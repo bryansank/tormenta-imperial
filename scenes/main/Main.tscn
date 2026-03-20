@@ -1,0 +1,55 @@
+[gd_scene load_steps=7 format=3 uid="uid://main_scene"]
+
+[ext_resource type="Script" path="res://scripts/camera/MonumentalCamera.gd" id="1"]
+
+[sub_resource type="PlaneMesh" id="ground_mesh"]
+size = Vector2(100, 100)
+
+[sub_resource type="StandardMaterial3D" id="ground_material"]
+albedo_color = Color(0.28, 0.38, 0.2, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="house_mesh"]
+size = Vector3(2, 1.5, 2)
+
+[sub_resource type="StandardMaterial3D" id="house_material"]
+albedo_color = Color(0.55, 0.35, 0.2, 1)
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="roof_mesh"]
+size = Vector3(2.4, 0.4, 2.4)
+
+[node name="Main" type="Node3D"]
+
+[node name="MonumentalCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 15, 15)
+projection = 1
+size = 20.0
+near = 0.1
+far = 100.0
+script = ExtResource("1")
+
+[node name="DirectionalLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.766044, 0.642788, 0, -0.642788, 0.766044, 0, 20, 0)
+light_color = Color(1, 0.95, 0.85, 1)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+mesh = SubResource("ground_mesh")
+surface_material_override/0 = SubResource("ground_material")
+
+[node name="House" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, 3)
+
+[node name="Walls" type="MeshInstance3D" parent="House"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+mesh = SubResource("house_mesh")
+surface_material_override/0 = SubResource("house_material")
+
+[node name="Roof" type="MeshInstance3D" parent="House"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+mesh = SubResource("roof_mesh")
+surface_material_override/0 = SubResource("house_material")
