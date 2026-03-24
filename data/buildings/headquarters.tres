@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "headquarters"
+display_name = "Cuartel General"
+description = "Centro de comando. Produce oro lentamente."
+grid_size = Vector2i(2, 2)
+cost_gold = 0
+cost_steel = 0
+cost_oil = 0
+cost_wood = 0
+build_time = 0.0
+produces_gold = 10
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 15.0
+mesh_height = 3.0
+mesh_color = Color(0.6, 0.5, 0.3, 1)
+max_health = 500
