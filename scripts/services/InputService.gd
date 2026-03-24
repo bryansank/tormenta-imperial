@@ -1,14 +1,16 @@
 extends Node
 ## Unified input service: abstracts keyboard, mouse, and touch into EventBus signals.
 ## Supports: WASD/Arrows (pan), scroll wheel (zoom), middle-mouse drag (pan),
-## single-finger drag (pan), two-finger pinch (zoom).
+## right-mouse drag (rotate), Q/E (rotate), single-finger drag (pan), two-finger pinch (zoom).
 
 @export var mouse_drag_sensitivity: float = 0.05
 @export var touch_drag_sensitivity: float = 0.02
 @export var pinch_zoom_sensitivity: float = 0.05
+@export var mouse_rotate_sensitivity: float = 0.3
 
 var _is_mouse_dragging: bool = false
-var _touch_points: Dictionary = {}  # index -> position
+var _is_mouse_rotating: bool = false
+var _touch_points: Dictionary = {}
 var _last_pinch_distance: float = 0.0
 
 func _process(_delta: float) -> void:
@@ -39,6 +41,12 @@ func _handle_keyboard() -> void:
 	if dir != Vector2.ZERO:
 		EventBus.camera_pan_requested.emit(dir.normalized())
 
+	# Q/E rotation
+	if Input.is_key_pressed(KEY_Q):
+		EventBus.camera_rotate_requested.emit(-1.0)
+	if Input.is_key_pressed(KEY_E):
+		EventBus.camera_rotate_requested.emit(1.0)
+
 # ── Mouse ──
 
 func _handle_mouse_button(event: InputEventMouseButton) -> void:
@@ -49,10 +57,14 @@ func _handle_mouse_button(event: InputEventMouseButton) -> void:
 			EventBus.camera_zoom_requested.emit(1.0)
 		MOUSE_BUTTON_MIDDLE:
 			_is_mouse_dragging = event.pressed
+		MOUSE_BUTTON_RIGHT:
+			_is_mouse_rotating = event.pressed
 
 func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
 	if _is_mouse_dragging:
 		EventBus.camera_drag_moved.emit(event.relative * mouse_drag_sensitivity)
+	elif _is_mouse_rotating:
+		EventBus.camera_rotate_requested.emit(event.relative.x * mouse_rotate_sensitivity)
 
 # ── Touch ──
 
@@ -62,7 +74,6 @@ func _handle_screen_touch(event: InputEventScreenTouch) -> void:
 	else:
 		_touch_points.erase(event.index)
 
-	# Reset pinch baseline when two fingers land
 	if _touch_points.size() == 2:
 		var points := _touch_points.values()
 		_last_pinch_distance = (points[0] as Vector2).distance_to(points[1] as Vector2)
@@ -71,10 +82,8 @@ func _handle_screen_drag(event: InputEventScreenDrag) -> void:
 	_touch_points[event.index] = event.position
 
 	if _touch_points.size() == 1:
-		# Single finger → pan
 		EventBus.camera_drag_moved.emit(event.relative * touch_drag_sensitivity)
 	elif _touch_points.size() == 2:
-		# Two fingers → pinch zoom
 		var points := _touch_points.values()
 		var current_dist := (points[0] as Vector2).distance_to(points[1] as Vector2)
 		var diff := current_dist - _last_pinch_distance
