@@ -6,3 +6,12 @@ extends Node
 signal camera_pan_requested(direction: Vector2)
 signal camera_zoom_requested(amount: float)
 signal camera_drag_moved(delta: Vector2)
+signal camera_rotate_requested(amount: float)
+
+# ── Resources ──
+signal resource_changed(resource_type: String, new_amount: int, delta: int)
+signal resources_insufficient(resource_type: String, required: int, available: int)
+
+# ── Buildings ──
+signal building_placed(building_data: Resource, cell: Vector2i)
+signal building_removed(cell: Vector2i)
