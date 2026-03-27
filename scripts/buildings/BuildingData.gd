@@ -32,6 +32,9 @@ extends Resource
 # Stats
 @export var max_health: int = 100
 
+# Core building (unique, auto-placed, cannot be built or moved)
+@export var is_core: bool = false
+
 ## Helper: get cost as dictionary compatible with ResourceManager.
 func get_cost() -> Dictionary:
 	var cost := {}

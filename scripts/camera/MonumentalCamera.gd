@@ -69,6 +69,16 @@ func _on_drag(delta: Vector2) -> void:
 func _on_rotate(amount: float) -> void:
 	_yaw += amount * rotate_speed * get_process_delta_time()
 
+func get_state() -> Dictionary:
+	return { "target_x": _ground_target.x, "target_y": _ground_target.y, "yaw": _yaw, "distance": _distance }
+
+func set_state(data: Dictionary) -> void:
+	_ground_target = Vector2(data.get("target_x", 0.0), data.get("target_y", 0.0))
+	_yaw = data.get("yaw", 0.0)
+	_distance = data.get("distance", 20.0)
+	_target_distance = _distance
+	_update_transform()
+
 func _clamp_to_boundaries() -> void:
 	_ground_target.x = clampf(_ground_target.x, boundary_min.x, boundary_max.x)
 	_ground_target.y = clampf(_ground_target.y, boundary_min.y, boundary_max.y)

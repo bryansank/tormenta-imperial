@@ -17,6 +17,11 @@ func _process(_delta: float) -> void:
 	_handle_keyboard()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Skip mouse/touch input when hovering over UI elements
+	if _is_mouse_over_ui():
+		if event is InputEventMouseButton or event is InputEventMouseMotion:
+			return
+
 	if event is InputEventMouseButton:
 		_handle_mouse_button(event)
 	elif event is InputEventMouseMotion:
@@ -25,6 +30,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_screen_touch(event)
 	elif event is InputEventScreenDrag:
 		_handle_screen_drag(event)
+
+func _is_mouse_over_ui() -> bool:
+	var viewport := get_viewport()
+	if not viewport:
+		return false
+	return viewport.gui_get_hovered_control() != null
 
 # ── Keyboard ──
 

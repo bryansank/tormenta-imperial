@@ -18,6 +18,7 @@ func _process(_delta: float) -> void:
 func _setup_ui() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_theme_constant_override("margin_bottom", 20)
 	margin.add_theme_constant_override("margin_left", 20)
 	margin.add_theme_constant_override("margin_right", 20)
@@ -35,6 +36,7 @@ func _setup_ui() -> void:
 	# Spacer
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(spacer)
 
 	# Right side: rotate + zoom stacked

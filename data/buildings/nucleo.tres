@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "nucleo"
+display_name = "Núcleo"
+description = "Edificio central. El corazón de tu imperio."
+grid_size = Vector2i(3, 3)
+cost_gold = 0
+cost_steel = 0
+cost_oil = 0
+cost_wood = 0
+build_time = 0.0
+produces_gold = 5
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 15.0
+mesh_height = 4.0
+mesh_color = Color(0.8, 0.6, 0.1, 1)
+max_health = 1000
+is_core = true

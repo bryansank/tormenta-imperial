@@ -24,6 +24,23 @@ func _setup_ui() -> void:
 	hbox.add_theme_constant_override("separation", 40)
 	panel.add_child(hbox)
 
+	# LIMPIAR button (clear save and restart)
+	var clear_btn := Button.new()
+	clear_btn.text = "LIMPIAR"
+	clear_btn.custom_minimum_size = Vector2(80, 28)
+	var clear_style := StyleBoxFlat.new()
+	clear_style.bg_color = Color(0.5, 0.15, 0.15, 0.8)
+	clear_style.set_corner_radius_all(6)
+	clear_btn.add_theme_stylebox_override("normal", clear_style)
+	var clear_hover := StyleBoxFlat.new()
+	clear_hover.bg_color = Color(0.6, 0.2, 0.2, 0.9)
+	clear_hover.set_corner_radius_all(6)
+	clear_btn.add_theme_stylebox_override("hover", clear_hover)
+	clear_btn.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
+	clear_btn.add_theme_font_size_override("font_size", 12)
+	clear_btn.pressed.connect(func(): GameManager.clear_save())
+	hbox.add_child(clear_btn)
+
 	# Create label for each resource type
 	var resource_config := [
 		[ResourceManager.Type.GOLD, "ORO", Color(1.0, 0.85, 0.2)],

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:gitmcp.io)",
+      "Bash(gh search repos gitmcp --limit 5 --json fullName,description,url)",
+      "Bash(cp /c/tmp/rtk-extract/rtk.exe /c/Users/bkey/.local/bin/rtk.exe)",
+      "Bash(/c/Users/bkey/.local/bin/rtk.exe --version)",
+      "Bash(echo $PATH)",
+      "Bash(rtk git:*)",
+      "Bash(ls -la \"c:\\\\Users\\\\bkey\\\\Documents\\\\PERSONAL\\\\apss\\\\empires\\\\scenes\\\\buildings\"\" 2>/dev/null || echo \"Empty or doesn 't exist \")"
+    ]
+  }
+}

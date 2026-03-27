@@ -67,3 +67,20 @@ func spend_cost(cost: Dictionary) -> bool:
 ## Get all resources as {Type: int} — for UI display.
 func get_all() -> Dictionary:
 	return _resources.duplicate()
+
+## Reset to starting values.
+func reset() -> void:
+	_resources = { Type.GOLD: 500, Type.STEEL: 300, Type.OIL: 200, Type.WOOD: 400 }
+	for type in _resources:
+		EventBus.resource_changed.emit(_names[type], _resources[type], 0)
+
+## Load amounts from save data { "gold": N, "steel": N, ... }.
+func set_amounts(data: Dictionary) -> void:
+	var name_to_type := {}
+	for type in _names:
+		name_to_type[_names[type]] = type
+	for res_name in data:
+		if name_to_type.has(res_name):
+			var type: Type = name_to_type[res_name]
+			_resources[type] = data[res_name]
+			EventBus.resource_changed.emit(res_name, data[res_name], 0)
