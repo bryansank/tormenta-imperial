@@ -27,6 +27,8 @@ InputService="*res://scripts/services/InputService.gd"
 GridManager="*res://scripts/grid/GridManager.gd"
 ResourceManager="*res://scripts/services/ResourceManager.gd"
 GameManager="*res://scripts/services/GameManager.gd"
+ProcessManager="*res://scripts/services/ProcessManager.gd"
+ProductionManager="*res://scripts/services/ProductionManager.gd"
 
 [display]
 

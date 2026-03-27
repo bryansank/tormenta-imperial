@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/buildings/BuildingPlacer.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ConstructionMenu.tscn" id="6"]
 [ext_resource type="Script" path="res://scripts/map/MapGenerator.gd" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/ui/BuildingInfoPanel.tscn" id="8"]
 
 [sub_resource type="PlaneMesh" id="ground_mesh"]
 size = Vector2(50, 50)
@@ -64,3 +65,5 @@ surface_material_override/0 = SubResource("grid_material")
 script = ExtResource("7")
 
 [node name="ConstructionMenu" parent="." instance=ExtResource("6")]
+
+[node name="BuildingInfoPanel" parent="." instance=ExtResource("8")]

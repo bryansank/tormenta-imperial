@@ -66,6 +66,8 @@ func spawn_deposit(deposit_id: String, cell: Vector2i) -> Node3D:
 
 	root.add_child(mesh_inst)
 	root.add_child(label)
+	root.set_meta("deposit_id", deposit_id)
+	root.set_meta("cell", cell)
 
 	var world_pos := GridManager.cell_to_world(cell)
 	root.global_position = world_pos

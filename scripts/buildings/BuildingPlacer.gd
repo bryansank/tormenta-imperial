@@ -22,6 +22,8 @@ func _ready() -> void:
 
 	EventBus.building_selected_for_placement.connect(_on_building_selected)
 	EventBus.building_placement_cancelled.connect(_cancel)
+	EventBus.request_move_building.connect(_on_move_requested)
+	EventBus.request_demolish_building.connect(_on_demolish_requested)
 	GameManager.register_placer(self)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -115,15 +117,54 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 func _try_select_building(screen_pos: Vector2) -> void:
 	var hit = _raycast_to_ground(screen_pos)
 	if hit == null:
+		EventBus.building_deselected.emit()
 		return
 	var cell := GridManager.world_to_cell(hit as Vector3)
-	var building := GridManager.get_building_at(cell)
-	if building:
-		_start_moving(building)
+	var node := GridManager.get_building_at(cell)
+	if node == null:
+		EventBus.building_deselected.emit()
+		return
+	# Check if it's a building (has info) or a deposit (has metadata)
+	var info := GridManager.get_building_info(node)
+	if not info.is_empty():
+		EventBus.building_clicked.emit(node, info["data"])
+	elif node.has_meta("deposit_id"):
+		EventBus.deposit_clicked.emit(node, node.get_meta("deposit_id"), cell)
+	else:
+		EventBus.building_deselected.emit()
+
+func _on_move_requested(building: Node3D) -> void:
+	_start_moving(building)
+
+func _on_demolish_requested(building: Node3D) -> void:
+	var info := GridManager.get_building_info(building)
+	if info.is_empty():
+		return
+	var data: BuildingData = info["data"]
+	if data.is_core:
+		return
+	var cell: Vector2i = info["origin_cell"]
+	# Refund 50% of cost
+	var cost := data.get_cost()
+	for type in cost:
+		ResourceManager.add(type, int(cost[type] * 0.5))
+	# Unregister from production/construction
+	ProductionManager.unregister(building)
+	ProcessManager.cancel(building)
+	# Remove from grid and scene
+	GridManager.remove_building(building)
+	building.queue_free()
+	EventBus.building_demolished.emit(building, cell)
 
 func _try_place(cell: Vector2i) -> void:
 	if not GridManager.can_place(cell, _current_data.grid_size):
 		return
+	# Check and deduct cost
+	var cost := _current_data.get_cost()
+	if not cost.is_empty():
+		if not ResourceManager.can_afford(cost):
+			return
+		ResourceManager.spend_cost(cost)
 	var building := _create_building_mesh(_current_data)
 	var world_pos := GridManager.building_center(cell, _current_data.grid_size)
 	building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
@@ -218,7 +259,12 @@ func get_all_placed_buildings() -> Array:
 		if not info.is_empty():
 			var origin: Vector2i = info["origin_cell"]
 			var data: BuildingData = info["data"]
-			result.append({ "id": data.id, "cell_x": origin.x, "cell_y": origin.y })
+			var entry := { "id": data.id, "cell_x": origin.x, "cell_y": origin.y }
+			if building.has_meta("custom_name"):
+				entry["custom_name"] = building.get_meta("custom_name")
+			if ProductionManager.is_constructing(building):
+				entry["construction_remaining"] = ProductionManager.get_construction_remaining(building)
+			result.append(entry)
 	return result
 
 func clear_all_buildings() -> void:
@@ -246,6 +292,7 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 
 	# Label above building
 	var label := Label3D.new()
+	label.name = "NameLabel"
 	label.text = data.display_name
 	label.font_size = 32
 	label.position.y = data.mesh_height + 0.3
