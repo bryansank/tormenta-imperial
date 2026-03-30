@@ -68,9 +68,15 @@ func spend_cost(cost: Dictionary) -> bool:
 func get_all() -> Dictionary:
 	return _resources.duplicate()
 
-## Reset to starting values.
+## Reset to starting values from GameConfig.
 func reset() -> void:
-	_resources = { Type.GOLD: 500, Type.STEEL: 300, Type.OIL: 200, Type.WOOD: 400 }
+	var cfg := GameConfig.starting_resources
+	_resources = {
+		Type.GOLD: cfg.get("gold", 500),
+		Type.STEEL: cfg.get("steel", 300),
+		Type.OIL: cfg.get("oil", 200),
+		Type.WOOD: cfg.get("wood", 400),
+	}
 	for type in _resources:
 		EventBus.resource_changed.emit(_names[type], _resources[type], 0)
 

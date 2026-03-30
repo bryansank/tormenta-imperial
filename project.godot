@@ -22,6 +22,8 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+Tr="*res://scripts/services/Tr.gd"
+GameConfig="*res://scripts/services/GameConfig.gd"
 EventBus="*res://scripts/services/EventBus.gd"
 InputService="*res://scripts/services/InputService.gd"
 GridManager="*res://scripts/grid/GridManager.gd"

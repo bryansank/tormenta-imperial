@@ -144,10 +144,10 @@ func _on_demolish_requested(building: Node3D) -> void:
 	if data.is_core:
 		return
 	var cell: Vector2i = info["origin_cell"]
-	# Refund 50% of cost
+	# Refund based on GameConfig ratio
 	var cost := data.get_cost()
 	for type in cost:
-		ResourceManager.add(type, int(cost[type] * 0.5))
+		ResourceManager.add(type, int(cost[type] * GameConfig.demolish_refund_ratio))
 	# Unregister from production/construction
 	ProductionManager.unregister(building)
 	ProcessManager.cancel(building)
@@ -278,17 +278,22 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	var root := Node3D.new()
 	root.name = data.id
 
-	var mesh_inst := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	var sx := data.grid_size.x * GridManager.cell_size * 0.9
-	var sz := data.grid_size.y * GridManager.cell_size * 0.9
-	box.size = Vector3(sx, data.mesh_height, sz)
-	mesh_inst.mesh = box
-
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = data.mesh_color
-	mesh_inst.set_surface_override_material(0, mat)
-	mesh_inst.position.y = data.mesh_height * 0.5
+	if data.model_scene:
+		var model_instance := data.model_scene.instantiate()
+		root.add_child(model_instance)
+	else:
+		# Fallback: colored box placeholder
+		var mesh_inst := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		var sx := data.grid_size.x * GridManager.cell_size * 0.9
+		var sz := data.grid_size.y * GridManager.cell_size * 0.9
+		box.size = Vector3(sx, data.mesh_height, sz)
+		mesh_inst.mesh = box
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = data.mesh_color
+		mesh_inst.set_surface_override_material(0, mat)
+		mesh_inst.position.y = data.mesh_height * 0.5
+		root.add_child(mesh_inst)
 
 	# Label above building
 	var label := Label3D.new()
@@ -297,7 +302,6 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	label.font_size = 32
 	label.position.y = data.mesh_height + 0.3
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-
-	root.add_child(mesh_inst)
 	root.add_child(label)
+
 	return root
