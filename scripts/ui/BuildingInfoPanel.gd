@@ -1,27 +1,26 @@
 extends CanvasLayer
 ## Panel that appears when selecting a building or deposit.
-## Shows name, production info, rename (nucleus), processes, construction state,
-## progress bars, move/demolish/close buttons.
+## Scrollable, styled, delegates process actions to ProcessActionsPanel.
 
 var _panel: PanelContainer
+var _scroll: ScrollContainer
 var _vbox: VBoxContainer
 var _title_label: Label
 var _desc_label: Label
+var _production_container: PanelContainer
 var _production_label: Label
 var _construction_container: VBoxContainer
 var _construction_label: Label
 var _construction_bar: ProgressBar
+var _deposit_uses_label: Label
 var _name_container: HBoxContainer
 var _name_edit: LineEdit
-var _processes_box: VBoxContainer
-var _progress_container: VBoxContainer
-var _progress_bar: ProgressBar
-var _progress_label: Label
 var _actions_box: HBoxContainer
 var _move_btn: Button
 var _demolish_btn: Button
 var _close_btn: Button
 
+var _process_panel: ProcessActionsPanel
 var _selected_node: Node3D = null
 var _selected_data: BuildingData = null
 var _selected_deposit_id: String = ""
@@ -36,10 +35,11 @@ func _ready() -> void:
 	EventBus.building_deselected.connect(_on_deselected)
 	EventBus.deposit_clicked.connect(_on_deposit_clicked)
 	EventBus.process_completed.connect(_on_process_event)
-	EventBus.mining_completed.connect(_on_process_event)
+	EventBus.mining_completed.connect(_on_mining_event)
 	EventBus.construction_completed.connect(_on_construction_completed)
 	EventBus.building_selected_for_placement.connect(func(_d): _hide_panel())
 	EventBus.building_demolished.connect(func(_n, _c): _hide_panel())
+	EventBus.deposit_depleted.connect(_on_deposit_depleted)
 
 func _process(_delta: float) -> void:
 	if not _selected_node or not _panel.visible:
@@ -47,152 +47,220 @@ func _process(_delta: float) -> void:
 	if not is_instance_valid(_selected_node):
 		_hide_panel()
 		return
-	_update_progress()
+	_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
 	_update_construction()
 
 # ── UI Construction ──
 
 func _build_ui() -> void:
+	# Outer panel anchored right side, limited height with scroll
 	_panel = PanelContainer.new()
-	_panel.custom_minimum_size = Vector2(280, 0)
+	_panel.custom_minimum_size = Vector2(300, 0)
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.12, 0.94)
-	style.border_color = Color(0.65, 0.5, 0.15, 0.85)
+	style.bg_color = Color(0.08, 0.08, 0.1, 0.96)
+	style.border_color = Color(0.7, 0.55, 0.15, 0.9)
 	style.set_border_width_all(2)
-	style.set_corner_radius_all(6)
-	style.set_content_margin_all(14)
+	style.set_corner_radius_all(10)
+	style.set_content_margin_all(0)
 	_panel.add_theme_stylebox_override("panel", style)
 
-	_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	_panel.offset_left = -295
-	_panel.offset_right = -10
+	_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	_panel.offset_left = -315
+	_panel.offset_right = -8
+	_panel.offset_top = 50
+	_panel.offset_bottom = -10
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 
+	# ScrollContainer so content never clips
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_panel.add_child(_scroll)
+
 	_vbox = VBoxContainer.new()
-	_vbox.add_theme_constant_override("separation", 8)
-	_panel.add_child(_vbox)
+	_vbox.add_theme_constant_override("separation", 10)
+	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var vbox_margin := MarginContainer.new()
+	vbox_margin.add_theme_constant_override("margin_left", 14)
+	vbox_margin.add_theme_constant_override("margin_right", 14)
+	vbox_margin.add_theme_constant_override("margin_top", 14)
+	vbox_margin.add_theme_constant_override("margin_bottom", 14)
+	vbox_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox_margin.add_child(_vbox)
+	_scroll.add_child(vbox_margin)
 
-	# Title
+	# ── Header: Title + Close ──
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 6)
 	_title_label = Label.new()
-	_title_label.add_theme_font_size_override("font_size", 20)
-	_title_label.add_theme_color_override("font_color", Color(0.95, 0.8, 0.25))
-	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_vbox.add_child(_title_label)
+	_title_label.add_theme_font_size_override("font_size", 18)
+	_title_label.add_theme_color_override("font_color", Color(0.95, 0.82, 0.25))
+	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	header.add_child(_title_label)
 
-	# Description
+	_close_btn = Button.new()
+	_close_btn.text = "X"
+	_close_btn.custom_minimum_size = Vector2(28, 28)
+	_style_button(_close_btn, Color(0.45, 0.12, 0.12, 0.8))
+	_close_btn.pressed.connect(_hide_panel)
+	header.add_child(_close_btn)
+	_vbox.add_child(header)
+
+	# ── Description ──
 	_desc_label = Label.new()
 	_desc_label.add_theme_font_size_override("font_size", 12)
-	_desc_label.add_theme_color_override("font_color", Color(0.65, 0.65, 0.65))
+	_desc_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_vbox.add_child(_desc_label)
 
-	# Production info
+	# ── Production info card ──
+	_production_container = PanelContainer.new()
+	var prod_style := StyleBoxFlat.new()
+	prod_style.bg_color = Color(0.12, 0.18, 0.12, 0.9)
+	prod_style.set_corner_radius_all(6)
+	prod_style.set_content_margin_all(8)
+	_production_container.add_theme_stylebox_override("panel", prod_style)
 	_production_label = Label.new()
 	_production_label.add_theme_font_size_override("font_size", 13)
-	_production_label.add_theme_color_override("font_color", Color(0.5, 0.85, 0.4))
+	_production_label.add_theme_color_override("font_color", Color(0.45, 0.9, 0.35))
 	_production_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_vbox.add_child(_production_label)
+	_production_container.add_child(_production_label)
+	_vbox.add_child(_production_container)
 
-	# Construction state
+	# ── Deposit uses ──
+	_deposit_uses_label = Label.new()
+	_deposit_uses_label.add_theme_font_size_override("font_size", 12)
+	_deposit_uses_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4))
+	_deposit_uses_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_vbox.add_child(_deposit_uses_label)
+
+	# ── Construction state ──
 	_construction_container = VBoxContainer.new()
-	_construction_container.add_theme_constant_override("separation", 2)
+	_construction_container.add_theme_constant_override("separation", 4)
 	_construction_label = Label.new()
 	_construction_label.add_theme_font_size_override("font_size", 13)
 	_construction_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))
 	_construction_bar = ProgressBar.new()
-	_construction_bar.custom_minimum_size = Vector2(0, 16)
+	_construction_bar.custom_minimum_size = Vector2(0, 14)
 	_construction_bar.max_value = 1.0
 	_construction_bar.show_percentage = false
 	var constr_bg := StyleBoxFlat.new()
 	constr_bg.bg_color = Color(0.15, 0.15, 0.15)
-	constr_bg.set_corner_radius_all(3)
+	constr_bg.set_corner_radius_all(4)
 	_construction_bar.add_theme_stylebox_override("background", constr_bg)
 	var constr_fill := StyleBoxFlat.new()
 	constr_fill.bg_color = Color(0.9, 0.7, 0.1)
-	constr_fill.set_corner_radius_all(3)
+	constr_fill.set_corner_radius_all(4)
 	_construction_bar.add_theme_stylebox_override("fill", constr_fill)
 	_construction_container.add_child(_construction_label)
 	_construction_container.add_child(_construction_bar)
 	_vbox.add_child(_construction_container)
 
-	# Name editor (nucleus)
+	# ── Name editor (nucleus) ──
 	_name_container = HBoxContainer.new()
 	_name_container.add_theme_constant_override("separation", 4)
 	_name_edit = LineEdit.new()
-	_name_edit.placeholder_text = "Nombre del edificio..."
+	_name_edit.placeholder_text = Tr.t("LBL_BUILDING_NAME_PLACEHOLDER")
 	_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_name_edit.max_length = 20
 	_name_edit.text_submitted.connect(func(_t): _on_rename())
 	var name_btn := Button.new()
-	name_btn.text = "Renombrar"
+	name_btn.text = Tr.t("BTN_RENAME")
+	_style_button(name_btn, Color(0.2, 0.35, 0.5, 0.8))
 	name_btn.pressed.connect(_on_rename)
 	_name_container.add_child(_name_edit)
 	_name_container.add_child(name_btn)
 	_vbox.add_child(_name_container)
 
-	# Separator
+	# ── Separator ──
 	var sep := HSeparator.new()
-	sep.add_theme_color_override("separator", Color(0.4, 0.35, 0.15, 0.6))
+	sep.add_theme_color_override("separator", Color(0.4, 0.35, 0.15, 0.4))
 	_vbox.add_child(sep)
 
-	# Processes header
+	# ── Processes header ──
 	var proc_header := Label.new()
-	proc_header.text = "Acciones"
+	proc_header.text = Tr.t("LBL_ACTIONS")
 	proc_header.add_theme_font_size_override("font_size", 14)
-	proc_header.add_theme_color_override("font_color", Color(0.75, 0.7, 0.5))
+	proc_header.add_theme_color_override("font_color", Color(0.7, 0.65, 0.45))
 	_vbox.add_child(proc_header)
 
-	_processes_box = VBoxContainer.new()
-	_processes_box.add_theme_constant_override("separation", 4)
-	_vbox.add_child(_processes_box)
+	# ── Process actions (delegated) ──
+	var processes_box := VBoxContainer.new()
+	processes_box.add_theme_constant_override("separation", 6)
+	_vbox.add_child(processes_box)
 
-	# Process progress
-	_progress_container = VBoxContainer.new()
-	_progress_container.add_theme_constant_override("separation", 2)
-	_progress_label = Label.new()
-	_progress_label.add_theme_font_size_override("font_size", 12)
-	_progress_label.add_theme_color_override("font_color", Color(0.8, 0.75, 0.5))
-	_progress_bar = ProgressBar.new()
-	_progress_bar.custom_minimum_size = Vector2(0, 18)
-	_progress_bar.max_value = 1.0
-	_progress_bar.show_percentage = false
+	# ── Progress bar ──
+	var progress_container := VBoxContainer.new()
+	progress_container.add_theme_constant_override("separation", 3)
+	var progress_label := Label.new()
+	progress_label.add_theme_font_size_override("font_size", 12)
+	progress_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.45))
+	var progress_bar := ProgressBar.new()
+	progress_bar.custom_minimum_size = Vector2(0, 16)
+	progress_bar.max_value = 1.0
+	progress_bar.show_percentage = false
 	var bar_bg := StyleBoxFlat.new()
 	bar_bg.bg_color = Color(0.15, 0.15, 0.15)
-	bar_bg.set_corner_radius_all(3)
-	_progress_bar.add_theme_stylebox_override("background", bar_bg)
+	bar_bg.set_corner_radius_all(4)
+	progress_bar.add_theme_stylebox_override("background", bar_bg)
 	var bar_fill := StyleBoxFlat.new()
-	bar_fill.bg_color = Color(0.8, 0.6, 0.1)
-	bar_fill.set_corner_radius_all(3)
-	_progress_bar.add_theme_stylebox_override("fill", bar_fill)
-	_progress_container.add_child(_progress_label)
-	_progress_container.add_child(_progress_bar)
-	_vbox.add_child(_progress_container)
+	bar_fill.bg_color = Color(0.85, 0.65, 0.1)
+	bar_fill.set_corner_radius_all(4)
+	progress_bar.add_theme_stylebox_override("fill", bar_fill)
+	progress_container.add_child(progress_label)
+	progress_container.add_child(progress_bar)
+	_vbox.add_child(progress_container)
 
-	# Action buttons
+	_process_panel = ProcessActionsPanel.new(processes_box, progress_container, progress_bar, progress_label)
+
+	# ── Separator before actions ──
+	var sep2 := HSeparator.new()
+	sep2.add_theme_color_override("separator", Color(0.4, 0.35, 0.15, 0.4))
+	_vbox.add_child(sep2)
+
+	# ── Action buttons ──
 	_actions_box = HBoxContainer.new()
 	_actions_box.add_theme_constant_override("separation", 6)
 	_actions_box.alignment = BoxContainer.ALIGNMENT_CENTER
 
 	_move_btn = Button.new()
-	_move_btn.text = "Mover"
+	_move_btn.text = Tr.t("BTN_MOVE")
+	_style_button(_move_btn, Color(0.2, 0.35, 0.5, 0.8))
 	_move_btn.pressed.connect(_on_move)
 
 	_demolish_btn = Button.new()
-	_demolish_btn.text = "Demoler"
-	_demolish_btn.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3))
+	_demolish_btn.text = Tr.t("BTN_DEMOLISH")
+	_style_button(_demolish_btn, Color(0.5, 0.15, 0.12, 0.85))
 	_demolish_btn.pressed.connect(_on_demolish)
-
-	_close_btn = Button.new()
-	_close_btn.text = "Cerrar"
-	_close_btn.pressed.connect(_hide_panel)
 
 	_actions_box.add_child(_move_btn)
 	_actions_box.add_child(_demolish_btn)
-	_actions_box.add_child(_close_btn)
 	_vbox.add_child(_actions_box)
 
 	add_child(_panel)
+
+func _style_button(btn: Button, bg_color: Color) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = bg_color
+	normal.set_corner_radius_all(6)
+	normal.set_content_margin_all(6)
+	btn.add_theme_stylebox_override("normal", normal)
+
+	var hover := StyleBoxFlat.new()
+	hover.bg_color = bg_color.lightened(0.15)
+	hover.set_corner_radius_all(6)
+	hover.set_content_margin_all(6)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	var pressed := StyleBoxFlat.new()
+	pressed.bg_color = bg_color.lightened(0.3)
+	pressed.set_corner_radius_all(6)
+	pressed.set_content_margin_all(6)
+	btn.add_theme_stylebox_override("pressed", pressed)
+
+	btn.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
 
 # ── Event Handlers ──
 
@@ -215,11 +283,22 @@ func _on_deselected() -> void:
 
 func _on_process_event(node: Node3D, _pid: String) -> void:
 	if node == _selected_node:
-		_update_progress()
+		_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
+
+func _on_mining_event(node: Node3D, _pid: String) -> void:
+	if node == _selected_node:
+		_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
+		# Refresh deposit uses display
+		if _is_deposit and is_instance_valid(_selected_node):
+			_update_deposit_uses()
 
 func _on_construction_completed(node: Node3D) -> void:
 	if node == _selected_node:
 		_show_building_panel()
+
+func _on_deposit_depleted(node: Node3D, _deposit_id: String) -> void:
+	if node == _selected_node:
+		_hide_panel()
 
 # ── Panel Display ──
 
@@ -232,53 +311,36 @@ func _show_building_panel() -> void:
 	# Production info
 	var prod_parts: Array = []
 	if _selected_data.produces_gold > 0:
-		prod_parts.append("+%d oro" % _selected_data.produces_gold)
+		prod_parts.append("+%d %s" % [_selected_data.produces_gold, Tr.res_name("gold")])
 	if _selected_data.produces_steel > 0:
-		prod_parts.append("+%d acero" % _selected_data.produces_steel)
+		prod_parts.append("+%d %s" % [_selected_data.produces_steel, Tr.res_name("steel")])
 	if _selected_data.produces_oil > 0:
-		prod_parts.append("+%d petroleo" % _selected_data.produces_oil)
+		prod_parts.append("+%d %s" % [_selected_data.produces_oil, Tr.res_name("oil")])
 	if _selected_data.produces_wood > 0:
-		prod_parts.append("+%d madera" % _selected_data.produces_wood)
+		prod_parts.append("+%d %s" % [_selected_data.produces_wood, Tr.res_name("wood")])
 	if not prod_parts.is_empty():
-		_production_label.text = "Produce: %s cada %ds" % [" | ".join(prod_parts), int(_selected_data.production_interval)]
-		_production_label.visible = true
+		var interval := GameConfig.get_production_interval(_selected_data.production_interval)
+		_production_label.text = Tr.t("FMT_PRODUCES_EVERY") % [" | ".join(prod_parts), int(interval)]
+		_production_container.visible = true
 	else:
-		_production_label.visible = false
+		_production_container.visible = false
 
-	# Construction state
+	_deposit_uses_label.visible = false
+
 	var is_building := ProductionManager.is_constructing(_selected_node)
 	_construction_container.visible = is_building
 	if is_building:
 		_update_construction()
 
-	# Name editor: visible for core buildings (not during construction)
 	_name_container.visible = _selected_data.is_core and not is_building
-
 	if _selected_data.is_core:
 		_name_edit.text = custom_name
 
-	# Move/demolish: only for non-core
 	_move_btn.visible = not _selected_data.is_core and not is_building
 	_demolish_btn.visible = not _selected_data.is_core
 
-	# Populate process buttons (disabled during construction)
-	_clear_processes()
-	var processes := ProcessManager.get_processes_for(_selected_data.id)
-	for proc in processes:
-		_add_process_button(proc)
-
-	if processes.is_empty() and not _selected_data.is_core:
-		var no_actions := Label.new()
-		no_actions.text = "Sin acciones disponibles"
-		no_actions.add_theme_font_size_override("font_size", 12)
-		no_actions.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-		_processes_box.add_child(no_actions)
-
-	# Disable process buttons if constructing
-	if is_building:
-		_set_buttons_disabled(true)
-
-	_update_progress()
+	_process_panel.populate_building(_selected_node, _selected_data, is_building)
+	_scroll.scroll_vertical = 0
 	_panel.visible = true
 
 func _show_deposit_panel() -> void:
@@ -288,21 +350,27 @@ func _show_deposit_panel() -> void:
 			display_name = child.text
 			break
 	_title_label.text = display_name
-	_desc_label.text = "Recurso natural disponible para extraccion."
+	_desc_label.text = Tr.t("LBL_NATURAL_RESOURCE")
 	_desc_label.visible = true
-	_production_label.visible = false
+	_production_container.visible = false
 	_construction_container.visible = false
 	_name_container.visible = false
 	_move_btn.visible = false
 	_demolish_btn.visible = false
 
-	_clear_processes()
-	var mining := ProcessManager.get_mining_info(_selected_deposit_id)
-	if not mining.is_empty():
-		_add_mining_button(mining)
+	_update_deposit_uses()
 
-	_update_progress()
+	_process_panel.populate_deposit(_selected_node, _selected_deposit_id)
+	_scroll.scroll_vertical = 0
 	_panel.visible = true
+
+func _update_deposit_uses() -> void:
+	if _selected_node and _selected_node.has_meta("uses_remaining"):
+		var uses: int = _selected_node.get_meta("uses_remaining")
+		_deposit_uses_label.text = Tr.t("LBL_DEPOSIT_USES") % [uses]
+		_deposit_uses_label.visible = true
+	else:
+		_deposit_uses_label.visible = false
 
 func _hide_panel() -> void:
 	_panel.visible = false
@@ -310,54 +378,7 @@ func _hide_panel() -> void:
 	_selected_data = null
 	_selected_deposit_id = ""
 
-# ── Process Buttons ──
-
-func _clear_processes() -> void:
-	for child in _processes_box.get_children():
-		child.queue_free()
-
-func _add_process_button(proc: Dictionary) -> void:
-	var btn := Button.new()
-	var cost_parts: Array = []
-	if proc.has("cost"):
-		for res_name in proc["cost"]:
-			cost_parts.append("%d %s" % [proc["cost"][res_name], _translate_res(res_name)])
-	var produce_parts: Array = []
-	for res_name in proc["produces"]:
-		produce_parts.append("+%d %s" % [proc["produces"][res_name], _translate_res(res_name)])
-
-	var label := proc["name"]
-	if not cost_parts.is_empty():
-		label += "\nCosto: %s" % " | ".join(cost_parts)
-	label += "\nProduce: %s" % " | ".join(produce_parts)
-	label += " (%ds)" % int(proc["duration"])
-
-	btn.text = label
-	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	btn.pressed.connect(_start_process.bind(proc))
-	_processes_box.add_child(btn)
-
-func _add_mining_button(mining: Dictionary) -> void:
-	var btn := Button.new()
-	var parts: Array = []
-	for res_name in mining["produces"]:
-		parts.append("+%d %s" % [mining["produces"][res_name], _translate_res(res_name)])
-	btn.text = "%s\nProduce: %s (%ds)" % [mining["name"], " | ".join(parts), int(mining["duration"])]
-	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	btn.pressed.connect(_start_mining)
-	_processes_box.add_child(btn)
-
 # ── Actions ──
-
-func _start_process(proc: Dictionary) -> void:
-	if _selected_node and not ProcessManager.is_busy(_selected_node):
-		ProcessManager.start_process(_selected_node, proc)
-		_update_progress()
-
-func _start_mining() -> void:
-	if _selected_node and not ProcessManager.is_busy(_selected_node):
-		ProcessManager.start_mining(_selected_node, _selected_deposit_id)
-		_update_progress()
 
 func _on_rename() -> void:
 	if not _selected_node or not _selected_data or not _selected_data.is_core:
@@ -387,23 +408,7 @@ func _on_demolish() -> void:
 		return
 	EventBus.request_demolish_building.emit(_selected_node)
 
-# ── Progress Updates ──
-
-func _update_progress() -> void:
-	if not _selected_node:
-		_progress_container.visible = false
-		return
-	var active := ProcessManager.get_active(_selected_node)
-	if active.is_empty():
-		_progress_container.visible = false
-		if not _is_deposit and _selected_data and not ProductionManager.is_constructing(_selected_node):
-			_set_buttons_disabled(false)
-		return
-	_progress_container.visible = true
-	_progress_bar.value = ProcessManager.get_progress(_selected_node)
-	var remaining: float = active["remaining"]
-	_progress_label.text = "%s — %ds restantes" % [active["name"], ceili(remaining)]
-	_set_buttons_disabled(true)
+# ── Construction ──
 
 func _update_construction() -> void:
 	if not _selected_node or _is_deposit:
@@ -416,19 +421,4 @@ func _update_construction() -> void:
 	var progress := ProductionManager.get_construction_progress(_selected_node)
 	_construction_bar.value = progress
 	var remaining := ProductionManager.get_construction_remaining(_selected_node)
-	_construction_label.text = "En construccion: %d%% — %ds restantes" % [int(progress * 100), ceili(remaining)]
-
-func _set_buttons_disabled(disabled: bool) -> void:
-	for child in _processes_box.get_children():
-		if child is Button:
-			child.disabled = disabled
-
-# ── Helpers ──
-
-func _translate_res(res_name: String) -> String:
-	match res_name:
-		"gold": return "oro"
-		"steel": return "acero"
-		"oil": return "petroleo"
-		"wood": return "madera"
-	return res_name
+	_construction_label.text = Tr.t("FMT_CONSTRUCTION") % [int(progress * 100), ceili(remaining)]
