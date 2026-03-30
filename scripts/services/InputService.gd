@@ -40,6 +40,11 @@ func _is_mouse_over_ui() -> bool:
 # ── Keyboard ──
 
 func _handle_keyboard() -> void:
+	# Don't process camera keys when a text field has focus
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused is LineEdit or focused is TextEdit:
+		return
+
 	var dir := Vector2.ZERO
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
 		dir.y -= 1

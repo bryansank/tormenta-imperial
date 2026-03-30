@@ -305,26 +305,36 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		var model_instance := data.model_scene.instantiate()
 		root.add_child(model_instance)
 	else:
-		# Fallback: colored box placeholder
-		var mesh_inst := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		var sx := data.grid_size.x * GridManager.cell_size * 0.9
-		var sz := data.grid_size.y * GridManager.cell_size * 0.9
-		box.size = Vector3(sx, data.mesh_height, sz)
-		mesh_inst.mesh = box
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = data.mesh_color
-		mesh_inst.set_surface_override_material(0, mat)
-		mesh_inst.position.y = data.mesh_height * 0.5
-		root.add_child(mesh_inst)
+		# Try dieselpunk procedural mesh first
+		var dieselpunk := DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
+		if dieselpunk:
+			root.add_child(dieselpunk)
+		else:
+			# Fallback: colored box placeholder for unknown buildings
+			var mesh_inst := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			var sx := data.grid_size.x * GridManager.cell_size * 0.9
+			var sz := data.grid_size.y * GridManager.cell_size * 0.9
+			box.size = Vector3(sx, data.mesh_height, sz)
+			mesh_inst.mesh = box
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = data.mesh_color
+			mesh_inst.set_surface_override_material(0, mat)
+			mesh_inst.position.y = data.mesh_height * 0.5
+			root.add_child(mesh_inst)
 
-	# Label above building
+	# Label above building — large, bold, readable
 	var label := Label3D.new()
 	label.name = "NameLabel"
 	label.text = data.display_name
-	label.font_size = 32
-	label.position.y = data.mesh_height + 0.3
+	label.font_size = 64
+	label.pixel_size = 0.01
+	label.position.y = data.mesh_height + 0.5
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.outline_size = 12
+	label.outline_modulate = Color(0, 0, 0, 0.8)
+	label.modulate = Color(1, 1, 1, 1)
 	root.add_child(label)
 
 	return root
@@ -332,40 +342,15 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 # ── Grid Overlay ──
 
 func _show_grid_overlay() -> void:
-	_hide_grid_overlay()
-	var im := ImmediateMesh.new()
-	_grid_overlay = MeshInstance3D.new()
-	_grid_overlay.mesh = im
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.5, 0.45, 0.2, 0.15)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.no_depth_test = true
-	_grid_overlay.set_surface_override_material(0, mat)
-
-	var cs := GridManager.cell_size
-	var gw := GridManager.grid_width
-	var gh := GridManager.grid_height
-	var ox: float = -(gw * cs) * 0.5
-	var oz: float = -(gh * cs) * 0.5
-
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-	for i in range(gw + 1):
-		var x := ox + i * cs
-		im.surface_add_vertex(Vector3(x, 0.02, oz))
-		im.surface_add_vertex(Vector3(x, 0.02, oz + gh * cs))
-	for j in range(gh + 1):
-		var z := oz + j * cs
-		im.surface_add_vertex(Vector3(ox, 0.02, z))
-		im.surface_add_vertex(Vector3(ox + gw * cs, 0.02, z))
-	im.surface_end()
-
-	add_child(_grid_overlay)
+	# Show the main scene GridOverlay (shader-based)
+	var scene_grid := get_tree().current_scene.get_node_or_null("GridOverlay")
+	if scene_grid:
+		scene_grid.visible = true
 
 func _hide_grid_overlay() -> void:
-	if _grid_overlay:
-		_grid_overlay.queue_free()
-		_grid_overlay = null
+	var scene_grid := get_tree().current_scene.get_node_or_null("GridOverlay")
+	if scene_grid:
+		scene_grid.visible = false
 
 # ── Limit / Prerequisite Helpers ──
 

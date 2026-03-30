@@ -18,6 +18,6 @@ produces_steel = 0
 produces_oil = 6
 produces_wood = 0
 production_interval = 12.0
-mesh_height = 2.5
+mesh_height = 4.0
 mesh_color = Color(0.25, 0.25, 0.3, 1)
 max_health = 180
