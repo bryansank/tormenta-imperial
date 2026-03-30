@@ -103,24 +103,39 @@ func _apply_construction_visual(node: Node3D) -> void:
 		node.add_child(label)
 
 func _complete_construction(node: Node3D) -> void:
+	var constr_info: Dictionary = _constructing.get(node, {})
+	var is_upgrade: bool = constr_info.get("is_upgrade", false)
+	var new_level: int = constr_info.get("new_level", 1)
 	_constructing.erase(node)
 	if not is_instance_valid(node):
 		return
 	node.remove_meta("under_construction")
+	# Restore mesh opacity
 	var mesh_inst := node.get_child(0)
 	if mesh_inst is MeshInstance3D:
 		var mat: StandardMaterial3D = mesh_inst.get_surface_override_material(0)
 		if mat:
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 			mat.albedo_color.a = 1.0
-	var label := node.get_node_or_null("ConstructionLabel")
+	# Remove construction label
+	var label: Node = node.get_node_or_null("ConstructionLabel")
 	if label:
 		label.queue_free()
-	_spawn_floating_text(node.global_position, Tr.t("FMT_CONSTRUCTION_COMPLETE"), Color(0.3, 1.0, 0.3))
+	if is_upgrade:
+		node.set_meta("level", new_level)
+		# Scale up mesh slightly per level
+		if mesh_inst is MeshInstance3D:
+			var s := 1.0 + (new_level - 1) * 0.1
+			mesh_inst.scale = Vector3(s, s, s)
+		_spawn_floating_text(node.global_position, Tr.t("LBL_UPGRADE_COMPLETE"), Color(0.3, 0.8, 1.0))
+		EventBus.building_upgrade_completed.emit(node, new_level)
+	else:
+		_spawn_floating_text(node.global_position, Tr.t("FMT_CONSTRUCTION_COMPLETE"), Color(0.3, 1.0, 0.3))
+		EventBus.construction_completed.emit(node)
+	# Register for production
 	var info := GridManager.get_building_info(node)
 	if not info.is_empty():
 		_register_producer(node, info["data"])
-	EventBus.construction_completed.emit(node)
 
 # ── Production ──
 
@@ -138,7 +153,8 @@ func _tick_construction(delta: float) -> void:
 		var progress := get_construction_progress(node)
 		var label: Node = node.get_node_or_null("ConstructionLabel")
 		if label:
-			label.text = Tr.t("FMT_CONSTRUCTING") % int(progress * 100)
+			var fmt_key := "FMT_UPGRADING" if _constructing[node].get("is_upgrade", false) else "FMT_CONSTRUCTING"
+			label.text = Tr.t(fmt_key) % [int(progress * 100)]
 		if _constructing[node]["remaining"] <= 0.0:
 			completed.append(node)
 	for node in completed:
@@ -163,23 +179,47 @@ func _tick_production(delta: float) -> void:
 
 func _award_production(node: Node3D, data: BuildingData) -> void:
 	var pos := node.global_position
+	var level: int = node.get_meta("level", 1)
+	var mult := GameConfig.get_production_multiplier(level)
 	var offset := 0.0
 	if data.produces_gold > 0:
-		ResourceManager.add(ResourceManager.Type.GOLD, data.produces_gold)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [data.produces_gold, Tr.res_name("gold")], _res_colors["gold"])
+		var amount := int(data.produces_gold * mult)
+		ResourceManager.add(ResourceManager.Type.GOLD, amount)
+		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [amount, Tr.res_name("gold")], _res_colors["gold"])
 		offset += 0.3
 	if data.produces_steel > 0:
-		ResourceManager.add(ResourceManager.Type.STEEL, data.produces_steel)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [data.produces_steel, Tr.res_name("steel")], _res_colors["steel"])
+		var amount := int(data.produces_steel * mult)
+		ResourceManager.add(ResourceManager.Type.STEEL, amount)
+		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [amount, Tr.res_name("steel")], _res_colors["steel"])
 		offset += 0.3
 	if data.produces_oil > 0:
-		ResourceManager.add(ResourceManager.Type.OIL, data.produces_oil)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [data.produces_oil, Tr.res_name("oil")], _res_colors["oil"])
+		var amount := int(data.produces_oil * mult)
+		ResourceManager.add(ResourceManager.Type.OIL, amount)
+		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [amount, Tr.res_name("oil")], _res_colors["oil"])
 		offset += 0.3
 	if data.produces_wood > 0:
-		ResourceManager.add(ResourceManager.Type.WOOD, data.produces_wood)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [data.produces_wood, Tr.res_name("wood")], _res_colors["wood"])
+		var amount := int(data.produces_wood * mult)
+		ResourceManager.add(ResourceManager.Type.WOOD, amount)
+		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [amount, Tr.res_name("wood")], _res_colors["wood"])
 	EventBus.production_tick.emit(node)
+
+## Start upgrade on a building (reuses construction system)
+func start_upgrade(node: Node3D, data: BuildingData, new_level: int) -> void:
+	var cost := GameConfig.get_upgrade_cost(data, new_level)
+	if not ResourceManager.can_afford(cost):
+		return
+	ResourceManager.spend_cost(cost)
+	var dur := GameConfig.get_upgrade_duration(new_level)
+	_producing.erase(node)
+	_constructing[node] = {
+		"remaining": dur,
+		"duration": dur,
+		"is_upgrade": true,
+		"new_level": new_level,
+	}
+	node.set_meta("under_construction", true)
+	_apply_construction_visual(node)
+	EventBus.building_upgrade_started.emit(node, new_level)
 
 # ── Offline Progression ──
 

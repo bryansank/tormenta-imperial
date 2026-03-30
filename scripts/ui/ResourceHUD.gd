@@ -4,10 +4,14 @@ extends CanvasLayer
 
 var _labels: Dictionary = {}  # ResourceManager.Type -> Label
 
+var _feedback_label: Label
+var _feedback_tween: Tween
+
 func _ready() -> void:
 	layer = 10
 	_setup_ui()
 	EventBus.resource_changed.connect(_on_resource_changed)
+	EventBus.resources_insufficient.connect(_on_insufficient)
 
 func _setup_ui() -> void:
 	var panel := PanelContainer.new()
@@ -88,4 +92,33 @@ func _on_resource_changed(resource_type: String, new_amount: int, _delta: int) -
 	for type in _labels:
 		if ResourceManager.get_type_name(type) == resource_type:
 			_labels[type].text = str(new_amount)
+			# Flash red if at cap
+			var cap := ResourceManager.get_storage_cap()
+			if new_amount >= cap:
+				_labels[type].add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+			else:
+				_labels[type].add_theme_color_override("font_color", Color(1, 1, 1))
 			break
+
+func _on_insufficient(_resource_type: String, _required: int, _available: int) -> void:
+	_show_feedback(Tr.t("LBL_NOT_ENOUGH_RESOURCES"))
+
+func _show_feedback(text: String) -> void:
+	if not _feedback_label:
+		_feedback_label = Label.new()
+		_feedback_label.add_theme_font_size_override("font_size", 18)
+		_feedback_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
+		_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_feedback_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		_feedback_label.position.y = 50
+		_feedback_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		add_child(_feedback_label)
+	_feedback_label.text = text
+	_feedback_label.modulate.a = 1.0
+	_feedback_label.visible = true
+	if _feedback_tween and _feedback_tween.is_valid():
+		_feedback_tween.kill()
+	_feedback_tween = create_tween()
+	_feedback_tween.tween_interval(1.5)
+	_feedback_tween.tween_property(_feedback_label, "modulate:a", 0.0, 0.8)
+	_feedback_tween.tween_callback(func(): _feedback_label.visible = false)

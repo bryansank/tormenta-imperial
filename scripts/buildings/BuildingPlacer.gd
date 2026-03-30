@@ -11,6 +11,7 @@ var _preview_node: Node3D = null
 var _preview_mesh: MeshInstance3D = null
 var _moving_building: Node3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
+var _grid_overlay: MeshInstance3D = null
 
 # Container for all placed buildings
 var _buildings_container: Node3D
@@ -154,22 +155,39 @@ func _on_demolish_requested(building: Node3D) -> void:
 	# Remove from grid and scene
 	GridManager.remove_building(building)
 	building.queue_free()
+	# Update warehouse count
+	if data.id == "warehouse":
+		ResourceManager.set_warehouse_count(count_building("warehouse"))
 	EventBus.building_demolished.emit(building, cell)
 
 func _try_place(cell: Vector2i) -> void:
 	if not GridManager.can_place(cell, _current_data.grid_size):
 		return
+	# Check building limit
+	if not _check_building_limit(_current_data.id):
+		_show_feedback(Tr.t("LBL_LIMIT_REACHED") % [count_building(_current_data.id), GameConfig.get_building_limit(_current_data.id)])
+		return
+	# Check prerequisites
+	if not _check_prerequisites(_current_data.id):
+		var reqs := GameConfig.get_prerequisites(_current_data.id)
+		_show_feedback(Tr.t("LBL_REQUIRES") % " + ".join(reqs))
+		return
 	# Check and deduct cost
 	var cost := _current_data.get_cost()
 	if not cost.is_empty():
 		if not ResourceManager.can_afford(cost):
+			_show_feedback(Tr.t("LBL_NOT_ENOUGH_RESOURCES"))
 			return
 		ResourceManager.spend_cost(cost)
 	var building := _create_building_mesh(_current_data)
+	building.set_meta("level", 1)
 	var world_pos := GridManager.building_center(cell, _current_data.grid_size)
 	building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
 	_buildings_container.add_child(building)
 	GridManager.place_building(cell, _current_data, building)
+	# Update warehouse count
+	if _current_data.id == "warehouse":
+		ResourceManager.set_warehouse_count(count_building("warehouse"))
 	EventBus.building_placed.emit(_current_data, cell)
 	# Stay in placement mode for rapid building
 	_hover_cell = Vector2i(-1, -1)
@@ -206,6 +224,7 @@ func _try_move(cell: Vector2i) -> void:
 
 func _create_preview() -> void:
 	_cleanup_preview()
+	_show_grid_overlay()
 	_preview_node = Node3D.new()
 	_preview_mesh = MeshInstance3D.new()
 
@@ -230,6 +249,7 @@ func _cleanup_preview() -> void:
 		_preview_node.queue_free()
 		_preview_node = null
 		_preview_mesh = null
+	_hide_grid_overlay()
 	_hover_cell = Vector2i(-1, -1)
 
 func _cancel() -> void:
@@ -260,6 +280,9 @@ func get_all_placed_buildings() -> Array:
 			var origin: Vector2i = info["origin_cell"]
 			var data: BuildingData = info["data"]
 			var entry := { "id": data.id, "cell_x": origin.x, "cell_y": origin.y }
+			var level: int = building.get_meta("level", 1)
+			if level > 1:
+				entry["level"] = level
 			if building.has_meta("custom_name"):
 				entry["custom_name"] = building.get_meta("custom_name")
 			if ProductionManager.is_constructing(building):
@@ -305,3 +328,81 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	root.add_child(label)
 
 	return root
+
+# ── Grid Overlay ──
+
+func _show_grid_overlay() -> void:
+	_hide_grid_overlay()
+	var im := ImmediateMesh.new()
+	_grid_overlay = MeshInstance3D.new()
+	_grid_overlay.mesh = im
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.5, 0.45, 0.2, 0.15)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = true
+	_grid_overlay.set_surface_override_material(0, mat)
+
+	var cs := GridManager.cell_size
+	var gw := GridManager.grid_width
+	var gh := GridManager.grid_height
+	var ox: float = -(gw * cs) * 0.5
+	var oz: float = -(gh * cs) * 0.5
+
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for i in range(gw + 1):
+		var x := ox + i * cs
+		im.surface_add_vertex(Vector3(x, 0.02, oz))
+		im.surface_add_vertex(Vector3(x, 0.02, oz + gh * cs))
+	for j in range(gh + 1):
+		var z := oz + j * cs
+		im.surface_add_vertex(Vector3(ox, 0.02, z))
+		im.surface_add_vertex(Vector3(ox + gw * cs, 0.02, z))
+	im.surface_end()
+
+	add_child(_grid_overlay)
+
+func _hide_grid_overlay() -> void:
+	if _grid_overlay:
+		_grid_overlay.queue_free()
+		_grid_overlay = null
+
+# ── Limit / Prerequisite Helpers ──
+
+func count_building(building_id: String) -> int:
+	var count := 0
+	for child in _buildings_container.get_children():
+		if child.name == building_id:
+			count += 1
+	return count
+
+func _check_building_limit(building_id: String) -> bool:
+	var limit := GameConfig.get_building_limit(building_id)
+	if limit < 0:
+		return true
+	return count_building(building_id) < limit
+
+func _check_prerequisites(building_id: String) -> bool:
+	var reqs := GameConfig.get_prerequisites(building_id)
+	for req_id in reqs:
+		if count_building(req_id) < 1:
+			return false
+	return true
+
+func _show_feedback(text: String) -> void:
+	var camera := get_viewport().get_camera_3d()
+	if not camera:
+		return
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = 24
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.outline_size = 4
+	label.modulate = Color(1.0, 0.3, 0.2)
+	label.global_position = camera.global_position + camera.global_transform.basis.z * -8.0 + Vector3(0, 0, 0)
+	get_tree().current_scene.add_child(label)
+	var tween := create_tween()
+	tween.tween_property(label, "global_position:y", label.global_position.y + 2.0, 1.5)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, 1.5).set_delay(0.3)
+	tween.tween_callback(label.queue_free)

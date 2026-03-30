@@ -39,6 +39,10 @@ signal construction_completed(building_node: Node3D)
 # ── Production ──
 signal production_tick(building_node: Node3D)
 
+# ── Upgrades ──
+signal building_upgrade_started(building_node: Node3D, new_level: int)
+signal building_upgrade_completed(building_node: Node3D, new_level: int)
+
 # ── Demolish ──
 signal request_demolish_building(building_node: Node3D)
 signal building_demolished(building_node: Node3D, cell: Vector2i)

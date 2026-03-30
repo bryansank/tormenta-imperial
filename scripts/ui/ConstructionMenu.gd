@@ -89,9 +89,13 @@ func _toggle_panel() -> void:
 
 func _create_building_button(data: BuildingData) -> Button:
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(320, 55)
+	btn.custom_minimum_size = Vector2(320, 0)
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 
+	var lines: Array = []
+	lines.append("%s [%dx%d]" % [data.display_name, data.grid_size.x, data.grid_size.y])
+
+	# Cost
 	var cost_parts: Array = []
 	if data.cost_gold > 0:
 		cost_parts.append(str(data.cost_gold) + " " + Tr.res_name("gold"))
@@ -101,12 +105,30 @@ func _create_building_button(data: BuildingData) -> Button:
 		cost_parts.append(str(data.cost_oil) + " " + Tr.res_name("oil"))
 	if data.cost_wood > 0:
 		cost_parts.append(str(data.cost_wood) + " " + Tr.res_name("wood"))
-	var cost_str := " | ".join(cost_parts) if cost_parts.size() > 0 else Tr.t("LBL_FREE")
+	lines.append(Tr.t("FMT_COST") % (" | ".join(cost_parts) if cost_parts.size() > 0 else Tr.t("LBL_FREE")))
 
-	btn.text = "%s [%dx%d]\n%s" % [data.display_name, data.grid_size.x, data.grid_size.y, cost_str]
+	# Production tooltip
+	var prod_parts: Array = []
+	if data.produces_gold > 0:
+		prod_parts.append("+%d %s" % [data.produces_gold, Tr.res_name("gold")])
+	if data.produces_steel > 0:
+		prod_parts.append("+%d %s" % [data.produces_steel, Tr.res_name("steel")])
+	if data.produces_oil > 0:
+		prod_parts.append("+%d %s" % [data.produces_oil, Tr.res_name("oil")])
+	if data.produces_wood > 0:
+		prod_parts.append("+%d %s" % [data.produces_wood, Tr.res_name("wood")])
+	if not prod_parts.is_empty():
+		lines.append(Tr.t("FMT_PRODUCES") % " | ".join(prod_parts))
+
+	# Prerequisites
+	var reqs := GameConfig.get_prerequisites(data.id)
+	if not reqs.is_empty():
+		lines.append(Tr.t("LBL_REQUIRES") % " + ".join(reqs))
+
+	btn.text = "\n".join(lines)
 
 	_style_button(btn, Color(0.18, 0.18, 0.22, 0.85))
-	btn.add_theme_font_size_override("font_size", 13)
+	btn.add_theme_font_size_override("font_size", 12)
 
 	btn.pressed.connect(func():
 		EventBus.building_selected_for_placement.emit(data)

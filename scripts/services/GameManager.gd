@@ -8,6 +8,7 @@ var _placer: Node = null
 var _map_gen: Node = null
 var _camera: Camera3D = null
 var _started := false
+var _warehouse_count := 0
 
 func register_placer(placer: Node) -> void:
 	_placer = placer
@@ -80,11 +81,25 @@ func _load_game() -> void:
 					var label: Node = node.get_node_or_null("NameLabel")
 					if label and label is Label3D:
 						label.text = entry["custom_name"]
+				# Restore level
+				var level: int = entry.get("level", 1)
+				node.set_meta("level", level)
+				if level > 1:
+					var mesh_inst := node.get_child(0)
+					if mesh_inst is MeshInstance3D:
+						var s := 1.0 + (level - 1) * 0.1
+						mesh_inst.scale = Vector3(s, s, s)
 				# Register with ProductionManager (restore construction state)
 				var constr_remaining := 0.0
 				if entry.has("construction_remaining"):
 					constr_remaining = float(entry["construction_remaining"])
 				ProductionManager.register_building(node, building_data, constr_remaining)
+				# Count warehouses
+				if building_data.id == "warehouse":
+					_warehouse_count += 1
+
+	ResourceManager.set_warehouse_count(_warehouse_count)
+	_warehouse_count = 0
 
 	# Restore deposits
 	if data.has("deposits"):

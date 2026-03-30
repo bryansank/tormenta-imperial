@@ -1,19 +1,10 @@
 extends Node
 ## Central configuration table for all tunable game values.
 ## Toggle dev_mode for fast testing. All durations go through time_multiplier.
-##
-## Usage:
-##   GameConfig.dev_mode = true      → all times ~1-2s for testing
-##   GameConfig.time_multiplier = 0.5 → everything 2x faster
-##   GameConfig.get_duration(30.0)   → returns 30.0 * time_multiplier (or 1.0 in dev)
 
 # ── Master Controls ──
 
-## When true, all durations become near-instant for testing
 var dev_mode := true
-
-## Global speed multiplier for all durations (build, process, mining, production)
-## 1.0 = normal, 0.5 = 2x faster, 0.1 = 10x faster
 var time_multiplier := 1.0
 
 # ── Starting Resources ──
@@ -25,7 +16,48 @@ var starting_resources := {
 	"wood": 400,
 }
 
-# ── Building Processes (nucleo) ──
+# ── Upgrade System ──
+
+var max_building_level := 3
+
+## Cost multiplier per level: level 1 = base cost, level 2 = 1.8x, level 3 = 3.0x
+var upgrade_cost_multiplier := [1.0, 1.8, 3.0]
+
+## Production multiplier per level
+var upgrade_production_multiplier := [1.0, 1.6, 2.5]
+
+## Upgrade duration base (seconds), scaled by time_multiplier
+var upgrade_base_duration := 15.0
+
+# ── Building Limits (max per type, -1 = unlimited) ──
+
+var building_limits := {
+	"sawmill": 3,
+	"gold_mine": 2,
+	"foundry": 2,
+	"refinery": 1,
+	"warehouse": 2,
+	"barracks": 2,
+	"tower": 4,
+	"headquarters": 1,
+}
+
+# ── Building Prerequisites (must have at least 1 of each listed) ──
+
+var building_prerequisites := {
+	"foundry": ["sawmill"],
+	"refinery": ["foundry"],
+	"barracks": ["foundry", "sawmill"],
+	"tower": ["barracks"],
+	"headquarters": ["barracks", "refinery"],
+}
+
+# ── Storage ──
+
+var base_storage_cap := 1000
+var warehouse_storage_bonus := 500
+
+# ── Building Processes ──
 
 var building_processes := {
 	"nucleo": [
@@ -35,6 +67,30 @@ var building_processes := {
 		 "cost": {"steel": 30}, "produces": {"steel": 70}},
 		{"id": "water_pipes", "name": "PROC_WATER_PIPES", "duration": 60.0,
 		 "cost": {"steel": 20, "wood": 10}, "produces": {"gold": 100}},
+	],
+	"sawmill": [
+		{"id": "refined_lumber", "name": "PROC_REFINED_LUMBER", "duration": 30.0,
+		 "cost": {"wood": 15}, "produces": {"wood": 30, "gold": 5}},
+		{"id": "charcoal", "name": "PROC_CHARCOAL", "duration": 25.0,
+		 "cost": {"wood": 20}, "produces": {"steel": 10}},
+	],
+	"gold_mine": [
+		{"id": "deep_mining", "name": "PROC_DEEP_MINING", "duration": 35.0,
+		 "cost": {"steel": 10}, "produces": {"gold": 40}},
+		{"id": "gem_extraction", "name": "PROC_GEM_EXTRACTION", "duration": 60.0,
+		 "cost": {"gold": 20, "steel": 5}, "produces": {"gold": 80}},
+	],
+	"foundry": [
+		{"id": "alloy_smelting", "name": "PROC_ALLOY_SMELTING", "duration": 40.0,
+		 "cost": {"steel": 25, "wood": 10}, "produces": {"steel": 60}},
+		{"id": "armor_plates", "name": "PROC_ARMOR_PLATES", "duration": 45.0,
+		 "cost": {"steel": 30}, "produces": {"steel": 20, "gold": 15}},
+	],
+	"refinery": [
+		{"id": "fuel_distillation", "name": "PROC_FUEL_DISTILLATION", "duration": 30.0,
+		 "cost": {"oil": 15}, "produces": {"oil": 35}},
+		{"id": "chemical_processing", "name": "PROC_CHEMICAL_PROCESSING", "duration": 50.0,
+		 "cost": {"oil": 20, "steel": 10}, "produces": {"oil": 25, "gold": 30}},
 	],
 }
 
@@ -62,21 +118,16 @@ var deposit_center_exclusion := 4
 
 # ── Economy ──
 
-## Fraction of build cost returned on demolish (0.5 = 50%)
 var demolish_refund_ratio := 0.5
-
-## Max offline seconds for progression (28800 = 8 hours)
 var max_offline_seconds := 28800.0
 
 # ── Duration Helpers ──
 
-## Apply time_multiplier (or dev override) to any base duration
 func get_duration(base: float) -> float:
 	if dev_mode:
 		return 1.0
 	return base * time_multiplier
 
-## Same but for build times specifically (allows separate tuning later)
 func get_build_time(base: float) -> float:
 	if base <= 0.0:
 		return 0.0
@@ -84,13 +135,37 @@ func get_build_time(base: float) -> float:
 		return 1.0
 	return base * time_multiplier
 
-## Same for production intervals
 func get_production_interval(base: float) -> float:
 	if base <= 0.0:
 		return 0.0
 	if dev_mode:
 		return 2.0
 	return base * time_multiplier
+
+func get_upgrade_duration(level: int) -> float:
+	return get_duration(upgrade_base_duration * level)
+
+# ── Upgrade Helpers ──
+
+func get_upgrade_cost(data: BuildingData, to_level: int) -> Dictionary:
+	if to_level < 1 or to_level > max_building_level:
+		return {}
+	var mult: float = upgrade_cost_multiplier[to_level - 1]
+	var cost := {}
+	if data.cost_gold > 0:
+		cost[ResourceManager.Type.GOLD] = int(data.cost_gold * mult)
+	if data.cost_steel > 0:
+		cost[ResourceManager.Type.STEEL] = int(data.cost_steel * mult)
+	if data.cost_oil > 0:
+		cost[ResourceManager.Type.OIL] = int(data.cost_oil * mult)
+	if data.cost_wood > 0:
+		cost[ResourceManager.Type.WOOD] = int(data.cost_wood * mult)
+	return cost
+
+func get_production_multiplier(level: int) -> float:
+	if level < 1 or level > max_building_level:
+		return 1.0
+	return upgrade_production_multiplier[level - 1]
 
 # ── Process/Mining with duration already scaled ──
 
@@ -113,3 +188,16 @@ func get_mining_info(deposit_id: String) -> Dictionary:
 
 func get_deposit_max_uses(deposit_id: String) -> int:
 	return deposit_max_uses.get(deposit_id, 3)
+
+# ── Building Limit Helpers ──
+
+func get_building_limit(building_id: String) -> int:
+	return building_limits.get(building_id, -1)
+
+func get_prerequisites(building_id: String) -> Array:
+	return building_prerequisites.get(building_id, [])
+
+# ── Storage Helpers ──
+
+func get_storage_cap(warehouse_count: int) -> int:
+	return base_storage_cap + (warehouse_count * warehouse_storage_bonus)
