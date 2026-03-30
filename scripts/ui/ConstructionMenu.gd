@@ -19,7 +19,7 @@ func _setup_ui() -> void:
 
 	# Build button at bottom center
 	_build_btn = Button.new()
-	_build_btn.text = "CONSTRUIR"
+	_build_btn.text = Tr.t("BTN_BUILD")
 	_build_btn.custom_minimum_size = Vector2(160, 45)
 	_build_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_build_btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -59,7 +59,7 @@ func _setup_ui() -> void:
 	vbox.add_child(title_row)
 
 	var title := Label.new()
-	title.text = "Edificios disponibles"
+	title.text = Tr.t("LBL_BUILDINGS_AVAILABLE")
 	title.add_theme_font_size_override("font_size", 15)
 	title.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -94,14 +94,14 @@ func _create_building_button(data: BuildingData) -> Button:
 
 	var cost_parts: Array = []
 	if data.cost_gold > 0:
-		cost_parts.append(str(data.cost_gold) + " oro")
+		cost_parts.append(str(data.cost_gold) + " " + Tr.res_name("gold"))
 	if data.cost_steel > 0:
-		cost_parts.append(str(data.cost_steel) + " acero")
+		cost_parts.append(str(data.cost_steel) + " " + Tr.res_name("steel"))
 	if data.cost_oil > 0:
-		cost_parts.append(str(data.cost_oil) + " petroleo")
+		cost_parts.append(str(data.cost_oil) + " " + Tr.res_name("oil"))
 	if data.cost_wood > 0:
-		cost_parts.append(str(data.cost_wood) + " madera")
-	var cost_str := " | ".join(cost_parts) if cost_parts.size() > 0 else "Gratis"
+		cost_parts.append(str(data.cost_wood) + " " + Tr.res_name("wood"))
+	var cost_str := " | ".join(cost_parts) if cost_parts.size() > 0 else Tr.t("LBL_FREE")
 
 	btn.text = "%s [%dx%d]\n%s" % [data.display_name, data.grid_size.x, data.grid_size.y, cost_str]
 

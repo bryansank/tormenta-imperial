@@ -3,9 +3,9 @@ extends Node
 ## Buildings with build_time > 0 go through construction before producing.
 ## Spawns floating text when resources are awarded.
 
-# Construction tracking: Node3D → {remaining: float, duration: float}
+# Construction tracking: Node3D -> {remaining: float, duration: float}
 var _constructing: Dictionary = {}
-# Production tracking: Node3D → {timer: float, data: BuildingData}
+# Production tracking: Node3D -> {timer: float, data: BuildingData}
 var _producing: Dictionary = {}
 
 var _res_colors := {
@@ -25,17 +25,19 @@ func _on_building_placed(data: Resource, cell: Vector2i) -> void:
 	var node := GridManager.get_building_at(cell)
 	if not node:
 		return
-	if building_data.build_time > 0.0:
-		_start_construction(node, building_data)
+	var build_time := GameConfig.get_build_time(building_data.build_time)
+	if build_time > 0.0:
+		_start_construction(node, building_data, build_time)
 	else:
 		_register_producer(node, building_data)
 
 ## Called by GameManager when loading saved buildings.
 func register_building(node: Node3D, data: BuildingData, construction_remaining := 0.0) -> void:
 	if construction_remaining > 0.0:
+		var total_duration := GameConfig.get_build_time(data.build_time)
 		_constructing[node] = {
-			"remaining": construction_remaining,
-			"duration": data.build_time,
+			"remaining": minf(construction_remaining, total_duration),
+			"duration": total_duration,
 		}
 		node.set_meta("under_construction", true)
 		_apply_construction_visual(node)
@@ -68,24 +70,23 @@ func get_construction_remaining(node: Node3D) -> float:
 		return 0.0
 	return _constructing[node]["remaining"]
 
-func _start_construction(node: Node3D, data: BuildingData) -> void:
+func _start_construction(node: Node3D, data: BuildingData, duration: float = -1.0) -> void:
+	var dur := duration if duration > 0.0 else GameConfig.get_build_time(data.build_time)
 	_constructing[node] = {
-		"remaining": data.build_time,
-		"duration": data.build_time,
+		"remaining": dur,
+		"duration": dur,
 	}
 	node.set_meta("under_construction", true)
 	_apply_construction_visual(node)
 	EventBus.construction_started.emit(node)
 
 func _apply_construction_visual(node: Node3D) -> void:
-	# Make mesh semi-transparent
 	var mesh_inst := node.get_child(0)
 	if mesh_inst is MeshInstance3D:
 		var mat: StandardMaterial3D = mesh_inst.get_surface_override_material(0)
 		if mat:
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			mat.albedo_color.a = 0.35
-	# Add construction label below name
 	if not node.get_node_or_null("ConstructionLabel"):
 		var data_info := GridManager.get_building_info(node)
 		var height: float = 1.5
@@ -93,7 +94,7 @@ func _apply_construction_visual(node: Node3D) -> void:
 			height = (data_info["data"] as BuildingData).mesh_height
 		var label := Label3D.new()
 		label.name = "ConstructionLabel"
-		label.text = "Construyendo 0%"
+		label.text = Tr.t("FMT_CONSTRUCTING") % [0]
 		label.font_size = 18
 		label.position.y = height + 0.7
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -106,20 +107,16 @@ func _complete_construction(node: Node3D) -> void:
 	if not is_instance_valid(node):
 		return
 	node.remove_meta("under_construction")
-	# Restore mesh opacity
 	var mesh_inst := node.get_child(0)
 	if mesh_inst is MeshInstance3D:
 		var mat: StandardMaterial3D = mesh_inst.get_surface_override_material(0)
 		if mat:
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 			mat.albedo_color.a = 1.0
-	# Remove construction label
 	var label := node.get_node_or_null("ConstructionLabel")
 	if label:
 		label.queue_free()
-	# Spawn completion text
-	_spawn_floating_text(node.global_position, "Construccion completa!", Color(0.3, 1.0, 0.3))
-	# Register for production
+	_spawn_floating_text(node.global_position, Tr.t("FMT_CONSTRUCTION_COMPLETE"), Color(0.3, 1.0, 0.3))
 	var info := GridManager.get_building_info(node)
 	if not info.is_empty():
 		_register_producer(node, info["data"])
@@ -139,9 +136,9 @@ func _tick_construction(delta: float) -> void:
 			continue
 		_constructing[node]["remaining"] -= delta
 		var progress := get_construction_progress(node)
-		var label := node.get_node_or_null("ConstructionLabel")
+		var label: Node = node.get_node_or_null("ConstructionLabel")
 		if label:
-			label.text = "Construyendo %d%%" % int(progress * 100)
+			label.text = Tr.t("FMT_CONSTRUCTING") % int(progress * 100)
 		if _constructing[node]["remaining"] <= 0.0:
 			completed.append(node)
 	for node in completed:
@@ -157,8 +154,9 @@ func _tick_production(delta: float) -> void:
 			continue
 		_producing[node]["timer"] += delta
 		var data: BuildingData = _producing[node]["data"]
-		if _producing[node]["timer"] >= data.production_interval:
-			_producing[node]["timer"] -= data.production_interval
+		var interval := GameConfig.get_production_interval(data.production_interval)
+		if interval > 0.0 and _producing[node]["timer"] >= interval:
+			_producing[node]["timer"] -= interval
 			_award_production(node, data)
 	for node in to_remove:
 		_producing.erase(node)
@@ -168,35 +166,29 @@ func _award_production(node: Node3D, data: BuildingData) -> void:
 	var offset := 0.0
 	if data.produces_gold > 0:
 		ResourceManager.add(ResourceManager.Type.GOLD, data.produces_gold)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d oro" % data.produces_gold, _res_colors["gold"])
+		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [data.produces_gold, Tr.res_name("gold")], _res_colors["gold"])
 		offset += 0.3
 	if data.produces_steel > 0:
 		ResourceManager.add(ResourceManager.Type.STEEL, data.produces_steel)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d acero" % data.produces_steel, _res_colors["steel"])
+		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [data.produces_steel, Tr.res_name("steel")], _res_colors["steel"])
 		offset += 0.3
 	if data.produces_oil > 0:
 		ResourceManager.add(ResourceManager.Type.OIL, data.produces_oil)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d petroleo" % data.produces_oil, _res_colors["oil"])
+		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [data.produces_oil, Tr.res_name("oil")], _res_colors["oil"])
 		offset += 0.3
 	if data.produces_wood > 0:
 		ResourceManager.add(ResourceManager.Type.WOOD, data.produces_wood)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d madera" % data.produces_wood, _res_colors["wood"])
+		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [data.produces_wood, Tr.res_name("wood")], _res_colors["wood"])
 	EventBus.production_tick.emit(node)
 
 # ── Offline Progression ──
 
-const MAX_OFFLINE_SECONDS := 28800.0  # 8 hours cap
-
-## Called on load: applies elapsed time to construction and production.
-## Returns dictionary of total earned resources {"gold": N, "steel": N, ...}.
 func apply_offline_progression(elapsed: float) -> Dictionary:
-	elapsed = minf(elapsed, MAX_OFFLINE_SECONDS)
+	elapsed = minf(elapsed, GameConfig.max_offline_seconds)
 	var earnings := {}
 
-	# 1. Snapshot current producers before construction adds new ones
 	var existing_producers: Array = _producing.keys().duplicate()
 
-	# 2. Handle construction — complete buildings that finished offline
 	var to_complete: Array = []
 	for node in _constructing.keys():
 		if not is_instance_valid(node):
@@ -205,36 +197,36 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 		if elapsed >= remaining:
 			to_complete.append({"node": node, "leftover": elapsed - remaining})
 		else:
-			# Still constructing but advanced
 			_constructing[node]["remaining"] -= elapsed
 			var progress := get_construction_progress(node)
-			var label := node.get_node_or_null("ConstructionLabel")
+			var label: Node = node.get_node_or_null("ConstructionLabel")
 			if label:
-				label.text = "Construyendo %d%%" % int(progress * 100)
+				label.text = Tr.t("FMT_CONSTRUCTING") % int(progress * 100)
 
 	for entry in to_complete:
 		var node: Node3D = entry["node"]
 		var leftover: float = entry["leftover"]
 		var info := GridManager.get_building_info(node)
 		_complete_construction(node)
-		# Production for the time after construction finished
 		if not info.is_empty():
 			var data: BuildingData = info["data"]
 			if data.is_producer():
-				var cycles := int(leftover / data.production_interval)
-				_accumulate_earnings(earnings, data, cycles)
+				var interval := GameConfig.get_production_interval(data.production_interval)
+				if interval > 0.0:
+					var cycles := int(leftover / interval)
+					_accumulate_earnings(earnings, data, cycles)
 
-	# 3. Production from buildings that were already operational
 	for node in existing_producers:
 		if not is_instance_valid(node):
 			continue
 		if not _producing.has(node):
 			continue
 		var data: BuildingData = _producing[node]["data"]
-		var cycles := int(elapsed / data.production_interval)
-		_accumulate_earnings(earnings, data, cycles)
+		var interval := GameConfig.get_production_interval(data.production_interval)
+		if interval > 0.0:
+			var cycles := int(elapsed / interval)
+			_accumulate_earnings(earnings, data, cycles)
 
-	# 4. Award all resources at once
 	for res_name in earnings:
 		if earnings[res_name] > 0:
 			var type = _res_to_type(res_name)

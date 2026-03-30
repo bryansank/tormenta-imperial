@@ -24,9 +24,9 @@ func _setup_ui() -> void:
 	hbox.add_theme_constant_override("separation", 40)
 	panel.add_child(hbox)
 
-	# LIMPIAR button (clear save and restart)
+	# Clear save button
 	var clear_btn := Button.new()
-	clear_btn.text = "LIMPIAR"
+	clear_btn.text = Tr.t("BTN_CLEAR")
 	clear_btn.custom_minimum_size = Vector2(80, 28)
 	var clear_style := StyleBoxFlat.new()
 	clear_style.bg_color = Color(0.5, 0.15, 0.15, 0.8)
@@ -42,35 +42,39 @@ func _setup_ui() -> void:
 	hbox.add_child(clear_btn)
 
 	# Create label for each resource type
-	var resource_config := [
-		[ResourceManager.Type.GOLD, "ORO", Color(1.0, 0.85, 0.2)],
-		[ResourceManager.Type.STEEL, "ACERO", Color(0.7, 0.75, 0.8)],
-		[ResourceManager.Type.OIL, "PETROLEO", Color(0.3, 0.3, 0.35)],
-		[ResourceManager.Type.WOOD, "MADERA", Color(0.55, 0.35, 0.15)],
+	var resource_ids := ["gold", "steel", "oil", "wood"]
+	var resource_types := [
+		ResourceManager.Type.GOLD,
+		ResourceManager.Type.STEEL,
+		ResourceManager.Type.OIL,
+		ResourceManager.Type.WOOD,
+	]
+	var resource_colors := [
+		Color(1.0, 0.85, 0.2),
+		Color(0.7, 0.75, 0.8),
+		Color(0.3, 0.3, 0.35),
+		Color(0.55, 0.35, 0.15),
 	]
 
-	for config in resource_config:
-		var type: ResourceManager.Type = config[0]
-		var name: String = config[1]
-		var color: Color = config[2]
+	for i in range(resource_ids.size()):
+		var type: ResourceManager.Type = resource_types[i]
+		var res_id: String = resource_ids[i]
+		var color: Color = resource_colors[i]
 
 		var item := HBoxContainer.new()
 		item.add_theme_constant_override("separation", 8)
 
-		# Color indicator
 		var indicator := ColorRect.new()
 		indicator.custom_minimum_size = Vector2(12, 12)
 		indicator.color = color
 		item.add_child(indicator)
 
-		# Name
 		var name_label := Label.new()
-		name_label.text = name
+		name_label.text = Tr.res_upper(res_id)
 		name_label.add_theme_font_size_override("font_size", 14)
 		name_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 		item.add_child(name_label)
 
-		# Amount
 		var amount_label := Label.new()
 		amount_label.text = str(ResourceManager.get_amount(type))
 		amount_label.add_theme_font_size_override("font_size", 16)
@@ -81,7 +85,6 @@ func _setup_ui() -> void:
 		hbox.add_child(item)
 
 func _on_resource_changed(resource_type: String, new_amount: int, _delta: int) -> void:
-	# Find the Type enum from the string name
 	for type in _labels:
 		if ResourceManager.get_type_name(type) == resource_type:
 			_labels[type].text = str(new_amount)

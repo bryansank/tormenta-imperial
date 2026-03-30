@@ -43,6 +43,9 @@ signal production_tick(building_node: Node3D)
 signal request_demolish_building(building_node: Node3D)
 signal building_demolished(building_node: Node3D, cell: Vector2i)
 
+# ── Deposits ──
+signal deposit_depleted(deposit_node: Node3D, deposit_id: String)
+
 # ── Ground Interaction ──
 signal ground_clicked(world_pos: Vector3, cell: Vector2i)
 signal ground_hover(world_pos: Vector3, cell: Vector2i)

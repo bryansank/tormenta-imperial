@@ -28,6 +28,7 @@ extends Resource
 # Visual
 @export var mesh_height: float = 1.5
 @export var mesh_color: Color = Color(0.5, 0.5, 0.5, 1.0)
+@export var model_scene: PackedScene = null
 
 # Stats
 @export var max_health: int = 100

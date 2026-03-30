@@ -43,7 +43,7 @@ func _new_game() -> void:
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
 		var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
-		var node := _placer.place_building_at(nucleo_data, center)
+		var node: Node3D = _placer.place_building_at(nucleo_data, center)
 		if node:
 			ProductionManager.register_building(node, nucleo_data, 0.0)
 	# Generate random deposits
@@ -71,13 +71,13 @@ func _load_game() -> void:
 		for entry in data["buildings"]:
 			var building_data := _load_building_data(entry["id"])
 			if building_data:
-				var node := _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]))
+				var node: Node3D = _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]))
 				if not node:
 					continue
 				# Restore custom name
 				if entry.has("custom_name") and entry["custom_name"] != "":
 					node.set_meta("custom_name", entry["custom_name"])
-					var label := node.get_node_or_null("NameLabel")
+					var label: Node = node.get_node_or_null("NameLabel")
 					if label and label is Label3D:
 						label.text = entry["custom_name"]
 				# Register with ProductionManager (restore construction state)
@@ -89,7 +89,8 @@ func _load_game() -> void:
 	# Restore deposits
 	if data.has("deposits"):
 		for entry in data["deposits"]:
-			_map_gen.spawn_deposit(entry["id"], Vector2i(entry["cell_x"], entry["cell_y"]))
+			var uses: int = entry.get("uses_remaining", -1)
+			_map_gen.spawn_deposit(entry["id"], Vector2i(entry["cell_x"], entry["cell_y"]), uses)
 
 	# Restore camera
 	if data.has("camera") and _camera and _camera.has_method("set_state"):
@@ -183,7 +184,7 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	panel.add_child(vbox)
 
 	var title := Label.new()
-	title.text = "Mientras estuviste fuera (%s)" % _format_elapsed(elapsed)
+	title.text = Tr.t("FMT_OFFLINE_TITLE") % _format_elapsed(elapsed)
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.25))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -192,7 +193,7 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	var sep := HSeparator.new()
 	vbox.add_child(sep)
 
-	var res_names := {"gold": "Oro", "steel": "Acero", "oil": "Petroleo", "wood": "Madera"}
+	var res_names: Dictionary = {"gold": Tr.res_cap("gold"), "steel": Tr.res_cap("steel"), "oil": Tr.res_cap("oil"), "wood": Tr.res_cap("wood")}
 	var res_colors := {
 		"gold": Color(1.0, 0.85, 0.1),
 		"steel": Color(0.7, 0.75, 0.8),

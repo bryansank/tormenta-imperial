@@ -1,26 +1,6 @@
 extends Node
 ## Manages timed processes for buildings and mining for deposits.
-## Holds process/mining definitions and tracks active timers.
-
-# Process definitions per building type
-const BUILDING_PROCESSES := {
-	"nucleo": [
-		{"id": "wood_planks", "name": "Láminas de Madera", "duration": 30.0,
-		 "cost": {"wood": 20}, "produces": {"wood": 50}},
-		{"id": "iron_sheets", "name": "Láminas de Hierro", "duration": 45.0,
-		 "cost": {"steel": 30}, "produces": {"steel": 70}},
-		{"id": "water_pipes", "name": "Tubos de Agua", "duration": 60.0,
-		 "cost": {"steel": 20, "wood": 10}, "produces": {"gold": 100}},
-	],
-}
-
-# Mining yields per deposit type
-const MINING_DATA := {
-	"gold_vein": {"id": "mine_gold", "name": "Minar Oro", "duration": 15.0, "produces": {"gold": 25}},
-	"iron_deposit": {"id": "mine_iron", "name": "Minar Hierro", "duration": 20.0, "produces": {"steel": 20}},
-	"oil_well": {"id": "mine_oil", "name": "Extraer Petróleo", "duration": 25.0, "produces": {"oil": 15}},
-	"forest": {"id": "mine_wood", "name": "Talar Árboles", "duration": 10.0, "produces": {"wood": 30}},
-}
+## Reads definitions from GameConfig (durations already scaled).
 
 var _type_map := {
 	"gold": ResourceManager.Type.GOLD,
@@ -29,14 +9,14 @@ var _type_map := {
 	"wood": ResourceManager.Type.WOOD,
 }
 
-# Active processes: Node3D → {id, name, remaining, duration, produces}
+# Active processes: Node3D -> {id, name, remaining, duration, produces}
 var _active: Dictionary = {}
 
 func get_processes_for(building_id: String) -> Array:
-	return BUILDING_PROCESSES.get(building_id, [])
+	return GameConfig.get_processes_for(building_id)
 
 func get_mining_info(deposit_id: String) -> Dictionary:
-	return MINING_DATA.get(deposit_id, {})
+	return GameConfig.get_mining_info(deposit_id)
 
 func is_busy(node: Node3D) -> bool:
 	return _active.has(node)
@@ -63,7 +43,7 @@ func start_process(node: Node3D, process: Dictionary) -> bool:
 		ResourceManager.spend_cost(cost)
 	_active[node] = {
 		"id": process["id"],
-		"name": process["name"],
+		"name": Tr.t(process["name"]),
 		"remaining": process["duration"],
 		"duration": process["duration"],
 		"produces": process["produces"],
@@ -79,7 +59,7 @@ func start_mining(node: Node3D, deposit_id: String) -> bool:
 		return false
 	_active[node] = {
 		"id": data["id"],
-		"name": data["name"],
+		"name": Tr.t(data["name"]),
 		"remaining": data["duration"],
 		"duration": data["duration"],
 		"produces": data["produces"],
@@ -108,12 +88,11 @@ var _res_colors := {
 
 func _complete(node: Node3D) -> void:
 	var info: Dictionary = _active[node]
-	# Award produced resources with floating text
 	for res_name in info["produces"]:
 		if _type_map.has(res_name):
 			ResourceManager.add(_type_map[res_name], info["produces"][res_name])
 			if is_instance_valid(node):
-				_spawn_floating_text(node.global_position, "+%d %s" % [info["produces"][res_name], _translate_res(res_name)], _res_colors.get(res_name, Color.WHITE))
+				_spawn_floating_text(node.global_position, "+%d %s" % [info["produces"][res_name], Tr.res_name(res_name)], _res_colors.get(res_name, Color.WHITE))
 	var pid: String = info["id"]
 	_active.erase(node)
 	if is_instance_valid(node):
@@ -128,14 +107,6 @@ func _convert_cost(cost_dict: Dictionary) -> Dictionary:
 		if _type_map.has(res_name):
 			result[_type_map[res_name]] = cost_dict[res_name]
 	return result
-
-func _translate_res(res_name: String) -> String:
-	match res_name:
-		"gold": return "oro"
-		"steel": return "acero"
-		"oil": return "petroleo"
-		"wood": return "madera"
-	return res_name
 
 func _spawn_floating_text(world_pos: Vector3, text: String, color: Color) -> void:
 	var label := Label3D.new()
