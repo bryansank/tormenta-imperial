@@ -1,18 +1,20 @@
-[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="BuildingData" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/models/buildings/barracks/barracks.tscn" id="2"]
 
 [resource]
 script = ExtResource("1")
+model_scene = ExtResource("2")
 id = "barracks"
 display_name = "Cuartel"
 description = "Entrena unidades de infantería."
 grid_size = Vector2i(2, 2)
-cost_gold = 200
-cost_steel = 150
-cost_oil = 50
-cost_wood = 100
-build_time = 10.0
+cost_gold = 250
+cost_steel = 100
+cost_oil = 0
+cost_wood = 80
+build_time = 15.0
 produces_gold = 0
 produces_steel = 0
 produces_oil = 0
@@ -20,4 +22,5 @@ produces_wood = 0
 production_interval = 0.0
 mesh_height = 2.0
 mesh_color = Color(0.4, 0.3, 0.2, 1)
+workers_required = 3
 max_health = 300

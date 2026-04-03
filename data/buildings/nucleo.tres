@@ -1,11 +1,9 @@
-[gd_resource type="Resource" script_class="BuildingData" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
-[ext_resource type="PackedScene" path="res://assets/models/buildings/nucleo/nucleo.tscn" id="2"]
 
 [resource]
 script = ExtResource("1")
-model_scene = ExtResource("2")
 id = "nucleo"
 display_name = "Núcleo"
 description = "Edificio central. El corazón de tu imperio."
@@ -15,12 +13,15 @@ cost_steel = 0
 cost_oil = 0
 cost_wood = 0
 build_time = 0.0
-produces_gold = 5
+produces_gold = 3
 produces_steel = 0
 produces_oil = 0
 produces_wood = 0
-production_interval = 15.0
+production_interval = 20.0
 mesh_height = 4.0
 mesh_color = Color(0.8, 0.6, 0.1, 1)
+workers_required = 0
+population_capacity = 5
+morale_bonus = 0
 max_health = 1000
 is_core = true

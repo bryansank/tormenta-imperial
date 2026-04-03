@@ -172,6 +172,11 @@ func _try_place(cell: Vector2i) -> void:
 		var reqs := GameConfig.get_prerequisites(_current_data.id)
 		_show_feedback(Tr.t("LBL_REQUIRES") % " + ".join(reqs))
 		return
+	# Check workers availability
+	if _current_data.workers_required > 0:
+		if PopulationManager.get_free_workers() < _current_data.workers_required:
+			_show_feedback(Tr.t("LBL_NO_WORKERS"))
+			return
 	# Check and deduct cost
 	var cost := _current_data.get_cost()
 	if not cost.is_empty():

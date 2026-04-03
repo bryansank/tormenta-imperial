@@ -136,6 +136,7 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 	var sx: float = grid_size.x * cell_size * 0.9
 	var sz: float = grid_size.y * cell_size * 0.9
 	match building_id:
+		"nucleo": return _build_nucleo(sx, sz)
 		"headquarters": return _build_headquarters(sx, sz)
 		"barracks": return _build_barracks(sx, sz)
 		"gold_mine": return _build_gold_mine(sx, sz)
@@ -144,7 +145,105 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 		"sawmill": return _build_sawmill(sx, sz)
 		"tower": return _build_tower(sx, sz)
 		"warehouse": return _build_warehouse(sx, sz)
+		"house": return _build_house(sx, sz)
+		"garden": return _build_garden(sx, sz)
+		"fountain": return _build_fountain(sx, sz)
+		"statue": return _build_statue(sx, sz)
+		"road": return _build_road(sx, sz)
 	return null
+
+
+# ════════════════════════════════════════════════════════════════
+# NUCLEO — Presidential palace, cyberpunk neoclassical
+# Columned facade, central dome, neon accents, antenna spire
+# ════════════════════════════════════════════════════════════════
+static func _build_nucleo(sx: float, sz: float) -> Node3D:
+	var root: Node3D = Node3D.new()
+
+	# Materials
+	var mat_marble := _metal(Color(0.85, 0.82, 0.78), 0.15, 0.55)
+	var mat_dark := _metal(Color(0.18, 0.18, 0.22), 0.85, 0.35)
+	var mat_gold := _metal(Color(0.82, 0.68, 0.2), 0.95, 0.25)
+	var mat_neon_cyan := _emissive(Color(0.1, 0.9, 0.95), 2.5)
+	var mat_neon_amber := _emissive(Color(1.0, 0.7, 0.1), 1.8)
+	var mat_window := _emissive(Color(0.2, 0.6, 0.9), 0.6)
+	var mat_roof := _metal(Color(0.25, 0.28, 0.32), 0.7, 0.4)
+
+	# ── Foundation platform (stepped) ──
+	_add_box(root, Vector3(0, 0.1, 0), Vector3(sx * 0.98, 0.2, sz * 0.98), mat_dark)
+	_add_box(root, Vector3(0, 0.25, 0), Vector3(sx * 0.93, 0.12, sz * 0.93), mat_marble)
+
+	# ── Main body — wide, 2-story presidential block ──
+	_add_box(root, Vector3(0, 1.1, 0), Vector3(sx * 0.82, 1.5, sz * 0.7), mat_marble)
+
+	# ── Front portico (extended entrance with columns) ──
+	_add_box(root, Vector3(0, 0.9, sz * 0.38), Vector3(sx * 0.5, 1.1, sz * 0.12), mat_marble)
+
+	# ── Columns (6 across the front) ──
+	var col_count := 6
+	var col_spacing := sx * 0.7 / float(col_count - 1)
+	var col_start_x := -sx * 0.35
+	for i in range(col_count):
+		var cx := col_start_x + i * col_spacing
+		_add_cylinder(root, Vector3(cx, 1.0, sz * 0.44), 0.07, 1.5, mat_marble, 8)
+		# Gold capital on top of each column
+		_add_box(root, Vector3(cx, 1.78, sz * 0.44), Vector3(0.16, 0.06, 0.16), mat_gold)
+
+	# ── Portico entablature (beam above columns) ──
+	_add_box(root, Vector3(0, 1.85, sz * 0.44), Vector3(sx * 0.55, 0.1, 0.18), mat_marble)
+	# Triangular pediment
+	_add_prism(root, Vector3(0, 2.1, sz * 0.44), Vector3(sx * 0.5, 0.4, 0.16), mat_marble)
+
+	# ── Central dome ──
+	_add_cylinder(root, Vector3(0, 2.0, 0), sx * 0.18, 0.2, mat_roof, 16)
+	_add_sphere(root, Vector3(0, 2.45, 0), sx * 0.18, mat_roof, 16)
+	# Dome top spire
+	_add_cylinder(root, Vector3(0, 2.85, 0), 0.03, 0.5, mat_gold, 6)
+	_add_sphere(root, Vector3(0, 3.15, 0), 0.06, mat_neon_amber, 6)
+
+	# ── Side wings ──
+	_add_box(root, Vector3(sx * 0.35, 0.85, 0), Vector3(sx * 0.22, 1.1, sz * 0.55), mat_marble)
+	_add_box(root, Vector3(-sx * 0.35, 0.85, 0), Vector3(sx * 0.22, 1.1, sz * 0.55), mat_marble)
+
+	# ── Windows (glowing cyan, cyberpunk style) ──
+	# Front windows
+	for i in range(4):
+		var wx := -sx * 0.28 + i * sx * 0.19
+		_add_box(root, Vector3(wx, 1.2, sz * 0.351), Vector3(0.18, 0.35, 0.02), mat_window)
+		# Neon trim under each window
+		_add_box(root, Vector3(wx, 0.98, sz * 0.352), Vector3(0.2, 0.03, 0.02), mat_neon_cyan)
+
+	# Side windows
+	for side in [-1.0, 1.0]:
+		for j in range(2):
+			var wz := -sz * 0.15 + j * sz * 0.25
+			_add_box(root, Vector3(side * sx * 0.411, 1.2, wz), Vector3(0.02, 0.3, 0.15), mat_window)
+
+	# ── Neon accent lines (cyberpunk) ──
+	# Horizontal neon strips along building edges
+	_add_box(root, Vector3(0, 1.88, sz * 0.351), Vector3(sx * 0.84, 0.025, 0.02), mat_neon_cyan)
+	_add_box(root, Vector3(0, 0.35, sz * 0.351), Vector3(sx * 0.84, 0.025, 0.02), mat_neon_cyan)
+	# Back neon
+	_add_box(root, Vector3(0, 1.88, -sz * 0.351), Vector3(sx * 0.84, 0.025, 0.02), mat_neon_cyan)
+	# Side neon strips
+	_add_box(root, Vector3(sx * 0.461, 1.88, 0), Vector3(0.02, 0.025, sz * 0.56), mat_neon_cyan)
+	_add_box(root, Vector3(-sx * 0.461, 1.88, 0), Vector3(0.02, 0.025, sz * 0.56), mat_neon_cyan)
+
+	# ── Roof details ──
+	_add_box(root, Vector3(0, 1.92, 0), Vector3(sx * 0.85, 0.06, sz * 0.73), mat_roof)
+
+	# ── Antenna towers on wings ──
+	for side in [-1.0, 1.0]:
+		_add_cylinder(root, Vector3(side * sx * 0.35, 2.0, -sz * 0.2), 0.04, 0.8, mat_dark, 6)
+		_add_sphere(root, Vector3(side * sx * 0.35, 2.45, -sz * 0.2), 0.05, mat_neon_amber, 6)
+
+	# ── Gold eagle/emblem on pediment ──
+	_add_sphere(root, Vector3(0, 2.15, sz * 0.46), 0.1, mat_gold, 8)
+
+	# ── Rivets along foundation ──
+	_add_rivets(root, Vector3(-sx * 0.45, 0.32, sz * 0.47), Vector3(sx * 0.45, 0.32, sz * 0.47), 10)
+
+	return root
 
 
 # ════════════════════════════════════════════════════════════════
@@ -581,5 +680,123 @@ static func _build_warehouse(sx: float, sz: float) -> Node3D:
 
 	# Lock/padlock on door
 	_add_box(root, Vector3(0.15, 0.35, sz * 0.46), Vector3(0.08, 0.1, 0.04), mat_brass)
+
+	return root
+
+
+# ════════════════════════════════════════════════════════════════
+# HOUSE — Small residential dwelling with chimney and windows
+# ════════════════════════════════════════════════════════════════
+static func _build_house(sx: float, sz: float) -> Node3D:
+	var root: Node3D = Node3D.new()
+	var mat_wall := _metal(Color(0.55, 0.42, 0.28), 0.2, 0.8)
+	var mat_roof := _metal(Color(0.45, 0.22, 0.12), 0.3, 0.7)
+	var mat_window := _emissive(Color(0.9, 0.75, 0.3), 0.8)
+	var mat_chimney := _metal(COL_DARK_IRON, 0.6, 0.5)
+
+	# Main body
+	_add_box(root, Vector3(0, 0.6, 0), Vector3(sx * 0.85, 1.2, sz * 0.8), mat_wall)
+	# Roof (angled box)
+	var roof := _add_box(root, Vector3(0, 1.35, 0), Vector3(sx * 0.95, 0.4, sz * 0.9), mat_roof)
+	roof.rotation.x = 0.0
+	# Chimney
+	_add_cylinder(root, Vector3(sx * 0.25, 1.7, sz * 0.1), 0.08, 0.5, mat_chimney, 6)
+	# Windows (glowing)
+	_add_box(root, Vector3(sx * 0.25, 0.65, sz * 0.41), Vector3(0.2, 0.2, 0.02), mat_window)
+	_add_box(root, Vector3(-sx * 0.2, 0.65, sz * 0.41), Vector3(0.2, 0.2, 0.02), mat_window)
+	# Door
+	_add_box(root, Vector3(0, 0.35, sz * 0.41), Vector3(0.2, 0.5, 0.02), mat_roof)
+
+	return root
+
+
+# ════════════════════════════════════════════════════════════════
+# GARDEN — Green patch with small bushes/flowers
+# ════════════════════════════════════════════════════════════════
+static func _build_garden(sx: float, sz: float) -> Node3D:
+	var root: Node3D = Node3D.new()
+	var mat_grass := _metal(Color(0.25, 0.5, 0.15), 0.1, 0.9)
+	var mat_bush_dark := _metal(Color(0.15, 0.4, 0.12), 0.1, 0.85)
+	var mat_bush_light := _metal(Color(0.3, 0.55, 0.2), 0.1, 0.8)
+	var mat_flower := _emissive(Color(0.9, 0.3, 0.4), 0.5)
+
+	# Ground
+	_add_cylinder(root, Vector3(0, 0.02, 0), sx * 0.45, 0.04, mat_grass, 10)
+	# Bushes
+	_add_sphere(root, Vector3(-0.2, 0.18, 0.15), 0.2, mat_bush_dark, 6)
+	_add_sphere(root, Vector3(0.2, 0.15, -0.1), 0.18, mat_bush_light, 6)
+	_add_sphere(root, Vector3(0, 0.12, -0.25), 0.15, mat_bush_dark, 5)
+	# Flowers
+	_add_sphere(root, Vector3(0.3, 0.1, 0.2), 0.06, mat_flower, 4)
+	_add_sphere(root, Vector3(-0.15, 0.1, 0.3), 0.05, mat_flower, 4)
+
+	return root
+
+
+# ════════════════════════════════════════════════════════════════
+# FOUNTAIN — Circular base with water jet
+# ════════════════════════════════════════════════════════════════
+static func _build_fountain(sx: float, sz: float) -> Node3D:
+	var root: Node3D = Node3D.new()
+	var mat_stone := _metal(Color(0.5, 0.48, 0.45), 0.4, 0.6)
+	var mat_water := _emissive(Color(0.3, 0.5, 0.8), 0.4)
+	var mat_brass := _metal(COL_BRASS, 0.9, 0.3)
+
+	# Base pool
+	_add_cylinder(root, Vector3(0, 0.15, 0), 0.55, 0.3, mat_stone, 12)
+	# Water
+	_add_cylinder(root, Vector3(0, 0.2, 0), 0.45, 0.1, mat_water, 12)
+	# Central pillar
+	_add_cylinder(root, Vector3(0, 0.6, 0), 0.08, 0.8, mat_stone, 8)
+	# Top bowl
+	_add_cylinder(root, Vector3(0, 1.05, 0), 0.2, 0.1, mat_stone, 8)
+	# Water spray (emissive sphere)
+	_add_sphere(root, Vector3(0, 1.2, 0), 0.08, mat_water, 6)
+	# Brass accents
+	_add_cylinder(root, Vector3(0, 0.95, 0), 0.1, 0.04, mat_brass, 8)
+
+	return root
+
+
+# ════════════════════════════════════════════════════════════════
+# STATUE — Imperial monument on pedestal
+# ════════════════════════════════════════════════════════════════
+static func _build_statue(sx: float, sz: float) -> Node3D:
+	var root: Node3D = Node3D.new()
+	var mat_stone := _metal(Color(0.55, 0.52, 0.48), 0.3, 0.65)
+	var mat_bronze := _metal(Color(0.6, 0.45, 0.2), 0.85, 0.35)
+	var mat_gold := _emissive(Color(0.9, 0.75, 0.15), 0.5)
+
+	# Pedestal base
+	_add_box(root, Vector3(0, 0.2, 0), Vector3(0.6, 0.4, 0.6), mat_stone)
+	# Pedestal mid
+	_add_box(root, Vector3(0, 0.5, 0), Vector3(0.45, 0.2, 0.45), mat_stone)
+	# Figure body
+	_add_cylinder(root, Vector3(0, 1.1, 0), 0.15, 1.0, mat_bronze, 8)
+	# Head
+	_add_sphere(root, Vector3(0, 1.7, 0), 0.12, mat_bronze, 6)
+	# Arms (simplified)
+	_add_box(root, Vector3(0.2, 1.2, 0), Vector3(0.3, 0.06, 0.06), mat_bronze)
+	# Eagle/star on top
+	_add_sphere(root, Vector3(0, 1.9, 0), 0.06, mat_gold, 4)
+	# Plaque
+	_add_box(root, Vector3(0, 0.35, 0.31), Vector3(0.3, 0.12, 0.02), mat_gold)
+
+	return root
+
+
+# ════════════════════════════════════════════════════════════════
+# ROAD — Flat paved surface
+# ════════════════════════════════════════════════════════════════
+static func _build_road(sx: float, sz: float) -> Node3D:
+	var root: Node3D = Node3D.new()
+	var mat_pave := _metal(Color(0.35, 0.33, 0.3), 0.2, 0.85)
+	var mat_edge := _metal(Color(0.28, 0.26, 0.24), 0.3, 0.8)
+
+	# Main road surface
+	_add_box(root, Vector3(0, 0.025, 0), Vector3(sx * 0.95, 0.05, sz * 0.95), mat_pave)
+	# Edge stones
+	_add_box(root, Vector3(sx * 0.45, 0.04, 0), Vector3(0.06, 0.08, sz * 0.9), mat_edge)
+	_add_box(root, Vector3(-sx * 0.45, 0.04, 0), Vector3(0.06, 0.08, sz * 0.9), mat_edge)
 
 	return root

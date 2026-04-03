@@ -30,11 +30,23 @@ extends Resource
 @export var mesh_color: Color = Color(0.5, 0.5, 0.5, 1.0)
 @export var model_scene: PackedScene = null
 
+# Workers required to operate (0 = no workers needed)
+@export var workers_required: int = 0
+
+# Population capacity provided (only for houses)
+@export var population_capacity: int = 0
+
+# Morale bonus (decorations, special buildings)
+@export var morale_bonus: int = 0
+
 # Stats
 @export var max_health: int = 100
 
 # Core building (unique, auto-placed, cannot be built or moved)
 @export var is_core: bool = false
+
+# Decoration (no production, no workers, just morale)
+@export var is_decoration: bool = false
 
 ## Helper: get cost as dictionary compatible with ResourceManager.
 func get_cost() -> Dictionary:

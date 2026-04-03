@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/models/buildings/statue/statue.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+model_scene = ExtResource("2")
+id = "statue"
+display_name = "Estatua Imperial"
+description = "Monumento que inspira a los trabajadores. Gran impulso a la moral."
+grid_size = Vector2i(1, 1)
+cost_gold = 120
+cost_steel = 40
+cost_oil = 0
+cost_wood = 0
+build_time = 6.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+workers_required = 0
+morale_bonus = 10
+mesh_height = 3.0
+mesh_color = Color(0.65, 0.6, 0.5, 1)
+max_health = 200
+is_decoration = true
