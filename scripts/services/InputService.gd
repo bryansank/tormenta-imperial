@@ -13,6 +13,10 @@ var _is_mouse_rotating: bool = false
 var _touch_points: Dictionary = {}
 var _last_pinch_distance: float = 0.0
 
+func _ready() -> void:
+	# Ensure mouse cursor is always visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 func _process(_delta: float) -> void:
 	_handle_keyboard()
 

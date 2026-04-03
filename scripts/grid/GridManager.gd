@@ -108,6 +108,16 @@ func place_obstacle(cell: Vector2i, node: Node3D) -> bool:
 func remove_obstacle(cell: Vector2i) -> void:
 	_cell_to_building.erase(cell)
 
+## Get all placed buildings as an array of info dicts (includes "node" key).
+func get_all_buildings() -> Array:
+	var result: Array = []
+	for node in _building_info:
+		if is_instance_valid(node):
+			var info: Dictionary = _building_info[node].duplicate()
+			info["node"] = node
+			result.append(info)
+	return result
+
 ## Clear all tracked buildings and obstacles.
 func clear_all() -> void:
 	_cell_to_building.clear()

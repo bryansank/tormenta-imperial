@@ -8,12 +8,6 @@ var _constructing: Dictionary = {}
 # Production tracking: Node3D -> {timer: float, data: BuildingData}
 var _producing: Dictionary = {}
 
-var _res_colors := {
-	"gold": Color(1.0, 0.85, 0.1),
-	"steel": Color(0.7, 0.75, 0.8),
-	"oil": Color(0.5, 0.4, 0.6),
-	"wood": Color(0.55, 0.35, 0.15),
-}
 
 func _ready() -> void:
 	EventBus.building_placed.connect(_on_building_placed)
@@ -127,11 +121,17 @@ func _complete_construction(node: Node3D) -> void:
 		if mesh_inst is MeshInstance3D:
 			var s := 1.0 + (new_level - 1) * 0.1
 			mesh_inst.scale = Vector3(s, s, s)
-		_spawn_floating_text(node.global_position, Tr.t("LBL_UPGRADE_COMPLETE"), Color(0.3, 0.8, 1.0))
+		FloatingText.spawn(get_tree(), node.global_position, Tr.t("LBL_UPGRADE_COMPLETE"), Color(0.3, 0.8, 1.0))
 		EventBus.building_upgrade_completed.emit(node, new_level)
+		var binfo := GridManager.get_building_info(node)
+		if not binfo.is_empty():
+			EventBus.notification_posted.emit(Tr.t("NOTIF_UPGRADE_DONE") % [(binfo["data"] as BuildingData).display_name, new_level], "info", Color(0.3, 0.8, 1.0))
 	else:
-		_spawn_floating_text(node.global_position, Tr.t("FMT_CONSTRUCTION_COMPLETE"), Color(0.3, 1.0, 0.3))
+		FloatingText.spawn(get_tree(), node.global_position, Tr.t("FMT_CONSTRUCTION_COMPLETE"), Color(0.3, 1.0, 0.3))
 		EventBus.construction_completed.emit(node)
+		var binfo := GridManager.get_building_info(node)
+		if not binfo.is_empty():
+			EventBus.notification_posted.emit(Tr.t("NOTIF_BUILT") % (binfo["data"] as BuildingData).display_name, "info", Color(0.3, 1.0, 0.3))
 	# Register for production
 	var info := GridManager.get_building_info(node)
 	if not info.is_empty():
@@ -178,29 +178,34 @@ func _tick_production(delta: float) -> void:
 		_producing.erase(node)
 
 func _award_production(node: Node3D, data: BuildingData) -> void:
+	# Skip if building is not staffed (no workers assigned)
+	if data.workers_required > 0 and not PopulationManager.is_building_staffed(node):
+		return
 	var pos := node.global_position
 	var level: int = node.get_meta("level", 1)
-	var mult := GameConfig.get_production_multiplier(level)
+	var morale_mult := PopulationManager.get_morale_multiplier()
+	var base_mult := GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus
+	var mult := base_mult * morale_mult
 	var offset := 0.0
 	if data.produces_gold > 0:
 		var amount := int(data.produces_gold * mult)
 		ResourceManager.add(ResourceManager.Type.GOLD, amount)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [amount, Tr.res_name("gold")], _res_colors["gold"])
+		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, "gold")
 		offset += 0.3
 	if data.produces_steel > 0:
 		var amount := int(data.produces_steel * mult)
 		ResourceManager.add(ResourceManager.Type.STEEL, amount)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [amount, Tr.res_name("steel")], _res_colors["steel"])
+		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, "steel")
 		offset += 0.3
 	if data.produces_oil > 0:
 		var amount := int(data.produces_oil * mult)
 		ResourceManager.add(ResourceManager.Type.OIL, amount)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [amount, Tr.res_name("oil")], _res_colors["oil"])
+		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, "oil")
 		offset += 0.3
 	if data.produces_wood > 0:
 		var amount := int(data.produces_wood * mult)
 		ResourceManager.add(ResourceManager.Type.WOOD, amount)
-		_spawn_floating_text(pos + Vector3(offset, 0, 0), "+%d %s" % [amount, Tr.res_name("wood")], _res_colors["wood"])
+		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, "wood")
 	EventBus.production_tick.emit(node)
 
 ## Start upgrade on a building (reuses construction system)
@@ -226,6 +231,7 @@ func start_upgrade(node: Node3D, data: BuildingData, new_level: int) -> void:
 func apply_offline_progression(elapsed: float) -> Dictionary:
 	elapsed = minf(elapsed, GameConfig.max_offline_seconds)
 	var earnings := {}
+	var morale_mult := PopulationManager.get_morale_multiplier()
 
 	var existing_producers: Array = _producing.keys().duplicate()
 
@@ -254,7 +260,7 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 				var interval := GameConfig.get_production_interval(data.production_interval)
 				if interval > 0.0:
 					var cycles := int(leftover / interval)
-					_accumulate_earnings(earnings, data, cycles)
+					_accumulate_earnings(earnings, data, cycles, morale_mult)
 
 	for node in existing_producers:
 		if not is_instance_valid(node):
@@ -262,30 +268,47 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 		if not _producing.has(node):
 			continue
 		var data: BuildingData = _producing[node]["data"]
+		var level: int = node.get_meta("level", 1)
+		var level_mult := GameConfig.get_production_multiplier(level)
 		var interval := GameConfig.get_production_interval(data.production_interval)
 		if interval > 0.0:
 			var cycles := int(elapsed / interval)
-			_accumulate_earnings(earnings, data, cycles)
+			_accumulate_earnings(earnings, data, cycles, morale_mult * level_mult)
+
+	# Deduct population consumption (each pop consumes 1 gold + 1 wood per consumption tick)
+	var pop := PopulationManager.get_population()
+	if pop > 0:
+		var cons_interval := GameConfig.get_duration(GameConfig.consumption_interval)
+		if cons_interval > 0.0:
+			var cons_ticks := int(elapsed / cons_interval)
+			var gold_consumed := pop * cons_ticks
+			var wood_consumed := pop * cons_ticks
+			earnings["gold"] = earnings.get("gold", 0) - gold_consumed
+			earnings["wood"] = earnings.get("wood", 0) - wood_consumed
 
 	for res_name in earnings:
+		var type = _res_to_type(res_name)
+		if type == -1:
+			continue
 		if earnings[res_name] > 0:
-			var type = _res_to_type(res_name)
-			if type != -1:
-				ResourceManager.add(type, earnings[res_name])
+			ResourceManager.add(type, earnings[res_name])
+		elif earnings[res_name] < 0:
+			var current := ResourceManager.get_amount(type)
+			ResourceManager.spend(type, mini(absi(earnings[res_name]), current))
 
 	return earnings
 
-func _accumulate_earnings(earnings: Dictionary, data: BuildingData, cycles: int) -> void:
+func _accumulate_earnings(earnings: Dictionary, data: BuildingData, cycles: int, mult: float = 1.0) -> void:
 	if cycles <= 0:
 		return
 	if data.produces_gold > 0:
-		earnings["gold"] = earnings.get("gold", 0) + data.produces_gold * cycles
+		earnings["gold"] = earnings.get("gold", 0) + int(data.produces_gold * mult) * cycles
 	if data.produces_steel > 0:
-		earnings["steel"] = earnings.get("steel", 0) + data.produces_steel * cycles
+		earnings["steel"] = earnings.get("steel", 0) + int(data.produces_steel * mult) * cycles
 	if data.produces_oil > 0:
-		earnings["oil"] = earnings.get("oil", 0) + data.produces_oil * cycles
+		earnings["oil"] = earnings.get("oil", 0) + int(data.produces_oil * mult) * cycles
 	if data.produces_wood > 0:
-		earnings["wood"] = earnings.get("wood", 0) + data.produces_wood * cycles
+		earnings["wood"] = earnings.get("wood", 0) + int(data.produces_wood * mult) * cycles
 
 func _res_to_type(res_name: String) -> int:
 	match res_name:
@@ -294,20 +317,3 @@ func _res_to_type(res_name: String) -> int:
 		"oil": return ResourceManager.Type.OIL
 		"wood": return ResourceManager.Type.WOOD
 	return -1
-
-# ── Floating Text ──
-
-func _spawn_floating_text(world_pos: Vector3, text: String, color: Color) -> void:
-	var label := Label3D.new()
-	label.text = text
-	label.font_size = 20
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.outline_size = 3
-	label.modulate = color
-	label.global_position = world_pos + Vector3(randf_range(-0.3, 0.3), 2.5, randf_range(-0.3, 0.3))
-	get_tree().current_scene.add_child(label)
-	var tween := create_tween()
-	tween.tween_property(label, "global_position:y", world_pos.y + 5.0, 1.8).set_ease(Tween.EASE_OUT)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, 1.8).set_delay(0.4)
-	tween.tween_callback(label.queue_free)

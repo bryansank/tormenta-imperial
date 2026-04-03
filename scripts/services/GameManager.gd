@@ -40,6 +40,11 @@ func _try_start() -> void:
 
 func _new_game() -> void:
 	ResourceManager.reset()
+	ProgressionManager.reset()
+	MarketManager.reset()
+	PopulationManager.reset()
+	RandomEventManager.reset()
+	TechTreeManager.reset()
 	# Place nucleo at center (no build time for core)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
@@ -111,6 +116,34 @@ func _load_game() -> void:
 	if data.has("camera") and _camera and _camera.has_method("set_state"):
 		_camera.set_state(data["camera"])
 
+	# Restore progression
+	if data.has("progression"):
+		ProgressionManager.load_save_data(data["progression"])
+
+	# Restore market
+	if data.has("market"):
+		MarketManager.load_save_data(data["market"])
+
+	# Restore population
+	if data.has("population"):
+		PopulationManager.load_save_data(data["population"])
+
+	# Restore random events
+	if data.has("random_events"):
+		RandomEventManager.load_save_data(data["random_events"])
+
+	# Restore resource unlock state
+	if data.has("unlocked_resources"):
+		ResourceManager.set_unlock_state(data["unlocked_resources"])
+
+	# Restore active processes
+	if data.has("active_processes"):
+		ProcessManager.load_save_data(data["active_processes"])
+
+	# Restore tech tree
+	if data.has("tech_tree"):
+		TechTreeManager.load_save_data(data["tech_tree"])
+
 	# Apply offline progression
 	if data.has("saved_at"):
 		var saved_at: float = float(data["saved_at"])
@@ -139,6 +172,27 @@ func save_game() -> void:
 	# Deposits
 	data["deposits"] = _map_gen.get_all_deposits()
 
+	# Progression
+	data["progression"] = ProgressionManager.get_save_data()
+
+	# Market
+	data["market"] = MarketManager.get_save_data()
+
+	# Resource unlock state
+	data["unlocked_resources"] = ResourceManager.get_unlock_state()
+
+	# Population
+	data["population"] = PopulationManager.get_save_data()
+
+	# Random events
+	data["random_events"] = RandomEventManager.get_save_data()
+
+	# Active processes
+	data["active_processes"] = ProcessManager.get_save_data()
+
+	# Tech tree
+	data["tech_tree"] = TechTreeManager.get_save_data()
+
 	# Camera
 	if _camera and _camera.has_method("get_state"):
 		data["camera"] = _camera.get_state()
@@ -151,10 +205,17 @@ func clear_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
 	GridManager.clear_all()
+	ResourceManager.reset()
+	ProgressionManager.reset()
+	MarketManager.reset()
+	PopulationManager.reset()
+	RandomEventManager.reset()
+	TechTreeManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null
 	_started = false
+	_warehouse_count = 0
 	get_tree().reload_current_scene()
 
 func _on_building_changed(_data: Resource, _cell: Vector2i) -> void:
@@ -172,7 +233,7 @@ func _on_building_demolished(_node: Node3D, _cell: Vector2i) -> void:
 func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	var has_any := false
 	for res in earnings:
-		if earnings[res] > 0:
+		if earnings[res] != 0:
 			has_any = true
 			break
 	if not has_any:
@@ -209,20 +270,20 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	vbox.add_child(sep)
 
 	var res_names: Dictionary = {"gold": Tr.res_cap("gold"), "steel": Tr.res_cap("steel"), "oil": Tr.res_cap("oil"), "wood": Tr.res_cap("wood")}
-	var res_colors := {
-		"gold": Color(1.0, 0.85, 0.1),
-		"steel": Color(0.7, 0.75, 0.8),
-		"oil": Color(0.5, 0.4, 0.6),
-		"wood": Color(0.55, 0.35, 0.15),
-	}
 	for res in earnings:
-		if earnings[res] > 0:
-			var lbl := Label.new()
-			lbl.text = "+%d %s" % [earnings[res], res_names.get(res, res)]
-			lbl.add_theme_font_size_override("font_size", 16)
-			lbl.add_theme_color_override("font_color", res_colors.get(res, Color.WHITE))
-			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			vbox.add_child(lbl)
+		if earnings[res] == 0:
+			continue
+		var lbl := Label.new()
+		var amount: int = earnings[res]
+		if amount > 0:
+			lbl.text = "+%d %s" % [amount, res_names.get(res, res)]
+			lbl.add_theme_color_override("font_color", GameConfig.resource_colors.get(res, Color.WHITE))
+		else:
+			lbl.text = "%d %s" % [amount, res_names.get(res, res)]
+			lbl.add_theme_color_override("font_color", Color(0.9, 0.35, 0.3))
+		lbl.add_theme_font_size_override("font_size", 16)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(lbl)
 
 	canvas.add_child(panel)
 

@@ -8,7 +8,13 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/ConstructionMenu.tscn" id="6"]
 [ext_resource type="Script" path="res://scripts/map/MapGenerator.gd" id="7"]
 [ext_resource type="PackedScene" path="res://scenes/ui/BuildingInfoPanel.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/ui/MarketPanel.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ProgressPanel.tscn" id="10"]
 [ext_resource type="Script" path="res://scripts/map/IslandGenerator.gd" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/ui/VictoryScreen.tscn" id="12"]
+[ext_resource type="PackedScene" path="res://scenes/ui/NotificationPanel.tscn" id="13"]
+[ext_resource type="PackedScene" path="res://scenes/ui/TechTreePanel.tscn" id="14"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ObjectivePanel.tscn" id="15"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -27,9 +33,9 @@ size = Vector2(50, 50)
 [sub_resource type="ShaderMaterial" id="grid_material"]
 render_priority = 1
 shader = ExtResource("2")
-shader_parameter/grid_color = Color(0.85, 0.85, 0.75, 0.35)
+shader_parameter/grid_color = Color(0.85, 0.85, 0.75, 0.15)
 shader_parameter/cell_size = 2.0
-shader_parameter/line_width = 0.04
+shader_parameter/line_width = 0.02
 shader_parameter/fade_distance = 60.0
 shader_parameter/grid_origin = Vector2(-25, -25)
 
@@ -75,3 +81,15 @@ script = ExtResource("7")
 [node name="ConstructionMenu" parent="." instance=ExtResource("6")]
 
 [node name="BuildingInfoPanel" parent="." instance=ExtResource("8")]
+
+[node name="MarketPanel" parent="." instance=ExtResource("9")]
+
+[node name="ProgressPanel" parent="." instance=ExtResource("10")]
+
+[node name="VictoryScreen" parent="." instance=ExtResource("12")]
+
+[node name="NotificationPanel" parent="." instance=ExtResource("13")]
+
+[node name="TechTreePanel" parent="." instance=ExtResource("14")]
+
+[node name="ObjectivePanel" parent="." instance=ExtResource("15")]

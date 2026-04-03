@@ -54,6 +54,8 @@ func start_process(node: Node3D, process: Dictionary) -> bool:
 func start_mining(node: Node3D, deposit_id: String) -> bool:
 	if _active.has(node):
 		return false
+	if not GameConfig.is_deposit_unlocked(deposit_id):
+		return false
 	var data := get_mining_info(deposit_id)
 	if data.is_empty():
 		return false
@@ -79,20 +81,13 @@ func _process(delta: float) -> void:
 	for node in completed:
 		_complete(node)
 
-var _res_colors := {
-	"gold": Color(1.0, 0.85, 0.1),
-	"steel": Color(0.7, 0.75, 0.8),
-	"oil": Color(0.5, 0.4, 0.6),
-	"wood": Color(0.55, 0.35, 0.15),
-}
-
 func _complete(node: Node3D) -> void:
 	var info: Dictionary = _active[node]
 	for res_name in info["produces"]:
 		if _type_map.has(res_name):
 			ResourceManager.add(_type_map[res_name], info["produces"][res_name])
 			if is_instance_valid(node):
-				_spawn_floating_text(node.global_position, "+%d %s" % [info["produces"][res_name], Tr.res_name(res_name)], _res_colors.get(res_name, Color.WHITE))
+				FloatingText.spawn_resource(get_tree(), node.global_position, info["produces"][res_name], res_name)
 	var pid: String = info["id"]
 	_active.erase(node)
 	if is_instance_valid(node):
@@ -108,17 +103,50 @@ func _convert_cost(cost_dict: Dictionary) -> Dictionary:
 			result[_type_map[res_name]] = cost_dict[res_name]
 	return result
 
-func _spawn_floating_text(world_pos: Vector3, text: String, color: Color) -> void:
-	var label := Label3D.new()
-	label.text = text
-	label.font_size = 20
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.outline_size = 3
-	label.modulate = color
-	label.global_position = world_pos + Vector3(randf_range(-0.3, 0.3), 2.5, randf_range(-0.3, 0.3))
-	get_tree().current_scene.add_child(label)
-	var tween := create_tween()
-	tween.tween_property(label, "global_position:y", world_pos.y + 5.0, 1.8).set_ease(Tween.EASE_OUT)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, 1.8).set_delay(0.4)
-	tween.tween_callback(label.queue_free)
+# ── Save/Load ──
+
+func get_save_data() -> Array:
+	var result: Array = []
+	for node in _active:
+		if not is_instance_valid(node):
+			continue
+		var info: Dictionary = _active[node]
+		var binfo := GridManager.get_building_info(node)
+		if not binfo.is_empty():
+			result.append({
+				"cell_x": (binfo["origin_cell"] as Vector2i).x,
+				"cell_y": (binfo["origin_cell"] as Vector2i).y,
+				"id": info["id"],
+				"name": info["name"],
+				"remaining": info["remaining"],
+				"duration": info["duration"],
+				"produces": info["produces"],
+			})
+		elif node.has_meta("cell"):
+			var cell: Vector2i = node.get_meta("cell")
+			result.append({
+				"cell_x": cell.x,
+				"cell_y": cell.y,
+				"id": info["id"],
+				"name": info["name"],
+				"remaining": info["remaining"],
+				"duration": info["duration"],
+				"produces": info["produces"],
+				"is_deposit": true,
+			})
+	return result
+
+func load_save_data(data: Array) -> void:
+	for entry in data:
+		var cell := Vector2i(entry["cell_x"], entry["cell_y"])
+		var node := GridManager.get_building_at(cell)
+		if not node or not is_instance_valid(node):
+			continue
+		_active[node] = {
+			"id": entry["id"],
+			"name": entry["name"],
+			"remaining": entry["remaining"],
+			"duration": entry["duration"],
+			"produces": entry["produces"],
+		}
+

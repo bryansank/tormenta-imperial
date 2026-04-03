@@ -18,12 +18,31 @@ func _process(_delta: float) -> void:
 func _setup_ui() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
 	margin.add_theme_constant_override("margin_bottom", 20)
 	margin.add_theme_constant_override("margin_left", 20)
 	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 20)
 	add_child(margin)
 
+	# Top UI container
+	var top_vbox := VBoxContainer.new()
+	top_vbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	margin.add_child(top_vbox)
+
+	var top_hbox := HBoxContainer.new()
+	top_hbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	top_vbox.add_child(top_hbox)
+
+	# QUE HACER Button (Badge)
+	var help_btn := Button.new()
+	help_btn.text = "¿QUÉ HACER?"
+	help_btn.custom_minimum_size = Vector2(140, 45)
+	UITheme.style_button(help_btn, UITheme.INFO, UITheme.FONT_SECTION)
+	help_btn.pressed.connect(func(): EventBus.objective_panel_toggled.emit())
+	top_hbox.add_child(help_btn)
+
+	# Bottom UI container
 	var hbox := HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_END
 	hbox.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -116,22 +135,5 @@ func _styled_button(label: String) -> Button:
 	var btn := Button.new()
 	btn.text = label
 	btn.custom_minimum_size = Vector2(50, 50)
-
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.15, 0.15, 0.15, 0.6)
-	normal.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("normal", normal)
-
-	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.3, 0.3, 0.3, 0.8)
-	pressed.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("pressed", pressed)
-
-	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.2, 0.2, 0.2, 0.7)
-	hover.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("hover", hover)
-
-	btn.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
-	btn.add_theme_font_size_override("font_size", 20)
+	UITheme.style_button(btn, Color(UITheme.BTN.r, UITheme.BTN.g, UITheme.BTN.b, 0.6), UITheme.FONT_TITLE)
 	return btn

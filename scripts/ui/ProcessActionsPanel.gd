@@ -1,6 +1,6 @@
 class_name ProcessActionsPanel
 ## Manages process/mining buttons and progress display.
-## Styled card buttons with clear cost/produce layout.
+## Uses UITheme card buttons for consistent styling.
 
 var _processes_box: VBoxContainer
 var _progress_container: VBoxContainer
@@ -22,12 +22,11 @@ func populate_building(node: Node3D, data: BuildingData, is_constructing: bool) 
 	clear()
 	var processes := ProcessManager.get_processes_for(data.id)
 	for proc in processes:
+		if _process_has_locked_resource(proc):
+			continue
 		_add_process_card(proc, node)
 	if processes.is_empty() and not data.is_core:
-		var no_actions := Label.new()
-		no_actions.text = Tr.t("LBL_NO_ACTIONS")
-		no_actions.add_theme_font_size_override("font_size", 12)
-		no_actions.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45))
+		var no_actions := UITheme.make_label(Tr.t("LBL_NO_ACTIONS"), "small", UITheme.TEXT_DIM)
 		no_actions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_processes_box.add_child(no_actions)
 	if is_constructing:
@@ -36,6 +35,13 @@ func populate_building(node: Node3D, data: BuildingData, is_constructing: bool) 
 
 func populate_deposit(node: Node3D, deposit_id: String) -> void:
 	clear()
+	if not GameConfig.is_deposit_unlocked(deposit_id):
+		var locked_label := UITheme.make_label(Tr.t("LBL_DEPOSIT_LOCKED"), "small", UITheme.DANGER)
+		locked_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		locked_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		_processes_box.add_child(locked_label)
+		_progress_container.visible = false
+		return
 	var mining := ProcessManager.get_mining_info(deposit_id)
 	if not mining.is_empty():
 		_add_mining_card(mining, node, deposit_id)
@@ -62,37 +68,30 @@ func set_buttons_disabled(disabled: bool) -> void:
 		if child is Button:
 			child.disabled = disabled
 
-# ── Styled Process Card ──
-
 func _add_process_card(proc: Dictionary, node: Node3D) -> void:
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(0, 0)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	# Build label with clear sections
 	var lines: Array = []
 	lines.append(Tr.t(proc["name"]))
 
-	# Cost line (red)
 	if proc.has("cost") and not proc["cost"].is_empty():
 		var cost_parts: Array = []
 		for res_id in proc["cost"]:
 			cost_parts.append("-%d %s" % [proc["cost"][res_id], Tr.res_name(res_id)])
 		lines.append(Tr.t("FMT_COST") % " | ".join(cost_parts))
 
-	# Produce line (green)
 	var produce_parts: Array = []
 	for res_id in proc["produces"]:
 		produce_parts.append("+%d %s" % [proc["produces"][res_id], Tr.res_name(res_id)])
 	lines.append(Tr.t("FMT_PRODUCES") % " | ".join(produce_parts))
 
-	# Duration
 	lines.append(Tr.t("FMT_DURATION") % int(proc["duration"]))
 
 	btn.text = "\n".join(lines)
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 
-	_style_card_button(btn, Color(0.14, 0.16, 0.2, 0.9))
+	UITheme.style_card_button(btn, UITheme.CARD_BG, UITheme.ACCENT)
 	btn.pressed.connect(func(): _start_process(node, proc))
 	_processes_box.add_child(btn)
 
@@ -112,46 +111,20 @@ func _add_mining_card(mining: Dictionary, node: Node3D, deposit_id: String) -> v
 	btn.text = "\n".join(lines)
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 
-	_style_card_button(btn, Color(0.12, 0.18, 0.14, 0.9))
+	UITheme.style_card_button(btn, UITheme.POSITIVE.darkened(0.6), UITheme.POSITIVE)
 	btn.pressed.connect(func(): _start_mining(node, deposit_id))
 	_processes_box.add_child(btn)
 
-func _style_card_button(btn: Button, bg_color: Color) -> void:
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = bg_color
-	normal.border_color = Color(0.4, 0.35, 0.15, 0.5)
-	normal.set_border_width_all(1)
-	normal.set_corner_radius_all(8)
-	normal.set_content_margin_all(10)
-	btn.add_theme_stylebox_override("normal", normal)
-
-	var hover := StyleBoxFlat.new()
-	hover.bg_color = bg_color.lightened(0.12)
-	hover.border_color = Color(0.7, 0.55, 0.15, 0.7)
-	hover.set_border_width_all(1)
-	hover.set_corner_radius_all(8)
-	hover.set_content_margin_all(10)
-	btn.add_theme_stylebox_override("hover", hover)
-
-	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = bg_color.lightened(0.25)
-	pressed.border_color = Color(0.7, 0.55, 0.15, 0.9)
-	pressed.set_border_width_all(1)
-	pressed.set_corner_radius_all(8)
-	pressed.set_content_margin_all(10)
-	btn.add_theme_stylebox_override("pressed", pressed)
-
-	var disabled := StyleBoxFlat.new()
-	disabled.bg_color = Color(0.12, 0.12, 0.12, 0.6)
-	disabled.border_color = Color(0.3, 0.3, 0.3, 0.3)
-	disabled.set_border_width_all(1)
-	disabled.set_corner_radius_all(8)
-	disabled.set_content_margin_all(10)
-	btn.add_theme_stylebox_override("disabled", disabled)
-
-	btn.add_theme_font_size_override("font_size", 12)
-	btn.add_theme_color_override("font_color", Color(0.9, 0.88, 0.8))
-	btn.add_theme_color_override("font_disabled_color", Color(0.45, 0.45, 0.45))
+func _process_has_locked_resource(proc: Dictionary) -> bool:
+	if proc.has("cost"):
+		for res_name in proc["cost"]:
+			if not ResourceManager.is_unlocked_by_name(res_name):
+				return true
+	if proc.has("produces"):
+		for res_name in proc["produces"]:
+			if not ResourceManager.is_unlocked_by_name(res_name):
+				return true
+	return false
 
 func _start_process(node: Node3D, proc: Dictionary) -> void:
 	if node and not ProcessManager.is_busy(node):

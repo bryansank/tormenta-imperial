@@ -62,20 +62,15 @@ func _process(_delta: float) -> void:
 
 func _build_ui() -> void:
 	_panel = PanelContainer.new()
-	_panel.custom_minimum_size = Vector2(300, 0)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.1, 0.96)
-	style.border_color = Color(0.7, 0.55, 0.15, 0.9)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(10)
-	style.set_content_margin_all(0)
-	_panel.add_theme_stylebox_override("panel", style)
+	_panel.custom_minimum_size = Vector2(310, 0)
+	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	_panel.offset_left = -315
+	_panel.offset_left = -320
 	_panel.offset_right = -8
 	_panel.offset_top = 50
 	_panel.offset_bottom = -10
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))
 
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -83,87 +78,62 @@ func _build_ui() -> void:
 	_panel.add_child(_scroll)
 
 	var vbox_margin := MarginContainer.new()
-	vbox_margin.add_theme_constant_override("margin_left", 14)
-	vbox_margin.add_theme_constant_override("margin_right", 14)
-	vbox_margin.add_theme_constant_override("margin_top", 14)
-	vbox_margin.add_theme_constant_override("margin_bottom", 14)
+	vbox_margin.add_theme_constant_override("margin_left", UITheme.MARGIN)
+	vbox_margin.add_theme_constant_override("margin_right", UITheme.MARGIN)
+	vbox_margin.add_theme_constant_override("margin_top", UITheme.MARGIN)
+	vbox_margin.add_theme_constant_override("margin_bottom", UITheme.MARGIN)
 	vbox_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(vbox_margin)
 
 	_vbox = VBoxContainer.new()
-	_vbox.add_theme_constant_override("separation", 10)
+	_vbox.add_theme_constant_override("separation", UITheme.SEPARATION)
 	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox_margin.add_child(_vbox)
 
-	# Header: Title + Close
+	# Header
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 6)
-	_title_label = Label.new()
-	_title_label.add_theme_font_size_override("font_size", 18)
-	_title_label.add_theme_color_override("font_color", Color(0.95, 0.82, 0.25))
+	_title_label = UITheme.make_label("", "title", UITheme.ACCENT)
 	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	header.add_child(_title_label)
-	_close_btn = Button.new()
-	_close_btn.text = "X"
-	_close_btn.custom_minimum_size = Vector2(28, 28)
-	_style_button(_close_btn, Color(0.45, 0.12, 0.12, 0.8))
-	_close_btn.pressed.connect(_hide_panel)
+	_close_btn = UITheme.make_close_button(_hide_panel)
 	header.add_child(_close_btn)
 	_vbox.add_child(header)
 
 	# Level label
-	_level_label = Label.new()
-	_level_label.add_theme_font_size_override("font_size", 13)
-	_level_label.add_theme_color_override("font_color", Color(0.6, 0.75, 1.0))
+	_level_label = UITheme.make_label("", "body", UITheme.INFO)
 	_vbox.add_child(_level_label)
 
 	# Description
-	_desc_label = Label.new()
-	_desc_label.add_theme_font_size_override("font_size", 12)
-	_desc_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	_desc_label = UITheme.make_label("", "small", UITheme.TEXT_DIM)
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_vbox.add_child(_desc_label)
 
 	# Production info card
 	_production_container = PanelContainer.new()
 	var prod_style := StyleBoxFlat.new()
-	prod_style.bg_color = Color(0.12, 0.18, 0.12, 0.9)
-	prod_style.set_corner_radius_all(6)
+	prod_style.bg_color = UITheme.POSITIVE.darkened(0.7)
+	prod_style.set_corner_radius_all(UITheme.CORNER)
 	prod_style.set_content_margin_all(8)
+	prod_style.border_color = UITheme.POSITIVE.darkened(0.3)
+	prod_style.border_width_left = 3
 	_production_container.add_theme_stylebox_override("panel", prod_style)
-	_production_label = Label.new()
-	_production_label.add_theme_font_size_override("font_size", 13)
-	_production_label.add_theme_color_override("font_color", Color(0.45, 0.9, 0.35))
+	_production_label = UITheme.make_label("", "body", UITheme.POSITIVE)
 	_production_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_production_container.add_child(_production_label)
 	_vbox.add_child(_production_container)
 
 	# Deposit uses
-	_deposit_uses_label = Label.new()
-	_deposit_uses_label.add_theme_font_size_override("font_size", 12)
-	_deposit_uses_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4))
+	_deposit_uses_label = UITheme.make_label("", "body", UITheme.WARNING)
 	_deposit_uses_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_vbox.add_child(_deposit_uses_label)
 
 	# Construction state
 	_construction_container = VBoxContainer.new()
 	_construction_container.add_theme_constant_override("separation", 4)
-	_construction_label = Label.new()
-	_construction_label.add_theme_font_size_override("font_size", 13)
-	_construction_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))
-	_construction_bar = ProgressBar.new()
-	_construction_bar.custom_minimum_size = Vector2(0, 14)
-	_construction_bar.max_value = 1.0
-	_construction_bar.show_percentage = false
-	var constr_bg := StyleBoxFlat.new()
-	constr_bg.bg_color = Color(0.15, 0.15, 0.15)
-	constr_bg.set_corner_radius_all(4)
-	_construction_bar.add_theme_stylebox_override("background", constr_bg)
-	var constr_fill := StyleBoxFlat.new()
-	constr_fill.bg_color = Color(0.9, 0.7, 0.1)
-	constr_fill.set_corner_radius_all(4)
-	_construction_bar.add_theme_stylebox_override("fill", constr_fill)
+	_construction_label = UITheme.make_label("", "body", UITheme.WARNING)
+	_construction_bar = UITheme.make_progress_bar(UITheme.WARNING)
 	_construction_container.add_child(_construction_label)
 	_construction_container.add_child(_construction_bar)
 	_vbox.add_child(_construction_container)
@@ -178,7 +148,7 @@ func _build_ui() -> void:
 	_name_edit.text_submitted.connect(func(_t): _on_rename())
 	var name_btn := Button.new()
 	name_btn.text = Tr.t("BTN_RENAME")
-	_style_button(name_btn, Color(0.2, 0.35, 0.5, 0.8))
+	UITheme.style_button(name_btn, UITheme.INFO)
 	name_btn.pressed.connect(_on_rename)
 	_name_container.add_child(_name_edit)
 	_name_container.add_child(name_btn)
@@ -187,28 +157,20 @@ func _build_ui() -> void:
 	# Upgrade section
 	_upgrade_container = VBoxContainer.new()
 	_upgrade_container.add_theme_constant_override("separation", 4)
-	_upgrade_cost_label = Label.new()
-	_upgrade_cost_label.add_theme_font_size_override("font_size", 11)
-	_upgrade_cost_label.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5))
+	_upgrade_cost_label = UITheme.make_label("", "small", UITheme.TEXT_DIM)
 	_upgrade_cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_upgrade_container.add_child(_upgrade_cost_label)
 	_upgrade_btn = Button.new()
 	_upgrade_btn.text = Tr.t("BTN_UPGRADE")
-	_style_button(_upgrade_btn, Color(0.15, 0.3, 0.5, 0.85))
+	UITheme.style_button(_upgrade_btn, UITheme.INFO)
 	_upgrade_btn.pressed.connect(_on_upgrade)
 	_upgrade_container.add_child(_upgrade_btn)
 	_vbox.add_child(_upgrade_container)
 
-	var sep := HSeparator.new()
-	sep.add_theme_color_override("separator", Color(0.4, 0.35, 0.15, 0.4))
-	_vbox.add_child(sep)
+	_vbox.add_child(UITheme.make_separator())
 
 	# Processes header
-	var proc_header := Label.new()
-	proc_header.text = Tr.t("LBL_ACTIONS")
-	proc_header.add_theme_font_size_override("font_size", 14)
-	proc_header.add_theme_color_override("font_color", Color(0.7, 0.65, 0.45))
-	_vbox.add_child(proc_header)
+	_vbox.add_child(UITheme.section_header(Tr.t("LBL_ACTIONS"), UITheme.ACCENT))
 
 	# Process actions (delegated)
 	var processes_box := VBoxContainer.new()
@@ -218,41 +180,26 @@ func _build_ui() -> void:
 	# Progress bar
 	var progress_container := VBoxContainer.new()
 	progress_container.add_theme_constant_override("separation", 3)
-	var progress_label := Label.new()
-	progress_label.add_theme_font_size_override("font_size", 12)
-	progress_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.45))
-	var progress_bar := ProgressBar.new()
-	progress_bar.custom_minimum_size = Vector2(0, 16)
-	progress_bar.max_value = 1.0
-	progress_bar.show_percentage = false
-	var bar_bg := StyleBoxFlat.new()
-	bar_bg.bg_color = Color(0.15, 0.15, 0.15)
-	bar_bg.set_corner_radius_all(4)
-	progress_bar.add_theme_stylebox_override("background", bar_bg)
-	var bar_fill := StyleBoxFlat.new()
-	bar_fill.bg_color = Color(0.85, 0.65, 0.1)
-	bar_fill.set_corner_radius_all(4)
-	progress_bar.add_theme_stylebox_override("fill", bar_fill)
+	var progress_label := UITheme.make_label("", "small", UITheme.WARNING)
+	var progress_bar := UITheme.make_progress_bar(UITheme.ACCENT, 14)
 	progress_container.add_child(progress_label)
 	progress_container.add_child(progress_bar)
 	_vbox.add_child(progress_container)
 	_process_panel = ProcessActionsPanel.new(processes_box, progress_container, progress_bar, progress_label)
 
-	var sep2 := HSeparator.new()
-	sep2.add_theme_color_override("separator", Color(0.4, 0.35, 0.15, 0.4))
-	_vbox.add_child(sep2)
+	_vbox.add_child(UITheme.make_separator())
 
 	# Action buttons
 	_actions_box = HBoxContainer.new()
-	_actions_box.add_theme_constant_override("separation", 6)
+	_actions_box.add_theme_constant_override("separation", 8)
 	_actions_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	_move_btn = Button.new()
 	_move_btn.text = Tr.t("BTN_MOVE")
-	_style_button(_move_btn, Color(0.2, 0.35, 0.5, 0.8))
+	UITheme.style_button(_move_btn, UITheme.INFO)
 	_move_btn.pressed.connect(_on_move)
 	_demolish_btn = Button.new()
 	_demolish_btn.text = Tr.t("BTN_DEMOLISH")
-	_style_button(_demolish_btn, Color(0.5, 0.15, 0.12, 0.85))
+	UITheme.style_button(_demolish_btn, UITheme.DANGER)
 	_demolish_btn.pressed.connect(_on_demolish)
 	_actions_box.add_child(_move_btn)
 	_actions_box.add_child(_demolish_btn)
@@ -262,22 +209,20 @@ func _build_ui() -> void:
 	_confirm_container = VBoxContainer.new()
 	_confirm_container.add_theme_constant_override("separation", 4)
 	_confirm_container.visible = false
-	_confirm_label = Label.new()
-	_confirm_label.add_theme_font_size_override("font_size", 12)
-	_confirm_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.4))
+	_confirm_label = UITheme.make_label("", "body", UITheme.DANGER)
 	_confirm_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_confirm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_confirm_container.add_child(_confirm_label)
 	var confirm_row := HBoxContainer.new()
-	confirm_row.add_theme_constant_override("separation", 6)
+	confirm_row.add_theme_constant_override("separation", 8)
 	confirm_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	var yes_btn := Button.new()
 	yes_btn.text = Tr.t("BTN_CONFIRM")
-	_style_button(yes_btn, Color(0.5, 0.15, 0.12, 0.85))
+	UITheme.style_button(yes_btn, UITheme.DANGER)
 	yes_btn.pressed.connect(_confirm_demolish)
 	var no_btn := Button.new()
 	no_btn.text = Tr.t("BTN_CANCEL")
-	_style_button(no_btn, Color(0.3, 0.3, 0.35, 0.8))
+	UITheme.style_button(no_btn, UITheme.BTN)
 	no_btn.pressed.connect(_cancel_demolish)
 	confirm_row.add_child(yes_btn)
 	confirm_row.add_child(no_btn)
@@ -285,24 +230,6 @@ func _build_ui() -> void:
 	_vbox.add_child(_confirm_container)
 
 	add_child(_panel)
-
-func _style_button(btn: Button, bg_color: Color) -> void:
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = bg_color
-	normal.set_corner_radius_all(6)
-	normal.set_content_margin_all(6)
-	btn.add_theme_stylebox_override("normal", normal)
-	var hover := StyleBoxFlat.new()
-	hover.bg_color = bg_color.lightened(0.15)
-	hover.set_corner_radius_all(6)
-	hover.set_content_margin_all(6)
-	btn.add_theme_stylebox_override("hover", hover)
-	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = bg_color.lightened(0.3)
-	pressed.set_corner_radius_all(6)
-	pressed.set_content_margin_all(6)
-	btn.add_theme_stylebox_override("pressed", pressed)
-	btn.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
 
 # ── Event Handlers ──
 
@@ -352,9 +279,16 @@ func _show_building_panel() -> void:
 	_desc_label.text = _selected_data.description
 	_desc_label.visible = not _selected_data.description.is_empty()
 
-	# Level display
+	# Level display + workers/morale info
 	var level: int = _selected_node.get_meta("level", 1)
-	_level_label.text = Tr.t("LBL_LEVEL") % [level]
+	var level_text := Tr.t("LBL_LEVEL") % [level]
+	if _selected_data.workers_required > 0:
+		level_text += "  |  " + Tr.t("LBL_WORKERS_NEEDED") % _selected_data.workers_required
+	if _selected_data.population_capacity > 0:
+		level_text += "  |  +%d pop" % _selected_data.population_capacity
+	if _selected_data.morale_bonus > 0:
+		level_text += "  |  +%d moral" % _selected_data.morale_bonus
+	_level_label.text = level_text
 	_level_label.visible = true
 
 	# Production info (with level multiplier)
@@ -411,6 +345,7 @@ func _show_building_panel() -> void:
 	_process_panel.populate_building(_selected_node, _selected_data, is_building)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
+	UIManager.open_window(self)
 
 func _show_deposit_panel() -> void:
 	_confirm_container.visible = false
@@ -433,6 +368,7 @@ func _show_deposit_panel() -> void:
 	_process_panel.populate_deposit(_selected_node, _selected_deposit_id)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
+	UIManager.open_window(self)
 
 func _update_deposit_uses() -> void:
 	if _selected_node and _selected_node.has_meta("uses_remaining"):
@@ -443,11 +379,16 @@ func _update_deposit_uses() -> void:
 		_deposit_uses_label.visible = false
 
 func _hide_panel() -> void:
+	if _panel.visible:
+		UIManager.close_window(self)
 	_panel.visible = false
 	_selected_node = null
 	_selected_data = null
 	_selected_deposit_id = ""
 	_demolish_pending = false
+
+func _toggle_panel() -> void:
+	_hide_panel()
 
 # ── Actions ──
 

@@ -6,10 +6,10 @@ extends Node
 enum Type { GOLD, STEEL, OIL, WOOD }
 
 var _resources: Dictionary = {
-	Type.GOLD: 500,
-	Type.STEEL: 300,
-	Type.OIL: 200,
-	Type.WOOD: 400,
+	Type.GOLD: 300,
+	Type.STEEL: 0,
+	Type.OIL: 0,
+	Type.WOOD: 200,
 }
 
 var _names: Dictionary = {
@@ -19,7 +19,35 @@ var _names: Dictionary = {
 	Type.WOOD: "wood",
 }
 
+var _unlocked: Dictionary = {
+	Type.GOLD: true,
+	Type.STEEL: false,
+	Type.OIL: false,
+	Type.WOOD: true,
+}
+
 var _warehouse_count := 0
+
+func is_unlocked(type: Type) -> bool:
+	return _unlocked.get(type, false)
+
+func is_unlocked_by_name(res_name: String) -> bool:
+	var type := name_to_type(res_name)
+	if type == -1:
+		return false
+	return _unlocked.get(type, false)
+
+func unlock(type: Type) -> void:
+	if _unlocked.get(type, false):
+		return
+	_unlocked[type] = true
+	EventBus.resource_unlocked.emit(_names[type])
+
+func name_to_type(res_name: String) -> int:
+	for type in _names:
+		if _names[type] == res_name:
+			return type
+	return -1
 
 func get_amount(type: Type) -> int:
 	return _resources.get(type, 0)
@@ -70,13 +98,38 @@ func spend_cost(cost: Dictionary) -> bool:
 func get_all() -> Dictionary:
 	return _resources.duplicate()
 
+func get_unlocked_types() -> Array:
+	var result: Array = []
+	for type in _unlocked:
+		if _unlocked[type]:
+			result.append(type)
+	return result
+
+func get_unlock_state() -> Dictionary:
+	var result := {}
+	for type in _names:
+		result[_names[type]] = _unlocked[type]
+	return result
+
+func set_unlock_state(state: Dictionary) -> void:
+	for res_name in state:
+		var type := name_to_type(res_name)
+		if type != -1:
+			_unlocked[type] = state[res_name]
+
 func reset() -> void:
 	var cfg := GameConfig.starting_resources
 	_resources = {
-		Type.GOLD: cfg.get("gold", 500),
-		Type.STEEL: cfg.get("steel", 300),
-		Type.OIL: cfg.get("oil", 200),
-		Type.WOOD: cfg.get("wood", 400),
+		Type.GOLD: cfg.get("gold", 300),
+		Type.STEEL: cfg.get("steel", 0),
+		Type.OIL: cfg.get("oil", 0),
+		Type.WOOD: cfg.get("wood", 200),
+	}
+	_unlocked = {
+		Type.GOLD: true,
+		Type.STEEL: false,
+		Type.OIL: false,
+		Type.WOOD: true,
 	}
 	_warehouse_count = 0
 	for type in _resources:

@@ -122,6 +122,7 @@ func _deplete_deposit(node: Node3D) -> void:
 	tween.tween_callback(label.queue_free)
 	# Signal and remove node
 	EventBus.deposit_depleted.emit(node, deposit_id)
+	EventBus.notification_posted.emit(Tr.t("NOTIF_DEPOSIT_GONE") % Tr.t(DEPOSIT_TYPES[deposit_id]["display_name"]), "warning", Color(0.8, 0.5, 0.2))
 	node.queue_free()
 	# Auto-save
 	GameManager.save_game()

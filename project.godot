@@ -31,6 +31,13 @@ ResourceManager="*res://scripts/services/ResourceManager.gd"
 GameManager="*res://scripts/services/GameManager.gd"
 ProcessManager="*res://scripts/services/ProcessManager.gd"
 ProductionManager="*res://scripts/services/ProductionManager.gd"
+ProgressionManager="*res://scripts/services/ProgressionManager.gd"
+MarketManager="*res://scripts/services/MarketManager.gd"
+PopulationManager="*res://scripts/services/PopulationManager.gd"
+RandomEventManager="*res://scripts/services/RandomEventManager.gd"
+TechTreeManager="*res://scripts/services/TechTreeManager.gd"
+CloudSaveManager="*res://scripts/services/CloudSaveManager.gd"
+UIManager="*res://scripts/services/UIManager.gd"
 
 [display]
 
