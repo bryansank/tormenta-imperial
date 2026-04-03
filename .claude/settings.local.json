@@ -7,7 +7,16 @@
       "Bash(/c/Users/bkey/.local/bin/rtk.exe --version)",
       "Bash(echo $PATH)",
       "Bash(rtk git:*)",
-      "Bash(ls -la \"c:\\\\Users\\\\bkey\\\\Documents\\\\PERSONAL\\\\apss\\\\empires\\\\scenes\\\\buildings\"\" 2>/dev/null || echo \"Empty or doesn 't exist \")"
+      "Bash(ls -la \"c:\\\\Users\\\\bkey\\\\Documents\\\\PERSONAL\\\\apss\\\\empires\\\\scenes\\\\buildings\"\" 2>/dev/null || echo \"Empty or doesn 't exist \")",
+      "Bash(curl -s https://raw.githubusercontent.com/rtk-ai/rtk/main/README.md)",
+      "Bash(curl -sL https://gitmcp.io/juanklagos/spec-driven-development-template)",
+      "Bash(gh repo:*)",
+      "Bash(curl -sL https://raw.githubusercontent.com/juanklagos/spec-driven-development-template/main/docs/es/48-como-conectar-este-repo-con-gitmcp.md)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(where gh:*)",
+      "Bash(curl -s \"https://api.github.com/search/repositories?q=mcp+3d+model&sort=stars&per_page=20\")",
+      "Bash(python3 -c \" import json,sys data=json.load\\(sys.stdin\\) for r in data.get\\('items',[]\\)[:20]: print\\(f\\\\\"{r['full_name']} | stars:{r['stargazers_count']} | {r['description'][:120] if r['description'] else 'N/A'} | {r['html_url']}\\\\\"\\) \")"
     ]
   }
 }

@@ -1,56 +1,65 @@
-# GEMINI.md - Tormenta Imperial Project Context
+# GEMINI.md - Tormenta Imperial Master Context
 
-This file provides instructional context for Gemini CLI when working on the **Tormenta Imperial** project.
+Este archivo es el índice maestro para Gemini CLI. Define la arquitectura, los servicios activos y las convenciones del proyecto **Tormenta Imperial**.
 
-## Project Overview
+## 1. Project Overview
+Hybrid strategy game: persistent base management (meta-game) + RTS combat.
+- **Aesthetic:** "Heroic Realism" / Dieselpunk (Monumentalism vs Mud).
+- **Engine:** Godot 4.6 .NET Edition (Forward+ renderer).
+- **Primary Architecture:** Service-Signal-Component (100% Decoupled).
 
-**Tormenta Imperial** is a hybrid strategy game that combines real-time strategy (RTS) combat with a persistent, monumental base-management system. The game features a "Dieselpunk" and "Heroic Realism" aesthetic, where players manage resources, research technologies, and engage in tactical combat.
+## 2. Core Architecture: Service-Signal-Component
+Todos los sistemas se comunican exclusivamente a través del **EventBus**. No hay referencias directas entre productores y consumidores.
 
-### Key Features:
-- **Heroic Realism / Dieselpunk Aesthetic:** Massively neoclassical architecture ("Monumentalism") contrasted with the "Barro" (mud) of the battlefield.
-- **Persistent Base Management (Meta-Game):** Base grows and persists outside of matches. Improvements unlock new frontline units.
-- **RTS Combat:** Micro and macro management of units on 2D maps with tactical AI (cover, flanking).
-- **Backend Persistence:** Integration with Supabase for user authentication and game state saving.
+### Golden Rules (From `docs/01-architecture.md`):
+1. **Services never reference each other directly** — use `EventBus` signals.
+2. **UI subscribes to EventBus in `_ready()`** and reacts to signals.
+3. **Data flows one way:** Input -> Service -> EventBus -> Consumer.
+4. **GameConfig holds all balance values** — zero magic numbers in code.
 
-## Tech Stack (100% Open Source / Free)
+### Registered Autoload Services (Load Order Matters):
+| Order | Service | Responsability |
+|-------|---------|----------------|
+| 1 | `Tr` | Localización (ES/EN). |
+| 2 | `GameConfig` | Constantes de balance y tuning. |
+| 3 | `EventBus` | Bus global de señales (solo declaraciones). |
+| 4 | `InputService` | Mapeo de Input a señales del EventBus. |
+| 5 | `GridManager` | Gestión de celdas 25x25 y lógica de terreno. |
+| 6 | `ResourceManager` | Gestión de 4 recursos + desbloqueos. |
+| 7 | `GameManager` | Ciclo de vida, guardado/carga (Local + Cloud). |
+| 8 | `ProcessManager` | Procesos de edificios (minería, refinado). |
+| 9 | `ProductionManager` | Producción pasiva y ciclos de construcción. |
+| 10 | `ProgressionManager` | Eras, hitos (milestones) y victoria. |
+| 11 | `MarketManager` | Comercio con precios dinámicos. |
+| 12 | `PopulationManager` | Población, trabajadores y moral. |
+| 13 | `RandomEventManager` | Eventos aleatorios del juego. |
+| 14 | `CloudSaveManager` | Integración con Supabase (pendiente). |
 
-- **Game Engine:** [Godot Engine 4.3 .NET Edition](https://godotengine.org/)
-- **Programming Languages:**
-    - **C#:** Used for performance-critical systems (Unit AI, combat logic, pathfinding).
-    - **GDScript:** Used for UI, scene management, and light gameplay glue.
-- **Backend:** [Supabase](https://supabase.com/) (PostgreSQL Database, Auth, Edge Functions).
-- **Networking (Future):** [Nakama](https://heroiclabs.com/) (Local Docker setup for competitive multiplayer).
-- **IDE:** Visual Studio Code with Godot extensions.
-- **Art:** Aseprite (Pixel Art), Inkscape (Vector icons).
+## 3. Implementation Cheat Sheet
+Para añadir un nuevo sistema o funcionalidad, sigue este flujo:
 
-## Building and Running
+1. **Signals:** Declara la señal en `scripts/services/EventBus.gd`.
+2. **Service:** Crea el manager en `scripts/services/`. Debe incluir:
+   - `get_save_data()` / `load_save_data()` / `reset()`.
+3. **Registration:** Añádelo a `project.godot` respetando el orden de dependencia.
+4. **GameManager:** Conecta el nuevo servicio en `_new_game()`, `_load_game()` y `clear_save()`.
+5. **UI:** Crea la escena en `scenes/ui/` y el script en `scripts/ui/` conectando señales en `_ready()`.
 
-1.  **Engine:** Requires **Godot 4.3 .NET Edition**.
-2.  **Environment:** Open the root folder in VS Code with the Godot extension.
-3.  **Run:** Open the project in Godot and press **F5** (or the Play button).
-4.  **Backend Config:** (TODO) Configure Supabase API keys in the project configuration (file to be determined).
+## 4. Coding Conventions
+- **GDScript:** UI, Camera, Input, Signal Wiring, Audio. (`snake_case`)
+- **C#:** (Planned) Performance-heavy systems: Unit AI, Combat Logic, Pathfinding. (`PascalCase`)
+- **Resources:** Todos los datos de edificios están en `data/buildings/*.tres`.
 
-## Development Conventions
+## 5. Project Roadmap & Status
+- [x] **Core Foundations:** Camera, Grid, Building Placer, EventBus.
+- [x] **Economy & Management:** Resource system, Population, Market, Production.
+- [x] **Progression:** Tech Tree, Eras, Milestones, Save System (Local).
+- [~] **Persistence:** Local JSON working. Supabase/Cloud pending.
+- [ ] **Combat Basics:** Drag selection box and NavigationAgent2D (Next Focus).
+- [ ] **Assets:** Refine building models and unit sprites.
 
-- **Performance:** Always prioritize **C#** for heavy computations and complex systems (e.g., unit selection logic, navigation agents).
-- **UI/Glue:** Use **GDScript** for simple UI scripts and connecting scene components.
-- **Organization:**
-    - Use `NavigationAgent2D` for unit movement.
-    - Implement a grid-based system for building placement.
-- **Naming & Style:** Adhere to standard Godot (GDScript) and C# (.NET) naming conventions where applicable.
-
-## Initial Roadmap (Phase 1: Foundations)
-
-- [ ] **Infrastructure:** Setup camera system (Zoom, Pan, Map limits).
-- [ ] **Backend:** Initial Supabase integration (Login system).
-- [ ] **Combat Basics:** Drag selection box and `NavigationAgent2D` movement.
-- [ ] **Assets:** Create "Eagle Imperial" icon and "Light Tank" unit.
-- [ ] **Base Building:** Grid-based placement and "Vintage Military" UI.
-- [ ] **Persistence:** Cloud-save logic for base state.
-
-## Key Files (Current)
-
-- `readme.md`: Main project documentation and roadmap.
-- `CLAUDE.md`: Context for Claude Code.
-- `GEMINI.md`: This file.
-- `project.godot`: (TODO: Create once the Godot project is initialized).
+## 6. Key Documentation References
+- `docs/01-architecture.md`: Detalles técnicos del flujo de datos.
+- `docs/03-buildings.md`: Lista completa de los 14 tipos de edificios.
+- `docs/09-save-system.md`: Estructura del JSON de guardado.
+- `docs/10-signals-reference.md`: Diccionario completo de señales del EventBus.
