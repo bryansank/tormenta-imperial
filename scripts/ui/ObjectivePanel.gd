@@ -25,7 +25,7 @@ func _setup_ui() -> void:
 	_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_panel.add_theme_stylebox_override("panel", UITheme.make_panel_style())
+	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	add_child(_panel)
 
 	var margin := MarginContainer.new()

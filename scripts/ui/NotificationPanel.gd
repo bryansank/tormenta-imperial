@@ -37,10 +37,12 @@ func _setup_ui() -> void:
 	status_panel.position = Vector2(10, 50)
 	var status_style := StyleBoxFlat.new()
 	status_style.bg_color = UITheme.PANEL_BG
-	status_style.set_corner_radius_all(UITheme.CORNER)
-	status_style.set_content_margin_all(8)
-	status_style.border_color = UITheme.ACCENT_DIM
-	status_style.set_border_width_all(1)
+	status_style.set_corner_radius_all(0)
+	status_style.set_content_margin_all(10)
+	status_style.border_color = UITheme.ACCENT
+	status_style.set_border_width_all(3)
+	status_style.shadow_color = Color(UITheme.ACCENT.r, UITheme.ACCENT.g, UITheme.ACCENT.b, 0.3)
+	status_style.shadow_size = 3
 	status_panel.add_theme_stylebox_override("panel", status_style)
 	root.add_child(status_panel)
 

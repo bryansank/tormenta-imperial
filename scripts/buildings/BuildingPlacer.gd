@@ -25,6 +25,8 @@ func _ready() -> void:
 	EventBus.building_placement_cancelled.connect(_cancel)
 	EventBus.request_move_building.connect(_on_move_requested)
 	EventBus.request_demolish_building.connect(_on_demolish_requested)
+	EventBus.building_clicked.connect(_on_building_clicked)
+	EventBus.building_deselected.connect(_on_building_deselected)
 	GameManager.register_placer(self)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -328,7 +330,7 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 			mesh_inst.position.y = data.mesh_height * 0.5
 			root.add_child(mesh_inst)
 
-	# Label above building — large, bold, readable
+	# Label above building — large, bold, readable (hidden by default)
 	var label := Label3D.new()
 	label.name = "NameLabel"
 	label.text = data.display_name
@@ -340,6 +342,7 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	label.outline_size = 12
 	label.outline_modulate = Color(0, 0, 0, 0.8)
 	label.modulate = Color(1, 1, 1, 1)
+	label.visible = false
 	root.add_child(label)
 
 	return root
@@ -396,3 +399,23 @@ func _show_feedback(text: String) -> void:
 	tween.tween_property(label, "global_position:y", label.global_position.y + 2.0, 1.5)
 	tween.parallel().tween_property(label, "modulate:a", 0.0, 1.5).set_delay(0.3)
 	tween.tween_callback(label.queue_free)
+
+# ── Show/Hide building labels on selection ──
+
+func _on_building_clicked(building: Node3D, _data: BuildingData) -> void:
+	# Hide all labels first
+	for child in _buildings_container.get_children():
+		var name_label := child.get_node_or_null("NameLabel")
+		if name_label:
+			name_label.visible = false
+	# Show only selected building's label
+	var selected_label := building.get_node_or_null("NameLabel")
+	if selected_label:
+		selected_label.visible = true
+
+func _on_building_deselected() -> void:
+	# Hide all labels
+	for child in _buildings_container.get_children():
+		var name_label := child.get_node_or_null("NameLabel")
+		if name_label:
+			name_label.visible = false

@@ -14,7 +14,7 @@ func _show_victory(stats: Dictionary) -> void:
 	add_child(_backdrop)
 
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.make_panel_style())
+	panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH

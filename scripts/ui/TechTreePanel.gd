@@ -55,7 +55,7 @@ func _setup_ui() -> void:
 	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_panel.custom_minimum_size = Vector2(540, 0)
 	_panel.visible = false
-	_panel.add_theme_stylebox_override("panel", UITheme.make_panel_style())
+	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))
 	root.add_child(_panel)
 
