@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/TechTreePanel.gd" id="1"]
+
+[node name="TechTreePanel" type="CanvasLayer"]
+script = ExtResource("1")

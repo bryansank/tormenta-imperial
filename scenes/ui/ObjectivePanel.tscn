@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://b8k2j7m8x4y3p"]
+
+[ext_resource type="Script" path="res://scripts/ui/ObjectivePanel.gd" id="1_script"]
+
+[node name="ObjectivePanel" type="CanvasLayer"]
+script = ExtResource("1_script")
