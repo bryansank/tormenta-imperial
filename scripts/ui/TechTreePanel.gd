@@ -12,6 +12,7 @@ var _progress_bar: ProgressBar
 func _ready() -> void:
 	layer = 11
 	_setup_ui()
+	UIManager.register_panel(self, "TechTreePanel.modal")
 	EventBus.notification_posted.connect(func(_m, _c, _col): _refresh_tech_states())
 
 func _process(_delta: float) -> void:
@@ -168,6 +169,6 @@ func _toggle_panel() -> void:
 	_backdrop.visible = _is_open
 	if _is_open:
 		_refresh_tech_states()
-		UIManager.open_window(self)
+		UIManager.open_panel(self)
 	else:
-		UIManager.close_window(self)
+		UIManager.close_panel(self)

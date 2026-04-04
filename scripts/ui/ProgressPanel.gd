@@ -12,6 +12,7 @@ var _bar: ProgressBar
 func _ready() -> void:
 	layer = 11
 	_setup_ui()
+	UIManager.register_panel(self, "ProgressPanel.modal")
 	EventBus.milestone_completed.connect(_on_milestone_completed)
 	EventBus.era_advanced.connect(_on_era_advanced)
 
@@ -134,6 +135,6 @@ func _toggle_panel() -> void:
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
 	if _is_open:
-		UIManager.open_window(self)
+		UIManager.open_panel(self)
 	else:
-		UIManager.close_window(self)
+		UIManager.close_panel(self)

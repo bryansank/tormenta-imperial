@@ -10,6 +10,7 @@ func _ready() -> void:
 	visible = false
 	_setup_ui()
 	EventBus.objective_panel_toggled.connect(toggle)
+	UIManager.register_panel(self, "ObjectivePanel")
 
 func _setup_ui() -> void:
 	# Backdrop
@@ -93,5 +94,9 @@ func toggle() -> void:
 	_is_open = not _is_open
 	visible = _is_open
 	if _is_open:
-		# Could play sound or animation here
-		pass
+		UIManager.open_panel(self)
+	else:
+		UIManager.close_panel(self)
+
+func _toggle_panel() -> void:
+	toggle()

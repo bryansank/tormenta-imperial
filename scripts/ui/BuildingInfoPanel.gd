@@ -37,6 +37,7 @@ func _ready() -> void:
 	layer = 10
 	_build_ui()
 	_panel.visible = false
+	UIManager.register_panel(self, "BuildingInfoPanel")
 
 	EventBus.building_clicked.connect(_on_building_clicked)
 	EventBus.building_deselected.connect(_on_deselected)
@@ -339,7 +340,7 @@ func _show_building_panel() -> void:
 	_process_panel.populate_building(_selected_node, _selected_data, is_building)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
-	UIManager.open_window(self)
+	UIManager.open_panel(self)
 
 func _show_deposit_panel() -> void:
 	_confirm_container.visible = false
@@ -362,7 +363,7 @@ func _show_deposit_panel() -> void:
 	_process_panel.populate_deposit(_selected_node, _selected_deposit_id)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
-	UIManager.open_window(self)
+	UIManager.open_panel(self)
 
 func _update_deposit_uses() -> void:
 	if _selected_node and _selected_node.has_meta("uses_remaining"):
@@ -374,7 +375,7 @@ func _update_deposit_uses() -> void:
 
 func _hide_panel() -> void:
 	if _panel.visible:
-		UIManager.close_window(self)
+		UIManager.close_panel(self)
 	_panel.visible = false
 	_selected_node = null
 	_selected_data = null

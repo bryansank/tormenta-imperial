@@ -49,6 +49,7 @@ func _ready() -> void:
 	EventBus.resource_unlocked.connect(func(_r): _refresh_grid())
 	EventBus.sidebar_toggled.connect(func(v): _build_btn.visible = v)
 	_build_btn.visible = false  # Start collapsed, sidebar controls it
+	UIManager.register_panel(self, "ConstructionMenu.modal")
 
 func _process(delta: float) -> void:
 	if _preview_model and _is_open and _selected_data:
@@ -321,13 +322,13 @@ func _open() -> void:
 	_modal.visible = true
 	_backdrop.visible = true
 	_refresh_grid()
-	UIManager.open_window(self)
+	UIManager.open_panel(self)
 
 func _close() -> void:
 	_is_open = false
 	_modal.visible = false
 	_backdrop.visible = false
-	UIManager.close_window(self)
+	UIManager.close_panel(self)
 
 func _toggle_panel() -> void:
 	if _is_open:

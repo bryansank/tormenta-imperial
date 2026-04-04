@@ -2,8 +2,6 @@ class_name UILayoutConfig
 ## Single source of truth for UI panel layout.
 ## Defines screen slots and assigns each panel to a slot.
 
-enum Grow { END = 1, BEGIN = 0, BOTH = 2 }
-
 ## Slot definitions: each slot is a screen region.
 ## anchor: Rect2(left, top, right, bottom) in 0..1 normalized coords
 ## margin: Dictionary with pixel offsets from anchor edges
@@ -128,6 +126,12 @@ const SIDEBAR_BUTTON_ORDER := [
 	"ProgressPanel.button",
 	"TechTreePanel.button",
 ]
+
+## Slot conflicts: opening a panel in key slot also closes panels in value slots.
+## center_modal closes right_panel because the backdrop obscures it.
+const SLOT_CONFLICTS := {
+	"center_modal": ["right_panel"],
+}
 
 ## Height of each sidebar button + gap
 const SIDEBAR_BTN_HEIGHT := 38

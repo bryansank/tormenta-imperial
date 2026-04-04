@@ -14,6 +14,7 @@ const TRADEABLE := ["wood", "steel", "oil"]
 func _ready() -> void:
 	layer = 11
 	_setup_ui()
+	UIManager.register_panel(self, "MarketPanel.modal")
 	EventBus.market_prices_updated.connect(_on_prices_updated)
 	EventBus.resource_unlocked.connect(func(_r): _rebuild())
 	EventBus.market_trade_completed.connect(func(_r, _a, _b, _p): _update_prices())
@@ -213,9 +214,9 @@ func _toggle_panel() -> void:
 	_backdrop.visible = _is_open
 	if _is_open:
 		_update_prices()
-		UIManager.open_window(self)
+		UIManager.open_panel(self)
 	else:
-		UIManager.close_window(self)
+		UIManager.close_panel(self)
 
 func _toggle_sidebar() -> void:
 	_sidebar_visible = not _sidebar_visible
