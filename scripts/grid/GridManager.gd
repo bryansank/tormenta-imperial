@@ -97,16 +97,21 @@ func get_building_at(cell: Vector2i) -> Node3D:
 func get_building_info(building_node: Node3D) -> Dictionary:
 	return _building_info.get(building_node, {})
 
-## Place a non-building obstacle (resource deposit) on a single cell.
-func place_obstacle(cell: Vector2i, node: Node3D) -> bool:
-	if not is_cell_free(cell):
-		return false
-	_cell_to_building[cell] = node
+## Place a non-building obstacle (resource deposit) on one or more cells.
+func place_obstacle(cell: Vector2i, node: Node3D, grid_size: Vector2i = Vector2i(1, 1)) -> bool:
+	var cells := _get_cells_for(cell, grid_size)
+	for c in cells:
+		if not is_cell_free(c):
+			return false
+	for c in cells:
+		_cell_to_building[c] = node
 	return true
 
-## Remove an obstacle from a single cell.
-func remove_obstacle(cell: Vector2i) -> void:
-	_cell_to_building.erase(cell)
+## Remove an obstacle from one or more cells.
+func remove_obstacle(cell: Vector2i, grid_size: Vector2i = Vector2i(1, 1)) -> void:
+	var cells := _get_cells_for(cell, grid_size)
+	for c in cells:
+		_cell_to_building.erase(c)
 
 ## Get all placed buildings as an array of info dicts (includes "node" key).
 func get_all_buildings() -> Array:
