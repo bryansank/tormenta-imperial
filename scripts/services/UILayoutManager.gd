@@ -45,22 +45,27 @@ func apply_layout(panel_id: String, control: Control) -> void:
 	var h_spans := anchor.position.x != anchor.size.x
 	var v_spans := anchor.position.y != anchor.size.y
 
+	var m_left: float = margin["left"]
+	var m_right: float = margin["right"]
+	var m_top: float = margin["top"]
+	var m_bottom: float = margin["bottom"]
+
 	# Horizontal offsets
 	if h_spans:
-		control.offset_left = margin["left"]
+		control.offset_left = m_left
 		if size.x > 0:
-			control.offset_right = margin["left"] + size.x
+			control.offset_right = m_left + size.x
 		else:
-			control.offset_right = -margin["right"]
+			control.offset_right = -m_right
 	else:
-		_apply_h_point(control, grow_h, margin, size.x)
+		_apply_h_point(control, grow_h, m_left, m_right, size.x)
 
 	# Vertical offsets
 	if v_spans:
-		control.offset_top = margin["top"]
-		control.offset_bottom = -margin["bottom"]
+		control.offset_top = m_top
+		control.offset_bottom = -m_bottom
 	else:
-		_apply_v_point(control, grow_v, margin, size.y)
+		_apply_v_point(control, grow_v, m_top, m_bottom, size.y)
 
 	# Set minimum size
 	if size.x > 0:
@@ -69,46 +74,46 @@ func apply_layout(panel_id: String, control: Control) -> void:
 		control.custom_minimum_size.y = size.y
 
 ## Horizontal offset when anchor is a single point (left == right)
-func _apply_h_point(control: Control, grow_h: int, margin: Dictionary, width: float) -> void:
+func _apply_h_point(control: Control, grow_h: int, m_left: float, m_right: float, width: float) -> void:
 	match grow_h:
 		Control.GROW_DIRECTION_END:
-			control.offset_left = margin["left"]
-			control.offset_right = margin["left"] + (width if width > 0 else 0.0)
+			control.offset_left = m_left
+			control.offset_right = m_left + (width if width > 0.0 else 0.0)
 		Control.GROW_DIRECTION_BEGIN:
-			var w := width if width > 0 else 0.0
-			control.offset_left = -(margin["right"] + w)
-			control.offset_right = -margin["right"]
+			var w: float = width if width > 0.0 else 0.0
+			control.offset_left = -(m_right + w)
+			control.offset_right = -m_right
 		Control.GROW_DIRECTION_BOTH:
-			var half_w := width / 2.0 if width > 0 else 0.0
+			var half_w: float = width / 2.0 if width > 0.0 else 0.0
 			control.offset_left = -half_w
 			control.offset_right = half_w
 
 ## Vertical offset when anchor is a single point (top == bottom)
-func _apply_v_point(control: Control, grow_v: int, margin: Dictionary, height: float) -> void:
+func _apply_v_point(control: Control, grow_v: int, m_top: float, m_bottom: float, height: float) -> void:
 	match grow_v:
 		Control.GROW_DIRECTION_END:
-			control.offset_top = margin["top"]
-			control.offset_bottom = margin["top"] + (height if height > 0 else 0.0)
+			control.offset_top = m_top
+			control.offset_bottom = m_top + (height if height > 0.0 else 0.0)
 		Control.GROW_DIRECTION_BEGIN:
-			var h := height if height > 0 else 0.0
-			control.offset_top = -(margin["bottom"] + h)
-			control.offset_bottom = -margin["bottom"]
+			var h: float = height if height > 0.0 else 0.0
+			control.offset_top = -(m_bottom + h)
+			control.offset_bottom = -m_bottom
 		Control.GROW_DIRECTION_BOTH:
-			var half_h := height / 2.0 if height > 0 else 0.0
+			var half_h: float = height / 2.0 if height > 0.0 else 0.0
 			control.offset_top = -half_h
 			control.offset_bottom = half_h
 
 ## Returns the y-offset for a sidebar button based on its position in the stacking order.
 func get_sidebar_button_offset(panel_id: String) -> float:
-	var index := UILayoutConfig.SIDEBAR_BUTTON_ORDER.find(panel_id)
+	var index: int = UILayoutConfig.SIDEBAR_BUTTON_ORDER.find(panel_id)
 	if index < 0:
-		return UILayoutConfig.SIDEBAR_FIRST_Y
+		return float(UILayoutConfig.SIDEBAR_FIRST_Y)
 	if index == 0:
-		return UILayoutConfig.SIDEBAR_FIRST_Y
+		return float(UILayoutConfig.SIDEBAR_FIRST_Y)
 	# First item is the toggle (36px + 6px gap), rest are buttons (38px + 4px gap)
-	var y := float(UILayoutConfig.SIDEBAR_FIRST_Y + UILayoutConfig.SIDEBAR_TOGGLE_SIZE + UILayoutConfig.SIDEBAR_TOGGLE_GAP)
+	var y: float = float(UILayoutConfig.SIDEBAR_FIRST_Y + UILayoutConfig.SIDEBAR_TOGGLE_SIZE + UILayoutConfig.SIDEBAR_TOGGLE_GAP)
 	for i in range(1, index):
-		y += UILayoutConfig.SIDEBAR_BTN_HEIGHT + UILayoutConfig.SIDEBAR_BTN_GAP
+		y += float(UILayoutConfig.SIDEBAR_BTN_HEIGHT + UILayoutConfig.SIDEBAR_BTN_GAP)
 	return y
 
 ## Returns pixel Rect2 for a panel's layout (for manual calculations).
@@ -122,9 +127,9 @@ func get_layout_rect(panel_id: String) -> Rect2:
 	var margin: Dictionary = slot["margin"]
 	var size: Vector2 = UILayoutConfig.PANEL_SIZES.get(panel_id, slot["max_size"])
 
-	var x := anchor.position.x * _viewport_size.x + margin["left"]
-	var y := anchor.position.y * _viewport_size.y + margin["top"]
-	var w := size.x if size.x > 0 else _viewport_size.x
-	var h := size.y if size.y > 0 else _viewport_size.y
+	var x: float = anchor.position.x * _viewport_size.x + float(margin["left"])
+	var y: float = anchor.position.y * _viewport_size.y + float(margin["top"])
+	var w: float = size.x if size.x > 0.0 else _viewport_size.x
+	var h: float = size.y if size.y > 0.0 else _viewport_size.y
 
 	return Rect2(x, y, w, h)
