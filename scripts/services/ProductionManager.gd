@@ -119,7 +119,7 @@ func _complete_construction(node: Node3D) -> void:
 		node.set_meta("level", new_level)
 		# Scale up mesh slightly per level
 		if mesh_inst is MeshInstance3D:
-			var s := 1.0 + (new_level - 1) * 0.1
+			var s: float = 1.0 + (new_level - 1) * 0.1
 			mesh_inst.scale = Vector3(s, s, s)
 		FloatingText.spawn(get_tree(), node.global_position, Tr.t("LBL_UPGRADE_COMPLETE"), Color(0.3, 0.8, 1.0))
 		EventBus.building_upgrade_completed.emit(node, new_level)

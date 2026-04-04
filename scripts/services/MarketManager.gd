@@ -102,7 +102,7 @@ func sell(resource: String, amount: int) -> bool:
 
 func _adjust_price(resource: String, signed_amount: int) -> void:
 	var sensitivity: float = GameConfig.market_price_sensitivity
-	var shift := float(signed_amount) * sensitivity
+	var shift: float = float(signed_amount) * sensitivity
 	var mod: float = _price_mods.get(resource, 1.0)
 	mod += shift
 	mod = clampf(mod, GameConfig.market_min_price_mult, GameConfig.market_max_price_mult)

@@ -131,11 +131,11 @@ func _get_event_pool() -> Array:
 
 func _trigger_random_event() -> void:
 	var pool := _get_event_pool()
-	var total_weight := 0
+	var total_weight: int = 0
 	for event in pool:
-		total_weight += event["weight"]
-	var roll := randi() % total_weight
-	var cumulative := 0
+		total_weight += int(event["weight"])
+	var roll: int = randi() % total_weight
+	var cumulative: int = 0
 	for event in pool:
 		cumulative += event["weight"]
 		if roll < cumulative:

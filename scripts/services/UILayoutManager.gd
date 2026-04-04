@@ -42,8 +42,8 @@ func apply_layout(panel_id: String, control: Control) -> void:
 
 	# When anchors span a range (e.g., 0 to 1), offsets are insets from edges.
 	# When anchors are at a single point, offsets position the control relative to that point.
-	var h_spans := anchor.position.x != anchor.size.x
-	var v_spans := anchor.position.y != anchor.size.y
+	var h_spans: bool = anchor.position.x != anchor.size.x
+	var v_spans: bool = anchor.position.y != anchor.size.y
 
 	var m_left: float = margin["left"]
 	var m_right: float = margin["right"]
