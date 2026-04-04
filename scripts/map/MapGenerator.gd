@@ -24,13 +24,13 @@ func _ready() -> void:
 
 func _roll_deposit_size(deposit_id: String) -> Vector2i:
 	var sizes: Dictionary = GameConfig.deposit_sizes.get(deposit_id, {"min_w": 2, "max_w": 3, "min_h": 2, "max_h": 3})
-	var w := randi_range(sizes["min_w"], sizes["max_w"])
-	var h := randi_range(sizes["min_h"], sizes["max_h"])
+	var w: int = randi_range(sizes["min_w"], sizes["max_w"])
+	var h: int = randi_range(sizes["min_h"], sizes["max_h"])
 	return Vector2i(w, h)
 
 func generate_new_map() -> Array:
 	var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
-	var count := randi_range(GameConfig.deposit_count_min, GameConfig.deposit_count_max)
+	var count: int = randi_range(GameConfig.deposit_count_min, GameConfig.deposit_count_max)
 
 	for i in range(count):
 		var deposit_id: String = DEPOSIT_IDS[randi() % DEPOSIT_IDS.size()]
@@ -185,7 +185,7 @@ func _dep_add_box(parent: Node3D, pos: Vector3, size: Vector3, mat: StandardMate
 	parent.add_child(mi)
 	return mi
 
-func _dep_add_cyl(parent: Node3D, pos: Vector3, radius: float, height: float, mat: StandardMaterial3D, seg: int = 8) -> MeshInstance3D:
+func _dep_add_cyl(parent: Node3D, pos: Vector3, radius: float, height: float, mat: StandardMaterial3D, seg: int = 24) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = radius
@@ -198,20 +198,20 @@ func _dep_add_cyl(parent: Node3D, pos: Vector3, radius: float, height: float, ma
 	parent.add_child(mi)
 	return mi
 
-func _dep_add_sphere(parent: Node3D, pos: Vector3, radius: float, mat: StandardMaterial3D, seg: int = 8) -> MeshInstance3D:
+func _dep_add_sphere(parent: Node3D, pos: Vector3, radius: float, mat: StandardMaterial3D, seg: int = 16) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var mesh := SphereMesh.new()
 	mesh.radius = radius
 	mesh.height = radius * 2.0
 	mesh.radial_segments = seg
-	mesh.rings = seg / 2
+	mesh.rings = maxi(seg / 2, 8)
 	mi.mesh = mesh
 	mi.set_surface_override_material(0, mat)
 	mi.position = pos
 	parent.add_child(mi)
 	return mi
 
-func _dep_add_cone(parent: Node3D, pos: Vector3, bot_r: float, top_r: float, height: float, mat: StandardMaterial3D, seg: int = 8) -> MeshInstance3D:
+func _dep_add_cone(parent: Node3D, pos: Vector3, bot_r: float, top_r: float, height: float, mat: StandardMaterial3D, seg: int = 24) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = top_r
@@ -324,9 +324,9 @@ func _deposit_oil_well() -> Node3D:
 	_dep_add_sphere(root, Vector3(0.04, 0.78, 0.02), 0.04, mat_oil_dark, 4)
 	# Warning stakes around the seep
 	for i in range(4):
-		var angle := i * TAU / 4.0 + PI / 4.0
-		var sx := cos(angle) * 0.6
-		var sz := sin(angle) * 0.6
+		var angle: float = i * TAU / 4.0 + PI / 4.0
+		var sx: float = cos(angle) * 0.6
+		var sz: float = sin(angle) * 0.6
 		_dep_add_cyl(root, Vector3(sx, 0.2, sz), 0.02, 0.4, mat_rust, 4)
 		_dep_add_sphere(root, Vector3(sx, 0.42, sz), 0.035, mat_warning, 4)
 	# Small satellite puddles
@@ -423,13 +423,13 @@ func remove_deposit(node: Node3D) -> void:
 
 func _random_cell_for_deposit(center: Vector2i, dep_size: Vector2i) -> Vector2i:
 	for attempt in range(80):
-		var cx := randi_range(0, GridManager.grid_width - dep_size.x)
-		var cy := randi_range(0, GridManager.grid_height - dep_size.y)
+		var cx: int = randi_range(0, GridManager.grid_width - dep_size.x)
+		var cy: int = randi_range(0, GridManager.grid_height - dep_size.y)
 		var cell := Vector2i(cx, cy)
 		# Check center exclusion from deposit center
 		var mid_x: float = cx + dep_size.x * 0.5
 		var mid_y: float = cy + dep_size.y * 0.5
-		var dist := absf(mid_x - center.x) + absf(mid_y - center.y)
+		var dist: float = absf(mid_x - center.x) + absf(mid_y - center.y)
 		if dist <= GameConfig.deposit_center_exclusion:
 			continue
 		# Check all cells are free

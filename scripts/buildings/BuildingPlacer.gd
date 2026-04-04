@@ -388,8 +388,8 @@ func _create_preview() -> void:
 		_preview_mesh = MeshInstance3D.new()
 		var rotated_size := _get_rotated_size()
 		var box := BoxMesh.new()
-		var sx := rotated_size.x * GridManager.cell_size * 0.9
-		var sz := rotated_size.y * GridManager.cell_size * 0.9
+		var sx: float = rotated_size.x * GridManager.cell_size * 0.9
+		var sz: float = rotated_size.y * GridManager.cell_size * 0.9
 		box.size = Vector3(sx, _current_data.mesh_height, sz)
 		_preview_mesh.mesh = box
 		_preview_mesh.set_surface_override_material(0, _ghost_valid)
@@ -547,8 +547,8 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 			# Fallback: colored box placeholder for unknown buildings
 			var mesh_inst := MeshInstance3D.new()
 			var box := BoxMesh.new()
-			var sx := data.grid_size.x * GridManager.cell_size * 0.9
-			var sz := data.grid_size.y * GridManager.cell_size * 0.9
+			var sx: float = data.grid_size.x * GridManager.cell_size * 0.9
+			var sz: float = data.grid_size.y * GridManager.cell_size * 0.9
 			box.size = Vector3(sx, data.mesh_height, sz)
 			mesh_inst.mesh = box
 			var mat := StandardMaterial3D.new()

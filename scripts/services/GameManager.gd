@@ -93,7 +93,7 @@ func _load_game() -> void:
 				if level > 1:
 					var mesh_inst := node.get_child(0)
 					if mesh_inst is MeshInstance3D:
-						var s := 1.0 + (level - 1) * 0.1
+						var s: float = 1.0 + (level - 1) * 0.1
 						mesh_inst.scale = Vector3(s, s, s)
 				# Register with ProductionManager (restore construction state)
 				var constr_remaining := 0.0

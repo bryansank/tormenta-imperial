@@ -16,19 +16,19 @@ var _building_info: Dictionary = {}
 
 func world_to_cell(world_pos: Vector3) -> Vector2i:
 	var local := world_pos - _origin
-	var cx := floori(local.x / cell_size)
-	var cy := floori(local.z / cell_size)
+	var cx: int = floori(local.x / cell_size)
+	var cy: int = floori(local.z / cell_size)
 	return Vector2i(clampi(cx, 0, grid_width - 1), clampi(cy, 0, grid_height - 1))
 
 func cell_to_world(cell: Vector2i) -> Vector3:
-	var x := _origin.x + (cell.x * cell_size) + (cell_size * 0.5)
-	var z := _origin.z + (cell.y * cell_size) + (cell_size * 0.5)
+	var x: float = _origin.x + (cell.x * cell_size) + (cell_size * 0.5)
+	var z: float = _origin.z + (cell.y * cell_size) + (cell_size * 0.5)
 	return Vector3(x, 0.0, z)
 
 ## Get the world center for a multi-cell building placed at origin_cell.
 func building_center(origin_cell: Vector2i, grid_size: Vector2i) -> Vector3:
-	var cx := _origin.x + (origin_cell.x * cell_size) + (grid_size.x * cell_size * 0.5)
-	var cz := _origin.z + (origin_cell.y * cell_size) + (grid_size.y * cell_size * 0.5)
+	var cx: float = _origin.x + (origin_cell.x * cell_size) + (grid_size.x * cell_size * 0.5)
+	var cz: float = _origin.z + (origin_cell.y * cell_size) + (grid_size.y * cell_size * 0.5)
 	return Vector3(cx, 0.0, cz)
 
 func is_valid_cell(cell: Vector2i) -> bool:

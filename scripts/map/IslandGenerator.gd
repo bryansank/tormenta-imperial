@@ -14,7 +14,7 @@ func _ready() -> void:
 	var segments := 64
 	_border_offsets.clear()
 	for i in range(segments):
-		var angle := (float(i) / float(segments)) * TAU
+		var angle: float = (float(i) / float(segments)) * TAU
 		var wobble := 0.0
 		wobble += sin(angle * 2.0 + _seed_val) * 1.5
 		wobble += sin(angle * 3.0 + _seed_val * 0.7) * 1.0
@@ -78,15 +78,15 @@ func _build_island_mesh(expand: float, y_offset: float) -> ArrayMesh:
 	var border: Array = []
 	var n := 4.0  # Superellipse exponent: higher = more rectangular
 	for i in range(segments):
-		var angle := (float(i) / float(segments)) * TAU
+		var angle: float = (float(i) / float(segments)) * TAU
 		var ca := cos(angle)
 		var sa := sin(angle)
 		# Superellipse radius: r = 1 / (|cos|^n + |sin|^n)^(1/n)
 		var abs_ca := absf(ca)
 		var abs_sa := absf(sa)
 		var r_factor := 1.0 / pow(pow(abs_ca, n) + pow(abs_sa, n), 1.0 / n)
-		var r_x := (half_w + 2.0 + expand + float(_border_offsets[i])) * r_factor
-		var r_z := (half_h + 2.0 + expand + float(_border_offsets[i])) * r_factor
+		var r_x: float = (half_w + 2.0 + expand + float(_border_offsets[i])) * r_factor
+		var r_z: float = (half_h + 2.0 + expand + float(_border_offsets[i])) * r_factor
 		border.append(Vector3(r_x * ca, y_offset, r_z * sa))
 
 	var center := Vector3(0, y_offset, 0)
@@ -109,7 +109,7 @@ func _build_island_mesh(expand: float, y_offset: float) -> ArrayMesh:
 	# Add subdivided ring for better grass shader detail
 	var rings := 5
 	for ring in range(1, rings):
-		var t := float(ring) / float(rings)
+		var t: float = float(ring) / float(rings)
 		for i in range(segments):
 			var j := (i + 1) % segments
 			var inner_i: Vector3 = center.lerp(border[i], t)
