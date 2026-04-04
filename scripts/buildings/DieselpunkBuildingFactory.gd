@@ -101,7 +101,7 @@ static func _add_sphere(parent: Node3D, pos: Vector3, radius: float, mat: Standa
 	mesh.radius = radius
 	mesh.height = radius * 2.0
 	mesh.radial_segments = segments
-	mesh.rings = segments / 2
+	mesh.rings = maxi(segments / 2, 8)
 	mi.mesh = mesh
 	mi.set_surface_override_material(0, mat)
 	mi.position = pos
@@ -388,6 +388,8 @@ static func _build_nucleo(sx: float, sz: float) -> Node3D:
 		_add_cylinder(root, Vector3(side * 0.25, 0.8, sz * 0.50), 0.02, 0.4, mat_iron)
 		_add_sphere(root, Vector3(side * 0.25, 1.05, sz * 0.50), 0.04, mat_neon_amber)
 
+	# Scale the entire citadel up to be imposing (1.6x taller)
+	root.scale = Vector3(1.0, 1.6, 1.0)
 	return root
 
 
