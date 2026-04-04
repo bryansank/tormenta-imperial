@@ -8,10 +8,15 @@ enum State { IDLE, PLACING, MOVING }
 var _state: State = State.IDLE
 var _current_data: BuildingData = null
 var _preview_node: Node3D = null
-var _preview_mesh: MeshInstance3D = null
+var _preview_mesh: MeshInstance3D = null  # Fallback box (kept for legacy)
+var _preview_meshes: Array = []           # All MeshInstance3D in preview for material swap
 var _moving_building: Node3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
 var _grid_overlay: MeshInstance3D = null
+var _rotation_steps: int = 0  # 0=0°, 1=90°, 2=180°, 3=270°
+var _ghost_valid: StandardMaterial3D
+var _ghost_invalid: StandardMaterial3D
+var _last_preview_valid := true
 
 # Container for all placed buildings
 var _buildings_container: Node3D
@@ -21,12 +26,26 @@ func _ready() -> void:
 	_buildings_container.name = "Buildings"
 	add_child(_buildings_container)
 
+	# Cached ghost materials for preview
+	_ghost_valid = StandardMaterial3D.new()
+	_ghost_valid.albedo_color = Color(0.2, 0.85, 0.2, 0.45)
+	_ghost_valid.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_ghost_valid.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ghost_valid.no_depth_test = true
+
+	_ghost_invalid = StandardMaterial3D.new()
+	_ghost_invalid.albedo_color = Color(0.85, 0.2, 0.2, 0.45)
+	_ghost_invalid.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_ghost_invalid.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ghost_invalid.no_depth_test = true
+
 	EventBus.building_selected_for_placement.connect(_on_building_selected)
 	EventBus.building_placement_cancelled.connect(_cancel)
 	EventBus.request_move_building.connect(_on_move_requested)
 	EventBus.request_demolish_building.connect(_on_demolish_requested)
 	EventBus.building_clicked.connect(_on_building_clicked)
 	EventBus.building_deselected.connect(_on_building_deselected)
+	EventBus.building_rotate_requested.connect(_on_rotate_requested)
 	GameManager.register_placer(self)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -40,15 +59,60 @@ func _unhandled_input(event: InputEvent) -> void:
 			_cancel()
 			get_viewport().set_input_as_handled()
 
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		if _state != State.IDLE:
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_ESCAPE and _state != State.IDLE:
 			_cancel()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_R and _state != State.IDLE:
+			_rotate_building()
 			get_viewport().set_input_as_handled()
 
 func _process(_delta: float) -> void:
 	if _state == State.IDLE:
 		return
 	_update_preview()
+
+# ── Rotation Helpers ──
+
+## Get the effective grid size accounting for rotation (swap X/Y on 90°/270°).
+func _get_rotated_size() -> Vector2i:
+	if _current_data == null:
+		return Vector2i(1, 1)
+	if _rotation_steps % 2 == 1:
+		return Vector2i(_current_data.grid_size.y, _current_data.grid_size.x)
+	return _current_data.grid_size
+
+## Get the Y rotation in radians for the current rotation step.
+func _get_rotation_angle() -> float:
+	return _rotation_steps * PI * 0.5
+
+func _rotate_building() -> void:
+	_rotation_steps = (_rotation_steps + 1) % 4
+	_hover_cell = Vector2i(-1, -1)  # Force preview refresh
+	_rebuild_preview()
+
+func _rebuild_preview() -> void:
+	if not _preview_node or not _current_data:
+		return
+	_preview_node.rotation.y = _get_rotation_angle()
+	_hover_cell = Vector2i(-1, -1)  # Force position refresh
+
+func _on_rotate_requested() -> void:
+	if _state != State.IDLE:
+		_rotate_building()
+
+## Load original (unrotated) BuildingData from the .tres file by ID.
+func _load_original_data(building_id: String) -> BuildingData:
+	var path := "res://data/buildings/%s.tres" % building_id
+	if ResourceLoader.exists(path):
+		return load(path) as BuildingData
+	return null
+
+## Create a copy of BuildingData with swapped grid_size for rotated placement.
+func _create_rotated_data(data: BuildingData) -> BuildingData:
+	var rotated := data.duplicate()
+	rotated.grid_size = Vector2i(data.grid_size.y, data.grid_size.x)
+	return rotated
 
 # ── Raycast ──
 
@@ -80,25 +144,35 @@ func _update_preview() -> void:
 	_hover_cell = cell
 
 	if _preview_node and _current_data:
-		var world_pos := GridManager.building_center(cell, _current_data.grid_size)
+		var rotated_size := _get_rotated_size()
+		var world_pos := GridManager.building_center(cell, rotated_size)
 		_preview_node.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
 
 		var can_place: bool
 		if _state == State.MOVING:
-			can_place = GridManager.can_place(cell, _current_data.grid_size, _moving_building)
+			can_place = GridManager.can_place(cell, rotated_size, _moving_building)
 		else:
-			can_place = GridManager.can_place(cell, _current_data.grid_size)
+			can_place = GridManager.can_place(cell, rotated_size)
+			# For deposit-requiring buildings, check overlap with required deposit
+			var required_dep: String = GameConfig.building_requires_deposit.get(_current_data.id, "")
+			if required_dep != "" and _state == State.PLACING:
+				var cells := GridManager._get_cells_for(cell, rotated_size)
+				var map_gen: Node = get_tree().current_scene.get_node_or_null("MapGenerator")
+				var has_deposit := map_gen and map_gen.find_deposit_at_cells(required_dep, cells) != null
+				# Valid only if overlapping with the deposit (cells occupied by deposit are OK)
+				can_place = has_deposit
 
-		# Green = valid, Red = invalid
-		var mat: StandardMaterial3D = _preview_mesh.get_surface_override_material(0)
-		if mat:
-			mat.albedo_color = Color(0.2, 0.8, 0.2, 0.5) if can_place else Color(0.8, 0.2, 0.2, 0.5)
+		# Update ghost material (green = valid, red = invalid)
+		if can_place != _last_preview_valid:
+			_last_preview_valid = can_place
+			_apply_ghost_material(can_place)
 
 # ── Placement Mode ──
 
 func _on_building_selected(data: Resource) -> void:
 	_cancel()
 	_current_data = data as BuildingData
+	_rotation_steps = 0
 	_state = State.PLACING
 	_create_preview()
 
@@ -154,16 +228,41 @@ func _on_demolish_requested(building: Node3D) -> void:
 	# Unregister from production/construction
 	ProductionManager.unregister(building)
 	ProcessManager.cancel(building)
+	# Save cell before removing for road update
+	var was_road := data.id == "road"
 	# Remove from grid and scene
 	GridManager.remove_building(building)
 	building.queue_free()
+	# Update neighboring roads if we demolished a road
+	if was_road:
+		for d in ROAD_DIRS:
+			var neighbor_cell: Vector2i = cell + d["offset"]
+			var neighbor := GridManager.get_building_at(neighbor_cell)
+			if neighbor:
+				var n_info := GridManager.get_building_info(neighbor)
+				if not n_info.is_empty() and n_info["data"].id == "road":
+					_update_road_mesh(neighbor, neighbor_cell)
 	# Update warehouse count
 	if data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
 	EventBus.building_demolished.emit(building, cell)
 
 func _try_place(cell: Vector2i) -> void:
-	if not GridManager.can_place(cell, _current_data.grid_size):
+	var rotated_size := _get_rotated_size()
+	# Check if building requires a deposit underneath
+	var required_deposit: String = GameConfig.building_requires_deposit.get(_current_data.id, "")
+	var consumed_deposit: Node3D = null
+	if required_deposit != "":
+		var cells := GridManager._get_cells_for(cell, rotated_size)
+		var map_gen: Node = get_tree().current_scene.get_node_or_null("MapGenerator")
+		if map_gen:
+			consumed_deposit = map_gen.find_deposit_at_cells(required_deposit, cells)
+		if consumed_deposit == null:
+			_show_feedback(Tr.t("LBL_REQUIRES_DEPOSIT"))
+			return
+		# Remove deposit from grid so can_place succeeds
+		map_gen.remove_deposit(consumed_deposit)
+	if not GridManager.can_place(cell, rotated_size):
 		return
 	# Check building limit
 	if not _check_building_limit(_current_data.id):
@@ -186,15 +285,25 @@ func _try_place(cell: Vector2i) -> void:
 			_show_feedback(Tr.t("LBL_NOT_ENOUGH_RESOURCES"))
 			return
 		ResourceManager.spend_cost(cost)
+	# Create building with rotation applied
 	var building := _create_building_mesh(_current_data)
 	building.set_meta("level", 1)
-	var world_pos := GridManager.building_center(cell, _current_data.grid_size)
+	building.set_meta("rotation_steps", _rotation_steps)
+	building.rotation.y = _get_rotation_angle()
+	var world_pos := GridManager.building_center(cell, rotated_size)
 	building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
 	_buildings_container.add_child(building)
-	GridManager.place_building(cell, _current_data, building)
+	# Use a rotated BuildingData proxy for GridManager so it occupies the right cells
+	var place_data := _current_data
+	if _rotation_steps % 2 == 1:
+		place_data = _create_rotated_data(_current_data)
+	GridManager.place_building(cell, place_data, building)
 	# Update warehouse count
 	if _current_data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
+	# Update road connections if placing a road
+	if _current_data.id == "road":
+		_update_road_connections(cell)
 	EventBus.building_placed.emit(_current_data, cell)
 	# Stay in placement mode for rapid building
 	_hover_cell = Vector2i(-1, -1)
@@ -207,24 +316,51 @@ func _start_moving(building: Node3D) -> void:
 	if data.is_core:
 		return
 	_moving_building = building
-	_current_data = data
+	# Always use the original (unrotated) data — reload from .tres
+	_current_data = _load_original_data(data.id)
+	if not _current_data:
+		_current_data = data
+	_rotation_steps = building.get_meta("rotation_steps", 0)
 	_state = State.MOVING
 	# Hide the real building, show preview
 	_moving_building.visible = false
 	_create_preview()
+	_rebuild_preview()
 
 func _try_move(cell: Vector2i) -> void:
-	if not GridManager.can_place(cell, _current_data.grid_size, _moving_building):
+	var rotated_size := _get_rotated_size()
+	if not GridManager.can_place(cell, rotated_size, _moving_building):
 		return
-	GridManager.move_building(_moving_building, cell)
-	var world_pos := GridManager.building_center(cell, _current_data.grid_size)
-	_moving_building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
-	_moving_building.visible = true
+	# Remember old cell for road updates
 	var old_info := GridManager.get_building_info(_moving_building)
-	EventBus.building_moved.emit(old_info.get("origin_cell", cell), cell)
+	var old_cell: Vector2i = old_info.get("origin_cell", cell)
+	# Update grid with possibly new rotated size
+	GridManager.remove_building(_moving_building)
+	var place_data := _current_data
+	if _rotation_steps % 2 == 1:
+		place_data = _create_rotated_data(_current_data)
+	GridManager.place_building(cell, place_data, _moving_building)
+	var world_pos := GridManager.building_center(cell, rotated_size)
+	_moving_building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
+	_moving_building.rotation.y = _get_rotation_angle()
+	_moving_building.set_meta("rotation_steps", _rotation_steps)
+	_moving_building.visible = true
+	# Update road connections at old and new positions
+	if _current_data.id == "road":
+		_update_road_connections(cell)
+		# Update neighbors at old position (road no longer there)
+		for d in ROAD_DIRS:
+			var neighbor_cell: Vector2i = old_cell + d["offset"]
+			var neighbor := GridManager.get_building_at(neighbor_cell)
+			if neighbor:
+				var n_info := GridManager.get_building_info(neighbor)
+				if not n_info.is_empty() and n_info["data"].id == "road":
+					_update_road_mesh(neighbor, neighbor_cell)
+	EventBus.building_moved.emit(old_cell, cell)
 	_cleanup_preview()
 	_moving_building = null
 	_current_data = null
+	_rotation_steps = 0
 	_state = State.IDLE
 
 # ── Preview Mesh ──
@@ -233,29 +369,56 @@ func _create_preview() -> void:
 	_cleanup_preview()
 	_show_grid_overlay()
 	_preview_node = Node3D.new()
-	_preview_mesh = MeshInstance3D.new()
+	_preview_meshes.clear()
+	_last_preview_valid = true
 
-	var box := BoxMesh.new()
-	var sx := _current_data.grid_size.x * GridManager.cell_size * 0.9
-	var sz := _current_data.grid_size.y * GridManager.cell_size * 0.9
-	box.size = Vector3(sx, _current_data.mesh_height, sz)
-	_preview_mesh.mesh = box
+	# Use the actual 3D building model for the preview
+	var model: Node3D = null
+	if _current_data.model_scene:
+		model = _current_data.model_scene.instantiate()
+	else:
+		model = DieselpunkBuildingFactory.create(_current_data.id, GridManager.cell_size, _current_data.grid_size)
 
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.2, 0.8, 0.2, 0.5)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_preview_mesh.set_surface_override_material(0, mat)
-	_preview_mesh.position.y = _current_data.mesh_height * 0.5
+	if model:
+		_preview_node.add_child(model)
+		_collect_mesh_instances(_preview_node)
+		_apply_ghost_material(true)
+	else:
+		# Fallback: transparent box
+		_preview_mesh = MeshInstance3D.new()
+		var rotated_size := _get_rotated_size()
+		var box := BoxMesh.new()
+		var sx := rotated_size.x * GridManager.cell_size * 0.9
+		var sz := rotated_size.y * GridManager.cell_size * 0.9
+		box.size = Vector3(sx, _current_data.mesh_height, sz)
+		_preview_mesh.mesh = box
+		_preview_mesh.set_surface_override_material(0, _ghost_valid)
+		_preview_mesh.position.y = _current_data.mesh_height * 0.5
+		_preview_node.add_child(_preview_mesh)
+		_preview_meshes.append(_preview_mesh)
 
-	_preview_node.add_child(_preview_mesh)
+	_preview_node.rotation.y = _get_rotation_angle()
 	add_child(_preview_node)
+
+func _collect_mesh_instances(node: Node) -> void:
+	if node is MeshInstance3D:
+		_preview_meshes.append(node)
+	for child in node.get_children():
+		_collect_mesh_instances(child)
+
+func _apply_ghost_material(valid: bool) -> void:
+	var mat := _ghost_valid if valid else _ghost_invalid
+	for mi in _preview_meshes:
+		if mi is MeshInstance3D and mi.mesh:
+			for s in range(mi.mesh.get_surface_count()):
+				mi.set_surface_override_material(s, mat)
 
 func _cleanup_preview() -> void:
 	if _preview_node:
 		_preview_node.queue_free()
 		_preview_node = null
 		_preview_mesh = null
+		_preview_meshes.clear()
 	_hide_grid_overlay()
 	_hover_cell = Vector2i(-1, -1)
 
@@ -265,18 +428,27 @@ func _cancel() -> void:
 	_cleanup_preview()
 	_moving_building = null
 	_current_data = null
+	_rotation_steps = 0
 	_state = State.IDLE
 
 # ── Public API (used by GameManager) ──
 
-func place_building_at(data: BuildingData, cell: Vector2i) -> Node3D:
-	if not GridManager.can_place(cell, data.grid_size):
+func place_building_at(data: BuildingData, cell: Vector2i, rot_steps: int = 0) -> Node3D:
+	var place_data := data
+	if rot_steps % 2 == 1:
+		place_data = _create_rotated_data(data)
+	if not GridManager.can_place(cell, place_data.grid_size):
 		return null
 	var building := _create_building_mesh(data)
-	var world_pos := GridManager.building_center(cell, data.grid_size)
+	building.set_meta("rotation_steps", rot_steps)
+	building.rotation.y = rot_steps * PI * 0.5
+	var world_pos := GridManager.building_center(cell, place_data.grid_size)
 	building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
 	_buildings_container.add_child(building)
-	GridManager.place_building(cell, data, building)
+	GridManager.place_building(cell, place_data, building)
+	# Update road connections after placement (deferred so all buildings load first)
+	if data.id == "road":
+		_update_road_connections.call_deferred(cell)
 	return building
 
 func get_all_placed_buildings() -> Array:
@@ -287,6 +459,9 @@ func get_all_placed_buildings() -> Array:
 			var origin: Vector2i = info["origin_cell"]
 			var data: BuildingData = info["data"]
 			var entry := { "id": data.id, "cell_x": origin.x, "cell_y": origin.y }
+			var rot: int = building.get_meta("rotation_steps", 0)
+			if rot != 0:
+				entry["rotation"] = rot
 			var level: int = building.get_meta("level", 1)
 			if level > 1:
 				entry["level"] = level
@@ -301,6 +476,58 @@ func clear_all_buildings() -> void:
 	for child in _buildings_container.get_children():
 		child.queue_free()
 	GridManager.clear_all()
+
+# ── Create actual building mesh ──
+
+# ── Road connectivity ──
+
+## Direction offsets: NORTH=1(Z-), EAST=2(X+), SOUTH=4(Z+), WEST=8(X-)
+const ROAD_DIRS: Array = [
+	{"bit": 1, "offset": Vector2i(0, -1)},  # North (Z-)
+	{"bit": 2, "offset": Vector2i(1, 0)},   # East (X+)
+	{"bit": 4, "offset": Vector2i(0, 1)},   # South (Z+)
+	{"bit": 8, "offset": Vector2i(-1, 0)},  # West (X-)
+]
+
+## Get the neighbor bitmask for a road at the given cell.
+func _get_road_neighbors(cell: Vector2i) -> int:
+	var mask := 0
+	for d in ROAD_DIRS:
+		var neighbor_cell: Vector2i = cell + d["offset"]
+		var neighbor := GridManager.get_building_at(neighbor_cell)
+		if neighbor:
+			var info := GridManager.get_building_info(neighbor)
+			if not info.is_empty() and info["data"].id == "road":
+				mask |= d["bit"]
+	return mask
+
+## Rebuild a road's visual mesh based on current neighbors.
+func _update_road_mesh(building: Node3D, cell: Vector2i) -> void:
+	var neighbors := _get_road_neighbors(cell)
+	# Remove old mesh children (keep NameLabel)
+	for child in building.get_children():
+		if child.name != "NameLabel":
+			child.queue_free()
+	# Add new procedural road mesh
+	var road_mesh := DieselpunkBuildingFactory.create_road(GridManager.cell_size, neighbors)
+	building.add_child(road_mesh)
+
+## Update this road and all adjacent roads' meshes.
+func _update_road_connections(cell: Vector2i) -> void:
+	# Update the road at this cell
+	var building := GridManager.get_building_at(cell)
+	if building:
+		var info := GridManager.get_building_info(building)
+		if not info.is_empty() and info["data"].id == "road":
+			_update_road_mesh(building, cell)
+	# Update all adjacent roads
+	for d in ROAD_DIRS:
+		var neighbor_cell: Vector2i = cell + d["offset"]
+		var neighbor := GridManager.get_building_at(neighbor_cell)
+		if neighbor:
+			var n_info := GridManager.get_building_info(neighbor)
+			if not n_info.is_empty() and n_info["data"].id == "road":
+				_update_road_mesh(neighbor, neighbor_cell)
 
 # ── Create actual building mesh ──
 
@@ -382,23 +609,48 @@ func _check_prerequisites(building_id: String) -> bool:
 			return false
 	return true
 
+var _feedback_canvas: CanvasLayer = null
+var _feedback_label: Label = null
+var _feedback_tween: Tween = null
+
 func _show_feedback(text: String) -> void:
-	var camera := get_viewport().get_camera_3d()
-	if not camera:
-		return
-	var label := Label3D.new()
-	label.text = text
-	label.font_size = 24
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.outline_size = 4
-	label.modulate = Color(1.0, 0.3, 0.2)
-	label.global_position = camera.global_position + camera.global_transform.basis.z * -8.0 + Vector3(0, 0, 0)
-	get_tree().current_scene.add_child(label)
-	var tween := create_tween()
-	tween.tween_property(label, "global_position:y", label.global_position.y + 2.0, 1.5)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, 1.5).set_delay(0.3)
-	tween.tween_callback(label.queue_free)
+	# Reuse a single 2D screen label instead of spawning 3D labels
+	if not _feedback_canvas:
+		_feedback_canvas = CanvasLayer.new()
+		_feedback_canvas.layer = 15
+		add_child(_feedback_canvas)
+		_feedback_label = Label.new()
+		_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_feedback_label.set_anchors_preset(Control.PRESET_CENTER)
+		_feedback_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_feedback_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+		_feedback_label.add_theme_font_size_override("font_size", 16)
+		_feedback_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.7))
+		_feedback_label.add_theme_constant_override("outline_size", 4)
+		_feedback_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+		var panel := PanelContainer.new()
+		panel.set_anchors_preset(Control.PRESET_CENTER)
+		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.12, 0.08, 0.05, 0.9)
+		style.border_color = Color(0.7, 0.35, 0.15, 0.8)
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(4)
+		style.set_content_margin_all(12)
+		panel.add_theme_stylebox_override("panel", style)
+		panel.add_child(_feedback_label)
+		_feedback_canvas.add_child(panel)
+	_feedback_label.text = text
+	_feedback_label.get_parent().visible = true
+	_feedback_label.get_parent().modulate = Color(1, 1, 1, 1)
+	if _feedback_tween and _feedback_tween.is_valid():
+		_feedback_tween.kill()
+	_feedback_tween = create_tween()
+	_feedback_tween.tween_interval(1.2)
+	_feedback_tween.tween_property(_feedback_label.get_parent(), "modulate:a", 0.0, 0.5)
+	_feedback_tween.tween_callback(func(): _feedback_label.get_parent().visible = false)
 
 # ── Show/Hide building labels on selection ──
 
