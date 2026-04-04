@@ -161,94 +161,232 @@ static func create_road(cell_size: float, neighbors: int = 0) -> Node3D:
 
 
 # ════════════════════════════════════════════════════════════════
-# NUCLEO — Presidential palace, cyberpunk neoclassical
-# Columned facade, central dome, neon accents, antenna spire
+# NUCLEO — Monumental dieselpunk imperial citadel
+# Tiered fortress with central dome, four corner towers,
+# grand columned entrance, industrial pipes, gears, searchlights
 # ════════════════════════════════════════════════════════════════
 static func _build_nucleo(sx: float, sz: float) -> Node3D:
 	var root: Node3D = Node3D.new()
 
-	# Materials
-	var mat_marble := _metal(Color(0.85, 0.82, 0.78), 0.15, 0.55)
-	var mat_dark := _metal(Color(0.18, 0.18, 0.22), 0.85, 0.35)
-	var mat_gold := _metal(Color(0.82, 0.68, 0.2), 0.95, 0.25)
-	var mat_neon_cyan := _emissive(Color(0.1, 0.9, 0.95), 2.5)
-	var mat_neon_amber := _emissive(Color(1.0, 0.7, 0.1), 1.8)
-	var mat_window := _emissive(Color(0.2, 0.6, 0.9), 0.6)
-	var mat_roof := _metal(Color(0.25, 0.28, 0.32), 0.7, 0.4)
+	# ── Materials ──
+	var mat_stone := _metal(Color(0.55, 0.50, 0.42), 0.2, 0.7)
+	var mat_marble := _metal(Color(0.82, 0.78, 0.72), 0.15, 0.55)
+	var mat_iron := _metal(COL_DARK_IRON, 0.85, 0.35)
+	var mat_gunmetal := _metal(COL_GUNMETAL, 0.8, 0.4)
+	var mat_gold := _metal(Color(0.85, 0.70, 0.15), 0.95, 0.2)
+	var mat_brass := _metal(COL_BRASS, 0.9, 0.3)
+	var mat_copper := _metal(COL_COPPER, 0.85, 0.35)
+	var mat_roof := _metal(Color(0.20, 0.22, 0.25), 0.7, 0.4)
+	var mat_neon_cyan := _emissive(Color(0.1, 0.85, 0.9), 2.0)
+	var mat_neon_amber := _emissive(Color(1.0, 0.7, 0.1), 2.5)
+	var mat_neon_red := _emissive(Color(1.0, 0.15, 0.05), 1.5)
+	var mat_window := _emissive(Color(0.25, 0.55, 0.85), 0.8)
+	var mat_window_warm := _emissive(Color(0.9, 0.7, 0.3), 0.5)
+	var mat_fire := _emissive(COL_FIRE, 2.0)
+	var mat_searchlight := _emissive(COL_SEARCHLIGHT, 3.0)
 
-	# ── Foundation platform (stepped) ──
-	_add_box(root, Vector3(0, 0.1, 0), Vector3(sx * 0.98, 0.2, sz * 0.98), mat_dark)
-	_add_box(root, Vector3(0, 0.25, 0), Vector3(sx * 0.93, 0.12, sz * 0.93), mat_marble)
+	# ══════════════════════════════════════════════
+	# TIER 1 — Massive stepped foundation
+	# ══════════════════════════════════════════════
+	_add_box(root, Vector3(0, 0.06, 0), Vector3(sx * 1.0, 0.12, sz * 1.0), mat_iron)
+	_add_box(root, Vector3(0, 0.18, 0), Vector3(sx * 0.96, 0.12, sz * 0.96), mat_stone)
+	_add_box(root, Vector3(0, 0.30, 0), Vector3(sx * 0.92, 0.12, sz * 0.92), mat_iron)
+	# Rivets along foundation edges
+	_add_rivets(root, Vector3(-sx * 0.48, 0.13, sz * 0.50), Vector3(sx * 0.48, 0.13, sz * 0.50), 14)
+	_add_rivets(root, Vector3(-sx * 0.48, 0.13, -sz * 0.50), Vector3(sx * 0.48, 0.13, -sz * 0.50), 14)
+	_add_rivets(root, Vector3(-sx * 0.50, 0.13, -sz * 0.48), Vector3(-sx * 0.50, 0.13, sz * 0.48), 14)
+	_add_rivets(root, Vector3(sx * 0.50, 0.13, -sz * 0.48), Vector3(sx * 0.50, 0.13, sz * 0.48), 14)
 
-	# ── Main body — wide, 2-story presidential block ──
-	_add_box(root, Vector3(0, 1.1, 0), Vector3(sx * 0.82, 1.5, sz * 0.7), mat_marble)
+	# ══════════════════════════════════════════════
+	# TIER 2 — Main building body (2 stories)
+	# ══════════════════════════════════════════════
+	_add_box(root, Vector3(0, 1.15, 0), Vector3(sx * 0.78, 1.5, sz * 0.68), mat_marble)
+	# Iron band between floors
+	_add_box(root, Vector3(0, 1.15, sz * 0.341), Vector3(sx * 0.80, 0.06, 0.02), mat_iron)
+	_add_box(root, Vector3(0, 1.15, -sz * 0.341), Vector3(sx * 0.80, 0.06, 0.02), mat_iron)
+	_add_box(root, Vector3(sx * 0.391, 1.15, 0), Vector3(0.02, 0.06, sz * 0.70), mat_iron)
+	_add_box(root, Vector3(-sx * 0.391, 1.15, 0), Vector3(0.02, 0.06, sz * 0.70), mat_iron)
 
-	# ── Front portico (extended entrance with columns) ──
-	_add_box(root, Vector3(0, 0.9, sz * 0.38), Vector3(sx * 0.5, 1.1, sz * 0.12), mat_marble)
+	# ── Reinforced corners (iron plates) ──
+	for cx in [-1.0, 1.0]:
+		for cz in [-1.0, 1.0]:
+			_add_box(root, Vector3(cx * sx * 0.38, 1.15, cz * sz * 0.33), Vector3(0.12, 1.52, 0.12), mat_gunmetal)
 
-	# ── Columns (6 across the front) ──
-	var col_count := 6
-	var col_spacing := sx * 0.7 / float(col_count - 1)
-	var col_start_x := -sx * 0.35
+	# ══════════════════════════════════════════════
+	# TIER 3 — Grand front portico with 8 columns
+	# ══════════════════════════════════════════════
+	_add_box(root, Vector3(0, 0.95, sz * 0.40), Vector3(sx * 0.6, 1.2, sz * 0.14), mat_marble)
+	# Columns (8 across front)
+	var col_count := 8
+	var col_spacing := sx * 0.54 / float(col_count - 1)
+	var col_start_x := -sx * 0.27
 	for i in range(col_count):
 		var cx := col_start_x + i * col_spacing
-		_add_cylinder(root, Vector3(cx, 1.0, sz * 0.44), 0.07, 1.5, mat_marble, 8)
-		# Gold capital on top of each column
-		_add_box(root, Vector3(cx, 1.78, sz * 0.44), Vector3(0.16, 0.06, 0.16), mat_gold)
+		# Column shaft (fluted look with low segments)
+		_add_cylinder(root, Vector3(cx, 1.05, sz * 0.47), 0.06, 1.5, mat_marble, 8)
+		# Column base
+		_add_box(root, Vector3(cx, 0.28, sz * 0.47), Vector3(0.15, 0.06, 0.15), mat_stone)
+		# Gold Corinthian capital
+		_add_cone(root, Vector3(cx, 1.82, sz * 0.47), 0.04, 0.09, 0.08, mat_gold, 8)
+	# Entablature
+	_add_box(root, Vector3(0, 1.90, sz * 0.47), Vector3(sx * 0.62, 0.08, 0.20), mat_marble)
+	# Pediment (triangular)
+	_add_prism(root, Vector3(0, 2.18, sz * 0.47), Vector3(sx * 0.56, 0.45, 0.18), mat_marble)
+	# Gold imperial eagle on pediment
+	_add_sphere(root, Vector3(0, 2.20, sz * 0.49), 0.12, mat_gold, 10)
+	# Eagle wings (flattened boxes)
+	_add_box(root, Vector3(-0.15, 2.22, sz * 0.50), Vector3(0.18, 0.06, 0.03), mat_gold)
+	_add_box(root, Vector3(0.15, 2.22, sz * 0.50), Vector3(0.18, 0.06, 0.03), mat_gold)
 
-	# ── Portico entablature (beam above columns) ──
-	_add_box(root, Vector3(0, 1.85, sz * 0.44), Vector3(sx * 0.55, 0.1, 0.18), mat_marble)
-	# Triangular pediment
-	_add_prism(root, Vector3(0, 2.1, sz * 0.44), Vector3(sx * 0.5, 0.4, 0.16), mat_marble)
+	# Stairs leading up to portico
+	for step in range(4):
+		var sy := 0.06
+		var y := 0.08 + step * sy
+		var depth := sz * 0.08 + step * 0.04
+		_add_box(root, Vector3(0, y, sz * 0.50 + depth * 0.5), Vector3(sx * 0.52 - step * 0.02, sy, depth), mat_stone)
 
-	# ── Central dome ──
-	_add_cylinder(root, Vector3(0, 2.0, 0), sx * 0.18, 0.2, mat_roof, 16)
-	_add_sphere(root, Vector3(0, 2.45, 0), sx * 0.18, mat_roof, 16)
-	# Dome top spire
-	_add_cylinder(root, Vector3(0, 2.85, 0), 0.03, 0.5, mat_gold, 6)
-	_add_sphere(root, Vector3(0, 3.15, 0), 0.06, mat_neon_amber, 6)
+	# ══════════════════════════════════════════════
+	# CENTRAL DOME — Crowned with spire
+	# ══════════════════════════════════════════════
+	# Drum base
+	_add_cylinder(root, Vector3(0, 2.05, 0), sx * 0.20, 0.2, mat_gunmetal, 16)
+	# Dome windows in drum
+	for a in range(8):
+		var angle := a * PI / 4.0
+		var dwx := sin(angle) * sx * 0.205
+		var dwz := cos(angle) * sx * 0.205
+		_add_box(root, Vector3(dwx, 2.05, dwz), Vector3(0.08, 0.12, 0.02), mat_window)
+	# Main dome sphere
+	_add_sphere(root, Vector3(0, 2.55, 0), sx * 0.20, mat_roof, 16)
+	# Gold ring at dome base
+	_add_torus(root, Vector3(0, 2.15, 0), sx * 0.18, sx * 0.21, mat_gold, 16, 8)
+	# Lantern on top
+	_add_cylinder(root, Vector3(0, 2.90, 0), 0.07, 0.3, mat_gunmetal, 8)
+	# Spire
+	_add_cone(root, Vector3(0, 3.25, 0), 0.06, 0.01, 0.5, mat_gold, 8)
+	# Beacon light at tip
+	_add_sphere(root, Vector3(0, 3.55, 0), 0.06, mat_neon_amber, 8)
 
-	# ── Side wings ──
-	_add_box(root, Vector3(sx * 0.35, 0.85, 0), Vector3(sx * 0.22, 1.1, sz * 0.55), mat_marble)
-	_add_box(root, Vector3(-sx * 0.35, 0.85, 0), Vector3(sx * 0.22, 1.1, sz * 0.55), mat_marble)
+	# ══════════════════════════════════════════════
+	# FOUR CORNER TOWERS — Industrial watchtowers
+	# ══════════════════════════════════════════════
+	for tx in [-1.0, 1.0]:
+		for tz in [-1.0, 1.0]:
+			var bx := tx * sx * 0.42
+			var bz := tz * sz * 0.38
+			# Tower body (octagonal feel via low-seg cylinder)
+			_add_cylinder(root, Vector3(bx, 1.4, bz), 0.22, 2.4, mat_gunmetal, 8)
+			# Iron bands
+			_add_torus(root, Vector3(bx, 0.5, bz), 0.20, 0.24, mat_iron, 8, 8)
+			_add_torus(root, Vector3(bx, 1.8, bz), 0.20, 0.24, mat_iron, 8, 8)
+			# Tower windows (2 levels)
+			for wlev in [1.0, 1.8]:
+				var wdir := Vector3(tx, 0, tz).normalized()
+				_add_box(root, Vector3(bx + wdir.x * 0.22, wlev, bz + wdir.z * 0.22), Vector3(0.08, 0.14, 0.08), mat_window_warm)
+			# Crenellated tower top
+			_add_cylinder(root, Vector3(bx, 2.65, bz), 0.25, 0.1, mat_iron, 8)
+			# Conical tower roof
+			_add_cone(root, Vector3(bx, 2.95, bz), 0.24, 0.02, 0.5, mat_roof, 8)
+			# Searchlight on two front towers
+			if tz > 0:
+				_add_sphere(root, Vector3(bx, 3.25, bz), 0.05, mat_searchlight, 6)
 
-	# ── Windows (glowing cyan, cyberpunk style) ──
-	# Front windows
+	# ══════════════════════════════════════════════
+	# WINDOWS — Rows of glowing windows on main body
+	# ══════════════════════════════════════════════
+	# Front face - upper floor (5 windows)
+	for i in range(5):
+		var wx := -sx * 0.28 + i * sx * 0.14
+		_add_box(root, Vector3(wx, 1.55, sz * 0.342), Vector3(0.14, 0.25, 0.02), mat_window)
+		_add_box(root, Vector3(wx, 1.55, sz * 0.345), Vector3(0.16, 0.02, 0.02), mat_brass)  # lintel
+		_add_box(root, Vector3(wx, 1.40, sz * 0.345), Vector3(0.16, 0.02, 0.02), mat_brass)  # sill
+	# Front face - lower floor (5 windows)
+	for i in range(5):
+		var wx := -sx * 0.28 + i * sx * 0.14
+		_add_box(root, Vector3(wx, 0.75, sz * 0.342), Vector3(0.12, 0.2, 0.02), mat_window_warm)
+
+	# Side windows (3 per side, 2 floors)
+	for side in [-1.0, 1.0]:
+		for j in range(3):
+			var wz := -sz * 0.18 + j * sz * 0.18
+			_add_box(root, Vector3(side * sx * 0.392, 1.55, wz), Vector3(0.02, 0.25, 0.12), mat_window)
+			_add_box(root, Vector3(side * sx * 0.392, 0.75, wz), Vector3(0.02, 0.2, 0.10), mat_window_warm)
+
+	# Back windows
 	for i in range(4):
-		var wx := -sx * 0.28 + i * sx * 0.19
-		_add_box(root, Vector3(wx, 1.2, sz * 0.351), Vector3(0.18, 0.35, 0.02), mat_window)
-		# Neon trim under each window
-		_add_box(root, Vector3(wx, 0.98, sz * 0.352), Vector3(0.2, 0.03, 0.02), mat_neon_cyan)
+		var wx := -sx * 0.24 + i * sx * 0.16
+		_add_box(root, Vector3(wx, 1.55, -sz * 0.342), Vector3(0.14, 0.25, 0.02), mat_window)
 
-	# Side windows
+	# ══════════════════════════════════════════════
+	# INDUSTRIAL DETAILS — Pipes, gears, smokestacks
+	# ══════════════════════════════════════════════
+	# Back smokestacks (2)
 	for side in [-1.0, 1.0]:
-		for j in range(2):
-			var wz := -sz * 0.15 + j * sz * 0.25
-			_add_box(root, Vector3(side * sx * 0.411, 1.2, wz), Vector3(0.02, 0.3, 0.15), mat_window)
+		var pipe_x := side * sx * 0.25
+		_add_cylinder(root, Vector3(pipe_x, 2.4, -sz * 0.35), 0.08, 1.0, mat_iron, 8)
+		_add_torus(root, Vector3(pipe_x, 2.95, -sz * 0.35), 0.06, 0.10, mat_copper, 8, 8)
+		# Smoke cap
+		_add_cone(root, Vector3(pipe_x, 3.05, -sz * 0.35), 0.10, 0.12, 0.12, mat_iron, 8)
+		# Fire glow inside
+		_add_sphere(root, Vector3(pipe_x, 2.90, -sz * 0.35), 0.05, mat_fire, 6)
 
-	# ── Neon accent lines (cyberpunk) ──
-	# Horizontal neon strips along building edges
-	_add_box(root, Vector3(0, 1.88, sz * 0.351), Vector3(sx * 0.84, 0.025, 0.02), mat_neon_cyan)
-	_add_box(root, Vector3(0, 0.35, sz * 0.351), Vector3(sx * 0.84, 0.025, 0.02), mat_neon_cyan)
-	# Back neon
-	_add_box(root, Vector3(0, 1.88, -sz * 0.351), Vector3(sx * 0.84, 0.025, 0.02), mat_neon_cyan)
-	# Side neon strips
-	_add_box(root, Vector3(sx * 0.461, 1.88, 0), Vector3(0.02, 0.025, sz * 0.56), mat_neon_cyan)
-	_add_box(root, Vector3(-sx * 0.461, 1.88, 0), Vector3(0.02, 0.025, sz * 0.56), mat_neon_cyan)
-
-	# ── Roof details ──
-	_add_box(root, Vector3(0, 1.92, 0), Vector3(sx * 0.85, 0.06, sz * 0.73), mat_roof)
-
-	# ── Antenna towers on wings ──
+	# Steam pipes along sides
 	for side in [-1.0, 1.0]:
-		_add_cylinder(root, Vector3(side * sx * 0.35, 2.0, -sz * 0.2), 0.04, 0.8, mat_dark, 6)
-		_add_sphere(root, Vector3(side * sx * 0.35, 2.45, -sz * 0.2), 0.05, mat_neon_amber, 6)
+		_add_pipe(root, Vector3(side * sx * 0.40, 0.55, -sz * 0.28), Vector3(side * sx * 0.40, 0.55, sz * 0.28), 0.03, mat_copper)
+		_add_pipe(root, Vector3(side * sx * 0.40, 0.45, -sz * 0.28), Vector3(side * sx * 0.40, 0.45, sz * 0.28), 0.025, mat_brass)
+		# Pipe joints
+		for jz in [-0.15, 0.0, 0.15]:
+			_add_torus(root, Vector3(side * sx * 0.40, 0.55, sz * jz), 0.025, 0.045, mat_brass, 8, 6)
 
-	# ── Gold eagle/emblem on pediment ──
-	_add_sphere(root, Vector3(0, 2.15, sz * 0.46), 0.1, mat_gold, 8)
+	# Gears on back wall (decorative)
+	_add_torus(root, Vector3(0, 1.4, -sz * 0.345), 0.12, 0.18, mat_brass, 12, 8)
+	_add_torus(root, Vector3(0.22, 1.2, -sz * 0.345), 0.08, 0.12, mat_copper, 10, 8)
+	# Gear center pins
+	_add_cylinder(root, Vector3(0, 1.4, -sz * 0.34), 0.04, 0.04, mat_iron, 6)
+	_add_cylinder(root, Vector3(0.22, 1.2, -sz * 0.34), 0.03, 0.04, mat_iron, 6)
 
-	# ── Rivets along foundation ──
-	_add_rivets(root, Vector3(-sx * 0.45, 0.32, sz * 0.47), Vector3(sx * 0.45, 0.32, sz * 0.47), 10)
+	# ══════════════════════════════════════════════
+	# NEON ACCENT LINES — Cyberpunk glow strips
+	# ══════════════════════════════════════════════
+	# Horizontal cyan strips at roofline
+	_add_box(root, Vector3(0, 1.92, sz * 0.343), Vector3(sx * 0.80, 0.025, 0.015), mat_neon_cyan)
+	_add_box(root, Vector3(0, 1.92, -sz * 0.343), Vector3(sx * 0.80, 0.025, 0.015), mat_neon_cyan)
+	_add_box(root, Vector3(sx * 0.393, 1.92, 0), Vector3(0.015, 0.025, sz * 0.70), mat_neon_cyan)
+	_add_box(root, Vector3(-sx * 0.393, 1.92, 0), Vector3(0.015, 0.025, sz * 0.70), mat_neon_cyan)
+	# Foundation glow line
+	_add_box(root, Vector3(0, 0.37, sz * 0.465), Vector3(sx * 0.90, 0.02, 0.015), mat_neon_cyan)
+	_add_box(root, Vector3(0, 0.37, -sz * 0.465), Vector3(sx * 0.90, 0.02, 0.015), mat_neon_cyan)
+	# Vertical accent on portico columns (every other)
+	for i in [0, 2, 5, 7]:
+		var cx := col_start_x + i * col_spacing
+		_add_box(root, Vector3(cx, 1.05, sz * 0.475), Vector3(0.015, 1.5, 0.015), mat_neon_cyan)
+	# Red warning lights on smokestacks
+	for side in [-1.0, 1.0]:
+		_add_sphere(root, Vector3(side * sx * 0.25, 3.15, -sz * 0.35), 0.035, mat_neon_red, 6)
+
+	# ══════════════════════════════════════════════
+	# ROOF — Armored plates with gold trim
+	# ══════════════════════════════════════════════
+	_add_box(root, Vector3(0, 1.95, 0), Vector3(sx * 0.82, 0.06, sz * 0.72), mat_roof)
+	# Gold cornice trim
+	_add_box(root, Vector3(0, 1.98, sz * 0.345), Vector3(sx * 0.82, 0.03, 0.04), mat_gold)
+	_add_box(root, Vector3(0, 1.98, -sz * 0.345), Vector3(sx * 0.82, 0.03, 0.04), mat_gold)
+	_add_box(root, Vector3(sx * 0.395, 1.98, 0), Vector3(0.04, 0.03, sz * 0.70), mat_gold)
+	_add_box(root, Vector3(-sx * 0.395, 1.98, 0), Vector3(0.04, 0.03, sz * 0.70), mat_gold)
+
+	# ══════════════════════════════════════════════
+	# ENTRANCE DETAILS — Door, banners, lamps
+	# ══════════════════════════════════════════════
+	# Grand doorway
+	_add_box(root, Vector3(0, 0.7, sz * 0.345), Vector3(0.3, 0.8, 0.04), mat_iron)
+	_add_box(root, Vector3(0, 1.12, sz * 0.345), Vector3(0.34, 0.04, 0.05), mat_gold)  # lintel
+	# Door glow
+	_add_box(root, Vector3(0, 0.7, sz * 0.35), Vector3(0.26, 0.7, 0.01), mat_window_warm)
+
+	# Lanterns flanking entrance
+	for side in [-1.0, 1.0]:
+		_add_cylinder(root, Vector3(side * 0.25, 0.8, sz * 0.50), 0.02, 0.4, mat_iron, 6)
+		_add_sphere(root, Vector3(side * 0.25, 1.05, sz * 0.50), 0.04, mat_neon_amber, 6)
 
 	return root
 
