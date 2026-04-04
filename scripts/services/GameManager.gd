@@ -220,6 +220,26 @@ func clear_save() -> void:
 	_warehouse_count = 0
 	get_tree().reload_current_scene()
 
+## Replaces local save with provided data and reloads the scene.
+## Used by CloudSaveManager to apply cloud-downloaded saves.
+func clear_save_and_reload_from(save_data: Dictionary) -> void:
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(save_data, "\t"))
+	GridManager.clear_all()
+	ResourceManager.reset()
+	ProgressionManager.reset()
+	MarketManager.reset()
+	PopulationManager.reset()
+	RandomEventManager.reset()
+	TechTreeManager.reset()
+	_placer = null
+	_map_gen = null
+	_camera = null
+	_started = false
+	_warehouse_count = 0
+	get_tree().reload_current_scene()
+
 func _on_building_changed(_data: Resource, _cell: Vector2i) -> void:
 	save_game()
 

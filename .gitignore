@@ -22,6 +22,13 @@ desktop.ini
 .vscode/
 *.code-workspace
 
+# Python cache
+__pycache__/
+*.pyc
+
+# Crash dumps
+*.stackdump
+
 # Environment / secrets
 .env
 secret.json
