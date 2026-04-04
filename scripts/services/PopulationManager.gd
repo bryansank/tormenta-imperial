@@ -82,9 +82,10 @@ func adjust_morale(delta: int) -> void:
 func _tick_consumption() -> void:
 	if _population <= 0:
 		return
-	# Each pop unit consumes 1 wood and 1 gold per tick
-	var wood_needed: int = _population
-	var gold_needed: int = _population
+	# Each pop unit consumes 1 wood and 1 gold per tick, reduced by tech bonus
+	var reduction := GameConfig.tech_consumption_reduction
+	var wood_needed: int = maxi(1, int(_population * maxf(0.1, 1.0 - reduction)))
+	var gold_needed: int = maxi(1, int(_population * maxf(0.1, 1.0 - reduction)))
 
 	var wood_ok := ResourceManager.has_enough(ResourceManager.Type.WOOD, wood_needed)
 	var gold_ok := ResourceManager.has_enough(ResourceManager.Type.GOLD, gold_needed)

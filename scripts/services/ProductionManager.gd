@@ -281,8 +281,10 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 		var cons_interval := GameConfig.get_duration(GameConfig.consumption_interval)
 		if cons_interval > 0.0:
 			var cons_ticks := int(elapsed / cons_interval)
-			var gold_consumed := pop * cons_ticks
-			var wood_consumed := pop * cons_ticks
+			var reduction := GameConfig.tech_consumption_reduction
+			var cons_mult := maxf(0.1, 1.0 - reduction)
+			var gold_consumed := int(pop * cons_ticks * cons_mult)
+			var wood_consumed := int(pop * cons_ticks * cons_mult)
 			earnings["gold"] = earnings.get("gold", 0) - gold_consumed
 			earnings["wood"] = earnings.get("wood", 0) - wood_consumed
 

@@ -7,8 +7,14 @@ extends Node
 var _researched: Dictionary = {}  # tech_id -> true
 var _researching: Dictionary = {}  # {"tech_id": String, "remaining": float, "duration": float} or empty
 var _research_points := 0  # accumulated from HQ production
+var _base_market_spread: float
+var _base_morale_recovery: int
+var _base_storage_cap: int
 
 func _ready() -> void:
+	_base_market_spread = GameConfig.market_spread
+	_base_morale_recovery = GameConfig.morale_satisfied_recovery
+	_base_storage_cap = GameConfig.base_storage_cap
 	EventBus.production_tick.connect(_on_production_tick)
 
 func _process(delta: float) -> void:
@@ -166,3 +172,10 @@ func reset() -> void:
 	_researched = {}
 	_researching = {}
 	_research_points = 0
+	# Reset tech bonuses applied to GameConfig
+	GameConfig.tech_production_bonus = 0.0
+	GameConfig.tech_consumption_reduction = 0.0
+	GameConfig.tech_build_speed_bonus = 0.0
+	GameConfig.market_spread = _base_market_spread
+	GameConfig.morale_satisfied_recovery = _base_morale_recovery
+	GameConfig.base_storage_cap = _base_storage_cap
