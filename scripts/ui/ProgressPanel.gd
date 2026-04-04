@@ -18,22 +18,24 @@ func _ready() -> void:
 func _setup_ui() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_PASS
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
 	_progress_btn = Button.new()
 	_progress_btn.text = Tr.t("BTN_PROGRESS")
-	_progress_btn.custom_minimum_size = Vector2(120, 36)
+	_progress_btn.custom_minimum_size = Vector2(140, 38)
 	_progress_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_progress_btn.offset_left = -135
-	_progress_btn.offset_top = 90
-	UITheme.style_button(_progress_btn, UITheme.WARNING.darkened(0.3))
+	_progress_btn.offset_left = -152
+	_progress_btn.offset_top = 94
+	UITheme.style_card_button(_progress_btn, UITheme.BTN.lightened(0.05), UITheme.WARNING)
 	_progress_btn.pressed.connect(_toggle_panel)
+	_progress_btn.visible = false  # Start collapsed with sidebar
 	root.add_child(_progress_btn)
+	EventBus.sidebar_toggled.connect(func(vis: bool): _progress_btn.visible = vis)
 
 	_backdrop = UITheme.make_backdrop()
 	_backdrop.visible = false
-	_backdrop.gui_input.connect(func(_e): _toggle_panel())
+	_backdrop.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _toggle_panel())
 	root.add_child(_backdrop)
 
 	_panel = PanelContainer.new()

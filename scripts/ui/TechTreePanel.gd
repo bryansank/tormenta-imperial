@@ -31,22 +31,24 @@ func _process(_delta: float) -> void:
 func _setup_ui() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_PASS
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
 	_tech_btn = Button.new()
 	_tech_btn.text = Tr.t("BTN_TECH")
-	_tech_btn.custom_minimum_size = Vector2(120, 36)
+	_tech_btn.custom_minimum_size = Vector2(140, 38)
 	_tech_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_tech_btn.offset_left = -135
-	_tech_btn.offset_top = 130
-	UITheme.style_button(_tech_btn, UITheme.INFO.darkened(0.2))
+	_tech_btn.offset_left = -152
+	_tech_btn.offset_top = 136
+	UITheme.style_card_button(_tech_btn, UITheme.BTN.lightened(0.05), UITheme.INFO)
 	_tech_btn.pressed.connect(_toggle_panel)
+	_tech_btn.visible = false  # Start collapsed with sidebar
 	root.add_child(_tech_btn)
+	EventBus.sidebar_toggled.connect(func(vis: bool): _tech_btn.visible = vis)
 
 	_backdrop = UITheme.make_backdrop()
 	_backdrop.visible = false
-	_backdrop.gui_input.connect(func(_e): _toggle_panel())
+	_backdrop.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _toggle_panel())
 	root.add_child(_backdrop)
 
 	_panel = PanelContainer.new()
@@ -124,10 +126,10 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 		match key:
 			"production_mult": lines.append("+%d%% %s" % [int(val * 100), Tr.t("LBL_PRODUCTION")])
 			"storage_bonus": lines.append("+%d %s" % [val, Tr.t("LBL_STORAGE")])
-			"market_spread_reduction": lines.append("-%d%% spread" % [int(val * 100)])
+			"market_spread_reduction": lines.append(Tr.t("FMT_SPREAD_REDUCTION") % [int(val * 100)])
 			"morale_bonus": lines.append("+%d %s" % [val, Tr.t("LBL_MORALE_WORD")])
-			"consumption_reduction": lines.append("-%d%% consumo" % [int(val * 100)])
-			"build_speed": lines.append("+%d%% velocidad" % [int(val * 100)])
+			"consumption_reduction": lines.append(Tr.t("FMT_CONSUMPTION_REDUCTION") % [int(val * 100)])
+			"build_speed": lines.append(Tr.t("FMT_BUILD_SPEED") % [int(val * 100)])
 
 	btn.text = "\n".join(lines)
 

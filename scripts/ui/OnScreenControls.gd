@@ -4,10 +4,15 @@ extends CanvasLayer
 
 var _pan_direction: Vector2 = Vector2.ZERO
 var _rotate_direction: float = 0.0
+var _rotate_building_btn: Button = null
 
 func _ready() -> void:
 	layer = 10
 	_setup_ui()
+	EventBus.building_selected_for_placement.connect(func(_d): _rotate_building_btn.visible = true)
+	EventBus.building_placement_cancelled.connect(func(): _rotate_building_btn.visible = false)
+	EventBus.building_placed.connect(func(_d, _c): pass)  # stay visible during rapid placement
+	EventBus.building_deselected.connect(func(): _rotate_building_btn.visible = false)
 
 func _process(_delta: float) -> void:
 	if _pan_direction != Vector2.ZERO:
@@ -18,7 +23,7 @@ func _process(_delta: float) -> void:
 func _setup_ui() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.mouse_filter = Control.MOUSE_FILTER_PASS
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_theme_constant_override("margin_bottom", 20)
 	margin.add_theme_constant_override("margin_left", 20)
 	margin.add_theme_constant_override("margin_right", 20)
@@ -27,16 +32,16 @@ func _setup_ui() -> void:
 
 	# Top UI container
 	var top_vbox := VBoxContainer.new()
-	top_vbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	top_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(top_vbox)
 
 	var top_hbox := HBoxContainer.new()
-	top_hbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	top_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_vbox.add_child(top_hbox)
 
 	# QUE HACER Button (Badge)
 	var help_btn := Button.new()
-	help_btn.text = "¿QUÉ HACER?"
+	help_btn.text = Tr.t("BTN_OBJECTIVES")
 	help_btn.custom_minimum_size = Vector2(140, 45)
 	UITheme.style_button(help_btn, UITheme.INFO, UITheme.FONT_SECTION)
 	help_btn.pressed.connect(func(): EventBus.objective_panel_toggled.emit())
@@ -65,6 +70,14 @@ func _setup_ui() -> void:
 
 	var rotate_box := _create_rotate_buttons()
 	right_vbox.add_child(rotate_box)
+
+	# Building rotate button (visible only during placement)
+	_rotate_building_btn = _styled_button("R ↻")
+	_rotate_building_btn.custom_minimum_size = Vector2(108, 50)
+	_rotate_building_btn.tooltip_text = Tr.t("LBL_ROTATE_BUILDING")
+	_rotate_building_btn.pressed.connect(func(): EventBus.building_rotate_requested.emit())
+	_rotate_building_btn.visible = false
+	right_vbox.add_child(_rotate_building_btn)
 
 	var zoom_box := _create_zoom_buttons()
 	right_vbox.add_child(zoom_box)
@@ -134,6 +147,38 @@ func _create_zoom_buttons() -> HBoxContainer:
 func _styled_button(label: String) -> Button:
 	var btn := Button.new()
 	btn.text = label
-	btn.custom_minimum_size = Vector2(50, 50)
-	UITheme.style_button(btn, Color(UITheme.BTN.r, UITheme.BTN.g, UITheme.BTN.b, 0.6), UITheme.FONT_TITLE)
+	btn.custom_minimum_size = Vector2(48, 48)
+
+	var bg_color := Color(UITheme.PANEL_BG.r, UITheme.PANEL_BG.g, UITheme.PANEL_BG.b, 0.7)
+
+	var n := StyleBoxFlat.new()
+	n.bg_color = bg_color
+	n.set_corner_radius_all(6)
+	n.set_content_margin_all(6)
+	n.border_color = UITheme.ACCENT_DIM
+	n.set_border_width_all(2)
+	btn.add_theme_stylebox_override("normal", n)
+
+	var h := StyleBoxFlat.new()
+	h.bg_color = bg_color.lightened(0.15)
+	h.set_corner_radius_all(6)
+	h.set_content_margin_all(6)
+	h.border_color = UITheme.ACCENT
+	h.set_border_width_all(2)
+	h.shadow_color = Color(UITheme.ACCENT.r, UITheme.ACCENT.g, UITheme.ACCENT.b, 0.3)
+	h.shadow_size = 3
+	btn.add_theme_stylebox_override("hover", h)
+
+	var p := StyleBoxFlat.new()
+	p.bg_color = bg_color.lightened(0.3)
+	p.set_corner_radius_all(6)
+	p.set_content_margin_all(6)
+	p.border_color = UITheme.ACCENT
+	p.set_border_width_all(3)
+	btn.add_theme_stylebox_override("pressed", p)
+
+	btn.add_theme_font_size_override("font_size", UITheme.FONT_SECTION)
+	btn.add_theme_color_override("font_color", UITheme.TEXT_DIM)
+	btn.add_theme_color_override("font_hover_color", UITheme.TEXT)
+	btn.add_theme_color_override("font_pressed_color", UITheme.TEXT_BRIGHT)
 	return btn

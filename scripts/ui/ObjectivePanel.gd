@@ -40,7 +40,7 @@ func _setup_ui() -> void:
 	margin.add_child(vbox)
 
 	# Header
-	var header := UITheme.make_panel_header("¿QUÉ HACER? - OBJETIVOS", toggle)
+	var header := UITheme.make_panel_header(Tr.t("LBL_OBJ_TITLE"), toggle)
 	vbox.add_child(header)
 
 	vbox.add_child(UITheme.make_separator())
@@ -57,21 +57,21 @@ func _setup_ui() -> void:
 	scroll.add_child(content)
 
 	# Goal Section
-	content.add_child(UITheme.section_header("TU MISIÓN"))
-	var main_goal := UITheme.make_label("Transforma un asentamiento remoto en una Potencia Industrial Monumental. Debes gestionar recursos, energía y población para expandir tu base.", "body")
+	content.add_child(UITheme.section_header(Tr.t("LBL_OBJ_MISSION")))
+	var main_goal := UITheme.make_label(Tr.t("LBL_OBJ_MISSION_DESC"), "body")
 	main_goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(main_goal)
 
 	# Step-by-step
 	content.add_child(UITheme.make_separator())
-	content.add_child(UITheme.section_header("PASOS INICIALES"))
-	
+	content.add_child(UITheme.section_header(Tr.t("LBL_OBJ_STEPS")))
+
 	var steps := [
-		"1. ENERGÍA: Construye un NÚCLEO para dar energía a tus edificios.",
-		"2. EXTRACCIÓN: Construye SERRERÍAS y MINAS para obtener recursos básicos.",
-		"3. POBLACIÓN: Construye CASAS. Sin gente, las fábricas no funcionan.",
-		"4. LOGÍSTICA: Conecta edificios con ALMACENES para guardar tu producción.",
-		"5. PROGRESO: Usa el Árbol Tecnológico para desbloquear edificios avanzados."
+		Tr.t("LBL_OBJ_STEP_1"),
+		Tr.t("LBL_OBJ_STEP_2"),
+		Tr.t("LBL_OBJ_STEP_3"),
+		Tr.t("LBL_OBJ_STEP_4"),
+		Tr.t("LBL_OBJ_STEP_5"),
 	]
 	
 	for step in steps:
@@ -81,13 +81,13 @@ func _setup_ui() -> void:
 
 	# Controls Tip
 	content.add_child(UITheme.make_separator())
-	var tip := UITheme.make_label("TIP: Usa el menú de construcción (abajo a la derecha) para empezar.", "small", UITheme.ACCENT)
+	var tip := UITheme.make_label(Tr.t("LBL_OBJ_TIP"), "small", UITheme.ACCENT)
 	tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(tip)
 
 	# Close Button at bottom
 	var close_btn := Button.new()
-	close_btn.text = "¡ENTENDIDO!"
+	close_btn.text = Tr.t("BTN_UNDERSTOOD")
 	UITheme.style_button(close_btn, UITheme.POSITIVE, UITheme.FONT_SECTION)
 	close_btn.pressed.connect(toggle)
 	vbox.add_child(close_btn)

@@ -14,7 +14,10 @@ var _log_vbox: VBoxContainer
 var _toast_container: VBoxContainer
 var _pop_label: Label
 var _morale_label: Label
+var _morale_bar: ProgressBar
 var _workers_label: Label
+var _status_panel: PanelContainer
+var _objective_label: Label
 
 func _ready() -> void:
 	layer = 11
@@ -23,41 +26,106 @@ func _ready() -> void:
 	EventBus.population_changed.connect(_on_population_changed)
 	EventBus.morale_changed.connect(_on_morale_changed)
 	EventBus.workers_changed.connect(_on_workers_changed)
+	EventBus.phase_advanced.connect(_on_phase_advanced)
+	EventBus.milestone_completed.connect(func(_m): _update_objective_hint())
 	_update_status_labels()
+	_update_objective_hint()
+	# Hide status bar until Phase 1 when pop/morale become relevant
+	if ProgressionManager.current_phase < GameConfig.Phase.SETTLEMENT:
+		_status_panel.visible = false
 
 func _setup_ui() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_PASS
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
 	# Status bar (top-left below HUD)
-	var status_panel := PanelContainer.new()
+	_status_panel = PanelContainer.new()
+	var status_panel := _status_panel
 	status_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	status_panel.position = Vector2(10, 50)
+	status_panel.position = Vector2(10, 54)
 	var status_style := StyleBoxFlat.new()
 	status_style.bg_color = UITheme.PANEL_BG
-	status_style.set_corner_radius_all(0)
+	status_style.set_corner_radius_all(UITheme.CORNER)
 	status_style.set_content_margin_all(10)
+	status_style.border_color = UITheme.ACCENT_DIM
+	status_style.set_border_width_all(2)
+	status_style.border_width_left = 4
 	status_style.border_color = UITheme.ACCENT
-	status_style.set_border_width_all(3)
-	status_style.shadow_color = Color(UITheme.ACCENT.r, UITheme.ACCENT.g, UITheme.ACCENT.b, 0.3)
-	status_style.shadow_size = 3
+	status_style.shadow_color = Color(0, 0, 0, 0.4)
+	status_style.shadow_size = 4
 	status_panel.add_theme_stylebox_override("panel", status_style)
 	root.add_child(status_panel)
 
 	var status_vbox := VBoxContainer.new()
-	status_vbox.add_theme_constant_override("separation", 3)
+	status_vbox.add_theme_constant_override("separation", 5)
 	status_panel.add_child(status_vbox)
 
+	# Population row with icon
+	var pop_row := HBoxContainer.new()
+	pop_row.add_theme_constant_override("separation", 6)
+	var pop_icon := UITheme.make_label("\u2302", "body", UITheme.CAT_SUPPORT)  # House icon
+	pop_row.add_child(pop_icon)
 	_pop_label = UITheme.make_label("", "small", UITheme.CAT_SUPPORT)
-	status_vbox.add_child(_pop_label)
+	pop_row.add_child(_pop_label)
+	status_vbox.add_child(pop_row)
 
+	# Workers row with icon
+	var work_row := HBoxContainer.new()
+	work_row.add_theme_constant_override("separation", 6)
+	var work_icon := UITheme.make_label("\u2692", "body", UITheme.INFO)  # Hammer & pick
+	work_row.add_child(work_icon)
 	_workers_label = UITheme.make_label("", "small", UITheme.INFO)
-	status_vbox.add_child(_workers_label)
+	work_row.add_child(_workers_label)
+	status_vbox.add_child(work_row)
 
+	# Morale row with icon + progress bar
+	var morale_row := HBoxContainer.new()
+	morale_row.add_theme_constant_override("separation", 6)
+	var morale_icon := UITheme.make_label("\u2665", "body", UITheme.WARNING)  # Heart
+	morale_row.add_child(morale_icon)
 	_morale_label = UITheme.make_label("", "small", UITheme.WARNING)
-	status_vbox.add_child(_morale_label)
+	morale_row.add_child(_morale_label)
+	status_vbox.add_child(morale_row)
+
+	# Morale bar
+	_morale_bar = UITheme.make_progress_bar(UITheme.WARNING, 8)
+	_morale_bar.custom_minimum_size.x = 110
+	_morale_bar.max_value = 100.0
+	_morale_bar.value = PopulationManager.get_morale()
+	status_vbox.add_child(_morale_bar)
+
+	# Log button integrated below status
+	_log_btn = Button.new()
+	_log_btn.text = Tr.t("BTN_LOG")
+	_log_btn.custom_minimum_size = Vector2(0, 28)
+	_log_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_button(_log_btn, UITheme.BTN, UITheme.FONT_SMALL)
+	_log_btn.pressed.connect(_toggle_panel)
+	status_vbox.add_child(_log_btn)
+
+	# Objective hint (top-center)
+	var obj_panel := PanelContainer.new()
+	obj_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	obj_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	obj_panel.position = Vector2(-160, 54)
+	obj_panel.custom_minimum_size = Vector2(320, 0)
+	var obj_style := StyleBoxFlat.new()
+	obj_style.bg_color = Color(0.08, 0.06, 0.04, 0.85)
+	obj_style.set_corner_radius_all(UITheme.CORNER)
+	obj_style.set_content_margin_all(10)
+	obj_style.border_width_bottom = 2
+	obj_style.border_color = UITheme.ACCENT
+	obj_panel.add_theme_stylebox_override("panel", obj_style)
+	obj_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(obj_panel)
+
+	_objective_label = UITheme.make_label("", "small", UITheme.ACCENT)
+	_objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_objective_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	obj_panel.add_child(_objective_label)
 
 	# Toast container (bottom-left)
 	_toast_container = VBoxContainer.new()
@@ -67,16 +135,6 @@ func _setup_ui() -> void:
 	_toast_container.add_theme_constant_override("separation", 4)
 	_toast_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_toast_container)
-
-	# Log button
-	_log_btn = Button.new()
-	_log_btn.text = Tr.t("BTN_LOG")
-	_log_btn.custom_minimum_size = Vector2(100, 32)
-	_log_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_log_btn.position = Vector2(10, 130)
-	UITheme.style_button(_log_btn, UITheme.BTN, UITheme.FONT_SMALL)
-	_log_btn.pressed.connect(_toggle_panel)
-	root.add_child(_log_btn)
 
 	# Log panel
 	_panel = PanelContainer.new()
@@ -148,12 +206,19 @@ func _on_population_changed(current: int, max_pop: int) -> void:
 
 func _on_morale_changed(new_morale: int) -> void:
 	_morale_label.text = Tr.t("LBL_MORALE") % new_morale
+	_morale_bar.value = new_morale
+	var color: Color
 	if new_morale <= 30:
-		_morale_label.add_theme_color_override("font_color", UITheme.DANGER)
+		color = UITheme.DANGER
 	elif new_morale <= 60:
-		_morale_label.add_theme_color_override("font_color", UITheme.WARNING)
+		color = UITheme.WARNING
 	else:
-		_morale_label.add_theme_color_override("font_color", UITheme.POSITIVE)
+		color = UITheme.POSITIVE
+	_morale_label.add_theme_color_override("font_color", color)
+	# Update bar fill color
+	var fill := _morale_bar.get_theme_stylebox("fill") as StyleBoxFlat
+	if fill:
+		fill.bg_color = color
 
 func _on_workers_changed(used: int, total: int) -> void:
 	_workers_label.text = Tr.t("LBL_WORKERS") % [used, total]
@@ -166,3 +231,42 @@ func _update_status_labels() -> void:
 func _toggle_panel() -> void:
 	_is_open = not _is_open
 	_panel.visible = _is_open
+
+# ── Phase & Objective System ──
+
+func _on_phase_advanced(new_phase: int) -> void:
+	# Show status bar once consumption kicks in
+	if new_phase >= GameConfig.Phase.SETTLEMENT:
+		_status_panel.visible = true
+	# Notify the player about the new phase
+	var phase_msg: String = Tr.t("PHASE_%d" % new_phase)
+	if phase_msg != "PHASE_%d" % new_phase:
+		EventBus.notification_posted.emit(phase_msg, "info", UITheme.ACCENT)
+	_update_objective_hint()
+
+func _update_objective_hint() -> void:
+	if not _objective_label:
+		return
+	var phase: int = ProgressionManager.current_phase
+	var hint: String = ""
+	match phase:
+		GameConfig.Phase.FOUNDATION:
+			hint = Tr.t("OBJ_PHASE_0")
+		GameConfig.Phase.SETTLEMENT:
+			if not ProgressionManager.is_milestone_completed("first_gold_mine"):
+				hint = Tr.t("OBJ_PHASE_1")
+			else:
+				hint = Tr.t("OBJ_PHASE_1_DONE")
+		GameConfig.Phase.ECONOMY:
+			if not ProgressionManager.is_milestone_completed("first_warehouse"):
+				hint = Tr.t("OBJ_PHASE_2")
+			else:
+				hint = Tr.t("OBJ_PHASE_2_DONE")
+		GameConfig.Phase.SURVIVAL:
+			if not ProgressionManager.is_milestone_completed("era_2"):
+				hint = Tr.t("OBJ_PHASE_3")
+			else:
+				hint = Tr.t("OBJ_PHASE_3_DONE")
+		_:
+			hint = Tr.t("OBJ_PHASE_4")
+	_objective_label.text = hint

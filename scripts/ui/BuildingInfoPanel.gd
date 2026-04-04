@@ -64,12 +64,16 @@ func _build_ui() -> void:
 	_panel = PanelContainer.new()
 	_panel.custom_minimum_size = Vector2(310, 0)
 	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
-	_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	# Anchor top-right, auto-size to content (no full-height stretch)
+	_panel.anchor_left = 1.0
+	_panel.anchor_top = 0.0
+	_panel.anchor_right = 1.0
+	_panel.anchor_bottom = 0.0
 	_panel.offset_left = -320
 	_panel.offset_right = -8
-	_panel.offset_top = 50
-	_panel.offset_bottom = -10
+	_panel.offset_top = 190  # Below the right-side buttons (MERCADO/PROGRESO/TECNOLOGIA end ~182)
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_panel.grow_vertical = Control.GROW_DIRECTION_END
 	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))
 
 	_scroll = ScrollContainer.new()
@@ -285,9 +289,9 @@ func _show_building_panel() -> void:
 	if _selected_data.workers_required > 0:
 		level_text += "  |  " + Tr.t("LBL_WORKERS_NEEDED") % _selected_data.workers_required
 	if _selected_data.population_capacity > 0:
-		level_text += "  |  +%d pop" % _selected_data.population_capacity
+		level_text += "  |  " + Tr.t("LBL_POP_CAPACITY") % _selected_data.population_capacity
 	if _selected_data.morale_bonus > 0:
-		level_text += "  |  +%d moral" % _selected_data.morale_bonus
+		level_text += "  |  " + Tr.t("LBL_MORALE_BONUS") % _selected_data.morale_bonus
 	_level_label.text = level_text
 	_level_label.visible = true
 

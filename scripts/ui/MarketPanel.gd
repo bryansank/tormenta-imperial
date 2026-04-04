@@ -4,6 +4,8 @@ extends CanvasLayer
 var _panel: PanelContainer
 var _backdrop: ColorRect
 var _market_btn: Button
+var _sidebar_toggle: Button
+var _sidebar_visible := false
 var _is_open := false
 var _rows: Dictionary = {}
 
@@ -15,26 +17,61 @@ func _ready() -> void:
 	EventBus.market_prices_updated.connect(_on_prices_updated)
 	EventBus.resource_unlocked.connect(func(_r): _rebuild())
 	EventBus.market_trade_completed.connect(func(_r, _a, _b, _p): _update_prices())
+	EventBus.phase_advanced.connect(_on_phase_advanced)
+	# Hide market button until Phase 2
+	if ProgressionManager.current_phase < GameConfig.Phase.ECONOMY:
+		_market_btn.visible = false
+
+func _on_phase_advanced(new_phase: int) -> void:
+	if new_phase >= GameConfig.Phase.ECONOMY and _sidebar_visible:
+		_market_btn.visible = true
 
 func _setup_ui() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_PASS
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+
+	# Sidebar toggle button (owned by MarketPanel, controls all right-side buttons)
+	_sidebar_toggle = Button.new()
+	_sidebar_toggle.text = "\u2630"  # ☰ hamburger
+	_sidebar_toggle.custom_minimum_size = Vector2(36, 36)
+	_sidebar_toggle.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_sidebar_toggle.offset_left = -46
+	_sidebar_toggle.offset_top = 10
+	var stb := StyleBoxFlat.new()
+	stb.bg_color = Color(0.08, 0.09, 0.07, 0.85)
+	stb.set_corner_radius_all(4)
+	stb.set_content_margin_all(4)
+	stb.border_color = UITheme.ACCENT_DIM
+	stb.set_border_width_all(2)
+	_sidebar_toggle.add_theme_stylebox_override("normal", stb)
+	var stb_h := stb.duplicate()
+	stb_h.bg_color = Color(0.14, 0.15, 0.12, 0.9)
+	stb_h.border_color = UITheme.ACCENT
+	_sidebar_toggle.add_theme_stylebox_override("hover", stb_h)
+	_sidebar_toggle.add_theme_stylebox_override("pressed", stb_h)
+	_sidebar_toggle.add_theme_font_size_override("font_size", 16)
+	_sidebar_toggle.add_theme_color_override("font_color", UITheme.ACCENT)
+	_sidebar_toggle.add_theme_color_override("font_hover_color", UITheme.TEXT_BRIGHT)
+	_sidebar_toggle.pressed.connect(_toggle_sidebar)
+	root.add_child(_sidebar_toggle)
 
 	_market_btn = Button.new()
 	_market_btn.text = Tr.t("BTN_MARKET")
-	_market_btn.custom_minimum_size = Vector2(120, 36)
+	_market_btn.custom_minimum_size = Vector2(140, 38)
 	_market_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_market_btn.offset_left = -135
-	_market_btn.offset_top = 50
-	UITheme.style_button(_market_btn, UITheme.POSITIVE.darkened(0.3))
+	_market_btn.offset_left = -152
+	_market_btn.offset_top = 52
+	UITheme.style_card_button(_market_btn, UITheme.BTN.lightened(0.05), UITheme.POSITIVE)
 	_market_btn.pressed.connect(_toggle_panel)
+	_market_btn.visible = false  # Start collapsed
 	root.add_child(_market_btn)
+	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 
 	_backdrop = UITheme.make_backdrop()
 	_backdrop.visible = false
-	_backdrop.gui_input.connect(func(_e): _toggle_panel())
+	_backdrop.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _toggle_panel())
 	root.add_child(_backdrop)
 
 	_panel = PanelContainer.new()
@@ -182,6 +219,19 @@ func _toggle_panel() -> void:
 		UIManager.open_window(self)
 	else:
 		UIManager.close_window(self)
+
+func _toggle_sidebar() -> void:
+	_sidebar_visible = not _sidebar_visible
+	_sidebar_toggle.text = "\u2715" if _sidebar_visible else "\u2630"  # ✕ / ☰
+	EventBus.sidebar_toggled.emit(_sidebar_visible)
+
+func _on_sidebar_toggled(visible: bool) -> void:
+	_sidebar_visible = visible
+	# Show market button only if sidebar visible AND phase allows it
+	if ProgressionManager.current_phase >= GameConfig.Phase.ECONOMY:
+		_market_btn.visible = visible
+	else:
+		_market_btn.visible = false
 
 func _add_col(parent: HBoxContainer, text: String, min_w: float) -> void:
 	var label := UITheme.make_label(text, "small", UITheme.TEXT_DIM)
