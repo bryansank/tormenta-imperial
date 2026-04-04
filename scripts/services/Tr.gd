@@ -46,6 +46,7 @@ const _STRINGS := {
 		"LBL_STORAGE_CAP": "Almacenamiento: %d/%d",
 		"LBL_LIMIT_REACHED": "Limite alcanzado (%d/%d)",
 		"LBL_REQUIRES": "Requiere: %s",
+		"LBL_REQUIRES_DEPOSIT": "Debe colocarse sobre un deposito de petroleo",
 		"LBL_NOT_ENOUGH_RESOURCES": "Recursos insuficientes!",
 		"LBL_UPGRADE_COMPLETE": "Mejora completa!",
 
@@ -146,7 +147,7 @@ const _STRINGS := {
 		"LBL_MORALE": "Moral: %d%%",
 		"LBL_WORKERS_NEEDED": "Requiere %d trabajadores",
 		"LBL_NO_WORKERS": "Sin trabajadores disponibles",
-		"LBL_NO_WORKERS_SHORT": "SIN WORKERS",
+		"LBL_NO_WORKERS_SHORT": "SIN TRABAJADORES",
 		"NOTIF_POP_GREW": "Poblacion crecio: %d/%d",
 		"NOTIF_NO_WOOD": "Falta madera para la poblacion!",
 		"NOTIF_NO_GOLD": "Falta oro para pagar salarios!",
@@ -207,10 +208,29 @@ const _STRINGS := {
 		"LBL_MORALE_WORD": "moral",
 
 		# Construction Categories
-		"LBL_CAT_PRODUCTION": "-- Produccion --",
-		"LBL_CAT_SUPPORT": "-- Soporte --",
-		"LBL_CAT_MILITARY": "-- Militar --",
-		"LBL_CAT_DECORATION": "-- Decoracion --",
+		"LBL_CAT_ALL": "Todos",
+		"LBL_CAT_PRODUCTION": "Produccion",
+		"LBL_CAT_SUPPORT": "Soporte",
+		"LBL_CAT_MILITARY": "Militar",
+		"LBL_CAT_DECORATION": "Decoracion",
+		"LBL_SEARCH": "Buscar...",
+		"LBL_SELECT_BUILDING": "Selecciona un edificio",
+
+		# Phase notifications (shown when a phase unlocks)
+		"PHASE_1": "Tu asentamiento crece. La poblacion ahora consume recursos.",
+		"PHASE_2": "El Mercado Imperial esta disponible. La moral ahora sube y baja.",
+		"PHASE_3": "Eventos aleatorios comienzan. Las decoraciones ahora mejoran la moral.",
+		"PHASE_4": "La era industrial ha llegado. Todos los sistemas activos.",
+
+		# Objective hints (shown at top-center)
+		"OBJ_PHASE_0": "Construye un Aserradero para empezar a producir madera.",
+		"OBJ_PHASE_1": "Bien! Ahora construye una Mina de Oro para generar ingresos.",
+		"OBJ_PHASE_1_DONE": "Construye un Deposito para almacenar mas recursos.",
+		"OBJ_PHASE_2": "Construye un Deposito. El Mercado ya esta disponible para comerciar.",
+		"OBJ_PHASE_2_DONE": "Construye una Fundicion para avanzar a la Era Industrial.",
+		"OBJ_PHASE_3": "Construye una Fundicion para desbloquear el acero.",
+		"OBJ_PHASE_3_DONE": "Sigue expandiendo tu imperio. Objetivo: Cuartel General Nv.3",
+		"OBJ_PHASE_4": "Avanza hacia la Victoria Imperial. Construye el Cuartel General y mejoralo.",
 
 		# Cloud Save
 		"NOTIF_CLOUD_NOT_CONFIGURED": "Supabase no configurado. Usa guardado local.",
@@ -220,6 +240,30 @@ const _STRINGS := {
 		"NOTIF_CLOUD_LOAD_FAILED": "Error al cargar desde la nube.",
 		"NOTIF_CLOUD_NO_SAVE": "No hay guardado en la nube.",
 		"NOTIF_CLOUD_LOADED": "Cargado desde la nube.",
+
+		# Objective Panel
+		"LBL_OBJ_TITLE": "¿QUE HACER? - OBJETIVOS",
+		"LBL_OBJ_MISSION": "TU MISION",
+		"LBL_OBJ_MISSION_DESC": "Transforma un asentamiento remoto en una Potencia Industrial Monumental. Debes gestionar recursos, energia y poblacion para expandir tu base.",
+		"LBL_OBJ_STEPS": "PASOS INICIALES",
+		"LBL_OBJ_STEP_1": "1. ENERGIA: Construye un NUCLEO para dar energia a tus edificios.",
+		"LBL_OBJ_STEP_2": "2. EXTRACCION: Construye SERRERIAS y MINAS para obtener recursos basicos.",
+		"LBL_OBJ_STEP_3": "3. POBLACION: Construye CASAS. Sin gente, las fabricas no funcionan.",
+		"LBL_OBJ_STEP_4": "4. LOGISTICA: Conecta edificios con ALMACENES para guardar tu produccion.",
+		"LBL_OBJ_STEP_5": "5. PROGRESO: Usa el Arbol Tecnologico para desbloquear edificios avanzados.",
+		"LBL_OBJ_TIP": "TIP: Usa el menu de construccion (abajo a la derecha) para empezar.",
+		"BTN_UNDERSTOOD": "ENTENDIDO!",
+		"BTN_OBJECTIVES": "¿QUE HACER?",
+
+		# Building Info extras
+		"LBL_POP_CAPACITY": "+%d poblacion",
+		"LBL_MORALE_BONUS": "+%d moral",
+		"LBL_ROTATE_BUILDING": "Rotar edificio (R)",
+
+		# Tech bonuses
+		"FMT_SPREAD_REDUCTION": "-%d%% margen",
+		"FMT_CONSUMPTION_REDUCTION": "-%d%% consumo",
+		"FMT_BUILD_SPEED": "+%d%% velocidad",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -244,6 +288,7 @@ const _STRINGS := {
 		"LBL_STORAGE_CAP": "Storage: %d/%d",
 		"LBL_LIMIT_REACHED": "Limit reached (%d/%d)",
 		"LBL_REQUIRES": "Requires: %s",
+		"LBL_REQUIRES_DEPOSIT": "Must be placed on an oil deposit",
 		"LBL_NOT_ENOUGH_RESOURCES": "Not enough resources!",
 		"LBL_UPGRADE_COMPLETE": "Upgrade complete!",
 
@@ -397,10 +442,29 @@ const _STRINGS := {
 		"LBL_MORALE_WORD": "morale",
 
 		# Construction Categories
-		"LBL_CAT_PRODUCTION": "-- Production --",
-		"LBL_CAT_SUPPORT": "-- Support --",
-		"LBL_CAT_MILITARY": "-- Military --",
-		"LBL_CAT_DECORATION": "-- Decoration --",
+		"LBL_CAT_ALL": "All",
+		"LBL_CAT_PRODUCTION": "Production",
+		"LBL_CAT_SUPPORT": "Support",
+		"LBL_CAT_MILITARY": "Military",
+		"LBL_CAT_DECORATION": "Decoration",
+		"LBL_SEARCH": "Search...",
+		"LBL_SELECT_BUILDING": "Select a building",
+
+		# Phase notifications
+		"PHASE_1": "Your settlement grows. Population now consumes resources.",
+		"PHASE_2": "The Imperial Market is open. Morale now rises and falls.",
+		"PHASE_3": "Random events begin. Decorations now improve morale.",
+		"PHASE_4": "The industrial era has arrived. All systems active.",
+
+		# Objective hints
+		"OBJ_PHASE_0": "Build a Sawmill to start producing wood.",
+		"OBJ_PHASE_1": "Good! Now build a Gold Mine to generate income.",
+		"OBJ_PHASE_1_DONE": "Build a Warehouse to store more resources.",
+		"OBJ_PHASE_2": "Build a Warehouse. The Market is now open for trade.",
+		"OBJ_PHASE_2_DONE": "Build a Foundry to advance to the Industrial Era.",
+		"OBJ_PHASE_3": "Build a Foundry to unlock steel.",
+		"OBJ_PHASE_3_DONE": "Keep expanding. Goal: Headquarters Level 3.",
+		"OBJ_PHASE_4": "Push for Imperial Victory. Build and upgrade Headquarters.",
 
 		# Cloud Save
 		"NOTIF_CLOUD_NOT_CONFIGURED": "Supabase not configured. Using local save.",
@@ -410,6 +474,30 @@ const _STRINGS := {
 		"NOTIF_CLOUD_LOAD_FAILED": "Failed to load from cloud.",
 		"NOTIF_CLOUD_NO_SAVE": "No cloud save found.",
 		"NOTIF_CLOUD_LOADED": "Loaded from cloud.",
+
+		# Objective Panel
+		"LBL_OBJ_TITLE": "WHAT TO DO? - OBJECTIVES",
+		"LBL_OBJ_MISSION": "YOUR MISSION",
+		"LBL_OBJ_MISSION_DESC": "Transform a remote settlement into a Monumental Industrial Power. Manage resources, energy, and population to expand your base.",
+		"LBL_OBJ_STEPS": "INITIAL STEPS",
+		"LBL_OBJ_STEP_1": "1. ENERGY: Build a CORE to power your buildings.",
+		"LBL_OBJ_STEP_2": "2. EXTRACTION: Build SAWMILLS and MINES to obtain basic resources.",
+		"LBL_OBJ_STEP_3": "3. POPULATION: Build HOUSES. Without people, factories don't work.",
+		"LBL_OBJ_STEP_4": "4. LOGISTICS: Connect buildings with WAREHOUSES to store production.",
+		"LBL_OBJ_STEP_5": "5. PROGRESS: Use the Tech Tree to unlock advanced buildings.",
+		"LBL_OBJ_TIP": "TIP: Use the construction menu (bottom right) to get started.",
+		"BTN_UNDERSTOOD": "GOT IT!",
+		"BTN_OBJECTIVES": "WHAT TO DO?",
+
+		# Building Info extras
+		"LBL_POP_CAPACITY": "+%d population",
+		"LBL_MORALE_BONUS": "+%d morale",
+		"LBL_ROTATE_BUILDING": "Rotate building (R)",
+
+		# Tech bonuses
+		"FMT_SPREAD_REDUCTION": "-%d%% spread",
+		"FMT_CONSUMPTION_REDUCTION": "-%d%% consumption",
+		"FMT_BUILD_SPEED": "+%d%% build speed",
 	},
 }
 
