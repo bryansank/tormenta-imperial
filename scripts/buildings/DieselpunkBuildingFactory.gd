@@ -149,8 +149,15 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 		"garden": return _build_garden(sx, sz)
 		"fountain": return _build_fountain(sx, sz)
 		"statue": return _build_statue(sx, sz)
-		"road": return _build_road(sx, sz)
+		"road": return _build_road(sx, sz, 0)
 	return null
+
+## Create a road mesh with neighbor connectivity.
+## neighbors is a bitmask: NORTH=1, EAST=2, SOUTH=4, WEST=8
+static func create_road(cell_size: float, neighbors: int = 0) -> Node3D:
+	var sx: float = cell_size * 0.9
+	var sz: float = cell_size * 0.9
+	return _build_road(sx, sz, neighbors)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -788,15 +795,49 @@ static func _build_statue(sx: float, sz: float) -> Node3D:
 # ════════════════════════════════════════════════════════════════
 # ROAD — Flat paved surface
 # ════════════════════════════════════════════════════════════════
-static func _build_road(sx: float, sz: float) -> Node3D:
+## Dynamic road that connects to adjacent roads.
+## neighbors bitmask: NORTH=1 (Z-), EAST=2 (X+), SOUTH=4 (Z+), WEST=8 (X-)
+static func _build_road(sx: float, sz: float, neighbors: int = 0) -> Node3D:
 	var root: Node3D = Node3D.new()
 	var mat_pave := _metal(Color(0.35, 0.33, 0.3), 0.2, 0.85)
 	var mat_edge := _metal(Color(0.28, 0.26, 0.24), 0.3, 0.8)
+	var mat_line := _metal(Color(0.45, 0.42, 0.38), 0.15, 0.9)
 
-	# Main road surface
-	_add_box(root, Vector3(0, 0.025, 0), Vector3(sx * 0.95, 0.05, sz * 0.95), mat_pave)
-	# Edge stones
-	_add_box(root, Vector3(sx * 0.45, 0.04, 0), Vector3(0.06, 0.08, sz * 0.9), mat_edge)
-	_add_box(root, Vector3(-sx * 0.45, 0.04, 0), Vector3(0.06, 0.08, sz * 0.9), mat_edge)
+	var has_n := (neighbors & 1) != 0
+	var has_e := (neighbors & 2) != 0
+	var has_s := (neighbors & 4) != 0
+	var has_w := (neighbors & 8) != 0
+
+	# Center pad (always present)
+	_add_box(root, Vector3(0, 0.025, 0), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
+
+	# Connection strips toward each neighbor
+	if has_n:
+		_add_box(root, Vector3(0, 0.025, -sz * 0.25), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
+	if has_s:
+		_add_box(root, Vector3(0, 0.025, sz * 0.25), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
+	if has_e:
+		_add_box(root, Vector3(sx * 0.25, 0.025, 0), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
+	if has_w:
+		_add_box(root, Vector3(-sx * 0.25, 0.025, 0), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
+
+	# Edge stones on sides that DON'T connect
+	var half := sx * 0.48
+	var edge_h := 0.08
+	var edge_w := 0.06
+	if not has_n:
+		_add_box(root, Vector3(0, 0.04, -half), Vector3(sx * 0.5 if neighbors == 0 else sx * 0.5, edge_h, edge_w), mat_edge)
+	if not has_s:
+		_add_box(root, Vector3(0, 0.04, half), Vector3(sx * 0.5 if neighbors == 0 else sx * 0.5, edge_h, edge_w), mat_edge)
+	if not has_e:
+		_add_box(root, Vector3(half, 0.04, 0), Vector3(edge_w, edge_h, sz * 0.5 if neighbors == 0 else sz * 0.5), mat_edge)
+	if not has_w:
+		_add_box(root, Vector3(-half, 0.04, 0), Vector3(edge_w, edge_h, sz * 0.5 if neighbors == 0 else sz * 0.5), mat_edge)
+
+	# Center line markings for straight roads
+	if has_n and has_s and not has_e and not has_w:
+		_add_box(root, Vector3(0, 0.052, 0), Vector3(0.04, 0.01, sz * 0.8), mat_line)
+	elif has_e and has_w and not has_n and not has_s:
+		_add_box(root, Vector3(0, 0.052, 0), Vector3(sx * 0.8, 0.01, 0.04), mat_line)
 
 	return root
