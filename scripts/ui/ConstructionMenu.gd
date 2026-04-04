@@ -102,10 +102,8 @@ func _setup_ui() -> void:
 	# Build button (bottom center)
 	_build_btn = Button.new()
 	_build_btn.text = Tr.t("BTN_BUILD")
-	_build_btn.custom_minimum_size = Vector2(200, 54)
-	_build_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_build_btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_build_btn.position = Vector2(-100, -20)
+	_build_btn.custom_minimum_size.y = 54
+	UILayoutManager.apply_layout("ConstructionMenu.button", _build_btn)
 	UITheme.style_button(_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
 	_build_btn.pressed.connect(_open)
 	_root.add_child(_build_btn)
@@ -121,14 +119,7 @@ func _setup_ui() -> void:
 
 	# Main modal panel
 	_modal = PanelContainer.new()
-	_modal.set_anchors_preset(Control.PRESET_CENTER)
-	_modal.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_modal.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_modal.custom_minimum_size = Vector2(860, 520)
-	_modal.offset_left = -430
-	_modal.offset_right = 430
-	_modal.offset_top = -260
-	_modal.offset_bottom = 260
+	UILayoutManager.apply_layout("ConstructionMenu.modal", _modal)
 	_modal.visible = false
 	_modal.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	_modal.gui_input.connect(func(event):

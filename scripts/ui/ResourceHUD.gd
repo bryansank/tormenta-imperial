@@ -37,7 +37,7 @@ func _setup_ui() -> void:
 	add_child(root)
 
 	_panel = PanelContainer.new()
-	_panel.position = Vector2(10, 8)
+	UILayoutManager.apply_layout("ResourceHUD", _panel)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.06, 0.07, 0.05, 0.92)
 	style.set_corner_radius_all(4)

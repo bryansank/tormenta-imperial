@@ -38,6 +38,7 @@ RandomEventManager="*res://scripts/services/RandomEventManager.gd"
 TechTreeManager="*res://scripts/services/TechTreeManager.gd"
 CloudSaveManager="*res://scripts/services/CloudSaveManager.gd"
 UIManager="*res://scripts/services/UIManager.gd"
+UILayoutManager="*res://scripts/services/UILayoutManager.gd"
 
 [display]
 

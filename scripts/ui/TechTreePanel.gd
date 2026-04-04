@@ -39,7 +39,7 @@ func _setup_ui() -> void:
 	_tech_btn.custom_minimum_size = Vector2(140, 38)
 	_tech_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_tech_btn.offset_left = -152
-	_tech_btn.offset_top = 136
+	_tech_btn.offset_top = UILayoutManager.get_sidebar_button_offset("TechTreePanel.button")
 	UITheme.style_card_button(_tech_btn, UITheme.BTN.lightened(0.05), UITheme.INFO)
 	_tech_btn.pressed.connect(_toggle_panel)
 	_tech_btn.visible = false  # Start collapsed with sidebar
@@ -52,10 +52,7 @@ func _setup_ui() -> void:
 	root.add_child(_backdrop)
 
 	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_panel.custom_minimum_size = Vector2(540, 0)
+	UILayoutManager.apply_layout("TechTreePanel.modal", _panel)
 	_panel.visible = false
 	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))

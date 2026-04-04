@@ -26,7 +26,7 @@ func _setup_ui() -> void:
 	_progress_btn.custom_minimum_size = Vector2(140, 38)
 	_progress_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_progress_btn.offset_left = -152
-	_progress_btn.offset_top = 94
+	_progress_btn.offset_top = UILayoutManager.get_sidebar_button_offset("ProgressPanel.button")
 	UITheme.style_card_button(_progress_btn, UITheme.BTN.lightened(0.05), UITheme.WARNING)
 	_progress_btn.pressed.connect(_toggle_panel)
 	_progress_btn.visible = false  # Start collapsed with sidebar
@@ -39,10 +39,7 @@ func _setup_ui() -> void:
 	root.add_child(_backdrop)
 
 	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_panel.custom_minimum_size = Vector2(360, 0)
+	UILayoutManager.apply_layout("ProgressPanel.modal", _panel)
 	_panel.visible = false
 	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))

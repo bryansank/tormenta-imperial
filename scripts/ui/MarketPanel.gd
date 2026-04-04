@@ -38,7 +38,7 @@ func _setup_ui() -> void:
 	_sidebar_toggle.custom_minimum_size = Vector2(36, 36)
 	_sidebar_toggle.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_sidebar_toggle.offset_left = -46
-	_sidebar_toggle.offset_top = 10
+	_sidebar_toggle.offset_top = UILayoutManager.get_sidebar_button_offset("MarketPanel.sidebar_toggle")
 	var stb := StyleBoxFlat.new()
 	stb.bg_color = Color(0.08, 0.09, 0.07, 0.85)
 	stb.set_corner_radius_all(4)
@@ -62,7 +62,7 @@ func _setup_ui() -> void:
 	_market_btn.custom_minimum_size = Vector2(140, 38)
 	_market_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_market_btn.offset_left = -152
-	_market_btn.offset_top = 52
+	_market_btn.offset_top = UILayoutManager.get_sidebar_button_offset("MarketPanel.button")
 	UITheme.style_card_button(_market_btn, UITheme.BTN.lightened(0.05), UITheme.POSITIVE)
 	_market_btn.pressed.connect(_toggle_panel)
 	_market_btn.visible = false  # Start collapsed
@@ -75,10 +75,7 @@ func _setup_ui() -> void:
 	root.add_child(_backdrop)
 
 	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_panel.custom_minimum_size = Vector2(420, 0)
+	UILayoutManager.apply_layout("MarketPanel.modal", _panel)
 	_panel.visible = false
 	_panel.add_theme_stylebox_override("panel", UITheme.make_command_panel_style())
 	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))

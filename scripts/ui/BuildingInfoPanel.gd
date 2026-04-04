@@ -62,18 +62,8 @@ func _process(_delta: float) -> void:
 
 func _build_ui() -> void:
 	_panel = PanelContainer.new()
-	_panel.custom_minimum_size = Vector2(310, 0)
 	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
-	# Anchor top-right, auto-size to content (no full-height stretch)
-	_panel.anchor_left = 1.0
-	_panel.anchor_top = 0.0
-	_panel.anchor_right = 1.0
-	_panel.anchor_bottom = 0.0
-	_panel.offset_left = -320
-	_panel.offset_right = -8
-	_panel.offset_top = 190  # Below the right-side buttons (MERCADO/PROGRESO/TECNOLOGIA end ~182)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_panel.grow_vertical = Control.GROW_DIRECTION_END
+	UILayoutManager.apply_layout("BuildingInfoPanel", _panel)
 	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))
 
 	_scroll = ScrollContainer.new()

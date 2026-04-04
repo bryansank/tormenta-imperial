@@ -43,8 +43,7 @@ func _setup_ui() -> void:
 	# Status bar (top-left below HUD)
 	_status_panel = PanelContainer.new()
 	var status_panel := _status_panel
-	status_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	status_panel.position = Vector2(10, 54)
+	UILayoutManager.apply_layout("NotificationPanel.status", status_panel)
 	var status_style := StyleBoxFlat.new()
 	status_style.bg_color = UITheme.PANEL_BG
 	status_style.set_corner_radius_all(UITheme.CORNER)
@@ -107,10 +106,7 @@ func _setup_ui() -> void:
 
 	# Objective hint (top-center)
 	var obj_panel := PanelContainer.new()
-	obj_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	obj_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	obj_panel.position = Vector2(-160, 54)
-	obj_panel.custom_minimum_size = Vector2(320, 0)
+	UILayoutManager.apply_layout("NotificationPanel.objective", obj_panel)
 	var obj_style := StyleBoxFlat.new()
 	obj_style.bg_color = Color(0.08, 0.06, 0.04, 0.85)
 	obj_style.set_corner_radius_all(UITheme.CORNER)
@@ -129,20 +125,14 @@ func _setup_ui() -> void:
 
 	# Toast container (bottom-left)
 	_toast_container = VBoxContainer.new()
-	_toast_container.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_toast_container.position = Vector2(10, -200)
-	_toast_container.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	UILayoutManager.apply_layout("NotificationPanel.toasts", _toast_container)
 	_toast_container.add_theme_constant_override("separation", 4)
 	_toast_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_toast_container)
 
 	# Log panel
 	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_LEFT_WIDE)
-	_panel.offset_left = 10
-	_panel.offset_right = 320
-	_panel.offset_top = 168
-	_panel.offset_bottom = -10
+	UILayoutManager.apply_layout("NotificationPanel.log", _panel)
 	_panel.visible = false
 	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	root.add_child(_panel)

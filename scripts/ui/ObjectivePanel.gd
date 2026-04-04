@@ -21,10 +21,7 @@ func _setup_ui() -> void:
 	add_child(backdrop)
 
 	_panel = PanelContainer.new()
-	_panel.custom_minimum_size = Vector2(500, 450)
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	UILayoutManager.apply_layout("ObjectivePanel", _panel)
 	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	add_child(_panel)
 
