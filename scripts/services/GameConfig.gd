@@ -57,18 +57,18 @@ var hq_upgrade_costs := {
 # ── Building Limits (max per type, -1 = unlimited) ──
 
 var building_limits := {
-	"sawmill": 3,
-	"gold_mine": 2,
-	"foundry": 2,
-	"refinery": 1,
-	"warehouse": 3,
-	"barracks": 2,
-	"tower": 4,
+	"sawmill": 5,
+	"gold_mine": 4,
+	"foundry": 3,
+	"refinery": 2,
+	"warehouse": 5,
+	"barracks": 3,
+	"tower": 6,
 	"headquarters": 1,
-	"house": 6,
+	"house": 10,
 	"garden": -1,
-	"statue": 3,
-	"fountain": 3,
+	"statue": 5,
+	"fountain": 5,
 	"road": -1,
 }
 
@@ -148,9 +148,9 @@ var deposit_max_uses := {
 	"forest": 8,
 }
 
-var deposit_count_min := 8
-var deposit_count_max := 14
-var deposit_center_exclusion := 5
+var deposit_count_min := 18
+var deposit_count_max := 28
+var deposit_center_exclusion := 6
 
 # ── Deposit Sizes (random range per type: min_w, max_w, min_h, max_h) ──
 var deposit_sizes := {
