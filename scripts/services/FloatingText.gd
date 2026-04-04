@@ -2,6 +2,8 @@ class_name FloatingText
 ## Static utility for spawning floating 3D text labels that animate upward and fade out.
 
 static func spawn(scene_tree: SceneTree, world_pos: Vector3, text: String, color: Color) -> void:
+	if not scene_tree or not scene_tree.current_scene:
+		return
 	var label := Label3D.new()
 	label.text = text
 	label.font_size = 20
