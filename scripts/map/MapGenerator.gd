@@ -272,25 +272,34 @@ func _deposit_iron() -> Node3D:
 	var mat_iron := _dep_metal(Color(0.45, 0.42, 0.48), 0.85, 0.35)
 	var mat_dark := _dep_metal(Color(0.25, 0.23, 0.27), 0.8, 0.4)
 	var mat_rust := _dep_metal(Color(0.55, 0.30, 0.15), 0.5, 0.6)
-	# Large angular iron chunks
+	var mat_sheen := _dep_emissive(Color(0.55, 0.55, 0.65), 0.3)
+	# Large angular iron ore chunks (scattered boulders)
 	var b1 := _dep_add_box(root, Vector3(0, 0.5, 0), Vector3(0.8, 1.0, 0.7), mat_iron)
 	b1.rotation.y = 0.3
-	var b2 := _dep_add_box(root, Vector3(0.4, 0.6, 0.4), Vector3(0.55, 0.8, 0.5), mat_dark)
+	var b2 := _dep_add_box(root, Vector3(0.4, 0.65, 0.4), Vector3(0.55, 0.9, 0.5), mat_dark)
 	b2.rotation.y = -0.5
 	b2.rotation.x = 0.15
-	var b3 := _dep_add_box(root, Vector3(-0.3, 0.35, -0.25), Vector3(0.65, 0.6, 0.55), mat_iron)
+	var b3 := _dep_add_box(root, Vector3(-0.3, 0.4, -0.25), Vector3(0.65, 0.7, 0.55), mat_iron)
 	b3.rotation.y = 0.8
-	var b4 := _dep_add_box(root, Vector3(-0.5, 0.25, 0.4), Vector3(0.4, 0.45, 0.4), mat_dark)
+	var b4 := _dep_add_box(root, Vector3(-0.5, 0.3, 0.4), Vector3(0.45, 0.5, 0.45), mat_dark)
 	b4.rotation.y = -0.2
 	b4.rotation.z = 0.1
-	# Rust streaks
-	_dep_add_box(root, Vector3(0.2, 0.85, 0.4), Vector3(0.4, 0.04, 0.08), mat_rust)
-	_dep_add_box(root, Vector3(-0.2, 0.6, -0.3), Vector3(0.3, 0.04, 0.1), mat_rust)
-	_dep_add_box(root, Vector3(0.5, 0.4, -0.1), Vector3(0.08, 0.04, 0.3), mat_rust)
-	# Small iron fragments scattered
-	_dep_add_sphere(root, Vector3(0.6, 0.08, -0.4), 0.09, mat_dark, 4)
-	_dep_add_sphere(root, Vector3(-0.5, 0.07, 0.6), 0.07, mat_dark, 4)
-	_dep_add_sphere(root, Vector3(0.7, 0.06, 0.3), 0.06, mat_dark, 4)
+	# Tall ore pillar
+	var b5 := _dep_add_box(root, Vector3(0.15, 0.7, -0.35), Vector3(0.35, 1.2, 0.3), mat_iron)
+	b5.rotation.y = 0.5
+	# Metallic veins (shiny streaks)
+	_dep_add_box(root, Vector3(0.2, 0.85, 0.4), Vector3(0.4, 0.05, 0.08), mat_sheen)
+	_dep_add_box(root, Vector3(-0.15, 0.7, -0.3), Vector3(0.3, 0.05, 0.1), mat_sheen)
+	_dep_add_box(root, Vector3(0.5, 0.5, -0.1), Vector3(0.08, 0.05, 0.3), mat_sheen)
+	# Rust weathering
+	_dep_add_box(root, Vector3(-0.4, 0.6, 0.25), Vector3(0.5, 0.03, 0.06), mat_rust)
+	_dep_add_box(root, Vector3(0.3, 0.35, 0.15), Vector3(0.35, 0.03, 0.08), mat_rust)
+	# Scattered ore fragments
+	_dep_add_sphere(root, Vector3(0.6, 0.1, -0.4), 0.1, mat_dark, 4)
+	_dep_add_sphere(root, Vector3(-0.55, 0.08, 0.55), 0.08, mat_dark, 4)
+	_dep_add_sphere(root, Vector3(0.7, 0.07, 0.3), 0.07, mat_iron, 4)
+	_dep_add_sphere(root, Vector3(-0.65, 0.06, -0.35), 0.06, mat_dark, 4)
+	_dep_add_sphere(root, Vector3(0.1, 0.05, 0.65), 0.07, mat_iron, 4)
 	return root
 
 func _deposit_oil_well() -> Node3D:
@@ -298,56 +307,88 @@ func _deposit_oil_well() -> Node3D:
 	var mat_oil_dark := _dep_metal(Color(0.06, 0.05, 0.08), 0.4, 0.15)
 	var mat_oil_sheen := _dep_emissive(Color(0.12, 0.08, 0.20), 0.4)
 	var mat_oil_edge := _dep_metal(Color(0.10, 0.08, 0.12), 0.3, 0.25)
-	# Main oil stain — large irregular puddle (overlapping flat cylinders)
+	var mat_iron := _dep_metal(Color(0.25, 0.23, 0.27), 0.8, 0.4)
+	var mat_rust := _dep_metal(Color(0.50, 0.28, 0.15), 0.6, 0.55)
+	var mat_warning := _dep_emissive(Color(1.0, 0.3, 0.05), 1.5)
+	# Oil puddle base
 	_dep_add_cyl(root, Vector3(0, 0.02, 0), 0.85, 0.04, mat_oil_sheen, 12)
 	_dep_add_cyl(root, Vector3(0.35, 0.02, 0.25), 0.55, 0.04, mat_oil_dark, 10)
 	_dep_add_cyl(root, Vector3(-0.3, 0.02, -0.2), 0.6, 0.04, mat_oil_dark, 10)
 	_dep_add_cyl(root, Vector3(-0.45, 0.02, 0.35), 0.4, 0.03, mat_oil_sheen, 8)
 	_dep_add_cyl(root, Vector3(0.5, 0.02, -0.35), 0.45, 0.03, mat_oil_edge, 9)
-	# Smaller satellite splatters
+	# Natural oil seep (geyser pipe)
+	_dep_add_cyl(root, Vector3(0, 0.3, 0), 0.08, 0.6, mat_iron, 6)
+	_dep_add_cyl(root, Vector3(0, 0.65, 0), 0.12, 0.1, mat_rust, 6)
+	# Oil bubbling up from pipe
+	_dep_add_sphere(root, Vector3(0, 0.72, 0), 0.08, mat_oil_sheen, 6)
+	_dep_add_sphere(root, Vector3(0.04, 0.78, 0.02), 0.04, mat_oil_dark, 4)
+	# Warning stakes around the seep
+	for i in range(4):
+		var angle := i * TAU / 4.0 + PI / 4.0
+		var sx := cos(angle) * 0.6
+		var sz := sin(angle) * 0.6
+		_dep_add_cyl(root, Vector3(sx, 0.2, sz), 0.02, 0.4, mat_rust, 4)
+		_dep_add_sphere(root, Vector3(sx, 0.42, sz), 0.035, mat_warning, 4)
+	# Small satellite puddles
 	_dep_add_cyl(root, Vector3(0.7, 0.015, 0.5), 0.25, 0.03, mat_oil_dark, 8)
 	_dep_add_cyl(root, Vector3(-0.65, 0.015, -0.5), 0.3, 0.03, mat_oil_sheen, 8)
-	_dep_add_cyl(root, Vector3(-0.1, 0.015, 0.7), 0.2, 0.03, mat_oil_edge, 7)
-	# Tiny bubbles (slight bumps on the surface)
-	_dep_add_sphere(root, Vector3(0.1, 0.05, 0.1), 0.06, mat_oil_sheen, 5)
-	_dep_add_sphere(root, Vector3(-0.2, 0.05, -0.1), 0.05, mat_oil_sheen, 5)
-	_dep_add_sphere(root, Vector3(0.3, 0.04, -0.15), 0.04, mat_oil_dark, 4)
+	# Bubbles
+	_dep_add_sphere(root, Vector3(0.15, 0.05, 0.15), 0.06, mat_oil_sheen, 5)
+	_dep_add_sphere(root, Vector3(-0.25, 0.05, -0.1), 0.05, mat_oil_sheen, 5)
 	return root
 
 func _deposit_forest() -> Node3D:
 	var root := Node3D.new()
 	var mat_trunk := _dep_metal(Color(0.35, 0.22, 0.10), 0.1, 0.85)
+	var mat_trunk_birch := _dep_metal(Color(0.65, 0.58, 0.48), 0.1, 0.8)
 	var mat_leaves_dark := _dep_metal(Color(0.15, 0.35, 0.10), 0.1, 0.8)
-	var mat_leaves_light := _dep_metal(Color(0.25, 0.45, 0.15), 0.1, 0.75)
+	var mat_leaves_light := _dep_metal(Color(0.28, 0.50, 0.18), 0.1, 0.75)
+	var mat_leaves_autumn := _dep_metal(Color(0.45, 0.35, 0.10), 0.1, 0.8)
 	var mat_moss := _dep_metal(Color(0.18, 0.30, 0.12), 0.05, 0.9)
-	# Main tall tree
-	_dep_add_cyl(root, Vector3(0, 0.7, 0), 0.12, 1.4, mat_trunk, 6)
-	_dep_add_cone(root, Vector3(0, 1.8, 0), 0.6, 0.0, 1.0, mat_leaves_dark, 7)
-	_dep_add_cone(root, Vector3(0, 1.5, 0), 0.7, 0.15, 0.7, mat_leaves_light, 7)
-	# Second tree
-	_dep_add_cyl(root, Vector3(0.5, 0.55, 0.45), 0.09, 1.1, mat_trunk, 6)
-	_dep_add_cone(root, Vector3(0.5, 1.4, 0.45), 0.5, 0.0, 0.8, mat_leaves_dark, 6)
-	_dep_add_cone(root, Vector3(0.5, 1.2, 0.45), 0.55, 0.1, 0.5, mat_leaves_light, 6)
-	# Third smaller tree
-	_dep_add_cyl(root, Vector3(-0.5, 0.45, -0.4), 0.07, 0.9, mat_trunk, 5)
-	_dep_add_cone(root, Vector3(-0.5, 1.1, -0.4), 0.4, 0.0, 0.7, mat_leaves_dark, 6)
-	# Fourth tree behind
-	_dep_add_cyl(root, Vector3(-0.3, 0.5, 0.5), 0.08, 1.0, mat_trunk, 5)
-	_dep_add_cone(root, Vector3(-0.3, 1.3, 0.5), 0.45, 0.0, 0.75, mat_leaves_light, 6)
-	# Bushes / undergrowth scattered
+	var mat_mushroom := _dep_emissive(Color(0.8, 0.6, 0.2), 0.3)
+	# Main tall pine (layered canopy)
+	_dep_add_cyl(root, Vector3(0, 0.8, 0), 0.12, 1.6, mat_trunk, 6)
+	_dep_add_cone(root, Vector3(0, 2.0, 0), 0.65, 0.0, 0.9, mat_leaves_dark, 7)
+	_dep_add_cone(root, Vector3(0, 1.7, 0), 0.72, 0.2, 0.6, mat_leaves_light, 7)
+	_dep_add_cone(root, Vector3(0, 1.4, 0), 0.55, 0.3, 0.4, mat_leaves_dark, 7)
+	# Second tall tree (birch)
+	_dep_add_cyl(root, Vector3(0.55, 0.65, 0.5), 0.07, 1.3, mat_trunk_birch, 6)
+	_dep_add_sphere(root, Vector3(0.55, 1.55, 0.5), 0.4, mat_leaves_light, 6)
+	_dep_add_sphere(root, Vector3(0.55, 1.35, 0.55), 0.35, mat_leaves_dark, 5)
+	# Third pine
+	_dep_add_cyl(root, Vector3(-0.55, 0.5, -0.45), 0.08, 1.0, mat_trunk, 5)
+	_dep_add_cone(root, Vector3(-0.55, 1.25, -0.45), 0.45, 0.0, 0.7, mat_leaves_dark, 6)
+	_dep_add_cone(root, Vector3(-0.55, 1.05, -0.45), 0.50, 0.12, 0.4, mat_leaves_light, 6)
+	# Fourth small autumn tree
+	_dep_add_cyl(root, Vector3(-0.35, 0.5, 0.55), 0.06, 1.0, mat_trunk, 5)
+	_dep_add_sphere(root, Vector3(-0.35, 1.2, 0.55), 0.35, mat_leaves_autumn, 5)
+	# Fifth young sapling
+	_dep_add_cyl(root, Vector3(0.4, 0.3, -0.5), 0.04, 0.6, mat_trunk, 4)
+	_dep_add_cone(root, Vector3(0.4, 0.75, -0.5), 0.2, 0.0, 0.35, mat_leaves_light, 5)
+	# Dense undergrowth
 	_dep_add_sphere(root, Vector3(-0.4, 0.2, 0.15), 0.25, mat_leaves_light, 5)
-	_dep_add_sphere(root, Vector3(0.3, 0.18, -0.5), 0.22, mat_leaves_dark, 5)
-	_dep_add_sphere(root, Vector3(0.6, 0.15, -0.1), 0.2, mat_leaves_light, 5)
-	_dep_add_sphere(root, Vector3(-0.6, 0.15, -0.2), 0.18, mat_leaves_dark, 5)
-	# Stumps / fallen logs
+	_dep_add_sphere(root, Vector3(0.3, 0.2, -0.3), 0.22, mat_leaves_dark, 5)
+	_dep_add_sphere(root, Vector3(0.65, 0.15, 0.1), 0.2, mat_leaves_light, 5)
+	_dep_add_sphere(root, Vector3(-0.6, 0.18, -0.2), 0.22, mat_leaves_dark, 5)
+	_dep_add_sphere(root, Vector3(0.1, 0.15, 0.65), 0.18, mat_leaves_light, 4)
+	_dep_add_sphere(root, Vector3(-0.2, 0.14, -0.6), 0.16, mat_leaves_dark, 4)
+	# Fallen logs
 	var log1 := _dep_add_cyl(root, Vector3(-0.6, 0.1, 0.4), 0.07, 0.5, mat_trunk, 6)
 	log1.rotation.z = PI / 2.0
-	var log2 := _dep_add_cyl(root, Vector3(0.5, 0.1, 0.7), 0.06, 0.4, mat_trunk, 6)
+	var log2 := _dep_add_cyl(root, Vector3(0.5, 0.1, 0.7), 0.06, 0.45, mat_trunk, 6)
 	log2.rotation.z = PI / 2.0
 	log2.rotation.y = 0.8
-	# Moss patches on ground
+	# Tree stump
+	_dep_add_cyl(root, Vector3(0.6, 0.1, -0.55), 0.1, 0.2, mat_trunk, 6)
+	# Moss patches
 	_dep_add_cyl(root, Vector3(0.1, 0.01, -0.1), 0.6, 0.02, mat_moss, 8)
-	_dep_add_cyl(root, Vector3(-0.3, 0.01, 0.3), 0.4, 0.02, mat_moss, 8)
+	_dep_add_cyl(root, Vector3(-0.3, 0.01, 0.3), 0.45, 0.02, mat_moss, 8)
+	_dep_add_cyl(root, Vector3(0.4, 0.01, 0.35), 0.3, 0.02, mat_moss, 7)
+	# Mushrooms
+	_dep_add_cyl(root, Vector3(-0.5, 0.06, 0.0), 0.015, 0.06, mat_trunk, 4)
+	_dep_add_sphere(root, Vector3(-0.5, 0.1, 0.0), 0.04, mat_mushroom, 4)
+	_dep_add_cyl(root, Vector3(-0.45, 0.05, 0.05), 0.01, 0.04, mat_trunk, 4)
+	_dep_add_sphere(root, Vector3(-0.45, 0.08, 0.05), 0.03, mat_mushroom, 4)
 	return root
 
 ## Find a deposit of the given type that overlaps any of the provided cells.
