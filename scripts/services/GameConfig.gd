@@ -82,6 +82,12 @@ var building_prerequisites := {
 	"headquarters": ["barracks", "refinery"],
 }
 
+# ── Deposit Placement Requirements (building must overlap a deposit) ──
+
+var building_requires_deposit := {
+	"refinery": "oil_well",
+}
+
 # ── Storage ──
 
 var base_storage_cap := 800
@@ -136,15 +142,23 @@ var mining_data := {
 # ── Deposit Config ──
 
 var deposit_max_uses := {
-	"gold_vein": 5,
-	"iron_deposit": 4,
-	"oil_well": 6,
-	"forest": 4,
+	"gold_vein": 8,
+	"iron_deposit": 7,
+	"oil_well": 10,
+	"forest": 8,
 }
 
-var deposit_count_min := 15
-var deposit_count_max := 25
-var deposit_center_exclusion := 4
+var deposit_count_min := 8
+var deposit_count_max := 14
+var deposit_center_exclusion := 5
+
+# ── Deposit Sizes (random range per type: min_w, max_w, min_h, max_h) ──
+var deposit_sizes := {
+	"gold_vein": {"min_w": 2, "max_w": 3, "min_h": 2, "max_h": 3},
+	"iron_deposit": {"min_w": 2, "max_w": 3, "min_h": 2, "max_h": 3},
+	"oil_well": {"min_w": 2, "max_w": 3, "min_h": 2, "max_h": 3},
+	"forest": {"min_w": 2, "max_w": 4, "min_h": 2, "max_h": 4},
+}
 
 # ── Deposit Resource Mapping (which resource a deposit requires unlocked) ──
 
@@ -369,3 +383,28 @@ func is_deposit_unlocked(deposit_id: String) -> bool:
 	if res_name.is_empty():
 		return true
 	return ResourceManager.is_unlocked_by_name(res_name)
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Game Phase System (gradual unlock of mechanics) ──
+# ══════════════════════════════════════════════════════════════════════
+#
+# Phase 0 "Fundacion"   — Build freely. No consumption, no morale changes, no market, no events.
+# Phase 1 "Asentamiento" — Consumption starts (gentle). Pop growth starts.
+# Phase 2 "Economia"     — Market unlocks. Morale becomes dynamic.
+# Phase 3 "Supervivencia"— Random events start. Decorations affect morale.
+# Phase 4+ "Expansion"   — Everything active (eras 2, 3 flow naturally).
+
+enum Phase { FOUNDATION, SETTLEMENT, ECONOMY, SURVIVAL, EXPANSION }
+
+## Which milestone triggers each phase transition
+var phase_triggers := {
+	Phase.SETTLEMENT: "first_sawmill",     # Build first Sawmill
+	Phase.ECONOMY: "first_gold_mine",      # Build first Gold Mine
+	Phase.SURVIVAL: "first_warehouse",     # Build first Warehouse
+	Phase.EXPANSION: "era_2",              # Build Foundry (era 2)
+}
+
+## Gentle early-game timers (overrides for phases 1-2)
+var early_consumption_interval := 60.0     # Phase 1-2: every 60s (vs 30s normal)
+var early_morale_penalty := -3             # Phase 1-2: gentle penalty (vs -8)
+var early_growth_interval := 40.0          # Phase 1-2: slow growth (vs 20s)

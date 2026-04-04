@@ -3,6 +3,7 @@ extends Node
 ## Listens to EventBus signals and advances the game state accordingly.
 
 var current_era := 1
+var current_phase: int = GameConfig.Phase.FOUNDATION
 var milestones_completed: Dictionary = {}
 var _trade_count := 0
 var _stats := {"buildings_built": 0, "resources_gathered": 0, "trades_completed": 0}
@@ -37,8 +38,15 @@ func _complete_milestone(milestone_id: String) -> void:
 		return
 	milestones_completed[milestone_id] = true
 	EventBus.milestone_completed.emit(milestone_id)
+	_check_phase_advance(milestone_id)
 	if milestone_id == "hq_max":
 		_trigger_victory()
+
+func _check_phase_advance(milestone_id: String) -> void:
+	for phase in GameConfig.phase_triggers:
+		if GameConfig.phase_triggers[phase] == milestone_id and current_phase < phase:
+			current_phase = phase
+			EventBus.phase_advanced.emit(current_phase)
 
 func _check_building_milestones(building_id: String) -> void:
 	match building_id:
@@ -112,6 +120,7 @@ func _on_resource_changed(_type: String, _amount: int, delta: int) -> void:
 func get_save_data() -> Dictionary:
 	return {
 		"current_era": current_era,
+		"current_phase": current_phase,
 		"milestones": milestones_completed.duplicate(),
 		"trade_count": _trade_count,
 		"stats": _stats.duplicate(),
@@ -120,6 +129,7 @@ func get_save_data() -> Dictionary:
 
 func load_save_data(data: Dictionary) -> void:
 	current_era = data.get("current_era", 1)
+	current_phase = data.get("current_phase", GameConfig.Phase.FOUNDATION)
 	milestones_completed = data.get("milestones", {})
 	_trade_count = data.get("trade_count", 0)
 	_stats = data.get("stats", {"buildings_built": 0, "resources_gathered": 0, "trades_completed": 0})
@@ -129,9 +139,20 @@ func load_save_data(data: Dictionary) -> void:
 		ResourceManager.unlock(ResourceManager.Type.STEEL)
 	if current_era >= 3:
 		ResourceManager.unlock(ResourceManager.Type.OIL)
+	# Recalculate phase from milestones if not saved (backwards compat)
+	if not data.has("current_phase"):
+		_recalculate_phase()
+
+func _recalculate_phase() -> void:
+	current_phase = GameConfig.Phase.FOUNDATION
+	for phase in GameConfig.phase_triggers:
+		var milestone_id: String = GameConfig.phase_triggers[phase]
+		if milestones_completed.has(milestone_id):
+			current_phase = maxi(current_phase, phase)
 
 func reset() -> void:
 	current_era = 1
+	current_phase = GameConfig.Phase.FOUNDATION
 	milestones_completed = {}
 	_trade_count = 0
 	_stats = {"buildings_built": 0, "resources_gathered": 0, "trades_completed": 0}

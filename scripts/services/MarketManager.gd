@@ -12,6 +12,9 @@ var _price_mods: Dictionary = {
 var _tick_timer := 0.0
 
 func _process(delta: float) -> void:
+	# Market not available until Phase 2 (Economy)
+	if ProgressionManager.current_phase < GameConfig.Phase.ECONOMY:
+		return
 	_tick_timer += delta
 	var interval := GameConfig.market_tick_interval
 	if GameConfig.dev_mode:

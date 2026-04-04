@@ -12,6 +12,10 @@ func _ready() -> void:
 	_schedule_next_event()
 
 func _process(delta: float) -> void:
+	# Random events don't start until Phase 3 (Survival)
+	if ProgressionManager.current_phase < GameConfig.Phase.SURVIVAL:
+		return
+
 	# Check for next event
 	_timer += delta
 	if _timer >= _next_event_time and _active_event.is_empty():

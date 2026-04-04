@@ -26,15 +26,24 @@ func _process(delta: float) -> void:
 	if _notif_cooldown > 0.0:
 		_notif_cooldown -= delta
 
+	# Phase 0 (Foundation): no consumption, no growth — just build freely
+	if ProgressionManager.current_phase < GameConfig.Phase.SETTLEMENT:
+		return
+
+	# Use gentler timers in early phases (1-2)
+	var is_early := ProgressionManager.current_phase < GameConfig.Phase.SURVIVAL
+	var cons_base := GameConfig.early_consumption_interval if is_early else GameConfig.consumption_interval
+	var grow_base := GameConfig.early_growth_interval if is_early else GameConfig.growth_interval
+
 	# Consumption tick
-	var cons_interval := GameConfig.get_duration(GameConfig.consumption_interval)
+	var cons_interval := GameConfig.get_duration(cons_base)
 	_consumption_timer += delta
 	if _consumption_timer >= cons_interval:
 		_consumption_timer -= cons_interval
 		_tick_consumption()
 
 	# Population growth
-	var grow_interval := GameConfig.get_duration(GameConfig.growth_interval)
+	var grow_interval := GameConfig.get_duration(grow_base)
 	_growth_timer += delta
 	if _growth_timer >= grow_interval:
 		_growth_timer -= grow_interval
@@ -89,7 +98,7 @@ func _tick_consumption() -> void:
 		EventBus.consumption_failed.emit("wood")
 		if _notif_cooldown <= 0.0:
 			EventBus.notification_posted.emit(Tr.t("NOTIF_NO_WOOD"), "warning", Color(0.9, 0.6, 0.2))
-			_notif_cooldown = 10.0
+			_notif_cooldown = 30.0
 
 	if gold_ok:
 		ResourceManager.spend(ResourceManager.Type.GOLD, gold_needed)
@@ -100,7 +109,7 @@ func _tick_consumption() -> void:
 		EventBus.consumption_failed.emit("gold")
 		if _notif_cooldown <= 0.0:
 			EventBus.notification_posted.emit(Tr.t("NOTIF_NO_GOLD"), "warning", Color(0.9, 0.6, 0.2))
-			_notif_cooldown = 10.0
+			_notif_cooldown = 30.0
 
 	# Morale adjustments
 	if wood_ok and gold_ok:
@@ -109,8 +118,17 @@ func _tick_consumption() -> void:
 		_adjust_morale(GameConfig.morale_unsatisfied_penalty)
 
 func _adjust_morale(delta: int) -> void:
+	# Phase 0-1: morale stays fixed — don't confuse new players
+	if ProgressionManager.current_phase < GameConfig.Phase.ECONOMY:
+		return
 	var old := _morale
-	_morale = clampi(_morale + delta + _get_decoration_morale_rate(), GameConfig.morale_min, GameConfig.morale_max)
+	# Use gentler penalty in early phases
+	var actual_delta := delta
+	if delta < 0 and ProgressionManager.current_phase < GameConfig.Phase.SURVIVAL:
+		actual_delta = maxi(delta, GameConfig.early_morale_penalty)
+	# Decoration bonus only active from Phase 3+
+	var deco_rate := _get_decoration_morale_rate() if ProgressionManager.current_phase >= GameConfig.Phase.SURVIVAL else 0
+	_morale = clampi(_morale + actual_delta + deco_rate, GameConfig.morale_min, GameConfig.morale_max)
 	if _morale != old:
 		EventBus.morale_changed.emit(_morale)
 		if _morale <= GameConfig.morale_danger_threshold and old > GameConfig.morale_danger_threshold:
@@ -130,7 +148,9 @@ func _tick_growth() -> void:
 	# Grow 1 pop if morale is decent
 	_population = mini(_population + 1, _max_population)
 	EventBus.population_changed.emit(_population, _max_population)
-	EventBus.notification_posted.emit(Tr.t("NOTIF_POP_GREW") % [_population, _max_population], "info", Color(0.4, 0.8, 0.4))
+	if _notif_cooldown <= 0.0:
+		EventBus.notification_posted.emit(Tr.t("NOTIF_POP_GREW") % [_population, _max_population], "info", Color(0.4, 0.8, 0.4))
+		_notif_cooldown = 30.0
 
 # ── Building Events ──
 
@@ -191,7 +211,7 @@ func _recalculate_all() -> void:
 
 ## Check if a specific building node is staffed (has enough workers assigned).
 func is_building_staffed(node: Node3D) -> bool:
-	return node.get_meta("staffed", true)
+	return node.get_meta("staffed", false)
 
 ## Update the visual indicator on a building for worker status.
 func _update_worker_visual(node: Node3D, staffed: bool) -> void:
