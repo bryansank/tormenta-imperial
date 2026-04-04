@@ -7,11 +7,11 @@ extends Camera3D
 @export var zoom_speed: float = 2.0
 @export var rotate_speed: float = 60.0
 @export var min_distance: float = 8.0
-@export var max_distance: float = 40.0
+@export var max_distance: float = 60.0
 @export var pitch_angle: float = -45.0
 
-@export var boundary_min: Vector2 = Vector2(-25, -25)
-@export var boundary_max: Vector2 = Vector2(25, 25)
+@export var boundary_min: Vector2 = Vector2(-40, -40)
+@export var boundary_max: Vector2 = Vector2(40, 40)
 
 var _ground_target: Vector2 = Vector2.ZERO
 var _yaw: float = 0.0

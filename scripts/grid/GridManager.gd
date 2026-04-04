@@ -3,11 +3,11 @@ extends Node
 ## tracks which cells are occupied, supports multi-cell buildings.
 
 @export var cell_size: float = 2.0
-@export var grid_width: int = 25   # Number of cells along X (50 / 2.0)
-@export var grid_height: int = 25  # Number of cells along Z
+@export var grid_width: int = 40   # Number of cells along X (80 / 2.0)
+@export var grid_height: int = 40  # Number of cells along Z
 
-# Origin offset: the grid starts at world (-25, -25) so cell (0,0) maps there
-var _origin := Vector3(-25.0, 0.0, -25.0)
+# Origin offset: the grid starts at world (-40, -40) so cell (0,0) maps there
+var _origin := Vector3(-40.0, 0.0, -40.0)
 
 # Cell → Node3D reference of the building occupying it
 var _cell_to_building: Dictionary = {}

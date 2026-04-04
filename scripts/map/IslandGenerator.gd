@@ -37,7 +37,7 @@ func _generate_island() -> void:
 	var water_node := MeshInstance3D.new()
 	water_node.name = "Water"
 	var water_plane := PlaneMesh.new()
-	water_plane.size = Vector2(200, 200)
+	water_plane.size = Vector2(300, 300)
 	water_node.mesh = water_plane
 	var water_mat := StandardMaterial3D.new()
 	water_mat.albedo_color = water_color
@@ -99,11 +99,11 @@ func _build_island_mesh(expand: float, y_offset: float) -> ArrayMesh:
 		st.add_vertex(center)
 
 		st.set_normal(Vector3.UP)
-		st.set_uv(Vector2(border[i].x / 60.0 + 0.5, border[i].z / 60.0 + 0.5))
+		st.set_uv(Vector2(border[i].x / 100.0 + 0.5, border[i].z / 100.0 + 0.5))
 		st.add_vertex(border[i])
 
 		st.set_normal(Vector3.UP)
-		st.set_uv(Vector2(border[j].x / 60.0 + 0.5, border[j].z / 60.0 + 0.5))
+		st.set_uv(Vector2(border[j].x / 100.0 + 0.5, border[j].z / 100.0 + 0.5))
 		st.add_vertex(border[j])
 
 	# Add subdivided ring for better grass shader detail
@@ -119,23 +119,23 @@ func _build_island_mesh(expand: float, y_offset: float) -> ArrayMesh:
 
 			# Quad as 2 triangles
 			st.set_normal(Vector3.UP)
-			st.set_uv(Vector2(inner_i.x / 60.0 + 0.5, inner_i.z / 60.0 + 0.5))
+			st.set_uv(Vector2(inner_i.x / 100.0 + 0.5, inner_i.z / 100.0 + 0.5))
 			st.add_vertex(inner_i)
 			st.set_normal(Vector3.UP)
-			st.set_uv(Vector2(outer_i.x / 60.0 + 0.5, outer_i.z / 60.0 + 0.5))
+			st.set_uv(Vector2(outer_i.x / 100.0 + 0.5, outer_i.z / 100.0 + 0.5))
 			st.add_vertex(outer_i)
 			st.set_normal(Vector3.UP)
-			st.set_uv(Vector2(outer_j.x / 60.0 + 0.5, outer_j.z / 60.0 + 0.5))
+			st.set_uv(Vector2(outer_j.x / 100.0 + 0.5, outer_j.z / 100.0 + 0.5))
 			st.add_vertex(outer_j)
 
 			st.set_normal(Vector3.UP)
-			st.set_uv(Vector2(inner_i.x / 60.0 + 0.5, inner_i.z / 60.0 + 0.5))
+			st.set_uv(Vector2(inner_i.x / 100.0 + 0.5, inner_i.z / 100.0 + 0.5))
 			st.add_vertex(inner_i)
 			st.set_normal(Vector3.UP)
-			st.set_uv(Vector2(outer_j.x / 60.0 + 0.5, outer_j.z / 60.0 + 0.5))
+			st.set_uv(Vector2(outer_j.x / 100.0 + 0.5, outer_j.z / 100.0 + 0.5))
 			st.add_vertex(outer_j)
 			st.set_normal(Vector3.UP)
-			st.set_uv(Vector2(inner_j.x / 60.0 + 0.5, inner_j.z / 60.0 + 0.5))
+			st.set_uv(Vector2(inner_j.x / 100.0 + 0.5, inner_j.z / 100.0 + 0.5))
 			st.add_vertex(inner_j)
 
 	return st.commit()
