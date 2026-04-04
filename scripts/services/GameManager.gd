@@ -77,7 +77,8 @@ func _load_game() -> void:
 		for entry in data["buildings"]:
 			var building_data := _load_building_data(entry["id"])
 			if building_data:
-				var node: Node3D = _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]))
+				var rot_steps: int = entry.get("rotation", 0)
+				var node: Node3D = _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]), rot_steps)
 				if not node:
 					continue
 				# Restore custom name
@@ -110,7 +111,8 @@ func _load_game() -> void:
 	if data.has("deposits"):
 		for entry in data["deposits"]:
 			var uses: int = entry.get("uses_remaining", -1)
-			_map_gen.spawn_deposit(entry["id"], Vector2i(entry["cell_x"], entry["cell_y"]), uses)
+			var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
+			_map_gen.spawn_deposit(entry["id"], Vector2i(entry["cell_x"], entry["cell_y"]), uses, dep_size)
 
 	# Restore camera
 	if data.has("camera") and _camera and _camera.has_method("set_state"):
@@ -285,13 +287,32 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vbox.add_child(lbl)
 
+	# Close button
+	var close_btn := Button.new()
+	close_btn.text = Tr.t("BTN_CLOSE")
+	close_btn.custom_minimum_size = Vector2(100, 36)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var close_style := StyleBoxFlat.new()
+	close_style.bg_color = Color(0.7, 0.55, 0.15, 0.8)
+	close_style.set_corner_radius_all(4)
+	close_style.set_content_margin_all(6)
+	close_btn.add_theme_stylebox_override("normal", close_style)
+	var close_hover := StyleBoxFlat.new()
+	close_hover.bg_color = Color(0.8, 0.65, 0.25, 0.9)
+	close_hover.set_corner_radius_all(4)
+	close_hover.set_content_margin_all(6)
+	close_btn.add_theme_stylebox_override("hover", close_hover)
+	close_btn.add_theme_color_override("font_color", Color(0.1, 0.08, 0.05))
+	close_btn.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(close_btn)
+
 	canvas.add_child(panel)
 
-	# Auto-dismiss after 5 seconds
-	var tween := create_tween()
-	tween.tween_interval(4.0)
-	tween.tween_property(panel, "modulate:a", 0.0, 1.5)
-	tween.tween_callback(canvas.queue_free)
+	close_btn.pressed.connect(func():
+		var tw := create_tween()
+		tw.tween_property(panel, "modulate:a", 0.0, 0.3)
+		tw.tween_callback(canvas.queue_free)
+	)
 
 func _format_elapsed(seconds: float) -> String:
 	var s := int(seconds)
