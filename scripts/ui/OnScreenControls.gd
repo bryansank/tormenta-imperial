@@ -30,23 +30,6 @@ func _setup_ui() -> void:
 	margin.add_theme_constant_override("margin_top", 20)
 	add_child(margin)
 
-	# Top UI container
-	var top_vbox := VBoxContainer.new()
-	top_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(top_vbox)
-
-	var top_hbox := HBoxContainer.new()
-	top_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_vbox.add_child(top_hbox)
-
-	# QUE HACER Button (Badge)
-	var help_btn := Button.new()
-	help_btn.text = Tr.t("BTN_OBJECTIVES")
-	help_btn.custom_minimum_size = Vector2(140, 45)
-	UITheme.style_button(help_btn, UITheme.INFO, UITheme.FONT_SECTION)
-	help_btn.pressed.connect(func(): EventBus.objective_panel_toggled.emit())
-	top_hbox.add_child(help_btn)
-
 	# Bottom UI container
 	var hbox := HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_END

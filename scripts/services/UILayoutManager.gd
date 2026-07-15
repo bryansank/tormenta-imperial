@@ -10,6 +10,8 @@ var _viewport_size := Vector2(1280, 720)
 func _ready() -> void:
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	_viewport_size = Vector2(get_viewport().get_visible_rect().size)
+	# Apply the global UI theme so built-in controls stop looking "default".
+	get_tree().root.theme = UITheme.build_global_theme()
 
 func _on_viewport_resized() -> void:
 	_viewport_size = Vector2(get_viewport().get_visible_rect().size)
