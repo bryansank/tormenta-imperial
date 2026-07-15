@@ -5,15 +5,58 @@ class_name DieselpunkBuildingFactory
 
 # ── Material palette ──
 
+# CC0 metal-plate maps (Poly Haven) shared by every metal surface. We keep each
+# material's albedo_color (preserving the dieselpunk palette) and only add the
+# normal + roughness maps, so flat primitives gain plate relief and varied
+# reflections instead of looking like solid-color boxes.
+const TEX_METAL_ROUGH := "res://assets/textures/metal_plate_rough_1k.jpg"
+const TEX_METAL_NORMAL := "res://assets/textures/metal_plate_nor_gl_1k.jpg"
+
+static var _tex_rough: Texture2D
+static var _tex_normal: Texture2D
+static var _tex_ready := false
+
+## Loads a texture robustly: the imported resource if present (export-safe),
+## otherwise the raw image bytes so it works before Godot reimports.
+static func _load_tex(path: String) -> Texture2D:
+	if ResourceLoader.exists(path):
+		var res = load(path)
+		if res is Texture2D:
+			return res
+	if FileAccess.file_exists(path):
+		var img := Image.new()
+		if img.load(path) == OK:
+			return ImageTexture.create_from_image(img)
+	return null
+
+static func _ensure_textures() -> void:
+	if _tex_ready:
+		return
+	_tex_ready = true
+	_tex_rough = _load_tex(TEX_METAL_ROUGH)
+	_tex_normal = _load_tex(TEX_METAL_NORMAL)
+
 static func _metal(color: Color, metallic: float = 0.7, roughness: float = 0.45) -> StandardMaterial3D:
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
 	mat.albedo_color = color
 	mat.metallic = metallic
 	mat.roughness = roughness
+	_ensure_textures()
+	if _tex_rough:
+		mat.roughness_texture = _tex_rough
+		mat.uv1_scale = Vector3(1.6, 1.6, 1.6)
+	if _tex_normal:
+		mat.normal_enabled = true
+		mat.normal_texture = _tex_normal
+		mat.normal_scale = 0.8
 	return mat
 
 static func _emissive(color: Color, energy: float = 1.5) -> StandardMaterial3D:
-	var mat: StandardMaterial3D = _metal(color, 0.0, 0.9)
+	# Plain material (no plate maps) so glowing glass/fire/steam stays clean.
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.metallic = 0.0
+	mat.roughness = 0.9
 	mat.emission_enabled = true
 	mat.emission = color
 	mat.emission_energy_multiplier = energy
@@ -109,7 +152,7 @@ static func _add_sphere(parent: Node3D, pos: Vector3, radius: float, mat: Standa
 	return mi
 
 # Rivet strip: a row of small spheres along an edge
-static func _add_rivets(parent: Node3D, start: Vector3, end: Vector3, count: int, radius: float = 0.04) -> void:
+static func _add_rivets(parent: Node3D, start: Vector3, end: Vector3, count: int = 8, radius: float = 0.04) -> void:
 	var mat: StandardMaterial3D = _metal(COL_BRASS, 0.9, 0.3)
 	for i in range(count):
 		var t: float = float(i) / float(count - 1) if count > 1 else 0.5
