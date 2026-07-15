@@ -371,6 +371,63 @@ func get_building_limit(building_id: String) -> int:
 func get_prerequisites(building_id: String) -> Array:
 	return building_prerequisites.get(building_id, [])
 
+# ══════════════════════════════════════════════════════════════════════
+# ── Army / Units (management → combat bridge) ──
+# ══════════════════════════════════════════════════════════════════════
+# Units are trained at Barracks, cost resources + time, consume gold upkeep,
+# and contribute to Military Power. Combat (planned) will consume this army.
+
+## Unit definitions. `era` gates availability; `power` feeds the Military Power
+## score; `upkeep_gold` is deducted per upkeep tick; `train_time` in seconds.
+var unit_types := {
+	"infantry": {
+		"name": "UNIT_INFANTRY",
+		"tier": 1,
+		"era": 1,
+		"cost": {"gold": 40, "wood": 20},
+		"train_time": 20.0,
+		"upkeep_gold": 1,
+		"power": 10,
+	},
+	"artillery": {
+		"name": "UNIT_ARTILLERY",
+		"tier": 2,
+		"era": 2,
+		"cost": {"gold": 80, "steel": 30},
+		"train_time": 35.0,
+		"upkeep_gold": 2,
+		"power": 28,
+	},
+	"vehicle": {
+		"name": "UNIT_VEHICLE",
+		"tier": 3,
+		"era": 3,
+		"cost": {"gold": 140, "steel": 60, "oil": 30},
+		"train_time": 55.0,
+		"upkeep_gold": 4,
+		"power": 65,
+	},
+}
+
+## Army capacity: you may hold a few units even with no barracks; each barracks
+## raises the ceiling. Bigger base = larger, stronger army.
+var army_base_capacity := 3
+var army_capacity_per_barracks := 8
+## Seconds between upkeep deductions (scaled by dev_mode like other durations).
+var army_upkeep_interval := 30.0
+
+func get_unit_def(unit_id: String) -> Dictionary:
+	return unit_types.get(unit_id, {})
+
+func get_unit_ids() -> Array:
+	return unit_types.keys()
+
+func get_army_capacity(barracks_count: int) -> int:
+	return army_base_capacity + army_capacity_per_barracks * maxi(0, barracks_count)
+
+func get_army_upkeep_interval() -> float:
+	return get_duration(army_upkeep_interval)
+
 # ── Storage Helpers ──
 
 func get_storage_cap(warehouse_count: int) -> int:

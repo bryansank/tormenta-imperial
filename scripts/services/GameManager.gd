@@ -45,6 +45,7 @@ func _new_game() -> void:
 	PopulationManager.reset()
 	RandomEventManager.reset()
 	TechTreeManager.reset()
+	ArmyManager.reset()
 	# Place nucleo at center (no build time for core)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
@@ -146,6 +147,10 @@ func _load_game() -> void:
 	if data.has("tech_tree"):
 		TechTreeManager.load_save_data(data["tech_tree"])
 
+	# Restore army
+	if data.has("army"):
+		ArmyManager.load_save_data(data["army"])
+
 	# Apply offline progression
 	if data.has("saved_at"):
 		var saved_at: float = float(data["saved_at"])
@@ -195,6 +200,9 @@ func save_game() -> void:
 	# Tech tree
 	data["tech_tree"] = TechTreeManager.get_save_data()
 
+	# Army
+	data["army"] = ArmyManager.get_save_data()
+
 	# Camera
 	if _camera and _camera.has_method("get_state"):
 		data["camera"] = _camera.get_state()
@@ -213,6 +221,7 @@ func clear_save() -> void:
 	PopulationManager.reset()
 	RandomEventManager.reset()
 	TechTreeManager.reset()
+	ArmyManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null
@@ -233,6 +242,7 @@ func clear_save_and_reload_from(save_data: Dictionary) -> void:
 	PopulationManager.reset()
 	RandomEventManager.reset()
 	TechTreeManager.reset()
+	ArmyManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null

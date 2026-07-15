@@ -100,6 +100,8 @@ const PANEL_SLOTS := {
 	"ObjectivePanel.button":      "sidebar_buttons",
 	"ProgressPanel.button":       "sidebar_buttons",
 	"ProgressPanel.modal":        "center_modal",
+	"ArmyPanel.button":           "sidebar_buttons",
+	"ArmyPanel.modal":            "center_modal",
 	"TechTreePanel.button":       "sidebar_buttons",
 	"TechTreePanel.modal":        "center_modal",
 	"ConstructionMenu.button":    "bottom_center",
@@ -114,6 +116,7 @@ const PANEL_SLOTS := {
 const PANEL_SIZES := {
 	"MarketPanel.modal":       Vector2(420, 0),
 	"ProgressPanel.modal":     Vector2(360, 0),
+	"ArmyPanel.modal":         Vector2(500, 0),
 	"TechTreePanel.modal":     Vector2(540, 0),
 	"ObjectivePanel":          Vector2(500, 450),
 	"ConstructionMenu.modal":  Vector2(860, 520),
@@ -125,6 +128,7 @@ const SIDEBAR_BUTTON_ORDER := [
 	"MarketPanel.sidebar_toggle",
 	"ObjectivePanel.button",
 	"ProgressPanel.button",
+	"ArmyPanel.button",
 	"MarketPanel.button",
 	"TechTreePanel.button",
 ]
