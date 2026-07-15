@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://b5army9p2nel7q"]
+
+[ext_resource type="Script" path="res://scripts/ui/ArmyPanel.gd" id="1_script"]
+
+[node name="ArmyPanel" type="CanvasLayer"]
+script = ExtResource("1_script")

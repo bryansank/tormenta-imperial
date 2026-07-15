@@ -115,6 +115,16 @@ signal morale_changed(new_morale: int)
 @warning_ignore("unused_signal")
 signal consumption_failed(resource: String)
 
+# ── Army ──
+@warning_ignore("unused_signal")
+signal unit_training_started(unit_id: String, duration: float)
+@warning_ignore("unused_signal")
+signal unit_trained(unit_id: String)
+@warning_ignore("unused_signal")
+signal army_changed()
+@warning_ignore("unused_signal")
+signal army_upkeep_unpaid(gold_short: int)
+
 # ── Random Events ──
 @warning_ignore("unused_signal")
 signal random_event_started(event_id: String, event_data: Dictionary)
