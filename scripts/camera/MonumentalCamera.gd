@@ -6,6 +6,8 @@ extends Camera3D
 @export var move_speed: float = 30.0
 @export var zoom_speed: float = 2.0
 @export var rotate_speed: float = 60.0
+@export var rotate_step_degrees: float = 45.0  # degrees per rotate-button press
+@export var rotate_lerp_speed: float = 10.0    # how fast yaw eases to its target
 @export var min_distance: float = 8.0
 @export var max_distance: float = 60.0
 @export var pitch_angle: float = -45.0
@@ -15,6 +17,7 @@ extends Camera3D
 
 var _ground_target: Vector2 = Vector2.ZERO
 var _yaw: float = 0.0
+var _target_yaw: float = 0.0
 var _distance: float = 20.0
 var _target_distance: float = 20.0
 
@@ -26,11 +29,14 @@ func _ready() -> void:
 	EventBus.camera_pan_requested.connect(_on_pan)
 	EventBus.camera_zoom_requested.connect(_on_zoom)
 	EventBus.camera_drag_moved.connect(_on_drag)
+	EventBus.camera_drag_world_requested.connect(_on_drag_world)
 	EventBus.camera_rotate_requested.connect(_on_rotate)
+	EventBus.camera_rotate_step_requested.connect(_on_rotate_step)
 	_update_transform()
 
 func _process(delta: float) -> void:
 	_distance = lerp(_distance, _target_distance, 8.0 * delta)
+	_yaw = lerp(_yaw, _target_yaw, minf(1.0, rotate_lerp_speed * delta))
 	_clamp_to_boundaries()
 	_update_transform()
 
@@ -66,8 +72,17 @@ func _on_drag(delta: Vector2) -> void:
 	var right := Vector2(cos(yaw_rad), -sin(yaw_rad))
 	_ground_target += forward * delta.y + right * -delta.x
 
+## World-space grab-pan: the delta is already in world XZ units (computed by the
+## caller via ground raycasts), so the terrain point under the cursor stays glued
+## to the cursor regardless of zoom or yaw.
+func _on_drag_world(delta: Vector2) -> void:
+	_ground_target += delta
+
 func _on_rotate(amount: float) -> void:
-	_yaw += amount * rotate_speed * get_process_delta_time()
+	_target_yaw += amount * rotate_speed * get_process_delta_time()
+
+func _on_rotate_step(degrees: float) -> void:
+	_target_yaw += degrees
 
 func get_state() -> Dictionary:
 	return { "target_x": _ground_target.x, "target_y": _ground_target.y, "yaw": _yaw, "distance": _distance }
@@ -75,6 +90,7 @@ func get_state() -> Dictionary:
 func set_state(data: Dictionary) -> void:
 	_ground_target = Vector2(data.get("target_x", 0.0), data.get("target_y", 0.0))
 	_yaw = data.get("yaw", 0.0)
+	_target_yaw = _yaw
 	_distance = data.get("distance", 20.0)
 	_target_distance = _distance
 	_update_transform()

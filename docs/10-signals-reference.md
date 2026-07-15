@@ -9,7 +9,9 @@ All inter-system communication flows through `EventBus` (`scripts/services/Event
 | `camera_pan_requested` | `direction: Vector2` | InputService | MonumentalCamera |
 | `camera_zoom_requested` | `amount: float` | InputService | MonumentalCamera |
 | `camera_drag_moved` | `delta: Vector2` | InputService | MonumentalCamera |
-| `camera_rotate_requested` | `amount: float` | InputService, OnScreenControls | MonumentalCamera |
+| `camera_drag_world_requested` | `delta: Vector2` (world XZ) | BuildingPlacer (left-drag grab-pan) | MonumentalCamera |
+| `camera_rotate_requested` | `amount: float` | InputService | MonumentalCamera |
+| `camera_rotate_step_requested` | `degrees: float` | OnScreenControls | MonumentalCamera |
 
 ## Resources
 
