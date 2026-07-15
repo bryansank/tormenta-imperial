@@ -40,6 +40,7 @@ TechTreeManager="*res://scripts/services/TechTreeManager.gd"
 CloudSaveManager="*res://scripts/services/CloudSaveManager.gd"
 UIManager="*res://scripts/services/UIManager.gd"
 UILayoutManager="*res://scripts/services/UILayoutManager.gd"
+AudioManager="*res://scripts/services/AudioManager.gd"
 
 [display]
 

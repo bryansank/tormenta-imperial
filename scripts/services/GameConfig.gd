@@ -178,6 +178,21 @@ var resource_colors := {
 	"wood": Color(0.55, 0.35, 0.15),
 }
 
+# ── Audio ──
+# Volumes are linear [0.0, 1.0]; AudioManager converts to dB per bus.
+# Master scales all others. Set any to 0.0 to mute that channel.
+
+var audio_master_volume := 0.9
+var audio_music_volume := 0.6
+var audio_sfx_volume := 0.8
+var audio_ambient_volume := 0.5
+
+## Seconds to cross-fade between music tracks (e.g. on era change).
+var audio_music_fade := 1.5
+
+## Number of pooled voices for overlapping one-shot SFX.
+var audio_sfx_voices := 8
+
 # ── Economy ──
 
 var demolish_refund_ratio := 0.5
