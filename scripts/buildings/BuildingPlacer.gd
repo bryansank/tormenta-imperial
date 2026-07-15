@@ -344,9 +344,10 @@ func _try_place(cell: Vector2i) -> void:
 	building.set_meta("level", 1)
 	building.set_meta("rotation_steps", _rotation_steps)
 	building.rotation.y = _get_rotation_angle()
+	# Add to the tree BEFORE setting global_position (global transform needs a parent).
+	_buildings_container.add_child(building)
 	var world_pos := GridManager.building_center(cell, rotated_size)
 	building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
-	_buildings_container.add_child(building)
 	# Use a rotated BuildingData proxy for GridManager so it occupies the right cells
 	var place_data := _current_data
 	if _rotation_steps % 2 == 1:
@@ -496,9 +497,10 @@ func place_building_at(data: BuildingData, cell: Vector2i, rot_steps: int = 0) -
 	var building := _create_building_mesh(data)
 	building.set_meta("rotation_steps", rot_steps)
 	building.rotation.y = rot_steps * PI * 0.5
+	# Add to the tree BEFORE setting global_position (global transform needs a parent).
+	_buildings_container.add_child(building)
 	var world_pos := GridManager.building_center(cell, place_data.grid_size)
 	building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
-	_buildings_container.add_child(building)
 	GridManager.place_building(cell, place_data, building)
 	# Update road connections after placement (deferred so all buildings load first)
 	if data.id == "road":

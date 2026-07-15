@@ -72,7 +72,8 @@ func can_afford(cost: Dictionary) -> bool:
 
 func add(type: Type, amount: int) -> int:
 	var cap := get_storage_cap()
-	_resources[type] = mini(_resources.get(type, 0) + amount, cap)
+	# Clamp to [0, cap]: never below zero, even when called with a negative amount.
+	_resources[type] = clampi(_resources.get(type, 0) + amount, 0, cap)
 	EventBus.resource_changed.emit(_names[type], _resources[type], amount)
 	return _resources[type]
 
@@ -80,7 +81,7 @@ func spend(type: Type, amount: int) -> bool:
 	if not has_enough(type, amount):
 		EventBus.resources_insufficient.emit(_names[type], amount, _resources.get(type, 0))
 		return false
-	_resources[type] -= amount
+	_resources[type] = maxi(0, _resources[type] - amount)
 	EventBus.resource_changed.emit(_names[type], _resources[type], -amount)
 	return true
 
@@ -91,7 +92,7 @@ func spend_cost(cost: Dictionary) -> bool:
 				EventBus.resources_insufficient.emit(_names[type], cost[type], _resources.get(type, 0))
 		return false
 	for type in cost:
-		_resources[type] -= cost[type]
+		_resources[type] = maxi(0, _resources[type] - cost[type])
 		EventBus.resource_changed.emit(_names[type], _resources[type], -cost[type])
 	return true
 
@@ -142,5 +143,6 @@ func set_amounts(data: Dictionary) -> void:
 	for res_name in data:
 		if name_to_type.has(res_name):
 			var type: Type = name_to_type[res_name]
-			_resources[type] = data[res_name]
-			EventBus.resource_changed.emit(res_name, data[res_name], 0)
+			# Repair any negative value that may have been saved before this guard existed.
+			_resources[type] = maxi(0, int(data[res_name]))
+			EventBus.resource_changed.emit(res_name, _resources[type], 0)
