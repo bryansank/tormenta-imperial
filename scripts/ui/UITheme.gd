@@ -60,6 +60,49 @@ const FONT_BODY := 13
 const FONT_SMALL := 11
 const FONT_BUTTON := 13
 
+# ── Font files (free, OFL-licensed — see assets/fonts/OFL-*.txt) ──
+# Black Ops One: military stencil display for titles.
+# Rajdhani: condensed industrial sans for everything else.
+const FONT_TITLE_PATH := "res://assets/fonts/BlackOpsOne-Regular.ttf"
+const FONT_BODY_PATH := "res://assets/fonts/Rajdhani-Medium.ttf"
+const FONT_HEAVY_PATH := "res://assets/fonts/Rajdhani-SemiBold.ttf"
+
+static var _font_cache := {}
+
+## Loads a font robustly: the imported resource when available (export-safe),
+## otherwise the raw .ttf bytes so it works even before Godot reimports.
+static func _load_font(path: String) -> FontFile:
+	if _font_cache.has(path):
+		return _font_cache[path]
+	var f: FontFile = null
+	if ResourceLoader.exists(path):
+		var res = load(path)
+		if res is FontFile:
+			f = res
+	if f == null and FileAccess.file_exists(path):
+		var bytes := FileAccess.get_file_as_bytes(path)
+		if bytes.size() > 0:
+			f = FontFile.new()
+			f.data = bytes
+	_font_cache[path] = f
+	return f
+
+static func body_font() -> FontFile:
+	return _load_font(FONT_BODY_PATH)
+
+static func heavy_font() -> FontFile:
+	return _load_font(FONT_HEAVY_PATH)
+
+## Display font for titles, with Rajdhani as fallback so accented/ñ glyphs
+## missing from the stencil face still render.
+static func title_font() -> FontFile:
+	var f := _load_font(FONT_TITLE_PATH)
+	if f and f.fallbacks.is_empty():
+		var b := body_font()
+		if b:
+			f.fallbacks = [b]
+	return f
+
 # ══════════════════════════════════════
 # SIZING
 # ══════════════════════════════════════
@@ -71,10 +114,51 @@ const MIN_BTN_H := 40
 const SEPARATION := 8
 
 # ══════════════════════════════════════
+# TEXTURED SURFACES (9-patch metal — Kenney UI, CC0)
+# ══════════════════════════════════════
+# These 9-slice sprites turn flat panels/buttons into brushed-metal plates with
+# rivets. Grey source art is tinted warm via modulate_color to read as dieselpunk
+# brass/gunmetal. If a texture is missing, callers fall back to a flat StyleBox so
+# the UI never breaks.
+
+const TEX_PANEL := "res://assets/textures/ui/panel.png"        # 64x64 beveled plate
+const TEX_PANEL_INSET := "res://assets/textures/ui/panel_inset.png"  # 64x64 thin frame
+const TEX_BUTTON := "res://assets/textures/ui/button.png"      # 192x64 beveled button
+
+static var _tex_cache := {}
+
+static func _tex(path: String) -> Texture2D:
+	if _tex_cache.has(path):
+		return _tex_cache[path]
+	var t: Texture2D = null
+	if ResourceLoader.exists(path):
+		var res: Resource = load(path)
+		if res is Texture2D:
+			t = res
+	_tex_cache[path] = t
+	return t
+
+## Builds a 9-slice StyleBoxTexture, tinted by `modulate`. Returns null if the
+## texture isn't imported yet, so callers can fall back to a flat box.
+static func _tex_box(path: String, slice: int, content: int, modulate: Color) -> StyleBoxTexture:
+	var tex := _tex(path)
+	if tex == null:
+		return null
+	var s := StyleBoxTexture.new()
+	s.texture = tex
+	s.set_texture_margin_all(slice)
+	s.set_content_margin_all(content)
+	s.modulate_color = modulate
+	return s
+
+# ══════════════════════════════════════
 # PANEL STYLE
 # ══════════════════════════════════════
 
-static func make_panel_style(border: bool = true) -> StyleBoxFlat:
+static func make_panel_style(border: bool = true) -> StyleBox:
+	var tex := _tex_box(TEX_PANEL, 24, MARGIN, Color(0.36, 0.32, 0.26))
+	if tex != null:
+		return tex
 	var s := StyleBoxFlat.new()
 	s.bg_color = PANEL_BG
 	s.set_corner_radius_all(CORNER)
@@ -98,7 +182,10 @@ static func make_hud_style() -> StyleBoxFlat:
 	return s
 
 ## Military tactical panel con decoraciones de esquinas
-static func make_war_table_style() -> StyleBoxFlat:
+static func make_war_table_style() -> StyleBox:
+	var tex := _tex_box(TEX_PANEL, 24, MARGIN, Color(0.40, 0.34, 0.25))
+	if tex != null:
+		return tex
 	var s := StyleBoxFlat.new()
 	s.bg_color = PANEL_BG
 	s.set_corner_radius_all(CORNER)
@@ -116,39 +203,11 @@ static func make_war_table_style() -> StyleBoxFlat:
 static func style_button(btn: Button, bg: Color = BTN, font_size: int = FONT_BUTTON) -> void:
 	btn.custom_minimum_size.y = maxi(int(btn.custom_minimum_size.y), MIN_BTN_H)
 
-	var n := StyleBoxFlat.new()
-	n.bg_color = bg
-	n.set_corner_radius_all(CORNER)
-	n.set_content_margin_all(10)
-	n.border_color = ACCENT_DIM
-	n.set_border_width_all(3)
-	btn.add_theme_stylebox_override("normal", n)
-
-	var h := StyleBoxFlat.new()
-	h.bg_color = bg.lightened(0.2)
-	h.set_corner_radius_all(CORNER)
-	h.set_content_margin_all(10)
-	h.border_color = ACCENT
-	h.set_border_width_all(3)
-	h.shadow_color = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.4)
-	h.shadow_size = 3
-	btn.add_theme_stylebox_override("hover", h)
-
-	var p := StyleBoxFlat.new()
-	p.bg_color = bg.lightened(0.4)
-	p.set_corner_radius_all(CORNER)
-	p.set_content_margin_all(10)
-	p.border_color = ACCENT
-	p.set_border_width_all(4)
-	btn.add_theme_stylebox_override("pressed", p)
-
-	var d := StyleBoxFlat.new()
-	d.bg_color = BTN_DISABLED
-	d.set_corner_radius_all(CORNER)
-	d.set_content_margin_all(10)
-	d.border_color = Color(0.2, 0.2, 0.15)
-	d.set_border_width_all(2)
-	btn.add_theme_stylebox_override("disabled", d)
+	# Textured brass metal, tinted toward `bg`'s hue; falls back to flat if art missing.
+	btn.add_theme_stylebox_override("normal", _button_style(bg.lightened(0.35), bg, ACCENT_DIM, 3))
+	btn.add_theme_stylebox_override("hover", _button_style(bg.lightened(0.55), bg.lightened(0.2), ACCENT, 3))
+	btn.add_theme_stylebox_override("pressed", _button_style(bg.lightened(0.72), bg.lightened(0.4), ACCENT, 4))
+	btn.add_theme_stylebox_override("disabled", _button_style(Color(0.24, 0.24, 0.21), BTN_DISABLED, Color(0.2, 0.2, 0.15), 2))
 
 	btn.add_theme_font_size_override("font_size", font_size)
 	btn.add_theme_color_override("font_color", TEXT)
@@ -211,12 +270,23 @@ static func make_label(text: String, size: String = "body", color: Color = TEXT)
 	var label := Label.new()
 	label.text = text
 	var fs: int
+	var font: FontFile
 	match size:
-		"title": fs = FONT_TITLE
-		"section": fs = FONT_SECTION
-		"small": fs = FONT_SMALL
-		_: fs = FONT_BODY
+		"title":
+			fs = FONT_TITLE
+			font = title_font()
+		"section":
+			fs = FONT_SECTION
+			font = heavy_font()
+		"small":
+			fs = FONT_SMALL
+			font = body_font()
+		_:
+			fs = FONT_BODY
+			font = body_font()
 	label.add_theme_font_size_override("font_size", fs)
+	if font:
+		label.add_theme_font_override("font", font)
 	label.add_theme_color_override("font_color", color)
 	return label
 
@@ -224,6 +294,9 @@ static func section_header(text: String, color: Color = ACCENT) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", FONT_SECTION)
+	var font := heavy_font()
+	if font:
+		label.add_theme_font_override("font", font)
 	label.add_theme_color_override("font_color", color)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return label
@@ -289,7 +362,10 @@ static func make_backdrop() -> ColorRect:
 	return rect
 
 ## Tactical command panel con bordes gruesos militares y glow
-static func make_command_panel_style() -> StyleBoxFlat:
+static func make_command_panel_style() -> StyleBox:
+	var tex := _tex_box(TEX_PANEL, 24, MARGIN, Color(0.32, 0.28, 0.22))
+	if tex != null:
+		return tex
 	var s := StyleBoxFlat.new()
 	s.bg_color = PANEL_BG
 	s.set_corner_radius_all(0)  # Ángulos rectos = militar
@@ -301,7 +377,10 @@ static func make_command_panel_style() -> StyleBoxFlat:
 	return s
 
 ## Info display con frame de datos
-static func make_data_display_style() -> StyleBoxFlat:
+static func make_data_display_style() -> StyleBox:
+	var tex := _tex_box(TEX_PANEL_INSET, 16, 8, Color(0.28, 0.26, 0.22))
+	if tex != null:
+		return tex
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0.08, 0.09, 0.07)
 	s.set_corner_radius_all(1)
@@ -309,3 +388,123 @@ static func make_data_display_style() -> StyleBoxFlat:
 	s.border_color = ACCENT_DIM
 	s.set_border_width_all(2)
 	return s
+
+# ══════════════════════════════════════
+# GLOBAL THEME
+# ══════════════════════════════════════
+
+## Small StyleBoxFlat factory used to build the global theme.
+static func _flat(bg: Color, border: Color, border_w: int, corner: int, margin: int) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.set_corner_radius_all(corner)
+	if margin > 0:
+		s.set_content_margin_all(margin)
+	if border_w > 0:
+		s.border_color = border
+		s.set_border_width_all(border_w)
+	return s
+
+## Textured brass button for one state, with a flat fallback if art is missing.
+static func _button_style(modulate: Color, fb_bg: Color, fb_border: Color, fb_bw: int) -> StyleBox:
+	var tex := _tex_box(TEX_BUTTON, 22, 10, modulate)
+	if tex != null:
+		return tex
+	return _flat(fb_bg, fb_border, fb_bw, CORNER, 10)
+
+static func _theme_button(t: Theme, type: String) -> void:
+	var n := _button_style(Color(0.42, 0.36, 0.26), BTN, ACCENT_DIM, 3)
+	var h := _button_style(Color(0.58, 0.49, 0.31), BTN_HOVER, ACCENT, 3)
+	var p := _button_style(Color(0.74, 0.61, 0.36), BTN_PRESSED, ACCENT, 4)
+	var d := _button_style(Color(0.24, 0.24, 0.21), BTN_DISABLED, Color(0.2, 0.2, 0.15), 2)
+	var focus := _flat(Color(0, 0, 0, 0), ACCENT, 2, CORNER, 10)
+	t.set_stylebox("normal", type, n)
+	t.set_stylebox("hover", type, h)
+	t.set_stylebox("pressed", type, p)
+	t.set_stylebox("disabled", type, d)
+	t.set_stylebox("focus", type, focus)
+	t.set_color("font_color", type, TEXT)
+	t.set_color("font_hover_color", type, TEXT_BRIGHT)
+	t.set_color("font_pressed_color", type, TEXT_BRIGHT)
+	t.set_color("font_disabled_color", type, TEXT_DIM)
+	t.set_font_size("font_size", type, FONT_BUTTON)
+	var hf := heavy_font()
+	if hf:
+		t.set_font("font", type, hf)
+
+## Builds a Theme that restyles Godot's built-in controls (buttons, scrollbars,
+## sliders, line edits, tooltips, popups, focus rings…) so nothing falls back to
+## the default engine look. Applied once to the scene-tree root by UILayoutManager.
+## Controls that set their own theme overrides are unaffected (overrides win).
+static func build_global_theme() -> Theme:
+	var t := Theme.new()
+	t.default_font_size = FONT_BODY
+	# Global font: everything that doesn't override falls back to Rajdhani.
+	var bf := body_font()
+	if bf:
+		t.default_font = bf
+	t.set_color("font_color", "Label", TEXT)
+
+	# ── Buttons ──
+	_theme_button(t, "Button")
+	_theme_button(t, "OptionButton")
+	_theme_button(t, "MenuButton")
+	for cb in ["CheckBox", "CheckButton"]:
+		t.set_color("font_color", cb, TEXT)
+		t.set_color("font_hover_color", cb, TEXT_BRIGHT)
+		t.set_color("font_pressed_color", cb, TEXT_BRIGHT)
+		t.set_font_size("font_size", cb, FONT_BODY)
+
+	# ── LineEdit ──
+	t.set_stylebox("normal", "LineEdit", _flat(BG_DARK, ACCENT_DIM, 1, CORNER, 6))
+	t.set_stylebox("focus", "LineEdit", _flat(BG_DARK.lightened(0.03), ACCENT, 2, CORNER, 6))
+	t.set_color("font_color", "LineEdit", TEXT)
+	t.set_color("font_placeholder_color", "LineEdit", TEXT_DIM)
+	t.set_color("caret_color", "LineEdit", ACCENT)
+	t.set_color("selection_color", "LineEdit", Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.35))
+	t.set_font_size("font_size", "LineEdit", FONT_BODY)
+
+	# ── Panels ── (textured metal, falls back to flat if art missing)
+	t.set_stylebox("panel", "PanelContainer", make_panel_style())
+	t.set_stylebox("panel", "Panel", make_panel_style())
+
+	# ── ScrollBars ──
+	var clear := Color(0, 0, 0, 0)
+	for sb_type in ["VScrollBar", "HScrollBar"]:
+		t.set_stylebox("scroll", sb_type, _flat(Color(0.04, 0.05, 0.03, 0.6), clear, 0, CORNER, 2))
+		t.set_stylebox("scroll_focus", sb_type, _flat(Color(0.04, 0.05, 0.03, 0.6), clear, 0, CORNER, 2))
+		t.set_stylebox("grabber", sb_type, _flat(ACCENT_DIM, clear, 0, CORNER, 2))
+		t.set_stylebox("grabber_highlight", sb_type, _flat(ACCENT, clear, 0, CORNER, 2))
+		t.set_stylebox("grabber_pressed", sb_type, _flat(ACCENT.lightened(0.2), clear, 0, CORNER, 2))
+
+	# ── Sliders ──
+	for sl in ["HSlider", "VSlider"]:
+		t.set_stylebox("slider", sl, _flat(BG_DARK, ACCENT_DIM, 1, CORNER, 0))
+		t.set_stylebox("grabber_area", sl, _flat(ACCENT_DIM, clear, 0, CORNER, 0))
+		t.set_stylebox("grabber_area_highlight", sl, _flat(ACCENT, clear, 0, CORNER, 0))
+
+	# ── ProgressBar ──
+	t.set_stylebox("background", "ProgressBar", _flat(Color(0.06, 0.06, 0.05, 1), ACCENT_DIM, 2, 2, 0))
+	t.set_stylebox("fill", "ProgressBar", _flat(ACCENT, clear, 0, 2, 0))
+	t.set_color("font_color", "ProgressBar", TEXT)
+	t.set_font_size("font_size", "ProgressBar", FONT_SMALL)
+
+	# ── PopupMenu (dropdowns / context menus) ──
+	t.set_stylebox("panel", "PopupMenu", make_war_table_style())
+	t.set_stylebox("hover", "PopupMenu", _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.25), clear, 0, CORNER, 4))
+	t.set_color("font_color", "PopupMenu", TEXT)
+	t.set_color("font_hover_color", "PopupMenu", TEXT_BRIGHT)
+	t.set_color("font_separator_color", "PopupMenu", ACCENT)
+	t.set_font_size("font_size", "PopupMenu", FONT_BODY)
+
+	# ── Tooltip ──
+	t.set_stylebox("panel", "TooltipPanel", _flat(Color(0.06, 0.07, 0.05, 0.97), ACCENT, 1, CORNER, 8))
+	t.set_color("font_color", "TooltipLabel", TEXT_BRIGHT)
+	t.set_font_size("font_size", "TooltipLabel", FONT_SMALL)
+
+	# ── Split containers ──
+	for split in ["HSplitContainer", "VSplitContainer"]:
+		t.set_constant("separation", split, 8)
+		t.set_constant("minimum_grab_thickness", split, 8)
+
+	return t

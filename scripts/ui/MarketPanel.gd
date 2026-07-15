@@ -223,8 +223,8 @@ func _toggle_sidebar() -> void:
 	_sidebar_toggle.text = "\u2715" if _sidebar_visible else "\u2630"  # ✕ / ☰
 	EventBus.sidebar_toggled.emit(_sidebar_visible)
 
-func _on_sidebar_toggled(visible: bool) -> void:
-	_sidebar_visible = visible
+func _on_sidebar_toggled(is_visible: bool) -> void:
+	_sidebar_visible = is_visible
 	# Show market button only if sidebar visible AND phase allows it
 	if ProgressionManager.current_phase >= GameConfig.Phase.ECONOMY:
 		_market_btn.visible = visible
