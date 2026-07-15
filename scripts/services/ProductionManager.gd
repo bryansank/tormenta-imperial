@@ -275,7 +275,9 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 			var cycles := int(elapsed / interval)
 			_accumulate_earnings(earnings, data, cycles, morale_mult * level_mult)
 
-	# Deduct population consumption (each pop consumes 1 gold + 1 wood per consumption tick)
+	# Population consumption while offline is capped to what was PRODUCED offline.
+	# Being away can eat into your offline gains, but never into the stockpile you
+	# left with — the player must never return poorer than when they closed the game.
 	var pop := PopulationManager.get_population()
 	if pop > 0:
 		var cons_interval := GameConfig.get_duration(GameConfig.consumption_interval)
@@ -283,20 +285,25 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 			var cons_ticks := int(elapsed / cons_interval)
 			var reduction := GameConfig.tech_consumption_reduction
 			var cons_mult := maxf(0.1, 1.0 - reduction)
-			var gold_consumed := int(pop * cons_ticks * cons_mult)
-			var wood_consumed := int(pop * cons_ticks * cons_mult)
-			earnings["gold"] = earnings.get("gold", 0) - gold_consumed
-			earnings["wood"] = earnings.get("wood", 0) - wood_consumed
+			var demand := int(pop * cons_ticks * cons_mult)
+			earnings["gold"] = maxi(0, earnings.get("gold", 0) - demand)
+			earnings["wood"] = maxi(0, earnings.get("wood", 0) - demand)
 
 	for res_name in earnings:
 		var type = _res_to_type(res_name)
 		if type == -1:
 			continue
-		if earnings[res_name] > 0:
-			ResourceManager.add(type, earnings[res_name])
-		elif earnings[res_name] < 0:
-			var current := ResourceManager.get_amount(type)
-			ResourceManager.spend(type, mini(absi(earnings[res_name]), current))
+		var net: int = earnings[res_name]
+		var before := ResourceManager.get_amount(type)
+		if net > 0:
+			ResourceManager.add(type, net)
+		elif net < 0:
+			# Never spend more than is available — offline losses can't go below 0.
+			ResourceManager.spend(type, mini(absi(net), before))
+		# Report the ACTUAL applied change (capped by storage cap / available stock),
+		# not the raw theoretical net, so the offline summary never shows a resource
+		# dropping below what the player actually had.
+		earnings[res_name] = ResourceManager.get_amount(type) - before
 
 	return earnings
 

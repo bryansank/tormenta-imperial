@@ -2,8 +2,10 @@ extends CanvasLayer
 ## On-screen controls: D-pad for panning, rotate buttons, zoom buttons.
 ## Emits signals through EventBus — same as keyboard/touch input.
 
+## Degrees the camera snaps per rotate-button press.
+const ROTATE_STEP_DEGREES := 45.0
+
 var _pan_direction: Vector2 = Vector2.ZERO
-var _rotate_direction: float = 0.0
 var _rotate_building_btn: Button = null
 
 func _ready() -> void:
@@ -17,8 +19,6 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _pan_direction != Vector2.ZERO:
 		EventBus.camera_pan_requested.emit(_pan_direction.normalized())
-	if _rotate_direction != 0.0:
-		EventBus.camera_rotate_requested.emit(_rotate_direction)
 
 func _setup_ui() -> void:
 	var margin := MarginContainer.new()
@@ -29,23 +29,6 @@ func _setup_ui() -> void:
 	margin.add_theme_constant_override("margin_right", 20)
 	margin.add_theme_constant_override("margin_top", 20)
 	add_child(margin)
-
-	# Top UI container
-	var top_vbox := VBoxContainer.new()
-	top_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(top_vbox)
-
-	var top_hbox := HBoxContainer.new()
-	top_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_vbox.add_child(top_hbox)
-
-	# QUE HACER Button (Badge)
-	var help_btn := Button.new()
-	help_btn.text = Tr.t("BTN_OBJECTIVES")
-	help_btn.custom_minimum_size = Vector2(140, 45)
-	UITheme.style_button(help_btn, UITheme.INFO, UITheme.FONT_SECTION)
-	help_btn.pressed.connect(func(): EventBus.objective_panel_toggled.emit())
-	top_hbox.add_child(help_btn)
 
 	# Bottom UI container
 	var hbox := HBoxContainer.new()
@@ -116,15 +99,13 @@ func _create_rotate_buttons() -> HBoxContainer:
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
 
+	# Each press snaps the camera a fixed step (smoothly eased by the camera),
+	# instead of nudging a tiny amount while held.
 	var rot_left := _styled_button("\u21BA")
-	rot_left.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
-	rot_left.button_down.connect(func(): _rotate_direction -= 1.0)
-	rot_left.button_up.connect(func(): _rotate_direction += 1.0)
+	rot_left.pressed.connect(func(): EventBus.camera_rotate_step_requested.emit(-ROTATE_STEP_DEGREES))
 
 	var rot_right := _styled_button("\u21BB")
-	rot_right.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
-	rot_right.button_down.connect(func(): _rotate_direction += 1.0)
-	rot_right.button_up.connect(func(): _rotate_direction -= 1.0)
+	rot_right.pressed.connect(func(): EventBus.camera_rotate_step_requested.emit(ROTATE_STEP_DEGREES))
 
 	hbox.add_child(rot_left)
 	hbox.add_child(rot_right)

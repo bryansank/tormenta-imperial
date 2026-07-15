@@ -243,8 +243,8 @@ func _setup_ui() -> void:
 	_preview_camera = Camera3D.new()
 	_preview_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	_preview_camera.size = 6.0
-	_preview_camera.position = Vector3(4.0, 4.5, 4.0)
-	_preview_camera.look_at(Vector3(0, 0.5, 0))
+	# look_at_from_position works before the node is in the tree (plain look_at errors).
+	_preview_camera.look_at_from_position(Vector3(4.0, 4.5, 4.0), Vector3(0, 0.5, 0))
 	_preview_viewport.add_child(_preview_camera)
 
 	var light := DirectionalLight3D.new()
@@ -551,8 +551,7 @@ func _generate_thumbnails() -> void:
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 5.0
-	camera.position = Vector3(3.5, 4.0, 3.5)
-	camera.look_at(Vector3(0, 0.3, 0))
+	camera.look_at_from_position(Vector3(3.5, 4.0, 3.5), Vector3(0, 0.3, 0))
 	viewport.add_child(camera)
 
 	var light := DirectionalLight3D.new()

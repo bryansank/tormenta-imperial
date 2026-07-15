@@ -10,8 +10,14 @@ signal camera_pan_requested(direction: Vector2)
 signal camera_zoom_requested(amount: float)
 @warning_ignore("unused_signal")
 signal camera_drag_moved(delta: Vector2)
+## World-space grab-pan: move the camera's ground target by an XZ delta (in world units).
+@warning_ignore("unused_signal")
+signal camera_drag_world_requested(delta: Vector2)
 @warning_ignore("unused_signal")
 signal camera_rotate_requested(amount: float)
+## Discrete camera rotation: snap the yaw by a fixed number of degrees per press.
+@warning_ignore("unused_signal")
+signal camera_rotate_step_requested(degrees: float)
 
 # ── Resources ──
 @warning_ignore("unused_signal")
@@ -114,6 +120,16 @@ signal workers_changed(used: int, total: int)
 signal morale_changed(new_morale: int)
 @warning_ignore("unused_signal")
 signal consumption_failed(resource: String)
+
+# ── Army ──
+@warning_ignore("unused_signal")
+signal unit_training_started(unit_id: String, duration: float)
+@warning_ignore("unused_signal")
+signal unit_trained(unit_id: String)
+@warning_ignore("unused_signal")
+signal army_changed()
+@warning_ignore("unused_signal")
+signal army_upkeep_unpaid(gold_short: int)
 
 # ── Random Events ──
 @warning_ignore("unused_signal")

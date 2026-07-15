@@ -37,8 +37,8 @@ const SLOTS := {
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
 	"right_panel": {
-		"anchor": Rect2(1, 0, 1, 0),
-		"margin": {"left": 0, "top": 190, "right": 8, "bottom": 0},
+		"anchor": Rect2(1, 0, 1, 1),
+		"margin": {"left": 0, "top": 190, "right": 8, "bottom": 20},
 		"max_size": Vector2(312, 0),
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,
@@ -97,8 +97,11 @@ const PANEL_SLOTS := {
 	"MarketPanel.sidebar_toggle": "sidebar_buttons",
 	"MarketPanel.button":         "sidebar_buttons",
 	"MarketPanel.modal":          "center_modal",
+	"ObjectivePanel.button":      "sidebar_buttons",
 	"ProgressPanel.button":       "sidebar_buttons",
 	"ProgressPanel.modal":        "center_modal",
+	"ArmyPanel.button":           "sidebar_buttons",
+	"ArmyPanel.modal":            "center_modal",
 	"TechTreePanel.button":       "sidebar_buttons",
 	"TechTreePanel.modal":        "center_modal",
 	"ConstructionMenu.button":    "bottom_center",
@@ -113,6 +116,7 @@ const PANEL_SLOTS := {
 const PANEL_SIZES := {
 	"MarketPanel.modal":       Vector2(420, 0),
 	"ProgressPanel.modal":     Vector2(360, 0),
+	"ArmyPanel.modal":         Vector2(500, 0),
 	"TechTreePanel.modal":     Vector2(540, 0),
 	"ObjectivePanel":          Vector2(500, 450),
 	"ConstructionMenu.modal":  Vector2(860, 520),
@@ -122,8 +126,10 @@ const PANEL_SIZES := {
 ## Sidebar button stacking order (top to bottom)
 const SIDEBAR_BUTTON_ORDER := [
 	"MarketPanel.sidebar_toggle",
-	"MarketPanel.button",
+	"ObjectivePanel.button",
 	"ProgressPanel.button",
+	"ArmyPanel.button",
+	"MarketPanel.button",
 	"TechTreePanel.button",
 ]
 

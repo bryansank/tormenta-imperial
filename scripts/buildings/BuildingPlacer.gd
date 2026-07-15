@@ -5,6 +5,14 @@ extends Node3D
 
 enum State { IDLE, PLACING, MOVING }
 
+## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
+## Grabs the terrain: the point under the cursor stays glued to the cursor.
+const DRAG_PAN_THRESHOLD := 6.0  # px of movement before a click becomes a pan
+var _left_pressed := false
+var _left_press_pos := Vector2.ZERO
+var _drag_last_pos := Vector2.ZERO
+var _left_dragged := false
+
 var _state: State = State.IDLE
 var _current_data: BuildingData = null
 var _preview_node: Node3D = null
@@ -49,15 +57,21 @@ func _ready() -> void:
 	GameManager.register_placer(self)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed:
-		# Ignore clicks on UI
-		if get_viewport().gui_get_hovered_control() != null:
-			return
+	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			_handle_left_click(event.position)
-		elif event.button_index == MOUSE_BUTTON_RIGHT and _state != State.IDLE:
+			_handle_left_button(event)
+			return
+		if event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and _state != State.IDLE:
+			# Ignore clicks on UI
+			if get_viewport().gui_get_hovered_control() != null:
+				return
 			_cancel()
 			get_viewport().set_input_as_handled()
+		return
+
+	if event is InputEventMouseMotion and _left_pressed:
+		_handle_left_drag(event)
+		return
 
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE and _state != State.IDLE:
@@ -66,6 +80,46 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_R and _state != State.IDLE:
 			_rotate_building()
 			get_viewport().set_input_as_handled()
+
+## Left mouse button: in IDLE it either drags the camera (if the pointer moves
+## past a threshold) or selects a building on release. While placing/moving a
+## building it places/confirms immediately on press.
+func _handle_left_button(event: InputEventMouseButton) -> void:
+	if event.pressed:
+		# Ignore presses that start on UI
+		if get_viewport().gui_get_hovered_control() != null:
+			return
+		if _state == State.IDLE:
+			_left_pressed = true
+			_left_press_pos = event.position
+			_drag_last_pos = event.position
+			_left_dragged = false
+		else:
+			_handle_left_click(event.position)
+	else:
+		# Release: a click without drag selects; a drag was a camera pan
+		if _left_pressed and _state == State.IDLE and not _left_dragged:
+			_try_select_building(event.position)
+		_left_pressed = false
+		_left_dragged = false
+
+func _handle_left_drag(event: InputEventMouseMotion) -> void:
+	if _state != State.IDLE:
+		_left_pressed = false
+		return
+	if not _left_dragged and event.position.distance_to(_left_press_pos) < DRAG_PAN_THRESHOLD:
+		return
+	_left_dragged = true
+	# Grab-pan: move the camera by the world-space gap between where the cursor
+	# was and where it is now, so the terrain follows the cursor 1:1.
+	var prev_hit = _raycast_to_ground(_drag_last_pos)
+	var cur_hit = _raycast_to_ground(event.position)
+	_drag_last_pos = event.position
+	if prev_hit == null or cur_hit == null:
+		return
+	var world_delta := Vector2(prev_hit.x - cur_hit.x, prev_hit.z - cur_hit.z)
+	EventBus.camera_drag_world_requested.emit(world_delta)
+	get_viewport().set_input_as_handled()
 
 func _process(_delta: float) -> void:
 	if _state == State.IDLE:
@@ -290,9 +344,10 @@ func _try_place(cell: Vector2i) -> void:
 	building.set_meta("level", 1)
 	building.set_meta("rotation_steps", _rotation_steps)
 	building.rotation.y = _get_rotation_angle()
+	# Add to the tree BEFORE setting global_position (global transform needs a parent).
+	_buildings_container.add_child(building)
 	var world_pos := GridManager.building_center(cell, rotated_size)
 	building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
-	_buildings_container.add_child(building)
 	# Use a rotated BuildingData proxy for GridManager so it occupies the right cells
 	var place_data := _current_data
 	if _rotation_steps % 2 == 1:
@@ -442,9 +497,10 @@ func place_building_at(data: BuildingData, cell: Vector2i, rot_steps: int = 0) -
 	var building := _create_building_mesh(data)
 	building.set_meta("rotation_steps", rot_steps)
 	building.rotation.y = rot_steps * PI * 0.5
+	# Add to the tree BEFORE setting global_position (global transform needs a parent).
+	_buildings_container.add_child(building)
 	var world_pos := GridManager.building_center(cell, place_data.grid_size)
 	building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
-	_buildings_container.add_child(building)
 	GridManager.place_building(cell, place_data, building)
 	# Update road connections after placement (deferred so all buildings load first)
 	if data.id == "road":

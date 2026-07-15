@@ -18,6 +18,7 @@ Complete technical documentation for AI and developer context.
 | 10 | [Signals Reference](10-signals-reference.md) | Complete EventBus signal table with emitters and consumers |
 | 11 | [Tech Tree](11-tech-tree.md) | 3 branches x 5 tiers, research mechanics, bonus application |
 | 12 | [Cloud Saves](12-cloud-saves.md) | Supabase integration, auth, cloud save/load setup |
+| 13 | [Roadmap](13-roadmap.md) | Phased plan: what's shipped and what's next (combat, units, multiplayer) |
 
 ## Quick Reference
 

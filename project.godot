@@ -17,7 +17,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="Tormenta Imperial"
 config/description="Hybrid strategy game — persistent base management + RTS combat"
 run/main_scene="res://scenes/main/Main.tscn"
-config/features=PackedStringArray("4.6", "Forward Plus")
+config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
@@ -34,11 +34,13 @@ ProductionManager="*res://scripts/services/ProductionManager.gd"
 ProgressionManager="*res://scripts/services/ProgressionManager.gd"
 MarketManager="*res://scripts/services/MarketManager.gd"
 PopulationManager="*res://scripts/services/PopulationManager.gd"
+ArmyManager="*res://scripts/services/ArmyManager.gd"
 RandomEventManager="*res://scripts/services/RandomEventManager.gd"
 TechTreeManager="*res://scripts/services/TechTreeManager.gd"
 CloudSaveManager="*res://scripts/services/CloudSaveManager.gd"
 UIManager="*res://scripts/services/UIManager.gd"
 UILayoutManager="*res://scripts/services/UILayoutManager.gd"
+AudioManager="*res://scripts/services/AudioManager.gd"
 
 [display]
 

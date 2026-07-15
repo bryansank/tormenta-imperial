@@ -3,28 +3,52 @@ extends CanvasLayer
 ## Toggled via EventBus.
 
 var _panel: PanelContainer
+var _backdrop: ColorRect
+var _obj_btn: Button
 var _is_open := false
 
 func _ready() -> void:
 	layer = 15 # Higher than other UI
-	visible = false
 	_setup_ui()
 	EventBus.objective_panel_toggled.connect(toggle)
 	UIManager.register_panel(self, "ObjectivePanel")
 
 func _setup_ui() -> void:
+	# Root control holds the always-present sidebar button; the modal itself
+	# (backdrop + panel) is toggled independently so the button stays visible.
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
+
+	# Sidebar button ("¿Qué hacer?") — lives in the hamburger menu
+	_obj_btn = Button.new()
+	_obj_btn.text = Tr.t("BTN_OBJECTIVES")
+	_obj_btn.custom_minimum_size = Vector2(140, 38)
+	_obj_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_obj_btn.offset_left = -152
+	_obj_btn.offset_top = UILayoutManager.get_sidebar_button_offset("ObjectivePanel.button")
+	UITheme.style_card_button(_obj_btn, UITheme.BTN.lightened(0.05), UITheme.INFO)
+	_obj_btn.pressed.connect(toggle)
+	_obj_btn.visible = false  # Start collapsed with sidebar
+	root.add_child(_obj_btn)
+	EventBus.sidebar_toggled.connect(func(vis: bool): _obj_btn.visible = vis)
+
 	# Backdrop
-	var backdrop := UITheme.make_backdrop()
-	backdrop.gui_input.connect(func(event: InputEvent):
+	_backdrop = UITheme.make_backdrop()
+	_backdrop.visible = false
+	_backdrop.gui_input.connect(func(event: InputEvent):
 		if event is InputEventMouseButton and event.pressed:
 			toggle()
 	)
-	add_child(backdrop)
+	root.add_child(_backdrop)
 
 	_panel = PanelContainer.new()
+	_panel.visible = false
 	UILayoutManager.apply_layout("ObjectivePanel", _panel)
 	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
-	add_child(_panel)
+	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))
+	root.add_child(_panel)
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_top", 20)
@@ -92,7 +116,8 @@ func _setup_ui() -> void:
 
 func toggle() -> void:
 	_is_open = not _is_open
-	visible = _is_open
+	_panel.visible = _is_open
+	_backdrop.visible = _is_open
 	if _is_open:
 		UIManager.open_panel(self)
 	else:
