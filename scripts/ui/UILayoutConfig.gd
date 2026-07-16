@@ -104,6 +104,9 @@ const PANEL_SLOTS := {
 	"ArmyPanel.modal":            "center_modal",
 	"TechTreePanel.button":       "sidebar_buttons",
 	"TechTreePanel.modal":        "center_modal",
+	"SettingsPanel.button":       "sidebar_buttons",
+	"SettingsPanel.modal":        "center_modal",
+	"HelperPanel.modal":          "center_modal",
 	"ConstructionMenu.button":    "bottom_center",
 	"ConstructionMenu.modal":     "center_modal",
 	"BuildingInfoPanel":          "right_panel",
@@ -119,6 +122,8 @@ const PANEL_SIZES := {
 	"ArmyPanel.modal":         Vector2(500, 0),
 	"TechTreePanel.modal":     Vector2(540, 0),
 	"ObjectivePanel":          Vector2(500, 450),
+	"SettingsPanel.modal":     Vector2(400, 0),
+	"HelperPanel.modal":       Vector2(560, 500),
 	"ConstructionMenu.modal":  Vector2(860, 520),
 	"VictoryScreen":           Vector2(440, 320),
 }
@@ -131,6 +136,7 @@ const SIDEBAR_BUTTON_ORDER := [
 	"ArmyPanel.button",
 	"MarketPanel.button",
 	"TechTreePanel.button",
+	"SettingsPanel.button",
 ]
 
 ## Slot conflicts: opening a panel in key slot also closes panels in value slots.

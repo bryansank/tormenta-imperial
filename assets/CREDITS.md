@@ -16,11 +16,15 @@ Wired in `scripts/ui/UITheme.gd` (global theme default font + title/section over
 | Texture | Use | License | Source |
 |---------|-----|---------|--------|
 | metal_plate (diff/rough/nor_gl, 1K) | Building material relief + reflections | CC0 | Poly Haven |
-| ui/panel, panel_inset, button (9-patch) | Metal UI panels + buttons (tinted brass in UITheme) | CC0 | Kenney — UI Pack |
-| ui/header_rivets (9-patch) | Riveted header accent (dieselpunk) | CC0 | Kenney — UI Pack (Sci-Fi) |
+| ui/panel_metal, panel_inset_metal, button_metal (9-patch) | Riveted metal UI panels + buttons | CC0 (derived) | Generated from metal_plate (Poly Haven) |
 
-Wired in `scripts/buildings/DieselpunkBuildingFactory.gd` (`_metal()` applies the
-normal + roughness maps to every metal surface while keeping each material's color).
+The three `ui/*_metal` 9-patch sprites are composited from the CC0 metal_plate
+diffuse above, with a drawn brass frame + corner rivets, by `tools/gen_ui_textures.gd`
+(re-runnable). Wired as textured StyleBoxes in `scripts/ui/UITheme.gd`.
+
+Building materials are wired in `scripts/buildings/DieselpunkBuildingFactory.gd`
+(`_metal()` applies the normal + roughness maps to every metal surface while keeping
+each material's color).
 
 ## Audio (`assets/audio/`)
 
