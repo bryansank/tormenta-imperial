@@ -262,6 +262,8 @@ const _STRINGS := {
 		"LBL_VOL_MASTER": "Volumen general",
 		"LBL_VOL_MUSIC": "Musica",
 		"LBL_VOL_SFX": "Efectos de sonido",
+		"LBL_SETTINGS_UI": "INTERFAZ",
+		"LBL_SHOW_GRID": "Mostrar cuadricula del mapa",
 
 		# Army / Units
 		"BTN_ARMY": "EJERCITO",
@@ -527,6 +529,8 @@ const _STRINGS := {
 		"LBL_VOL_MASTER": "Master volume",
 		"LBL_VOL_MUSIC": "Music",
 		"LBL_VOL_SFX": "Sound effects",
+		"LBL_SETTINGS_UI": "INTERFACE",
+		"LBL_SHOW_GRID": "Show map grid",
 
 		# Army / Units
 		"BTN_ARMY": "ARMY",

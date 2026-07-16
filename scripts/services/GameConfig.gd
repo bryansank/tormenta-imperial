@@ -193,6 +193,9 @@ var audio_ambient_volume := 0.5
 
 const USER_SETTINGS_PATH := "user://settings.cfg"
 
+## Whether the map cell grid overlay is shown permanently (toggle in Settings).
+var ui_grid_visible := false
+
 func _ready() -> void:
 	load_user_settings()
 
@@ -204,6 +207,7 @@ func load_user_settings() -> void:
 	audio_music_volume = clampf(float(cf.get_value("audio", "music", audio_music_volume)), 0.0, 1.0)
 	audio_sfx_volume = clampf(float(cf.get_value("audio", "sfx", audio_sfx_volume)), 0.0, 1.0)
 	audio_ambient_volume = clampf(float(cf.get_value("audio", "ambient", audio_ambient_volume)), 0.0, 1.0)
+	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -212,6 +216,7 @@ func save_user_settings() -> void:
 	cf.set_value("audio", "music", audio_music_volume)
 	cf.set_value("audio", "sfx", audio_sfx_volume)
 	cf.set_value("audio", "ambient", audio_ambient_volume)
+	cf.set_value("ui", "grid_visible", ui_grid_visible)
 	cf.save(USER_SETTINGS_PATH)
 
 ## Seconds to cross-fade between music tracks (e.g. on era change).

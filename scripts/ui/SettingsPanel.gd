@@ -81,6 +81,22 @@ func _setup_ui() -> void:
 		true
 	))
 
+	vbox.add_child(UITheme.make_separator())
+	vbox.add_child(UITheme.section_header(Tr.t("LBL_SETTINGS_UI")))
+
+	# Map grid toggle
+	var grid_check := CheckButton.new()
+	grid_check.text = Tr.t("LBL_SHOW_GRID")
+	grid_check.button_pressed = GameConfig.ui_grid_visible
+	grid_check.add_theme_font_size_override("font_size", UITheme.FONT_BODY)
+	grid_check.add_theme_color_override("font_color", UITheme.TEXT)
+	grid_check.toggled.connect(func(pressed: bool):
+		GameConfig.ui_grid_visible = pressed
+		EventBus.grid_overlay_toggled.emit(pressed)
+		GameConfig.save_user_settings()
+	)
+	vbox.add_child(grid_check)
+
 	# Close button at bottom
 	var close_btn := Button.new()
 	close_btn.text = Tr.t("BTN_UNDERSTOOD")
