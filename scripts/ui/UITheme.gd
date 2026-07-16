@@ -121,9 +121,11 @@ const SEPARATION := 8
 # brass/gunmetal. If a texture is missing, callers fall back to a flat StyleBox so
 # the UI never breaks.
 
-const TEX_PANEL := "res://assets/textures/ui/panel.png"        # 64x64 beveled plate
-const TEX_PANEL_INSET := "res://assets/textures/ui/panel_inset.png"  # 64x64 thin frame
-const TEX_BUTTON := "res://assets/textures/ui/button.png"      # 192x64 beveled button
+# Brushed-metal plates composited from the owned Poly Haven metal_plate texture
+# (CC0) with a drawn brass frame + corner rivets — see tools/gen_ui_textures.gd.
+const TEX_PANEL := "res://assets/textures/ui/panel_metal.png"          # 128² frame+rivets
+const TEX_PANEL_INSET := "res://assets/textures/ui/panel_inset_metal.png"  # 96² thin frame
+const TEX_BUTTON := "res://assets/textures/ui/button_metal.png"        # 160x56 beveled
 
 static var _tex_cache := {}
 
@@ -149,6 +151,10 @@ static func _tex_box(path: String, slice: int, content: int, modulate: Color) ->
 	s.set_texture_margin_all(slice)
 	s.set_content_margin_all(content)
 	s.modulate_color = modulate
+	# Tile the metal grain in the stretchable center/edges so it stays crisp
+	# instead of smearing when a panel is much larger than the source texture.
+	s.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	s.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
 	return s
 
 # ══════════════════════════════════════
@@ -156,7 +162,7 @@ static func _tex_box(path: String, slice: int, content: int, modulate: Color) ->
 # ══════════════════════════════════════
 
 static func make_panel_style(border: bool = true) -> StyleBox:
-	var tex := _tex_box(TEX_PANEL, 24, MARGIN, Color(0.36, 0.32, 0.26))
+	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(1, 1, 1))
 	if tex != null:
 		return tex
 	var s := StyleBoxFlat.new()
@@ -183,7 +189,7 @@ static func make_hud_style() -> StyleBoxFlat:
 
 ## Military tactical panel con decoraciones de esquinas
 static func make_war_table_style() -> StyleBox:
-	var tex := _tex_box(TEX_PANEL, 24, MARGIN, Color(0.40, 0.34, 0.25))
+	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(1.06, 1.02, 0.92))
 	if tex != null:
 		return tex
 	var s := StyleBoxFlat.new()
@@ -203,11 +209,11 @@ static func make_war_table_style() -> StyleBox:
 static func style_button(btn: Button, bg: Color = BTN, font_size: int = FONT_BUTTON) -> void:
 	btn.custom_minimum_size.y = maxi(int(btn.custom_minimum_size.y), MIN_BTN_H)
 
-	# Textured brass metal, tinted toward `bg`'s hue; falls back to flat if art missing.
-	btn.add_theme_stylebox_override("normal", _button_style(bg.lightened(0.35), bg, ACCENT_DIM, 3))
-	btn.add_theme_stylebox_override("hover", _button_style(bg.lightened(0.55), bg.lightened(0.2), ACCENT, 3))
-	btn.add_theme_stylebox_override("pressed", _button_style(bg.lightened(0.72), bg.lightened(0.4), ACCENT, 4))
-	btn.add_theme_stylebox_override("disabled", _button_style(Color(0.24, 0.24, 0.21), BTN_DISABLED, Color(0.2, 0.2, 0.15), 2))
+	# Baked metal button, tinted toward `bg`'s hue; falls back to flat if art missing.
+	btn.add_theme_stylebox_override("normal", _button_style(_metal_tint(bg, 1.0), bg, ACCENT_DIM, 3))
+	btn.add_theme_stylebox_override("hover", _button_style(_metal_tint(bg, 1.32), bg.lightened(0.2), ACCENT, 3))
+	btn.add_theme_stylebox_override("pressed", _button_style(_metal_tint(bg, 1.6), bg.lightened(0.4), ACCENT, 4))
+	btn.add_theme_stylebox_override("disabled", _button_style(Color(0.5, 0.5, 0.47), BTN_DISABLED, Color(0.2, 0.2, 0.15), 2))
 
 	btn.add_theme_font_size_override("font_size", font_size)
 	btn.add_theme_color_override("font_color", TEXT)
@@ -363,7 +369,7 @@ static func make_backdrop() -> ColorRect:
 
 ## Tactical command panel con bordes gruesos militares y glow
 static func make_command_panel_style() -> StyleBox:
-	var tex := _tex_box(TEX_PANEL, 24, MARGIN, Color(0.32, 0.28, 0.22))
+	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(0.82, 0.82, 0.82))
 	if tex != null:
 		return tex
 	var s := StyleBoxFlat.new()
@@ -378,7 +384,7 @@ static func make_command_panel_style() -> StyleBox:
 
 ## Info display con frame de datos
 static func make_data_display_style() -> StyleBox:
-	var tex := _tex_box(TEX_PANEL_INSET, 16, 8, Color(0.28, 0.26, 0.22))
+	var tex := _tex_box(TEX_PANEL_INSET, 10, 8, Color(0.9, 0.9, 0.9))
 	if tex != null:
 		return tex
 	var s := StyleBoxFlat.new()
@@ -405,18 +411,26 @@ static func _flat(bg: Color, border: Color, border_w: int, corner: int, margin: 
 		s.set_border_width_all(border_w)
 	return s
 
+## Normalizes a colour to a modulate for the baked metal button: white stays
+## neutral (shows the metal as-is), a hue pushes the metal toward that hue, and
+## `boost` brightens (hover/pressed). The button texture already bakes in its dark
+## tone, so modulates hover around 1.0 rather than the ~0.4 used for flat fills.
+static func _metal_tint(base: Color, boost: float) -> Color:
+	var m := maxf(maxf(base.r, base.g), maxf(base.b, 0.001))
+	return Color(base.r / m * boost, base.g / m * boost, base.b / m * boost)
+
 ## Textured brass button for one state, with a flat fallback if art is missing.
 static func _button_style(modulate: Color, fb_bg: Color, fb_border: Color, fb_bw: int) -> StyleBox:
-	var tex := _tex_box(TEX_BUTTON, 22, 10, modulate)
+	var tex := _tex_box(TEX_BUTTON, 12, 10, modulate)
 	if tex != null:
 		return tex
 	return _flat(fb_bg, fb_border, fb_bw, CORNER, 10)
 
 static func _theme_button(t: Theme, type: String) -> void:
-	var n := _button_style(Color(0.42, 0.36, 0.26), BTN, ACCENT_DIM, 3)
-	var h := _button_style(Color(0.58, 0.49, 0.31), BTN_HOVER, ACCENT, 3)
-	var p := _button_style(Color(0.74, 0.61, 0.36), BTN_PRESSED, ACCENT, 4)
-	var d := _button_style(Color(0.24, 0.24, 0.21), BTN_DISABLED, Color(0.2, 0.2, 0.15), 2)
+	var n := _button_style(Color(1, 1, 1), BTN, ACCENT_DIM, 3)
+	var h := _button_style(Color(1.32, 1.28, 1.15), BTN_HOVER, ACCENT, 3)
+	var p := _button_style(Color(1.6, 1.5, 1.3), BTN_PRESSED, ACCENT, 4)
+	var d := _button_style(Color(0.5, 0.5, 0.47), BTN_DISABLED, Color(0.2, 0.2, 0.15), 2)
 	var focus := _flat(Color(0, 0, 0, 0), ACCENT, 2, CORNER, 10)
 	t.set_stylebox("normal", type, n)
 	t.set_stylebox("hover", type, h)
