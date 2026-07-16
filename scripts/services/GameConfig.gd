@@ -187,6 +187,33 @@ var audio_music_volume := 0.6
 var audio_sfx_volume := 0.8
 var audio_ambient_volume := 0.5
 
+# ── User Settings persistence ──
+# Device-local preferences (volumes, UI toggles) — separate from save_game.json
+# so they survive "new game" and apply before any save is loaded.
+
+const USER_SETTINGS_PATH := "user://settings.cfg"
+
+func _ready() -> void:
+	load_user_settings()
+
+func load_user_settings() -> void:
+	var cf := ConfigFile.new()
+	if cf.load(USER_SETTINGS_PATH) != OK:
+		return
+	audio_master_volume = clampf(float(cf.get_value("audio", "master", audio_master_volume)), 0.0, 1.0)
+	audio_music_volume = clampf(float(cf.get_value("audio", "music", audio_music_volume)), 0.0, 1.0)
+	audio_sfx_volume = clampf(float(cf.get_value("audio", "sfx", audio_sfx_volume)), 0.0, 1.0)
+	audio_ambient_volume = clampf(float(cf.get_value("audio", "ambient", audio_ambient_volume)), 0.0, 1.0)
+
+func save_user_settings() -> void:
+	var cf := ConfigFile.new()
+	cf.load(USER_SETTINGS_PATH)  # keep unknown sections if the file already exists
+	cf.set_value("audio", "master", audio_master_volume)
+	cf.set_value("audio", "music", audio_music_volume)
+	cf.set_value("audio", "sfx", audio_sfx_volume)
+	cf.set_value("audio", "ambient", audio_ambient_volume)
+	cf.save(USER_SETTINGS_PATH)
+
 ## Seconds to cross-fade between music tracks (e.g. on era change).
 var audio_music_fade := 1.5
 
