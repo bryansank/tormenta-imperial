@@ -265,6 +265,22 @@ const _STRINGS := {
 		"LBL_SETTINGS_UI": "INTERFAZ",
 		"LBL_SHOW_GRID": "Mostrar cuadricula del mapa",
 
+		# Helper
+		"BTN_HELPER_TIP": "Ayudante: muestra u oculta las guias en pantalla",
+		"BTN_BUILDING_GUIDE": "GUIA DE EDIFICIOS",
+		"LBL_GUIDE_TITLE": "GUIA DE EDIFICIOS",
+		"LBL_GUIDE_COST": "Costo",
+		"LBL_GUIDE_WORKERS": "Trabajadores",
+		"LBL_GUIDE_PRODUCES": "Produce",
+		"LBL_GUIDE_HOUSING": "Alojamiento",
+		"LBL_GUIDE_MORALE": "Moral",
+		"LBL_HELP_RESOURCES": "Tus recursos: oro y madera (luego acero y petroleo). El /800 es tu capacidad de almacenamiento.",
+		"LBL_HELP_MENUS": "El boton ☰ abre los menus: Que Hacer, Progreso, Mercado, Tecnologia, Ejercito, Ajustes y CONSTRUIR.",
+		"LBL_HELP_OBJECTIVE": "Aqui aparece tu objetivo actual.",
+		"LBL_HELP_BUILD": "Para construir: abre ☰, pulsa CONSTRUIR (abajo), elige un edificio y toca una celda libre del mapa.",
+		"LBL_HELP_CAMERA": "Mueve la camara con estas flechas o con WASD.",
+		"LBL_HELP_ZOOM": "Rota la camara y haz zoom (tambien con la rueda del raton).",
+
 		# Army / Units
 		"BTN_ARMY": "EJERCITO",
 		"LBL_ARMY_TITLE": "CUARTEL - EJERCITO",
@@ -531,6 +547,22 @@ const _STRINGS := {
 		"LBL_VOL_SFX": "Sound effects",
 		"LBL_SETTINGS_UI": "INTERFACE",
 		"LBL_SHOW_GRID": "Show map grid",
+
+		# Helper
+		"BTN_HELPER_TIP": "Helper: show or hide the on-screen guides",
+		"BTN_BUILDING_GUIDE": "BUILDING GUIDE",
+		"LBL_GUIDE_TITLE": "BUILDING GUIDE",
+		"LBL_GUIDE_COST": "Cost",
+		"LBL_GUIDE_WORKERS": "Workers",
+		"LBL_GUIDE_PRODUCES": "Produces",
+		"LBL_GUIDE_HOUSING": "Housing",
+		"LBL_GUIDE_MORALE": "Morale",
+		"LBL_HELP_RESOURCES": "Your resources: gold and wood (later steel and oil). The /800 is your storage capacity.",
+		"LBL_HELP_MENUS": "The ☰ button opens the menus: What To Do, Progress, Market, Technology, Army, Settings and BUILD.",
+		"LBL_HELP_OBJECTIVE": "Your current objective appears here.",
+		"LBL_HELP_BUILD": "To build: open ☰, press BUILD (bottom), pick a building and tap a free map cell.",
+		"LBL_HELP_CAMERA": "Move the camera with these arrows or WASD.",
+		"LBL_HELP_ZOOM": "Rotate the camera and zoom (mouse wheel works too).",
 
 		# Army / Units
 		"BTN_ARMY": "ARMY",

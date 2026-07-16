@@ -85,6 +85,8 @@ Main (Node3D)
   +-- TechTreePanel (CanvasLayer) -- 3 branches x 5 tiers research UI
   +-- ObjectivePanel (CanvasLayer) -- "what to do" goals modal
   +-- ArmyPanel (CanvasLayer) -- train units, Military Power, upkeep
+  +-- SettingsPanel (CanvasLayer) -- volume sliders + UI toggles (persisted)
+  +-- HelperPanel (CanvasLayer) -- "?" on-screen callouts + building guide modal
 ```
 
 UI panels are positioned by `UILayoutManager` using the slot definitions in
@@ -238,6 +240,15 @@ ramps up gradually instead of punishing the first minutes.
   Missing files are skipped silently — audio never crashes the game.
 - API: `play_sfx(key)`, `play_music_for_era(era)`, `set_*_volume(linear)`.
   Manifest of expected keys: `assets/audio/MANIFEST.md`.
+
+### User Settings (`user://settings.cfg`)
+
+Device-local preferences, separate from the game save. `GameConfig.load_user_settings()`
+runs in its `_ready()` (before AudioManager applies volumes); anything that changes a
+preference calls `GameConfig.save_user_settings()`. Currently stored: audio volumes
+(master/music/sfx/ambient — sliders in SettingsPanel), `ui_grid_visible` (map grid
+toggle; GridOverlayControl applies it, BuildingPlacer restores it after placement),
+and `ui_helper_visible` (HelperPanel "?" callouts, on by default).
 
 ### Save/Load System
 
