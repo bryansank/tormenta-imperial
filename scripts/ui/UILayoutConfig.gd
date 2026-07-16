@@ -106,6 +106,7 @@ const PANEL_SLOTS := {
 	"TechTreePanel.modal":        "center_modal",
 	"SettingsPanel.button":       "sidebar_buttons",
 	"SettingsPanel.modal":        "center_modal",
+	"HelperPanel.modal":          "center_modal",
 	"ConstructionMenu.button":    "bottom_center",
 	"ConstructionMenu.modal":     "center_modal",
 	"BuildingInfoPanel":          "right_panel",
@@ -122,6 +123,7 @@ const PANEL_SIZES := {
 	"TechTreePanel.modal":     Vector2(540, 0),
 	"ObjectivePanel":          Vector2(500, 450),
 	"SettingsPanel.modal":     Vector2(400, 0),
+	"HelperPanel.modal":       Vector2(560, 500),
 	"ConstructionMenu.modal":  Vector2(860, 520),
 	"VictoryScreen":           Vector2(440, 320),
 }

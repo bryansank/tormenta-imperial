@@ -196,6 +196,10 @@ const USER_SETTINGS_PATH := "user://settings.cfg"
 ## Whether the map cell grid overlay is shown permanently (toggle in Settings).
 var ui_grid_visible := false
 
+## Whether the on-screen helper callouts are shown ("?" button). On by default
+## so new players get guidance; the choice persists once toggled.
+var ui_helper_visible := true
+
 func _ready() -> void:
 	load_user_settings()
 
@@ -208,6 +212,7 @@ func load_user_settings() -> void:
 	audio_sfx_volume = clampf(float(cf.get_value("audio", "sfx", audio_sfx_volume)), 0.0, 1.0)
 	audio_ambient_volume = clampf(float(cf.get_value("audio", "ambient", audio_ambient_volume)), 0.0, 1.0)
 	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
+	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -217,6 +222,7 @@ func save_user_settings() -> void:
 	cf.set_value("audio", "sfx", audio_sfx_volume)
 	cf.set_value("audio", "ambient", audio_ambient_volume)
 	cf.set_value("ui", "grid_visible", ui_grid_visible)
+	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.save(USER_SETTINGS_PATH)
 
 ## Seconds to cross-fade between music tracks (e.g. on era change).
