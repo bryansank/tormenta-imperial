@@ -639,9 +639,11 @@ func _show_grid_overlay() -> void:
 		scene_grid.visible = true
 
 func _hide_grid_overlay() -> void:
+	# Restore the user preference instead of always hiding — the Settings
+	# toggle can keep the grid permanently visible.
 	var scene_grid := get_tree().current_scene.get_node_or_null("GridOverlay")
 	if scene_grid:
-		scene_grid.visible = false
+		scene_grid.visible = GameConfig.ui_grid_visible
 
 # ── Limit / Prerequisite Helpers ──
 
