@@ -255,6 +255,14 @@ const _STRINGS := {
 		"BTN_UNDERSTOOD": "ENTENDIDO!",
 		"BTN_OBJECTIVES": "¿QUE HACER?",
 
+		# Settings Panel
+		"BTN_SETTINGS": "AJUSTES",
+		"LBL_SETTINGS_TITLE": "AJUSTES",
+		"LBL_SETTINGS_AUDIO": "AUDIO",
+		"LBL_VOL_MASTER": "Volumen general",
+		"LBL_VOL_MUSIC": "Musica",
+		"LBL_VOL_SFX": "Efectos de sonido",
+
 		# Army / Units
 		"BTN_ARMY": "EJERCITO",
 		"LBL_ARMY_TITLE": "CUARTEL - EJERCITO",
@@ -511,6 +519,14 @@ const _STRINGS := {
 		"LBL_OBJ_TIP": "TIP: Use the construction menu (bottom right) to get started.",
 		"BTN_UNDERSTOOD": "GOT IT!",
 		"BTN_OBJECTIVES": "WHAT TO DO?",
+
+		# Settings Panel
+		"BTN_SETTINGS": "SETTINGS",
+		"LBL_SETTINGS_TITLE": "SETTINGS",
+		"LBL_SETTINGS_AUDIO": "AUDIO",
+		"LBL_VOL_MASTER": "Master volume",
+		"LBL_VOL_MUSIC": "Music",
+		"LBL_VOL_SFX": "Sound effects",
 
 		# Army / Units
 		"BTN_ARMY": "ARMY",

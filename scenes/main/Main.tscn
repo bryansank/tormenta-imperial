@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/TechTreePanel.tscn" id="14"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ObjectivePanel.tscn" id="15"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ArmyPanel.tscn" id="16"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SettingsPanel.tscn" id="17"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -96,3 +97,5 @@ script = ExtResource("7")
 [node name="ObjectivePanel" parent="." instance=ExtResource("15")]
 
 [node name="ArmyPanel" parent="." instance=ExtResource("16")]
+
+[node name="SettingsPanel" parent="." instance=ExtResource("17")]
