@@ -13,12 +13,14 @@
 2. **Manage** population (houses provide workers, workers operate buildings)
 3. **Trade** resources on the Imperial Market (buy/sell with floating prices)
 4. **Progress** through 3 eras by unlocking steel and oil
-5. **Survive** random events (storms, plagues, bandit raids)
-6. **Win** by building and upgrading Headquarters to Level 3
+5. **Research** the tech tree (15 techs, 3 branches) for permanent bonuses
+6. **Train** an army at the Barracks (infantry, artillery, vehicles) — Military Power
+7. **Survive** random events (storms, plagues, bandit raids)
+8. **Win** by building and upgrading Headquarters to Level 3
 
 ### What This Game Is NOT
 - NOT real-time strategy (RTS). It's a **management/city builder** first
-- Combat is **turn-based** (PVE + PVP), planned but not yet implemented
+- Combat is **turn-based** (PVE + PVP) — army training is in; battles are the next milestone (see `docs/13-roadmap.md`)
 - No real-money transactions — all economy is internal
 
 ---
@@ -58,7 +60,7 @@
 | Engine | Godot 4.6 .NET Edition | Game engine (Forward+ renderer) |
 | Logic | GDScript | All current systems (services, UI, gameplay) |
 | Logic (planned) | C# | Unit AI, combat math, pathfinding |
-| Backend (planned) | Supabase | Cloud saves, auth |
+| Backend | Supabase | Cloud saves + auth (implemented, not yet wired to UI) |
 | Multiplayer (planned) | Nakama (Docker) | PvP and Co-op turn-based combat |
 
 ---
@@ -66,7 +68,7 @@
 ## Architecture
 
 See [CLAUDE.md](CLAUDE.md) for complete technical documentation including:
-- All 13 autoload services and their responsibilities
+- All 19 autoload services and their responsibilities
 - Scene tree structure
 - Complete building/economy tables
 - Code conventions and patterns

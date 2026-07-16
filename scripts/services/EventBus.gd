@@ -146,6 +146,8 @@ signal objective_panel_toggled()
 # ── UI ──
 @warning_ignore("unused_signal")
 signal sidebar_toggled(visible: bool)
+@warning_ignore("unused_signal")
+signal grid_overlay_toggled(visible: bool)
 
 # ── Persistence ──
 @warning_ignore("unused_signal")

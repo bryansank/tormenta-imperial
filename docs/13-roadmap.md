@@ -19,7 +19,10 @@ The full management + economy loop is playable end-to-end:
 - ✅ 8 random events
 - ✅ 9 milestones + Imperial Victory
 - ✅ Tech tree (15 techs, 3 branches)
-- ✅ Save/load, offline progression, cloud saves (Supabase REST)
+- ✅ Save/load, offline progression
+- 🚧 Cloud saves: `CloudSaveManager` (Supabase REST, auth + save/load) implemented
+  but **unwired** — nothing calls it yet; needs `.env` config + settings UI
+- ✅ Audio: `AudioManager` (runtime buses, signal-driven) + 4 music tracks + 16 SFX
 - ✅ i18n (ES/EN), notifications + activity log, mobile touch controls
 - ✅ UI: global theme, hamburger sidebar, left-drag grab-pan, stepped camera rotation
 - ✅ **Army as production**: Barracks trains units (cost + time + upkeep), gated by era,
@@ -33,11 +36,12 @@ Small, high-value items that harden the current game and prep for combat.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Audio: music + SFX | ⬜ | No audio at all yet; biggest "feel" gap |
+| Audio: ambient track | ⬜ | Music + SFX done; `assets/audio/ambient/` still empty |
 | Tutorial / onboarding | ⬜ | "¿Qué hacer?" panel exists; needs guided first-run flow |
 | Touch grab-pan parity | ⬜ | Left-mouse now grabs terrain 1:1; make one-finger touch match |
 | Balance pass | 💤 | Tune costs/durations once combat economy is known |
-| Settings menu (audio/lang/save) | ⬜ | Central options panel |
+| Settings menu (audio/lang/save) | ⬜ | Central options panel; also the natural home for cloud-save login |
+| Wire cloud saves | ⬜ | Call `CloudSaveManager` from settings/save flow + `.env` setup |
 
 ## ⬜ Milestone B — Combat Foundation (PVE)
 

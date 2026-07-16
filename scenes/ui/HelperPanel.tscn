@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dhelperpanel000"]
+
+[ext_resource type="Script" path="res://scripts/ui/HelperPanel.gd" id="1_script"]
+
+[node name="HelperPanel" type="CanvasLayer"]
+script = ExtResource("1_script")
