@@ -21,6 +21,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/HelperPanel.tscn" id="19"]
 [ext_resource type="PackedScene" path="res://scenes/ui/SkirmishPanel.tscn" id="20"]
 [ext_resource type="PackedScene" path="res://scenes/ui/BattleScreen.tscn" id="21"]
+[ext_resource type="PackedScene" path="res://scenes/ui/StormHUD.tscn" id="22"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -110,3 +111,5 @@ script = ExtResource("7")
 [node name="SkirmishPanel" parent="." instance=ExtResource("20")]
 
 [node name="BattleScreen" parent="." instance=ExtResource("21")]
+
+[node name="StormHUD" parent="." instance=ExtResource("22")]

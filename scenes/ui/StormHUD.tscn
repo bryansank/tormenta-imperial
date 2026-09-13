@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cst0rm8hud4n1x"]
+
+[ext_resource type="Script" path="res://scripts/ui/StormHUD.gd" id="1_script"]
+
+[node name="StormHUD" type="CanvasLayer"]
+script = ExtResource("1_script")

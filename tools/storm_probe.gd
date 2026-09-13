@@ -43,7 +43,11 @@ func _run() -> void:
 	GameConfig.combat_ai_step_delay = 0.0
 	var elapsed := 0.0
 	var seen_storm := false
+	var seen_warning := false
 	while elapsed < total:
+		if StormManager.get_phase() == StormCycle.Phase.WARNING and not seen_warning:
+			seen_warning = true
+			await _shot("storm_01_aviso")
 		# Si los Tasadores abren tablero, hay que pelear o el ciclo se queda
 		# esperando: la fase de cobranza detiene el reloj a proposito.
 		if CombatManager.is_in_encounter():
@@ -54,6 +58,7 @@ func _run() -> void:
 		if StormManager.is_storming() and not seen_storm:
 			seen_storm = true
 			print("[storm] EN TORMENTA | multiplicador de produccion = %.2f" % GameConfig.event_production_multiplier)
+			await _shot("storm_02_cayendo")
 
 	print("[storm] despues: %s" % _snapshot())
 	print("[storm] fase final=%d tormentas_superadas=%d severidad=%d" % [
@@ -108,6 +113,15 @@ func _play_one_turn() -> void:
 	if not cells.is_empty():
 		CombatManager.move_unit(unit.uid, cells[cells.size() - 1])
 	CombatManager.end_turn()
+
+const OUT_DIR := "res://docs/media/dev"
+
+func _shot(file_name: String) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
+	await RenderingServer.frame_post_draw
+	var image := get_viewport().get_texture().get_image()
+	var err := image.save_png("%s/%s.png" % [OUT_DIR, file_name])
+	print("[storm] %s.png (err %d)" % [file_name, err])
 
 func _snapshot() -> Dictionary:
 	return {

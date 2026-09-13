@@ -29,6 +29,15 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
+	## El reloj de la Tormenta. Va justo debajo del aviso de objetivo porque
+	## cuando hay ceniza en camino es el numero mas importante de la pantalla.
+	"storm_banner": {
+		"anchor": Rect2(0.5, 0, 0.5, 0),
+		"margin": {"left": 0, "top": 124, "right": 0, "bottom": 0},
+		"max_size": Vector2(380, 0),
+		"grow_h": Control.GROW_DIRECTION_BOTH,
+		"grow_v": Control.GROW_DIRECTION_END,
+	},
 	"sidebar_buttons": {
 		"anchor": Rect2(1, 0, 1, 0),
 		"margin": {"left": 0, "top": 10, "right": 10, "bottom": 0},
@@ -92,6 +101,7 @@ const PANEL_SLOTS := {
 	"ResourceHUD":                "top_left",
 	"NotificationPanel.status":   "status_bar",
 	"NotificationPanel.objective":"top_center",
+	"StormHUD":                   "storm_banner",
 	"NotificationPanel.toasts":   "toast_area",
 	"NotificationPanel.log":      "left_panel",
 	"MarketPanel.sidebar_toggle": "sidebar_buttons",

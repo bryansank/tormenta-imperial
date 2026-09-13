@@ -15,6 +15,10 @@ func _ready() -> void:
 	layer = 14  # Above HUD (10), below modal panels (15)
 	_setup_ui()
 	UIManager.register_panel(self, "HelperPanel.modal")
+	# Cuando hay ceniza en camino, el tutorial se calla: sus globos tapan media
+	# pantalla y en ese momento lo unico que importa es el reloj de la Tormenta.
+	EventBus.storm_incoming.connect(func(_s, _sev): _set_callouts_visible(false))
+	EventBus.tithe_resolved.connect(func(_paid, _taken): _restore_callouts())
 	_set_callouts_visible(GameConfig.ui_helper_visible)
 
 func _setup_ui() -> void:
@@ -210,6 +214,11 @@ func _toggle_helper() -> void:
 func _set_callouts_visible(vis: bool) -> void:
 	_callouts.visible = vis
 	_helper_btn.modulate = Color(1, 1, 1, 1.0 if vis else 0.55)
+
+## Pasada la tormenta, los globos vuelven solo si el jugador no los habia
+## apagado el mismo. Silenciarlos por una tormenta no es cambiar su preferencia.
+func _restore_callouts() -> void:
+	_set_callouts_visible(GameConfig.ui_helper_visible)
 
 func _toggle_guide() -> void:
 	_guide_open = not _guide_open
