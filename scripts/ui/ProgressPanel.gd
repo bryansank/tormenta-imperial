@@ -24,9 +24,9 @@ func _setup_ui() -> void:
 
 	_progress_btn = Button.new()
 	_progress_btn.text = Tr.t("BTN_PROGRESS")
-	_progress_btn.custom_minimum_size = Vector2(140, 38)
+	_progress_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
 	_progress_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_progress_btn.offset_left = -152
+	_progress_btn.offset_left = -176
 	_progress_btn.offset_top = UILayoutManager.get_sidebar_button_offset("ProgressPanel.button")
 	UITheme.style_card_button(_progress_btn, UITheme.BTN.lightened(0.05), UITheme.WARNING)
 	_progress_btn.pressed.connect(_toggle_panel)
@@ -96,8 +96,8 @@ func _on_milestone_completed(milestone_id: String) -> void:
 	if _milestone_labels.has(milestone_id):
 		var labels: Dictionary = _milestone_labels[milestone_id]
 		labels["check"].text = "[X]"
-		labels["check"].add_theme_color_override("font_color", UITheme.POSITIVE)
-		labels["name"].add_theme_color_override("font_color", UITheme.TEXT)
+		UITheme.set_label_color(labels["check"], UITheme.POSITIVE)
+		UITheme.set_label_color(labels["name"], UITheme.TEXT)
 	_bar.value = ProgressionManager.get_completion_percent()
 	_show_milestone_toast(milestone_id)
 

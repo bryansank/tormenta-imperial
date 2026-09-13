@@ -5,6 +5,7 @@ extends CanvasLayer
 var _panel: PanelContainer
 var _backdrop: ColorRect
 var _settings_btn: Button
+var _fullscreen_check: CheckButton
 var _is_open := false
 
 func _ready() -> void:
@@ -23,9 +24,9 @@ func _setup_ui() -> void:
 	# Sidebar button — lives in the hamburger menu
 	_settings_btn = Button.new()
 	_settings_btn.text = Tr.t("BTN_SETTINGS")
-	_settings_btn.custom_minimum_size = Vector2(140, 38)
+	_settings_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
 	_settings_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_settings_btn.offset_left = -152
+	_settings_btn.offset_left = -176
 	_settings_btn.offset_top = UILayoutManager.get_sidebar_button_offset("SettingsPanel.button")
 	UITheme.style_card_button(_settings_btn, UITheme.BTN.lightened(0.05), UITheme.ACCENT)
 	_settings_btn.pressed.connect(toggle)
@@ -85,17 +86,25 @@ func _setup_ui() -> void:
 	vbox.add_child(UITheme.section_header(Tr.t("LBL_SETTINGS_UI")))
 
 	# Map grid toggle
-	var grid_check := CheckButton.new()
-	grid_check.text = Tr.t("LBL_SHOW_GRID")
-	grid_check.button_pressed = GameConfig.ui_grid_visible
-	grid_check.add_theme_font_size_override("font_size", UITheme.FONT_BODY)
-	grid_check.add_theme_color_override("font_color", UITheme.TEXT)
-	grid_check.toggled.connect(func(pressed: bool):
-		GameConfig.ui_grid_visible = pressed
-		EventBus.grid_overlay_toggled.emit(pressed)
-		GameConfig.save_user_settings()
+	var grid_check := UITheme.make_check_button(
+		Tr.t("LBL_SHOW_GRID"), GameConfig.ui_grid_visible,
+		func(pressed: bool):
+			GameConfig.ui_grid_visible = pressed
+			EventBus.grid_overlay_toggled.emit(pressed)
+			GameConfig.save_user_settings()
 	)
 	vbox.add_child(grid_check)
+
+	# Pantalla completa — tambien con F11; el interruptor se sincroniza si se
+	# cambia por teclado mientras el panel esta abierto.
+	_fullscreen_check = UITheme.make_check_button(
+		Tr.t("LBL_FULLSCREEN"), GameConfig.ui_fullscreen,
+		func(pressed: bool): GameConfig.set_fullscreen(pressed)
+	)
+	vbox.add_child(_fullscreen_check)
+	EventBus.fullscreen_changed.connect(func(enabled: bool):
+		_fullscreen_check.set_pressed_no_signal(enabled)
+	)
 
 	vbox.add_child(UITheme.make_separator())
 	vbox.add_child(UITheme.section_header(Tr.t("LBL_SETTINGS_GAME")))

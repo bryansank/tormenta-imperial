@@ -27,12 +27,13 @@ func _setup_ui() -> void:
 	_helper_btn = Button.new()
 	_helper_btn.text = "?"
 	_helper_btn.tooltip_text = Tr.t("BTN_HELPER_TIP")
-	_helper_btn.custom_minimum_size = Vector2(36, 36)
+	_helper_btn.custom_minimum_size = Vector2(UILayoutConfig.SIDEBAR_TOGGLE_SIZE, UILayoutConfig.SIDEBAR_TOGGLE_SIZE)
 	_helper_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_helper_btn.offset_left = -92
-	_helper_btn.offset_right = -56
+	# A la izquierda del menu hamburguesa, mismo lado tactil (44 px).
+	_helper_btn.offset_left = -(UILayoutConfig.SIDEBAR_TOGGLE_SIZE * 2 + 20)
+	_helper_btn.offset_right = -(UILayoutConfig.SIDEBAR_TOGGLE_SIZE + 20)
 	_helper_btn.offset_top = 10
-	_helper_btn.offset_bottom = 46
+	_helper_btn.offset_bottom = 10 + UILayoutConfig.SIDEBAR_TOGGLE_SIZE
 	UITheme.style_button(_helper_btn, UITheme.INFO, UITheme.FONT_SECTION)
 	_helper_btn.pressed.connect(_toggle_helper)
 	root.add_child(_helper_btn)

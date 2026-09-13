@@ -47,9 +47,9 @@ func _setup_ui() -> void:
 
 	_skirmish_btn = Button.new()
 	_skirmish_btn.text = Tr.t("BTN_SKIRMISH")
-	_skirmish_btn.custom_minimum_size = Vector2(140, 38)
+	_skirmish_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
 	_skirmish_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_skirmish_btn.offset_left = -152
+	_skirmish_btn.offset_left = -176
 	_skirmish_btn.offset_top = UILayoutManager.get_sidebar_button_offset("SkirmishPanel.button")
 	UITheme.style_card_button(_skirmish_btn, UITheme.BTN.lightened(0.05), MILITARY)
 	_skirmish_btn.pressed.connect(_toggle_panel)

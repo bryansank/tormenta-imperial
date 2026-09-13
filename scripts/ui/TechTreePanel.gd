@@ -37,9 +37,9 @@ func _setup_ui() -> void:
 
 	_tech_btn = Button.new()
 	_tech_btn.text = Tr.t("BTN_TECH")
-	_tech_btn.custom_minimum_size = Vector2(140, 38)
+	_tech_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
 	_tech_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_tech_btn.offset_left = -152
+	_tech_btn.offset_left = -176
 	_tech_btn.offset_top = UILayoutManager.get_sidebar_button_offset("TechTreePanel.button")
 	UITheme.style_card_button(_tech_btn, UITheme.BTN.lightened(0.05), UITheme.INFO)
 	_tech_btn.pressed.connect(_toggle_panel)
@@ -133,7 +133,7 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 
 	if researched:
 		UITheme.style_card_button(btn, UITheme.POSITIVE.darkened(0.4), UITheme.POSITIVE)
-		btn.add_theme_color_override("font_color", UITheme.POSITIVE)
+		UITheme.set_label_color(btn, UITheme.POSITIVE)
 		btn.disabled = true
 	elif can_research:
 		UITheme.style_card_button(btn, branch_color.darkened(0.6), branch_color)
@@ -155,13 +155,13 @@ func _refresh_tech_states() -> void:
 		var can_research := TechTreeManager.can_research(tech_id)
 		if researched:
 			btn.disabled = true
-			btn.add_theme_color_override("font_color", UITheme.POSITIVE)
+			UITheme.set_label_color(btn, UITheme.POSITIVE)
 		elif can_research:
 			btn.disabled = false
-			btn.add_theme_color_override("font_color", UITheme.TEXT)
+			UITheme.set_label_color(btn, UITheme.TEXT)
 		else:
 			btn.disabled = true
-			btn.add_theme_color_override("font_color", UITheme.TEXT_DIM)
+			UITheme.set_label_color(btn, UITheme.TEXT_DIM)
 
 func _toggle_panel() -> void:
 	_is_open = not _is_open

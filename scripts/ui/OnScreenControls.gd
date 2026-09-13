@@ -159,7 +159,7 @@ func _styled_button(label: String) -> Button:
 	btn.add_theme_stylebox_override("pressed", p)
 
 	btn.add_theme_font_size_override("font_size", UITheme.FONT_SECTION)
-	btn.add_theme_color_override("font_color", UITheme.TEXT_DIM)
+	UITheme.set_label_color(btn, UITheme.TEXT_DIM)
 	btn.add_theme_color_override("font_hover_color", UITheme.TEXT)
 	btn.add_theme_color_override("font_pressed_color", UITheme.TEXT_BRIGHT)
 	return btn
