@@ -19,6 +19,7 @@ Complete technical documentation for AI and developer context.
 | 11 | [Tech Tree](11-tech-tree.md) | 3 branches x 5 tiers, research mechanics, bonus application |
 | 12 | [Cloud Saves](12-cloud-saves.md) | Supabase integration, auth, cloud save/load setup |
 | 13 | [Roadmap](13-roadmap.md) | Phased plan: what's shipped and what's next (combat, units, multiplayer) |
+| 14 | [Guía de juego](14-guia-de-juego.md) | Player-facing: what every building does (with renders), the path to victory, and the dev-mode timings |
 
 ## Quick Reference
 
