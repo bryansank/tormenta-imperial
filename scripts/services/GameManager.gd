@@ -46,6 +46,7 @@ func _new_game() -> void:
 	RandomEventManager.reset()
 	TechTreeManager.reset()
 	ArmyManager.reset()
+	CombatManager.reset()
 	# Place nucleo at center (no build time for core)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
@@ -151,6 +152,11 @@ func _load_game() -> void:
 	if data.has("army"):
 		ArmyManager.load_save_data(data["army"])
 
+	# Restore expedition in progress. A save older than this feature has no key,
+	# which simply means "no expedition" — nothing to migrate.
+	if data.has("expedition"):
+		CombatManager.load_save_data(data["expedition"])
+
 	# Apply offline progression
 	if data.has("saved_at"):
 		var saved_at: float = float(data["saved_at"])
@@ -202,6 +208,7 @@ func save_game() -> void:
 
 	# Army
 	data["army"] = ArmyManager.get_save_data()
+	data["expedition"] = CombatManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -210,6 +217,19 @@ func save_game() -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(data, "\t"))
+
+## Asks the player to confirm before wiping the save. Every UI entry point to a
+## new game must go through here: clear_save() is irreversible.
+func request_new_game() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = Tr.t("BTN_NEW_GAME")
+	dialog.dialog_text = Tr.t("CONFIRM_NEW_GAME")
+	dialog.ok_button_text = Tr.t("BTN_CONFIRM")
+	dialog.cancel_button_text = Tr.t("BTN_CANCEL")
+	dialog.confirmed.connect(clear_save)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered()
 
 func clear_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
@@ -222,6 +242,7 @@ func clear_save() -> void:
 	RandomEventManager.reset()
 	TechTreeManager.reset()
 	ArmyManager.reset()
+	CombatManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null
@@ -243,6 +264,7 @@ func clear_save_and_reload_from(save_data: Dictionary) -> void:
 	RandomEventManager.reset()
 	TechTreeManager.reset()
 	ArmyManager.reset()
+	CombatManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null

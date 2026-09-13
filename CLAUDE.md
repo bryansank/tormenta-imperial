@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.6 .NET. The player builds and manages a persistent base on a procedurally generated island, progressing through 3 economic eras toward Imperial Victory. The management loop is complete (economy, population, market, tech tree, army training, audio). Turn-based combat (PVE/PVP) is the next major pillar — see `docs/13-roadmap.md`.
+**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET. The player builds and manages a persistent base on a procedurally generated island, progressing through 3 economic eras toward Imperial Victory. The management loop is complete (economy, population, market, tech tree, army training, audio). Turn-based combat (PVE/PVP) is the next major pillar — see `docs/13-roadmap.md`.
 
 Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
@@ -12,14 +12,14 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 ## Tech Stack
 
-- **Engine:** Godot 4.6 .NET Edition (Forward+ renderer)
-- **Languages:** GDScript (UI, camera, input, services, scene management) / C# (planned: unit AI, combat, pathfinding)
+- **Engine:** Godot 4.7 .NET Edition (Forward+ renderer)
+- **Languages:** GDScript for everything, including the upcoming turn-based combat. There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
 - **Backend:** Supabase (CloudSaveManager implements auth + save/load via REST, but nothing calls it yet — needs `.env` config and UI wiring)
 - **Multiplayer:** Nakama (planned: self-hosted Docker, for PvP and Co-op)
 
 ## Running the Project
 
-1. Open the project folder in **Godot 4.6 .NET Edition**
+1. Open the project folder in **Godot 4.7 .NET Edition**
 2. Press **F5** to run
 3. WASD to pan camera, scroll to zoom, middle-click to drag-pan
 4. Touch: single finger drag to pan, two-finger pinch to zoom
@@ -320,10 +320,11 @@ generated procedurally by `DieselpunkBuildingFactory` (fallback when a building'
 | Resources | `snake_case.tres` | `gold_mine.tres` |
 | Translation keys | `UPPER_SNAKE` | `LBL_MORALE`, `EVENT_STORM` |
 
-### Key Rule: C# vs GDScript
+### Key Rule: GDScript first (decided 2026-09-12)
 
-- **C#** for performance-sensitive: unit AI, combat math, pathfinding, network serialization
-- **GDScript** for everything else: UI, camera, input, services, scene management, signal wiring
+- **GDScript for everything**, combat included. The whole project (19 services + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
+- The old plan put unit AI, combat math and pathfinding in C# **for performance**. That argument does not apply at the agreed combat scale: an 8x8 board with 4–6 units per side. GDScript is orders of magnitude more than enough.
+- **Migrate later, only on evidence**: if a profiled module proves too slow, port that module to C#. Do not create the .NET project speculatively.
 
 ### Adding a New Building
 
@@ -376,8 +377,9 @@ All balance values live in `GameConfig.gd`:
 
 Full roadmap with milestones and dependency order: `docs/13-roadmap.md`.
 
-- **Turn-based combat PVE** (next major pillar): tactical grid, turn/initiative,
-  move/attack/defend, enemy AI — first real C# in the project
+- **Turn-based combat PVE** (next major pillar): tactical grid (8x8, 4–6 units per
+  side), turn/initiative, move/attack/defend, enemy AI — **in GDScript**, fully
+  planned in `specs/001-combate-pve/`
 - **Tower defensive behavior** + unit desertion when upkeep unpaid
 - **Missions/contracts:** timed delivery challenges for rewards
 - **Cloud save wiring:** CloudSaveManager exists but needs `.env` + UI (settings menu)

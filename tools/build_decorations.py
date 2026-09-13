@@ -1,7 +1,18 @@
 """Build and export all decoration models to Blender."""
+import os
 import sys
 sys.path.insert(0, '.')
 from tools.blender_helper import send_to_blender
+
+# Where the exported .glb files land. Resolved from this file so the script runs
+# on any machine; override with TORMENTA_ASSETS to export somewhere else.
+ASSETS_BASE = os.environ.get(
+    'TORMENTA_ASSETS',
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'assets', 'models', 'buildings',
+    ),
+).replace('\\', '/')
 
 CODE = r'''
 import bpy
@@ -52,7 +63,9 @@ def export(name, path):
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True, export_materials='EXPORT')
 
-BASE = r'C:/Users/Key/Documents/1_PERSONAL_KEY/tormenta-imperial/assets/models/buildings'
+# Injected by the host script below — this code runs inside Blender, where
+# __file__ would point somewhere else entirely.
+BASE = '__ASSETS_BASE__'
 
 # ROAD
 clear()
@@ -145,5 +158,5 @@ print('Statue exported')
 '''
 
 import json
-result = send_to_blender(CODE, timeout=60)
+result = send_to_blender(CODE.replace('__ASSETS_BASE__', ASSETS_BASE), timeout=60)
 print(json.dumps(result, indent=2))

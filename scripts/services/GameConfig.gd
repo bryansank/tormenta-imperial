@@ -481,6 +481,54 @@ func get_army_capacity(barracks_count: int) -> int:
 func get_army_upkeep_interval() -> float:
 	return get_duration(army_upkeep_interval)
 
+# ══════════════════════════════════════════════════════════════════════
+# ── Combat (PVE expeditions) ──
+# ══════════════════════════════════════════════════════════════════════
+# The army trained above is spent here. Kept deliberately small: an 8x8 board
+# with up to 6 units per side stays readable on a phone and resolves in minutes.
+
+## Board and party limits.
+var combat_board_size := Vector2i(8, 8)
+var combat_deploy_cap := 6
+## Rounds before the encounter is force-resolved by total HP (FR-015).
+var combat_turn_limit := 20
+## Seconds between enemy AI actions, so the player can follow what happened.
+var combat_ai_step_delay := 0.45
+
+## Per-unit combat stats, parallel to `unit_types`. `min_range` keeps artillery
+## from firing at adjacent targets, which is what makes positioning matter.
+var combat_unit_stats := {
+	"infantry":  {"hp": 30, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5},
+	"artillery": {"hp": 22, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3},
+	"vehicle":   {"hp": 60, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4},
+}
+
+## Enemy scaling: deeper nodes and later eras field tougher rosters.
+var combat_enemy_scale_per_depth := 0.15
+var combat_enemy_scale_per_era := 0.25
+var combat_boss_multiplier := 1.8
+
+## Expedition map shape (min, max).
+var combat_map_depth := Vector2i(4, 6)
+var combat_map_branching := Vector2i(2, 3)
+var combat_draft_options := 3
+
+## Base reward per cleared encounter, scaled by node depth and risk.
+var combat_reward_base := {"gold": 60, "wood": 30}
+
+## Morale is the bridge between base and battlefield: a demoralised population
+## reacts late and hits softer, and casualties cost morale back home.
+var combat_morale_initiative_bonus := 2
+var combat_morale_attack_range := Vector2(0.85, 1.15)
+var combat_morale_on_victory := 8.0
+var combat_morale_per_casualty := 3.0
+
+func get_combat_stats(unit_id: String) -> Dictionary:
+	return combat_unit_stats.get(unit_id, {})
+
+func get_combat_ai_step_delay() -> float:
+	return combat_ai_step_delay if not dev_mode else combat_ai_step_delay * 0.5
+
 # ── Storage Helpers ──
 
 func get_storage_cap(warehouse_count: int) -> int:

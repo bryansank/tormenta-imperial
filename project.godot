@@ -35,12 +35,19 @@ ProgressionManager="*res://scripts/services/ProgressionManager.gd"
 MarketManager="*res://scripts/services/MarketManager.gd"
 PopulationManager="*res://scripts/services/PopulationManager.gd"
 ArmyManager="*res://scripts/services/ArmyManager.gd"
+CombatManager="*res://scripts/services/CombatManager.gd"
 RandomEventManager="*res://scripts/services/RandomEventManager.gd"
 TechTreeManager="*res://scripts/services/TechTreeManager.gd"
 CloudSaveManager="*res://scripts/services/CloudSaveManager.gd"
 UIManager="*res://scripts/services/UIManager.gd"
 UILayoutManager="*res://scripts/services/UILayoutManager.gd"
 AudioManager="*res://scripts/services/AudioManager.gd"
+BeckettRuntime="*uid://dspgi2nxto4e8"
+
+[beckett]
+
+effort_schema=2
+dock_revealed=true
 
 [display]
 
@@ -51,6 +58,10 @@ window/stretch/mode="canvas_items"
 [dotnet]
 
 project/assembly_name="TormentaImperial"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/beckett/plugin.cfg", "res://addons/gdUnit4/plugin.cfg")
 
 [rendering]
 
