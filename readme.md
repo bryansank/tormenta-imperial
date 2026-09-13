@@ -99,4 +99,15 @@ Delete `user://save_game.json` (on Windows: `%APPDATA%/Godot/app_userdata/Tormen
 
 ## License
 
-This project is licensed under the **MIT License**.
+**Source available, not open source.** This repository is public so the code can be
+read and studied — not reused.
+
+- **Source code:** [PolyForm Strict 1.0.0](https://polyformproject.org/licenses/strict/1.0.0).
+  You may read it and run it locally for personal study or private entertainment.
+  You may **not** redistribute it, modify it, or use it commercially.
+- **Art, audio, written text and the name "Tormenta Imperial":** all rights reserved,
+  not licensed.
+- **Bundled third-party components** (Godot, gdUnit4, Beckett, fonts, CC0 assets) keep
+  their own licences — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+Full terms in [LICENSE](LICENSE). Want different terms? Open an issue.
