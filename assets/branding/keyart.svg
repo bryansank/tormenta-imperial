@@ -1,0 +1,290 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <title>Tormenta Imperial — key art</title>
+  <defs>
+    <!-- Sky: cold storm above, furnace haze at the horizon -->
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#0B0E14"/>
+      <stop offset="0.28" stop-color="#1A2130"/>
+      <stop offset="0.55" stop-color="#333840"/>
+      <stop offset="0.78" stop-color="#5E5540"/>
+      <stop offset="1"    stop-color="#8A6E3E"/>
+    </linearGradient>
+
+    <radialGradient id="boltGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"   stop-color="#EAF2FF" stop-opacity="0.55"/>
+      <stop offset="0.35" stop-color="#9FB8E0" stop-opacity="0.20"/>
+      <stop offset="1"   stop-color="#9FB8E0" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="furnace" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"   stop-color="#FFC24A" stop-opacity="0.85"/>
+      <stop offset="0.3" stop-color="#FF8A22" stop-opacity="0.42"/>
+      <stop offset="1"   stop-color="#C24A10" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="emberGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFD070" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#FF9B2A" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="smokeCold" x1="0" y1="1" x2="0.4" y2="0">
+      <stop offset="0"   stop-color="#9E8C6A" stop-opacity="0.75"/>
+      <stop offset="0.45" stop-color="#6A7080" stop-opacity="0.5"/>
+      <stop offset="1"   stop-color="#3A4250" stop-opacity="0.05"/>
+    </linearGradient>
+
+    <radialGradient id="plume" cx="0.5" cy="0.6" r="0.52">
+      <stop offset="0"   stop-color="#95886C" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#5F6675" stop-opacity="0.26"/>
+      <stop offset="1"   stop-color="#454C5A" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Horizon haze as a soft band, so it never shows a hard edge -->
+    <linearGradient id="haze" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#6E6046" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#6E6046" stop-opacity="0.30"/>
+      <stop offset="1"    stop-color="#8A6E3E" stop-opacity="0.05"/>
+    </linearGradient>
+
+    <!-- Soft vignette instead of hard corner wedges -->
+    <radialGradient id="vignette" cx="0.5" cy="0.52" r="0.72">
+      <stop offset="0.5" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="0.82" stop-color="#000000" stop-opacity="0.28"/>
+      <stop offset="1"   stop-color="#000000" stop-opacity="0.62"/>
+    </radialGradient>
+
+    <!-- Diffuse halo around the strike, replacing the geometric shafts -->
+    <radialGradient id="strikeWash" cx="0.5" cy="0.42" r="0.5">
+      <stop offset="0"    stop-color="#BFD4F5" stop-opacity="0.22"/>
+      <stop offset="0.45" stop-color="#8FA8CE" stop-opacity="0.09"/>
+      <stop offset="1"    stop-color="#7D93B8" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="mud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#171410"/>
+      <stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+
+    <linearGradient id="bolt" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0"   stop-color="#FFFFFF"/>
+      <stop offset="0.5" stop-color="#DCE9FF"/>
+      <stop offset="1"   stop-color="#9CC0FF"/>
+    </linearGradient>
+
+    <linearGradient id="brassRule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#8A6818" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#C49629"/>
+      <stop offset="0.75" stop-color="#E8C468"/>
+      <stop offset="1"    stop-color="#8A6818" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ───────────────────────── SKY ───────────────────────── -->
+  <rect width="1600" height="900" fill="url(#sky)"/>
+
+  <!-- High cloud mass, cold and heavy -->
+  <g fill="#0D111A" opacity="0.85">
+    <ellipse cx="240" cy="90"  rx="330" ry="86"/>
+    <ellipse cx="640" cy="52"  rx="380" ry="94"/>
+    <ellipse cx="1090" cy="84" rx="350" ry="88"/>
+    <ellipse cx="1450" cy="60" rx="300" ry="80"/>
+    <rect x="0" y="0" width="1600" height="70"/>
+  </g>
+  <g fill="#161C28" opacity="0.8">
+    <ellipse cx="380" cy="168" rx="300" ry="66"/>
+    <ellipse cx="860" cy="146" rx="340" ry="72"/>
+    <ellipse cx="1320" cy="180" rx="290" ry="62"/>
+  </g>
+  <g fill="#232A38" opacity="0.6">
+    <ellipse cx="200" cy="250" rx="260" ry="48"/>
+    <ellipse cx="700" cy="236" rx="300" ry="52"/>
+    <ellipse cx="1240" cy="262" rx="280" ry="46"/>
+  </g>
+
+  <!-- Lightning: glow, main fork, branches -->
+  <ellipse cx="470" cy="300" rx="430" ry="330" fill="url(#boltGlow)"/>
+  <g fill="url(#bolt)">
+    <path d="M556 96 L470 300 L524 292 L436 508 L470 352 L414 362 L500 96 Z"/>
+    <path d="M470 300 L404 404 L436 396 L392 470 L446 388 L414 394 Z" opacity="0.9"/>
+    <path d="M524 292 L588 366 L560 360 L604 430 L544 358 L570 352 Z" opacity="0.75"/>
+  </g>
+  <!-- distant secondary strike -->
+  <g fill="#CFE0FF" opacity="0.45">
+    <path d="M1268 150 L1226 268 L1256 262 L1210 366 L1268 258 L1238 264 L1288 150 Z"/>
+  </g>
+
+  <!-- Diffuse wash of light around the strike (no hard-edged shafts) -->
+  <ellipse cx="500" cy="330" rx="620" ry="430" fill="url(#strikeWash)"/>
+
+  <!-- ─────────────────── FAR INDUSTRY (hazy) ─────────────────── -->
+  <g fill="#2B3240" opacity="0.75">
+    <rect x="86"  y="470" width="26" height="200"/>
+    <rect x="80"  y="462" width="38" height="12"/>
+    <rect x="150" y="510" width="22" height="160"/>
+    <rect x="196" y="486" width="30" height="184"/>
+    <rect x="190" y="478" width="42" height="12"/>
+    <rect x="1386" y="492" width="26" height="178"/>
+    <rect x="1380" y="484" width="38" height="12"/>
+    <rect x="1452" y="524" width="22" height="146"/>
+    <rect x="1496" y="500" width="30" height="170"/>
+  </g>
+  <!-- haze band that pushes the far layer back -->
+  <rect x="0" y="400" width="1600" height="290" fill="url(#haze)"/>
+
+  <!-- ─────────────────── MID INDUSTRY ─────────────────── -->
+  <g fill="#121822">
+    <rect x="300" y="452" width="34" height="230"/>
+    <rect x="292" y="442" width="50" height="14" rx="3"/>
+    <rect x="366" y="498" width="28" height="184"/>
+    <rect x="420" y="470" width="40" height="212"/>
+    <rect x="412" y="460" width="56" height="14" rx="3"/>
+    <path d="M1180 682 L1180 508 L1196 492 L1232 492 L1248 508 L1248 682 Z"/>
+    <rect x="1172" y="480" width="84" height="16" rx="3"/>
+    <rect x="1288" y="536" width="30" height="146"/>
+    <rect x="1280" y="526" width="46" height="12" rx="3"/>
+  </g>
+
+  <!-- ─────────────────── HERO: the imperial works ─────────────────── -->
+  <!-- furnace bloom behind the complex -->
+  <ellipse cx="880" cy="660" rx="430" ry="190" fill="url(#furnace)"/>
+
+  <g fill="#05070A">
+    <!-- left wing -->
+    <rect x="560" y="560" width="120" height="128"/>
+    <path d="M560 560 L620 528 L680 560 Z"/>
+    <!-- tall twin stacks -->
+    <path d="M700 688 L700 318 L712 296 L748 296 L760 318 L760 688 Z"/>
+    <rect x="690" y="286" width="80" height="20" rx="4"/>
+    <path d="M792 688 L792 372 L802 352 L832 352 L842 372 L842 688 Z"/>
+    <rect x="784" y="342" width="66" height="18" rx="4"/>
+    <!-- central keep: the HQ -->
+    <path d="M876 688 L876 430 L900 430 L900 386 L944 352 L988 386 L988 430 L1012 430 L1012 688 Z"/>
+    <!-- flanking towers -->
+    <path d="M1040 688 L1040 470 L1052 452 L1084 452 L1096 470 L1096 688 Z"/>
+    <rect x="1032" y="444" width="72" height="16" rx="4"/>
+    <!-- right hall -->
+    <rect x="1116" y="580" width="150" height="108"/>
+    <path d="M1116 580 L1191 546 L1266 580 Z"/>
+    <!-- gantry connecting stacks to keep -->
+    <rect x="760" y="500" width="120" height="12"/>
+    <rect x="1012" y="520" width="34" height="10"/>
+  </g>
+
+  <!-- brass banding and structure -->
+  <g fill="#C49629">
+    <rect x="876" y="486" width="136" height="9"/>
+    <rect x="876" y="548" width="136" height="7" opacity="0.8"/>
+    <rect x="700" y="470" width="60" height="6" opacity="0.7"/>
+    <rect x="792" y="500" width="50" height="6" opacity="0.7"/>
+    <rect x="1040" y="530" width="56" height="6" opacity="0.65"/>
+  </g>
+
+  <!-- furnace mouths and lit windows (warm against the cold storm) -->
+  <ellipse cx="944" cy="672" rx="120" ry="46" fill="url(#emberGlow)"/>
+  <ellipse cx="640" cy="676" rx="70" ry="28" fill="url(#emberGlow)" opacity="0.8"/>
+  <ellipse cx="1190" cy="672" rx="80" ry="30" fill="url(#emberGlow)" opacity="0.75"/>
+  <g fill="#FFB43C">
+    <rect x="912" y="648" width="26" height="40"/>
+    <rect x="950" y="648" width="26" height="40"/>
+    <rect x="614" y="656" width="20" height="32"/>
+    <rect x="646" y="656" width="20" height="32"/>
+    <rect x="1166" y="652" width="22" height="36"/>
+    <rect x="1200" y="652" width="22" height="36"/>
+  </g>
+  <g fill="#FFD933" opacity="0.92">
+    <rect x="898" y="452" width="14" height="20"/><rect x="922" y="452" width="14" height="20"/>
+    <rect x="952" y="452" width="14" height="20"/><rect x="976" y="452" width="14" height="20"/>
+    <rect x="898" y="510" width="14" height="20"/><rect x="952" y="510" width="14" height="20"/>
+    <rect x="712" y="420" width="12" height="16"/><rect x="734" y="420" width="12" height="16"/>
+    <rect x="1054" y="500" width="12" height="18"/><rect x="1076" y="500" width="12" height="18"/>
+    <rect x="1140" y="612" width="16" height="22"/><rect x="1172" y="612" width="16" height="22"/>
+    <rect x="1216" y="612" width="16" height="22"/>
+    <rect x="584" y="596" width="16" height="22"/><rect x="616" y="596" width="16" height="22"/>
+  </g>
+  <!-- beacon on the keep -->
+  <circle cx="944" cy="366" r="26" fill="url(#emberGlow)"/>
+  <circle cx="944" cy="366" r="7" fill="#FFE08A"/>
+
+  <!-- ─────────────────── SMOKE ─────────────────── -->
+  <!-- Billowing plumes: overlapping soft puffs drifting right with the wind -->
+  <g>
+    <!-- tall stack, the big plume -->
+    <ellipse cx="736" cy="262" rx="62"  ry="44" fill="url(#plume)"/>
+    <ellipse cx="766" cy="212" rx="80"  ry="56" fill="url(#plume)"/>
+    <ellipse cx="812" cy="158" rx="98"  ry="66" fill="url(#plume)"/>
+    <ellipse cx="880" cy="104" rx="120" ry="74" fill="url(#plume)"/>
+    <ellipse cx="972" cy="62"  rx="142" ry="80" fill="url(#plume)" opacity="0.8"/>
+    <ellipse cx="1090" cy="40" rx="160" ry="76" fill="url(#plume)" opacity="0.55"/>
+    <!-- second stack -->
+    <ellipse cx="826" cy="322" rx="48" ry="34" fill="url(#plume)" opacity="0.9"/>
+    <ellipse cx="856" cy="286" rx="62" ry="42" fill="url(#plume)" opacity="0.75"/>
+    <ellipse cx="900" cy="248" rx="76" ry="48" fill="url(#plume)" opacity="0.6"/>
+    <!-- right tower -->
+    <ellipse cx="1218" cy="452" rx="44" ry="30" fill="url(#plume)" opacity="0.7"/>
+    <ellipse cx="1248" cy="418" rx="58" ry="38" fill="url(#plume)" opacity="0.55"/>
+    <ellipse cx="1292" cy="384" rx="72" ry="44" fill="url(#plume)" opacity="0.4"/>
+    <!-- far left, thin and hazy -->
+    <ellipse cx="326" cy="418" rx="38" ry="26" fill="url(#plume)" opacity="0.5"/>
+    <ellipse cx="352" cy="386" rx="50" ry="32" fill="url(#plume)" opacity="0.38"/>
+    <ellipse cx="388" cy="356" rx="62" ry="36" fill="url(#plume)" opacity="0.26"/>
+  </g>
+
+  <!-- ─────────────────── RAIN ─────────────────── -->
+  <g stroke="#AFC0D6" stroke-width="1.6" opacity="0.13">
+    <path d="M40 120 L14 210"/><path d="M140 60 L114 150"/><path d="M232 180 L206 270"/>
+    <path d="M330 40 L304 130"/><path d="M410 250 L384 340"/><path d="M498 140 L472 230"/>
+    <path d="M596 320 L570 410"/><path d="M676 70 L650 160"/><path d="M760 230 L734 320"/>
+    <path d="M852 130 L826 220"/><path d="M940 300 L914 390"/><path d="M1026 80 L1000 170"/>
+    <path d="M1112 240 L1086 330"/><path d="M1200 150 L1174 240"/><path d="M1288 330 L1262 420"/>
+    <path d="M1370 90 L1344 180"/><path d="M1456 260 L1430 350"/><path d="M1540 170 L1514 260"/>
+    <path d="M90 400 L64 490"/><path d="M270 470 L244 560"/><path d="M480 520 L454 610"/>
+    <path d="M1330 500 L1304 590"/><path d="M1520 440 L1494 530"/><path d="M1180 380 L1154 470"/>
+  </g>
+  <g stroke="#CFE0FF" stroke-width="2.2" opacity="0.10">
+    <path d="M200 300 L166 420"/><path d="M620 200 L586 320"/><path d="M1080 420 L1046 540"/>
+    <path d="M1400 300 L1366 420"/><path d="M860 520 L826 640"/>
+  </g>
+
+  <!-- ─────────────────── FOREGROUND: mud and scale ─────────────────── -->
+  <path d="M0 688 L1600 688 L1600 900 L0 900 Z" fill="url(#mud)"/>
+  <!-- warm light pooling on the wet ground -->
+  <ellipse cx="944" cy="700" rx="340" ry="34" fill="#FF9B2A" opacity="0.16"/>
+  <ellipse cx="944" cy="706" rx="170" ry="18" fill="#FFC24A" opacity="0.14"/>
+  <!-- ridges of mud -->
+  <g fill="#0B0A08">
+    <path d="M0 700 C 220 686, 380 716, 600 702 C 820 688, 980 718, 1200 704 C 1380 692, 1500 710, 1600 700 L1600 760 L0 760 Z"/>
+    <path d="M0 762 C 260 748, 420 780, 700 764 C 980 748, 1180 782, 1600 762 L1600 900 L0 900 Z"/>
+  </g>
+  <!-- rail line running to the works -->
+  <g stroke="#3A3529" stroke-width="3" opacity="0.55">
+    <path d="M300 900 L820 706"/><path d="M420 900 L860 706"/>
+  </g>
+  <g stroke="#2A2820" stroke-width="5" opacity="0.5">
+    <path d="M336 878 L392 858"/><path d="M404 838 L452 820"/><path d="M466 800 L508 784"/>
+    <path d="M524 764 L562 750"/><path d="M576 734 L610 722"/>
+  </g>
+
+  <!-- two workers, for scale -->
+  <g fill="#000000">
+    <ellipse cx="540" cy="812" rx="26" ry="5" opacity="0.5"/>
+    <path d="M534 812 L534 788 L530 770 L536 762 L544 762 L550 770 L546 788 L546 812 L542 812 L542 796 L538 796 L538 812 Z"/>
+    <circle cx="540" cy="756" r="7"/>
+    <ellipse cx="596" cy="820" rx="24" ry="5" opacity="0.5"/>
+    <path d="M590 820 L590 796 L586 780 L592 772 L600 772 L606 780 L602 796 L602 820 L598 820 L598 806 L594 806 L594 820 Z"/>
+    <circle cx="596" cy="766" r="6.5"/>
+  </g>
+  <!-- their lanterns -->
+  <circle cx="558" cy="786" r="16" fill="url(#emberGlow)" opacity="0.8"/>
+  <circle cx="558" cy="786" r="3" fill="#FFD070"/>
+
+  <!-- ─────────────────── FRAMING ─────────────────── -->
+  <!-- soft vignette -->
+  <rect width="1600" height="900" fill="url(#vignette)"/>
+
+  <!-- brass rules that frame the title area (text is composited on top) -->
+  <rect x="300" y="742" width="1000" height="3" fill="url(#brassRule)" opacity="0.9"/>
+  <rect x="300" y="856" width="1000" height="2" fill="url(#brassRule)" opacity="0.6"/>
+  <g fill="#C49629" opacity="0.85">
+    <circle cx="292" cy="743" r="5"/><circle cx="1308" cy="743" r="5"/>
+  </g>
+</svg>
