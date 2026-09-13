@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.6 .NET. The player builds and manages a persistent base on a procedurally generated island, progressing through 3 economic eras toward Imperial Victory. The management loop is complete (economy, population, market, tech tree, army training, audio). Turn-based combat (PVE/PVP) is the next major pillar — see `docs/13-roadmap.md`.
+**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET. The player builds and manages a persistent base on a procedurally generated island, progressing through 3 economic eras toward Imperial Victory. The management loop is complete (economy, population, market, tech tree, army training, audio). Turn-based combat (PVE/PVP) is the next major pillar — see `docs/13-roadmap.md`.
 
 Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
@@ -12,14 +12,14 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 ## Tech Stack
 
-- **Engine:** Godot 4.6 .NET Edition (Forward+ renderer)
+- **Engine:** Godot 4.7 .NET Edition (Forward+ renderer)
 - **Languages:** GDScript (UI, camera, input, services, scene management) / C# (planned: unit AI, combat, pathfinding)
 - **Backend:** Supabase (CloudSaveManager implements auth + save/load via REST, but nothing calls it yet — needs `.env` config and UI wiring)
 - **Multiplayer:** Nakama (planned: self-hosted Docker, for PvP and Co-op)
 
 ## Running the Project
 
-1. Open the project folder in **Godot 4.6 .NET Edition**
+1. Open the project folder in **Godot 4.7 .NET Edition**
 2. Press **F5** to run
 3. WASD to pan camera, scroll to zoom, middle-click to drag-pan
 4. Touch: single finger drag to pan, two-finger pinch to zoom

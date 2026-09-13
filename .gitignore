@@ -32,3 +32,9 @@ __pycache__/
 # Environment / secrets
 .env
 secret.json
+
+# Config de clientes MCP: contiene el token local del servidor de Beckett.
+# Se regenera solo al abrir el editor; la config de Blender está documentada
+# en CONTEXTO_PROYECTO.md.
+.mcp.json
+.cursor/

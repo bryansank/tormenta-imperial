@@ -1,6 +1,6 @@
 # Tormenta Imperial
 
-**Tormenta Imperial** is a dieselpunk base management + turn-based strategy game built in **Godot 4.6 .NET**. Build an industrial empire on a procedural island, manage population and resources through 3 economic eras, and achieve Imperial Victory.
+**Tormenta Imperial** is a dieselpunk base management + turn-based strategy game built in **Godot 4.7 .NET**. Build an industrial empire on a procedural island, manage population and resources through 3 economic eras, and achieve Imperial Victory.
 
 > "On the mud of history, we shall build monuments of steel."
 
@@ -57,7 +57,7 @@
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| Engine | Godot 4.6 .NET Edition | Game engine (Forward+ renderer) |
+| Engine | Godot 4.7 .NET Edition | Game engine (Forward+ renderer) |
 | Logic | GDScript | All current systems (services, UI, gameplay) |
 | Logic (planned) | C# | Unit AI, combat math, pathfinding |
 | Backend | Supabase | Cloud saves + auth (implemented, not yet wired to UI) |
@@ -79,7 +79,7 @@ See [CLAUDE.md](CLAUDE.md) for complete technical documentation including:
 ## Development
 
 ### Prerequisites
-- **Godot 4.6 .NET Edition**
+- **Godot 4.7 .NET Edition**
 - **.NET SDK 8.0+**
 
 ### Running

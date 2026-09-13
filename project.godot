@@ -41,6 +41,12 @@ CloudSaveManager="*res://scripts/services/CloudSaveManager.gd"
 UIManager="*res://scripts/services/UIManager.gd"
 UILayoutManager="*res://scripts/services/UILayoutManager.gd"
 AudioManager="*res://scripts/services/AudioManager.gd"
+BeckettRuntime="*uid://dspgi2nxto4e8"
+
+[beckett]
+
+effort_schema=2
+dock_revealed=true
 
 [display]
 
@@ -51,6 +57,10 @@ window/stretch/mode="canvas_items"
 [dotnet]
 
 project/assembly_name="TormentaImperial"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/beckett/plugin.cfg")
 
 [rendering]
 

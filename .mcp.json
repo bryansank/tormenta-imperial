@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "blender": {
-      "command": "python",
-      "args": ["-m", "blender_mcp"]
-    }
-  }
-}
