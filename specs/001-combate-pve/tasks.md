@@ -19,11 +19,11 @@
 
 **Purpose**: dependencias, balance, señales y textos — todo lo que las stories consumen.
 
-- [ ] T001 Instalar gdUnit4 en `addons/gdUnit4/` (AssetLib) y activarlo en `project.godot` `[editor_plugins]`; crear `tests/combat/.gitkeep`
-- [ ] T002 [P] Añadir a `scripts/services/GameConfig.gd` las claves `combat_*` y `combat_unit_stats` con los valores de research.md D4, más `get_combat_stats(unit_id) -> Dictionary`
-- [ ] T003 [P] Declarar la categoría `# ── Combat ──` con las 12 señales de `contracts/eventbus-combat.md` en `scripts/services/EventBus.gd`
-- [ ] T004 [P] Añadir las claves `Tr` de `contracts/eventbus-combat.md` en ES y EN en `scripts/services/Tr.gd` (sin acentos, como el resto del archivo); validar con `validate_script` (detecta claves duplicadas)
-- [ ] T005 [P] Añadir slots en `scripts/ui/UILayoutConfig.gd`: `SkirmishPanel.button` → `sidebar_buttons` (tras `ArmyPanel.button` en `SIDEBAR_BUTTON_ORDER`), `SkirmishPanel.modal` → `center_modal` (`PANEL_SIZES` 520×0), `BattleScreen` → `full_overlay`
+- [x] T001 Instalar gdUnit4 en `addons/gdUnit4/` (AssetLib) y activarlo en `project.godot` `[editor_plugins]`; crear `tests/combat/.gitkeep`
+- [x] T002 [P] Añadir a `scripts/services/GameConfig.gd` las claves `combat_*` y `combat_unit_stats` con los valores de research.md D4, más `get_combat_stats(unit_id) -> Dictionary`
+- [x] T003 [P] Declarar la categoría `# ── Combat ──` con las 12 señales de `contracts/eventbus-combat.md` en `scripts/services/EventBus.gd`
+- [x] T004 [P] Añadir las claves `Tr` de `contracts/eventbus-combat.md` en ES y EN en `scripts/services/Tr.gd` (sin acentos, como el resto del archivo); validar con `validate_script` (detecta claves duplicadas)
+- [x] T005 [P] Añadir slots en `scripts/ui/UILayoutConfig.gd`: `SkirmishPanel.button` → `sidebar_buttons` (tras `ArmyPanel.button` en `SIDEBAR_BUTTON_ORDER`), `SkirmishPanel.modal` → `center_modal` (`PANEL_SIZES` 520×0), `BattleScreen` → `full_overlay`
 
 **Checkpoint**: el juego arranca igual que antes, `game_logs` vacío, sin UI nueva visible todavía.
 
@@ -33,12 +33,12 @@
 
 **Purpose**: entidades y reglas puras + el servicio dueño. Bloquea todas las stories.
 
-- [ ] T006 [P] Crear `scripts/combat/CombatUnit.gd` (`RefCounted`) según data-model.md: campos, derivados (`attack()`, `defense()` con `defending` ×2, `initiative()`), `to_dict()` / `from_dict()`
-- [ ] T007 [P] Crear `scripts/combat/CombatRules.gd` (estático): `damage(attacker, target, morale_mod) -> int` (mín. 1), `morale_attack_mod(morale) -> float`, `morale_initiative_bonus(morale) -> int`, `manhattan()`, `in_attack_range()`, `reachable_cells(board, from, move_range, blocked) -> Array[Vector2i]` (BFS 4 direcciones), `resolve_timeout(units) -> int`
-- [ ] T008 Tests `tests/combat/test_combat_rules.gd`: daño mínimo 1; defender duplica DEF; moral 0/50/100 da 0.85/1.0/1.15; artillería no alcanza adyacente (min_range 2); BFS no atraviesa unidades; timeout con empate → derrota
-- [ ] T009 Crear `scripts/services/CombatManager.gd` (autoload): estado (`_expedition`, `_encounter`), API pública completa de `contracts/eventbus-combat.md` como stubs que emiten señales, `get_save_data()` / `load_save_data()` / `reset()`; registrar en `project.godot` **tras** `ArmyManager` y **antes** de `RandomEventManager`
-- [ ] T010 Cablear `scripts/services/GameManager.gd`: `data["expedition"] = CombatManager.get_save_data()` en guardado; `if data.has("expedition"): CombatManager.load_save_data(...)` en carga; `CombatManager.reset()` en `clear_save()`
-- [ ] T011 Crear `scenes/ui/BattleScreen.tscn` + `scripts/ui/BattleScreen.gd` (CanvasLayer, `layer = 12`, oculto; se registra en `UIManager` como `"BattleScreen"`) y `scenes/ui/SkirmishPanel.tscn` + `scripts/ui/SkirmishPanel.gd` (patrón exacto de `ArmyPanel.gd`: botón lateral visible solo con Cuartel, backdrop, modal); instanciar ambos en `scenes/main/Main.tscn`
+- [x] T006 [P] Crear `scripts/combat/CombatUnit.gd` (`RefCounted`) según data-model.md: campos, derivados (`attack()`, `defense()` con `defending` ×2, `initiative()`), `to_dict()` / `from_dict()`
+- [x] T007 [P] Crear `scripts/combat/CombatRules.gd` (estático): `damage(attacker, target, morale_mod) -> int` (mín. 1), `morale_attack_mod(morale) -> float`, `morale_initiative_bonus(morale) -> int`, `manhattan()`, `in_attack_range()`, `reachable_cells(board, from, move_range, blocked) -> Array[Vector2i]` (BFS 4 direcciones), `resolve_timeout(units) -> int`
+- [x] T008 Tests `tests/combat/test_combat_rules.gd`: daño mínimo 1; defender duplica DEF; moral 0/50/100 da 0.85/1.0/1.15; artillería no alcanza adyacente (min_range 2); BFS no atraviesa unidades; timeout con empate → derrota
+- [x] T009 Crear `scripts/services/CombatManager.gd` (autoload): estado (`_expedition`, `_encounter`), API pública completa de `contracts/eventbus-combat.md` como stubs que emiten señales, `get_save_data()` / `load_save_data()` / `reset()`; registrar en `project.godot` **tras** `ArmyManager` y **antes** de `RandomEventManager`
+- [x] T010 Cablear `scripts/services/GameManager.gd`: `data["expedition"] = CombatManager.get_save_data()` en guardado; `if data.has("expedition"): CombatManager.load_save_data(...)` en carga; `CombatManager.reset()` en `clear_save()`
+- [x] T011 Crear `scenes/ui/BattleScreen.tscn` + `scripts/ui/BattleScreen.gd` (CanvasLayer, `layer = 12`, oculto; se registra en `UIManager` como `"BattleScreen"`) y `scenes/ui/SkirmishPanel.tscn` + `scripts/ui/SkirmishPanel.gd` (patrón exacto de `ArmyPanel.gd`: botón lateral visible solo con Cuartel, backdrop, modal); instanciar ambos en `scenes/main/Main.tscn`
 
 **Checkpoint**: nuevo botón **Escaramuzas** en la barra lateral abre un modal vacío y lo cierra. Arranque limpio. Tests de reglas en verde.
 
@@ -50,16 +50,16 @@
 
 **Independent Test**: quickstart E1 usando el botón dev; victoria y derrota declaradas; `game_logs` vacío; < 5 min.
 
-- [ ] T012 [US1] Crear `scripts/combat/Encounter.gd`: tablero, `deploy_zones` (filas 0-1 enemigo, 6-7 jugador), `deploy(units)`, cálculo de `turn_order` (iniciativa desc., jugador gana empates, luego `uid`), `advance_turn()` con reset de flags por ronda, transiciones `DEPLOYING → PLAYER_TURN/ENEMY_TURN → WON/LOST/TIMEOUT`
-- [ ] T013 [US1] `CombatManager`: `start_encounter(party, enemy_roster, is_boss)`, `get_valid_moves()`, `get_valid_targets()`, `move_unit()`, `attack()`, `defend()`, `wait()`, `end_turn()`; emitir `encounter_started`, `turn_started`, `unit_moved`, `unit_attacked`, `unit_defended`, `unit_died`, `encounter_ended`. Enemigo generado por `dev_encounter_roster()` provisional (2 infanterías + 1 artillería)
-- [ ] T014 [US1] `CombatManager.dev_start_encounter()` (solo `GameConfig.dev_mode`): toma hasta `combat_deploy_cap` unidades de `ArmyManager` y arranca un encuentro suelto. `SkirmishPanel`: botón **Escaramuza de prueba** visible solo en `dev_mode`
-- [ ] T015 [US1] `BattleScreen` — tablero: `GridContainer` 8x8 de botones-celda (`UITheme`, ≥44 px), backdrop oscuro sobre la base, cabecera con `LBL_ENCOUNTER_N`; pintar unidades (icono/letra + barra de HP + color de bando) desde `CombatManager.get_encounter()`; refrescar en cada señal
-- [ ] T016 [US1] `BattleScreen` — selección y movimiento: clic en unidad propia activa la resalta y pinta `get_valid_moves()`; clic en celda válida → `move_unit()`; deshabilitar si `moved_this_turn`
-- [ ] T017 [US1] `BattleScreen` — ataque y acciones: pintar `get_valid_targets()` tras seleccionar; clic en objetivo → `attack()` + número flotante de daño (reusar `FloatingText` o `Label` animado 2D); botones **Defender**, **Esperar**, **Terminar turno**
-- [ ] T018 [US1] `BattleScreen` — orden de turno visible (fila de retratos por iniciativa, activo resaltado, `LBL_TURN_PLAYER` / `LBL_TURN_ENEMY`) y contador de ronda con límite
-- [ ] T019 [US1] Crear `scripts/combat/CombatAI.gd` mínimo: para cada unidad enemiga, si hay objetivo en rango → atacar al de menor HP; si no → moverse por BFS hacia la unidad jugador más cercana respetando `min_range`; si nada → esperar. `CombatManager` ejecuta el turno enemigo con un `Timer`/`await` corto por acción para que se vea (duración en `GameConfig.combat_ai_step_delay`)
-- [ ] T020 [US1] Fin de encuentro: `encounter_ended` → `BattleScreen` muestra resultado (`LBL_VICTORY` / `LBL_DEFEAT`, turnos usados) y botón cerrar; en el flujo dev vuelve a la base. Límite de turnos aplica `CombatRules.resolve_timeout()`
-- [ ] T021 [US1] Legibilidad y táctil: probar a 400×720 (quickstart E9); ajustar tamaño de celda y posición de botones de acción; verificar con `ui_snapshot` que no hay controles fuera de pantalla
+- [x] T012 [US1] Crear `scripts/combat/Encounter.gd`: tablero, `deploy_zones` (filas 0-1 enemigo, 6-7 jugador), `deploy(units)`, cálculo de `turn_order` (iniciativa desc., jugador gana empates, luego `uid`), `advance_turn()` con reset de flags por ronda, transiciones `DEPLOYING → PLAYER_TURN/ENEMY_TURN → WON/LOST/TIMEOUT`
+- [x] T013 [US1] `CombatManager`: `start_encounter(party, enemy_roster, is_boss)`, `get_valid_moves()`, `get_valid_targets()`, `move_unit()`, `attack()`, `defend()`, `wait()`, `end_turn()`; emitir `encounter_started`, `turn_started`, `unit_moved`, `unit_attacked`, `unit_defended`, `unit_died`, `encounter_ended`. Enemigo generado por `dev_encounter_roster()` provisional (2 infanterías + 1 artillería)
+- [x] T014 [US1] `CombatManager.dev_start_encounter()` (solo `GameConfig.dev_mode`): toma hasta `combat_deploy_cap` unidades de `ArmyManager` y arranca un encuentro suelto. `SkirmishPanel`: botón **Escaramuza de prueba** visible solo en `dev_mode`
+- [x] T015 [US1] `BattleScreen` — tablero: `GridContainer` 8x8 de botones-celda (`UITheme`, ≥44 px), backdrop oscuro sobre la base, cabecera con `LBL_ENCOUNTER_N`; pintar unidades (icono/letra + barra de HP + color de bando) desde `CombatManager.get_encounter()`; refrescar en cada señal
+- [x] T016 [US1] `BattleScreen` — selección y movimiento: clic en unidad propia activa la resalta y pinta `get_valid_moves()`; clic en celda válida → `move_unit()`; deshabilitar si `moved_this_turn`
+- [x] T017 [US1] `BattleScreen` — ataque y acciones: pintar `get_valid_targets()` tras seleccionar; clic en objetivo → `attack()` + número flotante de daño (reusar `FloatingText` o `Label` animado 2D); botones **Defender**, **Esperar**, **Terminar turno**
+- [x] T018 [US1] `BattleScreen` — orden de turno visible (fila de retratos por iniciativa, activo resaltado, `LBL_TURN_PLAYER` / `LBL_TURN_ENEMY`) y contador de ronda con límite
+- [x] T019 [US1] Crear `scripts/combat/CombatAI.gd` mínimo: para cada unidad enemiga, si hay objetivo en rango → atacar al de menor HP; si no → moverse por BFS hacia la unidad jugador más cercana respetando `min_range`; si nada → esperar. `CombatManager` ejecuta el turno enemigo con un `Timer`/`await` corto por acción para que se vea (duración en `GameConfig.combat_ai_step_delay`)
+- [x] T020 [US1] Fin de encuentro: `encounter_ended` → `BattleScreen` muestra resultado (`LBL_VICTORY` / `LBL_DEFEAT`, turnos usados) y botón cerrar; en el flujo dev vuelve a la base. Límite de turnos aplica `CombatRules.resolve_timeout()`
+- [x] T021 [US1] Legibilidad y táctil: probar a 400×720 (quickstart E9); ajustar tamaño de celda y posición de botones de acción; verificar con `ui_snapshot` que no hay controles fuera de pantalla
 
 **Checkpoint**: 🎬 **Hito A cerrado.** Un encuentro completo, jugable de principio a fin. Es el primer incremento demostrable del pilar.
 
