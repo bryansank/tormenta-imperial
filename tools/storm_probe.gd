@@ -72,7 +72,8 @@ func _run() -> void:
 		elapsed += 0.5
 		if StormManager.is_storming() and not seen_storm:
 			seen_storm = true
-			print("[storm] EN TORMENTA | multiplicador de produccion = %.2f" % GameConfig.event_production_multiplier)
+			print("[storm] EN TORMENTA | multiplicador de produccion = %.2f | cielo: %s" % [
+				GameConfig.event_production_multiplier, _sky_state()])
 			await _shot("storm_02_cayendo")
 
 	print("[storm] despues: %s" % _snapshot())
@@ -80,6 +81,9 @@ func _run() -> void:
 		StormManager.get_phase(), StormManager.storms_survived(), StormManager.get_severity()
 	])
 	print("[storm] multiplicador de produccion restaurado = %.2f" % GameConfig.event_production_multiplier)
+	# Margen para que termine el fundido de salida del cielo.
+	await get_tree().create_timer(6.0).timeout
+	print("[storm] cielo tras despejar: %s" % _sky_state())
 	get_tree().quit()
 
 ## Una base creible y ya fuera de la fase Fundacion, que es donde el reloj se arma.
@@ -168,6 +172,21 @@ func _shot(file_name: String) -> void:
 	var image := get_viewport().get_texture().get_image()
 	var err := image.save_png("%s/%s.png" % [OUT_DIR, file_name])
 	print("[storm] %s.png (err %d)" % [file_name, err])
+
+## Diagnostico de la capa visual: si el sol no baja, StormSky no engancho.
+func _sky_state() -> String:
+	var main := get_tree().current_scene
+	var light := main.get_node_or_null("DirectionalLight") if main != null else null
+	var we := main.get_node_or_null("WorldEnvironment") if main != null else null
+	if light == null or we == null:
+		return "no encuentro los nodos"
+	var env: Environment = (we as WorldEnvironment).environment
+	return "sol=%.2f ambiente=%.2f niebla=%.4f fondo=%s" % [
+		(light as DirectionalLight3D).light_energy,
+		env.ambient_light_energy if env != null else -1.0,
+		env.fog_density if env != null else -1.0,
+		env.background_color if env != null else "?",
+	]
 
 func _snapshot() -> Dictionary:
 	return {
