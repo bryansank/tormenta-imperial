@@ -19,6 +19,8 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/SettingsPanel.tscn" id="17"]
 [ext_resource type="Script" path="res://scripts/grid/GridOverlayControl.gd" id="18"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HelperPanel.tscn" id="19"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SkirmishPanel.tscn" id="20"]
+[ext_resource type="PackedScene" path="res://scenes/ui/BattleScreen.tscn" id="21"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -104,3 +106,7 @@ script = ExtResource("7")
 [node name="SettingsPanel" parent="." instance=ExtResource("17")]
 
 [node name="HelperPanel" parent="." instance=ExtResource("19")]
+
+[node name="SkirmishPanel" parent="." instance=ExtResource("20")]
+
+[node name="BattleScreen" parent="." instance=ExtResource("21")]
