@@ -251,9 +251,45 @@ func _on_encounter_ended(victory: bool, turns_used: int) -> void:
 	_refresh()
 	_result_title.text = Tr.t("LBL_VICTORY") if victory else Tr.t("LBL_DEFEAT")
 	_result_title.add_theme_color_override("font_color", UITheme.POSITIVE if victory else UITheme.DANGER)
-	_result_detail.text = Tr.t("LBL_ROUND") % [turns_used, CombatManager.get_turn_limit()]
+	_result_detail.text = _result_text(turns_used)
 	_result_panel.visible = true
 	_set_actions_enabled(false)
+
+## What the fight actually cost and paid. The dead are named, because a list of
+## units that are not coming back is the part the player has to feel.
+func _result_text(turns_used: int) -> String:
+	var lines: Array = [Tr.t("LBL_ROUND") % [turns_used, CombatManager.get_turn_limit()]]
+	var result: Dictionary = CombatManager.get_last_result()
+	if result.is_empty():
+		return "\n".join(lines)
+
+	var rewards: Dictionary = result.get("rewards", {})
+	if not rewards.is_empty():
+		lines.append("%s: %s" % [Tr.t("LBL_REWARDS"), _resource_list(rewards)])
+
+	var casualties: Dictionary = result.get("casualties", {})
+	if casualties.is_empty():
+		lines.append(Tr.t("LBL_NO_CASUALTIES"))
+	else:
+		lines.append("%s: %s" % [Tr.t("LBL_CASUALTIES"), _unit_list(casualties)])
+
+	var morale_delta: int = int(result.get("morale_delta", 0))
+	if morale_delta != 0:
+		lines.append(Tr.t("LBL_MORALE_DELTA") % morale_delta)
+	return "\n".join(lines)
+
+func _resource_list(amounts: Dictionary) -> String:
+	var parts: Array = []
+	for res_name in amounts:
+		parts.append("%d %s" % [int(amounts[res_name]), Tr.res_name(res_name)])
+	return "   ".join(parts)
+
+func _unit_list(counts: Dictionary) -> String:
+	var parts: Array = []
+	for unit_id in counts:
+		var def := GameConfig.get_unit_def(unit_id)
+		parts.append("%d %s" % [int(counts[unit_id]), Tr.t(def.get("name", unit_id))])
+	return "   ".join(parts)
 
 # ── Refresh ──────────────────────────────────────────────────────────
 

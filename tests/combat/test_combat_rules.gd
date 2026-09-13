@@ -176,6 +176,43 @@ func test_timeout_ignores_dead_units() -> void:
 	enemy.take_damage(5)
 	assert_int(Rules.resolve_timeout([player, dead_ally, enemy])).is_equal(PLAYER)
 
+# ── Consequences back home ───────────────────────────────────────────
+
+func test_rewards_match_the_configured_base_in_the_first_era() -> void:
+	var rewards := Rules.encounter_rewards(1)
+	for res_name in GameConfig.combat_reward_base:
+		assert_int(int(rewards[res_name])).is_equal(int(GameConfig.combat_reward_base[res_name]))
+
+func test_rewards_grow_with_the_era() -> void:
+	# The enemy scales with the era, so the loot has to as well or it turns into
+	# pocket change exactly when the costs are highest.
+	var early := Rules.encounter_rewards(1)
+	var late := Rules.encounter_rewards(3)
+	for res_name in early:
+		assert_int(int(late[res_name])).is_greater(int(early[res_name]))
+
+func test_rewards_never_pay_zero() -> void:
+	for res_name in Rules.encounter_rewards(1):
+		assert_int(int(Rules.encounter_rewards(1)[res_name])).is_greater(0)
+
+func test_a_clean_victory_lifts_morale() -> void:
+	assert_int(Rules.morale_delta(true, 0)).is_equal(roundi(GameConfig.combat_morale_on_victory))
+
+func test_every_casualty_costs_morale() -> void:
+	var clean := Rules.morale_delta(true, 0)
+	var bloody := Rules.morale_delta(true, 2)
+	assert_int(bloody).is_less(clean)
+
+func test_a_victory_bought_with_enough_dead_still_hurts() -> void:
+	# The point of tying the halves together: winning is not automatically good.
+	var per_casualty: float = GameConfig.combat_morale_per_casualty
+	var enough: int = int(GameConfig.combat_morale_on_victory / per_casualty) + 1
+	assert_int(Rules.morale_delta(true, enough)).is_less(0)
+
+func test_defeat_gets_no_victory_bonus() -> void:
+	assert_int(Rules.morale_delta(false, 0)).is_equal(0)
+	assert_int(Rules.morale_delta(false, 1)).is_equal(-roundi(GameConfig.combat_morale_per_casualty))
+
 # ── Helpers ──────────────────────────────────────────────────────────
 
 func test_living_units_filters_by_side_and_health() -> void:

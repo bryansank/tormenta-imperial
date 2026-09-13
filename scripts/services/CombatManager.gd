@@ -23,6 +23,11 @@ var _encounter: Encounter = null
 var _next_uid: int = 1
 var _morale_snapshot: float = 50.0
 var _enemy_turn_running: bool = false
+## Guards against applying the outcome twice: a timeout and a wipe can both fire
+## on the same advance, and paying the player twice for one fight is not a bug
+## anybody reports.
+var _result_applied: bool = false
+var _last_result: Dictionary = {}
 
 # ── Queries ──────────────────────────────────────────────────────────
 
@@ -90,6 +95,7 @@ func start_encounter(party: Dictionary, enemy_roster: Dictionary, is_boss: bool 
 	units.append_array(_build_side(enemy_roster, Encounter.ENEMY, scale))
 
 	_encounter = EncounterScript.create(units, encounter_index, is_boss)
+	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())
 
@@ -213,6 +219,9 @@ func _emit_events(events: Array) -> void:
 			"unit_died":
 				EventBus.unit_died.emit(event["uid"], event["side"])
 			"encounter_ended":
+				# The base learns the outcome before anyone is told the fight is
+				# over, so the UI reading get_last_result() always sees it applied.
+				_apply_result(event["victory"], event["rounds"])
 				EventBus.encounter_ended.emit(event["victory"], event["rounds"])
 
 ## Publishes and then hands the board to the AI if the turn that just started
@@ -264,6 +273,70 @@ func _run_enemy_turn() -> void:
 	_enemy_turn_running = false
 	_maybe_run_enemy_turn()
 
+# ── Consequences ─────────────────────────────────────────────────────
+
+## Turns the outcome of a fight into changes the player feels in the base: the
+## dead are struck off the roster for good, a win pays, and the town's morale
+## moves either way.
+##
+## This is what makes the board part of the game instead of a simulator. It runs
+## exactly once per encounter, when the encounter resolves.
+func _apply_result(victory: bool, rounds: int) -> void:
+	if _encounter == null or _result_applied:
+		return
+	_result_applied = true
+
+	var casualties: Dictionary = _count_by_unit(_encounter.casualties(Encounter.PLAYER))
+	var survivors: Dictionary = _count_by_unit(_encounter.survivors())
+
+	# ArmyManager is the source of truth for the roster: the party was never
+	# deducted when it marched out, so only the dead are subtracted now and
+	# Military Power lands exactly on the survivors.
+	var lost: Dictionary = ArmyManager.remove_units(casualties)
+
+	var rewards: Dictionary = {}
+	if victory:
+		rewards = Rules.encounter_rewards(ProgressionManager.current_era)
+		for res_name in rewards:
+			ResourceManager.add(_resource_type(res_name), int(rewards[res_name]))
+
+	var dead: int = 0
+	for count in lost.values():
+		dead += int(count)
+	var morale_delta: int = Rules.morale_delta(victory, dead)
+	if morale_delta != 0:
+		PopulationManager.adjust_morale(morale_delta)
+
+	_last_result = {
+		"victory": victory,
+		"rounds": rounds,
+		"rewards": rewards,
+		"casualties": lost,
+		"survivors": survivors,
+		"morale_delta": morale_delta,
+	}
+
+## The outcome of the last encounter, for the UI to show. Empty before the first.
+func get_last_result() -> Dictionary:
+	return _last_result
+
+func _count_by_unit(units: Array) -> Dictionary:
+	var tally: Dictionary = {}
+	for unit in units:
+		tally[unit.unit_id] = int(tally.get(unit.unit_id, 0)) + 1
+	return tally
+
+func _resource_type(res_name: String) -> int:
+	match res_name:
+		"steel":
+			return ResourceManager.Type.STEEL
+		"oil":
+			return ResourceManager.Type.OIL
+		"wood":
+			return ResourceManager.Type.WOOD
+		_:
+			return ResourceManager.Type.GOLD
+
 # ── Dev helper (T014) ────────────────────────────────────────────────
 
 ## Starts a standalone encounter with whatever the player has trained, so the
@@ -303,3 +376,5 @@ func reset() -> void:
 	_encounter = null
 	_enemy_turn_running = false
 	_next_uid = 1
+	_result_applied = false
+	_last_result = {}

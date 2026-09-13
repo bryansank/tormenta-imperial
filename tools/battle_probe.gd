@@ -56,24 +56,70 @@ func _run() -> void:
 		await get_tree().create_timer(STEP).timeout
 		if not CombatManager.is_in_encounter():
 			break
-		if CombatManager.is_player_turn():
-			var unit: CombatUnit = CombatManager.get_active_unit()
-			if unit == null:
-				continue
-			var targets: Array = CombatManager.get_valid_targets(unit.uid)
-			if not targets.is_empty():
-				CombatManager.attack(unit.uid, targets[0])
-			else:
-				var cells: Array = CombatManager.get_valid_moves(unit.uid)
-				if not cells.is_empty():
-					CombatManager.move_unit(unit.uid, cells[0])
-				CombatManager.end_turn()
+		await _play_one_turn(STEP * 0.5)
 	await _shot("battle_03_midfight")
 
-	print("[battle] capturas en %s | estado %d | ronda %d" % [
-		OUT_DIR, CombatManager.get_state(), CombatManager.get_round()
-	])
+	# 5. Pelear hasta el final y comprobar que el resultado llega a la base.
+	#    Esto es lo que verifica que el combate no es un simulador suelto.
+	# A ritmo de fotograma: aqui no interesa verlo, interesa que termine.
+	# El margen es alto a proposito: la IA espera entre accion y accion, asi que
+	# muchas de estas vueltas se van solo en esperar al enemigo.
+	# La IA espera entre accion y accion para que se vea; aqui no se mira nadie y
+	# esa pausa convierte una pelea de 20 rondas en minutos. Se anula.
+	GameConfig.combat_ai_step_delay = 0.0
+	var before := _snapshot()
+	var guard := 0
+	print("[battle] peleando hasta el final...")
+	while CombatManager.is_in_encounter() and guard < 6000:
+		guard += 1
+		await _play_one_turn(0.0)
+	if CombatManager.is_in_encounter():
+		print("[battle] AVISO: la pelea no termino en %d vueltas (ronda %d)" % [guard, CombatManager.get_round()])
+	else:
+		print("[battle] pelea resuelta en %d vueltas" % guard)
+	await _shot("battle_04_result")
+
+	var after := _snapshot()
+	var result: Dictionary = CombatManager.get_last_result()
+	print("[battle] --- consecuencias ---")
+	print("[battle] resultado: %s" % result)
+	print("[battle] oro   %d -> %d" % [before["gold"], after["gold"]])
+	print("[battle] madera %d -> %d" % [before["wood"], after["wood"]])
+	print("[battle] tropas %d -> %d" % [before["units"], after["units"]])
+	print("[battle] poder  %d -> %d" % [before["power"], after["power"]])
+	print("[battle] moral  %d -> %d" % [before["morale"], after["morale"]])
 	get_tree().quit()
+
+## Juega el turno activo: ataca si puede, si no se acerca y pasa. El turno
+## enemigo lo lleva la IA sola, asi que aqui solo hay que esperarlo.
+## `pausa` a 0 corre a ritmo de fotograma, para terminar la pelea rapido.
+func _play_one_turn(pausa: float) -> void:
+	if pausa > 0.0:
+		await get_tree().create_timer(pausa).timeout
+	else:
+		await get_tree().process_frame
+	if not CombatManager.is_player_turn():
+		return
+	var unit: CombatUnit = CombatManager.get_active_unit()
+	if unit == null:
+		return
+	var targets: Array = CombatManager.get_valid_targets(unit.uid)
+	if not targets.is_empty():
+		CombatManager.attack(unit.uid, targets[0])
+		return
+	var cells: Array = CombatManager.get_valid_moves(unit.uid)
+	if not cells.is_empty():
+		CombatManager.move_unit(unit.uid, cells[0])
+	CombatManager.end_turn()
+
+func _snapshot() -> Dictionary:
+	return {
+		"gold": ResourceManager.get_amount(ResourceManager.Type.GOLD),
+		"wood": ResourceManager.get_amount(ResourceManager.Type.WOOD),
+		"units": ArmyManager.get_total_units(),
+		"power": ArmyManager.get_power(),
+		"morale": PopulationManager.get_morale(),
+	}
 
 ## Un Cuartel, tropas entrenadas y moral alta: lo minimo para que el boton de
 ## escaramuzas exista y el combate tenga con que pelear.
@@ -81,6 +127,11 @@ func _seed() -> void:
 	ResourceManager.set_unlock_state({"gold": true, "wood": true, "steel": true, "oil": false})
 	ResourceManager.set_amounts({"gold": 2400, "wood": 1100, "steel": 600, "oil": 0})
 	ProgressionManager.current_era = 2
+	# La fase importa: PopulationManager ignora cualquier cambio de moral antes de
+	# Phase.ECONOMY. En partida real, tener Cuartel implica Aserradero y Fundicion,
+	# asi que ya se esta en EXPANSION; sembrando a mano hay que ponerlo a mano o la
+	# moral del combate se descarta en silencio y parece un bug que no existe.
+	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
 	PopulationManager._population = 26
 	PopulationManager._max_population = 32
 	PopulationManager._morale = 84
