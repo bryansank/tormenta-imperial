@@ -32,6 +32,8 @@ const _STRINGS := {
 		"BTN_UPGRADE": "Mejorar",
 		"BTN_CONFIRM": "Confirmar",
 		"BTN_CANCEL": "Cancelar",
+		"CONFIRM_NEW_GAME": "Esto borrara tu partida actual y empezara de cero. No se puede deshacer.",
+		"LBL_SETTINGS_GAME": "PARTIDA",
 
 		# Labels
 		"LBL_ACTIONS": "Acciones",
@@ -324,6 +326,8 @@ const _STRINGS := {
 		"BTN_UPGRADE": "Upgrade",
 		"BTN_CONFIRM": "Confirm",
 		"BTN_CANCEL": "Cancel",
+		"CONFIRM_NEW_GAME": "This will erase your current game and start over. It cannot be undone.",
+		"LBL_SETTINGS_GAME": "GAME",
 
 		"LBL_ACTIONS": "Actions",
 		"LBL_NO_ACTIONS": "No actions available",

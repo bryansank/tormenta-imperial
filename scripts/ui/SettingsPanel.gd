@@ -97,6 +97,15 @@ func _setup_ui() -> void:
 	)
 	vbox.add_child(grid_check)
 
+	vbox.add_child(UITheme.make_separator())
+	vbox.add_child(UITheme.section_header(Tr.t("LBL_SETTINGS_GAME")))
+
+	var new_game_btn := Button.new()
+	new_game_btn.text = Tr.t("BTN_NEW_GAME")
+	UITheme.style_button(new_game_btn, UITheme.DANGER, UITheme.FONT_BODY)
+	new_game_btn.pressed.connect(GameManager.request_new_game)
+	vbox.add_child(new_game_btn)
+
 	# Close button at bottom
 	var close_btn := Button.new()
 	close_btn.text = Tr.t("BTN_UNDERSTOOD")

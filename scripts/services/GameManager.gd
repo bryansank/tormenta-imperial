@@ -211,6 +211,19 @@ func save_game() -> void:
 	if file:
 		file.store_string(JSON.stringify(data, "\t"))
 
+## Asks the player to confirm before wiping the save. Every UI entry point to a
+## new game must go through here: clear_save() is irreversible.
+func request_new_game() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = Tr.t("BTN_NEW_GAME")
+	dialog.dialog_text = Tr.t("CONFIRM_NEW_GAME")
+	dialog.ok_button_text = Tr.t("BTN_CONFIRM")
+	dialog.cancel_button_text = Tr.t("BTN_CANCEL")
+	dialog.confirmed.connect(clear_save)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered()
+
 func clear_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
