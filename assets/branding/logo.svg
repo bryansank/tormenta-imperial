@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Tormenta Imperial — emblema</title>
+  <desc>Placa de laton remachada: chimeneas bajo una tormenta, partidas por un rayo.</desc>
+  <defs>
+    <!-- Laton del anillo: luz arriba-izquierda, sombra abajo-derecha -->
+    <linearGradient id="brass" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0"    stop-color="#F0D083"/>
+      <stop offset="0.22" stop-color="#C49629"/>
+      <stop offset="0.5"  stop-color="#8A6A22"/>
+      <stop offset="0.78" stop-color="#5E4718"/>
+      <stop offset="1"    stop-color="#8C6C24"/>
+    </linearGradient>
+
+    <linearGradient id="brassRivet" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0"   stop-color="#F5DB9B"/>
+      <stop offset="0.6" stop-color="#9A7526"/>
+      <stop offset="1"   stop-color="#4E3B12"/>
+    </linearGradient>
+
+    <!-- Cielo de tormenta: frio arriba, calor de horno en el horizonte -->
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#080B11"/>
+      <stop offset="0.34" stop-color="#18202E"/>
+      <stop offset="0.62" stop-color="#333840"/>
+      <stop offset="0.84" stop-color="#5E5540"/>
+      <stop offset="1"    stop-color="#8A6E3E"/>
+    </linearGradient>
+
+    <radialGradient id="strike" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#DDE9FF" stop-opacity="0.34"/>
+      <stop offset="0.42" stop-color="#9FB8E0" stop-opacity="0.13"/>
+      <stop offset="1"    stop-color="#7D93B8" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="furnace" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"   stop-color="#FFC24A" stop-opacity="0.72"/>
+      <stop offset="0.4" stop-color="#FF8A22" stop-opacity="0.34"/>
+      <stop offset="1"   stop-color="#C24A10" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="bolt" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0"    stop-color="#FFF6DC"/>
+      <stop offset="0.38" stop-color="#F4D98C"/>
+      <stop offset="1"    stop-color="#E0A62E"/>
+    </linearGradient>
+
+    <linearGradient id="smoke" x1="0" y1="1" x2="0.35" y2="0">
+      <stop offset="0"   stop-color="#9E8C6A" stop-opacity="0.42"/>
+      <stop offset="0.5" stop-color="#6A7080" stop-opacity="0.24"/>
+      <stop offset="1"   stop-color="#3A4250" stop-opacity="0"/>
+    </linearGradient>
+
+    <radialGradient id="vignette" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.58" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0.45"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Bisel exterior y anillo de laton -->
+  <circle cx="256" cy="256" r="252" fill="#241F18"/>
+  <circle cx="256" cy="256" r="246" fill="url(#brass)"/>
+  <circle cx="256" cy="256" r="219" fill="#2A2418"/>
+
+  <!-- Campo interior -->
+  <circle cx="256" cy="256" r="212" fill="url(#sky)"/>
+
+  <!-- Halo del impacto y calor del horizonte -->
+  <ellipse cx="262" cy="250" rx="178" ry="198" fill="url(#strike)"/>
+  <ellipse cx="256" cy="376" rx="162" ry="66" fill="url(#furnace)"/>
+
+  <!-- Humo de las chimeneas, arrastrado por el viento -->
+  <g>
+    <ellipse cx="150" cy="214" rx="34" ry="58" fill="url(#smoke)"/>
+    <ellipse cx="352" cy="186" rx="40" ry="66" fill="url(#smoke)"/>
+    <ellipse cx="392" cy="240" rx="28" ry="46" fill="url(#smoke)"/>
+  </g>
+
+  <!-- Silueta industrial: chimeneas sobre la nave de la fabrica -->
+  <g fill="#0E1219">
+    <path d="M 120 398 L 126 250 L 148 250 L 152 398 Z"/>
+    <path d="M 168 398 L 173 300 L 192 300 L 196 398 Z"/>
+    <path d="M 330 398 L 336 228 L 362 228 L 366 398 Z"/>
+    <path d="M 380 398 L 384 290 L 402 290 L 404 398 Z"/>
+    <rect x="114" y="352" width="294" height="46"/>
+    <path d="M 214 352 L 238 330 L 262 352 Z"/>
+    <path d="M 268 352 L 292 330 L 316 352 Z"/>
+  </g>
+
+  <!-- Bocas de horno encendidas en la nave -->
+  <g fill="#FFA83A">
+    <rect x="176" y="368" width="14" height="18"/>
+    <rect x="212" y="368" width="14" height="18"/>
+    <rect x="322" y="368" width="14" height="18"/>
+  </g>
+
+  <!-- Suelo: barro, recortado por el arco del anillo -->
+  <path d="M 410.7 398 A 212 212 0 0 1 101.3 398 Z" fill="#171A16"/>
+  <path d="M 410.7 398 A 212 212 0 0 1 101.3 398 Z" fill="#6E5A32" opacity="0.16"/>
+
+  <!-- El rayo -->
+  <path d="M 322 70 L 186 262 L 248 262 L 202 430 L 338 238 L 276 238 Z"
+        fill="url(#bolt)"/>
+  <path d="M 322 70 L 186 262 L 248 262 L 202 430 L 338 238 L 276 238 Z"
+        fill="none" stroke="#FFF9E6" stroke-width="3" opacity="0.55"/>
+
+  <!-- Viñeta y filo interior -->
+  <circle cx="256" cy="256" r="212" fill="url(#vignette)"/>
+  <circle cx="256" cy="256" r="212" fill="none" stroke="#E8C468" stroke-width="5" opacity="0.9"/>
+  <circle cx="256" cy="256" r="246" fill="none" stroke="#3A2F1C" stroke-width="3" opacity="0.7"/>
+
+  <!-- Remaches -->
+  <g fill="url(#brassRivet)" stroke="#3A2D12" stroke-width="1.5">
+    <circle cx="485.0" cy="256.0" r="8"/>
+    <circle cx="454.3" cy="141.5" r="8"/>
+    <circle cx="370.5" cy="57.7"  r="8"/>
+    <circle cx="256.0" cy="27.0"  r="8"/>
+    <circle cx="141.5" cy="57.7"  r="8"/>
+    <circle cx="57.7"  cy="141.5" r="8"/>
+    <circle cx="27.0"  cy="256.0" r="8"/>
+    <circle cx="57.7"  cy="370.5" r="8"/>
+    <circle cx="141.5" cy="454.3" r="8"/>
+    <circle cx="256.0" cy="485.0" r="8"/>
+    <circle cx="370.5" cy="454.3" r="8"/>
+    <circle cx="454.3" cy="370.5" r="8"/>
+  </g>
+</svg>

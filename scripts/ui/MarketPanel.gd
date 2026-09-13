@@ -19,6 +19,9 @@ func _ready() -> void:
 	EventBus.resource_unlocked.connect(func(_r): _rebuild())
 	EventBus.market_trade_completed.connect(func(_r, _a, _b, _p): _update_prices())
 	EventBus.phase_advanced.connect(_on_phase_advanced)
+	# Va aqui y no en _setup_ui: _rebuild() vuelve a llamar a _setup_ui cada vez
+	# que se desbloquea un recurso, y conectar dos veces la misma senal es error.
+	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 	# Hide market button until Phase 2
 	if ProgressionManager.current_phase < GameConfig.Phase.ECONOMY:
 		_market_btn.visible = false
@@ -68,7 +71,6 @@ func _setup_ui() -> void:
 	_market_btn.pressed.connect(_toggle_panel)
 	_market_btn.visible = false  # Start collapsed
 	root.add_child(_market_btn)
-	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 
 	_backdrop = UITheme.make_backdrop()
 	_backdrop.visible = false

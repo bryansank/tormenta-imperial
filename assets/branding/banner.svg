@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="500" viewBox="0 0 1600 500">
+  <title>Tormenta Imperial — banner (fondo)</title>
+  <desc>Fondo del banner. El emblema y la tipografia los compone tools/render_brand.gd.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#080B11"/>
+      <stop offset="0.3"  stop-color="#141B27"/>
+      <stop offset="0.58" stop-color="#2C323C"/>
+      <stop offset="0.8"  stop-color="#544C3A"/>
+      <stop offset="1"    stop-color="#7E6539"/>
+    </linearGradient>
+
+    <radialGradient id="furnace" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"   stop-color="#FFC24A" stop-opacity="0.50"/>
+      <stop offset="0.4" stop-color="#FF8A22" stop-opacity="0.20"/>
+      <stop offset="1"   stop-color="#C24A10" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="strike" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#DDE9FF" stop-opacity="0.26"/>
+      <stop offset="0.45" stop-color="#9FB8E0" stop-opacity="0.10"/>
+      <stop offset="1"    stop-color="#7D93B8" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="smoke" x1="0" y1="1" x2="0.3" y2="0">
+      <stop offset="0"   stop-color="#9E8C6A" stop-opacity="0.38"/>
+      <stop offset="0.5" stop-color="#6A7080" stop-opacity="0.20"/>
+      <stop offset="1"   stop-color="#3A4250" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="haze" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#6E6046" stop-opacity="0"/>
+      <stop offset="0.5"  stop-color="#6E6046" stop-opacity="0.26"/>
+      <stop offset="1"    stop-color="#8A6E3E" stop-opacity="0.04"/>
+    </linearGradient>
+
+    <linearGradient id="bolt" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0"    stop-color="#FFF6DC"/>
+      <stop offset="0.4"  stop-color="#F4D98C"/>
+      <stop offset="1"    stop-color="#E0A62E"/>
+    </linearGradient>
+
+    <!-- Oscurece la izquierda para que el emblema y el titulo respiren -->
+    <linearGradient id="leftShade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#05070B" stop-opacity="0.88"/>
+      <stop offset="0.55" stop-color="#05070B" stop-opacity="0.74"/>
+      <stop offset="0.80" stop-color="#05070B" stop-opacity="0.42"/>
+      <stop offset="1"    stop-color="#05070B" stop-opacity="0"/>
+    </linearGradient>
+
+    <radialGradient id="vignette" cx="0.5" cy="0.48" r="0.74">
+      <stop offset="0.5"  stop-color="#000000" stop-opacity="0"/>
+      <stop offset="0.84" stop-color="#000000" stop-opacity="0.30"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0.66"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="500" fill="url(#sky)"/>
+
+  <!-- Calor del horizonte -->
+  <ellipse cx="1260" cy="452" rx="480" ry="130" fill="url(#furnace)"/>
+  <ellipse cx="640"  cy="466" rx="340" ry="90" fill="url(#furnace)" opacity="0.5"/>
+  <rect x="0" y="392" width="1600" height="108" fill="url(#haze)"/>
+
+  <!-- Halo del impacto, a la derecha -->
+  <ellipse cx="1452" cy="180" rx="280" ry="250" fill="url(#strike)"/>
+
+  <!-- Humo arrastrado -->
+  <g>
+    <ellipse cx="1128" cy="300" rx="64" ry="120" fill="url(#smoke)"/>
+    <ellipse cx="1214" cy="240" rx="82" ry="145" fill="url(#smoke)"/>
+    <ellipse cx="1424" cy="212" rx="70" ry="130" fill="url(#smoke)"/>
+    <ellipse cx="1334" cy="292" rx="56" ry="104" fill="url(#smoke)" opacity="0.7"/>
+  </g>
+
+  <!-- Silueta lejana: la ciudad industrial, replegada al tercio derecho -->
+  <g fill="#0C1017" opacity="0.9">
+    <rect x="640" y="438" width="960" height="62"/>
+    <rect x="700"  y="414" width="120" height="26"/>
+    <rect x="880"  y="406" width="96"  height="34"/>
+    <path d="M 1006 440 L 1010 352 L 1028 352 L 1032 440 Z"/>
+    <rect x="1054" y="398" width="104" height="42"/>
+    <path d="M 1122 440 L 1127 330 L 1147 330 L 1151 440 Z"/>
+    <path d="M 1196 440 L 1202 268 L 1228 268 L 1232 440 Z"/>
+    <rect x="1256" y="386" width="110" height="54"/>
+    <path d="M 1320 440 L 1326 302 L 1348 302 L 1352 440 Z"/>
+    <path d="M 1404 440 L 1410 238 L 1438 238 L 1442 440 Z"/>
+    <rect x="1466" y="396" width="92" height="44"/>
+    <path d="M 1518 440 L 1524 288 L 1546 288 L 1550 440 Z"/>
+  </g>
+
+  <!-- Bocas de horno -->
+  <g fill="#FFA83A" opacity="0.92">
+    <rect x="1072" y="414" width="12" height="18"/>
+    <rect x="1108" y="414" width="12" height="18"/>
+    <rect x="1276" y="402" width="12" height="20"/>
+    <rect x="1318" y="402" width="12" height="20"/>
+    <rect x="1482" y="412" width="12" height="18"/>
+  </g>
+
+  <!-- El rayo cae sobre la ciudad -->
+  <path d="M 1494 26 L 1402 186 L 1450 186 L 1408 338 L 1516 172 L 1466 172 Z"
+        fill="url(#bolt)"/>
+  <path d="M 1494 26 L 1402 186 L 1450 186 L 1408 338 L 1516 172 L 1466 172 Z"
+        fill="none" stroke="#FFF9E6" stroke-width="2" opacity="0.5"/>
+
+  <!-- Barro en primer plano -->
+  <rect x="0" y="474" width="1600" height="26" fill="#12140F"/>
+  <ellipse cx="300"  cy="478" rx="300" ry="22" fill="#1B1C15"/>
+  <ellipse cx="1160" cy="480" rx="380" ry="18" fill="#1B1C15"/>
+
+  <rect width="1600" height="500" fill="url(#leftShade)"/>
+  <rect width="1600" height="500" fill="url(#vignette)"/>
+
+  <!-- Filo de laton arriba y abajo -->
+  <rect x="0" y="0"   width="1600" height="4" fill="#C49629" opacity="0.55"/>
+  <rect x="0" y="496" width="1600" height="4" fill="#C49629" opacity="0.35"/>
+</svg>

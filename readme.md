@@ -1,29 +1,48 @@
 <p align="center">
-  <img src="assets/branding/keyart.png" alt="Tormenta Imperial" width="100%">
+  <img src="assets/branding/banner.png" alt="Tormenta Imperial" width="100%">
+</p>
+
+<p align="center">
+  <img alt="Godot 4.7" src="https://img.shields.io/badge/Godot-4.7%20.NET-478CBF">
+  <img alt="GDScript" src="https://img.shields.io/badge/GDScript-11.7k%20l%C3%ADneas-355570">
+  <img alt="Estado" src="https://img.shields.io/badge/estado-en%20desarrollo-C49629">
+  <img alt="Licencia" src="https://img.shields.io/badge/licencia-PolyForm%20Strict%201.0.0-8C3B29">
 </p>
 
 <p align="center">
   <strong>Un imperio industrial se levanta sobre una isla de barro. La tormenta ya viene.</strong>
 </p>
 
-<p align="center">
-  <img alt="Godot 4.7" src="https://img.shields.io/badge/Godot-4.7-478CBF">
-  <img alt="GDScript" src="https://img.shields.io/badge/GDScript-24k%20l%C3%ADneas-355570">
-  <img alt="Estado" src="https://img.shields.io/badge/estado-en%20desarrollo-C49629">
-  <img alt="Licencia" src="https://img.shields.io/badge/licencia-source%20available-8C3B29">
-</p>
-
 ---
 
 ## Qué es
 
-**Tormenta Imperial** es un juego **dieselpunk de gestión de base y estrategia por turnos**.
+**Tormenta Imperial** es un juego **dieselpunk de gestión de base y estrategia por turnos**, hecho en Godot 4.7.
 
 Llegas a una isla generada proceduralmente con un núcleo, 300 de oro y 200 de madera. A partir de ahí, todo lo que tengas lo habrás construido: aserraderos que muerden el bosque, minas, una fundición que enciende la era del acero, una refinería que abre la del petróleo. Tu gente trabaja, consume y **tiene moral** — y la moral decide si tu imperio produce o se para.
 
 Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán —o no— a ella.
 
 > *"Sobre el barro de la historia, construiremos monumentos de acero."*
+
+## Así se ve
+
+<p align="center">
+  <img src="docs/media/01_base.png" alt="Una base de la era industrial: calzada, viviendas, torres y el núcleo" width="100%">
+</p>
+
+<p align="center">
+  <em>Mitad de campaña: era industrial, 26 habitantes, moral alta y un ejército pequeño ya en pie.</em>
+</p>
+
+| | |
+|---|---|
+| <img src="docs/media/02_construccion.png" alt="Catálogo de construcción"> | <img src="docs/media/03_mercado.png" alt="Mercado Imperial"> |
+| **Construcción** — catálogo filtrable de 14 edificios, con requisitos y coste. | **Mercado Imperial** — compra y venta con precios que flotan según lo que hagas. |
+| <img src="docs/media/04_tecnologia.png" alt="Árbol tecnológico"> | <img src="docs/media/05_ejercito.png" alt="Cuartel y ejército"> |
+| **Tecnología** — 15 mejoras en tres ramas, cinco escalones cada una. | **Ejército** — entrenamiento por ranuras, poder militar y mantenimiento en oro. |
+
+> Capturas del juego corriendo, generadas por [`tools/showcase_shots.gd`](tools/showcase_shots.gd). No son montajes.
 
 ## El bucle
 
@@ -44,19 +63,27 @@ Ningún otro juego del género cruza esas dos mitades. Esa es la apuesta.
 
 ## Estado
 
-El **bucle de gestión está completo y es jugable** de principio a fin: economía, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline y condiciones de victoria.
+El **bucle de gestión está completo y es jugable** de principio a fin: economía, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline y condiciones de victoria. Corre sin errores ni warnings, a 144 fps.
 
-El **combate PVE por turnos** es el pilar en construcción. Está enteramente especificado y planificado en [`specs/001-combate-pve/`](specs/001-combate-pve/): expediciones roguelike con mapa ramificado, atrición entre encuentros, muerte permanente, draft de mejoras y un jefe final. Los cimientos (reglas de combate, unidades, servicio de dominio) ya están en el repositorio; falta el tablero.
+El **combate PVE por turnos** es el pilar en construcción, enteramente especificado en [`specs/001-combate-pve/`](specs/001-combate-pve/): expediciones roguelike con mapa ramificado, atrición entre encuentros, muerte permanente, draft de mejoras y un jefe final.
+
+| Fase | Qué incluye | Estado |
+|---|---|---|
+| 1–2 · Cimientos | Reglas de combate, unidades, servicio de dominio, señales, traducciones, guardado | 9 de 11 tareas |
+| 3 · US1, el MVP visible | Tablero 8x8, selección, movimiento, ataque, orden de turnos, IA enemiga | pendiente |
+| 4+ | Expedición roguelike, economía y moral en combate, IA táctica, pulido | pendiente |
+
+Las piezas de dominio ya están en el repositorio. **Falta el tablero**: hasta entonces, el combate existe pero no se ve.
 
 ## Bajo el capó
 
 | | |
 |---|---|
 | **Motor** | Godot 4.7 (.NET/mono), renderer Forward+ |
-| **Lenguaje** | GDScript — 24.000 líneas, 83 scripts, 30 escenas |
-| **Arquitectura** | Servicio–señal–componente: 20 autoloads que **solo** se hablan por un `EventBus`. Ningún servicio referencia a otro |
+| **Lenguaje** | GDScript — 11.700 líneas en 46 scripts, 15 escenas |
+| **Arquitectura** | Servicio–señal–componente: 21 autoloads que **solo** se hablan por un `EventBus`. Ningún servicio referencia a otro |
 | **Balance** | Todo valor ajustable vive en `GameConfig.gd`. Cero números mágicos repartidos por el código |
-| **Modelos 3D** | Generados proceduralmente en tiempo de ejecución por `DieselpunkBuildingFactory` |
+| **Modelos 3D** | Los 14 edificios se generan proceduralmente en tiempo de ejecución por `DieselpunkBuildingFactory` |
 | **Guardado** | JSON local con progresión offline de hasta 8 horas |
 | **Tests** | gdUnit4 sobre las fórmulas puras de economía y combate |
 
@@ -64,28 +91,78 @@ El proyecto sigue **Spec-Driven Development**: cada pilar pasa por especificaci�
 
 Documentación por sistema en [`docs/`](docs/INDEX.md) · Guía técnica en [`CLAUDE.md`](CLAUDE.md)
 
+## Estructura
+
+```
+tormenta-imperial/
+├── scenes/          Main.tscn y una escena por panel de interfaz
+├── scripts/
+│   ├── services/    Los autoloads: economía, población, mercado, ejército…
+│   ├── combat/      Cimientos del combate por turnos
+│   ├── buildings/   Colocación y fábrica procedural de modelos
+│   ├── ui/          Un script por panel, más tema y disposición
+│   ├── grid/        Rejilla de 40x40 celdas
+│   ├── map/         Isla y depósitos procedurales
+│   └── camera/      Cámara ortográfica a 45°
+├── data/buildings/  Los 14 edificios, como recursos .tres
+├── assets/          Audio, fuentes, texturas y marca
+├── specs/           Especificaciones previas a cada pilar
+├── docs/            Documentación por sistema
+└── tools/           Utilidades de desarrollo (marca, capturas, texturas)
+```
+
 ## Correrlo
 
 Necesitas **Godot 4.7 (.NET)**. No hay proyecto C# ni dependencias externas.
 
 ```bash
-godot --path . --editor     # abre el proyecto
-# o pulsa F5 dentro del editor
+git clone https://github.com/bryansank/tormenta-imperial.git
+cd tormenta-imperial
+godot --path . --editor     # y pulsa F5
 ```
 
 | Acción | PC | Móvil |
 |---|---|---|
 | Mover cámara | WASD / flechas / arrastrar con botón central | Arrastrar un dedo |
 | Zoom | Rueda del ratón | Pellizcar |
+| Rotar | Botones en pantalla | Botones en pantalla |
 
 `GameConfig.dev_mode` (activo por defecto) acorta todas las duraciones a 1–2 segundos para probar rápido. Para empezar de cero: **Ajustes → Nueva partida**.
 
+### Utilidades de desarrollo
+
+```bash
+# Regenerar la marca tras tocar los SVG (con ventana, NO headless)
+godot --path . -s tools/render_brand.gd        # emblema y banner
+godot --path . -s tools/render_branding.gd     # key art
+
+# Tests
+godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a tests
+```
+
+---
+
 ## Licencia
 
-**Código disponible, no código abierto.** Este repositorio es público para que el trabajo se pueda leer y estudiar — no para reutilizarlo.
+> **Código disponible, no código abierto.** Este repositorio es público para que el trabajo se pueda **leer, estudiar y evaluar** — no para reutilizarlo.
 
-- **Código fuente:** [PolyForm Strict 1.0.0](https://polyformproject.org/licenses/strict/1.0.0). Puedes leerlo y ejecutarlo en local para estudio o entretenimiento privado. **No** puedes redistribuirlo, modificarlo ni usarlo comercialmente.
-- **Arte, audio, textos y el nombre "Tormenta Imperial":** todos los derechos reservados.
-- **Componentes de terceros** (Godot, gdUnit4, Beckett, fuentes, assets CC0) conservan sus propias licencias — ver [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+El código fuente se publica bajo [**PolyForm Strict 1.0.0**](https://polyformproject.org/licenses/strict/1.0.0), una licencia deliberadamente restrictiva.
 
-Términos completos en [LICENSE](LICENSE). ¿Quieres otros términos? Abre un issue.
+| Puedes | No puedes |
+|---|---|
+| Leer y estudiar el código | Redistribuirlo, en fuente o compilado |
+| Clonarlo y ejecutarlo en local, para estudio o entretenimiento privado | Crear versiones modificadas, forks o trabajos derivados |
+| Citarlo y comentarlo | Usarlo, entero o en parte, con fines comerciales |
+
+Además:
+
+- **Arte, audio, textos y el nombre "Tormenta Imperial"** quedan fuera de esa licencia: **todos los derechos reservados**. Eso incluye el emblema, el banner y el key art de [`assets/branding/`](assets/branding/).
+- **Componentes de terceros** —Godot, gdUnit4, Beckett, las fuentes y los assets CC0— conservan sus propias licencias. Están listadas una a una en [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+Los términos completos, que son los que mandan, están en [LICENSE](LICENSE).
+
+**¿Necesitas otros términos?** Para uso comercial, educativo o cualquier cosa que la licencia no permita, abre un [issue](https://github.com/bryansank/tormenta-imperial/issues) y lo hablamos. La licencia es estricta por defecto, no por cerrazón.
+
+<p align="center">
+  <sub>Copyright © 2026 Bryan Key · Todos los derechos reservados</sub>
+</p>
