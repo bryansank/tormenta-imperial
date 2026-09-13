@@ -159,6 +159,29 @@ signal draft_applied(option: Dictionary)
 @warning_ignore("unused_signal")
 signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary)
 
+# ── Imperial Storm ──
+## Emitted only by StormManager. The storm is dispatched on a schedule, not rolled
+## at random — the player is meant to see it coming and prepare (see the design in
+## the private context folder).
+## `phase` values follow StormCycle.Phase.
+@warning_ignore("unused_signal")
+signal storm_phase_changed(phase: int, seconds_left: float)
+## The warning window opens: ash on the horizon, time to decide.
+@warning_ignore("unused_signal")
+signal storm_incoming(seconds_until: float, severity: int)
+@warning_ignore("unused_signal")
+signal storm_started(severity: int)
+## Per-tick bite while the storm is overhead, for the UI to react to.
+@warning_ignore("unused_signal")
+signal storm_tick(seconds_left: float)
+@warning_ignore("unused_signal")
+signal storm_ended(severity: int)
+## The Assessors arrive to collect. `taken` is resource_name -> amount.
+@warning_ignore("unused_signal")
+signal tithe_demanded(severity: int)
+@warning_ignore("unused_signal")
+signal tithe_resolved(paid: bool, taken: Dictionary)
+
 # ── Random Events ──
 @warning_ignore("unused_signal")
 signal random_event_started(event_id: String, event_data: Dictionary)

@@ -529,6 +529,55 @@ func get_combat_stats(unit_id: String) -> Dictionary:
 func get_combat_ai_step_delay() -> float:
 	return combat_ai_step_delay if not dev_mode else combat_ai_step_delay * 0.5
 
+# ══════════════════════════════════════════════════════════════════════
+# ── The Imperial Storm ──
+# ══════════════════════════════════════════════════════════════════════
+# The storm is dispatched, not rolled: it arrives on a schedule the player can
+# see and plan around. A storm you cannot prepare for is just a random event.
+
+## Seconds of calm between storms, and how long the warning lasts before it hits.
+## The warning is the whole mechanic — it is what turns the storm into decisions.
+var storm_interval := 300.0
+var storm_warning := 45.0
+var storm_duration := 60.0
+
+## The first storm is deliberately late and gentle: it has to teach the cycle,
+## not end the run.
+var storm_first_interval := 420.0
+var storm_first_severity := 1
+
+## Production multiplier while the ash is overhead. Not zero — watching the
+## factories crawl is worse than watching them stop.
+var storm_production_multiplier := 0.35
+## Morale lost per storm tick, and how often those ticks land.
+var storm_morale_per_tick := 2.0
+var storm_tick_interval := 5.0
+
+## Severity climbs with the era and with how much smoke you make. The Regency does
+## not spend a storm on a province that does not show up in the ledger.
+var storm_severity_max := 5
+var storm_severity_per_era := 1
+## One extra step of severity per this many producing buildings.
+var storm_buildings_per_severity := 6
+
+## Share of everything in store that the Assessors take when the Tithe is not
+## repelled. A percentage, not a flat sum: hoarding into a storm is the mistake.
+var storm_tithe_ratio := 0.25
+## How many enemies the Assessors field, before severity scaling.
+var storm_tithe_base_force := 3
+
+func get_storm_interval(is_first: bool) -> float:
+	return get_duration(storm_first_interval if is_first else storm_interval)
+
+func get_storm_warning() -> float:
+	return get_duration(storm_warning)
+
+func get_storm_duration() -> float:
+	return get_duration(storm_duration)
+
+func get_storm_tick_interval() -> float:
+	return get_duration(storm_tick_interval)
+
 # ── Storage Helpers ──
 
 func get_storage_cap(warehouse_count: int) -> int:
