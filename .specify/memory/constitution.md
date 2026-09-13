@@ -1,25 +1,23 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (template) → 1.0.0
-Bump rationale: Initial ratification of the project constitution (MAJOR baseline).
-Modified principles: N/A (first version)
-Added principles:
-  - I. Comunicación Mediada por EventBus
-  - II. El Lenguaje Correcto para Cada Trabajo (C# vs GDScript)
-  - III. GameConfig como Única Fuente de Balance
-  - IV. Fronteras de Servicios Autoload
-  - V. Disciplina de Convenciones, i18n y Persistencia
-Added sections:
-  - Restricciones de Tecnología y Estructura
-  - Flujo de Desarrollo
-  - Governance
-Removed sections: none
+Version change: 1.0.0 → 2.0.0
+Bump rationale: MAJOR — redefinición incompatible del Principio II. Pasa de "C# MUST
+para IA/combate/pathfinding" a "GDScript primero; C# solo con evidencia de profiler".
+Justificación: nunca existió el proyecto .NET (sin .csproj ni .cs); el alcance acordado
+del combate (tablero 8x8, 4-6 unidades por bando) no justifica un segundo lenguaje, y un
+solo runtime maximiza la probabilidad de terminar el proyecto.
+Modified principles:
+  - II. El Lenguaje Correcto para Cada Trabajo → II. GDScript Primero
+Modified sections:
+  - Restricciones de Tecnología y Estructura: motor Godot 4.7 (antes 4.6); se retira
+    Nakama del backend planificado (PvP fuera de alcance; si algún día se hace, sobre
+    Supabase). Definiciones de combate como diccionarios inline en GameConfig.
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ reviewed (Constitution Check genérico, compatible)
-  - .specify/templates/spec-template.md ✅ reviewed (sin conflicto)
-  - .specify/templates/tasks-template.md ✅ reviewed (sin conflicto)
+  - .specify/templates/plan-template.md ✅ sin cambios necesarios
+  - CLAUDE.md ✅ ya refleja GDScript-first (2026-09-12)
 Follow-up TODOs: none
+Previous version: 1.0.0 (ratificada 2026-07-20)
 -->
 
 # Tormenta Imperial Constitution
@@ -41,15 +39,23 @@ Reglas no negociables:
 **Rationale:** El desacople productor/consumidor es lo que permite que 19 autoloads
 evolucionen sin romperse entre sí y que UI, cámara y lógica se prueben de forma aislada.
 
-### II. El Lenguaje Correcto para Cada Trabajo (C# vs GDScript)
+### II. GDScript Primero
 
-El código sensible al rendimiento se escribe en **C#**; todo lo demás en **GDScript**.
+Todo el código del juego se escribe en **GDScript**, incluido el combate por turnos.
 
-- **C# (MUST):** IA de unidades, matemática de combate, pathfinding, serialización de red.
-- **GDScript (MUST):** UI, cámara, input, servicios, gestión de escenas, cableado de señales.
+- **GDScript (MUST):** servicios, UI, cámara, input, gestión de escenas, cableado de
+  señales, reglas de combate, IA de unidades y generación procedural.
+- **C# (MAY, solo con evidencia):** un módulo puede portarse a C# únicamente si el
+  profiler de Godot demuestra que es el cuello de botella y que GDScript no alcanza el
+  objetivo de rendimiento. El puerto se hace por módulo aislado, nunca de forma
+  especulativa, y requiere enmendar esta constitución.
+- La lógica de combate se escribe como **funciones puras y deterministas** (sin nodos ni
+  estado global) para que sea testeable en headless y portable si algún día hace falta.
 
-**Rationale:** GDScript es más ágil para el pegamento del juego; C# aporta el rendimiento
-determinista que exigen el combate por turnos y la futura capa de multijugador.
+**Rationale:** El proyecto entero (19 autoloads y toda la UI) ya es GDScript. A la escala
+acordada para el combate —tablero 8x8, 4-6 unidades por bando— el rendimiento no es un
+factor, y un segundo runtime añade compilación, marshalling y depuración doble sin
+beneficio. Menos piezas es más probabilidad de terminar.
 
 ### III. GameConfig como Única Fuente de Balance
 
@@ -99,14 +105,17 @@ persistencia evita corromper partidas existentes al añadir features.
 
 ## Restricciones de Tecnología y Estructura
 
-- **Motor:** Godot 4.6 .NET Edition (renderer Forward+). No introducir dependencias que
-  rompan la edición .NET.
-- **Definiciones de datos:** edificios como `.tres` en `data/buildings/`; unidades y techs
-  como diccionarios inline en `GameConfig.gd` (`unit_types`, `tech_definitions`).
+- **Motor:** Godot 4.7 (edición .NET/mono, renderer Forward+). El editor .NET se mantiene
+  por compatibilidad futura, pero no existe proyecto C# y no se crea sin evidencia
+  (Principio II).
+- **Definiciones de datos:** edificios como `.tres` en `data/buildings/`; unidades, techs y
+  combate como diccionarios inline en `GameConfig.gd` (`unit_types`, `tech_definitions`,
+  `combat_*`).
 - **Mallas 3D:** generadas proceduralmente por `DieselpunkBuildingFactory` salvo que un
   edificio defina `model_scene`.
-- **Backend/Multijugador (planificado):** Supabase (`CloudSaveManager`) y Nakama; su
-  cableado debe seguir estos principios cuando se active.
+- **Backend (planificado):** Supabase (`CloudSaveManager`, implementado pero desconectado).
+  El PvP está fuera del alcance de la v1; si algún día se construye, va sobre Supabase
+  (RLS + Edge Functions + Realtime), no sobre un servidor de juego dedicado.
 - **Docs:** los sistemas se documentan en `docs/`; `CLAUDE.md` refleja la arquitectura
   vigente y se actualiza junto al código que cambia.
 
@@ -138,4 +147,4 @@ o convergencia de Spec Kit y debe corregirse antes de dar una feature por comple
 - **Guía runtime:** `CLAUDE.md` es la guía operativa de desarrollo y debe mantenerse
   coherente con esta constitución.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-20 | **Last Amended**: 2026-07-20
+**Version**: 2.0.0 | **Ratified**: 2026-07-20 | **Last Amended**: 2026-09-12
