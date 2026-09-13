@@ -87,14 +87,45 @@ func get_deployable_units() -> Dictionary:
 
 ## Builds both sides and opens the board. `party` and `enemy_roster` are
 ## unit_id -> count dictionaries.
-func start_encounter(party: Dictionary, enemy_roster: Dictionary, is_boss: bool = false, encounter_index: int = 0) -> void:
+## The Assessors come to collect and the garrison answers. Unlike a skirmish the
+## player does not pick the party: whatever is at home fights, which is what makes
+## sending the army out before a storm an actual gamble.
+##
+## Returns false when there is nobody left to stand — the caller then has to let
+## the Tithe be collected.
+func start_defense(enemy_roster: Dictionary) -> bool:
+	if is_in_encounter() or enemy_roster.is_empty():
+		return false
+	var garrison: Dictionary = get_garrison()
+	if garrison.is_empty():
+		return false
+	start_encounter(garrison, enemy_roster, false, 0, true)
+	return true
+
+## Everything trained and at home, up to the board's cap.
+func get_garrison() -> Dictionary:
+	var garrison: Dictionary = {}
+	var committed := 0
+	for unit_id in GameConfig.get_unit_ids():
+		for i in ArmyManager.get_count(unit_id):
+			if committed >= GameConfig.combat_deploy_cap:
+				break
+			garrison[unit_id] = int(garrison.get(unit_id, 0)) + 1
+			committed += 1
+	return garrison
+
+## True while the current fight is a defence of the base.
+func is_defending() -> bool:
+	return _encounter != null and _encounter.is_defense
+
+func start_encounter(party: Dictionary, enemy_roster: Dictionary, is_boss: bool = false, encounter_index: int = 0, is_defense: bool = false) -> void:
 	_morale_snapshot = _read_morale()
 	var scale: float = GameConfig.combat_boss_multiplier if is_boss else 1.0
 	var units: Array = []
 	units.append_array(_build_side(party, Encounter.PLAYER, 1.0))
 	units.append_array(_build_side(enemy_roster, Encounter.ENEMY, scale))
 
-	_encounter = EncounterScript.create(units, encounter_index, is_boss)
+	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense)
 	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())
@@ -294,8 +325,11 @@ func _apply_result(victory: bool, rounds: int) -> void:
 	# Military Power lands exactly on the survivors.
 	var lost: Dictionary = ArmyManager.remove_units(casualties)
 
+	# Winning a defence pays nothing, and it should not: the reward is that the
+	# Tithe goes uncollected. Handing out loot on top would pay the player twice
+	# for the same fight.
 	var rewards: Dictionary = {}
-	if victory:
+	if victory and not _encounter.is_defense:
 		rewards = Rules.encounter_rewards(ProgressionManager.current_era)
 		for res_name in rewards:
 			ResourceManager.add(_resource_type(res_name), int(rewards[res_name]))
@@ -310,6 +344,7 @@ func _apply_result(victory: bool, rounds: int) -> void:
 	_last_result = {
 		"victory": victory,
 		"rounds": rounds,
+		"defense": _encounter.is_defense,
 		"rewards": rewards,
 		"casualties": lost,
 		"survivors": survivors,

@@ -20,6 +20,7 @@ func _ready() -> void:
 	_cycle = StormCycleScript.create()
 	EventBus.phase_advanced.connect(_on_phase_advanced)
 	EventBus.game_load_completed.connect(_check_arming)
+	EventBus.encounter_ended.connect(_on_encounter_ended)
 	_check_arming()
 
 func _process(delta: float) -> void:
@@ -110,12 +111,41 @@ func _apply_storm_tick() -> void:
 
 # ── The Tithe ────────────────────────────────────────────────────────
 
-## The Assessors arrive. Until the defensive board exists they collect without a
-## fight; wiring this to a real encounter is the next step.
+## The Assessors arrive. If there is a garrison at home, they have to get through
+## it first; with nobody to stand, they simply help themselves.
 func _begin_tithe(severity: int) -> void:
+	if CombatManager.start_defense(assessor_roster(severity)):
+		return
+	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_UNDEFENDED"), "danger", UITheme.DANGER)
+	_pay_tithe(severity)
+
+## The force that comes to collect. A line of Assessors with guns behind it,
+## growing with severity — the more you are worth, the more they send.
+func assessor_roster(severity: int) -> Dictionary:
+	var force: int = clampi(
+		GameConfig.storm_tithe_base_force + severity - 1, 1, GameConfig.combat_deploy_cap)
+	var guns: int = force / 3
+	var line: int = maxi(1, force - guns)
+	var roster: Dictionary = {"infantry": line}
+	if guns > 0:
+		roster["artillery"] = guns
+	return roster
+
+## Settles the collection once the board is done with it.
+func _on_encounter_ended(victory: bool, _turns: int) -> void:
+	if _cycle == null or not _cycle.is_collecting():
+		return
+	if not CombatManager.is_defending():
+		return
+	if victory:
+		repel_tithe()
+	else:
+		EventBus.notification_posted.emit(Tr.t("STORM_TITHE_PAID"), "danger", UITheme.DANGER)
+		_pay_tithe(get_severity())
+
+func _pay_tithe(severity: int) -> void:
 	var taken: Dictionary = _collect_tithe(severity)
 	EventBus.tithe_resolved.emit(false, taken)
-	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_PAID"), "danger", UITheme.DANGER)
 	_settle()
 
 ## Takes a share of everything in store. A percentage and not a flat sum on

@@ -39,9 +39,16 @@ func _run() -> void:
 
 	# Un ciclo entero: mecha + aviso + tormenta + cobranza, con margen.
 	var total: float = FUSE + GameConfig.get_storm_warning() + GameConfig.get_storm_duration() + 6.0
+	# La IA espera entre accion y accion para que se vea; aqui no mira nadie.
+	GameConfig.combat_ai_step_delay = 0.0
 	var elapsed := 0.0
 	var seen_storm := false
 	while elapsed < total:
+		# Si los Tasadores abren tablero, hay que pelear o el ciclo se queda
+		# esperando: la fase de cobranza detiene el reloj a proposito.
+		if CombatManager.is_in_encounter():
+			await _play_one_turn()
+			continue
 		await get_tree().create_timer(0.5).timeout
 		elapsed += 0.5
 		if StormManager.is_storming() and not seen_storm:
@@ -56,7 +63,10 @@ func _run() -> void:
 	get_tree().quit()
 
 ## Una base creible y ya fuera de la fase Fundacion, que es donde el reloj se arma.
+## Con guarnicion: asi el Diezmo llega a las manos en vez de cobrarse solo.
 func _seed() -> void:
+	ArmyManager._units = {"infantry": 4, "artillery": 2}
+	EventBus.army_changed.emit()
 	ResourceManager.set_unlock_state({"gold": true, "wood": true, "steel": true, "oil": false})
 	ResourceManager.set_amounts({"gold": 2000, "wood": 1000, "steel": 500, "oil": 0})
 	ProgressionManager.current_era = 2
@@ -75,8 +85,29 @@ func _listen() -> void:
 		print("[storm] el aire aclara"))
 	EventBus.tithe_demanded.connect(func(sev):
 		print("[storm] LLEGAN LOS TASADORES (severidad %d)" % sev))
+	EventBus.encounter_started.connect(func(_i, _b):
+		print("[storm] TABLERO ABIERTO | defensa=%s | guarnicion=%s" % [
+			CombatManager.is_defending(), CombatManager.get_garrison()]))
 	EventBus.tithe_resolved.connect(func(paid, taken):
 		print("[storm] cobranza resuelta: repelida=%s, se llevan %s" % [paid, taken]))
+
+## Juega el turno activo del jugador: ataca si puede, si no se acerca y pasa.
+## El turno enemigo lo lleva la IA sola.
+func _play_one_turn() -> void:
+	await get_tree().process_frame
+	if not CombatManager.is_player_turn():
+		return
+	var unit: CombatUnit = CombatManager.get_active_unit()
+	if unit == null:
+		return
+	var targets: Array = CombatManager.get_valid_targets(unit.uid)
+	if not targets.is_empty():
+		CombatManager.attack(unit.uid, targets[0])
+		return
+	var cells: Array = CombatManager.get_valid_moves(unit.uid)
+	if not cells.is_empty():
+		CombatManager.move_unit(unit.uid, cells[cells.size() - 1])
+	CombatManager.end_turn()
 
 func _snapshot() -> Dictionary:
 	return {

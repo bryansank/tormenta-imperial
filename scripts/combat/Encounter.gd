@@ -22,6 +22,9 @@ var turn_index: int = -1
 var round_number: int = 1
 var turn_limit: int = 20
 var is_boss: bool = false
+## True when the player is being attacked at home instead of marching out. It
+## changes who starts where, and what losing costs — see _rows_for().
+var is_defense: bool = false
 var index: int = 0
 var state: int = State.DEPLOYING
 var deploy_zones: Dictionary = {}    ## side -> Array[Vector2i]
@@ -30,11 +33,12 @@ var deploy_zones: Dictionary = {}    ## side -> Array[Vector2i]
 
 ## `units` arrive already built (CombatUnit instances) so the expedition can hand
 ## over survivors carrying their damage from the previous node (FR-011).
-static func create(p_units: Array, p_index: int, p_is_boss: bool) -> Encounter:
+static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: bool = false) -> Encounter:
 	var e := Encounter.new()
 	e.units = p_units
 	e.index = p_index
 	e.is_boss = p_is_boss
+	e.is_defense = p_is_defense
 	e.board_size = GameConfig.combat_board_size
 	e.turn_limit = GameConfig.combat_turn_limit
 	e._build_deploy_zones()
@@ -46,10 +50,14 @@ static func create(p_units: Array, p_index: int, p_is_boss: bool) -> Encounter:
 ##
 ## Each side's rows are listed front first — the row facing the enemy — because
 ## that is the order units fill them in.
+## Defending at home is worth something: the attackers form up on the far edge
+## instead of the near one, which buys the defender a round of approach to place
+## themselves. It is the only advantage the player gets for being attacked, and
+## without it a defence is just an expedition with worse stakes.
 func _rows_for(side: int) -> Array:
 	if side == PLAYER:
 		return [board_size.y - 2, board_size.y - 1]
-	return [1, 0]
+	return [0, 1] if is_defense else [1, 0]
 
 func _build_deploy_zones() -> void:
 	deploy_zones = {PLAYER: [], ENEMY: []}

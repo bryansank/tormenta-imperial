@@ -93,7 +93,15 @@ func test_a_wiped_out_kind_leaves_no_leftover_entry() -> void:
 
 func test_casualties_announce_themselves() -> void:
 	# The army panel and Military Power only refresh on this signal.
+	#
+	# Connected by hand on purpose: gdUnit's monitor_signals() frees the object it
+	# watches at teardown, and EventBus is an autoload — monitoring it kills the
+	# bus for every suite that runs afterwards, which fails them all somewhere
+	# far away from the real cause.
 	_given({"infantry": 2})
-	var monitor := monitor_signals(EventBus)
+	var fired := [false]
+	var probe := func(): fired[0] = true
+	EventBus.army_changed.connect(probe)
 	ArmyManager.remove_units({"infantry": 1})
-	await assert_signal(monitor).is_emitted("army_changed")
+	EventBus.army_changed.disconnect(probe)
+	assert_bool(fired[0]).is_true()
