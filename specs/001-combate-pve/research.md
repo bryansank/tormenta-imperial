@@ -90,7 +90,7 @@ Ver [`contracts/eventbus-combat.md`](contracts/eventbus-combat.md). Productores:
 
 **Decisión**: la moral de la base entra al combate en dos números (bono de iniciativa y multiplicador de ataque) y el resultado de la expedición devuelve moral a la base (victoria suma, cada baja resta). Se implementa en US3 porque es "el resultado impacta la economía" — la moral es economía.
 
-**Rationale**: es el diferenciador identificado en `estrategia/02_VISION_Y_DIFERENCIADORES.md`, cuesta cuatro valores de `GameConfig` y una señal, y hace que el combate se sienta consecuencia de la base desde la primera versión. La "huelga por derrota" y los decretos quedan en `estrategia/IDEAS.md` para la fase 2.
+**Rationale**: es el diferenciador de diseño del juego, cuesta cuatro valores de `GameConfig` y una señal, y hace que el combate se sienta consecuencia de la base desde la primera versión. Efectos mayores sobre la moral (huelgas por derrota, decretos) quedan fuera de esta versión.
 
 ## D9 — Testing: gdUnit4 sobre las funciones puras
 

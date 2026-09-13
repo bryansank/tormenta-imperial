@@ -33,8 +33,24 @@ __pycache__/
 .env
 secret.json
 
+# ── Local / personal: nada de esto debe llegar a un repositorio publico ──
+#
 # Config de clientes MCP: contiene el token local del servidor de Beckett.
-# Se regenera solo al abrir el editor; la config de Blender está documentada
-# en CONTEXTO_PROYECTO.md.
+# Se regenera sola al abrir el editor.
 .mcp.json
 .cursor/
+.beckett/
+
+# Ajustes por-maquina de Claude Code: rutas absolutas y nombre de usuario.
+# El equivalente compartible es .claude/settings.json.
+.claude/settings.local.json
+
+# Contexto de negocio y notas personales (estrategia, monetizacion, planes).
+# Viven fuera del repositorio, en la carpeta de contexto del autor.
+estrategia/
+CONTEXTO_PROYECTO.md
+NOTAS_*.md
+*_PRIVADO.md
+
+# Capturas del recorrido de UI generadas por tools/ui_tour.gd
+ui_tour/

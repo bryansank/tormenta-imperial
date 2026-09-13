@@ -378,8 +378,8 @@ All balance values live in `GameConfig.gd`:
 Full roadmap with milestones and dependency order: `docs/13-roadmap.md`.
 
 - **Turn-based combat PVE** (next major pillar): tactical grid (8x8, 4–6 units per
-  side), turn/initiative, move/attack/defend, enemy AI — **in GDScript**, see
-  `estrategia/02_VISION_Y_DIFERENCIADORES.md` for the agreed scope
+  side), turn/initiative, move/attack/defend, enemy AI — **in GDScript**, fully
+  planned in `specs/001-combate-pve/`
 - **Tower defensive behavior** + unit desertion when upkeep unpaid
 - **Missions/contracts:** timed delivery challenges for rewards
 - **Cloud save wiring:** CloudSaveManager exists but needs `.env` + UI (settings menu)

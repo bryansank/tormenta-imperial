@@ -26,7 +26,7 @@ Enfoque técnico: un solo autoload nuevo (`CombatManager`) dueño del dominio, l
 
 **Performance Goals**: 60 fps estables en el tablero; resolución de un turno de IA < 16 ms (8x8, ≤ 6 unidades por bando: trivial)
 
-**Constraints**: cero `print` en producción; cero warnings en `game_logs`; sin números mágicos fuera de `GameConfig`; textos ES+EN vía `Tr`; un encuentro típico < 5 min de reloj (SC-002); cada tarea cerrable en una sesión de 2-4 h
+**Constraints**: cero `print` en producción; cero warnings en `game_logs`; sin números mágicos fuera de `GameConfig`; textos ES+EN vía `Tr`; un encuentro típico < 5 min de reloj (SC-002); cada tarea cerrable en una sesión corta de trabajo
 
 **Scale/Scope**: 3 tipos de unidad (existentes), tablero 8x8, 4-6 unidades por bando, mapas de 4-6 nodos de profundidad, 5 tipos de mejora de draft, 1 tipo de objetivo ("eliminar a todos") en v1
 
@@ -107,7 +107,7 @@ docs/
 
 **Structure Decision**: se respeta la estructura existente (servicios como autoloads en `scripts/services/`, un `.gd` + `.tscn` por panel en `scripts/ui/` y `scenes/ui/`). Lo único nuevo es la carpeta `scripts/combat/` para la lógica pura —separada de los servicios porque no son autoloads ni tienen estado global— y `tests/` en la raíz siguiendo la convención de gdUnit4.
 
-## Fases de entrega (mapa a `estrategia/05_PLAN_DE_TRABAJO.md`)
+## Fases de entrega
 
 | Hito del plan estratégico | User Stories | Resultado visible |
 |---|---|---|

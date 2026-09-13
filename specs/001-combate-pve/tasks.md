@@ -123,7 +123,7 @@
 - [ ] T042 [P] `AudioManager`: SFX en `unit_attacked`, `unit_died`, `encounter_ended`, `expedition_ended`; música de combate opcional por señal (usar tracks existentes; ambientes siguen fuera de alcance)
 - [ ] T043 [P] `HelperPanel`: un callout para el botón **Escaramuzas** cuando aparece el Cuartel (un solo callout, no una pared)
 - [ ] T044 [P] Docs: crear `docs/14-combat.md` (sistemas, señales, balance), añadir a `docs/INDEX.md`; actualizar tabla de autoloads (20) y estructura en `CLAUDE.md`; actualizar `docs/13-roadmap.md`
-- [ ] T045 Recorrer `quickstart.md` E1-E9 completo con Beckett; capturar `estrategia/capturas/` del tablero para el devlog
+- [ ] T045 Recorrer `quickstart.md` E1-E9 completo con Beckett; capturar el tablero con `tools/ui_tour.gd` para el devlog
 - [ ] T046 Balance inicial: sesión de juego real de 30 min; ajustar solo `GameConfig.combat_*` hasta que un encuentro dure 3-5 min y la primera expedición sea ganable con 3-4 unidades de era 1
 
 ---
@@ -149,7 +149,7 @@
 
 **MVP = Phase 1 + Phase 2 + US1.** Al cerrar T021 hay un juego de combate mostrable aunque no exista la expedición. Con < 5 h/semana eso son ~6-8 sesiones. Parar ahí, grabar el GIF, y solo entonces seguir con US2.
 
-Reglas de higiene (de `estrategia/05_PLAN_DE_TRABAJO.md`): una rama por hito (`feat/combate-encuentro`, `feat/combate-expedicion`, `feat/combate-economia`, `feat/combate-ia`), PR a `main`, la base congelada, ideas nuevas a `estrategia/IDEAS.md`, y verificar la cuenta `bryansank` antes de cada push.
+Reglas de higiene: una rama por hito (`feat/combate-encuentro`, `feat/combate-expedicion`, `feat/combate-economia`, `feat/combate-ia`), PR a `main`, y la base del juego congelada mientras dure el pilar de combate.
 
 ## Mapa de sesiones (estimación)
 

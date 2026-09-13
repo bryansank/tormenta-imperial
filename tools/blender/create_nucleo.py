@@ -18,7 +18,13 @@ import bmesh
 import math
 import os
 
-EXPORT_PATH = "c:/Users/bkey/Documents/PERSONAL/apss/empires/assets/models/buildings/nucleo/nucleo.glb"
+# Resolved from this file's location so the script works on any machine.
+# Override with TORMENTA_ASSETS if you run it from elsewhere.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+EXPORT_PATH = os.environ.get(
+    "TORMENTA_NUCLEO_GLB",
+    os.path.join(_PROJECT_ROOT, "assets", "models", "buildings", "nucleo", "nucleo.glb"),
+).replace("\\", "/")
 
 # ─── PALETTE — Warm, vibrant, authoritative ─────────────────────────────────
 WALL = {"base_color": (0.78, 0.72, 0.58, 1.0), "metallic": 0.05, "roughness": 0.75}
