@@ -47,6 +47,7 @@ func _new_game() -> void:
 	TechTreeManager.reset()
 	ArmyManager.reset()
 	CombatManager.reset()
+	StormManager.reset()
 	# Place nucleo at center (no build time for core)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
@@ -157,6 +158,11 @@ func _load_game() -> void:
 	if data.has("expedition"):
 		CombatManager.load_save_data(data["expedition"])
 
+	# Restore the storm clock. Same rule: no key means a save from before the
+	# storm existed, and the cycle simply starts fresh.
+	if data.has("storm"):
+		StormManager.load_save_data(data["storm"])
+
 	# Apply offline progression
 	if data.has("saved_at"):
 		var saved_at: float = float(data["saved_at"])
@@ -209,6 +215,7 @@ func save_game() -> void:
 	# Army
 	data["army"] = ArmyManager.get_save_data()
 	data["expedition"] = CombatManager.get_save_data()
+	data["storm"] = StormManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -243,6 +250,7 @@ func clear_save() -> void:
 	TechTreeManager.reset()
 	ArmyManager.reset()
 	CombatManager.reset()
+	StormManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null
@@ -265,6 +273,7 @@ func clear_save_and_reload_from(save_data: Dictionary) -> void:
 	TechTreeManager.reset()
 	ArmyManager.reset()
 	CombatManager.reset()
+	StormManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null

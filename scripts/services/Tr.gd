@@ -266,6 +266,7 @@ const _STRINGS := {
 		"LBL_VOL_SFX": "Efectos de sonido",
 		"LBL_SETTINGS_UI": "INTERFAZ",
 		"LBL_SHOW_GRID": "Mostrar cuadricula del mapa",
+		"LBL_FULLSCREEN": "Pantalla completa (F11)",
 
 		# Helper
 		"BTN_HELPER_TIP": "Ayudante: muestra u oculta las guias en pantalla",
@@ -328,6 +329,15 @@ const _STRINGS := {
 		"LBL_REWARDS": "Botin",
 		"LBL_CASUALTIES": "Bajas",
 		"LBL_NO_CASUALTIES": "Sin bajas",
+		# La Tormenta Imperial
+		"STORM_INCOMING_FIRST": "El aire viene sucio del este.",
+		"STORM_INCOMING": "Otra vez el aire del este. Puntual.",
+		"STORM_STARTED": "La ceniza cae sobre la isla.",
+		"STORM_ENDED": "El aire aclara.",
+		"STORM_TITHE_PAID": "Los Tasadores han cobrado el Diezmo.",
+		"STORM_TITHE_REPELLED": "Los Tasadores se retiran sin cobrar.",
+		"STORM_COUNTDOWN": "Tormenta en %s",
+		"STORM_OVERHEAD": "TORMENTA",
 		"LBL_MORALE_DELTA": "Moral %+d",
 		"LBL_RISK_LOW": "Riesgo bajo",
 		"LBL_RISK_MED": "Riesgo medio",
@@ -591,6 +601,7 @@ const _STRINGS := {
 		"LBL_VOL_SFX": "Sound effects",
 		"LBL_SETTINGS_UI": "INTERFACE",
 		"LBL_SHOW_GRID": "Show map grid",
+		"LBL_FULLSCREEN": "Fullscreen (F11)",
 
 		# Helper
 		"BTN_HELPER_TIP": "Helper: show or hide the on-screen guides",
@@ -653,6 +664,15 @@ const _STRINGS := {
 		"LBL_REWARDS": "Spoils",
 		"LBL_CASUALTIES": "Casualties",
 		"LBL_NO_CASUALTIES": "No losses",
+		# The Imperial Storm
+		"STORM_INCOMING_FIRST": "The air is coming in dirty from the east.",
+		"STORM_INCOMING": "The east wind again. Punctual.",
+		"STORM_STARTED": "Ash is falling on the island.",
+		"STORM_ENDED": "The air clears.",
+		"STORM_TITHE_PAID": "The Assessors have collected the Tithe.",
+		"STORM_TITHE_REPELLED": "The Assessors withdraw with nothing.",
+		"STORM_COUNTDOWN": "Storm in %s",
+		"STORM_OVERHEAD": "STORM",
 		"LBL_MORALE_DELTA": "Morale %+d",
 		"LBL_RISK_LOW": "Low risk",
 		"LBL_RISK_MED": "Medium risk",

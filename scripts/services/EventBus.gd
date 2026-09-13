@@ -200,6 +200,9 @@ signal sidebar_toggled(visible: bool)
 @warning_ignore("unused_signal")
 signal grid_overlay_toggled(visible: bool)
 
+## Emitted when the window switches to/from fullscreen (F11 or Settings).
+signal fullscreen_changed(enabled: bool)
+
 # ── Persistence ──
 @warning_ignore("unused_signal")
 signal game_new_started()

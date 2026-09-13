@@ -185,7 +185,11 @@ func _award_production(node: Node3D, data: BuildingData) -> void:
 	var level: int = node.get_meta("level", 1)
 	var morale_mult := PopulationManager.get_morale_multiplier()
 	var base_mult := GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus
-	var mult := base_mult * morale_mult
+	# Temporary, event-driven penalties (the Imperial Storm) ride on their own
+	# multiplier so they can be lifted cleanly. Folding them into the tech bonus
+	# would mix a passing squall with permanent research and leave the value
+	# corrupt if the event were ever interrupted.
+	var mult := base_mult * morale_mult * GameConfig.event_production_multiplier
 	var offset := 0.0
 	if data.produces_gold > 0:
 		var amount := int(data.produces_gold * mult)
