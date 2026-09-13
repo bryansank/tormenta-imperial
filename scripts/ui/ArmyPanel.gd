@@ -45,9 +45,9 @@ func _setup_ui() -> void:
 	# Sidebar button (hamburger menu)
 	_army_btn = Button.new()
 	_army_btn.text = Tr.t("BTN_ARMY")
-	_army_btn.custom_minimum_size = Vector2(140, 38)
+	_army_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
 	_army_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_army_btn.offset_left = -152
+	_army_btn.offset_left = -176
 	_army_btn.offset_top = UILayoutManager.get_sidebar_button_offset("ArmyPanel.button")
 	UITheme.style_card_button(_army_btn, UITheme.BTN.lightened(0.05), MILITARY)
 	_army_btn.pressed.connect(_toggle_panel)

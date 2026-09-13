@@ -24,9 +24,9 @@ func _setup_ui() -> void:
 	# Sidebar button ("¿Qué hacer?") — lives in the hamburger menu
 	_obj_btn = Button.new()
 	_obj_btn.text = Tr.t("BTN_OBJECTIVES")
-	_obj_btn.custom_minimum_size = Vector2(140, 38)
+	_obj_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
 	_obj_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_obj_btn.offset_left = -152
+	_obj_btn.offset_left = -176
 	_obj_btn.offset_top = UILayoutManager.get_sidebar_button_offset("ObjectivePanel.button")
 	UITheme.style_card_button(_obj_btn, UITheme.BTN.lightened(0.05), UITheme.INFO)
 	_obj_btn.pressed.connect(toggle)

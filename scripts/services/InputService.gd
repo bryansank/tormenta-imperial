@@ -20,6 +20,14 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	_handle_keyboard()
 
+## F11 alterna pantalla completa desde cualquier parte del juego. Va en _input
+## (no en _unhandled_input) para que siga funcionando con un panel abierto.
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if (event as InputEventKey).keycode == KEY_F11:
+			GameConfig.toggle_fullscreen()
+			get_viewport().set_input_as_handled()
+
 func _unhandled_input(event: InputEvent) -> void:
 	# Skip mouse/touch input when hovering over UI elements
 	if _is_mouse_over_ui():

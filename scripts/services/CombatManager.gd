@@ -1,40 +1,50 @@
 extends Node
-## Owner of the PVE combat domain: expeditions, encounters, turn order and
-## resolution. Nothing else mutates combat state — the UI reads this API and
-## reacts to EventBus signals (constitution, principles I and IV).
+## Owner of the PVE combat domain. Holds the active Encounter, translates its
+## events onto the EventBus and drives the enemy turn. Nothing else mutates
+## combat state — the UI reads this API and reacts to signals (constitution,
+## principles I and IV).
+##
+## The rules and the board live in scripts/combat/ as pure RefCounted objects.
+## This node exists only for what needs a scene tree: signals and timing.
 ##
 ## ArmyManager stays the source of truth for the roster: units committed to an
 ## expedition are still counted there and are only deducted as casualties when
 ## the expedition resolves, so Military Power never lies mid-run.
 ##
-## Current scope: encounter core (T012-T013). Expedition map, drafts and the
-## economy bridge land in later tasks — see specs/001-combate-pve/tasks.md.
+## Current scope: the encounter core (T012-T020). The expedition map, drafts and
+## the economy bridge land in US2/US3 — see specs/001-combate-pve/tasks.md.
 
 const CombatUnitScript := preload("res://scripts/combat/CombatUnit.gd")
+const EncounterScript := preload("res://scripts/combat/Encounter.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
+const AI := preload("res://scripts/combat/CombatAI.gd")
 
-enum EncounterState { IDLE, DEPLOYING, PLAYER_TURN, ENEMY_TURN, WON, LOST }
-
-var _units: Array = []              ## CombatUnit, both sides, alive and dead
-var _turn_order: Array = []         ## uids, rebuilt each round
-var _turn_index: int = 0
-var _round: int = 1
-var _state: int = EncounterState.IDLE
-var _is_boss: bool = false
-var _encounter_index: int = 0
+var _encounter: Encounter = null
 var _next_uid: int = 1
 var _morale_snapshot: float = 50.0
+var _enemy_turn_running: bool = false
+## Guards against applying the outcome twice: a timeout and a wipe can both fire
+## on the same advance, and paying the player twice for one fight is not a bug
+## anybody reports.
+var _result_applied: bool = false
+var _last_result: Dictionary = {}
 
 # ── Queries ──────────────────────────────────────────────────────────
 
+func get_encounter() -> Encounter:
+	return _encounter
+
 func is_in_encounter() -> bool:
-	return _state in [EncounterState.DEPLOYING, EncounterState.PLAYER_TURN, EncounterState.ENEMY_TURN]
+	return _encounter != null and _encounter.is_active()
+
+func is_enemy_thinking() -> bool:
+	return _enemy_turn_running
 
 func get_state() -> int:
-	return _state
+	return _encounter.state if _encounter != null else Encounter.State.DEPLOYING
 
 func get_round() -> int:
-	return _round
+	return _encounter.round_number if _encounter != null else 1
 
 func get_turn_limit() -> int:
 	return GameConfig.combat_turn_limit
@@ -43,30 +53,26 @@ func get_board_size() -> Vector2i:
 	return GameConfig.combat_board_size
 
 func get_units() -> Array:
-	return _units
+	return _encounter.units if _encounter != null else []
 
 func get_unit(uid: int) -> CombatUnit:
-	for unit in _units:
-		if unit.uid == uid:
-			return unit
-	return null
+	return _encounter.get_unit(uid) if _encounter != null else null
 
 func get_unit_at(cell: Vector2i) -> CombatUnit:
-	for unit in _units:
-		if unit.is_alive() and unit.position == cell:
-			return unit
-	return null
+	return _encounter.get_unit_at(cell) if _encounter != null else null
 
 func get_active_unit() -> CombatUnit:
-	if _turn_index < 0 or _turn_index >= _turn_order.size():
-		return null
-	return get_unit(_turn_order[_turn_index])
+	return _encounter.active_unit() if _encounter != null else null
 
 func get_turn_order() -> Array:
-	return _turn_order
+	return _encounter.turn_order if _encounter != null else []
 
 func get_morale_snapshot() -> float:
 	return _morale_snapshot
+
+## True while it is the player's turn and the board is waiting on them.
+func is_player_turn() -> bool:
+	return is_in_encounter() and _encounter.state == Encounter.State.PLAYER_TURN and not _enemy_turn_running
 
 ## Units the player may still commit: everything trained and not already deployed.
 func get_deployable_units() -> Dictionary:
@@ -81,158 +87,290 @@ func get_deployable_units() -> Dictionary:
 
 ## Builds both sides and opens the board. `party` and `enemy_roster` are
 ## unit_id -> count dictionaries.
-func start_encounter(party: Dictionary, enemy_roster: Dictionary, is_boss: bool = false, encounter_index: int = 0) -> void:
-	_units.clear()
-	_turn_order.clear()
-	_turn_index = 0
-	_round = 1
-	_is_boss = is_boss
-	_encounter_index = encounter_index
-	_state = EncounterState.DEPLOYING
+## The Assessors come to collect and the garrison answers. Unlike a skirmish the
+## player does not pick the party: whatever is at home fights, which is what makes
+## sending the army out before a storm an actual gamble.
+##
+## Returns false when there is nobody left to stand — the caller then has to let
+## the Tithe be collected.
+func start_defense(enemy_roster: Dictionary) -> bool:
+	if is_in_encounter() or enemy_roster.is_empty():
+		return false
+	var garrison: Dictionary = get_garrison()
+	if garrison.is_empty():
+		return false
+	start_encounter(garrison, enemy_roster, false, 0, true)
+	return true
+
+## Everything trained and at home, up to the board's cap.
+func get_garrison() -> Dictionary:
+	var garrison: Dictionary = {}
+	var committed := 0
+	for unit_id in GameConfig.get_unit_ids():
+		for i in ArmyManager.get_count(unit_id):
+			if committed >= GameConfig.combat_deploy_cap:
+				break
+			garrison[unit_id] = int(garrison.get(unit_id, 0)) + 1
+			committed += 1
+	return garrison
+
+## True while the current fight is a defence of the base.
+func is_defending() -> bool:
+	return _encounter != null and _encounter.is_defense
+
+func start_encounter(party: Dictionary, enemy_roster: Dictionary, is_boss: bool = false, encounter_index: int = 0, is_defense: bool = false) -> void:
 	_morale_snapshot = _read_morale()
-
 	var scale: float = GameConfig.combat_boss_multiplier if is_boss else 1.0
-	_spawn_side(party, 0, 1.0)
-	_spawn_side(enemy_roster, 1, scale)
-	_deploy_units()
+	var units: Array = []
+	units.append_array(_build_side(party, Encounter.PLAYER, 1.0))
+	units.append_array(_build_side(enemy_roster, Encounter.ENEMY, scale))
 
-	EventBus.encounter_started.emit(_encounter_index, _is_boss)
-	_begin_round()
+	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense)
+	_result_applied = false
+	EventBus.encounter_started.emit(encounter_index, is_boss)
+	_publish(_encounter.start())
 
-func _spawn_side(roster: Dictionary, side: int, scale: float) -> void:
+func _build_side(roster: Dictionary, side: int, scale: float) -> Array:
+	var built: Array = []
 	for unit_id in roster.keys():
 		for i in int(roster[unit_id]):
 			var unit: CombatUnit = CombatUnitScript.create(_next_uid, unit_id, side, scale)
 			_next_uid += 1
-			if side == 0:
+			if side == Encounter.PLAYER:
+				# Morale is captured once, at launch: the battle is fought with the
+				# spirit the base had when it set out, not with live numbers.
 				unit.morale_attack_mod = Rules.morale_attack_mod(_morale_snapshot)
 				unit.morale_initiative_bonus = Rules.morale_initiative_bonus(_morale_snapshot)
-			_units.append(unit)
+			built.append(unit)
+	return built
 
-## Player deploys on the bottom rows, enemy on the top ones (FR-005).
-func _deploy_units() -> void:
-	var board: Vector2i = get_board_size()
-	var rows := {0: [board.y - 1, board.y - 2], 1: [0, 1]}
-	for side in [0, 1]:
-		var cells: Array = []
-		for row in rows[side]:
-			for x in range(board.x):
-				cells.append(Vector2i(x, row))
-		var index := 0
-		for unit in Rules.living_units(_units, side):
-			# Spread units across the middle of their rows instead of the corner.
-			var offset: int = (board.x - Rules.living_units(_units, side).size()) / 2
-			var cell_index: int = index + maxi(0, offset)
-			unit.position = cells[cell_index % cells.size()]
-			index += 1
+## Standalone fight with the party the player just committed. This is the loop
+## the expedition will wrap in US2: the same encounter, chained across a map with
+## drafts between nodes. Until then it is the playable slice.
+func start_skirmish(party: Dictionary) -> bool:
+	if party.is_empty() or is_in_encounter():
+		return false
+	start_encounter(party, build_enemy_roster(party, 0), false, 0)
+	return true
 
-func _begin_round() -> void:
-	for unit in _units:
-		if unit.is_alive():
-			unit.begin_turn()
-	_turn_order = Rules.build_turn_order(_units)
-	_turn_index = -1
-	_advance_turn()
+## Fields an opposing force that answers what the player brought, so committing
+## more never turns the fight into a walkover — the decision has to stay a
+## decision. Deeper nodes and later eras tilt it against the player.
+##
+## Provisional: ExpeditionGenerator.enemy_roster() replaces this in T022, where
+## the roster becomes seeded and reproducible.
+func build_enemy_roster(party: Dictionary, depth: int) -> Dictionary:
+	var committed := 0
+	for count in party.values():
+		committed += int(count)
+	committed = maxi(1, committed)
 
-## Moves to the next living unit; wraps into a new round when the order is spent.
-func _advance_turn() -> void:
-	if _check_end_conditions():
-		return
-	_turn_index += 1
-	while _turn_index < _turn_order.size():
-		var unit := get_unit(_turn_order[_turn_index])
-		if unit != null and unit.is_alive() and not unit.has_acted:
-			_state = EncounterState.PLAYER_TURN if unit.side == 0 else EncounterState.ENEMY_TURN
-			EventBus.turn_started.emit(unit.side, unit.uid)
-			return
-		_turn_index += 1
-	_round += 1
-	if _round > get_turn_limit():
-		_finish_encounter(Rules.resolve_timeout(_units) == 0)
-		return
-	_begin_round()
+	var era: int = ProgressionManager.current_era
+	var pressure: float = 1.0 \
+		+ GameConfig.combat_enemy_scale_per_depth * float(depth) \
+		+ GameConfig.combat_enemy_scale_per_era * float(maxi(0, era - 1))
+	var slots: int = clampi(roundi(float(committed) * pressure), 1, GameConfig.combat_deploy_cap)
 
-func end_turn() -> void:
-	var unit := get_active_unit()
-	if unit != null:
-		unit.has_acted = true
-	_advance_turn()
+	# A line of infantry with guns behind it: enough shape that positioning and
+	# the artillery's minimum range both matter from the very first fight.
+	var roster: Dictionary = {}
+	var guns: int = slots / 3
+	var armour: int = 1 if era >= 3 and slots >= 4 else 0
+	var line: int = maxi(1, slots - guns - armour)
+	roster["infantry"] = line
+	if guns > 0:
+		roster["artillery"] = guns
+	if armour > 0:
+		roster["vehicle"] = armour
+	return roster
 
-func _check_end_conditions() -> bool:
-	if not is_in_encounter():
-		return true
-	if Rules.living_units(_units, 1).is_empty():
-		_finish_encounter(true)
-		return true
-	if Rules.living_units(_units, 0).is_empty():
-		_finish_encounter(false)
-		return true
-	return false
-
-func _finish_encounter(victory: bool) -> void:
-	_state = EncounterState.WON if victory else EncounterState.LOST
-	EventBus.encounter_ended.emit(victory, _round)
+func end_encounter() -> void:
+	if _encounter != null:
+		_encounter.release_survivors()
+	_encounter = null
+	_enemy_turn_running = false
 
 # ── Player actions ───────────────────────────────────────────────────
 
 func get_valid_moves(uid: int) -> Array:
-	var unit := get_unit(uid)
-	if unit == null or not unit.is_alive() or unit.moved_this_turn:
-		return []
-	return Rules.reachable_cells(
-		unit.position, unit.move_range(), get_board_size(), Rules.occupied_cells(_units, uid)
-	)
+	return _encounter.valid_moves(uid) if _encounter != null else []
 
 func get_valid_targets(uid: int) -> Array:
-	var unit := get_unit(uid)
-	if unit == null or not unit.is_alive() or unit.has_acted:
-		return []
-	var targets: Array = []
-	for other in _units:
-		if other.is_alive() and other.side != unit.side and Rules.in_attack_range(unit, other):
-			targets.append(other.uid)
-	return targets
+	return _encounter.valid_targets(uid) if _encounter != null else []
 
 func move_unit(uid: int, to: Vector2i) -> bool:
-	var unit := get_unit(uid)
-	if unit == null or not get_valid_moves(uid).has(to):
+	if not is_player_turn():
 		return false
-	var from := unit.position
-	unit.position = to
-	unit.moved_this_turn = true
-	EventBus.unit_moved.emit(uid, from, to)
-	return true
+	var events := _encounter.move_unit(uid, to)
+	_publish(events)
+	return not events.is_empty()
 
 func attack(uid: int, target_uid: int) -> bool:
-	var attacker := get_unit(uid)
-	var target := get_unit(target_uid)
-	if attacker == null or target == null or not get_valid_targets(uid).has(target_uid):
+	if not is_player_turn():
 		return false
-	var dealt: int = Rules.damage(attacker, target)
-	target.take_damage(dealt)
-	attacker.has_acted = true
-	EventBus.unit_attacked.emit(uid, target_uid, dealt)
-	if not target.is_alive():
-		target.position = Vector2i(-1, -1)
-		EventBus.unit_died.emit(target_uid, target.side)
-	_advance_turn()
+	var events := _encounter.attack(uid, target_uid)
+	_publish(events)
+	return not events.is_empty()
+
+func defend(uid: int) -> bool:
+	if not is_player_turn():
+		return false
+	var events := _encounter.defend(uid)
+	_publish(events)
+	return not events.is_empty()
+
+func wait_unit(uid: int) -> bool:
+	if not is_player_turn():
+		return false
+	var events := _encounter.wait_unit(uid)
+	_publish(events)
+	return not events.is_empty()
+
+func end_turn() -> bool:
+	if not is_player_turn():
+		return false
+	_publish(_encounter.end_turn())
 	return true
 
-func defend(uid: int) -> void:
-	var unit := get_unit(uid)
-	if unit == null:
-		return
-	unit.defending = true
-	unit.has_acted = true
-	EventBus.unit_defended.emit(uid)
-	_advance_turn()
+# ── Event translation ────────────────────────────────────────────────
 
-func wait_unit(uid: int) -> void:
-	var unit := get_unit(uid)
-	if unit == null:
+## Translates the encounter's plain event list onto the EventBus. The UI only
+## ever learns about combat through these signals.
+func _emit_events(events: Array) -> void:
+	for event in events:
+		match event.get("e", ""):
+			"turn_started":
+				EventBus.turn_started.emit(event["side"], event["uid"])
+			"unit_moved":
+				EventBus.unit_moved.emit(event["uid"], event["from"], event["to"])
+			"unit_attacked":
+				EventBus.unit_attacked.emit(event["attacker"], event["target"], event["damage"])
+			"unit_defended":
+				EventBus.unit_defended.emit(event["uid"])
+			"unit_died":
+				EventBus.unit_died.emit(event["uid"], event["side"])
+			"encounter_ended":
+				# The base learns the outcome before anyone is told the fight is
+				# over, so the UI reading get_last_result() always sees it applied.
+				_apply_result(event["victory"], event["rounds"])
+				EventBus.encounter_ended.emit(event["victory"], event["rounds"])
+
+## Publishes and then hands the board to the AI if the turn that just started
+## belongs to the enemy. Used for everything the player triggers.
+func _publish(events: Array) -> void:
+	_emit_events(events)
+	_maybe_run_enemy_turn()
+
+func _maybe_run_enemy_turn() -> void:
+	if _enemy_turn_running or _encounter == null:
 		return
-	unit.has_acted = true
-	_advance_turn()
+	if _encounter.state != Encounter.State.ENEMY_TURN:
+		return
+	_run_enemy_turn()
+
+## Plays the enemy unit's plan with a pause between steps. Without the pause the
+## whole enemy round resolves in one frame and the player never sees what hit them.
+func _run_enemy_turn() -> void:
+	_enemy_turn_running = true
+	var uid: int = _encounter.active_unit().uid if _encounter.active_unit() != null else -1
+	if uid == -1:
+		_enemy_turn_running = false
+		return
+
+	var plan: Array = AI.plan_turn(_encounter, uid)
+	var delay: float = GameConfig.get_combat_ai_step_delay()
+	var follow_up: Array = []
+
+	for step in plan:
+		if _encounter == null or not _encounter.is_active():
+			break
+		await get_tree().create_timer(delay).timeout
+		if _encounter == null or not _encounter.is_active():
+			break
+		match step.get("action", "wait"):
+			"move":
+				follow_up = _encounter.move_unit(uid, step["to"])
+			"attack":
+				follow_up = _encounter.attack(uid, step["target"])
+			_:
+				follow_up = _encounter.wait_unit(uid)
+		_emit_events(follow_up)
+
+	# The unit may have moved without attacking; close its turn either way.
+	if _encounter != null and _encounter.is_active() and _encounter.active_unit() != null \
+			and _encounter.active_unit().uid == uid:
+		_emit_events(_encounter.end_turn())
+
+	_enemy_turn_running = false
+	_maybe_run_enemy_turn()
+
+# ── Consequences ─────────────────────────────────────────────────────
+
+## Turns the outcome of a fight into changes the player feels in the base: the
+## dead are struck off the roster for good, a win pays, and the town's morale
+## moves either way.
+##
+## This is what makes the board part of the game instead of a simulator. It runs
+## exactly once per encounter, when the encounter resolves.
+func _apply_result(victory: bool, rounds: int) -> void:
+	if _encounter == null or _result_applied:
+		return
+	_result_applied = true
+
+	var casualties: Dictionary = _count_by_unit(_encounter.casualties(Encounter.PLAYER))
+	var survivors: Dictionary = _count_by_unit(_encounter.survivors())
+
+	# ArmyManager is the source of truth for the roster: the party was never
+	# deducted when it marched out, so only the dead are subtracted now and
+	# Military Power lands exactly on the survivors.
+	var lost: Dictionary = ArmyManager.remove_units(casualties)
+
+	# Winning a defence pays nothing, and it should not: the reward is that the
+	# Tithe goes uncollected. Handing out loot on top would pay the player twice
+	# for the same fight.
+	var rewards: Dictionary = {}
+	if victory and not _encounter.is_defense:
+		rewards = Rules.encounter_rewards(ProgressionManager.current_era)
+		for res_name in rewards:
+			ResourceManager.add(_resource_type(res_name), int(rewards[res_name]))
+
+	var dead: int = 0
+	for count in lost.values():
+		dead += int(count)
+	var morale_delta: int = Rules.morale_delta(victory, dead)
+	if morale_delta != 0:
+		PopulationManager.adjust_morale(morale_delta)
+
+	_last_result = {
+		"victory": victory,
+		"rounds": rounds,
+		"defense": _encounter.is_defense,
+		"rewards": rewards,
+		"casualties": lost,
+		"survivors": survivors,
+		"morale_delta": morale_delta,
+	}
+
+## The outcome of the last encounter, for the UI to show. Empty before the first.
+func get_last_result() -> Dictionary:
+	return _last_result
+
+func _count_by_unit(units: Array) -> Dictionary:
+	var tally: Dictionary = {}
+	for unit in units:
+		tally[unit.unit_id] = int(tally.get(unit.unit_id, 0)) + 1
+	return tally
+
+func _resource_type(res_name: String) -> int:
+	match res_name:
+		"steel":
+			return ResourceManager.Type.STEEL
+		"oil":
+			return ResourceManager.Type.OIL
+		"wood":
+			return ResourceManager.Type.WOOD
+		_:
+			return ResourceManager.Type.GOLD
 
 # ── Dev helper (T014) ────────────────────────────────────────────────
 
@@ -244,8 +382,7 @@ func dev_start_encounter() -> bool:
 	var party: Dictionary = {}
 	var committed := 0
 	for unit_id in GameConfig.get_unit_ids():
-		var count: int = ArmyManager.get_count(unit_id)
-		for i in count:
+		for i in ArmyManager.get_count(unit_id):
 			if committed >= GameConfig.combat_deploy_cap:
 				break
 			party[unit_id] = int(party.get(unit_id, 0)) + 1
@@ -271,9 +408,8 @@ func load_save_data(_data: Dictionary) -> void:
 	pass
 
 func reset() -> void:
-	_units.clear()
-	_turn_order.clear()
-	_turn_index = 0
-	_round = 1
-	_state = EncounterState.IDLE
+	_encounter = null
+	_enemy_turn_running = false
 	_next_uid = 1
+	_result_applied = false
+	_last_result = {}

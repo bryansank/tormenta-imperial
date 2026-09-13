@@ -37,6 +37,9 @@ PopulationManager="*res://scripts/services/PopulationManager.gd"
 ArmyManager="*res://scripts/services/ArmyManager.gd"
 CombatManager="*res://scripts/services/CombatManager.gd"
 RandomEventManager="*res://scripts/services/RandomEventManager.gd"
+BuildingHealth="*res://scripts/services/BuildingHealth.gd"
+StormManager="*res://scripts/services/StormManager.gd"
+StormSky="*res://scripts/map/StormSky.gd"
 TechTreeManager="*res://scripts/services/TechTreeManager.gd"
 CloudSaveManager="*res://scripts/services/CloudSaveManager.gd"
 UIManager="*res://scripts/services/UIManager.gd"
@@ -54,6 +57,7 @@ dock_revealed=true
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
+window/stretch/aspect="keep_height"
 
 [dotnet]
 

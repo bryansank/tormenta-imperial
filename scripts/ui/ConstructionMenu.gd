@@ -146,8 +146,8 @@ func _setup_ui() -> void:
 	search.placeholder_text = Tr.t("LBL_SEARCH")
 	search.custom_minimum_size = Vector2(180, 32)
 	search.add_theme_font_size_override("font_size", UITheme.FONT_BODY)
-	search.add_theme_color_override("font_color", UITheme.TEXT)
-	search.add_theme_color_override("font_placeholder_color", UITheme.TEXT_DIM)
+	UITheme.set_label_color(search, UITheme.TEXT)
+	search.add_theme_color_override("font_placeholder_color", UITheme.readable(UITheme.TEXT_DIM, UITheme.UI_BG_REFERENCE, 3.0))
 	var search_style := StyleBoxFlat.new()
 	search_style.bg_color = UITheme.BG_DARK
 	search_style.set_corner_radius_all(UITheme.CORNER)

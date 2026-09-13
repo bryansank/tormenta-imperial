@@ -7,6 +7,14 @@ signal layout_changed
 
 var _viewport_size := Vector2(1280, 720)
 
+## Margen libre que se deja entre un panel y el borde de pantalla al recortarlo.
+const EDGE_MARGIN := 8.0
+
+## Controles ya colocados: {"id": String, "ref": WeakRef}. Se vuelven a colocar
+## al cambiar el tamano de ventana (p.ej. al entrar o salir de pantalla completa)
+## para que los paneles se recorten al viewport nuevo y nada se salga.
+var _placed: Array[Dictionary] = []
+
 func _ready() -> void:
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	_viewport_size = Vector2(get_viewport().get_visible_rect().size)
@@ -15,11 +23,46 @@ func _ready() -> void:
 
 func _on_viewport_resized() -> void:
 	_viewport_size = Vector2(get_viewport().get_visible_rect().size)
+	_reapply_all()
 	layout_changed.emit()
+
+func _reapply_all() -> void:
+	var alive: Array[Dictionary] = []
+	for entry in _placed:
+		var ref: WeakRef = entry["ref"]
+		var control: Variant = ref.get_ref()
+		if control == null or not is_instance_valid(control):
+			continue
+		alive.append(entry)
+		_place(String(entry["id"]), control as Control)
+	_placed = alive
+
+func _remember(panel_id: String, control: Control) -> void:
+	for entry in _placed:
+		var ref: WeakRef = entry["ref"]
+		if ref.get_ref() == control:
+			entry["id"] = panel_id
+			return
+	_placed.append({"id": panel_id, "ref": weakref(control)})
+
+## Recorta el tamano pedido al viewport actual. Sin esto, con la tipografia
+## grande y una ventana estrecha (movil 400x720) los modales se salen de pantalla.
+func _clamp_to_viewport(size: Vector2) -> Vector2:
+	var max_w: float = maxf(_viewport_size.x - EDGE_MARGIN * 2.0, 120.0)
+	var max_h: float = maxf(_viewport_size.y - EDGE_MARGIN * 2.0, 120.0)
+	if size.x > 0.0:
+		size.x = minf(size.x, max_w)
+	if size.y > 0.0:
+		size.y = minf(size.y, max_h)
+	return size
 
 ## Applies anchor, offset, grow direction and minimum size to a Control
 ## based on the slot assigned to panel_id in UILayoutConfig.
 func apply_layout(panel_id: String, control: Control) -> void:
+	_remember(panel_id, control)
+	_place(panel_id, control)
+
+func _place(panel_id: String, control: Control) -> void:
 	var slot_name: String = UILayoutConfig.PANEL_SLOTS.get(panel_id, "")
 	if slot_name.is_empty():
 		push_warning("UILayoutManager: No slot assigned for '%s'" % panel_id)
@@ -30,7 +73,7 @@ func apply_layout(panel_id: String, control: Control) -> void:
 	var margin: Dictionary = slot["margin"]
 	var grow_h: int = slot["grow_h"]
 	var grow_v: int = slot["grow_v"]
-	var size: Vector2 = UILayoutConfig.PANEL_SIZES.get(panel_id, slot["max_size"])
+	var size: Vector2 = _clamp_to_viewport(UILayoutConfig.PANEL_SIZES.get(panel_id, slot["max_size"]))
 
 	# Set anchors (Rect2: position = (left, top), size = (right, bottom))
 	control.anchor_left = anchor.position.x
@@ -69,7 +112,7 @@ func apply_layout(panel_id: String, control: Control) -> void:
 	else:
 		_apply_v_point(control, grow_v, m_top, m_bottom, size.y)
 
-	# Set minimum size
+	# Set minimum size (ya recortado al viewport)
 	if size.x > 0:
 		control.custom_minimum_size.x = size.x
 	if size.y > 0:
@@ -127,7 +170,7 @@ func get_layout_rect(panel_id: String) -> Rect2:
 	var slot: Dictionary = UILayoutConfig.SLOTS[slot_name]
 	var anchor: Rect2 = slot["anchor"]
 	var margin: Dictionary = slot["margin"]
-	var size: Vector2 = UILayoutConfig.PANEL_SIZES.get(panel_id, slot["max_size"])
+	var size: Vector2 = _clamp_to_viewport(UILayoutConfig.PANEL_SIZES.get(panel_id, slot["max_size"]))
 
 	var x: float = anchor.position.x * _viewport_size.x + float(margin["left"])
 	var y: float = anchor.position.y * _viewport_size.y + float(margin["top"])

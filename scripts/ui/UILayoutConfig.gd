@@ -11,63 +11,72 @@ const SLOTS := {
 	"top_left": {
 		"anchor": Rect2(0, 0, 0, 0),
 		"margin": {"left": 10, "top": 8, "right": 0, "bottom": 0},
-		"max_size": Vector2(220, 0),
+		"max_size": Vector2(280, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
 	"status_bar": {
 		"anchor": Rect2(0, 0, 0, 0),
-		"margin": {"left": 10, "top": 54, "right": 0, "bottom": 0},
-		"max_size": Vector2(200, 0),
+		"margin": {"left": 10, "top": 62, "right": 0, "bottom": 0},
+		"max_size": Vector2(260, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
 	"top_center": {
 		"anchor": Rect2(0.5, 0, 0.5, 0),
-		"margin": {"left": 0, "top": 54, "right": 0, "bottom": 0},
-		"max_size": Vector2(320, 0),
+		"margin": {"left": 0, "top": 62, "right": 0, "bottom": 0},
+		"max_size": Vector2(440, 0),
+		"grow_h": Control.GROW_DIRECTION_BOTH,
+		"grow_v": Control.GROW_DIRECTION_END,
+	},
+	## El reloj de la Tormenta. Va justo debajo del aviso de objetivo porque
+	## cuando hay ceniza en camino es el numero mas importante de la pantalla.
+	"storm_banner": {
+		"anchor": Rect2(0.5, 0, 0.5, 0),
+		"margin": {"left": 0, "top": 124, "right": 0, "bottom": 0},
+		"max_size": Vector2(380, 0),
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
 	"sidebar_buttons": {
 		"anchor": Rect2(1, 0, 1, 0),
 		"margin": {"left": 0, "top": 10, "right": 10, "bottom": 0},
-		"max_size": Vector2(152, 0),
+		"max_size": Vector2(176, 0),
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
 	"right_panel": {
 		"anchor": Rect2(1, 0, 1, 1),
-		"margin": {"left": 0, "top": 190, "right": 8, "bottom": 20},
-		"max_size": Vector2(312, 0),
+		"margin": {"left": 0, "top": 210, "right": 8, "bottom": 20},
+		"max_size": Vector2(360, 0),
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
 	"center_modal": {
 		"anchor": Rect2(0.5, 0.5, 0.5, 0.5),
 		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 0},
-		"max_size": Vector2(860, 520),
+		"max_size": Vector2(1000, 660),
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_BOTH,
 	},
 	"left_panel": {
 		"anchor": Rect2(0, 0, 0, 1),
-		"margin": {"left": 10, "top": 168, "right": 0, "bottom": 10},
-		"max_size": Vector2(310, 0),
+		"margin": {"left": 10, "top": 186, "right": 0, "bottom": 10},
+		"max_size": Vector2(354, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
 	"toast_area": {
 		"anchor": Rect2(0, 1, 0, 1),
 		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 200},
-		"max_size": Vector2(280, 180),
+		"max_size": Vector2(344, 210),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_BEGIN,
 	},
 	"bottom_center": {
 		"anchor": Rect2(0.5, 1, 0.5, 1),
 		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 20},
-		"max_size": Vector2(200, 0),
+		"max_size": Vector2(250, 0),
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_BEGIN,
 	},
@@ -92,6 +101,7 @@ const PANEL_SLOTS := {
 	"ResourceHUD":                "top_left",
 	"NotificationPanel.status":   "status_bar",
 	"NotificationPanel.objective":"top_center",
+	"StormHUD":                   "storm_banner",
 	"NotificationPanel.toasts":   "toast_area",
 	"NotificationPanel.log":      "left_panel",
 	"MarketPanel.sidebar_toggle": "sidebar_buttons",
@@ -119,17 +129,19 @@ const PANEL_SLOTS := {
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)
+## Anchos subidos ~25% para acompanar la tipografia mayor (FONT_BODY 13 -> 17).
+## UILayoutManager los recorta al viewport, asi que en 400x720 no se salen.
 const PANEL_SIZES := {
-	"MarketPanel.modal":       Vector2(420, 0),
-	"ProgressPanel.modal":     Vector2(360, 0),
-	"ArmyPanel.modal":         Vector2(500, 0),
-	"SkirmishPanel.modal":     Vector2(520, 0),
-	"TechTreePanel.modal":     Vector2(540, 0),
-	"ObjectivePanel":          Vector2(500, 450),
-	"SettingsPanel.modal":     Vector2(400, 0),
-	"HelperPanel.modal":       Vector2(560, 500),
-	"ConstructionMenu.modal":  Vector2(860, 520),
-	"VictoryScreen":           Vector2(440, 320),
+	"MarketPanel.modal":       Vector2(540, 0),
+	"ProgressPanel.modal":     Vector2(470, 0),
+	"ArmyPanel.modal":         Vector2(620, 0),
+	"SkirmishPanel.modal":     Vector2(640, 0),
+	"TechTreePanel.modal":     Vector2(860, 0),
+	"ObjectivePanel":          Vector2(640, 560),
+	"SettingsPanel.modal":     Vector2(520, 0),
+	"HelperPanel.modal":       Vector2(700, 600),
+	"ConstructionMenu.modal":  Vector2(1000, 640),
+	"VictoryScreen":           Vector2(560, 400),
 }
 
 ## Sidebar button stacking order (top to bottom)
@@ -151,8 +163,9 @@ const SLOT_CONFLICTS := {
 }
 
 ## Height of each sidebar button + gap
-const SIDEBAR_BTN_HEIGHT := 38
-const SIDEBAR_BTN_GAP := 4
+## 44 px de lado: minimo tactil recomendado en movil.
+const SIDEBAR_BTN_HEIGHT := 44
+const SIDEBAR_BTN_GAP := 5
 const SIDEBAR_TOGGLE_GAP := 6
-const SIDEBAR_TOGGLE_SIZE := 36
+const SIDEBAR_TOGGLE_SIZE := 44
 const SIDEBAR_FIRST_Y := 10

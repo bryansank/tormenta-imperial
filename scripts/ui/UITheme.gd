@@ -17,9 +17,16 @@ const ACCENT := Color(0.77, 0.59, 0.16)          # Brass gold
 const ACCENT_DIM := Color(0.5, 0.38, 0.12, 0.6)  # Muted brass
 
 # Text
-const TEXT := Color(0.91, 0.86, 0.78)             # Parchment
-const TEXT_DIM := Color(0.55, 0.49, 0.37)         # Aged brass
-const TEXT_BRIGHT := Color(1.0, 0.95, 0.85)       # Highlighted
+const TEXT := Color(0.91, 0.86, 0.78)             # Parchment — 12.1:1
+const TEXT_DIM := Color(0.72, 0.66, 0.52)         # Aged brass — 7.0:1 (era 0.55/0.49/0.37 = 4.1:1, no pasaba AA)
+const TEXT_BRIGHT := Color(1.0, 0.95, 0.85)       # Highlighted — 14.9:1
+
+# Fondo de referencia para medir contraste: el pixel mas claro de la placa
+# metalica 9-patch, medido sobre capturas reales (docs/media/dev). Todo el texto
+# se corrige contra este peor caso, no contra PANEL_BG teorico.
+const UI_BG_REFERENCE := Color(0.14, 0.12, 0.07)
+## Ratio minimo exigido (WCAG AA para texto normal).
+const MIN_CONTRAST := 4.5
 
 # Semantic
 const POSITIVE := Color(0.29, 0.55, 0.25)         # Military green
@@ -54,18 +61,33 @@ const BRANCH_LOGISTICS := Color(0.3, 0.7, 0.9)
 # TYPOGRAPHY
 # ══════════════════════════════════════
 
-const FONT_TITLE := 20
-const FONT_SECTION := 15
-const FONT_BODY := 13
-const FONT_SMALL := 11
-const FONT_BUTTON := 13
+# Tamanos subidos ~30%: a 1280x720 el cuerpo pasa de 13 a 17 px, y el minimo
+# legible (small) de 11 a 15. Jerarquia intacta: 26 > 20 > 17 > 15.
+const FONT_TITLE := 26
+const FONT_SECTION := 20
+const FONT_BODY := 17
+const FONT_SMALL := 15
+const FONT_BUTTON := 17
+
+# ── Contorno del texto ──
+# La placa metalica es una textura ruidosa: un trazo claro fino se pierde encima.
+# Un contorno oscuro alrededor de cada glifo da mas legibilidad (y mas cuerpo)
+# que subir un punto de tamano.
+const OUTLINE_COLOR := Color(0.03, 0.03, 0.02, 0.95)
+
+## Grosor de contorno proporcional al tamano de letra (en px).
+static func outline_for(font_size: int) -> int:
+	return maxi(3, roundi(float(font_size) * 0.22))
 
 # ── Font files (free, OFL-licensed — see assets/fonts/OFL-*.txt) ──
 # Black Ops One: military stencil display for titles.
 # Rajdhani: condensed industrial sans for everything else.
+# El cuerpo usa SemiBold (antes Medium): Medium se ve delgado y se difumina
+# sobre la textura metalica. Bold queda para secciones y botones.
 const FONT_TITLE_PATH := "res://assets/fonts/BlackOpsOne-Regular.ttf"
-const FONT_BODY_PATH := "res://assets/fonts/Rajdhani-Medium.ttf"
+const FONT_BODY_PATH := "res://assets/fonts/Rajdhani-SemiBold.ttf"
 const FONT_HEAVY_PATH := "res://assets/fonts/Rajdhani-SemiBold.ttf"
+const FONT_BOLD_PATH := "res://assets/fonts/Rajdhani-Bold.ttf"
 
 static var _font_cache := {}
 
@@ -93,6 +115,10 @@ static func body_font() -> FontFile:
 static func heavy_font() -> FontFile:
 	return _load_font(FONT_HEAVY_PATH)
 
+## Rajdhani Bold: cabeceras de seccion y botones.
+static func bold_font() -> FontFile:
+	return _load_font(FONT_BOLD_PATH)
+
 ## Display font for titles, with Rajdhani as fallback so accented/ñ glyphs
 ## missing from the stencil face still render.
 static func title_font() -> FontFile:
@@ -110,8 +136,51 @@ static func title_font() -> FontFile:
 const CORNER := 2
 const MARGIN := 12
 const BORDER := 6
-const MIN_BTN_H := 40
+## Lado tactil minimo (guia de accesibilidad movil): 44 px.
+const MIN_BTN_H := 44
 const SEPARATION := 8
+
+# ══════════════════════════════════════
+# CONTRASTE (WCAG)
+# ══════════════════════════════════════
+# Las factorias de texto pasan el color por readable(): si no llega al ratio
+# minimo contra UI_BG_REFERENCE lo aclaran hasta que lo cumple. Asi ningun panel
+# puede introducir texto ilegible aunque pida un color oscuro.
+
+## Luminancia relativa WCAG de un color sRGB.
+static func _relative_luminance(c: Color) -> float:
+	var ch := [c.r, c.g, c.b]
+	var lin := []
+	for v in ch:
+		lin.append(v / 12.92 if v <= 0.04045 else pow((v + 0.055) / 1.055, 2.4))
+	return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+## Ratio de contraste WCAG entre dos colores (1.0 = iguales, 21.0 = maximo).
+static func contrast_ratio(a: Color, b: Color) -> float:
+	var la := _relative_luminance(a)
+	var lb := _relative_luminance(b)
+	var hi := maxf(la, lb)
+	var lo := minf(la, lb)
+	return (hi + 0.05) / (lo + 0.05)
+
+## Devuelve `color` aclarado lo justo para cumplir `min_ratio` sobre `bg`.
+## Conserva el tono: solo interpola hacia blanco.
+static func readable(color: Color, bg: Color = UI_BG_REFERENCE, min_ratio: float = MIN_CONTRAST) -> Color:
+	if contrast_ratio(color, bg) >= min_ratio:
+		return color
+	var t := 0.05
+	while t <= 0.95:
+		var candidate := color.lightened(t)
+		if contrast_ratio(candidate, bg) >= min_ratio:
+			candidate.a = color.a
+			return candidate
+		t += 0.05
+	return Color(1.0, 1.0, 1.0, color.a)
+
+## Pinta una etiqueta ya creada respetando el contraste minimo y el contorno.
+## Usar esto en vez de add_theme_color_override("font_color", ...) a mano.
+static func set_label_color(control: Control, color: Color) -> void:
+	control.add_theme_color_override("font_color", readable(color))
 
 # ══════════════════════════════════════
 # TEXTURED SURFACES (9-patch metal — Kenney UI, CC0)
@@ -206,6 +275,19 @@ static func make_war_table_style() -> StyleBox:
 # BUTTONS
 # ══════════════════════════════════════
 
+## Texto de boton: Rajdhani Bold, contorno oscuro y colores con contraste minimo.
+static func _apply_button_text(btn: Button, font_size: int) -> void:
+	var bf := bold_font()
+	if bf:
+		btn.add_theme_font_override("font", bf)
+	btn.add_theme_font_size_override("font_size", font_size)
+	btn.add_theme_color_override("font_color", readable(TEXT))
+	btn.add_theme_color_override("font_hover_color", readable(TEXT_BRIGHT))
+	btn.add_theme_color_override("font_pressed_color", readable(TEXT_BRIGHT))
+	btn.add_theme_color_override("font_disabled_color", readable(TEXT_DIM, UI_BG_REFERENCE, 3.0))
+	btn.add_theme_constant_override("outline_size", outline_for(font_size))
+	btn.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
+
 static func style_button(btn: Button, bg: Color = BTN, font_size: int = FONT_BUTTON) -> void:
 	btn.custom_minimum_size.y = maxi(int(btn.custom_minimum_size.y), MIN_BTN_H)
 
@@ -215,11 +297,7 @@ static func style_button(btn: Button, bg: Color = BTN, font_size: int = FONT_BUT
 	btn.add_theme_stylebox_override("pressed", _button_style(_metal_tint(bg, 1.6), bg.lightened(0.4), ACCENT, 4))
 	btn.add_theme_stylebox_override("disabled", _button_style(Color(0.5, 0.5, 0.47), BTN_DISABLED, Color(0.2, 0.2, 0.15), 2))
 
-	btn.add_theme_font_size_override("font_size", font_size)
-	btn.add_theme_color_override("font_color", TEXT)
-	btn.add_theme_color_override("font_hover_color", TEXT_BRIGHT)
-	btn.add_theme_color_override("font_pressed_color", TEXT_BRIGHT)
-	btn.add_theme_color_override("font_disabled_color", TEXT_DIM)
+	_apply_button_text(btn, font_size)
 
 static func style_card_button(btn: Button, bg: Color = CARD_BG, left_color: Color = ACCENT) -> void:
 	btn.custom_minimum_size.y = maxi(int(btn.custom_minimum_size.y), MIN_BTN_H)
@@ -263,18 +341,15 @@ static func style_card_button(btn: Button, bg: Color = CARD_BG, left_color: Colo
 	d.border_width_left = 3
 	btn.add_theme_stylebox_override("disabled", d)
 
-	btn.add_theme_font_size_override("font_size", FONT_BODY)
-	btn.add_theme_color_override("font_color", TEXT)
-	btn.add_theme_color_override("font_hover_color", TEXT_BRIGHT)
-	btn.add_theme_color_override("font_disabled_color", TEXT_DIM)
+	_apply_button_text(btn, FONT_BODY)
 
 # ══════════════════════════════════════
 # LABELS & TEXT
 # ══════════════════════════════════════
 
-static func make_label(text: String, size: String = "body", color: Color = TEXT) -> Label:
-	var label := Label.new()
-	label.text = text
+## Aplica tamano, fuente, color corregido por contraste y contorno oscuro.
+## Unico punto donde se decide como se ve una etiqueta.
+static func apply_text_style(label: Label, size: String, color: Color) -> void:
 	var fs: int
 	var font: FontFile
 	match size:
@@ -283,27 +358,28 @@ static func make_label(text: String, size: String = "body", color: Color = TEXT)
 			font = title_font()
 		"section":
 			fs = FONT_SECTION
-			font = heavy_font()
+			font = bold_font()
 		"small":
 			fs = FONT_SMALL
-			font = body_font()
+			font = heavy_font()
 		_:
 			fs = FONT_BODY
-			font = body_font()
+			font = heavy_font()
 	label.add_theme_font_size_override("font_size", fs)
 	if font:
 		label.add_theme_font_override("font", font)
-	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_color", readable(color))
+	label.add_theme_constant_override("outline_size", outline_for(fs))
+	label.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
+
+static func make_label(text: String, size: String = "body", color: Color = TEXT) -> Label:
+	var label := Label.new()
+	label.text = text
+	apply_text_style(label, size, color)
 	return label
 
 static func section_header(text: String, color: Color = ACCENT) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", FONT_SECTION)
-	var font := heavy_font()
-	if font:
-		label.add_theme_font_override("font", font)
-	label.add_theme_color_override("font_color", color)
+	var label := make_label(text, "section", color)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return label
 
@@ -317,7 +393,7 @@ static func make_separator() -> HSeparator:
 	sep.add_theme_color_override("separator", ACCENT)
 	return sep
 
-static func make_progress_bar(fill_color: Color = ACCENT, height: int = 14) -> ProgressBar:
+static func make_progress_bar(fill_color: Color = ACCENT, height: int = 18) -> ProgressBar:
 	var bar := ProgressBar.new()
 	bar.custom_minimum_size = Vector2(0, height)
 	bar.max_value = 1.0
@@ -342,7 +418,7 @@ static func make_progress_bar(fill_color: Color = ACCENT, height: int = 14) -> P
 static func make_close_button(callback: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = "X"
-	btn.custom_minimum_size = Vector2(32, 32)
+	btn.custom_minimum_size = Vector2(MIN_BTN_H, MIN_BTN_H)
 	style_button(btn, DANGER, FONT_BODY)
 	btn.pressed.connect(callback)
 	return btn
@@ -359,6 +435,25 @@ static func make_panel_header(title_text: String, close_callback: Callable) -> H
 	header.add_child(close)
 
 	return header
+
+## Interruptor de ajustes. Los paneles NO deben estilar CheckButton a mano.
+static func make_check_button(text: String, pressed: bool, on_toggled: Callable) -> CheckButton:
+	var cb := CheckButton.new()
+	cb.text = text
+	cb.button_pressed = pressed
+	cb.custom_minimum_size.y = MIN_BTN_H
+	var hf := heavy_font()
+	if hf:
+		cb.add_theme_font_override("font", hf)
+	cb.add_theme_font_size_override("font_size", FONT_BODY)
+	cb.add_theme_color_override("font_color", readable(TEXT))
+	cb.add_theme_color_override("font_hover_color", readable(TEXT_BRIGHT))
+	cb.add_theme_color_override("font_pressed_color", readable(TEXT_BRIGHT))
+	cb.add_theme_constant_override("outline_size", outline_for(FONT_BODY))
+	cb.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
+	if on_toggled.is_valid():
+		cb.toggled.connect(on_toggled)
+	return cb
 
 static func make_backdrop() -> ColorRect:
 	var rect := ColorRect.new()
@@ -437,14 +532,16 @@ static func _theme_button(t: Theme, type: String) -> void:
 	t.set_stylebox("pressed", type, p)
 	t.set_stylebox("disabled", type, d)
 	t.set_stylebox("focus", type, focus)
-	t.set_color("font_color", type, TEXT)
-	t.set_color("font_hover_color", type, TEXT_BRIGHT)
-	t.set_color("font_pressed_color", type, TEXT_BRIGHT)
-	t.set_color("font_disabled_color", type, TEXT_DIM)
+	t.set_color("font_color", type, readable(TEXT))
+	t.set_color("font_hover_color", type, readable(TEXT_BRIGHT))
+	t.set_color("font_pressed_color", type, readable(TEXT_BRIGHT))
+	t.set_color("font_disabled_color", type, readable(TEXT_DIM, UI_BG_REFERENCE, 3.0))
+	t.set_color("font_outline_color", type, OUTLINE_COLOR)
+	t.set_constant("outline_size", type, outline_for(FONT_BUTTON))
 	t.set_font_size("font_size", type, FONT_BUTTON)
-	var hf := heavy_font()
-	if hf:
-		t.set_font("font", type, hf)
+	var bf := bold_font()
+	if bf:
+		t.set_font("font", type, bf)
 
 ## Builds a Theme that restyles Godot's built-in controls (buttons, scrollbars,
 ## sliders, line edits, tooltips, popups, focus rings…) so nothing falls back to
@@ -453,27 +550,34 @@ static func _theme_button(t: Theme, type: String) -> void:
 static func build_global_theme() -> Theme:
 	var t := Theme.new()
 	t.default_font_size = FONT_BODY
-	# Global font: everything that doesn't override falls back to Rajdhani.
+	# Global font: everything that doesn't override falls back to Rajdhani SemiBold.
 	var bf := body_font()
 	if bf:
 		t.default_font = bf
-	t.set_color("font_color", "Label", TEXT)
+	t.set_color("font_color", "Label", readable(TEXT))
+	t.set_color("font_outline_color", "Label", OUTLINE_COLOR)
+	t.set_constant("outline_size", "Label", outline_for(FONT_BODY))
+	t.set_font_size("font_size", "Label", FONT_BODY)
+	t.set_color("font_color", "RichTextLabel", readable(TEXT))
+	t.set_font_size("normal_font_size", "RichTextLabel", FONT_BODY)
 
 	# ── Buttons ──
 	_theme_button(t, "Button")
 	_theme_button(t, "OptionButton")
 	_theme_button(t, "MenuButton")
 	for cb in ["CheckBox", "CheckButton"]:
-		t.set_color("font_color", cb, TEXT)
-		t.set_color("font_hover_color", cb, TEXT_BRIGHT)
-		t.set_color("font_pressed_color", cb, TEXT_BRIGHT)
+		t.set_color("font_color", cb, readable(TEXT))
+		t.set_color("font_hover_color", cb, readable(TEXT_BRIGHT))
+		t.set_color("font_pressed_color", cb, readable(TEXT_BRIGHT))
+		t.set_color("font_outline_color", cb, OUTLINE_COLOR)
+		t.set_constant("outline_size", cb, outline_for(FONT_BODY))
 		t.set_font_size("font_size", cb, FONT_BODY)
 
 	# ── LineEdit ──
 	t.set_stylebox("normal", "LineEdit", _flat(BG_DARK, ACCENT_DIM, 1, CORNER, 6))
 	t.set_stylebox("focus", "LineEdit", _flat(BG_DARK.lightened(0.03), ACCENT, 2, CORNER, 6))
-	t.set_color("font_color", "LineEdit", TEXT)
-	t.set_color("font_placeholder_color", "LineEdit", TEXT_DIM)
+	t.set_color("font_color", "LineEdit", readable(TEXT))
+	t.set_color("font_placeholder_color", "LineEdit", readable(TEXT_DIM, UI_BG_REFERENCE, 3.0))
 	t.set_color("caret_color", "LineEdit", ACCENT)
 	t.set_color("selection_color", "LineEdit", Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.35))
 	t.set_font_size("font_size", "LineEdit", FONT_BODY)
@@ -500,21 +604,21 @@ static func build_global_theme() -> Theme:
 	# ── ProgressBar ──
 	t.set_stylebox("background", "ProgressBar", _flat(Color(0.06, 0.06, 0.05, 1), ACCENT_DIM, 2, 2, 0))
 	t.set_stylebox("fill", "ProgressBar", _flat(ACCENT, clear, 0, 2, 0))
-	t.set_color("font_color", "ProgressBar", TEXT)
+	t.set_color("font_color", "ProgressBar", readable(TEXT))
 	t.set_font_size("font_size", "ProgressBar", FONT_SMALL)
 
 	# ── PopupMenu (dropdowns / context menus) ──
 	t.set_stylebox("panel", "PopupMenu", make_war_table_style())
 	t.set_stylebox("hover", "PopupMenu", _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.25), clear, 0, CORNER, 4))
-	t.set_color("font_color", "PopupMenu", TEXT)
-	t.set_color("font_hover_color", "PopupMenu", TEXT_BRIGHT)
-	t.set_color("font_separator_color", "PopupMenu", ACCENT)
+	t.set_color("font_color", "PopupMenu", readable(TEXT))
+	t.set_color("font_hover_color", "PopupMenu", readable(TEXT_BRIGHT))
+	t.set_color("font_separator_color", "PopupMenu", readable(ACCENT))
 	t.set_font_size("font_size", "PopupMenu", FONT_BODY)
 
 	# ── Tooltip ──
 	t.set_stylebox("panel", "TooltipPanel", _flat(Color(0.06, 0.07, 0.05, 0.97), ACCENT, 1, CORNER, 8))
-	t.set_color("font_color", "TooltipLabel", TEXT_BRIGHT)
-	t.set_font_size("font_size", "TooltipLabel", FONT_SMALL)
+	t.set_color("font_color", "TooltipLabel", readable(TEXT_BRIGHT))
+	t.set_font_size("font_size", "TooltipLabel", FONT_BODY)
 
 	# ── Split containers ──
 	for split in ["HSplitContainer", "VSplitContainer"]:

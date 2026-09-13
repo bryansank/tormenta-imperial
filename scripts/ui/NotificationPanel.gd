@@ -204,7 +204,7 @@ func _on_morale_changed(new_morale: int) -> void:
 		color = UITheme.WARNING
 	else:
 		color = UITheme.POSITIVE
-	_morale_label.add_theme_color_override("font_color", color)
+	UITheme.set_label_color(_morale_label, color)
 	# Update bar fill color
 	var fill := _morale_bar.get_theme_stylebox("fill") as StyleBoxFlat
 	if fill:

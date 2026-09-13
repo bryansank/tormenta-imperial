@@ -153,6 +153,30 @@ func _convert_cost(cost_dict: Dictionary) -> Dictionary:
 			result[_type_map[res_name]] = cost_dict[res_name]
 	return result
 
+# ── Casualties ──
+
+## Removes units for good. This is the only way the army ever shrinks: training
+## adds, combat subtracts, and nothing else touches the roster.
+##
+## You cannot lose more than you had — a caller asking for 3 infantry when 2 are
+## left removes 2. The returned dictionary says what actually died, which is what
+## callers should report to the player, not what they asked for.
+func remove_units(losses: Dictionary) -> Dictionary:
+	var removed: Dictionary = {}
+	for unit_id in losses.keys():
+		var wanted: int = int(losses[unit_id])
+		var owned: int = int(_units.get(unit_id, 0))
+		var gone: int = mini(maxi(0, wanted), owned)
+		if gone <= 0:
+			continue
+		_units[unit_id] = owned - gone
+		if _units[unit_id] <= 0:
+			_units.erase(unit_id)
+		removed[unit_id] = gone
+	if not removed.is_empty():
+		EventBus.army_changed.emit()
+	return removed
+
 # ── Save / Load ──
 
 func get_save_data() -> Dictionary:

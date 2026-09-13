@@ -85,6 +85,24 @@ static func resolve_timeout(units: Array) -> int:
 			totals[unit.side] = totals[unit.side] + unit.hp
 	return 0 if totals[0] > totals[1] else 1
 
+## What a cleared encounter pays. Scales with the era exactly the way the enemy
+## roster does, so the loot keeps pace with what you had to beat instead of
+## turning into pocket change by era 3.
+static func encounter_rewards(era: int) -> Dictionary:
+	var mult: float = 1.0 + GameConfig.combat_enemy_scale_per_era * float(maxi(0, era - 1))
+	var rewards: Dictionary = {}
+	for res_name in GameConfig.combat_reward_base:
+		rewards[res_name] = maxi(1, roundi(float(GameConfig.combat_reward_base[res_name]) * mult))
+	return rewards
+
+## The swing back home: a win lifts the town, and every unit that does not come
+## back sinks it. A costly victory can still leave the base worse than it started,
+## which is the whole point of tying the two halves together.
+static func morale_delta(victory: bool, casualties: int) -> int:
+	var delta: float = GameConfig.combat_morale_on_victory if victory else 0.0
+	delta -= GameConfig.combat_morale_per_casualty * float(maxi(0, casualties))
+	return roundi(delta)
+
 static func living_units(units: Array, side: int) -> Array:
 	var result: Array = []
 	for unit in units:

@@ -200,8 +200,14 @@ var ui_grid_visible := false
 ## so new players get guidance; the choice persists once toggled.
 var ui_helper_visible := true
 
+## Whether the game runs in exclusive fullscreen. Toggled with F11 or from the
+## Settings panel; persists in user://settings.cfg like the rest of preferences.
+var ui_fullscreen := false
+
 func _ready() -> void:
 	load_user_settings()
+	# El modo de ventana se aplica en cuanto arranca, antes de que se dibuje la UI.
+	_apply_window_mode()
 
 func load_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -213,6 +219,7 @@ func load_user_settings() -> void:
 	audio_ambient_volume = clampf(float(cf.get_value("audio", "ambient", audio_ambient_volume)), 0.0, 1.0)
 	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
+	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -223,7 +230,39 @@ func save_user_settings() -> void:
 	cf.set_value("audio", "ambient", audio_ambient_volume)
 	cf.set_value("ui", "grid_visible", ui_grid_visible)
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
+	cf.set_value("ui", "fullscreen", ui_fullscreen)
 	cf.save(USER_SETTINGS_PATH)
+
+# ── Pantalla completa ──
+
+## Pone la ventana en el modo que marque ui_fullscreen. Sin senales: se usa
+## tambien en _ready(), cuando EventBus todavia no existe.
+func _apply_window_mode() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var wanted := DisplayServer.WINDOW_MODE_FULLSCREEN if ui_fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
+	if DisplayServer.window_get_mode() != wanted:
+		DisplayServer.window_set_mode(wanted)
+
+## Cambia a pantalla completa (o vuelve a ventana), lo guarda y lo anuncia.
+func set_fullscreen(enabled: bool) -> void:
+	if ui_fullscreen == enabled and not _window_mode_mismatched(enabled):
+		return
+	ui_fullscreen = enabled
+	_apply_window_mode()
+	save_user_settings()
+	EventBus.fullscreen_changed.emit(ui_fullscreen)
+
+func toggle_fullscreen() -> void:
+	set_fullscreen(not ui_fullscreen)
+
+## True si la ventana no esta en el modo que dice la preferencia (p.ej. el
+## usuario salio de pantalla completa con el gestor de ventanas).
+func _window_mode_mismatched(enabled: bool) -> bool:
+	if DisplayServer.get_name() == "headless":
+		return false
+	var wanted := DisplayServer.WINDOW_MODE_FULLSCREEN if enabled else DisplayServer.WINDOW_MODE_WINDOWED
+	return DisplayServer.window_get_mode() != wanted
 
 ## Seconds to cross-fade between music tracks (e.g. on era change).
 var audio_music_fade := 1.5
@@ -528,6 +567,84 @@ func get_combat_stats(unit_id: String) -> Dictionary:
 
 func get_combat_ai_step_delay() -> float:
 	return combat_ai_step_delay if not dev_mode else combat_ai_step_delay * 0.5
+
+# ══════════════════════════════════════════════════════════════════════
+# ── The Imperial Storm ──
+# ══════════════════════════════════════════════════════════════════════
+# The storm is dispatched, not rolled: it arrives on a schedule the player can
+# see and plan around. A storm you cannot prepare for is just a random event.
+
+## Seconds of calm between storms, and how long the warning lasts before it hits.
+## The warning is the whole mechanic — it is what turns the storm into decisions.
+var storm_interval := 300.0
+var storm_warning := 45.0
+var storm_duration := 60.0
+
+## The first storm is deliberately late and gentle: it has to teach the cycle,
+## not end the run.
+var storm_first_interval := 420.0
+var storm_first_severity := 1
+
+## Production multiplier while the ash is overhead. Not zero — watching the
+## factories crawl is worse than watching them stop.
+var storm_production_multiplier := 0.35
+## Live, temporary multiplier applied on top of everything else in
+## ProductionManager. 1.0 means nothing is happening. Only events write to it,
+## and whoever sets it is responsible for putting it back.
+var event_production_multiplier := 1.0
+## Morale lost per storm tick, and how often those ticks land.
+var storm_morale_per_tick := 2.0
+var storm_tick_interval := 5.0
+
+## Severity climbs with the era and with how much smoke you make. The Regency does
+## not spend a storm on a province that does not show up in the ledger.
+var storm_severity_max := 5
+var storm_severity_per_era := 1
+## One extra step of severity per this many producing buildings.
+var storm_buildings_per_severity := 6
+
+## Daño por tic de tormenta, como fracción de la salud máxima del edificio. Se
+## multiplica por la severidad: una tormenta fuerte deja la base en ruinas.
+var storm_damage_per_tick := 0.06
+## Cuántos edificios muerde cada tic. No los toca todos: la tormenta se siente
+## caprichosa, y eso hace que proteger los importantes signifique algo.
+var storm_buildings_hit_per_tick := 2
+
+## Las torres, por fin, sirven: cada una en pie reduce el daño de la tormenta.
+## Es la palanca de preparación principal y la razón de que existan.
+var storm_tower_mitigation := 0.15
+var storm_tower_mitigation_max := 0.6
+
+## Reparar cuesta esta fracción del coste de construcción, escalada por el daño
+## recibido. Reparar un rasguño es barato; levantar una ruina, casi construirla.
+var storm_repair_cost_ratio := 0.5
+
+func get_storm_damage(severity: int, max_health: int, towers: int) -> int:
+	var raw: float = float(max_health) * storm_damage_per_tick * float(maxi(1, severity))
+	return maxi(1, roundi(raw * (1.0 - get_storm_mitigation(towers))))
+
+## Cuánto absorben las torres. Con techo: ninguna cantidad de torres vuelve a la
+## base inmune, porque entonces la Tormenta dejaría de ser una amenaza.
+func get_storm_mitigation(towers: int) -> float:
+	return clampf(storm_tower_mitigation * float(maxi(0, towers)), 0.0, storm_tower_mitigation_max)
+
+## Share of everything in store that the Assessors take when the Tithe is not
+## repelled. A percentage, not a flat sum: hoarding into a storm is the mistake.
+var storm_tithe_ratio := 0.25
+## How many enemies the Assessors field, before severity scaling.
+var storm_tithe_base_force := 3
+
+func get_storm_interval(is_first: bool) -> float:
+	return get_duration(storm_first_interval if is_first else storm_interval)
+
+func get_storm_warning() -> float:
+	return get_duration(storm_warning)
+
+func get_storm_duration() -> float:
+	return get_duration(storm_duration)
+
+func get_storm_tick_interval() -> float:
+	return get_duration(storm_tick_interval)
 
 # ── Storage Helpers ──
 

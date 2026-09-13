@@ -159,6 +159,39 @@ signal draft_applied(option: Dictionary)
 @warning_ignore("unused_signal")
 signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary)
 
+# ── Building Health ──
+## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
+## deja de producir hasta que se paga la reparacion; nunca se destruye solo.
+@warning_ignore("unused_signal")
+signal building_damaged(building_node: Node3D, health: int, max_health: int)
+@warning_ignore("unused_signal")
+signal building_ruined(building_node: Node3D)
+@warning_ignore("unused_signal")
+signal building_repaired(building_node: Node3D)
+
+# ── Imperial Storm ──
+## Emitted only by StormManager. The storm is dispatched on a schedule, not rolled
+## at random — the player is meant to see it coming and prepare (see the design in
+## the private context folder).
+## `phase` values follow StormCycle.Phase.
+@warning_ignore("unused_signal")
+signal storm_phase_changed(phase: int, seconds_left: float)
+## The warning window opens: ash on the horizon, time to decide.
+@warning_ignore("unused_signal")
+signal storm_incoming(seconds_until: float, severity: int)
+@warning_ignore("unused_signal")
+signal storm_started(severity: int)
+## Per-tick bite while the storm is overhead, for the UI to react to.
+@warning_ignore("unused_signal")
+signal storm_tick(seconds_left: float)
+@warning_ignore("unused_signal")
+signal storm_ended(severity: int)
+## The Assessors arrive to collect. `taken` is resource_name -> amount.
+@warning_ignore("unused_signal")
+signal tithe_demanded(severity: int)
+@warning_ignore("unused_signal")
+signal tithe_resolved(paid: bool, taken: Dictionary)
+
 # ── Random Events ──
 @warning_ignore("unused_signal")
 signal random_event_started(event_id: String, event_data: Dictionary)
@@ -176,6 +209,9 @@ signal objective_panel_toggled()
 signal sidebar_toggled(visible: bool)
 @warning_ignore("unused_signal")
 signal grid_overlay_toggled(visible: bool)
+
+## Emitted when the window switches to/from fullscreen (F11 or Settings).
+signal fullscreen_changed(enabled: bool)
 
 # ── Persistence ──
 @warning_ignore("unused_signal")

@@ -72,7 +72,7 @@ func _setup_ui() -> void:
 	_toggle_btn.add_theme_stylebox_override("hover", tb)
 	_toggle_btn.add_theme_stylebox_override("pressed", tb)
 	_toggle_btn.add_theme_font_size_override("font_size", 10)
-	_toggle_btn.add_theme_color_override("font_color", UITheme.ACCENT)
+	UITheme.set_label_color(_toggle_btn, UITheme.ACCENT)
 	_toggle_btn.add_theme_color_override("font_hover_color", UITheme.TEXT_BRIGHT)
 	_toggle_btn.pressed.connect(_toggle_expanded)
 	header.add_child(_toggle_btn)
@@ -88,13 +88,13 @@ func _setup_ui() -> void:
 		var dot := Label.new()
 		dot.text = symbol
 		dot.add_theme_font_size_override("font_size", 12)
-		dot.add_theme_color_override("font_color", color)
+		UITheme.set_label_color(dot, color)
 		item.add_child(dot)
 
 		var amt := Label.new()
 		amt.text = str(ResourceManager.get_amount(type))
 		amt.add_theme_font_size_override("font_size", 13)
-		amt.add_theme_color_override("font_color", UITheme.TEXT_BRIGHT)
+		UITheme.set_label_color(amt, UITheme.TEXT_BRIGHT)
 		item.add_child(amt)
 		_labels[type] = amt
 
@@ -106,7 +106,7 @@ func _setup_ui() -> void:
 	_storage_label = Label.new()
 	_storage_label.text = "/%d" % ResourceManager.get_storage_cap()
 	_storage_label.add_theme_font_size_override("font_size", 10)
-	_storage_label.add_theme_color_override("font_color", UITheme.TEXT_DIM)
+	UITheme.set_label_color(_storage_label, UITheme.TEXT_DIM)
 	header.add_child(_storage_label)
 
 	# Dev-only shortcut to wipe the save. Players use Settings > New game instead.
@@ -115,7 +115,7 @@ func _setup_ui() -> void:
 		clear_btn.text = Tr.t("BTN_CLEAR")
 		clear_btn.custom_minimum_size = Vector2(60, 22)
 		clear_btn.add_theme_font_size_override("font_size", 10)
-		clear_btn.add_theme_color_override("font_color", UITheme.DANGER)
+		UITheme.set_label_color(clear_btn, UITheme.DANGER)
 		clear_btn.add_theme_color_override("font_hover_color", UITheme.TEXT_BRIGHT)
 		var clr_s := StyleBoxFlat.new()
 		clr_s.bg_color = UITheme.DANGER.darkened(0.7)
@@ -154,20 +154,20 @@ func _setup_ui() -> void:
 		var dot := Label.new()
 		dot.text = symbol
 		dot.add_theme_font_size_override("font_size", 13)
-		dot.add_theme_color_override("font_color", color)
+		UITheme.set_label_color(dot, color)
 		row.add_child(dot)
 
 		var name_lbl := Label.new()
 		name_lbl.text = Tr.res_upper(res_id)
 		name_lbl.add_theme_font_size_override("font_size", 11)
-		name_lbl.add_theme_color_override("font_color", color.darkened(0.1))
+		UITheme.set_label_color(name_lbl, color)
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(name_lbl)
 
 		var amt_lbl := Label.new()
 		amt_lbl.text = str(ResourceManager.get_amount(type))
 		amt_lbl.add_theme_font_size_override("font_size", 14)
-		amt_lbl.add_theme_color_override("font_color", UITheme.TEXT_BRIGHT)
+		UITheme.set_label_color(amt_lbl, UITheme.TEXT_BRIGHT)
 		amt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(amt_lbl)
 		_exp_labels[type] = amt_lbl
@@ -218,10 +218,10 @@ func _on_resource_changed(resource_type: String, new_amount: int, _delta: int) -
 		if ResourceManager.get_type_name(type) == resource_type:
 			_labels[type].text = str(new_amount)
 			var at_cap := new_amount >= cap
-			_labels[type].add_theme_color_override("font_color", UITheme.WARNING if at_cap else UITheme.TEXT_BRIGHT)
+			UITheme.set_label_color(_labels[type], UITheme.WARNING if at_cap else UITheme.TEXT_BRIGHT)
 			if _exp_labels.has(type):
 				_exp_labels[type].text = str(new_amount)
-				_exp_labels[type].add_theme_color_override("font_color", UITheme.WARNING if at_cap else UITheme.TEXT_BRIGHT)
+				UITheme.set_label_color(_exp_labels[type], UITheme.WARNING if at_cap else UITheme.TEXT_BRIGHT)
 			if _bars.has(type):
 				_bars[type].max_value = cap
 				_bars[type].value = new_amount
@@ -249,7 +249,7 @@ func _show_feedback(text: String) -> void:
 	if not _feedback_label:
 		_feedback_label = Label.new()
 		_feedback_label.add_theme_font_size_override("font_size", 15)
-		_feedback_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3))
+		UITheme.set_label_color(_feedback_label, UITheme.DANGER)
 		_feedback_label.add_theme_constant_override("outline_size", 3)
 		_feedback_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 		_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

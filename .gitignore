@@ -54,3 +54,9 @@ NOTAS_*.md
 
 # Capturas del recorrido de UI generadas por tools/ui_tour.gd
 ui_tour/
+
+# Capturas de verificacion generadas por tools/battle_probe.gd
+docs/media/dev/
+
+# Informes de gdUnit4 (se regeneran en cada ejecucion de los tests)
+reports/

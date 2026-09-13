@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c7skrm1sh4p2ne"]
+
+[ext_resource type="Script" path="res://scripts/ui/SkirmishPanel.gd" id="1_script"]
+
+[node name="SkirmishPanel" type="CanvasLayer"]
+script = ExtResource("1_script")
