@@ -178,6 +178,10 @@ func _tick_production(delta: float) -> void:
 		_producing.erase(node)
 
 func _award_production(node: Node3D, data: BuildingData) -> void:
+	# A building in ruins produces nothing until it is repaired. This is what
+	# gives the storm teeth beyond a bad afternoon.
+	if BuildingHealth.is_ruined(node):
+		return
 	# Skip if building is not staffed (no workers assigned)
 	if data.workers_required > 0 and not PopulationManager.is_building_staffed(node):
 		return

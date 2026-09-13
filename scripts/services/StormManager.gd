@@ -103,11 +103,52 @@ func _on_phase_entered(phase: int) -> void:
 	GameConfig.event_production_multiplier = \
 		GameConfig.storm_production_multiplier if phase == StormCycle.Phase.STORM else 1.0
 
-## Every bite of the storm costs morale. Building damage lands here too once the
-## health system exists (see the design doc) — for now the town just suffers.
+## Cada mordisco de la tormenta cuesta moral y deja edificios tocados.
 func _apply_storm_tick() -> void:
-	var bite: float = GameConfig.storm_morale_per_tick * float(get_severity())
-	PopulationManager.adjust_morale(-roundi(bite))
+	var severity: int = get_severity()
+	PopulationManager.adjust_morale(-roundi(GameConfig.storm_morale_per_tick * float(severity)))
+	_damage_buildings(severity)
+
+## La ceniza no cae sobre todo por igual: muerde unos pocos edificios al azar por
+## tic. Que se sienta caprichosa es lo que hace que proteger la base importe, en
+## vez de ser un impuesto plano que se paga y ya.
+##
+## El núcleo queda fuera: perder la producción del núcleo por una tormenta
+## temprana deja al jugador sin salida, y una tormenta sin salida no enseña nada.
+func _damage_buildings(severity: int) -> void:
+	var targets: Array = []
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info["data"]
+		if data.is_core or data.is_decoration:
+			continue
+		var node: Node3D = info["node"]
+		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
+			continue
+		targets.append(node)
+	if targets.is_empty():
+		return
+
+	targets.shuffle()
+	var towers: int = _standing_towers()
+	var hits: int = mini(GameConfig.storm_buildings_hit_per_tick, targets.size())
+	for i in range(hits):
+		var node: Node3D = targets[i]
+		var amount: int = GameConfig.get_storm_damage(
+			severity, BuildingHealth.get_max_health(node), towers)
+		BuildingHealth.damage_building(node, amount)
+
+## Solo cuentan las torres en pie: una torre en ruinas no protege nada, que es
+## justo lo que obliga a repararlas antes de la siguiente.
+func _standing_towers() -> int:
+	var count := 0
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info["data"]
+		if data.id != "tower":
+			continue
+		var node: Node3D = info["node"]
+		if node != null and is_instance_valid(node) and not BuildingHealth.is_ruined(node):
+			count += 1
+	return count
 
 # ── The Tithe ────────────────────────────────────────────────────────
 

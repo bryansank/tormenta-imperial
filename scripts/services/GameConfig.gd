@@ -603,6 +603,31 @@ var storm_severity_per_era := 1
 ## One extra step of severity per this many producing buildings.
 var storm_buildings_per_severity := 6
 
+## Daño por tic de tormenta, como fracción de la salud máxima del edificio. Se
+## multiplica por la severidad: una tormenta fuerte deja la base en ruinas.
+var storm_damage_per_tick := 0.06
+## Cuántos edificios muerde cada tic. No los toca todos: la tormenta se siente
+## caprichosa, y eso hace que proteger los importantes signifique algo.
+var storm_buildings_hit_per_tick := 2
+
+## Las torres, por fin, sirven: cada una en pie reduce el daño de la tormenta.
+## Es la palanca de preparación principal y la razón de que existan.
+var storm_tower_mitigation := 0.15
+var storm_tower_mitigation_max := 0.6
+
+## Reparar cuesta esta fracción del coste de construcción, escalada por el daño
+## recibido. Reparar un rasguño es barato; levantar una ruina, casi construirla.
+var storm_repair_cost_ratio := 0.5
+
+func get_storm_damage(severity: int, max_health: int, towers: int) -> int:
+	var raw: float = float(max_health) * storm_damage_per_tick * float(maxi(1, severity))
+	return maxi(1, roundi(raw * (1.0 - get_storm_mitigation(towers))))
+
+## Cuánto absorben las torres. Con techo: ninguna cantidad de torres vuelve a la
+## base inmune, porque entonces la Tormenta dejaría de ser una amenaza.
+func get_storm_mitigation(towers: int) -> float:
+	return clampf(storm_tower_mitigation * float(maxi(0, towers)), 0.0, storm_tower_mitigation_max)
+
 ## Share of everything in store that the Assessors take when the Tithe is not
 ## repelled. A percentage, not a flat sum: hoarding into a storm is the mistake.
 var storm_tithe_ratio := 0.25

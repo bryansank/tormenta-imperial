@@ -19,6 +19,9 @@ var _name_edit: LineEdit
 var _upgrade_container: VBoxContainer
 var _upgrade_btn: Button
 var _upgrade_cost_label: Label
+var _repair_container: VBoxContainer
+var _repair_btn: Button
+var _repair_label: Label
 var _actions_box: HBoxContainer
 var _move_btn: Button
 var _demolish_btn: Button
@@ -148,6 +151,21 @@ func _build_ui() -> void:
 	_name_container.add_child(_name_edit)
 	_name_container.add_child(name_btn)
 	_vbox.add_child(_name_container)
+
+	# Seccion de reparacion. Va ANTES de la de mejora a proposito: con el
+	# edificio en ruinas, repararlo es lo unico que importa.
+	_repair_container = VBoxContainer.new()
+	_repair_container.add_theme_constant_override("separation", 4)
+	_repair_label = UITheme.make_label("", "small", UITheme.WARNING)
+	_repair_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_repair_container.add_child(_repair_label)
+	_repair_btn = Button.new()
+	_repair_btn.text = Tr.t("BTN_REPAIR")
+	UITheme.style_button(_repair_btn, UITheme.WARNING.darkened(0.2))
+	_repair_btn.pressed.connect(_on_repair)
+	_repair_container.add_child(_repair_btn)
+	_repair_container.visible = false
+	_vbox.add_child(_repair_container)
 
 	# Upgrade section
 	_upgrade_container = VBoxContainer.new()
@@ -315,6 +333,8 @@ func _show_building_panel() -> void:
 	if _selected_data.is_core:
 		_name_edit.text = custom_name
 
+	_refresh_repair()
+
 	# Upgrade section
 	var next_level := level + 1
 	if next_level <= GameConfig.max_building_level and not is_building:
@@ -399,6 +419,37 @@ func _on_rename() -> void:
 	if label_node and label_node is Label3D:
 		label_node.text = new_name
 	EventBus.building_renamed.emit(_selected_node, new_name)
+
+## Un edificio tocado ensena cuanto le queda y cuanto cuesta levantarlo. En
+## ruinas, ademas, avisa de que no produce nada mientras tanto.
+func _refresh_repair() -> void:
+	if _selected_node == null or not is_instance_valid(_selected_node):
+		_repair_container.visible = false
+		return
+	if not BuildingHealth.is_damaged(_selected_node):
+		_repair_container.visible = false
+		return
+
+	var ruined: bool = BuildingHealth.is_ruined(_selected_node)
+	var pct: int = roundi(BuildingHealth.get_health_ratio(_selected_node) * 100.0)
+	var cost := BuildingHealth.repair_cost(_selected_node)
+	var parts: Array = []
+	for res_name in cost:
+		parts.append("%d %s" % [int(cost[res_name]), Tr.res_name(res_name)])
+
+	_repair_label.text = "%s  ·  %s" % [
+		Tr.t("LBL_RUINED") if ruined else Tr.t("LBL_DAMAGED") % pct,
+		Tr.t("FMT_COST") % " | ".join(parts),
+	]
+	UITheme.set_label_color(_repair_label, UITheme.DANGER if ruined else UITheme.WARNING)
+	_repair_btn.disabled = not BuildingHealth.can_repair(_selected_node)["ok"]
+	_repair_container.visible = true
+
+func _on_repair() -> void:
+	if _selected_node == null or not is_instance_valid(_selected_node):
+		return
+	if BuildingHealth.repair(_selected_node):
+		_refresh_repair()
 
 func _on_upgrade() -> void:
 	if not _selected_node or not _selected_data:

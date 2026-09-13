@@ -20,8 +20,23 @@ func _ready() -> void:
 	await get_tree().create_timer(SETTLE).timeout
 	await _run()
 
+## Edificios que planta la sonda, para que la tormenta tenga algo que morder.
+## Dos torres a proposito: son la palanca de mitigacion y hay que verla actuar.
+const LAYOUT := [
+	["sawmill",   Vector2i(15, 15)],
+	["gold_mine", Vector2i(25, 15)],
+	["foundry",   Vector2i(15, 24)],
+	["barracks",  Vector2i(25, 24)],
+	["warehouse", Vector2i(27, 21)],
+	["house",     Vector2i(17, 16)],
+	["house",     Vector2i(19, 16)],
+	["tower",     Vector2i(14, 19)],
+	["tower",     Vector2i(28, 19)],
+]
+
 func _run() -> void:
 	_seed()
+	_build_base()
 	_listen()
 
 	# Armar el reloj y acortar la mecha: no interesa esperar la cuenta real.
@@ -81,6 +96,37 @@ func _seed() -> void:
 	PopulationManager._morale = 80
 	EventBus.phase_advanced.emit(ProgressionManager.current_phase)
 
+func _build_base() -> void:
+	var main := get_tree().current_scene
+	var placer: Node = main.get_node_or_null("BuildingPlacer") if main != null else null
+	if placer == null:
+		push_warning("[storm] falta BuildingPlacer; sin edificios que danar")
+		return
+	for entry in LAYOUT:
+		var data: BuildingData = load("res://data/buildings/%s.tres" % entry[0])
+		if data == null:
+			continue
+		var cell: Vector2i = _find_spot(entry[1] as Vector2i, data.grid_size)
+		if cell.x < 0:
+			continue
+		var node: Node3D = placer.place_building_at(data, cell)
+		if node != null:
+			ProductionManager.register_building(node, data, 0.0)
+	PopulationManager._recalculate_all()
+
+## Los yacimientos ocupan celdas al azar, asi que el sitio pedido puede estar
+## cogido. Se busca hueco en espiral alrededor.
+func _find_spot(wanted: Vector2i, size: Vector2i) -> Vector2i:
+	if GridManager.can_place(wanted, size):
+		return wanted
+	for radius in range(1, 6):
+		for dy in range(-radius, radius + 1):
+			for dx in range(-radius, radius + 1):
+				var cell := wanted + Vector2i(dx, dy)
+				if GridManager.can_place(cell, size):
+					return cell
+	return Vector2i(-1, -1)
+
 func _listen() -> void:
 	EventBus.storm_incoming.connect(func(secs, sev):
 		print("[storm] AVISO: impacto en %.1fs, severidad %d" % [secs, sev]))
@@ -129,4 +175,22 @@ func _snapshot() -> Dictionary:
 		"madera": ResourceManager.get_amount(ResourceManager.Type.WOOD),
 		"acero": ResourceManager.get_amount(ResourceManager.Type.STEEL),
 		"moral": PopulationManager.get_morale(),
+		"edificios": _buildings_state(),
 	}
+
+## Cuantos edificios hay enteros, tocados y en ruinas.
+func _buildings_state() -> String:
+	var whole := 0
+	var hurt := 0
+	var ruined := 0
+	for info in GridManager.get_all_buildings():
+		var node: Node3D = info["node"]
+		if node == null or not is_instance_valid(node):
+			continue
+		if BuildingHealth.is_ruined(node):
+			ruined += 1
+		elif BuildingHealth.is_damaged(node):
+			hurt += 1
+		else:
+			whole += 1
+	return "%d enteros, %d tocados, %d en ruinas" % [whole, hurt, ruined]

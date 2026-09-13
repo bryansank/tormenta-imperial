@@ -159,6 +159,16 @@ signal draft_applied(option: Dictionary)
 @warning_ignore("unused_signal")
 signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary)
 
+# ── Building Health ──
+## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
+## deja de producir hasta que se paga la reparacion; nunca se destruye solo.
+@warning_ignore("unused_signal")
+signal building_damaged(building_node: Node3D, health: int, max_health: int)
+@warning_ignore("unused_signal")
+signal building_ruined(building_node: Node3D)
+@warning_ignore("unused_signal")
+signal building_repaired(building_node: Node3D)
+
 # ── Imperial Storm ──
 ## Emitted only by StormManager. The storm is dispatched on a schedule, not rolled
 ## at random — the player is meant to see it coming and prepare (see the design in

@@ -98,6 +98,10 @@ func _load_game() -> void:
 					if mesh_inst is MeshInstance3D:
 						var s: float = 1.0 + (level - 1) * 0.1
 						mesh_inst.scale = Vector3(s, s, s)
+				# Restaurar dano. Sin la clave, el edificio esta entero.
+				if entry.has("health"):
+					node.set_meta("health", int(entry["health"]))
+					BuildingHealth.refresh_visual(node)
 				# Register with ProductionManager (restore construction state)
 				var constr_remaining := 0.0
 				if entry.has("construction_remaining"):

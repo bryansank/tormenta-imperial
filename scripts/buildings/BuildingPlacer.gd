@@ -523,6 +523,12 @@ func get_all_placed_buildings() -> Array:
 				entry["level"] = level
 			if building.has_meta("custom_name"):
 				entry["custom_name"] = building.get_meta("custom_name")
+			# Solo se guarda si esta tocado: un save viejo sin la clave significa
+			# "entero", que es exactamente lo que queremos por defecto.
+			if building.has_meta("health"):
+				var hp: int = building.get_meta("health")
+				if hp < data.max_health:
+					entry["health"] = hp
 			if ProductionManager.is_constructing(building):
 				entry["construction_remaining"] = ProductionManager.get_construction_remaining(building)
 			result.append(entry)
