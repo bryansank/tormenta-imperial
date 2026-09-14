@@ -834,3 +834,44 @@ func unpaid_hurts(unpaid_ticks: int) -> bool:
 ## como "Tormenta en marcha", el Diezmo incluido — que es cuando mas duele.
 func _storm_cycle_running() -> bool:
 	return StormManager.get_phase() != StormCycle.Phase.CALM
+
+# ══════════════════════════════════════════════════════════════════════
+# ── La Auditoria Final ──
+# ══════════════════════════════════════════════════════════════════════
+# El Cuartel General a nivel 3 ya no gana la partida: la convoca. La Regencia
+# manda su auditoria definitiva y hay que sobrevivirla — varias oleadas seguidas
+# contra la misma guarnicion, sin reentrenar entre medias.
+#
+# Todos los numeros de aqui se leen contra una sola pregunta: cuanto ejercito hay
+# que tener en pie para que la ultima oleada siga siendo ganable despues de que
+# las anteriores ya se hayan cobrado lo suyo. La atricion es el balance de
+# verdad; estos valores solo deciden cuanto muerde.
+
+## Cuantas oleadas trae el asedio (minimo, maximo). Sale de la semilla, no de una
+## eleccion del jugador: convocar es apostar sin saber cuanto dura la noche.
+var final_audit_waves := Vector2i(3, 5)
+
+## Cuerpos de la primera oleada, y cuantos suma cada oleada siguiente. El techo
+## real lo pone `combat_deploy_cap`: el tablero sigue siendo el mismo de siempre.
+var final_audit_base_slots := 3
+var final_audit_slots_per_wave := 1
+
+## Multiplicador de HP/ATK por oleada y por era. Cuando los cuerpos ya no caben
+## en el tablero, esta escalada es la unica que sigue apretando.
+var final_audit_scale_per_wave := 0.22
+var final_audit_scale_per_era := 0.25
+## La ultima oleada baja con todo. Es el cierre del juego, no un escalon mas.
+var final_audit_last_wave_multiplier := 1.5
+
+## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
+## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
+## asedio es la misma pelea cinco veces seguidas.
+var final_audit_artillery_share := 3
+var final_audit_armour_wave := 2
+## La unica moneda al aire del asedio: a veces, un canon de mas.
+var final_audit_extra_gun_chance := 0.35
+
+## Unidades vivas en casa que hacen falta para volver a convocar tras perder.
+## Perder no acaba la partida, pero tampoco se rifa la victoria: hay que
+## reconstruir el ejercito antes de que la Regencia vuelva a bajar.
+var final_audit_resummon_min_units := 3
