@@ -35,37 +35,37 @@ The management loop, the tactical board and the storm cycle all run in-game:
 
 ---
 
-## 🚧 Milestone 1 — Economic floor
+## ✅ Milestone 1 — Economic floor
 
 Tuning on systems that already exist: the biggest change in feel for the least new code.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Shared storage pool | ⬜ | One cap for the **sum** of all resources, not 800 of each. Era 1 = 300, Era 3 = 1000, +500/warehouse. Touches `GameConfig.get_storage_cap`, `ResourceManager.add`, `ResourceHUD`, save load |
-| **Three-phase storm cycle** | ⬜ | `CALM → WARNING → ASH → STORM → TITHE`, plus a `WARNING → CALM` false alarm that banks +1 severity for next time. Calm interval becomes a random range; phase durations stay fixed. Two production multipliers (ash 0.50, storm 0.15) instead of one |
-| Phase indicator instead of a clock | ⬜ | The storm HUD stops counting down: colour and icon for the current phase, nothing in calm. Severity is no longer announced |
-| Queue stays open, the storm ruins it | ⬜ | Processes, mining and training can run through all three phases, but anything still in flight when the STORM lands is lost with its cost. Closes the "hide the warehouse in the queue" hole — which also paid a 1.5× margin |
-| Corruption tax (cancellation) | ⬜ | There is no cancel button today: `ProcessManager.cancel()` is only reached by demolition and silently loses 100%. Add explicit cancellation returning 70% in calm, 40% during the phases |
-| Famine & desertion | ⬜ | Sustained unpaid consumption kills population; sustained unpaid upkeep deserts units. Both APIs already exist (`remove_population`, `remove_units`) |
-| Ruin floor | ⬜ | The Nucleo is never damaged or destroyed and population never hits 0 — there is always a thread to rebuild from. No game-over screen |
+| Shared storage pool | ✅ | One cap for the **sum** of all resources, not 800 of each. Era 1 = 600, Era 2 = 800, Era 3 = 1000, +500/warehouse — Era 3 ceiling is exactly the HQ-3 price (3500). Touches `GameConfig.get_storage_cap`, `ResourceManager.add`, `ResourceHUD`, save load |
+| **Three-phase storm cycle** | ✅ | `CALM → WARNING → ASH → STORM → TITHE`, plus a `WARNING → CALM` false alarm that banks +1 severity for next time. Calm interval becomes a random range; phase durations stay fixed. Two production multipliers (ash 0.50, storm 0.15) instead of one |
+| Phase indicator instead of a clock | ✅ | The storm HUD stops counting down: colour and icon for the current phase, nothing in calm. Severity is no longer announced |
+| Queue stays open, the storm ruins it | ✅ | Processes, mining and training can run through all three phases, but anything still in flight when the STORM lands is lost with its cost. Closes the "hide the warehouse in the queue" hole — which also paid a 1.5× margin |
+| Corruption tax (cancellation) | ✅ | Explicit cancellation of processes and training, refund 70% in calm and 40% while the storm cycle is active, clamped to the free space in the shared pool so the button never promises more than it can pay |
+| Famine & desertion | ✅ | Sustained unpaid consumption kills population; sustained unpaid upkeep deserts units. Both APIs already exist (`remove_population`, `remove_units`) |
+| Ruin floor | ✅ | The Nucleo is never damaged or destroyed and population never hits 0 — there is always a thread to rebuild from. No game-over screen |
 
-## ⬜ Milestone 2 — The storm bites
+## ✅ Milestone 2 — The storm bites
 
 | Item | Status | Notes |
 |------|--------|-------|
 | Building health system | ✅ | `BuildingHealth` autoload: damage, ruined state that halts output, proportional repair cost, ash/blackened overlay, state persisted on the node |
 | Repair | ✅ | Costs scale with the damage taken — a scratch is cheap, a ruin nearly costs rebuilding |
-| Storm sky | 🚧 | `StormSky.gd` — fog, darkening and sky scaled by severity. With severity hidden, this is the player's only read on what is coming |
-| Selective damage | ⬜ | Today `_damage_buildings()` shuffles. Needs priority: defence and morale first, then housing, then production. Never the Nucleo, never the last sawmill or gold mine (anti-softlock) |
-| Minimum Quota | ⬜ | An empty warehouse no longer means a free tithe: the debt is collected in buildings and workers instead |
-| Arms race | ⬜ | `StormCycle.storms_survived` already tracked — feed it into `assessor_roster()` so winning today means heavier guns tomorrow |
-| Defensive towers | 🚧 | ✅ mitigate storm damage (15% each, 60% cap, only while standing) · ⬜ still don't add a unit to the defensive board |
+| Storm sky | ✅ | `StormSky.gd` — fog, darkening and sky scaled by severity. With severity hidden, this is the player's only read on what is coming |
+| Selective damage | ✅ | Priority: defence and morale first, then housing, then production. Never the Nucleo, never the last sawmill or gold mine (anti-softlock) |
+| Minimum Quota | ✅ | An empty warehouse no longer means a free tithe: the debt is collected in buildings and workers instead |
+| Arms race | ✅ | `StormCycle.storms_survived` already tracked — feed it into `assessor_roster()` so winning today means heavier guns tomorrow |
+| Defensive towers | ✅ | Mitigate storm damage (15% each, 60% cap) and field an artillery crew on the defensive board, outside the deploy cap, forming in the back row — only while operational (not ruined, not under construction) |
 
-## ⬜ Milestone 3 — Expedition & the double clock
+## 🚧 Milestone 3 — Expedition & the double clock
 
 Tasks T022-T029 are specified in `specs/001-combate-pve/tasks.md`.
 
-- ⬜ `ExpeditionGenerator` — seeded branching map, rosters by depth and era, draft options
+- ✅ `ExpeditionGenerator` + `Expedition` pure models with 59 tests (boss reachable across 200 seeds); wiring to `CombatManager` and UI still pending
 - ⬜ `Expedition` model, `launch_expedition()`, real skirmish panel, map view, draft modal
 - ⬜ Chained encounters with attrition and permadeath
 - ⬜ **Unit lockout**: `get_garrison()` excludes units away on expedition
@@ -73,11 +73,11 @@ Tasks T022-T029 are specified in `specs/001-combate-pve/tasks.md`.
   both sides — no separate combat maths
 - ⬜ Storm notifications drawn over `BattleScreen`
 
-## ⬜ Milestone 4 — The Final Audit
+## 🚧 Milestone 4 — The Final Audit
 
-- ⬜ HQ level 3 arms a siege instead of instantly winning
-- ⬜ 3-5 chained defensive encounters, attrition, no retraining between waves
-- ⬜ Winning stops the storm permanently and changes the UI
+- ✅ HQ level 3 summons the siege instead of instantly winning (`FinalAudit` pure model, 32 tests; resummon floor of 3 units)
+- 🚧 3-5 chained defensive encounters with attrition — model done, wiring waves onto the board in progress. **Until it lands the game cannot be finished: HQ 3 summons but nothing begins the siege.**
+- 🚧 Winning emits `storm_halted_forever` — `StormManager` listener in progress
 - ⬜ Losing sacks the settlement but the siege can be summoned again after rebuilding
 
 ## 💤 Backlog — Nice-to-have
