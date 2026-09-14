@@ -163,7 +163,9 @@ func test_mining_only_costs_the_time_it_took() -> void:
 
 func test_cancelling_training_gives_back_its_share() -> void:
 	_training_of("infantry")
-	ResourceManager.set_amounts({"gold": 500, "wood": 500})
+	# La bolsa es compartida y en Era 1 son 600: 500+500 la dejaria llena y el
+	# reembolso no tendria donde caer. Eso se prueba aparte, mas abajo.
+	ResourceManager.set_amounts({"gold": 200, "wood": 200})
 	var promised := ArmyManager.get_training_refund(0)
 	assert_bool(promised.has("gold")).is_true()
 
@@ -174,6 +176,24 @@ func test_cancelling_training_gives_back_its_share() -> void:
 	assert_int(int(paid["gold"])).is_equal(int(promised["gold"]))
 	assert_int(_gold()).is_equal(gold_before + int(promised["gold"]))
 	assert_int(_wood()).is_equal(wood_before + int(promised.get("wood", 0)))
+	assert_int(ArmyManager.get_training().size()).is_equal(0)
+
+## Con la bolsa llena el reembolso no cabe, y el boton tiene que decirlo antes.
+## Prometer un 70% que luego no se abona es peor que no ofrecer reembolso: el
+## jugador cancela contando con un dinero que no va a ver.
+func test_a_full_bag_promises_nothing_and_keeps_its_word() -> void:
+	_training_of("infantry")
+	var cap := ResourceManager.get_storage_cap()
+	ResourceManager.set_amounts({"gold": cap, "wood": 0})
+	assert_bool(ResourceManager.is_storage_full()).is_true()
+
+	var promised := ArmyManager.get_training_refund(0)
+	assert_bool(promised.is_empty()).is_true()
+
+	var gold_before := _gold()
+	var paid := ArmyManager.cancel_training(0)
+	assert_bool(paid.is_empty()).is_true()
+	assert_int(_gold()).is_equal(gold_before)
 	assert_int(ArmyManager.get_training().size()).is_equal(0)
 
 func test_a_cancelled_recruit_is_never_born() -> void:

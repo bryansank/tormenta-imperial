@@ -112,7 +112,9 @@ func get_training_refund(index: int) -> Dictionary:
 	if index < 0 or index >= _training.size():
 		return {}
 	var def := GameConfig.get_unit_def(str(_training[index].get("id", "")))
-	return GameConfig.get_cancel_refund(def.get("cost", {}))
+	# Recortado al hueco que queda: con la bolsa compartida, prometer un 70% que
+	# no cabe es mentirle al jugador en el propio boton.
+	return ResourceManager.fit_into_storage(GameConfig.get_cancel_refund(def.get("cost", {})))
 
 ## Cancela una unidad en entrenamiento y devuelve parte de lo pagado.
 ## Hasta ahora entrenar era irreversible: pulsar ENTRENAR por error costaba la

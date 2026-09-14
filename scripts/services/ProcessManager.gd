@@ -26,7 +26,10 @@ func is_busy(node: Node3D) -> bool:
 func get_refund_preview(node: Node3D) -> Dictionary:
 	if not _active.has(node):
 		return {}
-	return GameConfig.get_cancel_refund(_active[node].get("cost", {}))
+	# Recortado al hueco que queda: con la bolsa compartida, prometer un 70% que
+	# no cabe es mentirle al jugador en el propio boton.
+	return ResourceManager.fit_into_storage(
+		GameConfig.get_cancel_refund(_active[node].get("cost", {})))
 
 ## Cancela el proceso o minado en curso y devuelve parte de lo pagado.
 ## Devuelve el reembolso realmente abonado (recurso -> cantidad); vacio si no
@@ -35,7 +38,7 @@ func cancel(node: Node3D) -> Dictionary:
 	if not _active.has(node):
 		return {}
 	var info: Dictionary = _active[node]
-	var refund := GameConfig.get_cancel_refund(info.get("cost", {}))
+	var refund := get_refund_preview(node)
 	_active.erase(node)
 	for res_name in refund:
 		if _type_map.has(res_name):

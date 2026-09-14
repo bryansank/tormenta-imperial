@@ -99,6 +99,31 @@ func get_free_space() -> int:
 func is_storage_full() -> bool:
 	return get_free_space() <= 0
 
+## Recorta un ingreso al espacio libre de la bolsa, repartiendo proporcionalmente.
+##
+## Lo usa quien tiene que PROMETER una cantidad antes de abonarla. Con la bolsa
+## compartida, un reembolso del 70% puede no caber, y un numero anunciado que
+## luego no se abona es peor que no ofrecer reembolso: el jugador cuenta con el.
+## Repartir a prorrata y no por orden del diccionario evita que el primer recurso
+## se coma todo el hueco y el segundo se quede en cero por casualidad.
+func fit_into_storage(amounts: Dictionary) -> Dictionary:
+	var total := 0
+	for res_name in amounts:
+		total += int(amounts[res_name])
+	if total <= 0:
+		return {}
+	var free := get_free_space()
+	if free >= total:
+		return amounts.duplicate()
+	var fitted := {}
+	var left := free
+	for res_name in amounts:
+		var share: int = mini(int(float(int(amounts[res_name])) * float(free) / float(total)), left)
+		if share > 0:
+			fitted[res_name] = share
+			left -= share
+	return fitted
+
 func set_warehouse_count(count: int) -> void:
 	_warehouse_count = maxi(0, count)
 
