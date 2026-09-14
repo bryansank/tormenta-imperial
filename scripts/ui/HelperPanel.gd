@@ -16,9 +16,12 @@ func _ready() -> void:
 	_setup_ui()
 	UIManager.register_panel(self, "HelperPanel.modal")
 	# Cuando hay ceniza en camino, el tutorial se calla: sus globos tapan media
-	# pantalla y en ese momento lo unico que importa es el reloj de la Tormenta.
-	EventBus.storm_incoming.connect(func(_s, _sev): _set_callouts_visible(false))
+	# pantalla y en ese momento lo unico que importa es el indicador de fase.
+	EventBus.storm_incoming.connect(func(_s): _set_callouts_visible(false))
 	EventBus.tithe_resolved.connect(func(_paid, _taken): _restore_callouts())
+	# Y vuelve si el aviso queda en nada: sin esto una falsa alarma dejaria los
+	# globos callados hasta la siguiente cobranza, que puede no llegar nunca.
+	EventBus.storm_false_alarm.connect(func(_deferred): _restore_callouts())
 	_set_callouts_visible(GameConfig.ui_helper_visible)
 
 func _setup_ui() -> void:

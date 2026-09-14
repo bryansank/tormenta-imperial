@@ -571,13 +571,22 @@ func get_combat_ai_step_delay() -> float:
 # ══════════════════════════════════════════════════════════════════════
 # ── The Imperial Storm ──
 # ══════════════════════════════════════════════════════════════════════
-# The storm is dispatched, not rolled: it arrives on a schedule the player can
-# see and plan around. A storm you cannot prepare for is just a random event.
+# The storm is dispatched, not rolled: it always announces itself and always runs
+# the same three phases in the same order. What the dice decide is when the calm
+# ends and whether a given warning amounts to anything — never how hard it hits.
+# A disaster nobody can prepare for is noise; one that always means the same
+# thing is arithmetic.
 
-## Seconds of calm between storms, and how long the warning lasts before it hits.
-## The warning is the whole mechanic — it is what turns the storm into decisions.
-var storm_interval := 300.0
+## How long the calm lasts. A range, not a metronome: a storm you can set your
+## watch by stops being weather and becomes a spreadsheet column.
+var storm_interval_min := 240.0
+var storm_interval_max := 420.0
+
+## The three phases are always exactly this long, in this order: Warning, Ash,
+## Storm. The arrival is uncertain; what happens once it starts never is. That
+## asymmetry is what makes the Warning worth acting on.
 var storm_warning := 45.0
+var storm_ash_duration := 60.0
 var storm_duration := 60.0
 
 ## The first storm is deliberately late and gentle: it has to teach the cycle,
@@ -585,15 +594,28 @@ var storm_duration := 60.0
 var storm_first_interval := 420.0
 var storm_first_severity := 1
 
-## Production multiplier while the ash is overhead. Not zero — watching the
-## factories crawl is worse than watching them stop.
-var storm_production_multiplier := 0.35
+## One Warning in four turns out to be nothing. The player still paid to prepare,
+## and the Regency loses nothing by crying wolf — which is the point.
+var storm_false_alarm_chance := 0.25
+## What a false alarm costs: the assessment is deferred, not forgiven. This much
+## severity is saved up and rides along with the next real storm.
+var storm_false_alarm_carry := 1
+
+## Production multiplier per biting phase. The Warning does not touch production
+## at all — it is the one clean window in which to decide. Neither is zero:
+## watching the factories crawl is worse than watching them stop.
+var storm_ash_production_multiplier := 0.5
+var storm_production_multiplier := 0.15
 ## Live, temporary multiplier applied on top of everything else in
 ## ProductionManager. 1.0 means nothing is happening. Only events write to it,
 ## and whoever sets it is responsible for putting it back.
 var event_production_multiplier := 1.0
-## Morale lost per storm tick, and how often those ticks land.
+## Morale lost per tick of ash, and how often those ticks land. The Warning
+## costs none of it.
 var storm_morale_per_tick := 2.0
+## The Storm bleeds this much harder than the Ash. Same clock, three times the
+## bill — the difference between the two phases has to be felt, not read.
+var storm_morale_storm_multiplier := 3.0
 var storm_tick_interval := 5.0
 
 ## Severity climbs with the era and with how much smoke you make. The Regency does
@@ -634,11 +656,22 @@ var storm_tithe_ratio := 0.25
 ## How many enemies the Assessors field, before severity scaling.
 var storm_tithe_base_force := 3
 
-func get_storm_interval(is_first: bool) -> float:
-	return get_duration(storm_first_interval if is_first else storm_interval)
+func get_storm_first_interval() -> float:
+	return get_duration(storm_first_interval)
+
+## Bounds of the calm. The roll itself belongs to StormCycle's own generator, so
+## the model stays deterministic under a seed.
+func get_storm_interval_min() -> float:
+	return get_duration(storm_interval_min)
+
+func get_storm_interval_max() -> float:
+	return get_duration(storm_interval_max)
 
 func get_storm_warning() -> float:
 	return get_duration(storm_warning)
+
+func get_storm_ash_duration() -> float:
+	return get_duration(storm_ash_duration)
 
 func get_storm_duration() -> float:
 	return get_duration(storm_duration)
