@@ -95,15 +95,25 @@ var building_requires_deposit := {
 # el mercado sirva, que gastar antes de la Tormenta sea la jugada correcta y que
 # llegar lleno al Diezmo sea una decision y no un descuido.
 #
-# El techo esta cuadrado a proposito: 1000 + 5x500 = 3500 en Era 3, que es
-# exactamente lo que cuesta la mejora del Cuartel General a Nv.3 (1500 oro +
-# 800 acero + 500 petroleo + 700 madera). Para ganar hay que llegar con la bolsa
-# llena y los cinco almacenes en pie, que es justo cuando mas tienes que perder.
+# Los dos extremos de la tabla estan fijados por razones distintas:
+#
+# - **Era 1 = 600 porque la apertura tiene que poder jugarse.** Se empieza con 500
+#   (300 oro + 200 madera) y los dos primeros edificios que el juego pide, serreria
+#   (80/50) y mina de oro (120/80), suman 330. Con un tope de 300 el jugador
+#   arrancaba 200 por encima del limite y perdia recursos antes de tomar su primera
+#   decision: el juego le quitaba cosas por existir, no por elegir mal. 600 sigue
+#   siendo asfixiante frente a los 800 POR RECURSO de antes (1600 utiles en Era 1),
+#   pero deja jugar la apertura y obliga a elegir a partir de ahi.
+# - **Era 3 = 1000 porque cuadra con el precio de la victoria.** 1000 + 5x500 = 3500,
+#   exactamente lo que cuesta la mejora del Cuartel General a Nv.3 (1500 oro + 800
+#   acero + 500 petroleo + 700 madera). Para ganar hay que llegar con la bolsa llena
+#   y los cinco almacenes en pie, que es justo cuando mas tienes que perder. Este
+#   numero no se mueve sin mover tambien `hq_upgrade_costs`.
 
-## Tope base de la bolsa, por era. Sin almacenes la Frontera aprieta de verdad.
+## Tope base de la bolsa, por era.
 var base_storage_cap_by_era := {
-	1: 300,
-	2: 550,
+	1: 600,
+	2: 800,
 	3: 1000,
 }
 
