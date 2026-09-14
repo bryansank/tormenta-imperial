@@ -64,6 +64,10 @@ signal process_completed(building_node: Node3D, process_id: String)
 signal mining_started(deposit_node: Node3D, deposit_id: String)
 @warning_ignore("unused_signal")
 signal mining_completed(deposit_node: Node3D, deposit_id: String)
+## Cancelado a mano por el jugador. `refunded` es recurso -> cantidad devuelta,
+## ya aplicada: lo que la UI prometio antes de confirmar y lo que se cobro.
+@warning_ignore("unused_signal")
+signal process_cancelled(building_node: Node3D, process_id: String, refunded: Dictionary)
 
 # ── Construction ──
 @warning_ignore("unused_signal")
@@ -124,6 +128,10 @@ signal workers_changed(used: int, total: int)
 signal morale_changed(new_morale: int)
 @warning_ignore("unused_signal")
 signal consumption_failed(resource: String)
+## Hambruna: el impago ya no se perdona y muere gente. `deaths` es cuanta murio
+## de verdad, `population` lo que queda despues (nunca por debajo del suelo).
+@warning_ignore("unused_signal")
+signal population_starved(deaths: int, population: int)
 
 # ── Army ──
 @warning_ignore("unused_signal")
@@ -134,6 +142,12 @@ signal unit_trained(unit_id: String)
 signal army_changed()
 @warning_ignore("unused_signal")
 signal army_upkeep_unpaid(gold_short: int)
+## Entrenamiento cancelado a mano. `refunded` es recurso -> cantidad devuelta.
+@warning_ignore("unused_signal")
+signal unit_training_cancelled(unit_id: String, refunded: Dictionary)
+## Desercion: al ejercito sin paga se le va la tropa, la mas cara primero.
+@warning_ignore("unused_signal")
+signal army_deserted(unit_id: String, count: int)
 
 # ── Combat ──
 ## Emitted only by CombatManager. `side`: 0 = player, 1 = enemy.

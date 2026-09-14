@@ -9,6 +9,9 @@ extends Node
 var _units: Dictionary = {}   # unit_id (String) -> count (int)
 var _training: Array = []     # [{id: String, remaining: float, duration: float}]
 var _upkeep_accum := 0.0
+## Tics de mantenimiento seguidos sin poder pagar. Se reinicia en cuanto se paga
+## uno entero. Viaja en el guardado: la deuda no se perdona al cerrar el juego.
+var _unpaid_ticks := 0
 
 var _type_map := {
 	"gold": ResourceManager.Type.GOLD,
@@ -34,6 +37,10 @@ func get_total_units() -> int:
 
 func get_training() -> Array:
 	return _training
+
+## Tics seguidos de mantenimiento impagado. Cero significa al corriente.
+func get_unpaid_ticks() -> int:
+	return _unpaid_ticks
 
 func get_power() -> int:
 	var power := 0
@@ -99,6 +106,30 @@ func train(unit_id: String) -> bool:
 	EventBus.army_changed.emit()
 	return true
 
+## Lo que devolveria cancelar ese entrenamiento ahora mismo, sin cancelarlo.
+## La UI lo ensena junto al boton: nadie deberia descubrir la tasa perdiendola.
+func get_training_refund(index: int) -> Dictionary:
+	if index < 0 or index >= _training.size():
+		return {}
+	var def := GameConfig.get_unit_def(str(_training[index].get("id", "")))
+	return GameConfig.get_cancel_refund(def.get("cost", {}))
+
+## Cancela una unidad en entrenamiento y devuelve parte de lo pagado.
+## Hasta ahora entrenar era irreversible: pulsar ENTRENAR por error costaba la
+## unidad entera y no habia forma de deshacerlo. Devuelve el reembolso abonado.
+func cancel_training(index: int) -> Dictionary:
+	if index < 0 or index >= _training.size():
+		return {}
+	var unit_id := str(_training[index].get("id", ""))
+	var refund := get_training_refund(index)
+	_training.remove_at(index)
+	for res_name in refund:
+		if _type_map.has(res_name):
+			ResourceManager.add(_type_map[res_name], refund[res_name])
+	EventBus.unit_training_cancelled.emit(unit_id, refund)
+	EventBus.army_changed.emit()
+	return refund
+
 # ── Internal ──
 
 func _advance_training(delta: float) -> void:
@@ -122,6 +153,8 @@ func _advance_training(delta: float) -> void:
 func _advance_upkeep(delta: float) -> void:
 	if get_total_units() <= 0:
 		_upkeep_accum = 0.0
+		# Sin tropa no hay deuda que arrastrar.
+		_unpaid_ticks = 0
 		return
 	var interval := GameConfig.get_army_upkeep_interval()
 	if interval <= 0.0:
@@ -137,14 +170,52 @@ func _pay_upkeep() -> void:
 		var def := GameConfig.get_unit_def(id)
 		due += _units[id] * int(def.get("upkeep_gold", 0))
 	if due <= 0:
+		_unpaid_ticks = 0
 		return
 	var have := ResourceManager.get_amount(ResourceManager.Type.GOLD)
 	if have >= due:
 		ResourceManager.spend(ResourceManager.Type.GOLD, due)
-	else:
-		if have > 0:
-			ResourceManager.spend(ResourceManager.Type.GOLD, have)
-		EventBus.army_upkeep_unpaid.emit(due - have)
+		# Una nomina pagada entera borra la deuda: el contador no se arrastra.
+		_unpaid_ticks = 0
+		return
+	if have > 0:
+		ResourceManager.spend(ResourceManager.Type.GOLD, have)
+	_unpaid_ticks += 1
+	EventBus.army_upkeep_unpaid.emit(due - have)
+	# Dos tics de gracia. Al tercero la tropa deja de creerse las promesas.
+	if GameConfig.unpaid_hurts(_unpaid_ticks):
+		_desert()
+
+## Un ejercito sin paga se deshace por arriba: se va primero la unidad mas cara
+## de mantener, que es justo la que el jugador no queria perder. Es la
+## consecuencia la que ensena a no sobrepasarse, no el aviso.
+func _desert() -> void:
+	var unit_id := _costliest_unit()
+	if unit_id.is_empty():
+		return
+	var removed := remove_units({unit_id: GameConfig.desertion_units_per_tick})
+	var gone: int = int(removed.get(unit_id, 0))
+	if gone <= 0:
+		return
+	var def := GameConfig.get_unit_def(unit_id)
+	EventBus.army_deserted.emit(unit_id, gone)
+	EventBus.notification_posted.emit(
+		Tr.t("NOTIF_DESERTION") % [gone, Tr.t(def.get("name", unit_id))],
+		"danger", UITheme.DANGER)
+
+## La mas cara de mantener entre las que quedan. En empate gana la mas antigua
+## del diccionario, que basta para que el resultado sea siempre el mismo.
+func _costliest_unit() -> String:
+	var worst := ""
+	var worst_upkeep := -1
+	for id in _units:
+		if _units[id] <= 0:
+			continue
+		var upkeep := int(GameConfig.get_unit_def(id).get("upkeep_gold", 0))
+		if upkeep > worst_upkeep:
+			worst_upkeep = upkeep
+			worst = id
+	return worst
 
 func _convert_cost(cost_dict: Dictionary) -> Dictionary:
 	var result := {}
@@ -184,6 +255,7 @@ func get_save_data() -> Dictionary:
 		"units": _units.duplicate(),
 		"training": _training.duplicate(true),
 		"upkeep_accum": _upkeep_accum,
+		"unpaid_ticks": _unpaid_ticks,
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -199,10 +271,13 @@ func load_save_data(data: Dictionary) -> void:
 			"duration": float(t.get("duration", 1.0)),
 		})
 	_upkeep_accum = float(data.get("upkeep_accum", 0.0))
+	# Un guardado anterior a la desercion no trae contador: empieza a cero.
+	_unpaid_ticks = int(data.get("unpaid_ticks", 0))
 	EventBus.army_changed.emit()
 
 func reset() -> void:
 	_units.clear()
 	_training.clear()
 	_upkeep_accum = 0.0
+	_unpaid_ticks = 0
 	EventBus.army_changed.emit()
