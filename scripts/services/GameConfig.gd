@@ -941,3 +941,40 @@ func unpaid_hurts(unpaid_ticks: int) -> bool:
 ## como "Tormenta en marcha", el Diezmo incluido — que es cuando mas duele.
 func _storm_cycle_running() -> bool:
 	return StormManager.get_phase() != StormCycle.Phase.CALM
+
+# ══════════════════════════════════════════════════════════════════════
+# ── La cola abierta y lo que la Tormenta se lleva ──
+# ══════════════════════════════════════════════════════════════════════
+# La cola no se bloquea en ninguna fase: vaciar el almacen en procesos y
+# entrenamientos es una decision legitima del jugador, y prohibirsela seria
+# quitarle la unica palanca que tiene contra el Diezmo.
+#
+# El agujero que se cierra aqui no era cancelar colas: era llenarlas. El coste de
+# un proceso se paga al instante, asi que meter el almacen en la cola hacia que
+# los Tasadores auditaran ceros — y como los procesos tienen un margen de 1,5x
+# (pagas 20 de madera, recibes 35), esconder ahi no solo salvaba los recursos,
+# los multiplicaba. Era la jugada dominante del juego.
+
+## Que fraccion de lo pagado sobrevive a la Tormenta. Cero, y no un porcentaje
+## bajo: con cualquier reembolso por encima de cero la cola sigue siendo una caja
+## fuerte mas barata que el Diezmo, que como mucho se lleva el 37,5%. El
+## escondite solo deja de compensar cuando no devuelve absolutamente nada.
+var storm_queue_loss_refund_ratio := 0.0
+
+## Solo la TORMENTA arruina la cola. La Advertencia no cuesta nada y la Ceniza es
+## la ultima ventana para decidir: si la Ceniza ya destruyera, el aviso que se da
+## durante la Ceniza llegaria tarde por definicion y la regla seria injusta.
+func storm_phase_ruins_queue(phase: int) -> bool:
+	return phase == StormCycle.Phase.STORM
+
+## Lo que se salva de una cosa en curso cuando rompe la Tormenta. Misma forma que
+## `get_cancel_refund` a proposito: perderlo por la Tormenta y cancelarlo a mano
+## son la misma operacion con distinto precio, y quien la aplique puede tratarlas
+## igual sin preguntar cual de las dos fue.
+func get_storm_loss_refund(cost: Dictionary) -> Dictionary:
+	var refund := {}
+	for res_name in cost:
+		var amount := int(floor(float(cost[res_name]) * storm_queue_loss_refund_ratio))
+		if amount > 0:
+			refund[res_name] = amount
+	return refund
