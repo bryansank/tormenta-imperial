@@ -307,6 +307,15 @@ const _STRINGS := {
 		"LBL_ARMY_EMPTY": "Aun no tienes tropas. Entrena unidades en el Cuartel.",
 		"NOTIF_UPKEEP_UNPAID": "Sin oro para el ejercito: faltan %d oro",
 
+		# Cancelacion (Tasa de Corrupcion), hambruna y desercion
+		"FMT_CANCEL_REFUND": "Cancelar — devuelve %s",
+		"LBL_CANCEL_NO_REFUND": "Cancelar — sin reembolso",
+		"LBL_CANCEL_RATE": "Tasa de Corrupcion: vuelve el %d%%",
+		"LBL_CANCEL_RATE_STORM": "Con la Tormenta en marcha solo vuelve el %d%%",
+		"FMT_DEMOLISH_IN_PROGRESS": "Hay algo en curso: devuelve %s",
+		"NOTIF_STARVATION": "Hambruna: muere %d habitante por falta de suministros.",
+		"NOTIF_DESERTION": "Desercion: %d %s abandonan el ejercito sin cobrar.",
+
 		# Combat / Expeditions
 		"BTN_SKIRMISH": "ESCARAMUZAS",
 		"BTN_LAUNCH_EXPEDITION": "LANZAR EXPEDICION",
@@ -650,6 +659,15 @@ const _STRINGS := {
 		"LBL_ARMY_EMPTY": "No troops yet. Train units at the Barracks.",
 		"NOTIF_UPKEEP_UNPAID": "No gold for the army: %d gold short",
 
+		# Cancelling (Corruption Rate), famine and desertion
+		"FMT_CANCEL_REFUND": "Cancel — refunds %s",
+		"LBL_CANCEL_NO_REFUND": "Cancel — no refund",
+		"LBL_CANCEL_RATE": "Corruption Rate: %d%% comes back",
+		"LBL_CANCEL_RATE_STORM": "With the Storm under way only %d%% comes back",
+		"FMT_DEMOLISH_IN_PROGRESS": "Something is under way: refunds %s",
+		"NOTIF_STARVATION": "Famine: %d citizen dies for lack of supplies.",
+		"NOTIF_DESERTION": "Desertion: %d %s walk out of the army unpaid.",
+
 		# Combat / Expeditions
 		"BTN_SKIRMISH": "SKIRMISH",
 		"BTN_LAUNCH_EXPEDITION": "LAUNCH EXPEDITION",
@@ -730,6 +748,15 @@ func res_upper(res_id: String) -> String:
 
 func res_cap(res_id: String) -> String:
 	return _RESOURCES_CAP.get(_locale, {}).get(res_id, res_id)
+
+## Lista legible de cantidades por recurso ({"gold": 21} -> "21 oro").
+## Vive aqui porque el nombre del recurso ya es cosa del idioma, y porque el
+## reembolso de una cancelacion tiene que leerse igual en los dos paneles.
+func amount_list(amounts: Dictionary) -> String:
+	var parts: Array = []
+	for res_id in amounts:
+		parts.append("%d %s" % [int(amounts[res_id]), res_name(res_id)])
+	return " | ".join(parts)
 
 func set_locale(locale: String) -> void:
 	_locale = locale

@@ -683,3 +683,61 @@ var phase_triggers := {
 var early_consumption_interval := 60.0     # Phase 1-2: every 60s (vs 30s normal)
 var early_morale_penalty := -3             # Phase 1-2: gentle penalty (vs -8)
 var early_growth_interval := 40.0          # Phase 1-2: slow growth (vs 20s)
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Cancelacion, hambruna y suelo de ruina ──
+# ══════════════════════════════════════════════════════════════════════
+# Tres reglas que van juntas: lo que cuesta arrepentirse, lo que cuesta no pagar
+# y hasta donde se puede caer. Seccion aparte a proposito, para que el balance de
+# la Tormenta y el de la economia se toquen sin pisarse.
+
+## La Tasa de Corrupcion: que fraccion de lo pagado vuelve al cancelar un
+## proceso, un minado o un entrenamiento — y lo que hoy se perdia al demoler con
+## algo en curso. En calma solo se pierde la comision; con la Tormenta en marcha
+## los Tasadores ya vienen de camino y la fuga de capitales se cobra el doble.
+## Si cancelar fuese igual de barato siempre, cancelar seria gratis.
+var cancel_refund_ratio := 0.70
+var cancel_refund_ratio_storm := 0.40
+
+## Tics de impago que se perdonan antes de que empiece a morir gente y a desertar
+## tropa. Dos de gracia: al tercero duele. Margen para reaccionar, no para
+## ignorarlo.
+var unpaid_grace_ticks := 2
+## Cuanto se pierde por tic una vez agotada la gracia.
+var starvation_deaths_per_tick := 1
+var desertion_units_per_tick := 1
+## Moral que cuestan la hambruna y la desercion, ademas del golpe que ya pega el
+## impago por si mismo.
+var starvation_morale_penalty := -6
+var desertion_morale_penalty := -5
+
+## El suelo de ruina: se puede caer hasta el fondo, pero no se pierde la partida.
+## Siempre queda alguien para volver a empezar.
+var population_floor := 1
+
+## Cuanto devuelve cancelar ahora mismo.
+func get_cancel_refund_ratio() -> float:
+	return cancel_refund_ratio_storm if _storm_cycle_running() else cancel_refund_ratio
+
+## Reembolso exacto de un coste (nombre de recurso -> cantidad). Redondea hacia
+## abajo, y es exactamente el numero que la UI ensena antes de confirmar: nadie
+## deberia descubrir el porcentaje perdiendolo.
+func get_cancel_refund(cost: Dictionary) -> Dictionary:
+	var ratio := get_cancel_refund_ratio()
+	var refund := {}
+	for res_name in cost:
+		var amount := int(floor(float(cost[res_name]) * ratio))
+		if amount > 0:
+			refund[res_name] = amount
+	return refund
+
+## Si un contador de tics impagados ya agoto la gracia y toca cobrarselo.
+func unpaid_hurts(unpaid_ticks: int) -> bool:
+	return unpaid_ticks > unpaid_grace_ticks
+
+## UNICA lectura de la fase de la Tormenta en todo el sistema de cancelacion.
+## Aislada a proposito: cuando el ciclo gane fases nuevas o cambien de nombre,
+## adaptarlo es esta linea y ninguna mas. Cualquier fase que no sea calma cuenta
+## como "Tormenta en marcha", el Diezmo incluido — que es cuando mas duele.
+func _storm_cycle_running() -> bool:
+	return StormManager.get_phase() != StormCycle.Phase.CALM

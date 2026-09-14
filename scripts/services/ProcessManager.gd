@@ -21,8 +21,27 @@ func get_mining_info(deposit_id: String) -> Dictionary:
 func is_busy(node: Node3D) -> bool:
 	return _active.has(node)
 
-func cancel(node: Node3D) -> void:
+## Lo que devolveria cancelar ahora mismo, sin cancelar nada. La UI lo ensena
+## antes de que el jugador confirme, y es el mismo numero que luego se abona.
+func get_refund_preview(node: Node3D) -> Dictionary:
+	if not _active.has(node):
+		return {}
+	return GameConfig.get_cancel_refund(_active[node].get("cost", {}))
+
+## Cancela el proceso o minado en curso y devuelve parte de lo pagado.
+## Devuelve el reembolso realmente abonado (recurso -> cantidad); vacio si no
+## habia nada en curso o si lo que habia no costaba recursos (un minado).
+func cancel(node: Node3D) -> Dictionary:
+	if not _active.has(node):
+		return {}
+	var info: Dictionary = _active[node]
+	var refund := GameConfig.get_cancel_refund(info.get("cost", {}))
 	_active.erase(node)
+	for res_name in refund:
+		if _type_map.has(res_name):
+			ResourceManager.add(_type_map[res_name], refund[res_name])
+	EventBus.process_cancelled.emit(node, str(info.get("id", "")), refund)
+	return refund
 
 func get_active(node: Node3D) -> Dictionary:
 	return _active.get(node, {})
@@ -47,6 +66,9 @@ func start_process(node: Node3D, process: Dictionary) -> bool:
 		"remaining": process["duration"],
 		"duration": process["duration"],
 		"produces": process["produces"],
+		# Lo pagado se guarda con el proceso: sin esto, cancelar no puede
+		# devolver nada porque nadie recuerda cuanto costo.
+		"cost": process.get("cost", {}).duplicate(),
 	}
 	EventBus.process_started.emit(node, process["id"])
 	return true
@@ -65,6 +87,8 @@ func start_mining(node: Node3D, deposit_id: String) -> bool:
 		"remaining": data["duration"],
 		"duration": data["duration"],
 		"produces": data["produces"],
+		# Minar no cuesta recursos: cancelar solo cuesta el tiempo invertido.
+		"cost": {},
 	}
 	EventBus.mining_started.emit(node, deposit_id)
 	return true
@@ -121,6 +145,7 @@ func get_save_data() -> Array:
 				"remaining": info["remaining"],
 				"duration": info["duration"],
 				"produces": info["produces"],
+				"cost": info.get("cost", {}),
 			})
 		elif node.has_meta("cell"):
 			var cell: Vector2i = node.get_meta("cell")
@@ -132,6 +157,7 @@ func get_save_data() -> Array:
 				"remaining": info["remaining"],
 				"duration": info["duration"],
 				"produces": info["produces"],
+				"cost": info.get("cost", {}),
 				"is_deposit": true,
 			})
 	return result
@@ -148,5 +174,8 @@ func load_save_data(data: Array) -> void:
 			"remaining": entry["remaining"],
 			"duration": entry["duration"],
 			"produces": entry["produces"],
+			# Las partidas guardadas antes de que existiera la cancelacion no
+			# traen coste: se cargan igual, y cancelarlas no devuelve nada.
+			"cost": entry.get("cost", {}),
 		}
 
