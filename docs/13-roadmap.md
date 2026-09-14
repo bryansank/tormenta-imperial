@@ -3,14 +3,14 @@
 Development roadmap for Tormenta Imperial. Ordered by priority and dependency.
 Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nice-to-have
 
-> The management/economy core is complete and shippable. Everything below the
-> "Shipped" section is future work. Combat is the next major pillar.
+> The management core and the Imperial Storm cycle are both live. The storm is the
+> game's clock: everything below is measured against it.
 
 ---
 
 ## ✅ Shipped (current build)
 
-The full management + economy loop is playable end-to-end:
+The management loop, the tactical board and the storm cycle all run in-game:
 
 - ✅ Grid building placement (25×25), 14 buildings, rotation, move, demolish
 - ✅ 4 resources + 3-era unlock, passive production, manual processes, mining
@@ -20,72 +20,75 @@ The full management + economy loop is playable end-to-end:
 - ✅ 9 milestones + Imperial Victory
 - ✅ Tech tree (15 techs, 3 branches)
 - ✅ Save/load, offline progression
+- ✅ Audio: `AudioManager` (runtime buses, signal-driven) + 4 music tracks + 16 SFX
+- ✅ **Tactical encounter**: 8×8 board, turn order, move/attack/defend/wait, enemy AI,
+  `Encounter` + `CombatAI` as pure headless-testable models (59 tests)
+- ✅ **The Imperial Storm**: four-phase cycle (warning → storm → tithe → aftermath),
+  production collapse, morale bleed, severity scaled by industrial footprint
+- ✅ **The Tithe is fought, not just paid**: `CombatManager.start_defense()` puts the
+  garrison on the board against the Assessors; repel it and they take nothing
+- ✅ **Storm HUD on screen** (about to become a phase indicator — see Milestone 1)
+- ✅ **Building health**: `BuildingHealth` autoload — storm damage, ruins that stop
+  producing, proportional repair, and towers that mitigate only while standing
 - 🚧 Cloud saves: `CloudSaveManager` (Supabase REST, auth + save/load) implemented
   but **unwired** — nothing calls it yet; needs `.env` config + settings UI
-- ✅ Audio: `AudioManager` (runtime buses, signal-driven) + 4 music tracks + 16 SFX
-- ✅ i18n (ES/EN), notifications + activity log, mobile touch controls
-- ✅ UI: global theme, hamburger sidebar, left-drag grab-pan, stepped camera rotation
-- ✅ **Army as production**: Barracks trains units (cost + time + upkeep), gated by era,
-  capacity scales with base, Military Power score — the bridge into combat
 
 ---
 
-## 🚧 Milestone A — Polish & Foundations (near-term)
+## 🚧 Milestone 1 — Economic floor
 
-Small, high-value items that harden the current game and prep for combat.
+Tuning on systems that already exist: the biggest change in feel for the least new code.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Audio: ambient track | ⬜ | Music + SFX done; `assets/audio/ambient/` still empty |
-| Tutorial / onboarding | ⬜ | "¿Qué hacer?" panel exists; needs guided first-run flow |
-| Touch grab-pan parity | ⬜ | Left-mouse now grabs terrain 1:1; make one-finger touch match |
-| Balance pass | 💤 | Tune costs/durations once combat economy is known |
-| Settings menu (audio/lang/save) | ⬜ | Central options panel; also the natural home for cloud-save login |
-| Wire cloud saves | ⬜ | Call `CloudSaveManager` from settings/save flow + `.env` setup |
+| Shared storage pool | ⬜ | One cap for the **sum** of all resources, not 800 of each. Era 1 = 300, Era 3 = 1000, +500/warehouse. Touches `GameConfig.get_storage_cap`, `ResourceManager.add`, `ResourceHUD`, save load |
+| **Three-phase storm cycle** | ⬜ | `CALM → WARNING → ASH → STORM → TITHE`, plus a `WARNING → CALM` false alarm that banks +1 severity for next time. Calm interval becomes a random range; phase durations stay fixed. Two production multipliers (ash 0.50, storm 0.15) instead of one |
+| Phase indicator instead of a clock | ⬜ | The storm HUD stops counting down: colour and icon for the current phase, nothing in calm. Severity is no longer announced |
+| Queue stays open, the storm ruins it | ⬜ | Processes, mining and training can run through all three phases, but anything still in flight when the STORM lands is lost with its cost. Closes the "hide the warehouse in the queue" hole — which also paid a 1.5× margin |
+| Corruption tax (cancellation) | ⬜ | There is no cancel button today: `ProcessManager.cancel()` is only reached by demolition and silently loses 100%. Add explicit cancellation returning 70% in calm, 40% during the phases |
+| Famine & desertion | ⬜ | Sustained unpaid consumption kills population; sustained unpaid upkeep deserts units. Both APIs already exist (`remove_population`, `remove_units`) |
+| Ruin floor | ⬜ | The Nucleo is never damaged or destroyed and population never hits 0 — there is always a thread to rebuild from. No game-over screen |
 
-## ⬜ Milestone B — Combat Foundation (PVE)
+## ⬜ Milestone 2 — The storm bites
 
-The next major pillar. Turn-based tactical combat on a grid.
+| Item | Status | Notes |
+|------|--------|-------|
+| Building health system | ✅ | `BuildingHealth` autoload: damage, ruined state that halts output, proportional repair cost, ash/blackened overlay, state persisted on the node |
+| Repair | ✅ | Costs scale with the damage taken — a scratch is cheap, a ruin nearly costs rebuilding |
+| Storm sky | 🚧 | `StormSky.gd` — fog, darkening and sky scaled by severity. With severity hidden, this is the player's only read on what is coming |
+| Selective damage | ⬜ | Today `_damage_buildings()` shuffles. Needs priority: defence and morale first, then housing, then production. Never the Nucleo, never the last sawmill or gold mine (anti-softlock) |
+| Minimum Quota | ⬜ | An empty warehouse no longer means a free tithe: the debt is collected in buildings and workers instead |
+| Arms race | ⬜ | `StormCycle.storms_survived` already tracked — feed it into `assessor_roster()` so winning today means heavier guns tomorrow |
+| Defensive towers | 🚧 | ✅ mitigate storm damage (15% each, 60% cap, only while standing) · ⬜ still don't add a unit to the defensive board |
 
-- ⬜ Tactical battle grid + turn/initiative system
-- ⬜ Unit stats model (HP, attack, defense, move, range)
-- ⬜ Actions: move / attack / defend / wait
-- ⬜ Enemy AI (target selection, pathfinding)
-- ⬜ Battle start/resolution flow + rewards back into the economy
-- ⬜ **C# migration** for perf-sensitive parts (unit AI, combat math, pathfinding) — first real C# in the project
+## ⬜ Milestone 3 — Expedition & the double clock
 
-## 🚧 Milestone C — Units & Military Buildings
+Tasks T022-T029 are specified in `specs/001-combate-pve/tasks.md`.
 
-Turns Barracks/Tower from placeholders into a real production chain.
+- ⬜ `ExpeditionGenerator` — seeded branching map, rosters by depth and era, draft options
+- ⬜ `Expedition` model, `launch_expedition()`, real skirmish panel, map view, draft modal
+- ⬜ Chained encounters with attrition and permadeath
+- ⬜ **Unit lockout**: `get_garrison()` excludes units away on expedition
+- ⬜ **Defensive auto-resolve**: run the *same* `Encounter` headless with the AI driving
+  both sides — no separate combat maths
+- ⬜ Storm notifications drawn over `BattleScreen`
 
-- ✅ Unit production from Barracks (infantry, artillery, vehicles) — `ArmyManager`
-- ✅ Army management UI (`ArmyPanel`) with Military Power, capacity, training queue
-- ✅ Upkeep economy for units (gold drain per tick)
-- ⬜ Unit desertion / morale coupling when upkeep unpaid (currently just a warning)
-- ⬜ Army capacity scaling from HQ level (currently barracks-only)
-- ⬜ Tower / defensive building behavior
-- ⬜ Wire "Commander" / "General" milestones to real military gameplay
+## ⬜ Milestone 4 — The Final Audit
 
-## ⬜ Milestone D — Missions & Contracts
-
-- ⬜ Timed delivery / production contracts for rewards
-- ⬜ Mission board UI
-- ⬜ PVE skirmish missions (uses Milestone B)
-
-## ⬜ Milestone E — Multiplayer (PVP & Co-op)
-
-Depends on combat being solid. Self-hosted Nakama (Docker).
-
-- ⬜ Nakama backend setup (Docker)
-- ⬜ Account / auth (extend Supabase auth already used for cloud saves)
-- ⬜ Asynchronous PVP: attack another player's base with your army
-- ⬜ Co-op play
-- ⬜ Base snapshot / defense serialization for async battles
+- ⬜ HQ level 3 arms a siege instead of instantly winning
+- ⬜ 3-5 chained defensive encounters, attrition, no retraining between waves
+- ⬜ Winning stops the storm permanently and changes the UI
+- ⬜ Losing sacks the settlement but the siege can be summoned again after rebuilding
 
 ## 💤 Backlog — Nice-to-have
 
+- 💤 Tutorial / guided first run
+- 💤 Ambient audio track (`assets/audio/ambient/` still empty)
+- 💤 Real unit icons on the board (currently the name's initial)
+- 💤 Touch grab-pan parity with mouse
+- 💤 Settings home for cloud-save login + wiring `CloudSaveManager`
 - 💤 More buildings / decorations & a second island biome
-- 💤 Weather / day-night visual layer (dieselpunk atmosphere)
+- 💤 Weather / day-night visual layer
 - 💤 Achievements / statistics
 - 💤 Steam / mobile store packaging
 
@@ -94,9 +97,18 @@ Depends on combat being solid. Self-hosted Nakama (Docker).
 ## Dependency order
 
 ```
-Shipped ──▶ A Polish ──▶ B Combat (PVE) ──▶ C Units ──▶ D Missions
-                                   └────────────────────▶ E Multiplayer (needs C)
+M1 economy ──────────────┐
+    │                    │
+    └──▶ 2.1 building ──▶ M2 storm bites
+         health           │
+                          ├──▶ M3 expedition + double clock
+                          └──▶ M4 Final Audit
 ```
 
-Combat (B) is the gate: units, missions, and multiplayer all build on it, and it
-introduces C# to the codebase for the first time.
+Milestone 1 comes first because it is tuning, not construction. Milestone 4 depends only
+on Milestone 2 — the game can be finished without the expedition if time runs short.
+
+## Out of scope
+
+PvP and co-op · meta-progression between expeditions · non-combat expedition nodes ·
+enabling cloud saves · store publishing.
