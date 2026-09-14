@@ -552,6 +552,28 @@ var combat_map_depth := Vector2i(4, 6)
 var combat_map_branching := Vector2i(2, 3)
 var combat_draft_options := 3
 
+## Node risk (0 low / 1 medium / 2 high). The same dial pushes the roster up and
+## the loot with it, so taking the dangerous road is a bet, not a punishment.
+var combat_risk_enemy_scale := 0.20
+var combat_risk_reward_bonus := 0.35
+
+## Enemy roster size at depth 0, era 1, risk 0. Every pressure term grows it from
+## here up to `combat_deploy_cap`.
+var combat_enemy_base_slots := 2
+
+## What one draft pick is worth. Kept modest on purpose: a run is 6-8 fights, not
+## thirty, so a single pick should tilt a fight, never decide the expedition.
+var combat_draft_values := {
+	"atk": 2,
+	"def": 2,
+	"move": 1,
+	"initiative": 2,
+	"heal_pct": 0.3,
+}
+## A draft aimed at one unit type instead of the whole party hits harder, because
+## it helps fewer units.
+var combat_draft_focus_multiplier := 2
+
 ## Base reward per cleared encounter, scaled by node depth and risk.
 var combat_reward_base := {"gold": 60, "wood": 30}
 
