@@ -10,6 +10,12 @@ extends Node
 ## training, fighting — is measured against the next one.
 
 const StormCycleScript := preload("res://scripts/storm/StormCycle.gd")
+## El orden en que se vacía la bolsa. El oro primero porque es lo que duele
+## anotar, y la madera al final porque es lo que permite reconstruir.
+const _TITHE_ORDER: Array = [
+	ResourceManager.Type.GOLD, ResourceManager.Type.STEEL,
+	ResourceManager.Type.OIL, ResourceManager.Type.WOOD,
+]
 
 var _cycle: StormCycle = null
 ## The storm stays asleep until the base is real enough to be noticed. In the
@@ -142,33 +148,90 @@ func _apply_storm_tick(phase: int) -> void:
 	PopulationManager.adjust_morale(-roundi(bleed * GameConfig.storm_morale_storm_multiplier))
 	_damage_buildings(severity)
 
-## La ceniza no cae sobre todo por igual: muerde unos pocos edificios al azar por
-## tic. Que se sienta caprichosa es lo que hace que proteger la base importe, en
-## vez de ser un impuesto plano que se paga y ya.
+## La Tormenta no rompe al azar: rompe con criterio. Gasta sus mordiscos del tic
+## en el escalón más alto que tenga gente en pie y solo baja al siguiente cuando
+## ese se le acaba.
 ##
-## El núcleo queda fuera: perder la producción del núcleo por una tormenta
-## temprana deja al jugador sin salida, y una tormenta sin salida no enseña nada.
+## Que la prioridad exista es lo que convierte el daño en una conversación: la
+## Tormenta te quita primero el colchón de moral y la defensa, después el techo,
+## y solo cuando viene de verdad fuerte se mete con lo que te da de comer.
 func _damage_buildings(severity: int) -> void:
-	var targets: Array = []
+	var towers: int = _standing_towers()
+	var hits: int = GameConfig.storm_buildings_hit_per_tick
+	for tier in damage_priority(severity):
+		if hits <= 0:
+			return
+		# Dentro del escalón sigue mandando el azar: entre dos estatuas la
+		# Tormenta no elige, y esa arbitrariedad de detalle es la que hace que
+		# la base se sienta expuesta en vez de auditada.
+		tier.shuffle()
+		for node in tier:
+			if hits <= 0:
+				return
+			var amount: int = GameConfig.get_storm_damage(
+				severity, BuildingHealth.get_max_health(node), towers)
+			BuildingHealth.damage_building(node, amount)
+			hits -= 1
+
+## Los escalones de objetivos, del más prioritario al menos, ya filtrados de todo
+## lo intocable. Público porque es la regla que hay que poder auditar sin
+## encender una tormenta entera encima de una base de mentira.
+##
+## Fuera del reparto, pase lo que pase:
+##   · lo que ya está en ruinas — no se rompe dos veces;
+##   · el último Aserradero y la última Mina de oro **en pie** — sin madera ni
+##     oro no hay con qué reparar, y una base que no puede repararse ya perdió
+##     sin haberse enterado. Es la regla anti-softlock y no admite excepciones;
+##   · el Núcleo, que `BuildingHealth` ya blinda por su cuenta. Aquí se le
+##     pregunta a él en vez de repetir la regla: el guard no se duplica, pero un
+##     objetivo invulnerable seguiría gastando un mordisco del tic en no hacer
+##     nada, y el reparto tiene que ser honesto sobre a quién apunta.
+func damage_priority(severity: int) -> Array:
+	var defense: Array = []
+	var shelter: Array = []
+	var economy: Array = []
+	var last_standing: Dictionary = _last_standing_essentials()
+
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info["data"]
-		if data.is_core or data.is_decoration:
+		var node: Node3D = info["node"]
+		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
+			continue
+		if BuildingHealth.is_core(node):
+			continue
+		if last_standing.get(data.id, null) == node:
+			continue
+		if data.is_decoration or data.id in GameConfig.storm_targets_defense:
+			defense.append(node)
+		elif data.id in GameConfig.storm_targets_shelter:
+			shelter.append(node)
+		else:
+			economy.append(node)
+
+	var tiers: Array = [defense, shelter]
+	# La producción solo entra con severidad alta. Una tormenta menor que ya
+	# tumba fundiciones no deja ventana para rehacerse, y sin ventana el ciclo
+	# deja de ser presión y pasa a ser una cuenta atrás.
+	if severity >= GameConfig.storm_production_target_severity:
+		tiers.append(economy)
+	return tiers
+
+## Para cada edificio esencial, el único que queda en pie — o nada si hay más de
+## uno, porque entonces perder uno no cierra ninguna puerta.
+func _last_standing_essentials() -> Dictionary:
+	var standing: Dictionary = {}
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info["data"]
+		if not data.id in GameConfig.storm_essential_buildings:
 			continue
 		var node: Node3D = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
-		targets.append(node)
-	if targets.is_empty():
-		return
-
-	targets.shuffle()
-	var towers: int = _standing_towers()
-	var hits: int = mini(GameConfig.storm_buildings_hit_per_tick, targets.size())
-	for i in range(hits):
-		var node: Node3D = targets[i]
-		var amount: int = GameConfig.get_storm_damage(
-			severity, BuildingHealth.get_max_health(node), towers)
-		BuildingHealth.damage_building(node, amount)
+		if standing.has(data.id):
+			standing[data.id] = null  # Hay dos: ya ninguno es el último.
+		else:
+			standing[data.id] = node
+	return standing
 
 ## Solo cuentan las torres en pie: una torre en ruinas no protege nada, que es
 ## justo lo que obliga a repararlas antes de la siguiente.
@@ -195,9 +258,14 @@ func _begin_tithe(severity: int) -> void:
 
 ## The force that comes to collect. A line of Assessors with guns behind it,
 ## growing with severity — the more you are worth, the more they send.
+##
+## Y creciendo también con cada Diezmo que le has repelido. No es rencor: es
+## que una provincia capaz de echarlos figura en el libro como una que puede
+## pagar más, y la próxima partida de gasto se aprueba sola. Ganarles hoy no
+## quita el problema, lo encarece.
 func assessor_roster(severity: int) -> Dictionary:
-	var force: int = clampi(
-		GameConfig.storm_tithe_base_force + severity - 1, 1, GameConfig.combat_deploy_cap)
+	var raw: float = float(GameConfig.storm_tithe_base_force + severity - 1) 		* GameConfig.get_assessor_escalation(storms_survived())
+	var force: int = clampi(roundi(raw), 1, GameConfig.combat_deploy_cap)
 	var guns: int = force / 3
 	var line: int = maxi(1, force - guns)
 	var roster: Dictionary = {"infantry": line}
@@ -222,22 +290,118 @@ func _pay_tithe(severity: int) -> void:
 	EventBus.tithe_resolved.emit(false, taken)
 	_settle()
 
-## Takes a share of everything in store. A percentage and not a flat sum on
-## purpose: walking into a storm with full warehouses is the mistake the player
-## has to learn, and spending beforehand is the correct answer.
+## La Cuota Mínima. Antes esto era un porcentaje de lo almacenado y nada más, y
+## por eso no servía: con el almacén en cero se llevaban cero, así que vaciar la
+## bolsa en la cola antes de que bajaran convertía el Diezmo en un trámite
+## gratis. Era la jugada dominante del juego.
+##
+## Ahora hay una deuda que existe tengas lo que tengas, y lo que no se cubra con
+## recursos **se cobra en carne**: primero lo que es lujo o fuerza —decoraciones
+## y edificios militares— y solo después los obreros. Nunca el Núcleo y nunca
+## el último habitante: se puede caer hasta el fondo, no se puede perder.
+##
+## El orden importa tanto como las cifras. Empezar por las estatuas y acabar por
+## la gente es lo que hace que el Diezmo se lea como una tasación y no como un
+## saqueo: los Tasadores embargan bienes, y solo cuando no quedan bienes anotan
+## personas.
 func _collect_tithe(severity: int) -> Dictionary:
-	var ratio: float = clampf(
-		GameConfig.storm_tithe_ratio * (float(severity) / float(maxi(1, GameConfig.storm_severity_max)) + 0.5),
-		0.0, 0.9)
 	var taken: Dictionary = {}
-	for type in [ResourceManager.Type.GOLD, ResourceManager.Type.STEEL,
-			ResourceManager.Type.OIL, ResourceManager.Type.WOOD]:
-		var held: int = ResourceManager.get_amount(type)
-		var bite: int = int(float(held) * ratio)
-		if bite > 0:
-			ResourceManager.spend(type, bite)
-			taken[_resource_name(type)] = bite
+	var debt: int = GameConfig.get_tithe_debt(
+		severity, ProgressionManager.current_era, ResourceManager.get_total_stored())
+
+	debt -= _take_from_stores(debt, taken)
+	if debt <= 0:
+		return taken
+	debt -= _take_in_seizures(debt, taken)
+	if debt <= 0:
+		return taken
+	_take_in_workers(debt, taken)
 	return taken
+
+## Lo que se cobra de la bolsa. Dos pasadas a propósito: la primera reparte a
+## prorrata para que el recorte se sienta en las cuatro columnas a la vez, la
+## segunda barre lo que falte para que la cuenta cuadre exacta. Un Tasador no
+## deja pendiente un resto de redondeo.
+func _take_from_stores(debt: int, taken: Dictionary) -> int:
+	var total: int = ResourceManager.get_total_stored()
+	if debt <= 0 or total <= 0:
+		return 0
+	var target: int = mini(debt, total)
+	var collected: int = 0
+	for sweep in 2:
+		for type in _TITHE_ORDER:
+			if collected >= target:
+				break
+			var held: int = ResourceManager.get_amount(type)
+			if held <= 0:
+				continue
+			var bite: int = held if sweep == 1 else int(float(target) * float(held) / float(total))
+			bite = mini(bite, target - collected)
+			if bite <= 0:
+				continue
+			ResourceManager.spend(type, bite)
+			var key: String = _resource_name(type)
+			taken[key] = int(taken.get(key, 0)) + bite
+			collected += bite
+	return collected
+
+## El embargo. Deja los bienes en ruinas en vez de borrarlos porque un edificio
+## dañado no se destruye nunca (2.1): lo que se llevan es el uso, y recuperarlo
+## cuesta una reparación — que es justo la deuda con la siguiente tormenta.
+func _take_in_seizures(debt: int, taken: Dictionary) -> int:
+	var value: int = maxi(1, GameConfig.storm_tithe_building_value)
+	var settled: int = 0
+	var seized: int = 0
+	for node in _seizable_buildings():
+		if settled >= debt:
+			break
+		BuildingHealth.damage_building(node, BuildingHealth.get_max_health(node))
+		seized += 1
+		settled += value
+	if seized > 0:
+		taken["buildings"] = seized
+		EventBus.notification_posted.emit(
+			Tr.t("STORM_TITHE_SEIZED") % seized, "danger", UITheme.DANGER)
+	return settled
+
+## Lo embargable, en el orden en que se anota: primero el lujo, después la
+## fuerza. Que las estatuas caigan antes que el Cuartel no es piedad, es
+## contabilidad — y de paso es el golpe de moral más legible que existe.
+func _seizable_buildings() -> Array:
+	var luxury: Array = []
+	var military: Array = []
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info["data"]
+		var node: Node3D = info["node"]
+		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
+			continue
+		if BuildingHealth.is_core(node):
+			continue
+		if data.is_decoration:
+			luxury.append(node)
+		elif data.id in GameConfig.storm_targets_defense:
+			military.append(node)
+	luxury.shuffle()
+	military.shuffle()
+	return luxury + military
+
+## Lo último que se cobra. `remove_population()` tiene su propio suelo, así que
+## por muy grande que sea la deuda siempre queda alguien: sin habitantes no hay
+## a quién volver a cobrarle, y una colonia arrasada no paga el año que viene.
+func _take_in_workers(debt: int, taken: Dictionary) -> void:
+	var value: int = maxi(1, GameConfig.storm_tithe_worker_value)
+	var wanted: int = ceili(float(debt) / float(value))
+	if wanted <= 0:
+		return
+	var before: int = PopulationManager.get_population()
+	PopulationManager.remove_population(wanted)
+	var lost: int = before - PopulationManager.get_population()
+	if lost <= 0:
+		return
+	taken["workers"] = lost
+	PopulationManager.adjust_morale(-GameConfig.storm_tithe_worker_morale * lost)
+	EventBus.notification_posted.emit(
+		Tr.t("STORM_TITHE_CONSCRIPTED") % lost, "danger", UITheme.DANGER)
 
 ## Repelling them costs nothing but the fight. Called when the board is won.
 func repel_tithe() -> void:

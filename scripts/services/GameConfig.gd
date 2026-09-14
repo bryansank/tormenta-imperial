@@ -692,6 +692,29 @@ var storm_tower_mitigation_max := 0.6
 ## recibido. Reparar un rasguño es barato; levantar una ruina, casi construirla.
 var storm_repair_cost_ratio := 0.5
 
+## ── A quién muerde primero ──
+## El daño dejó de ser un sorteo. El orden es de balance, no de código: decide
+## qué se siente al perder, y eso se afina en pruebas, no reescribiendo el
+## algoritmo.
+##
+## Primero lo que sostiene la defensa y la moral, **decoraciones incluidas**.
+## Romper una estatua es el golpe más legible que tiene la Tormenta: te quita
+## justo el colchón de moral con el que contabas para aguantarla, y lo hace
+## antes de pasar la cuenta.
+var storm_targets_defense := ["tower", "barracks"]
+## Después el techo. Perder casas duele a plazo —baja el aforo, no la
+## producción—, así que va en segundo escalón y no en el primero.
+var storm_targets_shelter := ["house"]
+## La economía (fundición, refinería, minas, aserraderos, almacenes) solo entra
+## en el reparto a partir de esta severidad. Que una tormenta menor no pueda
+## tocar la fundición es lo que deja margen para rehacerse; si entrara siempre,
+## la primera mala racha sería terminal.
+var storm_production_target_severity := 4
+## La regla anti-softlock: nunca cae el **último** de estos en pie. Sin madera y
+## sin oro no hay con qué reparar, y una base que no puede repararse ya perdió
+## sin que nadie se lo haya dicho todavía.
+var storm_essential_buildings := ["sawmill", "gold_mine"]
+
 func get_storm_damage(severity: int, max_health: int, towers: int) -> int:
 	var raw: float = float(max_health) * storm_damage_per_tick * float(maxi(1, severity))
 	return maxi(1, roundi(raw * (1.0 - get_storm_mitigation(towers))))
@@ -706,6 +729,54 @@ func get_storm_mitigation(towers: int) -> float:
 var storm_tithe_ratio := 0.25
 ## How many enemies the Assessors field, before severity scaling.
 var storm_tithe_base_force := 3
+
+## ── La Cuota Mínima ──
+## El porcentaje solo no bastaba: con el almacén en cero se llevaban cero, así
+## que meter la bolsa en la cola convertía el Diezmo en un trámite gratis. Ahora
+## hay una **deuda base** que no depende de lo que tengas, y lo que no se cubre
+## con recursos se cobra en carne. Los Tasadores no se van con las manos vacías;
+## esa es toda su función en el mundo.
+var storm_tithe_base_debt := 60
+var storm_tithe_debt_per_severity := 40
+var storm_tithe_debt_per_era := 30
+## Lo que salda arruinar un edificio embargado. Alto a propósito: el embargo es
+## el último recurso y tiene que cerrar la cuenta rápido, no desmantelar la base
+## entera por una deuda pequeña.
+var storm_tithe_building_value := 80
+## Lo que salda llevarse a un obrero, y lo que cuesta de moral cada uno. Vale
+## menos que un edificio porque la gente es lo último que se toca y lo que más
+## se nota: un Diezmo que se lleva obreros tiene que doler durante horas.
+var storm_tithe_worker_value := 50
+var storm_tithe_worker_morale := 10
+
+## Carrera armamentística: cada tormenta superada engorda la escolta que vuelve.
+## Ganarles hoy no te quita el problema, te lo encarece — que es exactamente lo
+## que hace una contaduría cuando una provincia demuestra que puede pagar más.
+var storm_assessor_growth_per_win := 0.15
+## Con techo, porque el tablero también lo tiene: sin tope, la escalada dejaría
+## de leerse en cuanto la escolta desbordara `combat_deploy_cap`.
+var storm_assessor_growth_max := 2.0
+
+## Cuánto se llevan de lo almacenado, escalado por severidad. Vive aquí y no en
+## StormManager porque es la curva del impuesto, no el procedimiento de cobro.
+func get_tithe_ratio(severity: int) -> float:
+	return clampf(
+		storm_tithe_ratio * (float(severity) / float(maxi(1, storm_severity_max)) + 0.5),
+		0.0, 0.9)
+
+## La deuda del día. El suelo existe para el que llega con la bolsa vacía, no
+## para abaratarle el Diezmo al que llega lleno: por eso manda el mayor de los
+## dos, y el que acumula sigue pagando el porcentaje de siempre.
+func get_tithe_debt(severity: int, era: int, stored: int) -> int:
+	var floor_debt: int = storm_tithe_base_debt 		+ storm_tithe_debt_per_severity * maxi(0, severity - 1) 		+ storm_tithe_debt_per_era * maxi(0, era - 1)
+	var share: int = int(float(maxi(0, stored)) * get_tithe_ratio(severity))
+	return maxi(floor_debt, share)
+
+## El multiplicador de la escolta por tormentas superadas.
+func get_assessor_escalation(storms_survived: int) -> float:
+	return clampf(
+		1.0 + storm_assessor_growth_per_win * float(maxi(0, storms_survived)),
+		1.0, storm_assessor_growth_max)
 
 func get_storm_first_interval() -> float:
 	return get_duration(storm_first_interval)
