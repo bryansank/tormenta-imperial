@@ -45,7 +45,7 @@ Bonuses are applied via runtime modification of GameConfig values:
 - `tech_production_bonus` — added to production multiplier in ProductionManager
 - `tech_build_speed_bonus` — reduces build time in `get_build_time()`
 - `tech_consumption_reduction` — reduces consumption per pop (planned)
-- `base_storage_cap` — directly increased
+- `tech_storage_bonus` — added on top of the shared storage cap
 - `market_spread` — directly reduced (min 0.1)
 - `morale_satisfied_recovery` — increased morale recovery rate
 

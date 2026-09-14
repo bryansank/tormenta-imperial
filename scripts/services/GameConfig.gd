@@ -89,9 +89,28 @@ var building_requires_deposit := {
 }
 
 # ── Storage ──
+#
+# El almacen es UNA bolsa compartida por los cuatro recursos, no un tope por
+# recurso. Guardar oro tiene que significar no guardar acero: es lo que hace que
+# el mercado sirva, que gastar antes de la Tormenta sea la jugada correcta y que
+# llegar lleno al Diezmo sea una decision y no un descuido.
+#
+# El techo esta cuadrado a proposito: 1000 + 5x500 = 3500 en Era 3, que es
+# exactamente lo que cuesta la mejora del Cuartel General a Nv.3 (1500 oro +
+# 800 acero + 500 petroleo + 700 madera). Para ganar hay que llegar con la bolsa
+# llena y los cinco almacenes en pie, que es justo cuando mas tienes que perder.
 
-var base_storage_cap := 800
-var warehouse_storage_bonus := 400
+## Tope base de la bolsa, por era. Sin almacenes la Frontera aprieta de verdad.
+var base_storage_cap_by_era := {
+	1: 300,
+	2: 550,
+	3: 1000,
+}
+
+var warehouse_storage_bonus := 500
+
+## Bonificacion permanente de almacenamiento del arbol tecnologico (runtime).
+var tech_storage_bonus := 0
 
 # ── Building Processes (margins ~1.5x) ──
 
@@ -648,8 +667,17 @@ func get_storm_tick_interval() -> float:
 
 # ── Storage Helpers ──
 
-func get_storage_cap(warehouse_count: int) -> int:
-	return base_storage_cap + (warehouse_count * warehouse_storage_bonus)
+## Tope base de la era. Una era fuera de tabla se acota a la mas cercana en vez de
+## devolver 0: un save corrupto no puede dejar al jugador sin almacen.
+func get_base_storage_cap(era: int) -> int:
+	var keys: Array = base_storage_cap_by_era.keys()
+	keys.sort()
+	var clamped: int = clampi(era, int(keys[0]), int(keys[-1]))
+	return int(base_storage_cap_by_era.get(clamped, base_storage_cap_by_era[keys[0]]))
+
+## Tope de la bolsa compartida: escala con la era y con cada almacen en pie.
+func get_storage_cap(warehouse_count: int, era: int = 1) -> int:
+	return get_base_storage_cap(era) + (warehouse_count * warehouse_storage_bonus) + tech_storage_bonus
 
 # ── Deposit Helpers ──
 
