@@ -167,6 +167,14 @@ func _load_game() -> void:
 	if data.has("storm"):
 		StormManager.load_save_data(data["storm"])
 
+	# La bolsa es una sola y su tope depende de la era, de los almacenes y del arbol
+	# tecnologico: hasta que los tres no estan restaurados no se sabe cuanto cabe. Por
+	# eso el recorte va aqui y no junto a los recursos. Una partida guardada cuando el
+	# tope era por recurso puede traer mas de lo que hoy entra; se recorta en proporcion
+	# antes de que la progresion offline anada nada encima.
+	ResourceManager.set_era(ProgressionManager.current_era)
+	ResourceManager.clamp_to_storage()
+
 	# Apply offline progression
 	if data.has("saved_at"):
 		var saved_at: float = float(data["saved_at"])

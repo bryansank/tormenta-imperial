@@ -24,6 +24,10 @@ signal camera_rotate_step_requested(degrees: float)
 signal resource_changed(resource_type: String, new_amount: int, delta: int)
 @warning_ignore("unused_signal")
 signal resources_insufficient(resource_type: String, required: int, available: int)
+## La bolsa compartida estaba llena y `lost` unidades de `resource_type` no cupieron:
+## se han perdido. Un jugador que pierde cosecha sin verlo cree que el juego esta roto.
+@warning_ignore("unused_signal")
+signal storage_overflow(resource_type: String, lost: int, cap: int)
 
 # ── Buildings ──
 @warning_ignore("unused_signal")
