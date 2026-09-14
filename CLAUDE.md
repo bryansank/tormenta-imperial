@@ -350,6 +350,22 @@ because its mesh is connectivity-aware).
 2. Emit from the producing service
 3. Connect from consuming service/UI in `_ready()`
 
+### Adding Persistent State
+
+Any state that travels in the save file has to be cleared in its service's `reset()`,
+and that `reset()` has to be called from **all three** places in `GameManager` that
+start a fresh game: `_new_game()`, `clear_save()` and `clear_save_and_reload_from()`.
+They are three duplicated lists and it is easy to update one and forget the others —
+that is exactly how `ProcessManager` shipped without a `reset()` at all.
+
+Rules:
+- `reset()` **throws away, it never cancels**. Do not reuse `cancel()` or any refund
+  path: a new game must not pay out resources from the old one.
+- `reset()` **never notifies the player**. A new game does not announce what it lost.
+- If the state is transient and rebuilt from signals (e.g. "is ash falling"), it also has
+  to be **re-derived on `game_load_completed`**, or a save made mid-event reloads blind.
+- Autoloads survive scene reloads. Anything you do not clear is still there.
+
 ### Tuning Economy
 
 All balance values live in `GameConfig.gd`:
