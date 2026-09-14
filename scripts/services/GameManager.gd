@@ -40,6 +40,7 @@ func _try_start() -> void:
 
 func _new_game() -> void:
 	ResourceManager.reset()
+	ProcessManager.reset()
 	ProgressionManager.reset()
 	MarketManager.reset()
 	PopulationManager.reset()
@@ -255,6 +256,7 @@ func clear_save() -> void:
 		DirAccess.remove_absolute(SAVE_PATH)
 	GridManager.clear_all()
 	ResourceManager.reset()
+	ProcessManager.reset()
 	ProgressionManager.reset()
 	MarketManager.reset()
 	PopulationManager.reset()
@@ -278,6 +280,7 @@ func clear_save_and_reload_from(save_data: Dictionary) -> void:
 		file.store_string(JSON.stringify(save_data, "\t"))
 	GridManager.clear_all()
 	ResourceManager.reset()
+	ProcessManager.reset()
 	ProgressionManager.reset()
 	MarketManager.reset()
 	PopulationManager.reset()

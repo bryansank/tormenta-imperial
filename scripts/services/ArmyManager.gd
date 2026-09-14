@@ -13,12 +13,22 @@ var _upkeep_accum := 0.0
 ## uno entero. Viaja en el guardado: la deuda no se perdona al cerrar el juego.
 var _unpaid_ticks := 0
 
+## Cae ceniza y la Tormenta todavia no ha roto: la ultima ventana para sacar del
+## cuartel lo que haya dentro. Se lleva por señal y no preguntandole la fase a
+## StormManager, para que este servicio no dependa de aquel.
+var _ash_overhead: bool = false
+
 var _type_map := {
 	"gold": ResourceManager.Type.GOLD,
 	"steel": ResourceManager.Type.STEEL,
 	"oil": ResourceManager.Type.OIL,
 	"wood": ResourceManager.Type.WOOD,
 }
+
+func _ready() -> void:
+	EventBus.storm_ash_started.connect(_on_ash_started)
+	EventBus.storm_started.connect(_on_storm_started)
+	EventBus.storm_ended.connect(_on_storm_ended)
 
 func _process(delta: float) -> void:
 	_advance_training(delta)
@@ -104,6 +114,9 @@ func train(unit_id: String) -> bool:
 	_training.append({"id": unit_id, "remaining": dur, "duration": dur})
 	EventBus.unit_training_started.emit(unit_id, dur)
 	EventBus.army_changed.emit()
+	# El cuartel no se cierra durante la ceniza, pero tampoco se deja que el
+	# jugador meta ahi el almacen sin saber lo que arriesga.
+	_warn_if_ash()
 	return true
 
 ## Lo que devolveria cancelar ese entrenamiento ahora mismo, sin cancelarlo.
@@ -131,6 +144,71 @@ func cancel_training(index: int) -> Dictionary:
 	EventBus.unit_training_cancelled.emit(unit_id, refund)
 	EventBus.army_changed.emit()
 	return refund
+
+# ── La Tormenta arruina el cuartel ──
+#
+# Igual que la cola de procesos: el cuartel no se cierra en ninguna fase —
+# vaciar el almacen en reclutas es una decision legitima— pero lo que siga a
+# medio entrenar cuando rompa la TORMENTA se pierde con su coste. Sin esto, el
+# cuartel sigue siendo el mismo escondite que los procesos: el coste se paga al
+# pulsar ENTRENAR, y los Tasadores auditan lo que queda en la bolsa, no lo que
+# hay dentro de un uniforme a medio coser.
+
+## Lo que el cuartel se lleva por delante si rompe ahora: la suma de lo pagado
+## por cada recluta. Es el COSTE, no el reembolso de cancelar — la Tormenta no
+## devuelve nada, asi que esto no se recorta al hueco libre de la bolsa. Anunciar
+## el reembolso con el almacen lleno diria "vas a perder 0" y seria falso.
+func get_training_at_risk() -> Dictionary:
+	var at_risk := {}
+	for entry in _training:
+		var cost: Dictionary = GameConfig.get_unit_def(str(entry.get("id", ""))).get("cost", {})
+		for res_name in cost:
+			at_risk[res_name] = int(at_risk.get(res_name, 0)) + int(cost[res_name])
+	return at_risk
+
+## Empieza la ceniza: la ultima ventana para sacar del cuartel lo que haya dentro.
+func _on_ash_started() -> void:
+	_ash_overhead = true
+	_warn_if_ash()
+
+## El aviso. Al entrar en la ceniza y otra vez con cada recluta nuevo mientras
+## cae, porque quien entrena durante la ceniza es justo quien va a perderlo. Una
+## regla dura que nadie te conto es una regla injusta.
+func _warn_if_ash() -> void:
+	if not _ash_overhead or _training.is_empty():
+		return
+	EventBus.notification_posted.emit(
+		Tr.t("STORM_ASH_TRAINING_WARNING") % [_training.size(), Tr.amount_list(get_training_at_risk())],
+		"warning", UITheme.WARNING)
+
+## Rompe la Tormenta. Ningun recluta a medio hacer llega al otro lado, y se dice
+## uno por uno: un resumen deja al jugador sin saber que perdio, y saberlo es lo
+## que le ensena a vaciar el cuartel antes de la proxima.
+func _on_storm_started(_severity: int) -> void:
+	_ash_overhead = false
+	if _training.is_empty():
+		return
+	var lost: Array = _training.duplicate()
+	# Se vacia de golpe y se avisa despues: si se notificara mientras se recorre,
+	# quien escuche la notificacion veria una cola a medio deshacer.
+	_training.clear()
+	for entry in lost:
+		var unit_id := str(entry.get("id", ""))
+		var def := GameConfig.get_unit_def(unit_id)
+		EventBus.notification_posted.emit(
+			Tr.t("NOTIF_STORM_ATE_TRAINING") % [
+				Tr.t(str(def.get("name", unit_id))),
+				Tr.amount_list(def.get("cost", {}))],
+			"danger", UITheme.DANGER)
+		# Mismo canal que cancelar, con el reembolso real: ninguno. Asi la UI que
+		# sigue la cola se entera sin tener que conocer la Tormenta.
+		EventBus.unit_training_cancelled.emit(unit_id, {})
+	EventBus.army_changed.emit()
+
+## Pasa la tormenta. Lo que entre al cuartel a partir de aqui ya no corre peligro
+## hasta la siguiente ceniza.
+func _on_storm_ended(_severity: int) -> void:
+	_ash_overhead = false
 
 # ── Internal ──
 
@@ -282,4 +360,6 @@ func reset() -> void:
 	_training.clear()
 	_upkeep_accum = 0.0
 	_unpaid_ticks = 0
+	# Partida nueva: el cielo tambien empieza limpio.
+	_ash_overhead = false
 	EventBus.army_changed.emit()
