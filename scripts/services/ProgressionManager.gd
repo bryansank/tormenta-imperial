@@ -141,6 +141,17 @@ func resummon_final_audit() -> bool:
 func is_final_audit_active() -> bool:
 	return final_audit != null and final_audit.is_active()
 
+## Convocada y esperando a que el jugador entre. Es el estado que enseña el boton
+## de "QUE BAJEN": la UI pregunta aqui y no a la var publica, para que el modelo
+## pueda cambiar de forma sin arrastrar a ninguna pantalla.
+func is_final_audit_pending() -> bool:
+	return final_audit != null and final_audit.is_pending()
+
+## Perdida y a la espera de reconvocatoria. La UI lo usa para ofrecer volver a
+## intentarlo; si ademas se puede, lo dice `can_resummon_final_audit()`.
+func is_final_audit_lost() -> bool:
+	return final_audit != null and final_audit.is_lost()
+
 ## Announces the wave that should be on the board now. **This is the seam:**
 ## nothing here calls CombatManager.start_defense(). The model says which wave it
 ## is and who comes down; whoever drives the board listens and puts it there.
