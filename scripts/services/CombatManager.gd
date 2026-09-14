@@ -166,8 +166,7 @@ func count_standing_towers() -> int:
 		var data: BuildingData = info["data"]
 		if data == null or data.id != GameConfig.storm_tower_building_id:
 			continue
-		var node: Node3D = info["node"]
-		if node != null and is_instance_valid(node) and not BuildingHealth.is_ruined(node):
+		if BuildingHealth.is_operational(info["node"]):
 			standing += 1
 	return standing
 
@@ -214,7 +213,10 @@ func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encount
 	for uid in crew_uids:
 		_tower_crew_uids[int(uid)] = true
 
-	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense)
+	# Las dotaciones de torre forman en la retaguardia: son artilleria con alcance
+	# minimo 2, y en cabeza se quedan mudas justo cuando el enemigo llega a
+	# contacto. Es la misma lista que ya se usa para no contarlas como bajas.
+	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids)
 	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())

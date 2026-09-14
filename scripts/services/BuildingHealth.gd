@@ -32,6 +32,20 @@ func get_health_ratio(node: Node3D) -> float:
 func is_ruined(node: Node3D) -> bool:
 	return get_health(node) <= 0
 
+## En pie y funcionando: ni en ruinas ni a medio construir.
+##
+## Es la definicion unica de "cuenta" para todo el que mire edificios. Habia dos
+## copias —una en StormManager para la mitigacion y otra en CombatManager para
+## las dotaciones— y ninguna miraba la construccion, asi que una torre a medio
+## levantar mitigaba daño Y peleaba el Diezmo: colocar torres justo antes de una
+## tormenta pagaba sin haberlas terminado.
+func is_operational(node: Node3D) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
+	if node.has_meta("under_construction"):
+		return false
+	return not is_ruined(node)
+
 func is_damaged(node: Node3D) -> bool:
 	return get_health(node) < get_max_health(node)
 

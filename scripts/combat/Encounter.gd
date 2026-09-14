@@ -25,6 +25,10 @@ var is_boss: bool = false
 ## True when the player is being attacked at home instead of marching out. It
 ## changes who starts where, and what losing costs — see _rows_for().
 var is_defense: bool = false
+## uids que forman en la retaguardia en vez de en la linea. Hoy son las
+## dotaciones de torre: artilleria con alcance minimo 2, que en cabeza se queda
+## muda en cuanto el enemigo llega a contacto.
+var back_row_uids: Dictionary = {}
 var index: int = 0
 var state: int = State.DEPLOYING
 var deploy_zones: Dictionary = {}    ## side -> Array[Vector2i]
@@ -33,12 +37,14 @@ var deploy_zones: Dictionary = {}    ## side -> Array[Vector2i]
 
 ## `units` arrive already built (CombatUnit instances) so the expedition can hand
 ## over survivors carrying their damage from the previous node (FR-011).
-static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: bool = false) -> Encounter:
+static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: bool = false, p_back_row: Array = []) -> Encounter:
 	var e := Encounter.new()
 	e.units = p_units
 	e.index = p_index
 	e.is_boss = p_is_boss
 	e.is_defense = p_is_defense
+	for uid in p_back_row:
+		e.back_row_uids[int(uid)] = true
 	e.board_size = GameConfig.combat_board_size
 	e.turn_limit = GameConfig.combat_turn_limit
 	e._build_deploy_zones()
@@ -70,16 +76,43 @@ func _build_deploy_zones() -> void:
 ## as a line facing the enemy instead of a zigzag across two rows.
 func _deploy() -> void:
 	for side in [PLAYER, ENEMY]:
-		var squad: Array = Rules.living_units(units, side)
-		var placed: int = 0
-		for row in _rows_for(side):
-			if placed >= squad.size():
+		var rows: Array = _rows_for(side)
+		var rear: Array = []
+		var line: Array = []
+		for unit in Rules.living_units(units, side):
+			if back_row_uids.has(unit.uid):
+				rear.append(unit)
+			else:
+				line.append(unit)
+
+		var taken: Dictionary = {}
+		# La retaguardia coge la fila de atras ANTES de que forme la linea, porque
+		# el bando entero suele caber en la primera fila: si se repartiera por
+		# orden, nadie llegaria nunca atras.
+		if not rear.is_empty():
+			_fill_row(rear, int(rows[rows.size() - 1]), taken)
+		for row in rows:
+			if line.is_empty():
 				break
-			var in_row: int = mini(squad.size() - placed, board_size.x)
-			var offset: int = maxi(0, (board_size.x - in_row) / 2)
-			for i in range(in_row):
-				squad[placed].position = Vector2i(offset + i, row)
-				placed += 1
+			_fill_row(line, int(row), taken)
+
+## Centra en esa fila a los que quepan y los saca de `pending`. Respeta las
+## celdas ya ocupadas, para que la linea no aplaste a la retaguardia al desbordar.
+func _fill_row(pending: Array, row: int, taken: Dictionary) -> void:
+	var free: Array = []
+	for x in range(board_size.x):
+		var cell := Vector2i(x, row)
+		if not taken.has(cell):
+			free.append(cell)
+	var count: int = mini(pending.size(), free.size())
+	if count <= 0:
+		return
+	var offset: int = maxi(0, (free.size() - count) / 2)
+	for i in range(count):
+		var cell: Vector2i = free[offset + i]
+		pending[0].position = cell
+		taken[cell] = true
+		pending.remove_at(0)
 
 # ── Queries ──────────────────────────────────────────────────────────
 

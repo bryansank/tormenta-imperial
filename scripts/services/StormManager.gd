@@ -239,10 +239,9 @@ func _standing_towers() -> int:
 	var count := 0
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info["data"]
-		if data.id != "tower":
+		if data == null or data.id != GameConfig.storm_tower_building_id:
 			continue
-		var node: Node3D = info["node"]
-		if node != null and is_instance_valid(node) and not BuildingHealth.is_ruined(node):
+		if BuildingHealth.is_operational(info["node"]):
 			count += 1
 	return count
 

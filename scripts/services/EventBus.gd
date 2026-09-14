@@ -219,6 +219,33 @@ signal tithe_demanded(severity: int)
 @warning_ignore("unused_signal")
 signal tithe_resolved(paid: bool, taken: Dictionary)
 
+# ── The Final Audit ──
+## Emitidas solo por ProgressionManager. El Cuartel General a nivel 3 ya no gana
+## la partida: convoca la auditoria definitiva de la Regencia, y sobrevivirla es
+## la victoria. Un asedio son 3-5 oleadas seguidas contra la misma guarnicion.
+## La Regencia ha sido convocada. Todavia no hay nadie en el tablero.
+@warning_ignore("unused_signal")
+signal final_audit_summoned(waves: int, summons: int)
+## Empieza el asedio: a partir de aqui no se reentrena nada.
+@warning_ignore("unused_signal")
+signal final_audit_started(waves: int)
+## La oleada que toca poner en el tablero: quien baja y con cuanto peso. Esta es
+## la costura del asedio — el modelo dice que oleada es, y quien conduce el
+## tablero es quien llama a CombatManager.start_defense(). Nadie mas.
+@warning_ignore("unused_signal")
+signal final_audit_wave_ready(wave: int, roster: Dictionary, scale: float)
+@warning_ignore("unused_signal")
+signal final_audit_wave_cleared(wave: int, remaining: int)
+## La guarnicion ha caido. No hay Game Over: se cobra el Diezmo maximo y la
+## ciudad queda en ruinas, pero el asedio se puede volver a convocar cuando el
+## ejercito este rehecho.
+@warning_ignore("unused_signal")
+signal final_audit_lost(wave: int)
+## Se ha sobrevivido a la auditoria. La Tormenta para para siempre: StormManager
+## escucha aqui cuando se cablee, y nada mas tiene permiso para detener el ciclo.
+@warning_ignore("unused_signal")
+signal storm_halted_forever()
+
 # ── Random Events ──
 @warning_ignore("unused_signal")
 signal random_event_started(event_id: String, event_data: Dictionary)
