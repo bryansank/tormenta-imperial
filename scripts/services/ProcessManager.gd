@@ -21,6 +21,14 @@ func _ready() -> void:
 	EventBus.storm_ash_started.connect(_on_ash_started)
 	EventBus.storm_started.connect(_on_storm_started)
 	EventBus.storm_ended.connect(_on_storm_ended)
+	# Al cargar partida, el estado de ceniza se reconstruye preguntando la fase.
+	# Es transitorio y no viaja en el guardado: sin esto, quien guarda con la
+	# ceniza encima recarga creyendo que no pasa nada y pierde la cola sin haber
+	# visto un solo aviso en esa sesion.
+	EventBus.game_load_completed.connect(_resync_storm_phase)
+
+func _resync_storm_phase() -> void:
+	_ash_overhead = StormManager.is_ashfall()
 
 func get_processes_for(building_id: String) -> Array:
 	return GameConfig.get_processes_for(building_id)
