@@ -730,6 +730,42 @@ func get_storm_duration() -> float:
 func get_storm_tick_interval() -> float:
 	return get_duration(storm_tick_interval)
 
+# ══════════════════════════════════════════════════════════════════════
+# ── Las torres en el tablero del Diezmo ──
+# ══════════════════════════════════════════════════════════════════════
+# Mitigar el daño ya justifica construir torres. Esto justifica tenerlas **en
+# pie** el día que los Tasadores se bajan del carro: una torre entera pelea.
+
+## Qué edificio cuenta como torre. Aquí para que ningún servicio vuelva a
+## escribir "tower" a mano.
+var storm_tower_building_id := "tower"
+
+## Qué pone una torre en el tablero. Una torre es una posición fija con un
+## reflector y un arma pesada: ve venir al enemigo de lejos y no maniobra. Eso es
+## artillería (alcance 3, movimiento 1), no infantería — una dotación de torre
+## que corretea por el tablero sería una unidad que no vive en ninguna parte.
+var storm_tower_garrison_unit := "artillery"
+## Dotaciones por torre en pie, y su tope. El tope existe por lo mismo que el de
+## la mitigación: una fila de torres no puede convertir el Diezmo en un trámite.
+var storm_tower_garrison_per_tower := 1
+var storm_tower_garrison_max := 2
+
+## Cuántas dotaciones se suman a la guarnición.
+##
+## Van **además** del tope de despliegue, no dentro: si ocuparan hueco de la
+## guarnición, construir una torre sería cambiar un soldado entrenado por una
+## dotación y las torres no aportarían nada al tablero, que es justo lo que
+## venían a arreglar.
+##
+## El límite duro no es `combat_deploy_cap` sino el tablero. La defensa nunca
+## pasa de una fila del defensor (`combat_board_size.x`), así que si alguien sube
+## el tope de despliegue las torres ceden el sitio antes que desbordar la zona de
+## despliegue y dejar unidades fuera del tablero.
+func get_tower_garrison(standing_towers: int, garrison_size: int) -> int:
+	var crews: int = mini(
+		maxi(0, standing_towers) * storm_tower_garrison_per_tower, storm_tower_garrison_max)
+	return maxi(0, mini(crews, combat_board_size.x - maxi(0, garrison_size)))
+
 # ── Storage Helpers ──
 
 ## Tope base de la era. Una era fuera de tabla se acota a la mas cercana en vez de
