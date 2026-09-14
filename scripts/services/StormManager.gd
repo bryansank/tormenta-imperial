@@ -39,15 +39,26 @@ func is_armed() -> bool:
 func get_phase() -> int:
 	return _cycle.phase if _cycle != null else StormCycle.Phase.CALM
 
+## What the storm actually hits with: the severity the base earned by growing,
+## plus whatever a false alarm deferred onto it.
 func get_severity() -> int:
-	return _cycle.severity if _cycle != null else 1
+	return _cycle.effective_severity() if _cycle != null else 1
+
+## Severity a false alarm has postponed onto the next storm. Never shown: the
+## whole point of deferring it is that the player cannot price the next one.
+func get_deferred_severity() -> int:
+	return _cycle.deferred_severity if _cycle != null else 0
+
+func is_ashfall() -> bool:
+	return _cycle != null and _cycle.is_ashfall()
 
 func is_storming() -> bool:
 	return _cycle != null and _cycle.is_storming()
 
-## Seconds until the ash lands. This is the number the player plans around.
-func seconds_until_impact() -> float:
-	return _cycle.seconds_until_impact() if _cycle != null else 0.0
+## Seconds until the ash starts falling. Dev tooling only — the HUD stopped
+## counting, and a false alarm can make this number mean nothing at all.
+func seconds_until_ash() -> float:
+	return _cycle.seconds_until_ash() if _cycle != null else 0.0
 
 func storms_survived() -> int:
 	return _cycle.storms_survived if _cycle != null else 0
@@ -75,19 +86,30 @@ func _publish(events: Array) -> void:
 				_on_phase_entered(int(event["phase"]))
 				EventBus.storm_phase_changed.emit(int(event["phase"]), float(event["left"]))
 			"incoming":
-				EventBus.storm_incoming.emit(float(event["seconds"]), int(event["severity"]))
+				EventBus.storm_incoming.emit(float(event["seconds"]))
 				# The first one reads as bad weather. The second one gives the game
-				# away by being punctual — that is how the player finds out it has
-				# a sender, without a single line of exposition.
+				# away by coming back at all — that is how the player finds out it
+				# has a sender, without a single line of exposition.
 				var key: String = "STORM_INCOMING_FIRST" if storms_survived() == 0 else "STORM_INCOMING"
 				EventBus.notification_posted.emit(Tr.t(key), "warning", UITheme.WARNING)
+			"false_alarm":
+				EventBus.storm_false_alarm.emit(int(event["deferred"]))
+				# Worded as relief and nothing more: the player is never told that
+				# the assessment is still on the books, which is what makes the
+				# next warning land heavier than this one.
+				EventBus.notification_posted.emit(
+					Tr.t("STORM_FALSE_ALARM"), "info", UITheme.TEXT_DIM)
+			"ash_started":
+				EventBus.storm_ash_started.emit()
+				EventBus.notification_posted.emit(
+					Tr.t("STORM_ASH_STARTED"), "warning", UITheme.WARNING)
 			"storm_started":
 				EventBus.storm_started.emit(int(event["severity"]))
 				EventBus.notification_posted.emit(
 					Tr.t("STORM_STARTED"), "danger", UITheme.DANGER)
 			"storm_tick":
-				_apply_storm_tick()
-				EventBus.storm_tick.emit(float(event["left"]))
+				_apply_storm_tick(int(event["phase"]))
+				EventBus.storm_tick.emit(int(event["phase"]), float(event["left"]))
 			"storm_ended":
 				EventBus.storm_ended.emit(int(event["severity"]))
 				EventBus.notification_posted.emit(
@@ -96,17 +118,28 @@ func _publish(events: Array) -> void:
 				EventBus.tithe_demanded.emit(int(event["severity"]))
 				_begin_tithe(int(event["severity"]))
 
-## Production only crawls while the ash is overhead; everything else keeps its
-## own pace. The multiplier is lifted the moment the storm passes, whatever
-## happens next.
+## Production is taxed in two steps, and the Warning is not one of them: halved
+## while the ash falls, a crawl once the storm is overhead. The multiplier is
+## lifted the moment the phase passes, whatever happens next.
 func _on_phase_entered(phase: int) -> void:
-	GameConfig.event_production_multiplier = \
-		GameConfig.storm_production_multiplier if phase == StormCycle.Phase.STORM else 1.0
+	match phase:
+		StormCycle.Phase.ASH:
+			GameConfig.event_production_multiplier = GameConfig.storm_ash_production_multiplier
+		StormCycle.Phase.STORM:
+			GameConfig.event_production_multiplier = GameConfig.storm_production_multiplier
+		_:
+			GameConfig.event_production_multiplier = 1.0
 
-## Cada mordisco de la tormenta cuesta moral y deja edificios tocados.
-func _apply_storm_tick() -> void:
+## Cada mordisco cuesta moral, y solo la TORMENTA derriba edificios. La ceniza
+## ensucia, no tumba: si tumbara, la fase de Ceniza dejaria de ser la ultima
+## ventana en la que reparar un techo sirve de algo.
+func _apply_storm_tick(phase: int) -> void:
 	var severity: int = get_severity()
-	PopulationManager.adjust_morale(-roundi(GameConfig.storm_morale_per_tick * float(severity)))
+	var bleed: float = GameConfig.storm_morale_per_tick * float(severity)
+	if phase != StormCycle.Phase.STORM:
+		PopulationManager.adjust_morale(-roundi(bleed))
+		return
+	PopulationManager.adjust_morale(-roundi(bleed * GameConfig.storm_morale_storm_multiplier))
 	_damage_buildings(severity)
 
 ## La ceniza no cae sobre todo por igual: muerde unos pocos edificios al azar por
