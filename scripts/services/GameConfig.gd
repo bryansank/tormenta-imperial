@@ -939,8 +939,10 @@ func unpaid_hurts(unpaid_ticks: int) -> bool:
 ## Aislada a proposito: cuando el ciclo gane fases nuevas o cambien de nombre,
 ## adaptarlo es esta linea y ninguna mas. Cualquier fase que no sea calma cuenta
 ## como "Tormenta en marcha", el Diezmo incluido — que es cuando mas duele.
+## Pregunta a StormManager en vez de comparar fases: asi una Tormenta parada para
+## siempre (asedio ganado) nunca vuelve a cobrar el 60% por cancelar.
 func _storm_cycle_running() -> bool:
-	return StormManager.get_phase() != StormCycle.Phase.CALM
+	return StormManager.is_cycle_active()
 
 # ══════════════════════════════════════════════════════════════════════
 # ── La cola abierta y lo que la Tormenta se lleva ──
