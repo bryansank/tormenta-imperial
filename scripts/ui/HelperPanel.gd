@@ -1,28 +1,52 @@
 extends CanvasLayer
-## In-game helper: an always-visible "?" button that toggles on-screen callouts
-## explaining where each menu lives, how to build, and the camera controls —
+## In-game helper: on-screen callouts anchored to the HUD panels they explain,
 ## plus a building guide modal describing every building.
-## The on/off state persists in user://settings.cfg (GameConfig.ui_helper_visible).
+##
+## It is switched on and off from the AYUDA entry of the ☰ menu (A6). It used
+## to be a floating "?" next to the menu: one more button in a corner that was
+## already full. The on/off state persists in user://settings.cfg
+## (GameConfig.ui_helper_visible).
+##
+## The callouts go quiet on their own (A4) while any window is open, while the
+## ☰ menu is unfolded, and from the moment the Storm is announced until the
+## Tithe is settled: they cover half the screen and at those moments something
+## else matters. Going quiet never changes the player's preference: they come
+## back afterwards.
+##
+## Each callout is placed by UILayoutManager (slots tip_*), stacked under the
+## panel it talks about, so it follows the HUD when the HUD changes size
+## instead of living at fixed pixel offsets that stop being true.
 
 var _callouts: Control
-var _helper_btn: Button
+var _help_btn: Button
 var _guide_btn: Button
 var _guide_panel: PanelContainer
 var _backdrop: ColorRect
 var _guide_open := false
+var _storm_silenced := false
+var _sidebar_open := false
+## Callouts that only make sense with the touch buttons on screen, and the one
+## that replaces them on a desktop.
+var _touch_tips: Array[Control] = []
+var _desktop_tips: Array[Control] = []
 
 func _ready() -> void:
 	layer = 14  # Above HUD (10), below modal panels (15)
 	_setup_ui()
 	UIManager.register_panel(self, "HelperPanel.modal")
+	UIManager.window_opened.connect(func(_w): _refresh_callouts())
+	UIManager.window_closed.connect(func(_w): _refresh_callouts())
+	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 	# Cuando hay ceniza en camino, el tutorial se calla: sus globos tapan media
 	# pantalla y en ese momento lo unico que importa es el indicador de fase.
-	EventBus.storm_incoming.connect(func(_s): _set_callouts_visible(false))
-	EventBus.tithe_resolved.connect(func(_paid, _taken): _restore_callouts())
+	EventBus.storm_incoming.connect(func(_s): _set_storm_silenced(true))
+	EventBus.tithe_resolved.connect(func(_paid, _taken): _set_storm_silenced(false))
 	# Y vuelve si el aviso queda en nada: sin esto una falsa alarma dejaria los
 	# globos callados hasta la siguiente cobranza, que puede no llegar nunca.
-	EventBus.storm_false_alarm.connect(func(_deferred): _restore_callouts())
-	_set_callouts_visible(GameConfig.ui_helper_visible)
+	EventBus.storm_false_alarm.connect(func(_deferred): _set_storm_silenced(false))
+	EventBus.touch_controls_changed.connect(func(_enabled): _refresh_touch_tips())
+	_refresh_touch_tips()
+	_refresh_callouts()
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -30,20 +54,18 @@ func _setup_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	# "?" toggle — always visible, next to the hamburger menu (top-right)
-	_helper_btn = Button.new()
-	_helper_btn.text = "?"
-	_helper_btn.tooltip_text = Tr.t("BTN_HELPER_TIP")
-	_helper_btn.custom_minimum_size = Vector2(UILayoutConfig.SIDEBAR_TOGGLE_SIZE, UILayoutConfig.SIDEBAR_TOGGLE_SIZE)
-	_helper_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	# A la izquierda del menu hamburguesa, mismo lado tactil (44 px).
-	_helper_btn.offset_left = -(UILayoutConfig.SIDEBAR_TOGGLE_SIZE * 2 + 20)
-	_helper_btn.offset_right = -(UILayoutConfig.SIDEBAR_TOGGLE_SIZE + 20)
-	_helper_btn.offset_top = 10
-	_helper_btn.offset_bottom = 10 + UILayoutConfig.SIDEBAR_TOGGLE_SIZE
-	UITheme.style_button(_helper_btn, UITheme.INFO, UITheme.FONT_SECTION)
-	_helper_btn.pressed.connect(_toggle_helper)
-	root.add_child(_helper_btn)
+	# AYUDA — one more entry of the ☰ sidebar, same size and style as the rest.
+	_help_btn = Button.new()
+	_help_btn.text = Tr.t("BTN_HELP")
+	_help_btn.tooltip_text = Tr.t("BTN_HELPER_TIP")
+	_help_btn.custom_minimum_size = Vector2(UILayoutConfig.SIDEBAR_BTN_WIDTH, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
+	_help_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_help_btn.offset_left = -(UILayoutConfig.SIDEBAR_BTN_WIDTH + 12)
+	_help_btn.offset_top = UILayoutManager.get_sidebar_button_offset("HelperPanel.button")
+	UITheme.style_card_button(_help_btn, UITheme.BTN.lightened(0.05), UITheme.INFO)
+	_help_btn.pressed.connect(_toggle_helper)
+	_help_btn.visible = false  # Start collapsed with sidebar
+	root.add_child(_help_btn)
 
 	# Callout layer (tips anchored around the screen)
 	_callouts = Control.new()
@@ -51,31 +73,25 @@ func _setup_ui() -> void:
 	_callouts.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_callouts)
 
-	# Top-left: resources HUD
-	_add_callout(Tr.t("LBL_HELP_RESOURCES"), Control.PRESET_TOP_LEFT, Vector2(12, 100), 250)
-	# Top-right: hamburger menus (left of the sidebar area)
-	_add_callout(Tr.t("LBL_HELP_MENUS"), Control.PRESET_TOP_RIGHT, Vector2(-282, 56), 270)
-	# Top-center: current objective
-	_add_callout(Tr.t("LBL_HELP_OBJECTIVE"), Control.PRESET_CENTER_TOP, Vector2(-130, 118), 260)
-	# Bottom-center: construction flow
-	_add_callout(Tr.t("LBL_HELP_BUILD"), Control.PRESET_CENTER_BOTTOM, Vector2(-150, -160), 300)
-	# Bottom-left: camera pan
-	_add_callout(Tr.t("LBL_HELP_CAMERA"), Control.PRESET_BOTTOM_LEFT, Vector2(20, -260), 220)
-	# Bottom-right: rotate/zoom
-	_add_callout(Tr.t("LBL_HELP_ZOOM"), Control.PRESET_BOTTOM_RIGHT, Vector2(-240, -260), 220)
+	# Left column: under resources -> population (-> log when open)
+	_add_callout(Tr.t("LBL_HELP_RESOURCES_POOL"), "HelperPanel.tip_resources")
+	# Top-right: the ☰ menu, with the building guide right there
+	var menus_box := _add_callout(Tr.t("LBL_HELP_MENUS"), "HelperPanel.tip_menus")
+	# Center column: under the objective banner
+	_add_callout(Tr.t("LBL_HELP_OBJECTIVE"), "HelperPanel.tip_objective")
+	# Bottom-center: construction flow, above the BUILD button
+	_add_callout(Tr.t("LBL_HELP_BUILD"), "HelperPanel.tip_build")
+	# Camera: one text for the touch D-pad, another for keyboard and mouse
+	_touch_tips.append(_add_callout(Tr.t("LBL_HELP_CAMERA"), "HelperPanel.tip_camera_touch").get_parent())
+	_touch_tips.append(_add_callout(Tr.t("LBL_HELP_ZOOM"), "HelperPanel.tip_zoom").get_parent())
+	_desktop_tips.append(_add_callout(Tr.t("LBL_HELP_CAMERA_DESKTOP"), "HelperPanel.tip_camera").get_parent())
 
-	# Building guide button (under the "?", only while helper is on)
+	# Building guide button lives inside the menus callout: it is help too.
 	_guide_btn = Button.new()
 	_guide_btn.text = Tr.t("BTN_BUILDING_GUIDE")
-	_guide_btn.custom_minimum_size = Vector2(180, 34)
-	_guide_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_guide_btn.offset_left = -282
-	_guide_btn.offset_right = -102
-	_guide_btn.offset_top = 10
-	_guide_btn.offset_bottom = 44
 	UITheme.style_card_button(_guide_btn, UITheme.BTN.lightened(0.05), UITheme.INFO)
 	_guide_btn.pressed.connect(_toggle_guide)
-	_callouts.add_child(_guide_btn)
+	menus_box.add_child(_guide_btn)
 
 	# ── Building guide modal ──
 	_backdrop = UITheme.make_backdrop()
@@ -119,33 +135,26 @@ func _setup_ui() -> void:
 	for data in _load_buildings():
 		list.add_child(_make_building_entry(data))
 
-## One anchored tip label with a dark framed background.
-func _add_callout(text: String, preset: Control.LayoutPreset, offset: Vector2, width: int) -> void:
+## One tip box placed by the layout system. Returns its inner VBox so callers
+## can add more than the text (the building guide button, for one).
+## Steel-blue frame on purpose: brass is the HUD's state; blue is help.
+func _add_callout(text: String, panel_id: String) -> VBoxContainer:
 	var box := PanelContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.05, 0.04, 0.88)
-	style.border_color = UITheme.ACCENT_DIM
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(4)
-	style.set_content_margin_all(8)
-	box.add_theme_stylebox_override("panel", style)
-	box.set_anchors_preset(preset)
-	box.offset_left = offset.x
-	box.offset_top = offset.y
-	box.offset_right = offset.x + width
-	# Give a tiny nominal height and let the container's minimum size grow it
-	# downward to fit the text — otherwise bottom-anchored boxes stretch to the
-	# screen edge.
-	box.offset_bottom = offset.y + 10
-	box.grow_vertical = Control.GROW_DIRECTION_END
-	box.custom_minimum_size = Vector2(width, 0)
+	box.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.INFO, 1))
+	UILayoutManager.apply_layout(panel_id, box)
+	_callouts.add_child(box)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 6)
+	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(inner)
 
 	var label := UITheme.make_label(text, "small", UITheme.TEXT_BRIGHT)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(label)
-	_callouts.add_child(box)
+	inner.add_child(label)
+	return inner
 
 func _load_buildings() -> Array:
 	var result: Array = []
@@ -206,22 +215,43 @@ func _meta_line(data: BuildingData) -> String:
 
 	return " · ".join(parts)
 
+# ── Visibility ──
+
 func _toggle_helper() -> void:
 	var vis := not GameConfig.ui_helper_visible
 	GameConfig.ui_helper_visible = vis
 	GameConfig.save_user_settings()
-	_set_callouts_visible(vis)
+	_refresh_callouts()
 	if not vis and _guide_open:
 		_toggle_guide()
 
-func _set_callouts_visible(vis: bool) -> void:
-	_callouts.visible = vis
-	_helper_btn.modulate = Color(1, 1, 1, 1.0 if vis else 0.55)
+func _on_sidebar_toggled(is_visible: bool) -> void:
+	_sidebar_open = is_visible
+	_help_btn.visible = is_visible
+	_refresh_callouts()
 
-## Pasada la tormenta, los globos vuelven solo si el jugador no los habia
-## apagado el mismo. Silenciarlos por una tormenta no es cambiar su preferencia.
-func _restore_callouts() -> void:
-	_set_callouts_visible(GameConfig.ui_helper_visible)
+func _set_storm_silenced(silenced: bool) -> void:
+	_storm_silenced = silenced
+	_refresh_callouts()
+
+## The one place that decides whether the callouts show. Everything else just
+## flips a reason and calls this.
+func _refresh_callouts() -> void:
+	var wanted: bool = GameConfig.ui_helper_visible
+	var quiet: bool = _storm_silenced or _sidebar_open or UIManager.is_any_window_open()
+	_callouts.visible = wanted and not quiet
+	# The menu entry dims when help is off, so the player sees the state.
+	_help_btn.modulate = Color(1, 1, 1, 1.0 if wanted else 0.55)
+
+func is_showing_callouts() -> bool:
+	return _callouts.visible
+
+func _refresh_touch_tips() -> void:
+	var touch := GameConfig.touch_controls_enabled()
+	for tip in _touch_tips:
+		tip.visible = touch
+	for tip in _desktop_tips:
+		tip.visible = not touch
 
 func _toggle_guide() -> void:
 	_guide_open = not _guide_open

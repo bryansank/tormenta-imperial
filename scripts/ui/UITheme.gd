@@ -462,6 +462,193 @@ static func make_backdrop() -> ColorRect:
 	rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	return rect
 
+# ══════════════════════════════════════
+# HUD (tarjetas permanentes de la pantalla de juego)
+# ══════════════════════════════════════
+# Recursos, poblacion, objetivo y globos del tutorial comparten esta tarjeta:
+# fondo oscuro translucido (se lee sobre la isla sin taparla) y un borde fino
+# del color que identifica a cada uno. Antes cada panel se pintaba el suyo a
+# mano y no habia dos iguales.
+
+const HUD_BG := Color(0.06, 0.07, 0.05, 0.92)
+
+## Tarjeta del HUD. `left_bar` pinta el borde izquierdo mas grueso: marca los
+## paneles de estado (poblacion) frente a los de aviso (objetivo, tutorial).
+static func make_hud_card_style(border: Color = ACCENT, border_width: int = 2, left_bar: bool = false) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = HUD_BG
+	s.set_corner_radius_all(4)
+	s.content_margin_left = 10
+	s.content_margin_right = 10
+	s.content_margin_top = 7
+	s.content_margin_bottom = 7
+	s.border_color = border
+	s.set_border_width_all(border_width)
+	if left_bar:
+		s.border_width_left = border_width + 2
+	s.shadow_color = Color(0, 0, 0, 0.5)
+	s.shadow_size = 5
+	s.shadow_offset = Vector2(1, 2)
+	return s
+
+# ── Iconos ──
+# PNG pequenos generados por tools/gen_resource_icons.gd. Formas distintas
+# (moneda, tronco, lingote, gota), no solo colores: quien no distinga el oro
+# del oxido tiene que poder leer el recurso igual.
+const ICON_DIR := "res://assets/textures/ui/icons/"
+const ICON_SIZE := 24
+
+static func icon_path(icon_id: String) -> String:
+	return ICON_DIR + icon_id + ".png"
+
+static func icon_texture(icon_id: String) -> Texture2D:
+	return _tex(icon_path(icon_id))
+
+## TextureRect cuadrado con el icono. Si el PNG aun no esta importado queda
+## vacio en vez de romper: el numero al lado sigue leyendose.
+static func make_icon(icon_id: String, px: int = ICON_SIZE) -> TextureRect:
+	var rect := TextureRect.new()
+	rect.texture = icon_texture(icon_id)
+	rect.custom_minimum_size = Vector2(px, px)
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return rect
+
+static func resource_color(res_id: String) -> Color:
+	match res_id:
+		"gold":
+			return RES_GOLD
+		"steel":
+			return RES_STEEL
+		"oil":
+			return RES_OIL
+		"wood":
+			return RES_WOOD
+		_:
+			return TEXT
+
+## Ficha de recurso del HUD: [icono] 2480. La cantidad es el nodo "Amount"
+## (ver chip_amount) para que el panel la actualice sin guardar mas punteros.
+static func make_resource_chip(res_id: String, size_name: String = "body") -> HBoxContainer:
+	var chip := HBoxContainer.new()
+	chip.add_theme_constant_override("separation", 4)
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.tooltip_text = Tr.res_cap(res_id)
+	chip.add_child(make_icon(res_id))
+	var amount := make_label("0", size_name, TEXT_BRIGHT)
+	amount.name = "Amount"
+	amount.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	amount.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.add_child(amount)
+	return chip
+
+static func chip_amount(chip: HBoxContainer) -> Label:
+	return chip.get_node("Amount") as Label
+
+## Parpadeo rojo de una etiqueta (recurso que falta, almacen que desborda) y
+## vuelta a su color. Se usa en vez de un texto flotante que tapa otros paneles.
+static func flash_label(label: Label, restore: Color, duration: float = 0.9) -> void:
+	set_label_color(label, DANGER)
+	var tween := label.create_tween()
+	tween.tween_interval(duration)
+	tween.tween_callback(func(): if is_instance_valid(label): set_label_color(label, restore))
+
+# ── Barra de bolsa (almacen compartido) ──
+# Una sola barra para los cuatro recursos porque el tope es uno solo. Cada
+# segmento es lo que ocupa un recurso; el ultimo, lo que queda libre. Cuando
+# la bolsa se llena el marco se pone rojo: lo que entre a partir de ahi se
+# pierde y el jugador tiene que verlo.
+
+static func make_pool_bar(segment_colors: Array, height: int = 10) -> PanelContainer:
+	var frame := PanelContainer.new()
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_theme_stylebox_override("panel", _pool_frame_style(false))
+	frame.custom_minimum_size = Vector2(0, height + 4)
+	var segments := HBoxContainer.new()
+	segments.name = "Segments"
+	segments.add_theme_constant_override("separation", 0)
+	segments.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(segments)
+	for i in range(segment_colors.size()):
+		var seg := ColorRect.new()
+		seg.name = "Seg%d" % i
+		seg.color = (segment_colors[i] as Color).darkened(0.15)
+		seg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		seg.custom_minimum_size = Vector2(0, height)
+		seg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		segments.add_child(seg)
+	var free := ColorRect.new()
+	free.name = "Free"
+	free.color = Color(0.09, 0.1, 0.08)
+	free.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	free.custom_minimum_size = Vector2(0, height)
+	free.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	segments.add_child(free)
+	return frame
+
+static func pool_bar_segments(bar: PanelContainer) -> Array:
+	var out: Array = []
+	for child in bar.get_node("Segments").get_children():
+		if child.name != "Free":
+			out.append(child)
+	return out
+
+static func pool_bar_free(bar: PanelContainer) -> ColorRect:
+	return bar.get_node("Segments/Free") as ColorRect
+
+## Rojo cuando desborda; latón cuando cabe.
+static func set_pool_bar_alert(bar: PanelContainer, alert: bool) -> void:
+	bar.add_theme_stylebox_override("panel", _pool_frame_style(alert))
+
+static func _pool_frame_style(alert: bool) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(0.04, 0.04, 0.03)
+	s.set_corner_radius_all(2)
+	s.set_content_margin_all(2)
+	s.border_color = readable(DANGER) if alert else ACCENT_DIM
+	s.set_border_width_all(2 if alert else 1)
+	return s
+
+# ── Asa de arrastre (A9: mover los paneles del HUD) ──
+# Seis puntos de laton en la esquina del panel. Es la unica parte del panel que
+# captura el raton para arrastrar, asi el resto sigue dejando pasar los clics
+# al mapa. El icono lo genera tools/gen_resource_icons.gd (drag.png).
+
+const DRAG_HANDLE_SIZE := 18
+
+static func make_drag_handle() -> TextureRect:
+	var handle := make_icon("drag", DRAG_HANDLE_SIZE)
+	handle.mouse_filter = Control.MOUSE_FILTER_STOP
+	handle.mouse_default_cursor_shape = Control.CURSOR_MOVE
+	handle.modulate = Color(1, 1, 1, 0.6)
+	handle.tooltip_text = Tr.t("LBL_DRAG_HANDLE_TIP")
+	handle.mouse_entered.connect(func(): handle.modulate = Color(1, 1, 1, 1.0))
+	handle.mouse_exited.connect(func(): handle.modulate = Color(1, 1, 1, 0.6))
+	return handle
+
+# ── Selector de opciones (ajustes con mas de dos estados) ──
+
+## Fila "ETIQUETA  [ opcion v ]". `on_selected` recibe el indice elegido.
+## Existe porque un interruptor no puede decir "automatico": el tri-estado de
+## los controles tactiles es el primer ajuste que lo necesita.
+static func make_option_row(label_text: String, options: Array, selected: int, on_selected: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var label := make_label(label_text, "body")
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(label)
+	var picker := OptionButton.new()
+	picker.custom_minimum_size = Vector2(180, MIN_BTN_H)
+	for opt in options:
+		picker.add_item(String(opt))
+	picker.selected = clampi(selected, 0, maxi(options.size() - 1, 0))
+	if on_selected.is_valid():
+		picker.item_selected.connect(on_selected)
+	row.add_child(picker)
+	return row
+
 ## Tactical command panel con bordes gruesos militares y glow
 static func make_command_panel_style() -> StyleBox:
 	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(0.82, 0.82, 0.82))

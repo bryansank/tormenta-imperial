@@ -267,6 +267,16 @@ signal grid_overlay_toggled(visible: bool)
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
 
+## Emitted when the on-screen touch controls preference changes (Settings).
+## Carries the RESOLVED state: "auto" already checked against the hardware.
+@warning_ignore("unused_signal")
+signal touch_controls_changed(enabled: bool)
+
+## Emitted when the player resets the dragged HUD panel positions (Settings).
+## UILayoutManager puts every panel back in its default slot.
+@warning_ignore("unused_signal")
+signal ui_layout_reset()
+
 # ── Persistence ──
 @warning_ignore("unused_signal")
 signal game_new_started()

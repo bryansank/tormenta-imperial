@@ -44,17 +44,9 @@ func _setup_ui() -> void:
 	_status_panel = PanelContainer.new()
 	var status_panel := _status_panel
 	UILayoutManager.apply_layout("NotificationPanel.status", status_panel)
-	var status_style := StyleBoxFlat.new()
-	status_style.bg_color = UITheme.PANEL_BG
-	status_style.set_corner_radius_all(UITheme.CORNER)
-	status_style.set_content_margin_all(10)
-	status_style.border_color = UITheme.ACCENT_DIM
-	status_style.set_border_width_all(2)
-	status_style.border_width_left = 4
-	status_style.border_color = UITheme.ACCENT
-	status_style.shadow_color = Color(0, 0, 0, 0.4)
-	status_style.shadow_size = 4
-	status_panel.add_theme_stylebox_override("panel", status_style)
+	# Misma tarjeta que el panel de recursos, justo encima: se leen como una
+	# sola columna de estado (recursos -> poblacion y moral).
+	status_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2, true))
 	root.add_child(status_panel)
 
 	var status_vbox := VBoxContainer.new()
@@ -107,13 +99,7 @@ func _setup_ui() -> void:
 	# Objective hint (top-center)
 	var obj_panel := PanelContainer.new()
 	UILayoutManager.apply_layout("NotificationPanel.objective", obj_panel)
-	var obj_style := StyleBoxFlat.new()
-	obj_style.bg_color = Color(0.08, 0.06, 0.04, 0.85)
-	obj_style.set_corner_radius_all(UITheme.CORNER)
-	obj_style.set_content_margin_all(10)
-	obj_style.border_width_bottom = 2
-	obj_style.border_color = UITheme.ACCENT
-	obj_panel.add_theme_stylebox_override("panel", obj_style)
+	obj_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT))
 	obj_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(obj_panel)
 
@@ -162,13 +148,7 @@ func _on_notification(message: String, category: String, color: Color) -> void:
 
 func _show_toast(text: String, color: Color) -> void:
 	var toast_bg := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = UITheme.PANEL_BG
-	style.set_corner_radius_all(6)
-	style.set_content_margin_all(6)
-	style.border_color = color.darkened(0.3)
-	style.border_width_left = 3
-	toast_bg.add_theme_stylebox_override("panel", style)
+	toast_bg.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(color.darkened(0.3), 1, true))
 	toast_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var label := UITheme.make_label(text, "small", color)

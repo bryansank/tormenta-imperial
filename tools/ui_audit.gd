@@ -76,6 +76,34 @@ func _run() -> void:
 	_top_up()
 	await _shot("hud")
 
+	# Los globos del tutorial, apilados bajo los paneles que explican: la unica
+	# forma de ver que siguen al HUD y no a coordenadas fijas.
+	if helper != null:
+		var was_helper: bool = GameConfig.ui_helper_visible
+		GameConfig.ui_helper_visible = true
+		helper.visible = true
+		if helper.has_method("_refresh_callouts"):
+			helper._refresh_callouts()
+		await _shot("ayuda")
+		GameConfig.ui_helper_visible = was_helper
+		if helper.has_method("_refresh_callouts"):
+			helper._refresh_callouts()
+		helper.visible = false
+
+	# Menu ☰ desplegado con el panel de edificio abierto: el panel tiene que
+	# nacer debajo del ultimo boton, no detras de ellos.
+	var market: Node = main.get_node_or_null("MarketPanel")
+	var info: Node = main.get_node_or_null("BuildingInfoPanel")
+	if market != null and market.has_method("_toggle_sidebar"):
+		market._toggle_sidebar()
+		var info_modal: Variant = info.get("_panel") if info != null else null
+		if info_modal is CanvasItem:
+			info_modal.visible = true
+		await _shot("menu")
+		if info_modal is CanvasItem:
+			info_modal.visible = false
+		market._toggle_sidebar()
+
 	for p in PANELS:
 		var host: Node = main.get_node_or_null(String(p["node"]))
 		if host == null:

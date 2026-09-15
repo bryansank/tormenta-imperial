@@ -89,14 +89,17 @@ func _process(delta: float) -> void:
 
 func _setup_ui() -> void:
 	_root = Control.new()
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	UILayoutManager.apply_layout("StormHUD", _root)
 	add_child(_root)
 
+	# Se coloca el panel, no el contenedor: asi el objetivo que se apila debajo
+	# ve la altura real del banner, y cuando el banner se oculta (calma) sube a
+	# ocupar su sitio en vez de dejar un hueco vacio arriba de la pantalla.
 	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.visible = false
+	UILayoutManager.apply_layout("StormHUD", _panel)
 	_root.add_child(_panel)
 
 	var hbox := HBoxContainer.new()

@@ -233,6 +233,18 @@ var ui_helper_visible := true
 ## Settings panel; persists in user://settings.cfg like the rest of preferences.
 var ui_fullscreen := false
 
+## Controles tactiles en pantalla (D-pad, zoom, rotar). "auto" los ensena solo
+## si hay pantalla tactil; "always" y "never" fuerzan. En escritorio sobran:
+## hay WASD y rueda, y los botones ocupaban las cuatro esquinas de la pantalla.
+const TOUCH_CONTROLS_MODES := ["auto", "always", "never"]
+var ui_touch_controls := "auto"
+
+## Posiciones de los paneles del HUD que el jugador ha arrastrado (A9):
+## panel_id -> Vector2 (esquina superior izquierda, en px del viewport de
+## referencia, 720 de alto). Un panel que no esta aqui usa su hueco por defecto.
+## Se guardan en la seccion [ui_layout] de settings.cfg, una clave por panel.
+var ui_panel_positions: Dictionary = {}
+
 func _ready() -> void:
 	load_user_settings()
 	# El modo de ventana se aplica en cuanto arranca, antes de que se dibuje la UI.
@@ -249,6 +261,16 @@ func load_user_settings() -> void:
 	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
+	var touch_mode := String(cf.get_value("ui", "touch_controls", ui_touch_controls))
+	# Un valor desconocido en el archivo (edicion a mano, version vieja) vuelve
+	# a "auto" en vez de dejar los controles en un estado que nadie eligio.
+	ui_touch_controls = touch_mode if touch_mode in TOUCH_CONTROLS_MODES else "auto"
+	ui_panel_positions = {}
+	if cf.has_section("ui_layout"):
+		for panel_id in cf.get_section_keys("ui_layout"):
+			var pos: Variant = cf.get_value("ui_layout", panel_id)
+			if pos is Vector2:
+				ui_panel_positions[String(panel_id)] = pos
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -260,7 +282,53 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "grid_visible", ui_grid_visible)
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
+	cf.set_value("ui", "touch_controls", ui_touch_controls)
+	# La seccion se reescribe entera: un panel que volvio a su hueco por
+	# defecto no puede quedar guardado con la posicion vieja.
+	if cf.has_section("ui_layout"):
+		cf.erase_section("ui_layout")
+	for panel_id in ui_panel_positions:
+		cf.set_value("ui_layout", String(panel_id), ui_panel_positions[panel_id])
 	cf.save(USER_SETTINGS_PATH)
+
+# ── Posiciones de la interfaz (A9) ──
+
+## Guarda donde dejo el jugador un panel del HUD. Lo llama UILayoutManager al
+## soltar el asa; nadie mas deberia tocar el diccionario directamente.
+func set_panel_position(panel_id: String, pos: Vector2) -> void:
+	ui_panel_positions[panel_id] = pos
+	save_user_settings()
+
+## Borra todas las posiciones guardadas y avisa para que los paneles vuelvan
+## a sus huecos por defecto sin reiniciar. Boton "Restablecer" de Ajustes.
+func reset_panel_positions() -> void:
+	ui_panel_positions.clear()
+	save_user_settings()
+	EventBus.ui_layout_reset.emit()
+
+# ── Controles tactiles ──
+
+## Si los controles en pantalla deben verse ahora, resolviendo el "auto" contra
+## el hardware real. Es la unica pregunta que hace OnScreenControls.
+func touch_controls_enabled() -> bool:
+	match ui_touch_controls:
+		"always":
+			return true
+		"never":
+			return false
+		_:
+			return DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
+
+## Cambia el modo, lo guarda y anuncia el estado resuelto para que los controles
+## aparezcan o desaparezcan sin reiniciar.
+func set_touch_controls(mode: String) -> void:
+	if not mode in TOUCH_CONTROLS_MODES:
+		mode = "auto"
+	if ui_touch_controls == mode:
+		return
+	ui_touch_controls = mode
+	save_user_settings()
+	EventBus.touch_controls_changed.emit(touch_controls_enabled())
 
 # ── Pantalla completa ──
 

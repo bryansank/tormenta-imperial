@@ -1,6 +1,10 @@
 extends CanvasLayer
 ## On-screen controls: D-pad for panning, rotate buttons, zoom buttons.
 ## Emits signals through EventBus — same as keyboard/touch input.
+##
+## Only shown on touch screens (A5): on a desktop there is WASD and the wheel,
+## and these buttons were eating all four corners of the screen. The player can
+## force them either way from Settings (GameConfig.ui_touch_controls).
 
 ## Degrees the camera snaps per rotate-button press.
 const ROTATE_STEP_DEGREES := 45.0
@@ -15,9 +19,18 @@ func _ready() -> void:
 	EventBus.building_placement_cancelled.connect(func(): _rotate_building_btn.visible = false)
 	EventBus.building_placed.connect(func(_d, _c): pass)  # stay visible during rapid placement
 	EventBus.building_deselected.connect(func(): _rotate_building_btn.visible = false)
+	_apply_visibility(GameConfig.touch_controls_enabled())
+	EventBus.touch_controls_changed.connect(_apply_visibility)
+
+## Hides the whole layer. A held D-pad button is released too, so the camera
+## does not keep drifting after the controls vanish under the finger.
+func _apply_visibility(enabled: bool) -> void:
+	visible = enabled
+	if not enabled:
+		_pan_direction = Vector2.ZERO
 
 func _process(_delta: float) -> void:
-	if _pan_direction != Vector2.ZERO:
+	if visible and _pan_direction != Vector2.ZERO:
 		EventBus.camera_pan_requested.emit(_pan_direction.normalized())
 
 func _setup_ui() -> void:
