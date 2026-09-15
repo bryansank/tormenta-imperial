@@ -82,11 +82,36 @@ var building_prerequisites := {
 	"headquarters": ["barracks", "refinery"],
 }
 
-# ── Deposit Placement Requirements (building must overlap a deposit) ──
+# ── Deposit Placement Rules (extractor next to its deposit) ──
+#
+# Decision del dueno (P1, 2026-09-14): cada extractor se levanta junto al
+# yacimiento que explota, y sigue produciendo pasivamente como siempre. La
+# produccion se lee como "cosechar ese bosque / esa veta", no como madera que
+# aparece de la nada. Nada se agota por producir: el minado a mano en el
+# yacimiento sigue igual.
+#
+# - `deposit`:  id del yacimiento (MapGenerator.DEPOSIT_TYPES).
+# - `reach`:    0 = el edificio debe SOLAPAR el yacimiento (la Refineria se
+#               planta sobre el pozo); 1 = alguna celda del edificio toca alguna
+#               del yacimiento, diagonal incluida, sin pisarlo (nadie construye
+#               encima de los arboles).
+# - `consumes`: si al colocarlo el yacimiento desaparece (solo la Refineria,
+#               como hasta ahora). Con alcance 1 nunca se consume.
+# - `message`:  clave de Tr con el aviso al jugador cuando no se cumple.
+#
+# La misma regla vale para colocar y para MOVER: si no, se colocaba bien y luego
+# se arrastraba a cualquier sitio.
 
-var building_requires_deposit := {
-	"refinery": "oil_well",
+var building_deposit_rules := {
+	"refinery":  {"deposit": "oil_well",     "reach": 0, "consumes": true,  "message": "LBL_REQUIRES_DEPOSIT"},
+	"sawmill":   {"deposit": "forest",       "reach": 1, "consumes": false, "message": "LBL_NEEDS_FOREST_NEAR"},
+	"gold_mine": {"deposit": "gold_vein",    "reach": 1, "consumes": false, "message": "LBL_NEEDS_GOLD_VEIN_NEAR"},
+	"foundry":   {"deposit": "iron_deposit", "reach": 1, "consumes": false, "message": "LBL_NEEDS_IRON_NEAR"},
 }
+
+## Regla de yacimiento de un edificio, o {} si construye donde quiera.
+func get_deposit_rule(building_id: String) -> Dictionary:
+	return building_deposit_rules.get(building_id, {})
 
 # ── Storage ──
 #
@@ -223,7 +248,9 @@ var audio_ambient_volume := 0.5
 const USER_SETTINGS_PATH := "user://settings.cfg"
 
 ## Whether the map cell grid overlay is shown permanently (toggle in Settings).
-var ui_grid_visible := false
+## On by default (A10): the owner wants to see the cells at all times, faintly;
+## the alpha lives in the GridOverlay material in Main.tscn.
+var ui_grid_visible := true
 
 ## Whether the on-screen helper callouts are shown ("?" button). On by default
 ## so new players get guidance; the choice persists once toggled.

@@ -261,29 +261,14 @@ func is_building_staffed(node: Node3D) -> bool:
 	return node.get_meta("staffed", false)
 
 ## Update the visual indicator on a building for worker status.
-func _update_worker_visual(node: Node3D, staffed: bool) -> void:
-	var indicator: Node = node.get_node_or_null("WorkerIndicator")
-	if staffed:
-		if indicator:
-			indicator.queue_free()
-	else:
-		if not indicator:
-			var label := Label3D.new()
-			label.name = "WorkerIndicator"
-			label.text = Tr.t("LBL_NO_WORKERS_SHORT")
-			label.font_size = 36
-			label.pixel_size = 0.01
-			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			label.no_depth_test = true
-			label.outline_size = 8
-			label.outline_modulate = Color(0, 0, 0, 0.8)
-			label.modulate = Color(1.0, 0.3, 0.2, 0.9)
-			var info := GridManager.get_building_info(node)
-			var height := 1.5
-			if not info.is_empty():
-				height = (info["data"] as BuildingData).mesh_height
-			label.position.y = height + 1.2
-			node.add_child(label)
+## El cartel rojo de "SIN TRABAJADORES" ya no se pinta aqui: el estado del
+## edificio vive en su BuildingStatusBadge (A11), que lee la meta `staffed`
+## que acabamos de escribir y la combina con construccion, ruina y procesos
+## para decidir entre Zzz y el obrero. Aqui solo se le avisa de que mire.
+func _update_worker_visual(node: Node3D, _staffed: bool) -> void:
+	var badge: Node = node.get_node_or_null("StatusBadge")
+	if badge and badge.has_method("refresh"):
+		badge.refresh()
 
 func has_enough_workers(data: BuildingData) -> bool:
 	return get_free_workers() >= data.workers_required

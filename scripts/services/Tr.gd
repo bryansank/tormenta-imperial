@@ -49,6 +49,10 @@ const _STRINGS := {
 		"LBL_LIMIT_REACHED": "Limite alcanzado (%d/%d)",
 		"LBL_REQUIRES": "Requiere: %s",
 		"LBL_REQUIRES_DEPOSIT": "Debe colocarse sobre un deposito de petroleo",
+		"LBL_NEEDS_FOREST_NEAR": "El aserradero necesita un bosque al lado",
+		"LBL_NEEDS_GOLD_VEIN_NEAR": "La mina de oro necesita una veta de oro al lado",
+		"LBL_NEEDS_IRON_NEAR": "La fundicion necesita un yacimiento de hierro al lado",
+		"LBL_STATUS_IDLE": "Zzz",
 		"LBL_NOT_ENOUGH_RESOURCES": "Recursos insuficientes!",
 		"LBL_UPGRADE_COMPLETE": "Mejora completa!",
 
@@ -443,6 +447,10 @@ const _STRINGS := {
 		"LBL_LIMIT_REACHED": "Limit reached (%d/%d)",
 		"LBL_REQUIRES": "Requires: %s",
 		"LBL_REQUIRES_DEPOSIT": "Must be placed on an oil deposit",
+		"LBL_NEEDS_FOREST_NEAR": "The sawmill needs a forest next to it",
+		"LBL_NEEDS_GOLD_VEIN_NEAR": "The gold mine needs a gold vein next to it",
+		"LBL_NEEDS_IRON_NEAR": "The foundry needs an iron deposit next to it",
+		"LBL_STATUS_IDLE": "Zzz",
 		"LBL_NOT_ENOUGH_RESOURCES": "Not enough resources!",
 		"LBL_UPGRADE_COMPLETE": "Upgrade complete!",
 
