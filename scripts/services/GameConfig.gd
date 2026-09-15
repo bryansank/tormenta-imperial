@@ -6,6 +6,10 @@ extends Node
 
 var dev_mode := true
 var time_multiplier := 1.0
+## Cuanto se acelera todo en dev_mode. Estaba a 1/10 y Bryan, jugando, no llegaba a
+## leer que pasaba: construir en 1 s y una tormenta cada 30 s convierten el ciclo en
+## un borron. A 1/5 sigue siendo una partida de minutos, pero se entiende.
+var dev_time_scale := 0.2
 
 # ── Population & Morale Constants ──
 
@@ -24,8 +28,8 @@ var growth_interval := 20.0
 
 var event_interval_min := 120.0
 var event_interval_max := 300.0
-var event_interval_min_dev := 15.0
-var event_interval_max_dev := 30.0
+var event_interval_min_dev := 30.0
+var event_interval_max_dev := 60.0
 
 # ── Starting Resources ──
 
@@ -407,7 +411,7 @@ var tech_definitions := [
 
 func get_duration(base: float) -> float:
 	if dev_mode:
-		return maxf(base * 0.1, 1.0)
+		return maxf(base * dev_time_scale, 1.0)
 	return base * time_multiplier
 
 func get_production_with_tech(base_mult: float) -> float:
@@ -417,7 +421,7 @@ func get_build_time(base: float) -> float:
 	if base <= 0.0:
 		return 0.0
 	if dev_mode:
-		return 1.0
+		return 2.0
 	var speed_reduction := maxf(0.0, 1.0 - tech_build_speed_bonus)
 	return base * time_multiplier * speed_reduction
 
@@ -425,7 +429,7 @@ func get_production_interval(base: float) -> float:
 	if base <= 0.0:
 		return 0.0
 	if dev_mode:
-		return 2.0
+		return 4.0
 	return base * time_multiplier
 
 func get_upgrade_duration(level: int) -> float:
