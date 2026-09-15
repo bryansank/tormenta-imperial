@@ -49,6 +49,7 @@ func _new_game() -> void:
 	ArmyManager.reset()
 	CombatManager.reset()
 	StormManager.reset()
+	TutorialManager.reset()
 	# Place nucleo at center (no build time for core)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
@@ -168,6 +169,11 @@ func _load_game() -> void:
 	if data.has("storm"):
 		StormManager.load_save_data(data["storm"])
 
+	# Que ha visto ya el jugador del tutorial. Sin la clave (partida anterior al
+	# tutorial) no ha visto nada, y la intro se le ofrece al terminar la carga.
+	if data.has("tutorial"):
+		TutorialManager.load_save_data(data["tutorial"])
+
 	# La bolsa es una sola y su tope depende de la era, de los almacenes y del arbol
 	# tecnologico: hasta que los tres no estan restaurados no se sabe cuanto cabe. Por
 	# eso el recorte va aqui y no junto a los recursos. Una partida guardada cuando el
@@ -229,6 +235,7 @@ func save_game() -> void:
 	data["army"] = ArmyManager.get_save_data()
 	data["expedition"] = CombatManager.get_save_data()
 	data["storm"] = StormManager.get_save_data()
+	data["tutorial"] = TutorialManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -265,6 +272,7 @@ func clear_save() -> void:
 	ArmyManager.reset()
 	CombatManager.reset()
 	StormManager.reset()
+	TutorialManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null
@@ -289,6 +297,7 @@ func clear_save_and_reload_from(save_data: Dictionary) -> void:
 	ArmyManager.reset()
 	CombatManager.reset()
 	StormManager.reset()
+	TutorialManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null

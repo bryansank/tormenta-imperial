@@ -272,3 +272,21 @@ signal fullscreen_changed(enabled: bool)
 signal game_new_started()
 @warning_ignore("unused_signal")
 signal game_load_completed()
+
+# ── Tutorial ──
+## Emitidas solo por TutorialManager. El manager decide QUE se ensena y CUANDO
+## (una intro por partida, un consejo por suceso); TutorialPanel solo pinta lo
+## que le llega. Asi el manager no conoce a ningun panel y se puede probar sin
+## escena.
+## La intro paginada del lore y del "como se juega". Se pide al empezar partida
+## nueva si aun no se ha visto, y desde show_intro() cuando el jugador la quiera.
+@warning_ignore("unused_signal")
+signal tutorial_intro_requested()
+## Un consejo contextual: tarjeta pequena, no modal, con "Entendido". El texto
+## ya viene traducido para que el panel no tenga que saber de que trata.
+@warning_ignore("unused_signal")
+signal tutorial_tip_requested(tip_id: String, title: String, body: String)
+## El jugador cerro la intro, leida o saltada. Es lo que la marca como vista:
+## saltar cuenta como leer, porque volver a insistir seria castigar el "Saltar".
+@warning_ignore("unused_signal")
+signal tutorial_intro_closed()
