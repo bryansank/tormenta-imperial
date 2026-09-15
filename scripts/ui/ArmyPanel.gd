@@ -195,7 +195,8 @@ func _rebuild_training() -> void:
 		var empty := UITheme.make_label(Tr.t("LBL_ARMY_EMPTY") if ArmyManager.get_total_units() == 0 else "—", "small", UITheme.TEXT_DIM)
 		_training_vbox.add_child(empty)
 		return
-	for item in training:
+	for i in range(training.size()):
+		var item: Dictionary = training[i]
 		var def := GameConfig.get_unit_def(item["id"])
 		var line := HBoxContainer.new()
 		line.add_theme_constant_override("separation", 8)
@@ -207,8 +208,27 @@ func _rebuild_training() -> void:
 		bar.max_value = 1.0
 		bar.value = _training_progress(item)
 		line.add_child(bar)
+		line.add_child(_make_cancel_button(i))
 		_training_vbox.add_child(line)
 		_training_bars.append(bar)
+
+## Cancelar un entrenamiento, diciendo en el propio boton cuanto vuelve.
+## Entrenar era irreversible: pulsar ENTRENAR por error costaba la unidad entera.
+func _make_cancel_button(index: int) -> Button:
+	var refund := ArmyManager.get_training_refund(index)
+	var btn := Button.new()
+	if refund.is_empty():
+		btn.text = Tr.t("LBL_CANCEL_NO_REFUND")
+	else:
+		btn.text = Tr.t("FMT_CANCEL_REFUND") % Tr.amount_list(refund)
+	# En rojo cuando la Tormenta se esta cobrando su parte de la cancelacion.
+	var stormy := GameConfig.get_cancel_refund_ratio() < GameConfig.cancel_refund_ratio
+	UITheme.style_button(btn, UITheme.DANGER.darkened(0.2) if stormy else UITheme.BTN, UITheme.FONT_SMALL)
+	btn.pressed.connect(func():
+		ArmyManager.cancel_training(index)
+		_refresh()
+	)
+	return btn
 
 func _update_training_progress() -> void:
 	var training := ArmyManager.get_training()

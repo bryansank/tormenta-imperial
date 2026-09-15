@@ -281,6 +281,8 @@ func _on_demolish_requested(building: Node3D) -> void:
 		ResourceManager.add(type, int(cost[type] * GameConfig.demolish_refund_ratio))
 	# Unregister from production/construction
 	ProductionManager.unregister(building)
+	# Demoler con algo en curso ya no lo quema: el proceso se cancela como
+	# cualquier otro y devuelve su parte (la Tasa de Corrupcion).
 	ProcessManager.cancel(building)
 	# Save cell before removing for road update
 	var was_road := data.id == "road"

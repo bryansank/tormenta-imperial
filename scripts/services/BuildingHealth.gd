@@ -32,14 +32,41 @@ func get_health_ratio(node: Node3D) -> float:
 func is_ruined(node: Node3D) -> bool:
 	return get_health(node) <= 0
 
+## En pie y funcionando: ni en ruinas ni a medio construir.
+##
+## Es la definicion unica de "cuenta" para todo el que mire edificios. Habia dos
+## copias —una en StormManager para la mitigacion y otra en CombatManager para
+## las dotaciones— y ninguna miraba la construccion, asi que una torre a medio
+## levantar mitigaba daño Y peleaba el Diezmo: colocar torres justo antes de una
+## tormenta pagaba sin haberlas terminado.
+func is_operational(node: Node3D) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
+	if node.has_meta("under_construction"):
+		return false
+	return not is_ruined(node)
+
 func is_damaged(node: Node3D) -> bool:
 	return get_health(node) < get_max_health(node)
+
+## El Núcleo es el suelo de la partida: se puede caer hasta el fondo, pero
+## siempre queda un hilo del que tirar. El guard vive aquí y no en quien golpea
+## para que ninguna fuente de daño futura —torres enemigas, eventos, el Diezmo—
+## tenga que acordarse de filtrarlo.
+func is_core(node: Node3D) -> bool:
+	var info := GridManager.get_building_info(node)
+	if info.is_empty():
+		return false
+	var data: BuildingData = info["data"]
+	return data.is_core
 
 # ── Daño ─────────────────────────────────────────────────────────────
 
 ## Devuelve true si este golpe lo dejó en ruinas.
 func damage_building(node: Node3D, amount: int) -> bool:
 	if node == null or not is_instance_valid(node) or amount <= 0:
+		return false
+	if is_core(node):
 		return false
 	if is_ruined(node):
 		return false
