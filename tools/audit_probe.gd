@@ -120,6 +120,7 @@ func _listen() -> void:
 	EventBus.final_audit_summoned.connect(func(w, s): _log.append("convocada: %d oleadas, convocatoria %d" % [w, s]))
 	EventBus.final_audit_started.connect(func(w): _log.append("empieza: %d oleadas" % w))
 	EventBus.final_audit_wave_ready.connect(func(i, r, sc): _log.append("oleada %d lista: %s x%.2f" % [i, r, sc]))
+	EventBus.encounter_started.connect(func(_i, _b): _capture_board())
 	EventBus.encounter_started.connect(func(_i, _b): _log.append("  tablero: defensa=%s unidades=%d" % [
 		CombatManager.is_defending(), CombatManager.get_units().size()]))
 	EventBus.encounter_ended.connect(func(v, t): _log.append("  oleada resuelta: victoria=%s rondas=%d bajas=%s" % [
@@ -129,7 +130,10 @@ func _listen() -> void:
 	EventBus.storm_halted_forever.connect(func(): _log.append("*** LA TORMENTA SE DETIENE. PARA SIEMPRE. ***"))
 	EventBus.tithe_resolved.connect(func(paid, taken): _log.append("diezmo: repelido=%s se llevan %s" % [paid, taken]))
 
-## Juega el turno activo del jugador: ataca si puede, si no se acerca y pasa.
+## Juega el turno activo del jugador: ataca si puede; si no, se acerca al enemigo
+## vivo mas proximo y vuelve a intentar el ataque. La primera version movia a la
+## ultima casilla valida, que muchas veces era hacia atras: 20 rondas de nada y el
+## desempate por vida total lo daba al enemigo escalado. Eso no probaba el cableado.
 func _play_one_turn() -> void:
 	await get_tree().process_frame
 	if not CombatManager.is_player_turn():
@@ -137,14 +141,69 @@ func _play_one_turn() -> void:
 	var unit: CombatUnit = CombatManager.get_active_unit()
 	if unit == null:
 		return
-	var targets: Array = CombatManager.get_valid_targets(unit.uid)
-	if not targets.is_empty():
-		CombatManager.attack(unit.uid, targets[0])
+	var enc: Encounter = CombatManager.get_encounter()
+	if enc.round_number != _last_round and enc.round_number <= 3:
+		_last_round = enc.round_number
+		var board := "r%d TABLERO:" % enc.round_number
+		for u in CombatManager.get_units():
+			board += " %s%s#%d@%s:%d%s" % ["E" if u.side == Encounter.ENEMY else "J", u.unit_id.left(3), u.uid, u.position, u.hp, "" if u.is_alive() else "x"]
+		print("[audit]   . " + board)
+	var trace := "r%d %s#%d@%s hp=%d" % [enc.round_number, unit.unit_id, unit.uid, unit.position, unit.hp]
+	if _try_attack(unit.uid):
+		_trace(trace + " ATACA")
 		return
 	var cells: Array = CombatManager.get_valid_moves(unit.uid)
 	if not cells.is_empty():
-		CombatManager.move_unit(unit.uid, cells[cells.size() - 1])
-	CombatManager.end_turn()
+		var to: Vector2i = _closest_to_enemy(cells)
+		var moved: bool = CombatManager.move_unit(unit.uid, to)
+		await get_tree().process_frame
+		trace += " mueve->%s ok=%s" % [to, moved]
+		if _try_attack(unit.uid):
+			_trace(trace + " ATACA")
+			return
+	else:
+		trace += " sin_movs"
+	var ended: bool = CombatManager.end_turn()
+	_trace(trace + " pasa ok=%s" % ended)
+
+var _traces := 0
+var _last_round := -1
+func _trace(line: String) -> void:
+	_traces += 1
+	if _traces <= 45:
+		print("[audit]   . " + line)
+
+func _try_attack(uid: int) -> bool:
+	var targets: Array = CombatManager.get_valid_targets(uid)
+	if targets.is_empty():
+		return false
+	return CombatManager.attack(uid, targets[0])
+
+func _closest_to_enemy(cells: Array) -> Vector2i:
+	var best: Vector2i = cells[0]
+	var best_d := 1 << 30
+	for cell in cells:
+		for enemy in CombatManager.get_units():
+			if enemy.side != Encounter.ENEMY or not enemy.is_alive():
+				continue
+			var d: int = absi(cell.x - enemy.position.x) + absi(cell.y - enemy.position.y)
+			if d < best_d:
+				best_d = d
+				best = cell
+	return best
+
+## Una foto del tablero de la primera oleada, para mirarlo con ojos y no solo
+## por el log. Va a user:// para que no ensucie el repo.
+var _captured := false
+func _capture_board() -> void:
+	if _captured:
+		return
+	_captured = true
+	# Con la IA sin pausa la oleada dura un suspiro: la foto tiene que ser rapida.
+	await get_tree().create_timer(0.3).timeout
+	var img: Image = get_viewport().get_texture().get_image()
+	img.save_png("user://audit_board.png")
+	print("[audit] captura: %s" % ProjectSettings.globalize_path("user://audit_board.png"))
 
 func _audit_state() -> String:
 	var a = ProgressionManager.final_audit

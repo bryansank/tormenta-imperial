@@ -41,6 +41,14 @@ func test_a_halted_storm_is_never_active_whatever_the_phase_says() -> void:
 	cycle.phase = StormCycle.Phase.STORM
 	assert_bool(StormManager.is_cycle_active()).is_false()
 
+func test_a_halted_storm_cancels_at_the_calm_price() -> void:
+	# La deuda de GameConfig: el reembolso leia la fase a pelo. Con la Tormenta
+	# parada la fase es CALM de todos modos, pero la fuente de verdad es una sola.
+	EventBus.storm_halted_forever.emit()
+	var cycle: StormCycle = StormManager.get_cycle()
+	cycle.phase = StormCycle.Phase.STORM
+	assert_float(GameConfig.get_cancel_refund_ratio()).is_equal(GameConfig.cancel_refund_ratio)
+
 # ── Parar para siempre ───────────────────────────────────────────────
 
 func test_halting_stops_and_disarms_the_clock() -> void:
@@ -138,3 +146,47 @@ func test_without_a_scale_the_defence_fields_enemies_as_before() -> void:
 	for unit in CombatManager.get_units():
 		if unit.side == Encounter.ENEMY:
 			assert_int(unit.max_hp).is_equal(base_hp)
+
+# ── Cada unidad del tablero tiene su propio uid ──────────────────────
+#
+# La guarnicion del asedio la numera FinalAudit; las dotaciones y el enemigo los
+# numera CombatManager. Sin reservar los primeros, los segundos repetian numero
+# y Encounter.get_unit() confundia a unos con otros: los defensores se mataban
+# entre si y la Regencia salia ilesa de las veinte rondas.
+
+func _assert_uids_are_unique() -> void:
+	var seen := {}
+	for unit in CombatManager.get_units():
+		assert_bool(seen.has(unit.uid)).override_failure_message(
+			"uid %d repetido en el tablero" % unit.uid).is_false()
+		seen[unit.uid] = true
+
+func test_units_handed_in_keep_their_uids_and_the_enemy_never_reuses_them() -> void:
+	var handed: Array = []
+	for i in range(1, 4):
+		handed.append(CombatUnit.create(i, "infantry", Encounter.PLAYER, 1.0))
+	CombatManager.start_encounter_with_units(handed, {"infantry": 2, "artillery": 1}, false, 0, true, [])
+	assert_int(CombatManager.get_units().size()).is_equal(6)
+	_assert_uids_are_unique()
+	for i in range(1, 4):
+		var unit: CombatUnit = CombatManager.get_encounter().get_unit(i)
+		assert_int(unit.side).is_equal(Encounter.PLAYER)
+
+func test_the_first_audit_wave_fields_a_board_without_duplicate_uids() -> void:
+	# El camino real: convocar, bajar, y mirar el tablero que abre la oleada.
+	var progression_saved: Dictionary = ProgressionManager.get_save_data()
+	ArmyManager.load_save_data({"units": {"infantry": 3, "vehicle": 1}, "training": [], "upkeep_accum": 0.0})
+	ProgressionManager.final_audit = null
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	assert_bool(CombatManager.is_in_encounter()).is_true()
+	_assert_uids_are_unique()
+	var enemies := 0
+	for unit in CombatManager.get_units():
+		if unit.side == Encounter.ENEMY:
+			enemies += 1
+	assert_int(enemies).is_greater(0)
+	# El asedio es estado del servicio: se deja como estaba.
+	CombatManager.end_encounter()
+	ProgressionManager.final_audit = null
+	ProgressionManager.load_save_data(progression_saved)

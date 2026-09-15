@@ -155,6 +155,9 @@ func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> 
 	if audit == null:
 		return
 	var defenders: Array = audit.living_garrison().duplicate()
+	# Las dotaciones se fabrican aqui, antes de _open(): sin esto nacerian con los
+	# uids 1 y 2, los mismos que la guarnicion, y no llegarian a actuar nunca.
+	_reserve_uids(defenders)
 
 	_morale_snapshot = _read_morale()
 	# Una torre no se cansa, una dotacion si muere. Cada oleada las torres en pie
@@ -265,6 +268,12 @@ func start_encounter_with_units(player_units: Array, enemy_roster: Dictionary, i
 func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array, enemy_scale: float = -1.0) -> void:
 	# Una escala dada (las oleadas del asedio) manda sobre la del jefe.
 	var scale: float = enemy_scale if enemy_scale > 0.0 else (GameConfig.combat_boss_multiplier if is_boss else 1.0)
+	# Las unidades que llegan hechas (la guarnicion del asedio, que FinalAudit
+	# numera por su cuenta) traen sus uids puestos. Si no se reservan, el enemigo
+	# se fabrica desde 1 y colisiona con ellas: Encounter.get_unit() devuelve la
+	# primera coincidencia, asi que cada golpe al "enemigo #3" caia sobre el
+	# defensor #3 y la Regencia no sangraba nunca. La sonda del asedio lo destapo.
+	_reserve_uids(player_units)
 	var units: Array = player_units.duplicate()
 	units.append_array(_build_side(enemy_roster, Encounter.ENEMY, scale))
 
@@ -279,6 +288,12 @@ func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encount
 	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())
+
+## Empuja el contador por encima de cualquier uid que ya exista en `units`, para
+## que todo lo que se fabrique despues (dotaciones, enemigo) no repita ninguno.
+func _reserve_uids(units: Array) -> void:
+	for unit in units:
+		_next_uid = maxi(_next_uid, int(unit.uid) + 1)
 
 func _build_side(roster: Dictionary, side: int, scale: float) -> Array:
 	var built: Array = []
