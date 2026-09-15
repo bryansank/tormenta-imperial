@@ -5,6 +5,10 @@ extends Node3D
 
 enum State { IDLE, PLACING, MOVING }
 
+## Preloaded so placement does not depend on the editor's global class cache
+## (a fresh clone runs the game headless before any editor scan).
+const StatusBadge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
+
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
 const DRAG_PAN_THRESHOLD := 6.0  # px of movement before a click becomes a pan
@@ -202,19 +206,10 @@ func _update_preview() -> void:
 		var world_pos := GridManager.building_center(cell, rotated_size)
 		_preview_node.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
 
-		var can_place: bool
-		if _state == State.MOVING:
-			can_place = GridManager.can_place(cell, rotated_size, _moving_building)
-		else:
-			can_place = GridManager.can_place(cell, rotated_size)
-			# For deposit-requiring buildings, check overlap with required deposit
-			var required_dep: String = GameConfig.building_requires_deposit.get(_current_data.id, "")
-			if required_dep != "" and _state == State.PLACING:
-				var cells := GridManager._get_cells_for(cell, rotated_size)
-				var map_gen: Node = get_tree().current_scene.get_node_or_null("MapGenerator")
-				var has_deposit := map_gen and map_gen.find_deposit_at_cells(required_dep, cells) != null
-				# Valid only if overlapping with the deposit (cells occupied by deposit are OK)
-				can_place = has_deposit
+		# Same verdict for placing and moving: the ghost goes red wherever the
+		# click would be refused, deposit rule included.
+		var ignore: Node3D = _moving_building if _state == State.MOVING else null
+		var can_place: bool = evaluate_placement(_current_data.id, cell, rotated_size, _map_generator(), ignore)["ok"]
 
 		# Update ghost material (green = valid, red = invalid)
 		if can_place != _last_preview_valid:
@@ -305,20 +300,11 @@ func _on_demolish_requested(building: Node3D) -> void:
 
 func _try_place(cell: Vector2i) -> void:
 	var rotated_size := _get_rotated_size()
-	# Check if building requires a deposit underneath
-	var required_deposit: String = GameConfig.building_requires_deposit.get(_current_data.id, "")
-	var consumed_deposit: Node3D = null
-	if required_deposit != "":
-		var cells := GridManager._get_cells_for(cell, rotated_size)
-		var map_gen: Node = get_tree().current_scene.get_node_or_null("MapGenerator")
-		if map_gen:
-			consumed_deposit = map_gen.find_deposit_at_cells(required_deposit, cells)
-		if consumed_deposit == null:
-			_show_feedback(Tr.t("LBL_REQUIRES_DEPOSIT"))
-			return
-		# Remove deposit from grid so can_place succeeds
-		map_gen.remove_deposit(consumed_deposit)
-	if not GridManager.can_place(cell, rotated_size):
+	var map_gen := _map_generator()
+	var verdict := evaluate_placement(_current_data.id, cell, rotated_size, map_gen)
+	if not verdict["ok"]:
+		if verdict["reason"] == "deposit":
+			_reject_for_deposit(_current_data.id)
 		return
 	# Check building limit
 	if not _check_building_limit(_current_data.id):
@@ -341,6 +327,10 @@ func _try_place(cell: Vector2i) -> void:
 			_show_feedback(Tr.t("LBL_NOT_ENOUGH_RESOURCES"))
 			return
 		ResourceManager.spend_cost(cost)
+	# Only now, with every check passed, does a consuming building eat its
+	# deposit. Before, the oil well was removed BEFORE the limit / cost checks,
+	# so a refused placement could still swallow the well.
+	_consume_deposit_if_required(verdict, map_gen)
 	# Create building with rotation applied
 	var building := _create_building_mesh(_current_data)
 	building.set_meta("level", 1)
@@ -386,8 +376,15 @@ func _start_moving(building: Node3D) -> void:
 
 func _try_move(cell: Vector2i) -> void:
 	var rotated_size := _get_rotated_size()
-	if not GridManager.can_place(cell, rotated_size, _moving_building):
+	# Moving obeys the same deposit rule as placing; otherwise a sawmill could be
+	# planted by a forest and then dragged anywhere.
+	var map_gen := _map_generator()
+	var verdict := evaluate_placement(_current_data.id, cell, rotated_size, map_gen, _moving_building)
+	if not verdict["ok"]:
+		if verdict["reason"] == "deposit":
+			_reject_for_deposit(_current_data.id)
 		return
+	_consume_deposit_if_required(verdict, map_gen)
 	# Remember old cell for road updates
 	var old_info := GridManager.get_building_info(_moving_building)
 	var old_cell: Vector2i = old_info.get("origin_cell", cell)
@@ -419,6 +416,47 @@ func _try_move(cell: Vector2i) -> void:
 	_current_data = null
 	_rotation_steps = 0
 	_state = State.IDLE
+
+# ── Deposit rules ──
+
+## The scene's MapGenerator, or null (tests, or a scene without one).
+func _map_generator() -> Node:
+	var scene := get_tree().current_scene if is_inside_tree() else null
+	return scene.get_node_or_null("MapGenerator") if scene else null
+
+## Full placement verdict for `building_id` with footprint `size` at `cell`:
+## the GameConfig deposit rule (reach / overlap) AND free cells. Static so the
+## same function serves the ghost preview, the click, the move and the tests.
+## `ignore_building` is the building being moved (its own cells count as free).
+## Returns {"ok": bool, "reason": "" | "deposit" | "occupied", "deposit": Node3D}.
+static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector2i, map_gen: Node, ignore_building: Node3D = null) -> Dictionary:
+	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
+	var deposit: Node3D = null
+	if not rule.is_empty():
+		var cells: Array = GridManager.cells_for(cell, size)
+		if map_gen != null and map_gen.has_method("find_deposit_near_cells"):
+			deposit = map_gen.find_deposit_near_cells(String(rule["deposit"]), cells, int(rule["reach"]))
+		if deposit == null:
+			return {"ok": false, "reason": "deposit", "deposit": null}
+	# A deposit that gets consumed sits under the building: its cells are fine.
+	var ignore_obstacle: Node3D = deposit if bool(rule.get("consumes", false)) else null
+	if not GridManager.can_place(cell, size, ignore_building, ignore_obstacle):
+		return {"ok": false, "reason": "occupied", "deposit": deposit}
+	return {"ok": true, "reason": "", "deposit": deposit}
+
+## Removes the deposit a consuming building (the Refinery) is placed on.
+func _consume_deposit_if_required(verdict: Dictionary, map_gen: Node) -> void:
+	var rule: Dictionary = GameConfig.get_deposit_rule(_current_data.id)
+	var deposit: Node3D = verdict.get("deposit", null)
+	if deposit != null and bool(rule.get("consumes", false)) and map_gen != null:
+		map_gen.remove_deposit(deposit)
+
+## Tells the player why the click was refused, on screen and in the log.
+func _reject_for_deposit(building_id: String) -> void:
+	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
+	var msg: String = Tr.t(String(rule.get("message", "LBL_REQUIRES_DEPOSIT")))
+	_show_feedback(msg)
+	EventBus.notification_posted.emit(msg, "warning", Color(0.9, 0.6, 0.3))
 
 # ── Preview Mesh ──
 
@@ -635,6 +673,13 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	label.modulate = Color(1, 1, 1, 1)
 	label.visible = false
 	root.add_child(label)
+
+	# Status badge (A11): Zzz / worker above every building that can work.
+	# Measured from the real mesh so it clears the Nucleo's scaled dome too.
+	var badge: Label3D = StatusBadge.new()
+	var top: float = maxf(data.mesh_height, StatusBadge.measure_top(root))
+	root.add_child(badge)
+	badge.setup(root, data, top)
 
 	return root
 

@@ -47,7 +47,7 @@ No service references another directly -- only through EventBus.
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
 | 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus (~25 signal categories) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch |
-| 5 | `GridManager` | `scripts/grid/GridManager.gd` | 25x25 cell grid, building/obstacle placement |
+| 5 | `GridManager` | `scripts/grid/GridManager.gd` | 40x40 cell grid (2.0 units/cell, origin -40,-40), building/obstacle placement |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
 | 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load, new game, offline progression |
 | 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining) |
@@ -70,8 +70,8 @@ Main (Node3D)
   +-- MonumentalCamera (Camera3D)
   +-- DirectionalLight
   +-- WorldEnvironment
-  +-- IslandGenerator (Node3D) -- procedural island mesh
-  +-- GridOverlay (MeshInstance3D) -- debug grid (hidden)
+  +-- IslandGenerator (Node3D) -- procedural island mesh: a rounded square that covers the whole 40x40 grid (shore and water start outside it)
+  +-- GridOverlay (MeshInstance3D) -- faint cell grid, on by default (Settings toggle), fitted to GridManager at runtime
   +-- BuildingPlacer (Node3D) -- handles placement/move/demolish
   +-- OnScreenControls (CanvasLayer) -- mobile D-pad, zoom, rotate
   +-- ResourceHUD (CanvasLayer) -- top bar: gold/steel/oil/wood
@@ -283,7 +283,7 @@ tormenta-imperial/
 |   |   +-- BuildingPlacer.gd       # Placement/move/demolish + mesh spawning
 |   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes for all 14 buildings
 |   +-- camera/MonumentalCamera.gd   # Orthographic 45deg RTS camera
-|   +-- grid/GridManager.gd          # 25x25 cell grid
+|   +-- grid/GridManager.gd          # 40x40 cell grid; the island covers every cell
 |   +-- map/
 |   |   +-- IslandGenerator.gd      # Procedural island mesh
 |   |   +-- MapGenerator.gd         # Random deposit spawning
