@@ -34,6 +34,20 @@ var _last_result: Dictionary = {}
 ## jugador cañones que nunca envió.
 var _tower_crew_uids: Dictionary = {}
 
+## La Auditoria Final: el asedio en casa con el que termina la partida.
+## FinalAudit (en ProgressionManager) lleva la guarnicion oleada a oleada y
+## arrastra su daño; aqui solo se pone cada oleada en el tablero y se devuelve
+## el resultado. Las dotaciones de torre no son del asedio: las compone quien lo
+## lanza, y tambien sufren atricion — no hay relevos.
+var _audit_wave_active: bool = false
+var _audit_crews: Array = []
+## Dotaciones caidas en lo que va de asedio. Las torres no se cansan, pero a
+## una dotacion muerta no la reemplaza nadie.
+var _audit_crew_losses: int = 0
+
+func _ready() -> void:
+	EventBus.final_audit_wave_ready.connect(_on_final_audit_wave_ready)
+
 # ── Queries ──────────────────────────────────────────────────────────
 
 func get_encounter() -> Encounter:
@@ -108,7 +122,7 @@ func get_deployable_units() -> Dictionary:
 ## como siempre. El hueco existe porque una defensa no siempre empieza de cero:
 ## encadenar oleadas solo significa algo si los supervivientes entran tocados a la
 ## siguiente, y recalcular la guarnición cada vez borraría precisamente eso.
-func start_defense(enemy_roster: Dictionary, defenders: Array = []) -> bool:
+func start_defense(enemy_roster: Dictionary, defenders: Array = [], enemy_scale: float = -1.0) -> bool:
 	if is_in_encounter() or enemy_roster.is_empty():
 		return false
 
@@ -120,18 +134,62 @@ func start_defense(enemy_roster: Dictionary, defenders: Array = []) -> bool:
 		for unit in defenders:
 			if _tower_crew_uids.has(unit.uid):
 				carried.append(unit.uid)
-		start_encounter_with_units(defenders, enemy_roster, false, 0, true, carried)
+		start_encounter_with_units(defenders, enemy_roster, false, 0, true, carried, enemy_scale)
 		return true
 
 	var garrison: Dictionary = get_garrison()
 	var crews: Dictionary = get_tower_crews(garrison)
 	if garrison.is_empty() and crews.is_empty():
 		return false
-	start_encounter(garrison, enemy_roster, false, 0, true, crews)
+	start_encounter(garrison, enemy_roster, false, 0, true, crews, enemy_scale)
 	if not crews.is_empty():
 		EventBus.notification_posted.emit(
 			Tr.t("STORM_TITHE_TOWER_CREWS") % roster_size(crews), "positive", UITheme.ACCENT)
 	return true
+
+## Una oleada del asedio pide tablero. Los defensores son la guarnicion viva que
+## lleva FinalAudit —con el daño de la oleada anterior— mas las dotaciones de
+## torre que sigan en pie. Sin relevos: lo que cae, cae.
+func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> void:
+	var audit = ProgressionManager.final_audit
+	if audit == null:
+		return
+	var defenders: Array = audit.living_garrison().duplicate()
+
+	_morale_snapshot = _read_morale()
+	# Una torre no se cansa, una dotacion si muere. Cada oleada las torres en pie
+	# vuelven a mandar gente entera, pero las dotaciones caidas en oleadas
+	# anteriores no se reemplazan: la atricion tambien les toca a ellas.
+	if wave <= 0:
+		_audit_crew_losses = 0
+	else:
+		for crew in _audit_crews:
+			if not crew.is_alive():
+				_audit_crew_losses += 1
+	var counts: Dictionary = {}
+	for unit in defenders:
+		counts[unit.unit_id] = int(counts.get(unit.unit_id, 0)) + 1
+	var wanted: int = roster_size(get_tower_crews(counts)) - _audit_crew_losses
+	_audit_crews = []
+	if wanted > 0:
+		_audit_crews = _build_side({GameConfig.storm_tower_garrison_unit: wanted}, Encounter.PLAYER, 1.0)
+	for crew in _audit_crews:
+		_tower_crew_uids[crew.uid] = true
+	defenders.append_array(_audit_crews)
+
+	# Sin nadie en pie no se abre tablero: si se llamara a start_defense() con la
+	# lista vacia, esta caeria al camino normal y armaria la defensa desde
+	# ArmyManager, que no es la guarnicion del asedio. FinalAudit ya declara la
+	# derrota al quedarse sin gente, pero este guard evita depender de ello.
+	if defenders.is_empty():
+		ProgressionManager.report_audit_wave(false)
+		return
+
+	_audit_wave_active = true
+	if not start_defense(roster, defenders, scale):
+		# Nadie en pie: la oleada pasa por encima sin abrir tablero.
+		_audit_wave_active = false
+		ProgressionManager.report_audit_wave(false)
 
 ## Everything trained and at home, up to the board's cap.
 func get_garrison() -> Dictionary:
@@ -184,28 +242,29 @@ func is_defending() -> bool:
 ## `reinforcements` son unidades del jugador que no salen de su ejército (hoy,
 ## las dotaciones de torre). Entran al tablero como cualquier otra, pero se
 ## anotan aparte para que las bajas no toquen el roster de ArmyManager.
-func start_encounter(party: Dictionary, enemy_roster: Dictionary, is_boss: bool = false, encounter_index: int = 0, is_defense: bool = false, reinforcements: Dictionary = {}) -> void:
+func start_encounter(party: Dictionary, enemy_roster: Dictionary, is_boss: bool = false, encounter_index: int = 0, is_defense: bool = false, reinforcements: Dictionary = {}, enemy_scale: float = -1.0) -> void:
 	_morale_snapshot = _read_morale()
 	var player_units: Array = _build_side(party, Encounter.PLAYER, 1.0)
 	var crew_uids: Array = []
 	for crew in _build_side(reinforcements, Encounter.PLAYER, 1.0):
 		crew_uids.append(crew.uid)
 		player_units.append(crew)
-	_open(player_units, enemy_roster, is_boss, encounter_index, is_defense, crew_uids)
+	_open(player_units, enemy_roster, is_boss, encounter_index, is_defense, crew_uids, enemy_scale)
 
 ## El mismo encuentro, pero con el bando del jugador ya construido: las unidades
 ## entran con la vida que traen en vez de nacer enteras. Es lo que permite
 ## encadenar encuentros sin que cada uno empiece de cero.
 ##
 ## `crew_uids` marca cuáles de esas unidades no pertenecen al ejército.
-func start_encounter_with_units(player_units: Array, enemy_roster: Dictionary, is_boss: bool = false, encounter_index: int = 0, is_defense: bool = false, crew_uids: Array = []) -> void:
+func start_encounter_with_units(player_units: Array, enemy_roster: Dictionary, is_boss: bool = false, encounter_index: int = 0, is_defense: bool = false, crew_uids: Array = [], enemy_scale: float = -1.0) -> void:
 	_morale_snapshot = _read_morale()
-	_open(player_units, enemy_roster, is_boss, encounter_index, is_defense, crew_uids)
+	_open(player_units, enemy_roster, is_boss, encounter_index, is_defense, crew_uids, enemy_scale)
 
 ## Único sitio donde se abre un tablero: monta el bando enemigo, fija quién no
 ## cuenta como ejército y arranca.
-func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array) -> void:
-	var scale: float = GameConfig.combat_boss_multiplier if is_boss else 1.0
+func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array, enemy_scale: float = -1.0) -> void:
+	# Una escala dada (las oleadas del asedio) manda sobre la del jefe.
+	var scale: float = enemy_scale if enemy_scale > 0.0 else (GameConfig.combat_boss_multiplier if is_boss else 1.0)
 	var units: Array = player_units.duplicate()
 	units.append_array(_build_side(enemy_roster, Encounter.ENEMY, scale))
 
@@ -276,10 +335,17 @@ func build_enemy_roster(party: Dictionary, depth: int) -> Dictionary:
 	return roster
 
 func end_encounter() -> void:
+	var was_audit_wave: bool = _audit_wave_active
+	var wave_won: bool = bool(_last_result.get("victory", false))
+	_audit_wave_active = false
 	if _encounter != null:
 		_encounter.release_survivors()
 	_encounter = null
 	_enemy_turn_running = false
+	# Se reporta con el tablero ya cerrado: si se hiciera al terminar la pelea,
+	# la oleada siguiente llegaria con is_in_encounter() aun en true y se perderia.
+	if was_audit_wave:
+		ProgressionManager.report_audit_wave(wave_won)
 
 # ── Player actions ───────────────────────────────────────────────────
 
@@ -516,6 +582,9 @@ func load_save_data(_data: Dictionary) -> void:
 func reset() -> void:
 	_encounter = null
 	_enemy_turn_running = false
+	_audit_wave_active = false
+	_audit_crews.clear()
+	_audit_crew_losses = 0
 	_next_uid = 1
 	_result_applied = false
 	_last_result = {}

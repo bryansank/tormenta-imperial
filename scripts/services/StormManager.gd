@@ -21,16 +21,22 @@ var _cycle: StormCycle = null
 ## The storm stays asleep until the base is real enough to be noticed. In the
 ## fiction, a province that does not show up in the ledger is not worth a storm.
 var _armed: bool = false
+## Ganada la Auditoria Final, la Tormenta no vuelve. Vive aqui y no en
+## StormCycle a proposito: load_save_data() reconstruye el ciclo entero desde el
+## dict, y un from_dict que no lo contemplara lo borraria al cargar.
+var _halted: bool = false
 
 func _ready() -> void:
 	_cycle = StormCycleScript.create()
 	EventBus.phase_advanced.connect(_on_phase_advanced)
 	EventBus.game_load_completed.connect(_check_arming)
 	EventBus.encounter_ended.connect(_on_encounter_ended)
+	EventBus.storm_halted_forever.connect(_on_halted_forever)
+	EventBus.final_audit_lost.connect(_on_final_audit_lost)
 	_check_arming()
 
 func _process(delta: float) -> void:
-	if not _armed or _cycle == null:
+	if _halted or not _armed or _cycle == null:
 		return
 	_publish(_cycle.advance(delta))
 
@@ -75,10 +81,38 @@ func storms_survived() -> int:
 ## the same threshold at which consumption and events wake up. Before that the
 ## player is still invisible, and that is exactly the point.
 func _check_arming() -> void:
-	if _armed:
+	if _halted or _armed:
 		return
 	if ProgressionManager.current_phase >= GameConfig.Phase.SETTLEMENT:
 		_armed = true
+
+## Hay tormenta en marcha (cualquier fase que no sea la calma). Es la mitad de
+## StormManager de la deuda de GameConfig: la tabla de balance no debe
+## preguntarle la fase a un autoload posterior; recibe este bool.
+func is_cycle_active() -> bool:
+	return not _halted and _cycle != null and _cycle.phase != StormCycle.Phase.CALM
+
+func is_halted() -> bool:
+	return _halted
+
+## La Regencia ha perdido la Auditoria Final. Se para el reloj para siempre y se
+## levanta cualquier efecto que hubiera encima. Sin bool: quien emite esto ya ha
+## decidido; aqui solo se obedece.
+func _on_halted_forever() -> void:
+	_halted = true
+	_armed = false
+	GameConfig.event_production_multiplier = 1.0
+	_cycle = StormCycleScript.create()
+	EventBus.storm_phase_changed.emit(StormCycle.Phase.CALM, 0.0)
+
+## Perder el asedio no es perder la partida, pero pasa por encima: Diezmo a
+## severidad maxima y una tormenta maxima de daño. La base queda en ruinas y con
+## el reloj corriendo, y el jugador reconstruye y vuelve a convocarlos.
+func _on_final_audit_lost(_wave: int) -> void:
+	var worst: int = GameConfig.storm_severity_max
+	_damage_buildings(worst)
+	var taken: Dictionary = _collect_tithe(worst)
+	EventBus.tithe_resolved.emit(false, taken)
 
 func _on_phase_advanced(_phase: int) -> void:
 	_check_arming()
@@ -444,14 +478,19 @@ func get_save_data() -> Dictionary:
 		return {}
 	var data: Dictionary = _cycle.to_dict()
 	data["armed"] = _armed
+	data["halted"] = _halted
 	return data
 
 func load_save_data(data: Dictionary) -> void:
 	_cycle = StormCycleScript.from_dict(data)
 	_armed = bool(data.get("armed", false))
+	_halted = bool(data.get("halted", false))
+	if _halted:
+		_armed = false
 	GameConfig.event_production_multiplier = 1.0
 
 func reset() -> void:
 	_cycle = StormCycleScript.create()
 	_armed = false
+	_halted = false
 	GameConfig.event_production_multiplier = 1.0

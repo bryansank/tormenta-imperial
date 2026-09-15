@@ -40,6 +40,8 @@ func _ready() -> void:
 	EventBus.storm_started.connect(_on_storm)
 	EventBus.storm_false_alarm.connect(_on_false_alarm)
 	EventBus.storm_ended.connect(_on_ended)
+	# Ganada la Auditoria Final no hay fundido: el aire aclara de golpe y para siempre.
+	EventBus.storm_halted_forever.connect(restore_now)
 
 ## La escena no existe todavía en `_ready` de un autoload, así que se busca
 ## perezosamente la primera vez que hace falta.
