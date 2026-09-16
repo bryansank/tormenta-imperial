@@ -373,6 +373,9 @@ const _STRINGS := {
 		"FMT_SPREAD_REDUCTION": "-%d%% margen",
 		"FMT_CONSUMPTION_REDUCTION": "-%d%% consumo",
 		"FMT_BUILD_SPEED": "+%d%% velocidad",
+
+		# Helper callout: Skirmish button (appears with the first Barracks)
+		"LBL_HELP_SKIRMISH": "ESCARAMUZAS: desde aqui mandas expediciones con tu ejercito y, cuando estes listo, convocas la Auditoria Final.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -716,6 +719,9 @@ const _STRINGS := {
 		"FMT_SPREAD_REDUCTION": "-%d%% spread",
 		"FMT_CONSUMPTION_REDUCTION": "-%d%% consumption",
 		"FMT_BUILD_SPEED": "+%d%% build speed",
+
+		# Helper callout: Skirmish button (appears with the first Barracks)
+		"LBL_HELP_SKIRMISH": "SKIRMISH: from here you send expeditions with your army and, when ready, summon the Final Audit.",
 	},
 }
 

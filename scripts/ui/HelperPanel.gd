@@ -4,12 +4,23 @@ extends CanvasLayer
 ## plus a building guide modal describing every building.
 ## The on/off state persists in user://settings.cfg (GameConfig.ui_helper_visible).
 
+## Node name of the Skirmish callout, so tests and tools can find it.
+const SKIRMISH_CALLOUT_NAME := "SkirmishCallout"
+## Width of the Skirmish callout and the gap it keeps from the sidebar button.
+const SKIRMISH_CALLOUT_WIDTH := 240
+const SKIRMISH_CALLOUT_GAP := 12
+## Sidebar buttons hang from the right edge at offset_left = -176 (see
+## SkirmishPanel/ArmyPanel); the callout sits to their left.
+const SIDEBAR_BTN_LEFT := 176
+
 var _callouts: Control
 var _helper_btn: Button
 var _guide_btn: Button
 var _guide_panel: PanelContainer
 var _backdrop: ColorRect
 var _guide_open := false
+var _skirmish_callout: PanelContainer
+var _sidebar_visible := false
 
 func _ready() -> void:
 	layer = 14  # Above HUD (10), below modal panels (15)
@@ -19,6 +30,15 @@ func _ready() -> void:
 	# pantalla y en ese momento lo unico que importa es el reloj de la Tormenta.
 	EventBus.storm_incoming.connect(func(_s, _sev): _set_callouts_visible(false))
 	EventBus.tithe_resolved.connect(func(_paid, _taken): _restore_callouts())
+	# El globo de Escaramuzas sigue al boton lateral: mismo gate (hay Cuartel y
+	# la barra esta abierta) y mismas señales que usa SkirmishPanel para decidirlo.
+	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
+	EventBus.building_placed.connect(func(_d, _c): _update_skirmish_callout())
+	EventBus.building_demolished.connect(func(_n, _c): _update_skirmish_callout())
+	EventBus.army_changed.connect(func(_a = null): _update_skirmish_callout())
+	EventBus.game_new_started.connect(_update_skirmish_callout)
+	EventBus.game_load_completed.connect(_update_skirmish_callout)
+	_update_skirmish_callout()
 	_set_callouts_visible(GameConfig.ui_helper_visible)
 
 func _setup_ui() -> void:
@@ -60,6 +80,13 @@ func _setup_ui() -> void:
 	_add_callout(Tr.t("LBL_HELP_CAMERA"), Control.PRESET_BOTTOM_LEFT, Vector2(20, -260), 220)
 	# Bottom-right: rotate/zoom
 	_add_callout(Tr.t("LBL_HELP_ZOOM"), Control.PRESET_BOTTOM_RIGHT, Vector2(-240, -260), 220)
+	# Right, beside the Skirmish sidebar button: one callout, shown only while
+	# that button exists (first Barracks built, sidebar open). Never a wall.
+	var skirmish_x := -(SIDEBAR_BTN_LEFT + SKIRMISH_CALLOUT_GAP + SKIRMISH_CALLOUT_WIDTH)
+	var skirmish_y := UILayoutManager.get_sidebar_button_offset("SkirmishPanel.button")
+	_skirmish_callout = _add_callout(Tr.t("LBL_HELP_SKIRMISH"), Control.PRESET_TOP_RIGHT, Vector2(skirmish_x, skirmish_y), SKIRMISH_CALLOUT_WIDTH)
+	_skirmish_callout.name = SKIRMISH_CALLOUT_NAME
+	_skirmish_callout.visible = false
 
 	# Building guide button (under the "?", only while helper is on)
 	_guide_btn = Button.new()
@@ -116,8 +143,9 @@ func _setup_ui() -> void:
 	for data in _load_buildings():
 		list.add_child(_make_building_entry(data))
 
-## One anchored tip label with a dark framed background.
-func _add_callout(text: String, preset: Control.LayoutPreset, offset: Vector2, width: int) -> void:
+## One anchored tip label with a dark framed background. Returns the box so a
+## caller can toggle it later; most callouts are static and ignore it.
+func _add_callout(text: String, preset: Control.LayoutPreset, offset: Vector2, width: int) -> PanelContainer:
 	var box := PanelContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
@@ -143,6 +171,25 @@ func _add_callout(text: String, preset: Control.LayoutPreset, offset: Vector2, w
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(label)
 	_callouts.add_child(box)
+	return box
+
+## Same gate as SkirmishPanel's sidebar button: a Barracks exists and the
+## sidebar is open. Lives inside _callouts, so the "?" toggle and the storm
+## silence still apply on top of this.
+func _update_skirmish_callout(_arg = null) -> void:
+	if _skirmish_callout == null:
+		return
+	_skirmish_callout.visible = _sidebar_visible and ArmyManager.barracks_count() > 0
+
+func _on_sidebar_toggled(is_visible: bool) -> void:
+	_sidebar_visible = is_visible
+	_update_skirmish_callout()
+
+## True while the Skirmish callout is actually on screen: its own gate passed
+## AND the callout layer is on (the "?" toggle / storm silence hide the layer,
+## not the box). For tests and probes.
+func is_skirmish_callout_shown() -> bool:
+	return _skirmish_callout != null and _callouts.visible and _skirmish_callout.visible
 
 func _load_buildings() -> Array:
 	var result: Array = []
