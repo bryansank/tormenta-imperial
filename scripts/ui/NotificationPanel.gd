@@ -5,8 +5,19 @@ extends CanvasLayer
 
 const MAX_LOG_ENTRIES := 50
 const TOAST_DURATION := 4.0
+## Los avisos van en su propia capa, por encima del tablero de batalla (18) y
+## por debajo de la pantalla de victoria (20): la Tormenta tiene que poder avisar
+## mientras se pelea (ceniza, Diezmo, la guarnicion que peleo sola). El resto del
+## panel (estado, registro) se queda en la 11. Ni este panel ni la subcapa estan
+## en la pila de UIManager, asi que nadie les reasigna la capa.
+const TOAST_LAYER := 19
+## Mientras la intro del tutorial (17) esta abierta, los avisos vuelven debajo
+## de ella, donde siempre estuvieron: en ese momento la intro es lo unico que se
+## lee, y ningun tablero puede estar abierto.
+const TOAST_LAYER_UNDER_INTRO := 11
 
 var _panel: PanelContainer
+var _toast_layer: CanvasLayer
 var _log_btn: Button
 var _is_open := false
 var _log_entries: Array = []
@@ -28,6 +39,8 @@ func _ready() -> void:
 	EventBus.workers_changed.connect(_on_workers_changed)
 	EventBus.phase_advanced.connect(_on_phase_advanced)
 	EventBus.milestone_completed.connect(func(_m): _update_objective_hint())
+	EventBus.tutorial_intro_requested.connect(func(): _toast_layer.layer = TOAST_LAYER_UNDER_INTRO)
+	EventBus.tutorial_intro_closed.connect(func(): _toast_layer.layer = TOAST_LAYER)
 	_update_status_labels()
 	_update_objective_hint()
 	# Hide status bar until Phase 1 when pop/morale become relevant
@@ -123,12 +136,19 @@ func _setup_ui() -> void:
 	_objective_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	obj_panel.add_child(_objective_label)
 
-	# Toast container (bottom-left)
+	# Toast container (bottom-left), en su propia capa para verse sobre el tablero.
+	_toast_layer = CanvasLayer.new()
+	_toast_layer.layer = TOAST_LAYER
+	add_child(_toast_layer)
+	var toast_root := Control.new()
+	toast_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	toast_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast_layer.add_child(toast_root)
 	_toast_container = VBoxContainer.new()
 	UILayoutManager.apply_layout("NotificationPanel.toasts", _toast_container)
 	_toast_container.add_theme_constant_override("separation", 4)
 	_toast_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_toast_container)
+	toast_root.add_child(_toast_container)
 
 	# Log panel
 	_panel = PanelContainer.new()
