@@ -227,6 +227,54 @@ static func _tex_box(path: String, slice: int, content: int, modulate: Color) ->
 	return s
 
 # ══════════════════════════════════════
+# UNIT ICONS (combat board)
+# ══════════════════════════════════════
+# Flat dieselpunk silhouettes, one per unit type, drawn by tools/gen_unit_icons.gd.
+# The PNG is a single-colour mask (white RGB, antialiased alpha), so one file
+# serves both armies: the board tints it with the colour of the side that owns
+# the unit. Same rule as the metal plates above — if the texture isn't there,
+# `unit_icon` returns null and the caller falls back to the name's initial, so a
+# missing file can never leave a unit unpainted.
+
+const UNIT_ICON_DIR := "res://assets/textures/ui/units/"
+
+## Alpha of a unit that already spent its turn. Dim enough to read as "done",
+## bright enough that the silhouette is still identifiable.
+const UNIT_ICON_SPENT_ALPHA := 0.42
+
+## Brass halo that marks the boss apart from its escort. It sits outside the
+## border so the "active" / "in range" highlights keep reading on top of it.
+const BOSS_GLOW_SIZE := 3
+const BOSS_BORDER_MIN := 3
+
+static func unit_icon_path(unit_id: String) -> String:
+	return UNIT_ICON_DIR + unit_id + ".png"
+
+## The silhouette for a unit type, or null when there is no icon on disk.
+static func unit_icon(unit_id: String) -> Texture2D:
+	if unit_id == "":
+		return null
+	return _tex(unit_icon_path(unit_id))
+
+## Icon tint per side. Lightened over the side's base colour because the cell
+## behind it is that very same colour darkened — that gap is what makes the
+## silhouette pop instead of dissolving into its own background.
+static func unit_icon_tint(is_player: bool) -> Color:
+	return POSITIVE.lightened(0.62) if is_player else DANGER.lightened(0.62)
+
+## Same tint, already faded when the unit has nothing left to do this turn.
+static func unit_face_color(is_player: bool, spent: bool) -> Color:
+	var tint := unit_icon_tint(is_player)
+	return Color(tint.r, tint.g, tint.b, UNIT_ICON_SPENT_ALPHA if spent else 1.0)
+
+## Stamps the boss mark on an already-built cell style, without touching the
+## colours the caller chose for state.
+static func mark_boss(style: StyleBoxFlat) -> void:
+	style.shadow_color = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.85)
+	style.shadow_size = BOSS_GLOW_SIZE
+	style.set_border_width_all(maxi(style.border_width_top, BOSS_BORDER_MIN))
+
+# ══════════════════════════════════════
 # PANEL STYLE
 # ══════════════════════════════════════
 

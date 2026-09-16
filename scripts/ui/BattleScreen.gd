@@ -49,6 +49,7 @@ var _board_view: Control
 var _grid: GridContainer
 var _cells: Array = []              ## Button, row-major, index = y * width + x
 var _cell_bars: Array = []          ## ProgressBar alineado con _cells
+var _cell_icons: Array = []         ## TextureRect alineado con _cells
 
 var _title_label: Label
 var _round_label: Label
@@ -393,6 +394,7 @@ func _build_grid() -> void:
 		child.queue_free()
 	_cells.clear()
 	_cell_bars.clear()
+	_cell_icons.clear()
 
 	_grid.columns = _board.x
 	for y in range(_board.y):
@@ -410,7 +412,23 @@ func _build_grid() -> void:
 			_grid.add_child(cell)
 			_cells.append(cell)
 
-			# La vida se lee como una barra bajo la letra — el unico numero que
+			# La silueta del tipo de unidad. Va de hijo y no de `icon` del boton
+			# porque asi se le reserva el hueco justo: todo el alto menos la
+			# franja de abajo, que es de la barra de vida. Se tine desde fuera.
+			var icon := TextureRect.new()
+			icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+			icon.offset_left = 5
+			icon.offset_right = -5
+			icon.offset_top = 3
+			icon.offset_bottom = -10
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			icon.visible = false
+			cell.add_child(icon)
+			_cell_icons.append(icon)
+
+			# La vida se lee como una barra bajo la silueta — el unico numero que
 			# el jugador mira constantemente no deberia necesitar un tooltip.
 			var bar := ProgressBar.new()
 			bar.show_percentage = false
@@ -798,6 +816,26 @@ func map_button(index: int) -> Button:
 		return null
 	return _map_buttons[index]
 
+## Acceso a una casilla del tablero por coordenadas, para pruebas y depuracion.
+func board_cell(coords: Vector2i) -> Button:
+	var index: int = _cell_index(coords)
+	return null if index < 0 else _cells[index]
+
+## El retrato de una casilla. Sin textura y oculto mientras la casilla este vacia.
+func board_cell_icon(coords: Vector2i) -> TextureRect:
+	var index: int = _cell_index(coords)
+	return null if index < 0 else _cell_icons[index]
+
+## Las fichas de la franja de iniciativa, en el orden en que van a jugar.
+func order_chips() -> Array:
+	return _order_box.get_children() if _order_box != null else []
+
+func _cell_index(coords: Vector2i) -> int:
+	if coords.x < 0 or coords.y < 0 or coords.x >= _board.x or coords.y >= _board.y:
+		return -1
+	var index: int = coords.y * _board.x + coords.x
+	return index if index < _cells.size() else -1
+
 # ── Abandono ─────────────────────────────────────────────────────────
 
 func _ask_abandon() -> void:
@@ -920,29 +958,38 @@ func _refresh_cells() -> void:
 		moves = CombatManager.get_valid_moves(active.uid)
 		targets = CombatManager.get_valid_targets(active.uid)
 
+	var boss: int = boss_uid()
+
 	for y in range(_board.y):
 		for x in range(_board.x):
 			var index: int = y * _board.x + x
 			var cell: Button = _cells[index]
 			var bar: ProgressBar = _cell_bars[index]
+			var icon: TextureRect = _cell_icons[index]
 			var coords := Vector2i(x, y)
 			var unit := CombatManager.get_unit_at(coords)
-			_style_cell(cell, bar, coords, unit, active, moves, targets)
+			_style_cell(cell, bar, icon, coords, unit, active, moves, targets, boss)
 
-func _style_cell(cell: Button, bar: ProgressBar, coords: Vector2i, unit: CombatUnit,
-		active: CombatUnit, moves: Array, targets: Array) -> void:
+func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vector2i,
+		unit: CombatUnit, active: CombatUnit, moves: Array, targets: Array,
+		boss: int = -1) -> void:
 	var background: Color = COL_EMPTY
 	var border: Color = UITheme.ACCENT_DIM
 	var border_width: int = 1
+	var text_color: Color = UITheme.TEXT_BRIGHT
+	var is_boss := false
 
 	if unit == null:
 		cell.text = ""
+		icon.texture = null
+		icon.visible = false
 		bar.visible = false
 		if moves.has(coords):
 			background = COL_MOVE
 			border = UITheme.INFO
 	else:
-		cell.text = _unit_glyph(unit)
+		is_boss = boss >= 0 and unit.uid == boss
+		text_color = _paint_unit_face(cell, icon, unit)
 		bar.visible = true
 		bar.value = float(unit.hp) / float(maxi(1, unit.max_hp))
 		_style_health_bar(bar, unit)
@@ -964,10 +1011,30 @@ func _style_cell(cell: Button, bar: ProgressBar, coords: Vector2i, unit: CombatU
 	style.set_corner_radius_all(UITheme.CORNER)
 	style.border_color = border
 	style.set_border_width_all(border_width)
+	# El jefe va el ultimo a proposito: el halo de laton se suma a lo que ya
+	# diga el borde (activo, alcanzable, en guardia) en vez de taparlo.
+	if is_boss:
+		UITheme.mark_boss(style)
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		cell.add_theme_stylebox_override(state, style)
-	cell.add_theme_color_override("font_color", UITheme.TEXT_BRIGHT)
-	cell.add_theme_color_override("font_hover_color", UITheme.TEXT_BRIGHT)
+	cell.add_theme_color_override("font_color", text_color)
+	cell.add_theme_color_override("font_hover_color", text_color)
+
+## La cara de una unidad: la silueta de su tipo, tenida con el color de su bando
+## y apagada si ya gasto el turno. Si el PNG no esta en disco se vuelve a la
+## inicial del nombre, que es como se pintaba antes — una unidad sin icono se
+## sigue viendo, que es lo unico innegociable.
+##
+## Devuelve el color con el que hay que escribir el texto de la celda, para que
+## la inicial de repuesto distinga bando igual que lo haria el icono.
+func _paint_unit_face(cell: Button, icon: TextureRect, unit: CombatUnit) -> Color:
+	var tint: Color = UITheme.unit_face_color(unit.side == PLAYER, unit.has_acted)
+	var texture := UITheme.unit_icon(unit.unit_id)
+	icon.texture = texture
+	icon.visible = texture != null
+	icon.modulate = tint
+	cell.text = "" if texture != null else _unit_glyph(unit)
+	return tint
 
 func _style_health_bar(bar: ProgressBar, unit: CombatUnit) -> void:
 	var ratio: float = float(unit.hp) / float(maxi(1, unit.max_hp))
@@ -981,39 +1048,95 @@ func _style_health_bar(bar: ProgressBar, unit: CombatUnit) -> void:
 	bar.add_theme_stylebox_override("background", bg)
 
 ## Una letra por tipo de unidad, tomada del nombre traducido para que siga
-## leyendose en ingles. Los iconos de verdad son trabajo de arte, dejado aparte.
+## leyendose en ingles. Es el repuesto de la silueta: solo se ve si el PNG del
+## icono no esta importado.
 func _unit_glyph(unit: CombatUnit) -> String:
 	var def := GameConfig.get_unit_def(unit.unit_id)
 	var label: String = Tr.t(def.get("name", unit.unit_id))
 	return label.substr(0, 1).to_upper() if label != "" else "?"
 
-## La franja de iniciativa: quien actua, en orden, con el actual encendido.
+## Cual de los enemigos lleva el marco de jefe, o -1 si esta pelea no es la del
+## jefe. El encuentro sabe que lo es pero no quien: la banda del jefe es la
+## escuadra de siempre mas la pieza mas pesada que la era puede poner, asi que el
+## jefe es el enemigo de mas poder y, a igualdad, el mas duro.
+##
+## Se mira sobre todas las unidades del encuentro, vivas o muertas, para que
+## matarlo no ascienda a otra al puesto. En la era 1, donde el enemigo solo puede
+## fielder infanteria, todos empatan y el marco recae en el primero que formo:
+## sigue siendo uno solo, que es lo que el jugador necesita ver.
+func boss_uid() -> int:
+	var encounter: Encounter = CombatManager.get_encounter()
+	if encounter == null or not encounter.is_boss:
+		return -1
+	var best: int = -1
+	var best_power: int = -1
+	var best_hp: int = -1
+	for unit in encounter.units:
+		if unit.side != ENEMY:
+			continue
+		var power: int = unit.power()
+		if power > best_power or (power == best_power and unit.max_hp > best_hp):
+			best = unit.uid
+			best_power = power
+			best_hp = unit.max_hp
+	return best
+
+## La franja de iniciativa: quien actua, en orden, con el actual encendido. Las
+## fichas llevan la misma silueta que el tablero, a su tamano, para que mirar la
+## franja y mirar el tablero sea mirar lo mismo.
 func _refresh_order() -> void:
 	for child in _order_box.get_children():
 		child.queue_free()
 	var active := CombatManager.get_active_unit()
+	var boss: int = boss_uid()
 	for uid in CombatManager.get_turn_order():
 		var unit := CombatManager.get_unit(uid)
 		if unit == null or not unit.is_alive():
 			continue
 		var chip := Label.new()
-		chip.text = _unit_glyph(unit)
 		chip.custom_minimum_size = Vector2(26, 26)
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		chip.add_theme_font_size_override("font_size", UITheme.FONT_SMALL)
 		var is_active: bool = active != null and uid == active.uid
 		var tint: Color = UITheme.POSITIVE if unit.side == PLAYER else UITheme.DANGER
-		chip.add_theme_color_override("font_color", UITheme.TEXT_BRIGHT if is_active else UITheme.TEXT_DIM)
+		_paint_order_face(chip, unit, is_active)
 		var style := StyleBoxFlat.new()
 		style.bg_color = tint.darkened(0.2 if is_active else 0.6)
 		style.set_corner_radius_all(UITheme.CORNER)
 		style.border_color = UITheme.ACCENT if is_active else UITheme.ACCENT_DIM
 		style.set_border_width_all(2 if is_active else 1)
+		if boss >= 0 and uid == boss:
+			UITheme.mark_boss(style)
 		chip.add_theme_stylebox_override("normal", style)
 		# Una unidad que ya actuo se apaga, para que la franja muestre lo que queda.
 		chip.modulate.a = 1.0 if not unit.has_acted else 0.45
 		_order_box.add_child(chip)
+
+## El retrato de una ficha de iniciativa. Mismo trato que en la celda: silueta si
+## la hay, inicial si no. El apagado de "ya actuo" lo pone `chip.modulate`, que
+## arrastra tambien al icono, asi que aqui el tinte va siempre a plena opacidad.
+func _paint_order_face(chip: Label, unit: CombatUnit, is_active: bool) -> void:
+	var texture := UITheme.unit_icon(unit.unit_id)
+	if texture == null:
+		chip.text = _unit_glyph(unit)
+		chip.add_theme_color_override("font_color", UITheme.TEXT_BRIGHT if is_active else UITheme.TEXT_DIM)
+		return
+	chip.text = ""
+	var icon := TextureRect.new()
+	icon.texture = texture
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = 3
+	icon.offset_right = -3
+	icon.offset_top = 3
+	icon.offset_bottom = -3
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.modulate = UITheme.unit_icon_tint(unit.side == PLAYER)
+	if not is_active:
+		icon.modulate = icon.modulate.darkened(0.25)
+	chip.add_child(icon)
 
 func _refresh_actions() -> void:
 	_set_actions_enabled(CombatManager.is_player_turn())
