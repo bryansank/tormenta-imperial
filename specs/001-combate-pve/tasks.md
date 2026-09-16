@@ -71,16 +71,16 @@
 
 **Independent Test**: quickstart E2; dos expediciones consecutivas difieren; draft siempre ≥2 opciones.
 
-- [ ] T022 [P] [US2] Crear `scripts/combat/ExpeditionGenerator.gd` (estático, recibe `RandomNumberGenerator`): `generate_map(rng, depth_range, branching_range) -> Array[Dictionary]` con invariante "todo nodo alcanza al jefe"; `enemy_roster(rng, depth, era, risk) -> Dictionary`; `boss_roster(...)`; `draft_options(rng, party, count) -> Array[Dictionary]` filtrando no aplicables
-- [ ] T023 [P] [US2] Tests `tests/combat/test_expedition_generator.gd`: conectividad al jefe en 200 semillas; profundidad dentro de rango; dos semillas distintas → mapas distintos; draft nunca con < 2 aplicables; roster crece con `depth`
-- [ ] T024 [US2] Crear `scripts/combat/Expedition.gd`: campos de data-model.md, `from_army(party_counts) -> party de CombatUnit`, `current_exits()`, `mark_cleared()`, `apply_draft(option)`, `is_finished()`, `to_dict()` / `from_dict()` (regenera `map` desde `seed` + `cleared`)
-- [ ] T025 [US2] `CombatManager.launch_expedition(party)`: valida con `can_launch()` (FR-001, FR-002, cap), crea `Expedition` con semilla nueva y `morale_snapshot`, emite `expedition_started`, arranca el encuentro del nodo 0. `select_node()` valida que sea una salida del nodo actual
-- [ ] T026 [US2] `SkirmishPanel` real: lista de unidades disponibles (`get_deployable_units()`) con +/- hasta `combat_deploy_cap`, resumen de poder comprometido, botón **Lanzar expedición**; `MSG_NO_UNITS` cuando no hay; ocultar el botón dev cuando `dev_mode` es false
-- [ ] T027 [US2] `BattleScreen` — vista de mapa: nodos como botones en columnas por `depth`, líneas entre nodos (`Line2D` o `draw_line`), actual/limpiados/jefe distinguidos, riesgo indicado; clic en salida válida → `select_node()`
-- [ ] T028 [US2] Encadenar encuentros: al ganar, `CombatManager` mantiene `hp` de supervivientes (FR-011), retira muertos del `party` activo (FR-010), y si no es jefe emite `draft_offered`; tras `apply_draft` vuelve a la vista de mapa
-- [ ] T029 [US2] `BattleScreen` — draft: modal con `combat_draft_options` tarjetas (`Tr` `DRAFT_*`), clic → `apply_draft(i)`; mostrar bonos activos del party en la vista de mapa
-- [ ] T030 [US2] Jefe y cierre: `is_boss` aplica `combat_boss_multiplier`; ganar el jefe → `COMPLETED`; party aniquilado → `DEFEATED`; ambos emiten `expedition_ended` y `BattleScreen` muestra pantalla final (`LBL_REWARDS`, `LBL_CASUALTIES`)
-- [ ] T031 [US2] Abandonar: botón **Abandonar** (mapa y tablero) → `ConfirmationDialog` → `abandon_expedition()` (FR-016) → `expedition_ended(2, ...)`
+- [x] T022 [P] [US2] Crear `scripts/combat/ExpeditionGenerator.gd` (estático, recibe `RandomNumberGenerator`): `generate_map(rng, depth_range, branching_range) -> Array[Dictionary]` con invariante "todo nodo alcanza al jefe"; `enemy_roster(rng, depth, era, risk) -> Dictionary`; `boss_roster(...)`; `draft_options(rng, party, count) -> Array[Dictionary]` filtrando no aplicables
+- [x] T023 [P] [US2] Tests `tests/combat/test_expedition_generator.gd`: conectividad al jefe en 200 semillas; profundidad dentro de rango; dos semillas distintas → mapas distintos; draft nunca con < 2 aplicables; roster crece con `depth`
+- [x] T024 [US2] Crear `scripts/combat/Expedition.gd`: campos de data-model.md, `from_army(party_counts) -> party de CombatUnit`, `current_exits()`, `mark_cleared()`, `apply_draft(option)`, `is_finished()`, `to_dict()` / `from_dict()` (regenera `map` desde `seed` + `cleared`)
+- [x] T025 [US2] `CombatManager.launch_expedition(party)`: valida con `can_launch()` (FR-001, FR-002, cap), crea `Expedition` con semilla nueva y `morale_snapshot`, emite `expedition_started`, arranca el encuentro del nodo 0. `select_node()` valida que sea una salida del nodo actual
+- [x] T026 [US2] `SkirmishPanel` real: lista de unidades disponibles (`get_deployable_units()`) con +/- hasta `combat_deploy_cap`, resumen de poder comprometido, botón **Lanzar expedición**; `MSG_NO_UNITS` cuando no hay; ocultar el botón dev cuando `dev_mode` es false
+- [x] T027 [US2] `BattleScreen` — vista de mapa: nodos como botones en columnas por `depth`, líneas entre nodos (`Line2D` o `draw_line`), actual/limpiados/jefe distinguidos, riesgo indicado; clic en salida válida → `select_node()`
+- [x] T028 [US2] Encadenar encuentros: al ganar, `CombatManager` mantiene `hp` de supervivientes (FR-011), retira muertos del `party` activo (FR-010), y si no es jefe emite `draft_offered`; tras `apply_draft` vuelve a la vista de mapa
+- [x] T029 [US2] `BattleScreen` — draft: modal con `combat_draft_options` tarjetas (`Tr` `DRAFT_*`), clic → `apply_draft(i)`; mostrar bonos activos del party en la vista de mapa
+- [x] T030 [US2] Jefe y cierre: `is_boss` aplica `combat_boss_multiplier`; ganar el jefe → `COMPLETED`; party aniquilado → `DEFEATED`; ambos emiten `expedition_ended` y `BattleScreen` muestra pantalla final (`LBL_REWARDS`, `LBL_CASUALTIES`)
+- [x] T031 [US2] Abandonar: botón **Abandonar** (mapa y tablero) → `ConfirmationDialog` → `abandon_expedition()` (FR-016) → `expedition_ended(2, ...)`
 
 **Checkpoint**: 🎬 **Hito C cerrado.** Expedición completa de lanzamiento a jefe, con draft y bajas.
 
@@ -92,12 +92,12 @@
 
 **Independent Test**: quickstart E3, E4, E6, E7.
 
-- [ ] T032 [US3] `ArmyManager`: `get_available_for_deploy() -> Dictionary` (excluye unidades marcadas en expedición por `CombatManager`), `remove_casualties(casualties: Dictionary)` que descuenta `_units` y emite `army_changed`; `get_power()` inalterado hasta ese momento (SC-004)
-- [ ] T033 [US3] `CombatManager._resolve_expedition(result)`: `ResourceManager` suma `rewards` (respetando tope de almacén; el sobrante se pierde con aviso), `ArmyManager.remove_casualties()`, supervivientes vuelven al 100% (FR-017), emite `expedition_ended`, descarta la expedición
-- [ ] T034 [P] [US3] `NotificationPanel`: toasts en `expedition_started` y `expedition_ended` (`MSG_EXPEDITION_WON/LOST/ABANDONED` con botín y bajas) — FR-018
-- [ ] T035 [US3] **Puente de moral** (hito B): `CombatUnit.initiative()` y `CombatRules.damage()` usan `morale_snapshot` vía `combat_morale_*`; `PopulationManager.apply_expedition_morale(result, casualties)` conectado a `expedition_ended` (+`combat_morale_on_victory`, `combat_morale_per_casualty` × bajas); mostrar el modificador activo en `SkirmishPanel` ("Moral 72 → iniciativa +1, ataque ×1.07")
-- [ ] T036 [US3] Reanudar: `CombatManager.load_save_data()` reconstruye `Expedition` desde `seed`+`cleared`+`party`; en `game_load_completed`, si hay expedición activa `BattleScreen` abre la vista de mapa en el nodo actual (D6). Probar cerrar/abrir a mitad (E6) y cargar un save previo sin clave `expedition`
-- [ ] T037 [P] [US3] `ArmyPanel` y `SkirmishPanel` se refrescan en `expedition_started` / `expedition_ended`; unidades en expedición aparecen como "en campaña" en `ArmyPanel`
+- [x] T032 [US3] `ArmyManager`: `get_available_for_deploy() -> Dictionary` (excluye unidades marcadas en expedición por `CombatManager`), `remove_casualties(casualties: Dictionary)` que descuenta `_units` y emite `army_changed`; `get_power()` inalterado hasta ese momento (SC-004)
+- [x] T033 [US3] `CombatManager._resolve_expedition(result)`: `ResourceManager` suma `rewards` (respetando tope de almacén; el sobrante se pierde con aviso), `ArmyManager.remove_casualties()`, supervivientes vuelven al 100% (FR-017), emite `expedition_ended`, descarta la expedición
+- [x] T034 [P] [US3] `NotificationPanel`: toasts en `expedition_started` y `expedition_ended` (`MSG_EXPEDITION_WON/LOST/ABANDONED` con botín y bajas) — FR-018
+- [x] T035 [US3] **Puente de moral** (hito B): `CombatUnit.initiative()` y `CombatRules.damage()` usan `morale_snapshot` vía `combat_morale_*`; `PopulationManager.apply_expedition_morale(result, casualties)` conectado a `expedition_ended` (+`combat_morale_on_victory`, `combat_morale_per_casualty` × bajas); mostrar el modificador activo en `SkirmishPanel` ("Moral 72 → iniciativa +1, ataque ×1.07")
+- [x] T036 [US3] Reanudar: `CombatManager.load_save_data()` reconstruye `Expedition` desde `seed`+`cleared`+`party`; en `game_load_completed`, si hay expedición activa `BattleScreen` abre la vista de mapa en el nodo actual (D6). Probar cerrar/abrir a mitad (E6) y cargar un save previo sin clave `expedition`
+- [x] T037 [P] [US3] `ArmyPanel` y `SkirmishPanel` se refrescan en `expedition_started` / `expedition_ended`; unidades en expedición aparecen como "en campaña" en `ArmyPanel`
 
 **Checkpoint**: 🎬 **Hito D (parte 1).** La expedición se siente consecuencia de la base y vuelve a ella.
 
@@ -110,7 +110,7 @@
 **Independent Test**: quickstart E5; SC-007.
 
 - [x] T038 [US4] `CombatAI` prioridad de objetivo: (1) enemigo que puede matar este turno, (2) mayor `power`, (3) menor HP, (4) más cercano; artillería prefiere mantenerse a `attack_range` y retrocede si un enemigo está a `< min_range`
-- [ ] T039 [US4] `CombatAI` movimiento: si ningún objetivo está en rango, elegir la celda alcanzable que minimiza la distancia al objetivo prioritario **y** deja en rango si es posible; unidades con `defending` disponible y sin objetivo alcanzable → defender en vez de esperar
+- [x] T039 [US4] `CombatAI` movimiento: si ningún objetivo está en rango, elegir la celda alcanzable que minimiza la distancia al objetivo prioritario **y** deja en rango si es posible; unidades con `defending` disponible y sin objetivo alcanzable → defender en vez de esperar
 - [x] T040 [US4] Escalado: `ExpeditionGenerator.enemy_roster()` aplica `combat_enemy_scale_per_depth` y `combat_enemy_scale_per_era` a HP/ATK y al tamaño del roster (cap `combat_deploy_cap`); el jefe añade una unidad de tier máximo disponible en la era
 - [x] T041 [US4] Tests en `test_combat_rules.gd` / nuevo `tests/combat/test_combat_ai.gd`: la IA ataca cuando hay objetivo en rango; elige el objetivo matable; artillería no se acerca a adyacente; nunca devuelve "sin acción" con un objetivo alcanzable (SC-007)
 
@@ -120,11 +120,11 @@
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [ ] T042 [P] `AudioManager`: SFX en `unit_attacked`, `unit_died`, `encounter_ended`, `expedition_ended`; música de combate opcional por señal (usar tracks existentes; ambientes siguen fuera de alcance)
-- [ ] T043 [P] `HelperPanel`: un callout para el botón **Escaramuzas** cuando aparece el Cuartel (un solo callout, no una pared)
-- [ ] T044 [P] Docs: crear `docs/14-combat.md` (sistemas, señales, balance), añadir a `docs/INDEX.md`; actualizar tabla de autoloads (20) y estructura en `CLAUDE.md`; actualizar `docs/13-roadmap.md`
-- [ ] T045 Recorrer `quickstart.md` E1-E9 completo con Beckett; capturar el tablero con `tools/ui_tour.gd` para el devlog
-- [ ] T046 Balance inicial: sesión de juego real de 30 min; ajustar solo `GameConfig.combat_*` hasta que un encuentro dure 3-5 min y la primera expedición sea ganable con 3-4 unidades de era 1
+- [x] T042 [P] `AudioManager`: SFX en `unit_attacked`, `unit_died`, `encounter_ended`, `expedition_ended`; música de combate opcional por señal (usar tracks existentes; ambientes siguen fuera de alcance)
+- [x] T043 [P] `HelperPanel`: un callout para el botón **Escaramuzas** cuando aparece el Cuartel (un solo callout, no una pared)
+- [x] T044 [P] Docs: creado como `docs/15-combat.md` (el 14 lo ocupaba la guia de juego), mas `docs/16-balance-combate.md` y `docs/17-balance-asedio.md`. Docs: (sistemas, señales, balance), añadir a `docs/INDEX.md`; actualizar tabla de autoloads (20) y estructura en `CLAUDE.md`; actualizar `docs/13-roadmap.md`
+- [x] T045 Recorrido E1-E9 hecho con `tools/expedition_probe.gd` (50 invariantes) y la suite, no con Beckett: el servidor no levanta en este entorno. Parte en `quickstart-results.md`, con las cuatro cosas que siguen necesitando un telefono. Captura para el devlog, pendiente
+- [x] T046 Balance medido, no jugado a ojo: 37.800 encuentros y 3.600 expediciones con `tools/balance_probe.gd`. Antes NO se ganaba ni una sola expedicion y los encuentros duraban <1 min. Ahora el de referencia dura 3,4 min y la columna de 4 gana el 53%. Ver `docs/16-balance-combate.md`. El asedio final iba aparte y tambien era invencible: `docs/17-balance-asedio.md`
 
 ---
 
