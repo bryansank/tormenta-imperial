@@ -196,6 +196,25 @@ func stop_music() -> void:
 	for m in _music_players:
 		m.stop()
 
+## Silences every voice before the engine tears the ObjectDB down. A track still
+## playing at quit keeps its Ogg playback alive past the audio server, and Godot
+## reports leaked instances at exit — only sometimes, because it is a race with
+## the audio thread. Autoloads receive _exit_tree on quit, so this is the hook.
+## The key is cleared first so the loop keep-alive cannot restart a player that
+## is being shut down; the streams are dropped so the resources can be freed.
+func _exit_tree() -> void:
+	_current_music_key = ""
+	for m in _music_players:
+		m.stop()
+		m.stream = null
+	for p in _sfx_players:
+		p.stop()
+		p.stream = null
+	if _ambient_player != null:
+		_ambient_player.stop()
+		_ambient_player.stream = null
+	_streams.clear()
+
 # ── Loop keep-alive (in case the imported clip isn't flagged as looping) ──
 
 func _on_music_finished(player: AudioStreamPlayer) -> void:

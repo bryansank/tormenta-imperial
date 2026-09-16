@@ -24,6 +24,10 @@ signal camera_rotate_step_requested(degrees: float)
 signal resource_changed(resource_type: String, new_amount: int, delta: int)
 @warning_ignore("unused_signal")
 signal resources_insufficient(resource_type: String, required: int, available: int)
+## La bolsa compartida estaba llena y `lost` unidades de `resource_type` no cupieron:
+## se han perdido. Un jugador que pierde cosecha sin verlo cree que el juego esta roto.
+@warning_ignore("unused_signal")
+signal storage_overflow(resource_type: String, lost: int, cap: int)
 
 # ── Buildings ──
 @warning_ignore("unused_signal")
@@ -60,6 +64,10 @@ signal process_completed(building_node: Node3D, process_id: String)
 signal mining_started(deposit_node: Node3D, deposit_id: String)
 @warning_ignore("unused_signal")
 signal mining_completed(deposit_node: Node3D, deposit_id: String)
+## Cancelado a mano por el jugador. `refunded` es recurso -> cantidad devuelta,
+## ya aplicada: lo que la UI prometio antes de confirmar y lo que se cobro.
+@warning_ignore("unused_signal")
+signal process_cancelled(building_node: Node3D, process_id: String, refunded: Dictionary)
 
 # ── Construction ──
 @warning_ignore("unused_signal")
@@ -120,6 +128,10 @@ signal workers_changed(used: int, total: int)
 signal morale_changed(new_morale: int)
 @warning_ignore("unused_signal")
 signal consumption_failed(resource: String)
+## Hambruna: el impago ya no se perdona y muere gente. `deaths` es cuanta murio
+## de verdad, `population` lo que queda despues (nunca por debajo del suelo).
+@warning_ignore("unused_signal")
+signal population_starved(deaths: int, population: int)
 
 # ── Army ──
 @warning_ignore("unused_signal")
@@ -130,6 +142,12 @@ signal unit_trained(unit_id: String)
 signal army_changed()
 @warning_ignore("unused_signal")
 signal army_upkeep_unpaid(gold_short: int)
+## Entrenamiento cancelado a mano. `refunded` es recurso -> cantidad devuelta.
+@warning_ignore("unused_signal")
+signal unit_training_cancelled(unit_id: String, refunded: Dictionary)
+## Desercion: al ejercito sin paga se le va la tropa, la mas cara primero.
+@warning_ignore("unused_signal")
+signal army_deserted(unit_id: String, count: int)
 
 # ── Combat ──
 ## Emitted only by CombatManager. `side`: 0 = player, 1 = enemy.
@@ -176,14 +194,23 @@ signal building_repaired(building_node: Node3D)
 ## `phase` values follow StormCycle.Phase.
 @warning_ignore("unused_signal")
 signal storm_phase_changed(phase: int, seconds_left: float)
-## The warning window opens: ash on the horizon, time to decide.
+## The warning window opens: ash on the horizon, time to decide. No severity in
+## it on purpose — the size of the bill is only announced with `storm_started`.
 @warning_ignore("unused_signal")
-signal storm_incoming(seconds_until: float, severity: int)
+signal storm_incoming(seconds_until: float)
+## The warning came to nothing. `deferred` is the severity the next real storm
+## inherits for it: postponed, not forgiven.
+@warning_ignore("unused_signal")
+signal storm_false_alarm(deferred: int)
+## Ash starts falling: production halves, morale bleeds, nothing comes down yet.
+@warning_ignore("unused_signal")
+signal storm_ash_started()
 @warning_ignore("unused_signal")
 signal storm_started(severity: int)
-## Per-tick bite while the storm is overhead, for the UI to react to.
+## Per-tick bite while ash or storm is overhead, for the UI to react to.
+## `phase` follows StormCycle.Phase.
 @warning_ignore("unused_signal")
-signal storm_tick(seconds_left: float)
+signal storm_tick(phase: int, seconds_left: float)
 @warning_ignore("unused_signal")
 signal storm_ended(severity: int)
 ## The Assessors arrive to collect. `taken` is resource_name -> amount.
@@ -191,6 +218,33 @@ signal storm_ended(severity: int)
 signal tithe_demanded(severity: int)
 @warning_ignore("unused_signal")
 signal tithe_resolved(paid: bool, taken: Dictionary)
+
+# ── The Final Audit ──
+## Emitidas solo por ProgressionManager. El Cuartel General a nivel 3 ya no gana
+## la partida: convoca la auditoria definitiva de la Regencia, y sobrevivirla es
+## la victoria. Un asedio son 3-5 oleadas seguidas contra la misma guarnicion.
+## La Regencia ha sido convocada. Todavia no hay nadie en el tablero.
+@warning_ignore("unused_signal")
+signal final_audit_summoned(waves: int, summons: int)
+## Empieza el asedio: a partir de aqui no se reentrena nada.
+@warning_ignore("unused_signal")
+signal final_audit_started(waves: int)
+## La oleada que toca poner en el tablero: quien baja y con cuanto peso. Esta es
+## la costura del asedio — el modelo dice que oleada es, y quien conduce el
+## tablero es quien llama a CombatManager.start_defense(). Nadie mas.
+@warning_ignore("unused_signal")
+signal final_audit_wave_ready(wave: int, roster: Dictionary, scale: float)
+@warning_ignore("unused_signal")
+signal final_audit_wave_cleared(wave: int, remaining: int)
+## La guarnicion ha caido. No hay Game Over: se cobra el Diezmo maximo y la
+## ciudad queda en ruinas, pero el asedio se puede volver a convocar cuando el
+## ejercito este rehecho.
+@warning_ignore("unused_signal")
+signal final_audit_lost(wave: int)
+## Se ha sobrevivido a la auditoria. La Tormenta para para siempre: StormManager
+## escucha aqui cuando se cablee, y nada mas tiene permiso para detener el ciclo.
+@warning_ignore("unused_signal")
+signal storm_halted_forever()
 
 # ── Random Events ──
 @warning_ignore("unused_signal")
@@ -218,3 +272,21 @@ signal fullscreen_changed(enabled: bool)
 signal game_new_started()
 @warning_ignore("unused_signal")
 signal game_load_completed()
+
+# ── Tutorial ──
+## Emitidas solo por TutorialManager. El manager decide QUE se ensena y CUANDO
+## (una intro por partida, un consejo por suceso); TutorialPanel solo pinta lo
+## que le llega. Asi el manager no conoce a ningun panel y se puede probar sin
+## escena.
+## La intro paginada del lore y del "como se juega". Se pide al empezar partida
+## nueva si aun no se ha visto, y desde show_intro() cuando el jugador la quiera.
+@warning_ignore("unused_signal")
+signal tutorial_intro_requested()
+## Un consejo contextual: tarjeta pequena, no modal, con "Entendido". El texto
+## ya viene traducido para que el panel no tenga que saber de que trata.
+@warning_ignore("unused_signal")
+signal tutorial_tip_requested(tip_id: String, title: String, body: String)
+## El jugador cerro la intro, leida o saltada. Es lo que la marca como vista:
+## saltar cuenta como leer, porque volver a insistir seria castigar el "Saltar".
+@warning_ignore("unused_signal")
+signal tutorial_intro_closed()

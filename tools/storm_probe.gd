@@ -46,14 +46,17 @@ func _run() -> void:
 		get_tree().quit()
 		return
 	cycle.seconds_left = FUSE
-	print("[storm] armado=%s fase=%d severidad=%d impacto_en=%.1fs" % [
+	print("[storm] armado=%s fase=%d severidad=%d ceniza_en=%.1fs" % [
 		StormManager.is_armed(), StormManager.get_phase(),
-		StormManager.get_severity(), StormManager.seconds_until_impact()
+		StormManager.get_severity(), StormManager.seconds_until_ash()
 	])
 	print("[storm] antes: %s" % _snapshot())
 
-	# Un ciclo entero: mecha + aviso + tormenta + cobranza, con margen.
-	var total: float = FUSE + GameConfig.get_storm_warning() + GameConfig.get_storm_duration() + 6.0
+	# Un ciclo entero: mecha + aviso + ceniza + tormenta + cobranza, con margen.
+	# La falsa alarma se desactiva: la sonda mira una tormenta de verdad, y con
+	# un 25% de nada el ciclo observado seria distinto cada ejecucion.
+	GameConfig.storm_false_alarm_chance = 0.0
+	var total: float = FUSE + GameConfig.get_storm_warning() + GameConfig.get_storm_ash_duration() + GameConfig.get_storm_duration() + 6.0
 	# La IA espera entre accion y accion para que se vea; aqui no mira nadie.
 	GameConfig.combat_ai_step_delay = 0.0
 	var elapsed := 0.0
@@ -132,10 +135,14 @@ func _find_spot(wanted: Vector2i, size: Vector2i) -> Vector2i:
 	return Vector2i(-1, -1)
 
 func _listen() -> void:
-	EventBus.storm_incoming.connect(func(secs, sev):
-		print("[storm] AVISO: impacto en %.1fs, severidad %d" % [secs, sev]))
+	EventBus.storm_incoming.connect(func(secs):
+		print("[storm] AVISO: la ceniza llega en %.1fs" % secs))
+	EventBus.storm_false_alarm.connect(func(deferred):
+		print("[storm] FALSA ALARMA (severidad aplazada: %d)" % deferred))
+	EventBus.storm_ash_started.connect(func():
+		print("[storm] CAE CENIZA"))
 	EventBus.storm_started.connect(func(sev):
-		print("[storm] CAE LA CENIZA (severidad %d)" % sev))
+		print("[storm] ROMPE LA TORMENTA (severidad %d)" % sev))
 	EventBus.storm_ended.connect(func(_sev):
 		print("[storm] el aire aclara"))
 	EventBus.tithe_demanded.connect(func(sev):

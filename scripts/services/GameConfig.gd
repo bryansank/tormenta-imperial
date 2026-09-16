@@ -6,6 +6,10 @@ extends Node
 
 var dev_mode := true
 var time_multiplier := 1.0
+## Cuanto se acelera todo en dev_mode. Estaba a 1/10 y Bryan, jugando, no llegaba a
+## leer que pasaba: construir en 1 s y una tormenta cada 30 s convierten el ciclo en
+## un borron. A 1/5 sigue siendo una partida de minutos, pero se entiende.
+var dev_time_scale := 0.2
 
 # ── Population & Morale Constants ──
 
@@ -24,8 +28,8 @@ var growth_interval := 20.0
 
 var event_interval_min := 120.0
 var event_interval_max := 300.0
-var event_interval_min_dev := 15.0
-var event_interval_max_dev := 30.0
+var event_interval_min_dev := 30.0
+var event_interval_max_dev := 60.0
 
 # ── Starting Resources ──
 
@@ -82,16 +86,70 @@ var building_prerequisites := {
 	"headquarters": ["barracks", "refinery"],
 }
 
-# ── Deposit Placement Requirements (building must overlap a deposit) ──
+# ── Deposit Placement Rules (extractor next to its deposit) ──
+#
+# Decision del dueno (P1, 2026-09-14): cada extractor se levanta junto al
+# yacimiento que explota, y sigue produciendo pasivamente como siempre. La
+# produccion se lee como "cosechar ese bosque / esa veta", no como madera que
+# aparece de la nada. Nada se agota por producir: el minado a mano en el
+# yacimiento sigue igual.
+#
+# - `deposit`:  id del yacimiento (MapGenerator.DEPOSIT_TYPES).
+# - `reach`:    0 = el edificio debe SOLAPAR el yacimiento (la Refineria se
+#               planta sobre el pozo); 1 = alguna celda del edificio toca alguna
+#               del yacimiento, diagonal incluida, sin pisarlo (nadie construye
+#               encima de los arboles).
+# - `consumes`: si al colocarlo el yacimiento desaparece (solo la Refineria,
+#               como hasta ahora). Con alcance 1 nunca se consume.
+# - `message`:  clave de Tr con el aviso al jugador cuando no se cumple.
+#
+# La misma regla vale para colocar y para MOVER: si no, se colocaba bien y luego
+# se arrastraba a cualquier sitio.
 
-var building_requires_deposit := {
-	"refinery": "oil_well",
+var building_deposit_rules := {
+	"refinery":  {"deposit": "oil_well",     "reach": 0, "consumes": true,  "message": "LBL_REQUIRES_DEPOSIT"},
+	"sawmill":   {"deposit": "forest",       "reach": 1, "consumes": false, "message": "LBL_NEEDS_FOREST_NEAR"},
+	"gold_mine": {"deposit": "gold_vein",    "reach": 1, "consumes": false, "message": "LBL_NEEDS_GOLD_VEIN_NEAR"},
+	"foundry":   {"deposit": "iron_deposit", "reach": 1, "consumes": false, "message": "LBL_NEEDS_IRON_NEAR"},
 }
 
-# ── Storage ──
+## Regla de yacimiento de un edificio, o {} si construye donde quiera.
+func get_deposit_rule(building_id: String) -> Dictionary:
+	return building_deposit_rules.get(building_id, {})
 
-var base_storage_cap := 800
-var warehouse_storage_bonus := 400
+# ── Storage ──
+#
+# El almacen es UNA bolsa compartida por los cuatro recursos, no un tope por
+# recurso. Guardar oro tiene que significar no guardar acero: es lo que hace que
+# el mercado sirva, que gastar antes de la Tormenta sea la jugada correcta y que
+# llegar lleno al Diezmo sea una decision y no un descuido.
+#
+# Los dos extremos de la tabla estan fijados por razones distintas:
+#
+# - **Era 1 = 600 porque la apertura tiene que poder jugarse.** Se empieza con 500
+#   (300 oro + 200 madera) y los dos primeros edificios que el juego pide, serreria
+#   (80/50) y mina de oro (120/80), suman 330. Con un tope de 300 el jugador
+#   arrancaba 200 por encima del limite y perdia recursos antes de tomar su primera
+#   decision: el juego le quitaba cosas por existir, no por elegir mal. 600 sigue
+#   siendo asfixiante frente a los 800 POR RECURSO de antes (1600 utiles en Era 1),
+#   pero deja jugar la apertura y obliga a elegir a partir de ahi.
+# - **Era 3 = 1000 porque cuadra con el precio de la victoria.** 1000 + 5x500 = 3500,
+#   exactamente lo que cuesta la mejora del Cuartel General a Nv.3 (1500 oro + 800
+#   acero + 500 petroleo + 700 madera). Para ganar hay que llegar con la bolsa llena
+#   y los cinco almacenes en pie, que es justo cuando mas tienes que perder. Este
+#   numero no se mueve sin mover tambien `hq_upgrade_costs`.
+
+## Tope base de la bolsa, por era.
+var base_storage_cap_by_era := {
+	1: 600,
+	2: 800,
+	3: 1000,
+}
+
+var warehouse_storage_bonus := 500
+
+## Bonificacion permanente de almacenamiento del arbol tecnologico (runtime).
+var tech_storage_bonus := 0
 
 # ── Building Processes (margins ~1.5x) ──
 
@@ -194,7 +252,9 @@ var audio_ambient_volume := 0.5
 const USER_SETTINGS_PATH := "user://settings.cfg"
 
 ## Whether the map cell grid overlay is shown permanently (toggle in Settings).
-var ui_grid_visible := false
+## On by default (A10): the owner wants to see the cells at all times, faintly;
+## the alpha lives in the GridOverlay material in Main.tscn.
+var ui_grid_visible := true
 
 ## Whether the on-screen helper callouts are shown ("?" button). On by default
 ## so new players get guidance; the choice persists once toggled.
@@ -378,7 +438,7 @@ var tech_definitions := [
 
 func get_duration(base: float) -> float:
 	if dev_mode:
-		return maxf(base * 0.1, 1.0)
+		return maxf(base * dev_time_scale, 1.0)
 	return base * time_multiplier
 
 func get_production_with_tech(base_mult: float) -> float:
@@ -388,7 +448,7 @@ func get_build_time(base: float) -> float:
 	if base <= 0.0:
 		return 0.0
 	if dev_mode:
-		return 1.0
+		return 2.0
 	var speed_reduction := maxf(0.0, 1.0 - tech_build_speed_bonus)
 	return base * time_multiplier * speed_reduction
 
@@ -396,7 +456,7 @@ func get_production_interval(base: float) -> float:
 	if base <= 0.0:
 		return 0.0
 	if dev_mode:
-		return 2.0
+		return 4.0
 	return base * time_multiplier
 
 func get_upgrade_duration(level: int) -> float:
@@ -552,6 +612,28 @@ var combat_map_depth := Vector2i(4, 6)
 var combat_map_branching := Vector2i(2, 3)
 var combat_draft_options := 3
 
+## Node risk (0 low / 1 medium / 2 high). The same dial pushes the roster up and
+## the loot with it, so taking the dangerous road is a bet, not a punishment.
+var combat_risk_enemy_scale := 0.20
+var combat_risk_reward_bonus := 0.35
+
+## Enemy roster size at depth 0, era 1, risk 0. Every pressure term grows it from
+## here up to `combat_deploy_cap`.
+var combat_enemy_base_slots := 2
+
+## What one draft pick is worth. Kept modest on purpose: a run is 6-8 fights, not
+## thirty, so a single pick should tilt a fight, never decide the expedition.
+var combat_draft_values := {
+	"atk": 2,
+	"def": 2,
+	"move": 1,
+	"initiative": 2,
+	"heal_pct": 0.3,
+}
+## A draft aimed at one unit type instead of the whole party hits harder, because
+## it helps fewer units.
+var combat_draft_focus_multiplier := 2
+
 ## Base reward per cleared encounter, scaled by node depth and risk.
 var combat_reward_base := {"gold": 60, "wood": 30}
 
@@ -571,13 +653,22 @@ func get_combat_ai_step_delay() -> float:
 # ══════════════════════════════════════════════════════════════════════
 # ── The Imperial Storm ──
 # ══════════════════════════════════════════════════════════════════════
-# The storm is dispatched, not rolled: it arrives on a schedule the player can
-# see and plan around. A storm you cannot prepare for is just a random event.
+# The storm is dispatched, not rolled: it always announces itself and always runs
+# the same three phases in the same order. What the dice decide is when the calm
+# ends and whether a given warning amounts to anything — never how hard it hits.
+# A disaster nobody can prepare for is noise; one that always means the same
+# thing is arithmetic.
 
-## Seconds of calm between storms, and how long the warning lasts before it hits.
-## The warning is the whole mechanic — it is what turns the storm into decisions.
-var storm_interval := 300.0
+## How long the calm lasts. A range, not a metronome: a storm you can set your
+## watch by stops being weather and becomes a spreadsheet column.
+var storm_interval_min := 240.0
+var storm_interval_max := 420.0
+
+## The three phases are always exactly this long, in this order: Warning, Ash,
+## Storm. The arrival is uncertain; what happens once it starts never is. That
+## asymmetry is what makes the Warning worth acting on.
 var storm_warning := 45.0
+var storm_ash_duration := 60.0
 var storm_duration := 60.0
 
 ## The first storm is deliberately late and gentle: it has to teach the cycle,
@@ -585,15 +676,28 @@ var storm_duration := 60.0
 var storm_first_interval := 420.0
 var storm_first_severity := 1
 
-## Production multiplier while the ash is overhead. Not zero — watching the
-## factories crawl is worse than watching them stop.
-var storm_production_multiplier := 0.35
+## One Warning in four turns out to be nothing. The player still paid to prepare,
+## and the Regency loses nothing by crying wolf — which is the point.
+var storm_false_alarm_chance := 0.25
+## What a false alarm costs: the assessment is deferred, not forgiven. This much
+## severity is saved up and rides along with the next real storm.
+var storm_false_alarm_carry := 1
+
+## Production multiplier per biting phase. The Warning does not touch production
+## at all — it is the one clean window in which to decide. Neither is zero:
+## watching the factories crawl is worse than watching them stop.
+var storm_ash_production_multiplier := 0.5
+var storm_production_multiplier := 0.15
 ## Live, temporary multiplier applied on top of everything else in
 ## ProductionManager. 1.0 means nothing is happening. Only events write to it,
 ## and whoever sets it is responsible for putting it back.
 var event_production_multiplier := 1.0
-## Morale lost per storm tick, and how often those ticks land.
+## Morale lost per tick of ash, and how often those ticks land. The Warning
+## costs none of it.
 var storm_morale_per_tick := 2.0
+## The Storm bleeds this much harder than the Ash. Same clock, three times the
+## bill — the difference between the two phases has to be felt, not read.
+var storm_morale_storm_multiplier := 3.0
 var storm_tick_interval := 5.0
 
 ## Severity climbs with the era and with how much smoke you make. The Regency does
@@ -619,6 +723,29 @@ var storm_tower_mitigation_max := 0.6
 ## recibido. Reparar un rasguño es barato; levantar una ruina, casi construirla.
 var storm_repair_cost_ratio := 0.5
 
+## ── A quién muerde primero ──
+## El daño dejó de ser un sorteo. El orden es de balance, no de código: decide
+## qué se siente al perder, y eso se afina en pruebas, no reescribiendo el
+## algoritmo.
+##
+## Primero lo que sostiene la defensa y la moral, **decoraciones incluidas**.
+## Romper una estatua es el golpe más legible que tiene la Tormenta: te quita
+## justo el colchón de moral con el que contabas para aguantarla, y lo hace
+## antes de pasar la cuenta.
+var storm_targets_defense := ["tower", "barracks"]
+## Después el techo. Perder casas duele a plazo —baja el aforo, no la
+## producción—, así que va en segundo escalón y no en el primero.
+var storm_targets_shelter := ["house"]
+## La economía (fundición, refinería, minas, aserraderos, almacenes) solo entra
+## en el reparto a partir de esta severidad. Que una tormenta menor no pueda
+## tocar la fundición es lo que deja margen para rehacerse; si entrara siempre,
+## la primera mala racha sería terminal.
+var storm_production_target_severity := 4
+## La regla anti-softlock: nunca cae el **último** de estos en pie. Sin madera y
+## sin oro no hay con qué reparar, y una base que no puede repararse ya perdió
+## sin que nadie se lo haya dicho todavía.
+var storm_essential_buildings := ["sawmill", "gold_mine"]
+
 func get_storm_damage(severity: int, max_health: int, towers: int) -> int:
 	var raw: float = float(max_health) * storm_damage_per_tick * float(maxi(1, severity))
 	return maxi(1, roundi(raw * (1.0 - get_storm_mitigation(towers))))
@@ -634,11 +761,70 @@ var storm_tithe_ratio := 0.25
 ## How many enemies the Assessors field, before severity scaling.
 var storm_tithe_base_force := 3
 
-func get_storm_interval(is_first: bool) -> float:
-	return get_duration(storm_first_interval if is_first else storm_interval)
+## ── La Cuota Mínima ──
+## El porcentaje solo no bastaba: con el almacén en cero se llevaban cero, así
+## que meter la bolsa en la cola convertía el Diezmo en un trámite gratis. Ahora
+## hay una **deuda base** que no depende de lo que tengas, y lo que no se cubre
+## con recursos se cobra en carne. Los Tasadores no se van con las manos vacías;
+## esa es toda su función en el mundo.
+var storm_tithe_base_debt := 60
+var storm_tithe_debt_per_severity := 40
+var storm_tithe_debt_per_era := 30
+## Lo que salda arruinar un edificio embargado. Alto a propósito: el embargo es
+## el último recurso y tiene que cerrar la cuenta rápido, no desmantelar la base
+## entera por una deuda pequeña.
+var storm_tithe_building_value := 80
+## Lo que salda llevarse a un obrero, y lo que cuesta de moral cada uno. Vale
+## menos que un edificio porque la gente es lo último que se toca y lo que más
+## se nota: un Diezmo que se lleva obreros tiene que doler durante horas.
+var storm_tithe_worker_value := 50
+var storm_tithe_worker_morale := 10
+
+## Carrera armamentística: cada tormenta superada engorda la escolta que vuelve.
+## Ganarles hoy no te quita el problema, te lo encarece — que es exactamente lo
+## que hace una contaduría cuando una provincia demuestra que puede pagar más.
+var storm_assessor_growth_per_win := 0.15
+## Con techo, porque el tablero también lo tiene: sin tope, la escalada dejaría
+## de leerse en cuanto la escolta desbordara `combat_deploy_cap`.
+var storm_assessor_growth_max := 2.0
+
+## Cuánto se llevan de lo almacenado, escalado por severidad. Vive aquí y no en
+## StormManager porque es la curva del impuesto, no el procedimiento de cobro.
+func get_tithe_ratio(severity: int) -> float:
+	return clampf(
+		storm_tithe_ratio * (float(severity) / float(maxi(1, storm_severity_max)) + 0.5),
+		0.0, 0.9)
+
+## La deuda del día. El suelo existe para el que llega con la bolsa vacía, no
+## para abaratarle el Diezmo al que llega lleno: por eso manda el mayor de los
+## dos, y el que acumula sigue pagando el porcentaje de siempre.
+func get_tithe_debt(severity: int, era: int, stored: int) -> int:
+	var floor_debt: int = storm_tithe_base_debt 		+ storm_tithe_debt_per_severity * maxi(0, severity - 1) 		+ storm_tithe_debt_per_era * maxi(0, era - 1)
+	var share: int = int(float(maxi(0, stored)) * get_tithe_ratio(severity))
+	return maxi(floor_debt, share)
+
+## El multiplicador de la escolta por tormentas superadas.
+func get_assessor_escalation(storms_survived: int) -> float:
+	return clampf(
+		1.0 + storm_assessor_growth_per_win * float(maxi(0, storms_survived)),
+		1.0, storm_assessor_growth_max)
+
+func get_storm_first_interval() -> float:
+	return get_duration(storm_first_interval)
+
+## Bounds of the calm. The roll itself belongs to StormCycle's own generator, so
+## the model stays deterministic under a seed.
+func get_storm_interval_min() -> float:
+	return get_duration(storm_interval_min)
+
+func get_storm_interval_max() -> float:
+	return get_duration(storm_interval_max)
 
 func get_storm_warning() -> float:
 	return get_duration(storm_warning)
+
+func get_storm_ash_duration() -> float:
+	return get_duration(storm_ash_duration)
 
 func get_storm_duration() -> float:
 	return get_duration(storm_duration)
@@ -646,10 +832,55 @@ func get_storm_duration() -> float:
 func get_storm_tick_interval() -> float:
 	return get_duration(storm_tick_interval)
 
+# ══════════════════════════════════════════════════════════════════════
+# ── Las torres en el tablero del Diezmo ──
+# ══════════════════════════════════════════════════════════════════════
+# Mitigar el daño ya justifica construir torres. Esto justifica tenerlas **en
+# pie** el día que los Tasadores se bajan del carro: una torre entera pelea.
+
+## Qué edificio cuenta como torre. Aquí para que ningún servicio vuelva a
+## escribir "tower" a mano.
+var storm_tower_building_id := "tower"
+
+## Qué pone una torre en el tablero. Una torre es una posición fija con un
+## reflector y un arma pesada: ve venir al enemigo de lejos y no maniobra. Eso es
+## artillería (alcance 3, movimiento 1), no infantería — una dotación de torre
+## que corretea por el tablero sería una unidad que no vive en ninguna parte.
+var storm_tower_garrison_unit := "artillery"
+## Dotaciones por torre en pie, y su tope. El tope existe por lo mismo que el de
+## la mitigación: una fila de torres no puede convertir el Diezmo en un trámite.
+var storm_tower_garrison_per_tower := 1
+var storm_tower_garrison_max := 2
+
+## Cuántas dotaciones se suman a la guarnición.
+##
+## Van **además** del tope de despliegue, no dentro: si ocuparan hueco de la
+## guarnición, construir una torre sería cambiar un soldado entrenado por una
+## dotación y las torres no aportarían nada al tablero, que es justo lo que
+## venían a arreglar.
+##
+## El límite duro no es `combat_deploy_cap` sino el tablero. La defensa nunca
+## pasa de una fila del defensor (`combat_board_size.x`), así que si alguien sube
+## el tope de despliegue las torres ceden el sitio antes que desbordar la zona de
+## despliegue y dejar unidades fuera del tablero.
+func get_tower_garrison(standing_towers: int, garrison_size: int) -> int:
+	var crews: int = mini(
+		maxi(0, standing_towers) * storm_tower_garrison_per_tower, storm_tower_garrison_max)
+	return maxi(0, mini(crews, combat_board_size.x - maxi(0, garrison_size)))
+
 # ── Storage Helpers ──
 
-func get_storage_cap(warehouse_count: int) -> int:
-	return base_storage_cap + (warehouse_count * warehouse_storage_bonus)
+## Tope base de la era. Una era fuera de tabla se acota a la mas cercana en vez de
+## devolver 0: un save corrupto no puede dejar al jugador sin almacen.
+func get_base_storage_cap(era: int) -> int:
+	var keys: Array = base_storage_cap_by_era.keys()
+	keys.sort()
+	var clamped: int = clampi(era, int(keys[0]), int(keys[-1]))
+	return int(base_storage_cap_by_era.get(clamped, base_storage_cap_by_era[keys[0]]))
+
+## Tope de la bolsa compartida: escala con la era y con cada almacen en pie.
+func get_storage_cap(warehouse_count: int, era: int = 1) -> int:
+	return get_base_storage_cap(era) + (warehouse_count * warehouse_storage_bonus) + tech_storage_bonus
 
 # ── Deposit Helpers ──
 
@@ -683,3 +914,139 @@ var phase_triggers := {
 var early_consumption_interval := 60.0     # Phase 1-2: every 60s (vs 30s normal)
 var early_morale_penalty := -3             # Phase 1-2: gentle penalty (vs -8)
 var early_growth_interval := 40.0          # Phase 1-2: slow growth (vs 20s)
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Cancelacion, hambruna y suelo de ruina ──
+# ══════════════════════════════════════════════════════════════════════
+# Tres reglas que van juntas: lo que cuesta arrepentirse, lo que cuesta no pagar
+# y hasta donde se puede caer. Seccion aparte a proposito, para que el balance de
+# la Tormenta y el de la economia se toquen sin pisarse.
+
+## La Tasa de Corrupcion: que fraccion de lo pagado vuelve al cancelar un
+## proceso, un minado o un entrenamiento — y lo que hoy se perdia al demoler con
+## algo en curso. En calma solo se pierde la comision; con la Tormenta en marcha
+## los Tasadores ya vienen de camino y la fuga de capitales se cobra el doble.
+## Si cancelar fuese igual de barato siempre, cancelar seria gratis.
+var cancel_refund_ratio := 0.70
+var cancel_refund_ratio_storm := 0.40
+
+## Tics de impago que se perdonan antes de que empiece a morir gente y a desertar
+## tropa. Dos de gracia: al tercero duele. Margen para reaccionar, no para
+## ignorarlo.
+var unpaid_grace_ticks := 2
+## Cuanto se pierde por tic una vez agotada la gracia.
+var starvation_deaths_per_tick := 1
+var desertion_units_per_tick := 1
+## Moral que cuestan la hambruna y la desercion, ademas del golpe que ya pega el
+## impago por si mismo.
+var starvation_morale_penalty := -6
+var desertion_morale_penalty := -5
+
+## El suelo de ruina: se puede caer hasta el fondo, pero no se pierde la partida.
+## Siempre queda alguien para volver a empezar.
+var population_floor := 1
+
+## Cuanto devuelve cancelar ahora mismo.
+func get_cancel_refund_ratio() -> float:
+	return cancel_refund_ratio_storm if _storm_cycle_running() else cancel_refund_ratio
+
+## Reembolso exacto de un coste (nombre de recurso -> cantidad). Redondea hacia
+## abajo, y es exactamente el numero que la UI ensena antes de confirmar: nadie
+## deberia descubrir el porcentaje perdiendolo.
+func get_cancel_refund(cost: Dictionary) -> Dictionary:
+	var ratio := get_cancel_refund_ratio()
+	var refund := {}
+	for res_name in cost:
+		var amount := int(floor(float(cost[res_name]) * ratio))
+		if amount > 0:
+			refund[res_name] = amount
+	return refund
+
+## Si un contador de tics impagados ya agoto la gracia y toca cobrarselo.
+func unpaid_hurts(unpaid_ticks: int) -> bool:
+	return unpaid_ticks > unpaid_grace_ticks
+
+## UNICA lectura de la fase de la Tormenta en todo el sistema de cancelacion.
+## Aislada a proposito: cuando el ciclo gane fases nuevas o cambien de nombre,
+## adaptarlo es esta linea y ninguna mas. Cualquier fase que no sea calma cuenta
+## como "Tormenta en marcha", el Diezmo incluido — que es cuando mas duele.
+## Pregunta a StormManager en vez de comparar fases: asi una Tormenta parada para
+## siempre (asedio ganado) nunca vuelve a cobrar el 60% por cancelar.
+func _storm_cycle_running() -> bool:
+	return StormManager.is_cycle_active()
+
+# ══════════════════════════════════════════════════════════════════════
+# ── La cola abierta y lo que la Tormenta se lleva ──
+# ══════════════════════════════════════════════════════════════════════
+# La cola no se bloquea en ninguna fase: vaciar el almacen en procesos y
+# entrenamientos es una decision legitima del jugador, y prohibirsela seria
+# quitarle la unica palanca que tiene contra el Diezmo.
+#
+# El agujero que se cierra aqui no era cancelar colas: era llenarlas. El coste de
+# un proceso se paga al instante, asi que meter el almacen en la cola hacia que
+# los Tasadores auditaran ceros — y como los procesos tienen un margen de 1,5x
+# (pagas 20 de madera, recibes 35), esconder ahi no solo salvaba los recursos,
+# los multiplicaba. Era la jugada dominante del juego.
+
+## Que fraccion de lo pagado sobrevive a la Tormenta. Cero, y no un porcentaje
+## bajo: con cualquier reembolso por encima de cero la cola sigue siendo una caja
+## fuerte mas barata que el Diezmo, que como mucho se lleva el 37,5%. El
+## escondite solo deja de compensar cuando no devuelve absolutamente nada.
+var storm_queue_loss_refund_ratio := 0.0
+
+## Solo la TORMENTA arruina la cola. La Advertencia no cuesta nada y la Ceniza es
+## la ultima ventana para decidir: si la Ceniza ya destruyera, el aviso que se da
+## durante la Ceniza llegaria tarde por definicion y la regla seria injusta.
+func storm_phase_ruins_queue(phase: int) -> bool:
+	return phase == StormCycle.Phase.STORM
+
+## Lo que se salva de una cosa en curso cuando rompe la Tormenta. Misma forma que
+## `get_cancel_refund` a proposito: perderlo por la Tormenta y cancelarlo a mano
+## son la misma operacion con distinto precio, y quien la aplique puede tratarlas
+## igual sin preguntar cual de las dos fue.
+func get_storm_loss_refund(cost: Dictionary) -> Dictionary:
+	var refund := {}
+	for res_name in cost:
+		var amount := int(floor(float(cost[res_name]) * storm_queue_loss_refund_ratio))
+		if amount > 0:
+			refund[res_name] = amount
+	return refund
+# ── La Auditoria Final ──
+# ══════════════════════════════════════════════════════════════════════
+# El Cuartel General a nivel 3 ya no gana la partida: la convoca. La Regencia
+# manda su auditoria definitiva y hay que sobrevivirla — varias oleadas seguidas
+# contra la misma guarnicion, sin reentrenar entre medias.
+#
+# Todos los numeros de aqui se leen contra una sola pregunta: cuanto ejercito hay
+# que tener en pie para que la ultima oleada siga siendo ganable despues de que
+# las anteriores ya se hayan cobrado lo suyo. La atricion es el balance de
+# verdad; estos valores solo deciden cuanto muerde.
+
+## Cuantas oleadas trae el asedio (minimo, maximo). Sale de la semilla, no de una
+## eleccion del jugador: convocar es apostar sin saber cuanto dura la noche.
+var final_audit_waves := Vector2i(3, 5)
+
+## Cuerpos de la primera oleada, y cuantos suma cada oleada siguiente. El techo
+## real lo pone `combat_deploy_cap`: el tablero sigue siendo el mismo de siempre.
+var final_audit_base_slots := 3
+var final_audit_slots_per_wave := 1
+
+## Multiplicador de HP/ATK por oleada y por era. Cuando los cuerpos ya no caben
+## en el tablero, esta escalada es la unica que sigue apretando.
+var final_audit_scale_per_wave := 0.22
+var final_audit_scale_per_era := 0.25
+## La ultima oleada baja con todo. Es el cierre del juego, no un escalon mas.
+var final_audit_last_wave_multiplier := 1.5
+
+## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
+## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
+## asedio es la misma pelea cinco veces seguidas.
+var final_audit_artillery_share := 3
+var final_audit_armour_wave := 2
+## La unica moneda al aire del asedio: a veces, un canon de mas.
+var final_audit_extra_gun_chance := 0.35
+
+## Unidades vivas en casa que hacen falta para volver a convocar tras perder.
+## Perder no acaba la partida, pero tampoco se rifa la victoria: hay que
+## reconstruir el ejercito antes de que la Regencia vuelva a bajar.
+var final_audit_resummon_min_units := 3

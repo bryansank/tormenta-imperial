@@ -44,7 +44,7 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Special |
 |----|------|------|--------------|---------|------------|---------|
 | `house` | Vivienda | 1x1 | 50/0/0/30 | 0 | 3s | +6 pop capacity |
-| `warehouse` | Deposito | 1x1 | 60/0/0/40 | 1 | 4s | +400 storage cap |
+| `warehouse` | Deposito | 1x1 | 60/0/0/40 | 1 | 4s | +500 shared storage cap |
 
 ### Military Buildings (combat planned)
 
