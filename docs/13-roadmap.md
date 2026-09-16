@@ -22,7 +22,11 @@ The management loop, the tactical board and the storm cycle all run in-game:
 - ✅ Save/load, offline progression
 - ✅ Audio: `AudioManager` (runtime buses, signal-driven) + 4 music tracks + 16 SFX
 - ✅ **Tactical encounter**: 8×8 board, turn order, move/attack/defend/wait, enemy AI,
-  `Encounter` + `CombatAI` as pure headless-testable models (59 tests)
+  `Encounter` + `CombatAI` as pure headless-testable models — see [15-combat.md](15-combat.md)
+- ✅ **The Final Audit**: HQ 3 summons a 3-5 wave siege fought by the garrison with
+  attrition across waves; surviving it stops the Storm for good and wins the game
+- ✅ **Tutorial**: `TutorialManager` + `TutorialPanel` — paged intro on a new game and
+  one contextual tip the first time each thing happens
 - ✅ **The Imperial Storm**: four-phase cycle (warning → storm → tithe → aftermath),
   production collapse, morale bleed, severity scaled by industrial footprint
 - ✅ **The Tithe is fought, not just paid**: `CombatManager.start_defense()` puts the
@@ -64,25 +68,32 @@ Tuning on systems that already exist: the biggest change in feel for the least n
 ## 🚧 Milestone 3 — Expedition & the double clock
 
 Tasks T022-T029 are specified in `specs/001-combate-pve/tasks.md`.
+Everything below is wired at the model and service level; what is left is the screens.
 
-- ✅ `ExpeditionGenerator` + `Expedition` pure models with 59 tests (boss reachable across 200 seeds); wiring to `CombatManager` and UI still pending
-- ⬜ `Expedition` model, `launch_expedition()`, real skirmish panel, map view, draft modal
-- ⬜ Chained encounters with attrition and permadeath
-- ⬜ **Unit lockout**: `get_garrison()` excludes units away on expedition
-- ⬜ **Defensive auto-resolve**: run the *same* `Encounter` headless with the AI driving
-  both sides — no separate combat maths
-- ⬜ Storm notifications drawn over `BattleScreen`
+| Item | Status | Where it lives |
+|------|--------|----------------|
+| `ExpeditionGenerator` + `Expedition` pure models (boss reachable across many seeds) | ✅ | `scripts/combat/ExpeditionGenerator.gd`, `scripts/combat/Expedition.gd`, `tests/combat/test_expedition_generator.gd`, `tests/combat/test_expedition.gd` |
+| `launch_expedition()` and the rest of the service API (`select_node`, `apply_draft`, `abandon_expedition`, `enter_current_node`) | ✅ | `scripts/services/CombatManager.gd`, `tests/combat/test_expedition_wiring.gd` |
+| Expedition save/load — seed + cleared nodes, map regenerated, board never saved | ✅ | `Expedition.to_dict/from_dict`, `CombatManager.get_save_data/load_save_data`, `GameManager` |
+| Chained encounters with attrition and permadeath | ✅ | `Expedition.build_encounter_units()` hands the board the same `CombatUnit` instances; `CombatManager.enter_current_node()` |
+| **Unit lockout**: `get_garrison()` excludes units away on expedition | ✅ | `CombatManager.get_garrison()` / `get_units_on_expedition()` |
+| **Defensive auto-resolve**: the *same* `Encounter` headless, AI on both sides, no separate combat maths | ✅ | `scripts/combat/AutoResolver.gd`, `CombatManager.auto_resolve_defense()`, `StormManager._auto_resolve_tithe()`, `tests/combat/test_auto_resolver.gd`, `tests/storm/test_defense_auto_resolve.gd` |
+| Storm notifications drawn over `BattleScreen` | ✅ | `NotificationPanel` toast layer vs `BattleScreen.layer`, `tests/storm/test_storm_toasts_over_board.gd` |
+| **Real skirmish panel, map view, draft modal** | 🚧 | `scripts/ui/SkirmishPanel.gd` exists but launches `start_skirmish()`, not an expedition. No map view, no draft modal, and `draft_offered` / `expedition_node_selected` / `expedition_resumed` have no listener |
 
-## 🚧 Milestone 4 — The Final Audit
+## ✅ Milestone 4 — The Final Audit
 
-- ✅ HQ level 3 summons the siege instead of instantly winning (`FinalAudit` pure model, 32 tests; resummon floor of 3 units)
-- 🚧 3-5 chained defensive encounters with attrition — model done, wiring waves onto the board in progress. **Until it lands the game cannot be finished: HQ 3 summons but nothing begins the siege.**
-- 🚧 Winning emits `storm_halted_forever` — `StormManager` listener in progress
-- ⬜ Losing sacks the settlement but the siege can be summoned again after rebuilding
+| Item | Status | Where it lives |
+|------|--------|----------------|
+| HQ level 3 summons the siege instead of instantly winning | ✅ | `ProgressionManager._complete_milestone()` → `summon_final_audit()`; `scripts/combat/FinalAudit.gd`, `tests/combat/test_final_audit.gd` |
+| 3-5 chained defensive encounters with attrition | ✅ | `final_audit_wave_ready` → `CombatManager._on_final_audit_wave_ready()` → `start_defense(roster, defenders, scale)`; reported back from `end_encounter()` via `ProgressionManager.report_audit_wave()`. `tests/storm/test_final_audit_wiring.gd` |
+| Winning emits `storm_halted_forever` and the Storm stops for good | ✅ | `ProgressionManager._publish_audit()`, `StormManager._on_halted_forever()`, `StormSky.restore_now()` |
+| Losing sacks the settlement but the siege can be summoned again after rebuilding | ✅ | `StormManager._on_final_audit_lost()` (max-severity Tithe + max storm damage); `FinalAudit.can_resummon()` / `resummon()` with a floor of `final_audit_resummon_min_units` (3); the button lives in `SkirmishPanel._refresh_audit_button()` |
+
+Full technical detail: [15-combat.md](15-combat.md).
 
 ## 💤 Backlog — Nice-to-have
 
-- 💤 Tutorial / guided first run
 - 💤 Ambient audio track (`assets/audio/ambient/` still empty)
 - 💤 Real unit icons on the board (currently the name's initial)
 - 💤 Touch grab-pan parity with mouse
