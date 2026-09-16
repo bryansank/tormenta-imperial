@@ -139,9 +139,19 @@ func test_enemy_scale_climbs_with_depth_risk_and_era() -> void:
 	assert_float(Generator.enemy_scale(4, 1, 0, true)).is_greater(Generator.enemy_scale(4, 1, 0, false))
 
 func test_rosters_grow_with_depth() -> void:
+	# La profundidad de muestra ya no es 8, es 16. No cambia la regla — el roster
+	# sigue creciendo con la profundidad, y `test_the_roster_never_shrinks_as_the
+	# _run_goes_deeper` sigue comprobando que nunca encoge —, cambia cuando se
+	# nota: el balance de T046 bajo `combat_enemy_scale_per_depth` de 0.15 a 0.02,
+	# asi que el tercer cuerpo entra mucho mas tarde. A proposito: medido con
+	# `tools/balance_probe.gd`, un tercer enemigo dentro del mapa real (0-7)
+	# borra a una columna de cuatro unidades de era 1, y el encargo era justo que
+	# esa columna pudiera ganar. Dentro de una expedicion la dificultad sube por
+	# el multiplicador y por el cuerpo extra del jefe, no por llenar el tablero.
+	# Ver `docs/16-balance-combate.md`.
 	var rng := Generator.make_rng(1234)
 	var shallow: int = Generator.roster_size(Generator.enemy_roster(rng, 0, 1, 0))
-	var deep: int = Generator.roster_size(Generator.enemy_roster(rng, 8, 1, 0))
+	var deep: int = Generator.roster_size(Generator.enemy_roster(rng, 16, 1, 0))
 	assert_int(deep).is_greater(shallow)
 
 func test_a_node_never_fields_more_than_the_deploy_cap() -> void:
