@@ -284,6 +284,19 @@ func _standing_towers() -> int:
 ## The Assessors arrive. If there is a garrison at home, they have to get through
 ## it first; with nobody to stand, they simply help themselves.
 func _begin_tithe(severity: int) -> void:
+	# Con la Auditoria Final en el tablero no hay Diezmo aparte: la Regencia ya
+	# esta en la puerta, y cobrar por un lado mientras se pelea por el otro pone
+	# a la misma guarnicion a defender dos sitios a la vez. get_garrison() no sabe
+	# de las unidades que estan en las oleadas del asedio, asi que las volveria a
+	# alistar y les descontaria las bajas por duplicado: el jugador perderia
+	# soldados que no murieron.
+	if ProgressionManager.is_final_audit_active():
+		EventBus.notification_posted.emit(
+			Tr.t("STORM_TITHE_DURING_AUDIT"), "warning", UITheme.WARNING)
+		EventBus.tithe_resolved.emit(true, {})
+		_settle()
+		return
+
 	var roster: Dictionary = assessor_roster(severity)
 	# Con el tablero ocupado (una expedicion a medias) la guarnicion que quedo en
 	# casa pelea sola: el mismo Encounter, resuelto a ciegas, sin abrir otro

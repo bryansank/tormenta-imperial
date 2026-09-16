@@ -140,6 +140,12 @@ func _handle_screen_touch(event: InputEventScreenTouch) -> void:
 		else:
 			# Aparece el segundo dedo: el arrastre de uno se corta en seco y toma
 			# el mando el pellizco. Si no, el zoom arranca dando un tiron al mapa.
+			#
+			# Y el gesto queda marcado como consumido aunque nadie llegue a panear:
+			# dos dedos nunca son un toque. Sin esta linea, pellizcar para alejar
+			# la camara en modo colocacion suelta el edificio al levantar el dedo,
+			# porque el raton emulado ve un press y un release sin arrastre.
+			_touch_pan_consumed_click = true
 			_cancel_touch_pan()
 			_arm_pinch()
 		return

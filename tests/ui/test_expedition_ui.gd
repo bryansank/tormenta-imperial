@@ -359,3 +359,4 @@ func test_the_map_stays_touchable_and_on_screen_on_a_phone() -> void:
 		.is_less_equal(viewport.y + 1.0)
 	assert_float(screen._abandon_map_btn.global_position.y + screen._abandon_map_btn.size.y) \
 		.is_less_equal(viewport.y + 1.0)
+

@@ -1093,6 +1093,13 @@ func _close_board() -> void:
 	_result_panel.visible = false
 	CombatManager.end_encounter()
 
+	# Cerrar la oleada de un asedio ABRE la siguiente, y lo hace dentro de esa
+	# llamada: report_audit_wave encadena hasta encounter_started sin soltar el
+	# hilo. Si se sigue de largo, la cola de este metodo esconde el tablero que
+	# se acaba de abrir y deja la partida sin forma de continuar el asedio.
+	if _board_open:
+		return
+
 	if _report_panel.visible:
 		# La expedicion ya se cerro mientras se leia el parte: manda el informe.
 		return

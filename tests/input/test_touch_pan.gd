@@ -276,3 +276,36 @@ func test_an_interface_touch_does_not_break_the_finger_that_is_panning() -> void
 	_feed(_drag(0, a, Vector2(440, 300)))
 	assert_array(_pans).has_size(1)
 	assert_array(_zooms).is_empty()
+
+# ── Un pellizco no es un toque ───────────────────────────────────────
+
+## Con el raton emulado desde el tactil encendido, cada gesto del dedo llega
+## tambien como boton izquierdo. `BuildingPlacer` difiere la colocacion al soltar
+## y pregunta si el gesto se consumio paneando. Un pellizco no panea nunca —
+## manda `_handle_pinch`— asi que sin marcarlo aparte la respuesta era "no" y el
+## gesto acababa colocando el edificio donde quedo el dedo.
+func test_a_pinch_never_ends_up_as_a_click() -> void:
+	_feed(_touch(0, Vector2(300, 300), true))
+	_feed(_touch(1, Vector2(340, 300), true))
+	assert_bool(_svc.touch_pan_consumed_click()).is_true()
+
+	# Y sigue consumido mientras dura el pellizco y al levantar los dedos, que es
+	# cuando llega el clic emulado.
+	_feed(_drag(0, Vector2(300, 300), Vector2(260, 300)))
+	_feed(_drag(1, Vector2(340, 300), Vector2(380, 300)))
+	assert_bool(_svc.touch_pan_consumed_click()).is_true()
+	_feed(_touch(1, Vector2(380, 300), false))
+	_feed(_touch(0, Vector2(260, 300), false))
+	assert_bool(_svc.touch_pan_consumed_click()).is_true()
+
+func test_a_plain_tap_after_a_pinch_is_a_click_again() -> void:
+	_feed(_touch(0, Vector2(300, 300), true))
+	_feed(_touch(1, Vector2(340, 300), true))
+	_feed(_touch(1, Vector2(340, 300), false))
+	_feed(_touch(0, Vector2(300, 300), false))
+	# Gesto nuevo: el primer dedo limpia la marca, o el jugador no podria volver
+	# a tocar nada despues de hacer zoom.
+	_feed(_touch(0, Vector2(200, 200), true))
+	assert_bool(_svc.touch_pan_consumed_click()).is_false()
+	_feed(_touch(0, Vector2(200, 200), false))
+	assert_bool(_svc.touch_pan_consumed_click()).is_false()

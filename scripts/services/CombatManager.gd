@@ -898,6 +898,15 @@ func _clear_draft() -> void:
 func _resolve_expedition(result: int) -> void:
 	if _expedition == null:
 		return
+	# El tablero del ultimo nodo se cierra aqui, no en la interfaz: cuando la
+	# campana termina por el jefe o por aniquilacion, el parte final sustituye al
+	# del encuentro y con el desaparece el boton que llamaba a end_encounter().
+	# Un _encounter colgado deja is_board_open() en true para siempre, y a partir
+	# de ahi todo Diezmo se resuelve a ciegas y el asedio se da por perdido sin
+	# jugarse una sola oleada.
+	if _encounter != null:
+		end_encounter()
+
 	var summary: Dictionary = _expedition.result_summary()
 	var rewards: Dictionary = summary.get("rewards", {})
 	for res_name in rewards:
