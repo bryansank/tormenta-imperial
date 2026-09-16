@@ -24,17 +24,18 @@ extends GdUnitTestSuite
 ##   5. `test_the_capstone_summons_the_audit_and_surviving_it_wins_the_game`
 ##   6. `test_losing_the_siege_ruins_the_base_but_never_ends_the_game`
 ##
-## Y tres casos mas en `do_skip`, que NO son andamio: son tres fallos reales del
-## juego, escritos, reproducidos y documentados aqui para que arreglarlos consista
-## en quitarles el `do_skip`. Cada uno lleva el diagnostico entero en su cabecera:
+## Otros tres nacieron en rojo y destaparon tres fallos reales que ningun test
+## unitario veia, porque los tres vivian en una costura entre servicios. Ya estan
+## arreglados; los casos se quedan de guardia, con el diagnostico en su cabecera:
 ##
-##   · `test_the_building_limit_actually_limits` — los limites por edificio no
-##     limitan: se pueden levantar 8 Almacenes con el tope en 5, y dos Cuarteles
-##     Generales con el tope en 1.
-##   · `test_the_shipped_siege_is_unwinnable_today` — la Auditoria Final no se
-##     puede ganar ni con la guarnicion maxima.
-##   · `test_a_damaged_building_can_be_repaired` — reparar es imposible: el boton
-##     REPARAR nunca se deja pulsar.
+##   · `test_the_building_limit_actually_limits` — ningun tope limitaba nada: se
+##     levantaban 8 Almacenes con el tope en 5, y DOS Cuarteles Generales con el
+##     tope en 1, que es el edificio que convoca el final.
+##   · `test_the_siege_is_hard_but_winnable_with_a_full_garrison` y el de la
+##     guarnicion minima — la Auditoria Final no se podia ganar ni con la
+##     guarnicion maxima, asi que la partida no tenia final.
+##   · `test_a_damaged_building_can_be_repaired` — reparar era imposible: el
+##     boton REPARAR no se dejaba pulsar nunca, con la Tormenta rompiendo cosas.
 ##
 ## El guardado y la carga (punto 7 del encargo) no tienen caso propio: se
 ## comprueban **dentro** del recorrido, en los dos momentos en que mas duele
@@ -95,6 +96,10 @@ const EXPEDITION_SEED := 20260915
 ## Semilla global antes de convocar: `ProgressionManager._audit_seed()` llama a
 ## `randi()`, asi que fijarla aqui fija el asedio entero, oleada por oleada.
 const AUDIT_SEED := 7727
+## Asedios que se juegan para medir. Cinco bastan para separar "la mayoria gana"
+## (82% medido) de "casi nunca gana" (0-6%), y siguen costando poco porque las
+## peleas las resuelve la IA en memoria.
+const SIEGE_SAMPLES := 5
 
 # ── Estado guardado de los autoloads ──────────────────────────────────
 
@@ -1000,38 +1005,64 @@ func test_the_capstone_summons_the_audit_and_surviving_it_wins_the_game() -> voi
 	# El tablero queda limpio: ganar no puede dejar un encuentro colgado.
 	assert_bool(CombatManager.is_board_open()).is_false()
 
-## ⚠ PENDIENTE — fallo real, no se arregla desde aqui.
+## El asedio, con la escalada TAL COMO VIENE. Este caso nacio en rojo: con la
+## guarnicion mas fuerte que el juego permite se perdia siempre en la oleada 2,
+## en todas las semillas probadas y en las tres longitudes posibles. El final del
+## juego no se podia terminar.
 ##
-## El mismo recorrido de arriba con la escalada de oleadas tal como viene hoy en
-## `GameConfig`. Con la guarnicion mas fuerte que el juego permite —6 vehiculos
-## (el tope de despliegue, la unidad de mas poder) + las 2 dotaciones de torre,
-## moral 100, era 3— y las dos IA jugando el tablero, el asedio se pierde
-## **siempre en la oleada 2**, con la guarnicion entera borrada, en las 15
-## semillas probadas y en las tres longitudes posibles (3, 4 y 5 oleadas).
+## La causa no era el numero de oleadas ni la composicion, sino que el
+## multiplicador toca HP y ATK **a la vez**, asi que el poder efectivo sube al
+## cuadrado; y que la era entraba dos veces, porque el Cuartel General es de era
+## 3 y el asedio no se convoca antes. Medido con `tools/siege_probe.gd`, tabla en
+## `docs/17-balance-asedio.md`.
 ##
-## Es la escalada de estadisticas, no el numero de oleadas ni la composicion:
-##   · tal cual viene                                   → limpia 2, pierde
-##   · con `final_audit_scale_per_era` a 0              → limpia 3, pierde
-##   · con las tres escalas a 0 (por oleada, era, final)→ gana, 2-5 en pie
-##
-## Archivos: `scripts/combat/FinalAudit.gd::wave_scale()` y las constantes
-## `final_audit_scale_per_wave` (0.22), `final_audit_scale_per_era` (0.25) y
-## `final_audit_last_wave_multiplier` (1.5) en `scripts/services/GameConfig.gd`.
-##
-## Se deja en `do_skip` y no borrado: el dia que el balance se ajuste, quitar el
-## `do_skip` es toda la prueba que hace falta.
-func test_the_shipped_siege_is_unwinnable_today(do_skip = true, skip_reason = "Fallo de balance abierto: la Auditoria Final no se puede ganar con la guarnicion maxima. Ver la cabecera del caso.") -> void:
+## Ahora se mide en vez de afirmarse sobre una semilla: con los valores reales la
+## guarnicion maxima gana el 82% de las veces, asi que una sola semilla seria una
+## moneda al aire con un 18% de cruz. Lo que este caso vigila es que la mayoria
+## se gane, y que no se ganen todas: duro y ganable.
+func test_the_siege_is_hard_but_winnable_with_a_full_garrison() -> void:
 	_open_the_frontier()
 	_industrialise()
-	_raise_an_army({"vehicle": GameConfig.combat_deploy_cap})
-	seed(AUDIT_SEED)
-	assert_bool(ProgressionManager.summon_final_audit()).is_true()
-	assert_bool(ProgressionManager.begin_final_audit()).is_true()
-	await _fight_the_siege_to_the_end()
-	assert_bool(ProgressionManager.final_audit.is_won()).override_failure_message(
-		"la Auditoria Final se perdio en la oleada %d de %d con la guarnicion maxima" % [
-			ProgressionManager.final_audit.current_wave,
-			ProgressionManager.final_audit.wave_count()]).is_true()
+	var won := 0
+	for i in range(SIEGE_SAMPLES):
+		# Guarnicion entera y sana en cada intento: lo que se mide es el asedio,
+		# no lo que quedo del anterior.
+		ArmyManager.reset()
+		_raise_an_army({"vehicle": GameConfig.combat_deploy_cap})
+		ProgressionManager.final_audit = null
+		seed(AUDIT_SEED + i * 101)
+		assert_bool(ProgressionManager.summon_final_audit()).is_true()
+		assert_bool(ProgressionManager.begin_final_audit()).is_true()
+		await _fight_the_siege_to_the_end()
+		if ProgressionManager.final_audit.is_won():
+			won += 1
+		CombatManager.reset()
+
+	assert_int(won).override_failure_message(
+		"la guarnicion maxima gano %d de %d asedios; el diseno pide que la mayoria se gane"
+		% [won, SIEGE_SAMPLES]).is_greater(SIEGE_SAMPLES / 2)
+
+## Y el otro lado del objetivo: la guarnicion minima con la que se puede
+## reconvocar no basta. Si bastara, perder el asedio no costaria nada.
+func test_the_smallest_garrison_that_can_resummon_does_not_win() -> void:
+	_open_the_frontier()
+	_industrialise()
+	var won := 0
+	for i in range(SIEGE_SAMPLES):
+		ArmyManager.reset()
+		_raise_an_army({"infantry": 3})
+		ProgressionManager.final_audit = null
+		seed(AUDIT_SEED + i * 101)
+		assert_bool(ProgressionManager.summon_final_audit()).is_true()
+		assert_bool(ProgressionManager.begin_final_audit()).is_true()
+		await _fight_the_siege_to_the_end()
+		if ProgressionManager.final_audit.is_won():
+			won += 1
+		CombatManager.reset()
+
+	assert_int(won).override_failure_message(
+		"tres infantes ganaron %d de %d asedios: la Regencia no da miedo"
+		% [won, SIEGE_SAMPLES]).is_less(2)
 
 ## Juega el asedio entero con la IA a los dos lados, cerrando cada parte como
 ## hace la pantalla. Devuelve cuantas oleadas se llegaron a pelear.

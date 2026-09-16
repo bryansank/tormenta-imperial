@@ -22,6 +22,7 @@ Complete technical documentation for AI and developer context.
 | 14 | [Guía de juego](14-guia-de-juego.md) | Player-facing: what every building does (with renders), expeditions, the Final Audit and the path to victory, and the dev-mode timings |
 | 15 | [Combat](15-combat.md) | The combat pillar: pure models, `CombatManager`, the three roads to the board, expeditions, the Final Audit, signals, balance, tests |
 | 16 | [Balance de combate](16-balance-combate.md) | Spanish, measured not guessed: the `tools/balance_probe.gd` sweeps, the before/after numbers for every `combat_*` value T046 moved, the rounds→minutes conversion, and what the model cannot fix from `combat_*` alone |
+| 17 | [Balance del asedio](17-balance-asedio.md) | La Auditoria Final: por que no se podia ganar, que se cambio y las tablas medidas |
 
 ## Quick Reference
 

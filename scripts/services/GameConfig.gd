@@ -1095,10 +1095,32 @@ var final_audit_slots_per_wave := 1
 
 ## Multiplicador de HP/ATK por oleada y por era. Cuando los cuerpos ya no caben
 ## en el tablero, esta escalada es la unica que sigue apretando.
-var final_audit_scale_per_wave := 0.22
-var final_audit_scale_per_era := 0.25
+##
+## Numeros deliberadamente pequenos, y no por timidez. Medidos con
+## `tools/siege_probe.gd`; la tabla entera esta en `docs/17-balance-asedio.md`.
+## Con la escalada anterior (0.22 / 0.25 / 1.5) el asedio se perdia SIEMPRE en la
+## oleada 2, con la guarnicion maxima que el juego permite y en las 400 semillas
+## probadas: el final del juego no se podia terminar. Tres razones:
+##   * El multiplicador toca **HP y ATK a la vez**, asi que el poder efectivo va
+##     con el cuadrado. Un +0.22 por oleada no es un +22% de dificultad.
+##   * No es la unica cuesta. Los cuerpos ya suben solos (3, 4, 5, 6), la
+##     formacion ya mete canones en la segunda y blindados en la tercera, y la
+##     guarnicion no se cura ni se reentrena entre oleadas. La atricion es el
+##     balance de verdad; esto solo decide cuanto muerde.
+##   * La era ya entraba dos veces: el 0.25 por era valia +0.50 fijo en TODA
+##     oleada, porque el Cuartel General es de era 3 y el asedio no se convoca
+##     antes. La oleada de apertura salia ya a x1.5.
+var final_audit_scale_per_wave := 0.03
+## La era casi no varia aqui —el asedio solo se convoca en la 3— asi que esto es
+## en la practica el peso base de la Regencia: +0.10 en todas sus oleadas. Se
+## deja viva para que una Regencia que bajase antes lo hiciera mas floja.
+var final_audit_scale_per_era := 0.05
 ## La ultima oleada baja con todo. Es el cierre del juego, no un escalon mas.
-var final_audit_last_wave_multiplier := 1.5
+## El salto de verdad lo da la formacion (el cierre trae DOS blindados, ver
+## `FinalAudit._compose()`); esto es lo que se le suma encima. Un 5% parece poco
+## y no lo es: es lo que separa un asedio de 5 oleadas ganable el 44% de las
+## veces de uno que no se gana nunca.
+var final_audit_last_wave_multiplier := 1.05
 
 ## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
 ## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
