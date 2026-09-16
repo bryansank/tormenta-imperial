@@ -18,11 +18,19 @@ var _sidebar_visible := false
 
 var _commit_label: Label
 var _morale_label: Label
+var _units_scroll: ScrollContainer
 var _units_vbox: VBoxContainer
 var _launch_btn: Button
+var _reason_label: Label
 var _dev_btn: Button
 var _audit_btn: Button
 var _empty_label: Label
+
+## Lo que se ve en lugar del selector mientras la columna esta fuera.
+var _campaign_box: VBoxContainer
+var _campaign_status: Label
+var _campaign_party: Label
+var _map_btn: Button
 
 ## unit_id -> how many the player has picked for this run.
 var _selection: Dictionary = {}
@@ -38,6 +46,13 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(func(): _update_button_visibility())
 	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 	EventBus.encounter_started.connect(_on_encounter_started)
+	# Con la columna fuera, este panel deja de ser un selector y pasa a ser el
+	# parte de la campana: lo que hay que refrescar es lo mismo, lo que se pinta no.
+	EventBus.expedition_started.connect(func(_id, _nodes): _on_expedition_changed())
+	EventBus.expedition_node_selected.connect(func(_index): _on_expedition_changed())
+	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _on_expedition_changed())
+	if EventBus.has_signal("expedition_resumed"):
+		EventBus.connect("expedition_resumed", Callable(self, "_on_expedition_resumed"))
 	# El asedio final cambia lo que este panel ofrece: aparece "QUE BAJEN" y se
 	# bloquea salir de expedicion mientras la guarnicion esta defendiendo.
 	EventBus.final_audit_summoned.connect(func(_w, _s): _refresh())
@@ -92,22 +107,45 @@ func _setup_ui() -> void:
 
 	vbox.add_child(UITheme.make_separator())
 
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 240)
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(scroll)
+	_units_scroll = ScrollContainer.new()
+	_units_scroll.custom_minimum_size = Vector2(0, 240)
+	_units_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_units_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(_units_scroll)
 
 	_units_vbox = VBoxContainer.new()
 	_units_vbox.add_theme_constant_override("separation", 6)
 	_units_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_units_vbox)
+	_units_scroll.add_child(_units_vbox)
 
 	_empty_label = UITheme.make_label(Tr.t("MSG_NO_UNITS"), "small", UITheme.TEXT_DIM)
 	_empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_empty_label.visible = false
 	vbox.add_child(_empty_label)
+
+	# Con la expedicion en marcha no hay nada que elegir: lo unico util es saber
+	# por donde va la columna y poder volver al mapa.
+	_campaign_box = VBoxContainer.new()
+	_campaign_box.add_theme_constant_override("separation", 6)
+	_campaign_box.visible = false
+	vbox.add_child(_campaign_box)
+
+	_campaign_status = UITheme.make_label("", "section", UITheme.ACCENT)
+	_campaign_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_campaign_box.add_child(_campaign_status)
+
+	_campaign_party = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_campaign_party.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_campaign_party.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_campaign_box.add_child(_campaign_party)
+
+	_map_btn = Button.new()
+	_map_btn.text = Tr.t("BTN_VIEW_MAP")
+	_map_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
+	UITheme.style_button(_map_btn, MILITARY.darkened(0.15), UITheme.FONT_BUTTON)
+	_map_btn.pressed.connect(_on_view_map_pressed)
+	_campaign_box.add_child(_map_btn)
 
 	vbox.add_child(UITheme.make_separator())
 
@@ -117,6 +155,14 @@ func _setup_ui() -> void:
 	UITheme.style_button(_launch_btn, MILITARY.darkened(0.15), UITheme.FONT_BUTTON)
 	_launch_btn.pressed.connect(_on_launch_pressed)
 	vbox.add_child(_launch_btn)
+
+	# Un boton apagado sin motivo es un bug a ojos del jugador. El motivo va
+	# debajo, escrito, siempre que `can_launch` diga que no.
+	_reason_label = UITheme.make_label("", "small", UITheme.WARNING)
+	_reason_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_reason_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_reason_label.visible = false
+	vbox.add_child(_reason_label)
 
 	# Convocar la Auditoria Final es la ultima decision de la partida, y se toma
 	# aqui, donde se decide pelear. No arranca sola: un asedio de varias oleadas
@@ -144,8 +190,13 @@ func _refresh() -> void:
 		return
 	_prune_selection()
 	var cap: int = GameConfig.combat_deploy_cap
-	_commit_label.text = Tr.t("LBL_DEPLOY_CAP") % [_committed(), cap]
+	var on_campaign: bool = has_expedition()
 
+	_commit_label.text = Tr.t("LBL_EXPEDITION_ACTIVE") if on_campaign \
+		else Tr.t("LBL_DEPLOY_CAP") % [_committed(), cap]
+
+	# La moral con la que se pelea es la que tenia el pueblo cuando la columna
+	# salio, no la de ahora: con expedicion en curso se muestra esa.
 	var morale: float = _current_morale()
 	_morale_label.text = Tr.t("LBL_MORALE_COMBAT") % [
 		roundi(morale),
@@ -153,14 +204,107 @@ func _refresh() -> void:
 		CombatRules.morale_attack_mod(morale),
 	]
 
+	_refresh_audit_button()
+	_dev_btn.visible = GameConfig.dev_mode and not on_campaign
+
+	if on_campaign:
+		_units_scroll.visible = false
+		_empty_label.visible = false
+		_launch_btn.visible = false
+		_reason_label.visible = false
+		_campaign_box.visible = true
+		_refresh_campaign()
+		return
+
+	_campaign_box.visible = false
+	_launch_btn.visible = true
+	_units_scroll.visible = true
+
 	var available: Dictionary = CombatManager.get_deployable_units()
 	_empty_label.visible = available.is_empty()
-	var audit_active: bool = ProgressionManager.is_final_audit_active()
-	# Con el asedio en marcha la guarnicion esta ocupada: no se sale de expedicion.
-	_launch_btn.disabled = _committed() <= 0 or audit_active
-	_dev_btn.visible = GameConfig.dev_mode
-	_refresh_audit_button()
+
+	var check: Dictionary = evaluate_launch(_party())
+	_launch_btn.disabled = not bool(check.get("ok", false))
+	var reason: String = String(check.get("reason", ""))
+	_reason_label.text = _reason_text(reason)
+	_reason_label.visible = _launch_btn.disabled and reason != ""
+
 	_rebuild_units(available)
+
+## Lo que la campana esta haciendo ahora mismo, leido de la expedicion viva.
+func _refresh_campaign() -> void:
+	var run = _expedition()
+	if run == null:
+		_campaign_status.text = Tr.t("LBL_EXPEDITION_ACTIVE")
+	else:
+		_campaign_status.text = Tr.t("LBL_EXPEDITION_PROGRESS") % [run.nodes_cleared(), run.map.size()]
+	_campaign_party.text = Tr.t("LBL_EXPEDITION_PARTY") % _unit_list(_units_on_expedition())
+
+func _unit_list(counts: Dictionary) -> String:
+	if counts.is_empty():
+		return "-"
+	var parts: Array = []
+	for unit_id in counts:
+		var def := GameConfig.get_unit_def(unit_id)
+		parts.append("%d %s" % [int(counts[unit_id]), Tr.t(def.get("name", unit_id))])
+	return "   ".join(parts)
+
+## Traduce el motivo que devuelve `can_launch`. Las claves que llegan son de `Tr`;
+## una frase ya escrita se deja pasar tal cual.
+func _reason_text(reason: String) -> String:
+	if reason == "":
+		return ""
+	var translated: String = Tr.t(reason)
+	if translated != reason:
+		return translated
+	if reason == "MSG_LAUNCH_DEPLOY_CAP":
+		return Tr.t(reason) % GameConfig.combat_deploy_cap
+	return reason
+
+# ── Lectura de la expedicion ─────────────────────────────────────────
+
+## El nucleo de la expedicion lo construye `CombatManager`. Mientras no exista,
+## el panel se comporta como si nunca hubiera una en curso.
+func has_expedition() -> bool:
+	return CombatManager.has_method("has_active_expedition") and CombatManager.has_active_expedition()
+
+func _expedition():
+	if CombatManager.has_method("get_expedition"):
+		return CombatManager.get_expedition()
+	return null
+
+func _units_on_expedition() -> Dictionary:
+	if CombatManager.has_method("get_units_on_expedition"):
+		return CombatManager.get_units_on_expedition()
+	return {}
+
+## Por que se puede (o no) lanzar. Prefiere el veredicto del manager; si todavia
+## no existe, aplica las mismas reglas aqui para no ofrecer un boton que mentiria.
+func evaluate_launch(party: Dictionary) -> Dictionary:
+	if CombatManager.has_method("can_launch"):
+		return CombatManager.can_launch(party)
+
+	var committed: int = 0
+	for count in party.values():
+		committed += int(count)
+	if committed <= 0:
+		return {"ok": false, "reason": "MSG_NO_UNITS"}
+	if committed > GameConfig.combat_deploy_cap:
+		return {"ok": false, "reason": "MSG_LAUNCH_DEPLOY_CAP"}
+	if has_expedition():
+		return {"ok": false, "reason": "MSG_LAUNCH_EXPEDITION_ACTIVE"}
+	if ProgressionManager.is_final_audit_active():
+		return {"ok": false, "reason": "MSG_LAUNCH_AUDIT_ACTIVE"}
+	if CombatManager.is_in_encounter():
+		return {"ok": false, "reason": "MSG_LAUNCH_IN_BATTLE"}
+	return {"ok": true, "reason": ""}
+
+func _party() -> Dictionary:
+	var party: Dictionary = {}
+	for unit_id in _selection.keys():
+		if int(_selection[unit_id]) > 0:
+			party[unit_id] = int(_selection[unit_id])
+	return party
 
 ## Drops picks the player no longer owns (units lost, disbanded or spent).
 func _prune_selection() -> void:
@@ -176,6 +320,9 @@ func _committed() -> int:
 	return total
 
 func _current_morale() -> float:
+	var run = _expedition()
+	if run != null:
+		return float(run.morale_snapshot)
 	if PopulationManager.has_method("get_morale"):
 		return float(PopulationManager.get_morale())
 	return 50.0
@@ -284,14 +431,38 @@ func _on_audit_pressed() -> void:
 		_refresh()
 
 func _on_launch_pressed() -> void:
-	var party: Dictionary = {}
-	for unit_id in _selection.keys():
-		if int(_selection[unit_id]) > 0:
-			party[unit_id] = int(_selection[unit_id])
-	if party.is_empty():
-		EventBus.notification_posted.emit(Tr.t("MSG_NO_UNITS"), "warning", UITheme.WARNING)
+	var party: Dictionary = _party()
+	var check: Dictionary = evaluate_launch(party)
+	if not bool(check.get("ok", false)):
+		EventBus.notification_posted.emit(
+			_reason_text(String(check.get("reason", "MSG_NO_UNITS"))), "warning", UITheme.WARNING
+		)
+		_refresh()
 		return
-	CombatManager.start_skirmish(party)
+	# `launch_expedition` es la puerta de verdad; `start_skirmish` es lo que hay
+	# hasta que el nucleo de la expedicion aterrice, y deja jugar el encuentro.
+	if CombatManager.has_method("launch_expedition"):
+		CombatManager.launch_expedition(party)
+	else:
+		CombatManager.start_skirmish(party)
+	_close()
+
+## Vuelve al mapa de la campana en curso sin tocar nada de su estado.
+func _on_view_map_pressed() -> void:
+	var screen: Node = _battle_screen()
+	if screen != null and screen.has_method("open_map"):
+		screen.open_map()
+		_close()
+
+## La pantalla de batalla es hermana de este panel en Main; el barrido del arbol
+## es el plan B para escenas de prueba que no la monten en el mismo sitio.
+func _battle_screen() -> Node:
+	var parent: Node = get_parent()
+	if parent != null:
+		var sibling: Node = parent.get_node_or_null("BattleScreen")
+		if sibling != null:
+			return sibling
+	return get_tree().root.find_child("BattleScreen", true, false)
 
 # ── Visibility / open-close ──────────────────────────────────────────
 
@@ -308,6 +479,14 @@ func _on_encounter_started(_index: int, _is_boss: bool) -> void:
 	# The board takes over: get out of its way.
 	if _is_open:
 		_close()
+
+func _on_expedition_changed() -> void:
+	if _is_open:
+		_refresh()
+	_update_button_visibility()
+
+func _on_expedition_resumed(_expedition_id: int) -> void:
+	_on_expedition_changed()
 
 func _update_button_visibility() -> void:
 	# Skirmishes unlock with the Barracks, same gate as the army itself.
