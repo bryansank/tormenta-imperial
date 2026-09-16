@@ -277,11 +277,25 @@ func _pay_upkeep() -> void:
 ## Un ejercito sin paga se deshace por arriba: se va primero la unidad mas cara
 ## de mantener, que es justo la que el jugador no queria perder. Es la
 ## consecuencia la que ensena a no sobrepasarse, no el aviso.
+##
+## Solo puede desertar quien esta en casa. Una unidad de expedicion no se larga
+## del cuartel porque no esta en el cuartel: si lo hiciera, el total seguiria
+## cuadrando —la columna se liquida entera al volver— pero la identidad no. Un
+## caido en campana desertaria en casa y, al liquidar la expedicion, quien se
+## borraria del recuento seria un superviviente. Es la misma regla que bloquea a
+## la columna para cualquier otra cosa, aplicada al impago.
+##
+## Con toda la tropa fuera no deserta nadie: el aviso de impago ya se emitio
+## antes de llegar aqui, que es lo unico que el jugador necesita ver.
 func _desert() -> void:
-	var unit_id := _costliest_unit()
+	var at_home := _units_at_home()
+	var unit_id := _costliest_unit(at_home)
 	if unit_id.is_empty():
 		return
-	var removed := remove_units({unit_id: GameConfig.desertion_units_per_tick})
+	# Nunca mas de los que quedan en casa: pedir de mas volveria a morder a la
+	# columna, que es justo lo que este camino existe para evitar.
+	var quota: int = mini(GameConfig.desertion_units_per_tick, int(at_home[unit_id]))
+	var removed := remove_units({unit_id: quota})
 	var gone: int = int(removed.get(unit_id, 0))
 	if gone <= 0:
 		return
@@ -291,13 +305,30 @@ func _desert() -> void:
 		Tr.t("NOTIF_DESERTION") % [gone, Tr.t(def.get("name", unit_id))],
 		"danger", UITheme.DANGER)
 
-## La mas cara de mantener entre las que quedan. En empate gana la mas antigua
-## del diccionario, que basta para que el resultado sea siempre el mismo.
-func _costliest_unit() -> String:
+## El ejercito menos la columna que esta fuera, unit_id -> cuantos hay en casa.
+## Las entradas a cero no salen: quien consulte esto pregunta por quien queda.
+##
+## CombatManager se carga DESPUES que este servicio (project.godot), asi que solo
+## se le pregunta en caliente, nunca durante _ready — exactamente igual que este
+## mismo archivo ya hace con StormManager, que tambien va detras.
+func _units_at_home() -> Dictionary:
+	var away: Dictionary = CombatManager.get_units_on_expedition()
+	var home: Dictionary = {}
+	for id in _units:
+		var count: int = int(_units[id]) - int(away.get(id, 0))
+		if count > 0:
+			home[id] = count
+	return home
+
+## La mas cara de mantener dentro de `pool` (unit_id -> cantidad). En empate gana
+## la mas antigua del diccionario, que basta para que el resultado sea siempre el
+## mismo. Recibe el conjunto en vez de mirar `_units` porque quien deserta no es
+## el ejercito entero: es la parte que sigue en casa.
+func _costliest_unit(pool: Dictionary) -> String:
 	var worst := ""
 	var worst_upkeep := -1
-	for id in _units:
-		if _units[id] <= 0:
+	for id in pool:
+		if int(pool[id]) <= 0:
 			continue
 		var upkeep := int(GameConfig.get_unit_def(id).get("upkeep_gold", 0))
 		if upkeep > worst_upkeep:

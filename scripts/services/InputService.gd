@@ -34,6 +34,34 @@ func _ready() -> void:
 	# Ensure mouse cursor is always visible
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
+## La aplicacion se va a segundo plano con el dedo puesto. El motor NO purga
+## nada por su cuenta al perder el foco: reenvia lo que mande el sistema y ya.
+## En Android eso es un ACTION_CANCEL, que Godot convierte en un soltar por cada
+## dedo... salvo que llegue con `index` -1, que es exactamente lo que se le lleva
+## reprochando desde 4.0 (godotengine/godot#74199). Borrar el indice -1 de
+## `_touch_points` no borra nada: el dedo se queda vivo para siempre, el
+## siguiente toque entra ya como segundo, el arrastre de uno deja de funcionar y
+## solo se arregla reiniciando el juego.
+##
+## Es NOTIFICATION_APPLICATION_FOCUS_OUT y no la de ventana: la de ventana se la
+## queda el nodo Window, y esto es un autoload — nunca la veria.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_purge_touch_state()
+
+## Deja el servicio como si no hubiera ningun dedo en la pantalla: el toque
+## siguiente vuelve a ser el primero y vuelve a poder arrastrar el mapa.
+##
+## El gesto se marca como consumido a proposito. Un gesto que el sistema corta no
+## es un toque deliberado, y si Godot fabrica un clic emulado al cerrarlo, nadie
+## quiere que ese clic suelte el edificio que se estaba colocando. La marca dura
+## lo que tarde en apoyarse el dedo siguiente, que la pone a cero al empezar.
+func _purge_touch_state() -> void:
+	_touch_points.clear()
+	_cancel_touch_pan()
+	_touch_pan_consumed_click = true
+	_last_pinch_distance = 0.0
+
 func _process(_delta: float) -> void:
 	_handle_keyboard()
 
@@ -148,6 +176,14 @@ func _handle_screen_touch(event: InputEventScreenTouch) -> void:
 			_touch_pan_consumed_click = true
 			_cancel_touch_pan()
 			_arm_pinch()
+		return
+
+	# El otro disfraz del gesto cortado: un soltar que no apunta a ningun dedo
+	# (index -1, godotengine/godot#74199) o que viene marcado como cancelado no
+	# levanta un dedo, los levanta todos. Tratarlo como un soltar normal borraria
+	# un indice que no existe y dejaria los de verdad pegados.
+	if event.index < 0 or event.canceled:
+		_purge_touch_state()
 		return
 
 	_touch_points.erase(event.index)
