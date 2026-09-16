@@ -55,6 +55,10 @@ var _tower_crew_uids: Dictionary = {}
 ## el resultado. Las dotaciones de torre no son del asedio: las compone quien lo
 ## lanza, y tambien sufren atricion — no hay relevos.
 var _audit_wave_active: bool = false
+## Como acabo la oleada del asedio, anotado al resolverse y leido al cerrar el
+## tablero. Vive aparte de _last_result porque ese parte es de la ultima pelea
+## que se resolvio, y no siempre es esta.
+var _audit_wave_won: bool = false
 var _audit_crews: Array = []
 ## Dotaciones caidas en lo que va de asedio. Las torres no se cansan, pero a
 ## una dotacion muerta no la reemplaza nadie.
@@ -70,6 +74,13 @@ func get_encounter() -> Encounter:
 
 func is_in_encounter() -> bool:
 	return _encounter != null and _encounter.is_active()
+
+## Hay tablero en pantalla, este jugandose o mostrando el parte. No es lo mismo
+## que is_in_encounter(): entre que la pelea se resuelve y el jugador cierra el
+## parte, el encuentro existe y no esta activo. Abrir otro tablero en ese hueco
+## se lleva por delante el parte sin que nadie lo lea.
+func is_board_open() -> bool:
+	return _encounter != null
 
 func is_enemy_thinking() -> bool:
 	return _enemy_turn_running
@@ -141,7 +152,7 @@ func get_deployable_units() -> Dictionary:
 ## encadenar oleadas solo significa algo si los supervivientes entran tocados a la
 ## siguiente, y recalcular la guarnición cada vez borraría precisamente eso.
 func start_defense(enemy_roster: Dictionary, defenders: Array = [], enemy_scale: float = -1.0) -> bool:
-	if is_in_encounter() or enemy_roster.is_empty():
+	if is_board_open() or enemy_roster.is_empty():
 		return false
 
 	if not defenders.is_empty():
@@ -431,8 +442,13 @@ func build_enemy_roster(party: Dictionary, depth: int) -> Dictionary:
 
 func end_encounter() -> void:
 	var was_audit_wave: bool = _audit_wave_active
-	var wave_won: bool = bool(_last_result.get("victory", false))
+	# El resultado de la oleada se anota cuando la oleada se resuelve, no se
+	# deduce aqui de _last_result: esa variable la pisa cualquier otra pelea
+	# (la defensa a ciegas del Diezmo, sin ir mas lejos) y una oleada ganada
+	# podia reportarse perdida, que es arrasar la base por un efecto colateral.
+	var wave_won: bool = _audit_wave_won
 	_audit_wave_active = false
+	_audit_wave_won = false
 	if _encounter != null:
 		_encounter.release_survivors()
 	_encounter = null
@@ -572,6 +588,8 @@ func _apply_result(victory: bool, rounds: int) -> void:
 	if _encounter == null or _result_applied:
 		return
 	_result_applied = true
+	if _audit_wave_active:
+		_audit_wave_won = victory
 
 	# Un nodo de expedicion no cobra ni entierra a nadie todavia: lo acumula el
 	# modelo y se liquida todo junto al volver (FR-010, FR-011, FR-017). La
@@ -992,6 +1010,7 @@ func reset() -> void:
 	_expedition_followups = []
 	_enemy_turn_running = false
 	_audit_wave_active = false
+	_audit_wave_won = false
 	_audit_crews.clear()
 	_audit_crew_losses = 0
 	_next_uid = 1

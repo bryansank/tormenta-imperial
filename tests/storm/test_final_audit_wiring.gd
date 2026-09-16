@@ -8,11 +8,22 @@ extends GdUnitTestSuite
 
 var _storm_saved: Dictionary = {}
 var _army_saved: Dictionary = {}
+var _res_saved: Dictionary = {}
+var _pop_saved: Dictionary = {}
 var _mult_saved: float = 1.0
 
 func before_test() -> void:
 	_storm_saved = StormManager.get_save_data()
 	_army_saved = ArmyManager.get_save_data()
+	# Varios casos de aqui provocan un Diezmo real a severidad maxima: vacian la
+	# bolsa, embargan edificios y llegan a llevarse gente. Sin guardar esto, la
+	# suite siguiente hereda una base saqueada y falla por algo que no hizo.
+	# get_all() viene indexado por tipo y set_amounts() espera nombres, igual que
+	# hace GameManager al guardar la partida.
+	_res_saved = {}
+	for type in ResourceManager.get_all():
+		_res_saved[ResourceManager.get_type_name(type)] = ResourceManager.get_all()[type]
+	_pop_saved = PopulationManager.get_save_data()
 	_mult_saved = GameConfig.event_production_multiplier
 	StormManager.reset()
 	CombatManager.reset()
@@ -23,6 +34,8 @@ func after_test() -> void:
 	CombatManager.reset()
 	StormManager.load_save_data(_storm_saved)
 	ArmyManager.load_save_data(_army_saved)
+	ResourceManager.set_amounts(_res_saved)
+	PopulationManager.load_save_data(_pop_saved)
 	GameConfig.event_production_multiplier = _mult_saved
 
 # ── is_cycle_active: la mitad de StormManager de la deuda de GameConfig ─────
@@ -186,7 +199,10 @@ func test_the_first_audit_wave_fields_a_board_without_duplicate_uids() -> void:
 		if unit.side == Encounter.ENEMY:
 			enemies += 1
 	assert_int(enemies).is_greater(0)
-	# El asedio es estado del servicio: se deja como estaba.
+	# El asedio es estado del servicio: se deja como estaba. reset() ANTES de
+	# cerrar: end_encounter() con la marca de oleada puesta reportaria una
+	# derrota que nadie jugo, y esa derrota arrasa la base de verdad.
+	CombatManager.reset()
 	CombatManager.end_encounter()
 	ProgressionManager.final_audit = null
 	ProgressionManager.load_save_data(progression_saved)

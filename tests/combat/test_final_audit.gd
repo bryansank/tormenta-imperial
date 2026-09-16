@@ -300,7 +300,8 @@ func test_a_siege_survives_a_round_trip_through_the_save() -> void:
 	var restored := AuditScript.from_dict(audit.to_dict())
 	assert_int(restored.seed_value).is_equal(audit.seed_value)
 	assert_int(restored.era).is_equal(audit.era)
-	assert_int(restored.state).is_equal(audit.state)
+	# El estado es lo unico que no vuelve tal cual: ver el caso de abajo.
+	assert_int(restored.state).is_equal(AuditScript.State.PENDING)
 	assert_int(restored.current_wave).is_equal(audit.current_wave)
 	assert_int(restored.summons).is_equal(audit.summons)
 	assert_float(restored.morale_snapshot).is_equal(audit.morale_snapshot)
@@ -309,6 +310,32 @@ func test_a_siege_survives_a_round_trip_through_the_save() -> void:
 	for i in range(audit.wave_count()):
 		assert_dict(restored.wave_at(i)["roster"]).is_equal(audit.wave_at(i)["roster"])
 		assert_float(restored.wave_at(i)["scale"]).is_equal(audit.wave_at(i)["scale"])
+
+## El tablero no se guarda: un asedio que vuelve ACTIVO seria un asedio que nadie
+## puede reanudar (el boton de convocar se esconde porque ya esta activo, las
+## oleadas no se reanuncian, y la expedicion queda bloqueada para siempre). Vuelve
+## PENDIENTE, conservando la oleada y las heridas, y el jugador lo hace bajar otra
+## vez.
+func test_a_siege_saved_mid_wave_comes_back_ready_to_be_summoned_again() -> void:
+	var audit := _audit(20260913, 3, 72.0)
+	audit.begin()
+	audit.living_garrison()[0].take_damage(11)
+	assert_bool(audit.is_active()).is_true()
+
+	var restored := AuditScript.from_dict(audit.to_dict())
+	assert_bool(restored.is_pending()).is_true()
+	assert_bool(restored.is_active()).is_false()
+	# Lo que importa del asedio a medias sigue ahi: la oleada y los heridos.
+	assert_int(restored.current_wave).is_equal(audit.current_wave)
+	assert_int(restored.living_garrison()[0].hp).is_equal(audit.living_garrison()[0].hp)
+	# Y por eso se puede volver a empezar, que es lo que se rompia.
+	assert_array(restored.begin()).is_not_empty()
+	assert_bool(restored.is_active()).is_true()
+
+func test_a_pending_siege_still_comes_back_pending() -> void:
+	var audit := _audit()
+	var restored := AuditScript.from_dict(audit.to_dict())
+	assert_bool(restored.is_pending()).is_true()
 
 func test_the_wounds_and_the_dead_come_back_with_the_save() -> void:
 	var audit := _audit()
@@ -331,6 +358,10 @@ func test_a_reloaded_siege_keeps_fighting_where_it_stopped() -> void:
 	audit.begin()
 	audit.clear_wave()
 	var restored := AuditScript.from_dict(audit.to_dict())
+	# Vuelve pendiente, asi que el jugador lo hace bajar otra vez; lo que importa
+	# es que baja por la oleada donde lo dejo, no por la primera.
+	restored.begin()
+	assert_int(restored.current_wave).is_equal(audit.current_wave)
 	while not restored.at_last_wave():
 		restored.clear_wave()
 	assert_int(_events_of(restored.clear_wave(), "final_audit_won").size()).is_equal(1)

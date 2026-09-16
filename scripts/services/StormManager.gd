@@ -288,7 +288,10 @@ func _begin_tithe(severity: int) -> void:
 	# Con el tablero ocupado (una expedicion a medias) la guarnicion que quedo en
 	# casa pelea sola: el mismo Encounter, resuelto a ciegas, sin abrir otro
 	# tablero encima del que el jugador esta jugando.
-	if CombatManager.is_in_encounter():
+	# is_board_open() y no is_in_encounter(): mientras el jugador lee el parte de
+	# la pelea anterior el tablero sigue en pantalla aunque ya no se juegue, y
+	# abrir la defensa encima se lo borraria de delante sin haberlo leido.
+	if CombatManager.is_board_open():
 		_auto_resolve_tithe(roster, severity)
 		return
 	if CombatManager.start_defense(roster):
