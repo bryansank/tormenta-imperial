@@ -13,8 +13,8 @@ extends CanvasLayer
 ## rechazan y la pantalla nunca tiene que saber por que.
 ##
 ## El nucleo de la expedicion (`launch_expedition`, `select_node`, `apply_draft`,
-## `abandon_expedition`...) lo construye otro servicio; mientras no exista, cada
-## llamada va protegida con `has_method()` y la vista se limita a no mentir.
+## `abandon_expedition`...) vive en `CombatManager` y la pantalla solo lo llama:
+## aqui no se decide nada, ni siquiera si un nodo es elegible.
 
 const Rules := preload("res://scripts/combat/CombatRules.gd")
 
@@ -129,10 +129,7 @@ func _ready() -> void:
 	EventBus.draft_offered.connect(_on_draft_offered)
 	EventBus.draft_applied.connect(_on_draft_applied)
 	EventBus.game_load_completed.connect(_on_game_load_completed)
-	# `expedition_resumed` lo declara el nucleo de la expedicion; mientras no
-	# exista, reanudar se cubre con `game_load_completed`.
-	if EventBus.has_signal("expedition_resumed"):
-		EventBus.connect("expedition_resumed", Callable(self, "_on_expedition_resumed"))
+	EventBus.expedition_resumed.connect(_on_expedition_resumed)
 	get_viewport().size_changed.connect(_on_viewport_resized)
 
 # ── Construccion ─────────────────────────────────────────────────────
@@ -373,14 +370,10 @@ func _build_confirm_dialog() -> void:
 ## Toda consulta de expedicion pasa por aqui: mientras `CombatManager` no tenga
 ## la capa de expedicion, la pantalla se comporta como si no hubiera ninguna.
 func _fetch_expedition():
-	if CombatManager.has_method("get_expedition"):
-		return CombatManager.get_expedition()
-	return null
+	return CombatManager.get_expedition()
 
 func has_expedition() -> bool:
-	if CombatManager.has_method("has_active_expedition"):
-		return CombatManager.has_active_expedition()
-	return _run != null and _run.is_active()
+	return CombatManager.has_active_expedition()
 
 func current_view() -> int:
 	return _view
@@ -580,10 +573,7 @@ func _choose_draft(index: int) -> void:
 		return
 	draft_option_chosen.emit(index)
 	_close_draft()
-	if CombatManager.has_method("apply_draft"):
-		CombatManager.apply_draft(index)
-	else:
-		open_map()
+	CombatManager.apply_draft(index)
 
 func _close_draft() -> void:
 	_draft_panel.visible = false
@@ -805,8 +795,7 @@ func _choose_node(index: int) -> void:
 	if _run == null or not _run.can_select(index):
 		return
 	map_node_chosen.emit(index)
-	if CombatManager.has_method("select_node"):
-		CombatManager.select_node(index)
+	CombatManager.select_node(index)
 
 func map_button_count() -> int:
 	return _map_buttons.size()
@@ -844,8 +833,7 @@ func _ask_abandon() -> void:
 
 func _do_abandon() -> void:
 	abandon_confirmed.emit()
-	if CombatManager.has_method("abandon_expedition"):
-		CombatManager.abandon_expedition()
+	CombatManager.abandon_expedition()
 
 func is_confirming_abandon() -> bool:
 	return _confirm_dialog != null and _confirm_dialog.visible

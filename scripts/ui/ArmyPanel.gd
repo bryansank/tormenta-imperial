@@ -33,8 +33,7 @@ func _ready() -> void:
 	# ni mandar a ningun otro sitio: el panel tiene que decirlo.
 	EventBus.expedition_started.connect(func(_id, _nodes): _refresh())
 	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _refresh())
-	if EventBus.has_signal("expedition_resumed"):
-		EventBus.connect("expedition_resumed", Callable(self, "_on_expedition_resumed"))
+	EventBus.expedition_resumed.connect(_on_expedition_resumed)
 	_update_button_visibility()
 
 func _process(_delta: float) -> void:
@@ -129,12 +128,9 @@ func _refresh(_arg = null) -> void:
 	_rebuild_units()
 	_rebuild_training()
 
-## Quien esta fuera, segun CombatManager. Vacio mientras la capa de expedicion
-## no exista: el panel nunca inventa una campana que no hay.
+## Quien esta fuera, segun CombatManager: el panel no lleva su propia cuenta.
 func _units_on_expedition() -> Dictionary:
-	if CombatManager.has_method("get_units_on_expedition"):
-		return CombatManager.get_units_on_expedition()
-	return {}
+	return CombatManager.get_units_on_expedition()
 
 func _on_expedition_resumed(_expedition_id: int) -> void:
 	_refresh()

@@ -51,8 +51,7 @@ func _ready() -> void:
 	EventBus.expedition_started.connect(func(_id, _nodes): _on_expedition_changed())
 	EventBus.expedition_node_selected.connect(func(_index): _on_expedition_changed())
 	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _on_expedition_changed())
-	if EventBus.has_signal("expedition_resumed"):
-		EventBus.connect("expedition_resumed", Callable(self, "_on_expedition_resumed"))
+	EventBus.expedition_resumed.connect(_on_expedition_resumed)
 	# El asedio final cambia lo que este panel ofrece: aparece "QUE BAJEN" y se
 	# bloquea salir de expedicion mientras la guarnicion esta defendiendo.
 	EventBus.final_audit_summoned.connect(func(_w, _s): _refresh())
@@ -263,41 +262,20 @@ func _reason_text(reason: String) -> String:
 
 # ── Lectura de la expedicion ─────────────────────────────────────────
 
-## El nucleo de la expedicion lo construye `CombatManager`. Mientras no exista,
-## el panel se comporta como si nunca hubiera una en curso.
 func has_expedition() -> bool:
-	return CombatManager.has_method("has_active_expedition") and CombatManager.has_active_expedition()
+	return CombatManager.has_active_expedition()
 
 func _expedition():
-	if CombatManager.has_method("get_expedition"):
-		return CombatManager.get_expedition()
-	return null
+	return CombatManager.get_expedition()
 
 func _units_on_expedition() -> Dictionary:
-	if CombatManager.has_method("get_units_on_expedition"):
-		return CombatManager.get_units_on_expedition()
-	return {}
+	return CombatManager.get_units_on_expedition()
 
-## Por que se puede (o no) lanzar. Prefiere el veredicto del manager; si todavia
-## no existe, aplica las mismas reglas aqui para no ofrecer un boton que mentiria.
+## Por que se puede (o no) lanzar. El veredicto es del manager y solo de el: una
+## segunda copia de las reglas viviendo aqui acabaria discrepando de la suya, y
+## entonces el boton mentiria justo cuando mas claro tiene que hablar.
 func evaluate_launch(party: Dictionary) -> Dictionary:
-	if CombatManager.has_method("can_launch"):
-		return CombatManager.can_launch(party)
-
-	var committed: int = 0
-	for count in party.values():
-		committed += int(count)
-	if committed <= 0:
-		return {"ok": false, "reason": "MSG_NO_UNITS"}
-	if committed > GameConfig.combat_deploy_cap:
-		return {"ok": false, "reason": "MSG_LAUNCH_DEPLOY_CAP"}
-	if has_expedition():
-		return {"ok": false, "reason": "MSG_LAUNCH_EXPEDITION_ACTIVE"}
-	if ProgressionManager.is_final_audit_active():
-		return {"ok": false, "reason": "MSG_LAUNCH_AUDIT_ACTIVE"}
-	if CombatManager.is_in_encounter():
-		return {"ok": false, "reason": "MSG_LAUNCH_IN_BATTLE"}
-	return {"ok": true, "reason": ""}
+	return CombatManager.can_launch(party)
 
 func _party() -> Dictionary:
 	var party: Dictionary = {}
@@ -439,12 +417,7 @@ func _on_launch_pressed() -> void:
 		)
 		_refresh()
 		return
-	# `launch_expedition` es la puerta de verdad; `start_skirmish` es lo que hay
-	# hasta que el nucleo de la expedicion aterrice, y deja jugar el encuentro.
-	if CombatManager.has_method("launch_expedition"):
-		CombatManager.launch_expedition(party)
-	else:
-		CombatManager.start_skirmish(party)
+	CombatManager.launch_expedition(party)
 	_close()
 
 ## Vuelve al mapa de la campana en curso sin tocar nada de su estado.
