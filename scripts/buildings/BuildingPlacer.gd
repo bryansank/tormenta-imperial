@@ -8,14 +8,22 @@ enum State { IDLE, PLACING, MOVING }
 ## Preloaded so placement does not depend on the editor's global class cache
 ## (a fresh clone runs the game headless before any editor scan).
 const StatusBadge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
+## Las cuentas de pantalla -> suelo son estaticas y viven en InputService, que es
+## quien las usa para el dedo. Se cargan por script (no por el autoload) para
+## llamarlas como lo que son: funciones sueltas, sin instancia de por medio.
+const PointerMath := preload("res://scripts/services/InputService.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
-const DRAG_PAN_THRESHOLD := 6.0  # px of movement before a click becomes a pan
+## El umbral vive en GameConfig.mouse_drag_threshold_px.
 var _left_pressed := false
 var _left_press_pos := Vector2.ZERO
 var _drag_last_pos := Vector2.ZERO
 var _left_dragged := false
+## Este clic viene de un dedo (Godot fabrica un raton emulado a partir del tacto).
+## Con el dedo, colocar y seleccionar esperan a levantarlo: hasta entonces no se
+## sabe si el gesto era un toque o el principio de un arrastre del mapa.
+var _left_from_touch := false
 
 var _state: State = State.IDLE
 var _current_data: BuildingData = null
@@ -86,42 +94,60 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 ## Left mouse button: in IDLE it either drags the camera (if the pointer moves
-## past a threshold) or selects a building on release. While placing/moving a
-## building it places/confirms immediately on press.
+## past a threshold) or selects a building on release. With the mouse, placing or
+## confirming happens on press; con el dedo espera a levantarlo, porque el mismo
+## gesto puede acabar siendo un arrastre del mapa.
 func _handle_left_button(event: InputEventMouseButton) -> void:
 	if event.pressed:
 		# Ignore presses that start on UI
 		if get_viewport().gui_get_hovered_control() != null:
 			return
-		if _state == State.IDLE:
-			_left_pressed = true
-			_left_press_pos = event.position
-			_drag_last_pos = event.position
-			_left_dragged = false
-		else:
-			_handle_left_click(event.position)
-	else:
-		# Release: a click without drag selects; a drag was a camera pan
-		if _left_pressed and _state == State.IDLE and not _left_dragged:
-			_try_select_building(event.position)
-		_left_pressed = false
+		_left_pressed = true
+		_left_press_pos = event.position
+		_drag_last_pos = event.position
 		_left_dragged = false
+		_left_from_touch = event.device == InputEvent.DEVICE_ID_EMULATION
+		if _left_from_touch:
+			return
+		if _state != State.IDLE:
+			_left_pressed = false
+			_handle_left_click(event.position)
+		return
+
+	# Release: a click without drag places or selects; a drag was a camera pan.
+	var was_click := _left_pressed and not _left_dragged
+	if _left_from_touch and InputService.touch_pan_consumed_click():
+		was_click = false
+	_left_pressed = false
+	_left_dragged = false
+	_left_from_touch = false
+	if not was_click:
+		return
+	if _state == State.IDLE:
+		_try_select_building(event.position)
+	else:
+		_handle_left_click(event.position)
 
 func _handle_left_drag(event: InputEventMouseMotion) -> void:
+	# El arrastre con el dedo lo panea InputService con esta misma cuenta; si lo
+	# repitiesemos aqui con el raton emulado, el mapa correria el doble.
+	if event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
 	if _state != State.IDLE:
 		_left_pressed = false
 		return
-	if not _left_dragged and event.position.distance_to(_left_press_pos) < DRAG_PAN_THRESHOLD:
+	if not _left_dragged and event.position.distance_to(_left_press_pos) < GameConfig.mouse_drag_threshold_px:
 		return
 	_left_dragged = true
 	# Grab-pan: move the camera by the world-space gap between where the cursor
-	# was and where it is now, so the terrain follows the cursor 1:1.
-	var prev_hit = _raycast_to_ground(_drag_last_pos)
-	var cur_hit = _raycast_to_ground(event.position)
+	# was and where it is now, so the terrain follows the cursor 1:1. Es la misma
+	# funcion que usa el dedo, de ahi que ambos se sientan igual.
+	var prev_pos := _drag_last_pos
 	_drag_last_pos = event.position
-	if prev_hit == null or cur_hit == null:
+	var world_delta = PointerMath.screen_drag_to_world_delta(
+		get_viewport().get_camera_3d(), prev_pos, event.position)
+	if world_delta == null:
 		return
-	var world_delta := Vector2(prev_hit.x - cur_hit.x, prev_hit.z - cur_hit.z)
 	EventBus.camera_drag_world_requested.emit(world_delta)
 	get_viewport().set_input_as_handled()
 
@@ -175,18 +201,9 @@ func _create_rotated_data(data: BuildingData) -> BuildingData:
 # ── Raycast ──
 
 func _raycast_to_ground(screen_pos: Vector2) -> Variant:
-	var camera := get_viewport().get_camera_3d()
-	if not camera:
-		return null
-	var from := camera.project_ray_origin(screen_pos)
-	var dir := camera.project_ray_normal(screen_pos)
-	# Intersect with Y=0 plane
-	if absf(dir.y) < 0.001:
-		return null
-	var t := -from.y / dir.y
-	if t < 0:
-		return null
-	return from + dir * t
+	# La proyeccion sobre el plano Y=0 vive en InputService: la comparten el
+	# fantasma de colocacion, el clic y el arrastre del mapa (raton y dedo).
+	return PointerMath.raycast_to_ground(get_viewport().get_camera_3d(), screen_pos)
 
 # ── Preview ──
 
