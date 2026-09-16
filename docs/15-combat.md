@@ -96,21 +96,28 @@ sees the board close before it hears what comes next.
 
 ### Layer 3 — the interface
 
-> **Note for whoever integrates this.** The interface layer was still landing when
-> this document was written. `BattleScreen` and `SkirmishPanel` exist and work for
-> the boards described below, but nothing in `scripts/ui/` calls
-> `launch_expedition()`, `select_node()`, `apply_draft()` or `abandon_expedition()`
-> yet, and no panel listens to `draft_offered`, `expedition_node_selected`,
-> `expedition_resumed` or `defense_auto_resolved`. Re-check this section against
-> the code before trusting it.
+The expedition interface has landed. `BattleScreen` is one overlay with four
+views that never share the screen — board, map, draft modal, final report — and
+`SkirmishPanel` is the door out: its launch button calls
+`CombatManager.launch_expedition()`. Every expedition signal has a real listener;
+some are connected by name through `EventBus.has_signal()` / `connect("name", …)`
+rather than as a typed `EventBus.x.connect(…)`, so a naive grep for `.connect`
+misses them — search for the signal name in quotes too.
 
 | Script | Role |
 |--------|------|
-| `scripts/ui/BattleScreen.gd` | The board. `CanvasLayer` at `layer = 18`, deliberately kept out of `UIManager`'s window stack so ESC cannot dismiss a fight. Opens on `encounter_started`, redraws on every combat signal, routes every click back through `CombatManager`. Its close button calls `CombatManager.end_encounter()` — which is what advances the Final Audit to the next wave |
-| `scripts/ui/SkirmishPanel.gd` | Troop commitment before a board opens, plus the "QUE BAJEN" button that begins or re-summons the Final Audit. Its launch button calls `CombatManager.start_skirmish()` |
-| `scripts/services/AudioManager.gd` | SFX on `encounter_started`, `unit_attacked`, `unit_died`, `encounter_ended`, `expedition_started`, `expedition_ended`, `storm_halted_forever` |
+| `scripts/ui/BattleScreen.gd` | The expedition screen. `CanvasLayer` at `layer = 18`, deliberately kept out of `UIManager`'s window stack so ESC cannot dismiss a fight. Four views (`View.BOARD`, `View.MAP`, the draft modal, the final report). Opens on `encounter_started` and on `expedition_started` / `expedition_resumed` / `game_load_completed`, redraws on every combat signal, routes every click back through `CombatManager`. Its close button calls `CombatManager.end_encounter()` — which is what advances the Final Audit to the next wave |
+| `scripts/ui/SkirmishPanel.gd` | Troop commitment before a board opens, plus the "QUE BAJEN" button that begins or re-summons the Final Audit. Its launch button calls `CombatManager.launch_expedition()` (`start_skirmish()` survives only as a `has_method()` fallback, and behind a dev-only button via `dev_start_encounter()`). With a column out it stops being a selector and becomes the campaign status, with a "back to the map" button that calls `BattleScreen.open_map()` |
+| `scripts/ui/ArmyPanel.gd` | Paints who is away "en campaña" from `CombatManager.get_units_on_expedition()`, and refreshes on `expedition_started` / `expedition_ended` / `expedition_resumed` |
+| `scripts/ui/NotificationPanel.gd` | Log entries on `expedition_started` and `expedition_ended`, so a run leaves a trace in the base |
+| `scripts/services/AudioManager.gd` | SFX on `encounter_started`, `unit_attacked`, `unit_died`, `encounter_ended`, `expedition_started`, `expedition_ended`, `final_audit_summoned`, `storm_halted_forever` |
 | `scripts/ui/HelperPanel.gd` | One callout pointing at the Escaramuzas button once a Barracks exists |
 | `scripts/services/TutorialManager.gd` | A one-shot contextual tip on `encounter_started` |
+
+`BattleScreen` and `SkirmishPanel` still guard the newer service calls with
+`has_method()` / `has_signal()`. That is scaffolding from when the expedition core
+did not exist yet, not a statement that it is missing: every guarded call resolves
+today.
 
 ---
 
@@ -152,6 +159,40 @@ side. Both are read by `Encounter.create()`.
 - `back_row_uids` (today: tower crews) take the rear row **before** the line
   forms. They are artillery with `min_range` 2 — in front they go mute the moment
   anything reaches contact.
+
+### Reading the board
+
+Units are drawn as **silhouettes, not letters**. `tools/gen_unit_icons.gd` is a
+re-runnable headless tool (`godot --headless --path . --script
+res://tools/gen_unit_icons.gd`) that traces one flat dieselpunk shape per unit
+type into `assets/textures/ui/units/{infantry,artillery,vehicle}.png` — the same
+"no artist, code instead" route as `tools/gen_ui_textures.gd`. Each shape is
+traced at 4x and box-averaged down so the edge survives being shrunk to the 24 px
+of the initiative strip, and the three silhouettes are deliberately different
+*masses* — infantry tall and narrow, artillery a circle with a diagonal, vehicle
+wide and low — so they separate without looking at detail.
+
+The PNG is a single-colour mask (white RGB, antialiased alpha), so one file
+serves both armies. `UITheme` owns the reading rules:
+
+| API | What it gives |
+|-----|---------------|
+| `UITheme.unit_icon_path(unit_id)` / `unit_icon(unit_id)` | The texture, or **`null` when there is no file on disk** |
+| `UITheme.unit_icon_tint(is_player)` | `POSITIVE` / `DANGER` lightened by 0.62 — the cell behind is the same colour *darkened*, and that gap is what keeps the silhouette from dissolving into its own background |
+| `UITheme.unit_face_color(is_player, spent)` | The same tint, dropped to `UNIT_ICON_SPENT_ALPHA` (0.42) once the unit has acted |
+| `UITheme.mark_boss(style)` | The brass halo (`BOSS_GLOW_SIZE`, `BOSS_BORDER_MIN`) stamped on a cell style **last**, so it adds to whatever border the state already chose instead of hiding it |
+
+`BattleScreen._paint_unit_face()` and `_paint_order_face()` both fall back to
+`_unit_glyph()` — the first letter of the translated unit name — whenever
+`unit_icon()` returns `null`. A missing or unimported PNG can therefore never
+leave a unit unpainted; it only reverts the board to how it looked before.
+
+Which enemy wears the boss mark is decided by `BattleScreen.boss_uid()`: only in
+a boss encounter, and it is the enemy with the highest `power()`, ties broken by
+`max_hp`. It scans dead units too, so killing the boss does not promote anybody
+to the title. In era 1, where the enemy can only field infantry, everything ties
+and the mark lands on whoever deployed first — still exactly one unit, which is
+what the player needs to see.
 
 ### Turn flow
 
@@ -199,6 +240,32 @@ the higher-`power` unit, and entrench (`defend`) when nothing is reachable. It
 takes `rival_side(unit.side)`, so the same AI drives the enemy on the board and
 either side under `AutoResolver`.
 
+### `is_board_open()` is not `is_in_encounter()`
+
+Two queries on `CombatManager` that read like synonyms and are not. Confusing them
+cost three serious bugs. **"There is a fight" is not "there is a board."**
+
+| Query | True when |
+|-------|-----------|
+| `is_in_encounter()` | `_encounter != null` **and** `_encounter.is_active()` — somebody still has a turn to take |
+| `is_board_open()` | `_encounter != null`, full stop |
+
+The gap between them is the stretch where the fight has resolved and the player
+is **reading the after-action report**. The encounter object still exists, the
+screen is still up, and nobody is acting. That stretch counts as board open.
+
+Anything that asks "may I put a board on screen?" must ask `is_board_open()`.
+`StormManager._begin_tithe()` does exactly that: with the board open it calls
+`auto_resolve_defense()` instead, because opening the Tithe defence over an
+unread report wipes the report off the screen before the player has seen it.
+`CombatManager.start_defense()` refuses on `is_board_open()` for the same reason.
+
+Anything that asks "is the player mid-fight?" — gating a launch, driving a turn —
+asks `is_in_encounter()`: `start_skirmish()`, `select_node()`,
+`enter_current_node()`, `SkirmishPanel.evaluate_launch()`.
+
+The seams between the two live in `tests/storm/test_board_handoff.gd`.
+
 ---
 
 ## 4. The expedition
@@ -206,9 +273,11 @@ either side under `AutoResolver`.
 One roguelike run: march out with a committed party, fight a chain of encounters
 across a branching map, and settle up only when the column comes home.
 
-> Everything in this section is implemented and tested at the service level
-> (`tests/combat/test_expedition_wiring.gd`). **No screen drives it yet** — see the
-> note in §1.
+> Implemented and tested at the service level
+> (`tests/combat/test_expedition_wiring.gd`) **and driven by the interface**:
+> `SkirmishPanel` commits the party and calls `launch_expedition()`;
+> `BattleScreen` draws the map, the draft modal and the final report
+> (`tests/ui/test_expedition_ui.gd`).
 
 ### The map is a seed
 
@@ -305,9 +374,11 @@ keeps the loot and the survivors: quitting while ahead has to be a real option.
 
 The **encounter in progress is never saved**. On load the party carries its current
 HP and the node is still uncleared, so the board is redeployed from scratch.
-`load_save_data()` emits `expedition_resumed`; the UI is expected to call
-`enter_current_node()`. A save with no `expedition` key simply means no expedition
-and is never an error.
+`load_save_data()` emits `expedition_resumed`. `BattleScreen` answers it by
+reopening the map view (and `game_load_completed` covers the same ground when the
+signal is not there), so the player lands back on the campaign map and re-enters
+the node themselves rather than being dropped straight onto a board. A save with
+no `expedition` key simply means no expedition and is never an error.
 
 `era` is stored on top of the documented schema because the rosters depend on it:
 the player can reach a new era while a run is paused.
@@ -318,7 +389,10 @@ the player can reach a new era while a run is paused.
 
 When the Tithe lands while the player is already on a board,
 `StormManager._begin_tithe()` cannot open a second one. It calls
-`CombatManager.auto_resolve_defense()` instead.
+`CombatManager.auto_resolve_defense()` instead. The check is
+`CombatManager.is_board_open()`, not `is_in_encounter()` — see
+[§3](#is_board_open-is-not-is_in_encounter): a resolved fight whose report is
+still on screen counts as a board.
 
 **Why it uses the same `Encounter` rather than a formula.** A separate resolution
 formula would be a second set of combat rules to keep in sync with the first, and
@@ -369,6 +443,11 @@ than from the end of the fight — reporting earlier would leave
 `is_in_encounter()` still true when the next wave arrives, and the wave would be
 lost.
 
+`end_encounter()` also reads `_audit_wave_won`, noted when the wave *resolved*,
+rather than deducing the outcome from `_last_result`: that field is overwritten by
+any other fight — the blind Tithe defence, for one — and a won wave reported as
+lost razes the base as a side effect.
+
 - **Waves:** `final_audit_waves` (3–5), rolled from the siege seed. The seed comes
   from `randi()` and is **not** saved as a re-rollable choice — a lost siege that is
   summoned again is a different night, so reloading cannot shop for an easier one.
@@ -391,60 +470,91 @@ lost.
 - **Persistence:** `to_dict()` saves seed, era, state, `current_wave`, `summons`,
   `morale_snapshot` and the garrison. The waves themselves are rebuilt from the
   seed and the era, exactly the way `Expedition` rebuilds its map.
+- **A saved siege comes back `PENDING`, never `ACTIVE`.** `FinalAudit.from_dict()`
+  downgrades a stored `ACTIVE` state to `PENDING` on purpose. The board is not
+  saved, so an `ACTIVE` siege on load would be a siege nobody can resume: the
+  "QUE BAJEN" button hides itself because the siege is already running, no wave is
+  re-announced because nothing calls `begin()`, and the expedition stays blocked
+  forever (`can_launch()` refuses while the Regency is up). Degrading it keeps the
+  wave in progress and the wounded garrison, and hands control back to the player —
+  press QUE BAJEN again and the wave comes down.
 
 Winning emits `storm_halted_forever` **before** `victory_achieved`: the world goes
 quiet before the screen says so. `StormManager._on_halted_forever()` sets `_halted`,
 disarms the cycle and resets the production multiplier; `StormSky` restores the
 sky; `AudioManager` plays the unlock sting.
 
+### Closing a wave opens the next one, inside the same call
+
+**Whoever touches `end_encounter()` or `BattleScreen._close_board()` has to know
+this.** Closing a wave's report runs, without ever yielding:
+
+```
+BattleScreen._close_board()
+  → CombatManager.end_encounter()                    # _encounter = null
+    → ProgressionManager.report_audit_wave(won)
+      → FinalAudit.clear_wave()                      # advances current_wave
+      → ProgressionManager._announce_wave()
+        → EventBus.final_audit_wave_ready
+          → CombatManager._on_final_audit_wave_ready() → start_defense()
+            → _open_board()                          # _encounter = a new board
+              → EventBus.encounter_started → BattleScreen._on_encounter_started()
+                → BattleScreen._open_board()         # _board_open = true
+```
+
+By the time `end_encounter()` returns, `_encounter` is a **new** board and
+`BattleScreen._board_open` is `true` again. Any code that keeps running after that
+call is running on top of a board that has just opened. `_close_board()` therefore
+re-checks `_board_open` immediately after `end_encounter()` and returns early if
+it is set; without that early return the tail of the method hides the board it
+just opened, and the siege becomes unplayable — the player is left looking at the
+base, with no board and no button that leads back to it. That exact path is
+`tests/storm/test_board_handoff.gd::test_closing_a_wave_report_leaves_the_next_wave_on_screen`.
+
+### The Tithe stands down while the Audit is being fought
+
+`StormManager._begin_tithe()` returns early when
+`ProgressionManager.is_final_audit_active()`: it posts
+`STORM_TITHE_DURING_AUDIT`, emits `tithe_resolved(true, {})` and settles. No
+Tithe is collected and no second defence is opened.
+
+The reason is not mercy, it is bookkeeping. The Regency is already at the door;
+collecting on one side while the garrison fights on the other would set the same
+troops to defend two places at once. `CombatManager.get_garrison()` knows nothing
+about the units standing in the siege's waves, so it would re-enlist them and then
+deduct their casualties twice — the player would lose soldiers who never died.
+
+A siege that is only **summoned** (`PENDING`) does not stop the Tithe: the check
+is `is_final_audit_active()`, and both cases are pinned in
+`tests/storm/test_board_handoff.gd`.
+
 ---
 
 ## 7. Signals
 
-Same format as [`10-signals-reference.md`](10-signals-reference.md). These sections
-are **not** in that file yet; when you add them there, copy these rows.
+The parameter and consumer tables now live in
+[`10-signals-reference.md`](10-signals-reference.md) — sections **Combat** and
+**The Final Audit**. That file is the one to update when a listener appears or
+disappears; duplicating the rows here is how this section went stale the last
+time. What follows is only what a reader of *this* document needs on top of them.
 
-### Combat
-
-Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
-
-| Signal | Params | Emitted By | Consumed By |
-|--------|--------|------------|-------------|
-| `expedition_started` | `expedition_id: int, node_count: int` | CombatManager | AudioManager |
-| `expedition_node_selected` | `node_index: int` | CombatManager | — *(no listener yet)* |
-| `expedition_resumed` | `expedition_id: int` | CombatManager | — *(no listener yet)* |
-| `encounter_started` | `encounter_index: int, is_boss: bool` | CombatManager | BattleScreen, SkirmishPanel, AudioManager, TutorialManager |
-| `turn_started` | `side: int, unit_uid: int` | CombatManager | BattleScreen |
-| `unit_moved` | `unit_uid: int, from: Vector2i, to: Vector2i` | CombatManager | BattleScreen |
-| `unit_attacked` | `attacker_uid: int, target_uid: int, damage: int` | CombatManager | BattleScreen, AudioManager |
-| `unit_defended` | `unit_uid: int` | CombatManager | BattleScreen |
-| `unit_died` | `unit_uid: int, side: int` | CombatManager | BattleScreen, AudioManager |
-| `encounter_ended` | `victory: bool, turns_used: int` | CombatManager | BattleScreen, StormManager, AudioManager |
-| `draft_offered` | `options: Array` | CombatManager | — *(no listener yet)* |
-| `draft_applied` | `option: Dictionary` | CombatManager | — *(no listener yet)* |
-| `expedition_ended` | `result: int, rewards: Dictionary, casualties: Dictionary` | CombatManager | AudioManager |
-| `defense_auto_resolved` | `victory: bool, rounds: int, summary: Dictionary` | CombatManager | — *(no listener yet; `StormManager` reads the return value of `auto_resolve_defense()` directly)* |
-
-`result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
-`summary` on `defense_auto_resolved` is `CombatManager.get_last_result()`, and that
-signal is the **only** one that fight emits — no `encounter_*` accompanies it,
-because the open board would claim them.
-
-### The Final Audit
-
-Emitted only by `ProgressionManager`.
-
-| Signal | Params | Emitted By | Consumed By |
-|--------|--------|------------|-------------|
-| `final_audit_summoned` | `waves: int, summons: int` | ProgressionManager | SkirmishPanel, AudioManager *(optional connect)* |
-| `final_audit_started` | `waves: int` | ProgressionManager | SkirmishPanel |
-| `final_audit_wave_ready` | `wave: int, roster: Dictionary, scale: float` | ProgressionManager | CombatManager |
-| `final_audit_wave_cleared` | `wave: int, remaining: int` | ProgressionManager | — *(no listener yet)* |
-| `final_audit_lost` | `wave: int` | ProgressionManager | StormManager, SkirmishPanel |
-| `storm_halted_forever` | — | ProgressionManager | StormManager, StormSky, SkirmishPanel, AudioManager |
-
-`victory_achieved(stats)` is still emitted by `ProgressionManager` and consumed by
-`VictoryScreen`, but it is now reached **only** through a won Final Audit.
+- **`expedition_resumed` is connected with the string form** —
+  `EventBus.connect("expedition_resumed", Callable(self, …))` — in `BattleScreen`,
+  `SkirmishPanel` and `ArmyPanel`, behind a `has_signal()` guard. A grep for
+  `expedition_resumed.connect` finds none of the three. The same is true of
+  `AudioManager`'s `_connect_optional()` for `final_audit_summoned` and
+  `storm_halted_forever`. When auditing listeners, grep the **signal name**, not
+  the `.connect` form.
+- `result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
+- `summary` on `defense_auto_resolved` is `CombatManager.get_last_result()`, and
+  that signal is the **only** one that fight emits — no `encounter_*` accompanies
+  it, because the open board would claim them.
+- `defense_auto_resolved` and `final_audit_wave_cleared` still have **no listener
+  in `scripts/`**. `StormManager` reads the return value of
+  `auto_resolve_defense()` directly and posts its own notification; the signals
+  are there for a proper after-action report that has not been built.
+- `victory_achieved(stats)` is still emitted by `ProgressionManager` and consumed
+  by `VictoryScreen`, but it is now reached **only** through a won Final Audit.
 
 ---
 
@@ -515,7 +625,8 @@ the crews so the defender's row never overflows `combat_board_size.x`.
 
 ## 9. Testing
 
-gdUnit4, headless. Whole suite:
+gdUnit4, headless. The tree holds **37 suites / 697 cases**; 20 of them are the
+combat pillar. Whole suite:
 
 ```bash
 godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a tests
@@ -542,9 +653,17 @@ godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a tests/combat
 | `tests/storm/test_defense_auto_resolve.gd` | `auto_resolve_defense()` when the board is busy |
 | `tests/storm/test_tower_garrison.gd` | Crew count, back-row deployment, crews outside the deploy cap and outside the ledger |
 | `tests/storm/test_final_audit_wiring.gd` | `ProgressionManager` ↔ `CombatManager` seam, `storm_halted_forever`, victory ordering |
+| **`tests/storm/test_board_handoff.gd`** | **The seams.** A resolved board still counts as open; the Tithe never opens a board over an unread report; winning the boss and losing a run both close the board they were fought on; the Tithe stands down while the siege is *active* but not while it is merely summoned; and closing a wave's report leaves the next wave on screen. Four bugs that left the game unfinishable lived here, and none of them was visible from the pure models |
 | `tests/storm/test_storm_toasts_over_board.gd` | Notification toasts draw above `BattleScreen` and below `VictoryScreen` |
 | `tests/audio/test_audio_combat.gd` | `AudioManager` connects the combat and audit signals it claims to |
+| `tests/ui/test_expedition_ui.gd` | `BattleScreen`'s map, draft modal, final report and abandon flow, plus `SkirmishPanel`'s launch refusals — including that the map stays touchable on a phone |
+| `tests/ui/test_battle_board_icons.gd` | Unit silhouettes on the cell and on the initiative strip, side tint, the dimming of a unit that already acted, the boss frame and who wears it, the fallback to the name's initial when the PNG is missing, and the cell still fitting a 400x720 screen |
 | `tests/ui/test_helper_skirmish_callout.gd` | The Escaramuzas callout appears with the Barracks and only once |
+
+`test_board_handoff.gd`, `test_expedition_ui.gd` and `test_battle_board_icons.gd`
+touch the real autoloads and private members on purpose: what they are watching —
+the handover between boards and the actual drawing — has no seam that can be
+reached any other way. Each case restores what it moved.
 
 ### Probes (`tools/`)
 
@@ -558,7 +677,11 @@ the line is removed afterwards. They all no-op unless `GameConfig.dev_mode` is o
 | `tools/audit_probe.gd` | Summons the Final Audit, plays the whole siege without touching the UI, and logs what happened. `FORCE_SHORT_SIEGE = true` forces a one-wave siege so the victory path (the Storm stopping for good) can be seen without luck. It is the proof that **the game can be finished** |
 
 There is no `expedition_probe.gd` in this tree. The expedition is exercised by
-`tests/combat/test_expedition_wiring.gd` instead.
+`tests/combat/test_expedition_wiring.gd` (the service) and
+`tests/ui/test_expedition_ui.gd` (the screens) instead.
+
+`tools/gen_unit_icons.gd` is not a probe: it is a one-shot generator, run headless
+and never registered as an autoload. Re-run it after touching a silhouette.
 
 ---
 
@@ -566,25 +689,33 @@ There is no `expedition_probe.gd` in this tree. The expedition is exercised by
 
 Verified against the code, not the spec. Update this list as things land.
 
-- **No expedition UI.** `launch_expedition()`, `select_node()`, `apply_draft()`,
-  `abandon_expedition()` and `enter_current_node()` are implemented, saved, loaded
-  and tested, but only tests call them. `SkirmishPanel`'s launch button calls
-  `start_skirmish()`, which is the standalone one-off fight. There is no map view
-  and no draft modal.
-- **Four combat signals have no listener** in `scripts/`: `draft_offered`,
-  `draft_applied`, `expedition_node_selected`, `expedition_resumed`. Add the
-  consumers along with the UI above. `final_audit_wave_cleared` has none either.
-- **`defense_auto_resolved` has no listener.** `StormManager` reads the return value
-  of `auto_resolve_defense()` directly and posts its own notification
-  (`MSG_DEFENSE_AUTO_WON` / `MSG_DEFENSE_AUTO_LOST`). The signal is there for a
-  proper after-action report.
+- **`defense_auto_resolved` has no listener** in `scripts/`. `StormManager` reads
+  the return value of `auto_resolve_defense()` directly and posts its own
+  notification (`MSG_DEFENSE_AUTO_WON` / `MSG_DEFENSE_AUTO_LOST`). The signal is
+  there for a proper after-action report that nobody has built. Only
+  `tests/storm/test_defense_auto_resolve.gd` connects it.
+- **`final_audit_wave_cleared` has no listener either.** A cleared wave is felt
+  only through the next one opening; there is no "wave 2 of 4" beat anywhere.
 - **`CombatManager.build_enemy_roster()` is provisional.** It is the unseeded
   roster used by `start_skirmish()`; its own docstring says
-  `ExpeditionGenerator.enemy_roster()` replaces it. Both exist today.
-- **`ArmyPanel` does not show units on campaign.** `CombatManager`'s comment says
-  it paints them "en campaña"; `scripts/ui/ArmyPanel.gd` does not reference
-  `CombatManager` at all.
-- **Unit glyphs on the board are the first letter** of the translated unit name
-  (`BattleScreen._unit_glyph()`). Real icons are an art task.
-- **Towers have no behaviour of their own** beyond mitigating storm damage and
+  `ExpeditionGenerator.enemy_roster()` replaces it. Both exist today, and
+  `start_skirmish()` itself is now reachable only through the dev-mode button
+  (`dev_start_encounter()`) and as a `has_method()` fallback in `SkirmishPanel`.
+- **`has_method()` / `has_signal()` guards outlived their reason.** `BattleScreen`,
+  `SkirmishPanel` and `ArmyPanel` still wrap `launch_expedition`, `apply_draft`,
+  `get_units_on_expedition`, `can_launch` and `expedition_resumed` in existence
+  checks from when the expedition core was not written. Every one of them resolves
+  today; the branches that do not are dead code that also hides a typo.
+- **Towers have no behaviour of their own** beyond mitigating storm damage
+  (`StormManager._damage_buildings()` via `GameConfig.get_storm_damage()`) and
   fielding a crew on a defensive board. There is no tower attack on the base map.
+- **Losing a siege costs nothing but time.** `final_audit_lost` takes a
+  maximum-severity Tithe and maximum storm damage, but the run can be re-summoned
+  as soon as three units stand again. Whether that is a price is a balance
+  question nobody has answered yet.
+
+Landed since this document was first written, and no longer gaps: the expedition
+interface (map, draft modal, final report, abandon), listeners for
+`draft_offered` / `draft_applied` / `expedition_node_selected` /
+`expedition_resumed`, `ArmyPanel` painting who is away on campaign, and real unit
+silhouettes on the board in place of the name's initial.
