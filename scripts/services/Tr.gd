@@ -465,6 +465,8 @@ const _STRINGS := {
 		"TUT_TIP_OVERFLOW_BODY": "Tus cuatro recursos comparten una sola bolsa, y lo que no cabe se pierde. Gasta en edificios o construye un almacen: cada uno amplia el tope en 500.",
 		"TUT_TIP_BOARD_TITLE": "El tablero",
 		"TUT_TIP_BOARD_BODY": "Por turnos, en orden de iniciativa. Una unidad puede moverse y luego atacar; atacar termina su turno. La artilleria no dispara a un enemigo pegado a ella. Defender duplica la defensa hasta tu siguiente turno.",
+		# Helper callout: Skirmish button (appears with the first Barracks)
+		"LBL_HELP_SKIRMISH": "ESCARAMUZAS: desde aqui mandas expediciones con tu ejercito y, cuando estes listo, convocas la Auditoria Final.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -898,6 +900,8 @@ const _STRINGS := {
 		"TUT_TIP_OVERFLOW_BODY": "Your four resources share one single bag, and whatever does not fit is lost. Spend on buildings or build a warehouse: each one raises the cap by 500.",
 		"TUT_TIP_BOARD_TITLE": "The board",
 		"TUT_TIP_BOARD_BODY": "Turn-based, in initiative order. A unit may move and then attack; attacking ends its turn. Artillery cannot fire at an enemy adjacent to it. Defending doubles defence until your next turn.",
+		# Helper callout: Skirmish button (appears with the first Barracks)
+		"LBL_HELP_SKIRMISH": "SKIRMISH: from here you send expeditions with your army and, when ready, summon the Final Audit.",
 	},
 }
 
