@@ -48,6 +48,15 @@ var _last_result: Dictionary = {}
 ## ArmyManager: si murieran "como artillería", una defensa perdida le borraría al
 ## jugador cañones que nunca envió.
 var _tower_crew_uids: Dictionary = {}
+## Las dotaciones del tablero que acaba de cerrarse, entregadas por
+## end_encounter() en el momento en que `_tower_crew_uids` deja de valer. Es lo
+## unico que puede responder "quien era dotacion" cuando alguien encadena un
+## tablero con los supervivientes del anterior, y solo sirve para ESE relevo: en
+## cuanto se abre otro tablero, las unidades que salgan de el son las suyas.
+## Quien componga un bando sin venir del tablero anterior (el asedio, que numera
+## su guarnicion por su cuenta desde 1) no usa esto: dice sus dotaciones a la
+## cara, porque sus uids pueden chocar con los de cualquier tablero pasado.
+var _last_board_crew_uids: Dictionary = {}
 
 ## La Auditoria Final: el asedio en casa con el que termina la partida.
 ## FinalAudit (en ProgressionManager) lleva la guarnicion oleada a oleada y
@@ -151,7 +160,21 @@ func get_deployable_units() -> Dictionary:
 ## como siempre. El hueco existe porque una defensa no siempre empieza de cero:
 ## encadenar oleadas solo significa algo si los supervivientes entran tocados a la
 ## siguiente, y recalcular la guarnición cada vez borraría precisamente eso.
-func start_defense(enemy_roster: Dictionary, defenders: Array = [], enemy_scale: float = -1.0) -> bool:
+##
+## `defender_crew_uids` dice cuáles de esos defensores son dotación de torre.
+## Quien compone el bando lo sabe, y decirlo es la única forma de saberlo bien:
+## deducirlo del estado que dejó el tablero anterior era apostar a que dos uids
+## de tableros distintos nunca coinciden, y sí coinciden — el asedio numera su
+## guarnición desde 1 por su cuenta, así que su infantería #2 se cruza con la
+## dotación #2 de cualquier defensa anterior y sus bajas dejan de salir de
+## ArmyManager.
+##
+## `null` es "no lo sé, dedúcelo", y solo vale para quien encadena con los
+## supervivientes del tablero que se acaba de cerrar: son las mismas unidades y
+## los mismos uids, así que no hay nada que confundir. Una lista vacía NO es lo
+## mismo que `null`: es "ninguna, y lo sé" — una oleada sin torres en pie tiene
+## que poder decirlo sin que nadie salga a buscarle dotaciones al pasado.
+func start_defense(enemy_roster: Dictionary, defenders: Array = [], enemy_scale: float = -1.0, defender_crew_uids: Variant = null) -> bool:
 	if is_board_open() or enemy_roster.is_empty():
 		return false
 
@@ -160,9 +183,12 @@ func start_defense(enemy_roster: Dictionary, defenders: Array = [], enemy_scale:
 		# dotación de torre que esas unidades ya traían, para que una dotación que
 		# sobrevivió a la oleada anterior siga sin ser parte del ejército.
 		var carried: Array = []
-		for unit in defenders:
-			if _tower_crew_uids.has(unit.uid):
-				carried.append(unit.uid)
+		if defender_crew_uids != null:
+			carried = (defender_crew_uids as Array).duplicate()
+		else:
+			for unit in defenders:
+				if _last_board_crew_uids.has(unit.uid):
+					carried.append(unit.uid)
 		start_encounter_with_units(defenders, enemy_roster, false, 0, true, carried, enemy_scale)
 		return true
 
@@ -258,8 +284,12 @@ func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> 
 	_audit_crews = []
 	if wanted > 0:
 		_audit_crews = _build_side({GameConfig.storm_tower_garrison_unit: wanted}, Encounter.PLAYER, 1.0)
+	# Quien las fabrica es quien dice quienes son. La lista viaja hasta el tablero
+	# en la misma llamada: ninguna decision sobre "esto es dotacion" pasa por lo
+	# que dejo apuntado un tablero que ya no existe.
+	var crew_uids: Array = []
 	for crew in _audit_crews:
-		_tower_crew_uids[crew.uid] = true
+		crew_uids.append(crew.uid)
 	defenders.append_array(_audit_crews)
 
 	# Sin nadie en pie no se abre tablero: si se llamara a start_defense() con la
@@ -271,7 +301,7 @@ func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> 
 		return
 
 	_audit_wave_active = true
-	if not start_defense(roster, defenders, scale):
+	if not start_defense(roster, defenders, scale, crew_uids):
 		# Nadie en pie: la oleada pasa por encima sin abrir tablero.
 		_audit_wave_active = false
 		ProgressionManager.report_audit_wave(false)
@@ -453,6 +483,13 @@ func end_encounter() -> void:
 		_encounter.release_survivors()
 	_encounter = null
 	_enemy_turn_running = false
+	# Las marcas de dotacion dejan de ser "las del tablero" y pasan a ser "las del
+	# tablero que acaba de cerrarse". El reparto de bajas ya se hizo (_apply_result
+	# corre con encounter_ended, antes que esto), asi que aqui no le quitamos nada
+	# a nadie; lo que se evita es que sigan vivas a espaldas de todos y contesten
+	# por un tablero futuro con el que no tienen nada que ver.
+	_last_board_crew_uids = _tower_crew_uids.duplicate()
+	_tower_crew_uids.clear()
 	# Se reporta con el tablero ya cerrado: si se hiciera al terminar la pelea,
 	# la oleada siguiente llegaria con is_in_encounter() aun en true y se perderia.
 	if was_audit_wave:
@@ -997,9 +1034,7 @@ func get_save_data() -> Dictionary:
 ## expedicion, que es exactamente lo que dice un save anterior a esta feature
 ## (constitucion, principio V).
 func load_save_data(data: Dictionary) -> void:
-	_expedition = null
-	_clear_draft()
-	_expedition_followups = []
+	_clear_runtime_state()
 	var run: Expedition = ExpeditionScript.from_dict(data, ProgressionManager.current_era)
 	if run == null or not run.is_active():
 		return
@@ -1012,9 +1047,25 @@ func load_save_data(data: Dictionary) -> void:
 		_offer_draft()
 
 func reset() -> void:
+	_clear_runtime_state()
+	_next_expedition_id = 1
+
+## Todo lo que este servicio se inventa mientras se juega: el tablero, la
+## campana, el parte, las marcas del asedio y los contadores. Lo unico que NO
+## limpia es `_next_expedition_id`, porque partida nueva y partida cargada no
+## opinan lo mismo de el: la nueva lo devuelve a 1 y la cargada lo empuja por
+## encima de la campana que trae.
+##
+## load_save_data() pasa por aqui aunque hoy no le haga falta: la carga solo
+## ocurre con los autoloads recien arrancados, asi que todo esto ya estaba a cero
+## y el comportamiento observable no cambia ni un paso. Lo que cambia es que deja
+## de estar minado para el dia que se cargue en caliente —guardado en la nube,
+## ranuras de partida—, cuando la carga entraria sobre un servicio usado y se
+## traeria el parte de la partida anterior, el asedio a medias y un
+## `_tower_crew_uids` que no es de ningun tablero.
+func _clear_runtime_state() -> void:
 	_encounter = null
 	_expedition = null
-	_next_expedition_id = 1
 	_clear_draft()
 	_expedition_followups = []
 	_enemy_turn_running = false
@@ -1026,3 +1077,4 @@ func reset() -> void:
 	_result_applied = false
 	_last_result = {}
 	_tower_crew_uids.clear()
+	_last_board_crew_uids.clear()
