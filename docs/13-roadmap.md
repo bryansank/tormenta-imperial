@@ -20,6 +20,10 @@ The management loop, the tactical board and the storm cycle all run in-game:
 - ✅ 9 milestones + Imperial Victory
 - ✅ Tech tree (15 techs, 3 branches)
 - ✅ Save/load, offline progression
+- ✅ **Touch grab-pan parity with mouse**: one finger grabs the terrain with the same
+  screen→world formula as the left-drag (`InputService.screen_drag_to_world_delta`),
+  a tap under the threshold still selects, and the second finger hands over to the
+  pinch without a jump (13 tests)
 - ✅ Audio: `AudioManager` (runtime buses, signal-driven) + 4 music tracks + 16 SFX
 - ✅ **Tactical encounter**: 8×8 board, turn order, move/attack/defend/wait, enemy AI,
   `Encounter` + `CombatAI` as pure headless-testable models — see [15-combat.md](15-combat.md)
@@ -96,7 +100,6 @@ Full technical detail: [15-combat.md](15-combat.md).
 
 - 💤 Ambient audio track (`assets/audio/ambient/` still empty)
 - 💤 Real unit icons on the board (currently the name's initial)
-- 💤 Touch grab-pan parity with mouse
 - 💤 Settings home for cloud-save login + wiring `CloudSaveManager`
 - 💤 More buildings / decorations & a second island biome
 - 💤 Weather / day-night visual layer

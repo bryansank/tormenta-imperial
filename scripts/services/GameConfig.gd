@@ -245,6 +245,32 @@ var audio_music_volume := 0.6
 var audio_sfx_volume := 0.8
 var audio_ambient_volume := 0.5
 
+# ── Camara: arrastrar el mapa ──
+# El raton y el dedo mueven el mapa con la misma cuenta (agarrar el terreno y
+# llevarlo), asi que lo unico que se ajusta por separado es cuanto hay que
+# moverse antes de que un clic deje de ser un clic.
+
+## Pixeles que el cursor recorre con el boton izquierdo pulsado antes de que el
+## clic pase a ser un arrastre del mapa. Mas bajo: el mapa se mueve al minimo
+## temblor y cuesta seleccionar un edificio. Mas alto: el arrastre parece que
+## tarda en enganchar el terreno.
+var mouse_drag_threshold_px := 6.0
+
+## Lo mismo para el dedo. Va mas alto que el del raton porque un dedo se mueve
+## unos pixeles incluso en un toque que el jugador siente inmovil: con 6 px,
+## media docena de toques por partida acabarian moviendo el mapa en vez de
+## abrir el edificio que se queria abrir.
+var touch_drag_threshold_px := 12.0
+
+## Pellizco: cuanto tiene que cambiar la separacion entre los dos dedos (en
+## pixeles) para mover el zoom. Absorbe el temblor de dos dedos quietos; si se
+## sube, el zoom empieza a ir a tirones.
+var pinch_zoom_dead_zone_px := 1.0
+
+## Zoom por pellizco: unidades de distancia de camara por pixel de separacion
+## ganada entre los dedos. Mas alto = el mapa se acerca de golpe.
+var pinch_zoom_sensitivity := 0.05
+
 # ── User Settings persistence ──
 # Device-local preferences (volumes, UI toggles) — separate from save_game.json
 # so they survive "new game" and apply before any save is loaded.
