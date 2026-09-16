@@ -21,6 +21,7 @@ const EncounterScript := preload("res://scripts/combat/Encounter.gd")
 const ExpeditionScript := preload("res://scripts/combat/Expedition.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
 const AI := preload("res://scripts/combat/CombatAI.gd")
+const AutoResolverScript := preload("res://scripts/combat/AutoResolver.gd")
 
 var _encounter: Encounter = null
 ## La expedicion en curso. Null en la base; se descarta al resolverla.
@@ -163,6 +164,59 @@ func start_defense(enemy_roster: Dictionary, defenders: Array = [], enemy_scale:
 		EventBus.notification_posted.emit(
 			Tr.t("STORM_TITHE_TOWER_CREWS") % roster_size(crews), "positive", UITheme.ACCENT)
 	return true
+
+# ── Defensa sin tablero ──────────────────────────────────────────────
+
+## La misma defensa que start_defense(), pero jugada de una vez por la IA en un
+## Encounter propio que nunca llega a ser `_encounter`: ni abre el tablero ni
+## emite una sola senal de combate. Es lo que pasa cuando el Diezmo cae con el
+## jugador en plena expedicion: la guarnicion que se quedo en casa pelea sola.
+##
+## El bando defensor se compone exactamente igual que en start_defense()
+## (guarnicion de ArmyManager + dotaciones de las torres en pie, misma moral,
+## misma escala enemiga) y el resultado se aplica por el mismo camino que una
+## defensa jugada (_apply_result_for): bajas fuera del ejercito, nunca las
+## dotaciones; sin botin; moral como siempre. Al terminar emite
+## `defense_auto_resolved` con get_last_result() como parte.
+##
+## Las oleadas de la Auditoria Final no pasan por aqui a proposito: el asedio no
+## puede convocarse con una expedicion fuera (can_launch se bloquea mientras hay
+## asedio, y el asedio no se convoca con el tablero ocupado), asi que nunca hay
+## tablero que esquivar; y una oleada resuelta a ciegas le quitaria al final del
+## juego justo lo que lo hace final.
+##
+## Devuelve {"fought": false, "victory": false, "reason": ...} cuando no hay
+## nadie que defienda (igual que start_defense() devuelve false) o nadie de quien
+## defenderse; si se pelea, {"fought": true, "victory", "rounds", "summary"}.
+func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -> Dictionary:
+	if enemy_roster.is_empty():
+		return {"fought": false, "victory": false, "reason": "no_attackers"}
+	var garrison: Dictionary = get_garrison()
+	var crews: Dictionary = get_tower_crews(garrison)
+	if garrison.is_empty() and crews.is_empty():
+		return {"fought": false, "victory": false, "reason": "undefended"}
+
+	# La moral se captura como en cualquier lanzamiento, pero sin pisar la
+	# instantanea del tablero que sigue abierto: la expedicion pelea con la moral
+	# con la que salio.
+	var board_snapshot: float = _morale_snapshot
+	_morale_snapshot = _read_morale()
+	var units: Array = _build_side(garrison, Encounter.PLAYER, 1.0)
+	var crew_uids: Dictionary = {}
+	for crew in _build_side(crews, Encounter.PLAYER, 1.0):
+		crew_uids[crew.uid] = true
+		units.append(crew)
+	var scale: float = enemy_scale if enemy_scale > 0.0 else 1.0
+	units.append_array(_build_side(enemy_roster, Encounter.ENEMY, scale))
+	_morale_snapshot = board_snapshot
+
+	var encounter: Encounter = EncounterScript.create(units, 0, false, true, crew_uids.keys())
+	var outcome: Dictionary = AutoResolverScript.resolve(encounter)
+	var victory: bool = bool(outcome["victory"])
+	var rounds: int = int(outcome["rounds"])
+	var summary: Dictionary = _apply_result_for(encounter, victory, rounds, crew_uids)
+	EventBus.defense_auto_resolved.emit(victory, rounds, summary)
+	return {"fought": true, "victory": victory, "rounds": rounds, "summary": summary}
 
 ## Una oleada del asedio pide tablero. Los defensores son la guarnicion viva que
 ## lleva FinalAudit —con el daño de la oleada anterior— mas las dotaciones de
@@ -492,6 +546,8 @@ func _run_enemy_turn() -> void:
 				follow_up = _encounter.move_unit(uid, step["to"])
 			"attack":
 				follow_up = _encounter.attack(uid, step["target"])
+			"defend":
+				follow_up = _encounter.defend(uid)
 			_:
 				follow_up = _encounter.wait_unit(uid)
 		_emit_events(follow_up)
@@ -524,12 +580,18 @@ func _apply_result(victory: bool, rounds: int) -> void:
 		_apply_expedition_encounter(victory, rounds)
 		return
 
+	_apply_result_for(_encounter, victory, rounds, _tower_crew_uids)
+
+## El mismo cierre para cualquier encuentro, este en el tablero o resuelto a
+## ciegas por AutoResolver: `crew_uids` dice que unidades del jugador no
+## pertenecen al ejercito. Deja el parte en get_last_result() y lo devuelve.
+func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_uids: Dictionary) -> Dictionary:
 	# Las dotaciones de torre quedan fuera del recuento: no salieron del cuartel,
 	# así que ni se restan del ejército ni cuentan como supervivientes que vuelven.
-	var fallen: Array = _encounter.casualties(Encounter.PLAYER)
-	var roster_fallen: Array = _roster_only(fallen)
+	var fallen: Array = encounter.casualties(Encounter.PLAYER)
+	var roster_fallen: Array = _roster_only(fallen, crew_uids)
 	var casualties: Dictionary = _count_by_unit(roster_fallen)
-	var survivors: Dictionary = _count_by_unit(_roster_only(_encounter.survivors()))
+	var survivors: Dictionary = _count_by_unit(_roster_only(encounter.survivors(), crew_uids))
 
 	# ArmyManager is the source of truth for the roster: the party was never
 	# deducted when it marched out, so only the dead are subtracted now and
@@ -540,7 +602,7 @@ func _apply_result(victory: bool, rounds: int) -> void:
 	# Tithe goes uncollected. Handing out loot on top would pay the player twice
 	# for the same fight.
 	var rewards: Dictionary = {}
-	if victory and not _encounter.is_defense:
+	if victory and not encounter.is_defense:
 		rewards = Rules.encounter_rewards(ProgressionManager.current_era)
 		for res_name in rewards:
 			ResourceManager.add(_resource_type(res_name), int(rewards[res_name]))
@@ -555,21 +617,22 @@ func _apply_result(victory: bool, rounds: int) -> void:
 	_last_result = {
 		"victory": victory,
 		"rounds": rounds,
-		"defense": _encounter.is_defense,
+		"defense": encounter.is_defense,
 		"rewards": rewards,
 		"casualties": lost,
 		"survivors": survivors,
 		"morale_delta": morale_delta,
 		# Para que el parte de la defensa pueda decir cuánto pusieron las torres.
-		"tower_crews": _tower_crew_uids.size(),
+		"tower_crews": crew_uids.size(),
 		"tower_crews_lost": fallen.size() - roster_fallen.size(),
 	}
+	return _last_result
 
 ## Quita del recuento a las unidades que no pertenecen al ejército del jugador.
-func _roster_only(units: Array) -> Array:
+func _roster_only(units: Array, crew_uids: Dictionary) -> Array:
 	var result: Array = []
 	for unit in units:
-		if not _tower_crew_uids.has(unit.uid):
+		if not crew_uids.has(unit.uid):
 			result.append(unit)
 	return result
 

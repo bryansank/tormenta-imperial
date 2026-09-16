@@ -18,13 +18,18 @@ const SCORE_CAN_ATTACK := 1000.0
 ## Returns an ordered list of actions:
 ##   {"action": "move",   "to": Vector2i}
 ##   {"action": "attack", "target": uid}
+##   {"action": "defend"}
 ##   {"action": "wait"}
+##
+## Sirve para cualquier bando: el "rival" es siempre el lado contrario al de la
+## unidad, asi que la misma IA conduce al enemigo en el tablero y a la
+## guarnicion cuando una defensa se resuelve sin jugador (AutoResolver).
 static func plan_turn(encounter: Encounter, uid: int) -> Array:
 	var unit: CombatUnit = encounter.get_unit(uid)
 	if unit == null or not unit.is_alive():
 		return [{"action": "wait"}]
 
-	var enemies: Array = encounter.living(Encounter.PLAYER if unit.side == Encounter.ENEMY else Encounter.ENEMY)
+	var enemies: Array = encounter.living(rival_side(unit.side))
 	if enemies.is_empty():
 		return [{"action": "wait"}]
 
@@ -36,9 +41,18 @@ static func plan_turn(encounter: Encounter, uid: int) -> Array:
 	var target: CombatUnit = _pick_target(unit, destination, enemies)
 	if target != null:
 		plan.append({"action": "attack", "target": target.uid})
+	elif not unit.defending:
+		# Sin nadie a tiro ni siquiera tras moverse, la unidad se atrinchera en
+		# vez de quedarse mirando (T039): moverse no cierra el turno, asi que
+		# acercarse y defender en la nueva casilla es una jugada completa.
+		plan.append({"action": "defend"})
 	elif plan.is_empty():
 		plan.append({"action": "wait"})
 	return plan
+
+## El bando al que dispara una unidad de `side`.
+static func rival_side(side: int) -> int:
+	return Encounter.PLAYER if side == Encounter.ENEMY else Encounter.ENEMY
 
 ## Scores every cell the unit could stand on, including staying put.
 static func _best_cell(encounter: Encounter, unit: CombatUnit, enemies: Array) -> Vector2i:
