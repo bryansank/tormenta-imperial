@@ -5,26 +5,29 @@ class_name CombatAI
 ## the EventBus. CombatManager executes the plan one step at a time so the player
 ## can follow it.
 ##
-## Deliberately simple (plan T019): close in, focus the weakest thing you can
-## reach, and keep artillery at its stand-off distance. Smarter behaviour —
-## flanking, retreating, protecting the guns — belongs to US4.
+## Criterio (T038): cerrar distancia, elegir el objetivo que mas cambia la
+## batalla y mantener la artilleria a su distancia de tiro. Todo desempate acaba
+## en el `uid` menor, asi que el mismo tablero siempre produce el mismo plan: es
+## lo que permite que AutoResolver decida una defensa sin jugador y que el
+## resultado sea reproducible al recargar la partida.
 
 const Rules := preload("res://scripts/combat/CombatRules.gd")
-
-## A cell that lets the unit shoot this turn is worth more than any amount of
-## walking, so the AI never wanders past a target it could have hit.
-const SCORE_CAN_ATTACK := 1000.0
 
 ## Returns an ordered list of actions:
 ##   {"action": "move",   "to": Vector2i}
 ##   {"action": "attack", "target": uid}
+##   {"action": "defend"}
 ##   {"action": "wait"}
+##
+## Sirve para cualquier bando: el "rival" es siempre el lado contrario al de la
+## unidad, asi que la misma IA conduce al enemigo en el tablero y a la
+## guarnicion cuando una defensa se resuelve sin jugador (AutoResolver).
 static func plan_turn(encounter: Encounter, uid: int) -> Array:
 	var unit: CombatUnit = encounter.get_unit(uid)
 	if unit == null or not unit.is_alive():
 		return [{"action": "wait"}]
 
-	var enemies: Array = encounter.living(Encounter.PLAYER if unit.side == Encounter.ENEMY else Encounter.ENEMY)
+	var enemies: Array = encounter.living(rival_side(unit.side))
 	if enemies.is_empty():
 		return [{"action": "wait"}]
 
@@ -36,51 +39,102 @@ static func plan_turn(encounter: Encounter, uid: int) -> Array:
 	var target: CombatUnit = _pick_target(unit, destination, enemies)
 	if target != null:
 		plan.append({"action": "attack", "target": target.uid})
+	elif not unit.defending:
+		# Sin nadie a tiro ni siquiera tras moverse, la unidad se atrinchera en
+		# vez de quedarse mirando (T039): moverse no cierra el turno, asi que
+		# acercarse y defender en la nueva casilla es una jugada completa.
+		plan.append({"action": "defend"})
 	elif plan.is_empty():
 		plan.append({"action": "wait"})
 	return plan
 
-## Scores every cell the unit could stand on, including staying put.
+## El bando al que dispara una unidad de `side`.
+static func rival_side(side: int) -> int:
+	return Encounter.PLAYER if side == Encounter.ENEMY else Encounter.ENEMY
+
+# ── Eleccion de casilla ────────────────────────────────
+
+## Puntua todas las casillas donde la unidad podria plantarse, quedarse quieta
+## incluida, y se queda con la mejor.
+##
+## Las claves se comparan lexicograficamente y **menor es mejor**; ante un empate
+## exacto gana la primera candidata, que siempre es la posicion actual. De ahi
+## sale el "prefiere mantenerse": una unidad que ya dispara bien no se reubica
+## por gusto, y la artilleria que ya esta a su alcance no avanza ni retrocede.
 static func _best_cell(encounter: Encounter, unit: CombatUnit, enemies: Array) -> Vector2i:
 	var candidates: Array = [unit.position]
 	candidates.append_array(encounter.valid_moves(unit.uid))
 
 	var best: Vector2i = unit.position
-	var best_score: float = -INF
-	for cell in candidates:
-		var score: float = _score_cell(unit, cell, enemies)
-		if score > best_score:
-			best_score = score
-			best = cell
+	var best_key: Array = _cell_key(unit, unit.position, enemies)
+	for i in range(1, candidates.size()):
+		var key: Array = _cell_key(unit, candidates[i], enemies)
+		if _precedes(key, best_key):
+			best_key = key
+			best = candidates[i]
 	return best
 
-static func _score_cell(unit: CombatUnit, cell: Vector2i, enemies: Array) -> float:
+## Clave de una casilla. El primer campo es el que manda: una casilla desde la
+## que se dispara este turno (0) vale mas que cualquier cantidad de avance (1),
+## asi que la IA nunca pasa de largo junto a un objetivo al que podia pegar.
+##
+## Casilla con tiro: se ordena por la calidad del objetivo que cubre, de modo que
+## entre dos posiciones de disparo gana la que apunta al rival que mas urge. La
+## distancia y el uid del objetivo quedan fuera a proposito: dos casillas que
+## cubren rivales igual de urgentes empatan, y el empate lo gana quedarse quieto.
+## Casilla muda: se ordena por lo lejos que queda de la distancia ideal — el
+## alcance minimo de la unidad. Ahi vive el repliegue de la artilleria: pegada a
+## un rival no tiene tiro (clave 1), y cualquier casilla a la que pueda retirarse
+## y disparar tiene clave 0, asi que se aleja en lugar de aguantar a bocajarro.
+static func _cell_key(unit: CombatUnit, cell: Vector2i, enemies: Array) -> Array:
+	var target: CombatUnit = _pick_target(unit, cell, enemies)
+	if target != null:
+		var key: Array = [0]
+		key.append_array(_target_quality(unit, target))
+		return key
+
 	var nearest: int = 9999
-	var can_hit := false
-	var weakest_hp: int = 9999
 	for enemy in enemies:
-		var dist: int = Rules.manhattan(cell, enemy.position)
-		nearest = mini(nearest, dist)
-		if dist >= unit.min_range() and dist <= unit.attack_range():
-			can_hit = true
-			weakest_hp = mini(weakest_hp, enemy.hp)
+		nearest = mini(nearest, Rules.manhattan(cell, enemy.position))
+	return [1, absi(nearest - unit.min_range()), 0, 0]
 
-	if can_hit:
-		# Among shooting positions, prefer the one covering the weakest target.
-		return SCORE_CAN_ATTACK - float(weakest_hp)
-	# Otherwise walk in, but never closer than the unit's minimum range: artillery
-	# that hugs the enemy is artillery that cannot fire next turn.
-	var ideal: int = unit.min_range()
-	return -float(absi(nearest - ideal))
+# ── Eleccion de objetivo (T038) ────────────────────────
 
-## Focus fire: the target that dies soonest. Ties go to the higher-value unit so
-## the AI shoots the tank rather than the infantry escorting it.
+## Prioridad de objetivo, de mas a menos importante:
+##   1. Un rival al que **puede matar este turno**: el dano calculado (con la
+##      guardia del rival ya contada) alcanza o supera sus HP restantes. Un
+##      muerto deja de pegar; nada rinde mas en un turno.
+##   2. Si ninguno muere, el de mayor **valor** (`power` de GameConfig): mejor
+##      morder al vehiculo que a la infanteria que lo escolta.
+##   3. A igual valor, el de **menos HP**: es el que antes caera.
+##   4. A igual HP, el **mas cercano**, para no dejar hueco al que ya tienes
+##      encima.
+##   5. A igual distancia, el **`uid` menor**. Es el desempate que garantiza
+##      determinismo: el mismo tablero siempre produce el mismo plan.
 static func _pick_target(unit: CombatUnit, from: Vector2i, enemies: Array) -> CombatUnit:
 	var best: CombatUnit = null
+	var best_key: Array = []
 	for enemy in enemies:
 		var dist: int = Rules.manhattan(from, enemy.position)
 		if dist < unit.min_range() or dist > unit.attack_range():
 			continue
-		if best == null or enemy.hp < best.hp or (enemy.hp == best.hp and enemy.power() > best.power()):
+		var key: Array = _target_quality(unit, enemy)
+		key.append(dist)
+		key.append(enemy.uid)
+		if best == null or _precedes(key, best_key):
 			best = enemy
+			best_key = key
 	return best
+
+## Los tres criterios que no dependen de donde este la unidad: rematable, valor y
+## HP. `_pick_target` les anade distancia y uid; `_cell_key` solo el uid.
+static func _target_quality(unit: CombatUnit, enemy: CombatUnit) -> Array:
+	var lethal: int = 0 if Rules.damage(unit, enemy) >= enemy.hp else 1
+	return [lethal, -enemy.power(), enemy.hp]
+
+## Orden lexicografico: `true` si `a` es estrictamente mejor que `b`.
+static func _precedes(a: Array, b: Array) -> bool:
+	for i in range(mini(a.size(), b.size())):
+		if a[i] != b[i]:
+			return a[i] < b[i]
+	return false

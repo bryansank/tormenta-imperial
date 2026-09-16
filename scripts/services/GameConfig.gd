@@ -245,6 +245,32 @@ var audio_music_volume := 0.6
 var audio_sfx_volume := 0.8
 var audio_ambient_volume := 0.5
 
+# ── Camara: arrastrar el mapa ──
+# El raton y el dedo mueven el mapa con la misma cuenta (agarrar el terreno y
+# llevarlo), asi que lo unico que se ajusta por separado es cuanto hay que
+# moverse antes de que un clic deje de ser un clic.
+
+## Pixeles que el cursor recorre con el boton izquierdo pulsado antes de que el
+## clic pase a ser un arrastre del mapa. Mas bajo: el mapa se mueve al minimo
+## temblor y cuesta seleccionar un edificio. Mas alto: el arrastre parece que
+## tarda en enganchar el terreno.
+var mouse_drag_threshold_px := 6.0
+
+## Lo mismo para el dedo. Va mas alto que el del raton porque un dedo se mueve
+## unos pixeles incluso en un toque que el jugador siente inmovil: con 6 px,
+## media docena de toques por partida acabarian moviendo el mapa en vez de
+## abrir el edificio que se queria abrir.
+var touch_drag_threshold_px := 12.0
+
+## Pellizco: cuanto tiene que cambiar la separacion entre los dos dedos (en
+## pixeles) para mover el zoom. Absorbe el temblor de dos dedos quietos; si se
+## sube, el zoom empieza a ir a tirones.
+var pinch_zoom_dead_zone_px := 1.0
+
+## Zoom por pellizco: unidades de distancia de camara por pixel de separacion
+## ganada entre los dedos. Mas alto = el mapa se acerca de golpe.
+var pinch_zoom_sensitivity := 0.05
+
 # ── User Settings persistence ──
 # Device-local preferences (volumes, UI toggles) — separate from save_game.json
 # so they survive "new game" and apply before any save is loaded.
@@ -596,16 +622,32 @@ var combat_ai_step_delay := 0.45
 
 ## Per-unit combat stats, parallel to `unit_types`. `min_range` keeps artillery
 ## from firing at adjacent targets, which is what makes positioning matter.
+##
+## Los HP son lo unico que fija la DURACION de un encuentro: el dano es
+## `atk - def` y no lleva dados, asi que las rondas salen de dividir vida entre
+## golpe. Con los 30/22/60 originales un encuentro se resolvia en 3-5 rondas,
+## poco mas de un minuto de reloj; x3.3 lo deja en 8-12 rondas, que es la
+## ventana de 3-5 minutos que pide el diseno. `atk` y `def` no se tocan: son la
+## relacion que hace que la artilleria pegue y el vehiculo aguante, y ademas la
+## IA de objetivos esta fijada sobre esos numeros en `tests/combat/test_combat_ai.gd`.
+## Medido en `tools/balance_probe.gd`; tablas en `docs/16-balance-combate.md`.
 var combat_unit_stats := {
-	"infantry":  {"hp": 30, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5},
-	"artillery": {"hp": 22, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3},
-	"vehicle":   {"hp": 60, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4},
+	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5},
+	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3},
+	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4},
 }
 
 ## Enemy scaling: deeper nodes and later eras field tougher rosters.
-var combat_enemy_scale_per_depth := 0.15
-var combat_enemy_scale_per_era := 0.25
-var combat_boss_multiplier := 1.8
+##
+## Son deliberadamente pequenos. El multiplicador sube los HP **y** el ataque a
+## la vez, asi que una escala `s` vale `s²` de poder de combate; y la misma
+## presion engorda ademas el roster. El jugador, en cambio, no repone bajas ni
+## cura entre nodos: su unico crecimiento son los drafts, que suman +2 a un stat.
+## Con los 0.15/0.25/1.8 originales, ninguna expedicion se ganaba jamas — ni con
+## seis unidades, ni en ninguna era (0% sobre 3.600 expediciones simuladas, la mitad de ellas bien jugadas).
+var combat_enemy_scale_per_depth := 0.02
+var combat_enemy_scale_per_era := 0.12
+var combat_boss_multiplier := 1.15
 
 ## Expedition map shape (min, max).
 var combat_map_depth := Vector2i(4, 6)
@@ -614,7 +656,9 @@ var combat_draft_options := 3
 
 ## Node risk (0 low / 1 medium / 2 high). The same dial pushes the roster up and
 ## the loot with it, so taking the dangerous road is a bet, not a punishment.
-var combat_risk_enemy_scale := 0.20
+## El lado del enemigo es pequeno por lo mismo que `combat_enemy_scale_per_depth`;
+## el del botin no se toca, para que el riesgo siga pagando mas de lo que cuesta.
+var combat_risk_enemy_scale := 0.05
 var combat_risk_reward_bonus := 0.35
 
 ## Enemy roster size at depth 0, era 1, risk 0. Every pressure term grows it from
@@ -623,12 +667,18 @@ var combat_enemy_base_slots := 2
 
 ## What one draft pick is worth. Kept modest on purpose: a run is 6-8 fights, not
 ## thirty, so a single pick should tilt a fight, never decide the expedition.
+##
+## `heal_pct` es la excepcion, y con motivo: es la UNICA forma de recuperar vida
+## en toda la expedicion, y solo aparece en 3 de las 5 cartas. Al 0.3 original la
+## columna llegaba al jefe con el deposito por debajo del 20%; al 0.5, un cuatro
+## de era 1 bien jugado gana el 56% de las veces contra el 29% de antes. Cura a
+## todos los vivos, asi que lo que sobra de un herido leve se pierde.
 var combat_draft_values := {
 	"atk": 2,
 	"def": 2,
 	"move": 1,
 	"initiative": 2,
-	"heal_pct": 0.3,
+	"heal_pct": 0.5,
 }
 ## A draft aimed at one unit type instead of the whole party hits harder, because
 ## it helps fewer units.
@@ -639,8 +689,20 @@ var combat_reward_base := {"gold": 60, "wood": 30}
 
 ## Morale is the bridge between base and battlefield: a demoralised population
 ## reacts late and hits softer, and casualties cost morale back home.
+##
+## El rango de ataque es ancho a proposito. Es el unico modificador que solo
+## tiene el jugador — el enemigo pelea siempre a 1.0 —, asi que es la palanca que
+## permite que una columna pequena gane un nodo sin dejarse a nadie. Con el
+## (0.85, 1.15) de antes, la moral de salida (75) daba un x1.075 que el redondeo
+## se comia entero (8 x 1.075 = 8.6 -> 9, el mismo 9 que sin moral); con
+## (0.60, 1.40) da x1.20, la infanteria pega 10 en vez de 9, y el mismo cuatro de
+## era 1 pasa del 11% al 56% de expediciones ganadas. El rango sigue siendo
+## **simetrico alrededor de 1.0**, que es la regla que fija
+## `tests/combat/test_combat_rules.gd`: moral 50 no suma ni resta. El precio de
+## la otra mitad es real: salir con la moral por los suelos es salir a perder,
+## que es justo lo que la moral deberia significar.
 var combat_morale_initiative_bonus := 2
-var combat_morale_attack_range := Vector2(0.85, 1.15)
+var combat_morale_attack_range := Vector2(0.60, 1.40)
 var combat_morale_on_victory := 8.0
 var combat_morale_per_casualty := 3.0
 
@@ -1033,10 +1095,32 @@ var final_audit_slots_per_wave := 1
 
 ## Multiplicador de HP/ATK por oleada y por era. Cuando los cuerpos ya no caben
 ## en el tablero, esta escalada es la unica que sigue apretando.
-var final_audit_scale_per_wave := 0.22
-var final_audit_scale_per_era := 0.25
+##
+## Numeros deliberadamente pequenos, y no por timidez. Medidos con
+## `tools/siege_probe.gd`; la tabla entera esta en `docs/17-balance-asedio.md`.
+## Con la escalada anterior (0.22 / 0.25 / 1.5) el asedio se perdia SIEMPRE en la
+## oleada 2, con la guarnicion maxima que el juego permite y en las 400 semillas
+## probadas: el final del juego no se podia terminar. Tres razones:
+##   * El multiplicador toca **HP y ATK a la vez**, asi que el poder efectivo va
+##     con el cuadrado. Un +0.22 por oleada no es un +22% de dificultad.
+##   * No es la unica cuesta. Los cuerpos ya suben solos (3, 4, 5, 6), la
+##     formacion ya mete canones en la segunda y blindados en la tercera, y la
+##     guarnicion no se cura ni se reentrena entre oleadas. La atricion es el
+##     balance de verdad; esto solo decide cuanto muerde.
+##   * La era ya entraba dos veces: el 0.25 por era valia +0.50 fijo en TODA
+##     oleada, porque el Cuartel General es de era 3 y el asedio no se convoca
+##     antes. La oleada de apertura salia ya a x1.5.
+var final_audit_scale_per_wave := 0.03
+## La era casi no varia aqui —el asedio solo se convoca en la 3— asi que esto es
+## en la practica el peso base de la Regencia: +0.10 en todas sus oleadas. Se
+## deja viva para que una Regencia que bajase antes lo hiciera mas floja.
+var final_audit_scale_per_era := 0.05
 ## La ultima oleada baja con todo. Es el cierre del juego, no un escalon mas.
-var final_audit_last_wave_multiplier := 1.5
+## El salto de verdad lo da la formacion (el cierre trae DOS blindados, ver
+## `FinalAudit._compose()`); esto es lo que se le suma encima. Un 5% parece poco
+## y no lo es: es lo que separa un asedio de 5 oleadas ganable el 44% de las
+## veces de uno que no se gana nunca.
+var final_audit_last_wave_multiplier := 1.05
 
 ## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
 ## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el

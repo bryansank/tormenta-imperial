@@ -5,8 +5,19 @@ extends CanvasLayer
 
 const MAX_LOG_ENTRIES := 50
 const TOAST_DURATION := 4.0
+## Los avisos van en su propia capa, por encima del tablero de batalla (18) y
+## por debajo de la pantalla de victoria (20): la Tormenta tiene que poder avisar
+## mientras se pelea (ceniza, Diezmo, la guarnicion que peleo sola). El resto del
+## panel (estado, registro) se queda en la 11. Ni este panel ni la subcapa estan
+## en la pila de UIManager, asi que nadie les reasigna la capa.
+const TOAST_LAYER := 19
+## Mientras la intro del tutorial (17) esta abierta, los avisos vuelven debajo
+## de ella, donde siempre estuvieron: en ese momento la intro es lo unico que se
+## lee, y ningun tablero puede estar abierto.
+const TOAST_LAYER_UNDER_INTRO := 11
 
 var _panel: PanelContainer
+var _toast_layer: CanvasLayer
 var _log_btn: Button
 var _is_open := false
 var _log_entries: Array = []
@@ -28,6 +39,12 @@ func _ready() -> void:
 	EventBus.workers_changed.connect(_on_workers_changed)
 	EventBus.phase_advanced.connect(_on_phase_advanced)
 	EventBus.milestone_completed.connect(func(_m): _update_objective_hint())
+	EventBus.tutorial_intro_requested.connect(func(): _toast_layer.layer = TOAST_LAYER_UNDER_INTRO)
+	EventBus.tutorial_intro_closed.connect(func(): _toast_layer.layer = TOAST_LAYER)
+	# La expedicion pasa fuera de la base: si no deja rastro aqui, el jugador
+	# vuelve al mapa sin saber que se trajo ni a quien dejo por el camino.
+	EventBus.expedition_started.connect(_on_expedition_started)
+	EventBus.expedition_ended.connect(_on_expedition_ended)
 	_update_status_labels()
 	_update_objective_hint()
 	# Hide status bar until Phase 1 when pop/morale become relevant
@@ -123,12 +140,19 @@ func _setup_ui() -> void:
 	_objective_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	obj_panel.add_child(_objective_label)
 
-	# Toast container (bottom-left)
+	# Toast container (bottom-left), en su propia capa para verse sobre el tablero.
+	_toast_layer = CanvasLayer.new()
+	_toast_layer.layer = TOAST_LAYER
+	add_child(_toast_layer)
+	var toast_root := Control.new()
+	toast_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	toast_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast_layer.add_child(toast_root)
 	_toast_container = VBoxContainer.new()
 	UILayoutManager.apply_layout("NotificationPanel.toasts", _toast_container)
 	_toast_container.add_theme_constant_override("separation", 4)
 	_toast_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_toast_container)
+	toast_root.add_child(_toast_container)
 
 	# Log panel
 	_panel = PanelContainer.new()
@@ -159,6 +183,50 @@ func _on_notification(message: String, category: String, color: Color) -> void:
 		_log_entries.pop_back()
 	_refresh_log()
 	_show_toast(message, color)
+
+func _on_expedition_started(_expedition_id: int, node_count: int) -> void:
+	_on_notification(Tr.t("MSG_EXPEDITION_STARTED") % node_count, "combat", UITheme.ACCENT)
+
+## El parte de vuelta: que resultado, que botin y a quien no traemos. Las tres
+## cosas en una linea, porque un toast se lee de una pasada o no se lee.
+func _on_expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary) -> void:
+	var fallen: int = 0
+	for count in casualties.values():
+		fallen += int(count)
+
+	var message: String
+	var color: Color
+	match result:
+		0:
+			message = Tr.t("MSG_EXPEDITION_WON") % _spoils_text(rewards)
+			color = UITheme.POSITIVE
+		2:
+			message = Tr.t("MSG_EXPEDITION_ABANDONED")
+			color = UITheme.WARNING
+		_:
+			message = Tr.t("MSG_EXPEDITION_LOST") % fallen
+			color = UITheme.DANGER
+
+	if result != 0 and not rewards.is_empty():
+		message += "  %s: %s" % [Tr.t("LBL_REWARDS"), _spoils_text(rewards)]
+	if result != 1 and fallen > 0:
+		message += "  %s: %s" % [Tr.t("LBL_CASUALTIES"), _casualty_text(casualties)]
+	_on_notification(message, "combat", color)
+
+func _spoils_text(rewards: Dictionary) -> String:
+	if rewards.is_empty():
+		return Tr.t("LBL_NO_REWARDS")
+	var parts: Array = []
+	for res_name in rewards:
+		parts.append("%d %s" % [int(rewards[res_name]), Tr.res_name(res_name)])
+	return " ".join(parts)
+
+func _casualty_text(casualties: Dictionary) -> String:
+	var parts: Array = []
+	for unit_id in casualties:
+		var def := GameConfig.get_unit_def(unit_id)
+		parts.append("%d %s" % [int(casualties[unit_id]), Tr.t(def.get("name", unit_id))])
+	return " ".join(parts)
 
 func _show_toast(text: String, color: Color) -> void:
 	var toast_bg := PanelContainer.new()

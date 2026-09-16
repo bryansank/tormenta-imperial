@@ -389,7 +389,16 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> FinalAudit:
 	var audit := FinalAudit.new()
 	audit.seed_value = int(data.get("seed", 0))
 	audit.era = maxi(1, int(data.get("era", default_era)))
+	# Un asedio que se guardo con el tablero abierto vuelve como PENDIENTE, no
+	# como activo. El tablero no se guarda (D6), asi que un asedio ACTIVO al
+	# cargar seria un asedio que nadie puede reanudar: el boton de convocar se
+	# esconde porque ya esta activo, las oleadas no se reanuncian porque nadie
+	# llama a begin(), y la expedicion queda bloqueada para siempre. Degradarlo
+	# conserva la oleada en curso y la guarnicion herida, y devuelve el mando al
+	# jugador: vuelve a pulsar QUE BAJEN y la oleada baja.
 	audit.state = int(data.get("state", State.PENDING))
+	if audit.state == State.ACTIVE:
+		audit.state = State.PENDING
 	audit.summons = maxi(1, int(data.get("summons", 1)))
 	audit.morale_snapshot = float(data.get("morale_snapshot", 50.0))
 	# The era has to be in place before the waves are rolled: it is half of what

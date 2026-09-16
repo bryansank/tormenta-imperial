@@ -25,7 +25,13 @@ const MUSIC_MANIFEST := {
 	"era_2": "era_2_industrial",
 	"era_3": "era_3_petroleum",
 	"victory": "victory",
+	# Combat theme. No dedicated track yet: the Era 3 piece is the densest of the
+	# four, so it doubles as the battle theme. Drop a `combat.ogg` and repoint this.
+	"combat": "era_3_petroleum",
 }
+
+## Music key the combat theme is stored under; encounters cross-fade to it.
+const MUSIC_COMBAT_KEY := "combat"
 
 const AMBIENT_MANIFEST := {
 	"base": "base_ambient",
@@ -48,14 +54,33 @@ const SFX_MANIFEST := {
 	"unit_ready": "unit_ready",
 	"ui_click": "ui_click",
 	"insufficient": "insufficient",
+	# ── Combat (T042) ── every key below reuses a clip that already ships; the
+	# ideal replacement for each one is listed in assets/audio/MANIFEST.md.
+	"combat_start": "event_danger",       # encounter_started: alarm, the fight is on
+	"combat_hit": "build_place",          # unit_attacked: heavy metallic thunk
+	"combat_unit_lost": "demolish",       # unit_died: collapse / debris
+	"combat_victory": "milestone",        # encounter_ended(true): fanfare stamp
+	"combat_defeat": "insufficient",      # encounter_ended(false) / lost expedition
+	"expedition_start": "unit_ready",     # expedition_started: military whistle
+	"expedition_return": "era_up",        # expedition_ended(victory): brass sting
+	"audit_summoned": "event_danger",     # final_audit_summoned: the bell tolls
+	"storm_halted": "unlock",             # storm_halted_forever: the sky clears
 }
+
+## Same clip requested twice inside this window plays once. An AI turn can land
+## several `unit_attacked` in a burst; stacking the identical hit only gets
+## louder and would eat every voice in the pool (GameConfig.audio_sfx_voices).
+const SFX_BURST_GAP_MSEC := 60
 
 var _streams: Dictionary = {}          # key → AudioStream (only for files that exist)
 var _sfx_players: Array[AudioStreamPlayer] = []
 var _sfx_next: int = 0
+var _sfx_last_msec: Dictionary = {}    # key → Time.get_ticks_msec() of its last play
 var _music_players: Array[AudioStreamPlayer] = []  # [0]=active, [1]=fading — swapped on change
 var _ambient_player: AudioStreamPlayer
 var _current_music_key: String = ""
+var _music_before_combat: String = ""  # what was playing when the first encounter opened
+var _combat_session: int = 0           # bumps per encounter_started; guards the deferred restore
 
 func _ready() -> void:
 	_ensure_buses()
@@ -146,10 +171,21 @@ func play_sfx(key: String) -> void:
 	var stream: AudioStream = _streams.get(key)
 	if stream == null:
 		return
+	if not _burst_guard_allows(key, Time.get_ticks_msec()):
+		return
 	var p := _sfx_players[_sfx_next]
 	_sfx_next = (_sfx_next + 1) % _sfx_players.size()
 	p.stream = stream
 	p.play()
+
+## True when `key` may play at `now_msec`; records the play when it does.
+## Pure bookkeeping (no audio), so it can be tested headless.
+func _burst_guard_allows(key: String, now_msec: int) -> bool:
+	var last: int = int(_sfx_last_msec.get(key, -SFX_BURST_GAP_MSEC))
+	if now_msec - last < SFX_BURST_GAP_MSEC:
+		return false
+	_sfx_last_msec[key] = now_msec
+	return true
 
 ## Cross-fades the music bus to the track for this key (e.g. "era_2", "victory").
 func play_music(key: String) -> void:
@@ -157,6 +193,11 @@ func play_music(key: String) -> void:
 		return
 	var stream: AudioStream = _streams.get(key)
 	if stream == null:
+		return
+	# Two keys can share one file (e.g. "combat" borrows the Era 3 track). If it
+	# is already playing, just adopt the new name instead of fading it into itself.
+	if stream == _streams.get(_current_music_key) and _music_players[0].playing:
+		_current_music_key = key
 		return
 	_current_music_key = key
 
@@ -245,6 +286,26 @@ func _connect_events() -> void:
 	EventBus.resources_insufficient.connect(_on_insufficient)
 	EventBus.game_new_started.connect(_on_game_started)
 	EventBus.game_load_completed.connect(_on_game_started)
+	# Combat (T042)
+	EventBus.encounter_started.connect(_on_encounter_started)
+	EventBus.unit_attacked.connect(_on_unit_attacked)
+	EventBus.unit_died.connect(_on_unit_died)
+	EventBus.encounter_ended.connect(_on_encounter_ended)
+	EventBus.expedition_started.connect(_on_expedition_started)
+	EventBus.expedition_ended.connect(_on_expedition_ended)
+	# Final Audit. These signals arrive with the Storm's final chapter; until that
+	# branch lands they may not exist, so they are wired only when present.
+	_connect_optional("final_audit_summoned", _on_final_audit_summoned)
+	_connect_optional("storm_halted_forever", _on_storm_halted_forever)
+
+## Connects to an EventBus signal that may not be declared yet. Handlers take
+## optional arguments so they accept whatever arity the signal ends up having.
+func _connect_optional(signal_name: String, handler: Callable) -> void:
+	if not EventBus.has_signal(signal_name):
+		return
+	if EventBus.is_connected(signal_name, handler):
+		return
+	EventBus.connect(signal_name, handler)
 
 func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
 	play_sfx("build_place")
@@ -296,3 +357,58 @@ func _on_game_started() -> void:
 	# Default to Era 1 music; era_advanced switches tracks as the player progresses.
 	if _current_music_key.is_empty():
 		play_music("era_1")
+
+# ── Combat (T042) ─────────────────────────────────────────────────────
+
+func _on_encounter_started(_index: int, _is_boss: bool) -> void:
+	_combat_session += 1
+	play_sfx("combat_start")
+	if _current_music_key != MUSIC_COMBAT_KEY:
+		_music_before_combat = _current_music_key
+	play_music(MUSIC_COMBAT_KEY)
+
+func _on_unit_attacked(_attacker_uid: int, _target_uid: int, _damage: int) -> void:
+	play_sfx("combat_hit")
+
+func _on_unit_died(_unit_uid: int, _side: int) -> void:
+	play_sfx("combat_unit_lost")
+
+func _on_encounter_ended(victory: bool, _turns_used: int) -> void:
+	play_sfx("combat_victory" if victory else "combat_defeat")
+	# An expedition may chain the next encounter right behind this one. Decide
+	# next frame: if encounter_started bumped the session meanwhile, keep the theme.
+	var session := _combat_session
+	(func() -> void:
+		if session == _combat_session:
+			_restore_music_after_combat()
+	).call_deferred()
+
+func _on_expedition_started(_expedition_id: int, _node_count: int) -> void:
+	play_sfx("expedition_start")
+
+## `result`: 0 = victory, 1 = defeat, 2 = abandoned (see EventBus).
+func _on_expedition_ended(result: int, _rewards: Dictionary, _casualties: Dictionary) -> void:
+	play_sfx("expedition_return" if result == 0 else "combat_defeat")
+	_restore_music_after_combat()
+
+func _on_final_audit_summoned(_a = null, _b = null, _c = null) -> void:
+	play_sfx("audit_summoned")
+
+func _on_storm_halted_forever(_a = null, _b = null, _c = null) -> void:
+	play_sfx("storm_halted")
+
+## Leaves the combat theme for whatever should be playing now. Only acts while
+## the combat theme is actually on: if victory (or a future storm theme) took
+## over the bus during the fight, that track stays.
+func _restore_music_after_combat() -> void:
+	if _current_music_key != MUSIC_COMBAT_KEY:
+		return
+	play_music(_music_key_after_combat())
+
+## Era tracks are re-derived from ProgressionManager (the era may have advanced
+## mid-expedition); any other theme that was playing before is resumed as-is.
+func _music_key_after_combat() -> String:
+	var previous := _music_before_combat
+	if previous.is_empty() or previous.begins_with("era_") or previous == MUSIC_COMBAT_KEY:
+		return "era_%d" % clampi(ProgressionManager.current_era, 1, 3)
+	return previous

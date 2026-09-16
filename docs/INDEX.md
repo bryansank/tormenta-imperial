@@ -15,11 +15,14 @@ Complete technical documentation for AI and developer context.
 | 07 | [Random Events](07-random-events.md) | 8 event types, probability weights, timed effects |
 | 08 | [UI Systems](08-ui-systems.md) | All UI panels, layout, styling, construction pattern |
 | 09 | [Save System](09-save-system.md) | JSON save format, auto-save triggers, offline progression, load flow |
-| 10 | [Signals Reference](10-signals-reference.md) | Complete EventBus signal table with emitters and consumers |
+| 10 | [Signals Reference](10-signals-reference.md) | All 97 EventBus signals with emitters and consumers, plus the 13 that are wired on only one side |
 | 11 | [Tech Tree](11-tech-tree.md) | 3 branches x 5 tiers, research mechanics, bonus application |
 | 12 | [Cloud Saves](12-cloud-saves.md) | Supabase integration, auth, cloud save/load setup |
-| 13 | [Roadmap](13-roadmap.md) | Phased plan: what's shipped and what's next (combat, units, multiplayer) |
-| 14 | [Guía de juego](14-guia-de-juego.md) | Player-facing: what every building does (with renders), the path to victory, and the dev-mode timings |
+| 13 | [Roadmap](13-roadmap.md) | Phased plan: all four milestones shipped, what is left open inside each, and the backlog |
+| 14 | [Guía de juego](14-guia-de-juego.md) | Player-facing: what every building does (with renders), expeditions, the Final Audit and the path to victory, and the dev-mode timings |
+| 15 | [Combat](15-combat.md) | The combat pillar: pure models, `CombatManager`, the three roads to the board, expeditions, the Final Audit, signals, balance, tests |
+| 16 | [Balance de combate](16-balance-combate.md) | Spanish, measured not guessed: the `tools/balance_probe.gd` sweeps, the before/after numbers for every `combat_*` value T046 moved, the rounds→minutes conversion, and what the model cannot fix from `combat_*` alone |
+| 17 | [Balance del asedio](17-balance-asedio.md) | La Auditoria Final: por que no se podia ganar, que se cambio y las tablas medidas |
 
 ## Quick Reference
 
@@ -47,14 +50,29 @@ Complete technical documentation for AI and developer context.
 - [x] Mobile touch controls
 - [x] Real worker assignment with visual indicator (unstaffed buildings shown)
 - [x] Tech tree (15 techs, 3 branches)
-- [x] Cloud saves (Supabase integration)
 - [x] Process save/load (mining/crafting persists)
+- [x] Audio (`AudioManager`: runtime buses, signal-driven music + SFX)
+- [x] Unit system (infantry, artillery, vehicles) — `ArmyManager`, training, upkeep, desertion
+- [x] Building health: storm damage, ruins that stop producing, proportional repair
+- [x] The Imperial Storm: four-phase cycle, storm sky, selective damage, the Tithe
+- [x] Tactical board (8x8): turn order, move/attack/defend/wait, enemy AI, `BattleScreen`
+- [x] The Tithe is fought: garrison + tower crews on the board, or auto-resolved when the board is busy
+- [x] The Final Audit: HQ 3 summons a 3-5 wave siege; surviving it is the victory
+- [x] Expedition (roguelike run): seeded branching map, drafts, attrition and permadeath, save/resume — models, `CombatManager`, and the `BattleScreen` map / draft / final-report views
+- [x] Unit silhouettes on the board (`tools/gen_unit_icons.gd`), with the boss marked and a fallback to the name's initial
+- [x] Tutorial: paged intro + one contextual tip per event (`TutorialManager`)
+
+## Partially Implemented
+
+- [~] **Combat after-action reporting** — `defense_auto_resolved` and
+  `final_audit_wave_cleared` are emitted but have no listener: a blind Tithe
+  defence is summarised by a `StormManager` toast, and a cleared siege wave is
+  felt only through the next one opening. See [15-combat.md](15-combat.md) §10
+- [~] Cloud saves: `CloudSaveManager` (Supabase REST) implemented but **unwired** —
+  nothing calls it; needs `.env` config + settings UI
 
 ## What's Planned
 
-- [ ] Turn-based PVE combat
 - [ ] Turn-based PVP combat (Nakama)
-- [ ] Unit system (infantry, artillery, vehicles)
 - [ ] Missions/contracts system
-- [ ] Audio (music + SFX)
-- [ ] Tutorial/onboarding
+- [ ] Ambient audio track (`assets/audio/ambient/` still empty)

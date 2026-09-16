@@ -27,6 +27,13 @@ add a key there and a matching `EventBus` hook in `_connect_events()`.
 | `era_3_petroleum`  | On reaching Era 3       | `era_advanced(3)` | Dense epic dieselpunk orchestral |
 | `victory`          | Imperial Victory        | `victory_achieved` | Triumphant fanfare |
 
+**Combat theme (key `combat`)** — cross-faded in on `encounter_started`; the era track
+returns after the last `encounter_ended` (a chained encounter keeps the theme) or on
+`expedition_ended`. If victory music (or any non-era theme) took the bus during the
+fight, it is left alone. Today `combat` **borrows `era_3_petroleum`** (the tensest of
+the four). Ideal: a dedicated `combat.ogg` — driving percussion, low brass, 90-110 BPM,
+loopable — then repoint the key in `MUSIC_MANIFEST`.
+
 ## `ambient/` — positional-free background loop (world atmosphere)
 
 | Filename (base) | When it plays | EventBus trigger | Suggested tone |
@@ -53,6 +60,30 @@ add a key there and a matching `EventBus` hook in `_connect_events()`.
 | `unit_ready`        | Unit finishes training        | `unit_trained`               | Military whistle |
 | `ui_click`          | (reserved for UI buttons)     | call `AudioManager.play_sfx("ui_click")` | Soft click |
 | `insufficient`      | Not enough resources          | `resources_insufficient`     | Denied buzz |
+
+### Combat keys (T042) — aliases over installed clips
+
+No new files were added for combat. Each key below is a **manifest alias**: it points
+at a clip that already ships. To give one its own sound, drop the ideal file with the
+key's name (e.g. `sfx/combat_hit.ogg`) and change the alias in `SFX_MANIFEST` to
+`"combat_hit": "combat_hit"`. The two Final Audit signals are wired only if they exist
+on the `EventBus` (they arrive with the Storm's last chapter).
+
+| Key | EventBus trigger | Plays today | Ideal clip if added |
+|-----|------------------|-------------|---------------------|
+| `combat_start`      | `encounter_started`             | `event_danger` | Short war horn + snare hit |
+| `combat_hit`        | `unit_attacked`                 | `build_place`  | Metallic impact / rifle crack |
+| `combat_unit_lost`  | `unit_died`                     | `demolish`     | Heavy crash, debris, short |
+| `combat_victory`    | `encounter_ended(true)`         | `milestone`    | Brass fanfare, 2-3 s |
+| `combat_defeat`     | `encounter_ended(false)`, `expedition_ended(1/2)` | `insufficient` | Low descending horn |
+| `expedition_start`  | `expedition_started`            | `unit_ready`   | Bugle call, marching drums |
+| `expedition_return` | `expedition_ended(0)`           | `era_up`       | Triumphant return sting |
+| `audit_summoned`    | `final_audit_summoned`          | `event_danger` | Great bell toll, reverb |
+| `storm_halted`      | `storm_halted_forever`          | `unlock`       | Wind dying, one bright chord |
+
+Burst guard: the same key is not re-triggered within `SFX_BURST_GAP_MSEC` (60 ms), so
+an AI turn landing several hits at once does not stack the clip or drain the voice
+pool (`GameConfig.audio_sfx_voices`).
 
 ---
 

@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 
 const Generator := preload("res://scripts/combat/ExpeditionGenerator.gd")
 const CombatUnitScript := preload("res://scripts/combat/CombatUnit.gd")
+const ExpeditionScript := preload("res://scripts/combat/Expedition.gd")
 
 ## The spec asks for 200 seeds on the connectivity invariant; the cheaper checks
 ## reuse the same sweep.
@@ -138,9 +139,19 @@ func test_enemy_scale_climbs_with_depth_risk_and_era() -> void:
 	assert_float(Generator.enemy_scale(4, 1, 0, true)).is_greater(Generator.enemy_scale(4, 1, 0, false))
 
 func test_rosters_grow_with_depth() -> void:
+	# La profundidad de muestra ya no es 8, es 16. No cambia la regla — el roster
+	# sigue creciendo con la profundidad, y `test_the_roster_never_shrinks_as_the
+	# _run_goes_deeper` sigue comprobando que nunca encoge —, cambia cuando se
+	# nota: el balance de T046 bajo `combat_enemy_scale_per_depth` de 0.15 a 0.02,
+	# asi que el tercer cuerpo entra mucho mas tarde. A proposito: medido con
+	# `tools/balance_probe.gd`, un tercer enemigo dentro del mapa real (0-7)
+	# borra a una columna de cuatro unidades de era 1, y el encargo era justo que
+	# esa columna pudiera ganar. Dentro de una expedicion la dificultad sube por
+	# el multiplicador y por el cuerpo extra del jefe, no por llenar el tablero.
+	# Ver `docs/16-balance-combate.md`.
 	var rng := Generator.make_rng(1234)
 	var shallow: int = Generator.roster_size(Generator.enemy_roster(rng, 0, 1, 0))
-	var deep: int = Generator.roster_size(Generator.enemy_roster(rng, 8, 1, 0))
+	var deep: int = Generator.roster_size(Generator.enemy_roster(rng, 16, 1, 0))
 	assert_int(deep).is_greater(shallow)
 
 func test_a_node_never_fields_more_than_the_deploy_cap() -> void:
@@ -176,6 +187,77 @@ func test_deeper_nodes_are_harder_than_the_opening_fight() -> void:
 		for node in map:
 			if int(node["depth"]) == deepest:
 				assert_float(Generator.node_power(node, 2)).is_greater(opener)
+
+func test_depth_and_era_land_on_the_actual_hp_and_attack() -> void:
+	# El escalado no vale nada como numero suelto: tiene que llegar a los HP y al
+	# ataque de la unidad que pisa el tablero (T040).
+	var base_unit: CombatUnit = CombatUnitScript.create(1, "infantry", 1, Generator.enemy_scale(0, 1, 0))
+	var deeper: CombatUnit = CombatUnitScript.create(2, "infantry", 1, Generator.enemy_scale(5, 1, 0))
+	var later: CombatUnit = CombatUnitScript.create(3, "infantry", 1, Generator.enemy_scale(0, 3, 0))
+	assert_int(deeper.max_hp).is_greater(base_unit.max_hp)
+	assert_int(deeper.attack_power()).is_greater(base_unit.attack_power())
+	assert_int(later.max_hp).is_greater(base_unit.max_hp)
+	assert_int(later.attack_power()).is_greater(base_unit.attack_power())
+
+func test_the_boss_hits_harder_than_a_normal_node_at_the_same_depth() -> void:
+	# Mismo fondo de mapa, mismo riesgo: lo unico que cambia es que es el jefe.
+	var plain: CombatUnit = CombatUnitScript.create(1, "infantry", 1, Generator.enemy_scale(4, 2, 2, false))
+	var boss: CombatUnit = CombatUnitScript.create(2, "infantry", 1, Generator.enemy_scale(4, 2, 2, true))
+	assert_int(boss.max_hp).is_greater(plain.max_hp)
+	assert_int(boss.attack_power()).is_greater(plain.attack_power())
+
+func test_the_roster_never_shrinks_as_the_run_goes_deeper() -> void:
+	# Monotono, y con techo: mas profundidad nunca devuelve menos cuerpos, y
+	# ninguno pasa de combat_deploy_cap.
+	var previous: int = 0
+	for depth in range(0, 14):
+		var size: int = Generator.roster_size(Generator.enemy_roster(Generator.make_rng(99), depth, 1, 0))
+		assert_int(size).override_failure_message(
+			"a profundidad %d el roster encogio a %d" % [depth, size]).is_greater_equal(previous)
+		assert_int(size).is_less_equal(GameConfig.combat_deploy_cap)
+		previous = size
+	assert_int(previous).is_greater(Generator.roster_size(Generator.enemy_roster(Generator.make_rng(99), 0, 1, 0)))
+
+func test_a_later_era_fields_more_bodies_at_the_same_depth() -> void:
+	var era_one: int = Generator.roster_size(Generator.enemy_roster(Generator.make_rng(7), 4, 1, 0))
+	var era_three: int = Generator.roster_size(Generator.enemy_roster(Generator.make_rng(7), 4, 3, 0))
+	assert_int(era_three).is_greater(era_one)
+	assert_int(era_three).is_less_equal(GameConfig.combat_deploy_cap)
+
+func test_the_boss_brings_the_heaviest_unit_the_era_allows() -> void:
+	for era in [1, 2, 3]:
+		var top: String = Generator.top_tier_unit(era)
+		var plain: Dictionary = Generator.enemy_roster(Generator.make_rng(4242), 5, era, 2)
+		var boss: Dictionary = Generator.boss_roster(Generator.make_rng(4242), 5, era)
+		assert_bool(boss.has(top)).override_failure_message(
+			"en era %d el jefe no trajo %s: %s" % [era, top, boss]).is_true()
+		assert_int(int(boss.get(top, 0))).is_greater(int(plain.get(top, 0)))
+
+func test_no_roster_ever_passes_the_cap_however_deep_or_late() -> void:
+	var cap: int = GameConfig.combat_deploy_cap
+	for depth in range(0, 30):
+		for era in [1, 2, 3]:
+			var node_seed: int = depth * 31 + era
+			assert_int(Generator.roster_size(
+				Generator.enemy_roster(Generator.make_rng(node_seed), depth, era, 2))).is_less_equal(cap)
+			assert_int(Generator.roster_size(
+				Generator.boss_roster(Generator.make_rng(node_seed), depth, era))).is_less_equal(cap)
+
+func test_the_scale_reaches_the_board_exactly_once() -> void:
+	# La expedicion fabrica su propio enemigo, asi que el multiplicador tiene que
+	# aplicarse ahi una sola vez. Si CombatManager volviera a multiplicarlo, este
+	# es el numero que dejaria de cuadrar.
+	var run: Expedition = ExpeditionScript.create(1, 20260915, {"infantry": 2}, 50.0, 3)
+	var node: Dictionary = run.current_node_data()
+	var expected: float = Generator.enemy_scale(
+		int(node["depth"]), 3, int(node["risk"]), bool(node["is_boss"])
+	)
+	var built: Array = run.build_enemy_units()
+	assert_int(built.size()).is_equal(Generator.roster_size(node["enemy_roster"]))
+	for unit in built:
+		assert_float(unit.scale).is_equal_approx(expected, 0.0001)
+		var base_hp: int = int(GameConfig.get_combat_stats(unit.unit_id)["hp"])
+		assert_int(unit.max_hp).is_equal(maxi(1, roundi(float(base_hp) * expected)))
 
 # ── Rewards ──────────────────────────────────────────────────────────
 

@@ -29,6 +29,11 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(_on_base_changed)
 	EventBus.army_upkeep_unpaid.connect(_on_upkeep_unpaid)
 	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
+	# Lo que esta fuera sigue contando en el ejercito pero no se puede entrenar
+	# ni mandar a ningun otro sitio: el panel tiene que decirlo.
+	EventBus.expedition_started.connect(func(_id, _nodes): _refresh())
+	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _refresh())
+	EventBus.expedition_resumed.connect(_on_expedition_resumed)
 	_update_button_visibility()
 
 func _process(_delta: float) -> void:
@@ -123,6 +128,13 @@ func _refresh(_arg = null) -> void:
 	_rebuild_units()
 	_rebuild_training()
 
+## Quien esta fuera, segun CombatManager: el panel no lleva su propia cuenta.
+func _units_on_expedition() -> Dictionary:
+	return CombatManager.get_units_on_expedition()
+
+func _on_expedition_resumed(_expedition_id: int) -> void:
+	_refresh()
+
 func _rebuild_units() -> void:
 	for child in _units_vbox.get_children():
 		child.queue_free()
@@ -160,6 +172,9 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	title_row.add_child(tier_label)
 	var owned_label := UITheme.make_label(Tr.t("LBL_ARMY_OWNED") % ArmyManager.get_count(unit_id), "small", UITheme.POSITIVE)
 	title_row.add_child(owned_label)
+	var on_campaign: int = int(_units_on_expedition().get(unit_id, 0))
+	if on_campaign > 0:
+		title_row.add_child(UITheme.make_label(Tr.t("LBL_ON_CAMPAIGN") % on_campaign, "small", UITheme.WARNING))
 	info.add_child(title_row)
 
 	var stats := "%s   |   %s   |   %s" % [

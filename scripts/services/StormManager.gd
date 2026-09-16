@@ -284,10 +284,57 @@ func _standing_towers() -> int:
 ## The Assessors arrive. If there is a garrison at home, they have to get through
 ## it first; with nobody to stand, they simply help themselves.
 func _begin_tithe(severity: int) -> void:
-	if CombatManager.start_defense(assessor_roster(severity)):
+	# Con la Auditoria Final en el tablero no hay Diezmo aparte: la Regencia ya
+	# esta en la puerta, y cobrar por un lado mientras se pelea por el otro pone
+	# a la misma guarnicion a defender dos sitios a la vez. get_garrison() no sabe
+	# de las unidades que estan en las oleadas del asedio, asi que las volveria a
+	# alistar y les descontaria las bajas por duplicado: el jugador perderia
+	# soldados que no murieron.
+	if ProgressionManager.is_final_audit_active():
+		EventBus.notification_posted.emit(
+			Tr.t("STORM_TITHE_DURING_AUDIT"), "warning", UITheme.WARNING)
+		EventBus.tithe_resolved.emit(true, {})
+		_settle()
+		return
+
+	var roster: Dictionary = assessor_roster(severity)
+	# Con el tablero ocupado (una expedicion a medias) la guarnicion que quedo en
+	# casa pelea sola: el mismo Encounter, resuelto a ciegas, sin abrir otro
+	# tablero encima del que el jugador esta jugando.
+	# is_board_open() y no is_in_encounter(): mientras el jugador lee el parte de
+	# la pelea anterior el tablero sigue en pantalla aunque ya no se juegue, y
+	# abrir la defensa encima se lo borraria de delante sin haberlo leido.
+	if CombatManager.is_board_open():
+		_auto_resolve_tithe(roster, severity)
+		return
+	if CombatManager.start_defense(roster):
 		return
 	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_UNDEFENDED"), "danger", UITheme.DANGER)
 	_pay_tithe(severity)
+
+## El Diezmo cae con el jugador de expedicion. La defensa se resuelve al
+## instante y el Diezmo con ella: aqui no se espera `encounter_ended`, porque esa
+## senal es del tablero abierto, no de esta pelea. El parte llega por
+## `defense_auto_resolved` y por un aviso con bajas y rondas.
+func _auto_resolve_tithe(roster: Dictionary, severity: int) -> void:
+	var outcome: Dictionary = CombatManager.auto_resolve_defense(roster)
+	if not bool(outcome.get("fought", false)):
+		EventBus.notification_posted.emit(Tr.t("STORM_TITHE_UNDEFENDED"), "danger", UITheme.DANGER)
+		_pay_tithe(severity)
+		return
+	var summary: Dictionary = outcome.get("summary", {})
+	var dead: int = 0
+	for count in summary.get("casualties", {}).values():
+		dead += int(count)
+	var rounds: int = int(outcome.get("rounds", 0))
+	if bool(outcome.get("victory", false)):
+		EventBus.notification_posted.emit(
+			Tr.t("MSG_DEFENSE_AUTO_WON") % [dead, rounds], "success", UITheme.POSITIVE)
+		repel_tithe()
+	else:
+		EventBus.notification_posted.emit(
+			Tr.t("MSG_DEFENSE_AUTO_LOST") % [dead, rounds], "danger", UITheme.DANGER)
+		_pay_tithe(severity)
 
 ## The force that comes to collect. A line of Assessors with guns behind it,
 ## growing with severity — the more you are worth, the more they send.

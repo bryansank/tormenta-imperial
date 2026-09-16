@@ -176,6 +176,10 @@ signal draft_offered(options: Array)
 signal draft_applied(option: Dictionary)
 @warning_ignore("unused_signal")
 signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary)
+## Al cargar una partida con campana en marcha: la UI abre el mapa en el nodo
+## actual. El tablero no se guarda (D6), asi que aqui nunca hay encuentro abierto.
+@warning_ignore("unused_signal")
+signal expedition_resumed(expedition_id: int)
 
 # ── Building Health ──
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
@@ -218,6 +222,13 @@ signal storm_ended(severity: int)
 signal tithe_demanded(severity: int)
 @warning_ignore("unused_signal")
 signal tithe_resolved(paid: bool, taken: Dictionary)
+## La guarnicion peleo sola: el Diezmo cayo con el tablero ocupado por una
+## expedicion y la defensa se resolvio a ciegas (AutoResolver). `summary` es
+## CombatManager.get_last_result(). Emitida solo por CombatManager, y es la UNICA
+## senal de esa pelea: ninguna encounter_*/turn_started/unit_* la acompaña, porque
+## el tablero abierto las tomaria como suyas.
+@warning_ignore("unused_signal")
+signal defense_auto_resolved(victory: bool, rounds: int, summary: Dictionary)
 
 # ── The Final Audit ──
 ## Emitidas solo por ProgressionManager. El Cuartel General a nivel 3 ya no gana
