@@ -4,7 +4,7 @@
 
 <p align="center">
   <img alt="Godot 4.7" src="https://img.shields.io/badge/Godot-4.7%20.NET-478CBF">
-  <img alt="GDScript" src="https://img.shields.io/badge/GDScript-11.7k%20l%C3%ADneas-355570">
+  <img alt="GDScript" src="https://img.shields.io/badge/GDScript-19.2k%20l%C3%ADneas-355570">
   <img alt="Estado" src="https://img.shields.io/badge/estado-en%20desarrollo-C49629">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-PolyForm%20Strict%201.0.0-8C3B29">
 </p>
@@ -21,7 +21,7 @@
 
 Llegas a una isla generada proceduralmente con un núcleo, 300 de oro y 200 de madera. A partir de ahí, todo lo que tengas lo habrás construido: aserraderos que muerden el bosque, minas, una fundición que enciende la era del acero, una refinería que abre la del petróleo. Tu gente trabaja, consume y **tiene moral** — y la moral decide si tu imperio produce o se para.
 
-Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán —o no— a ella.
+Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán —o no— a ella. Porque la Tormenta Imperial vuelve: apaga el cielo, rompe lo que construiste y manda a los Tasadores a cobrar el Diezmo. Ese cobro se pelea en un tablero de 8x8 con lo que tengas en casa.
 
 > *"Sobre el barro de la historia, construiremos monumentos de acero."*
 
@@ -52,38 +52,41 @@ Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán �
 4. **Progresa** por tres eras: Frontera → Industrial → Petróleo. Cada una desbloquea un recurso y con él media docena de decisiones nuevas.
 5. **Investiga** quince tecnologías en tres ramas, con bonificaciones permanentes.
 6. **Entrena un ejército** en el Cuartel — y págale el mantenimiento, todos los turnos, en oro.
-7. **Sobrevive** a tormentas, plagas y bandidos.
-8. **Gana** llevando tu Cuartel General al nivel 3.
+7. **Sobrevive** a la Tormenta Imperial: ceniza, edificios en ruinas y el Diezmo, que se paga o se pelea.
+8. **Aguanta la Auditoría Final.** Subir el Cuartel General al nivel 3 ya no gana la partida: convoca a la Regencia. De 3 a 5 oleadas seguidas contra la guarnición que tengas en casa, sin reentrenar entre medias. Sobrevivirlas para la Tormenta para siempre — y eso sí es ganar.
 
 ## Lo que lo hace distinto
 
-**La moral no es una barra que cuidas: es el sistema que lo conecta todo.** Hoy multiplica tu producción. Cuando llegue el combate, decidirá también la iniciativa de tus unidades en el tablero, las bajas la hundirán al volver a casa, y una derrota podrá parar tus fábricas. Un imperio desmoralizado reacciona tarde y golpea flojo.
+**La moral no es una barra que cuidas: es el sistema que lo conecta todo.** Multiplica tu producción, y también decide la iniciativa de tus unidades en el tablero y lo fuerte que golpean. Las bajas la hunden al volver a casa: una victoria cara puede dejar al pueblo peor que antes de salir. Un imperio desmoralizado reacciona tarde y golpea flojo.
 
 Ningún otro juego del género cruza esas dos mitades. Esa es la apuesta.
 
 ## Estado
 
-El **bucle de gestión está completo y es jugable** de principio a fin: economía, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline y condiciones de victoria. Corre sin errores ni warnings, a 144 fps.
+El **bucle de gestión está completo y es jugable** de principio a fin: economía, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline y tutorial. Corre sin errores ni warnings, a 144 fps.
 
-El **combate PVE por turnos** es el pilar en construcción, enteramente especificado en [`specs/001-combate-pve/`](specs/001-combate-pve/): expediciones roguelike con mapa ramificado, atrición entre encuentros, muerte permanente, draft de mejoras y un jefe final.
+El **combate PVE por turnos está en el juego**: tablero de 8x8, orden de iniciativa, mover/atacar/defender/esperar, IA enemiga, el Diezmo peleado en vez de pagado, y la Auditoría Final que cierra la partida. Todo el modelo vive en `scripts/combat/` como objetos puros, sin nodos ni señales, y se prueba en headless con gdUnit4.
 
-| Fase | Qué incluye | Estado |
-|---|---|---|
-| 1–2 · Cimientos | Reglas de combate, unidades, servicio de dominio, señales, traducciones, guardado | 9 de 11 tareas |
-| 3 · US1, el MVP visible | Tablero 8x8, selección, movimiento, ataque, orden de turnos, IA enemiga | pendiente |
-| 4+ | Expedición roguelike, economía y moral en combate, IA táctica, pulido | pendiente |
+| Pieza | Estado |
+|---|---|
+| Tablero táctico, turnos, IA enemiga (`Encounter`, `CombatAI`, `BattleScreen`) | ✅ en el juego |
+| El Diezmo se pelea: guarnición y dotaciones de torre en el tablero | ✅ en el juego |
+| Defensa auto-resuelta cuando el tablero ya está ocupado (`AutoResolver`) | ✅ en el juego |
+| Auditoría Final: oleadas encadenadas, atrición, perder sin Game Over, reconvocar | ✅ en el juego |
+| Expedición roguelike: mapa por semilla, atrición, muerte permanente, draft | ⚙️ modelo, servicio, guardado y tests hechos — **falta la interfaz** |
 
-Las piezas de dominio ya están en el repositorio. **Falta el tablero**: hasta entonces, el combate existe pero no se ve.
+La expedición es lo único que queda del pilar: `CombatManager` ya sabe lanzarla, encadenarla, guardarla y liquidarla, pero ninguna pantalla la conduce todavía. Detalle técnico en [`docs/15-combat.md`](docs/15-combat.md); especificación en [`specs/001-combate-pve/`](specs/001-combate-pve/).
 
 ## Bajo el capó
 
 | | |
 |---|---|
 | **Motor** | Godot 4.7 (.NET/mono), renderer Forward+ |
-| **Lenguaje** | GDScript — 11.700 líneas en 46 scripts, 15 escenas |
-| **Arquitectura** | Servicio–señal–componente: 21 autoloads que **solo** se hablan por un `EventBus`. Ningún servicio referencia a otro |
+| **Lenguaje** | GDScript — 19.200 líneas en 62 scripts, 19 escenas |
+| **Arquitectura** | Servicio–señal–componente: 24 autoloads que **solo** se hablan por un `EventBus`. Ningún servicio referencia a otro |
+| **Modelos puros** | La lógica de combate y de la Tormenta vive en `scripts/combat/` y `scripts/storm/` como `RefCounted` sin nodos ni señales: devuelven listas de eventos y un servicio las publica. Por eso se prueban enteras en headless |
 | **Balance** | Todo valor ajustable vive en `GameConfig.gd`. Cero números mágicos repartidos por el código |
-| **Modelos 3D** | Los 14 edificios se generan proceduralmente en tiempo de ejecución por `DieselpunkBuildingFactory` |
+| **Modelos 3D** | 12 de los 14 edificios son GLB; `nucleo` y `road` se generan proceduralmente por `DieselpunkBuildingFactory` (la calzada necesita conocer a sus vecinas) |
 | **Guardado** | JSON local con progresión offline de hasta 8 horas |
 | **Tests** | gdUnit4 sobre las fórmulas puras de economía y combate |
 
@@ -98,7 +101,8 @@ tormenta-imperial/
 ├── scenes/          Main.tscn y una escena por panel de interfaz
 ├── scripts/
 │   ├── services/    Los autoloads: economía, población, mercado, ejército…
-│   ├── combat/      Cimientos del combate por turnos
+│   ├── combat/      Modelos puros del combate: tablero, IA, expedición, Auditoría
+│   ├── storm/       Modelo puro del ciclo de la Tormenta
 │   ├── buildings/   Colocación y fábrica procedural de modelos
 │   ├── ui/          Un script por panel, más tema y disposición
 │   ├── grid/        Rejilla de 40x40 celdas
@@ -107,8 +111,9 @@ tormenta-imperial/
 ├── data/buildings/  Los 14 edificios, como recursos .tres
 ├── assets/          Audio, fuentes, texturas y marca
 ├── specs/           Especificaciones previas a cada pilar
+├── tests/           Suites de gdUnit4 sobre los modelos puros
 ├── docs/            Documentación por sistema
-└── tools/           Utilidades de desarrollo (marca, capturas, texturas)
+└── tools/           Utilidades de desarrollo (marca, capturas, texturas, sondas)
 ```
 
 ## Correrlo

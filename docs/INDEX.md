@@ -20,6 +20,7 @@ Complete technical documentation for AI and developer context.
 | 12 | [Cloud Saves](12-cloud-saves.md) | Supabase integration, auth, cloud save/load setup |
 | 13 | [Roadmap](13-roadmap.md) | Phased plan: what's shipped and what's next (combat, units, multiplayer) |
 | 14 | [Guía de juego](14-guia-de-juego.md) | Player-facing: what every building does (with renders), the path to victory, and the dev-mode timings |
+| 15 | [Combat](15-combat.md) | The combat pillar: pure models, `CombatManager`, the three roads to the board, expeditions, the Final Audit, signals, balance, tests |
 
 ## Quick Reference
 
@@ -47,14 +48,27 @@ Complete technical documentation for AI and developer context.
 - [x] Mobile touch controls
 - [x] Real worker assignment with visual indicator (unstaffed buildings shown)
 - [x] Tech tree (15 techs, 3 branches)
-- [x] Cloud saves (Supabase integration)
 - [x] Process save/load (mining/crafting persists)
+- [x] Audio (`AudioManager`: runtime buses, signal-driven music + SFX)
+- [x] Unit system (infantry, artillery, vehicles) — `ArmyManager`, training, upkeep, desertion
+- [x] Building health: storm damage, ruins that stop producing, proportional repair
+- [x] The Imperial Storm: four-phase cycle, storm sky, selective damage, the Tithe
+- [x] Tactical board (8x8): turn order, move/attack/defend/wait, enemy AI, `BattleScreen`
+- [x] The Tithe is fought: garrison + tower crews on the board, or auto-resolved when the board is busy
+- [x] The Final Audit: HQ 3 summons a 3-5 wave siege; surviving it is the victory
+- [x] Tutorial: paged intro + one contextual tip per event (`TutorialManager`)
+
+## Partially Implemented
+
+- [~] **Expedition (roguelike run)** — models, `CombatManager` wiring, save/load and
+  tests are done; **no UI drives it yet** (no map view, no draft modal). See
+  [15-combat.md](15-combat.md) §10
+- [~] Cloud saves: `CloudSaveManager` (Supabase REST) implemented but **unwired** —
+  nothing calls it; needs `.env` config + settings UI
 
 ## What's Planned
 
-- [ ] Turn-based PVE combat
 - [ ] Turn-based PVP combat (Nakama)
-- [ ] Unit system (infantry, artillery, vehicles)
 - [ ] Missions/contracts system
-- [ ] Audio (music + SFX)
-- [ ] Tutorial/onboarding
+- [ ] Ambient audio track (`assets/audio/ambient/` still empty)
+- [ ] Real unit icons on the board (currently the unit name's initial)
