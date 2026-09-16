@@ -661,7 +661,7 @@ func test_each_era_opens_because_of_the_building_the_design_says() -> void:
 ## Ningun test lo veia porque todo el mundo cuenta edificios por
 ## `GridManager.get_all_buildings()`, que si es fiable; `count_building()` es la
 ## unica via alternativa y solo la usa el propio placer.
-func test_the_building_limit_actually_limits(do_skip = true, skip_reason = "Fallo abierto: BuildingPlacer.count_building() compara nombres de nodo, que Godot renombra al repetirse, y siempre devuelve 1. Ver la cabecera del caso.") -> void:
+func test_the_building_limit_actually_limits() -> void:
 	_open_the_frontier()
 	# La colonia abierta deja 4 Casas en pie: el contador del placer tiene que
 	# decir lo mismo que la rejilla.
@@ -1172,7 +1172,7 @@ func _some_building_is_damaged() -> bool:
 ## Ningun test lo veia porque `BuildingHealth` solo se probaba por el lado del
 ## daño (`tests/storm/test_storm_targets.gd`, `test_operational.gd`), nunca por
 ## el de la reparacion, que es donde cruza a `ResourceManager`.
-func test_a_damaged_building_can_be_repaired(do_skip = true, skip_reason = "Fallo abierto: repair_cost() devuelve claves de texto y ResourceManager espera el enum Type. Ver la cabecera del caso.") -> void:
+func test_a_damaged_building_can_be_repaired() -> void:
 	_open_the_frontier()
 	_bankroll()
 	var sawmill: Node3D = _first_node_of("sawmill")

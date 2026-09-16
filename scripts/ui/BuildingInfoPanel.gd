@@ -434,8 +434,9 @@ func _refresh_repair() -> void:
 	var pct: int = roundi(BuildingHealth.get_health_ratio(_selected_node) * 100.0)
 	var cost := BuildingHealth.repair_cost(_selected_node)
 	var parts: Array = []
-	for res_name in cost:
-		parts.append("%d %s" % [int(cost[res_name]), Tr.res_name(res_name)])
+	for type in cost:
+		parts.append("%d %s" % [
+			int(cost[type]), Tr.res_name(ResourceManager.get_type_name(type))])
 
 	_repair_label.text = "%s  ·  %s" % [
 		Tr.t("LBL_RUINED") if ruined else Tr.t("LBL_DAMAGED") % pct,

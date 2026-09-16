@@ -83,6 +83,13 @@ func damage_building(node: Node3D, amount: int) -> bool:
 
 ## Cuesta en proporción a lo que falta: un rasguño es barato, una ruina casi
 ## cuesta construirla de nuevo.
+##
+## Indexado por `ResourceManager.Type`, como `BuildingData.get_cost()` y como todo
+## lo que se paga en este juego. Antes devolvia nombres de texto, y como
+## `can_afford()` espera el enum, `has_enough()` reventaba con un error de tipos
+## en cada comprobacion: `can_repair()` contestaba que no habia recursos siempre,
+## asi que el boton REPARAR estaba muerto aunque el panel pintara el precio
+## correcto justo encima. Media Tormenta era irreversible.
 func repair_cost(node: Node3D) -> Dictionary:
 	var info := GridManager.get_building_info(node)
 	if info.is_empty():
@@ -93,8 +100,10 @@ func repair_cost(node: Node3D) -> Dictionary:
 		return {}
 	var factor: float = missing * GameConfig.storm_repair_cost_ratio
 	var cost: Dictionary = {}
-	for pair in [["gold", data.cost_gold], ["steel", data.cost_steel],
-			["oil", data.cost_oil], ["wood", data.cost_wood]]:
+	for pair in [[ResourceManager.Type.GOLD, data.cost_gold],
+			[ResourceManager.Type.STEEL, data.cost_steel],
+			[ResourceManager.Type.OIL, data.cost_oil],
+			[ResourceManager.Type.WOOD, data.cost_wood]]:
 		var amount: int = roundi(float(pair[1]) * factor)
 		if amount > 0:
 			cost[pair[0]] = amount

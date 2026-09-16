@@ -717,10 +717,19 @@ func _hide_grid_overlay() -> void:
 
 # ── Limit / Prerequisite Helpers ──
 
+## Cuantos hay en pie de este tipo. Se le pregunta a GridManager, que guarda el
+## BuildingData de cada edificio, y no al nombre del nodo: el nodo se bautiza con
+## el id, pero Godot renombra a los hermanos repetidos ("house", "house2"...), asi
+## que comparar nombres devolvia 1 siempre. Con eso ningun tope limitaba nada —
+## cabian dos Cuarteles Generales con el tope en uno—, los Cuarteles de mas no
+## daban plaza de entrenamiento, y el almacen compartido se quedaba en un solo
+## Almacen hasta que el jugador guardaba y recargaba, que es cuando el tope subia
+## de golpe porque la carga si los contaba bien.
 func count_building(building_id: String) -> int:
 	var count := 0
-	for child in _buildings_container.get_children():
-		if child.name == building_id:
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info.get("data")
+		if data != null and data.id == building_id:
 			count += 1
 	return count
 
