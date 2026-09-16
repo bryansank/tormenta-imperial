@@ -109,10 +109,10 @@
 
 **Independent Test**: quickstart E5; SC-007.
 
-- [ ] T038 [US4] `CombatAI` prioridad de objetivo: (1) enemigo que puede matar este turno, (2) mayor `power`, (3) menor HP, (4) más cercano; artillería prefiere mantenerse a `attack_range` y retrocede si un enemigo está a `< min_range`
+- [x] T038 [US4] `CombatAI` prioridad de objetivo: (1) enemigo que puede matar este turno, (2) mayor `power`, (3) menor HP, (4) más cercano; artillería prefiere mantenerse a `attack_range` y retrocede si un enemigo está a `< min_range`
 - [ ] T039 [US4] `CombatAI` movimiento: si ningún objetivo está en rango, elegir la celda alcanzable que minimiza la distancia al objetivo prioritario **y** deja en rango si es posible; unidades con `defending` disponible y sin objetivo alcanzable → defender en vez de esperar
-- [ ] T040 [US4] Escalado: `ExpeditionGenerator.enemy_roster()` aplica `combat_enemy_scale_per_depth` y `combat_enemy_scale_per_era` a HP/ATK y al tamaño del roster (cap `combat_deploy_cap`); el jefe añade una unidad de tier máximo disponible en la era
-- [ ] T041 [US4] Tests en `test_combat_rules.gd` / nuevo `tests/combat/test_combat_ai.gd`: la IA ataca cuando hay objetivo en rango; elige el objetivo matable; artillería no se acerca a adyacente; nunca devuelve "sin acción" con un objetivo alcanzable (SC-007)
+- [x] T040 [US4] Escalado: `ExpeditionGenerator.enemy_roster()` aplica `combat_enemy_scale_per_depth` y `combat_enemy_scale_per_era` a HP/ATK y al tamaño del roster (cap `combat_deploy_cap`); el jefe añade una unidad de tier máximo disponible en la era
+- [x] T041 [US4] Tests en `test_combat_rules.gd` / nuevo `tests/combat/test_combat_ai.gd`: la IA ataca cuando hay objetivo en rango; elige el objetivo matable; artillería no se acerca a adyacente; nunca devuelve "sin acción" con un objetivo alcanzable (SC-007)
 
 **Checkpoint**: 🎬 **Hito D cerrado.** Combate PVE completo según spec.
 
