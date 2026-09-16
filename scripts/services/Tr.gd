@@ -474,6 +474,28 @@ const _STRINGS := {
 		"TUT_TIP_BOARD_BODY": "Por turnos, en orden de iniciativa. Una unidad puede moverse y luego atacar; atacar termina su turno. La artilleria no dispara a un enemigo pegado a ella. Defender duplica la defensa hasta tu siguiente turno.",
 		# Helper callout: Skirmish button (appears with the first Barracks)
 		"LBL_HELP_SKIRMISH": "ESCARAMUZAS: desde aqui mandas expediciones con tu ejercito y, cuando estes listo, convocas la Auditoria Final.",
+
+		# Mapa de expedicion, draft y parte final (UI de la expedicion)
+		"BTN_VIEW_MAP": "Ver mapa",
+		"BTN_BACK_TO_BASE": "Volver a la base",
+		"LBL_ABANDONED": "ABANDONADA",
+		"LBL_SKIRMISH_FIGHT": "Escaramuza",
+		"LBL_EXPEDITION_ACTIVE": "Expedicion en curso",
+		"LBL_EXPEDITION_PROGRESS": "Nodos limpiados: %d / %d",
+		"LBL_ON_CAMPAIGN": "En campana: %d",
+		"LBL_EXPEDITION_PARTY": "En campana: %s",
+		"LBL_DRAFT_BONUSES": "Mejoras: %s",
+		"LBL_NO_DRAFT_BONUSES": "Sin mejoras todavia",
+		"LBL_NODE_ENEMIES": "%d enemigos",
+		"LBL_NODE_CURRENT": "Estas aqui",
+		"LBL_NODE_CLEARED": "Limpiado",
+		"LBL_NODE_LOCKED": "Fuera de ruta",
+		"LBL_NO_REWARDS": "Sin botin",
+		"MSG_EXPEDITION_STARTED": "Expedicion en marcha: %d nodos por delante.",
+		"MSG_LAUNCH_EXPEDITION_ACTIVE": "Ya hay una expedicion en curso.",
+		"MSG_LAUNCH_IN_BATTLE": "Hay un tablero abierto.",
+		"MSG_LAUNCH_DEPLOY_CAP": "No caben mas de %d unidades en el tablero.",
+		"MSG_LAUNCH_AUDIT_ACTIVE": "La guarnicion defiende la base: nadie sale de expedicion.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -916,6 +938,28 @@ const _STRINGS := {
 		"TUT_TIP_BOARD_BODY": "Turn-based, in initiative order. A unit may move and then attack; attacking ends its turn. Artillery cannot fire at an enemy adjacent to it. Defending doubles defence until your next turn.",
 		# Helper callout: Skirmish button (appears with the first Barracks)
 		"LBL_HELP_SKIRMISH": "SKIRMISH: from here you send expeditions with your army and, when ready, summon the Final Audit.",
+
+		# Expedition map, draft and final report (expedition UI)
+		"BTN_VIEW_MAP": "View map",
+		"BTN_BACK_TO_BASE": "Back to base",
+		"LBL_ABANDONED": "ABANDONED",
+		"LBL_SKIRMISH_FIGHT": "Skirmish",
+		"LBL_EXPEDITION_ACTIVE": "Expedition under way",
+		"LBL_EXPEDITION_PROGRESS": "Nodes cleared: %d / %d",
+		"LBL_ON_CAMPAIGN": "On campaign: %d",
+		"LBL_EXPEDITION_PARTY": "On campaign: %s",
+		"LBL_DRAFT_BONUSES": "Upgrades: %s",
+		"LBL_NO_DRAFT_BONUSES": "No upgrades yet",
+		"LBL_NODE_ENEMIES": "%d enemies",
+		"LBL_NODE_CURRENT": "You are here",
+		"LBL_NODE_CLEARED": "Cleared",
+		"LBL_NODE_LOCKED": "Off route",
+		"LBL_NO_REWARDS": "No spoils",
+		"MSG_EXPEDITION_STARTED": "Expedition under way: %d nodes ahead.",
+		"MSG_LAUNCH_EXPEDITION_ACTIVE": "An expedition is already under way.",
+		"MSG_LAUNCH_IN_BATTLE": "A board is already open.",
+		"MSG_LAUNCH_DEPLOY_CAP": "No more than %d units fit on the board.",
+		"MSG_LAUNCH_AUDIT_ACTIVE": "The garrison is defending the base: nobody marches out.",
 	},
 }
 
