@@ -21,6 +21,7 @@ Complete technical documentation for AI and developer context.
 | 13 | [Roadmap](13-roadmap.md) | Phased plan: what's shipped and what's next (combat, units, multiplayer) |
 | 14 | [Guía de juego](14-guia-de-juego.md) | Player-facing: what every building does (with renders), the path to victory, and the dev-mode timings |
 | 15 | [Combat](15-combat.md) | The combat pillar: pure models, `CombatManager`, the three roads to the board, expeditions, the Final Audit, signals, balance, tests |
+| 16 | [Balance de combate](16-balance-combate.md) | Spanish, measured not guessed: the `tools/balance_probe.gd` sweeps, the before/after numbers for every `combat_*` value T046 moved, the rounds→minutes conversion, and what the model cannot fix from `combat_*` alone |
 
 ## Quick Reference
 
