@@ -15,11 +15,11 @@ Complete technical documentation for AI and developer context.
 | 07 | [Random Events](07-random-events.md) | 8 event types, probability weights, timed effects |
 | 08 | [UI Systems](08-ui-systems.md) | All UI panels, layout, styling, construction pattern |
 | 09 | [Save System](09-save-system.md) | JSON save format, auto-save triggers, offline progression, load flow |
-| 10 | [Signals Reference](10-signals-reference.md) | Complete EventBus signal table with emitters and consumers |
+| 10 | [Signals Reference](10-signals-reference.md) | All 97 EventBus signals with emitters and consumers, plus the 13 that are wired on only one side |
 | 11 | [Tech Tree](11-tech-tree.md) | 3 branches x 5 tiers, research mechanics, bonus application |
 | 12 | [Cloud Saves](12-cloud-saves.md) | Supabase integration, auth, cloud save/load setup |
-| 13 | [Roadmap](13-roadmap.md) | Phased plan: what's shipped and what's next (combat, units, multiplayer) |
-| 14 | [Guía de juego](14-guia-de-juego.md) | Player-facing: what every building does (with renders), the path to victory, and the dev-mode timings |
+| 13 | [Roadmap](13-roadmap.md) | Phased plan: all four milestones shipped, what is left open inside each, and the backlog |
+| 14 | [Guía de juego](14-guia-de-juego.md) | Player-facing: what every building does (with renders), expeditions, the Final Audit and the path to victory, and the dev-mode timings |
 | 15 | [Combat](15-combat.md) | The combat pillar: pure models, `CombatManager`, the three roads to the board, expeditions, the Final Audit, signals, balance, tests |
 
 ## Quick Reference

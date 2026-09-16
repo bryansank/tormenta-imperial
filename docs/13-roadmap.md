@@ -5,6 +5,10 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 
 > The management core and the Imperial Storm cycle are both live. The storm is the
 > game's clock: everything below is measured against it.
+>
+> **All four milestones are shipped.** The game can be played from the first sawmill
+> to the Final Audit without a gap. What is left is the backlog, the leftovers listed
+> under each milestone, and cloud saves — the only 🚧 left in this file.
 
 ---
 
@@ -24,7 +28,8 @@ The management loop, the tactical board and the storm cycle all run in-game:
   screen→world formula as the left-drag (`InputService.screen_drag_to_world_delta`),
   a tap under the threshold still selects, and the second finger hands over to the
   pinch without a jump (13 tests)
-- ✅ Audio: `AudioManager` (runtime buses, signal-driven) + 4 music tracks + 16 SFX
+- ✅ Audio: `AudioManager` (runtime buses, signal-driven) + 4 music tracks + 16 SFX,
+  combat included — see the Milestone 3 table for what "combat audio" ships as today
 - ✅ **Tactical encounter**: 8×8 board, turn order, move/attack/defend/wait, enemy AI,
   `Encounter` + `CombatAI` as pure headless-testable models — see [15-combat.md](15-combat.md)
 - ✅ **The Final Audit**: HQ 3 summons a 3-5 wave siege fought by the garrison with
@@ -35,7 +40,8 @@ The management loop, the tactical board and the storm cycle all run in-game:
   production collapse, morale bleed, severity scaled by industrial footprint
 - ✅ **The Tithe is fought, not just paid**: `CombatManager.start_defense()` puts the
   garrison on the board against the Assessors; repel it and they take nothing
-- ✅ **Storm HUD on screen** (about to become a phase indicator — see Milestone 1)
+- ✅ **Storm HUD on screen**: `StormHUD.gd`, already the phase indicator Milestone 1
+  called for — colour and icon per phase, no countdown, severity never announced
 - ✅ **Building health**: `BuildingHealth` autoload — storm damage, ruins that stop
   producing, proportional repair, and towers that mitigate only while standing
 - 🚧 Cloud saves: `CloudSaveManager` (Supabase REST, auth + save/load) implemented
@@ -69,10 +75,17 @@ Tuning on systems that already exist: the biggest change in feel for the least n
 | Arms race | ✅ | `StormCycle.storms_survived` already tracked — feed it into `assessor_roster()` so winning today means heavier guns tomorrow |
 | Defensive towers | ✅ | Mitigate storm damage (15% each, 60% cap) and field an artillery crew on the defensive board, outside the deploy cap, forming in the back row — only while operational (not ruined, not under construction) |
 
-## 🚧 Milestone 3 — Expedition & the double clock
+## ✅ Milestone 3 — Expedition & the double clock
 
 Tasks T022-T029 are specified in `specs/001-combate-pve/tasks.md`.
-Everything below is wired at the model and service level; what is left is the screens.
+The screens have landed: the expedition now runs end to end from the UI, not only
+from tests.
+
+> ⚠️ [15-combat.md](15-combat.md) §1 and §10 still say there is no expedition UI and
+> that four combat signals have no listener. That was true when it was written and is
+> not any more — `BattleScreen` and `SkirmishPanel` now drive the whole loop. Trust
+> this table and [10-signals-reference.md](10-signals-reference.md) over those two
+> sections until they are rewritten.
 
 | Item | Status | Where it lives |
 |------|--------|----------------|
@@ -83,7 +96,23 @@ Everything below is wired at the model and service level; what is left is the sc
 | **Unit lockout**: `get_garrison()` excludes units away on expedition | ✅ | `CombatManager.get_garrison()` / `get_units_on_expedition()` |
 | **Defensive auto-resolve**: the *same* `Encounter` headless, AI on both sides, no separate combat maths | ✅ | `scripts/combat/AutoResolver.gd`, `CombatManager.auto_resolve_defense()`, `StormManager._auto_resolve_tithe()`, `tests/combat/test_auto_resolver.gd`, `tests/storm/test_defense_auto_resolve.gd` |
 | Storm notifications drawn over `BattleScreen` | ✅ | `NotificationPanel` toast layer vs `BattleScreen.layer`, `tests/storm/test_storm_toasts_over_board.gd` |
-| **Real skirmish panel, map view, draft modal** | 🚧 | `scripts/ui/SkirmishPanel.gd` exists but launches `start_skirmish()`, not an expedition. No map view, no draft modal, and `draft_offered` / `expedition_node_selected` / `expedition_resumed` have no listener |
+| **Real skirmish panel, map view, draft modal** | ✅ | `SkirmishPanel._on_launch_pressed()` calls `CombatManager.launch_expedition(party)`. `BattleScreen` builds three views on top of the board — `_build_map_view()` (node graph, progress, accumulated bonuses, abandon), `_build_draft_panel()` (modal, one card per option, routes to `apply_draft`) and `_build_report_panel()` (the after-action report). Node clicks go through `select_node()`, abandoning through `abandon_expedition()`. `tests/ui/test_expedition_ui.gd` (25 tests) |
+| Listeners for the four expedition signals | ✅ | `draft_offered` / `draft_applied` → BattleScreen; `expedition_node_selected` → BattleScreen, SkirmishPanel; `expedition_resumed` → BattleScreen, SkirmishPanel, ArmyPanel (string-form connect). A campaign in flight reopens its map on load |
+| Combat audio | ✅ | `AudioManager` plays on `encounter_started`, `unit_attacked`, `unit_died`, `encounter_ended`, `expedition_started`, `expedition_ended`, plus `final_audit_summoned` / `storm_halted_forever` through `_connect_optional()`. `tests/audio/test_audio_combat.gd` (15 tests). **No new audio files shipped**: the 9 combat keys are manifest aliases onto existing SFX and the `combat` music borrows `era_3_petroleum` — see `assets/audio/MANIFEST.md` |
+| Helper callout for Escaramuzas | ✅ | `HelperPanel` `SkirmishCallout` — appears once a Barracks exists and the sidebar is open, following the sidebar button. `tests/ui/test_helper_skirmish_callout.gd` (13 tests) |
+
+Still open inside this milestone, none of it blocking:
+
+- **No after-action report for the blind defence.** `defense_auto_resolved` is
+  emitted by `CombatManager` and nothing in `scripts/` listens; `StormManager` reads
+  the return value of `auto_resolve_defense()` and posts a one-line notification
+  (`MSG_DEFENSE_AUTO_WON` / `MSG_DEFENSE_AUTO_LOST`). The expedition's own report
+  panel exists; the garrison's does not.
+- **`CombatManager.build_enemy_roster()` is still the provisional unseeded roster**
+  used by `start_skirmish()`. Its own docstring says `ExpeditionGenerator.enemy_roster()`
+  replaces it. Both still exist.
+- **Unit glyphs on the board are the first letter** of the translated unit name
+  (`BattleScreen._unit_glyph()`) — tracked in the backlog as an art task.
 
 ## ✅ Milestone 4 — The Final Audit
 
@@ -98,11 +127,17 @@ Full technical detail: [15-combat.md](15-combat.md).
 
 ## 💤 Backlog — Nice-to-have
 
-- 💤 Ambient audio track (`assets/audio/ambient/` still empty)
-- 💤 Real unit icons on the board (currently the name's initial)
+- 💤 Ambient audio track (`assets/audio/ambient/` holds only a `.gitkeep`)
+- 💤 Dedicated combat audio files (the 9 combat keys are aliases onto existing SFX
+  today, and the `combat` theme borrows `era_3_petroleum` — `assets/audio/MANIFEST.md`
+  lists what each one should become)
+- 💤 Real unit icons on the board (currently the name's initial, `BattleScreen._unit_glyph()`)
+- 💤 After-action report for the auto-resolved defence (`defense_auto_resolved` is
+  emitted and unlistened — see Milestone 3)
 - 💤 Settings home for cloud-save login + wiring `CloudSaveManager`
 - 💤 More buildings / decorations & a second island biome
-- 💤 Weather / day-night visual layer
+- 💤 Day-night visual layer. Storm weather itself is **done** (`StormSky.gd` scales
+  fog, darkening and sky by severity); what is missing is a cycle outside the storm
 - 💤 Achievements / statistics
 - 💤 Steam / mobile store packaging
 
