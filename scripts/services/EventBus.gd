@@ -176,6 +176,10 @@ signal draft_offered(options: Array)
 signal draft_applied(option: Dictionary)
 @warning_ignore("unused_signal")
 signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary)
+## Al cargar una partida con campana en marcha: la UI abre el mapa en el nodo
+## actual. El tablero no se guarda (D6), asi que aqui nunca hay encuentro abierto.
+@warning_ignore("unused_signal")
+signal expedition_resumed(expedition_id: int)
 
 # ── Building Health ──
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y

@@ -11,15 +11,29 @@ extends Node
 ## expedition are still counted there and are only deducted as casualties when
 ## the expedition resolves, so Military Power never lies mid-run.
 ##
-## Current scope: the encounter core (T012-T020). The expedition map, drafts and
-## the economy bridge land in US2/US3 — see specs/001-combate-pve/tasks.md.
+## La expedicion (Expedition, scripts/combat/) es el otro modelo que este nodo
+## posee: el mapa, el party que salio y lo que lleva ganado. Mientras dura, sus
+## encuentros no cobran nada: recompensas y bajas se acumulan en el modelo y se
+## liquidan una sola vez en _resolve_expedition() (FR-010, FR-011, FR-017).
 
 const CombatUnitScript := preload("res://scripts/combat/CombatUnit.gd")
 const EncounterScript := preload("res://scripts/combat/Encounter.gd")
+const ExpeditionScript := preload("res://scripts/combat/Expedition.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
 const AI := preload("res://scripts/combat/CombatAI.gd")
 
 var _encounter: Encounter = null
+## La expedicion en curso. Null en la base; se descarta al resolverla.
+var _expedition: Expedition = null
+var _next_expedition_id: int = 1
+## El draft ofrecido tras ganar un nodo y aun sin elegir. Mientras dure no se
+## abre ningun tablero: primero se elige la carta, despues la ruta.
+var _draft_pending: bool = false
+var _draft_options: Array = []
+## Eventos del modelo de expedicion que un encuentro deja al resolverse (draft,
+## fin de la expedicion). Se publican DESPUES de encounter_ended, para que la UI
+## siempre vea cerrado el tablero antes de que le llegue lo que viene despues.
+var _expedition_followups: Array = []
 var _next_uid: int = 1
 var _morale_snapshot: float = 50.0
 var _enemy_turn_running: bool = false
@@ -93,11 +107,14 @@ func get_morale_snapshot() -> float:
 func is_player_turn() -> bool:
 	return is_in_encounter() and _encounter.state == Encounter.State.PLAYER_TURN and not _enemy_turn_running
 
-## Units the player may still commit: everything trained and not already deployed.
+## Units the player may still commit: everything trained and not already out on
+## expedition. Las comprometidas se descuentan enteras, vivas y caidas, porque
+## ArmyManager no borra a las caidas hasta que la columna vuelve (SC-004).
 func get_deployable_units() -> Dictionary:
+	var committed: Dictionary = get_units_on_expedition()
 	var available: Dictionary = {}
 	for unit_id in GameConfig.get_unit_ids():
-		var count: int = ArmyManager.get_count(unit_id)
+		var count: int = ArmyManager.get_count(unit_id) - int(committed.get(unit_id, 0))
 		if count > 0:
 			available[unit_id] = count
 	return available
@@ -194,12 +211,15 @@ func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> 
 		_audit_wave_active = false
 		ProgressionManager.report_audit_wave(false)
 
-## Everything trained and at home, up to the board's cap.
+## Everything trained and at home, up to the board's cap. Quien esta de
+## expedicion no esta en casa: si el Diezmo cae con la columna fuera, defiende
+## solo lo que se quedo.
 func get_garrison() -> Dictionary:
+	var away: Dictionary = get_units_on_expedition()
 	var garrison: Dictionary = {}
 	var committed := 0
 	for unit_id in GameConfig.get_unit_ids():
-		for i in ArmyManager.get_count(unit_id):
+		for i in ArmyManager.get_count(unit_id) - int(away.get(unit_id, 0)):
 			if committed >= GameConfig.combat_deploy_cap:
 				break
 			garrison[unit_id] = int(garrison.get(unit_id, 0)) + 1
@@ -263,8 +283,9 @@ func start_encounter_with_units(player_units: Array, enemy_roster: Dictionary, i
 	_morale_snapshot = _read_morale()
 	_open(player_units, enemy_roster, is_boss, encounter_index, is_defense, crew_uids, enemy_scale)
 
-## Único sitio donde se abre un tablero: monta el bando enemigo, fija quién no
-## cuenta como ejército y arranca.
+## Monta el bando enemigo desde un roster y abre el tablero. Las escaramuzas y
+## la defensa entran por aqui; la expedicion trae al enemigo ya fabricado por su
+## propio modelo y entra directamente por _open_board().
 func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array, enemy_scale: float = -1.0) -> void:
 	# Una escala dada (las oleadas del asedio) manda sobre la del jefe.
 	var scale: float = enemy_scale if enemy_scale > 0.0 else (GameConfig.combat_boss_multiplier if is_boss else 1.0)
@@ -276,7 +297,12 @@ func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encount
 	_reserve_uids(player_units)
 	var units: Array = player_units.duplicate()
 	units.append_array(_build_side(enemy_roster, Encounter.ENEMY, scale))
+	_open_board(units, is_boss, encounter_index, is_defense, crew_uids)
 
+## Único sitio donde se abre un tablero: recibe ambos bandos ya montados, fija
+## quién no cuenta como ejército y arranca.
+func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array) -> void:
+	_reserve_uids(units)
 	_tower_crew_uids.clear()
 	for uid in crew_uids:
 		_tower_crew_uids[int(uid)] = true
@@ -313,7 +339,7 @@ func _build_side(roster: Dictionary, side: int, scale: float) -> Array:
 ## the expedition will wrap in US2: the same encounter, chained across a map with
 ## drafts between nodes. Until then it is the playable slice.
 func start_skirmish(party: Dictionary) -> bool:
-	if party.is_empty() or is_in_encounter():
+	if party.is_empty() or is_in_encounter() or has_active_expedition():
 		return false
 	start_encounter(party, build_enemy_roster(party, 0), false, 0)
 	return true
@@ -426,6 +452,8 @@ func _emit_events(events: Array) -> void:
 				# over, so the UI reading get_last_result() always sees it applied.
 				_apply_result(event["victory"], event["rounds"])
 				EventBus.encounter_ended.emit(event["victory"], event["rounds"])
+				# Y solo entonces la expedicion sigue: draft o final de la campana.
+				_publish_expedition_followups()
 
 ## Publishes and then hands the board to the AI if the turn that just started
 ## belongs to the enemy. Used for everything the player triggers.
@@ -488,6 +516,13 @@ func _apply_result(victory: bool, rounds: int) -> void:
 	if _encounter == null or _result_applied:
 		return
 	_result_applied = true
+
+	# Un nodo de expedicion no cobra ni entierra a nadie todavia: lo acumula el
+	# modelo y se liquida todo junto al volver (FR-010, FR-011, FR-017). La
+	# defensa de la base sigue su camino de siempre aunque haya columna fuera.
+	if has_active_expedition() and not _encounter.is_defense:
+		_apply_expedition_encounter(victory, rounds)
+		return
 
 	# Las dotaciones de torre quedan fuera del recuento: no salieron del cuartel,
 	# así que ni se restan del ejército ni cuentan como supervivientes que vuelven.
@@ -559,17 +594,282 @@ func _resource_type(res_name: String) -> int:
 		_:
 			return ResourceManager.Type.GOLD
 
+# ── Expedition (T025, T028, T030-T033) ───────────────────────────────
+
+func has_active_expedition() -> bool:
+	return _expedition != null and _expedition.is_active()
+
+## La expedicion en curso, para que la UI la lea. Null si no hay. Nadie fuera de
+## este servicio la muta (constitucion, principio IV).
+func get_expedition() -> Expedition:
+	return _expedition
+
+## unit_id -> count de todo el party, vivos y caidos. Los caidos cuentan porque
+## ArmyManager sigue teniendolos hasta que la expedicion se resuelve; ArmyPanel
+## los pinta "en campana" y get_deployable_units() los descuenta.
+func get_units_on_expedition() -> Dictionary:
+	if _expedition == null:
+		return {}
+	var counts: Dictionary = {}
+	for unit in _expedition.party:
+		counts[unit.unit_id] = int(counts.get(unit.unit_id, 0)) + 1
+	return counts
+
+## True entre ganar un nodo y elegir la carta. Mientras dure no se elige ruta.
+func has_pending_draft() -> bool:
+	return _draft_pending
+
+## Las cartas sobre la mesa, en el orden que espera apply_draft(index). Vacio si
+## no hay draft pendiente.
+func get_draft_options() -> Array:
+	return _draft_options.duplicate(true) if _draft_pending else []
+
+## Por que no se puede salir, si no se puede. `reason` es una clave de Tr para
+## que la UI la traduzca (FR-002). Las comprobaciones de estado van primero
+## porque no dependen de lo que el jugador haya marcado.
+func can_launch(party: Dictionary) -> Dictionary:
+	if has_active_expedition():
+		return {"ok": false, "reason": "MSG_EXPEDITION_ACTIVE"}
+	if is_in_encounter():
+		return {"ok": false, "reason": "MSG_ENCOUNTER_ACTIVE"}
+	# Con la Regencia convocada o ya en la puerta, la guarnicion no sale: la
+	# Auditoria Final se pelea con lo que hay en casa, y mandarla fuera ahora
+	# seria regalarles la partida.
+	if ProgressionManager.is_final_audit_pending() or ProgressionManager.is_final_audit_active():
+		return {"ok": false, "reason": "MSG_AUDIT_BLOCKS_EXPEDITION"}
+	var total: int = roster_size(party)
+	if total <= 0:
+		return {"ok": false, "reason": "MSG_NO_UNITS"}
+	if total > GameConfig.combat_deploy_cap:
+		return {"ok": false, "reason": "MSG_DEPLOY_CAP_EXCEEDED"}
+	var available: Dictionary = get_deployable_units()
+	for unit_id in party:
+		var wanted: int = int(party[unit_id])
+		if wanted < 0 or wanted > int(available.get(unit_id, 0)):
+			return {"ok": false, "reason": "MSG_UNITS_UNAVAILABLE"}
+	return {"ok": true, "reason": ""}
+
+## Saca la columna. Crea la expedicion con una semilla nueva (o la dada, para
+## reproducir una partida) y la moral que la base tiene ahora mismo, avisa y
+## abre el tablero del nodo 0. Las unidades NO se descuentan de ArmyManager:
+## siguen contando en el Poder Militar hasta que se sepa quien vuelve.
+func launch_expedition(party: Dictionary, seed_value: int = 0) -> bool:
+	if not bool(can_launch(party).get("ok", false)):
+		return false
+	var committed: Dictionary = {}
+	for unit_id in party:
+		if int(party[unit_id]) > 0:
+			committed[String(unit_id)] = int(party[unit_id])
+	_expedition = ExpeditionScript.create(
+		_next_expedition_id, seed_value if seed_value != 0 else _new_seed(),
+		committed, _read_morale(), ProgressionManager.current_era
+	)
+	_next_expedition_id += 1
+	_morale_snapshot = _expedition.morale_snapshot
+	_clear_draft()
+	_expedition_followups = []
+	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
+	enter_current_node()
+	return true
+
+## Elige la ruta. Solo una salida del nodo actual, y solo con la carta del draft
+## ya elegida; despues abre el tablero del nodo elegido.
+func select_node(node_index: int) -> bool:
+	if not has_active_expedition() or is_in_encounter() or _draft_pending:
+		return false
+	if not _expedition.can_select(node_index):
+		return false
+	_publish_expedition_events(_expedition.select_node(node_index))
+	return enter_current_node()
+
+## Abre el tablero del nodo en el que esta el party. Lo usan el lanzamiento y
+## select_node(), y es lo que la UI llama al reanudar una partida guardada a
+## mitad de nodo (D6): el encuentro no se guarda, asi que se vuelve a desplegar
+## desde cero, con las unidades y el HP tal como estaban.
+##
+## Las CombatUnit que entran son las mismas instancias de Expedition.party: el
+## tablero les pega directamente, y por eso un superviviente llega tocado al
+## siguiente nodo y un caido no vuelve a formar (FR-010, FR-011).
+func enter_current_node() -> bool:
+	if not has_active_expedition() or is_in_encounter() or _draft_pending:
+		return false
+	var node: Dictionary = _expedition.current_node_data()
+	if node.is_empty() or bool(node.get("cleared", false)):
+		return false
+	if _expedition.is_party_wiped():
+		# Sin nadie en pie no hay tablero que abrir: la campana termino.
+		_publish_expedition_events(_expedition.mark_defeated())
+		return false
+	if _encounter != null:
+		# Un tablero ya resuelto que la UI aun no cerro.
+		end_encounter()
+	_morale_snapshot = _expedition.morale_snapshot
+	_open_board(
+		_expedition.build_encounter_units(), bool(node.get("is_boss", false)),
+		int(node.get("index", _expedition.current_node)), false, []
+	)
+	return true
+
+## El jugador elige una carta del draft. El bono vive en las unidades y muere
+## con la expedicion (FR-018). NO abre el siguiente tablero: la ruta se elige
+## aparte con select_node().
+func apply_draft(option_index: int) -> bool:
+	if not has_active_expedition() or not _draft_pending:
+		return false
+	if option_index < 0 or option_index >= _draft_options.size():
+		return false
+	var events: Array = _expedition.apply_draft(_draft_options[option_index])
+	if events.is_empty():
+		return false
+	_clear_draft()
+	_publish_expedition_events(events)
+	return true
+
+## Volver a casa antes de tiempo, con el botin y los supervivientes (FR-016).
+## Si hay tablero abierto se cierra sin aplicar resultado: quien sigue en pie
+## se retira, y los caidos ya estan anotados en el party.
+func abandon_expedition() -> bool:
+	if not has_active_expedition():
+		return false
+	if _encounter != null:
+		_result_applied = true
+		end_encounter()
+	_clear_draft()
+	_publish_expedition_events(_expedition.abandon())
+	return true
+
+## Un encuentro de expedicion acaba de resolverse. Aqui no se toca la base: el
+## modelo apunta el botin del nodo y decide si toca draft o si la campana ha
+## terminado; eso se publica despues de encounter_ended (ver _emit_events).
+func _apply_expedition_encounter(victory: bool, rounds: int) -> void:
+	var fallen: Dictionary = _count_by_unit(_encounter.casualties(Encounter.PLAYER))
+	var survivors: Dictionary = _count_by_unit(_encounter.survivors())
+	# Los supervivientes bajan del tablero ya, con su daño puesto: son las mismas
+	# instancias que viven en Expedition.party y asi entran al siguiente nodo.
+	_encounter.release_survivors()
+
+	var before: Dictionary = _expedition.rewards.duplicate()
+	_expedition_followups = _expedition.mark_cleared() if victory else _expedition.mark_defeated()
+	var gained: Dictionary = {}
+	for res_name in _expedition.rewards:
+		var delta: int = int(_expedition.rewards[res_name]) - int(before.get(res_name, 0))
+		if delta > 0:
+			gained[res_name] = delta
+
+	_last_result = {
+		"victory": victory,
+		"rounds": rounds,
+		"defense": false,
+		"expedition": true,
+		# Lo que pago este nodo y lo que costo. Nada de esto ha llegado aun al
+		# almacen ni al cuartel: se liquida en _resolve_expedition().
+		"rewards": gained,
+		"casualties": fallen,
+		"survivors": survivors,
+		"morale_delta": 0,
+		"tower_crews": 0,
+		"tower_crews_lost": 0,
+	}
+
+func _publish_expedition_followups() -> void:
+	var events: Array = _expedition_followups
+	_expedition_followups = []
+	_publish_expedition_events(events)
+
+## Vuelca los eventos del modelo de expedicion al EventBus. Es el equivalente
+## de _emit_events() para Expedition: el modelo nunca emite nada por su cuenta.
+func _publish_expedition_events(events: Array) -> void:
+	for event in events:
+		match event.get("e", ""):
+			"expedition_node_selected":
+				EventBus.expedition_node_selected.emit(int(event["index"]))
+			"node_cleared":
+				# El jefe no da carta: da la campana entera, y eso viene detras.
+				if not bool(event.get("is_boss", false)):
+					_offer_draft()
+			"draft_applied":
+				EventBus.draft_applied.emit(event["option"])
+			"expedition_ended":
+				_resolve_expedition(int(event["result"]))
+
+## Pone las cartas sobre la mesa. Salen de la semilla y del nodo, asi que
+## reabrir la partida ensena las mismas.
+func _offer_draft() -> void:
+	if not has_active_expedition():
+		return
+	var options: Array = _expedition.draft_options()
+	if options.is_empty():
+		# Sin nadie vivo a quien mejorar no hay nada que ofrecer.
+		return
+	_draft_options = options
+	_draft_pending = true
+	EventBus.draft_offered.emit(options.duplicate(true))
+
+func _clear_draft() -> void:
+	_draft_pending = false
+	_draft_options = []
+
+## La liquidacion, una sola vez por campana: el botin entra al almacen (el pool
+## compartido ya recorta y avisa por storage_overflow), los caidos salen del
+## ejercito, los supervivientes vuelven enteros —basta con soltar el party, su
+## HP solo existia aqui— y la moral del pueblo se mueve segun como fue (FR-017,
+## FR-018, D8). Al final, expedition_ended, y la base vuelve a ser la base.
+func _resolve_expedition(result: int) -> void:
+	if _expedition == null:
+		return
+	var summary: Dictionary = _expedition.result_summary()
+	var rewards: Dictionary = summary.get("rewards", {})
+	for res_name in rewards:
+		ResourceManager.add(_resource_type(String(res_name)), int(rewards[res_name]))
+
+	var lost: Dictionary = ArmyManager.remove_units(summary.get("casualties", {}))
+	var dead: int = 0
+	for count in lost.values():
+		dead += int(count)
+	# Misma formula que la escaramuza suelta: ganar levanta, cada caido hunde.
+	# Abandonar no es ganar, pero tampoco cuesta mas que sus muertos.
+	var morale_delta: int = Rules.morale_delta(result == Expedition.RESULT_WON, dead)
+	if morale_delta != 0:
+		PopulationManager.adjust_morale(morale_delta)
+
+	_last_result = {
+		"victory": result == Expedition.RESULT_WON,
+		"rounds": int(_last_result.get("rounds", 0)),
+		"defense": false,
+		"expedition": true,
+		"result": result,
+		"rewards": rewards.duplicate(),
+		"casualties": lost.duplicate(),
+		"survivors": summary.get("survivors", {}),
+		"morale_delta": morale_delta,
+		"nodes_cleared": int(summary.get("nodes_cleared", 0)),
+		"boss_defeated": bool(summary.get("boss_defeated", false)),
+		"tower_crews": 0,
+		"tower_crews_lost": 0,
+	}
+
+	_expedition = null
+	_clear_draft()
+	_expedition_followups = []
+	EventBus.expedition_ended.emit(result, rewards.duplicate(), lost.duplicate())
+
+func _new_seed() -> int:
+	var value: int = randi()
+	# Cero es "sin semilla" para launch_expedition(); que nunca salga por azar.
+	return value if value != 0 else 1
+
 # ── Dev helper (T014) ────────────────────────────────────────────────
 
 ## Starts a standalone encounter with whatever the player has trained, so the
 ## board can be exercised before the expedition layer exists.
 func dev_start_encounter() -> bool:
-	if not GameConfig.dev_mode:
+	if not GameConfig.dev_mode or has_active_expedition():
 		return false
 	var party: Dictionary = {}
 	var committed := 0
+	var available: Dictionary = get_deployable_units()
 	for unit_id in GameConfig.get_unit_ids():
-		for i in ArmyManager.get_count(unit_id):
+		for i in int(available.get(unit_id, 0)):
 			if committed >= GameConfig.combat_deploy_cap:
 				break
 			party[unit_id] = int(party.get(unit_id, 0)) + 1
@@ -586,16 +886,47 @@ func _read_morale() -> float:
 		return float(PopulationManager.get_morale())
 	return 50.0
 
-## No expedition layer yet, so nothing persists. Kept so GameManager can wire the
-## save slot now and stay backward compatible when expeditions land (T036).
+## Lo que va en data["expedition"]: nada si no hay campana, o el to_dict() del
+## modelo (el mapa no se guarda, se regenera de la semilla — D5/D6). Encima va
+## `draft_pending`, que es estado de este servicio y no del modelo: una carta
+## ofrecida y sin elegir se vuelve a ofrecer al cargar, y son las mismas cartas
+## porque salen de la semilla y del nodo.
+##
+## El encuentro a medias NO se guarda: el party va con el HP que tiene ahora
+## mismo y el nodo sin limpiar, y al cargar se vuelve a desplegar desde cero.
 func get_save_data() -> Dictionary:
-	return {}
+	if not has_active_expedition():
+		return {}
+	var data: Dictionary = _expedition.to_dict()
+	data["draft_pending"] = _draft_pending
+	return data
 
-func load_save_data(_data: Dictionary) -> void:
-	pass
+## Reconstruye la campana guardada y avisa con expedition_resumed para que la UI
+## abra el mapa en el nodo actual (D6); el tablero lo abre la UI llamando a
+## enter_current_node(). Sin clave, dict vacio o campana ya terminada = no hay
+## expedicion, que es exactamente lo que dice un save anterior a esta feature
+## (constitucion, principio V).
+func load_save_data(data: Dictionary) -> void:
+	_expedition = null
+	_clear_draft()
+	_expedition_followups = []
+	var run: Expedition = ExpeditionScript.from_dict(data, ProgressionManager.current_era)
+	if run == null or not run.is_active():
+		return
+	_expedition = run
+	_next_expedition_id = maxi(_next_expedition_id, run.id + 1)
+	_morale_snapshot = run.morale_snapshot
+	EventBus.expedition_resumed.emit(run.id)
+	var node: Dictionary = run.current_node_data()
+	if bool(data.get("draft_pending", false)) and bool(node.get("cleared", false)) and not run.at_boss():
+		_offer_draft()
 
 func reset() -> void:
 	_encounter = null
+	_expedition = null
+	_next_expedition_id = 1
+	_clear_draft()
+	_expedition_followups = []
 	_enemy_turn_running = false
 	_audit_wave_active = false
 	_audit_crews.clear()
