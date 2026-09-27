@@ -549,10 +549,14 @@ time. What follows is only what a reader of *this* document needs on top of them
 - `summary` on `defense_auto_resolved` is `CombatManager.get_last_result()`, and
   that signal is the **only** one that fight emits — no `encounter_*` accompanies
   it, because the open board would claim them.
-- `defense_auto_resolved` and `final_audit_wave_cleared` still have **no listener
-  in `scripts/`**. `StormManager` reads the return value of
-  `auto_resolve_defense()` directly and posts its own notification; the signals
-  are there for a proper after-action report that has not been built.
+- `defense_auto_resolved` is read by `WarReportScreen` (the after-action report:
+  casualties on both sides — `summary.enemy_casualties` — rounds, tower crews,
+  outcome), and `final_audit_wave_cleared` by `AuditWaveBanner` ("Oleada X de N").
+  `StormManager` still reads `auto_resolve_defense()`'s return value for its toast.
+- `tithe_resolved`'s first argument is **true when nothing was taken** (repelled,
+  or stood down during the Audit), despite its name `paid`. `WarReportScreen`
+  stamps it COBRADO / REPELIDO; the maximum Tithe of a lost siege is left to
+  `AuditDefeatScreen`, which matches it to `final_audit_lost` by process frame.
 - `victory_achieved(stats)` is still emitted by `ProgressionManager` and consumed
   by `VictoryScreen`, but it is now reached **only** through a won Final Audit.
 
@@ -689,13 +693,6 @@ and never registered as an autoload. Re-run it after touching a silhouette.
 
 Verified against the code, not the spec. Update this list as things land.
 
-- **`defense_auto_resolved` has no listener** in `scripts/`. `StormManager` reads
-  the return value of `auto_resolve_defense()` directly and posts its own
-  notification (`MSG_DEFENSE_AUTO_WON` / `MSG_DEFENSE_AUTO_LOST`). The signal is
-  there for a proper after-action report that nobody has built. Only
-  `tests/storm/test_defense_auto_resolve.gd` connects it.
-- **`final_audit_wave_cleared` has no listener either.** A cleared wave is felt
-  only through the next one opening; there is no "wave 2 of 4" beat anywhere.
 - **`CombatManager.build_enemy_roster()` is provisional.** It is the unseeded
   roster used by `start_skirmish()`; its own docstring says
   `ExpeditionGenerator.enemy_roster()` replaces it. Both exist today, and
