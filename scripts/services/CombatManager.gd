@@ -22,6 +22,7 @@ const ExpeditionScript := preload("res://scripts/combat/Expedition.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
 const AI := preload("res://scripts/combat/CombatAI.gd")
 const AutoResolverScript := preload("res://scripts/combat/AutoResolver.gd")
+const ExpeditionGeneratorScript := preload("res://scripts/combat/ExpeditionGenerator.gd")
 
 var _encounter: Encounter = null
 ## La expedicion en curso. Null en la base; se descarta al resolverla.
@@ -430,45 +431,20 @@ func _build_side(roster: Dictionary, side: int, scale: float) -> Array:
 			built.append(unit)
 	return built
 
-## Standalone fight with the party the player just committed. This is the loop
-## the expedition will wrap in US2: the same encounter, chained across a map with
-## drafts between nodes. Until then it is the playable slice.
-func start_skirmish(party: Dictionary) -> bool:
+## Pelea suelta con el party que el jugador acaba de comprometer. El enemigo es
+## el mismo que el del primer nodo de una expedicion (profundidad 0, riesgo bajo),
+## sacado de ExpeditionGenerator con su propia semilla: el roster provisional sin
+## semilla que vivia aqui se fue, y con el la segunda formula de "cuanto enemigo
+## toca". `seed_value` = 0 tira una semilla nueva; otra cosa reproduce la pelea.
+func start_skirmish(party: Dictionary, seed_value: int = 0) -> bool:
 	if party.is_empty() or is_in_encounter() or has_active_expedition():
 		return false
-	start_encounter(party, build_enemy_roster(party, 0), false, 0)
-	return true
-
-## Fields an opposing force that answers what the player brought, so committing
-## more never turns the fight into a walkover — the decision has to stay a
-## decision. Deeper nodes and later eras tilt it against the player.
-##
-## Provisional: ExpeditionGenerator.enemy_roster() replaces this in T022, where
-## the roster becomes seeded and reproducible.
-func build_enemy_roster(party: Dictionary, depth: int) -> Dictionary:
-	var committed := 0
-	for count in party.values():
-		committed += int(count)
-	committed = maxi(1, committed)
-
 	var era: int = ProgressionManager.current_era
-	var pressure: float = 1.0 \
-		+ GameConfig.combat_enemy_scale_per_depth * float(depth) \
-		+ GameConfig.combat_enemy_scale_per_era * float(maxi(0, era - 1))
-	var slots: int = clampi(roundi(float(committed) * pressure), 1, GameConfig.combat_deploy_cap)
-
-	# A line of infantry with guns behind it: enough shape that positioning and
-	# the artillery's minimum range both matter from the very first fight.
-	var roster: Dictionary = {}
-	var guns: int = slots / 3
-	var armour: int = 1 if era >= 3 and slots >= 4 else 0
-	var line: int = maxi(1, slots - guns - armour)
-	roster["infantry"] = line
-	if guns > 0:
-		roster["artillery"] = guns
-	if armour > 0:
-		roster["vehicle"] = armour
-	return roster
+	var rng: RandomNumberGenerator = ExpeditionGeneratorScript.make_rng(
+		seed_value if seed_value != 0 else _new_seed())
+	var roster: Dictionary = ExpeditionGeneratorScript.enemy_roster(rng, 0, era, 0)
+	start_encounter(party, roster, false, 0, false, {}, ExpeditionGeneratorScript.enemy_scale(0, era, 0))
+	return true
 
 func end_encounter() -> void:
 	var was_audit_wave: bool = _audit_wave_active
