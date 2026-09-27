@@ -241,7 +241,12 @@ var resource_colors := {
 # Master scales all others. Set any to 0.0 to mute that channel.
 
 var audio_master_volume := 0.9
-var audio_music_volume := 0.6
+## Bajada de 0.6 a 0.35: el dueno la encontraba muy invasiva. Quien ya guardo
+## un volumen en settings.cfg conserva el suyo.
+var audio_music_volume := 0.35
+## Musica si/no, aparte del volumen (Ajustes y el menu ☰). Apagada, AudioManager
+## no arranca ninguna pista, ni al cambiar de era ni al entrar en combate.
+var audio_music_enabled := true
 var audio_sfx_volume := 0.8
 var audio_ambient_volume := 0.5
 
@@ -290,6 +295,15 @@ var ui_helper_visible := true
 ## Settings panel; persists in user://settings.cfg like the rest of preferences.
 var ui_fullscreen := false
 
+## Controles tactiles en pantalla (D-pad, zoom, rotar, cancelar colocacion).
+## "auto" los ensena solo en movil (o en PC tras un toque real de pantalla, ver
+## touch_controls_enabled); "always" y "never" fuerzan. En escritorio sobran:
+## hay WASD y rueda, y los botones ocupaban las cuatro esquinas de la pantalla.
+## El mismo estado decide si los botones pequenos del HUD crecen a tamano dedo
+## (UITheme.touch_px).
+const TOUCH_CONTROLS_MODES := ["auto", "always", "never"]
+var ui_touch_controls := "auto"
+
 func _ready() -> void:
 	load_user_settings()
 	# El modo de ventana se aplica en cuanto arranca, antes de que se dibuje la UI.
@@ -303,9 +317,14 @@ func load_user_settings() -> void:
 	audio_music_volume = clampf(float(cf.get_value("audio", "music", audio_music_volume)), 0.0, 1.0)
 	audio_sfx_volume = clampf(float(cf.get_value("audio", "sfx", audio_sfx_volume)), 0.0, 1.0)
 	audio_ambient_volume = clampf(float(cf.get_value("audio", "ambient", audio_ambient_volume)), 0.0, 1.0)
+	audio_music_enabled = bool(cf.get_value("audio", "music_enabled", audio_music_enabled))
 	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
+	var touch_mode := String(cf.get_value("ui", "touch_controls", ui_touch_controls))
+	# Un valor desconocido en el archivo (edicion a mano, version vieja) vuelve
+	# a "auto" en vez de dejar los controles en un estado que nadie eligio.
+	ui_touch_controls = touch_mode if touch_mode in TOUCH_CONTROLS_MODES else "auto"
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -314,10 +333,63 @@ func save_user_settings() -> void:
 	cf.set_value("audio", "music", audio_music_volume)
 	cf.set_value("audio", "sfx", audio_sfx_volume)
 	cf.set_value("audio", "ambient", audio_ambient_volume)
+	cf.set_value("audio", "music_enabled", audio_music_enabled)
 	cf.set_value("ui", "grid_visible", ui_grid_visible)
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
+	cf.set_value("ui", "touch_controls", ui_touch_controls)
 	cf.save(USER_SETTINGS_PATH)
+
+# ── Controles tactiles ──
+
+## Si ya ha llegado un toque de pantalla REAL en esta sesion (InputService lo
+## avisa). No se guarda: un portatil tactil que hoy se usa con el dedo manana
+## puede usarse con raton, y el ajuste explicito es "Siempre".
+var _real_touch_seen := false
+
+## Si los controles en pantalla deben verse ahora, resolviendo el "auto".
+## Es la unica pregunta que hace OnScreenControls.
+##
+## "auto" NO mira DisplayServer.is_touchscreen_available(): muchos portatiles
+## Windows dicen tener pantalla tactil y el D-pad aparecia en un PC que se usa
+## con raton. En "auto" salen solo en un sistema movil, o en escritorio en
+## cuanto llega un toque real de pantalla.
+func touch_controls_enabled() -> bool:
+	match ui_touch_controls:
+		"always":
+			return true
+		"never":
+			return false
+		_:
+			return is_mobile_os() or _real_touch_seen
+
+## Movil de verdad: exportado a Android/iOS, o la web abierta en uno de ellos.
+static func is_mobile_os() -> bool:
+	for feature in ["mobile", "android", "ios", "web_android", "web_ios"]:
+		if OS.has_feature(feature):
+			return true
+	return false
+
+## InputService llama aqui con cada InputEventScreenTouch real (el proyecto no
+## emula toques desde el raton, asi que un toque es un dedo). En "auto" hace
+## aparecer los controles; con "never" explicito no cambia nada.
+func notice_real_touch() -> void:
+	if _real_touch_seen:
+		return
+	_real_touch_seen = true
+	if ui_touch_controls == "auto" and not is_mobile_os():
+		EventBus.touch_controls_changed.emit(touch_controls_enabled())
+
+## Cambia el modo, lo guarda y anuncia el estado resuelto para que los controles
+## aparezcan o desaparezcan sin reiniciar.
+func set_touch_controls(mode: String) -> void:
+	if not mode in TOUCH_CONTROLS_MODES:
+		mode = "auto"
+	if ui_touch_controls == mode:
+		return
+	ui_touch_controls = mode
+	save_user_settings()
+	EventBus.touch_controls_changed.emit(touch_controls_enabled())
 
 # ── Pantalla completa ──
 

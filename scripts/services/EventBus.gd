@@ -33,7 +33,7 @@ signal storage_overflow(resource_type: String, lost: int, cap: int)
 @warning_ignore("unused_signal")
 signal building_selected_for_placement(building_data: Resource)
 @warning_ignore("unused_signal")
-signal building_placement_cancelled()  # reserved: BuildingPlacer cancel flow
+signal building_placement_cancelled()  # ESC, right-click or the on-screen CANCEL; BuildingPlacer._cancel listens
 @warning_ignore("unused_signal")
 signal building_placed(building_data: Resource, cell: Vector2i)
 @warning_ignore("unused_signal")
@@ -277,6 +277,15 @@ signal grid_overlay_toggled(visible: bool)
 
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
+
+## Emitted when the on-screen touch controls preference changes (Settings).
+## Carries the RESOLVED state: "auto" already checked against the hardware.
+@warning_ignore("unused_signal")
+signal touch_controls_changed(enabled: bool)
+
+## Emitted when music is switched on/off (Settings or the ☰ quick button).
+@warning_ignore("unused_signal")
+signal music_toggled(enabled: bool)
 
 # ── Persistence ──
 @warning_ignore("unused_signal")

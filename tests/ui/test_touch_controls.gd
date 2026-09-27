@@ -6,6 +6,9 @@ extends GdUnitTestSuite
 ## "automatico" (segun haya pantalla tactil) es el valor bueno para casi todos
 ## y un interruptor de dos posiciones no puede decirlo.
 ##
+## "auto" significa movil (o un toque real en PC), no "hay pantalla tactil":
+## muchos portatiles lo dicen y el D-pad salia en un PC que se usa con raton.
+##
 ## Toca GameConfig (autoload) y user://settings.cfg; cada prueba deja ambos
 ## como los encontro. No se usa monitor_signals sobre autoloads.
 
@@ -16,6 +19,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	GameConfig.ui_touch_controls = _saved_mode
+	GameConfig._real_touch_seen = false
 	GameConfig.save_user_settings()
 
 func test_always_shows_them_even_without_a_touchscreen() -> void:
@@ -26,10 +30,31 @@ func test_never_hides_them_even_on_a_touchscreen() -> void:
 	GameConfig.ui_touch_controls = "never"
 	assert_bool(GameConfig.touch_controls_enabled()).is_false()
 
-func test_auto_follows_the_hardware() -> void:
+func test_auto_is_off_on_a_desktop_until_a_real_touch() -> void:
+	# Muchos portatiles Windows dicen tener pantalla tactil: "auto" no se fia de
+	# eso. En PC los controles no salen hasta que llega un dedo de verdad.
 	GameConfig.ui_touch_controls = "auto"
-	var hardware := DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
-	assert_bool(GameConfig.touch_controls_enabled()).is_equal(hardware)
+	GameConfig._real_touch_seen = false
+	assert_bool(GameConfig.touch_controls_enabled()).is_equal(GameConfig.is_mobile_os())
+
+func test_a_real_touch_brings_them_in_auto() -> void:
+	GameConfig.ui_touch_controls = "auto"
+	GameConfig._real_touch_seen = false
+	var received: Array = []
+	var listener := func(enabled: bool): received.append(enabled)
+	EventBus.touch_controls_changed.connect(listener)
+	GameConfig.notice_real_touch()
+	GameConfig.notice_real_touch()  # el segundo toque no vuelve a avisar
+	EventBus.touch_controls_changed.disconnect(listener)
+	assert_bool(GameConfig.touch_controls_enabled()).is_true()
+	if not GameConfig.is_mobile_os():
+		assert_array(received).is_equal([true])
+
+func test_an_explicit_never_wins_over_a_real_touch() -> void:
+	GameConfig.ui_touch_controls = "never"
+	GameConfig._real_touch_seen = false
+	GameConfig.notice_real_touch()
+	assert_bool(GameConfig.touch_controls_enabled()).is_false()
 
 func test_the_default_is_auto() -> void:
 	assert_array(GameConfig.TOUCH_CONTROLS_MODES).contains(["auto", "always", "never"])
