@@ -58,6 +58,48 @@ func can_research(tech_id: String) -> bool:
 	var cost := _get_tech_cost(tech)
 	return ResourceManager.can_afford(cost)
 
+## Por que `can_research()` dice que no, como clave de Tr ("" si se puede).
+## Mismo orden de comprobaciones que `can_research()`, para que el motivo que ve
+## el jugador sea siempre el primero que le para de verdad.
+##   TECH_BLOCK_DONE        ya investigada
+##   TECH_BLOCK_RESEARCHING hay otra investigacion en curso
+##   TECH_BLOCK_PREREQ      falta el nivel anterior (ver get_missing_prerequisites)
+##   TECH_BLOCK_COST        faltan recursos (ver get_missing_cost)
+func get_research_blocker(tech_id: String) -> String:
+	if is_researched(tech_id):
+		return "TECH_BLOCK_DONE"
+	if is_researching():
+		return "TECH_BLOCK_RESEARCHING"
+	var tech := get_tech(tech_id)
+	if tech.is_empty():
+		return "TECH_BLOCK_PREREQ"
+	if not get_missing_prerequisites(tech_id).is_empty():
+		return "TECH_BLOCK_PREREQ"
+	if not ResourceManager.can_afford(_get_tech_cost(tech)):
+		return "TECH_BLOCK_COST"
+	return ""
+
+## Las tecnologias que faltan por investigar antes de esta.
+func get_missing_prerequisites(tech_id: String) -> Array:
+	var missing: Array = []
+	for req in get_tech(tech_id).get("requires", []):
+		if not is_researched(req):
+			missing.append(req)
+	return missing
+
+## Lo que falta de cada recurso para pagarla: {"steel": 40}. Vacio si alcanza.
+func get_missing_cost(tech_id: String) -> Dictionary:
+	var missing: Dictionary = {}
+	var raw_cost: Dictionary = get_tech(tech_id).get("cost", {})
+	for res_name in raw_cost:
+		var type := ResourceManager.name_to_type(res_name)
+		if type == -1:
+			continue
+		var short: int = int(raw_cost[res_name]) - ResourceManager.get_amount(type)
+		if short > 0:
+			missing[res_name] = short
+	return missing
+
 func start_research(tech_id: String) -> bool:
 	if not can_research(tech_id):
 		return false
