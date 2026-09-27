@@ -11,6 +11,115 @@ var _camera: Camera3D = null
 var _started := false
 var _warehouse_count := 0
 
+# ── Autosave ──
+## Hay algo sin escribir. Se escribe al vencer el debounce, y si en ese momento
+## no es seguro (pelea en juego) se queda pendiente hasta que lo sea.
+var _save_pending := false
+var _save_debounce_left := 0.0
+var _autosave_elapsed := 0.0
+
+## Lo que cambia la partida sin pasar por un edificio. Cada senal con su numero
+## de argumentos, para poder desatarlos y llamar a request_save() sin mas.
+func _autosave_triggers() -> Array:
+	return [
+		[EventBus.market_trade_completed, 4],
+		[EventBus.unit_training_started, 2],
+		[EventBus.unit_trained, 1],
+		[EventBus.unit_training_cancelled, 2],
+		[EventBus.army_deserted, 2],
+		[EventBus.encounter_ended, 2],
+		[EventBus.tithe_resolved, 2],
+		[EventBus.final_audit_summoned, 2],
+		[EventBus.final_audit_wave_cleared, 2],
+		[EventBus.final_audit_lost, 1],
+		[EventBus.storm_halted_forever, 0],
+		[EventBus.victory_achieved, 1],
+		[EventBus.expedition_started, 2],
+		[EventBus.expedition_node_selected, 1],
+		[EventBus.draft_applied, 1],
+		[EventBus.expedition_ended, 3],
+		[EventBus.process_started, 2],
+		[EventBus.process_completed, 2],
+		[EventBus.mining_completed, 2],
+		[EventBus.process_cancelled, 3],
+		[EventBus.construction_completed, 1],
+		[EventBus.building_upgrade_started, 2],
+		[EventBus.building_upgrade_completed, 2],
+		[EventBus.storm_phase_changed, 2],
+	]
+
+func _ready() -> void:
+	for trigger in _autosave_triggers():
+		var sig: Signal = trigger[0]
+		var cb: Callable = request_save.unbind(int(trigger[1])) if int(trigger[1]) > 0 else request_save
+		sig.connect(cb)
+	EventBus.encounter_started.connect(_on_encounter_started)
+
+## Pide un guardado. No escribe en el acto: espera `autosave_debounce` para que
+## una rafaga de eventos del mismo instante acabe en un solo guardado.
+func request_save() -> void:
+	if not _started:
+		return
+	_save_pending = true
+	_save_debounce_left = GameConfig.autosave_debounce
+
+func has_pending_save() -> bool:
+	return _save_pending
+
+## Escribe lo pendiente si ahora se puede. Devuelve si escribio.
+func flush_pending_save() -> bool:
+	if not _save_pending:
+		return false
+	if not _can_write() or not CombatManager.is_save_safe():
+		return false
+	_save_pending = false
+	_write_save()
+	return true
+
+func _process(delta: float) -> void:
+	if not _started:
+		_save_pending = false
+		_autosave_elapsed = 0.0
+		return
+	_autosave_elapsed += delta
+	if _autosave_elapsed >= GameConfig.autosave_interval:
+		_autosave_elapsed = 0.0
+		_save_pending = true
+		_save_debounce_left = 0.0
+	if _save_pending:
+		_save_debounce_left -= delta
+		if _save_debounce_left <= 0.0:
+			flush_pending_save()
+
+## El punto de control de cada pelea: se escribe justo cuando se abre el
+## tablero, antes de que nadie mueva. Mientras dure la pelea no se guarda (ver
+## CombatManager.is_save_safe), asi que si el juego se cierra a mitad, lo que
+## hay en disco es este momento: la pelea se vuelve a jugar desde el principio,
+## que es lo que siempre ha dicho el diseño (el tablero no se guarda).
+func _on_encounter_started(_index: int, _is_boss: bool) -> void:
+	if _started and _can_write():
+		_write_save()
+
+## Cerrar la ventana, o que el movil mande la app al fondo (de donde el sistema
+## puede matarla sin avisar), guarda lo que haya. Con una pelea en juego no: el
+## disco ya tiene el punto de control de cuando se abrio el tablero.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			_save_now_if_safe()
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			if OS.has_feature("mobile"):
+				_save_now_if_safe()
+
+func _save_now_if_safe() -> void:
+	if not _started or not _can_write() or not CombatManager.is_save_safe():
+		return
+	_save_pending = false
+	_write_save()
+
+func _can_write() -> bool:
+	return is_instance_valid(_placer) and is_instance_valid(_map_gen)
+
 func register_placer(placer: Node) -> void:
 	_placer = placer
 	_try_start()
@@ -260,7 +369,19 @@ func backup_unreadable_save() -> String:
 		return ""
 	return path
 
+## Guarda ya, salvo que haya una pelea en juego: entonces queda pendiente y se
+## escribe en cuanto el tablero lo permita.
 func save_game() -> void:
+	if not _can_write():
+		return
+	if not CombatManager.is_save_safe():
+		_save_pending = true
+		return
+	_save_pending = false
+	_write_save()
+
+func _write_save() -> void:
+	_autosave_elapsed = 0.0
 	var data := {}
 	data["saved_at"] = Time.get_unix_time_from_system()
 
