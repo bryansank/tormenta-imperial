@@ -8,16 +8,27 @@ extends CanvasLayer
 ## como se reparte la bolsa. Cuando se llena, la barra y el numero se ponen
 ## rojos: lo que entre a partir de ahi se pierde y el jugador tiene que verlo.
 ##
+## El desplegable (▼) anade una fila con nombre por recurso: el icono basta de
+## un vistazo, pero quien aun no sabe cual es cual lo lee ahi.
+##
 ## Los iconos (moneda, tronco, lingote, gota) los genera
 ## tools/gen_resource_icons.gd; los estilos salen todos de UITheme.
 
+## Lado del boton ▼ en escritorio. Con el dedo crece a UITheme.MIN_BTN_H.
+const TOGGLE_PX := 28.0
+
 var _panel: PanelContainer
-var _chips: Dictionary = {}     # Type -> HBoxContainer (UITheme.make_resource_chip)
-var _segments: Dictionary = {}  # Type -> ColorRect, su tajada de la barra
+var _chips: Dictionary = {}       # Type -> HBoxContainer (UITheme.make_resource_chip)
+var _exp_rows: Dictionary = {}    # Type -> HBoxContainer (fila con nombre, desplegada)
+var _exp_labels: Dictionary = {}  # Type -> Label (cantidad en la fila desplegada)
+var _segments: Dictionary = {}    # Type -> ColorRect, su tajada de la barra
 var _free_segment: ColorRect
 var _pool_bar: PanelContainer
 var _storage_label: Label
 var _storage_value: Label
+var _toggle_btn: Button
+var _content_box: VBoxContainer
+var _is_expanded := false
 
 ## En orden de era: lo primero que ve un jugador nuevo es oro y madera.
 var _resource_ids := ["gold", "wood", "steel", "oil"]
@@ -33,6 +44,7 @@ func _ready() -> void:
 	EventBus.resources_insufficient.connect(_on_insufficient)
 	EventBus.resource_unlocked.connect(_on_resource_unlocked)
 	EventBus.storage_overflow.connect(_on_overflow)
+	EventBus.touch_controls_changed.connect(func(_on): _size_toggle())
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -49,10 +61,18 @@ func _setup_ui() -> void:
 	vbox.add_theme_constant_override("separation", 6)
 	_panel.add_child(vbox)
 
-	# ── Fila de fichas: [icono] cantidad, una por recurso desbloqueado ──
+	# ── Fila de fichas: [▼] [icono] cantidad, una por recurso desbloqueado ──
 	var chips_row := HBoxContainer.new()
-	chips_row.add_theme_constant_override("separation", 14)
+	chips_row.add_theme_constant_override("separation", 12)
 	vbox.add_child(chips_row)
+
+	_toggle_btn = Button.new()
+	_toggle_btn.text = "▼"  # ▼
+	_toggle_btn.tooltip_text = Tr.t("BTN_RESOURCES_DETAIL")
+	UITheme.style_button(_toggle_btn, UITheme.BTN, UITheme.FONT_SMALL)
+	_toggle_btn.pressed.connect(_toggle_expanded)
+	chips_row.add_child(_toggle_btn)
+	_size_toggle()
 
 	for i in range(_resource_ids.size()):
 		var type: ResourceManager.Type = _resource_types[i]
@@ -60,6 +80,37 @@ func _setup_ui() -> void:
 		chip.visible = ResourceManager.is_unlocked(type)
 		chips_row.add_child(chip)
 		_chips[type] = chip
+
+	# Dev-only shortcut to wipe the save. Players use Settings > New game instead.
+	if GameConfig.dev_mode:
+		var clear_btn := Button.new()
+		clear_btn.text = Tr.t("BTN_CLEAR")
+		UITheme.style_button(clear_btn, UITheme.DANGER, UITheme.FONT_SMALL)
+		clear_btn.custom_minimum_size.y = UITheme.touch_px(TOGGLE_PX)
+		clear_btn.pressed.connect(GameManager.request_new_game)
+		chips_row.add_child(clear_btn)
+
+	# ── Detalle desplegable: una fila con nombre por recurso ──
+	_content_box = VBoxContainer.new()
+	_content_box.add_theme_constant_override("separation", 4)
+	_content_box.visible = false
+	vbox.add_child(_content_box)
+	for i in range(_resource_ids.size()):
+		var type: ResourceManager.Type = _resource_types[i]
+		var res_id: String = _resource_ids[i]
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		row.add_child(UITheme.make_icon(res_id, 20))
+		var name_lbl := UITheme.make_label(Tr.res_upper(res_id), "small", UITheme.resource_color(res_id))
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_lbl)
+		var amt := UITheme.make_label("0", "small", UITheme.TEXT_BRIGHT)
+		amt.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(amt)
+		row.visible = ResourceManager.is_unlocked(type)
+		_content_box.add_child(row)
+		_exp_rows[type] = row
+		_exp_labels[type] = amt
 
 	# ── Almacen: un nombre, un numero, una barra ──
 	var storage_row := HBoxContainer.new()
@@ -86,6 +137,24 @@ func _setup_ui() -> void:
 
 	_refresh()
 
+## El ▼ es pequeno con raton y de tamano dedo en tactil. Va despues de
+## style_button, que impone MIN_BTN_H de alto: en escritorio el ▼ es mas bajo a
+## proposito, para no doblar la altura de la unica fila del panel.
+func _size_toggle() -> void:
+	var side := UITheme.touch_px(TOGGLE_PX)
+	_toggle_btn.custom_minimum_size = Vector2(side, side)
+
+func _toggle_expanded() -> void:
+	_is_expanded = not _is_expanded
+	_content_box.visible = _is_expanded
+	_toggle_btn.text = "▲" if _is_expanded else "▼"
+
+func is_expanded() -> bool:
+	return _is_expanded
+
+func get_toggle_button() -> Button:
+	return _toggle_btn
+
 ## Una bolsa significa un refresco: cualquier recurso que se mueva cambia el
 ## total compartido, asi que no hay nada que actualizar por separado.
 func _refresh() -> void:
@@ -94,7 +163,10 @@ func _refresh() -> void:
 	var is_full := total >= cap
 
 	for type in _chips:
-		UITheme.chip_amount(_chips[type]).text = str(ResourceManager.get_amount(type))
+		var amount := str(ResourceManager.get_amount(type))
+		UITheme.chip_amount(_chips[type]).text = amount
+		if _exp_labels.has(type):
+			_exp_labels[type].text = amount
 
 	# Rojo mientras la bolsa esta llena: desde aqui, lo producido se pierde.
 	var tone: Color = UITheme.DANGER if is_full else UITheme.TEXT_DIM
@@ -120,6 +192,8 @@ func _on_resource_unlocked(resource_name: String) -> void:
 		return
 	var chip: HBoxContainer = _chips[type]
 	chip.visible = true
+	if _exp_rows.has(type):
+		_exp_rows[type].visible = true
 	# Destello al desbloquear: el jugador acaba de abrir una era y la fila
 	# cambia de forma; sin aviso, el recurso nuevo aparece sin mas.
 	chip.modulate = Color(2.5, 2.0, 0.5, 0.0)
