@@ -474,7 +474,11 @@ All balance values live in `GameConfig.gd`:
 
 ### Dev Mode
 
-`GameConfig.dev_mode = true` makes all durations 1-2 seconds for rapid testing. Set to `false` for real timings.
+`GameConfig.dev_mode` compresses all durations (`dev_time_scale`) and shows the dev buttons. It is **not hand-set**: `true` when running from the editor binary (F5, tests, probes — feature tag `editor`), `false` in every export. Force it with user args: `-- --dev` / `-- --no-dev`.
+
+### Exporting
+
+`export_presets.cfg` has a "Windows Desktop" preset (single .exe, PCK embedded, output in the untracked `build/`). The `BeckettRuntime` autoload points at `scripts/services/BeckettGate.gd`, which loads the addon only in the editor; `addons/beckett`, `addons/gdUnit4`, tests, tools, docs and local token files (`.mcp.json`, `.env*`) are excluded. Exports save to `%APPDATA%\TormentaImperial\`, not the editor's user dir. Full guide: `docs/19-exportar.md`.
 
 ---
 
