@@ -276,8 +276,8 @@ in place, but no screen drives an expedition yet. See "Planned" below.
 - Research costs **resources** (not points) and takes time; only one tech at a time.
 - Bonuses are permanent: production multiplier, storage, consumption reduction,
   morale recovery (Military branch), market spread / build speed (Logistics).
-- Caveat: `_research_points` (+1 per HQ production tick) is saved but never spent —
-  vestigial. The "requires HQ" comment in the header is NOT enforced in code.
+- No HQ requirement (deliberate: the HQ is era 3). The old vestigial `_research_points`
+  counter was removed; a `research_points` key in old saves is ignored.
 
 ### Game Phases (onboarding pacing)
 
@@ -302,7 +302,12 @@ runs in its `_ready()` (before AudioManager applies volumes); anything that chan
 preference calls `GameConfig.save_user_settings()`. Currently stored: audio volumes
 (master/music/sfx/ambient — sliders in SettingsPanel), `ui_grid_visible` (map grid
 toggle; GridOverlayControl applies it, BuildingPlacer restores it after placement),
-and `ui_helper_visible` (HelperPanel "?" callouts, on by default).
+`ui_helper_visible` (HelperPanel "?" callouts, on by default) and `ui_locale`
+(`es`/`en`, applied to `Tr` at startup). The language selector lives in SettingsPanel:
+`GameConfig.set_locale()` saves it and emits `EventBus.locale_changed`, and GameManager
+answers by saving and reloading the scene with the same game (`reload_keeping_game()`),
+so every panel is rebuilt in the new language. With a board open it does not reload
+(the board is not saved); the language shows everywhere on the next start.
 
 ### Save/Load System
 
@@ -417,7 +422,7 @@ because its mesh is connectivity-aware).
 2. Add limit in `GameConfig.building_limits`
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any)
-5. Add translations in `Tr.gd` (both ES and EN)
+5. Add translations in `Tr.gd` (both ES and EN), including `BLD_<ID>_NAME` and `BLD_<ID>_DESC`. UI shows buildings through `BuildingData.get_display_name()` / `get_description()`, never the raw `.tres` fields
 6. Building auto-appears in ConstructionMenu (loads all .tres from data/buildings/)
 
 ### Adding a New Signal

@@ -94,6 +94,7 @@ func focus_window(window: CanvasLayer) -> void:
 		_update_layers()
 
 func _update_layers() -> void:
+	_prune()
 	for i in range(_window_stack.size()):
 		_window_stack[i].layer = _base_layer + i + 1
 

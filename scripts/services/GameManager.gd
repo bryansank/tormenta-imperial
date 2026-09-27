@@ -54,6 +54,7 @@ func _ready() -> void:
 		var cb: Callable = request_save.unbind(int(trigger[1])) if int(trigger[1]) > 0 else request_save
 		sig.connect(cb)
 	EventBus.encounter_started.connect(_on_encounter_started)
+	EventBus.locale_changed.connect(_on_locale_changed)
 
 ## Pide un guardado. No escribe en el acto: espera `autosave_debounce` para que
 ## una rafaga de eventos del mismo instante acabe en un solo guardado.
@@ -609,3 +610,43 @@ func _load_building_data(id: String) -> BuildingData:
 	if ResourceLoader.exists(path):
 		return load(path) as BuildingData
 	return null
+
+# ── Cambio de idioma ──
+#
+# Los paneles construyen sus textos una vez, en _ready(). Rehacer a mano cada
+# uno para un cambio de idioma seria una lista que se desincroniza sola; lo
+# robusto es guardar, recargar la escena y dejar que todo se pinte de nuevo en el
+# idioma nuevo. Es el mismo camino que ya usa la carga desde la nube.
+# (El listener de locale_changed se conecta en el _ready de arriba.)
+
+func _on_locale_changed(_locale: String) -> void:
+	# Sin partida arrancada (arranque, pruebas) no hay nada que recargar.
+	if not _started:
+		return
+	# El tablero no viaja en el guardado: recargar con uno abierto lo perderia.
+	# Tampoco se recarga si no es seguro guardar (pelea sin saldar): se perderia
+	# lo pendiente. El idioma ya esta puesto y guardado; se vera en la proxima carga.
+	if CombatManager.is_board_open() or not CombatManager.is_save_safe():
+		EventBus.notification_posted.emit(Tr.t("NOTIF_LOCALE_AFTER_BATTLE"), "info", Color(0.5, 0.7, 1.0))
+		return
+	# Diferido: quien emite suele ser un boton del panel de ajustes, y recargar
+	# dentro de su propia senal liberaria el boton mientras aun se esta pulsando.
+	reload_keeping_game.call_deferred()
+
+## Guarda y recarga la escena con la misma partida. No es partida nueva: nada se
+## pierde y no se anuncia nada.
+func reload_keeping_game() -> void:
+	if not _started or not _can_write() or not CombatManager.is_save_safe():
+		return
+	# Escritura directa: save_game() dejaria el guardado pendiente si no fuera
+	# seguro, y aqui se relee el disco justo despues.
+	_save_pending = false
+	_write_save()
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if not file:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not parsed is Dictionary:
+		return
+	clear_save_and_reload_from(parsed)

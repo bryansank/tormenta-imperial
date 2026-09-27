@@ -298,6 +298,10 @@ var ui_helper_visible := true
 ## Settings panel; persists in user://settings.cfg like the rest of preferences.
 var ui_fullscreen := false
 
+## Idioma de la interfaz ("es" / "en"). Vive en settings.cfg y no en la partida:
+## es del dispositivo, sobrevive a "partida nueva" y se aplica antes de pintar nada.
+var ui_locale := "es"
+
 func _ready() -> void:
 	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
 	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
@@ -326,6 +330,10 @@ func load_user_settings() -> void:
 	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
+	var locale := str(cf.get_value("ui", "locale", ui_locale))
+	if Tr.LOCALES.has(locale):
+		ui_locale = locale
+	Tr.set_locale(ui_locale)
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -337,6 +345,7 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "grid_visible", ui_grid_visible)
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
+	cf.set_value("ui", "locale", ui_locale)
 	cf.save(USER_SETTINGS_PATH)
 
 # ── Pantalla completa ──
@@ -358,6 +367,16 @@ func set_fullscreen(enabled: bool) -> void:
 	_apply_window_mode()
 	save_user_settings()
 	EventBus.fullscreen_changed.emit(ui_fullscreen)
+
+## Cambia el idioma, lo guarda y lo anuncia. Un idioma sin tabla o el mismo que
+## ya estaba no hace nada (ni guarda ni avisa): asi un clic repetido no recarga.
+func set_locale(locale: String) -> void:
+	if not Tr.LOCALES.has(locale) or locale == ui_locale:
+		return
+	ui_locale = locale
+	Tr.set_locale(locale)
+	save_user_settings()
+	EventBus.locale_changed.emit(locale)
 
 func toggle_fullscreen() -> void:
 	set_fullscreen(not ui_fullscreen)
@@ -495,9 +514,6 @@ func get_duration(base: float) -> float:
 	if dev_mode:
 		return maxf(base * dev_time_scale, 1.0)
 	return base * time_multiplier
-
-func get_production_with_tech(base_mult: float) -> float:
-	return base_mult + tech_production_bonus
 
 func get_build_time(base: float) -> float:
 	if base <= 0.0:
@@ -780,9 +796,20 @@ var storm_false_alarm_carry := 1
 var storm_ash_production_multiplier := 0.5
 var storm_production_multiplier := 0.15
 ## Live, temporary multiplier applied on top of everything else in
-## ProductionManager. 1.0 means nothing is happening. Only events write to it,
-## and whoever sets it is responsible for putting it back.
+## ProductionManager. 1.0 means nothing is happening. Only the STORM writes to
+## it, and it is responsible for putting it back.
 var event_production_multiplier := 1.0
+## El mismo papel para los eventos aleatorios (la plaga). Es otra variable a
+## proposito: si la plaga y la tormenta escribieran la misma, la que acabara
+## primero borraria el castigo de la otra. Solo RandomEventManager la toca.
+var random_event_production_multiplier := 1.0
+## Lo que la plaga deja producir mientras dura: la mitad.
+var plague_production_multiplier := 0.5
+
+## Todo lo pasajero junto: tormenta por evento aleatorio. Se multiplican, nunca se
+## pisan. ProductionManager lee esto y no las variables sueltas.
+func get_event_production_multiplier() -> float:
+	return event_production_multiplier * random_event_production_multiplier
 ## Morale lost per tick of ash, and how often those ticks land. The Warning
 ## costs none of it.
 var storm_morale_per_tick := 2.0
