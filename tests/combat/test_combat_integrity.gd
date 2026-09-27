@@ -195,6 +195,113 @@ func test_nobody_deserts_from_the_middle_of_a_fight() -> void:
 	assert_int(ArmyManager.get_count("artillery")).is_equal(1)
 	assert_int(ArmyManager.get_count("infantry")).is_less(2)
 
+# ── 3. La guarnicion del asedio se pasa lista al abrir la puerta ──────
+
+func _living_counts(audit: FinalAudit) -> Dictionary:
+	var counts: Dictionary = {}
+	for unit in audit.living_garrison():
+		counts[unit.unit_id] = int(counts.get(unit.unit_id, 0)) + 1
+	return counts
+
+func test_the_first_begin_musters_whoever_is_home_now() -> void:
+	var audit := FinalAudit.create(11, {"infantry": 4}, 1, 50.0)
+	assert_int(audit.garrison.size()).is_equal(4)
+	audit.begin({"infantry": 2, "artillery": 1})
+	assert_dict(_living_counts(audit)).is_equal({"infantry": 2, "artillery": 1})
+	assert_bool(audit.started).is_true()
+
+func test_a_siege_already_fought_is_reconciled_never_remustered() -> void:
+	var audit := FinalAudit.create(11, {"infantry": 3}, 1, 50.0)
+	audit.begin({"infantry": 3})
+	audit.garrison[0].take_damage(5)
+	var wounded_hp: int = audit.garrison[0].hp
+	var back: FinalAudit = FinalAudit.from_dict(audit.to_dict())
+	assert_bool(back.is_pending()).is_true()
+	assert_bool(back.started).is_true()
+	# Diez en casa no son diez en el asedio: los refuerzos no entran.
+	back.begin({"infantry": 10})
+	assert_int(back.garrison.size()).is_equal(3)
+	assert_int(back.garrison[0].hp).is_equal(wounded_hp)
+	# Y si el ejercito encogio, la guarnicion encoge con el.
+	back.reconcile({"infantry": 1})
+	assert_dict(_living_counts(back)).is_equal({"infantry": 1})
+	assert_int(back.garrison[0].hp).is_equal(wounded_hp)
+
+func test_an_old_save_guesses_whether_the_siege_had_started() -> void:
+	var fresh := FinalAudit.create(11, {"infantry": 2}, 1, 50.0)
+	var data: Dictionary = fresh.to_dict()
+	data.erase("started")
+	assert_bool(FinalAudit.from_dict(data).started).is_false()
+	data["current_wave"] = 1
+	assert_bool(FinalAudit.from_dict(data).started).is_true()
+
+func test_the_siege_is_fought_by_who_is_home_when_it_begins() -> void:
+	_given_army({"infantry": 4})
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	# Mientras la Regencia espera, dos desertan y se entrena una artilleria.
+	ArmyManager.remove_units({"infantry": 2})
+	_given_army({"infantry": 2, "artillery": 1})
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	assert_dict(_living_counts(ProgressionManager.final_audit)).is_equal({"infantry": 2, "artillery": 1})
+
+func test_the_garrison_is_squared_with_the_army_before_every_wave() -> void:
+	_given_army({"infantry": 3})
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	if ProgressionManager.final_audit.wave_count() < 2:
+		return
+	_resolve_open_board(true)
+	var alive: int = ProgressionManager.final_audit.living_garrison().size()
+	# Entre oleadas, uno deserta. La oleada siguiente no lo cuenta.
+	ArmyManager.remove_units({"infantry": 1})
+	CombatManager.end_encounter()
+	assert_int(ProgressionManager.final_audit.living_garrison().size()).is_equal(mini(alive, ArmyManager.get_count("infantry")))
+
+# ── 6. Una oleada no se pierde por encontrar el tablero ocupado ───────
+
+func test_the_siege_cannot_begin_over_an_open_board_and_says_why() -> void:
+	_given_army({"infantry": 4})
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(CombatManager.start_skirmish({"infantry": 2}, 5)).is_true()
+	assert_str(CombatManager.final_audit_block_reason()).is_equal("MSG_AUDIT_BOARD_BUSY")
+	assert_bool(ProgressionManager.begin_final_audit()).is_false()
+	assert_bool(ProgressionManager.is_final_audit_pending()).is_true()
+	assert_int(_audit_lost).is_equal(0)
+
+func test_the_audit_button_is_disabled_with_a_reason_while_a_board_is_open() -> void:
+	_given_army({"infantry": 4})
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(CombatManager.start_skirmish({"infantry": 2}, 5)).is_true()
+	var panel: CanvasLayer = auto_free(load("res://scenes/ui/SkirmishPanel.tscn").instantiate())
+	add_child(panel)
+	await await_idle_frame()
+	panel._refresh_audit_button()
+	assert_bool(panel._audit_btn.visible).is_true()
+	assert_bool(panel._audit_btn.disabled).is_true()
+	assert_str(panel._audit_btn.tooltip_text).is_equal(Tr.t("MSG_AUDIT_BOARD_BUSY"))
+	# Pulsarlo a la fuerza tampoco lo abre.
+	panel._on_audit_pressed()
+	assert_bool(ProgressionManager.is_final_audit_pending()).is_true()
+
+func test_a_wave_that_finds_the_board_busy_waits_instead_of_being_lost() -> void:
+	_given_army({"infantry": 4})
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(CombatManager.start_skirmish({"infantry": 2}, 5)).is_true()
+	# Saltandose el bloqueo: el asedio empieza con el tablero ocupado.
+	ProgressionManager._publish_audit(ProgressionManager.final_audit.begin())
+	ProgressionManager._announce_wave()
+	assert_int(_audit_lost).is_equal(0)
+	assert_bool(ProgressionManager.is_final_audit_active()).is_true()
+	assert_bool(CombatManager.is_defending()).is_false()
+
+	_resolve_open_board(true)
+	CombatManager.end_encounter()
+	await await_idle_frame()
+	# La oleada bajo en cuanto el tablero quedo libre.
+	assert_bool(CombatManager.is_in_encounter()).is_true()
+	assert_bool(CombatManager.is_defending()).is_true()
+	assert_int(_audit_lost).is_equal(0)
+
 # ── 5. Un solo bucle enemigo por tablero ─────────────────────────────
 
 var _enemy_actions: int = 0

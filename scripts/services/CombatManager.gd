@@ -82,6 +82,9 @@ var _audit_crew_losses: int = 0
 ## uids del tablero actual cuya muerte ya se liquido en caliente (ver
 ## _settle_audit_death). Solo lo usan las oleadas del asedio.
 var _audit_charged: Dictionary = {}
+## Una oleada del asedio que llego con otro tablero en pantalla. No se da por
+## perdida: espera a que ese tablero se cierre y entonces baja.
+var _audit_wave_queued: bool = false
 
 func _ready() -> void:
 	EventBus.final_audit_wave_ready.connect(_on_final_audit_wave_ready)
@@ -272,6 +275,13 @@ func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> 
 	var audit = ProgressionManager.final_audit
 	if audit == null:
 		return
+	# Con otro tablero abierto la oleada no cabe, y antes eso contaba como oleada
+	# perdida: Diezmo maximo y daño maximo por haber pulsado en mal momento. Ahora
+	# espera en la puerta; end_encounter() la deja bajar al cerrarse el tablero.
+	if is_board_open():
+		_audit_wave_queued = true
+		return
+	_audit_wave_queued = false
 	var defenders: Array = audit.living_garrison().duplicate()
 	# Las dotaciones se fabrican aqui, antes de _open(): sin esto nacerian con los
 	# uids 1 y 2, los mismos que la guarnicion, y no llegarian a actuar nunca.
@@ -485,6 +495,37 @@ func end_encounter() -> void:
 	# la oleada siguiente llegaria con is_in_encounter() aun en true y se perderia.
 	if was_audit_wave:
 		ProgressionManager.report_audit_wave(wave_won)
+	elif _audit_wave_queued:
+		# Diferido: quien cierra este tablero puede seguir trabajando despues
+		# (_resolve_expedition publica su parte, BattleScreen recoloca vistas), y
+		# abrir la oleada en mitad de eso la esconderia nada mas abrirla.
+		call_deferred("_release_queued_audit_wave")
+
+## Deja bajar la oleada que esperaba en la puerta, si sigue habiendo asedio y el
+## tablero sigue libre. Si otro tablero se abrio entretanto, vuelve a esperar.
+func _release_queued_audit_wave() -> void:
+	if not _audit_wave_queued:
+		return
+	var audit = ProgressionManager.final_audit
+	if audit == null or not audit.is_active():
+		_audit_wave_queued = false
+		return
+	var wave: Dictionary = audit.current_wave_data()
+	if wave.is_empty():
+		_audit_wave_queued = false
+		return
+	_on_final_audit_wave_ready(int(wave["index"]), wave["roster"].duplicate(), float(wave["scale"]))
+
+## Por que no se puede llamar ahora a la Regencia, como clave de Tr; vacio si se
+## puede. El asedio se pelea en casa y con el tablero libre: con otro tablero
+## abierto la oleada no tendria donde bajar, y con la columna fuera la guarnicion
+## que se pasaria lista no seria la de la base.
+func final_audit_block_reason() -> String:
+	if is_board_open():
+		return "MSG_AUDIT_BOARD_BUSY"
+	if has_active_expedition():
+		return "MSG_AUDIT_EXPEDITION_OUT"
+	return ""
 
 # ── Player actions ───────────────────────────────────────────────────
 
@@ -1123,3 +1164,4 @@ func _clear_runtime_state() -> void:
 	_tower_crew_uids.clear()
 	_last_board_crew_uids.clear()
 	_audit_charged.clear()
+	_audit_wave_queued = false
