@@ -3,6 +3,7 @@ extends Node
 ## Waits for BuildingPlacer and MapGenerator to register before starting.
 
 const SAVE_PATH := "user://save_game.json"
+const CORRUPT_PATH_FMT := "user://save_game.corrupt-%s.json"
 
 var _placer: Node = null
 var _map_gen: Node = null
@@ -94,11 +95,13 @@ func _new_game() -> void:
 func _load_game() -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if not file:
-		_new_game()
+		_recover_from_unreadable_save()
 		return
 	var json := JSON.new()
-	if json.parse(file.get_as_text()) != OK:
-		_new_game()
+	var parsed: int = json.parse(file.get_as_text())
+	file.close()
+	if parsed != OK or not (json.data is Dictionary):
+		_recover_from_unreadable_save()
 		return
 	var data: Dictionary = json.data
 
@@ -224,6 +227,34 @@ func _load_game() -> void:
 
 	EventBus.game_load_completed.emit()
 
+## Un guardado que no se puede leer no se pisa en silencio: _new_game() guarda
+## encima, y eso era perder la partida sin enterarse. Se aparta una copia con
+## fecha y se avisa de donde quedo.
+func _recover_from_unreadable_save() -> void:
+	var backup: String = backup_unreadable_save()
+	_new_game()
+	if not backup.is_empty():
+		EventBus.notification_posted.emit(
+			Tr.t("MSG_SAVE_CORRUPT") % backup, "danger", UITheme.DANGER)
+
+## Copia el guardado ilegible a user://save_game.corrupt-<fecha>.json y devuelve
+## la ruta, o "" si no habia nada que copiar.
+func backup_unreadable_save() -> String:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return ""
+	var t: Dictionary = Time.get_datetime_dict_from_system()
+	var stamp: String = "%04d%02d%02d-%02d%02d%02d" % [
+		int(t["year"]), int(t["month"]), int(t["day"]),
+		int(t["hour"]), int(t["minute"]), int(t["second"])]
+	var path: String = CORRUPT_PATH_FMT % stamp
+	var n := 1
+	while FileAccess.file_exists(path):
+		n += 1
+		path = CORRUPT_PATH_FMT % ("%s-%d" % [stamp, n])
+	if DirAccess.copy_absolute(SAVE_PATH, path) != OK:
+		return ""
+	return path
+
 func save_game() -> void:
 	var data := {}
 	data["saved_at"] = Time.get_unix_time_from_system()
@@ -284,6 +315,9 @@ func request_new_game() -> void:
 	dialog.dialog_text = Tr.t("CONFIRM_NEW_GAME")
 	dialog.ok_button_text = Tr.t("BTN_CONFIRM")
 	dialog.cancel_button_text = Tr.t("BTN_CANCEL")
+	# El dialogo cuelga de este autoload, que sobrevive a la recarga: si no se
+	# libera tambien al confirmar, cada "Partida nueva" deja uno huerfano.
+	dialog.confirmed.connect(dialog.queue_free)
 	dialog.confirmed.connect(clear_save)
 	dialog.canceled.connect(dialog.queue_free)
 	add_child(dialog)

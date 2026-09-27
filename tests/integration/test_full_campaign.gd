@@ -1368,3 +1368,58 @@ func test_a_save_without_upgrade_keys_still_loads_as_construction() -> void:
 	assert_int(ProductionManager.get_upgrade_target(loaded)).is_equal(0)
 	_finish_building()
 	assert_int(int(loaded.get_meta("level", 1))).is_equal(1)
+
+## Un guardado ilegible no se pisa en silencio: se aparta una copia y se avisa.
+func test_an_unreadable_save_is_backed_up_and_the_player_is_told() -> void:
+	var garbage := "{ esto no es json"
+	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	f.store_string(garbage)
+	f.close()
+	_wipe_the_world()
+	var told: Array = []
+	var probe := func(msg: String, _cat: String, _col: Color) -> void: told.append(msg)
+	EventBus.notification_posted.connect(probe)
+	GameManager._load_game()
+	EventBus.notification_posted.disconnect(probe)
+
+	var backups: Array = []
+	for name in DirAccess.get_files_at("user://"):
+		if name.begins_with("save_game.corrupt-"):
+			backups.append("user://" + name)
+	assert_array(backups).override_failure_message(
+		"el guardado ilegible se piso sin dejar copia").is_not_empty()
+	var kept: bool = false
+	for path in backups:
+		if FileAccess.get_file_as_string(path) == garbage:
+			kept = true
+	for path in backups:
+		DirAccess.remove_absolute(path)
+	assert_bool(kept).is_true()
+	var mentioned: bool = false
+	for msg in told:
+		if String(msg).contains("save_game.corrupt-"):
+			mentioned = true
+	assert_bool(mentioned).override_failure_message(
+		"no se aviso al jugador de la copia").is_true()
+	# Y la colonia nueva arranca con su Nucleo.
+	assert_object(_first_node_of("nucleo")).is_not_null()
+
+## Cada "Partida nueva" confirmada liberaba su dialogo? No: quedaba colgando del
+## autoload. Ahora se libera tanto al confirmar como al cancelar.
+func test_the_new_game_dialog_frees_itself_on_both_answers() -> void:
+	var before: int = GameManager.get_child_count()
+	GameManager.request_new_game()
+	assert_int(GameManager.get_child_count()).is_equal(before + 1)
+	var dialog: ConfirmationDialog = GameManager.get_child(GameManager.get_child_count() - 1)
+	var frees_on := func(sig: Signal) -> bool:
+		for c in sig.get_connections():
+			var cb: Callable = c["callable"]
+			if cb.get_object() == dialog and cb.get_method() == "queue_free":
+				return true
+		return false
+	assert_bool(frees_on.call(dialog.confirmed)).is_true()
+	assert_bool(frees_on.call(dialog.canceled)).is_true()
+	dialog.canceled.emit()
+	await await_idle_frame()
+	assert_bool(is_instance_valid(dialog)).is_false()
+	assert_int(GameManager.get_child_count()).is_equal(before)
