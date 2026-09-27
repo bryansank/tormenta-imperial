@@ -751,9 +751,20 @@ var storm_false_alarm_carry := 1
 var storm_ash_production_multiplier := 0.5
 var storm_production_multiplier := 0.15
 ## Live, temporary multiplier applied on top of everything else in
-## ProductionManager. 1.0 means nothing is happening. Only events write to it,
-## and whoever sets it is responsible for putting it back.
+## ProductionManager. 1.0 means nothing is happening. Only the STORM writes to
+## it, and it is responsible for putting it back.
 var event_production_multiplier := 1.0
+## El mismo papel para los eventos aleatorios (la plaga). Es otra variable a
+## proposito: si la plaga y la tormenta escribieran la misma, la que acabara
+## primero borraria el castigo de la otra. Solo RandomEventManager la toca.
+var random_event_production_multiplier := 1.0
+## Lo que la plaga deja producir mientras dura: la mitad.
+var plague_production_multiplier := 0.5
+
+## Todo lo pasajero junto: tormenta por evento aleatorio. Se multiplican, nunca se
+## pisan. ProductionManager lee esto y no las variables sueltas.
+func get_event_production_multiplier() -> float:
+	return event_production_multiplier * random_event_production_multiplier
 ## Morale lost per tick of ash, and how often those ticks land. The Warning
 ## costs none of it.
 var storm_morale_per_tick := 2.0

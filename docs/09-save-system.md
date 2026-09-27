@@ -67,7 +67,11 @@ Game state is persisted to a JSON file at `user://save_game.json`. Auto-saves on
   },
 
   "random_events": {
-    "events_triggered": 3
+    "events_triggered": 3,
+    "timer": 42.0,
+    "next_event_time": 180.0,
+    "active_event_id": "plague",
+    "active_timer": 23.5
   },
 
   "camera": {

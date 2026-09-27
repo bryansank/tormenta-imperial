@@ -193,7 +193,7 @@ func _award_production(node: Node3D, data: BuildingData) -> void:
 	# multiplier so they can be lifted cleanly. Folding them into the tech bonus
 	# would mix a passing squall with permanent research and leave the value
 	# corrupt if the event were ever interrupted.
-	var mult := base_mult * morale_mult * GameConfig.event_production_multiplier
+	var mult := base_mult * morale_mult * GameConfig.get_event_production_multiplier()
 	var offset := 0.0
 	if data.produces_gold > 0:
 		var amount := int(data.produces_gold * mult)
