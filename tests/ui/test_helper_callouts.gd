@@ -2,8 +2,9 @@ extends GdUnitTestSuite
 ## Los globos del tutorial se callan cuando estorban (A4).
 ##
 ## Se dibujan en la capa 14, por encima del HUD, y tapaban los paneles que el
-## jugador acababa de abrir. La regla: con cualquier ventana abierta, con el
-## menu lateral desplegado o con la Tormenta anunciada, los globos no se ven;
+## jugador acababa de abrir (UIManager apila ventanas desde la capa 12). La
+## regla: con cualquier ventana abierta o con la Tormenta anunciada, los globos
+## no se ven;
 ## al volver a la calma vuelven, salvo que el jugador los haya apagado.
 ##
 ## Toca GameConfig.ui_helper_visible en memoria (sin guardar) y lo restaura.
@@ -45,16 +46,35 @@ func test_callouts_hide_while_any_window_is_open_and_return_after() -> void:
 	if not UIManager.is_any_window_open():
 		assert_bool(helper.is_showing_callouts()).is_true()
 
-func test_callouts_hide_while_the_sidebar_is_unfolded() -> void:
+func test_the_menus_tip_steps_aside_while_the_sidebar_is_unfolded() -> void:
+	# Se dibuja justo donde el menu desplegado pone sus botones. El resto de
+	# globos sigue (el de Escaramuzas, de hecho, solo sale con el menu abierto).
 	var helper := _helper()
 	await await_idle_frame()
 	EventBus.sidebar_toggled.emit(true)
 	await await_idle_frame()
-	assert_bool(helper.is_showing_callouts()).is_false()
+	assert_bool(helper._menus_tip.visible).is_false()
 	EventBus.sidebar_toggled.emit(false)
 	await await_idle_frame()
-	if not UIManager.is_any_window_open():
-		assert_bool(helper.is_showing_callouts()).is_true()
+	assert_bool(helper._menus_tip.visible).is_true()
+
+func test_the_help_entry_appears_with_the_sidebar() -> void:
+	var helper := _helper()
+	await await_idle_frame()
+	assert_bool(helper._help_btn.visible).is_false()
+	EventBus.sidebar_toggled.emit(true)
+	await await_idle_frame()
+	assert_bool(helper._help_btn.visible).is_true()
+	# Y queda debajo del ultimo boton del menu, sin taparlo.
+	var order := UILayoutConfig.SIDEBAR_BUTTON_ORDER
+	var prev_y := UILayoutManager.get_sidebar_button_offset(order[order.size() - 2])
+	assert_float(helper._help_btn.offset_top).is_greater_equal(prev_y + UILayoutConfig.SIDEBAR_BTN_HEIGHT)
+
+func test_the_old_floating_question_mark_is_gone() -> void:
+	var helper := _helper()
+	await await_idle_frame()
+	for b in helper.find_children("*", "Button", true, false):
+		assert_str((b as Button).text).is_not_equal("?")
 
 func test_the_storm_silences_them_and_the_tithe_brings_them_back() -> void:
 	var helper := _helper()
