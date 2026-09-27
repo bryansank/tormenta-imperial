@@ -39,6 +39,12 @@ var _expedition_followups: Array = []
 var _next_uid: int = 1
 var _morale_snapshot: float = 50.0
 var _enemy_turn_running: bool = false
+## Numero de tablero. Sube cada vez que un tablero se abre o se cierra. El turno
+## enemigo es una corrutina que espera entre pasos: si el tablero cambia mientras
+## espera, al despertar ve otro numero y se retira sin tocar nada. Sin esto,
+## cerrar un tablero con la IA pensando y abrir otro dejaba dos bucles enemigos
+## corriendo a la vez sobre el nuevo.
+var _board_generation: int = 0
 ## Guards against applying the outcome twice: a timeout and a wipe can both fire
 ## on the same advance, and paying the player twice for one fight is not a bug
 ## anybody reports.
@@ -407,6 +413,8 @@ func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: 
 	# minimo 2, y en cabeza se quedan mudas justo cuando el enemigo llega a
 	# contacto. Es la misma lista que ya se usa para no contarlas como bajas.
 	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids)
+	_board_generation += 1
+	_enemy_turn_running = false
 	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())
@@ -458,6 +466,7 @@ func end_encounter() -> void:
 	if _encounter != null:
 		_encounter.release_survivors()
 	_encounter = null
+	_board_generation += 1
 	_enemy_turn_running = false
 	# Las marcas de dotacion dejan de ser "las del tablero" y pasan a ser "las del
 	# tablero que acaba de cerrarse". El reparto de bajas ya se hizo (_apply_result
@@ -555,6 +564,7 @@ func _maybe_run_enemy_turn() -> void:
 ## whole enemy round resolves in one frame and the player never sees what hit them.
 func _run_enemy_turn() -> void:
 	_enemy_turn_running = true
+	var generation: int = _board_generation
 	var uid: int = _encounter.active_unit().uid if _encounter.active_unit() != null else -1
 	if uid == -1:
 		_enemy_turn_running = false
@@ -568,6 +578,11 @@ func _run_enemy_turn() -> void:
 		if _encounter == null or not _encounter.is_active():
 			break
 		await get_tree().create_timer(delay).timeout
+		# El tablero por el que se empezo a pensar ya no esta: este bucle no es de
+		# nadie. Ni actua, ni suelta la bandera, ni relanza turno: el tablero nuevo
+		# tiene (o tendra) su propio bucle.
+		if generation != _board_generation:
+			return
 		if _encounter == null or not _encounter.is_active():
 			break
 		match step.get("action", "wait"):
@@ -580,11 +595,16 @@ func _run_enemy_turn() -> void:
 			_:
 				follow_up = _encounter.wait_unit(uid)
 		_emit_events(follow_up)
+		# Emitir puede cerrar este tablero y abrir otro (una oleada que acaba y
+		# encadena la siguiente): mismo criterio que tras la espera.
+		if generation != _board_generation:
+			return
 
 	# The unit may have moved without attacking; close its turn either way.
-	if _encounter != null and _encounter.is_active() and _encounter.active_unit() != null \
-			and _encounter.active_unit().uid == uid:
+	if _encounter != null and _encounter.is_active() and _encounter.active_unit() != null 			and _encounter.active_unit().uid == uid:
 		_emit_events(_encounter.end_turn())
+		if generation != _board_generation:
+			return
 
 	_enemy_turn_running = false
 	_maybe_run_enemy_turn()
@@ -1045,6 +1065,7 @@ func _clear_runtime_state() -> void:
 	_clear_draft()
 	_expedition_followups = []
 	_enemy_turn_running = false
+	_board_generation += 1
 	_audit_wave_active = false
 	_audit_wave_won = false
 	_audit_crews.clear()

@@ -94,3 +94,45 @@ func test_the_same_seed_fields_the_same_skirmish() -> void:
 
 func test_the_provisional_unseeded_roster_is_gone() -> void:
 	assert_bool(CombatManager.has_method("build_enemy_roster")).is_false()
+
+# ── 5. Un solo bucle enemigo por tablero ─────────────────────────────
+
+var _enemy_actions: int = 0
+
+func _count_enemy_action(_a = null, _b = null, _c = null) -> void:
+	_enemy_actions += 1
+
+## Tablero A con la IA pensando (paso corto); se cierra y se abre B, tambien con
+## el enemigo moviendo primero pero con un paso muy largo. Si el bucle de A
+## despierta y se cree el dueño de B, suelta la bandera y relanza un bucle nuevo
+## que ya lee el paso corto: el enemigo de B actuaria mucho antes de su tiempo.
+func test_a_stale_enemy_turn_never_drives_the_next_board() -> void:
+	var saved_delay: float = GameConfig.combat_ai_step_delay
+	var saved_dev: bool = GameConfig.dev_mode
+	GameConfig.dev_mode = false
+	_enemy_actions = 0
+	# Artilleria (iniciativa 3) contra infanteria (5): abre el enemigo. Con la
+	# moral a tope la artilleria empataria y el empate es del jugador.
+	PopulationManager.load_save_data({"morale": 0})
+	GameConfig.combat_ai_step_delay = 0.15
+	CombatManager.start_encounter({"artillery": 2}, {"infantry": 2})
+	assert_bool(CombatManager.is_enemy_thinking()).is_true()
+	CombatManager.end_encounter()
+
+	GameConfig.combat_ai_step_delay = 4.0
+	CombatManager.start_encounter({"artillery": 2}, {"infantry": 2})
+	assert_bool(CombatManager.is_enemy_thinking()).is_true()
+	GameConfig.combat_ai_step_delay = 0.02
+
+	EventBus.unit_moved.connect(_count_enemy_action)
+	EventBus.unit_attacked.connect(_count_enemy_action)
+	EventBus.unit_defended.connect(_count_enemy_action)
+	await get_tree().create_timer(0.6).timeout
+	EventBus.unit_moved.disconnect(_count_enemy_action)
+	EventBus.unit_attacked.disconnect(_count_enemy_action)
+	EventBus.unit_defended.disconnect(_count_enemy_action)
+
+	GameConfig.combat_ai_step_delay = saved_delay
+	GameConfig.dev_mode = saved_dev
+	assert_int(_enemy_actions).is_equal(0)
+	assert_bool(CombatManager.is_enemy_thinking()).is_true()
