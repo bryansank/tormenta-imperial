@@ -6,6 +6,7 @@ class_name FloatingText
 ## el que decide. Un Node3D recibe el Label3D de siempre; un Node2D (la vista 2D,
 ## docs/18-vista-2d.md) recibe una etiqueta 2D que sube por el mapa plano.
 
+const FloatingText2D := preload("res://scripts/view2d/FloatingText2D.gd")
 
 static func spawn(scene_tree: SceneTree, world_pos: Vector3, text: String, color: Color) -> void:
 	if not scene_tree or not scene_tree.current_scene:
@@ -36,6 +37,8 @@ static func spawn_on(node: Node, text: String, color: Color, offset: float = 0.0
 		return
 	if node is Node3D:
 		spawn(node.get_tree(), (node as Node3D).global_position + Vector3(offset, 0, 0), text, color)
+	elif node is Node2D:
+		FloatingText2D.spawn(node as Node2D, text, color, offset)
 
 static func spawn_resource_on(node: Node, amount: int, res_name: String, offset: float = 0.0) -> void:
 	var color: Color = GameConfig.resource_colors.get(res_name, Color.WHITE)
