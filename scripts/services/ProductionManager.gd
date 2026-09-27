@@ -125,13 +125,13 @@ func _complete_construction(node: Node3D) -> void:
 		EventBus.building_upgrade_completed.emit(node, new_level)
 		var binfo := GridManager.get_building_info(node)
 		if not binfo.is_empty():
-			EventBus.notification_posted.emit(Tr.t("NOTIF_UPGRADE_DONE") % [(binfo["data"] as BuildingData).display_name, new_level], "info", Color(0.3, 0.8, 1.0))
+			EventBus.notification_posted.emit(Tr.t("NOTIF_UPGRADE_DONE") % [(binfo["data"] as BuildingData).get_display_name(), new_level], "info", Color(0.3, 0.8, 1.0))
 	else:
 		FloatingText.spawn(get_tree(), node.global_position, Tr.t("FMT_CONSTRUCTION_COMPLETE"), Color(0.3, 1.0, 0.3))
 		EventBus.construction_completed.emit(node)
 		var binfo := GridManager.get_building_info(node)
 		if not binfo.is_empty():
-			EventBus.notification_posted.emit(Tr.t("NOTIF_BUILT") % (binfo["data"] as BuildingData).display_name, "info", Color(0.3, 1.0, 0.3))
+			EventBus.notification_posted.emit(Tr.t("NOTIF_BUILT") % (binfo["data"] as BuildingData).get_display_name(), "info", Color(0.3, 1.0, 0.3))
 	# Register for production
 	var info := GridManager.get_building_info(node)
 	if not info.is_empty():

@@ -409,7 +409,7 @@ because its mesh is connectivity-aware).
 2. Add limit in `GameConfig.building_limits`
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any)
-5. Add translations in `Tr.gd` (both ES and EN)
+5. Add translations in `Tr.gd` (both ES and EN), including `BLD_<ID>_NAME` and `BLD_<ID>_DESC`. UI shows buildings through `BuildingData.get_display_name()` / `get_description()`, never the raw `.tres` fields
 6. Building auto-appears in ConstructionMenu (loads all .tres from data/buildings/)
 
 ### Adding a New Signal

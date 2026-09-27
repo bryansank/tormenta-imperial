@@ -207,22 +207,22 @@ func _load_buildings() -> Array:
 			if res is BuildingData:
 				result.append(res)
 		file_name = dir.get_next()
-	result.sort_custom(func(a, b): return a.display_name < b.display_name)
+	result.sort_custom(func(a, b): return a.get_display_name() < b.get_display_name())
 	return result
 
 func _make_building_entry(data: BuildingData) -> VBoxContainer:
 	var entry := VBoxContainer.new()
 	entry.add_theme_constant_override("separation", 2)
 
-	var title := UITheme.make_label("%s  (%dx%d)" % [data.display_name, data.grid_size.x, data.grid_size.y], "body", UITheme.ACCENT)
+	var title := UITheme.make_label("%s  (%dx%d)" % [data.get_display_name(), data.grid_size.x, data.grid_size.y], "body", UITheme.ACCENT)
 	entry.add_child(title)
 
 	var meta := UITheme.make_label(_meta_line(data), "small", UITheme.TEXT_DIM)
 	meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	entry.add_child(meta)
 
-	if not data.description.is_empty():
-		var desc := UITheme.make_label(data.description, "small", UITheme.TEXT)
+	if not data.get_description().is_empty():
+		var desc := UITheme.make_label(data.get_description(), "small", UITheme.TEXT)
 		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		entry.add_child(desc)
 	return entry

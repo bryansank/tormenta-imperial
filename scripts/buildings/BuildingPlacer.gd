@@ -679,7 +679,7 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	# Label above building — large, bold, readable (hidden by default)
 	var label := Label3D.new()
 	label.name = "NameLabel"
-	label.text = data.display_name
+	label.text = data.get_display_name()
 	label.font_size = 64
 	label.pixel_size = 0.01
 	label.position.y = data.mesh_height + 0.5

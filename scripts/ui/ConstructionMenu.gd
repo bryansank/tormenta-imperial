@@ -69,7 +69,7 @@ func _load_buildings() -> void:
 			if res is BuildingData and not res.is_core:
 				_all_buildings.append(res)
 		file_name = dir.get_next()
-	_all_buildings.sort_custom(func(a, b): return a.display_name < b.display_name)
+	_all_buildings.sort_custom(func(a, b): return a.get_display_name() < b.get_display_name())
 
 func _get_category(data: BuildingData) -> String:
 	if data.is_decoration:
@@ -85,7 +85,7 @@ func _get_filtered_buildings() -> Array:
 	for data in _all_buildings:
 		if _current_category != "all" and _get_category(data) != _current_category:
 			continue
-		if _search_text != "" and data.display_name.to_lower().find(_search_text.to_lower()) == -1:
+		if _search_text != "" and data.get_display_name().to_lower().find(_search_text.to_lower()) == -1:
 			continue
 		result.append(data)
 	return result
@@ -407,7 +407,7 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		vbox.add_child(placeholder)
 
 	# Name
-	var name_label := UITheme.make_label(data.display_name, "small", UITheme.TEXT if not locked else UITheme.TEXT_DIM)
+	var name_label := UITheme.make_label(data.get_display_name(), "small", UITheme.TEXT if not locked else UITheme.TEXT_DIM)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	name_label.custom_minimum_size.x = 110
@@ -451,7 +451,7 @@ func _select_building(data: BuildingData) -> void:
 	_preview_spin = 0.0
 
 	# Name + size
-	_detail_name.text = data.display_name
+	_detail_name.text = data.get_display_name()
 	_detail_size.text = "%dx%d" % [data.grid_size.x, data.grid_size.y]
 
 	# Cost
