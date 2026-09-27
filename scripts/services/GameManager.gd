@@ -225,6 +225,11 @@ func _load_game() -> void:
 			var earnings := ProductionManager.apply_offline_progression(elapsed)
 			_show_offline_report(elapsed, earnings)
 
+	# Partidas de antes de la Auditoria Final con el Cuartel General ya al maximo:
+	# sin esto no hay asedio que ganar. Va despues de todo lo demas porque la
+	# guarnicion que lo defiende sale del ejercito ya cargado.
+	ProgressionManager.migrate_legacy_capstone()
+
 	EventBus.game_load_completed.emit()
 
 ## Un guardado que no se puede leer no se pisa en silencio: _new_game() guarda
