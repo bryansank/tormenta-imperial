@@ -43,57 +43,57 @@ signal building_removed(cell: Vector2i)  # reserved: future use
 
 # ── Selection ──
 @warning_ignore("unused_signal")
-signal building_clicked(building_node: Node3D, building_data: Resource)
+signal building_clicked(building_node: Node, building_data: Resource)
 @warning_ignore("unused_signal")
 signal building_deselected()
 @warning_ignore("unused_signal")
-signal deposit_clicked(deposit_node: Node3D, deposit_id: String, cell: Vector2i)
+signal deposit_clicked(deposit_node: Node, deposit_id: String, cell: Vector2i)
 @warning_ignore("unused_signal")
-signal request_move_building(building_node: Node3D)
+signal request_move_building(building_node: Node)
 @warning_ignore("unused_signal")
-signal building_renamed(building_node: Node3D, new_name: String)
+signal building_renamed(building_node: Node, new_name: String)
 @warning_ignore("unused_signal")
 signal building_rotate_requested()
 
 # ── Processes & Mining ──
 @warning_ignore("unused_signal")
-signal process_started(building_node: Node3D, process_id: String)
+signal process_started(building_node: Node, process_id: String)
 @warning_ignore("unused_signal")
-signal process_completed(building_node: Node3D, process_id: String)
+signal process_completed(building_node: Node, process_id: String)
 @warning_ignore("unused_signal")
-signal mining_started(deposit_node: Node3D, deposit_id: String)
+signal mining_started(deposit_node: Node, deposit_id: String)
 @warning_ignore("unused_signal")
-signal mining_completed(deposit_node: Node3D, deposit_id: String)
+signal mining_completed(deposit_node: Node, deposit_id: String)
 ## Cancelado a mano por el jugador. `refunded` es recurso -> cantidad devuelta,
 ## ya aplicada: lo que la UI prometio antes de confirmar y lo que se cobro.
 @warning_ignore("unused_signal")
-signal process_cancelled(building_node: Node3D, process_id: String, refunded: Dictionary)
+signal process_cancelled(building_node: Node, process_id: String, refunded: Dictionary)
 
 # ── Construction ──
 @warning_ignore("unused_signal")
-signal construction_started(building_node: Node3D)
+signal construction_started(building_node: Node)
 @warning_ignore("unused_signal")
-signal construction_completed(building_node: Node3D)
+signal construction_completed(building_node: Node)
 
 # ── Production ──
 @warning_ignore("unused_signal")
-signal production_tick(building_node: Node3D)
+signal production_tick(building_node: Node)
 
 # ── Upgrades ──
 @warning_ignore("unused_signal")
-signal building_upgrade_started(building_node: Node3D, new_level: int)
+signal building_upgrade_started(building_node: Node, new_level: int)
 @warning_ignore("unused_signal")
-signal building_upgrade_completed(building_node: Node3D, new_level: int)
+signal building_upgrade_completed(building_node: Node, new_level: int)
 
 # ── Demolish ──
 @warning_ignore("unused_signal")
-signal request_demolish_building(building_node: Node3D)
+signal request_demolish_building(building_node: Node)
 @warning_ignore("unused_signal")
-signal building_demolished(building_node: Node3D, cell: Vector2i)
+signal building_demolished(building_node: Node, cell: Vector2i)
 
 # ── Deposits ──
 @warning_ignore("unused_signal")
-signal deposit_depleted(deposit_node: Node3D, deposit_id: String)
+signal deposit_depleted(deposit_node: Node, deposit_id: String)
 
 # ── Ground Interaction (reserved: future terrain interaction) ──
 @warning_ignore("unused_signal")
@@ -185,11 +185,11 @@ signal expedition_resumed(expedition_id: int)
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
 ## deja de producir hasta que se paga la reparacion; nunca se destruye solo.
 @warning_ignore("unused_signal")
-signal building_damaged(building_node: Node3D, health: int, max_health: int)
+signal building_damaged(building_node: Node, health: int, max_health: int)
 @warning_ignore("unused_signal")
-signal building_ruined(building_node: Node3D)
+signal building_ruined(building_node: Node)
 @warning_ignore("unused_signal")
-signal building_repaired(building_node: Node3D)
+signal building_repaired(building_node: Node)
 
 # ── Imperial Storm ──
 ## Emitted only by StormManager. The storm is dispatched on a schedule, not rolled

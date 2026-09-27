@@ -118,25 +118,25 @@ func _exit_tree() -> void:
 
 # ── Senales ───────────────────────────────────────────────────────────
 
-func _on_building_signal(node: Node3D) -> void:
+func _on_building_signal(node: Node) -> void:
 	if node == _building:
 		refresh()
 
-func _on_upgrade_signal(node: Node3D, _level: int) -> void:
+func _on_upgrade_signal(node: Node, _level: int) -> void:
 	if node == _building:
 		refresh()
 
-func _on_process_started(node: Node3D, _id: String) -> void:
+func _on_process_started(node: Node, _id: String) -> void:
 	if node == _building:
 		_busy = true
 		refresh()
 
-func _on_process_ended(node: Node3D, _id: String) -> void:
+func _on_process_ended(node: Node, _id: String) -> void:
 	if node == _building:
 		_busy = false
 		refresh()
 
-func _on_process_cancelled(node: Node3D, _id: String, _refund: Dictionary) -> void:
+func _on_process_cancelled(node: Node, _id: String, _refund: Dictionary) -> void:
 	_on_process_ended(node, _id)
 
 func _on_workers_changed(_used: int, _total: int) -> void:

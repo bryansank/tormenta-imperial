@@ -54,7 +54,7 @@ func _new_game() -> void:
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
 		var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
-		var node: Node3D = _placer.place_building_at(nucleo_data, center)
+		var node: Node = _placer.place_building_at(nucleo_data, center)
 		if node:
 			ProductionManager.register_building(node, nucleo_data, 0.0)
 	# Generate random deposits
@@ -83,7 +83,7 @@ func _load_game() -> void:
 			var building_data := _load_building_data(entry["id"])
 			if building_data:
 				var rot_steps: int = entry.get("rotation", 0)
-				var node: Node3D = _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]), rot_steps)
+				var node: Node = _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]), rot_steps)
 				if not node:
 					continue
 				# Restore custom name
@@ -311,10 +311,10 @@ func _on_building_changed(_data: Resource, _cell: Vector2i) -> void:
 func _on_building_moved(_from: Vector2i, _to: Vector2i) -> void:
 	save_game()
 
-func _on_building_renamed(_node: Node3D, _name: String) -> void:
+func _on_building_renamed(_node: Node, _name: String) -> void:
 	save_game()
 
-func _on_building_demolished(_node: Node3D, _cell: Vector2i) -> void:
+func _on_building_demolished(_node: Node, _cell: Vector2i) -> void:
 	save_game()
 
 func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:

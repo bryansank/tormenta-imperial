@@ -42,7 +42,7 @@ func generate_new_map() -> Array:
 
 	return get_all_deposits()
 
-func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, dep_size: Vector2i = Vector2i(2, 2)) -> Node3D:
+func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, dep_size: Vector2i = Vector2i(2, 2)) -> Node:
 	if not DEPOSIT_TYPES.has(deposit_id):
 		return null
 	var info: Dictionary = DEPOSIT_TYPES[deposit_id]
@@ -90,7 +90,7 @@ func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, 
 	_deposit_cells.append({ "id": deposit_id, "cell_x": cell.x, "cell_y": cell.y, "size_x": dep_size.x, "size_y": dep_size.y, "node": root })
 	return root
 
-func _on_mining_completed(deposit_node: Node3D, _deposit_id: String) -> void:
+func _on_mining_completed(deposit_node: Node, _deposit_id: String) -> void:
 	if not is_instance_valid(deposit_node):
 		return
 	if not deposit_node.has_meta("uses_remaining"):
@@ -411,7 +411,7 @@ static func deposit_within_reach(dep_origin: Vector2i, dep_size: Vector2i, cells
 	return false
 
 ## First deposit of the given type within `reach` of the provided cells, or null.
-func find_deposit_near_cells(deposit_id: String, cells: Array, reach: int) -> Node3D:
+func find_deposit_near_cells(deposit_id: String, cells: Array, reach: int) -> Node:
 	for entry in _deposit_cells:
 		if entry["id"] != deposit_id or not is_instance_valid(entry["node"]):
 			continue
@@ -423,7 +423,7 @@ func find_deposit_near_cells(deposit_id: String, cells: Array, reach: int) -> No
 
 ## Find a deposit of the given type that overlaps any of the provided cells.
 ## Returns the deposit node or null. Kept as the reach-0 case of the rule above.
-func find_deposit_at_cells(deposit_id: String, cells: Array) -> Node3D:
+func find_deposit_at_cells(deposit_id: String, cells: Array) -> Node:
 	return find_deposit_near_cells(deposit_id, cells, 0)
 
 ## Is there at least one free spot where a building with `footprint` (either
@@ -460,7 +460,7 @@ func buildable_spots_near(deposit_id: String, footprint: Vector2i, reach: int, l
 	return spots
 
 ## Remove a deposit programmatically (used when a building consumes it).
-func remove_deposit(node: Node3D) -> void:
+func remove_deposit(node: Node) -> void:
 	if not is_instance_valid(node):
 		return
 	var deposit_id: String = node.get_meta("deposit_id", "")

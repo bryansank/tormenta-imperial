@@ -225,7 +225,7 @@ func _update_preview() -> void:
 
 		# Same verdict for placing and moving: the ghost goes red wherever the
 		# click would be refused, deposit rule included.
-		var ignore: Node3D = _moving_building if _state == State.MOVING else null
+		var ignore: Node = _moving_building if _state == State.MOVING else null
 		var can_place: bool = evaluate_placement(_current_data.id, cell, rotated_size, _map_generator(), ignore)["ok"]
 
 		# Update ghost material (green = valid, red = invalid)
@@ -276,10 +276,10 @@ func _try_select_building(screen_pos: Vector2) -> void:
 	else:
 		EventBus.building_deselected.emit()
 
-func _on_move_requested(building: Node3D) -> void:
+func _on_move_requested(building: Node) -> void:
 	_start_moving(building)
 
-func _on_demolish_requested(building: Node3D) -> void:
+func _on_demolish_requested(building: Node) -> void:
 	var info := GridManager.get_building_info(building)
 	if info.is_empty():
 		return
@@ -445,10 +445,10 @@ func _map_generator() -> Node:
 ## the GameConfig deposit rule (reach / overlap) AND free cells. Static so the
 ## same function serves the ghost preview, the click, the move and the tests.
 ## `ignore_building` is the building being moved (its own cells count as free).
-## Returns {"ok": bool, "reason": "" | "deposit" | "occupied", "deposit": Node3D}.
-static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector2i, map_gen: Node, ignore_building: Node3D = null) -> Dictionary:
+## Returns {"ok": bool, "reason": "" | "deposit" | "occupied", "deposit": Node}.
+static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector2i, map_gen: Node, ignore_building: Node = null) -> Dictionary:
 	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
-	var deposit: Node3D = null
+	var deposit: Node = null
 	if not rule.is_empty():
 		var cells: Array = GridManager.cells_for(cell, size)
 		if map_gen != null and map_gen.has_method("find_deposit_near_cells"):
@@ -456,7 +456,7 @@ static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector
 		if deposit == null:
 			return {"ok": false, "reason": "deposit", "deposit": null}
 	# A deposit that gets consumed sits under the building: its cells are fine.
-	var ignore_obstacle: Node3D = deposit if bool(rule.get("consumes", false)) else null
+	var ignore_obstacle: Node = deposit if bool(rule.get("consumes", false)) else null
 	if not GridManager.can_place(cell, size, ignore_building, ignore_obstacle):
 		return {"ok": false, "reason": "occupied", "deposit": deposit}
 	return {"ok": true, "reason": "", "deposit": deposit}
@@ -464,7 +464,7 @@ static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector
 ## Removes the deposit a consuming building (the Refinery) is placed on.
 func _consume_deposit_if_required(verdict: Dictionary, map_gen: Node) -> void:
 	var rule: Dictionary = GameConfig.get_deposit_rule(_current_data.id)
-	var deposit: Node3D = verdict.get("deposit", null)
+	var deposit: Node = verdict.get("deposit", null)
 	if deposit != null and bool(rule.get("consumes", false)) and map_gen != null:
 		map_gen.remove_deposit(deposit)
 
@@ -791,7 +791,7 @@ func _show_feedback(text: String) -> void:
 
 # ── Show/Hide building labels on selection ──
 
-func _on_building_clicked(building: Node3D, _data: BuildingData) -> void:
+func _on_building_clicked(building: Node, _data: BuildingData) -> void:
 	# Hide all labels first
 	for child in _buildings_container.get_children():
 		var name_label := child.get_node_or_null("NameLabel")

@@ -210,7 +210,7 @@ func _trigger_victory() -> void:
 
 # ── Signal Handlers ──
 
-func _on_construction_completed(node: Node3D) -> void:
+func _on_construction_completed(node: Node) -> void:
 	var info := GridManager.get_building_info(node)
 	if info.is_empty():
 		return
@@ -222,7 +222,7 @@ func _on_construction_completed(node: Node3D) -> void:
 func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
 	_stats["buildings_built"] += 1
 
-func _on_upgrade_completed(node: Node3D, new_level: int) -> void:
+func _on_upgrade_completed(node: Node, new_level: int) -> void:
 	var info := GridManager.get_building_info(node)
 	if info.is_empty():
 		return

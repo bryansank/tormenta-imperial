@@ -30,7 +30,7 @@ var _confirm_container: VBoxContainer
 var _confirm_label: Label
 
 var _process_panel: ProcessActionsPanel
-var _selected_node: Node3D = null
+var _selected_node: Node = null
 var _selected_data: BuildingData = null
 var _selected_deposit_id: String = ""
 var _is_deposit: bool = false
@@ -246,7 +246,7 @@ func _build_ui() -> void:
 
 # ── Event Handlers ──
 
-func _on_building_clicked(building_node: Node3D, building_data: Resource) -> void:
+func _on_building_clicked(building_node: Node, building_data: Resource) -> void:
 	_selected_node = building_node
 	_selected_data = building_data as BuildingData
 	_selected_deposit_id = ""
@@ -254,7 +254,7 @@ func _on_building_clicked(building_node: Node3D, building_data: Resource) -> voi
 	_demolish_pending = false
 	_show_building_panel()
 
-func _on_deposit_clicked(deposit_node: Node3D, deposit_id: String, _cell: Vector2i) -> void:
+func _on_deposit_clicked(deposit_node: Node, deposit_id: String, _cell: Vector2i) -> void:
 	_selected_node = deposit_node
 	_selected_data = null
 	_selected_deposit_id = deposit_id
@@ -265,21 +265,21 @@ func _on_deposit_clicked(deposit_node: Node3D, deposit_id: String, _cell: Vector
 func _on_deselected() -> void:
 	_hide_panel()
 
-func _on_process_event(node: Node3D, _pid: String) -> void:
+func _on_process_event(node: Node, _pid: String) -> void:
 	if node == _selected_node:
 		_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
 
-func _on_mining_event(node: Node3D, _pid: String) -> void:
+func _on_mining_event(node: Node, _pid: String) -> void:
 	if node == _selected_node:
 		_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
 		if _is_deposit and is_instance_valid(_selected_node):
 			_update_deposit_uses()
 
-func _on_construction_completed(node: Node3D) -> void:
+func _on_construction_completed(node: Node) -> void:
 	if node == _selected_node:
 		_show_building_panel()
 
-func _on_upgrade_completed(node: Node3D, _new_level: int) -> void:
+func _on_upgrade_completed(node: Node, _new_level: int) -> void:
 	if node == _selected_node:
 		_show_building_panel()
 

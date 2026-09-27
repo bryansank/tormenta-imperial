@@ -129,7 +129,7 @@ func get_researched_count() -> int:
 
 # ── HQ Research Points ──
 
-func _on_production_tick(node: Node3D) -> void:
+func _on_production_tick(node: Node) -> void:
 	var info := GridManager.get_building_info(node)
 	if info.is_empty():
 		return

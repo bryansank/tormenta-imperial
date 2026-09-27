@@ -94,7 +94,7 @@ func _on_storm_started(_severity: int) -> void:
 func _on_tithe_demanded(_severity: int) -> void:
 	offer_tip("tithe")
 
-func _on_building_ruined(_node: Node3D) -> void:
+func _on_building_ruined(_node: Node) -> void:
 	offer_tip("ruined")
 
 func _on_storage_overflow(_resource: String, _lost: int, _cap: int) -> void:

@@ -9,7 +9,7 @@ var _type_map := {
 	"wood": ResourceManager.Type.WOOD,
 }
 
-# Active processes: Node3D -> {id, name, remaining, duration, produces}
+# Active processes: Node -> {id, name, remaining, duration, produces}
 var _active: Dictionary = {}
 
 ## Cae ceniza y la Tormenta todavia no ha roto: la ultima ventana en la que lo
@@ -36,12 +36,12 @@ func get_processes_for(building_id: String) -> Array:
 func get_mining_info(deposit_id: String) -> Dictionary:
 	return GameConfig.get_mining_info(deposit_id)
 
-func is_busy(node: Node3D) -> bool:
+func is_busy(node: Node) -> bool:
 	return _active.has(node)
 
 ## Lo que devolveria cancelar ahora mismo, sin cancelar nada. La UI lo ensena
 ## antes de que el jugador confirme, y es el mismo numero que luego se abona.
-func get_refund_preview(node: Node3D) -> Dictionary:
+func get_refund_preview(node: Node) -> Dictionary:
 	if not _active.has(node):
 		return {}
 	# Recortado al hueco que queda: con la bolsa compartida, prometer un 70% que
@@ -53,7 +53,7 @@ func get_refund_preview(node: Node3D) -> Dictionary:
 ## vacio —se pierde con su coste— pero existe como funcion y no como cero escrito
 ## a mano para que la pantalla pueda ensenarlo igual que el reembolso de
 ## cancelar, y para que aflojar la regla sea tocar el ratio y nada mas.
-func get_storm_loss_preview(node: Node3D) -> Dictionary:
+func get_storm_loss_preview(node: Node) -> Dictionary:
 	if not _active.has(node):
 		return {}
 	return ResourceManager.fit_into_storage(
@@ -62,7 +62,7 @@ func get_storm_loss_preview(node: Node3D) -> Dictionary:
 ## Cancela el proceso o minado en curso y devuelve parte de lo pagado.
 ## Devuelve el reembolso realmente abonado (recurso -> cantidad); vacio si no
 ## habia nada en curso o si lo que habia no costaba recursos (un minado).
-func cancel(node: Node3D) -> Dictionary:
+func cancel(node: Node) -> Dictionary:
 	if not _active.has(node):
 		return {}
 	var info: Dictionary = _active[node]
@@ -75,23 +75,23 @@ func cancel(node: Node3D) -> Dictionary:
 ## por la Tormenta son la misma operacion con distinto precio: un unico sitio
 ## donde se borra y se paga evita que una de las dos vias se olvide de la otra
 ## mitad el dia que esto cambie.
-func _drop(node: Node3D, refund: Dictionary) -> Dictionary:
+func _drop(node: Node, refund: Dictionary) -> Dictionary:
 	_active.erase(node)
 	for res_name in refund:
 		if _type_map.has(res_name):
 			ResourceManager.add(_type_map[res_name], refund[res_name])
 	return refund
 
-func get_active(node: Node3D) -> Dictionary:
+func get_active(node: Node) -> Dictionary:
 	return _active.get(node, {})
 
-func get_progress(node: Node3D) -> float:
+func get_progress(node: Node) -> float:
 	if not _active.has(node):
 		return 0.0
 	var info: Dictionary = _active[node]
 	return clampf(1.0 - (info["remaining"] / info["duration"]), 0.0, 1.0)
 
-func start_process(node: Node3D, process: Dictionary) -> bool:
+func start_process(node: Node, process: Dictionary) -> bool:
 	if _active.has(node):
 		return false
 	if process.has("cost") and not process["cost"].is_empty():
@@ -115,7 +115,7 @@ func start_process(node: Node3D, process: Dictionary) -> bool:
 	_warn_if_ash()
 	return true
 
-func start_mining(node: Node3D, deposit_id: String) -> bool:
+func start_mining(node: Node, deposit_id: String) -> bool:
 	if _active.has(node):
 		return false
 	if not GameConfig.is_deposit_unlocked(deposit_id):
@@ -149,14 +149,14 @@ func _process(delta: float) -> void:
 	# Un edificio que ya no existe no entrega nada: su entrada se tira sin abonar.
 	# Antes se mandaba a `_complete()`, que abonaba la produccion igual —el guard
 	# de validez solo envolvia el texto flotante y la señal— y ademas ni siquiera
-	# llegaba: el tipado de `_complete(node: Node3D)` rechaza un nodo liberado, de
+	# llegaba: el tipado de `_complete(node: Node)` rechaza un nodo liberado, de
 	# modo que la entrada no se borraba nunca y el error se repetia cada frame.
 	for node in vanished:
 		_active.erase(node)
 	for node in completed:
 		_complete(node)
 
-func _complete(node: Node3D) -> void:
+func _complete(node: Node) -> void:
 	var info: Dictionary = _active[node]
 	var pid: String = str(info["id"])
 	_active.erase(node)
@@ -169,7 +169,7 @@ func _complete(node: Node3D) -> void:
 	for res_name in info["produces"]:
 		if _type_map.has(res_name):
 			ResourceManager.add(_type_map[res_name], info["produces"][res_name])
-			FloatingText.spawn_resource(get_tree(), node.global_position, info["produces"][res_name], res_name)
+			FloatingText.spawn_resource_on(node, info["produces"][res_name], res_name)
 	if pid.begins_with("mine_"):
 		EventBus.mining_completed.emit(node, pid)
 	else:
