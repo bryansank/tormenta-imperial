@@ -50,6 +50,7 @@ func _new_game() -> void:
 	CombatManager.reset()
 	StormManager.reset()
 	TutorialManager.reset()
+	ProductionManager.reset()
 	# Place nucleo at center (no build time for core)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
@@ -273,6 +274,8 @@ func clear_save() -> void:
 	CombatManager.reset()
 	StormManager.reset()
 	TutorialManager.reset()
+	ProductionManager.reset()
+	UIManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null
@@ -298,6 +301,8 @@ func clear_save_and_reload_from(save_data: Dictionary) -> void:
 	CombatManager.reset()
 	StormManager.reset()
 	TutorialManager.reset()
+	ProductionManager.reset()
+	UIManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null
