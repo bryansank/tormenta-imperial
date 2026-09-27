@@ -536,6 +536,10 @@ const _STRINGS := {
 		"STORM_TITHE_RESUMED": "Los Tasadores siguen en la puerta: el Diezmo que dejaste a medias se cobra ahora.",
 		"MSG_SAVE_CORRUPT": "La partida guardada estaba danada y no se pudo leer. Se guardo una copia en %s y empieza una colonia nueva.",
 		"MSG_AUDIT_AWAITING": "La Regencia no olvida tu Cuartel General: la Auditoria Final espera tu orden.",
+		# ── integridad-combate ──
+		"LBL_NODE_FIGHT": "Sin limpiar: pulsa para combatir",
+		"MSG_AUDIT_BOARD_BUSY": "Hay un tablero abierto: cierralo antes de llamar a la Regencia.",
+		"MSG_AUDIT_EXPEDITION_OUT": "La columna esta fuera: que vuelva antes de llamar a la Regencia.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -1040,6 +1044,10 @@ const _STRINGS := {
 		"STORM_TITHE_RESUMED": "The Assessors are still at the gate: the Tithe you left half-settled is due now.",
 		"MSG_SAVE_CORRUPT": "The saved game was damaged and could not be read. A copy was kept at %s and a new colony begins.",
 		"MSG_AUDIT_AWAITING": "The Regency has not forgotten your Headquarters: the Final Audit awaits your order.",
+		# ── integridad-combate ──
+		"LBL_NODE_FIGHT": "Not cleared: press to fight",
+		"MSG_AUDIT_BOARD_BUSY": "A board is open: close it before calling the Regency down.",
+		"MSG_AUDIT_EXPEDITION_OUT": "The column is out: bring it home before calling the Regency down.",
 	},
 }
 

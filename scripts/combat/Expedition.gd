@@ -110,10 +110,21 @@ func at_boss() -> bool:
 func current_exits() -> Array:
 	return current_node_data().get("exits", []).duplicate()
 
+## True once the node the party is standing on has been fought and won.
+func is_current_cleared() -> bool:
+	return bool(current_node_data().get("cleared", false))
+
+## The party is standing on a node it still has to fight. That is the state a
+## save made mid-node reloads into: the board was not saved, so the node is there
+## again, uncleared, and the only way on is through it.
+func needs_fight() -> bool:
+	return is_active() and not current_node_data().is_empty() and not is_current_cleared()
+
 ## A move is legal only along an exit of the current node — no jumping across the
-## map, and no going back.
+## map, and no going back — and only once that node is cleared. Without the last
+## rule a reload mid-node let the player walk straight past a fight nobody won.
 func can_select(index: int) -> bool:
-	return is_active() and current_exits().has(index)
+	return is_active() and is_current_cleared() and current_exits().has(index)
 
 func living_party() -> Array:
 	var alive: Array = []

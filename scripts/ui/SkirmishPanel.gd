@@ -387,20 +387,31 @@ func _adjust(unit_id: String, delta: int) -> void:
 
 ## Visible solo cuando hay algo que convocar: la primera vez (pendiente) o tras
 ## perder, si el ejercito ya da para volver a llamarlos.
+##
+## Con un tablero abierto o la columna fuera el boton se ve pero no se pulsa, y
+## el tooltip dice por que: la oleada no tendria donde bajar.
 func _refresh_audit_button() -> void:
+	var blocked: String = CombatManager.final_audit_block_reason()
+	_audit_btn.tooltip_text = Tr.t(blocked) if blocked != "" else ""
 	if ProgressionManager.is_final_audit_pending():
 		_audit_btn.text = Tr.t("BTN_AUDIT_BEGIN")
 		_audit_btn.visible = true
-		_audit_btn.disabled = false
+		_audit_btn.disabled = blocked != ""
 	elif ProgressionManager.is_final_audit_lost():
 		_audit_btn.text = Tr.t("BTN_AUDIT_RESUMMON")
 		_audit_btn.visible = true
-		_audit_btn.disabled = not ProgressionManager.can_resummon_final_audit()
+		_audit_btn.disabled = blocked != "" or not ProgressionManager.can_resummon_final_audit()
 	else:
 		_audit_btn.visible = false
 
 func _on_audit_pressed() -> void:
 	var started: bool = false
+	var blocked: String = CombatManager.final_audit_block_reason()
+	if blocked != "":
+		# Nada de reconvocar para luego no poder empezar: se avisa y ya.
+		EventBus.notification_posted.emit(Tr.t(blocked), "warning", UITheme.WARNING)
+		_refresh()
+		return
 	if ProgressionManager.is_final_audit_pending():
 		started = ProgressionManager.begin_final_audit()
 	elif ProgressionManager.is_final_audit_lost():

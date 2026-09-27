@@ -58,6 +58,7 @@ func test_only_the_exits_of_the_current_node_answer() -> void:
 	var screen := _screen()
 	await await_idle_frame()
 	var run := _expedition()
+	run.mark_cleared()
 	screen.open_map(run)
 	await await_idle_frame()
 	var exits: Array = run.current_exits()
@@ -65,10 +66,26 @@ func test_only_the_exits_of_the_current_node_answer() -> void:
 	for i in range(run.map.size()):
 		assert_bool(screen.map_button(i).disabled).is_equal(not exits.has(i))
 
+func test_an_unfought_current_node_is_the_only_button_that_answers() -> void:
+	# Una partida cargada a mitad de nodo: el nodo sigue sin limpiar, asi que no
+	# hay salida que valga. Lo unico que se pulsa es el propio nodo, para pelearlo.
+	var screen := _screen()
+	await await_idle_frame()
+	var run := _expedition()
+	screen.open_map(run)
+	await await_idle_frame()
+	for i in range(run.map.size()):
+		assert_bool(screen.map_button(i).disabled).is_equal(i != run.current_node)
+	assert_str(screen.map_button(run.current_node).tooltip_text).contains(Tr.t("LBL_NODE_FIGHT"))
+	var exit_index: int = int(run.current_exits()[0])
+	screen.map_button(exit_index).pressed.emit()
+	assert_array(_chosen_nodes).is_empty()
+
 func test_clicking_a_valid_exit_asks_for_that_node() -> void:
 	var screen := _screen()
 	await await_idle_frame()
 	var run := _expedition()
+	run.mark_cleared()
 	screen.open_map(run)
 	await await_idle_frame()
 	var target: int = int(run.current_exits()[0])
