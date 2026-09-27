@@ -6,6 +6,8 @@ var _panel: PanelContainer
 var _backdrop: ColorRect
 var _settings_btn: Button
 var _fullscreen_check: CheckButton
+var _music_btn: Button
+var _music_check: CheckButton
 var _is_open := false
 
 func _ready() -> void:
@@ -33,6 +35,20 @@ func _setup_ui() -> void:
 	_settings_btn.visible = false  # Start collapsed with sidebar
 	root.add_child(_settings_btn)
 	EventBus.sidebar_toggled.connect(func(vis: bool): _settings_btn.visible = vis)
+
+	# Musica si/no de un clic desde el menu ☰, sin abrir Ajustes.
+	_music_btn = Button.new()
+	_music_btn.name = "MusicQuickButton"
+	_music_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
+	_music_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_music_btn.offset_left = -176
+	_music_btn.offset_top = UILayoutManager.get_sidebar_button_offset("SettingsPanel.music_button")
+	UITheme.style_card_button(_music_btn, UITheme.BTN.lightened(0.05), UITheme.ACCENT)
+	_music_btn.pressed.connect(AudioManager.toggle_music)
+	_music_btn.visible = false
+	root.add_child(_music_btn)
+	EventBus.sidebar_toggled.connect(func(vis: bool): _music_btn.visible = vis)
+	EventBus.music_toggled.connect(_sync_music)
 
 	# Backdrop
 	_backdrop = UITheme.make_backdrop()
@@ -72,6 +88,9 @@ func _setup_ui() -> void:
 		Tr.t("LBL_VOL_MASTER"), GameConfig.audio_master_volume,
 		func(v: float): AudioManager.set_master_volume(v)
 	))
+	_music_check = UITheme.make_check_button(Tr.t("LBL_MUSIC_ENABLED"), GameConfig.audio_music_enabled,
+		func(pressed: bool): AudioManager.set_music_enabled(pressed))
+	vbox.add_child(_music_check)
 	vbox.add_child(_make_volume_row(
 		Tr.t("LBL_VOL_MUSIC"), GameConfig.audio_music_volume,
 		func(v: float): AudioManager.set_music_volume(v)
@@ -106,9 +125,8 @@ func _setup_ui() -> void:
 		_fullscreen_check.set_pressed_no_signal(enabled)
 	)
 
-	# Controles tactiles en pantalla: tres estados porque "automatico" (segun
-	# haya pantalla tactil) es el valor bueno para casi todos, y un interruptor
-	# de dos posiciones no puede decirlo.
+	# Controles en pantalla: tres estados porque "automatico" (movil, o PC tras
+	# un toque real) es el valor bueno para casi todos; en PC salen apagados.
 	var touch_idx := GameConfig.TOUCH_CONTROLS_MODES.find(GameConfig.ui_touch_controls)
 	vbox.add_child(UITheme.make_option_row(
 		Tr.t("LBL_TOUCH_CONTROLS"),
@@ -132,6 +150,14 @@ func _setup_ui() -> void:
 	UITheme.style_button(close_btn, UITheme.POSITIVE, UITheme.FONT_SECTION)
 	close_btn.pressed.connect(toggle)
 	vbox.add_child(close_btn)
+	_sync_music(GameConfig.audio_music_enabled)
+
+## El boton del menu y el interruptor dicen lo mismo, cambie quien cambie.
+func _sync_music(enabled: bool) -> void:
+	_music_btn.text = Tr.t("BTN_MUSIC_ON") if enabled else Tr.t("BTN_MUSIC_OFF")
+	_music_btn.modulate = Color(1, 1, 1, 1.0 if enabled else 0.7)
+	if _music_check != null:
+		_music_check.set_pressed_no_signal(enabled)
 
 ## One labelled volume slider row: NAME  [--------o---]  85%
 func _make_volume_row(label_text: String, initial: float, apply: Callable, sfx_preview := false) -> VBoxContainer:
