@@ -150,9 +150,13 @@ func _process(delta: float) -> void:
 
 func _tick_construction(delta: float) -> void:
 	var completed: Array = []
-	for node in _constructing:
+	for node in _constructing.keys():
+		# Un nodo liberado (demolido, o la escena cambio: nueva partida, otra
+		# vista) se descarta aqui. Mandarlo a _complete_construction fallaba en
+		# el tipado del argumento, la entrada no se borraba y el error se repetia
+		# cada frame.
 		if not is_instance_valid(node):
-			completed.append(node)
+			_constructing.erase(node)
 			continue
 		_constructing[node]["remaining"] -= delta
 		var progress := get_construction_progress(node)
