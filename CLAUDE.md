@@ -276,8 +276,8 @@ in place, but no screen drives an expedition yet. See "Planned" below.
 - Research costs **resources** (not points) and takes time; only one tech at a time.
 - Bonuses are permanent: production multiplier, storage, consumption reduction,
   morale recovery (Military branch), market spread / build speed (Logistics).
-- Caveat: `_research_points` (+1 per HQ production tick) is saved but never spent —
-  vestigial. The "requires HQ" comment in the header is NOT enforced in code.
+- No HQ requirement (deliberate: the HQ is era 3). The old vestigial `_research_points`
+  counter was removed; a `research_points` key in old saves is ignored.
 
 ### Game Phases (onboarding pacing)
 
