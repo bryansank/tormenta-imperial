@@ -64,7 +64,7 @@ Production output = `base * level_multiplier * morale_multiplier`
 | 50 | 1.0x |
 | 100 | 1.2x |
 
-Formula: `0.5 + (morale / 100) * 0.7`
+Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/50 * 0.5` up to 50, `1.0 + (m-50)/50 * 0.2` above.
 
 ## Economy Balance Design
 

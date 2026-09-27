@@ -497,6 +497,45 @@ const _STRINGS := {
 		"MSG_LAUNCH_IN_BATTLE": "Hay un tablero abierto.",
 		"MSG_LAUNCH_DEPLOY_CAP": "No caben mas de %d unidades en el tablero.",
 		"MSG_LAUNCH_AUDIT_ACTIVE": "La guarnicion defiende la base: nadie sale de expedicion.",
+		# ── reglas-idioma ──
+		# Edificios (BuildingData.get_display_name / get_description)
+		"BLD_NUCLEO_NAME": "Núcleo",
+		"BLD_NUCLEO_DESC": "Edificio central. El corazón de tu imperio.",
+		"BLD_HOUSE_NAME": "Vivienda",
+		"BLD_HOUSE_DESC": "Aloja trabajadores. Cada vivienda alberga 6 habitantes.",
+		"BLD_SAWMILL_NAME": "Aserradero",
+		"BLD_SAWMILL_DESC": "Tala y procesa madera.",
+		"BLD_GOLD_MINE_NAME": "Mina de Oro",
+		"BLD_GOLD_MINE_DESC": "Extrae oro del subsuelo.",
+		"BLD_WAREHOUSE_NAME": "Depósito",
+		"BLD_WAREHOUSE_DESC": "Amplía el almacén compartido de recursos.",
+		"BLD_FOUNDRY_NAME": "Fundición",
+		"BLD_FOUNDRY_DESC": "Produce acero a partir de minerales.",
+		"BLD_BARRACKS_NAME": "Cuartel",
+		"BLD_BARRACKS_DESC": "Entrena las unidades del ejército.",
+		"BLD_REFINERY_NAME": "Refinería",
+		"BLD_REFINERY_DESC": "Extrae y refina petróleo.",
+		"BLD_TOWER_NAME": "Torre de Vigilancia",
+		"BLD_TOWER_DESC": "Mitiga el daño de la Tormenta y aporta una dotación de artillería en las defensas.",
+		"BLD_HEADQUARTERS_NAME": "Cuartel General",
+		"BLD_HEADQUARTERS_DESC": "Centro de comando. Produce oro lentamente.",
+		"BLD_ROAD_NAME": "Camino",
+		"BLD_ROAD_DESC": "Camino pavimentado. Pequeño impulso a la moral.",
+		"BLD_GARDEN_NAME": "Jardín",
+		"BLD_GARDEN_DESC": "Espacio verde que mejora la moral de los habitantes.",
+		"BLD_FOUNTAIN_NAME": "Fuente",
+		"BLD_FOUNTAIN_DESC": "Fuente ornamental. Mejora la moral y embellece la base.",
+		"BLD_STATUE_NAME": "Estatua Imperial",
+		"BLD_STATUE_DESC": "Monumento que inspira a los trabajadores. Gran impulso a la moral.",
+		# Selector de idioma (Ajustes). Cada idioma se nombra en su propia lengua.
+		"LBL_LANGUAGE": "Idioma",
+		"LBL_LOCALE_ES": "Español",
+		"LBL_LOCALE_EN": "English",
+		"NOTIF_LOCALE_AFTER_BATTLE": "Idioma cambiado. Con un tablero abierto no se recarga: se verá en todos los paneles al volver a abrir el juego.",
+		# ── integridad-guardado ──
+		"STORM_TITHE_RESUMED": "Los Tasadores siguen en la puerta: el Diezmo que dejaste a medias se cobra ahora.",
+		"MSG_SAVE_CORRUPT": "La partida guardada estaba danada y no se pudo leer. Se guardo una copia en %s y empieza una colonia nueva.",
+		"MSG_AUDIT_AWAITING": "La Regencia no olvida tu Cuartel General: la Auditoria Final espera tu orden.",
 		# ── integridad-combate ──
 		"LBL_NODE_FIGHT": "Sin limpiar: pulsa para combatir",
 		"MSG_AUDIT_BOARD_BUSY": "Hay un tablero abierto: cierralo antes de llamar a la Regencia.",
@@ -966,6 +1005,45 @@ const _STRINGS := {
 		"MSG_LAUNCH_IN_BATTLE": "A board is already open.",
 		"MSG_LAUNCH_DEPLOY_CAP": "No more than %d units fit on the board.",
 		"MSG_LAUNCH_AUDIT_ACTIVE": "The garrison is defending the base: nobody marches out.",
+		# ── reglas-idioma ──
+		# Buildings (BuildingData.get_display_name / get_description)
+		"BLD_NUCLEO_NAME": "Core",
+		"BLD_NUCLEO_DESC": "Central building. The heart of your empire.",
+		"BLD_HOUSE_NAME": "House",
+		"BLD_HOUSE_DESC": "Houses workers. Each house holds 6 inhabitants.",
+		"BLD_SAWMILL_NAME": "Sawmill",
+		"BLD_SAWMILL_DESC": "Fells and processes wood.",
+		"BLD_GOLD_MINE_NAME": "Gold Mine",
+		"BLD_GOLD_MINE_DESC": "Digs gold out of the ground.",
+		"BLD_WAREHOUSE_NAME": "Warehouse",
+		"BLD_WAREHOUSE_DESC": "Expands the shared resource storage.",
+		"BLD_FOUNDRY_NAME": "Foundry",
+		"BLD_FOUNDRY_DESC": "Produces steel from ore.",
+		"BLD_BARRACKS_NAME": "Barracks",
+		"BLD_BARRACKS_DESC": "Trains the army's units.",
+		"BLD_REFINERY_NAME": "Refinery",
+		"BLD_REFINERY_DESC": "Extracts and refines oil.",
+		"BLD_TOWER_NAME": "Watchtower",
+		"BLD_TOWER_DESC": "Mitigates Storm damage and fields an artillery crew in defences.",
+		"BLD_HEADQUARTERS_NAME": "Headquarters",
+		"BLD_HEADQUARTERS_DESC": "Command centre. Produces gold slowly.",
+		"BLD_ROAD_NAME": "Road",
+		"BLD_ROAD_DESC": "Paved road. A small morale boost.",
+		"BLD_GARDEN_NAME": "Garden",
+		"BLD_GARDEN_DESC": "Green space that lifts the inhabitants' morale.",
+		"BLD_FOUNTAIN_NAME": "Fountain",
+		"BLD_FOUNTAIN_DESC": "Ornamental fountain. Improves morale and adorns the base.",
+		"BLD_STATUE_NAME": "Imperial Statue",
+		"BLD_STATUE_DESC": "Monument that inspires the workers. A large morale boost.",
+		# Language selector (Settings). Each language is named in its own tongue.
+		"LBL_LANGUAGE": "Language",
+		"LBL_LOCALE_ES": "Español",
+		"LBL_LOCALE_EN": "English",
+		"NOTIF_LOCALE_AFTER_BATTLE": "Language changed. With a board open the game does not reload: every panel will show it next time you start the game.",
+		# ── integridad-guardado ──
+		"STORM_TITHE_RESUMED": "The Assessors are still at the gate: the Tithe you left half-settled is due now.",
+		"MSG_SAVE_CORRUPT": "The saved game was damaged and could not be read. A copy was kept at %s and a new colony begins.",
+		"MSG_AUDIT_AWAITING": "The Regency has not forgotten your Headquarters: the Final Audit awaits your order.",
 		# ── integridad-combate ──
 		"LBL_NODE_FIGHT": "Not cleared: press to fight",
 		"MSG_AUDIT_BOARD_BUSY": "A board is open: close it before calling the Regency down.",
@@ -994,5 +1072,15 @@ func amount_list(amounts: Dictionary) -> String:
 		parts.append("%d %s" % [int(amounts[res_id]), res_name(res_id)])
 	return " | ".join(parts)
 
+## Idiomas que tienen tabla. El selector de Ajustes los ofrece en este orden.
+const LOCALES := ["es", "en"]
+
+## Cambia el idioma. Un idioma sin tabla se ignora (se queda el actual) para que
+## un settings.cfg tocado a mano no deje el juego ensenando claves crudas.
 func set_locale(locale: String) -> void:
+	if not _STRINGS.has(locale):
+		return
 	_locale = locale
+
+func get_locale() -> String:
+	return _locale

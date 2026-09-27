@@ -100,6 +100,19 @@ func is_in_encounter() -> bool:
 func is_board_open() -> bool:
 	return _encounter != null
 
+## Se puede guardar sin mentir. El tablero no se guarda nunca (D6), asi que con
+## una pelea en juego el save captaria unidades a medio herir sobre un nodo sin
+## limpiar. Tampoco con el parte de una oleada del asedio en pantalla: su
+## resultado no llega a FinalAudit hasta que se cierra (end_encounter), y un save
+## en ese hueco traeria la guarnicion herida a repetir la misma oleada. Con el
+## parte de cualquier otra pelea delante, el resultado ya esta liquidado.
+func is_save_safe() -> bool:
+	if _encounter == null:
+		return true
+	if _encounter.is_active():
+		return false
+	return _result_applied and not _audit_wave_active
+
 func is_enemy_thinking() -> bool:
 	return _enemy_turn_running
 

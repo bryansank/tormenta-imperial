@@ -131,6 +131,9 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(_on_game_load_completed)
 	EventBus.expedition_resumed.connect(_on_expedition_resumed)
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	# Red de seguridad: si la carga ocurrio antes de que este panel escuchara,
+	# expedition_resumed y draft_offered se perdieron. Se le pregunta al servicio.
+	sync_with_state.call_deferred()
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -483,6 +486,19 @@ func _on_expedition_node_selected(_node_index: int) -> void:
 func _on_game_load_completed() -> void:
 	if has_expedition():
 		open_map()
+
+## Pone la pantalla al dia con CombatManager sin esperar a ninguna senal: mapa si
+## hay campana, y el draft si hay cartas sin elegir. Sin esto, un draft pendiente
+## cargado a espaldas de la UI dejaba el mapa sin respuesta (select_node rechaza
+## mientras haya draft) y la partida bloqueada. Idempotente: si la senal ya
+## llego, no hace nada.
+func sync_with_state() -> void:
+	if not has_expedition() or CombatManager.is_board_open():
+		return
+	if _view == View.NONE:
+		open_map()
+	if CombatManager.has_pending_draft() and not is_draft_open() and _pending_draft.is_empty():
+		_on_draft_offered(CombatManager.get_draft_options())
 
 func _on_expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary) -> void:
 	_pending_draft.clear()
