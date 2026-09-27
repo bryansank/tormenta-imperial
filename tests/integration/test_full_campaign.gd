@@ -70,6 +70,7 @@ extends GdUnitTestSuite
 const Placer := preload("res://scripts/buildings/BuildingPlacer.gd")
 const MapGen := preload("res://scripts/map/MapGenerator.gd")
 const AutoResolverScript := preload("res://scripts/combat/AutoResolver.gd")
+const Parking := preload("res://tests/save/save_parking.gd")
 
 const SAVE_PATH := "user://save_game.json"
 const BACKUP_PATH := "user://save_game.full_campaign.bak"
@@ -214,17 +215,14 @@ func after_test() -> void:
 ## GameManager guarda en `user://save_game.json`, que es la partida de verdad de
 ## quien tenga el juego instalado. Se aparta antes y se devuelve despues: una
 ## suite de pruebas no puede cobrarse la partida de nadie.
+##
+## Una copia aparcada que ya existe es una partida real varada por una ejecucion
+## que murio antes de devolverla: se devuelve, no se borra (tests/save/save_parking.gd).
 func _park_player_save() -> void:
-	if FileAccess.file_exists(BACKUP_PATH):
-		DirAccess.remove_absolute(BACKUP_PATH)
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.rename_absolute(SAVE_PATH, BACKUP_PATH)
+	Parking.park(BACKUP_PATH)
 
 func _restore_player_save() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
-	if FileAccess.file_exists(BACKUP_PATH):
-		DirAccess.rename_absolute(BACKUP_PATH, SAVE_PATH)
+	Parking.restore(BACKUP_PATH)
 
 ## Una colonia nueva de verdad: el BuildingPlacer y el MapGenerator reales bajo
 ## la escena actual (de ahi los lee `GameManager`, `ArmyManager.barracks_count()`

@@ -14,6 +14,7 @@ const SAVE_PATH := "user://save_game.json"
 const BACKUP_PATH := "user://save_game.load_ui.bak"
 const PARTY := {"infantry": 2, "artillery": 1}
 const SEED := 424242
+const Parking := preload("res://tests/save/save_parking.gd")
 
 var _saved_army: Dictionary = {}
 var _saved_population: Dictionary = {}
@@ -129,10 +130,7 @@ func test_without_a_campaign_the_safety_net_stays_quiet() -> void:
 # ── El orden de arranque ─────────────────────────────────────────────
 
 func test_the_game_starts_only_once_the_whole_scene_is_ready() -> void:
-	if FileAccess.file_exists(BACKUP_PATH):
-		DirAccess.remove_absolute(BACKUP_PATH)
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.rename_absolute(SAVE_PATH, BACKUP_PATH)
+	Parking.park(BACKUP_PATH)
 	GridManager.clear_all()
 	GameManager._placer = null
 	GameManager._map_gen = null
@@ -169,7 +167,4 @@ func test_the_game_starts_only_once_the_whole_scene_is_ready() -> void:
 	GridManager.clear_all()
 	get_tree().root.remove_child(main)
 	main.free()
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
-	if FileAccess.file_exists(BACKUP_PATH):
-		DirAccess.rename_absolute(BACKUP_PATH, SAVE_PATH)
+	Parking.restore(BACKUP_PATH)
