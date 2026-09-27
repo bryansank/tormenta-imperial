@@ -497,6 +497,10 @@ const _STRINGS := {
 		"MSG_LAUNCH_IN_BATTLE": "Hay un tablero abierto.",
 		"MSG_LAUNCH_DEPLOY_CAP": "No caben mas de %d unidades en el tablero.",
 		"MSG_LAUNCH_AUDIT_ACTIVE": "La guarnicion defiende la base: nadie sale de expedicion.",
+		# ── integridad-guardado ──
+		"STORM_TITHE_RESUMED": "Los Tasadores siguen en la puerta: el Diezmo que dejaste a medias se cobra ahora.",
+		"MSG_SAVE_CORRUPT": "La partida guardada estaba danada y no se pudo leer. Se guardo una copia en %s y empieza una colonia nueva.",
+		"MSG_AUDIT_AWAITING": "La Regencia no olvida tu Cuartel General: la Auditoria Final espera tu orden.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -962,6 +966,10 @@ const _STRINGS := {
 		"MSG_LAUNCH_IN_BATTLE": "A board is already open.",
 		"MSG_LAUNCH_DEPLOY_CAP": "No more than %d units fit on the board.",
 		"MSG_LAUNCH_AUDIT_ACTIVE": "The garrison is defending the base: nobody marches out.",
+		# ── integridad-guardado ──
+		"STORM_TITHE_RESUMED": "The Assessors are still at the gate: the Tithe you left half-settled is due now.",
+		"MSG_SAVE_CORRUPT": "The saved game was damaged and could not be read. A copy was kept at %s and a new colony begins.",
+		"MSG_AUDIT_AWAITING": "The Regency has not forgotten your Headquarters: the Final Audit awaits your order.",
 	},
 }
 

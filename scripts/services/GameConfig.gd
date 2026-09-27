@@ -381,6 +381,15 @@ var audio_sfx_voices := 8
 var demolish_refund_ratio := 0.5
 var max_offline_seconds := 28800.0
 
+# ── Autosave ──
+## Segundos REALES entre guardados periodicos. No pasa por get_duration(): es
+## una red contra cierres inesperados, no parte del ritmo del juego, y dev_mode
+## no debe convertirlo en un guardado por segundo.
+var autosave_interval := 60.0
+## Ventana en la que una rafaga de eventos (fin de pelea + Diezmo + fin de
+## expedicion llegan en el mismo instante) se funde en un solo guardado.
+var autosave_debounce := 0.5
+
 # ── Market Config ──
 
 var market_base_prices := {

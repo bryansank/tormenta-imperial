@@ -33,6 +33,13 @@ var _tween: Tween = null
 
 ## Los valores originales, para poder devolverlos tal cual.
 var _clear: Dictionary = {}
+## De que Environment son esos valores. El Environment de Main.tscn es un
+## sub-recurso cacheado: al recargar la escena puede volver el MISMO objeto, con
+## la ceniza que le dejo la partida anterior encima. Si se volvieran a leer ahi,
+## el "cielo limpio" seria el oscuro. Solo se capturan de un Environment nuevo.
+var _clear_env: Environment = null
+## Y de que luz salio la energia del sol limpio.
+var _clear_sun_id: int = 0
 
 func _ready() -> void:
 	EventBus.storm_incoming.connect(_on_incoming)
@@ -42,12 +49,18 @@ func _ready() -> void:
 	EventBus.storm_ended.connect(_on_ended)
 	# Ganada la Auditoria Final no hay fundido: el aire aclara de golpe y para siempre.
 	EventBus.storm_halted_forever.connect(restore_now)
+	# Al empezar o cargar partida la escena es otra: se vuelve a buscar el cielo
+	# y se pinta el de la fase en la que esta la Tormenta, sin fundido.
+	EventBus.game_new_started.connect(sync_to_storm)
+	EventBus.game_load_completed.connect(sync_to_storm)
 
 ## La escena no existe todavía en `_ready` de un autoload, así que se busca
-## perezosamente la primera vez que hace falta.
+## perezosamente la primera vez que hace falta. Y se vuelve a buscar si la escena
+## cambio: tras recargar, la luz vieja esta liberada.
 func _resolve() -> bool:
-	if _env != null and _sun != null:
+	if _env != null and is_instance_valid(_sun) and _sun.is_inside_tree():
 		return true
+	_forget_scene()
 	var scene := get_tree().current_scene
 	if scene == null:
 		return false
@@ -58,13 +71,22 @@ func _resolve() -> bool:
 	_env = (we as WorldEnvironment).environment
 	_sun = light as DirectionalLight3D
 	if _env == null:
+		_sun = null
 		return false
-	_clear = {
-		"bg": _env.background_color,
-		"ambient": _env.ambient_light_color,
-		"ambient_energy": _env.ambient_light_energy,
-		"sun": _sun.light_energy,
-	}
+	if _clear_env != _env:
+		_clear_env = _env
+		_clear_sun_id = _sun.get_instance_id()
+		_clear = {
+			"bg": _env.background_color,
+			"ambient": _env.ambient_light_color,
+			"ambient_energy": _env.ambient_light_energy,
+			"sun": _sun.light_energy,
+		}
+	elif _clear_sun_id != _sun.get_instance_id():
+		# Mismo Environment, luz nueva: la luz es un nodo de la escena recien
+		# cargada, asi que llega limpia y su energia es la de cielo despejado.
+		_clear_sun_id = _sun.get_instance_id()
+		_clear["sun"] = _sun.light_energy
 	# La niebla es lo que de verdad se ve: la hierba de la isla usa un shader
 	# propio que apenas responde a la luz, asi que bajar el sol solo no cambia
 	# nada en pantalla. La niebla si tine todo por profundidad, y ademas es
@@ -91,7 +113,7 @@ func _on_ash() -> void:
 ## incluso la tormenta mas floja tiene que oscurecer lo bastante como para que
 ## se note sin leer nada.
 func _on_storm(severity: int) -> void:
-	_close_to(clampf(float(severity) / float(maxi(1, GameConfig.storm_severity_max)), 0.6, 1.0))
+	_close_to(weight_for(StormCycle.Phase.STORM, severity))
 
 ## El Aviso no era nada. El cielo se despeja sin mas explicacion: el jugador se
 ## entera de que era falsa alarma mirando por la ventana, no leyendo un aviso.
@@ -129,6 +151,57 @@ func _start_tween() -> void:
 		_tween.kill()
 	_tween = create_tween()
 	_tween.set_ease(Tween.EASE_IN_OUT)
+
+## Suelta las referencias a la escena. No toca `_clear`: esos valores son del
+## Environment, no de la escena, y se conservan mientras el Environment sea el mismo.
+func _forget_scene() -> void:
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	_tween = null
+	_env = null
+	_sun = null
+
+## Lo que pesa la ceniza en cada fase. Publico para poder auditarlo sin cielo.
+static func weight_for(phase: int, severity: int) -> float:
+	match phase:
+		StormCycle.Phase.WARNING:
+			return WEIGHT_WARNING
+		StormCycle.Phase.ASH:
+			return WEIGHT_ASH
+		StormCycle.Phase.STORM:
+			return clampf(float(severity) / float(maxi(1, GameConfig.storm_severity_max)), 0.6, 1.0)
+	return 0.0
+
+## Pinta al instante el cielo de la fase actual. Sin esto, cargar con la ceniza
+## cayendo mostraba cielo limpio, y cargar en calma tras una partida oscura
+## heredaba la oscuridad.
+func sync_to_storm() -> void:
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	if not _resolve():
+		return
+	var weight: float = 0.0
+	if not StormManager.is_halted():
+		weight = weight_for(StormManager.get_phase(), StormManager.get_severity())
+	_apply_now(weight)
+
+func _apply_now(weight: float) -> void:
+	_env.background_color = _clear["bg"].lerp(ASH, weight)
+	_env.ambient_light_color = _clear["ambient"].lerp(ASH_LIGHT, weight)
+	_env.ambient_light_energy = lerpf(_clear["ambient_energy"], _clear["ambient_energy"] * 0.3, weight)
+	_sun.light_energy = lerpf(_clear["sun"], _clear["sun"] * 0.15, weight)
+	_env.fog_density = MAX_FOG * weight
+
+## Vuelve a estado de fabrica: sin escena, sin valores capturados. Para tests y
+## para quien necesite empezar de cero de verdad.
+##
+## No se llama al recargar la escena: el Environment puede sobrevivir a la
+## recarga con la ceniza puesta, y olvidar sus valores limpios seria perderlos.
+func reset() -> void:
+	_forget_scene()
+	_clear = {}
+	_clear_env = null
+	_clear_sun_id = 0
 
 ## Devuelve el cielo al instante. Para cargar partida o empezar de cero.
 func restore_now() -> void:
