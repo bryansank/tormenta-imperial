@@ -13,6 +13,10 @@ var _saved_mode := "3d"
 
 func before_test() -> void:
 	_saved_mode = GameConfig.ui_view_mode
+	# Una copia aparcada que sigue ahi es de una ejecucion que murio a medias:
+	# son los ajustes de verdad y vuelven a su sitio antes de aparcar otra vez.
+	if FileAccess.file_exists(BACKUP):
+		DirAccess.copy_absolute(ProjectSettings.globalize_path(BACKUP), ProjectSettings.globalize_path(SETTINGS))
 	if FileAccess.file_exists(SETTINGS):
 		DirAccess.copy_absolute(ProjectSettings.globalize_path(SETTINGS), ProjectSettings.globalize_path(BACKUP))
 

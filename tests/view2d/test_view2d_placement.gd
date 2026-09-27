@@ -15,6 +15,8 @@ const View2D := preload("res://scripts/view2d/View2D.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
 const SAVE_PATH := "user://save_game.json"
+## Aparca la partida del jugador sin perder nunca una copia varada.
+const SaveParking := preload("res://tests/save/save_parking.gd")
 const BACKUP_PATH := "user://save_game.view2d_placement.bak"
 
 var _placer: Node2D = null
@@ -24,8 +26,7 @@ var _resources: Dictionary = {}
 var _warehouses := 0
 
 func before_test() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.rename_absolute(SAVE_PATH, BACKUP_PATH)
+	SaveParking.park(BACKUP_PATH)
 	_gm = {"placer": GameManager._placer, "map": GameManager._map_gen, "camera": GameManager._camera,
 		"started": GameManager._started, "hold": GameManager._hold_start}
 	_resources = ResourceManager.get_all().duplicate()
@@ -64,10 +65,7 @@ func after_test() -> void:
 	GameManager._camera = _alive(_gm["camera"])
 	GameManager._started = _gm["started"]
 	GameManager._hold_start = _gm["hold"]
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
-	if FileAccess.file_exists(BACKUP_PATH):
-		DirAccess.rename_absolute(BACKUP_PATH, SAVE_PATH)
+	SaveParking.restore(BACKUP_PATH)
 
 func _alive(v: Variant) -> Node:
 	return v if is_instance_valid(v) else null

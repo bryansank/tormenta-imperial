@@ -9,9 +9,11 @@ extends Node
 ##     godot --path . -s tools/view2d_probe.gd -- --view=2d
 ##     godot --path . -s tools/view2d_probe.gd -- --view=2d --shot-size=400x720
 ##
-## Las capturas van a docs/media/dev/ (ignorada por git). El guardado del
-## jugador se aparta al empezar y se devuelve al terminar: la partida sembrada
-## se escribe en su sitio solo mientras dura la sonda.
+## Las capturas van a docs/media/dev/ (ignorada por git). Correla SIEMPRE con
+## una carpeta de datos aparte (un override.cfg temporal, no versionado, con
+## application/config/use_custom_user_dir=true y custom_user_dir_name propio):
+## asi no toca ni el guardado ni los ajustes del jugador. Aun asi, el guardado
+## que haya se aparca (tests/save/save_parking.gd) y se devuelve al terminar.
 ##
 ## La partida sembrada esta escrita en el formato de save_game.json de siempre,
 ## el mismo que escribe la vista 3D: que abra bien aqui ES la prueba de que un
@@ -19,6 +21,7 @@ extends Node
 
 const View2D := preload("res://scripts/view2d/View2D.gd")
 const SAVE_PATH := "user://save_game.json"
+const SaveParking := preload("res://tests/save/save_parking.gd")
 const BACKUP_PATH := "user://save_game.view2d_probe.bak"
 const OUT_DIR := "res://docs/media/dev"
 
@@ -40,10 +43,13 @@ func _run() -> void:
 	print("view2d_probe: window=", DisplayServer.window_get_size(), " visible=", size, " tex=", get_tree().root.get_texture().get_size())
 	_tag = "%dx%d" % [int(size.x), int(size.y)]
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.rename_absolute(SAVE_PATH, BACKUP_PATH)
+	SaveParking.park(BACKUP_PATH)
 	GameConfig.dev_mode = false
 	_saved_view = GameConfig.ui_view_mode
+	if OS.get_cmdline_user_args().has("--play"):
+		await _play()
+		_finish()
+		return
 	_write_seeded_save()
 	get_tree().change_scene_to_file("res://scenes/main/Main2D.tscn")
 	await _frames(45)
@@ -132,6 +138,87 @@ func _run() -> void:
 		await _shot("2d_after_roundtrip")
 	_finish()
 
+## --play: partida NUEVA en 2D jugada con eventos de raton de verdad (los que
+## llegan a _unhandled_input): arrastrar el mapa, colocar un aserradero junto a
+## un bosque, seleccionarlo. Imprime lo que comprueba.
+func _play() -> void:
+	GameConfig.dev_mode = true
+	get_tree().change_scene_to_file("res://scenes/main/Main2D.tscn")
+	await _frames(45)
+	var scene := get_tree().current_scene
+	_close_overlays()
+	var cam: Node = scene.get_node("Camera2D")
+	var map_gen: Node = scene.get_node("MapGenerator")
+	var nucleo := GridManager.get_building_at(Vector2i(21, 21))
+	print("view2d_probe: play nucleo=", nucleo != null, " deposits=", map_gen.get_all_deposits().size())
+	# 1) Arrastrar el mapa con el boton izquierdo
+	var before: Dictionary = cam.get_state()
+	_mouse(Vector2(640, 360), true)
+	for i in range(1, 11):
+		_motion(Vector2(640 - i * 20, 360))
+		await _frames(1)
+	_mouse(Vector2(440, 360), false)
+	await _frames(3)
+	var after: Dictionary = cam.get_state()
+	print("view2d_probe: drag moved target_x ", before["target_x"], " -> ", after["target_x"])
+	# 2) Colocar un aserradero junto a un bosque, con un clic
+	ResourceManager.add(ResourceManager.Type.WOOD, 200)
+	ResourceManager.add(ResourceManager.Type.GOLD, 200)
+	var spots: Array = map_gen.buildable_spots_near("forest", Vector2i(2, 1), 1, 1)
+	if spots.is_empty():
+		print("view2d_probe: play no forest spot")
+		return
+	var spot: Dictionary = spots[0]
+	var cell: Vector2i = spot["origin"]
+	var sawmill: BuildingData = load("res://data/buildings/sawmill.tres")
+	# La huella girada si el hueco es vertical
+	EventBus.building_selected_for_placement.emit(sawmill)
+	if (spot["size"] as Vector2i) != sawmill.grid_size:
+		EventBus.building_rotate_requested.emit()
+	cam.look_at_world(Vector2(View2D.px_to_world(View2D.footprint_center_px(cell, spot["size"])).x, View2D.px_to_world(View2D.footprint_center_px(cell, spot["size"])).z))
+	await _frames(3)
+	var screen := View2D.px_to_screen(get_tree().root.get_canvas_transform(), View2D.footprint_center_px(cell, Vector2i.ONE))
+	get_tree().root.warp_mouse(screen)
+	await _frames(3)
+	await _shot("2d_play_ghost")
+	_mouse(screen, true)
+	_mouse(screen, false)
+	await _frames(3)
+	var placed := GridManager.get_building_at(cell)
+	var info := GridManager.get_building_info(placed) if placed else {}
+	print("view2d_probe: play placed sawmill=", (not info.is_empty()) and info["data"].id == "sawmill", " at ", cell)
+	EventBus.building_placement_cancelled.emit()
+	await _frames(30)
+	# 3) Seleccionarlo con un clic
+	_mouse(screen, true)
+	_mouse(screen, false)
+	await _frames(5)
+	var panel: Node = scene.get_node("BuildingInfoPanel")
+	var panel_open := false
+	for c in panel.get_children():
+		if c is Control and (c as Control).visible:
+			panel_open = true
+	print("view2d_probe: play selected=", placed != null and bool(placed.call("is_selected")), " info_panel_visible=", panel_open)
+	await _frames(120)
+	await _shot("2d_play_built")
+
+func _mouse(pos: Vector2, pressed: bool) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = pressed
+	ev.position = pos
+	ev.global_position = pos
+	Input.parse_input_event(ev)
+	Input.flush_buffered_events()
+
+func _motion(pos: Vector2) -> void:
+	var ev := InputEventMouseMotion.new()
+	ev.position = pos
+	ev.global_position = pos
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT
+	Input.parse_input_event(ev)
+	Input.flush_buffered_events()
+
 func _ghost_at(placer: Node, cell: Vector2i) -> void:
 	var xform := get_tree().root.get_canvas_transform()
 	var screen := View2D.px_to_screen(xform, View2D.footprint_center_px(cell, Vector2i.ONE))
@@ -161,10 +248,7 @@ func _finish() -> void:
 	# La preferencia de vista vuelve a como estaba (el cambio en caliente la toca).
 	GameConfig.ui_view_mode = _saved_view
 	GameConfig.save_user_settings()
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
-	if FileAccess.file_exists(BACKUP_PATH):
-		DirAccess.rename_absolute(BACKUP_PATH, SAVE_PATH)
+	SaveParking.restore(BACKUP_PATH)
 	get_tree().quit()
 
 func _write_seeded_save() -> void:
