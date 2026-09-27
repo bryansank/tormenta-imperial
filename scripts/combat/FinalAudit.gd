@@ -49,6 +49,11 @@ var summons: int = 1
 ## musters it again from scratch. After that the garrison is the siege's own —
 ## wounds, dead and all — and begin() (after a reload, say) only reconciles it.
 var started: bool = false
+## Tower crews fallen in this siege. A tower does not tire, a dead crew is not
+## replaced: every wave fields the standing towers' crews minus this. It lives in
+## the model, and therefore in the save, because a crew that died before a
+## reload is just as dead after it.
+var crew_losses: int = 0
 
 ## uid counter, unique inside this siege and shared with the waves it fields, so
 ## no two units on a board can ever collide (data-model, CombatUnit.uid).
@@ -71,6 +76,7 @@ static func create(p_seed: int, garrison_counts: Dictionary, p_era: int = 1, p_m
 	audit.current_wave = 0
 	audit.summons = 1
 	audit.started = false
+	audit.crew_losses = 0
 	audit._build_waves()
 	audit._muster(garrison_counts)
 	return audit
@@ -302,6 +308,11 @@ func begin(garrison_counts: Variant = null) -> Array:
 	events.append({"e": "final_audit_started", "waves": wave_count(), "summons": summons})
 	return events
 
+## A tower crew fell on the board of this siege. Nothing to announce.
+func record_crew_loss(count: int = 1) -> Array:
+	crew_losses += maxi(0, count)
+	return []
+
 ## Squares the garrison with the army as it stands: for every unit type, no more
 ## living soldiers in the siege than the army still has at home. Whoever deserted
 ## or fell somewhere else since the garrison was mustered is dropped from it
@@ -384,6 +395,7 @@ func resummon(p_seed: int, garrison_counts: Dictionary, p_era: int = -1, p_moral
 	current_wave = 0
 	garrison = []
 	started = false
+	crew_losses = 0
 	summons += 1
 	_build_waves()
 	_muster(garrison_counts)
@@ -431,6 +443,7 @@ func to_dict() -> Dictionary:
 		"current_wave": current_wave,
 		"summons": summons,
 		"started": started,
+		"crew_losses": crew_losses,
 		"morale_snapshot": morale_snapshot,
 		"garrison": units,
 	}
@@ -457,6 +470,7 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> FinalAudit:
 	if audit.state == State.ACTIVE:
 		audit.state = State.PENDING
 	audit.summons = maxi(1, int(data.get("summons", 1)))
+	audit.crew_losses = maxi(0, int(data.get("crew_losses", 0)))
 	audit.morale_snapshot = float(data.get("morale_snapshot", 50.0))
 	# The era has to be in place before the waves are rolled: it is half of what
 	# decides their shape.

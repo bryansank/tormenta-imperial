@@ -75,10 +75,6 @@ var _audit_wave_active: bool = false
 ## tablero. Vive aparte de _last_result porque ese parte es de la ultima pelea
 ## que se resolvio, y no siempre es esta.
 var _audit_wave_won: bool = false
-var _audit_crews: Array = []
-## Dotaciones caidas en lo que va de asedio. Las torres no se cansan, pero a
-## una dotacion muerta no la reemplaza nadie.
-var _audit_crew_losses: int = 0
 ## uids del tablero actual cuya muerte ya se liquido en caliente (ver
 ## _settle_audit_death). Solo lo usan las oleadas del asedio.
 var _audit_charged: Dictionary = {}
@@ -271,7 +267,7 @@ func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -
 ## Una oleada del asedio pide tablero. Los defensores son la guarnicion viva que
 ## lleva FinalAudit —con el daño de la oleada anterior— mas las dotaciones de
 ## torre que sigan en pie. Sin relevos: lo que cae, cae.
-func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> void:
+func _on_final_audit_wave_ready(_wave: int, roster: Dictionary, scale: float) -> void:
 	var audit = ProgressionManager.final_audit
 	if audit == null:
 		return
@@ -289,28 +285,23 @@ func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> 
 
 	_morale_snapshot = _read_morale()
 	# Una torre no se cansa, una dotacion si muere. Cada oleada las torres en pie
-	# vuelven a mandar gente entera, pero las dotaciones caidas en oleadas
-	# anteriores no se reemplazan: la atricion tambien les toca a ellas.
-	if wave <= 0:
-		_audit_crew_losses = 0
-	else:
-		for crew in _audit_crews:
-			if not crew.is_alive():
-				_audit_crew_losses += 1
+	# vuelven a mandar gente entera, pero las dotaciones caidas en lo que va de
+	# asedio no se reemplazan. La cuenta vive en FinalAudit (y con el, en el
+	# guardado): una dotacion muerta antes de cargar sigue muerta despues.
 	var counts: Dictionary = {}
 	for unit in defenders:
 		counts[unit.unit_id] = int(counts.get(unit.unit_id, 0)) + 1
-	var wanted: int = roster_size(get_tower_crews(counts)) - _audit_crew_losses
-	_audit_crews = []
+	var wanted: int = roster_size(get_tower_crews(counts)) - int(audit.crew_losses)
+	var audit_crews: Array = []
 	if wanted > 0:
-		_audit_crews = _build_side({GameConfig.storm_tower_garrison_unit: wanted}, Encounter.PLAYER, 1.0)
+		audit_crews = _build_side({GameConfig.storm_tower_garrison_unit: wanted}, Encounter.PLAYER, 1.0)
 	# Quien las fabrica es quien dice quienes son. La lista viaja hasta el tablero
 	# en la misma llamada: ninguna decision sobre "esto es dotacion" pasa por lo
 	# que dejo apuntado un tablero que ya no existe.
 	var crew_uids: Array = []
-	for crew in _audit_crews:
+	for crew in audit_crews:
 		crew_uids.append(crew.uid)
-	defenders.append_array(_audit_crews)
+	defenders.append_array(audit_crews)
 
 	# Sin nadie en pie no se abre tablero: si se llamara a start_defense() con la
 	# lista vacia, esta caeria al camino normal y armaria la defensa desde
@@ -585,6 +576,8 @@ func _emit_events(events: Array) -> void:
 			"unit_defended":
 				EventBus.unit_defended.emit(event["uid"])
 			"unit_died":
+				if _audit_wave_active:
+					_settle_audit_death(int(event["uid"]))
 				EventBus.unit_died.emit(event["uid"], event["side"])
 			"encounter_ended":
 				# The base learns the outcome before anyone is told the fight is
@@ -670,6 +663,11 @@ func _apply_result(victory: bool, rounds: int) -> void:
 	_result_applied = true
 	if _audit_wave_active:
 		_audit_wave_won = victory
+		# Quien cayo sin que llegara su unit_died (no deberia pasar en partida,
+		# pero el ledger no puede depender de ello) se liquida ahora, por el mismo
+		# camino y una sola vez.
+		for unit in _encounter.casualties(Encounter.PLAYER):
+			_settle_audit_death(unit.uid)
 
 	# Un nodo de expedicion no cobra ni entierra a nadie todavia: lo acumula el
 	# modelo y se liquida todo junto al volver (FR-010, FR-011, FR-017). La
@@ -678,23 +676,60 @@ func _apply_result(victory: bool, rounds: int) -> void:
 		_apply_expedition_encounter(victory, rounds)
 		return
 
-	_apply_result_for(_encounter, victory, rounds, _tower_crew_uids)
+	_apply_result_for(_encounter, victory, rounds, _tower_crew_uids, _audit_charged)
+
+## Una unidad del jugador cae en una oleada del asedio, y su baja se cobra YA, no
+## al cerrar la oleada. La guarnicion del asedio son las mismas CombatUnit que
+## pelean en el tablero, y el guardado se lleva su HP tal cual: si ArmyManager
+## esperase al final de la oleada, una partida guardada a medias volveria con los
+## muertos muertos en el asedio y vivos en el cuartel —cobrando paga, sumando
+## Poder Militar, defendiendo Diezmos— porque al cargar la oleada se reintenta y
+## nadie liquida lo que ya paso. Cobrando en el momento, lo guardado siempre
+## cuadra: el cuartel y el asedio cuentan los mismos muertos.
+##
+## Una dotacion de torre no sale del ejercito: se anota en FinalAudit, que es
+## quien decide cuantas manda cada oleada. Idempotente por uid.
+func _settle_audit_death(uid: int) -> void:
+	if _encounter == null or _audit_charged.has(uid):
+		return
+	var unit: CombatUnit = _encounter.get_unit(uid)
+	if unit == null or unit.side != Encounter.PLAYER or unit.is_alive():
+		return
+	_audit_charged[uid] = true
+	if _tower_crew_uids.has(uid):
+		var audit = ProgressionManager.final_audit
+		if audit != null:
+			audit.record_crew_loss()
+	else:
+		ArmyManager.remove_units({unit.unit_id: 1})
 
 ## El mismo cierre para cualquier encuentro, este en el tablero o resuelto a
 ## ciegas por AutoResolver: `crew_uids` dice que unidades del jugador no
 ## pertenecen al ejercito. Deja el parte en get_last_result() y lo devuelve.
-func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_uids: Dictionary) -> Dictionary:
+##
+## `precharged` son uids cuya baja ya salio de ArmyManager en plena pelea (las
+## oleadas del asedio, ver _settle_audit_death): cuentan en el parte y en la moral,
+## pero no se vuelven a restar.
+func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_uids: Dictionary, precharged: Dictionary = {}) -> Dictionary:
 	# Las dotaciones de torre quedan fuera del recuento: no salieron del cuartel,
 	# así que ni se restan del ejército ni cuentan como supervivientes que vuelven.
 	var fallen: Array = encounter.casualties(Encounter.PLAYER)
 	var roster_fallen: Array = _roster_only(fallen, crew_uids)
-	var casualties: Dictionary = _count_by_unit(roster_fallen)
+	var to_charge: Array = []
+	var already: Array = []
+	for unit in roster_fallen:
+		if precharged.has(unit.uid):
+			already.append(unit)
+		else:
+			to_charge.append(unit)
 	var survivors: Dictionary = _count_by_unit(_roster_only(encounter.survivors(), crew_uids))
 
 	# ArmyManager is the source of truth for the roster: the party was never
 	# deducted when it marched out, so only the dead are subtracted now and
 	# Military Power lands exactly on the survivors.
-	var lost: Dictionary = ArmyManager.remove_units(casualties)
+	var lost: Dictionary = ArmyManager.remove_units(_count_by_unit(to_charge))
+	for unit in already:
+		lost[unit.unit_id] = int(lost.get(unit.unit_id, 0)) + 1
 
 	# Winning a defence pays nothing, and it should not: the reward is that the
 	# Tithe goes uncollected. Handing out loot on top would pay the player twice
@@ -1156,8 +1191,6 @@ func _clear_runtime_state() -> void:
 	_board_generation += 1
 	_audit_wave_active = false
 	_audit_wave_won = false
-	_audit_crews.clear()
-	_audit_crew_losses = 0
 	_next_uid = 1
 	_result_applied = false
 	_last_result = {}

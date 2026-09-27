@@ -35,6 +35,7 @@ func after_test() -> void:
 	EventBus.final_audit_lost.disconnect(_on_audit_lost)
 	EventBus.encounter_ended.disconnect(_on_encounter_ended)
 	CombatManager.reset()
+	_clear_towers()
 	ProgressionManager.final_audit = null
 	ProgressionManager.load_save_data(_progression_saved)
 	StormManager.load_save_data(_storm_saved)
@@ -301,6 +302,100 @@ func test_a_wave_that_finds_the_board_busy_waits_instead_of_being_lost() -> void
 	assert_bool(CombatManager.is_in_encounter()).is_true()
 	assert_bool(CombatManager.is_defending()).is_true()
 	assert_int(_audit_lost).is_equal(0)
+
+# ── 2. El ledger del asedio cuadra tambien a traves de un guardado ────
+
+var _towers: Array = []
+
+func _given_tower() -> void:
+	var data := BuildingData.new()
+	data.id = GameConfig.storm_tower_building_id
+	data.grid_size = Vector2i(1, 1)
+	data.max_health = 250
+	var node := Node3D.new()
+	node.set_meta("health", 250)
+	assert_bool(GridManager.place_building(Vector2i(_towers.size(), 0), data, node)).is_true()
+	_towers.append(node)
+
+func _clear_towers() -> void:
+	for node in _towers:
+		GridManager.remove_building(node)
+		node.free()
+	_towers.clear()
+
+## Una muerte de verdad en el tablero: la unidad cae y el evento pasa por el
+## mismo traductor que usa el Encounter.
+func _kill_on_board(unit: CombatUnit) -> void:
+	unit.take_damage(unit.max_hp * 10)
+	CombatManager._emit_events([{"e": "unit_died", "uid": unit.uid, "side": unit.side}])
+
+func _garrison_on_board() -> Array:
+	var result: Array = []
+	for unit in CombatManager.get_units():
+		if unit.side == Encounter.PLAYER and not CombatManager._tower_crew_uids.has(unit.uid):
+			result.append(unit)
+	return result
+
+## Guardar y cargar como lo hace GameManager para los dos lados del ledger.
+func _save_and_reload() -> void:
+	var progression: Dictionary = JSON.parse_string(JSON.stringify(ProgressionManager.get_save_data()))
+	var army: Dictionary = JSON.parse_string(JSON.stringify(ArmyManager.get_save_data()))
+	CombatManager.reset()
+	ProgressionManager.load_save_data(progression)
+	ArmyManager.load_save_data(army)
+
+func test_a_wave_death_leaves_the_army_the_moment_it_happens() -> void:
+	_given_army({"infantry": 4})
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	_kill_on_board(_garrison_on_board()[0])
+	assert_int(ArmyManager.get_count("infantry")).is_equal(3)
+
+func test_a_siege_saved_mid_wave_reloads_without_ghosts() -> void:
+	_given_army({"infantry": 4})
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	_kill_on_board(_garrison_on_board()[0])
+
+	_save_and_reload()
+	var audit: FinalAudit = ProgressionManager.final_audit
+	assert_bool(audit.is_pending()).is_true()
+	# El cuartel y el asedio cuentan los mismos muertos.
+	assert_int(audit.living_garrison().size()).is_equal(3)
+	assert_int(ArmyManager.get_count("infantry")).is_equal(3)
+
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	assert_int(_garrison_on_board().size()).is_equal(3)
+	_resolve_open_board(true)
+	# Ganar la oleada no vuelve a cobrar al que ya se cobro.
+	assert_int(ArmyManager.get_count("infantry")).is_equal(3)
+
+func test_a_lost_wave_charges_every_dead_exactly_once() -> void:
+	_given_army({"infantry": 4})
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	_kill_on_board(_garrison_on_board()[0])
+	_resolve_open_board(false)
+	assert_int(ArmyManager.get_count("infantry")).is_equal(0)
+	assert_int(int(CombatManager.get_last_result()["casualties"].get("infantry", 0))).is_equal(4)
+
+func test_a_dead_tower_crew_stays_dead_after_a_reload() -> void:
+	_given_army({"infantry": 4})
+	_given_tower()
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	assert_int(CombatManager._tower_crew_uids.size()).is_equal(1)
+	var crew: CombatUnit = CombatManager.get_unit(int(CombatManager._tower_crew_uids.keys()[0]))
+	_kill_on_board(crew)
+	# La dotacion no era del ejercito: el cuartel no pierde a nadie.
+	assert_int(ArmyManager.get_count("infantry")).is_equal(4)
+	assert_int(ProgressionManager.final_audit.crew_losses).is_equal(1)
+
+	_save_and_reload()
+	assert_int(ProgressionManager.final_audit.crew_losses).is_equal(1)
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	# La torre sigue en pie, pero su dotacion ya murio en este asedio.
+	assert_dict(CombatManager._tower_crew_uids).is_empty()
 
 # ── 5. Un solo bucle enemigo por tablero ─────────────────────────────
 
