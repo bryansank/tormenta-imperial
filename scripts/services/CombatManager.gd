@@ -591,7 +591,9 @@ func _run_enemy_turn() -> void:
 	for step in plan:
 		if _encounter == null or not _encounter.is_active():
 			break
-		await get_tree().create_timer(delay).timeout
+		# process_always = false: con el juego en pausa el enemigo tambien espera.
+		# El valor por defecto (true) le dejaba seguir jugando detras del menu.
+		await get_tree().create_timer(delay, false).timeout
 		if _encounter == null or not _encounter.is_active():
 			break
 		match step.get("action", "wait"):
@@ -680,6 +682,9 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 		# Para que el parte de la defensa pueda decir cuánto pusieron las torres.
 		"tower_crews": crew_uids.size(),
 		"tower_crews_lost": fallen.size() - roster_fallen.size(),
+		# Lo que cayo del otro lado: el parte de una defensa resuelta a ciegas
+		# tiene que contar las dos columnas, no solo la nuestra.
+		"enemy_casualties": _count_by_unit(encounter.casualties(Encounter.ENEMY)),
 	}
 	return _last_result
 
