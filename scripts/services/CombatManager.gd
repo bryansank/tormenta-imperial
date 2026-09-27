@@ -713,6 +713,12 @@ func _resource_type(res_name: String) -> int:
 func has_active_expedition() -> bool:
 	return _expedition != null and _expedition.is_active()
 
+## El tablero abierto es un nodo de la expedicion en curso. Con columna fuera no
+## se abre ningun otro tablero que no sea de defensa (start_skirmish() y el de
+## pruebas se niegan), asi que "no es defensa" basta para saberlo.
+func _is_expedition_board() -> bool:
+	return _encounter != null and _expedition != null and not _encounter.is_defense
+
 ## La expedicion en curso, para que la UI la lea. Null si no hay. Nadie fuera de
 ## este servicio la muta (constitucion, principio IV).
 func get_expedition() -> Expedition:
@@ -840,12 +846,17 @@ func apply_draft(option_index: int) -> bool:
 	return true
 
 ## Volver a casa antes de tiempo, con el botin y los supervivientes (FR-016).
-## Si hay tablero abierto se cierra sin aplicar resultado: quien sigue en pie
-## se retira, y los caidos ya estan anotados en el party.
+## Si el tablero abierto es el de la expedicion se cierra sin aplicar resultado:
+## quien sigue en pie se retira, y los caidos ya estan anotados en el party.
+##
+## Solo el suyo. Un tablero de defensa (el Diezmo que cayo entre dos nodos) no es
+## de la columna: cerrarlo aqui con el resultado dado por aplicado se tragaba el
+## encounter_ended, y sin el StormManager se quedaba en TITHE para siempre. Esa
+## defensa sigue abierta y se resuelve como cualquier otra.
 func abandon_expedition() -> bool:
 	if not has_active_expedition():
 		return false
-	if _encounter != null:
+	if _is_expedition_board():
 		_result_applied = true
 		end_encounter()
 	_clear_draft()
@@ -937,7 +948,9 @@ func _resolve_expedition(result: int) -> void:
 	# Un _encounter colgado deja is_board_open() en true para siempre, y a partir
 	# de ahi todo Diezmo se resuelve a ciegas y el asedio se da por perdido sin
 	# jugarse una sola oleada.
-	if _encounter != null:
+	# Pero solo el de la columna: una defensa abierta en paralelo tiene su propio
+	# parte y su propio Diezmo por liquidar.
+	if _is_expedition_board():
 		end_encounter()
 
 	var summary: Dictionary = _expedition.result_summary()

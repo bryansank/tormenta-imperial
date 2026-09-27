@@ -1128,7 +1128,9 @@ func _paint_order_face(chip: Label, unit: CombatUnit, is_active: bool) -> void:
 
 func _refresh_actions() -> void:
 	_set_actions_enabled(CombatManager.is_player_turn())
-	_abandon_board_btn.visible = has_expedition()
+	# Una defensa en pleno campaña no es de la columna: abandonar desde ella no
+	# retira a nadie de ese tablero, asi que el boton no se ofrece.
+	_abandon_board_btn.visible = has_expedition() and not CombatManager.is_defending()
 
 func _set_actions_enabled(enabled: bool) -> void:
 	_defend_btn.disabled = not enabled

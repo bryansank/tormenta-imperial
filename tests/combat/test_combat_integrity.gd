@@ -95,6 +95,42 @@ func test_the_same_seed_fields_the_same_skirmish() -> void:
 func test_the_provisional_unseeded_roster_is_gone() -> void:
 	assert_bool(CombatManager.has_method("build_enemy_roster")).is_false()
 
+# ── 4. Abandonar solo cierra el tablero de la columna ────────────────
+
+## El Diezmo cae entre dos nodos: con el tablero libre, la guarnicion que se quedo
+## en casa lo defiende en un tablero propio. Abandonar la expedicion en ese rato
+## no puede llevarse ese tablero por delante: sin su encounter_ended el ciclo de
+## la tormenta se quedaba cobrando para siempre.
+func test_abandoning_leaves_a_tithe_defense_board_to_resolve_itself() -> void:
+	_given_army({"infantry": 5})
+	assert_bool(CombatManager.launch_expedition({"infantry": 2}, 99)).is_true()
+	_resolve_open_board(true)
+	CombatManager.end_encounter()
+	assert_bool(CombatManager.is_board_open()).is_false()
+
+	StormManager.get_cycle().phase = StormCycle.Phase.TITHE
+	StormManager._begin_tithe(1)
+	assert_bool(CombatManager.is_defending()).is_true()
+	var defense: Encounter = CombatManager.get_encounter()
+
+	assert_bool(CombatManager.abandon_expedition()).is_true()
+	assert_bool(CombatManager.has_active_expedition()).is_false()
+	# La defensa sigue en el tablero y sin resolver.
+	assert_object(CombatManager.get_encounter()).is_same(defense)
+	assert_bool(CombatManager.is_in_encounter()).is_true()
+
+	_encounters_ended = 0
+	_resolve_open_board(true)
+	assert_int(_encounters_ended).is_equal(1)
+	assert_bool(StormManager.get_cycle().is_collecting()).is_false()
+
+func test_abandoning_still_closes_the_expeditions_own_board() -> void:
+	_given_army({"infantry": 3})
+	assert_bool(CombatManager.launch_expedition({"infantry": 2}, 99)).is_true()
+	assert_bool(CombatManager.is_board_open()).is_true()
+	assert_bool(CombatManager.abandon_expedition()).is_true()
+	assert_bool(CombatManager.is_board_open()).is_false()
+
 # ── 5. Un solo bucle enemigo por tablero ─────────────────────────────
 
 var _enemy_actions: int = 0
