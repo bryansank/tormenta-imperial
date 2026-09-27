@@ -497,6 +497,11 @@ const _STRINGS := {
 		"MSG_LAUNCH_IN_BATTLE": "Hay un tablero abierto.",
 		"MSG_LAUNCH_DEPLOY_CAP": "No caben mas de %d unidades en el tablero.",
 		"MSG_LAUNCH_AUDIT_ACTIVE": "La guarnicion defiende la base: nadie sale de expedicion.",
+		# ── vista-2d ──
+		"LBL_VIEW_MODE": "Vista del mapa",
+		"BTN_VIEW_3D": "3D",
+		"BTN_VIEW_2D": "2D (plano)",
+		"LBL_VIEW_MODE_HINT": "La partida se guarda y se abre en la otra vista.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -962,6 +967,11 @@ const _STRINGS := {
 		"MSG_LAUNCH_IN_BATTLE": "A board is already open.",
 		"MSG_LAUNCH_DEPLOY_CAP": "No more than %d units fit on the board.",
 		"MSG_LAUNCH_AUDIT_ACTIVE": "The garrison is defending the base: nobody marches out.",
+		# ── vista-2d ──
+		"LBL_VIEW_MODE": "Map view",
+		"BTN_VIEW_3D": "3D",
+		"BTN_VIEW_2D": "2D (flat)",
+		"LBL_VIEW_MODE_HINT": "The game is saved and reopened in the other view.",
 	},
 }
 

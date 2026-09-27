@@ -8,6 +8,8 @@ var _settings_btn: Button
 var _fullscreen_check: CheckButton
 var _is_open := false
 
+const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
+
 func _ready() -> void:
 	layer = 15
 	_setup_ui()
@@ -106,6 +108,8 @@ func _setup_ui() -> void:
 		_fullscreen_check.set_pressed_no_signal(enabled)
 	)
 
+	vbox.add_child(_make_view_mode_row())
+
 	vbox.add_child(UITheme.make_separator())
 	vbox.add_child(UITheme.section_header(Tr.t("LBL_SETTINGS_GAME")))
 
@@ -121,6 +125,38 @@ func _setup_ui() -> void:
 	UITheme.style_button(close_btn, UITheme.POSITIVE, UITheme.FONT_SECTION)
 	close_btn.pressed.connect(toggle)
 	vbox.add_child(close_btn)
+
+## Vista del mapa: [3D] [2D]. Elegir la otra guarda la preferencia y la partida
+## y abre la otra escena (ViewMode.switch_to, docs/18-vista-2d.md).
+func _make_view_mode_row() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.name = "ViewModeRow"
+	box.add_theme_constant_override("separation", 4)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	box.add_child(row)
+	var label := UITheme.make_label(Tr.t("LBL_VIEW_MODE"), "body")
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	var current := ViewMode.current(get_tree()) if is_inside_tree() else ""
+	if current == "":
+		current = ViewMode.requested()
+	var group := ButtonGroup.new()
+	for mode in [ViewMode.MODE_3D, ViewMode.MODE_2D]:
+		var btn := Button.new()
+		btn.name = "View" + mode.to_upper()
+		btn.text = Tr.t("BTN_VIEW_3D" if mode == ViewMode.MODE_3D else "BTN_VIEW_2D")
+		btn.toggle_mode = true
+		btn.button_group = group
+		btn.button_pressed = mode == current
+		UITheme.style_button(btn, UITheme.INFO if mode == current else UITheme.BTN, UITheme.FONT_BODY)
+		btn.pressed.connect(func():
+			if mode != ViewMode.current(get_tree()):
+				ViewMode.switch_to(mode, get_tree())
+		)
+		btn.tooltip_text = Tr.t("LBL_VIEW_MODE_HINT")
+		row.add_child(btn)
+	return box
 
 ## One labelled volume slider row: NAME  [--------o---]  85%
 func _make_volume_row(label_text: String, initial: float, apply: Callable, sfx_preview := false) -> VBoxContainer:

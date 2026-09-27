@@ -37,12 +37,19 @@ var _preview_spin := 0.0
 
 # Thumbnail cache
 var _thumb_cache: Dictionary = {}  # building_id -> ImageTexture
+
+# Vista 2D (docs/18-vista-2d.md): miniaturas y vista previa con el dibujo plano
+# del mapa en vez de modelos 3D. Se decide al arrancar: sin Camera3D es la 2D.
+const BuildingIcon2D := preload("res://scripts/view2d/BuildingIcon2D.gd")
+var _is_2d := false
+var _preview_icon: Control = null
 var _thumb_rects: Dictionary = {}  # building_id -> TextureRect
 
 const CATEGORIES := ["all", "production", "support", "military", "decoration"]
 
 func _ready() -> void:
 	layer = 12
+	_is_2d = get_viewport().get_camera_3d() == null and get_viewport().get_camera_2d() != null
 	_load_buildings()
 	_setup_ui()
 	_generate_thumbnails()
@@ -270,6 +277,11 @@ func _setup_ui() -> void:
 	var preview_wrapper := PanelContainer.new()
 	preview_wrapper.add_theme_stylebox_override("panel", preview_style)
 	preview_wrapper.add_child(_preview_container)
+	if _is_2d:
+		_preview_container.visible = false
+		_preview_icon = BuildingIcon2D.new()
+		_preview_icon.custom_minimum_size = Vector2(300, 220)
+		preview_wrapper.add_child(_preview_icon)
 	_detail_panel.add_child(preview_wrapper)
 
 	# Detail labels
@@ -390,7 +402,14 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	card.add_child(vbox)
 
 	# Thumbnail
-	if _thumb_cache.has(data.id):
+	if _is_2d:
+		var icon: Control = BuildingIcon2D.new()
+		icon.custom_minimum_size = Vector2(64, 64)
+		icon.data = data
+		if locked:
+			icon.modulate = Color(0.4, 0.4, 0.4, 0.7)
+		vbox.add_child(icon)
+	elif _thumb_cache.has(data.id):
 		var tex_rect := TextureRect.new()
 		tex_rect.custom_minimum_size = Vector2(64, 64)
 		tex_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
@@ -504,6 +523,9 @@ func _select_building(data: BuildingData) -> void:
 
 func _load_preview_model(data: BuildingData) -> void:
 	_clear_preview_model()
+	if _is_2d:
+		_preview_icon.data = data
+		return
 	if data.model_scene:
 		_preview_model = data.model_scene.instantiate()
 	else:
@@ -517,6 +539,8 @@ func _load_preview_model(data: BuildingData) -> void:
 	_preview_spin = 0.0
 
 func _clear_preview_model() -> void:
+	if _preview_icon:
+		_preview_icon.data = null
 	if _preview_model and is_instance_valid(_preview_model):
 		_preview_model.queue_free()
 		_preview_model = null
@@ -542,6 +566,9 @@ func _has_locked_resource_cost(data: BuildingData) -> bool:
 # ══════════════════════════════════════════════════════════════════════
 
 func _generate_thumbnails() -> void:
+	# En 2D las miniaturas se dibujan al vuelo (BuildingIcon2D): nada que renderizar.
+	if _is_2d:
+		return
 	var viewport := SubViewport.new()
 	viewport.size = Vector2i(128, 128)
 	viewport.transparent_bg = true

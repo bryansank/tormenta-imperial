@@ -53,6 +53,8 @@ func _setup_ui() -> void:
 
 	var rotate_box := _create_rotate_buttons()
 	right_vbox.add_child(rotate_box)
+	# La vista 2D (docs/18-vista-2d.md) no gira la camara: sin Camera3D, fuera.
+	rotate_box.visible = get_viewport().get_camera_3d() != null
 
 	# Building rotate button (visible only during placement)
 	_rotate_building_btn = _styled_button("R ↻")
