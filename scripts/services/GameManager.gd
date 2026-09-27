@@ -109,7 +109,9 @@ func _load_game() -> void:
 				var constr_remaining := 0.0
 				if entry.has("construction_remaining"):
 					constr_remaining = float(entry["construction_remaining"])
-				ProductionManager.register_building(node, building_data, constr_remaining)
+				# Sin la clave (save anterior) es una construccion, como siempre fue.
+				var upgrade_to: int = int(entry.get("upgrade_to", 0))
+				ProductionManager.register_building(node, building_data, constr_remaining, upgrade_to)
 				# Count warehouses
 				if building_data.id == "warehouse":
 					_warehouse_count += 1

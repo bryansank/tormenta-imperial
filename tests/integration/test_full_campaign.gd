@@ -1318,3 +1318,53 @@ func _audit_snapshot() -> Dictionary:
 		"guarnicion": audit.garrison.size(),
 		"pendiente": audit.is_pending(),
 	}
+
+# ══════════════════════════════════════════════════════════════════════
+# 8. Integridad del guardado
+# ══════════════════════════════════════════════════════════════════════
+
+## La mejora del Cuartel General a nivel 3 es la que convoca el asedio. Si se
+## guardaba a medias, volvia de la carga como obra normal: terminaba sin subir de
+## nivel, el hito no llegaba nunca y la partida no se podia ganar.
+func test_an_upgrade_in_progress_survives_a_save_and_still_summons_the_audit() -> void:
+	_open_the_frontier()
+	_industrialise()
+	_bankroll(9000, 9000, 9000, 9000)
+	var hq: Node3D = _build("headquarters")
+	_upgrade(hq, 2)
+	var data: BuildingData = GridManager.get_building_info(hq)["data"]
+	ProductionManager.start_upgrade(hq, data, 3)
+	assert_int(ProductionManager.get_upgrade_target(hq)).is_equal(3)
+
+	GameManager.save_game()
+	_wipe_the_world()
+	GameManager._load_game()
+
+	var loaded: Node3D = _first_node_of("headquarters")
+	assert_object(loaded).is_not_null()
+	assert_int(int(loaded.get_meta("level", 1))).is_equal(2)
+	assert_bool(ProductionManager.is_constructing(loaded)).is_true()
+	assert_int(ProductionManager.get_upgrade_target(loaded)).override_failure_message(
+		"la mejora a nivel 3 volvio de la carga como obra normal").is_equal(3)
+
+	_finish_building()
+	assert_int(int(loaded.get_meta("level", 1))).is_equal(3)
+	assert_bool(ProgressionManager.is_milestone_completed("hq_max")).is_true()
+	assert_bool(ProgressionManager.is_final_audit_pending()).override_failure_message(
+		"la mejora cargada termino pero no convoco la Auditoria Final").is_true()
+
+## Un save de antes de la clave `upgrade_to` sigue cargando como construccion.
+func test_a_save_without_upgrade_keys_still_loads_as_construction() -> void:
+	_bankroll()
+	var house: Node3D = _place("house")
+	assert_object(house).is_not_null()
+	GameManager.save_game()
+	var text: String = FileAccess.get_file_as_string(SAVE_PATH)
+	assert_bool(text.contains("upgrade_to")).is_false()
+	_wipe_the_world()
+	GameManager._load_game()
+	var loaded: Node3D = _first_node_of("house")
+	assert_bool(ProductionManager.is_constructing(loaded)).is_true()
+	assert_int(ProductionManager.get_upgrade_target(loaded)).is_equal(0)
+	_finish_building()
+	assert_int(int(loaded.get_meta("level", 1))).is_equal(1)
