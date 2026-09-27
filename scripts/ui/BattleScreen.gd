@@ -50,6 +50,11 @@ var _grid: GridContainer
 var _cells: Array = []              ## Button, row-major, index = y * width + x
 var _cell_bars: Array = []          ## ProgressBar alineado con _cells
 var _cell_icons: Array = []         ## TextureRect alineado con _cells
+## Marca de bando alineada con _cells: circulo arriba a la izquierda para los
+## nuestros, rombo arriba a la derecha para el enemigo. Forma Y posicion, para
+## que el bando se lea sin depender del verde y el rojo (daltonismo, sol en la
+## pantalla del movil).
+var _cell_marks: Array = []
 
 var _title_label: Label
 var _round_label: Label
@@ -79,6 +84,14 @@ var _abandon_map_btn: Button
 var _map_buttons: Array = []        ## Button por nodo, alineado con el mapa
 var _node_positions: Array = []     ## Vector2, esquina superior izquierda
 var _node_size: int = 56
+var _map_risk_labels: Array = []    ## Label de riesgo bajo cada nodo
+var _map_hint: Label
+
+## Con el dedo no hay tooltip: el primer toque en un nodo lo ARMA (lo marca y
+## dice su riesgo en la cabecera) y solo el segundo toque sobre el mismo nodo
+## entra. Con raton, un clic basta: el tooltip ya lo conto todo.
+var _touch_mode := false
+var _armed_node: int = -1
 
 ## La expedicion que se esta pintando. Es una copia de lectura de lo que dice
 ## CombatManager, nunca una fuente propia: se refresca en cada apertura.
@@ -285,6 +298,12 @@ func _build_map_view() -> void:
 	_map_bonuses.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_map_bonuses)
 
+	# Lo que diria el tooltip, escrito: con el dedo es la unica forma de saber
+	# que hay detras de un nodo antes de entrar en el.
+	_map_hint = UITheme.make_label("", "small", UITheme.TEXT)
+	_map_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_map_hint)
+
 	_map_scroll = ScrollContainer.new()
 	_map_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_map_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -391,6 +410,7 @@ func _build_grid() -> void:
 	_cells.clear()
 	_cell_bars.clear()
 	_cell_icons.clear()
+	_cell_marks.clear()
 
 	_grid.columns = _board.x
 	for y in range(_board.y):
@@ -438,6 +458,12 @@ func _build_grid() -> void:
 			cell.add_child(bar)
 			_cell_bars.append(bar)
 
+			var mark := Panel.new()
+			mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			mark.visible = false
+			cell.add_child(mark)
+			_cell_marks.append(mark)
+
 ## Mantiene el tablero dentro de la ventana de un movil sin dejar que las celdas
 ## bajen de un tamano tocable (quickstart E9).
 func _recalculate_cell_size() -> void:
@@ -481,6 +507,7 @@ func _on_expedition_node_selected(_node_index: int) -> void:
 	var fresh = _fetch_expedition()
 	if fresh != null:
 		_run = fresh
+	_armed_node = -1
 	_refresh_map()
 
 func _on_game_load_completed() -> void:
@@ -615,6 +642,7 @@ func open_map(run = null) -> void:
 	if _run == null:
 		return
 	_recalculate_node_size()
+	_armed_node = -1
 	_build_map()
 	_view = View.MAP
 	_board_open = false
@@ -628,6 +656,7 @@ func _build_map() -> void:
 	for child in _map_canvas.get_children():
 		child.queue_free()
 	_map_buttons.clear()
+	_map_risk_labels.clear()
 	_node_positions.clear()
 	if _run == null:
 		return
@@ -663,7 +692,7 @@ func _build_map() -> void:
 
 	_map_canvas.custom_minimum_size = Vector2(
 		float(MAP_PAD * 2 + max_depth * col_w + _node_size),
-		float(MAP_PAD * 2 + (widest - 1) * row_h + _node_size)
+		float(MAP_PAD * 2 + (widest - 1) * row_h + _node_size + MAP_ROW_GAP)
 	)
 
 	for i in range(map.size()):
@@ -677,6 +706,17 @@ func _build_map() -> void:
 		btn.pressed.connect(func(): _choose_node(index))
 		_map_canvas.add_child(btn)
 		_map_buttons.append(btn)
+
+		# El riesgo, escrito bajo el nodo. El color del fondo lo repite, pero
+		# el color solo no basta, y el tooltip no existe en un movil.
+		var risk_label := UITheme.make_label("", "small", UITheme.TEXT_DIM)
+		risk_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		risk_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		risk_label.clip_text = true
+		risk_label.size = Vector2(float(_node_size + MAP_COL_GAP - 4), float(MAP_ROW_GAP))
+		risk_label.position = _node_positions[i] + Vector2(-float(MAP_COL_GAP - 4) * 0.5, float(_node_size))
+		_map_canvas.add_child(risk_label)
+		_map_risk_labels.append(risk_label)
 
 	_refresh_map()
 
@@ -704,16 +744,22 @@ func _refresh_map() -> void:
 		btn.tooltip_text = _node_tooltip(node, i == current, cleared, reachable)
 		if fightable:
 			btn.tooltip_text += "\n" + Tr.t("LBL_NODE_FIGHT")
-		_style_node(btn, i == current, cleared, reachable, is_boss, int(node.get("risk", 0)))
+		_style_node(btn, i == current, cleared, reachable, is_boss, int(node.get("risk", 0)), i == _armed_node)
+		if i < _map_risk_labels.size():
+			var risk_label: Label = _map_risk_labels[i]
+			risk_label.text = node_risk_text(i)
+			var risk_col: Color = _risk_color(int(node.get("risk", 0))).lightened(0.35)
+			UITheme.set_label_color(risk_label, risk_col if (reachable or fightable or i == _armed_node) else UITheme.TEXT_DIM)
 
 	_map_progress.text = Tr.t("LBL_EXPEDITION_PROGRESS") % [_run.nodes_cleared(), map.size()]
 	_map_bonuses.text = _draft_summary()
+	_map_hint.text = map_hint_text()
 	_abandon_map_btn.visible = active
 	_map_canvas.queue_redraw()
 
 ## El riesgo se pinta en el fondo y se dice con palabras en el tooltip: el color
 ## solo nunca es suficiente.
-func _style_node(btn: Button, is_current: bool, cleared: bool, reachable: bool, is_boss: bool, risk: int) -> void:
+func _style_node(btn: Button, is_current: bool, cleared: bool, reachable: bool, is_boss: bool, risk: int, armed: bool = false) -> void:
 	var background: Color = _risk_color(risk).darkened(0.55)
 	var border: Color = UITheme.ACCENT_DIM
 	var width: int = 1
@@ -732,6 +778,12 @@ func _style_node(btn: Button, is_current: bool, cleared: bool, reachable: bool, 
 	if is_current:
 		border = UITheme.ACCENT
 		width = 4
+	if armed:
+		# Armado por un primer toque: brilla y se aclara, para que el segundo
+		# toque se sienta como confirmar, no como adivinar.
+		background = background.lightened(0.25)
+		border = UITheme.TEXT_BRIGHT
+		width = 5
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = background
@@ -777,6 +829,29 @@ func _node_tooltip(node: Dictionary, is_current: bool, cleared: bool, reachable:
 		lines.append(Tr.t("LBL_NODE_LOCKED"))
 	return "\n".join(lines)
 
+## El texto que va bajo el nodo: su riesgo en palabras. El del jefe tambien lo
+## dice, porque el jefe siempre es riesgo alto y eso tiene que leerse.
+func node_risk_text(index: int) -> String:
+	if _run == null or index < 0 or index >= _run.map.size():
+		return ""
+	var node: Dictionary = _run.map[index]
+	if bool(node.get("cleared", false)):
+		return Tr.t("LBL_NODE_CLEARED")
+	return _risk_text(int(node.get("risk", 0)))
+
+## La linea bajo la cabecera del mapa. Con un nodo armado describe ese nodo y
+## pide el segundo toque; si no, explica como se entra segun el dispositivo.
+func map_hint_text() -> String:
+	if _run == null or not _run.is_active():
+		return ""
+	if _armed_node >= 0 and _armed_node < _run.map.size():
+		var node: Dictionary = _run.map[_armed_node]
+		var parts: Array = [_risk_text(int(node.get("risk", 0))), Tr.t("LBL_NODE_ENEMIES") % _roster_size(node)]
+		if bool(node.get("is_boss", false)):
+			parts.append(Tr.t("LBL_BOSS"))
+		return "%s. %s" % [" - ".join(parts), Tr.t("LBL_NODE_TAP_AGAIN")]
+	return Tr.t("LBL_NODE_PICK_TOUCH") if _touch_mode else Tr.t("LBL_NODE_PICK_MOUSE")
+
 func _roster_size(node: Dictionary) -> int:
 	var total: int = 0
 	for count in node.get("enemy_roster", {}).values():
@@ -821,8 +896,38 @@ func _choose_node(index: int) -> void:
 		return
 	if not _run.can_select(index):
 		return
+	# Con el dedo, el primer toque solo arma el nodo: sin tooltip, entrar al
+	# primer toque es entrar a ciegas en un nodo de riesgo alto.
+	if _touch_mode and _armed_node != index:
+		_armed_node = index
+		_refresh_map()
+		return
+	_armed_node = -1
 	map_node_chosen.emit(index)
 	CombatManager.select_node(index)
+
+## El nodo armado por un primer toque, o -1.
+func armed_node() -> int:
+	return _armed_node
+
+## Fuerza el modo tactil (pruebas). En partida lo decide `_input`.
+func set_touch_mode(enabled: bool) -> void:
+	_touch_mode = enabled
+	if not enabled:
+		_armed_node = -1
+	if _view == View.MAP:
+		_refresh_map()
+
+## Aprende si el jugador usa el dedo o el raton. Un toque real llega como
+## ScreenTouch antes que el raton emulado; un raton de verdad no trae el id de
+## emulacion. No consume nada: solo mira.
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		if not _touch_mode:
+			set_touch_mode(true)
+	elif event is InputEventMouseButton and event.device != InputEvent.DEVICE_ID_EMULATION:
+		if _touch_mode:
+			set_touch_mode(false)
 
 func map_button_count() -> int:
 	return _map_buttons.size()
@@ -841,6 +946,11 @@ func board_cell(coords: Vector2i) -> Button:
 func board_cell_icon(coords: Vector2i) -> TextureRect:
 	var index: int = _cell_index(coords)
 	return null if index < 0 else _cell_icons[index]
+
+## La marca de bando de una casilla. Lleva meta "side" = "ally" / "enemy" / "".
+func board_cell_mark(coords: Vector2i) -> Panel:
+	var index: int = _cell_index(coords)
+	return null if index < 0 or index >= _cell_marks.size() else _cell_marks[index]
 
 ## Las fichas de la franja de iniciativa, en el orden en que van a jugar.
 func order_chips() -> Array:
@@ -984,6 +1094,8 @@ func _refresh_cells() -> void:
 			var coords := Vector2i(x, y)
 			var unit := CombatManager.get_unit_at(coords)
 			_style_cell(cell, bar, icon, coords, unit, active, moves, targets, boss)
+			if index < _cell_marks.size():
+				_paint_side_mark(_cell_marks[index], unit)
 
 func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vector2i,
 		unit: CombatUnit, active: CombatUnit, moves: Array, targets: Array,
@@ -1050,6 +1162,34 @@ func _paint_unit_face(cell: Button, icon: TextureRect, unit: CombatUnit) -> Colo
 	icon.modulate = tint
 	cell.text = "" if texture != null else _unit_glyph(unit)
 	return tint
+
+## Circulo arriba a la izquierda = nuestro; rombo arriba a la derecha = enemigo.
+## Dos formas en dos esquinas: se distinguen en gris, de lejos y con el pulgar
+## tapando media casilla.
+func _paint_side_mark(mark: Panel, unit: CombatUnit) -> void:
+	if unit == null:
+		mark.visible = false
+		mark.set_meta("side", "")
+		return
+	var is_player: bool = unit.side == PLAYER
+	var side_size: float = maxf(8.0, float(_cell_size) * 0.2)
+	mark.size = Vector2(side_size, side_size)
+	mark.pivot_offset = mark.size * 0.5
+	var style := StyleBoxFlat.new()
+	style.bg_color = UITheme.unit_icon_tint(is_player)
+	style.border_color = UITheme.OUTLINE_COLOR
+	style.set_border_width_all(2)
+	if is_player:
+		style.set_corner_radius_all(int(side_size))
+		mark.rotation = 0.0
+		mark.position = Vector2(4.0, 4.0)
+	else:
+		style.set_corner_radius_all(0)
+		mark.rotation = deg_to_rad(45.0)
+		mark.position = Vector2(float(_cell_size) - side_size - 5.0, 5.0)
+	mark.add_theme_stylebox_override("panel", style)
+	mark.set_meta("side", "ally" if is_player else "enemy")
+	mark.visible = true
 
 func _style_health_bar(bar: ProgressBar, unit: CombatUnit) -> void:
 	var ratio: float = float(unit.hp) / float(maxi(1, unit.max_hp))
@@ -1118,7 +1258,10 @@ func _refresh_order() -> void:
 		_paint_order_face(chip, unit, is_active)
 		var style := StyleBoxFlat.new()
 		style.bg_color = tint.darkened(0.2 if is_active else 0.6)
-		style.set_corner_radius_all(UITheme.CORNER)
+		# La forma dice el bando: ficha redonda la nuestra, cuadrada la suya. Es
+		# la misma pareja circulo/esquina que la marca de las casillas.
+		style.set_corner_radius_all(13 if unit.side == PLAYER else 0)
+		chip.set_meta("side", "ally" if unit.side == PLAYER else "enemy")
 		style.border_color = UITheme.ACCENT if is_active else UITheme.ACCENT_DIM
 		style.set_border_width_all(2 if is_active else 1)
 		if boss >= 0 and uid == boss:

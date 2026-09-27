@@ -5,11 +5,23 @@ extends Node
 const SAVE_PATH := "user://save_game.json"
 const CORRUPT_PATH_FMT := "user://save_game.corrupt-%s.json"
 
+## El parte de progreso offline se cerro. La pantalla de victoria espera a esta
+## senal si el parte sigue en pantalla: las dos usan la capa 20 y no deben
+## solaparse nunca.
+signal offline_report_closed
+
 var _placer: Node = null
 var _map_gen: Node = null
 var _camera: Camera3D = null
 var _started := false
 var _warehouse_count := 0
+## True si esta sesion arranco cargando una partida guardada, false si arranco
+## una nueva porque no habia archivo. El menu principal lo lee para ofrecer
+## "Continuar" solo cuando habia algo que continuar: una partida nueva se guarda
+## al instante, asi que mirar el archivo despues de arrancar no sirve.
+var loaded_from_save := false
+## La capa del parte offline mientras esta en pantalla.
+var _offline_canvas: CanvasLayer = null
 
 # ── Autosave ──
 ## Hay algo sin escribir. Se escribe al vencer el debounce, y si en ese momento
@@ -164,7 +176,8 @@ func _begin() -> void:
 		_started = false
 		return
 	_camera = get_viewport().get_camera_3d()
-	if FileAccess.file_exists(SAVE_PATH):
+	loaded_from_save = FileAccess.file_exists(SAVE_PATH)
+	if loaded_from_save:
 		_load_game()
 	else:
 		_new_game()
@@ -342,6 +355,11 @@ func _load_game() -> void:
 
 	EventBus.game_load_completed.emit()
 
+## La partida esta en marcha (placer y mapa registrados). Sin eso no hay nada
+## que guardar: los menus lo preguntan antes de llamar a save_game().
+func is_started() -> bool:
+	return _started and _placer != null and _map_gen != null
+
 ## Un guardado que no se puede leer no se pisa en silencio: _new_game() guarda
 ## encima, y eso era perder la partida sin enterarse. Se aparta una copia con
 ## fecha y se avisa de donde quedo.
@@ -436,8 +454,13 @@ func _write_save() -> void:
 
 ## Asks the player to confirm before wiping the save. Every UI entry point to a
 ## new game must go through here: clear_save() is irreversible.
-func request_new_game() -> void:
+##
+## Devuelve el dialogo para que quien lo pide pueda reaccionar al cancelar. Se
+## procesa siempre: se puede pedir desde el menu principal o el de pausa, con el
+## arbol pausado, y un dialogo pausado no recibe clics.
+func request_new_game() -> ConfirmationDialog:
 	var dialog := ConfirmationDialog.new()
+	dialog.process_mode = Node.PROCESS_MODE_ALWAYS
 	dialog.title = Tr.t("BTN_NEW_GAME")
 	dialog.dialog_text = Tr.t("CONFIRM_NEW_GAME")
 	dialog.ok_button_text = Tr.t("BTN_CONFIRM")
@@ -449,6 +472,7 @@ func request_new_game() -> void:
 	dialog.canceled.connect(dialog.queue_free)
 	add_child(dialog)
 	dialog.popup_centered()
+	return dialog
 
 func clear_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
@@ -472,6 +496,9 @@ func clear_save() -> void:
 	_camera = null
 	_started = false
 	_warehouse_count = 0
+	# Se puede llegar aqui desde el menu de pausa o el principal, con el arbol
+	# pausado. La escena recargada heredaria la pausa y arrancaria congelada.
+	get_tree().paused = false
 	get_tree().reload_current_scene()
 
 ## Replaces local save with provided data and reloads the scene.
@@ -499,6 +526,9 @@ func clear_save_and_reload_from(save_data: Dictionary) -> void:
 	_camera = null
 	_started = false
 	_warehouse_count = 0
+	# Se puede llegar aqui desde el menu de pausa o el principal, con el arbol
+	# pausado. La escena recargada heredaria la pausa y arrancaria congelada.
+	get_tree().paused = false
 	get_tree().reload_current_scene()
 
 func _on_building_changed(_data: Resource, _cell: Vector2i) -> void:
@@ -525,6 +555,7 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	var canvas := CanvasLayer.new()
 	canvas.layer = 20
 	add_child(canvas)
+	_offline_canvas = canvas
 
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
@@ -593,7 +624,13 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 		var tw := create_tween()
 		tw.tween_property(panel, "modulate:a", 0.0, 0.3)
 		tw.tween_callback(canvas.queue_free)
+		_offline_canvas = null
+		offline_report_closed.emit()
 	)
+
+## El parte offline sigue en pantalla. Lo pregunta VictoryScreen antes de abrirse.
+func is_offline_report_open() -> bool:
+	return _offline_canvas != null and is_instance_valid(_offline_canvas)
 
 func _format_elapsed(seconds: float) -> String:
 	var s := int(seconds)

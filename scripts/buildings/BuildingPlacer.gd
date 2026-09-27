@@ -534,6 +534,11 @@ func _cleanup_preview() -> void:
 	_hide_grid_overlay()
 	_hover_cell = Vector2i(-1, -1)
 
+## Sin colocar ni mover nada. El menu de pausa lo pregunta antes de abrirse con
+## ESC: mientras hay un edificio en la mano, ESC es "cancelar", no "pausa".
+func is_idle() -> bool:
+	return _state == State.IDLE
+
 func _cancel() -> void:
 	if _state == State.MOVING and _moving_building:
 		_moving_building.visible = true
