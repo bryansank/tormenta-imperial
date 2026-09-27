@@ -250,9 +250,10 @@ static func from_dict(data: Dictionary) -> StormCycle:
 	cycle.deferred_severity = maxi(0, int(data.get("deferred_severity", 0)))
 	cycle.storms_survived = int(data.get("storms_survived", 0))
 	cycle._first = bool(data.get("first", true))
-	# A save made mid-collection would restore a board that no longer exists, so
-	# the fight is forgiven and the clock restarts calm.
+	# Un save hecho con los Tasadores en la puerta vuelve con los Tasadores en la
+	# puerta. Antes se perdonaba y el reloj volvia a la calma: salir del juego
+	# durante el Diezmo era la forma de no pagarlo. El tablero no se guarda, asi
+	# que quien reanuda el cobro es StormManager, al terminar la carga.
 	if cycle.phase == Phase.TITHE:
-		cycle.phase = Phase.CALM
-		cycle.seconds_left = cycle._roll_interval()
+		cycle.seconds_left = 0.0
 	return cycle
