@@ -1,10 +1,18 @@
 extends Node
 ## Central configuration table for all tunable game values.
-## Toggle dev_mode for fast testing. All durations go through time_multiplier.
+## dev_mode (fast timings) is on in the editor and off in exports; see below.
 
 # ── Master Controls ──
 
-var dev_mode := true
+## dev_mode comprime todas las duraciones (dev_time_scale) y enseña los botones de
+## desarrollo (borrar partida en ResourceHUD, combate de prueba en SkirmishPanel).
+## No se decide a mano: vale true cuando el juego corre desde el editor (F5, tests,
+## sondas) y false en cualquier exportado, sea release o debug. Así un .exe que se
+## reparte nunca sale con tiempos de prueba por un commit despistado.
+## Para forzarlo, argumentos de usuario tras `--`:
+##   TormentaImperial.exe -- --dev      exportado con tiempos de prueba
+##   godot --path . -- --no-dev         editor con tiempos reales
+var dev_mode := _resolve_dev_mode()
 var time_multiplier := 1.0
 ## Cuanto se acelera todo en dev_mode. Estaba a 1/10 y Bryan, jugando, no llegaba a
 ## leer que pasaba: construir en 1 s y una tormenta cada 30 s convierten el ciclo en
@@ -291,9 +299,21 @@ var ui_helper_visible := true
 var ui_fullscreen := false
 
 func _ready() -> void:
+	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
+	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
 	load_user_settings()
 	# El modo de ventana se aplica en cuanto arranca, antes de que se dibuje la UI.
 	_apply_window_mode()
+
+## Resuelve dev_mode al arrancar (ver el comentario de la variable). El feature tag
+## "editor" solo existe en el binario del editor, nunca en una plantilla de exportación.
+static func _resolve_dev_mode() -> bool:
+	var args := OS.get_cmdline_user_args()
+	if args.has("--no-dev"):
+		return false
+	if args.has("--dev"):
+		return true
+	return OS.has_feature("editor")
 
 func load_user_settings() -> void:
 	var cf := ConfigFile.new()
