@@ -158,6 +158,43 @@ func test_abandoning_still_closes_the_expeditions_own_board() -> void:
 	assert_bool(CombatManager.abandon_expedition()).is_true()
 	assert_bool(CombatManager.is_board_open()).is_false()
 
+# ── 7. Quien esta en un tablero no esta en casa ──────────────────────
+
+func test_units_fighting_a_skirmish_are_not_in_the_garrison() -> void:
+	_given_army({"infantry": 4})
+	assert_bool(CombatManager.start_skirmish({"infantry": 3}, 5)).is_true()
+	assert_dict(CombatManager.get_units_on_board()).is_equal({"infantry": 3})
+	assert_dict(CombatManager.get_garrison()).is_equal({"infantry": 1})
+	assert_dict(CombatManager.get_deployable_units()).is_equal({"infantry": 1})
+
+func test_a_blind_tithe_during_a_skirmish_never_charges_the_same_dead_twice() -> void:
+	# Todo el ejercito esta en la escaramuza: en casa no queda nadie que defienda.
+	_given_army({"infantry": 2})
+	assert_bool(CombatManager.start_skirmish({"infantry": 2}, 5)).is_true()
+	var outcome: Dictionary = CombatManager.auto_resolve_defense({"infantry": 6}, 3.0)
+	assert_bool(bool(outcome["fought"])).is_false()
+	assert_int(ArmyManager.get_count("infantry")).is_equal(2)
+	# La escaramuza se pierde: las dos bajas salen una sola vez.
+	_resolve_open_board(false)
+	assert_int(ArmyManager.get_count("infantry")).is_equal(0)
+
+func test_once_the_result_is_applied_the_survivors_are_home_again() -> void:
+	_given_army({"infantry": 3})
+	assert_bool(CombatManager.start_skirmish({"infantry": 2}, 5)).is_true()
+	_resolve_open_board(true)
+	# El parte sigue en pantalla, pero la pelea ya se liquido.
+	assert_bool(CombatManager.is_board_open()).is_true()
+	assert_dict(CombatManager.get_units_on_board()).is_empty()
+	assert_dict(CombatManager.get_garrison()).is_equal({"infantry": 3})
+
+func test_nobody_deserts_from_the_middle_of_a_fight() -> void:
+	_given_army({"infantry": 2, "artillery": 1})
+	assert_bool(CombatManager.start_skirmish({"artillery": 1}, 5)).is_true()
+	# La artilleria es la mas cara de mantener, pero esta en el tablero.
+	ArmyManager._desert()
+	assert_int(ArmyManager.get_count("artillery")).is_equal(1)
+	assert_int(ArmyManager.get_count("infantry")).is_less(2)
+
 # ── 5. Un solo bucle enemigo por tablero ─────────────────────────────
 
 var _enemy_actions: int = 0

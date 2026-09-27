@@ -79,6 +79,9 @@ var _audit_crews: Array = []
 ## Dotaciones caidas en lo que va de asedio. Las torres no se cansan, pero a
 ## una dotacion muerta no la reemplaza nadie.
 var _audit_crew_losses: int = 0
+## uids del tablero actual cuya muerte ya se liquido en caliente (ver
+## _settle_audit_death). Solo lo usan las oleadas del asedio.
+var _audit_charged: Dictionary = {}
 
 func _ready() -> void:
 	EventBus.final_audit_wave_ready.connect(_on_final_audit_wave_ready)
@@ -139,7 +142,7 @@ func is_player_turn() -> bool:
 ## expedition. Las comprometidas se descuentan enteras, vivas y caidas, porque
 ## ArmyManager no borra a las caidas hasta que la columna vuelve (SC-004).
 func get_deployable_units() -> Dictionary:
-	var committed: Dictionary = get_units_on_expedition()
+	var committed: Dictionary = get_units_away()
 	var available: Dictionary = {}
 	for unit_id in GameConfig.get_unit_ids():
 		var count: int = ArmyManager.get_count(unit_id) - int(committed.get(unit_id, 0))
@@ -315,9 +318,11 @@ func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> 
 
 ## Everything trained and at home, up to the board's cap. Quien esta de
 ## expedicion no esta en casa: si el Diezmo cae con la columna fuera, defiende
-## solo lo que se quedo.
+## solo lo que se quedo. Y quien esta en un tablero abierto tampoco: un Diezmo
+## resuelto a ciegas durante una escaramuza alistaba a las mismas unidades que
+## estaban peleandola, y sus bajas se cobraban dos veces.
 func get_garrison() -> Dictionary:
-	var away: Dictionary = get_units_on_expedition()
+	var away: Dictionary = get_units_away()
 	var garrison: Dictionary = {}
 	var committed := 0
 	for unit_id in GameConfig.get_unit_ids():
@@ -406,6 +411,7 @@ func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encount
 func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array) -> void:
 	_reserve_uids(units)
 	_tower_crew_uids.clear()
+	_audit_charged.clear()
 	for uid in crew_uids:
 		_tower_crew_uids[int(uid)] = true
 
@@ -734,6 +740,34 @@ func get_units_on_expedition() -> Dictionary:
 	for unit in _expedition.party:
 		counts[unit.unit_id] = int(counts.get(unit.unit_id, 0)) + 1
 	return counts
+
+## unit_id -> count de las unidades del EJERCITO que estan ahora mismo en el
+## tablero abierto y cuya suerte aun no se ha liquidado: vivas, y caidas cuya
+## baja todavia no salio de ArmyManager. No cuentan las dotaciones de torre (no
+## son del ejercito), ni un tablero cuyo resultado ya se aplico (los caidos ya se
+## restaron y los supervivientes han vuelto a casa), ni el tablero de la
+## expedicion (esas ya salen en get_units_on_expedition()).
+func get_units_on_board() -> Dictionary:
+	if _encounter == null or _result_applied or _is_expedition_board():
+		return {}
+	var counts: Dictionary = {}
+	for unit in _encounter.units:
+		if unit.side != Encounter.PLAYER or _tower_crew_uids.has(unit.uid):
+			continue
+		if not unit.is_alive() and _audit_charged.has(unit.uid):
+			continue
+		counts[unit.unit_id] = int(counts.get(unit.unit_id, 0)) + 1
+	return counts
+
+## Todo lo que no esta en casa: la columna de expedicion y quien pelea en el
+## tablero abierto. Es lo que get_garrison(), get_deployable_units() y la
+## desercion de ArmyManager restan antes de contar a nadie.
+func get_units_away() -> Dictionary:
+	var away: Dictionary = get_units_on_expedition()
+	var board: Dictionary = get_units_on_board()
+	for unit_id in board:
+		away[unit_id] = int(away.get(unit_id, 0)) + int(board[unit_id])
+	return away
 
 ## True entre ganar un nodo y elegir la carta. Mientras dure no se elige ruta.
 func has_pending_draft() -> bool:
@@ -1088,3 +1122,4 @@ func _clear_runtime_state() -> void:
 	_last_result = {}
 	_tower_crew_uids.clear()
 	_last_board_crew_uids.clear()
+	_audit_charged.clear()
