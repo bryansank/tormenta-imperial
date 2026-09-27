@@ -467,9 +467,6 @@ func get_duration(base: float) -> float:
 		return maxf(base * dev_time_scale, 1.0)
 	return base * time_multiplier
 
-func get_production_with_tech(base_mult: float) -> float:
-	return base_mult + tech_production_bonus
-
 func get_build_time(base: float) -> float:
 	if base <= 0.0:
 		return 0.0

@@ -178,43 +178,51 @@ func _tick_production(delta: float) -> void:
 		_producing.erase(node)
 
 func _award_production(node: Node3D, data: BuildingData) -> void:
+	var produced := get_cycle_yield(node, data)
+	if produced.is_empty():
+		return
+	var pos := node.global_position
+	var offset := 0.0
+	for res_name in produced:
+		var amount: int = produced[res_name]
+		ResourceManager.add(_res_to_type(res_name), amount)
+		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, res_name)
+		offset += 0.3
+	EventBus.production_tick.emit(node)
+
+## Lo que rinde un edificio en UN ciclo ahora mismo (recurso -> cantidad). Es la
+## unica formula de produccion: la usan el tic en vivo y la progresion offline,
+## para que estar fuera nunca rinda distinto de estar mirando.
+##
+## Vacio si el edificio esta en ruinas o le faltan trabajadores. Con
+## `include_events` a false se deja fuera lo pasajero (tormenta, plaga): offline
+## no se simula ninguno de los dos, asi que tampoco se cobran.
+func get_cycle_yield(node: Node, data: BuildingData, include_events := true) -> Dictionary:
 	# A building in ruins produces nothing until it is repaired. This is what
 	# gives the storm teeth beyond a bad afternoon.
 	if BuildingHealth.is_ruined(node):
-		return
+		return {}
 	# Skip if building is not staffed (no workers assigned)
 	if data.workers_required > 0 and not PopulationManager.is_building_staffed(node):
-		return
-	var pos := node.global_position
+		return {}
 	var level: int = node.get_meta("level", 1)
-	var morale_mult := PopulationManager.get_morale_multiplier()
 	var base_mult := GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus
-	# Temporary, event-driven penalties (the Imperial Storm) ride on their own
-	# multiplier so they can be lifted cleanly. Folding them into the tech bonus
-	# would mix a passing squall with permanent research and leave the value
-	# corrupt if the event were ever interrupted.
-	var mult := base_mult * morale_mult * GameConfig.get_event_production_multiplier()
-	var offset := 0.0
+	var mult := base_mult * PopulationManager.get_morale_multiplier()
+	# Temporary, event-driven penalties (the Imperial Storm, the plague) ride on
+	# their own multipliers so they can be lifted cleanly. Folding them into the
+	# tech bonus would mix a passing squall with permanent research.
+	if include_events:
+		mult *= GameConfig.get_event_production_multiplier()
+	var produced := {}
 	if data.produces_gold > 0:
-		var amount := int(data.produces_gold * mult)
-		ResourceManager.add(ResourceManager.Type.GOLD, amount)
-		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, "gold")
-		offset += 0.3
+		produced["gold"] = int(data.produces_gold * mult)
 	if data.produces_steel > 0:
-		var amount := int(data.produces_steel * mult)
-		ResourceManager.add(ResourceManager.Type.STEEL, amount)
-		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, "steel")
-		offset += 0.3
+		produced["steel"] = int(data.produces_steel * mult)
 	if data.produces_oil > 0:
-		var amount := int(data.produces_oil * mult)
-		ResourceManager.add(ResourceManager.Type.OIL, amount)
-		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, "oil")
-		offset += 0.3
+		produced["oil"] = int(data.produces_oil * mult)
 	if data.produces_wood > 0:
-		var amount := int(data.produces_wood * mult)
-		ResourceManager.add(ResourceManager.Type.WOOD, amount)
-		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, "wood")
-	EventBus.production_tick.emit(node)
+		produced["wood"] = int(data.produces_wood * mult)
+	return produced
 
 ## Start upgrade on a building (reuses construction system)
 func start_upgrade(node: Node3D, data: BuildingData, new_level: int) -> void:
@@ -235,11 +243,21 @@ func start_upgrade(node: Node3D, data: BuildingData, new_level: int) -> void:
 	EventBus.building_upgrade_started.emit(node, new_level)
 
 # ── Offline Progression ──
+#
+# Offline solo se produce (y se come, con tope). La tormenta, los eventos, el
+# ejercito y los procesos se quedan congelados donde estaban: ver
+# docs/09-save-system.md. Cada edificio rinde lo que diga get_cycle_yield(), la
+# misma formula que en vivo, asi que una ruina o un edificio sin obreros tampoco
+# produce estando fuera.
 
 func apply_offline_progression(elapsed: float) -> Dictionary:
+	# Reloj atrasado, NaN o infinito: no ha pasado nada que se pueda cobrar.
+	if is_nan(elapsed) or elapsed <= 0.0:
+		return {}
+	# Un salto hacia delante sospechoso (reloj adelantado, anos de ausencia) se
+	# queda en el tope de 8 h, igual que una ausencia real larga.
 	elapsed = minf(elapsed, GameConfig.max_offline_seconds)
 	var earnings := {}
-	var morale_mult := PopulationManager.get_morale_multiplier()
 
 	var existing_producers: Array = _producing.keys().duplicate()
 
@@ -255,33 +273,40 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 			var progress := get_construction_progress(node)
 			var label: Node = node.get_node_or_null("ConstructionLabel")
 			if label:
-				label.text = Tr.t("FMT_CONSTRUCTING") % int(progress * 100)
+				var fmt_key := "FMT_UPGRADING" if _constructing[node].get("is_upgrade", false) else "FMT_CONSTRUCTING"
+				label.text = Tr.t(fmt_key) % int(progress * 100)
 
+	# Lo que se termina estando fuera produce solo el tiempo que le sobro. Se
+	# completa antes de medir: completar pone el nivel nuevo y (por la senal de
+	# construccion/mejora) reparte los obreros, y el rendimiento lee las dos cosas.
+	var finished: Array = []
 	for entry in to_complete:
 		var node: Node3D = entry["node"]
-		var leftover: float = entry["leftover"]
 		var info := GridManager.get_building_info(node)
 		_complete_construction(node)
 		if not info.is_empty():
-			var data: BuildingData = info["data"]
-			if data.is_producer():
-				var interval := GameConfig.get_production_interval(data.production_interval)
-				if interval > 0.0:
-					var cycles := int(leftover / interval)
-					_accumulate_earnings(earnings, data, cycles, morale_mult)
-
+			finished.append({"node": node, "data": info["data"], "seconds": float(entry["leftover"])})
 	for node in existing_producers:
+		if not is_instance_valid(node) or not _producing.has(node):
+			continue
+		finished.append({"node": node, "data": _producing[node]["data"], "seconds": elapsed})
+
+	for entry in finished:
+		var node: Node3D = entry["node"]
 		if not is_instance_valid(node):
 			continue
-		if not _producing.has(node):
+		var data: BuildingData = entry["data"]
+		if not data.is_producer():
 			continue
-		var data: BuildingData = _producing[node]["data"]
-		var level: int = node.get_meta("level", 1)
-		var level_mult := GameConfig.get_production_multiplier(level)
 		var interval := GameConfig.get_production_interval(data.production_interval)
-		if interval > 0.0:
-			var cycles := int(elapsed / interval)
-			_accumulate_earnings(earnings, data, cycles, morale_mult * level_mult)
+		if interval <= 0.0:
+			continue
+		var cycles := int(float(entry["seconds"]) / interval)
+		if cycles <= 0:
+			continue
+		var per_cycle := get_cycle_yield(node, data, false)
+		for res_name in per_cycle:
+			earnings[res_name] = int(earnings.get(res_name, 0)) + int(per_cycle[res_name]) * cycles
 
 	# Population consumption while offline is capped to what was PRODUCED offline.
 	# Being away can eat into your offline gains, but never into the stockpile you
@@ -314,18 +339,6 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 		earnings[res_name] = ResourceManager.get_amount(type) - before
 
 	return earnings
-
-func _accumulate_earnings(earnings: Dictionary, data: BuildingData, cycles: int, mult: float = 1.0) -> void:
-	if cycles <= 0:
-		return
-	if data.produces_gold > 0:
-		earnings["gold"] = earnings.get("gold", 0) + int(data.produces_gold * mult) * cycles
-	if data.produces_steel > 0:
-		earnings["steel"] = earnings.get("steel", 0) + int(data.produces_steel * mult) * cycles
-	if data.produces_oil > 0:
-		earnings["oil"] = earnings.get("oil", 0) + int(data.produces_oil * mult) * cycles
-	if data.produces_wood > 0:
-		earnings["wood"] = earnings.get("wood", 0) + int(data.produces_wood * mult) * cycles
 
 func _res_to_type(res_name: String) -> int:
 	match res_name:
