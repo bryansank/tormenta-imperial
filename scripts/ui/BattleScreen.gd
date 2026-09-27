@@ -677,11 +677,17 @@ func _refresh_map() -> void:
 		var btn: Button = _map_buttons[i]
 		var is_boss: bool = bool(node.get("is_boss", false))
 		var cleared: bool = bool(node.get("cleared", false))
-		var reachable: bool = active and exits.has(i)
+		var reachable: bool = _run.can_select(i)
+		# El nodo en el que esta la columna y que aun no se ha peleado (una partida
+		# cargada a mitad de nodo): se pulsa para volver a su tablero. Hasta
+		# ganarlo, ninguna salida se enciende.
+		var fightable: bool = i == current and _run.needs_fight()
 
 		btn.text = Tr.t("LBL_BOSS") if is_boss else str(_roster_size(node))
-		btn.disabled = not reachable
+		btn.disabled = not (reachable or fightable)
 		btn.tooltip_text = _node_tooltip(node, i == current, cleared, reachable)
+		if fightable:
+			btn.tooltip_text += "\n" + Tr.t("LBL_NODE_FIGHT")
 		_style_node(btn, i == current, cleared, reachable, is_boss, int(node.get("risk", 0)))
 
 	_map_progress.text = Tr.t("LBL_EXPEDITION_PROGRESS") % [_run.nodes_cleared(), map.size()]
@@ -792,7 +798,12 @@ func _draft_summary() -> String:
 	return Tr.t("LBL_DRAFT_BONUSES") % "   ".join(parts)
 
 func _choose_node(index: int) -> void:
-	if _run == null or not _run.can_select(index):
+	if _run == null:
+		return
+	if index == _run.current_node and _run.needs_fight():
+		CombatManager.enter_current_node()
+		return
+	if not _run.can_select(index):
 		return
 	map_node_chosen.emit(index)
 	CombatManager.select_node(index)

@@ -497,6 +497,10 @@ const _STRINGS := {
 		"MSG_LAUNCH_IN_BATTLE": "Hay un tablero abierto.",
 		"MSG_LAUNCH_DEPLOY_CAP": "No caben mas de %d unidades en el tablero.",
 		"MSG_LAUNCH_AUDIT_ACTIVE": "La guarnicion defiende la base: nadie sale de expedicion.",
+		# ── integridad-combate ──
+		"LBL_NODE_FIGHT": "Sin limpiar: pulsa para combatir",
+		"MSG_AUDIT_BOARD_BUSY": "Hay un tablero abierto: cierralo antes de llamar a la Regencia.",
+		"MSG_AUDIT_EXPEDITION_OUT": "La columna esta fuera: que vuelva antes de llamar a la Regencia.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -962,6 +966,10 @@ const _STRINGS := {
 		"MSG_LAUNCH_IN_BATTLE": "A board is already open.",
 		"MSG_LAUNCH_DEPLOY_CAP": "No more than %d units fit on the board.",
 		"MSG_LAUNCH_AUDIT_ACTIVE": "The garrison is defending the base: nobody marches out.",
+		# ── integridad-combate ──
+		"LBL_NODE_FIGHT": "Not cleared: press to fight",
+		"MSG_AUDIT_BOARD_BUSY": "A board is open: close it before calling the Regency down.",
+		"MSG_AUDIT_EXPEDITION_OUT": "The column is out: bring it home before calling the Regency down.",
 	},
 }
 

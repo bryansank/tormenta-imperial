@@ -95,6 +95,33 @@ func test_the_same_seed_fields_the_same_skirmish() -> void:
 func test_the_provisional_unseeded_roster_is_gone() -> void:
 	assert_bool(CombatManager.has_method("build_enemy_roster")).is_false()
 
+# ── 1. No se deja atras un nodo sin pelear ───────────────────────────
+
+func test_a_run_reloaded_mid_node_has_to_fight_it_before_moving_on() -> void:
+	_given_army({"infantry": 3})
+	assert_bool(CombatManager.launch_expedition({"infantry": 3}, 4242)).is_true()
+	_resolve_open_board(true)
+	CombatManager.end_encounter()
+	if CombatManager.has_pending_draft():
+		CombatManager.apply_draft(0)
+	var exits: Array = CombatManager.get_expedition().current_exits()
+	assert_bool(CombatManager.select_node(int(exits[0]))).is_true()
+	assert_bool(CombatManager.is_in_encounter()).is_true()
+
+	# Se guarda con el tablero del nodo 1 a medias y se vuelve a cargar.
+	var data: Dictionary = CombatManager.get_save_data()
+	CombatManager.reset()
+	CombatManager.load_save_data(data)
+	var run: Expedition = CombatManager.get_expedition()
+	assert_bool(run.needs_fight()).is_true()
+
+	var next: Array = run.current_exits()
+	if not next.is_empty():
+		assert_bool(CombatManager.select_node(int(next[0]))).is_false()
+	assert_int(run.current_node).is_equal(int(exits[0]))
+	assert_bool(CombatManager.enter_current_node()).is_true()
+	assert_bool(CombatManager.is_in_encounter()).is_true()
+
 # ── 4. Abandonar solo cierra el tablero de la columna ────────────────
 
 ## El Diezmo cae entre dos nodos: con el tablero libre, la guarnicion que se quedo
