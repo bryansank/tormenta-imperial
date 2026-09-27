@@ -125,6 +125,22 @@ func report_audit_wave(victory: bool) -> void:
 	_publish_audit(final_audit.clear_wave() if victory else final_audit.lose())
 	_announce_wave()
 
+## Una partida guardada antes de que existiera la Auditoria, con el Cuartel
+## General ya a nivel 3: el hito hq_max esta hecho, asi que _complete_milestone()
+## no vuelve a entrar y el asedio no se convocaba nunca. Esa partida no se podia
+## ganar. Se convoca aqui, PENDIENTE: no se abre ningun tablero al cargar; el
+## jugador lo lanza con "QUE BAJEN" cuando quiera. Llamar con todo ya cargado
+## (la guarnicion sale del ejercito).
+func migrate_legacy_capstone() -> bool:
+	if not milestones_completed.has("hq_max"):
+		return false
+	if final_audit != null or StormManager.is_halted():
+		return false
+	if not summon_final_audit():
+		return false
+	EventBus.notification_posted.emit(Tr.t("MSG_AUDIT_AWAITING"), "warning", UITheme.WARNING)
+	return true
+
 func can_resummon_final_audit() -> bool:
 	return final_audit != null and final_audit.can_resummon(CombatManager.get_garrison())
 

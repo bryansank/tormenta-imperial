@@ -23,6 +23,7 @@ Complete technical documentation for AI and developer context.
 | 15 | [Combat](15-combat.md) | The combat pillar: pure models, `CombatManager`, the three roads to the board, expeditions, the Final Audit, signals, balance, tests |
 | 16 | [Balance de combate](16-balance-combate.md) | Spanish, measured not guessed: the `tools/balance_probe.gd` sweeps, the before/after numbers for every `combat_*` value T046 moved, the rounds→minutes conversion, and what the model cannot fix from `combat_*` alone |
 | 17 | [Balance del asedio](17-balance-asedio.md) | La Auditoria Final: por que no se podia ganar, que se cambio y las tablas medidas |
+| 19 | [Exportar](19-exportar.md) | Spanish: building the Windows .exe (templates, preset, exclusions, `dev_mode` off in exports, Beckett gate, save folder), distributing it, and what Linux/macOS/Web/Android would need |
 
 ## Quick Reference
 

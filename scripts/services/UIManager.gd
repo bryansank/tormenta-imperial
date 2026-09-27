@@ -12,9 +12,33 @@ var _top_layer: int = 100
 # Panel registry: CanvasLayer -> panel_id (String)
 var _panel_ids: Dictionary = {}
 
+## Olvida la pila y el registro. Lo llama GameManager antes de recargar la
+## escena: los paneles viejos mueren con ella y los nuevos se registran en su
+## _ready. Este autoload sobrevive a la recarga, asi que sin esto seguiria
+## guardando CanvasLayer liberados y el primer _update_layers reventaria.
+func reset() -> void:
+	_window_stack.clear()
+	_panel_ids.clear()
+
+## Quita de la pila y del registro lo que ya no existe. Es la red de seguridad
+## de reset(): cualquier camino que libere un panel sin avisar (una recarga que
+## no pase por GameManager, un test) deja de poder romper la pila.
+func _prune() -> void:
+	# Sin `for` sobre un Array[CanvasLayer]: iterar un array tipado con un objeto
+	# liberado dentro ya es un error. Se mira cada hueco como Variant.
+	var i := _window_stack.size() - 1
+	while i >= 0:
+		var entry: Variant = _window_stack[i]
+		if not is_instance_valid(entry):
+			_window_stack.remove_at(i)
+		i -= 1
+	for key in _panel_ids.keys():
+		if not is_instance_valid(key):
+			_panel_ids.erase(key)
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
-		_prune_freed()
+		_prune()
 		if not _window_stack.is_empty():
 			var top = _window_stack.back()
 			if top.has_method("_toggle_panel"):
@@ -27,11 +51,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Register a panel with its layout ID for conflict resolution.
 func register_panel(window: CanvasLayer, panel_id: String) -> void:
+	_prune()
 	_panel_ids[window] = panel_id
 
 ## Opens a panel with automatic conflict resolution.
 ## Closes other panels sharing the same slot before opening.
 func open_panel(window: CanvasLayer) -> void:
+	_prune()
 	var panel_id: String = _panel_ids.get(window, "")
 	if not panel_id.is_empty():
 		_close_conflicting(window, panel_id)
@@ -43,6 +69,7 @@ func close_panel(window: CanvasLayer) -> void:
 
 ## Called when a window is opened to put it on top of the stack.
 func open_window(window: CanvasLayer) -> void:
+	_prune()
 	if not _window_stack.has(window):
 		_window_stack.append(window)
 	else:
@@ -53,39 +80,27 @@ func open_window(window: CanvasLayer) -> void:
 
 ## Called when a window is closed to remove it from the stack.
 func close_window(window: CanvasLayer) -> void:
+	_prune()
 	_window_stack.erase(window)
 	_update_layers()
 	window_closed.emit(window)
 
 ## Brings a window to the front (used when clicking on it).
 func focus_window(window: CanvasLayer) -> void:
+	_prune()
 	if _window_stack.has(window):
 		_window_stack.erase(window)
 		_window_stack.append(window)
 		_update_layers()
 
 func _update_layers() -> void:
-	_prune_freed()
+	_prune()
 	for i in range(_window_stack.size()):
 		_window_stack[i].layer = _base_layer + i + 1
 
 func is_any_window_open() -> bool:
-	_prune_freed()
+	_prune()
 	return not _window_stack.is_empty()
-
-## UIManager es autoload y sobrevive a recargar la escena (partida nueva, cambio
-## de idioma, carga desde la nube); los paneles no. Lo que quedo en la pila o en
-## el registro de la escena anterior esta liberado y se tira aqui, antes de que
-## alguien le asigne un `layer` a un objeto muerto.
-func _prune_freed() -> void:
-	var alive: Array[CanvasLayer] = []
-	for w in _window_stack:
-		if is_instance_valid(w):
-			alive.append(w)
-	_window_stack = alive
-	for w in _panel_ids.keys():
-		if not is_instance_valid(w):
-			_panel_ids.erase(w)
 
 ## Close panels that share the same slot or a conflicting slot.
 func _close_conflicting(opening: CanvasLayer, opening_id: String) -> void:
