@@ -290,6 +290,12 @@ var ui_helper_visible := true
 ## Settings panel; persists in user://settings.cfg like the rest of preferences.
 var ui_fullscreen := false
 
+## Vista del mapa: "3d" (Main.tscn) o "2d" (Main2D.tscn, docs/18-vista-2d.md).
+## Cambiar el valor por defecto a "2d" es lo unico que hace falta para que la
+## vista 2D sea la de serie. `--view=2d` en la linea de comandos manda sobre esto
+## solo en esa sesion (ViewMode.gd).
+var ui_view_mode := "3d"
+
 func _ready() -> void:
 	load_user_settings()
 	# El modo de ventana se aplica en cuanto arranca, antes de que se dibuje la UI.
@@ -306,6 +312,8 @@ func load_user_settings() -> void:
 	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
+	var view := String(cf.get_value("ui", "view_mode", ui_view_mode))
+	ui_view_mode = view if view in ["3d", "2d"] else ui_view_mode
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -317,6 +325,7 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "grid_visible", ui_grid_visible)
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
+	cf.set_value("ui", "view_mode", ui_view_mode)
 	cf.save(USER_SETTINGS_PATH)
 
 # ── Pantalla completa ──

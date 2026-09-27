@@ -6,9 +6,15 @@ const SAVE_PATH := "user://save_game.json"
 
 var _placer: Node = null
 var _map_gen: Node = null
-var _camera: Camera3D = null
+## La camara de la vista activa: cualquier nodo con get_state()/set_state()
+## (MonumentalCamera en 3D, Camera2DController en 2D). La 2D se registra; la 3D
+## se sigue buscando en el viewport como siempre.
+var _camera: Node = null
 var _started := false
 var _warehouse_count := 0
+## La escena que arranca se va a ir a la otra vista (ViewRouter): no se empieza
+## partida con su placer, que muere en este mismo frame.
+var _hold_start := false
 
 func register_placer(placer: Node) -> void:
 	_placer = placer
@@ -18,13 +24,45 @@ func register_map_generator(map_gen: Node) -> void:
 	_map_gen = map_gen
 	_try_start()
 
+## La vista 2D registra su camara (no hay Camera3D que encontrar).
+func register_camera(camera: Node) -> void:
+	_camera = camera
+
+## ViewRouter: esta escena se abandona por la otra vista antes de empezar.
+func hold_start() -> void:
+	_hold_start = true
+
+## ViewRouter: esta escena es la buena. Suelta lo que registro la escena que se
+## abandono (nodos que ya no existen) para que la nueva se registre limpia.
+func release_start() -> void:
+	_hold_start = false
+	if not _started:
+		_placer = null
+		_map_gen = null
+		_camera = null
+
+## Cambia de vista (3D <-> 2D) sin perder nada: guarda, suelta los servicios
+## como una carga desde la nube y abre la otra escena, que vuelve a cargar el
+## mismo save_game.json (el formato es el mismo en las dos vistas).
+func switch_to_scene(scene_path: String) -> void:
+	if _started:
+		save_game()
+	var data := {}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file:
+		var json := JSON.new()
+		if json.parse(file.get_as_text()) == OK and json.data is Dictionary:
+			data = json.data
+	clear_save_and_reload_from(data, scene_path)
+
 func _try_start() -> void:
 	if _placer == null or _map_gen == null:
 		return
-	if _started:
+	if _started or _hold_start:
 		return
 	_started = true
-	_camera = get_viewport().get_camera_3d()
+	if _camera == null:
+		_camera = get_viewport().get_camera_3d()
 	if FileAccess.file_exists(SAVE_PATH):
 		_load_game()
 	else:
@@ -90,7 +128,7 @@ func _load_game() -> void:
 				if entry.has("custom_name") and entry["custom_name"] != "":
 					node.set_meta("custom_name", entry["custom_name"])
 					var label: Node = node.get_node_or_null("NameLabel")
-					if label and label is Label3D:
+					if label and (label is Label3D or label is Label):
 						label.text = entry["custom_name"]
 				# Restore level
 				var level: int = entry.get("level", 1)
@@ -282,10 +320,13 @@ func clear_save() -> void:
 
 ## Replaces local save with provided data and reloads the scene.
 ## Used by CloudSaveManager to apply cloud-downloaded saves.
-func clear_save_and_reload_from(save_data: Dictionary) -> void:
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(save_data, "\t"))
+## `scene_path` vacio recarga la escena actual; con ruta abre esa (cambio de vista).
+## Un `save_data` vacio no escribe nada: la escena nueva empieza partida.
+func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") -> void:
+	if not save_data.is_empty():
+		var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+		if file:
+			file.store_string(JSON.stringify(save_data, "\t"))
 	GridManager.clear_all()
 	ResourceManager.reset()
 	ProcessManager.reset()
@@ -303,7 +344,10 @@ func clear_save_and_reload_from(save_data: Dictionary) -> void:
 	_camera = null
 	_started = false
 	_warehouse_count = 0
-	get_tree().reload_current_scene()
+	if scene_path != "":
+		get_tree().change_scene_to_file(scene_path)
+	else:
+		get_tree().reload_current_scene()
 
 func _on_building_changed(_data: Resource, _cell: Vector2i) -> void:
 	save_game()

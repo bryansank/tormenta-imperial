@@ -12,6 +12,9 @@ const StatusBadge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
 ## quien las usa para el dedo. Se cargan por script (no por el autoload) para
 ## llamarlas como lo que son: funciones sueltas, sin instancia de por medio.
 const PointerMath := preload("res://scripts/services/InputService.gd")
+## Las reglas (veredicto, topes, demoler, guardar) son las mismas en la vista 2D:
+## viven en PlacementRules y aqui solo se llaman.
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
@@ -160,11 +163,7 @@ func _process(_delta: float) -> void:
 
 ## Get the effective grid size accounting for rotation (swap X/Y on 90°/270°).
 func _get_rotated_size() -> Vector2i:
-	if _current_data == null:
-		return Vector2i(1, 1)
-	if _rotation_steps % 2 == 1:
-		return Vector2i(_current_data.grid_size.y, _current_data.grid_size.x)
-	return _current_data.grid_size
+	return Rules.rotated_size(_current_data, _rotation_steps)
 
 ## Get the Y rotation in radians for the current rotation step.
 func _get_rotation_angle() -> float:
@@ -187,16 +186,11 @@ func _on_rotate_requested() -> void:
 
 ## Load original (unrotated) BuildingData from the .tres file by ID.
 func _load_original_data(building_id: String) -> BuildingData:
-	var path := "res://data/buildings/%s.tres" % building_id
-	if ResourceLoader.exists(path):
-		return load(path) as BuildingData
-	return null
+	return Rules.load_building_data(building_id)
 
 ## Create a copy of BuildingData with swapped grid_size for rotated placement.
 func _create_rotated_data(data: BuildingData) -> BuildingData:
-	var rotated := data.duplicate()
-	rotated.grid_size = Vector2i(data.grid_size.y, data.grid_size.x)
-	return rotated
+	return Rules.rotated_data(data)
 
 # ── Raycast ──
 
@@ -280,36 +274,17 @@ func _on_move_requested(building: Node) -> void:
 	_start_moving(building)
 
 func _on_demolish_requested(building: Node) -> void:
-	var info := GridManager.get_building_info(building)
-	if info.is_empty():
+	# Reembolso, produccion, procesos y rejilla: PlacementRules.demolish.
+	var result := Rules.demolish(building)
+	if result.is_empty():
 		return
-	var data: BuildingData = info["data"]
-	if data.is_core:
-		return
-	var cell: Vector2i = info["origin_cell"]
-	# Refund based on GameConfig ratio
-	var cost := data.get_cost()
-	for type in cost:
-		ResourceManager.add(type, int(cost[type] * GameConfig.demolish_refund_ratio))
-	# Unregister from production/construction
-	ProductionManager.unregister(building)
-	# Demoler con algo en curso ya no lo quema: el proceso se cancela como
-	# cualquier otro y devuelve su parte (la Tasa de Corrupcion).
-	ProcessManager.cancel(building)
-	# Save cell before removing for road update
-	var was_road := data.id == "road"
-	# Remove from grid and scene
-	GridManager.remove_building(building)
+	var data: BuildingData = result["data"]
+	var cell: Vector2i = result["cell"]
 	building.queue_free()
 	# Update neighboring roads if we demolished a road
-	if was_road:
-		for d in ROAD_DIRS:
-			var neighbor_cell: Vector2i = cell + d["offset"]
-			var neighbor := GridManager.get_building_at(neighbor_cell)
-			if neighbor:
-				var n_info := GridManager.get_building_info(neighbor)
-				if not n_info.is_empty() and n_info["data"].id == "road":
-					_update_road_mesh(neighbor, neighbor_cell)
+	if data.id == "road":
+		for n in Rules.neighbor_roads(cell):
+			_update_road_mesh(n["node"], n["cell"])
 	# Update warehouse count
 	if data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
@@ -323,26 +298,13 @@ func _try_place(cell: Vector2i) -> void:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
 		return
-	# Check building limit
-	if not _check_building_limit(_current_data.id):
-		_show_feedback(Tr.t("LBL_LIMIT_REACHED") % [count_building(_current_data.id), GameConfig.get_building_limit(_current_data.id)])
+	# Tope, requisitos, obreros y coste, en ese orden (PlacementRules).
+	var blocked := Rules.purchase_block_message(_current_data)
+	if blocked != "":
+		_show_feedback(blocked)
 		return
-	# Check prerequisites
-	if not _check_prerequisites(_current_data.id):
-		var reqs := GameConfig.get_prerequisites(_current_data.id)
-		_show_feedback(Tr.t("LBL_REQUIRES") % " + ".join(reqs))
-		return
-	# Check workers availability
-	if _current_data.workers_required > 0:
-		if PopulationManager.get_free_workers() < _current_data.workers_required:
-			_show_feedback(Tr.t("LBL_NO_WORKERS"))
-			return
-	# Check and deduct cost
 	var cost := _current_data.get_cost()
 	if not cost.is_empty():
-		if not ResourceManager.can_afford(cost):
-			_show_feedback(Tr.t("LBL_NOT_ENOUGH_RESOURCES"))
-			return
 		ResourceManager.spend_cost(cost)
 	# Only now, with every check passed, does a consuming building eat its
 	# deposit. Before, the oil well was removed BEFORE the limit / cost checks,
@@ -420,13 +382,8 @@ func _try_move(cell: Vector2i) -> void:
 	if _current_data.id == "road":
 		_update_road_connections(cell)
 		# Update neighbors at old position (road no longer there)
-		for d in ROAD_DIRS:
-			var neighbor_cell: Vector2i = old_cell + d["offset"]
-			var neighbor := GridManager.get_building_at(neighbor_cell)
-			if neighbor:
-				var n_info := GridManager.get_building_info(neighbor)
-				if not n_info.is_empty() and n_info["data"].id == "road":
-					_update_road_mesh(neighbor, neighbor_cell)
+		for n in Rules.neighbor_roads(old_cell):
+			_update_road_mesh(n["node"], n["cell"])
 	EventBus.building_moved.emit(old_cell, cell)
 	_cleanup_preview()
 	_moving_building = null
@@ -447,31 +404,15 @@ func _map_generator() -> Node:
 ## `ignore_building` is the building being moved (its own cells count as free).
 ## Returns {"ok": bool, "reason": "" | "deposit" | "occupied", "deposit": Node}.
 static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector2i, map_gen: Node, ignore_building: Node = null) -> Dictionary:
-	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
-	var deposit: Node = null
-	if not rule.is_empty():
-		var cells: Array = GridManager.cells_for(cell, size)
-		if map_gen != null and map_gen.has_method("find_deposit_near_cells"):
-			deposit = map_gen.find_deposit_near_cells(String(rule["deposit"]), cells, int(rule["reach"]))
-		if deposit == null:
-			return {"ok": false, "reason": "deposit", "deposit": null}
-	# A deposit that gets consumed sits under the building: its cells are fine.
-	var ignore_obstacle: Node = deposit if bool(rule.get("consumes", false)) else null
-	if not GridManager.can_place(cell, size, ignore_building, ignore_obstacle):
-		return {"ok": false, "reason": "occupied", "deposit": deposit}
-	return {"ok": true, "reason": "", "deposit": deposit}
+	return Rules.evaluate_placement(building_id, cell, size, map_gen, ignore_building)
 
 ## Removes the deposit a consuming building (the Refinery) is placed on.
 func _consume_deposit_if_required(verdict: Dictionary, map_gen: Node) -> void:
-	var rule: Dictionary = GameConfig.get_deposit_rule(_current_data.id)
-	var deposit: Node = verdict.get("deposit", null)
-	if deposit != null and bool(rule.get("consumes", false)) and map_gen != null:
-		map_gen.remove_deposit(deposit)
+	Rules.consume_deposit_if_required(_current_data.id, verdict, map_gen)
 
 ## Tells the player why the click was refused, on screen and in the log.
 func _reject_for_deposit(building_id: String) -> void:
-	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
-	var msg: String = Tr.t(String(rule.get("message", "LBL_REQUIRES_DEPOSIT")))
+	var msg: String = Rules.deposit_reject_message(building_id)
 	_show_feedback(msg)
 	EventBus.notification_posted.emit(msg, "warning", Color(0.9, 0.6, 0.3))
 
@@ -567,27 +508,8 @@ func place_building_at(data: BuildingData, cell: Vector2i, rot_steps: int = 0) -
 func get_all_placed_buildings() -> Array:
 	var result: Array = []
 	for building in _buildings_container.get_children():
-		var info := GridManager.get_building_info(building)
-		if not info.is_empty():
-			var origin: Vector2i = info["origin_cell"]
-			var data: BuildingData = info["data"]
-			var entry := { "id": data.id, "cell_x": origin.x, "cell_y": origin.y }
-			var rot: int = building.get_meta("rotation_steps", 0)
-			if rot != 0:
-				entry["rotation"] = rot
-			var level: int = building.get_meta("level", 1)
-			if level > 1:
-				entry["level"] = level
-			if building.has_meta("custom_name"):
-				entry["custom_name"] = building.get_meta("custom_name")
-			# Solo se guarda si esta tocado: un save viejo sin la clave significa
-			# "entero", que es exactamente lo que queremos por defecto.
-			if building.has_meta("health"):
-				var hp: int = building.get_meta("health")
-				if hp < data.max_health:
-					entry["health"] = hp
-			if ProductionManager.is_constructing(building):
-				entry["construction_remaining"] = ProductionManager.get_construction_remaining(building)
+		var entry := Rules.serialize_building(building)
+		if not entry.is_empty():
 			result.append(entry)
 	return result
 
@@ -600,25 +522,9 @@ func clear_all_buildings() -> void:
 
 # ── Road connectivity ──
 
-## Direction offsets: NORTH=1(Z-), EAST=2(X+), SOUTH=4(Z+), WEST=8(X-)
-const ROAD_DIRS: Array = [
-	{"bit": 1, "offset": Vector2i(0, -1)},  # North (Z-)
-	{"bit": 2, "offset": Vector2i(1, 0)},   # East (X+)
-	{"bit": 4, "offset": Vector2i(0, 1)},   # South (Z+)
-	{"bit": 8, "offset": Vector2i(-1, 0)},  # West (X-)
-]
-
-## Get the neighbor bitmask for a road at the given cell.
+## Get the neighbor bitmask for a road at the given cell (PlacementRules.ROAD_DIRS).
 func _get_road_neighbors(cell: Vector2i) -> int:
-	var mask := 0
-	for d in ROAD_DIRS:
-		var neighbor_cell: Vector2i = cell + d["offset"]
-		var neighbor := GridManager.get_building_at(neighbor_cell)
-		if neighbor:
-			var info := GridManager.get_building_info(neighbor)
-			if not info.is_empty() and info["data"].id == "road":
-				mask |= d["bit"]
-	return mask
+	return Rules.road_neighbor_mask(cell)
 
 ## Rebuild a road's visual mesh based on current neighbors.
 func _update_road_mesh(building: Node3D, cell: Vector2i) -> void:
@@ -640,13 +546,8 @@ func _update_road_connections(cell: Vector2i) -> void:
 		if not info.is_empty() and info["data"].id == "road":
 			_update_road_mesh(building, cell)
 	# Update all adjacent roads
-	for d in ROAD_DIRS:
-		var neighbor_cell: Vector2i = cell + d["offset"]
-		var neighbor := GridManager.get_building_at(neighbor_cell)
-		if neighbor:
-			var n_info := GridManager.get_building_info(neighbor)
-			if not n_info.is_empty() and n_info["data"].id == "road":
-				_update_road_mesh(neighbor, neighbor_cell)
+	for n in Rules.neighbor_roads(cell):
+		_update_road_mesh(n["node"], n["cell"])
 
 # ── Create actual building mesh ──
 
@@ -726,25 +627,7 @@ func _hide_grid_overlay() -> void:
 ## Almacen hasta que el jugador guardaba y recargaba, que es cuando el tope subia
 ## de golpe porque la carga si los contaba bien.
 func count_building(building_id: String) -> int:
-	var count := 0
-	for info in GridManager.get_all_buildings():
-		var data: BuildingData = info.get("data")
-		if data != null and data.id == building_id:
-			count += 1
-	return count
-
-func _check_building_limit(building_id: String) -> bool:
-	var limit := GameConfig.get_building_limit(building_id)
-	if limit < 0:
-		return true
-	return count_building(building_id) < limit
-
-func _check_prerequisites(building_id: String) -> bool:
-	var reqs := GameConfig.get_prerequisites(building_id)
-	for req_id in reqs:
-		if count_building(req_id) < 1:
-			return false
-	return true
+	return Rules.count_building(building_id)
 
 var _feedback_canvas: CanvasLayer = null
 var _feedback_label: Label = null

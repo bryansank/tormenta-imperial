@@ -75,6 +75,11 @@ func _start_construction(node: Node, data: BuildingData, duration: float = -1.0)
 	EventBus.construction_started.emit(node)
 
 func _apply_construction_visual(node: Node) -> void:
+	# Un edificio que se pinta solo (la vista 2D) pone su propio "ConstructionLabel";
+	# el texto de progreso y el borrado al terminar siguen siendo cosa de aqui.
+	if node.has_method("apply_construction_visual"):
+		node.apply_construction_visual()
+		return
 	var mesh_inst := node.get_child(0)
 	if mesh_inst is MeshInstance3D:
 		var mat: StandardMaterial3D = mesh_inst.get_surface_override_material(0)

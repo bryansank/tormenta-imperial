@@ -366,7 +366,7 @@ func _show_deposit_panel() -> void:
 	_confirm_container.visible = false
 	var display_name := _selected_deposit_id
 	for child in _selected_node.get_children():
-		if child is Label3D:
+		if child is Label3D or child is Label:
 			display_name = child.text
 			break
 	_title_label.text = display_name
@@ -416,7 +416,7 @@ func _on_rename() -> void:
 	_selected_node.set_meta("custom_name", new_name)
 	_title_label.text = new_name
 	var label_node := _selected_node.get_node_or_null("NameLabel")
-	if label_node and label_node is Label3D:
+	if label_node and (label_node is Label3D or label_node is Label):
 		label_node.text = new_name
 	EventBus.building_renamed.emit(_selected_node, new_name)
 

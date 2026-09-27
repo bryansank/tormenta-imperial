@@ -12,11 +12,11 @@ const DEPOSIT_TYPES := {
 
 const DEPOSIT_IDS := ["gold_vein", "iron_deposit", "oil_well", "forest"]
 
-var _deposits_container: Node3D
-var _deposit_cells: Array = []  # [{ "id": String, "cell_x": int, "cell_y": int, "size_x": int, "size_y": int, "node": Node3D }]
+var _deposits_container: Node
+var _deposit_cells: Array = []  # [{ "id": String, "cell_x": int, "cell_y": int, "size_x": int, "size_y": int, "node": Node }]
 
 func _ready() -> void:
-	_deposits_container = Node3D.new()
+	_deposits_container = _make_container()
 	_deposits_container.name = "Deposits"
 	add_child(_deposits_container)
 	EventBus.mining_completed.connect(_on_mining_completed)
@@ -47,8 +47,40 @@ func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, 
 		return null
 	var info: Dictionary = DEPOSIT_TYPES[deposit_id]
 
-	var root := Node3D.new()
+	var root := _build_deposit_node(deposit_id, info, dep_size)
 	root.name = deposit_id
+	root.set_meta("deposit_id", deposit_id)
+	root.set_meta("cell", cell)
+	root.set_meta("deposit_size", dep_size)
+
+	# Set uses remaining from GameConfig
+	var max_uses: int = GameConfig.get_deposit_max_uses(deposit_id)
+	var uses: int = uses_override if uses_override > 0 else max_uses
+	root.set_meta("uses_remaining", uses)
+	root.set_meta("max_uses", max_uses)
+
+	# Add to tree FIRST, then position (a global transform needs a parent)
+	_deposits_container.add_child(root)
+	_place_deposit_node(root, cell, dep_size)
+	GridManager.place_obstacle(cell, root, dep_size)
+
+	_deposit_cells.append({ "id": deposit_id, "cell_x": cell.x, "cell_y": cell.y, "size_x": dep_size.x, "size_y": dep_size.y, "node": root })
+	return root
+
+# ── Ganchos de vista ──────────────────────────────────────────────────
+# Todo lo que es dibujo pasa por estos cuatro metodos. La vista 2D
+# (scripts/view2d/MapGenerator2D.gd) hereda de aqui y solo cambia estos; el
+# sorteo, el registro, el agotamiento, el guardado y la regla de alcance son
+# los mismos en las dos vistas.
+
+## Contenedor de los yacimientos.
+func _make_container() -> Node:
+	return Node3D.new()
+
+## El nodo visible de un yacimiento (sin posicionar). Lleva un Label3D oculto:
+## BuildingInfoPanel lee de ahi el nombre al hacer clic.
+func _build_deposit_node(deposit_id: String, info: Dictionary, dep_size: Vector2i) -> Node:
+	var root := Node3D.new()
 
 	# Scale mesh to fill the multi-cell area
 	var scale_x: float = float(dep_size.x)
@@ -71,49 +103,15 @@ func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, 
 	label.visible = false
 
 	root.add_child(label)
-	root.set_meta("deposit_id", deposit_id)
-	root.set_meta("cell", cell)
-	root.set_meta("deposit_size", dep_size)
-
-	# Set uses remaining from GameConfig
-	var max_uses: int = GameConfig.get_deposit_max_uses(deposit_id)
-	var uses: int = uses_override if uses_override > 0 else max_uses
-	root.set_meta("uses_remaining", uses)
-	root.set_meta("max_uses", max_uses)
-
-	# Add to tree FIRST, then set global_position (requires being in tree)
-	_deposits_container.add_child(root)
-	var world_pos := GridManager.building_center(cell, dep_size)
-	root.global_position = world_pos
-	GridManager.place_obstacle(cell, root, dep_size)
-
-	_deposit_cells.append({ "id": deposit_id, "cell_x": cell.x, "cell_y": cell.y, "size_x": dep_size.x, "size_y": dep_size.y, "node": root })
 	return root
 
-func _on_mining_completed(deposit_node: Node, _deposit_id: String) -> void:
-	if not is_instance_valid(deposit_node):
-		return
-	if not deposit_node.has_meta("uses_remaining"):
-		return
-	var uses: int = deposit_node.get_meta("uses_remaining") - 1
-	deposit_node.set_meta("uses_remaining", uses)
-	if uses <= 0:
-		_deplete_deposit(deposit_node)
+## Coloca el nodo ya metido en el arbol sobre su huella.
+func _place_deposit_node(root: Node, cell: Vector2i, dep_size: Vector2i) -> void:
+	(root as Node3D).global_position = GridManager.building_center(cell, dep_size)
 
-func _deplete_deposit(node: Node3D) -> void:
-	var deposit_id: String = node.get_meta("deposit_id", "")
-	var cell: Vector2i = node.get_meta("cell", Vector2i(-1, -1))
-	var dep_size: Vector2i = node.get_meta("deposit_size", Vector2i(2, 2))
-	# Remove from tracking
-	for i in range(_deposit_cells.size() - 1, -1, -1):
-		if _deposit_cells[i]["node"] == node:
-			_deposit_cells.remove_at(i)
-			break
-	# Remove from grid (multi-cell)
-	if cell != Vector2i(-1, -1):
-		GridManager.remove_obstacle(cell, dep_size)
-	# Floating text
-	var pos := node.global_position
+## El aviso flotante de "agotado" sobre el yacimiento que desaparece.
+func _show_depleted_text(node: Node) -> void:
+	var pos: Vector3 = (node as Node3D).global_position
 	var label := Label3D.new()
 	label.text = Tr.t("LBL_DEPOSIT_DEPLETED")
 	label.font_size = 22
@@ -127,6 +125,31 @@ func _deplete_deposit(node: Node3D) -> void:
 	tween.tween_property(label, "global_position:y", pos.y + 5.0, 2.0).set_ease(Tween.EASE_OUT)
 	tween.parallel().tween_property(label, "modulate:a", 0.0, 2.0).set_delay(0.5)
 	tween.tween_callback(label.queue_free)
+
+func _on_mining_completed(deposit_node: Node, _deposit_id: String) -> void:
+	if not is_instance_valid(deposit_node):
+		return
+	if not deposit_node.has_meta("uses_remaining"):
+		return
+	var uses: int = deposit_node.get_meta("uses_remaining") - 1
+	deposit_node.set_meta("uses_remaining", uses)
+	if uses <= 0:
+		_deplete_deposit(deposit_node)
+
+func _deplete_deposit(node: Node) -> void:
+	var deposit_id: String = node.get_meta("deposit_id", "")
+	var cell: Vector2i = node.get_meta("cell", Vector2i(-1, -1))
+	var dep_size: Vector2i = node.get_meta("deposit_size", Vector2i(2, 2))
+	# Remove from tracking
+	for i in range(_deposit_cells.size() - 1, -1, -1):
+		if _deposit_cells[i]["node"] == node:
+			_deposit_cells.remove_at(i)
+			break
+	# Remove from grid (multi-cell)
+	if cell != Vector2i(-1, -1):
+		GridManager.remove_obstacle(cell, dep_size)
+	# Floating text
+	_show_depleted_text(node)
 	# Signal and remove node
 	EventBus.deposit_depleted.emit(node, deposit_id)
 	EventBus.notification_posted.emit(Tr.t("NOTIF_DEPOSIT_GONE") % Tr.t(DEPOSIT_TYPES[deposit_id]["display_name"]), "warning", Color(0.8, 0.5, 0.2))
@@ -138,7 +161,7 @@ func get_all_deposits() -> Array:
 	var result: Array = []
 	for entry in _deposit_cells:
 		if is_instance_valid(entry["node"]):
-			var node: Node3D = entry["node"]
+			var node: Node = entry["node"]
 			var dep_entry := {
 				"id": entry["id"],
 				"cell_x": entry["cell_x"],

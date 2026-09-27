@@ -46,8 +46,12 @@ func _ready() -> void:
 ## La escena no existe todavía en `_ready` de un autoload, así que se busca
 ## perezosamente la primera vez que hace falta.
 func _resolve() -> bool:
-	if _env != null and _sun != null:
+	if _env != null and is_instance_valid(_sun):
 		return true
+	# La escena cambio (nueva partida, o la vista 2D, que no tiene ni entorno ni
+	# sol: ahi el cielo lo pinta StormTint2D): lo cacheado ya no vale.
+	_env = null
+	_sun = null
 	var scene := get_tree().current_scene
 	if scene == null:
 		return false
