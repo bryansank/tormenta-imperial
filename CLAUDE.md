@@ -302,7 +302,12 @@ runs in its `_ready()` (before AudioManager applies volumes); anything that chan
 preference calls `GameConfig.save_user_settings()`. Currently stored: audio volumes
 (master/music/sfx/ambient — sliders in SettingsPanel), `ui_grid_visible` (map grid
 toggle; GridOverlayControl applies it, BuildingPlacer restores it after placement),
-and `ui_helper_visible` (HelperPanel "?" callouts, on by default).
+`ui_helper_visible` (HelperPanel "?" callouts, on by default) and `ui_locale`
+(`es`/`en`, applied to `Tr` at startup). The language selector lives in SettingsPanel:
+`GameConfig.set_locale()` saves it and emits `EventBus.locale_changed`, and GameManager
+answers by saving and reloading the scene with the same game (`reload_keeping_game()`),
+so every panel is rebuilt in the new language. With a board open it does not reload
+(the board is not saved); the language shows everywhere on the next start.
 
 ### Save/Load System
 

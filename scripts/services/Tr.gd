@@ -527,6 +527,11 @@ const _STRINGS := {
 		"BLD_FOUNTAIN_DESC": "Fuente ornamental. Mejora la moral y embellece la base.",
 		"BLD_STATUE_NAME": "Estatua Imperial",
 		"BLD_STATUE_DESC": "Monumento que inspira a los trabajadores. Gran impulso a la moral.",
+		# Selector de idioma (Ajustes). Cada idioma se nombra en su propia lengua.
+		"LBL_LANGUAGE": "Idioma",
+		"LBL_LOCALE_ES": "Español",
+		"LBL_LOCALE_EN": "English",
+		"NOTIF_LOCALE_AFTER_BATTLE": "Idioma cambiado. Con un tablero abierto no se recarga: se verá en todos los paneles al volver a abrir el juego.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -1022,6 +1027,11 @@ const _STRINGS := {
 		"BLD_FOUNTAIN_DESC": "Ornamental fountain. Improves morale and adorns the base.",
 		"BLD_STATUE_NAME": "Imperial Statue",
 		"BLD_STATUE_DESC": "Monument that inspires the workers. A large morale boost.",
+		# Language selector (Settings). Each language is named in its own tongue.
+		"LBL_LANGUAGE": "Language",
+		"LBL_LOCALE_ES": "Español",
+		"LBL_LOCALE_EN": "English",
+		"NOTIF_LOCALE_AFTER_BATTLE": "Language changed. With a board open the game does not reload: every panel will show it next time you start the game.",
 	},
 }
 

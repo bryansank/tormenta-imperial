@@ -290,6 +290,10 @@ var ui_helper_visible := true
 ## Settings panel; persists in user://settings.cfg like the rest of preferences.
 var ui_fullscreen := false
 
+## Idioma de la interfaz ("es" / "en"). Vive en settings.cfg y no en la partida:
+## es del dispositivo, sobrevive a "partida nueva" y se aplica antes de pintar nada.
+var ui_locale := "es"
+
 func _ready() -> void:
 	load_user_settings()
 	# El modo de ventana se aplica en cuanto arranca, antes de que se dibuje la UI.
@@ -306,6 +310,10 @@ func load_user_settings() -> void:
 	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
+	var locale := str(cf.get_value("ui", "locale", ui_locale))
+	if Tr.LOCALES.has(locale):
+		ui_locale = locale
+	Tr.set_locale(ui_locale)
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -317,6 +325,7 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "grid_visible", ui_grid_visible)
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
+	cf.set_value("ui", "locale", ui_locale)
 	cf.save(USER_SETTINGS_PATH)
 
 # ── Pantalla completa ──
@@ -338,6 +347,16 @@ func set_fullscreen(enabled: bool) -> void:
 	_apply_window_mode()
 	save_user_settings()
 	EventBus.fullscreen_changed.emit(ui_fullscreen)
+
+## Cambia el idioma, lo guarda y lo anuncia. Un idioma sin tabla o el mismo que
+## ya estaba no hace nada (ni guarda ni avisa): asi un clic repetido no recarga.
+func set_locale(locale: String) -> void:
+	if not Tr.LOCALES.has(locale) or locale == ui_locale:
+		return
+	ui_locale = locale
+	Tr.set_locale(locale)
+	save_user_settings()
+	EventBus.locale_changed.emit(locale)
 
 func toggle_fullscreen() -> void:
 	set_fullscreen(not ui_fullscreen)

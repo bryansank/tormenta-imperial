@@ -14,6 +14,7 @@ var _panel_ids: Dictionary = {}
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
+		_prune_freed()
 		if not _window_stack.is_empty():
 			var top = _window_stack.back()
 			if top.has_method("_toggle_panel"):
@@ -64,11 +65,27 @@ func focus_window(window: CanvasLayer) -> void:
 		_update_layers()
 
 func _update_layers() -> void:
+	_prune_freed()
 	for i in range(_window_stack.size()):
 		_window_stack[i].layer = _base_layer + i + 1
 
 func is_any_window_open() -> bool:
+	_prune_freed()
 	return not _window_stack.is_empty()
+
+## UIManager es autoload y sobrevive a recargar la escena (partida nueva, cambio
+## de idioma, carga desde la nube); los paneles no. Lo que quedo en la pila o en
+## el registro de la escena anterior esta liberado y se tira aqui, antes de que
+## alguien le asigne un `layer` a un objeto muerto.
+func _prune_freed() -> void:
+	var alive: Array[CanvasLayer] = []
+	for w in _window_stack:
+		if is_instance_valid(w):
+			alive.append(w)
+	_window_stack = alive
+	for w in _panel_ids.keys():
+		if not is_instance_valid(w):
+			_panel_ids.erase(w)
 
 ## Close panels that share the same slot or a conflicting slot.
 func _close_conflicting(opening: CanvasLayer, opening_id: String) -> void:

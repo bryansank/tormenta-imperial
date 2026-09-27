@@ -414,3 +414,41 @@ func _load_building_data(id: String) -> BuildingData:
 	if ResourceLoader.exists(path):
 		return load(path) as BuildingData
 	return null
+
+# ── Cambio de idioma ──
+#
+# Los paneles construyen sus textos una vez, en _ready(). Rehacer a mano cada
+# uno para un cambio de idioma seria una lista que se desincroniza sola; lo
+# robusto es guardar, recargar la escena y dejar que todo se pinte de nuevo en el
+# idioma nuevo. Es el mismo camino que ya usa la carga desde la nube.
+
+func _ready() -> void:
+	EventBus.locale_changed.connect(_on_locale_changed)
+
+func _on_locale_changed(_locale: String) -> void:
+	# Sin partida arrancada (arranque, pruebas) no hay nada que recargar.
+	if not _started:
+		return
+	# El tablero no viaja en el guardado: recargar con uno abierto lo perderia.
+	# El idioma ya esta puesto y guardado; se vera entero en la proxima carga.
+	if CombatManager.is_board_open():
+		EventBus.notification_posted.emit(Tr.t("NOTIF_LOCALE_AFTER_BATTLE"), "info", Color(0.5, 0.7, 1.0))
+		return
+	# Diferido: quien emite suele ser un boton del panel de ajustes, y recargar
+	# dentro de su propia senal liberaria el boton mientras aun se esta pulsando.
+	reload_keeping_game.call_deferred()
+
+## Guarda y recarga la escena con la misma partida. No es partida nueva: nada se
+## pierde y no se anuncia nada.
+func reload_keeping_game() -> void:
+	if not _started:
+		return
+	save_game()
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if not file:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not parsed is Dictionary:
+		return
+	clear_save_and_reload_from(parsed)
