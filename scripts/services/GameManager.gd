@@ -24,6 +24,34 @@ func _try_start() -> void:
 	if _started:
 		return
 	_started = true
+	# El placer y el mapa se registran desde su propio _ready, y en Main.tscn hay
+	# trece paneles despues de ellos que todavia no escuchan. Cargar aqui mismo
+	# era hablarle a nadie: expedition_resumed, draft_offered y
+	# game_load_completed se perdian, y una partida guardada con un draft
+	# pendiente volvia con el mapa bloqueado. Se espera a que la escena entera
+	# este lista. Si ya lo esta (una escena montada a mano, un test) se arranca
+	# en el acto, como siempre.
+	var scene_root: Node = _scene_root_of(_map_gen)
+	if scene_root != null and not scene_root.is_node_ready():
+		scene_root.ready.connect(_begin, CONNECT_ONE_SHOT)
+		return
+	_begin()
+
+## El nodo de la escena que cuelga directamente de la raiz del arbol.
+func _scene_root_of(node: Node) -> Node:
+	if node == null or not node.is_inside_tree():
+		return null
+	var root: Node = get_tree().root
+	var current: Node = node
+	while current.get_parent() != null and current.get_parent() != root:
+		current = current.get_parent()
+	return current
+
+func _begin() -> void:
+	# La escena pudo irse entre el registro y su ready (recarga encadenada).
+	if not is_instance_valid(_placer) or not is_instance_valid(_map_gen):
+		_started = false
+		return
 	_camera = get_viewport().get_camera_3d()
 	if FileAccess.file_exists(SAVE_PATH):
 		_load_game()
