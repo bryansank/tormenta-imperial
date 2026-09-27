@@ -278,6 +278,12 @@ signal grid_overlay_toggled(visible: bool)
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
 
+## El idioma cambio (GameConfig.set_locale). Ya esta aplicado en Tr y guardado en
+## settings.cfg cuando llega. GameManager lo escucha y recarga la escena
+## conservando la partida, para que todo panel vuelva a pintarse en el idioma
+## nuevo; quien pinte textos de larga vida puede escucharlo tambien.
+signal locale_changed(locale: String)
+
 # ── Persistence ──
 @warning_ignore("unused_signal")
 signal game_new_started()

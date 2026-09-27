@@ -23,8 +23,14 @@ func _screen() -> CanvasLayer:
 	screen.map_node_chosen.connect(func(index): _chosen.append(index))
 	return screen
 
-func _run() -> Expedition:
-	return Expedition.create(1, 4242, {"infantry": 2, "artillery": 1}, 70.0, 1)
+## Con `start_cleared`, una columna que ya gano su primer nodo y elige el
+## siguiente: desde integridad-combate no se sale de un nodo sin limpiar
+## (Expedition.can_select), asi que los tests de elegir nodo lo necesitan.
+func _run(start_cleared := false) -> Expedition:
+	var run := Expedition.create(1, 4242, {"infantry": 2, "artillery": 1}, 70.0, 1)
+	if start_cleared:
+		run.current_node_data()["cleared"] = true
+	return run
 
 # ── Riesgo escrito ───────────────────────────────────────────────────
 
@@ -53,7 +59,7 @@ func test_the_risk_label_sits_below_its_node() -> void:
 func test_with_a_mouse_one_click_goes_in() -> void:
 	var screen := _screen()
 	await await_idle_frame()
-	var run := _run()
+	var run := _run(true)
 	screen.open_map(run)
 	var target: int = int(run.current_exits()[0])
 	screen.map_button(target).pressed.emit()
@@ -62,7 +68,7 @@ func test_with_a_mouse_one_click_goes_in() -> void:
 func test_with_a_finger_the_first_tap_only_arms_the_node() -> void:
 	var screen := _screen()
 	await await_idle_frame()
-	var run := _run()
+	var run := _run(true)
 	screen.open_map(run)
 	screen.set_touch_mode(true)
 	var target: int = int(run.current_exits()[0])
@@ -79,7 +85,7 @@ func test_with_a_finger_the_first_tap_only_arms_the_node() -> void:
 func test_tapping_another_node_moves_the_arm_instead_of_entering() -> void:
 	var screen := _screen()
 	await await_idle_frame()
-	var run := _run()
+	var run := _run(true)
 	screen.open_map(run)
 	var exits: Array = run.current_exits()
 	if exits.size() < 2:

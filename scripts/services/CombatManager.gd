@@ -22,6 +22,7 @@ const ExpeditionScript := preload("res://scripts/combat/Expedition.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
 const AI := preload("res://scripts/combat/CombatAI.gd")
 const AutoResolverScript := preload("res://scripts/combat/AutoResolver.gd")
+const ExpeditionGeneratorScript := preload("res://scripts/combat/ExpeditionGenerator.gd")
 
 var _encounter: Encounter = null
 ## La expedicion en curso. Null en la base; se descarta al resolverla.
@@ -38,6 +39,12 @@ var _expedition_followups: Array = []
 var _next_uid: int = 1
 var _morale_snapshot: float = 50.0
 var _enemy_turn_running: bool = false
+## Numero de tablero. Sube cada vez que un tablero se abre o se cierra. El turno
+## enemigo es una corrutina que espera entre pasos: si el tablero cambia mientras
+## espera, al despertar ve otro numero y se retira sin tocar nada. Sin esto,
+## cerrar un tablero con la IA pensando y abrir otro dejaba dos bucles enemigos
+## corriendo a la vez sobre el nuevo.
+var _board_generation: int = 0
 ## Guards against applying the outcome twice: a timeout and a wipe can both fire
 ## on the same advance, and paying the player twice for one fight is not a bug
 ## anybody reports.
@@ -68,10 +75,12 @@ var _audit_wave_active: bool = false
 ## tablero. Vive aparte de _last_result porque ese parte es de la ultima pelea
 ## que se resolvio, y no siempre es esta.
 var _audit_wave_won: bool = false
-var _audit_crews: Array = []
-## Dotaciones caidas en lo que va de asedio. Las torres no se cansan, pero a
-## una dotacion muerta no la reemplaza nadie.
-var _audit_crew_losses: int = 0
+## uids del tablero actual cuya muerte ya se liquido en caliente (ver
+## _settle_audit_death). Solo lo usan las oleadas del asedio.
+var _audit_charged: Dictionary = {}
+## Una oleada del asedio que llego con otro tablero en pantalla. No se da por
+## perdida: espera a que ese tablero se cierre y entonces baja.
+var _audit_wave_queued: bool = false
 
 func _ready() -> void:
 	EventBus.final_audit_wave_ready.connect(_on_final_audit_wave_ready)
@@ -90,6 +99,19 @@ func is_in_encounter() -> bool:
 ## se lleva por delante el parte sin que nadie lo lea.
 func is_board_open() -> bool:
 	return _encounter != null
+
+## Se puede guardar sin mentir. El tablero no se guarda nunca (D6), asi que con
+## una pelea en juego el save captaria unidades a medio herir sobre un nodo sin
+## limpiar. Tampoco con el parte de una oleada del asedio en pantalla: su
+## resultado no llega a FinalAudit hasta que se cierra (end_encounter), y un save
+## en ese hueco traeria la guarnicion herida a repetir la misma oleada. Con el
+## parte de cualquier otra pelea delante, el resultado ya esta liquidado.
+func is_save_safe() -> bool:
+	if _encounter == null:
+		return true
+	if _encounter.is_active():
+		return false
+	return _result_applied and not _audit_wave_active
 
 func is_enemy_thinking() -> bool:
 	return _enemy_turn_running
@@ -132,7 +154,7 @@ func is_player_turn() -> bool:
 ## expedition. Las comprometidas se descuentan enteras, vivas y caidas, porque
 ## ArmyManager no borra a las caidas hasta que la columna vuelve (SC-004).
 func get_deployable_units() -> Dictionary:
-	var committed: Dictionary = get_units_on_expedition()
+	var committed: Dictionary = get_units_away()
 	var available: Dictionary = {}
 	for unit_id in GameConfig.get_unit_ids():
 		var count: int = ArmyManager.get_count(unit_id) - int(committed.get(unit_id, 0))
@@ -258,10 +280,17 @@ func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -
 ## Una oleada del asedio pide tablero. Los defensores son la guarnicion viva que
 ## lleva FinalAudit —con el daño de la oleada anterior— mas las dotaciones de
 ## torre que sigan en pie. Sin relevos: lo que cae, cae.
-func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> void:
+func _on_final_audit_wave_ready(_wave: int, roster: Dictionary, scale: float) -> void:
 	var audit = ProgressionManager.final_audit
 	if audit == null:
 		return
+	# Con otro tablero abierto la oleada no cabe, y antes eso contaba como oleada
+	# perdida: Diezmo maximo y daño maximo por haber pulsado en mal momento. Ahora
+	# espera en la puerta; end_encounter() la deja bajar al cerrarse el tablero.
+	if is_board_open():
+		_audit_wave_queued = true
+		return
+	_audit_wave_queued = false
 	var defenders: Array = audit.living_garrison().duplicate()
 	# Las dotaciones se fabrican aqui, antes de _open(): sin esto nacerian con los
 	# uids 1 y 2, los mismos que la guarnicion, y no llegarian a actuar nunca.
@@ -269,28 +298,23 @@ func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> 
 
 	_morale_snapshot = _read_morale()
 	# Una torre no se cansa, una dotacion si muere. Cada oleada las torres en pie
-	# vuelven a mandar gente entera, pero las dotaciones caidas en oleadas
-	# anteriores no se reemplazan: la atricion tambien les toca a ellas.
-	if wave <= 0:
-		_audit_crew_losses = 0
-	else:
-		for crew in _audit_crews:
-			if not crew.is_alive():
-				_audit_crew_losses += 1
+	# vuelven a mandar gente entera, pero las dotaciones caidas en lo que va de
+	# asedio no se reemplazan. La cuenta vive en FinalAudit (y con el, en el
+	# guardado): una dotacion muerta antes de cargar sigue muerta despues.
 	var counts: Dictionary = {}
 	for unit in defenders:
 		counts[unit.unit_id] = int(counts.get(unit.unit_id, 0)) + 1
-	var wanted: int = roster_size(get_tower_crews(counts)) - _audit_crew_losses
-	_audit_crews = []
+	var wanted: int = roster_size(get_tower_crews(counts)) - int(audit.crew_losses)
+	var audit_crews: Array = []
 	if wanted > 0:
-		_audit_crews = _build_side({GameConfig.storm_tower_garrison_unit: wanted}, Encounter.PLAYER, 1.0)
+		audit_crews = _build_side({GameConfig.storm_tower_garrison_unit: wanted}, Encounter.PLAYER, 1.0)
 	# Quien las fabrica es quien dice quienes son. La lista viaja hasta el tablero
 	# en la misma llamada: ninguna decision sobre "esto es dotacion" pasa por lo
 	# que dejo apuntado un tablero que ya no existe.
 	var crew_uids: Array = []
-	for crew in _audit_crews:
+	for crew in audit_crews:
 		crew_uids.append(crew.uid)
-	defenders.append_array(_audit_crews)
+	defenders.append_array(audit_crews)
 
 	# Sin nadie en pie no se abre tablero: si se llamara a start_defense() con la
 	# lista vacia, esta caeria al camino normal y armaria la defensa desde
@@ -308,9 +332,11 @@ func _on_final_audit_wave_ready(wave: int, roster: Dictionary, scale: float) -> 
 
 ## Everything trained and at home, up to the board's cap. Quien esta de
 ## expedicion no esta en casa: si el Diezmo cae con la columna fuera, defiende
-## solo lo que se quedo.
+## solo lo que se quedo. Y quien esta en un tablero abierto tampoco: un Diezmo
+## resuelto a ciegas durante una escaramuza alistaba a las mismas unidades que
+## estaban peleandola, y sus bajas se cobraban dos veces.
 func get_garrison() -> Dictionary:
-	var away: Dictionary = get_units_on_expedition()
+	var away: Dictionary = get_units_away()
 	var garrison: Dictionary = {}
 	var committed := 0
 	for unit_id in GameConfig.get_unit_ids():
@@ -399,6 +425,7 @@ func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encount
 func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array) -> void:
 	_reserve_uids(units)
 	_tower_crew_uids.clear()
+	_audit_charged.clear()
 	for uid in crew_uids:
 		_tower_crew_uids[int(uid)] = true
 
@@ -406,6 +433,8 @@ func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: 
 	# minimo 2, y en cabeza se quedan mudas justo cuando el enemigo llega a
 	# contacto. Es la misma lista que ya se usa para no contarlas como bajas.
 	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids)
+	_board_generation += 1
+	_enemy_turn_running = false
 	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())
@@ -430,45 +459,20 @@ func _build_side(roster: Dictionary, side: int, scale: float) -> Array:
 			built.append(unit)
 	return built
 
-## Standalone fight with the party the player just committed. This is the loop
-## the expedition will wrap in US2: the same encounter, chained across a map with
-## drafts between nodes. Until then it is the playable slice.
-func start_skirmish(party: Dictionary) -> bool:
+## Pelea suelta con el party que el jugador acaba de comprometer. El enemigo es
+## el mismo que el del primer nodo de una expedicion (profundidad 0, riesgo bajo),
+## sacado de ExpeditionGenerator con su propia semilla: el roster provisional sin
+## semilla que vivia aqui se fue, y con el la segunda formula de "cuanto enemigo
+## toca". `seed_value` = 0 tira una semilla nueva; otra cosa reproduce la pelea.
+func start_skirmish(party: Dictionary, seed_value: int = 0) -> bool:
 	if party.is_empty() or is_in_encounter() or has_active_expedition():
 		return false
-	start_encounter(party, build_enemy_roster(party, 0), false, 0)
-	return true
-
-## Fields an opposing force that answers what the player brought, so committing
-## more never turns the fight into a walkover — the decision has to stay a
-## decision. Deeper nodes and later eras tilt it against the player.
-##
-## Provisional: ExpeditionGenerator.enemy_roster() replaces this in T022, where
-## the roster becomes seeded and reproducible.
-func build_enemy_roster(party: Dictionary, depth: int) -> Dictionary:
-	var committed := 0
-	for count in party.values():
-		committed += int(count)
-	committed = maxi(1, committed)
-
 	var era: int = ProgressionManager.current_era
-	var pressure: float = 1.0 \
-		+ GameConfig.combat_enemy_scale_per_depth * float(depth) \
-		+ GameConfig.combat_enemy_scale_per_era * float(maxi(0, era - 1))
-	var slots: int = clampi(roundi(float(committed) * pressure), 1, GameConfig.combat_deploy_cap)
-
-	# A line of infantry with guns behind it: enough shape that positioning and
-	# the artillery's minimum range both matter from the very first fight.
-	var roster: Dictionary = {}
-	var guns: int = slots / 3
-	var armour: int = 1 if era >= 3 and slots >= 4 else 0
-	var line: int = maxi(1, slots - guns - armour)
-	roster["infantry"] = line
-	if guns > 0:
-		roster["artillery"] = guns
-	if armour > 0:
-		roster["vehicle"] = armour
-	return roster
+	var rng: RandomNumberGenerator = ExpeditionGeneratorScript.make_rng(
+		seed_value if seed_value != 0 else _new_seed())
+	var roster: Dictionary = ExpeditionGeneratorScript.enemy_roster(rng, 0, era, 0)
+	start_encounter(party, roster, false, 0, false, {}, ExpeditionGeneratorScript.enemy_scale(0, era, 0))
+	return true
 
 func end_encounter() -> void:
 	var was_audit_wave: bool = _audit_wave_active
@@ -482,6 +486,7 @@ func end_encounter() -> void:
 	if _encounter != null:
 		_encounter.release_survivors()
 	_encounter = null
+	_board_generation += 1
 	_enemy_turn_running = false
 	# Las marcas de dotacion dejan de ser "las del tablero" y pasan a ser "las del
 	# tablero que acaba de cerrarse". El reparto de bajas ya se hizo (_apply_result
@@ -494,6 +499,37 @@ func end_encounter() -> void:
 	# la oleada siguiente llegaria con is_in_encounter() aun en true y se perderia.
 	if was_audit_wave:
 		ProgressionManager.report_audit_wave(wave_won)
+	elif _audit_wave_queued:
+		# Diferido: quien cierra este tablero puede seguir trabajando despues
+		# (_resolve_expedition publica su parte, BattleScreen recoloca vistas), y
+		# abrir la oleada en mitad de eso la esconderia nada mas abrirla.
+		call_deferred("_release_queued_audit_wave")
+
+## Deja bajar la oleada que esperaba en la puerta, si sigue habiendo asedio y el
+## tablero sigue libre. Si otro tablero se abrio entretanto, vuelve a esperar.
+func _release_queued_audit_wave() -> void:
+	if not _audit_wave_queued:
+		return
+	var audit = ProgressionManager.final_audit
+	if audit == null or not audit.is_active():
+		_audit_wave_queued = false
+		return
+	var wave: Dictionary = audit.current_wave_data()
+	if wave.is_empty():
+		_audit_wave_queued = false
+		return
+	_on_final_audit_wave_ready(int(wave["index"]), wave["roster"].duplicate(), float(wave["scale"]))
+
+## Por que no se puede llamar ahora a la Regencia, como clave de Tr; vacio si se
+## puede. El asedio se pelea en casa y con el tablero libre: con otro tablero
+## abierto la oleada no tendria donde bajar, y con la columna fuera la guarnicion
+## que se pasaria lista no seria la de la base.
+func final_audit_block_reason() -> String:
+	if is_board_open():
+		return "MSG_AUDIT_BOARD_BUSY"
+	if has_active_expedition():
+		return "MSG_AUDIT_EXPEDITION_OUT"
+	return ""
 
 # ── Player actions ───────────────────────────────────────────────────
 
@@ -553,6 +589,8 @@ func _emit_events(events: Array) -> void:
 			"unit_defended":
 				EventBus.unit_defended.emit(event["uid"])
 			"unit_died":
+				if _audit_wave_active:
+					_settle_audit_death(int(event["uid"]))
 				EventBus.unit_died.emit(event["uid"], event["side"])
 			"encounter_ended":
 				# The base learns the outcome before anyone is told the fight is
@@ -579,6 +617,7 @@ func _maybe_run_enemy_turn() -> void:
 ## whole enemy round resolves in one frame and the player never sees what hit them.
 func _run_enemy_turn() -> void:
 	_enemy_turn_running = true
+	var generation: int = _board_generation
 	var uid: int = _encounter.active_unit().uid if _encounter.active_unit() != null else -1
 	if uid == -1:
 		_enemy_turn_running = false
@@ -594,6 +633,11 @@ func _run_enemy_turn() -> void:
 		# process_always = false: con el juego en pausa el enemigo tambien espera.
 		# El valor por defecto (true) le dejaba seguir jugando detras del menu.
 		await get_tree().create_timer(delay, false).timeout
+		# El tablero por el que se empezo a pensar ya no esta: este bucle no es de
+		# nadie. Ni actua, ni suelta la bandera, ni relanza turno: el tablero nuevo
+		# tiene (o tendra) su propio bucle.
+		if generation != _board_generation:
+			return
 		if _encounter == null or not _encounter.is_active():
 			break
 		match step.get("action", "wait"):
@@ -606,11 +650,16 @@ func _run_enemy_turn() -> void:
 			_:
 				follow_up = _encounter.wait_unit(uid)
 		_emit_events(follow_up)
+		# Emitir puede cerrar este tablero y abrir otro (una oleada que acaba y
+		# encadena la siguiente): mismo criterio que tras la espera.
+		if generation != _board_generation:
+			return
 
 	# The unit may have moved without attacking; close its turn either way.
-	if _encounter != null and _encounter.is_active() and _encounter.active_unit() != null \
-			and _encounter.active_unit().uid == uid:
+	if _encounter != null and _encounter.is_active() and _encounter.active_unit() != null 			and _encounter.active_unit().uid == uid:
 		_emit_events(_encounter.end_turn())
+		if generation != _board_generation:
+			return
 
 	_enemy_turn_running = false
 	_maybe_run_enemy_turn()
@@ -629,6 +678,11 @@ func _apply_result(victory: bool, rounds: int) -> void:
 	_result_applied = true
 	if _audit_wave_active:
 		_audit_wave_won = victory
+		# Quien cayo sin que llegara su unit_died (no deberia pasar en partida,
+		# pero el ledger no puede depender de ello) se liquida ahora, por el mismo
+		# camino y una sola vez.
+		for unit in _encounter.casualties(Encounter.PLAYER):
+			_settle_audit_death(unit.uid)
 
 	# Un nodo de expedicion no cobra ni entierra a nadie todavia: lo acumula el
 	# modelo y se liquida todo junto al volver (FR-010, FR-011, FR-017). La
@@ -637,23 +691,60 @@ func _apply_result(victory: bool, rounds: int) -> void:
 		_apply_expedition_encounter(victory, rounds)
 		return
 
-	_apply_result_for(_encounter, victory, rounds, _tower_crew_uids)
+	_apply_result_for(_encounter, victory, rounds, _tower_crew_uids, _audit_charged)
+
+## Una unidad del jugador cae en una oleada del asedio, y su baja se cobra YA, no
+## al cerrar la oleada. La guarnicion del asedio son las mismas CombatUnit que
+## pelean en el tablero, y el guardado se lleva su HP tal cual: si ArmyManager
+## esperase al final de la oleada, una partida guardada a medias volveria con los
+## muertos muertos en el asedio y vivos en el cuartel —cobrando paga, sumando
+## Poder Militar, defendiendo Diezmos— porque al cargar la oleada se reintenta y
+## nadie liquida lo que ya paso. Cobrando en el momento, lo guardado siempre
+## cuadra: el cuartel y el asedio cuentan los mismos muertos.
+##
+## Una dotacion de torre no sale del ejercito: se anota en FinalAudit, que es
+## quien decide cuantas manda cada oleada. Idempotente por uid.
+func _settle_audit_death(uid: int) -> void:
+	if _encounter == null or _audit_charged.has(uid):
+		return
+	var unit: CombatUnit = _encounter.get_unit(uid)
+	if unit == null or unit.side != Encounter.PLAYER or unit.is_alive():
+		return
+	_audit_charged[uid] = true
+	if _tower_crew_uids.has(uid):
+		var audit = ProgressionManager.final_audit
+		if audit != null:
+			audit.record_crew_loss()
+	else:
+		ArmyManager.remove_units({unit.unit_id: 1})
 
 ## El mismo cierre para cualquier encuentro, este en el tablero o resuelto a
 ## ciegas por AutoResolver: `crew_uids` dice que unidades del jugador no
 ## pertenecen al ejercito. Deja el parte en get_last_result() y lo devuelve.
-func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_uids: Dictionary) -> Dictionary:
+##
+## `precharged` son uids cuya baja ya salio de ArmyManager en plena pelea (las
+## oleadas del asedio, ver _settle_audit_death): cuentan en el parte y en la moral,
+## pero no se vuelven a restar.
+func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_uids: Dictionary, precharged: Dictionary = {}) -> Dictionary:
 	# Las dotaciones de torre quedan fuera del recuento: no salieron del cuartel,
 	# así que ni se restan del ejército ni cuentan como supervivientes que vuelven.
 	var fallen: Array = encounter.casualties(Encounter.PLAYER)
 	var roster_fallen: Array = _roster_only(fallen, crew_uids)
-	var casualties: Dictionary = _count_by_unit(roster_fallen)
+	var to_charge: Array = []
+	var already: Array = []
+	for unit in roster_fallen:
+		if precharged.has(unit.uid):
+			already.append(unit)
+		else:
+			to_charge.append(unit)
 	var survivors: Dictionary = _count_by_unit(_roster_only(encounter.survivors(), crew_uids))
 
 	# ArmyManager is the source of truth for the roster: the party was never
 	# deducted when it marched out, so only the dead are subtracted now and
 	# Military Power lands exactly on the survivors.
-	var lost: Dictionary = ArmyManager.remove_units(casualties)
+	var lost: Dictionary = ArmyManager.remove_units(_count_by_unit(to_charge))
+	for unit in already:
+		lost[unit.unit_id] = int(lost.get(unit.unit_id, 0)) + 1
 
 	# Winning a defence pays nothing, and it should not: the reward is that the
 	# Tithe goes uncollected. Handing out loot on top would pay the player twice
@@ -722,6 +813,12 @@ func _resource_type(res_name: String) -> int:
 func has_active_expedition() -> bool:
 	return _expedition != null and _expedition.is_active()
 
+## El tablero abierto es un nodo de la expedicion en curso. Con columna fuera no
+## se abre ningun otro tablero que no sea de defensa (start_skirmish() y el de
+## pruebas se niegan), asi que "no es defensa" basta para saberlo.
+func _is_expedition_board() -> bool:
+	return _encounter != null and _expedition != null and not _encounter.is_defense
+
 ## La expedicion en curso, para que la UI la lea. Null si no hay. Nadie fuera de
 ## este servicio la muta (constitucion, principio IV).
 func get_expedition() -> Expedition:
@@ -737,6 +834,34 @@ func get_units_on_expedition() -> Dictionary:
 	for unit in _expedition.party:
 		counts[unit.unit_id] = int(counts.get(unit.unit_id, 0)) + 1
 	return counts
+
+## unit_id -> count de las unidades del EJERCITO que estan ahora mismo en el
+## tablero abierto y cuya suerte aun no se ha liquidado: vivas, y caidas cuya
+## baja todavia no salio de ArmyManager. No cuentan las dotaciones de torre (no
+## son del ejercito), ni un tablero cuyo resultado ya se aplico (los caidos ya se
+## restaron y los supervivientes han vuelto a casa), ni el tablero de la
+## expedicion (esas ya salen en get_units_on_expedition()).
+func get_units_on_board() -> Dictionary:
+	if _encounter == null or _result_applied or _is_expedition_board():
+		return {}
+	var counts: Dictionary = {}
+	for unit in _encounter.units:
+		if unit.side != Encounter.PLAYER or _tower_crew_uids.has(unit.uid):
+			continue
+		if not unit.is_alive() and _audit_charged.has(unit.uid):
+			continue
+		counts[unit.unit_id] = int(counts.get(unit.unit_id, 0)) + 1
+	return counts
+
+## Todo lo que no esta en casa: la columna de expedicion y quien pelea en el
+## tablero abierto. Es lo que get_garrison(), get_deployable_units() y la
+## desercion de ArmyManager restan antes de contar a nadie.
+func get_units_away() -> Dictionary:
+	var away: Dictionary = get_units_on_expedition()
+	var board: Dictionary = get_units_on_board()
+	for unit_id in board:
+		away[unit_id] = int(away.get(unit_id, 0)) + int(board[unit_id])
+	return away
 
 ## True entre ganar un nodo y elegir la carta. Mientras dure no se elige ruta.
 func has_pending_draft() -> bool:
@@ -849,12 +974,17 @@ func apply_draft(option_index: int) -> bool:
 	return true
 
 ## Volver a casa antes de tiempo, con el botin y los supervivientes (FR-016).
-## Si hay tablero abierto se cierra sin aplicar resultado: quien sigue en pie
-## se retira, y los caidos ya estan anotados en el party.
+## Si el tablero abierto es el de la expedicion se cierra sin aplicar resultado:
+## quien sigue en pie se retira, y los caidos ya estan anotados en el party.
+##
+## Solo el suyo. Un tablero de defensa (el Diezmo que cayo entre dos nodos) no es
+## de la columna: cerrarlo aqui con el resultado dado por aplicado se tragaba el
+## encounter_ended, y sin el StormManager se quedaba en TITHE para siempre. Esa
+## defensa sigue abierta y se resuelve como cualquier otra.
 func abandon_expedition() -> bool:
 	if not has_active_expedition():
 		return false
-	if _encounter != null:
+	if _is_expedition_board():
 		_result_applied = true
 		end_encounter()
 	_clear_draft()
@@ -946,7 +1076,9 @@ func _resolve_expedition(result: int) -> void:
 	# Un _encounter colgado deja is_board_open() en true para siempre, y a partir
 	# de ahi todo Diezmo se resuelve a ciegas y el asedio se da por perdido sin
 	# jugarse una sola oleada.
-	if _encounter != null:
+	# Pero solo el de la columna: una defensa abierta en paralelo tiene su propio
+	# parte y su propio Diezmo por liquidar.
+	if _is_expedition_board():
 		end_encounter()
 
 	var summary: Dictionary = _expedition.result_summary()
@@ -1074,12 +1206,13 @@ func _clear_runtime_state() -> void:
 	_clear_draft()
 	_expedition_followups = []
 	_enemy_turn_running = false
+	_board_generation += 1
 	_audit_wave_active = false
 	_audit_wave_won = false
-	_audit_crews.clear()
-	_audit_crew_losses = 0
 	_next_uid = 1
 	_result_applied = false
 	_last_result = {}
 	_tower_crew_uids.clear()
 	_last_board_crew_uids.clear()
+	_audit_charged.clear()
+	_audit_wave_queued = false

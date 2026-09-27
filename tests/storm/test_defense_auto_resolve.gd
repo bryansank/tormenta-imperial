@@ -170,7 +170,9 @@ func test_the_summary_carries_the_last_result_of_the_headless_fight() -> void:
 # ── Perder a ciegas cuesta lo mismo que perder jugando ───────────────
 
 func test_a_lost_headless_defense_pays_the_tithe() -> void:
-	_given_army({"infantry": 1})
+	# Una infanteria en el tablero abierto y otra en casa: solo la de casa
+	# defiende. La del tablero ya esta peleando otra cosa.
+	_given_army({"infantry": 2})
 	_given_the_board_busy()
 	var gold_before: int = ResourceManager.get_amount(ResourceManager.Type.GOLD)
 	_drop_the_tithe(GameConfig.storm_severity_max)

@@ -144,6 +144,9 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(_on_game_load_completed)
 	EventBus.expedition_resumed.connect(_on_expedition_resumed)
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	# Red de seguridad: si la carga ocurrio antes de que este panel escuchara,
+	# expedition_resumed y draft_offered se perdieron. Se le pregunta al servicio.
+	sync_with_state.call_deferred()
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -511,6 +514,19 @@ func _on_game_load_completed() -> void:
 	if has_expedition():
 		open_map()
 
+## Pone la pantalla al dia con CombatManager sin esperar a ninguna senal: mapa si
+## hay campana, y el draft si hay cartas sin elegir. Sin esto, un draft pendiente
+## cargado a espaldas de la UI dejaba el mapa sin respuesta (select_node rechaza
+## mientras haya draft) y la partida bloqueada. Idempotente: si la senal ya
+## llego, no hace nada.
+func sync_with_state() -> void:
+	if not has_expedition() or CombatManager.is_board_open():
+		return
+	if _view == View.NONE:
+		open_map()
+	if CombatManager.has_pending_draft() and not is_draft_open() and _pending_draft.is_empty():
+		_on_draft_offered(CombatManager.get_draft_options())
+
 func _on_expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary) -> void:
 	_pending_draft.clear()
 	_close_draft()
@@ -717,17 +733,23 @@ func _refresh_map() -> void:
 		var btn: Button = _map_buttons[i]
 		var is_boss: bool = bool(node.get("is_boss", false))
 		var cleared: bool = bool(node.get("cleared", false))
-		var reachable: bool = active and exits.has(i)
+		var reachable: bool = _run.can_select(i)
+		# El nodo en el que esta la columna y que aun no se ha peleado (una partida
+		# cargada a mitad de nodo): se pulsa para volver a su tablero. Hasta
+		# ganarlo, ninguna salida se enciende.
+		var fightable: bool = i == current and _run.needs_fight()
 
 		btn.text = Tr.t("LBL_BOSS") if is_boss else str(_roster_size(node))
-		btn.disabled = not reachable
+		btn.disabled = not (reachable or fightable)
 		btn.tooltip_text = _node_tooltip(node, i == current, cleared, reachable)
+		if fightable:
+			btn.tooltip_text += "\n" + Tr.t("LBL_NODE_FIGHT")
 		_style_node(btn, i == current, cleared, reachable, is_boss, int(node.get("risk", 0)), i == _armed_node)
 		if i < _map_risk_labels.size():
 			var risk_label: Label = _map_risk_labels[i]
 			risk_label.text = node_risk_text(i)
 			var risk_col: Color = _risk_color(int(node.get("risk", 0))).lightened(0.35)
-			UITheme.set_label_color(risk_label, risk_col if (reachable or i == _armed_node) else UITheme.TEXT_DIM)
+			UITheme.set_label_color(risk_label, risk_col if (reachable or fightable or i == _armed_node) else UITheme.TEXT_DIM)
 
 	_map_progress.text = Tr.t("LBL_EXPEDITION_PROGRESS") % [_run.nodes_cleared(), map.size()]
 	_map_bonuses.text = _draft_summary()
@@ -867,7 +889,12 @@ func _draft_summary() -> String:
 	return Tr.t("LBL_DRAFT_BONUSES") % "   ".join(parts)
 
 func _choose_node(index: int) -> void:
-	if _run == null or not _run.can_select(index):
+	if _run == null:
+		return
+	if index == _run.current_node and _run.needs_fight():
+		CombatManager.enter_current_node()
+		return
+	if not _run.can_select(index):
 		return
 	# Con el dedo, el primer toque solo arma el nodo: sin tooltip, entrar al
 	# primer toque es entrar a ciegas en un nodo de riesgo alto.
@@ -1271,7 +1298,9 @@ func _paint_order_face(chip: Label, unit: CombatUnit, is_active: bool) -> void:
 
 func _refresh_actions() -> void:
 	_set_actions_enabled(CombatManager.is_player_turn())
-	_abandon_board_btn.visible = has_expedition()
+	# Una defensa en pleno campaña no es de la columna: abandonar desde ella no
+	# retira a nadie de ese tablero, asi que el boton no se ofrece.
+	_abandon_board_btn.visible = has_expedition() and not CombatManager.is_defending()
 
 func _set_actions_enabled(enabled: bool) -> void:
 	_defend_btn.disabled = not enabled

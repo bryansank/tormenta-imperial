@@ -593,6 +593,11 @@ func get_all_placed_buildings() -> Array:
 					entry["health"] = hp
 			if ProductionManager.is_constructing(building):
 				entry["construction_remaining"] = ProductionManager.get_construction_remaining(building)
+				# Una mejora en obras no es una obra: sin esto volvia de la carga
+				# como construccion normal y el edificio nunca subia de nivel.
+				var upgrade_to: int = ProductionManager.get_upgrade_target(building)
+				if upgrade_to > 0:
+					entry["upgrade_to"] = upgrade_to
 			result.append(entry)
 	return result
 
@@ -684,7 +689,7 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	# Label above building — large, bold, readable (hidden by default)
 	var label := Label3D.new()
 	label.name = "NameLabel"
-	label.text = data.display_name
+	label.text = data.get_display_name()
 	label.font_size = 64
 	label.pixel_size = 0.01
 	label.position.y = data.mesh_height + 0.5

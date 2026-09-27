@@ -44,6 +44,16 @@ var morale_snapshot: float = 50.0
 ## How many times the Regency has come down. Losing does not end the game, so
 ## this is the only record that it ever happened.
 var summons: int = 1
+## True once this summons has actually been fought: begin() ran at least once.
+## Until then the garrison is only a preview of who is at home, and begin()
+## musters it again from scratch. After that the garrison is the siege's own —
+## wounds, dead and all — and begin() (after a reload, say) only reconciles it.
+var started: bool = false
+## Tower crews fallen in this siege. A tower does not tire, a dead crew is not
+## replaced: every wave fields the standing towers' crews minus this. It lives in
+## the model, and therefore in the save, because a crew that died before a
+## reload is just as dead after it.
+var crew_losses: int = 0
 
 ## uid counter, unique inside this siege and shared with the waves it fields, so
 ## no two units on a board can ever collide (data-model, CombatUnit.uid).
@@ -65,6 +75,8 @@ static func create(p_seed: int, garrison_counts: Dictionary, p_era: int = 1, p_m
 	audit.state = State.PENDING
 	audit.current_wave = 0
 	audit.summons = 1
+	audit.started = false
+	audit.crew_losses = 0
 	audit._build_waves()
 	audit._muster(garrison_counts)
 	return audit
@@ -270,12 +282,65 @@ func release_survivors() -> void:
 
 # ── Transitions ──────────────────────────────────────────────────────
 
-## Opens the siege. Call once, after the Regency has been summoned.
-func begin() -> Array:
+## Opens the siege. Call once, after the Regency has been summoned — or again
+## after a reload brought an interrupted siege back PENDING.
+##
+## `garrison_counts` is who is at home **now**. The first time a summons begins,
+## the garrison is mustered again from it: between the summons and the moment
+## the player lets them in, a Tithe can kill, upkeep can desert and the barracks
+## can train, and the siege is fought by whoever is actually there when the gate
+## opens, not by a list written at summon time. A siege that already started is
+## never re-mustered (that would heal the wounded and raise the dead); it is only
+## reconciled, so nobody who has left the army since keeps fighting in it.
+## `null` keeps the garrison as it is.
+func begin(garrison_counts: Variant = null) -> Array:
 	if not is_pending():
 		return []
+	var events: Array = []
+	if garrison_counts != null:
+		if not started:
+			garrison = []
+			_muster(garrison_counts as Dictionary)
+		else:
+			events.append_array(reconcile(garrison_counts as Dictionary))
+	started = true
 	state = State.ACTIVE
-	return [{"e": "final_audit_started", "waves": wave_count(), "summons": summons}]
+	events.append({"e": "final_audit_started", "waves": wave_count(), "summons": summons})
+	return events
+
+## A tower crew fell on the board of this siege. Nothing to announce.
+func record_crew_loss(count: int = 1) -> Array:
+	crew_losses += maxi(0, count)
+	return []
+
+## Squares the garrison with the army as it stands: for every unit type, no more
+## living soldiers in the siege than the army still has at home. Whoever deserted
+## or fell somewhere else since the garrison was mustered is dropped from it
+## (they are simply gone — they did not die here, so they are not casualties).
+## Nobody is ever added: reinforcements do not join a siege in progress.
+func reconcile(army_counts: Dictionary) -> Array:
+	var living: Dictionary = {}
+	for unit in garrison:
+		if unit.is_alive():
+			living[unit.unit_id] = int(living.get(unit.unit_id, 0)) + 1
+	var dropped: Dictionary = {}
+	for unit_id in living:
+		var excess: int = int(living[unit_id]) - maxi(0, int(army_counts.get(unit_id, 0)))
+		if excess > 0:
+			dropped[unit_id] = excess
+	if dropped.is_empty():
+		return []
+	var keep: Array = []
+	var to_drop: Dictionary = dropped.duplicate()
+	# The last mustered go first: the order is stable and observable.
+	for i in range(garrison.size() - 1, -1, -1):
+		var unit: CombatUnit = garrison[i]
+		if unit.is_alive() and int(to_drop.get(unit.unit_id, 0)) > 0:
+			to_drop[unit.unit_id] = int(to_drop[unit.unit_id]) - 1
+			continue
+		keep.push_front(unit)
+	garrison = keep
+	return [{"e": "final_audit_garrison_reconciled", "dropped": dropped}]
 
 ## The wave is broken. The survivors step off keeping every wound, the count
 ## moves on, and breaking the last one is the whole game.
@@ -329,6 +394,8 @@ func resummon(p_seed: int, garrison_counts: Dictionary, p_era: int = -1, p_moral
 	state = State.PENDING
 	current_wave = 0
 	garrison = []
+	started = false
+	crew_losses = 0
 	summons += 1
 	_build_waves()
 	_muster(garrison_counts)
@@ -375,6 +442,8 @@ func to_dict() -> Dictionary:
 		"state": state,
 		"current_wave": current_wave,
 		"summons": summons,
+		"started": started,
+		"crew_losses": crew_losses,
 		"morale_snapshot": morale_snapshot,
 		"garrison": units,
 	}
@@ -397,9 +466,11 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> FinalAudit:
 	# conserva la oleada en curso y la guarnicion herida, y devuelve el mando al
 	# jugador: vuelve a pulsar QUE BAJEN y la oleada baja.
 	audit.state = int(data.get("state", State.PENDING))
+	var was_fought: bool = audit.state != State.PENDING
 	if audit.state == State.ACTIVE:
 		audit.state = State.PENDING
 	audit.summons = maxi(1, int(data.get("summons", 1)))
+	audit.crew_losses = maxi(0, int(data.get("crew_losses", 0)))
 	audit.morale_snapshot = float(data.get("morale_snapshot", 50.0))
 	# The era has to be in place before the waves are rolled: it is half of what
 	# decides their shape.
@@ -419,4 +490,14 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> FinalAudit:
 		highest_uid = maxi(highest_uid, unit.uid)
 		audit.garrison.append(unit)
 	audit._next_uid = highest_uid + 1
+	# A save from before `started` existed has to guess. Any sign that the siege
+	# was fought — a state other than PENDING, a wave already behind it, a wound —
+	# means it started; a pristine garrison on wave 0 is a summons nobody opened.
+	if data.has("started"):
+		audit.started = bool(data["started"])
+	else:
+		audit.started = was_fought or audit.current_wave > 0
+		for unit in audit.garrison:
+			if unit.hp < unit.max_hp:
+				audit.started = true
 	return audit

@@ -1,19 +1,19 @@
 extends Node
 ## Tech tree with 3 branches: Industrial, Military, Logistics.
 ## Each tech costs resources and time to research. Techs provide permanent bonuses.
-## Requires HQ to exist. Higher tiers require previous tech in branch.
+## Higher tiers require the previous tech in the branch. There is NO HQ requirement:
+## the HQ is an era-3 building and gating the tree behind it would leave it unusable
+## for most of the game. Research is paid in resources, not points.
 
 # ── State ──
 var _researched: Dictionary = {}  # tech_id -> true
 var _researching: Dictionary = {}  # {"tech_id": String, "remaining": float, "duration": float} or empty
-var _research_points := 0  # accumulated from HQ production
 var _base_market_spread: float
 var _base_morale_recovery: int
 
 func _ready() -> void:
 	_base_market_spread = GameConfig.market_spread
 	_base_morale_recovery = GameConfig.morale_satisfied_recovery
-	EventBus.production_tick.connect(_on_production_tick)
 
 func _process(delta: float) -> void:
 	if _researching.is_empty():
@@ -169,16 +169,6 @@ func get_current_research() -> Dictionary:
 func get_researched_count() -> int:
 	return _researched.size()
 
-# ── HQ Research Points ──
-
-func _on_production_tick(node: Node3D) -> void:
-	var info := GridManager.get_building_info(node)
-	if info.is_empty():
-		return
-	var data: BuildingData = info["data"]
-	if data.id == "headquarters":
-		_research_points += 1
-
 # ── Cost Helper ──
 
 func _get_tech_cost(tech: Dictionary) -> Dictionary:
@@ -196,13 +186,13 @@ func get_save_data() -> Dictionary:
 	return {
 		"researched": _researched.duplicate(),
 		"researching": _researching.duplicate(),
-		"research_points": _research_points,
 	}
 
 func load_save_data(data: Dictionary) -> void:
 	_researched = data.get("researched", {})
 	_researching = data.get("researching", {})
-	_research_points = data.get("research_points", 0)
+	# Los guardados viejos traen "research_points" (puntos que nunca se gastaron):
+	# se ignoran.
 	# Re-apply all researched bonuses
 	for tech_id in _researched:
 		var tech := get_tech(tech_id)
@@ -212,7 +202,6 @@ func load_save_data(data: Dictionary) -> void:
 func reset() -> void:
 	_researched = {}
 	_researching = {}
-	_research_points = 0
 	# Reset tech bonuses applied to GameConfig
 	GameConfig.tech_production_bonus = 0.0
 	GameConfig.tech_consumption_reduction = 0.0
