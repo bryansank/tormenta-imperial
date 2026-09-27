@@ -35,6 +35,12 @@ static func spawn_resource(scene_tree: SceneTree, world_pos: Vector3, amount: in
 static func spawn_on(node: Node, text: String, color: Color, offset: float = 0.0) -> void:
 	if node == null or not is_instance_valid(node) or not node.is_inside_tree():
 		return
+	# Durante la carga (obras que la progresion offline termina dentro del _ready
+	# de la escena) la escena no admite hijos todavia y la etiqueta quedaria
+	# huerfana. Ese texto no lo veria nadie: lo resume el informe offline.
+	var scene := node.get_tree().current_scene
+	if scene == null or not scene.is_node_ready():
+		return
 	if node is Node3D:
 		spawn(node.get_tree(), (node as Node3D).global_position + Vector3(offset, 0, 0), text, color)
 	elif node is Node2D:
