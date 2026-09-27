@@ -309,7 +309,15 @@ and `ui_helper_visible` (HelperPanel "?" callouts, on by default).
 - Path: `user://save_game.json`
 - Saves: resources, buildings (level, name, construction state), deposits, camera, progression, market, population, events, unlock state, tech tree, army
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
-- Auto-saves on: building placed/moved/renamed/demolished, deposit depleted
+- Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
+  `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
+  steps and fight results; plus every `GameConfig.autosave_interval` real seconds, on window close, and on
+  pause/focus-out on mobile. `GameManager.request_save()` is the entry point for new triggers
+- Fights are never saved: a checkpoint is written when a board opens, and nothing is written while
+  `CombatManager.is_save_safe()` is false (fight in play, or a siege-wave report not yet closed). Quitting mid-fight
+  replays it from the start. A save made during the Tithe reloads with the Tithe re-demanded (defence or payment)
+- The game starts only once `Main` is ready (GameManager waits for the scene root), so load signals reach the UI.
+  An unreadable save is copied to `user://save_game.corrupt-<date>.json` before a new game replaces it
 - Offline progression: calculates production earned while game closed (max 8h)
 
 ---

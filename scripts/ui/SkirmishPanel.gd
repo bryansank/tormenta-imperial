@@ -58,6 +58,8 @@ func _ready() -> void:
 	EventBus.final_audit_started.connect(func(_w): _refresh())
 	EventBus.final_audit_lost.connect(func(_w): _refresh())
 	EventBus.storm_halted_forever.connect(_refresh)
+	# Por si la partida se cargo antes de que este panel escuchara.
+	_on_expedition_changed.call_deferred()
 	_update_button_visibility()
 
 func _setup_ui() -> void:

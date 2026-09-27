@@ -26,17 +26,36 @@ func _on_building_placed(data: Resource, cell: Vector2i) -> void:
 		_register_producer(node, building_data)
 
 ## Called by GameManager when loading saved buildings.
-func register_building(node: Node3D, data: BuildingData, construction_remaining := 0.0) -> void:
+##
+## `upgrade_to` > 0 dice que lo que estaba en obras era una mejora a ese nivel y
+## no la construccion inicial. Sin el, una mejora a medias volvia de la carga
+## como obra normal: al terminar no subia de nivel, y la del Cuartel General a
+## nivel 3 —la que convoca la Auditoria Final— se perdia sin dejar rastro. Un
+## save anterior a la clave llega con 0, que es lo que siempre significo.
+func register_building(node: Node, data: BuildingData, construction_remaining := 0.0, upgrade_to: int = 0) -> void:
 	if construction_remaining > 0.0:
-		var total_duration := GameConfig.get_build_time(data.build_time)
-		_constructing[node] = {
+		var is_upgrade: bool = upgrade_to > 1
+		var total_duration := GameConfig.get_upgrade_duration(upgrade_to) if is_upgrade 				else GameConfig.get_build_time(data.build_time)
+		var info := {
 			"remaining": minf(construction_remaining, total_duration),
 			"duration": total_duration,
 		}
+		if is_upgrade:
+			info["is_upgrade"] = true
+			info["new_level"] = upgrade_to
+		_constructing[node] = info
 		node.set_meta("under_construction", true)
 		_apply_construction_visual(node)
 	else:
 		_register_producer(node, data)
+
+## Olvida todo lo que estaba en obras y produciendo. Lo llama GameManager en los
+## tres sitios que empiezan partida: los nodos de la escena anterior mueren con
+## la recarga, pero este autoload sobrevive y los seguiria teniendo de clave.
+## Tira, no liquida: una partida nueva no termina las obras de la vieja.
+func reset() -> void:
+	_constructing.clear()
+	_producing.clear()
 
 func _register_producer(node: Node3D, data: BuildingData) -> void:
 	if data.is_producer():
@@ -63,6 +82,17 @@ func get_construction_remaining(node: Node3D) -> float:
 	if not _constructing.has(node):
 		return 0.0
 	return _constructing[node]["remaining"]
+
+## El nivel al que sube una mejora en curso, o 0 si lo que hay en obras es una
+## construccion (o no hay nada). Es lo que el guardado necesita para no confundir
+## una cosa con la otra.
+func get_upgrade_target(node: Node3D) -> int:
+	if not _constructing.has(node):
+		return 0
+	var info: Dictionary = _constructing[node]
+	if not bool(info.get("is_upgrade", false)):
+		return 0
+	return int(info.get("new_level", 0))
 
 func _start_construction(node: Node3D, data: BuildingData, duration: float = -1.0) -> void:
 	var dur := duration if duration > 0.0 else GameConfig.get_build_time(data.build_time)
@@ -96,13 +126,18 @@ func _apply_construction_visual(node: Node3D) -> void:
 		label.outline_size = 4
 		node.add_child(label)
 
-func _complete_construction(node: Node3D) -> void:
-	var constr_info: Dictionary = _constructing.get(node, {})
+## Sin tipo en el parametro a proposito: una clave de `_constructing` puede ser
+## un nodo ya liberado, y pasar un objeto liberado a un parametro tipado revienta
+## la llamada antes de la primera linea. Entonces el erase no llegaba a correr y
+## el mismo error se repetia cada fotograma. Primero se borra, despues se mira.
+func _complete_construction(stale_or_node) -> void:
+	var constr_info: Dictionary = _constructing.get(stale_or_node, {})
+	_constructing.erase(stale_or_node)
+	if not is_instance_valid(stale_or_node):
+		return
+	var node: Node3D = stale_or_node
 	var is_upgrade: bool = constr_info.get("is_upgrade", false)
 	var new_level: int = constr_info.get("new_level", 1)
-	_constructing.erase(node)
-	if not is_instance_valid(node):
-		return
 	node.remove_meta("under_construction")
 	# Restore mesh opacity
 	var mesh_inst := node.get_child(0)
@@ -145,9 +180,10 @@ func _process(delta: float) -> void:
 
 func _tick_construction(delta: float) -> void:
 	var completed: Array = []
+	var gone: Array = []
 	for node in _constructing:
 		if not is_instance_valid(node):
-			completed.append(node)
+			gone.append(node)
 			continue
 		_constructing[node]["remaining"] -= delta
 		var progress := get_construction_progress(node)
@@ -157,6 +193,8 @@ func _tick_construction(delta: float) -> void:
 			label.text = Tr.t(fmt_key) % [int(progress * 100)]
 		if _constructing[node]["remaining"] <= 0.0:
 			completed.append(node)
+	for node in gone:
+		_constructing.erase(node)
 	for node in completed:
 		_complete_construction(node)
 
@@ -255,7 +293,8 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 			var progress := get_construction_progress(node)
 			var label: Node = node.get_node_or_null("ConstructionLabel")
 			if label:
-				label.text = Tr.t("FMT_CONSTRUCTING") % int(progress * 100)
+				var fmt_key := "FMT_UPGRADING" if _constructing[node].get("is_upgrade", false) else "FMT_CONSTRUCTING"
+				label.text = Tr.t(fmt_key) % int(progress * 100)
 
 	for entry in to_complete:
 		var node: Node3D = entry["node"]
