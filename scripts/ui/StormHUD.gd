@@ -60,9 +60,11 @@ var _label: Label
 var _pulse := 0.0
 
 func _ready() -> void:
-	# Por encima de los globos del tutorial (14) y de los paneles modales (15) a
-	# proposito: saber que hay en el cielo importa igual —o mas— mientras estas
-	# gastando en el mercado. Es el unico HUD que gana a un modal.
+	# Por encima de los globos del tutorial (14) y de las ventanas modales, que
+	# UIManager apila desde la capa 12 (12, 13...), a proposito: saber que hay en
+	# el cielo importa igual —o mas— mientras estas gastando en el mercado. Es el
+	# unico HUD que gana a un modal. Con cuatro ventanas abiertas a la vez una
+	# llegaria a la 16; no pasa en la practica (las del centro se cierran entre si).
 	layer = 16
 	_setup_ui()
 	EventBus.storm_phase_changed.connect(func(_p, _s): _refresh())
@@ -89,14 +91,17 @@ func _process(delta: float) -> void:
 
 func _setup_ui() -> void:
 	_root = Control.new()
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	UILayoutManager.apply_layout("StormHUD", _root)
 	add_child(_root)
 
+	# Se coloca el panel, no el contenedor: asi el objetivo que se apila debajo
+	# ve la altura real del banner, y cuando el banner se oculta (calma) sube a
+	# ocupar su sitio en vez de dejar un hueco vacio arriba de la pantalla.
 	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.visible = false
+	UILayoutManager.apply_layout("StormHUD", _panel)
 	_root.add_child(_panel)
 
 	var hbox := HBoxContainer.new()

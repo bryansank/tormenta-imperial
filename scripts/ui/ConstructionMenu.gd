@@ -361,14 +361,20 @@ func _select_category(cat_id: String) -> void:
 # ── Grid (building cards) ──
 # ══════════════════════════════════════════════════════════════════════
 
+## Estilos de las tarjetas desbloqueadas: id -> {"style": StyleBoxFlat, "cat": Color}.
+## Hace falta para marcar la seleccionada sin recrear la rejilla.
+var _card_styles: Dictionary = {}
+
 func _refresh_grid() -> void:
 	for child in _grid_container.get_children():
 		child.queue_free()
+	_card_styles.clear()
 
 	var filtered := _get_filtered_buildings()
 	for data in filtered:
 		var card := _create_grid_card(data)
 		_grid_container.add_child(card)
+	_mark_selected_card()
 
 func _create_grid_card(data: BuildingData) -> PanelContainer:
 	var locked := _has_locked_resource_cost(data)
@@ -413,22 +419,41 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	name_label.custom_minimum_size.x = 110
 	vbox.add_child(name_label)
 
-	# Interaction
+	# Interaction (A14): el hover solo RESALTA; la seleccion cambia solo con
+	# clic y queda bloqueada hasta el siguiente. Antes pasar el raton por otra
+	# tarjeta cambiaba la seleccion y el detalle saltaba de edificio en edificio.
 	if not locked:
+		_card_styles[data.id] = {"style": style, "cat": cat_color}
 		card.gui_input.connect(func(event):
 			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 				_select_building(data)
 		)
 		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		card.mouse_entered.connect(func():
-			style.bg_color = UITheme.CARD_BG.lightened(0.15)
-			_select_building(data)
+			if not _is_selected(data):
+				style.bg_color = UITheme.CARD_BG.lightened(0.12)
 		)
 		card.mouse_exited.connect(func():
-			style.bg_color = UITheme.CARD_BG
+			if not _is_selected(data):
+				style.bg_color = UITheme.CARD_BG
 		)
 
 	return card
+
+func _is_selected(data: BuildingData) -> bool:
+	return _selected_data != null and _selected_data.id == data.id
+
+## Pinta la tarjeta elegida con marco de laton y fondo claro, y devuelve las
+## demas a su estado normal. Se llama al seleccionar y al reconstruir la rejilla.
+func _mark_selected_card() -> void:
+	for id in _card_styles:
+		var entry: Dictionary = _card_styles[id]
+		var style: StyleBoxFlat = entry["style"]
+		var selected: bool = _selected_data != null and _selected_data.id == id
+		style.bg_color = UITheme.CARD_BG.lightened(0.25) if selected else UITheme.CARD_BG
+		style.set_border_width_all(2 if selected else 0)
+		style.border_width_bottom = 3
+		style.border_color = UITheme.ACCENT if selected else entry["cat"]
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Detail Panel (right side) ──
@@ -449,6 +474,7 @@ func _select_building(data: BuildingData) -> void:
 		return
 	_selected_data = data
 	_preview_spin = 0.0
+	_mark_selected_card()
 
 	# Name + size
 	_detail_name.text = data.display_name

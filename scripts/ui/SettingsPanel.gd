@@ -106,6 +106,17 @@ func _setup_ui() -> void:
 		_fullscreen_check.set_pressed_no_signal(enabled)
 	)
 
+	# Controles tactiles en pantalla: tres estados porque "automatico" (segun
+	# haya pantalla tactil) es el valor bueno para casi todos, y un interruptor
+	# de dos posiciones no puede decirlo.
+	var touch_idx := GameConfig.TOUCH_CONTROLS_MODES.find(GameConfig.ui_touch_controls)
+	vbox.add_child(UITheme.make_option_row(
+		Tr.t("LBL_TOUCH_CONTROLS"),
+		[Tr.t("OPT_TOUCH_AUTO"), Tr.t("OPT_TOUCH_ALWAYS"), Tr.t("OPT_TOUCH_NEVER")],
+		touch_idx,
+		func(idx: int): GameConfig.set_touch_controls(GameConfig.TOUCH_CONTROLS_MODES[idx])
+	))
+
 	vbox.add_child(UITheme.make_separator())
 	vbox.add_child(UITheme.section_header(Tr.t("LBL_SETTINGS_GAME")))
 
