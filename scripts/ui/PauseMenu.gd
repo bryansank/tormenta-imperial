@@ -187,11 +187,19 @@ func _exit_tree() -> void:
 
 ## Guarda y lo dice aqui mismo: los avisos de la esquina van por debajo de este
 ## menu y, con el juego parado, no se desvanecerian.
+##
+## Y dice la verdad: este menu puede abrirse encima del tablero, y con una pelea
+## abierta GameManager no escribe, deja el guardado pendiente hasta que termine.
+## Entonces no se dice "guardada", se dice cuando se guardara.
 func save() -> void:
 	_save_now()
-	_status.text = Tr.t("MSG_GAME_SAVED")
+	var deferred: bool = GameManager.is_started() and GameManager.has_pending_save()
+	var key := "MSG_SAVE_AFTER_FIGHT" if deferred else "MSG_GAME_SAVED"
+	var color: Color = UITheme.WARNING if deferred else UITheme.POSITIVE
+	_status.text = Tr.t(key)
+	_status.add_theme_color_override("font_color", color)
 	_status.visible = true
-	EventBus.notification_posted.emit(Tr.t("MSG_GAME_SAVED"), "success", UITheme.POSITIVE)
+	EventBus.notification_posted.emit(Tr.t(key), "warning" if deferred else "success", color)
 
 ## Guarda si hay partida en marcha. Sin escena de juego (pruebas) no hay nada.
 func _save_now() -> void:
