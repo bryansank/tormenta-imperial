@@ -8,7 +8,7 @@ extends CanvasLayer
 ## dos iban en el mismo modal y el jugador se saltaba las diez paginas o leia
 ## instrucciones sin ver donde se aplicaban (docs/07 bug 12).
 ##
-##   Saltar historia   ● ● ○ ○ ○ ○   ◀ Atras   Siguiente ▶
+##   Saltar historia   ● ● ○   ◀ Atras   Siguiente ▶
 ##
 ## - Atras y Siguiente, y deslizar el dedo a izquierda o derecha. Flechas, Intro
 ##   y Esc en teclado.
@@ -27,15 +27,16 @@ signal page_changed(index: int)
 ## es lo unico que hay en pantalla.
 const LAYER := 32
 
-## Paginas por variante. Cada una son claves PRO_<id>_TITLE/_BODY/_NOTE y, si la
+## Paginas por variante, tres como mucho: el prologo se lee de un tiron y el
+## detalle queda para la partida. Cada una son claves PRO_<id>_TITLE/_BODY/_NOTE y, si la
 ## pagina lleva sello de tampon, PRO_<id>_STAMP.
 const VARIANTS := {
-	"full": ["1", "2", "3", "4", "5", "6"],
+	"full": ["1", "2", "3"],
 	# Constructor: no hay Tormenta ni Diezmo que explicar. La portada y un cierre
 	# propio: el expediente esta "en tramite" y no se despacha ceniza.
 	"short": ["1", "B"],
 }
-const STAMPED := ["1", "6", "B"]
+const STAMPED := ["1", "3", "B"]
 
 ## Caracteres por segundo de la maquina de escribir, y tope de lo que dura.
 const TYPE_CPS := 80.0

@@ -41,7 +41,7 @@ dibujado, sin imagen). El papel y la mesa son ruido generado (`UITheme.parchment
 
 | Modo | Prólogo |
 |---|---|
-| Campaña, Supervivencia | Completo, 6 folios |
+| Campaña, Supervivencia | Completo, 3 folios (quiénes somos, la Tormenta y el Diezmo, la reapertura) |
 | Constructor | Corto: portada y un cierre propio, **EN TRÁMITE** ("Aquí no llega la Tormenta") |
 | Sandbox | Ninguno (cuenta como visto). "Historia" a mano cuenta el completo |
 
