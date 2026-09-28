@@ -5,6 +5,9 @@ extends CanvasLayer
 
 const MAX_LOG_ENTRIES := 50
 const TOAST_DURATION := 4.0
+## Avisos visibles a la vez (el resto va solo al registro).
+const MAX_TOASTS := 3
+const MAX_TOASTS_NARROW := 1
 ## Los avisos van en su propia capa, por encima del tablero de batalla (18) y
 ## por debajo de la pantalla de victoria (20): la Tormenta tiene que poder avisar
 ## mientras se pelea (ceniza, Diezmo, la guarnicion que peleo sola). El resto del
@@ -65,6 +68,7 @@ func _setup_ui() -> void:
 	# sola columna de estado (recursos -> poblacion y moral).
 	status_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2, true))
 	root.add_child(status_panel)
+	HudRegistry.register("NotificationPanel.status", status_panel)
 
 	var status_vbox := VBoxContainer.new()
 	status_vbox.add_theme_constant_override("separation", 5)
@@ -113,6 +117,7 @@ func _setup_ui() -> void:
 	# Antes pedia 28 px, que un pulgar no acierta.
 	_log_btn.pressed.connect(_toggle_panel)
 	status_vbox.add_child(_log_btn)
+	HudRegistry.register("NotificationPanel.log_button", _log_btn)
 
 	# Objective hint (top-center)
 	var obj_panel := PanelContainer.new()
@@ -120,6 +125,7 @@ func _setup_ui() -> void:
 	obj_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT))
 	obj_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(obj_panel)
+	HudRegistry.register("NotificationPanel.objective", obj_panel)
 
 	_objective_label = UITheme.make_label("", "small", UITheme.ACCENT)
 	_objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -140,6 +146,7 @@ func _setup_ui() -> void:
 	_toast_container.add_theme_constant_override("separation", 4)
 	_toast_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toast_root.add_child(_toast_container)
+	HudRegistry.register("NotificationPanel.toasts", _toast_container)
 
 	# Log panel
 	_panel = PanelContainer.new()
@@ -147,6 +154,7 @@ func _setup_ui() -> void:
 	_panel.visible = false
 	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	root.add_child(_panel)
+	HudRegistry.register("NotificationPanel.log", _panel)
 
 	var panel_vbox := VBoxContainer.new()
 	panel_vbox.add_theme_constant_override("separation", 4)
@@ -226,6 +234,16 @@ func _show_toast(text: String, color: Color) -> void:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toast_bg.add_child(label)
 	_toast_container.add_child(toast_bg)
+	# Tope de avisos a la vez: en una tablet (lienzo de ~700 de alto) cinco
+	# avisos seguidos subian hasta tapar la poblacion y el boton del registro.
+	# Los que salen ya estan en el registro.
+	var alive: Array = _toast_container.get_children().filter(func(c): return not c.is_queued_for_deletion())
+	# En pantalla estrecha (movil en vertical) solo cabe uno entre la columna
+	# y CONSTRUIR.
+	var cap := MAX_TOASTS_NARROW if UILayoutManager.is_narrow() else MAX_TOASTS
+	while alive.size() > cap:
+		var oldest: Node = alive.pop_front()
+		oldest.queue_free()
 
 	var tween := create_tween()
 	tween.tween_interval(TOAST_DURATION)

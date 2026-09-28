@@ -21,11 +21,9 @@ const Rules := preload("res://scripts/combat/CombatRules.gd")
 const PLAYER := 0
 const ENEMY := 1
 
-## Roles de resalte, aparte de los colores de bando para que el tablero siga
-## siendo legible sin depender solo del tono.
-const COL_EMPTY := Color(0.11, 0.12, 0.10)
-const COL_MOVE := Color(0.20, 0.33, 0.45)
-const COL_TARGET := Color(0.48, 0.18, 0.14)
+## Roles de resalte (vacia, movimiento, objetivo): UITheme.BOARD_*, aparte de
+## los colores de bando para que el tablero siga siendo legible sin depender
+## solo del tono. Son tokens: la paleta de daltonismo los cambia.
 
 ## Margen y separacion del lienzo del mapa, en pixeles.
 const MAP_PAD := 16
@@ -197,6 +195,7 @@ func _build_board_view() -> void:
 	_turn_label = UITheme.make_label("", "section", UITheme.TEXT)
 	_turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_turn_label)
+	HudRegistry.register("BattleScreen.turn", _turn_label)
 
 	# Franja de iniciativa: la ronda entera, en el orden en que va a pasar (FR-006).
 	_order_box = HBoxContainer.new()
@@ -1100,7 +1099,7 @@ func _refresh_cells() -> void:
 func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vector2i,
 		unit: CombatUnit, active: CombatUnit, moves: Array, targets: Array,
 		boss: int = -1) -> void:
-	var background: Color = COL_EMPTY
+	var background: Color = UITheme.BOARD_EMPTY
 	var border: Color = UITheme.ACCENT_DIM
 	var border_width: int = 1
 	var text_color: Color = UITheme.TEXT_BRIGHT
@@ -1112,7 +1111,7 @@ func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vect
 		icon.visible = false
 		bar.visible = false
 		if moves.has(coords):
-			background = COL_MOVE
+			background = UITheme.BOARD_MOVE
 			border = UITheme.INFO
 	else:
 		is_boss = boss >= 0 and unit.uid == boss
@@ -1123,7 +1122,7 @@ func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vect
 		background = UITheme.POSITIVE.darkened(0.45) if unit.side == PLAYER else UITheme.DANGER.darkened(0.35)
 		border = UITheme.POSITIVE if unit.side == PLAYER else UITheme.DANGER
 		if targets.has(unit.uid):
-			background = COL_TARGET
+			background = UITheme.BOARD_TARGET
 			border = UITheme.WARNING
 			border_width = 3
 		if unit.defending:
