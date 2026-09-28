@@ -23,6 +23,7 @@ var _repair_container: VBoxContainer
 var _repair_btn: Button
 var _repair_label: Label
 var _actions_box: HBoxContainer
+var _move_container: VBoxContainer
 var _move_btn: Button
 var _demolish_btn: Button
 var _close_btn: Button
@@ -180,6 +181,24 @@ func _build_ui() -> void:
 	_upgrade_container.add_child(_upgrade_btn)
 	_vbox.add_child(_upgrade_container)
 
+	# Mover, a la altura de Reparar y Mejorar (A13). El boton existia pero iba
+	# en una fila pequena al fondo, junto a Demoler, y el dueno no lo encontro.
+	# Ahora es una seccion propia: ancha, con icono y una linea que dice que hace.
+	_move_container = VBoxContainer.new()
+	_move_container.add_theme_constant_override("separation", 4)
+	var move_hint := UITheme.make_label(Tr.t("LBL_MOVE_HINT"), "small", UITheme.TEXT_DIM)
+	move_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_move_container.add_child(move_hint)
+	_move_btn = Button.new()
+	_move_btn.text = Tr.t("BTN_MOVE")
+	_move_btn.icon = UITheme.icon_texture("move")
+	_move_btn.add_theme_constant_override("h_separation", 10)
+	_move_btn.custom_minimum_size.y = 52
+	UITheme.style_button(_move_btn, UITheme.CAT_SUPPORT.darkened(0.35), UITheme.FONT_SECTION)
+	_move_btn.pressed.connect(_on_move)
+	_move_container.add_child(_move_btn)
+	_vbox.add_child(_move_container)
+
 	_vbox.add_child(UITheme.make_separator())
 
 	# Processes header
@@ -202,19 +221,15 @@ func _build_ui() -> void:
 
 	_vbox.add_child(UITheme.make_separator())
 
-	# Action buttons
+	# Demoler queda solo al fondo: es la accion destructiva y no debe compartir
+	# fila con nada que se pulse a menudo.
 	_actions_box = HBoxContainer.new()
 	_actions_box.add_theme_constant_override("separation", 8)
 	_actions_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	_move_btn = Button.new()
-	_move_btn.text = Tr.t("BTN_MOVE")
-	UITheme.style_button(_move_btn, UITheme.INFO)
-	_move_btn.pressed.connect(_on_move)
 	_demolish_btn = Button.new()
 	_demolish_btn.text = Tr.t("BTN_DEMOLISH")
 	UITheme.style_button(_demolish_btn, UITheme.DANGER)
 	_demolish_btn.pressed.connect(_on_demolish)
-	_actions_box.add_child(_move_btn)
 	_actions_box.add_child(_demolish_btn)
 	_vbox.add_child(_actions_box)
 
@@ -354,7 +369,7 @@ func _show_building_panel() -> void:
 		else:
 			_upgrade_container.visible = false
 
-	_move_btn.visible = not _selected_data.is_core and not is_building
+	_move_container.visible = not _selected_data.is_core and not is_building
 	_demolish_btn.visible = not _selected_data.is_core
 
 	_process_panel.populate_building(_selected_node, _selected_data, is_building)
@@ -377,7 +392,7 @@ func _show_deposit_panel() -> void:
 	_construction_container.visible = false
 	_name_container.visible = false
 	_upgrade_container.visible = false
-	_move_btn.visible = false
+	_move_container.visible = false
 	_demolish_btn.visible = false
 	_update_deposit_uses()
 	_process_panel.populate_deposit(_selected_node, _selected_deposit_id)

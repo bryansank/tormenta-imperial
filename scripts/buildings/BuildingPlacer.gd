@@ -77,7 +77,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Ignore clicks on UI
 			if get_viewport().gui_get_hovered_control() != null:
 				return
-			_cancel()
+			# Por la senal, no _cancel() directo: asi el boton tactil de
+			# cancelar y los de colocacion se enteran y se ocultan tambien.
+			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		return
 
@@ -87,7 +89,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE and _state != State.IDLE:
-			_cancel()
+			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R and _state != State.IDLE:
 			_rotate_building()
@@ -322,6 +324,9 @@ func _try_place(cell: Vector2i) -> void:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "occupied":
+			# Antes, silencio: el clic no hacia nada y no se sabia por que.
+			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return
 	# Check building limit
 	if not _check_building_limit(_current_data.id):
@@ -400,6 +405,8 @@ func _try_move(cell: Vector2i) -> void:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "occupied":
+			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return
 	_consume_deposit_if_required(verdict, map_gen)
 	# Remember old cell for road updates
