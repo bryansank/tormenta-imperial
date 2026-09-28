@@ -62,3 +62,7 @@ docs/media/dev/
 
 # Informes de gdUnit4 (se regeneran en cada ejecucion de los tests)
 reports/
+
+# Carpeta de usuario temporal de tools/run_tests.sh (y overrides locales)
+/override.cfg
+/override.cfg.run_tests.bak
