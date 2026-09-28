@@ -20,7 +20,10 @@ import random
 from mathutils import Vector, noise
 
 # === CONFIG ===
-EXPORT_DIR = r"C:\Users\Key\Documents\1_PERSONAL_KEY\tormenta-imperial\assets\models\buildings"
+# Carpeta de salida: TI_EXPORT_DIR manda; si no, assets/models/buildings relativo
+# a este script (tools/ -> ../assets/...). Sin rutas personales en el repo.
+_HERE = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
+EXPORT_DIR = os.environ.get("TI_EXPORT_DIR", os.path.normpath(os.path.join(_HERE, "..", "assets", "models", "buildings")))
 CELL = 2.0
 random.seed(42)
 

@@ -202,10 +202,16 @@ func test_moving_frees_the_old_cells_and_takes_the_new_ones() -> void:
 	assert_vector(node.position).is_equal(View2D.footprint_center_px(Vector2i(9, 4), Vector2i(1, 1)))
 
 func test_demolishing_frees_the_cells_and_refunds_part_of_the_cost() -> void:
+	# Estado conocido: fallaba a veces en la suite completa porque otra suite dejaba
+	# el modo en Sandbox (rellena recursos) o el almacen lleno (recorta el reembolso).
+	var mode_before := GameMode.current
+	GameMode.current = GameMode.Mode.CAMPAIGN
+	ResourceManager.set_amounts({"gold": 100, "wood": 100, "steel": 0, "oil": 0})
 	var data := _data("house")
 	var node: Node2D = _placer.place_building_at(data, Vector2i(7, 3))
 	var gold_before := ResourceManager.get_amount(ResourceManager.Type.GOLD)
 	EventBus.request_demolish_building.emit(node)
+	GameMode.current = mode_before
 	assert_object(GridManager.get_building_at(Vector2i(7, 3))).is_null()
 	assert_int(ResourceManager.get_amount(ResourceManager.Type.GOLD)).is_equal(gold_before + int(data.cost_gold * GameConfig.demolish_refund_ratio))
 

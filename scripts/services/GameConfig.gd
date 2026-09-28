@@ -352,8 +352,8 @@ var ui_fullscreen := false
 ## solo en esa sesion (ViewMode.gd).
 var ui_view_mode := "3d"
 ## Controles tactiles en pantalla (D-pad, zoom, rotar, cancelar colocacion).
-## "auto" los ensena solo en movil (o en PC tras un toque real de pantalla, ver
-## touch_controls_enabled); "always" y "never" fuerzan. En escritorio sobran:
+## "auto" sigue al perfil de dispositivo (DeviceProfile): tablet y movil los
+## ensenan, PC nunca, aunque la pantalla sea tactil; "always" y "never" fuerzan. En escritorio sobran:
 ## hay WASD y rueda, y los botones ocupaban las cuatro esquinas de la pantalla.
 ## El mismo estado decide si los botones pequenos del HUD crecen a tamano dedo
 ## (UITheme.touch_px).

@@ -6,7 +6,7 @@ x86_64) con un APK solo para QA. Cada paso deja una captura. Se leen a ojo o con
 scripts de `herramientas/`.
 
 Los resultados de la primera pasada (2026-09-28, código de `build/exportar-android`)
-están en `tormenta-imperial-contexto\08_QA_TABLET_MAESTRO.md`.
+se guardan fuera del repo, en la carpeta de resultados que elijas (`OUT`).
 
 ## Por qué coordenadas y no textos
 
@@ -78,7 +78,7 @@ Hace falta Maestro CLI (`~/.maestro/bin/maestro`). Desde `qa/maestro/`:
 
 ```bash
 RUN=/tmp/ti-maestro          # salida cruda de la CLI (logs, jerarquías, capturas)
-OUT=/ruta/a/capturas         # carpeta plana, p. ej. tormenta-imperial-contexto/qa-tablet
+OUT=/ruta/a/capturas         # carpeta plana fuera del repo
 maestro --device emulator-5554 test --test-output-dir "$RUN" 01_lore_atras.yaml
 maestro --device emulator-5554 test --test-output-dir "$RUN" .       # todos los .yaml
 python herramientas/recoger.py "$RUN" "$OUT"

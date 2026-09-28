@@ -70,7 +70,7 @@ const SFX_MANIFEST := {
 ## Ganancia por clip (dB), por NOMBRE DE FICHERO: las claves de combate reusan
 ## clips y se llevan su misma ganancia. Los efectos vienen masterizados casi a
 ## 0 dBFS (era_up pasa de 0 y recorta) y sonaban ~15 dB por encima de la musica
-## (docs/tormenta-imperial-contexto 07, bug 4). Se atenuan aqui en vez de
+## (diagnostico de jugabilidad, bug 4: el volumen inicial era demasiado alto). Se atenuan aqui en vez de
 ## reescribir los ficheros: ui_click suena en cada boton y va el mas bajo.
 const SFX_GAIN_DB := {
 	"era_up": -11.0,
