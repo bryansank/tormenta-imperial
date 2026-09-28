@@ -36,6 +36,18 @@ func _prune() -> void:
 		if not is_instance_valid(key):
 			_panel_ids.erase(key)
 
+const DragScroll := preload("res://scripts/ui/DragScroll.gd")
+
+func _ready() -> void:
+	# Toda lista desplazable se arrastra con el dedo o el raton empiece donde
+	# empiece el gesto (DragScroll). Se engancha sola a cada ScrollContainer que
+	# entra al arbol, de cualquier panel, sin que cada panel tenga que acordarse.
+	get_tree().node_added.connect(_on_node_added)
+
+func _on_node_added(node: Node) -> void:
+	if node is ScrollContainer:
+		DragScroll.attach.call_deferred(node)
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
 		_prune()
