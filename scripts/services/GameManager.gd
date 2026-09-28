@@ -12,9 +12,15 @@ signal offline_report_closed
 
 var _placer: Node = null
 var _map_gen: Node = null
-var _camera: Camera3D = null
+## La camara de la vista activa: cualquier nodo con get_state()/set_state()
+## (MonumentalCamera en 3D, Camera2DController en 2D). La 2D se registra; la 3D
+## se sigue buscando en el viewport como siempre.
+var _camera: Node = null
 var _started := false
 var _warehouse_count := 0
+## La escena que arranca se va a ir a la otra vista (ViewRouter): no se empieza
+## partida con su placer, que muere en este mismo frame.
+var _hold_start := false
 ## True si esta sesion arranco cargando una partida guardada, false si arranco
 ## una nueva porque no habia archivo. El menu principal lo lee para ofrecer
 ## "Continuar" solo cuando habia algo que continuar: una partida nueva se guarda
@@ -141,10 +147,48 @@ func register_map_generator(map_gen: Node) -> void:
 	_map_gen = map_gen
 	_try_start()
 
+## La vista 2D registra su camara (no hay Camera3D que encontrar).
+func register_camera(camera: Node) -> void:
+	_camera = camera
+
+## ViewRouter: esta escena se abandona por la otra vista antes de empezar.
+func hold_start() -> void:
+	_hold_start = true
+
+## ViewRouter: esta escena es la buena. Suelta lo que registro la escena que se
+## abandono (nodos que ya no existen) para que la nueva se registre limpia.
+func release_start() -> void:
+	_hold_start = false
+	if not _started:
+		_placer = null
+		_map_gen = null
+		_camera = null
+
+## Cambia de vista (3D <-> 2D) sin perder nada: guarda, suelta los servicios
+## como una carga desde la nube y abre la otra escena, que vuelve a cargar el
+## mismo save_game.json (el formato es el mismo en las dos vistas).
+##
+## Con un tablero abierto (o una pelea sin saldar) no se cambia: el tablero no
+## viaja en el guardado, igual que al cambiar de idioma. La preferencia ya quedo
+## guardada y se aplica en el proximo arranque.
+func switch_to_scene(scene_path: String) -> void:
+	if _started and (CombatManager.is_board_open() or not CombatManager.is_save_safe()):
+		EventBus.notification_posted.emit(Tr.t("NOTIF_VIEW_AFTER_BATTLE"), "info", Color(0.5, 0.7, 1.0))
+		return
+	if _started:
+		save_game()
+	var data := {}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file:
+		var json := JSON.new()
+		if json.parse(file.get_as_text()) == OK and json.data is Dictionary:
+			data = json.data
+	clear_save_and_reload_from(data, scene_path)
+
 func _try_start() -> void:
 	if _placer == null or _map_gen == null:
 		return
-	if _started:
+	if _started or _hold_start:
 		return
 	_started = true
 	# El placer y el mapa se registran desde su propio _ready, y en Main.tscn hay
@@ -175,7 +219,9 @@ func _begin() -> void:
 	if not is_instance_valid(_placer) or not is_instance_valid(_map_gen):
 		_started = false
 		return
-	_camera = get_viewport().get_camera_3d()
+	# La vista 2D ya registro su camara (register_camera); la 3D se busca.
+	if _camera == null or not is_instance_valid(_camera):
+		_camera = get_viewport().get_camera_3d()
 	loaded_from_save = FileAccess.file_exists(SAVE_PATH)
 	if loaded_from_save:
 		_load_game()
@@ -207,7 +253,7 @@ func _new_game() -> void:
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
 		var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
-		var node: Node3D = _placer.place_building_at(nucleo_data, center)
+		var node: Node = _placer.place_building_at(nucleo_data, center)
 		if node:
 			ProductionManager.register_building(node, nucleo_data, 0.0)
 	# Generate random deposits
@@ -238,14 +284,14 @@ func _load_game() -> void:
 			var building_data := _load_building_data(entry["id"])
 			if building_data:
 				var rot_steps: int = entry.get("rotation", 0)
-				var node: Node3D = _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]), rot_steps)
+				var node: Node = _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]), rot_steps)
 				if not node:
 					continue
 				# Restore custom name
 				if entry.has("custom_name") and entry["custom_name"] != "":
 					node.set_meta("custom_name", entry["custom_name"])
 					var label: Node = node.get_node_or_null("NameLabel")
-					if label and label is Label3D:
+					if label and (label is Label3D or label is Label):
 						label.text = entry["custom_name"]
 				# Restore level
 				var level: int = entry.get("level", 1)
@@ -503,10 +549,13 @@ func clear_save() -> void:
 
 ## Replaces local save with provided data and reloads the scene.
 ## Used by CloudSaveManager to apply cloud-downloaded saves.
-func clear_save_and_reload_from(save_data: Dictionary) -> void:
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(save_data, "\t"))
+## `scene_path` vacio recarga la escena actual; con ruta abre esa (cambio de vista).
+## Un `save_data` vacio no escribe nada: la escena nueva empieza partida.
+func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") -> void:
+	if not save_data.is_empty():
+		var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+		if file:
+			file.store_string(JSON.stringify(save_data, "\t"))
 	GridManager.clear_all()
 	ResourceManager.reset()
 	ProcessManager.reset()
@@ -529,7 +578,10 @@ func clear_save_and_reload_from(save_data: Dictionary) -> void:
 	# Se puede llegar aqui desde el menu de pausa o el principal, con el arbol
 	# pausado. La escena recargada heredaria la pausa y arrancaria congelada.
 	get_tree().paused = false
-	get_tree().reload_current_scene()
+	if scene_path != "":
+		get_tree().change_scene_to_file(scene_path)
+	else:
+		get_tree().reload_current_scene()
 
 func _on_building_changed(_data: Resource, _cell: Vector2i) -> void:
 	save_game()
@@ -537,10 +589,10 @@ func _on_building_changed(_data: Resource, _cell: Vector2i) -> void:
 func _on_building_moved(_from: Vector2i, _to: Vector2i) -> void:
 	save_game()
 
-func _on_building_renamed(_node: Node3D, _name: String) -> void:
+func _on_building_renamed(_node: Node, _name: String) -> void:
 	save_game()
 
-func _on_building_demolished(_node: Node3D, _cell: Vector2i) -> void:
+func _on_building_demolished(_node: Node, _cell: Vector2i) -> void:
 	save_game()
 
 func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:

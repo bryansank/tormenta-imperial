@@ -210,13 +210,13 @@ func _tick_growth() -> void:
 
 # ── Building Events ──
 
-func _on_building_completed(node: Node3D) -> void:
+func _on_building_completed(node: Node) -> void:
 	_recalculate_all()
 
-func _on_building_demolished(_node: Node3D, _cell: Vector2i) -> void:
+func _on_building_demolished(_node: Node, _cell: Vector2i) -> void:
 	_recalculate_all()
 
-func _on_upgrade_completed(_node: Node3D, _new_level: int) -> void:
+func _on_upgrade_completed(_node: Node, _new_level: int) -> void:
 	_recalculate_all()
 
 func _recalculate_all() -> void:
@@ -230,9 +230,9 @@ func _recalculate_all() -> void:
 	var buildings_needing_workers: Array = []
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info["data"]
-		var node: Node3D = info.get("node", null)
+		var node: Node = info.get("node", null)
 		# Skip buildings under construction
-		if node and node is Node3D and node.has_meta("under_construction"):
+		if node and node is Node and node.has_meta("under_construction"):
 			if node.has_meta("staffed"):
 				node.remove_meta("staffed")
 			continue
@@ -248,7 +248,7 @@ func _recalculate_all() -> void:
 	# Second pass: assign workers with priority (first built = first served)
 	var remaining_workers := _population
 	for entry in buildings_needing_workers:
-		var node: Node3D = entry["node"]
+		var node: Node = entry["node"]
 		var data: BuildingData = entry["data"]
 		if remaining_workers >= data.workers_required:
 			remaining_workers -= data.workers_required
@@ -267,7 +267,7 @@ func _recalculate_all() -> void:
 		EventBus.workers_changed.emit(_used_workers, _population)
 
 ## Check if a specific building node is staffed (has enough workers assigned).
-func is_building_staffed(node: Node3D) -> bool:
+func is_building_staffed(node: Node) -> bool:
 	return node.get_meta("staffed", false)
 
 ## Update the visual indicator on a building for worker status.
@@ -275,7 +275,7 @@ func is_building_staffed(node: Node3D) -> bool:
 ## edificio vive en su BuildingStatusBadge (A11), que lee la meta `staffed`
 ## que acabamos de escribir y la combina con construccion, ruina y procesos
 ## para decidir entre Zzz y el obrero. Aqui solo se le avisa de que mire.
-func _update_worker_visual(node: Node3D, _staffed: bool) -> void:
+func _update_worker_visual(node: Node, _staffed: bool) -> void:
 	var badge: Node = node.get_node_or_null("StatusBadge")
 	if badge and badge.has_method("refresh"):
 		badge.refresh()

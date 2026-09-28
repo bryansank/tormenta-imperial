@@ -3,9 +3,9 @@ extends Node
 ## Buildings with build_time > 0 go through construction before producing.
 ## Spawns floating text when resources are awarded.
 
-# Construction tracking: Node3D -> {remaining: float, duration: float}
+# Construction tracking: Node -> {remaining: float, duration: float}
 var _constructing: Dictionary = {}
-# Production tracking: Node3D -> {timer: float, data: BuildingData}
+# Production tracking: Node -> {timer: float, data: BuildingData}
 var _producing: Dictionary = {}
 
 
@@ -57,20 +57,20 @@ func reset() -> void:
 	_constructing.clear()
 	_producing.clear()
 
-func _register_producer(node: Node3D, data: BuildingData) -> void:
+func _register_producer(node: Node, data: BuildingData) -> void:
 	if data.is_producer():
 		_producing[node] = {"timer": 0.0, "data": data}
 
-func unregister(node: Node3D) -> void:
+func unregister(node: Node) -> void:
 	_constructing.erase(node)
 	_producing.erase(node)
 
 # ── Construction ──
 
-func is_constructing(node: Node3D) -> bool:
+func is_constructing(node: Node) -> bool:
 	return _constructing.has(node)
 
-func get_construction_progress(node: Node3D) -> float:
+func get_construction_progress(node: Node) -> float:
 	if not _constructing.has(node):
 		return 1.0
 	var info: Dictionary = _constructing[node]
@@ -78,7 +78,7 @@ func get_construction_progress(node: Node3D) -> float:
 		return 1.0
 	return clampf(1.0 - (info["remaining"] / info["duration"]), 0.0, 1.0)
 
-func get_construction_remaining(node: Node3D) -> float:
+func get_construction_remaining(node: Node) -> float:
 	if not _constructing.has(node):
 		return 0.0
 	return _constructing[node]["remaining"]
@@ -86,7 +86,7 @@ func get_construction_remaining(node: Node3D) -> float:
 ## El nivel al que sube una mejora en curso, o 0 si lo que hay en obras es una
 ## construccion (o no hay nada). Es lo que el guardado necesita para no confundir
 ## una cosa con la otra.
-func get_upgrade_target(node: Node3D) -> int:
+func get_upgrade_target(node: Node) -> int:
 	if not _constructing.has(node):
 		return 0
 	var info: Dictionary = _constructing[node]
@@ -94,7 +94,7 @@ func get_upgrade_target(node: Node3D) -> int:
 		return 0
 	return int(info.get("new_level", 0))
 
-func _start_construction(node: Node3D, data: BuildingData, duration: float = -1.0) -> void:
+func _start_construction(node: Node, data: BuildingData, duration: float = -1.0) -> void:
 	var dur := duration if duration > 0.0 else GameConfig.get_build_time(data.build_time)
 	_constructing[node] = {
 		"remaining": dur,
@@ -104,7 +104,12 @@ func _start_construction(node: Node3D, data: BuildingData, duration: float = -1.
 	_apply_construction_visual(node)
 	EventBus.construction_started.emit(node)
 
-func _apply_construction_visual(node: Node3D) -> void:
+func _apply_construction_visual(node: Node) -> void:
+	# Un edificio que se pinta solo (la vista 2D) pone su propio "ConstructionLabel";
+	# el texto de progreso y el borrado al terminar siguen siendo cosa de aqui.
+	if node.has_method("apply_construction_visual"):
+		node.apply_construction_visual()
+		return
 	var mesh_inst := node.get_child(0)
 	if mesh_inst is MeshInstance3D:
 		var mat: StandardMaterial3D = mesh_inst.get_surface_override_material(0)
@@ -135,7 +140,7 @@ func _complete_construction(stale_or_node) -> void:
 	_constructing.erase(stale_or_node)
 	if not is_instance_valid(stale_or_node):
 		return
-	var node: Node3D = stale_or_node
+	var node: Node = stale_or_node
 	var is_upgrade: bool = constr_info.get("is_upgrade", false)
 	var new_level: int = constr_info.get("new_level", 1)
 	node.remove_meta("under_construction")
@@ -156,13 +161,13 @@ func _complete_construction(stale_or_node) -> void:
 		if mesh_inst is MeshInstance3D:
 			var s: float = 1.0 + (new_level - 1) * 0.1
 			mesh_inst.scale = Vector3(s, s, s)
-		FloatingText.spawn(get_tree(), node.global_position, Tr.t("LBL_UPGRADE_COMPLETE"), Color(0.3, 0.8, 1.0))
+		FloatingText.spawn_on(node, Tr.t("LBL_UPGRADE_COMPLETE"), Color(0.3, 0.8, 1.0))
 		EventBus.building_upgrade_completed.emit(node, new_level)
 		var binfo := GridManager.get_building_info(node)
 		if not binfo.is_empty():
 			EventBus.notification_posted.emit(Tr.t("NOTIF_UPGRADE_DONE") % [(binfo["data"] as BuildingData).get_display_name(), new_level], "info", Color(0.3, 0.8, 1.0))
 	else:
-		FloatingText.spawn(get_tree(), node.global_position, Tr.t("FMT_CONSTRUCTION_COMPLETE"), Color(0.3, 1.0, 0.3))
+		FloatingText.spawn_on(node, Tr.t("FMT_CONSTRUCTION_COMPLETE"), Color(0.3, 1.0, 0.3))
 		EventBus.construction_completed.emit(node)
 		var binfo := GridManager.get_building_info(node)
 		if not binfo.is_empty():
@@ -215,16 +220,16 @@ func _tick_production(delta: float) -> void:
 	for node in to_remove:
 		_producing.erase(node)
 
-func _award_production(node: Node3D, data: BuildingData) -> void:
+func _award_production(node: Node, data: BuildingData) -> void:
 	var produced := get_cycle_yield(node, data)
 	if produced.is_empty():
 		return
-	var pos := node.global_position
 	var offset := 0.0
 	for res_name in produced:
 		var amount: int = produced[res_name]
 		ResourceManager.add(_res_to_type(res_name), amount)
-		FloatingText.spawn_resource(get_tree(), pos + Vector3(offset, 0, 0), amount, res_name)
+		# spawn_resource_on: vale para un edificio 3D y para uno 2D.
+		FloatingText.spawn_resource_on(node, amount, res_name, offset)
 		offset += 0.3
 	EventBus.production_tick.emit(node)
 
@@ -263,7 +268,7 @@ func get_cycle_yield(node: Node, data: BuildingData, include_events := true) -> 
 	return produced
 
 ## Start upgrade on a building (reuses construction system)
-func start_upgrade(node: Node3D, data: BuildingData, new_level: int) -> void:
+func start_upgrade(node: Node, data: BuildingData, new_level: int) -> void:
 	var cost := GameConfig.get_upgrade_cost(data, new_level)
 	if not ResourceManager.can_afford(cost):
 		return
@@ -319,7 +324,7 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 	# construccion/mejora) reparte los obreros, y el rendimiento lee las dos cosas.
 	var finished: Array = []
 	for entry in to_complete:
-		var node: Node3D = entry["node"]
+		var node: Node = entry["node"]
 		var info := GridManager.get_building_info(node)
 		_complete_construction(node)
 		if not info.is_empty():
@@ -330,7 +335,7 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 		finished.append({"node": node, "data": _producing[node]["data"], "seconds": elapsed})
 
 	for entry in finished:
-		var node: Node3D = entry["node"]
+		var node: Node = entry["node"]
 		if not is_instance_valid(node):
 			continue
 		var data: BuildingData = entry["data"]

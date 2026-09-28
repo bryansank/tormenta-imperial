@@ -18,9 +18,9 @@ func get_origin() -> Vector3:
 func get_world_size() -> Vector2:
 	return Vector2(grid_width * cell_size, grid_height * cell_size)
 
-# Cell → Node3D reference of the building occupying it
+# Cell → Node reference of the building occupying it
 var _cell_to_building: Dictionary = {}
-# Node3D → { "data": BuildingData, "origin_cell": Vector2i, "cells": Array[Vector2i] }
+# Node → { "data": BuildingData, "origin_cell": Vector2i, "cells": Array[Vector2i] }
 var _building_info: Dictionary = {}
 
 func world_to_cell(world_pos: Vector3) -> Vector2i:
@@ -50,13 +50,13 @@ func is_cell_free(cell: Vector2i) -> bool:
 ## If ignore_building is set, those cells are treated as free (for move operations).
 ## ignore_obstacle does the same for a deposit the building is about to consume
 ## (the Refinery sits on its oil well), so moving a consumer can ignore both.
-func can_place(origin_cell: Vector2i, grid_size: Vector2i, ignore_building: Node3D = null, ignore_obstacle: Node3D = null) -> bool:
+func can_place(origin_cell: Vector2i, grid_size: Vector2i, ignore_building: Node = null, ignore_obstacle: Node = null) -> bool:
 	var cells := _get_cells_for(origin_cell, grid_size)
 	for cell in cells:
 		if not is_valid_cell(cell):
 			return false
 		if _cell_to_building.has(cell):
-			var occupant: Node3D = _cell_to_building[cell]
+			var occupant: Node = _cell_to_building[cell]
 			if occupant != ignore_building and (ignore_obstacle == null or occupant != ignore_obstacle):
 				return false
 	return true
@@ -66,8 +66,8 @@ func can_place(origin_cell: Vector2i, grid_size: Vector2i, ignore_building: Node
 func cells_for(origin: Vector2i, grid_size: Vector2i) -> Array:
 	return _get_cells_for(origin, grid_size)
 
-## Place a building. Returns the Node3D or null if invalid.
-func place_building(origin_cell: Vector2i, data: BuildingData, building_node: Node3D) -> bool:
+## Place a building. Returns the Node or null if invalid.
+func place_building(origin_cell: Vector2i, data: BuildingData, building_node: Node) -> bool:
 	if not can_place(origin_cell, data.grid_size):
 		return false
 	var cells := _get_cells_for(origin_cell, data.grid_size)
@@ -81,7 +81,7 @@ func place_building(origin_cell: Vector2i, data: BuildingData, building_node: No
 	return true
 
 ## Move a building to a new cell. Returns true if successful.
-func move_building(building_node: Node3D, new_origin: Vector2i) -> bool:
+func move_building(building_node: Node, new_origin: Vector2i) -> bool:
 	if not _building_info.has(building_node):
 		return false
 	var info: Dictionary = _building_info[building_node]
@@ -100,7 +100,7 @@ func move_building(building_node: Node3D, new_origin: Vector2i) -> bool:
 	return true
 
 ## Remove a building entirely.
-func remove_building(building_node: Node3D) -> void:
+func remove_building(building_node: Node) -> void:
 	if not _building_info.has(building_node):
 		return
 	for cell in _building_info[building_node]["cells"]:
@@ -108,15 +108,15 @@ func remove_building(building_node: Node3D) -> void:
 	_building_info.erase(building_node)
 
 ## Get the building node at a given cell, or null.
-func get_building_at(cell: Vector2i) -> Node3D:
+func get_building_at(cell: Vector2i) -> Node:
 	return _cell_to_building.get(cell, null)
 
 ## Get info dict for a building node.
-func get_building_info(building_node: Node3D) -> Dictionary:
+func get_building_info(building_node: Node) -> Dictionary:
 	return _building_info.get(building_node, {})
 
 ## Place a non-building obstacle (resource deposit) on one or more cells.
-func place_obstacle(cell: Vector2i, node: Node3D, grid_size: Vector2i = Vector2i(1, 1)) -> bool:
+func place_obstacle(cell: Vector2i, node: Node, grid_size: Vector2i = Vector2i(1, 1)) -> bool:
 	var cells := _get_cells_for(cell, grid_size)
 	for c in cells:
 		if not is_cell_free(c):

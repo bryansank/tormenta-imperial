@@ -91,12 +91,12 @@ func _roll_hits() -> void:
 		_damaged.clear()
 		_ruined.clear()
 
-func _on_building_damaged(node: Node3D, _health: int, _max_health: int) -> void:
+func _on_building_damaged(node: Node, _health: int, _max_health: int) -> void:
 	_roll_hits()
 	if node != null:
 		_damaged[node.get_instance_id()] = true
 
-func _on_building_ruined(node: Node3D) -> void:
+func _on_building_ruined(node: Node) -> void:
 	_roll_hits()
 	if node != null:
 		_ruined[node.get_instance_id()] = true

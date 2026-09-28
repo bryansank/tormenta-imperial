@@ -363,13 +363,13 @@ func _connect_optional(signal_name: String, handler: Callable) -> void:
 func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
 	play_sfx("build_place")
 
-func _on_construction_completed(_node: Node3D) -> void:
+func _on_construction_completed(_node: Node) -> void:
 	play_sfx("build_complete")
 
-func _on_upgrade_completed(_node: Node3D, _level: int) -> void:
+func _on_upgrade_completed(_node: Node, _level: int) -> void:
 	play_sfx("upgrade_complete")
 
-func _on_demolished(_node: Node3D, _cell: Vector2i) -> void:
+func _on_demolished(_node: Node, _cell: Vector2i) -> void:
 	play_sfx("demolish")
 
 func _on_trade_completed(_res: String, _amount: int, is_buy: bool, _total: int) -> void:
@@ -393,10 +393,10 @@ func _on_random_event(_id: String, event_data: Dictionary) -> void:
 	var kind := String(event_data.get("type", event_data.get("category", "")))
 	play_sfx("event_danger" if kind == "danger" else "event_positive")
 
-func _on_process_completed(_node: Node3D, _id: String) -> void:
+func _on_process_completed(_node: Node, _id: String) -> void:
 	play_sfx("process_done")
 
-func _on_mining_completed(_node: Node3D, _id: String) -> void:
+func _on_mining_completed(_node: Node, _id: String) -> void:
 	play_sfx("mining_done")
 
 func _on_unit_trained(_id: String) -> void:

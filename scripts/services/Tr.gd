@@ -615,6 +615,12 @@ const _STRINGS := {
 		"LBL_MUSIC_ENABLED": "Musica",
 		"BTN_MUSIC_ON": "MUSICA: SI",
 		"BTN_MUSIC_OFF": "MUSICA: NO",
+		# ── vista-2d ──
+		"LBL_VIEW_MODE": "Vista del mapa",
+		"BTN_VIEW_3D": "3D",
+		"BTN_VIEW_2D": "2D (plano)",
+		"LBL_VIEW_MODE_HINT": "La partida se guarda y se abre en la otra vista.",
+		"NOTIF_VIEW_AFTER_BATTLE": "Vista elegida. Con un tablero abierto no se cambia: se abrira en esa vista la proxima vez que arranques el juego.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -1198,6 +1204,12 @@ const _STRINGS := {
 		"LBL_MUSIC_ENABLED": "Music",
 		"BTN_MUSIC_ON": "MUSIC: ON",
 		"BTN_MUSIC_OFF": "MUSIC: OFF",
+		# ── vista-2d ──
+		"LBL_VIEW_MODE": "Map view",
+		"BTN_VIEW_3D": "3D",
+		"BTN_VIEW_2D": "2D (flat)",
+		"LBL_VIEW_MODE_HINT": "The game is saved and reopened in the other view.",
+		"NOTIF_VIEW_AFTER_BATTLE": "View chosen. With a board open it does not switch: the game will open in that view next time you start it.",
 	},
 }
 
