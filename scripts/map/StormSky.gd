@@ -20,6 +20,13 @@ const ASH_LIGHT := Color(0.55, 0.45, 0.35)
 ## de la isla sin dejar al jugador sin ver donde construye.
 const MAX_FOG := 0.035
 
+## El cielo se cierra en tres pasos, uno por fase, y ninguno depende de la
+## severidad hasta que la tormenta ya esta encima: si el Aviso oscureciera en
+## proporcion al golpe que viene, el jugador leeria la factura antes de tiempo y
+## la decision de prepararse dejaria de tener riesgo.
+const WEIGHT_WARNING := 0.35
+const WEIGHT_ASH := 0.7
+
 var _env: Environment = null
 var _sun: DirectionalLight3D = null
 var _tween: Tween = null
@@ -29,7 +36,12 @@ var _clear: Dictionary = {}
 
 func _ready() -> void:
 	EventBus.storm_incoming.connect(_on_incoming)
+	EventBus.storm_ash_started.connect(_on_ash)
+	EventBus.storm_started.connect(_on_storm)
+	EventBus.storm_false_alarm.connect(_on_false_alarm)
 	EventBus.storm_ended.connect(_on_ended)
+	# Ganada la Auditoria Final no hay fundido: el aire aclara de golpe y para siempre.
+	EventBus.storm_halted_forever.connect(restore_now)
 
 ## La escena no existe todavía en `_ready` de un autoload, así que se busca
 ## perezosamente la primera vez que hace falta.
@@ -66,14 +78,29 @@ func _resolve() -> bool:
 
 ## Se oscurece desde el Aviso, no desde el impacto: el cielo cerrándose **es**
 ## el aviso. Para cuando el texto aparece, el jugador ya lo ha notado.
-func _on_incoming(_seconds: float, severity: int) -> void:
+func _on_incoming(_seconds: float) -> void:
+	_close_to(WEIGHT_WARNING)
+
+## Cae ceniza: el cielo se cierra mas, pero todavia no del todo. El salto entre
+## una fase y la siguiente es lo que le dice al jugador que esto va a peor sin
+## necesidad de un solo numero en pantalla.
+func _on_ash() -> void:
+	_close_to(WEIGHT_ASH)
+
+## Ya encima, y solo ahora la severidad se ve. El suelo es alto a proposito:
+## incluso la tormenta mas floja tiene que oscurecer lo bastante como para que
+## se note sin leer nada.
+func _on_storm(severity: int) -> void:
+	_close_to(clampf(float(severity) / float(maxi(1, GameConfig.storm_severity_max)), 0.6, 1.0))
+
+## El Aviso no era nada. El cielo se despeja sin mas explicacion: el jugador se
+## entera de que era falsa alarma mirando por la ventana, no leyendo un aviso.
+func _on_false_alarm(_deferred: int) -> void:
+	_clear_sky()
+
+func _close_to(weight: float) -> void:
 	if not _resolve():
 		return
-	# El suelo es alto a proposito: incluso la tormenta mas floja tiene que
-	# oscurecer lo bastante como para que se note sin leer nada. Una diferencia
-	# del 15% no la ve nadie, y entonces la capa visual no sirve para su unico
-	# proposito, que es avisar antes que el texto.
-	var weight: float = clampf(float(severity) / float(maxi(1, GameConfig.storm_severity_max)), 0.6, 1.0)
 	_start_tween()
 	_tween.tween_property(_env, "background_color", _clear["bg"].lerp(ASH, weight), FADE_IN)
 	_tween.parallel().tween_property(_env, "ambient_light_color", _clear["ambient"].lerp(ASH_LIGHT, weight), FADE_IN)
@@ -85,6 +112,9 @@ func _on_incoming(_seconds: float, severity: int) -> void:
 	_tween.parallel().tween_property(_env, "fog_light_color", ASH_LIGHT, FADE_IN)
 
 func _on_ended(_severity: int) -> void:
+	_clear_sky()
+
+func _clear_sky() -> void:
 	if not _resolve():
 		return
 	_start_tween()

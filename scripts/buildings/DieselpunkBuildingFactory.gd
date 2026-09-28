@@ -208,6 +208,15 @@ static func create_road(cell_size: float, neighbors: int = 0) -> Node3D:
 # Tiered fortress with central dome, four corner towers,
 # grand columned entrance, industrial pipes, gears, searchlights
 # ════════════════════════════════════════════════════════════════
+
+## Final scale of the Nucleo mesh (A12). The owner wants "the town hall" to
+## dominate the view: it is the one building that never falls and the heart of
+## the lore, so it has to read as such from the default camera. Only the MESH is
+## scaled — the 3x3 footprint, the grid cells and the click hit-test are
+## untouched. XZ stays close to 1 so the base does not spill onto neighbouring
+## cells; the drama comes from height.
+const NUCLEO_SCALE := Vector3(1.08, 2.4, 1.08)
+
 static func _build_nucleo(sx: float, sz: float) -> Node3D:
 	var root: Node3D = Node3D.new()
 
@@ -431,8 +440,8 @@ static func _build_nucleo(sx: float, sz: float) -> Node3D:
 		_add_cylinder(root, Vector3(side * 0.25, 0.8, sz * 0.50), 0.02, 0.4, mat_iron)
 		_add_sphere(root, Vector3(side * 0.25, 1.05, sz * 0.50), 0.04, mat_neon_amber)
 
-	# Scale the entire citadel up to be imposing (1.6x taller)
-	root.scale = Vector3(1.0, 1.6, 1.0)
+	# Scale the entire citadel up to be imposing (see NUCLEO_SCALE)
+	root.scale = NUCLEO_SCALE
 	return root
 
 

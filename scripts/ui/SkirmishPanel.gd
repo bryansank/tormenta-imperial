@@ -21,6 +21,7 @@ var _morale_label: Label
 var _units_vbox: VBoxContainer
 var _launch_btn: Button
 var _dev_btn: Button
+var _audit_btn: Button
 var _empty_label: Label
 
 ## unit_id -> how many the player has picked for this run.
@@ -37,6 +38,12 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(func(): _update_button_visibility())
 	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 	EventBus.encounter_started.connect(_on_encounter_started)
+	# El asedio final cambia lo que este panel ofrece: aparece "QUE BAJEN" y se
+	# bloquea salir de expedicion mientras la guarnicion esta defendiendo.
+	EventBus.final_audit_summoned.connect(func(_w, _s): _refresh())
+	EventBus.final_audit_started.connect(func(_w): _refresh())
+	EventBus.final_audit_lost.connect(func(_w): _refresh())
+	EventBus.storm_halted_forever.connect(_refresh)
 	_update_button_visibility()
 
 func _setup_ui() -> void:
@@ -111,6 +118,16 @@ func _setup_ui() -> void:
 	_launch_btn.pressed.connect(_on_launch_pressed)
 	vbox.add_child(_launch_btn)
 
+	# Convocar la Auditoria Final es la ultima decision de la partida, y se toma
+	# aqui, donde se decide pelear. No arranca sola: un asedio de varias oleadas
+	# sin que el jugador lo pida seria quitarle justo esa decision.
+	_audit_btn = Button.new()
+	_audit_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H + 6)
+	UITheme.style_button(_audit_btn, UITheme.DANGER, UITheme.FONT_BUTTON)
+	_audit_btn.pressed.connect(_on_audit_pressed)
+	_audit_btn.visible = false
+	vbox.add_child(_audit_btn)
+
 	_dev_btn = Button.new()
 	_dev_btn.text = Tr.t("BTN_DEV_SKIRMISH")
 	_dev_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
@@ -138,8 +155,11 @@ func _refresh() -> void:
 
 	var available: Dictionary = CombatManager.get_deployable_units()
 	_empty_label.visible = available.is_empty()
-	_launch_btn.disabled = _committed() <= 0
+	var audit_active: bool = ProgressionManager.is_final_audit_active()
+	# Con el asedio en marcha la guarnicion esta ocupada: no se sale de expedicion.
+	_launch_btn.disabled = _committed() <= 0 or audit_active
 	_dev_btn.visible = GameConfig.dev_mode
+	_refresh_audit_button()
 	_rebuild_units(available)
 
 ## Drops picks the player no longer owns (units lost, disbanded or spent).
@@ -237,6 +257,31 @@ func _adjust(unit_id: String, delta: int) -> void:
 	_refresh()
 
 # ── Launch ───────────────────────────────────────────────────────────
+
+## Visible solo cuando hay algo que convocar: la primera vez (pendiente) o tras
+## perder, si el ejercito ya da para volver a llamarlos.
+func _refresh_audit_button() -> void:
+	if ProgressionManager.is_final_audit_pending():
+		_audit_btn.text = Tr.t("BTN_AUDIT_BEGIN")
+		_audit_btn.visible = true
+		_audit_btn.disabled = false
+	elif ProgressionManager.is_final_audit_lost():
+		_audit_btn.text = Tr.t("BTN_AUDIT_RESUMMON")
+		_audit_btn.visible = true
+		_audit_btn.disabled = not ProgressionManager.can_resummon_final_audit()
+	else:
+		_audit_btn.visible = false
+
+func _on_audit_pressed() -> void:
+	var started: bool = false
+	if ProgressionManager.is_final_audit_pending():
+		started = ProgressionManager.begin_final_audit()
+	elif ProgressionManager.is_final_audit_lost():
+		started = ProgressionManager.resummon_final_audit() and ProgressionManager.begin_final_audit()
+	if started:
+		_close()
+	else:
+		_refresh()
 
 func _on_launch_pressed() -> void:
 	var party: Dictionary = {}

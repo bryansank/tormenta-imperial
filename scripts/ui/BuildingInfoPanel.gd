@@ -477,7 +477,14 @@ func _on_demolish() -> void:
 	# Show confirmation
 	_demolish_pending = true
 	var refund_pct := int(GameConfig.demolish_refund_ratio * 100)
-	_confirm_label.text = Tr.t("FMT_DEMOLISH_CONFIRM") % [_selected_data.display_name, refund_pct]
+	var text := Tr.t("FMT_DEMOLISH_CONFIRM") % [_selected_data.display_name, refund_pct]
+	# Demoler con un proceso en curso ya no lo quema en silencio: se dice lo que
+	# vuelve de el antes de que el jugador confirme.
+	if ProcessManager.is_busy(_selected_node):
+		var in_progress := ProcessManager.get_refund_preview(_selected_node)
+		var amounts := Tr.amount_list(in_progress) if not in_progress.is_empty() else Tr.t("LBL_FREE")
+		text += "\n" + Tr.t("FMT_DEMOLISH_IN_PROGRESS") % amounts
+	_confirm_label.text = text
 	_confirm_container.visible = true
 	_actions_box.visible = false
 

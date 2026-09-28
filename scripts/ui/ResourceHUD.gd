@@ -1,16 +1,23 @@
 extends CanvasLayer
 ## Collapsible resource panel — top-left corner.
-## Collapsed: compact colored dots + amounts.  Expanded: full bars + storage info.
+## Collapsed: compact colored dots + amounts + the shared storage counter.
+## Expanded: per-resource amounts + one bar showing how the single pool is split.
+##
+## Storage is one shared bag for all four resources, so there is one number and one
+## bar here, not four bars racing the same ceiling. While the bag is full the counter
+## turns red: incoming harvest is being lost and the player has to see it happen.
 
 var _labels: Dictionary = {}       # Type -> Label (collapsed amounts)
 var _exp_labels: Dictionary = {}   # Type -> Label (expanded amounts)
 var _items: Dictionary = {}        # Type -> Control (collapsed row items)
 var _exp_rows: Dictionary = {}     # Type -> Control (expanded rows)
-var _bars: Dictionary = {}         # Type -> ProgressBar
+var _segments: Dictionary = {}     # Type -> ColorRect (its slice of the shared bar)
+var _free_segment: ColorRect
 var _panel: PanelContainer
 var _content_box: VBoxContainer
 var _toggle_btn: Button
 var _storage_label: Label
+var _storage_detail_label: Label
 var _feedback_label: Label
 var _feedback_tween: Tween
 var _is_expanded := false
@@ -102,11 +109,9 @@ func _setup_ui() -> void:
 		_items[type] = item
 		item.visible = ResourceManager.is_unlocked(type)
 
-	# Storage compact
+	# Shared storage: everything stored, against the one cap.
 	_storage_label = Label.new()
-	_storage_label.text = "/%d" % ResourceManager.get_storage_cap()
 	_storage_label.add_theme_font_size_override("font_size", 10)
-	UITheme.set_label_color(_storage_label, UITheme.TEXT_DIM)
 	header.add_child(_storage_label)
 
 	# Dev-only shortcut to wipe the save. Players use Settings > New game instead.
@@ -174,26 +179,40 @@ func _setup_ui() -> void:
 
 		row_box.add_child(row)
 
-		# Storage bar
-		var bar := ProgressBar.new()
-		bar.custom_minimum_size = Vector2(140, 5)
-		bar.max_value = ResourceManager.get_storage_cap()
-		bar.value = ResourceManager.get_amount(type)
-		bar.show_percentage = false
-		var bg := StyleBoxFlat.new()
-		bg.bg_color = Color(0.05, 0.05, 0.04)
-		bg.set_corner_radius_all(1)
-		bar.add_theme_stylebox_override("background", bg)
-		var fill := StyleBoxFlat.new()
-		fill.bg_color = color.darkened(0.25)
-		fill.set_corner_radius_all(1)
-		bar.add_theme_stylebox_override("fill", fill)
-		row_box.add_child(bar)
-		_bars[type] = bar
-
 		_content_box.add_child(row_box)
 		_exp_rows[type] = row_box
 		row_box.visible = ResourceManager.is_unlocked(type)
+
+	# The shared pool, as one bar split by what is actually inside it: the slices
+	# push each other, which is the whole point of the system.
+	_content_box.add_child(UITheme.make_separator())
+
+	_storage_detail_label = Label.new()
+	_storage_detail_label.add_theme_font_size_override("font_size", 11)
+	UITheme.set_label_color(_storage_detail_label, UITheme.TEXT_DIM)
+	_content_box.add_child(_storage_detail_label)
+
+	var bar_box := HBoxContainer.new()
+	bar_box.add_theme_constant_override("separation", 0)
+	bar_box.custom_minimum_size = Vector2(150, 7)
+	_content_box.add_child(bar_box)
+
+	for i in range(_resource_ids.size()):
+		var seg_type: ResourceManager.Type = _resource_types[i]
+		var seg := ColorRect.new()
+		seg.color = _resource_colors[i].darkened(0.2)
+		seg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		seg.custom_minimum_size = Vector2(0, 7)
+		bar_box.add_child(seg)
+		_segments[seg_type] = seg
+
+	_free_segment = ColorRect.new()
+	_free_segment.color = Color(0.07, 0.08, 0.06)
+	_free_segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_free_segment.custom_minimum_size = Vector2(0, 7)
+	bar_box.add_child(_free_segment)
+
+	_refresh()
 
 
 func _toggle_expanded() -> void:
@@ -201,32 +220,40 @@ func _toggle_expanded() -> void:
 	_content_box.visible = _is_expanded
 	_toggle_btn.text = "\u25B2" if _is_expanded else "\u25BC"
 	if _is_expanded:
-		_sync_expanded()
+		_refresh()
 
-func _sync_expanded() -> void:
+## One pool means one refresh: any resource moving changes the shared total, so
+## there is nothing meaningful to update in isolation.
+func _refresh() -> void:
 	var cap := ResourceManager.get_storage_cap()
-	for type in _exp_labels:
-		var amt := ResourceManager.get_amount(type)
-		_exp_labels[type].text = str(amt)
-		if _bars.has(type):
-			_bars[type].max_value = cap
-			_bars[type].value = amt
+	var total := ResourceManager.get_total_stored()
+	var is_full := total >= cap
 
-func _on_resource_changed(resource_type: String, new_amount: int, _delta: int) -> void:
-	var cap := ResourceManager.get_storage_cap()
 	for type in _labels:
-		if ResourceManager.get_type_name(type) == resource_type:
-			_labels[type].text = str(new_amount)
-			var at_cap := new_amount >= cap
-			UITheme.set_label_color(_labels[type], UITheme.WARNING if at_cap else UITheme.TEXT_BRIGHT)
-			if _exp_labels.has(type):
-				_exp_labels[type].text = str(new_amount)
-				UITheme.set_label_color(_exp_labels[type], UITheme.WARNING if at_cap else UITheme.TEXT_BRIGHT)
-			if _bars.has(type):
-				_bars[type].max_value = cap
-				_bars[type].value = new_amount
-			_storage_label.text = "/%d" % cap
-			break
+		var amt := ResourceManager.get_amount(type)
+		_labels[type].text = str(amt)
+		if _exp_labels.has(type):
+			_exp_labels[type].text = str(amt)
+
+	# Red while the bag is full: from here on, anything produced is being lost.
+	_storage_label.text = "%d/%d" % [total, cap]
+	UITheme.set_label_color(_storage_label, UITheme.DANGER if is_full else UITheme.TEXT_DIM)
+
+	if not _storage_detail_label:
+		return
+	_storage_detail_label.text = "%s  %d/%d" % [Tr.t("LBL_STORAGE_USED"), total, cap]
+	UITheme.set_label_color(_storage_detail_label, UITheme.DANGER if is_full else UITheme.TEXT_DIM)
+
+	for type in _segments:
+		var seg_amt := ResourceManager.get_amount(type)
+		_segments[type].visible = seg_amt > 0
+		_segments[type].size_flags_stretch_ratio = maxf(0.001, float(seg_amt))
+	var free := maxi(0, cap - total)
+	_free_segment.visible = free > 0
+	_free_segment.size_flags_stretch_ratio = maxf(0.001, float(free))
+
+func _on_resource_changed(_resource_type: String, _new_amount: int, _delta: int) -> void:
+	_refresh()
 
 func _on_resource_unlocked(resource_name: String) -> void:
 	for i in range(_resource_ids.size()):

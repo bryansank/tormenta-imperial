@@ -9,6 +9,15 @@ extends Node
 # Origin offset: the grid starts at world (-40, -40) so cell (0,0) maps there
 var _origin := Vector3(-40.0, 0.0, -40.0)
 
+## World position of the grid's corner (cell 0,0). Public so the island and the
+## grid overlay can fit themselves to the real grid instead of hardcoding it.
+func get_origin() -> Vector3:
+	return _origin
+
+## World size of the whole grid (X, Z).
+func get_world_size() -> Vector2:
+	return Vector2(grid_width * cell_size, grid_height * cell_size)
+
 # Cell → Node3D reference of the building occupying it
 var _cell_to_building: Dictionary = {}
 # Node3D → { "data": BuildingData, "origin_cell": Vector2i, "cells": Array[Vector2i] }
@@ -39,14 +48,23 @@ func is_cell_free(cell: Vector2i) -> bool:
 
 ## Check if all cells for a building of grid_size at origin_cell are free.
 ## If ignore_building is set, those cells are treated as free (for move operations).
-func can_place(origin_cell: Vector2i, grid_size: Vector2i, ignore_building: Node3D = null) -> bool:
+## ignore_obstacle does the same for a deposit the building is about to consume
+## (the Refinery sits on its oil well), so moving a consumer can ignore both.
+func can_place(origin_cell: Vector2i, grid_size: Vector2i, ignore_building: Node3D = null, ignore_obstacle: Node3D = null) -> bool:
 	var cells := _get_cells_for(origin_cell, grid_size)
 	for cell in cells:
 		if not is_valid_cell(cell):
 			return false
-		if _cell_to_building.has(cell) and _cell_to_building[cell] != ignore_building:
-			return false
+		if _cell_to_building.has(cell):
+			var occupant: Node3D = _cell_to_building[cell]
+			if occupant != ignore_building and (ignore_obstacle == null or occupant != ignore_obstacle):
+				return false
 	return true
+
+## Cells covered by a footprint of grid_size placed at origin. Public twin of
+## _get_cells_for, for callers outside this class (placement rules, tests).
+func cells_for(origin: Vector2i, grid_size: Vector2i) -> Array:
+	return _get_cells_for(origin, grid_size)
 
 ## Place a building. Returns the Node3D or null if invalid.
 func place_building(origin_cell: Vector2i, data: BuildingData, building_node: Node3D) -> bool:

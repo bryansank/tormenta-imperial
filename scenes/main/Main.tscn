@@ -22,6 +22,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/SkirmishPanel.tscn" id="20"]
 [ext_resource type="PackedScene" path="res://scenes/ui/BattleScreen.tscn" id="21"]
 [ext_resource type="PackedScene" path="res://scenes/ui/StormHUD.tscn" id="22"]
+[ext_resource type="PackedScene" path="res://scenes/ui/TutorialPanel.tscn" id="23"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -35,16 +36,16 @@ ssao_radius = 2.0
 ssao_intensity = 1.0
 
 [sub_resource type="PlaneMesh" id="grid_mesh"]
-size = Vector2(50, 50)
+size = Vector2(80.4, 80.4)
 
 [sub_resource type="ShaderMaterial" id="grid_material"]
 render_priority = 1
 shader = ExtResource("2")
-shader_parameter/grid_color = Color(0.85, 0.85, 0.75, 0.15)
+shader_parameter/grid_color = Color(0.85, 0.85, 0.75, 0.09)
 shader_parameter/cell_size = 2.0
 shader_parameter/line_width = 0.02
-shader_parameter/fade_distance = 60.0
-shader_parameter/grid_origin = Vector2(-25, -25)
+shader_parameter/fade_distance = 90.0
+shader_parameter/grid_origin = Vector2(-40, -40)
 
 
 [node name="Main" type="Node3D" unique_id=1159845753]
@@ -72,7 +73,6 @@ script = ExtResource("11")
 
 [node name="GridOverlay" type="MeshInstance3D" parent="." unique_id=568559968]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
-visible = false
 mesh = SubResource("grid_mesh")
 surface_material_override/0 = SubResource("grid_material")
 script = ExtResource("18")
@@ -113,3 +113,5 @@ script = ExtResource("7")
 [node name="BattleScreen" parent="." instance=ExtResource("21")]
 
 [node name="StormHUD" parent="." instance=ExtResource("22")]
+
+[node name="TutorialPanel" parent="." instance=ExtResource("23")]

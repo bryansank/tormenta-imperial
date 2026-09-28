@@ -6,6 +6,9 @@ var _processes_box: VBoxContainer
 var _progress_container: VBoxContainer
 var _progress_bar: ProgressBar
 var _progress_label: Label
+var _rate_label: Label
+var _cancel_btn: Button
+var _active_node: Node3D = null
 
 func _init(processes_box: VBoxContainer, progress_container: VBoxContainer,
 		progress_bar: ProgressBar, progress_label: Label) -> void:
@@ -13,6 +16,28 @@ func _init(processes_box: VBoxContainer, progress_container: VBoxContainer,
 	_progress_container = progress_container
 	_progress_bar = progress_bar
 	_progress_label = progress_label
+	_build_cancel_controls()
+
+## Cancelar vive junto a la barra de progreso, con el reembolso escrito encima.
+## Hasta ahora no habia boton: la unica forma de parar algo era demoler el
+## edificio entero, y se perdia el 100% sin decirlo.
+func _build_cancel_controls() -> void:
+	_rate_label = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_rate_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_progress_container.add_child(_rate_label)
+
+	_cancel_btn = Button.new()
+	_cancel_btn.text = Tr.t("BTN_CANCEL")
+	UITheme.style_button(_cancel_btn, UITheme.DANGER.darkened(0.2))
+	_cancel_btn.pressed.connect(_on_cancel_pressed)
+	_progress_container.add_child(_cancel_btn)
+
+func _on_cancel_pressed() -> void:
+	if _active_node == null or not is_instance_valid(_active_node):
+		return
+	ProcessManager.cancel(_active_node)
+	_progress_container.visible = false
+	set_buttons_disabled(false)
 
 func clear() -> void:
 	for child in _processes_box.get_children():
@@ -49,19 +74,36 @@ func populate_deposit(node: Node3D, deposit_id: String) -> void:
 
 func update_progress(node: Node3D, is_deposit: bool, data: BuildingData) -> void:
 	if not node:
+		_active_node = null
 		_progress_container.visible = false
 		return
 	var active := ProcessManager.get_active(node)
 	if active.is_empty():
+		_active_node = null
 		_progress_container.visible = false
 		if not is_deposit and data and not ProductionManager.is_constructing(node):
 			set_buttons_disabled(false)
 		return
+	_active_node = node
 	_progress_container.visible = true
 	_progress_bar.value = ProcessManager.get_progress(node)
 	var remaining: float = active["remaining"]
 	_progress_label.text = Tr.t("FMT_PROGRESS") % [active["name"], ceili(remaining)]
+	_update_cancel_text(node)
 	set_buttons_disabled(true)
+
+## El boton dice exactamente cuanto devuelve, y la linea de encima por que. Con
+## la Tormenta en marcha lo dice en rojo: cancelar entonces cuesta el doble.
+func _update_cancel_text(node: Node3D) -> void:
+	var refund := ProcessManager.get_refund_preview(node)
+	if refund.is_empty():
+		_cancel_btn.text = Tr.t("LBL_CANCEL_NO_REFUND")
+	else:
+		_cancel_btn.text = Tr.t("FMT_CANCEL_REFUND") % Tr.amount_list(refund)
+	var pct := int(round(GameConfig.get_cancel_refund_ratio() * 100.0))
+	var stormy := pct < int(round(GameConfig.cancel_refund_ratio * 100.0))
+	_rate_label.text = Tr.t("LBL_CANCEL_RATE_STORM") % pct if stormy else Tr.t("LBL_CANCEL_RATE") % pct
+	UITheme.set_label_color(_rate_label, UITheme.DANGER if stormy else UITheme.TEXT_DIM)
 
 func set_buttons_disabled(disabled: bool) -> void:
 	for child in _processes_box.get_children():

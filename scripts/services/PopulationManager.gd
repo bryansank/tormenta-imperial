@@ -17,10 +17,18 @@ var _consumption_timer := 0.0
 var _growth_timer := 0.0
 var _notif_cooldown := 0.0  # Prevent notification spam
 
+# ── Hambruna ──
+## Tics de consumo seguidos sin poder pagar. Se reinicia al pagar uno entero.
+## Viaja en el guardado: el hambre no se olvida al cerrar el juego.
+var _unpaid_ticks := 0
+
 func _ready() -> void:
 	EventBus.construction_completed.connect(_on_building_completed)
 	EventBus.building_demolished.connect(_on_building_demolished)
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
+	# La moral es de esta casa: ArmyManager avisa de la desercion por EventBus y
+	# aqui se traduce a moral, sin que un servicio toque el estado del otro.
+	EventBus.army_deserted.connect(_on_army_deserted)
 
 func _process(delta: float) -> void:
 	if _notif_cooldown > 0.0:
@@ -71,11 +79,24 @@ func get_morale_multiplier() -> float:
 	return clampf(0.5 + (_morale / 100.0) * 0.7, 0.5, 1.2)
 
 func remove_population(amount: int) -> void:
-	_population = maxi(0, _population - amount)
-	EventBus.population_changed.emit(_population, _max_population)
+	_set_population(_population - amount)
 
 func adjust_morale(delta: int) -> void:
 	_adjust_morale(delta)
+
+## Tics seguidos de consumo impagado. Cero significa que se come.
+func get_unpaid_ticks() -> int:
+	return _unpaid_ticks
+
+## El suelo de ruina vive aqui, en el unico sitio que escribe la poblacion.
+## Se puede caer hasta el fondo, pero no se pierde la partida: por muy mal que
+## vaya siempre queda alguien, y con alguien todavia se puede reconstruir.
+func _set_population(value: int) -> void:
+	var clamped: int = maxi(GameConfig.population_floor, value)
+	if clamped == _population:
+		return
+	_population = clamped
+	EventBus.population_changed.emit(_population, _max_population)
 
 # ── Consumption ──
 
@@ -115,8 +136,32 @@ func _tick_consumption() -> void:
 	# Morale adjustments
 	if wood_ok and gold_ok:
 		_adjust_morale(GameConfig.morale_satisfied_recovery)
-	else:
-		_adjust_morale(GameConfig.morale_unsatisfied_penalty)
+		# Un tic pagado entero borra la cuenta: el hambre no se arrastra.
+		_unpaid_ticks = 0
+		return
+
+	_adjust_morale(GameConfig.morale_unsatisfied_penalty)
+	_unpaid_ticks += 1
+	# Dos tics de gracia. Al tercero la gente deja de aguantar.
+	if GameConfig.unpaid_hurts(_unpaid_ticks):
+		_starve()
+
+## El impago sostenido mata. Hasta ahora solo restaba moral y avisaba, asi que
+## se podia ignorar indefinidamente; una advertencia que nunca se cumple deja de
+## leerse. El suelo de ruina sigue en pie: nunca baja del ultimo habitante.
+func _starve() -> void:
+	var before := _population
+	_set_population(_population - GameConfig.starvation_deaths_per_tick)
+	var deaths := before - _population
+	if deaths <= 0:
+		return  # Ya estamos en el suelo: no queda nadie mas que perder.
+	_adjust_morale(GameConfig.starvation_morale_penalty)
+	EventBus.population_starved.emit(deaths, _population)
+	EventBus.notification_posted.emit(
+		Tr.t("NOTIF_STARVATION") % deaths, "danger", Color(0.9, 0.3, 0.2))
+
+func _on_army_deserted(_unit_id: String, count: int) -> void:
+	_adjust_morale(GameConfig.desertion_morale_penalty * maxi(1, count))
 
 func _adjust_morale(delta: int) -> void:
 	# Phase 0-1: morale stays fixed — don't confuse new players
@@ -186,8 +231,9 @@ func _recalculate_all() -> void:
 		if data.workers_required > 0:
 			buildings_needing_workers.append({"node": node, "data": data})
 
-	# Clamp population to max
-	_population = mini(_population, _max_population)
+	# Clamp population to max — pero nunca por debajo del suelo de ruina:
+	# quedarse sin casas no puede dejar la isla vacia.
+	_population = maxi(GameConfig.population_floor, mini(_population, _max_population))
 
 	# Second pass: assign workers with priority (first built = first served)
 	var remaining_workers := _population
@@ -215,29 +261,14 @@ func is_building_staffed(node: Node3D) -> bool:
 	return node.get_meta("staffed", false)
 
 ## Update the visual indicator on a building for worker status.
-func _update_worker_visual(node: Node3D, staffed: bool) -> void:
-	var indicator: Node = node.get_node_or_null("WorkerIndicator")
-	if staffed:
-		if indicator:
-			indicator.queue_free()
-	else:
-		if not indicator:
-			var label := Label3D.new()
-			label.name = "WorkerIndicator"
-			label.text = Tr.t("LBL_NO_WORKERS_SHORT")
-			label.font_size = 36
-			label.pixel_size = 0.01
-			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			label.no_depth_test = true
-			label.outline_size = 8
-			label.outline_modulate = Color(0, 0, 0, 0.8)
-			label.modulate = Color(1.0, 0.3, 0.2, 0.9)
-			var info := GridManager.get_building_info(node)
-			var height := 1.5
-			if not info.is_empty():
-				height = (info["data"] as BuildingData).mesh_height
-			label.position.y = height + 1.2
-			node.add_child(label)
+## El cartel rojo de "SIN TRABAJADORES" ya no se pinta aqui: el estado del
+## edificio vive en su BuildingStatusBadge (A11), que lee la meta `staffed`
+## que acabamos de escribir y la combina con construccion, ruina y procesos
+## para decidir entre Zzz y el obrero. Aqui solo se le avisa de que mire.
+func _update_worker_visual(node: Node3D, _staffed: bool) -> void:
+	var badge: Node = node.get_node_or_null("StatusBadge")
+	if badge and badge.has_method("refresh"):
+		badge.refresh()
 
 func has_enough_workers(data: BuildingData) -> bool:
 	return get_free_workers() >= data.workers_required
@@ -248,11 +279,14 @@ func get_save_data() -> Dictionary:
 	return {
 		"population": _population,
 		"morale": _morale,
+		"unpaid_ticks": _unpaid_ticks,
 	}
 
 func load_save_data(data: Dictionary) -> void:
-	_population = data.get("population", GameConfig.population_start)
+	_population = maxi(GameConfig.population_floor, int(data.get("population", GameConfig.population_start)))
 	_morale = data.get("morale", GameConfig.morale_start)
+	# Un guardado anterior a la hambruna no trae contador: empieza a cero.
+	_unpaid_ticks = int(data.get("unpaid_ticks", 0))
 	_recalculate_all()
 
 func reset() -> void:
@@ -263,3 +297,4 @@ func reset() -> void:
 	_morale_bonus = 0
 	_consumption_timer = 0.0
 	_growth_timer = 0.0
+	_unpaid_ticks = 0

@@ -9,12 +9,10 @@ var _researching: Dictionary = {}  # {"tech_id": String, "remaining": float, "du
 var _research_points := 0  # accumulated from HQ production
 var _base_market_spread: float
 var _base_morale_recovery: int
-var _base_storage_cap: int
 
 func _ready() -> void:
 	_base_market_spread = GameConfig.market_spread
 	_base_morale_recovery = GameConfig.morale_satisfied_recovery
-	_base_storage_cap = GameConfig.base_storage_cap
 	EventBus.production_tick.connect(_on_production_tick)
 
 func _process(delta: float) -> void:
@@ -99,7 +97,8 @@ func _apply_tech_bonus(tech: Dictionary) -> void:
 			"production_mult":
 				GameConfig.tech_production_bonus += bonus[key]
 			"storage_bonus":
-				GameConfig.base_storage_cap += bonus[key]
+				# Suma al tope de la bolsa compartida, no al tope de un recurso.
+				GameConfig.tech_storage_bonus += bonus[key]
 			"market_spread_reduction":
 				GameConfig.market_spread = maxf(0.1, GameConfig.market_spread - bonus[key])
 			"morale_bonus":
@@ -176,6 +175,6 @@ func reset() -> void:
 	GameConfig.tech_production_bonus = 0.0
 	GameConfig.tech_consumption_reduction = 0.0
 	GameConfig.tech_build_speed_bonus = 0.0
+	GameConfig.tech_storage_bonus = 0
 	GameConfig.market_spread = _base_market_spread
 	GameConfig.morale_satisfied_recovery = _base_morale_recovery
-	GameConfig.base_storage_cap = _base_storage_cap

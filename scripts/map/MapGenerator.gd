@@ -391,20 +391,73 @@ func _deposit_forest() -> Node3D:
 	_dep_add_sphere(root, Vector3(-0.45, 0.08, 0.05), 0.03, mat_mushroom)
 	return root
 
-## Find a deposit of the given type that overlaps any of the provided cells.
-## Returns the deposit node or null.
-func find_deposit_at_cells(deposit_id: String, cells: Array) -> Node3D:
+# ── Deposit reach (placement rules) ──
+
+## Pure check: is the deposit rectangle (dep_origin, dep_size) within `reach`
+## cells of ANY of `cells`? Distance is Chebyshev (king's move), so reach 1
+## means "touching, diagonals included" and reach 0 means "overlapping".
+## Static and free of scene state on purpose: this is the rule the placement
+## tests pin down, so it must not live inside the mouse flow.
+static func deposit_within_reach(dep_origin: Vector2i, dep_size: Vector2i, cells: Array, reach: int) -> bool:
+	var max_x: int = dep_origin.x + dep_size.x - 1
+	var max_y: int = dep_origin.y + dep_size.y - 1
+	for cell in cells:
+		var c: Vector2i = cell
+		# Gap between the cell and the rectangle along each axis (0 = inside)
+		var dx: int = maxi(0, maxi(dep_origin.x - c.x, c.x - max_x))
+		var dy: int = maxi(0, maxi(dep_origin.y - c.y, c.y - max_y))
+		if maxi(dx, dy) <= reach:
+			return true
+	return false
+
+## First deposit of the given type within `reach` of the provided cells, or null.
+func find_deposit_near_cells(deposit_id: String, cells: Array, reach: int) -> Node3D:
 	for entry in _deposit_cells:
 		if entry["id"] != deposit_id or not is_instance_valid(entry["node"]):
 			continue
 		var dep_origin := Vector2i(entry["cell_x"], entry["cell_y"])
 		var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
-		for dx in range(dep_size.x):
-			for dy in range(dep_size.y):
-				var dep_cell := Vector2i(dep_origin.x + dx, dep_origin.y + dy)
-				if dep_cell in cells:
-					return entry["node"]
+		if deposit_within_reach(dep_origin, dep_size, cells, reach):
+			return entry["node"]
 	return null
+
+## Find a deposit of the given type that overlaps any of the provided cells.
+## Returns the deposit node or null. Kept as the reach-0 case of the rule above.
+func find_deposit_at_cells(deposit_id: String, cells: Array) -> Node3D:
+	return find_deposit_near_cells(deposit_id, cells, 0)
+
+## Is there at least one free spot where a building with `footprint` (either
+## orientation) could stand within `reach` of a `deposit_id` deposit? Uses the
+## live grid occupancy. This is the "can the player actually open Era 1 with a
+## sawmill next to a forest" question, asked by the map tests.
+func has_buildable_spot_near(deposit_id: String, footprint: Vector2i, reach: int) -> bool:
+	return not buildable_spots_near(deposit_id, footprint, reach, 1).is_empty()
+
+## All free origins (with their orientation) for `footprint` within `reach` of a
+## `deposit_id` deposit, up to `limit` results (0 = no limit).
+func buildable_spots_near(deposit_id: String, footprint: Vector2i, reach: int, limit: int = 0) -> Array:
+	var spots: Array = []
+	var orientations: Array = [footprint]
+	if footprint.x != footprint.y:
+		orientations.append(Vector2i(footprint.y, footprint.x))
+	for entry in _deposit_cells:
+		if entry["id"] != deposit_id or not is_instance_valid(entry["node"]):
+			continue
+		var dep_origin := Vector2i(entry["cell_x"], entry["cell_y"])
+		var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
+		for size in orientations:
+			var s: Vector2i = size
+			# Any origin whose footprint could touch the deposit's reach band.
+			for ox in range(dep_origin.x - s.x - reach + 1, dep_origin.x + dep_size.x + reach):
+				for oy in range(dep_origin.y - s.y - reach + 1, dep_origin.y + dep_size.y + reach):
+					var origin := Vector2i(ox, oy)
+					if not GridManager.can_place(origin, s):
+						continue
+					if deposit_within_reach(dep_origin, dep_size, GridManager.cells_for(origin, s), reach):
+						spots.append({"origin": origin, "size": s})
+						if limit > 0 and spots.size() >= limit:
+							return spots
+	return spots
 
 ## Remove a deposit programmatically (used when a building consumes it).
 func remove_deposit(node: Node3D) -> void:

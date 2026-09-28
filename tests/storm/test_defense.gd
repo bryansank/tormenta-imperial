@@ -114,3 +114,58 @@ func _total(roster: Dictionary) -> int:
 	for count in roster.values():
 		sum += int(count)
 	return sum
+
+# ── La retaguardia ───────────────────────────────────────────────────
+
+func test_tower_crews_hold_the_back_row() -> void:
+	# Artillería con alcance mínimo 2: en cabeza se queda muda en cuanto el
+	# enemigo llega a contacto, que es justo cuando hace falta.
+	var crew := _unit("artillery", PLAYER)
+	var units: Array = [_unit("infantry", PLAYER), _unit("infantry", PLAYER), crew]
+	var e: Encounter = EncounterScript.create(units, 0, false, true, [crew.uid])
+	assert_int(crew.position.y).is_equal(e.board_size.y - 1)
+
+func test_the_line_still_forms_in_front_of_the_crews() -> void:
+	var crew := _unit("artillery", PLAYER)
+	var line_a := _unit("infantry", PLAYER)
+	var line_b := _unit("infantry", PLAYER)
+	var e: Encounter = EncounterScript.create([line_a, line_b, crew], 0, false, true, [crew.uid])
+	assert_int(line_a.position.y).is_equal(e.board_size.y - 2)
+	assert_int(line_b.position.y).is_equal(e.board_size.y - 2)
+
+func test_a_full_board_still_puts_the_crews_behind() -> void:
+	# El caso que motivó todo esto: 6 de guarnición + 2 dotaciones son
+	# exactamente el ancho del tablero, así que sin reparto explícito la fila de
+	# atrás no se tocaría nunca y las dotaciones formarían en cabeza.
+	var units: Array = []
+	for i in range(6):
+		units.append(_unit("infantry", PLAYER))
+	var crews: Array = [_unit("artillery", PLAYER), _unit("artillery", PLAYER)]
+	units.append_array(crews)
+	units.append(_unit("infantry", ENEMY))
+	var e: Encounter = EncounterScript.create(units, 0, false, true, [crews[0].uid, crews[1].uid])
+	for crew in crews:
+		assert_int(crew.position.y).is_equal(e.board_size.y - 1)
+
+func test_nobody_shares_a_cell_with_a_crew() -> void:
+	var units: Array = []
+	for i in range(8):
+		units.append(_unit("infantry", PLAYER))
+	var crew := _unit("artillery", PLAYER)
+	units.append(crew)
+	var e: Encounter = EncounterScript.create(units, 0, false, true, [crew.uid])
+	var seen: Array = []
+	for unit in e.living(PLAYER):
+		assert_array(seen).not_contains([unit.position])
+		seen.append(unit.position)
+
+func test_without_crews_the_formation_is_unchanged() -> void:
+	# La red que impide que esto cambie el despliegue de siempre.
+	var units: Array = [_unit("infantry", PLAYER), _unit("infantry", PLAYER)]
+	var e: Encounter = EncounterScript.create(units, 0, false, true, [])
+	var columns: Array = []
+	for unit in e.living(PLAYER):
+		assert_int(unit.position.y).is_equal(e.board_size.y - 2)
+		columns.append(unit.position.x)
+	columns.sort()
+	assert_array(columns).is_equal([3, 4])
