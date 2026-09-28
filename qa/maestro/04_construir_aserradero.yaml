@@ -1,0 +1,79 @@
+# Bug de Bryan: "no me deja construir el aserradero".
+#
+# En el APK de Android la ventana "Edificios disponibles" sale VACIA en todas
+# las pestanas (04_02, 04_03): ConstructionMenu lista res://data/buildings con
+# DirAccess y filtra por ".tres", pero en un export los .tres viajan como
+# "*.tres.remap" y no queda ninguno. En el editor de PC no pasa.
+# Esperado tras el arreglo: 04_02 muestra las tarjetas; buscando "Aserradero"
+# sale la tarjeta (04_04); al tocarla, el detalle (04_05); CONSTRUIR del detalle
+# entra en modo colocar (04_06); los toques en el mapa colocan o dan un motivo
+# (04_07..04_09). Las coordenadas de la tarjeta y del CONSTRUIR del detalle son
+# estimadas: revisarlas con la primera captura buena tras el arreglo.
+# Ademas: la columna de hamburguesa se queda abierta encima de la ventana y tapa
+# su X (04_02).
+appId: com.bryankey.tormentaimperial.qa
+name: 04 Construir un aserradero
+tags: [construir, colocar]
+---
+- runFlow: comun/en_partida.yaml
+- takeScreenshot: ${output.dir}/04_00_en_partida
+- tapOn:
+    point: "97%,9%"       # hamburguesa: CONSTRUIR solo aparece con ella abierta
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/04_01_hamburguesa_con_construir
+- tapOn:
+    point: "50%,89%"      # CONSTRUIR
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/04_02_menu_construir
+- tapOn:
+    point: "35%,21%"      # pestana Produccion
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+- takeScreenshot: ${output.dir}/04_03_pestana_produccion
+- tapOn:
+    point: "19%,21%"      # pestana Todos
+- tapOn:
+    point: "76%,14%"      # Buscar...
+- inputText: "Aserradero"
+- hideKeyboard
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/04_04_buscar_aserradero
+- tapOn:
+    point: "22%,33%"      # primera tarjeta de la lista (estimada)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/04_05_tarjeta_elegida
+- tapOn:
+    point: "76%,84%"      # CONSTRUIR del detalle (estimado)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/04_06_modo_colocar
+# Toques en el mapa: arriba al centro (donde suele haber arboles en la vista
+# inicial), junto al Nucleo y en el tercio inferior (franja que se traga el toque).
+- tapOn:
+    point: "40%,22%"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/04_07_toque_arriba
+- tapOn:
+    point: "45%,55%"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/04_08_toque_centro
+- tapOn:
+    point: "40%,72%"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/04_09_toque_tercio_inferior
