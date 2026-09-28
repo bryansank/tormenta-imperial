@@ -75,6 +75,28 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 - **Purpose:** Mobile/touch control support
 - **Layer:** 10
 
+## Interfaz configurable y dispositivos (docs/21)
+
+- **Perfiles** (`DeviceProfile`, autoload): PC / Tablet / Movil, detectados por
+  features de SO y lado corto en dp, forzables en Ajustes. Traen escala, texto,
+  lado tactil minimo, controles en pantalla en "Automatico" (nunca en PC) y
+  textos de ayuda de raton o de dedo (`Tr.ti`).
+- **Lienzo**: `aspect = expand` y `content_scale_factor` como escala de
+  interfaz: sin bandas negras en 16:10, 4:3, 21:9 ni vertical.
+- **Ajustes en pestanas**: Audio · Interfaz · Controles · Accesibilidad · Juego,
+  cada una con scroll y Restablecer.
+- **HUD**: `HudRegistry` decide que se puede ocultar y mover. Un elemento nuevo
+  se anade a `HudRegistry.ELEMENTS` y llama a `HudRegistry.register(id, control)`
+  despues de `add_child`.
+- **Paneles movibles**: "Editar disposicion" (`LayoutEditor`); desplazamientos
+  sobre el slot guardados por perfil y proporcion en `GameConfig.ui_layout`.
+- **Colores**: los colores de `UITheme` son tokens (`UITheme.configure`):
+  paletas rojo-verde y azul-amarillo, alto contraste, opacidad de paneles y
+  tamano de texto. Nada de colores semanticos escritos a mano en los paneles.
+- **Columna central** baja a la izquierda cuando no cabe (lienzo < 1080 px o
+  columna izquierda real mas ancha: cuatro recursos + LIMPIAR). La pausa se
+  coloca a la derecha del ancho REAL de la barra de recursos.
+
 ## UI Construction Pattern
 
 All panels follow this pattern:
@@ -93,7 +115,8 @@ func _setup_ui() -> void:
 
 ## Styling
 
-All panels use a consistent dark theme:
+Everything goes through `UITheme` (tokens, factories, `UITheme.style_tabs`).
+Historic defaults of the dark theme:
 - Background: `Color(0.08-0.12, alpha 0.85-0.96)`
 - Borders: `Color(0.7, 0.55, 0.15)` (gold accent)
 - Buttons: `_style_button(btn, bg_color)` helper (each panel has its own)

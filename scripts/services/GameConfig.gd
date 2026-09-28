@@ -320,6 +320,29 @@ var ui_touch_controls := "auto"
 ## es del dispositivo, sobrevive a "partida nueva" y se aplica antes de pintar nada.
 var ui_locale := "es"
 
+# ── interfaz-dispositivos (docs/21-interfaz-y-dispositivos.md) ──
+# Todo del dispositivo, en settings.cfg [interfaz]: una tablet y un PC del mismo
+# jugador no tienen por que querer la misma letra ni la misma disposicion.
+
+## Perfil de dispositivo: "auto" lo detecta DeviceProfile; "pc", "tablet" y
+## "phone" lo fuerzan.
+const DEVICE_PROFILE_MODES := ["auto", "pc", "tablet", "phone"]
+var ui_device_profile := "auto"
+## Escala global de la interfaz en %. 0 = la del perfil de dispositivo.
+const UI_SCALE_MIN := 75
+const UI_SCALE_MAX := 150
+var ui_scale_pct := 0
+## Tamano de texto: "auto" (el del perfil) o uno de UITheme.TEXT_SIZES.
+var ui_text_size := "auto"
+## Paleta de colores (UITheme.PALETTES), alto contraste y opacidad de paneles.
+var ui_palette := "default"
+var ui_high_contrast := false
+var ui_panel_opacity := 1.0
+## Ids de HudRegistry que el jugador oculto.
+var ui_hud_hidden: Array = []
+## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
+var ui_layout: Dictionary = {}
+
 func _ready() -> void:
 	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
 	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
@@ -359,6 +382,29 @@ func load_user_settings() -> void:
 	if Tr.LOCALES.has(locale):
 		ui_locale = locale
 	Tr.set_locale(ui_locale)
+	_load_interface_settings(cf)
+
+## [interfaz]: cada valor se valida; uno desconocido vuelve al de serie en vez
+## de dejar la interfaz en un estado que nadie eligio.
+func _load_interface_settings(cf: ConfigFile) -> void:
+	var prof := str(cf.get_value("interfaz", "device_profile", ui_device_profile))
+	ui_device_profile = prof if prof in DEVICE_PROFILE_MODES else "auto"
+	var scale := int(cf.get_value("interfaz", "ui_scale_pct", ui_scale_pct))
+	ui_scale_pct = 0 if scale == 0 else clampi(scale, UI_SCALE_MIN, UI_SCALE_MAX)
+	var text := str(cf.get_value("interfaz", "text_size", ui_text_size))
+	ui_text_size = text if (text == "auto" or text in UITheme.TEXT_SIZES) else "auto"
+	var pal := str(cf.get_value("interfaz", "palette", ui_palette))
+	ui_palette = pal if pal in UITheme.PALETTES else "default"
+	ui_high_contrast = bool(cf.get_value("interfaz", "high_contrast", ui_high_contrast))
+	ui_panel_opacity = clampf(float(cf.get_value("interfaz", "panel_opacity", ui_panel_opacity)),
+		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
+	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
+	ui_hud_hidden = []
+	if hidden is Array:
+		for id in hidden:
+			ui_hud_hidden.append(str(id))
+	var layout: Variant = cf.get_value("interfaz", "layout", ui_layout)
+	ui_layout = layout.duplicate(true) if layout is Dictionary else {}
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -374,6 +420,14 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "view_mode", ui_view_mode)
 	cf.set_value("ui", "touch_controls", ui_touch_controls)
 	cf.set_value("ui", "locale", ui_locale)
+	cf.set_value("interfaz", "device_profile", ui_device_profile)
+	cf.set_value("interfaz", "ui_scale_pct", ui_scale_pct)
+	cf.set_value("interfaz", "text_size", ui_text_size)
+	cf.set_value("interfaz", "palette", ui_palette)
+	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
+	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
+	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
+	cf.set_value("interfaz", "layout", ui_layout)
 	cf.save(USER_SETTINGS_PATH)
 
 # ── Controles tactiles ──
@@ -386,10 +440,11 @@ var _real_touch_seen := false
 ## Si los controles en pantalla deben verse ahora, resolviendo el "auto".
 ## Es la unica pregunta que hace OnScreenControls.
 ##
-## "auto" NO mira DisplayServer.is_touchscreen_available(): muchos portatiles
-## Windows dicen tener pantalla tactil y el D-pad aparecia en un PC que se usa
-## con raton. En "auto" salen solo en un sistema movil, o en escritorio en
-## cuanto llega un toque real de pantalla.
+## "auto" sigue al perfil de dispositivo (DeviceProfile): tablet y movil los
+## llevan, PC NUNCA (norma de Bryan). Ni DisplayServer.is_touchscreen_available()
+## ni un toque real los encienden en un PC: un portatil Windows tactil que se
+## toca una vez no se llena de flechas. Quien los quiera en PC elige "Siempre"
+## o el perfil Tablet.
 func touch_controls_enabled() -> bool:
 	match ui_touch_controls:
 		"always":
@@ -397,7 +452,16 @@ func touch_controls_enabled() -> bool:
 		"never":
 			return false
 		_:
-			return is_mobile_os() or _real_touch_seen
+			return _touch_profile()
+
+## "auto" sigue al perfil de dispositivo (tablet y movil llevan controles en
+## pantalla; PC no), asi que forzar el perfil Tablet en Ajustes los trae.
+## Sin DeviceProfile (no deberia pasar) se mira el sistema, como antes.
+func _touch_profile() -> bool:
+	var dp := get_node_or_null("/root/DeviceProfile")
+	if dp != null and dp.has_method("is_touch_profile"):
+		return dp.is_touch_profile()
+	return is_mobile_os()
 
 ## Movil de verdad: exportado a Android/iOS, o la web abierta en uno de ellos.
 static func is_mobile_os() -> bool:
@@ -407,14 +471,14 @@ static func is_mobile_os() -> bool:
 	return false
 
 ## InputService llama aqui con cada InputEventScreenTouch real (el proyecto no
-## emula toques desde el raton, asi que un toque es un dedo). En "auto" hace
-## aparecer los controles; con "never" explicito no cambia nada.
+## emula toques desde el raton, asi que un toque es un dedo). Solo se anota:
+## en PC un toque ya no enciende los controles (ver touch_controls_enabled);
+## sirve para que los textos de ayuda hablen de dedos (DeviceProfile.input_style).
 func notice_real_touch() -> void:
-	if _real_touch_seen:
-		return
 	_real_touch_seen = true
-	if ui_touch_controls == "auto" and not is_mobile_os():
-		EventBus.touch_controls_changed.emit(touch_controls_enabled())
+
+func real_touch_seen() -> bool:
+	return _real_touch_seen
 
 ## Cambia el modo, lo guarda y anuncia el estado resuelto para que los controles
 ## aparezcan o desaparezcan sin reiniciar.

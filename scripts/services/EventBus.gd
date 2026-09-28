@@ -283,6 +283,11 @@ signal fullscreen_changed(enabled: bool)
 @warning_ignore("unused_signal")
 signal touch_controls_changed(enabled: bool)
 
+## Los globos de ayuda se encendieron o apagaron (AYUDA del menu ☰ o Ajustes >
+## Interfaz). GameConfig.ui_helper_visible ya tiene el valor nuevo.
+@warning_ignore("unused_signal")
+signal helper_visibility_changed(visible: bool)
+
 ## Emitted when music is switched on/off (Settings or the ☰ quick button).
 @warning_ignore("unused_signal")
 signal music_toggled(enabled: bool)

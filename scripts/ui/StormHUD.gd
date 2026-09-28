@@ -59,14 +59,27 @@ var _icon: PhaseIcon
 var _label: Label
 var _pulse := 0.0
 
+const LAYER_OVER_MODALS := 16
+const LAYER_UNDER_MODALS := 11
+
+func _sync_layer() -> void:
+	var under: bool = UILayoutManager.is_column_narrow() and UIManager.is_any_window_open()
+	layer = LAYER_UNDER_MODALS if under else LAYER_OVER_MODALS
+
 func _ready() -> void:
 	# Por encima de los globos del tutorial (14) y de las ventanas modales, que
 	# UIManager apila desde la capa 12 (12, 13...), a proposito: saber que hay en
 	# el cielo importa igual —o mas— mientras estas gastando en el mercado. Es el
 	# unico HUD que gana a un modal. Con cuatro ventanas abiertas a la vez una
 	# llegaria a la 16; no pasa en la practica (las del centro se cierran entre si).
-	layer = 16
+	layer = LAYER_OVER_MODALS
 	_setup_ui()
+	# Cuando la columna central baja a la izquierda (tablet 4:3, movil, escala
+	# grande) el indicador cae en mitad de la pantalla: encima de una ventana
+	# taparia su contenido. Ahi se queda por debajo de las ventanas.
+	UIManager.window_opened.connect(func(_w): _sync_layer())
+	UIManager.window_closed.connect(func(_w): _sync_layer())
+	UILayoutManager.layout_changed.connect(_sync_layer)
 	EventBus.storm_phase_changed.connect(func(_p, _s): _refresh())
 	EventBus.storm_incoming.connect(func(_s): _refresh())
 	EventBus.storm_false_alarm.connect(func(_d): _refresh())
@@ -103,6 +116,7 @@ func _setup_ui() -> void:
 	_panel.visible = false
 	UILayoutManager.apply_layout("StormHUD", _panel)
 	_root.add_child(_panel)
+	HudRegistry.register("StormHUD", _panel)
 
 	var hbox := HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_CENTER

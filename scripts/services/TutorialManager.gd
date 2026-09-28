@@ -105,7 +105,7 @@ func offer_tip(tip_id: String) -> void:
 		return
 	tips_seen.append(tip_id)
 	var keys: Dictionary = TIPS[tip_id]
-	EventBus.tutorial_tip_requested.emit(tip_id, Tr.t(keys["title"]), Tr.t(keys["body"]))
+	EventBus.tutorial_tip_requested.emit(tip_id, Tr.t(keys["title"]), Tr.ti(keys["body"]))
 
 func has_seen_tip(tip_id: String) -> bool:
 	return tip_id in tips_seen

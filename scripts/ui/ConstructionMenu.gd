@@ -115,6 +115,7 @@ func _setup_ui() -> void:
 	UITheme.style_button(_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
 	_build_btn.pressed.connect(_open)
 	_root.add_child(_build_btn)
+	HudRegistry.register("ConstructionMenu.button", _build_btn)
 
 	# Backdrop
 	_backdrop = UITheme.make_backdrop()

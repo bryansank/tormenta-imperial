@@ -39,8 +39,17 @@ func _process(delta: float) -> void:
 
 func _apply() -> void:
 	position = _target * View2D.PX_PER_UNIT
-	var z := View2D.distance_to_zoom(_distance) * screen_boost()
+	var z := View2D.distance_to_zoom(_distance) * screen_boost() / ui_scale()
 	zoom = Vector2(z, z)
+
+## La escala de interfaz (content_scale_factor, DeviceProfile) agranda el lienzo
+## entero, mapa 2D incluido. La camara la descuenta: la escala es de la
+## interfaz, no un zoom del mapa. La 3D no la necesita (canvas_items no escala
+## el 3D).
+func ui_scale() -> float:
+	if not is_inside_tree():
+		return 1.0
+	return maxf(0.01, get_tree().root.content_scale_factor)
 
 ## En una pantalla estrecha (movil) el lienzo logico de 1280 se encoge a unos
 ## 400 px fisicos y las celdas quedarian diminutas. Se acerca la camara en
@@ -50,7 +59,8 @@ func screen_boost() -> float:
 	if not is_inside_tree():
 		return 1.0
 	var phys := float(DisplayServer.window_get_size().x) if DisplayServer.get_name() != "headless" else 0.0
-	var logical := get_viewport().get_visible_rect().size.x
+	# El lienzo sin la escala de interfaz: esa ya la descuenta ui_scale().
+	var logical := get_viewport().get_visible_rect().size.x / ui_scale()
 	if phys <= 0.0 or logical <= phys:
 		return 1.0
 	return pow(logical / phys, 0.75)

@@ -13,15 +13,19 @@ extends CanvasLayer
 const LAYER := 11
 const TAB_W := 120.0
 const CARD_W := 300.0
-## Debajo de la barra de recursos, la de poblacion y el globo de ayuda que
-## explica los recursos: el hueco libre de la columna izquierda antes de los
-## avisos (ranura toast_area, abajo a la izquierda).
-const TOP := 228.0
-## La tarjeta se abre a la derecha de esa columna (UILayoutConfig: left_panel
-## mide 354 como mucho), para no tapar los avisos que salen debajo.
+## La pestana la coloca UILayoutManager (slot "sandbox_tab": al pie de la
+## columna izquierda, bajo lo que haya en ella) y se registra en HudRegistry,
+## asi que se puede ocultar en Ajustes > Interfaz y mover en "Editar
+## disposicion". La tarjeta sigue a la pestana.
+## La tarjeta se abre a la derecha de la columna izquierda (UILayoutConfig:
+## left_panel mide 354 como mucho), para no tapar los avisos que salen debajo.
 const CARD_LEFT := 364.0
+const CARD_GAP := 8.0
 
 var _root: Control
+## Lo que se coloca, se mueve y se oculta: mide lo que la pestana. La tarjeta
+## cuelga de el (fuera de su rectangulo) para ir y ocultarse con la pestana.
+var _dock: Control
 var _tab: Button
 var _card: PanelContainer
 var _storm_btn: Button
@@ -46,23 +50,38 @@ func _setup_ui() -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
+	_dock = Control.new()
+	_dock.name = "SandboxDock"
+	_dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dock.custom_minimum_size = Vector2(TAB_W, UITheme.MIN_BTN_H)
+	UILayoutManager.apply_layout("SandboxPanel", _dock)
+	_root.add_child(_dock)
+
 	_tab = Button.new()
 	_tab.text = Tr.t("BTN_SANDBOX")
 	_tab.focus_mode = Control.FOCUS_NONE
 	_tab.toggle_mode = true
 	_tab.custom_minimum_size = Vector2(TAB_W, UITheme.MIN_BTN_H)
 	UITheme.style_card_button(_tab, UITheme.BTN, UITheme.INFO)
-	_tab.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_tab.position = Vector2(ModalKit.EDGE * 0.5, TOP)
+	_tab.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_tab.toggled.connect(_on_tab_toggled)
-	_root.add_child(_tab)
+	_dock.add_child(_tab)
 
 	_card = ModalKit.make_card(8)
 	_card.visible = false
 	_card.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	get_viewport().size_changed.connect(_relayout)
 	_card.custom_minimum_size = Vector2(CARD_W, 0)
-	_root.add_child(_card)
+	_dock.add_child(_card)
+	HudRegistry.register("SandboxPanel", _dock)
+	get_viewport().size_changed.connect(_relayout)
+	# La pestana cambia de sitio al apilarse, al moverla en el editor o al
+	# restablecer la disposicion; la tarjeta crece con el aviso de ocupado.
+	_dock.item_rect_changed.connect(_relayout)
+	_card.resized.connect(_relayout)
+	# El texto envuelto mide primero a ancho 0 (altisimo) y encoge al conocer su
+	# ancho: eso cambia el minimo, no el tamano, y resized no salta.
+	_card.minimum_size_changed.connect(_relayout, CONNECT_DEFERRED)
+	UILayoutManager.layout_changed.connect(_relayout)
 	var column: VBoxContainer = _card.get_child(0)
 	column.add_child(ModalKit.make_text(Tr.t("LBL_SANDBOX_TOOLS"), "section", UITheme.INFO.lightened(0.3)))
 	_storm_btn = ModalKit.make_menu_button(Tr.t("BTN_SANDBOX_STORM"), UITheme.WARNING, _on_storm)
@@ -75,16 +94,42 @@ func _setup_ui() -> void:
 	column.add_child(hint)
 	_relayout()
 
-## A la derecha de la columna izquierda si cabe; en una pantalla estrecha (movil
-## en vertical) debajo de la pestana, al ancho que quede.
+## La tarjeta junto a la pestana, donde este: a su derecha (y fuera de la
+## columna izquierda) si cabe, si no a su izquierda (pestana movida al borde
+## derecho), y en una pantalla estrecha (movil en vertical) debajo, al ancho que
+## quede. Siempre dentro de la pantalla.
 func _relayout() -> void:
+	if _card == null or _dock == null or not _dock.is_inside_tree():
+		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	if vp.x >= CARD_LEFT + CARD_W + ModalKit.EDGE:
-		_card.custom_minimum_size.x = CARD_W
-		_card.position = Vector2(CARD_LEFT, TOP)
+	var tab := _dock.get_global_rect()
+	var margin := ModalKit.EDGE * 0.5
+	var width := CARD_W
+	var pos: Vector2
+	var right_x := tab.end.x + CARD_GAP
+	if tab.position.x < CARD_LEFT:
+		right_x = maxf(CARD_LEFT, right_x)
+	if right_x + width + margin <= vp.x:
+		pos = Vector2(right_x, tab.position.y)
+	elif tab.position.x - CARD_GAP - width >= margin:
+		pos = Vector2(tab.position.x - CARD_GAP - width, tab.position.y)
 	else:
-		_card.custom_minimum_size.x = minf(CARD_W, vp.x - ModalKit.EDGE * 2.0)
-		_card.position = Vector2(ModalKit.EDGE * 0.5, TOP + UITheme.MIN_BTN_H + 6.0)
+		width = minf(CARD_W, vp.x - ModalKit.EDGE * 2.0)
+		pos = Vector2(clampf(tab.position.x, margin, maxf(margin, vp.x - width - margin)), tab.end.y + 6.0)
+	_card.custom_minimum_size.x = width
+	# Su padre no es un contenedor: sin esto la tarjeta se queda con el alto de
+	# la primera medida (texto envuelto a ancho 0) y nunca encoge.
+	_card.reset_size()
+	var card_h: float = _card.size.y
+	pos.y = clampf(pos.y, margin, maxf(margin, vp.y - card_h - margin))
+	_card.position = pos - tab.position
+
+## Rectangulo de la tarjeta en pantalla (para las pruebas).
+func card_rect() -> Rect2:
+	return _card.get_global_rect()
+
+func tab_button() -> Button:
+	return _tab
 
 ## Visible solo en Sandbox; los botones, apagados cuando no pueden hacer nada.
 func refresh() -> void:

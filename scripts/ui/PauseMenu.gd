@@ -14,13 +14,12 @@ extends CanvasLayer
 
 const LAYER := 30
 const CARD_WIDTH := 340.0
-## El boton de pausa. En pantalla ancha, pegado a la derecha de la barra de
-## recursos (ranura top_left, 280 px como mucho) y a su altura. En una estrecha
+## El boton de pausa. En pantalla ancha, pegado a la derecha del ancho REAL de
+## la barra de recursos y a su altura (UILayoutManager.pause_button_position:
+## con cuatro recursos y LIMPIAR la barra pasa de 300 px). En una estrecha
 ## (movil en vertical) arriba no queda sitio: va abajo al centro, justo encima
 ## del boton CONSTRUIR (ranura bottom_center) y entre los mandos de camara.
 const PAUSE_BTN_SIZE := 44.0
-const PAUSE_BTN_LEFT := 298.0
-const PAUSE_BTN_TOP := 8.0
 const NARROW_WIDTH := 700.0
 const PAUSE_BTN_BOTTOM_NARROW := 84.0
 
@@ -45,6 +44,13 @@ func _ready() -> void:
 	UIManager.window_closed.connect(_on_window_closed)
 	EventBus.tutorial_intro_closed.connect(_on_intro_closed)
 	get_viewport().size_changed.connect(_relayout)
+	# Va a la derecha del ancho REAL de los recursos: cuando crecen (cuatro
+	# recursos, LIMPIAR, letra grande) o se mueven, la pausa se aparta.
+	UILayoutManager.panel_rect_changed.connect(func(id: String):
+		if id == "ResourceHUD":
+			_relayout.call_deferred())
+	UILayoutManager.layout_changed.connect(_relayout)
+	UILayoutManager.user_layout_changed.connect(_relayout.call_deferred)
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -57,7 +63,7 @@ func _setup_ui() -> void:
 	# Pausa tactil: siempre a la vista, junto a la barra de recursos.
 	_pause_btn = Button.new()
 	_pause_btn.text = "II"
-	_pause_btn.tooltip_text = Tr.t("BTN_PAUSE")
+	_pause_btn.tooltip_text = Tr.ti("BTN_PAUSE")
 	_pause_btn.focus_mode = Control.FOCUS_NONE
 	_pause_btn.custom_minimum_size = Vector2(PAUSE_BTN_SIZE, PAUSE_BTN_SIZE)
 	UITheme.style_button(_pause_btn, UITheme.BTN, UITheme.FONT_SECTION)
@@ -111,10 +117,14 @@ func _place_pause_button(vp: Vector2) -> void:
 		_pause_btn.offset_bottom = -PAUSE_BTN_BOTTOM_NARROW
 	else:
 		_pause_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		_pause_btn.offset_left = PAUSE_BTN_LEFT
-		_pause_btn.offset_right = PAUSE_BTN_LEFT + PAUSE_BTN_SIZE
-		_pause_btn.offset_top = PAUSE_BTN_TOP
-		_pause_btn.offset_bottom = PAUSE_BTN_TOP + PAUSE_BTN_SIZE
+		var pos := UILayoutManager.pause_button_position()
+		# Dentro de la pantalla aunque los recursos se hayan movido al borde.
+		pos.x = clampf(pos.x, 0.0, maxf(0.0, vp.x - PAUSE_BTN_SIZE))
+		pos.y = clampf(pos.y, 0.0, maxf(0.0, vp.y - PAUSE_BTN_SIZE))
+		_pause_btn.offset_left = pos.x
+		_pause_btn.offset_right = pos.x + PAUSE_BTN_SIZE
+		_pause_btn.offset_top = pos.y
+		_pause_btn.offset_bottom = pos.y + PAUSE_BTN_SIZE
 
 ## El boton de pausa, para pruebas.
 func pause_button() -> Button:

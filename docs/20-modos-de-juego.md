@@ -159,10 +159,12 @@ Godot que salía en el emulador de Android.
   campaña.
 - **Victoria:** una fila "Modo"; Constructor con sus propios textos.
 - **Fin de Supervivencia:** `AuditDefeatScreen` en su variante final.
-- **Sandbox:** una pestaña SANDBOX en el borde izquierdo (bajo la barra de
-  recursos; marca la partida como de pruebas) que abre las herramientas:
+- **Sandbox:** una pestaña SANDBOX en el borde izquierdo (al pie de la columna
+  izquierda; marca la partida como de pruebas) que abre las herramientas:
   INVOCAR TORMENTA e INVOCAR AUDITORÍA, apagados mientras ya hay una en
-  marcha (`scripts/ui/SandboxPanel.gd`, en `Main.tscn` y `Main2D.tscn`).
+  marcha (`scripts/ui/SandboxPanel.gd`, en `Main.tscn` y `Main2D.tscn`). Está
+  en `HudRegistry` (docs/21): se oculta desde Ajustes > Interfaz y se mueve en
+  "Editar disposición", y la tarjeta la sigue.
 
 Todo funciona igual en la vista 3D y en la 2D: ninguna pieza depende de la
 cámara ni del placer.
