@@ -195,7 +195,15 @@ static func _support_step(target: Dictionary) -> Dictionary:
 	# empieza por el aserradero, no por una mina que nadie necesita todavia.
 	var eating: bool = ProgressionManager.current_phase >= GameConfig.Phase.SETTLEMENT
 	for res in ["gold", "wood"]:
-		if eating and float(net[res]) < MIN_NET_PER_SECOND:
+		if not eating:
+			continue
+		# Hambre ya: lo que hay no llega a dos ciclos de comida. Un aserradero nuevo
+		# tarda en rendir (y puede no tener obreros: con la moral bajo 30 no nace
+		# nadie); el Mercado es inmediato.
+		var hungry: Dictionary = _food_market_step(res)
+		if not hungry.is_empty():
+			return hungry
+		if float(net[res]) < MIN_NET_PER_SECOND:
 			var fix: Dictionary = _producer_step(res, "OBJ_WHY_FEED_%s" % res.to_upper())
 			if not fix.is_empty() and String(fix["id"]) != String(target.get("id", "")):
 				return fix
@@ -323,6 +331,38 @@ static func missing_for(step: Dictionary) -> Dictionary:
 		if short > 0:
 			missing[ResourceManager.get_type_name(type)] = short
 	return missing
+
+## Comprar comida (madera) con el oro que sobre, o vender lo que sobre por oro,
+## cuando lo que hay de `res` no llega a dos ciclos de consumo. {} si no hay hambre
+## o no hay con que.
+static func _food_market_step(res: String) -> Dictionary:
+	var pop: int = PopulationManager.get_population()
+	var upkeep := 0
+	for unit_id in GameConfig.get_unit_ids():
+		upkeep += ArmyManager.get_count(unit_id) * int(GameConfig.get_unit_def(unit_id).get("upkeep_gold", 0))
+	var due: int = pop + (upkeep if res == "gold" else 0)
+	var have: int = ResourceManager.get_amount(ResourceManager.name_to_type(res))
+	if have >= due * 2:
+		return {}
+	var wanted: int = maxi(MIN_SALE, due * 4 - have)
+	if res == "wood":
+		var gold_spare: int = ResourceManager.get_amount(ResourceManager.Type.GOLD) - (pop + upkeep) * 2
+		var price: int = maxi(1, MarketManager.get_buy_price("wood"))
+		var can: int = mini(wanted, gold_spare / price)
+		if can >= MIN_SALE and ResourceManager.get_free_space() >= can:
+			return {"kind": "buy", "id": "wood", "amount": can, "why": "OBJ_WHY_HUNGRY"}
+	# Vender lo que no se come: el acero y el petroleo primero.
+	for other in ["oil", "steel", "wood"]:
+		if other == res or not ResourceManager.is_unlocked_by_name(other):
+			continue
+		var stock: int = ResourceManager.get_amount(ResourceManager.name_to_type(other))
+		var keep: int = pop * 4 if other == "wood" else 0
+		if stock - keep < MIN_SALE:
+			continue
+		var sell_price: int = maxi(1, MarketManager.get_sell_price(other))
+		var units: int = mini(stock - keep, maxi(MIN_SALE, int(ceil(float(wanted) / float(sell_price)))))
+		return {"kind": "sell", "id": other, "amount": units, "why": "OBJ_WHY_HUNGRY"}
+	return {}
 
 ## La siguiente tecnologia de almacen que se puede investigar, o {} si no queda
 ## ninguna o ya se esta investigando algo (una a la vez).
