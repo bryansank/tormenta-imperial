@@ -199,7 +199,13 @@ func _get_decoration_morale_rate() -> int:
 func _tick_growth() -> void:
 	if _population >= _max_population:
 		return
-	if _morale < GameConfig.morale_growth_threshold:
+	# Por debajo del suelo de rebrote la gente vuelve aunque la moral este por los
+	# suelos. Sin esto una colonia hundida (hambre, Diezmo en obreros) se quedaba
+	# en 1 habitante con la moral a 0: sin obreros no produce la mina, sin oro no
+	# se paga la comida, sin comida la moral no sube de 30 y sin 30 no nace nadie.
+	# Un atasco sin salida; "se puede caer, no se puede perder" pide que la haya.
+	var regrowing: bool = _population < GameConfig.population_regrow_floor
+	if _morale < GameConfig.morale_growth_threshold and not regrowing:
 		return  # Too unhappy to grow
 	# Grow 1 pop if morale is decent
 	_population = mini(_population + 1, _max_population)

@@ -2,6 +2,8 @@ class_name BuildingData
 extends Resource
 ## Data definition for a building type. Each .tres file is one building kind.
 
+const DATA_DIR := "res://data/buildings/"
+
 @export var id: String = ""
 @export var display_name: String = ""
 @export var description: String = ""
@@ -78,3 +80,28 @@ func get_cost() -> Dictionary:
 ## Helper: check if this building produces any resources.
 func is_producer() -> bool:
 	return produces_gold > 0 or produces_steel > 0 or produces_oil > 0 or produces_wood > 0
+
+
+## Every building definition, in an exported game too. An export renames each
+## .tres to *.tres.remap, so scanning the folder with DirAccess for ".tres"
+## found nothing there: the build menu came up EMPTY in the APK and the .exe
+## while the editor looked fine. ResourceLoader.list_directory() lists the
+## loadable names in both cases.
+static func load_all() -> Array:
+	var result: Array = []
+	for file_name in resource_file_names(ResourceLoader.list_directory(DATA_DIR)):
+		var res = load(DATA_DIR + file_name)
+		if res is BuildingData:
+			result.append(res)
+	return result
+
+
+## Keeps only resource file names and drops the ".remap" an export adds, once
+## per resource. Pure, so the export case is testable from the editor.
+static func resource_file_names(names: PackedStringArray) -> PackedStringArray:
+	var out := PackedStringArray()
+	for raw in names:
+		var file_name := raw.trim_suffix(".remap")
+		if (file_name.ends_with(".tres") or file_name.ends_with(".res")) and not out.has(file_name):
+			out.append(file_name)
+	return out

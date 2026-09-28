@@ -29,6 +29,18 @@ func _ready() -> void:
 	EventBus.building_deselected.connect(func(): _set_placing(false))
 	_apply_visibility(GameConfig.touch_controls_enabled())
 	EventBus.touch_controls_changed.connect(_apply_visibility)
+	# Opacidad elegida en Ajustes > Controles (bug 7: tapaban el mapa).
+	_apply_opacity(GameConfig.ui_touch_controls_opacity)
+	EventBus.touch_controls_opacity_changed.connect(_apply_opacity)
+
+## La raiz de los controles (primer hijo) se transparenta entera: flechas,
+## zoom, giro y los botones de colocar.
+func _apply_opacity(alpha: float) -> void:
+	if get_child_count() > 0 and get_child(0) is CanvasItem:
+		(get_child(0) as CanvasItem).modulate.a = alpha
+
+func current_opacity() -> float:
+	return (get_child(0) as CanvasItem).modulate.a if get_child_count() > 0 else 1.0
 
 ## Hides the whole layer. A held D-pad button is released too, so the camera
 ## does not keep drifting after the controls vanish under the finger.

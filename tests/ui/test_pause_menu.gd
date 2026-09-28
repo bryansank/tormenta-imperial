@@ -196,12 +196,12 @@ func test_main_menu_hands_the_pause_to_the_title() -> void:
 	assert_bool(blocked).is_true()
 	assert_bool(get_tree().paused).is_false()
 
-func test_the_pause_button_moves_down_on_a_phone() -> void:
+## Menu unico: el boton va siempre arriba a la derecha (donde estaba el ☰),
+## con palabra y de tamano dedo, en PC, tablet y movil.
+func test_the_menu_button_sits_top_right_and_is_finger_sized() -> void:
 	var menu := _menu()
-	menu._place_pause_button(Vector2(400, 720))
-	var phone_anchor: float = menu.pause_button().anchor_top
-	menu._place_pause_button(Vector2(1280, 720))
-	var desk_anchor: float = menu.pause_button().anchor_top
-	assert_float(phone_anchor).is_equal(1.0)
-	assert_float(desk_anchor).is_equal(0.0)
-	assert_float(menu.pause_button().custom_minimum_size.x).is_greater_equal(float(UITheme.MIN_BTN_H))
+	var btn: Button = menu.menu_button()
+	assert_float(btn.anchor_left).is_equal(1.0)
+	assert_float(btn.anchor_top).is_equal(0.0)
+	assert_float(btn.custom_minimum_size.y).is_greater_equal(float(UITheme.MIN_BTN_H))
+	assert_str(btn.text).is_equal(Tr.t("BTN_GAME_MENU"))

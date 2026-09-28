@@ -548,18 +548,7 @@ func open_building_guide() -> void:
 		_toggle_guide()
 
 func _load_buildings() -> Array:
-	var result: Array = []
-	var dir := DirAccess.open("res://data/buildings")
-	if not dir:
-		return result
-	dir.list_dir_begin()
-	var file_name := dir.get_next()
-	while file_name != "":
-		if file_name.ends_with(".tres"):
-			var res = load("res://data/buildings/" + file_name)
-			if res is BuildingData:
-				result.append(res)
-		file_name = dir.get_next()
+	var result: Array = BuildingData.load_all()
 	result.sort_custom(func(a, b): return a.get_display_name() < b.get_display_name())
 	return result
 

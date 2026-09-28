@@ -43,6 +43,7 @@ var _paused_by_me := false
 ## Pantalla prestada abierta encima (Ajustes) y su process_mode original.
 var _sub: CanvasLayer = null
 var _sub_mode: int = Node.PROCESS_MODE_INHERIT
+var _sub_layer: int = 1
 
 func _ready() -> void:
 	layer = LAYER
@@ -51,6 +52,7 @@ func _ready() -> void:
 	_setup_ui()
 	visible = false
 	UIManager.window_closed.connect(_on_window_closed)
+	UIManager.window_opened.connect(func(_w): _pin_sub_layer())
 	get_viewport().size_changed.connect(_relayout)
 	# El menu sale antes de que GameManager cargue (lo hace cuando la escena
 	# entera esta lista): al terminar la carga se sabe que hay que continuar y
@@ -268,15 +270,35 @@ func _on_quit() -> void:
 ## pausa no recibiria clics: se le deja procesar mientras esta abierto y se le
 ## devuelve su modo al cerrarse. El menu se esconde para no taparlo (su capa
 ## queda por encima de la de cualquier ventana de la pila).
+##
+## Y se pone POR ENCIMA de todo mientras dura (bug 1): UIManager la dejaba en la
+## capa 13 y cualquier cosa por encima (la intro del tutorial, capa 17, que se
+## abria detras del menu) se comia los toques. La capa se vuelve a fijar cada
+## vez que UIManager reordena su pila y en cada frame.
 func _open_sub(panel: CanvasLayer) -> void:
 	_sub = panel
 	_sub_mode = panel.process_mode
+	_sub_layer = panel.layer
 	panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	_pin_sub_layer()
 	_root.visible = false
+
+func _pin_sub_layer() -> void:
+	if _sub != null and is_instance_valid(_sub):
+		_sub.layer = LAYER + 1
+
+func _process(_delta: float) -> void:
+	if _sub != null:
+		_pin_sub_layer()
+
+## Pantalla prestada abierta, para pruebas.
+func borrowed() -> CanvasLayer:
+	return _sub
 
 func _close_sub() -> void:
 	if _sub != null and is_instance_valid(_sub):
 		_sub.process_mode = _sub_mode
+		_sub.layer = _sub_layer
 	_sub = null
 	_root.visible = true
 

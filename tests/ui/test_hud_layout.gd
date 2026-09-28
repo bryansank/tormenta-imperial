@@ -327,7 +327,9 @@ func test_four_resources_push_the_pause_and_the_center_column_aside(width: float
 	GameConfig.dev_mode = saved_dev
 	var tag := "%dx%d res=%s pausa=%s" % [width, height, res_rect, pause_rect]
 	assert_bool(pause_rect.intersects(res_rect)).override_failure_message(tag).is_false()
-	assert_float(pause_rect.end.x).override_failure_message(tag).is_less_equal(width)
+	# El boton del menu (antes la pausa II junto a los recursos) va anclado a la
+	# esquina superior derecha del viewport REAL, no del lienzo simulado.
+	assert_float(pause_rect.end.x).override_failure_message(tag).is_less_equal(menu.get_viewport().get_visible_rect().size.x)
 	for c in [storm, objective]:
 		assert_bool(_rect(c).intersects(pause_rect)).override_failure_message("%s centro=%s" % [tag, _rect(c)]).is_false()
 		assert_bool(_rect(c).intersects(res_rect)).override_failure_message("%s centro=%s" % [tag, _rect(c)]).is_false()

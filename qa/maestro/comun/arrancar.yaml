@@ -1,0 +1,13 @@
+# Arranque limpio hasta el menu de titulo: sin partida guardada y con los ajustes
+# de fabrica (user://settings.cfg borrado). El APK QA tarda 20-30 s en el emulador
+# el primer arranque tras clearState (splash de Godot + carga de la escena).
+appId: com.bryankey.tormentaimperial.qa
+---
+- runFlow: salida.yaml
+- launchApp:
+    clearState: true
+    stopApp: true
+- runFlow:
+    file: esperar.yaml
+    env:
+      MS: 60000
