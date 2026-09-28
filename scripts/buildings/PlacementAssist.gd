@@ -313,12 +313,15 @@ static func spot_cells(origins: Array, size: Vector2i) -> Array:
 			seen[c] = true
 	return seen.keys()
 
-## Linea "Necesita ..." de un edificio para su ficha, o "" si construye donde sea.
+## La regla del yacimiento de un edificio para su ficha, o "" si construye donde
+## sea. Es la misma frase que da el colocador al fallar (la clave `message` de
+## `GameConfig.building_deposit_rules`): una sola redaccion en la ficha, en el
+## aviso al tocar y en el aviso con raton, para que nunca se contradigan.
 static func rule_text(building_id: String) -> String:
 	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
 	if rule.is_empty():
 		return ""
-	return Tr.t("LBL_RULE_" + String(rule["deposit"]).to_upper())
+	return Tr.t(String(rule.get("message", "LBL_REQUIRES_DEPOSIT")))
 
 # ── Boton ✓ ───────────────────────────────────────────────────────────
 

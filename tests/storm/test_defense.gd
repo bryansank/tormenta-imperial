@@ -79,6 +79,15 @@ func test_the_garrison_respects_the_board_cap() -> void:
 		total += int(count)
 	assert_int(total).is_equal(GameConfig.combat_deploy_cap)
 
+## Atasco de la linea jugable: con mas tropa que huecos, los huecos se llenaban
+## por orden de diccionario (infanteria primero) y seis blindados criados para el
+## final se quedaban en tres. La guarnicion pone a los mejores.
+func test_a_full_board_fields_the_strongest_units_first() -> void:
+	_given_army({"infantry": 3, "vehicle": 6})
+	assert_dict(CombatManager.get_garrison()).is_equal({"vehicle": 6})
+	_given_army({"infantry": 4, "artillery": 1, "vehicle": 3})
+	assert_dict(CombatManager.get_garrison()).is_equal({"vehicle": 3, "artillery": 1, "infantry": 2})
+
 func test_an_empty_army_leaves_no_garrison() -> void:
 	_given_army({})
 	assert_bool(CombatManager.get_garrison().is_empty()).is_true()

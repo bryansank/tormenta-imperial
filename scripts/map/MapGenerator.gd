@@ -40,7 +40,50 @@ func generate_new_map() -> Array:
 			continue
 		spawn_deposit(deposit_id, cell, -1, dep_size)
 
+	_guarantee_minimums(center)
 	return get_all_deposits()
+
+## El sorteo de arriba elige el tipo de cada yacimiento al azar y sin mirar el
+## resto, asi que una isla podia salir sin un solo pozo de petroleo (y entonces
+## no hay Refineria, ni era 3, ni final), o sin bosque (y la partida no empieza).
+## Pasaba en ~2 de cada 100 mapas. Aqui se completa lo que falte hasta
+## `GameConfig.deposit_min_per_type`, y se exige que al menos uno de cada tipo
+## deje un hueco legal a su extractor: un bosque encajonado entre otros
+## yacimientos cuenta como bosque, pero no abre la partida.
+func _guarantee_minimums(center: Vector2i) -> void:
+	for deposit_id in DEPOSIT_IDS:
+		var wanted: int = int(GameConfig.deposit_min_per_type.get(deposit_id, 0))
+		var tries := 0
+		while wanted > 0 and tries < 40 \
+				and (_count_type(deposit_id) < wanted or not _type_is_usable(deposit_id)):
+			tries += 1
+			var dep_size := _roll_deposit_size(deposit_id)
+			var cell := _random_cell_for_deposit(center, dep_size)
+			if cell != Vector2i(-1, -1):
+				spawn_deposit(deposit_id, cell, -1, dep_size)
+
+func _count_type(deposit_id: String) -> int:
+	var n := 0
+	for entry in _deposit_cells:
+		if entry["id"] == deposit_id and is_instance_valid(entry["node"]):
+			n += 1
+	return n
+
+## ¿Puede el extractor de este tipo levantarse junto a (o encima de) alguno?
+func _type_is_usable(deposit_id: String) -> bool:
+	if _count_type(deposit_id) == 0:
+		return false
+	for building_id in GameConfig.building_deposit_rules:
+		var rule: Dictionary = GameConfig.building_deposit_rules[building_id]
+		if String(rule["deposit"]) != deposit_id:
+			continue
+		var data: Resource = load("res://data/buildings/%s.tres" % building_id)
+		var footprint: Vector2i = data.grid_size if data != null else Vector2i(2, 2)
+		# Encima del yacimiento: el pozo mas pequeno (2x2) ya aloja la Refineria.
+		if int(rule["reach"]) == 0:
+			return true
+		return has_buildable_spot_near(deposit_id, footprint, int(rule["reach"]))
+	return true
 
 func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, dep_size: Vector2i = Vector2i(2, 2)) -> Node:
 	if not DEPOSIT_TYPES.has(deposit_id):

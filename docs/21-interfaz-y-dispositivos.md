@@ -324,8 +324,12 @@ devuelve el mando al cursor.
 
 **La regla del yacimiento se ve antes de colocar:**
 
-- La ficha de `ConstructionMenu` dice "▲ Necesita bosque adyacente" (o la veta,
-  el hierro, el pozo): `PlacementAssist.rule_text(id)`, claves `LBL_RULE_*`.
+- La ficha de `ConstructionMenu` dice "▲ El aserradero debe tocar un bosque (al
+  lado o en diagonal)" (o la veta, el hierro, el pozo):
+  `PlacementAssist.rule_text(id)`. Es la misma clave `message` de
+  `GameConfig.building_deposit_rules` que usa el aviso al fallar
+  (`LBL_NEEDS_*_NEAR`, `LBL_REQUIRES_DEPOSIT`), con ratón o en táctil: una sola
+  redacción en todas partes.
 - Al colocar un extractor se pintan en verde pálido las casillas donde cabe
   (`PlacementAssist.valid_spots`, el mismo `PlacementRules.evaluate_placement`
   del clic). En tactil el fantasma sale ya en la más cercana al centro de la
