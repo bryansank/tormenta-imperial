@@ -248,15 +248,18 @@ var resource_colors := {
 # Volumes are linear [0.0, 1.0]; AudioManager converts to dB per bus.
 # Master scales all others. Set any to 0.0 to mute that channel.
 
-var audio_master_volume := 0.9
+## Valores de serie bajos (bug 4): el primer arranque sonaba muy fuerte. Los
+## deslizadores siguen una curva perceptual (AudioManager.slider_to_db), asi que
+## 0.8 / 0.5 ya bajan de verdad. Quien ya guardo settings.cfg conserva lo suyo.
+var audio_master_volume := 0.8
 ## Bajada de 0.6 a 0.35: el dueno la encontraba muy invasiva. Quien ya guardo
 ## un volumen en settings.cfg conserva el suyo.
 var audio_music_volume := 0.35
 ## Musica si/no, aparte del volumen (Ajustes y el menu ☰). Apagada, AudioManager
 ## no arranca ninguna pista, ni al cambiar de era ni al entrar en combate.
 var audio_music_enabled := true
-var audio_sfx_volume := 0.8
-var audio_ambient_volume := 0.5
+var audio_sfx_volume := 0.5
+var audio_ambient_volume := 0.4
 
 # ── Camara: arrastrar el mapa ──
 # El raton y el dedo mueven el mapa con la misma cuenta (agarrar el terreno y
