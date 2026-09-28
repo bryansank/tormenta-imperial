@@ -196,6 +196,13 @@ Para una ayuda nueva que hable de ratón: escribe también `MI_CLAVE_TOUCH` (ES 
 EN) y llama a `Tr.ti`. `test_device_profile.gd` falla si un texto `_TOUCH` dice
 WASD, rueda, ratón o clic.
 
+El tutorial guiado y las ayudas ([23-onboarding.md](23-onboarding.md)) van
+igual: cada paso del tutorial ("Toca CONSTRUIR" / "Haz clic en CONSTRUIR"), cada
+globo y el índice de AYUDA leen con `Tr.ti`. El prólogo dice "Desliza el dedo
+para pasar folio" en tablet y "← → o Intro" en PC. El interruptor "Globos de
+ayuda" de Interfaz (`HelperPanel.callouts`) es ahora el de las ayudas que salen
+solas: apagado, el índice de AYUDA sigue reabriendo la que se pida.
+
 ## 7. Disposición por tamaño de lienzo
 
 - **< 1080 px de ancho** (tablet 4:3 con escala, 150 %…): la columna central

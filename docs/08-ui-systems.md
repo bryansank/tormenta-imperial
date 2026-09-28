@@ -58,7 +58,7 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - **Button:** "☰ MENÚ", top-right, finger-sized, always visible in play (hidden while the menu itself is open). No other menu button exists; the old sidebar buttons of each panel stay hidden (nobody emits `sidebar_toggled(true)` any more)
 - **Card:** title, "Modo: X", and two groups side by side (one column with scroll below 700 px):
   - **COLONIA** — ¿Qué hacer?, Progreso, Mercado (from the ECONOMY phase), Tecnología, Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode). Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
-  - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Historia (replays the intro), Menú principal, Guardar y salir
+  - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Historia (closes the menu, then `TutorialManager.show_prologue()` replays the prologue, docs/23), Menú principal, Guardar y salir
 - **Behavior:**
   - Real pause while open (`get_tree().paused`); tapping the backdrop resumes.
   - The button NEVER fails silently: it cancels a placement (`building_placement_cancelled`) and closes every UIManager window (`UIManager.close_all_windows()`) and then opens. `can_pause()` is only for ESC.
@@ -113,6 +113,24 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
   columna izquierda real mas ancha: cuatro recursos + LIMPIAR). Ya no hay
   boton de pausa a la derecha de los recursos (`PAUSE_RESERVE = 0`): el menu
   unico va arriba a la derecha.
+
+## Prologo, tutorial y ayudas (docs/23)
+
+Tres piezas que no se mezclan, cada una con su estilo:
+
+| Pieza | Script | Capa | Estilo | Que hace |
+|---|---|---|---|---|
+| Prologo | `PrologueScreen` (hija de `TutorialPanel`) | 32 | papel, maquina de escribir, lacre | El lore como expediente de la Regencia. Atras / Siguiente / Saltar historia, puntos de pagina, deslizar el dedo. Pausa el juego |
+| Tutorial guiado | `TutorialPanel` | 19 | laton sobre metal | Coach marks sobre la interfaz real: velo con hueco, marco, flecha, una linea. Avanza cuando el jugador hace la cosa (`TutorialManager.derive_step`). "Saltar tutorial" |
+| Ayudas | `HelperPanel` (+ `HelpCallout`, `HelpCatalog`) | 14 (globos) / 19 (tarjeta) | azul acero | Una a la vez, en cola por prioridad, con ✕ y cierre solo (6-12 s, barra, pausa con el dedo encima). Cerrada = vista |
+| Indice de AYUDA | `HelpIndexPanel` (grupo `help_index`, `open()`) | pila de UIManager | metal | Lo visto y lo basico, por categoria; tocar reabre esa ayuda senalando su control. Interruptor global, guia de edificios, Repetir tutorial, Historia |
+
+- `TutorialManager.show_prologue()` (alias `show_intro()`) reabre el prologo: lo
+  usan "Historia" de la pausa y el menu unico.
+- El prologo nunca se abre con el menu principal delante ni con el arbol en
+  pausa: queda pendiente (`is_prologue_pending`) y sale al soltarlo.
+- Los controles se buscan por nombre estable (`HelpTargets`): grupos
+  `hud_build_button` y `hud_menu_button`, y si no, `HudRegistry`.
 
 ## UI Construction Pattern
 

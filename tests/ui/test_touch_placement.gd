@@ -347,3 +347,63 @@ func test_placing_closes_the_sidebar() -> void:
 	_start()
 	EventBus.sidebar_toggled.disconnect(listener)
 	assert_array(seen).is_equal([false])
+
+## Empezar a colocar cierra el MENÚ unico (#31) si estaba abierto.
+func test_placing_closes_the_game_menu() -> void:
+	_setup("2d")
+	var menu: CanvasLayer = FakeMenu.new()
+	add_child(menu)
+	menu.open = true
+	_start()
+	var still_open: bool = menu.open
+	remove_child(menu)
+	menu.free()
+	assert_bool(still_open).is_false()
+
+# ── Tutorial guiado + colocar con el dedo (integracion #32 + #34) ─────
+
+## El paso "toca junto a un bosque" (place_sawmill) avanza con el flujo de ✓:
+## las casillas verdes salen, ✓ planta el aserradero y el tutorial pasa a
+## esperar la obra.
+func _check_guide_advances_with_confirm(view: String) -> void:
+	var saved := {"state": TutorialManager.guide_state, "base": TutorialManager.guide_baseline,
+		"step": TutorialManager._step, "menu": TutorialManager._menu_open,
+		"placing": TutorialManager._placing_id, "intro": TutorialManager.intro_seen}
+	_setup(view)
+	TutorialManager.intro_seen = true
+	TutorialManager.start_guide(false)
+	_start()
+	var step_placing := TutorialManager.current_step()
+	var hl = _placer.get_spot_highlight()
+	var highlighted: bool = hl != null and hl.visible
+	var confirm_shown: bool = _assist().confirm_button().visible
+	_assist().confirm_button().pressed.emit()
+	var sawmills := _sawmills()
+	var step_after := TutorialManager.current_step()
+	TutorialManager.guide_state = saved["state"]
+	TutorialManager.guide_baseline = saved["base"]
+	TutorialManager._step = saved["step"]
+	TutorialManager._menu_open = saved["menu"]
+	TutorialManager._placing_id = saved["placing"]
+	TutorialManager.intro_seen = saved["intro"]
+	assert_str(step_placing).is_equal("place_sawmill")
+	assert_bool(highlighted).is_true()
+	assert_bool(confirm_shown).is_true()
+	assert_int(sawmills).is_equal(1)
+	assert_str(step_after).is_equal("wait_sawmill")
+
+func test_3d_the_guide_advances_when_the_sawmill_is_confirmed_by_touch() -> void:
+	_check_guide_advances_with_confirm("3d")
+
+func test_2d_the_guide_advances_when_the_sawmill_is_confirmed_by_touch() -> void:
+	_check_guide_advances_with_confirm("2d")
+
+## Doble del menu unico (PauseMenu): solo lo que PlacementAssist usa.
+class FakeMenu extends CanvasLayer:
+	var open := false
+	func _ready() -> void:
+		add_to_group("game_menu")
+	func is_open() -> bool:
+		return open
+	func resume() -> void:
+		open = false

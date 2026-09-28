@@ -334,3 +334,17 @@ signal run_ended(result: String)
 ## "audit". Solo informativo (avisos, sonido); las reglas no cambian.
 @warning_ignore("unused_signal")
 signal sandbox_invoked(what: String)
+
+# ── prologo-ayudas ──
+## El tutorial guiado cambio de paso (TutorialManager.GUIDE_STEPS). "" = ninguno
+## en pantalla (terminado, saltado o sin empezar).
+@warning_ignore("unused_signal")
+signal tutorial_step_changed(step_id: String)
+## El tutorial guiado termino. `skipped`: el jugador pulso "Saltar tutorial".
+## HelperPanel pone entonces en cola los globos basicos, de uno en uno.
+@warning_ignore("unused_signal")
+signal tutorial_guide_finished(skipped: bool)
+## El jugador pidio volver a ver una ayuda concreta (indice de AYUDA). El id es
+## de HelpCatalog. HelperPanel la ensena ya, senalando su control.
+@warning_ignore("unused_signal")
+signal help_reopen_requested(help_id: String)

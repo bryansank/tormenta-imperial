@@ -68,7 +68,7 @@ No service references another directly -- only through EventBus.
 | 19 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
 | 20 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
 | 21 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
-| 22 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Paged intro on a new game + one contextual tip per event; state saved with the game |
+| 22 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built) and which tips/helps were seen; state saved with the game (docs/23) |
 | 23 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 24 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
 | 25 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size). See `docs/21-interfaz-y-dispositivos.md` |
@@ -96,12 +96,12 @@ Main (Node3D)
   +-- ObjectivePanel (CanvasLayer) -- "what to do" goals modal
   +-- ArmyPanel (CanvasLayer) -- train units, Military Power, upkeep
   +-- SettingsPanel (CanvasLayer) -- volume sliders + UI toggles (persisted)
-  +-- HelperPanel (CanvasLayer) -- "?" on-screen callouts + building guide modal
+  +-- HelperPanel (CanvasLayer) -- help callouts and tip cards, one at a time with ✕ + auto-close; building guide; creates HelpIndexPanel (group "help_index")
   +-- SkirmishPanel (CanvasLayer) -- commit troops before a board opens; "QUE BAJEN" (Final Audit)
   +-- SandboxPanel (CanvasLayer) -- Sandbox mode only: summon a storm / the Final Audit
   +-- BattleScreen (CanvasLayer) -- the 8x8 tactical board (layer 18, outside UIManager's stack)
   +-- StormHUD (CanvasLayer) -- storm phase indicator (colour + icon, no countdown)
-  +-- TutorialPanel (CanvasLayer) -- paged intro + contextual tip cards
+  +-- TutorialPanel (CanvasLayer) -- guided coach marks on the real UI; hosts PrologueScreen (the lore, layer 32)
   +-- AuditWaveBanner / WarReportScreen / AuditDefeatScreen (CanvasLayer) -- siege banner and war reports
   +-- PauseMenu (CanvasLayer, layer 30) -- THE game menu: "☰ MENÚ" top-right, COLONIA + PARTIDA, pauses; ESC / Android back
   +-- TitleMenu (CanvasLayer, layer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal

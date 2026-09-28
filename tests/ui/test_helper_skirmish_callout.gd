@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 ## The Skirmish callout follows the Skirmish sidebar button: it is built from
 ## the start with its own text, stays hidden until a Barracks stands and the
-## sidebar is open, and goes away again when either condition drops.
+## sidebar is open, and goes away again when either condition drops. Like every
+## help now it comes once: closed (✕ or timeout) it is seen and stays away.
 ## ArmyManager.barracks_count() reads current_scene/BuildingPlacer, so a stub
 ## placer is parked there for the duration of each test.
 
@@ -18,10 +19,14 @@ var _placer: FakePlacer
 var _scene: Node
 var _made_scene := false
 var _saved_helper_visible := true
+var _saved_tutorial: Dictionary = {}
 
 func before_test() -> void:
 	_saved_helper_visible = GameConfig.ui_helper_visible
 	GameConfig.ui_helper_visible = true
+	# Tutorial hecho y nada visto: el globo puede salir.
+	_saved_tutorial = TutorialManager.get_save_data()
+	TutorialManager.load_save_data({"intro_seen": true, "guide_state": "done"})
 
 	_scene = get_tree().current_scene
 	if _scene == null:
@@ -47,6 +52,7 @@ func after_test() -> void:
 		get_tree().root.remove_child(_scene)
 		_scene.free()
 	GameConfig.ui_helper_visible = _saved_helper_visible
+	TutorialManager.load_save_data(_saved_tutorial)
 
 func _callout() -> PanelContainer:
 	return _panel.find_child(HelperPanelScript.SKIRMISH_CALLOUT_NAME, true, false) as PanelContainer
@@ -73,9 +79,7 @@ func test_there_is_exactly_one_skirmish_callout() -> void:
 	assert_int(count).is_equal(1)
 
 func test_the_callout_carries_the_skirmish_help_text() -> void:
-	var label := _callout().get_child(0) as Label
-	assert_object(label).is_not_null()
-	assert_str(label.text).is_equal(Tr.t("LBL_HELP_SKIRMISH"))
+	assert_str(_callout().call("body_text")).is_equal(Tr.t("LBL_HELP_SKIRMISH"))
 
 func test_the_help_text_exists_in_both_languages() -> void:
 	for locale in ["es", "en"]:
@@ -116,10 +120,23 @@ func test_gone_again_when_the_last_barracks_falls() -> void:
 	EventBus.army_changed.emit()
 	assert_bool(_panel.is_skirmish_callout_shown()).is_false()
 
-func test_gone_when_the_sidebar_closes() -> void:
+func test_gone_when_the_sidebar_closes_and_back_when_it_opens_unseen() -> void:
+	# Apartado por el menu no cuenta como visto: vuelve al reabrir.
 	_placer.barracks = 1
 	_open_sidebar()
 	EventBus.sidebar_toggled.emit(false)
+	assert_bool(_panel.is_skirmish_callout_shown()).is_false()
+	_open_sidebar()
+	assert_bool(_panel.is_skirmish_callout_shown()).is_true()
+
+func test_once_closed_it_does_not_come_back_by_itself() -> void:
+	_placer.barracks = 1
+	_open_sidebar()
+	(_callout().call("close_button") as Button).pressed.emit()
+	assert_bool(TutorialManager.has_seen_help("callout_skirmish")).is_true()
+	EventBus.sidebar_toggled.emit(false)
+	_open_sidebar()
+	_panel.skip_gap()
 	assert_bool(_panel.is_skirmish_callout_shown()).is_false()
 
 # ── It behaves like every other callout ──────────────────────────────
@@ -127,15 +144,14 @@ func test_gone_when_the_sidebar_closes() -> void:
 func test_the_helper_toggle_hides_it_with_the_rest() -> void:
 	_placer.barracks = 1
 	_open_sidebar()
-	_panel._set_callouts_visible(false)
+	GameConfig.ui_helper_visible = false
+	_panel._refresh_callouts()
 	assert_bool(_panel.is_skirmish_callout_shown()).is_false()
-	_panel._set_callouts_visible(true)
+	GameConfig.ui_helper_visible = true
+	_panel._refresh_callouts()
 	assert_bool(_panel.is_skirmish_callout_shown()).is_true()
 
-func test_the_other_callouts_do_not_depend_on_the_barracks() -> void:
-	# Only the Skirmish tip is gated; the rest of the guide stays as it was.
-	var visible_others := 0
-	for child in _panel.find_children("*", "PanelContainer", true, false):
-		if child.name != HelperPanelScript.SKIRMISH_CALLOUT_NAME and child.get_parent() == _callout().get_parent() and child.visible:
-			visible_others += 1
-	assert_int(visible_others).is_greater(0)
+func test_it_is_the_only_help_on_screen() -> void:
+	_placer.barracks = 1
+	_open_sidebar()
+	assert_int(_panel.visible_help_count()).is_equal(1)

@@ -155,24 +155,27 @@ func test_settings_can_be_used_while_paused_and_come_back() -> void:
 	assert_bool(card_back).is_true()
 	assert_int(mode_back).is_equal(Node.PROCESS_MODE_INHERIT)
 
-func test_story_replays_the_intro_and_returns_to_the_menu() -> void:
+## Historia (integracion #31 + #32): el menu se cierra y suelta la pausa ANTES
+## de pedir el prologo, porque el prologo espera a que no haya pausa ni menu.
+## Al cerrar el prologo se vuelve a la partida, sin pausa y sin el menu.
+func test_story_closes_the_menu_and_replays_the_prologue() -> void:
 	var tutorial: CanvasLayer = auto_free(load("res://scenes/ui/TutorialPanel.tscn").instantiate())
 	add_child(tutorial)
 	var seen_before: bool = TutorialManager.intro_seen
 	var menu := _menu()
 	menu.open_pause()
 	menu._on_story()
+	var menu_closed: bool = not menu.is_open()
 	var intro_open: bool = tutorial.is_intro_open()
-	var tutorial_mode: int = tutorial.process_mode
 	tutorial._close()
 	var card_back: bool = menu._root.visible
-	var mode_back: int = tutorial.process_mode
-	menu.resume()
+	# El prologo pausa mientras se lee (la pausa es suya, no del menu) y la suelta.
+	var paused: bool = get_tree().paused
 	TutorialManager.intro_seen = seen_before
+	assert_bool(menu_closed).is_true()
+	assert_bool(paused).is_false()
 	assert_bool(intro_open).is_true()
-	assert_int(tutorial_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
-	assert_bool(card_back).is_true()
-	assert_int(mode_back).is_equal(Node.PROCESS_MODE_INHERIT)
+	assert_bool(card_back).is_false()
 
 func test_main_menu_hands_the_pause_to_the_title() -> void:
 	var title: CanvasLayer = auto_free(load("res://scenes/ui/TitleMenu.tscn").instantiate())
