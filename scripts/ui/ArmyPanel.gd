@@ -86,9 +86,11 @@ func _setup_ui() -> void:
 	_power_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_power_label)
 
-	var stats_row := HBoxContainer.new()
-	stats_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	stats_row.add_theme_constant_override("separation", 20)
+	# Flow y no HBox: en un movil en vertical las dos cifras van una debajo de
+	# otra en vez de empujar el panel fuera de la pantalla.
+	var stats_row := HFlowContainer.new()
+	stats_row.alignment = FlowContainer.ALIGNMENT_CENTER
+	stats_row.add_theme_constant_override("h_separation", 20)
 	_capacity_label = UITheme.make_label("", "body", UITheme.TEXT)
 	_slots_label = UITheme.make_label("", "body", UITheme.TEXT_DIM)
 	stats_row.add_child(_capacity_label)
@@ -166,8 +168,8 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	info.add_theme_constant_override("separation", 1)
 	row.add_child(info)
 
-	var title_row := HBoxContainer.new()
-	title_row.add_theme_constant_override("separation", 8)
+	var title_row := HFlowContainer.new()
+	title_row.add_theme_constant_override("h_separation", 8)
 	var name_label := UITheme.make_label(Tr.t(def.get("name", unit_id)), "section", UITheme.TEXT if unlocked else UITheme.TEXT_DIM)
 	title_row.add_child(name_label)
 	var tier_label := UITheme.make_label(Tr.t("LBL_ARMY_TIER") % int(def.get("tier", 1)), "small", UITheme.TEXT_DIM)
@@ -184,10 +186,19 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 		Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0)),
 		Tr.t("LBL_ARMY_UPKEEP") % int(def.get("upkeep_gold", 0)),
 	]
-	info.add_child(UITheme.make_label(stats, "small", UITheme.TEXT_DIM))
+	var stats_label := UITheme.make_label(stats, "small", UITheme.TEXT_DIM)
+	stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.add_child(stats_label)
 
 	# Right: train button
 	var check := ArmyManager.can_train(unit_id)
+	# Por que no se puede entrenar, a la vista: antes solo iba en el tooltip, y
+	# en movil no hay raton que se pose encima para leerlo.
+	if not check["ok"] and check["reason"] != "":
+		var why := UITheme.make_label(Tr.t(check["reason"]), "small", UITheme.WARNING)
+		why.name = "BlockedReason"
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.add_child(why)
 	var train_btn := Button.new()
 	train_btn.text = Tr.t("BTN_TRAIN")
 	train_btn.custom_minimum_size = Vector2(96, 40)
