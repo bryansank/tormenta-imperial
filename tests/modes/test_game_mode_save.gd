@@ -143,7 +143,11 @@ func _read_save() -> Dictionary:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 	return parsed if parsed is Dictionary else {}
 
+## Un guardado del formato de hoy salvo que la prueba diga otro: sin la clave
+## seria de antes de la red de carreteras y se apartaria sin cargarse.
 func _write_raw_save(data: Dictionary) -> void:
+	if not data.has("format"):
+		data["format"] = GameManager.SAVE_FORMAT
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	file.store_string(JSON.stringify(data))
 	file.close()
@@ -162,6 +166,20 @@ func test_a_save_from_before_the_modes_loads_as_campaign() -> void:
 	_open_colony()
 	assert_int(GameMode.current).is_equal(GameMode.Mode.CAMPAIGN)
 	assert_int(ResourceManager.get_amount(ResourceManager.Type.GOLD)).is_equal(111)
+
+## Un guardado de antes de los edificios de 2x2 (formato 1) no se carga: se
+## aparta con fecha y empieza una colonia nueva con su acera.
+func test_a_save_from_before_the_road_network_starts_a_new_colony() -> void:
+	_write_raw_save({"format": 1, "saved_at": Time.get_unix_time_from_system(), "resources": {"gold": 111, "wood": 99}})
+	_open_colony()
+	assert_int(ResourceManager.get_amount(ResourceManager.Type.GOLD)).is_not_equal(111)
+	assert_bool(GameManager.loaded_from_save).is_false()
+	var kept := false
+	for f in DirAccess.get_files_at("user://"):
+		if f.begins_with("save_game.v1-"):
+			kept = true
+			DirAccess.remove_absolute("user://" + f)
+	assert_bool(kept).is_true()
 
 func test_a_saved_mode_comes_back_on_load() -> void:
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)

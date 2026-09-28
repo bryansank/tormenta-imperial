@@ -5,6 +5,11 @@ extends Node
 const SAVE_PATH := "user://save_game.json"
 const NewGameDialogScript := preload("res://scripts/ui/NewGameDialog.gd")
 const CORRUPT_PATH_FMT := "user://save_game.corrupt-%s.json"
+## Version del formato del guardado. La 2 (2026-09-28) trae edificios de 2x2 y
+## la red de carreteras unida al Nucleo: un guardado de antes no cabe en ella
+## (casas de 1x1, nada conectado), asi que se aparta y se empieza de nuevo.
+const SAVE_FORMAT := 2
+const OLD_FORMAT_PATH_FMT := "user://save_game.v1-%s.json"
 
 ## El parte de progreso offline se cerro. La pantalla de victoria espera a esta
 ## senal si el parte sigue en pantalla: las dos usan la capa 20 y no deben
@@ -275,6 +280,7 @@ func _new_game() -> void:
 		var node: Node = _placer.place_building_at(nucleo_data, center)
 		if node:
 			ProductionManager.register_building(node, nucleo_data, 0.0)
+			pave_core_ring(center, nucleo_data.grid_size)
 	# Sandbox: el arbol entero investigado desde el primer minuto.
 	if GameMode.all_unlocked():
 		TechTreeManager.unlock_all()
@@ -282,6 +288,21 @@ func _new_game() -> void:
 	_map_gen.generate_new_map()
 	save_game()
 	EventBus.game_new_started.emit()
+
+## La acera del Nucleo: una carretera en cada celda de alrededor, gratis y ya
+## hecha. Es donde nace la red: todo lo demas se construye tocandola.
+func pave_core_ring(origin: Vector2i, size: Vector2i) -> void:
+	var road := _load_building_data("road")
+	if road == null or _placer == null:
+		return
+	for y in range(origin.y - 1, origin.y + size.y + 1):
+		for x in range(origin.x - 1, origin.x + size.x + 1):
+			var inside := x >= origin.x and x < origin.x + size.x and y >= origin.y and y < origin.y + size.y
+			if inside:
+				continue
+			var node: Node = _placer.place_building_at(road, Vector2i(x, y))
+			if node:
+				ProductionManager.register_building(node, road, 0.0)
 
 func _load_game() -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
@@ -295,6 +316,11 @@ func _load_game() -> void:
 		_recover_from_unreadable_save()
 		return
 	var data: Dictionary = json.data
+	# Un guardado de antes de la red de carreteras no se carga: se aparta con
+	# fecha y se empieza una partida nueva, avisando.
+	if int(data.get("format", 1)) < SAVE_FORMAT:
+		_restart_from_old_format()
+		return
 
 	# El modo primero: las cargas de los servicios leen sus reglas. Sin la clave
 	# es un guardado de antes de los modos, y eso es Campana.
@@ -447,20 +473,28 @@ func _recover_from_unreadable_save() -> void:
 		EventBus.notification_posted.emit(
 			Tr.t("MSG_SAVE_CORRUPT") % backup, "danger", UITheme.DANGER)
 
+func _restart_from_old_format() -> void:
+	var backup: String = backup_unreadable_save(OLD_FORMAT_PATH_FMT)
+	loaded_from_save = false
+	_new_game()
+	EventBus.notification_posted.emit(Tr.t("MSG_SAVE_OLD_FORMAT"), "info", UITheme.INFO)
+	if not backup.is_empty():
+		print("GameManager: guardado viejo apartado en ", backup)
+
 ## Copia el guardado ilegible a user://save_game.corrupt-<fecha>.json y devuelve
 ## la ruta, o "" si no habia nada que copiar.
-func backup_unreadable_save() -> String:
+func backup_unreadable_save(path_fmt: String = CORRUPT_PATH_FMT) -> String:
 	if not FileAccess.file_exists(SAVE_PATH):
 		return ""
 	var t: Dictionary = Time.get_datetime_dict_from_system()
 	var stamp: String = "%04d%02d%02d-%02d%02d%02d" % [
 		int(t["year"]), int(t["month"]), int(t["day"]),
 		int(t["hour"]), int(t["minute"]), int(t["second"])]
-	var path: String = CORRUPT_PATH_FMT % stamp
+	var path: String = path_fmt % stamp
 	var n := 1
 	while FileAccess.file_exists(path):
 		n += 1
-		path = CORRUPT_PATH_FMT % ("%s-%d" % [stamp, n])
+		path = path_fmt % ("%s-%d" % [stamp, n])
 	if DirAccess.copy_absolute(SAVE_PATH, path) != OK:
 		return ""
 	return path
@@ -480,6 +514,7 @@ func _write_save() -> void:
 	_autosave_elapsed = 0.0
 	var data := {}
 	data["saved_at"] = Time.get_unix_time_from_system()
+	data["format"] = SAVE_FORMAT
 
 	# Resources
 	var res_all := ResourceManager.get_all()

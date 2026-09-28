@@ -536,6 +536,14 @@ const _STRINGS := {
 		"NOTIF_LOCALE_AFTER_BATTLE": "Idioma cambiado. Con un tablero abierto no se recarga: se verá en todos los paneles al volver a abrir el juego.",
 		# ── integridad-guardado ──
 		"STORM_TITHE_RESUMED": "Los Tasadores siguen en la puerta: el Diezmo que dejaste a medias se cobra ahora.",
+		"MSG_SAVE_OLD_FORMAT": "El mapa cambió: edificios de 2x2 y carreteras unidas al Núcleo. Tu partida anterior no cabe en él, así que empieza una colonia nueva (la vieja queda guardada aparte).",
+		"LBL_NEEDS_ROAD": "Tiene que tocar una carretera unida al Núcleo.",
+		"LBL_ROAD_NEEDED_BY": "Esta carretera conecta un edificio con el Núcleo: no se puede quitar.",
+		"LBL_RULE_ROAD": "Tiene que tocar una carretera unida al Núcleo (1 oro cada tramo).",
+		"DEP_HINT_FOREST": "Talarlo a mano lo agota. Un Aserradero pegado al bosque da madera sin gastarlo.",
+		"DEP_HINT_GOLD_VEIN": "Picarla a mano la agota. Una Mina de oro pegada a la veta da oro sin gastarla.",
+		"DEP_HINT_IRON_DEPOSIT": "Sacarlo a mano lo agota. Una Fundición pegada al hierro da acero sin gastarlo.",
+		"DEP_HINT_OIL_WELL": "Bombearlo a mano lo agota. Una Refinería encima del pozo da petróleo sin fin.",
 		"MSG_SAVE_CORRUPT": "La partida guardada estaba danada y no se pudo leer. Se guardo una copia en %s y empieza una colonia nueva.",
 		"MSG_AUDIT_AWAITING": "La Regencia no olvida tu Cuartel General: la Auditoria Final espera tu orden.",
 		# ── integridad-combate ──
@@ -1415,6 +1423,14 @@ const _STRINGS := {
 		"NOTIF_LOCALE_AFTER_BATTLE": "Language changed. With a board open the game does not reload: every panel will show it next time you start the game.",
 		# ── integridad-guardado ──
 		"STORM_TITHE_RESUMED": "The Assessors are still at the gate: the Tithe you left half-settled is due now.",
+		"MSG_SAVE_OLD_FORMAT": "The map changed: 2x2 buildings and roads joined to the Core. Your previous game does not fit it, so a new colony begins (the old one is kept aside).",
+		"LBL_NEEDS_ROAD": "It must touch a road joined to the Core.",
+		"LBL_ROAD_NEEDED_BY": "This road links a building to the Core: it cannot be removed.",
+		"LBL_RULE_ROAD": "It must touch a road joined to the Core (1 gold per tile).",
+		"DEP_HINT_FOREST": "Cutting it by hand uses it up. A Sawmill next to the forest gives wood without spending it.",
+		"DEP_HINT_GOLD_VEIN": "Digging it by hand uses it up. A Gold Mine next to the vein gives gold without spending it.",
+		"DEP_HINT_IRON_DEPOSIT": "Mining it by hand uses it up. A Foundry next to the iron gives steel without spending it.",
+		"DEP_HINT_OIL_WELL": "Pumping it by hand uses it up. A Refinery on top of the well gives oil forever.",
 		"MSG_SAVE_CORRUPT": "The saved game was damaged and could not be read. A copy was kept at %s and a new colony begins.",
 		"MSG_AUDIT_AWAITING": "The Regency has not forgotten your Headquarters: the Final Audit awaits your order.",
 		# ── integridad-combate ──

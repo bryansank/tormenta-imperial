@@ -314,6 +314,7 @@ func _try_build(building_id: String, step: Dictionary) -> void:
 	if spot.is_empty():
 		_r["stuck"] = "sin hueco para %s" % building_id
 		return
+	_pave_to(spot["origin"] as Vector2i, spot.get("size", data.grid_size) as Vector2i)
 	var before: int = Rules.count_building(building_id)
 	_placer._current_data = data
 	_placer._rotation_steps = int(spot.get("rotation", 0))
@@ -548,6 +549,8 @@ func _spot_for(building_id: String, data: BuildingData) -> Dictionary:
 			for ox in range(int(dep["cell_x"]), int(dep["cell_x"]) + int(dep["size_x"])):
 				for oy in range(int(dep["cell_y"]), int(dep["cell_y"]) + int(dep["size_y"])):
 					var origin := Vector2i(ox, oy)
+					if Rules.road_route(origin, data.grid_size) == null:
+						continue
 					if bool(Rules.evaluate_placement("refinery", origin, data.grid_size, _map)["ok"]):
 						return {"origin": origin, "rotation": 0}
 		return {}
@@ -557,8 +560,11 @@ func _spot_for(building_id: String, data: BuildingData) -> Dictionary:
 		if spots.is_empty():
 			return {}
 		spots.sort_custom(func(a, b): return _dist(a["origin"], center) < _dist(b["origin"], center))
-		var spot: Dictionary = spots[0]
-		return {"origin": spot["origin"], "rotation": 1 if (spot["size"] as Vector2i) != data.grid_size else 0}
+		for spot in spots:
+			if Rules.road_route(spot["origin"], spot["size"]) == null:
+				continue
+			return {"origin": spot["origin"], "rotation": 1 if (spot["size"] as Vector2i) != data.grid_size else 0, "size": spot["size"]}
+		return {}
 	# Construye donde quiera: lo mas cerca del Nucleo sin pisar la orla de ningun
 	# yacimiento, que es donde iran los extractores.
 	var reserved: Dictionary = {}
@@ -581,11 +587,25 @@ func _spot_for(building_id: String, data: BuildingData) -> Dictionary:
 					break
 			if clash:
 				continue
+			if Rules.road_route(origin, data.grid_size) == null:
+				continue
 			best = origin
 			best_d = d
 	if best == Vector2i(-1, -1):
 		return {}
 	return {"origin": best, "rotation": 0}
+
+## Tiende la carretera que une la huella a la red, cobrando cada tramo (1 oro).
+func _pave_to(origin: Vector2i, size: Vector2i) -> void:
+	var route: Variant = Rules.road_route(origin, size)
+	if route == null:
+		return
+	var road: BuildingData = Rules.load_building_data("road")
+	for c in route:
+		if not ResourceManager.can_afford(road.get_cost()):
+			return
+		ResourceManager.spend_cost(road.get_cost())
+		_placer.place_building_at(road, c)
 
 func _dist(a: Vector2i, b: Vector2i) -> int:
 	return absi(a.x - b.x) + absi(a.y - b.y)

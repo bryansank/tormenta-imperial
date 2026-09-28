@@ -269,7 +269,7 @@ func damage_priority(severity: int) -> Array:
 		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
-		if BuildingHealth.is_core(node):
+		if BuildingHealth.is_immune(node):
 			continue
 		if last_standing.get(data.id, null) == node:
 			continue
@@ -499,7 +499,7 @@ func _seizable_buildings() -> Array:
 		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
-		if BuildingHealth.is_core(node):
+		if BuildingHealth.is_immune(node):
 			continue
 		if data.is_decoration:
 			luxury.append(node)

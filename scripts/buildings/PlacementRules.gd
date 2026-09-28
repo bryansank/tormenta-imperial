@@ -74,6 +74,8 @@ static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector
 	var ignore_obstacle: Node = deposit if bool(rule.get("consumes", false)) else null
 	if not GridManager.can_place(cell, size, ignore_building, ignore_obstacle):
 		return {"ok": false, "reason": "occupied", "deposit": deposit}
+	if not is_connected_spot(building_id, cell, size, ignore_building):
+		return {"ok": false, "reason": "road", "deposit": deposit}
 	return {"ok": true, "reason": "", "deposit": deposit}
 
 ## Quita el yacimiento sobre el que se planta un edificio que lo consume (la
@@ -163,6 +165,187 @@ static func purchase_block_detail(data: BuildingData) -> String:
 		return Tr.t("OBJ_MISSING") % Tr.amount_list(missing_cost(data))
 	return msg
 
+# ── Red de carreteras (2026-09-28) ─────────────────────────────────────
+#
+# Todo edificio tiene que tocar una carretera unida al Nucleo, y toda carretera
+# nueva tiene que tocar la red (o el propio Nucleo). La partida empieza con una
+# acera alrededor del Nucleo (GameManager.pave_core_ring), asi que la red
+# siempre nace de el. Sin Nucleo en la rejilla (una escena de prueba montada a
+# mano) no hay red que exigir y la regla no se aplica.
+
+const ROAD_ID := "road"
+const NEIGHBORS4 := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+
+## Las celdas del Nucleo, o [] si no hay.
+static func core_cells() -> Array:
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info.get("data")
+		if data != null and data.is_core:
+			return info.get("cells", [])
+	return []
+
+## Las celdas de carretera unidas al Nucleo (celda -> true). `ignore` es una
+## carretera que no cuenta: la que se esta moviendo o se quiere quitar.
+static func connected_roads(ignore: Node = null) -> Dictionary:
+	var core := core_cells()
+	var out := {}
+	if core.is_empty():
+		return out
+	var queue: Array = []
+	for c in core:
+		for d in NEIGHBORS4:
+			var n: Vector2i = c + d
+			if not out.has(n) and _is_road_cell(n, ignore):
+				out[n] = true
+				queue.append(n)
+	while not queue.is_empty():
+		var cur: Vector2i = queue.pop_back()
+		for d in NEIGHBORS4:
+			var n: Vector2i = cur + d
+			if not out.has(n) and _is_road_cell(n, ignore):
+				out[n] = true
+				queue.append(n)
+	return out
+
+static func _is_road_cell(cell: Vector2i, ignore: Node) -> bool:
+	var node := GridManager.get_building_at(cell)
+	if node == null or node == ignore:
+		return false
+	var info := GridManager.get_building_info(node)
+	return not info.is_empty() and (info["data"] as BuildingData).id == ROAD_ID
+
+## Algun vecino (4 lados) de la huella esta en `targets`.
+static func _touches(cells: Array, targets: Dictionary) -> bool:
+	for c in cells:
+		for d in NEIGHBORS4:
+			if targets.has(c + d):
+				return true
+	return false
+
+## Se puede plantar `building_id` en esa huella sin quedar suelto de la red?
+static func is_connected_spot(building_id: String, cell: Vector2i, size: Vector2i, ignore: Node = null) -> bool:
+	var core := core_cells()
+	if core.is_empty():
+		return true
+	var data := load_building_data(building_id)
+	if data != null and data.is_core:
+		return true
+	var cells: Array = GridManager.cells_for(cell, size)
+	var network := connected_roads(ignore)
+	if building_id == ROAD_ID:
+		var core_set := {}
+		for c in core:
+			core_set[c] = true
+		return _touches(cells, network) or _touches(cells, core_set)
+	return _touches(cells, network)
+
+## Quitar esta carretera dejaria algun edificio sin conexion? Devuelve el
+## primero que se quedaria suelto, o null.
+static func road_removal_strands(road: Node) -> Node:
+	if core_cells().is_empty():
+		return null
+	var network := connected_roads(road)
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info.get("data")
+		if data == null or data.is_core or info.get("node") == road:
+			continue
+		if data.id == ROAD_ID:
+			# Una carretera que se queda suelta no rompe nada por si sola: lo que
+			# importa es el edificio al que llevaba.
+			continue
+		if not _touches(info.get("cells", []), network):
+			# Ya estaba suelto antes (partida cargada): no es culpa de esta.
+			if _touches(info.get("cells", []), connected_roads()):
+				return info.get("node")
+	return null
+
+## Las celdas libres que hay que pavimentar para unir una huella a la red, por
+## el camino mas corto (sin pisar edificios, yacimientos ni la propia huella).
+## [] si ya toca la red; null si no hay camino. Lo usan las pruebas y las sondas
+## que juegan solas, y el aviso de "te falta carretera".
+static func road_route(cell: Vector2i, size: Vector2i) -> Variant:
+	var footprint := {}
+	for c in GridManager.cells_for(cell, size):
+		footprint[c] = true
+	var network := connected_roads()
+	if network.is_empty():
+		var core := core_cells()
+		for c in core:
+			network[c] = true
+	if _touches(footprint.keys(), network):
+		return []
+	# BFS desde las celdas libres pegadas a la huella hasta tocar la red.
+	var came := {}
+	var queue: Array = []
+	for c in footprint:
+		for d in NEIGHBORS4:
+			var n: Vector2i = c + d
+			if not footprint.has(n) and not came.has(n) and GridManager.is_valid_cell(n) and GridManager.is_cell_free(n):
+				came[n] = null
+				queue.append(n)
+	var head := 0
+	while head < queue.size():
+		var cur: Vector2i = queue[head]
+		head += 1
+		for d in NEIGHBORS4:
+			if network.has(cur + d):
+				var path: Array = []
+				var step: Variant = cur
+				while step != null:
+					path.append(step)
+					step = came[step]
+				return path
+		for d in NEIGHBORS4:
+			var n: Vector2i = cur + d
+			if not footprint.has(n) and not came.has(n) and GridManager.is_valid_cell(n) and GridManager.is_cell_free(n):
+				came[n] = cur
+				queue.append(n)
+	return null
+
+## La ruta a pie del Nucleo a `target` por la red: celdas de carretera, de la
+## que toca el Nucleo a la que toca el edificio. [] si no hay (sin Nucleo, sin
+## red, o el edificio suelto). La usan los trabajadores que se ven andar.
+static func walk_route(target: Node) -> Array:
+	var info := GridManager.get_building_info(target)
+	if info.is_empty():
+		return []
+	var network := connected_roads()
+	if network.is_empty():
+		return []
+	var goal := {}
+	for c in info.get("cells", []):
+		for d in NEIGHBORS4:
+			if network.has(c + d):
+				goal[c + d] = true
+	if goal.is_empty():
+		return []
+	var core := core_cells()
+	var came := {}
+	var queue: Array = []
+	for c in core:
+		for d in NEIGHBORS4:
+			var n: Vector2i = c + d
+			if network.has(n) and not came.has(n):
+				came[n] = null
+				queue.append(n)
+	var head := 0
+	while head < queue.size():
+		var cur: Vector2i = queue[head]
+		head += 1
+		if goal.has(cur):
+			var path: Array = []
+			var step: Variant = cur
+			while step != null:
+				path.push_front(step)
+				step = came[step]
+			return path
+		for d in NEIGHBORS4:
+			var n: Vector2i = cur + d
+			if network.has(n) and not came.has(n):
+				came[n] = cur
+				queue.append(n)
+	return []
+
 # ── Calzadas ──────────────────────────────────────────────────────────
 
 static func is_road_at(cell: Vector2i) -> bool:
@@ -203,6 +386,8 @@ static func demolish(building: Node) -> Dictionary:
 	var data: BuildingData = info["data"]
 	if data.is_core:
 		return {}
+	if data.id == ROAD_ID and road_removal_strands(building) != null:
+		return {"blocked": Tr.t("LBL_ROAD_NEEDED_BY")}
 	var cell: Vector2i = info["origin_cell"]
 	var cost := data.get_cost()
 	for type in cost:

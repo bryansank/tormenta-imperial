@@ -85,12 +85,14 @@ func _rich() -> void:
 
 # ── Huella y posicion ─────────────────────────────────────────────────
 
-func test_a_house_occupies_its_cell_and_sits_on_its_centre() -> void:
+## Desde el 2026-09-28 una vivienda es de 2x2, como todo salvo la carretera.
+func test_a_house_occupies_its_2x2_and_sits_on_its_centre() -> void:
 	var node: Node2D = _placer.place_building_at(_data("house"), Vector2i(5, 7))
 	assert_object(node).is_not_null()
-	assert_object(GridManager.get_building_at(Vector2i(5, 7))).is_same(node)
-	assert_object(GridManager.get_building_at(Vector2i(6, 7))).is_null()
-	assert_vector(node.position).is_equal(View2D.footprint_center_px(Vector2i(5, 7), Vector2i(1, 1)))
+	for cell in GridManager.cells_for(Vector2i(5, 7), Vector2i(2, 2)):
+		assert_object(GridManager.get_building_at(cell)).is_same(node)
+	assert_object(GridManager.get_building_at(Vector2i(7, 7))).is_null()
+	assert_vector(node.position).is_equal(View2D.footprint_center_px(Vector2i(5, 7), Vector2i(2, 2)))
 
 func test_a_multi_cell_building_covers_its_whole_footprint() -> void:
 	var node: Node2D = _placer.place_building_at(_data("gold_mine"), Vector2i(10, 10))
@@ -99,8 +101,12 @@ func test_a_multi_cell_building_covers_its_whole_footprint() -> void:
 	assert_vector(node.call("footprint_px")).is_equal(Vector2(2, 2) * View2D.cell_px())
 
 func test_rotation_swaps_the_footprint() -> void:
-	# Aserradero 2x1 girado 90 grados: ocupa 1x2 (hacia abajo, no a la derecha).
-	var node: Node2D = _placer.place_building_at(_data("sawmill"), Vector2i(8, 8), 1)
+	# Un edificio de 2x1 girado 90 grados ocupa 1x2 (hacia abajo, no a la
+	# derecha). Desde el 2026-09-28 todos son cuadrados: se prueba con un
+	# aserradero de 2x1 hecho a mano, que es lo que el giro tiene que seguir haciendo bien.
+	var rect: BuildingData = _data("sawmill").duplicate()
+	rect.grid_size = Vector2i(2, 1)
+	var node: Node2D = _placer.place_building_at(rect, Vector2i(8, 8), 1)
 	assert_object(GridManager.get_building_at(Vector2i(8, 9))).is_same(node)
 	assert_object(GridManager.get_building_at(Vector2i(9, 8))).is_null()
 	assert_int(int(node.get_meta("rotation_steps"))).is_equal(1)
@@ -142,12 +148,15 @@ func test_the_ghost_obeys_the_deposit_rule() -> void:
 	assert_bool(bool(_placer.get_ghost().get("ghost_valid"))).is_true()
 
 func test_rotating_while_placing_changes_the_verdict_footprint() -> void:
-	# Hueco de 1 de ancho entre dos casas: el aserradero 2x1 no cabe tumbado,
-	# si cabe de pie (girado).
+	# Hueco de 1 de ancho entre dos casas (de 2x2): un aserradero de 2x1 hecho
+	# a mano (todos son cuadrados desde el 2026-09-28) no cabe tumbado, si cabe
+	# de pie (girado).
 	_map.spawn_deposit("forest", Vector2i(30, 10), -1, Vector2i(2, 2))
-	_placer.place_building_at(_data("house"), Vector2i(29, 12))
+	_placer.place_building_at(_data("house"), Vector2i(28, 12))
 	_placer.place_building_at(_data("house"), Vector2i(31, 12))
-	EventBus.building_selected_for_placement.emit(_data("sawmill"))
+	var rect: BuildingData = _data("sawmill").duplicate()
+	rect.grid_size = Vector2i(2, 1)
+	EventBus.building_selected_for_placement.emit(rect)
 	_placer.update_ghost(Vector2i(30, 12))
 	assert_bool(bool(_placer.get_ghost().get("ghost_valid"))).is_false()
 	EventBus.building_rotate_requested.emit()
