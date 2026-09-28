@@ -5,79 +5,100 @@
 Tormenta Imperial uses a **Service-Signal-Component** architecture native to Godot:
 
 ```
-+------------------------------------------------------+
-|                  Autoload Services                    |
-|  Tr - GameConfig - EventBus - InputService - Grid    |
-|  ResourceMgr - GameMgr - ProcessMgr - ProductionMgr  |
-|  ProgressionMgr - MarketMgr - PopulationMgr - Events |
-+---------------------------+--------------------------+
-                            | signals (EventBus)
-+---------------------------v--------------------------+
-|                  Scene Components                     |
-|  Camera - BuildingPlacer - MapGenerator - UI Panels   |
-+------------------------------------------------------+
++-------------------------------------------------------------+
+|                    Autoload Services (25)                    |
+|  Tr - GameConfig - EventBus - InputService - GridManager     |
+|  Resource / Game / Process / Production / Progression        |
+|  Market / Population / Army / Combat / RandomEvent           |
+|  BuildingHealth / Storm / StormSky / TechTree / CloudSave    |
+|  UIManager / Tutorial / UILayout / Audio / DeviceProfile     |
++------------------------------+------------------------------+
+                               | signals (EventBus)
++------------------------------v------------------------------+
+|                      Scene Components                        |
+|  Main.tscn (3D) or Main2D.tscn (2D): camera, island, placer, |
+|  map generator + the same 23 UI panels in both               |
++-------------------------------------------------------------+
+        ^
+        | pure models, no nodes: scripts/combat/, scripts/storm/
 ```
 
 ### Core Rules
-1. **Services never reference each other directly** — only through EventBus signals
-2. **UI subscribes to EventBus** in `_ready()` and reacts to signals
+1. **State changes are announced on the EventBus.** A producer never knows its
+   consumers. Direct calls between autoloads exist only as queries and commands by
+   name (`CombatManager.get_garrison()`, `GameMode.storm_enabled()`, GameManager
+   calling every `reset()`), never as notifications
+2. **UI subscribes to EventBus** in `_ready()`, reads services and calls them
 3. **Data flows one way:** Input -> Service -> EventBus -> Consumer
 4. **GameConfig holds all tunable values** — no magic numbers in code
+5. **Pure models** (`scripts/combat/`, `scripts/storm/StormCycle.gd`) have no nodes,
+   no signals and no global RNG; they return event lists that a service publishes
+6. **Views are interchangeable**: services type buildings and deposits as `Node`, not
+   `Node3D`, so the 2D view (`scripts/view2d/`) runs on the same services
 
 ## Autoload Load Order (matters!)
 
-The autoloads in `project.godot` load in order. Dependencies must load before dependents:
+The autoloads in `project.godot` load in this order. 26 entries: 25 game services and
+the `BeckettRuntime` dev bridge.
 
-| Order | Service | Depends On | Purpose |
-|-------|---------|------------|---------|
-| 1 | Tr | — | Translation strings |
-| 2 | GameConfig | — | All balance/tuning constants |
-| 3 | EventBus | — | Signal bus (no logic, just signal declarations) |
-| 4 | InputService | EventBus | Keyboard/mouse/touch -> signals |
-| 5 | GridManager | — | 25x25 cell grid, placement logic |
-| 6 | ResourceManager | EventBus, GameConfig | 4 resources + unlock tracking |
-| 7 | GameManager | All above | Save/load, game lifecycle |
-| 8 | ProcessManager | ResourceManager, GameConfig, EventBus | Timed crafting/mining |
-| 9 | ProductionManager | ResourceManager, GameConfig, EventBus, GridManager | Passive production, construction |
-| 10 | ProgressionManager | EventBus, GameConfig, ResourceManager, GridManager | Eras, milestones, victory |
-| 11 | MarketManager | ResourceManager, EventBus, GameConfig | Buy/sell with floating prices |
-| 12 | PopulationManager | ResourceManager, EventBus, GameConfig, GridManager | Pop, workers, morale |
-| 13 | RandomEventManager | ResourceManager, PopulationManager, EventBus, GameConfig | Random events |
+| Order | Service | Purpose |
+|-------|---------|---------|
+| 1 | Tr | Translation strings (ES/EN) |
+| 2 | GameConfig | All balance/tuning values, user settings, `dev_mode` |
+| 3 | EventBus | Signal bus (no logic, just 107 signal declarations) |
+| 4 | InputService | Keyboard/mouse/touch -> signals |
+| 5 | GridManager | 40x40 cell grid, placement logic |
+| 6 | ResourceManager | 4 resources in one shared pool + unlock tracking |
+| 7 | GameManager | Save/load, new game, offline progression, scene/view switching |
+| 8 | ProcessManager | Timed crafting/mining |
+| 9 | ProductionManager | Passive production, construction, upgrades |
+| 10 | ProgressionManager | Eras, milestones, the Final Audit, victory |
+| 11 | MarketManager | Buy/sell with floating prices |
+| 12 | PopulationManager | Pop, workers, morale |
+| 13 | ArmyManager | Training, upkeep, desertion |
+| 14 | CombatManager | The active encounter and expedition |
+| 15 | RandomEventManager | Random events |
+| 16 | BuildingHealth | Damage, ruins, repair |
+| 17 | StormManager | The Imperial Storm cycle and the Tithe |
+| 18 | StormSky | Sky and light during the storm (`scripts/map/StormSky.gd`) |
+| 19 | TechTreeManager | Research and permanent bonuses |
+| 20 | CloudSaveManager | Supabase auth + cloud save (unwired) |
+| 21 | UIManager | Window stack, ESC, slot conflicts |
+| 22 | TutorialManager | Prologue, guided tutorial, tips and helps seen |
+| 23 | UILayoutManager | Positions panels from `UILayoutConfig` slots |
+| 24 | AudioManager | Signal-driven music/SFX |
+| — | BeckettRuntime | Dev bridge: `scripts/services/BeckettGate.gd`, loads `addons/beckett` only in the editor |
+| 25 | DeviceProfile | PC/tablet/phone profile, UI scale, `UITheme` tokens |
+
+`GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `Objectives` and
+`FloatingText` are static helpers, not autoloads.
 
 ## Scene Tree
 
-```
-Main (Node3D)
-  MonumentalCamera (Camera3D) -- orthographic 45deg, WASD/scroll/touch
-  DirectionalLight -- sun with shadows
-  WorldEnvironment -- sky, ambient light, SSAO
-  IslandGenerator (Node3D) -- procedural island (water + shore + grass)
-  GridOverlay (MeshInstance3D) -- debug grid visualization (hidden)
-  BuildingPlacer (Node3D) -- handles all building placement/move/demolish
-  OnScreenControls (CanvasLayer) -- mobile D-pad, zoom, rotate buttons
-  ResourceHUD (CanvasLayer) -- top bar showing unlocked resources
-  MapGenerator (Node) -- spawns 15-25 resource deposits randomly
-  ConstructionMenu (CanvasLayer) -- "BUILD" button + scrollable building list
-  BuildingInfoPanel (CanvasLayer) -- right panel for selected building/deposit
-  MarketPanel (CanvasLayer) -- buy/sell UI with price display
-  ProgressPanel (CanvasLayer) -- milestones checklist + era display
-  VictoryScreen (CanvasLayer) -- full-screen victory overlay
-  NotificationPanel (CanvasLayer) -- activity log + toast notifications + status
-```
+`Main.tscn` (3D) and `Main2D.tscn` (2D) have the same UI nodes in the same order;
+only the world nodes differ. The full annotated tree, with layers and the nodes
+created at runtime (PrologueScreen, HelpIndexPanel, NewGameDialog, LayoutEditor), is
+in `CLAUDE.md` → "Scene Tree". The 2D view is described in
+[18-vista-2d.md](18-vista-2d.md).
 
 ## File Organization
 
 ```
-scripts/services/    -- Autoload singletons (the "brain")
-scripts/ui/          -- UI panel scripts (subscribe to EventBus)
-scripts/buildings/   -- BuildingData resource class
-scripts/camera/      -- Camera controller
-scripts/grid/        -- Grid management
-scripts/map/         -- Island + deposit generation
+scripts/services/    -- Autoload singletons (the "brain") + static helpers (GameMode, Objectives, FloatingText)
+scripts/ui/          -- UI panel scripts (subscribe to EventBus), UITheme, UILayoutConfig, HudRegistry
+scripts/buildings/   -- BuildingData, BuildingPlacer (3D), PlacementRules, PlacementAssist, status badge, mesh factory
+scripts/view2d/      -- The 2D view: router, camera, island, placer, drawings
+scripts/combat/      -- Pure combat models
+scripts/storm/       -- Pure storm cycle model
+scripts/camera/      -- 3D camera controller
+scripts/grid/        -- Grid management + grid overlay
+scripts/map/         -- Island + deposit generation, storm sky
 data/buildings/      -- 14 .tres building definitions
-scenes/main/         -- Main.tscn entry scene
+scenes/main/         -- Main.tscn (entry, 3D) and Main2D.tscn
 scenes/ui/           -- UI .tscn files (minimal, scripts do the work)
 scenes/buildings/    -- BuildingPlacer.tscn
+tests/               -- gdUnit4 suites (run with tools/run_tests.sh)
+tools/               -- Probes, asset generators, test wrapper
 ```
 
 ## Adding New Systems
@@ -85,8 +106,12 @@ scenes/buildings/    -- BuildingPlacer.tscn
 1. Create service in `scripts/services/NewManager.gd`
 2. Add signals to `EventBus.gd` under a new category
 3. Register as autoload in `project.godot` (order matters!)
-4. Add save/load methods: `get_save_data()`, `load_save_data()`, `reset()`
-5. Wire into `GameManager._new_game()`, `_load_game()`, `clear_save()`
+4. Add save/load methods: `get_save_data()`, `load_save_data()` (idempotent), `reset()`
+5. Wire the save key into `GameManager._write_save()` and the load path, and call
+   `reset()` from **all three** fresh-game paths: `_new_game()`, `clear_save()` and
+   `clear_save_and_reload_from()` (see `CLAUDE.md` → "Adding Persistent State")
 6. Add translations to `Tr.gd` (both ES and EN dicts)
 7. Create UI if needed in `scripts/ui/` + `scenes/ui/`
-8. Add to `Main.tscn` scene tree
+8. Add the UI node to **both** `Main.tscn` and `Main2D.tscn`, same name, same place
+   (`tests/view2d/test_view_mode.gd` checks it)
+9. Test it with `tools/run_tests.sh`, never with `GdUnitCmdTool.gd` directly

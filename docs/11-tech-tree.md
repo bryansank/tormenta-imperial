@@ -44,10 +44,13 @@ Each tech requires the previous tier in its branch:
 Bonuses are applied via runtime modification of GameConfig values:
 - `tech_production_bonus` — added to production multiplier in ProductionManager
 - `tech_build_speed_bonus` — reduces build time in `get_build_time()`
-- `tech_consumption_reduction` — reduces consumption per pop (planned)
-- `tech_storage_bonus` — added on top of the shared storage cap
+- `tech_consumption_reduction` — reduces consumption per pop (`PopulationManager._tick_consumption()`, floor 10%)
+- `tech_storage_bonus` — added on top of the shared storage cap: `ind_2` + `log_2` + `log_5` = +1000, so the era-3 ceiling with five warehouses goes from 3500 to 4500
 - `market_spread` — directly reduced (min 0.1)
 - `morale_satisfied_recovery` — increased morale recovery rate
+
+`TechTreeManager.load_save_data()` derives the bonuses from what was researched instead
+of adding them on top: loading twice without a `reset()` no longer doubles them.
 
 ## UI
 

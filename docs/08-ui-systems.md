@@ -16,7 +16,7 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 - **Position:** Bottom center: a big CONSTRUIR button (240x64, brass border), ALWAYS visible — it used to appear only while the ☰ column was open
 - **Shows:** Scrollable list of all non-core buildings from `data/buildings/`
 - **Behavior:** Each button shows name, size, cost, production, prerequisites, worker requirements. Buildings requiring locked resources are grayed out. Rebuilds when resources unlock.
-- **Layer:** 10
+- **Layer:** 12
 
 ### BuildingInfoPanel (`scripts/ui/BuildingInfoPanel.gd`)
 - **Position:** Right side, full height
@@ -30,13 +30,13 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 - **Behavior:** Hides processes that use locked resources. Shows progress bar during active process. Disables buttons while process running or building constructing.
 
 ### MarketPanel (`scripts/ui/MarketPanel.gd`)
-- **Position:** Center overlay, button top-right
+- **Position:** Center overlay, opened from ☰ MENÚ → COLONIA → Mercado
 - **Shows:** Buy/sell prices for each unlocked resource, amount selector (+-5), buy/sell buttons, gold balance
 - **Behavior:** Prices update via `EventBus.market_prices_updated`. Rebuilds when resources unlock.
 - **Layer:** 11
 
 ### ProgressPanel (`scripts/ui/ProgressPanel.gd`)
-- **Position:** Center overlay, button top-right (below market)
+- **Position:** Center overlay, opened from ☰ MENÚ → COLONIA → Progreso
 - **Shows:** Current era, progress bar, 9 milestones with [X]/[ ] checkmarks
 - **Behavior:** Updates checkmarks on milestone completion. Milestone and era toasts go through a queue: one plate at a time at 30 % of the screen height, away from the centre column (they used to stack on top of each other and of the objective).
 - **Layer:** 11
@@ -90,6 +90,24 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - **Shows:** D-pad for camera pan, rotate buttons, zoom buttons
 - **Purpose:** Mobile/touch control support
 - **Layer:** 10
+
+### Other panels
+
+| Panel | Layer | What it is |
+|---|---|---|
+| `TechTreePanel` | 11 | 3 branches x 5 tiers, research progress ([11-tech-tree.md](11-tech-tree.md)) |
+| `ArmyPanel` | 11 | Training slots, Military Power, upkeep, who is away on campaign |
+| `SkirmishPanel` | 11 | Commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" for the Final Audit ([15-combat.md](15-combat.md)) |
+| `BattleScreen` | 18 | The 8x8 board plus the expedition map, draft modal and final report; outside UIManager's stack so ESC cannot dismiss a fight |
+| `ObjectivePanel` | 15 | ¿QUÉ HACER?: the next step from `Objectives.next_step()` ([22-linea-jugable.md](22-linea-jugable.md) §4) |
+| `SettingsPanel` | 15 | Tabs Audio · Interfaz · Controles · Accesibilidad · Juego ([21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md)) |
+| `StormHUD` | 16 (11 under modals) | Storm phase: colour and icon, no countdown |
+| `SandboxPanel` | 11 | Sandbox only: the SANDBOX tab with INVOCAR TORMENTA / INVOCAR AUDITORÍA ([20-modos-de-juego.md](20-modos-de-juego.md)) |
+| `NewGameDialog` | 40 | The mode picker, created by `GameManager.request_new_game()` from every "Nueva partida" |
+| `LayoutEditor` | 35 | EDITAR DISPOSICIÓN: drag panels, saved per device profile |
+
+Every panel exists in both `Main.tscn` and `Main2D.tscn` with the same name and
+order; the full tree is in `CLAUDE.md` → "Scene Tree".
 
 ## Interfaz configurable y dispositivos (docs/21)
 

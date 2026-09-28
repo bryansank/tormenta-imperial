@@ -7,7 +7,10 @@ Random events fire at intervals to keep gameplay dynamic. They can be positive, 
 ## Timing
 
 - Events fire every **2-5 minutes** (random interval)
-- In dev mode: every **15-30 seconds**
+- In dev mode: every **30-60 seconds** (`event_interval_min_dev` / `event_interval_max_dev`)
+- None before the SURVIVAL phase (first Warehouse)
+- Per mode (`GameConfig.game_mode_rules`): none in Sandbox, only the positive ones in
+  Constructor (`danger_events: false`); Campaña and Supervivencia get all eight
 - Only one timed event can be active at once
 - Instant events fire and resolve immediately
 

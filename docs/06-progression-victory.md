@@ -29,7 +29,7 @@
 | `market_10_trades` | Merchant | Complete 10 market trades | any |
 | `military_ready` | Commander | Have 1 Barracks + 2 Towers | 2-3 |
 | `hq_built` | General | Build Headquarters | 3 |
-| `hq_max` | Final Audit summoned (`MILE_AUDIT`) | Upgrade HQ to Level 3 — **summons the siege, does not win** | 3 |
+| `hq_max` | Final Audit summoned (`MILE_AUDIT`) | Upgrade HQ to Level 3 — in Campaña and Supervivencia **summons the siege, does not win**; in Constructor it wins | 3 |
 
 ### Milestone Detection
 
@@ -40,9 +40,18 @@
 
 ## Victory
 
-`hq_max` no longer wins: `_complete_milestone("hq_max")` calls
-`summon_final_audit()` (3-5 defensive waves, `docs/15-combat.md`). Surviving the last
-wave emits `storm_halted_forever` and only then `_trigger_victory()`:
+What `hq_max` does depends on the game mode ([20-modos-de-juego.md](20-modos-de-juego.md)):
+
+| Mode | HQ level 3 | Victory |
+|------|-----------|---------|
+| Campaña | `summon_final_audit()`: 3-5 defensive waves ([15-combat.md](15-combat.md) §6), entered with "QUE BAJEN" | Surviving the last wave. Losing is not a game over: the siege can be resummoned once 3 units stand |
+| Supervivencia | Same siege, but only one (`resummon: false`) | Surviving it. Losing it ends the run (`run_ended`) and seals the save |
+| Constructor | No siege (`audit_on_capstone: false`) | `_trigger_victory()` right away (`capstone_wins: true`) |
+| Sandbox | Nothing (the siege is summoned only from the SANDBOX tab) | None (`victory: false`) |
+
+`_complete_milestone("hq_max")` asks `GameMode.audit_enabled()` first and
+`GameMode.capstone_wins()` second. In the siege modes, surviving the last wave emits
+`storm_halted_forever` and only then `_trigger_victory()`:
 
 1. Stats: `time_played` (**played seconds**, `ProgressionManager._played_seconds`,
    saved — not wall-clock time since creation), buildings built, trades, milestones,

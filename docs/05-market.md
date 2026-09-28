@@ -66,7 +66,7 @@ Every market tick (60s, or 10s in dev mode):
 
 ## UI (MarketPanel)
 
-- Button "MERCADO" in top-right corner
+- Opened from ☰ MENÚ → COLONIA → Mercado (the entry appears from the ECONOMY phase, after the first Gold Mine; before that the market does not tick)
 - Shows: resource name, buy price, sell price, amount selector (+/- 5), buy/sell buttons
 - Gold display at bottom
 - Only shows unlocked resources

@@ -4,6 +4,15 @@
 
 CloudSaveManager provides optional cloud save/load via Supabase REST API. Falls back to local save if unconfigured or offline.
 
+> **Status: implemented but unwired.** No game code calls `CloudSaveManager` and there
+> is no login UI; the local JSON (`docs/09-save-system.md`) is the only active path.
+> Wiring it waits for a decision (`docs/13-roadmap.md`, backlog).
+>
+> **Exports cannot read `.env`.** `_load_config()` reads `res://.env`, and every
+> export preset excludes `.env*` from the package (`docs/19-exportar.md`). When this
+> is wired, the credentials have to come from somewhere an exported build can read —
+> a file in `user://` or values injected at build time — never from the repo.
+
 ## Setup
 
 1. Create a Supabase project at [supabase.com](https://supabase.com)
