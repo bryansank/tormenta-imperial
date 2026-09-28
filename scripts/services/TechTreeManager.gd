@@ -219,3 +219,17 @@ func _clear_bonuses() -> void:
 	GameConfig.tech_storage_bonus = 0
 	GameConfig.market_spread = _base_market_spread
 	GameConfig.morale_satisfied_recovery = _base_morale_recovery
+
+# ── modos-de-juego ──
+
+## Sandbox: todo investigado desde el principio, con sus bonos. Solo al empezar
+## partida (GameManager._new_game): una carga ya trae la lista en el guardado.
+## Sin avisos: una partida nueva no anuncia nada.
+func unlock_all() -> void:
+	_researching = {}
+	for tech in get_all_techs():
+		var tech_id: String = String(tech.get("id", ""))
+		if tech_id == "" or _researched.has(tech_id):
+			continue
+		_researched[tech_id] = true
+		_apply_tech_bonus(tech)

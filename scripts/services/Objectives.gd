@@ -35,12 +35,12 @@ const LINE := [
 	# escolta); tres infantes y dos canones lo ganan hasta severidad 3 sin torres y
 	# hasta la 5 con dos torres en pie (tabla en docs/22-linea-jugable.md). Cuenta
 	# cualquier tropa: los blindados del final tambien son guarnicion.
-	{"kind": "train", "id": "infantry", "count": GARRISON_UNITS, "any": true, "why": "OBJ_WHY_GARRISON"},
+	{"kind": "train", "id": "infantry", "count": GARRISON_UNITS, "any": true, "needs": "tithe", "why": "OBJ_WHY_GARRISON"},
 	{"kind": "build", "id": "refinery", "count": 1, "why": "OBJ_WHY_REFINERY"},
 	{"kind": "build", "id": "tower", "count": 2, "why": "OBJ_WHY_TOWERS"},
 	{"kind": "build", "id": "headquarters", "count": 1, "why": "OBJ_WHY_HQ"},
 	{"kind": "upgrade", "id": "headquarters", "level": 2, "why": "OBJ_WHY_HQ_2"},
-	{"kind": "train", "id": "vehicle", "count": 6, "why": "OBJ_WHY_ARMOUR"},
+	{"kind": "train", "id": "vehicle", "count": 6, "needs": "audit", "why": "OBJ_WHY_ARMOUR"},
 	{"kind": "upgrade", "id": "headquarters", "level": 3, "why": "OBJ_WHY_HQ_3"},
 ]
 
@@ -83,6 +83,14 @@ const PRODUCER_OF := {
 # ══════════════════════════════════════════════════════════════════════
 
 static func next_step() -> Dictionary:
+	# ── El modo manda (docs/20-modos-de-juego.md) ──
+	if GameMode.is_run_over():
+		return {"kind": "sandbox", "why": "OBJ_WHY_RUN_OVER"}
+	if not GameMode.victory_enabled():
+		return {"kind": "sandbox", "why": "OBJ_WHY_SANDBOX_MODE"}
+	if GameMode.capstone_wins() and ProgressionManager.is_milestone_completed("hq_max"):
+		return {"kind": "sandbox", "why": "OBJ_WHY_SANDBOX_BUILT"}
+
 	# ── Despues del final ──
 	if StormManager.is_halted():
 		return {"kind": "sandbox", "why": "OBJ_WHY_SANDBOX"}
@@ -141,6 +149,8 @@ static func _siege_army_step(why: String, kind: String) -> Dictionary:
 ## El primer paso de la linea que no esta hecho.
 static func _first_open_line_step() -> Dictionary:
 	for entry in LINE:
+		if not _entry_applies(entry):
+			continue
 		match String(entry["kind"]):
 			"build":
 				if Rules.count_building(String(entry["id"])) < int(entry["count"]):
@@ -168,6 +178,17 @@ static func _garrison_unit(entry: Dictionary) -> String:
 	if ArmyManager.is_unlocked("artillery") and _army_count("artillery") < GARRISON_GUNS:
 		return "artillery"
 	return String(entry["id"])
+
+## Un paso de tropa solo tiene sentido si el modo trae aquello contra lo que se
+## entrena: la guarnicion es para el Diezmo, los blindados para la Auditoria. En
+## Constructor no hay ni lo uno ni lo otro.
+static func _entry_applies(entry: Dictionary) -> bool:
+	match String(entry.get("needs", "")):
+		"tithe":
+			return GameMode.tithe_enabled()
+		"audit":
+			return GameMode.audit_enabled()
+	return true
 
 ## Cuantas unidades cuentan para un paso de tropa: las de su tipo, o todas si el
 ## paso es de guarnicion ("any"). Incluye las que se estan entrenando.
@@ -579,6 +600,8 @@ static func route() -> Array:
 	var rows: Array = []
 	var current_found := false
 	for entry in LINE:
+		if not _entry_applies(entry):
+			continue
 		var done: bool = _line_entry_done(entry)
 		var row := {"text": describe(entry)["title"], "done": done, "current": false}
 		if String(entry["kind"]) == "train":
@@ -589,8 +612,9 @@ static func route() -> Array:
 			row["current"] = true
 			current_found = true
 		rows.append(row)
-	var won: bool = StormManager.is_halted()
-	rows.append({"text": Tr.t("OBJ_ROUTE_FINAL"), "done": won, "current": not current_found and not won})
+	if GameMode.audit_enabled():
+		var won: bool = StormManager.is_halted()
+		rows.append({"text": Tr.t("OBJ_ROUTE_FINAL"), "done": won, "current": not current_found and not won})
 	rows.append({"text": Tr.t("OBJ_ROUTE_MARKET"), "current": false,
 		"done": ProgressionManager.is_milestone_completed("market_10_trades")})
 	return rows
@@ -637,8 +661,20 @@ static func describe(step: Dictionary) -> Dictionary:
 		"resummon":
 			title = Tr.t("OBJ_DO_RESUMMON")
 		_:
-			title = Tr.t("OBJ_DO_SANDBOX")
-	return {"title": title, "why": Tr.t(String(step.get("why", ""))), "blocker": blocker(step)}
+			match String(step.get("why", "")):
+				"OBJ_WHY_SANDBOX_BUILT":
+					title = Tr.t("OBJ_DO_SANDBOX_BUILT")
+				"OBJ_WHY_SANDBOX_MODE":
+					title = Tr.t("OBJ_DO_SANDBOX_MODE")
+				"OBJ_WHY_RUN_OVER":
+					title = Tr.t("LBL_RUN_OVER_TITLE")
+				_:
+					title = Tr.t("OBJ_DO_SANDBOX")
+	var why: String = String(step.get("why", ""))
+	# En Constructor el nivel 3 del Cuartel General es la meta, no una convocatoria.
+	if why == "OBJ_WHY_HQ_3" and GameMode.capstone_wins():
+		why = "OBJ_WHY_HQ_3_BUILDER"
+	return {"title": title, "why": Tr.t(why), "blocker": blocker(step)}
 
 ## Por que no se puede dar el paso ahora, o "" si se puede.
 static func blocker(step: Dictionary) -> String:

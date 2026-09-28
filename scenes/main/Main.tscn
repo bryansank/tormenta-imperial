@@ -29,6 +29,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/AuditDefeatScreen.tscn" id="26"]
 [ext_resource type="PackedScene" path="res://scenes/ui/PauseMenu.tscn" id="27"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TitleMenu.tscn" id="28"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SandboxPanel.tscn" id="modos_sandbox"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -128,6 +129,8 @@ script = ExtResource("7")
 [node name="WarReportScreen" parent="." instance=ExtResource("25")]
 
 [node name="AuditDefeatScreen" parent="." instance=ExtResource("26")]
+
+[node name="SandboxPanel" parent="." instance=ExtResource("modos_sandbox")]
 
 [node name="PauseMenu" parent="." instance=ExtResource("27")]
 

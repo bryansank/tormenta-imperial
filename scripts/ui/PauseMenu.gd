@@ -28,6 +28,9 @@ var _root: Control
 var _backdrop: ColorRect
 var _card: PanelContainer
 var _status: Label
+## El modo de la partida, bajo el titulo. Se rellena al abrir: al construirse el
+## menu la partida aun no ha cargado.
+var _mode_label: Label
 var _pause_btn: Button
 
 var _open := false
@@ -76,6 +79,8 @@ func _setup_ui() -> void:
 
 	column.add_child(ModalKit.make_text(Tr.t("LBL_PAUSE_TITLE"), "title", UITheme.ACCENT))
 	column.add_child(ModalKit.make_text(Tr.t("LBL_PAUSE_SUBTITLE"), "small", UITheme.TEXT_DIM))
+	_mode_label = ModalKit.make_text("", "small", UITheme.ACCENT)
+	column.add_child(_mode_label)
 	column.add_child(UITheme.make_separator())
 	column.add_child(ModalKit.make_menu_button(Tr.t("BTN_RESUME"), UITheme.POSITIVE, resume))
 	column.add_child(ModalKit.make_menu_button(Tr.t("BTN_SAVE_GAME"), UITheme.BTN, save))
@@ -160,15 +165,17 @@ func _unhandled_input(event: InputEvent) -> void:
 func open_pause() -> void:
 	_open = true
 	_status.visible = false
+	_mode_label.text = Tr.t("LBL_MODE_CURRENT") % GameMode.display_name()
 	_relayout()
 	_root.visible = true
 	_pause_btn.visible = false
 	if not get_tree().paused:
 		get_tree().paused = true
 		_paused_by_me = true
-	var first: Control = (_card.get_child(0) as VBoxContainer).get_child(3)
-	if first is Button:
-		(first as Button).grab_focus.call_deferred()
+	for child in (_card.get_child(0) as VBoxContainer).get_children():
+		if child is Button:
+			(child as Button).grab_focus.call_deferred()
+			break
 
 func resume() -> void:
 	_close_sub()
@@ -187,11 +194,19 @@ func _exit_tree() -> void:
 
 ## Guarda y lo dice aqui mismo: los avisos de la esquina van por debajo de este
 ## menu y, con el juego parado, no se desvanecerian.
+##
+## Y dice la verdad: este menu puede abrirse encima del tablero, y con una pelea
+## abierta GameManager no escribe, deja el guardado pendiente hasta que termine.
+## Entonces no se dice "guardada", se dice cuando se guardara.
 func save() -> void:
 	_save_now()
-	_status.text = Tr.t("MSG_GAME_SAVED")
+	var deferred: bool = GameManager.is_started() and GameManager.has_pending_save()
+	var key := "MSG_SAVE_AFTER_FIGHT" if deferred else "MSG_GAME_SAVED"
+	var color: Color = UITheme.WARNING if deferred else UITheme.POSITIVE
+	_status.text = Tr.t(key)
+	_status.add_theme_color_override("font_color", color)
 	_status.visible = true
-	EventBus.notification_posted.emit(Tr.t("MSG_GAME_SAVED"), "success", UITheme.POSITIVE)
+	EventBus.notification_posted.emit(Tr.t(key), "warning" if deferred else "success", color)
 
 ## Guarda si hay partida en marcha. Sin escena de juego (pruebas) no hay nada.
 func _save_now() -> void:

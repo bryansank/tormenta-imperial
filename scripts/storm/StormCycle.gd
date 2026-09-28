@@ -39,6 +39,9 @@ var storms_survived: int = 0
 var tithes_repelled: int = 0
 ## Only the first storm gets the long fuse and the gentle severity.
 var _first: bool = true
+## The next Warning cannot turn out to be a false alarm. Set by `summon_now()`
+## (a storm called on demand is a storm that comes) and spent on that Warning.
+var forced: bool = false
 var _tick_accum: float = 0.0
 ## The cycle owns its randomness so a test can seed it and get the same run
 ## twice. Never the global `randf()`: a model that reads global state is not
@@ -53,7 +56,8 @@ static func create(rng_seed: int = -1) -> StormCycle:
 	var cycle := StormCycle.new()
 	cycle.phase = Phase.CALM
 	cycle.seconds_left = GameConfig.get_storm_first_interval()
-	cycle.severity = GameConfig.storm_first_severity
+	cycle.severity = clampi(GameConfig.storm_first_severity + GameConfig.get_storm_severity_bonus(),
+		1, GameConfig.storm_severity_max)
 	cycle.seed_rng(rng_seed)
 	return cycle
 
@@ -145,8 +149,20 @@ func _enter_warning() -> Array:
 		{"e": "incoming", "seconds": seconds_left},
 	]
 
+## Calls the storm now: straight into the Warning, whatever the calm had left.
+## Only from CALM — a storm already on its way is not summoned twice. Used by
+## the Sandbox tools; the rules of the storm itself do not change.
+func summon_now() -> Array:
+	if phase != Phase.CALM:
+		return []
+	forced = true
+	return _enter_warning()
+
 ## The Warning runs out and the sky decides.
 func _leave_warning() -> Array:
+	if forced:
+		forced = false
+		return _enter_ash()
 	if _rng.randf() < GameConfig.storm_false_alarm_chance:
 		return _false_alarm()
 	return _enter_ash()
@@ -227,7 +243,8 @@ static func compute_severity(footprint: int, era: int) -> int:
 	var from_era: int = GameConfig.storm_severity_per_era * maxi(0, era - 1)
 	var per: int = maxi(1, GameConfig.storm_buildings_per_severity)
 	var from_smoke: int = int(maxi(0, footprint) / per)
-	return clampi(1 + from_era + from_smoke, 1, GameConfig.storm_severity_max)
+	var from_mode: int = GameConfig.get_storm_severity_bonus()
+	return clampi(1 + from_era + from_smoke + from_mode, 1, GameConfig.storm_severity_max)
 
 # ── Persistence ──────────────────────────────────────────────────────
 
@@ -247,6 +264,7 @@ func to_dict() -> Dictionary:
 		"storms_survived": storms_survived,
 		"tithes_repelled": tithes_repelled,
 		"first": _first,
+		"forced": forced,
 	}
 
 static func from_dict(data: Dictionary) -> StormCycle:
@@ -263,6 +281,7 @@ static func from_dict(data: Dictionary) -> StormCycle:
 	# es lo prudente (la escolta vuelve a su tamano base, no al del tope).
 	cycle.tithes_repelled = maxi(0, int(data.get("tithes_repelled", 0)))
 	cycle._first = bool(data.get("first", true))
+	cycle.forced = bool(data.get("forced", false))
 	# Un save hecho con los Tasadores en la puerta vuelve con los Tasadores en la
 	# puerta. Antes se perdonaba y el reloj volvia a la calma: salir del juego
 	# durante el Diezmo era la forma de no pagarlo. El tablero no se guarda, asi

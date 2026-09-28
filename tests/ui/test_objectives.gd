@@ -354,3 +354,35 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	assert_int(int(step["level"])).is_equal(3)
 	# Y con la holgura, la mejora ya no es el 100% de la bolsa.
 	assert_int(Objectives._cost_total(Objectives.step_cost(step))).is_less(ResourceManager.get_storage_cap())
+
+# ── Los modos ────────────────────────────────────────────────────────
+
+## En Constructor no hay Diezmo ni asedio: el panel no pide guarnicion ni
+## blindados, y el nivel 3 del Cuartel General es la meta. En Sandbox no hay
+## objetivo. docs/20-modos-de-juego.md.
+func test_the_builder_skips_the_army_and_the_sandbox_has_no_goal() -> void:
+	var saved_mode: int = GameMode.current
+	var saved_result: String = GameMode.run_result
+	GameMode.begin_run(GameMode.Mode.BUILDER)
+	var visited: Array = []
+	for i in range(80):
+		var step: Dictionary = Objectives.next_step()
+		if String(step["kind"]) == "sandbox":
+			break
+		visited.append("%s:%s" % [step["kind"], step.get("id", "")])
+		if String(step["kind"]) == "upgrade" and String(step["id"]) == "headquarters" \
+				and int(step["level"]) == 3:
+			assert_str(String(Objectives.describe(step)["why"])).is_equal(Tr.t("OBJ_WHY_HQ_3_BUILDER"))
+			ProgressionManager.milestones_completed["hq_max"] = true
+			continue
+		_give(step)
+		_take(step)
+	assert_bool(visited.has("train:vehicle")).override_failure_message(
+		"el Constructor pidio blindados: %s" % str(visited)).is_false()
+	assert_bool(visited.has("train:artillery") or visited.has("train:infantry")).override_failure_message(
+		"el Constructor pidio guarnicion: %s" % str(visited)).is_false()
+	assert_str(String(Objectives.next_step()["why"])).is_equal("OBJ_WHY_SANDBOX_BUILT")
+	GameMode.begin_run(GameMode.Mode.SANDBOX)
+	assert_str(String(Objectives.next_step()["why"])).is_equal("OBJ_WHY_SANDBOX_MODE")
+	GameMode.current = saved_mode
+	GameMode.run_result = saved_result
