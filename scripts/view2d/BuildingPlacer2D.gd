@@ -264,6 +264,15 @@ func try_place(cell: Vector2i) -> Node:
 	if blocked != "":
 		_show_feedback(blocked)
 		return null
+	# La carretera automatica se paga con el edificio: si no llega para los dos,
+	# no se pone ni un tramo (luego no quedarian calles a ninguna parte).
+	var route: Array = verdict.get("route", [])
+	if not route.is_empty() and not ResourceManager.can_afford(Rules.cost_with_route(_current_data, route)):
+		_show_feedback(Tr.t("LBL_ROUTE_TOO_EXPENSIVE") % route.size())
+		return null
+	if not route.is_empty():
+		var laid := Rules.pave_route(self, route)
+		_show_feedback(Tr.t("LBL_ROUTE_LAID") % [laid, laid])
 	var cost := _current_data.get_cost()
 	if not cost.is_empty():
 		ResourceManager.spend_cost(cost)
@@ -328,6 +337,14 @@ func try_move(cell: Vector2i) -> bool:
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
 		return false
+	# Llevado a donde no llega la red: su carretera se tiende (y se paga) igual
+	# que al colocarlo.
+	var move_route: Array = verdict.get("route", [])
+	if not move_route.is_empty():
+		if not ResourceManager.can_afford(Rules.route_cost(move_route)):
+			_show_feedback(Tr.t("LBL_ROUTE_TOO_EXPENSIVE") % move_route.size())
+			return false
+		Rules.pave_route(self, move_route)
 	Rules.consume_deposit_if_required(_current_data.id, verdict, map_gen)
 	var old_info := GridManager.get_building_info(_moving_building)
 	var old_cell: Vector2i = old_info.get("origin_cell", cell)

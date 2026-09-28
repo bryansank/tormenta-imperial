@@ -715,10 +715,11 @@ func _on_build_pressed() -> void:
 # ══════════════════════════════════════════════════════════════════════
 
 func _has_locked_resource_cost(data: BuildingData) -> bool:
-	if data.cost_steel > 0 and not ResourceManager.is_unlocked(ResourceManager.Type.STEEL):
-		return true
-	if data.cost_oil > 0 and not ResourceManager.is_unlocked(ResourceManager.Type.OIL):
-		return true
+	# Cualquier recurso o material del coste que aun no este en el juego.
+	var cost := data.get_cost()
+	for type in cost:
+		if not ResourceManager.is_unlocked(type) and ResourceManager.get_amount(type) < int(cost[type]):
+			return true
 	return false
 
 # ══════════════════════════════════════════════════════════════════════

@@ -95,10 +95,20 @@ func _setup_ui() -> void:
 	_fit_scroll()
 	UILayoutManager.layout_changed.connect(_fit_scroll)
 
+	# La frase de arriba va dentro del scroll: fuera empujaria el modal por
+	# encima de los 720 px.
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", UITheme.SEPARATION)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_branches_scroll.add_child(content)
+
+	# Que es el arbol y que representa: sin esto nadie sabe para que subir.
+	content.add_child(_wrapped_label(Tr.t("LBL_TECH_INTRO"), "body", UITheme.TEXT))
+
 	var branches_row := HBoxContainer.new()
 	branches_row.add_theme_constant_override("separation", 12)
 	branches_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_branches_scroll.add_child(branches_row)
+	content.add_child(branches_row)
 
 	var branch_colors := {
 		"industrial": UITheme.BRANCH_INDUSTRIAL,
@@ -114,6 +124,10 @@ func _setup_ui() -> void:
 		col.add_child(UITheme.section_header(
 			Tr.t("TECH_BRANCH_" + branch.to_upper()), branch_colors[branch]
 		))
+		# Que hace la rama y que significa en el mundo.
+		col.add_child(_wrapped_label(
+			Tr.t("TECH_BRANCH_" + branch.to_upper() + "_DESC"), "small", UITheme.TEXT_DIM
+		))
 
 		var techs := TechTreeManager.get_branch_techs(branch)
 		techs.sort_custom(func(a, b): return a["tier"] < b["tier"])
@@ -121,6 +135,9 @@ func _setup_ui() -> void:
 			var btn := _create_tech_button(tech, branch_colors[branch])
 			col.add_child(btn)
 			_tech_buttons[tech["id"]] = btn
+			# El lore va fuera del boton: el texto del boton se reescribe con el
+			# motivo del bloqueo en cada refresco.
+			col.add_child(_wrapped_label(lore_text(tech["id"]), "small", UITheme.TEXT_DIM))
 
 		branches_row.add_child(col)
 
@@ -128,6 +145,8 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(155, 0)
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	# La ventaja es una frase entera: sin ajuste de linea ensancharia la columna.
+	btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	var researched := TechTreeManager.is_researched(tech["id"])
 	var can_research := TechTreeManager.can_research(tech["id"])
@@ -141,15 +160,9 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 	if not cost_parts.is_empty():
 		lines.append(Tr.t("FMT_COST") % " | ".join(cost_parts))
 
-	for key in tech.get("bonus", {}):
-		var val = tech["bonus"][key]
-		match key:
-			"production_mult": lines.append("+%d%% %s" % [int(val * 100), Tr.t("LBL_PRODUCTION")])
-			"storage_bonus": lines.append("+%d %s" % [val, Tr.t("LBL_STORAGE")])
-			"market_spread_reduction": lines.append(Tr.t("FMT_SPREAD_REDUCTION") % [int(val * 100)])
-			"morale_bonus": lines.append("+%d %s" % [val, Tr.t("LBL_MORALE_WORD")])
-			"consumption_reduction": lines.append(Tr.t("FMT_CONSUMPTION_REDUCTION") % [int(val * 100)])
-			"build_speed": lines.append(Tr.t("FMT_BUILD_SPEED") % [int(val * 100)])
+	var advantage := advantage_text(tech)
+	if advantage != "":
+		lines.append(Tr.t("LBL_TECH_ADVANTAGE") % advantage)
 
 	# El texto fijo se guarda aparte: el motivo del bloqueo se reescribe en cada
 	# refresco y no puede ir acumulandose encima.
@@ -173,6 +186,33 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 		_refresh_tech_states()
 	)
 	return btn
+
+## La ventaja en claro, con los numeros de GameConfig.tech_definitions. Estatica
+## y publica para las pruebas. Varias ventajas van separadas por coma.
+static func advantage_text(tech: Dictionary) -> String:
+	var parts: Array = []
+	var bonus: Dictionary = tech.get("bonus", {})
+	for key in bonus:
+		var val = bonus[key]
+		match key:
+			"production_mult": parts.append(Tr.t("TECH_ADV_PRODUCTION") % roundi(float(val) * 100.0))
+			"storage_bonus": parts.append(Tr.t("TECH_ADV_STORAGE") % int(val))
+			"market_spread_reduction": parts.append(Tr.t("TECH_ADV_SPREAD") % roundi(float(val) * 100.0))
+			"morale_bonus": parts.append(Tr.t("TECH_ADV_MORALE") % int(val))
+			"consumption_reduction": parts.append(Tr.t("TECH_ADV_CONSUMPTION") % roundi(float(val) * 100.0))
+			"build_speed": parts.append(Tr.t("TECH_ADV_BUILD") % roundi(float(val) * 100.0))
+	return ", ".join(parts)
+
+## La linea de lore de una tecnologia: que es en el mundo del juego.
+static func lore_text(tech_id: String) -> String:
+	return Tr.t("TECH_LORE_" + tech_id)
+
+## Etiqueta con ajuste de linea, estilo solo via UITheme.
+func _wrapped_label(text: String, size: String, color: Color) -> Label:
+	var label := UITheme.make_label(text, size, color)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return label
 
 func _refresh_tech_states() -> void:
 	for tech_id in _tech_buttons:

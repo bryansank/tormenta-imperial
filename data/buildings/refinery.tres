@@ -14,6 +14,7 @@ cost_gold = 300
 cost_steel = 150
 cost_oil = 0
 cost_wood = 100
+cost_materials = {"beams": 6}
 build_time = 18.0
 produces_gold = 0
 produces_steel = 0

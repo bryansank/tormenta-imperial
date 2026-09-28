@@ -75,8 +75,15 @@ static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector
 	if not GridManager.can_place(cell, size, ignore_building, ignore_obstacle):
 		return {"ok": false, "reason": "occupied", "deposit": deposit}
 	if not is_connected_spot(building_id, cell, size, ignore_building):
+		# Carretera automatica: si hay camino libre hasta la red, el sitio vale y
+		# el veredicto lleva los tramos a tender (se pagan al colocar, 1 oro cada
+		# uno). Una carretera no se tiende a si misma: esa si tiene que tocar la red.
+		if building_id != ROAD_ID:
+			var route: Variant = road_route(cell, size)
+			if route != null:
+				return {"ok": true, "reason": "", "deposit": deposit, "route": route}
 		return {"ok": false, "reason": "road", "deposit": deposit}
-	return {"ok": true, "reason": "", "deposit": deposit}
+	return {"ok": true, "reason": "", "deposit": deposit, "route": []}
 
 ## Quita el yacimiento sobre el que se planta un edificio que lo consume (la
 ## Refineria). Solo tras pasar todas las comprobaciones.
@@ -249,6 +256,10 @@ static func _is_road_cell(cell: Vector2i, ignore: Node) -> bool:
 	var info := GridManager.get_building_info(node)
 	return not info.is_empty() and (info["data"] as BuildingData).id == ROAD_ID
 
+## La huella toca la red (celdas de `connected_roads()`)?
+static func touches_network(cells: Array, network: Dictionary) -> bool:
+	return _touches(cells, network)
+
 ## Algun vecino (4 lados) de la huella esta en `targets`.
 static func _touches(cells: Array, targets: Dictionary) -> bool:
 	for c in cells:
@@ -336,6 +347,45 @@ static func road_route(cell: Vector2i, size: Vector2i) -> Variant:
 				came[n] = cur
 				queue.append(n)
 	return null
+
+## Lo que cuestan los tramos de `route` (Type -> cantidad).
+static func route_cost(route: Array) -> Dictionary:
+	var out := {}
+	if route.is_empty():
+		return out
+	var road := load_building_data(ROAD_ID)
+	if road == null:
+		return out
+	var one := road.get_cost()
+	for type in one:
+		out[type] = int(one[type]) * route.size()
+	return out
+
+## El coste del edificio mas el de su carretera automatica.
+static func cost_with_route(data: BuildingData, route: Array) -> Dictionary:
+	var total := data.get_cost()
+	var extra := route_cost(route)
+	for type in extra:
+		total[type] = int(total.get(type, 0)) + int(extra[type])
+	return total
+
+## Tiende (y cobra) los tramos de la carretera automatica con `placer` (el de 3D
+## o el de 2D: los dos tienen place_building_at). Emite building_placed por cada
+## tramo, como si el jugador lo hubiera puesto: guardado, trabajadores y
+## trabajadores que andan se enteran. Devuelve cuantos puso.
+static func pave_route(placer: Node, route: Array) -> int:
+	var road := load_building_data(ROAD_ID)
+	if road == null or route.is_empty():
+		return 0
+	var cost := route_cost(route)
+	if not cost.is_empty():
+		ResourceManager.spend_cost(cost)
+	var n := 0
+	for c in route:
+		if placer.place_building_at(road, c) != null:
+			n += 1
+			EventBus.building_placed.emit(road, c)
+	return n
 
 ## La ruta a pie del Nucleo a `target` por la red: celdas de carretera, de la
 ## que toca el Nucleo a la que toca el edificio. [] si no hay (sin Nucleo, sin

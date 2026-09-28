@@ -553,15 +553,8 @@ func _industrial_footprint() -> int:
 	return count
 
 func _resource_name(type: int) -> String:
-	match type:
-		ResourceManager.Type.STEEL:
-			return "steel"
-		ResourceManager.Type.OIL:
-			return "oil"
-		ResourceManager.Type.WOOD:
-			return "wood"
-		_:
-			return "gold"
+	var n: String = ResourceManager.get_type_name(type)
+	return n if n != "unknown" else "gold"
 
 # ── Persistence ──────────────────────────────────────────────────────
 

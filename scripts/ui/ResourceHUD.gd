@@ -28,6 +28,10 @@ var _storage_label: Label
 var _storage_value: Label
 var _toggle_btn: Button
 var _content_box: VBoxContainer
+## TALLER: los materiales (tablones, lingotes, vigas, combustible), fuera de la
+## bolsa. Una fila aparte, solo con los que ya estan en el juego.
+var _mat_row: HBoxContainer
+var _mat_labels: Dictionary = {}  # Type -> Label
 var _is_expanded := false
 
 ## En orden de era: lo primero que ve un jugador nuevo es oro y madera.
@@ -163,6 +167,22 @@ func _setup_ui() -> void:
 		_segments[_resource_types[i]] = segs[i]
 	_free_segment = UITheme.pool_bar_free(_pool_bar)
 
+	# ── Taller: materiales, fuera de la bolsa ──
+	_mat_row = HBoxContainer.new()
+	_mat_row.name = "MaterialsRow"
+	_mat_row.add_theme_constant_override("separation", 10)
+	_mat_row.tooltip_text = Tr.t("HINT_MATERIALS")
+	_mat_row.mouse_filter = Control.MOUSE_FILTER_STOP
+	vbox.add_child(_mat_row)
+	_mat_row.add_child(UITheme.make_label(Tr.t("LBL_MATERIALS"), "small", UITheme.TEXT_DIM))
+	for type in ResourceManager.MATERIALS:
+		var res_id: String = ResourceManager.get_type_name(type)
+		var lbl := UITheme.make_label("", "small", UITheme.resource_color(res_id))
+		lbl.name = "Mat_" + res_id
+		lbl.tooltip_text = Tr.t("HINT_MATERIALS")
+		_mat_row.add_child(lbl)
+		_mat_labels[type] = lbl
+
 	_refresh()
 
 ## El ▼ es pequeno con raton y de tamano dedo en tactil. Va despues de
@@ -219,10 +239,25 @@ func _refresh() -> void:
 	_free_segment.visible = free > 0
 	_free_segment.size_flags_stretch_ratio = maxf(0.001, float(free))
 
+	var any_material := false
+	for type in _mat_labels:
+		var on: bool = ResourceManager.is_unlocked(type) or ResourceManager.get_amount(type) > 0
+		var lbl: Label = _mat_labels[type]
+		lbl.visible = on
+		lbl.text = "%s %d" % [Tr.res_cap(ResourceManager.get_type_name(type)), ResourceManager.get_amount(type)]
+		any_material = any_material or on
+	_mat_row.visible = any_material
+
 func _on_resource_changed(_resource_type: String, _new_amount: int, _delta: int) -> void:
 	_refresh()
 
 func _on_resource_unlocked(resource_name: String) -> void:
+	# Un material nuevo: se ensena en el taller y se dice donde se fabrica.
+	if ResourceManager.is_material_name(resource_name):
+		_refresh()
+		EventBus.notification_posted.emit(
+			Tr.t("NOTIF_MATERIAL_UNLOCKED") % Tr.res_cap(resource_name), "info", UITheme.INFO)
+		return
 	var type := _type_of(resource_name)
 	if type < 0 or not _chips.has(type):
 		return

@@ -16,6 +16,9 @@ const DATA_DIR := "res://data/buildings/"
 @export var cost_steel: int = 0
 @export var cost_oil: int = 0
 @export var cost_wood: int = 0
+## Materiales del taller que pide ademas (nombre -> cantidad): "planks",
+## "ingots", "beams", "fuel". Solo los edificios avanzados (2026-09-28).
+@export var cost_materials: Dictionary = {}
 
 # Build time in seconds (0 = instant)
 @export var build_time: float = 0.0
@@ -82,6 +85,10 @@ func get_cost() -> Dictionary:
 		cost[ResourceManager.Type.OIL] = cost_oil
 	if cost_wood > 0:
 		cost[ResourceManager.Type.WOOD] = cost_wood
+	for res_name in cost_materials:
+		var type: int = ResourceManager.name_to_type(String(res_name))
+		if type != -1 and int(cost_materials[res_name]) > 0:
+			cost[type] = int(cost_materials[res_name])
 	return cost
 
 ## Helper: check if this building produces any resources.

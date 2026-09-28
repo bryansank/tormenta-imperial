@@ -15,6 +15,7 @@ cost_gold = 120
 cost_steel = 40
 cost_oil = 0
 cost_wood = 0
+cost_materials = {"ingots": 3}
 build_time = 6.0
 produces_gold = 0
 produces_steel = 0

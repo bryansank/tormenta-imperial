@@ -48,6 +48,11 @@ func _on_node_added(node: Node) -> void:
 	if node is ScrollContainer:
 		DragScroll.attach.call_deferred(node)
 
+## Las ventanas abiertas ahora mismo (copia; las liberadas no salen).
+func open_windows() -> Array:
+	_prune()
+	return _window_stack.duplicate()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
 		_prune()

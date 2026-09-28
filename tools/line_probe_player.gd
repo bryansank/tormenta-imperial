@@ -251,6 +251,8 @@ func _decide() -> void:
 				_act("research %s" % String(step["id"]), true)
 			elif not TechTreeManager.is_researching():
 				_cover_with_market(Objectives.step_cost(step))
+		"make":
+			_try_make(step)
 		"buy":
 			if MarketManager.buy(String(step["id"]), int(step["amount"])):
 				_r["trades"] += 1
@@ -490,6 +492,23 @@ func _towers_whole() -> bool:
 ## oro mientras no haya otra cosa que hacer, y mina a mano un yacimiento a la vez
 ## (gratis: 20 de madera cada 8 s o 20 de oro cada 12 s, hasta agotarlo). Nunca el
 ## ultimo bosque ni la ultima veta: sin ellos no se levanta otro extractor.
+## Fabrica el material que pide el paso en el primer edificio libre que lo haga;
+## si falta el recurso de la receta, se cubre en el mercado como cualquier coste.
+func _try_make(step: Dictionary) -> void:
+	var recipe: Dictionary = Objectives.material_recipe(String(step["id"]))
+	if recipe.is_empty():
+		return
+	for info in GridManager.get_all_buildings():
+		var node: Node = info["node"]
+		if (info["data"] as BuildingData).id != String(step.get("building", "")):
+			continue
+		if ProcessManager.is_busy(node) or ProductionManager.is_constructing(node):
+			continue
+		if ProcessManager.start_process(node, recipe):
+			_act("make %s" % String(step["id"]), false)
+			return
+	_cover_with_market(Objectives.step_cost(step))
+
 func _run_processes() -> void:
 	_mine_by_hand()
 	_run_recipes()

@@ -109,13 +109,11 @@ func repair_cost(node: Node) -> Dictionary:
 		return {}
 	var factor: float = missing * GameConfig.storm_repair_cost_ratio
 	var cost: Dictionary = {}
-	for pair in [[ResourceManager.Type.GOLD, data.cost_gold],
-			[ResourceManager.Type.STEEL, data.cost_steel],
-			[ResourceManager.Type.OIL, data.cost_oil],
-			[ResourceManager.Type.WOOD, data.cost_wood]]:
-		var amount: int = roundi(float(pair[1]) * factor)
+	var full: Dictionary = data.get_cost()
+	for type in full:
+		var amount: int = roundi(float(full[type]) * factor)
 		if amount > 0:
-			cost[pair[0]] = amount
+			cost[type] = amount
 	return cost
 
 func can_repair(node: Node) -> Dictionary:

@@ -45,10 +45,31 @@ func test_a_building_touching_the_ring_is_connected_and_one_away_is_not() -> voi
 	_core_with_ring()
 	# Casa 2x2 pegada a la acera por la izquierda (x=7..8, la acera en x=9).
 	assert_bool(Rules.is_connected_spot("house", Vector2i(7, 10), Vector2i(2, 2))).is_true()
-	# Una celda mas lejos ya no la toca.
+	# Una celda mas lejos ya no la toca...
 	assert_bool(Rules.is_connected_spot("house", Vector2i(6, 10), Vector2i(2, 2))).is_false()
+	# ...pero vale igual: la carretera automatica tiende el tramo que falta.
 	var verdict := Rules.evaluate_placement("house", Vector2i(6, 10), Vector2i(2, 2), null)
+	assert_bool(bool(verdict["ok"])).is_true()
+	assert_int((verdict["route"] as Array).size()).is_equal(1)
+
+## Sin camino libre hasta la red no vale: encerrada entre edificios.
+func test_a_spot_with_no_way_to_the_network_is_refused() -> void:
+	_core_with_ring()
+	# Una casa en (2,2) rodeada de casas: ningun camino libre sale de ella.
+	for o in [Vector2i(0, 0), Vector2i(2, 0), Vector2i(4, 0), Vector2i(0, 2), Vector2i(4, 2),
+			Vector2i(0, 4), Vector2i(2, 4), Vector2i(4, 4)]:
+		_put("house", o)
+	var verdict := Rules.evaluate_placement("house", Vector2i(2, 2), Vector2i(2, 2), null)
+	assert_bool(bool(verdict["ok"])).is_false()
 	assert_str(String(verdict["reason"])).is_equal("road")
+
+func test_the_auto_road_costs_one_gold_a_tile() -> void:
+	var cost: Dictionary = Rules.route_cost([Vector2i(1, 1), Vector2i(2, 1), Vector2i(3, 1)])
+	assert_int(int(cost.get(ResourceManager.Type.GOLD, 0))).is_equal(3)
+	assert_bool(cost.has(ResourceManager.Type.WOOD)).is_false()
+
+func test_roads_are_instant() -> void:
+	assert_float(_data("road").build_time).is_equal(0.0)
 
 func test_a_road_has_to_grow_from_the_network() -> void:
 	_core_with_ring()
@@ -105,3 +126,16 @@ func test_only_the_road_stays_1x1() -> void:
 			assert_bool(d.grid_size.x >= 2 and d.grid_size.y >= 2).override_failure_message(
 				"%s es de %s" % [d.id, d.grid_size]).is_true()
 	assert_int(_data("road").cost_gold).is_equal(1)
+
+## Sin carretera hasta el Nucleo, un edificio no funciona: no recibe gente ni
+## produce (la meta `connected` la pone PopulationManager al recontar).
+func test_a_building_without_a_road_does_not_work() -> void:
+	_core_with_ring()
+	var linked := _put("sawmill", Vector2i(7, 10))
+	var loose := _put("sawmill", Vector2i(2, 2))
+	PopulationManager._recalculate_all()
+	assert_bool(bool(linked.get_meta("connected", false))).is_true()
+	assert_bool(bool(loose.get_meta("connected", true))).is_false()
+	assert_bool(bool(loose.get_meta("staffed", false))).is_false()
+	var facts := {"can_work": true, "connected": false, "needs_workers": true, "staffed": false}
+	assert_str(String(BuildingStatusBadge.derive(facts)["reason"])).is_equal("no_road")

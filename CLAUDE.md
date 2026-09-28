@@ -221,6 +221,28 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
 
+### Materials (2026-09-28)
+
+Four workshop materials, appended to `ResourceManager.Type`: `PLANKS` (Sawmill,
+"make_planks": 20 wood → 5), `INGOTS` (Gold Mine, 30 gold → 3), `BEAMS` (Foundry, 20
+steel + 10 wood → 4), `FUEL` (Refinery, 15 oil → 5) — the first process of each in
+`GameConfig.building_processes`; `GameConfig.material_sources` maps material →
+building. A material is unlocked when the first of its building finishes
+(`ProgressionManager._unlock_material_of`). They are **outside the shared storage**
+(`get_total_stored()` skips them, the Tithe does not take them) because the pool is
+tuned to the exact HQ L3 price. Advanced buildings ask for them via
+`BuildingData.cost_materials` (Barracks planks, Tower/Refinery beams, HQ beams +
+ingots + fuel, Statue ingots) and `hq_upgrade_costs`. The HUD shows them in a TALLER
+row; `Objectives.make_step_for()` turns a missing material into a `"make"` step.
+
+**Era gates:** Foundry (era 2) needs Sawmill + Gold Mine + House + Warehouse;
+Refinery (era 3) needs Foundry + Barracks (`building_prerequisites`).
+
+**Quick guide:** `scripts/ui/QuickGuide.gd`, one screen with four blocks (resources,
+extraction, buildings and roads, progress), opened by TutorialPanel once per game
+after the prologue (help id `quick_guide`); the same texts are `guide_qg_*` in the
+AYUDA index.
+
 ### Road network (2026-09-28)
 
 - **Every building is at least 2x2**, except the road (1x1). GLBs made for 1x1 are
@@ -242,6 +264,14 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
   sends little figures from the Núcleo along `walk_route()` when a building gets
   staffed, plus one every 25 s as a shift change. View only; staffing stays in
   PopulationManager.
+- **Auto-road:** `evaluate_placement()` accepts an unconnected spot when a free route
+  to the network exists and returns it as `"route"`; the placers charge building +
+  route together (`Rules.cost_with_route`, 1 gold per tile) and lay it with
+  `Rules.pave_route()` (emits `building_placed` per tile). Roads are instant
+  (`build_time = 0`). No route → reason `"road"` (`LBL_NEEDS_ROAD`).
+- **No road, no work:** `PopulationManager._recalculate_all()` sets the meta
+  `connected` on every building; an unconnected one gets no workers, a house gives no
+  room, ProductionManager skips it and its badge says "sin carretera" (`no_road`).
 - **Save format 2:** `_write_save()` writes `"format": 2`. A save without it (or older)
   is copied to `user://save_game.v1-<date>.json` and a new game starts, with a notice
   (`MSG_SAVE_OLD_FORMAT`). A test that writes a save fixture adds `"format"`.

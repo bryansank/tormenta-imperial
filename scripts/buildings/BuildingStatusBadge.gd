@@ -160,6 +160,7 @@ func refresh() -> void:
 		"can_work": can_work(_data),
 		"under_construction": _building.has_meta("under_construction"),
 		"ruined": BuildingHealth.is_ruined(_building),
+		"connected": bool(_building.get_meta("connected", true)),
 		"busy": _busy or ProcessManager.is_busy(_building),
 		"needs_workers": _data.workers_required > 0,
 		"staffed": bool(_building.get_meta("staffed", false)),
@@ -181,6 +182,8 @@ static func derive(facts: Dictionary) -> Dictionary:
 		return {"status": Status.NONE, "reason": ""}
 	if bool(facts.get("under_construction", false)):
 		return {"status": Status.IDLE, "reason": "construction"}
+	if not bool(facts.get("connected", true)):
+		return {"status": Status.IDLE, "reason": "no_road"}
 	if bool(facts.get("ruined", false)):
 		return {"status": Status.IDLE, "reason": "ruined"}
 	if bool(facts.get("busy", false)):
@@ -204,7 +207,7 @@ static func color_for_reason(reason: String) -> Color:
 	match reason:
 		"construction": return COLOR_CONSTRUCTION
 		"ruined": return COLOR_RUINED
-		"unstaffed": return COLOR_UNSTAFFED
+		"unstaffed", "no_road": return COLOR_UNSTAFFED
 	return COLOR_IDLE
 
 ## Lo que dice el badge parado: "Zzz" y, debajo, por que (bug 11: nadie sabia
@@ -215,6 +218,7 @@ static func reason_text(reason: String) -> String:
 		"construction": key = "LBL_STATUS_WHY_CONSTRUCTION"
 		"ruined": key = "LBL_STATUS_WHY_RUINED"
 		"unstaffed": key = "LBL_STATUS_WHY_UNSTAFFED"
+		"no_road": key = "LBL_STATUS_WHY_NO_ROAD"
 	return Tr.t(key)
 
 func _apply(status: int, reason: String) -> void:

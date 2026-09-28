@@ -62,8 +62,8 @@ var upgrade_base_duration := 15.0
 # ── HQ Upgrade Override (capstone building, much more expensive) ──
 
 var hq_upgrade_costs := {
-	2: {"gold": 800, "steel": 500, "oil": 300, "wood": 400},
-	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700},
+	2: {"gold": 800, "steel": 500, "oil": 300, "wood": 400, "beams": 15, "ingots": 10, "fuel": 15},
+	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700, "beams": 25, "ingots": 20, "fuel": 25},
 }
 
 # ── Building Limits (max per type, -1 = unlimited) ──
@@ -86,9 +86,12 @@ var building_limits := {
 
 # ── Building Prerequisites (must have at least 1 of each listed) ──
 
+## La Fundicion abre la era 2 y la Refineria la 3: no se sube de era sin la base
+## de la anterior en pie (2026-09-28). Era 1 completa = madera, oro, gente y
+## almacen; era 2 completa = acero y un Cuartel que la defienda.
 var building_prerequisites := {
-	"foundry": ["sawmill"],
-	"refinery": ["foundry"],
+	"foundry": ["sawmill", "gold_mine", "house", "warehouse"],
+	"refinery": ["foundry", "barracks"],
 	"barracks": ["foundry", "sawmill"],
 	"tower": ["barracks"],
 	"headquarters": ["barracks", "refinery"],
@@ -171,30 +174,62 @@ var building_processes := {
 		 "cost": {"steel": 15, "wood": 10}, "produces": {"gold": 60}},
 	],
 	"sawmill": [
+		{"id": "make_planks", "name": "PROC_MAKE_PLANKS", "duration": 20.0,
+		 "cost": {"wood": 20}, "produces": {"planks": 5}},
 		{"id": "refined_lumber", "name": "PROC_REFINED_LUMBER", "duration": 30.0,
 		 "cost": {"wood": 15}, "produces": {"wood": 25, "gold": 5}},
 		{"id": "charcoal", "name": "PROC_CHARCOAL", "duration": 25.0,
 		 "cost": {"wood": 25}, "produces": {"steel": 12}},
 	],
 	"gold_mine": [
+		{"id": "make_ingots", "name": "PROC_MAKE_INGOTS", "duration": 30.0,
+		 "cost": {"gold": 30}, "produces": {"ingots": 3}},
 		{"id": "deep_mining", "name": "PROC_DEEP_MINING", "duration": 35.0,
 		 "cost": {"steel": 10}, "produces": {"gold": 35}},
 		{"id": "gem_extraction", "name": "PROC_GEM_EXTRACTION", "duration": 60.0,
 		 "cost": {"gold": 20, "steel": 5}, "produces": {"gold": 60}},
 	],
 	"foundry": [
+		{"id": "make_beams", "name": "PROC_MAKE_BEAMS", "duration": 30.0,
+		 "cost": {"steel": 20, "wood": 10}, "produces": {"beams": 4}},
 		{"id": "alloy_smelting", "name": "PROC_ALLOY_SMELTING", "duration": 40.0,
 		 "cost": {"steel": 20, "wood": 10}, "produces": {"steel": 45}},
 		{"id": "armor_plates", "name": "PROC_ARMOR_PLATES", "duration": 45.0,
 		 "cost": {"steel": 30}, "produces": {"steel": 15, "gold": 20}},
 	],
 	"refinery": [
+		{"id": "make_fuel", "name": "PROC_MAKE_FUEL", "duration": 25.0,
+		 "cost": {"oil": 15}, "produces": {"fuel": 5}},
 		{"id": "fuel_distillation", "name": "PROC_FUEL_DISTILLATION", "duration": 30.0,
 		 "cost": {"oil": 15}, "produces": {"oil": 25}},
 		{"id": "chemical_processing", "name": "PROC_CHEMICAL_PROCESSING", "duration": 50.0,
 		 "cost": {"oil": 20, "steel": 10}, "produces": {"oil": 18, "gold": 25}},
 	],
 }
+
+# ── Materiales (2026-09-28) ──
+#
+# Cada edificio especializado fabrica, con su recurso, un material para los
+# edificios avanzados (el primer proceso de su lista en building_processes). El
+# material aparece en el juego cuando se termina el primero de su edificio.
+# Viven fuera de la bolsa compartida (ResourceManager: el taller del Nucleo).
+var material_sources := {
+	"planks": "sawmill",
+	"ingots": "gold_mine",
+	"beams": "foundry",
+	"fuel": "refinery",
+}
+
+## El edificio que fabrica un material ("" si no es un material).
+func get_material_source(res_name: String) -> String:
+	return String(material_sources.get(res_name, ""))
+
+## El material que fabrica un edificio ("" si ninguno).
+func get_material_of(building_id: String) -> String:
+	for m in material_sources:
+		if material_sources[m] == building_id:
+			return m
+	return ""
 
 # ── Mining Data ──
 
@@ -252,6 +287,10 @@ var resource_colors := {
 	"steel": Color(0.7, 0.75, 0.8),
 	"oil": Color(0.5, 0.4, 0.6),
 	"wood": Color(0.55, 0.35, 0.15),
+	"planks": Color(0.82, 0.62, 0.36),
+	"ingots": Color(1.0, 0.72, 0.25),
+	"beams": Color(0.55, 0.62, 0.72),
+	"fuel": Color(0.85, 0.38, 0.2),
 }
 
 # ── Audio ──
@@ -760,14 +799,9 @@ func get_upgrade_cost(data: BuildingData, to_level: int) -> Dictionary:
 		return cost
 	var mult: float = upgrade_cost_multiplier[to_level - 1]
 	var cost := {}
-	if data.cost_gold > 0:
-		cost[ResourceManager.Type.GOLD] = int(data.cost_gold * mult)
-	if data.cost_steel > 0:
-		cost[ResourceManager.Type.STEEL] = int(data.cost_steel * mult)
-	if data.cost_oil > 0:
-		cost[ResourceManager.Type.OIL] = int(data.cost_oil * mult)
-	if data.cost_wood > 0:
-		cost[ResourceManager.Type.WOOD] = int(data.cost_wood * mult)
+	var base: Dictionary = data.get_cost()
+	for type in base:
+		cost[type] = int(base[type] * mult)
 	return cost
 
 func get_production_multiplier(level: int) -> float:

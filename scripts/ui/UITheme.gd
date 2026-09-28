@@ -790,8 +790,10 @@ static func resource_color(res_id: String) -> Color:
 			return RES_OIL
 		"wood":
 			return RES_WOOD
-		_:
-			return TEXT
+	# Materiales del taller: su color de GameConfig (no cambian con la paleta).
+	if GameConfig.resource_colors.has(res_id):
+		return GameConfig.resource_colors[res_id]
+	return TEXT
 
 ## Ficha de recurso del HUD: [icono] 2480. La cantidad es el nodo "Amount"
 ## (ver chip_amount) para que el panel la actualice sin guardar mas punteros.

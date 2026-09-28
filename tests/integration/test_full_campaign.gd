@@ -385,8 +385,12 @@ func _resource_amounts() -> Dictionary:
 ## Dinero para seguir jugando. Inyectar recursos esta permitido y es lo unico que
 ## se salta: lo que se prueba es que construir lo correcto abre la era correcta,
 ## no cuantos minutos cuesta juntar el oro.
+##
+## Los materiales del taller (tablones, lingotes, vigas, combustible) van con el
+## dinero: fabricarlos es un proceso de su edificio, probado aparte.
 func _bankroll(gold: int = 4000, wood: int = 4000, steel: int = 2000, oil: int = 2000) -> void:
-	ResourceManager.set_amounts({"gold": gold, "wood": wood, "steel": steel, "oil": oil})
+	ResourceManager.set_amounts({"gold": gold, "wood": wood, "steel": steel, "oil": oil,
+		"planks": 200, "ingots": 200, "beams": 200, "fuel": 200})
 
 func _count(building_id: String) -> int:
 	var total := 0

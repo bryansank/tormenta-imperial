@@ -45,6 +45,9 @@ var _text: Label
 var _skip_btn: Button
 var _ok_btn: Button
 var _step := ""
+var _quick_guide: CanvasLayer = null
+const QuickGuideScript := preload("res://scripts/ui/QuickGuide.gd")
+const QUICK_GUIDE_ID := "quick_guide"
 var _done_left := 0.0
 var _pulse := 0.0
 
@@ -56,6 +59,10 @@ func _ready() -> void:
 	_prologue.name = "PrologueScreen"
 	add_child(_prologue)
 	_prologue.closed.connect(_on_prologue_closed)
+	_quick_guide = QuickGuideScript.new()
+	_quick_guide.name = "QuickGuide"
+	add_child(_quick_guide)
+	_quick_guide.closed.connect(func(): TutorialManager.mark_help_seen(QUICK_GUIDE_ID))
 	_build_coach()
 	EventBus.tutorial_intro_requested.connect(_open_intro)
 	EventBus.tutorial_step_changed.connect(_on_step_changed)
@@ -73,6 +80,17 @@ func _open_intro() -> void:
 
 func _on_prologue_closed() -> void:
 	EventBus.tutorial_intro_closed.emit()
+	# La guia rapida, una vez por partida, justo despues del lore y antes de la
+	# primera marca del tutorial (que no se ve mientras la guia pausa el juego).
+	if not TutorialManager.has_seen_help(QUICK_GUIDE_ID):
+		_quick_guide.open()
+
+## La guia rapida (Como funciona). Tambien la abre AYUDA.
+func quick_guide() -> CanvasLayer:
+	return _quick_guide
+
+func open_quick_guide() -> void:
+	_quick_guide.open()
 
 func prologue() -> CanvasLayer:
 	return _prologue
@@ -222,6 +240,13 @@ func _should_hide() -> bool:
 		return true
 	if is_intro_open() or get_tree().paused:
 		return true
+	if _quick_guide != null and _quick_guide.is_open():
+		return true
+	# Otra ventana encima (Tecnologia, Mercado...): la marca del tutorial no la
+	# tapa. CONSTRUIR si deja verla: los pasos del tutorial ocurren ahi dentro.
+	for w in UIManager.open_windows():
+		if is_instance_valid(w) and String(w.name) != "ConstructionMenu":
+			return true
 	if CombatManager.is_board_open():
 		return true
 	return false
