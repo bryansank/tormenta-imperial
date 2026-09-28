@@ -160,6 +160,11 @@ func register_camera(camera: Node) -> void:
 func hold_start() -> void:
 	_hold_start = true
 
+## La escena actual se esta abandonando por la otra vista. El menu principal lo
+## mira para no abrirse (y pausar) en una escena que muere este mismo frame.
+func is_start_held() -> bool:
+	return _hold_start
+
 ## ViewRouter: esta escena es la buena. Suelta lo que registro la escena que se
 ## abandono (nodos que ya no existen) para que la nueva se registre limpia.
 func release_start() -> void:

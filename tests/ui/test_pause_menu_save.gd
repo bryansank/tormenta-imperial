@@ -16,6 +16,11 @@ const STUB_SRC := "extends Node\nfunc get_all_placed_buildings() -> Array:\n\tre
 const PARTY := {"infantry": 2}
 const Parking := preload("res://tests/save/save_parking.gd")
 
+## Esta suite escribe user://save_game.json. Si corre en la carpeta del jugador
+## (lanzada sin tools/run_tests.sh) se salta entera: no hay partida que pisar.
+func before(do_skip := Parking.in_player_dir(), skip_reason := "Carpeta de usuario del jugador: lanza los tests con tools/run_tests.sh") -> void:
+	pass
+
 var _saved_gm: Array = []
 var _saved_army: Dictionary = {}
 var _placer: Node = null

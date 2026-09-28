@@ -60,6 +60,10 @@ func should_show_on_launch() -> bool:
 		return false
 	if DisplayServer.get_name() == "headless":
 		return false
+	# La escena se va a la otra vista en este mismo frame (ViewRouter): el menu
+	# lo abre la escena que llega, no esta, que muere antes de poder enfocarlo.
+	if GameManager.is_start_held():
+		return false
 	return not OS.get_cmdline_user_args().has("--no-title")
 
 ## Hay una partida que merece "Continuar": se cargo al arrancar, o el jugador ya
@@ -186,7 +190,14 @@ func open_menu() -> void:
 	if not get_tree().paused:
 		get_tree().paused = true
 		_paused_by_me = true
-	(_continue_btn if _continue_btn.visible else _new_btn).grab_focus.call_deferred()
+	_focus_default.call_deferred()
+
+## Diferido, y solo si el menu sigue en el arbol: una recarga o un cambio de
+## escena en el mismo frame lo dejaba fuera y grab_focus fallaba.
+func _focus_default() -> void:
+	var btn: Button = _continue_btn if _continue_btn.visible else _new_btn
+	if is_instance_valid(btn) and btn.is_inside_tree() and btn.is_visible_in_tree():
+		btn.grab_focus()
 
 ## Suelta el menu y, si lo pauso el, el juego.
 func close_menu() -> void:
