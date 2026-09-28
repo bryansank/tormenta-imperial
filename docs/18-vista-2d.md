@@ -149,13 +149,13 @@ de un dedo, pellizco, toque para colocar al levantar el dedo).
   `_ready()` corren: el menu de construccion 3D empieza a renderizar miniaturas
   que se descartan. Cuando la 2D sea la de serie conviene hacer de `Main2D.tscn`
   la escena principal (o una escena de arranque minima).
-- `project.godot` usa `stretch/aspect = "keep_height"`: en una ventana vertical
-  (400x720) todo el juego, 3D o 2D, se ve con bandas negras a 400x225. Las
-  capturas de movil de esta vista se hicieron con `aspect = "expand"` en un
-  `override.cfg` local; decidir el ajuste de movil es cosa de todo el proyecto.
+- ~~`stretch/aspect = "keep_height"` ponia bandas negras en vertical.~~ Resuelto:
+  `aspect = "expand"` y la escala por perfil de dispositivo
+  (docs/21-interfaz-y-dispositivos.md). La camara 2D descuenta la escala de
+  interfaz (`Camera2DController.ui_scale`).
 - HelperPanel son rotulos anclados a la pantalla, no a cosas del mundo: valen
   igual en 2D. El que habla de girar la camara sobra en 2D.
-- El panel de Ajustes ya era alto; con la fila de vista (y el selector de idioma
+- ~~El panel de Ajustes ya era alto~~ (ahora va en pestanas, docs/21); con la fila de vista (y el selector de idioma
   que llega en paralelo) hay que repasar que quepa a 720 de alto.
 - `ResourceHUD` puede ensenar el tope de almacen viejo justo tras cargar (se
   refresca con el siguiente cambio de recursos). Pasa igual en 3D.
