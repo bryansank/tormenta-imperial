@@ -1,0 +1,17 @@
+# Menu de titulo -> Nueva partida -> Confirmar. El dialogo "Esto borrara tu
+# partida actual" sale si hay partida guardada; si no sale, el toque de Confirmar
+# cae sobre el texto del lore y no hace nada. Deja abierta la pagina 1/10.
+appId: com.bryankey.tormentaimperial.qa
+---
+- tapOn:
+    point: "18%,38%"      # Nueva partida
+- runFlow:
+    file: esperar.yaml
+    env:
+      MS: 1500
+- tapOn:
+    point: "58%,53%"      # Confirmar (dialogo "Nueva partida")
+- runFlow:
+    file: esperar.yaml
+    env:
+      MS: 5000

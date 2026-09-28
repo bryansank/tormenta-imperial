@@ -1,0 +1,58 @@
+# Con el panel AJUSTES abierto: toca y arrastra sliders, toca un interruptor y
+# captura despues de cada cosa. Recibe P (prefijo de las capturas).
+# Coordenadas del panel (tableta 2560x1600, apaisado):
+#   Volumen general: pista y=32%, x de 32% a 67%
+#   Interruptor Musica: 65%,39%   Musica (volumen): y=48%   Efectos: y=56%
+#   Mostrar cuadricula: 65%,70%   Cerrar X: 66%,15%
+appId: com.bryankey.tormentaimperial.qa
+---
+- takeScreenshot: ${output.dir}/${P}_a_abierto
+# Toque sobre la pista del volumen general, al 25% de su recorrido.
+- tapOn:
+    point: "41%,32%"
+- runFlow:
+    file: esperar.yaml
+    env: {MS: 800}
+- takeScreenshot: ${output.dir}/${P}_b_toque_pista_general
+# Arrastre horizontal del tirador (de ~25% a ~65%).
+- swipe:
+    start: "41%,32%"
+    end: "55%,32%"
+    duration: 1200
+- runFlow:
+    file: esperar.yaml
+    env: {MS: 800}
+- takeScreenshot: ${output.dir}/${P}_c_arrastre_general
+# Arrastre "de dedo real": horizontal con algo de deriva vertical, en Efectos.
+- swipe:
+    start: "59%,56%"
+    end: "44%,59%"
+    duration: 1000
+- runFlow:
+    file: esperar.yaml
+    env: {MS: 800}
+- takeScreenshot: ${output.dir}/${P}_d_arrastre_con_deriva_efectos
+# Interruptores.
+- tapOn:
+    point: "65%,39%"      # Musica si/no
+- tapOn:
+    point: "65%,70%"      # Mostrar cuadricula
+- runFlow:
+    file: esperar.yaml
+    env: {MS: 800}
+- takeScreenshot: ${output.dir}/${P}_e_interruptores
+# Desplazar el panel (tiene barra de scroll) para ver lo de abajo.
+- swipe:
+    start: "50%,80%"
+    end: "50%,40%"
+    duration: 800
+- runFlow:
+    file: esperar.yaml
+    env: {MS: 800}
+- takeScreenshot: ${output.dir}/${P}_f_scroll
+- tapOn:
+    point: "66%,15%"      # X
+- runFlow:
+    file: esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/${P}_g_cerrado

@@ -62,3 +62,6 @@ docs/media/dev/
 
 # Informes de gdUnit4 (se regeneran en cada ejecucion de los tests)
 reports/
+
+# Capturas de los flujos de Maestro (qa/maestro/README.md)
+qa-out/
