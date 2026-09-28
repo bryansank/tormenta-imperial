@@ -185,13 +185,88 @@ hay que pedir a quien reporte un fallo.
 
 ---
 
-## 8. Distribuir
+## 8. Distribución
 
-1. Comprimir `TormentaImperial.exe` en un zip (`TormentaImperial-0.9.0-windows.zip`,
-   ~48 MB). Conviene añadir `LICENSE` y `THIRD-PARTY-NOTICES.md` al zip: las
-   licencias de terceros (Godot, fuentes, audio) exigen acompañar el binario.
+El .exe y el APK no se reparten sueltos: la MIT de Godot, la Apache 2.0 de Special
+Elite y la OFL de las otras fuentes exigen que su licencia acompañe al binario, y el
+tester necesita saber cómo abrirlo. `tools/package_release.sh` (o `.ps1`, el mismo
+resultado desde PowerShell) lo hace de una vez **a partir de builds ya exportadas**;
+no exporta nada.
+
+```bash
+# Por defecto: build/windows/TormentaImperial.exe y build/android/TormentaImperial-debug.apk,
+# versión de project.godot (config/version) y salida en dist/ (fuera de git).
+bash tools/package_release.sh
+
+# Con otras rutas, o solo una plataforma:
+bash tools/package_release.sh --exe ruta/al.exe --apk ruta/al.apk --out ../tormenta-imperial-builds
+bash tools/package_release.sh --only windows
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\package_release.ps1 -Exe ruta\al.exe -Apk ruta\al.apk -Out dist
+```
+
+Deja un zip por plataforma, cada uno con una carpeta dentro:
+
+| Fichero | Windows (`TormentaImperial-<versión>-windows.zip`) | Android (`TormentaImperial-<versión>-android.zip`) |
+|---|---|---|
+| Binario | `TormentaImperial.exe` | `TormentaImperial-<versión>.apk` |
+| `LEEME.txt` | cómo abrirlo, SmartScreen, dónde se guarda (`%APPDATA%\TormentaImperial`), controles, cómo reportar fallos; resumen en inglés | sideload, "orígenes desconocidos", Play Protect, partida, controles táctiles, fallos; resumen en inglés |
+| `LICENSE.txt` | `LICENSE` del repo (PolyForm Strict 1.0.0 + derechos reservados) | igual |
+| `THIRD-PARTY-NOTICES.md` | todo lo de terceros que viaja, con MIT, Apache 2.0 y OFL completas | igual |
+| `GODOT-COPYRIGHT.txt` | los 101 componentes del motor (FreeType, HarfBuzz, Jolt...) con sus licencias completas | igual |
+| `licenses/fonts/` | las cuatro licencias de `assets/fonts/` | igual |
+
+Las plantillas de los LEEME están en `tools/dist/LEEME-{windows,android}.txt`
+(`{{VERSION}}` se sustituye al empaquetar; salen en CRLF). No llevan ningún correo
+personal: los fallos van a los issues de GitHub o a quien pasó el juego.
+
+El script se niega a crear el zip si falta `LICENSE`, `THIRD-PARTY-NOTICES.md`,
+`licenses/GODOT-COPYRIGHT.txt` o la licencia de alguna fuente, y
+`tests/build/test_export_guards.gd` falla por lo mismo. Regla para fuentes nuevas:
+la licencia va al lado, en un `.txt` cuyo nombre contenga la familia (lo que va antes
+del primer `-` del nombre de la fuente: `SpecialElite-Regular.ttf` →
+`LICENSE-SpecialElite.txt`), y la fuente se añade a `THIRD-PARTY-NOTICES.md` §3.
+
+Medido el 2026-09-28 con las builds 0.9.0: 48,9 MB el zip de Windows (el .exe pesa
+120,6 MB sin comprimir) y 39,4 MB el de Android (el APK ya va comprimido).
+
+### Qué es de terceros y qué no
+
+| Qué | Licencia | Dónde |
+|---|---|---|
+| Godot 4.7 y sus componentes | MIT; cada componente la suya | `THIRD-PARTY-NOTICES.md` §1, `licenses/GODOT-COPYRIGHT.txt` |
+| Librerías Android del APK (AndroidX, Kotlin, kotlinx.coroutines, libc++) | Apache 2.0 | §2 |
+| Fuentes (Special Elite, Caveat, Black Ops One, Rajdhani) | Apache 2.0 / OFL 1.1 | §3 y `assets/fonts/*.txt` |
+| Música y efectos | CC0 (SRG774, Kenney) | §4 y `assets/CREDITS.md` |
+| Textura `metal_plate` | CC0 (Poly Haven) | §5 |
+| Modelos, iconos, logo, key art, textos | del autor, derechos reservados | §6 y `LICENSE` |
+| gdUnit4, Beckett | MIT, pero **no viajan** (excluidos en los tres presets) | §7 |
+
+**No viaja .NET.** El proyecto no tiene C#: el export de Windows no genera la carpeta
+`data_TormentaImperial_*` ni ningún ensamblado, y el APK no contiene ninguna `.dll`.
+La plantilla mono solo lleva el código de enlace de C# del propio Godot (MIT), sin
+usar. Comprobado sobre las builds 0.9.0: en el .exe, `addons/gdUnit4` y
+`addons/beckett` solo aparecen como nombres en la lista `editor_plugins/enabled` del
+`project.binary`, sin ningún fichero suyo.
+
+### Al cambiar de versión de Godot
+
+`licenses/GODOT-COPYRIGHT.txt` sale del propio binario del motor. Hay que regenerarlo
+con el Godot nuevo (no necesita importar el proyecto) y actualizar la versión y el
+hash de `THIRD-PARTY-NOTICES.md` §1:
+
+```bash
+"$GODOT" --headless --path . -s tools/gen_godot_notices.gd -- "$PWD/licenses/GODOT-COPYRIGHT.txt"
+```
+
+### Dónde publicar
+
+1. **Testers:** el zip tal cual, por el canal que sea. La licencia no deja que ellos
+   lo redistribuyan, y el LEEME lo dice.
 2. **itch.io:** crear el proyecto como "Downloadable", subir el zip marcado como
-   Windows. Para publicar versiones sin la web, `butler`:
+   Windows (y el de Android como Android). Para publicar versiones sin la web, `butler`:
    `butler push TormentaImperial-0.9.0-windows.zip usuario/tormenta-imperial:windows --userversion 0.9.0`.
 3. GitHub Releases también vale (adjuntar el zip a un tag), nunca dentro del repo.
 
