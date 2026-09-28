@@ -250,7 +250,7 @@ func try_place(cell: Vector2i) -> Node:
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return null
-	var blocked := Rules.purchase_block_message(_current_data)
+	var blocked := Rules.purchase_block_detail(_current_data)
 	if blocked != "":
 		_show_feedback(blocked)
 		return null
@@ -265,8 +265,11 @@ func try_place(cell: Vector2i) -> Node:
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
 	_redraw_roads_around(cell)
 	EventBus.building_placed.emit(_current_data, cell)
-	# Se sigue en modo colocacion para construir en serie, como en 3D.
-	_hover_cell = Vector2i(-99999, -99999)
+	# Como en 3D: en serie solo decoraciones y caminos; el resto sale del modo.
+	if Rules.keeps_placing(_current_data):
+		_hover_cell = Vector2i(-99999, -99999)
+	else:
+		EventBus.building_placement_cancelled.emit()
 	return building
 
 func _spawn(data: BuildingData, cell: Vector2i, rot_steps: int) -> Node2D:

@@ -46,6 +46,15 @@ static func load_building_data(building_id: String) -> BuildingData:
 		return load(path) as BuildingData
 	return null
 
+## "Fundicion + Aserradero": los requisitos de `building_id` con el nombre que
+## lee el jugador, no el id interno ("foundry + sawmill").
+static func prerequisite_names(building_id: String) -> String:
+	var names: Array = []
+	for req_id in GameConfig.get_prerequisites(building_id):
+		var req := load_building_data(String(req_id))
+		names.append(req.get_display_name() if req != null else String(req_id))
+	return " + ".join(names)
+
 # ── Veredicto de colocacion ───────────────────────────────────────────
 
 ## Veredicto completo para `building_id` con huella `size` en `cell`: la regla de
@@ -104,6 +113,13 @@ static func check_prerequisites(building_id: String) -> bool:
 			return false
 	return true
 
+## Tras colocar `data`, se sigue con otro en la mano? Solo lo que se pone en
+## serie: decoraciones y caminos (is_decoration), o un edificio que lo pida con
+## `repeat_placement`. Una casa, un aserradero o una mina se colocan de uno en
+## uno: seguir con el fantasma pegado al cursor invitaba a gastar sin querer.
+static func keeps_placing(data: BuildingData) -> bool:
+	return data != null and (data.is_decoration or data.repeat_placement)
+
 ## Por que no se puede comprar `data` ahora mismo, como texto para el jugador, o
 ## "" si nada lo impide. En el mismo orden en que lo comprobaba BuildingPlacer:
 ## tope, requisitos, obreros y coste. No cobra nada.
@@ -111,13 +127,41 @@ static func purchase_block_message(data: BuildingData) -> String:
 	if not check_building_limit(data.id):
 		return Tr.t("LBL_LIMIT_REACHED") % [count_building(data.id), GameConfig.get_building_limit(data.id)]
 	if not check_prerequisites(data.id):
-		return Tr.t("LBL_REQUIRES") % " + ".join(GameConfig.get_prerequisites(data.id))
+		return Tr.t("LBL_REQUIRES") % prerequisite_names(data.id)
 	if data.workers_required > 0 and PopulationManager.get_free_workers() < data.workers_required:
 		return Tr.t("LBL_NO_WORKERS")
 	var cost := data.get_cost()
 	if not cost.is_empty() and not ResourceManager.can_afford(cost):
 		return Tr.t("LBL_NOT_ENOUGH_RESOURCES")
 	return ""
+
+## Coste de `data` por nombre de recurso ("gold" -> 50), en el orden de
+## BuildingData.get_cost(). Para ensenarlo con Tr.amount_list().
+static func cost_by_name(data: BuildingData) -> Dictionary:
+	var out := {}
+	var cost := data.get_cost()
+	for type in cost:
+		out[ResourceManager.get_type_name(type)] = int(cost[type])
+	return out
+
+## Lo que le falta al jugador para pagar `data`, por nombre de recurso. {} si llega.
+static func missing_cost(data: BuildingData) -> Dictionary:
+	var out := {}
+	var cost := data.get_cost()
+	for type in cost:
+		var short: int = int(cost[type]) - ResourceManager.get_amount(type)
+		if short > 0:
+			out[ResourceManager.get_type_name(type)] = short
+	return out
+
+## Como purchase_block_message, pero si lo que falta son recursos dice cuales y
+## cuantos ("Te falta: 20 Madera"): "Recursos insuficientes" a secas no dice que
+## hacer. Es lo que ven el detalle de CONSTRUIR y el aviso al colocar.
+static func purchase_block_detail(data: BuildingData) -> String:
+	var msg := purchase_block_message(data)
+	if msg == Tr.t("LBL_NOT_ENOUGH_RESOURCES"):
+		return Tr.t("OBJ_MISSING") % Tr.amount_list(missing_cost(data))
+	return msg
 
 # ── Calzadas ──────────────────────────────────────────────────────────
 

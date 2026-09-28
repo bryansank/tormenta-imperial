@@ -3,6 +3,7 @@ extends CanvasLayer
 ## building grid with thumbnails, and a 3D preview panel for the selected building.
 
 const PlacementAssistScript := preload("res://scripts/buildings/PlacementAssist.gd")
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
 var _root: Control
 var _backdrop: ColorRect
@@ -32,6 +33,8 @@ var _detail_extras: Label
 ## "Necesita bosque adyacente": la regla del yacimiento, antes de colocar (bug 10).
 var _detail_rule: Label
 var _detail_size: Label
+## Por que no se puede construir ahora ("Te falta: 20 Madera"), junto al boton.
+var _detail_block: Label
 var _detail_build_btn: Button
 var _selected_data: BuildingData = null
 
@@ -61,6 +64,8 @@ func _ready() -> void:
 	_setup_ui()
 	_generate_thumbnails()
 	EventBus.resource_unlocked.connect(func(_r): _refresh_grid())
+	# Con la lista abierta, el coste en rojo o no y el aviso siguen a lo que hay.
+	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	# CONSTRUIR es la accion principal: siempre a la vista, no escondida tras el
 	# menu (bug 9/11: solo salia al desplegar el antiguo ☰).
 	_build_btn.visible = true
@@ -311,11 +316,17 @@ func _setup_ui() -> void:
 	_detail_size.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_detail_panel.add_child(_detail_size)
 
-	_detail_panel.add_child(UITheme.make_separator())
-
-	_detail_cost = UITheme.make_label("", "body", UITheme.WARNING)
+	# El coste, lo primero tras el nombre: es lo que decide si se puede.
+	_detail_cost = UITheme.make_label("", "section", UITheme.WARNING)
+	_detail_cost.name = "DetailCost"
+	_detail_cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_detail_cost.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_detail_panel.add_child(_detail_cost)
+
+	_detail_panel.add_child(UITheme.make_separator())
+	# Nombre, tamano y coste arriba del todo; la vista previa, detras. En
+	# tableta la vista previa empujaba el coste fuera de la pantalla.
+	_detail_panel.move_child(preview_wrapper, _detail_panel.get_child_count() - 1)
 
 	_detail_production = UITheme.make_label("", "body", UITheme.POSITIVE)
 	_detail_production.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -329,6 +340,14 @@ func _setup_ui() -> void:
 	_detail_extras = UITheme.make_label("", "small", UITheme.TEXT_DIM)
 	_detail_extras.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_detail_panel.add_child(_detail_extras)
+
+	# Lo que impide construir, a la vista junto al boton (fuera del scroll).
+	_detail_block = UITheme.make_label("", "body", UITheme.DANGER)
+	_detail_block.name = "DetailBlock"
+	_detail_block.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_detail_block.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_detail_block.visible = false
+	detail_column.add_child(_detail_block)
 
 	# Build button (outside the scroll, see DetailColumn above)
 	_detail_build_btn = Button.new()
@@ -353,6 +372,7 @@ func _open() -> void:
 	_modal.visible = true
 	_backdrop.visible = true
 	_refresh_grid()
+	_refresh_block()
 	UIManager.open_panel(self)
 
 func _close() -> void:
@@ -459,6 +479,17 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	name_label.custom_minimum_size.x = 110
 	vbox.add_child(name_label)
 
+	# El coste en la propia tarjeta: se ve sin elegir, y en rojo si no llega.
+	var cost_text := card_cost_text(data)
+	if cost_text != "":
+		var cost_label := UITheme.make_label(cost_text, "small",
+			UITheme.TEXT_DIM if locked else (UITheme.DANGER if not Rules.missing_cost(data).is_empty() else UITheme.WARNING))
+		cost_label.name = "CardCost"
+		cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		cost_label.custom_minimum_size.x = 110
+		vbox.add_child(cost_label)
+
 	# Interaction (A14): el hover solo RESALTA; la seleccion cambia solo con
 	# clic y queda bloqueada hasta el siguiente. Antes pasar el raton por otra
 	# tarjeta cambiaba la seleccion y el detalle saltaba de edificio en edificio.
@@ -479,6 +510,14 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		)
 
 	return card
+
+## "50 Oro · 30 Madera", o "" si es gratis.
+static func card_cost_text(data: BuildingData) -> String:
+	var parts: Array = []
+	var cost := Rules.cost_by_name(data)
+	for res_id in cost:
+		parts.append("%d %s" % [int(cost[res_id]), Tr.res_name(res_id)])
+	return " · ".join(parts)
 
 func _is_selected(data: BuildingData) -> bool:
 	return _selected_data != null and _selected_data.id == data.id
@@ -507,6 +546,7 @@ func _show_no_selection() -> void:
 	_detail_production.text = ""
 	_detail_extras.text = ""
 	_detail_rule.text = ""
+	_detail_block.visible = false
 	_detail_build_btn.visible = false
 	_clear_preview_model()
 
@@ -565,11 +605,12 @@ func _select_building(data: BuildingData) -> void:
 		extras.append(Tr.t("LBL_MORALE_BONUS") % data.morale_bonus)
 	var reqs := GameConfig.get_prerequisites(data.id)
 	if not reqs.is_empty():
-		extras.append(Tr.t("LBL_REQUIRES") % " + ".join(reqs))
+		extras.append(Tr.t("LBL_REQUIRES") % Rules.prerequisite_names(data.id))
 	_detail_extras.text = "\n".join(extras)
 
-	# Build button
+	# Build button, y lo que lo impide si algo lo impide
 	_detail_build_btn.visible = true
+	_refresh_block()
 
 	# 3D preview
 	_load_preview_model(data)
@@ -598,8 +639,41 @@ func _clear_preview_model() -> void:
 		_preview_model.queue_free()
 		_preview_model = null
 
+## Lo que impide construir el elegido: se dice y el boton no deja empezar a
+## colocar algo que luego no se puede pagar.
+func _refresh_block() -> void:
+	if _selected_data == null:
+		_detail_block.visible = false
+		return
+	var block := Rules.purchase_block_detail(_selected_data)
+	_detail_block.text = block
+	_detail_block.visible = block != ""
+	_detail_build_btn.disabled = block != ""
+	var short := Rules.missing_cost(_selected_data)
+	_detail_cost.add_theme_color_override("font_color", UITheme.DANGER if not short.is_empty() else UITheme.WARNING)
+
+func _on_resources_changed() -> void:
+	if not _is_open:
+		return
+	_refresh_block()
+	for card in _grid_container.get_children():
+		var label := card.find_child("CardCost", true, false) as Label
+		var id := String(card.get_meta("building_id", ""))
+		if label == null or not _card_styles.has(id):
+			continue
+		var data: BuildingData = _data_by_id(id)
+		if data != null:
+			label.add_theme_color_override("font_color",
+				UITheme.DANGER if not Rules.missing_cost(data).is_empty() else UITheme.WARNING)
+
+func _data_by_id(id: String) -> BuildingData:
+	for data in _all_buildings:
+		if data.id == id:
+			return data
+	return null
+
 func _on_build_pressed() -> void:
-	if _selected_data:
+	if _selected_data and not _detail_build_btn.disabled:
 		EventBus.building_selected_for_placement.emit(_selected_data)
 		_close()
 
@@ -679,5 +753,13 @@ func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingDa
 	model.queue_free()
 
 ## El boton CONSTRUIR del HUD, para pruebas.
+## Id del edificio elegido en la lista ("" si ninguno). Para el tutorial.
+func selected_building_id() -> String:
+	return String(_selected_data.id) if _selected_data != null and _is_open else ""
+
+## El CONSTRUIR del detalle (el que empieza a colocar). Para el tutorial.
+func detail_build_button() -> Button:
+	return _detail_build_btn
+
 func build_button() -> Button:
 	return _build_btn

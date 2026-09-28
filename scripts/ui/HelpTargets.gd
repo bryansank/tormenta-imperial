@@ -51,8 +51,33 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 		"storm":
 			return HudRegistry.control_of("StormHUD")
 	if target_name.begins_with("card:"):
-		return building_card(tree, target_name.substr(5))
+		return card_or_build(tree, target_name.substr(5))
 	return null
+
+## El paso "elige la Vivienda": mientras no este elegida, su tarjeta, desplazada
+## a la vista (es la ultima de la lista y quedaba fuera del scroll: el marco
+## salia donde no habia nada). Ya elegida, el boton CONSTRUIR del detalle, que es
+## lo siguiente que hay que pulsar.
+static func card_or_build(tree: SceneTree, building_id: String) -> Control:
+	var menu := _scene_node(tree, "ConstructionMenu")
+	if menu != null and menu.has_method("selected_building_id") \
+			and menu.selected_building_id() == building_id:
+		var btn: Control = menu.detail_build_button()
+		if btn != null and btn.is_visible_in_tree():
+			return btn
+	var card := building_card(tree, building_id)
+	if card != null:
+		scroll_into_view(card)
+	return card
+
+## Desplaza el ScrollContainer que contiene a `c` hasta que se vea entero.
+static func scroll_into_view(c: Control) -> void:
+	var p := c.get_parent()
+	while p != null:
+		if p is ScrollContainer:
+			(p as ScrollContainer).ensure_control_visible(c)
+			return
+		p = p.get_parent()
 
 static func _first_in_group(tree: SceneTree, group: String) -> Control:
 	for n in tree.get_nodes_in_group(group):

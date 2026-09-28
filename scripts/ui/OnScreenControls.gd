@@ -47,7 +47,8 @@ func _ready() -> void:
 	EventBus.building_selected_for_placement.connect(func(_d): _set_placing(true))
 	EventBus.request_move_building.connect(func(_b): _set_placing(true))
 	EventBus.building_placement_cancelled.connect(func(): _set_placing(false))
-	EventBus.building_placed.connect(func(_d, _c): pass)  # stay visible during rapid placement
+	# Tras colocar, el placer emite building_placement_cancelled si no se sigue
+	# en serie (PlacementRules.keeps_placing): ahi se esconde la pareja.
 	EventBus.building_moved.connect(func(_from, _to): _set_placing(false))
 	EventBus.building_deselected.connect(func(): _set_placing(false))
 	_apply_visibility(GameConfig.touch_controls_enabled())
