@@ -53,7 +53,7 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 - **Layer:** 30, `PROCESS_MODE_ALWAYS`
 
 ### PauseMenu (`scripts/ui/PauseMenu.gd`)
-- **Shows:** Reanudar, Guardar, Ajustes, Historia (replays the intro), Menu principal, Guardar y salir; plus an always-visible "II" touch button (top-left next to the HUD; bottom-centre on narrow screens)
+- **Shows:** Reanudar, Guardar, Ajustes, Historia (replays the prologue, docs/23), Menu principal, Guardar y salir; plus an always-visible "II" touch button (top-left next to the HUD; bottom-centre on narrow screens)
 - **Behavior:** ESC opens it only when no UIManager window is open, `BuildingPlacer.is_idle()` and the title menu is closed. Real pause: services stop; the menu, AudioManager and whatever panel it lends (SettingsPanel, TutorialPanel) get `PROCESS_MODE_ALWAYS` while in use and their mode back on close
 - **Layer:** 30
 
@@ -96,6 +96,24 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 - **Columna central** baja a la izquierda cuando no cabe (lienzo < 1080 px o
   columna izquierda real mas ancha: cuatro recursos + LIMPIAR). La pausa se
   coloca a la derecha del ancho REAL de la barra de recursos.
+
+## Prologo, tutorial y ayudas (docs/23)
+
+Tres piezas que no se mezclan, cada una con su estilo:
+
+| Pieza | Script | Capa | Estilo | Que hace |
+|---|---|---|---|---|
+| Prologo | `PrologueScreen` (hija de `TutorialPanel`) | 32 | papel, maquina de escribir, lacre | El lore como expediente de la Regencia. Atras / Siguiente / Saltar historia, puntos de pagina, deslizar el dedo. Pausa el juego |
+| Tutorial guiado | `TutorialPanel` | 19 | laton sobre metal | Coach marks sobre la interfaz real: velo con hueco, marco, flecha, una linea. Avanza cuando el jugador hace la cosa (`TutorialManager.derive_step`). "Saltar tutorial" |
+| Ayudas | `HelperPanel` (+ `HelpCallout`, `HelpCatalog`) | 14 (globos) / 19 (tarjeta) | azul acero | Una a la vez, en cola por prioridad, con ✕ y cierre solo (6-12 s, barra, pausa con el dedo encima). Cerrada = vista |
+| Indice de AYUDA | `HelpIndexPanel` (grupo `help_index`, `open()`) | pila de UIManager | metal | Lo visto y lo basico, por categoria; tocar reabre esa ayuda senalando su control. Interruptor global, guia de edificios, Repetir tutorial, Historia |
+
+- `TutorialManager.show_prologue()` (alias `show_intro()`) reabre el prologo: lo
+  usan "Historia" de la pausa y el menu unico.
+- El prologo nunca se abre con el menu principal delante ni con el arbol en
+  pausa: queda pendiente (`is_prologue_pending`) y sale al soltarlo.
+- Los controles se buscan por nombre estable (`HelpTargets`): grupos
+  `hud_build_button` y `hud_menu_button`, y si no, `HudRegistry`.
 
 ## UI Construction Pattern
 

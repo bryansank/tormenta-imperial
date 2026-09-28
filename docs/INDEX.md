@@ -27,6 +27,7 @@ Complete technical documentation for AI and developer context.
 | 19 | [Exportar](19-exportar.md) | Spanish: building the Windows .exe (templates, preset, exclusions, `dev_mode` off in exports, Beckett gate, save folder), distributing it, the Android APK for tablets (toolchain, preset, signing via env vars, emulator findings, Google Play needs), and what Linux/macOS/Web would need |
 | 20 | [Modos de juego](20-modos-de-juego.md) | Spanish: Campaña, Constructor, Supervivencia y Sandbox — the rules table per mode, `GameMode` + `GameConfig.game_mode_rules`, the New Game mode picker, the sealed Survival save, and how to add a mode |
 | 21 | [Interfaz y dispositivos](21-interfaz-y-dispositivos.md) | Spanish: device profiles (PC/tablet/phone detection and defaults), canvas scaling without black bars, Settings tabs, HUD show/hide registry, movable panels and the layout editor, colour-blind palettes, high contrast, touch/mouse help texts |
+| 23 | [Prólogo, tutorial y ayudas](23-onboarding.md) | Spanish: the lore as a Regency dossier (PrologueScreen: back/next/skip, swipe, never behind the title menu), the guided coach-mark tutorial on the real UI (derived steps, resume, skip), and the help callouts (one at a time, ✕ + auto-close, seen list, HelpIndexPanel `help_index`) |
 
 ## Quick Reference
 
