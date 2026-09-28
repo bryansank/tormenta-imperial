@@ -23,6 +23,11 @@ const SAVE_PATH := "user://save_game.json"
 const SaveParking := preload("res://tests/save/save_parking.gd")
 const BACKUP_PATH := "user://save_game.view2d_compat.bak"
 
+## Esta suite escribe user://save_game.json. Si corre en la carpeta del jugador
+## (lanzada sin tools/run_tests.sh) se salta entera: no hay partida que pisar.
+func before(do_skip := SaveParking.in_player_dir(), skip_reason := "Carpeta de usuario del jugador: lanza los tests con tools/run_tests.sh") -> void:
+	pass
+
 const BUILDINGS := [
 	{"id": "nucleo", "cell_x": 20, "cell_y": 20},
 	{"id": "house", "cell_x": 17, "cell_y": 20, "custom_name": "Casa del capataz"},
