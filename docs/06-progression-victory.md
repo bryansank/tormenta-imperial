@@ -65,7 +65,7 @@ Era 2 (Industrial)    -> 26-44 min     foundry (the Storm arms), barracks, garri
                                        (5 units, 2 guns); first storm ~10 min later
 Era 3 (Petroleum)     -> 60-128 min    refinery on a well, two towers, HQ
 Endgame               -> 123-188 min   HQ L2, six vehicles, storage techs, HQ L3
-Final Audit           -> 138-239 min   3-5 waves; median victory 3 h 8 min
+Final Audit           -> 138-239 min   3-5 waves; median victory 3 h 11 min
 ```
 
 ## Key Files

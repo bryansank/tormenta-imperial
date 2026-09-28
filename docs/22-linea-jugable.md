@@ -11,8 +11,8 @@ Medido, no estimado, con `tools/line_probe.gd`. Hermano de
 partidas simuladas se ganaron 2, a las 4 y 6 horas; la moral vivía en 0 desde la
 segunda tormenta, la gente moría de hambre y no se echó a los Tasadores casi nunca
 (12 Diezmos de 349). Después de los arreglos, **10 de 10 partidas se ganan**, en
-**2 h 18 min a 4 h** (mediana 3 h 8 min), la era 1 no tiene esperas de más de 6
-minutos, y se echa a los Tasadores 9 de cada 10 veces.
+**2 h 18 min a 4 h** (mediana 3 h 11 min), la era 1 no tiene esperas de más de 6
+minutos, y se echa a los Tasadores casi 9 de cada 10 veces.
 
 ---
 
@@ -185,6 +185,11 @@ Y después: con el asedio convocado y menos de seis blindados en casa, entrenarl
 ellos, "pulsa QUE BAJEN"; tras perder, rehacer los seis blindados y reconvocar (se puede
 con tres unidades, pero con tres no se gana); tras ganar, mundo libre.
 
+El panel respeta el modo de la partida ([20-modos-de-juego.md](20-modos-de-juego.md)):
+en **Constructor** no pide guarnición ni blindados y el CG nivel 3 es la meta; en
+**Sandbox** no hay objetivo; en **Supervivencia** una Auditoría perdida es el final y lo
+dice. La cabecera del panel es la del modo.
+
 `tests/ui/test_objectives.gd` recorre la línea entera dando cada paso que el panel pide
 con justo lo que cuesta, y comprueba que nunca se atasca, que el paso siempre se puede
 dar y que el orden es el de la guía.
@@ -193,8 +198,10 @@ dar y que el orden es el de la guía.
 
 ## 5. Después
 
-Todos los números de §3.3 aplicados y el panel de §4. Diez semillas, jugador por
-defecto (sin procesos ni minado a mano). Minutos de partida:
+Todos los números de §3.3 aplicados y el panel de §4, medido otra vez después de
+integrar los modos de juego (la Campaña usa estos números tal cual; los otros modos
+los escalan). Diez semillas, jugador por defecto (sin procesos ni minado a mano).
+Minutos de partida:
 
 | Semilla | Era 2 | Era 3 | Comandante | CG | CG nv3 | Asedio | Victoria | Tormentas | Diezmos echados | Esperas >2 min | Mayor espera | Antes de era 2 | Bolsa llena |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -206,15 +213,15 @@ defecto (sin procesos ni minado a mano). Minutos de partida:
 | 6 | 9 | 33 | 45 | 83 | 123 | 132 | **147** | 7 | 6/7 | 16 | 15 min | 5 min | 7 min |
 | 7 | 9 | 40 | 44 | 92 | 166 | 166 | **182** | 9 | 8/9 | 20 | 16 min | 5 min | 3 min |
 | 8 | 9 | 29 | 35 | 76 | 164 | 175 | **194** | 8 | 8/8 | 22 | 19 min | 6 min | 6 min |
-| 9 | 9 | 29 | 43 | 119 | 181 | 181 | **196** | 9 | 9/9 | 23 | 15 min | 5 min | 12 min |
-| 10 | 9 | 28 | 44 | 66 | 129 | 129 | **144** | 7 | 7/7 | 17 | 15 min | 5 min | 1 min |
+| 9 | 8 | 29 | 44 | 80 | 159 | 159 · 192 | **206** | 10 | 9/11 | 20 | 27 min | 4 min | 24 min |
+| 10 | 8 | 32 | 42 | 135 | 173 | 173 | **188** | 9 | 8/9 | 21 | 17 min | 4 min | 12 min |
 
 (Aserradero y mina en el minuto 0 y almacén en el 3 en todas.) Dos asedios en una
 casilla: el primero se perdió y el segundo se ganó.
 
 ### 5.1 Lo que dice la tabla
 
-- **10 de 10 victorias**, de 2 h 18 min a 4 h, **mediana 3 h 8 min**, media 3 h. Dentro
+- **10 de 10 victorias**, de 2 h 18 min a 4 h, **mediana 3 h 11 min**, media 3 h 6 min. Dentro
   de la ventana de 2-4 h que se pedía, con un jugador que juega el tablero peor que una
   persona y que no usa procesos manuales ni minado.
 - **Era 1 en 8-10 min, era 2 en 20-35 min, era 3 el resto.** La era 3 es la mitad de la
@@ -227,10 +234,10 @@ casilla: el primero se perdió y el segundo se ganó.
   0-6 puntos y el Diezmo se echa (o se paga su porcentaje: 60-100 de recursos). **Las
   siguientes muerden**: severidad 2-3 en la era 2 y 4-5 en la era 3, que se llevan 30-60
   puntos de moral y rompen 1-3 edificios.
-- **Diezmos**: 82 de 90 echados (91%). Los que se pagan son la primera visita (sin
+- **Diezmos**: 83 de 94 echados (88%). Los que se pagan son la primera visita (sin
   cuartel todavía) y los que caen con el ejército recién gastado en un asedio perdido.
-- **Asedio**: 10 ganados en 13 intentos con seis blindados; los dos que se perdieron se
-  reconvocaron y se ganaron 41-45 min después. Coincide con
+- **Asedio**: 10 ganados en 13 intentos con seis blindados; los tres que se perdieron
+  (semillas 3, 4 y 9) se reconvocaron y se ganaron 33-47 min después. Coincide con
   [17-balance-asedio.md](17-balance-asedio.md) (82% con la guarnición máxima).
 - **Hambre**: 0 muertos en 7 partidas, 16-21 en dos. Bajas de tropa: 5-25 por partida.
 
