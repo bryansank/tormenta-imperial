@@ -134,6 +134,7 @@ func _setup_ui() -> void:
 		touch_idx,
 		func(idx: int): GameConfig.set_touch_controls(GameConfig.TOUCH_CONTROLS_MODES[idx])
 	))
+	vbox.add_child(_make_language_row())
 
 	vbox.add_child(UITheme.make_separator())
 	vbox.add_child(UITheme.section_header(Tr.t("LBL_SETTINGS_GAME")))
@@ -158,6 +159,28 @@ func _sync_music(enabled: bool) -> void:
 	_music_btn.modulate = Color(1, 1, 1, 1.0 if enabled else 0.7)
 	if _music_check != null:
 		_music_check.set_pressed_no_signal(enabled)
+
+## Selector de idioma: IDIOMA  [Español] [English]. Un boton por idioma con su
+## nombre en ese idioma, para que quien no entienda el actual encuentre el suyo.
+## El activo va en dorado (pulsarlo otra vez no hace nada). Elegir otro lo aplica, lo guarda y
+## recarga la partida (GameManager escucha EventBus.locale_changed).
+func _make_language_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "LanguageRow"
+	row.add_theme_constant_override("separation", 8)
+	var label := UITheme.make_label(Tr.t("LBL_LANGUAGE"), "body")
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	for locale in Tr.LOCALES:
+		var btn := Button.new()
+		btn.name = "Locale_" + locale
+		btn.text = Tr.t("LBL_LOCALE_" + locale.to_upper())
+		btn.custom_minimum_size = Vector2(96, 36)
+		var active: bool = locale == Tr.get_locale()
+		UITheme.style_button(btn, UITheme.ACCENT if active else UITheme.BTN, UITheme.FONT_BODY)
+		btn.pressed.connect(GameConfig.set_locale.bind(locale))
+		row.add_child(btn)
+	return row
 
 ## One labelled volume slider row: NAME  [--------o---]  85%
 func _make_volume_row(label_text: String, initial: float, apply: Callable, sfx_preview := false) -> VBoxContainer:

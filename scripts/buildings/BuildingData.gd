@@ -48,6 +48,20 @@ extends Resource
 # Decoration (no production, no workers, just morale)
 @export var is_decoration: bool = false
 
+## Nombre para ensenar al jugador, en el idioma actual. `display_name` en el .tres
+## queda como respaldo (y como referencia para el editor): cualquier texto que vea
+## el jugador sale de aqui, nunca del campo crudo.
+func get_display_name() -> String:
+	return _translated("BLD_%s_NAME" % id.to_upper(), display_name)
+
+## Descripcion en el idioma actual; mismo respaldo que el nombre.
+func get_description() -> String:
+	return _translated("BLD_%s_DESC" % id.to_upper(), description)
+
+func _translated(key: String, fallback: String) -> String:
+	var text: String = Tr.t(key)
+	return fallback if text == key else text
+
 ## Helper: get cost as dictionary compatible with ResourceManager.
 func get_cost() -> Dictionary:
 	var cost := {}

@@ -412,13 +412,15 @@ func test_the_ashfall_survives_a_save() -> void:
 	var restored: StormCycle = StormCycleScript.from_dict(cycle.to_dict())
 	assert_int(restored.phase).is_equal(StormCycle.Phase.ASH)
 
-func test_saving_mid_collection_forgives_the_fight() -> void:
-	# The board is gone when the save reloads, so the tithe cannot be resumed.
+func test_saving_mid_collection_keeps_the_tithe_owed() -> void:
+	# It used to be forgiven, which made quitting during the Tithe the way not to
+	# pay it. The board is still not saved: StormManager re-demands the Tithe once
+	# loading ends (tests/storm/test_storm_load.gd).
 	var cycle := _real_storm_cycle()
 	_run(cycle, _to_tithe())
 	var restored: StormCycle = StormCycleScript.from_dict(cycle.to_dict())
-	assert_int(restored.phase).is_equal(StormCycle.Phase.CALM)
-	assert_bool(restored.seconds_left > 0.0).is_true()
+	assert_int(restored.phase).is_equal(StormCycle.Phase.TITHE)
+	assert_float(restored.seconds_left).is_equal(0.0)
 
 func test_an_empty_save_starts_a_fresh_cycle() -> void:
 	var restored: StormCycle = StormCycleScript.from_dict({})

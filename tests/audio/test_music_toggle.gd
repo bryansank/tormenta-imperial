@@ -9,17 +9,32 @@ extends GdUnitTestSuite
 
 var _saved_enabled := true
 var _saved_key := ""
+## El settings.cfg del jugador se devuelve byte a byte: reescribirlo con
+## save_user_settings() lo dejaba con claves nuevas que el jugador no tenia.
+var _had_file := false
+var _file_bytes := PackedByteArray()
 
 func before_test() -> void:
 	_saved_enabled = GameConfig.audio_music_enabled
 	_saved_key = AudioManager.get_music_key()
+	_had_file = FileAccess.file_exists(GameConfig.USER_SETTINGS_PATH)
+	if _had_file:
+		_file_bytes = FileAccess.get_file_as_bytes(GameConfig.USER_SETTINGS_PATH)
 
 func after_test() -> void:
 	AudioManager.set_music_enabled(_saved_enabled)
 	GameConfig.audio_music_enabled = _saved_enabled
-	GameConfig.save_user_settings()
 	AudioManager.stop_music()
 	AudioManager._current_music_key = _saved_key
+	_restore_settings_file()
+
+func _restore_settings_file() -> void:
+	if _had_file:
+		var f := FileAccess.open(GameConfig.USER_SETTINGS_PATH, FileAccess.WRITE)
+		f.store_buffer(_file_bytes)
+		f.close()
+	elif FileAccess.file_exists(GameConfig.USER_SETTINGS_PATH):
+		DirAccess.remove_absolute(GameConfig.USER_SETTINGS_PATH)
 
 func _has_track(key: String) -> bool:
 	return AudioManager._streams.has(key)

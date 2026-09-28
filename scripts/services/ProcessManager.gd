@@ -9,7 +9,9 @@ var _type_map := {
 	"wood": ResourceManager.Type.WOOD,
 }
 
-# Active processes: Node3D -> {id, name, remaining, duration, produces}
+# Active processes: Node3D -> {id, name_key, remaining, duration, produces, cost}
+# Se guarda la CLAVE de traduccion, no el texto: el nombre se traduce al
+# ensenarlo, asi que cambiar de idioma no deja la cola hablando el anterior.
 var _active: Dictionary = {}
 
 ## Cae ceniza y la Tormenta todavia no ha roto: la ultima ventana en la que lo
@@ -85,6 +87,32 @@ func _drop(node: Node3D, refund: Dictionary) -> Dictionary:
 func get_active(node: Node3D) -> Dictionary:
 	return _active.get(node, {})
 
+## Nombre del proceso en curso, traducido ahora. Vacio si no hay nada.
+func get_active_name(node: Node) -> String:
+	if not _active.has(node):
+		return ""
+	return _display_name(_active[node])
+
+func _display_name(info: Dictionary) -> String:
+	var key := str(info.get("name_key", ""))
+	if key != "":
+		return Tr.t(key)
+	# Guardado viejo cuyo id ya no existe: se ensena el texto que trajo.
+	return str(info.get("legacy_name", info.get("id", "")))
+
+## La clave de traduccion de un proceso o minado por su id. Sirve para cargar
+## guardados de antes, que traian el nombre ya traducido y no la clave.
+func _name_key_for(process_id: String) -> String:
+	for building_id in GameConfig.building_processes:
+		for proc in GameConfig.building_processes[building_id]:
+			if str(proc.get("id", "")) == process_id:
+				return str(proc.get("name", ""))
+	for deposit_id in GameConfig.mining_data:
+		var mine: Dictionary = GameConfig.mining_data[deposit_id]
+		if str(mine.get("id", "")) == process_id:
+			return str(mine.get("name", ""))
+	return ""
+
 func get_progress(node: Node3D) -> float:
 	if not _active.has(node):
 		return 0.0
@@ -101,7 +129,7 @@ func start_process(node: Node3D, process: Dictionary) -> bool:
 		ResourceManager.spend_cost(cost)
 	_active[node] = {
 		"id": process["id"],
-		"name": Tr.t(process["name"]),
+		"name_key": str(process["name"]),
 		"remaining": process["duration"],
 		"duration": process["duration"],
 		"produces": process["produces"],
@@ -125,7 +153,7 @@ func start_mining(node: Node3D, deposit_id: String) -> bool:
 		return false
 	_active[node] = {
 		"id": data["id"],
-		"name": Tr.t(data["name"]),
+		"name_key": str(data["name"]),
 		"remaining": data["duration"],
 		"duration": data["duration"],
 		"produces": data["produces"],
@@ -245,11 +273,11 @@ func _on_storm_started(_severity: int) -> void:
 		# decirle "el coste no vuelve" a quien no pago nada suena a mentira.
 		if cost.is_empty():
 			EventBus.notification_posted.emit(
-				Tr.t("NOTIF_STORM_ATE_MINING") % str(info.get("name", pid)),
+				Tr.t("NOTIF_STORM_ATE_MINING") % _display_name(info),
 				"danger", UITheme.DANGER)
 		else:
 			EventBus.notification_posted.emit(
-				Tr.t("NOTIF_STORM_ATE_PROCESS") % [str(info.get("name", pid)), Tr.amount_list(cost)],
+				Tr.t("NOTIF_STORM_ATE_PROCESS") % [_display_name(info), Tr.amount_list(cost)],
 				"danger", UITheme.DANGER)
 		# Se emite tambien como cancelacion para que la UI que sigue la cola se
 		# entere por el mismo canal, con el reembolso real: ninguno.
@@ -290,7 +318,7 @@ func get_save_data() -> Array:
 				"cell_x": (binfo["origin_cell"] as Vector2i).x,
 				"cell_y": (binfo["origin_cell"] as Vector2i).y,
 				"id": info["id"],
-				"name": info["name"],
+				"name_key": str(info.get("name_key", "")),
 				"remaining": info["remaining"],
 				"duration": info["duration"],
 				"produces": info["produces"],
@@ -302,7 +330,7 @@ func get_save_data() -> Array:
 				"cell_x": cell.x,
 				"cell_y": cell.y,
 				"id": info["id"],
-				"name": info["name"],
+				"name_key": str(info.get("name_key", "")),
 				"remaining": info["remaining"],
 				"duration": info["duration"],
 				"produces": info["produces"],
@@ -317,9 +345,15 @@ func load_save_data(data: Array) -> void:
 		var node := GridManager.get_building_at(cell)
 		if not node or not is_instance_valid(node):
 			continue
+		# Antes se guardaba el nombre ya traducido ("name"); ahora la clave. Un
+		# guardado viejo recupera la clave por el id, y si ni eso, conserva el texto.
+		var name_key := str(entry.get("name_key", ""))
+		if name_key == "":
+			name_key = _name_key_for(str(entry.get("id", "")))
 		_active[node] = {
 			"id": entry["id"],
-			"name": entry["name"],
+			"name_key": name_key,
+			"legacy_name": str(entry.get("name", "")),
 			"remaining": entry["remaining"],
 			"duration": entry["duration"],
 			"produces": entry["produces"],

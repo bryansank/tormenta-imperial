@@ -108,9 +108,6 @@ Still open inside this milestone, none of it blocking:
   the return value of `auto_resolve_defense()` and posts a one-line notification
   (`MSG_DEFENSE_AUTO_WON` / `MSG_DEFENSE_AUTO_LOST`). The expedition's own report
   panel exists; the garrison's does not.
-- **`CombatManager.build_enemy_roster()` is still the provisional unseeded roster**
-  used by `start_skirmish()`. Its own docstring says `ExpeditionGenerator.enemy_roster()`
-  replaces it. Both still exist.
 - **Unit glyphs on the board are the first letter** of the translated unit name
   (`BattleScreen._unit_glyph()`) — tracked in the backlog as an art task.
 

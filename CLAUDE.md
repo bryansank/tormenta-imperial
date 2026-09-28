@@ -276,8 +276,8 @@ in place, but no screen drives an expedition yet. See "Planned" below.
 - Research costs **resources** (not points) and takes time; only one tech at a time.
 - Bonuses are permanent: production multiplier, storage, consumption reduction,
   morale recovery (Military branch), market spread / build speed (Logistics).
-- Caveat: `_research_points` (+1 per HQ production tick) is saved but never spent —
-  vestigial. The "requires HQ" comment in the header is NOT enforced in code.
+- No HQ requirement (deliberate: the HQ is era 3). The old vestigial `_research_points`
+  counter was removed; a `research_points` key in old saves is ignored.
 
 ### Game Phases (onboarding pacing)
 
@@ -302,14 +302,27 @@ runs in its `_ready()` (before AudioManager applies volumes); anything that chan
 preference calls `GameConfig.save_user_settings()`. Currently stored: audio volumes
 (master/music/sfx/ambient — sliders in SettingsPanel), `ui_grid_visible` (map grid
 toggle; GridOverlayControl applies it, BuildingPlacer restores it after placement),
-and `ui_helper_visible` (HelperPanel "?" callouts, on by default).
+`ui_helper_visible` (HelperPanel "?" callouts, on by default) and `ui_locale`
+(`es`/`en`, applied to `Tr` at startup). The language selector lives in SettingsPanel:
+`GameConfig.set_locale()` saves it and emits `EventBus.locale_changed`, and GameManager
+answers by saving and reloading the scene with the same game (`reload_keeping_game()`),
+so every panel is rebuilt in the new language. With a board open it does not reload
+(the board is not saved); the language shows everywhere on the next start.
 
 ### Save/Load System
 
 - Path: `user://save_game.json`
 - Saves: resources, buildings (level, name, construction state), deposits, camera, progression, market, population, events, unlock state, tech tree, army
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
-- Auto-saves on: building placed/moved/renamed/demolished, deposit depleted
+- Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
+  `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
+  steps and fight results; plus every `GameConfig.autosave_interval` real seconds, on window close, and on
+  pause/focus-out on mobile. `GameManager.request_save()` is the entry point for new triggers
+- Fights are never saved: a checkpoint is written when a board opens, and nothing is written while
+  `CombatManager.is_save_safe()` is false (fight in play, or a siege-wave report not yet closed). Quitting mid-fight
+  replays it from the start. A save made during the Tithe reloads with the Tithe re-demanded (defence or payment)
+- The game starts only once `Main` is ready (GameManager waits for the scene root), so load signals reach the UI.
+  An unreadable save is copied to `user://save_game.corrupt-<date>.json` before a new game replaces it
 - Offline progression: calculates production earned while game closed (max 8h)
 
 ---
@@ -409,7 +422,7 @@ because its mesh is connectivity-aware).
 2. Add limit in `GameConfig.building_limits`
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any)
-5. Add translations in `Tr.gd` (both ES and EN)
+5. Add translations in `Tr.gd` (both ES and EN), including `BLD_<ID>_NAME` and `BLD_<ID>_DESC`. UI shows buildings through `BuildingData.get_display_name()` / `get_description()`, never the raw `.tres` fields
 6. Building auto-appears in ConstructionMenu (loads all .tres from data/buildings/)
 
 ### Adding a New Signal
@@ -466,7 +479,11 @@ All balance values live in `GameConfig.gd`:
 
 ### Dev Mode
 
-`GameConfig.dev_mode = true` makes all durations 1-2 seconds for rapid testing. Set to `false` for real timings.
+`GameConfig.dev_mode` compresses all durations (`dev_time_scale`) and shows the dev buttons. It is **not hand-set**: `true` when running from the editor binary (F5, tests, probes — feature tag `editor`), `false` in every export. Force it with user args: `-- --dev` / `-- --no-dev`.
+
+### Exporting
+
+`export_presets.cfg` has a "Windows Desktop" preset (single .exe, PCK embedded, output in the untracked `build/`). The `BeckettRuntime` autoload points at `scripts/services/BeckettGate.gd`, which loads the addon only in the editor; `addons/beckett`, `addons/gdUnit4`, tests, tools, docs and local token files (`.mcp.json`, `.env*`) are excluded. Exports save to `%APPDATA%\TormentaImperial\`, not the editor's user dir. Full guide: `docs/19-exportar.md`.
 
 ---
 

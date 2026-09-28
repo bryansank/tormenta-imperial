@@ -286,6 +286,11 @@ signal touch_controls_changed(enabled: bool)
 ## Emitted when music is switched on/off (Settings or the ☰ quick button).
 @warning_ignore("unused_signal")
 signal music_toggled(enabled: bool)
+## El idioma cambio (GameConfig.set_locale). Ya esta aplicado en Tr y guardado en
+## settings.cfg cuando llega. GameManager lo escucha y recarga la escena
+## conservando la partida, para que todo panel vuelva a pintarse en el idioma
+## nuevo; quien pinte textos de larga vida puede escucharlo tambien.
+signal locale_changed(locale: String)
 
 # ── Persistence ──
 @warning_ignore("unused_signal")

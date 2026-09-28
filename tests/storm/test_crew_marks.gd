@@ -137,9 +137,16 @@ func test_a_wave_counts_exactly_the_crews_it_fielded() -> void:
 	# No basta con que el numero cuadre: tienen que ser ESAS unidades. Un uid
 	# heredado de la defensa anterior tambien suma uno, y el parte saldria igual
 	# de bonito mientras un infante del cuartel se cuela por dotacion.
+	# Las dotaciones son las unidades del jugador en el tablero que no son de la
+	# guarnicion del asedio.
+	var garrison_uids: Array = []
+	for unit in ProgressionManager.final_audit.garrison:
+		garrison_uids.append(unit.uid)
 	var crew_uids: Array = []
-	for crew in CombatManager._audit_crews:
-		crew_uids.append(crew.uid)
+	for unit in _units_of_side(PLAYER):
+		if not garrison_uids.has(unit.uid):
+			crew_uids.append(unit.uid)
+	assert_array(crew_uids).is_not_empty()
 	assert_array(CombatManager._tower_crew_uids.keys()).contains_exactly_in_any_order(crew_uids)
 
 	_wipe(PLAYER)
@@ -197,7 +204,8 @@ func test_loading_a_save_leaves_nothing_of_the_session_before() -> void:
 	# uids gastados y el asedio a medio contar.
 	CombatManager._audit_wave_active = true
 	CombatManager._audit_wave_won = true
-	CombatManager._audit_crew_losses = 3
+	CombatManager._audit_charged = {7: true}
+	CombatManager._audit_wave_queued = true
 	CombatManager._last_board_crew_uids = {99: true}
 	assert_bool(CombatManager.is_board_open()).is_true()
 	assert_dict(CombatManager.get_last_result()).is_not_empty()
@@ -215,8 +223,8 @@ func test_loading_a_save_leaves_nothing_of_the_session_before() -> void:
 	assert_bool(CombatManager._result_applied).is_false()
 	assert_bool(CombatManager._audit_wave_active).is_false()
 	assert_bool(CombatManager._audit_wave_won).is_false()
-	assert_int(CombatManager._audit_crew_losses).is_equal(0)
-	assert_array(CombatManager._audit_crews).is_empty()
+	assert_dict(CombatManager._audit_charged).is_empty()
+	assert_bool(CombatManager._audit_wave_queued).is_false()
 	assert_bool(CombatManager._enemy_turn_running).is_false()
 
 func test_the_cleanup_does_not_eat_the_campaign_it_is_loading() -> void:

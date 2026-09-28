@@ -131,11 +131,11 @@ pays, and what losing costs.
 |---|---|---|---|
 | Entry point | `CombatManager.start_skirmish()` · `enter_current_node()` | `CombatManager.start_defense()` | `EventBus.final_audit_wave_ready` → `CombatManager._on_final_audit_wave_ready()` |
 | Who composes the player's side | The player, in `SkirmishPanel` (skirmish); `Expedition.party` (node) | `get_garrison()`: everything trained and **at home**, capped at `combat_deploy_cap` | `FinalAudit.living_garrison()`, carried wave to wave with its damage |
-| Tower crews | No | Yes — `get_tower_crews()`, outside the deploy cap, back row | Yes, and crews lost in earlier waves are **not** replaced (`_audit_crew_losses`) |
+| Tower crews | No | Yes — `get_tower_crews()`, outside the deploy cap, back row | Yes, and crews lost earlier in the siege are **not** replaced (`FinalAudit.crew_losses`, saved) |
 | `Encounter.is_defense` | `false` | `true` | `true` |
 | Deployment rows | Enemy on row 1 then 0 | Enemy on row 0 then 1 (one extra round of approach for the defender) | Same as the Tithe defence |
 | Loot on a win | Yes, `CombatRules.encounter_rewards(era)` — banked immediately for a skirmish, accumulated in the model for an expedition node | **None.** The reward is that the Tithe goes uncollected | None |
-| Casualties | Struck off `ArmyManager` (at once for a skirmish, at the end of the run for an expedition) | Struck off `ArmyManager`; tower crews never are | Struck off `ArmyManager`; tower crews never are |
+| Casualties | Struck off `ArmyManager` (at once for a skirmish, at the end of the run for an expedition) | Struck off `ArmyManager`; tower crews never are | Struck off `ArmyManager` **the moment each one falls** (`_settle_audit_death`), so a mid-wave save always balances; tower crews go to `FinalAudit.crew_losses` instead |
 | Morale swing | `CombatRules.morale_delta()` | `CombatRules.morale_delta()` | `CombatRules.morale_delta()` |
 | What losing costs | The dead, and the run | The Tithe is collected (`StormManager._pay_tithe()`) | The siege is lost: maximum-severity Tithe and maximum storm damage (`StormManager._on_final_audit_lost()`), but no game over |
 
@@ -143,6 +143,18 @@ Tower crews are marked by uid in `CombatManager._tower_crew_uids` and filtered o
 of the casualty and survivor counts by `_roster_only()`. They fight for the player
 but never touch the `ArmyManager` ledger — otherwise a lost defence would delete
 artillery the player never trained.
+
+**Who is at home.** `get_units_away()` is the expedition party plus
+`get_units_on_board()` — army units standing on an open board whose fate has not
+been settled yet (living, or fallen and not yet charged; never tower crews, never
+the expedition's own board, and nothing once `_result_applied`). `get_garrison()`,
+`get_deployable_units()` and `ArmyManager`'s desertion all subtract it. Without it
+a Tithe resolved blind during a skirmish enlisted the very units on the skirmish
+board and charged their deaths twice.
+
+**The skirmish roster** is `ExpeditionGenerator.enemy_roster(rng, 0, era, 0)` — the
+first node of an expedition — with its own seed (`start_skirmish(party, seed)`; 0
+rolls a new one). The provisional unseeded `build_enemy_roster()` is gone.
 
 ---
 
@@ -232,6 +244,13 @@ rule is what makes positioning matter.
 and executes them with `GameConfig.get_combat_ai_step_delay()` seconds between
 each (halved in dev mode), so the player can follow what hit them. It closes the
 unit's turn afterwards if the plan did not.
+
+Each board has a generation number (`_board_generation`), bumped whenever a
+board opens or closes. The enemy-turn coroutine remembers the one it started on;
+if it wakes up after an `await` on a different board it returns without acting,
+without releasing `_enemy_turn_running` and without relaunching a turn. Before
+that, closing a board mid-think and opening another left two enemy loops driving
+the new one.
 
 `CombatAI` is deliberately simple: score every reachable cell (a cell that lets
 the unit shoot this turn is worth `SCORE_CAN_ATTACK` = 1000 more than any amount
@@ -331,6 +350,10 @@ no meta-progression.
 While a draft is pending, `select_node()` and `enter_current_node()` both refuse:
 first the card, then the route.
 
+`Expedition.can_select()` also requires the current node to be **cleared**
+(`is_current_cleared()`). `needs_fight()` is the opposite state — standing on a node
+nobody has won yet — which is exactly what a save made mid-node reloads into.
+
 ### Attrition, permadeath, lockout
 
 - **Attrition.** `build_encounter_units()` hands the board the *same*
@@ -359,6 +382,10 @@ first the card, then the route.
 
 `result` is `0` won, `1` lost, `2` abandoned. Abandoning (`abandon_expedition()`)
 keeps the loot and the survivors: quitting while ahead has to be a real option.
+Abandoning closes **only the expedition's own board** (`_is_expedition_board()`):
+a Tithe defence opened between two nodes stays on the board and resolves normally,
+because swallowing its `encounter_ended` left `StormCycle` stuck in `TITHE`.
+`BattleScreen` does not offer the abandon button on a defence board.
 
 ### What is saved and what is regenerated
 
@@ -377,7 +404,10 @@ HP and the node is still uncleared, so the board is redeployed from scratch.
 `load_save_data()` emits `expedition_resumed`. `BattleScreen` answers it by
 reopening the map view (and `game_load_completed` covers the same ground when the
 signal is not there), so the player lands back on the campaign map and re-enters
-the node themselves rather than being dropped straight onto a board. A save with
+the node themselves rather than being dropped straight onto a board. On that map
+the current uncleared node is the only enabled button (tooltip `LBL_NODE_FIGHT`);
+pressing it calls `enter_current_node()`. No exit lights up until the node is won,
+so a reload can no longer walk past an unfought node. A save with
 no `expedition` key simply means no expedition and is never an error.
 
 `era` is stored on top of the documented schema because the rosters depend on it:
@@ -428,8 +458,8 @@ catches the `hq_max` milestone and calls `summon_final_audit()`.
 
 | Stage | Call | State |
 |-------|------|-------|
-| Summoned | `summon_final_audit()` | `PENDING` — nobody on the board yet; `SkirmishPanel` offers the button |
-| Begun | `begin_final_audit()` | `ACTIVE`; `_announce_wave()` emits `final_audit_wave_ready` |
+| Summoned | `summon_final_audit()` | `PENDING` — nobody on the board yet; `SkirmishPanel` offers the button. The garrison mustered here is only a preview |
+| Begun | `begin_final_audit()` | `ACTIVE`; the garrison is mustered **now** from `get_garrison()` (`FinalAudit.begin(counts)`), then `_announce_wave()` emits `final_audit_wave_ready`. Refused while `CombatManager.final_audit_block_reason()` is non-empty (a board open, a column out) |
 | Wave on the board | `CombatManager._on_final_audit_wave_ready()` → `start_defense(roster, defenders, scale)` | A normal defensive `Encounter` |
 | Wave reported | `CombatManager.end_encounter()` → `ProgressionManager.report_audit_wave(won)` | `clear_wave()` or `lose()` |
 | Won | last `clear_wave()` | `WON` → `storm_halted_forever` **then** `victory_achieved` |
@@ -455,8 +485,37 @@ lost razes the base as a side effect.
   `living_garrison()` — the same objects, wound by wound. No retraining, no
   reinforcement. That, not the scaling, is the real difficulty curve.
 - **Tower crews** are rebuilt each wave from the standing towers, minus every crew
-  that has already fallen (`_audit_crew_losses`). A tower does not tire; a dead
-  crew is not replaced.
+  that has already fallen (`FinalAudit.crew_losses`, recorded as each one falls and
+  saved with the siege). A tower does not tire; a dead crew is not replaced — not
+  even by reloading.
+- **Who fights is decided at the gate, not at the summons.** `FinalAudit.begin()`
+  re-musters the garrison the first time a summons begins (`started` is false),
+  so whatever a Tithe killed, upkeep deserted or the barracks trained in between is
+  reflected. Once `started`, a siege is never re-mustered — that would heal the
+  wounded and raise the dead — only `reconcile()`d: living units in excess of what
+  the army still has are dropped (not counted as casualties).
+  `ProgressionManager._announce_wave()` reconciles against `get_deployable_units()`
+  before **every** wave, so a desertion between waves takes a soldier out of the
+  siege too. Reinforcements never join a siege in progress.
+- **The Tithe still comes while the siege is only summoned.** That is a decision,
+  not an accident: the Regency waits for the player, the Assessors do not. The
+  garrison defends as usual, casualties leave `ArmyManager`, and the muster at the
+  gate simply finds fewer soldiers. Only an `ACTIVE` siege stands the Tithe down
+  (below).
+- **The ledger is settled live.** Garrison units are the same `CombatUnit`
+  objects as the board's, and the save stores their HP. Every player death on a
+  wave board is charged at once (`CombatManager._settle_audit_death()`, from the
+  `unit_died` event, idempotent by uid; anything that fell without that event is
+  settled when the wave resolves), and `_apply_result_for(..., precharged)` reports
+  those deaths without subtracting them again. A save made mid-wave therefore has
+  the same dead in the siege and in the barracks.
+- **A wave that finds the board busy waits.** `_on_final_audit_wave_ready()` sets
+  `_audit_wave_queued` instead of counting the wave as lost (which used to cost the
+  maximum Tithe and maximum damage); `end_encounter()` releases it with
+  `call_deferred("_release_queued_audit_wave")` once the board is free. The normal
+  path never needs it — "QUE BAJEN" is disabled, with the reason in its tooltip,
+  while `final_audit_block_reason()` answers `MSG_AUDIT_BOARD_BUSY` or
+  `MSG_AUDIT_EXPEDITION_OUT` — it is the safety net.
 - **Shape.** `wave_slots()` grows from `final_audit_base_slots` by
   `final_audit_slots_per_wave`, capped by `combat_deploy_cap`. Guns appear from
   wave 1, armour from `final_audit_armour_wave`, and the last wave gets an extra
@@ -468,7 +527,9 @@ lost razes the base as a side effect.
   (`can_resummon()` / `resummon()`). `resummon()` rolls a new seed, a new garrison
   and new waves, and increments `summons` — the only record that it happened.
 - **Persistence:** `to_dict()` saves seed, era, state, `current_wave`, `summons`,
-  `morale_snapshot` and the garrison. The waves themselves are rebuilt from the
+  `started`, `crew_losses`, `morale_snapshot` and the garrison. A save without
+  `started` guesses it: any state but `PENDING`, a wave behind it or a wounded unit
+  means the siege had started. The waves themselves are rebuilt from the
   seed and the era, exactly the way `Expedition` rebuilds its map.
 - **A saved siege comes back `PENDING`, never `ACTIVE`.** `FinalAudit.from_dict()`
   downgrades a stored `ACTIVE` state to `PENDING` on purpose. The board is not
@@ -549,10 +610,14 @@ time. What follows is only what a reader of *this* document needs on top of them
 - `summary` on `defense_auto_resolved` is `CombatManager.get_last_result()`, and
   that signal is the **only** one that fight emits — no `encounter_*` accompanies
   it, because the open board would claim them.
-- `defense_auto_resolved` and `final_audit_wave_cleared` still have **no listener
-  in `scripts/`**. `StormManager` reads the return value of
-  `auto_resolve_defense()` directly and posts its own notification; the signals
-  are there for a proper after-action report that has not been built.
+- `defense_auto_resolved` is read by `WarReportScreen` (the after-action report:
+  casualties on both sides — `summary.enemy_casualties` — rounds, tower crews,
+  outcome), and `final_audit_wave_cleared` by `AuditWaveBanner` ("Oleada X de N").
+  `StormManager` still reads `auto_resolve_defense()`'s return value for its toast.
+- `tithe_resolved`'s first argument is **true when nothing was taken** (repelled,
+  or stood down during the Audit), despite its name `paid`. `WarReportScreen`
+  stamps it COBRADO / REPELIDO; the maximum Tithe of a lost siege is left to
+  `AuditDefeatScreen`, which matches it to `final_audit_lost` by process frame.
 - `victory_achieved(stats)` is still emitted by `ProgressionManager` and consumed
   by `VictoryScreen`, but it is now reached **only** through a won Final Audit.
 
@@ -659,6 +724,7 @@ godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a tests/combat
 | `tests/ui/test_expedition_ui.gd` | `BattleScreen`'s map, draft modal, final report and abandon flow, plus `SkirmishPanel`'s launch refusals — including that the map stays touchable on a phone |
 | `tests/ui/test_battle_board_icons.gd` | Unit silhouettes on the cell and on the initiative strip, side tint, the dimming of a unit that already acted, the boss frame and who wears it, the fallback to the name's initial when the PNG is missing, and the cell still fitting a 400x720 screen |
 | `tests/ui/test_helper_skirmish_callout.gd` | The Escaramuzas callout appears with the Barracks and only once |
+| `tests/combat/test_combat_integrity.gd` | The ledger across boards and saves: no walking past an unfought node, the siege ledger balanced through a mid-wave save (garrison and tower crews), the garrison mustered at the gate and reconciled before every wave, abandoning leaving a Tithe board alone, one enemy loop per board, a busy board queuing a wave instead of losing it, board units never counted at home, and the seeded skirmish roster |
 
 `test_board_handoff.gd`, `test_expedition_ui.gd` and `test_battle_board_icons.gd`
 touch the real autoloads and private members on purpose: what they are watching —
@@ -689,18 +755,10 @@ and never registered as an autoload. Re-run it after touching a silhouette.
 
 Verified against the code, not the spec. Update this list as things land.
 
-- **`defense_auto_resolved` has no listener** in `scripts/`. `StormManager` reads
-  the return value of `auto_resolve_defense()` directly and posts its own
-  notification (`MSG_DEFENSE_AUTO_WON` / `MSG_DEFENSE_AUTO_LOST`). The signal is
-  there for a proper after-action report that nobody has built. Only
-  `tests/storm/test_defense_auto_resolve.gd` connects it.
-- **`final_audit_wave_cleared` has no listener either.** A cleared wave is felt
-  only through the next one opening; there is no "wave 2 of 4" beat anywhere.
-- **`CombatManager.build_enemy_roster()` is provisional.** It is the unseeded
-  roster used by `start_skirmish()`; its own docstring says
-  `ExpeditionGenerator.enemy_roster()` replaces it. Both exist today, and
-  `start_skirmish()` itself is now reachable only through the dev-mode button
-  (`dev_start_encounter()`) and as a `has_method()` fallback in `SkirmishPanel`.
+- **Mid-wave saves from before the live ledger** (no `started` key) may still
+  carry deaths of the interrupted wave that `ArmyManager` never charged: nothing
+  tells them apart from deaths of earlier waves, which were charged. New saves
+  cannot produce this.
 - **`has_method()` / `has_signal()` guards outlived their reason.** `BattleScreen`,
   `SkirmishPanel` and `ArmyPanel` still wrap `launch_expedition`, `apply_draft`,
   `get_units_on_expedition`, `can_launch` and `expedition_resumed` in existence

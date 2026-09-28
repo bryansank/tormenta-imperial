@@ -70,6 +70,7 @@ extends GdUnitTestSuite
 const Placer := preload("res://scripts/buildings/BuildingPlacer.gd")
 const MapGen := preload("res://scripts/map/MapGenerator.gd")
 const AutoResolverScript := preload("res://scripts/combat/AutoResolver.gd")
+const Parking := preload("res://tests/save/save_parking.gd")
 
 const SAVE_PATH := "user://save_game.json"
 const BACKUP_PATH := "user://save_game.full_campaign.bak"
@@ -214,17 +215,14 @@ func after_test() -> void:
 ## GameManager guarda en `user://save_game.json`, que es la partida de verdad de
 ## quien tenga el juego instalado. Se aparta antes y se devuelve despues: una
 ## suite de pruebas no puede cobrarse la partida de nadie.
+##
+## Una copia aparcada que ya existe es una partida real varada por una ejecucion
+## que murio antes de devolverla: se devuelve, no se borra (tests/save/save_parking.gd).
 func _park_player_save() -> void:
-	if FileAccess.file_exists(BACKUP_PATH):
-		DirAccess.remove_absolute(BACKUP_PATH)
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.rename_absolute(SAVE_PATH, BACKUP_PATH)
+	Parking.park(BACKUP_PATH)
 
 func _restore_player_save() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
-	if FileAccess.file_exists(BACKUP_PATH):
-		DirAccess.rename_absolute(BACKUP_PATH, SAVE_PATH)
+	Parking.restore(BACKUP_PATH)
 
 ## Una colonia nueva de verdad: el BuildingPlacer y el MapGenerator reales bajo
 ## la escena actual (de ahi los lee `GameManager`, `ArmyManager.barracks_count()`
@@ -1318,3 +1316,108 @@ func _audit_snapshot() -> Dictionary:
 		"guarnicion": audit.garrison.size(),
 		"pendiente": audit.is_pending(),
 	}
+
+# ══════════════════════════════════════════════════════════════════════
+# 8. Integridad del guardado
+# ══════════════════════════════════════════════════════════════════════
+
+## La mejora del Cuartel General a nivel 3 es la que convoca el asedio. Si se
+## guardaba a medias, volvia de la carga como obra normal: terminaba sin subir de
+## nivel, el hito no llegaba nunca y la partida no se podia ganar.
+func test_an_upgrade_in_progress_survives_a_save_and_still_summons_the_audit() -> void:
+	_open_the_frontier()
+	_industrialise()
+	_bankroll(9000, 9000, 9000, 9000)
+	var hq: Node3D = _build("headquarters")
+	_upgrade(hq, 2)
+	var data: BuildingData = GridManager.get_building_info(hq)["data"]
+	ProductionManager.start_upgrade(hq, data, 3)
+	assert_int(ProductionManager.get_upgrade_target(hq)).is_equal(3)
+
+	GameManager.save_game()
+	_wipe_the_world()
+	GameManager._load_game()
+
+	var loaded: Node3D = _first_node_of("headquarters")
+	assert_object(loaded).is_not_null()
+	assert_int(int(loaded.get_meta("level", 1))).is_equal(2)
+	assert_bool(ProductionManager.is_constructing(loaded)).is_true()
+	assert_int(ProductionManager.get_upgrade_target(loaded)).override_failure_message(
+		"la mejora a nivel 3 volvio de la carga como obra normal").is_equal(3)
+
+	_finish_building()
+	assert_int(int(loaded.get_meta("level", 1))).is_equal(3)
+	assert_bool(ProgressionManager.is_milestone_completed("hq_max")).is_true()
+	assert_bool(ProgressionManager.is_final_audit_pending()).override_failure_message(
+		"la mejora cargada termino pero no convoco la Auditoria Final").is_true()
+
+## Un save de antes de la clave `upgrade_to` sigue cargando como construccion.
+func test_a_save_without_upgrade_keys_still_loads_as_construction() -> void:
+	_bankroll()
+	var house: Node3D = _place("house")
+	assert_object(house).is_not_null()
+	GameManager.save_game()
+	var text: String = FileAccess.get_file_as_string(SAVE_PATH)
+	assert_bool(text.contains("upgrade_to")).is_false()
+	_wipe_the_world()
+	GameManager._load_game()
+	var loaded: Node3D = _first_node_of("house")
+	assert_bool(ProductionManager.is_constructing(loaded)).is_true()
+	assert_int(ProductionManager.get_upgrade_target(loaded)).is_equal(0)
+	_finish_building()
+	assert_int(int(loaded.get_meta("level", 1))).is_equal(1)
+
+## Un guardado ilegible no se pisa en silencio: se aparta una copia y se avisa.
+func test_an_unreadable_save_is_backed_up_and_the_player_is_told() -> void:
+	var garbage := "{ esto no es json"
+	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	f.store_string(garbage)
+	f.close()
+	_wipe_the_world()
+	var told: Array = []
+	var probe := func(msg: String, _cat: String, _col: Color) -> void: told.append(msg)
+	EventBus.notification_posted.connect(probe)
+	GameManager._load_game()
+	EventBus.notification_posted.disconnect(probe)
+
+	var backups: Array = []
+	for name in DirAccess.get_files_at("user://"):
+		if name.begins_with("save_game.corrupt-"):
+			backups.append("user://" + name)
+	assert_array(backups).override_failure_message(
+		"el guardado ilegible se piso sin dejar copia").is_not_empty()
+	var kept: bool = false
+	for path in backups:
+		if FileAccess.get_file_as_string(path) == garbage:
+			kept = true
+	for path in backups:
+		DirAccess.remove_absolute(path)
+	assert_bool(kept).is_true()
+	var mentioned: bool = false
+	for msg in told:
+		if String(msg).contains("save_game.corrupt-"):
+			mentioned = true
+	assert_bool(mentioned).override_failure_message(
+		"no se aviso al jugador de la copia").is_true()
+	# Y la colonia nueva arranca con su Nucleo.
+	assert_object(_first_node_of("nucleo")).is_not_null()
+
+## Cada "Partida nueva" confirmada liberaba su dialogo? No: quedaba colgando del
+## autoload. Ahora se libera tanto al confirmar como al cancelar.
+func test_the_new_game_dialog_frees_itself_on_both_answers() -> void:
+	var before: int = GameManager.get_child_count()
+	GameManager.request_new_game()
+	assert_int(GameManager.get_child_count()).is_equal(before + 1)
+	var dialog: ConfirmationDialog = GameManager.get_child(GameManager.get_child_count() - 1)
+	var frees_on := func(sig: Signal) -> bool:
+		for c in sig.get_connections():
+			var cb: Callable = c["callable"]
+			if cb.get_object() == dialog and cb.get_method() == "queue_free":
+				return true
+		return false
+	assert_bool(frees_on.call(dialog.confirmed)).is_true()
+	assert_bool(frees_on.call(dialog.canceled)).is_true()
+	dialog.canceled.emit()
+	await await_idle_frame()
+	assert_bool(is_instance_valid(dialog)).is_false()
+	assert_int(GameManager.get_child_count()).is_equal(before)

@@ -1,10 +1,18 @@
 extends Node
 ## Central configuration table for all tunable game values.
-## Toggle dev_mode for fast testing. All durations go through time_multiplier.
+## dev_mode (fast timings) is on in the editor and off in exports; see below.
 
 # ── Master Controls ──
 
-var dev_mode := true
+## dev_mode comprime todas las duraciones (dev_time_scale) y enseña los botones de
+## desarrollo (borrar partida en ResourceHUD, combate de prueba en SkirmishPanel).
+## No se decide a mano: vale true cuando el juego corre desde el editor (F5, tests,
+## sondas) y false en cualquier exportado, sea release o debug. Así un .exe que se
+## reparte nunca sale con tiempos de prueba por un commit despistado.
+## Para forzarlo, argumentos de usuario tras `--`:
+##   TormentaImperial.exe -- --dev      exportado con tiempos de prueba
+##   godot --path . -- --no-dev         editor con tiempos reales
+var dev_mode := _resolve_dev_mode()
 var time_multiplier := 1.0
 ## Cuanto se acelera todo en dev_mode. Estaba a 1/10 y Bryan, jugando, no llegaba a
 ## leer que pasaba: construir en 1 s y una tormenta cada 30 s convierten el ciclo en
@@ -303,11 +311,26 @@ var ui_fullscreen := false
 ## (UITheme.touch_px).
 const TOUCH_CONTROLS_MODES := ["auto", "always", "never"]
 var ui_touch_controls := "auto"
+## Idioma de la interfaz ("es" / "en"). Vive en settings.cfg y no en la partida:
+## es del dispositivo, sobrevive a "partida nueva" y se aplica antes de pintar nada.
+var ui_locale := "es"
 
 func _ready() -> void:
+	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
+	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
 	load_user_settings()
 	# El modo de ventana se aplica en cuanto arranca, antes de que se dibuje la UI.
 	_apply_window_mode()
+
+## Resuelve dev_mode al arrancar (ver el comentario de la variable). El feature tag
+## "editor" solo existe en el binario del editor, nunca en una plantilla de exportación.
+static func _resolve_dev_mode() -> bool:
+	var args := OS.get_cmdline_user_args()
+	if args.has("--no-dev"):
+		return false
+	if args.has("--dev"):
+		return true
+	return OS.has_feature("editor")
 
 func load_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -325,6 +348,10 @@ func load_user_settings() -> void:
 	# Un valor desconocido en el archivo (edicion a mano, version vieja) vuelve
 	# a "auto" en vez de dejar los controles en un estado que nadie eligio.
 	ui_touch_controls = touch_mode if touch_mode in TOUCH_CONTROLS_MODES else "auto"
+	var locale := str(cf.get_value("ui", "locale", ui_locale))
+	if Tr.LOCALES.has(locale):
+		ui_locale = locale
+	Tr.set_locale(ui_locale)
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -338,6 +365,7 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
 	cf.set_value("ui", "touch_controls", ui_touch_controls)
+	cf.set_value("ui", "locale", ui_locale)
 	cf.save(USER_SETTINGS_PATH)
 
 # ── Controles tactiles ──
@@ -411,6 +439,16 @@ func set_fullscreen(enabled: bool) -> void:
 	save_user_settings()
 	EventBus.fullscreen_changed.emit(ui_fullscreen)
 
+## Cambia el idioma, lo guarda y lo anuncia. Un idioma sin tabla o el mismo que
+## ya estaba no hace nada (ni guarda ni avisa): asi un clic repetido no recarga.
+func set_locale(locale: String) -> void:
+	if not Tr.LOCALES.has(locale) or locale == ui_locale:
+		return
+	ui_locale = locale
+	Tr.set_locale(locale)
+	save_user_settings()
+	EventBus.locale_changed.emit(locale)
+
 func toggle_fullscreen() -> void:
 	set_fullscreen(not ui_fullscreen)
 
@@ -432,6 +470,15 @@ var audio_sfx_voices := 8
 
 var demolish_refund_ratio := 0.5
 var max_offline_seconds := 28800.0
+
+# ── Autosave ──
+## Segundos REALES entre guardados periodicos. No pasa por get_duration(): es
+## una red contra cierres inesperados, no parte del ritmo del juego, y dev_mode
+## no debe convertirlo en un guardado por segundo.
+var autosave_interval := 60.0
+## Ventana en la que una rafaga de eventos (fin de pelea + Diezmo + fin de
+## expedicion llegan en el mismo instante) se funde en un solo guardado.
+var autosave_debounce := 0.5
 
 # ── Market Config ──
 
@@ -538,9 +585,6 @@ func get_duration(base: float) -> float:
 	if dev_mode:
 		return maxf(base * dev_time_scale, 1.0)
 	return base * time_multiplier
-
-func get_production_with_tech(base_mult: float) -> float:
-	return base_mult + tech_production_bonus
 
 func get_build_time(base: float) -> float:
 	if base <= 0.0:
@@ -823,9 +867,20 @@ var storm_false_alarm_carry := 1
 var storm_ash_production_multiplier := 0.5
 var storm_production_multiplier := 0.15
 ## Live, temporary multiplier applied on top of everything else in
-## ProductionManager. 1.0 means nothing is happening. Only events write to it,
-## and whoever sets it is responsible for putting it back.
+## ProductionManager. 1.0 means nothing is happening. Only the STORM writes to
+## it, and it is responsible for putting it back.
 var event_production_multiplier := 1.0
+## El mismo papel para los eventos aleatorios (la plaga). Es otra variable a
+## proposito: si la plaga y la tormenta escribieran la misma, la que acabara
+## primero borraria el castigo de la otra. Solo RandomEventManager la toca.
+var random_event_production_multiplier := 1.0
+## Lo que la plaga deja producir mientras dura: la mitad.
+var plague_production_multiplier := 0.5
+
+## Todo lo pasajero junto: tormenta por evento aleatorio. Se multiplican, nunca se
+## pisan. ProductionManager lee esto y no las variables sueltas.
+func get_event_production_multiplier() -> float:
+	return event_production_multiplier * random_event_production_multiplier
 ## Morale lost per tick of ash, and how often those ticks land. The Warning
 ## costs none of it.
 var storm_morale_per_tick := 2.0

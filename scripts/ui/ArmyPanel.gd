@@ -35,6 +35,8 @@ func _ready() -> void:
 	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _refresh())
 	EventBus.expedition_resumed.connect(_on_expedition_resumed)
 	_update_button_visibility()
+	# Por si la partida se cargo antes de que este panel escuchara.
+	_on_base_changed.call_deferred()
 
 func _process(_delta: float) -> void:
 	if not _is_open:

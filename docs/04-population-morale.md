@@ -84,13 +84,14 @@ Every 30 seconds (`_consumption_interval`), each pop unit consumes:
 | Morale | Production Multiplier | Growth |
 |--------|----------------------|--------|
 | 0 | 0.50x | Stopped |
-| 20 | 0.64x | Stopped (danger notification at this threshold) |
-| 30 | 0.71x | Starts growing |
-| 50 | 0.85x | Normal |
-| 75 | 1.025x | Good |
+| 20 | 0.70x | Stopped (danger notification at this threshold) |
+| 30 | 0.80x | Starts growing |
+| 50 | 1.00x | Normal |
+| 75 | 1.10x | Good |
 | 100 | 1.20x | Maximum |
 
-Formula: `multiplier = 0.5 + (morale / 100.0) * 0.7`
+Formula (piecewise linear through 0 -> 0.5x, 50 -> 1.0x, 100 -> 1.2x):
+`m <= 50: 0.5 + m/50 * 0.5`, `m > 50: 1.0 + (m-50)/50 * 0.2` (`PopulationManager.morale_to_multiplier`).
 
 ### Decoration Morale
 

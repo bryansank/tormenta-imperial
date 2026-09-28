@@ -44,8 +44,24 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 ### VictoryScreen (`scripts/ui/VictoryScreen.gd`)
 - **Position:** Center overlay (full screen)
 - **Shows:** "VICTORIA IMPERIAL" title, flavor text, stats, continue/new game buttons
-- **Trigger:** `EventBus.victory_achieved`
+- **Trigger:** `EventBus.victory_achieved`. Waits for `GameManager.offline_report_closed` if the offline report (also layer 20) is still open. "Nueva partida" goes through `GameManager.request_new_game()`
 - **Layer:** 20
+
+### TitleMenu (`scripts/ui/TitleMenu.gd`)
+- **Shows:** keyart background (logo + name on portrait), Continuar (only if a save was loaded or the player already played this session), Nueva partida (via `GameManager.request_new_game()` when there is something to lose), Ajustes, Salir
+- **Behavior:** opens on launch over the already-loaded game and pauses the tree (`get_tree().paused`). Skipped headless and with `-- --no-title` (probes). Shown once per session (static flag survives the new-game reload)
+- **Layer:** 30, `PROCESS_MODE_ALWAYS`
+
+### PauseMenu (`scripts/ui/PauseMenu.gd`)
+- **Shows:** Reanudar, Guardar, Ajustes, Historia (replays the intro), Menu principal, Guardar y salir; plus an always-visible "II" touch button (top-left next to the HUD; bottom-centre on narrow screens)
+- **Behavior:** ESC opens it only when no UIManager window is open, `BuildingPlacer.is_idle()` and the title menu is closed. Real pause: services stop; the menu, AudioManager and whatever panel it lends (SettingsPanel, TutorialPanel) get `PROCESS_MODE_ALWAYS` while in use and their mode back on close
+- **Layer:** 30
+
+### War reports and the Final Audit screens
+- `AuditWaveBanner` (layer 19): "Oleada X de N" on `final_audit_wave_ready`, with the cleared wave from `final_audit_wave_cleared` above it and the last-wave line. Ignores the mouse, fades by itself
+- `WarReportScreen` (layer 19): queued, one at a time, never over an open board — after-action report for `defense_auto_resolved`, and the Tithe report with its COBRADO / REPELIDO stamp for `tithe_resolved`
+- `AuditDefeatScreen` (layer 20): on `final_audit_lost` — wave reached, Tithe taken, storm damage, casualties, and what it takes to resummon (`final_audit_resummon_min_units`). Not a game over
+- All built with `ModalKit` (`scripts/ui/ModalKit.gd`), which only places UITheme pieces
 
 ### NotificationPanel (`scripts/ui/NotificationPanel.gd`)
 - **Position:** Top-left status bar (pop/workers/morale), bottom-left toasts, left side log panel

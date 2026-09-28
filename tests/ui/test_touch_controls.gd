@@ -13,14 +13,26 @@ extends GdUnitTestSuite
 ## como los encontro. No se usa monitor_signals sobre autoloads.
 
 var _saved_mode := "auto"
+## El settings.cfg del jugador se devuelve byte a byte: reescribirlo con
+## save_user_settings() lo dejaba con claves nuevas que el jugador no tenia.
+var _had_file := false
+var _file_bytes := PackedByteArray()
 
 func before_test() -> void:
 	_saved_mode = GameConfig.ui_touch_controls
+	_had_file = FileAccess.file_exists(GameConfig.USER_SETTINGS_PATH)
+	if _had_file:
+		_file_bytes = FileAccess.get_file_as_bytes(GameConfig.USER_SETTINGS_PATH)
 
 func after_test() -> void:
 	GameConfig.ui_touch_controls = _saved_mode
 	GameConfig._real_touch_seen = false
-	GameConfig.save_user_settings()
+	if _had_file:
+		var f := FileAccess.open(GameConfig.USER_SETTINGS_PATH, FileAccess.WRITE)
+		f.store_buffer(_file_bytes)
+		f.close()
+	elif FileAccess.file_exists(GameConfig.USER_SETTINGS_PATH):
+		DirAccess.remove_absolute(GameConfig.USER_SETTINGS_PATH)
 
 func test_always_shows_them_even_without_a_touchscreen() -> void:
 	GameConfig.ui_touch_controls = "always"
