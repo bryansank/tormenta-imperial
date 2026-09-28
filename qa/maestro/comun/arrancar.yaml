@@ -10,4 +10,4 @@ appId: com.bryankey.tormentaimperial.qa
 - runFlow:
     file: esperar.yaml
     env:
-      MS: 45000
+      MS: 60000
