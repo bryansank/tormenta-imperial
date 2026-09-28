@@ -239,12 +239,19 @@ func _setup_ui() -> void:
 	_grid_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_grid_scroll.add_child(_grid_container)
 
-	# Right side: detail panel with 3D preview
+	# Right side: detail panel with 3D preview. The CONSTRUIR button sits below
+	# the scroll, always in sight: on a tablet the detail is taller than the
+	# window and the button used to end up scrolled off the bottom (QA flow 04).
+	var detail_column := VBoxContainer.new()
+	detail_column.name = "DetailColumn"
+	detail_column.custom_minimum_size = Vector2(320, 0)
+	detail_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail_column.add_theme_constant_override("separation", 8)
+	content.add_child(detail_column)
 	var detail_scroll := ScrollContainer.new()
-	detail_scroll.custom_minimum_size = Vector2(320, 0)
 	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	content.add_child(detail_scroll)
+	detail_column.add_child(detail_scroll)
 
 	_detail_panel = VBoxContainer.new()
 	_detail_panel.add_theme_constant_override("separation", 8)
@@ -323,19 +330,15 @@ func _setup_ui() -> void:
 	_detail_extras.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_detail_panel.add_child(_detail_extras)
 
-	# Spacer
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_detail_panel.add_child(spacer)
-
-	# Build button
+	# Build button (outside the scroll, see DetailColumn above)
 	_detail_build_btn = Button.new()
 	_detail_build_btn.text = Tr.t("BTN_BUILD")
 	_detail_build_btn.custom_minimum_size = Vector2(0, 48)
 	_detail_build_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UITheme.style_button(_detail_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
+	_detail_build_btn.name = "DetailBuildButton"
 	_detail_build_btn.pressed.connect(_on_build_pressed)
-	_detail_panel.add_child(_detail_build_btn)
+	detail_column.add_child(_detail_build_btn)
 
 	# Initial state: show placeholder
 	_show_no_selection()

@@ -205,3 +205,35 @@ func test_the_menu_button_sits_top_right_and_is_finger_sized() -> void:
 	assert_float(btn.anchor_top).is_equal(0.0)
 	assert_float(btn.custom_minimum_size.y).is_greater_equal(float(UITheme.MIN_BTN_H))
 	assert_str(btn.text).is_equal(Tr.t("BTN_GAME_MENU"))
+
+## QA en tableta (flujos 01 y 03): el atras de Android llegaba dos veces por
+## toque y abria y cerraba el MENÚ en el acto. Dos peticiones seguidas son un
+## solo ESC; pasado el margen, la siguiente vuelve a contar.
+func test_one_android_back_is_one_escape() -> void:
+	var menu := _menu()
+	var counter := EscCounter.new()
+	# El primer ESC abre el MENÚ y pausa el arbol: el contador sigue oyendo.
+	counter.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(counter)
+	menu._last_back_ms = -100000
+	menu.go_back()
+	menu.go_back()
+	await await_idle_frame()
+	await await_idle_frame()
+	var first: int = counter.presses
+	menu._last_back_ms -= menu.BACK_DEBOUNCE_MS + 1
+	menu.go_back()
+	await await_idle_frame()
+	await await_idle_frame()
+	var second: int = counter.presses
+	counter.queue_free()
+	if menu.is_open():
+		menu.resume()
+	assert_int(first).is_equal(1)
+	assert_int(second).is_equal(2)
+
+class EscCounter extends Node:
+	var presses := 0
+	func _input(event: InputEvent) -> void:
+		if event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed:
+			presses += 1

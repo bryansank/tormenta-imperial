@@ -9,8 +9,10 @@
 #   05_d: mantener + (zoom) 2 s                  -> hoy un solo paso, al soltar
 #   05_e: mantener - (zoom) 2 s                  -> igual
 #   05_f: mantener girar 2 s                     -> hoy un solo giro de 45 grados
-# Esperado tras el arreglo: 05_a da un paso; 05_d/e/f cambian durante el
+# Esperado tras el arreglo (#34): 05_a da un paso; 05_d/e/f cambian durante el
 # gesto de forma continua (con autorrepeticion), no solo una vez.
+# Coordenadas (tras #31/#34, tableta 2560x1600): cruceta abajo a la izquierda
+# (<- 4%,86%  -> 13%,86%), giro 91%/96%,85%, zoom + 90%,94% y - 95%,94%.
 # "Mantener" se hace con swipe de inicio = fin y duracion 2000 ms, que es un
 # toque sostenido real (ACTION_DOWN ... ACTION_UP a los 2 s).
 appId: com.bryankey.tormentaimperial.qa
@@ -51,8 +53,8 @@ tags: [camara, controles]
 - takeScreenshot: ${output.dir}/05_c1_tras_mantener_con_deriva
 # Zoom +
 - swipe:
-    start: "91%,87%"
-    end: "91%,87%"
+    start: "90%,94%"
+    end: "90%,94%"
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml
@@ -60,16 +62,16 @@ tags: [camara, controles]
 - takeScreenshot: ${output.dir}/05_d1_tras_mantener_zoom_mas
 # Zoom -
 - swipe:
-    start: "96%,87%"
-    end: "96%,87%"
+    start: "95%,94%"
+    end: "95%,94%"
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/05_e1_tras_mantener_zoom_menos
 - swipe:
-    start: "96%,87%"
-    end: "96%,87%"
+    start: "95%,94%"
+    end: "95%,94%"
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml
@@ -77,8 +79,8 @@ tags: [camara, controles]
 - takeScreenshot: ${output.dir}/05_e2_tras_mantener_zoom_menos_otra
 # Girar
 - swipe:
-    start: "96%,78%"
-    end: "96%,78%"
+    start: "96%,85%"
+    end: "96%,85%"
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml

@@ -104,18 +104,21 @@ python herramientas/recoger.py "$RUN" "$OUT"
 
 | Flujo | Bug | Qué mirar |
 |---|---|---|
-| `01_lore_atras.yaml` | El lore solo tiene "Siguiente" | `01_02`/`01_03`/`01_04`: hoy sigue en 2/10. El atrás de Android cierra la app (`01_06`) |
-| `02_ajustes_responden.yaml` | Ajustes "pegado" | Desde pausa, ☰ y título (con intro ya vista): los % y los interruptores cambian entre `_a` y `_e` |
-| `02b_ajustes_titulo_limpio.yaml` | Ajustes "pegado" (el caso que falla) | Instalación limpia → AJUSTES del título: la intro tapa el panel y nada responde (`02b_a`…`02b_h`) |
-| `03_menu_principal.yaml` | No deja salir al menú principal | II → Menú principal funciona (`03_02`); con el panel de un edificio abierto, II no hace nada (`03_05`); ☰ no tiene la opción (`03_06`); el atrás de Android cierra la app (`03_08`) |
-| `04_construir_aserradero.yaml` | No deja construir el aserradero | `04_02`: la lista "Edificios disponibles" está **vacía** en el APK |
+| `01_lore_atras.yaml` | El lore solo tiene "Siguiente" | Prólogo de 6 folios: `01_02` en el folio 2, `01_03` (◀ Atrás) y `01_05` (deslizar a la derecha) de vuelta al 1. El atrás de Android cierra el prólogo, no la app (`01_06`) |
+| `02_ajustes_responden.yaml` | Ajustes "pegado" | Desde ☰ MENÚ (dos veces) y desde el título: los % y los interruptores cambian entre `_a` y `_e` |
+| `02b_ajustes_titulo_limpio.yaml` | Ajustes "pegado" (el caso que fallaba) | Instalación limpia → AJUSTES del título: nada encima, responde (`02b_a`…`02b_g`); el prólogo solo sale tras Nueva partida y se salta (`02b_i`, `02b_j`) |
+| `03_menu_principal.yaml` | No deja salir al menú principal | ☰ MENÚ → Menú principal → Continuar (`03_02`, `03_03`); con el panel del Núcleo abierto el MENÚ se abre igual (`03_05`); el atrás de Android abre y cierra el MENÚ (`03_07`, `03_08`) |
+| `04_construir_aserradero.yaml` | No deja construir el aserradero | Lista llena y X a la vista (`04_01`), CONSTRUIR del detalle visible (`04_02`), casillas verdes + ✓ + tutorial sin taparlo (`04_03`), aserradero en obras y oro 300→220 (`04_04`) |
 | `05_mantener_dpad.yaml` | Mantener pulsado debería repetir | Pares `05_*` con `comparar.py` |
 | `06_arrastre_vista.yaml` | El arrastre solo funciona en algunos sitios | `herramientas/analizar_arrastre.py` → tabla 4x4 y mapa |
-| `07_ayudas_cerrar.yaml` | Las ayudas no se cierran | Globos a los 0/20/45/90 s, toque en un globo y ☰ → AYUDA |
-| `08_rotar_dos_dedos.py` | El giro con dos dedos no rota | Script de adb (Maestro no tiene multitouch). Tabla pellizco/giro |
+| `07_ayudas_cerrar.yaml` | Las ayudas no se cierran | Tras saltar el tutorial: una ayuda cada vez, con ✕ y barra (`07_00`, `07_04`), se van solas (`07_01`..`07_03`); ☰ MENÚ → AYUDA abre el índice (`07_05`) y reabre una (`07_06`) |
+| `08_rotar_dos_dedos.py` | El giro con dos dedos no rota | Script de adb (Maestro no tiene multitouch). Tabla pellizco/giro. **Ojo:** los toques de `adb emu event send` llegan a Android (se ven con "Ubicación del puntero") pero **no a la app**: con logs en `InputService` no entra ni un evento, mientras que `adb shell input swipe` (el control de un dedo) sí. En el emulador el resultado de dos dedos no es concluyente; lo fija `tests/input/test_twist_gesture.gd` y hay que probarlo en una tableta real |
 
-`comun/` contiene los trozos compartidos: `arrancar`, `nueva_partida`, `saltar_lore`,
-`en_partida` (los tres seguidos), `probar_ajustes`, `esperar` y `salida`.
+`comun/` contiene los trozos compartidos: `arrancar`, `nueva_partida`, `saltar_lore`
+("Saltar historia" del prólogo), `saltar_tutorial`, `en_partida` (los cuatro seguidos),
+`probar_ajustes`, `esperar` y `salida`. Las coordenadas son las de la interfaz tras #31
+(☰ MENÚ arriba a la derecha, CONSTRUIR abajo al centro), #32 (prólogo y tutorial) y
+#34 (✓ CONSTRUIR AQUÍ).
 
 ## 5. Leer los resultados
 

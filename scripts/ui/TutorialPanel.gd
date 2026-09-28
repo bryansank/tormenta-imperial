@@ -282,6 +282,9 @@ func _layout_step() -> void:
 		focus = rect
 	elif not point.is_empty():
 		focus = Rect2(point["point"] - Vector2(40, 40), Vector2(80, 80))
+	# Colocando con el dedo, el fantasma y su ✓ CONSTRUIR AQUI (#34) tampoco se
+	# tapan: la tarjeta se aparta de los dos juntos.
+	focus = with_confirm(focus, _confirm_rect())
 	_card.position = card_position(vp, Vector2(w, ch), focus)
 
 	# Flecha y aro.
@@ -309,6 +312,21 @@ func _layout_step() -> void:
 			var edge := _edge_point(c, dir, vp, 60.0)
 			_arrow.visible = true
 			_arrow.point_at(edge, dir)
+
+## El ✓ de colocar con el dedo, si esta a la vista (Rect2() si no).
+func _confirm_rect() -> Rect2:
+	var c := get_tree().get_first_node_in_group("placement_confirm") as Control
+	if c == null or not is_instance_valid(c) or not c.is_visible_in_tree():
+		return Rect2()
+	return c.get_global_rect()
+
+## El foco agrandado para que tambien cubra el ✓. Publica para las pruebas.
+static func with_confirm(focus: Rect2, confirm: Rect2) -> Rect2:
+	if confirm.size == Vector2.ZERO:
+		return focus
+	if focus.size == Vector2.ZERO:
+		return confirm
+	return focus.merge(confirm)
 
 ## Donde va la tarjeta de `size` para senalar `focus`: debajo, a ARROW_GAP, si
 ## cabe; si no, encima; y centrada en horizontal sobre el foco, sin salirse. Sin

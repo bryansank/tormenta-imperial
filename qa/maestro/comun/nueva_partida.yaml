@@ -3,7 +3,7 @@
 # (Campana / Constructor / Supervivencia / Sandbox). En el emulador el PRIMER
 # toque en EMPEZAR a veces no hace nada; por eso se toca dos veces. Si el primero
 # ya funciono, el segundo cae sobre el texto de la introduccion y no hace nada.
-# Deja abierta la pagina 1/10 de la introduccion.
+# Deja abierto (o a punto de abrirse) el folio 1 de 6 del prologo.
 appId: com.bryankey.tormentaimperial.qa
 ---
 - tapOn:

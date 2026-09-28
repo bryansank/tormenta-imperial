@@ -344,7 +344,18 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		go_back()
 
+## QA en tableta (flujos 01 y 03): un solo toque del atras de Android llegaba
+## dos veces (al apretar y al soltar), asi que abria el MENÚ y lo volvia a
+## cerrar, o cerraba el prologo y abria el MENÚ encima. Una segunda peticion en
+## menos de BACK_DEBOUNCE_MS es el mismo toque y no cuenta.
+const BACK_DEBOUNCE_MS := 350
+var _last_back_ms := -100000
+
 func go_back() -> void:
+	var now := Time.get_ticks_msec()
+	if now - _last_back_ms < BACK_DEBOUNCE_MS:
+		return
+	_last_back_ms = now
 	for pressed in [true, false]:
 		var esc := InputEventKey.new()
 		esc.keycode = KEY_ESCAPE
