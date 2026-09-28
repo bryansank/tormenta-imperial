@@ -288,9 +288,9 @@ func _on_upgrade_completed(node: Node3D, _new_level: int) -> void:
 func _show_building_panel() -> void:
 	_confirm_container.visible = false
 	var custom_name: String = _selected_node.get_meta("custom_name", "")
-	_title_label.text = custom_name if not custom_name.is_empty() else _selected_data.display_name
-	_desc_label.text = _selected_data.description
-	_desc_label.visible = not _selected_data.description.is_empty()
+	_title_label.text = custom_name if not custom_name.is_empty() else _selected_data.get_display_name()
+	_desc_label.text = _selected_data.get_description()
+	_desc_label.visible = not _selected_data.get_description().is_empty()
 
 	# Level display + workers/morale info
 	var level: int = _selected_node.get_meta("level", 1)
@@ -478,7 +478,7 @@ func _on_demolish() -> void:
 	# Show confirmation
 	_demolish_pending = true
 	var refund_pct := int(GameConfig.demolish_refund_ratio * 100)
-	var text := Tr.t("FMT_DEMOLISH_CONFIRM") % [_selected_data.display_name, refund_pct]
+	var text := Tr.t("FMT_DEMOLISH_CONFIRM") % [_selected_data.get_display_name(), refund_pct]
 	# Demoler con un proceso en curso ya no lo quema en silencio: se dice lo que
 	# vuelve de el antes de que el jugador confirme.
 	if ProcessManager.is_busy(_selected_node):

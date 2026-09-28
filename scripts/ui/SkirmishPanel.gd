@@ -24,6 +24,9 @@ var _launch_btn: Button
 var _reason_label: Label
 var _dev_btn: Button
 var _audit_btn: Button
+## Por que "VOLVER A CONVOCARLOS" esta apagado. Mismo criterio que el lanzamiento:
+## un boton apagado sin motivo escrito parece roto.
+var _audit_reason: Label
 var _empty_label: Label
 
 ## Lo que se ve en lugar del selector mientras la columna esta fuera.
@@ -58,6 +61,8 @@ func _ready() -> void:
 	EventBus.final_audit_started.connect(func(_w): _refresh())
 	EventBus.final_audit_lost.connect(func(_w): _refresh())
 	EventBus.storm_halted_forever.connect(_refresh)
+	# Por si la partida se cargo antes de que este panel escuchara.
+	_on_expedition_changed.call_deferred()
 	_update_button_visibility()
 
 func _setup_ui() -> void:
@@ -172,6 +177,12 @@ func _setup_ui() -> void:
 	_audit_btn.pressed.connect(_on_audit_pressed)
 	_audit_btn.visible = false
 	vbox.add_child(_audit_btn)
+
+	_audit_reason = UITheme.make_label("", "small", UITheme.WARNING)
+	_audit_reason.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_audit_reason.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_audit_reason.visible = false
+	vbox.add_child(_audit_reason)
 
 	_dev_btn = Button.new()
 	_dev_btn.text = Tr.t("BTN_DEV_SKIRMISH")
@@ -385,20 +396,48 @@ func _adjust(unit_id: String, delta: int) -> void:
 
 ## Visible solo cuando hay algo que convocar: la primera vez (pendiente) o tras
 ## perder, si el ejercito ya da para volver a llamarlos.
+##
+## Con un tablero abierto o la columna fuera el boton se ve pero no se pulsa, y
+## el tooltip dice por que: la oleada no tendria donde bajar.
 func _refresh_audit_button() -> void:
+	var blocked: String = CombatManager.final_audit_block_reason()
+	_audit_btn.tooltip_text = Tr.t(blocked) if blocked != "" else ""
 	if ProgressionManager.is_final_audit_pending():
 		_audit_btn.text = Tr.t("BTN_AUDIT_BEGIN")
 		_audit_btn.visible = true
-		_audit_btn.disabled = false
+		_audit_btn.disabled = blocked != ""
 	elif ProgressionManager.is_final_audit_lost():
 		_audit_btn.text = Tr.t("BTN_AUDIT_RESUMMON")
 		_audit_btn.visible = true
-		_audit_btn.disabled = not ProgressionManager.can_resummon_final_audit()
+		_audit_btn.disabled = blocked != "" or not ProgressionManager.can_resummon_final_audit()
 	else:
 		_audit_btn.visible = false
+	var reason: String = audit_block_reason()
+	_audit_reason.text = reason
+	_audit_reason.visible = _audit_btn.visible and _audit_btn.disabled and reason != ""
+
+## Por que no se puede volver a convocar a la Regencia ahora mismo, o "" si se
+## puede (o si no hay nada que convocar). Las cifras salen del manager y de
+## GameConfig: aqui no se decide nada, solo se explica.
+func audit_block_reason() -> String:
+	if not ProgressionManager.is_final_audit_lost():
+		return ""
+	if ProgressionManager.can_resummon_final_audit():
+		return ""
+	var standing: int = CombatManager.roster_size(CombatManager.get_garrison())
+	return "%s %s" % [
+		Tr.t("AUDIT_RESUMMON_LOCKED") % GameConfig.final_audit_resummon_min_units,
+		Tr.t("LBL_AUDIT_STANDING") % standing,
+	]
 
 func _on_audit_pressed() -> void:
 	var started: bool = false
+	var blocked: String = CombatManager.final_audit_block_reason()
+	if blocked != "":
+		# Nada de reconvocar para luego no poder empezar: se avisa y ya.
+		EventBus.notification_posted.emit(Tr.t(blocked), "warning", UITheme.WARNING)
+		_refresh()
+		return
 	if ProgressionManager.is_final_audit_pending():
 		started = ProgressionManager.begin_final_audit()
 	elif ProgressionManager.is_final_audit_lost():
@@ -406,6 +445,12 @@ func _on_audit_pressed() -> void:
 	if started:
 		_close()
 	else:
+		# Nunca en silencio: si el boton se pulso y no paso nada, se dice por que.
+		var reason: String = audit_block_reason()
+		if reason == "" and has_expedition():
+			reason = Tr.t("MSG_EXPEDITION_ACTIVE")
+		if reason != "":
+			EventBus.notification_posted.emit(reason, "warning", UITheme.WARNING)
 		_refresh()
 
 func _on_launch_pressed() -> void:

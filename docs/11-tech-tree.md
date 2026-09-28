@@ -2,7 +2,7 @@
 
 ## Overview
 
-3 research branches with 5 tiers each (15 techs total). Researching costs resources and time. Each tech provides a permanent bonus. Only one tech can be researched at a time. Requires HQ to exist (research points come from HQ production ticks).
+3 research branches with 5 tiers each (15 techs total). Researching costs resources and time. Each tech provides a permanent bonus. Only one tech can be researched at a time. There is no HQ requirement: the HQ is an era-3 building and gating the tree behind it would leave it unusable for most of the game. There are no research points either (an old unused counter was removed; saves that still carry `research_points` load fine and the key is ignored).
 
 ## Branches
 

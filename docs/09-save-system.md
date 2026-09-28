@@ -67,7 +67,11 @@ Game state is persisted to a JSON file at `user://save_game.json`. Auto-saves on
   },
 
   "random_events": {
-    "events_triggered": 3
+    "events_triggered": 3,
+    "timer": 42.0,
+    "next_event_time": 180.0,
+    "active_event_id": "plague",
+    "active_timer": 23.5
   },
 
   "camera": {
@@ -107,11 +111,28 @@ Game state is persisted to a JSON file at `user://save_game.json`. Auto-saves on
 
 ## Offline Progression
 
-When loading a save, if `elapsed > 2 seconds`:
-1. Calculate production cycles for each building: `cycles = elapsed / interval`
-2. Award resources proportionally (capped by storage)
-3. Show floating text report of earnings
-4. Max offline time: 8 hours (`GameConfig.max_offline_seconds = 28800`)
+When loading a save, if `elapsed > 2 seconds`, `ProductionManager.apply_offline_progression(elapsed)`:
+1. Ignores garbage: a negative elapsed (clock rolled back) or NaN pays nothing.
+2. Caps the absence at 8 hours (`GameConfig.max_offline_seconds = 28800`). A suspicious
+   forward jump (clock pushed ahead, years away) is clamped to the same cap.
+3. Finishes constructions/upgrades that would have ended while away; those produce only
+   for the leftover time, at their new level.
+4. Each building earns `cycles * get_cycle_yield(node, data, false)` — the **same**
+   per-cycle function the live tick uses. So a ruined building (`BuildingHealth.is_ruined`)
+   or an unstaffed one produces nothing offline either, and level multiplier,
+   `tech_production_bonus` and the morale multiplier all apply. Morale is the one at save
+   time (it is not simulated).
+5. Population consumption is subtracted, capped to what was produced offline (you never
+   come back poorer than you left).
+6. The result goes through the shared storage cap; the report shows what actually fit.
+
+**Offline is production-only.** The Imperial Storm, random events (the plague), the army
+(upkeep, desertion, training), manual processes and the tech research are *frozen* while
+the game is closed and resume where they were. Simulating the storm or the army offline
+would mean resolving fights and ruining buildings the player never saw and could not react
+to; a management game should not punish closing the window. For the same reason the
+storm's and the plague's production penalties are not applied to offline earnings: the
+events themselves do not advance, so they do not charge either.
 
 ## Clear Save
 

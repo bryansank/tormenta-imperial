@@ -186,7 +186,7 @@ Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
 | `draft_applied` | `option: Dictionary` | CombatManager | BattleScreen |
 | `expedition_ended` | `result: int, rewards: Dictionary, casualties: Dictionary` | CombatManager | BattleScreen, SkirmishPanel, ArmyPanel, NotificationPanel, AudioManager |
 | `expedition_resumed` | `expedition_id: int` | CombatManager | BattleScreen, SkirmishPanel, ArmyPanel |
-| `defense_auto_resolved` | `victory: bool, rounds: int, summary: Dictionary` | CombatManager | *(no listener)* |
+| `defense_auto_resolved` | `victory: bool, rounds: int, summary: Dictionary` | CombatManager | WarReportScreen |
 
 `result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
 
@@ -232,7 +232,7 @@ follow `StormCycle.Phase`.
 | `storm_tick` | `phase: int, seconds_left: float` | StormManager | StormHUD |
 | `storm_ended` | `severity: int` | StormManager | ProcessManager, ArmyManager, StormHUD, StormSky |
 | `tithe_demanded` | `severity: int` | StormManager | TutorialManager |
-| `tithe_resolved` | `paid: bool, taken: Dictionary` | StormManager | StormHUD, HelperPanel |
+| `tithe_resolved` | `paid: bool, taken: Dictionary` | StormManager | StormHUD, HelperPanel, WarReportScreen, AuditDefeatScreen |
 
 `storm_incoming` carries no severity on purpose — the warning window says the ash
 is on the horizon, and the size of the bill is only announced with `storm_started`.
@@ -251,8 +251,8 @@ summons the Regency's definitive audit, and surviving it is the victory. A siege
 | `final_audit_summoned` | `waves: int, summons: int` | ProgressionManager | SkirmishPanel, AudioManager *(optional connect)* |
 | `final_audit_started` | `waves: int` | ProgressionManager | SkirmishPanel |
 | `final_audit_wave_ready` | `wave: int, roster: Dictionary, scale: float` | ProgressionManager | CombatManager |
-| `final_audit_wave_cleared` | `wave: int, remaining: int` | ProgressionManager | *(no listener)* |
-| `final_audit_lost` | `wave: int` | ProgressionManager | StormManager, SkirmishPanel |
+| `final_audit_wave_cleared` | `wave: int, remaining: int` | ProgressionManager | AuditWaveBanner |
+| `final_audit_lost` | `wave: int` | ProgressionManager | StormManager, SkirmishPanel, AuditDefeatScreen, WarReportScreen, AuditWaveBanner |
 | `storm_halted_forever` | — | ProgressionManager | StormManager, StormSky, SkirmishPanel, AudioManager *(optional connect)* |
 
 `final_audit_wave_ready` is the seam of the siege: the model says which wave it is
@@ -357,8 +357,6 @@ Wiring that will start working the day something fires it.
 | `unit_training_started` | ArmyManager | `ArmyPanel` polls `ArmyManager` instead of listening |
 | `unit_training_cancelled` | ArmyManager | Same |
 | `building_damaged` | BuildingHealth | `BuildingStatusBadge` reacts to `building_ruined` and `building_repaired` but not to partial damage — a scratch gets no icon |
-| `defense_auto_resolved` | CombatManager | Only `tests/storm/test_defense_auto_resolve.gd` listens. `StormManager` reads the return value of `auto_resolve_defense()` directly and posts its own notification. The signal is there for a proper after-action report that has not been built |
-| `final_audit_wave_cleared` | ProgressionManager | There is no wave-by-wave readout; `SkirmishPanel` refreshes from `final_audit_started` / `final_audit_lost` instead |
 | `random_event_ended` | RandomEventManager | Timed effects expire inside the manager; nothing reacts to the end |
 
 Not on this list, despite looking thin in the tables above: `process_started`,

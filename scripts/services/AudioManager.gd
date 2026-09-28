@@ -83,6 +83,10 @@ var _music_before_combat: String = ""  # what was playing when the first encount
 var _combat_session: int = 0           # bumps per encounter_started; guards the deferred restore
 
 func _ready() -> void:
+	# La musica sigue sonando con el juego en pausa (menu principal y de pausa):
+	# un AudioStreamPlayer pausado corta la pista. Los SFX no molestan: con el
+	# arbol parado nadie emite las senales que los disparan.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_ensure_buses()
 	_build_players()
 	_load_manifest(MUSIC_MANIFEST, MUSIC_DIR)
