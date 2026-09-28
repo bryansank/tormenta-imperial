@@ -27,6 +27,11 @@ var _hold_start := false
 ## "Continuar" solo cuando habia algo que continuar: una partida nueva se guarda
 ## al instante, asi que mirar el archivo despues de arrancar no sirve.
 var loaded_from_save := false
+## El jugador ya solto el menu principal en esta sesion. Es del TitleMenu, pero
+## vive aqui porque un autoload sobrevive a cualquier cambio de escena (nueva
+## partida, cambio de vista 3D/2D) sin depender de que el script del menu siga
+## cargado. De sesion: no se guarda ni lo limpia ningun reset().
+var title_dismissed := false
 ## La capa del parte offline mientras esta en pantalla.
 var _offline_canvas: CanvasLayer = null
 ## La partida termino (Supervivencia perdida) y su guardado ya se escribio
@@ -159,6 +164,11 @@ func register_camera(camera: Node) -> void:
 ## ViewRouter: esta escena se abandona por la otra vista antes de empezar.
 func hold_start() -> void:
 	_hold_start = true
+
+## La escena actual se esta abandonando por la otra vista. El menu principal lo
+## mira para no abrirse (y pausar) en una escena que muere este mismo frame.
+func is_start_held() -> bool:
+	return _hold_start
 
 ## ViewRouter: esta escena es la buena. Suelta lo que registro la escena que se
 ## abandono (nodos que ya no existen) para que la nueva se registre limpia.

@@ -125,6 +125,33 @@ func test_settings_open_over_the_menu_and_give_it_back_on_close() -> void:
 	assert_bool(menu_back).is_true()
 	assert_int(restored).is_equal(Node.PROCESS_MODE_INHERIT)
 
+## Cambiar de vista (GameManager.switch_to_scene) monta la otra escena con su
+## propio TitleMenu. Que el menu ya se solto en esta sesion no puede depender de
+## que el script siga cargado: una copia nueva del script (lo que queda si el
+## motor lo descarga entre escenas) tiene que seguir sabiendolo.
+func test_the_dismissal_outlives_the_scene_and_its_script() -> void:
+	var menu := _menu()
+	menu.open_menu()
+	menu._on_continue()
+	var fresh := GDScript.new()
+	fresh.source_code = load("res://scripts/ui/TitleMenu.gd").source_code
+	fresh.reload()
+	var other: CanvasLayer = auto_free(CanvasLayer.new())
+	other.set_script(fresh)
+	# Sin partida cargada, "Continuar" solo sale si el menu ya se solto.
+	GameManager.loaded_from_save = false
+	assert_bool(other.has_game_to_continue()).override_failure_message(
+		"la otra escena olvido que el menu ya se habia soltado").is_true()
+
+func test_a_menu_never_dismissed_is_not_taken_as_dismissed() -> void:
+	var fresh := GDScript.new()
+	fresh.source_code = load("res://scripts/ui/TitleMenu.gd").source_code
+	fresh.reload()
+	var other: CanvasLayer = auto_free(CanvasLayer.new())
+	other.set_script(fresh)
+	GameManager.loaded_from_save = false
+	assert_bool(other.has_game_to_continue()).is_false()
+
 func _dialogs() -> Array:
 	var found: Array = []
 	for child in GameManager.get_children():

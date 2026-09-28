@@ -660,6 +660,7 @@ const _STRINGS := {
 		"LBL_SANDBOX_HINT": "Los recursos se rellenan solos. La tormenta hace su ciclo entero (aviso, ceniza, tormenta, Diezmo) y se para al volver la calma.",
 		"LBL_SANDBOX_STORM_BUSY": "Ya hay una tormenta en marcha.",
 		"LBL_SANDBOX_AUDIT_BUSY": "La Auditoría ya está convocada o en curso.",
+		"MSG_SAVE_AFTER_FIGHT": "Se guardara al terminar la pelea.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -1288,6 +1289,7 @@ const _STRINGS := {
 		"LBL_SANDBOX_HINT": "Resources refill themselves. The storm runs its whole cycle (warning, ash, storm, Tithe) and stops once calm returns.",
 		"LBL_SANDBOX_STORM_BUSY": "A storm is already under way.",
 		"LBL_SANDBOX_AUDIT_BUSY": "The Audit is already summoned or under way.",
+		"MSG_SAVE_AFTER_FIGHT": "The game will be saved when the fight is over.",
 	},
 }
 

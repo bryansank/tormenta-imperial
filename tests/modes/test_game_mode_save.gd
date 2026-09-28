@@ -13,6 +13,11 @@ const Parking := preload("res://tests/save/save_parking.gd")
 const SAVE_PATH := "user://save_game.json"
 const BACKUP_PATH := "user://save_game.game_modes.bak"
 
+## Esta suite escribe user://save_game.json. Si corre en la carpeta del jugador
+## (lanzada sin tools/run_tests.sh) se salta entera: no hay partida que pisar.
+func before(do_skip := Parking.in_player_dir(), skip_reason := "Carpeta de usuario del jugador: lanza los tests con tools/run_tests.sh") -> void:
+	pass
+
 var _saved_resources: Dictionary = {}
 var _saved_unlocks: Dictionary = {}
 var _saved_era: int = 1

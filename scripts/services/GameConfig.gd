@@ -431,12 +431,21 @@ func set_touch_controls(mode: String) -> void:
 
 ## Pone la ventana en el modo que marque ui_fullscreen. Sin senales: se usa
 ## tambien en _ready(), cuando EventBus todavia no existe.
+## En movil no hay ventana que elegir: siempre pantalla completa (inmersiva en
+## Android). "Ventana" alli significa enseñar las barras del sistema encima del
+## juego, y es lo que pasaba con la preferencia por defecto (false).
 func _apply_window_mode() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	var wanted := DisplayServer.WINDOW_MODE_FULLSCREEN if ui_fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
+	var wanted := _wanted_window_mode(ui_fullscreen, OS.has_feature("mobile"))
 	if DisplayServer.window_get_mode() != wanted:
 		DisplayServer.window_set_mode(wanted)
+
+## Modo de ventana que corresponde a la preferencia en esta plataforma.
+static func _wanted_window_mode(fullscreen: bool, mobile: bool) -> DisplayServer.WindowMode:
+	if mobile or fullscreen:
+		return DisplayServer.WINDOW_MODE_FULLSCREEN
+	return DisplayServer.WINDOW_MODE_WINDOWED
 
 ## Cambia a pantalla completa (o vuelve a ventana), lo guarda y lo anuncia.
 func set_fullscreen(enabled: bool) -> void:
@@ -465,8 +474,7 @@ func toggle_fullscreen() -> void:
 func _window_mode_mismatched(enabled: bool) -> bool:
 	if DisplayServer.get_name() == "headless":
 		return false
-	var wanted := DisplayServer.WINDOW_MODE_FULLSCREEN if enabled else DisplayServer.WINDOW_MODE_WINDOWED
-	return DisplayServer.window_get_mode() != wanted
+	return DisplayServer.window_get_mode() != _wanted_window_mode(enabled, OS.has_feature("mobile"))
 
 ## Seconds to cross-fade between music tracks (e.g. on era change).
 var audio_music_fade := 1.5

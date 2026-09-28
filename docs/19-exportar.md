@@ -1,7 +1,8 @@
-# 19 — Exportar el juego a un .exe de Windows
+# 19 — Exportar el juego: .exe de Windows y APK de Android
 
 Cómo sacar de este proyecto un `TormentaImperial.exe` que otra persona pueda
 descargar y jugar, qué viaja dentro, qué se queda fuera y qué falta para publicarlo.
+Android (tableta primero) está en la sección 11.
 
 Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11 (RTX 3060, Vulkan).
 
@@ -72,8 +73,9 @@ Desde la raíz del proyecto, con `GODOT` apuntando al ejecutable de consola:
 # 1. Importar (primera vez o tras tocar assets)
 "$GODOT" --headless --path . --import
 
-# 2. Tests (deben quedar en verde)
-"$GODOT" --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -a tests
+# 2. Tests (deben quedar en verde). Siempre por el envoltorio: da a la suite su
+#    propia carpeta de usuario y no toca la partida del jugador.
+GODOT="$GODOT" tools/run_tests.sh
 
 # 3. Exportar
 mkdir -p build/windows
@@ -228,5 +230,232 @@ Algunos antivirus marcan de más los ejecutables de Godot sin firma. Opciones:
 | **Linux** (x86_64) | Sí | Preset "Linux" con las mismas exclusiones; las plantillas ya están instaladas. Probar en una distro real (Vulkan/Mesa). Distribuir como `.tar.gz` o en itch.io. |
 | **macOS** | Con trabajo | Preset "macOS" (plantilla universal incluida). Para que Gatekeeper lo deje abrir hace falta firmar y **notarizar** con una cuenta de Apple Developer (99 USD/año) y, en la práctica, un Mac. Sin eso el jugador tiene que forzar la apertura. |
 | **Web (HTML5)** | No con este editor | Godot 4 .NET **no exporta a Web**. Haría falta el editor estándar 4.7 y sus plantillas. Además: Forward+ no existe en Web (solo Compatibility/WebGL2), así que habría que revisar luces, niebla y materiales; `user://` pasa a IndexedDB; el audio necesita un clic del jugador antes de sonar; y para hilos hay que servir con cabeceras COOP/COEP (itch.io tiene la casilla "SharedArrayBuffer"). Es la vía de mayor alcance para una demo, pero es un port, no un clic. |
-| **Android** | Con trabajo | Plantillas incluidas; falta instalar JDK 17 + Android SDK, crear un keystore de release (secreto: fuera del repo) y un preset "Android". El juego ya tiene controles táctiles. Forward+ en móvil es pesado: probablemente Mobile renderer. Para Google Play, AAB firmado y cuenta de desarrollador. |
+| **Android** | Sí (APK de depuración) | Preset "Android" listo: ver §11. Falta el keystore de release, el AAB y la cuenta de Google Play. |
 | **iOS** | No sin Mac | Requiere Xcode y cuenta de Apple Developer. |
+
+---
+
+## 11. Android (tableta primero)
+
+La tableta en apaisado es el objetivo principal en móvil; el teléfono, secundario.
+Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11.
+
+### 11.1 Resumen
+
+| Qué | Valor |
+|---|---|
+| Preset | `Android` en `export_presets.cfg` (sin secretos) |
+| Salida | `build/android/TormentaImperial-debug.apk` |
+| Tamaño | 38,9 MB el APK (73 MB son `libgodot_android.so` sin comprimir; ~10 MB el juego) |
+| Paquete | `com.bryankey.tormentaimperial`, versionCode `900`, versionName `0.9.0` |
+| SDK | minSdk 24 (Android 7), targetSdk 36 |
+| ABI | `arm64-v8a` (todas las tabletas y teléfonos de los últimos años) |
+| Orientación | apaisado con sensor (`userLandscape` en el manifiesto: gira 180° y respeta el bloqueo de rotación) |
+| Permisos | ninguno |
+| Renderer | Mobile (Vulkan) en Android; Forward+ sigue en PC |
+| Tiempo de export | ~40-60 s |
+
+### 11.2 ¿Mono o estándar?
+
+Igual que en Windows: el editor mono exporta a Android sin `.csproj` y sin meter
+ensamblados .NET en el APK. Lo único que se nota es una línea en el logcat al
+arrancar, inocua: `E GODOT: Unable to load System.Security.Cryptography.Native.Android library`
+(la plantilla mono intenta cargar su runtime y no lo encuentra, porque no hay C#).
+Con el editor estándar desaparecería.
+
+### 11.3 Herramientas (una vez por máquina, todo gratis y oficial)
+
+Lo que pide la documentación de Godot 4.7:
+
+| Pieza | Versión | De dónde |
+|---|---|---|
+| OpenJDK | 17 | Eclipse Temurin (`adoptium.net`), el zip portable vale |
+| Android SDK command-line tools | latest | `developer.android.com/studio` → "Command line tools only" |
+| platform-tools | 35.0.0 o más | `sdkmanager` |
+| build-tools | 35.0.1 | `sdkmanager` |
+| platform | android-35 | `sdkmanager` |
+| NDK r28b + CMake 3.10.2 | — | **solo** para la build con Gradle (AAB); el APK precompilado no los usa |
+
+Comprobar los SHA-256 que publica cada página antes de descomprimir. Con el SDK en
+`%LOCALAPPDATA%\Android\Sdk` (el sitio por defecto de Android Studio):
+
+```powershell
+# cmdline-tools va en <sdk>\cmdline-tools\latest\
+$env:JAVA_HOME = "<carpeta del JDK 17>"
+$sm = "$env:LOCALAPPDATA\Android\Sdk\cmdline-tools\latest\bin\sdkmanager.bat"
+& $sm --licenses                       # aceptar todas
+& $sm "platform-tools" "build-tools;35.0.1" "platforms;android-35"
+```
+
+Después, en el editor: *Editor → Configuración del editor → Exportar → Android*:
+
+- `Java SDK Path` → la carpeta del JDK 17 (la que contiene `bin\java.exe`);
+- `Android SDK Path` → `%LOCALAPPDATA%\Android\Sdk`.
+
+Viven en `%APPDATA%\Godot\editor_settings-4.7.tres`, **fuera del repositorio**. Si se
+editan a mano, con todos los editores de Godot cerrados: cualquier editor abierto
+(también uno headless de los tests) reescribe el fichero al salir y deshace el cambio.
+
+### 11.4 Firmar: depuración y release
+
+**Depuración.** Godot firma el APK de depuración con el keystore de
+`export/android/debug_keystore` (también en la configuración del editor). Si no
+existe, se crea con el `keytool` del JDK, fuera del repo:
+
+```powershell
+keytool -genkeypair -v -keystore "$env:APPDATA\Godot\keystores\debug.keystore" `
+  -storepass android -alias androiddebugkey -keypass android `
+  -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+```
+
+**Release.** Es la identidad de la app para siempre: Google Play no deja publicar una
+actualización firmada con otra clave. Se crea **una vez**, se guarda con copia de
+seguridad fuera del repo (gestor de contraseñas + copia offline) y nunca se versiona:
+
+```powershell
+keytool -genkeypair -v -keystore "D:\claves\tormenta-release.keystore" `
+  -alias tormenta -keyalg RSA -keysize 2048 -validity 10000
+```
+
+`export_presets.cfg` es público, así que los campos `keystore/release*` se dejan
+**vacíos**. Godot los lee de variables de entorno al exportar:
+
+```powershell
+$env:GODOT_ANDROID_KEYSTORE_RELEASE_PATH     = "D:\claves\tormenta-release.keystore"
+$env:GODOT_ANDROID_KEYSTORE_RELEASE_USER     = "tormenta"
+$env:GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD = "<la contraseña>"
+& $GODOT --headless --path . --export-release "Android" build/android/TormentaImperial.apk
+```
+
+(Existen también `GODOT_ANDROID_KEYSTORE_DEBUG_*` por si se quiere un keystore de
+depuración propio en CI.) `tests/build/test_export_guards.gd` falla si alguien guarda
+una ruta de keystore o una contraseña en el preset.
+
+### 11.5 Exportar
+
+```bash
+"$GODOT" --headless --path . --import      # la primera vez, o tras tocar assets
+mkdir -p build/android
+"$GODOT" --headless --path . --export-debug "Android" build/android/TormentaImperial-debug.apk
+```
+
+Queda también un `.apk.idsig` al lado (firma v4 para instalación incremental); no
+hace falta distribuirlo.
+
+**Si el export no termina.** El plugin de Android arranca el servidor de `adb` y, si
+lo arranca él, `adb` hereda la consola y el `_console.exe` se queda esperando aunque el
+APK ya esté escrito. Arrancar `adb start-server` antes de exportar lo evita.
+
+Para comprobar qué lleva dentro (`aapt2` está en `build-tools\35.0.1`):
+
+```bash
+aapt2 dump badging build/android/TormentaImperial-debug.apk   # paquete, versión, SDK, ABI, permisos
+unzip -l build/android/TormentaImperial-debug.apk             # assets/ es el contenido del PCK
+```
+
+Verificado: 359 ficheros en `assets/`, ninguno de `addons/beckett`, `addons/gdUnit4`,
+`tests/`, `tools/`, `docs/`, ni `.mcp.json`/`.env`. `BeckettGate.gdc` sí viaja (es el
+portero, y se retira solo).
+
+### 11.6 El preset `Android`
+
+| Opción | Valor | Por qué |
+|---|---|---|
+| `package/unique_name` | `com.bryankey.tormentaimperial` | identificador en la tienda. Se puede cambiar **hasta la primera publicación**; después es para siempre |
+| `version/code` | `900` | entero que Play exige creciente. Regla: `mayor*10000 + menor*100 + parche` (0.9.0 → 900, 1.0.0 → 10000). Subirlo a mano con cada release |
+| `version/name` | vacío → `config/version` | la versión legible vive solo en `project.godot` |
+| `gradle_build/use_gradle_build` | `false` | plantillas precompiladas: no hace falta NDK ni Gradle para un APK |
+| `architectures/arm64-v8a` | `true` (el resto `false`) | armeabi-v7a solo sirve para tabletas muy viejas de 32 bits y suma ~25 MB; Play acepta solo-64 bits |
+| `screen/immersive_mode` | `true` | sin barra de estado ni de navegación |
+| `screen/support_small` | `false` | pantallas < 3" no tienen sitio para la UI |
+| `permissions/*` | todos `false` | el juego no usa red, cámara ni almacenamiento externo |
+| `launcher_icons/*` | vacío → `icon.svg` | Godot genera el icono y el icono adaptativo a partir del del proyecto |
+| `keystore/*` | vacío | ver 11.4 |
+
+Y en `project.godot` (solo afectan a móvil):
+
+- `display/window/handheld/orientation=4` → apaisado con sensor;
+- `rendering/renderer/rendering_method.mobile="mobile"` (explícito; Forward+ se queda
+  en `rendering_method` para PC);
+- `rendering/textures/vram_compression/import_etc2_astc=true`, sin el cual el export a
+  Android se niega. Hoy todas las texturas del juego son sin pérdida, así que no cambia nada.
+
+### 11.7 Instalar en una tableta
+
+1. En la tableta: *Ajustes → Información → Número de compilación* siete veces para
+   activar las opciones de desarrollador; activar **Depuración por USB**.
+2. Conectar por USB, aceptar la huella del PC y:
+   ```bash
+   adb devices
+   adb install -r build/android/TormentaImperial-debug.apk
+   adb logcat -s godot        # el log del juego
+   ```
+3. Sin cable (*sideload*): copiar el `.apk` a la tableta y abrirlo desde el gestor de
+   archivos; Android pide permitir "instalar apps de fuentes desconocidas" para esa app.
+
+La partida se guarda en el almacenamiento interno de la app
+(`/data/data/com.bryankey.tormentaimperial/files/`); `use_custom_user_dir` no aplica en
+Android. Desinstalar la app borra la partida (`retain_data_on_uninstall=false`).
+
+### 11.8 Lo que se vio en el emulador
+
+Emulador oficial con un AVD *Pixel Tablet* (2560×1600, 320 dpi, Android 16, imagen
+x86_64 con WHPX).
+
+- **El APK arm64 arranca** gracias a la traducción ARM del emulador (≈60 s hasta el
+  primer fotograma), pero la pantalla queda **negra**: el Vulkan del emulador falla al
+  presentar (`ERROR: Couldn't present to Vulkan queue (VkResult error 5)`). Con un APK
+  x86_64 nativo pasa lo mismo. Es el emulador, no el juego: el mismo renderer Mobile
+  pinta bien en el PC (Vulkan real).
+- Con una variante **solo para el emulador** (x86_64 + `command_line/extra_args=
+  "--rendering-driver opengl3 --rendering-method gl_compatibility"`, sin versionar) el
+  juego arranca en ~15 s, enseña el menú de título, y los toques funcionan: *Nueva
+  partida → Confirmar → Saltar* llevan a la isla con el tutorial y los controles
+  táctiles en pantalla. Cero errores de script en el logcat.
+- Bug encontrado y corregido: con la preferencia de pantalla completa por defecto
+  (`false`) `GameConfig` pedía modo ventana al arrancar, y en Android eso vuelve a sacar
+  las barras del sistema encima del juego. Ahora en móvil siempre es pantalla completa.
+- Para quien haga la UI de tableta (no se ha tocado aquí):
+  - **Franjas negras arriba y abajo** (~50 px a cada lado en 2560×1600): la tableta es
+    16:10 y `window/stretch/aspect="keep_height"` sobre una base 16:9 deja sobrante
+    vertical. `expand` lo llenaría.
+  - Los textos de ayuda hablan de "WASD" y "la rueda del ratón" también en táctil.
+  - El diálogo de "Nueva partida" sale con el tema por defecto de Godot, no con `UITheme`.
+  - Arranca con el *splash* de Godot (no hay `application/boot_splash/image`).
+
+### 11.9 Renderer Mobile frente a Forward+
+
+Probado en el PC con `--rendering-method mobile`, ventana y directorio de usuario
+temporal: la isla, los modelos y la UI se ven igual. La única diferencia que avisa el
+motor es que **el SSAO no existe en Mobile**
+(`WARNING: Screen-space ambient occlusion (SSAO) is only available when using the
+Forward+ or Compatibility renderers`), así que en Android las esquinas y la base de los
+edificios quedan algo menos oscurecidas. No es un error; si molesta el aviso, se puede
+apagar `ssao_enabled` en móvil. El MSAA 2x se mantiene. Falta medir rendimiento en una
+tableta real de gama media, que es lo que decide si Mobile basta o hay que bajar a
+Compatibility (OpenGL ES 3) en equipos sin Vulkan fiable.
+
+### 11.10 Google Play
+
+1. **Cuenta de desarrollador** (pago único de 25 USD). Las cuentas personales nuevas
+   tienen que pasar una prueba cerrada con testers (hoy: 12 personas durante 14 días)
+   antes de poder publicar en producción.
+2. **AAB, no APK.** Play solo acepta Android App Bundle. Hace falta la build con Gradle:
+   *Proyecto → Instalar plantilla de compilación de Android* (crea `android/build/`,
+   que se versiona o se regenera), `gradle_build/use_gradle_build=true`,
+   `gradle_build/export_format=1` (AAB) y el NDK r28b + CMake del cuadro de 11.3.
+3. **Firma:** keystore de release (11.4) como *upload key*, con *Play App Signing*
+   activado (Google guarda la clave final).
+4. **targetSdk:** Play exige un nivel reciente cada año; la plantilla de 4.7 ya apunta a 36.
+5. Ficha: icono 512×512, gráfico destacado 1024×500, capturas de tableta de 7" y 10",
+   política de privacidad (URL; el juego no recoge datos, pero la ficha la pide),
+   cuestionario de clasificación por edades y formulario de seguridad de datos.
+
+### 11.11 Límites conocidos (Android)
+
+- No probado aún en una tableta física; el emulador no pinta Vulkan (11.8).
+- Solo arm64. Sin x86_64 no corre en Chromebooks x86 ni en emuladores sin traducción.
+- Sin keystore de release ni AAB todavía: el APK de depuración solo sirve para probar.
+- Sin guardado en la nube: la partida vive en la tableta y se pierde al desinstalar.
+- La UI está pensada para PC; la adaptación a tableta (stretch, tamaños táctiles,
+  textos) es trabajo aparte.
