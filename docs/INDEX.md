@@ -24,6 +24,7 @@ Complete technical documentation for AI and developer context.
 | 16 | [Balance de combate](16-balance-combate.md) | Spanish, measured not guessed: the `tools/balance_probe.gd` sweeps, the before/after numbers for every `combat_*` value T046 moved, the rounds→minutes conversion, and what the model cannot fix from `combat_*` alone |
 | 17 | [Balance del asedio](17-balance-asedio.md) | La Auditoria Final: por que no se podia ganar, que se cambio y las tablas medidas |
 | 18 | [Vista 2D](18-vista-2d.md) | Spanish: the flat top-down world view (`Main2D.tscn`, `scripts/view2d/`), how to switch (Settings, `-- --view=2d`), what is shared with the 3D view, the service hooks, what differs and the known gaps |
+| 19 | [Exportar](19-exportar.md) | Spanish: building the Windows .exe (templates, preset, exclusions, `dev_mode` off in exports, Beckett gate, save folder), distributing it, and what Linux/macOS/Web/Android would need |
 
 ## Quick Reference
 

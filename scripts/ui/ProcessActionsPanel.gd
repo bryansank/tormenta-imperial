@@ -88,7 +88,7 @@ func update_progress(node: Node, is_deposit: bool, data: BuildingData) -> void:
 	_progress_container.visible = true
 	_progress_bar.value = ProcessManager.get_progress(node)
 	var remaining: float = active["remaining"]
-	_progress_label.text = Tr.t("FMT_PROGRESS") % [active["name"], ceili(remaining)]
+	_progress_label.text = Tr.t("FMT_PROGRESS") % [ProcessManager.get_active_name(node), ceili(remaining)]
 	_update_cancel_text(node)
 	set_buttons_disabled(true)
 

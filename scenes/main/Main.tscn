@@ -23,7 +23,12 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/BattleScreen.tscn" id="21"]
 [ext_resource type="PackedScene" path="res://scenes/ui/StormHUD.tscn" id="22"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TutorialPanel.tscn" id="23"]
-[ext_resource type="Script" path="res://scripts/view2d/ViewRouter.gd" id="24"]
+[ext_resource type="Script" path="res://scripts/view2d/ViewRouter.gd" id="29"]
+[ext_resource type="PackedScene" path="res://scenes/ui/AuditWaveBanner.tscn" id="24"]
+[ext_resource type="PackedScene" path="res://scenes/ui/WarReportScreen.tscn" id="25"]
+[ext_resource type="PackedScene" path="res://scenes/ui/AuditDefeatScreen.tscn" id="26"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PauseMenu.tscn" id="27"]
+[ext_resource type="PackedScene" path="res://scenes/ui/TitleMenu.tscn" id="28"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -50,7 +55,7 @@ shader_parameter/grid_origin = Vector2(-40, -40)
 
 
 [node name="Main" type="Node3D" unique_id=1159845753]
-script = ExtResource("24")
+script = ExtResource("29")
 
 [node name="MonumentalCamera" type="Camera3D" parent="." unique_id=520294082]
 transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 20, 20)
@@ -117,3 +122,13 @@ script = ExtResource("7")
 [node name="StormHUD" parent="." instance=ExtResource("22")]
 
 [node name="TutorialPanel" parent="." instance=ExtResource("23")]
+
+[node name="AuditWaveBanner" parent="." instance=ExtResource("24")]
+
+[node name="WarReportScreen" parent="." instance=ExtResource("25")]
+
+[node name="AuditDefeatScreen" parent="." instance=ExtResource("26")]
+
+[node name="PauseMenu" parent="." instance=ExtResource("27")]
+
+[node name="TitleMenu" parent="." instance=ExtResource("28")]

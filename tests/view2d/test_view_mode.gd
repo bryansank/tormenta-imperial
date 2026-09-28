@@ -109,7 +109,9 @@ func test_the_2d_scene_has_the_same_ui_as_the_3d_scene() -> void:
 	for n in ["ResourceHUD", "ConstructionMenu", "BuildingInfoPanel", "MarketPanel", "ProgressPanel",
 			"VictoryScreen", "NotificationPanel", "TechTreePanel", "ObjectivePanel", "ArmyPanel",
 			"SettingsPanel", "HelperPanel", "SkirmishPanel", "BattleScreen", "StormHUD", "TutorialPanel",
-			"OnScreenControls", "BuildingPlacer", "MapGenerator", "GridOverlay"]:
+			"OnScreenControls", "BuildingPlacer", "MapGenerator", "GridOverlay",
+			# menus-informes: PauseMenu y TitleMenu buscan a sus hermanos por nombre.
+			"AuditWaveBanner", "WarReportScreen", "AuditDefeatScreen", "PauseMenu", "TitleMenu"]:
 		assert_bool(n in names_3d).override_failure_message("%s falta en Main" % n).is_true()
 		assert_bool(n in names_2d).override_failure_message("%s falta en Main2D" % n).is_true()
 

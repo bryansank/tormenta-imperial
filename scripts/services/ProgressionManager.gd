@@ -110,10 +110,17 @@ func summon_final_audit() -> bool:
 	return true
 
 ## Opens the siege and announces the first formation.
+##
+## The garrison is taken HERE, not at summon time: whoever is at home when the
+## gate opens is who fights (FinalAudit.begin()). Refused while a board is open
+## or a column is out — CombatManager.final_audit_block_reason() says why, and the
+## UI shows it on the disabled button.
 func begin_final_audit() -> bool:
 	if final_audit == null or not final_audit.is_pending():
 		return false
-	_publish_audit(final_audit.begin())
+	if CombatManager.final_audit_block_reason() != "":
+		return false
+	_publish_audit(final_audit.begin(CombatManager.get_garrison()))
 	_announce_wave()
 	return true
 
@@ -124,6 +131,22 @@ func report_audit_wave(victory: bool) -> void:
 		return
 	_publish_audit(final_audit.clear_wave() if victory else final_audit.lose())
 	_announce_wave()
+
+## Una partida guardada antes de que existiera la Auditoria, con el Cuartel
+## General ya a nivel 3: el hito hq_max esta hecho, asi que _complete_milestone()
+## no vuelve a entrar y el asedio no se convocaba nunca. Esa partida no se podia
+## ganar. Se convoca aqui, PENDIENTE: no se abre ningun tablero al cargar; el
+## jugador lo lanza con "QUE BAJEN" cuando quiera. Llamar con todo ya cargado
+## (la guarnicion sale del ejercito).
+func migrate_legacy_capstone() -> bool:
+	if not milestones_completed.has("hq_max"):
+		return false
+	if final_audit != null or StormManager.is_halted():
+		return false
+	if not summon_final_audit():
+		return false
+	EventBus.notification_posted.emit(Tr.t("MSG_AUDIT_AWAITING"), "warning", UITheme.WARNING)
+	return true
 
 func can_resummon_final_audit() -> bool:
 	return final_audit != null and final_audit.can_resummon(CombatManager.get_garrison())
@@ -161,6 +184,10 @@ func _announce_wave() -> void:
 	var wave: Dictionary = final_audit.current_wave_data()
 	if wave.is_empty():
 		return
+	# Between two waves the army can still shrink (desertion does not wait for
+	# the Regency). Before anyone stands on the next board, the garrison is
+	# squared with who the army still has, so nobody fights who is gone.
+	final_audit.reconcile(CombatManager.get_deployable_units())
 	EventBus.final_audit_wave_ready.emit(
 		int(wave["index"]), wave["roster"].duplicate(), float(wave["scale"])
 	)

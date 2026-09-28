@@ -6,6 +6,10 @@ var _panel: PanelContainer
 var _backdrop: ColorRect
 var _settings_btn: Button
 var _fullscreen_check: CheckButton
+var _music_btn: Button
+var _music_check: CheckButton
+var _scroll: ScrollContainer
+var _scroll_body: VBoxContainer
 var _is_open := false
 
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
@@ -35,6 +39,20 @@ func _setup_ui() -> void:
 	_settings_btn.visible = false  # Start collapsed with sidebar
 	root.add_child(_settings_btn)
 	EventBus.sidebar_toggled.connect(func(vis: bool): _settings_btn.visible = vis)
+
+	# Musica si/no de un clic desde el menu ☰, sin abrir Ajustes.
+	_music_btn = Button.new()
+	_music_btn.name = "MusicQuickButton"
+	_music_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
+	_music_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_music_btn.offset_left = -176
+	_music_btn.offset_top = UILayoutManager.get_sidebar_button_offset("SettingsPanel.music_button")
+	UITheme.style_card_button(_music_btn, UITheme.BTN.lightened(0.05), UITheme.ACCENT)
+	_music_btn.pressed.connect(AudioManager.toggle_music)
+	_music_btn.visible = false
+	root.add_child(_music_btn)
+	EventBus.sidebar_toggled.connect(func(vis: bool): _music_btn.visible = vis)
+	EventBus.music_toggled.connect(_sync_music)
 
 	# Backdrop
 	_backdrop = UITheme.make_backdrop()
@@ -68,12 +86,29 @@ func _setup_ui() -> void:
 
 	vbox.add_child(UITheme.make_separator())
 
+	# Todo lo que va debajo de la cabecera, en un scroll: con el idioma, los
+	# controles en pantalla, la musica y la vista 2D/3D el panel pasaba de
+	# 1000 px y a 720 de alto se salia por arriba, sin titulo ni cerrar.
+	_scroll = ScrollContainer.new()
+	_scroll.name = "SettingsScroll"
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(_scroll)
+	_scroll_body = VBoxContainer.new()
+	_scroll_body.add_theme_constant_override("separation", 15)
+	_scroll_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_scroll_body)
+	vbox = _scroll_body
+
 	vbox.add_child(UITheme.section_header(Tr.t("LBL_SETTINGS_AUDIO")))
 
 	vbox.add_child(_make_volume_row(
 		Tr.t("LBL_VOL_MASTER"), GameConfig.audio_master_volume,
 		func(v: float): AudioManager.set_master_volume(v)
 	))
+	_music_check = UITheme.make_check_button(Tr.t("LBL_MUSIC_ENABLED"), GameConfig.audio_music_enabled,
+		func(pressed: bool): AudioManager.set_music_enabled(pressed))
+	vbox.add_child(_music_check)
 	vbox.add_child(_make_volume_row(
 		Tr.t("LBL_VOL_MUSIC"), GameConfig.audio_music_volume,
 		func(v: float): AudioManager.set_music_volume(v)
@@ -109,6 +144,16 @@ func _setup_ui() -> void:
 	)
 
 	vbox.add_child(_make_view_mode_row())
+	# Controles en pantalla: tres estados porque "automatico" (movil, o PC tras
+	# un toque real) es el valor bueno para casi todos; en PC salen apagados.
+	var touch_idx := GameConfig.TOUCH_CONTROLS_MODES.find(GameConfig.ui_touch_controls)
+	vbox.add_child(UITheme.make_option_row(
+		Tr.t("LBL_TOUCH_CONTROLS"),
+		[Tr.t("OPT_TOUCH_AUTO"), Tr.t("OPT_TOUCH_ALWAYS"), Tr.t("OPT_TOUCH_NEVER")],
+		touch_idx,
+		func(idx: int): GameConfig.set_touch_controls(GameConfig.TOUCH_CONTROLS_MODES[idx])
+	))
+	vbox.add_child(_make_language_row())
 
 	vbox.add_child(UITheme.make_separator())
 	vbox.add_child(UITheme.section_header(Tr.t("LBL_SETTINGS_GAME")))
@@ -125,6 +170,47 @@ func _setup_ui() -> void:
 	UITheme.style_button(close_btn, UITheme.POSITIVE, UITheme.FONT_SECTION)
 	close_btn.pressed.connect(toggle)
 	vbox.add_child(close_btn)
+	_sync_music(GameConfig.audio_music_enabled)
+	_fit_scroll()
+	UILayoutManager.layout_changed.connect(_fit_scroll)
+
+## Alto del scroll: lo que pide el contenido, sin pasar de la pantalla menos la
+## cabecera y los margenes (como el scroll de ramas del arbol tecnologico).
+func _fit_scroll() -> void:
+	if _scroll == null or not is_inside_tree():
+		return
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var wanted: float = _scroll_body.get_combined_minimum_size().y
+	_scroll.custom_minimum_size.y = clampf(wanted, 120.0, maxf(120.0, vp.y - 200.0))
+
+## El boton del menu y el interruptor dicen lo mismo, cambie quien cambie.
+func _sync_music(enabled: bool) -> void:
+	_music_btn.text = Tr.t("BTN_MUSIC_ON") if enabled else Tr.t("BTN_MUSIC_OFF")
+	_music_btn.modulate = Color(1, 1, 1, 1.0 if enabled else 0.7)
+	if _music_check != null:
+		_music_check.set_pressed_no_signal(enabled)
+
+## Selector de idioma: IDIOMA  [Español] [English]. Un boton por idioma con su
+## nombre en ese idioma, para que quien no entienda el actual encuentre el suyo.
+## El activo va en dorado (pulsarlo otra vez no hace nada). Elegir otro lo aplica, lo guarda y
+## recarga la partida (GameManager escucha EventBus.locale_changed).
+func _make_language_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "LanguageRow"
+	row.add_theme_constant_override("separation", 8)
+	var label := UITheme.make_label(Tr.t("LBL_LANGUAGE"), "body")
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	for locale in Tr.LOCALES:
+		var btn := Button.new()
+		btn.name = "Locale_" + locale
+		btn.text = Tr.t("LBL_LOCALE_" + locale.to_upper())
+		btn.custom_minimum_size = Vector2(96, 36)
+		var active: bool = locale == Tr.get_locale()
+		UITheme.style_button(btn, UITheme.ACCENT if active else UITheme.BTN, UITheme.FONT_BODY)
+		btn.pressed.connect(GameConfig.set_locale.bind(locale))
+		row.add_child(btn)
+	return row
 
 ## Vista del mapa: [3D] [2D]. Elegir la otra guarda la preferencia y la partida
 ## y abre la otra escena (ViewMode.switch_to, docs/18-vista-2d.md).

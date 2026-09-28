@@ -75,8 +75,18 @@ func get_morale() -> int:
 	return _morale
 
 func get_morale_multiplier() -> float:
-	# 100 morale = 1.2x production, 50 = 1.0x, 0 = 0.5x
-	return clampf(0.5 + (_morale / 100.0) * 0.7, 0.5, 1.2)
+	return morale_to_multiplier(_morale)
+
+## La curva de diseno: 0 de moral = 0,5x, 50 = 1,0x, 100 = 1,2x, lineal a tramos.
+## Antes era una sola recta (0,5 + m*0,007) que daba 0,85x a moral 50: el punto
+## "normal" de la partida producia un 15% menos de lo que decia la documentacion.
+## La mitad baja castiga rapido (media moral cuesta la mitad de la produccion); la
+## alta premia poco, para que la moral alta sea un extra y no una obligacion.
+static func morale_to_multiplier(morale: float) -> float:
+	var m := clampf(morale, 0.0, 100.0)
+	if m <= 50.0:
+		return 0.5 + (m / 50.0) * 0.5
+	return 1.0 + ((m - 50.0) / 50.0) * 0.2
 
 func remove_population(amount: int) -> void:
 	_set_population(_population - amount)

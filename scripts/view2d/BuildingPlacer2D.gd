@@ -73,7 +73,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and _state != State.IDLE:
 			if get_viewport().gui_get_hovered_control() != null:
 				return
-			_cancel()
+			# La misma senal que ESC en 3D y el CANCELAR en pantalla: _cancel la
+			# escucha, y tambien los controles tactiles y la ayuda.
+			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseMotion and _left_pressed:
@@ -81,7 +83,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE and _state != State.IDLE:
-			_cancel()
+			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R and _state != State.IDLE:
 			_rotate_building()
@@ -218,6 +220,8 @@ func try_place(cell: Vector2i) -> Node:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "occupied":
+			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return null
 	var blocked := Rules.purchase_block_message(_current_data)
 	if blocked != "":
@@ -276,6 +280,8 @@ func try_move(cell: Vector2i) -> bool:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "occupied":
+			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return false
 	Rules.consume_deposit_if_required(_current_data.id, verdict, map_gen)
 	var old_info := GridManager.get_building_info(_moving_building)
@@ -318,6 +324,11 @@ func _redraw_roads_around(cell: Vector2i) -> void:
 	# Building2D relee su mascara de calzada cada frame; basta con pedir repintado.
 	for n in Rules.neighbor_roads(cell):
 		(n["node"] as CanvasItem).queue_redraw()
+
+## Sin colocar ni mover nada. El menu de pausa lo pregunta antes de abrirse con
+## ESC: mientras hay un edificio en la mano, ESC es "cancelar", no "pausa".
+func is_idle() -> bool:
+	return _state == State.IDLE
 
 func _cancel() -> void:
 	if _state == State.MOVING and _moving_building:

@@ -3,6 +3,12 @@ extends Node
 ## Waits for BuildingPlacer and MapGenerator to register before starting.
 
 const SAVE_PATH := "user://save_game.json"
+const CORRUPT_PATH_FMT := "user://save_game.corrupt-%s.json"
+
+## El parte de progreso offline se cerro. La pantalla de victoria espera a esta
+## senal si el parte sigue en pantalla: las dos usan la capa 20 y no deben
+## solaparse nunca.
+signal offline_report_closed
 
 var _placer: Node = null
 var _map_gen: Node = null
@@ -15,6 +21,123 @@ var _warehouse_count := 0
 ## La escena que arranca se va a ir a la otra vista (ViewRouter): no se empieza
 ## partida con su placer, que muere en este mismo frame.
 var _hold_start := false
+## True si esta sesion arranco cargando una partida guardada, false si arranco
+## una nueva porque no habia archivo. El menu principal lo lee para ofrecer
+## "Continuar" solo cuando habia algo que continuar: una partida nueva se guarda
+## al instante, asi que mirar el archivo despues de arrancar no sirve.
+var loaded_from_save := false
+## La capa del parte offline mientras esta en pantalla.
+var _offline_canvas: CanvasLayer = null
+
+# ── Autosave ──
+## Hay algo sin escribir. Se escribe al vencer el debounce, y si en ese momento
+## no es seguro (pelea en juego) se queda pendiente hasta que lo sea.
+var _save_pending := false
+var _save_debounce_left := 0.0
+var _autosave_elapsed := 0.0
+
+## Lo que cambia la partida sin pasar por un edificio. Cada senal con su numero
+## de argumentos, para poder desatarlos y llamar a request_save() sin mas.
+func _autosave_triggers() -> Array:
+	return [
+		[EventBus.market_trade_completed, 4],
+		[EventBus.unit_training_started, 2],
+		[EventBus.unit_trained, 1],
+		[EventBus.unit_training_cancelled, 2],
+		[EventBus.army_deserted, 2],
+		[EventBus.encounter_ended, 2],
+		[EventBus.tithe_resolved, 2],
+		[EventBus.final_audit_summoned, 2],
+		[EventBus.final_audit_wave_cleared, 2],
+		[EventBus.final_audit_lost, 1],
+		[EventBus.storm_halted_forever, 0],
+		[EventBus.victory_achieved, 1],
+		[EventBus.expedition_started, 2],
+		[EventBus.expedition_node_selected, 1],
+		[EventBus.draft_applied, 1],
+		[EventBus.expedition_ended, 3],
+		[EventBus.process_started, 2],
+		[EventBus.process_completed, 2],
+		[EventBus.mining_completed, 2],
+		[EventBus.process_cancelled, 3],
+		[EventBus.construction_completed, 1],
+		[EventBus.building_upgrade_started, 2],
+		[EventBus.building_upgrade_completed, 2],
+		[EventBus.storm_phase_changed, 2],
+	]
+
+func _ready() -> void:
+	for trigger in _autosave_triggers():
+		var sig: Signal = trigger[0]
+		var cb: Callable = request_save.unbind(int(trigger[1])) if int(trigger[1]) > 0 else request_save
+		sig.connect(cb)
+	EventBus.encounter_started.connect(_on_encounter_started)
+	EventBus.locale_changed.connect(_on_locale_changed)
+
+## Pide un guardado. No escribe en el acto: espera `autosave_debounce` para que
+## una rafaga de eventos del mismo instante acabe en un solo guardado.
+func request_save() -> void:
+	if not _started:
+		return
+	_save_pending = true
+	_save_debounce_left = GameConfig.autosave_debounce
+
+func has_pending_save() -> bool:
+	return _save_pending
+
+## Escribe lo pendiente si ahora se puede. Devuelve si escribio.
+func flush_pending_save() -> bool:
+	if not _save_pending:
+		return false
+	if not _can_write() or not CombatManager.is_save_safe():
+		return false
+	_save_pending = false
+	_write_save()
+	return true
+
+func _process(delta: float) -> void:
+	if not _started:
+		_save_pending = false
+		_autosave_elapsed = 0.0
+		return
+	_autosave_elapsed += delta
+	if _autosave_elapsed >= GameConfig.autosave_interval:
+		_autosave_elapsed = 0.0
+		_save_pending = true
+		_save_debounce_left = 0.0
+	if _save_pending:
+		_save_debounce_left -= delta
+		if _save_debounce_left <= 0.0:
+			flush_pending_save()
+
+## El punto de control de cada pelea: se escribe justo cuando se abre el
+## tablero, antes de que nadie mueva. Mientras dure la pelea no se guarda (ver
+## CombatManager.is_save_safe), asi que si el juego se cierra a mitad, lo que
+## hay en disco es este momento: la pelea se vuelve a jugar desde el principio,
+## que es lo que siempre ha dicho el diseño (el tablero no se guarda).
+func _on_encounter_started(_index: int, _is_boss: bool) -> void:
+	if _started and _can_write():
+		_write_save()
+
+## Cerrar la ventana, o que el movil mande la app al fondo (de donde el sistema
+## puede matarla sin avisar), guarda lo que haya. Con una pelea en juego no: el
+## disco ya tiene el punto de control de cuando se abrio el tablero.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			_save_now_if_safe()
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			if OS.has_feature("mobile"):
+				_save_now_if_safe()
+
+func _save_now_if_safe() -> void:
+	if not _started or not _can_write() or not CombatManager.is_save_safe():
+		return
+	_save_pending = false
+	_write_save()
+
+func _can_write() -> bool:
+	return is_instance_valid(_placer) and is_instance_valid(_map_gen)
 
 func register_placer(placer: Node) -> void:
 	_placer = placer
@@ -44,7 +167,14 @@ func release_start() -> void:
 ## Cambia de vista (3D <-> 2D) sin perder nada: guarda, suelta los servicios
 ## como una carga desde la nube y abre la otra escena, que vuelve a cargar el
 ## mismo save_game.json (el formato es el mismo en las dos vistas).
+##
+## Con un tablero abierto (o una pelea sin saldar) no se cambia: el tablero no
+## viaja en el guardado, igual que al cambiar de idioma. La preferencia ya quedo
+## guardada y se aplica en el proximo arranque.
 func switch_to_scene(scene_path: String) -> void:
+	if _started and (CombatManager.is_board_open() or not CombatManager.is_save_safe()):
+		EventBus.notification_posted.emit(Tr.t("NOTIF_VIEW_AFTER_BATTLE"), "info", Color(0.5, 0.7, 1.0))
+		return
 	if _started:
 		save_game()
 	var data := {}
@@ -61,9 +191,39 @@ func _try_start() -> void:
 	if _started or _hold_start:
 		return
 	_started = true
-	if _camera == null:
+	# El placer y el mapa se registran desde su propio _ready, y en Main.tscn hay
+	# trece paneles despues de ellos que todavia no escuchan. Cargar aqui mismo
+	# era hablarle a nadie: expedition_resumed, draft_offered y
+	# game_load_completed se perdian, y una partida guardada con un draft
+	# pendiente volvia con el mapa bloqueado. Se espera a que la escena entera
+	# este lista. Si ya lo esta (una escena montada a mano, un test) se arranca
+	# en el acto, como siempre.
+	var scene_root: Node = _scene_root_of(_map_gen)
+	if scene_root != null and not scene_root.is_node_ready():
+		scene_root.ready.connect(_begin, CONNECT_ONE_SHOT)
+		return
+	_begin()
+
+## El nodo de la escena que cuelga directamente de la raiz del arbol.
+func _scene_root_of(node: Node) -> Node:
+	if node == null or not node.is_inside_tree():
+		return null
+	var root: Node = get_tree().root
+	var current: Node = node
+	while current.get_parent() != null and current.get_parent() != root:
+		current = current.get_parent()
+	return current
+
+func _begin() -> void:
+	# La escena pudo irse entre el registro y su ready (recarga encadenada).
+	if not is_instance_valid(_placer) or not is_instance_valid(_map_gen):
+		_started = false
+		return
+	# La vista 2D ya registro su camara (register_camera); la 3D se busca.
+	if _camera == null or not is_instance_valid(_camera):
 		_camera = get_viewport().get_camera_3d()
-	if FileAccess.file_exists(SAVE_PATH):
+	loaded_from_save = FileAccess.file_exists(SAVE_PATH)
+	if loaded_from_save:
 		_load_game()
 	else:
 		_new_game()
@@ -88,6 +248,7 @@ func _new_game() -> void:
 	CombatManager.reset()
 	StormManager.reset()
 	TutorialManager.reset()
+	ProductionManager.reset()
 	# Place nucleo at center (no build time for core)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
@@ -103,11 +264,13 @@ func _new_game() -> void:
 func _load_game() -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if not file:
-		_new_game()
+		_recover_from_unreadable_save()
 		return
 	var json := JSON.new()
-	if json.parse(file.get_as_text()) != OK:
-		_new_game()
+	var parsed: int = json.parse(file.get_as_text())
+	file.close()
+	if parsed != OK or not (json.data is Dictionary):
+		_recover_from_unreadable_save()
 		return
 	var data: Dictionary = json.data
 
@@ -146,7 +309,9 @@ func _load_game() -> void:
 				var constr_remaining := 0.0
 				if entry.has("construction_remaining"):
 					constr_remaining = float(entry["construction_remaining"])
-				ProductionManager.register_building(node, building_data, constr_remaining)
+				# Sin la clave (save anterior) es una construccion, como siempre fue.
+				var upgrade_to: int = int(entry.get("upgrade_to", 0))
+				ProductionManager.register_building(node, building_data, constr_remaining, upgrade_to)
 				# Count warehouses
 				if building_data.id == "warehouse":
 					_warehouse_count += 1
@@ -229,9 +394,59 @@ func _load_game() -> void:
 			var earnings := ProductionManager.apply_offline_progression(elapsed)
 			_show_offline_report(elapsed, earnings)
 
+	# Partidas de antes de la Auditoria Final con el Cuartel General ya al maximo:
+	# sin esto no hay asedio que ganar. Va despues de todo lo demas porque la
+	# guarnicion que lo defiende sale del ejercito ya cargado.
+	ProgressionManager.migrate_legacy_capstone()
+
 	EventBus.game_load_completed.emit()
 
+## La partida esta en marcha (placer y mapa registrados). Sin eso no hay nada
+## que guardar: los menus lo preguntan antes de llamar a save_game().
+func is_started() -> bool:
+	return _started and _placer != null and _map_gen != null
+
+## Un guardado que no se puede leer no se pisa en silencio: _new_game() guarda
+## encima, y eso era perder la partida sin enterarse. Se aparta una copia con
+## fecha y se avisa de donde quedo.
+func _recover_from_unreadable_save() -> void:
+	var backup: String = backup_unreadable_save()
+	_new_game()
+	if not backup.is_empty():
+		EventBus.notification_posted.emit(
+			Tr.t("MSG_SAVE_CORRUPT") % backup, "danger", UITheme.DANGER)
+
+## Copia el guardado ilegible a user://save_game.corrupt-<fecha>.json y devuelve
+## la ruta, o "" si no habia nada que copiar.
+func backup_unreadable_save() -> String:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return ""
+	var t: Dictionary = Time.get_datetime_dict_from_system()
+	var stamp: String = "%04d%02d%02d-%02d%02d%02d" % [
+		int(t["year"]), int(t["month"]), int(t["day"]),
+		int(t["hour"]), int(t["minute"]), int(t["second"])]
+	var path: String = CORRUPT_PATH_FMT % stamp
+	var n := 1
+	while FileAccess.file_exists(path):
+		n += 1
+		path = CORRUPT_PATH_FMT % ("%s-%d" % [stamp, n])
+	if DirAccess.copy_absolute(SAVE_PATH, path) != OK:
+		return ""
+	return path
+
+## Guarda ya, salvo que haya una pelea en juego: entonces queda pendiente y se
+## escribe en cuanto el tablero lo permita.
 func save_game() -> void:
+	if not _can_write():
+		return
+	if not CombatManager.is_save_safe():
+		_save_pending = true
+		return
+	_save_pending = false
+	_write_save()
+
+func _write_save() -> void:
+	_autosave_elapsed = 0.0
 	var data := {}
 	data["saved_at"] = Time.get_unix_time_from_system()
 
@@ -285,16 +500,25 @@ func save_game() -> void:
 
 ## Asks the player to confirm before wiping the save. Every UI entry point to a
 ## new game must go through here: clear_save() is irreversible.
-func request_new_game() -> void:
+##
+## Devuelve el dialogo para que quien lo pide pueda reaccionar al cancelar. Se
+## procesa siempre: se puede pedir desde el menu principal o el de pausa, con el
+## arbol pausado, y un dialogo pausado no recibe clics.
+func request_new_game() -> ConfirmationDialog:
 	var dialog := ConfirmationDialog.new()
+	dialog.process_mode = Node.PROCESS_MODE_ALWAYS
 	dialog.title = Tr.t("BTN_NEW_GAME")
 	dialog.dialog_text = Tr.t("CONFIRM_NEW_GAME")
 	dialog.ok_button_text = Tr.t("BTN_CONFIRM")
 	dialog.cancel_button_text = Tr.t("BTN_CANCEL")
+	# El dialogo cuelga de este autoload, que sobrevive a la recarga: si no se
+	# libera tambien al confirmar, cada "Partida nueva" deja uno huerfano.
+	dialog.confirmed.connect(dialog.queue_free)
 	dialog.confirmed.connect(clear_save)
 	dialog.canceled.connect(dialog.queue_free)
 	add_child(dialog)
 	dialog.popup_centered()
+	return dialog
 
 func clear_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
@@ -311,11 +535,16 @@ func clear_save() -> void:
 	CombatManager.reset()
 	StormManager.reset()
 	TutorialManager.reset()
+	ProductionManager.reset()
+	UIManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null
 	_started = false
 	_warehouse_count = 0
+	# Se puede llegar aqui desde el menu de pausa o el principal, con el arbol
+	# pausado. La escena recargada heredaria la pausa y arrancaria congelada.
+	get_tree().paused = false
 	get_tree().reload_current_scene()
 
 ## Replaces local save with provided data and reloads the scene.
@@ -339,11 +568,16 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	CombatManager.reset()
 	StormManager.reset()
 	TutorialManager.reset()
+	ProductionManager.reset()
+	UIManager.reset()
 	_placer = null
 	_map_gen = null
 	_camera = null
 	_started = false
 	_warehouse_count = 0
+	# Se puede llegar aqui desde el menu de pausa o el principal, con el arbol
+	# pausado. La escena recargada heredaria la pausa y arrancaria congelada.
+	get_tree().paused = false
 	if scene_path != "":
 		get_tree().change_scene_to_file(scene_path)
 	else:
@@ -373,6 +607,7 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	var canvas := CanvasLayer.new()
 	canvas.layer = 20
 	add_child(canvas)
+	_offline_canvas = canvas
 
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
@@ -441,7 +676,13 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 		var tw := create_tween()
 		tw.tween_property(panel, "modulate:a", 0.0, 0.3)
 		tw.tween_callback(canvas.queue_free)
+		_offline_canvas = null
+		offline_report_closed.emit()
 	)
+
+## El parte offline sigue en pantalla. Lo pregunta VictoryScreen antes de abrirse.
+func is_offline_report_open() -> bool:
+	return _offline_canvas != null and is_instance_valid(_offline_canvas)
 
 func _format_elapsed(seconds: float) -> String:
 	var s := int(seconds)
@@ -458,3 +699,43 @@ func _load_building_data(id: String) -> BuildingData:
 	if ResourceLoader.exists(path):
 		return load(path) as BuildingData
 	return null
+
+# ── Cambio de idioma ──
+#
+# Los paneles construyen sus textos una vez, en _ready(). Rehacer a mano cada
+# uno para un cambio de idioma seria una lista que se desincroniza sola; lo
+# robusto es guardar, recargar la escena y dejar que todo se pinte de nuevo en el
+# idioma nuevo. Es el mismo camino que ya usa la carga desde la nube.
+# (El listener de locale_changed se conecta en el _ready de arriba.)
+
+func _on_locale_changed(_locale: String) -> void:
+	# Sin partida arrancada (arranque, pruebas) no hay nada que recargar.
+	if not _started:
+		return
+	# El tablero no viaja en el guardado: recargar con uno abierto lo perderia.
+	# Tampoco se recarga si no es seguro guardar (pelea sin saldar): se perderia
+	# lo pendiente. El idioma ya esta puesto y guardado; se vera en la proxima carga.
+	if CombatManager.is_board_open() or not CombatManager.is_save_safe():
+		EventBus.notification_posted.emit(Tr.t("NOTIF_LOCALE_AFTER_BATTLE"), "info", Color(0.5, 0.7, 1.0))
+		return
+	# Diferido: quien emite suele ser un boton del panel de ajustes, y recargar
+	# dentro de su propia senal liberaria el boton mientras aun se esta pulsando.
+	reload_keeping_game.call_deferred()
+
+## Guarda y recarga la escena con la misma partida. No es partida nueva: nada se
+## pierde y no se anuncia nada.
+func reload_keeping_game() -> void:
+	if not _started or not _can_write() or not CombatManager.is_save_safe():
+		return
+	# Escritura directa: save_game() dejaria el guardado pendiente si no fuera
+	# seguro, y aqui se relee el disco justo despues.
+	_save_pending = false
+	_write_save()
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if not file:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not parsed is Dictionary:
+		return
+	clear_save_and_reload_from(parsed)

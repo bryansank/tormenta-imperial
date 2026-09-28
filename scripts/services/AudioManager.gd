@@ -83,6 +83,10 @@ var _music_before_combat: String = ""  # what was playing when the first encount
 var _combat_session: int = 0           # bumps per encounter_started; guards the deferred restore
 
 func _ready() -> void:
+	# La musica sigue sonando con el juego en pausa (menu principal y de pausa):
+	# un AudioStreamPlayer pausado corta la pista. Los SFX no molestan: con el
+	# arbol parado nadie emite las senales que los disparan.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_ensure_buses()
 	_build_players()
 	_load_manifest(MUSIC_MANIFEST, MUSIC_DIR)
@@ -136,7 +140,7 @@ func _load_manifest(manifest: Dictionary, dir: String) -> void:
 
 func _apply_volumes() -> void:
 	_set_bus_volume("Master", GameConfig.audio_master_volume)
-	_set_bus_volume(BUS_MUSIC, GameConfig.audio_music_volume)
+	_apply_music_bus()
 	_set_bus_volume(BUS_SFX, GameConfig.audio_sfx_volume)
 	_set_bus_volume(BUS_AMBIENT, GameConfig.audio_ambient_volume)
 
@@ -150,7 +154,51 @@ func _set_bus_volume(bus_name: String, linear: float) -> void:
 
 func set_music_volume(linear: float) -> void:
 	GameConfig.audio_music_volume = clampf(linear, 0.0, 1.0)
-	_set_bus_volume(BUS_MUSIC, GameConfig.audio_music_volume)
+	_apply_music_bus()
+
+## The Music bus obeys the volume slider AND the on/off switch: with music off
+## the bus stays muted whatever the slider says.
+func _apply_music_bus() -> void:
+	_set_bus_volume(BUS_MUSIC, GameConfig.audio_music_volume if GameConfig.audio_music_enabled else 0.0)
+
+# ── Music on/off (the owner found it invasive: it has to be one click away) ──
+
+## Switches music on or off, persists it and tells the UI. Off stops both music
+## players and mutes the bus; the track the game WANTS keeps being tracked
+## (era changes, combat), so switching back on resumes the right one instead of
+## whatever was playing when it was muted. SFX and ambience are untouched.
+func set_music_enabled(enabled: bool) -> void:
+	if GameConfig.audio_music_enabled == enabled:
+		return
+	GameConfig.audio_music_enabled = enabled
+	GameConfig.save_user_settings()
+	_apply_music_bus()
+	if enabled:
+		var wanted := _current_music_key
+		_current_music_key = ""
+		if not wanted.is_empty():
+			play_music(wanted)
+	else:
+		for m in _music_players:
+			m.stop()
+	EventBus.music_toggled.emit(enabled)
+
+func toggle_music() -> void:
+	set_music_enabled(not GameConfig.audio_music_enabled)
+
+func is_music_enabled() -> bool:
+	return GameConfig.audio_music_enabled
+
+## True while any music player is actually sounding. For tests and probes.
+func is_music_playing() -> bool:
+	for m in _music_players:
+		if m.playing:
+			return true
+	return false
+
+## The track the game currently wants (plays or would play with music on).
+func get_music_key() -> String:
+	return _current_music_key
 
 func set_sfx_volume(linear: float) -> void:
 	GameConfig.audio_sfx_volume = clampf(linear, 0.0, 1.0)
@@ -188,11 +236,16 @@ func _burst_guard_allows(key: String, now_msec: int) -> bool:
 	return true
 
 ## Cross-fades the music bus to the track for this key (e.g. "era_2", "victory").
+## With music switched off only the wanted key is recorded: nothing starts, so
+## an era change or a combat cross-fade can never turn music back on by itself.
 func play_music(key: String) -> void:
 	if key == _current_music_key:
 		return
 	var stream: AudioStream = _streams.get(key)
 	if stream == null:
+		return
+	if not GameConfig.audio_music_enabled:
+		_current_music_key = key
 		return
 	# Two keys can share one file (e.g. "combat" borrows the Era 3 track). If it
 	# is already playing, just adopt the new name instead of fading it into itself.
@@ -260,7 +313,7 @@ func _exit_tree() -> void:
 
 func _on_music_finished(player: AudioStreamPlayer) -> void:
 	# Only the active player (index 0) loops; the fading-out one is left stopped.
-	if player == _music_players[0] and not _current_music_key.is_empty():
+	if player == _music_players[0] and not _current_music_key.is_empty() and GameConfig.audio_music_enabled:
 		player.play()
 
 func _on_ambient_finished() -> void:

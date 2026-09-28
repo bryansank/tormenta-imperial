@@ -80,7 +80,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Ignore clicks on UI
 			if get_viewport().gui_get_hovered_control() != null:
 				return
-			_cancel()
+			# Por la senal, no _cancel() directo: asi el boton tactil de
+			# cancelar y los de colocacion se enteran y se ocultan tambien.
+			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		return
 
@@ -90,7 +92,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE and _state != State.IDLE:
-			_cancel()
+			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R and _state != State.IDLE:
 			_rotate_building()
@@ -297,6 +299,9 @@ func _try_place(cell: Vector2i) -> void:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "occupied":
+			# Antes, silencio: el clic no hacia nada y no se sabia por que.
+			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return
 	# Tope, requisitos, obreros y coste, en ese orden (PlacementRules).
 	var blocked := Rules.purchase_block_message(_current_data)
@@ -362,6 +367,8 @@ func _try_move(cell: Vector2i) -> void:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "occupied":
+			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return
 	_consume_deposit_if_required(verdict, map_gen)
 	# Remember old cell for road updates
@@ -475,6 +482,11 @@ func _cleanup_preview() -> void:
 	_hide_grid_overlay()
 	_hover_cell = Vector2i(-1, -1)
 
+## Sin colocar ni mover nada. El menu de pausa lo pregunta antes de abrirse con
+## ESC: mientras hay un edificio en la mano, ESC es "cancelar", no "pausa".
+func is_idle() -> bool:
+	return _state == State.IDLE
+
 func _cancel() -> void:
 	if _state == State.MOVING and _moving_building:
 		_moving_building.visible = true
@@ -580,7 +592,7 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	# Label above building — large, bold, readable (hidden by default)
 	var label := Label3D.new()
 	label.name = "NameLabel"
-	label.text = data.display_name
+	label.text = data.get_display_name()
 	label.font_size = 64
 	label.pixel_size = 0.01
 	label.position.y = data.mesh_height + 0.5

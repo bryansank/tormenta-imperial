@@ -25,11 +25,15 @@ var _armed: bool = false
 ## StormCycle a proposito: load_save_data() reconstruye el ciclo entero desde el
 ## dict, y un from_dict que no lo contemplara lo borraria al cargar.
 var _halted: bool = false
+## La carga trajo un Diezmo sin cobrar. Transitorio: lo pone load_save_data() y
+## lo consume el final de la carga.
+var _tithe_to_resume: bool = false
 
 func _ready() -> void:
 	_cycle = StormCycleScript.create()
 	EventBus.phase_advanced.connect(_on_phase_advanced)
 	EventBus.game_load_completed.connect(_check_arming)
+	EventBus.game_load_completed.connect(_on_game_load_completed)
 	EventBus.encounter_ended.connect(_on_encounter_ended)
 	EventBus.storm_halted_forever.connect(_on_halted_forever)
 	EventBus.final_audit_lost.connect(_on_final_audit_lost)
@@ -534,10 +538,39 @@ func load_save_data(data: Dictionary) -> void:
 	_halted = bool(data.get("halted", false))
 	if _halted:
 		_armed = false
-	GameConfig.event_production_multiplier = 1.0
+	# El castigo a la produccion sale de la fase cargada, no se da por levantado:
+	# cargar con la ceniza cayendo ya no la limpiaba.
+	if _halted:
+		GameConfig.event_production_multiplier = 1.0
+	else:
+		_on_phase_entered(_cycle.phase)
+	_tithe_to_resume = not _halted and _cycle.is_collecting()
+
+## El Diezmo que la carga trajo pendiente se reclama cuando la escena ya escucha,
+## y diferido para ir detras de cualquier otro oyente de game_load_completed (la
+## pantalla de combate abre el mapa de una campana ahi, y abrir la defensa antes
+## la dejaria tapada).
+func _on_game_load_completed() -> void:
+	if _tithe_to_resume:
+		_resume_tithe.call_deferred()
+
+## Se reclama por el mismo camino que en partida: defensa con la guarnicion que
+## haya en casa, o cobro directo si no hay nadie. El tablero no se guarda, asi
+## que un Diezmo interrumpido vuelve a empezar desde la puerta.
+func _resume_tithe() -> void:
+	if not _tithe_to_resume:
+		return
+	_tithe_to_resume = false
+	if _halted or _cycle == null or not _cycle.is_collecting():
+		return
+	var severity: int = get_severity()
+	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_RESUMED"), "warning", UITheme.WARNING)
+	EventBus.tithe_demanded.emit(severity)
+	_begin_tithe(severity)
 
 func reset() -> void:
 	_cycle = StormCycleScript.create()
 	_armed = false
 	_halted = false
+	_tithe_to_resume = false
 	GameConfig.event_production_multiplier = 1.0

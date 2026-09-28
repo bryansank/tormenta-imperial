@@ -70,6 +70,10 @@ func _process(_delta: float) -> void:
 ## F11 alterna pantalla completa desde cualquier parte del juego. Va en _input
 ## (no en _unhandled_input) para que siga funcionando con un panel abierto.
 func _input(event: InputEvent) -> void:
+	# Un dedo de verdad: en "auto" los controles en pantalla aparecen aunque sea
+	# un PC (portatil tactil). El raton no genera toques en este proyecto.
+	if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+		GameConfig.notice_real_touch()
 	if event is InputEventKey and event.pressed and not event.echo:
 		if (event as InputEventKey).keycode == KEY_F11:
 			GameConfig.toggle_fullscreen()

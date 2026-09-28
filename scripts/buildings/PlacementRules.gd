@@ -199,4 +199,9 @@ static func serialize_building(building: Node) -> Dictionary:
 			entry["health"] = hp
 	if ProductionManager.is_constructing(building):
 		entry["construction_remaining"] = ProductionManager.get_construction_remaining(building)
+		# Una mejora en obras no es una obra: sin esto volvia de la carga
+		# como construccion normal y el edificio nunca subia de nivel.
+		var upgrade_to: int = ProductionManager.get_upgrade_target(building)
+		if upgrade_to > 0:
+			entry["upgrade_to"] = upgrade_to
 	return entry

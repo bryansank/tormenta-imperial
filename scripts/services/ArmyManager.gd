@@ -305,14 +305,16 @@ func _desert() -> void:
 		Tr.t("NOTIF_DESERTION") % [gone, Tr.t(def.get("name", unit_id))],
 		"danger", UITheme.DANGER)
 
-## El ejercito menos la columna que esta fuera, unit_id -> cuantos hay en casa.
-## Las entradas a cero no salen: quien consulte esto pregunta por quien queda.
+## El ejercito menos la columna que esta fuera y quien pelea en el tablero
+## abierto, unit_id -> cuantos hay en casa. Las entradas a cero no salen: quien
+## consulte esto pregunta por quien queda. Un soldado en pleno combate tampoco
+## deserta: si lo hiciera, su baja posterior se cobraria sobre otro.
 ##
 ## CombatManager se carga DESPUES que este servicio (project.godot), asi que solo
 ## se le pregunta en caliente, nunca durante _ready — exactamente igual que este
 ## mismo archivo ya hace con StormManager, que tambien va detras.
 func _units_at_home() -> Dictionary:
-	var away: Dictionary = CombatManager.get_units_on_expedition()
+	var away: Dictionary = CombatManager.get_units_away()
 	var home: Dictionary = {}
 	for id in _units:
 		var count: int = int(_units[id]) - int(away.get(id, 0))
