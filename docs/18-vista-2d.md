@@ -126,12 +126,15 @@ tormenta (tinte y ceniza, dano y ruinas visibles, el Diezmo en el tablero),
 escaramuzas, expediciones y la Auditoria Final (el tablero es el mismo
 `BattleScreen`), guardar y cargar, nueva partida. Raton (clic, arrastre, rueda,
 boton central, derecho para cancelar), teclado (WASD, R, Esc) y tacto (arrastre
-de un dedo, pellizco, toque para colocar al levantar el dedo).
+de un dedo, pellizco; al construir, tocar lleva el fantasma, tocarlo o ✓ lo
+planta y las casillas validas de un extractor salen en verde: PlacementAssist,
+docs/21 §9).
 
 ## En que difiere de la 3D
 
-- **Sin giro de camara.** Q/E y el boton derecho arrastrado no hacen nada; los
-  botones de girar de OnScreenControls no aparecen. El `yaw` guardado se
+- **Sin giro de camara.** Q/E, el boton derecho arrastrado y el giro con dos
+  dedos no hacen nada (un giro de dos dedos tampoco da zoom); los botones de
+  girar de OnScreenControls no aparecen. El `yaw` guardado se
   conserva para la 3D.
 - **Las calzadas no giran**: sus uniones ya dicen hacia donde van.
 - **La isla se sortea al abrir la escena** (la silueta no viaja en el guardado,

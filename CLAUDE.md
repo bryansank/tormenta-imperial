@@ -371,6 +371,7 @@ tormenta-imperial/
 |   +-- buildings/
 |   |   +-- BuildingData.gd         # Resource class for building definitions
 |   |   +-- BuildingPlacer.gd       # Placement/move/demolish + mesh spawning
+|   |   +-- PlacementAssist.gd      # Touch placement (tap aims, tap ghost/✓ builds), valid-spot highlight — docs/21 §9
 |   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes for all 14 buildings
 |   +-- camera/MonumentalCamera.gd   # Orthographic 45deg RTS camera
 |   +-- combat/                      # PURE models: no nodes, no signals, no global RNG
