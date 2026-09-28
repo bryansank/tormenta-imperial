@@ -260,6 +260,8 @@ func _build() -> void:
 	title_row.add_child(_folio)
 
 	_scroll = ScrollContainer.new()
+	# El prologo pasa folio deslizando: su texto no se arrastra (DragScroll).
+	_scroll.set_meta("no_drag_scroll", true)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.mouse_filter = Control.MOUSE_FILTER_PASS

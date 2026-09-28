@@ -157,11 +157,46 @@ static func missing_cost(data: BuildingData) -> Dictionary:
 ## Como purchase_block_message, pero si lo que falta son recursos dice cuales y
 ## cuantos ("Te falta: 20 Madera"): "Recursos insuficientes" a secas no dice que
 ## hacer. Es lo que ven el detalle de CONSTRUIR y el aviso al colocar.
+##
+## Dice TODO lo que falta, una cosa por linea: el recurso sin desbloquear y
+## como se desbloquea, los edificios que faltan antes, el tope, los
+## trabajadores y el coste. El Cuartel General al empezar pide acero, petroleo,
+## un Cuartel y una Refineria, y antes solo se veia una tarjeta gris.
 static func purchase_block_detail(data: BuildingData) -> String:
-	var msg := purchase_block_message(data)
-	if msg == Tr.t("LBL_NOT_ENOUGH_RESOURCES"):
-		return Tr.t("OBJ_MISSING") % Tr.amount_list(missing_cost(data))
-	return msg
+	return "\n".join(block_reasons(data))
+
+## Lo que impide construir `data` ahora, en frases para el jugador. [] si nada.
+static func block_reasons(data: BuildingData) -> Array:
+	var out: Array = []
+	# Lo que falta de un recurso aun bloqueado se explica como "llega con...":
+	# "te faltan 100 de acero" sin acero en el juego no dice que hacer. Si ya lo
+	# tienes (del mercado, de un evento) no se bloquea nada: solo falta lo que falta.
+	var locked: Array = []
+	var short := missing_cost(data)
+	for res_id in short.keys():
+		if not ResourceManager.is_unlocked_by_name(String(res_id)):
+			locked.append(Tr.t("LBL_NEEDS_UNLOCK_ONE") % [Tr.res_name(res_id), Tr.t("UNLOCK_HINT_" + String(res_id).to_upper())])
+			short.erase(res_id)
+	if not locked.is_empty():
+		out.append(Tr.t("LBL_NEEDS_UNLOCK") % Tr.t("LBL_AND_JOIN").join(locked))
+	if not check_prerequisites(data.id):
+		out.append(Tr.t("LBL_NEEDS_FIRST") % missing_prerequisite_names(data.id))
+	if not check_building_limit(data.id):
+		out.append(Tr.t("LBL_LIMIT_REACHED") % [count_building(data.id), GameConfig.get_building_limit(data.id)])
+	if data.workers_required > 0 and PopulationManager.get_free_workers() < data.workers_required:
+		out.append(Tr.t("LBL_NEEDS_WORKERS") % [data.workers_required, PopulationManager.get_free_workers()])
+	if not short.is_empty():
+		out.append(Tr.t("OBJ_MISSING") % Tr.amount_list(short))
+	return out
+
+## Los requisitos que aun no estan en pie, con su nombre.
+static func missing_prerequisite_names(building_id: String) -> String:
+	var names: Array = []
+	for req_id in GameConfig.get_prerequisites(building_id):
+		if count_building(String(req_id)) < 1:
+			var req := load_building_data(String(req_id))
+			names.append(req.get_display_name() if req != null else String(req_id))
+	return " + ".join(names)
 
 # ── Calzadas ──────────────────────────────────────────────────────────
 
