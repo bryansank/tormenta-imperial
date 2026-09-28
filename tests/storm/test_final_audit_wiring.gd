@@ -8,11 +8,22 @@ extends GdUnitTestSuite
 
 var _storm_saved: Dictionary = {}
 var _army_saved: Dictionary = {}
+var _res_saved: Dictionary = {}
+var _pop_saved: Dictionary = {}
 var _mult_saved: float = 1.0
 
 func before_test() -> void:
 	_storm_saved = StormManager.get_save_data()
 	_army_saved = ArmyManager.get_save_data()
+	# Varios casos de aqui provocan un Diezmo real a severidad maxima: vacian la
+	# bolsa, embargan edificios y llegan a llevarse gente. Sin guardar esto, la
+	# suite siguiente hereda una base saqueada y falla por algo que no hizo.
+	# get_all() viene indexado por tipo y set_amounts() espera nombres, igual que
+	# hace GameManager al guardar la partida.
+	_res_saved = {}
+	for type in ResourceManager.get_all():
+		_res_saved[ResourceManager.get_type_name(type)] = ResourceManager.get_all()[type]
+	_pop_saved = PopulationManager.get_save_data()
 	_mult_saved = GameConfig.event_production_multiplier
 	StormManager.reset()
 	CombatManager.reset()
@@ -23,6 +34,8 @@ func after_test() -> void:
 	CombatManager.reset()
 	StormManager.load_save_data(_storm_saved)
 	ArmyManager.load_save_data(_army_saved)
+	ResourceManager.set_amounts(_res_saved)
+	PopulationManager.load_save_data(_pop_saved)
 	GameConfig.event_production_multiplier = _mult_saved
 
 # ── is_cycle_active: la mitad de StormManager de la deuda de GameConfig ─────
@@ -186,7 +199,41 @@ func test_the_first_audit_wave_fields_a_board_without_duplicate_uids() -> void:
 		if unit.side == Encounter.ENEMY:
 			enemies += 1
 	assert_int(enemies).is_greater(0)
-	# El asedio es estado del servicio: se deja como estaba.
+	# El asedio es estado del servicio: se deja como estaba. reset() ANTES de
+	# cerrar: end_encounter() con la marca de oleada puesta reportaria una
+	# derrota que nadie jugo, y esa derrota arrasa la base de verdad.
+	CombatManager.reset()
+	CombatManager.end_encounter()
+	ProgressionManager.final_audit = null
+	ProgressionManager.load_save_data(progression_saved)
+
+## Recarga con ejercito crecido. Un asedio empezado vuelve de la partida
+## PENDIENTE y, al bajar otra vez, se cuadra con el ejercito (reconcile). Se
+## cuadraba con get_garrison(), que llena el tope del tablero de infanteria a
+## vehiculo: con {inf 6, art 2} en casa devolvia {inf 6}, y el asedio borraba
+## las dos artillerias VIVAS por "sobrar". Se cuadra con el ejercito entero.
+func test_recarga_con_ejercito_crecido() -> void:
+	var progression_saved: Dictionary = ProgressionManager.get_save_data()
+	ArmyManager.load_save_data({"units": {"infantry": 4, "artillery": 2}, "training": [], "upkeep_accum": 0.0})
+	ProgressionManager.final_audit = null
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	# Se guarda con la oleada abierta y se recarga: el asedio vuelve pendiente.
+	CombatManager.reset()
+	CombatManager.end_encounter()
+	var saved: Dictionary = ProgressionManager.final_audit.to_dict()
+	ProgressionManager.final_audit = FinalAudit.from_dict(saved, ProgressionManager.current_era)
+	assert_bool(ProgressionManager.is_final_audit_pending()).is_true()
+	# Tras recargar termina un entrenamiento de dos infanterias.
+	ArmyManager.load_save_data({"units": {"infantry": 6, "artillery": 2}, "training": [], "upkeep_accum": 0.0})
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	var living: Dictionary = {}
+	for unit in ProgressionManager.final_audit.living_garrison():
+		living[unit.unit_id] = int(living.get(unit.unit_id, 0)) + 1
+	# Nadie se suma a un asedio en curso, y nadie vivo se borra.
+	assert_int(int(living.get("artillery", 0))).is_equal(2)
+	assert_int(int(living.get("infantry", 0))).is_equal(4)
+	CombatManager.reset()
 	CombatManager.end_encounter()
 	ProgressionManager.final_audit = null
 	ProgressionManager.load_save_data(progression_saved)

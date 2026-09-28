@@ -145,6 +145,7 @@ func add(type: Type, amount: int) -> int:
 		# Losses and no-ops do not compete for room; only the floor at zero matters.
 		_resources[type] = maxi(0, current + amount)
 		EventBus.resource_changed.emit(_names[type], _resources[type], amount)
+		_top_up()
 		return _resources[type]
 	# One pool: what comes in competes with everything already inside, not with a
 	# per-resource ceiling.
@@ -173,6 +174,7 @@ func spend(type: Type, amount: int) -> bool:
 		return false
 	_resources[type] = maxi(0, _resources[type] - amount)
 	EventBus.resource_changed.emit(_names[type], _resources[type], -amount)
+	_top_up()
 	return true
 
 func spend_cost(cost: Dictionary) -> bool:
@@ -184,6 +186,7 @@ func spend_cost(cost: Dictionary) -> bool:
 	for type in cost:
 		_resources[type] = maxi(0, _resources[type] - cost[type])
 		EventBus.resource_changed.emit(_names[type], _resources[type], -cost[type])
+	_top_up()
 	return true
 
 func get_all() -> Dictionary:
@@ -209,7 +212,8 @@ func set_unlock_state(state: Dictionary) -> void:
 			_unlocked[type] = state[res_name]
 
 func reset() -> void:
-	var cfg := GameConfig.starting_resources
+	# Lo que da el modo (Supervivencia arranca con menos; Sandbox con todo).
+	var cfg: Dictionary = GameMode.starting_resources()
 	_resources = {
 		Type.GOLD: cfg.get("gold", 300),
 		Type.STEEL: cfg.get("steel", 0),
@@ -222,8 +226,11 @@ func reset() -> void:
 		Type.OIL: false,
 		Type.WOOD: true,
 	}
+	if GameMode.all_unlocked():
+		for type in _unlocked:
+			_unlocked[type] = true
 	_warehouse_count = 0
-	_era = 1
+	_era = 3 if GameMode.all_unlocked() else 1
 	_overflow_warned = false
 	for type in _resources:
 		EventBus.resource_changed.emit(_names[type], _resources[type], 0)
@@ -283,3 +290,21 @@ func clamp_to_storage() -> bool:
 		"warning", Color(0.85, 0.55, 0.2)
 	)
 	return true
+
+# ── modos-de-juego ──
+
+## Sandbox: los recursos no se acaban. Tras cada gasto, lo que baje del suelo
+## vuelve a subir hasta el. Se hace despues del gasto y no en vez de el para que
+## todo lo demas (el HUD, el Diezmo invocado, el mercado) vea el mismo flujo que
+## en cualquier otro modo.
+func _top_up() -> void:
+	if not GameMode.infinite_resources():
+		return
+	var floor_amount: int = GameConfig.sandbox_resource_floor
+	for type in _resources:
+		if not _unlocked.get(type, false):
+			continue
+		var held: int = int(_resources[type])
+		if held < floor_amount:
+			_resources[type] = floor_amount
+			EventBus.resource_changed.emit(_names[type], floor_amount, floor_amount - held)

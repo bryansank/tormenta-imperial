@@ -8,11 +8,16 @@ salen del código: `data/buildings/*.tres` y `scripts/services/GameConfig.gd`.
 ## 1. Qué es esto
 
 Levantas una base en una isla generada al azar y la haces crecer a través de **tres
-eras económicas** hasta la Victoria Imperial. No hay prisa impuesta: la presión
-viene de que tu gente come, cobra y se desmoraliza si no le llega.
+eras económicas**. La presión viene de que tu gente come, cobra y se desmoraliza si
+no le llega.
 
 El bucle es: **produce recursos → gasta en edificios → desbloquea la siguiente era
-→ repite**, con un ejército al final que sale a pelear por turnos.
+→ repite**, con un ejército que entrena, sale de expedición y defiende la base.
+
+**Ganar es sobrevivir a la Auditoría Final.** Subir el Cuartel General a nivel 3 no
+es el final: es lo que **convoca** a la Regencia a venir a mirar. La partida se gana
+aguantando ese asedio, y ganarla detiene la Tormenta para siempre. Está explicado en
+la [sección 10](#10-el-camino-a-la-victoria).
 
 ---
 
@@ -111,8 +116,8 @@ la era 3.** Por eso ninguna de las dos cuesta el recurso que desbloquea.
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
 | <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 250 oro · 100 acero · 80 madera | 3 | Entrena unidades. Cada cuartel es una plaza de entrenamiento en paralelo |
-| <img src="media/guia/tower.png" width="110"> | **Torre** | 1×1 | 150 oro · 60 acero · 20 petróleo · 30 madera | 1 | **Hoy no hace nada** salvo contar para un hito. Su comportamiento defensivo está por construir |
-| <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera | 5 | 10 oro / 20s. **Subirlo a nivel 3 es ganar la partida.** Solo uno |
+| <img src="media/guia/tower.png" width="110"> | **Torre** | 1×1 | 150 oro · 60 acero · 20 petróleo · 30 madera | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
+| <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca la Auditoría Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
 
 ### Decoraciones (suben la moral)
 
@@ -211,8 +216,9 @@ si quieres dos en paralelo, necesitas dos cuarteles.
 ocupan plaza.
 
 > ⚠️ **El sueldo se cobra cada 30 segundos, solo en oro.** Si no te llega, te vacía el
-> oro que tengas y te avisa. Las unidades no desertan todavía, pero un ejército grande
-> sin economía detrás te deja sin oro para todo lo demás.
+> oro que tengas y te avisa. Y si el impago se mantiene, **la tropa deserta**: se va
+> primero la unidad más cara, que es justo la que más te costó. Un ejército grande sin
+> economía detrás no solo te deja sin oro para todo lo demás: se disuelve solo.
 
 ### En el tablero
 
@@ -239,11 +245,61 @@ Reglas que hay que saber:
 > **La moral de tu ciudad se captura al empezar la batalla y no cambia durante ella.**
 > Sales a pelear con el ánimo que tenía tu pueblo al despedirte.
 
+### Las expediciones (escaramuzas)
+
+Desde el botón **Escaramuzas** eliges qué unidades salen y las mandas fuera de la
+isla. Eso no es una batalla: es una **campaña de varios combates encadenados** de la
+que no se vuelve hasta el final.
+
+**Cómo funciona el mapa.** Al salir se genera un mapa por capas: un nodo de entrada
+tranquilo, luego entre **4 y 6 capas de 2 o 3 nodos** cada una, y un jefe solo al
+final. Tú eliges la ruta, nodo a nodo. Cada nodo lleva un **riesgo** (bajo, medio o
+alto) que sube a la vez la dureza del enemigo **y el botín**: el camino peligroso es
+una apuesta, no un castigo. Elijas lo que elijas, **desde cualquier nodo se puede
+llegar al jefe**; no hay callejones sin salida.
+
+**Las mejoras entre nodos.** Al ganar un nodo que no sea el jefe te ofrecen **3
+cartas** y eliges una: más ataque, más defensa, más movimiento, más iniciativa o
+curar. A veces la carta apunta a un solo tipo de unidad y entonces **vale el doble**.
+Solo te ofrecen cartas que sirvan de algo — una estación de curas no aparece si
+nadie está herido. **Mientras haya carta pendiente no puedes elegir ruta**: primero
+la carta, luego el camino.
+
+> Las mejoras **duran lo que dure la expedición** y se pierden al volver. No hay
+> progresión entre campañas: cada salida empieza de cero.
+
+**El desgaste no se cura.** Las unidades llegan al siguiente nodo con las heridas
+del anterior. **Nada se cura entre nodos** salvo que te toque la carta de curación;
+la vida solo se recupera al volver a casa.
+
+> ⚠️ **Las bajas no vuelven.** Una unidad que cae en expedición está muerta: ninguna
+> carta la resucita y desaparece de tu ejército al liquidar la campaña. Las bajas
+> también **te bajan la moral** al volver (−3 por cada una, frente a +8 por ganar),
+> así que una victoria muy cara puede dejar al pueblo peor que antes de salir.
+
+**Lo que se queda en casa defiende.** Las unidades que están fuera **no cuentan como
+guarnición**. Si la tormenta trae el **Diezmo** mientras tu columna está de campaña,
+lo defiende únicamente quien se quedó, más las dotaciones de las torres en pie. Si no
+se quedó nadie, no hay defensa. Ese es el verdadero coste de salir: **decidir cuánto
+ejército te atreves a dejar fuera de casa.**
+
+> Si el Diezmo cae mientras estás en el tablero de la expedición, la defensa **se
+> resuelve sola**, sin tablero, y te llega solo el aviso con el resultado. El juego no
+> te quita la partida de las manos para meterte en otra.
+
+**Volver.** Puedes **abandonar** en cualquier momento desde el mapa: te llevas el
+botín acumulado y los supervivientes. Retirarse con lo ganado es una opción de
+verdad, no una derrota. El botín base por nodo son **60 oro y 30 madera**,
+multiplicados por profundidad, era y riesgo — y el jefe casi lo dobla.
+
+Si guardas con una campaña en marcha, al cargar la partida **vuelves al mapa en el
+nodo donde estabas**. El tablero de un combate a medias no se guarda.
+
 ---
 
 ## 10. El camino a la victoria
 
-Nueve hitos. El último es ganar.
+Nueve hitos. El último **no** es ganar: es que te convoquen a la prueba final.
 
 | # | Hito | Cómo se consigue |
 |---|---|---|
@@ -255,7 +311,7 @@ Nueve hitos. El último es ganar.
 | 6 | Mercader | Completar 10 operaciones de mercado |
 | 7 | Comandante | Tener 1 Cuartel y 2 Torres |
 | 8 | General | Construir el Cuartel General |
-| 9 | **Victoria Imperial** | **Subir el Cuartel General a nivel 3** |
+| 9 | **Auditoría Final** | **Subir el Cuartel General a nivel 3** → convoca a la Regencia. Ganar es **sobrevivirla**, ver abajo |
 
 Subir el Cuartel General cuesta aparte:
 
@@ -277,9 +333,53 @@ Subir el Cuartel General cuesta aparte:
 9. **Refinería, encima de un pozo** — era 3, petróleo.
 10. **Dos Torres** — cierran el hito Comandante.
 11. **Cuartel General** — y a partir de aquí solo acumulas para las dos subidas.
-12. **HQ nivel 2 → nivel 3** — victoria.
+12. **HQ nivel 2 → nivel 3** — con esto **convocas la Auditoría Final**. No subas el
+    nivel 3 hasta tener el ejército rehecho y las torres reparadas: a partir de ahí ya
+    no se entrena nada.
 
 Por el camino, **10 operaciones de mercado** en cualquier momento.
+
+### La Auditoría Final
+
+Subir el Cuartel General a nivel 3 **no gana la partida**. Convoca a la Regencia: el
+Imperio manda a sus auditores a comprobar en persona si lo que has construido merece
+seguir en pie. **Ganar es sobrevivir a esa visita.**
+
+**Qué es.** Un asedio de **3 a 5 oleadas seguidas** contra tu base. No son batallas
+sueltas: son una sola noche partida en asaltos. Cuando lo convocas, todavía no baja
+nadie — el asedio empieza **cuando tú pulsas el botón** en el panel de Escaramuzas.
+Ese margen es para que llegues preparado.
+
+**Cómo se afronta.** Tres cosas que conviene saber antes de convocarla:
+
+1. **No hay refuerzos.** En cuanto empieza el asedio **no se entrena ni se reemplaza
+   nada**. Peleas todas las oleadas con el ejército que tuvieras en ese momento.
+2. **El desgaste se arrastra de oleada en oleada.** Las unidades **no se curan entre
+   oleadas**: la que sale tocada de la primera entra tocada en la segunda. Esa, y no
+   que el enemigo escale, es la verdadera dificultad.
+3. **Las torres tripulan, pero no resucitan.** Cada oleada vuelve a bajar las
+   dotaciones de las torres que sigan en pie, descontando las que ya cayeron. Una
+   torre no se cansa; una dotación muerta no se repone.
+
+Las oleadas **crecen**: empiezan en 3 unidades y suman 1 por oleada hasta llenar el
+tablero, con artillería desde la primera, blindados desde la segunda y un vehículo
+extra en la última. Cuando ya no caben más cuerpos, lo único que sigue subiendo es la
+dureza de cada uno.
+
+> ⚠️ **Prepárate antes de convocar.** Repara las torres, paga los sueldos para que
+> nadie deserte, sube la moral (que te da iniciativa y daño) y **trae a todo el mundo
+> de vuelta de las expediciones**: quien esté de campaña no defiende.
+
+**Si la pierdes no se acaba la partida.** No hay pantalla de derrota. Te cobran el
+Diezmo más caro posible y la ciudad queda hecha trizas, pero sigues jugando: cuando
+vuelvas a tener **3 unidades en pie** puedes **volver a convocar** la Auditoría. Cada
+convocatoria es una noche distinta — el asedio se sortea de nuevo, así que recargar
+la partida no sirve para buscar uno más fácil.
+
+**Si la ganas, se acabó la Tormenta.** Sobrevivir a la última oleada **detiene el
+ciclo de la tormenta para siempre**: el cielo se despeja, dejan de caer cenizas y no
+vuelve a haber Diezmo. Primero se calla el mundo y después sale la pantalla de
+victoria. Esa es la Victoria Imperial.
 
 ---
 

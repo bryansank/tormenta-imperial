@@ -1,19 +1,19 @@
 extends Node
 ## Tech tree with 3 branches: Industrial, Military, Logistics.
 ## Each tech costs resources and time to research. Techs provide permanent bonuses.
-## Requires HQ to exist. Higher tiers require previous tech in branch.
+## Higher tiers require the previous tech in the branch. There is NO HQ requirement:
+## the HQ is an era-3 building and gating the tree behind it would leave it unusable
+## for most of the game. Research is paid in resources, not points.
 
 # ── State ──
 var _researched: Dictionary = {}  # tech_id -> true
 var _researching: Dictionary = {}  # {"tech_id": String, "remaining": float, "duration": float} or empty
-var _research_points := 0  # accumulated from HQ production
 var _base_market_spread: float
 var _base_morale_recovery: int
 
 func _ready() -> void:
 	_base_market_spread = GameConfig.market_spread
 	_base_morale_recovery = GameConfig.morale_satisfied_recovery
-	EventBus.production_tick.connect(_on_production_tick)
 
 func _process(delta: float) -> void:
 	if _researching.is_empty():
@@ -57,6 +57,48 @@ func can_research(tech_id: String) -> bool:
 	# Check cost
 	var cost := _get_tech_cost(tech)
 	return ResourceManager.can_afford(cost)
+
+## Por que `can_research()` dice que no, como clave de Tr ("" si se puede).
+## Mismo orden de comprobaciones que `can_research()`, para que el motivo que ve
+## el jugador sea siempre el primero que le para de verdad.
+##   TECH_BLOCK_DONE        ya investigada
+##   TECH_BLOCK_RESEARCHING hay otra investigacion en curso
+##   TECH_BLOCK_PREREQ      falta el nivel anterior (ver get_missing_prerequisites)
+##   TECH_BLOCK_COST        faltan recursos (ver get_missing_cost)
+func get_research_blocker(tech_id: String) -> String:
+	if is_researched(tech_id):
+		return "TECH_BLOCK_DONE"
+	if is_researching():
+		return "TECH_BLOCK_RESEARCHING"
+	var tech := get_tech(tech_id)
+	if tech.is_empty():
+		return "TECH_BLOCK_PREREQ"
+	if not get_missing_prerequisites(tech_id).is_empty():
+		return "TECH_BLOCK_PREREQ"
+	if not ResourceManager.can_afford(_get_tech_cost(tech)):
+		return "TECH_BLOCK_COST"
+	return ""
+
+## Las tecnologias que faltan por investigar antes de esta.
+func get_missing_prerequisites(tech_id: String) -> Array:
+	var missing: Array = []
+	for req in get_tech(tech_id).get("requires", []):
+		if not is_researched(req):
+			missing.append(req)
+	return missing
+
+## Lo que falta de cada recurso para pagarla: {"steel": 40}. Vacio si alcanza.
+func get_missing_cost(tech_id: String) -> Dictionary:
+	var missing: Dictionary = {}
+	var raw_cost: Dictionary = get_tech(tech_id).get("cost", {})
+	for res_name in raw_cost:
+		var type := ResourceManager.name_to_type(res_name)
+		if type == -1:
+			continue
+		var short: int = int(raw_cost[res_name]) - ResourceManager.get_amount(type)
+		if short > 0:
+			missing[res_name] = short
+	return missing
 
 func start_research(tech_id: String) -> bool:
 	if not can_research(tech_id):
@@ -127,16 +169,6 @@ func get_current_research() -> Dictionary:
 func get_researched_count() -> int:
 	return _researched.size()
 
-# ── HQ Research Points ──
-
-func _on_production_tick(node: Node3D) -> void:
-	var info := GridManager.get_building_info(node)
-	if info.is_empty():
-		return
-	var data: BuildingData = info["data"]
-	if data.id == "headquarters":
-		_research_points += 1
-
 # ── Cost Helper ──
 
 func _get_tech_cost(tech: Dictionary) -> Dictionary:
@@ -154,14 +186,21 @@ func get_save_data() -> Dictionary:
 	return {
 		"researched": _researched.duplicate(),
 		"researching": _researching.duplicate(),
-		"research_points": _research_points,
 	}
 
 func load_save_data(data: Dictionary) -> void:
 	_researched = data.get("researched", {})
 	_researching = data.get("researching", {})
-	_research_points = data.get("research_points", 0)
-	# Re-apply all researched bonuses
+	# Los guardados viejos traen "research_points" (puntos que nunca se gastaron):
+	# se ignoran.
+	# Los bonos se derivan de lo investigado, no se suman a lo que ya hubiera:
+	# cargar dos veces sin reset() de por medio los doblaba.
+	_recompute_bonuses()
+
+## Deja los bonos de GameConfig exactamente en lo que da el conjunto investigado:
+## vuelve a la base y aplica cada tecnologia una vez.
+func _recompute_bonuses() -> void:
+	_clear_bonuses()
 	for tech_id in _researched:
 		var tech := get_tech(tech_id)
 		if not tech.is_empty():
@@ -170,11 +209,27 @@ func load_save_data(data: Dictionary) -> void:
 func reset() -> void:
 	_researched = {}
 	_researching = {}
-	_research_points = 0
-	# Reset tech bonuses applied to GameConfig
+	_clear_bonuses()
+
+## Devuelve a su base todo lo que el arbol toca en GameConfig.
+func _clear_bonuses() -> void:
 	GameConfig.tech_production_bonus = 0.0
 	GameConfig.tech_consumption_reduction = 0.0
 	GameConfig.tech_build_speed_bonus = 0.0
 	GameConfig.tech_storage_bonus = 0
 	GameConfig.market_spread = _base_market_spread
 	GameConfig.morale_satisfied_recovery = _base_morale_recovery
+
+# ── modos-de-juego ──
+
+## Sandbox: todo investigado desde el principio, con sus bonos. Solo al empezar
+## partida (GameManager._new_game): una carga ya trae la lista en el guardado.
+## Sin avisos: una partida nueva no anuncia nada.
+func unlock_all() -> void:
+	_researching = {}
+	for tech in get_all_techs():
+		var tech_id: String = String(tech.get("id", ""))
+		if tech_id == "" or _researched.has(tech_id):
+			continue
+		_researched[tech_id] = true
+		_apply_tech_bonus(tech)

@@ -37,12 +37,19 @@ var _preview_spin := 0.0
 
 # Thumbnail cache
 var _thumb_cache: Dictionary = {}  # building_id -> ImageTexture
+
+# Vista 2D (docs/18-vista-2d.md): miniaturas y vista previa con el dibujo plano
+# del mapa en vez de modelos 3D. Se decide al arrancar: sin Camera3D es la 2D.
+const BuildingIcon2D := preload("res://scripts/view2d/BuildingIcon2D.gd")
+var _is_2d := false
+var _preview_icon: Control = null
 var _thumb_rects: Dictionary = {}  # building_id -> TextureRect
 
 const CATEGORIES := ["all", "production", "support", "military", "decoration"]
 
 func _ready() -> void:
 	layer = 12
+	_is_2d = get_viewport().get_camera_3d() == null and get_viewport().get_camera_2d() != null
 	_load_buildings()
 	_setup_ui()
 	_generate_thumbnails()
@@ -69,7 +76,7 @@ func _load_buildings() -> void:
 			if res is BuildingData and not res.is_core:
 				_all_buildings.append(res)
 		file_name = dir.get_next()
-	_all_buildings.sort_custom(func(a, b): return a.display_name < b.display_name)
+	_all_buildings.sort_custom(func(a, b): return a.get_display_name() < b.get_display_name())
 
 func _get_category(data: BuildingData) -> String:
 	if data.is_decoration:
@@ -85,7 +92,7 @@ func _get_filtered_buildings() -> Array:
 	for data in _all_buildings:
 		if _current_category != "all" and _get_category(data) != _current_category:
 			continue
-		if _search_text != "" and data.display_name.to_lower().find(_search_text.to_lower()) == -1:
+		if _search_text != "" and data.get_display_name().to_lower().find(_search_text.to_lower()) == -1:
 			continue
 		result.append(data)
 	return result
@@ -108,6 +115,7 @@ func _setup_ui() -> void:
 	UITheme.style_button(_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
 	_build_btn.pressed.connect(_open)
 	_root.add_child(_build_btn)
+	HudRegistry.register("ConstructionMenu.button", _build_btn)
 
 	# Backdrop
 	_backdrop = UITheme.make_backdrop()
@@ -270,6 +278,11 @@ func _setup_ui() -> void:
 	var preview_wrapper := PanelContainer.new()
 	preview_wrapper.add_theme_stylebox_override("panel", preview_style)
 	preview_wrapper.add_child(_preview_container)
+	if _is_2d:
+		_preview_container.visible = false
+		_preview_icon = BuildingIcon2D.new()
+		_preview_icon.custom_minimum_size = Vector2(300, 220)
+		preview_wrapper.add_child(_preview_icon)
 	_detail_panel.add_child(preview_wrapper)
 
 	# Detail labels
@@ -361,14 +374,20 @@ func _select_category(cat_id: String) -> void:
 # ── Grid (building cards) ──
 # ══════════════════════════════════════════════════════════════════════
 
+## Estilos de las tarjetas desbloqueadas: id -> {"style": StyleBoxFlat, "cat": Color}.
+## Hace falta para marcar la seleccionada sin recrear la rejilla.
+var _card_styles: Dictionary = {}
+
 func _refresh_grid() -> void:
 	for child in _grid_container.get_children():
 		child.queue_free()
+	_card_styles.clear()
 
 	var filtered := _get_filtered_buildings()
 	for data in filtered:
 		var card := _create_grid_card(data)
 		_grid_container.add_child(card)
+	_mark_selected_card()
 
 func _create_grid_card(data: BuildingData) -> PanelContainer:
 	var locked := _has_locked_resource_cost(data)
@@ -390,7 +409,14 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	card.add_child(vbox)
 
 	# Thumbnail
-	if _thumb_cache.has(data.id):
+	if _is_2d:
+		var icon: Control = BuildingIcon2D.new()
+		icon.custom_minimum_size = Vector2(64, 64)
+		icon.data = data
+		if locked:
+			icon.modulate = Color(0.4, 0.4, 0.4, 0.7)
+		vbox.add_child(icon)
+	elif _thumb_cache.has(data.id):
 		var tex_rect := TextureRect.new()
 		tex_rect.custom_minimum_size = Vector2(64, 64)
 		tex_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
@@ -407,28 +433,47 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		vbox.add_child(placeholder)
 
 	# Name
-	var name_label := UITheme.make_label(data.display_name, "small", UITheme.TEXT if not locked else UITheme.TEXT_DIM)
+	var name_label := UITheme.make_label(data.get_display_name(), "small", UITheme.TEXT if not locked else UITheme.TEXT_DIM)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	name_label.custom_minimum_size.x = 110
 	vbox.add_child(name_label)
 
-	# Interaction
+	# Interaction (A14): el hover solo RESALTA; la seleccion cambia solo con
+	# clic y queda bloqueada hasta el siguiente. Antes pasar el raton por otra
+	# tarjeta cambiaba la seleccion y el detalle saltaba de edificio en edificio.
 	if not locked:
+		_card_styles[data.id] = {"style": style, "cat": cat_color}
 		card.gui_input.connect(func(event):
 			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 				_select_building(data)
 		)
 		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		card.mouse_entered.connect(func():
-			style.bg_color = UITheme.CARD_BG.lightened(0.15)
-			_select_building(data)
+			if not _is_selected(data):
+				style.bg_color = UITheme.CARD_BG.lightened(0.12)
 		)
 		card.mouse_exited.connect(func():
-			style.bg_color = UITheme.CARD_BG
+			if not _is_selected(data):
+				style.bg_color = UITheme.CARD_BG
 		)
 
 	return card
+
+func _is_selected(data: BuildingData) -> bool:
+	return _selected_data != null and _selected_data.id == data.id
+
+## Pinta la tarjeta elegida con marco de laton y fondo claro, y devuelve las
+## demas a su estado normal. Se llama al seleccionar y al reconstruir la rejilla.
+func _mark_selected_card() -> void:
+	for id in _card_styles:
+		var entry: Dictionary = _card_styles[id]
+		var style: StyleBoxFlat = entry["style"]
+		var selected: bool = _selected_data != null and _selected_data.id == id
+		style.bg_color = UITheme.CARD_BG.lightened(0.25) if selected else UITheme.CARD_BG
+		style.set_border_width_all(2 if selected else 0)
+		style.border_width_bottom = 3
+		style.border_color = UITheme.ACCENT if selected else entry["cat"]
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Detail Panel (right side) ──
@@ -449,9 +494,10 @@ func _select_building(data: BuildingData) -> void:
 		return
 	_selected_data = data
 	_preview_spin = 0.0
+	_mark_selected_card()
 
 	# Name + size
-	_detail_name.text = data.display_name
+	_detail_name.text = data.get_display_name()
 	_detail_size.text = "%dx%d" % [data.grid_size.x, data.grid_size.y]
 
 	# Cost
@@ -504,6 +550,9 @@ func _select_building(data: BuildingData) -> void:
 
 func _load_preview_model(data: BuildingData) -> void:
 	_clear_preview_model()
+	if _is_2d:
+		_preview_icon.data = data
+		return
 	if data.model_scene:
 		_preview_model = data.model_scene.instantiate()
 	else:
@@ -517,6 +566,8 @@ func _load_preview_model(data: BuildingData) -> void:
 	_preview_spin = 0.0
 
 func _clear_preview_model() -> void:
+	if _preview_icon:
+		_preview_icon.data = null
 	if _preview_model and is_instance_valid(_preview_model):
 		_preview_model.queue_free()
 		_preview_model = null
@@ -542,6 +593,9 @@ func _has_locked_resource_cost(data: BuildingData) -> bool:
 # ══════════════════════════════════════════════════════════════════════
 
 func _generate_thumbnails() -> void:
+	# En 2D las miniaturas se dibujan al vuelo (BuildingIcon2D): nada que renderizar.
+	if _is_2d:
+		return
 	var viewport := SubViewport.new()
 	viewport.size = Vector2i(128, 128)
 	viewport.transparent_bg = true

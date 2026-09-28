@@ -8,12 +8,23 @@ var _is_open := false
 var _tech_buttons: Dictionary = {}
 var _progress_label: Label
 var _progress_bar: ProgressBar
+var _branches_scroll: ScrollContainer
+
+## Alto del scroll de ramas: la pantalla menos cabecera y margenes.
+func _fit_scroll() -> void:
+	if _branches_scroll == null:
+		return
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	_branches_scroll.custom_minimum_size.y = clampf(vp.y - 150.0, 200.0, 540.0)
 
 func _ready() -> void:
 	layer = 11
 	_setup_ui()
 	UIManager.register_panel(self, "TechTreePanel.modal")
 	EventBus.notification_posted.connect(func(_m, _c, _col): _refresh_tech_states())
+	# El motivo "faltan recursos" cambia con la bolsa: con el panel abierto se
+	# vuelve a escribir en cuanto entra o sale algo.
+	EventBus.resource_changed.connect(func(_t, _a, _d): if _is_open: _refresh_tech_states())
 
 func _process(_delta: float) -> void:
 	if _is_open and TechTreeManager.is_researching():
@@ -74,9 +85,20 @@ func _setup_ui() -> void:
 	vbox.add_child(_progress_bar)
 
 	# Branch columns
+	# Las ramas van en un scroll: cinco niveles con su coste y su motivo de
+	# bloqueo no caben en 720 px de alto, y un modal que se sale por arriba se
+	# queda sin titulo ni boton de cerrar.
+	_branches_scroll = ScrollContainer.new()
+	_branches_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_branches_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(_branches_scroll)
+	_fit_scroll()
+	UILayoutManager.layout_changed.connect(_fit_scroll)
+
 	var branches_row := HBoxContainer.new()
 	branches_row.add_theme_constant_override("separation", 12)
-	vbox.add_child(branches_row)
+	branches_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_branches_scroll.add_child(branches_row)
 
 	var branch_colors := {
 		"industrial": UITheme.BRANCH_INDUSTRIAL,
@@ -129,6 +151,9 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 			"consumption_reduction": lines.append(Tr.t("FMT_CONSUMPTION_REDUCTION") % [int(val * 100)])
 			"build_speed": lines.append(Tr.t("FMT_BUILD_SPEED") % [int(val * 100)])
 
+	# El texto fijo se guarda aparte: el motivo del bloqueo se reescribe en cada
+	# refresco y no puede ir acumulandose encima.
+	btn.set_meta("base_text", "\n".join(lines))
 	btn.text = "\n".join(lines)
 
 	if researched:
@@ -142,6 +167,7 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 		btn.disabled = true
 
 	var tech_id: String = tech["id"]
+	_apply_blocker_text(btn, tech_id)
 	btn.pressed.connect(func():
 		TechTreeManager.start_research(tech_id)
 		_refresh_tech_states()
@@ -162,6 +188,30 @@ func _refresh_tech_states() -> void:
 		else:
 			btn.disabled = true
 			UITheme.set_label_color(btn, UITheme.TEXT_DIM)
+		_apply_blocker_text(btn, tech_id)
+
+## Un boton apagado sin motivo parece un fallo. Debajo del coste va, escrito, lo
+## primero que impide investigarla ahora mismo; si nada lo impide, nada.
+func _apply_blocker_text(btn: Button, tech_id: String) -> void:
+	var base: String = String(btn.get_meta("base_text", btn.text))
+	var reason: String = blocker_text(tech_id)
+	btn.text = base if reason == "" else "%s\n%s" % [base, reason]
+	btn.tooltip_text = reason
+
+## El motivo legible. Publico para las pruebas; lee el veredicto del manager y no
+## repite sus reglas.
+func blocker_text(tech_id: String) -> String:
+	match TechTreeManager.get_research_blocker(tech_id):
+		"TECH_BLOCK_RESEARCHING":
+			return Tr.t("TECH_BLOCK_RESEARCHING")
+		"TECH_BLOCK_PREREQ":
+			var names: Array = []
+			for req in TechTreeManager.get_missing_prerequisites(tech_id):
+				names.append(Tr.t(TechTreeManager.get_tech(req).get("name", req)))
+			return Tr.t("TECH_BLOCK_PREREQ") % ", ".join(names)
+		"TECH_BLOCK_COST":
+			return Tr.t("TECH_BLOCK_COST") % Tr.amount_list(TechTreeManager.get_missing_cost(tech_id))
+	return ""
 
 func _toggle_panel() -> void:
 	_is_open = not _is_open

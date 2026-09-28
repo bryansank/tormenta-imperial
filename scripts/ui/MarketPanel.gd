@@ -114,10 +114,7 @@ func _setup_ui() -> void:
 	var gold_row := HBoxContainer.new()
 	gold_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	gold_row.add_theme_constant_override("separation", 8)
-	var gold_icon := ColorRect.new()
-	gold_icon.custom_minimum_size = Vector2(12, 12)
-	gold_icon.color = UITheme.RES_GOLD
-	gold_row.add_child(gold_icon)
+	gold_row.add_child(UITheme.make_icon("gold"))
 	var gold_label := UITheme.make_label(
 		Tr.t("LBL_YOUR_GOLD") % ResourceManager.get_amount(ResourceManager.Type.GOLD),
 		"body", UITheme.RES_GOLD
@@ -127,8 +124,11 @@ func _setup_ui() -> void:
 	vbox.add_child(gold_row)
 
 func _add_resource_row(parent: VBoxContainer, res_name: String) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
+	# Fila que se parte en dos si no cabe: con botones de tamano dedo, en un
+	# movil en vertical (400 px) la fila entera no entraba y el panel se salia.
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 4)
+	row.add_theme_constant_override("v_separation", 6)
 
 	var name_label := UITheme.make_label(Tr.res_cap(res_name), "body", UITheme.TEXT)
 	name_label.custom_minimum_size.x = 80
@@ -147,7 +147,8 @@ func _add_resource_row(parent: VBoxContainer, res_name: String) -> void:
 	var amount := 10
 	var minus_btn := Button.new()
 	minus_btn.text = "-"
-	minus_btn.custom_minimum_size = Vector2(30, 30)
+	# Cuadrados de tamano dedo: con 30 px el pulgar acertaba el de al lado.
+	minus_btn.custom_minimum_size = Vector2(UITheme.MIN_BTN_H, UITheme.MIN_BTN_H)
 	UITheme.style_button(minus_btn, UITheme.DANGER.darkened(0.3), UITheme.FONT_BODY)
 	row.add_child(minus_btn)
 
@@ -158,19 +159,19 @@ func _add_resource_row(parent: VBoxContainer, res_name: String) -> void:
 
 	var plus_btn := Button.new()
 	plus_btn.text = "+"
-	plus_btn.custom_minimum_size = Vector2(30, 30)
+	plus_btn.custom_minimum_size = Vector2(UITheme.MIN_BTN_H, UITheme.MIN_BTN_H)
 	UITheme.style_button(plus_btn, UITheme.POSITIVE.darkened(0.3), UITheme.FONT_BODY)
 	row.add_child(plus_btn)
 
 	var buy_btn := Button.new()
 	buy_btn.text = Tr.t("BTN_BUY")
-	buy_btn.custom_minimum_size = Vector2(60, 30)
+	buy_btn.custom_minimum_size = Vector2(60, UITheme.MIN_BTN_H)
 	UITheme.style_button(buy_btn, UITheme.POSITIVE.darkened(0.2))
 	row.add_child(buy_btn)
 
 	var sell_btn := Button.new()
 	sell_btn.text = Tr.t("BTN_SELL")
-	sell_btn.custom_minimum_size = Vector2(60, 30)
+	sell_btn.custom_minimum_size = Vector2(60, UITheme.MIN_BTN_H)
 	UITheme.style_button(sell_btn, UITheme.DANGER)
 	row.add_child(sell_btn)
 
@@ -231,7 +232,9 @@ func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_visible = is_visible
 	# Show market button only if sidebar visible AND phase allows it
 	if ProgressionManager.current_phase >= GameConfig.Phase.ECONOMY:
-		_market_btn.visible = visible
+		# `is_visible` (el del menu), no `visible`: ese es el de la capa, que
+		# siempre es true, y el boton se quedaba suelto al cerrar el menu.
+		_market_btn.visible = is_visible
 	else:
 		_market_btn.visible = false
 

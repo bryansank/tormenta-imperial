@@ -5,7 +5,20 @@ var _backdrop: ColorRect
 
 func _ready() -> void:
 	layer = 20
-	EventBus.victory_achieved.connect(_show_victory)
+	EventBus.victory_achieved.connect(_on_victory_achieved)
+
+## La victoria y el parte de progreso offline comparten la capa 20. Si el parte
+## sigue en pantalla, la victoria espera a que se cierre: dos modales en la misma
+## capa se tapan el uno al otro y el jugador no sabe cual esta pulsando.
+func _on_victory_achieved(stats: Dictionary) -> void:
+	if GameManager.is_offline_report_open():
+		GameManager.offline_report_closed.connect(func(): _show_victory(stats), CONNECT_ONE_SHOT)
+		return
+	_show_victory(stats)
+
+## Esta la pantalla en pantalla. Para pruebas y para quien tenga que esperarla.
+func is_showing() -> bool:
+	return _backdrop != null and is_instance_valid(_backdrop) and not _backdrop.is_queued_for_deletion()
 
 func _show_victory(stats: Dictionary) -> void:
 	# Backdrop
@@ -23,14 +36,15 @@ func _show_victory(stats: Dictionary) -> void:
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(vbox)
 
-	# Title
-	var title := UITheme.make_label(Tr.t("LBL_VICTORY_TITLE"), "title", UITheme.ACCENT)
+	# Title. Constructor gana sin asedio: su victoria no habla de la Tormenta.
+	var builder: bool = GameMode.capstone_wins()
+	var title := UITheme.make_label(Tr.t("LBL_VICTORY_TITLE_BUILDER" if builder else "LBL_VICTORY_TITLE"), "title", UITheme.ACCENT)
 	title.add_theme_font_size_override("font_size", 28)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
 	# Subtitle
-	var subtitle := UITheme.make_label(Tr.t("LBL_VICTORY_SUBTITLE"), "body", UITheme.TEXT_DIM)
+	var subtitle := UITheme.make_label(Tr.t("LBL_VICTORY_SUBTITLE_BUILDER" if builder else "LBL_VICTORY_SUBTITLE"), "body", UITheme.TEXT_DIM)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(subtitle)
@@ -39,6 +53,7 @@ func _show_victory(stats: Dictionary) -> void:
 
 	# Stats
 	var time_played: float = stats.get("time_played", 0.0)
+	_add_stat(vbox, Tr.t("LBL_STAT_MODE"), GameMode.display_name(GameMode.from_key(String(stats.get("mode", GameMode.current_key())))))
 	_add_stat(vbox, Tr.t("LBL_STAT_TIME"), _format_time(time_played))
 	_add_stat(vbox, Tr.t("LBL_STAT_BUILDINGS"), str(stats.get("buildings_built", 0)))
 	_add_stat(vbox, Tr.t("LBL_STAT_TRADES"), str(stats.get("trades_completed", 0)))
@@ -65,7 +80,8 @@ func _show_victory(stats: Dictionary) -> void:
 	new_btn.text = Tr.t("BTN_NEW_GAME")
 	new_btn.custom_minimum_size = Vector2(150, 44)
 	UITheme.style_button(new_btn, UITheme.DANGER)
-	new_btn.pressed.connect(func(): GameManager.clear_save())
+	# Borrar la partida es irreversible: siempre con confirmacion, como en Ajustes.
+	new_btn.pressed.connect(func(): GameManager.request_new_game())
 	btn_row.add_child(new_btn)
 
 	vbox.add_child(btn_row)

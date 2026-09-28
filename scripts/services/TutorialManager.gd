@@ -27,6 +27,21 @@ const TIPS := {
 	"ruined":         {"title": "TUT_TIP_RUINED_TITLE",   "body": "TUT_TIP_RUINED_BODY"},
 	"overflow":       {"title": "TUT_TIP_OVERFLOW_TITLE", "body": "TUT_TIP_OVERFLOW_BODY"},
 	"encounter":      {"title": "TUT_TIP_BOARD_TITLE",    "body": "TUT_TIP_BOARD_BODY"},
+	"barracks":       {"title": "TUT_TIP_BARRACKS_TITLE", "body": "TUT_TIP_BARRACKS_BODY"},
+	"market":         {"title": "TUT_TIP_MARKET_TITLE",   "body": "TUT_TIP_MARKET_BODY"},
+	"tech_tree":      {"title": "TUT_TIP_TECH_TITLE",     "body": "TUT_TIP_TECH_BODY"},
+	"expedition_map": {"title": "TUT_TIP_MAP_TITLE",      "body": "TUT_TIP_MAP_BODY"},
+	"upkeep":         {"title": "TUT_TIP_UPKEEP_TITLE",   "body": "TUT_TIP_UPKEEP_BODY"},
+	"consumption":    {"title": "TUT_TIP_CONSUMPTION_TITLE", "body": "TUT_TIP_CONSUMPTION_BODY"},
+	"final_audit":    {"title": "TUT_TIP_AUDIT_TITLE",    "body": "TUT_TIP_AUDIT_BODY"},
+}
+
+## Paneles cuya primera apertura merece un consejo: nombre del nodo en Main.tscn
+## -> id del consejo. Se mira el nombre y no la clase porque los paneles no
+## tienen class_name, y el nombre es lo que la escena garantiza.
+const PANEL_TIPS := {
+	"MarketPanel": "market",
+	"TechTreePanel": "tech_tree",
 }
 
 func _ready() -> void:
@@ -45,6 +60,15 @@ func _ready() -> void:
 	EventBus.building_ruined.connect(_on_building_ruined)
 	EventBus.storage_overflow.connect(_on_storage_overflow)
 	EventBus.encounter_started.connect(_on_encounter_started)
+	EventBus.building_placed.connect(_on_building_placed)
+	EventBus.expedition_started.connect(_on_expedition_started)
+	EventBus.unit_trained.connect(_on_unit_trained)
+	EventBus.army_upkeep_unpaid.connect(_on_upkeep_unpaid)
+	EventBus.consumption_failed.connect(_on_consumption_failed)
+	EventBus.final_audit_summoned.connect(_on_final_audit_summoned)
+	# Abrir el mercado o el arbol por primera vez. UIManager es quien sabe que se
+	# abrio una ventana; aqui solo se escucha su senal, no se le pregunta nada.
+	UIManager.window_opened.connect(_on_window_opened)
 
 # ── Intro ────────────────────────────────────────────────────────────
 
@@ -72,12 +96,16 @@ func _on_intro_closed() -> void:
 func offer_tip(tip_id: String) -> void:
 	if tip_id in tips_seen:
 		return
+	# Un consejo sobre algo que este modo no tiene (la Tormenta en Constructor)
+	# no sale, y no se marca: no se ha visto.
+	if not GameMode.tip_allowed(tip_id):
+		return
 	if not TIPS.has(tip_id):
 		push_warning("TutorialManager: consejo desconocido '%s'" % tip_id)
 		return
 	tips_seen.append(tip_id)
 	var keys: Dictionary = TIPS[tip_id]
-	EventBus.tutorial_tip_requested.emit(tip_id, Tr.t(keys["title"]), Tr.t(keys["body"]))
+	EventBus.tutorial_tip_requested.emit(tip_id, Tr.t(keys["title"]), Tr.ti(keys["body"]))
 
 func has_seen_tip(tip_id: String) -> bool:
 	return tip_id in tips_seen
@@ -94,7 +122,7 @@ func _on_storm_started(_severity: int) -> void:
 func _on_tithe_demanded(_severity: int) -> void:
 	offer_tip("tithe")
 
-func _on_building_ruined(_node: Node3D) -> void:
+func _on_building_ruined(_node: Node) -> void:
 	offer_tip("ruined")
 
 func _on_storage_overflow(_resource: String, _lost: int, _cap: int) -> void:
@@ -102,6 +130,35 @@ func _on_storage_overflow(_resource: String, _lost: int, _cap: int) -> void:
 
 func _on_encounter_started(_index: int, _is_boss: bool) -> void:
 	offer_tip("encounter")
+
+func _on_building_placed(data: Resource, _cell: Vector2i) -> void:
+	if data != null and String(data.get("id")) == "barracks":
+		offer_tip("barracks")
+
+func _on_expedition_started(_expedition_id: int, _node_count: int) -> void:
+	offer_tip("expedition_map")
+
+## El sueldo se explica con la primera unidad, antes de que falte el oro: cuando
+## ya no se puede pagar, el consejo llega tarde. Si aun asi falta primero, el
+## impago lo dispara (mismo id, sale una vez).
+func _on_unit_trained(_unit_id: String) -> void:
+	offer_tip("upkeep")
+
+func _on_upkeep_unpaid(_gold_short: int) -> void:
+	offer_tip("upkeep")
+
+func _on_consumption_failed(_resource: String) -> void:
+	offer_tip("consumption")
+
+func _on_final_audit_summoned(_waves: int, _summons: int) -> void:
+	offer_tip("final_audit")
+
+func _on_window_opened(window: CanvasLayer) -> void:
+	if window == null:
+		return
+	var tip_id: String = String(PANEL_TIPS.get(String(window.name), ""))
+	if tip_id != "":
+		offer_tip(tip_id)
 
 # ── Persistencia ─────────────────────────────────────────────────────
 

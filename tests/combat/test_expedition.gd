@@ -19,11 +19,19 @@ func _events_of(events: Array, kind: String) -> Array:
 			found.append(event)
 	return found
 
-## Walks one step forward along the first available exit.
+## Walks one step forward along the first available exit. The node has to be won
+## before the party may leave it; the tests that only care about the walk mark it
+## cleared by hand, which books no loot (mark_cleared() would).
 func _advance(run: Expedition) -> void:
+	_mark_fought(run)
 	var exits: Array = run.current_exits()
 	if not exits.is_empty():
 		run.select_node(int(exits[0]))
+
+func _mark_fought(run: Expedition) -> void:
+	var node: Dictionary = run.current_node_data()
+	if not node.is_empty():
+		node["cleared"] = true
 
 # ── Launch ───────────────────────────────────────────────────────────
 
@@ -64,6 +72,7 @@ func test_no_two_units_in_a_run_share_a_uid() -> void:
 
 func test_only_an_exit_of_the_current_node_can_be_selected() -> void:
 	var run := _run()
+	_mark_fought(run)
 	var exits: Array = run.current_exits()
 	assert_array(exits).is_not_empty()
 	assert_bool(run.can_select(int(exits[0]))).is_true()
@@ -72,8 +81,28 @@ func test_only_an_exit_of_the_current_node_can_be_selected() -> void:
 	assert_array(run.select_node(999)).is_empty()
 	assert_int(run.current_node).is_equal(0)
 
+func test_an_unfought_node_cannot_be_walked_past() -> void:
+	var run := _run()
+	assert_bool(run.needs_fight()).is_true()
+	var exits: Array = run.current_exits()
+	assert_bool(run.can_select(int(exits[0]))).is_false()
+	assert_array(run.select_node(int(exits[0]))).is_empty()
+	assert_int(run.current_node).is_equal(0)
+	run.mark_cleared()
+	assert_bool(run.needs_fight()).is_false()
+	assert_bool(run.can_select(int(exits[0]))).is_true()
+
+func test_a_reloaded_run_mid_node_still_owes_the_fight() -> void:
+	var run := _run()
+	run.mark_cleared()
+	run.select_node(int(run.current_exits()[0]))
+	var back: Expedition = Expedition.from_dict(run.to_dict())
+	assert_bool(back.needs_fight()).is_true()
+	assert_bool(back.can_select(int(back.current_exits()[0]) if not back.current_exits().is_empty() else -1)).is_false()
+
 func test_selecting_a_valid_exit_moves_the_run_and_reports_it() -> void:
 	var run := _run()
+	_mark_fought(run)
 	var target: int = int(run.current_exits()[0])
 	var events: Array = run.select_node(target)
 	assert_int(_events_of(events, "expedition_node_selected").size()).is_equal(1)

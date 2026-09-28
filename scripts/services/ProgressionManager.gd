@@ -49,9 +49,13 @@ func _complete_milestone(milestone_id: String) -> void:
 	milestones_completed[milestone_id] = true
 	EventBus.milestone_completed.emit(milestone_id)
 	_check_phase_advance(milestone_id)
-	# The capstone no longer wins: it calls the Regency down on you.
+	# The capstone no longer wins: it calls the Regency down on you. Unless the
+	# mode says otherwise: Constructor wins right here, Sandbox does nothing.
 	if milestone_id == "hq_max":
-		summon_final_audit()
+		if GameMode.audit_enabled():
+			summon_final_audit()
+		elif GameMode.capstone_wins():
+			_trigger_victory()
 
 func _check_phase_advance(milestone_id: String) -> void:
 	for phase in GameConfig.phase_triggers:
@@ -110,10 +114,24 @@ func summon_final_audit() -> bool:
 	return true
 
 ## Opens the siege and announces the first formation.
+##
+## The garrison is taken HERE, not at summon time: whoever is at home when the
+## gate opens is who fights (FinalAudit.begin()). Refused while a board is open
+## or a column is out — CombatManager.final_audit_block_reason() says why, and the
+## UI shows it on the disabled button.
 func begin_final_audit() -> bool:
 	if final_audit == null or not final_audit.is_pending():
 		return false
-	_publish_audit(final_audit.begin())
+	if CombatManager.final_audit_block_reason() != "":
+		return false
+	# Un asedio nuevo se alista con la guarnicion (el tope del tablero). Uno ya
+	# empezado que vuelve de la partida solo se cuadra (reconcile), y eso se hace
+	# contra el ejercito entero, sin tope: get_garrison() llena el tope de
+	# infanteria a vehiculo, y con mas infanteria en casa que al empezar
+	# dejaba fuera a la artilleria viva, que el asedio borraba por "sobrar".
+	var home: Dictionary = CombatManager.get_deployable_units() if final_audit.started \
+			else CombatManager.get_garrison()
+	_publish_audit(final_audit.begin(home))
 	_announce_wave()
 	return true
 
@@ -125,7 +143,25 @@ func report_audit_wave(victory: bool) -> void:
 	_publish_audit(final_audit.clear_wave() if victory else final_audit.lose())
 	_announce_wave()
 
+## Una partida guardada antes de que existiera la Auditoria, con el Cuartel
+## General ya a nivel 3: el hito hq_max esta hecho, asi que _complete_milestone()
+## no vuelve a entrar y el asedio no se convocaba nunca. Esa partida no se podia
+## ganar. Se convoca aqui, PENDIENTE: no se abre ningun tablero al cargar; el
+## jugador lo lanza con "QUE BAJEN" cuando quiera. Llamar con todo ya cargado
+## (la guarnicion sale del ejercito).
+func migrate_legacy_capstone() -> bool:
+	if not milestones_completed.has("hq_max") or not GameMode.audit_enabled():
+		return false
+	if final_audit != null or StormManager.is_halted():
+		return false
+	if not summon_final_audit():
+		return false
+	EventBus.notification_posted.emit(Tr.t("MSG_AUDIT_AWAITING"), "warning", UITheme.WARNING)
+	return true
+
 func can_resummon_final_audit() -> bool:
+	if not GameMode.resummon_allowed():
+		return false
 	return final_audit != null and final_audit.can_resummon(CombatManager.get_garrison())
 
 ## Losing is not a Game Over: once the army is rebuilt the Regency can be called
@@ -161,6 +197,10 @@ func _announce_wave() -> void:
 	var wave: Dictionary = final_audit.current_wave_data()
 	if wave.is_empty():
 		return
+	# Between two waves the army can still shrink (desertion does not wait for
+	# the Regency). Before anyone stands on the next board, the garrison is
+	# squared with who the army still has, so nobody fights who is gone.
+	final_audit.reconcile(CombatManager.get_deployable_units())
 	EventBus.final_audit_wave_ready.emit(
 		int(wave["index"]), wave["roster"].duplicate(), float(wave["scale"])
 	)
@@ -178,11 +218,20 @@ func _publish_audit(events: Array) -> void:
 				EventBus.final_audit_wave_cleared.emit(int(event["wave"]), int(event["remaining"]))
 			"final_audit_lost":
 				EventBus.final_audit_lost.emit(int(event["wave"]))
+				# Supervivencia: no hay segunda Auditoria. La partida termina aqui,
+				# despues de que la derrota haya cobrado lo suyo.
+				if not GameMode.resummon_allowed():
+					GameMode.finish_run(GameMode.RESULT_DEFEAT)
+					EventBus.run_ended.emit(GameMode.RESULT_DEFEAT)
 			"final_audit_won":
-				# The Storm stops for good, and only then is the game won. The
-				# order matters: the world goes quiet before the screen says so.
-				EventBus.storm_halted_forever.emit()
-				_trigger_victory()
+				# Sandbox: el asedio se invoco para probarlo, no para acabar nada.
+				if not GameMode.victory_enabled():
+					EventBus.notification_posted.emit(Tr.t("MSG_SANDBOX_AUDIT_WON"), "success", UITheme.POSITIVE)
+				else:
+					# The Storm stops for good, and only then is the game won. The
+					# order matters: the world goes quiet before the screen says so.
+					EventBus.storm_halted_forever.emit()
+					_trigger_victory()
 
 ## One siege, one number. Not seeded from the save on purpose: a lost audit that
 ## is summoned again has to be a different night, or reloading would be a way to
@@ -199,18 +248,21 @@ func _read_morale() -> float:
 
 ## Reached only through the final audit now. Nothing else emits it.
 func _trigger_victory() -> void:
+	if not GameMode.victory_enabled():
+		return
 	var elapsed := Time.get_unix_time_from_system() - _start_time
 	var stats := {
 		"time_played": elapsed,
 		"buildings_built": _stats["buildings_built"],
 		"trades_completed": _stats["trades_completed"],
 		"milestones": milestones_completed.size(),
+		"mode": GameMode.current_key(),
 	}
 	EventBus.victory_achieved.emit(stats)
 
 # ── Signal Handlers ──
 
-func _on_construction_completed(node: Node3D) -> void:
+func _on_construction_completed(node: Node) -> void:
 	var info := GridManager.get_building_info(node)
 	if info.is_empty():
 		return
@@ -222,7 +274,7 @@ func _on_construction_completed(node: Node3D) -> void:
 func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
 	_stats["buildings_built"] += 1
 
-func _on_upgrade_completed(node: Node3D, new_level: int) -> void:
+func _on_upgrade_completed(node: Node, new_level: int) -> void:
 	var info := GridManager.get_building_info(node)
 	if info.is_empty():
 		return
@@ -280,7 +332,8 @@ func _recalculate_phase() -> void:
 			current_phase = maxi(current_phase, phase)
 
 func reset() -> void:
-	current_era = 1
+	# Sandbox arranca con las tres eras abiertas (ResourceManager desbloquea).
+	current_era = 3 if GameMode.all_unlocked() else 1
 	current_phase = GameConfig.Phase.FOUNDATION
 	milestones_completed = {}
 	final_audit = null
@@ -304,3 +357,21 @@ func get_completion_percent() -> float:
 	if total == 0:
 		return 0.0
 	return float(milestones_completed.size()) / float(total)
+
+# ── modos-de-juego ──
+
+## Sandbox: convoca la Auditoria a mano, sin Cuartel General. Queda PENDIENTE,
+## como la de una partida antigua: se entra con "QUE BAJEN" cuando la guarnicion
+## este lista. Una Auditoria ya terminada (ganada o perdida) se tira y se
+## convoca otra nueva; una en curso o pendiente no se toca.
+func invoke_final_audit() -> bool:
+	if not GameMode.sandbox_tools():
+		return false
+	if final_audit != null and (final_audit.is_active() or final_audit.is_pending()):
+		return false
+	final_audit = null
+	if not summon_final_audit():
+		return false
+	EventBus.sandbox_invoked.emit("audit")
+	EventBus.notification_posted.emit(Tr.t("MSG_SANDBOX_AUDIT_AWAITING"), "warning", UITheme.WARNING)
+	return true

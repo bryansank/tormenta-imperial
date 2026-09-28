@@ -1,23 +1,56 @@
 extends CanvasLayer
 ## On-screen controls: D-pad for panning, rotate buttons, zoom buttons.
 ## Emits signals through EventBus — same as keyboard/touch input.
+##
+## Only shown when GameConfig.touch_controls_enabled() (A5): on a mobile OS, or
+## on a PC once a real finger touches the screen, or when forced from Settings.
+## On a desktop there is WASD, the wheel, R, ESC and right-click, and these
+## buttons were eating all four corners of the screen.
+##
+## While a building is being placed or moved, the right column also shows
+## rotate-building and CANCEL: without it a finger had no way out of placement
+## (cancel was right-click or ESC only).
 
 ## Degrees the camera snaps per rotate-button press.
 const ROTATE_STEP_DEGREES := 45.0
 
 var _pan_direction: Vector2 = Vector2.ZERO
 var _rotate_building_btn: Button = null
+var _cancel_placement_btn: Button = null
 
 func _ready() -> void:
 	layer = 10
 	_setup_ui()
-	EventBus.building_selected_for_placement.connect(func(_d): _rotate_building_btn.visible = true)
-	EventBus.building_placement_cancelled.connect(func(): _rotate_building_btn.visible = false)
+	EventBus.building_selected_for_placement.connect(func(_d): _set_placing(true))
+	EventBus.request_move_building.connect(func(_b): _set_placing(true))
+	EventBus.building_placement_cancelled.connect(func(): _set_placing(false))
 	EventBus.building_placed.connect(func(_d, _c): pass)  # stay visible during rapid placement
-	EventBus.building_deselected.connect(func(): _rotate_building_btn.visible = false)
+	EventBus.building_moved.connect(func(_from, _to): _set_placing(false))
+	EventBus.building_deselected.connect(func(): _set_placing(false))
+	_apply_visibility(GameConfig.touch_controls_enabled())
+	EventBus.touch_controls_changed.connect(_apply_visibility)
+
+## Hides the whole layer. A held D-pad button is released too, so the camera
+## does not keep drifting after the controls vanish under the finger.
+func _apply_visibility(enabled: bool) -> void:
+	visible = enabled
+	if not enabled:
+		_pan_direction = Vector2.ZERO
+
+## The placement pair (rotate building + cancel) comes and goes together.
+func _set_placing(placing: bool) -> void:
+	_rotate_building_btn.visible = placing
+	_cancel_placement_btn.visible = placing
+
+func is_placing_shown() -> bool:
+	return _cancel_placement_btn.visible
+
+## Same signal every other cancel path uses: BuildingPlacer listens to it.
+func _on_cancel_placement() -> void:
+	EventBus.building_placement_cancelled.emit()
 
 func _process(_delta: float) -> void:
-	if _pan_direction != Vector2.ZERO:
+	if visible and _pan_direction != Vector2.ZERO:
 		EventBus.camera_pan_requested.emit(_pan_direction.normalized())
 
 func _setup_ui() -> void:
@@ -38,6 +71,9 @@ func _setup_ui() -> void:
 
 	# D-Pad (left side)
 	var dpad := _create_dpad()
+	# Pegado abajo: sin esto la rejilla se estira a la altura de la columna
+	# derecha (que crece al colocar) y las flechas se separan hacia arriba.
+	dpad.size_flags_vertical = Control.SIZE_SHRINK_END
 	hbox.add_child(dpad)
 
 	# Spacer
@@ -53,14 +89,27 @@ func _setup_ui() -> void:
 
 	var rotate_box := _create_rotate_buttons()
 	right_vbox.add_child(rotate_box)
+	# La vista 2D (docs/18-vista-2d.md) no gira la camara: sin Camera3D, fuera.
+	rotate_box.visible = get_viewport().get_camera_3d() != null
 
 	# Building rotate button (visible only during placement)
 	_rotate_building_btn = _styled_button("R ↻")
 	_rotate_building_btn.custom_minimum_size = Vector2(108, 50)
-	_rotate_building_btn.tooltip_text = Tr.t("LBL_ROTATE_BUILDING")
+	_rotate_building_btn.tooltip_text = Tr.ti("LBL_ROTATE_BUILDING")
 	_rotate_building_btn.pressed.connect(func(): EventBus.building_rotate_requested.emit())
 	_rotate_building_btn.visible = false
 	right_vbox.add_child(_rotate_building_btn)
+
+	# Cancel placement / move (visible only during placement): the finger's ESC.
+	_cancel_placement_btn = Button.new()
+	_cancel_placement_btn.name = "CancelPlacement"
+	_cancel_placement_btn.text = "✕ " + Tr.t("BTN_CANCEL").to_upper()
+	_cancel_placement_btn.custom_minimum_size = Vector2(108, 50)
+	_cancel_placement_btn.tooltip_text = Tr.ti("LBL_CANCEL_PLACEMENT_TIP")
+	UITheme.style_button(_cancel_placement_btn, UITheme.DANGER, UITheme.FONT_BODY)
+	_cancel_placement_btn.pressed.connect(_on_cancel_placement)
+	_cancel_placement_btn.visible = false
+	right_vbox.add_child(_cancel_placement_btn)
 
 	var zoom_box := _create_zoom_buttons()
 	right_vbox.add_child(zoom_box)

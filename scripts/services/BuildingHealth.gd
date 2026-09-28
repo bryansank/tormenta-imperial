@@ -13,23 +13,23 @@ extends Node
 ## El estado vive en el propio nodo (`health`), igual que `level` y
 ## `under_construction`, y viaja en el guardado con el resto del edificio.
 
-func get_max_health(node: Node3D) -> int:
+func get_max_health(node: Node) -> int:
 	var info := GridManager.get_building_info(node)
 	if info.is_empty():
 		return 1
 	var data: BuildingData = info["data"]
 	return maxi(1, data.max_health)
 
-func get_health(node: Node3D) -> int:
+func get_health(node: Node) -> int:
 	if node == null or not is_instance_valid(node):
 		return 0
 	return int(node.get_meta("health", get_max_health(node)))
 
-func get_health_ratio(node: Node3D) -> float:
+func get_health_ratio(node: Node) -> float:
 	return clampf(float(get_health(node)) / float(maxi(1, get_max_health(node))), 0.0, 1.0)
 
 ## En ruinas: sigue ocupando su sitio, pero no produce nada hasta repararlo.
-func is_ruined(node: Node3D) -> bool:
+func is_ruined(node: Node) -> bool:
 	return get_health(node) <= 0
 
 ## En pie y funcionando: ni en ruinas ni a medio construir.
@@ -39,21 +39,21 @@ func is_ruined(node: Node3D) -> bool:
 ## las dotaciones— y ninguna miraba la construccion, asi que una torre a medio
 ## levantar mitigaba daño Y peleaba el Diezmo: colocar torres justo antes de una
 ## tormenta pagaba sin haberlas terminado.
-func is_operational(node: Node3D) -> bool:
+func is_operational(node: Node) -> bool:
 	if node == null or not is_instance_valid(node):
 		return false
 	if node.has_meta("under_construction"):
 		return false
 	return not is_ruined(node)
 
-func is_damaged(node: Node3D) -> bool:
+func is_damaged(node: Node) -> bool:
 	return get_health(node) < get_max_health(node)
 
 ## El Núcleo es el suelo de la partida: se puede caer hasta el fondo, pero
 ## siempre queda un hilo del que tirar. El guard vive aquí y no en quien golpea
 ## para que ninguna fuente de daño futura —torres enemigas, eventos, el Diezmo—
 ## tenga que acordarse de filtrarlo.
-func is_core(node: Node3D) -> bool:
+func is_core(node: Node) -> bool:
 	var info := GridManager.get_building_info(node)
 	if info.is_empty():
 		return false
@@ -63,7 +63,7 @@ func is_core(node: Node3D) -> bool:
 # ── Daño ─────────────────────────────────────────────────────────────
 
 ## Devuelve true si este golpe lo dejó en ruinas.
-func damage_building(node: Node3D, amount: int) -> bool:
+func damage_building(node: Node, amount: int) -> bool:
 	if node == null or not is_instance_valid(node) or amount <= 0:
 		return false
 	if is_core(node):
@@ -83,7 +83,14 @@ func damage_building(node: Node3D, amount: int) -> bool:
 
 ## Cuesta en proporción a lo que falta: un rasguño es barato, una ruina casi
 ## cuesta construirla de nuevo.
-func repair_cost(node: Node3D) -> Dictionary:
+##
+## Indexado por `ResourceManager.Type`, como `BuildingData.get_cost()` y como todo
+## lo que se paga en este juego. Antes devolvia nombres de texto, y como
+## `can_afford()` espera el enum, `has_enough()` reventaba con un error de tipos
+## en cada comprobacion: `can_repair()` contestaba que no habia recursos siempre,
+## asi que el boton REPARAR estaba muerto aunque el panel pintara el precio
+## correcto justo encima. Media Tormenta era irreversible.
+func repair_cost(node: Node) -> Dictionary:
 	var info := GridManager.get_building_info(node)
 	if info.is_empty():
 		return {}
@@ -93,14 +100,16 @@ func repair_cost(node: Node3D) -> Dictionary:
 		return {}
 	var factor: float = missing * GameConfig.storm_repair_cost_ratio
 	var cost: Dictionary = {}
-	for pair in [["gold", data.cost_gold], ["steel", data.cost_steel],
-			["oil", data.cost_oil], ["wood", data.cost_wood]]:
+	for pair in [[ResourceManager.Type.GOLD, data.cost_gold],
+			[ResourceManager.Type.STEEL, data.cost_steel],
+			[ResourceManager.Type.OIL, data.cost_oil],
+			[ResourceManager.Type.WOOD, data.cost_wood]]:
 		var amount: int = roundi(float(pair[1]) * factor)
 		if amount > 0:
 			cost[pair[0]] = amount
 	return cost
 
-func can_repair(node: Node3D) -> Dictionary:
+func can_repair(node: Node) -> Dictionary:
 	if not is_damaged(node):
 		return {"ok": false, "reason": "MSG_REPAIR_NOT_NEEDED"}
 	var cost := repair_cost(node)
@@ -108,7 +117,7 @@ func can_repair(node: Node3D) -> Dictionary:
 		return {"ok": false, "reason": "MSG_REPAIR_NO_RESOURCES"}
 	return {"ok": true, "reason": ""}
 
-func repair(node: Node3D) -> bool:
+func repair(node: Node) -> bool:
 	var check := can_repair(node)
 	if not check["ok"]:
 		return false
@@ -127,7 +136,7 @@ func repair(node: Node3D) -> bool:
 ## Se hace con `material_overlay` en vez de tocar el albedo: los edificios son
 ## modelos GLB con sus propios materiales, y sobrescribirlos les borraría la
 ## textura. La capa se pinta encima y se quita poniéndola a null.
-func _apply_visual(node: Node3D) -> void:
+func _apply_visual(node: Node) -> void:
 	var ratio: float = get_health_ratio(node)
 	var overlay: StandardMaterial3D = null
 	if ratio < 1.0:
@@ -149,5 +158,5 @@ func _meshes_of(node: Node) -> Array:
 	return found
 
 ## Reaplica el aspecto tras cargar partida, cuando la malla ya existe.
-func refresh_visual(node: Node3D) -> void:
+func refresh_visual(node: Node) -> void:
 	_apply_visual(node)
