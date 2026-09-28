@@ -620,8 +620,13 @@ func _select_building(data: BuildingData) -> void:
 
 	# Regla del yacimiento (PlacementAssist.rule_text): se dice aqui, no al fallar.
 	var rule := PlacementAssistScript.rule_text(data.id)
-	_detail_rule.text = ("▲ " + rule) if rule != "" else ""
-	_detail_rule.visible = rule != ""
+	var rules: Array = []
+	if rule != "":
+		rules.append("▲ " + rule)
+	if not data.is_core and data.id != "road":
+		rules.append("▲ " + Tr.t("LBL_RULE_ROAD"))
+	_detail_rule.text = "\n".join(rules)
+	_detail_rule.visible = not rules.is_empty()
 
 	# Extras
 	var extras: Array = []
@@ -649,7 +654,7 @@ func _load_preview_model(data: BuildingData) -> void:
 		_preview_icon.data = data
 		return
 	if data.model_scene:
-		_preview_model = data.model_scene.instantiate()
+		_preview_model = data.instantiate_model()
 	else:
 		_preview_model = DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
 	if not _preview_model:
@@ -758,7 +763,7 @@ func _generate_thumbnails() -> void:
 func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingData) -> void:
 	var model: Node3D = null
 	if data.model_scene:
-		model = data.model_scene.instantiate()
+		model = data.instantiate_model()
 	else:
 		model = DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
 	if not model:

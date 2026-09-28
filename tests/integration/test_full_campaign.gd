@@ -81,6 +81,7 @@ extends GdUnitTestSuite
 ## el fichero de guardado del jugador, que se aparta y se devuelve.
 
 const Placer := preload("res://scripts/buildings/BuildingPlacer.gd")
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const MapGen := preload("res://scripts/map/MapGenerator.gd")
 const AutoResolverScript := preload("res://scripts/combat/AutoResolver.gd")
 const Parking := preload("res://tests/save/save_parking.gd")
@@ -402,15 +403,44 @@ func _buildings_by_id() -> Dictionary:
 		tally[key] = int(tally.get(key, 0)) + 1
 	return tally
 
-## Primer hueco legal, barrido desde la esquina lejana para no comerse las
-## celdas que los extractores necesitan junto a sus yacimientos.
+## El hueco legal mas cerca del Nucleo que se pueda unir a la red, sin pisar la
+## orla de los yacimientos (donde iran los extractores). Como juega un jugador:
+## pegado a la acera antes que a veinte tramos de carretera.
 func _free_origin(size: Vector2i) -> Vector2i:
-	for y in range(GridManager.grid_height - size.y, -1, -1):
-		for x in range(GridManager.grid_width - size.x, -1, -1):
-			var origin := Vector2i(x, y)
-			if GridManager.can_place(origin, size):
-				return origin
+	var reserved := {}
+	for dep in _map.get_all_deposits():
+		for x in range(int(dep["cell_x"]) - 1, int(dep["cell_x"]) + int(dep["size_x"]) + 1):
+			for y in range(int(dep["cell_y"]) - 1, int(dep["cell_y"]) + int(dep["size_y"]) + 1):
+				reserved[Vector2i(x, y)] = true
+	var center := Vector2(GridManager.grid_width, GridManager.grid_height) * 0.5
+	var candidates: Array = []
+	for y in range(0, GridManager.grid_height - size.y + 1):
+		for x in range(0, GridManager.grid_width - size.x + 1):
+			candidates.append(Vector2i(x, y))
+	candidates.sort_custom(func(a, b): return Vector2(a).distance_squared_to(center) < Vector2(b).distance_squared_to(center))
+	for origin in candidates:
+		if not GridManager.can_place(origin, size):
+			continue
+		var clash := false
+		for c in GridManager.cells_for(origin, size):
+			if reserved.has(c):
+				clash = true
+				break
+		if clash:
+			continue
+		if Rules.road_route(origin, size) != null:
+			return origin
 	return Vector2i(-1, -1)
+
+## Tiende la carretera que falta para unir la huella a la red (gratis: aqui se
+## mide la economia de los edificios, no la de los tramos a 1 de oro).
+func _pave_to(origin: Vector2i, size: Vector2i) -> void:
+	var route: Variant = Rules.road_route(origin, size)
+	if route == null:
+		return
+	var road: BuildingData = load("res://data/buildings/road.tres")
+	for c in route:
+		_placer.place_building_at(road, c)
 
 ## Donde va este edificio: junto a su yacimiento si lo pide la regla, encima del
 ## pozo si es la Refineria, y en el primer hueco libre si construye donde quiera.
@@ -422,11 +452,12 @@ func _spot_for(building_id: String, data: BuildingData) -> Dictionary:
 		return {"origin": _free_origin(data.grid_size), "rotation": 0}
 	var spots: Array = _map.buildable_spots_near(
 		String(rule["deposit"]), data.grid_size, int(rule["reach"]), 1)
-	if spots.is_empty():
-		return {}
-	var spot: Dictionary = spots[0]
-	var rotated: bool = (spot["size"] as Vector2i) != data.grid_size
-	return {"origin": spot["origin"], "rotation": 1 if rotated else 0}
+	for spot in spots:
+		if Rules.road_route(spot["origin"], spot["size"]) == null:
+			continue
+		var rotated: bool = (spot["size"] as Vector2i) != data.grid_size
+		return {"origin": spot["origin"], "rotation": 1 if rotated else 0, "size": spot["size"]}
+	return {}
 
 ## Coloca como colocaria el jugador: el mismo `_try_place()` que responde al
 ## clic, con sus comprobaciones de yacimiento, prerrequisitos, limite, obreros y
@@ -442,6 +473,7 @@ func _place(building_id: String) -> Node3D:
 		return null
 
 	var before: int = _count(building_id)
+	_pave_to(spot["origin"] as Vector2i, spot.get("size", data.grid_size) as Vector2i)
 	_placer._current_data = data
 	_placer._rotation_steps = int(spot.get("rotation", 0))
 	_placer._try_place(spot["origin"] as Vector2i)
@@ -463,6 +495,7 @@ func _try_to_place(building_id: String) -> void:
 	var spot: Dictionary = _spot_for(building_id, data)
 	if not spot.has("origin") or spot["origin"] == Vector2i(-1, -1):
 		return
+	_pave_to(spot["origin"] as Vector2i, spot.get("size", data.grid_size) as Vector2i)
 	_placer._current_data = data
 	_placer._rotation_steps = int(spot.get("rotation", 0))
 	_placer._try_place(spot["origin"] as Vector2i)

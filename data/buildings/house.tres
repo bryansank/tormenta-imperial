@@ -6,10 +6,11 @@
 [resource]
 script = ExtResource("1")
 model_scene = ExtResource("2")
+model_scale = 1.8
 id = "house"
 display_name = "Vivienda"
 description = "Aloja trabajadores. Cada vivienda alberga 6 habitantes."
-grid_size = Vector2i(1, 1)
+grid_size = Vector2i(2, 2)
 cost_gold = 50
 cost_steel = 0
 cost_oil = 0
@@ -23,6 +24,6 @@ production_interval = 0.0
 workers_required = 0
 population_capacity = 6
 morale_bonus = 0
-mesh_height = 2.0
+mesh_height = 3.6
 mesh_color = Color(0.55, 0.4, 0.25, 1)
 max_health = 120

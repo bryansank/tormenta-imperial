@@ -60,13 +60,22 @@ func is_core(node: Node) -> bool:
 	var data: BuildingData = info["data"]
 	return data.is_core
 
+## Lo que ningun dano toca: el Nucleo y las carreteras (2026-09-28). La red une
+## cada edificio al Nucleo; una calle en ruinas no dejaria nada que reparar y
+## la tormenta se gastaba en la acera en vez de en la base.
+func is_immune(node: Node) -> bool:
+	if is_core(node):
+		return true
+	var info := GridManager.get_building_info(node)
+	return not info.is_empty() and (info["data"] as BuildingData).id == "road"
+
 # ── Daño ─────────────────────────────────────────────────────────────
 
 ## Devuelve true si este golpe lo dejó en ruinas.
 func damage_building(node: Node, amount: int) -> bool:
 	if node == null or not is_instance_valid(node) or amount <= 0:
 		return false
-	if is_core(node):
+	if is_immune(node):
 		return false
 	if is_ruined(node):
 		return false
