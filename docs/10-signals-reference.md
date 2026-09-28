@@ -11,9 +11,8 @@ Three patterns count as a connection, and all three are included here:
 
 - `EventBus.<signal>.connect(...)` — the normal case.
 - `var bus := EventBus` then `bus.<signal>.connect(...)` — `BuildingStatusBadge`.
-- `EventBus.connect("<signal>", ...)` — `ArmyPanel`, `BattleScreen`, `SkirmishPanel`
-  use the string form for `expedition_resumed`, and `AudioManager._connect_optional()`
-  uses it for the two Final Audit signals it guards with `has_signal()`.
+- `EventBus.connect("<signal>", ...)` — only `AudioManager._connect_optional()`, for
+  the two Final Audit signals it guards with `has_signal()`.
 
 Rows marked *(no emitter)* or *(no listener)* are declared but not wired on that
 side. That is recorded on purpose: see [Orphan signals](#orphan-signals) for the
@@ -191,8 +190,8 @@ Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
 
 `result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
 
-`expedition_resumed` is connected with the string form
-(`EventBus.connect("expedition_resumed", ...)`) in all three panels. It fires when
+`expedition_resumed` is connected in all three panels (BattleScreen, SkirmishPanel,
+ArmyPanel). It fires when
 a save with a campaign in flight is loaded, so the UI can reopen the map on the
 current node; the board itself is never saved, so there is never an open encounter
 waiting behind it.

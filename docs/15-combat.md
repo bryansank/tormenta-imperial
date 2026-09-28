@@ -99,25 +99,27 @@ sees the board close before it hears what comes next.
 The expedition interface has landed. `BattleScreen` is one overlay with four
 views that never share the screen — board, map, draft modal, final report — and
 `SkirmishPanel` is the door out: its launch button calls
-`CombatManager.launch_expedition()`. Every expedition signal has a real listener;
-some are connected by name through `EventBus.has_signal()` / `connect("name", …)`
-rather than as a typed `EventBus.x.connect(…)`, so a naive grep for `.connect`
-misses them — search for the signal name in quotes too.
+`CombatManager.launch_expedition()`. Every expedition signal has a real listener,
+connected as a typed `EventBus.x.connect(…)`. Around the pillar, `WarReportScreen`,
+`AuditWaveBanner` and `AuditDefeatScreen` report what has no board of its own (the
+blind defence, the Tithe, each siege wave, a lost siege).
 
 | Script | Role |
 |--------|------|
 | `scripts/ui/BattleScreen.gd` | The expedition screen. `CanvasLayer` at `layer = 18`, deliberately kept out of `UIManager`'s window stack so ESC cannot dismiss a fight. Four views (`View.BOARD`, `View.MAP`, the draft modal, the final report). Opens on `encounter_started` and on `expedition_started` / `expedition_resumed` / `game_load_completed`, redraws on every combat signal, routes every click back through `CombatManager`. Its close button calls `CombatManager.end_encounter()` — which is what advances the Final Audit to the next wave |
-| `scripts/ui/SkirmishPanel.gd` | Troop commitment before a board opens, plus the "QUE BAJEN" button that begins or re-summons the Final Audit. Its launch button calls `CombatManager.launch_expedition()` (`start_skirmish()` survives only as a `has_method()` fallback, and behind a dev-only button via `dev_start_encounter()`). With a column out it stops being a selector and becomes the campaign status, with a "back to the map" button that calls `BattleScreen.open_map()` |
+| `scripts/ui/SkirmishPanel.gd` | Troop commitment before a board opens, plus the "QUE BAJEN" button that begins or re-summons the Final Audit. Its launch button calls `CombatManager.launch_expedition()`; the dev-only test fight calls `dev_start_encounter()` (which uses `start_encounter()`). Nothing in `scripts/` calls `start_skirmish()` any more — only tests do. With a column out it stops being a selector and becomes the campaign status, with a "back to the map" button that calls `BattleScreen.open_map()` |
 | `scripts/ui/ArmyPanel.gd` | Paints who is away "en campaña" from `CombatManager.get_units_on_expedition()`, and refreshes on `expedition_started` / `expedition_ended` / `expedition_resumed` |
 | `scripts/ui/NotificationPanel.gd` | Log entries on `expedition_started` and `expedition_ended`, so a run leaves a trace in the base |
 | `scripts/services/AudioManager.gd` | SFX on `encounter_started`, `unit_attacked`, `unit_died`, `encounter_ended`, `expedition_started`, `expedition_ended`, `final_audit_summoned`, `storm_halted_forever` |
 | `scripts/ui/HelperPanel.gd` | One callout pointing at the Escaramuzas button once a Barracks exists |
 | `scripts/services/TutorialManager.gd` | A one-shot contextual tip on `encounter_started` |
+| `scripts/ui/WarReportScreen.gd` | Queued war reports, never over an open board: the blind defence (`defense_auto_resolved`) and the Tithe with its COBRADO / REPELIDO stamp (`tithe_resolved`) |
+| `scripts/ui/AuditWaveBanner.gd` | "Oleada X de N" on `final_audit_wave_ready`, with the cleared wave from `final_audit_wave_cleared` |
+| `scripts/ui/AuditDefeatScreen.gd` | A lost siege (`final_audit_lost`): what was taken, in which wave, and what it takes to resummon — or, in Supervivencia, the end of the run |
 
-`BattleScreen` and `SkirmishPanel` still guard the newer service calls with
-`has_method()` / `has_signal()`. That is scaffolding from when the expedition core
-did not exist yet, not a statement that it is missing: every guarded call resolves
-today.
+The old `has_method()` / `has_signal()` scaffolding around the expedition calls is
+gone; the only guards left in these panels are unrelated (`SkirmishPanel` asks
+`PopulationManager.has_method("get_morale")` and `BattleScreen.has_method("open_map")`).
 
 ---
 
@@ -129,7 +131,7 @@ pays, and what losing costs.
 
 | | Skirmish / expedition node | Tithe defence | Final Audit wave |
 |---|---|---|---|
-| Entry point | `CombatManager.start_skirmish()` · `enter_current_node()` | `CombatManager.start_defense()` | `EventBus.final_audit_wave_ready` → `CombatManager._on_final_audit_wave_ready()` |
+| Entry point | `CombatManager.launch_expedition()` → `enter_current_node()` (`start_skirmish()`: tests only) | `CombatManager.start_defense()` | `EventBus.final_audit_wave_ready` → `CombatManager._on_final_audit_wave_ready()` |
 | Who composes the player's side | The player, in `SkirmishPanel` (skirmish); `Expedition.party` (node) | `get_garrison()`: everything trained and **at home**, capped at `combat_deploy_cap` | `FinalAudit.living_garrison()`, carried wave to wave with its damage |
 | Tower crews | No | Yes — `get_tower_crews()`, outside the deploy cap, back row | Yes, and crews lost earlier in the siege are **not** replaced (`FinalAudit.crew_losses`, saved) |
 | `Encounter.is_defense` | `false` | `true` | `true` |
@@ -453,8 +455,12 @@ endgame.
 
 ## 6. The Final Audit
 
-HQ level 3 no longer wins the game. `ProgressionManager._complete_milestone()`
-catches the `hq_max` milestone and calls `summon_final_audit()`.
+In Campaña and Supervivencia HQ level 3 no longer wins the game.
+`ProgressionManager._complete_milestone()` catches the `hq_max` milestone and, when
+`GameMode.audit_enabled()`, calls `summon_final_audit()`. Constructor wins right there
+(`GameMode.capstone_wins()`), Sandbox summons the siege only from its SANDBOX tab, and
+Supervivencia allows no resummon: a lost siege emits `run_ended`
+([20-modos-de-juego.md](20-modos-de-juego.md)).
 
 | Stage | Call | State |
 |-------|------|-------|
@@ -507,8 +513,9 @@ lost razes the base as a side effect.
   wave board is charged at once (`CombatManager._settle_audit_death()`, from the
   `unit_died` event, idempotent by uid; anything that fell without that event is
   settled when the wave resolves), and `_apply_result_for(..., precharged)` reports
-  those deaths without subtracting them again. A save made mid-wave therefore has
-  the same dead in the siege and in the barracks.
+  those deaths without subtracting them again. No save is written while a wave is
+  in play (`CombatManager.is_save_safe()`), but the ledger does not depend on that:
+  the siege and the barracks always hold the same dead.
 - **A wave that finds the board busy waits.** `_on_final_audit_wave_ready()` sets
   `_audit_wave_queued` instead of counting the wave as lost (which used to cost the
   maximum Tithe and maximum damage); `end_encounter()` releases it with
@@ -599,13 +606,11 @@ The parameter and consumer tables now live in
 disappears; duplicating the rows here is how this section went stale the last
 time. What follows is only what a reader of *this* document needs on top of them.
 
-- **`expedition_resumed` is connected with the string form** —
-  `EventBus.connect("expedition_resumed", Callable(self, …))` — in `BattleScreen`,
-  `SkirmishPanel` and `ArmyPanel`, behind a `has_signal()` guard. A grep for
-  `expedition_resumed.connect` finds none of the three. The same is true of
-  `AudioManager`'s `_connect_optional()` for `final_audit_summoned` and
-  `storm_halted_forever`. When auditing listeners, grep the **signal name**, not
-  the `.connect` form.
+- **`expedition_resumed`** is connected as a typed `.connect` in `BattleScreen`,
+  `SkirmishPanel` and `ArmyPanel`. The one string-form connection left is
+  `AudioManager._connect_optional()` for `final_audit_summoned` and
+  `storm_halted_forever`, guarded by `EventBus.has_signal()`: when auditing
+  listeners, grep the **signal name** too, not only the `.connect` form.
 - `result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
 - `summary` on `defense_auto_resolved` is `CombatManager.get_last_result()`, and
   that signal is the **only** one that fight emits — no `encounter_*` accompanies
@@ -741,10 +746,19 @@ the line is removed afterwards. They all no-op unless `GameConfig.dev_mode` is o
 |-------|--------------|
 | `tools/battle_probe.gd` | Seeds an army, opens the skirmish panel and the board, and screenshots them into `res://docs/media/dev/`. For reviewing the battle screen without playing up to a Barracks |
 | `tools/audit_probe.gd` | Summons the Final Audit, plays the whole siege without touching the UI, and logs what happened. `FORCE_SHORT_SIEGE = true` forces a one-wave siege so the victory path (the Storm stopping for good) can be seen without luck. It is the proof that **the game can be finished** |
+| `tools/expedition_probe.gd` | Plays a whole expedition without the UI (same `CombatAI`, applied through the public `CombatManager` API) and checks the roguelike invariants: attrition, permadeath, one payout on return, and that the army left at home is exactly the one that survived (T045, `specs/001-combate-pve/quickstart.md`) |
 
-There is no `expedition_probe.gd` in this tree. The expedition is exercised by
+Two balance probes run headless and open no board: `tools/siege_probe.gd`, an
+`extends SceneTree` script run with `-s`, plays whole sieges in memory over hundreds
+of seeds without touching `CombatManager` (`godot --headless --path . -s
+tools/siege_probe.gd -- --seeds=200`, [17-balance-asedio.md](17-balance-asedio.md));
+`tools/balance_probe.gd`, a temporary autoload, sweeps the `combat_*` values with
+`AutoResolver` ([16-balance-combate.md](16-balance-combate.md)). Every probe runs with a private
+user dir (`override.cfg`, see `CLAUDE.md`).
+
+Besides the probes, the expedition is exercised by
 `tests/combat/test_expedition_wiring.gd` (the service) and
-`tests/ui/test_expedition_ui.gd` (the screens) instead.
+`tests/ui/test_expedition_ui.gd` (the screens).
 
 `tools/gen_unit_icons.gd` is not a probe: it is a one-shot generator, run headless
 and never registered as an autoload. Re-run it after touching a silhouette.
@@ -759,21 +773,20 @@ Verified against the code, not the spec. Update this list as things land.
   carry deaths of the interrupted wave that `ArmyManager` never charged: nothing
   tells them apart from deaths of earlier waves, which were charged. New saves
   cannot produce this.
-- **`has_method()` / `has_signal()` guards outlived their reason.** `BattleScreen`,
-  `SkirmishPanel` and `ArmyPanel` still wrap `launch_expedition`, `apply_draft`,
-  `get_units_on_expedition`, `can_launch` and `expedition_resumed` in existence
-  checks from when the expedition core was not written. Every one of them resolves
-  today; the branches that do not are dead code that also hides a typo.
 - **Towers have no behaviour of their own** beyond mitigating storm damage
   (`StormManager._damage_buildings()` via `GameConfig.get_storm_damage()`) and
   fielding a crew on a defensive board. There is no tower attack on the base map.
-- **Losing a siege costs nothing but time.** `final_audit_lost` takes a
-  maximum-severity Tithe and maximum storm damage, but the run can be re-summoned
-  as soon as three units stand again. Whether that is a price is a balance
-  question nobody has answered yet.
+- **What losing a siege costs is a balance call, per mode.** In Campaña
+  `final_audit_lost` takes a maximum-severity Tithe and maximum storm damage, and the
+  siege can be resummoned once `final_audit_resummon_min_units` (3) stand — but the
+  smallest garrison that can resummon does not win (`docs/17-balance-asedio.md`,
+  `test_the_smallest_garrison_that_can_resummon_does_not_win`), so a retry means
+  rebuilding the army first. In Supervivencia the loss ends the run (`run_ended`).
 
 Landed since this document was first written, and no longer gaps: the expedition
 interface (map, draft modal, final report, abandon), listeners for
 `draft_offered` / `draft_applied` / `expedition_node_selected` /
-`expedition_resumed`, `ArmyPanel` painting who is away on campaign, and real unit
-silhouettes on the board in place of the name's initial.
+`expedition_resumed`, `ArmyPanel` painting who is away on campaign, real unit
+silhouettes on the board in place of the name's initial, the after-action report
+for the blind defence (`WarReportScreen`), the siege banner (`AuditWaveBanner`), and
+the removal of the `has_method()` / `has_signal()` scaffolding.
