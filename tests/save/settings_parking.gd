@@ -12,7 +12,7 @@ const PATH := "user://settings.cfg"
 ## Campos de GameConfig que las suites de interfaz tocan.
 const FIELDS := ["ui_device_profile", "ui_scale_pct", "ui_text_size", "ui_palette",
 	"ui_high_contrast", "ui_panel_opacity", "ui_hud_hidden", "ui_layout",
-	"ui_helper_visible", "ui_touch_controls", "ui_grid_visible"]
+	"ui_helper_visible", "ui_touch_controls", "ui_grid_visible", "ui_touch_controls_opacity"]
 
 static func park() -> Dictionary:
 	var snap := {"had": FileAccess.file_exists(PATH), "bytes": PackedByteArray(), "fields": {}}

@@ -201,3 +201,21 @@ func test_closing_borrowed_settings_gives_everything_back() -> void:
 	assert_int(back_layer).is_less(menu.layer)
 	assert_int(s.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 	assert_bool(card_back).is_true()
+
+## Bug 7 (la parte de Ajustes): los controles en pantalla se transparentan
+## desde Ajustes > Controles, y se nota al momento.
+func test_touch_controls_opacity_slider_applies_at_once() -> void:
+	var saved: float = GameConfig.ui_touch_controls_opacity
+	var root := _game()
+	var osc: CanvasLayer = load("res://scenes/ui/OnScreenControls.tscn").instantiate()
+	root.add_child(osc)
+	var slider: HSlider = _settings(root).find_child("Slider_touch_opacity", true, false)
+	slider.value = 0.4
+	var applied: float = osc.current_opacity()
+	var stored: float = GameConfig.ui_touch_controls_opacity
+	GameConfig.set_touch_controls_opacity(saved)
+	assert_object(slider).is_not_null()
+	assert_float(applied).is_equal_approx(0.4, 0.01)
+	assert_float(stored).is_equal_approx(0.4, 0.01)
+	# Nunca invisibles del todo: el minimo es TOUCH_OPACITY_MIN.
+	assert_float(slider.min_value).is_equal_approx(GameConfig.TOUCH_OPACITY_MIN, 0.001)

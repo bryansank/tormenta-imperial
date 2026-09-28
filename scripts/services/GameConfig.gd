@@ -321,6 +321,10 @@ var ui_view_mode := "3d"
 ## (UITheme.touch_px).
 const TOUCH_CONTROLS_MODES := ["auto", "always", "never"]
 var ui_touch_controls := "auto"
+## Opacidad de los controles en pantalla (bug 7: tapaban el mapa). 0.2..1.0;
+## Ajustes > Controles. Los aplica OnScreenControls.
+const TOUCH_OPACITY_MIN := 0.2
+var ui_touch_controls_opacity := 0.55
 ## Idioma de la interfaz ("es" / "en"). Vive en settings.cfg y no en la partida:
 ## es del dispositivo, sobrevive a "partida nueva" y se aplica antes de pintar nada.
 var ui_locale := "es"
@@ -383,6 +387,7 @@ func load_user_settings() -> void:
 	# Un valor desconocido en el archivo (edicion a mano, version vieja) vuelve
 	# a "auto" en vez de dejar los controles en un estado que nadie eligio.
 	ui_touch_controls = touch_mode if touch_mode in TOUCH_CONTROLS_MODES else "auto"
+	ui_touch_controls_opacity = clampf(float(cf.get_value("ui", "touch_opacity", ui_touch_controls_opacity)), TOUCH_OPACITY_MIN, 1.0)
 	var locale := str(cf.get_value("ui", "locale", ui_locale))
 	if Tr.LOCALES.has(locale):
 		ui_locale = locale
@@ -424,6 +429,7 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
 	cf.set_value("ui", "view_mode", ui_view_mode)
 	cf.set_value("ui", "touch_controls", ui_touch_controls)
+	cf.set_value("ui", "touch_opacity", ui_touch_controls_opacity)
 	cf.set_value("ui", "locale", ui_locale)
 	cf.set_value("interfaz", "device_profile", ui_device_profile)
 	cf.set_value("interfaz", "ui_scale_pct", ui_scale_pct)
@@ -495,6 +501,12 @@ func set_touch_controls(mode: String) -> void:
 	ui_touch_controls = mode
 	save_user_settings()
 	EventBus.touch_controls_changed.emit(touch_controls_enabled())
+
+## Cambia la opacidad de los controles en pantalla y la anuncia (no guarda:
+## Ajustes guarda al soltar el deslizador y al cerrarse).
+func set_touch_controls_opacity(alpha: float) -> void:
+	ui_touch_controls_opacity = clampf(alpha, TOUCH_OPACITY_MIN, 1.0)
+	EventBus.touch_controls_opacity_changed.emit(ui_touch_controls_opacity)
 
 # ── Pantalla completa ──
 

@@ -757,6 +757,7 @@ const _STRINGS := {
 		"HINT_HUD_RESOURCE": "%s: %s (clic para ver los nombres)",
 		"BTN_LOG_HUD": "REGISTRO DE AVISOS",
 		"HINT_HUD_LOG": "Todos los avisos de la partida, por si se te pasó alguno",
+		"LBL_TOUCH_OPACITY": "Opacidad de los controles en pantalla",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -1482,6 +1483,7 @@ const _STRINGS := {
 		"HINT_HUD_RESOURCE": "%s: %s (click to see the names)",
 		"BTN_LOG_HUD": "NOTICE LOG",
 		"HINT_HUD_LOG": "Every notice of the game, in case you missed one",
+		"LBL_TOUCH_OPACITY": "On-screen controls opacity",
 	},
 }
 
