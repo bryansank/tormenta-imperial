@@ -4,7 +4,7 @@
 
 <p align="center">
   <img alt="Godot 4.7" src="https://img.shields.io/badge/Godot-4.7%20.NET-478CBF">
-  <img alt="GDScript" src="https://img.shields.io/badge/GDScript-19.2k%20l%C3%ADneas-355570">
+  <img alt="GDScript" src="https://img.shields.io/badge/GDScript-34.5k%20l%C3%ADneas-355570">
   <img alt="Estado" src="https://img.shields.io/badge/estado-en%20desarrollo-C49629">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-PolyForm%20Strict%201.0.0-8C3B29">
 </p>
@@ -53,7 +53,7 @@ Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán �
 5. **Investiga** quince tecnologías en tres ramas, con bonificaciones permanentes.
 6. **Entrena un ejército** en el Cuartel — y págale el mantenimiento, todos los turnos, en oro.
 7. **Sobrevive** a la Tormenta Imperial: ceniza, edificios en ruinas y el Diezmo, que se paga o se pelea.
-8. **Aguanta la Auditoría Final.** Subir el Cuartel General al nivel 3 ya no gana la partida: convoca a la Regencia. De 3 a 5 oleadas seguidas contra la guarnición que tengas en casa, sin reentrenar entre medias. Sobrevivirlas para la Tormenta para siempre — y eso sí es ganar.
+8. **Aguanta la Auditoría Final.** En la Campaña, subir el Cuartel General al nivel 3 no gana la partida: convoca a la Regencia. De 3 a 5 oleadas seguidas contra la guarnición que tengas en casa, sin reentrenar entre medias. Sobrevivirlas para la Tormenta para siempre — y eso sí es ganar.
 
 ## Lo que lo hace distinto
 
@@ -63,7 +63,7 @@ Ningún otro juego del género cruza esas dos mitades. Esa es la apuesta.
 
 ## Estado
 
-El **bucle de gestión está completo y es jugable** de principio a fin: economía, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline y tutorial. Corre sin errores ni warnings, a 144 fps.
+El **juego se puede jugar de principio a fin**: economía, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline, la Tormenta y su Diezmo, el combate y la Auditoría Final. Alrededor: **cuatro modos** (Campaña, Constructor, Supervivencia y Sandbox), una **vista 2D** además de la 3D, una **interfaz configurable** por dispositivo (PC, tableta, móvil) con juego táctil, un **prólogo, un tutorial guiado y un índice de ayudas**, y exportados para **Windows y Android**. La campaña se ha medido entera con tiempos reales: diez de diez partidas simuladas se ganan, en 2 h 18 min a 4 h.
 
 El **combate PVE por turnos está en el juego**: tablero de 8x8, orden de iniciativa, mover/atacar/defender/esperar, IA enemiga, el Diezmo peleado en vez de pagado, y la Auditoría Final que cierra la partida. Todo el modelo vive en `scripts/combat/` como objetos puros, sin nodos ni señales, y se prueba en headless con gdUnit4.
 
@@ -73,22 +73,25 @@ El **combate PVE por turnos está en el juego**: tablero de 8x8, orden de inicia
 | El Diezmo se pelea: guarnición y dotaciones de torre en el tablero | ✅ en el juego |
 | Defensa auto-resuelta cuando el tablero ya está ocupado (`AutoResolver`) | ✅ en el juego |
 | Auditoría Final: oleadas encadenadas, atrición, perder sin Game Over, reconvocar | ✅ en el juego |
-| Expedición roguelike: mapa por semilla, atrición, muerte permanente, draft | ⚙️ modelo, servicio, guardado y tests hechos — **falta la interfaz** |
+| Expedición roguelike: mapa por semilla, atrición, muerte permanente, draft | ✅ en el juego: mapa, draft e informe final sobre el tablero |
+| Partes de guerra: defensa a ciegas, Diezmo cobrado o repelido, oleadas del asedio | ✅ en el juego |
+| Siluetas de unidad en el tablero, con el jefe marcado | ✅ en el juego |
 
-La expedición es lo único que queda del pilar: `CombatManager` ya sabe lanzarla, encadenarla, guardarla y liquidarla, pero ninguna pantalla la conduce todavía. Detalle técnico en [`docs/15-combat.md`](docs/15-combat.md); especificación en [`specs/001-combate-pve/`](specs/001-combate-pve/).
+Detalle técnico en [`docs/15-combat.md`](docs/15-combat.md); especificación en [`specs/001-combate-pve/`](specs/001-combate-pve/); lo que queda, en [`docs/13-roadmap.md`](docs/13-roadmap.md).
 
 ## Bajo el capó
 
 | | |
 |---|---|
-| **Motor** | Godot 4.7 (.NET/mono), renderer Forward+ |
-| **Lenguaje** | GDScript — 19.200 líneas en 62 scripts, 19 escenas |
-| **Arquitectura** | Servicio–señal–componente: 24 autoloads que **solo** se hablan por un `EventBus`. Ningún servicio referencia a otro |
+| **Motor** | Godot 4.7 (.NET/mono), renderer Forward+ en PC y Mobile en Android |
+| **Lenguaje** | GDScript — unas 34.500 líneas en 101 scripts, 28 escenas |
+| **Arquitectura** | Servicio–señal–componente: 25 autoloads de juego que se **avisan** solo por un `EventBus` (107 señales); ningún productor conoce a quien le escucha |
 | **Modelos puros** | La lógica de combate y de la Tormenta vive en `scripts/combat/` y `scripts/storm/` como `RefCounted` sin nodos ni señales: devuelven listas de eventos y un servicio las publica. Por eso se prueban enteras en headless |
 | **Balance** | Todo valor ajustable vive en `GameConfig.gd`. Cero números mágicos repartidos por el código |
 | **Modelos 3D** | 12 de los 14 edificios son GLB; `nucleo` y `road` se generan proceduralmente por `DieselpunkBuildingFactory` (la calzada necesita conocer a sus vecinas) |
-| **Guardado** | JSON local con progresión offline de hasta 8 horas |
-| **Tests** | gdUnit4 sobre las fórmulas puras de economía y combate |
+| **Guardado** | JSON local con autoguardado y progresión offline de hasta 8 horas; las peleas no se guardan a medias |
+| **Tests** | gdUnit4: unos 1.350 tests en 101 suites, lanzados siempre con `tools/run_tests.sh`, que les da una carpeta de usuario propia |
+| **Exportados** | Windows (`.exe` único) y Android (APK para tableta); ver [`docs/19-exportar.md`](docs/19-exportar.md) |
 
 El proyecto sigue **Spec-Driven Development**: cada pilar pasa por especificación, plan técnico y lista de tareas antes de escribirse. Las reglas que no se negocian están en [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
 
@@ -98,22 +101,24 @@ Documentación por sistema en [`docs/`](docs/INDEX.md) · Guía técnica en [`CL
 
 ```
 tormenta-imperial/
-├── scenes/          Main.tscn y una escena por panel de interfaz
+├── scenes/          Main.tscn (3D), Main2D.tscn (2D) y una escena por panel de interfaz
 ├── scripts/
 │   ├── services/    Los autoloads: economía, población, mercado, ejército…
 │   ├── combat/      Modelos puros del combate: tablero, IA, expedición, Auditoría
 │   ├── storm/       Modelo puro del ciclo de la Tormenta
 │   ├── buildings/   Colocación y fábrica procedural de modelos
 │   ├── ui/          Un script por panel, más tema y disposición
+│   ├── view2d/      La vista 2D: cámara, isla, colocación y dibujos
 │   ├── grid/        Rejilla de 40x40 celdas
 │   ├── map/         Isla y depósitos procedurales
 │   └── camera/      Cámara ortográfica a 45°
 ├── data/buildings/  Los 14 edificios, como recursos .tres
 ├── assets/          Audio, fuentes, texturas y marca
 ├── specs/           Especificaciones previas a cada pilar
-├── tests/           Suites de gdUnit4 sobre los modelos puros
+├── tests/           Suites de gdUnit4
+├── qa/maestro/      Flujos de QA en el emulador de tableta Android
 ├── docs/            Documentación por sistema
-└── tools/           Utilidades de desarrollo (marca, capturas, texturas, sondas)
+└── tools/           Envoltorio de tests, sondas, capturas, marca y texturas
 ```
 
 ## Correrlo
@@ -128,11 +133,13 @@ godot --path . --editor     # y pulsa F5
 
 | Acción | PC | Móvil |
 |---|---|---|
-| Mover cámara | WASD / flechas / arrastrar con botón central | Arrastrar un dedo |
+| Mover cámara | WASD / flechas / arrastrar el suelo (botón izquierdo o central) | Arrastrar un dedo |
 | Zoom | Rueda del ratón | Pellizcar |
-| Rotar | Botones en pantalla | Botones en pantalla |
+| Rotar (3D) | Q / E o arrastrar con el botón derecho | Girar dos dedos |
+| Construir | Botón CONSTRUIR | Tocar el sitio y tocar el fantasma o ✓ |
+| Menú | ☰ MENÚ o Esc | ☰ MENÚ o el botón atrás |
 
-`GameConfig.dev_mode` (activo por defecto) acorta todas las duraciones a 1–2 segundos para probar rápido. Para empezar de cero: **Ajustes → Nueva partida**.
+Desde el editor, `GameConfig.dev_mode` está encendido solo (todo corre cinco veces más rápido); en un exportado está apagado. Para jugar desde el editor con tiempos reales: `godot --path . -- --no-dev`. Vista 2D: `-- --view=2d` o en Ajustes. Para empezar de cero: **☰ MENÚ → Menú principal → Nueva partida**, que deja elegir el modo.
 
 ### Utilidades de desarrollo
 
