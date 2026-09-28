@@ -11,11 +11,16 @@ const PRESETS_PATH := "res://export_presets.cfg"
 const GATE_PATH := "res://scripts/services/BeckettGate.gd"
 
 ## Lo que nunca puede acabar dentro del .pck: tests, herramientas, documentación,
-## los dos addons de desarrollo y los ficheros locales con tokens (.mcp.json, .env).
+## los dos addons de desarrollo, los ficheros locales con tokens (.mcp.json y
+## .cursor/mcp.json llevan el token de Beckett; .env, secret.json), la config del
+## editor, el override.cfg de desarrollo y las carpetas privadas que .gitignore
+## deja fuera del repo pero que siguen en disco (estrategia/, ui_tour/).
 const MUST_EXCLUDE := [
 	"tests/*", "tools/*", "docs/*", "specs/*", "reports/*",
 	"addons/gdUnit4/*", "addons/beckett/*",
-	".claude/*", ".specify/*", ".beckett/*", ".mcp.json", ".env*", "build/*", "*.md",
+	".claude/*", ".specify/*", ".beckett/*", ".cursor/*", ".vscode/*",
+	".mcp.json", "secret.json", ".env*", "override.cfg",
+	"estrategia/*", "ui_tour/*", "build/*", "*.md",
 ]
 
 
