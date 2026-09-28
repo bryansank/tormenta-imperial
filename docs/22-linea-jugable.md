@@ -318,7 +318,7 @@ mantiene ocupados los procesos del Núcleo, el aserradero y la mina.
   que la producción de acero/petróleo se pare con la bolsa llena en vez de tirarse.
 - **La era 1 no tiene Tormenta.** Es lo que dice el diseño (Acto I), pero son 8-10 min
   sin otra presión que el consumo. Si se quiere una "tormenta de prueba" guionizada en la
-  era 1, es una decisión de diseño abierta en `01_EL_JUEGO_COMPLETO.md` §15.
+  era 1, es una decisión de diseño abierta (ver [13-roadmap.md](13-roadmap.md), decisiones abiertas).
 - **El minado a mano es la palanca más fuerte de la era 1** (§5.4): con él la era 2
   llega en el minuto 3. Si se quiere que la era 1 dure, la palanca es
   `mining_data` (rendimiento o duración), no la línea.

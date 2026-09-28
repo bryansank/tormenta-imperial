@@ -75,7 +75,7 @@ the `BeckettRuntime` dev bridge.
 
 ## Scene Tree
 
-`Main.tscn` (3D) and `Main2D.tscn` (2D) have the same UI nodes in the same order;
+`Main.tscn` (3D) and `Main2D.tscn` (2D) have the same UI nodes with the same names;
 only the world nodes differ. The full annotated tree, with layers and the nodes
 created at runtime (PrologueScreen, HelpIndexPanel, NewGameDialog, LayoutEditor), is
 in `CLAUDE.md` → "Scene Tree". The 2D view is described in
@@ -112,6 +112,7 @@ tools/               -- Probes, asset generators, test wrapper
    `clear_save_and_reload_from()` (see `CLAUDE.md` → "Adding Persistent State")
 6. Add translations to `Tr.gd` (both ES and EN dicts)
 7. Create UI if needed in `scripts/ui/` + `scenes/ui/`
-8. Add the UI node to **both** `Main.tscn` and `Main2D.tscn`, same name, same place
-   (`tests/view2d/test_view_mode.gd` checks it)
+8. Add the UI node to **both** `Main.tscn` and `Main2D.tscn`, same name, same place,
+   and add the name to the list in
+   `tests/view2d/test_view_mode.gd::test_the_2d_scene_has_the_same_ui_as_the_3d_scene`
 9. Test it with `tools/run_tests.sh`, never with `GdUnitCmdTool.gd` directly

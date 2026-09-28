@@ -97,8 +97,11 @@ holds a service's state of its own.
 `Main.tscn` is the main scene. Its root carries `scripts/view2d/ViewRouter.gd`: when
 the preferred view (Settings, or `-- --view=2d`) is the other one, it holds the game
 start and switches to `Main2D.tscn` before anything loads. Both scenes carry **the
-same UI nodes, with the same names, in the same order** (enforced by
-`tests/view2d/test_view_mode.gd`); only the world nodes differ.
+same UI nodes, with the same names** (today also in the same order); only the world
+nodes differ. `tests/view2d/test_view_mode.gd` checks a list of those names in both
+scenes — `PauseMenu` and `TitleMenu` find their siblings by name — but not the order,
+and `SandboxPanel` is not on the list yet: a new UI node goes into both scenes and
+into that list.
 
 ```
 Main (Node3D, ViewRouter view_mode="3d")
@@ -108,7 +111,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- IslandGenerator (Node3D) -- procedural island mesh: a rounded square that covers the whole 40x40 grid (shore and water start outside it)
   +-- GridOverlay (MeshInstance3D) -- faint cell grid, on by default (Settings toggle), fitted to GridManager at runtime
   +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist
-  +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" shows them on mobile (on PC only after a real touch)
+  +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" follows the device profile (tablet/phone yes, PC no)
   +-- ResourceHUD (CanvasLayer 10) -- top-left card: named resources + ALMACÉN COMPARTIDO bar with legend
   +-- MapGenerator (Node) -- spawns 18-28 resource deposits (`deposit_count_*`, with a minimum per type)
   +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + building list
@@ -142,7 +145,7 @@ Created at runtime, not in either .tscn:
   PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore as a Regency dossier
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker, created by GameManager.request_new_game()
-  LayoutEditor (layer 35, scripts/ui/LayoutEditor.gd) -- "Editar disposición", created by UILayoutManager
+  LayoutEditor (layer 35, scripts/ui/LayoutEditor.gd) -- EDITAR DISPOSICIÓN (Settings), created by UILayoutManager
 ```
 
 UI panels are positioned by `UILayoutManager` using the slot definitions in
@@ -411,8 +414,8 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   and `music_enabled`;
 - `[ui]`: `grid_visible` (map grid toggle; GridOverlayControl applies it, BuildingPlacer
   restores it after placement), `helper_visible` (help callouts, on by default),
-  `touch_controls` (`auto` / `always` / `never`; "auto" = mobile OS, or a PC once a real
-  touch is seen in the session) and
+  `touch_controls` (`auto` / `always` / `never`; "auto" follows the device profile:
+  tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
   `touch_controls_opacity`, `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
 - `[interfaz]`: device profile, UI scale, text size, palette, high contrast, panel
   opacity, hidden HUD elements, moved layout — docs/21.
@@ -616,9 +619,10 @@ Checklist:
    `tests/save/save_parking.gd` (`park()` in `before_test()`, `restore()` in
    `after_test()`) and skips itself in the player's dir: `func before(do_skip := Parking.in_player_dir(),
    skip_reason := ...)`. A test that writes `settings.cfg` uses
-   `tests/save/settings_parking.gd`. Both refuse to touch the player's dirs
-   (`save_parking.player_dirs()`: the editor's `Godot/app_userdata/Tormenta Imperial`
-   and the export's `TormentaImperial`).
+   `tests/save/settings_parking.gd` (byte-for-byte copy and restore). `save_parking`
+   refuses to touch the player's dirs (`player_dirs()`: the editor's
+   `Godot/app_userdata/Tormenta Imperial` and the export's `TormentaImperial`);
+   `settings_parking` has no such guard, so it relies on the wrapper's own user dir.
 6. Run the suite only through `tools/run_tests.sh` / `.ps1`, which gives it its own
    user dir. Never write to `user://` from a probe, tool or experiment without an
    `override.cfg` of your own (see "Running the Project"); delete it afterwards.

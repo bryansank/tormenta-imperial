@@ -240,7 +240,7 @@ solas: apagado, el índice de AYUDA sigue reabriendo la que se pida.
   HUD en era 1 y 3, el menú y cada pestaña de Ajustes, y el tablero, en
   `docs/media/dev/menu/`.
 
-## 9. Herramientas y tests
+### Herramientas y tests (§1-§8)
 
 - `tools/interfaz_probe.gd`: siembra una partida y hace capturas (HUD, menú ☰
   con un edificio, Ajustes pestañas Interfaz y Accesibilidad, editor, tablero)
@@ -253,14 +253,15 @@ solas: apagado, el índice de AYUDA sigue reabriendo la que se pida.
   estado de interfaz de GameConfig mientras una suite toca preferencias.
 - Suites: `tests/ui/test_device_profile.gd`, `test_ui_palettes.gd`,
   `test_hud_layout.gd`, `test_settings_tabs.gd`, y `test_touch_controls.gd`
-  (actualizado: PC nunca enciende los controles en "Automático").
+  ("Automático" sigue al perfil: en PC no enciende los controles aunque llegue un
+  toque; "Siempre" y "Nunca" fuerzan).
 - Tacto: ver §9.
 
 ## 9. Tacto (dedo)
 
-Lo que hace que una tablet se juegue con el dedo, y dónde vive. Diagnóstico de
-partida: `tormenta-imperial-contexto/07_DIAGNOSTICO_JUGABILIDAD.md` (bugs 5, 7,
-8, 10 y 13).
+Lo que hace que una tablet se juegue con el dedo, y dónde vive. Parte de un
+diagnóstico de jugabilidad en tableta (bugs 5, 7, 8, 10 y 13), que no está en el
+repositorio.
 
 ### El mapa se arrastra casi en cualquier sitio
 
@@ -273,9 +274,8 @@ partida: `tormenta-imperial-contexto/07_DIAGNOSTICO_JUGABILIDAD.md` (bugs 5, 7,
 - `OnScreenControls`: la fila inferior, la columna derecha, la cruceta, su
   centro vacío y las filas de giro y zoom en `IGNORE`. El aviso de colocación
   rechazada (`BuildingPlacer._show_feedback`) también.
-- Medido a 1280x800 con el perfil tablet (sonda con ventana, mapas en
-  `tormenta-imperial-contexto/diagnostico/fx*_blockmap*_overlay.png`), en % de
-  la pantalla entera que llega al mapa:
+- Medido a 1280x800 con el perfil tablet (sonda con ventana y mapas de bloqueo,
+  fuera del repositorio), en % de la pantalla entera que llega al mapa:
 
   | | Reposo | Colocando |
   |---|---|---|
@@ -367,9 +367,9 @@ zoom.
 
 `tests/input/test_twist_gesture.gd`, `tests/ui/test_touch_hold_opacity.gd`,
 `tests/ui/test_touch_passthrough.gd`, `tests/ui/test_touch_placement.gd` (3D y
-2D). La sonda con ventana del diagnóstico
-(`tormenta-imperial-contexto/diagnostico/_sonda/Probe.gd`) sirve para el mapa de
-bloqueo y el recorrido completo con toques sintéticos; siempre con un
+2D). La sonda con ventana del diagnóstico (fuera del repositorio) sirvió para el mapa
+de bloqueo y el recorrido completo con toques sintéticos; en el repositorio, los
+flujos de `qa/maestro/` recorren lo mismo en el emulador de tableta. Siempre con un
 `override.cfg` que apunte a otra carpeta de datos.
 
 ## 10. Huecos conocidos

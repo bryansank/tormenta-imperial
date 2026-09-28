@@ -25,11 +25,13 @@ la [sección 11](#11-el-camino-a-la-victoria).
 
 | Acción | Ratón y teclado | Táctil |
 |---|---|---|
-| Mover la cámara | `WASD` o arrastrar con el botón central | Arrastrar un dedo |
+| Mover la cámara | `WASD` / flechas, o arrastrar el suelo con el botón izquierdo o el central | Arrastrar un dedo |
+| Girar la cámara (3D) | `Q` / `E` o arrastrar con el botón derecho | Girar dos dedos |
 | Zoom | Rueda del ratón | Pellizcar con dos dedos |
-| Construir | Botón `CONSTRUIR` abajo | Igual |
+| Construir | Botón `CONSTRUIR` abajo | Tocar el sitio para apuntar y tocar el fantasma o `✓` para construir |
 | Rotar el edificio antes de colocarlo | `R` | Botón de rotar |
-| Abrir menús | Botón `☰` arriba a la derecha | Igual |
+| Abrir menús | Botón `☰ MENÚ` arriba a la derecha (o `ESC`) | Igual, o el botón atrás de Android |
+| Pantalla completa | `F11` | Siempre |
 | Cerrar un panel | `ESC` | Botón `X` |
 
 ---
@@ -440,7 +442,7 @@ dureza de cada uno.
 > nadie deserte, sube la moral (que te da iniciativa y daño) y **trae a todo el mundo
 > de vuelta de las expediciones**: quien esté de campaña no defiende.
 
-**Si la pierdes no se acaba la partida.** No hay pantalla de derrota. Te cobran el
+**Si la pierdes no se acaba la partida** (en Campaña). No es un game over: sale el parte del asedio perdido. Te cobran el
 Diezmo más caro posible y la ciudad queda hecha trizas, pero sigues jugando: cuando
 vuelvas a tener **3 unidades en pie** puedes **volver a convocar** la Auditoría. Cada
 convocatoria es una noche distinta — el asedio se sortea de nuevo, así que recargar
@@ -450,6 +452,13 @@ la partida no sirve para buscar uno más fácil.
 ciclo de la tormenta para siempre**: el cielo se despeja, dejan de caer cenizas y no
 vuelve a haber Diezmo. Primero se calla el mundo y después sale la pantalla de
 victoria. Esa es la Victoria Imperial.
+
+> **Esto es la Campaña.** En los otros modos cambia el final
+> ([20-modos-de-juego.md](20-modos-de-juego.md)): en **Constructor** no hay Tormenta
+> ni asedio y el Cuartel General a nivel 3 gana directamente; en **Supervivencia** la
+> Auditoría solo se puede intentar una vez y perderla **sí** acaba la partida; en
+> **Sandbox** no hay victoria y la Tormenta y la Auditoría solo vienen si las invocas
+> desde la pestaña SANDBOX.
 
 ---
 
@@ -490,42 +499,48 @@ A partir de Supervivencia, cada 2-5 minutos pasa algo:
 
 ## 13. Modo de pruebas: todo en segundos
 
-`GameConfig.dev_mode` está **activo por defecto** (`scripts/services/GameConfig.gd`).
-Con él, una partida entera se juega en minutos en vez de horas.
+`GameConfig.dev_mode` no se toca a mano: está **activo cuando el juego corre desde el
+editor** (F5, tests, sondas) y **apagado en cualquier exportado** (el `.exe` y el APK
+que juega la gente). Con él, una partida entera se juega en minutos en vez de horas.
 
 | Qué | Normal | En pruebas |
 |---|---|---|
-| **Construir cualquier edificio** | 3 a 30s | **1s fijo** |
-| **Cualquier ciclo de producción** | 12 a 20s | **2s fijo** |
-| Consumo de la gente (fase temprana) | 60s | 6s |
-| Consumo de la gente (fase normal) | 30s | 3s |
-| Crecimiento de población | 40s / 20s | 4s / 2s |
-| Sueldo del ejército | 30s | 3s |
-| Entrenar infantería | 20s | 2s |
-| Entrenar artillería | 35s | 3,5s |
-| Entrenar vehículo | 55s | 5,5s |
-| Procesos manuales | 25 a 60s | 2,5 a 6s |
-| Eventos aleatorios | cada 120-300s | cada 15-30s |
+| **Construir cualquier edificio** | 3 a 30s | **2s fijo** |
+| **Cualquier ciclo de producción** | 12 a 20s | **4s fijo** |
+| Consumo de la gente (fase temprana) | 60s | 12s |
+| Consumo de la gente (fase normal) | 30s | 6s |
+| Crecimiento de población | 40s / 20s | 8s / 4s |
+| Sueldo del ejército | 30s | 6s |
+| Entrenar infantería | 20s | 4s |
+| Entrenar artillería | 35s | 7s |
+| Entrenar vehículo | 55s | 11s |
+| Procesos manuales | 25 a 60s | 5 a 12s |
+| Tormenta (calma entre una y otra) | 360-600s | 72-120s |
+| Eventos aleatorios | cada 120-300s | cada 30-60s |
 
-La regla general es **la décima parte, con un mínimo de 1 segundo**; construcción y
-producción son valores fijos.
+La regla general es **la quinta parte** (`dev_time_scale = 0.2`), **con un mínimo de 1
+segundo**; construcción y producción son valores fijos.
 
-> ⚠️ **Lo que se acelera no es solo lo bueno.** El consumo también corre 10 veces más
-> rápido, así que una base con mucha población y poca producción se queda sin oro en
-> segundos. Si vas a dejar la partida quieta para mirar algo, hazlo con reservas.
+> ⚠️ **Lo que se acelera no es solo lo bueno.** El consumo también corre 5 veces más
+> rápido, así que una base con mucha población y poca producción se queda sin oro
+> enseguida. Si vas a dejar la partida quieta para mirar algo, hazlo con reservas.
 
-Para desactivarlo y jugar con los tiempos reales, pon `dev_mode = false` en
-`scripts/services/GameConfig.gd`.
+Para jugar desde el editor con los tiempos reales, arranca con `-- --no-dev`
+(`godot --path . -- --no-dev`); para lo contrario en un exportado,
+`TormentaImperial.exe -- --dev`.
 
 ### Empezar una isla nueva
 
-**Desde el juego:** `☰` → `AJUSTES` → `Nueva partida`. Pide confirmación.
+**Desde el juego:** `☰ MENÚ` → `Menú principal` → `Nueva partida`, o `Nueva partida`
+en el menú principal al arrancar. Sale el selector de modo (Campaña, Constructor,
+Supervivencia, Sandbox) y pide confirmación si hay una partida que perder.
 
 **Borrando la partida a mano:** la partida vive en un único JSON, sin base de datos ni
 nada en la nube. En Windows:
 
 ```
-%APPDATA%\Godot\app_userdata\Tormenta Imperial\save_game.json
+%APPDATA%\Godot\app_userdata\Tormenta Imperial\save_game.json   (desde el editor)
+%APPDATA%\TormentaImperial\save_game.json                       (el .exe exportado)
 ```
 
 Bórralo y al abrir el juego tendrás una isla nueva generada desde cero.

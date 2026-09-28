@@ -106,14 +106,14 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 | `NewGameDialog` | 40 | The mode picker, created by `GameManager.request_new_game()` from every "Nueva partida" |
 | `LayoutEditor` | 35 | EDITAR DISPOSICIÓN: drag panels, saved per device profile |
 
-Every panel exists in both `Main.tscn` and `Main2D.tscn` with the same name and
-order; the full tree is in `CLAUDE.md` → "Scene Tree".
+Every panel exists in both `Main.tscn` and `Main2D.tscn` with the same name; the
+full tree is in `CLAUDE.md` → "Scene Tree".
 
 ## Interfaz configurable y dispositivos (docs/21)
 
 - **Perfiles** (`DeviceProfile`, autoload): PC / Tablet / Movil, detectados por
   features de SO y lado corto en dp, forzables en Ajustes. Traen escala, texto,
-  lado tactil minimo, controles en pantalla en "Automatico" (nunca en PC) y
+  lado tactil minimo, controles en pantalla en "Automatico" (sigue al perfil: nunca en PC) y
   textos de ayuda de raton o de dedo (`Tr.ti`).
 - **Lienzo**: `aspect = expand` y `content_scale_factor` como escala de
   interfaz: sin bandas negras en 16:10, 4:3, 21:9 ni vertical.

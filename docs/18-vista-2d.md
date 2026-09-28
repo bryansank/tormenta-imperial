@@ -7,7 +7,7 @@ que se lea bien en un movil.
 
 Lo que cambia es solo el **mundo**: camara, isla, rejilla, yacimientos,
 edificios, texto flotante y el cielo de la tormenta. Todo lo demas es lo mismo en
-las dos vistas: los 24 autoloads, todos los paneles de la interfaz, el tablero
+las dos vistas: los 25 autoloads de juego, todos los paneles de la interfaz, el tablero
 de combate y `user://save_game.json`.
 
 ## Como se cambia de vista
@@ -162,10 +162,10 @@ docs/21 §9).
   que llega en paralelo) hay que repasar que quepa a 720 de alto.
 - `ResourceHUD` puede ensenar el tope de almacen viejo justo tras cargar (se
   refresca con el siguiente cambio de recursos). Pasa igual en 3D.
-- Nodos que otro agente anada a `Main.tscn` (menu de titulo, pausa, informes)
-  hay que anadirlos tambien a `Main2D.tscn`; `tests/view2d/test_view_mode.gd`
-  comprueba que las dos escenas tienen la misma interfaz y conviene ampliar su
-  lista.
+- Todo nodo de interfaz que se anada a `Main.tscn` hay que anadirlo tambien a
+  `Main2D.tscn` (hoy las dos tienen los mismos 23, en el mismo orden);
+  `tests/view2d/test_view_mode.gd` comprueba una lista de nombres en las dos y
+  conviene ampliarla: `SandboxPanel` aun no esta en ella.
 
 ## Herramientas y tests
 

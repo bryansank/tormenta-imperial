@@ -3,7 +3,7 @@
 Cómo aprende a jugar alguien que abre el juego por primera vez. Sustituye a la intro
 paginada de `TutorialPanel` (10 páginas, lore y "Cómo se juega" en el mismo marco) y a
 los seis globos de `HelperPanel` que salían a la vez. Arregla los bugs 1 (en parte), 2,
-6 y 12 de `07_DIAGNOSTICO_JUGABILIDAD.md`.
+6 y 12 del diagnóstico de jugabilidad (fuera del repositorio).
 
 Tres piezas, tres estilos, y ninguna se parece a otra:
 

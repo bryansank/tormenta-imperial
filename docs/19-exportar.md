@@ -70,6 +70,8 @@ que instalar también `Godot_v4.7-stable_export_templates.tpz` (carpeta `4.7.sta
 Desde la raíz del proyecto, con `GODOT` apuntando al ejecutable de consola:
 
 ```bash
+# 0. Si lo lanza un agente o un script: override.cfg con carpeta de usuario propia
+#    (ver CLAUDE.md, "Running the Project"), y borrarlo al terminar.
 # 1. Importar (primera vez o tras tocar assets)
 "$GODOT" --headless --path . --import
 
@@ -161,7 +163,9 @@ dependen de `dev_mode`. La primera línea del log lo dice:
 
 ## 6. Beckett no viaja
 
-`BeckettRuntime` (el puente MCP de desarrollo, abre un socket local) ya no apunta al
+`BeckettRuntime` (el puente MCP de desarrollo: `addons/beckett/runtime/mcp_runtime.gd`
+se conecta como cliente a `127.0.0.1:8771`, el servidor MCP del editor, y ejecuta las
+órdenes que le llegan; no es un simple socket abierto) ya no apunta al
 addon: apunta a `scripts/services/BeckettGate.gd`, un portero que solo carga el
 runtime del addon con `load()` cuando `OS.has_feature("editor")`. Se mantiene el
 nombre del autoload a propósito, porque el plugin solo se registra si ese nombre no
@@ -244,7 +248,7 @@ Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11.
 
 | Qué | Valor |
 |---|---|
-| Preset | `Android` en `export_presets.cfg` (sin secretos) |
+| Preset | `Android` en `export_presets.cfg` (sin secretos); `Android QA (emulador)` para el emulador (11.8) |
 | Salida | `build/android/TormentaImperial-debug.apk` |
 | Tamaño | 38,9 MB el APK (73 MB son `libgodot_android.so` sin comprimir; ~10 MB el juego) |
 | Paquete | `com.bryankey.tormentaimperial`, versionCode `900`, versionName `0.9.0` |
@@ -408,20 +412,26 @@ x86_64 con WHPX).
   x86_64 nativo pasa lo mismo. Es el emulador, no el juego: el mismo renderer Mobile
   pinta bien en el PC (Vulkan real).
 - Con una variante **solo para el emulador** (x86_64 + `command_line/extra_args=
-  "--rendering-driver opengl3 --rendering-method gl_compatibility"`, sin versionar) el
+  "--rendering-method gl_compatibility --rendering-driver opengl3"`; hoy es el preset
+  versionado `Android QA (emulador)`, paquete `com.bryankey.tormentaimperial.qa`,
+  salida `build/android/TormentaImperial-qa.apk`, el que usan los flujos de
+  `qa/maestro/`) el
   juego arranca en ~15 s, enseña el menú de título, y los toques funcionan: *Nueva
   partida → Confirmar → Saltar* llevan a la isla con el tutorial y los controles
   táctiles en pantalla. Cero errores de script en el logcat.
 - Bug encontrado y corregido: con la preferencia de pantalla completa por defecto
   (`false`) `GameConfig` pedía modo ventana al arrancar, y en Android eso vuelve a sacar
   las barras del sistema encima del juego. Ahora en móvil siempre es pantalla completa.
-- Para quien haga la UI de tableta (no se ha tocado aquí):
-  - **Franjas negras arriba y abajo** (~50 px a cada lado en 2560×1600): la tableta es
-    16:10 y `window/stretch/aspect="keep_height"` sobre una base 16:9 deja sobrante
-    vertical. `expand` lo llenaría.
-  - Los textos de ayuda hablan de "WASD" y "la rueda del ratón" también en táctil.
-  - El diálogo de "Nueva partida" sale con el tema por defecto de Godot, no con `UITheme`.
-  - Arranca con el *splash* de Godot (no hay `application/boot_splash/image`).
+- Lo que se anotó entonces para la UI de tableta, ya resuelto
+  ([21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md)):
+  - ~~Franjas negras arriba y abajo con `keep_height`~~: el lienzo es
+    `window/stretch/aspect="expand"`.
+  - ~~Textos de ayuda con "WASD" y "la rueda del ratón" en táctil~~: los textos van
+    por dispositivo (`Tr.ti`).
+  - ~~El diálogo de "Nueva partida" con el tema de Godot~~: es `NewGameDialog`, con
+    `UITheme` y el selector de modo.
+  - ~~El *splash* de Godot~~: `application/boot_splash/image` es
+    `res://assets/branding/logo.png`.
 
 ### 11.9 Renderer Mobile frente a Forward+
 
@@ -457,5 +467,7 @@ Compatibility (OpenGL ES 3) en equipos sin Vulkan fiable.
 - Solo arm64. Sin x86_64 no corre en Chromebooks x86 ni en emuladores sin traducción.
 - Sin keystore de release ni AAB todavía: el APK de depuración solo sirve para probar.
 - Sin guardado en la nube: la partida vive en la tableta y se pierde al desinstalar.
-- La UI está pensada para PC; la adaptación a tableta (stretch, tamaños táctiles,
-  textos) es trabajo aparte.
+- La adaptación a tableta (stretch `expand`, perfiles de dispositivo, tamaños
+  táctiles, colocación táctil, textos por dispositivo) ya está hecha
+  ([21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md)); falta probarla en
+  una tableta física.
