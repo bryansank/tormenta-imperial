@@ -132,7 +132,14 @@ func begin_final_audit() -> bool:
 		return false
 	if CombatManager.final_audit_block_reason() != "":
 		return false
-	_publish_audit(final_audit.begin(CombatManager.get_garrison()))
+	# Un asedio nuevo se alista con la guarnicion (el tope del tablero). Uno ya
+	# empezado que vuelve de la partida solo se cuadra (reconcile), y eso se hace
+	# contra el ejercito entero, sin tope: get_garrison() llena el tope de
+	# infanteria a vehiculo, y con mas infanteria en casa que al empezar
+	# dejaba fuera a la artilleria viva, que el asedio borraba por "sobrar".
+	var home: Dictionary = CombatManager.get_deployable_units() if final_audit.started \
+			else CombatManager.get_garrison()
+	_publish_audit(final_audit.begin(home))
 	_announce_wave()
 	return true
 
