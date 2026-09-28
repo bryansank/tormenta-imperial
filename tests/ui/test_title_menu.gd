@@ -115,13 +115,16 @@ func test_settings_open_over_the_menu_and_give_it_back_on_close() -> void:
 	menu.open_menu()
 	menu._on_settings()
 	var settings_mode: int = settings.process_mode
-	var menu_hidden: bool = not menu._root.visible
+	var menu_hidden: bool = not menu._card.visible
+	# Ajustes del menu principal se abre sobre la ilustracion, no sobre la isla.
+	var art_behind: bool = menu._root.visible and menu._art.visible
 	settings.toggle()  # cerrar Ajustes
-	var menu_back: bool = menu._root.visible
+	var menu_back: bool = menu._card.visible
 	var restored: int = settings.process_mode
 	menu.close_menu()
 	assert_int(settings_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
 	assert_bool(menu_hidden).is_true()
+	assert_bool(art_behind).is_true()
 	assert_bool(menu_back).is_true()
 	assert_int(restored).is_equal(Node.PROCESS_MODE_INHERIT)
 

@@ -83,7 +83,7 @@ func test_settings_from_the_title_menu_is_on_top_and_nothing_eats_its_touches() 
 	# tarjeta mientras presta la pantalla.
 	var above: int = _top_visible_layer([menu, settings])
 	var settings_layer: int = settings.layer
-	var menu_card_hidden: bool = not menu._root.visible
+	var menu_card_hidden: bool = not menu._card.visible
 	settings.toggle()
 	menu.close_menu()
 	s["tutorial"]._close()
