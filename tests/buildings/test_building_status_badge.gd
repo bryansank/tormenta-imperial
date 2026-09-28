@@ -86,7 +86,9 @@ func test_it_starts_asleep_without_workers_in_the_old_red() -> void:
 	assert_int(_badge.get_status()).is_equal(Badge.Status.IDLE)
 	assert_str(_badge.get_reason()).is_equal("unstaffed")
 	assert_bool(_badge.visible).is_true()
-	assert_str(_badge.text).is_equal(Tr.t("LBL_STATUS_IDLE"))
+	# Zzz y, debajo, el porque: nadie sabia que Zzz era "sin obreros".
+	assert_str(_badge.text).starts_with(Tr.t("LBL_STATUS_IDLE"))
+	assert_str(_badge.text).contains(Tr.t("LBL_STATUS_WHY_UNSTAFFED"))
 	assert_that(_badge.modulate).is_equal(Badge.COLOR_UNSTAFFED)
 
 func test_workers_changed_makes_it_reread_the_staffing() -> void:

@@ -79,6 +79,11 @@ func _setup_ui() -> void:
 		var type: ResourceManager.Type = _resource_types[i]
 		var chip := UITheme.make_resource_chip(_resource_ids[i])
 		chip.visible = ResourceManager.is_unlocked(type)
+		# Cada numero dice que es (bug 11): nombre al pasar el raton y, con el
+		# dedo, un toque despliega la fila con nombres (lo mismo que el ▼).
+		chip.name = "Chip_" + _resource_ids[i]
+		chip.mouse_filter = Control.MOUSE_FILTER_STOP
+		chip.gui_input.connect(_on_tap_expand)
 		chips_row.add_child(chip)
 		_chips[type] = chip
 
@@ -101,6 +106,13 @@ func _setup_ui() -> void:
 		var res_id: String = _resource_ids[i]
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
+		# La muestra de color es la leyenda de la barra del almacen.
+		var swatch := ColorRect.new()
+		swatch.color = UITheme.resource_color(res_id)
+		swatch.custom_minimum_size = Vector2(10, 10)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(swatch)
 		row.add_child(UITheme.make_icon(res_id, 20))
 		var name_lbl := UITheme.make_label(Tr.res_upper(res_id), "small", UITheme.resource_color(res_id))
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -113,12 +125,24 @@ func _setup_ui() -> void:
 		_exp_rows[type] = row
 		_exp_labels[type] = amt
 
+	# Que es la barra: un tope para los cuatro, y lo que no cabe se pierde.
+	var legend := UITheme.make_label(Tr.t("HINT_HUD_STORAGE"), "small", UITheme.TEXT_DIM)
+	legend.name = "StorageLegend"
+	legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	legend.custom_minimum_size.x = 200
+	_content_box.add_child(legend)
+
 	# ── Almacen: un nombre, un numero, una barra ──
 	var storage_row := HBoxContainer.new()
+	storage_row.name = "StorageRow"
 	storage_row.add_theme_constant_override("separation", 6)
+	storage_row.mouse_filter = Control.MOUSE_FILTER_STOP
+	storage_row.tooltip_text = Tr.t("HINT_HUD_STORAGE")
+	storage_row.gui_input.connect(_on_tap_expand)
 	vbox.add_child(storage_row)
 
-	_storage_label = UITheme.make_label(Tr.t("LBL_STORAGE_USED").to_upper(), "small", UITheme.TEXT_DIM)
+	# "ALMACEN COMPARTIDO  730 / 1000": el tope es uno para los cuatro.
+	_storage_label = UITheme.make_label(Tr.t("LBL_HUD_STORAGE"), "small", UITheme.TEXT_DIM)
 	_storage_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	storage_row.add_child(_storage_label)
 
@@ -130,6 +154,9 @@ func _setup_ui() -> void:
 	for res_id in _resource_ids:
 		colors.append(UITheme.resource_color(res_id))
 	_pool_bar = UITheme.make_pool_bar(colors, 8)
+	_pool_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pool_bar.tooltip_text = Tr.t("HINT_HUD_STORAGE")
+	_pool_bar.gui_input.connect(_on_tap_expand)
 	vbox.add_child(_pool_bar)
 	var segs := UITheme.pool_bar_segments(_pool_bar)
 	for i in range(_resource_types.size()):
@@ -144,6 +171,12 @@ func _setup_ui() -> void:
 func _size_toggle() -> void:
 	var side := UITheme.touch_px(TOGGLE_PX)
 	_toggle_btn.custom_minimum_size = Vector2(side, side)
+
+## Un toque (o clic) en un recurso o en el almacen despliega la leyenda.
+func _on_tap_expand(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_toggle_expanded()
+		get_viewport().set_input_as_handled()
 
 func _toggle_expanded() -> void:
 	_is_expanded = not _is_expanded
@@ -166,6 +199,8 @@ func _refresh() -> void:
 	for type in _chips:
 		var amount := str(ResourceManager.get_amount(type))
 		UITheme.chip_amount(_chips[type]).text = amount
+		var res_id: String = _resource_ids[_resource_types.find(type)]
+		(_chips[type] as Control).tooltip_text = Tr.t("HINT_HUD_RESOURCE") % [Tr.res_cap(res_id), amount]
 		if _exp_labels.has(type):
 			_exp_labels[type].text = amount
 

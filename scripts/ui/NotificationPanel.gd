@@ -30,6 +30,8 @@ var _pop_label: Label
 var _morale_label: Label
 var _morale_bar: ProgressBar
 var _workers_label: Label
+## Las tres explicaciones de la tarjeta de poblacion, que un toque despliega.
+var _status_hint: Label
 var _status_panel: PanelContainer
 var _objective_label: Label
 
@@ -104,6 +106,16 @@ func _setup_ui() -> void:
 	morale_row.add_child(_morale_label)
 	status_vbox.add_child(morale_row)
 
+	# Que es cada fila, en palabras (bug 11): al pasar el raton sale en el
+	# tooltip de la fila y, con el dedo, un toque en la tarjeta despliega las
+	# tres explicaciones debajo.
+	pop_row.tooltip_text = Tr.t("HINT_HUD_POPULATION")
+	work_row.tooltip_text = Tr.t("HINT_HUD_WORKERS")
+	morale_row.tooltip_text = Tr.t("HINT_HUD_MORALE")
+	for row in [pop_row, work_row, morale_row]:
+		(row as Control).mouse_filter = Control.MOUSE_FILTER_STOP
+		(row as Control).gui_input.connect(_on_status_tap)
+
 	# Morale bar
 	_morale_bar = UITheme.make_progress_bar(UITheme.WARNING, 8)
 	_morale_bar.custom_minimum_size.x = 110
@@ -111,9 +123,18 @@ func _setup_ui() -> void:
 	_morale_bar.value = PopulationManager.get_morale()
 	status_vbox.add_child(_morale_bar)
 
+	_status_hint = UITheme.make_label("%s\n%s\n%s" % [Tr.t("HINT_HUD_POPULATION"),
+		Tr.t("HINT_HUD_WORKERS"), Tr.t("HINT_HUD_MORALE")], "small", UITheme.TEXT_DIM)
+	_status_hint.name = "StatusHint"
+	_status_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status_hint.custom_minimum_size.x = 220
+	_status_hint.visible = false
+	status_vbox.add_child(_status_hint)
+
 	# Log button integrated below status
 	_log_btn = Button.new()
-	_log_btn.text = Tr.t("BTN_LOG")
+	_log_btn.text = Tr.t("BTN_LOG_HUD")
+	_log_btn.tooltip_text = Tr.t("HINT_HUD_LOG")
 	_log_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UITheme.style_button(_log_btn, UITheme.BTN, UITheme.FONT_SMALL)
 	# Sin alto propio: style_button le da MIN_BTN_H (44), el minimo tactil.
@@ -262,10 +283,10 @@ func _refresh_log() -> void:
 		_log_vbox.add_child(label)
 
 func _on_population_changed(current: int, max_pop: int) -> void:
-	_pop_label.text = Tr.t("LBL_POPULATION") % [current, max_pop]
+	_pop_label.text = Tr.t("LBL_HUD_POPULATION") % [current, max_pop]
 
 func _on_morale_changed(new_morale: int) -> void:
-	_morale_label.text = Tr.t("LBL_MORALE") % new_morale
+	_morale_label.text = morale_text(new_morale)
 	_morale_bar.value = new_morale
 	var color: Color
 	if new_morale <= 30:
@@ -281,12 +302,30 @@ func _on_morale_changed(new_morale: int) -> void:
 		fill.bg_color = color
 
 func _on_workers_changed(used: int, total: int) -> void:
-	_workers_label.text = Tr.t("LBL_WORKERS") % [used, total]
+	_workers_label.text = workers_text(used, total)
 
 func _update_status_labels() -> void:
-	_pop_label.text = Tr.t("LBL_POPULATION") % [PopulationManager.get_population(), PopulationManager.get_max_population()]
-	_workers_label.text = Tr.t("LBL_WORKERS") % [PopulationManager.get_used_workers(), PopulationManager.get_population()]
-	_morale_label.text = Tr.t("LBL_MORALE") % PopulationManager.get_morale()
+	_pop_label.text = Tr.t("LBL_HUD_POPULATION") % [PopulationManager.get_population(), PopulationManager.get_max_population()]
+	_workers_label.text = workers_text(PopulationManager.get_used_workers(), PopulationManager.get_population())
+	_morale_label.text = morale_text(PopulationManager.get_morale())
+
+## "Obreros: 3 trabajan, 2 libres" en vez de "Trabajadores: 3/5", que no decia
+## si eran libres u ocupados.
+static func workers_text(used: int, total: int) -> String:
+	return Tr.t("LBL_HUD_WORKERS") % [used, maxi(0, total - used)]
+
+## "Moral 75 %: produccion x1.1": lo que la moral HACE, no solo cuanta hay.
+static func morale_text(morale: int) -> String:
+	return Tr.t("LBL_HUD_MORALE") % [morale, PopulationManager.morale_to_multiplier(morale)]
+
+func _on_status_tap(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_status_hint.visible = not _status_hint.visible
+		get_viewport().set_input_as_handled()
+
+## Si las explicaciones de la tarjeta estan desplegadas. Para tests.
+func is_status_hint_shown() -> bool:
+	return _status_hint != null and _status_hint.visible
 
 func _toggle_panel() -> void:
 	_is_open = not _is_open
