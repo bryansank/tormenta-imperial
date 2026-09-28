@@ -15,6 +15,15 @@ const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 var _placed: Array = []
 var _next_cell := 0
 var _saved: Dictionary = {}
+var _scene: Node = null
+var _made_scene := false
+var _placer: Node = null
+
+## ArmyManager.barracks_count() pregunta al "BuildingPlacer" de la escena actual;
+## este cuenta en la rejilla, como el de verdad (PlacementRules.count_building).
+class GridPlacer extends Node:
+	func count_building(building_id: String) -> int:
+		return load("res://scripts/buildings/PlacementRules.gd").count_building(building_id)
 
 func before_test() -> void:
 	_placed = []
@@ -32,6 +41,16 @@ func before_test() -> void:
 		"tech": TechTreeManager.get_save_data(),
 	}
 	TechTreeManager.reset()
+	_scene = get_tree().current_scene
+	if _scene == null:
+		_scene = Node.new()
+		_scene.name = "ObjectivesTestScene"
+		get_tree().root.add_child(_scene)
+		get_tree().current_scene = _scene
+		_made_scene = true
+	_placer = GridPlacer.new()
+	_placer.name = "BuildingPlacer"
+	_scene.add_child(_placer)
 	GridManager.clear_all()
 	ProgressionManager.reset()
 	ArmyManager.reset()
@@ -49,6 +68,13 @@ func after_test() -> void:
 			node.free()
 	_placed.clear()
 	GridManager.clear_all()
+	_scene.remove_child(_placer)
+	_placer.free()
+	if _made_scene:
+		get_tree().current_scene = null
+		get_tree().root.remove_child(_scene)
+		_scene.free()
+		_made_scene = false
 	ProgressionManager.load_save_data(_saved["progression"])
 	ProgressionManager.final_audit = _saved["final_audit"]
 	StormManager.load_save_data(_saved["storm"])
