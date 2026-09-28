@@ -154,7 +154,8 @@ func test_reset_audio_brings_the_music_back() -> void:
 	AudioManager.set_music_volume(saved[1])
 	AudioManager.set_sfx_volume(saved[2])
 	AudioManager.set_music_enabled(saved[3])
-	assert_array(after).is_equal([0.9, 0.35, 0.8, true])
+	# Los de serie bajaron (bug 4): GameConfig.AUDIO_DEFAULTS.
+	assert_array(after).is_equal([0.8, 0.35, 0.5, true])
 
 func test_edit_layout_closes_settings_first() -> void:
 	var p = _open()

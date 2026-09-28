@@ -251,15 +251,17 @@ var resource_colors := {
 ## Valores de serie bajos (bug 4): el primer arranque sonaba muy fuerte. Los
 ## deslizadores siguen una curva perceptual (AudioManager.slider_to_db), asi que
 ## 0.8 / 0.5 ya bajan de verdad. Quien ya guardo settings.cfg conserva lo suyo.
-var audio_master_volume := 0.8
+## Los de serie, en un sitio: Ajustes > Audio > Restablecer vuelve a estos.
+const AUDIO_DEFAULTS := {"master": 0.8, "music": 0.35, "sfx": 0.5, "ambient": 0.4}
+var audio_master_volume: float = AUDIO_DEFAULTS["master"]
 ## Bajada de 0.6 a 0.35: el dueno la encontraba muy invasiva. Quien ya guardo
 ## un volumen en settings.cfg conserva el suyo.
-var audio_music_volume := 0.35
+var audio_music_volume: float = AUDIO_DEFAULTS["music"]
 ## Musica si/no, aparte del volumen (Ajustes y el menu ☰). Apagada, AudioManager
 ## no arranca ninguna pista, ni al cambiar de era ni al entrar en combate.
 var audio_music_enabled := true
-var audio_sfx_volume := 0.5
-var audio_ambient_volume := 0.4
+var audio_sfx_volume: float = AUDIO_DEFAULTS["sfx"]
+var audio_ambient_volume: float = AUDIO_DEFAULTS["ambient"]
 
 # ── Camara: arrastrar el mapa ──
 # El raton y el dedo mueven el mapa con la misma cuenta (agarrar el terreno y

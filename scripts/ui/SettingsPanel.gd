@@ -213,9 +213,9 @@ func _build_audio_tab(body: VBoxContainer) -> void:
 		func(v: float): AudioManager.set_sfx_volume(v), true))
 	_add_reset(body, reset_audio)
 
-## Los valores de serie de GameConfig (la musica, encendida y a 0.35).
+## Los valores de serie de GameConfig (AUDIO_DEFAULTS: bajos, bug 4).
 func reset_audio() -> void:
-	var defaults := {"master": 0.9, "music": 0.35, "sfx": 0.8}
+	var defaults: Dictionary = GameConfig.AUDIO_DEFAULTS
 	for key in defaults:
 		var slider: HSlider = _audio_sliders.get(key)
 		if slider != null:
@@ -643,6 +643,9 @@ func toggle() -> void:
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)
+		# Guardar al cerrar: un deslizador movido con teclado o mando no emite
+		# drag_ended, y lo elegido tiene que sobrevivir al reinicio.
+		GameConfig.save_user_settings()
 		# Cerrar con cambios pendientes es aplicarlos: nadie espera que la
 		# letra grande que eligio se quede sin verse.
 		if _needs_rebuild:
