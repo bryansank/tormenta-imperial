@@ -1,0 +1,75 @@
+# Bug de Bryan: "no me deja ajustar nada, todo esta pegado sin accion".
+#
+# Se abre AJUSTES desde los tres sitios (pausa, menu de hamburguesa y menu de
+# titulo) y en cada uno se toca/arrastra un slider y se tocan dos interruptores.
+# Esperado: el porcentaje y los interruptores cambian en las capturas _b, _c, _d
+# y _e respecto a _a, y _g vuelve a donde se abrio.
+# 02_1_pausa_a_abierto es ademas el valor de fabrica del volumen (instalacion
+# limpia): Bryan dice que "el volumen inicial esta super alto".
+# El caso que SI se queda pegado (AJUSTES del titulo en una instalacion limpia)
+# esta aparte, en 02b_ajustes_titulo_limpio.yaml.
+appId: com.bryankey.tormentaimperial.qa
+name: 02 Ajustes - responden al toque
+tags: [ajustes, menus]
+---
+- runFlow: comun/en_partida.yaml
+# 1) Desde la pausa.
+- tapOn:
+    point: "30%,5%"       # boton pausa (II)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/02_1_pausa_menu
+- tapOn:
+    point: "50%,54%"      # AJUSTES en la pausa
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- runFlow:
+    file: comun/probar_ajustes.yaml
+    env: {P: 02_1_pausa}
+- tapOn:
+    point: "50%,36%"      # Reanudar
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+# 2) Desde el menu de hamburguesa.
+- tapOn:
+    point: "97%,5%"       # boton de hamburguesa
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/02_2_hamburguesa_menu
+- tapOn:
+    point: "92%,54%"      # AJUSTES en el menu lateral
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- runFlow:
+    file: comun/probar_ajustes.yaml
+    env: {P: 02_2_hamburguesa}
+- tapOn:
+    point: "97%,5%"       # cerrar el menu lateral si sigue abierto
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# 3) Desde el menu de titulo (con partida guardada: Continuar arriba, AJUSTES 3o).
+- tapOn:
+    point: "30%,5%"       # pausa
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- tapOn:
+    point: "50%,72%"      # Menu principal
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 4000}
+- takeScreenshot: ${output.dir}/02_3_titulo
+- tapOn:
+    point: "21%,52%"      # AJUSTES
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- runFlow:
+    file: comun/probar_ajustes.yaml
+    env: {P: 02_3_titulo}
