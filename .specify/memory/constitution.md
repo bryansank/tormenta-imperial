@@ -1,6 +1,10 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 2.0.0 → 2.0.1 (2026-09-28)
+Bump rationale: PATCH — solo la cuenta de autoloads (19 → 25 de juego, más el puente
+BeckettRuntime) en los Rationale de I y II y en IV. Ningún principio cambia.
+
 Version change: 1.0.0 → 2.0.0
 Bump rationale: MAJOR — redefinición incompatible del Principio II. Pasa de "C# MUST
 para IA/combate/pathfinding" a "GDScript primero; C# solo con evidencia de profiler".
@@ -36,7 +40,7 @@ Reglas no negociables:
 - Toda señal nueva se declara en `EventBus.gd` bajo su categoría antes de emitirse.
 - El flujo canónico es `Input crudo → InputService → EventBus.signal → Consumidor`.
 
-**Rationale:** El desacople productor/consumidor es lo que permite que 19 autoloads
+**Rationale:** El desacople productor/consumidor es lo que permite que 25 autoloads
 evolucionen sin romperse entre sí y que UI, cámara y lógica se prueben de forma aislada.
 
 ### II. GDScript Primero
@@ -52,7 +56,7 @@ Todo el código del juego se escribe en **GDScript**, incluido el combate por tu
 - La lógica de combate se escribe como **funciones puras y deterministas** (sin nodos ni
   estado global) para que sea testeable en headless y portable si algún día hace falta.
 
-**Rationale:** El proyecto entero (19 autoloads y toda la UI) ya es GDScript. A la escala
+**Rationale:** El proyecto entero (25 autoloads y toda la UI) ya es GDScript. A la escala
 acordada para el combate —tablero 8x8, 4-6 unidades por bando— el rendimiento no es un
 factor, y un segundo runtime añade compilación, marshalling y depuración doble sin
 beneficio. Menos piezas es más probabilidad de terminar.
@@ -72,7 +76,8 @@ seguro, sin cazar constantes dispersas por el código.
 ### IV. Fronteras de Servicios Autoload
 
 Cada dominio del juego pertenece a exactamente un servicio autoload con responsabilidad
-clara (ver la tabla de 19 autoloads en `CLAUDE.md`).
+clara (ver la tabla de autoloads en `CLAUDE.md`: 25 de juego, más el puente de
+desarrollo `BeckettRuntime`).
 
 - Un servicio es dueño de su estado; los demás lo leen vía su API pública o reaccionan a
   sus señales, nunca mutando su estado interno directamente.
@@ -147,4 +152,4 @@ o convergencia de Spec Kit y debe corregirse antes de dar una feature por comple
 - **Guía runtime:** `CLAUDE.md` es la guía operativa de desarrollo y debe mantenerse
   coherente con esta constitución.
 
-**Version**: 2.0.0 | **Ratified**: 2026-07-20 | **Last Amended**: 2026-09-12
+**Version**: 2.0.1 | **Ratified**: 2026-07-20 | **Last Amended**: 2026-09-28

@@ -1,65 +1,39 @@
-# GEMINI.md - Tormenta Imperial Master Context
+# GEMINI.md - Tormenta Imperial
 
-Este archivo es el índice maestro para Gemini CLI. Define la arquitectura, los servicios activos y las convenciones del proyecto **Tormenta Imperial**.
+Contexto para Gemini CLI. **La guía completa y al día es [`CLAUDE.md`](CLAUDE.md)**:
+arquitectura, los 25 autoloads, el árbol de escena, estructura, convenciones, cómo
+correr los tests y qué falta. Este archivo solo resume lo imprescindible y remite allí;
+si algo de aquí contradice a `CLAUDE.md`, manda `CLAUDE.md`.
 
-## 1. Project Overview
-Hybrid strategy game: persistent base management (meta-game) + RTS combat.
-- **Aesthetic:** "Heroic Realism" / Dieselpunk (Monumentalism vs Mud).
-- **Engine:** Godot 4.6 .NET Edition (Forward+ renderer).
-- **Primary Architecture:** Service-Signal-Component (100% Decoupled).
+## 1. Qué es
+Juego dieselpunk de gestión de base + estrategia por turnos, en **Godot 4.7 .NET**
+(Forward+ en PC, renderer Mobile en Android). Todo en **GDScript**: no hay proyecto C#
+ni está previsto para la v1.
 
-## 2. Core Architecture: Service-Signal-Component
-Todos los sistemas se comunican exclusivamente a través del **EventBus**. No hay referencias directas entre productores y consumidores.
+- Gestión: 4 recursos en una bolsa compartida, 3 eras, 14 edificios en una rejilla de
+  **40x40**, población y moral, mercado, árbol tecnológico, ejército.
+- La Tormenta Imperial vuelve por ciclos y cobra el Diezmo, que se paga o se pelea.
+- Combate PVE por turnos en un tablero 8x8: expediciones roguelike (mapa, draft,
+  informe), la defensa del Diezmo y la Auditoría Final (en Campaña, el Cuartel General
+  nivel 3 convoca un asedio de 3-5 oleadas; sobrevivirlo es la victoria).
+- Cuatro modos (Campaña, Constructor, Supervivencia, Sandbox), vista 3D y vista 2D,
+  interfaz configurable por dispositivo, exportación a Windows y Android.
 
-### Golden Rules (From `docs/01-architecture.md`):
-1. **Services never reference each other directly** — use `EventBus` signals.
-2. **UI subscribes to EventBus in `_ready()`** and reacts to signals.
-3. **Data flows one way:** Input -> Service -> EventBus -> Consumer.
-4. **GameConfig holds all balance values** — zero magic numbers in code.
+## 2. Reglas que no se negocian
+1. Los cambios de estado se anuncian por `EventBus`; un productor no conoce a sus
+   consumidores.
+2. Todo valor ajustable vive en `scripts/services/GameConfig.gd`.
+3. Los modelos de `scripts/combat/` y `scripts/storm/` son puros: sin nodos, sin
+   señales, sin RNG global.
+4. Los tests se lanzan **solo** con `tools/run_tests.sh` (o `.ps1`), que les da una
+   carpeta de usuario propia. Nunca `GdUnitCmdTool.gd` a pelo: pisaría la partida del
+   jugador.
+5. Estado nuevo en el guardado: `reset()` llamado desde los tres sitios de
+   `GameManager` (`_new_game()`, `clear_save()`, `clear_save_and_reload_from()`).
+6. Constitución del proyecto: `.specify/memory/constitution.md`.
 
-### Registered Autoload Services (Load Order Matters):
-| Order | Service | Responsability |
-|-------|---------|----------------|
-| 1 | `Tr` | Localización (ES/EN). |
-| 2 | `GameConfig` | Constantes de balance y tuning. |
-| 3 | `EventBus` | Bus global de señales (solo declaraciones). |
-| 4 | `InputService` | Mapeo de Input a señales del EventBus. |
-| 5 | `GridManager` | Gestión de celdas 25x25 y lógica de terreno. |
-| 6 | `ResourceManager` | Gestión de 4 recursos + desbloqueos. |
-| 7 | `GameManager` | Ciclo de vida, guardado/carga (Local + Cloud). |
-| 8 | `ProcessManager` | Procesos de edificios (minería, refinado). |
-| 9 | `ProductionManager` | Producción pasiva y ciclos de construcción. |
-| 10 | `ProgressionManager` | Eras, hitos (milestones) y victoria. |
-| 11 | `MarketManager` | Comercio con precios dinámicos. |
-| 12 | `PopulationManager` | Población, trabajadores y moral. |
-| 13 | `RandomEventManager` | Eventos aleatorios del juego. |
-| 14 | `CloudSaveManager` | Integración con Supabase (pendiente). |
-
-## 3. Implementation Cheat Sheet
-Para añadir un nuevo sistema o funcionalidad, sigue este flujo:
-
-1. **Signals:** Declara la señal en `scripts/services/EventBus.gd`.
-2. **Service:** Crea el manager en `scripts/services/`. Debe incluir:
-   - `get_save_data()` / `load_save_data()` / `reset()`.
-3. **Registration:** Añádelo a `project.godot` respetando el orden de dependencia.
-4. **GameManager:** Conecta el nuevo servicio en `_new_game()`, `_load_game()` y `clear_save()`.
-5. **UI:** Crea la escena en `scenes/ui/` y el script en `scripts/ui/` conectando señales en `_ready()`.
-
-## 4. Coding Conventions
-- **GDScript:** UI, Camera, Input, Signal Wiring, Audio. (`snake_case`)
-- **C#:** (Planned) Performance-heavy systems: Unit AI, Combat Logic, Pathfinding. (`PascalCase`)
-- **Resources:** Todos los datos de edificios están en `data/buildings/*.tres`.
-
-## 5. Project Roadmap & Status
-- [x] **Core Foundations:** Camera, Grid, Building Placer, EventBus.
-- [x] **Economy & Management:** Resource system, Population, Market, Production.
-- [x] **Progression:** Tech Tree, Eras, Milestones, Save System (Local).
-- [~] **Persistence:** Local JSON working. Supabase/Cloud pending.
-- [ ] **Combat Basics:** Drag selection box and NavigationAgent2D (Next Focus).
-- [ ] **Assets:** Refine building models and unit sprites.
-
-## 6. Key Documentation References
-- `docs/01-architecture.md`: Detalles técnicos del flujo de datos.
-- `docs/03-buildings.md`: Lista completa de los 14 tipos de edificios.
-- `docs/09-save-system.md`: Estructura del JSON de guardado.
-- `docs/10-signals-reference.md`: Diccionario completo de señales del EventBus.
+## 3. Dónde mirar
+- `CLAUDE.md` — la guía técnica completa.
+- `docs/INDEX.md` — un documento por sistema (01-23).
+- `docs/13-roadmap.md` — lo hecho y lo pendiente.
+- `docs/10-signals-reference.md` — las 107 señales del `EventBus`.
