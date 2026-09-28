@@ -26,6 +26,11 @@ var _hold_start := false
 ## "Continuar" solo cuando habia algo que continuar: una partida nueva se guarda
 ## al instante, asi que mirar el archivo despues de arrancar no sirve.
 var loaded_from_save := false
+## El jugador ya solto el menu principal en esta sesion. Es del TitleMenu, pero
+## vive aqui porque un autoload sobrevive a cualquier cambio de escena (nueva
+## partida, cambio de vista 3D/2D) sin depender de que el script del menu siga
+## cargado. De sesion: no se guarda ni lo limpia ningun reset().
+var title_dismissed := false
 ## La capa del parte offline mientras esta en pantalla.
 var _offline_canvas: CanvasLayer = null
 
