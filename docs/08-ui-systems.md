@@ -7,13 +7,13 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 ## UI Panels
 
 ### ResourceHUD (`scripts/ui/ResourceHUD.gd`)
-- **Position:** Top bar, full width
-- **Shows:** Unlocked resource amounts (gold, wood, then steel/oil when unlocked)
-- **Behavior:** Resource values update in real-time via `EventBus.resource_changed`. Flashes orange when at storage cap. Animates glow when a new resource unlocks.
+- **Position:** Top-left card (slot `top_left`)
+- **Shows:** Unlocked resource amounts (gold, wood, then steel/oil when unlocked) and ONE shared storage bar labelled "ALMACÉN COMPARTIDO 500 / 600"
+- **Behavior:** Resource values update in real-time via `EventBus.resource_changed`. Each number has its name in a tooltip; a tap (or click) on a number or on the storage row unfolds a row per resource with name, amount and a colour swatch that is the legend of the storage bar, plus one line explaining the shared cap. The bar turns red when full. Animates glow when a new resource unlocks.
 - **Layer:** 10
 
 ### ConstructionMenu (`scripts/ui/ConstructionMenu.gd`)
-- **Position:** Bottom center ("BUILD" button), panel grows upward
+- **Position:** Bottom center: a big CONSTRUIR button (240x64, brass border), ALWAYS visible — it used to appear only while the ☰ column was open
 - **Shows:** Scrollable list of all non-core buildings from `data/buildings/`
 - **Behavior:** Each button shows name, size, cost, production, prerequisites, worker requirements. Buildings requiring locked resources are grayed out. Rebuilds when resources unlock.
 - **Layer:** 10
@@ -38,7 +38,7 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 ### ProgressPanel (`scripts/ui/ProgressPanel.gd`)
 - **Position:** Center overlay, button top-right (below market)
 - **Shows:** Current era, progress bar, 9 milestones with [X]/[ ] checkmarks
-- **Behavior:** Updates checkmarks on milestone completion. Shows toast notifications for milestones and era transitions.
+- **Behavior:** Updates checkmarks on milestone completion. Milestone and era toasts go through a queue: one plate at a time at 30 % of the screen height, away from the centre column (they used to stack on top of each other and of the objective).
 - **Layer:** 11
 
 ### VictoryScreen (`scripts/ui/VictoryScreen.gd`)
@@ -52,10 +52,23 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 - **Behavior:** opens on launch over the already-loaded game and pauses the tree (`get_tree().paused`). Skipped headless and with `-- --no-title` (probes). Shown once per session (static flag survives the new-game reload)
 - **Layer:** 30, `PROCESS_MODE_ALWAYS`
 
-### PauseMenu (`scripts/ui/PauseMenu.gd`)
-- **Shows:** Reanudar, Guardar, Ajustes, Historia (replays the intro), Menu principal, Guardar y salir; plus an always-visible "II" touch button (top-left next to the HUD; bottom-centre on narrow screens)
-- **Behavior:** ESC opens it only when no UIManager window is open, `BuildingPlacer.is_idle()` and the title menu is closed. Real pause: services stop; the menu, AudioManager and whatever panel it lends (SettingsPanel, TutorialPanel) get `PROCESS_MODE_ALWAYS` while in use and their mode back on close
+### PauseMenu (`scripts/ui/PauseMenu.gd`) — THE game menu
+There is ONE menu (it replaced the "II" pause button and the ☰ sidebar, which
+lived in opposite corners and overlapped). The node is still called `PauseMenu`.
+- **Button:** "☰ MENÚ", top-right, finger-sized, always visible in play (hidden while the menu itself is open). No other menu button exists; the old sidebar buttons of each panel stay hidden (nobody emits `sidebar_toggled(true)` any more)
+- **Card:** title, "Modo: X", and two groups side by side (one column with scroll below 700 px):
+  - **COLONIA** — ¿Qué hacer?, Progreso, Mercado (from the ECONOMY phase), Tecnología, Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode). Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
+  - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Historia (replays the intro), Menú principal, Guardar y salir
+- **Behavior:**
+  - Real pause while open (`get_tree().paused`); tapping the backdrop resumes.
+  - The button NEVER fails silently: it cancels a placement (`building_placement_cancelled`) and closes every UIManager window (`UIManager.close_all_windows()`) and then opens. `can_pause()` is only for ESC.
+  - ESC: an open window or a building in hand keeps ESC for itself; otherwise ESC opens/closes the menu, or closes the borrowed screen.
+  - Android back = ESC (`application/config/quit_on_go_back=false`; `NOTIFICATION_WM_GO_BACK_REQUEST` is turned into an ESC press).
+  - Borrowed screens (Ajustes, Ayuda, the intro) get `PROCESS_MODE_ALWAYS` and a layer ABOVE the menu (`LAYER + 1`, re-pinned every frame and on every UIManager reorder) while in use, and their mode and layer back on close. TitleMenu does the same with Ajustes. Bug 1 was the intro (layer 17) sitting over Ajustes (UIManager put it at 13) and eating every touch.
+  - Menú principal saves, cancels placement, closes windows and opens TitleMenu, in 3D and 2D and in every mode.
 - **Layer:** 30
+- **Tests:** `tests/ui/test_game_menu.gd`, `test_main_menu_exit.gd`, `test_settings_respond.gd` (real mouse events pushed at the slider and a toggle, from the title menu, the game menu and in play, with a full-screen trap layer at 17), `test_pause_menu.gd`
+- **Probe:** `tools/menu_probe.gd` (`-- --shot-size=1280x800 --profile=tablet [--view=2d]`), screenshots in `docs/media/dev/menu/`
 
 ### War reports and the Final Audit screens
 - `AuditWaveBanner` (layer 19): "Oleada X de N" on `final_audit_wave_ready`, with the cleared wave from `final_audit_wave_cleared` above it and the last-wave line. Ignores the mouse, fades by itself
@@ -65,9 +78,12 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 
 ### NotificationPanel (`scripts/ui/NotificationPanel.gd`)
 - **Position:** Top-left status bar (pop/workers/morale), bottom-left toasts, left side log panel
-- **Shows:** Population/workers/morale status, scrollable activity log, toast notifications
+- **Shows:** "Habitantes: 26 de 32", "Obreros: 14 trabajan, 12 libres", "Moral 72 %: producción x1.1" (tooltips per row; a tap on the card unfolds the three explanations), the REGISTRO DE AVISOS button, scrollable activity log, toast notifications
 - **Behavior:** Listens to `EventBus.notification_posted`. Toasts auto-fade after 4 seconds. Log stores last 50 entries.
 - **Layer:** 11
+
+### Status badge (`scripts/buildings/BuildingStatusBadge.gd`, `scripts/view2d/StatusBadge2D.gd`)
+- Over every building that can work: a worker pictogram when it works, and "Zzz" plus WHY it is stopped when it does not: "sin obreros" (red), "parado", "en obras", "en ruinas" (`BuildingStatusBadge.reason_text`). Same text in 3D and 2D.
 
 ### OnScreenControls (`scripts/ui/OnScreenControls.gd`)
 - **Position:** Bottom-right
@@ -94,8 +110,9 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
   paletas rojo-verde y azul-amarillo, alto contraste, opacidad de paneles y
   tamano de texto. Nada de colores semanticos escritos a mano en los paneles.
 - **Columna central** baja a la izquierda cuando no cabe (lienzo < 1080 px o
-  columna izquierda real mas ancha: cuatro recursos + LIMPIAR). La pausa se
-  coloca a la derecha del ancho REAL de la barra de recursos.
+  columna izquierda real mas ancha: cuatro recursos + LIMPIAR). Ya no hay
+  boton de pausa a la derecha de los recursos (`PAUSE_RESERVE = 0`): el menu
+  unico va arriba a la derecha.
 
 ## UI Construction Pattern
 

@@ -78,9 +78,9 @@ en tablet y con letra grande) y su **Restablecer esta pestaña** (menos Juego):
 
 | Pestaña | Qué hay |
 |---|---|
-| **Audio** | Volumen general, música sí/no (sigue en el menú ☰), música, efectos |
+| **Audio** | Volumen general, música sí/no (también en ☰ MENÚ → PARTIDA), música, efectos. De serie bajos: general 80 %, música 35 %, efectos 50 % (`GameConfig.AUDIO_DEFAULTS`), con curva perceptual |
 | **Interfaz** | Perfil de dispositivo, escala, tamaño de texto · Vista 3D/2D, rejilla, pantalla completa · Elementos en pantalla (un interruptor por elemento) · Editar / Restablecer disposición |
-| **Controles** | Controles en pantalla (Automático / Siempre / Nunca) y el resumen de controles en ratón o en dedo |
+| **Controles** | Controles en pantalla (Automático / Siempre / Nunca), su opacidad (20–100 %, de serie 55 %, `GameConfig.ui_touch_controls_opacity`) y el resumen de controles en ratón o en dedo |
 | **Accesibilidad** | Paleta de colores, alto contraste, opacidad de paneles, vista previa |
 | **Juego** | Idioma, Nueva partida |
 
@@ -99,8 +99,9 @@ y se verá al terminar.
 ocultar: recursos y almacén, población/obreros/moral, botón del registro,
 objetivo, indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
 mismo interruptor que AYUDA del menú ☰), texto de turno en batalla y las
-herramientas Sandbox (solo existen en ese modo, docs/20). El menú ☰ y la pausa no
-están en el registro: no se pueden ocultar.
+herramientas Sandbox (solo existen en ese modo, docs/20). El botón ☰ MENÚ (el
+menú único, que sustituye al ☰ y a la pausa II) no está en el registro: no se
+puede ocultar.
 
 La pestaña SANDBOX es también movible: su slot `sandbox_tab` la apila al pie de
 la columna izquierda (tras el globo de los recursos, que va tras el registro),
@@ -209,7 +210,30 @@ WASD, rueda, ratón o clic.
 - Los globos de ayuda se callan también bajo la pausa y el menú principal
   (`HelperPanel` mira `get_tree().paused` con un vigía que corre en pausa).
 
-## 8. Herramientas y tests
+## 8. Menú único, Ajustes que responden y volumen
+
+- **Un solo menú** (`PauseMenu`, docs/08): el botón "☰ MENÚ" arriba a la
+  derecha sustituye a la pausa II (arriba a la izquierda) y al ☰ desplegable.
+  Abre una tarjeta con COLONIA y PARTIDA y pausa. Siempre abre: cierra antes las
+  ventanas y suelta el edificio en la mano. ESC y el botón atrás de Android
+  (`quit_on_go_back=false`) hacen lo mismo. Sin botón de pausa junto a los
+  recursos, la columna izquierda ya no le reserva sitio (`PAUSE_RESERVE = 0`).
+- **CONSTRUIR** es siempre visible, grande y abajo en el centro.
+- **Ajustes prestados** (desde el menú principal o el menú de la partida) van
+  en una capa por encima de todo (`LAYER + 1`) mientras están abiertos y
+  procesan en pausa. Ajustes guarda al cerrarse.
+- **Volumen**: `AudioManager.slider_to_db(v) = linear_to_db(v * v)` en los
+  cuatro buses, y cada efecto con su ganancia fija (`SFX_GAIN_DB`, por nombre
+  de fichero: `era_up` −11 dB, `ui_click` −10 dB, el resto −6 a −8 dB).
+- **HUD con palabras**: "ALMACÉN COMPARTIDO 500 / 600" con leyenda de colores,
+  nombre de cada recurso (tooltip; con el dedo, un toque despliega los
+  nombres), "Habitantes", "Obreros: N trabajan, M libres", "Moral: producción
+  xN", y el Zzz con su motivo.
+- **Sonda**: `tools/menu_probe.gd` captura título, Ajustes sobre el título, el
+  HUD en era 1 y 3, el menú y cada pestaña de Ajustes, y el tablero, en
+  `docs/media/dev/menu/`.
+
+## 9. Herramientas y tests
 
 - `tools/interfaz_probe.gd`: siembra una partida y hace capturas (HUD, menú ☰
   con un edificio, Ajustes pestañas Interfaz y Accesibilidad, editor, tablero)
@@ -224,7 +248,7 @@ WASD, rueda, ratón o clic.
   `test_hud_layout.gd`, `test_settings_tabs.gd`, y `test_touch_controls.gd`
   (actualizado: PC nunca enciende los controles en "Automático").
 
-## 9. Huecos conocidos
+## 10. Huecos conocidos
 
 - Cambiar texto, paleta, contraste u opacidad recarga la escena: no hay
   repintado en caliente de los paneles ya construidos.

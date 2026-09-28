@@ -248,15 +248,20 @@ var resource_colors := {
 # Volumes are linear [0.0, 1.0]; AudioManager converts to dB per bus.
 # Master scales all others. Set any to 0.0 to mute that channel.
 
-var audio_master_volume := 0.9
+## Valores de serie bajos (bug 4): el primer arranque sonaba muy fuerte. Los
+## deslizadores siguen una curva perceptual (AudioManager.slider_to_db), asi que
+## 0.8 / 0.5 ya bajan de verdad. Quien ya guardo settings.cfg conserva lo suyo.
+## Los de serie, en un sitio: Ajustes > Audio > Restablecer vuelve a estos.
+const AUDIO_DEFAULTS := {"master": 0.8, "music": 0.35, "sfx": 0.5, "ambient": 0.4}
+var audio_master_volume: float = AUDIO_DEFAULTS["master"]
 ## Bajada de 0.6 a 0.35: el dueno la encontraba muy invasiva. Quien ya guardo
 ## un volumen en settings.cfg conserva el suyo.
-var audio_music_volume := 0.35
+var audio_music_volume: float = AUDIO_DEFAULTS["music"]
 ## Musica si/no, aparte del volumen (Ajustes y el menu ☰). Apagada, AudioManager
 ## no arranca ninguna pista, ni al cambiar de era ni al entrar en combate.
 var audio_music_enabled := true
-var audio_sfx_volume := 0.8
-var audio_ambient_volume := 0.5
+var audio_sfx_volume: float = AUDIO_DEFAULTS["sfx"]
+var audio_ambient_volume: float = AUDIO_DEFAULTS["ambient"]
 
 # ── Camara: arrastrar el mapa ──
 # El raton y el dedo mueven el mapa con la misma cuenta (agarrar el terreno y
@@ -316,6 +321,10 @@ var ui_view_mode := "3d"
 ## (UITheme.touch_px).
 const TOUCH_CONTROLS_MODES := ["auto", "always", "never"]
 var ui_touch_controls := "auto"
+## Opacidad de los controles en pantalla (bug 7: tapaban el mapa). 0.2..1.0;
+## Ajustes > Controles. Los aplica OnScreenControls.
+const TOUCH_OPACITY_MIN := 0.2
+var ui_touch_controls_opacity := 0.55
 ## Idioma de la interfaz ("es" / "en"). Vive en settings.cfg y no en la partida:
 ## es del dispositivo, sobrevive a "partida nueva" y se aplica antes de pintar nada.
 var ui_locale := "es"
@@ -378,6 +387,7 @@ func load_user_settings() -> void:
 	# Un valor desconocido en el archivo (edicion a mano, version vieja) vuelve
 	# a "auto" en vez de dejar los controles en un estado que nadie eligio.
 	ui_touch_controls = touch_mode if touch_mode in TOUCH_CONTROLS_MODES else "auto"
+	ui_touch_controls_opacity = clampf(float(cf.get_value("ui", "touch_opacity", ui_touch_controls_opacity)), TOUCH_OPACITY_MIN, 1.0)
 	var locale := str(cf.get_value("ui", "locale", ui_locale))
 	if Tr.LOCALES.has(locale):
 		ui_locale = locale
@@ -419,6 +429,7 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
 	cf.set_value("ui", "view_mode", ui_view_mode)
 	cf.set_value("ui", "touch_controls", ui_touch_controls)
+	cf.set_value("ui", "touch_opacity", ui_touch_controls_opacity)
 	cf.set_value("ui", "locale", ui_locale)
 	cf.set_value("interfaz", "device_profile", ui_device_profile)
 	cf.set_value("interfaz", "ui_scale_pct", ui_scale_pct)
@@ -490,6 +501,12 @@ func set_touch_controls(mode: String) -> void:
 	ui_touch_controls = mode
 	save_user_settings()
 	EventBus.touch_controls_changed.emit(touch_controls_enabled())
+
+## Cambia la opacidad de los controles en pantalla y la anuncia (no guarda:
+## Ajustes guarda al soltar el deslizador y al cerrarse).
+func set_touch_controls_opacity(alpha: float) -> void:
+	ui_touch_controls_opacity = clampf(alpha, TOUCH_OPACITY_MIN, 1.0)
+	EventBus.touch_controls_opacity_changed.emit(ui_touch_controls_opacity)
 
 # ── Pantalla completa ──
 

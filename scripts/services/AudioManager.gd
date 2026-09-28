@@ -67,6 +67,21 @@ const SFX_MANIFEST := {
 	"storm_halted": "unlock",             # storm_halted_forever: the sky clears
 }
 
+## Ganancia por clip (dB), por NOMBRE DE FICHERO: las claves de combate reusan
+## clips y se llevan su misma ganancia. Los efectos vienen masterizados casi a
+## 0 dBFS (era_up pasa de 0 y recorta) y sonaban ~15 dB por encima de la musica
+## (docs/tormenta-imperial-contexto 07, bug 4). Se atenuan aqui en vez de
+## reescribir los ficheros: ui_click suena en cada boton y va el mas bajo.
+const SFX_GAIN_DB := {
+	"era_up": -11.0,
+	"ui_click": -10.0,
+	"build_place": -8.0,
+	"event_danger": -8.0,
+	"milestone": -8.0,
+}
+## Lo que no esta en SFX_GAIN_DB: todos los efectos se bajan algo.
+const SFX_DEFAULT_GAIN_DB := -6.0
+
 ## Same clip requested twice inside this window plays once. An AI turn can land
 ## several `unit_attacked` in a burst; stacking the identical hit only gets
 ## louder and would eat every voice in the pool (GameConfig.audio_sfx_voices).
@@ -150,7 +165,22 @@ func _set_bus_volume(bus_name: String, linear: float) -> void:
 		return
 	var v := clampf(linear, 0.0, 1.0)
 	AudioServer.set_bus_mute(idx, v <= 0.0)
-	AudioServer.set_bus_volume_db(idx, linear_to_db(v) if v > 0.0 else -80.0)
+	AudioServer.set_bus_volume_db(idx, slider_to_db(v))
+
+## Curva perceptual del deslizador: dB = linear_to_db(v * v). Con la lineal de
+## antes, del 100 % al 50 % solo bajaban 6 dB y el deslizador "no hacia nada"
+## hasta el ultimo tramo; asi el 50 % baja 12 dB y el 25 %, 24. El rango sigue
+## siendo 0..1, asi que los settings.cfg guardados siguen valiendo. 0 = silencio.
+static func slider_to_db(v: float) -> float:
+	var c := clampf(v, 0.0, 1.0)
+	if c <= 0.0:
+		return -80.0
+	return maxf(-80.0, linear_to_db(c * c))
+
+## Ganancia fija de un efecto (dB), segun su fichero.
+func sfx_gain_db(key: String) -> float:
+	var file: String = String(SFX_MANIFEST.get(key, key))
+	return float(SFX_GAIN_DB.get(file, SFX_DEFAULT_GAIN_DB))
 
 func set_music_volume(linear: float) -> void:
 	GameConfig.audio_music_volume = clampf(linear, 0.0, 1.0)
@@ -224,6 +254,7 @@ func play_sfx(key: String) -> void:
 	var p := _sfx_players[_sfx_next]
 	_sfx_next = (_sfx_next + 1) % _sfx_players.size()
 	p.stream = stream
+	p.volume_db = sfx_gain_db(key)
 	p.play()
 
 ## True when `key` may play at `now_msec`; records the play when it does.

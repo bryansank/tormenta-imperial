@@ -75,7 +75,7 @@ func _draw() -> void:
 		Badge3D.Status.IDLE:
 			var font := ThemeDB.fallback_font
 			var col := Badge3D.color_for_reason(_reason)
-			var text := Tr.t("LBL_STATUS_IDLE")
+			var text := "%s %s" % [Tr.t("LBL_STATUS_IDLE"), Badge3D.reason_text(_reason)]
 			var fs := 14
 			var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 			draw_rect(Rect2(Vector2(-w - 6, -fs - 1), Vector2(w + 8, fs + 5)), Color(0.05, 0.05, 0.05, 0.7))
