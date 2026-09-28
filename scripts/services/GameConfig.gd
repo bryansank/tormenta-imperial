@@ -217,6 +217,16 @@ var deposit_max_uses := {
 var deposit_count_min := 18
 var deposit_count_max := 28
 var deposit_center_exclusion := 6
+## Lo minimo de cada tipo que trae cualquier isla, por encima del sorteo. Sin
+## esto ~2 de cada 100 mapas salian sin pozo (sin era 3, sin final) o sin bosque.
+## Dos pozos porque la Refineria se come el suyo y el tope es de dos; dos vetas
+## porque el oro paga la comida, los sueldos y casi cada obra.
+var deposit_min_per_type := {
+	"forest": 2,
+	"gold_vein": 2,
+	"iron_deposit": 1,
+	"oil_well": 2,
+}
 
 # ── Deposit Sizes (random range per type: min_w, max_w, min_h, max_h) ──
 var deposit_sizes := {
