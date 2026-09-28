@@ -30,8 +30,18 @@ var severity: int = 1
 ## Persisted, because forgetting it on reload would make the false alarm free.
 var deferred_severity: int = 0
 var storms_survived: int = 0
+## Diezmos que la guarnicion ha echado. Es lo que engorda la escolta que vuelve
+## (GameConfig.get_assessor_escalation): una provincia que paga no les ha
+## ensenado nada; una que los echa figura en el libro como una que puede mas.
+## Antes la escolta crecia con `storms_survived`, que cuenta tambien los Diezmos
+## pagados, y a la septima tormenta llegaba al tope aunque no se hubiera ganado
+## ninguna (docs/22-linea-jugable.md).
+var tithes_repelled: int = 0
 ## Only the first storm gets the long fuse and the gentle severity.
 var _first: bool = true
+## The next Warning cannot turn out to be a false alarm. Set by `summon_now()`
+## (a storm called on demand is a storm that comes) and spent on that Warning.
+var forced: bool = false
 var _tick_accum: float = 0.0
 ## The cycle owns its randomness so a test can seed it and get the same run
 ## twice. Never the global `randf()`: a model that reads global state is not
@@ -46,7 +56,8 @@ static func create(rng_seed: int = -1) -> StormCycle:
 	var cycle := StormCycle.new()
 	cycle.phase = Phase.CALM
 	cycle.seconds_left = GameConfig.get_storm_first_interval()
-	cycle.severity = GameConfig.storm_first_severity
+	cycle.severity = clampi(GameConfig.storm_first_severity + GameConfig.get_storm_severity_bonus(),
+		1, GameConfig.storm_severity_max)
 	cycle.seed_rng(rng_seed)
 	return cycle
 
@@ -138,8 +149,20 @@ func _enter_warning() -> Array:
 		{"e": "incoming", "seconds": seconds_left},
 	]
 
+## Calls the storm now: straight into the Warning, whatever the calm had left.
+## Only from CALM — a storm already on its way is not summoned twice. Used by
+## the Sandbox tools; the rules of the storm itself do not change.
+func summon_now() -> Array:
+	if phase != Phase.CALM:
+		return []
+	forced = true
+	return _enter_warning()
+
 ## The Warning runs out and the sky decides.
 func _leave_warning() -> Array:
+	if forced:
+		forced = false
+		return _enter_ash()
 	if _rng.randf() < GameConfig.storm_false_alarm_chance:
 		return _false_alarm()
 	return _enter_ash()
@@ -191,10 +214,12 @@ func _enter_tithe() -> Array:
 
 ## Called once the collection is settled, whether it was repelled or paid.
 ## Re-arms the clock for the next one.
-func settle_tithe(footprint: int, era: int) -> Array:
+func settle_tithe(footprint: int, era: int, repelled: bool = false) -> Array:
 	if phase != Phase.TITHE:
 		return []
 	storms_survived += 1
+	if repelled:
+		tithes_repelled += 1
 	_first = false
 	severity = compute_severity(footprint, era)
 	# The deferred assessment rode along with this storm; the books are square.
@@ -218,7 +243,8 @@ static func compute_severity(footprint: int, era: int) -> int:
 	var from_era: int = GameConfig.storm_severity_per_era * maxi(0, era - 1)
 	var per: int = maxi(1, GameConfig.storm_buildings_per_severity)
 	var from_smoke: int = int(maxi(0, footprint) / per)
-	return clampi(1 + from_era + from_smoke, 1, GameConfig.storm_severity_max)
+	var from_mode: int = GameConfig.get_storm_severity_bonus()
+	return clampi(1 + from_era + from_smoke + from_mode, 1, GameConfig.storm_severity_max)
 
 # ── Persistence ──────────────────────────────────────────────────────
 
@@ -236,7 +262,9 @@ func to_dict() -> Dictionary:
 		"severity": severity,
 		"deferred_severity": deferred_severity,
 		"storms_survived": storms_survived,
+		"tithes_repelled": tithes_repelled,
 		"first": _first,
+		"forced": forced,
 	}
 
 static func from_dict(data: Dictionary) -> StormCycle:
@@ -249,10 +277,15 @@ static func from_dict(data: Dictionary) -> StormCycle:
 	cycle.severity = int(data.get("severity", 1))
 	cycle.deferred_severity = maxi(0, int(data.get("deferred_severity", 0)))
 	cycle.storms_survived = int(data.get("storms_survived", 0))
+	# Un guardado de antes de este contador no sabe cuantos se echaron: cero, que
+	# es lo prudente (la escolta vuelve a su tamano base, no al del tope).
+	cycle.tithes_repelled = maxi(0, int(data.get("tithes_repelled", 0)))
 	cycle._first = bool(data.get("first", true))
-	# A save made mid-collection would restore a board that no longer exists, so
-	# the fight is forgiven and the clock restarts calm.
+	cycle.forced = bool(data.get("forced", false))
+	# Un save hecho con los Tasadores en la puerta vuelve con los Tasadores en la
+	# puerta. Antes se perdonaba y el reloj volvia a la calma: salir del juego
+	# durante el Diezmo era la forma de no pagarlo. El tablero no se guarda, asi
+	# que quien reanuda el cobro es StormManager, al terminar la carga.
 	if cycle.phase == Phase.TITHE:
-		cycle.phase = Phase.CALM
-		cycle.seconds_left = cycle._roll_interval()
+		cycle.seconds_left = 0.0
 	return cycle

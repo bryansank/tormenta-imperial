@@ -2,10 +2,15 @@ extends CanvasLayer
 ## Construction menu: full-screen modal with category tabs, search bar,
 ## building grid with thumbnails, and a 3D preview panel for the selected building.
 
+const PlacementAssistScript := preload("res://scripts/buildings/PlacementAssist.gd")
+
 var _root: Control
 var _backdrop: ColorRect
 var _modal: PanelContainer
 var _build_btn: Button
+## Tamano del boton CONSTRUIR del HUD (el primario del juego).
+const BUILD_BTN_W := 240.0
+const BUILD_BTN_H := 64.0
 var _is_open := false
 
 # Category state
@@ -24,6 +29,8 @@ var _detail_name: Label
 var _detail_cost: Label
 var _detail_production: Label
 var _detail_extras: Label
+## "Necesita bosque adyacente": la regla del yacimiento, antes de colocar (bug 10).
+var _detail_rule: Label
 var _detail_size: Label
 var _detail_build_btn: Button
 var _selected_data: BuildingData = null
@@ -37,18 +44,26 @@ var _preview_spin := 0.0
 
 # Thumbnail cache
 var _thumb_cache: Dictionary = {}  # building_id -> ImageTexture
+
+# Vista 2D (docs/18-vista-2d.md): miniaturas y vista previa con el dibujo plano
+# del mapa en vez de modelos 3D. Se decide al arrancar: sin Camera3D es la 2D.
+const BuildingIcon2D := preload("res://scripts/view2d/BuildingIcon2D.gd")
+var _is_2d := false
+var _preview_icon: Control = null
 var _thumb_rects: Dictionary = {}  # building_id -> TextureRect
 
 const CATEGORIES := ["all", "production", "support", "military", "decoration"]
 
 func _ready() -> void:
 	layer = 12
+	_is_2d = get_viewport().get_camera_3d() == null and get_viewport().get_camera_2d() != null
 	_load_buildings()
 	_setup_ui()
 	_generate_thumbnails()
 	EventBus.resource_unlocked.connect(func(_r): _refresh_grid())
-	EventBus.sidebar_toggled.connect(func(v): _build_btn.visible = v)
-	_build_btn.visible = false  # Start collapsed, sidebar controls it
+	# CONSTRUIR es la accion principal: siempre a la vista, no escondida tras el
+	# menu (bug 9/11: solo salia al desplegar el antiguo ☰).
+	_build_btn.visible = true
 	UIManager.register_panel(self, "ConstructionMenu.modal")
 
 func _process(delta: float) -> void:
@@ -58,18 +73,10 @@ func _process(delta: float) -> void:
 
 func _load_buildings() -> void:
 	_all_buildings.clear()
-	var dir := DirAccess.open("res://data/buildings")
-	if not dir:
-		return
-	dir.list_dir_begin()
-	var file_name := dir.get_next()
-	while file_name != "":
-		if file_name.ends_with(".tres"):
-			var res = load("res://data/buildings/" + file_name)
-			if res is BuildingData and not res.is_core:
-				_all_buildings.append(res)
-		file_name = dir.get_next()
-	_all_buildings.sort_custom(func(a, b): return a.display_name < b.display_name)
+	for res in BuildingData.load_all():
+		if not res.is_core:
+			_all_buildings.append(res)
+	_all_buildings.sort_custom(func(a, b): return a.get_display_name() < b.get_display_name())
 
 func _get_category(data: BuildingData) -> String:
 	if data.is_decoration:
@@ -85,7 +92,7 @@ func _get_filtered_buildings() -> Array:
 	for data in _all_buildings:
 		if _current_category != "all" and _get_category(data) != _current_category:
 			continue
-		if _search_text != "" and data.display_name.to_lower().find(_search_text.to_lower()) == -1:
+		if _search_text != "" and data.get_display_name().to_lower().find(_search_text.to_lower()) == -1:
 			continue
 		result.append(data)
 	return result
@@ -102,12 +109,23 @@ func _setup_ui() -> void:
 
 	# Build button (bottom center)
 	_build_btn = Button.new()
-	_build_btn.text = Tr.t("BTN_BUILD")
-	_build_btn.custom_minimum_size.y = 54
+	_build_btn.name = "BuildButton"
+	# Gancho del tutorial guiado (frente de ayudas): resalta este boton.
+	_build_btn.add_to_group("hud_build_button")
+	_build_btn.text = Tr.t("BTN_BUILD_BIG")
+	_build_btn.tooltip_text = Tr.t("BTN_BUILD_HINT")
+	_build_btn.focus_mode = Control.FOCUS_NONE
+	# Grande y abajo en el centro: el pulgar llega en una tablet apaisada.
+	_build_btn.custom_minimum_size = Vector2(BUILD_BTN_W, BUILD_BTN_H)
 	UILayoutManager.apply_layout("ConstructionMenu.button", _build_btn)
 	UITheme.style_button(_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
+	# El primario del juego se distingue en reposo: metal mas claro y borde de
+	# laton, no el mismo verde apagado que cualquier boton.
+	_build_btn.add_theme_stylebox_override("normal", UITheme._button_style(
+		UITheme._metal_tint(UITheme.POSITIVE, 1.35), UITheme.POSITIVE, UITheme.ACCENT, 4))
 	_build_btn.pressed.connect(_open)
 	_root.add_child(_build_btn)
+	HudRegistry.register("ConstructionMenu.button", _build_btn)
 
 	# Backdrop
 	_backdrop = UITheme.make_backdrop()
@@ -221,12 +239,19 @@ func _setup_ui() -> void:
 	_grid_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_grid_scroll.add_child(_grid_container)
 
-	# Right side: detail panel with 3D preview
+	# Right side: detail panel with 3D preview. The CONSTRUIR button sits below
+	# the scroll, always in sight: on a tablet the detail is taller than the
+	# window and the button used to end up scrolled off the bottom (QA flow 04).
+	var detail_column := VBoxContainer.new()
+	detail_column.name = "DetailColumn"
+	detail_column.custom_minimum_size = Vector2(320, 0)
+	detail_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail_column.add_theme_constant_override("separation", 8)
+	content.add_child(detail_column)
 	var detail_scroll := ScrollContainer.new()
-	detail_scroll.custom_minimum_size = Vector2(320, 0)
 	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	content.add_child(detail_scroll)
+	detail_column.add_child(detail_scroll)
 
 	_detail_panel = VBoxContainer.new()
 	_detail_panel.add_theme_constant_override("separation", 8)
@@ -270,6 +295,11 @@ func _setup_ui() -> void:
 	var preview_wrapper := PanelContainer.new()
 	preview_wrapper.add_theme_stylebox_override("panel", preview_style)
 	preview_wrapper.add_child(_preview_container)
+	if _is_2d:
+		_preview_container.visible = false
+		_preview_icon = BuildingIcon2D.new()
+		_preview_icon.custom_minimum_size = Vector2(300, 220)
+		preview_wrapper.add_child(_preview_icon)
 	_detail_panel.add_child(preview_wrapper)
 
 	# Detail labels
@@ -291,23 +321,24 @@ func _setup_ui() -> void:
 	_detail_production.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_detail_panel.add_child(_detail_production)
 
+	_detail_rule = UITheme.make_label("", "body", UITheme.INFO)
+	_detail_rule.name = "DepositRule"
+	_detail_rule.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_detail_panel.add_child(_detail_rule)
+
 	_detail_extras = UITheme.make_label("", "small", UITheme.TEXT_DIM)
 	_detail_extras.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_detail_panel.add_child(_detail_extras)
 
-	# Spacer
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_detail_panel.add_child(spacer)
-
-	# Build button
+	# Build button (outside the scroll, see DetailColumn above)
 	_detail_build_btn = Button.new()
 	_detail_build_btn.text = Tr.t("BTN_BUILD")
 	_detail_build_btn.custom_minimum_size = Vector2(0, 48)
 	_detail_build_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UITheme.style_button(_detail_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
+	_detail_build_btn.name = "DetailBuildButton"
 	_detail_build_btn.pressed.connect(_on_build_pressed)
-	_detail_panel.add_child(_detail_build_btn)
+	detail_column.add_child(_detail_build_btn)
 
 	# Initial state: show placeholder
 	_show_no_selection()
@@ -361,20 +392,28 @@ func _select_category(cat_id: String) -> void:
 # ── Grid (building cards) ──
 # ══════════════════════════════════════════════════════════════════════
 
+## Estilos de las tarjetas desbloqueadas: id -> {"style": StyleBoxFlat, "cat": Color}.
+## Hace falta para marcar la seleccionada sin recrear la rejilla.
+var _card_styles: Dictionary = {}
+
 func _refresh_grid() -> void:
 	for child in _grid_container.get_children():
 		child.queue_free()
+	_card_styles.clear()
 
 	var filtered := _get_filtered_buildings()
 	for data in filtered:
 		var card := _create_grid_card(data)
 		_grid_container.add_child(card)
+	_mark_selected_card()
 
 func _create_grid_card(data: BuildingData) -> PanelContainer:
 	var locked := _has_locked_resource_cost(data)
 	var cat_color: Color = _cat_colors.get(_get_category(data), UITheme.ACCENT)
 
 	var card := PanelContainer.new()
+	# El tutorial guiado busca la tarjeta por id, no por el nombre traducido.
+	card.set_meta("building_id", data.id)
 	card.custom_minimum_size = Vector2(125, 110)
 	var style := StyleBoxFlat.new()
 	style.bg_color = UITheme.CARD_BG if not locked else UITheme.BTN_DISABLED
@@ -390,7 +429,14 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	card.add_child(vbox)
 
 	# Thumbnail
-	if _thumb_cache.has(data.id):
+	if _is_2d:
+		var icon: Control = BuildingIcon2D.new()
+		icon.custom_minimum_size = Vector2(64, 64)
+		icon.data = data
+		if locked:
+			icon.modulate = Color(0.4, 0.4, 0.4, 0.7)
+		vbox.add_child(icon)
+	elif _thumb_cache.has(data.id):
 		var tex_rect := TextureRect.new()
 		tex_rect.custom_minimum_size = Vector2(64, 64)
 		tex_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
@@ -407,28 +453,47 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		vbox.add_child(placeholder)
 
 	# Name
-	var name_label := UITheme.make_label(data.display_name, "small", UITheme.TEXT if not locked else UITheme.TEXT_DIM)
+	var name_label := UITheme.make_label(data.get_display_name(), "small", UITheme.TEXT if not locked else UITheme.TEXT_DIM)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	name_label.custom_minimum_size.x = 110
 	vbox.add_child(name_label)
 
-	# Interaction
+	# Interaction (A14): el hover solo RESALTA; la seleccion cambia solo con
+	# clic y queda bloqueada hasta el siguiente. Antes pasar el raton por otra
+	# tarjeta cambiaba la seleccion y el detalle saltaba de edificio en edificio.
 	if not locked:
+		_card_styles[data.id] = {"style": style, "cat": cat_color}
 		card.gui_input.connect(func(event):
 			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 				_select_building(data)
 		)
 		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		card.mouse_entered.connect(func():
-			style.bg_color = UITheme.CARD_BG.lightened(0.15)
-			_select_building(data)
+			if not _is_selected(data):
+				style.bg_color = UITheme.CARD_BG.lightened(0.12)
 		)
 		card.mouse_exited.connect(func():
-			style.bg_color = UITheme.CARD_BG
+			if not _is_selected(data):
+				style.bg_color = UITheme.CARD_BG
 		)
 
 	return card
+
+func _is_selected(data: BuildingData) -> bool:
+	return _selected_data != null and _selected_data.id == data.id
+
+## Pinta la tarjeta elegida con marco de laton y fondo claro, y devuelve las
+## demas a su estado normal. Se llama al seleccionar y al reconstruir la rejilla.
+func _mark_selected_card() -> void:
+	for id in _card_styles:
+		var entry: Dictionary = _card_styles[id]
+		var style: StyleBoxFlat = entry["style"]
+		var selected: bool = _selected_data != null and _selected_data.id == id
+		style.bg_color = UITheme.CARD_BG.lightened(0.25) if selected else UITheme.CARD_BG
+		style.set_border_width_all(2 if selected else 0)
+		style.border_width_bottom = 3
+		style.border_color = UITheme.ACCENT if selected else entry["cat"]
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Detail Panel (right side) ──
@@ -441,6 +506,7 @@ func _show_no_selection() -> void:
 	_detail_cost.text = ""
 	_detail_production.text = ""
 	_detail_extras.text = ""
+	_detail_rule.text = ""
 	_detail_build_btn.visible = false
 	_clear_preview_model()
 
@@ -449,9 +515,10 @@ func _select_building(data: BuildingData) -> void:
 		return
 	_selected_data = data
 	_preview_spin = 0.0
+	_mark_selected_card()
 
 	# Name + size
-	_detail_name.text = data.display_name
+	_detail_name.text = data.get_display_name()
 	_detail_size.text = "%dx%d" % [data.grid_size.x, data.grid_size.y]
 
 	# Cost
@@ -483,6 +550,11 @@ func _select_building(data: BuildingData) -> void:
 	else:
 		_detail_production.text = ""
 
+	# Regla del yacimiento (PlacementAssist.rule_text): se dice aqui, no al fallar.
+	var rule := PlacementAssistScript.rule_text(data.id)
+	_detail_rule.text = ("▲ " + rule) if rule != "" else ""
+	_detail_rule.visible = rule != ""
+
 	# Extras
 	var extras: Array = []
 	if data.workers_required > 0:
@@ -504,6 +576,9 @@ func _select_building(data: BuildingData) -> void:
 
 func _load_preview_model(data: BuildingData) -> void:
 	_clear_preview_model()
+	if _is_2d:
+		_preview_icon.data = data
+		return
 	if data.model_scene:
 		_preview_model = data.model_scene.instantiate()
 	else:
@@ -517,6 +592,8 @@ func _load_preview_model(data: BuildingData) -> void:
 	_preview_spin = 0.0
 
 func _clear_preview_model() -> void:
+	if _preview_icon:
+		_preview_icon.data = null
 	if _preview_model and is_instance_valid(_preview_model):
 		_preview_model.queue_free()
 		_preview_model = null
@@ -542,6 +619,9 @@ func _has_locked_resource_cost(data: BuildingData) -> bool:
 # ══════════════════════════════════════════════════════════════════════
 
 func _generate_thumbnails() -> void:
+	# En 2D las miniaturas se dibujan al vuelo (BuildingIcon2D): nada que renderizar.
+	if _is_2d:
+		return
 	var viewport := SubViewport.new()
 	viewport.size = Vector2i(128, 128)
 	viewport.transparent_bg = true
@@ -597,3 +677,7 @@ func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingDa
 		_thumb_rects[data.id].texture = tex
 
 	model.queue_free()
+
+## El boton CONSTRUIR del HUD, para pruebas.
+func build_button() -> Button:
+	return _build_btn

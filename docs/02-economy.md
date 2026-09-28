@@ -17,12 +17,12 @@ The economy is era-gated: resources unlock progressively as the player advances.
 
 ```
 Deposits (finite)           Buildings (infinite, slow)
-  gold_vein -> 20 gold        Nucleo -> 3 gold/20s
-  forest -> 20 wood           Sawmill -> 6 wood/12s
-  iron_deposit -> 15 steel    Gold Mine -> 8 gold/12s
-  oil_well -> 10 oil          Foundry -> 5 steel/15s
-                              Refinery -> 4 oil/18s
-                              HQ -> 10 gold/20s
+  gold_vein -> 20 gold (12s)  Sawmill -> 6 wood/12s
+  forest -> 20 wood (8s)      Gold Mine -> 8 gold/12s
+  iron_deposit -> 15 steel    Foundry -> 5 steel/15s
+  oil_well -> 10 oil          Refinery -> 4 oil/18s
+  (GameConfig.mining_data)    HQ -> 10 gold/20s
+                              (Nucleo: no passive output, manual processes only)
 
 Manual Processes (active, ~1.5x margin)
   Wood Planks: 20 wood -> 35 wood (30s)
@@ -33,10 +33,22 @@ Manual Processes (active, ~1.5x margin)
 
 ## Storage
 
-- Base cap: 800
-- Each warehouse: +400
-- Max warehouses: 3
-- Max total storage: 800 + 3*400 = 2000
+One **shared pool** for all four resources (not a cap per resource):
+
+- Base cap by era: 600 / 800 / 1000 (`base_storage_cap_by_era`)
+- Each warehouse: +500 (`warehouse_storage_bonus`), max 5
+- Tech: Logistics 2 +300, Industrial 2 +200, Logistics 5 +500 (`tech_storage_bonus`)
+- Era 3 with five warehouses: 1000 + 5×500 = **3500**, exactly the HQ level 3 upgrade;
+  with the three storage techs (+1000) the ceiling is **4500** (`GameConfig.get_storage_cap()`)
+- Sandbox ignores the cap (`sandbox_storage_cap`) and refills resources to `sandbox_resource_floor`
+- What does not fit is lost — gold and wood for food included. In era 3 steel and oil
+  fill the pool on their own; see `docs/22-linea-jugable.md` §3.1 (A4, A5)
+
+## Where extractors can go
+
+Sawmill, Gold Mine and Foundry must touch a forest, a gold vein and an iron deposit
+(reach 1); the Refinery sits on an oil well and consumes it
+(`GameConfig.building_deposit_rules`, applied by `PlacementRules`).
 
 ## Consumption (Population Drain)
 
@@ -64,7 +76,7 @@ Production output = `base * level_multiplier * morale_multiplier`
 | 50 | 1.0x |
 | 100 | 1.2x |
 
-Formula: `0.5 + (morale / 100) * 0.7`
+Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/50 * 0.5` up to 50, `1.0 + (m-50)/50 * 0.2` above.
 
 ## Economy Balance Design
 
@@ -83,7 +95,8 @@ Formula: `0.5 + (morale / 100) * 0.7`
 - Oil enables: Tower (requires oil), HQ (requires all 4)
 - HQ L1: 500g+300s+200o+200w
 - HQ L2: 800g+500s+300o+400w
-- HQ L3: 1500g+800s+500o+700w (VICTORY)
+- HQ L3: 1500g+800s+500o+700w — summons the Final Audit in Campaña and Supervivencia
+  (surviving it is the victory), wins directly in Constructor (docs/06, docs/20)
 
 ## Key Files
 

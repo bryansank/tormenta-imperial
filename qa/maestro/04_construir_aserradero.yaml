@@ -1,0 +1,78 @@
+# Bug de Bryan: "no me deja construir el aserradero".
+#
+# Antes: en el APK la lista "Edificios disponibles" salia VACIA (los .tres viajan
+# como .remap; lo arreglo #33) y la columna ☰ tapaba la X de la ventana.
+# Ahora (#31 + #32 + #34): CONSTRUIR es un boton grande siempre abajo, el
+# tutorial guiado lo senala (paso 1), luego la tarjeta del Aserradero (paso 2) y
+# luego el bosque (paso 3). Al colocar con el dedo salen casillas verdes y un
+# boton flotante "✓ CONSTRUIR AQUI".
+# Esperado (arreglado):
+#   04_01  lista llena, la X de la ventana a la vista (no bajo "☰ MENÚ"),
+#          tutorial paso 2 sobre la tarjeta Aserradero.
+#   04_02  detalle con "▲ El aserradero debe tocar un bosque..." y el CONSTRUIR
+#          del detalle a la vista (fuera del scroll).
+#   04_03  modo colocar: casillas verdes, fantasma en la mas cercana, ✓ encima,
+#          aro del tutorial en el bosque y la tarjeta sin tapar el ✓ (paso 3).
+#   04_04  tras tocar ✓: aserradero en obras, oro 300 -> 220, tutorial paso 4.
+# La posicion del ✓ depende del mapa (sigue al fantasma): se toca donde sale en
+# la isla de clearState; si no hay ✓ ahi, 04_04 lo delata (oro sin bajar).
+appId: com.bryankey.tormentaimperial.qa
+name: 04 Construir un aserradero
+tags: [construir, colocar]
+---
+- runFlow: comun/arrancar.yaml
+- runFlow: comun/nueva_partida.yaml
+- runFlow: comun/saltar_lore.yaml
+- takeScreenshot: ${output.dir}/04_00_en_partida_tutorial_paso1
+- tapOn:
+    point: "50%,93%"      # CONSTRUIR (siempre abajo al centro)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/04_01_menu_construir
+- tapOn:
+    point: "12%,37%"      # tarjeta Aserradero (primera de la lista)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/04_02_tarjeta_elegida
+- tapOn:
+    point: "79%,85%"      # CONSTRUIR del detalle
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2000}
+- takeScreenshot: ${output.dir}/04_03_modo_colocar
+- tapOn:
+    point: "50%,39%"      # ✓ CONSTRUIR AQUI (sobre el fantasma)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2000}
+- takeScreenshot: ${output.dir}/04_04_tras_confirmar
+# Un toque lejos del bosque: el fantasma va alli en rojo y dice por que.
+- tapOn:
+    point: "25%,30%"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/04_05_toque_lejos_del_bosque
+# Buscar en la lista (el buscador sigue funcionando).
+- tapOn:
+    point: "91%,85%"      # CANCELAR la colocacion
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- tapOn:
+    point: "50%,93%"      # CONSTRUIR
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- tapOn:
+    point: "80%,14%"      # Buscar...
+- inputText: "Vivienda"
+# Nada de hideKeyboard: en Maestro es un "atras". Se toca el titulo de la ventana.
+- tapOn:
+    point: "25%,14%"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/04_06_buscar_vivienda

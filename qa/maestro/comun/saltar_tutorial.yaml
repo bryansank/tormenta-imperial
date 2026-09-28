@@ -1,0 +1,10 @@
+# Salta el tutorial guiado (paso 1: la tarjeta sobre CONSTRUIR, boton
+# "Saltar tutorial" a su derecha). Sin tutorial empiezan las ayudas, de una en una.
+appId: com.bryankey.tormentaimperial.qa
+---
+- tapOn:
+    point: "65%,74%"      # Saltar tutorial (tarjeta del paso 1)
+- runFlow:
+    file: esperar.yaml
+    env:
+      MS: 2000

@@ -8,7 +8,7 @@ var _progress_bar: ProgressBar
 var _progress_label: Label
 var _rate_label: Label
 var _cancel_btn: Button
-var _active_node: Node3D = null
+var _active_node: Node = null
 
 func _init(processes_box: VBoxContainer, progress_container: VBoxContainer,
 		progress_bar: ProgressBar, progress_label: Label) -> void:
@@ -43,7 +43,7 @@ func clear() -> void:
 	for child in _processes_box.get_children():
 		child.queue_free()
 
-func populate_building(node: Node3D, data: BuildingData, is_constructing: bool) -> void:
+func populate_building(node: Node, data: BuildingData, is_constructing: bool) -> void:
 	clear()
 	var processes := ProcessManager.get_processes_for(data.id)
 	for proc in processes:
@@ -58,7 +58,7 @@ func populate_building(node: Node3D, data: BuildingData, is_constructing: bool) 
 		set_buttons_disabled(true)
 	update_progress(node, false, data)
 
-func populate_deposit(node: Node3D, deposit_id: String) -> void:
+func populate_deposit(node: Node, deposit_id: String) -> void:
 	clear()
 	if not GameConfig.is_deposit_unlocked(deposit_id):
 		var locked_label := UITheme.make_label(Tr.t("LBL_DEPOSIT_LOCKED"), "small", UITheme.DANGER)
@@ -72,7 +72,7 @@ func populate_deposit(node: Node3D, deposit_id: String) -> void:
 		_add_mining_card(mining, node, deposit_id)
 	update_progress(node, true, null)
 
-func update_progress(node: Node3D, is_deposit: bool, data: BuildingData) -> void:
+func update_progress(node: Node, is_deposit: bool, data: BuildingData) -> void:
 	if not node:
 		_active_node = null
 		_progress_container.visible = false
@@ -88,13 +88,13 @@ func update_progress(node: Node3D, is_deposit: bool, data: BuildingData) -> void
 	_progress_container.visible = true
 	_progress_bar.value = ProcessManager.get_progress(node)
 	var remaining: float = active["remaining"]
-	_progress_label.text = Tr.t("FMT_PROGRESS") % [active["name"], ceili(remaining)]
+	_progress_label.text = Tr.t("FMT_PROGRESS") % [ProcessManager.get_active_name(node), ceili(remaining)]
 	_update_cancel_text(node)
 	set_buttons_disabled(true)
 
 ## El boton dice exactamente cuanto devuelve, y la linea de encima por que. Con
 ## la Tormenta en marcha lo dice en rojo: cancelar entonces cuesta el doble.
-func _update_cancel_text(node: Node3D) -> void:
+func _update_cancel_text(node: Node) -> void:
 	var refund := ProcessManager.get_refund_preview(node)
 	if refund.is_empty():
 		_cancel_btn.text = Tr.t("LBL_CANCEL_NO_REFUND")
@@ -110,7 +110,7 @@ func set_buttons_disabled(disabled: bool) -> void:
 		if child is Button:
 			child.disabled = disabled
 
-func _add_process_card(proc: Dictionary, node: Node3D) -> void:
+func _add_process_card(proc: Dictionary, node: Node) -> void:
 	var btn := Button.new()
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
@@ -137,7 +137,7 @@ func _add_process_card(proc: Dictionary, node: Node3D) -> void:
 	btn.pressed.connect(func(): _start_process(node, proc))
 	_processes_box.add_child(btn)
 
-func _add_mining_card(mining: Dictionary, node: Node3D, deposit_id: String) -> void:
+func _add_mining_card(mining: Dictionary, node: Node, deposit_id: String) -> void:
 	var btn := Button.new()
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
@@ -168,10 +168,10 @@ func _process_has_locked_resource(proc: Dictionary) -> bool:
 				return true
 	return false
 
-func _start_process(node: Node3D, proc: Dictionary) -> void:
+func _start_process(node: Node, proc: Dictionary) -> void:
 	if node and not ProcessManager.is_busy(node):
 		ProcessManager.start_process(node, proc)
 
-func _start_mining(node: Node3D, deposit_id: String) -> void:
+func _start_mining(node: Node, deposit_id: String) -> void:
 	if node and not ProcessManager.is_busy(node):
 		ProcessManager.start_mining(node, deposit_id)

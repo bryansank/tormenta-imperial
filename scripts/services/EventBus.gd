@@ -33,7 +33,7 @@ signal storage_overflow(resource_type: String, lost: int, cap: int)
 @warning_ignore("unused_signal")
 signal building_selected_for_placement(building_data: Resource)
 @warning_ignore("unused_signal")
-signal building_placement_cancelled()  # reserved: BuildingPlacer cancel flow
+signal building_placement_cancelled()  # ESC, right-click or the on-screen CANCEL; BuildingPlacer._cancel listens
 @warning_ignore("unused_signal")
 signal building_placed(building_data: Resource, cell: Vector2i)
 @warning_ignore("unused_signal")
@@ -43,57 +43,57 @@ signal building_removed(cell: Vector2i)  # reserved: future use
 
 # ── Selection ──
 @warning_ignore("unused_signal")
-signal building_clicked(building_node: Node3D, building_data: Resource)
+signal building_clicked(building_node: Node, building_data: Resource)
 @warning_ignore("unused_signal")
 signal building_deselected()
 @warning_ignore("unused_signal")
-signal deposit_clicked(deposit_node: Node3D, deposit_id: String, cell: Vector2i)
+signal deposit_clicked(deposit_node: Node, deposit_id: String, cell: Vector2i)
 @warning_ignore("unused_signal")
-signal request_move_building(building_node: Node3D)
+signal request_move_building(building_node: Node)
 @warning_ignore("unused_signal")
-signal building_renamed(building_node: Node3D, new_name: String)
+signal building_renamed(building_node: Node, new_name: String)
 @warning_ignore("unused_signal")
 signal building_rotate_requested()
 
 # ── Processes & Mining ──
 @warning_ignore("unused_signal")
-signal process_started(building_node: Node3D, process_id: String)
+signal process_started(building_node: Node, process_id: String)
 @warning_ignore("unused_signal")
-signal process_completed(building_node: Node3D, process_id: String)
+signal process_completed(building_node: Node, process_id: String)
 @warning_ignore("unused_signal")
-signal mining_started(deposit_node: Node3D, deposit_id: String)
+signal mining_started(deposit_node: Node, deposit_id: String)
 @warning_ignore("unused_signal")
-signal mining_completed(deposit_node: Node3D, deposit_id: String)
+signal mining_completed(deposit_node: Node, deposit_id: String)
 ## Cancelado a mano por el jugador. `refunded` es recurso -> cantidad devuelta,
 ## ya aplicada: lo que la UI prometio antes de confirmar y lo que se cobro.
 @warning_ignore("unused_signal")
-signal process_cancelled(building_node: Node3D, process_id: String, refunded: Dictionary)
+signal process_cancelled(building_node: Node, process_id: String, refunded: Dictionary)
 
 # ── Construction ──
 @warning_ignore("unused_signal")
-signal construction_started(building_node: Node3D)
+signal construction_started(building_node: Node)
 @warning_ignore("unused_signal")
-signal construction_completed(building_node: Node3D)
+signal construction_completed(building_node: Node)
 
 # ── Production ──
 @warning_ignore("unused_signal")
-signal production_tick(building_node: Node3D)
+signal production_tick(building_node: Node)
 
 # ── Upgrades ──
 @warning_ignore("unused_signal")
-signal building_upgrade_started(building_node: Node3D, new_level: int)
+signal building_upgrade_started(building_node: Node, new_level: int)
 @warning_ignore("unused_signal")
-signal building_upgrade_completed(building_node: Node3D, new_level: int)
+signal building_upgrade_completed(building_node: Node, new_level: int)
 
 # ── Demolish ──
 @warning_ignore("unused_signal")
-signal request_demolish_building(building_node: Node3D)
+signal request_demolish_building(building_node: Node)
 @warning_ignore("unused_signal")
-signal building_demolished(building_node: Node3D, cell: Vector2i)
+signal building_demolished(building_node: Node, cell: Vector2i)
 
 # ── Deposits ──
 @warning_ignore("unused_signal")
-signal deposit_depleted(deposit_node: Node3D, deposit_id: String)
+signal deposit_depleted(deposit_node: Node, deposit_id: String)
 
 # ── Ground Interaction (reserved: future terrain interaction) ──
 @warning_ignore("unused_signal")
@@ -176,16 +176,20 @@ signal draft_offered(options: Array)
 signal draft_applied(option: Dictionary)
 @warning_ignore("unused_signal")
 signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary)
+## Al cargar una partida con campana en marcha: la UI abre el mapa en el nodo
+## actual. El tablero no se guarda (D6), asi que aqui nunca hay encuentro abierto.
+@warning_ignore("unused_signal")
+signal expedition_resumed(expedition_id: int)
 
 # ── Building Health ──
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
 ## deja de producir hasta que se paga la reparacion; nunca se destruye solo.
 @warning_ignore("unused_signal")
-signal building_damaged(building_node: Node3D, health: int, max_health: int)
+signal building_damaged(building_node: Node, health: int, max_health: int)
 @warning_ignore("unused_signal")
-signal building_ruined(building_node: Node3D)
+signal building_ruined(building_node: Node)
 @warning_ignore("unused_signal")
-signal building_repaired(building_node: Node3D)
+signal building_repaired(building_node: Node)
 
 # ── Imperial Storm ──
 ## Emitted only by StormManager. The storm is dispatched on a schedule, not rolled
@@ -218,6 +222,13 @@ signal storm_ended(severity: int)
 signal tithe_demanded(severity: int)
 @warning_ignore("unused_signal")
 signal tithe_resolved(paid: bool, taken: Dictionary)
+## La guarnicion peleo sola: el Diezmo cayo con el tablero ocupado por una
+## expedicion y la defensa se resolvio a ciegas (AutoResolver). `summary` es
+## CombatManager.get_last_result(). Emitida solo por CombatManager, y es la UNICA
+## senal de esa pelea: ninguna encounter_*/turn_started/unit_* la acompaña, porque
+## el tablero abierto las tomaria como suyas.
+@warning_ignore("unused_signal")
+signal defense_auto_resolved(victory: bool, rounds: int, summary: Dictionary)
 
 # ── The Final Audit ──
 ## Emitidas solo por ProgressionManager. El Cuartel General a nivel 3 ya no gana
@@ -267,6 +278,28 @@ signal grid_overlay_toggled(visible: bool)
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
 
+## Emitted when the on-screen touch controls preference changes (Settings).
+## Carries the RESOLVED state: "auto" already checked against the hardware.
+@warning_ignore("unused_signal")
+signal touch_controls_changed(enabled: bool)
+## La opacidad de los controles en pantalla cambio (Ajustes → Controles).
+@warning_ignore("unused_signal")
+signal touch_controls_opacity_changed(opacity: float)
+
+## Los globos de ayuda se encendieron o apagaron (AYUDA del menu ☰ o Ajustes >
+## Interfaz). GameConfig.ui_helper_visible ya tiene el valor nuevo.
+@warning_ignore("unused_signal")
+signal helper_visibility_changed(visible: bool)
+
+## Emitted when music is switched on/off (Settings or the ☰ quick button).
+@warning_ignore("unused_signal")
+signal music_toggled(enabled: bool)
+## El idioma cambio (GameConfig.set_locale). Ya esta aplicado en Tr y guardado en
+## settings.cfg cuando llega. GameManager lo escucha y recarga la escena
+## conservando la partida, para que todo panel vuelva a pintarse en el idioma
+## nuevo; quien pinte textos de larga vida puede escucharlo tambien.
+signal locale_changed(locale: String)
+
 # ── Persistence ──
 @warning_ignore("unused_signal")
 signal game_new_started()
@@ -290,3 +323,28 @@ signal tutorial_tip_requested(tip_id: String, title: String, body: String)
 ## saltar cuenta como leer, porque volver a insistir seria castigar el "Saltar".
 @warning_ignore("unused_signal")
 signal tutorial_intro_closed()
+
+# ── modos-de-juego ──
+## La partida termino sin vuelta atras (Supervivencia: Auditoria perdida). La
+## emite ProgressionManager despues de `final_audit_lost`; GameManager escribe el
+## guardado una ultima vez, marcado, y la pantalla de derrota ofrece empezar otra.
+@warning_ignore("unused_signal")
+signal run_ended(result: String)
+## Sandbox: se invoco a mano una tormenta o la Auditoria. `what` es "storm" o
+## "audit". Solo informativo (avisos, sonido); las reglas no cambian.
+@warning_ignore("unused_signal")
+signal sandbox_invoked(what: String)
+
+# ── prologo-ayudas ──
+## El tutorial guiado cambio de paso (TutorialManager.GUIDE_STEPS). "" = ninguno
+## en pantalla (terminado, saltado o sin empezar).
+@warning_ignore("unused_signal")
+signal tutorial_step_changed(step_id: String)
+## El tutorial guiado termino. `skipped`: el jugador pulso "Saltar tutorial".
+## HelperPanel pone entonces en cola los globos basicos, de uno en uno.
+@warning_ignore("unused_signal")
+signal tutorial_guide_finished(skipped: bool)
+## El jugador pidio volver a ver una ayuda concreta (indice de AYUDA). El id es
+## de HelpCatalog. HelperPanel la ensena ya, senalando su control.
+@warning_ignore("unused_signal")
+signal help_reopen_requested(help_id: String)

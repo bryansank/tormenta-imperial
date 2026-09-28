@@ -23,6 +23,7 @@ var _repair_container: VBoxContainer
 var _repair_btn: Button
 var _repair_label: Label
 var _actions_box: HBoxContainer
+var _move_container: VBoxContainer
 var _move_btn: Button
 var _demolish_btn: Button
 var _close_btn: Button
@@ -30,7 +31,7 @@ var _confirm_container: VBoxContainer
 var _confirm_label: Label
 
 var _process_panel: ProcessActionsPanel
-var _selected_node: Node3D = null
+var _selected_node: Node = null
 var _selected_data: BuildingData = null
 var _selected_deposit_id: String = ""
 var _is_deposit: bool = false
@@ -180,6 +181,24 @@ func _build_ui() -> void:
 	_upgrade_container.add_child(_upgrade_btn)
 	_vbox.add_child(_upgrade_container)
 
+	# Mover, a la altura de Reparar y Mejorar (A13). El boton existia pero iba
+	# en una fila pequena al fondo, junto a Demoler, y el dueno no lo encontro.
+	# Ahora es una seccion propia: ancha, con icono y una linea que dice que hace.
+	_move_container = VBoxContainer.new()
+	_move_container.add_theme_constant_override("separation", 4)
+	var move_hint := UITheme.make_label(Tr.t("LBL_MOVE_HINT"), "small", UITheme.TEXT_DIM)
+	move_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_move_container.add_child(move_hint)
+	_move_btn = Button.new()
+	_move_btn.text = Tr.t("BTN_MOVE")
+	_move_btn.icon = UITheme.icon_texture("move")
+	_move_btn.add_theme_constant_override("h_separation", 10)
+	_move_btn.custom_minimum_size.y = 52
+	UITheme.style_button(_move_btn, UITheme.CAT_SUPPORT.darkened(0.35), UITheme.FONT_SECTION)
+	_move_btn.pressed.connect(_on_move)
+	_move_container.add_child(_move_btn)
+	_vbox.add_child(_move_container)
+
 	_vbox.add_child(UITheme.make_separator())
 
 	# Processes header
@@ -202,19 +221,15 @@ func _build_ui() -> void:
 
 	_vbox.add_child(UITheme.make_separator())
 
-	# Action buttons
+	# Demoler queda solo al fondo: es la accion destructiva y no debe compartir
+	# fila con nada que se pulse a menudo.
 	_actions_box = HBoxContainer.new()
 	_actions_box.add_theme_constant_override("separation", 8)
 	_actions_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	_move_btn = Button.new()
-	_move_btn.text = Tr.t("BTN_MOVE")
-	UITheme.style_button(_move_btn, UITheme.INFO)
-	_move_btn.pressed.connect(_on_move)
 	_demolish_btn = Button.new()
 	_demolish_btn.text = Tr.t("BTN_DEMOLISH")
 	UITheme.style_button(_demolish_btn, UITheme.DANGER)
 	_demolish_btn.pressed.connect(_on_demolish)
-	_actions_box.add_child(_move_btn)
 	_actions_box.add_child(_demolish_btn)
 	_vbox.add_child(_actions_box)
 
@@ -246,7 +261,7 @@ func _build_ui() -> void:
 
 # ── Event Handlers ──
 
-func _on_building_clicked(building_node: Node3D, building_data: Resource) -> void:
+func _on_building_clicked(building_node: Node, building_data: Resource) -> void:
 	_selected_node = building_node
 	_selected_data = building_data as BuildingData
 	_selected_deposit_id = ""
@@ -254,7 +269,7 @@ func _on_building_clicked(building_node: Node3D, building_data: Resource) -> voi
 	_demolish_pending = false
 	_show_building_panel()
 
-func _on_deposit_clicked(deposit_node: Node3D, deposit_id: String, _cell: Vector2i) -> void:
+func _on_deposit_clicked(deposit_node: Node, deposit_id: String, _cell: Vector2i) -> void:
 	_selected_node = deposit_node
 	_selected_data = null
 	_selected_deposit_id = deposit_id
@@ -265,21 +280,21 @@ func _on_deposit_clicked(deposit_node: Node3D, deposit_id: String, _cell: Vector
 func _on_deselected() -> void:
 	_hide_panel()
 
-func _on_process_event(node: Node3D, _pid: String) -> void:
+func _on_process_event(node: Node, _pid: String) -> void:
 	if node == _selected_node:
 		_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
 
-func _on_mining_event(node: Node3D, _pid: String) -> void:
+func _on_mining_event(node: Node, _pid: String) -> void:
 	if node == _selected_node:
 		_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
 		if _is_deposit and is_instance_valid(_selected_node):
 			_update_deposit_uses()
 
-func _on_construction_completed(node: Node3D) -> void:
+func _on_construction_completed(node: Node) -> void:
 	if node == _selected_node:
 		_show_building_panel()
 
-func _on_upgrade_completed(node: Node3D, _new_level: int) -> void:
+func _on_upgrade_completed(node: Node, _new_level: int) -> void:
 	if node == _selected_node:
 		_show_building_panel()
 
@@ -288,9 +303,9 @@ func _on_upgrade_completed(node: Node3D, _new_level: int) -> void:
 func _show_building_panel() -> void:
 	_confirm_container.visible = false
 	var custom_name: String = _selected_node.get_meta("custom_name", "")
-	_title_label.text = custom_name if not custom_name.is_empty() else _selected_data.display_name
-	_desc_label.text = _selected_data.description
-	_desc_label.visible = not _selected_data.description.is_empty()
+	_title_label.text = custom_name if not custom_name.is_empty() else _selected_data.get_display_name()
+	_desc_label.text = _selected_data.get_description()
+	_desc_label.visible = not _selected_data.get_description().is_empty()
 
 	# Level display + workers/morale info
 	var level: int = _selected_node.get_meta("level", 1)
@@ -354,7 +369,7 @@ func _show_building_panel() -> void:
 		else:
 			_upgrade_container.visible = false
 
-	_move_btn.visible = not _selected_data.is_core and not is_building
+	_move_container.visible = not _selected_data.is_core and not is_building
 	_demolish_btn.visible = not _selected_data.is_core
 
 	_process_panel.populate_building(_selected_node, _selected_data, is_building)
@@ -366,7 +381,7 @@ func _show_deposit_panel() -> void:
 	_confirm_container.visible = false
 	var display_name := _selected_deposit_id
 	for child in _selected_node.get_children():
-		if child is Label3D:
+		if child is Label3D or child is Label:
 			display_name = child.text
 			break
 	_title_label.text = display_name
@@ -377,7 +392,7 @@ func _show_deposit_panel() -> void:
 	_construction_container.visible = false
 	_name_container.visible = false
 	_upgrade_container.visible = false
-	_move_btn.visible = false
+	_move_container.visible = false
 	_demolish_btn.visible = false
 	_update_deposit_uses()
 	_process_panel.populate_deposit(_selected_node, _selected_deposit_id)
@@ -416,7 +431,7 @@ func _on_rename() -> void:
 	_selected_node.set_meta("custom_name", new_name)
 	_title_label.text = new_name
 	var label_node := _selected_node.get_node_or_null("NameLabel")
-	if label_node and label_node is Label3D:
+	if label_node and (label_node is Label3D or label_node is Label):
 		label_node.text = new_name
 	EventBus.building_renamed.emit(_selected_node, new_name)
 
@@ -434,8 +449,9 @@ func _refresh_repair() -> void:
 	var pct: int = roundi(BuildingHealth.get_health_ratio(_selected_node) * 100.0)
 	var cost := BuildingHealth.repair_cost(_selected_node)
 	var parts: Array = []
-	for res_name in cost:
-		parts.append("%d %s" % [int(cost[res_name]), Tr.res_name(res_name)])
+	for type in cost:
+		parts.append("%d %s" % [
+			int(cost[type]), Tr.res_name(ResourceManager.get_type_name(type))])
 
 	_repair_label.text = "%s  ·  %s" % [
 		Tr.t("LBL_RUINED") if ruined else Tr.t("LBL_DAMAGED") % pct,
@@ -477,7 +493,7 @@ func _on_demolish() -> void:
 	# Show confirmation
 	_demolish_pending = true
 	var refund_pct := int(GameConfig.demolish_refund_ratio * 100)
-	var text := Tr.t("FMT_DEMOLISH_CONFIRM") % [_selected_data.display_name, refund_pct]
+	var text := Tr.t("FMT_DEMOLISH_CONFIRM") % [_selected_data.get_display_name(), refund_pct]
 	# Demoler con un proceso en curso ya no lo quema en silencio: se dice lo que
 	# vuelve de el antes de que el jugador confirme.
 	if ProcessManager.is_busy(_selected_node):

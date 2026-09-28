@@ -9,8 +9,8 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | String | Unique identifier (matches filename) |
-| `display_name` | String | Shown in UI |
-| `description` | String | Tooltip text |
+| `display_name` | String | Fallback name; the UI shows `get_display_name()` (the `BLD_<ID>_NAME` translation) |
+| `description` | String | Fallback text; the UI shows `get_description()` (`BLD_<ID>_DESC`) |
 | `grid_size` | Vector2i | Cells occupied (e.g., 2x2) |
 | `cost_gold/steel/oil/wood` | int | Construction cost |
 | `build_time` | float | Seconds to construct (0 = instant) |
@@ -21,8 +21,8 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | `morale_bonus` | int | Passive morale bonus (decorations) |
 | `mesh_height` | float | Visual height for procedural mesh |
 | `mesh_color` | Color | Visual color |
-| `model_scene` | PackedScene | 3D model (optional, nucleo uses one) |
-| `max_health` | int | HP (for future combat) |
+| `model_scene` | PackedScene | GLB model (12 of 14 buildings; `nucleo` and `road` fall back to `DieselpunkBuildingFactory`) |
+| `max_health` | int | HP for storm and siege damage (`BuildingHealth`) |
 | `is_core` | bool | Cannot be built/moved/demolished |
 | `is_decoration` | bool | No production, no workers, morale only |
 
@@ -32,7 +32,7 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Produces | Interval |
 |----|------|------|--------------|---------|------------|----------|----------|
-| `nucleo` | Nucleo | 3x3 | Free | 0 | instant | 3 gold | 20s |
+| `nucleo` | Nucleo | 3x3 | Free | 0 | instant | — (manual processes, +5 pop) | — |
 | `sawmill` | Aserradero | 2x1 | 80/0/0/50 | 2 | 5s | 6 wood | 12s |
 | `gold_mine` | Mina de Oro | 2x2 | 120/0/0/80 | 3 | 8s | 8 gold | 12s |
 | `foundry` | Fundicion | 2x1 | 200/0/0/120 | 3 | 12s | 5 steel | 15s |
@@ -46,12 +46,17 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | `house` | Vivienda | 1x1 | 50/0/0/30 | 0 | 3s | +6 pop capacity |
 | `warehouse` | Deposito | 1x1 | 60/0/0/40 | 1 | 4s | +500 shared storage cap |
 
-### Military Buildings (combat planned)
+### Military Buildings
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Prereqs |
 |----|------|------|--------------|---------|------------|---------|
 | `barracks` | Cuartel | 2x2 | 250/100/0/80 | 3 | 15s | foundry + sawmill |
 | `tower` | Torre | 1x1 | 150/60/20/30 | 1 | 8s | barracks |
+
+The Barracks trains units (`ArmyManager`, one training slot per Barracks). Each
+operational Tower cuts storm damage by 15% (cap 60%) and puts one artillery crew on
+the defensive boards — the Tithe and each Final Audit wave — outside the deploy cap
+(max 2). See [15-combat.md](15-combat.md).
 
 ### Decorations (morale only)
 
@@ -68,18 +73,30 @@ Defined in `GameConfig.building_limits`:
 
 | Building | Max |
 |----------|-----|
-| house | 6 |
-| sawmill | 3 |
-| gold_mine | 2 |
-| foundry | 2 |
-| refinery | 1 |
-| warehouse | 3 |
-| barracks | 2 |
-| tower | 4 |
+| house | 10 |
+| sawmill | 5 |
+| gold_mine | 4 |
+| foundry | 3 |
+| refinery | 2 |
+| warehouse | 5 |
+| barracks | 3 |
+| tower | 6 |
 | headquarters | 1 |
-| statue | 3 |
-| fountain | 3 |
+| statue | 5 |
+| fountain | 5 |
 | garden, road | unlimited |
+
+## Deposit Rules
+
+Defined in `GameConfig.building_deposit_rules` and checked by
+`scripts/buildings/PlacementRules.gd` (same rule in 3D, 2D and touch placement):
+
+| Building | Must touch | Reach | Consumes it |
+|----------|-----------|-------|-------------|
+| sawmill | forest | 1 | no |
+| gold_mine | gold_vein | 1 | no |
+| foundry | iron_deposit | 1 | no |
+| refinery | oil_well | 0 (on top) | yes |
 
 ## Prerequisites
 
@@ -108,8 +125,8 @@ Buildings can run timed manual processes (one at a time per building). Defined i
 
 1. Player selects building from ConstructionMenu
 2. `EventBus.building_selected_for_placement` emitted
-3. BuildingPlacer shows green/red preview on grid
-4. On click: `ResourceManager.spend_cost()`, `GridManager.place_building()`
+3. BuildingPlacer (or `BuildingPlacer2D`) shows a green/red ghost on the grid; on touch, `PlacementAssist` highlights the valid spots, a tap aims and a tap on the ghost / ✓ builds
+4. On confirm: `PlacementRules` checks the spot, then `ResourceManager.spend_cost()`, `GridManager.place_building()`
 5. `EventBus.building_placed` emitted
 6. ProductionManager starts construction timer (translucent visual + label)
 7. Timer complete: `EventBus.construction_completed` emitted

@@ -117,18 +117,54 @@ func _show_era_toast(era: int) -> void:
 	var era_name := Tr.t(GameConfig.era_names.get(era, ""))
 	_show_toast(Tr.t("FMT_ERA_UNLOCKED") % era_name, UITheme.INFO)
 
+## Hitos y eras llegan a rafagas (el primer Refinado cierra un hito Y abre una
+## era en el mismo frame). Antes cada uno era una etiqueta suelta en y=60-80,
+## encima del objetivo y encima de la anterior: una linea ilegible. Ahora van a
+## una cola y salen de uno en uno, en una placa propia a un tercio de pantalla,
+## lejos de la columna central (Tormenta y objetivo).
+const TOAST_TOP_RATIO := 0.30
+const TOAST_HOLD := 2.2
+var _toast_queue: Array = []
+var _toast_busy := false
+
 func _show_toast(text: String, color: Color) -> void:
-	var label := UITheme.make_label(text, "section", color)
+	_toast_queue.append([text, color])
+	if not _toast_busy:
+		_next_toast()
+
+## Cuantos quedan por salir, contando el que esta en pantalla. Para tests.
+func pending_toasts() -> int:
+	return _toast_queue.size() + (1 if _toast_busy else 0)
+
+func _next_toast() -> void:
+	if _toast_queue.is_empty():
+		_toast_busy = false
+		return
+	_toast_busy = true
+	var item: Array = _toast_queue.pop_front()
+	var plate := PanelContainer.new()
+	plate.name = "MilestoneToast"
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(item[1]))
+	var label := UITheme.make_label(item[0], "section", item[1])
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	label.position.y = 80
-	label.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	add_child(label)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.add_child(label)
+	plate.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	plate.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	var vp_h: float = get_viewport().get_visible_rect().size.y if is_inside_tree() else 720.0
+	var top := vp_h * TOAST_TOP_RATIO
+	plate.offset_top = top + 20.0
+	plate.modulate.a = 0.0
+	add_child(plate)
 	var tween := create_tween()
-	tween.tween_property(label, "position:y", 60.0, 0.5).set_ease(Tween.EASE_OUT)
-	tween.tween_interval(2.5)
-	tween.tween_property(label, "modulate:a", 0.0, 1.0)
-	tween.tween_callback(label.queue_free)
+	tween.tween_property(plate, "offset_top", top, 0.35).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(plate, "modulate:a", 1.0, 0.25)
+	tween.tween_interval(TOAST_HOLD)
+	tween.tween_property(plate, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(func():
+		plate.queue_free()
+		_next_toast())
 
 func _toggle_panel() -> void:
 	_is_open = not _is_open

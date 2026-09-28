@@ -1,34 +1,41 @@
 extends CanvasLayer
-## Collapsible resource panel — top-left corner.
-## Collapsed: compact colored dots + amounts + the shared storage counter.
-## Expanded: per-resource amounts + one bar showing how the single pool is split.
+## Panel de recursos, esquina superior izquierda: [icono] cantidad por cada
+## recurso desbloqueado y, debajo, UNA barra de almacen.
 ##
-## Storage is one shared bag for all four resources, so there is one number and one
-## bar here, not four bars racing the same ceiling. While the bag is full the counter
-## turns red: incoming harvest is being lost and the player has to see it happen.
+## El almacen es una bolsa compartida: un solo tope para la suma de los cuatro.
+## Antes el HUD ensenaba "528/600" pegado a un recurso y mentia: parecia el tope
+## de ese recurso. Ahora el tope sale una vez, bajo los cuatro, y la barra ensena
+## como se reparte la bolsa. Cuando se llena, la barra y el numero se ponen
+## rojos: lo que entre a partir de ahi se pierde y el jugador tiene que verlo.
+##
+## El desplegable (▼) anade una fila con nombre por recurso: el icono basta de
+## un vistazo, pero quien aun no sabe cual es cual lo lee ahi.
+##
+## Los iconos (moneda, tronco, lingote, gota) los genera
+## tools/gen_resource_icons.gd; los estilos salen todos de UITheme.
 
-var _labels: Dictionary = {}       # Type -> Label (collapsed amounts)
-var _exp_labels: Dictionary = {}   # Type -> Label (expanded amounts)
-var _items: Dictionary = {}        # Type -> Control (collapsed row items)
-var _exp_rows: Dictionary = {}     # Type -> Control (expanded rows)
-var _segments: Dictionary = {}     # Type -> ColorRect (its slice of the shared bar)
-var _free_segment: ColorRect
+## Lado del boton ▼ en escritorio. Con el dedo crece a UITheme.MIN_BTN_H.
+const TOGGLE_PX := 28.0
+
 var _panel: PanelContainer
-var _content_box: VBoxContainer
-var _toggle_btn: Button
+var _chips: Dictionary = {}       # Type -> HBoxContainer (UITheme.make_resource_chip)
+var _exp_rows: Dictionary = {}    # Type -> HBoxContainer (fila con nombre, desplegada)
+var _exp_labels: Dictionary = {}  # Type -> Label (cantidad en la fila desplegada)
+var _segments: Dictionary = {}    # Type -> ColorRect, su tajada de la barra
+var _free_segment: ColorRect
+var _pool_bar: PanelContainer
 var _storage_label: Label
-var _storage_detail_label: Label
-var _feedback_label: Label
-var _feedback_tween: Tween
+var _storage_value: Label
+var _toggle_btn: Button
+var _content_box: VBoxContainer
 var _is_expanded := false
 
-var _resource_ids := ["gold", "steel", "oil", "wood"]
+## En orden de era: lo primero que ve un jugador nuevo es oro y madera.
+var _resource_ids := ["gold", "wood", "steel", "oil"]
 var _resource_types := [
-	ResourceManager.Type.GOLD, ResourceManager.Type.STEEL,
-	ResourceManager.Type.OIL, ResourceManager.Type.WOOD,
+	ResourceManager.Type.GOLD, ResourceManager.Type.WOOD,
+	ResourceManager.Type.STEEL, ResourceManager.Type.OIL,
 ]
-var _resource_colors := [UITheme.RES_GOLD, UITheme.RES_STEEL, UITheme.RES_OIL, UITheme.RES_WOOD]
-var _resource_symbols := ["\u25C6", "\u2B23", "\u25CF", "\u25A0"]  # ◆ ⬣ ● ■
 
 func _ready() -> void:
 	layer = 10
@@ -36,6 +43,8 @@ func _ready() -> void:
 	EventBus.resource_changed.connect(_on_resource_changed)
 	EventBus.resources_insufficient.connect(_on_insufficient)
 	EventBus.resource_unlocked.connect(_on_resource_unlocked)
+	EventBus.storage_overflow.connect(_on_overflow)
+	EventBus.touch_controls_changed.connect(func(_on): _size_toggle())
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -45,204 +54,162 @@ func _setup_ui() -> void:
 
 	_panel = PanelContainer.new()
 	UILayoutManager.apply_layout("ResourceHUD", _panel)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.07, 0.05, 0.92)
-	style.set_corner_radius_all(4)
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 7
-	style.content_margin_bottom = 7
-	style.border_color = UITheme.ACCENT
-	style.set_border_width_all(2)
-	style.shadow_color = Color(0, 0, 0, 0.5)
-	style.shadow_size = 5
-	style.shadow_offset = Vector2(1, 2)
-	_panel.add_theme_stylebox_override("panel", style)
+	_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT))
 	root.add_child(_panel)
+	HudRegistry.register("ResourceHUD", _panel)
 
-	var main_vbox := VBoxContainer.new()
-	main_vbox.add_theme_constant_override("separation", 6)
-	_panel.add_child(main_vbox)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	_panel.add_child(vbox)
 
-	# ── Collapsed row: toggle + dots + amounts ──
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 6)
-	main_vbox.add_child(header)
+	# ── Fila de fichas: [▼] [icono] cantidad, una por recurso desbloqueado ──
+	var chips_row := HBoxContainer.new()
+	chips_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(chips_row)
 
 	_toggle_btn = Button.new()
-	_toggle_btn.text = "\u25BC"  # ▼
-	_toggle_btn.custom_minimum_size = Vector2(22, 22)
-	var tb := StyleBoxFlat.new()
-	tb.bg_color = Color(0, 0, 0, 0)
-	tb.set_content_margin_all(1)
-	_toggle_btn.add_theme_stylebox_override("normal", tb)
-	_toggle_btn.add_theme_stylebox_override("hover", tb)
-	_toggle_btn.add_theme_stylebox_override("pressed", tb)
-	_toggle_btn.add_theme_font_size_override("font_size", 10)
-	UITheme.set_label_color(_toggle_btn, UITheme.ACCENT)
-	_toggle_btn.add_theme_color_override("font_hover_color", UITheme.TEXT_BRIGHT)
+	_toggle_btn.text = "▼"  # ▼
+	_toggle_btn.tooltip_text = Tr.t("BTN_RESOURCES_DETAIL")
+	UITheme.style_button(_toggle_btn, UITheme.BTN, UITheme.FONT_SMALL)
 	_toggle_btn.pressed.connect(_toggle_expanded)
-	header.add_child(_toggle_btn)
+	chips_row.add_child(_toggle_btn)
+	_size_toggle()
 
 	for i in range(_resource_ids.size()):
 		var type: ResourceManager.Type = _resource_types[i]
-		var color: Color = _resource_colors[i]
-		var symbol: String = _resource_symbols[i]
-
-		var item := HBoxContainer.new()
-		item.add_theme_constant_override("separation", 2)
-
-		var dot := Label.new()
-		dot.text = symbol
-		dot.add_theme_font_size_override("font_size", 12)
-		UITheme.set_label_color(dot, color)
-		item.add_child(dot)
-
-		var amt := Label.new()
-		amt.text = str(ResourceManager.get_amount(type))
-		amt.add_theme_font_size_override("font_size", 13)
-		UITheme.set_label_color(amt, UITheme.TEXT_BRIGHT)
-		item.add_child(amt)
-		_labels[type] = amt
-
-		header.add_child(item)
-		_items[type] = item
-		item.visible = ResourceManager.is_unlocked(type)
-
-	# Shared storage: everything stored, against the one cap.
-	_storage_label = Label.new()
-	_storage_label.add_theme_font_size_override("font_size", 10)
-	header.add_child(_storage_label)
+		var chip := UITheme.make_resource_chip(_resource_ids[i])
+		chip.visible = ResourceManager.is_unlocked(type)
+		# Cada numero dice que es (bug 11): nombre al pasar el raton y, con el
+		# dedo, un toque despliega la fila con nombres (lo mismo que el ▼).
+		chip.name = "Chip_" + _resource_ids[i]
+		chip.mouse_filter = Control.MOUSE_FILTER_STOP
+		chip.gui_input.connect(_on_tap_expand)
+		chips_row.add_child(chip)
+		_chips[type] = chip
 
 	# Dev-only shortcut to wipe the save. Players use Settings > New game instead.
 	if GameConfig.dev_mode:
 		var clear_btn := Button.new()
 		clear_btn.text = Tr.t("BTN_CLEAR")
-		clear_btn.custom_minimum_size = Vector2(60, 22)
-		clear_btn.add_theme_font_size_override("font_size", 10)
-		UITheme.set_label_color(clear_btn, UITheme.DANGER)
-		clear_btn.add_theme_color_override("font_hover_color", UITheme.TEXT_BRIGHT)
-		var clr_s := StyleBoxFlat.new()
-		clr_s.bg_color = UITheme.DANGER.darkened(0.7)
-		clr_s.set_corner_radius_all(3)
-		clr_s.set_content_margin_all(3)
-		clr_s.border_color = UITheme.DANGER.darkened(0.3)
-		clr_s.set_border_width_all(1)
-		clear_btn.add_theme_stylebox_override("normal", clr_s)
-		var clr_h := clr_s.duplicate()
-		clr_h.bg_color = UITheme.DANGER.darkened(0.4)
-		clear_btn.add_theme_stylebox_override("hover", clr_h)
-		clear_btn.add_theme_stylebox_override("pressed", clr_h)
+		UITheme.style_button(clear_btn, UITheme.DANGER, UITheme.FONT_SMALL)
+		clear_btn.custom_minimum_size.y = UITheme.touch_px(TOGGLE_PX)
 		clear_btn.pressed.connect(GameManager.request_new_game)
-		header.add_child(clear_btn)
+		chips_row.add_child(clear_btn)
 
-	# ── Expanded detail rows ──
+	# ── Detalle desplegable: una fila con nombre por recurso ──
 	_content_box = VBoxContainer.new()
 	_content_box.add_theme_constant_override("separation", 4)
 	_content_box.visible = false
-	main_vbox.add_child(_content_box)
-
-	_content_box.add_child(UITheme.make_separator())
-
+	vbox.add_child(_content_box)
 	for i in range(_resource_ids.size()):
 		var type: ResourceManager.Type = _resource_types[i]
 		var res_id: String = _resource_ids[i]
-		var color: Color = _resource_colors[i]
-		var symbol: String = _resource_symbols[i]
-
-		var row_box := VBoxContainer.new()
-		row_box.add_theme_constant_override("separation", 2)
-
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 5)
-
-		var dot := Label.new()
-		dot.text = symbol
-		dot.add_theme_font_size_override("font_size", 13)
-		UITheme.set_label_color(dot, color)
-		row.add_child(dot)
-
-		var name_lbl := Label.new()
-		name_lbl.text = Tr.res_upper(res_id)
-		name_lbl.add_theme_font_size_override("font_size", 11)
-		UITheme.set_label_color(name_lbl, color)
+		row.add_theme_constant_override("separation", 6)
+		# La muestra de color es la leyenda de la barra del almacen.
+		var swatch := ColorRect.new()
+		swatch.color = UITheme.resource_color(res_id)
+		swatch.custom_minimum_size = Vector2(10, 10)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(swatch)
+		row.add_child(UITheme.make_icon(res_id, 20))
+		var name_lbl := UITheme.make_label(Tr.res_upper(res_id), "small", UITheme.resource_color(res_id))
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(name_lbl)
+		var amt := UITheme.make_label("0", "small", UITheme.TEXT_BRIGHT)
+		amt.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(amt)
+		row.visible = ResourceManager.is_unlocked(type)
+		_content_box.add_child(row)
+		_exp_rows[type] = row
+		_exp_labels[type] = amt
 
-		var amt_lbl := Label.new()
-		amt_lbl.text = str(ResourceManager.get_amount(type))
-		amt_lbl.add_theme_font_size_override("font_size", 14)
-		UITheme.set_label_color(amt_lbl, UITheme.TEXT_BRIGHT)
-		amt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		row.add_child(amt_lbl)
-		_exp_labels[type] = amt_lbl
+	# Que es la barra: un tope para los cuatro, y lo que no cabe se pierde.
+	var legend := UITheme.make_label(Tr.t("HINT_HUD_STORAGE"), "small", UITheme.TEXT_DIM)
+	legend.name = "StorageLegend"
+	legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	legend.custom_minimum_size.x = 200
+	_content_box.add_child(legend)
 
-		row_box.add_child(row)
+	# ── Almacen: un nombre, un numero, una barra ──
+	var storage_row := HBoxContainer.new()
+	storage_row.name = "StorageRow"
+	storage_row.add_theme_constant_override("separation", 6)
+	storage_row.mouse_filter = Control.MOUSE_FILTER_STOP
+	storage_row.tooltip_text = Tr.t("HINT_HUD_STORAGE")
+	storage_row.gui_input.connect(_on_tap_expand)
+	vbox.add_child(storage_row)
 
-		_content_box.add_child(row_box)
-		_exp_rows[type] = row_box
-		row_box.visible = ResourceManager.is_unlocked(type)
+	# "ALMACEN COMPARTIDO  730 / 1000": el tope es uno para los cuatro.
+	_storage_label = UITheme.make_label(Tr.t("LBL_HUD_STORAGE"), "small", UITheme.TEXT_DIM)
+	_storage_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	storage_row.add_child(_storage_label)
 
-	# The shared pool, as one bar split by what is actually inside it: the slices
-	# push each other, which is the whole point of the system.
-	_content_box.add_child(UITheme.make_separator())
+	_storage_value = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_storage_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	storage_row.add_child(_storage_value)
 
-	_storage_detail_label = Label.new()
-	_storage_detail_label.add_theme_font_size_override("font_size", 11)
-	UITheme.set_label_color(_storage_detail_label, UITheme.TEXT_DIM)
-	_content_box.add_child(_storage_detail_label)
-
-	var bar_box := HBoxContainer.new()
-	bar_box.add_theme_constant_override("separation", 0)
-	bar_box.custom_minimum_size = Vector2(150, 7)
-	_content_box.add_child(bar_box)
-
-	for i in range(_resource_ids.size()):
-		var seg_type: ResourceManager.Type = _resource_types[i]
-		var seg := ColorRect.new()
-		seg.color = _resource_colors[i].darkened(0.2)
-		seg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		seg.custom_minimum_size = Vector2(0, 7)
-		bar_box.add_child(seg)
-		_segments[seg_type] = seg
-
-	_free_segment = ColorRect.new()
-	_free_segment.color = Color(0.07, 0.08, 0.06)
-	_free_segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_free_segment.custom_minimum_size = Vector2(0, 7)
-	bar_box.add_child(_free_segment)
+	var colors: Array = []
+	for res_id in _resource_ids:
+		colors.append(UITheme.resource_color(res_id))
+	_pool_bar = UITheme.make_pool_bar(colors, 8)
+	_pool_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pool_bar.tooltip_text = Tr.t("HINT_HUD_STORAGE")
+	_pool_bar.gui_input.connect(_on_tap_expand)
+	vbox.add_child(_pool_bar)
+	var segs := UITheme.pool_bar_segments(_pool_bar)
+	for i in range(_resource_types.size()):
+		_segments[_resource_types[i]] = segs[i]
+	_free_segment = UITheme.pool_bar_free(_pool_bar)
 
 	_refresh()
 
+## El ▼ es pequeno con raton y de tamano dedo en tactil. Va despues de
+## style_button, que impone MIN_BTN_H de alto: en escritorio el ▼ es mas bajo a
+## proposito, para no doblar la altura de la unica fila del panel.
+func _size_toggle() -> void:
+	var side := UITheme.touch_px(TOGGLE_PX)
+	_toggle_btn.custom_minimum_size = Vector2(side, side)
+
+## Un toque (o clic) en un recurso o en el almacen despliega la leyenda.
+func _on_tap_expand(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_toggle_expanded()
+		get_viewport().set_input_as_handled()
 
 func _toggle_expanded() -> void:
 	_is_expanded = not _is_expanded
 	_content_box.visible = _is_expanded
-	_toggle_btn.text = "\u25B2" if _is_expanded else "\u25BC"
-	if _is_expanded:
-		_refresh()
+	_toggle_btn.text = "▲" if _is_expanded else "▼"
 
-## One pool means one refresh: any resource moving changes the shared total, so
-## there is nothing meaningful to update in isolation.
+func is_expanded() -> bool:
+	return _is_expanded
+
+func get_toggle_button() -> Button:
+	return _toggle_btn
+
+## Una bolsa significa un refresco: cualquier recurso que se mueva cambia el
+## total compartido, asi que no hay nada que actualizar por separado.
 func _refresh() -> void:
 	var cap := ResourceManager.get_storage_cap()
 	var total := ResourceManager.get_total_stored()
 	var is_full := total >= cap
 
-	for type in _labels:
-		var amt := ResourceManager.get_amount(type)
-		_labels[type].text = str(amt)
+	for type in _chips:
+		var amount := str(ResourceManager.get_amount(type))
+		UITheme.chip_amount(_chips[type]).text = amount
+		var res_id: String = _resource_ids[_resource_types.find(type)]
+		(_chips[type] as Control).tooltip_text = Tr.t("HINT_HUD_RESOURCE") % [Tr.res_cap(res_id), amount]
 		if _exp_labels.has(type):
-			_exp_labels[type].text = str(amt)
+			_exp_labels[type].text = amount
 
-	# Red while the bag is full: from here on, anything produced is being lost.
-	_storage_label.text = "%d/%d" % [total, cap]
-	UITheme.set_label_color(_storage_label, UITheme.DANGER if is_full else UITheme.TEXT_DIM)
-
-	if not _storage_detail_label:
-		return
-	_storage_detail_label.text = "%s  %d/%d" % [Tr.t("LBL_STORAGE_USED"), total, cap]
-	UITheme.set_label_color(_storage_detail_label, UITheme.DANGER if is_full else UITheme.TEXT_DIM)
+	# Rojo mientras la bolsa esta llena: desde aqui, lo producido se pierde.
+	var tone: Color = UITheme.DANGER if is_full else UITheme.TEXT_DIM
+	_storage_value.text = "%d / %d" % [total, cap]
+	UITheme.set_label_color(_storage_value, tone)
+	UITheme.set_label_color(_storage_label, tone)
+	UITheme.set_pool_bar_alert(_pool_bar, is_full)
 
 	for type in _segments:
 		var seg_amt := ResourceManager.get_amount(type)
@@ -256,40 +223,40 @@ func _on_resource_changed(_resource_type: String, _new_amount: int, _delta: int)
 	_refresh()
 
 func _on_resource_unlocked(resource_name: String) -> void:
-	for i in range(_resource_ids.size()):
-		if _resource_ids[i] == resource_name:
-			var type: ResourceManager.Type = _resource_types[i]
-			if _items.has(type):
-				_items[type].visible = true
-				_items[type].modulate = Color(2.5, 2.0, 0.5, 0.0)
-				var tween := create_tween()
-				tween.tween_property(_items[type], "modulate", Color(1.5, 1.3, 0.8, 1.0), 0.4)
-				tween.tween_property(_items[type], "modulate", Color.WHITE, 1.0)
-			if _exp_rows.has(type):
-				_exp_rows[type].visible = true
-			break
+	var type := _type_of(resource_name)
+	if type < 0 or not _chips.has(type):
+		return
+	var chip: HBoxContainer = _chips[type]
+	chip.visible = true
+	if _exp_rows.has(type):
+		_exp_rows[type].visible = true
+	# Destello al desbloquear: el jugador acaba de abrir una era y la fila
+	# cambia de forma; sin aviso, el recurso nuevo aparece sin mas.
+	chip.modulate = Color(2.5, 2.0, 0.5, 0.0)
+	var tween := create_tween()
+	tween.tween_property(chip, "modulate", Color(1.5, 1.3, 0.8, 1.0), 0.4)
+	tween.tween_property(chip, "modulate", Color.WHITE, 1.0)
+	_refresh()
 
-func _on_insufficient(_resource_type: String, _required: int, _available: int) -> void:
-	_show_feedback(Tr.t("LBL_NOT_ENOUGH_RESOURCES"))
+## Falta un recurso: parpadea SU cifra y se avisa por el canal de mensajes.
+## Antes era un texto flotante en el centro de la pantalla, encima del banner
+## de la Tormenta y del objetivo; el aviso es efimero, pero tapaba.
+func _on_insufficient(resource_type: String, required: int, available: int) -> void:
+	var type := _type_of(resource_type)
+	if type >= 0 and _chips.has(type):
+		UITheme.flash_label(UITheme.chip_amount(_chips[type]), UITheme.TEXT_BRIGHT)
+	EventBus.notification_posted.emit(
+		Tr.t("FMT_NOT_ENOUGH_OF") % [Tr.res_name(resource_type), available, required],
+		"warning", UITheme.WARNING)
 
-func _show_feedback(text: String) -> void:
-	if not _feedback_label:
-		_feedback_label = Label.new()
-		_feedback_label.add_theme_font_size_override("font_size", 15)
-		UITheme.set_label_color(_feedback_label, UITheme.DANGER)
-		_feedback_label.add_theme_constant_override("outline_size", 3)
-		_feedback_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-		_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_feedback_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		_feedback_label.position.y = 10
-		_feedback_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
-		add_child(_feedback_label)
-	_feedback_label.text = text
-	_feedback_label.modulate.a = 1.0
-	_feedback_label.visible = true
-	if _feedback_tween and _feedback_tween.is_valid():
-		_feedback_tween.kill()
-	_feedback_tween = create_tween()
-	_feedback_tween.tween_interval(1.5)
-	_feedback_tween.tween_property(_feedback_label, "modulate:a", 0.0, 0.8)
-	_feedback_tween.tween_callback(func(): _feedback_label.visible = false)
+## Desborde: la barra ya esta roja por _refresh; un parpadeo marca el momento
+## exacto en que algo se ha perdido, que es lo que el jugador no veia.
+func _on_overflow(_resource_type: String, _lost: int, _cap: int) -> void:
+	_refresh()
+	var tween := create_tween()
+	tween.tween_property(_pool_bar, "modulate", Color(1.6, 1.2, 1.2, 1.0), 0.15)
+	tween.tween_property(_pool_bar, "modulate", Color.WHITE, 0.5)
+
+func _type_of(resource_name: String) -> int:
+	var idx := _resource_ids.find(resource_name)
+	return int(_resource_types[idx]) if idx >= 0 else -1

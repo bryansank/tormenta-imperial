@@ -34,6 +34,10 @@ func before_test() -> void:
 	_saved_population = PopulationManager.get_save_data()
 	_saved_storm = StormManager.get_save_data()
 	_saved_era = ProgressionManager.current_era
+	# La Cuota Minima es de la segunda visita en adelante (la primera es un alta,
+	# ver test_the_first_visit_takes_only_its_share): los casos de aqui cobran una
+	# visita cualquiera.
+	_given_storms_survived(1, 0)
 
 func after_test() -> void:
 	for node in _placed:
@@ -68,9 +72,12 @@ func _given_population(count: int) -> void:
 	PopulationManager.load_save_data({"population": count, "morale": 75, "unpaid_ticks": 0})
 	assert_int(PopulationManager.get_population()).is_equal(count)
 
-func _given_storms_survived(count: int) -> void:
+## Tormentas superadas y, de ellas, Diezmos echados: la escolta crece con los
+## segundos (ver test_a_paid_tithe_does_not_grow_the_escort).
+func _given_storms_survived(count: int, repelled: int = -1) -> void:
 	var cycle: StormCycle = StormManager.get_cycle()
 	cycle.storms_survived = count
+	cycle.tithes_repelled = count if repelled < 0 else repelled
 
 func _build(id: String) -> Node3D:
 	var data: BuildingData = load("res://data/buildings/%s.tres" % id)
@@ -262,3 +269,45 @@ func test_they_always_field_a_line_however_veteran_you_are() -> void:
 	_given_storms_survived(20)
 	for severity in range(1, GameConfig.storm_severity_max + 1):
 		assert_int(int(StormManager.assessor_roster(severity).get("infantry", 0))).is_greater(0)
+
+## Atasco de la linea jugable: la escolta crecia con cada tormenta superada,
+## pagada o no, y a la septima llegaba al tope sin que el jugador hubiera ganado
+## ninguna. Lo que dice el diseno (y el comentario de assessor_roster) es que la
+## encarece echarlos, no pagarles.
+func test_a_paid_tithe_does_not_grow_the_escort() -> void:
+	_given_storms_survived(0)
+	var fresh: int = _roster_size(1)
+	_given_storms_survived(12, 0)
+	assert_int(_roster_size(1)).override_failure_message(
+		"doce Diezmos pagados engordaron la escolta").is_equal(fresh)
+	_given_storms_survived(12, 6)
+	assert_int(_roster_size(1)).is_greater(fresh)
+
+func test_settling_counts_only_the_repelled_tithes() -> void:
+	var cycle: StormCycle = StormCycle.create(3)
+	cycle.phase = StormCycle.Phase.TITHE
+	cycle.settle_tithe(0, 1, false)
+	cycle.phase = StormCycle.Phase.TITHE
+	cycle.settle_tithe(0, 1, true)
+	assert_int(cycle.storms_survived).is_equal(2)
+	assert_int(cycle.tithes_repelled).is_equal(1)
+	var back: StormCycle = StormCycle.from_dict(cycle.to_dict())
+	assert_int(back.tithes_repelled).is_equal(1)
+	# Un guardado de antes del contador empieza de cero, no en el tope.
+	var legacy: Dictionary = cycle.to_dict()
+	legacy.erase("tithes_repelled")
+	assert_int(StormCycle.from_dict(legacy).tithes_repelled).is_equal(0)
+
+## La primera visita solo se lleva su porcentaje: la Cuota Minima no existe
+## todavia para una colonia que acaba de salir en el libro.
+func test_the_first_visit_takes_only_its_share() -> void:
+	assert_int(GameConfig.get_tithe_debt(1, 1, 0, true)).is_equal(0)
+	assert_int(GameConfig.get_tithe_debt(1, 1, 400, true)).is_equal(
+		int(400.0 * GameConfig.get_tithe_ratio(1)))
+	_given_population(12)
+	_given_storms_survived(0)
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	var taken: Dictionary = StormManager._collect_tithe(1)
+	assert_dict(taken).override_failure_message(
+		"la primera visita embargo o se llevo gente: %s" % str(taken)).is_empty()
+	assert_int(PopulationManager.get_population()).is_equal(12)

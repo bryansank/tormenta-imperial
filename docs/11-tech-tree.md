@@ -2,7 +2,7 @@
 
 ## Overview
 
-3 research branches with 5 tiers each (15 techs total). Researching costs resources and time. Each tech provides a permanent bonus. Only one tech can be researched at a time. Requires HQ to exist (research points come from HQ production ticks).
+3 research branches with 5 tiers each (15 techs total). Researching costs resources and time. Each tech provides a permanent bonus. Only one tech can be researched at a time. There is no HQ requirement: the HQ is an era-3 building and gating the tree behind it would leave it unusable for most of the game. There are no research points either (an old unused counter was removed; saves that still carry `research_points` load fine and the key is ignored).
 
 ## Branches
 
@@ -44,10 +44,13 @@ Each tech requires the previous tier in its branch:
 Bonuses are applied via runtime modification of GameConfig values:
 - `tech_production_bonus` — added to production multiplier in ProductionManager
 - `tech_build_speed_bonus` — reduces build time in `get_build_time()`
-- `tech_consumption_reduction` — reduces consumption per pop (planned)
-- `tech_storage_bonus` — added on top of the shared storage cap
+- `tech_consumption_reduction` — reduces consumption per pop (`PopulationManager._tick_consumption()`, floor 10%)
+- `tech_storage_bonus` — added on top of the shared storage cap: `ind_2` + `log_2` + `log_5` = +1000, so the era-3 ceiling with five warehouses goes from 3500 to 4500
 - `market_spread` — directly reduced (min 0.1)
 - `morale_satisfied_recovery` — increased morale recovery rate
+
+`TechTreeManager.load_save_data()` derives the bonuses from what was researched instead
+of adding them on top: loading twice without a `reset()` no longer doubles them.
 
 ## UI
 

@@ -114,6 +114,10 @@ static func grid_half_extents() -> Vector2:
 # ── Mesh generation ───────────────────────────────────────────────────
 
 func _generate_island() -> void:
+	# La escena ya se fue (ViewRouter la cambio por la vista 2D antes de este
+	# call_deferred): no hay isla que generar.
+	if not is_inside_tree():
+		return
 	# Remove old static meshes from Main if they exist
 	var main := get_tree().current_scene
 	for node_name in ["Ground", "Shore", "Water"]:

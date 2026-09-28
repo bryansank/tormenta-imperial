@@ -2,20 +2,34 @@ extends Node3D
 ## Handles building placement and moving via raycasting to the ground plane.
 ## States: IDLE → PLACING (new building) or MOVING (existing building).
 ## Left click = place/confirm. Escape = cancel. Mouse hover = preview.
+## Con el dedo: tocar lleva el fantasma, tocar el fantasma o ✓ lo planta, y las
+## casillas validas de un extractor se ven en verde (PlacementAssist, docs/21).
 
 enum State { IDLE, PLACING, MOVING }
 
 ## Preloaded so placement does not depend on the editor's global class cache
 ## (a fresh clone runs the game headless before any editor scan).
 const StatusBadge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
+## Las cuentas de pantalla -> suelo son estaticas y viven en InputService, que es
+## quien las usa para el dedo. Se cargan por script (no por el autoload) para
+## llamarlas como lo que son: funciones sueltas, sin instancia de por medio.
+const PointerMath := preload("res://scripts/services/InputService.gd")
+## Las reglas (veredicto, topes, demoler, guardar) son las mismas en la vista 2D:
+## viven en PlacementRules y aqui solo se llaman.
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
-const DRAG_PAN_THRESHOLD := 6.0  # px of movement before a click becomes a pan
+## El umbral vive en GameConfig.mouse_drag_threshold_px.
 var _left_pressed := false
 var _left_press_pos := Vector2.ZERO
 var _drag_last_pos := Vector2.ZERO
 var _left_dragged := false
+## Este clic viene de un dedo (Godot fabrica un raton emulado a partir del tacto).
+## Con el dedo, colocar y seleccionar esperan a levantarlo: hasta entonces no se
+## sabe si el gesto era un toque o el principio de un arrastre del mapa.
+var _left_from_touch := false
 
 var _state: State = State.IDLE
 var _current_data: BuildingData = null
@@ -32,6 +46,10 @@ var _last_preview_valid := true
 
 # Container for all placed buildings
 var _buildings_container: Node3D
+## Dedo, casillas validas y boton ✓ (compartido con la vista 2D).
+var _assist: Node = null
+## Casillas donde cabe el extractor en curso, en verde sobre el suelo.
+var _spot_highlight: MultiMeshInstance3D = null
 
 func _ready() -> void:
 	_buildings_container = Node3D.new()
@@ -59,8 +77,20 @@ func _ready() -> void:
 	EventBus.building_deselected.connect(_on_building_deselected)
 	EventBus.building_rotate_requested.connect(_on_rotate_requested)
 	GameManager.register_placer(self)
+	_assist = Assist.new()
+	_assist.name = "PlacementAssist"
+	_assist.setup(self)
+	add_child(_assist)
+
+func _input(event: InputEvent) -> void:
+	if _state != State.IDLE:
+		_assist.notice_input(event)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _state != State.IDLE and (event is InputEventScreenTouch or event is InputEventScreenDrag):
+		if _assist.handle_touch(event):
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_handle_left_button(event)
@@ -69,7 +99,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Ignore clicks on UI
 			if get_viewport().gui_get_hovered_control() != null:
 				return
-			_cancel()
+			# Por la senal, no _cancel() directo: asi el boton tactil de
+			# cancelar y los de colocacion se enteran y se ocultan tambien.
+			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		return
 
@@ -79,49 +111,71 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE and _state != State.IDLE:
-			_cancel()
+			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R and _state != State.IDLE:
 			_rotate_building()
 			get_viewport().set_input_as_handled()
 
 ## Left mouse button: in IDLE it either drags the camera (if the pointer moves
-## past a threshold) or selects a building on release. While placing/moving a
-## building it places/confirms immediately on press.
+## past a threshold) or selects a building on release. With the mouse, placing or
+## confirming happens on press; con el dedo espera a levantarlo, porque el mismo
+## gesto puede acabar siendo un arrastre del mapa.
 func _handle_left_button(event: InputEventMouseButton) -> void:
 	if event.pressed:
 		# Ignore presses that start on UI
 		if get_viewport().gui_get_hovered_control() != null:
 			return
-		if _state == State.IDLE:
-			_left_pressed = true
-			_left_press_pos = event.position
-			_drag_last_pos = event.position
-			_left_dragged = false
-		else:
-			_handle_left_click(event.position)
-	else:
-		# Release: a click without drag selects; a drag was a camera pan
-		if _left_pressed and _state == State.IDLE and not _left_dragged:
-			_try_select_building(event.position)
-		_left_pressed = false
+		_left_pressed = true
+		_left_press_pos = event.position
+		_drag_last_pos = event.position
 		_left_dragged = false
+		_left_from_touch = event.device == InputEvent.DEVICE_ID_EMULATION
+		if _left_from_touch:
+			return
+		if _state != State.IDLE:
+			_left_pressed = false
+			_handle_left_click(event.position)
+		return
+
+	# Release: a click without drag places or selects; a drag was a camera pan.
+	var was_click := _left_pressed and not _left_dragged
+	if _left_from_touch and InputService.touch_pan_consumed_click():
+		was_click = false
+	# Colocando, el dedo lo lleva PlacementAssist con los toques de verdad: el
+	# clic emulado que Godot fabrica al levantarlo no planta nada.
+	if _left_from_touch and _state != State.IDLE:
+		was_click = false
+	_left_pressed = false
+	_left_dragged = false
+	_left_from_touch = false
+	if not was_click:
+		return
+	if _state == State.IDLE:
+		_try_select_building(event.position)
+	else:
+		_handle_left_click(event.position)
 
 func _handle_left_drag(event: InputEventMouseMotion) -> void:
+	# El arrastre con el dedo lo panea InputService con esta misma cuenta; si lo
+	# repitiesemos aqui con el raton emulado, el mapa correria el doble.
+	if event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
 	if _state != State.IDLE:
 		_left_pressed = false
 		return
-	if not _left_dragged and event.position.distance_to(_left_press_pos) < DRAG_PAN_THRESHOLD:
+	if not _left_dragged and event.position.distance_to(_left_press_pos) < GameConfig.mouse_drag_threshold_px:
 		return
 	_left_dragged = true
 	# Grab-pan: move the camera by the world-space gap between where the cursor
-	# was and where it is now, so the terrain follows the cursor 1:1.
-	var prev_hit = _raycast_to_ground(_drag_last_pos)
-	var cur_hit = _raycast_to_ground(event.position)
+	# was and where it is now, so the terrain follows the cursor 1:1. Es la misma
+	# funcion que usa el dedo, de ahi que ambos se sientan igual.
+	var prev_pos := _drag_last_pos
 	_drag_last_pos = event.position
-	if prev_hit == null or cur_hit == null:
+	var world_delta = PointerMath.screen_drag_to_world_delta(
+		get_viewport().get_camera_3d(), prev_pos, event.position)
+	if world_delta == null:
 		return
-	var world_delta := Vector2(prev_hit.x - cur_hit.x, prev_hit.z - cur_hit.z)
 	EventBus.camera_drag_world_requested.emit(world_delta)
 	get_viewport().set_input_as_handled()
 
@@ -134,11 +188,7 @@ func _process(_delta: float) -> void:
 
 ## Get the effective grid size accounting for rotation (swap X/Y on 90°/270°).
 func _get_rotated_size() -> Vector2i:
-	if _current_data == null:
-		return Vector2i(1, 1)
-	if _rotation_steps % 2 == 1:
-		return Vector2i(_current_data.grid_size.y, _current_data.grid_size.x)
-	return _current_data.grid_size
+	return Rules.rotated_size(_current_data, _rotation_steps)
 
 ## Get the Y rotation in radians for the current rotation step.
 func _get_rotation_angle() -> float:
@@ -148,6 +198,10 @@ func _rotate_building() -> void:
 	_rotation_steps = (_rotation_steps + 1) % 4
 	_hover_cell = Vector2i(-1, -1)  # Force preview refresh
 	_rebuild_preview()
+	# La huella girada cabe en otros sitios: se repintan las casillas validas.
+	_assist.refresh_spots()
+	if _assist.touch_aim:
+		_assist.move_to(_assist.cell, false)
 
 func _rebuild_preview() -> void:
 	if not _preview_node or not _current_data:
@@ -161,42 +215,35 @@ func _on_rotate_requested() -> void:
 
 ## Load original (unrotated) BuildingData from the .tres file by ID.
 func _load_original_data(building_id: String) -> BuildingData:
-	var path := "res://data/buildings/%s.tres" % building_id
-	if ResourceLoader.exists(path):
-		return load(path) as BuildingData
-	return null
+	return Rules.load_building_data(building_id)
 
 ## Create a copy of BuildingData with swapped grid_size for rotated placement.
 func _create_rotated_data(data: BuildingData) -> BuildingData:
-	var rotated := data.duplicate()
-	rotated.grid_size = Vector2i(data.grid_size.y, data.grid_size.x)
-	return rotated
+	return Rules.rotated_data(data)
 
 # ── Raycast ──
 
 func _raycast_to_ground(screen_pos: Vector2) -> Variant:
-	var camera := get_viewport().get_camera_3d()
-	if not camera:
-		return null
-	var from := camera.project_ray_origin(screen_pos)
-	var dir := camera.project_ray_normal(screen_pos)
-	# Intersect with Y=0 plane
-	if absf(dir.y) < 0.001:
-		return null
-	var t := -from.y / dir.y
-	if t < 0:
-		return null
-	return from + dir * t
+	# La proyeccion sobre el plano Y=0 vive en InputService: la comparten el
+	# fantasma de colocacion, el clic y el arrastre del mapa (raton y dedo).
+	return PointerMath.raycast_to_ground(get_viewport().get_camera_3d(), screen_pos)
 
 # ── Preview ──
 
 func _update_preview() -> void:
+	# Con el dedo el fantasma esta donde lo dejo el ultimo toque, no donde quedo
+	# el raton emulado.
+	if _assist.touch_aim:
+		if GridManager.is_valid_cell(_assist.cell):
+			_set_preview_cell(_assist.cell)
+		return
 	var mouse_pos := get_viewport().get_mouse_position()
 	var hit = _raycast_to_ground(mouse_pos)
 	if hit == null:
 		return
+	_set_preview_cell(GridManager.world_to_cell(hit as Vector3))
 
-	var cell := GridManager.world_to_cell(hit as Vector3)
+func _set_preview_cell(cell: Vector2i) -> void:
 	if cell == _hover_cell:
 		return
 	_hover_cell = cell
@@ -208,7 +255,7 @@ func _update_preview() -> void:
 
 		# Same verdict for placing and moving: the ghost goes red wherever the
 		# click would be refused, deposit rule included.
-		var ignore: Node3D = _moving_building if _state == State.MOVING else null
+		var ignore: Node = _moving_building if _state == State.MOVING else null
 		var can_place: bool = evaluate_placement(_current_data.id, cell, rotated_size, _map_generator(), ignore)["ok"]
 
 		# Update ghost material (green = valid, red = invalid)
@@ -224,6 +271,7 @@ func _on_building_selected(data: Resource) -> void:
 	_rotation_steps = 0
 	_state = State.PLACING
 	_create_preview()
+	_assist.begin()
 
 func _handle_left_click(screen_pos: Vector2) -> void:
 	if _state == State.IDLE:
@@ -259,40 +307,21 @@ func _try_select_building(screen_pos: Vector2) -> void:
 	else:
 		EventBus.building_deselected.emit()
 
-func _on_move_requested(building: Node3D) -> void:
+func _on_move_requested(building: Node) -> void:
 	_start_moving(building)
 
-func _on_demolish_requested(building: Node3D) -> void:
-	var info := GridManager.get_building_info(building)
-	if info.is_empty():
+func _on_demolish_requested(building: Node) -> void:
+	# Reembolso, produccion, procesos y rejilla: PlacementRules.demolish.
+	var result := Rules.demolish(building)
+	if result.is_empty():
 		return
-	var data: BuildingData = info["data"]
-	if data.is_core:
-		return
-	var cell: Vector2i = info["origin_cell"]
-	# Refund based on GameConfig ratio
-	var cost := data.get_cost()
-	for type in cost:
-		ResourceManager.add(type, int(cost[type] * GameConfig.demolish_refund_ratio))
-	# Unregister from production/construction
-	ProductionManager.unregister(building)
-	# Demoler con algo en curso ya no lo quema: el proceso se cancela como
-	# cualquier otro y devuelve su parte (la Tasa de Corrupcion).
-	ProcessManager.cancel(building)
-	# Save cell before removing for road update
-	var was_road := data.id == "road"
-	# Remove from grid and scene
-	GridManager.remove_building(building)
+	var data: BuildingData = result["data"]
+	var cell: Vector2i = result["cell"]
 	building.queue_free()
 	# Update neighboring roads if we demolished a road
-	if was_road:
-		for d in ROAD_DIRS:
-			var neighbor_cell: Vector2i = cell + d["offset"]
-			var neighbor := GridManager.get_building_at(neighbor_cell)
-			if neighbor:
-				var n_info := GridManager.get_building_info(neighbor)
-				if not n_info.is_empty() and n_info["data"].id == "road":
-					_update_road_mesh(neighbor, neighbor_cell)
+	if data.id == "road":
+		for n in Rules.neighbor_roads(cell):
+			_update_road_mesh(n["node"], n["cell"])
 	# Update warehouse count
 	if data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
@@ -305,27 +334,17 @@ func _try_place(cell: Vector2i) -> void:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "occupied":
+			# Antes, silencio: el clic no hacia nada y no se sabia por que.
+			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return
-	# Check building limit
-	if not _check_building_limit(_current_data.id):
-		_show_feedback(Tr.t("LBL_LIMIT_REACHED") % [count_building(_current_data.id), GameConfig.get_building_limit(_current_data.id)])
+	# Tope, requisitos, obreros y coste, en ese orden (PlacementRules).
+	var blocked := Rules.purchase_block_message(_current_data)
+	if blocked != "":
+		_show_feedback(blocked)
 		return
-	# Check prerequisites
-	if not _check_prerequisites(_current_data.id):
-		var reqs := GameConfig.get_prerequisites(_current_data.id)
-		_show_feedback(Tr.t("LBL_REQUIRES") % " + ".join(reqs))
-		return
-	# Check workers availability
-	if _current_data.workers_required > 0:
-		if PopulationManager.get_free_workers() < _current_data.workers_required:
-			_show_feedback(Tr.t("LBL_NO_WORKERS"))
-			return
-	# Check and deduct cost
 	var cost := _current_data.get_cost()
 	if not cost.is_empty():
-		if not ResourceManager.can_afford(cost):
-			_show_feedback(Tr.t("LBL_NOT_ENOUGH_RESOURCES"))
-			return
 		ResourceManager.spend_cost(cost)
 	# Only now, with every check passed, does a consuming building eat its
 	# deposit. Before, the oil well was removed BEFORE the limit / cost checks,
@@ -373,6 +392,7 @@ func _start_moving(building: Node3D) -> void:
 	_moving_building.visible = false
 	_create_preview()
 	_rebuild_preview()
+	_assist.begin()
 
 func _try_move(cell: Vector2i) -> void:
 	var rotated_size := _get_rotated_size()
@@ -383,6 +403,8 @@ func _try_move(cell: Vector2i) -> void:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "occupied":
+			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return
 	_consume_deposit_if_required(verdict, map_gen)
 	# Remember old cell for road updates
@@ -403,13 +425,8 @@ func _try_move(cell: Vector2i) -> void:
 	if _current_data.id == "road":
 		_update_road_connections(cell)
 		# Update neighbors at old position (road no longer there)
-		for d in ROAD_DIRS:
-			var neighbor_cell: Vector2i = old_cell + d["offset"]
-			var neighbor := GridManager.get_building_at(neighbor_cell)
-			if neighbor:
-				var n_info := GridManager.get_building_info(neighbor)
-				if not n_info.is_empty() and n_info["data"].id == "road":
-					_update_road_mesh(neighbor, neighbor_cell)
+		for n in Rules.neighbor_roads(old_cell):
+			_update_road_mesh(n["node"], n["cell"])
 	EventBus.building_moved.emit(old_cell, cell)
 	_cleanup_preview()
 	_moving_building = null
@@ -422,39 +439,27 @@ func _try_move(cell: Vector2i) -> void:
 ## The scene's MapGenerator, or null (tests, or a scene without one).
 func _map_generator() -> Node:
 	var scene := get_tree().current_scene if is_inside_tree() else null
-	return scene.get_node_or_null("MapGenerator") if scene else null
+	var found: Node = scene.get_node_or_null("MapGenerator") if scene else null
+	# Como en la 2D: un hermano llamado MapGenerator (tests, herramientas).
+	if found == null and get_parent():
+		found = get_parent().get_node_or_null("MapGenerator")
+	return found
 
 ## Full placement verdict for `building_id` with footprint `size` at `cell`:
 ## the GameConfig deposit rule (reach / overlap) AND free cells. Static so the
 ## same function serves the ghost preview, the click, the move and the tests.
 ## `ignore_building` is the building being moved (its own cells count as free).
-## Returns {"ok": bool, "reason": "" | "deposit" | "occupied", "deposit": Node3D}.
-static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector2i, map_gen: Node, ignore_building: Node3D = null) -> Dictionary:
-	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
-	var deposit: Node3D = null
-	if not rule.is_empty():
-		var cells: Array = GridManager.cells_for(cell, size)
-		if map_gen != null and map_gen.has_method("find_deposit_near_cells"):
-			deposit = map_gen.find_deposit_near_cells(String(rule["deposit"]), cells, int(rule["reach"]))
-		if deposit == null:
-			return {"ok": false, "reason": "deposit", "deposit": null}
-	# A deposit that gets consumed sits under the building: its cells are fine.
-	var ignore_obstacle: Node3D = deposit if bool(rule.get("consumes", false)) else null
-	if not GridManager.can_place(cell, size, ignore_building, ignore_obstacle):
-		return {"ok": false, "reason": "occupied", "deposit": deposit}
-	return {"ok": true, "reason": "", "deposit": deposit}
+## Returns {"ok": bool, "reason": "" | "deposit" | "occupied", "deposit": Node}.
+static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector2i, map_gen: Node, ignore_building: Node = null) -> Dictionary:
+	return Rules.evaluate_placement(building_id, cell, size, map_gen, ignore_building)
 
 ## Removes the deposit a consuming building (the Refinery) is placed on.
 func _consume_deposit_if_required(verdict: Dictionary, map_gen: Node) -> void:
-	var rule: Dictionary = GameConfig.get_deposit_rule(_current_data.id)
-	var deposit: Node3D = verdict.get("deposit", null)
-	if deposit != null and bool(rule.get("consumes", false)) and map_gen != null:
-		map_gen.remove_deposit(deposit)
+	Rules.consume_deposit_if_required(_current_data.id, verdict, map_gen)
 
 ## Tells the player why the click was refused, on screen and in the log.
 func _reject_for_deposit(building_id: String) -> void:
-	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
-	var msg: String = Tr.t(String(rule.get("message", "LBL_REQUIRES_DEPOSIT")))
+	var msg: String = Rules.deposit_reject_message(building_id)
 	_show_feedback(msg)
 	EventBus.notification_posted.emit(msg, "warning", Color(0.9, 0.6, 0.3))
 
@@ -516,6 +521,13 @@ func _cleanup_preview() -> void:
 		_preview_meshes.clear()
 	_hide_grid_overlay()
 	_hover_cell = Vector2i(-1, -1)
+	if _assist:
+		_assist.end()
+
+## Sin colocar ni mover nada. El menu de pausa lo pregunta antes de abrirse con
+## ESC: mientras hay un edificio en la mano, ESC es "cancelar", no "pausa".
+func is_idle() -> bool:
+	return _state == State.IDLE
 
 func _cancel() -> void:
 	if _state == State.MOVING and _moving_building:
@@ -550,27 +562,8 @@ func place_building_at(data: BuildingData, cell: Vector2i, rot_steps: int = 0) -
 func get_all_placed_buildings() -> Array:
 	var result: Array = []
 	for building in _buildings_container.get_children():
-		var info := GridManager.get_building_info(building)
-		if not info.is_empty():
-			var origin: Vector2i = info["origin_cell"]
-			var data: BuildingData = info["data"]
-			var entry := { "id": data.id, "cell_x": origin.x, "cell_y": origin.y }
-			var rot: int = building.get_meta("rotation_steps", 0)
-			if rot != 0:
-				entry["rotation"] = rot
-			var level: int = building.get_meta("level", 1)
-			if level > 1:
-				entry["level"] = level
-			if building.has_meta("custom_name"):
-				entry["custom_name"] = building.get_meta("custom_name")
-			# Solo se guarda si esta tocado: un save viejo sin la clave significa
-			# "entero", que es exactamente lo que queremos por defecto.
-			if building.has_meta("health"):
-				var hp: int = building.get_meta("health")
-				if hp < data.max_health:
-					entry["health"] = hp
-			if ProductionManager.is_constructing(building):
-				entry["construction_remaining"] = ProductionManager.get_construction_remaining(building)
+		var entry := Rules.serialize_building(building)
+		if not entry.is_empty():
 			result.append(entry)
 	return result
 
@@ -583,25 +576,9 @@ func clear_all_buildings() -> void:
 
 # ── Road connectivity ──
 
-## Direction offsets: NORTH=1(Z-), EAST=2(X+), SOUTH=4(Z+), WEST=8(X-)
-const ROAD_DIRS: Array = [
-	{"bit": 1, "offset": Vector2i(0, -1)},  # North (Z-)
-	{"bit": 2, "offset": Vector2i(1, 0)},   # East (X+)
-	{"bit": 4, "offset": Vector2i(0, 1)},   # South (Z+)
-	{"bit": 8, "offset": Vector2i(-1, 0)},  # West (X-)
-]
-
-## Get the neighbor bitmask for a road at the given cell.
+## Get the neighbor bitmask for a road at the given cell (PlacementRules.ROAD_DIRS).
 func _get_road_neighbors(cell: Vector2i) -> int:
-	var mask := 0
-	for d in ROAD_DIRS:
-		var neighbor_cell: Vector2i = cell + d["offset"]
-		var neighbor := GridManager.get_building_at(neighbor_cell)
-		if neighbor:
-			var info := GridManager.get_building_info(neighbor)
-			if not info.is_empty() and info["data"].id == "road":
-				mask |= d["bit"]
-	return mask
+	return Rules.road_neighbor_mask(cell)
 
 ## Rebuild a road's visual mesh based on current neighbors.
 func _update_road_mesh(building: Node3D, cell: Vector2i) -> void:
@@ -623,13 +600,8 @@ func _update_road_connections(cell: Vector2i) -> void:
 		if not info.is_empty() and info["data"].id == "road":
 			_update_road_mesh(building, cell)
 	# Update all adjacent roads
-	for d in ROAD_DIRS:
-		var neighbor_cell: Vector2i = cell + d["offset"]
-		var neighbor := GridManager.get_building_at(neighbor_cell)
-		if neighbor:
-			var n_info := GridManager.get_building_info(neighbor)
-			if not n_info.is_empty() and n_info["data"].id == "road":
-				_update_road_mesh(neighbor, neighbor_cell)
+	for n in Rules.neighbor_roads(cell):
+		_update_road_mesh(n["node"], n["cell"])
 
 # ── Create actual building mesh ──
 
@@ -662,7 +634,7 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	# Label above building — large, bold, readable (hidden by default)
 	var label := Label3D.new()
 	label.name = "NameLabel"
-	label.text = data.display_name
+	label.text = data.get_display_name()
 	label.font_size = 64
 	label.pixel_size = 0.01
 	label.position.y = data.mesh_height + 0.5
@@ -687,38 +659,29 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 
 func _show_grid_overlay() -> void:
 	# Show the main scene GridOverlay (shader-based)
-	var scene_grid := get_tree().current_scene.get_node_or_null("GridOverlay")
+	var scene_grid: Node = get_tree().current_scene.get_node_or_null("GridOverlay") if get_tree().current_scene else null
 	if scene_grid:
 		scene_grid.visible = true
 
 func _hide_grid_overlay() -> void:
 	# Restore the user preference instead of always hiding — the Settings
 	# toggle can keep the grid permanently visible.
-	var scene_grid := get_tree().current_scene.get_node_or_null("GridOverlay")
+	var scene_grid: Node = get_tree().current_scene.get_node_or_null("GridOverlay") if get_tree().current_scene else null
 	if scene_grid:
 		scene_grid.visible = GameConfig.ui_grid_visible
 
 # ── Limit / Prerequisite Helpers ──
 
+## Cuantos hay en pie de este tipo. Se le pregunta a GridManager, que guarda el
+## BuildingData de cada edificio, y no al nombre del nodo: el nodo se bautiza con
+## el id, pero Godot renombra a los hermanos repetidos ("house", "house2"...), asi
+## que comparar nombres devolvia 1 siempre. Con eso ningun tope limitaba nada —
+## cabian dos Cuarteles Generales con el tope en uno—, los Cuarteles de mas no
+## daban plaza de entrenamiento, y el almacen compartido se quedaba en un solo
+## Almacen hasta que el jugador guardaba y recargaba, que es cuando el tope subia
+## de golpe porque la carga si los contaba bien.
 func count_building(building_id: String) -> int:
-	var count := 0
-	for child in _buildings_container.get_children():
-		if child.name == building_id:
-			count += 1
-	return count
-
-func _check_building_limit(building_id: String) -> bool:
-	var limit := GameConfig.get_building_limit(building_id)
-	if limit < 0:
-		return true
-	return count_building(building_id) < limit
-
-func _check_prerequisites(building_id: String) -> bool:
-	var reqs := GameConfig.get_prerequisites(building_id)
-	for req_id in reqs:
-		if count_building(req_id) < 1:
-			return false
-	return true
+	return Rules.count_building(building_id)
 
 var _feedback_canvas: CanvasLayer = null
 var _feedback_label: Label = null
@@ -741,6 +704,8 @@ func _show_feedback(text: String) -> void:
 		_feedback_label.add_theme_constant_override("outline_size", 4)
 		_feedback_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 		var panel := PanelContainer.new()
+		# Un aviso no es un boton: el dedo que cae encima sigue siendo del mapa.
+		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		panel.set_anchors_preset(Control.PRESET_CENTER)
 		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		panel.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -765,7 +730,7 @@ func _show_feedback(text: String) -> void:
 
 # ── Show/Hide building labels on selection ──
 
-func _on_building_clicked(building: Node3D, _data: BuildingData) -> void:
+func _on_building_clicked(building: Node, _data: BuildingData) -> void:
 	# Hide all labels first
 	for child in _buildings_container.get_children():
 		var name_label := child.get_node_or_null("NameLabel")
@@ -782,3 +747,120 @@ func _on_building_deselected() -> void:
 		var name_label := child.get_node_or_null("NameLabel")
 		if name_label:
 			name_label.visible = false
+
+# ── PlacementAssist (dedo, casillas validas, ✓) ───────────────────────
+
+## Casilla bajo un punto de pantalla SIN recortar a la rejilla: un toque en el
+## agua no es un toque en la casilla del borde. (-1, -1) si no corta el suelo.
+func assist_screen_to_cell(screen_pos: Vector2) -> Vector2i:
+	var hit = _raycast_to_ground(screen_pos)
+	if hit == null:
+		return Vector2i(-1, -1)
+	var local: Vector3 = (hit as Vector3) - GridManager.get_origin()
+	return Vector2i(floori(local.x / GridManager.cell_size), floori(local.z / GridManager.cell_size))
+
+func assist_cell_to_screen(origin: Vector2i, size: Vector2i) -> Variant:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return null
+	var w := GridManager.building_center(origin, size)
+	if cam.is_position_behind(w):
+		return null
+	return cam.unproject_position(w)
+
+func assist_ghost_top_screen(origin: Vector2i) -> Variant:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null or _current_data == null or not GridManager.is_valid_cell(origin):
+		return null
+	var w := GridManager.building_center(origin, _get_rotated_size()) + Vector3(0.0, _current_data.mesh_height, 0.0)
+	if cam.is_position_behind(w):
+		return null
+	var p := cam.unproject_position(w)
+	return p if get_viewport().get_visible_rect().has_point(p) else null
+
+func assist_move_ghost(origin: Vector2i) -> void:
+	if GridManager.is_valid_cell(origin):
+		_set_preview_cell(origin)
+
+func assist_confirm(origin: Vector2i) -> void:
+	if _state == State.PLACING:
+		_try_place(origin)
+	elif _state == State.MOVING:
+		_try_move(origin)
+	_hover_cell = Vector2i(-1, -1)
+
+## Por que no se puede en `origin`: el mismo aviso que el clic rechazado.
+func assist_explain(origin: Vector2i) -> void:
+	if _current_data == null:
+		return
+	if not GridManager.is_valid_cell(origin):
+		_show_feedback(Tr.t("LBL_OUTSIDE_MAP"))
+		return
+	var ignore: Node = _moving_building if _state == State.MOVING else null
+	var verdict := evaluate_placement(_current_data.id, origin, _get_rotated_size(), _map_generator(), ignore)
+	if verdict["reason"] == "deposit":
+		_reject_for_deposit(_current_data.id)
+	elif verdict["reason"] == "occupied":
+		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
+
+func assist_feedback(text: String) -> void:
+	_show_feedback(text)
+
+func assist_building_id() -> String:
+	return _current_data.id if _current_data else ""
+
+func assist_ghost_size() -> Vector2i:
+	return _get_rotated_size() if _current_data else Vector2i.ONE
+
+func assist_map_generator() -> Node:
+	return _map_generator()
+
+func assist_moving_node() -> Node:
+	return _moving_building if _state == State.MOVING else null
+
+func assist_is_placing() -> bool:
+	return _state != State.IDLE
+
+## Lleva la camara para que el origen `origin` quede en el centro de la pantalla.
+func assist_center_on(origin: Vector2i) -> void:
+	var vp := get_viewport().get_visible_rect().size
+	var centre = _raycast_to_ground(vp * 0.5)
+	if centre == null:
+		return
+	var w := GridManager.building_center(origin, assist_ghost_size())
+	var c := centre as Vector3
+	EventBus.camera_drag_world_requested.emit(Vector2(w.x - c.x, w.z - c.z))
+
+func assist_show_cells(cells: Array) -> void:
+	if cells.is_empty():
+		if _spot_highlight:
+			_spot_highlight.visible = false
+		return
+	if _spot_highlight == null:
+		_spot_highlight = MultiMeshInstance3D.new()
+		_spot_highlight.name = "ValidSpots"
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		var plane := PlaneMesh.new()
+		plane.size = Vector2.ONE * GridManager.cell_size * 0.86
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(Assist.SPOT_COLOR, 0.6)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		plane.material = mat
+		mm.mesh = plane
+		_spot_highlight.multimesh = mm
+		add_child(_spot_highlight)
+	var multimesh := _spot_highlight.multimesh
+	multimesh.instance_count = cells.size()
+	for i in cells.size():
+		var w := GridManager.cell_to_world(cells[i])
+		multimesh.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(w.x, 0.06, w.z)))
+	_spot_highlight.visible = true
+
+func get_spot_highlight() -> MultiMeshInstance3D:
+	return _spot_highlight
+
+func get_assist() -> Node:
+	return _assist

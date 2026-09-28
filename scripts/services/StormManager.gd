@@ -25,18 +25,38 @@ var _armed: bool = false
 ## StormCycle a proposito: load_save_data() reconstruye el ciclo entero desde el
 ## dict, y un from_dict que no lo contemplara lo borraria al cargar.
 var _halted: bool = false
+## La carga trajo un Diezmo sin cobrar. Transitorio: lo pone load_save_data() y
+## lo consume el final de la carga.
+var _tithe_to_resume: bool = false
+## La parte de moral que la tormenta ya se ha ganado pero que todavia no suma un
+## punto entero. Transitorio (una fraccion de punto no merece viajar en el
+## guardado): se tira en reset() y al saldar cada Diezmo.
+var _morale_debt: float = 0.0
+## Una tormenta invocada a mano (Sandbox) esta corriendo aunque el modo tenga el
+## reloj apagado. Se apaga sola cuando el ciclo vuelve a la calma.
+var _on_demand: bool = false
+## Ese Diezmo llego a reclamarse con el arbol en pausa (el menu principal sale
+## encima de la partida recien cargada) y espera al primer frame con el juego en
+## marcha. Transitorio, como el de arriba.
+var _resume_when_running: bool = false
 
 func _ready() -> void:
 	_cycle = StormCycleScript.create()
 	EventBus.phase_advanced.connect(_on_phase_advanced)
 	EventBus.game_load_completed.connect(_check_arming)
+	EventBus.game_load_completed.connect(_on_game_load_completed)
 	EventBus.encounter_ended.connect(_on_encounter_ended)
 	EventBus.storm_halted_forever.connect(_on_halted_forever)
 	EventBus.final_audit_lost.connect(_on_final_audit_lost)
 	_check_arming()
 
 func _process(delta: float) -> void:
-	if _halted or not _armed or _cycle == null:
+	# _process no corre con el arbol en pausa: llegar aqui es que el jugador ya
+	# solto el menu que tapaba la partida.
+	if _resume_when_running:
+		_resume_when_running = false
+		_resume_tithe()
+	if _halted or _cycle == null or not is_armed():
 		return
 	_publish(_cycle.advance(delta))
 
@@ -45,8 +65,10 @@ func _process(delta: float) -> void:
 func get_cycle() -> StormCycle:
 	return _cycle
 
+## El reloj corre: armado y con la Tormenta activa en este modo, o invocada a
+## mano. En Constructor y Sandbox se arma igual (la fase lo decide) pero no corre.
 func is_armed() -> bool:
-	return _armed
+	return (_armed and GameMode.storm_enabled()) or _on_demand
 
 func get_phase() -> int:
 	return _cycle.phase if _cycle != null else StormCycle.Phase.CALM
@@ -75,6 +97,9 @@ func seconds_until_ash() -> float:
 func storms_survived() -> int:
 	return _cycle.storms_survived if _cycle != null else 0
 
+func tithes_repelled() -> int:
+	return _cycle.tithes_repelled if _cycle != null else 0
+
 # ── Arming ───────────────────────────────────────────────────────────
 
 ## The clock only starts once the base has grown past the Foundation phase —
@@ -83,7 +108,7 @@ func storms_survived() -> int:
 func _check_arming() -> void:
 	if _halted or _armed:
 		return
-	if ProgressionManager.current_phase >= GameConfig.Phase.SETTLEMENT:
+	if ProgressionManager.current_phase >= GameConfig.storm_arm_phase:
 		_armed = true
 
 ## Hay tormenta en marcha (cualquier fase que no sea la calma). Es la mitad de
@@ -123,6 +148,9 @@ func _publish(events: Array) -> void:
 	for event in events:
 		match event.get("e", ""):
 			"phase":
+				# La tormenta invocada termina al volver la calma.
+				if int(event["phase"]) == StormCycle.Phase.CALM and not GameMode.storm_enabled():
+					_on_demand = false
 				_on_phase_entered(int(event["phase"]))
 				EventBus.storm_phase_changed.emit(int(event["phase"]), float(event["left"]))
 			"incoming":
@@ -173,14 +201,24 @@ func _on_phase_entered(phase: int) -> void:
 ## Cada mordisco cuesta moral, y solo la TORMENTA derriba edificios. La ceniza
 ## ensucia, no tumba: si tumbara, la fase de Ceniza dejaria de ser la ultima
 ## ventana en la que reparar un techo sirve de algo.
+##
+## La moral se cobra con decimales: cada tic suma su parte a `_morale_debt` y solo
+## se descuentan los puntos enteros. Con el redondeo por tic, cualquier sangria por
+## debajo de 0,5 se volvia cero y cualquier cosa por encima valia un punto entero
+## por tic, asi que no habia forma de que una tormenta leve costara poco: con 24
+## tics por tormenta, la de severidad 1 se llevaba 96 puntos (docs/22-linea-jugable.md).
 func _apply_storm_tick(phase: int) -> void:
 	var severity: int = get_severity()
 	var bleed: float = GameConfig.storm_morale_per_tick * float(severity)
-	if phase != StormCycle.Phase.STORM:
-		PopulationManager.adjust_morale(-roundi(bleed))
-		return
-	PopulationManager.adjust_morale(-roundi(bleed * GameConfig.storm_morale_storm_multiplier))
-	_damage_buildings(severity)
+	if phase == StormCycle.Phase.STORM:
+		bleed *= GameConfig.storm_morale_storm_multiplier
+	_morale_debt += bleed
+	var whole: int = int(floor(_morale_debt))
+	if whole > 0:
+		_morale_debt -= float(whole)
+		PopulationManager.adjust_morale(-whole)
+	if phase == StormCycle.Phase.STORM:
+		_damage_buildings(severity)
 
 ## La Tormenta no rompe al azar: rompe con criterio. Gasta sus mordiscos del tic
 ## en el escalón más alto que tenga gente en pie y solo baja al siguiente cuando
@@ -228,7 +266,7 @@ func damage_priority(severity: int) -> Array:
 
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info["data"]
-		var node: Node3D = info["node"]
+		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
 		if BuildingHealth.is_core(node):
@@ -258,7 +296,7 @@ func _last_standing_essentials() -> Dictionary:
 		var data: BuildingData = info["data"]
 		if not data.id in GameConfig.storm_essential_buildings:
 			continue
-		var node: Node3D = info["node"]
+		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
 		if standing.has(data.id):
@@ -284,10 +322,62 @@ func _standing_towers() -> int:
 ## The Assessors arrive. If there is a garrison at home, they have to get through
 ## it first; with nobody to stand, they simply help themselves.
 func _begin_tithe(severity: int) -> void:
-	if CombatManager.start_defense(assessor_roster(severity)):
+	# Un modo sin Diezmo: la tormenta pasa y nadie baja a cobrar.
+	if not GameMode.tithe_enabled():
+		EventBus.tithe_resolved.emit(true, {})
+		_settle()
+		return
+	# Con la Auditoria Final en el tablero no hay Diezmo aparte: la Regencia ya
+	# esta en la puerta, y cobrar por un lado mientras se pelea por el otro pone
+	# a la misma guarnicion a defender dos sitios a la vez. get_garrison() no sabe
+	# de las unidades que estan en las oleadas del asedio, asi que las volveria a
+	# alistar y les descontaria las bajas por duplicado: el jugador perderia
+	# soldados que no murieron.
+	if ProgressionManager.is_final_audit_active():
+		EventBus.notification_posted.emit(
+			Tr.t("STORM_TITHE_DURING_AUDIT"), "warning", UITheme.WARNING)
+		EventBus.tithe_resolved.emit(true, {})
+		_settle()
+		return
+
+	var roster: Dictionary = assessor_roster(severity)
+	# Con el tablero ocupado (una expedicion a medias) la guarnicion que quedo en
+	# casa pelea sola: el mismo Encounter, resuelto a ciegas, sin abrir otro
+	# tablero encima del que el jugador esta jugando.
+	# is_board_open() y no is_in_encounter(): mientras el jugador lee el parte de
+	# la pelea anterior el tablero sigue en pantalla aunque ya no se juegue, y
+	# abrir la defensa encima se lo borraria de delante sin haberlo leido.
+	if CombatManager.is_board_open():
+		_auto_resolve_tithe(roster, severity)
+		return
+	if CombatManager.start_defense(roster):
 		return
 	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_UNDEFENDED"), "danger", UITheme.DANGER)
 	_pay_tithe(severity)
+
+## El Diezmo cae con el jugador de expedicion. La defensa se resuelve al
+## instante y el Diezmo con ella: aqui no se espera `encounter_ended`, porque esa
+## senal es del tablero abierto, no de esta pelea. El parte llega por
+## `defense_auto_resolved` y por un aviso con bajas y rondas.
+func _auto_resolve_tithe(roster: Dictionary, severity: int) -> void:
+	var outcome: Dictionary = CombatManager.auto_resolve_defense(roster)
+	if not bool(outcome.get("fought", false)):
+		EventBus.notification_posted.emit(Tr.t("STORM_TITHE_UNDEFENDED"), "danger", UITheme.DANGER)
+		_pay_tithe(severity)
+		return
+	var summary: Dictionary = outcome.get("summary", {})
+	var dead: int = 0
+	for count in summary.get("casualties", {}).values():
+		dead += int(count)
+	var rounds: int = int(outcome.get("rounds", 0))
+	if bool(outcome.get("victory", false)):
+		EventBus.notification_posted.emit(
+			Tr.t("MSG_DEFENSE_AUTO_WON") % [dead, rounds], "success", UITheme.POSITIVE)
+		repel_tithe()
+	else:
+		EventBus.notification_posted.emit(
+			Tr.t("MSG_DEFENSE_AUTO_LOST") % [dead, rounds], "danger", UITheme.DANGER)
+		_pay_tithe(severity)
 
 ## The force that comes to collect. A line of Assessors with guns behind it,
 ## growing with severity — the more you are worth, the more they send.
@@ -297,7 +387,7 @@ func _begin_tithe(severity: int) -> void:
 ## pagar más, y la próxima partida de gasto se aprueba sola. Ganarles hoy no
 ## quita el problema, lo encarece.
 func assessor_roster(severity: int) -> Dictionary:
-	var raw: float = float(GameConfig.storm_tithe_base_force + severity - 1) 		* GameConfig.get_assessor_escalation(storms_survived())
+	var raw: float = float(GameConfig.storm_tithe_base_force + severity - 1) 		* GameConfig.get_assessor_escalation(tithes_repelled())
 	var force: int = clampi(roundi(raw), 1, GameConfig.combat_deploy_cap)
 	var guns: int = force / 3
 	var line: int = maxi(1, force - guns)
@@ -340,7 +430,8 @@ func _pay_tithe(severity: int) -> void:
 func _collect_tithe(severity: int) -> Dictionary:
 	var taken: Dictionary = {}
 	var debt: int = GameConfig.get_tithe_debt(
-		severity, ProgressionManager.current_era, ResourceManager.get_total_stored())
+		severity, ProgressionManager.current_era, ResourceManager.get_total_stored(),
+		storms_survived() == 0)
 
 	debt -= _take_from_stores(debt, taken)
 	if debt <= 0:
@@ -405,7 +496,7 @@ func _seizable_buildings() -> Array:
 	var military: Array = []
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info["data"]
-		var node: Node3D = info["node"]
+		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
 		if BuildingHealth.is_core(node):
@@ -442,12 +533,13 @@ func repel_tithe() -> void:
 		return
 	EventBus.tithe_resolved.emit(true, {})
 	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_REPELLED"), "success", UITheme.POSITIVE)
-	_settle()
+	_settle(true)
 
-func _settle() -> void:
+func _settle(repelled: bool = false) -> void:
 	if _cycle == null:
 		return
-	_publish(_cycle.settle_tithe(_industrial_footprint(), ProgressionManager.current_era))
+	_morale_debt = 0.0
+	_publish(_cycle.settle_tithe(_industrial_footprint(), ProgressionManager.current_era, repelled))
 
 ## How much smoke the base makes. This is what the Regency actually measures, and
 ## what decides how hard the next storm hits.
@@ -479,18 +571,78 @@ func get_save_data() -> Dictionary:
 	var data: Dictionary = _cycle.to_dict()
 	data["armed"] = _armed
 	data["halted"] = _halted
+	data["on_demand"] = _on_demand
 	return data
 
 func load_save_data(data: Dictionary) -> void:
 	_cycle = StormCycleScript.from_dict(data)
 	_armed = bool(data.get("armed", false))
 	_halted = bool(data.get("halted", false))
+	_on_demand = bool(data.get("on_demand", false)) and not _halted
 	if _halted:
 		_armed = false
-	GameConfig.event_production_multiplier = 1.0
+	# El castigo a la produccion sale de la fase cargada, no se da por levantado:
+	# cargar con la ceniza cayendo ya no la limpiaba.
+	if _halted:
+		GameConfig.event_production_multiplier = 1.0
+	else:
+		_on_phase_entered(_cycle.phase)
+	_tithe_to_resume = not _halted and _cycle.is_collecting()
+
+## El Diezmo que la carga trajo pendiente se reclama cuando la escena ya escucha,
+## y diferido para ir detras de cualquier otro oyente de game_load_completed (la
+## pantalla de combate abre el mapa de una campana ahi, y abrir la defensa antes
+## la dejaria tapada).
+func _on_game_load_completed() -> void:
+	if _tithe_to_resume:
+		_resume_tithe.call_deferred()
+
+## Se reclama por el mismo camino que en partida: defensa con la guarnicion que
+## haya en casa, o cobro directo si no hay nadie. El tablero no se guarda, asi
+## que un Diezmo interrumpido vuelve a empezar desde la puerta.
+##
+## Con el arbol en pausa no: el menu principal pausa en su _ready, antes de que
+## la partida cargue, y la defensa se abria detras de el. Espera a que el juego
+## vuelva a correr (_process).
+func _resume_tithe() -> void:
+	if not _tithe_to_resume:
+		return
+	if is_inside_tree() and get_tree().paused:
+		_resume_when_running = true
+		return
+	_tithe_to_resume = false
+	if _halted or _cycle == null or not _cycle.is_collecting():
+		return
+	var severity: int = get_severity()
+	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_RESUMED"), "warning", UITheme.WARNING)
+	EventBus.tithe_demanded.emit(severity)
+	_begin_tithe(severity)
 
 func reset() -> void:
 	_cycle = StormCycleScript.create()
 	_armed = false
 	_halted = false
+	_tithe_to_resume = false
+	_morale_debt = 0.0
+	_on_demand = false
+	_resume_when_running = false
 	GameConfig.event_production_multiplier = 1.0
+
+# ── modos-de-juego ──
+
+## Sandbox: la tormenta viene ahora. Entra en la Advertencia (que esta vez no
+## puede ser falsa alarma) y sigue el ciclo de siempre: ceniza, tormenta,
+## Diezmo. Al volver la calma se para otra vez. Solo desde la calma y nunca con
+## la Tormenta parada para siempre.
+func invoke_storm() -> bool:
+	if not GameMode.sandbox_tools() or _halted or _cycle == null:
+		return false
+	if _cycle.phase != StormCycle.Phase.CALM:
+		return false
+	_on_demand = true
+	_publish(_cycle.summon_now())
+	EventBus.sandbox_invoked.emit("storm")
+	return true
+
+func is_on_demand() -> bool:
+	return _on_demand

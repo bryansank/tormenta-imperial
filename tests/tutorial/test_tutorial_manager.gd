@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 ## El tutorial sale una vez. Esa es toda la regla, y es la que se vigila aqui:
-## cada consejo una sola vez por partida, la intro no vuelve una vez vista,
-## `reset()` lo olvida todo y el guardado lo trae de vuelta intacto.
+## cada consejo una sola vez por partida, el prologo no vuelve una vez visto ni
+## sale detras de nada, cada modo cuenta el suyo, `reset()` lo olvida todo y el
+## guardado lo trae de vuelta intacto.
 ##
 ## Se escucha EventBus conectando a mano: monitor_signals() libera el objeto
 ## vigilado y EventBus es un autoload.
@@ -97,37 +98,95 @@ func test_an_unknown_tip_is_ignored() -> void:
 	assert_array(_tips).is_empty()
 	assert_bool(TutorialManager.has_seen_tip("no_existe")).is_false()
 
-# ── Intro: una por partida ───────────────────────────────────────────
+# ── Prologo: uno por partida, nunca detras de nada ───────────────────
 
-func test_a_new_game_asks_for_the_intro() -> void:
+## Algo que pueda pintar el prologo: TutorialManager solo lo pide si existe.
+func _add_prologue_holder() -> Node:
+	var holder: Node = auto_free(Node.new())
+	holder.add_to_group("prologue_screen")
+	add_child(holder)
+	return holder
+
+func _wait_scan() -> void:
+	# TutorialManager mira cada 0,1 s si ya puede ensenarlo.
+	await await_millis(250)
+
+func test_a_new_game_leaves_the_prologue_pending_until_it_can_be_shown() -> void:
 	EventBus.game_new_started.emit()
-	# Se emite diferida: el panel es el ultimo nodo de la escena.
-	await await_idle_frame()
+	await _wait_scan()
+	# Sin pantalla que lo pinte (sin escena de juego) no se pide: queda pendiente.
+	assert_bool(TutorialManager.is_prologue_pending()).is_true()
+	assert_int(_intro_requests).is_equal(0)
+	_add_prologue_holder()
+	await _wait_scan()
 	assert_int(_intro_requests).is_equal(1)
+	assert_bool(TutorialManager.is_prologue_pending()).is_false()
 
-func test_the_intro_does_not_come_back_once_seen() -> void:
+func test_the_prologue_does_not_come_back_once_seen() -> void:
+	_add_prologue_holder()
 	EventBus.game_new_started.emit()
-	await await_idle_frame()
+	await _wait_scan()
 	EventBus.tutorial_intro_closed.emit()
 	assert_bool(TutorialManager.intro_seen).is_true()
 	EventBus.game_new_started.emit()
 	EventBus.game_load_completed.emit()
-	await await_idle_frame()
+	await _wait_scan()
 	assert_int(_intro_requests).is_equal(1)
 
-func test_loading_an_old_save_without_the_flag_offers_the_intro() -> void:
+func test_loading_an_old_save_without_the_flag_offers_the_prologue() -> void:
 	# La partida de quien se quejo de no entender nada es de antes del tutorial.
 	TutorialManager.load_save_data({})
 	EventBus.game_load_completed.emit()
-	await await_idle_frame()
-	assert_int(_intro_requests).is_equal(1)
+	assert_bool(TutorialManager.is_prologue_pending()).is_true()
+
+func test_a_paused_tree_holds_the_prologue_back() -> void:
+	# La pausa (menu de pausa, menu principal) es "hay algo delante".
+	_add_prologue_holder()
+	EventBus.game_new_started.emit()
+	get_tree().paused = true
+	var can_while_paused: bool = TutorialManager.can_show_prologue_now()
+	get_tree().paused = false
+	assert_bool(can_while_paused).is_false()
+	assert_bool(TutorialManager.can_show_prologue_now()).is_true()
 
 func test_show_intro_reopens_it_even_when_seen() -> void:
-	# Para el futuro boton HISTORIA: volver a leer el lore no depende de la marca.
+	# El "Historia" del menu: volver a leer el lore no depende de la marca.
 	TutorialManager.intro_seen = true
 	TutorialManager.show_intro()
-	assert_int(_intro_requests).is_equal(1)
+	TutorialManager.show_prologue()
+	assert_int(_intro_requests).is_equal(2)
 	assert_bool(TutorialManager.intro_seen).is_true()
+
+func test_each_mode_gets_its_prologue() -> void:
+	var saved_mode: int = GameMode.current
+	var got := {}
+	for mode in GameMode.ORDER:
+		GameMode.current = mode
+		got[GameMode.key_of(mode)] = TutorialManager.prologue_variant()
+	GameMode.current = saved_mode
+	assert_str(got["campaign"]).is_equal("full")
+	assert_str(got["survival"]).is_equal("full")
+	assert_str(got["builder"]).is_equal("short")
+	assert_str(got["sandbox"]).is_equal("none")
+
+func test_sandbox_skips_the_prologue_and_goes_straight_to_the_guide() -> void:
+	var saved_mode: int = GameMode.current
+	GameMode.current = GameMode.Mode.SANDBOX
+	EventBus.game_new_started.emit()
+	var pending: bool = TutorialManager.is_prologue_pending()
+	var seen: bool = TutorialManager.intro_seen
+	await await_idle_frame()
+	GameMode.current = saved_mode
+	assert_bool(pending).is_false()
+	assert_bool(seen).is_true()
+	assert_str(TutorialManager.guide_state).is_equal(TutorialManager.GUIDE_ACTIVE)
+
+func test_replaying_the_story_in_sandbox_tells_the_whole_file() -> void:
+	var saved_mode: int = GameMode.current
+	GameMode.current = GameMode.Mode.SANDBOX
+	var v: String = TutorialManager.requested_variant()
+	GameMode.current = saved_mode
+	assert_str(v).is_equal("full")
 
 # ── reset() y guardado ───────────────────────────────────────────────
 

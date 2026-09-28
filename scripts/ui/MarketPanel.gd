@@ -4,7 +4,6 @@ extends CanvasLayer
 var _panel: PanelContainer
 var _backdrop: ColorRect
 var _market_btn: Button
-var _sidebar_toggle: Button
 var _sidebar_visible := false
 var _is_open := false
 var _rows: Dictionary = {}
@@ -36,33 +35,9 @@ func _setup_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	# Sidebar toggle button (owned by MarketPanel, controls all right-side buttons)
-	_sidebar_toggle = Button.new()
-	_sidebar_toggle.text = "\u2630"  # ☰ hamburger
-	_sidebar_toggle.custom_minimum_size = Vector2(UILayoutConfig.SIDEBAR_TOGGLE_SIZE, UILayoutConfig.SIDEBAR_TOGGLE_SIZE)
-	_sidebar_toggle.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_sidebar_toggle.offset_left = -(UILayoutConfig.SIDEBAR_TOGGLE_SIZE + 10)
-	_sidebar_toggle.offset_right = -10
-	_sidebar_toggle.offset_top = UILayoutManager.get_sidebar_button_offset("MarketPanel.sidebar_toggle")
-	_sidebar_toggle.offset_bottom = _sidebar_toggle.offset_top + UILayoutConfig.SIDEBAR_TOGGLE_SIZE
-	var stb := StyleBoxFlat.new()
-	stb.bg_color = Color(0.08, 0.09, 0.07, 0.85)
-	stb.set_corner_radius_all(4)
-	stb.set_content_margin_all(4)
-	stb.border_color = UITheme.ACCENT_DIM
-	stb.set_border_width_all(2)
-	_sidebar_toggle.add_theme_stylebox_override("normal", stb)
-	var stb_h := stb.duplicate()
-	stb_h.bg_color = Color(0.14, 0.15, 0.12, 0.9)
-	stb_h.border_color = UITheme.ACCENT
-	_sidebar_toggle.add_theme_stylebox_override("hover", stb_h)
-	_sidebar_toggle.add_theme_stylebox_override("pressed", stb_h)
-	_sidebar_toggle.add_theme_font_size_override("font_size", 16)
-	UITheme.set_label_color(_sidebar_toggle, UITheme.ACCENT)
-	_sidebar_toggle.add_theme_color_override("font_hover_color", UITheme.TEXT_BRIGHT)
-	_sidebar_toggle.pressed.connect(_toggle_sidebar)
-	root.add_child(_sidebar_toggle)
-
+	# El boton ☰ que desplegaba la columna lateral ya no existe: el menu de la
+	# partida (PauseMenu, "☰ MENU") es el unico y abre este panel desde COLONIA.
+	# El boton lateral se conserva, oculto, por si algo lo busca.
 	_market_btn = Button.new()
 	_market_btn.text = Tr.t("BTN_MARKET")
 	_market_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
@@ -114,10 +89,7 @@ func _setup_ui() -> void:
 	var gold_row := HBoxContainer.new()
 	gold_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	gold_row.add_theme_constant_override("separation", 8)
-	var gold_icon := ColorRect.new()
-	gold_icon.custom_minimum_size = Vector2(12, 12)
-	gold_icon.color = UITheme.RES_GOLD
-	gold_row.add_child(gold_icon)
+	gold_row.add_child(UITheme.make_icon("gold"))
 	var gold_label := UITheme.make_label(
 		Tr.t("LBL_YOUR_GOLD") % ResourceManager.get_amount(ResourceManager.Type.GOLD),
 		"body", UITheme.RES_GOLD
@@ -127,8 +99,11 @@ func _setup_ui() -> void:
 	vbox.add_child(gold_row)
 
 func _add_resource_row(parent: VBoxContainer, res_name: String) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
+	# Fila que se parte en dos si no cabe: con botones de tamano dedo, en un
+	# movil en vertical (400 px) la fila entera no entraba y el panel se salia.
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 4)
+	row.add_theme_constant_override("v_separation", 6)
 
 	var name_label := UITheme.make_label(Tr.res_cap(res_name), "body", UITheme.TEXT)
 	name_label.custom_minimum_size.x = 80
@@ -147,7 +122,8 @@ func _add_resource_row(parent: VBoxContainer, res_name: String) -> void:
 	var amount := 10
 	var minus_btn := Button.new()
 	minus_btn.text = "-"
-	minus_btn.custom_minimum_size = Vector2(30, 30)
+	# Cuadrados de tamano dedo: con 30 px el pulgar acertaba el de al lado.
+	minus_btn.custom_minimum_size = Vector2(UITheme.MIN_BTN_H, UITheme.MIN_BTN_H)
 	UITheme.style_button(minus_btn, UITheme.DANGER.darkened(0.3), UITheme.FONT_BODY)
 	row.add_child(minus_btn)
 
@@ -158,19 +134,19 @@ func _add_resource_row(parent: VBoxContainer, res_name: String) -> void:
 
 	var plus_btn := Button.new()
 	plus_btn.text = "+"
-	plus_btn.custom_minimum_size = Vector2(30, 30)
+	plus_btn.custom_minimum_size = Vector2(UITheme.MIN_BTN_H, UITheme.MIN_BTN_H)
 	UITheme.style_button(plus_btn, UITheme.POSITIVE.darkened(0.3), UITheme.FONT_BODY)
 	row.add_child(plus_btn)
 
 	var buy_btn := Button.new()
 	buy_btn.text = Tr.t("BTN_BUY")
-	buy_btn.custom_minimum_size = Vector2(60, 30)
+	buy_btn.custom_minimum_size = Vector2(60, UITheme.MIN_BTN_H)
 	UITheme.style_button(buy_btn, UITheme.POSITIVE.darkened(0.2))
 	row.add_child(buy_btn)
 
 	var sell_btn := Button.new()
 	sell_btn.text = Tr.t("BTN_SELL")
-	sell_btn.custom_minimum_size = Vector2(60, 30)
+	sell_btn.custom_minimum_size = Vector2(60, UITheme.MIN_BTN_H)
 	UITheme.style_button(sell_btn, UITheme.DANGER)
 	row.add_child(sell_btn)
 
@@ -222,16 +198,13 @@ func _toggle_panel() -> void:
 	else:
 		UIManager.close_panel(self)
 
-func _toggle_sidebar() -> void:
-	_sidebar_visible = not _sidebar_visible
-	_sidebar_toggle.text = "\u2715" if _sidebar_visible else "\u2630"  # ✕ / ☰
-	EventBus.sidebar_toggled.emit(_sidebar_visible)
-
 func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_visible = is_visible
 	# Show market button only if sidebar visible AND phase allows it
 	if ProgressionManager.current_phase >= GameConfig.Phase.ECONOMY:
-		_market_btn.visible = visible
+		# `is_visible` (el del menu), no `visible`: ese es el de la capa, que
+		# siempre es true, y el boton se quedaba suelto al cerrar el menu.
+		_market_btn.visible = is_visible
 	else:
 		_market_btn.visible = false
 

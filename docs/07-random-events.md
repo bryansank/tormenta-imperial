@@ -7,7 +7,10 @@ Random events fire at intervals to keep gameplay dynamic. They can be positive, 
 ## Timing
 
 - Events fire every **2-5 minutes** (random interval)
-- In dev mode: every **15-30 seconds**
+- In dev mode: every **30-60 seconds** (`event_interval_min_dev` / `event_interval_max_dev`)
+- None before the SURVIVAL phase (first Warehouse)
+- Per mode (`GameConfig.game_mode_rules`): none in Sandbox, only the positive ones in
+  Constructor (`danger_events: false`); Campaña and Supervivencia get all eight
 - Only one timed event can be active at once
 - Instant events fire and resolve immediately
 
@@ -28,7 +31,7 @@ Random events fire at intervals to keep gameplay dynamic. They can be positive, 
 |----|------|--------|----------|--------|
 | `storm` | Storm | 15 | instant | Lose 20-50 wood |
 | `mining_accident` | Mining Accident | 10 | instant | Lose 1 pop, -15 morale |
-| `plague` | Plague | 8 | 60s | -25 morale (timed) |
+| `plague` | Plague | 8 | 60s | -25 morale, production x0.5 while active (timed) |
 | `bandit_raid` | Bandit Raid | 12 | instant | Lose 30-80 gold, -10 morale |
 
 ### Probability
@@ -54,6 +57,13 @@ Only the Plague is currently timed (60 seconds). During a timed event:
 - `_active_event` stores the event data
 - `_active_timer` counts down
 - When timer hits 0: `_end_active_event()` runs, notification posted
+- The Plague's production penalty lives in `GameConfig.random_event_production_multiplier`
+  (`plague_production_multiplier = 0.5`). It is a separate variable from the storm's
+  `event_production_multiplier`; `GameConfig.get_event_production_multiplier()` multiplies
+  the two, so neither can erase the other when it ends.
+- The active event (id only), its remaining time and the clock to the next event are
+  saved. Loading re-applies the sustained effect (the halved production) but not the
+  entry hit (the -25 morale).
 
 ## Integration Points
 

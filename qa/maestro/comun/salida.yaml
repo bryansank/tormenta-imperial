@@ -1,0 +1,7 @@
+# Carpeta de las capturas.
+# - Con la CLI: no pasar OUT y lanzar con `--test-output-dir <carpeta>`; las
+#   capturas van ahi (la CLI rechaza rutas fuera de esa carpeta).
+# - Con el MCP de Maestro (sin --test-output-dir): pasar OUT=<ruta absoluta>.
+appId: com.bryankey.tormentaimperial.qa
+---
+- evalScript: "${output.dir = (typeof OUT === 'undefined' || !OUT) ? '.' : OUT}"

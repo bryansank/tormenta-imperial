@@ -1,0 +1,39 @@
+# Bug de Bryan: "no me deja ajustar nada, todo esta pegado sin accion".
+#
+# Lo primero que hace un jugador nuevo: abrir AJUSTES en el menu de titulo antes
+# de empezar. Con la app recien instalada (clearState), AJUSTES abre el panel y
+# ENCIMA aparece la introduccion (1/10). A partir de ahi nada responde: ni los
+# sliders, ni Saltar, ni Siguiente, ni la X. La app queda bloqueada hasta
+# matarla (y el "atras" de Android la cierra).
+# Esperado tras el arreglo (#32): 02b_a muestra AJUSTES sin nada encima y los
+# valores cambian en _b.._e; 02b_h es el titulo limpio; el prologo solo sale
+# tras Nueva partida (02b_i) y "Saltar historia" lo cierra (02b_j, la partida).
+appId: com.bryankey.tormentaimperial.qa
+name: 02b Ajustes desde el titulo en instalacion limpia
+tags: [ajustes, menus, bloqueo]
+---
+- runFlow: comun/arrancar.yaml
+- takeScreenshot: ${output.dir}/02b_00_titulo
+- tapOn:
+    point: "21%,45%"      # AJUSTES (sin partida guardada es el 2o boton)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2000}
+- runFlow:
+    file: comun/probar_ajustes.yaml
+    env: {P: 02b}
+# Tras cerrar Ajustes sigue el titulo, sin prologo encima (el prologo espera a
+# que se cierre el menu de titulo, #32). Nueva partida funciona y ENTONCES sale
+# el prologo, que responde a "Saltar historia".
+- takeScreenshot: ${output.dir}/02b_h_titulo_tras_ajustes
+- runFlow: comun/nueva_partida.yaml
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 6000}
+- takeScreenshot: ${output.dir}/02b_i_prologo_tras_nueva_partida
+- tapOn:
+    point: "18%,94%"      # Saltar historia
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2500}
+- takeScreenshot: ${output.dir}/02b_j_partida_tras_saltar

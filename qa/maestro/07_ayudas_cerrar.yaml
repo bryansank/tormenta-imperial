@@ -1,0 +1,66 @@
+# Bug de Bryan: las ayudas deberian poder cerrarse y cerrarse solas.
+#
+# Antes: seis globos a la vez, sin X, que no se iban nunca; ☰ -> AYUDA los
+# apagaba todos. Ahora (#32): durante el tutorial guiado no sale ninguna; al
+# saltarlo salen DE UNA EN UNA, cada una con ✕ y una barra que se vacia (se
+# cierran solas a los 6-12 s), y MENÚ -> AYUDA abre el indice de ayudas.
+# Esperado (arreglado):
+#   07_00  una sola ayuda, con ✕ y barra de tiempo.
+#   07_01  (20 s) otra distinta, o ninguna: la primera ya se cerro sola.
+#   07_02 / 07_03  (45 / 90 s) nunca mas de una a la vez.
+#   07_04  (justo tras 07_00) tras tocar su ✕: se cierra; puede salir la
+#          siguiente de la cola.
+#   07_05  MENÚ -> AYUDA: indice con PRIMEROS PASOS, interruptor, Guia,
+#          Repetir tutorial e Historia.
+#   07_06  tocar "Tu objetivo" en el indice vuelve al MENÚ; 07_07, al cerrarlo,
+#          la ayuda sale junto a su control (espera a que no haya pausa).
+# La ✕ se toca donde sale la primera ayuda ("Construir", sobre el boton
+# CONSTRUIR), nada mas saltar el tutorial.
+appId: com.bryankey.tormentaimperial.qa
+name: 07 Ayudas - cerrar y tiempo en pantalla
+tags: [ayudas, tutorial]
+---
+- runFlow: comun/en_partida.yaml
+- takeScreenshot: ${output.dir}/07_00_t0
+- tapOn:
+    point: "61%,67%"      # ✕ de la ayuda "Construir"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/07_04_tras_tocar_x
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 20000}
+- takeScreenshot: ${output.dir}/07_01_t20s
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 25000}
+- takeScreenshot: ${output.dir}/07_02_t45s
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 45000}
+- takeScreenshot: ${output.dir}/07_03_t90s
+- tapOn:
+    point: "94%,5%"       # ☰ MENÚ
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- tapOn:
+    point: "63%,68%"      # AYUDA
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2000}
+- takeScreenshot: ${output.dir}/07_05_indice_ayuda
+- tapOn:
+    point: "50%,55%"      # "Tu objetivo"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2500}
+- takeScreenshot: ${output.dir}/07_06_indice_cierra_al_menu
+# La ayuda pedida espera a que no haya pausa: se cierra el MENÚ y sale.
+- tapOn:
+    point: "75%,7%"       # X del MENÚ
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2000}
+- takeScreenshot: ${output.dir}/07_07_ayuda_reabierta

@@ -1,0 +1,86 @@
+TORMENTA IMPERIAL {{VERSION}} — Windows (versión de prueba)
+==================================================================
+
+Gracias por probar el juego. Esta es una build para testers: puede tener
+fallos, y tu opinión es justo lo que hace falta.
+
+
+CÓMO JUGAR
+----------
+1. Descomprime el zip en una carpeta cualquiera (no lo ejecutes desde dentro
+   del zip).
+2. Abre TormentaImperial.exe. No hay instalador: el juego es ese único archivo.
+
+Requisitos: Windows 10/11 de 64 bits y una tarjeta gráfica con Vulkan (casi
+cualquiera de los últimos 8-10 años, con los drivers al día).
+
+
+AVISO DE WINDOWS ("Windows protegió su PC")
+-------------------------------------------
+El ejecutable no está firmado con un certificado de pago, así que la primera
+vez Windows SmartScreen puede bloquearlo. Para abrirlo:
+
+   pulsa "Más información"  ->  "Ejecutar de todas formas"
+
+Solo hace falta la primera vez. Algún antivirus puede marcarlo de más por el
+mismo motivo; si te pasa, avísanos.
+
+
+DÓNDE SE GUARDA LA PARTIDA
+--------------------------
+   %APPDATA%\TormentaImperial\
+
+(pega esa ruta en la barra del Explorador de archivos). Ahí están
+save_game.json (la partida) y settings.cfg (volumen y opciones). Para empezar
+de cero sin borrar nada a mano: Ajustes -> Nueva partida. Si nos mandas un
+fallo raro, adjuntar save_game.json ayuda mucho.
+
+
+CONTROLES
+---------
+   Mover la cámara       WASD o flechas, o arrastrar con el botón central
+   Zoom                  rueda del ratón
+   Rotar la cámara       Q / E (o los botones en pantalla)
+   Rotar un edificio     R mientras lo colocas
+   Cancelar / cerrar     Esc (cierra paneles, cancela la colocación, pausa)
+   Pantalla completa     F11
+
+El botón "?" enseña ayudas sobre la propia pantalla.
+
+
+CÓMO REPORTAR UN FALLO
+----------------------
+Abre un issue en:
+
+   https://github.com/bryansank/tormenta-imperial/issues
+
+o díselo directamente a quien te pasó el juego. Cuenta qué hacías, qué
+esperabas y qué pasó; una captura (Win + Mayús + S) y la versión
+({{VERSION}}) ayudan mucho.
+
+
+LICENCIA
+--------
+Tormenta Imperial © 2026 Bryan Key. Esta copia es para que la pruebes tú: no
+la redistribuyas ni la subas a ningún sitio. Términos completos en LICENSE.txt.
+El motor (Godot), las fuentes y el audio son de terceros y conservan sus
+licencias: ver THIRD-PARTY-NOTICES.md, GODOT-COPYRIGHT.txt y licenses\fonts\.
+
+
+==================================================================
+ENGLISH (short version)
+==================================================================
+Tormenta Imperial {{VERSION}}, a test build for Windows 10/11 64-bit (needs a
+Vulkan-capable GPU).
+
+- Run: unzip anywhere and open TormentaImperial.exe. No installer.
+- SmartScreen: the exe is unsigned. If Windows shows "Windows protected your
+  PC", click "More info" -> "Run anyway" (first launch only).
+- Saves: %APPDATA%\TormentaImperial\ (save_game.json, settings.cfg).
+- Controls: WASD/arrows or middle-drag to pan, mouse wheel to zoom, Q/E to
+  rotate the camera, R to rotate a building while placing it, Esc to cancel or
+  close, F11 for fullscreen.
+- Bugs: https://github.com/bryansank/tormenta-imperial/issues (what you did,
+  what you expected, what happened, a screenshot and the version).
+- Licence: for your own testing only; please do not redistribute. See LICENSE.txt
+  and THIRD-PARTY-NOTICES.md.

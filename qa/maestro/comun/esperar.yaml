@@ -1,0 +1,8 @@
+# Espera fija de MS milisegundos. Godot pinta todo en un SurfaceView y Maestro
+# no ve sus widgets, asi que se espera a un texto que nunca aparece, en opcional.
+appId: com.bryankey.tormentaimperial.qa
+---
+- extendedWaitUntil:
+    visible: "__nunca_aparece__"
+    timeout: ${MS}
+    optional: true

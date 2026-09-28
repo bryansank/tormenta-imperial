@@ -1,0 +1,100 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/view2d/ViewRouter.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/view2d/Camera2DController.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/view2d/StormTint2D.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/view2d/Island2D.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/view2d/GridOverlay2D.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/view2d/BuildingPlacer2D.gd" id="6"]
+[ext_resource type="Script" path="res://scripts/view2d/MapGenerator2D.gd" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/ui/OnScreenControls.tscn" id="10"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ResourceHUD.tscn" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ConstructionMenu.tscn" id="12"]
+[ext_resource type="PackedScene" path="res://scenes/ui/BuildingInfoPanel.tscn" id="13"]
+[ext_resource type="PackedScene" path="res://scenes/ui/MarketPanel.tscn" id="14"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ProgressPanel.tscn" id="15"]
+[ext_resource type="PackedScene" path="res://scenes/ui/VictoryScreen.tscn" id="16"]
+[ext_resource type="PackedScene" path="res://scenes/ui/NotificationPanel.tscn" id="17"]
+[ext_resource type="PackedScene" path="res://scenes/ui/TechTreePanel.tscn" id="18"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ObjectivePanel.tscn" id="19"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ArmyPanel.tscn" id="20"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SettingsPanel.tscn" id="21"]
+[ext_resource type="PackedScene" path="res://scenes/ui/HelperPanel.tscn" id="22"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SkirmishPanel.tscn" id="23"]
+[ext_resource type="PackedScene" path="res://scenes/ui/BattleScreen.tscn" id="24"]
+[ext_resource type="PackedScene" path="res://scenes/ui/StormHUD.tscn" id="25"]
+[ext_resource type="PackedScene" path="res://scenes/ui/TutorialPanel.tscn" id="26"]
+[ext_resource type="PackedScene" path="res://scenes/ui/AuditWaveBanner.tscn" id="27"]
+[ext_resource type="PackedScene" path="res://scenes/ui/WarReportScreen.tscn" id="28"]
+[ext_resource type="PackedScene" path="res://scenes/ui/AuditDefeatScreen.tscn" id="29"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PauseMenu.tscn" id="30"]
+[ext_resource type="PackedScene" path="res://scenes/ui/TitleMenu.tscn" id="31"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SandboxPanel.tscn" id="modos_sandbox"]
+
+[node name="Main2D" type="Node2D"]
+script = ExtResource("1")
+view_mode = "2d"
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("2")
+
+[node name="StormTint" type="CanvasModulate" parent="."]
+script = ExtResource("3")
+
+[node name="Island" type="Node2D" parent="."]
+script = ExtResource("4")
+
+[node name="GridOverlay" type="Node2D" parent="."]
+script = ExtResource("5")
+
+[node name="BuildingPlacer" type="Node2D" parent="."]
+script = ExtResource("6")
+
+[node name="OnScreenControls" parent="." instance=ExtResource("10")]
+
+[node name="ResourceHUD" parent="." instance=ExtResource("11")]
+
+[node name="MapGenerator" type="Node" parent="."]
+script = ExtResource("7")
+
+[node name="ConstructionMenu" parent="." instance=ExtResource("12")]
+
+[node name="BuildingInfoPanel" parent="." instance=ExtResource("13")]
+
+[node name="MarketPanel" parent="." instance=ExtResource("14")]
+
+[node name="ProgressPanel" parent="." instance=ExtResource("15")]
+
+[node name="VictoryScreen" parent="." instance=ExtResource("16")]
+
+[node name="NotificationPanel" parent="." instance=ExtResource("17")]
+
+[node name="TechTreePanel" parent="." instance=ExtResource("18")]
+
+[node name="ObjectivePanel" parent="." instance=ExtResource("19")]
+
+[node name="ArmyPanel" parent="." instance=ExtResource("20")]
+
+[node name="SettingsPanel" parent="." instance=ExtResource("21")]
+
+[node name="HelperPanel" parent="." instance=ExtResource("22")]
+
+[node name="SkirmishPanel" parent="." instance=ExtResource("23")]
+
+[node name="BattleScreen" parent="." instance=ExtResource("24")]
+
+[node name="StormHUD" parent="." instance=ExtResource("25")]
+
+[node name="TutorialPanel" parent="." instance=ExtResource("26")]
+
+[node name="AuditWaveBanner" parent="." instance=ExtResource("27")]
+
+[node name="WarReportScreen" parent="." instance=ExtResource("28")]
+
+[node name="AuditDefeatScreen" parent="." instance=ExtResource("29")]
+
+[node name="SandboxPanel" parent="." instance=ExtResource("modos_sandbox")]
+
+[node name="PauseMenu" parent="." instance=ExtResource("30")]
+
+[node name="TitleMenu" parent="." instance=ExtResource("31")]
