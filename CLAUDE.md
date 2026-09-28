@@ -483,7 +483,7 @@ All balance values live in `GameConfig.gd`:
 
 ### Exporting
 
-`export_presets.cfg` has a "Windows Desktop" preset (single .exe, PCK embedded, output in the untracked `build/`). The `BeckettRuntime` autoload points at `scripts/services/BeckettGate.gd`, which loads the addon only in the editor; `addons/beckett`, `addons/gdUnit4`, tests, tools, docs and local token files (`.mcp.json`, `.env*`) are excluded. Exports save to `%APPDATA%\TormentaImperial\`, not the editor's user dir. Full guide: `docs/19-exportar.md`.
+`export_presets.cfg` has a "Windows Desktop" preset (single .exe, PCK embedded, output in the untracked `build/`). The `BeckettRuntime` autoload points at `scripts/services/BeckettGate.gd`, which loads the addon only in the editor; `addons/beckett`, `addons/gdUnit4`, tests, tools, docs and local token files (`.mcp.json`, `.env*`) are excluded. Exports save to `%APPDATA%\TormentaImperial\`, not the editor's user dir. An "Android" preset builds a debug APK (arm64, sensor landscape, no permissions, prebuilt templates); Android uses the Mobile renderer through `rendering_method.mobile` while PC stays on Forward+. Signing secrets never go in the preset: release signing comes from `GODOT_ANDROID_KEYSTORE_RELEASE_{PATH,USER,PASSWORD}`. On mobile the game is always fullscreen (immersive). Full guide: `docs/19-exportar.md`.
 
 ---
 
