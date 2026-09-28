@@ -1408,7 +1408,7 @@ func test_the_new_game_dialog_frees_itself_on_both_answers() -> void:
 	var before: int = GameManager.get_child_count()
 	GameManager.request_new_game()
 	assert_int(GameManager.get_child_count()).is_equal(before + 1)
-	var dialog: ConfirmationDialog = GameManager.get_child(GameManager.get_child_count() - 1)
+	var dialog: CanvasLayer = GameManager.get_child(GameManager.get_child_count() - 1)
 	var frees_on := func(sig: Signal) -> bool:
 		for c in sig.get_connections():
 			var cb: Callable = c["callable"]

@@ -5,8 +5,8 @@ extends CanvasLayer
 ##
 ##   Continuar      solo si hay algo que continuar (se cargo una partida, o ya
 ##                  se estuvo jugando en esta sesion)
-##   Nueva partida  con confirmacion via GameManager.request_new_game() cuando
-##                  hay algo que perder; sin ella si la isla es nueva
+##   Nueva partida  abre el selector de modo (GameManager.request_new_game), que
+##                  pide confirmacion solo si hay algo que perder
 ##   Ajustes        abre el SettingsPanel de siempre, que funciona en pausa
 ##   Salir
 ##
@@ -35,6 +35,8 @@ var _continue_btn: Button
 var _new_btn: Button
 var _settings_btn: Button
 var _quit_btn: Button
+## "Partida en curso: Campana", bajo Continuar. Discreto: el modo se ve, no manda.
+var _mode_label: Label
 
 var _paused_by_me := false
 ## Pantalla prestada abierta encima (Ajustes) y su process_mode original.
@@ -49,6 +51,11 @@ func _ready() -> void:
 	visible = false
 	UIManager.window_closed.connect(_on_window_closed)
 	get_viewport().size_changed.connect(_relayout)
+	# El menu sale antes de que GameManager cargue (lo hace cuando la escena
+	# entera esta lista): al terminar la carga se sabe que hay que continuar y
+	# en que modo.
+	EventBus.game_load_completed.connect(_on_game_ready)
+	EventBus.game_new_started.connect(_on_game_ready)
 	if should_show_on_launch():
 		open_menu()
 
@@ -63,7 +70,12 @@ func should_show_on_launch() -> bool:
 
 ## Hay una partida que merece "Continuar": se cargo al arrancar, o el jugador ya
 ## ha estado jugando en esta sesion (vuelve aqui desde la pausa).
+##
+## Una partida terminada (Supervivencia perdida) no se continua: se ve, pero
+## solo ofrece empezar otra.
 func has_game_to_continue() -> bool:
+	if GameMode.is_run_over():
+		return false
 	return GameManager.loaded_from_save or _dismissed_this_session
 
 func is_open() -> bool:
@@ -134,6 +146,8 @@ func _setup_ui() -> void:
 
 	_continue_btn = ModalKit.make_menu_button(Tr.t("BTN_TITLE_CONTINUE"), UITheme.POSITIVE, _on_continue)
 	column.add_child(_continue_btn)
+	_mode_label = ModalKit.make_text("", "small", UITheme.TEXT_DIM)
+	column.add_child(_mode_label)
 	_new_btn = ModalKit.make_menu_button(Tr.t("BTN_NEW_GAME"), UITheme.BTN, _on_new_game)
 	column.add_child(_new_btn)
 	_settings_btn = ModalKit.make_menu_button(Tr.t("BTN_SETTINGS"), UITheme.BTN, _on_settings)
@@ -198,6 +212,12 @@ func close_menu() -> void:
 
 func _refresh_buttons() -> void:
 	_continue_btn.visible = has_game_to_continue()
+	_mode_label.visible = _continue_btn.visible
+	_mode_label.text = Tr.t("LBL_TITLE_RUN_MODE") % GameMode.display_name()
+
+func _on_game_ready() -> void:
+	if visible:
+		_refresh_buttons()
 
 func _exit_tree() -> void:
 	# Recargar la escena (nueva partida) con el menu abierto no puede dejar el
@@ -210,13 +230,11 @@ func _exit_tree() -> void:
 func _on_continue() -> void:
 	close_menu()
 
-## Con una partida que perder, confirma y borra (GameManager recarga la escena).
-## Si la isla acaba de nacer no hay nada que borrar: se suelta el menu y empieza.
+## Abre el selector de modo. Con una partida que perder, el selector confirma
+## antes de borrar; si la isla acaba de nacer no hay nada que perder y no
+## pregunta. En los dos casos, elegir recarga la escena en el modo elegido.
 func _on_new_game() -> void:
-	if not has_game_to_continue():
-		close_menu()
-		return
-	var dialog: ConfirmationDialog = GameManager.request_new_game()
+	var dialog: CanvasLayer = GameManager.request_new_game(has_game_to_continue())
 	if dialog != null:
 		# La escena se recarga al confirmar: el menu no vuelve a salir encima de
 		# la partida nueva, que arranca con su intro.
