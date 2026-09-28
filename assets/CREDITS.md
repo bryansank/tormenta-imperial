@@ -8,6 +8,8 @@ All third-party assets here are free and redistributable.
 |------|-----|---------|--------|
 | Black Ops One | UI titles / headers | OFL 1.1 (`OFL-BlackOpsOne.txt`) | Google Fonts |
 | Rajdhani (Medium/SemiBold/Bold) | UI body, buttons, labels | OFL 1.1 (`OFL-Rajdhani.txt`) | Google Fonts |
+| Special Elite | Typewritten dossier text (prologue) | Apache 2.0 (`LICENSE-SpecialElite.txt`) | Google Fonts |
+| Caveat | Handwritten margin notes (prologue) | OFL 1.1 (`OFL-Caveat.txt`) | Google Fonts |
 
 Wired in `scripts/ui/UITheme.gd` (global theme default font + title/section overrides).
 
