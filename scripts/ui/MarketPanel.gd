@@ -4,7 +4,6 @@ extends CanvasLayer
 var _panel: PanelContainer
 var _backdrop: ColorRect
 var _market_btn: Button
-var _sidebar_toggle: Button
 var _sidebar_visible := false
 var _is_open := false
 var _rows: Dictionary = {}
@@ -36,33 +35,9 @@ func _setup_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	# Sidebar toggle button (owned by MarketPanel, controls all right-side buttons)
-	_sidebar_toggle = Button.new()
-	_sidebar_toggle.text = "\u2630"  # ☰ hamburger
-	_sidebar_toggle.custom_minimum_size = Vector2(UILayoutConfig.SIDEBAR_TOGGLE_SIZE, UILayoutConfig.SIDEBAR_TOGGLE_SIZE)
-	_sidebar_toggle.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_sidebar_toggle.offset_left = -(UILayoutConfig.SIDEBAR_TOGGLE_SIZE + 10)
-	_sidebar_toggle.offset_right = -10
-	_sidebar_toggle.offset_top = UILayoutManager.get_sidebar_button_offset("MarketPanel.sidebar_toggle")
-	_sidebar_toggle.offset_bottom = _sidebar_toggle.offset_top + UILayoutConfig.SIDEBAR_TOGGLE_SIZE
-	var stb := StyleBoxFlat.new()
-	stb.bg_color = Color(0.08, 0.09, 0.07, 0.85)
-	stb.set_corner_radius_all(4)
-	stb.set_content_margin_all(4)
-	stb.border_color = UITheme.ACCENT_DIM
-	stb.set_border_width_all(2)
-	_sidebar_toggle.add_theme_stylebox_override("normal", stb)
-	var stb_h := stb.duplicate()
-	stb_h.bg_color = Color(0.14, 0.15, 0.12, 0.9)
-	stb_h.border_color = UITheme.ACCENT
-	_sidebar_toggle.add_theme_stylebox_override("hover", stb_h)
-	_sidebar_toggle.add_theme_stylebox_override("pressed", stb_h)
-	_sidebar_toggle.add_theme_font_size_override("font_size", 16)
-	UITheme.set_label_color(_sidebar_toggle, UITheme.ACCENT)
-	_sidebar_toggle.add_theme_color_override("font_hover_color", UITheme.TEXT_BRIGHT)
-	_sidebar_toggle.pressed.connect(_toggle_sidebar)
-	root.add_child(_sidebar_toggle)
-
+	# El boton ☰ que desplegaba la columna lateral ya no existe: el menu de la
+	# partida (PauseMenu, "☰ MENU") es el unico y abre este panel desde COLONIA.
+	# El boton lateral se conserva, oculto, por si algo lo busca.
 	_market_btn = Button.new()
 	_market_btn.text = Tr.t("BTN_MARKET")
 	_market_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
@@ -222,11 +197,6 @@ func _toggle_panel() -> void:
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)
-
-func _toggle_sidebar() -> void:
-	_sidebar_visible = not _sidebar_visible
-	_sidebar_toggle.text = "\u2715" if _sidebar_visible else "\u2630"  # ✕ / ☰
-	EventBus.sidebar_toggled.emit(_sidebar_visible)
 
 func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_visible = is_visible

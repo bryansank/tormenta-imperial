@@ -155,10 +155,11 @@ const SLOTS := {
 		"gap": 8,
 		"follow_moved": true,
 	},
-	## A la izquierda del boton ☰ (44 px + 10 de margen + 10 de hueco).
+	## A la izquierda del boton "☰ MENU" (PauseMenu: 118 px + 10 de margen +
+	## 10 de hueco).
 	"tip_top_right": {
 		"anchor": Rect2(1, 0, 1, 0),
-		"margin": {"left": 0, "top": 10, "right": 64, "bottom": 0},
+		"margin": {"left": 0, "top": 10, "right": 138, "bottom": 0},
 		"max_size": Vector2(280, 0),
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,
@@ -219,7 +220,9 @@ const COLUMN_GAP := 6.0
 ## ocupa el boton de pausa que va a su derecha (hueco + 44).
 const LEFT_COLUMN_IDS := ["ResourceHUD", "NotificationPanel.status"]
 const PAUSE_GAP := 4.0
-const PAUSE_RESERVE := 48.0
+## El boton II de pausa ya no existe (menu unico, arriba a la derecha): la
+## columna izquierda no reserva nada a su derecha.
+const PAUSE_RESERVE := 0.0
 ## Lo que cambia SOLO con la columna bajada (no en movil): con la columna
 ## izquierda llena hasta media pantalla, los avisos suben desde abajo a la
 ## izquierda y la tapaban. Pasan al centro, encima de CONSTRUIR.
@@ -363,7 +366,9 @@ const SLOT_CONFLICTS := {
 const SIDEBAR_BTN_HEIGHT := 44
 const SIDEBAR_BTN_GAP := 5
 const SIDEBAR_TOGGLE_GAP := 6
-const SIDEBAR_TOGGLE_SIZE := 44
+## Alto del boton "☰ MENU" (PauseMenu), que ocupa el sitio del antiguo ☰:
+## el panel de edificio se apila debajo de el.
+const SIDEBAR_TOGGLE_SIZE := 48
 const SIDEBAR_FIRST_Y := 10
 ## Ancho del boton de menu lateral (los paneles lo usan para colocarse a -176).
 const SIDEBAR_BTN_WIDTH := 164
