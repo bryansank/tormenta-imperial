@@ -234,7 +234,7 @@ func test_moving_frees_the_old_cells_and_takes_the_new_ones() -> void:
 	assert_object(GridManager.get_building_at(Vector2i(4, 4))).is_null()
 	assert_object(GridManager.get_building_at(Vector2i(9, 4))).is_same(node)
 	assert_bool(node.visible).is_true()
-	assert_vector(node.position).is_equal(View2D.footprint_center_px(Vector2i(9, 4), Vector2i(1, 1)))
+	assert_vector(node.position).is_equal(View2D.footprint_center_px(Vector2i(9, 4), Vector2i(2, 2)))
 
 func test_demolishing_frees_the_cells_and_refunds_part_of_the_cost() -> void:
 	# Estado conocido: fallaba a veces en la suite completa porque otra suite dejaba

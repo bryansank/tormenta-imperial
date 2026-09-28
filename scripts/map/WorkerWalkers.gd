@@ -180,7 +180,8 @@ class Walker2D extends Node2D:
 	func _ready() -> void:
 		z_index = 30
 	func _draw() -> void:
-		var r := 3.2
-		draw_circle(Vector2(0, 1.5), r + 1.2, Color(0, 0, 0, 0.35))
-		draw_circle(Vector2(0, 1.0), r, Color(0.22, 0.32, 0.52))
-		draw_circle(Vector2(0, -1.2), r * 0.62, Color(0.92, 0.72, 0.18))
+		# Un quinto de celda: se ve desde el zoom de siempre sin tapar la calle.
+		var r: float = View2D.cell_px() * 0.2
+		draw_circle(Vector2(0, r * 0.35), r * 1.2, Color(0, 0, 0, 0.35))
+		draw_circle(Vector2(0, r * 0.2), r, Color(0.22, 0.32, 0.52))
+		draw_circle(Vector2(0, -r * 0.4), r * 0.62, Color(0.92, 0.72, 0.18))
