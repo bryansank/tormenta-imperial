@@ -15,6 +15,9 @@ func _process(delta: float) -> void:
 	# Random events don't start until Phase 3 (Survival)
 	if ProgressionManager.current_phase < GameConfig.Phase.SURVIVAL:
 		return
+	# Sandbox no tiene eventos: con recursos infinitos solo serian ruido.
+	if not GameMode.random_events_enabled():
+		return
 
 	# Check for next event
 	_timer += delta
@@ -130,7 +133,9 @@ func _get_event_pool() -> Array:
 # ── Weighted Random Selection ──
 
 func _trigger_random_event() -> void:
-	var pool := _get_event_pool()
+	var pool := get_active_event_pool()
+	if pool.is_empty():
+		return
 	var total_weight: int = 0
 	for event in pool:
 		total_weight += int(event["weight"])
@@ -282,3 +287,15 @@ func reset() -> void:
 	_active_timer = 0.0
 	_events_triggered = 0
 	_schedule_next_event()
+
+# ── modos-de-juego ──
+
+## Los eventos que el modo deja salir. Constructor quita los de categoria
+## "danger" (tormenta menor, accidente, plaga, bandidos) y deja los buenos.
+func get_active_event_pool() -> Array:
+	var pool: Array = []
+	for event in _get_event_pool():
+		if event["category"] == "danger" and not GameMode.danger_events_enabled():
+			continue
+		pool.append(event)
+	return pool

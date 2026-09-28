@@ -96,12 +96,16 @@ func _on_intro_closed() -> void:
 func offer_tip(tip_id: String) -> void:
 	if tip_id in tips_seen:
 		return
+	# Un consejo sobre algo que este modo no tiene (la Tormenta en Constructor)
+	# no sale, y no se marca: no se ha visto.
+	if not GameMode.tip_allowed(tip_id):
+		return
 	if not TIPS.has(tip_id):
 		push_warning("TutorialManager: consejo desconocido '%s'" % tip_id)
 		return
 	tips_seen.append(tip_id)
 	var keys: Dictionary = TIPS[tip_id]
-	EventBus.tutorial_tip_requested.emit(tip_id, Tr.t(keys["title"]), Tr.t(keys["body"]))
+	EventBus.tutorial_tip_requested.emit(tip_id, Tr.t(keys["title"]), Tr.ti(keys["body"]))
 
 func has_seen_tip(tip_id: String) -> bool:
 	return tip_id in tips_seen

@@ -28,6 +28,13 @@ var _halted: bool = false
 ## La carga trajo un Diezmo sin cobrar. Transitorio: lo pone load_save_data() y
 ## lo consume el final de la carga.
 var _tithe_to_resume: bool = false
+## Una tormenta invocada a mano (Sandbox) esta corriendo aunque el modo tenga el
+## reloj apagado. Se apaga sola cuando el ciclo vuelve a la calma.
+var _on_demand: bool = false
+## Ese Diezmo llego a reclamarse con el arbol en pausa (el menu principal sale
+## encima de la partida recien cargada) y espera al primer frame con el juego en
+## marcha. Transitorio, como el de arriba.
+var _resume_when_running: bool = false
 
 func _ready() -> void:
 	_cycle = StormCycleScript.create()
@@ -40,7 +47,12 @@ func _ready() -> void:
 	_check_arming()
 
 func _process(delta: float) -> void:
-	if _halted or not _armed or _cycle == null:
+	# _process no corre con el arbol en pausa: llegar aqui es que el jugador ya
+	# solto el menu que tapaba la partida.
+	if _resume_when_running:
+		_resume_when_running = false
+		_resume_tithe()
+	if _halted or _cycle == null or not is_armed():
 		return
 	_publish(_cycle.advance(delta))
 
@@ -49,8 +61,10 @@ func _process(delta: float) -> void:
 func get_cycle() -> StormCycle:
 	return _cycle
 
+## El reloj corre: armado y con la Tormenta activa en este modo, o invocada a
+## mano. En Constructor y Sandbox se arma igual (la fase lo decide) pero no corre.
 func is_armed() -> bool:
-	return _armed
+	return (_armed and GameMode.storm_enabled()) or _on_demand
 
 func get_phase() -> int:
 	return _cycle.phase if _cycle != null else StormCycle.Phase.CALM
@@ -127,6 +141,9 @@ func _publish(events: Array) -> void:
 	for event in events:
 		match event.get("e", ""):
 			"phase":
+				# La tormenta invocada termina al volver la calma.
+				if int(event["phase"]) == StormCycle.Phase.CALM and not GameMode.storm_enabled():
+					_on_demand = false
 				_on_phase_entered(int(event["phase"]))
 				EventBus.storm_phase_changed.emit(int(event["phase"]), float(event["left"]))
 			"incoming":
@@ -288,6 +305,11 @@ func _standing_towers() -> int:
 ## The Assessors arrive. If there is a garrison at home, they have to get through
 ## it first; with nobody to stand, they simply help themselves.
 func _begin_tithe(severity: int) -> void:
+	# Un modo sin Diezmo: la tormenta pasa y nadie baja a cobrar.
+	if not GameMode.tithe_enabled():
+		EventBus.tithe_resolved.emit(true, {})
+		_settle()
+		return
 	# Con la Auditoria Final en el tablero no hay Diezmo aparte: la Regencia ya
 	# esta en la puerta, y cobrar por un lado mientras se pelea por el otro pone
 	# a la misma guarnicion a defender dos sitios a la vez. get_garrison() no sabe
@@ -530,12 +552,14 @@ func get_save_data() -> Dictionary:
 	var data: Dictionary = _cycle.to_dict()
 	data["armed"] = _armed
 	data["halted"] = _halted
+	data["on_demand"] = _on_demand
 	return data
 
 func load_save_data(data: Dictionary) -> void:
 	_cycle = StormCycleScript.from_dict(data)
 	_armed = bool(data.get("armed", false))
 	_halted = bool(data.get("halted", false))
+	_on_demand = bool(data.get("on_demand", false)) and not _halted
 	if _halted:
 		_armed = false
 	# El castigo a la produccion sale de la fase cargada, no se da por levantado:
@@ -557,8 +581,15 @@ func _on_game_load_completed() -> void:
 ## Se reclama por el mismo camino que en partida: defensa con la guarnicion que
 ## haya en casa, o cobro directo si no hay nadie. El tablero no se guarda, asi
 ## que un Diezmo interrumpido vuelve a empezar desde la puerta.
+##
+## Con el arbol en pausa no: el menu principal pausa en su _ready, antes de que
+## la partida cargue, y la defensa se abria detras de el. Espera a que el juego
+## vuelva a correr (_process).
 func _resume_tithe() -> void:
 	if not _tithe_to_resume:
+		return
+	if is_inside_tree() and get_tree().paused:
+		_resume_when_running = true
 		return
 	_tithe_to_resume = false
 	if _halted or _cycle == null or not _cycle.is_collecting():
@@ -573,4 +604,25 @@ func reset() -> void:
 	_armed = false
 	_halted = false
 	_tithe_to_resume = false
+	_on_demand = false
+	_resume_when_running = false
 	GameConfig.event_production_multiplier = 1.0
+
+# ── modos-de-juego ──
+
+## Sandbox: la tormenta viene ahora. Entra en la Advertencia (que esta vez no
+## puede ser falsa alarma) y sigue el ciclo de siempre: ceniza, tormenta,
+## Diezmo. Al volver la calma se para otra vez. Solo desde la calma y nunca con
+## la Tormenta parada para siempre.
+func invoke_storm() -> bool:
+	if not GameMode.sandbox_tools() or _halted or _cycle == null:
+		return false
+	if _cycle.phase != StormCycle.Phase.CALM:
+		return false
+	_on_demand = true
+	_publish(_cycle.summon_now())
+	EventBus.sandbox_invoked.emit("storm")
+	return true
+
+func is_on_demand() -> bool:
+	return _on_demand

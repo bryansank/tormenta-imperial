@@ -320,6 +320,29 @@ var ui_touch_controls := "auto"
 ## es del dispositivo, sobrevive a "partida nueva" y se aplica antes de pintar nada.
 var ui_locale := "es"
 
+# ── interfaz-dispositivos (docs/21-interfaz-y-dispositivos.md) ──
+# Todo del dispositivo, en settings.cfg [interfaz]: una tablet y un PC del mismo
+# jugador no tienen por que querer la misma letra ni la misma disposicion.
+
+## Perfil de dispositivo: "auto" lo detecta DeviceProfile; "pc", "tablet" y
+## "phone" lo fuerzan.
+const DEVICE_PROFILE_MODES := ["auto", "pc", "tablet", "phone"]
+var ui_device_profile := "auto"
+## Escala global de la interfaz en %. 0 = la del perfil de dispositivo.
+const UI_SCALE_MIN := 75
+const UI_SCALE_MAX := 150
+var ui_scale_pct := 0
+## Tamano de texto: "auto" (el del perfil) o uno de UITheme.TEXT_SIZES.
+var ui_text_size := "auto"
+## Paleta de colores (UITheme.PALETTES), alto contraste y opacidad de paneles.
+var ui_palette := "default"
+var ui_high_contrast := false
+var ui_panel_opacity := 1.0
+## Ids de HudRegistry que el jugador oculto.
+var ui_hud_hidden: Array = []
+## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
+var ui_layout: Dictionary = {}
+
 func _ready() -> void:
 	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
 	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
@@ -359,6 +382,29 @@ func load_user_settings() -> void:
 	if Tr.LOCALES.has(locale):
 		ui_locale = locale
 	Tr.set_locale(ui_locale)
+	_load_interface_settings(cf)
+
+## [interfaz]: cada valor se valida; uno desconocido vuelve al de serie en vez
+## de dejar la interfaz en un estado que nadie eligio.
+func _load_interface_settings(cf: ConfigFile) -> void:
+	var prof := str(cf.get_value("interfaz", "device_profile", ui_device_profile))
+	ui_device_profile = prof if prof in DEVICE_PROFILE_MODES else "auto"
+	var scale := int(cf.get_value("interfaz", "ui_scale_pct", ui_scale_pct))
+	ui_scale_pct = 0 if scale == 0 else clampi(scale, UI_SCALE_MIN, UI_SCALE_MAX)
+	var text := str(cf.get_value("interfaz", "text_size", ui_text_size))
+	ui_text_size = text if (text == "auto" or text in UITheme.TEXT_SIZES) else "auto"
+	var pal := str(cf.get_value("interfaz", "palette", ui_palette))
+	ui_palette = pal if pal in UITheme.PALETTES else "default"
+	ui_high_contrast = bool(cf.get_value("interfaz", "high_contrast", ui_high_contrast))
+	ui_panel_opacity = clampf(float(cf.get_value("interfaz", "panel_opacity", ui_panel_opacity)),
+		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
+	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
+	ui_hud_hidden = []
+	if hidden is Array:
+		for id in hidden:
+			ui_hud_hidden.append(str(id))
+	var layout: Variant = cf.get_value("interfaz", "layout", ui_layout)
+	ui_layout = layout.duplicate(true) if layout is Dictionary else {}
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -374,6 +420,14 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "view_mode", ui_view_mode)
 	cf.set_value("ui", "touch_controls", ui_touch_controls)
 	cf.set_value("ui", "locale", ui_locale)
+	cf.set_value("interfaz", "device_profile", ui_device_profile)
+	cf.set_value("interfaz", "ui_scale_pct", ui_scale_pct)
+	cf.set_value("interfaz", "text_size", ui_text_size)
+	cf.set_value("interfaz", "palette", ui_palette)
+	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
+	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
+	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
+	cf.set_value("interfaz", "layout", ui_layout)
 	cf.save(USER_SETTINGS_PATH)
 
 # ── Controles tactiles ──
@@ -386,10 +440,11 @@ var _real_touch_seen := false
 ## Si los controles en pantalla deben verse ahora, resolviendo el "auto".
 ## Es la unica pregunta que hace OnScreenControls.
 ##
-## "auto" NO mira DisplayServer.is_touchscreen_available(): muchos portatiles
-## Windows dicen tener pantalla tactil y el D-pad aparecia en un PC que se usa
-## con raton. En "auto" salen solo en un sistema movil, o en escritorio en
-## cuanto llega un toque real de pantalla.
+## "auto" sigue al perfil de dispositivo (DeviceProfile): tablet y movil los
+## llevan, PC NUNCA (norma de Bryan). Ni DisplayServer.is_touchscreen_available()
+## ni un toque real los encienden en un PC: un portatil Windows tactil que se
+## toca una vez no se llena de flechas. Quien los quiera en PC elige "Siempre"
+## o el perfil Tablet.
 func touch_controls_enabled() -> bool:
 	match ui_touch_controls:
 		"always":
@@ -397,7 +452,16 @@ func touch_controls_enabled() -> bool:
 		"never":
 			return false
 		_:
-			return is_mobile_os() or _real_touch_seen
+			return _touch_profile()
+
+## "auto" sigue al perfil de dispositivo (tablet y movil llevan controles en
+## pantalla; PC no), asi que forzar el perfil Tablet en Ajustes los trae.
+## Sin DeviceProfile (no deberia pasar) se mira el sistema, como antes.
+func _touch_profile() -> bool:
+	var dp := get_node_or_null("/root/DeviceProfile")
+	if dp != null and dp.has_method("is_touch_profile"):
+		return dp.is_touch_profile()
+	return is_mobile_os()
 
 ## Movil de verdad: exportado a Android/iOS, o la web abierta en uno de ellos.
 static func is_mobile_os() -> bool:
@@ -407,14 +471,14 @@ static func is_mobile_os() -> bool:
 	return false
 
 ## InputService llama aqui con cada InputEventScreenTouch real (el proyecto no
-## emula toques desde el raton, asi que un toque es un dedo). En "auto" hace
-## aparecer los controles; con "never" explicito no cambia nada.
+## emula toques desde el raton, asi que un toque es un dedo). Solo se anota:
+## en PC un toque ya no enciende los controles (ver touch_controls_enabled);
+## sirve para que los textos de ayuda hablen de dedos (DeviceProfile.input_style).
 func notice_real_touch() -> void:
-	if _real_touch_seen:
-		return
 	_real_touch_seen = true
-	if ui_touch_controls == "auto" and not is_mobile_os():
-		EventBus.touch_controls_changed.emit(touch_controls_enabled())
+
+func real_touch_seen() -> bool:
+	return _real_touch_seen
 
 ## Cambia el modo, lo guarda y anuncia el estado resuelto para que los controles
 ## aparezcan o desaparezcan sin reiniciar.
@@ -676,9 +740,13 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 # ── Building Limit Helpers ──
 
 func get_building_limit(building_id: String) -> int:
+	if GameMode.all_unlocked():
+		return -1  # Sandbox: sin tope por tipo (ver docs/20-modos-de-juego.md).
 	return building_limits.get(building_id, -1)
 
 func get_prerequisites(building_id: String) -> Array:
+	if GameMode.all_unlocked():
+		return []
 	return building_prerequisites.get(building_id, [])
 
 # ══════════════════════════════════════════════════════════════════════
@@ -952,7 +1020,7 @@ var storm_production_target_severity := 4
 var storm_essential_buildings := ["sawmill", "gold_mine"]
 
 func get_storm_damage(severity: int, max_health: int, towers: int) -> int:
-	var raw: float = float(max_health) * storm_damage_per_tick * float(maxi(1, severity))
+	var raw: float = float(max_health) * storm_damage_per_tick * float(maxi(1, severity)) * GameMode.storm_damage_mult()
 	return maxi(1, roundi(raw * (1.0 - get_storm_mitigation(towers))))
 
 ## Cuánto absorben las torres. Con techo: ninguna cantidad de torres vuelve a la
@@ -1006,7 +1074,7 @@ func get_tithe_ratio(severity: int) -> float:
 func get_tithe_debt(severity: int, era: int, stored: int) -> int:
 	var floor_debt: int = storm_tithe_base_debt 		+ storm_tithe_debt_per_severity * maxi(0, severity - 1) 		+ storm_tithe_debt_per_era * maxi(0, era - 1)
 	var share: int = int(float(maxi(0, stored)) * get_tithe_ratio(severity))
-	return maxi(floor_debt, share)
+	return int(round(float(maxi(floor_debt, share)) * GameMode.tithe_mult()))
 
 ## El multiplicador de la escolta por tormentas superadas.
 func get_assessor_escalation(storms_survived: int) -> float:
@@ -1015,15 +1083,20 @@ func get_assessor_escalation(storms_survived: int) -> float:
 		1.0, storm_assessor_growth_max)
 
 func get_storm_first_interval() -> float:
-	return get_duration(storm_first_interval)
+	return get_duration(storm_first_interval) * GameMode.storm_interval_mult()
 
 ## Bounds of the calm. The roll itself belongs to StormCycle's own generator, so
 ## the model stays deterministic under a seed.
 func get_storm_interval_min() -> float:
-	return get_duration(storm_interval_min)
+	return get_duration(storm_interval_min) * GameMode.storm_interval_mult()
 
 func get_storm_interval_max() -> float:
-	return get_duration(storm_interval_max)
+	return get_duration(storm_interval_max) * GameMode.storm_interval_mult()
+
+## Severidad que el modo suma a toda tormenta (Supervivencia: +1). StormCycle la
+## lee aqui para seguir sin conocer a nadie mas que a GameConfig.
+func get_storm_severity_bonus() -> int:
+	return GameMode.storm_severity_bonus()
 
 func get_storm_warning() -> float:
 	return get_duration(storm_warning)
@@ -1085,6 +1158,8 @@ func get_base_storage_cap(era: int) -> int:
 
 ## Tope de la bolsa compartida: escala con la era y con cada almacen en pie.
 func get_storage_cap(warehouse_count: int, era: int = 1) -> int:
+	if GameMode.infinite_resources():
+		return sandbox_storage_cap
 	return get_base_storage_cap(era) + (warehouse_count * warehouse_storage_bonus) + tech_storage_bonus
 
 # ── Deposit Helpers ──
@@ -1277,3 +1352,73 @@ var final_audit_extra_gun_chance := 0.35
 ## Perder no acaba la partida, pero tampoco se rifa la victoria: hay que
 ## reconstruir el ejercito antes de que la Regencia vuelva a bajar.
 var final_audit_resummon_min_units := 3
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Modos de juego ──
+# ══════════════════════════════════════════════════════════════════════
+# La tabla de reglas por modo. Lo que un modo no lista lo hereda de "campaign",
+# que es el juego de siempre. Quien lee esto es GameMode (scripts/services/
+# GameMode.gd); ningun servicio mira el modo directamente. Detalle y motivos en
+# docs/20-modos-de-juego.md.
+var game_mode_rules := {
+	"campaign": {
+		"storm": true,
+		"tithe": true,
+		"audit_on_capstone": true,
+		"capstone_wins": false,
+		"victory": true,
+		"resummon": true,
+		"offline": true,
+		"random_events": true,
+		"danger_events": true,
+		"infinite_resources": false,
+		"all_unlocked": false,
+		"sandbox_tools": false,
+		"storm_interval_mult": 1.0,
+		"storm_severity_bonus": 0,
+		"storm_damage_mult": 1.0,
+		"tithe_mult": 1.0,
+		"starting_resources_mult": 1.0,
+		"starting_resources": {},
+		"hidden_tips": [],
+	},
+	# Relajado: sin Tormenta, sin Diezmo, sin asedio. Los eventos buenos siguen;
+	# los danos (tormenta menor, accidente, plaga, bandidos) no salen.
+	"builder": {
+		"storm": false,
+		"tithe": false,
+		"audit_on_capstone": false,
+		"capstone_wins": true,
+		"danger_events": false,
+		"hidden_tips": ["storm_incoming", "storm_ash", "storm_started", "tithe", "ruined", "final_audit"],
+	},
+	# Dificil: tormentas mas seguidas y mas duras, Diezmo mas caro, menos con que
+	# empezar, nada de progreso offline y una sola Auditoria.
+	"survival": {
+		"resummon": false,
+		"offline": false,
+		"storm_interval_mult": 0.6,
+		"storm_severity_bonus": 1,
+		"storm_damage_mult": 1.25,
+		"tithe_mult": 1.5,
+		"starting_resources_mult": 0.75,
+	},
+	# Creativo / pruebas: todo abierto, recursos que no se acaban, la Tormenta y
+	# la Auditoria solo cuando se invocan a mano. Sin victoria.
+	"sandbox": {
+		"storm": false,
+		"audit_on_capstone": false,
+		"victory": false,
+		"random_events": false,
+		"infinite_resources": true,
+		"all_unlocked": true,
+		"sandbox_tools": true,
+		"starting_resources": {"gold": 20000, "steel": 20000, "oil": 20000, "wood": 20000},
+		"hidden_tips": ["final_audit"],
+	},
+}
+
+## Sandbox: la bolsa compartida no se llena nunca en la practica, y cada recurso
+## se rellena hasta este suelo cada vez que se gasta.
+var sandbox_storage_cap := 1000000
+var sandbox_resource_floor := 20000

@@ -19,6 +19,9 @@ class_name UILayoutConfig
 ## gap (opcional): separacion en px con el panel de arriba (por defecto,
 ## UILayoutManager.DEFAULT_STACK_GAP).
 ## `margin.top` en un slot apilado solo se usa si el referido no existe.
+## follow_moved (opcional): si el jugador movio el referido (Editar
+## disposicion), por defecto este slot ocupa su hueco en la columna; con true lo
+## sigue a donde este (los globos de ayuda, que hablan de ese panel).
 const SLOTS := {
 	## Columna izquierda: recursos -> poblacion/moral -> log.
 	"top_left": {
@@ -43,6 +46,20 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
 		"stack_after": "NotificationPanel.status",
+	},
+	## Pestana SANDBOX (solo en ese modo): al pie de la columna izquierda, bajo lo
+	## que haya en ella (poblacion, y la Tormenta y el objetivo cuando bajan a la
+	## izquierda). Se apila tras el globo de los recursos, que a su vez va tras el
+	## registro: oculto cualquiera de los dos, ocupa su sitio. `margin.top` es el
+	## hueco que tenia antes de apilarse, por si ninguno existe.
+	"sandbox_tab": {
+		"anchor": Rect2(0, 0, 0, 0),
+		"margin": {"left": 10, "top": 228, "right": 0, "bottom": 0},
+		"max_size": Vector2(120, 0),
+		"grow_h": Control.GROW_DIRECTION_END,
+		"grow_v": Control.GROW_DIRECTION_END,
+		"stack_after": "HelperPanel.tip_resources",
+		"gap": 8,
 	},
 	## Columna central: fase de la Tormenta -> objetivo.
 	## La Tormenta va ARRIBA: cuando hay ceniza en camino es lo mas importante
@@ -126,6 +143,7 @@ const SLOTS := {
 		"grow_v": Control.GROW_DIRECTION_END,
 		"stack_after": "NotificationPanel.log",
 		"gap": 8,
+		"follow_moved": true,
 	},
 	"tip_center": {
 		"anchor": Rect2(0.5, 0, 0.5, 0),
@@ -135,6 +153,7 @@ const SLOTS := {
 		"grow_v": Control.GROW_DIRECTION_END,
 		"stack_after": "NotificationPanel.objective",
 		"gap": 8,
+		"follow_moved": true,
 	},
 	## A la izquierda del boton ☰ (44 px + 10 de margen + 10 de hueco).
 	"tip_top_right": {
@@ -185,6 +204,32 @@ const SLOTS := {
 ## objetivo -> registro. UILayoutManager.get_slot() mezcla estos cambios sobre
 ## SLOTS; lo que no se nombra aqui no cambia.
 const NARROW_WIDTH := 720.0
+## Solo la columna central tiene un umbral mas alto: centrada, el objetivo
+## (440 px) empieza en ancho/2 - 220 y la columna izquierda acaba en 310. Por
+## debajo de ~1060 px de lienzo se tocan (tablet 4:3: 960x720 o 1002x626 con la
+## escala de tablet). Entre COLUMN_NARROW_WIDTH y NARROW_WIDTH solo bajan a la
+## izquierda los slots de COLUMN_SLOTS; CONSTRUIR, avisos y globos no cambian.
+const COLUMN_NARROW_WIDTH := 1080.0
+const COLUMN_SLOTS := ["storm_banner", "top_center", "left_panel"]
+## Media anchura de la columna central (el objetivo, 440 px) y hueco minimo
+## con la izquierda.
+const CENTER_COLUMN_HALF_WIDTH := 220.0
+const COLUMN_GAP := 6.0
+## Paneles cuyo ancho REAL marca el borde de la columna izquierda, y lo que
+## ocupa el boton de pausa que va a su derecha (hueco + 44).
+const LEFT_COLUMN_IDS := ["ResourceHUD", "NotificationPanel.status"]
+const PAUSE_GAP := 4.0
+const PAUSE_RESERVE := 48.0
+## Lo que cambia SOLO con la columna bajada (no en movil): con la columna
+## izquierda llena hasta media pantalla, los avisos suben desde abajo a la
+## izquierda y la tapaban. Pasan al centro, encima de CONSTRUIR.
+const COLUMN_NARROW_SLOTS := {
+	"toast_area": {
+		"anchor": Rect2(0.5, 1, 0.5, 1),
+		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 84},
+		"grow_h": Control.GROW_DIRECTION_BOTH,
+	},
+}
 const NARROW_SLOTS := {
 	"storm_banner": {
 		"anchor": Rect2(0, 0, 0, 0),
@@ -273,6 +318,7 @@ const PANEL_SLOTS := {
 	"ObjectivePanel":             "center_modal",
 	"VictoryScreen":              "full_overlay",
 	"OnScreenControls":           "bottom_controls",
+	"SandboxPanel":               "sandbox_tab",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)
@@ -285,7 +331,7 @@ const PANEL_SIZES := {
 	"SkirmishPanel.modal":     Vector2(640, 0),
 	"TechTreePanel.modal":     Vector2(860, 0),
 	"ObjectivePanel":          Vector2(640, 560),
-	"SettingsPanel.modal":     Vector2(520, 0),
+	"SettingsPanel.modal":     Vector2(640, 0),
 	"HelperPanel.modal":       Vector2(700, 600),
 	"ConstructionMenu.modal":  Vector2(1000, 640),
 	"VictoryScreen":           Vector2(560, 400),

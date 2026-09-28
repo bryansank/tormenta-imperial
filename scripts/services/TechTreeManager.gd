@@ -193,7 +193,14 @@ func load_save_data(data: Dictionary) -> void:
 	_researching = data.get("researching", {})
 	# Los guardados viejos traen "research_points" (puntos que nunca se gastaron):
 	# se ignoran.
-	# Re-apply all researched bonuses
+	# Los bonos se derivan de lo investigado, no se suman a lo que ya hubiera:
+	# cargar dos veces sin reset() de por medio los doblaba.
+	_recompute_bonuses()
+
+## Deja los bonos de GameConfig exactamente en lo que da el conjunto investigado:
+## vuelve a la base y aplica cada tecnologia una vez.
+func _recompute_bonuses() -> void:
+	_clear_bonuses()
 	for tech_id in _researched:
 		var tech := get_tech(tech_id)
 		if not tech.is_empty():
@@ -202,10 +209,27 @@ func load_save_data(data: Dictionary) -> void:
 func reset() -> void:
 	_researched = {}
 	_researching = {}
-	# Reset tech bonuses applied to GameConfig
+	_clear_bonuses()
+
+## Devuelve a su base todo lo que el arbol toca en GameConfig.
+func _clear_bonuses() -> void:
 	GameConfig.tech_production_bonus = 0.0
 	GameConfig.tech_consumption_reduction = 0.0
 	GameConfig.tech_build_speed_bonus = 0.0
 	GameConfig.tech_storage_bonus = 0
 	GameConfig.market_spread = _base_market_spread
 	GameConfig.morale_satisfied_recovery = _base_morale_recovery
+
+# ── modos-de-juego ──
+
+## Sandbox: todo investigado desde el principio, con sus bonos. Solo al empezar
+## partida (GameManager._new_game): una carga ya trae la lista en el guardado.
+## Sin avisos: una partida nueva no anuncia nada.
+func unlock_all() -> void:
+	_researching = {}
+	for tech in get_all_techs():
+		var tech_id: String = String(tech.get("id", ""))
+		if tech_id == "" or _researched.has(tech_id):
+			continue
+		_researched[tech_id] = true
+		_apply_tech_bonus(tech)

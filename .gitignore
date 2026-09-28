@@ -65,3 +65,6 @@ reports/
 
 # Capturas de los flujos de Maestro (qa/maestro/README.md)
 qa-out/
+# Carpeta de usuario temporal de tools/run_tests.sh (y overrides locales)
+/override.cfg
+/override.cfg.run_tests.bak

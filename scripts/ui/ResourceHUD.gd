@@ -56,6 +56,7 @@ func _setup_ui() -> void:
 	UILayoutManager.apply_layout("ResourceHUD", _panel)
 	_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT))
 	root.add_child(_panel)
+	HudRegistry.register("ResourceHUD", _panel)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)

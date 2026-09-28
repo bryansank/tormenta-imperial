@@ -64,6 +64,19 @@ extends GdUnitTestSuite
 ## vez, el Nucleo sigue en pie, nadie se queda atascado). Todo recorrido lleva
 ## guarda, y un guarda que salta **falla diciendo donde se atasco**.
 ##
+## El mapa que sortea la partida nueva se tira y se cambia por el fijo, asi que
+## su azar no decide nada; aun asi la semilla global se fija antes de abrir cada
+## colonia (`MAP_SEED`) para que todo lo que corre antes de la semilla del
+## asedio —ese mapa, el primer reloj de eventos— sea el mismo en cada vuelta.
+##
+## Lo unico que queda fuera del test es `user://`. La colonia es nueva porque al
+## abrirla no hay `save_game.json` (se aparco). Si otro proceso comparte la
+## carpeta —dos ejecuciones de la suite a la vez— puede dejar ahi el suyo entre
+## el aparcado y el arranque, GameManager lo carga, y el recorrido falla mas
+## tarde al colocar ("el juego rechazo levantar ..."). `_open_new_colony()` lo
+## comprueba y lo dice. Remedio: una carpeta de usuario por ejecucion
+## (`override.cfg` con `config/use_custom_user_dir`).
+##
 ## Toca todos los autoloads que hay. Cada caso los deja como estaban, incluido
 ## el fichero de guardado del jugador, que se aparta y se devuelve.
 
@@ -71,6 +84,11 @@ const Placer := preload("res://scripts/buildings/BuildingPlacer.gd")
 const MapGen := preload("res://scripts/map/MapGenerator.gd")
 const AutoResolverScript := preload("res://scripts/combat/AutoResolver.gd")
 const Parking := preload("res://tests/save/save_parking.gd")
+
+## Esta suite escribe user://save_game.json. Si corre en la carpeta del jugador
+## (lanzada sin tools/run_tests.sh) se salta entera: no hay partida que pisar.
+func before(do_skip := Parking.in_player_dir(), skip_reason := "Carpeta de usuario del jugador: lanza los tests con tools/run_tests.sh") -> void:
+	pass
 
 const SAVE_PATH := "user://save_game.json"
 const BACKUP_PATH := "user://save_game.full_campaign.bak"
@@ -94,6 +112,10 @@ const OIL_WELL_CELL := Vector2i(4, 12)
 const HOUSES := 4
 
 const EXPEDITION_SEED := 20260915
+## Semilla global al abrir cada colonia: fija el mapa que sortea `_new_game()`
+## (luego se cambia por `DEPOSITS`) y todo lo demas que tire de `randi()` antes
+## de `AUDIT_SEED`.
+const MAP_SEED := 4040
 ## Semilla global antes de convocar: `ProgressionManager._audit_seed()` llama a
 ## `randi()`, asi que fijarla aqui fija el asedio entero, oleada por oleada.
 const AUDIT_SEED := 7727
@@ -248,11 +270,19 @@ func _open_new_colony() -> void:
 	_scene.add_child(_map)
 	_placer = Placer.new()
 	_placer.name = "BuildingPlacer"
+	seed(MAP_SEED)
 	_scene.add_child(_placer)   # _ready() registra y dispara _new_game()
 
 	assert_bool(GameManager._started).override_failure_message(
 		"GameManager no arranco la partida nueva: el placer o el mapa no se registraron"
 	).is_true()
+	# Sin esto, un guardado ajeno cargado aqui se ve mucho despues como un
+	# edificio que no se deja colocar, y parece azar del mapa (ver cabecera).
+	assert_bool(GameManager.loaded_from_save).override_failure_message(
+		"la colonia no es nueva: GameManager cargo un save_game.json que aparecio en "
+		+ "user:// despues de aparcarlo. Otro proceso comparte la carpeta de usuario; "
+		+ "cada ejecucion de la suite necesita la suya (override.cfg)"
+	).is_false()
 
 	# El mapa que sortea la partida nueva se cambia por uno fijo: mismos
 	# yacimientos, mismas celdas, mismo recorrido todas las veces.
@@ -1408,7 +1438,7 @@ func test_the_new_game_dialog_frees_itself_on_both_answers() -> void:
 	var before: int = GameManager.get_child_count()
 	GameManager.request_new_game()
 	assert_int(GameManager.get_child_count()).is_equal(before + 1)
-	var dialog: ConfirmationDialog = GameManager.get_child(GameManager.get_child_count() - 1)
+	var dialog: CanvasLayer = GameManager.get_child(GameManager.get_child_count() - 1)
 	var frees_on := func(sig: Signal) -> bool:
 		for c in sig.get_connections():
 			var cb: Callable = c["callable"]

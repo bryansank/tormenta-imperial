@@ -95,7 +95,7 @@ func _setup_ui() -> void:
 	# Building rotate button (visible only during placement)
 	_rotate_building_btn = _styled_button("R ↻")
 	_rotate_building_btn.custom_minimum_size = Vector2(108, 50)
-	_rotate_building_btn.tooltip_text = Tr.t("LBL_ROTATE_BUILDING")
+	_rotate_building_btn.tooltip_text = Tr.ti("LBL_ROTATE_BUILDING")
 	_rotate_building_btn.pressed.connect(func(): EventBus.building_rotate_requested.emit())
 	_rotate_building_btn.visible = false
 	right_vbox.add_child(_rotate_building_btn)
@@ -105,7 +105,7 @@ func _setup_ui() -> void:
 	_cancel_placement_btn.name = "CancelPlacement"
 	_cancel_placement_btn.text = "✕ " + Tr.t("BTN_CANCEL").to_upper()
 	_cancel_placement_btn.custom_minimum_size = Vector2(108, 50)
-	_cancel_placement_btn.tooltip_text = Tr.t("LBL_CANCEL_PLACEMENT_TIP")
+	_cancel_placement_btn.tooltip_text = Tr.ti("LBL_CANCEL_PLACEMENT_TIP")
 	UITheme.style_button(_cancel_placement_btn, UITheme.DANGER, UITheme.FONT_BODY)
 	_cancel_placement_btn.pressed.connect(_on_cancel_placement)
 	_cancel_placement_btn.visible = false

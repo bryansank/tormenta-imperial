@@ -8,31 +8,33 @@ class_name UITheme
 
 # Backgrounds
 const BG_DARK := Color(0.05, 0.06, 0.04)
-const PANEL_BG := Color(0.1, 0.11, 0.09, 0.95)
-const PANEL_BG_LIGHT := Color(0.13, 0.14, 0.11, 0.9)
-const CARD_BG := Color(0.12, 0.13, 0.1, 0.9)
+static var PANEL_BG := Color(0.1, 0.11, 0.09, 0.95)
+static var PANEL_BG_LIGHT := Color(0.13, 0.14, 0.11, 0.9)
+static var CARD_BG := Color(0.12, 0.13, 0.1, 0.9)
 
 # Accent / Border
-const ACCENT := Color(0.77, 0.59, 0.16)          # Brass gold
-const ACCENT_DIM := Color(0.5, 0.38, 0.12, 0.6)  # Muted brass
+static var ACCENT := Color(0.77, 0.59, 0.16)          # Brass gold
+static var ACCENT_DIM := Color(0.5, 0.38, 0.12, 0.6)  # Muted brass
 
 # Text
-const TEXT := Color(0.91, 0.86, 0.78)             # Parchment — 12.1:1
-const TEXT_DIM := Color(0.72, 0.66, 0.52)         # Aged brass — 7.0:1 (era 0.55/0.49/0.37 = 4.1:1, no pasaba AA)
-const TEXT_BRIGHT := Color(1.0, 0.95, 0.85)       # Highlighted — 14.9:1
+static var TEXT := Color(0.91, 0.86, 0.78)             # Parchment — 12.1:1
+static var TEXT_DIM := Color(0.72, 0.66, 0.52)         # Aged brass — 7.0:1 (era 0.55/0.49/0.37 = 4.1:1, no pasaba AA)
+static var TEXT_BRIGHT := Color(1.0, 0.95, 0.85)       # Highlighted — 14.9:1
+## Fondo de las tarjetas del HUD (recursos, poblacion, objetivo, globos).
+static var HUD_BG := Color(0.06, 0.07, 0.05, 0.92)
 
 # Fondo de referencia para medir contraste: el pixel mas claro de la placa
 # metalica 9-patch, medido sobre capturas reales (docs/media/dev). Todo el texto
 # se corrige contra este peor caso, no contra PANEL_BG teorico.
 const UI_BG_REFERENCE := Color(0.14, 0.12, 0.07)
 ## Ratio minimo exigido (WCAG AA para texto normal).
-const MIN_CONTRAST := 4.5
+static var MIN_CONTRAST := 4.5
 
 # Semantic
-const POSITIVE := Color(0.29, 0.55, 0.25)         # Military green
-const DANGER := Color(0.55, 0.23, 0.16)           # Rust red
-const WARNING := Color(0.8, 0.53, 0.13)           # Amber
-const INFO := Color(0.29, 0.42, 0.55)             # Steel blue
+static var POSITIVE := Color(0.29, 0.55, 0.25)         # Military green
+static var DANGER := Color(0.55, 0.23, 0.16)           # Rust red
+static var WARNING := Color(0.8, 0.53, 0.13)           # Amber
+static var INFO := Color(0.29, 0.42, 0.55)             # Steel blue
 
 # Buttons
 const BTN := Color(0.15, 0.16, 0.13)
@@ -41,21 +43,205 @@ const BTN_PRESSED := Color(0.29, 0.31, 0.26)
 const BTN_DISABLED := Color(0.1, 0.1, 0.09, 0.7)
 
 # Resources
-const RES_GOLD := Color(1.0, 0.85, 0.2)
-const RES_STEEL := Color(0.7, 0.75, 0.8)
-const RES_OIL := Color(0.5, 0.45, 0.55)
-const RES_WOOD := Color(0.6, 0.4, 0.2)
+static var RES_GOLD := Color(1.0, 0.85, 0.2)
+static var RES_STEEL := Color(0.7, 0.75, 0.8)
+static var RES_OIL := Color(0.5, 0.45, 0.55)
+static var RES_WOOD := Color(0.6, 0.4, 0.2)
 
 # Categories
-const CAT_PRODUCTION := Color(0.9, 0.7, 0.2)
-const CAT_SUPPORT := Color(0.45, 0.75, 0.4)
-const CAT_MILITARY := Color(0.8, 0.35, 0.25)
-const CAT_DECORATION := Color(0.6, 0.5, 0.8)
+static var CAT_PRODUCTION := Color(0.9, 0.7, 0.2)
+static var CAT_SUPPORT := Color(0.45, 0.75, 0.4)
+static var CAT_MILITARY := Color(0.8, 0.35, 0.25)
+static var CAT_DECORATION := Color(0.6, 0.5, 0.8)
 
 # Tech branches
-const BRANCH_INDUSTRIAL := Color(0.9, 0.6, 0.2)
-const BRANCH_MILITARY := Color(0.8, 0.3, 0.3)
-const BRANCH_LOGISTICS := Color(0.3, 0.7, 0.9)
+static var BRANCH_INDUSTRIAL := Color(0.9, 0.6, 0.2)
+static var BRANCH_MILITARY := Color(0.8, 0.3, 0.3)
+static var BRANCH_LOGISTICS := Color(0.3, 0.7, 0.9)
+
+# Tablero de combate: casilla vacia, a la que se puede mover, y objetivo.
+static var BOARD_EMPTY := Color(0.11, 0.12, 0.10)
+static var BOARD_MOVE := Color(0.20, 0.33, 0.45)
+static var BOARD_TARGET := Color(0.48, 0.18, 0.14)
+
+# ══════════════════════════════════════
+# PALETAS, CONTRASTE, OPACIDAD Y TEXTO (docs/21-interfaz-y-dispositivos.md)
+# ══════════════════════════════════════
+# Los colores de arriba son TOKENS, no constantes: `configure()` los reescribe
+# segun la paleta, el alto contraste, la opacidad de paneles y el tamano de
+# texto que el jugador eligio en Ajustes. Todo panel que pinte con
+# UITheme.POSITIVE / DANGER / RES_* / FONT_* sigue la preferencia sin saberlo.
+# Los paneles se construyen una vez: un cambio de estos se ve al reconstruir
+# la interfaz (DeviceProfile recarga la escena conservando la partida).
+
+## Paletas ofrecidas, en el orden del selector de Ajustes.
+## red_green: segura para deuteranopia y protanopia (azul / bermellon / amarillo,
+## colores de Okabe-Ito). tritan: segura para tritanopia (turquesa / carmesi / rosa).
+const PALETTES := ["default", "red_green", "tritan"]
+
+## Valores de serie de todos los tokens configurables.
+const _BASE := {
+	"PANEL_BG": Color(0.1, 0.11, 0.09, 0.95),
+	"PANEL_BG_LIGHT": Color(0.13, 0.14, 0.11, 0.9),
+	"CARD_BG": Color(0.12, 0.13, 0.1, 0.9),
+	"HUD_BG": Color(0.06, 0.07, 0.05, 0.92),
+	"ACCENT": Color(0.77, 0.59, 0.16),
+	"ACCENT_DIM": Color(0.5, 0.38, 0.12, 0.6),
+	"TEXT": Color(0.91, 0.86, 0.78),
+	"TEXT_DIM": Color(0.72, 0.66, 0.52),
+	"TEXT_BRIGHT": Color(1.0, 0.95, 0.85),
+	"OUTLINE_COLOR": Color(0.03, 0.03, 0.02, 0.95),
+	"POSITIVE": Color(0.29, 0.55, 0.25),
+	"DANGER": Color(0.55, 0.23, 0.16),
+	"WARNING": Color(0.8, 0.53, 0.13),
+	"INFO": Color(0.29, 0.42, 0.55),
+	"RES_GOLD": Color(1.0, 0.85, 0.2),
+	"RES_STEEL": Color(0.7, 0.75, 0.8),
+	"RES_OIL": Color(0.5, 0.45, 0.55),
+	"RES_WOOD": Color(0.6, 0.4, 0.2),
+	"CAT_PRODUCTION": Color(0.9, 0.7, 0.2),
+	"CAT_SUPPORT": Color(0.45, 0.75, 0.4),
+	"CAT_MILITARY": Color(0.8, 0.35, 0.25),
+	"CAT_DECORATION": Color(0.6, 0.5, 0.8),
+	"BRANCH_INDUSTRIAL": Color(0.9, 0.6, 0.2),
+	"BRANCH_MILITARY": Color(0.8, 0.3, 0.3),
+	"BRANCH_LOGISTICS": Color(0.3, 0.7, 0.9),
+	"BOARD_EMPTY": Color(0.11, 0.12, 0.10),
+	"BOARD_MOVE": Color(0.20, 0.33, 0.45),
+	"BOARD_TARGET": Color(0.48, 0.18, 0.14),
+}
+
+## Lo que cambia cada paleta sobre _BASE. Aliado/bueno, enemigo/malo y aviso
+## quedan en tonos que esa vision distingue, y ademas separados en luminancia
+## (azul oscuro / bermellon medio / amarillo claro), que es lo que se lee
+## aunque el tono falle. La barra de vida (bueno -> aviso -> malo) y las fases
+## de la Tormenta (aviso -> produccion -> peligro) salen de estos mismos tokens.
+const _PALETTE_TOKENS := {
+	"default": {},
+	"red_green": {
+		"POSITIVE": Color(0.0, 0.45, 0.70),
+		"DANGER": Color(0.84, 0.37, 0.0),
+		"WARNING": Color(0.94, 0.89, 0.26),
+		"INFO": Color(0.80, 0.47, 0.65),
+		"CAT_PRODUCTION": Color(0.90, 0.62, 0.0),
+		"CAT_SUPPORT": Color(0.34, 0.71, 0.91),
+		"CAT_MILITARY": Color(0.84, 0.37, 0.0),
+		"BRANCH_INDUSTRIAL": Color(0.90, 0.62, 0.0),
+		"BRANCH_MILITARY": Color(0.84, 0.37, 0.0),
+		"BRANCH_LOGISTICS": Color(0.34, 0.71, 0.91),
+		"RES_WOOD": Color(0.62, 0.36, 0.08),
+		"RES_OIL": Color(0.55, 0.45, 0.75),
+		"BOARD_MOVE": Color(0.33, 0.30, 0.42),
+		"BOARD_TARGET": Color(0.50, 0.25, 0.0),
+	},
+	"tritan": {
+		"POSITIVE": Color(0.0, 0.62, 0.60),
+		"DANGER": Color(0.86, 0.15, 0.30),
+		"WARNING": Color(0.97, 0.55, 0.62),
+		"INFO": Color(0.55, 0.55, 0.60),
+		"CAT_PRODUCTION": Color(0.95, 0.45, 0.50),
+		"CAT_SUPPORT": Color(0.30, 0.75, 0.75),
+		"CAT_MILITARY": Color(0.86, 0.15, 0.30),
+		"BRANCH_INDUSTRIAL": Color(0.95, 0.55, 0.55),
+		"BRANCH_MILITARY": Color(0.86, 0.15, 0.30),
+		"BRANCH_LOGISTICS": Color(0.30, 0.75, 0.75),
+		"BOARD_MOVE": Color(0.35, 0.35, 0.38),
+		"BOARD_TARGET": Color(0.50, 0.08, 0.18),
+	},
+}
+
+## Alto contraste: fondos opacos y mas oscuros, bordes claros, sin texto
+## secundario apagado (TEXT_DIM pasa a ser tan claro como TEXT) y AAA (7:1).
+const _HIGH_CONTRAST := {
+	"PANEL_BG": Color(0.03, 0.035, 0.03, 1.0),
+	"PANEL_BG_LIGHT": Color(0.06, 0.065, 0.05, 1.0),
+	"CARD_BG": Color(0.05, 0.055, 0.04, 1.0),
+	"HUD_BG": Color(0.02, 0.02, 0.015, 1.0),
+	"ACCENT": Color(0.98, 0.78, 0.28),
+	"ACCENT_DIM": Color(0.85, 0.66, 0.22, 1.0),
+	"TEXT": Color(0.98, 0.96, 0.92),
+	"TEXT_DIM": Color(0.93, 0.90, 0.84),
+	"TEXT_BRIGHT": Color(1.0, 1.0, 1.0),
+	"OUTLINE_COLOR": Color(0.0, 0.0, 0.0, 1.0),
+}
+
+## Tamanos de letra de serie (texto "normal") y factores de cada tamano.
+const _FONT_BASE := {"title": 26, "section": 20, "body": 17, "small": 15, "button": 17}
+const TEXT_SIZES := ["small", "normal", "large", "xlarge"]
+const TEXT_SCALES := {"small": 0.88, "normal": 1.0, "large": 1.18, "xlarge": 1.36}
+## Lado tactil minimo de serie; el perfil de dispositivo lo sube en tablet y movil.
+const _BASE_MIN_BTN_H := 44
+## Rango del regulador de opacidad de paneles.
+const OPACITY_MIN := 0.4
+const OPACITY_MAX := 1.0
+
+## Estado aplicado por la ultima llamada a configure().
+static var palette := "default"
+static var high_contrast := false
+static var panel_opacity := 1.0
+static var text_scale := 1.0
+
+## Reescribe los tokens. Sin argumentos deja la interfaz de serie (los tests
+## lo llaman asi en after_test para no contagiar a la siguiente suite).
+static func configure(p_palette: String = "default", p_high_contrast: bool = false,
+		p_opacity: float = 1.0, p_text_size: String = "normal", p_touch_target: int = _BASE_MIN_BTN_H) -> void:
+	palette = p_palette if p_palette in PALETTES else "default"
+	high_contrast = p_high_contrast
+	panel_opacity = clampf(p_opacity, OPACITY_MIN, OPACITY_MAX)
+	text_scale = float(TEXT_SCALES.get(p_text_size, 1.0))
+	var d: Dictionary = resolve_tokens(palette, high_contrast, panel_opacity)
+	PANEL_BG = d["PANEL_BG"]
+	PANEL_BG_LIGHT = d["PANEL_BG_LIGHT"]
+	CARD_BG = d["CARD_BG"]
+	HUD_BG = d["HUD_BG"]
+	ACCENT = d["ACCENT"]
+	ACCENT_DIM = d["ACCENT_DIM"]
+	TEXT = d["TEXT"]
+	TEXT_DIM = d["TEXT_DIM"]
+	TEXT_BRIGHT = d["TEXT_BRIGHT"]
+	OUTLINE_COLOR = d["OUTLINE_COLOR"]
+	POSITIVE = d["POSITIVE"]
+	DANGER = d["DANGER"]
+	WARNING = d["WARNING"]
+	INFO = d["INFO"]
+	RES_GOLD = d["RES_GOLD"]
+	RES_STEEL = d["RES_STEEL"]
+	RES_OIL = d["RES_OIL"]
+	RES_WOOD = d["RES_WOOD"]
+	CAT_PRODUCTION = d["CAT_PRODUCTION"]
+	CAT_SUPPORT = d["CAT_SUPPORT"]
+	CAT_MILITARY = d["CAT_MILITARY"]
+	CAT_DECORATION = d["CAT_DECORATION"]
+	BRANCH_INDUSTRIAL = d["BRANCH_INDUSTRIAL"]
+	BRANCH_MILITARY = d["BRANCH_MILITARY"]
+	BRANCH_LOGISTICS = d["BRANCH_LOGISTICS"]
+	BOARD_EMPTY = d["BOARD_EMPTY"]
+	BOARD_MOVE = d["BOARD_MOVE"]
+	BOARD_TARGET = d["BOARD_TARGET"]
+	MIN_CONTRAST = 7.0 if high_contrast else 4.5
+	FONT_TITLE = scaled_font(_FONT_BASE["title"], text_scale)
+	FONT_SECTION = scaled_font(_FONT_BASE["section"], text_scale)
+	FONT_BODY = scaled_font(_FONT_BASE["body"], text_scale)
+	FONT_SMALL = scaled_font(_FONT_BASE["small"], text_scale)
+	FONT_BUTTON = scaled_font(_FONT_BASE["button"], text_scale)
+	MIN_BTN_H = maxi(_BASE_MIN_BTN_H, p_touch_target)
+
+## Los tokens que saldrian con esas opciones, sin aplicarlos. Puro: los tests y
+## la vista previa de Ajustes lo usan para comparar paletas.
+static func resolve_tokens(p_palette: String, p_high_contrast: bool, p_opacity: float) -> Dictionary:
+	var d: Dictionary = _BASE.duplicate()
+	d.merge(_PALETTE_TOKENS.get(p_palette, {}), true)
+	if p_high_contrast:
+		d.merge(_HIGH_CONTRAST, true)
+	var op := clampf(p_opacity, OPACITY_MIN, OPACITY_MAX)
+	for key in ["PANEL_BG", "PANEL_BG_LIGHT", "CARD_BG", "HUD_BG"]:
+		var c: Color = d[key]
+		d[key] = Color(c.r, c.g, c.b, c.a * op)
+	return d
+
+## Tamano de letra escalado, nunca por debajo de 11 px (legible en movil).
+static func scaled_font(base_px: int, scale: float) -> int:
+	return maxi(11, roundi(float(base_px) * scale))
 
 # ══════════════════════════════════════
 # TYPOGRAPHY
@@ -63,17 +249,17 @@ const BRANCH_LOGISTICS := Color(0.3, 0.7, 0.9)
 
 # Tamanos subidos ~30%: a 1280x720 el cuerpo pasa de 13 a 17 px, y el minimo
 # legible (small) de 11 a 15. Jerarquia intacta: 26 > 20 > 17 > 15.
-const FONT_TITLE := 26
-const FONT_SECTION := 20
-const FONT_BODY := 17
-const FONT_SMALL := 15
-const FONT_BUTTON := 17
+static var FONT_TITLE := 26
+static var FONT_SECTION := 20
+static var FONT_BODY := 17
+static var FONT_SMALL := 15
+static var FONT_BUTTON := 17
 
 # ── Contorno del texto ──
 # La placa metalica es una textura ruidosa: un trazo claro fino se pierde encima.
 # Un contorno oscuro alrededor de cada glifo da mas legibilidad (y mas cuerpo)
 # que subir un punto de tamano.
-const OUTLINE_COLOR := Color(0.03, 0.03, 0.02, 0.95)
+static var OUTLINE_COLOR := Color(0.03, 0.03, 0.02, 0.95)
 
 ## Grosor de contorno proporcional al tamano de letra (en px).
 static func outline_for(font_size: int) -> int:
@@ -137,7 +323,7 @@ const CORNER := 2
 const MARGIN := 12
 const BORDER := 6
 ## Lado tactil minimo (guia de accesibilidad movil): 44 px.
-const MIN_BTN_H := 44
+static var MIN_BTN_H := 44
 const SEPARATION := 8
 
 # ══════════════════════════════════════
@@ -212,9 +398,15 @@ static func _tex(path: String) -> Texture2D:
 ## Builds a 9-slice StyleBoxTexture, tinted by `modulate`. Returns null if the
 ## texture isn't imported yet, so callers can fall back to a flat box.
 static func _tex_box(path: String, slice: int, content: int, modulate: Color) -> StyleBoxTexture:
+	# Alto contraste: nada de placa ruidosa, caja lisa opaca con borde claro.
+	if high_contrast:
+		return null
 	var tex := _tex(path)
 	if tex == null:
 		return null
+	# La opacidad de paneles transparenta las placas, nunca los botones.
+	if path != TEX_BUTTON:
+		modulate = Color(modulate.r, modulate.g, modulate.b, modulate.a * panel_opacity)
 	var s := StyleBoxTexture.new()
 	s.texture = tex
 	s.set_texture_margin_all(slice)
@@ -505,7 +697,7 @@ static func make_check_button(text: String, pressed: bool, on_toggled: Callable)
 
 static func make_backdrop() -> ColorRect:
 	var rect := ColorRect.new()
-	rect.color = Color(0.0, 0.0, 0.0, 0.45)
+	rect.color = Color(0.0, 0.0, 0.0, 0.7 if high_contrast else 0.45)
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	return rect
@@ -536,7 +728,6 @@ static func is_touch_ui() -> bool:
 # del color que identifica a cada uno. Antes cada panel se pintaba el suyo a
 # mano y no habia dos iguales.
 
-const HUD_BG := Color(0.06, 0.07, 0.05, 0.92)
 
 ## Tarjeta del HUD. `left_bar` pinta el borde izquierdo mas grueso: marca los
 ## paneles de estado (poblacion) frente a los de aviso (objetivo, tutorial).
@@ -549,6 +740,8 @@ static func make_hud_card_style(border: Color = ACCENT, border_width: int = 2, l
 	s.content_margin_top = 7
 	s.content_margin_bottom = 7
 	s.border_color = border
+	if high_contrast:
+		border_width += 1
 	s.set_border_width_all(border_width)
 	if left_bar:
 		s.border_width_left = border_width + 2
@@ -780,6 +973,39 @@ static func _theme_button(t: Theme, type: String) -> void:
 	if bf:
 		t.set_font("font", type, bf)
 
+## Estilos de pestana: alto de dedo, el margen vertical lleva la pestana a
+## MIN_BTN_H con la letra del cuerpo.
+static func _tab_styles() -> Dictionary:
+	var tab_pad := maxi(8, int((MIN_BTN_H - FONT_BODY) / 2.0))
+	var sel := _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.28), ACCENT, 2, CORNER, 0)
+	var off := _flat(Color(0.05, 0.06, 0.04, 0.9), ACCENT_DIM, 1, CORNER, 0)
+	var hov := _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.16), ACCENT, 1, CORNER, 0)
+	var dis := _flat(Color(0.05, 0.06, 0.04, 0.5), ACCENT_DIM, 1, CORNER, 0)
+	for sb in [sel, off, hov, dis]:
+		sb.content_margin_left = 14
+		sb.content_margin_right = 14
+		sb.content_margin_top = tab_pad
+		sb.content_margin_bottom = tab_pad
+	return {"tab_selected": sel, "tab_unselected": off, "tab_hovered": hov, "tab_disabled": dis,
+		"tab_focus": _flat(Color(0, 0, 0, 0), ACCENT, 2, CORNER, 0)}
+
+## Pestanas de un TabContainer con el estilo del juego, como overrides (mandan
+## sobre cualquier tema heredado). Los paneles NO deben estilar pestanas a mano.
+static func style_tabs(tabs: TabContainer) -> void:
+	var styles := _tab_styles()
+	for key in styles:
+		tabs.add_theme_stylebox_override(key, styles[key])
+	tabs.add_theme_stylebox_override("panel", _flat(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0, 0))
+	tabs.add_theme_color_override("font_selected_color", readable(TEXT_BRIGHT))
+	tabs.add_theme_color_override("font_unselected_color", readable(TEXT_DIM))
+	tabs.add_theme_color_override("font_hovered_color", readable(TEXT_BRIGHT))
+	tabs.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
+	tabs.add_theme_constant_override("outline_size", outline_for(FONT_BODY))
+	tabs.add_theme_font_size_override("font_size", FONT_BODY)
+	var bf := bold_font()
+	if bf:
+		tabs.add_theme_font_override("font", bf)
+
 ## Builds a Theme that restyles Godot's built-in controls (buttons, scrollbars,
 ## sliders, line edits, tooltips, popups, focus rings…) so nothing falls back to
 ## the default engine look. Applied once to the scene-tree root by UILayoutManager.
@@ -856,6 +1082,22 @@ static func build_global_theme() -> Theme:
 	t.set_stylebox("panel", "TooltipPanel", _flat(Color(0.06, 0.07, 0.05, 0.97), ACCENT, 1, CORNER, 8))
 	t.set_color("font_color", "TooltipLabel", readable(TEXT_BRIGHT))
 	t.set_font_size("font_size", "TooltipLabel", FONT_BODY)
+
+	# ── Pestanas (Ajustes) ──
+	for tab_type in ["TabContainer", "TabBar"]:
+		var styles := _tab_styles()
+		for key in styles:
+			t.set_stylebox(key, tab_type, styles[key])
+		t.set_color("font_selected_color", tab_type, readable(TEXT_BRIGHT))
+		t.set_color("font_unselected_color", tab_type, readable(TEXT_DIM))
+		t.set_color("font_hovered_color", tab_type, readable(TEXT_BRIGHT))
+		t.set_color("font_outline_color", tab_type, OUTLINE_COLOR)
+		t.set_constant("outline_size", tab_type, outline_for(FONT_BODY))
+		t.set_font_size("font_size", tab_type, FONT_BODY)
+		var tab_font := bold_font()
+		if tab_font:
+			t.set_font("font", tab_type, tab_font)
+	t.set_stylebox("panel", "TabContainer", _flat(Color(0, 0, 0, 0), clear, 0, 0, 0))
 
 	# ── Split containers ──
 	for split in ["HSplitContainer", "VSplitContainer"]:

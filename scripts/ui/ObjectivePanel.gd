@@ -6,6 +6,10 @@ var _panel: PanelContainer
 var _backdrop: ColorRect
 var _obj_btn: Button
 var _is_open := false
+## Lo que pide el modo de esta partida. Se rellena al abrir: el panel se
+## construye antes de que la partida cargue y sepa en que modo esta.
+var _mode_header: Label
+var _mode_goal: Label
 
 func _ready() -> void:
 	layer = 15 # Higher than other UI
@@ -78,6 +82,14 @@ func _setup_ui() -> void:
 	content.add_theme_constant_override("separation", 20)
 	scroll.add_child(content)
 
+	# El modo primero: en Constructor o Sandbox el objetivo no es el asedio.
+	_mode_header = UITheme.section_header("", UITheme.ACCENT)
+	content.add_child(_mode_header)
+	_mode_goal = UITheme.make_label("", "body", UITheme.TEXT_BRIGHT)
+	_mode_goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_mode_goal)
+	content.add_child(UITheme.make_separator())
+
 	# Goal Section
 	content.add_child(UITheme.section_header(Tr.t("LBL_OBJ_MISSION")))
 	var main_goal := UITheme.make_label(Tr.t("LBL_OBJ_MISSION_DESC"), "body")
@@ -116,6 +128,8 @@ func _setup_ui() -> void:
 
 func toggle() -> void:
 	_is_open = not _is_open
+	if _is_open:
+		refresh_mode()
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
 	if _is_open:
@@ -125,3 +139,9 @@ func toggle() -> void:
 
 func _toggle_panel() -> void:
 	toggle()
+
+# ── modos-de-juego ──
+
+func refresh_mode() -> void:
+	_mode_header.text = Tr.t("LBL_OBJ_MODE") % GameMode.display_name().to_upper()
+	_mode_goal.text = Tr.t(GameMode.goal_key())

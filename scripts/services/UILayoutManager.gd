@@ -45,8 +45,14 @@ func _ready() -> void:
 	get_tree().root.theme = UITheme.build_global_theme()
 	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 
+## Recoloca todo contra el lienzo actual. DeviceProfile lo llama al cambiar la
+## escala de interfaz (content_scale_factor no siempre avisa size_changed).
+func refresh_viewport() -> void:
+	_on_viewport_resized()
+
 func _on_viewport_resized() -> void:
 	_viewport_size = Vector2(get_viewport().get_visible_rect().size)
+	_column_narrow_state = is_column_narrow()
 	_reapply_all()
 	# Al cruzar el umbral de pantalla estrecha cambian las cadenas de apilado:
 	# se recoloca a todos los que cuelgan de alguien, no solo a los de siempre.
@@ -60,15 +66,75 @@ func _on_viewport_resized() -> void:
 func is_narrow() -> bool:
 	return _viewport_size.x < UILayoutConfig.NARROW_WIDTH
 
+## La columna central no cabe entre la izquierda y el menu ☰ (tablet 4:3, o
+## cualquier lienzo estrecho por la escala de interfaz): baja a la izquierda.
+## Tambien cuando la columna izquierda REAL es mas ancha de lo previsto (cuatro
+## recursos y el LIMPIAR de desarrollo, letra grande): se mide lo que ocupan
+## recursos y poblacion mas la pausa que va a su derecha, no el slot.
+func is_column_narrow() -> bool:
+	if _viewport_size.x < UILayoutConfig.COLUMN_NARROW_WIDTH:
+		return true
+	# El objetivo (el mas ancho) sube a la fila de arriba cuando la Tormenta
+	# esta en calma, asi que tiene que librar tambien la pausa.
+	var center_left := _viewport_size.x * 0.5 - UILayoutConfig.CENTER_COLUMN_HALF_WIDTH
+	return center_left < left_column_right() + UILayoutConfig.PAUSE_RESERVE + UILayoutConfig.COLUMN_GAP
+
+## Borde derecho real de la columna izquierda: recursos y poblacion (los que no
+## se hayan movido a mano). Sin contar la pausa, que va a su derecha.
+func left_column_right() -> float:
+	var right := float(UILayoutConfig.SLOTS["top_left"]["margin"]["left"] + UILayoutConfig.SLOTS["top_left"]["max_size"].x)
+	for id in UILayoutConfig.LEFT_COLUMN_IDS:
+		if has_user_offset(id):
+			continue
+		var c := _find_placed(id)
+		if c != null and c.is_visible_in_tree():
+			right = maxf(right, c.get_global_rect().end.x)
+	return right
+
+## Donde va el boton de pausa: a la derecha del ancho REAL de los recursos (en
+## su fila), no en una x fija que cuatro recursos y LIMPIAR ya pasaban.
+func pause_button_position() -> Vector2:
+	var res := _find_placed("ResourceHUD")
+	if res != null and res.is_visible_in_tree():
+		var r := res.get_global_rect()
+		return Vector2(r.end.x + UILayoutConfig.PAUSE_GAP, r.position.y)
+	var slot: Dictionary = UILayoutConfig.SLOTS["top_left"]
+	return Vector2(float(slot["margin"]["left"] + slot["max_size"].x) + UILayoutConfig.PAUSE_GAP, float(slot["margin"]["top"]))
+
+## Emitida cuando un panel colocado cambia de tamano o de visibilidad. La pausa
+## la usa para ir siempre a la derecha del ancho REAL de los recursos.
+signal panel_rect_changed(panel_id: String)
+
+var _column_narrow_state := false
+
+## Si la columna izquierda crecio o encogio lo bastante para cambiar donde va
+## la central, se recoloca todo (en diferido: estamos dentro de un resized).
+func _check_column_state() -> void:
+	var now := is_column_narrow()
+	if now == _column_narrow_state:
+		return
+	_column_narrow_state = now
+	_reapply_all()
+	for entry in _placed:
+		_restack_after(String(entry["id"]))
+	layout_changed.emit()
+
 ## La definicion del slot que vale AHORA: la base, con lo que cambie en
 ## pantalla estrecha encima. Todo el manager lee los slots por aqui.
 func get_slot(slot_name: String) -> Dictionary:
 	var base: Dictionary = UILayoutConfig.SLOTS.get(slot_name, {})
-	if is_narrow() and UILayoutConfig.NARROW_SLOTS.has(slot_name):
-		var merged := base.duplicate()
-		merged.merge(UILayoutConfig.NARROW_SLOTS[slot_name], true)
-		return merged
-	return base
+	var override: Dictionary = {}
+	if is_narrow():
+		override = UILayoutConfig.NARROW_SLOTS.get(slot_name, {})
+	elif is_column_narrow():
+		if slot_name in UILayoutConfig.COLUMN_SLOTS:
+			override = UILayoutConfig.NARROW_SLOTS.get(slot_name, {})
+		override = UILayoutConfig.COLUMN_NARROW_SLOTS.get(slot_name, override)
+	if override.is_empty():
+		return base
+	var merged := base.duplicate()
+	merged.merge(override, true)
+	return merged
 
 func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_expanded = is_visible
@@ -146,6 +212,12 @@ func _on_watched_changed(control: Control) -> void:
 	var panel_id := _id_of(control)
 	if not panel_id.is_empty():
 		_restack_after(panel_id)
+		panel_rect_changed.emit(panel_id)
+		if panel_id in UILayoutConfig.LEFT_COLUMN_IDS:
+			_check_column_state.call_deferred()
+		# Un panel movido que crece (log abierto, texto largo) no se sale.
+		if has_user_offset(panel_id):
+			_clamp_on_screen.call_deferred(control)
 
 ## Marca a los dependientes de `ref_id` para recolocarlos en diferido.
 func _restack_after(ref_id: String) -> void:
@@ -191,11 +263,16 @@ func _flush_restack() -> void:
 ## Borde superior (en px de viewport) de un slot apilado bajo `ref_id`.
 ## Si el referido esta oculto o no existe, se ocupa su sitio: la columna se
 ## compacta en vez de dejar un agujero del tamano de un panel invisible.
-func _stack_top(ref_id: String, gap: float, depth: int = 0) -> float:
+func _stack_top(ref_id: String, gap: float, depth: int = 0, follow_moved: bool = false) -> float:
 	if depth > MAX_STACK_DEPTH:
 		return 0.0
 	if ref_id == UILayoutConfig.SIDEBAR_STACK_REF:
 		return get_sidebar_bottom() + gap
+	# Un panel que el jugador saco de su columna deja el hueco libre: quien iba
+	# debajo sube a ocupar su sitio, como si estuviera oculto.
+	# Salvo los globos de ayuda (follow_moved): explican ese panel y lo siguen.
+	if has_user_offset(ref_id) and not follow_moved:
+		return _slot_top(ref_id, depth + 1)
 	var ref := _find_placed(ref_id)
 	if ref != null and ref.is_visible_in_tree():
 		var rect := ref.get_global_rect()
@@ -211,7 +288,7 @@ func _slot_top(panel_id: String, depth: int = 0) -> float:
 	var slot: Dictionary = get_slot(slot_name)
 	var after := String(slot.get("stack_after", ""))
 	if not after.is_empty():
-		return _stack_top(after, float(slot.get("gap", DEFAULT_STACK_GAP)), depth)
+		return _stack_top(after, float(slot.get("gap", DEFAULT_STACK_GAP)), depth, bool(slot.get("follow_moved", false)))
 	var anchor: Rect2 = slot["anchor"]
 	return anchor.position.y * _viewport_size.y + float(slot["margin"]["top"])
 
@@ -267,7 +344,7 @@ func _place(panel_id: String, control: Control) -> void:
 	# borde inferior real del panel de arriba, en coordenadas del ancla.
 	var after := String(slot.get("stack_after", ""))
 	if not after.is_empty():
-		var top := _stack_top(after, float(slot.get("gap", DEFAULT_STACK_GAP)))
+		var top := _stack_top(after, float(slot.get("gap", DEFAULT_STACK_GAP)), 0, bool(slot.get("follow_moved", false)))
 		m_top = top - anchor.position.y * _viewport_size.y
 
 	# Horizontal offsets
@@ -292,6 +369,17 @@ func _place(panel_id: String, control: Control) -> void:
 		control.custom_minimum_size.x = size.x
 	if size.y > 0:
 		control.custom_minimum_size.y = size.y
+
+	# Disposicion del jugador (Editar disposicion): el slot es la posicion de
+	# serie y el desplazamiento guardado se suma encima. Luego se recorta a la
+	# pantalla, que con otra ventana el mismo desplazamiento podria sacarlo.
+	var user := get_user_offset(panel_id)
+	if user != Vector2.ZERO:
+		control.offset_left += user.x
+		control.offset_right += user.x
+		control.offset_top += user.y
+		control.offset_bottom += user.y
+		_clamp_on_screen.call_deferred(control)
 
 ## Horizontal offset when anchor is a single point (left == right)
 func _apply_h_point(control: Control, grow_h: int, m_left: float, m_right: float, width: float) -> void:
@@ -353,3 +441,146 @@ func get_layout_rect(panel_id: String) -> Rect2:
 	var h: float = size.y if size.y > 0.0 else _viewport_size.y
 
 	return Rect2(x, y, w, h)
+
+# ══════════════════════════════════════
+# DISPOSICION DEL JUGADOR (paneles movibles, docs/21)
+# ══════════════════════════════════════
+# Desplazamientos en px de lienzo sobre la posicion de serie de cada slot,
+# guardados en GameConfig.ui_layout por perfil de dispositivo y proporcion de
+# ventana (DeviceProfile.layout_key): mover el HUD en la tablet no lo mueve en
+# el PC, ni lo que vale en 16:9 se aplica a 4:3.
+
+## Rejilla a la que se ajusta un panel arrastrado, y distancia a la que se
+## pega a un borde de la pantalla.
+const SNAP_GRID := 8.0
+const SNAP_EDGE := 16.0
+
+signal user_layout_changed
+
+var _editor: CanvasLayer = null
+
+func layout_key() -> String:
+	var dp := get_node_or_null("/root/DeviceProfile")
+	if dp != null and dp.has_method("layout_key"):
+		return dp.layout_key()
+	return "pc|16:9"
+
+func _user_layout() -> Dictionary:
+	var d: Variant = GameConfig.ui_layout.get(layout_key(), {})
+	return d if d is Dictionary else {}
+
+func get_user_offset(panel_id: String) -> Vector2:
+	var v: Variant = _user_layout().get(panel_id, null)
+	if v is Vector2:
+		return v
+	if v is Array and (v as Array).size() >= 2:
+		return Vector2(float(v[0]), float(v[1]))
+	return Vector2.ZERO
+
+func has_user_offset(panel_id: String) -> bool:
+	return get_user_offset(panel_id) != Vector2.ZERO
+
+## Fija el desplazamiento de un panel y lo recoloca. `persist` false sirve para
+## el arrastre en vivo: se guarda una sola vez al soltar.
+func set_user_offset(panel_id: String, offset: Vector2, persist: bool = true) -> void:
+	var key := layout_key()
+	var d: Dictionary = _user_layout().duplicate()
+	if offset.length() < 0.5:
+		d.erase(panel_id)
+	else:
+		d[panel_id] = [roundf(offset.x), roundf(offset.y)]
+	if d.is_empty():
+		GameConfig.ui_layout.erase(key)
+	else:
+		GameConfig.ui_layout[key] = d
+	var control := _find_placed(panel_id)
+	if control != null:
+		_place(panel_id, control)
+		_restack_after(panel_id)
+	if persist:
+		GameConfig.save_user_settings()
+		user_layout_changed.emit()
+
+## "Restablecer disposicion": borra lo movido en este perfil y proporcion.
+func reset_user_layout() -> void:
+	GameConfig.ui_layout.erase(layout_key())
+	GameConfig.save_user_settings()
+	_reapply_all()
+	for entry in _placed:
+		_restack_after(String(entry["id"]))
+	user_layout_changed.emit()
+
+func placed_control(panel_id: String) -> Control:
+	return _find_placed(panel_id)
+
+## Rectangulo en pantalla que ocuparia `rect` desplazado para no salirse (con
+## EDGE_MARGIN de aire). Puro: el editor y el recorte lo comparten.
+static func clamp_rect_to(rect: Rect2, viewport: Vector2, margin: float = EDGE_MARGIN) -> Vector2:
+	var shift := Vector2.ZERO
+	if rect.size.x + margin * 2.0 <= viewport.x:
+		if rect.position.x < margin:
+			shift.x = margin - rect.position.x
+		elif rect.end.x > viewport.x - margin:
+			shift.x = viewport.x - margin - rect.end.x
+	else:
+		shift.x = margin - rect.position.x
+	if rect.size.y + margin * 2.0 <= viewport.y:
+		if rect.position.y < margin:
+			shift.y = margin - rect.position.y
+		elif rect.end.y > viewport.y - margin:
+			shift.y = viewport.y - margin - rect.end.y
+	else:
+		shift.y = margin - rect.position.y
+	return shift
+
+## Ajuste de un desplazamiento arrastrado: a la rejilla, y pegado al borde si
+## el panel queda a menos de SNAP_EDGE de el. Puro.
+static func snap_offset(offset: Vector2, rect_at_offset: Rect2, viewport: Vector2) -> Vector2:
+	var snapped_offset := Vector2(snappedf(offset.x, SNAP_GRID), snappedf(offset.y, SNAP_GRID))
+	var r := Rect2(rect_at_offset.position + (snapped_offset - offset), rect_at_offset.size)
+	if absf(r.position.x - EDGE_MARGIN) < SNAP_EDGE:
+		snapped_offset.x += EDGE_MARGIN - r.position.x
+	elif absf(viewport.x - EDGE_MARGIN - r.end.x) < SNAP_EDGE:
+		snapped_offset.x += viewport.x - EDGE_MARGIN - r.end.x
+	if absf(r.position.y - EDGE_MARGIN) < SNAP_EDGE:
+		snapped_offset.y += EDGE_MARGIN - r.position.y
+	elif absf(viewport.y - EDGE_MARGIN - r.end.y) < SNAP_EDGE:
+		snapped_offset.y += viewport.y - EDGE_MARGIN - r.end.y
+	return snapped_offset
+
+## Mete en pantalla un panel movido. No toca lo guardado: en otra ventana el
+## mismo desplazamiento puede volver a caber.
+func _clamp_on_screen(control: Control) -> void:
+	if not is_instance_valid(control) or not control.is_inside_tree():
+		return
+	var shift := clamp_rect_to(control.get_global_rect(), _viewport_size)
+	if shift == Vector2.ZERO:
+		return
+	control.offset_left += shift.x
+	control.offset_right += shift.x
+	control.offset_top += shift.y
+	control.offset_bottom += shift.y
+
+# ── Modo "Editar disposicion" ──
+
+func is_editing_layout() -> bool:
+	return _editor != null and is_instance_valid(_editor)
+
+## Abre el editor encima de todo. Devuelve false si no hay escena de juego o
+## hay un tablero abierto (no se reordena el HUD en mitad de una batalla).
+func start_layout_edit() -> bool:
+	if is_editing_layout():
+		return true
+	if CombatManager.is_board_open():
+		return false
+	var scene := get_tree().current_scene
+	if scene == null:
+		return false
+	_editor = preload("res://scripts/ui/LayoutEditor.gd").new()
+	scene.add_child(_editor)
+	return true
+
+func stop_layout_edit() -> void:
+	if is_editing_layout():
+		_editor.finish()
+	_editor = null

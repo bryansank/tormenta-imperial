@@ -235,7 +235,7 @@ func _render_page() -> void:
 	var p: Dictionary = PAGES[_page]
 	_title_label.text = Tr.t(p["title"])
 	_section_label.text = Tr.t(p["section"])
-	_body_label.text = Tr.t(p["body"])
+	_body_label.text = Tr.ti(p["body"])
 	_page_label.text = Tr.t("LBL_TUTORIAL_PAGE") % [_page + 1, PAGES.size()]
 	var last: bool = _page >= PAGES.size() - 1
 	_next_btn.text = Tr.t("BTN_TUTORIAL_START") if last else Tr.t("BTN_TUTORIAL_NEXT")
