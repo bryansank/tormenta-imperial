@@ -8,6 +8,8 @@ extends GdUnitTestSuite
 ##      con el renderer Mobile en móvil (Forward+ sigue en PC).
 ##   5. El preset "Android QA (emulador)" (x86_64 + Compatibility, paquete .qa)
 ##      excluye lo mismo, no lleva secretos y no altera el preset real.
+##   6. Las licencias que viajan con el binario existen: LICENSE,
+##      THIRD-PARTY-NOTICES.md, licenses/GODOT-COPYRIGHT.txt y la de cada fuente.
 
 const PRESETS_PATH := "res://export_presets.cfg"
 const GATE_PATH := "res://scripts/services/BeckettGate.gd"
@@ -224,3 +226,79 @@ func test_mobile_uses_mobile_renderer_and_desktop_keeps_forward_plus() -> void:
 	assert_str(str(cf.get_value("rendering", "renderer/rendering_method.mobile", ""))).is_equal("mobile")
 	# Android exige las texturas importadas también en ETC2/ASTC o el export se niega.
 	assert_bool(bool(cf.get_value("rendering", "textures/vram_compression/import_etc2_astc", false))).is_true()
+
+
+# --- Licencias que viajan con el binario --------------------------------------
+# tools/package_release.{sh,ps1} mete estos ficheros en cada zip para testers. Si
+# falta alguno, repartir el juego incumple las licencias de terceros (MIT de Godot,
+# Apache de Special Elite, OFL del resto de fuentes). Ver THIRD-PARTY-NOTICES.md.
+
+const FONTS_DIR := "res://assets/fonts/"
+const FONT_EXTENSIONS := ["ttf", "otf", "woff", "woff2"]
+
+
+func test_license_exists_and_is_polyform_strict_with_rights_reserved() -> void:
+	assert_bool(FileAccess.file_exists("res://LICENSE")).override_failure_message("falta LICENSE").is_true()
+	var text := FileAccess.get_file_as_string("res://LICENSE")
+	assert_bool(text.contains("PolyForm Strict License 1.0.0")).is_true()
+	assert_bool(text.contains("ALL RIGHTS RESERVED")).is_true()
+	assert_bool(text.contains("THIRD-PARTY-NOTICES.md")).is_true()
+
+
+func test_third_party_notices_exist_with_godot_licence_and_engine_notices() -> void:
+	assert_bool(FileAccess.file_exists("res://THIRD-PARTY-NOTICES.md")) \
+		.override_failure_message("falta THIRD-PARTY-NOTICES.md").is_true()
+	var notices := FileAccess.get_file_as_string("res://THIRD-PARTY-NOTICES.md")
+	# La MIT de Godot tiene que ir completa, no solo nombrada; Apache y OFL también.
+	assert_bool(notices.contains("Godot Engine contributors")).is_true()
+	assert_bool(notices.contains("The above copyright notice and this permission notice shall be included")).is_true()
+	assert_bool(notices.contains("TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION")).is_true()
+	assert_bool(notices.contains("SIL OPEN FONT LICENSE Version 1.1")).is_true()
+	# Los avisos de los componentes del motor (FreeType, HarfBuzz...).
+	var engine := FileAccess.get_file_as_string("res://licenses/GODOT-COPYRIGHT.txt")
+	assert_str(engine).override_failure_message("falta licenses/GODOT-COPYRIGHT.txt (tools/gen_godot_notices.gd)").is_not_empty()
+	assert_bool(engine.contains("The FreeType Project")).is_true()
+	assert_bool(engine.contains("HarfBuzz")).is_true()
+
+
+## Cada fuente tiene al lado un .txt de licencia cuyo nombre contiene la familia
+## (lo que va antes del primer "-": SpecialElite-Regular.ttf -> LICENSE-SpecialElite.txt)
+## y aparece en THIRD-PARTY-NOTICES.md. Es la misma regla que aplica
+## tools/package_release antes de crear un zip.
+func test_every_font_has_its_licence_file_next_to_it_and_is_listed() -> void:
+	var files := DirAccess.get_files_at(FONTS_DIR)
+	var licences := []
+	for f in files:
+		if f.get_extension() == "txt":
+			licences.append(f)
+	var notices := FileAccess.get_file_as_string("res://THIRD-PARTY-NOTICES.md")
+	var fonts := 0
+	for f in files:
+		if not FONT_EXTENSIONS.has(f.get_extension().to_lower()):
+			continue
+		fonts += 1
+		var family: String = f.get_basename().get_slice("-", 0)
+		var found := false
+		for lic in licences:
+			if str(lic).contains(family):
+				found = true
+		assert_bool(found) \
+			.override_failure_message("la fuente %s no tiene licencia al lado (assets/fonts/*%s*.txt)" % [f, family]) \
+			.is_true()
+		assert_bool(_mentions_family(notices, family)) \
+			.override_failure_message("la fuente %s no aparece en THIRD-PARTY-NOTICES.md" % f).is_true()
+	assert_int(fonts).override_failure_message("no hay fuentes en assets/fonts: ¿se movieron?").is_greater(0)
+
+
+## "SpecialElite" en el nombre del fichero y "Special Elite" en el aviso cuentan
+## como la misma familia.
+func _mentions_family(text: String, family: String) -> bool:
+	if text.contains(family):
+		return true
+	var spaced := ""
+	for i in family.length():
+		var ch := family[i]
+		if i > 0 and ch == ch.to_upper() and ch != ch.to_lower():
+			spaced += " "
+		spaced += ch
+	return text.contains(spaced)
