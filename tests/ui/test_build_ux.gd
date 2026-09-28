@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 
 const MenuScript := preload("res://scripts/ui/ConstructionMenu.gd")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
 func _data(id: String) -> BuildingData:
 	return load("res://data/buildings/%s.tres" % id)
@@ -44,3 +45,18 @@ func test_the_house_card_scrolls_into_view_then_hands_over_to_build() -> void:
 	menu.call("_close")
 	main.free()
 	assert_object(target).is_same(build)
+
+## Al empezar, el Cuartel General dice todo lo que le falta en vez de salir gris
+## sin mas: acero y petroleo por desbloquear, y un Cuartel y una Refineria antes.
+func test_the_headquarters_says_everything_it_lacks_at_the_start() -> void:
+	if ResourceManager.is_unlocked(ResourceManager.Type.STEEL):
+		return
+	var reasons: Array = Rules.block_reasons(_data("headquarters"))
+	var text := "\n".join(reasons)
+	assert_str(text).contains(Tr.res_name("steel"))
+	assert_str(text).contains(Tr.res_name("oil"))
+	assert_str(text).contains(_data("barracks").get_display_name())
+	assert_str(text).contains(_data("refinery").get_display_name())
+
+func test_a_house_card_says_it_brings_workers() -> void:
+	assert_str(Tr.t("LBL_CARD_WORKERS") % _data("house").population_capacity).contains(str(_data("house").population_capacity))

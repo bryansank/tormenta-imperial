@@ -20,11 +20,15 @@ func _instance(path: String) -> CanvasLayer:
 	add_child(node)
 	return node
 
+## Pulsar y soltar dentro: las tarjetas se eligen al soltar (arrastrar la lista
+## empieza encima de una tarjeta y no puede elegirla).
 func _click(control: Control) -> void:
-	var ev := InputEventMouseButton.new()
-	ev.button_index = MOUSE_BUTTON_LEFT
-	ev.pressed = true
-	control.gui_input.emit(ev)
+	for pressed in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = pressed
+		ev.position = Vector2(5, 5)
+		control.gui_input.emit(ev)
 
 ## Las tarjetas desbloqueadas: son las que escuchan el raton.
 func _unlocked_cards(menu: CanvasLayer) -> Array:
