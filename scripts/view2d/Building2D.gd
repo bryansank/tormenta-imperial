@@ -34,7 +34,7 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	z_index = 2
 	_name_label = Label.new()
 	_name_label.name = "NameLabel"
-	_name_label.text = data.display_name
+	_name_label.text = _label_text()
 	_name_label.visible = false
 	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -94,7 +94,7 @@ func _process(delta: float) -> void:
 	if sig != _signature:
 		_signature = sig
 		if _name_label:
-			_name_label.text = String(get_meta("custom_name", data.display_name))
+			_name_label.text = _label_text()
 		queue_redraw()
 
 func _current_signature() -> Array:
@@ -108,7 +108,14 @@ func _current_signature() -> Array:
 		if not info.is_empty():
 			mask = Rules.road_neighbor_mask(info["origin_cell"])
 	return [constructing, progress, int(get_meta("level", 1)), int(get_meta("health", data.max_health)),
-		BuildingHealth.is_ruined(self), mask, int(get_meta("rotation_steps", 0)), String(get_meta("custom_name", ""))]
+		BuildingHealth.is_ruined(self), mask, int(get_meta("rotation_steps", 0)), String(get_meta("custom_name", "")),
+		Tr.get_locale()]
+
+## El rotulo: el nombre que le puso el jugador o, si no tiene, el del edificio en
+## el idioma actual. Nunca el campo crudo del .tres, que esta en espanol.
+func _label_text() -> String:
+	var custom := String(get_meta("custom_name", ""))
+	return custom if custom != "" else data.get_display_name()
 
 ## Los rotulos no giran ni crecen con el zoom: se contraescalan para leerse igual
 ## a cualquier distancia.

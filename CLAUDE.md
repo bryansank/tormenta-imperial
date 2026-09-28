@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`) over the pure models — `godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a tests`
+- **Tests:** gdUnit4 (`addons/gdUnit4`) over the pure models — **always** through the wrapper: `GODOT=/path/to/godot tools/run_tests.sh` (or `tools\run_tests.ps1`; extra args go to GdUnitCmdTool, e.g. `-a tests/combat`). It writes a temporary `override.cfg` so the run gets its own user dir (`%APPDATA%\TormentaImperial_tests`, override with `TI_TEST_USER_DIR`) and removes it on exit. Never call `GdUnitCmdTool.gd` directly: that runs in the editor's user dir, where the player's `save_game.json` lives. As a backstop, `tests/save/save_parking.gd` refuses to park in the player's dir and the suites that write the save skip themselves there
 - **Backend:** Supabase (CloudSaveManager implements auth + save/load via REST, but nothing calls it yet — needs `.env` config and UI wiring)
 - **Multiplayer:** Nakama (planned: self-hosted Docker, for PvP and Co-op)
 

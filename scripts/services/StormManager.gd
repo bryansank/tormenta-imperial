@@ -28,6 +28,10 @@ var _halted: bool = false
 ## La carga trajo un Diezmo sin cobrar. Transitorio: lo pone load_save_data() y
 ## lo consume el final de la carga.
 var _tithe_to_resume: bool = false
+## Ese Diezmo llego a reclamarse con el arbol en pausa (el menu principal sale
+## encima de la partida recien cargada) y espera al primer frame con el juego en
+## marcha. Transitorio, como el de arriba.
+var _resume_when_running: bool = false
 
 func _ready() -> void:
 	_cycle = StormCycleScript.create()
@@ -40,6 +44,11 @@ func _ready() -> void:
 	_check_arming()
 
 func _process(delta: float) -> void:
+	# _process no corre con el arbol en pausa: llegar aqui es que el jugador ya
+	# solto el menu que tapaba la partida.
+	if _resume_when_running:
+		_resume_when_running = false
+		_resume_tithe()
 	if _halted or not _armed or _cycle == null:
 		return
 	_publish(_cycle.advance(delta))
@@ -557,8 +566,15 @@ func _on_game_load_completed() -> void:
 ## Se reclama por el mismo camino que en partida: defensa con la guarnicion que
 ## haya en casa, o cobro directo si no hay nadie. El tablero no se guarda, asi
 ## que un Diezmo interrumpido vuelve a empezar desde la puerta.
+##
+## Con el arbol en pausa no: el menu principal pausa en su _ready, antes de que
+## la partida cargue, y la defensa se abria detras de el. Espera a que el juego
+## vuelva a correr (_process).
 func _resume_tithe() -> void:
 	if not _tithe_to_resume:
+		return
+	if is_inside_tree() and get_tree().paused:
+		_resume_when_running = true
 		return
 	_tithe_to_resume = false
 	if _halted or _cycle == null or not _cycle.is_collecting():
@@ -573,4 +589,5 @@ func reset() -> void:
 	_armed = false
 	_halted = false
 	_tithe_to_resume = false
+	_resume_when_running = false
 	GameConfig.event_production_multiplier = 1.0

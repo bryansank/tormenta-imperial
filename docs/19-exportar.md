@@ -73,8 +73,9 @@ Desde la raíz del proyecto, con `GODOT` apuntando al ejecutable de consola:
 # 1. Importar (primera vez o tras tocar assets)
 "$GODOT" --headless --path . --import
 
-# 2. Tests (deben quedar en verde)
-"$GODOT" --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -a tests
+# 2. Tests (deben quedar en verde). Siempre por el envoltorio: da a la suite su
+#    propia carpeta de usuario y no toca la partida del jugador.
+GODOT="$GODOT" tools/run_tests.sh
 
 # 3. Exportar
 mkdir -p build/windows

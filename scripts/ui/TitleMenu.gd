@@ -22,9 +22,10 @@ const PORTRAIT_RATIO := 1.0
 const KEYART_PATH := "res://assets/branding/keyart.png"
 const LOGO_PATH := "res://assets/branding/logo.png"
 
-## Sobrevive a la recarga de escena de "Nueva partida": el menu sale una vez por
-## sesion, al arrancar, y no cada vez que se recarga la isla.
-static var _dismissed_this_session := false
+## El menu sale una vez por sesion, al arrancar, y no cada vez que se recarga la
+## isla (nueva partida) o se cambia de vista 3D/2D. La marca vive en GameManager
+## (GameManager.title_dismissed): un autoload sobrevive a cualquier cambio de
+## escena, y una static var solo mientras el motor no descargue este script.
 
 var _root: Control
 var _art: TextureRect
@@ -55,16 +56,20 @@ func _ready() -> void:
 ## Sin ventana (tests, --headless) no hay menu: pausaria el arbol de las pruebas.
 ## `--no-title` tras `--` lo salta tambien, para las sondas de tools/.
 func should_show_on_launch() -> bool:
-	if _dismissed_this_session:
+	if GameManager.title_dismissed:
 		return false
 	if DisplayServer.get_name() == "headless":
+		return false
+	# La escena se va a la otra vista en este mismo frame (ViewRouter): el menu
+	# lo abre la escena que llega, no esta, que muere antes de poder enfocarlo.
+	if GameManager.is_start_held():
 		return false
 	return not OS.get_cmdline_user_args().has("--no-title")
 
 ## Hay una partida que merece "Continuar": se cargo al arrancar, o el jugador ya
 ## ha estado jugando en esta sesion (vuelve aqui desde la pausa).
 func has_game_to_continue() -> bool:
-	return GameManager.loaded_from_save or _dismissed_this_session
+	return GameManager.loaded_from_save or GameManager.title_dismissed
 
 func is_open() -> bool:
 	return visible
@@ -72,7 +77,7 @@ func is_open() -> bool:
 ## Olvida si el menu ya salio en esta sesion. Solo para pruebas: en partida la
 ## marca vive hasta cerrar el juego.
 static func set_dismissed_for_tests(dismissed: bool) -> void:
-	_dismissed_this_session = dismissed
+	GameManager.title_dismissed = dismissed
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -185,11 +190,18 @@ func open_menu() -> void:
 	if not get_tree().paused:
 		get_tree().paused = true
 		_paused_by_me = true
-	(_continue_btn if _continue_btn.visible else _new_btn).grab_focus.call_deferred()
+	_focus_default.call_deferred()
+
+## Diferido, y solo si el menu sigue en el arbol: una recarga o un cambio de
+## escena en el mismo frame lo dejaba fuera y grab_focus fallaba.
+func _focus_default() -> void:
+	var btn: Button = _continue_btn if _continue_btn.visible else _new_btn
+	if is_instance_valid(btn) and btn.is_inside_tree() and btn.is_visible_in_tree():
+		btn.grab_focus()
 
 ## Suelta el menu y, si lo pauso el, el juego.
 func close_menu() -> void:
-	_dismissed_this_session = true
+	GameManager.title_dismissed = true
 	visible = false
 	_close_sub()
 	if _paused_by_me:
@@ -220,7 +232,7 @@ func _on_new_game() -> void:
 	if dialog != null:
 		# La escena se recarga al confirmar: el menu no vuelve a salir encima de
 		# la partida nueva, que arranca con su intro.
-		dialog.confirmed.connect(func(): _dismissed_this_session = true)
+		dialog.confirmed.connect(func(): GameManager.title_dismissed = true)
 
 func _on_settings() -> void:
 	var settings: CanvasLayer = _find_sibling("SettingsPanel")
