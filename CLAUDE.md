@@ -294,6 +294,11 @@ Full detail in `docs/15-combat.md` §6 and `docs/20-modos-de-juego.md`.
 
 ### Game Modes — full doc: `docs/20-modos-de-juego.md`
 
+**Only Campaña is offered today (2026-09-28).** `GameMode.OFFERED` lists the modes
+the New Game dialog shows; Constructor, Supervivencia and Sandbox are commented out
+there — their cards are built but hidden, and their rules, saves and tests stay
+intact (an old save in one of them still loads). Uncomment a line to bring it back.
+
 Four modes, picked in the New Game dialog (`NewGameDialog`, opened by
 `GameManager.request_new_game()` from every entry point) and fixed for the run:
 **Campaña** (default; old saves load as it), **Constructor** (no Storm/Tithe/siege,

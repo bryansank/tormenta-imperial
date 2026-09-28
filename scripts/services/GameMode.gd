@@ -29,6 +29,17 @@ const KEYS := {
 const DEFAULT := Mode.CAMPAIGN
 ## El orden en que el selector los ensena.
 const ORDER := [Mode.CAMPAIGN, Mode.BUILDER, Mode.SURVIVAL, Mode.SANDBOX]
+## Los que el selector de Nueva partida ofrece hoy. Constructor, Supervivencia y
+## Sandbox siguen enteros (reglas, guardado, pruebas, y un guardado viejo en
+## esos modos carga igual), pero apartados del selector desde el 2026-09-28: la
+## partida normal es la Campana, y los otros tres esperan a que se decida su
+## sitio. Para devolver uno, quitarle el comentario.
+const OFFERED := [
+	Mode.CAMPAIGN,
+	# Mode.BUILDER,
+	# Mode.SURVIVAL,
+	# Mode.SANDBOX,
+]
 
 const RESULT_NONE := ""
 const RESULT_DEFEAT := "defeat"
@@ -44,6 +55,9 @@ static var run_result: String = RESULT_NONE
 static func begin_run(mode: int) -> void:
 	current = mode if KEYS.has(mode) else DEFAULT
 	run_result = RESULT_NONE
+
+static func is_offered(mode: int) -> bool:
+	return OFFERED.has(mode)
 
 static func is_run_over() -> bool:
 	return run_result != RESULT_NONE

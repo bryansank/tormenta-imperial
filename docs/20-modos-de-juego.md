@@ -3,6 +3,13 @@
 Cuatro maneras de jugar la misma isla. Se elige al empezar una partida nueva y
 queda fija hasta la siguiente: no se cambia a mitad.
 
+> **Hoy el selector solo ofrece la Campaña (2026-09-28).** Constructor,
+> Supervivencia y Sandbox están apartados, no borrados: `GameMode.OFFERED` tiene
+> sus líneas comentadas, `NewGameDialog` crea sus tarjetas pero no las enseña, y
+> sus reglas, su guardado y sus pruebas siguen en pie (un guardado viejo en uno
+> de esos modos carga igual). Para devolver uno, quitar el comentario de su línea
+> en `GameMode.OFFERED`. Lo que sigue describe los cuatro tal como funcionan.
+
 | Modo | Etiqueta | En una línea |
 |---|---|---|
 | **Campaña** | Normal | El juego de siempre. Modo por defecto; todo guardado anterior a los modos carga como Campaña. |
