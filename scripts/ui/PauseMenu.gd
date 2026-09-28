@@ -98,6 +98,8 @@ func _setup_ui() -> void:
 	UITheme.style_button(_menu_btn, UITheme.BTN, UITheme.FONT_SECTION)
 	_menu_btn.custom_minimum_size = Vector2(MENU_BTN_MIN_W, UITheme.MIN_BTN_H)
 	_menu_btn.pressed.connect(request_open)
+	# Gancho del tutorial guiado (frente de ayudas): resalta este boton.
+	_menu_btn.add_to_group("hud_menu_button")
 	overlay.add_child(_menu_btn)
 
 	_root = Control.new()
@@ -193,6 +195,9 @@ func _make_group(node_name: String, title: String, hint: String) -> VBoxContaine
 	box.add_child(UITheme.section_header(title))
 	var sub := UITheme.make_label(hint, "small", UITheme.TEXT_DIM)
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Con ancho minimo: una etiqueta que envuelve sin ancho mide su minimo como
+	# una palabra por linea, y la tarjeta crecia de alto sin motivo.
+	sub.custom_minimum_size.x = 240.0
 	box.add_child(sub)
 	_groups.add_child(box)
 	return box
@@ -209,8 +214,11 @@ func _relayout() -> void:
 	if _groups != null:
 		_groups.columns = 2 if wide else 1
 	if _card != null:
-		ModalKit.fit_center(_card, CARD_WIDTH_WIDE if wide else CARD_WIDTH_NARROW, vp)
+		# Primero el alto del scroll y luego la tarjeta, que se centra con el
+		# alto minimo que quede: si no, se quedaba con el de la primera
+		# construccion (todas las entradas a la vista) y sobraba un hueco.
 		_fit_scroll(vp)
+		ModalKit.fit_center(_card, CARD_WIDTH_WIDE if wide else CARD_WIDTH_NARROW, vp)
 	if _menu_btn != null:
 		_place_menu_button()
 
@@ -219,12 +227,40 @@ func _relayout() -> void:
 func _fit_scroll(vp: Vector2) -> void:
 	if _scroll == null or _groups == null:
 		return
-	var wanted: float = _groups.get_combined_minimum_size().y
+	# Se suma a mano lo visible de cada grupo: el minimo que guarda el
+	# contenedor se actualiza en diferido y, justo tras ocultar entradas,
+	# todavia cuenta las que ya no estan (sobraba un hueco al pie).
+	var tallest := 0.0
+	var group_heights: Array = []
+	for group in _groups.get_children():
+		if not (group is VBoxContainer) or not (group as Control).visible:
+			continue
+		var h := 0.0
+		var n := 0
+		for child in group.get_children():
+			if child is Control and (child as Control).visible:
+				h += (child as Control).get_combined_minimum_size().y
+				n += 1
+		h += float(maxi(0, n - 1)) * float((group as VBoxContainer).get_theme_constant("separation"))
+		group_heights.append(h)
+		tallest = maxf(tallest, h)
+	var wanted: float = tallest
+	if _groups.columns == 1:
+		wanted = 0.0
+		for h in group_heights:
+			wanted += h
+		wanted += float(maxi(0, group_heights.size() - 1)) * float(_groups.get_theme_constant("v_separation"))
+	wanted += 4.0  # margen inferior del relleno
 	_scroll.custom_minimum_size.y = clampf(wanted, 120.0, maxf(120.0, vp.y - CHROME_H))
 
 func _place_menu_button() -> void:
+	# En un movil en vertical (400 de ancho) la palabra no cabe junto a los
+	# recursos: queda el icono solo, cuadrado y de tamano dedo.
+	var narrow: bool = get_viewport().get_visible_rect().size.x < UILayoutConfig.NARROW_WIDTH
+	_menu_btn.text = "☰" if narrow else Tr.t("BTN_GAME_MENU")
+	_menu_btn.custom_minimum_size = Vector2(UITheme.MIN_BTN_H if narrow else MENU_BTN_MIN_W, UITheme.MIN_BTN_H)
 	_menu_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	var w: float = maxf(MENU_BTN_MIN_W, _menu_btn.get_combined_minimum_size().x)
+	var w: float = maxf(_menu_btn.custom_minimum_size.x, _menu_btn.get_combined_minimum_size().x)
 	var h: float = maxf(UITheme.MIN_BTN_H, _menu_btn.get_combined_minimum_size().y)
 	_menu_btn.offset_right = -MENU_BTN_MARGIN
 	_menu_btn.offset_left = -MENU_BTN_MARGIN - w
@@ -357,8 +393,7 @@ func _refresh_entries() -> void:
 		btn.visible = _find_sibling(entry_def[2]) != null and is_colony_entry_available(id)
 	_help_btn.visible = _help_panel() != null
 	_sync_music()
-	if _groups != null:
-		_fit_scroll.call_deferred(get_viewport().get_visible_rect().size)
+	_relayout.call_deferred()
 
 static func is_colony_entry_available(id: String) -> bool:
 	match id:
@@ -445,7 +480,14 @@ func _help_panel() -> Node:
 
 ## Vuelve a contar el lore. La intro es modal y vive en TutorialPanel; se abre
 ## con el juego todavia en pausa y, al cerrarla, se vuelve a este menu.
+##
+## Con el prologo propio del frente de ayudas (TutorialManager.show_prologue),
+## el menu se cierra antes: el prologo espera a que no haya pausa ni menu.
 func _on_story() -> void:
+	if TutorialManager.has_method("show_prologue"):
+		resume()
+		TutorialManager.call("show_prologue")
+		return
 	var tutorial: Node = _find_sibling("TutorialPanel")
 	if tutorial != null:
 		_open_sub(tutorial)

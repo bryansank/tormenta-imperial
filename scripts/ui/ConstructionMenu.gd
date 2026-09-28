@@ -114,6 +114,8 @@ func _setup_ui() -> void:
 	# Build button (bottom center)
 	_build_btn = Button.new()
 	_build_btn.name = "BuildButton"
+	# Gancho del tutorial guiado (frente de ayudas): resalta este boton.
+	_build_btn.add_to_group("hud_build_button")
 	_build_btn.text = Tr.t("BTN_BUILD_BIG")
 	_build_btn.tooltip_text = Tr.t("BTN_BUILD_HINT")
 	_build_btn.focus_mode = Control.FOCUS_NONE

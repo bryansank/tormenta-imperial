@@ -80,7 +80,7 @@ en tablet y con letra grande) y su **Restablecer esta pestaña** (menos Juego):
 |---|---|
 | **Audio** | Volumen general, música sí/no (también en ☰ MENÚ → PARTIDA), música, efectos. De serie bajos: general 80 %, música 35 %, efectos 50 % (`GameConfig.AUDIO_DEFAULTS`), con curva perceptual |
 | **Interfaz** | Perfil de dispositivo, escala, tamaño de texto · Vista 3D/2D, rejilla, pantalla completa · Elementos en pantalla (un interruptor por elemento) · Editar / Restablecer disposición |
-| **Controles** | Controles en pantalla (Automático / Siempre / Nunca) y el resumen de controles en ratón o en dedo |
+| **Controles** | Controles en pantalla (Automático / Siempre / Nunca), su opacidad (20–100 %, de serie 55 %, `GameConfig.ui_touch_controls_opacity`) y el resumen de controles en ratón o en dedo |
 | **Accesibilidad** | Paleta de colores, alto contraste, opacidad de paneles, vista previa |
 | **Juego** | Idioma, Nueva partida |
 

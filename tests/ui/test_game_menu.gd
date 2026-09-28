@@ -224,3 +224,13 @@ func test_escape_opens_and_closes() -> void:
 	assert_bool(open).is_true()
 	assert_bool(menu.is_open()).is_false()
 	assert_bool(get_tree().paused).is_false()
+
+# ── Ganchos del tutorial guiado (frente de ayudas) ────────────────────
+
+func test_the_menu_button_is_in_its_hook_group() -> void:
+	var menu := _menu()
+	assert_bool(menu.menu_button().is_in_group("hud_menu_button")).is_true()
+
+func test_the_build_button_is_in_its_hook_group() -> void:
+	var build := _add("res://scenes/ui/ConstructionMenu.tscn", "ConstructionMenu")
+	assert_bool(build.build_button().is_in_group("hud_build_button")).is_true()
