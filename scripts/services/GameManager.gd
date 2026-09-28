@@ -3,6 +3,7 @@ extends Node
 ## Waits for BuildingPlacer and MapGenerator to register before starting.
 
 const SAVE_PATH := "user://save_game.json"
+const NewGameDialogScript := preload("res://scripts/ui/NewGameDialog.gd")
 const CORRUPT_PATH_FMT := "user://save_game.corrupt-%s.json"
 
 ## El parte de progreso offline se cerro. La pantalla de victoria espera a esta
@@ -33,6 +34,9 @@ var loaded_from_save := false
 var title_dismissed := false
 ## La capa del parte offline mientras esta en pantalla.
 var _offline_canvas: CanvasLayer = null
+## La partida termino (Supervivencia perdida) y su guardado ya se escribio
+## marcado: desde aqui es de solo lectura. Lo levanta cualquier partida nueva.
+var _run_sealed := false
 
 # ── Autosave ──
 ## Hay algo sin escribir. Se escribe al vencer el debounce, y si en ese momento
@@ -78,6 +82,7 @@ func _ready() -> void:
 		sig.connect(cb)
 	EventBus.encounter_started.connect(_on_encounter_started)
 	EventBus.locale_changed.connect(_on_locale_changed)
+	EventBus.run_ended.connect(_on_run_ended)
 
 ## Pide un guardado. No escribe en el acto: espera `autosave_debounce` para que
 ## una rafaga de eventos del mismo instante acabe en un solo guardado.
@@ -142,7 +147,7 @@ func _save_now_if_safe() -> void:
 	_write_save()
 
 func _can_write() -> bool:
-	return is_instance_valid(_placer) and is_instance_valid(_map_gen)
+	return not _run_sealed and is_instance_valid(_placer) and is_instance_valid(_map_gen)
 
 func register_placer(placer: Node) -> void:
 	_placer = placer
@@ -247,6 +252,10 @@ func _begin() -> void:
 		EventBus.building_demolished.connect(_on_building_demolished)
 
 func _new_game() -> void:
+	# El modo ya lo eligio quien pidio la partida (start_new_game); aqui solo se
+	# tira el resultado de la anterior. Va primero: los reset leen sus reglas.
+	GameMode.begin_run(GameMode.current)
+	_run_sealed = false
 	ResourceManager.reset()
 	ProcessManager.reset()
 	ProgressionManager.reset()
@@ -266,6 +275,9 @@ func _new_game() -> void:
 		var node: Node = _placer.place_building_at(nucleo_data, center)
 		if node:
 			ProductionManager.register_building(node, nucleo_data, 0.0)
+	# Sandbox: el arbol entero investigado desde el primer minuto.
+	if GameMode.all_unlocked():
+		TechTreeManager.unlock_all()
 	# Generate random deposits
 	_map_gen.generate_new_map()
 	save_game()
@@ -283,6 +295,11 @@ func _load_game() -> void:
 		_recover_from_unreadable_save()
 		return
 	var data: Dictionary = json.data
+
+	# El modo primero: las cargas de los servicios leen sus reglas. Sin la clave
+	# es un guardado de antes de los modos, y eso es Campana.
+	var mode_data: Variant = data.get("game_mode", {})
+	GameMode.load_save_data(mode_data if mode_data is Dictionary else {})
 
 	# Restore resources
 	if data.has("resources"):
@@ -395,8 +412,8 @@ func _load_game() -> void:
 	ResourceManager.set_era(ProgressionManager.current_era)
 	ResourceManager.clamp_to_storage()
 
-	# Apply offline progression
-	if data.has("saved_at"):
+	# Apply offline progression (Supervivencia no tiene: cerrar el juego no produce)
+	if data.has("saved_at") and GameMode.offline_enabled() and not GameMode.is_run_over():
 		var saved_at: float = float(data["saved_at"])
 		var now := Time.get_unix_time_from_system()
 		var elapsed := now - saved_at
@@ -408,6 +425,10 @@ func _load_game() -> void:
 	# sin esto no hay asedio que ganar. Va despues de todo lo demas porque la
 	# guarnicion que lo defiende sale del ejercito ya cargado.
 	ProgressionManager.migrate_legacy_capstone()
+
+	# Una partida terminada se abre para verla, no para seguirla: no se vuelve a
+	# escribir. La pantalla de derrota la vuelve a ensenar al terminar la carga.
+	_run_sealed = GameMode.is_run_over()
 
 	EventBus.game_load_completed.emit()
 
@@ -499,6 +520,7 @@ func _write_save() -> void:
 	data["expedition"] = CombatManager.get_save_data()
 	data["storm"] = StormManager.get_save_data()
 	data["tutorial"] = TutorialManager.get_save_data()
+	data["game_mode"] = GameMode.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -507,32 +529,44 @@ func _write_save() -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(data, "\t"))
+	# La ultima escritura de una partida terminada: la que la deja marcada.
+	if GameMode.is_run_over():
+		_run_sealed = true
 
 ## Asks the player to confirm before wiping the save. Every UI entry point to a
 ## new game must go through here: clear_save() is irreversible.
 ##
-## Devuelve el dialogo para que quien lo pide pueda reaccionar al cancelar. Se
-## procesa siempre: se puede pedir desde el menu principal o el de pausa, con el
-## arbol pausado, y un dialogo pausado no recibe clics.
-func request_new_game() -> ConfirmationDialog:
-	var dialog := ConfirmationDialog.new()
-	dialog.process_mode = Node.PROCESS_MODE_ALWAYS
-	dialog.title = Tr.t("BTN_NEW_GAME")
-	dialog.dialog_text = Tr.t("CONFIRM_NEW_GAME")
-	dialog.ok_button_text = Tr.t("BTN_CONFIRM")
-	dialog.cancel_button_text = Tr.t("BTN_CANCEL")
+## Abre el selector de modo (NewGameDialog): cuatro tarjetas y, si hay una
+## partida que perder, un segundo paso que lo dice antes de borrar nada.
+## `ask_confirm` en false salta ese segundo paso (el menu principal sobre una
+## isla recien nacida: no hay nada que perder).
+##
+## Devuelve el dialogo para que quien lo pide pueda reaccionar a `confirmed` o
+## `canceled`. Se procesa siempre: se puede pedir desde el menu principal o el
+## de pausa, con el arbol pausado, y un dialogo pausado no recibe clics.
+func request_new_game(ask_confirm: bool = true) -> CanvasLayer:
+	var dialog: CanvasLayer = NewGameDialogScript.new()
+	dialog.setup(ask_confirm, GameMode.current)
 	# El dialogo cuelga de este autoload, que sobrevive a la recarga: si no se
 	# libera tambien al confirmar, cada "Partida nueva" deja uno huerfano.
 	dialog.confirmed.connect(dialog.queue_free)
-	dialog.confirmed.connect(clear_save)
+	dialog.confirmed.connect(func(): start_new_game(dialog.chosen_mode))
 	dialog.canceled.connect(dialog.queue_free)
 	add_child(dialog)
-	dialog.popup_centered()
 	return dialog
+
+## Empieza una partida nueva en `mode`, borrando la actual. Irreversible: la UI
+## llega aqui solo a traves de request_new_game().
+func start_new_game(mode: int) -> void:
+	GameMode.begin_run(mode)
+	clear_save()
 
 func clear_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
+	# El modo es el que se eligio (start_new_game); se tira el resultado.
+	GameMode.begin_run(GameMode.current)
+	_run_sealed = false
 	GridManager.clear_all()
 	ResourceManager.reset()
 	ProcessManager.reset()
@@ -566,6 +600,14 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 		var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 		if file:
 			file.store_string(JSON.stringify(save_data, "\t"))
+	# El modo del guardado que va a cargarse, antes de los reset (leen reglas).
+	# Sin guardado, la escena empieza partida nueva en el modo de ahora.
+	var mode_data: Variant = save_data.get("game_mode", {})
+	if save_data.is_empty():
+		GameMode.begin_run(GameMode.current)
+	else:
+		GameMode.load_save_data(mode_data if mode_data is Dictionary else {})
+	_run_sealed = false
 	GridManager.clear_all()
 	ResourceManager.reset()
 	ProcessManager.reset()
@@ -735,12 +777,17 @@ func _on_locale_changed(_locale: String) -> void:
 ## Guarda y recarga la escena con la misma partida. No es partida nueva: nada se
 ## pierde y no se anuncia nada.
 func reload_keeping_game() -> void:
-	if not _started or not _can_write() or not CombatManager.is_save_safe():
+	if not _started or not CombatManager.is_save_safe():
 		return
-	# Escritura directa: save_game() dejaria el guardado pendiente si no fuera
-	# seguro, y aqui se relee el disco justo despues.
-	_save_pending = false
-	_write_save()
+	# Una partida terminada no se escribe, pero se puede recargar tal cual esta
+	# en disco (cambiar de idioma con la derrota en pantalla).
+	if _can_write():
+		# Escritura directa: save_game() dejaria el guardado pendiente si no fuera
+		# seguro, y aqui se relee el disco justo despues.
+		_save_pending = false
+		_write_save()
+	elif not _run_sealed:
+		return
 	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if not file:
 		return
@@ -749,3 +796,16 @@ func reload_keeping_game() -> void:
 	if not parsed is Dictionary:
 		return
 	clear_save_and_reload_from(parsed)
+
+# ── modos-de-juego ──
+
+## La partida termino: se escribe una ultima vez (marcada como terminada) y a
+## partir de ahi el guardado es de solo lectura. Si hay una pelea sin saldar,
+## queda pendiente como cualquier otro guardado y la escritura que la salda es
+## la que sella.
+func _on_run_ended(_result: String) -> void:
+	save_game()
+
+## El guardado es de una partida terminada y ya no se escribe.
+func is_run_sealed() -> bool:
+	return _run_sealed

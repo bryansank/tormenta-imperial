@@ -97,6 +97,7 @@ Main (Node3D)
   +-- SettingsPanel (CanvasLayer) -- volume sliders + UI toggles (persisted)
   +-- HelperPanel (CanvasLayer) -- "?" on-screen callouts + building guide modal
   +-- SkirmishPanel (CanvasLayer) -- commit troops before a board opens; "QUE BAJEN" (Final Audit)
+  +-- SandboxPanel (CanvasLayer) -- Sandbox mode only: summon a storm / the Final Audit
   +-- BattleScreen (CanvasLayer) -- the 8x8 tactical board (layer 18, outside UIManager's stack)
   +-- StormHUD (CanvasLayer) -- storm phase indicator (colour + icon, no countdown)
   +-- TutorialPanel (CanvasLayer) -- paged intro + contextual tip cards
@@ -221,6 +222,20 @@ and no retraining in between. Surviving it emits `storm_halted_forever` (the Sto
 stops for good) and only then `victory_achieved`. Losing is **not** a game over —
 maximum Tithe, maximum storm damage, and the siege can be summoned again once 3
 units stand. Full detail in `docs/15-combat.md`.
+
+### Game Modes — full doc: `docs/20-modos-de-juego.md`
+
+Four modes, picked in the New Game dialog (`NewGameDialog`, opened by
+`GameManager.request_new_game()` from every entry point) and fixed for the run:
+**Campaña** (default; old saves load as it), **Constructor** (no Storm/Tithe/siege,
+HQ 3 wins directly, only good random events), **Supervivencia** (storms x0.6 calm,
++1 severity, x1.25 damage, x1.5 Tithe, 75% start, no offline, one Final Audit —
+losing ends the run and seals the save), **Sandbox** (era 3, everything unlocked,
+no caps, resources refill, Storm/Audit only via the SANDBOX tools tab, no victory).
+`scripts/services/GameMode.gd` (static class, not an autoload) holds the mode and
+answers rule queries; the table is `GameConfig.game_mode_rules`. Services ask a
+rule (`GameMode.storm_enabled()`), never compare the mode. Saved as
+`"game_mode": {"mode", "result"}`; `GameMode.begin_run()` is its reset.
 
 ### Army & Units (management -> combat bridge)
 

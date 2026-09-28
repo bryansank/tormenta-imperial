@@ -3,12 +3,14 @@ extends GdUnitTestSuite
 ## (antes borraba la partida al primer clic), y nunca se abre encima del parte
 ## de progreso offline, que comparte con ella la capa 20.
 
+const NewGameDialogScript := preload("res://scripts/ui/NewGameDialog.gd")
+
 const STATS := {"time_played": 3700.0, "buildings_built": 30, "trades_completed": 12, "milestones": 9}
 
 func after_test() -> void:
 	GameManager._offline_canvas = null
 	for child in GameManager.get_children():
-		if child is ConfirmationDialog:
+		if child.get_script() == NewGameDialogScript:
 			child.queue_free()
 
 func _screen() -> CanvasLayer:
@@ -19,7 +21,7 @@ func _screen() -> CanvasLayer:
 func _dialogs() -> Array:
 	var found: Array = []
 	for child in GameManager.get_children():
-		if child is ConfirmationDialog and not child.is_queued_for_deletion():
+		if child.get_script() == NewGameDialogScript and not child.is_queued_for_deletion():
 			found.append(child)
 	return found
 

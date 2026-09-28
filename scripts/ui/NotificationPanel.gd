@@ -39,6 +39,9 @@ func _ready() -> void:
 	EventBus.workers_changed.connect(_on_workers_changed)
 	EventBus.phase_advanced.connect(_on_phase_advanced)
 	EventBus.milestone_completed.connect(func(_m): _update_objective_hint())
+	# El modo se sabe al terminar de cargar (o de empezar): el objetivo depende de el.
+	EventBus.game_load_completed.connect(_update_objective_hint)
+	EventBus.game_new_started.connect(_update_objective_hint)
 	EventBus.tutorial_intro_requested.connect(func(): _toast_layer.layer = TOAST_LAYER_UNDER_INTRO)
 	EventBus.tutorial_intro_closed.connect(func(): _toast_layer.layer = TOAST_LAYER)
 	# La expedicion pasa fuera de la base: si no deja rastro aqui, el jugador
@@ -285,6 +288,10 @@ func _on_phase_advanced(new_phase: int) -> void:
 
 func _update_objective_hint() -> void:
 	if not _objective_label:
+		return
+	# Sandbox lo tiene todo abierto: los pasos de la campana no aplican.
+	if GameMode.all_unlocked():
+		_objective_label.text = Tr.t(GameMode.goal_key())
 		return
 	var phase: int = ProgressionManager.current_phase
 	var hint: String = ""

@@ -676,9 +676,13 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 # ── Building Limit Helpers ──
 
 func get_building_limit(building_id: String) -> int:
+	if GameMode.all_unlocked():
+		return -1  # Sandbox: sin tope por tipo (ver docs/20-modos-de-juego.md).
 	return building_limits.get(building_id, -1)
 
 func get_prerequisites(building_id: String) -> Array:
+	if GameMode.all_unlocked():
+		return []
 	return building_prerequisites.get(building_id, [])
 
 # ══════════════════════════════════════════════════════════════════════
@@ -952,7 +956,7 @@ var storm_production_target_severity := 4
 var storm_essential_buildings := ["sawmill", "gold_mine"]
 
 func get_storm_damage(severity: int, max_health: int, towers: int) -> int:
-	var raw: float = float(max_health) * storm_damage_per_tick * float(maxi(1, severity))
+	var raw: float = float(max_health) * storm_damage_per_tick * float(maxi(1, severity)) * GameMode.storm_damage_mult()
 	return maxi(1, roundi(raw * (1.0 - get_storm_mitigation(towers))))
 
 ## Cuánto absorben las torres. Con techo: ninguna cantidad de torres vuelve a la
@@ -1006,7 +1010,7 @@ func get_tithe_ratio(severity: int) -> float:
 func get_tithe_debt(severity: int, era: int, stored: int) -> int:
 	var floor_debt: int = storm_tithe_base_debt 		+ storm_tithe_debt_per_severity * maxi(0, severity - 1) 		+ storm_tithe_debt_per_era * maxi(0, era - 1)
 	var share: int = int(float(maxi(0, stored)) * get_tithe_ratio(severity))
-	return maxi(floor_debt, share)
+	return int(round(float(maxi(floor_debt, share)) * GameMode.tithe_mult()))
 
 ## El multiplicador de la escolta por tormentas superadas.
 func get_assessor_escalation(storms_survived: int) -> float:
@@ -1015,15 +1019,20 @@ func get_assessor_escalation(storms_survived: int) -> float:
 		1.0, storm_assessor_growth_max)
 
 func get_storm_first_interval() -> float:
-	return get_duration(storm_first_interval)
+	return get_duration(storm_first_interval) * GameMode.storm_interval_mult()
 
 ## Bounds of the calm. The roll itself belongs to StormCycle's own generator, so
 ## the model stays deterministic under a seed.
 func get_storm_interval_min() -> float:
-	return get_duration(storm_interval_min)
+	return get_duration(storm_interval_min) * GameMode.storm_interval_mult()
 
 func get_storm_interval_max() -> float:
-	return get_duration(storm_interval_max)
+	return get_duration(storm_interval_max) * GameMode.storm_interval_mult()
+
+## Severidad que el modo suma a toda tormenta (Supervivencia: +1). StormCycle la
+## lee aqui para seguir sin conocer a nadie mas que a GameConfig.
+func get_storm_severity_bonus() -> int:
+	return GameMode.storm_severity_bonus()
 
 func get_storm_warning() -> float:
 	return get_duration(storm_warning)
@@ -1085,6 +1094,8 @@ func get_base_storage_cap(era: int) -> int:
 
 ## Tope de la bolsa compartida: escala con la era y con cada almacen en pie.
 func get_storage_cap(warehouse_count: int, era: int = 1) -> int:
+	if GameMode.infinite_resources():
+		return sandbox_storage_cap
 	return get_base_storage_cap(era) + (warehouse_count * warehouse_storage_bonus) + tech_storage_bonus
 
 # ── Deposit Helpers ──
@@ -1277,3 +1288,73 @@ var final_audit_extra_gun_chance := 0.35
 ## Perder no acaba la partida, pero tampoco se rifa la victoria: hay que
 ## reconstruir el ejercito antes de que la Regencia vuelva a bajar.
 var final_audit_resummon_min_units := 3
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Modos de juego ──
+# ══════════════════════════════════════════════════════════════════════
+# La tabla de reglas por modo. Lo que un modo no lista lo hereda de "campaign",
+# que es el juego de siempre. Quien lee esto es GameMode (scripts/services/
+# GameMode.gd); ningun servicio mira el modo directamente. Detalle y motivos en
+# docs/20-modos-de-juego.md.
+var game_mode_rules := {
+	"campaign": {
+		"storm": true,
+		"tithe": true,
+		"audit_on_capstone": true,
+		"capstone_wins": false,
+		"victory": true,
+		"resummon": true,
+		"offline": true,
+		"random_events": true,
+		"danger_events": true,
+		"infinite_resources": false,
+		"all_unlocked": false,
+		"sandbox_tools": false,
+		"storm_interval_mult": 1.0,
+		"storm_severity_bonus": 0,
+		"storm_damage_mult": 1.0,
+		"tithe_mult": 1.0,
+		"starting_resources_mult": 1.0,
+		"starting_resources": {},
+		"hidden_tips": [],
+	},
+	# Relajado: sin Tormenta, sin Diezmo, sin asedio. Los eventos buenos siguen;
+	# los danos (tormenta menor, accidente, plaga, bandidos) no salen.
+	"builder": {
+		"storm": false,
+		"tithe": false,
+		"audit_on_capstone": false,
+		"capstone_wins": true,
+		"danger_events": false,
+		"hidden_tips": ["storm_incoming", "storm_ash", "storm_started", "tithe", "ruined", "final_audit"],
+	},
+	# Dificil: tormentas mas seguidas y mas duras, Diezmo mas caro, menos con que
+	# empezar, nada de progreso offline y una sola Auditoria.
+	"survival": {
+		"resummon": false,
+		"offline": false,
+		"storm_interval_mult": 0.6,
+		"storm_severity_bonus": 1,
+		"storm_damage_mult": 1.25,
+		"tithe_mult": 1.5,
+		"starting_resources_mult": 0.75,
+	},
+	# Creativo / pruebas: todo abierto, recursos que no se acaban, la Tormenta y
+	# la Auditoria solo cuando se invocan a mano. Sin victoria.
+	"sandbox": {
+		"storm": false,
+		"audit_on_capstone": false,
+		"victory": false,
+		"random_events": false,
+		"infinite_resources": true,
+		"all_unlocked": true,
+		"sandbox_tools": true,
+		"starting_resources": {"gold": 20000, "steel": 20000, "oil": 20000, "wood": 20000},
+		"hidden_tips": ["final_audit"],
+	},
+}
+
+## Sandbox: la bolsa compartida no se llena nunca en la practica, y cada recurso
+## se rellena hasta este suelo cada vez que se gasta.
+var sandbox_storage_cap := 1000000
+var sandbox_resource_floor := 20000
