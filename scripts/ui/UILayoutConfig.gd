@@ -164,10 +164,11 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
-	## Encima del boton CONSTRUIR (bottom_center: 20 de margen + 44 de boton).
+	## Encima del boton CONSTRUIR (bottom_center: 20 de margen + 64 de boton
+	## + 12 de hueco; ConstructionMenu.BUILD_BTN_H).
 	"tip_bottom_center": {
 		"anchor": Rect2(0.5, 1, 0.5, 1),
-		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 80},
+		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 96},
 		"max_size": Vector2(320, 0),
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_BEGIN,

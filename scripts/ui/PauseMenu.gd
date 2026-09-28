@@ -141,12 +141,20 @@ func _setup_ui() -> void:
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	column.add_child(_scroll)
+	# Aire a los lados: el recorte del scroll se comia el borde de los botones
+	# y, a la derecha, deja sitio a la barra de desplazamiento en el movil.
+	var pad := MarginContainer.new()
+	pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pad.add_theme_constant_override("margin_left", 6)
+	pad.add_theme_constant_override("margin_right", 10)
+	pad.add_theme_constant_override("margin_bottom", 4)
+	_scroll.add_child(pad)
 	_groups = GridContainer.new()
 	_groups.columns = 2
 	_groups.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_groups.add_theme_constant_override("h_separation", 16)
 	_groups.add_theme_constant_override("v_separation", 12)
-	_scroll.add_child(_groups)
+	pad.add_child(_groups)
 
 	# ── COLONIA ──
 	var colony := _make_group("ColonyGroup", Tr.t("LBL_MENU_GROUP_COLONY"), Tr.t("LBL_MENU_GROUP_COLONY_HINT"))

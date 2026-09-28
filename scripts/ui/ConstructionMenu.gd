@@ -121,6 +121,10 @@ func _setup_ui() -> void:
 	_build_btn.custom_minimum_size = Vector2(BUILD_BTN_W, BUILD_BTN_H)
 	UILayoutManager.apply_layout("ConstructionMenu.button", _build_btn)
 	UITheme.style_button(_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
+	# El primario del juego se distingue en reposo: metal mas claro y borde de
+	# laton, no el mismo verde apagado que cualquier boton.
+	_build_btn.add_theme_stylebox_override("normal", UITheme._button_style(
+		UITheme._metal_tint(UITheme.POSITIVE, 1.35), UITheme.POSITIVE, UITheme.ACCENT, 4))
 	_build_btn.pressed.connect(_open)
 	_root.add_child(_build_btn)
 	HudRegistry.register("ConstructionMenu.button", _build_btn)
