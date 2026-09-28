@@ -587,8 +587,10 @@ func test_each_era_opens_because_of_the_building_the_design_says() -> void:
 		["first_sawmill", "first_gold_mine", "first_warehouse"])
 	assert_int(ProgressionManager.current_era).is_equal(1)
 	assert_bool(ResourceManager.is_unlocked(ResourceManager.Type.STEEL)).is_false()
-	# Y salir de FUNDACION es lo que despierta el reloj de la Tormenta.
-	assert_bool(StormManager.is_armed()).is_true()
+	# La era 1 es el Acto I: nadie nos mira. El reloj de la Tormenta duerme hasta
+	# que humea la primera Fundicion (GameConfig.storm_arm_phase, docs/22).
+	assert_bool(StormManager.is_armed()).override_failure_message(
+		"la Tormenta se armo en la era 1, antes de la primera Fundicion").is_false()
 
 	# ── La Fundicion abre la Era 2, pero solo cuando esta terminada ──
 	_bankroll()
@@ -599,6 +601,8 @@ func test_each_era_opens_because_of_the_building_the_design_says() -> void:
 	_finish_building()
 	assert_int(ProgressionManager.current_era).is_equal(2)
 	assert_bool(ResourceManager.is_unlocked(ResourceManager.Type.STEEL)).is_true()
+	# Y ahora si: las chimeneas de la Fundicion son lo que la Regencia ve.
+	assert_bool(StormManager.is_armed()).is_true()
 	assert_bool(ProgressionManager.is_milestone_completed("era_2")).is_true()
 	assert_array(_eras).contains([2])
 
@@ -748,10 +752,16 @@ func test_a_whole_storm_cycle_bites_the_base_and_settles_its_tithe() -> void:
 	# el hecho: o hay tablero, o ya se resolvio.
 	_advance_storm_until_the_assessors_arrive()
 
-	# Algo cayo, y no fue el Nucleo. La regla del Nucleo es el suelo de la
-	# partida: se puede caer hasta el fondo, no se puede perder.
-	assert_int(_ruined.size()).override_failure_message(
-		"una tormenta a severidad maxima no dejo un solo edificio en ruinas").is_greater(0)
+	# Algo quedo tocado de verdad, y no fue el Nucleo. La regla del Nucleo es el
+	# suelo de la partida: se puede caer hasta el fondo, no se puede perder. (Con
+	# dos torres en pie una severidad maxima deja torres y cuartel por debajo de
+	# la mitad; sin torres, en ruinas: GameConfig.storm_damage_per_tick.)
+	var hurt := 0
+	for info in GridManager.get_all_buildings():
+		if BuildingHealth.get_health_ratio(info["node"]) <= 0.5:
+			hurt += 1
+	assert_int(hurt + _ruined.size()).override_failure_message(
+		"una tormenta a severidad maxima no dejo un solo edificio ni a la mitad").is_greater(0)
 	assert_bool(BuildingHealth.is_ruined(nucleo)).override_failure_message(
 		"el Nucleo se rompio: eso no puede pasar nunca").is_false()
 	assert_int(BuildingHealth.get_health(nucleo)).is_equal(BuildingHealth.get_max_health(nucleo))

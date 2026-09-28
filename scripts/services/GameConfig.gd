@@ -858,8 +858,13 @@ func get_combat_ai_step_delay() -> float:
 
 ## How long the calm lasts. A range, not a metronome: a storm you can set your
 ## watch by stops being weather and becomes a spreadsheet column.
-var storm_interval_min := 240.0
-var storm_interval_max := 420.0
+##
+## Linea jugable (docs/22-linea-jugable.md): con 240-420 s la Tormenta volvia cada
+## 7-10 minutos, 35-45 tormentas en una partida, y cada Diezmo es un tablero de
+## 4-7 minutos: el jugador pasaba casi la mitad del tiempo peleando la misma
+## pelea. Con 360-600 s son 9-18 tormentas hasta la victoria.
+var storm_interval_min := 360.0
+var storm_interval_max := 600.0
 
 ## The three phases are always exactly this long, in this order: Warning, Ash,
 ## Storm. The arrival is uncertain; what happens once it starts never is. That
@@ -870,11 +875,18 @@ var storm_duration := 60.0
 
 ## En que fase de la colonia se arma el reloj de la Tormenta. Hasta ella no
 ## existe: la colonia todavia no sale en el libro.
-var storm_arm_phase: int = Phase.SETTLEMENT
+##
+## EXPANSION = la primera Fundicion (era 2). Es el Acto II del diseno ("llega la
+## primera Tormenta"): las chimeneas de la Fundicion son lo que se ve desde el
+## mar. Armada con el primer Aserradero (antes), la primera tormenta caia en el
+## minuto ~9 de una colonia que no puede tener Cuartel hasta la era 2, y el
+## Diezmo se cobraba en obreros sin que el jugador hubiera podido hacer nada.
+var storm_arm_phase: int = Phase.EXPANSION
 
 ## The first storm is deliberately late and gentle: it has to teach the cycle,
-## not end the run.
-var storm_first_interval := 420.0
+## not end the run. Diez minutos desde la Fundicion: lo justo para levantar el
+## Cuartel y la guarnicion que la pelea. Nunca menor que storm_interval_max.
+var storm_first_interval := 600.0
 var storm_first_severity := 1
 
 ## One Warning in four turns out to be nothing. The player still paid to prepare,
@@ -906,7 +918,14 @@ func get_event_production_multiplier() -> float:
 	return event_production_multiplier * random_event_production_multiplier
 ## Morale lost per tick of ash, and how often those ticks land. The Warning
 ## costs none of it.
-var storm_morale_per_tick := 2.0
+##
+## Por punto de severidad, con decimales (StormManager lleva la cuenta). Una
+## tormenta tiene 12 tics de ceniza y 12 de tormenta (x3): se lleva 12 puntos de
+## moral por punto de severidad. Severidad 1 = -12 (se nota y se recupera en dos
+## minutos), 3 = -36, 5 = -60 (muerde: hacen falta decoraciones o moral alta de
+## entrada). Con el 2,0 de antes una tormenta de severidad 1 se llevaba 96 puntos
+## y la moral vivia en 0 a partir de la segunda.
+var storm_morale_per_tick := 0.25
 ## The Storm bleeds this much harder than the Ash. Same clock, three times the
 ## bill — the difference between the two phases has to be felt, not read.
 var storm_morale_storm_multiplier := 3.0
@@ -921,7 +940,14 @@ var storm_buildings_per_severity := 6
 
 ## Daño por tic de tormenta, como fracción de la salud máxima del edificio. Se
 ## multiplica por la severidad: una tormenta fuerte deja la base en ruinas.
-var storm_damage_per_tick := 0.06
+##
+## 0,03 y no 0,06: son 24 mordiscos por tormenta y van primero a torres y
+## cuarteles. A 0,06 una severidad 3 ya arruinaba las dos torres ANTES del Diezmo,
+## asi que sus dotaciones no llegaban nunca al tablero que venian a defender (la
+## sonda: 1-3 Diezmos echados de ~40 por partida, con guarnicion de cinco). A
+## 0,03 una severidad 5 deja las torres
+## tocadas (~15% de vida con dos en pie) y sin torres las arruina.
+var storm_damage_per_tick := 0.03
 ## Cuántos edificios muerde cada tic. No los toca todos: la tormenta se siente
 ## caprichosa, y eso hace que proteger los importantes signifique algo.
 var storm_buildings_hit_per_tick := 2
