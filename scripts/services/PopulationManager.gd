@@ -1,4 +1,5 @@
 extends Node
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 ## Manages population, workers, morale, and resource consumption.
 ## Population lives in houses. Workers are assigned to production buildings.
 ## Population consumes resources each tick. Low supply = morale drop.
@@ -24,6 +25,8 @@ var _unpaid_ticks := 0
 
 func _ready() -> void:
 	EventBus.construction_completed.connect(_on_building_completed)
+	# Una carretera es instantanea: al ponerla puede conectar algo que estaba suelto.
+	EventBus.building_placed.connect(func(_d, _c): _recalculate_all())
 	EventBus.building_demolished.connect(_on_building_demolished)
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
 	# La moral es de esta casa: ArmyManager avisa de la desercion por EventBus y
@@ -232,11 +235,29 @@ func _recalculate_all() -> void:
 	_used_workers = 0
 	_morale_bonus = 0
 
+	# Sin carretera hasta el Nucleo, un edificio no funciona (2026-09-28): ni
+	# recibe trabajadores, ni una vivienda da sitio, ni produce (ProductionManager
+	# mira la misma meta `connected`). Se calcula la red una vez por recuento.
+	var has_core: bool = not Rules.core_cells().is_empty()
+	var network: Dictionary = Rules.connected_roads() if has_core else {}
+	var connection_changed := false
+
 	# First pass: count capacity and morale
 	var buildings_needing_workers: Array = []
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info["data"]
 		var node: Node = info.get("node", null)
+		var connected := true
+		if has_core and not data.is_core and data.id != Rules.ROAD_ID:
+			connected = Rules.touches_network(info.get("cells", []), network)
+		if node and is_instance_valid(node):
+			if bool(node.get_meta("connected", true)) != connected:
+				connection_changed = true
+			node.set_meta("connected", connected)
+		if not connected:
+			if node and is_instance_valid(node) and node.has_meta("staffed"):
+				node.set_meta("staffed", false)
+			continue
 		# Skip buildings under construction
 		if node and node is Node and node.has_meta("under_construction"):
 			if node.has_meta("staffed"):
@@ -269,7 +290,9 @@ func _recalculate_all() -> void:
 
 	if _max_population != old_max:
 		EventBus.population_changed.emit(_population, _max_population)
-	if _used_workers != old_workers:
+	# Tambien si solo cambio quien esta conectado: los carteles de estado
+	# ("sin carretera") se repintan con esta senal.
+	if _used_workers != old_workers or connection_changed:
 		EventBus.workers_changed.emit(_used_workers, _population)
 
 ## Check if a specific building node is staffed (has enough workers assigned).

@@ -102,6 +102,18 @@ func _build(building_id: String) -> Node3D:
 	assert_bool(GridManager.place_building(origin, data, node)).override_failure_message(
 		"no cupo %s en %s" % [building_id, origin]).is_true()
 	_placed.append(node)
+	# Su carretera hasta el Nucleo, como la tenderia el juego: sin ella el
+	# edificio no recibe gente ni produce (PopulationManager, meta `connected`).
+	if not data.is_core and building_id != "road":
+		var route: Variant = Rules.road_route(origin, data.grid_size)
+		if route != null:
+			var road: BuildingData = Rules.load_building_data("road")
+			for c in route:
+				var tile := Node3D.new()
+				if GridManager.place_building(c, road, tile):
+					_placed.append(tile)
+				else:
+					tile.free()
 	if building_id == "warehouse":
 		ResourceManager.set_warehouse_count(Rules.count_building("warehouse"))
 	# Las fases avanzan con los mismos edificios que en partida
@@ -162,6 +174,14 @@ func _take(step: Dictionary) -> void:
 			TechTreeManager._apply_tech_bonus(TechTreeManager.get_tech(String(step["id"])))
 		"sell":
 			MarketManager.sell(String(step["id"]), int(step["amount"]))
+		"make":
+			# Como entrenar: el taller termina al instante. Se paga la receta que
+			# _give puso en la bolsa y entra lo que el paso pide (el jugador repetiria
+			# la receta hasta juntarlo; aqui se prueba el camino, no el reloj).
+			assert_bool(_first(String(step["building"])) != null).override_failure_message(
+				"el paso %s pide un taller que no esta en pie" % str(step)).is_true()
+			ResourceManager.spend_cost(Objectives.step_cost(step))
+			ResourceManager.add(ResourceManager.name_to_type(String(step["id"])), int(step["amount"]))
 
 func _assert_readable(step: Dictionary, where: String) -> void:
 	var text: Dictionary = Objectives.describe(step)

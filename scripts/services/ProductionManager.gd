@@ -282,6 +282,9 @@ func _tick_production(delta: float) -> void:
 			continue
 		if node.has_meta("under_construction"):
 			continue
+		# Sin carretera hasta el Nucleo no produce (PopulationManager pone la meta).
+		if not bool(node.get_meta("connected", true)):
+			continue
 		_producing[node]["timer"] += delta
 		var data: BuildingData = _producing[node]["data"]
 		var interval := GameConfig.get_production_interval(data.production_interval)
@@ -451,9 +454,4 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 	return earnings
 
 func _res_to_type(res_name: String) -> int:
-	match res_name:
-		"gold": return ResourceManager.Type.GOLD
-		"steel": return ResourceManager.Type.STEEL
-		"oil": return ResourceManager.Type.OIL
-		"wood": return ResourceManager.Type.WOOD
-	return -1
+	return ResourceManager.name_to_type(res_name)

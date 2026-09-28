@@ -123,6 +123,11 @@ static func next_step() -> Dictionary:
 	return _support_or(target)
 
 static func _support_or(target: Dictionary) -> Dictionary:
+	# Lo que el paso pide del taller va antes que cualquier otra cosa: sin
+	# fabricarlo, juntar oro no acerca al paso.
+	var make: Dictionary = make_step_for(target)
+	if not make.is_empty():
+		return make
 	var support: Dictionary = _support_step(target)
 	if support.is_empty():
 		return target
@@ -130,6 +135,33 @@ static func _support_or(target: Dictionary) -> Dictionary:
 	# obreros para atenderlo es un consejo que el juego rechaza al hacer clic.
 	var hands: Dictionary = _workers_step(support)
 	return hands if not hands.is_empty() else support
+
+## "Fabrica vigas en la Fundicion" si `target` pide un material que falta y su
+## edificio esta en pie. {} si no pide materiales, ya los hay, o aun no hay donde
+## fabricarlos (entonces manda el requisito del propio paso).
+static func make_step_for(target: Dictionary) -> Dictionary:
+	# Si el paso ni cabe en la bolsa, lo primero es el almacen: fabricar para
+	# algo que no se puede pagar no acerca a nada.
+	if _cost_total(step_cost(target)) > ResourceManager.get_storage_cap():
+		return {}
+	var missing: Dictionary = missing_for(target)
+	for res in missing:
+		if not ResourceManager.is_material_name(String(res)):
+			continue
+		var source: String = GameConfig.get_material_source(String(res))
+		if source == "" or Rules.count_building(source) < 1:
+			continue
+		return {"kind": "make", "id": String(res), "building": source,
+			"amount": int(missing[res]), "why": "OBJ_WHY_MAKE"}
+	return {}
+
+## La receta del taller que da `material` en su edificio, o {}.
+static func material_recipe(material: String) -> Dictionary:
+	var source: String = GameConfig.get_material_source(material)
+	for proc in GameConfig.get_processes_for(source):
+		if (proc.get("produces", {}) as Dictionary).has(material):
+			return proc
+	return {}
 
 ## Una casa, si `step` pide obreros que no hay ni van a nacer. {} si no hace falta.
 static func _workers_step(step: Dictionary) -> Dictionary:
@@ -338,6 +370,11 @@ static func step_cost(step: Dictionary) -> Dictionary:
 			for res_name in raw_tech:
 				cost[ResourceManager.name_to_type(res_name)] = int(raw_tech[res_name])
 			return cost
+		"make":
+			var cost: Dictionary = {}
+			for res_name in material_recipe(String(step["id"])).get("cost", {}):
+				cost[ResourceManager.name_to_type(res_name)] = int(material_recipe(String(step["id"]))["cost"][res_name])
+			return cost
 		"train", "rebuild":
 			var cost: Dictionary = {}
 			var raw: Dictionary = GameConfig.get_unit_def(String(step["id"])).get("cost", {})
@@ -458,9 +495,12 @@ static func _slowest_missing(step: Dictionary, net: Dictionary) -> String:
 			worst_eta = eta
 	return worst
 
+## Lo que el coste ocupa de la bolsa: los materiales van al taller y no cuentan.
 static func _cost_total(cost: Dictionary) -> int:
 	var total := 0
 	for type in cost:
+		if ResourceManager.is_material(int(type)):
+			continue
 		total += int(cost[type])
 	return total
 
@@ -659,6 +699,10 @@ static func describe(step: Dictionary) -> Dictionary:
 		"research":
 			var tech: Dictionary = TechTreeManager.get_tech(String(step["id"]))
 			title = Tr.t("OBJ_DO_RESEARCH") % Tr.t(String(tech.get("name", step["id"])))
+		"make":
+			var src: BuildingData = Rules.load_building_data(String(step.get("building", "")))
+			title = Tr.t("OBJ_DO_MAKE") % [int(step.get("amount", 0)), Tr.res_name(String(step["id"])),
+				src.get_display_name() if src != null else String(step.get("building", ""))]
 		"siege":
 			title = Tr.t("OBJ_DO_SIEGE")
 		"resummon":
@@ -732,6 +776,14 @@ static func blocker(step: Dictionary) -> String:
 				var short: Dictionary = TechTreeManager.get_missing_cost(String(step["id"]))
 				return Tr.t("OBJ_MISSING") % Tr.amount_list(short)
 			return Tr.t(reason)
+		"make":
+			var recipe: Dictionary = material_recipe(String(step["id"]))
+			var need := {}
+			for res_name in recipe.get("cost", {}):
+				var short: int = int(recipe["cost"][res_name]) - ResourceManager.get_amount(ResourceManager.name_to_type(res_name))
+				if short > 0:
+					need[res_name] = short
+			return "" if need.is_empty() else Tr.t("OBJ_MISSING") % Tr.amount_list(need)
 		"siege":
 			if ProgressionManager.is_final_audit_active():
 				return Tr.t("OBJ_SIEGE_UNDER_WAY")

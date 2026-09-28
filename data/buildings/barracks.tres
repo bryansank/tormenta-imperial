@@ -14,6 +14,7 @@ cost_gold = 250
 cost_steel = 100
 cost_oil = 0
 cost_wood = 80
+cost_materials = {"planks": 10}
 build_time = 15.0
 produces_gold = 0
 produces_steel = 0

@@ -382,6 +382,12 @@ const TEX_PANEL := "res://assets/textures/ui/panel_metal.png"          # 128² f
 const TEX_PANEL_INSET := "res://assets/textures/ui/panel_inset_metal.png"  # 96² thin frame
 const TEX_BUTTON := "res://assets/textures/ui/button_metal.png"        # 160x56 beveled
 
+## Placas y botones de metal texturado, apagados (2026-09-28): el grano del
+## metal bajo el texto costaba leerlo. Todo panel y boton usa su caja lisa (la
+## de siempre como respaldo), que respeta la paleta, el contraste y la
+## opacidad. Las texturas siguen en assets/ por si vuelven.
+const METAL_TEXTURES := false
+
 static var _tex_cache := {}
 
 static func _tex(path: String) -> Texture2D:
@@ -399,7 +405,7 @@ static func _tex(path: String) -> Texture2D:
 ## texture isn't imported yet, so callers can fall back to a flat box.
 static func _tex_box(path: String, slice: int, content: int, modulate: Color) -> StyleBoxTexture:
 	# Alto contraste: nada de placa ruidosa, caja lisa opaca con borde claro.
-	if high_contrast:
+	if high_contrast or not METAL_TEXTURES:
 		return null
 	var tex := _tex(path)
 	if tex == null:
@@ -784,8 +790,10 @@ static func resource_color(res_id: String) -> Color:
 			return RES_OIL
 		"wood":
 			return RES_WOOD
-		_:
-			return TEXT
+	# Materiales del taller: su color de GameConfig (no cambian con la paleta).
+	if GameConfig.resource_colors.has(res_id):
+		return GameConfig.resource_colors[res_id]
+	return TEXT
 
 ## Ficha de recurso del HUD: [icono] 2480. La cantidad es el nodo "Amount"
 ## (ver chip_amount) para que el panel la actualice sin guardar mas punteros.

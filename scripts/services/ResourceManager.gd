@@ -8,13 +8,29 @@ extends Node
 ## makes spending before the Storm the right play. Anything that does not fit is
 ## lost, and the player is told the first time it happens.
 
-enum Type { GOLD, STEEL, OIL, WOOD }
+## Los cuatro recursos de la bolsa y, detras (2026-09-28), los cuatro
+## MATERIALES que fabrican los edificios especializados con su recurso: tablones
+## (Aserradero), lingotes (Mina de oro), vigas de acero (Fundicion) y combustible
+## (Refineria). Los piden los edificios avanzados. Van al final del enum para no
+## mover los numeros de los de siempre.
+##
+## Los materiales NO ocupan la bolsa compartida: se guardan en el taller del
+## Nucleo. La bolsa esta cuadrada al numero exacto de la mejora final del Cuartel
+## General (3500 sin tecnologias); si los materiales contaran, ya no cabria. El
+## Diezmo tampoco se los lleva: cobra lo que hay en el almacen.
+enum Type { GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL }
+
+const MATERIALS := [Type.PLANKS, Type.INGOTS, Type.BEAMS, Type.FUEL]
 
 var _resources: Dictionary = {
 	Type.GOLD: 300,
 	Type.STEEL: 0,
 	Type.OIL: 0,
 	Type.WOOD: 200,
+	Type.PLANKS: 0,
+	Type.INGOTS: 0,
+	Type.BEAMS: 0,
+	Type.FUEL: 0,
 }
 
 var _names: Dictionary = {
@@ -22,6 +38,10 @@ var _names: Dictionary = {
 	Type.STEEL: "steel",
 	Type.OIL: "oil",
 	Type.WOOD: "wood",
+	Type.PLANKS: "planks",
+	Type.INGOTS: "ingots",
+	Type.BEAMS: "beams",
+	Type.FUEL: "fuel",
 }
 
 var _unlocked: Dictionary = {
@@ -29,6 +49,10 @@ var _unlocked: Dictionary = {
 	Type.STEEL: false,
 	Type.OIL: false,
 	Type.WOOD: true,
+	Type.PLANKS: false,
+	Type.INGOTS: false,
+	Type.BEAMS: false,
+	Type.FUEL: false,
 }
 
 var _warehouse_count := 0
@@ -82,6 +106,13 @@ func get_amount(type: Type) -> int:
 func get_type_name(type: Type) -> String:
 	return _names.get(type, "unknown")
 
+## Es un material (taller) y no un recurso de la bolsa?
+static func is_material(type: int) -> bool:
+	return type in MATERIALS
+
+func is_material_name(res_name: String) -> bool:
+	return is_material(name_to_type(res_name))
+
 func get_storage_cap() -> int:
 	return GameConfig.get_storage_cap(_warehouse_count, _era)
 
@@ -89,6 +120,8 @@ func get_storage_cap() -> int:
 func get_total_stored() -> int:
 	var total := 0
 	for type in _resources:
+		if is_material(type):
+			continue
 		total += int(_resources[type])
 	return total
 
@@ -148,8 +181,8 @@ func add(type: Type, amount: int) -> int:
 		_top_up()
 		return _resources[type]
 	# One pool: what comes in competes with everything already inside, not with a
-	# per-resource ceiling.
-	var stored: int = mini(amount, get_free_space())
+	# per-resource ceiling. Los materiales van al taller, fuera de la bolsa.
+	var stored: int = amount if is_material(type) else mini(amount, get_free_space())
 	var lost := amount - stored
 	_resources[type] = current + stored
 	# Emitted even when stored is 0 so the HUD repaints the counter red on a full bag.
@@ -226,6 +259,9 @@ func reset() -> void:
 		Type.OIL: false,
 		Type.WOOD: true,
 	}
+	for m in MATERIALS:
+		_resources[m] = int(cfg.get(_names[m], 0))
+		_unlocked[m] = false
 	if GameMode.all_unlocked():
 		for type in _unlocked:
 			_unlocked[type] = true
@@ -265,12 +301,14 @@ func clamp_to_storage() -> bool:
 	var trimmed := {}
 	var assigned := 0
 	for type in _resources:
+		if is_material(type):
+			continue
 		var share: int = int(float(_resources[type]) * float(cap) / float(total))
 		trimmed[type] = share
 		assigned += share
 	# Truncating leaves crumbs unassigned (at most one per resource). They go to the
 	# most abundant ones, which are the ones the split shortchanged the most.
-	var order: Array = _resources.keys()
+	var order: Array = trimmed.keys()
 	order.sort_custom(func(a, b): return int(_resources[a]) > int(_resources[b]))
 	var leftover := cap - assigned
 	for type in order:

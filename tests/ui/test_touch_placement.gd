@@ -170,7 +170,7 @@ func _check_highlight(view: String) -> void:
 	var spots: Array = _assist().spots
 	assert_array(spots).is_not_empty()
 	for o in spots:
-		assert_bool(Rules.evaluate_placement("sawmill", o, Vector2i(2, 1), _map)["ok"]).is_true()
+		assert_bool(Rules.evaluate_placement("sawmill", o, Vector2i(2, 2), _map)["ok"]).is_true()
 	# El fantasma sale ya en un sitio valido, verde, con ✓ a mano.
 	assert_bool(_assist().is_valid(_assist().cell)).is_true()
 	assert_bool(_assist().confirm_button().visible).is_true()
@@ -202,7 +202,7 @@ func _check_tap_then_confirm(view: String) -> void:
 	# El primer toque solo lleva el fantasma: no se cobra ni se planta nada.
 	assert_int(_sawmills()).is_equal(0)
 	assert_bool(_assist().is_valid(_assist().cell)).is_true()
-	var cells: Array = GridManager.cells_for(_assist().cell, Vector2i(2, 1))
+	var cells: Array = GridManager.cells_for(_assist().cell, Vector2i(2, 2))
 	assert_bool(cells.has(target)).is_true()
 	# Tocar el fantasma lo planta.
 	var gold := ResourceManager.get_amount(ResourceManager.Type.GOLD)
@@ -235,7 +235,7 @@ func _check_tremor(view: String) -> void:
 	var target := _other_spot()
 	_tap(_screen(target), shake)
 	assert_bool(InputService.touch_pan_consumed_click()).is_false()
-	assert_bool(GridManager.cells_for(_assist().cell, Vector2i(2, 1)).has(target)).is_true()
+	assert_bool(GridManager.cells_for(_assist().cell, Vector2i(2, 2)).has(target)).is_true()
 	# Y el toque tembloroso sobre el fantasma sigue plantando.
 	_tap(_screen(target), shake)
 	assert_int(_sawmills()).is_equal(1)

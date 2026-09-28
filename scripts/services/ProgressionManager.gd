@@ -282,8 +282,19 @@ func _on_construction_completed(node: Node) -> void:
 		return
 	var data: BuildingData = info["data"]
 	_check_era_advance(data.id)
+	_unlock_material_of(data.id)
 	_check_building_milestones(data.id)
 	_check_military_milestone()
+
+## El primer edificio especializado terminado trae su material al juego: el
+## taller ya lo puede fabricar y los edificios que lo piden dejan de salir
+## bloqueados. Idempotente (ResourceManager.unlock no repite).
+func _unlock_material_of(building_id: String) -> void:
+	var m: String = GameConfig.get_material_of(building_id)
+	if m != "":
+		var type: int = ResourceManager.name_to_type(m)
+		if type != -1:
+			ResourceManager.unlock(type)
 
 func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
 	_stats["buildings_built"] += 1

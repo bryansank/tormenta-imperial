@@ -104,23 +104,24 @@ func test_high_contrast_panels_are_opaque_flat_boxes_with_a_clear_border() -> vo
 	assert_int(card.border_width_top).is_equal(3)
 	assert_float(card.bg_color.a).is_equal(1.0)
 
-func test_normal_contrast_keeps_the_metal_plates() -> void:
+## Sin placas de metal (2026-09-28): el texto se lee sobre una caja lisa.
+func test_panels_and_buttons_are_flat_boxes() -> void:
 	UITheme.configure()
-	assert_object(UITheme.make_panel_style()).is_instanceof(StyleBoxTexture)
+	assert_object(UITheme.make_panel_style()).is_instanceof(StyleBoxFlat)
+	var btn := Button.new()
+	UITheme.style_button(btn)
+	assert_object(btn.get_theme_stylebox("normal")).is_instanceof(StyleBoxFlat)
+	btn.free()
 
 # ── Opacidad ─────────────────────────────────────────────────────────
 
-func test_panel_opacity_fades_hud_cards_and_plates_not_buttons() -> void:
+func test_panel_opacity_fades_hud_cards_and_panels() -> void:
 	UITheme.configure("default", false, 0.5)
 	assert_float(UITheme.HUD_BG.a).is_equal_approx(0.46, 0.001)
 	assert_float(UITheme.make_hud_card_style().bg_color.a).is_equal_approx(0.46, 0.001)
-	var plate := UITheme.make_panel_style() as StyleBoxTexture
-	assert_float(plate.modulate_color.a).is_equal_approx(0.5, 0.001)
-	var btn := Button.new()
-	UITheme.style_button(btn)
-	var normal := btn.get_theme_stylebox("normal") as StyleBoxTexture
-	assert_float(normal.modulate_color.a).is_equal(1.0)
-	btn.free()
+	var panel := UITheme.make_panel_style() as StyleBoxFlat
+	assert_float(panel.bg_color.a).is_less(0.95)
+	UITheme.configure()
 
 func test_opacity_is_clamped() -> void:
 	UITheme.configure("default", false, 0.0)

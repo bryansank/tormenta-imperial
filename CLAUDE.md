@@ -205,21 +205,76 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Building | Size | Cost (G/S/O/W) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
 | Nucleo (core) | 3x3 | Free | 0 | +5 pop capacity; manual processes only | - |
-| House | 1x1 | 50/0/0/30 | 0 | +6 pop capacity | 1 |
-| Sawmill | 2x1 | 80/0/0/50 | 2 | 6 wood/12s | 1 |
+| House | 2x2 | 50/0/0/30 | 0 | +6 workers (room in houses) | 1 |
+| Sawmill | 2x2 | 80/0/0/50 | 2 | 6 wood/12s | 1 |
 | Gold Mine | 2x2 | 120/0/0/80 | 3 | 8 gold/12s | 1 |
-| Warehouse | 1x1 | 60/0/0/40 | 1 | +500 shared storage | 1 |
-| Foundry | 2x1 | 200/0/0/120 | 3 | 5 steel/15s | 1->2 |
+| Warehouse | 2x2 | 60/0/0/40 | 1 | +500 shared storage | 1 |
+| Foundry | 2x2 | 200/0/0/120 | 3 | 5 steel/15s | 1->2 |
 | Barracks | 2x2 | 250/100/0/80 | 3 | Trains units (ArmyManager) | 2 |
 | Refinery | 2x2 | 300/150/0/100 | 4 | 4 oil/18s | 2->3 |
-| Tower | 1x1 | 150/60/20/30 | 1 | Storm mitigation + an artillery crew on defensive boards (only while operational) | 2-3 |
+| Tower | 2x2 | 150/60/20/30 | 1 | Storm mitigation + an artillery crew on defensive boards (only while operational) | 2-3 |
 | HQ (capstone) | 2x2 | 500/300/200/200 | 5 | 10 gold/20s | 3 |
-| Road | 1x1 | 10/0/0/5 | 0 | +2 morale | deco |
-| Garden | 1x1 | 30/0/0/20 | 0 | +5 morale | deco |
-| Fountain | 1x1 | 60/20/0/10 | 0 | +7 morale | deco |
-| Statue | 1x1 | 120/40/0/0 | 0 | +10 morale | deco |
+| Road | 1x1 | 1/0/0/0 | 0 | +2 morale | deco |
+| Garden | 2x2 | 30/0/0/20 | 0 | +5 morale | deco |
+| Fountain | 2x2 | 60/20/0/10 | 0 | +7 morale | deco |
+| Statue | 2x2 | 120/40/0/0 | 0 | +10 morale | deco |
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
+
+### Materials (2026-09-28)
+
+Four workshop materials, appended to `ResourceManager.Type`: `PLANKS` (Sawmill,
+"make_planks": 20 wood → 5), `INGOTS` (Gold Mine, 30 gold → 3), `BEAMS` (Foundry, 20
+steel + 10 wood → 4), `FUEL` (Refinery, 15 oil → 5) — the first process of each in
+`GameConfig.building_processes`; `GameConfig.material_sources` maps material →
+building. A material is unlocked when the first of its building finishes
+(`ProgressionManager._unlock_material_of`). They are **outside the shared storage**
+(`get_total_stored()` skips them, the Tithe does not take them) because the pool is
+tuned to the exact HQ L3 price. Advanced buildings ask for them via
+`BuildingData.cost_materials` (Barracks planks, Tower/Refinery beams, HQ beams +
+ingots + fuel, Statue ingots) and `hq_upgrade_costs`. The HUD shows them in a TALLER
+row; `Objectives.make_step_for()` turns a missing material into a `"make"` step.
+
+**Era gates:** Foundry (era 2) needs Sawmill + Gold Mine + House + Warehouse;
+Refinery (era 3) needs Foundry + Barracks (`building_prerequisites`).
+
+**Quick guide:** `scripts/ui/QuickGuide.gd`, one screen with four blocks (resources,
+extraction, buildings and roads, progress), opened by TutorialPanel once per game
+after the prologue (help id `quick_guide`); the same texts are `guide_qg_*` in the
+AYUDA index.
+
+### Road network (2026-09-28)
+
+- **Every building is at least 2x2**, except the road (1x1). GLBs made for 1x1 are
+  scaled up with `BuildingData.model_scale`; `BuildingData.instantiate_model()` is the
+  only way to spawn one.
+- **Everything touches a road joined to the Núcleo.** `PlacementRules.is_connected_spot()`
+  is part of `evaluate_placement()` (reason `"road"`, feedback `LBL_NEEDS_ROAD`); a new
+  road must touch the network or the Núcleo. No Núcleo on the grid (hand-built test
+  scenes) means no rule. A road whose removal would strand a building cannot be
+  demolished or moved (`road_removal_strands()`).
+- **The Núcleo starts with its sidewalk:** `GameManager.pave_core_ring()` lays the 16
+  road cells around it in `_new_game()`. Roads cost 1 gold, are drawn as full-cell
+  pavement with a curb on the unconnected sides (3D and 2D), and take no damage
+  (`BuildingHealth.is_immune()`: the Núcleo and roads).
+- `PlacementRules.road_route(origin, size)` gives the free cells to pave to join a
+  footprint (tests and `tools/line_probe_player.gd` use it); `walk_route(node)` gives
+  the road path from the Núcleo to a building.
+- **Workers you can see:** `scripts/map/WorkerWalkers.gd` (child of both placers)
+  sends little figures from the Núcleo along `walk_route()` when a building gets
+  staffed, plus one every 25 s as a shift change. View only; staffing stays in
+  PopulationManager.
+- **Auto-road:** `evaluate_placement()` accepts an unconnected spot when a free route
+  to the network exists and returns it as `"route"`; the placers charge building +
+  route together (`Rules.cost_with_route`, 1 gold per tile) and lay it with
+  `Rules.pave_route()` (emits `building_placed` per tile). Roads are instant
+  (`build_time = 0`). No route → reason `"road"` (`LBL_NEEDS_ROAD`).
+- **No road, no work:** `PopulationManager._recalculate_all()` sets the meta
+  `connected` on every building; an unconnected one gets no workers, a house gives no
+  room, ProductionManager skips it and its badge says "sin carretera" (`no_road`).
+- **Save format 2:** `_write_save()` writes `"format": 2`. A save without it (or older)
+  is copied to `user://save_game.v1-<date>.json` and a new game starts, with a notice
+  (`MSG_SAVE_OLD_FORMAT`). A test that writes a save fixture adds `"format"`.
 
 ### Population & Workers
 

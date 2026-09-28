@@ -126,6 +126,7 @@ func _build_ui() -> void:
 	# Deposit uses
 	_deposit_uses_label = UITheme.make_label("", "body", UITheme.WARNING)
 	_deposit_uses_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_deposit_uses_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_vbox.add_child(_deposit_uses_label)
 
 	# Construction state
@@ -403,7 +404,13 @@ func _show_deposit_panel() -> void:
 func _update_deposit_uses() -> void:
 	if _selected_node and _selected_node.has_meta("uses_remaining"):
 		var uses: int = _selected_node.get_meta("uses_remaining")
+		# Los usos y, debajo, la diferencia entre sacarlo a mano (se agota) y
+		# ponerle su edificio especializado (produce sin gastarlo).
+		var hint_key := "DEP_HINT_" + _selected_deposit_id.to_upper()
+		var hint := Tr.t(hint_key)
 		_deposit_uses_label.text = Tr.t("LBL_DEPOSIT_USES") % [uses]
+		if hint != hint_key:
+			_deposit_uses_label.text += "\n" + hint
 		_deposit_uses_label.visible = true
 	else:
 		_deposit_uses_label.visible = false

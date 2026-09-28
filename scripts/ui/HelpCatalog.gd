@@ -50,6 +50,15 @@ const ENTRIES := {
 		"title": "HELP_T_MENUS", "body": "HELP_B_MENUS", "target": "menu_button"},
 	"callout_skirmish": {"kind": "callout", "cat": CAT_ARMY, "basic": false,
 		"title": "HELP_T_SKIRMISH", "body": "LBL_HELP_SKIRMISH", "target": ""},
+	# ── Guia rapida (2026-09-28): los cuatro bloques de la pantalla del inicio ──
+	"guide_qg_resources": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "QG_RESOURCES_T", "body": "QG_RESOURCES_B", "target": "resources"},
+	"guide_qg_extract": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "QG_EXTRACT_T", "body": "QG_EXTRACT_B", "target": ""},
+	"guide_qg_buildings": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "QG_BUILDINGS_T", "body": "QG_BUILDINGS_B", "target": "build_button"},
+	"guide_qg_progress": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "QG_PROGRESS_T", "body": "QG_PROGRESS_B", "target": "objective"},
 	# ── Guias basicas (las antiguas paginas "Como se juega") ──
 	"guide_first_steps": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "TUT_PLAY_1_TITLE", "body": "HELP_B_FIRST_STEPS", "target": "build_button"},

@@ -239,6 +239,9 @@ func _setup_ui() -> void:
 
 	_grid_container = GridContainer.new()
 	_grid_container.columns = 3
+	# Tantas columnas como quepan: con tres fijas quedaba media lista vacia y
+	# habia que desplazar para ver edificios que cabian de sobra.
+	_grid_scroll.resized.connect(_fit_columns)
 	_grid_container.add_theme_constant_override("h_separation", 6)
 	_grid_container.add_theme_constant_override("v_separation", 6)
 	_grid_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -416,6 +419,17 @@ func _select_category(cat_id: String) -> void:
 ## Hace falta para marcar la seleccionada sin recrear la rejilla.
 var _card_styles: Dictionary = {}
 
+const CARD_W := 125.0
+const CARD_GAP := 6.0
+
+## Columnas de la rejilla para el ancho de la lista.
+static func columns_for(width: float) -> int:
+	return maxi(1, floori((width - 14.0 + CARD_GAP) / (CARD_W + CARD_GAP)))
+
+func _fit_columns() -> void:
+	if _grid_scroll != null and _grid_container != null:
+		_grid_container.columns = columns_for(_grid_scroll.size.x)
+
 func _refresh_grid() -> void:
 	for child in _grid_container.get_children():
 		child.queue_free()
@@ -490,24 +504,37 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		cost_label.custom_minimum_size.x = 110
 		vbox.add_child(cost_label)
 
+	# Lo que da una vivienda, en la propia tarjeta: "+6 trabajadores".
+	if data.population_capacity > 0 and not data.is_core:
+		var gain := UITheme.make_label(Tr.t("LBL_CARD_WORKERS") % data.population_capacity, "small", UITheme.POSITIVE)
+		gain.name = "CardGain"
+		gain.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(gain)
+
 	# Interaction (A14): el hover solo RESALTA; la seleccion cambia solo con
 	# clic y queda bloqueada hasta el siguiente. Antes pasar el raton por otra
 	# tarjeta cambiaba la seleccion y el detalle saltaba de edificio en edificio.
-	if not locked:
-		_card_styles[data.id] = {"style": style, "cat": cat_color}
-		card.gui_input.connect(func(event):
-			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-				_select_building(data)
-		)
-		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		card.mouse_entered.connect(func():
-			if not _is_selected(data):
-				style.bg_color = UITheme.CARD_BG.lightened(0.12)
-		)
-		card.mouse_exited.connect(func():
-			if not _is_selected(data):
-				style.bg_color = UITheme.CARD_BG
-		)
+	#
+	# Se elige al SOLTAR dentro de la tarjeta: arrastrar la lista (DragScroll)
+	# empieza encima de una tarjeta y no puede elegirla. Las bloqueadas tambien
+	# se pueden tocar: el detalle dice que les falta (antes no pasaba nada, y el
+	# Cuartel General parecia roto).
+	_card_styles[data.id] = {"style": style, "cat": cat_color if not locked else UITheme.TEXT_DIM, "locked": locked}
+	card.gui_input.connect(func(event):
+		if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT \
+				and Rect2(Vector2.ZERO, card.size.max(card.custom_minimum_size)).has_point(event.position):
+			_select_building(data)
+	)
+	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var base_bg: Color = UITheme.CARD_BG if not locked else UITheme.BTN_DISABLED
+	card.mouse_entered.connect(func():
+		if not _is_selected(data):
+			style.bg_color = base_bg.lightened(0.12)
+	)
+	card.mouse_exited.connect(func():
+		if not _is_selected(data):
+			style.bg_color = base_bg
+	)
 
 	return card
 
@@ -529,7 +556,8 @@ func _mark_selected_card() -> void:
 		var entry: Dictionary = _card_styles[id]
 		var style: StyleBoxFlat = entry["style"]
 		var selected: bool = _selected_data != null and _selected_data.id == id
-		style.bg_color = UITheme.CARD_BG.lightened(0.25) if selected else UITheme.CARD_BG
+		var base_bg: Color = UITheme.BTN_DISABLED if bool(entry.get("locked", false)) else UITheme.CARD_BG
+		style.bg_color = base_bg.lightened(0.25) if selected else base_bg
 		style.set_border_width_all(2 if selected else 0)
 		style.border_width_bottom = 3
 		style.border_color = UITheme.ACCENT if selected else entry["cat"]
@@ -592,8 +620,13 @@ func _select_building(data: BuildingData) -> void:
 
 	# Regla del yacimiento (PlacementAssist.rule_text): se dice aqui, no al fallar.
 	var rule := PlacementAssistScript.rule_text(data.id)
-	_detail_rule.text = ("▲ " + rule) if rule != "" else ""
-	_detail_rule.visible = rule != ""
+	var rules: Array = []
+	if rule != "":
+		rules.append("▲ " + rule)
+	if not data.is_core and data.id != "road":
+		rules.append("▲ " + Tr.t("LBL_RULE_ROAD"))
+	_detail_rule.text = "\n".join(rules)
+	_detail_rule.visible = not rules.is_empty()
 
 	# Extras
 	var extras: Array = []
@@ -621,7 +654,7 @@ func _load_preview_model(data: BuildingData) -> void:
 		_preview_icon.data = data
 		return
 	if data.model_scene:
-		_preview_model = data.model_scene.instantiate()
+		_preview_model = data.instantiate_model()
 	else:
 		_preview_model = DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
 	if not _preview_model:
@@ -659,7 +692,7 @@ func _on_resources_changed() -> void:
 	for card in _grid_container.get_children():
 		var label := card.find_child("CardCost", true, false) as Label
 		var id := String(card.get_meta("building_id", ""))
-		if label == null or not _card_styles.has(id):
+		if label == null or not _card_styles.has(id) or bool(_card_styles[id].get("locked", false)):
 			continue
 		var data: BuildingData = _data_by_id(id)
 		if data != null:
@@ -682,10 +715,11 @@ func _on_build_pressed() -> void:
 # ══════════════════════════════════════════════════════════════════════
 
 func _has_locked_resource_cost(data: BuildingData) -> bool:
-	if data.cost_steel > 0 and not ResourceManager.is_unlocked(ResourceManager.Type.STEEL):
-		return true
-	if data.cost_oil > 0 and not ResourceManager.is_unlocked(ResourceManager.Type.OIL):
-		return true
+	# Cualquier recurso o material del coste que aun no este en el juego.
+	var cost := data.get_cost()
+	for type in cost:
+		if not ResourceManager.is_unlocked(type) and ResourceManager.get_amount(type) < int(cost[type]):
+			return true
 	return false
 
 # ══════════════════════════════════════════════════════════════════════
@@ -730,7 +764,7 @@ func _generate_thumbnails() -> void:
 func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingData) -> void:
 	var model: Node3D = null
 	if data.model_scene:
-		model = data.model_scene.instantiate()
+		model = data.instantiate_model()
 	else:
 		model = DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
 	if not model:

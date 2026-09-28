@@ -130,6 +130,7 @@ func _close_view() -> void:
 func _write_seed() -> void:
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	f.store_string(JSON.stringify({
+		"format": GameManager.SAVE_FORMAT,
 		"resources": {"gold": 300, "steel": 0, "oil": 0, "wood": 200},
 		"buildings": BUILDINGS,
 		"deposits": DEPOSITS,
@@ -194,9 +195,9 @@ func test_a_save_written_by_the_3d_view_loads_in_the_2d_view() -> void:
 		if entry.has("construction_remaining"):
 			assert_bool(ProductionManager.is_constructing(node)).is_true()
 			assert_object(node.get_node_or_null("ConstructionLabel")).is_not_null()
-	# El aserradero girado ocupa 1x2.
-	assert_object(GridManager.get_building_at(Vector2i(15, 18))).is_same(GridManager.get_building_at(Vector2i(15, 17)))
-	assert_object(GridManager.get_building_at(Vector2i(16, 17))).is_null()
+	# El aserradero (2x2, girado) ocupa sus cuatro celdas.
+	for cell in GridManager.cells_for(Vector2i(15, 17), Vector2i(2, 2)):
+		assert_object(GridManager.get_building_at(cell)).is_same(GridManager.get_building_at(Vector2i(15, 17)))
 	# Los yacimientos, en su sitio, con sus usos.
 	for entry in DEPOSITS:
 		var cell := Vector2i(int(entry["cell_x"]), int(entry["cell_y"]))

@@ -41,6 +41,7 @@ func refresh() -> void:
 		"can_work": Badge3D.can_work(_data),
 		"under_construction": _building.has_meta("under_construction"),
 		"ruined": BuildingHealth.is_ruined(_building),
+		"connected": bool(_building.get_meta("connected", true)),
 		"busy": ProcessManager.is_busy(_building),
 		"needs_workers": _data.workers_required > 0,
 		"staffed": bool(_building.get_meta("staffed", false)),

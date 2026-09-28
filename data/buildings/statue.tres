@@ -6,14 +6,16 @@
 [resource]
 script = ExtResource("1")
 model_scene = ExtResource("2")
+model_scale = 1.6
 id = "statue"
 display_name = "Estatua Imperial"
 description = "Monumento que inspira a los trabajadores. Gran impulso a la moral."
-grid_size = Vector2i(1, 1)
+grid_size = Vector2i(2, 2)
 cost_gold = 120
 cost_steel = 40
 cost_oil = 0
 cost_wood = 0
+cost_materials = {"ingots": 3}
 build_time = 6.0
 produces_gold = 0
 produces_steel = 0
@@ -22,7 +24,7 @@ produces_wood = 0
 production_interval = 0.0
 workers_required = 0
 morale_bonus = 10
-mesh_height = 3.0
+mesh_height = 4.8
 mesh_color = Color(0.65, 0.6, 0.5, 1)
 max_health = 200
 is_decoration = true

@@ -269,7 +269,7 @@ func damage_priority(severity: int) -> Array:
 		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
-		if BuildingHealth.is_core(node):
+		if BuildingHealth.is_immune(node):
 			continue
 		if last_standing.get(data.id, null) == node:
 			continue
@@ -499,7 +499,7 @@ func _seizable_buildings() -> Array:
 		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
-		if BuildingHealth.is_core(node):
+		if BuildingHealth.is_immune(node):
 			continue
 		if data.is_decoration:
 			luxury.append(node)
@@ -553,15 +553,8 @@ func _industrial_footprint() -> int:
 	return count
 
 func _resource_name(type: int) -> String:
-	match type:
-		ResourceManager.Type.STEEL:
-			return "steel"
-		ResourceManager.Type.OIL:
-			return "oil"
-		ResourceManager.Type.WOOD:
-			return "wood"
-		_:
-			return "gold"
+	var n: String = ResourceManager.get_type_name(type)
+	return n if n != "unknown" else "gold"
 
 # ── Persistence ──────────────────────────────────────────────────────
 

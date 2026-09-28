@@ -198,9 +198,9 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 ## Create a road mesh with neighbor connectivity.
 ## neighbors is a bitmask: NORTH=1, EAST=2, SOUTH=4, WEST=8
 static func create_road(cell_size: float, neighbors: int = 0) -> Node3D:
-	var sx: float = cell_size * 0.9
-	var sz: float = cell_size * 0.9
-	return _build_road(sx, sz, neighbors)
+	# La celda entera (2026-09-28): dos tramos vecinos se tocan y la red se lee
+	# como una sola carretera, no como losas sueltas con cesped entre medias.
+	return _build_road(cell_size, cell_size, neighbors)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -215,7 +215,8 @@ static func create_road(cell_size: float, neighbors: int = 0) -> Node3D:
 ## scaled — the 3x3 footprint, the grid cells and the click hit-test are
 ## untouched. XZ stays close to 1 so the base does not spill onto neighbouring
 ## cells; the drama comes from height.
-const NUCLEO_SCALE := Vector3(1.08, 2.4, 1.08)
+## XZ en 1.0 desde el 2026-09-28: alrededor va la acera y la base no la pisa.
+const NUCLEO_SCALE := Vector3(1.0, 2.4, 1.0)
 
 static func _build_nucleo(sx: float, sz: float) -> Node3D:
 	var root: Node3D = Node3D.new()
@@ -1103,45 +1104,34 @@ static func _build_statue(sx: float, sz: float) -> Node3D:
 ## neighbors bitmask: NORTH=1 (Z-), EAST=2 (X+), SOUTH=4 (Z+), WEST=8 (X-)
 static func _build_road(sx: float, sz: float, neighbors: int = 0) -> Node3D:
 	var root: Node3D = Node3D.new()
-	var mat_pave := _metal(Color(0.35, 0.33, 0.3), 0.2, 0.85)
-	var mat_edge := _metal(Color(0.28, 0.26, 0.24), 0.3, 0.8)
-	var mat_line := _metal(Color(0.45, 0.42, 0.38), 0.15, 0.9)
+	var mat_pave := _metal(Color(0.34, 0.32, 0.29), 0.2, 0.85)
+	var mat_curb := _metal(Color(0.62, 0.58, 0.52), 0.1, 0.8)
+	var mat_line := _metal(Color(0.85, 0.72, 0.3), 0.1, 0.7)
 
 	var has_n := (neighbors & 1) != 0
 	var has_e := (neighbors & 2) != 0
 	var has_s := (neighbors & 4) != 0
 	var has_w := (neighbors & 8) != 0
 
-	# Center pad (always present)
-	_add_box(root, Vector3(0, 0.025, 0), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
+	# Pavimento de la celda entera: con el vecino, un solo firme.
+	_add_box(root, Vector3(0, 0.025, 0), Vector3(sx, 0.05, sz), mat_pave)
 
-	# Connection strips toward each neighbor
-	if has_n:
-		_add_box(root, Vector3(0, 0.025, -sz * 0.25), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
-	if has_s:
-		_add_box(root, Vector3(0, 0.025, sz * 0.25), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
-	if has_e:
-		_add_box(root, Vector3(sx * 0.25, 0.025, 0), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
-	if has_w:
-		_add_box(root, Vector3(-sx * 0.25, 0.025, 0), Vector3(sx * 0.5, 0.05, sz * 0.5), mat_pave)
-
-	# Edge stones on sides that DON'T connect
-	var half: float = sx * 0.48
-	var edge_h := 0.08
-	var edge_w := 0.06
+	# Acera (bordillo claro y algo alto) en cada lado que no sigue la calle.
+	var curb_w: float = sx * 0.16
+	var curb_h := 0.1
 	if not has_n:
-		_add_box(root, Vector3(0, 0.04, -half), Vector3(sx * 0.5 if neighbors == 0 else sx * 0.5, edge_h, edge_w), mat_edge)
+		_add_box(root, Vector3(0, curb_h * 0.5, -sz * 0.5 + curb_w * 0.5), Vector3(sx, curb_h, curb_w), mat_curb)
 	if not has_s:
-		_add_box(root, Vector3(0, 0.04, half), Vector3(sx * 0.5 if neighbors == 0 else sx * 0.5, edge_h, edge_w), mat_edge)
+		_add_box(root, Vector3(0, curb_h * 0.5, sz * 0.5 - curb_w * 0.5), Vector3(sx, curb_h, curb_w), mat_curb)
 	if not has_e:
-		_add_box(root, Vector3(half, 0.04, 0), Vector3(edge_w, edge_h, sz * 0.5 if neighbors == 0 else sz * 0.5), mat_edge)
+		_add_box(root, Vector3(sx * 0.5 - curb_w * 0.5, curb_h * 0.5, 0), Vector3(curb_w, curb_h, sz), mat_curb)
 	if not has_w:
-		_add_box(root, Vector3(-half, 0.04, 0), Vector3(edge_w, edge_h, sz * 0.5 if neighbors == 0 else sz * 0.5), mat_edge)
+		_add_box(root, Vector3(-sx * 0.5 + curb_w * 0.5, curb_h * 0.5, 0), Vector3(curb_w, curb_h, sz), mat_curb)
 
-	# Center line markings for straight roads
+	# Linea central en los tramos rectos; de borde a borde, para que se una.
 	if has_n and has_s and not has_e and not has_w:
-		_add_box(root, Vector3(0, 0.052, 0), Vector3(0.04, 0.01, sz * 0.8), mat_line)
+		_add_box(root, Vector3(0, 0.052, 0), Vector3(0.05, 0.01, sz), mat_line)
 	elif has_e and has_w and not has_n and not has_s:
-		_add_box(root, Vector3(0, 0.052, 0), Vector3(sx * 0.8, 0.01, 0.04), mat_line)
+		_add_box(root, Vector3(0, 0.052, 0), Vector3(sx, 0.01, 0.05), mat_line)
 
 	return root

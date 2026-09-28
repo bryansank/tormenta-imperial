@@ -60,13 +60,22 @@ func is_core(node: Node) -> bool:
 	var data: BuildingData = info["data"]
 	return data.is_core
 
+## Lo que ningun dano toca: el Nucleo y las carreteras (2026-09-28). La red une
+## cada edificio al Nucleo; una calle en ruinas no dejaria nada que reparar y
+## la tormenta se gastaba en la acera en vez de en la base.
+func is_immune(node: Node) -> bool:
+	if is_core(node):
+		return true
+	var info := GridManager.get_building_info(node)
+	return not info.is_empty() and (info["data"] as BuildingData).id == "road"
+
 # ── Daño ─────────────────────────────────────────────────────────────
 
 ## Devuelve true si este golpe lo dejó en ruinas.
 func damage_building(node: Node, amount: int) -> bool:
 	if node == null or not is_instance_valid(node) or amount <= 0:
 		return false
-	if is_core(node):
+	if is_immune(node):
 		return false
 	if is_ruined(node):
 		return false
@@ -100,13 +109,11 @@ func repair_cost(node: Node) -> Dictionary:
 		return {}
 	var factor: float = missing * GameConfig.storm_repair_cost_ratio
 	var cost: Dictionary = {}
-	for pair in [[ResourceManager.Type.GOLD, data.cost_gold],
-			[ResourceManager.Type.STEEL, data.cost_steel],
-			[ResourceManager.Type.OIL, data.cost_oil],
-			[ResourceManager.Type.WOOD, data.cost_wood]]:
-		var amount: int = roundi(float(pair[1]) * factor)
+	var full: Dictionary = data.get_cost()
+	for type in full:
+		var amount: int = roundi(float(full[type]) * factor)
 		if amount > 0:
-			cost[pair[0]] = amount
+			cost[type] = amount
 	return cost
 
 func can_repair(node: Node) -> Dictionary:

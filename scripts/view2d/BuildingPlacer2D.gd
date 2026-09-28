@@ -15,6 +15,7 @@ extends Node2D
 
 enum State { IDLE, PLACING, MOVING }
 
+const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
@@ -45,6 +46,13 @@ func _ready() -> void:
 	_buildings_container.name = "Buildings"
 	_buildings_container.z_index = 2
 	add_child(_buildings_container)
+	var walkers_layer := Node2D.new()
+	walkers_layer.name = "Walkers"
+	walkers_layer.z_index = 3
+	add_child(walkers_layer)
+	var walkers: Node = WorkerWalkers.new()
+	walkers.setup(walkers_layer, true)
+	add_child(walkers)
 	EventBus.building_selected_for_placement.connect(_on_building_selected)
 	EventBus.building_placement_cancelled.connect(_cancel)
 	EventBus.request_move_building.connect(_on_move_requested)
@@ -249,11 +257,22 @@ func try_place(cell: Vector2i) -> Node:
 			_reject_for_deposit(_current_data.id)
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
+		elif verdict["reason"] == "road":
+			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
 		return null
 	var blocked := Rules.purchase_block_detail(_current_data)
 	if blocked != "":
 		_show_feedback(blocked)
 		return null
+	# La carretera automatica se paga con el edificio: si no llega para los dos,
+	# no se pone ni un tramo (luego no quedarian calles a ninguna parte).
+	var route: Array = verdict.get("route", [])
+	if not route.is_empty() and not ResourceManager.can_afford(Rules.cost_with_route(_current_data, route)):
+		_show_feedback(Tr.t("LBL_ROUTE_TOO_EXPENSIVE") % route.size())
+		return null
+	if not route.is_empty():
+		var laid := Rules.pave_route(self, route)
+		_show_feedback(Tr.t("LBL_ROUTE_LAID") % [laid, laid])
 	var cost := _current_data.get_cost()
 	if not cost.is_empty():
 		ResourceManager.spend_cost(cost)
@@ -304,6 +323,9 @@ func _on_move_requested(building: Node) -> void:
 func try_move(cell: Vector2i) -> bool:
 	if _moving_building == null or _current_data == null:
 		return false
+	if _current_data.id == "road" and Rules.road_removal_strands(_moving_building) != null:
+		_show_feedback(Tr.t("LBL_ROAD_NEEDED_BY"))
+		return false
 	var size := Rules.rotated_size(_current_data, _rotation_steps)
 	var map_gen := _map_generator()
 	var verdict := Rules.evaluate_placement(_current_data.id, cell, size, map_gen, _moving_building)
@@ -312,7 +334,17 @@ func try_move(cell: Vector2i) -> bool:
 			_reject_for_deposit(_current_data.id)
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
+		elif verdict["reason"] == "road":
+			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
 		return false
+	# Llevado a donde no llega la red: su carretera se tiende (y se paga) igual
+	# que al colocarlo.
+	var move_route: Array = verdict.get("route", [])
+	if not move_route.is_empty():
+		if not ResourceManager.can_afford(Rules.route_cost(move_route)):
+			_show_feedback(Tr.t("LBL_ROUTE_TOO_EXPENSIVE") % move_route.size())
+			return false
+		Rules.pave_route(self, move_route)
 	Rules.consume_deposit_if_required(_current_data.id, verdict, map_gen)
 	var old_info := GridManager.get_building_info(_moving_building)
 	var old_cell: Vector2i = old_info.get("origin_cell", cell)
@@ -338,6 +370,9 @@ func try_move(cell: Vector2i) -> bool:
 func _on_demolish_requested(building: Node) -> void:
 	var result := Rules.demolish(building)
 	if result.is_empty():
+		return
+	if result.has("blocked"):
+		_show_feedback(String(result["blocked"]))
 		return
 	var data: BuildingData = result["data"]
 	var cell: Vector2i = result["cell"]
@@ -520,6 +555,8 @@ func assist_explain(origin: Vector2i) -> void:
 		_reject_for_deposit(_current_data.id)
 	elif verdict["reason"] == "occupied":
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
+	elif verdict["reason"] == "road":
+		_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
 
 func assist_feedback(text: String) -> void:
 	_show_feedback(text)

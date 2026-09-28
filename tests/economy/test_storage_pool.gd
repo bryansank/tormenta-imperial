@@ -99,6 +99,9 @@ func test_the_fullest_bag_is_exactly_the_price_of_victory() -> void:
 	var hq_final: Dictionary = GameConfig.hq_upgrade_costs[3]
 	var price := 0
 	for res_name in hq_final:
+		# Los materiales van al taller, no a la bolsa (ResourceManager).
+		if ResourceManager.is_material_name(String(res_name)):
+			continue
 		price += int(hq_final[res_name])
 	assert_int(cap).is_equal(3500)
 	assert_int(price).is_equal(3500)

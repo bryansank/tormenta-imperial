@@ -23,6 +23,10 @@ var _type_map := {
 	"steel": ResourceManager.Type.STEEL,
 	"oil": ResourceManager.Type.OIL,
 	"wood": ResourceManager.Type.WOOD,
+	"planks": ResourceManager.Type.PLANKS,
+	"ingots": ResourceManager.Type.INGOTS,
+	"beams": ResourceManager.Type.BEAMS,
+	"fuel": ResourceManager.Type.FUEL,
 }
 
 func _ready() -> void:

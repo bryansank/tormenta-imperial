@@ -17,6 +17,7 @@ const PointerMath := preload("res://scripts/services/InputService.gd")
 ## Las reglas (veredicto, topes, demoler, guardar) son las mismas en la vista 2D:
 ## viven en PlacementRules y aqui solo se llaman.
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
@@ -55,6 +56,14 @@ func _ready() -> void:
 	_buildings_container = Node3D.new()
 	_buildings_container.name = "Buildings"
 	add_child(_buildings_container)
+	# Los trabajadores que andan del Nucleo a su edificio: fuera del contenedor
+	# de edificios, que es lo que se guarda.
+	var walkers_layer := Node3D.new()
+	walkers_layer.name = "Walkers"
+	add_child(walkers_layer)
+	var walkers: Node = WorkerWalkers.new()
+	walkers.setup(walkers_layer, false)
+	add_child(walkers)
 
 	# Cached ghost materials for preview
 	_ghost_valid = StandardMaterial3D.new()
@@ -315,6 +324,9 @@ func _on_demolish_requested(building: Node) -> void:
 	var result := Rules.demolish(building)
 	if result.is_empty():
 		return
+	if result.has("blocked"):
+		_show_feedback(String(result["blocked"]))
+		return
 	var data: BuildingData = result["data"]
 	var cell: Vector2i = result["cell"]
 	building.queue_free()
@@ -337,12 +349,23 @@ func _try_place(cell: Vector2i) -> void:
 		elif verdict["reason"] == "occupied":
 			# Antes, silencio: el clic no hacia nada y no se sabia por que.
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
+		elif verdict["reason"] == "road":
+			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
 		return
 	# Tope, requisitos, obreros y coste, en ese orden (PlacementRules).
 	var blocked := Rules.purchase_block_detail(_current_data)
 	if blocked != "":
 		_show_feedback(blocked)
 		return
+	# La carretera automatica se paga con el edificio: si no llega para los dos,
+	# no se pone ni un tramo (luego no quedarian calles a ninguna parte).
+	var route: Array = verdict.get("route", [])
+	if not route.is_empty() and not ResourceManager.can_afford(Rules.cost_with_route(_current_data, route)):
+		_show_feedback(Tr.t("LBL_ROUTE_TOO_EXPENSIVE") % route.size())
+		return
+	if not route.is_empty():
+		var laid := Rules.pave_route(self, route)
+		_show_feedback(Tr.t("LBL_ROUTE_LAID") % [laid, laid])
 	var cost := _current_data.get_cost()
 	if not cost.is_empty():
 		ResourceManager.spend_cost(cost)
@@ -402,6 +425,9 @@ func _try_move(cell: Vector2i) -> void:
 	var rotated_size := _get_rotated_size()
 	# Moving obeys the same deposit rule as placing; otherwise a sawmill could be
 	# planted by a forest and then dragged anywhere.
+	if _current_data.id == "road" and Rules.road_removal_strands(_moving_building) != null:
+		_show_feedback(Tr.t("LBL_ROAD_NEEDED_BY"))
+		return
 	var map_gen := _map_generator()
 	var verdict := evaluate_placement(_current_data.id, cell, rotated_size, map_gen, _moving_building)
 	if not verdict["ok"]:
@@ -409,7 +435,17 @@ func _try_move(cell: Vector2i) -> void:
 			_reject_for_deposit(_current_data.id)
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
+		elif verdict["reason"] == "road":
+			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
 		return
+	# Llevado a donde no llega la red: su carretera se tiende (y se paga) igual
+	# que al colocarlo.
+	var move_route: Array = verdict.get("route", [])
+	if not move_route.is_empty():
+		if not ResourceManager.can_afford(Rules.route_cost(move_route)):
+			_show_feedback(Tr.t("LBL_ROUTE_TOO_EXPENSIVE") % move_route.size())
+			return
+		Rules.pave_route(self, move_route)
 	_consume_deposit_if_required(verdict, map_gen)
 	# Remember old cell for road updates
 	var old_info := GridManager.get_building_info(_moving_building)
@@ -479,7 +515,7 @@ func _create_preview() -> void:
 	# Use the actual 3D building model for the preview
 	var model: Node3D = null
 	if _current_data.model_scene:
-		model = _current_data.model_scene.instantiate()
+		model = _current_data.instantiate_model()
 	else:
 		model = DieselpunkBuildingFactory.create(_current_data.id, GridManager.cell_size, _current_data.grid_size)
 
@@ -614,7 +650,7 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	root.name = data.id
 
 	if data.model_scene:
-		var model_instance := data.model_scene.instantiate()
+		var model_instance := data.instantiate_model()
 		root.add_child(model_instance)
 	else:
 		# Try dieselpunk procedural mesh first
@@ -806,6 +842,8 @@ func assist_explain(origin: Vector2i) -> void:
 		_reject_for_deposit(_current_data.id)
 	elif verdict["reason"] == "occupied":
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
+	elif verdict["reason"] == "road":
+		_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
 
 func assist_feedback(text: String) -> void:
 	_show_feedback(text)

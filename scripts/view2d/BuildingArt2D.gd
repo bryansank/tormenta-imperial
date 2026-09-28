@@ -371,36 +371,38 @@ static func _statue(ci: CanvasItem, r: Rect2) -> void:
 
 ## Calzada: adoquin oscuro, con un brazo hacia cada vecino que tambien es calzada.
 static func _road(ci: CanvasItem, cell_rect: Rect2, mask: int) -> void:
-	var c := cell_rect.get_center()
-	var w := cell_rect.size.x * 0.56
+	# La celda entera, como en 3D: los tramos vecinos se tocan y la red se lee
+	# como una sola carretera. Acera clara en los lados que no siguen la calle.
 	var base := Color(0.36, 0.34, 0.31)
-	var edge := Color(0.24, 0.22, 0.2)
-	var parts: Array = [Rect2(c - Vector2(w, w) * 0.5, Vector2(w, w))]
-	var half := cell_rect.size * 0.5
-	if mask & 1:
-		parts.append(Rect2(Vector2(c.x - w * 0.5, c.y - half.y), Vector2(w, half.y)))
-	if mask & 2:
-		parts.append(Rect2(Vector2(c.x, c.y - w * 0.5), Vector2(half.x, w)))
-	if mask & 4:
-		parts.append(Rect2(Vector2(c.x - w * 0.5, c.y), Vector2(w, half.y)))
-	if mask & 8:
-		parts.append(Rect2(Vector2(c.x - half.x, c.y - w * 0.5), Vector2(half.x, w)))
-	for p in parts:
-		ci.draw_rect((p as Rect2).grow(1.5), edge)
-	for p in parts:
-		ci.draw_rect(p, base)
+	var curb := Color(0.64, 0.6, 0.54)
+	var line := Color(0.85, 0.72, 0.3)
+	ci.draw_rect(cell_rect, base)
 	# Adoquines
-	for p in parts:
-		var pr: Rect2 = p
-		var y := pr.position.y + 3.0
-		var row := 0
-		while y < pr.end.y - 2.0:
-			var x := pr.position.x + (3.0 if row % 2 == 0 else 6.0)
-			while x < pr.end.x - 2.0:
-				ci.draw_rect(Rect2(Vector2(x, y), Vector2(4, 3)), base.lightened(0.12))
-				x += 6.0
-			y += 5.0
-			row += 1
+	var y := cell_rect.position.y + 3.0
+	var row := 0
+	while y < cell_rect.end.y - 2.0:
+		var x := cell_rect.position.x + (3.0 if row % 2 == 0 else 6.0)
+		while x < cell_rect.end.x - 2.0:
+			ci.draw_rect(Rect2(Vector2(x, y), Vector2(4, 3)), base.lightened(0.1))
+			x += 6.0
+		y += 5.0
+		row += 1
+	var cw := cell_rect.size.x * 0.16
+	var p0 := cell_rect.position
+	var sz := cell_rect.size
+	if not (mask & 1):
+		ci.draw_rect(Rect2(p0, Vector2(sz.x, cw)), curb)
+	if not (mask & 4):
+		ci.draw_rect(Rect2(Vector2(p0.x, p0.y + sz.y - cw), Vector2(sz.x, cw)), curb)
+	if not (mask & 2):
+		ci.draw_rect(Rect2(Vector2(p0.x + sz.x - cw, p0.y), Vector2(cw, sz.y)), curb)
+	if not (mask & 8):
+		ci.draw_rect(Rect2(p0, Vector2(cw, sz.y)), curb)
+	var c := cell_rect.get_center()
+	if (mask & 1) and (mask & 4) and not (mask & 2) and not (mask & 8):
+		ci.draw_rect(Rect2(Vector2(c.x - 1.0, p0.y), Vector2(2.0, sz.y)), line)
+	elif (mask & 2) and (mask & 8) and not (mask & 1) and not (mask & 4):
+		ci.draw_rect(Rect2(Vector2(p0.x, c.y - 1.0), Vector2(sz.x, 2.0)), line)
 
 static func _star(ci: CanvasItem, c: Vector2, radius: float, color: Color) -> void:
 	var pts := PackedVector2Array()
