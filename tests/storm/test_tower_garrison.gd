@@ -197,10 +197,10 @@ func test_a_fallen_crew_does_not_cost_the_player_a_gun() -> void:
 	# El fallo que esto vigila: las dotaciones entran al tablero como artilleria,
 	# y si sus bajas pasaran por ArmyManager una defensa cara le borraria al
 	# jugador canones que nunca saco del cuartel.
-	_given_army({"infantry": GameConfig.combat_deploy_cap, "artillery": 2})
+	_given_army({"vehicle": GameConfig.combat_deploy_cap, "artillery": 2})
 	_given_towers(1)
-	# El cuartel llena el tope con infanteria, asi que la unica artilleria que
-	# pisa el tablero es la de la torre.
+	# El cuartel llena el tope con blindados (la guarnicion pone primero a los
+	# mas fuertes), asi que la unica artilleria que pisa el tablero es la de la torre.
 	assert_int(int(CombatManager.get_garrison().get("artillery", 0))).is_equal(0)
 	assert_bool(CombatManager.start_defense({"infantry": 1})).is_true()
 
@@ -246,7 +246,7 @@ func test_a_defence_can_open_with_a_side_that_is_already_on_its_feet() -> void:
 		assert_int(unit.hp).is_less(unit.max_hp)
 
 func test_a_crew_that_survives_a_wave_is_still_not_army_in_the_next() -> void:
-	_given_army({"infantry": GameConfig.combat_deploy_cap, "artillery": 2})
+	_given_army({"vehicle": GameConfig.combat_deploy_cap, "artillery": 2})
 	_given_towers(1)
 	assert_bool(CombatManager.start_defense({"infantry": 1})).is_true()
 	var survivors: Array = _units_of_side(PLAYER)

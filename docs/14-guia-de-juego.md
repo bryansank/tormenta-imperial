@@ -17,7 +17,7 @@ El bucle es: **produce recursos → gasta en edificios → desbloquea la siguien
 **Ganar es sobrevivir a la Auditoría Final.** Subir el Cuartel General a nivel 3 no
 es el final: es lo que **convoca** a la Regencia a venir a mirar. La partida se gana
 aguantando ese asedio, y ganarla detiene la Tormenta para siempre. Está explicado en
-la [sección 10](#10-el-camino-a-la-victoria).
+la [sección 11](#11-el-camino-a-la-victoria).
 
 ---
 
@@ -43,8 +43,11 @@ la [sección 10](#10-el-camino-a-la-victoria).
 | **Acero** | Construcción avanzada y unidades | 0 | Era 2 — al construir la Fundición |
 | **Petróleo** | Construcción de final de partida | 0 | Era 3 — al construir la Refinería |
 
-**Tope de almacenamiento: 800**, más 400 por cada Almacén (máximo 5). Lo que produzcas
-por encima del tope se pierde.
+**Una sola bolsa para los cuatro recursos**, no un tope por recurso: 600 en la era 1,
+800 en la era 2 y 1.000 en la era 3, más 500 por cada Almacén (máximo 5). Lo que no
+cabe se pierde, **también el oro y la madera que tu gente necesita para comer**: una
+bolsa llena de acero y petróleo deja a la colonia sin comida. Las tecnologías
+Logística 2 (+300) e Industria 2 (+200) la agrandan un poco más.
 
 Los yacimientos de la isla se ven desde el principio, pero **no puedes explotarlos
 hasta que su recurso esté desbloqueado**.
@@ -109,7 +112,7 @@ la era 3.** Por eso ninguna de las dos cuesta el recurso que desbloquea.
 |---|---|---|---|---|---|
 | <img src="media/guia/nucleo.png" width="110"> | **Núcleo** | 3×3 | — | 0 | Tu punto de partida. +5 de población. No se puede demoler |
 | <img src="media/guia/house.png" width="110"> | **Casa** | 1×1 | 50 oro · 30 madera | 0 | +6 de capacidad de población. Máximo 10 |
-| <img src="media/guia/warehouse.png" width="110"> | **Almacén** | 1×1 | 60 oro · 40 madera | 1 | +400 de tope de almacenamiento. Máximo 5 |
+| <img src="media/guia/warehouse.png" width="110"> | **Almacén** | 1×1 | 60 oro · 40 madera | 1 | +500 a la bolsa compartida. Máximo 5 |
 
 ### Militares
 
@@ -297,7 +300,64 @@ nodo donde estabas**. El tablero de un combate a medias no se guarda.
 
 ---
 
-## 10. El camino a la victoria
+## 10. La Tormenta y el Diezmo
+
+La Tormenta es el reloj de la partida. **Se arma con la primera Fundición** (la era 1
+es tranquila: todavía no sales en el libro) y la primera llega **unos diez minutos
+después**. A partir de ahí vuelve cada **6 a 10 minutos**, al azar y sin contador en
+pantalla: lo que sí es siempre igual es el procedimiento.
+
+| Fase | Dura | Qué pasa |
+|---|---|---|
+| **Aviso** | 45 s | Ceniza en el horizonte. **No cuesta nada**: es la ventana para gastar, reparar y traer a la tropa a casa. Uno de cada cuatro avisos se disuelve en nada, pero la siguiente llega con **+1 de severidad** |
+| **Ceniza** | 60 s | Producción **a la mitad** y la moral empieza a sangrar |
+| **Tormenta** | 60 s | Producción **al 15%**, la moral sangra el triple y **se rompen edificios**. Los procesos y entrenamientos que sigan en curso se pierden |
+| **Diezmo** | lo que dure la pelea | Llegan los Tasadores a cobrar |
+
+**La severidad** (1 a 5, no se ve) sube con la era y con lo que produces: 1, +1 por era
+por encima de la primera, +1 por cada 6 edificios productores, y +1 si hubo una falsa
+alarma antes. Cada punto de severidad cuesta **unos 12 puntos de moral** por tormenta:
+una de severidad 1 se nota y se recupera en un par de minutos; una de 5 se lleva 60.
+
+**Qué rompe, y en qué orden.** Primero torres, cuarteles y decoraciones; después casas;
+los edificios de producción solo a partir de severidad 4, y **nunca el último aserradero
+ni la última mina en pie**. Cada torre en pie resta un 15% al daño (tope 60%). Un
+edificio a cero queda **en ruinas**: no produce hasta que lo repares (clic → REPARAR).
+
+### El Diezmo
+
+Lo pelea en el tablero **quien esté en casa**: tu guarnición (hasta 6) más **una
+dotación de artillería por torre en pie** (tope 2). Si ganas, **no se llevan nada**.
+
+Si pierdes, o no hay nadie, se llevan **un porcentaje de lo almacenado** (del 17% al 37%
+según la severidad). Desde la **segunda** visita hay además una **cuota mínima**: si lo
+almacenado no la cubre, embargan decoraciones y edificios militares (quedan en ruinas) y,
+si aún falta, se llevan obreros. Nunca el Núcleo ni el último habitante. La primera
+visita es un alta en el libro: solo su porcentaje.
+
+**La escolta** son 3 unidades más una por punto de severidad por encima de 1 (dos tercios
+infantería, un tercio artillería), y crece un 15% **por cada Diezmo que les echas** (tope:
+el tablero, 6). Pagar no la engorda; echarlos sí.
+
+**Qué guarnición gana** (medido con la IA a los dos lados, moral 50, que es peor de lo que
+juega una persona):
+
+| En casa | Sin torres | Con dos torres en pie |
+|---|---|---|
+| 3 infantes | pierde siempre | gana hasta severidad 3 |
+| 3 infantes + 2 artillerías | gana hasta severidad 3 | **gana siempre** |
+| 3 infantes + 3 artillerías | gana siempre | gana siempre |
+| 3 blindados | gana hasta severidad 3 | gana siempre |
+
+Tras unos cuantos Diezmos echados la escolta llega al tope (4 infantes y 2 cañones) sea
+cual sea la severidad: cuenta como la columna de severidad 4-5 de la tabla.
+
+> ⚠️ **Tres infantes solos pierden incluso contra la escolta más pequeña.** La guarnición
+> que recomienda el panel es de cinco, dos de ellas artillería.
+
+---
+
+## 11. El camino a la victoria
 
 Nueve hitos. El último **no** es ganar: es que te convoquen a la prueba final.
 
@@ -322,20 +382,30 @@ Subir el Cuartel General cuesta aparte:
 
 ### Orden recomendado, paso a paso
 
-1. **Aserradero** — lo primero, siempre. Sin madera no hay nada, y todo lo que sigue la cuesta.
-2. **Una o dos casas** — necesitas gente para atender lo que construyas.
-3. **Mina de oro** — ya tienes ingreso de los dos recursos de la era 1.
-4. **Segundo aserradero** — el consumo empieza a doler; adelántate.
-5. **Almacén** — ⚠️ ojo, lee la nota de abajo antes de ponerlo.
-6. **Fundición** — entras en la era 2 y se desbloquea el acero.
-7. **Más casas y alguna decoración** — estabiliza la moral antes de la siguiente tanda.
-8. **Cuartel** — abre el ejército y las escaramuzas.
-9. **Refinería, encima de un pozo** — era 3, petróleo.
-10. **Dos Torres** — cierran el hito Comandante.
-11. **Cuartel General** — y a partir de aquí solo acumulas para las dos subidas.
-12. **HQ nivel 2 → nivel 3** — con esto **convocas la Auditoría Final**. No subas el
-    nivel 3 hasta tener el ejército rehecho y las torres reparadas: a partir de ahí ya
-    no se entrena nada.
+Es el mismo orden que sigue el panel **¿QUÉ HACER?** (menú `☰`): el panel dice en
+cada momento el siguiente paso, por qué, y qué te falta para darlo. Si algo lo haría
+imposible (no hay oro para comer, faltan obreros, no cabe en la bolsa, algo que da de
+comer está en ruinas) te pide eso antes.
+
+1. **Aserradero**, pegado a un bosque — lo primero, siempre.
+2. **Mina de oro**, pegada a una veta.
+3. **Una casa** — necesitas gente para atender lo que construyas.
+4. **Segundo aserradero** — tu gente come madera; adelántate.
+5. **Almacén** — ⚠️ ojo, lee la nota de la sección 12 antes de ponerlo.
+6. **Fundición**, pegada a un hierro — entras en la era 2, se desbloquea el acero **y se
+   arma la Tormenta**: la primera llega unos diez minutos después.
+7. **Cuartel** y **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
+   infantes solos pierden incluso el Diezmo más pequeño.
+8. **Refinería, encima de un pozo** — era 3, petróleo.
+9. **Dos Torres** — cierran el hito Comandante, mitigan la Tormenta y bajan dotaciones al
+   tablero del Diezmo.
+10. **Cuartel General** — y a partir de aquí acumulas para las dos subidas.
+11. **HQ nivel 2**, y **seis blindados** en casa.
+12. **HQ nivel 3** — con esto **convocas la Auditoría Final**. Cuesta 3.500, exactamente
+    la bolsa máxima sin tecnología: investiga Logística 1-2 e Industria 1-2 (+500) para
+    tener holgura, o tendrás que cuadrar los cuatro recursos al céntimo mientras tu
+    gente come. No lo subas hasta tener el ejército hecho y las torres reparadas: a
+    partir de ahí ya no se entrena nada.
 
 Por el camino, **10 operaciones de mercado** en cualquier momento.
 
@@ -383,7 +453,7 @@ victoria. Esa es la Victoria Imperial.
 
 ---
 
-## 11. Las cuatro fases (qué se enciende y cuándo)
+## 12. Las cuatro fases (qué se enciende y cuándo)
 
 Esto no se ve en pantalla pero gobierna toda la dificultad. El juego se endurece por
 tramos, y **cada tramo lo activas tú al construir algo**.
@@ -394,7 +464,7 @@ tramos, y **cada tramo lo activas tú al construir algo**.
 | **Asentamiento** | Primer **Aserradero** | Empieza el consumo, pero suave: cada 60s. La moral todavía no se aplica |
 | **Economía** | Primera **Mina de oro** | **La moral empieza a contar de verdad** |
 | **Supervivencia** | Primer **Almacén** | Consumo cada 30s, castigo de moral de −3 a **−8**, y **empiezan los eventos aleatorios** |
-| **Expansión** | **Fundición** (era 2) | Ritmo completo |
+| **Expansión** | **Fundición** (era 2) | Ritmo completo, y **se arma la Tormenta** |
 
 > ⚠️ **El Almacén es el interruptor de la dificultad.** Es el edificio más barato de la
 > lista y parece inofensivo, pero al colocarlo **duplicas la frecuencia del consumo,
@@ -418,7 +488,7 @@ A partir de Supervivencia, cada 2-5 minutos pasa algo:
 
 ---
 
-## 12. Modo de pruebas: todo en segundos
+## 13. Modo de pruebas: todo en segundos
 
 `GameConfig.dev_mode` está **activo por defecto** (`scripts/services/GameConfig.gd`).
 Con él, una partida entera se juega en minutos en vez de horas.

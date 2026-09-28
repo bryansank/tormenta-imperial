@@ -335,11 +335,20 @@ func _on_final_audit_wave_ready(_wave: int, roster: Dictionary, scale: float) ->
 ## solo lo que se quedo. Y quien esta en un tablero abierto tampoco: un Diezmo
 ## resuelto a ciegas durante una escaramuza alistaba a las mismas unidades que
 ## estaban peleandola, y sus bajas se cobraban dos veces.
+##
+## Los huecos se llenan de la unidad mas fuerte a la mas debil. Antes se llenaban
+## en el orden del diccionario (infanteria primero), asi que quien guardaba tres
+## infantes de la era 1 y luego entrenaba seis blindados para el final defendia el
+## asedio con 3 infantes y 3 blindados: la mitad de su mejor tropa se quedaba
+## mirando, y la Auditoria pasaba de ganarse 4 de cada 5 veces a casi nunca.
 func get_garrison() -> Dictionary:
 	var away: Dictionary = get_units_away()
 	var garrison: Dictionary = {}
 	var committed := 0
-	for unit_id in GameConfig.get_unit_ids():
+	var by_strength: Array = GameConfig.get_unit_ids()
+	by_strength.sort_custom(func(a, b) -> bool:
+		return int(GameConfig.get_unit_def(a).get("power", 0)) > int(GameConfig.get_unit_def(b).get("power", 0)))
+	for unit_id in by_strength:
 		for i in ArmyManager.get_count(unit_id) - int(away.get(unit_id, 0)):
 			if committed >= GameConfig.combat_deploy_cap:
 				break
