@@ -98,6 +98,24 @@ func _update_layers() -> void:
 	for i in range(_window_stack.size()):
 		_window_stack[i].layer = _base_layer + i + 1
 
+## Cierra todas las ventanas de la pila, de arriba abajo, por el mismo camino
+## que ESC (cada panel se cierra a si mismo). Lo usa el menu de la partida:
+## su boton nunca puede quedarse sin hacer nada porque haya algo abierto.
+func close_all_windows() -> void:
+	_prune()
+	# Tope por si un panel no se quita de la pila al cerrarse.
+	var guard := _window_stack.size() + 4
+	while not _window_stack.is_empty() and guard > 0:
+		guard -= 1
+		var top: CanvasLayer = _window_stack.back()
+		if top.has_method("_toggle_panel"):
+			top._toggle_panel()
+		elif top.has_method("_close"):
+			top._close()
+		if _window_stack.has(top):
+			close_window(top)
+		_prune()
+
 func is_any_window_open() -> bool:
 	_prune()
 	return not _window_stack.is_empty()

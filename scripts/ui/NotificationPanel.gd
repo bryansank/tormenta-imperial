@@ -5,6 +5,9 @@ extends CanvasLayer
 
 const MAX_LOG_ENTRIES := 50
 const TOAST_DURATION := 4.0
+## Avisos visibles a la vez (el resto va solo al registro).
+const MAX_TOASTS := 3
+const MAX_TOASTS_NARROW := 1
 ## Los avisos van en su propia capa, por encima del tablero de batalla (18) y
 ## por debajo de la pantalla de victoria (20): la Tormenta tiene que poder avisar
 ## mientras se pelea (ceniza, Diezmo, la guarnicion que peleo sola). El resto del
@@ -27,6 +30,8 @@ var _pop_label: Label
 var _morale_label: Label
 var _morale_bar: ProgressBar
 var _workers_label: Label
+## Las tres explicaciones de la tarjeta de poblacion, que un toque despliega.
+var _status_hint: Label
 var _status_panel: PanelContainer
 var _objective_label: Label
 
@@ -68,6 +73,7 @@ func _setup_ui() -> void:
 	# sola columna de estado (recursos -> poblacion y moral).
 	status_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2, true))
 	root.add_child(status_panel)
+	HudRegistry.register("NotificationPanel.status", status_panel)
 
 	var status_vbox := VBoxContainer.new()
 	status_vbox.add_theme_constant_override("separation", 5)
@@ -100,6 +106,16 @@ func _setup_ui() -> void:
 	morale_row.add_child(_morale_label)
 	status_vbox.add_child(morale_row)
 
+	# Que es cada fila, en palabras (bug 11): al pasar el raton sale en el
+	# tooltip de la fila y, con el dedo, un toque en la tarjeta despliega las
+	# tres explicaciones debajo.
+	pop_row.tooltip_text = Tr.t("HINT_HUD_POPULATION")
+	work_row.tooltip_text = Tr.t("HINT_HUD_WORKERS")
+	morale_row.tooltip_text = Tr.t("HINT_HUD_MORALE")
+	for row in [pop_row, work_row, morale_row]:
+		(row as Control).mouse_filter = Control.MOUSE_FILTER_STOP
+		(row as Control).gui_input.connect(_on_status_tap)
+
 	# Morale bar
 	_morale_bar = UITheme.make_progress_bar(UITheme.WARNING, 8)
 	_morale_bar.custom_minimum_size.x = 110
@@ -107,15 +123,25 @@ func _setup_ui() -> void:
 	_morale_bar.value = PopulationManager.get_morale()
 	status_vbox.add_child(_morale_bar)
 
+	_status_hint = UITheme.make_label("%s\n%s\n%s" % [Tr.t("HINT_HUD_POPULATION"),
+		Tr.t("HINT_HUD_WORKERS"), Tr.t("HINT_HUD_MORALE")], "small", UITheme.TEXT_DIM)
+	_status_hint.name = "StatusHint"
+	_status_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status_hint.custom_minimum_size.x = 220
+	_status_hint.visible = false
+	status_vbox.add_child(_status_hint)
+
 	# Log button integrated below status
 	_log_btn = Button.new()
-	_log_btn.text = Tr.t("BTN_LOG")
+	_log_btn.text = Tr.t("BTN_LOG_HUD")
+	_log_btn.tooltip_text = Tr.t("HINT_HUD_LOG")
 	_log_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UITheme.style_button(_log_btn, UITheme.BTN, UITheme.FONT_SMALL)
 	# Sin alto propio: style_button le da MIN_BTN_H (44), el minimo tactil.
 	# Antes pedia 28 px, que un pulgar no acierta.
 	_log_btn.pressed.connect(_toggle_panel)
 	status_vbox.add_child(_log_btn)
+	HudRegistry.register("NotificationPanel.log_button", _log_btn)
 
 	# Objective hint (top-center)
 	var obj_panel := PanelContainer.new()
@@ -123,6 +149,7 @@ func _setup_ui() -> void:
 	obj_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT))
 	obj_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(obj_panel)
+	HudRegistry.register("NotificationPanel.objective", obj_panel)
 
 	_objective_label = UITheme.make_label("", "small", UITheme.ACCENT)
 	_objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -143,6 +170,7 @@ func _setup_ui() -> void:
 	_toast_container.add_theme_constant_override("separation", 4)
 	_toast_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toast_root.add_child(_toast_container)
+	HudRegistry.register("NotificationPanel.toasts", _toast_container)
 
 	# Log panel
 	_panel = PanelContainer.new()
@@ -150,6 +178,7 @@ func _setup_ui() -> void:
 	_panel.visible = false
 	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	root.add_child(_panel)
+	HudRegistry.register("NotificationPanel.log", _panel)
 
 	var panel_vbox := VBoxContainer.new()
 	panel_vbox.add_theme_constant_override("separation", 4)
@@ -229,6 +258,16 @@ func _show_toast(text: String, color: Color) -> void:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toast_bg.add_child(label)
 	_toast_container.add_child(toast_bg)
+	# Tope de avisos a la vez: en una tablet (lienzo de ~700 de alto) cinco
+	# avisos seguidos subian hasta tapar la poblacion y el boton del registro.
+	# Los que salen ya estan en el registro.
+	var alive: Array = _toast_container.get_children().filter(func(c): return not c.is_queued_for_deletion())
+	# En pantalla estrecha (movil en vertical) solo cabe uno entre la columna
+	# y CONSTRUIR.
+	var cap := MAX_TOASTS_NARROW if UILayoutManager.is_narrow() else MAX_TOASTS
+	while alive.size() > cap:
+		var oldest: Node = alive.pop_front()
+		oldest.queue_free()
 
 	var tween := create_tween()
 	tween.tween_interval(TOAST_DURATION)
@@ -244,10 +283,10 @@ func _refresh_log() -> void:
 		_log_vbox.add_child(label)
 
 func _on_population_changed(current: int, max_pop: int) -> void:
-	_pop_label.text = Tr.t("LBL_POPULATION") % [current, max_pop]
+	_pop_label.text = Tr.t("LBL_HUD_POPULATION") % [current, max_pop]
 
 func _on_morale_changed(new_morale: int) -> void:
-	_morale_label.text = Tr.t("LBL_MORALE") % new_morale
+	_morale_label.text = morale_text(new_morale)
 	_morale_bar.value = new_morale
 	var color: Color
 	if new_morale <= 30:
@@ -263,12 +302,30 @@ func _on_morale_changed(new_morale: int) -> void:
 		fill.bg_color = color
 
 func _on_workers_changed(used: int, total: int) -> void:
-	_workers_label.text = Tr.t("LBL_WORKERS") % [used, total]
+	_workers_label.text = workers_text(used, total)
 
 func _update_status_labels() -> void:
-	_pop_label.text = Tr.t("LBL_POPULATION") % [PopulationManager.get_population(), PopulationManager.get_max_population()]
-	_workers_label.text = Tr.t("LBL_WORKERS") % [PopulationManager.get_used_workers(), PopulationManager.get_population()]
-	_morale_label.text = Tr.t("LBL_MORALE") % PopulationManager.get_morale()
+	_pop_label.text = Tr.t("LBL_HUD_POPULATION") % [PopulationManager.get_population(), PopulationManager.get_max_population()]
+	_workers_label.text = workers_text(PopulationManager.get_used_workers(), PopulationManager.get_population())
+	_morale_label.text = morale_text(PopulationManager.get_morale())
+
+## "Obreros: 3 trabajan, 2 libres" en vez de "Trabajadores: 3/5", que no decia
+## si eran libres u ocupados.
+static func workers_text(used: int, total: int) -> String:
+	return Tr.t("LBL_HUD_WORKERS") % [used, maxi(0, total - used)]
+
+## "Moral 75 %: produccion x1.1": lo que la moral HACE, no solo cuanta hay.
+static func morale_text(morale: int) -> String:
+	return Tr.t("LBL_HUD_MORALE") % [morale, PopulationManager.morale_to_multiplier(morale)]
+
+func _on_status_tap(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_status_hint.visible = not _status_hint.visible
+		get_viewport().set_input_as_handled()
+
+## Si las explicaciones de la tarjeta estan desplegadas. Para tests.
+func is_status_hint_shown() -> bool:
+	return _status_hint != null and _status_hint.visible
 
 func _toggle_panel() -> void:
 	_is_open = not _is_open

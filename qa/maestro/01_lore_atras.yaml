@@ -1,0 +1,46 @@
+# Bug de Bryan: la introduccion solo tiene "Siguiente"; no hay "Atras".
+#
+# Esperado tras el arreglo: desde la pagina 2/10 hay un boton para volver a la
+# 1/10. Se comprueba en 01_03 y 01_04 (el contador "N / 10" debe volver a 1).
+# Al final se pulsa el boton "atras" de Android: hoy CIERRA el juego entero
+# (01_06 es el escritorio de Android). Esperado: volver una pagina o no hacer nada.
+appId: com.bryankey.tormentaimperial.qa
+name: 01 Lore - volver atras
+tags: [lore, menus]
+---
+- runFlow: comun/arrancar.yaml
+- takeScreenshot: ${output.dir}/01_00_titulo
+- runFlow: comun/nueva_partida.yaml
+- takeScreenshot: ${output.dir}/01_01_lore_p1
+- tapOn:
+    point: "75%,85%"      # Siguiente
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/01_02_lore_p2
+# Donde iria un "Atras": a la izquierda del contador, entre Saltar y Siguiente.
+- tapOn:
+    point: "50%,85%"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/01_03_tras_tocar_hueco_atras
+# Gesto de pasar pagina hacia atras (deslizar a la derecha sobre el texto).
+- swipe:
+    start: "30%,45%"
+    end: "70%,45%"
+    duration: 500
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/01_04_tras_deslizar_derecha
+# Boton atras del sistema.
+- back
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 3000}
+- takeScreenshot: ${output.dir}/01_05_tras_back_android
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 3000}
+- takeScreenshot: ${output.dir}/01_06_tras_back_android_3s

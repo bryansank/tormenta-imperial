@@ -1,0 +1,9 @@
+# Cierra la introduccion con "Saltar" (abajo a la izquierda del cuadro).
+appId: com.bryankey.tormentaimperial.qa
+---
+- tapOn:
+    point: "23%,85%"      # Saltar
+- runFlow:
+    file: esperar.yaml
+    env:
+      MS: 2500

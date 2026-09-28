@@ -22,7 +22,7 @@ enum Status { NONE, IDLE, WORKING }
 
 ## Tamano del glifo. ConstructionLabel usa 18 px a 0.005: aqui hace falta mas
 ## porque tiene que leerse desde la camara habitual (distancia 20, fov 60).
-const FONT_SIZE := 48
+const FONT_SIZE := 40
 const PIXEL_SIZE := 0.0125
 ## Hueco entre la cima del edificio y el badge.
 const HEIGHT_MARGIN := 1.0
@@ -207,6 +207,16 @@ static func color_for_reason(reason: String) -> Color:
 		"unstaffed": return COLOR_UNSTAFFED
 	return COLOR_IDLE
 
+## Lo que dice el badge parado: "Zzz" y, debajo, por que (bug 11: nadie sabia
+## que Zzz era "sin obreros" o "parado"). Mismo texto en la vista 2D.
+static func reason_text(reason: String) -> String:
+	var key := "LBL_STATUS_IDLE_WHY"
+	match reason:
+		"construction": key = "LBL_STATUS_WHY_CONSTRUCTION"
+		"ruined": key = "LBL_STATUS_WHY_RUINED"
+		"unstaffed": key = "LBL_STATUS_WHY_UNSTAFFED"
+	return Tr.t(key)
+
 func _apply(status: int, reason: String) -> void:
 	_status = status
 	_reason = reason
@@ -215,7 +225,7 @@ func _apply(status: int, reason: String) -> void:
 			visible = false
 		Status.IDLE:
 			visible = true
-			text = Tr.t("LBL_STATUS_IDLE")
+			text = "%s\n%s" % [Tr.t("LBL_STATUS_IDLE"), reason_text(reason)]
 			modulate = color_for_reason(reason)
 			if _icon:
 				_icon.visible = false

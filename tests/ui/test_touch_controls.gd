@@ -6,8 +6,9 @@ extends GdUnitTestSuite
 ## "automatico" (segun haya pantalla tactil) es el valor bueno para casi todos
 ## y un interruptor de dos posiciones no puede decirlo.
 ##
-## "auto" significa movil (o un toque real en PC), no "hay pantalla tactil":
-## muchos portatiles lo dicen y el D-pad salia en un PC que se usa con raton.
+## "auto" significa perfil tablet o movil (DeviceProfile), no "hay pantalla
+## tactil" ni "llego un toque": muchos portatiles lo dicen y el D-pad salia en un
+## PC que se usa con raton. En PC, nunca por defecto.
 ##
 ## Toca GameConfig (autoload) y user://settings.cfg; cada prueba deja ambos
 ## como los encontro. No se usa monitor_signals sobre autoloads.
@@ -42,25 +43,41 @@ func test_never_hides_them_even_on_a_touchscreen() -> void:
 	GameConfig.ui_touch_controls = "never"
 	assert_bool(GameConfig.touch_controls_enabled()).is_false()
 
-func test_auto_is_off_on_a_desktop_until_a_real_touch() -> void:
+func test_auto_is_off_on_a_desktop() -> void:
 	# Muchos portatiles Windows dicen tener pantalla tactil: "auto" no se fia de
-	# eso. En PC los controles no salen hasta que llega un dedo de verdad.
+	# eso. En el perfil PC los controles no salen (headless = PC).
 	GameConfig.ui_touch_controls = "auto"
 	GameConfig._real_touch_seen = false
-	assert_bool(GameConfig.touch_controls_enabled()).is_equal(GameConfig.is_mobile_os())
+	assert_str(DeviceProfile.current()).is_equal(DeviceProfile.PC)
+	assert_bool(GameConfig.touch_controls_enabled()).is_false()
 
-func test_a_real_touch_brings_them_in_auto() -> void:
+func test_a_real_touch_on_a_pc_does_not_bring_them_in_auto() -> void:
+	# Norma de Bryan: en PC nunca hay controles de movimiento en pantalla por
+	# defecto. Un toque en un portatil tactil no cambia eso para toda la sesion.
 	GameConfig.ui_touch_controls = "auto"
 	GameConfig._real_touch_seen = false
 	var received: Array = []
 	var listener := func(enabled: bool): received.append(enabled)
 	EventBus.touch_controls_changed.connect(listener)
 	GameConfig.notice_real_touch()
-	GameConfig.notice_real_touch()  # el segundo toque no vuelve a avisar
+	GameConfig.notice_real_touch()
 	EventBus.touch_controls_changed.disconnect(listener)
-	assert_bool(GameConfig.touch_controls_enabled()).is_true()
-	if not GameConfig.is_mobile_os():
-		assert_array(received).is_equal([true])
+	assert_bool(GameConfig.touch_controls_enabled()).is_false()
+	assert_array(received).is_empty()
+
+func test_auto_follows_a_touch_profile() -> void:
+	var saved := GameConfig.ui_device_profile
+	GameConfig.ui_touch_controls = "auto"
+	GameConfig.ui_device_profile = "tablet"
+	var tablet := GameConfig.touch_controls_enabled()
+	GameConfig.ui_device_profile = "phone"
+	var phone := GameConfig.touch_controls_enabled()
+	GameConfig.ui_device_profile = "pc"
+	var pc := GameConfig.touch_controls_enabled()
+	GameConfig.ui_device_profile = saved
+	assert_bool(tablet).is_true()
+	assert_bool(phone).is_true()
+	assert_bool(pc).is_false()
 
 func test_an_explicit_never_wins_over_a_real_touch() -> void:
 	GameConfig.ui_touch_controls = "never"

@@ -282,6 +282,13 @@ signal fullscreen_changed(enabled: bool)
 ## Carries the RESOLVED state: "auto" already checked against the hardware.
 @warning_ignore("unused_signal")
 signal touch_controls_changed(enabled: bool)
+## Opacidad de los controles en pantalla (Ajustes > Controles).
+signal touch_controls_opacity_changed(alpha: float)
+
+## Los globos de ayuda se encendieron o apagaron (AYUDA del menu ☰ o Ajustes >
+## Interfaz). GameConfig.ui_helper_visible ya tiene el valor nuevo.
+@warning_ignore("unused_signal")
+signal helper_visibility_changed(visible: bool)
 
 ## Emitted when music is switched on/off (Settings or the ☰ quick button).
 @warning_ignore("unused_signal")

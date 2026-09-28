@@ -1,0 +1,70 @@
+# Bug de Bryan: "cuando ya entro a jugar, no me deja salir al menu principal".
+#
+# a) Camino feliz: II -> Menu principal. Esperado: menu de titulo con Continuar
+#    (03_02). Continuar vuelve a la partida (03_03).
+# b) Con una ventana abierta: tocar el Nucleo abre su panel de informacion y
+#    luego II. Hoy II no hace nada ni avisa (03_05 sin menu de pausa).
+#    Esperado: la pausa se abre (cerrando antes el panel).
+# c) El menu de hamburguesa no tiene "Menu principal" (03_06).
+# d) Boton atras de Android en partida: hoy cierra la app (03_08 es el
+#    escritorio). Esperado: abrir la pausa o cerrar la ventana de arriba.
+appId: com.bryankey.tormentaimperial.qa
+name: 03 Salir al menu principal
+tags: [menus, pausa]
+---
+- runFlow: comun/en_partida.yaml
+- takeScreenshot: ${output.dir}/03_00_en_partida
+# a) II -> Menu principal -> Continuar
+- tapOn:
+    point: "30%,5%"       # II
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/03_01_pausa
+- tapOn:
+    point: "50%,72%"      # Menu principal
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 4000}
+- takeScreenshot: ${output.dir}/03_02_menu_titulo
+- tapOn:
+    point: "21%,29%"      # Continuar (con partida guardada es el 1er boton)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 4000}
+- takeScreenshot: ${output.dir}/03_03_tras_continuar
+# b) Panel de edificio abierto + II
+- tapOn:
+    point: "62%,55%"      # el Nucleo, en el centro-derecha de la vista inicial
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/03_04_panel_nucleo
+- tapOn:
+    point: "30%,5%"       # II
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/03_05_II_con_panel_abierto
+# c) Menu de hamburguesa
+- tapOn:
+    point: "97%,5%"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/03_06_hamburguesa_sin_menu_principal
+- tapOn:
+    point: "97%,5%"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# d) Atras de Android
+- back
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2000}
+- takeScreenshot: ${output.dir}/03_07_tras_back
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 3000}
+- takeScreenshot: ${output.dir}/03_08_tras_back_3s

@@ -1,0 +1,287 @@
+# Bug de Bryan: "el arrastre solo se activa en algunos sitios".
+#
+# Rejilla 4x4 de puntos de partida sobre la vista del mapa (x 15/38/62/85 %,
+# y 25/45/65/82 %). En cada punto: captura, arrastre de un dedo de 10 % del
+# ancho (600 ms), captura, y arrastre de vuelta. Los pares <punto>_0 / <punto>_1
+# se comparan con herramientas/analizar_arrastre.py, que escribe la tabla de
+# cobertura (movio / no movio). Hoy no mueven los puntos que caen sobre la
+# franja inferior de OnScreenControls (contenedores PASS) ni sobre los globos
+# de ayuda y paneles del HUD.
+# Esperado tras el arreglo: todos los puntos que no caen sobre un boton mueven.
+appId: com.bryankey.tormentaimperial.qa
+name: 06 Arrastre de un dedo por toda la pantalla
+tags: [camara, arrastre]
+---
+- runFlow: comun/en_partida.yaml
+# punto x=15% y=25%
+- takeScreenshot: ${output.dir}/06_r0c0_x15y25_0
+- swipe:
+    start: "15%,25%"
+    end: "25%,25%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r0c0_x15y25_1
+- swipe:
+    start: "25%,25%"
+    end: "15%,25%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=38% y=25%
+- takeScreenshot: ${output.dir}/06_r0c1_x38y25_0
+- swipe:
+    start: "38%,25%"
+    end: "48%,25%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r0c1_x38y25_1
+- swipe:
+    start: "48%,25%"
+    end: "38%,25%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=62% y=25%
+- takeScreenshot: ${output.dir}/06_r0c2_x62y25_0
+- swipe:
+    start: "62%,25%"
+    end: "52%,25%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r0c2_x62y25_1
+- swipe:
+    start: "52%,25%"
+    end: "62%,25%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=85% y=25%
+- takeScreenshot: ${output.dir}/06_r0c3_x85y25_0
+- swipe:
+    start: "85%,25%"
+    end: "75%,25%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r0c3_x85y25_1
+- swipe:
+    start: "75%,25%"
+    end: "85%,25%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=15% y=45%
+- takeScreenshot: ${output.dir}/06_r1c0_x15y45_0
+- swipe:
+    start: "15%,45%"
+    end: "25%,45%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r1c0_x15y45_1
+- swipe:
+    start: "25%,45%"
+    end: "15%,45%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=38% y=45%
+- takeScreenshot: ${output.dir}/06_r1c1_x38y45_0
+- swipe:
+    start: "38%,45%"
+    end: "48%,45%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r1c1_x38y45_1
+- swipe:
+    start: "48%,45%"
+    end: "38%,45%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=62% y=45%
+- takeScreenshot: ${output.dir}/06_r1c2_x62y45_0
+- swipe:
+    start: "62%,45%"
+    end: "52%,45%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r1c2_x62y45_1
+- swipe:
+    start: "52%,45%"
+    end: "62%,45%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=85% y=45%
+- takeScreenshot: ${output.dir}/06_r1c3_x85y45_0
+- swipe:
+    start: "85%,45%"
+    end: "75%,45%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r1c3_x85y45_1
+- swipe:
+    start: "75%,45%"
+    end: "85%,45%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=15% y=65%
+- takeScreenshot: ${output.dir}/06_r2c0_x15y65_0
+- swipe:
+    start: "15%,65%"
+    end: "25%,65%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r2c0_x15y65_1
+- swipe:
+    start: "25%,65%"
+    end: "15%,65%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=38% y=65%
+- takeScreenshot: ${output.dir}/06_r2c1_x38y65_0
+- swipe:
+    start: "38%,65%"
+    end: "48%,65%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r2c1_x38y65_1
+- swipe:
+    start: "48%,65%"
+    end: "38%,65%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=62% y=65%
+- takeScreenshot: ${output.dir}/06_r2c2_x62y65_0
+- swipe:
+    start: "62%,65%"
+    end: "52%,65%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r2c2_x62y65_1
+- swipe:
+    start: "52%,65%"
+    end: "62%,65%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=85% y=65%
+- takeScreenshot: ${output.dir}/06_r2c3_x85y65_0
+- swipe:
+    start: "85%,65%"
+    end: "75%,65%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r2c3_x85y65_1
+- swipe:
+    start: "75%,65%"
+    end: "85%,65%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=15% y=82%
+- takeScreenshot: ${output.dir}/06_r3c0_x15y82_0
+- swipe:
+    start: "15%,82%"
+    end: "25%,82%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r3c0_x15y82_1
+- swipe:
+    start: "25%,82%"
+    end: "15%,82%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=38% y=82%
+- takeScreenshot: ${output.dir}/06_r3c1_x38y82_0
+- swipe:
+    start: "38%,82%"
+    end: "48%,82%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r3c1_x38y82_1
+- swipe:
+    start: "48%,82%"
+    end: "38%,82%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=62% y=82%
+- takeScreenshot: ${output.dir}/06_r3c2_x62y82_0
+- swipe:
+    start: "62%,82%"
+    end: "52%,82%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r3c2_x62y82_1
+- swipe:
+    start: "52%,82%"
+    end: "62%,82%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+# punto x=85% y=82%
+- takeScreenshot: ${output.dir}/06_r3c3_x85y82_0
+- swipe:
+    start: "85%,82%"
+    end: "75%,82%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/06_r3c3_x85y82_1
+- swipe:
+    start: "75%,82%"
+    end: "85%,82%"
+    duration: 600
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}

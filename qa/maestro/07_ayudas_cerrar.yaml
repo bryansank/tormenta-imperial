@@ -1,0 +1,58 @@
+# Bug de Bryan: las ayudas deberian poder cerrarse y cerrarse solas.
+#
+# Tras saltar la introduccion salen los globos azules de HelperPanel: seis en el
+# build que jugo Bryan (recursos, objetivo, ☰, camara, zoom/giro y construir) y
+# uno solo (el de ☰) en el perfil tableta desde 2a3ec3e. Se captura a los 0, 20, 45 y 90 s sin tocar
+# nada: hoy siguen todos (07_00..07_03). Luego se toca un globo (no se cierra,
+# 07_04) y se prueba ☰ -> AYUDA, que hoy es la unica forma y los apaga todos a
+# la vez (07_06); otro AYUDA los devuelve (07_07).
+# Esperado tras el arreglo: cada globo tiene su X y se cierra solo pasado un
+# tiempo (07_02 o 07_03 ya sin globos); AYUDA los vuelve a mostrar.
+appId: com.bryankey.tormentaimperial.qa
+name: 07 Ayudas - cerrar y tiempo en pantalla
+tags: [ayudas, tutorial]
+---
+- runFlow: comun/en_partida.yaml
+- takeScreenshot: ${output.dir}/07_00_t0
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 20000}
+- takeScreenshot: ${output.dir}/07_01_t20s
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 25000}
+- takeScreenshot: ${output.dir}/07_02_t45s
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 45000}
+- takeScreenshot: ${output.dir}/07_03_t90s
+# Tocar el globo que queda en el perfil tableta ("El boton ☰ abre los menus",
+# arriba a la derecha): sobre el texto y en su esquina superior izquierda.
+# (En el build jugado por Bryan habia seis globos; el primero era "Tus recursos",
+# arriba a la izquierda.)
+- tapOn:
+    point: "80%,4%"
+- tapOn:
+    point: "70%,2%"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/07_04_tras_tocar_globo
+- tapOn:
+    point: "97%,5%"       # hamburguesa
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
+- takeScreenshot: ${output.dir}/07_05_hamburguesa_ayuda_tapada
+- tapOn:
+    point: "92%,68%"      # AYUDA (el globo "Rota la camara" la tapa en parte)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/07_06_tras_ayuda
+- tapOn:
+    point: "92%,68%"      # AYUDA otra vez
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/07_07_tras_ayuda_otra_vez

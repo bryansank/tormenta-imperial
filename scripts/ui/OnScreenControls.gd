@@ -29,6 +29,18 @@ func _ready() -> void:
 	EventBus.building_deselected.connect(func(): _set_placing(false))
 	_apply_visibility(GameConfig.touch_controls_enabled())
 	EventBus.touch_controls_changed.connect(_apply_visibility)
+	# Opacidad elegida en Ajustes > Controles (bug 7: tapaban el mapa).
+	_apply_opacity(GameConfig.ui_touch_controls_opacity)
+	EventBus.touch_controls_opacity_changed.connect(_apply_opacity)
+
+## La raiz de los controles (primer hijo) se transparenta entera: flechas,
+## zoom, giro y los botones de colocar.
+func _apply_opacity(alpha: float) -> void:
+	if get_child_count() > 0 and get_child(0) is CanvasItem:
+		(get_child(0) as CanvasItem).modulate.a = alpha
+
+func current_opacity() -> float:
+	return (get_child(0) as CanvasItem).modulate.a if get_child_count() > 0 else 1.0
 
 ## Hides the whole layer. A held D-pad button is released too, so the camera
 ## does not keep drifting after the controls vanish under the finger.
@@ -95,7 +107,7 @@ func _setup_ui() -> void:
 	# Building rotate button (visible only during placement)
 	_rotate_building_btn = _styled_button("R ↻")
 	_rotate_building_btn.custom_minimum_size = Vector2(108, 50)
-	_rotate_building_btn.tooltip_text = Tr.t("LBL_ROTATE_BUILDING")
+	_rotate_building_btn.tooltip_text = Tr.ti("LBL_ROTATE_BUILDING")
 	_rotate_building_btn.pressed.connect(func(): EventBus.building_rotate_requested.emit())
 	_rotate_building_btn.visible = false
 	right_vbox.add_child(_rotate_building_btn)
@@ -105,7 +117,7 @@ func _setup_ui() -> void:
 	_cancel_placement_btn.name = "CancelPlacement"
 	_cancel_placement_btn.text = "✕ " + Tr.t("BTN_CANCEL").to_upper()
 	_cancel_placement_btn.custom_minimum_size = Vector2(108, 50)
-	_cancel_placement_btn.tooltip_text = Tr.t("LBL_CANCEL_PLACEMENT_TIP")
+	_cancel_placement_btn.tooltip_text = Tr.ti("LBL_CANCEL_PLACEMENT_TIP")
 	UITheme.style_button(_cancel_placement_btn, UITheme.DANGER, UITheme.FONT_BODY)
 	_cancel_placement_btn.pressed.connect(_on_cancel_placement)
 	_cancel_placement_btn.visible = false

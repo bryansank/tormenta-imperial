@@ -66,6 +66,17 @@ func _ready() -> void:
 	# globos callados hasta la siguiente cobranza, que puede no llegar nunca.
 	EventBus.storm_false_alarm.connect(func(_deferred): _set_storm_silenced(false))
 	EventBus.touch_controls_changed.connect(func(_enabled): _refresh_tips())
+	# Ajustes > Interfaz tambien los enciende y apaga (HudRegistry).
+	EventBus.helper_visibility_changed.connect(func(_vis): _refresh_callouts())
+	# La pausa y el menu principal no estan en la pila de UIManager: sin esto
+	# los globos se veian bajo el velo de la pausa. Un vigia que corre en pausa
+	# mira get_tree().paused y avisa al cambiar.
+	var watcher := Node.new()
+	watcher.name = "PauseWatcher"
+	watcher.process_mode = Node.PROCESS_MODE_ALWAYS
+	watcher.set_script(_PauseWatcher)
+	watcher.set("owner_panel", self)
+	add_child(watcher)
 	# Al pasar a pantalla estrecha (o volver) cambia que globos caben.
 	UILayoutManager.layout_changed.connect(_refresh_tips)
 	EventBus.building_selected_for_placement.connect(func(_d): _set_placing(true))
@@ -121,9 +132,9 @@ func _setup_ui() -> void:
 	# Bottom-center: construction flow, above the BUILD button
 	_add_tip(Tr.t("LBL_HELP_BUILD"), "HelperPanel.tip_build")
 	# Camera: one text for the touch D-pad, another for keyboard and mouse
-	_add_tip(Tr.t("LBL_HELP_CAMERA"), "HelperPanel.tip_camera_touch")
-	_add_tip(Tr.t("LBL_HELP_ZOOM"), "HelperPanel.tip_zoom")
-	_add_tip(Tr.t("LBL_HELP_CAMERA_DESKTOP"), "HelperPanel.tip_camera")
+	_add_tip(Tr.ti("LBL_HELP_CAMERA"), "HelperPanel.tip_camera_touch")
+	_add_tip(Tr.ti("LBL_HELP_ZOOM"), "HelperPanel.tip_zoom")
+	_add_tip(Tr.ti("LBL_HELP_CAMERA_DESKTOP"), "HelperPanel.tip_camera")
 	# Right, beside the Skirmish sidebar button: one callout, shown only while
 	# that button exists (first Barracks built, sidebar open). Never a wall.
 	var skirmish_x := -(SIDEBAR_BTN_LEFT + SKIRMISH_CALLOUT_GAP + SKIRMISH_CALLOUT_WIDTH)
@@ -251,18 +262,7 @@ func is_skirmish_callout_shown() -> bool:
 	return _skirmish_callout != null and _callouts.visible and _skirmish_callout.visible
 
 func _load_buildings() -> Array:
-	var result: Array = []
-	var dir := DirAccess.open("res://data/buildings")
-	if not dir:
-		return result
-	dir.list_dir_begin()
-	var file_name := dir.get_next()
-	while file_name != "":
-		if file_name.ends_with(".tres"):
-			var res = load("res://data/buildings/" + file_name)
-			if res is BuildingData:
-				result.append(res)
-		file_name = dir.get_next()
+	var result: Array = BuildingData.load_all()
 	result.sort_custom(func(a, b): return a.get_display_name() < b.get_display_name())
 	return result
 
@@ -315,6 +315,7 @@ func _toggle_helper() -> void:
 	var vis := not GameConfig.ui_helper_visible
 	GameConfig.ui_helper_visible = vis
 	GameConfig.save_user_settings()
+	EventBus.helper_visibility_changed.emit(vis)
 	_refresh_callouts()
 	if not vis and _guide_open:
 		_toggle_guide()
@@ -332,9 +333,10 @@ func _set_callouts_visible(vis: bool) -> void:
 func _refresh_callouts() -> void:
 	_set_callouts_visible(GameConfig.ui_helper_visible)
 
-## Something more important is on screen: an open window or the Storm.
+## Something more important is on screen: an open window, the pause or title
+## menu (the tree is paused), or the Storm.
 func is_quiet() -> bool:
-	return _storm_silenced or UIManager.is_any_window_open()
+	return _storm_silenced or UIManager.is_any_window_open() or get_tree().paused
 
 func _set_storm_silenced(silenced: bool) -> void:
 	_storm_silenced = silenced
@@ -351,11 +353,18 @@ func _set_placing(placing: bool) -> void:
 ## a window open, the Storm) live in _refresh_callouts; these are per tip.
 func _refresh_tips() -> void:
 	var touch := GameConfig.touch_controls_enabled()
-	var narrow := UILayoutManager.is_narrow()
+	# El perfil movil (disposicion compacta) tampoco tiene sitio para seis globos.
+	# Con la columna central bajada a la izquierda tampoco: los globos de
+	# columna caerian encima del objetivo y de la camara.
+	var narrow := UILayoutManager.is_narrow() or UILayoutManager.is_column_narrow() 		or DeviceProfile.layout_variant() == "compact"
 	for panel_id in _tips:
 		var show := true
 		# Pantalla estrecha: solo caben los de NARROW_TIPS.
 		if narrow and not panel_id in UILayoutConfig.NARROW_TIPS:
+			show = false
+		# Perfil movil: ni ese. En vertical caeria sobre las flechas; la intro
+		# del tutorial y AYUDA > guia ya lo explican.
+		if DeviceProfile.layout_variant() == "compact":
 			show = false
 		# Los de camara tactil, solo con los botones en pantalla y sin colocar.
 		if panel_id in TOUCH_TIPS:
@@ -376,3 +385,6 @@ func _toggle_guide() -> void:
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)
+
+## Vigia de la pausa: el arbol en pausa no llama al _process de HelperPanel.
+const _PauseWatcher := preload("res://scripts/ui/PauseWatcher.gd")
