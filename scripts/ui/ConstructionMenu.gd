@@ -65,17 +65,9 @@ func _process(delta: float) -> void:
 
 func _load_buildings() -> void:
 	_all_buildings.clear()
-	var dir := DirAccess.open("res://data/buildings")
-	if not dir:
-		return
-	dir.list_dir_begin()
-	var file_name := dir.get_next()
-	while file_name != "":
-		if file_name.ends_with(".tres"):
-			var res = load("res://data/buildings/" + file_name)
-			if res is BuildingData and not res.is_core:
-				_all_buildings.append(res)
-		file_name = dir.get_next()
+	for res in BuildingData.load_all():
+		if not res.is_core:
+			_all_buildings.append(res)
 	_all_buildings.sort_custom(func(a, b): return a.get_display_name() < b.get_display_name())
 
 func _get_category(data: BuildingData) -> String:
