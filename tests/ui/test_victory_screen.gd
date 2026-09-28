@@ -52,6 +52,46 @@ func test_it_waits_for_the_offline_report_to_close() -> void:
 	GameManager.offline_report_closed.emit()
 	assert_bool(screen.is_showing()).is_true()
 
+## El tiempo jugado es el de partida, no la hora de la pared desde que se creo:
+## una campana de tres horas repartida en una semana no son siete dias jugados.
+## Y la pantalla cuenta lo que la partida fue: tormentas, Diezmos echados, asedios.
+func test_victory_stats_count_played_time_and_the_storms() -> void:
+	var saved: Dictionary = ProgressionManager.get_save_data()
+	var saved_audit = ProgressionManager.final_audit
+	var got: Array = []
+	var probe := func(stats: Dictionary) -> void: got.append(stats)
+	EventBus.victory_achieved.connect(probe)
+	ProgressionManager.reset()
+	ProgressionManager._start_time = Time.get_unix_time_from_system() - 7 * 24 * 3600.0
+	ProgressionManager._played_seconds = 3 * 3600.0
+	ProgressionManager._trigger_victory()
+	EventBus.victory_achieved.disconnect(probe)
+	ProgressionManager.load_save_data(saved)
+	ProgressionManager.final_audit = saved_audit
+	assert_int(got.size()).is_equal(1)
+	assert_float(float(got[0]["time_played"])).is_equal(3 * 3600.0)
+	for key in ["storms_survived", "tithes_repelled", "audit_summons"]:
+		assert_bool(got[0].has(key)).override_failure_message("faltan '%s' en la victoria" % key).is_true()
+	# Y el tiempo jugado viaja en el guardado.
+	ProgressionManager._played_seconds = 1234.0
+	var round_trip: Dictionary = ProgressionManager.get_save_data()
+	assert_float(float(round_trip["played_seconds"])).is_equal(1234.0)
+	ProgressionManager.load_save_data(saved)
+
+func test_the_victory_screen_shows_the_storm_count() -> void:
+	var screen := _screen()
+	screen._on_victory_achieved(STATS.merged({"storms_survived": 11, "tithes_repelled": 9, "audit_summons": 2}))
+	assert_bool(_has_label(screen, Tr.t("LBL_STAT_STORMS"))).is_true()
+	assert_bool(_has_label(screen, Tr.t("LBL_VICTORY_SUBTITLE_AUDIT"))).is_true()
+
+func _has_label(node: Node, text: String) -> bool:
+	if node is Label and (node as Label).text == text:
+		return true
+	for child in node.get_children():
+		if _has_label(child, text):
+			return true
+	return false
+
 func test_without_an_offline_report_it_opens_at_once() -> void:
 	var screen := _screen()
 	screen._on_victory_achieved(STATS)

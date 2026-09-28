@@ -25,6 +25,7 @@ Complete technical documentation for AI and developer context.
 | 17 | [Balance del asedio](17-balance-asedio.md) | La Auditoria Final: por que no se podia ganar, que se cambio y las tablas medidas |
 | 18 | [Vista 2D](18-vista-2d.md) | Spanish: the flat top-down world view (`Main2D.tscn`, `scripts/view2d/`), how to switch (Settings, `-- --view=2d`), what is shared with the 3D view, the service hooks, what differs and the known gaps |
 | 19 | [Exportar](19-exportar.md) | Spanish: building the Windows .exe (templates, preset, exclusions, `dev_mode` off in exports, Beckett gate, save folder), distributing it, and what Linux/macOS/Web/Android would need |
+| 22 | [Línea jugable](22-linea-jugable.md) | Spanish: the whole campaign played at real timings by `tools/line_probe.gd` (ten seeds, before/after tables), the dead ends found and fixed, the storm/Tithe pacing changes, the WHAT TO DO? panel (`Objectives.gd`), remaining risks and a human playtest checklist |
 
 ## Quick Reference
 

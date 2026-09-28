@@ -29,7 +29,7 @@
 | `market_10_trades` | Merchant | Complete 10 market trades | any |
 | `military_ready` | Commander | Have 1 Barracks + 2 Towers | 2-3 |
 | `hq_built` | General | Build Headquarters | 3 |
-| `hq_max` | **Imperial Victory** | Upgrade HQ to Level 3 | 3 |
+| `hq_max` | Final Audit summoned (`MILE_AUDIT`) | Upgrade HQ to Level 3 — **summons the siege, does not win** | 3 |
 
 ### Milestone Detection
 
@@ -40,44 +40,32 @@
 
 ## Victory
 
-When `hq_max` milestone is completed:
-1. `_trigger_victory()` collects stats (time, buildings, trades, milestones)
-2. `EventBus.victory_achieved` emitted with stats dict
-3. `VictoryScreen` shows full-screen overlay with:
-   - "VICTORIA IMPERIAL" title
-   - Flavor text
-   - Time played, buildings built, trades, milestones count
-   - "Keep playing" / "New game" buttons
+`hq_max` no longer wins: `_complete_milestone("hq_max")` calls
+`summon_final_audit()` (3-5 defensive waves, `docs/15-combat.md`). Surviving the last
+wave emits `storm_halted_forever` and only then `_trigger_victory()`:
 
-## Player Flow (~35-45 min real time)
+1. Stats: `time_played` (**played seconds**, `ProgressionManager._played_seconds`,
+   saved — not wall-clock time since creation), buildings built, trades, milestones,
+   `storms_survived`, `tithes_repelled`, `audit_summons`
+2. `EventBus.victory_achieved` emitted with the stats dict
+3. `VictoryScreen`: title, "the Regency left with nothing" subtitle, the stats, a coda
+   line, "Keep playing" / "New game"
+
+"Keep playing" leaves a sandbox: the Storm is halted for good and the WHAT TO DO? panel
+(`Objectives.next_step()`) says so.
+
+## Player Flow (measured, real timings)
+
+Measured with `tools/line_probe.gd` on ten seeds — full tables in
+`docs/22-linea-jugable.md`. A reasonable player that follows the WHAT TO DO? panel:
 
 ```
-Era 1 (Frontier) ~10 min
-  Start: 300 gold + 200 wood + Nucleo
-  -> Build House (workers!)
-  -> Build Sawmill (wood engine)
-  -> Build Gold Mine (gold engine)
-  -> Build Warehouse (storage pressure)
-  -> Mine deposits (forests, gold veins)
-
-Era 2 (Industrial) ~15 min
-  -> Build Foundry = STEEL UNLOCKED
-  -> Iron deposits now mineable
-  -> Build Barracks, Towers
-  -> Market: trade surplus for needed resources
-  -> Upgrade buildings to L2
-
-Era 3 (Petroleum) ~10 min
-  -> Build Refinery = OIL UNLOCKED
-  -> Oil wells now mineable
-  -> Maximize all production
-  -> Upgrade key buildings to L3
-
-Victory Push ~10 min
-  -> Build HQ (500g/300s/200o/200w)
-  -> Upgrade HQ to L2 (800g/500s/300o/400w)
-  -> Upgrade HQ to L3 (1500g/800s/500o/700w)
-  -> IMPERIAL VICTORY!
+Era 1 (Frontier)      0 -> 8-10 min    sawmill, gold mine, house, sawmill, warehouse
+Era 2 (Industrial)    -> 26-44 min     foundry (the Storm arms), barracks, garrison
+                                       (5 units, 2 guns); first storm ~10 min later
+Era 3 (Petroleum)     -> 60-128 min    refinery on a well, two towers, HQ
+Endgame               -> 123-188 min   HQ L2, six vehicles, storage techs, HQ L3
+Final Audit           -> 138-239 min   3-5 waves; median victory 3 h 8 min
 ```
 
 ## Key Files
