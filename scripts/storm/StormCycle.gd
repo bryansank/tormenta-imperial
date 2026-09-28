@@ -30,6 +30,13 @@ var severity: int = 1
 ## Persisted, because forgetting it on reload would make the false alarm free.
 var deferred_severity: int = 0
 var storms_survived: int = 0
+## Diezmos que la guarnicion ha echado. Es lo que engorda la escolta que vuelve
+## (GameConfig.get_assessor_escalation): una provincia que paga no les ha
+## ensenado nada; una que los echa figura en el libro como una que puede mas.
+## Antes la escolta crecia con `storms_survived`, que cuenta tambien los Diezmos
+## pagados, y a la septima tormenta llegaba al tope aunque no se hubiera ganado
+## ninguna (docs/22-linea-jugable.md).
+var tithes_repelled: int = 0
 ## Only the first storm gets the long fuse and the gentle severity.
 var _first: bool = true
 var _tick_accum: float = 0.0
@@ -191,10 +198,12 @@ func _enter_tithe() -> Array:
 
 ## Called once the collection is settled, whether it was repelled or paid.
 ## Re-arms the clock for the next one.
-func settle_tithe(footprint: int, era: int) -> Array:
+func settle_tithe(footprint: int, era: int, repelled: bool = false) -> Array:
 	if phase != Phase.TITHE:
 		return []
 	storms_survived += 1
+	if repelled:
+		tithes_repelled += 1
 	_first = false
 	severity = compute_severity(footprint, era)
 	# The deferred assessment rode along with this storm; the books are square.
@@ -236,6 +245,7 @@ func to_dict() -> Dictionary:
 		"severity": severity,
 		"deferred_severity": deferred_severity,
 		"storms_survived": storms_survived,
+		"tithes_repelled": tithes_repelled,
 		"first": _first,
 	}
 
@@ -249,6 +259,9 @@ static func from_dict(data: Dictionary) -> StormCycle:
 	cycle.severity = int(data.get("severity", 1))
 	cycle.deferred_severity = maxi(0, int(data.get("deferred_severity", 0)))
 	cycle.storms_survived = int(data.get("storms_survived", 0))
+	# Un guardado de antes de este contador no sabe cuantos se echaron: cero, que
+	# es lo prudente (la escolta vuelve a su tamano base, no al del tope).
+	cycle.tithes_repelled = maxi(0, int(data.get("tithes_repelled", 0)))
 	cycle._first = bool(data.get("first", true))
 	# Un save hecho con los Tasadores en la puerta vuelve con los Tasadores en la
 	# puerta. Antes se perdonaba y el reloj volvia a la calma: salir del juego

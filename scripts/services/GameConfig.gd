@@ -985,11 +985,20 @@ var storm_tithe_building_value := 80
 ## menos que un edificio porque la gente es lo último que se toca y lo que más
 ## se nota: un Diezmo que se lleva obreros tiene que doler durante horas.
 var storm_tithe_worker_value := 50
+## La primera visita es un alta en el libro, no un embargo: se llevan su
+## porcentaje de lo almacenado y nada mas. Con la Cuota Minima desde el primer dia,
+## el Diezmo de la primera tormenta (minuto ~9, sin cuartel posible hasta la era 2)
+## se cobraba en obreros a una colonia de cinco casas: la primera lección era
+## perder gente sin haber podido hacer nada (docs/22-linea-jugable.md).
+var storm_first_tithe_has_floor := false
 var storm_tithe_worker_morale := 10
 
-## Carrera armamentística: cada tormenta superada engorda la escolta que vuelve.
+## Carrera armamentística: cada Diezmo echado engorda la escolta que vuelve.
 ## Ganarles hoy no te quita el problema, te lo encarece — que es exactamente lo
 ## que hace una contaduría cuando una provincia demuestra que puede pagar más.
+## Cuenta los Diezmos REPELIDOS (StormCycle.tithes_repelled), no las tormentas:
+## contando las pagadas la escolta llegaba al tope a la séptima sin que el
+## jugador hubiera ganado ninguna.
 var storm_assessor_growth_per_win := 0.15
 ## Con techo, porque el tablero también lo tiene: sin tope, la escalada dejaría
 ## de leerse en cuanto la escolta desbordara `combat_deploy_cap`.
@@ -1005,15 +1014,17 @@ func get_tithe_ratio(severity: int) -> float:
 ## La deuda del día. El suelo existe para el que llega con la bolsa vacía, no
 ## para abaratarle el Diezmo al que llega lleno: por eso manda el mayor de los
 ## dos, y el que acumula sigue pagando el porcentaje de siempre.
-func get_tithe_debt(severity: int, era: int, stored: int) -> int:
+func get_tithe_debt(severity: int, era: int, stored: int, first_visit: bool = false) -> int:
 	var floor_debt: int = storm_tithe_base_debt 		+ storm_tithe_debt_per_severity * maxi(0, severity - 1) 		+ storm_tithe_debt_per_era * maxi(0, era - 1)
+	if first_visit and not storm_first_tithe_has_floor:
+		floor_debt = 0
 	var share: int = int(float(maxi(0, stored)) * get_tithe_ratio(severity))
 	return maxi(floor_debt, share)
 
-## El multiplicador de la escolta por tormentas superadas.
-func get_assessor_escalation(storms_survived: int) -> float:
+## El multiplicador de la escolta por Diezmos echados.
+func get_assessor_escalation(tithes_repelled: int) -> float:
 	return clampf(
-		1.0 + storm_assessor_growth_per_win * float(maxi(0, storms_survived)),
+		1.0 + storm_assessor_growth_per_win * float(maxi(0, tithes_repelled)),
 		1.0, storm_assessor_growth_max)
 
 func get_storm_first_interval() -> float:
