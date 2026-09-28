@@ -56,7 +56,7 @@ Workers for one of each: 2+3+3+4+3+1+1+5 = 22. For every building at its limit
 
 ## Consumption
 
-Every 30 seconds (`_consumption_interval`), each pop unit consumes:
+Every 30 seconds (`GameConfig.consumption_interval`; 60 s in the first two phases), each pop unit consumes:
 - 1 wood (heating/shelter)
 - 1 gold (wages)
 

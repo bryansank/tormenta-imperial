@@ -424,7 +424,8 @@ Never put any of this in the save, and never put game state in `settings.cfg`. T
 locale is `es`/`en`, applied to `Tr` at startup. The language selector lives in SettingsPanel:
 `GameConfig.set_locale()` saves it and emits `EventBus.locale_changed`, and GameManager
 answers by saving and reloading the scene with the same game (`reload_keeping_game()`),
-so every panel is rebuilt in the new language. With a board open it does not reload
+so every panel is rebuilt in the new language (the in-memory notification log is lost
+and Settings closes; accepted). With a board open it does not reload
 (the board is not saved); the language shows everywhere on the next start.
 
 ### Save/Load System

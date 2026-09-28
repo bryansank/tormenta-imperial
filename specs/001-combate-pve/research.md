@@ -20,7 +20,7 @@ Resuelve las incógnitas técnicas del plan. Cada decisión lista qué se eligi�
 
 **Rationale**: legibilidad en móvil garantizada (celdas de tamaño fijo, targets táctiles ≥44px); reutiliza `UITheme` y `UILayoutManager` (Principio V); cero malabares de cámara 3D ni cambio de escena; el spec solo exige "tablero de batalla por celdas". Un tablero 2D limpio con iconografía dieselpunk es más legible en un GIF que 3D low-poly a 45°.
 
-**Alternativas descartadas**: escena 3D separada con `change_scene` (rompe el estado de los autoloads de UI y complica reanudar); tablero 3D sobre la isla (ilegible en 6", colisiona con el grid 25x25 de la base).
+**Alternativas descartadas**: escena 3D separada con `change_scene` (rompe el estado de los autoloads de UI y complica reanudar); tablero 3D sobre la isla (ilegible en 6", colisiona con la rejilla de la base, entonces de 25x25 y hoy de 40x40).
 
 ## D3 — Un solo dueño del dominio: `CombatManager`
 
