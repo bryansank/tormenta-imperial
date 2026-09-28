@@ -20,6 +20,8 @@ signal canceled
 
 const LAYER := 40
 const MAX_WIDTH := 1000.0
+## La confirmacion es una frase y dos botones: no necesita la tarjeta ancha.
+const CONFIRM_WIDTH := 600.0
 const CARD_MIN_H := 150.0
 const WIDE := 900.0
 const MEDIUM := 520.0
@@ -63,7 +65,7 @@ func _setup_ui() -> void:
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_root)
-	_root.add_child(ModalKit.make_backdrop(0.72))
+	_root.add_child(ModalKit.make_backdrop(0.85))
 
 	_card = ModalKit.make_card(10)
 	_root.add_child(_card)
@@ -181,7 +183,10 @@ func _relayout() -> void:
 	if _card == null:
 		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	ModalKit.fit_center(_card, MAX_WIDTH, vp)
+	var confirming: bool = _confirm_box != null and _confirm_box.visible
+	ModalKit.fit_center(_card, CONFIRM_WIDTH if confirming else MAX_WIDTH, vp)
+	if confirming:
+		return
 	_grid.columns = columns_for(_card.custom_minimum_size.x)
 	# Lo que no quepa en alto se desplaza: el resto de la tarjeta (titulo,
 	# objetivo, botones) necesita unos 300 px.
@@ -200,6 +205,7 @@ func _select(mode: int) -> void:
 func _show_pick() -> void:
 	_pick_box.visible = true
 	_confirm_box.visible = false
+	_relayout()
 	(_cards.get(chosen_mode, _start_btn) as Control).grab_focus.call_deferred()
 
 func is_confirming() -> bool:
@@ -213,6 +219,7 @@ func _on_start() -> void:
 		GameMode.display_name(_current_mode), GameMode.display_name(chosen_mode)]
 	_pick_box.visible = false
 	_confirm_box.visible = true
+	_relayout()
 
 ## Elige y sigue. Publicos para las pruebas y para quien quiera saltarse la UI.
 func pick(mode: int) -> void:

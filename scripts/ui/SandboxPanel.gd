@@ -13,8 +13,13 @@ extends CanvasLayer
 const LAYER := 11
 const TAB_W := 120.0
 const CARD_W := 300.0
-## Debajo de la barra de recursos (ranura top_left) y de su boton de pausa.
-const TOP := 150.0
+## Debajo de la barra de recursos, la de poblacion y el globo de ayuda que
+## explica los recursos: el hueco libre de la columna izquierda antes de los
+## avisos (ranura toast_area, abajo a la izquierda).
+const TOP := 228.0
+## La tarjeta se abre a la derecha de esa columna (UILayoutConfig: left_panel
+## mide 354 como mucho), para no tapar los avisos que salen debajo.
+const CARD_LEFT := 364.0
 
 var _root: Control
 var _tab: Button
@@ -55,7 +60,7 @@ func _setup_ui() -> void:
 	_card = ModalKit.make_card(8)
 	_card.visible = false
 	_card.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_card.position = Vector2(ModalKit.EDGE * 0.5, TOP + UITheme.MIN_BTN_H + 6.0)
+	get_viewport().size_changed.connect(_relayout)
 	_card.custom_minimum_size = Vector2(CARD_W, 0)
 	_root.add_child(_card)
 	var column: VBoxContainer = _card.get_child(0)
@@ -68,6 +73,18 @@ func _setup_ui() -> void:
 	column.add_child(_status)
 	var hint := ModalKit.make_text(Tr.t("LBL_SANDBOX_HINT"), "small", UITheme.TEXT_DIM)
 	column.add_child(hint)
+	_relayout()
+
+## A la derecha de la columna izquierda si cabe; en una pantalla estrecha (movil
+## en vertical) debajo de la pestana, al ancho que quede.
+func _relayout() -> void:
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	if vp.x >= CARD_LEFT + CARD_W + ModalKit.EDGE:
+		_card.custom_minimum_size.x = CARD_W
+		_card.position = Vector2(CARD_LEFT, TOP)
+	else:
+		_card.custom_minimum_size.x = minf(CARD_W, vp.x - ModalKit.EDGE * 2.0)
+		_card.position = Vector2(ModalKit.EDGE * 0.5, TOP + UITheme.MIN_BTN_H + 6.0)
 
 ## Visible solo en Sandbox; los botones, apagados cuando no pueden hacer nada.
 func refresh() -> void:
