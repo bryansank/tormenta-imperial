@@ -229,3 +229,26 @@ func test_the_hunger_counter_travels_in_the_save() -> void:
 	# Un guardado viejo sin contador se carga sin deuda pendiente.
 	PopulationManager.load_save_data({"population": 4, "morale": 50})
 	assert_int(PopulationManager.get_unpaid_ticks()).is_equal(0)
+
+# ── La salida del pozo ───────────────────────────────────────────────
+
+## Sin casas en la rejilla de los tests el aforo sale 0: se fija a mano.
+func _colony(population: int, morale: int, room: int) -> void:
+	PopulationManager.load_save_data({"population": population, "morale": morale})
+	PopulationManager._max_population = room
+	PopulationManager._population = population
+
+## Atasco de la linea jugable: con la colonia hundida en 1 habitante y la moral a
+## 0 no nacia nadie (hace falta moral 30), sin obreros no producia la mina, sin
+## oro no se pagaba la comida y sin comida la moral no subia. Por debajo del suelo
+## de rebrote la gente vuelve igual; por encima manda la moral de siempre.
+func test_a_ruined_colony_regrows_up_to_the_floor_even_without_morale() -> void:
+	_colony(1, 0, 11)
+	for i in range(GameConfig.population_regrow_floor + 3):
+		PopulationManager._tick_growth()
+	assert_int(PopulationManager.get_population()).is_equal(GameConfig.population_regrow_floor)
+
+func test_above_the_floor_an_unhappy_colony_still_does_not_grow() -> void:
+	_colony(GameConfig.population_regrow_floor, 0, 11)
+	PopulationManager._tick_growth()
+	assert_int(PopulationManager.get_population()).is_equal(GameConfig.population_regrow_floor)

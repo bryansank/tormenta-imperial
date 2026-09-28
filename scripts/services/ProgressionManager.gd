@@ -18,6 +18,18 @@ var final_audit: FinalAudit = null
 var _trade_count := 0
 var _stats := {"buildings_built": 0, "resources_gathered": 0, "trades_completed": 0}
 var _start_time := 0.0
+## Segundos de partida jugados de verdad: suma el delta de cada fotograma con el
+## juego en marcha y sin pausa. La pantalla de victoria leia antes la hora de la
+## pared menos la de creacion, asi que una partida de tres horas repartida en una
+## semana ponia "7 dias jugados". Viaja en el guardado.
+var _played_seconds := 0.0
+
+func _process(delta: float) -> void:
+	if GameManager.is_started():
+		_played_seconds += delta
+
+func get_played_seconds() -> float:
+	return _played_seconds
 
 func _ready() -> void:
 	_start_time = Time.get_unix_time_from_system()
@@ -226,12 +238,14 @@ func _read_morale() -> float:
 
 ## Reached only through the final audit now. Nothing else emits it.
 func _trigger_victory() -> void:
-	var elapsed := Time.get_unix_time_from_system() - _start_time
 	var stats := {
-		"time_played": elapsed,
+		"time_played": _played_seconds,
 		"buildings_built": _stats["buildings_built"],
 		"trades_completed": _stats["trades_completed"],
 		"milestones": milestones_completed.size(),
+		"storms_survived": StormManager.storms_survived(),
+		"tithes_repelled": StormManager.tithes_repelled(),
+		"audit_summons": final_audit.summons if final_audit != null else 1,
 	}
 	EventBus.victory_achieved.emit(stats)
 
@@ -277,6 +291,7 @@ func get_save_data() -> Dictionary:
 		"trade_count": _trade_count,
 		"stats": _stats.duplicate(),
 		"start_time": _start_time,
+		"played_seconds": _played_seconds,
 		"final_audit": final_audit.to_dict() if final_audit != null else {},
 	}
 
@@ -287,6 +302,8 @@ func load_save_data(data: Dictionary) -> void:
 	_trade_count = data.get("trade_count", 0)
 	_stats = data.get("stats", {"buildings_built": 0, "resources_gathered": 0, "trades_completed": 0})
 	_start_time = data.get("start_time", Time.get_unix_time_from_system())
+	# Un guardado anterior no sabe cuanto se jugo: empieza a contar desde aqui.
+	_played_seconds = maxf(0.0, float(data.get("played_seconds", 0.0)))
 	# A save older than the audit has no key, which simply means "never summoned"
 	# and is not something to migrate (constitution, principle V).
 	final_audit = FinalAuditScript.from_dict(data.get("final_audit", {}), current_era)
@@ -314,6 +331,7 @@ func reset() -> void:
 	_trade_count = 0
 	_stats = {"buildings_built": 0, "resources_gathered": 0, "trades_completed": 0}
 	_start_time = Time.get_unix_time_from_system()
+	_played_seconds = 0.0
 
 # ── Helpers ──
 

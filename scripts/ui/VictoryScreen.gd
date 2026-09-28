@@ -43,7 +43,7 @@ func _show_victory(stats: Dictionary) -> void:
 	vbox.add_child(title)
 
 	# Subtitle
-	var subtitle := UITheme.make_label(Tr.t("LBL_VICTORY_SUBTITLE"), "body", UITheme.TEXT_DIM)
+	var subtitle := UITheme.make_label(Tr.t("LBL_VICTORY_SUBTITLE_AUDIT"), "body", UITheme.TEXT_DIM)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(subtitle)
@@ -56,6 +56,16 @@ func _show_victory(stats: Dictionary) -> void:
 	_add_stat(vbox, Tr.t("LBL_STAT_BUILDINGS"), str(stats.get("buildings_built", 0)))
 	_add_stat(vbox, Tr.t("LBL_STAT_TRADES"), str(stats.get("trades_completed", 0)))
 	_add_stat(vbox, Tr.t("LBL_STAT_MILESTONES"), str(stats.get("milestones", 0)))
+	# Lo que de verdad cuenta la partida: cuantas veces volvio la Tormenta, cuantas
+	# se les echo, y a la cuantas se gano el asedio.
+	_add_stat(vbox, Tr.t("LBL_STAT_STORMS"), "%d" % int(stats.get("storms_survived", 0)))
+	_add_stat(vbox, Tr.t("LBL_STAT_TITHES_REPELLED"), "%d" % int(stats.get("tithes_repelled", 0)))
+	_add_stat(vbox, Tr.t("LBL_STAT_SUMMONS"), "%d" % int(stats.get("audit_summons", 1)))
+
+	var coda := UITheme.make_label(Tr.t("LBL_VICTORY_CODA"), "small", UITheme.ACCENT)
+	coda.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	coda.autowrap_mode = TextServer.AUTOWRAP_WORD
+	vbox.add_child(coda)
 
 	vbox.add_child(UITheme.make_separator())
 

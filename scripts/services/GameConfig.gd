@@ -533,7 +533,8 @@ var milestone_definitions := [
 	{"id": "market_10_trades", "name": "MILE_MERCHANT", "era": 0},
 	{"id": "military_ready", "name": "MILE_COMMANDER", "era": 0},
 	{"id": "hq_built", "name": "MILE_GENERAL", "era": 3},
-	{"id": "hq_max", "name": "MILE_VICTORY", "era": 3},
+	# hq_max ya no gana: convoca la Auditoria Final. El nombre decia "Victoria".
+	{"id": "hq_max", "name": "MILE_AUDIT", "era": 3},
 ]
 
 # ── Tech Tree Config ──
@@ -867,6 +868,10 @@ var storm_warning := 45.0
 var storm_ash_duration := 60.0
 var storm_duration := 60.0
 
+## En que fase de la colonia se arma el reloj de la Tormenta. Hasta ella no
+## existe: la colonia todavia no sale en el libro.
+var storm_arm_phase: int = Phase.SETTLEMENT
+
 ## The first storm is deliberately late and gentle: it has to teach the cycle,
 ## not end the run.
 var storm_first_interval := 420.0
@@ -1163,6 +1168,10 @@ var desertion_morale_penalty := -5
 ## El suelo de ruina: se puede caer hasta el fondo, pero no se pierde la partida.
 ## Siempre queda alguien para volver a empezar.
 var population_floor := 1
+## Por debajo de esta poblacion la gente vuelve a nacer aunque la moral este bajo
+## el umbral de crecimiento: son los cinco del Nucleo, justo los obreros del
+## primer aserradero y la primera mina. Es la salida del pozo (docs/22-linea-jugable.md).
+var population_regrow_floor := 5
 
 ## Cuanto devuelve cancelar ahora mismo.
 func get_cancel_refund_ratio() -> float:

@@ -94,7 +94,7 @@ func tithes_repelled() -> int:
 func _check_arming() -> void:
 	if _halted or _armed:
 		return
-	if ProgressionManager.current_phase >= GameConfig.Phase.SETTLEMENT:
+	if ProgressionManager.current_phase >= GameConfig.storm_arm_phase:
 		_armed = true
 
 ## Hay tormenta en marcha (cualquier fase que no sea la calma). Es la mitad de
