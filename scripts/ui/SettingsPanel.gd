@@ -363,18 +363,20 @@ func _build_controls_tab(body: VBoxContainer) -> void:
 	)
 	row.name = "TouchControlsRow"
 	body.add_child(row)
+	# Opacidad de los controles en pantalla (tactil): se ve al momento y se guarda.
 	body.add_child(_make_percent_row("touch_opacity", Tr.t("LBL_TOUCH_OPACITY"),
-		GameConfig.ui_touch_controls_opacity, GameConfig.TOUCH_OPACITY_MIN, 1.0,
-		func(v: float): GameConfig.set_touch_controls_opacity(v),
+		GameConfig.ui_touch_controls_opacity, GameConfig.TOUCH_OPACITY_MIN, GameConfig.TOUCH_OPACITY_MAX,
+		func(v: float): GameConfig.set_touch_controls_opacity(v, false),
 		func(): GameConfig.save_user_settings()))
 	body.add_child(_make_hint(Tr.ti("LBL_CONTROLS_SUMMARY")))
 	_add_reset(body, reset_controls)
 
 func reset_controls() -> void:
 	GameConfig.set_touch_controls("auto")
+	GameConfig.set_touch_controls_opacity(0.45)
 	var op: HSlider = _audio_sliders.get("touch_opacity")
 	if op != null:
-		op.value = 0.55
+		op.set_value_no_signal(GameConfig.ui_touch_controls_opacity)
 	var row := find_child("TouchControlsRow", true, false)
 	if row != null:
 		(row.get_child(1) as OptionButton).selected = 0

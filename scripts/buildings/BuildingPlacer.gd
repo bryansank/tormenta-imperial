@@ -2,6 +2,8 @@ extends Node3D
 ## Handles building placement and moving via raycasting to the ground plane.
 ## States: IDLE → PLACING (new building) or MOVING (existing building).
 ## Left click = place/confirm. Escape = cancel. Mouse hover = preview.
+## Con el dedo: tocar lleva el fantasma, tocar el fantasma o ✓ lo planta, y las
+## casillas validas de un extractor se ven en verde (PlacementAssist, docs/21).
 
 enum State { IDLE, PLACING, MOVING }
 
@@ -15,6 +17,7 @@ const PointerMath := preload("res://scripts/services/InputService.gd")
 ## Las reglas (veredicto, topes, demoler, guardar) son las mismas en la vista 2D:
 ## viven en PlacementRules y aqui solo se llaman.
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
@@ -43,6 +46,10 @@ var _last_preview_valid := true
 
 # Container for all placed buildings
 var _buildings_container: Node3D
+## Dedo, casillas validas y boton ✓ (compartido con la vista 2D).
+var _assist: Node = null
+## Casillas donde cabe el extractor en curso, en verde sobre el suelo.
+var _spot_highlight: MultiMeshInstance3D = null
 
 func _ready() -> void:
 	_buildings_container = Node3D.new()
@@ -70,8 +77,20 @@ func _ready() -> void:
 	EventBus.building_deselected.connect(_on_building_deselected)
 	EventBus.building_rotate_requested.connect(_on_rotate_requested)
 	GameManager.register_placer(self)
+	_assist = Assist.new()
+	_assist.name = "PlacementAssist"
+	_assist.setup(self)
+	add_child(_assist)
+
+func _input(event: InputEvent) -> void:
+	if _state != State.IDLE:
+		_assist.notice_input(event)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _state != State.IDLE and (event is InputEventScreenTouch or event is InputEventScreenDrag):
+		if _assist.handle_touch(event):
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_handle_left_button(event)
@@ -122,6 +141,10 @@ func _handle_left_button(event: InputEventMouseButton) -> void:
 	# Release: a click without drag places or selects; a drag was a camera pan.
 	var was_click := _left_pressed and not _left_dragged
 	if _left_from_touch and InputService.touch_pan_consumed_click():
+		was_click = false
+	# Colocando, el dedo lo lleva PlacementAssist con los toques de verdad: el
+	# clic emulado que Godot fabrica al levantarlo no planta nada.
+	if _left_from_touch and _state != State.IDLE:
 		was_click = false
 	_left_pressed = false
 	_left_dragged = false
@@ -175,6 +198,10 @@ func _rotate_building() -> void:
 	_rotation_steps = (_rotation_steps + 1) % 4
 	_hover_cell = Vector2i(-1, -1)  # Force preview refresh
 	_rebuild_preview()
+	# La huella girada cabe en otros sitios: se repintan las casillas validas.
+	_assist.refresh_spots()
+	if _assist.touch_aim:
+		_assist.move_to(_assist.cell, false)
 
 func _rebuild_preview() -> void:
 	if not _preview_node or not _current_data:
@@ -204,12 +231,19 @@ func _raycast_to_ground(screen_pos: Vector2) -> Variant:
 # ── Preview ──
 
 func _update_preview() -> void:
+	# Con el dedo el fantasma esta donde lo dejo el ultimo toque, no donde quedo
+	# el raton emulado.
+	if _assist.touch_aim:
+		if GridManager.is_valid_cell(_assist.cell):
+			_set_preview_cell(_assist.cell)
+		return
 	var mouse_pos := get_viewport().get_mouse_position()
 	var hit = _raycast_to_ground(mouse_pos)
 	if hit == null:
 		return
+	_set_preview_cell(GridManager.world_to_cell(hit as Vector3))
 
-	var cell := GridManager.world_to_cell(hit as Vector3)
+func _set_preview_cell(cell: Vector2i) -> void:
 	if cell == _hover_cell:
 		return
 	_hover_cell = cell
@@ -237,6 +271,7 @@ func _on_building_selected(data: Resource) -> void:
 	_rotation_steps = 0
 	_state = State.PLACING
 	_create_preview()
+	_assist.begin()
 
 func _handle_left_click(screen_pos: Vector2) -> void:
 	if _state == State.IDLE:
@@ -357,6 +392,7 @@ func _start_moving(building: Node3D) -> void:
 	_moving_building.visible = false
 	_create_preview()
 	_rebuild_preview()
+	_assist.begin()
 
 func _try_move(cell: Vector2i) -> void:
 	var rotated_size := _get_rotated_size()
@@ -403,7 +439,11 @@ func _try_move(cell: Vector2i) -> void:
 ## The scene's MapGenerator, or null (tests, or a scene without one).
 func _map_generator() -> Node:
 	var scene := get_tree().current_scene if is_inside_tree() else null
-	return scene.get_node_or_null("MapGenerator") if scene else null
+	var found: Node = scene.get_node_or_null("MapGenerator") if scene else null
+	# Como en la 2D: un hermano llamado MapGenerator (tests, herramientas).
+	if found == null and get_parent():
+		found = get_parent().get_node_or_null("MapGenerator")
+	return found
 
 ## Full placement verdict for `building_id` with footprint `size` at `cell`:
 ## the GameConfig deposit rule (reach / overlap) AND free cells. Static so the
@@ -481,6 +521,8 @@ func _cleanup_preview() -> void:
 		_preview_meshes.clear()
 	_hide_grid_overlay()
 	_hover_cell = Vector2i(-1, -1)
+	if _assist:
+		_assist.end()
 
 ## Sin colocar ni mover nada. El menu de pausa lo pregunta antes de abrirse con
 ## ESC: mientras hay un edificio en la mano, ESC es "cancelar", no "pausa".
@@ -617,14 +659,14 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 
 func _show_grid_overlay() -> void:
 	# Show the main scene GridOverlay (shader-based)
-	var scene_grid := get_tree().current_scene.get_node_or_null("GridOverlay")
+	var scene_grid: Node = get_tree().current_scene.get_node_or_null("GridOverlay") if get_tree().current_scene else null
 	if scene_grid:
 		scene_grid.visible = true
 
 func _hide_grid_overlay() -> void:
 	# Restore the user preference instead of always hiding — the Settings
 	# toggle can keep the grid permanently visible.
-	var scene_grid := get_tree().current_scene.get_node_or_null("GridOverlay")
+	var scene_grid: Node = get_tree().current_scene.get_node_or_null("GridOverlay") if get_tree().current_scene else null
 	if scene_grid:
 		scene_grid.visible = GameConfig.ui_grid_visible
 
@@ -662,6 +704,8 @@ func _show_feedback(text: String) -> void:
 		_feedback_label.add_theme_constant_override("outline_size", 4)
 		_feedback_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 		var panel := PanelContainer.new()
+		# Un aviso no es un boton: el dedo que cae encima sigue siendo del mapa.
+		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		panel.set_anchors_preset(Control.PRESET_CENTER)
 		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		panel.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -703,3 +747,120 @@ func _on_building_deselected() -> void:
 		var name_label := child.get_node_or_null("NameLabel")
 		if name_label:
 			name_label.visible = false
+
+# ── PlacementAssist (dedo, casillas validas, ✓) ───────────────────────
+
+## Casilla bajo un punto de pantalla SIN recortar a la rejilla: un toque en el
+## agua no es un toque en la casilla del borde. (-1, -1) si no corta el suelo.
+func assist_screen_to_cell(screen_pos: Vector2) -> Vector2i:
+	var hit = _raycast_to_ground(screen_pos)
+	if hit == null:
+		return Vector2i(-1, -1)
+	var local: Vector3 = (hit as Vector3) - GridManager.get_origin()
+	return Vector2i(floori(local.x / GridManager.cell_size), floori(local.z / GridManager.cell_size))
+
+func assist_cell_to_screen(origin: Vector2i, size: Vector2i) -> Variant:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return null
+	var w := GridManager.building_center(origin, size)
+	if cam.is_position_behind(w):
+		return null
+	return cam.unproject_position(w)
+
+func assist_ghost_top_screen(origin: Vector2i) -> Variant:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null or _current_data == null or not GridManager.is_valid_cell(origin):
+		return null
+	var w := GridManager.building_center(origin, _get_rotated_size()) + Vector3(0.0, _current_data.mesh_height, 0.0)
+	if cam.is_position_behind(w):
+		return null
+	var p := cam.unproject_position(w)
+	return p if get_viewport().get_visible_rect().has_point(p) else null
+
+func assist_move_ghost(origin: Vector2i) -> void:
+	if GridManager.is_valid_cell(origin):
+		_set_preview_cell(origin)
+
+func assist_confirm(origin: Vector2i) -> void:
+	if _state == State.PLACING:
+		_try_place(origin)
+	elif _state == State.MOVING:
+		_try_move(origin)
+	_hover_cell = Vector2i(-1, -1)
+
+## Por que no se puede en `origin`: el mismo aviso que el clic rechazado.
+func assist_explain(origin: Vector2i) -> void:
+	if _current_data == null:
+		return
+	if not GridManager.is_valid_cell(origin):
+		_show_feedback(Tr.t("LBL_OUTSIDE_MAP"))
+		return
+	var ignore: Node = _moving_building if _state == State.MOVING else null
+	var verdict := evaluate_placement(_current_data.id, origin, _get_rotated_size(), _map_generator(), ignore)
+	if verdict["reason"] == "deposit":
+		_reject_for_deposit(_current_data.id)
+	elif verdict["reason"] == "occupied":
+		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
+
+func assist_feedback(text: String) -> void:
+	_show_feedback(text)
+
+func assist_building_id() -> String:
+	return _current_data.id if _current_data else ""
+
+func assist_ghost_size() -> Vector2i:
+	return _get_rotated_size() if _current_data else Vector2i.ONE
+
+func assist_map_generator() -> Node:
+	return _map_generator()
+
+func assist_moving_node() -> Node:
+	return _moving_building if _state == State.MOVING else null
+
+func assist_is_placing() -> bool:
+	return _state != State.IDLE
+
+## Lleva la camara para que el origen `origin` quede en el centro de la pantalla.
+func assist_center_on(origin: Vector2i) -> void:
+	var vp := get_viewport().get_visible_rect().size
+	var centre = _raycast_to_ground(vp * 0.5)
+	if centre == null:
+		return
+	var w := GridManager.building_center(origin, assist_ghost_size())
+	var c := centre as Vector3
+	EventBus.camera_drag_world_requested.emit(Vector2(w.x - c.x, w.z - c.z))
+
+func assist_show_cells(cells: Array) -> void:
+	if cells.is_empty():
+		if _spot_highlight:
+			_spot_highlight.visible = false
+		return
+	if _spot_highlight == null:
+		_spot_highlight = MultiMeshInstance3D.new()
+		_spot_highlight.name = "ValidSpots"
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		var plane := PlaneMesh.new()
+		plane.size = Vector2.ONE * GridManager.cell_size * 0.86
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(Assist.SPOT_COLOR, 0.6)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		plane.material = mat
+		mm.mesh = plane
+		_spot_highlight.multimesh = mm
+		add_child(_spot_highlight)
+	var multimesh := _spot_highlight.multimesh
+	multimesh.instance_count = cells.size()
+	for i in cells.size():
+		var w := GridManager.cell_to_world(cells[i])
+		multimesh.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(w.x, 0.06, w.z)))
+	_spot_highlight.visible = true
+
+func get_spot_highlight() -> MultiMeshInstance3D:
+	return _spot_highlight
+
+func get_assist() -> Node:
+	return _assist

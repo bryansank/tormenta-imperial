@@ -247,6 +247,119 @@ WASD, rueda, ratón o clic.
 - Suites: `tests/ui/test_device_profile.gd`, `test_ui_palettes.gd`,
   `test_hud_layout.gd`, `test_settings_tabs.gd`, y `test_touch_controls.gd`
   (actualizado: PC nunca enciende los controles en "Automático").
+- Tacto: ver §9.
+
+## 9. Tacto (dedo)
+
+Lo que hace que una tablet se juegue con el dedo, y dónde vive. Diagnóstico de
+partida: `tormenta-imperial-contexto/07_DIAGNOSTICO_JUGABILIDAD.md` (bugs 5, 7,
+8, 10 y 13).
+
+### El mapa se arrastra casi en cualquier sitio
+
+- El GUI entrega un `InputEventScreenTouch` a **cualquier** `Control` que no sea
+  `MOUSE_FILTER_IGNORE` bajo el dedo, y lo da por manejado; un `Container` vale
+  `PASS` por defecto y un `Control` pelado `STOP`. Además `InputService`
+  descarta el toque si hay un control "hovered". Regla: **solo los botones,
+  deslizadores y paneles de verdad paran el dedo**; todo contenedor o hueco que
+  quede encima del mapa va en `IGNORE`.
+- `OnScreenControls`: la fila inferior, la columna derecha, la cruceta, su
+  centro vacío y las filas de giro y zoom en `IGNORE`. El aviso de colocación
+  rechazada (`BuildingPlacer._show_feedback`) también.
+- Medido a 1280x800 con el perfil tablet (sonda con ventana, mapas en
+  `tormenta-imperial-contexto/diagnostico/fx*_blockmap*_overlay.png`), en % de
+  la pantalla entera que llega al mapa:
+
+  | | Reposo | Colocando |
+  |---|---|---|
+  | Antes (E1 / IB) | 73,6 % / 71,4 % | 56,2 % / 53,2 % |
+  | 3D ahora | 89,3 % | 87,8 % |
+  | 2D ahora | 90,3 % | 85,5 % (con la tarjeta de población ya abierta) |
+
+  Lo que falta son botones de verdad (cruceta, zoom, R, CANCELAR, ☰ MENÚ, CONSTRUIR, GUÍA),
+  la barra de recursos y la tarjeta de población. `tests/ui/test_touch_passthrough.gd` repite
+  el barrido en headless y exige el 90 % de los puntos que no caen sobre un
+  control de verdad (da el 100 %).
+
+### Toque o arrastre: el umbral en dp
+
+`GameConfig.touch_drag_threshold_dp` (14 dp, unos 2,2 mm) pasado a píxeles del
+lienzo con el dpi real y la escala (`InputService.touch_slop_px()`), sin bajar de
+`touch_drag_threshold_px` (8). Los 12 px físicos de antes eran 1,1 mm en una
+tablet de 280 dpi y un toque normal se volvía arrastre. El paneo no pierde nada
+por esperar: arranca desde donde se apoyó el dedo.
+
+### Construir con el dedo (`PlacementAssist`)
+
+Común a `BuildingPlacer` (3D) y `BuildingPlacer2D`; cada colocador responde a
+los métodos `assist_*`. Con ratón nada cambia: el fantasma sigue al cursor y el
+clic planta. Con el dedo:
+
+| Gesto | Qué hace |
+|---|---|
+| Tocar el mapa | Lleva el fantasma bajo el dedo (centrado), verde o rojo. Si es rojo, dice por qué en el acto (bosque, ocupado, fuera del mapa). En la franja verde de un extractor, se ajusta al hueco válido que cubre el dedo |
+| Tocar el fantasma | Lo planta (mismo veredicto y cobro que el clic) |
+| **✓ CONSTRUIR AQUÍ** | El botón que flota sobre el fantasma; lo planta. Solo sale si el sitio vale |
+| Apoyar en el fantasma y arrastrar | Lo mueve con el dedo; no panea |
+| Arrastrar en otro sitio | Mueve el mapa, como siempre |
+| Dos dedos | Pellizco o giro; el fantasma se queda donde está |
+
+**Por qué apuntar y confirmar** y no "planta al levantar el dedo": en tactil no
+hay hover, así que sin este paso el jugador paga antes de ver si el sitio vale.
+Con el fantasma verde y ✓ delante, el primer aserradero sale al segundo toque.
+Para construir en serie (calzadas) basta tocar la casilla siguiente y el
+fantasma. El clic emulado que Godot fabrica al levantar el dedo se ignora
+mientras se coloca, y el dedo que pulsa ✓ no mueve después el fantasma.
+
+El fantasma lo apunta el dedo (`touch_aim`) desde que empieza la colocación si
+el perfil es táctil o ya llegó un toque; un movimiento de ratón de verdad
+devuelve el mando al cursor.
+
+**La regla del yacimiento se ve antes de colocar:**
+
+- La ficha de `ConstructionMenu` dice "▲ Necesita bosque adyacente" (o la veta,
+  el hierro, el pozo): `PlacementAssist.rule_text(id)`, claves `LBL_RULE_*`.
+- Al colocar un extractor se pintan en verde pálido las casillas donde cabe
+  (`PlacementAssist.valid_spots`, el mismo `PlacementRules.evaluate_placement`
+  del clic). En tactil el fantasma sale ya en la más cercana al centro de la
+  pantalla, y si no hay ninguna a la vista la cámara va a ella.
+- Empezar a colocar cierra el ☰ MENÚ si estaba abierto.
+
+### Mantener pulsado repite
+
+Todos los botones de `OnScreenControls` disparan al tocar
+(`ACTION_MODE_BUTTON_PRESS`). Mantenidos más de `hold_repeat_delay_sec` (0,3 s):
+la cruceta panea cada frame, zoom y giro siguen de forma continua
+(`HOLD_ZOOM_PER_SEC`, `hold_rotate_degrees_per_sec` = 90°/s tras el paso de 45°),
+R un cuarto de vuelta cada 0,45 s. CANCELAR no repite.
+
+### Controles semitransparentes
+
+`GameConfig.ui_touch_controls_opacity` (0,45 de serie, 15–100 %), en
+`settings.cfg [ui] touch_controls_opacity` (la clave vieja `touch_opacity` del
+menú único se lee si no hay otra y se borra al guardar: hay un solo ajuste). Se aplica a cada botón entero
+(fondo, borde y símbolo); el que se pulsa se ve al 100 % y vuelve en 0,2 s al
+soltar. Ajustes → Controles → "Opacidad de los controles", al momento. En PC los
+controles siguen sin salir por defecto.
+
+### Girar con dos dedos (3D)
+
+`InputService` sigue los dos dedos, mide la separación y el ángulo de la línea
+que los une, y bloquea el gesto en lo primero que pase su umbral
+(`twist_lock_degrees` = 8° de giro antes que `pinch_lock_scale` = 8 % de
+separación → giro; al revés → zoom; `decide_two_finger_lock`, pura). El giro va
+1:1 por `camera_rotate_step_requested`: el terreno gira con los dedos. Levantar
+un dedo reinicia el bloqueo. En 2D no hay giro (docs/18) y un giro tampoco da
+zoom.
+
+### Tests y sonda
+
+`tests/input/test_twist_gesture.gd`, `tests/ui/test_touch_hold_opacity.gd`,
+`tests/ui/test_touch_passthrough.gd`, `tests/ui/test_touch_placement.gd` (3D y
+2D). La sonda con ventana del diagnóstico
+(`tormenta-imperial-contexto/diagnostico/_sonda/Probe.gd`) sirve para el mapa de
+bloqueo y el recorrido completo con toques sintéticos; siempre con un
+`override.cfg` que apunte a otra carpeta de datos.
 
 ## 10. Huecos conocidos
 
@@ -259,4 +372,8 @@ WASD, rueda, ratón o clic.
 - Los avisos (capa 19) se dibujan encima de Ajustes y de los globos: es a
   propósito (tienen que verse sobre el tablero), pero tapan unos segundos.
 - Los controles en pantalla (D-pad, zoom) no son movibles: son una sola capa a
-  pantalla completa.
+  pantalla completa (sus contenedores no paran el dedo, §9).
+- Si el fantasma sale de la pantalla, el botón ✓ se queda abajo al centro en
+  vez de flotar sobre él.
+- La barra de recursos (ResourceHUD) es un panel STOP de ~280x100: es de verdad,
+  pero tapa el mapa en la esquina.
