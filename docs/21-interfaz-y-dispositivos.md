@@ -98,8 +98,18 @@ y se verá al terminar.
 `scripts/ui/HudRegistry.gd` es el registro central. Elementos que se pueden
 ocultar: recursos y almacén, población/obreros/moral, botón del registro,
 objetivo, indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
-mismo interruptor que AYUDA del menú ☰), texto de turno en batalla. El menú ☰ y
-la pausa no están en el registro: no se pueden ocultar.
+mismo interruptor que AYUDA del menú ☰), texto de turno en batalla y las
+herramientas Sandbox (solo existen en ese modo, docs/20). El menú ☰ y la pausa no
+están en el registro: no se pueden ocultar.
+
+La pestaña SANDBOX es también movible: su slot `sandbox_tab` la apila al pie de
+la columna izquierda (tras el globo de los recursos, que va tras el registro),
+así que baja sola cuando la Tormenta y el objetivo pasan a esa columna. Su
+tarjeta de herramientas cuelga de ella y la sigue (a su derecha, a su izquierda
+o debajo, siempre dentro de la pantalla). `tests/ui/test_modes_meet_interface.gd`
+lo comprueba, junto con que el selector de "Nueva partida" (NewGameDialog) usa
+los tokens vivos de paleta, contraste, texto y lado táctil, y que "Nueva
+partida" de la pestaña Juego lo abre.
 
 Ocultar no toca el `visible` del panel (que es suyo: la población se esconde
 sola hasta la fase de asentamiento, la Tormenta en calma…). En modo `holder` el

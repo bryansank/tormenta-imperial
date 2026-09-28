@@ -47,6 +47,20 @@ const SLOTS := {
 		"grow_v": Control.GROW_DIRECTION_END,
 		"stack_after": "NotificationPanel.status",
 	},
+	## Pestana SANDBOX (solo en ese modo): al pie de la columna izquierda, bajo lo
+	## que haya en ella (poblacion, y la Tormenta y el objetivo cuando bajan a la
+	## izquierda). Se apila tras el globo de los recursos, que a su vez va tras el
+	## registro: oculto cualquiera de los dos, ocupa su sitio. `margin.top` es el
+	## hueco que tenia antes de apilarse, por si ninguno existe.
+	"sandbox_tab": {
+		"anchor": Rect2(0, 0, 0, 0),
+		"margin": {"left": 10, "top": 228, "right": 0, "bottom": 0},
+		"max_size": Vector2(120, 0),
+		"grow_h": Control.GROW_DIRECTION_END,
+		"grow_v": Control.GROW_DIRECTION_END,
+		"stack_after": "HelperPanel.tip_resources",
+		"gap": 8,
+	},
 	## Columna central: fase de la Tormenta -> objetivo.
 	## La Tormenta va ARRIBA: cuando hay ceniza en camino es lo mas importante
 	## de la pantalla y el jugador tiene que leerla sin buscarla. En calma el
@@ -304,6 +318,7 @@ const PANEL_SLOTS := {
 	"ObjectivePanel":             "center_modal",
 	"VictoryScreen":              "full_overlay",
 	"OnScreenControls":           "bottom_controls",
+	"SandboxPanel":               "sandbox_tab",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)

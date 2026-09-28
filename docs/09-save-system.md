@@ -77,9 +77,16 @@ Game state is persisted to a JSON file at `user://save_game.json`. Auto-saves on
   "camera": {
     "position": [0, 20, 20],
     "zoom": 1.0
-  }
+  },
+
+  "game_mode": {"mode": "campaign", "result": ""}
 }
 ```
+
+`game_mode` (docs/20-modos-de-juego.md) is read **first** on load. A save without
+it is a Campaign in progress. `"result": "defeat"` marks a lost Survival run: the
+save is kept but sealed (GameManager never writes it again), and Survival skips the
+offline progression below.
 
 ## Auto-Save Triggers
 

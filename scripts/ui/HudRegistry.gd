@@ -29,13 +29,16 @@ const ELEMENTS := {
 	"BattleScreen.turn": {"label": "HUD_TURN", "hideable": true, "movable": false, "mode": "visible"},
 	"ConstructionMenu.button": {"label": "HUD_BUILD_BUTTON", "hideable": false, "movable": true, "mode": "none"},
 	"BuildingInfoPanel": {"label": "HUD_BUILDING_PANEL", "hideable": false, "movable": true, "mode": "none"},
+	## La pestana SANDBOX (y su tarjeta, que la sigue). Solo existe en Sandbox:
+	## fuera de ese modo su capa esta oculta y el editor no la enmarca.
+	"SandboxPanel": {"label": "HUD_SANDBOX", "hideable": true, "movable": true, "mode": "holder"},
 }
 
 ## Orden en Ajustes y en el editor.
 const ORDER := [
 	"ResourceHUD", "NotificationPanel.status", "NotificationPanel.log_button",
 	"NotificationPanel.objective", "StormHUD", "NotificationPanel.toasts",
-	"HelperPanel.callouts", "BattleScreen.turn",
+	"HelperPanel.callouts", "BattleScreen.turn", "SandboxPanel",
 	"NotificationPanel.log", "ConstructionMenu.button", "BuildingInfoPanel",
 ]
 

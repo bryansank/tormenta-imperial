@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`) over the pure models — `godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a tests`
+- **Tests:** gdUnit4 (`addons/gdUnit4`) over the pure models — **always** through the wrapper: `GODOT=/path/to/godot tools/run_tests.sh` (or `tools\run_tests.ps1`; extra args go to GdUnitCmdTool, e.g. `-a tests/combat`). It writes a temporary `override.cfg` so the run gets its own user dir (`%APPDATA%\TormentaImperial_tests`, override with `TI_TEST_USER_DIR`) and removes it on exit. Never call `GdUnitCmdTool.gd` directly: that runs in the editor's user dir, where the player's `save_game.json` lives. As a backstop, `tests/save/save_parking.gd` refuses to park in the player's dir and the suites that write the save skip themselves there
 - **Backend:** Supabase (CloudSaveManager implements auth + save/load via REST, but nothing calls it yet — needs `.env` config and UI wiring)
 - **Multiplayer:** Nakama (planned: self-hosted Docker, for PvP and Co-op)
 
@@ -98,6 +98,7 @@ Main (Node3D)
   +-- SettingsPanel (CanvasLayer) -- volume sliders + UI toggles (persisted)
   +-- HelperPanel (CanvasLayer) -- "?" on-screen callouts + building guide modal
   +-- SkirmishPanel (CanvasLayer) -- commit troops before a board opens; "QUE BAJEN" (Final Audit)
+  +-- SandboxPanel (CanvasLayer) -- Sandbox mode only: summon a storm / the Final Audit
   +-- BattleScreen (CanvasLayer) -- the 8x8 tactical board (layer 18, outside UIManager's stack)
   +-- StormHUD (CanvasLayer) -- storm phase indicator (colour + icon, no countdown)
   +-- TutorialPanel (CanvasLayer) -- paged intro + contextual tip cards
@@ -229,6 +230,20 @@ and no retraining in between. Surviving it emits `storm_halted_forever` (the Sto
 stops for good) and only then `victory_achieved`. Losing is **not** a game over —
 maximum Tithe, maximum storm damage, and the siege can be summoned again once 3
 units stand. Full detail in `docs/15-combat.md`.
+
+### Game Modes — full doc: `docs/20-modos-de-juego.md`
+
+Four modes, picked in the New Game dialog (`NewGameDialog`, opened by
+`GameManager.request_new_game()` from every entry point) and fixed for the run:
+**Campaña** (default; old saves load as it), **Constructor** (no Storm/Tithe/siege,
+HQ 3 wins directly, only good random events), **Supervivencia** (storms x0.6 calm,
++1 severity, x1.25 damage, x1.5 Tithe, 75% start, no offline, one Final Audit —
+losing ends the run and seals the save), **Sandbox** (era 3, everything unlocked,
+no caps, resources refill, Storm/Audit only via the SANDBOX tools tab, no victory).
+`scripts/services/GameMode.gd` (static class, not an autoload) holds the mode and
+answers rule queries; the table is `GameConfig.game_mode_rules`. Services ask a
+rule (`GameMode.storm_enabled()`), never compare the mode. Saved as
+`"game_mode": {"mode", "result"}`; `GameMode.begin_run()` is its reset.
 
 ### Army & Units (management -> combat bridge)
 
@@ -494,7 +509,7 @@ All balance values live in `GameConfig.gd`:
 
 ### Exporting
 
-`export_presets.cfg` has a "Windows Desktop" preset (single .exe, PCK embedded, output in the untracked `build/`). The `BeckettRuntime` autoload points at `scripts/services/BeckettGate.gd`, which loads the addon only in the editor; `addons/beckett`, `addons/gdUnit4`, tests, tools, docs and local token files (`.mcp.json`, `.env*`) are excluded. Exports save to `%APPDATA%\TormentaImperial\`, not the editor's user dir. Full guide: `docs/19-exportar.md`.
+`export_presets.cfg` has a "Windows Desktop" preset (single .exe, PCK embedded, output in the untracked `build/`). The `BeckettRuntime` autoload points at `scripts/services/BeckettGate.gd`, which loads the addon only in the editor; `addons/beckett`, `addons/gdUnit4`, tests, tools, docs and local token files (`.mcp.json`, `.env*`) are excluded. Exports save to `%APPDATA%\TormentaImperial\`, not the editor's user dir. An "Android" preset builds a debug APK (arm64, sensor landscape, no permissions, prebuilt templates); Android uses the Mobile renderer through `rendering_method.mobile` while PC stays on Forward+. Signing secrets never go in the preset: release signing comes from `GODOT_ANDROID_KEYSTORE_RELEASE_{PATH,USER,PASSWORD}`. On mobile the game is always fullscreen (immersive). Full guide: `docs/19-exportar.md`.
 
 ---
 

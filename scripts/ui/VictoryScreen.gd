@@ -36,14 +36,15 @@ func _show_victory(stats: Dictionary) -> void:
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(vbox)
 
-	# Title
-	var title := UITheme.make_label(Tr.t("LBL_VICTORY_TITLE"), "title", UITheme.ACCENT)
+	# Title. Constructor gana sin asedio: su victoria no habla de la Tormenta.
+	var builder: bool = GameMode.capstone_wins()
+	var title := UITheme.make_label(Tr.t("LBL_VICTORY_TITLE_BUILDER" if builder else "LBL_VICTORY_TITLE"), "title", UITheme.ACCENT)
 	title.add_theme_font_size_override("font_size", 28)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
 	# Subtitle
-	var subtitle := UITheme.make_label(Tr.t("LBL_VICTORY_SUBTITLE"), "body", UITheme.TEXT_DIM)
+	var subtitle := UITheme.make_label(Tr.t("LBL_VICTORY_SUBTITLE_BUILDER" if builder else "LBL_VICTORY_SUBTITLE"), "body", UITheme.TEXT_DIM)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(subtitle)
@@ -52,6 +53,7 @@ func _show_victory(stats: Dictionary) -> void:
 
 	# Stats
 	var time_played: float = stats.get("time_played", 0.0)
+	_add_stat(vbox, Tr.t("LBL_STAT_MODE"), GameMode.display_name(GameMode.from_key(String(stats.get("mode", GameMode.current_key())))))
 	_add_stat(vbox, Tr.t("LBL_STAT_TIME"), _format_time(time_played))
 	_add_stat(vbox, Tr.t("LBL_STAT_BUILDINGS"), str(stats.get("buildings_built", 0)))
 	_add_stat(vbox, Tr.t("LBL_STAT_TRADES"), str(stats.get("trades_completed", 0)))

@@ -122,6 +122,29 @@ func test_a_tithe_with_a_garrison_at_home_reopens_the_defense() -> void:
 	assert_bool(CombatManager.is_defending()).is_true()
 	assert_array(_tithes).is_empty()
 
+## El menu principal sale al arrancar con el arbol en pausa, antes de que la
+## partida cargue. Un Diezmo pendiente abria la defensa DETRAS del menu: el
+## tablero debe esperar a que el jugador lo suelte.
+## Sin esperar frames con el arbol en pausa: el runner de gdUnit se pararia.
+func test_a_tithe_left_pending_waits_for_the_title_menu() -> void:
+	ArmyManager.load_save_data({"units": {"infantry": 3}, "training": [], "upkeep_accum": 0.0})
+	StormManager.load_save_data(_saved_in(StormCycle.Phase.TITHE))
+	get_tree().paused = true
+	# Lo que haria el call_deferred de game_load_completed, con el menu encima.
+	StormManager._resume_tithe()
+	var opened_behind: bool = CombatManager.is_in_encounter()
+	var demanded_behind: int = _demands.size()
+	get_tree().paused = false
+	assert_bool(opened_behind).override_failure_message(
+		"la defensa se abrio detras del menu principal").is_false()
+	assert_int(demanded_behind).is_equal(0)
+	# Suelto el menu, el Diezmo se reclama en el primer frame con el juego en marcha.
+	await await_idle_frame()
+	await await_idle_frame()
+	assert_bool(CombatManager.is_in_encounter()).is_true()
+	assert_bool(CombatManager.is_defending()).is_true()
+	assert_array(_demands).has_size(1)
+
 func test_the_resume_happens_once() -> void:
 	StormManager.load_save_data(_saved_in(StormCycle.Phase.TITHE))
 	EventBus.game_load_completed.emit()

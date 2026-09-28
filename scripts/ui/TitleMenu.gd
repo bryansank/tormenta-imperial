@@ -5,8 +5,8 @@ extends CanvasLayer
 ##
 ##   Continuar      solo si hay algo que continuar (se cargo una partida, o ya
 ##                  se estuvo jugando en esta sesion)
-##   Nueva partida  con confirmacion via GameManager.request_new_game() cuando
-##                  hay algo que perder; sin ella si la isla es nueva
+##   Nueva partida  abre el selector de modo (GameManager.request_new_game), que
+##                  pide confirmacion solo si hay algo que perder
 ##   Ajustes        abre el SettingsPanel de siempre, que funciona en pausa
 ##   Salir
 ##
@@ -22,9 +22,10 @@ const PORTRAIT_RATIO := 1.0
 const KEYART_PATH := "res://assets/branding/keyart.png"
 const LOGO_PATH := "res://assets/branding/logo.png"
 
-## Sobrevive a la recarga de escena de "Nueva partida": el menu sale una vez por
-## sesion, al arrancar, y no cada vez que se recarga la isla.
-static var _dismissed_this_session := false
+## El menu sale una vez por sesion, al arrancar, y no cada vez que se recarga la
+## isla (nueva partida) o se cambia de vista 3D/2D. La marca vive en GameManager
+## (GameManager.title_dismissed): un autoload sobrevive a cualquier cambio de
+## escena, y una static var solo mientras el motor no descargue este script.
 
 var _root: Control
 var _art: TextureRect
@@ -35,6 +36,8 @@ var _continue_btn: Button
 var _new_btn: Button
 var _settings_btn: Button
 var _quit_btn: Button
+## "Partida en curso: Campana", bajo Continuar. Discreto: el modo se ve, no manda.
+var _mode_label: Label
 
 var _paused_by_me := false
 ## Pantalla prestada abierta encima (Ajustes) y su process_mode original.
@@ -49,22 +52,36 @@ func _ready() -> void:
 	visible = false
 	UIManager.window_closed.connect(_on_window_closed)
 	get_viewport().size_changed.connect(_relayout)
+	# El menu sale antes de que GameManager cargue (lo hace cuando la escena
+	# entera esta lista): al terminar la carga se sabe que hay que continuar y
+	# en que modo.
+	EventBus.game_load_completed.connect(_on_game_ready)
+	EventBus.game_new_started.connect(_on_game_ready)
 	if should_show_on_launch():
 		open_menu()
 
 ## Sin ventana (tests, --headless) no hay menu: pausaria el arbol de las pruebas.
 ## `--no-title` tras `--` lo salta tambien, para las sondas de tools/.
 func should_show_on_launch() -> bool:
-	if _dismissed_this_session:
+	if GameManager.title_dismissed:
 		return false
 	if DisplayServer.get_name() == "headless":
+		return false
+	# La escena se va a la otra vista en este mismo frame (ViewRouter): el menu
+	# lo abre la escena que llega, no esta, que muere antes de poder enfocarlo.
+	if GameManager.is_start_held():
 		return false
 	return not OS.get_cmdline_user_args().has("--no-title")
 
 ## Hay una partida que merece "Continuar": se cargo al arrancar, o el jugador ya
 ## ha estado jugando en esta sesion (vuelve aqui desde la pausa).
+##
+## Una partida terminada (Supervivencia perdida) no se continua: se ve, pero
+## solo ofrece empezar otra.
 func has_game_to_continue() -> bool:
-	return GameManager.loaded_from_save or _dismissed_this_session
+	if GameMode.is_run_over():
+		return false
+	return GameManager.loaded_from_save or GameManager.title_dismissed
 
 func is_open() -> bool:
 	return visible
@@ -72,7 +89,7 @@ func is_open() -> bool:
 ## Olvida si el menu ya salio en esta sesion. Solo para pruebas: en partida la
 ## marca vive hasta cerrar el juego.
 static func set_dismissed_for_tests(dismissed: bool) -> void:
-	_dismissed_this_session = dismissed
+	GameManager.title_dismissed = dismissed
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -134,6 +151,8 @@ func _setup_ui() -> void:
 
 	_continue_btn = ModalKit.make_menu_button(Tr.t("BTN_TITLE_CONTINUE"), UITheme.POSITIVE, _on_continue)
 	column.add_child(_continue_btn)
+	_mode_label = ModalKit.make_text("", "small", UITheme.TEXT_DIM)
+	column.add_child(_mode_label)
 	_new_btn = ModalKit.make_menu_button(Tr.t("BTN_NEW_GAME"), UITheme.BTN, _on_new_game)
 	column.add_child(_new_btn)
 	_settings_btn = ModalKit.make_menu_button(Tr.t("BTN_SETTINGS"), UITheme.BTN, _on_settings)
@@ -185,11 +204,18 @@ func open_menu() -> void:
 	if not get_tree().paused:
 		get_tree().paused = true
 		_paused_by_me = true
-	(_continue_btn if _continue_btn.visible else _new_btn).grab_focus.call_deferred()
+	_focus_default.call_deferred()
+
+## Diferido, y solo si el menu sigue en el arbol: una recarga o un cambio de
+## escena en el mismo frame lo dejaba fuera y grab_focus fallaba.
+func _focus_default() -> void:
+	var btn: Button = _continue_btn if _continue_btn.visible else _new_btn
+	if is_instance_valid(btn) and btn.is_inside_tree() and btn.is_visible_in_tree():
+		btn.grab_focus()
 
 ## Suelta el menu y, si lo pauso el, el juego.
 func close_menu() -> void:
-	_dismissed_this_session = true
+	GameManager.title_dismissed = true
 	visible = false
 	_close_sub()
 	if _paused_by_me:
@@ -198,6 +224,12 @@ func close_menu() -> void:
 
 func _refresh_buttons() -> void:
 	_continue_btn.visible = has_game_to_continue()
+	_mode_label.visible = _continue_btn.visible
+	_mode_label.text = Tr.t("LBL_TITLE_RUN_MODE") % GameMode.display_name()
+
+func _on_game_ready() -> void:
+	if visible:
+		_refresh_buttons()
 
 func _exit_tree() -> void:
 	# Recargar la escena (nueva partida) con el menu abierto no puede dejar el
@@ -210,17 +242,15 @@ func _exit_tree() -> void:
 func _on_continue() -> void:
 	close_menu()
 
-## Con una partida que perder, confirma y borra (GameManager recarga la escena).
-## Si la isla acaba de nacer no hay nada que borrar: se suelta el menu y empieza.
+## Abre el selector de modo. Con una partida que perder, el selector confirma
+## antes de borrar; si la isla acaba de nacer no hay nada que perder y no
+## pregunta. En los dos casos, elegir recarga la escena en el modo elegido.
 func _on_new_game() -> void:
-	if not has_game_to_continue():
-		close_menu()
-		return
-	var dialog: ConfirmationDialog = GameManager.request_new_game()
+	var dialog: CanvasLayer = GameManager.request_new_game(has_game_to_continue())
 	if dialog != null:
 		# La escena se recarga al confirmar: el menu no vuelve a salir encima de
 		# la partida nueva, que arranca con su intro.
-		dialog.confirmed.connect(func(): _dismissed_this_session = true)
+		dialog.confirmed.connect(func(): GameManager.title_dismissed = true)
 
 func _on_settings() -> void:
 	var settings: CanvasLayer = _find_sibling("SettingsPanel")
