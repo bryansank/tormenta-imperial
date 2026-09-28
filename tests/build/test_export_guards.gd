@@ -4,16 +4,23 @@ extends GdUnitTestSuite
 ##   1. dev_mode se enciende solo en el editor, nunca en una plantilla de exportación.
 ##   2. El autoload de Beckett apunta al portero, no al addon (que no viaja).
 ##   3. El preset de Windows deja fuera todo lo que no es el juego.
+##   4. El preset de Android igual, sin secretos de firma, y el juego en apaisado
+##      con el renderer Mobile en móvil (Forward+ sigue en PC).
 
 const PRESETS_PATH := "res://export_presets.cfg"
 const GATE_PATH := "res://scripts/services/BeckettGate.gd"
 
 ## Lo que nunca puede acabar dentro del .pck: tests, herramientas, documentación,
-## los dos addons de desarrollo y los ficheros locales con tokens (.mcp.json, .env).
+## los dos addons de desarrollo, los ficheros locales con tokens (.mcp.json y
+## .cursor/mcp.json llevan el token de Beckett; .env, secret.json), la config del
+## editor, el override.cfg de desarrollo y las carpetas privadas que .gitignore
+## deja fuera del repo pero que siguen en disco (estrategia/, ui_tour/).
 const MUST_EXCLUDE := [
 	"tests/*", "tools/*", "docs/*", "specs/*", "reports/*",
 	"addons/gdUnit4/*", "addons/beckett/*",
-	".claude/*", ".specify/*", ".beckett/*", ".mcp.json", ".env*", "build/*", "*.md",
+	".claude/*", ".specify/*", ".beckett/*", ".cursor/*", ".vscode/*",
+	".mcp.json", "secret.json", ".env*", "override.cfg",
+	"estrategia/*", "ui_tour/*", "build/*", "*.md",
 ]
 
 
@@ -58,3 +65,100 @@ func test_windows_preset_ships_one_relative_exe() -> void:
 	assert_bool(export_path.is_relative_path()).is_true()
 	assert_bool(export_path.begins_with("build/")).is_true()
 	assert_bool(bool(cf.get_value("preset.0.options", "binary_format/embed_pck", false))).is_true()
+
+
+# --- Android ------------------------------------------------------------------
+# El preset se busca por plataforma, no por índice, para no depender del orden en
+# que el editor reescriba export_presets.cfg.
+
+## Claves del preset cuyo valor es un secreto: tienen que quedar vacías. La firma
+## de release sale de GODOT_ANDROID_KEYSTORE_RELEASE_{PATH,USER,PASSWORD} y la de
+## depuración, del keystore que el editor guarda en su carpeta de configuración.
+const ANDROID_SECRET_KEYS := [
+	"keystore/debug", "keystore/debug_user", "keystore/debug_password",
+	"keystore/release", "keystore/release_user", "keystore/release_password",
+	"apk_expansion/SALT", "apk_expansion/public_key",
+]
+
+
+func _android_section(cf: ConfigFile) -> String:
+	for section in cf.get_sections():
+		if section.ends_with(".options"):
+			continue
+		if str(cf.get_value(section, "platform", "")) == "Android":
+			return section
+	return ""
+
+
+func test_android_preset_excludes_everything_that_is_not_the_game() -> void:
+	var cf := ConfigFile.new()
+	assert_int(cf.load(PRESETS_PATH)).is_equal(OK)
+	var section := _android_section(cf)
+	assert_str(section).override_failure_message("no hay preset Android").is_not_empty()
+	var filters := []
+	for f in str(cf.get_value(section, "exclude_filter", "")).split(","):
+		filters.append(f.strip_edges())
+	for must in MUST_EXCLUDE:
+		assert_bool(filters.has(must)).override_failure_message("Android: falta excluir %s" % must).is_true()
+
+
+func test_android_preset_stores_no_keystore_or_password() -> void:
+	var cf := ConfigFile.new()
+	cf.load(PRESETS_PATH)
+	var options := _android_section(cf) + ".options"
+	assert_bool(cf.has_section(options)).is_true()
+	for key in ANDROID_SECRET_KEYS:
+		assert_str(str(cf.get_value(options, key, ""))) \
+			.override_failure_message("export_presets.cfg es publico: %s tiene que ir vacio" % key) \
+			.is_empty()
+	# Ni una ruta a un .keystore/.jks en ningún otro campo del fichero.
+	var raw := FileAccess.get_file_as_string(PRESETS_PATH).to_lower()
+	assert_bool(raw.contains(".keystore") or raw.contains(".jks")).is_false()
+
+
+func test_android_preset_is_relative_arm64_prebuilt_and_asks_no_permissions() -> void:
+	var cf := ConfigFile.new()
+	cf.load(PRESETS_PATH)
+	var section := _android_section(cf)
+	var options := section + ".options"
+	var export_path := str(cf.get_value(section, "export_path", ""))
+	assert_bool(export_path.is_relative_path()).is_true()
+	assert_bool(export_path.begins_with("build/android/")).is_true()
+	assert_bool(bool(cf.get_value(options, "architectures/arm64-v8a", false))).is_true()
+	assert_bool(bool(cf.get_value(options, "gradle_build/use_gradle_build", true))).is_false()
+	assert_str(str(cf.get_value(options, "package/unique_name", ""))).is_equal("com.bryankey.tormentaimperial")
+	# Sin permisos: el juego no usa red, cámara ni almacenamiento externo.
+	var custom: PackedStringArray = cf.get_value(options, "permissions/custom_permissions", PackedStringArray())
+	assert_int(custom.size()).is_equal(0)
+	for key in cf.get_section_keys(options):
+		if key.begins_with("permissions/") and key != "permissions/custom_permissions":
+			assert_bool(bool(cf.get_value(options, key, false))) \
+				.override_failure_message("permiso activado: %s" % key).is_false()
+
+
+func test_handheld_orientation_is_sensor_landscape() -> void:
+	# La tableta es el objetivo principal: apaisado siguiendo el sensor. Solo afecta
+	# a móvil; en PC no hace nada.
+	var orientation := int(ProjectSettings.get_setting("display/window/handheld/orientation", -1))
+	assert_int(orientation).is_equal(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
+
+
+func test_mobile_is_always_fullscreen_whatever_the_preference() -> void:
+	# En Android "ventana" deja las barras del sistema encima del juego.
+	var fs := DisplayServer.WINDOW_MODE_FULLSCREEN
+	assert_int(GameConfig._wanted_window_mode(false, true)).is_equal(fs)
+	assert_int(GameConfig._wanted_window_mode(true, true)).is_equal(fs)
+	# En PC la preferencia manda.
+	assert_int(GameConfig._wanted_window_mode(true, false)).is_equal(fs)
+	assert_int(GameConfig._wanted_window_mode(false, false)).is_equal(DisplayServer.WINDOW_MODE_WINDOWED)
+
+
+func test_mobile_uses_mobile_renderer_and_desktop_keeps_forward_plus() -> void:
+	# Se lee el fichero y no ProjectSettings: en el editor de PC get_setting ya
+	# resuelve el valor de escritorio y no dejaría ver el override .mobile.
+	var cf := ConfigFile.new()
+	assert_int(cf.load("res://project.godot")).is_equal(OK)
+	assert_str(str(cf.get_value("rendering", "renderer/rendering_method", ""))).is_equal("forward_plus")
+	assert_str(str(cf.get_value("rendering", "renderer/rendering_method.mobile", ""))).is_equal("mobile")
+	# Android exige las texturas importadas también en ETC2/ASTC o el export se niega.
+	assert_bool(bool(cf.get_value("rendering", "textures/vram_compression/import_etc2_astc", false))).is_true()
