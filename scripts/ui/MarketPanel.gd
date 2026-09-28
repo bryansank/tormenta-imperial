@@ -230,6 +230,8 @@ func _toggle_sidebar() -> void:
 
 func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_visible = is_visible
+	# Tambien la cierra quien no es este boton (empezar a colocar): el icono sigue.
+	_sidebar_toggle.text = "✕" if is_visible else "☰"
 	# Show market button only if sidebar visible AND phase allows it
 	if ProgressionManager.current_phase >= GameConfig.Phase.ECONOMY:
 		# `is_visible` (el del menu), no `visible`: ese es el de la capa, que

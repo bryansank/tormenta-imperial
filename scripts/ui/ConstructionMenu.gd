@@ -2,6 +2,8 @@ extends CanvasLayer
 ## Construction menu: full-screen modal with category tabs, search bar,
 ## building grid with thumbnails, and a 3D preview panel for the selected building.
 
+const PlacementAssistScript := preload("res://scripts/buildings/PlacementAssist.gd")
+
 var _root: Control
 var _backdrop: ColorRect
 var _modal: PanelContainer
@@ -24,6 +26,8 @@ var _detail_name: Label
 var _detail_cost: Label
 var _detail_production: Label
 var _detail_extras: Label
+## "Necesita bosque adyacente": la regla del yacimiento, antes de colocar (bug 10).
+var _detail_rule: Label
 var _detail_size: Label
 var _detail_build_btn: Button
 var _selected_data: BuildingData = null
@@ -304,6 +308,11 @@ func _setup_ui() -> void:
 	_detail_production.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_detail_panel.add_child(_detail_production)
 
+	_detail_rule = UITheme.make_label("", "body", UITheme.INFO)
+	_detail_rule.name = "DepositRule"
+	_detail_rule.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_detail_panel.add_child(_detail_rule)
+
 	_detail_extras = UITheme.make_label("", "small", UITheme.TEXT_DIM)
 	_detail_extras.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_detail_panel.add_child(_detail_extras)
@@ -486,6 +495,7 @@ func _show_no_selection() -> void:
 	_detail_cost.text = ""
 	_detail_production.text = ""
 	_detail_extras.text = ""
+	_detail_rule.text = ""
 	_detail_build_btn.visible = false
 	_clear_preview_model()
 
@@ -528,6 +538,11 @@ func _select_building(data: BuildingData) -> void:
 		_detail_production.text = Tr.t("FMT_PRODUCES") % " | ".join(prod_parts)
 	else:
 		_detail_production.text = ""
+
+	# Regla del yacimiento (PlacementAssist.rule_text): se dice aqui, no al fallar.
+	var rule := PlacementAssistScript.rule_text(data.id)
+	_detail_rule.text = ("▲ " + rule) if rule != "" else ""
+	_detail_rule.visible = rule != ""
 
 	# Extras
 	var extras: Array = []

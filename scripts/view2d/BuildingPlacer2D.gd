@@ -18,6 +18,8 @@ enum State { IDLE, PLACING, MOVING }
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
+## Dedo, casillas validas y boton ✓: lo mismo que en 3D (docs/21 §Tactil).
+const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
 
 var _state: State = State.IDLE
 var _current_data: BuildingData = null
@@ -34,6 +36,9 @@ var _left_dragged := false
 var _left_from_touch := false
 
 var _buildings_container: Node2D
+var _assist: Node = null
+var _spot_highlight: Node2D = null
+var _spot_cells: Array = []
 
 func _ready() -> void:
 	_buildings_container = Node2D.new()
@@ -49,6 +54,14 @@ func _ready() -> void:
 	EventBus.building_deselected.connect(_on_building_deselected)
 	EventBus.building_rotate_requested.connect(_on_rotate_requested)
 	GameManager.register_placer(self)
+	_assist = Assist.new()
+	_assist.name = "PlacementAssist"
+	_assist.setup(self)
+	add_child(_assist)
+
+func _input(event: InputEvent) -> void:
+	if _state != State.IDLE:
+		_assist.notice_input(event)
 
 # ── Pantalla -> celda ─────────────────────────────────────────────────
 
@@ -66,6 +79,10 @@ func get_ghost() -> Node2D:
 # ── Entrada ───────────────────────────────────────────────────────────
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _state != State.IDLE and (event is InputEventScreenTouch or event is InputEventScreenDrag):
+		if _assist.handle_touch(event):
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_handle_left_button(event)
@@ -110,6 +127,9 @@ func _handle_left_button(event: InputEventMouseButton) -> void:
 	var was_click := _left_pressed and not _left_dragged
 	if _left_from_touch and InputService.touch_pan_consumed_click():
 		was_click = false
+	# Colocando, el dedo lo lleva PlacementAssist: el clic emulado no planta.
+	if _left_from_touch and _state != State.IDLE:
+		was_click = false
 	_left_pressed = false
 	_left_dragged = false
 	_left_from_touch = false
@@ -149,7 +169,8 @@ func handle_click(screen_pos: Vector2) -> void:
 func _process(_delta: float) -> void:
 	if _state == State.IDLE or _ghost == null:
 		return
-	var cell := screen_to_cell(get_viewport().get_mouse_position())
+	# Con el dedo el fantasma esta donde lo dejo el ultimo toque.
+	var cell: Vector2i = _assist.cell if _assist.touch_aim else screen_to_cell(get_viewport().get_mouse_position())
 	if cell != _hover_cell:
 		_hover_cell = cell
 		update_ghost(cell)
@@ -177,12 +198,15 @@ func _create_ghost() -> void:
 	add_child(_ghost)
 	_show_grid_overlay(true)
 	_hover_cell = Vector2i(-99999, -99999)
+	_assist.begin()
 
 func _cleanup_ghost() -> void:
 	if _ghost:
 		_ghost.queue_free()
 		_ghost = null
 	_show_grid_overlay(false)
+	if _assist:
+		_assist.end()
 
 func _rotate_building() -> void:
 	_rotation_steps = (_rotation_steps + 1) % 4
@@ -190,6 +214,9 @@ func _rotate_building() -> void:
 	if _ghost:
 		_ghost.set_meta("rotation_steps", _rotation_steps)
 		_ghost.queue_redraw()
+	_assist.refresh_spots()
+	if _assist.touch_aim:
+		_assist.move_to(_assist.cell, false)
 
 func _on_rotate_requested() -> void:
 	if _state != State.IDLE:
@@ -449,3 +476,99 @@ func _show_feedback(text: String) -> void:
 	_feedback_tween.tween_interval(1.2)
 	_feedback_tween.tween_property(_feedback_panel, "modulate:a", 0.0, 0.5)
 	_feedback_tween.tween_callback(func(): _feedback_panel.visible = false)
+
+# ── PlacementAssist (dedo, casillas validas, ✓) ───────────────────────
+
+func assist_screen_to_cell(screen_pos: Vector2) -> Vector2i:
+	return screen_to_cell(screen_pos)
+
+func assist_cell_to_screen(origin: Vector2i, size: Vector2i) -> Variant:
+	return View2D.px_to_screen(get_viewport().get_canvas_transform(), View2D.footprint_center_px(origin, size))
+
+func assist_ghost_top_screen(origin: Vector2i) -> Variant:
+	if _current_data == null or not GridManager.is_valid_cell(origin):
+		return null
+	var r := View2D.footprint_rect_px(origin, Rules.rotated_size(_current_data, _rotation_steps))
+	var p := View2D.px_to_screen(get_viewport().get_canvas_transform(), Vector2(r.get_center().x, r.position.y))
+	return p if get_viewport().get_visible_rect().has_point(p) else null
+
+func assist_move_ghost(origin: Vector2i) -> void:
+	_hover_cell = origin
+	update_ghost(origin)
+
+func assist_confirm(origin: Vector2i) -> void:
+	if _state == State.PLACING:
+		try_place(origin)
+	elif _state == State.MOVING:
+		try_move(origin)
+	if _ghost:
+		update_ghost(origin)
+
+## Por que no se puede en `origin`: el mismo aviso que el clic rechazado.
+func assist_explain(origin: Vector2i) -> void:
+	if _current_data == null:
+		return
+	if not GridManager.is_valid_cell(origin):
+		_show_feedback(Tr.t("LBL_OUTSIDE_MAP"))
+		return
+	var ignore: Node = _moving_building if _state == State.MOVING else null
+	var verdict := Rules.evaluate_placement(_current_data.id, origin, Rules.rotated_size(_current_data, _rotation_steps), _map_generator(), ignore)
+	if verdict["reason"] == "deposit":
+		_reject_for_deposit(_current_data.id)
+	elif verdict["reason"] == "occupied":
+		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
+
+func assist_feedback(text: String) -> void:
+	_show_feedback(text)
+
+func assist_building_id() -> String:
+	return _current_data.id if _current_data else ""
+
+func assist_ghost_size() -> Vector2i:
+	return Rules.rotated_size(_current_data, _rotation_steps) if _current_data else Vector2i.ONE
+
+func assist_map_generator() -> Node:
+	return _map_generator()
+
+func assist_moving_node() -> Node:
+	return _moving_building if _state == State.MOVING else null
+
+func assist_is_placing() -> bool:
+	return _state != State.IDLE
+
+func assist_center_on(origin: Vector2i) -> void:
+	var vp := get_viewport().get_visible_rect().size
+	var centre_px := View2D.screen_to_px(get_viewport().get_canvas_transform(), vp * 0.5)
+	var target_px := View2D.footprint_center_px(origin, assist_ghost_size())
+	EventBus.camera_drag_world_requested.emit((target_px - centre_px) / View2D.PX_PER_UNIT)
+
+func assist_show_cells(cells: Array) -> void:
+	_spot_cells = cells
+	if _spot_highlight == null:
+		if cells.is_empty():
+			return
+		_spot_highlight = Node2D.new()
+		_spot_highlight.name = "ValidSpots"
+		# Encima del suelo y de la rejilla, debajo de los edificios (z 2).
+		_spot_highlight.z_index = 1
+		_spot_highlight.draw.connect(_draw_spots)
+		add_child(_spot_highlight)
+	_spot_highlight.visible = not cells.is_empty()
+	_spot_highlight.queue_redraw()
+
+func _draw_spots() -> void:
+	var fill := Color(Assist.SPOT_COLOR, 0.45)
+	var edge := Color(Assist.SPOT_COLOR, 0.95)
+	for c in _spot_cells:
+		var r := View2D.footprint_rect_px(c, Vector2i.ONE).grow(-2.0)
+		_spot_highlight.draw_rect(r, fill, true)
+		_spot_highlight.draw_rect(r, edge, false, 1.5)
+
+func get_spot_highlight() -> Node2D:
+	return _spot_highlight
+
+func get_spot_cells() -> Array:
+	return _spot_cells
+
+func get_assist() -> Node:
+	return _assist
