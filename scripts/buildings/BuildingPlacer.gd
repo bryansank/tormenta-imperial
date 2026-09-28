@@ -479,7 +479,7 @@ func _create_preview() -> void:
 	# Use the actual 3D building model for the preview
 	var model: Node3D = null
 	if _current_data.model_scene:
-		model = _current_data.model_scene.instantiate()
+		model = _current_data.instantiate_model()
 	else:
 		model = DieselpunkBuildingFactory.create(_current_data.id, GridManager.cell_size, _current_data.grid_size)
 
@@ -614,7 +614,7 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	root.name = data.id
 
 	if data.model_scene:
-		var model_instance := data.model_scene.instantiate()
+		var model_instance := data.instantiate_model()
 		root.add_child(model_instance)
 	else:
 		# Try dieselpunk procedural mesh first

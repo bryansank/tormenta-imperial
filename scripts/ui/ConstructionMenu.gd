@@ -621,7 +621,7 @@ func _load_preview_model(data: BuildingData) -> void:
 		_preview_icon.data = data
 		return
 	if data.model_scene:
-		_preview_model = data.model_scene.instantiate()
+		_preview_model = data.instantiate_model()
 	else:
 		_preview_model = DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
 	if not _preview_model:
@@ -730,7 +730,7 @@ func _generate_thumbnails() -> void:
 func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingData) -> void:
 	var model: Node3D = null
 	if data.model_scene:
-		model = data.model_scene.instantiate()
+		model = data.instantiate_model()
 	else:
 		model = DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
 	if not model:

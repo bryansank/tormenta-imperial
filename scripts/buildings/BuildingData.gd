@@ -31,6 +31,9 @@ const DATA_DIR := "res://data/buildings/"
 @export var mesh_height: float = 1.5
 @export var mesh_color: Color = Color(0.5, 0.5, 0.5, 1.0)
 @export var model_scene: PackedScene = null
+## Escala del GLB dentro de su parcela. Los edificios que pasaron de 1x1 a 2x2
+## (2026-09-28) llevan su modelo de siempre agrandado, en vez de uno nuevo.
+@export var model_scale: float = 1.0
 
 # Workers required to operate (0 = no workers needed)
 @export var workers_required: int = 0
@@ -109,3 +112,13 @@ static func resource_file_names(names: PackedStringArray) -> PackedStringArray:
 		if (file_name.ends_with(".tres") or file_name.ends_with(".res")) and not out.has(file_name):
 			out.append(file_name)
 	return out
+
+## El GLB instanciado a su escala (model_scale), o null si no tiene. Lo usan el
+## mapa, el fantasma de colocar y las vistas previas de CONSTRUIR.
+func instantiate_model() -> Node3D:
+	if model_scene == null:
+		return null
+	var model := model_scene.instantiate() as Node3D
+	if model != null and not is_equal_approx(model_scale, 1.0):
+		model.scale *= model_scale
+	return model
