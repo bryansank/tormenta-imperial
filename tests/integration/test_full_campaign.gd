@@ -85,6 +85,11 @@ const MapGen := preload("res://scripts/map/MapGenerator.gd")
 const AutoResolverScript := preload("res://scripts/combat/AutoResolver.gd")
 const Parking := preload("res://tests/save/save_parking.gd")
 
+## Esta suite escribe user://save_game.json. Si corre en la carpeta del jugador
+## (lanzada sin tools/run_tests.sh) se salta entera: no hay partida que pisar.
+func before(do_skip := Parking.in_player_dir(), skip_reason := "Carpeta de usuario del jugador: lanza los tests con tools/run_tests.sh") -> void:
+	pass
+
 const SAVE_PATH := "user://save_game.json"
 const BACKUP_PATH := "user://save_game.full_campaign.bak"
 

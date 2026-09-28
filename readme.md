@@ -141,8 +141,8 @@ godot --path . --editor     # y pulsa F5
 godot --path . -s tools/render_brand.gd        # emblema y banner
 godot --path . -s tools/render_branding.gd     # key art
 
-# Tests
-godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a tests
+# Tests (siempre por el envoltorio: carpeta de usuario propia, no toca tu partida)
+GODOT=godot tools/run_tests.sh
 ```
 
 ---

@@ -694,13 +694,13 @@ gdUnit4, headless. The tree holds **37 suites / 697 cases**; 20 of them are the
 combat pillar. Whole suite:
 
 ```bash
-godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a tests
+GODOT=godot tools/run_tests.sh   # own user dir; never call GdUnitCmdTool directly
 ```
 
 Just the combat models:
 
 ```bash
-godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd -a tests/combat
+GODOT=godot tools/run_tests.sh -a tests/combat
 ```
 
 | Suite | Covers |
