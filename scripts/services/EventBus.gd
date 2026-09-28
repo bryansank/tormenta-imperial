@@ -315,3 +315,14 @@ signal tutorial_tip_requested(tip_id: String, title: String, body: String)
 ## saltar cuenta como leer, porque volver a insistir seria castigar el "Saltar".
 @warning_ignore("unused_signal")
 signal tutorial_intro_closed()
+
+# ── modos-de-juego ──
+## La partida termino sin vuelta atras (Supervivencia: Auditoria perdida). La
+## emite ProgressionManager despues de `final_audit_lost`; GameManager escribe el
+## guardado una ultima vez, marcado, y la pantalla de derrota ofrece empezar otra.
+@warning_ignore("unused_signal")
+signal run_ended(result: String)
+## Sandbox: se invoco a mano una tormenta o la Auditoria. `what` es "storm" o
+## "audit". Solo informativo (avisos, sonido); las reglas no cambian.
+@warning_ignore("unused_signal")
+signal sandbox_invoked(what: String)
