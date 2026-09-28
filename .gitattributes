@@ -1,0 +1,2 @@
+# Los scripts de shell se ejecutan tal cual: con CRLF, bash no los lee.
+*.sh text eol=lf
