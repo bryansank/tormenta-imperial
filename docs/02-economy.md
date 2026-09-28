@@ -33,10 +33,14 @@ Manual Processes (active, ~1.5x margin)
 
 ## Storage
 
-- Base cap: 800
-- Each warehouse: +400
-- Max warehouses: 3
-- Max total storage: 800 + 3*400 = 2000
+One **shared pool** for all four resources (not a cap per resource):
+
+- Base cap by era: 600 / 800 / 1000 (`base_storage_cap_by_era`)
+- Each warehouse: +500 (`warehouse_storage_bonus`), max 5
+- Tech: Logistics 2 +300, Industrial 2 +200, Logistics 5 +500 (`tech_storage_bonus`)
+- Era 3 with five warehouses: 1000 + 5×500 = **3500**, exactly the HQ level 3 upgrade
+- What does not fit is lost — gold and wood for food included. In era 3 steel and oil
+  fill the pool on their own; see `docs/22-linea-jugable.md` §3.1 (A4, A5)
 
 ## Consumption (Population Drain)
 

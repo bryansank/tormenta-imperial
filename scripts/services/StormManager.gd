@@ -28,6 +28,10 @@ var _halted: bool = false
 ## La carga trajo un Diezmo sin cobrar. Transitorio: lo pone load_save_data() y
 ## lo consume el final de la carga.
 var _tithe_to_resume: bool = false
+## La parte de moral que la tormenta ya se ha ganado pero que todavia no suma un
+## punto entero. Transitorio (una fraccion de punto no merece viajar en el
+## guardado): se tira en reset() y al saldar cada Diezmo.
+var _morale_debt: float = 0.0
 ## Una tormenta invocada a mano (Sandbox) esta corriendo aunque el modo tenga el
 ## reloj apagado. Se apaga sola cuando el ciclo vuelve a la calma.
 var _on_demand: bool = false
@@ -93,6 +97,9 @@ func seconds_until_ash() -> float:
 func storms_survived() -> int:
 	return _cycle.storms_survived if _cycle != null else 0
 
+func tithes_repelled() -> int:
+	return _cycle.tithes_repelled if _cycle != null else 0
+
 # ── Arming ───────────────────────────────────────────────────────────
 
 ## The clock only starts once the base has grown past the Foundation phase —
@@ -101,7 +108,7 @@ func storms_survived() -> int:
 func _check_arming() -> void:
 	if _halted or _armed:
 		return
-	if ProgressionManager.current_phase >= GameConfig.Phase.SETTLEMENT:
+	if ProgressionManager.current_phase >= GameConfig.storm_arm_phase:
 		_armed = true
 
 ## Hay tormenta en marcha (cualquier fase que no sea la calma). Es la mitad de
@@ -194,14 +201,24 @@ func _on_phase_entered(phase: int) -> void:
 ## Cada mordisco cuesta moral, y solo la TORMENTA derriba edificios. La ceniza
 ## ensucia, no tumba: si tumbara, la fase de Ceniza dejaria de ser la ultima
 ## ventana en la que reparar un techo sirve de algo.
+##
+## La moral se cobra con decimales: cada tic suma su parte a `_morale_debt` y solo
+## se descuentan los puntos enteros. Con el redondeo por tic, cualquier sangria por
+## debajo de 0,5 se volvia cero y cualquier cosa por encima valia un punto entero
+## por tic, asi que no habia forma de que una tormenta leve costara poco: con 24
+## tics por tormenta, la de severidad 1 se llevaba 96 puntos (docs/22-linea-jugable.md).
 func _apply_storm_tick(phase: int) -> void:
 	var severity: int = get_severity()
 	var bleed: float = GameConfig.storm_morale_per_tick * float(severity)
-	if phase != StormCycle.Phase.STORM:
-		PopulationManager.adjust_morale(-roundi(bleed))
-		return
-	PopulationManager.adjust_morale(-roundi(bleed * GameConfig.storm_morale_storm_multiplier))
-	_damage_buildings(severity)
+	if phase == StormCycle.Phase.STORM:
+		bleed *= GameConfig.storm_morale_storm_multiplier
+	_morale_debt += bleed
+	var whole: int = int(floor(_morale_debt))
+	if whole > 0:
+		_morale_debt -= float(whole)
+		PopulationManager.adjust_morale(-whole)
+	if phase == StormCycle.Phase.STORM:
+		_damage_buildings(severity)
 
 ## La Tormenta no rompe al azar: rompe con criterio. Gasta sus mordiscos del tic
 ## en el escalón más alto que tenga gente en pie y solo baja al siguiente cuando
@@ -370,7 +387,7 @@ func _auto_resolve_tithe(roster: Dictionary, severity: int) -> void:
 ## pagar más, y la próxima partida de gasto se aprueba sola. Ganarles hoy no
 ## quita el problema, lo encarece.
 func assessor_roster(severity: int) -> Dictionary:
-	var raw: float = float(GameConfig.storm_tithe_base_force + severity - 1) 		* GameConfig.get_assessor_escalation(storms_survived())
+	var raw: float = float(GameConfig.storm_tithe_base_force + severity - 1) 		* GameConfig.get_assessor_escalation(tithes_repelled())
 	var force: int = clampi(roundi(raw), 1, GameConfig.combat_deploy_cap)
 	var guns: int = force / 3
 	var line: int = maxi(1, force - guns)
@@ -413,7 +430,8 @@ func _pay_tithe(severity: int) -> void:
 func _collect_tithe(severity: int) -> Dictionary:
 	var taken: Dictionary = {}
 	var debt: int = GameConfig.get_tithe_debt(
-		severity, ProgressionManager.current_era, ResourceManager.get_total_stored())
+		severity, ProgressionManager.current_era, ResourceManager.get_total_stored(),
+		storms_survived() == 0)
 
 	debt -= _take_from_stores(debt, taken)
 	if debt <= 0:
@@ -515,12 +533,13 @@ func repel_tithe() -> void:
 		return
 	EventBus.tithe_resolved.emit(true, {})
 	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_REPELLED"), "success", UITheme.POSITIVE)
-	_settle()
+	_settle(true)
 
-func _settle() -> void:
+func _settle(repelled: bool = false) -> void:
 	if _cycle == null:
 		return
-	_publish(_cycle.settle_tithe(_industrial_footprint(), ProgressionManager.current_era))
+	_morale_debt = 0.0
+	_publish(_cycle.settle_tithe(_industrial_footprint(), ProgressionManager.current_era, repelled))
 
 ## How much smoke the base makes. This is what the Regency actually measures, and
 ## what decides how hard the next storm hits.
@@ -604,6 +623,7 @@ func reset() -> void:
 	_armed = false
 	_halted = false
 	_tithe_to_resume = false
+	_morale_debt = 0.0
 	_on_demand = false
 	_resume_when_running = false
 	GameConfig.event_production_multiplier = 1.0

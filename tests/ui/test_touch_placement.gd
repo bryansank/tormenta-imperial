@@ -328,13 +328,14 @@ func test_the_emulated_mouse_click_does_not_place_while_touch_aiming() -> void:
 # ── Ficha del menu ────────────────────────────────────────────────────
 
 func test_the_rule_text_names_the_deposit() -> void:
-	assert_str(Assist.rule_text("sawmill")).is_equal(Tr.t("LBL_RULE_FOREST"))
-	assert_str(Assist.rule_text("gold_mine")).is_equal(Tr.t("LBL_RULE_GOLD_VEIN"))
-	assert_str(Assist.rule_text("foundry")).is_equal(Tr.t("LBL_RULE_IRON_DEPOSIT"))
-	assert_str(Assist.rule_text("refinery")).is_equal(Tr.t("LBL_RULE_OIL_WELL"))
+	# La ficha dice la misma frase que el aviso al fallar: una sola redaccion.
+	assert_str(Assist.rule_text("sawmill")).is_equal(Tr.t("LBL_NEEDS_FOREST_NEAR"))
+	assert_str(Assist.rule_text("gold_mine")).is_equal(Tr.t("LBL_NEEDS_GOLD_VEIN_NEAR"))
+	assert_str(Assist.rule_text("foundry")).is_equal(Tr.t("LBL_NEEDS_IRON_NEAR"))
+	assert_str(Assist.rule_text("refinery")).is_equal(Tr.t("LBL_REQUIRES_DEPOSIT"))
 	assert_str(Assist.rule_text("house")).is_equal("")
 	for id in GameConfig.building_deposit_rules:
-		var key := "LBL_RULE_" + String(GameConfig.building_deposit_rules[id]["deposit"]).to_upper()
+		var key := String(GameConfig.building_deposit_rules[id]["message"])
 		for locale in ["es", "en"]:
 			assert_bool(Tr._STRINGS[locale].has(key)).override_failure_message("%s en %s" % [key, locale]).is_true()
 

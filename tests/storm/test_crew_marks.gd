@@ -171,7 +171,7 @@ func test_a_crew_that_survives_still_carries_over_when_nobody_says_otherwise() -
 	# Y la contraparte: quien encadena una defensa con los supervivientes del
 	# tablero que acaba de cerrar sigue sin tener que declarar nada. Son las
 	# mismas unidades y los mismos uids, asi que no hay nada que confundir.
-	_given_army({"infantry": GameConfig.combat_deploy_cap, "artillery": 2})
+	_given_army({"vehicle": GameConfig.combat_deploy_cap, "artillery": 2})
 	_given_towers(1)
 	assert_bool(CombatManager.start_defense({"infantry": 1})).is_true()
 	var survivors: Array = _units_of_side(PLAYER)

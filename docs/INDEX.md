@@ -27,6 +27,7 @@ Complete technical documentation for AI and developer context.
 | 19 | [Exportar](19-exportar.md) | Spanish: building the Windows .exe (templates, preset, exclusions, `dev_mode` off in exports, Beckett gate, save folder), distributing it, the Android APK for tablets (toolchain, preset, signing via env vars, emulator findings, Google Play needs), and what Linux/macOS/Web would need |
 | 20 | [Modos de juego](20-modos-de-juego.md) | Spanish: Campaña, Constructor, Supervivencia y Sandbox — the rules table per mode, `GameMode` + `GameConfig.game_mode_rules`, the New Game mode picker, the sealed Survival save, and how to add a mode |
 | 21 | [Interfaz y dispositivos](21-interfaz-y-dispositivos.md) | Spanish: device profiles (PC/tablet/phone detection and defaults), canvas scaling without black bars, Settings tabs, HUD show/hide registry, movable panels and the layout editor, colour-blind palettes, high contrast, touch/mouse help texts |
+| 22 | [Línea jugable](22-linea-jugable.md) | Spanish: the whole campaign played at real timings by `tools/line_probe.gd` (ten seeds, before/after tables), the dead ends found and fixed, the storm/Tithe pacing changes, the WHAT TO DO? panel (`Objectives.gd`), remaining risks and a human playtest checklist |
 
 ## Quick Reference
 
