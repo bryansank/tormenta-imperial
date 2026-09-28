@@ -25,6 +25,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 3. WASD to pan camera, scroll to zoom, middle-click to drag-pan
 4. Touch: single finger drag to pan, two-finger pinch to zoom
 5. **Important:** Delete save file to test fresh economy: `user://save_game.json`
+6. **2D view:** Settings → Map view, or `godot --path . -- --view=2d`. Same services, UI and save; only the world view differs (`scenes/main/Main2D.tscn`, `scripts/view2d/`). See `docs/18-vista-2d.md`
 
 ---
 

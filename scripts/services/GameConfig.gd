@@ -303,6 +303,11 @@ var ui_helper_visible := true
 ## Settings panel; persists in user://settings.cfg like the rest of preferences.
 var ui_fullscreen := false
 
+## Vista del mapa: "3d" (Main.tscn) o "2d" (Main2D.tscn, docs/18-vista-2d.md).
+## Cambiar el valor por defecto a "2d" es lo unico que hace falta para que la
+## vista 2D sea la de serie. `--view=2d` en la linea de comandos manda sobre esto
+## solo en esa sesion (ViewMode.gd).
+var ui_view_mode := "3d"
 ## Controles tactiles en pantalla (D-pad, zoom, rotar, cancelar colocacion).
 ## "auto" los ensena solo en movil (o en PC tras un toque real de pantalla, ver
 ## touch_controls_enabled); "always" y "never" fuerzan. En escritorio sobran:
@@ -344,6 +349,8 @@ func load_user_settings() -> void:
 	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
+	var view := String(cf.get_value("ui", "view_mode", ui_view_mode))
+	ui_view_mode = view if view in ["3d", "2d"] else ui_view_mode
 	var touch_mode := String(cf.get_value("ui", "touch_controls", ui_touch_controls))
 	# Un valor desconocido en el archivo (edicion a mano, version vieja) vuelve
 	# a "auto" en vez de dejar los controles en un estado que nadie eligio.
@@ -364,6 +371,7 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "grid_visible", ui_grid_visible)
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
+	cf.set_value("ui", "view_mode", ui_view_mode)
 	cf.set_value("ui", "touch_controls", ui_touch_controls)
 	cf.set_value("ui", "locale", ui_locale)
 	cf.save(USER_SETTINGS_PATH)

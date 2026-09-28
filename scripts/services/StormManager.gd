@@ -232,7 +232,7 @@ func damage_priority(severity: int) -> Array:
 
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info["data"]
-		var node: Node3D = info["node"]
+		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
 		if BuildingHealth.is_core(node):
@@ -262,7 +262,7 @@ func _last_standing_essentials() -> Dictionary:
 		var data: BuildingData = info["data"]
 		if not data.id in GameConfig.storm_essential_buildings:
 			continue
-		var node: Node3D = info["node"]
+		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
 		if standing.has(data.id):
@@ -456,7 +456,7 @@ func _seizable_buildings() -> Array:
 	var military: Array = []
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info["data"]
-		var node: Node3D = info["node"]
+		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
 			continue
 		if BuildingHealth.is_core(node):

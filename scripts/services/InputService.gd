@@ -10,6 +10,8 @@ extends Node
 ## BuildingPlacer llama a esa misma funcion para el arrastre con el boton
 ## izquierdo: hay un solo camino, no dos parecidos.
 
+const View2D := preload("res://scripts/view2d/View2D.gd")
+
 @export var mouse_drag_sensitivity: float = 0.05
 @export var mouse_rotate_sensitivity: float = 0.3
 
@@ -261,7 +263,11 @@ func _emit_grab_pan(from_pos: Vector2, to_pos: Vector2) -> void:
 	var viewport := get_viewport()
 	if viewport == null:
 		return
-	var world_delta = screen_drag_to_world_delta(viewport.get_camera_3d(), from_pos, to_pos)
+	var camera := viewport.get_camera_3d()
+	var world_delta = screen_drag_to_world_delta(camera, from_pos, to_pos)
+	# Vista 2D: no hay Camera3D; la misma cuenta sale de la transformacion del lienzo.
+	if camera == null and viewport.get_camera_2d() != null:
+		world_delta = View2D.screen_drag_to_world_delta(viewport.get_canvas_transform(), from_pos, to_pos)
 	if world_delta == null:
 		return
 	EventBus.camera_drag_world_requested.emit(world_delta)
