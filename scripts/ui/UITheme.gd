@@ -1105,3 +1105,114 @@ static func build_global_theme() -> Theme:
 		t.set_constant("minimum_grab_thickness", split, 8)
 
 	return t
+
+# ══════════════════════════════════════════════════════════════════════
+# ── prologo-ayudas ──
+# ══════════════════════════════════════════════════════════════════════
+# El prologo (PrologueScreen) es un documento: papel, tinta y lacre. Su propio
+# lenguaje visual a proposito, para que el lore no se confunda con el tutorial
+# (laton sobre metal) ni con la ayuda (azul acero). No sigue las paletas del
+# HUD: es un papel viejo en cualquier paleta, y su tinta sobre ese papel pasa
+# de sobra el contraste AA (INK sobre PARCHMENT ~ 11:1).
+
+const PARCHMENT := Color(0.89, 0.82, 0.66)
+const PARCHMENT_DARK := Color(0.72, 0.62, 0.45)
+const INK := Color(0.17, 0.11, 0.06)
+const INK_DIM := Color(0.34, 0.25, 0.16)
+## La nota al margen: tinta azul-negra de pluma, otra mano.
+const INK_NOTE := Color(0.12, 0.17, 0.33)
+const SEAL_RED := Color(0.6, 0.1, 0.07)
+const DESK_BG := Color(0.07, 0.05, 0.035)
+
+## Maquina de escribir (Special Elite, Apache 2.0) y letra a mano (Caveat, OFL).
+const FONT_TYPEWRITER_PATH := "res://assets/fonts/SpecialElite-Regular.ttf"
+const FONT_HAND_PATH := "res://assets/fonts/Caveat-Variable.ttf"
+
+static var _parchment_tex: Texture2D = null
+static var _parchment_edge_tex: Texture2D = null
+static var _desk_tex: Texture2D = null
+
+static func typewriter_font() -> Font:
+	var f := _load_font(FONT_TYPEWRITER_PATH)
+	return f if f != null else body_font()
+
+static func hand_font() -> Font:
+	var f := _load_font(FONT_HAND_PATH)
+	return f if f != null else body_font()
+
+## El papel: ruido suave entre dos tonos de pergamino. Generado, sin imagen.
+static func parchment_texture() -> Texture2D:
+	if _parchment_tex == null:
+		var noise := FastNoiseLite.new()
+		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		noise.frequency = 0.012
+		noise.fractal_octaves = 5
+		var ramp := Gradient.new()
+		ramp.set_color(0, PARCHMENT.darkened(0.1))
+		ramp.set_color(1, PARCHMENT.lightened(0.06))
+		var tex := NoiseTexture2D.new()
+		tex.width = 512
+		tex.height = 512
+		tex.seamless = true
+		tex.noise = noise
+		tex.color_ramp = ramp
+		_parchment_tex = tex
+	return _parchment_tex
+
+## Los bordes tostados: un degradado radial transparente en el centro.
+static func parchment_edge_texture() -> Texture2D:
+	if _parchment_edge_tex == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0.35, 0.22, 0.1, 0.0))
+		g.set_color(1, Color(0.35, 0.22, 0.1, 0.55))
+		g.add_point(0.62, Color(0.35, 0.22, 0.1, 0.0))
+		var tex := GradientTexture2D.new()
+		tex.gradient = g
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(1.08, 1.08)
+		tex.width = 256
+		tex.height = 256
+		_parchment_edge_tex = tex
+	return _parchment_edge_tex
+
+## La mesa bajo el papel: grano pardo muy oscuro.
+static func desk_texture() -> Texture2D:
+	if _desk_tex == null:
+		var noise := FastNoiseLite.new()
+		noise.noise_type = FastNoiseLite.TYPE_CELLULAR
+		noise.frequency = 0.03
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(0.05, 0.035, 0.02))
+		ramp.set_color(1, Color(0.13, 0.09, 0.055))
+		var tex := NoiseTexture2D.new()
+		tex.width = 256
+		tex.height = 256
+		tex.seamless = true
+		tex.noise = noise
+		tex.color_ramp = ramp
+		_desk_tex = tex
+	return _desk_tex
+
+## Boton de cuero y tinta para el prologo: sin chapa ni remaches.
+static func style_ink_button(btn: Button, primary: bool = false) -> void:
+	var bg := Color(0.3, 0.12, 0.08) if primary else Color(0.2, 0.14, 0.09)
+	var normal := _flat(bg, PARCHMENT_DARK, 1, 3, 10)
+	var hover := _flat(bg.lightened(0.12), PARCHMENT, 1, 3, 10)
+	var pressed := _flat(bg.darkened(0.2), PARCHMENT, 2, 3, 10)
+	var disabled := _flat(Color(bg, 0.5), Color(PARCHMENT_DARK, 0.3), 1, 3, 10)
+	btn.add_theme_stylebox_override("normal", normal)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("pressed", pressed)
+	btn.add_theme_stylebox_override("focus", hover)
+	btn.add_theme_stylebox_override("disabled", disabled)
+	var f := typewriter_font()
+	if f != null:
+		btn.add_theme_font_override("font", f)
+	btn.add_theme_font_size_override("font_size", FONT_BUTTON)
+	btn.add_theme_color_override("font_color", PARCHMENT)
+	btn.add_theme_color_override("font_hover_color", Color(1, 0.96, 0.86))
+	btn.add_theme_color_override("font_pressed_color", Color(1, 0.96, 0.86))
+	btn.add_theme_color_override("font_focus_color", Color(1, 0.96, 0.86))
+	btn.add_theme_color_override("font_disabled_color", Color(PARCHMENT, 0.4))
+	btn.add_theme_constant_override("outline_size", 0)
