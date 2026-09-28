@@ -20,30 +20,30 @@ tags: [camara, controles]
 - runFlow: comun/en_partida.yaml
 # Primero se aleja la camara del borde con la flecha izquierda.
 - swipe:
-    start: "3%,83%"
-    end: "3%,83%"
+    start: "4%,86%"
+    end: "4%,86%"
     duration: 800
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/05_a0_antes_toque
 - tapOn:
-    point: "12%,83%"      # flecha derecha, toque corto
+    point: "13%,86%"      # flecha derecha, toque corto
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/05_a1_tras_toque
 - swipe:
-    start: "12%,83%"
-    end: "12%,83%"
+    start: "13%,86%"
+    end: "13%,86%"
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/05_b1_tras_mantener_2s
 - swipe:
-    start: "11%,82%"
-    end: "12%,84%"        # ~20 px de deriva, como un dedo real
+    start: "12%,85%"
+    end: "13%,87%"        # ~20 px de deriva, como un dedo real
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml
@@ -51,8 +51,8 @@ tags: [camara, controles]
 - takeScreenshot: ${output.dir}/05_c1_tras_mantener_con_deriva
 # Zoom +
 - swipe:
-    start: "92%,84%"
-    end: "92%,84%"
+    start: "91%,87%"
+    end: "91%,87%"
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml
@@ -60,16 +60,16 @@ tags: [camara, controles]
 - takeScreenshot: ${output.dir}/05_d1_tras_mantener_zoom_mas
 # Zoom -
 - swipe:
-    start: "96%,84%"
-    end: "96%,84%"
+    start: "96%,87%"
+    end: "96%,87%"
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/05_e1_tras_mantener_zoom_menos
 - swipe:
-    start: "96%,84%"
-    end: "96%,84%"
+    start: "96%,87%"
+    end: "96%,87%"
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml
@@ -77,8 +77,8 @@ tags: [camara, controles]
 - takeScreenshot: ${output.dir}/05_e2_tras_mantener_zoom_menos_otra
 # Girar
 - swipe:
-    start: "96%,76%"
-    end: "96%,76%"
+    start: "96%,78%"
+    end: "96%,78%"
     duration: 2000
 - runFlow:
     file: comun/esperar.yaml
@@ -86,7 +86,7 @@ tags: [camara, controles]
 - takeScreenshot: ${output.dir}/05_f1_tras_mantener_girar
 # longPressOn de Maestro, por comparar con el swipe sostenido.
 - longPressOn:
-    point: "3%,83%"
+    point: "4%,86%"
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}

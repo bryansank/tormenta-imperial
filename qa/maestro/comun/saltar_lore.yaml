@@ -2,7 +2,7 @@
 appId: com.bryankey.tormentaimperial.qa
 ---
 - tapOn:
-    point: "27%,81%"      # Saltar
+    point: "23%,85%"      # Saltar
 - runFlow:
     file: esperar.yaml
     env:

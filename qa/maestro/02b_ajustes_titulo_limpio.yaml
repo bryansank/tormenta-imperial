@@ -15,7 +15,7 @@ tags: [ajustes, menus, bloqueo]
 - runFlow: comun/arrancar.yaml
 - takeScreenshot: ${output.dir}/02b_00_titulo
 - tapOn:
-    point: "18%,46%"      # AJUSTES (sin partida guardada es el 2o boton)
+    point: "21%,45%"      # AJUSTES (sin partida guardada es el 2o boton)
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 2000}
@@ -23,17 +23,17 @@ tags: [ajustes, menus, bloqueo]
     file: comun/probar_ajustes.yaml
     env: {P: 02b}
 - tapOn:
-    point: "27%,81%"      # Saltar de la introduccion
+    point: "23%,85%"      # Saltar de la introduccion
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 - tapOn:
-    point: "72%,81%"      # Siguiente
+    point: "75%,85%"      # Siguiente
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 - tapOn:
-    point: "77%,19%"      # X de la introduccion
+    point: "81%,15%"      # X de la introduccion
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}

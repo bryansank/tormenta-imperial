@@ -13,14 +13,14 @@ tags: [lore, menus]
 - runFlow: comun/nueva_partida.yaml
 - takeScreenshot: ${output.dir}/01_01_lore_p1
 - tapOn:
-    point: "72%,81%"      # Siguiente
+    point: "75%,85%"      # Siguiente
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/01_02_lore_p2
 # Donde iria un "Atras": a la izquierda del contador, entre Saltar y Siguiente.
 - tapOn:
-    point: "50%,81%"
+    point: "50%,85%"
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}

@@ -18,41 +18,44 @@ tags: [construir, colocar]
 - runFlow: comun/en_partida.yaml
 - takeScreenshot: ${output.dir}/04_00_en_partida
 - tapOn:
-    point: "97%,9%"       # hamburguesa: CONSTRUIR solo aparece con ella abierta
+    point: "97%,5%"       # hamburguesa: CONSTRUIR solo aparece con ella abierta
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 - takeScreenshot: ${output.dir}/04_01_hamburguesa_con_construir
 - tapOn:
-    point: "50%,89%"      # CONSTRUIR
+    point: "50%,93%"      # CONSTRUIR
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/04_02_menu_construir
 - tapOn:
-    point: "35%,21%"      # pestana Produccion
+    point: "32%,17%"      # pestana Produccion
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1000}
 - takeScreenshot: ${output.dir}/04_03_pestana_produccion
 - tapOn:
-    point: "19%,21%"      # pestana Todos
+    point: "15%,17%"      # pestana Todos
 - tapOn:
-    point: "76%,14%"      # Buscar...
+    point: "80%,9%"       # Buscar...
 - inputText: "Aserradero"
-- hideKeyboard
+# Nada de hideKeyboard: en Maestro es un "atras" y el atras de Android cierra el
+# juego. Se toca el titulo de la ventana para quitar el foco del buscador.
+- tapOn:
+    point: "25%,9%"
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/04_04_buscar_aserradero
 - tapOn:
-    point: "22%,33%"      # primera tarjeta de la lista (estimada)
+    point: "20%,30%"      # primera tarjeta de la lista (estimada)
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 - takeScreenshot: ${output.dir}/04_05_tarjeta_elegida
 - tapOn:
-    point: "76%,84%"      # CONSTRUIR del detalle (estimado)
+    point: "80%,85%"      # CONSTRUIR del detalle (estimado)
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}

@@ -1,16 +1,26 @@
-# Menu de titulo -> Nueva partida -> Confirmar. El dialogo "Esto borrara tu
-# partida actual" sale si hay partida guardada; si no sale, el toque de Confirmar
-# cae sobre el texto del lore y no hace nada. Deja abierta la pagina 1/10.
+# Menu de titulo -> Nueva partida -> (Campana ya elegida) EMPEZAR.
+# Desde feat/hito-3-expedicion 2a3ec3e "Nueva partida" abre el selector de modo
+# (Campana / Constructor / Supervivencia / Sandbox). En el emulador el PRIMER
+# toque en EMPEZAR a veces no hace nada; por eso se toca dos veces. Si el primero
+# ya funciono, el segundo cae sobre el texto de la introduccion y no hace nada.
+# Deja abierta la pagina 1/10 de la introduccion.
 appId: com.bryankey.tormentaimperial.qa
 ---
 - tapOn:
-    point: "18%,38%"      # Nueva partida
+    point: "21%,36%"      # Nueva partida (sin partida guardada es el 1er boton)
 - runFlow:
     file: esperar.yaml
     env:
-      MS: 1500
+      MS: 2000
+- takeScreenshot: ${output.dir}/_selector_modo
 - tapOn:
-    point: "58%,53%"      # Confirmar (dialogo "Nueva partida")
+    point: "72%,73%"      # EMPEZAR
+- runFlow:
+    file: esperar.yaml
+    env:
+      MS: 2000
+- tapOn:
+    point: "72%,73%"      # EMPEZAR otra vez (ver arriba)
 - runFlow:
     file: esperar.yaml
     env:

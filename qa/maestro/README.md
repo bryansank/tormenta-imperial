@@ -52,6 +52,17 @@ Se ha comprobado también con `-gpu host`. Para el emulador existe un segundo pr
 Los dos excluyen lo mismo y ninguno guarda secretos (`tests/build/test_export_guards.gd`).
 Pueden estar instalados a la vez.
 
+**Antes de lanzar Godot** (importar, exportar o tests) tiene que haber un `override.cfg`
+en la raíz del proyecto con una carpeta de usuario propia. Si no, Godot escribe logs
+en la del jugador (`%APPDATA%\Godot\app_userdata\Tormenta Imperial`). El fichero está
+en `.gitignore` y el preset lo excluye del paquete:
+
+```ini
+[application]
+config/use_custom_user_dir=true
+config/custom_user_dir_name="TI_qa_tablet"
+```
+
 ```bash
 GODOT=".../Godot_v4.7-stable_mono_win64_console.exe"
 "$SDK/platform-tools/adb.exe" start-server       # evita que el export se quede colgado
@@ -128,10 +139,13 @@ Con la partida en pantalla (por ejemplo, al terminar `05_mantener_dpad.yaml`):
 python 08_rotar_dos_dedos.py "$OUT"
 ```
 
-Inyecta con `sendevent` en `/dev/input/event2` (`virtio_input_multi_touch_1`,
-protocolo B). No necesita root: el usuario `shell` de adb está en el grupo `input`.
-Primero hace un pellizco, que sirve de control (si hace zoom, la inyección llega), y
-después un giro de 90° a distancia constante en los dos sentidos.
+Inyecta los dedos por la consola del emulador (`adb emu event send EV_ABS:ABS_MT_…`),
+que llegan a `/dev/input/event2` (`virtio_input_multi_touch_1`, protocolo B). No
+necesita root. `sendevent` directo no sirve, porque SELinux se lo deniega al usuario
+`shell` en una imagen "user". Primero hace un arrastre de un dedo, que es el control
+(si panea, la inyección llega). Después dos pellizcos y un giro de 90° en cada
+sentido, a distancia constante. Al final repite con "Ubicación del puntero" encendida
+y guarda `08_*_traza.png`, donde Android pinta los dedos que recibe.
 
 ## Trampas conocidas
 
@@ -140,5 +154,13 @@ después un giro de 90° a distancia constante en los dos sentidos.
 - Si Maestro dice `Device server died … UNAVAILABLE` tras reiniciar el emulador, el
   servidor de Maestro se ha quedado con la sesión vieja. La CLI vuelve a instalar su
   driver en cada ejecución; el MCP puede necesitar reiniciarse.
-- Con partida guardada, el menú de título tiene "Continuar" arriba y los botones
-  bajan un puesto (Nueva partida 42 %, AJUSTES 50 %). Sin partida: 38 % y 46 %.
+- Las coordenadas son las de la base `feat/hito-3-expedicion` 2a3ec3e (pantalla
+  completa con `aspect=expand`, selector de modo en "Nueva partida"). En el build
+  que jugó Bryan (`e591ea7`) había franjas negras arriba y abajo y todo estaba en
+  otro sitio; sus capturas están en `qa-tablet\e1_build_jugado\`.
+- Menú de título sin partida: Nueva partida 21 %,36 % · AJUSTES 21 %,45 %. Con partida
+  guardada se añade "Continuar" arriba: Continuar 21 %,29 % · Nueva partida 21 %,43 % ·
+  AJUSTES 21 %,52 %.
+- En el selector de modo, el primer toque en EMPEZAR a veces no responde en el
+  emulador. `comun/nueva_partida.yaml` toca dos veces.
+- Maestro `hideKeyboard` es un "atrás" y cierra el juego. No se usa.

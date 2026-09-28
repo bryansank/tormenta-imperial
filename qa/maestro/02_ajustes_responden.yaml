@@ -15,13 +15,13 @@ tags: [ajustes, menus]
 - runFlow: comun/en_partida.yaml
 # 1) Desde la pausa.
 - tapOn:
-    point: "25%,9%"       # boton pausa (II)
+    point: "30%,5%"       # boton pausa (II)
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 - takeScreenshot: ${output.dir}/02_1_pausa_menu
 - tapOn:
-    point: "50%,52%"      # AJUSTES en la pausa
+    point: "50%,54%"      # AJUSTES en la pausa
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
@@ -29,19 +29,19 @@ tags: [ajustes, menus]
     file: comun/probar_ajustes.yaml
     env: {P: 02_1_pausa}
 - tapOn:
-    point: "50%,37%"      # Reanudar
+    point: "50%,36%"      # Reanudar
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 # 2) Desde el menu de hamburguesa.
 - tapOn:
-    point: "97%,9%"       # boton de hamburguesa
+    point: "97%,5%"       # boton de hamburguesa
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 - takeScreenshot: ${output.dir}/02_2_hamburguesa_menu
 - tapOn:
-    point: "93%,52%"      # AJUSTES en el menu lateral
+    point: "92%,54%"      # AJUSTES en el menu lateral
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
@@ -49,24 +49,24 @@ tags: [ajustes, menus]
     file: comun/probar_ajustes.yaml
     env: {P: 02_2_hamburguesa}
 - tapOn:
-    point: "97%,9%"       # cerrar el menu lateral si sigue abierto
+    point: "97%,5%"       # cerrar el menu lateral si sigue abierto
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1000}
 # 3) Desde el menu de titulo (con partida guardada: Continuar arriba, AJUSTES 3o).
 - tapOn:
-    point: "25%,9%"       # pausa
+    point: "30%,5%"       # pausa
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 - tapOn:
-    point: "50%,67%"      # Menu principal
+    point: "50%,72%"      # Menu principal
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 4000}
 - takeScreenshot: ${output.dir}/02_3_titulo
 - tapOn:
-    point: "18%,50%"      # AJUSTES
+    point: "21%,52%"      # AJUSTES
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}

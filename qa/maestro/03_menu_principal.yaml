@@ -16,45 +16,45 @@ tags: [menus, pausa]
 - takeScreenshot: ${output.dir}/03_00_en_partida
 # a) II -> Menu principal -> Continuar
 - tapOn:
-    point: "25%,9%"       # II
+    point: "30%,5%"       # II
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 - takeScreenshot: ${output.dir}/03_01_pausa
 - tapOn:
-    point: "50%,67%"      # Menu principal
+    point: "50%,72%"      # Menu principal
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 4000}
 - takeScreenshot: ${output.dir}/03_02_menu_titulo
 - tapOn:
-    point: "18%,35%"      # Continuar (con partida guardada es el 1er boton)
+    point: "21%,29%"      # Continuar (con partida guardada es el 1er boton)
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 4000}
 - takeScreenshot: ${output.dir}/03_03_tras_continuar
 # b) Panel de edificio abierto + II
 - tapOn:
-    point: "60%,62%"      # el Nucleo, en el centro-derecha de la vista inicial
+    point: "62%,55%"      # el Nucleo, en el centro-derecha de la vista inicial
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/03_04_panel_nucleo
 - tapOn:
-    point: "25%,9%"       # II
+    point: "30%,5%"       # II
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/03_05_II_con_panel_abierto
 # c) Menu de hamburguesa
 - tapOn:
-    point: "97%,9%"
+    point: "97%,5%"
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
 - takeScreenshot: ${output.dir}/03_06_hamburguesa_sin_menu_principal
 - tapOn:
-    point: "97%,9%"
+    point: "97%,5%"
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1000}
