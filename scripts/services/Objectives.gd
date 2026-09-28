@@ -21,7 +21,7 @@ const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
 ## El camino recomendado, en orden. Cada entrada se da por hecha cuando hay al
 ## menos `count` en pie (o en obras). Es el mismo orden que la guia
-## (docs/14-guia-de-juego.md, seccion 10) y que la intro del tutorial.
+## (docs/14-guia-de-juego.md, seccion 11).
 const LINE := [
 	{"kind": "build", "id": "sawmill", "count": 1, "why": "OBJ_WHY_SAWMILL"},
 	{"kind": "build", "id": "gold_mine", "count": 1, "why": "OBJ_WHY_GOLD_MINE"},
