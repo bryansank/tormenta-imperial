@@ -90,7 +90,7 @@ Detalle técnico en [`docs/15-combat.md`](docs/15-combat.md); especificación en
 | **Balance** | Todo valor ajustable vive en `GameConfig.gd`. Cero números mágicos repartidos por el código |
 | **Modelos 3D** | 12 de los 14 edificios son GLB; `nucleo` y `road` se generan proceduralmente por `DieselpunkBuildingFactory` (la calzada necesita conocer a sus vecinas) |
 | **Guardado** | JSON local con autoguardado y progresión offline de hasta 8 horas; las peleas no se guardan a medias |
-| **Tests** | gdUnit4: unos 1.350 tests en 101 suites, lanzados siempre con `tools/run_tests.sh`, que les da una carpeta de usuario propia |
+| **Tests** | gdUnit4: unos 1.360 tests en 102 suites, lanzados siempre con `tools/run_tests.sh`, que les da una carpeta de usuario propia |
 | **Exportados** | Windows (`.exe` único) y Android (APK para tableta); ver [`docs/19-exportar.md`](docs/19-exportar.md) |
 
 El proyecto sigue **Spec-Driven Development**: cada pilar pasa por especificación, plan técnico y lista de tareas antes de escribirse. Las reglas que no se negocian están en [`.specify/memory/constitution.md`](.specify/memory/constitution.md).

@@ -334,6 +334,8 @@ func _build_confirm() -> void:
 	add_child(_layer)
 	_confirm = Button.new()
 	_confirm.name = "ConfirmPlacement"
+	# El tutorial guiado lo busca para no taparlo con su tarjeta.
+	_confirm.add_to_group("placement_confirm")
 	_confirm.custom_minimum_size = Vector2(UITheme.touch_px(56.0), UITheme.touch_px(52.0))
 	UITheme.style_button(_confirm, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_BODY)
 	_confirm.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS

@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1350 tests in 101 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1360 tests in 102 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -454,6 +454,7 @@ and Settings closes; accepted). With a board open it does not reload
 tormenta-imperial/
 +-- project.godot                    # Engine config, 26 autoloads (25 game + BeckettRuntime)
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
++-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
 +-- readme.md                        # Game overview (Spanish, public)
 +-- docs/                            # Per-system deep docs 01-23 (INDEX.md); media/ = screenshots
@@ -463,7 +464,7 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 101 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 102 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
@@ -528,6 +529,8 @@ tormenta-imperial/
 |   +-- fonts/, branding/            # Fonts with their licences; logo, banner, key art
 +-- tools/
     +-- run_tests.sh, run_tests.ps1  # THE way to run the tests (private user dir)
+    +-- package_release.sh, .ps1     # Zips an exported .exe / APK with LICENSE, notices and dist/LEEME-*.txt (docs/19 §8)
+    +-- gen_godot_notices.gd         # Regenerates licenses/GODOT-COPYRIGHT.txt from the engine binary
     +-- gen_ui_textures.gd, gen_resource_icons.gd, gen_unit_icons.gd  # Asset generators (headless, -s)
     +-- render_brand.gd, render_branding.gd, render_catalog.gd, showcase_shots.gd  # Branding and screenshots
     +-- *_probe.gd                   # Dev probes, see below
@@ -707,7 +710,10 @@ a preset. The `BeckettRuntime`
 autoload points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime
 only in the editor and frees itself in an export. Exported Windows builds save to
 `%APPDATA%\TormentaImperial\` (`config/use_custom_user_dir.template`), not the
-editor's user dir; Android saves inside the app's internal storage.
+editor's user dir; Android saves inside the app's internal storage. To hand a build to
+testers, `tools/package_release.sh` (or `.ps1`) zips the exported `.exe` / APK with
+`LICENSE`, `THIRD-PARTY-NOTICES.md`, `licenses/` and a `LEEME` into the git-ignored
+`dist/`; it exports nothing itself.
 
 ---
 

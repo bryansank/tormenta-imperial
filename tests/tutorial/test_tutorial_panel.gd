@@ -118,6 +118,20 @@ func test_the_coach_hides_while_the_prologue_is_open() -> void:
 	panel._close()
 	assert_bool(hidden).is_true()
 
+## QA en tableta (flujo 04): en el paso del aserradero la tarjeta tapaba el ✓
+## CONSTRUIR AQUI. Con el ✓ a la vista, la tarjeta se aparta del bosque y del ✓.
+func test_the_card_never_covers_the_touch_confirm_button() -> void:
+	var TP := load("res://scripts/ui/TutorialPanel.gd")
+	var vp := Vector2(1024, 640)
+	var size := Vector2(420, 140)
+	var forest := Rect2(Vector2(410, 435) - Vector2(40, 40), Vector2(80, 80))
+	var confirm := Rect2(445, 225, 150, 42)
+	var pos: Vector2 = TP.card_position(vp, size, TP.with_confirm(forest, confirm))
+	var card := Rect2(pos, size)
+	assert_bool(card.intersects(confirm)).is_false()
+	assert_bool(card.intersects(forest)).is_false()
+	assert_bool(TP.with_confirm(forest, Rect2()) == forest).is_true()
+
 func test_the_card_goes_beside_its_target_and_never_on_it() -> void:
 	var TP := load("res://scripts/ui/TutorialPanel.gd")
 	var vp := Vector2(1280, 720)

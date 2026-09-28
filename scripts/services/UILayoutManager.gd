@@ -307,6 +307,31 @@ func get_sidebar_bottom() -> float:
 func is_sidebar_expanded() -> bool:
 	return _sidebar_expanded
 
+## El boton "☰ MENÚ" (PauseMenu, capa 30) vive arriba a la derecha y queda por
+## encima de cualquier ventana. Una ventana centrada tan grande que llega debajo
+## de el (tablet: la lista de CONSTRUIR ocupa casi toda la pantalla) perdia su X
+## tapada por el boton. Se acorta por arriba y por abajo lo justo para que su
+## cabecera empiece debajo del boton. Devuelve el tamano ya corregido.
+const MENU_BUTTON_FALLBACK_W := 150.0
+const MENU_BUTTON_MARGIN := 10.0
+const MENU_BUTTON_GAP := 6.0
+
+func clear_menu_button(size: Vector2) -> Vector2:
+	if size.x <= 0.0 or size.y <= 0.0:
+		return size
+	var btn_rect := Rect2(_viewport_size.x - MENU_BUTTON_MARGIN - MENU_BUTTON_FALLBACK_W,
+		MENU_BUTTON_MARGIN, MENU_BUTTON_FALLBACK_W, float(UITheme.MIN_BTN_H))
+	if is_inside_tree():
+		var btn := get_tree().get_first_node_in_group("hud_menu_button") as Control
+		if btn != null and is_instance_valid(btn) and btn.size.x > 0.0:
+			btn_rect = btn.get_global_rect()
+	var right := (_viewport_size.x + size.x) * 0.5
+	var top := (_viewport_size.y - size.y) * 0.5
+	var band := btn_rect.end.y + MENU_BUTTON_GAP
+	if right > btn_rect.position.x and top < band:
+		size.y = maxf(_viewport_size.y - 2.0 * band, 120.0)
+	return size
+
 func _place(panel_id: String, control: Control) -> void:
 	var slot_name: String = UILayoutConfig.PANEL_SLOTS.get(panel_id, "")
 	if slot_name.is_empty():
@@ -319,6 +344,8 @@ func _place(panel_id: String, control: Control) -> void:
 	var grow_h: int = slot["grow_h"]
 	var grow_v: int = slot["grow_v"]
 	var size: Vector2 = _clamp_to_viewport(UILayoutConfig.PANEL_SIZES.get(panel_id, slot["max_size"]))
+	if slot_name == "center_modal":
+		size = clear_menu_button(size)
 
 	# Set anchors (Rect2: position = (left, top), size = (right, bottom))
 	control.anchor_left = anchor.position.x

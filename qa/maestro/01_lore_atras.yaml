@@ -1,9 +1,13 @@
 # Bug de Bryan: la introduccion solo tiene "Siguiente"; no hay "Atras".
 #
-# Esperado tras el arreglo: desde la pagina 2/10 hay un boton para volver a la
-# 1/10. Se comprueba en 01_03 y 01_04 (el contador "N / 10" debe volver a 1).
-# Al final se pulsa el boton "atras" de Android: hoy CIERRA el juego entero
-# (01_06 es el escritorio de Android). Esperado: volver una pagina o no hacer nada.
+# Desde #32 el lore es el prologo (expediente de la Regencia, 6 folios) con
+# "Saltar historia" (abajo izq.), "◀ Atras" y "Siguiente ▶" (abajo der.).
+# Un toque en el papel completa el texto que se esta escribiendo (Siguiente
+# tambien lo haria, y haria falta un segundo toque para pasar de folio).
+# Esperado (arreglado): 01_02 dice "Folio 2 de 6"; 01_03, tras ◀ Atras, vuelve a
+# "Folio 1 de 6"; 01_04, tras deslizar a la izquierda, "Folio 2 de 6" y tras
+# deslizar a la derecha (01_05) otra vez el 1. El atras de Android cierra el
+# prologo (es ESC: "saltar"), no la app: 01_06/01_07 muestran la partida.
 appId: com.bryankey.tormentaimperial.qa
 name: 01 Lore - volver atras
 tags: [lore, menus]
@@ -11,21 +15,36 @@ tags: [lore, menus]
 - runFlow: comun/arrancar.yaml
 - takeScreenshot: ${output.dir}/01_00_titulo
 - runFlow: comun/nueva_partida.yaml
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 6000}
 - takeScreenshot: ${output.dir}/01_01_lore_p1
 - tapOn:
-    point: "75%,85%"      # Siguiente
+    point: "50%,50%"      # toque en el papel: completa el texto (si no, nada)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1000}
+- tapOn:
+    point: "82%,94%"      # Siguiente: folio 2
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
 - takeScreenshot: ${output.dir}/01_02_lore_p2
-# Donde iria un "Atras": a la izquierda del contador, entre Saltar y Siguiente.
 - tapOn:
-    point: "50%,85%"
+    point: "67%,94%"      # ◀ Atras
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
-- takeScreenshot: ${output.dir}/01_03_tras_tocar_hueco_atras
-# Gesto de pasar pagina hacia atras (deslizar a la derecha sobre el texto).
+- takeScreenshot: ${output.dir}/01_03_tras_atras
+# Deslizar a la izquierda (pasar hoja) y a la derecha (volver).
+- swipe:
+    start: "70%,45%"
+    end: "30%,45%"
+    duration: 500
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/01_04_tras_deslizar_izquierda
 - swipe:
     start: "30%,45%"
     end: "70%,45%"
@@ -33,14 +52,14 @@ tags: [lore, menus]
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
-- takeScreenshot: ${output.dir}/01_04_tras_deslizar_derecha
+- takeScreenshot: ${output.dir}/01_05_tras_deslizar_derecha
 # Boton atras del sistema.
 - back
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 3000}
-- takeScreenshot: ${output.dir}/01_05_tras_back_android
+- takeScreenshot: ${output.dir}/01_06_tras_back_android
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 3000}
-- takeScreenshot: ${output.dir}/01_06_tras_back_android_3s
+- takeScreenshot: ${output.dir}/01_07_tras_back_android_3s

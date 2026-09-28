@@ -1,82 +1,78 @@
 # Bug de Bryan: "no me deja construir el aserradero".
 #
-# En el APK de Android la ventana "Edificios disponibles" sale VACIA en todas
-# las pestanas (04_02, 04_03): ConstructionMenu lista res://data/buildings con
-# DirAccess y filtra por ".tres", pero en un export los .tres viajan como
-# "*.tres.remap" y no queda ninguno. En el editor de PC no pasa.
-# Esperado tras el arreglo: 04_02 muestra las tarjetas; buscando "Aserradero"
-# sale la tarjeta (04_04); al tocarla, el detalle (04_05); CONSTRUIR del detalle
-# entra en modo colocar (04_06); los toques en el mapa colocan o dan un motivo
-# (04_07..04_09). Las coordenadas de la tarjeta y del CONSTRUIR del detalle son
-# estimadas: revisarlas con la primera captura buena tras el arreglo.
-# Ademas: la columna de hamburguesa se queda abierta encima de la ventana y tapa
-# su X (04_02).
+# Antes: en el APK la lista "Edificios disponibles" salia VACIA (los .tres viajan
+# como .remap; lo arreglo #33) y la columna ☰ tapaba la X de la ventana.
+# Ahora (#31 + #32 + #34): CONSTRUIR es un boton grande siempre abajo, el
+# tutorial guiado lo senala (paso 1), luego la tarjeta del Aserradero (paso 2) y
+# luego el bosque (paso 3). Al colocar con el dedo salen casillas verdes y un
+# boton flotante "✓ CONSTRUIR AQUI".
+# Esperado (arreglado):
+#   04_01  lista llena, la X de la ventana a la vista (no bajo "☰ MENÚ"),
+#          tutorial paso 2 sobre la tarjeta Aserradero.
+#   04_02  detalle con "▲ El aserradero debe tocar un bosque..." y el CONSTRUIR
+#          del detalle a la vista (fuera del scroll).
+#   04_03  modo colocar: casillas verdes, fantasma en la mas cercana, ✓ encima,
+#          aro del tutorial en el bosque y la tarjeta sin tapar el ✓ (paso 3).
+#   04_04  tras tocar ✓: aserradero en obras, oro 300 -> 220, tutorial paso 4.
+# La posicion del ✓ depende del mapa (sigue al fantasma): se toca donde sale en
+# la isla de clearState; si no hay ✓ ahi, 04_04 lo delata (oro sin bajar).
 appId: com.bryankey.tormentaimperial.qa
 name: 04 Construir un aserradero
 tags: [construir, colocar]
 ---
-- runFlow: comun/en_partida.yaml
-- takeScreenshot: ${output.dir}/04_00_en_partida
+- runFlow: comun/arrancar.yaml
+- runFlow: comun/nueva_partida.yaml
+- runFlow: comun/saltar_lore.yaml
+- takeScreenshot: ${output.dir}/04_00_en_partida_tutorial_paso1
 - tapOn:
-    point: "97%,5%"       # hamburguesa: CONSTRUIR solo aparece con ella abierta
+    point: "50%,93%"      # CONSTRUIR (siempre abajo al centro)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/04_01_menu_construir
+- tapOn:
+    point: "12%,37%"      # tarjeta Aserradero (primera de la lista)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/04_02_tarjeta_elegida
+- tapOn:
+    point: "79%,85%"      # CONSTRUIR del detalle
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2000}
+- takeScreenshot: ${output.dir}/04_03_modo_colocar
+- tapOn:
+    point: "50%,39%"      # ✓ CONSTRUIR AQUI (sobre el fantasma)
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 2000}
+- takeScreenshot: ${output.dir}/04_04_tras_confirmar
+# Un toque lejos del bosque: el fantasma va alli en rojo y dice por que.
+- tapOn:
+    point: "25%,30%"
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1200}
-- takeScreenshot: ${output.dir}/04_01_hamburguesa_con_construir
+- takeScreenshot: ${output.dir}/04_05_toque_lejos_del_bosque
+# Buscar en la lista (el buscador sigue funcionando).
+- tapOn:
+    point: "91%,85%"      # CANCELAR la colocacion
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1200}
 - tapOn:
     point: "50%,93%"      # CONSTRUIR
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
-- takeScreenshot: ${output.dir}/04_02_menu_construir
 - tapOn:
-    point: "32%,17%"      # pestana Produccion
-- runFlow:
-    file: comun/esperar.yaml
-    env: {MS: 1000}
-- takeScreenshot: ${output.dir}/04_03_pestana_produccion
+    point: "80%,14%"      # Buscar...
+- inputText: "Vivienda"
+# Nada de hideKeyboard: en Maestro es un "atras". Se toca el titulo de la ventana.
 - tapOn:
-    point: "15%,17%"      # pestana Todos
-- tapOn:
-    point: "80%,9%"       # Buscar...
-- inputText: "Aserradero"
-# Nada de hideKeyboard: en Maestro es un "atras" y el atras de Android cierra el
-# juego. Se toca el titulo de la ventana para quitar el foco del buscador.
-- tapOn:
-    point: "25%,9%"
+    point: "25%,14%"
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
-- takeScreenshot: ${output.dir}/04_04_buscar_aserradero
-- tapOn:
-    point: "20%,30%"      # primera tarjeta de la lista (estimada)
-- runFlow:
-    file: comun/esperar.yaml
-    env: {MS: 1200}
-- takeScreenshot: ${output.dir}/04_05_tarjeta_elegida
-- tapOn:
-    point: "80%,85%"      # CONSTRUIR del detalle (estimado)
-- runFlow:
-    file: comun/esperar.yaml
-    env: {MS: 1500}
-- takeScreenshot: ${output.dir}/04_06_modo_colocar
-# Toques en el mapa: arriba al centro (donde suele haber arboles en la vista
-# inicial), junto al Nucleo y en el tercio inferior (franja que se traga el toque).
-- tapOn:
-    point: "40%,22%"
-- runFlow:
-    file: comun/esperar.yaml
-    env: {MS: 1200}
-- takeScreenshot: ${output.dir}/04_07_toque_arriba
-- tapOn:
-    point: "45%,55%"
-- runFlow:
-    file: comun/esperar.yaml
-    env: {MS: 1200}
-- takeScreenshot: ${output.dir}/04_08_toque_centro
-- tapOn:
-    point: "40%,72%"
-- runFlow:
-    file: comun/esperar.yaml
-    env: {MS: 1200}
-- takeScreenshot: ${output.dir}/04_09_toque_tercio_inferior
+- takeScreenshot: ${output.dir}/04_06_buscar_vivienda

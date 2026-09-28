@@ -1,0 +1,92 @@
+TORMENTA IMPERIAL {{VERSION}} — Android (versión de prueba)
+==================================================================
+
+Gracias por probar el juego. Esta es una build para testers: puede tener
+fallos, y tu opinión es justo lo que hace falta. Está pensado sobre todo para
+tableta en horizontal; en teléfono funciona, pero la interfaz va más justa.
+
+
+QUÉ NECESITAS
+-------------
+- Android 7 o superior, con procesador de 64 bits (ARM64, lo normal en
+  cualquier móvil o tableta de los últimos años) y Vulkan.
+- Unos 150 MB libres.
+
+
+CÓMO INSTALARLO (sideload, fuera de Google Play)
+------------------------------------------------
+El juego no está en Google Play: se instala a mano desde el archivo .apk.
+
+1. Copia el archivo TormentaImperial-...apk de este zip al móvil o tableta
+   (por cable, Google Drive, Telegram, lo que te venga mejor).
+2. Ábrelo desde el gestor de archivos o desde la notificación de descarga.
+3. Android avisará de que esa app no puede instalar aplicaciones de "orígenes
+   desconocidos" (o "fuentes desconocidas"). Pulsa "Ajustes" y activa
+   "Permitir de esta fuente" para la app con la que abriste el APK (Archivos,
+   Chrome, Drive...). Vuelve atrás y pulsa "Instalar".
+4. Si aparece Google Play Protect diciendo que no reconoce la app, pulsa
+   "Más detalles" -> "Instalar de todas formas". Pasa porque el APK no viene
+   de la tienda, no porque tenga nada raro.
+
+Cuando termines puedes volver a desactivar ese permiso. El juego no pide
+ningún permiso (ni internet, ni cámara, ni archivos).
+
+Para actualizar a una versión nueva, instala el APK nuevo encima: la partida
+se conserva. Si Android dice que el paquete "entra en conflicto" con el
+existente, desinstala el anterior primero (ojo: eso borra la partida).
+
+
+DÓNDE SE GUARDA LA PARTIDA
+--------------------------
+Dentro de la propia app, en su almacenamiento interno. No hay que hacer nada.
+Desinstalar el juego borra la partida. Para empezar de cero: Ajustes ->
+Nueva partida.
+
+
+CONTROLES
+---------
+   Mover la cámara     arrastrar un dedo
+   Zoom                pellizcar con dos dedos
+   Rotar la cámara     botones en pantalla
+   Todo lo demás       tocar botones y edificios
+
+El botón "?" enseña ayudas sobre la propia pantalla.
+
+
+CÓMO REPORTAR UN FALLO
+----------------------
+Abre un issue en:
+
+   https://github.com/bryansank/tormenta-imperial/issues
+
+o díselo directamente a quien te pasó el juego. Cuenta qué hacías, qué
+esperabas y qué pasó, qué dispositivo usas (marca y modelo) y la versión
+({{VERSION}}). Una captura de pantalla ayuda mucho.
+
+
+LICENCIA
+--------
+Tormenta Imperial © 2026 Bryan Key. Esta copia es para que la pruebes tú: no
+la redistribuyas ni la subas a ningún sitio. Términos completos en LICENSE.txt.
+El motor (Godot), sus librerías Android, las fuentes y el audio son de
+terceros y conservan sus licencias: ver THIRD-PARTY-NOTICES.md,
+GODOT-COPYRIGHT.txt y licenses/fonts/.
+
+
+==================================================================
+ENGLISH (short version)
+==================================================================
+Tormenta Imperial {{VERSION}}, a test build for Android 7+ (64-bit ARM, Vulkan).
+Designed for landscape tablets first.
+
+- Install (sideload): copy the .apk to the device and open it. When Android
+  blocks apps from "unknown sources", tap Settings, enable "Allow from this
+  source" for the app you opened it with, go back and tap Install. If Play
+  Protect warns about an unrecognised app, choose "More details" -> "Install
+  anyway". The game requests no permissions.
+- Saves: inside the app's private storage. Uninstalling deletes the save.
+- Controls: drag one finger to pan, pinch to zoom, on-screen buttons to rotate.
+- Bugs: https://github.com/bryansank/tormenta-imperial/issues (what you did,
+  what happened, device model and the version).
+- Licence: for your own testing only; please do not redistribute. See LICENSE.txt
+  and THIRD-PARTY-NOTICES.md.

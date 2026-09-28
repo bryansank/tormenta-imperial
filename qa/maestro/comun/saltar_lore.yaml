@@ -1,8 +1,22 @@
-# Cierra la introduccion con "Saltar" (abajo a la izquierda del cuadro).
+# Cierra el prologo (el expediente de la Regencia) con "Saltar historia", abajo
+# a la izquierda. El prologo sale cuando se cierra el menu de titulo y la escena
+# termina de cargar: en el emulador tarda varios segundos tras EMPEZAR, por eso
+# se espera antes y se toca dos veces. Si el primero ya lo cerro, el segundo cae
+# sobre el mapa vacio (a la derecha de la cruceta) y no hace nada.
 appId: com.bryankey.tormentaimperial.qa
 ---
+- runFlow:
+    file: esperar.yaml
+    env:
+      MS: 6000
 - tapOn:
-    point: "23%,85%"      # Saltar
+    point: "18%,94%"      # Saltar historia
+- runFlow:
+    file: esperar.yaml
+    env:
+      MS: 2500
+- tapOn:
+    point: "18%,94%"      # otra vez, por si el prologo aun no estaba
 - runFlow:
     file: esperar.yaml
     env:

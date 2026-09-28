@@ -57,6 +57,7 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 | **Balance line**: the whole campaign played at real timings over ten seeds; dead ends fixed; 10/10 won in 2 h 18 min – 4 h (median 3 h 11 min); the ¿QUÉ HACER? panel | ✅ | `tools/line_probe.gd`, `scripts/services/Objectives.gd`, [22-linea-jugable.md](22-linea-jugable.md) |
 | **Combat balance** measured, not guessed | ✅ | `tools/balance_probe.gd`, `tools/siege_probe.gd`, [16-balance-combate.md](16-balance-combate.md), [17-balance-asedio.md](17-balance-asedio.md) |
 | **Windows export**: one `.exe`, dev bridge gated, no dev files or tokens in the package, own save folder | ✅ | `export_presets.cfg` "Windows Desktop", [19-exportar.md](19-exportar.md) |
+| **Release packaging**: zips for testers with the licence, third-party notices and a LEEME | ✅ | `tools/package_release.sh` / `.ps1`, `THIRD-PARTY-NOTICES.md`, `licenses/`, [19-exportar.md](19-exportar.md) §8 |
 | **Android export**: debug APK (arm64, landscape, immersive, Mobile renderer, no permissions); an x86_64 OpenGL QA preset for the emulator | ✅ | "Android" and "Android QA (emulador)" presets, [19-exportar.md](19-exportar.md) §11 |
 | **Tablet QA flows** on the Android emulator | ✅ | `qa/maestro/` (README inside) |
 | **Tests isolated from the player's save** | ✅ | `tools/run_tests.sh` / `.ps1`, `tests/save/save_parking.gd` |

@@ -1,19 +1,33 @@
 # Bug de Bryan: las ayudas deberian poder cerrarse y cerrarse solas.
 #
-# Tras saltar la introduccion salen los globos azules de HelperPanel: seis en el
-# build que jugo Bryan (recursos, objetivo, ☰, camara, zoom/giro y construir) y
-# uno solo (el de ☰) en el perfil tableta desde 2a3ec3e. Se captura a los 0, 20, 45 y 90 s sin tocar
-# nada: hoy siguen todos (07_00..07_03). Luego se toca un globo (no se cierra,
-# 07_04) y se prueba ☰ -> AYUDA, que hoy es la unica forma y los apaga todos a
-# la vez (07_06); otro AYUDA los devuelve (07_07).
-# Esperado tras el arreglo: cada globo tiene su X y se cierra solo pasado un
-# tiempo (07_02 o 07_03 ya sin globos); AYUDA los vuelve a mostrar.
+# Antes: seis globos a la vez, sin X, que no se iban nunca; ☰ -> AYUDA los
+# apagaba todos. Ahora (#32): durante el tutorial guiado no sale ninguna; al
+# saltarlo salen DE UNA EN UNA, cada una con ✕ y una barra que se vacia (se
+# cierran solas a los 6-12 s), y MENÚ -> AYUDA abre el indice de ayudas.
+# Esperado (arreglado):
+#   07_00  una sola ayuda, con ✕ y barra de tiempo.
+#   07_01  (20 s) otra distinta, o ninguna: la primera ya se cerro sola.
+#   07_02 / 07_03  (45 / 90 s) nunca mas de una a la vez.
+#   07_04  (justo tras 07_00) tras tocar su ✕: se cierra; puede salir la
+#          siguiente de la cola.
+#   07_05  MENÚ -> AYUDA: indice con PRIMEROS PASOS, interruptor, Guia,
+#          Repetir tutorial e Historia.
+#   07_06  tocar "Tu objetivo" en el indice vuelve al MENÚ; 07_07, al cerrarlo,
+#          la ayuda sale junto a su control (espera a que no haya pausa).
+# La ✕ se toca donde sale la primera ayuda ("Construir", sobre el boton
+# CONSTRUIR), nada mas saltar el tutorial.
 appId: com.bryankey.tormentaimperial.qa
 name: 07 Ayudas - cerrar y tiempo en pantalla
 tags: [ayudas, tutorial]
 ---
 - runFlow: comun/en_partida.yaml
 - takeScreenshot: ${output.dir}/07_00_t0
+- tapOn:
+    point: "61%,67%"      # ✕ de la ayuda "Construir"
+- runFlow:
+    file: comun/esperar.yaml
+    env: {MS: 1500}
+- takeScreenshot: ${output.dir}/07_04_tras_tocar_x
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 20000}
@@ -26,33 +40,27 @@ tags: [ayudas, tutorial]
     file: comun/esperar.yaml
     env: {MS: 45000}
 - takeScreenshot: ${output.dir}/07_03_t90s
-# Tocar el globo que queda en el perfil tableta ("El boton ☰ abre los menus",
-# arriba a la derecha): sobre el texto y en su esquina superior izquierda.
-# (En el build jugado por Bryan habia seis globos; el primero era "Tus recursos",
-# arriba a la izquierda.)
 - tapOn:
-    point: "80%,4%"
-- tapOn:
-    point: "70%,2%"
+    point: "94%,5%"       # ☰ MENÚ
 - runFlow:
     file: comun/esperar.yaml
     env: {MS: 1500}
-- takeScreenshot: ${output.dir}/07_04_tras_tocar_globo
 - tapOn:
-    point: "97%,5%"       # hamburguesa
+    point: "63%,68%"      # AYUDA
 - runFlow:
     file: comun/esperar.yaml
-    env: {MS: 1200}
-- takeScreenshot: ${output.dir}/07_05_hamburguesa_ayuda_tapada
+    env: {MS: 2000}
+- takeScreenshot: ${output.dir}/07_05_indice_ayuda
 - tapOn:
-    point: "92%,68%"      # AYUDA (el globo "Rota la camara" la tapa en parte)
+    point: "50%,55%"      # "Tu objetivo"
 - runFlow:
     file: comun/esperar.yaml
-    env: {MS: 1500}
-- takeScreenshot: ${output.dir}/07_06_tras_ayuda
+    env: {MS: 2500}
+- takeScreenshot: ${output.dir}/07_06_indice_cierra_al_menu
+# La ayuda pedida espera a que no haya pausa: se cierra el MENÚ y sale.
 - tapOn:
-    point: "92%,68%"      # AYUDA otra vez
+    point: "75%,7%"       # X del MENÚ
 - runFlow:
     file: comun/esperar.yaml
-    env: {MS: 1500}
-- takeScreenshot: ${output.dir}/07_07_tras_ayuda_otra_vez
+    env: {MS: 2000}
+- takeScreenshot: ${output.dir}/07_07_ayuda_reabierta

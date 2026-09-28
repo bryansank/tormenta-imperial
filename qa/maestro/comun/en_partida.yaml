@@ -1,7 +1,10 @@
-# Arranque limpio -> Nueva partida -> Saltar la introduccion. Deja la partida
-# nueva en pantalla, con las ayudas "?" encendidas (valor de fabrica).
+# Arranque limpio -> Nueva partida -> Saltar el prologo -> Saltar el tutorial.
+# Deja la partida nueva en pantalla, con las ayudas encendidas (valor de fabrica),
+# que empiezan a salir de una en una. El flujo 04 no salta el tutorial: usa
+# arrancar + nueva_partida + saltar_lore por separado.
 appId: com.bryankey.tormentaimperial.qa
 ---
 - runFlow: arrancar.yaml
 - runFlow: nueva_partida.yaml
 - runFlow: saltar_lore.yaml
+- runFlow: saltar_tutorial.yaml
