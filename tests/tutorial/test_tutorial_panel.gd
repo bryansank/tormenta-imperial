@@ -1,20 +1,23 @@
 extends GdUnitTestSuite
-## El panel del tutorial pinta lo que le llega y avisa al cerrar. Se comprueba
-## que la intro se abre y se pagina, que "Saltar" la cierra y la marca como
-## vista, que todas las paginas traen texto traducido, y que un consejo espera
-## a que la intro se cierre en vez de pintarse encima.
-##
-## Toca miembros privados a proposito: es la forma de simular los botones sin
-## inyectar eventos de raton.
+## TutorialPanel: aloja el prologo y pinta los pasos del tutorial guiado sobre la
+## interfaz real (velo con hueco, marco, flecha y una linea de texto). Se prueba
+## que el prologo se abre a peticion y avisa al cerrar, que un paso ensena su
+## texto y su numero, que el velo no se come ningun toque, que "Saltar tutorial"
+## lo salta, y que la tarjeta nunca tapa lo que senala.
 
 var _closed := 0
+var _saved: Dictionary = {}
 
 func before_test() -> void:
 	_closed = 0
+	_saved = TutorialManager.get_save_data()
+	TutorialManager.reset()
 	EventBus.tutorial_intro_closed.connect(_count_closed)
 
 func after_test() -> void:
 	EventBus.tutorial_intro_closed.disconnect(_count_closed)
+	get_tree().paused = false
+	TutorialManager.load_save_data(_saved)
 
 func _count_closed() -> void:
 	_closed += 1
@@ -24,141 +27,104 @@ func _panel() -> CanvasLayer:
 	add_child(panel)
 	return panel
 
-func test_the_intro_opens_on_request_and_starts_at_the_first_page() -> void:
+# ── Prologo ──────────────────────────────────────────────────────────
+
+func test_the_prologue_opens_on_request_and_reports_its_close() -> void:
 	var panel := _panel()
 	await await_idle_frame()
 	assert_bool(panel.is_intro_open()).is_false()
-	EventBus.tutorial_intro_requested.emit()
-	assert_bool(panel.is_intro_open()).is_true()
-	assert_int(panel.current_page()).is_equal(0)
-	assert_bool(panel._card.visible).is_true()
-	assert_bool(panel._backdrop.visible).is_true()
+	TutorialManager.show_prologue()
+	var open: bool = panel.is_intro_open()
+	var page: int = panel.current_page()
 	panel._close()
-
-func test_next_walks_every_page_and_the_last_one_closes() -> void:
-	var panel := _panel()
-	await await_idle_frame()
-	EventBus.tutorial_intro_requested.emit()
-	var pages: int = panel.page_count()
-	for i in range(pages - 1):
-		panel._next_page()
-		assert_int(panel.current_page()).is_equal(i + 1)
-	assert_str(panel._next_btn.text).is_equal(Tr.t("BTN_TUTORIAL_START"))
-	panel._next_page()
+	assert_bool(open).is_true()
+	assert_int(page).is_equal(0)
 	assert_bool(panel.is_intro_open()).is_false()
 	assert_int(_closed).is_equal(1)
+	assert_bool(TutorialManager.intro_seen).is_true()
 
-func test_skip_closes_and_reports_the_intro_as_closed() -> void:
+func test_the_prologue_is_not_a_window_of_the_stack() -> void:
+	# Pantalla completa propia, por encima de todo: no entra en la pila de
+	# UIManager (que le cambiaria la capa) ni la cierra un ESC de ventana.
 	var panel := _panel()
 	await await_idle_frame()
-	EventBus.tutorial_intro_requested.emit()
+	TutorialManager.show_prologue()
+	var in_stack: bool = UIManager._window_stack.has(panel.prologue())
 	panel._close()
-	assert_bool(panel.is_intro_open()).is_false()
-	assert_bool(panel._card.visible).is_false()
-	assert_bool(panel._backdrop.visible).is_false()
-	assert_int(_closed).is_equal(1)
-	# Cerrar dos veces no avisa dos veces.
+	assert_bool(in_stack).is_false()
+
+# ── Pasos del tutorial ───────────────────────────────────────────────
+
+func _start_guide() -> void:
+	TutorialManager.intro_seen = true
+	TutorialManager.start_guide(false)
+
+func test_a_step_shows_its_line_and_number() -> void:
+	var panel := _panel()
+	await await_idle_frame()
+	_start_guide()
+	await await_idle_frame()
+	assert_str(panel.current_step()).is_equal("open_build")
+	assert_bool(panel.is_coach_visible()).is_true()
+	assert_str(panel.coach_text()).is_not_empty()
+	var badge: Label = panel.find_child("Badge", true, false)
+	assert_str(badge.text).contains("1")
+	assert_str(badge.text).contains(str(TutorialManager.GUIDE_TOTAL))
+
+func test_the_veil_never_eats_a_touch() -> void:
+	# Fuera de orden tiene que poder tocarse todo: solo la tarjeta para el dedo.
+	var panel := _panel()
+	await await_idle_frame()
+	_start_guide()
+	await await_idle_frame()
+	for c in panel.find_child("Coach", true, false).find_children("*", "Control", true, false):
+		var ctl := c as Control
+		var in_card: bool = ctl.name == "CoachCard" or panel.find_child("CoachCard", true, false).is_ancestor_of(ctl)
+		if not in_card:
+			assert_int(ctl.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
+
+func test_skip_tutorial_skips_it() -> void:
+	var panel := _panel()
+	await await_idle_frame()
+	_start_guide()
+	await await_idle_frame()
+	panel.skip_button().pressed.emit()
+	await await_idle_frame()
+	assert_str(TutorialManager.guide_state).is_equal(TutorialManager.GUIDE_SKIPPED)
+	assert_bool(panel.is_coach_visible()).is_false()
+
+func test_the_coach_hides_while_paused() -> void:
+	var panel := _panel()
+	await await_idle_frame()
+	_start_guide()
+	await await_idle_frame()
+	# Con el arbol en pausa el runner se para: nada de esperar frames, el
+	# _process del panel se llama a mano.
+	get_tree().paused = true
+	panel._process(0.016)
+	var hidden_paused: bool = not panel.is_coach_visible()
+	get_tree().paused = false
+	panel._process(0.016)
+	assert_bool(hidden_paused).is_true()
+	assert_bool(panel.is_coach_visible()).is_true()
+
+func test_the_coach_hides_while_the_prologue_is_open() -> void:
+	var panel := _panel()
+	await await_idle_frame()
+	_start_guide()
+	TutorialManager.show_prologue()
+	panel._process(0.016)
+	var hidden: bool = not panel.is_coach_visible()
 	panel._close()
-	assert_int(_closed).is_equal(1)
+	assert_bool(hidden).is_true()
 
-func test_every_page_has_translated_title_and_body() -> void:
-	var panel := _panel()
-	await await_idle_frame()
-	EventBus.tutorial_intro_requested.emit()
-	for i in range(panel.page_count()):
-		panel.go_to_page(i)
-		assert_str(panel._title_label.text).is_not_empty()
-		assert_str(panel._title_label.text).not_contains("TUT_")
-		assert_str(panel._body_label.text).not_contains("TUT_")
-		assert_int(panel._body_label.text.length()).is_greater(80)
-		assert_str(panel._page_label.text).is_equal("%d / %d" % [i + 1, panel.page_count()])
-	panel._close()
-
-func test_the_lore_comes_before_how_to_play() -> void:
-	# El orden es una decision: primero quien eres, despues que hacer.
-	var panel := _panel()
-	var seen_play := false
-	for p in panel.PAGES:
-		if p["section"] == "LBL_TUTORIAL_SECTION_PLAY":
-			seen_play = true
-		elif seen_play:
-			fail("una pagina de lore va despues de una de como se juega")
-	assert_bool(seen_play).is_true()
-
-func test_the_skip_button_is_always_there() -> void:
-	var panel := _panel()
-	await await_idle_frame()
-	EventBus.tutorial_intro_requested.emit()
-	for i in range(panel.page_count()):
-		panel.go_to_page(i)
-		assert_bool(panel._skip_btn.visible).is_true()
-		assert_str(panel._skip_btn.text).is_equal(Tr.t("BTN_TUTORIAL_SKIP"))
-	panel._close()
-
-func test_the_intro_sits_in_the_ui_manager_stack_while_open() -> void:
-	var panel := _panel()
-	await await_idle_frame()
-	var before: bool = UIManager.is_any_window_open()
-	EventBus.tutorial_intro_requested.emit()
-	assert_bool(UIManager.is_any_window_open()).is_true()
-	assert_int(panel.layer).is_equal(panel.INTRO_LAYER)
-	panel._close()
-	assert_bool(UIManager.is_any_window_open()).is_equal(before)
-
-func test_the_card_never_exceeds_the_viewport() -> void:
-	var panel := _panel()
-	await await_idle_frame()
-	EventBus.tutorial_intro_requested.emit()
-	await await_idle_frame()
-	var vp: Vector2 = panel.get_viewport().get_visible_rect().size
-	assert_float(panel._card.size.x).is_less_equal(vp.x)
-	assert_float(panel._card.size.y).is_less_equal(vp.y)
-	panel._close()
-
-# ── Consejos ─────────────────────────────────────────────────────────
-
-func test_a_tip_shows_and_got_it_hides_it() -> void:
-	var panel := _panel()
-	await await_idle_frame()
-	EventBus.tutorial_tip_requested.emit("storm_incoming", "Titulo", "Cuerpo")
-	assert_bool(panel.is_tip_showing()).is_true()
-	assert_bool(panel._tip_card.visible).is_true()
-	assert_str(panel._tip_title.text).is_equal("Titulo")
-	assert_str(panel._tip_body.text).is_equal("Cuerpo")
-	panel._dismiss_tip()
-	assert_bool(panel.is_tip_showing()).is_false()
-	assert_bool(panel._tip_card.visible).is_false()
-
-func test_a_tip_is_not_modal() -> void:
-	# El juego sigue detras: sin fondo oscuro y sin entrar en la pila de modales.
-	var panel := _panel()
-	await await_idle_frame()
-	var before: bool = UIManager.is_any_window_open()
-	EventBus.tutorial_tip_requested.emit("storm_ash", "T", "B")
-	assert_bool(panel._backdrop.visible).is_false()
-	assert_bool(UIManager.is_any_window_open()).is_equal(before)
-	panel._dismiss_tip()
-
-func test_tips_queue_up_one_at_a_time() -> void:
-	var panel := _panel()
-	await await_idle_frame()
-	EventBus.tutorial_tip_requested.emit("a", "Uno", "1")
-	EventBus.tutorial_tip_requested.emit("b", "Dos", "2")
-	assert_str(panel._tip_title.text).is_equal("Uno")
-	assert_int(panel.pending_tips()).is_equal(1)
-	panel._dismiss_tip()
-	assert_str(panel._tip_title.text).is_equal("Dos")
-	assert_int(panel.pending_tips()).is_equal(0)
-	panel._dismiss_tip()
-	assert_bool(panel.is_tip_showing()).is_false()
-
-func test_a_tip_waits_for_the_intro_to_close() -> void:
-	var panel := _panel()
-	await await_idle_frame()
-	EventBus.tutorial_intro_requested.emit()
-	EventBus.tutorial_tip_requested.emit("storm_incoming", "T", "B")
-	assert_bool(panel.is_tip_showing()).is_false()
-	assert_int(panel.pending_tips()).is_equal(1)
-	panel._close()
-	assert_bool(panel.is_tip_showing()).is_true()
-	panel._dismiss_tip()
+func test_the_card_goes_beside_its_target_and_never_on_it() -> void:
+	var TP := load("res://scripts/ui/TutorialPanel.gd")
+	var vp := Vector2(1280, 720)
+	var size := Vector2(460, 120)
+	for target in [Rect2(1220, 10, 44, 44), Rect2(520, 650, 240, 54), Rect2(80, 200, 150, 130), Rect2()]:
+		var pos: Vector2 = TP.card_position(vp, size, target)
+		var card := Rect2(pos, size)
+		assert_bool(Rect2(Vector2.ZERO, vp).encloses(card)).is_true()
+		if target.size != Vector2.ZERO:
+			assert_bool(card.intersects(target)).is_false()

@@ -159,6 +159,9 @@ func test_story_replays_the_intro_and_returns_to_the_menu() -> void:
 	var tutorial: CanvasLayer = auto_free(load("res://scenes/ui/TutorialPanel.tscn").instantiate())
 	add_child(tutorial)
 	var seen_before: bool = TutorialManager.intro_seen
+	# El prologo (docs/23) vive en TutorialPanel, que ya corre siempre: el menu
+	# se lo deja y se lo devuelve igual.
+	var mode_before: int = tutorial.process_mode
 	var menu := _menu()
 	menu.open_pause()
 	menu._on_story()
@@ -172,7 +175,7 @@ func test_story_replays_the_intro_and_returns_to_the_menu() -> void:
 	assert_bool(intro_open).is_true()
 	assert_int(tutorial_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
 	assert_bool(card_back).is_true()
-	assert_int(mode_back).is_equal(Node.PROCESS_MODE_INHERIT)
+	assert_int(mode_back).is_equal(mode_before)
 
 func test_main_menu_hands_the_pause_to_the_title() -> void:
 	var title: CanvasLayer = auto_free(load("res://scenes/ui/TitleMenu.tscn").instantiate())
