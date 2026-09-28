@@ -11,7 +11,8 @@ extends RefCounted
 ## del combate (lee autoloads), es una consulta, como `PlacementRules`.
 ##
 ## Un paso es un Dictionary:
-##   kind  "build" | "upgrade" | "train" | "repair" | "siege" | "resummon" | "rebuild" | "sandbox"
+##   kind  "build" | "upgrade" | "train" | "repair" | "sell" | "buy" | "research" | "siege" | "resummon"
+##         | "rebuild" | "sandbox"
 ##   id    edificio o unidad
 ##   level nivel al que sube una mejora
 ##   why   clave de Tr con el porque (una frase)
@@ -49,6 +50,18 @@ const SIEGE_VEHICLES := 6
 ## Guarnicion minima para el Diezmo, y cuantos canones lleva dentro.
 const GARRISON_UNITS := 5
 const GARRISON_GUNS := 2
+
+## Las tecnologias que agrandan la bolsa, con sus requisitos delante: Logistica 1
+## y 2 (+300) e Industria 1 y 2 (+200).
+const STORAGE_TECH_PATH := ["log_1", "log_2", "ind_1", "ind_2"]
+
+## Por debajo de esta fraccion de la bolsa se puede pedir un productor mas.
+const ROOMY_BAG := 0.75
+## Por encima de esta fraccion, si al paso le falta oro o madera, se vende.
+const CROWDED_BAG := 0.9
+## Lo minimo que merece la pena vender, y lo que no se vende nunca de madera
+## (varios ciclos de comida).
+const MIN_SALE := 20
 
 ## Por debajo de este saldo por segundo el paso siguiente es otro productor.
 const MIN_NET_PER_SECOND := 0.05
@@ -199,12 +212,36 @@ static func _support_step(target: Dictionary) -> Dictionary:
 	# trampa que la guia avisa de no pisar. Antes de eso, lo que sobra se gasta.
 	var full: bool = Rules.count_building("warehouse") > 0 \
 		and ResourceManager.get_total_stored() >= int(float(cap) * FULL_BAG)
-	if (cost_total > cap or full) and String(target.get("id", "")) != "warehouse":
-		var wh := _build_step("warehouse", "OBJ_WHY_BAG_TOO_SMALL" if cost_total > cap else "OBJ_WHY_BAG_FULL")
+	# "No cabe" es tambien "cabe tan justo que no se puede pagar": con la gente
+	# comiendo y las fabricas produciendo, juntar el 95% de la bolsa en la mezcla
+	# exacta es un rompecabezas. Por encima del 90% se pide sitio.
+	var tight: bool = cost_total > int(float(cap) * FULL_BAG)
+	if (tight or full) and String(target.get("id", "")) != "warehouse":
+		var wh := _build_step("warehouse", "OBJ_WHY_BAG_TOO_SMALL" if tight else "OBJ_WHY_BAG_FULL")
 		if not wh.is_empty():
 			return wh
+	# Con los cinco almacenes en pie la bolsa ya no crece con edificios: crece con
+	# la rama de Logistica e Industria del arbol. La mejora final del Cuartel
+	# General cuesta EXACTAMENTE la bolsa maxima sin tecnologia (3.500), asi que
+	# pagarla exige tener los cuatro recursos justos a la vez mientras la gente
+	# come y las fabricas producen: un rompecabezas, no una decision. Con +500 de
+	# las dos tecnologias de almacen cabe con holgura.
+	if tight:
+		var tech: Dictionary = _storage_tech_step()
+		if not tech.is_empty():
+			return tech
 
-	var slow: String = _slowest_missing(target, net)
+	# 5. La bolsa a rebosar y al paso le falta oro o madera: lo que sobra se vende.
+	# Con la bolsa llena lo que entra se pierde, el oro de la comida incluido, y
+	# lo que se llena solo es el acero y el petroleo que nadie come.
+	var sell: Dictionary = _sell_step(target)
+	if not sell.is_empty():
+		return sell
+
+	# Un productor mas solo si hay sitio para lo que va a producir: con la bolsa
+	# casi llena, otra fundicion es mas acero que se tira.
+	var slow: String = _slowest_missing(target, net) \
+		if ResourceManager.get_total_stored() < int(float(cap) * ROOMY_BAG) else ""
 	if slow != "":
 		var more: Dictionary = _producer_step(slow, "OBJ_WHY_SLOW_%s" % slow.to_upper())
 		if not more.is_empty() and String(more["id"]) != String(target.get("id", "")):
@@ -263,6 +300,12 @@ static func step_cost(step: Dictionary) -> Dictionary:
 		"upgrade":
 			var data: BuildingData = Rules.load_building_data(String(step["id"]))
 			return GameConfig.get_upgrade_cost(data, int(step["level"])) if data != null else {}
+		"research":
+			var cost: Dictionary = {}
+			var raw_tech: Dictionary = TechTreeManager.get_tech(String(step["id"])).get("cost", {})
+			for res_name in raw_tech:
+				cost[ResourceManager.name_to_type(res_name)] = int(raw_tech[res_name])
+			return cost
 		"train", "rebuild":
 			var cost: Dictionary = {}
 			var raw: Dictionary = GameConfig.get_unit_def(String(step["id"])).get("cost", {})
@@ -280,6 +323,63 @@ static func missing_for(step: Dictionary) -> Dictionary:
 		if short > 0:
 			missing[ResourceManager.get_type_name(type)] = short
 	return missing
+
+## La siguiente tecnologia de almacen que se puede investigar, o {} si no queda
+## ninguna o ya se esta investigando algo (una a la vez).
+static func _storage_tech_step() -> Dictionary:
+	if TechTreeManager.is_researching():
+		return {}
+	for tech_id in STORAGE_TECH_PATH:
+		if TechTreeManager.is_researched(tech_id):
+			continue
+		if not TechTreeManager.get_missing_prerequisites(tech_id).is_empty():
+			continue
+		return {"kind": "research", "id": tech_id, "why": "OBJ_WHY_STORAGE_TECH"}
+	return {}
+
+## Vender lo que sobra si la bolsa esta a rebosar y al paso le falta oro o madera.
+## Solo se vende lo que el paso no pide, y lo justo para que el oro quepa: con la
+## bolsa llena, cada unidad vendida vale un oro (el resto no cabe y se pierde).
+static func _sell_step(target: Dictionary) -> Dictionary:
+	var cap: int = ResourceManager.get_storage_cap()
+	if ResourceManager.get_total_stored() < int(float(cap) * CROWDED_BAG):
+		return {}
+	var missing: Dictionary = missing_for(target)
+	var food_short: bool = ResourceManager.get_amount(ResourceManager.Type.GOLD) < PopulationManager.get_population() * 2
+	if not missing.has("gold") and not missing.has("wood") and not food_short:
+		return {}
+	var cost: Dictionary = step_cost(target)
+	# Falta madera, acero o petroleo y sobra oro: se compra. Comprar ademas hace
+	# sitio (sale mas oro del que entra de lo comprado), que con la bolsa llena es
+	# justo lo que hace falta.
+	var gold_spare: int = ResourceManager.get_amount(ResourceManager.Type.GOLD) \
+		- int(cost.get(ResourceManager.Type.GOLD, 0)) - PopulationManager.get_population() * 2
+	for res in ["wood", "steel", "oil"]:
+		if not missing.has(res) or not ResourceManager.is_unlocked_by_name(res):
+			continue
+		var buy_price: int = maxi(1, MarketManager.get_buy_price(res))
+		var can: int = mini(int(missing[res]), gold_spare / buy_price)
+		if can >= MIN_SALE:
+			return {"kind": "buy", "id": res, "amount": can, "why": "OBJ_WHY_BUY"}
+	var best := ""
+	var best_excess := MIN_SALE - 1
+	for res in ["oil", "steel", "wood"]:
+		var type: int = ResourceManager.name_to_type(res)
+		if not ResourceManager.is_unlocked(type) or missing.has(res):
+			continue
+		var keep: int = int(cost.get(type, 0))
+		if res == "wood":
+			keep += PopulationManager.get_population() * 4
+		var excess: int = ResourceManager.get_amount(type) - keep
+		if excess > best_excess:
+			best = res
+			best_excess = excess
+	if best == "":
+		return {}
+	var price: int = maxi(2, MarketManager.get_sell_price(best))
+	var fits: int = ResourceManager.get_free_space() / (price - 1)
+	var amount: int = clampi(maxi(fits, MIN_SALE), 1, best_excess)
+	return {"kind": "sell", "id": best, "amount": amount, "why": "OBJ_WHY_SELL"}
 
 ## El recurso cuya falta mas tarda en cubrirse, si tarda demasiado. "" si nada.
 static func _slowest_missing(step: Dictionary, net: Dictionary) -> String:
@@ -359,7 +459,38 @@ static func _producer_step(res: String, why: String) -> Dictionary:
 	# no hay "otra", hay la de la linea.
 	if Rules.count_building(building_id) == 0 and building_id in ["foundry", "refinery"]:
 		return {}
-	return _build_step(building_id, why)
+	var more: Dictionary = _build_step(building_id, why)
+	if not more.is_empty():
+		return more
+	# Sin sitio o sin tope para otro: subir de nivel el que menos rinde. Un nivel 2
+	# rinde un 60% mas, y hasta aqui nada en el juego lo sugeria.
+	var lowest: Node = _lowest_level(building_id)
+	if lowest == null:
+		return {}
+	var level: int = int(lowest.get_meta("level", 1))
+	if level >= GameConfig.max_building_level or ProductionManager.is_constructing(lowest):
+		return {}
+	return {"kind": "upgrade", "id": building_id, "level": level + 1, "pick": "lowest", "why": why}
+
+## El edificio de ese tipo con el nivel mas bajo que no este en obras, o null.
+static func _lowest_level(building_id: String) -> Node:
+	var best: Node = null
+	for info in GridManager.get_all_buildings():
+		if (info["data"] as BuildingData).id != building_id:
+			continue
+		var node: Node = info["node"]
+		if ProductionManager.is_constructing(node) or BuildingHealth.is_ruined(node):
+			continue
+		if best == null or int(node.get_meta("level", 1)) < int(best.get_meta("level", 1)):
+			best = node
+	return best
+
+## El edificio al que se refiere un paso de mejora: el de nivel mas bajo si el
+## paso lo pide ("pick": "lowest"), o el primero (el Cuartel General es uno solo).
+static func upgrade_node(step: Dictionary) -> Node:
+	if String(step.get("pick", "")) == "lowest":
+		return _lowest_level(String(step["id"]))
+	return _first_building(String(step["id"]))
 
 ## Recurso que un edificio necesita desbloqueado para que tenga sentido pedirlo.
 static func _needs_unlocked(building_id: String) -> String:
@@ -454,6 +585,13 @@ static func describe(step: Dictionary) -> Dictionary:
 		"repair":
 			var data: BuildingData = Rules.load_building_data(String(step["id"]))
 			title = Tr.t("OBJ_DO_REPAIR") % (data.get_display_name() if data != null else String(step["id"]))
+		"sell":
+			title = Tr.t("OBJ_DO_SELL") % [int(step["amount"]), Tr.res_name(String(step["id"]))]
+		"buy":
+			title = Tr.t("OBJ_DO_BUY") % [int(step["amount"]), Tr.res_name(String(step["id"]))]
+		"research":
+			var tech: Dictionary = TechTreeManager.get_tech(String(step["id"]))
+			title = Tr.t("OBJ_DO_RESEARCH") % Tr.t(String(tech.get("name", step["id"])))
 		"siege":
 			title = Tr.t("OBJ_DO_SIEGE")
 		"resummon":
@@ -475,7 +613,7 @@ static func blocker(step: Dictionary) -> String:
 				return Tr.t("OBJ_MISSING") % Tr.amount_list(missing_for(step))
 			return block
 		"upgrade":
-			var node: Node = _first_building(String(step["id"]))
+			var node: Node = upgrade_node(step)
 			if node != null and ProductionManager.is_constructing(node):
 				return Tr.t("OBJ_IN_PROGRESS")
 			var total: int = _cost_total(step_cost(step))
@@ -504,6 +642,14 @@ static func blocker(step: Dictionary) -> String:
 				if short > 0:
 					missing[ResourceManager.get_type_name(type)] = short
 			return Tr.t("OBJ_MISSING") % Tr.amount_list(missing) if not missing.is_empty() else Tr.t(String(check["reason"]))
+		"research":
+			var reason: String = TechTreeManager.get_research_blocker(String(step["id"]))
+			if reason == "":
+				return ""
+			if reason == "TECH_BLOCK_COST":
+				var short: Dictionary = TechTreeManager.get_missing_cost(String(step["id"]))
+				return Tr.t("OBJ_MISSING") % Tr.amount_list(short)
+			return Tr.t(reason)
 		"siege":
 			if ProgressionManager.is_final_audit_active():
 				return Tr.t("OBJ_SIEGE_UNDER_WAY")

@@ -29,7 +29,9 @@ func before_test() -> void:
 		"population": PopulationManager.get_save_data(),
 		"army": ArmyManager.get_save_data(),
 		"storm": StormManager.get_save_data(),
+		"tech": TechTreeManager.get_save_data(),
 	}
+	TechTreeManager.reset()
 	GridManager.clear_all()
 	ProgressionManager.reset()
 	ArmyManager.reset()
@@ -50,6 +52,7 @@ func after_test() -> void:
 	ProgressionManager.load_save_data(_saved["progression"])
 	ProgressionManager.final_audit = _saved["final_audit"]
 	StormManager.load_save_data(_saved["storm"])
+	TechTreeManager.load_save_data(_saved["tech"])
 	ArmyManager.load_save_data(_saved["army"])
 	ResourceManager.set_unlock_state(_saved["unlock"])
 	ResourceManager.set_era(int(_saved["era"]))
@@ -122,12 +125,17 @@ func _take(step: Dictionary) -> void:
 		"build":
 			_build(String(step["id"]))
 		"upgrade":
-			_first(String(step["id"])).set_meta("level", int(step["level"]))
+			Objectives.upgrade_node(step).set_meta("level", int(step["level"]))
 		"train", "rebuild":
 			_add_unit(String(step["id"]))
 		"repair":
 			var node: Node = Objectives._ruined_producer()
 			node.set_meta("health", BuildingHealth.get_max_health(node))
+		"research":
+			TechTreeManager._researched[String(step["id"])] = true
+			TechTreeManager._apply_tech_bonus(TechTreeManager.get_tech(String(step["id"])))
+		"sell":
+			MarketManager.sell(String(step["id"]), int(step["amount"]))
 
 func _assert_readable(step: Dictionary, where: String) -> void:
 	var text: Dictionary = Objectives.describe(step)
@@ -161,7 +169,7 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 				str(step), Objectives.blocker(step)]).is_empty()
 		visited.append("%s:%s" % [step["kind"], step.get("id", "")])
 		_take(step)
-		if String(step["kind"]) == "upgrade" and int(step["level"]) == 3:
+		if String(step["kind"]) == "upgrade" and String(step["id"]) == "headquarters" and int(step["level"]) == 3:
 			ProgressionManager.summon_final_audit()
 
 	# El orden de la linea, en la secuencia visitada (con lo que haya en medio).
@@ -287,3 +295,36 @@ func _panel_says(node: Node, text: String) -> bool:
 		if _panel_says(child, text):
 			return true
 	return false
+
+## La mejora final cuesta exactamente la bolsa maxima sin tecnologia. Con los
+## cinco almacenes en pie, el panel manda al arbol a por holgura en vez de dejar al
+## jugador cuadrando los cuatro recursos al centimo.
+func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
+	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
+	for id in ["sawmill", "gold_mine", "gold_mine", "gold_mine", "house", "house", "house", "house", "house", "sawmill",
+			"warehouse", "warehouse", "warehouse", "warehouse", "warehouse", "foundry", "barracks",
+			"refinery", "tower", "tower", "headquarters"]:
+		_build(id)
+	_first("headquarters").set_meta("level", 2)
+	for i in range(Objectives.SIEGE_VEHICLES):
+		_add_unit("vehicle")
+	# Lo que haga falta por el camino (casas para los obreros, etc.) se da; lo que
+	# se vigila es que antes de la mejora final aparezca la tecnologia de almacen.
+	var research: Array = []
+	var step: Dictionary = {}
+	for i in range(30):
+		step = Objectives.next_step()
+		if String(step["kind"]) == "upgrade" and int(step.get("level", 0)) == 3:
+			break
+		_assert_readable(step, "antes de la mejora final")
+		if String(step["kind"]) == "research":
+			research.append(String(step["id"]))
+		_give(step)
+		_take(step)
+	assert_array(research).override_failure_message(
+		"la mejora final se pidio sin pasar por las tecnologias de almacen").is_not_empty()
+	assert_str(String(research[0])).is_equal("log_1")
+	assert_str(String(step["kind"])).is_equal("upgrade")
+	assert_int(int(step["level"])).is_equal(3)
+	# Y con la holgura, la mejora ya no es el 100% de la bolsa.
+	assert_int(Objectives._cost_total(Objectives.step_cost(step))).is_less(ResourceManager.get_storage_cap())
