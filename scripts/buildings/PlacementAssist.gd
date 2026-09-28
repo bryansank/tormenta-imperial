@@ -16,8 +16,8 @@ extends Node
 ##    hace el 90 % del tiempo (bug 8).
 ## 2. **La regla del yacimiento se ve antes.** Al empezar a colocar un extractor
 ##    (aserradero, mina, fundicion, refineria) se resaltan en verde las casillas
-##    donde cabe junto a su yacimiento, y si ninguna esta en pantalla la camara va
-##    a la mas cercana. En tactil el fantasma ya sale ahi.
+##    donde cabe junto a su yacimiento; el fantasma tactil sale ya en la mas
+##    cercana al centro, y si no queda comoda a la vista la camara va a ella.
 ## 3. Cierra la columna ☰ al empezar a colocar: tapaba la derecha del mapa.
 ##
 ## El colocador (BuildingPlacer o BuildingPlacer2D) crea este nodo como hijo y
@@ -71,7 +71,9 @@ func begin() -> void:
 	refresh_spots()
 	var centre := _screen_centre_cell()
 	var target := nearest_spot(centre) if not spots.is_empty() else centre_origin(centre)
-	if not spots.is_empty() and not _spot_on_screen():
+	# Si el hueco elegido no queda comodo a la vista (fuera, o pegado a un borde
+	# donde viven los controles), la camara va a el.
+	if not spots.is_empty() and not _comfortably_on_screen(target):
 		_placer.assist_center_on(target)
 	if touch_aim:
 		move_to(target, false)
@@ -260,16 +262,15 @@ func _screen_centre_cell() -> Vector2i:
 		c = Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
 	return c
 
-func _spot_on_screen() -> bool:
+## `origin` cae en el centro de la pantalla: sin el 30 % de cada lado (ahi viven
+## la barra de recursos, las ayudas, la cruceta y la columna de botones).
+func _comfortably_on_screen(origin: Vector2i) -> bool:
 	if not is_inside_tree():
 		return true
-	var rect := get_viewport().get_visible_rect().grow(-40.0)
-	var size: Vector2i = _placer.assist_ghost_size()
-	for o in spots:
-		var p: Variant = _placer.assist_cell_to_screen(o, size)
-		if p != null and rect.has_point(p):
-			return true
-	return false
+	var vp := get_viewport().get_visible_rect()
+	var rect := vp.grow_individual(-vp.size.x * 0.3, -vp.size.y * 0.3, -vp.size.x * 0.3, -vp.size.y * 0.3)
+	var p: Variant = _placer.assist_cell_to_screen(origin, _placer.assist_ghost_size())
+	return p != null and rect.has_point(p)
 
 # ── Reglas (puras) ────────────────────────────────────────────────────
 
@@ -319,7 +320,9 @@ static func rule_text(building_id: String) -> String:
 func _build_confirm() -> void:
 	_layer = CanvasLayer.new()
 	_layer.name = "PlacementConfirm"
-	_layer.layer = 11
+	# Por encima del HUD y de los globos de ayuda (hasta 15), por debajo de los
+	# modales (tutorial 17, avisos 19).
+	_layer.layer = 16
 	add_child(_layer)
 	_confirm = Button.new()
 	_confirm.name = "ConfirmPlacement"

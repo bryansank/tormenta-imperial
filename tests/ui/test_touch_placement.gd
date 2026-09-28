@@ -33,6 +33,7 @@ var _resources: Dictionary = {}
 var _pop: Array = []
 var _touch_mode := "auto"
 var _notes: Array = []
+var _warehouses := 0
 
 func before_test() -> void:
 	SaveParking.park(BACKUP_PATH)
@@ -49,8 +50,10 @@ func before_test() -> void:
 	InputService._purge_touch_state()
 	_notes = []
 	EventBus.notification_posted.connect(_on_note)
-	for type in [ResourceManager.Type.GOLD, ResourceManager.Type.WOOD]:
-		ResourceManager.add(type, 600)
+	# Cantidades fijas: otra suite puede haber dejado la bolsa llena o vacia.
+	_warehouses = ResourceManager.get_warehouse_count()
+	ResourceManager.set_warehouse_count(5)
+	ResourceManager.set_amounts({"gold": 600, "wood": 400, "steel": 0, "oil": 0})
 	PopulationManager._population = 12
 	PopulationManager._used_workers = 0
 
@@ -77,6 +80,7 @@ func after_test() -> void:
 	var by_name := {}
 	for type in _resources:
 		by_name[ResourceManager.get_type_name(type)] = _resources[type]
+	ResourceManager.set_warehouse_count(_warehouses)
 	ResourceManager.set_amounts(by_name)
 	GameManager._placer = _alive(_gm["placer"])
 	GameManager._map_gen = _alive(_gm["map"])
@@ -202,8 +206,11 @@ func _check_tap_then_confirm(view: String) -> void:
 	assert_bool(cells.has(target)).is_true()
 	# Tocar el fantasma lo planta.
 	var gold := ResourceManager.get_amount(ResourceManager.Type.GOLD)
+	var why := "block='%s' ghost=%s target=%s p=%s cell_at_p=%s valid=%s" % [
+		Rules.purchase_block_message(load("res://data/buildings/sawmill.tres")), _assist().cell, target, p,
+		_placer.assist_screen_to_cell(p), _assist().is_valid(_assist().cell)]
 	_tap(p)
-	assert_int(_sawmills()).is_equal(1)
+	assert_int(_sawmills()).override_failure_message(why).is_equal(1)
 	assert_int(ResourceManager.get_amount(ResourceManager.Type.GOLD)).is_equal(gold - 80)
 
 func test_3d_tap_aims_and_a_tap_on_the_ghost_builds_the_sawmill() -> void:

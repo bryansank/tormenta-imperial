@@ -741,7 +741,6 @@ const _STRINGS := {
 		"BTN_MOVE_HERE": "MOVER AQUÍ",
 		"LBL_OUTSIDE_MAP": "Fuera del mapa: toca la isla.",
 		"LBL_TOUCH_OPACITY": "Opacidad de los controles",
-		"LBL_TOUCH_OPACITY_HINT": "Cruceta, zoom y giro en pantalla. Al pulsarlos se ven enteros.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -1451,7 +1450,6 @@ const _STRINGS := {
 		"BTN_MOVE_HERE": "MOVE HERE",
 		"LBL_OUTSIDE_MAP": "Off the map: tap the island.",
 		"LBL_TOUCH_OPACITY": "Control opacity",
-		"LBL_TOUCH_OPACITY_HINT": "On-screen pad, zoom and turn. They show in full while pressed.",
 	},
 }
 

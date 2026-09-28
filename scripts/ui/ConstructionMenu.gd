@@ -403,6 +403,8 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	var cat_color: Color = _cat_colors.get(_get_category(data), UITheme.ACCENT)
 
 	var card := PanelContainer.new()
+	# El tutorial guiado busca la tarjeta por id, no por el nombre traducido.
+	card.set_meta("building_id", data.id)
 	card.custom_minimum_size = Vector2(125, 110)
 	var style := StyleBoxFlat.new()
 	style.bg_color = UITheme.CARD_BG if not locked else UITheme.BTN_DISABLED
