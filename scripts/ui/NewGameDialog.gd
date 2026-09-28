@@ -3,8 +3,10 @@ extends CanvasLayer
 ## confirmacion. Sustituye al ConfirmationDialog con el tema por defecto de
 ## Godot (en el emulador de Android salia gris y diminuto).
 ##
-##   Paso 1  cuatro tarjetas (nombre, dificultad, una linea) y lo que pide el
-##           modo elegido. Tocar una tarjeta la elige; EMPEZAR sigue.
+##   Paso 1  una tarjeta por modo ofrecido (GameMode.OFFERED: hoy solo la
+##           Campana; las de los modos apartados se crean pero no se ven), con
+##           nombre, dificultad, una linea y lo que pide el modo elegido. Tocar
+##           una tarjeta la elige; EMPEZAR sigue.
 ##   Paso 2  solo con `ask_confirm`: "se borrara la partida actual (modo X)".
 ##
 ## No borra nada por su cuenta: emite `confirmed` con `chosen_mode` puesto, o
@@ -47,7 +49,9 @@ var _cards: Dictionary = {}   ## mode -> Button
 func setup(ask_confirm: bool, current_mode: int) -> void:
 	_ask_confirm = ask_confirm
 	_current_mode = current_mode
-	chosen_mode = current_mode
+	# Una partida en un modo apartado (Sandbox de antes) no deja elegido un modo
+	# que ya no se ve: se empieza en el de siempre.
+	chosen_mode = current_mode if GameMode.is_offered(current_mode) else GameMode.DEFAULT
 
 func _ready() -> void:
 	layer = LAYER
@@ -91,6 +95,7 @@ func _setup_ui() -> void:
 	_scroll.add_child(_grid)
 	for mode in GameMode.ORDER:
 		var btn := _make_mode_card(mode)
+		btn.visible = GameMode.is_offered(mode)
 		_cards[mode] = btn
 		_grid.add_child(btn)
 
@@ -187,10 +192,11 @@ func _relayout() -> void:
 	ModalKit.fit_center(_card, CONFIRM_WIDTH if confirming else MAX_WIDTH, vp)
 	if confirming:
 		return
-	_grid.columns = columns_for(_card.custom_minimum_size.x)
+	var shown: int = maxi(1, GameMode.OFFERED.size())
+	_grid.columns = mini(columns_for(_card.custom_minimum_size.x), shown)
 	# Lo que no quepa en alto se desplaza: el resto de la tarjeta (titulo,
 	# objetivo, botones) necesita unos 300 px.
-	var rows: int = ceili(float(_cards.size()) / float(_grid.columns))
+	var rows: int = ceili(float(shown) / float(_grid.columns))
 	var wanted: float = float(rows) * (CARD_MIN_H + 10.0) + 30.0
 	_scroll.custom_minimum_size = Vector2(0, clampf(wanted, CARD_MIN_H, maxf(CARD_MIN_H, vp.y - 320.0)))
 

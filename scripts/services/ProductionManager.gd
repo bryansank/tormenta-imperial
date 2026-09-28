@@ -121,15 +121,89 @@ func _apply_construction_visual(node: Node) -> void:
 		var height: float = 1.5
 		if not data_info.is_empty():
 			height = (data_info["data"] as BuildingData).mesh_height
+		# La cima de la malla de verdad: con un GLB, mesh_height se queda corto y
+		# el rotulo salia dentro del edificio.
+		if node is Node3D:
+			height = maxf(height, BuildingStatusBadge.measure_top(node))
 		var label := Label3D.new()
 		label.name = "ConstructionLabel"
-		label.text = Tr.t("FMT_CONSTRUCTING") % [0]
-		label.font_size = 18
-		label.position.y = height + 0.7
+		label.text = construction_text(node)
+		# Del tamano del badge de estado, que se lee desde la camara de siempre
+		# (antes 18 px a 0.005: no se leia).
+		label.font_size = BuildingStatusBadge.FONT_SIZE
+		label.pixel_size = BuildingStatusBadge.PIXEL_SIZE
+		label.position.y = height + 1.6
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label.modulate = Color(1.0, 0.8, 0.2, 0.9)
-		label.outline_size = 4
+		label.no_depth_test = true
+		label.modulate = Color(1.0, 0.8, 0.2, 0.95)
+		label.outline_size = 8
+		label.outline_modulate = Color(0, 0, 0, 0.85)
 		node.add_child(label)
+		var bar := _make_progress_bar()
+		bar.position.y = height + 0.9
+		node.add_child(bar)
+
+## "Construyendo 45 % · faltan 12 s" (o "Mejorando ..."): lo que dice el rotulo
+## de la obra sobre el mapa, en 3D y en 2D.
+func construction_text(node: Node) -> String:
+	var info: Dictionary = _constructing.get(node, {})
+	var key := "FMT_UPGRADING_ETA" if bool(info.get("is_upgrade", false)) else "FMT_CONSTRUCTING_ETA"
+	return Tr.t(key) % [int(get_construction_progress(node) * 100), eta_text(get_construction_remaining(node))]
+
+## Segundos que faltan, para leer de un vistazo: "12 s", "2:05 min".
+static func eta_text(seconds: float) -> String:
+	var s := maxi(0, ceili(seconds))
+	if s < 60:
+		return "%d s" % s
+	return "%d:%02d min" % [s / 60, s % 60]
+
+const _BAR_SHADER := """
+shader_type spatial;
+render_mode unshaded, depth_test_disabled, cull_disabled;
+uniform float progress : hint_range(0.0, 1.0) = 0.0;
+uniform vec4 fill_color : source_color = vec4(1.0, 0.8, 0.2, 1.0);
+uniform vec4 back_color : source_color = vec4(0.05, 0.04, 0.03, 0.85);
+void vertex() {
+	// Siempre de cara a la camara, como los Label3D del rotulo.
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
+}
+void fragment() {
+	bool border = UV.x < 0.02 || UV.x > 0.98 || UV.y < 0.12 || UV.y > 0.88;
+	vec4 c = border ? vec4(0.0, 0.0, 0.0, 0.9) : (UV.x <= progress ? fill_color : back_color);
+	ALBEDO = c.rgb;
+	ALPHA = c.a;
+}
+"""
+static var _bar_shader: Shader = null
+
+## Barra de progreso de la obra, flotando bajo el rotulo. Un quad con su propio
+## material (el progreso es de cada obra) y un shader compartido.
+func _make_progress_bar() -> MeshInstance3D:
+	if _bar_shader == null:
+		_bar_shader = Shader.new()
+		_bar_shader.code = _BAR_SHADER
+	var quad := QuadMesh.new()
+	quad.size = Vector2(3.2, 0.42)
+	var mat := ShaderMaterial.new()
+	mat.shader = _bar_shader
+	mat.set_shader_parameter("progress", 0.0)
+	mat.render_priority = 1
+	var bar := MeshInstance3D.new()
+	bar.name = "ConstructionBar"
+	bar.mesh = quad
+	bar.material_override = mat
+	bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return bar
+
+## Rotulo y barra de una obra, al dia. Los dos son opcionales (la vista 2D solo
+## tiene el rotulo; su barra la pinta el propio edificio).
+func _refresh_construction_visual(node: Node) -> void:
+	var label: Node = node.get_node_or_null("ConstructionLabel")
+	if label:
+		label.text = construction_text(node)
+	var bar := node.get_node_or_null("ConstructionBar") as MeshInstance3D
+	if bar and bar.material_override is ShaderMaterial:
+		(bar.material_override as ShaderMaterial).set_shader_parameter("progress", get_construction_progress(node))
 
 ## Sin tipo en el parametro a proposito: una clave de `_constructing` puede ser
 ## un nodo ya liberado, y pasar un objeto liberado a un parametro tipado revienta
@@ -151,10 +225,11 @@ func _complete_construction(stale_or_node) -> void:
 		if mat:
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 			mat.albedo_color.a = 1.0
-	# Remove construction label
-	var label: Node = node.get_node_or_null("ConstructionLabel")
-	if label:
-		label.queue_free()
+	# Remove construction label and bar
+	for child_name in ["ConstructionLabel", "ConstructionBar"]:
+		var child: Node = node.get_node_or_null(child_name)
+		if child:
+			child.queue_free()
 	if is_upgrade:
 		node.set_meta("level", new_level)
 		# Scale up mesh slightly per level
@@ -191,11 +266,7 @@ func _tick_construction(delta: float) -> void:
 			gone.append(node)
 			continue
 		_constructing[node]["remaining"] -= delta
-		var progress := get_construction_progress(node)
-		var label: Node = node.get_node_or_null("ConstructionLabel")
-		if label:
-			var fmt_key := "FMT_UPGRADING" if _constructing[node].get("is_upgrade", false) else "FMT_CONSTRUCTING"
-			label.text = Tr.t(fmt_key) % [int(progress * 100)]
+		_refresh_construction_visual(node)
 		if _constructing[node]["remaining"] <= 0.0:
 			completed.append(node)
 	for node in gone:
@@ -313,11 +384,7 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 			to_complete.append({"node": node, "leftover": elapsed - remaining})
 		else:
 			_constructing[node]["remaining"] -= elapsed
-			var progress := get_construction_progress(node)
-			var label: Node = node.get_node_or_null("ConstructionLabel")
-			if label:
-				var fmt_key := "FMT_UPGRADING" if _constructing[node].get("is_upgrade", false) else "FMT_CONSTRUCTING"
-				label.text = Tr.t(fmt_key) % int(progress * 100)
+			_refresh_construction_visual(node)
 
 	# Lo que se termina estando fuera produce solo el tiempo que le sobro. Se
 	# completa antes de medir: completar pone el nivel nuevo y (por la senal de

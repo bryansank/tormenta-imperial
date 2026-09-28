@@ -45,15 +45,30 @@ func test_it_offers_the_four_modes_as_touch_sized_cards() -> void:
 		assert_float(card.custom_minimum_size.y).is_greater_equal(float(UITheme.MIN_BTN_H))
 		assert_int(card.focus_mode).is_equal(Control.FOCUS_ALL)
 
+## Constructor, Supervivencia y Sandbox estan apartados (2026-09-28): sus
+## tarjetas existen pero el selector solo ensena la Campana.
+func test_only_the_offered_modes_are_shown() -> void:
+	var dialog := _dialog(true)
+	for mode in GameMode.ORDER:
+		assert_bool(dialog.mode_card(mode).visible).is_equal(GameMode.is_offered(mode))
+	assert_bool(GameMode.is_offered(GameMode.Mode.CAMPAIGN)).is_true()
+
+func test_a_run_in_a_hidden_mode_starts_the_picker_on_campaign() -> void:
+	var dialog := _dialog(true, GameMode.Mode.SANDBOX)
+	if GameMode.is_offered(GameMode.Mode.SANDBOX):
+		return
+	assert_int(dialog.chosen_mode).is_equal(GameMode.DEFAULT)
+
 func test_it_works_while_the_tree_is_paused() -> void:
 	var dialog := _dialog(true)
 	assert_int(dialog.process_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
 
 func test_it_starts_on_the_mode_being_played() -> void:
-	var dialog := _dialog(true, GameMode.Mode.SURVIVAL)
-	assert_int(dialog.chosen_mode).is_equal(GameMode.Mode.SURVIVAL)
-	assert_bool(dialog.mode_card(GameMode.Mode.SURVIVAL).button_pressed).is_true()
-	assert_bool(dialog.mode_card(GameMode.Mode.CAMPAIGN).button_pressed).is_false()
+	# Con un modo ofrecido; uno apartado empieza en la Campana (prueba de arriba).
+	var mode: int = GameMode.OFFERED[GameMode.OFFERED.size() - 1]
+	var dialog := _dialog(true, mode)
+	assert_int(dialog.chosen_mode).is_equal(mode)
+	assert_bool(dialog.mode_card(mode).button_pressed).is_true()
 
 func test_tapping_a_card_selects_it_and_only_it() -> void:
 	var dialog := _dialog(true)

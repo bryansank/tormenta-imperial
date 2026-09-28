@@ -224,7 +224,9 @@ func _apply(status: int, reason: String) -> void:
 		Status.NONE:
 			visible = false
 		Status.IDLE:
-			visible = true
+			# En obras ya lo dice el rotulo de la obra, con su porcentaje, lo que
+			# falta y su barra (ProductionManager): dos carteles se pisaban.
+			visible = reason != "construction"
 			text = "%s\n%s" % [Tr.t("LBL_STATUS_IDLE"), reason_text(reason)]
 			modulate = color_for_reason(reason)
 			if _icon:

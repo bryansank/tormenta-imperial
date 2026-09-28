@@ -7,7 +7,8 @@ extends CanvasLayer
 ##                  se estuvo jugando en esta sesion)
 ##   Nueva partida  abre el selector de modo (GameManager.request_new_game), que
 ##                  pide confirmacion solo si hay algo que perder
-##   Ajustes        abre el SettingsPanel de siempre, que funciona en pausa
+##   Ajustes        abre el SettingsPanel de siempre, que funciona en pausa, sobre
+##                  la ilustracion del menu: la partida no se ve detras
 ##   Salir
 ##
 ## No carga ni guarda nada por su cuenta: GameManager ya arranco la partida
@@ -171,7 +172,7 @@ func _relayout() -> void:
 		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var portrait: bool = vp.x / maxf(vp.y, 1.0) < PORTRAIT_RATIO
-	_brand.visible = portrait
+	_brand.visible = portrait and _card.visible
 	ModalKit.fit_center(_card, CARD_WIDTH, vp)
 	# En vertical la ilustracion se estira por debajo de la pantalla: su franja
 	# de titulo queda fuera, en vez de salir recortada ("ENTA IMP").
@@ -268,8 +269,9 @@ func _on_quit() -> void:
 
 ## Ajustes vive en su propio panel y en la pila de UIManager. Con el arbol en
 ## pausa no recibiria clics: se le deja procesar mientras esta abierto y se le
-## devuelve su modo al cerrarse. El menu se esconde para no taparlo (su capa
-## queda por encima de la de cualquier ventana de la pila).
+## devuelve su modo al cerrarse. Del menu se esconden solo la tarjeta y el
+## emblema: la ilustracion se queda de fondo, porque Ajustes abierto desde el
+## menu principal es parte del menu, no una ventana sobre la isla.
 ##
 ## Y se pone POR ENCIMA de todo mientras dura (bug 1): UIManager la dejaba en la
 ## capa 13 y cualquier cosa por encima (la intro del tutorial, capa 17, que se
@@ -281,7 +283,8 @@ func _open_sub(panel: CanvasLayer) -> void:
 	_sub_layer = panel.layer
 	panel.process_mode = Node.PROCESS_MODE_ALWAYS
 	_pin_sub_layer()
-	_root.visible = false
+	_card.visible = false
+	_brand.visible = false
 
 func _pin_sub_layer() -> void:
 	if _sub != null and is_instance_valid(_sub):
@@ -300,7 +303,8 @@ func _close_sub() -> void:
 		_sub.process_mode = _sub_mode
 		_sub.layer = _sub_layer
 	_sub = null
-	_root.visible = true
+	_card.visible = true
+	_relayout()
 
 func _on_window_closed(window: CanvasLayer) -> void:
 	if _sub != null and window == _sub:

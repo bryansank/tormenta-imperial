@@ -164,8 +164,34 @@ func test_a_click_on_free_ground_buys_and_places_the_building() -> void:
 	assert_object(node).is_not_null()
 	assert_object(GridManager.get_building_at(Vector2i(6, 6))).is_same(node)
 	assert_int(ResourceManager.get_amount(ResourceManager.Type.GOLD)).is_equal(gold_before - _data("house").cost_gold)
-	# Sigue en modo colocacion para construir en serie, como la 3D.
-	assert_int(_placer.get_state()).is_equal(1)
+	# Una casa se coloca de una en una: tras colocarla se sale del modo.
+	assert_bool(_placer.is_idle()).is_true()
+
+## Las decoraciones (y los caminos) si se ponen en serie.
+func test_a_decoration_keeps_the_next_one_in_hand() -> void:
+	_rich()
+	EventBus.building_selected_for_placement.emit(_data("garden"))
+	assert_object(_placer.try_place(Vector2i(6, 6))).is_not_null()
+	assert_bool(_placer.is_idle()).is_false()
+	assert_object(_placer.try_place(Vector2i(8, 6))).is_not_null()
+
+func test_only_series_buildings_keep_placing() -> void:
+	assert_bool(Rules.keeps_placing(_data("garden"))).is_true()
+	assert_bool(Rules.keeps_placing(_data("road"))).is_true()
+	assert_bool(Rules.keeps_placing(_data("house"))).is_false()
+	assert_bool(Rules.keeps_placing(_data("sawmill"))).is_false()
+
+## Sin recursos, el aviso dice cuanto falta, no solo "insuficientes".
+func test_the_block_message_names_what_is_missing() -> void:
+	var saved := {
+		"gold": ResourceManager.get_amount(ResourceManager.Type.GOLD),
+		"wood": ResourceManager.get_amount(ResourceManager.Type.WOOD),
+	}
+	ResourceManager.set_amounts({"gold": 0, "wood": 0})
+	var msg := Rules.purchase_block_detail(_data("house"))
+	ResourceManager.set_amounts(saved)
+	assert_str(msg).contains(str(_data("house").cost_gold))
+	assert_str(msg).contains(Tr.res_name("wood"))
 
 func test_a_click_on_an_occupied_cell_does_not_charge() -> void:
 	_rich()

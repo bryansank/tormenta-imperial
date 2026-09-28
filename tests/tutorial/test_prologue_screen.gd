@@ -24,7 +24,7 @@ func test_it_opens_at_the_first_folio_on_top_of_everything() -> void:
 	var s := _screen()
 	assert_bool(s.is_open()).is_true()
 	assert_int(s.current_page()).is_equal(0)
-	assert_int(s.page_count()).is_equal(6)
+	assert_int(s.page_count()).is_equal(3)
 	# Encima del menu de pausa y del principal (capa 30).
 	assert_int(s.layer).is_greater(30)
 
@@ -34,16 +34,17 @@ func test_back_is_disabled_on_the_first_folio_and_does_nothing() -> void:
 	s.prev_page()
 	assert_int(s.current_page()).is_equal(0)
 
-func test_next_three_times_then_back_lands_on_folio_two() -> void:
-	# El caso de docs/07 bug 2: Siguiente x3 + Atras -> pagina 2 (indice).
+func test_next_twice_then_back_lands_on_folio_two() -> void:
+	# El caso de docs/07 bug 2 (Siguiente + Atras vuelve un folio), con los tres
+	# folios de ahora: Siguiente x2 + Atras -> folio 2 (indice 1).
 	var s := _screen()
-	for i in 3:
+	for i in 2:
 		# Con el texto ya escrito, Siguiente pasa folio (si no, lo completaria).
 		s.call("_finish_typing")
 		s.next_button().pressed.emit()
-	assert_int(s.current_page()).is_equal(3)
-	s.back_button().pressed.emit()
 	assert_int(s.current_page()).is_equal(2)
+	s.back_button().pressed.emit()
+	assert_int(s.current_page()).is_equal(1)
 	assert_bool(s.back_button().disabled).is_false()
 
 func test_next_first_finishes_the_typing_then_turns_the_folio() -> void:
@@ -87,10 +88,10 @@ func test_a_short_or_vertical_drag_is_not_a_swipe() -> void:
 func test_a_swipe_never_closes_it_on_the_last_folio() -> void:
 	# Cerrar es una decision (Empezar / Saltar), no un gesto que se escapa.
 	var s := _screen()
-	s.go_to_page(5)
+	s.go_to_page(2)
 	s.handle_swipe(Vector2(-300, 0))
 	assert_bool(s.is_open()).is_true()
-	assert_int(s.current_page()).is_equal(5)
+	assert_int(s.current_page()).is_equal(2)
 
 func test_it_pauses_the_game_and_gives_the_pause_back() -> void:
 	get_tree().paused = false
@@ -129,7 +130,7 @@ func test_every_folio_has_title_body_and_note_in_both_languages() -> void:
 			for part in ["TITLE", "BODY", "NOTE"]:
 				var key := "PRO_%s_%s" % [id, part]
 				assert_str(Tr.t(key)).is_not_equal(key)
-		for key in ["PRO_1_STAMP", "PRO_6_STAMP", "PRO_B_STAMP", "BTN_PROLOGUE_BACK", "BTN_PROLOGUE_NEXT", "BTN_PROLOGUE_SKIP", "PRO_HINT_TOUCH"]:
+		for key in ["PRO_1_STAMP", "PRO_3_STAMP", "PRO_B_STAMP", "BTN_PROLOGUE_BACK", "BTN_PROLOGUE_NEXT", "BTN_PROLOGUE_SKIP", "PRO_HINT_TOUCH"]:
 			assert_str(Tr.t(key)).is_not_equal(key)
 	Tr.set_locale(saved)
 

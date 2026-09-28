@@ -339,7 +339,7 @@ func _try_place(cell: Vector2i) -> void:
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		return
 	# Tope, requisitos, obreros y coste, en ese orden (PlacementRules).
-	var blocked := Rules.purchase_block_message(_current_data)
+	var blocked := Rules.purchase_block_detail(_current_data)
 	if blocked != "":
 		_show_feedback(blocked)
 		return
@@ -371,8 +371,12 @@ func _try_place(cell: Vector2i) -> void:
 	if _current_data.id == "road":
 		_update_road_connections(cell)
 	EventBus.building_placed.emit(_current_data, cell)
-	# Stay in placement mode for rapid building
-	_hover_cell = Vector2i(-1, -1)
+	# Decoraciones y caminos se ponen en serie; el resto, de uno en uno: se sale
+	# del modo colocar por la misma senal que cualquier otra salida.
+	if Rules.keeps_placing(_current_data):
+		_hover_cell = Vector2i(-1, -1)
+	else:
+		EventBus.building_placement_cancelled.emit()
 
 func _start_moving(building: Node3D) -> void:
 	var info := GridManager.get_building_info(building)

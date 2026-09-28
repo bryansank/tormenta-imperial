@@ -631,6 +631,10 @@ func _make_percent_row(key: String, label_text: String, initial: float, min_v: f
 	slider.value = initial
 	# Alto de dedo en tablet: el regulador es un control que se arrastra.
 	slider.custom_minimum_size = Vector2(0, UITheme.touch_px(28.0))
+	# La rueda desplaza la pestana, nunca mueve el regulador: pasar la rueda por
+	# encima de un volumen lo cambiaba sin querer, y en una pestana que no
+	# desplaza parecia que la rueda "seleccionaba" ajustes.
+	slider.scrollable = false
 	row.add_child(slider)
 	_audio_sliders[key] = slider
 	slider.value_changed.connect(func(v: float):

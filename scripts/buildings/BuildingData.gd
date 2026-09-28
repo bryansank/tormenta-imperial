@@ -50,6 +50,10 @@ const DATA_DIR := "res://data/buildings/"
 # Decoration (no production, no workers, just morale)
 @export var is_decoration: bool = false
 
+## Tras colocarlo, el jugador sigue con otro igual en la mano (como las
+## decoraciones). Por defecto no: se coloca uno y se sale (PlacementRules.keeps_placing).
+@export var repeat_placement: bool = false
+
 ## Nombre para ensenar al jugador, en el idioma actual. `display_name` en el .tres
 ## queda como respaldo (y como referencia para el editor): cualquier texto que vea
 ## el jugador sale de aqui, nunca del campo crudo.
