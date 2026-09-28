@@ -6,6 +6,9 @@ var _root: Control
 var _backdrop: ColorRect
 var _modal: PanelContainer
 var _build_btn: Button
+## Tamano del boton CONSTRUIR del HUD (el primario del juego).
+const BUILD_BTN_W := 240.0
+const BUILD_BTN_H := 64.0
 var _is_open := false
 
 # Category state
@@ -54,8 +57,9 @@ func _ready() -> void:
 	_setup_ui()
 	_generate_thumbnails()
 	EventBus.resource_unlocked.connect(func(_r): _refresh_grid())
-	EventBus.sidebar_toggled.connect(func(v): _build_btn.visible = v)
-	_build_btn.visible = false  # Start collapsed, sidebar controls it
+	# CONSTRUIR es la accion principal: siempre a la vista, no escondida tras el
+	# menu (bug 9/11: solo salia al desplegar el antiguo ☰).
+	_build_btn.visible = true
 	UIManager.register_panel(self, "ConstructionMenu.modal")
 
 func _process(delta: float) -> void:
@@ -109,8 +113,12 @@ func _setup_ui() -> void:
 
 	# Build button (bottom center)
 	_build_btn = Button.new()
-	_build_btn.text = Tr.t("BTN_BUILD")
-	_build_btn.custom_minimum_size.y = 54
+	_build_btn.name = "BuildButton"
+	_build_btn.text = Tr.t("BTN_BUILD_BIG")
+	_build_btn.tooltip_text = Tr.t("BTN_BUILD_HINT")
+	_build_btn.focus_mode = Control.FOCUS_NONE
+	# Grande y abajo en el centro: el pulgar llega en una tablet apaisada.
+	_build_btn.custom_minimum_size = Vector2(BUILD_BTN_W, BUILD_BTN_H)
 	UILayoutManager.apply_layout("ConstructionMenu.button", _build_btn)
 	UITheme.style_button(_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
 	_build_btn.pressed.connect(_open)
@@ -651,3 +659,7 @@ func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingDa
 		_thumb_rects[data.id].texture = tex
 
 	model.queue_free()
+
+## El boton CONSTRUIR del HUD, para pruebas.
+func build_button() -> Button:
+	return _build_btn
