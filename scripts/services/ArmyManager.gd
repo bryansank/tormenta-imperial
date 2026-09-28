@@ -6,6 +6,8 @@ extends Node
 ## Training model: one unit trains per Barracks at a time (parallel slots =
 ## barracks count). Army size is capped by GameConfig.get_army_capacity().
 
+const _Rules := preload("res://scripts/buildings/PlacementRules.gd")
+
 var _units: Dictionary = {}   # unit_id (String) -> count (int)
 var _training: Array = []     # [{id: String, remaining: float, duration: float}]
 var _upkeep_accum := 0.0
@@ -67,14 +69,12 @@ func get_power() -> int:
 		power += _units[id] * int(def.get("power", 0))
 	return power
 
-## Number of Barracks currently placed (queried from the scene's BuildingPlacer).
+## Number of Barracks currently placed. Se pregunta a la rejilla (PlacementRules),
+## que es lo que el placer de cualquiera de las dos vistas acaba consultando: antes
+## se buscaba un nodo "BuildingPlacer" en la escena, y sin el (un test, una escena
+## montada a mano, la sonda de la linea) el cuartel no existia y no se entrenaba nada.
 func barracks_count() -> int:
-	var scene := get_tree().current_scene
-	if scene:
-		var placer := scene.get_node_or_null("BuildingPlacer")
-		if placer and placer.has_method("count_building"):
-			return placer.count_building("barracks")
-	return 0
+	return _Rules.count_building("barracks")
 
 func get_capacity() -> int:
 	return GameConfig.get_army_capacity(barracks_count())

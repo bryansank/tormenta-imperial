@@ -6,6 +6,17 @@ var _panel: PanelContainer
 var _backdrop: ColorRect
 var _obj_btn: Button
 var _is_open := false
+var _now_title: Label
+var _now_why: Label
+var _now_blocker: Label
+var _route_box: VBoxContainer
+var _refresh_left := 0.0
+
+const Objectives := preload("res://scripts/services/Objectives.gd")
+## Cada cuanto se recalcula el paso con el panel abierto. Lo que cambia la
+## respuesta (una obra que acaba, oro que entra) pasa todo el rato; un segundo es
+## lo bastante vivo para leerlo y no cuesta nada.
+const REFRESH_EVERY := 1.0
 
 func _ready() -> void:
 	layer = 15 # Higher than other UI
@@ -78,32 +89,38 @@ func _setup_ui() -> void:
 	content.add_theme_constant_override("separation", 20)
 	scroll.add_child(content)
 
-	# Goal Section
+	# ── AHORA: el siguiente paso, calculado desde la partida (Objectives) ──
+	# Antes esto eran cinco pasos fijos, y tres eran falsos: construir un Nucleo
+	# (ya lo tienes y no se construye), "conectar" con almacenes (no se conecta
+	# nada) y desbloquear edificios con el arbol tecnologico (los desbloquean
+	# otros edificios). Ahora dice lo que toca, por que, y que falta.
+	content.add_child(UITheme.section_header(Tr.t("OBJ_NOW")))
+	_now_title = UITheme.make_label("", "section", UITheme.TEXT_BRIGHT)
+	_now_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_now_title)
+	_now_why = UITheme.make_label("", "body", UITheme.TEXT)
+	_now_why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_now_why)
+	_now_blocker = UITheme.make_label("", "body", UITheme.WARNING)
+	_now_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_now_blocker)
+
+	# ── EL CAMINO: la linea entera, con lo hecho marcado ──
+	content.add_child(UITheme.make_separator())
+	content.add_child(UITheme.section_header(Tr.t("OBJ_ROUTE")))
+	_route_box = VBoxContainer.new()
+	_route_box.add_theme_constant_override("separation", 4)
+	content.add_child(_route_box)
+
+	# La mision, al final: es el contexto, no la orden.
+	content.add_child(UITheme.make_separator())
 	content.add_child(UITheme.section_header(Tr.t("LBL_OBJ_MISSION")))
-	var main_goal := UITheme.make_label(Tr.t("LBL_OBJ_MISSION_DESC"), "body")
+	var main_goal := UITheme.make_label(Tr.t("OBJ_MISSION_TEXT"), "body")
 	main_goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(main_goal)
 
-	# Step-by-step
-	content.add_child(UITheme.make_separator())
-	content.add_child(UITheme.section_header(Tr.t("LBL_OBJ_STEPS")))
-
-	var steps := [
-		Tr.t("LBL_OBJ_STEP_1"),
-		Tr.t("LBL_OBJ_STEP_2"),
-		Tr.t("LBL_OBJ_STEP_3"),
-		Tr.t("LBL_OBJ_STEP_4"),
-		Tr.t("LBL_OBJ_STEP_5"),
-	]
-	
-	for step in steps:
-		var l := UITheme.make_label(step, "body", UITheme.TEXT)
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		content.add_child(l)
-
-	# Controls Tip
-	content.add_child(UITheme.make_separator())
-	var tip := UITheme.make_label(Tr.t("LBL_OBJ_TIP"), "small", UITheme.ACCENT)
+	var tip := UITheme.make_label(Tr.t("OBJ_TIP_TEXT"), "small", UITheme.ACCENT)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(tip)
 
@@ -119,9 +136,42 @@ func toggle() -> void:
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
 	if _is_open:
+		refresh()
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)
 
 func _toggle_panel() -> void:
 	toggle()
+
+func _process(delta: float) -> void:
+	if not _is_open:
+		return
+	_refresh_left -= delta
+	if _refresh_left <= 0.0:
+		refresh()
+
+## Vuelve a preguntar el paso y repinta. Publico para los tests.
+func refresh() -> void:
+	_refresh_left = REFRESH_EVERY
+	var step: Dictionary = Objectives.next_step()
+	var text: Dictionary = Objectives.describe(step)
+	_now_title.text = String(text["title"])
+	_now_why.text = String(text["why"])
+	_now_blocker.text = String(text["blocker"])
+	_now_blocker.visible = String(text["blocker"]) != ""
+	_paint_route()
+
+## La linea de Objectives.LINE, una fila por paso: hecho, el de ahora, o por hacer.
+func _paint_route() -> void:
+	for child in _route_box.get_children():
+		child.queue_free()
+	for row in Objectives.route():
+		var mark: String = "✔ " if bool(row["done"]) else ("▶ " if bool(row["current"]) else "· ")
+		var color: Color = UITheme.TEXT_DIM if bool(row["done"]) else (UITheme.ACCENT if bool(row["current"]) else UITheme.TEXT)
+		var label := UITheme.make_label(mark + String(row["text"]), "small", color)
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_route_box.add_child(label)
+
+func get_now_text() -> Dictionary:
+	return {"title": _now_title.text, "why": _now_why.text, "blocker": _now_blocker.text}
