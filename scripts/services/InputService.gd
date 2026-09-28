@@ -1,7 +1,8 @@
 extends Node
 ## Unified input service: abstracts keyboard, mouse, and touch into EventBus signals.
 ## Supports: WASD/Arrows (pan), scroll wheel (zoom), middle-mouse drag (pan),
-## right-mouse drag (rotate), single-finger grab-pan, two-finger pinch (zoom).
+## right-mouse drag (rotate), single-finger grab-pan, two-finger pinch (zoom)
+## and two-finger twist (rotate, 3D only).
 ##
 ## El dedo y el raton mueven el mapa con la misma cuenta: `screen_drag_to_world_delta`
 ## proyecta los dos puntos del arrastre sobre el suelo y devuelve el hueco en
@@ -31,6 +32,19 @@ var _touch_panning: bool = false
 ## el dedo porque el clic emulado que Godot fabrica al soltar llega despues.
 var _touch_pan_consumed_click: bool = false
 var _last_pinch_distance: float = 0.0
+
+# ── Dos dedos: pellizco (zoom) o giro (rotar) ──
+# Los dos dedos miden a la vez la separacion y el angulo de la linea que los une.
+# El gesto arranca sin decidir y se BLOQUEA en lo primero que pase su umbral: un
+# giro que llega a GameConfig.twist_lock_degrees antes de que la separacion cambie
+# GameConfig.pinch_lock_scale rota la camara, y al reves hace zoom. Sin bloqueo,
+# todo pellizco real (nunca es recto) giraria el mapa un poco y todo giro (nunca
+# es a distancia constante) le daria tirones al zoom.
+var _pinch_start_distance: float = 0.0
+var _pinch_start_angle: float = 0.0
+var _last_pinch_angle: float = 0.0
+## "" sin decidir, "zoom" o "rotate". Se reinicia cada vez que cambian los dedos.
+var _gesture_lock: String = ""
 
 func _ready() -> void:
 	# Ensure mouse cursor is always visible
@@ -63,6 +77,7 @@ func _purge_touch_state() -> void:
 	_cancel_touch_pan()
 	_touch_pan_consumed_click = true
 	_last_pinch_distance = 0.0
+	_gesture_lock = ""
 
 func _process(_delta: float) -> void:
 	_handle_keyboard()
@@ -204,8 +219,10 @@ func _handle_screen_touch(event: InputEventScreenTouch) -> void:
 		var remaining: int = _touch_points.keys()[0]
 		_begin_pan_finger(remaining, _touch_points[remaining])
 		_last_pinch_distance = 0.0
+		_gesture_lock = ""
 	else:
 		_last_pinch_distance = 0.0
+		_gesture_lock = ""
 
 func _handle_screen_drag(event: InputEventScreenDrag) -> void:
 	# Un dedo cuyo apoyo nunca paso por aqui empezo sobre la interfaz: el Control
@@ -220,7 +237,7 @@ func _handle_screen_drag(event: InputEventScreenDrag) -> void:
 	if event.index != _pan_finger:
 		return
 	if not _touch_panning:
-		if event.position.distance_to(_pan_start_pos) < GameConfig.touch_drag_threshold_px:
+		if event.position.distance_to(_pan_start_pos) < touch_slop_px():
 			return
 		_touch_panning = true
 		_touch_pan_consumed_click = true
@@ -229,6 +246,35 @@ func _handle_screen_drag(event: InputEventScreenDrag) -> void:
 	var from_pos := _pan_last_pos
 	_pan_last_pos = event.position
 	_emit_grab_pan(from_pos, event.position)
+
+## Cuanto tiene que moverse un dedo, en pixeles del lienzo (los de los eventos),
+## para dejar de ser un toque. Se mide en dp (GameConfig.touch_drag_threshold_dp):
+## un temblor es de milimetros, no de pixeles, y 12 px en una tablet de 280 dpi
+## son 1,1 mm. Nunca por debajo de GameConfig.touch_drag_threshold_px.
+func touch_slop_px() -> float:
+	# En headless la ventana es de mentira (64x64, escala 0.05): 1 dp = 1 px.
+	var dpi := 160
+	var canvas_scale := 1.0
+	if DisplayServer.get_name() != "headless":
+		dpi = DisplayServer.screen_get_dpi()
+		if is_inside_tree():
+			canvas_scale = get_tree().root.get_final_transform().get_scale().x
+	return touch_slop_for(GameConfig.touch_drag_threshold_dp, dpi, canvas_scale,
+		GameConfig.touch_drag_threshold_px)
+
+## Pura: `dp` dp en una pantalla de `dpi` puntos, pasados a pixeles del lienzo
+## (el lienzo va escalado `canvas_scale` veces sobre la ventana), sin bajar de
+## `floor_px`. Sin dpi conocido se asumen 160 (1 dp = 1 px).
+static func touch_slop_for(dp: float, dpi: int, canvas_scale: float, floor_px: float) -> float:
+	var physical := dp * (float(dpi) if dpi > 0 else 160.0) / 160.0
+	return maxf(floor_px, physical / maxf(canvas_scale, 0.01))
+
+## Olvida un dedo sin tocar los demas: alguien de la escena (el colocador, que
+## arrastra el fantasma con el) se lo ha quedado y este dedo no debe panear.
+func forget_touch(index: int) -> void:
+	_touch_points.erase(index)
+	if index == _pan_finger:
+		_cancel_touch_pan()
 
 func _begin_pan_finger(index: int, pos: Vector2) -> void:
 	_pan_finger = index
@@ -241,23 +287,74 @@ func _cancel_touch_pan() -> void:
 	_touch_panning = false
 
 func _arm_pinch() -> void:
+	_gesture_lock = ""
 	var points := _touch_points.values()
 	if points.size() < 2:
 		return
-	_last_pinch_distance = (points[0] as Vector2).distance_to(points[1] as Vector2)
+	var p0 := points[0] as Vector2
+	var p1 := points[1] as Vector2
+	_last_pinch_distance = p0.distance_to(p1)
+	_pinch_start_distance = _last_pinch_distance
+	_last_pinch_angle = (p1 - p0).angle()
+	_pinch_start_angle = _last_pinch_angle
+
+## En que se ha quedado el gesto de dos dedos en curso: "", "zoom" o "rotate".
+func gesture_lock() -> String:
+	return _gesture_lock
 
 func _handle_pinch() -> void:
 	var points := _touch_points.values()
 	if points.size() < 2:
 		return
-	var current_dist := (points[0] as Vector2).distance_to(points[1] as Vector2)
+	var p0 := points[0] as Vector2
+	var p1 := points[1] as Vector2
+	var current_dist := p0.distance_to(p1)
+	var current_angle := (p1 - p0).angle()
 	if _last_pinch_distance <= 0.0:
 		_last_pinch_distance = current_dist
+		_pinch_start_distance = current_dist
+		_last_pinch_angle = current_angle
+		_pinch_start_angle = current_angle
+		return
+	if _gesture_lock == "":
+		_gesture_lock = decide_two_finger_lock(_pinch_start_distance, current_dist,
+			_pinch_start_angle, current_angle, _rotation_allowed())
+		if _gesture_lock == "":
+			return
+	if _gesture_lock == "rotate":
+		# 1:1 con los dedos: los grados que gira la linea entre ellos son los que
+		# gira la camara. Con la camara orbitando, subir el yaw hace girar el
+		# terreno en el sentido de las agujas del reloj en pantalla, que es hacia
+		# donde crece el angulo con la Y hacia abajo: mismo signo.
+		var d_deg := rad_to_deg(angle_difference(_last_pinch_angle, current_angle))
+		_last_pinch_angle = current_angle
+		if absf(d_deg) > 0.0001:
+			EventBus.camera_rotate_step_requested.emit(d_deg * GameConfig.twist_rotate_sign)
 		return
 	var diff := current_dist - _last_pinch_distance
 	if absf(diff) > GameConfig.pinch_zoom_dead_zone_px:
 		EventBus.camera_zoom_requested.emit(-diff * GameConfig.pinch_zoom_sensitivity)
 		_last_pinch_distance = current_dist
+
+## Decide en que se convierte un gesto de dos dedos que aun no lo ha hecho. Pura,
+## para los tests: separacion y angulo del principio y de ahora. Gana el primero
+## que pase su umbral; si los dos lo pasan en el mismo evento, el que lo pase por
+## mas. Sin giro permitido (vista 2D, docs/18) un giro no decide nada: solo el
+## zoom puede bloquear, asi que girar dos dedos no da tirones de zoom.
+static func decide_two_finger_lock(start_dist: float, dist: float, start_angle: float,
+		angle: float, rotation_allowed: bool) -> String:
+	var scale_ratio := absf(dist / maxf(start_dist, 1.0) - 1.0) / maxf(GameConfig.pinch_lock_scale, 0.0001)
+	var twist_ratio := absf(rad_to_deg(angle_difference(start_angle, angle))) / maxf(GameConfig.twist_lock_degrees, 0.0001)
+	if not rotation_allowed:
+		twist_ratio = 0.0
+	if scale_ratio < 1.0 and twist_ratio < 1.0:
+		return ""
+	return "rotate" if twist_ratio > scale_ratio else "zoom"
+
+## Solo la camara 3D gira; la 2D va alineada a la rejilla (docs/18-vista-2d.md).
+func _rotation_allowed() -> bool:
+	var viewport := get_viewport()
+	return viewport != null and viewport.get_camera_3d() != null
 
 func _emit_grab_pan(from_pos: Vector2, to_pos: Vector2) -> void:
 	var viewport := get_viewport()

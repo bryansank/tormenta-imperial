@@ -269,11 +269,17 @@ var audio_ambient_volume := 0.5
 ## tarda en enganchar el terreno.
 var mouse_drag_threshold_px := 6.0
 
-## Lo mismo para el dedo. Va mas alto que el del raton porque un dedo se mueve
-## unos pixeles incluso en un toque que el jugador siente inmovil: con 6 px,
-## media docena de toques por partida acabarian moviendo el mapa en vez de
-## abrir el edificio que se queria abrir.
-var touch_drag_threshold_px := 12.0
+## Lo mismo para el dedo, en dp (1 dp = 1/160 de pulgada): un dedo se mueve un par
+## de milimetros incluso en un toque que el jugador siente inmovil, y eso son
+## pixeles distintos en cada pantalla. Con los 12 px fisicos de antes, en una
+## tablet de ~280 dpi un toque normal (1-2 mm) pasaba el umbral, se volvia
+## arrastre y el aserradero no se colocaba. 14 dp son ~2,2 mm; el paneo no pierde
+## nada por esperar, porque arranca desde donde se apoyo el dedo.
+## InputService.touch_slop_px() lo pasa a pixeles del lienzo con el dpi real.
+var touch_drag_threshold_dp := 14.0
+## Suelo del umbral anterior, en pixeles del lienzo: por mucho que el dpi diga,
+## un toque nunca se vuelve arrastre por menos de esto.
+var touch_drag_threshold_px := 8.0
 
 ## Pellizco: cuanto tiene que cambiar la separacion entre los dos dedos (en
 ## pixeles) para mover el zoom. Absorbe el temblor de dos dedos quietos; si se
@@ -283,6 +289,28 @@ var pinch_zoom_dead_zone_px := 1.0
 ## Zoom por pellizco: unidades de distancia de camara por pixel de separacion
 ## ganada entre los dedos. Mas alto = el mapa se acerca de golpe.
 var pinch_zoom_sensitivity := 0.05
+
+# ── tactil ──
+## Dos dedos: el gesto se bloquea en giro si la linea entre ellos gira esto (en
+## grados) antes de que la separacion cambie pinch_lock_scale (8 %), y en zoom al
+## reves. Mas bajo: cuesta hacer un pellizco que no gire. Mas alto: el giro tarda
+## en engancharse.
+var twist_lock_degrees := 8.0
+var pinch_lock_scale := 0.08
+## Sentido del giro con dos dedos (+1: el terreno gira con los dedos). Solo 3D.
+var twist_rotate_sign := 1.0
+## Mantener pulsado un boton de accion en pantalla lo repite: primero al tocar,
+## luego tras hold_repeat_delay_sec, y despues cada hold_repeat_interval_sec.
+var hold_repeat_delay_sec := 0.3
+var hold_repeat_interval_sec := 0.08
+## Grados por segundo que gira la camara con ↺/↻ mantenidos (tras el primer paso).
+var hold_rotate_degrees_per_sec := 90.0
+## Opacidad de los controles en pantalla (cruceta, zoom, giro, colocar): fondo,
+## borde y simbolo. Al pulsar un boton se ve entero; en reposo vuelve a esto.
+## Del dispositivo, en settings.cfg [ui] touch_controls_opacity.
+const TOUCH_OPACITY_MIN := 0.15
+const TOUCH_OPACITY_MAX := 1.0
+var ui_touch_controls_opacity := 0.45
 
 # ── User Settings persistence ──
 # Device-local preferences (volumes, UI toggles) — separate from save_game.json
@@ -378,6 +406,8 @@ func load_user_settings() -> void:
 	# Un valor desconocido en el archivo (edicion a mano, version vieja) vuelve
 	# a "auto" en vez de dejar los controles en un estado que nadie eligio.
 	ui_touch_controls = touch_mode if touch_mode in TOUCH_CONTROLS_MODES else "auto"
+	ui_touch_controls_opacity = clampf(float(cf.get_value("ui", "touch_controls_opacity",
+		ui_touch_controls_opacity)), TOUCH_OPACITY_MIN, TOUCH_OPACITY_MAX)
 	var locale := str(cf.get_value("ui", "locale", ui_locale))
 	if Tr.LOCALES.has(locale):
 		ui_locale = locale
@@ -419,6 +449,7 @@ func save_user_settings() -> void:
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
 	cf.set_value("ui", "view_mode", ui_view_mode)
 	cf.set_value("ui", "touch_controls", ui_touch_controls)
+	cf.set_value("ui", "touch_controls_opacity", ui_touch_controls_opacity)
 	cf.set_value("ui", "locale", ui_locale)
 	cf.set_value("interfaz", "device_profile", ui_device_profile)
 	cf.set_value("interfaz", "ui_scale_pct", ui_scale_pct)
@@ -490,6 +521,14 @@ func set_touch_controls(mode: String) -> void:
 	ui_touch_controls = mode
 	save_user_settings()
 	EventBus.touch_controls_changed.emit(touch_controls_enabled())
+
+## Cambia la opacidad de los controles en pantalla y la anuncia (OnScreenControls
+## la aplica al momento). `persist` = false mientras se arrastra el deslizador.
+func set_touch_controls_opacity(value: float, persist: bool = true) -> void:
+	ui_touch_controls_opacity = clampf(value, TOUCH_OPACITY_MIN, TOUCH_OPACITY_MAX)
+	if persist:
+		save_user_settings()
+	EventBus.touch_controls_opacity_changed.emit(ui_touch_controls_opacity)
 
 # ── Pantalla completa ──
 
