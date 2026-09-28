@@ -138,6 +138,16 @@ func test_handheld_orientation_is_sensor_landscape() -> void:
 	assert_int(orientation).is_equal(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
 
 
+func test_mobile_is_always_fullscreen_whatever_the_preference() -> void:
+	# En Android "ventana" deja las barras del sistema encima del juego.
+	var fs := DisplayServer.WINDOW_MODE_FULLSCREEN
+	assert_int(GameConfig._wanted_window_mode(false, true)).is_equal(fs)
+	assert_int(GameConfig._wanted_window_mode(true, true)).is_equal(fs)
+	# En PC la preferencia manda.
+	assert_int(GameConfig._wanted_window_mode(true, false)).is_equal(fs)
+	assert_int(GameConfig._wanted_window_mode(false, false)).is_equal(DisplayServer.WINDOW_MODE_WINDOWED)
+
+
 func test_mobile_uses_mobile_renderer_and_desktop_keeps_forward_plus() -> void:
 	# Se lee el fichero y no ProjectSettings: en el editor de PC get_setting ya
 	# resuelve el valor de escritorio y no dejaría ver el override .mobile.
