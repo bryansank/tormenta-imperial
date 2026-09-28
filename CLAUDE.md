@@ -84,14 +84,14 @@ Main (Node3D)
   +-- GridOverlay (MeshInstance3D) -- faint cell grid, on by default (Settings toggle), fitted to GridManager at runtime
   +-- BuildingPlacer (Node3D) -- handles placement/move/demolish
   +-- OnScreenControls (CanvasLayer) -- mobile D-pad, zoom, rotate
-  +-- ResourceHUD (CanvasLayer) -- top bar: gold/steel/oil/wood
+  +-- ResourceHUD (CanvasLayer) -- top-left card: named resources + ALMACÉN COMPARTIDO bar with legend
   +-- MapGenerator (Node) -- spawns 15-25 resource deposits
-  +-- ConstructionMenu (CanvasLayer) -- build button + building list
+  +-- ConstructionMenu (CanvasLayer) -- big CONSTRUIR button (always visible, bottom centre) + building list
   +-- BuildingInfoPanel (CanvasLayer) -- right panel: selected building info
   +-- MarketPanel (CanvasLayer) -- buy/sell UI
   +-- ProgressPanel (CanvasLayer) -- milestones + era display
   +-- VictoryScreen (CanvasLayer) -- victory overlay
-  +-- NotificationPanel (CanvasLayer) -- activity log + toasts + status
+  +-- NotificationPanel (CanvasLayer) -- activity log + toasts + status (Habitantes / Obreros / Moral in words)
   +-- TechTreePanel (CanvasLayer) -- 3 branches x 5 tiers research UI
   +-- ObjectivePanel (CanvasLayer) -- "what to do" goals modal
   +-- ArmyPanel (CanvasLayer) -- train units, Military Power, upkeep
@@ -102,6 +102,9 @@ Main (Node3D)
   +-- BattleScreen (CanvasLayer) -- the 8x8 tactical board (layer 18, outside UIManager's stack)
   +-- StormHUD (CanvasLayer) -- storm phase indicator (colour + icon, no countdown)
   +-- TutorialPanel (CanvasLayer) -- paged intro + contextual tip cards
+  +-- AuditWaveBanner / WarReportScreen / AuditDefeatScreen (CanvasLayer) -- siege banner and war reports
+  +-- PauseMenu (CanvasLayer, layer 30) -- THE game menu: "☰ MENÚ" top-right, COLONIA + PARTIDA, pauses; ESC / Android back
+  +-- TitleMenu (CanvasLayer, layer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal
 ```
 
 UI panels are positioned by `UILayoutManager` using the slot definitions in
