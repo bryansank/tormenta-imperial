@@ -4,8 +4,8 @@ extends Control
 ## mide lo que la flecha; quien la coloca pone su punta en `tip_at`.
 
 var direction := Vector2.DOWN
-var color := Color(0.77, 0.59, 0.16)
-var outline := Color(0.05, 0.04, 0.02, 0.95)
+var color: Color = UITheme.ACCENT
+var outline: Color = UITheme.OUTLINE_COLOR
 var _t := 0.0
 
 func _init() -> void:

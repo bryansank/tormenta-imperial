@@ -202,21 +202,13 @@ func _setup_ui() -> void:
 		"military": Tr.t("LBL_CAT_MILITARY"),
 		"decoration": Tr.t("LBL_CAT_DECORATION"),
 	}
-	var cat_colors := {
-		"all": UITheme.ACCENT,
-		"production": UITheme.CAT_PRODUCTION,
-		"support": UITheme.CAT_SUPPORT,
-		"military": UITheme.CAT_MILITARY,
-		"decoration": UITheme.CAT_DECORATION,
-	}
-
 	for cat_id in CATEGORIES:
 		var btn := Button.new()
 		btn.text = cat_labels.get(cat_id, cat_id)
 		btn.custom_minimum_size = Vector2(0, 32)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var is_active: bool = cat_id == _current_category
-		UITheme.style_button(btn, cat_colors[cat_id].darkened(0.6 if not is_active else 0.2), UITheme.FONT_SMALL)
+		UITheme.style_button(btn, filter_color(is_active), UITheme.FONT_SMALL)
 		var cid: String = cat_id  # capture
 		btn.pressed.connect(func(): _select_category(cid))
 		cat_bar.add_child(btn)
@@ -296,7 +288,7 @@ func _setup_ui() -> void:
 	_preview_container.add_child(_preview_viewport)
 	# Border around preview
 	var preview_style := StyleBoxFlat.new()
-	preview_style.bg_color = Color(0.03, 0.03, 0.02, 1.0)
+	preview_style.bg_color = UITheme.BG_DARK.darkened(0.4)
 	preview_style.set_corner_radius_all(UITheme.CORNER)
 	preview_style.border_color = UITheme.ACCENT_DIM
 	preview_style.set_border_width_all(1)
@@ -394,6 +386,7 @@ func _toggle_panel() -> void:
 # ── Category Selection ──
 # ══════════════════════════════════════════════════════════════════════
 
+## Color de categoria: solo la franja inferior de cada tarjeta (docs/24-paleta.md).
 var _cat_colors := {
 	"all": UITheme.ACCENT,
 	"production": UITheme.CAT_PRODUCTION,
@@ -402,13 +395,18 @@ var _cat_colors := {
 	"decoration": UITheme.CAT_DECORATION,
 }
 
+## Fondo de un boton del filtro: todos iguales, el activo en laton. Antes cada
+## categoria tenia su color de boton y la barra parecia un arcoiris.
+static func filter_color(active: bool) -> Color:
+	return UITheme.ACCENT.darkened(0.55) if active else UITheme.BTN
+
 func _select_category(cat_id: String) -> void:
 	_current_category = cat_id
 	# Update button styles
 	for cid in _cat_buttons:
 		var btn: Button = _cat_buttons[cid]
 		var is_active: bool = cid == _current_category
-		UITheme.style_button(btn, _cat_colors[cid].darkened(0.6 if not is_active else 0.2), UITheme.FONT_SMALL)
+		UITheme.style_button(btn, filter_color(is_active), UITheme.FONT_SMALL)
 	_refresh_grid()
 
 # ══════════════════════════════════════════════════════════════════════

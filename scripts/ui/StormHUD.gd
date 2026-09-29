@@ -158,7 +158,7 @@ func _style_for(phase: int) -> void:
 	var tint: Color = _tint_for(phase)
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.06, 0.05, 0.92)
+	style.bg_color = UITheme.HUD_BG
 	style.set_corner_radius_all(UITheme.CORNER)
 	style.set_content_margin_all(8)
 	style.border_color = tint
@@ -176,7 +176,7 @@ func _tint_for(phase: int) -> Color:
 		StormCycle.Phase.WARNING:
 			return UITheme.WARNING
 		StormCycle.Phase.ASH:
-			return UITheme.CAT_PRODUCTION
+			return UITheme.WARNING.lerp(UITheme.DANGER, 0.5)
 		StormCycle.Phase.STORM:
 			return UITheme.DANGER
 		StormCycle.Phase.TITHE:
