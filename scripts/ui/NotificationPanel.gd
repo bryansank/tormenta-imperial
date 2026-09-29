@@ -21,7 +21,6 @@ const TOAST_LAYER_UNDER_INTRO := 11
 
 var _panel: PanelContainer
 var _toast_layer: CanvasLayer
-var _log_btn: Button
 var _is_open := false
 var _log_entries: Array = []
 var _log_vbox: VBoxContainer
@@ -136,16 +135,9 @@ func _setup_ui() -> void:
 	status_vbox.add_child(_status_hint)
 
 	# Log button integrated below status
-	_log_btn = Button.new()
-	_log_btn.text = Tr.t("BTN_LOG_HUD")
-	_log_btn.tooltip_text = Tr.t("HINT_HUD_LOG")
-	_log_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UITheme.style_button(_log_btn, UITheme.BTN, UITheme.FONT_SMALL)
-	# Sin alto propio: style_button le da MIN_BTN_H (44), el minimo tactil.
-	# Antes pedia 28 px, que un pulgar no acierta.
-	_log_btn.pressed.connect(_toggle_panel)
-	status_vbox.add_child(_log_btn)
-	HudRegistry.register("NotificationPanel.log_button", _log_btn)
+	# El registro de avisos ya no tiene boton en el HUD (2026-09-28): es para
+	# revisar que paso o buscar un fallo, no para tenerlo a la vista. Se abre
+	# desde el menu (☰ MENU -> REGISTRO, PauseMenu).
 
 	# Objective hint (top-center)
 	var obj_panel := PanelContainer.new()
@@ -205,6 +197,11 @@ func _on_notification(message: String, category: String, color: Color) -> void:
 	if _log_entries.size() > MAX_LOG_ENTRIES:
 		_log_entries.pop_back()
 	_refresh_log()
+	# En pantalla, solo lo que pide atencion: peligros, advertencias y los avisos
+	# marcados "notice" (un material nuevo, la partida vieja apartada). Lo de
+	# rutina ("Camino construido", "Poblacion crecio") va solo al registro.
+	if not shows_toast(category):
+		return
 	_show_toast(message, color)
 
 func _on_expedition_started(_expedition_id: int, node_count: int) -> void:
@@ -341,6 +338,18 @@ func _on_status_tap(event: InputEvent) -> void:
 ## Si las explicaciones de la tarjeta estan desplegadas. Para tests.
 func is_status_hint_shown() -> bool:
 	return _status_hint != null and _status_hint.visible
+
+## Que categorias salen en pantalla ademas de ir al registro.
+static func shows_toast(category: String) -> bool:
+	return category in ["warning", "danger", "notice"]
+
+## El registro, abierto desde el menu.
+func open_log() -> void:
+	if not _is_open:
+		_toggle_panel()
+
+func is_open() -> bool:
+	return _is_open
 
 func _toggle_panel() -> void:
 	_is_open = not _is_open

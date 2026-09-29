@@ -387,6 +387,18 @@ static func pave_route(placer: Node, route: Array) -> int:
 			EventBus.building_placed.emit(road, c)
 	return n
 
+## Un extractor (Aserradero, Mina de oro, Fundicion) necesita su veta viva al
+## lado para funcionar (2026-09-28): si se agota a mano, se para. Los que no
+## tienen regla, y la Refineria (que se come su pozo al colocarse), siempre
+## tienen. Sin generador de mapa (pruebas sueltas) no se exige.
+static func has_its_deposit(data: BuildingData, cells: Array, map_gen: Node) -> bool:
+	var rule: Dictionary = GameConfig.get_deposit_rule(data.id)
+	if rule.is_empty() or bool(rule.get("consumes", false)):
+		return true
+	if map_gen == null or not is_instance_valid(map_gen) or not map_gen.has_method("find_deposit_near_cells"):
+		return true
+	return map_gen.find_deposit_near_cells(String(rule["deposit"]), cells, int(rule["reach"])) != null
+
 ## La ruta a pie del Nucleo a `target` por la red: celdas de carretera, de la
 ## que toca el Nucleo a la que toca el edificio. [] si no hay (sin Nucleo, sin
 ## red, o el edificio suelto). La usan los trabajadores que se ven andar.
@@ -505,6 +517,9 @@ static func serialize_building(building: Node) -> Dictionary:
 		entry["level"] = level
 	if building.has_meta("custom_name"):
 		entry["custom_name"] = building.get_meta("custom_name")
+	# El jugador le retiro los trabajadores: se guarda solo si es asi.
+	if bool(building.get_meta("workers_off", false)):
+		entry["workers_off"] = true
 	# Solo se guarda si esta tocado: un save viejo sin la clave significa
 	# "entero", que es exactamente lo que queremos por defecto.
 	if building.has_meta("health"):

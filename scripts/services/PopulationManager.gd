@@ -27,6 +27,8 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(_on_building_completed)
 	# Una carretera es instantanea: al ponerla puede conectar algo que estaba suelto.
 	EventBus.building_placed.connect(func(_d, _c): _recalculate_all())
+	# Una veta agotada para al extractor de al lado (el nodo muere al final del frame).
+	EventBus.deposit_depleted.connect(func(_n, _id): _recalculate_all.call_deferred())
 	EventBus.building_demolished.connect(_on_building_demolished)
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
 	# La moral es de esta casa: ArmyManager avisa de la desercion por EventBus y
@@ -258,6 +260,12 @@ func _recalculate_all() -> void:
 			if node and is_instance_valid(node) and node.has_meta("staffed"):
 				node.set_meta("staffed", false)
 			continue
+		# Sin su veta al lado (agotada a mano), un extractor no trabaja.
+		var has_vein: bool = Rules.has_its_deposit(data, info.get("cells", []), GameManager.map_generator())
+		if node and is_instance_valid(node):
+			if bool(node.get_meta("has_vein", true)) != has_vein:
+				connection_changed = true
+			node.set_meta("has_vein", has_vein)
 		# Skip buildings under construction
 		if node and node is Node and node.has_meta("under_construction"):
 			if node.has_meta("staffed"):
@@ -265,6 +273,13 @@ func _recalculate_all() -> void:
 			continue
 		_max_population += data.population_capacity
 		_morale_bonus += data.morale_bonus
+		# Los trabajadores retirados por el jugador (o sin veta) no se asignan:
+		# quedan libres para otro edificio.
+		var off: bool = node != null and is_instance_valid(node) and bool(node.get_meta("workers_off", false))
+		if data.workers_required > 0 and (off or not has_vein):
+			if node and is_instance_valid(node):
+				node.set_meta("staffed", false)
+			continue
 		if data.workers_required > 0:
 			buildings_needing_workers.append({"node": node, "data": data})
 
@@ -294,6 +309,19 @@ func _recalculate_all() -> void:
 	# ("sin carretera") se repintan con esta senal.
 	if _used_workers != old_workers or connection_changed:
 		EventBus.workers_changed.emit(_used_workers, _population)
+
+## El jugador retira (off = true) o devuelve los trabajadores de un edificio.
+## Sus trabajadores quedan libres para otros; el edificio deja de producir.
+func set_workers_off(node: Node, off: bool) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if off:
+		node.set_meta("workers_off", true)
+	elif node.has_meta("workers_off"):
+		node.remove_meta("workers_off")
+	_recalculate_all()
+	# Aunque no cambie el numero de ocupados, los carteles y el panel se repintan.
+	EventBus.workers_changed.emit(_used_workers, _population)
 
 ## Check if a specific building node is staffed (has enough workers assigned).
 func is_building_staffed(node: Node) -> bool:

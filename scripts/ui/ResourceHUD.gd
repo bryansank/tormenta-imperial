@@ -256,7 +256,7 @@ func _on_resource_unlocked(resource_name: String) -> void:
 	if ResourceManager.is_material_name(resource_name):
 		_refresh()
 		EventBus.notification_posted.emit(
-			Tr.t("NOTIF_MATERIAL_UNLOCKED") % Tr.res_cap(resource_name), "info", UITheme.INFO)
+			Tr.t("NOTIF_MATERIAL_UNLOCKED") % Tr.res_cap(resource_name), "notice", UITheme.INFO)
 		return
 	var type := _type_of(resource_name)
 	if type < 0 or not _chips.has(type):

@@ -25,6 +25,9 @@ var _repair_label: Label
 var _actions_box: HBoxContainer
 var _move_container: VBoxContainer
 var _move_btn: Button
+## Retirar / poner los trabajadores de este edificio (2026-09-28).
+var _workers_btn: Button
+var _workers_hint: Label
 var _demolish_btn: Button
 var _close_btn: Button
 var _confirm_container: VBoxContainer
@@ -49,6 +52,7 @@ func _ready() -> void:
 	EventBus.process_completed.connect(_on_process_event)
 	EventBus.mining_completed.connect(_on_mining_event)
 	EventBus.construction_completed.connect(_on_construction_completed)
+	EventBus.workers_changed.connect(func(_u, _t): if _workers_btn != null and _panel.visible: _refresh_workers_toggle())
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
 	EventBus.building_selected_for_placement.connect(func(_d): _hide_panel())
 	EventBus.building_demolished.connect(func(_n, _c): _hide_panel())
@@ -200,6 +204,18 @@ func _build_ui() -> void:
 	_move_container.add_child(_move_btn)
 	_vbox.add_child(_move_container)
 
+	# Trabajadores: el jugador decide si este edificio trabaja. Retirarlos deja
+	# libres a los suyos para otro edificio (mas madera o mas oro, segun haga falta).
+	_workers_hint = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_workers_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_vbox.add_child(_workers_hint)
+	_workers_btn = Button.new()
+	_workers_btn.name = "WorkersToggle"
+	_workers_btn.custom_minimum_size.y = 44
+	UITheme.style_button(_workers_btn, UITheme.BTN, UITheme.FONT_BODY)
+	_workers_btn.pressed.connect(_on_toggle_workers)
+	_vbox.add_child(_workers_btn)
+
 	_vbox.add_child(UITheme.make_separator())
 
 	# Processes header
@@ -339,6 +355,7 @@ func _show_building_panel() -> void:
 		_production_container.visible = false
 
 	_deposit_uses_label.visible = false
+	_refresh_workers_toggle()
 
 	var is_building := ProductionManager.is_constructing(_selected_node)
 	_construction_container.visible = is_building
@@ -400,6 +417,30 @@ func _show_deposit_panel() -> void:
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
 	UIManager.open_panel(self)
+
+## El boton de trabajadores: solo en edificios que los usan.
+func _refresh_workers_toggle() -> void:
+	var uses: bool = _selected_node != null and is_instance_valid(_selected_node) and not _is_deposit \
+		and _selected_data != null and _selected_data.workers_required > 0
+	_workers_btn.visible = uses
+	_workers_hint.visible = uses
+	if not uses:
+		return
+	var off: bool = bool(_selected_node.get_meta("workers_off", false))
+	if not bool(_selected_node.get_meta("has_vein", true)):
+		_workers_hint.text = Tr.t("LBL_NO_VEIN_HINT")
+	elif off:
+		_workers_hint.text = Tr.t("LBL_WORKERS_OFF_HINT") % _selected_data.workers_required
+	else:
+		_workers_hint.text = Tr.t("LBL_WORKERS_ON_HINT") % _selected_data.workers_required
+	_workers_btn.text = Tr.t("BTN_WORKERS_ON") if off else Tr.t("BTN_WORKERS_OFF")
+
+func _on_toggle_workers() -> void:
+	if _selected_node == null or not is_instance_valid(_selected_node):
+		return
+	PopulationManager.set_workers_off(_selected_node, not bool(_selected_node.get_meta("workers_off", false)))
+	_refresh_workers_toggle()
+	GameManager.request_save()
 
 func _update_deposit_uses() -> void:
 	if _selected_node and _selected_node.has_meta("uses_remaining"):

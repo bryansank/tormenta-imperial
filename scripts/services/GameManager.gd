@@ -291,6 +291,11 @@ func _new_game() -> void:
 
 ## La acera del Nucleo: una carretera en cada celda de alrededor, gratis y ya
 ## hecha. Es donde nace la red: todo lo demas se construye tocandola.
+## El generador de mapa de la escena (3D o 2D), o null. Para las consultas de
+## vetas de otros servicios (PopulationManager: sin veta, un extractor se para).
+func map_generator() -> Node:
+	return _map_gen if is_instance_valid(_map_gen) else null
+
 func pave_core_ring(origin: Vector2i, size: Vector2i) -> void:
 	var road := _load_building_data("road")
 	if road == null or _placer == null:
@@ -340,6 +345,8 @@ func _load_game() -> void:
 				var node: Node = _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]), rot_steps)
 				if not node:
 					continue
+				if bool(entry.get("workers_off", false)):
+					node.set_meta("workers_off", true)
 				# Restore custom name
 				if entry.has("custom_name") and entry["custom_name"] != "":
 					node.set_meta("custom_name", entry["custom_name"])
@@ -477,7 +484,7 @@ func _restart_from_old_format() -> void:
 	var backup: String = backup_unreadable_save(OLD_FORMAT_PATH_FMT)
 	loaded_from_save = false
 	_new_game()
-	EventBus.notification_posted.emit(Tr.t("MSG_SAVE_OLD_FORMAT"), "info", UITheme.INFO)
+	EventBus.notification_posted.emit(Tr.t("MSG_SAVE_OLD_FORMAT"), "notice", UITheme.INFO)
 	if not backup.is_empty():
 		print("GameManager: guardado viejo apartado en ", backup)
 

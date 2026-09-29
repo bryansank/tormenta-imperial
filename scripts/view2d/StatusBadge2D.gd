@@ -42,6 +42,8 @@ func refresh() -> void:
 		"under_construction": _building.has_meta("under_construction"),
 		"ruined": BuildingHealth.is_ruined(_building),
 		"connected": bool(_building.get_meta("connected", true)),
+		"has_vein": bool(_building.get_meta("has_vein", true)),
+		"workers_off": bool(_building.get_meta("workers_off", false)),
 		"busy": ProcessManager.is_busy(_building),
 		"needs_workers": _data.workers_required > 0,
 		"staffed": bool(_building.get_meta("staffed", false)),

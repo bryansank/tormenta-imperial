@@ -139,3 +139,26 @@ func test_a_building_without_a_road_does_not_work() -> void:
 	assert_bool(bool(loose.get_meta("staffed", false))).is_false()
 	var facts := {"can_work": true, "connected": false, "needs_workers": true, "staffed": false}
 	assert_str(String(BuildingStatusBadge.derive(facts)["reason"])).is_equal("no_road")
+
+## El jugador retira los trabajadores de un edificio: queda sin dotacion (y sin
+## producir) y los suyos libres; al devolverlos vuelve a trabajar.
+func test_withdrawing_workers_stops_a_building_and_frees_them() -> void:
+	_core_with_ring()
+	var saw := _put("sawmill", Vector2i(7, 10))
+	PopulationManager._recalculate_all()
+	var free_before: int = PopulationManager.get_free_workers()
+	PopulationManager.set_workers_off(saw, true)
+	assert_bool(bool(saw.get_meta("staffed", true))).is_false()
+	assert_int(PopulationManager.get_free_workers()).is_greater_equal(free_before)
+	var facts := {"can_work": true, "workers_off": true, "needs_workers": true}
+	assert_str(String(BuildingStatusBadge.derive(facts)["reason"])).is_equal("workers_off")
+	PopulationManager.set_workers_off(saw, false)
+	assert_bool(saw.has_meta("workers_off")).is_false()
+
+func test_an_extractor_without_its_vein_says_so() -> void:
+	var facts := {"can_work": true, "has_vein": false, "needs_workers": true, "staffed": false}
+	assert_str(String(BuildingStatusBadge.derive(facts)["reason"])).is_equal("no_vein")
+	# Sin generador de mapa (prueba suelta) no se exige veta.
+	assert_bool(Rules.has_its_deposit(_data("sawmill"), [Vector2i(1, 1)], null)).is_true()
+	# Lo que no explota veta siempre la tiene.
+	assert_bool(Rules.has_its_deposit(_data("house"), [Vector2i(1, 1)], null)).is_true()

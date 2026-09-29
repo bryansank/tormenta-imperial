@@ -20,7 +20,6 @@ class_name HudRegistry
 const ELEMENTS := {
 	"ResourceHUD": {"label": "HUD_RESOURCES", "hideable": true, "movable": true, "mode": "holder"},
 	"NotificationPanel.status": {"label": "HUD_STATUS", "hideable": true, "movable": true, "mode": "holder"},
-	"NotificationPanel.log_button": {"label": "HUD_LOG_BUTTON", "hideable": true, "movable": false, "mode": "visible"},
 	"NotificationPanel.log": {"label": "HUD_LOG", "hideable": false, "movable": true, "mode": "holder"},
 	"NotificationPanel.objective": {"label": "HUD_OBJECTIVE", "hideable": true, "movable": true, "mode": "holder"},
 	"StormHUD": {"label": "HUD_STORM", "hideable": true, "movable": true, "mode": "holder"},
@@ -36,7 +35,7 @@ const ELEMENTS := {
 
 ## Orden en Ajustes y en el editor.
 const ORDER := [
-	"ResourceHUD", "NotificationPanel.status", "NotificationPanel.log_button",
+	"ResourceHUD", "NotificationPanel.status",
 	"NotificationPanel.objective", "StormHUD", "NotificationPanel.toasts",
 	"HelperPanel.callouts", "BattleScreen.turn", "SandboxPanel",
 	"NotificationPanel.log", "ConstructionMenu.button", "BuildingInfoPanel",
