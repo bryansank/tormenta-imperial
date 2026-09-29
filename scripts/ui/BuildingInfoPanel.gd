@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 ## Panel that appears when selecting a building or deposit.
 ## Scrollable, styled, with upgrade, demolish confirm, level display.
 
@@ -25,6 +26,9 @@ var _repair_label: Label
 var _actions_box: HBoxContainer
 var _move_container: VBoxContainer
 var _move_btn: Button
+## El boton que abre la pantalla del edificio: el Mercado abre el comercio y el
+## Laboratorio el arbol tecnologico (2026-09-28). Antes se entraba desde el menu.
+var _open_btn: Button
 ## Retirar / poner los trabajadores de este edificio (2026-09-28).
 var _workers_btn: Button
 var _workers_hint: Label
@@ -204,6 +208,14 @@ func _build_ui() -> void:
 	_move_container.add_child(_move_btn)
 	_vbox.add_child(_move_container)
 
+	_open_btn = Button.new()
+	_open_btn.name = "OpenBuildingScreen"
+	_open_btn.custom_minimum_size.y = 52
+	UITheme.style_button(_open_btn, UITheme.POSITIVE.darkened(0.2), UITheme.FONT_SECTION)
+	_open_btn.pressed.connect(_on_open_screen)
+	_open_btn.visible = false
+	_vbox.add_child(_open_btn)
+
 	# Trabajadores: el jugador decide si este edificio trabaja. Retirarlos deja
 	# libres a los suyos para otro edificio (mas madera o mas oro, segun haga falta).
 	_workers_hint = UITheme.make_label("", "small", UITheme.TEXT_DIM)
@@ -356,6 +368,7 @@ func _show_building_panel() -> void:
 
 	_deposit_uses_label.visible = false
 	_refresh_workers_toggle()
+	_refresh_open_button()
 
 	var is_building := ProductionManager.is_constructing(_selected_node)
 	_construction_container.visible = is_building
@@ -370,13 +383,18 @@ func _show_building_panel() -> void:
 
 	# Upgrade section
 	var next_level := level + 1
-	if next_level <= GameConfig.max_building_level and not is_building:
+	var worth_it: bool = Rules.upgrade_does_something(_selected_data)
+	if not worth_it:
+		_upgrade_container.visible = false
+	elif next_level <= GameConfig.max_building_level and not is_building:
 		var cost := GameConfig.get_upgrade_cost(_selected_data, next_level)
 		var cost_parts: Array = []
 		for type in cost:
 			cost_parts.append("%d %s" % [cost[type], Tr.res_name(ResourceManager.get_type_name(type))])
 		_upgrade_btn.text = Tr.t("LBL_UPGRADE_TO") % [next_level]
-		_upgrade_cost_label.text = Tr.t("FMT_COST") % " | ".join(cost_parts)
+		# Que da la mejora, con sus numeros, y luego lo que cuesta.
+		var effects: Array = Rules.upgrade_effect_lines(_selected_data, level)
+		_upgrade_cost_label.text = "\n".join(effects + [Tr.t("FMT_COST") % " | ".join(cost_parts)])
 		_upgrade_btn.disabled = not ResourceManager.can_afford(cost)
 		_upgrade_container.visible = true
 	else:
@@ -417,6 +435,36 @@ func _show_deposit_panel() -> void:
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
 	UIManager.open_panel(self)
+
+## Pantalla de cada edificio que la tiene: id -> [nodo de la escena, clave Tr].
+const SCREENS := {
+	"market": ["MarketPanel", "BTN_OPEN_MARKET"],
+	"laboratory": ["TechTreePanel", "BTN_OPEN_LAB"],
+}
+
+func _refresh_open_button() -> void:
+	var entry: Array = SCREENS.get(_selected_data.id if _selected_data != null and not _is_deposit else "", [])
+	var ready: bool = not entry.is_empty() and not ProductionManager.is_constructing(_selected_node)
+	_open_btn.visible = ready
+	if ready:
+		_open_btn.text = Tr.t(String(entry[1]))
+		_open_btn.disabled = not bool(_selected_node.get_meta("connected", true))
+
+func _on_open_screen() -> void:
+	var entry: Array = SCREENS.get(_selected_data.id if _selected_data != null else "", [])
+	if entry.is_empty():
+		return
+	var scene := get_tree().current_scene
+	var panel: Node = scene.get_node_or_null(String(entry[0])) if scene != null else null
+	if panel == null:
+		return
+	_hide_panel()
+	if panel.has_method("open"):
+		panel.open()
+	elif panel.get("_is_open") != true and panel.has_method("toggle"):
+		panel.toggle()
+	elif panel.get("_is_open") != true and panel.has_method("_toggle_panel"):
+		panel._toggle_panel()
 
 ## El boton de trabajadores: solo en edificios que los usan.
 func _refresh_workers_toggle() -> void:

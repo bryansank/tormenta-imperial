@@ -188,6 +188,8 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 		"sawmill": return _build_sawmill(sx, sz)
 		"tower": return _build_tower(sx, sz)
 		"warehouse": return _build_warehouse(sx, sz)
+		"market": return _build_market(sx, sz)
+		"laboratory": return _build_laboratory(sx, sz)
 		"house": return _build_house(sx, sz)
 		"garden": return _build_garden(sx, sz)
 		"fountain": return _build_fountain(sx, sz)
@@ -839,6 +841,46 @@ static func _build_tower(sx: float, sz: float) -> Node3D:
 # ════════════════════════════════════════════════════════════════
 # WAREHOUSE — Riveted metal shed, sliding door, crates
 # ════════════════════════════════════════════════════════════════
+## Mercado: plataforma de madera con tres puestos de toldo a rayas y cajas.
+static func _build_market(sx: float, sz: float) -> Node3D:
+	var root: Node3D = Node3D.new()
+	var mat_wood := _metal(COL_DARK_WOOD, 0.1, 0.85)
+	var mat_iron := _metal(COL_DARK_IRON, 0.8, 0.4)
+	var mat_brass := _metal(COL_BRASS, 0.9, 0.3)
+	var awnings := [_metal(Color(0.72, 0.18, 0.12), 0.1, 0.7), _metal(Color(0.85, 0.7, 0.25), 0.1, 0.7), _metal(Color(0.2, 0.42, 0.6), 0.1, 0.7)]
+	_add_box(root, Vector3(0, 0.08, 0), Vector3(sx * 0.95, 0.16, sz * 0.95), mat_wood)
+	for i in 3:
+		var x: float = (-0.3 + 0.3 * i) * sx
+		var z: float = -0.18 * sz if i != 1 else 0.18 * sz
+		_add_box(root, Vector3(x, 0.45, z), Vector3(sx * 0.22, 0.55, sz * 0.26), mat_wood)
+		for cx in [-1, 1]:
+			for cz in [-1, 1]:
+				_add_box(root, Vector3(x + cx * sx * 0.1, 0.75, z + cz * sz * 0.12), Vector3(0.05, 1.1, 0.05), mat_iron)
+		_add_prism(root, Vector3(x, 1.35, z), Vector3(sx * 0.28, 0.3, sz * 0.32), awnings[i])
+	# Balanza de laton en el centro
+	_add_box(root, Vector3(0, 0.6, sz * 0.38), Vector3(0.06, 0.9, 0.06), mat_brass)
+	_add_box(root, Vector3(0, 1.05, sz * 0.38), Vector3(sx * 0.3, 0.04, 0.04), mat_brass)
+	for k in 4:
+		_add_box(root, Vector3(sx * (-0.4 + 0.25 * k), 0.3, sz * 0.4), Vector3(0.35, 0.3, 0.35), mat_wood)
+	return root
+
+## Laboratorio: bloque de hormigon con cupula de cristal, antena y tuberias.
+static func _build_laboratory(sx: float, sz: float) -> Node3D:
+	var root: Node3D = Node3D.new()
+	var mat_stone := _metal(Color(0.55, 0.55, 0.52), 0.2, 0.7)
+	var mat_iron := _metal(COL_DARK_IRON, 0.8, 0.4)
+	var mat_copper := _metal(COL_COPPER, 0.85, 0.35)
+	var mat_glass := _emissive(Color(0.35, 0.8, 0.95), 0.9)
+	_add_box(root, Vector3(0, 0.8, 0), Vector3(sx * 0.8, 1.6, sz * 0.75), mat_stone)
+	_add_box(root, Vector3(0, 1.62, 0), Vector3(sx * 0.84, 0.08, sz * 0.79), mat_iron)
+	_add_box(root, Vector3(0, 2.05, 0), Vector3(sx * 0.4, 0.8, sz * 0.4), mat_glass)
+	_add_box(root, Vector3(sx * 0.3, 2.6, -sz * 0.25), Vector3(0.06, 1.6, 0.06), mat_iron)
+	_add_box(root, Vector3(sx * 0.3, 3.4, -sz * 0.25), Vector3(0.4, 0.05, 0.05), mat_copper)
+	for i in 3:
+		_add_box(root, Vector3(-sx * 0.42, 0.4 + 0.4 * i, sz * (-0.2 + 0.2 * i)), Vector3(0.08, 0.08, sz * 0.5), mat_copper)
+	_add_box(root, Vector3(0, 0.5, sz * 0.38), Vector3(sx * 0.25, 1.0, 0.04), mat_iron)
+	return root
+
 static func _build_warehouse(sx: float, sz: float) -> Node3D:
 	var root: Node3D = Node3D.new()
 	var mat_iron: StandardMaterial3D = _metal(COL_DARK_IRON, 0.8, 0.4)

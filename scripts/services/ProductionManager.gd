@@ -143,6 +143,46 @@ func _apply_construction_visual(node: Node) -> void:
 		bar.position.y = height + 0.9
 		node.add_child(bar)
 
+## El nivel se ve (2026-09-28): el modelo crece un 8% por nivel y lleva una
+## placa "II" / "III" encima. Antes solo crecia la malla procedural; los GLB
+## (casi todos) no cambiaban. En 2D lo pinta el propio edificio (galones).
+static func apply_level_visual(node: Node, level: int) -> void:
+	if not (node is Node3D):
+		return
+	var model: Node = null
+	for child in node.get_children():
+		if child is Node3D and not (child is Label3D) and not (child is Sprite3D) \
+				and child.name != "ConstructionBar" and child.name != "LevelPlate":
+			model = child
+			break
+	if model != null:
+		if not model.has_meta("base_scale"):
+			model.set_meta("base_scale", (model as Node3D).scale)
+		var base: Vector3 = model.get_meta("base_scale")
+		(model as Node3D).scale = base * (1.0 + 0.08 * float(maxi(0, level - 1)))
+	var plate := node.get_node_or_null("LevelPlate") as Label3D
+	if level <= 1:
+		if plate != null:
+			plate.queue_free()
+		return
+	if plate == null:
+		plate = Label3D.new()
+		plate.name = "LevelPlate"
+		plate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		plate.no_depth_test = true
+		plate.font_size = 44
+		plate.pixel_size = 0.012
+		plate.outline_size = 10
+		plate.outline_modulate = Color(0, 0, 0, 0.9)
+		plate.modulate = Color(1.0, 0.82, 0.3)
+		node.add_child(plate)
+	var height := 2.0
+	var info := GridManager.get_building_info(node)
+	if not info.is_empty():
+		height = maxf((info["data"] as BuildingData).mesh_height, BuildingStatusBadge.measure_top(node as Node3D))
+	plate.position.y = height + 0.4
+	plate.text = "II" if level == 2 else "III"
+
 ## "Construyendo 45 % · faltan 12 s" (o "Mejorando ..."): lo que dice el rotulo
 ## de la obra sobre el mapa, en 3D y en 2D.
 func construction_text(node: Node) -> String:
@@ -232,10 +272,7 @@ func _complete_construction(stale_or_node) -> void:
 			child.queue_free()
 	if is_upgrade:
 		node.set_meta("level", new_level)
-		# Scale up mesh slightly per level
-		if mesh_inst is MeshInstance3D:
-			var s: float = 1.0 + (new_level - 1) * 0.1
-			mesh_inst.scale = Vector3(s, s, s)
+		apply_level_visual(node, new_level)
 		FloatingText.spawn_on(node, Tr.t("LBL_UPGRADE_COMPLETE"), Color(0.3, 0.8, 1.0))
 		EventBus.building_upgrade_completed.emit(node, new_level)
 		var binfo := GridManager.get_building_info(node)

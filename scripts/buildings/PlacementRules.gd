@@ -399,6 +399,55 @@ static func has_its_deposit(data: BuildingData, cells: Array, map_gen: Node) -> 
 		return true
 	return map_gen.find_deposit_near_cells(String(rule["deposit"]), cells, int(rule["reach"])) != null
 
+## Subir de nivel `data` cambia algo? Produce mas, aloja mas, guarda mas, da mas
+## moral, o es el Cuartel General (su nivel 3 convoca la Auditoria). El resto
+## (Cuartel, Torre, carretera, Nucleo) no ofrece mejora: no daria nada.
+static func upgrade_does_something(data: BuildingData) -> bool:
+	if data == null or data.is_core or data.id == ROAD_ID:
+		return false
+	if data.id == "headquarters":
+		return true
+	return data.is_producer() or data.population_capacity > 0 or data.id == "warehouse" \
+		or (data.is_decoration and data.morale_bonus > 0)
+
+## Que da pasar de `level` a `level + 1`, en frases para el jugador (claves Tr
+## con los numeros reales). [] si nada.
+static func upgrade_effect_lines(data: BuildingData, level: int) -> Array:
+	var out: Array = []
+	var nxt := level + 1
+	if data.is_producer():
+		var parts: Array = []
+		var now_m := GameConfig.get_production_multiplier(level)
+		var next_m := GameConfig.get_production_multiplier(nxt)
+		for pair in [["gold", data.produces_gold], ["steel", data.produces_steel], ["oil", data.produces_oil], ["wood", data.produces_wood]]:
+			if int(pair[1]) > 0:
+				parts.append(Tr.t("FMT_UPGRADE_FROM_TO") % [int(int(pair[1]) * now_m), int(int(pair[1]) * next_m), Tr.res_name(String(pair[0]))])
+		out.append(Tr.t("LBL_UPGRADE_PRODUCES") % [", ".join(parts), int(GameConfig.get_production_interval(data.production_interval))])
+	if data.population_capacity > 0 and not data.is_core:
+		out.append(Tr.t("LBL_UPGRADE_CAPACITY") % [
+			int(data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, level)),
+			int(data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, nxt))])
+	if data.id == "warehouse":
+		out.append(Tr.t("LBL_UPGRADE_STORAGE") % GameConfig.warehouse_level_bonus)
+	if data.is_decoration and data.morale_bonus > 0:
+		out.append(Tr.t("LBL_UPGRADE_MORALE") % [
+			int(data.morale_bonus * GameConfig.level_mult(GameConfig.upgrade_morale_multiplier, level)),
+			int(data.morale_bonus * GameConfig.level_mult(GameConfig.upgrade_morale_multiplier, nxt))])
+	if data.id == "headquarters" and nxt == GameConfig.max_building_level:
+		out.append(Tr.t("LBL_UPGRADE_HQ_AUDIT"))
+	return out
+
+## El almacen extra que dan los almacenes mejorados (suma de sus niveles por
+## encima del 1).
+static func warehouse_level_storage() -> int:
+	var total := 0
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info.get("data")
+		var node: Node = info.get("node")
+		if data != null and data.id == "warehouse" and node != null and is_instance_valid(node):
+			total += maxi(0, int(node.get_meta("level", 1)) - 1) * GameConfig.warehouse_level_bonus
+	return total
+
 ## La ruta a pie del Nucleo a `target` por la red: celdas de carretera, de la
 ## que toca el Nucleo a la que toca el edificio. [] si no hay (sin Nucleo, sin
 ## red, o el edificio suelto). La usan los trabajadores que se ven andar.

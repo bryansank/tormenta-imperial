@@ -10,6 +10,7 @@ id = "foundry"
 display_name = "Fundición"
 description = "Produce acero a partir de minerales."
 grid_size = Vector2i(2, 2)
+model_stretch = Vector3(1.05, 1.1, 1.8)
 cost_gold = 200
 cost_steel = 0
 cost_oil = 0

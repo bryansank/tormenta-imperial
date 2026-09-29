@@ -29,6 +29,10 @@ func _ready() -> void:
 	EventBus.building_placed.connect(func(_d, _c): _recalculate_all())
 	# Una veta agotada para al extractor de al lado (el nodo muere al final del frame).
 	EventBus.deposit_depleted.connect(func(_n, _id): _recalculate_all.call_deferred())
+	# Minar a mano ocupa trabajadores mientras dura (ProcessManager.busy_mining_workers).
+	EventBus.mining_started.connect(func(_n, _id): _recalculate_all.call_deferred())
+	EventBus.mining_completed.connect(func(_n, _id): _recalculate_all.call_deferred())
+	EventBus.process_cancelled.connect(func(_n, _id, _r): _recalculate_all.call_deferred())
 	EventBus.building_demolished.connect(_on_building_demolished)
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
 	# La moral es de esta casa: ArmyManager avisa de la desercion por EventBus y
@@ -271,8 +275,10 @@ func _recalculate_all() -> void:
 			if node.has_meta("staffed"):
 				node.remove_meta("staffed")
 			continue
-		_max_population += data.population_capacity
-		_morale_bonus += data.morale_bonus
+		var lvl: int = int(node.get_meta("level", 1)) if node != null and is_instance_valid(node) else 1
+		_max_population += int(data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, lvl)) \
+			if not data.is_core else data.population_capacity
+		_morale_bonus += int(data.morale_bonus * GameConfig.level_mult(GameConfig.upgrade_morale_multiplier, lvl))
 		# Los trabajadores retirados por el jugador (o sin veta) no se asignan:
 		# quedan libres para otro edificio.
 		var off: bool = node != null and is_instance_valid(node) and bool(node.get_meta("workers_off", false))
@@ -287,8 +293,11 @@ func _recalculate_all() -> void:
 	# quedarse sin casas no puede dejar la isla vacia.
 	_population = maxi(GameConfig.population_floor, mini(_population, _max_population))
 
-	# Second pass: assign workers with priority (first built = first served)
-	var remaining_workers := _population
+	# Second pass: assign workers with priority (first built = first served).
+	# Los que estan sacando vetas a mano no estan en ningun edificio.
+	var mining: int = mini(ProcessManager.busy_mining_workers(), _population)
+	_used_workers += mining
+	var remaining_workers := _population - mining
 	for entry in buildings_needing_workers:
 		var node: Node = entry["node"]
 		var data: BuildingData = entry["data"]

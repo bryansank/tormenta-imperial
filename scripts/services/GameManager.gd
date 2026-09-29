@@ -357,10 +357,7 @@ func _load_game() -> void:
 				var level: int = entry.get("level", 1)
 				node.set_meta("level", level)
 				if level > 1:
-					var mesh_inst := node.get_child(0)
-					if mesh_inst is MeshInstance3D:
-						var s: float = 1.0 + (level - 1) * 0.1
-						mesh_inst.scale = Vector3(s, s, s)
+					ProductionManager.apply_level_visual(node, level)
 				# Restaurar dano. Sin la clave, el edificio esta entero.
 				if entry.has("health"):
 					node.set_meta("health", int(entry["health"]))

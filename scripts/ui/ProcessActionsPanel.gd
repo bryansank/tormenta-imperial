@@ -149,6 +149,12 @@ func _add_mining_card(mining: Dictionary, node: Node, deposit_id: String) -> voi
 		parts.append("+%d %s" % [mining["produces"][res_id], Tr.res_name(res_id)])
 	lines.append(Tr.t("FMT_PRODUCES") % " | ".join(parts))
 	lines.append(Tr.t("FMT_DURATION") % int(mining["duration"]))
+	lines.append(Tr.t("LBL_MINE_WORKERS") % GameConfig.mining_workers)
+	# Sin carretera hasta la veta o sin trabajadores libres, no se puede: se dice.
+	var block: String = ProcessManager.mining_blocker(node)
+	if block != "":
+		lines.append("✖ " + Tr.t(block))
+		btn.disabled = true
 
 	btn.text = "\n".join(lines)
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT

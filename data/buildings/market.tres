@@ -4,23 +4,21 @@
 
 [resource]
 script = ExtResource("1")
-id = "road"
-display_name = "Camino"
-description = "Camino pavimentado. Pequeño impulso a la moral."
-grid_size = Vector2i(1, 1)
-cost_gold = 1
+id = "market"
+display_name = "Mercado"
+description = "Compra y vende recursos por oro."
+grid_size = Vector2i(2, 2)
+cost_gold = 100
 cost_steel = 0
 cost_oil = 0
-cost_wood = 0
-build_time = 0.0
+cost_wood = 60
+build_time = 6.0
 produces_gold = 0
 produces_steel = 0
 produces_oil = 0
 produces_wood = 0
 production_interval = 0.0
-workers_required = 0
-morale_bonus = 2
-mesh_height = 0.05
-mesh_color = Color(0.4, 0.38, 0.35, 1)
-max_health = 100
-is_decoration = true
+mesh_height = 2.2
+mesh_color = Color(0.7, 0.45, 0.2, 1)
+workers_required = 1
+max_health = 150

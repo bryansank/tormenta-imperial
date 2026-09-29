@@ -397,6 +397,9 @@ static func missing_for(step: Dictionary) -> Dictionary:
 ## cuando lo que hay de `res` no llega a dos ciclos de consumo. {} si no hay hambre
 ## o no hay con que.
 static func _food_market_step(res: String) -> Dictionary:
+	# Sin Mercado no se compra ni se vende (2026-09-28).
+	if Rules.count_building("market") == 0:
+		return {}
 	var pop: int = PopulationManager.get_population()
 	var upkeep := 0
 	for unit_id in GameConfig.get_unit_ids():
@@ -430,6 +433,10 @@ static func _food_market_step(res: String) -> Dictionary:
 static func _storage_tech_step() -> Dictionary:
 	if TechTreeManager.is_researching():
 		return {}
+	# Se investiga en el Laboratorio: sin el, lo primero es levantarlo.
+	if Rules.count_building("laboratory") == 0:
+		var lab: Dictionary = _build_step("laboratory", "OBJ_WHY_LABORATORY")
+		return lab
 	for tech_id in STORAGE_TECH_PATH:
 		if TechTreeManager.is_researched(tech_id):
 			continue
@@ -442,6 +449,8 @@ static func _storage_tech_step() -> Dictionary:
 ## Solo se vende lo que el paso no pide, y lo justo para que el oro quepa: con la
 ## bolsa llena, cada unidad vendida vale un oro (el resto no cabe y se pierde).
 static func _sell_step(target: Dictionary) -> Dictionary:
+	if Rules.count_building("market") == 0:
+		return {}
 	var cap: int = ResourceManager.get_storage_cap()
 	if ResourceManager.get_total_stored() < int(float(cap) * CROWDED_BAG):
 		return {}

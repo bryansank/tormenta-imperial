@@ -61,6 +61,8 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"sawmill": _sawmill(ci, r)
 		"gold_mine": _gold_mine(ci, r)
 		"warehouse": _warehouse(ci, r)
+		"market": _market(ci, r)
+		"laboratory": _laboratory(ci, r)
 		"foundry": _foundry(ci, r)
 		"barracks": _barracks(ci, r)
 		"refinery": _refinery(ci, r)
@@ -216,6 +218,30 @@ static func _gold_mine(ci: CanvasItem, r: Rect2) -> void:
 	for p in [Vector2(0.18, 0.2), Vector2(0.82, 0.24), Vector2(0.15, 0.62)]:
 		ci.draw_circle(r.position + r.size * p, 2.2, BRASS_LIGHT)
 		ci.draw_circle(r.position + r.size * p, 1.0, Color(1, 0.95, 0.7))
+
+## Mercado visto desde arriba: tres toldos a rayas sobre un entarimado.
+static func _market(ci: CanvasItem, r: Rect2) -> void:
+	_plate(ci, r, LIGHT_WOOD.darkened(0.25), OUTLINE)
+	var cols := [Color(0.72, 0.18, 0.12), Color(0.85, 0.7, 0.25), Color(0.2, 0.42, 0.6)]
+	for i in 3:
+		var w := r.size.x * 0.28
+		var tr := Rect2(Vector2(r.position.x + r.size.x * (0.06 + 0.32 * i), r.position.y + r.size.y * (0.12 if i != 1 else 0.45)), Vector2(w, r.size.y * 0.4))
+		ci.draw_rect(tr, cols[i])
+		for k in range(1, 4):
+			var x := tr.position.x + tr.size.x * k / 4.0
+			ci.draw_line(Vector2(x, tr.position.y), Vector2(x, tr.end.y), Color(1, 1, 1, 0.35), 2.0)
+		ci.draw_rect(tr, OUTLINE, false, 1.0)
+
+## Laboratorio: hormigon con una cupula de cristal que brilla.
+static func _laboratory(ci: CanvasItem, r: Rect2) -> void:
+	_plate(ci, r, CONCRETE, OUTLINE)
+	var c := r.get_center()
+	var rad := minf(r.size.x, r.size.y) * 0.28
+	ci.draw_circle(c, rad + 2.0, OUTLINE)
+	ci.draw_circle(c, rad, Color(0.35, 0.8, 0.95))
+	ci.draw_circle(c + Vector2(-rad * 0.3, -rad * 0.3), rad * 0.3, Color(0.85, 0.97, 1.0, 0.7))
+	ci.draw_line(Vector2(r.end.x - 6, r.position.y + 5), Vector2(r.end.x - 6, r.position.y + r.size.y * 0.4), IRON, 2.0)
+	_rivets(ci, r)
 
 static func _warehouse(ci: CanvasItem, r: Rect2) -> void:
 	_plate(ci, r, GUNMETAL, OUTLINE)

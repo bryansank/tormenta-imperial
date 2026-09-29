@@ -42,7 +42,7 @@ func _process_def(building_id: String, process_id: String) -> Dictionary:
 
 func test_every_building_has_a_name_and_description_in_both_languages() -> void:
 	var buildings := _all_buildings()
-	assert_int(buildings.size()).is_equal(14)
+	assert_int(buildings.size()).is_equal(16)
 	for locale in ["es", "en"]:
 		Tr.set_locale(locale)
 		for data in buildings:

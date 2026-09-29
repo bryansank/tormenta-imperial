@@ -56,6 +56,21 @@ var upgrade_cost_multiplier := [1.0, 1.8, 3.0]
 ## Production multiplier per level
 var upgrade_production_multiplier := [1.0, 1.6, 2.5]
 
+## Lo que da subir de nivel lo que no produce (2026-09-28). Antes una vivienda,
+## un almacen o una fuente subian de nivel sin cambiar nada.
+## Vivienda: sitio para trabajadores por nivel (6 -> 9 -> 12).
+var upgrade_capacity_multiplier := [1.0, 1.5, 2.0]
+## Decoraciones: moral por nivel.
+var upgrade_morale_multiplier := [1.0, 1.5, 2.0]
+## Almacen: almacen extra por cada nivel por encima del 1.
+var warehouse_level_bonus := 250
+
+## Multiplicador de una tabla por nivel (1..max), 1.0 fuera de rango.
+func level_mult(table: Array, level: int) -> float:
+	if level < 1 or level > table.size():
+		return 1.0
+	return float(table[level - 1])
+
 ## Upgrade duration base (seconds), scaled by time_multiplier
 var upgrade_base_duration := 15.0
 
@@ -74,6 +89,10 @@ var building_limits := {
 	"foundry": 3,
 	"refinery": 2,
 	"warehouse": 5,
+	# El Mercado y el Laboratorio abren el comercio y el arbol tecnologico
+	# (2026-09-28): uno de cada basta.
+	"market": 1,
+	"laboratory": 1,
 	"barracks": 3,
 	"tower": 6,
 	"headquarters": 1,
@@ -91,6 +110,8 @@ var building_limits := {
 ## almacen; era 2 completa = acero y un Cuartel que la defienda.
 var building_prerequisites := {
 	"foundry": ["sawmill", "gold_mine", "house", "warehouse"],
+	"market": ["gold_mine"],
+	"laboratory": ["house"],
 	"refinery": ["foundry", "barracks"],
 	"barracks": ["foundry", "sawmill"],
 	"tower": ["barracks"],
@@ -239,6 +260,10 @@ var mining_data := {
 	"oil_well": {"id": "mine_oil", "name": "PROC_MINE_OIL", "duration": 22.0, "produces": {"oil": 10}},
 	"forest": {"id": "mine_wood", "name": "PROC_MINE_WOOD", "duration": 8.0, "produces": {"wood": 20}},
 }
+
+## Trabajadores que ocupa sacar una veta a mano mientras dura (2026-09-28):
+## minar no es gratis, se quitan a un edificio o se esperan.
+var mining_workers := 2
 
 # ── Deposit Config ──
 
