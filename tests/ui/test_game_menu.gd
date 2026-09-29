@@ -157,23 +157,22 @@ func test_colony_entries_only_show_what_is_available() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.FOUNDATION
 	GameMode.current = GameMode.Mode.CAMPAIGN
 	menu.open_pause()
-	var market_early: bool = menu.entry("Colony_market").visible
+	# Mercado y Tecnologia ya no estan en el menu: se abren desde su edificio.
+	var market_in_menu: bool = menu.entry("Colony_market") != null
+	var tech_in_menu: bool = menu.entry("Colony_tech") != null
 	var sandbox_campaign: bool = menu.entry("Colony_sandbox").visible
 	var objectives: bool = menu.entry("Colony_objectives").visible
-	var tech_missing: bool = menu.entry("Colony_tech").visible   # no hay TechTreePanel
 	menu.resume()
 	ProgressionManager.current_phase = GameConfig.Phase.ECONOMY
 	GameMode.current = GameMode.Mode.SANDBOX
 	menu.open_pause()
-	var market_later: bool = menu.entry("Colony_market").visible
 	var sandbox_mode: bool = menu.entry("Colony_sandbox").visible
 	menu.resume()
 	assert_bool(objectives).is_true()
-	assert_bool(market_early).is_false()
-	assert_bool(market_later).is_true()
+	assert_bool(market_in_menu).is_false()
+	assert_bool(tech_in_menu).is_false()
 	assert_bool(sandbox_campaign).is_false()
 	assert_bool(sandbox_mode).is_true()
-	assert_bool(tech_missing).is_false()
 
 func test_army_needs_a_barracks() -> void:
 	assert_bool(MenuScript.is_colony_entry_available("army")).is_equal(ArmyManager.barracks_count() > 0)

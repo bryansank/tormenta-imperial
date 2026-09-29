@@ -40,11 +40,14 @@ const MENU_BTN_MIN_W := 118.0
 const COLONY_ENTRIES := [
 	["objectives", "BTN_OBJECTIVES", "ObjectivePanel"],
 	["progress", "BTN_PROGRESS", "ProgressPanel"],
-	["market", "BTN_MARKET", "MarketPanel"],
-	["tech", "BTN_TECH", "TechTreePanel"],
+	# Mercado y Tecnologia salen del menu (2026-09-28): se abren tocando su
+	# edificio (el Mercado y el Laboratorio, BuildingInfoPanel.SCREENS).
 	["army", "BTN_ARMY", "ArmyPanel"],
 	["skirmish", "BTN_SKIRMISH", "SkirmishPanel"],
 	["sandbox", "BTN_SANDBOX", "SandboxPanel"],
+	# El registro de avisos: para repasar lo ultimo que paso (2026-09-28). Antes
+	# era un boton a la vista en el HUD.
+	["log", "BTN_LOG_MENU", "NotificationPanel"],
 ]
 
 var _root: Control
@@ -433,7 +436,9 @@ func open_colony_panel(sibling: String) -> void:
 		return
 	if panel.get("_is_open") == true:
 		return
-	if panel.has_method("open"):
+	if panel.has_method("open_log"):
+		panel.open_log()
+	elif panel.has_method("open"):
 		panel.open()
 	elif panel.has_method("toggle"):
 		panel.toggle()

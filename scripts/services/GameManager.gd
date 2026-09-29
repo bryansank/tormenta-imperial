@@ -273,6 +273,10 @@ func _new_game() -> void:
 	StormManager.reset()
 	TutorialManager.reset()
 	ProductionManager.reset()
+	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
+	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
+	# una partida nueva (la carga lo pisa con el del guardado).
+	GridManager.roll_new_map()
 	# Place nucleo at center (no build time for core)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
@@ -291,6 +295,11 @@ func _new_game() -> void:
 
 ## La acera del Nucleo: una carretera en cada celda de alrededor, gratis y ya
 ## hecha. Es donde nace la red: todo lo demas se construye tocandola.
+## El generador de mapa de la escena (3D o 2D), o null. Para las consultas de
+## vetas de otros servicios (PopulationManager: sin veta, un extractor se para).
+func map_generator() -> Node:
+	return _map_gen if is_instance_valid(_map_gen) else null
+
 func pave_core_ring(origin: Vector2i, size: Vector2i) -> void:
 	var road := _load_building_data("road")
 	if road == null or _placer == null:
@@ -327,6 +336,11 @@ func _load_game() -> void:
 	var mode_data: Variant = data.get("game_mode", {})
 	GameMode.load_save_data(mode_data if mode_data is Dictionary else {})
 
+	# El tamano de la rejilla antes de poner nada: todas las celdas del guardado
+	# se refieren a el. Sin la clave es un guardado de 40x40.
+	var grid_data: Variant = data.get("grid", {})
+	GridManager.load_save_data(grid_data if grid_data is Dictionary else {})
+
 	# Restore resources
 	if data.has("resources"):
 		ResourceManager.set_amounts(data["resources"])
@@ -340,6 +354,8 @@ func _load_game() -> void:
 				var node: Node = _placer.place_building_at(building_data, Vector2i(entry["cell_x"], entry["cell_y"]), rot_steps)
 				if not node:
 					continue
+				if bool(entry.get("workers_off", false)):
+					node.set_meta("workers_off", true)
 				# Restore custom name
 				if entry.has("custom_name") and entry["custom_name"] != "":
 					node.set_meta("custom_name", entry["custom_name"])
@@ -350,10 +366,7 @@ func _load_game() -> void:
 				var level: int = entry.get("level", 1)
 				node.set_meta("level", level)
 				if level > 1:
-					var mesh_inst := node.get_child(0)
-					if mesh_inst is MeshInstance3D:
-						var s: float = 1.0 + (level - 1) * 0.1
-						mesh_inst.scale = Vector3(s, s, s)
+					ProductionManager.apply_level_visual(node, level)
 				# Restaurar dano. Sin la clave, el edificio esta entero.
 				if entry.has("health"):
 					node.set_meta("health", int(entry["health"]))
@@ -477,7 +490,7 @@ func _restart_from_old_format() -> void:
 	var backup: String = backup_unreadable_save(OLD_FORMAT_PATH_FMT)
 	loaded_from_save = false
 	_new_game()
-	EventBus.notification_posted.emit(Tr.t("MSG_SAVE_OLD_FORMAT"), "info", UITheme.INFO)
+	EventBus.notification_posted.emit(Tr.t("MSG_SAVE_OLD_FORMAT"), "notice", UITheme.INFO)
 	if not backup.is_empty():
 		print("GameManager: guardado viejo apartado en ", backup)
 
@@ -515,6 +528,9 @@ func _write_save() -> void:
 	var data := {}
 	data["saved_at"] = Time.get_unix_time_from_system()
 	data["format"] = SAVE_FORMAT
+
+	# Tamano de la rejilla y semilla de la isla
+	data["grid"] = GridManager.get_save_data()
 
 	# Resources
 	var res_all := ResourceManager.get_all()
@@ -696,14 +712,9 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	add_child(canvas)
 	_offline_canvas = canvas
 
+	# Colores y estilos de UITheme (docs/24-paleta.md), como cualquier panel.
 	var panel := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.1, 0.95)
-	style.border_color = Color(0.7, 0.55, 0.15, 0.9)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	style.set_content_margin_all(20)
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -712,29 +723,19 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	vbox.add_theme_constant_override("separation", 6)
 	panel.add_child(vbox)
 
-	var title := Label.new()
-	title.text = Tr.t("FMT_OFFLINE_TITLE") % _format_elapsed(elapsed)
-	title.add_theme_font_size_override("font_size", 18)
-	title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.25))
+	var title := UITheme.make_label(Tr.t("FMT_OFFLINE_TITLE") % _format_elapsed(elapsed), "section", UITheme.ACCENT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
+	vbox.add_child(UITheme.make_separator())
 
 	var res_names: Dictionary = {"gold": Tr.res_cap("gold"), "steel": Tr.res_cap("steel"), "oil": Tr.res_cap("oil"), "wood": Tr.res_cap("wood")}
 	for res in earnings:
 		if earnings[res] == 0:
 			continue
-		var lbl := Label.new()
 		var amount: int = earnings[res]
-		if amount > 0:
-			lbl.text = "+%d %s" % [amount, res_names.get(res, res)]
-			lbl.add_theme_color_override("font_color", GameConfig.resource_colors.get(res, Color.WHITE))
-		else:
-			lbl.text = "%d %s" % [amount, res_names.get(res, res)]
-			lbl.add_theme_color_override("font_color", Color(0.9, 0.35, 0.3))
-		lbl.add_theme_font_size_override("font_size", 16)
+		var text := ("+%d %s" if amount > 0 else "%d %s") % [amount, res_names.get(res, res)]
+		var lbl := UITheme.make_label(text, "body", UITheme.resource_color(res) if amount > 0 else UITheme.DANGER)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vbox.add_child(lbl)
 
@@ -743,18 +744,7 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	close_btn.text = Tr.t("BTN_CLOSE")
 	close_btn.custom_minimum_size = Vector2(100, 36)
 	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var close_style := StyleBoxFlat.new()
-	close_style.bg_color = Color(0.7, 0.55, 0.15, 0.8)
-	close_style.set_corner_radius_all(4)
-	close_style.set_content_margin_all(6)
-	close_btn.add_theme_stylebox_override("normal", close_style)
-	var close_hover := StyleBoxFlat.new()
-	close_hover.bg_color = Color(0.8, 0.65, 0.25, 0.9)
-	close_hover.set_corner_radius_all(4)
-	close_hover.set_content_margin_all(6)
-	close_btn.add_theme_stylebox_override("hover", close_hover)
-	close_btn.add_theme_color_override("font_color", Color(0.1, 0.08, 0.05))
-	close_btn.add_theme_font_size_override("font_size", 14)
+	UITheme.style_button(close_btn, UITheme.BTN)
 	vbox.add_child(close_btn)
 
 	canvas.add_child(panel)

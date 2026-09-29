@@ -56,7 +56,7 @@ static func make_text(text: String, size: String = "body", color: Color = UIThem
 ## Fondo oscuro a pantalla completa que se traga los clics.
 static func make_backdrop(alpha: float = 0.6) -> ColorRect:
 	var rect := UITheme.make_backdrop()
-	rect.color = Color(0.02, 0.02, 0.015, alpha)
+	rect.color = Color(UITheme.BG_DARK.darkened(0.6), alpha)
 	return rect
 
 ## Sello de tinta: texto en mayusculas dentro de un marco, girado. Lo usan los

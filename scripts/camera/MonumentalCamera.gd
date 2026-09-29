@@ -32,7 +32,20 @@ func _ready() -> void:
 	EventBus.camera_drag_world_requested.connect(_on_drag_world)
 	EventBus.camera_rotate_requested.connect(_on_rotate)
 	EventBus.camera_rotate_step_requested.connect(_on_rotate_step)
+	EventBus.grid_resized.connect(_on_grid_resized)
+	fit_to_grid()
 	_update_transform()
+
+## Los limites del paneo son los de la rejilla (su tamano cambia por partida).
+func fit_to_grid() -> void:
+	var o: Vector3 = GridManager.get_origin()
+	var size: Vector2 = GridManager.get_world_size()
+	boundary_min = Vector2(o.x, o.z)
+	boundary_max = Vector2(o.x + size.x, o.z + size.y)
+
+func _on_grid_resized(_w: int, _h: int) -> void:
+	fit_to_grid()
+	_clamp_to_boundaries()
 
 func _process(delta: float) -> void:
 	_distance = lerp(_distance, _target_distance, 8.0 * delta)

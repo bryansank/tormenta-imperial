@@ -8,7 +8,6 @@ extends CanvasLayer
 ## bridge between the base and the battlefield and the player must see it before
 ## committing, not after losing.
 
-const MILITARY := Color(0.8, 0.35, 0.25)  # matches UITheme.CAT_MILITARY
 
 var _panel: PanelContainer
 var _backdrop: ColorRect
@@ -77,7 +76,7 @@ func _setup_ui() -> void:
 	_skirmish_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_skirmish_btn.offset_left = -176
 	_skirmish_btn.offset_top = UILayoutManager.get_sidebar_button_offset("SkirmishPanel.button")
-	UITheme.style_card_button(_skirmish_btn, UITheme.BTN.lightened(0.05), MILITARY)
+	UITheme.style_card_button(_skirmish_btn, UITheme.BTN.lightened(0.05), UITheme.CAT_MILITARY)
 	_skirmish_btn.pressed.connect(_toggle_panel)
 	_skirmish_btn.visible = false
 	root.add_child(_skirmish_btn)
@@ -100,7 +99,7 @@ func _setup_ui() -> void:
 
 	vbox.add_child(UITheme.make_panel_header(Tr.t("LBL_SKIRMISH_TITLE"), _toggle_panel))
 
-	_commit_label = UITheme.make_label("", "title", MILITARY)
+	_commit_label = UITheme.make_label("", "title", UITheme.CAT_MILITARY)
 	_commit_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_commit_label)
 
@@ -147,7 +146,7 @@ func _setup_ui() -> void:
 	_map_btn = Button.new()
 	_map_btn.text = Tr.t("BTN_VIEW_MAP")
 	_map_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
-	UITheme.style_button(_map_btn, MILITARY.darkened(0.15), UITheme.FONT_BUTTON)
+	UITheme.style_button(_map_btn, UITheme.CAT_MILITARY.darkened(0.15), UITheme.FONT_BUTTON)
 	_map_btn.pressed.connect(_on_view_map_pressed)
 	_campaign_box.add_child(_map_btn)
 
@@ -156,7 +155,7 @@ func _setup_ui() -> void:
 	_launch_btn = Button.new()
 	_launch_btn.text = Tr.t("BTN_LAUNCH_EXPEDITION")
 	_launch_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H + 6)
-	UITheme.style_button(_launch_btn, MILITARY.darkened(0.15), UITheme.FONT_BUTTON)
+	UITheme.style_button(_launch_btn, UITheme.CAT_MILITARY.darkened(0.15), UITheme.FONT_BUTTON)
 	_launch_btn.pressed.connect(_on_launch_pressed)
 	vbox.add_child(_launch_btn)
 
@@ -334,7 +333,7 @@ func _make_unit_row(unit_id: String, owned: int) -> PanelContainer:
 	style.set_corner_radius_all(UITheme.CORNER)
 	style.set_content_margin_all(8)
 	style.border_width_left = 5
-	style.border_color = MILITARY if picked > 0 else UITheme.TEXT_DIM
+	style.border_color = UITheme.CAT_MILITARY if picked > 0 else UITheme.TEXT_DIM
 	card.add_theme_stylebox_override("panel", style)
 
 	var row := HBoxContainer.new()

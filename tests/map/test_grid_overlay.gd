@@ -12,9 +12,21 @@ var _saved_visible := true
 
 func before_test() -> void:
 	_saved_visible = GameConfig.ui_grid_visible
+	# Estos casos miden la rejilla de 40x40; una partida nueva de otra suite pudo
+	# dejar un tamano sorteado (mapa aleatorio).
+	GridManager.reset_size()
 
 func after_test() -> void:
 	GameConfig.ui_grid_visible = _saved_visible
+	GridManager.reset_size()
+
+func test_the_overlay_refits_when_the_grid_changes_size() -> void:
+	var overlay := _make_overlay()
+	GridManager.set_grid_size(46, 42)
+	var expected: Vector2 = Vector2(92, 84) + Vector2(Overlay.EDGE_PAD, Overlay.EDGE_PAD) * 2.0
+	assert_vector(overlay.get_plane_size()).is_equal_approx(expected, Vector2(0.001, 0.001))
+	assert_float(overlay.position.x).is_equal_approx(0.0, 0.001)
+	assert_float(overlay.position.z).is_equal_approx(0.0, 0.001)
 
 func _make_overlay() -> MeshInstance3D:
 	var node: MeshInstance3D = auto_free(Overlay.new())

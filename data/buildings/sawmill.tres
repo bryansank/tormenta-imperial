@@ -10,6 +10,7 @@ id = "sawmill"
 display_name = "Aserradero"
 description = "Tala y procesa madera."
 grid_size = Vector2i(2, 2)
+model_stretch = Vector3(1.1, 1.2, 1.9)
 cost_gold = 80
 cost_steel = 0
 cost_oil = 0

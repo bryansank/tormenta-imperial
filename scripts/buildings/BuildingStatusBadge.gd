@@ -161,6 +161,8 @@ func refresh() -> void:
 		"under_construction": _building.has_meta("under_construction"),
 		"ruined": BuildingHealth.is_ruined(_building),
 		"connected": bool(_building.get_meta("connected", true)),
+		"has_vein": bool(_building.get_meta("has_vein", true)),
+		"workers_off": bool(_building.get_meta("workers_off", false)),
 		"busy": _busy or ProcessManager.is_busy(_building),
 		"needs_workers": _data.workers_required > 0,
 		"staffed": bool(_building.get_meta("staffed", false)),
@@ -184,6 +186,10 @@ static func derive(facts: Dictionary) -> Dictionary:
 		return {"status": Status.IDLE, "reason": "construction"}
 	if not bool(facts.get("connected", true)):
 		return {"status": Status.IDLE, "reason": "no_road"}
+	if not bool(facts.get("has_vein", true)):
+		return {"status": Status.IDLE, "reason": "no_vein"}
+	if bool(facts.get("workers_off", false)):
+		return {"status": Status.IDLE, "reason": "workers_off"}
 	if bool(facts.get("ruined", false)):
 		return {"status": Status.IDLE, "reason": "ruined"}
 	if bool(facts.get("busy", false)):
@@ -207,7 +213,7 @@ static func color_for_reason(reason: String) -> Color:
 	match reason:
 		"construction": return COLOR_CONSTRUCTION
 		"ruined": return COLOR_RUINED
-		"unstaffed", "no_road": return COLOR_UNSTAFFED
+		"unstaffed", "no_road", "no_vein": return COLOR_UNSTAFFED
 	return COLOR_IDLE
 
 ## Lo que dice el badge parado: "Zzz" y, debajo, por que (bug 11: nadie sabia
@@ -219,6 +225,8 @@ static func reason_text(reason: String) -> String:
 		"ruined": key = "LBL_STATUS_WHY_RUINED"
 		"unstaffed": key = "LBL_STATUS_WHY_UNSTAFFED"
 		"no_road": key = "LBL_STATUS_WHY_NO_ROAD"
+		"no_vein": key = "LBL_STATUS_WHY_NO_VEIN"
+		"workers_off": key = "LBL_STATUS_WHY_WORKERS_OFF"
 	return Tr.t(key)
 
 func _apply(status: int, reason: String) -> void:

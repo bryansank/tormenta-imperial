@@ -37,6 +37,10 @@ const DATA_DIR := "res://data/buildings/"
 ## Escala del GLB dentro de su parcela. Los edificios que pasaron de 1x1 a 2x2
 ## (2026-09-28) llevan su modelo de siempre agrandado, en vez de uno nuevo.
 @export var model_scale: float = 1.0
+## Estirado por eje del GLB, encima de model_scale. El Aserradero y la Fundicion
+## tenian modelo de 2x1 y ahora ocupan 2x2: se estiran en profundidad (Z) para
+## llenar su parcela en vez de verse de dos casillas.
+@export var model_stretch: Vector3 = Vector3.ONE
 
 # Workers required to operate (0 = no workers needed)
 @export var workers_required: int = 0
@@ -128,4 +132,6 @@ func instantiate_model() -> Node3D:
 	var model := model_scene.instantiate() as Node3D
 	if model != null and not is_equal_approx(model_scale, 1.0):
 		model.scale *= model_scale
+	if model != null and model_stretch != Vector3.ONE:
+		model.scale *= model_stretch
 	return model

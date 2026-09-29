@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 ## Panel that appears when selecting a building or deposit.
 ## Scrollable, styled, with upgrade, demolish confirm, level display.
 
@@ -25,6 +26,12 @@ var _repair_label: Label
 var _actions_box: HBoxContainer
 var _move_container: VBoxContainer
 var _move_btn: Button
+## El boton que abre la pantalla del edificio: el Mercado abre el comercio y el
+## Laboratorio el arbol tecnologico (2026-09-28). Antes se entraba desde el menu.
+var _open_btn: Button
+## Retirar / poner los trabajadores de este edificio (2026-09-28).
+var _workers_btn: Button
+var _workers_hint: Label
 var _demolish_btn: Button
 var _close_btn: Button
 var _confirm_container: VBoxContainer
@@ -49,6 +56,7 @@ func _ready() -> void:
 	EventBus.process_completed.connect(_on_process_event)
 	EventBus.mining_completed.connect(_on_mining_event)
 	EventBus.construction_completed.connect(_on_construction_completed)
+	EventBus.workers_changed.connect(func(_u, _t): if _workers_btn != null and _panel.visible: _refresh_workers_toggle())
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
 	EventBus.building_selected_for_placement.connect(func(_d): _hide_panel())
 	EventBus.building_demolished.connect(func(_n, _c): _hide_panel())
@@ -195,10 +203,30 @@ func _build_ui() -> void:
 	_move_btn.icon = UITheme.icon_texture("move")
 	_move_btn.add_theme_constant_override("h_separation", 10)
 	_move_btn.custom_minimum_size.y = 52
-	UITheme.style_button(_move_btn, UITheme.CAT_SUPPORT.darkened(0.35), UITheme.FONT_SECTION)
+	UITheme.style_button(_move_btn, UITheme.INFO.darkened(0.3), UITheme.FONT_SECTION)
 	_move_btn.pressed.connect(_on_move)
 	_move_container.add_child(_move_btn)
 	_vbox.add_child(_move_container)
+
+	_open_btn = Button.new()
+	_open_btn.name = "OpenBuildingScreen"
+	_open_btn.custom_minimum_size.y = 52
+	UITheme.style_button(_open_btn, UITheme.POSITIVE.darkened(0.2), UITheme.FONT_SECTION)
+	_open_btn.pressed.connect(_on_open_screen)
+	_open_btn.visible = false
+	_vbox.add_child(_open_btn)
+
+	# Trabajadores: el jugador decide si este edificio trabaja. Retirarlos deja
+	# libres a los suyos para otro edificio (mas madera o mas oro, segun haga falta).
+	_workers_hint = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_workers_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_vbox.add_child(_workers_hint)
+	_workers_btn = Button.new()
+	_workers_btn.name = "WorkersToggle"
+	_workers_btn.custom_minimum_size.y = 44
+	UITheme.style_button(_workers_btn, UITheme.BTN, UITheme.FONT_BODY)
+	_workers_btn.pressed.connect(_on_toggle_workers)
+	_vbox.add_child(_workers_btn)
 
 	_vbox.add_child(UITheme.make_separator())
 
@@ -339,6 +367,8 @@ func _show_building_panel() -> void:
 		_production_container.visible = false
 
 	_deposit_uses_label.visible = false
+	_refresh_workers_toggle()
+	_refresh_open_button()
 
 	var is_building := ProductionManager.is_constructing(_selected_node)
 	_construction_container.visible = is_building
@@ -353,13 +383,18 @@ func _show_building_panel() -> void:
 
 	# Upgrade section
 	var next_level := level + 1
-	if next_level <= GameConfig.max_building_level and not is_building:
+	var worth_it: bool = Rules.upgrade_does_something(_selected_data)
+	if not worth_it:
+		_upgrade_container.visible = false
+	elif next_level <= GameConfig.max_building_level and not is_building:
 		var cost := GameConfig.get_upgrade_cost(_selected_data, next_level)
 		var cost_parts: Array = []
 		for type in cost:
 			cost_parts.append("%d %s" % [cost[type], Tr.res_name(ResourceManager.get_type_name(type))])
 		_upgrade_btn.text = Tr.t("LBL_UPGRADE_TO") % [next_level]
-		_upgrade_cost_label.text = Tr.t("FMT_COST") % " | ".join(cost_parts)
+		# Que da la mejora, con sus numeros, y luego lo que cuesta.
+		var effects: Array = Rules.upgrade_effect_lines(_selected_data, level)
+		_upgrade_cost_label.text = "\n".join(effects + [Tr.t("FMT_COST") % " | ".join(cost_parts)])
 		_upgrade_btn.disabled = not ResourceManager.can_afford(cost)
 		_upgrade_container.visible = true
 	else:
@@ -400,6 +435,60 @@ func _show_deposit_panel() -> void:
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
 	UIManager.open_panel(self)
+
+## Pantalla de cada edificio que la tiene: id -> [nodo de la escena, clave Tr].
+const SCREENS := {
+	"market": ["MarketPanel", "BTN_OPEN_MARKET"],
+	"laboratory": ["TechTreePanel", "BTN_OPEN_LAB"],
+}
+
+func _refresh_open_button() -> void:
+	var entry: Array = SCREENS.get(_selected_data.id if _selected_data != null and not _is_deposit else "", [])
+	var ready: bool = not entry.is_empty() and not ProductionManager.is_constructing(_selected_node)
+	_open_btn.visible = ready
+	if ready:
+		_open_btn.text = Tr.t(String(entry[1]))
+		_open_btn.disabled = not bool(_selected_node.get_meta("connected", true))
+
+func _on_open_screen() -> void:
+	var entry: Array = SCREENS.get(_selected_data.id if _selected_data != null else "", [])
+	if entry.is_empty():
+		return
+	var scene := get_tree().current_scene
+	var panel: Node = scene.get_node_or_null(String(entry[0])) if scene != null else null
+	if panel == null:
+		return
+	_hide_panel()
+	if panel.has_method("open"):
+		panel.open()
+	elif panel.get("_is_open") != true and panel.has_method("toggle"):
+		panel.toggle()
+	elif panel.get("_is_open") != true and panel.has_method("_toggle_panel"):
+		panel._toggle_panel()
+
+## El boton de trabajadores: solo en edificios que los usan.
+func _refresh_workers_toggle() -> void:
+	var uses: bool = _selected_node != null and is_instance_valid(_selected_node) and not _is_deposit \
+		and _selected_data != null and _selected_data.workers_required > 0
+	_workers_btn.visible = uses
+	_workers_hint.visible = uses
+	if not uses:
+		return
+	var off: bool = bool(_selected_node.get_meta("workers_off", false))
+	if not bool(_selected_node.get_meta("has_vein", true)):
+		_workers_hint.text = Tr.t("LBL_NO_VEIN_HINT")
+	elif off:
+		_workers_hint.text = Tr.t("LBL_WORKERS_OFF_HINT") % _selected_data.workers_required
+	else:
+		_workers_hint.text = Tr.t("LBL_WORKERS_ON_HINT") % _selected_data.workers_required
+	_workers_btn.text = Tr.t("BTN_WORKERS_ON") if off else Tr.t("BTN_WORKERS_OFF")
+
+func _on_toggle_workers() -> void:
+	if _selected_node == null or not is_instance_valid(_selected_node):
+		return
+	PopulationManager.set_workers_off(_selected_node, not bool(_selected_node.get_meta("workers_off", false)))
+	_refresh_workers_toggle()
+	GameManager.request_save()
 
 func _update_deposit_uses() -> void:
 	if _selected_node and _selected_node.has_meta("uses_remaining"):

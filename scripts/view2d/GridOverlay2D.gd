@@ -15,6 +15,10 @@ func _ready() -> void:
 	z_index = -10
 	visible = GameConfig.ui_grid_visible
 	EventBus.grid_overlay_toggled.connect(func(vis: bool): visible = vis)
+	EventBus.grid_resized.connect(_on_grid_resized)
+	queue_redraw()
+
+func _on_grid_resized(_w: int, _h: int) -> void:
 	queue_redraw()
 
 func _draw() -> void:

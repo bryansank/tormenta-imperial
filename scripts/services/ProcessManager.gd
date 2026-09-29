@@ -1,4 +1,5 @@
 extends Node
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 ## Manages timed processes for buildings and mining for deposits.
 ## Reads definitions from GameConfig (durations already scaled).
 
@@ -147,10 +148,39 @@ func start_process(node: Node, process: Dictionary) -> bool:
 	_warn_if_ash()
 	return true
 
+## Por que no se puede sacar a mano esta veta ahora: "" si se puede, o una clave
+## de Tr. Dos reglas (2026-09-28): la veta tiene que tocar una carretera unida al
+## Nucleo, y hacen falta trabajadores libres (GameConfig.mining_workers).
+func mining_blocker(node: Node) -> String:
+	if node == null or not is_instance_valid(node):
+		return "MINE_NEEDS_ROAD"
+	# Sin Nucleo (una escena de prueba montada a mano) no hay red ni reparto que
+	# exigir, como en la regla de carreteras.
+	if Rules.core_cells().is_empty():
+		return ""
+	var cell: Vector2i = node.get_meta("cell", Vector2i(-1, -1))
+	var size: Vector2i = node.get_meta("deposit_size", Vector2i(2, 2))
+	if not Rules.touches_network(GridManager.cells_for(cell, size), Rules.connected_roads()):
+		return "MINE_NEEDS_ROAD"
+	if PopulationManager.get_free_workers() < GameConfig.mining_workers:
+		return "MINE_NEEDS_WORKERS"
+	return ""
+
+## Trabajadores ocupados ahora mismo sacando vetas a mano. PopulationManager los
+## descuenta al repartir: mientras se mina, esos no estan en ningun edificio.
+func busy_mining_workers() -> int:
+	var n := 0
+	for node in _active:
+		if is_instance_valid(node) and String(_active[node].get("id", "")).begins_with("mine_"):
+			n += 1
+	return n * GameConfig.mining_workers
+
 func start_mining(node: Node, deposit_id: String) -> bool:
 	if _active.has(node):
 		return false
 	if not GameConfig.is_deposit_unlocked(deposit_id):
+		return false
+	if mining_blocker(node) != "":
 		return false
 	var data := get_mining_info(deposit_id)
 	if data.is_empty():

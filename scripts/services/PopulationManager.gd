@@ -27,6 +27,12 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(_on_building_completed)
 	# Una carretera es instantanea: al ponerla puede conectar algo que estaba suelto.
 	EventBus.building_placed.connect(func(_d, _c): _recalculate_all())
+	# Una veta agotada para al extractor de al lado (el nodo muere al final del frame).
+	EventBus.deposit_depleted.connect(func(_n, _id): _recalculate_all.call_deferred())
+	# Minar a mano ocupa trabajadores mientras dura (ProcessManager.busy_mining_workers).
+	EventBus.mining_started.connect(func(_n, _id): _recalculate_all.call_deferred())
+	EventBus.mining_completed.connect(func(_n, _id): _recalculate_all.call_deferred())
+	EventBus.process_cancelled.connect(func(_n, _id, _r): _recalculate_all.call_deferred())
 	EventBus.building_demolished.connect(_on_building_demolished)
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
 	# La moral es de esta casa: ArmyManager avisa de la desercion por EventBus y
@@ -258,13 +264,28 @@ func _recalculate_all() -> void:
 			if node and is_instance_valid(node) and node.has_meta("staffed"):
 				node.set_meta("staffed", false)
 			continue
+		# Sin su veta al lado (agotada a mano), un extractor no trabaja.
+		var has_vein: bool = Rules.has_its_deposit(data, info.get("cells", []), GameManager.map_generator())
+		if node and is_instance_valid(node):
+			if bool(node.get_meta("has_vein", true)) != has_vein:
+				connection_changed = true
+			node.set_meta("has_vein", has_vein)
 		# Skip buildings under construction
 		if node and node is Node and node.has_meta("under_construction"):
 			if node.has_meta("staffed"):
 				node.remove_meta("staffed")
 			continue
-		_max_population += data.population_capacity
-		_morale_bonus += data.morale_bonus
+		var lvl: int = int(node.get_meta("level", 1)) if node != null and is_instance_valid(node) else 1
+		_max_population += int(data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, lvl)) \
+			if not data.is_core else data.population_capacity
+		_morale_bonus += int(data.morale_bonus * GameConfig.level_mult(GameConfig.upgrade_morale_multiplier, lvl))
+		# Los trabajadores retirados por el jugador (o sin veta) no se asignan:
+		# quedan libres para otro edificio.
+		var off: bool = node != null and is_instance_valid(node) and bool(node.get_meta("workers_off", false))
+		if data.workers_required > 0 and (off or not has_vein):
+			if node and is_instance_valid(node):
+				node.set_meta("staffed", false)
+			continue
 		if data.workers_required > 0:
 			buildings_needing_workers.append({"node": node, "data": data})
 
@@ -272,8 +293,11 @@ func _recalculate_all() -> void:
 	# quedarse sin casas no puede dejar la isla vacia.
 	_population = maxi(GameConfig.population_floor, mini(_population, _max_population))
 
-	# Second pass: assign workers with priority (first built = first served)
-	var remaining_workers := _population
+	# Second pass: assign workers with priority (first built = first served).
+	# Los que estan sacando vetas a mano no estan en ningun edificio.
+	var mining: int = mini(ProcessManager.busy_mining_workers(), _population)
+	_used_workers += mining
+	var remaining_workers := _population - mining
 	for entry in buildings_needing_workers:
 		var node: Node = entry["node"]
 		var data: BuildingData = entry["data"]
@@ -294,6 +318,19 @@ func _recalculate_all() -> void:
 	# ("sin carretera") se repintan con esta senal.
 	if _used_workers != old_workers or connection_changed:
 		EventBus.workers_changed.emit(_used_workers, _population)
+
+## El jugador retira (off = true) o devuelve los trabajadores de un edificio.
+## Sus trabajadores quedan libres para otros; el edificio deja de producir.
+func set_workers_off(node: Node, off: bool) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if off:
+		node.set_meta("workers_off", true)
+	elif node.has_meta("workers_off"):
+		node.remove_meta("workers_off")
+	_recalculate_all()
+	# Aunque no cambie el numero de ocupados, los carteles y el panel se repintan.
+	EventBus.workers_changed.emit(_used_workers, _population)
 
 ## Check if a specific building node is staffed (has enough workers assigned).
 func is_building_staffed(node: Node) -> bool:

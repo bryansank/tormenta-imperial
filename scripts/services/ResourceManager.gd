@@ -68,6 +68,9 @@ var _overflow_warned := false
 
 func _ready() -> void:
 	EventBus.era_advanced.connect(_on_era_advanced)
+	EventBus.building_upgrade_completed.connect(func(_n, _l): refresh_warehouse_levels())
+	EventBus.building_demolished.connect(func(_n, _c): refresh_warehouse_levels.call_deferred())
+	EventBus.game_load_completed.connect(refresh_warehouse_levels)
 
 func _on_era_advanced(new_era: int) -> void:
 	_era = new_era
@@ -114,7 +117,14 @@ func is_material_name(res_name: String) -> bool:
 	return is_material(name_to_type(res_name))
 
 func get_storage_cap() -> int:
-	return GameConfig.get_storage_cap(_warehouse_count, _era)
+	return GameConfig.get_storage_cap(_warehouse_count, _era) + _warehouse_level_extra
+
+## Almacen extra de los almacenes mejorados (2026-09-28). Lo pone quien sabe de
+## edificios (refresh_warehouse_levels) al mejorar, demoler o cargar.
+var _warehouse_level_extra := 0
+
+func refresh_warehouse_levels() -> void:
+	_warehouse_level_extra = preload("res://scripts/buildings/PlacementRules.gd").warehouse_level_storage()
 
 ## Everything stored, across all four resources: this is what competes for the cap.
 func get_total_stored() -> int:
@@ -266,6 +276,7 @@ func reset() -> void:
 		for type in _unlocked:
 			_unlocked[type] = true
 	_warehouse_count = 0
+	_warehouse_level_extra = 0
 	_era = 3 if GameMode.all_unlocked() else 1
 	_overflow_warned = false
 	for type in _resources:

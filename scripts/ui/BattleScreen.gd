@@ -157,7 +157,7 @@ func _setup_ui() -> void:
 	# sentirse como tal.
 	_backdrop = ColorRect.new()
 	_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_backdrop.color = Color(0.03, 0.04, 0.03, 0.93)
+	_backdrop.color = Color(UITheme.BG_DARK.darkened(0.3), 0.93)
 	_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(_backdrop)
 
@@ -326,7 +326,7 @@ func _build_draft_panel() -> void:
 	# y una de ellas tiene que elegirse antes de volver al mapa (SC-009).
 	_draft_backdrop = ColorRect.new()
 	_draft_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_draft_backdrop.color = Color(0.02, 0.03, 0.02, 0.75)
+	_draft_backdrop.color = Color(UITheme.BG_DARK.darkened(0.5), 0.75)
 	_draft_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_draft_backdrop.visible = false
 	_root.add_child(_draft_backdrop)
@@ -1196,7 +1196,7 @@ func _style_health_bar(bar: ProgressBar, unit: CombatUnit) -> void:
 	fill.bg_color = UITheme.POSITIVE if ratio > 0.5 else (UITheme.WARNING if ratio > 0.25 else UITheme.DANGER)
 	fill.set_corner_radius_all(1)
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.05, 0.05, 0.04, 0.9)
+	bg.bg_color = Color(UITheme.BG_DARK, 0.9)
 	bg.set_corner_radius_all(1)
 	bar.add_theme_stylebox_override("fill", fill)
 	bar.add_theme_stylebox_override("background", bg)

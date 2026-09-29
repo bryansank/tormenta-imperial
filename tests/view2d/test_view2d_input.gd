@@ -15,9 +15,13 @@ var _saved_camera: Node = null
 
 func before_test() -> void:
 	_saved_camera = GameManager._camera
+	# Estos casos fijan el mapeo de la rejilla de 40x40; una partida nueva de
+	# otra suite pudo dejar un tamano sorteado (mapa aleatorio).
+	GridManager.reset_size()
 
 func after_test() -> void:
 	GameManager._camera = _saved_camera if is_instance_valid(_saved_camera) else null
+	GridManager.reset_size()
 
 ## Lienzo de una camara centrada en `center_px` con `zoom`, en una pantalla de `screen`.
 func _xform(center_px: Vector2, zoom: float, screen := Vector2(1280, 720)) -> Transform2D:

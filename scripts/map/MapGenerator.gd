@@ -28,39 +28,55 @@ func _roll_deposit_size(deposit_id: String) -> Vector2i:
 	var h: int = randi_range(sizes["min_h"], sizes["max_h"])
 	return Vector2i(w, h)
 
+## Mapa nuevo: para CADA tipo se sortea cuantos yacimientos trae, entre
+## `GameConfig.deposit_per_type_min` y `deposit_per_type_max`, y se reparten con
+## tamano y sitio al azar (RNG global: seed() fija el mapa entero).
+##
+## Cada yacimiento tiene que ser trabajable: su extractor (2x2) cabe al lado (o
+## encima, la Refineria sobre su pozo) y desde ese hueco hay camino de celdas
+## libres hasta la acera del Nucleo, por donde tender la carretera. Uno que no lo
+## es se retira y se sortea otro del mismo tipo. Como un yacimiento puesto
+## despues puede encajonar a uno anterior, al final se repasan todos juntos.
+##
+## Ninguno cae en la franja de costa (`map_shore_band`): queda libre para los
+## futuros recursos del mar y la orilla (ver shore_cells()).
 func generate_new_map() -> Array:
-	var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
-	var count: int = randi_range(GameConfig.deposit_count_min, GameConfig.deposit_count_max)
+	var lo: int = mini(GameConfig.deposit_per_type_min, GameConfig.deposit_per_type_max)
+	var hi: int = maxi(GameConfig.deposit_per_type_min, GameConfig.deposit_per_type_max)
+	var wanted := {}
+	for deposit_id in DEPOSIT_IDS:
+		wanted[deposit_id] = randi_range(lo, hi)
+		_fill_type(deposit_id, int(wanted[deposit_id]))
+	# Repaso: fuera los que quedaron sin camino a la red, y se reponen.
+	for pass_i in range(4):
+		var reach := _road_reach()
+		var removed := false
+		for entry in _deposit_cells.duplicate():
+			if not _deposit_is_workable(entry, reach):
+				remove_deposit(entry["node"])
+				removed = true
+		if not removed:
+			break
+		for deposit_id in DEPOSIT_IDS:
+			_fill_type(deposit_id, int(wanted[deposit_id]))
+	_generate_shore_deposits()
+	return get_all_deposits()
 
-	for i in range(count):
-		var deposit_id: String = DEPOSIT_IDS[randi() % DEPOSIT_IDS.size()]
+## Sortea yacimientos de `deposit_id` hasta tener `wanted` que dejen hueco a su
+## extractor. El camino hasta la red lo mira el repaso final (es caro de mirar
+## en cada intento y casi nunca falla: la isla esta casi vacia).
+func _fill_type(deposit_id: String, wanted: int) -> void:
+	var center := core_origin()
+	var tries := 0
+	while _count_type(deposit_id) < wanted and tries < wanted * 25:
+		tries += 1
 		var dep_size := _roll_deposit_size(deposit_id)
 		var cell := _random_cell_for_deposit(center, dep_size)
 		if cell == Vector2i(-1, -1):
 			continue
-		spawn_deposit(deposit_id, cell, -1, dep_size)
-
-	_guarantee_minimums(center)
-	return get_all_deposits()
-
-## El sorteo de arriba elige el tipo de cada yacimiento al azar y sin mirar el
-## resto, asi que una isla podia salir sin un solo pozo de petroleo (y entonces
-## no hay Refineria, ni era 3, ni final), o sin bosque (y la partida no empieza).
-## Pasaba en ~2 de cada 100 mapas. Aqui se completa lo que falte hasta
-## `GameConfig.deposit_min_per_type`, y se exige que al menos uno de cada tipo
-## deje un hueco legal a su extractor: un bosque encajonado entre otros
-## yacimientos cuenta como bosque, pero no abre la partida.
-func _guarantee_minimums(center: Vector2i) -> void:
-	for deposit_id in DEPOSIT_IDS:
-		var wanted: int = int(GameConfig.deposit_min_per_type.get(deposit_id, 0))
-		var tries := 0
-		while wanted > 0 and tries < 40 \
-				and (_count_type(deposit_id) < wanted or not _type_is_usable(deposit_id)):
-			tries += 1
-			var dep_size := _roll_deposit_size(deposit_id)
-			var cell := _random_cell_for_deposit(center, dep_size)
-			if cell != Vector2i(-1, -1):
-				spawn_deposit(deposit_id, cell, -1, dep_size)
+		var node := spawn_deposit(deposit_id, cell, -1, dep_size)
+		if node != null and _extractor_spots(_entry_of(node), 1).is_empty():
+			remove_deposit(node)
 
 func _count_type(deposit_id: String) -> int:
 	var n := 0
@@ -69,20 +85,159 @@ func _count_type(deposit_id: String) -> int:
 			n += 1
 	return n
 
-## ¿Puede el extractor de este tipo levantarse junto a (o encima de) alguno?
-func _type_is_usable(deposit_id: String) -> bool:
-	if _count_type(deposit_id) == 0:
+func _entry_of(node: Node) -> Dictionary:
+	for entry in _deposit_cells:
+		if entry["node"] == node:
+			return entry
+	return {}
+
+# ── Nucleo, costa y mar ───────────────────────────────────────────────
+
+## Celda de origen del Nucleo: la misma cuenta que GameManager._new_game().
+func core_origin() -> Vector2i:
+	return Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
+
+## El Nucleo mas su acera (la corona de carreteras de pave_core_ring()).
+func core_ring_rect() -> Rect2i:
+	var size := Vector2i(3, 3)
+	var data: Resource = _building_data("nucleo")
+	if data != null:
+		size = data.grid_size
+	return Rect2i(core_origin(), size).grow(1)
+
+## ¿Es `cell` de la franja de costa? La franja son las `map_shore_band` celdas
+## exteriores de la rejilla: tierra construible, pero sin yacimientos de tierra.
+static func is_shore_cell(cell: Vector2i) -> bool:
+	if not GridManager.is_valid_cell(cell):
 		return false
+	var band: int = GameConfig.map_shore_band
+	return cell.x < band or cell.y < band \
+		or cell.x >= GridManager.grid_width - band or cell.y >= GridManager.grid_height - band
+
+## Todas las celdas de la franja de costa.
+static func shore_cells() -> Array:
+	var out: Array = []
+	for y in range(GridManager.grid_height):
+		for x in range(GridManager.grid_width):
+			var c := Vector2i(x, y)
+			if is_shore_cell(c):
+				out.append(c)
+	return out
+
+## ¿Es mar? Todo lo que queda fuera de la rejilla: margen de hierba, arena y agua
+## (IslandGenerator). Ahi no se construye; un recurso marino se trabajaria desde
+## una celda de costa pegada a el.
+static func is_sea_cell(cell: Vector2i) -> bool:
+	return not GridManager.is_valid_cell(cell)
+
+## Yacimientos de costa y mar. Hoy no hay ninguno. Cuando los haya (pesca,
+## petroleo en alta mar, sal...): se anade su tipo a DEPOSIT_TYPES y a esta
+## lista, se le pone una regla en GameConfig.building_deposit_rules para su
+## extractor (un muelle, que tocaria una celda de costa y el mar de al lado), y
+## aqui se sortean sobre shore_cells(), que ningun yacimiento de tierra pisa.
+## El guardado ya los llevaria: get_all_deposits() no mira el tipo.
+const SHORE_DEPOSIT_IDS: Array = []
+
+func _generate_shore_deposits() -> void:
+	for _deposit_id in SHORE_DEPOSIT_IDS:
+		pass
+
+# ── Yacimiento trabajable ─────────────────────────────────────────────
+
+var _data_cache := {}
+
+func _building_data(building_id: String) -> Resource:
+	if not _data_cache.has(building_id):
+		_data_cache[building_id] = load("res://data/buildings/%s.tres" % building_id)
+	return _data_cache[building_id]
+
+## Huecos libres para el extractor de este yacimiento (hasta `limit`). Un tipo
+## sin extractor (ninguno hoy) siempre vale. Con alcance 0 (la Refineria) el
+## hueco va encima del yacimiento, que se ignora al mirar si cabe.
+func _extractor_spots(entry: Dictionary, limit: int = 0) -> Array:
+	if entry.is_empty():
+		return []
+	var deposit_id: String = entry["id"]
 	for building_id in GameConfig.building_deposit_rules:
 		var rule: Dictionary = GameConfig.building_deposit_rules[building_id]
 		if String(rule["deposit"]) != deposit_id:
 			continue
-		var data: Resource = load("res://data/buildings/%s.tres" % building_id)
+		var data: Resource = _building_data(building_id)
 		var footprint: Vector2i = data.grid_size if data != null else Vector2i(2, 2)
-		# Encima del yacimiento: el pozo mas pequeno (2x2) ya aloja la Refineria.
-		if int(rule["reach"]) == 0:
-			return true
-		return has_buildable_spot_near(deposit_id, footprint, int(rule["reach"]))
+		return _spots_for(entry, footprint, int(rule["reach"]), limit)
+	return [{"origin": Vector2i(entry["cell_x"], entry["cell_y"]), "size": Vector2i.ONE}]
+
+func _spots_for(entry: Dictionary, footprint: Vector2i, reach: int, limit: int) -> Array:
+	var spots: Array = []
+	var dep_origin := Vector2i(entry["cell_x"], entry["cell_y"])
+	var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
+	var ignore: Node = entry["node"] if reach == 0 else null
+	var orientations: Array = [footprint]
+	if footprint.x != footprint.y:
+		orientations.append(Vector2i(footprint.y, footprint.x))
+	for size in orientations:
+		var s: Vector2i = size
+		for ox in range(dep_origin.x - s.x - reach + 1, dep_origin.x + dep_size.x + reach):
+			for oy in range(dep_origin.y - s.y - reach + 1, dep_origin.y + dep_size.y + reach):
+				var origin := Vector2i(ox, oy)
+				if not GridManager.can_place(origin, s, null, ignore):
+					continue
+				if deposit_within_reach(dep_origin, dep_size, GridManager.cells_for(origin, s), reach):
+					spots.append({"origin": origin, "size": s})
+					if limit > 0 and spots.size() >= limit:
+						return spots
+	return spots
+
+## Celdas desde las que se llega a la acera del Nucleo andando por celdas
+## libres (celda -> true), la acera incluida. Por ahi iria la carretera.
+func _road_reach() -> Dictionary:
+	var ring := core_ring_rect()
+	var core := ring.grow(-1)
+	var seen := {}
+	var queue: Array = []
+	for y in range(ring.position.y, ring.end.y):
+		for x in range(ring.position.x, ring.end.x):
+			var c := Vector2i(x, y)
+			if core.has_point(c) or not GridManager.is_valid_cell(c):
+				continue
+			seen[c] = true
+			queue.append(c)
+	var head := 0
+	while head < queue.size():
+		var cur: Vector2i = queue[head]
+		head += 1
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = cur + d
+			if not seen.has(n) and GridManager.is_cell_free(n):
+				seen[n] = true
+				queue.append(n)
+	return seen
+
+## ¿Tiene este yacimiento un hueco para su extractor con camino hasta la red?
+func _deposit_is_workable(entry: Dictionary, reach: Dictionary) -> bool:
+	if not is_instance_valid(entry.get("node")):
+		return true
+	for spot in _extractor_spots(entry):
+		var cells: Array = GridManager.cells_for(spot["origin"], spot["size"])
+		var footprint := {}
+		for c in cells:
+			footprint[c] = true
+		for c in cells:
+			if reach.has(c):
+				return true
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n: Vector2i = c + d
+				if not footprint.has(n) and reach.has(n):
+					return true
+	return false
+
+## Lo que el repaso de generate_new_map() exige, para los tests: todos los
+## yacimientos del mapa tienen hueco para su extractor y camino a la red.
+func all_deposits_workable() -> bool:
+	var reach := _road_reach()
+	for entry in _deposit_cells:
+		if not _deposit_is_workable(entry, reach):
+			return false
 	return true
 
 func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, dep_size: Vector2i = Vector2i(2, 2)) -> Node:
@@ -540,16 +695,27 @@ func remove_deposit(node: Node) -> void:
 		GridManager.remove_obstacle(cell, dep_size)
 	node.queue_free()
 
+## Una celda al azar donde cabe un yacimiento de `dep_size`: dentro de la
+## rejilla pero fuera de la franja de costa, lejos del centro y sin tocar la
+## acera del Nucleo (queda `deposit_core_gap` de hueco para que la red crezca).
 func _random_cell_for_deposit(center: Vector2i, dep_size: Vector2i) -> Vector2i:
+	var band: int = GameConfig.map_shore_band
+	var keep_out: Rect2i = core_ring_rect().grow(GameConfig.deposit_core_gap)
+	var max_x: int = GridManager.grid_width - band - dep_size.x
+	var max_y: int = GridManager.grid_height - band - dep_size.y
+	if max_x < band or max_y < band:
+		return Vector2i(-1, -1)
 	for attempt in range(80):
-		var cx: int = randi_range(0, GridManager.grid_width - dep_size.x)
-		var cy: int = randi_range(0, GridManager.grid_height - dep_size.y)
+		var cx: int = randi_range(band, max_x)
+		var cy: int = randi_range(band, max_y)
 		var cell := Vector2i(cx, cy)
 		# Check center exclusion from deposit center
 		var mid_x: float = cx + dep_size.x * 0.5
 		var mid_y: float = cy + dep_size.y * 0.5
 		var dist: float = absf(mid_x - center.x) + absf(mid_y - center.y)
 		if dist <= GameConfig.deposit_center_exclusion:
+			continue
+		if keep_out.intersects(Rect2i(cell, dep_size)):
 			continue
 		# Check all cells are free
 		if not GridManager.can_place(cell, dep_size):

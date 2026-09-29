@@ -95,6 +95,13 @@ signal building_demolished(building_node: Node, cell: Vector2i)
 @warning_ignore("unused_signal")
 signal deposit_depleted(deposit_node: Node, deposit_id: String)
 
+# ── Map ──
+## La rejilla cambio de tamano (partida nueva o carga de un guardado con otro
+## tamano). La isla, la rejilla dibujada y las camaras se reajustan al oirla.
+## GridManager.set_grid_size() la emite solo si el tamano cambia de verdad.
+@warning_ignore("unused_signal")
+signal grid_resized(width: int, height: int)
+
 # ── Ground Interaction (reserved: future terrain interaction) ──
 @warning_ignore("unused_signal")
 signal ground_clicked(world_pos: Vector3, cell: Vector2i)

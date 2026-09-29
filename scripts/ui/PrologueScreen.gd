@@ -59,8 +59,6 @@ var _root: Control
 var _sheet: Control
 var _paper: TextureRect
 var _frame: Panel
-var _letterhead: Label
-var _subhead: Label
 var _title: Label
 var _folio: Label
 var _scroll: ScrollContainer
@@ -240,14 +238,9 @@ func _build() -> void:
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(col)
 
-	_letterhead = _ink_label(Tr.t("PRO_LETTERHEAD"), 15, UITheme.INK_DIM)
-	_letterhead.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_letterhead)
-	_subhead = _ink_label(Tr.t("PRO_SUBHEAD"), 13, UITheme.INK_DIM)
-	_subhead.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_subhead)
-	col.add_child(_ink_rule())
-
+	# Sin membrete (2026-09-28): la linea "IMPERIO SIN OCASO · REGENCIA ·
+	# CONTADURIA..." y el subtitulo del expediente cargaban la hoja de nombres
+	# antes de contar nada. El folio empieza por su titulo.
 	var title_row := HBoxContainer.new()
 	title_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(title_row)

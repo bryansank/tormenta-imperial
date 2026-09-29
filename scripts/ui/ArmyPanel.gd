@@ -15,7 +15,6 @@ var _units_vbox: VBoxContainer
 var _training_vbox: VBoxContainer
 var _training_bars: Array = []  # ProgressBar refs, index-aligned with ArmyManager.get_training()
 
-const MILITARY := Color(0.8, 0.35, 0.25)  # matches UITheme.CAT_MILITARY
 
 func _ready() -> void:
 	layer = 11
@@ -56,7 +55,7 @@ func _setup_ui() -> void:
 	_army_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_army_btn.offset_left = -176
 	_army_btn.offset_top = UILayoutManager.get_sidebar_button_offset("ArmyPanel.button")
-	UITheme.style_card_button(_army_btn, UITheme.BTN.lightened(0.05), MILITARY)
+	UITheme.style_card_button(_army_btn, UITheme.BTN.lightened(0.05), UITheme.CAT_MILITARY)
 	_army_btn.pressed.connect(_toggle_panel)
 	_army_btn.visible = false
 	root.add_child(_army_btn)
@@ -82,7 +81,7 @@ func _setup_ui() -> void:
 	vbox.add_child(UITheme.make_panel_header(Tr.t("LBL_ARMY_TITLE"), _toggle_panel))
 
 	# Summary
-	_power_label = UITheme.make_label("", "title", MILITARY)
+	_power_label = UITheme.make_label("", "title", UITheme.CAT_MILITARY)
 	_power_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_power_label)
 
@@ -155,7 +154,7 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	style.set_corner_radius_all(UITheme.CORNER)
 	style.set_content_margin_all(8)
 	style.border_width_left = 5
-	style.border_color = MILITARY if unlocked else UITheme.TEXT_DIM
+	style.border_color = UITheme.CAT_MILITARY if unlocked else UITheme.TEXT_DIM
 	card.add_theme_stylebox_override("panel", style)
 
 	var row := HBoxContainer.new()
@@ -202,7 +201,7 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	var train_btn := Button.new()
 	train_btn.text = Tr.t("BTN_TRAIN")
 	train_btn.custom_minimum_size = Vector2(96, 40)
-	UITheme.style_button(train_btn, MILITARY.darkened(0.15) if check["ok"] else UITheme.BTN, UITheme.FONT_BODY)
+	UITheme.style_button(train_btn, UITheme.CAT_MILITARY.darkened(0.15) if check["ok"] else UITheme.BTN, UITheme.FONT_BODY)
 	train_btn.disabled = not check["ok"]
 	if not check["ok"] and check["reason"] != "":
 		train_btn.tooltip_text = Tr.t(check["reason"])
@@ -231,7 +230,7 @@ func _rebuild_training() -> void:
 		var name_label := UITheme.make_label(Tr.t(def.get("name", item["id"])), "small", UITheme.TEXT)
 		name_label.custom_minimum_size.x = 130
 		line.add_child(name_label)
-		var bar := UITheme.make_progress_bar(MILITARY, 12)
+		var bar := UITheme.make_progress_bar(UITheme.CAT_MILITARY, 12)
 		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		bar.max_value = 1.0
 		bar.value = _training_progress(item)
