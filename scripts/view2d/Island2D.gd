@@ -3,8 +3,9 @@ extends Node2D
 ##
 ## La silueta sale de las mismas funciones puras que usa la isla 3D
 ## (IslandGenerator.border_points, rounded_square_radius, make_wobble), asi que
-## las dos vistas cumplen la misma promesa: la hierba cubre las 40x40 celdas y la
-## costa empieza fuera de la rejilla. La hierba es una textura de ruido generada
+## las dos vistas cumplen la misma promesa: la hierba cubre todas las celdas de
+## la rejilla (su tamano y la forma salen de GridManager) y la costa empieza
+## fuera de ella. La hierba es una textura de ruido generada
 ## una vez y pegada al poligono; el resto son primitivas de _draw, que Godot
 ## guarda y no vuelve a calcular mientras nada cambie.
 
@@ -30,6 +31,8 @@ const SHORE_WIDTH := 3.5
 const GRASS_TEXEL_PX := 4.0
 
 var _seed_val := 0.0
+var _margin := LAND_MARGIN
+var _radius := CORNER_RADIUS
 var _wobble: Array = []
 var _grass_pts := PackedVector2Array()
 var _grass_tex: Texture2D = null
@@ -39,19 +42,42 @@ var _waves: Array = []
 
 func _ready() -> void:
 	z_index = -20
-	_seed_val = randf() * 100.0
-	_wobble = Island.make_wobble(Island.SEGMENTS, _seed_val, WOBBLE)
+	EventBus.grid_resized.connect(_on_grid_resized)
+	_rebuild()
+
+func _on_grid_resized(_w: int, _h: int) -> void:
+	_rebuild()
+
+## Forma (de GridManager.island_seed, la misma que la isla 3D) y dibujo. Se
+## rehace cuando la rejilla cambia de tamano.
+func _rebuild() -> void:
+	var amplitude := WOBBLE
+	var detail := 1.0
+	_margin = LAND_MARGIN
+	_radius = CORNER_RADIUS
+	if GridManager.island_seed >= 0:
+		var shape: Dictionary = Island.shape_for_seed(GridManager.island_seed)
+		_seed_val = shape["seed_val"]
+		_margin = shape["margin"]
+		_radius = shape["radius"]
+		amplitude = shape["amplitude"]
+		detail = shape["detail"]
+	elif _seed_val == 0.0:
+		_seed_val = randf() * 100.0
+	_wobble = Island.make_wobble(Island.SEGMENTS, _seed_val, amplitude, detail)
 	_grass_pts = polygon_px(0.0)
 	_grass_bounds = _bounds(_grass_pts)
 	_grass_tex = _make_grass_texture(_grass_bounds)
+	_tufts.clear()
+	_waves.clear()
 	_scatter_details()
 	queue_redraw()
 
 ## Borde de la isla en pixeles de mapa, crecido `expand` unidades de mundo.
 func polygon_px(expand: float) -> PackedVector2Array:
 	var half := Island.grid_half_extents()
-	var radius := minf(CORNER_RADIUS, Island.max_corner_radius(LAND_MARGIN))
-	var pts := Island.border_points(half.x, half.y, LAND_MARGIN, radius, _wobble, expand)
+	var radius := minf(_radius, Island.max_corner_radius(_margin))
+	var pts := Island.border_points(half.x, half.y, _margin, radius, _wobble, expand)
 	var out := PackedVector2Array()
 	for p in pts:
 		out.append(p * View2D.PX_PER_UNIT)

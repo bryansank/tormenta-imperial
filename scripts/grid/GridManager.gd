@@ -2,12 +2,72 @@ extends Node
 ## Manages the logical grid: converts world positions to cell coordinates,
 ## tracks which cells are occupied, supports multi-cell buildings.
 
-@export var cell_size: float = 2.0
-@export var grid_width: int = 40   # Number of cells along X (80 / 2.0)
-@export var grid_height: int = 40  # Number of cells along Z
+## Tamano de la rejilla de un guardado sin la clave "grid" (todos los de antes
+## del mapa aleatorio) y de las escenas montadas a mano en los tests.
+const DEFAULT_SIZE := 40
 
-# Origin offset: the grid starts at world (-40, -40) so cell (0,0) maps there
+@export var cell_size: float = 2.0
+@export var grid_width: int = DEFAULT_SIZE   # Number of cells along X
+@export var grid_height: int = DEFAULT_SIZE  # Number of cells along Z
+
+# Origin offset: the grid is centred on the world origin, so with 40x40 cells of
+# 2.0 it starts at world (-40, -40). set_grid_size() keeps it centred.
 var _origin := Vector3(-40.0, 0.0, -40.0)
+
+## Semilla de la forma de la isla de esta partida (IslandGenerator.shape_for_seed).
+## Viaja con el tamano en el guardado, asi la isla sale igual al cargar y en las
+## dos vistas. -1 = sin semilla (escena de test): cada vista sortea la suya.
+var island_seed: int = -1
+
+## Cambia el tamano de la rejilla y la recentra. Solo con la rejilla vacia: una
+## partida nueva antes de poner el Nucleo, o una carga antes de poner nada. Emite
+## EventBus.grid_resized si el tamano cambia (la isla, la rejilla dibujada y las
+## camaras se reajustan).
+func set_grid_size(width: int, height: int) -> void:
+	_apply_map(width, height, island_seed)
+
+## Tamano y semilla de isla juntos. Avisa (grid_resized) si cambia cualquiera de
+## los dos: una isla de otra forma tambien hay que redibujarla.
+func _apply_map(width: int, height: int, new_seed: int) -> void:
+	width = maxi(width, 1)
+	height = maxi(height, 1)
+	if not _cell_to_building.is_empty():
+		push_warning("GridManager.set_grid_size: la rejilla no esta vacia; lo que haya queda en sus celdas")
+	var changed := width != grid_width or height != grid_height or new_seed != island_seed
+	grid_width = width
+	grid_height = height
+	island_seed = new_seed
+	_origin = Vector3(-width * cell_size * 0.5, 0.0, -height * cell_size * 0.5)
+	if changed:
+		EventBus.grid_resized.emit(width, height)
+
+## Sortea el tamano (y la forma de la isla) de una partida nueva, con el RNG
+## global: una semilla fijada con seed() da siempre el mismo mapa.
+func roll_new_map() -> void:
+	var lo: int = mini(GameConfig.grid_size_min, GameConfig.grid_size_max)
+	var hi: int = maxi(GameConfig.grid_size_min, GameConfig.grid_size_max)
+	var w: int = _roll_even(lo, hi)
+	var h: int = _roll_even(lo, hi)
+	_apply_map(w, h, randi() % 1000000)
+
+## Un lado par en [lo, hi] (lo si el rango no tiene ninguno).
+static func _roll_even(lo: int, hi: int) -> int:
+	var first: int = lo + (lo % 2)
+	if first > hi:
+		return lo
+	return first + 2 * randi_range(0, (hi - first) / 2)
+
+## Vuelve al 40x40 de siempre, sin semilla de isla.
+func reset_size() -> void:
+	_apply_map(DEFAULT_SIZE, DEFAULT_SIZE, -1)
+
+func get_save_data() -> Dictionary:
+	return {"width": grid_width, "height": grid_height, "island_seed": island_seed}
+
+## Idempotente. Sin clave (guardado de antes del mapa aleatorio) es 40x40.
+func load_save_data(data: Dictionary) -> void:
+	_apply_map(int(data.get("width", DEFAULT_SIZE)), int(data.get("height", DEFAULT_SIZE)),
+		int(data.get("island_seed", -1)))
 
 ## World position of the grid's corner (cell 0,0). Public so the island and the
 ## grid overlay can fit themselves to the real grid instead of hardcoding it.

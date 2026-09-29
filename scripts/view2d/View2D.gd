@@ -4,7 +4,8 @@ extends RefCounted
 ## abrir una ventana.
 ##
 ## El mundo es el de siempre: la rejilla de GridManager, en unidades de mundo
-## sobre el plano XZ (40x40 celdas de 2.0, origen en -40,-40). La vista 2D lo
+## sobre el plano XZ (de 40x40 a 48x48 celdas de 2.0 segun la partida, centrada
+## en el origen: con 40x40 empieza en -40,-40). La vista 2D lo
 ## pinta desde arriba: X del mundo -> X de pantalla, Z del mundo -> Y de pantalla,
 ## con PX_PER_UNIT pixeles por unidad. Asi "arriba" en 2D es "hacia -Z", que es
 ## hacia donde mira la camara 3D con giro cero: una partida se lee igual en las

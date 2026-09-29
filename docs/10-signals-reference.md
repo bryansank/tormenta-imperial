@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**107 signals**, in the order they are declared in `EventBus.gd`. Emitters and
+**108 signals**, in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -111,6 +111,12 @@ what the UI promised before confirming, and what was actually paid back.
 | Signal | Params | Emitted By | Consumed By |
 |--------|--------|------------|-------------|
 | `deposit_depleted` | `deposit_node: Node, deposit_id: String` | MapGenerator | BuildingInfoPanel |
+
+## Map
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `grid_resized` | `width: int, height: int` | GridManager (`set_grid_size()`, `roll_new_map()`, `load_save_data()`, only when size or island seed change) | IslandGenerator, Island2D, GridOverlayControl, GridOverlay2D, MonumentalCamera, Camera2DController |
 
 ## Ground Interaction (reserved for future terrain interaction)
 
@@ -355,7 +361,7 @@ Declared in `EventBus.gd` but not wired on one or both sides. Most are suppresse
 with `@warning_ignore("unused_signal")`, so the editor will not flag them; this
 list is the only record.
 
-**9 of the 107 signals** have a gap on one side or the other.
+**9 of the 108 signals** have a gap on one side or the other.
 
 ### Neither emitted nor consumed (3)
 

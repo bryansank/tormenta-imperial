@@ -127,6 +127,7 @@ func _close_colony() -> void:
 		_scene.remove_child(_map)
 		_map.free()
 	GridManager.clear_all()
+	GridManager.reset_size()
 	_placer = null
 	_map = null
 	GameManager._placer = null
@@ -187,6 +188,37 @@ func test_a_saved_mode_comes_back_on_load() -> void:
 	_open_colony()
 	assert_int(GameMode.current).is_equal(GameMode.Mode.SURVIVAL)
 	assert_bool(GameManager.is_run_sealed()).is_false()
+
+# ── El tamano de la rejilla viaja en el guardado (mapa aleatorio) ────
+
+func test_a_new_game_writes_its_grid_size() -> void:
+	_open_colony()
+	var grid: Dictionary = _read_save().get("grid", {})
+	assert_int(int(grid.get("width", 0))).is_between(GameConfig.grid_size_min, GameConfig.grid_size_max)
+	assert_int(int(grid.get("height", 0))).is_between(GameConfig.grid_size_min, GameConfig.grid_size_max)
+	assert_int(int(grid.get("width", 0))).is_equal(GridManager.grid_width)
+	# El Nucleo, en el centro de esa rejilla.
+	var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
+	assert_object(GridManager.get_building_at(center)).is_not_null()
+
+func test_a_saved_grid_size_comes_back_before_anything_is_placed() -> void:
+	_write_raw_save({"saved_at": Time.get_unix_time_from_system(),
+		"grid": {"width": 46, "height": 42, "island_seed": 1234},
+		"buildings": [{"id": "road", "cell_x": 45, "cell_y": 41}]})
+	GridManager.reset_size()
+	_open_colony()
+	assert_int(GridManager.grid_width).is_equal(46)
+	assert_int(GridManager.grid_height).is_equal(42)
+	assert_int(GridManager.island_seed).is_equal(1234)
+	# Una celda que en 40x40 no existe: solo se pudo poner con el tamano ya cargado.
+	assert_object(GridManager.get_building_at(Vector2i(45, 41))).is_not_null()
+
+func test_a_save_without_grid_is_forty_by_forty() -> void:
+	GridManager.set_grid_size(48, 48)
+	_write_raw_save({"saved_at": Time.get_unix_time_from_system()})
+	_open_colony()
+	assert_int(GridManager.grid_width).is_equal(40)
+	assert_int(GridManager.grid_height).is_equal(40)
 
 # ── Colonias nuevas con las reglas del modo ──────────────────────────
 

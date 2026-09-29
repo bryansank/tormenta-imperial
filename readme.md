@@ -109,7 +109,7 @@ tormenta-imperial/
 │   ├── buildings/   Colocación y fábrica procedural de modelos
 │   ├── ui/          Un script por panel, más tema y disposición
 │   ├── view2d/      La vista 2D: cámara, isla, colocación y dibujos
-│   ├── grid/        Rejilla de 40x40 celdas
+│   ├── grid/        Rejilla de 40x40 a 48x48 celdas, sorteada por partida
 │   ├── map/         Isla y depósitos procedurales
 │   └── camera/      Cámara ortográfica a 45°
 ├── data/buildings/  Los 14 edificios, como recursos .tres

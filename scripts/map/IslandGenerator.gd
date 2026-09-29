@@ -5,9 +5,14 @@ extends Node3D
 ## The old island was a superellipse *inscribed* in the grid square, so the four
 ## corners of the grid were water while `GridManager.can_place()` happily let you
 ## build there. Instead of adding a land mask, the island is now a rounded square
-## that contains every one of the 40x40 cells; shore and water start *outside*
+## that contains every cell of the grid; shore and water start *outside*
 ## the grid edge. We knowingly trade the organic silhouette for a map where
 ## "there is grid" and "there is land" mean the same thing.
+##
+## Mapa aleatorio (2026-09-28): la rejilla cambia de tamano por partida (40 a 48
+## por lado) y la forma sale de GridManager.island_seed (shape_for_seed): margen,
+## esquinas, ondulacion y su detalle varian, siempre dentro de la garantia. Al
+## oir EventBus.grid_resized la isla se rehace.
 ##
 ## The border geometry lives in static, pure functions so a test can prove that
 ## every cell corner is inside the grass polygon without rendering anything.
@@ -35,32 +40,80 @@ const SEGMENTS := 128
 var _border_offsets: Array = []
 var _seed_val: float = 0.0
 
+## Detalle de la ondulacion (peso de los armonicos altos): 1 = el de siempre.
+var _wobble_detail: float = 1.0
+var _regen_queued := false
+# Nodos de isla que ha creado este generador (para rehacerlos al cambiar la rejilla)
+var _made: Array = []
+
 func _ready() -> void:
-	_seed_val = randf() * 100.0
-	_border_offsets = make_wobble(SEGMENTS, _seed_val, wobble_amplitude)
+	_apply_shape()
+	EventBus.grid_resized.connect(_on_grid_resized)
+	_queue_regen()
+
+## La forma de esta partida: de GridManager.island_seed si la hay (partida
+## nueva o cargada), si no los valores exportados con una ondulacion al azar.
+func _apply_shape() -> void:
+	if GridManager.island_seed >= 0:
+		var shape := shape_for_seed(GridManager.island_seed)
+		_seed_val = shape["seed_val"]
+		land_margin = shape["margin"]
+		corner_radius = shape["radius"]
+		wobble_amplitude = shape["amplitude"]
+		_wobble_detail = shape["detail"]
+	elif _seed_val == 0.0:
+		_seed_val = randf() * 100.0
 	var limit := max_corner_radius(land_margin)
 	if corner_radius > limit:
 		# A corner rounder than the margin allows would leave the grid's corner
 		# cell in the water again — exactly the bug this file exists to close.
 		push_warning("IslandGenerator: corner_radius %.1f exceeds %.1f for land_margin %.1f; clamping" % [corner_radius, limit, land_margin])
 		corner_radius = limit
+	_border_offsets = make_wobble(SEGMENTS, _seed_val, wobble_amplitude, _wobble_detail)
+
+func _on_grid_resized(_w: int, _h: int) -> void:
+	_apply_shape()
+	_queue_regen()
+
+func _queue_regen() -> void:
+	if _regen_queued:
+		return
+	_regen_queued = true
 	call_deferred("_generate_island")
 
 # ── Pure geometry (static, testable) ──────────────────────────────────
 
+## La forma de la isla de una partida, sacada de su semilla (la guarda
+## GridManager). Todo lo que sale de aqui mantiene la promesa de cubrir la
+## rejilla: margen >= 3, esquina <= max_corner_radius(margen) y ondulacion >= 0.
+## La usan la isla 3D y la 2D, asi que las dos vistas dibujan la misma isla.
+static func shape_for_seed(island_seed: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = island_seed
+	var margin: float = rng.randf_range(3.0, 6.0)
+	return {
+		"seed_val": rng.randf() * 100.0,
+		"margin": margin,
+		"radius": rng.randf_range(0.35, 1.0) * max_corner_radius(margin),
+		"amplitude": rng.randf_range(1.0, 4.5),
+		"detail": rng.randf_range(0.5, 2.0),
+	}
+
 ## Deterministic border wobble, one offset per segment, in [0, amplitude].
-## The sum of sines spans [-3.3, 3.3]; it is shifted and scaled so the result
-## is never negative — the border may only bulge outwards.
-static func make_wobble(segments: int, seed_val: float, amplitude: float) -> Array:
+## The sum of sines is shifted and scaled by its own bound so the result is
+## never negative — the border may only bulge outwards. `detail` weights the
+## high harmonics: below 1 a smoother coast, above 1 a more jagged one.
+static func make_wobble(segments: int, seed_val: float, amplitude: float, detail: float = 1.0) -> Array:
 	var out: Array = []
+	var bound: float = 1.5 + 1.0 + (0.5 + 0.3) * detail
 	for i in range(segments):
 		var angle: float = (float(i) / float(segments)) * TAU
 		var w := 0.0
 		w += sin(angle * 2.0 + seed_val) * 1.5
 		w += sin(angle * 3.0 + seed_val * 0.7) * 1.0
-		w += sin(angle * 5.0 + seed_val * 1.3) * 0.5
-		w += sin(angle * 7.0 + seed_val * 0.4) * 0.3
-		out.append(clampf((w + 3.3) / 6.6, 0.0, 1.0) * amplitude)
+		w += sin(angle * 5.0 + seed_val * 1.3) * 0.5 * detail
+		w += sin(angle * 7.0 + seed_val * 0.4) * 0.3 * detail
+		out.append(clampf((w + bound) / (2.0 * bound), 0.0, 1.0) * amplitude)
 	return out
 
 ## Largest corner radius that still keeps the grid corner (h, h) inside a
@@ -114,17 +167,28 @@ static func grid_half_extents() -> Vector2:
 # ── Mesh generation ───────────────────────────────────────────────────
 
 func _generate_island() -> void:
+	_regen_queued = false
 	# La escena ya se fue (ViewRouter la cambio por la vista 2D antes de este
 	# call_deferred): no hay isla que generar.
 	if not is_inside_tree():
 		return
-	# Remove old static meshes from Main if they exist
+	# Remove old static meshes from Main if they exist (and the ones this
+	# generator made before the grid changed size). Out of the tree right away,
+	# so the new nodes keep their names.
 	var main := get_tree().current_scene
+	if main == null:
+		return
+	for old in _made:
+		if is_instance_valid(old):
+			if old.get_parent() != null:
+				old.get_parent().remove_child(old)
+			old.queue_free()
+	_made.clear()
 	for node_name in ["Ground", "Shore", "Water"]:
 		var old := main.get_node_or_null(node_name)
 		if old:
+			main.remove_child(old)
 			old.queue_free()
-			await get_tree().process_frame
 
 	# Water plane (huge, below everything) — add first so it's behind
 	var water_node := MeshInstance3D.new()
@@ -157,6 +221,7 @@ func _generate_island() -> void:
 	var grass_mat := _create_grass_material()
 	grass_node.set_surface_override_material(0, grass_mat)
 	main.add_child(grass_node)
+	_made = [water_node, shore_node, grass_node]
 
 func _build_island_mesh(expand: float, y_offset: float) -> ArrayMesh:
 	var st := SurfaceTool.new()

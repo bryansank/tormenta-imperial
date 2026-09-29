@@ -16,6 +16,10 @@ func _ready() -> void:
 	fit_to_grid()
 	visible = GameConfig.ui_grid_visible
 	EventBus.grid_overlay_toggled.connect(_on_grid_overlay_toggled)
+	EventBus.grid_resized.connect(_on_grid_resized)
+
+func _on_grid_resized(_w: int, _h: int) -> void:
+	fit_to_grid()
 
 func _on_grid_overlay_toggled(vis: bool) -> void:
 	visible = vis
