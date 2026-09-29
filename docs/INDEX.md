@@ -17,7 +17,7 @@ Spanish, the rest in English.
 | 07 | [Random Events](07-random-events.md) | 8 event types, weights, timing (per phase and mode), the timed plague |
 | 08 | [UI Systems](08-ui-systems.md) | Every panel and its layer, the single ☰ MENÚ, title menu, war reports, configurable UI, prologue/tutorial/help, styling |
 | 09 | [Save System](09-save-system.md) | Save paths per platform, JSON keys, autosave triggers, fights never saved, load flow, offline progression, resets |
-| 10 | [Signals Reference](10-signals-reference.md) | All 107 EventBus signals with emitters and consumers, plus the 9 wired on only one side |
+| 10 | [Signals Reference](10-signals-reference.md) | All 108 EventBus signals with emitters and consumers, plus the 9 wired on only one side |
 | 11 | [Tech Tree](11-tech-tree.md) | 3 branches x 5 tiers, costs, research mechanics, bonus application |
 | 12 | [Cloud Saves](12-cloud-saves.md) | Supabase integration (auth, cloud save/load) — implemented, unwired, and why `.env` cannot ship |
 | 13 | [Roadmap](13-roadmap.md) | What is shipped (M1-M4, 2D, modes, UI and devices, touch, onboarding, balance line, exports), open balance decisions, backlog |

@@ -45,9 +45,9 @@ the `BeckettRuntime` dev bridge.
 |-------|---------|---------|
 | 1 | Tr | Translation strings (ES/EN) |
 | 2 | GameConfig | All balance/tuning values, user settings, `dev_mode` |
-| 3 | EventBus | Signal bus (no logic, just 107 signal declarations) |
+| 3 | EventBus | Signal bus (no logic, just 108 signal declarations) |
 | 4 | InputService | Keyboard/mouse/touch -> signals |
-| 5 | GridManager | 40x40 cell grid, placement logic |
+| 5 | GridManager | Cell grid (40x40 to 48x48, rolled per game and saved), placement logic |
 | 6 | ResourceManager | 4 resources in one shared pool + unlock tracking |
 | 7 | GameManager | Save/load, new game, offline progression, scene/view switching |
 | 8 | ProcessManager | Timed crafting/mining |

@@ -274,19 +274,30 @@ var deposit_max_uses := {
 	"forest": 8,
 }
 
-var deposit_count_min := 18
-var deposit_count_max := 28
+## Cuantos yacimientos de CADA tipo (bosque, oro, hierro, petroleo) trae una isla
+## nueva: se sortea un numero en [min, max] para cada tipo por separado, asi que
+## ninguna partida sale sin pozo (sin era 3) ni sin bosque (sin apertura), y dos
+## partidas no se parecen. Tres como minimo porque la Refineria se come su pozo
+## y el tope es de dos.
+var deposit_per_type_min := 3
+var deposit_per_type_max := 6
+## Distancia minima (Manhattan, en celdas) del centro de un yacimiento al centro
+## de la rejilla.
 var deposit_center_exclusion := 6
-## Lo minimo de cada tipo que trae cualquier isla, por encima del sorteo. Sin
-## esto ~2 de cada 100 mapas salian sin pozo (sin era 3, sin final) o sin bosque.
-## Dos pozos porque la Refineria se come el suyo y el tope es de dos; dos vetas
-## porque el oro paga la comida, los sueldos y casi cada obra.
-var deposit_min_per_type := {
-	"forest": 2,
-	"gold_vein": 2,
-	"iron_deposit": 1,
-	"oil_well": 2,
-}
+## Celdas libres que se dejan entre un yacimiento y la acera del Nucleo (la
+## corona de carreteras): la red tiene por donde crecer hacia los cuatro lados.
+var deposit_core_gap := 2
+## Franja exterior de la rejilla (en celdas) que se reserva para la costa: ahi no
+## caen yacimientos de tierra. Es donde iran los futuros recursos del mar y la
+## orilla (MapGenerator.shore_cells()). Se puede construir en ella.
+var map_shore_band := 1
+
+# ── Map Size ──
+## Lado de la rejilla, en celdas, que sortea cada partida nueva (ancho y alto por
+## separado, siempre pares para que el Nucleo quede en el centro del mundo). Se
+## guarda con la partida (clave "grid"); un guardado sin ella es de 40x40.
+var grid_size_min := 40
+var grid_size_max := 48
 
 # ── Deposit Sizes (random range per type: min_w, max_w, min_h, max_h) ──
 var deposit_sizes := {

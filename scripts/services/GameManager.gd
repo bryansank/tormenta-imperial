@@ -273,6 +273,10 @@ func _new_game() -> void:
 	StormManager.reset()
 	TutorialManager.reset()
 	ProductionManager.reset()
+	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
+	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
+	# una partida nueva (la carga lo pisa con el del guardado).
+	GridManager.roll_new_map()
 	# Place nucleo at center (no build time for core)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
@@ -331,6 +335,11 @@ func _load_game() -> void:
 	# es un guardado de antes de los modos, y eso es Campana.
 	var mode_data: Variant = data.get("game_mode", {})
 	GameMode.load_save_data(mode_data if mode_data is Dictionary else {})
+
+	# El tamano de la rejilla antes de poner nada: todas las celdas del guardado
+	# se refieren a el. Sin la clave es un guardado de 40x40.
+	var grid_data: Variant = data.get("grid", {})
+	GridManager.load_save_data(grid_data if grid_data is Dictionary else {})
 
 	# Restore resources
 	if data.has("resources"):
@@ -519,6 +528,9 @@ func _write_save() -> void:
 	var data := {}
 	data["saved_at"] = Time.get_unix_time_from_system()
 	data["format"] = SAVE_FORMAT
+
+	# Tamano de la rejilla y semilla de la isla
+	data["grid"] = GridManager.get_save_data()
 
 	# Resources
 	var res_all := ResourceManager.get_all()

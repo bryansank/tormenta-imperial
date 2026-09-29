@@ -68,9 +68,9 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 107 signals in ~26 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 108 signals in ~26 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch |
-| 5 | `GridManager` | `scripts/grid/GridManager.gd` | 40x40 cell grid (2.0 units/cell, origin -40,-40), building/obstacle placement |
+| 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (40x40 to 48x48, even sides, `grid_size_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed, building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
 | 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave, new game (`request_new_game()` → mode picker), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
 | 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining) |
@@ -108,12 +108,12 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- MonumentalCamera (Camera3D) -- orthographic 45deg RTS camera
   +-- DirectionalLight
   +-- WorldEnvironment
-  +-- IslandGenerator (Node3D) -- procedural island mesh: a rounded square that covers the whole 40x40 grid (shore and water start outside it)
+  +-- IslandGenerator (Node3D) -- procedural island mesh: a rounded square that covers the whole grid (shore and water start outside it); its shape comes from `GridManager.island_seed` and it rebuilds on `grid_resized`
   +-- GridOverlay (MeshInstance3D) -- faint cell grid, on by default (Settings toggle), fitted to GridManager at runtime
   +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist
   +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" follows the device profile (tablet/phone yes, PC no)
   +-- ResourceHUD (CanvasLayer 10) -- top-left card: named resources + ALMACÉN COMPARTIDO bar with legend
-  +-- MapGenerator (Node) -- spawns 18-28 resource deposits (`deposit_count_*`, with a minimum per type)
+  +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), none on the Núcleo sidewalk or the shore band, each with room and a road path for its extractor; `shore_cells()` is the hook for future sea/shore resources
   +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + building list
   +-- BuildingInfoPanel (CanvasLayer 10) -- right panel: selected building / deposit info
   +-- MarketPanel (CanvasLayer 11) -- buy/sell UI
@@ -491,7 +491,7 @@ and Settings closes; accepted). With a board open it does not reload
 ### Save/Load System
 
 - Path: `user://save_game.json`
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `game_mode`. Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -552,7 +552,7 @@ tormenta-imperial/
 |   |   +-- ExpeditionGenerator.gd   # Seeded map graph, rosters, rewards, drafts
 |   |   +-- FinalAudit.gd            # The closing siege: waves, garrison, resummon
 |   +-- grid/
-|   |   +-- GridManager.gd           # 40x40 cell grid; the island covers every cell
+|   |   +-- GridManager.gd           # Cell grid (size per game, saved); the island covers every cell
 |   |   +-- GridOverlayControl.gd    # Applies the grid toggle to the 3D overlay
 |   +-- map/
 |   |   +-- IslandGenerator.gd       # Procedural island mesh
@@ -725,6 +725,8 @@ All balance values live in `GameConfig.gd`:
 - `storm_*` - storm cycle, damage, the Tithe, tower mitigation and tower crews
 - `final_audit_*` - the closing siege: wave count, slots, scaling, resummon floor
 - `building_deposit_rules` - which extractor must touch which deposit
+- `deposit_per_type_min/max` / `deposit_core_gap` / `map_shore_band` / `deposit_sizes` - the random map's deposits
+- `grid_size_min/max` - the grid side rolled per game (even, saved in the `grid` key)
 - `game_mode_rules` / `sandbox_*` - per-mode rules and multipliers on top of the base
   values (modes apply factors; the balance line changes the base values — docs/20, docs/22)
 - `population_floor` / `population_regrow_floor` - the ruin floor
