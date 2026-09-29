@@ -85,9 +85,9 @@ func _setup_ui() -> void:
 	# Population row with icon
 	var pop_row := HBoxContainer.new()
 	pop_row.add_theme_constant_override("separation", 6)
-	var pop_icon := UITheme.make_label("\u2302", "body", UITheme.CAT_SUPPORT)  # House icon
+	var pop_icon := UITheme.make_label("\u2302", "body", UITheme.POSITIVE)  # House icon
 	pop_row.add_child(pop_icon)
-	_pop_label = UITheme.make_label("", "small", UITheme.CAT_SUPPORT)
+	_pop_label = UITheme.make_label("", "small", UITheme.POSITIVE)
 	pop_row.add_child(_pop_label)
 	status_vbox.add_child(pop_row)
 
@@ -193,6 +193,8 @@ func _setup_ui() -> void:
 	scroll.add_child(_log_vbox)
 
 func _on_notification(message: String, category: String, color: Color) -> void:
+	# El color lo pone la paleta, no quien avisa (docs/24-paleta.md).
+	color = UITheme.notice_color(category, color)
 	_log_entries.push_front({"message": message, "category": category, "color": color})
 	if _log_entries.size() > MAX_LOG_ENTRIES:
 		_log_entries.pop_back()

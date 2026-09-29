@@ -712,14 +712,9 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	add_child(canvas)
 	_offline_canvas = canvas
 
+	# Colores y estilos de UITheme (docs/24-paleta.md), como cualquier panel.
 	var panel := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.1, 0.95)
-	style.border_color = Color(0.7, 0.55, 0.15, 0.9)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	style.set_content_margin_all(20)
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -728,29 +723,19 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	vbox.add_theme_constant_override("separation", 6)
 	panel.add_child(vbox)
 
-	var title := Label.new()
-	title.text = Tr.t("FMT_OFFLINE_TITLE") % _format_elapsed(elapsed)
-	title.add_theme_font_size_override("font_size", 18)
-	title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.25))
+	var title := UITheme.make_label(Tr.t("FMT_OFFLINE_TITLE") % _format_elapsed(elapsed), "section", UITheme.ACCENT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
+	vbox.add_child(UITheme.make_separator())
 
 	var res_names: Dictionary = {"gold": Tr.res_cap("gold"), "steel": Tr.res_cap("steel"), "oil": Tr.res_cap("oil"), "wood": Tr.res_cap("wood")}
 	for res in earnings:
 		if earnings[res] == 0:
 			continue
-		var lbl := Label.new()
 		var amount: int = earnings[res]
-		if amount > 0:
-			lbl.text = "+%d %s" % [amount, res_names.get(res, res)]
-			lbl.add_theme_color_override("font_color", GameConfig.resource_colors.get(res, Color.WHITE))
-		else:
-			lbl.text = "%d %s" % [amount, res_names.get(res, res)]
-			lbl.add_theme_color_override("font_color", Color(0.9, 0.35, 0.3))
-		lbl.add_theme_font_size_override("font_size", 16)
+		var text := ("+%d %s" if amount > 0 else "%d %s") % [amount, res_names.get(res, res)]
+		var lbl := UITheme.make_label(text, "body", UITheme.resource_color(res) if amount > 0 else UITheme.DANGER)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vbox.add_child(lbl)
 
@@ -759,18 +744,7 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 	close_btn.text = Tr.t("BTN_CLOSE")
 	close_btn.custom_minimum_size = Vector2(100, 36)
 	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var close_style := StyleBoxFlat.new()
-	close_style.bg_color = Color(0.7, 0.55, 0.15, 0.8)
-	close_style.set_corner_radius_all(4)
-	close_style.set_content_margin_all(6)
-	close_btn.add_theme_stylebox_override("normal", close_style)
-	var close_hover := StyleBoxFlat.new()
-	close_hover.bg_color = Color(0.8, 0.65, 0.25, 0.9)
-	close_hover.set_corner_radius_all(4)
-	close_hover.set_content_margin_all(6)
-	close_btn.add_theme_stylebox_override("hover", close_hover)
-	close_btn.add_theme_color_override("font_color", Color(0.1, 0.08, 0.05))
-	close_btn.add_theme_font_size_override("font_size", 14)
+	UITheme.style_button(close_btn, UITheme.BTN)
 	vbox.add_child(close_btn)
 
 	canvas.add_child(panel)

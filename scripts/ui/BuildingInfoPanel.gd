@@ -203,7 +203,7 @@ func _build_ui() -> void:
 	_move_btn.icon = UITheme.icon_texture("move")
 	_move_btn.add_theme_constant_override("h_separation", 10)
 	_move_btn.custom_minimum_size.y = 52
-	UITheme.style_button(_move_btn, UITheme.CAT_SUPPORT.darkened(0.35), UITheme.FONT_SECTION)
+	UITheme.style_button(_move_btn, UITheme.INFO.darkened(0.3), UITheme.FONT_SECTION)
 	_move_btn.pressed.connect(_on_move)
 	_move_container.add_child(_move_btn)
 	_vbox.add_child(_move_container)

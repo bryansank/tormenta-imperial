@@ -155,6 +155,10 @@ mapa. **LISTO** (o Esc) termina; **RESTABLECER DISPOSICIÓN** vuelve a la de ser
 
 ## 5. Colores y contraste
 
+Todos salen de una paleta de diez colores con nombre: ver
+[24-paleta.md](24-paleta.md). Las paletas para daltonismo y el alto contraste
+solo cambian colores de esa paleta; el resto se deriva.
+
 Los colores de `UITheme` son **tokens** (`static var`), no constantes:
 `UITheme.configure(paleta, alto_contraste, opacidad, tamaño_texto, lado_táctil)`
 los reescribe y todo lo que pinta con `UITheme.POSITIVE / DANGER / WARNING /

@@ -121,8 +121,10 @@ func _setup_ui() -> void:
 		col.add_theme_constant_override("separation", 4)
 		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
+		# Cabecera en laton para las tres ramas; la rama solo se nota en la
+		# franja izquierda de sus tarjetas (docs/24-paleta.md).
 		col.add_child(UITheme.section_header(
-			Tr.t("TECH_BRANCH_" + branch.to_upper()), branch_colors[branch]
+			Tr.t("TECH_BRANCH_" + branch.to_upper()), UITheme.ACCENT
 		))
 		# Que hace la rama y que significa en el mundo.
 		col.add_child(_wrapped_label(
@@ -174,7 +176,7 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 		UITheme.set_label_color(btn, UITheme.POSITIVE)
 		btn.disabled = true
 	elif can_research:
-		UITheme.style_card_button(btn, branch_color.darkened(0.6), branch_color)
+		UITheme.style_card_button(btn, UITheme.CARD_BG, branch_color)
 	else:
 		UITheme.style_card_button(btn, UITheme.BTN_DISABLED, UITheme.TEXT_DIM)
 		btn.disabled = true

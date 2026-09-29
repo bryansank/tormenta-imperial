@@ -31,6 +31,7 @@ Spanish, the rest in English.
 | 21 | [Interfaz y dispositivos](21-interfaz-y-dispositivos.md) | Device profiles, canvas scaling without black bars, Settings tabs, HUD show/hide, movable panels, colour-blind palettes and contrast, touch/mouse help texts, the single menu, touch play and placement |
 | 22 | [Línea jugable](22-linea-jugable.md) | The whole campaign at real timings (`tools/line_probe.gd`, ten seeds, before/after), dead ends fixed, storm/Tithe pacing, the ¿QUÉ HACER? panel, remaining risks and open decisions, human playtest checklist |
 | 23 | [Prólogo, tutorial y ayudas](23-onboarding.md) | The lore as a Regency dossier (`PrologueScreen`), the guided coach-mark tutorial on the real UI, the help callouts one at a time, the AYUDA index (`HelpIndexPanel`) |
+| 24 | [Paleta](24-paleta.md) | The ten UI colours in `UITheme` (name, hex, use, where not to use them), what is derived from them, categories and tech branches, what stays out of the palette (world, resources, sides) |
 
 ## Quick Reference
 

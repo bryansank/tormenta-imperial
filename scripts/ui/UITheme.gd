@@ -3,66 +3,81 @@ class_name UITheme
 ## Static utility class — no autoload needed. Use UITheme.method() from any script.
 
 # ══════════════════════════════════════
-# COLOR PALETTE — Dieselpunk Military
+# PALETA (docs/24-paleta.md)
 # ══════════════════════════════════════
+# Diez colores con nombre y funcion: los de _PALETTE, mas abajo. Todos los
+# tokens de esta seccion salen de ellos. Los que no son de la paleta se
+# derivan en _derive() con darkened() / lightened() / alfa, nunca con un color
+# nuevo. Un panel pinta con estos tokens; si necesita otro tono, lo deriva igual.
+# Sin valor aqui: _static_init() los rellena con la paleta de serie.
 
-# Backgrounds
-const BG_DARK := Color(0.05, 0.06, 0.04)
-static var PANEL_BG := Color(0.1, 0.11, 0.09, 0.95)
-static var PANEL_BG_LIGHT := Color(0.13, 0.14, 0.11, 0.9)
-static var CARD_BG := Color(0.12, 0.13, 0.1, 0.9)
-
-# Accent / Border
-static var ACCENT := Color(0.77, 0.59, 0.16)          # Brass gold
-static var ACCENT_DIM := Color(0.5, 0.38, 0.12, 0.6)  # Muted brass
-
-# Text
-static var TEXT := Color(0.91, 0.86, 0.78)             # Parchment — 12.1:1
-static var TEXT_DIM := Color(0.72, 0.66, 0.52)         # Aged brass — 7.0:1 (era 0.55/0.49/0.37 = 4.1:1, no pasaba AA)
-static var TEXT_BRIGHT := Color(1.0, 0.95, 0.85)       # Highlighted — 14.9:1
+# Fondos: SURFACE es de la paleta; los demas, sus variantes.
+static var SURFACE: Color
+static var BG_DARK: Color
+static var PANEL_BG: Color
+static var PANEL_BG_LIGHT: Color
+static var CARD_BG: Color
 ## Fondo de las tarjetas del HUD (recursos, poblacion, objetivo, globos).
-static var HUD_BG := Color(0.06, 0.07, 0.05, 0.92)
+static var HUD_BG: Color
+
+# Acento de laton y su variante apagada (bordes secundarios).
+static var ACCENT: Color
+static var ACCENT_DIM: Color
+
+# Texto: normal (12.1:1), tenue (7.0:1) y resaltado (14.9:1).
+static var TEXT: Color
+static var TEXT_DIM: Color
+static var TEXT_BRIGHT: Color
 
 # Fondo de referencia para medir contraste: el pixel mas claro de la placa
 # metalica 9-patch, medido sobre capturas reales (docs/media/dev). Todo el texto
-# se corrige contra este peor caso, no contra PANEL_BG teorico.
+# se corrige contra este peor caso, no contra PANEL_BG teorico. Es una medida,
+# no un color que se pinte.
 const UI_BG_REFERENCE := Color(0.14, 0.12, 0.07)
 ## Ratio minimo exigido (WCAG AA para texto normal).
 static var MIN_CONTRAST := 4.5
 
-# Semantic
-static var POSITIVE := Color(0.29, 0.55, 0.25)         # Military green
-static var DANGER := Color(0.55, 0.23, 0.16)           # Rust red
-static var WARNING := Color(0.8, 0.53, 0.13)           # Amber
-static var INFO := Color(0.29, 0.42, 0.55)             # Steel blue
+# Semanticos: uno por significado.
+static var POSITIVE: Color
+static var DANGER: Color
+static var WARNING: Color
+static var INFO: Color
 
-# Buttons
-const BTN := Color(0.15, 0.16, 0.13)
-const BTN_HOVER := Color(0.23, 0.24, 0.2)
-const BTN_PRESSED := Color(0.29, 0.31, 0.26)
-const BTN_DISABLED := Color(0.1, 0.1, 0.09, 0.7)
+# Botones: NEUTRAL es de la paleta; hover, pulsado y apagado, sus variantes.
+static var NEUTRAL: Color
+static var BTN: Color
+static var BTN_HOVER: Color
+static var BTN_PRESSED: Color
+static var BTN_DISABLED: Color
 
-# Resources
-static var RES_GOLD := Color(1.0, 0.85, 0.2)
-static var RES_STEEL := Color(0.7, 0.75, 0.8)
-static var RES_OIL := Color(0.5, 0.45, 0.55)
-static var RES_WOOD := Color(0.6, 0.4, 0.2)
+# Recursos: la leyenda de la barra del almacen. No son de la paleta a
+# proposito (cada recurso tiene su color y su icono), y no se usan para nada mas.
+static var RES_GOLD: Color
+static var RES_STEEL: Color
+static var RES_OIL: Color
+static var RES_WOOD: Color
 
-# Categories
-static var CAT_PRODUCTION := Color(0.9, 0.7, 0.2)
-static var CAT_SUPPORT := Color(0.45, 0.75, 0.4)
-static var CAT_MILITARY := Color(0.8, 0.35, 0.25)
-static var CAT_DECORATION := Color(0.6, 0.5, 0.8)
+# Categorias de CONSTRUIR: solo pintan la franja inferior de la tarjeta, con
+# tres tonos de la paleta (laton la economia, oxido lo militar, texto tenue la
+# decoracion). Los botones del filtro no llevan color de categoria.
+static var CAT_PRODUCTION: Color
+static var CAT_SUPPORT: Color
+static var CAT_MILITARY: Color
+static var CAT_DECORATION: Color
 
-# Tech branches
-static var BRANCH_INDUSTRIAL := Color(0.9, 0.6, 0.2)
-static var BRANCH_MILITARY := Color(0.8, 0.3, 0.3)
-static var BRANCH_LOGISTICS := Color(0.3, 0.7, 0.9)
+# Ramas del arbol tecnologico: solo la franja izquierda de cada tarjeta.
+static var BRANCH_INDUSTRIAL: Color
+static var BRANCH_MILITARY: Color
+static var BRANCH_LOGISTICS: Color
 
 # Tablero de combate: casilla vacia, a la que se puede mover, y objetivo.
-static var BOARD_EMPTY := Color(0.11, 0.12, 0.10)
-static var BOARD_MOVE := Color(0.20, 0.33, 0.45)
-static var BOARD_TARGET := Color(0.48, 0.18, 0.14)
+static var BOARD_EMPTY: Color
+static var BOARD_MOVE: Color
+static var BOARD_TARGET: Color
+
+static func _static_init() -> void:
+	_apply_tokens(resolve_tokens("default", false, 1.0))
+
 
 # ══════════════════════════════════════
 # PALETAS, CONTRASTE, OPACIDAD Y TEXTO (docs/21-interfaz-y-dispositivos.md)
@@ -79,43 +94,34 @@ static var BOARD_TARGET := Color(0.48, 0.18, 0.14)
 ## colores de Okabe-Ito). tritan: segura para tritanopia (turquesa / carmesi / rosa).
 const PALETTES := ["default", "red_green", "tritan"]
 
-## Valores de serie de todos los tokens configurables.
+## La paleta: los diez colores de la interfaz, en el orden de docs/24-paleta.md.
+const PALETTE_NAMES := ["SURFACE", "NEUTRAL", "ACCENT", "TEXT", "TEXT_DIM", "TEXT_BRIGHT",
+	"POSITIVE", "DANGER", "WARNING", "INFO"]
+
+## Valores de serie de lo que una paleta puede cambiar: los diez colores de la
+## paleta y la leyenda de recursos. Todo lo demas se deriva (ver _derive()).
 const _BASE := {
-	"PANEL_BG": Color(0.1, 0.11, 0.09, 0.95),
-	"PANEL_BG_LIGHT": Color(0.13, 0.14, 0.11, 0.9),
-	"CARD_BG": Color(0.12, 0.13, 0.1, 0.9),
-	"HUD_BG": Color(0.06, 0.07, 0.05, 0.92),
-	"ACCENT": Color(0.77, 0.59, 0.16),
-	"ACCENT_DIM": Color(0.5, 0.38, 0.12, 0.6),
-	"TEXT": Color(0.91, 0.86, 0.78),
-	"TEXT_DIM": Color(0.72, 0.66, 0.52),
-	"TEXT_BRIGHT": Color(1.0, 0.95, 0.85),
-	"OUTLINE_COLOR": Color(0.03, 0.03, 0.02, 0.95),
-	"POSITIVE": Color(0.29, 0.55, 0.25),
-	"DANGER": Color(0.55, 0.23, 0.16),
-	"WARNING": Color(0.8, 0.53, 0.13),
-	"INFO": Color(0.29, 0.42, 0.55),
+	"SURFACE": Color(0.1, 0.11, 0.09),        # Superficie de panel
+	"NEUTRAL": Color(0.15, 0.16, 0.13),       # Botones y bordes neutros
+	"ACCENT": Color(0.77, 0.59, 0.16),        # Laton
+	"TEXT": Color(0.91, 0.86, 0.78),          # Pergamino
+	"TEXT_DIM": Color(0.72, 0.66, 0.52),      # Laton viejo
+	"TEXT_BRIGHT": Color(1.0, 0.95, 0.85),    # Resaltado
+	"POSITIVE": Color(0.29, 0.55, 0.25),      # Verde militar
+	"DANGER": Color(0.55, 0.23, 0.16),        # Rojo oxido
+	"WARNING": Color(0.8, 0.53, 0.13),        # Ambar
+	"INFO": Color(0.29, 0.42, 0.55),          # Azul acero
 	"RES_GOLD": Color(1.0, 0.85, 0.2),
 	"RES_STEEL": Color(0.7, 0.75, 0.8),
 	"RES_OIL": Color(0.5, 0.45, 0.55),
 	"RES_WOOD": Color(0.6, 0.4, 0.2),
-	"CAT_PRODUCTION": Color(0.9, 0.7, 0.2),
-	"CAT_SUPPORT": Color(0.45, 0.75, 0.4),
-	"CAT_MILITARY": Color(0.8, 0.35, 0.25),
-	"CAT_DECORATION": Color(0.6, 0.5, 0.8),
-	"BRANCH_INDUSTRIAL": Color(0.9, 0.6, 0.2),
-	"BRANCH_MILITARY": Color(0.8, 0.3, 0.3),
-	"BRANCH_LOGISTICS": Color(0.3, 0.7, 0.9),
-	"BOARD_EMPTY": Color(0.11, 0.12, 0.10),
-	"BOARD_MOVE": Color(0.20, 0.33, 0.45),
-	"BOARD_TARGET": Color(0.48, 0.18, 0.14),
 }
 
-## Lo que cambia cada paleta sobre _BASE. Aliado/bueno, enemigo/malo y aviso
-## quedan en tonos que esa vision distingue, y ademas separados en luminancia
-## (azul oscuro / bermellon medio / amarillo claro), que es lo que se lee
-## aunque el tono falle. La barra de vida (bueno -> aviso -> malo) y las fases
-## de la Tormenta (aviso -> produccion -> peligro) salen de estos mismos tokens.
+## Lo que cambia cada paleta sobre _BASE: solo los cuatro semanticos (y dos
+## recursos). Aliado/bueno, enemigo/malo y aviso quedan en tonos que esa vision
+## distingue, y ademas separados en luminancia (azul oscuro / bermellon medio /
+## amarillo claro), que es lo que se lee aunque el tono falle. Categorias,
+## ramas, tablero, barra de vida y fases de la Tormenta se derivan de estos.
 const _PALETTE_TOKENS := {
 	"default": {},
 	"red_green": {
@@ -123,46 +129,26 @@ const _PALETTE_TOKENS := {
 		"DANGER": Color(0.84, 0.37, 0.0),
 		"WARNING": Color(0.94, 0.89, 0.26),
 		"INFO": Color(0.80, 0.47, 0.65),
-		"CAT_PRODUCTION": Color(0.90, 0.62, 0.0),
-		"CAT_SUPPORT": Color(0.34, 0.71, 0.91),
-		"CAT_MILITARY": Color(0.84, 0.37, 0.0),
-		"BRANCH_INDUSTRIAL": Color(0.90, 0.62, 0.0),
-		"BRANCH_MILITARY": Color(0.84, 0.37, 0.0),
-		"BRANCH_LOGISTICS": Color(0.34, 0.71, 0.91),
 		"RES_WOOD": Color(0.62, 0.36, 0.08),
 		"RES_OIL": Color(0.55, 0.45, 0.75),
-		"BOARD_MOVE": Color(0.33, 0.30, 0.42),
-		"BOARD_TARGET": Color(0.50, 0.25, 0.0),
 	},
 	"tritan": {
 		"POSITIVE": Color(0.0, 0.62, 0.60),
 		"DANGER": Color(0.86, 0.15, 0.30),
 		"WARNING": Color(0.97, 0.55, 0.62),
 		"INFO": Color(0.55, 0.55, 0.60),
-		"CAT_PRODUCTION": Color(0.95, 0.45, 0.50),
-		"CAT_SUPPORT": Color(0.30, 0.75, 0.75),
-		"CAT_MILITARY": Color(0.86, 0.15, 0.30),
-		"BRANCH_INDUSTRIAL": Color(0.95, 0.55, 0.55),
-		"BRANCH_MILITARY": Color(0.86, 0.15, 0.30),
-		"BRANCH_LOGISTICS": Color(0.30, 0.75, 0.75),
-		"BOARD_MOVE": Color(0.35, 0.35, 0.38),
-		"BOARD_TARGET": Color(0.50, 0.08, 0.18),
 	},
 }
 
-## Alto contraste: fondos opacos y mas oscuros, bordes claros, sin texto
-## secundario apagado (TEXT_DIM pasa a ser tan claro como TEXT) y AAA (7:1).
+## Alto contraste: superficie mas oscura (y opaca, ver _derive()), laton y
+## texto mas claros, sin texto secundario apagado (TEXT_DIM casi como TEXT) y
+## AAA (7:1).
 const _HIGH_CONTRAST := {
-	"PANEL_BG": Color(0.03, 0.035, 0.03, 1.0),
-	"PANEL_BG_LIGHT": Color(0.06, 0.065, 0.05, 1.0),
-	"CARD_BG": Color(0.05, 0.055, 0.04, 1.0),
-	"HUD_BG": Color(0.02, 0.02, 0.015, 1.0),
+	"SURFACE": Color(0.03, 0.035, 0.03),
 	"ACCENT": Color(0.98, 0.78, 0.28),
-	"ACCENT_DIM": Color(0.85, 0.66, 0.22, 1.0),
 	"TEXT": Color(0.98, 0.96, 0.92),
 	"TEXT_DIM": Color(0.93, 0.90, 0.84),
 	"TEXT_BRIGHT": Color(1.0, 1.0, 1.0),
-	"OUTLINE_COLOR": Color(0.0, 0.0, 0.0, 1.0),
 }
 
 ## Tamanos de letra de serie (texto "normal") y factores de cada tamano.
@@ -189,7 +175,20 @@ static func configure(p_palette: String = "default", p_high_contrast: bool = fal
 	high_contrast = p_high_contrast
 	panel_opacity = clampf(p_opacity, OPACITY_MIN, OPACITY_MAX)
 	text_scale = float(TEXT_SCALES.get(p_text_size, 1.0))
-	var d: Dictionary = resolve_tokens(palette, high_contrast, panel_opacity)
+	_apply_tokens(resolve_tokens(palette, high_contrast, panel_opacity))
+	MIN_CONTRAST = 7.0 if high_contrast else 4.5
+	FONT_TITLE = scaled_font(_FONT_BASE["title"], text_scale)
+	FONT_SECTION = scaled_font(_FONT_BASE["section"], text_scale)
+	FONT_BODY = scaled_font(_FONT_BASE["body"], text_scale)
+	FONT_SMALL = scaled_font(_FONT_BASE["small"], text_scale)
+	FONT_BUTTON = scaled_font(_FONT_BASE["button"], text_scale)
+	MIN_BTN_H = maxi(_BASE_MIN_BTN_H, p_touch_target)
+
+## Copia un diccionario de resolve_tokens() en los tokens estaticos.
+static func _apply_tokens(d: Dictionary) -> void:
+	SURFACE = d["SURFACE"]
+	NEUTRAL = d["NEUTRAL"]
+	BG_DARK = d["BG_DARK"]
 	PANEL_BG = d["PANEL_BG"]
 	PANEL_BG_LIGHT = d["PANEL_BG_LIGHT"]
 	CARD_BG = d["CARD_BG"]
@@ -204,6 +203,10 @@ static func configure(p_palette: String = "default", p_high_contrast: bool = fal
 	DANGER = d["DANGER"]
 	WARNING = d["WARNING"]
 	INFO = d["INFO"]
+	BTN = d["BTN"]
+	BTN_HOVER = d["BTN_HOVER"]
+	BTN_PRESSED = d["BTN_PRESSED"]
+	BTN_DISABLED = d["BTN_DISABLED"]
 	RES_GOLD = d["RES_GOLD"]
 	RES_STEEL = d["RES_STEEL"]
 	RES_OIL = d["RES_OIL"]
@@ -218,13 +221,6 @@ static func configure(p_palette: String = "default", p_high_contrast: bool = fal
 	BOARD_EMPTY = d["BOARD_EMPTY"]
 	BOARD_MOVE = d["BOARD_MOVE"]
 	BOARD_TARGET = d["BOARD_TARGET"]
-	MIN_CONTRAST = 7.0 if high_contrast else 4.5
-	FONT_TITLE = scaled_font(_FONT_BASE["title"], text_scale)
-	FONT_SECTION = scaled_font(_FONT_BASE["section"], text_scale)
-	FONT_BODY = scaled_font(_FONT_BASE["body"], text_scale)
-	FONT_SMALL = scaled_font(_FONT_BASE["small"], text_scale)
-	FONT_BUTTON = scaled_font(_FONT_BASE["button"], text_scale)
-	MIN_BTN_H = maxi(_BASE_MIN_BTN_H, p_touch_target)
 
 ## Los tokens que saldrian con esas opciones, sin aplicarlos. Puro: los tests y
 ## la vista previa de Ajustes lo usan para comparar paletas.
@@ -233,11 +229,43 @@ static func resolve_tokens(p_palette: String, p_high_contrast: bool, p_opacity: 
 	d.merge(_PALETTE_TOKENS.get(p_palette, {}), true)
 	if p_high_contrast:
 		d.merge(_HIGH_CONTRAST, true)
+	_derive(d, p_high_contrast)
 	var op := clampf(p_opacity, OPACITY_MIN, OPACITY_MAX)
 	for key in ["PANEL_BG", "PANEL_BG_LIGHT", "CARD_BG", "HUD_BG"]:
 		var c: Color = d[key]
 		d[key] = Color(c.r, c.g, c.b, c.a * op)
 	return d
+
+## Todo lo que no es de la paleta, sacado de ella. Asi una paleta para
+## daltonismo o el alto contraste solo tienen que cambiar los colores base.
+static func _derive(d: Dictionary, hc: bool) -> void:
+	var surface: Color = d["SURFACE"]
+	var neutral: Color = d["NEUTRAL"]
+	var accent: Color = d["ACCENT"]
+	# En alto contraste los fondos son opacos y el laton apagado casi no se apaga.
+	var panel_a := 1.0 if hc else 0.95
+	var soft_a := 1.0 if hc else 0.9
+	d["BG_DARK"] = surface.darkened(0.5)
+	d["PANEL_BG"] = Color(surface, panel_a)
+	d["PANEL_BG_LIGHT"] = Color(surface.lightened(0.04), soft_a)
+	d["CARD_BG"] = Color(surface.lightened(0.02), soft_a)
+	d["HUD_BG"] = Color(surface.darkened(0.4), 1.0 if hc else 0.92)
+	d["ACCENT_DIM"] = Color(accent.darkened(0.13), 1.0) if hc else Color(accent.darkened(0.35), 0.6)
+	d["OUTLINE_COLOR"] = Color(surface.darkened(1.0 if hc else 0.7), 1.0 if hc else 0.95)
+	d["BTN"] = neutral
+	d["BTN_HOVER"] = neutral.lightened(0.1)
+	d["BTN_PRESSED"] = neutral.lightened(0.17)
+	d["BTN_DISABLED"] = Color(surface, 0.7)
+	d["CAT_PRODUCTION"] = accent
+	d["CAT_SUPPORT"] = accent
+	d["CAT_MILITARY"] = d["DANGER"]
+	d["CAT_DECORATION"] = d["TEXT_DIM"]
+	d["BRANCH_INDUSTRIAL"] = accent
+	d["BRANCH_MILITARY"] = d["DANGER"]
+	d["BRANCH_LOGISTICS"] = d["INFO"]
+	d["BOARD_EMPTY"] = surface.lightened(0.02)
+	d["BOARD_MOVE"] = (d["INFO"] as Color).darkened(0.2)
+	d["BOARD_TARGET"] = (d["DANGER"] as Color).darkened(0.15)
 
 ## Tamano de letra escalado, nunca por debajo de 11 px (legible en movil).
 static func scaled_font(base_px: int, scale: float) -> int:
@@ -259,7 +287,7 @@ static var FONT_BUTTON := 17
 # La placa metalica es una textura ruidosa: un trazo claro fino se pierde encima.
 # Un contorno oscuro alrededor de cada glifo da mas legibilidad (y mas cuerpo)
 # que subir un punto de tamano.
-static var OUTLINE_COLOR := Color(0.03, 0.03, 0.02, 0.95)
+static var OUTLINE_COLOR: Color
 
 ## Grosor de contorno proporcional al tamano de letra (en px).
 static func outline_for(font_size: int) -> int:
@@ -494,7 +522,7 @@ static func make_panel_style(border: bool = true) -> StyleBox:
 
 static func make_hud_style() -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.06, 0.07, 0.05, 0.95)
+	s.bg_color = Color(BG_DARK, 0.95)
 	s.set_corner_radius_all(0)
 	s.set_content_margin_all(12)
 	# Borde grueso militar inferior
@@ -541,7 +569,7 @@ static func style_button(btn: Button, bg: Color = BTN, font_size: int = FONT_BUT
 	btn.add_theme_stylebox_override("normal", _button_style(_metal_tint(bg, 1.0), bg, ACCENT_DIM, 3))
 	btn.add_theme_stylebox_override("hover", _button_style(_metal_tint(bg, 1.32), bg.lightened(0.2), ACCENT, 3))
 	btn.add_theme_stylebox_override("pressed", _button_style(_metal_tint(bg, 1.6), bg.lightened(0.4), ACCENT, 4))
-	btn.add_theme_stylebox_override("disabled", _button_style(Color(0.5, 0.5, 0.47), BTN_DISABLED, Color(0.2, 0.2, 0.15), 2))
+	btn.add_theme_stylebox_override("disabled", _button_style(Color(0.5, 0.5, 0.47), BTN_DISABLED, NEUTRAL, 2))
 
 	_apply_button_text(btn, font_size)
 
@@ -582,7 +610,7 @@ static func style_card_button(btn: Button, bg: Color = CARD_BG, left_color: Colo
 	d.bg_color = BTN_DISABLED
 	d.set_corner_radius_all(CORNER)
 	d.set_content_margin_all(12)
-	d.border_color = Color(0.15, 0.15, 0.12, 0.4)
+	d.border_color = Color(NEUTRAL, 0.4)
 	d.set_border_width_all(1)
 	d.border_width_left = 3
 	btn.add_theme_stylebox_override("disabled", d)
@@ -646,7 +674,7 @@ static func make_progress_bar(fill_color: Color = ACCENT, height: int = 18) -> P
 	bar.show_percentage = false
 
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.06, 0.06, 0.05)
+	bg.bg_color = BG_DARK
 	bg.set_corner_radius_all(2)
 	bg.border_color = ACCENT_DIM
 	bg.set_border_width_all(2)
@@ -795,6 +823,24 @@ static func resource_color(res_id: String) -> Color:
 		return GameConfig.resource_colors[res_id]
 	return TEXT
 
+## Color de un aviso segun su categoria (EventBus.notification_posted). Los
+## servicios mandan un color, pero lo decide la interfaz: cada categoria tiene
+## su token de la paleta. Solo una categoria desconocida (o "combat", que ya
+## llega con un token) conserva el color que trae.
+static func notice_color(category: String, fallback: Color) -> Color:
+	match category:
+		"positive", "success":
+			return POSITIVE
+		"danger":
+			return DANGER
+		"warning":
+			return WARNING
+		"info":
+			return INFO
+		"notice":
+			return ACCENT
+	return fallback
+
 ## Ficha de recurso del HUD: [icono] 2480. La cantidad es el nodo "Amount"
 ## (ver chip_amount) para que el panel la actualice sin guardar mas punteros.
 static func make_resource_chip(res_id: String, size_name: String = "body") -> HBoxContainer:
@@ -847,7 +893,7 @@ static func make_pool_bar(segment_colors: Array, height: int = 10) -> PanelConta
 		segments.add_child(seg)
 	var free := ColorRect.new()
 	free.name = "Free"
-	free.color = Color(0.09, 0.1, 0.08)
+	free.color = NEUTRAL.darkened(0.4)
 	free.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	free.custom_minimum_size = Vector2(0, height)
 	free.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -870,7 +916,7 @@ static func set_pool_bar_alert(bar: PanelContainer, alert: bool) -> void:
 
 static func _pool_frame_style(alert: bool) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.04, 0.04, 0.03)
+	s.bg_color = BG_DARK.darkened(0.2)
 	s.set_corner_radius_all(2)
 	s.set_content_margin_all(2)
 	s.border_color = readable(DANGER) if alert else ACCENT_DIM
@@ -921,7 +967,7 @@ static func make_data_display_style() -> StyleBox:
 	if tex != null:
 		return tex
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.08, 0.09, 0.07)
+	s.bg_color = SURFACE.darkened(0.2)
 	s.set_corner_radius_all(1)
 	s.set_content_margin_all(8)
 	s.border_color = ACCENT_DIM
@@ -963,7 +1009,7 @@ static func _theme_button(t: Theme, type: String) -> void:
 	var n := _button_style(Color(1, 1, 1), BTN, ACCENT_DIM, 3)
 	var h := _button_style(Color(1.32, 1.28, 1.15), BTN_HOVER, ACCENT, 3)
 	var p := _button_style(Color(1.6, 1.5, 1.3), BTN_PRESSED, ACCENT, 4)
-	var d := _button_style(Color(0.5, 0.5, 0.47), BTN_DISABLED, Color(0.2, 0.2, 0.15), 2)
+	var d := _button_style(Color(0.5, 0.5, 0.47), BTN_DISABLED, NEUTRAL, 2)
 	var focus := _flat(Color(0, 0, 0, 0), ACCENT, 2, CORNER, 10)
 	t.set_stylebox("normal", type, n)
 	t.set_stylebox("hover", type, h)
@@ -986,9 +1032,9 @@ static func _theme_button(t: Theme, type: String) -> void:
 static func _tab_styles() -> Dictionary:
 	var tab_pad := maxi(8, int((MIN_BTN_H - FONT_BODY) / 2.0))
 	var sel := _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.28), ACCENT, 2, CORNER, 0)
-	var off := _flat(Color(0.05, 0.06, 0.04, 0.9), ACCENT_DIM, 1, CORNER, 0)
+	var off := _flat(Color(BG_DARK, 0.9), ACCENT_DIM, 1, CORNER, 0)
 	var hov := _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.16), ACCENT, 1, CORNER, 0)
-	var dis := _flat(Color(0.05, 0.06, 0.04, 0.5), ACCENT_DIM, 1, CORNER, 0)
+	var dis := _flat(Color(BG_DARK, 0.5), ACCENT_DIM, 1, CORNER, 0)
 	for sb in [sel, off, hov, dis]:
 		sb.content_margin_left = 14
 		sb.content_margin_right = 14
@@ -1060,8 +1106,8 @@ static func build_global_theme() -> Theme:
 	# ── ScrollBars ──
 	var clear := Color(0, 0, 0, 0)
 	for sb_type in ["VScrollBar", "HScrollBar"]:
-		t.set_stylebox("scroll", sb_type, _flat(Color(0.04, 0.05, 0.03, 0.6), clear, 0, CORNER, 2))
-		t.set_stylebox("scroll_focus", sb_type, _flat(Color(0.04, 0.05, 0.03, 0.6), clear, 0, CORNER, 2))
+		t.set_stylebox("scroll", sb_type, _flat(Color(BG_DARK, 0.6), clear, 0, CORNER, 2))
+		t.set_stylebox("scroll_focus", sb_type, _flat(Color(BG_DARK, 0.6), clear, 0, CORNER, 2))
 		t.set_stylebox("grabber", sb_type, _flat(ACCENT_DIM, clear, 0, CORNER, 2))
 		t.set_stylebox("grabber_highlight", sb_type, _flat(ACCENT, clear, 0, CORNER, 2))
 		t.set_stylebox("grabber_pressed", sb_type, _flat(ACCENT.lightened(0.2), clear, 0, CORNER, 2))
@@ -1073,7 +1119,7 @@ static func build_global_theme() -> Theme:
 		t.set_stylebox("grabber_area_highlight", sl, _flat(ACCENT, clear, 0, CORNER, 0))
 
 	# ── ProgressBar ──
-	t.set_stylebox("background", "ProgressBar", _flat(Color(0.06, 0.06, 0.05, 1), ACCENT_DIM, 2, 2, 0))
+	t.set_stylebox("background", "ProgressBar", _flat(BG_DARK, ACCENT_DIM, 2, 2, 0))
 	t.set_stylebox("fill", "ProgressBar", _flat(ACCENT, clear, 0, 2, 0))
 	t.set_color("font_color", "ProgressBar", readable(TEXT))
 	t.set_font_size("font_size", "ProgressBar", FONT_SMALL)
@@ -1087,7 +1133,7 @@ static func build_global_theme() -> Theme:
 	t.set_font_size("font_size", "PopupMenu", FONT_BODY)
 
 	# ── Tooltip ──
-	t.set_stylebox("panel", "TooltipPanel", _flat(Color(0.06, 0.07, 0.05, 0.97), ACCENT, 1, CORNER, 8))
+	t.set_stylebox("panel", "TooltipPanel", _flat(Color(BG_DARK, 0.97), ACCENT, 1, CORNER, 8))
 	t.set_color("font_color", "TooltipLabel", readable(TEXT_BRIGHT))
 	t.set_font_size("font_size", "TooltipLabel", FONT_BODY)
 

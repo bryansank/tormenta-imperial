@@ -83,6 +83,36 @@ func test_every_palette_defines_only_known_tokens() -> void:
 	for key in UITheme._HIGH_CONTRAST:
 		assert_bool(UITheme._BASE.has(key)).is_true()
 
+# ── Paleta pequena (docs/24-paleta.md) ──────────────────────────────
+
+func test_the_palette_has_ten_named_colours() -> void:
+	assert_int(UITheme.PALETTE_NAMES.size()).is_equal(10)
+	for key in UITheme.PALETTE_NAMES:
+		assert_bool(UITheme._BASE.has(key)).override_failure_message(key).is_true()
+
+## Categorias, ramas y botones no traen colores propios: son tonos de la paleta.
+func test_categories_branches_and_buttons_come_from_the_palette() -> void:
+	for pal in UITheme.PALETTES:
+		for hc in [false, true]:
+			var t := UITheme.resolve_tokens(pal, hc, 1.0)
+			var palette_colours: Array = []
+			for key in UITheme.PALETTE_NAMES:
+				palette_colours.append(t[key])
+			for key in ["CAT_PRODUCTION", "CAT_SUPPORT", "CAT_MILITARY", "CAT_DECORATION",
+					"BRANCH_INDUSTRIAL", "BRANCH_MILITARY", "BRANCH_LOGISTICS", "BTN"]:
+				assert_bool(palette_colours.has(t[key])).override_failure_message("%s/%s: %s" % [pal, hc, key]).is_true()
+
+## El texto se lee sobre el fondo en todas las paletas, con y sin alto contraste.
+func test_text_tokens_meet_the_minimum_contrast_on_the_surface() -> void:
+	for pal in UITheme.PALETTES:
+		for hc in [false, true]:
+			var t := UITheme.resolve_tokens(pal, hc, 1.0)
+			var need := 7.0 if hc else 4.5
+			for key in ["TEXT", "TEXT_DIM", "TEXT_BRIGHT"]:
+				for bg in [UITheme.UI_BG_REFERENCE, t["SURFACE"], t["HUD_BG"]]:
+					assert_float(UITheme.contrast_ratio(t[key], bg)) \
+						.override_failure_message("%s/%s: %s" % [pal, hc, key]).is_greater_equal(need)
+
 # ── Alto contraste ───────────────────────────────────────────────────
 
 func test_high_contrast_has_no_low_contrast_secondary_text() -> void:
