@@ -49,6 +49,10 @@ func _ready() -> void:
 	EventBus.game_new_started.connect(_update_objective_hint)
 	EventBus.tutorial_intro_requested.connect(func(): _toast_layer.layer = TOAST_LAYER_UNDER_INTRO)
 	EventBus.tutorial_intro_closed.connect(func(): _toast_layer.layer = TOAST_LAYER)
+	# Con CONSTRUIR abierto, los avisos no tapan la
+	# ventana (se metian encima de la lista de edificios).
+	UIManager.window_opened.connect(func(_w): _sync_toast_layer())
+	UIManager.window_closed.connect(func(_w): _sync_toast_layer.call_deferred())
 	# La expedicion pasa fuera de la base: si no deja rastro aqui, el jugador
 	# vuelve al mapa sin saber que se trajo ni a quien dejo por el camino.
 	EventBus.expedition_started.connect(_on_expedition_started)
@@ -246,6 +250,17 @@ func _casualty_text(casualties: Dictionary) -> String:
 		var def := GameConfig.get_unit_def(unit_id)
 		parts.append("%d %s" % [int(casualties[unit_id]), Tr.t(def.get("name", unit_id))])
 	return " ".join(parts)
+
+func _sync_toast_layer() -> void:
+	if _toast_layer == null:
+		return
+	# Solo con CONSTRUIR abierto: los avisos de la Tormenta tienen que seguir
+	# encima del tablero y de cualquier otra ventana (test_storm_toasts_over_board).
+	var busy := false
+	for w in UIManager.open_windows():
+		if is_instance_valid(w) and String(w.name) == "ConstructionMenu":
+			busy = true
+	_toast_layer.layer = TOAST_LAYER_UNDER_INTRO if busy else TOAST_LAYER
 
 func _show_toast(text: String, color: Color) -> void:
 	var toast_bg := PanelContainer.new()

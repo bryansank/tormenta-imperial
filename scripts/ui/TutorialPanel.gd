@@ -271,6 +271,10 @@ func _layout_step() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var target := TutorialManager.step_target(_step)
 	var text := TutorialManager.step_text(_step)
+	# El edificio que pide el paso ya esta elegido en la lista: la marca esta en
+	# CONSTRUIR (HelpTargets.card_or_build) y el texto deja de pedir que se elija.
+	if target.begins_with("card:") and _card_already_picked(target.substr(5)):
+		text = Tr.ti("GUIDE_PRESS_BUILD")
 	var rect := Rect2()
 	var point := {}
 	# CONSTRUIR es un boton grande siempre visible abajo (menu unico, #31): el
@@ -337,6 +341,12 @@ func _layout_step() -> void:
 			var edge := _edge_point(c, dir, vp, 60.0)
 			_arrow.visible = true
 			_arrow.point_at(edge, dir)
+
+func _card_already_picked(building_id: String) -> bool:
+	var scene := get_tree().current_scene
+	var menu: Node = scene.get_node_or_null("ConstructionMenu") if scene != null else null
+	return menu != null and menu.has_method("selected_building_id") \
+		and menu.selected_building_id() == building_id
 
 ## El ✓ de colocar con el dedo, si esta a la vista (Rect2() si no).
 func _confirm_rect() -> Rect2:
