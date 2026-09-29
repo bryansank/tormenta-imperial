@@ -303,7 +303,7 @@ func _build() -> void:
 	_seal.offset_bottom = -26
 	_sheet.add_child(_seal)
 
-	# El tampon: "DADO DE BAJA" en la portada, "REABIERTO" al final.
+	# El tampon: "FIRMADO" en la portada, "REABIERTO" al final.
 	_stamp = PanelContainer.new()
 	_stamp.name = "Stamp"
 	var ss := StyleBoxFlat.new()
