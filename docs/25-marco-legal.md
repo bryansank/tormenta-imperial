@@ -1,4 +1,4 @@
-# 24 — Marco legal y normas de contenido
+# 25. Marco legal y normas de contenido
 
 Qué leyes venezolanas tocan a Tormenta Imperial, qué dicen y qué reglas de contenido
 salen de ellas. Sirve para revisar textos, arte, descripciones de tienda y publicidad
