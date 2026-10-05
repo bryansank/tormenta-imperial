@@ -729,59 +729,186 @@ static func _build_refinery(sx: float, sz: float) -> Node3D:
 
 
 # ════════════════════════════════════════════════════════════════
-# SAWMILL — Timber frame, saw blade, log pile, conveyor
+# SAWMILL — Cobertizo ABIERTO (2026-10-04, guia de estilo): tejado de una
+# sola agua sobre postes que solo cubre la mitad de atras, cerchas al aire
+# delante y ninguna pared en el frente. Desde la camara de 45 grados se ve
+# lo que hace: la sierra circular GRANDE (el elemento exagerado, un 30 %
+# mas de lo realista), el tronco en la mesa, el tablon recien cortado, la
+# pila de tablones, la de troncos y la maquina de vapor que mueve la correa.
+# El serrin de "trabajando" sale de la sierra (Marker3D "FxAnchor").
 # ════════════════════════════════════════════════════════════════
+
+static var _cached_mats: Dictionary = {}
+
+## Material con mapas de chapa, compartido por nombre (los edificios
+## procedurales nuevos no crean uno por pieza).
+static func _shared_metal(key: String, color: Color, metallic: float, roughness: float) -> StandardMaterial3D:
+	if not _cached_mats.has(key):
+		_cached_mats[key] = _metal(color, metallic, roughness)
+	return _cached_mats[key]
+
+static func _shared_emissive(key: String, color: Color, energy: float) -> StandardMaterial3D:
+	if not _cached_mats.has(key):
+		_cached_mats[key] = _emissive(color, energy)
+	return _cached_mats[key]
+
+static func _group(parent: Node3D, node_name: String) -> Node3D:
+	var g := Node3D.new()
+	g.name = node_name
+	parent.add_child(g)
+	return g
+
 static func _build_sawmill(sx: float, sz: float) -> Node3D:
 	var root: Node3D = Node3D.new()
-	var mat_wood: StandardMaterial3D = _metal(COL_DARK_WOOD, 0.1, 0.85)
-	var mat_iron: StandardMaterial3D = _metal(COL_DARK_IRON, 0.8, 0.4)
-	var mat_brass: StandardMaterial3D = _metal(COL_BRASS, 0.9, 0.3)
-	var mat_light_wood: StandardMaterial3D = _metal(Color(0.55, 0.40, 0.22), 0.1, 0.8)
+	root.name = "SawmillOpen"
+	var wood := _shared_metal("saw_wood", Color(0.50, 0.34, 0.18), 0.05, 0.85)
+	var dark_wood := _shared_metal("saw_dark_wood", COL_DARK_WOOD, 0.05, 0.9)
+	var light_wood := _shared_metal("saw_light_wood", Color(0.74, 0.57, 0.34), 0.05, 0.8)
+	var bark := _shared_metal("saw_bark", Color(0.36, 0.24, 0.13), 0.05, 0.95)
+	var iron := _shared_metal("saw_iron", COL_DARK_IRON, 0.8, 0.4)
+	var roof_mat := _shared_metal("saw_roof", Color(0.42, 0.30, 0.22), 0.6, 0.55)
+	# Acero claro y poco metalico: muy metalico refleja el cielo y se ve negro.
+	var steel := _shared_metal("saw_steel", Color(0.86, 0.88, 0.9), 0.35, 0.3)
+	var red := _shared_metal("saw_red", Color(0.80, 0.16, 0.10), 0.3, 0.5)
+	var brass := _shared_metal("saw_brass", COL_BRASS, 0.9, 0.3)
+	var fire := _shared_emissive("saw_fire", COL_FIRE, 2.2)
+	var hw := minf(sx, 3.2) * 0.5
+	var hd := minf(sz, 3.2) * 0.5
+	var floor_y := 0.14
 
-	# Main timber frame structure — open shed
-	# Four corner posts
-	_add_box(root, Vector3(-sx * 0.4, 0.7, -sz * 0.35), Vector3(0.12, 1.4, 0.12), mat_wood)
-	_add_box(root, Vector3(sx * 0.4, 0.7, -sz * 0.35), Vector3(0.12, 1.4, 0.12), mat_wood)
-	_add_box(root, Vector3(-sx * 0.4, 0.7, sz * 0.35), Vector3(0.12, 1.4, 0.12), mat_wood)
-	_add_box(root, Vector3(sx * 0.4, 0.7, sz * 0.35), Vector3(0.12, 1.4, 0.12), mat_wood)
-	# Corrugated metal roof
-	_add_box(root, Vector3(0, 1.5, 0), Vector3(sx * 0.95, 0.06, sz * 0.85), mat_iron)
-	_add_prism(root, Vector3(0, 1.7, 0), Vector3(sx * 0.95, 0.35, sz * 0.85), mat_iron)
+	# ── Suelo de tablas ──
+	var floor_g := _group(root, "Floor")
+	_add_box(floor_g, Vector3(0, floor_y * 0.5, 0), Vector3(hw * 2.0, floor_y, hd * 2.0), wood)
+	for i in 7:
+		var z := lerpf(-hd + 0.2, hd - 0.2, float(i) / 6.0)
+		_add_box(floor_g, Vector3(0, floor_y + 0.005, z), Vector3(hw * 2.0, 0.01, 0.025), dark_wood)
 
-	# Saw blade (large torus in the center, vertical)
-	var blade: MeshInstance3D = _add_torus(root, Vector3(0, 0.8, 0), 0.15, 0.35, mat_iron, 8, 16)
-	blade.rotation.z = PI / 2.0
-	# Blade axle
-	_add_cylinder(root, Vector3(0, 0.8, 0), 0.04, sz * 0.5, mat_brass)
+	# ── Cobertizo: postes, media cubierta atras, cerchas al aire delante ──
+	var shed := _group(root, "Shed")
+	var back_z := -hd + 0.1
+	var mid_z := -0.15
+	var front_z := hd - 0.15
+	var roof_low := 1.85
+	var roof_high := 2.35
+	var posts := _group(shed, "Posts")
+	for x in [-hw + 0.08, 0.0, hw - 0.08]:
+		_add_box(posts, Vector3(x, (floor_y + roof_low) * 0.5, back_z), Vector3(0.14, roof_low - floor_y, 0.14), dark_wood)
+		_add_box(posts, Vector3(x, (floor_y + roof_high) * 0.5, mid_z), Vector3(0.14, roof_high - floor_y, 0.14), dark_wood)
+	for x in [-hw + 0.08, hw - 0.08]:
+		_add_box(posts, Vector3(x, (floor_y + roof_high) * 0.5, front_z), Vector3(0.14, roof_high - floor_y, 0.14), dark_wood)
+	# Media cubierta de chapa, de una sola agua, solo sobre la mitad de atras.
+	var roof := MeshInstance3D.new()
+	roof.name = "Roof"
+	var roof_box := BoxMesh.new()
+	var run := mid_z - back_z + 0.3
+	var rise := roof_high - roof_low
+	roof_box.size = Vector3(hw * 2.0 + 0.2, 0.07, sqrt(run * run + rise * rise))
+	roof.mesh = roof_box
+	roof.set_surface_override_material(0, roof_mat)
+	roof.position = Vector3(0, (roof_low + roof_high) * 0.5 + 0.06, (back_z + mid_z) * 0.5 + 0.05)
+	roof.rotation.x = -atan2(rise, run)
+	shed.add_child(roof)
+	# Ondas de la chapa
+	for i in 6:
+		var x := lerpf(-hw, hw, (float(i) + 0.5) / 6.0)
+		var rib := _add_box(shed, Vector3(x, roof.position.y + 0.05, roof.position.z), Vector3(0.05, 0.04, roof_box.size.z), roof_mat)
+		rib.rotation.x = roof.rotation.x
+	# Cerchas al aire sobre la sierra: vigas, sin cubierta, dejan ver dentro.
+	var rafters := _group(shed, "Rafters")
+	_add_box(rafters, Vector3(0, roof_high, front_z), Vector3(hw * 2.0, 0.12, 0.12), dark_wood)
+	_add_box(rafters, Vector3(0, roof_high, mid_z), Vector3(hw * 2.0, 0.12, 0.12), dark_wood)
+	for x in [-hw + 0.08, -hw * 0.33, hw * 0.33, hw - 0.08]:
+		_add_box(rafters, Vector3(x, roof_high + 0.02, (mid_z + front_z) * 0.5), Vector3(0.09, 0.09, front_z - mid_z), wood)
+	# Pared de atras y media pared en el lado izquierdo (solo detras): el
+	# frente, abierto.
+	var back_wall := _add_box(shed, Vector3(0, (floor_y + roof_low) * 0.5, back_z - 0.02), Vector3(hw * 2.0, roof_low - floor_y, 0.08), wood)
+	back_wall.name = "BackWall"
+	var side_wall := _add_box(shed, Vector3(-hw + 0.02, (floor_y + roof_low) * 0.5, (back_z + mid_z) * 0.5), Vector3(0.08, roof_low - floor_y, mid_z - back_z), wood)
+	side_wall.name = "SideWall"
+	for i in 5:
+		var y := floor_y + 0.3 + 0.3 * i
+		_add_box(shed, Vector3(0, y, back_z + 0.03), Vector3(hw * 2.0, 0.02, 0.02), dark_wood)
 
-	# Conveyor table (flat platform for logs)
-	_add_box(root, Vector3(-sx * 0.15, 0.55, 0), Vector3(sx * 0.35, 0.06, sz * 0.4), mat_iron)
-	_add_box(root, Vector3(sx * 0.15, 0.55, 0), Vector3(sx * 0.35, 0.06, sz * 0.4), mat_iron)
+	# ── La sierra: mesa larga, tronco, tablon cortado y la hoja grande ──
+	var saw := _group(root, "Saw")
+	var table_z := 0.42
+	var table_y := 0.78
+	var table := _add_box(saw, Vector3(0, table_y, table_z), Vector3(hw * 1.7, 0.1, 0.62), iron)
+	table.name = "SawTable"
+	for x in [-hw * 0.75, hw * 0.75]:
+		for dz in [-0.24, 0.24]:
+			_add_box(saw, Vector3(x, (floor_y + table_y) * 0.5, table_z + dz), Vector3(0.08, table_y - floor_y, 0.08), iron)
+	# Franja roja de aviso a los dos lados de la hoja
+	_add_box(saw, Vector3(0, table_y + 0.055, table_z + 0.27), Vector3(0.9, 0.012, 0.05), red)
+	_add_box(saw, Vector3(0, table_y + 0.055, table_z - 0.27), Vector3(0.9, 0.012, 0.05), red)
+	# Tronco entrando por la izquierda
+	var log_r := 0.22
+	var log_node := _add_cylinder(saw, Vector3(-hw * 0.42, table_y + 0.05 + log_r, table_z), log_r, hw * 0.75, bark, 10)
+	log_node.rotation.z = PI / 2.0
+	log_node.name = "Log"
+	var end_cap := _add_cylinder(saw, Vector3(-hw * 0.42 - hw * 0.375 - 0.005, table_y + 0.05 + log_r, table_z), log_r * 0.85, 0.02, light_wood, 10)
+	end_cap.rotation.z = PI / 2.0
+	# Tablon recien cortado saliendo por la derecha
+	var plank := _add_box(saw, Vector3(hw * 0.45, table_y + 0.09, table_z), Vector3(hw * 0.7, 0.07, 0.36), light_wood)
+	plank.name = "CutPlank"
+	# La hoja: un disco vertical de frente a la camara, con dientes y buje rojo.
+	var blade_r := 0.88
+	var blade_c := Vector3(0.0, table_y + 0.16, table_z)
+	var blade := _group(saw, "SawBlade")
+	blade.position = blade_c
+	var disc := _add_cylinder(blade, Vector3.ZERO, blade_r, 0.035, steel, 28)
+	disc.rotation.x = PI / 2.0
+	var inner := _add_cylinder(blade, Vector3(0, 0, 0.02), blade_r * 0.62, 0.01, _shared_metal("saw_steel_dark", Color(0.62, 0.64, 0.68), 0.35, 0.35), 24)
+	inner.rotation.x = PI / 2.0
+	for i in 22:
+		var a := TAU * float(i) / 22.0
+		var tooth := _add_box(blade, Vector3(cos(a), sin(a), 0) * (blade_r + 0.05), Vector3(0.13, 0.09, 0.045), steel)
+		tooth.rotation.z = a + 0.5
+	var hub := _add_cylinder(blade, Vector3.ZERO, 0.24, 0.12, red, 12)
+	hub.rotation.x = PI / 2.0
+	var cap := _add_cylinder(blade, Vector3(0, 0, 0.07), 0.06, 0.02, brass, 8)
+	cap.rotation.x = PI / 2.0
+	# Eje, polea y correa hasta la maquina de vapor del fondo
+	var axle := _add_cylinder(saw, blade_c + Vector3(0, 0, -0.45), 0.05, 0.9, iron, 8)
+	axle.rotation.x = PI / 2.0
+	var pulley := _add_cylinder(saw, blade_c + Vector3(0, 0, -0.75), 0.22, 0.1, brass, 12)
+	pulley.rotation.x = PI / 2.0
+	var engine := _group(root, "SteamEngine")
+	var eng_c := Vector3(hw * 0.5, floor_y, back_z + 0.55)
+	var boiler := _add_cylinder(engine, eng_c + Vector3(0, 0.42, 0), 0.32, 0.9, iron, 12)
+	boiler.rotation.z = PI / 2.0
+	_add_box(engine, eng_c + Vector3(-0.55, 0.3, 0), Vector3(0.3, 0.6, 0.5), iron)
+	_add_box(engine, eng_c + Vector3(-0.55, 0.25, 0.26), Vector3(0.16, 0.14, 0.02), fire)
+	var belt_from := blade_c + Vector3(0, 0, -0.75)
+	var belt_to := eng_c + Vector3(-0.3, 0.42, 0)
+	var belt := _add_box(engine, (belt_from + belt_to) * 0.5, Vector3(0.05, 0.04, belt_from.distance_to(belt_to)), dark_wood)
+	belt.name = "Belt"
+	belt.transform = Transform3D(Basis.looking_at(belt_to - belt_from, Vector3.UP), (belt_from + belt_to) * 0.5)
+	var chimney := _add_cylinder(engine, eng_c + Vector3(0.25, 1.55, 0), 0.09, 2.2, iron, 8)
+	chimney.name = "Chimney"
+	_add_cylinder(engine, eng_c + Vector3(0.25, 2.66, 0), 0.13, 0.06, red, 8)
 
-	# Log on the conveyor (horizontal cylinder)
-	var log: MeshInstance3D = _add_cylinder(root, Vector3(-sx * 0.2, 0.65, 0), 0.1, sx * 0.3, mat_light_wood)
-	log.rotation.z = PI / 2.0
+	# ── Pilas: tablones bajo techo (izquierda) y troncos delante ──
+	var planks := _group(root, "PlankStack")
+	for layer in 5:
+		for j in 4:
+			var col := light_wood if (layer + j) % 2 == 0 else wood
+			_add_box(planks, Vector3(-hw * 0.5 + (j - 1.5) * 0.24, floor_y + 0.05 + 0.1 * layer, back_z + 0.6), Vector3(0.22, 0.09, 0.95), col)
+	var logs := _group(root, "LogPile")
+	var lp := Vector3(-hw * 0.45, floor_y, front_z - 0.05)
+	for k in 3:
+		var l := _add_cylinder(logs, lp + Vector3(0, 0.15, -0.22 + 0.15 * k), 0.15, 1.1, bark, 8)
+		l.rotation.z = PI / 2.0
+	for k in 2:
+		var l := _add_cylinder(logs, lp + Vector3(0, 0.41, -0.15 + 0.15 * k), 0.15, 1.1, bark, 8)
+		l.rotation.z = PI / 2.0
+	# Serrin bajo la hoja
+	_add_cone(saw, Vector3(0.1, floor_y + 0.1, table_z + 0.55), 0.35, 0.05, 0.2, light_wood, 8)
 
-	# Log pile (stacked logs on one side)
-	for i in range(3):
-		var l: MeshInstance3D = _add_cylinder(root, Vector3(sx * 0.35, 0.12 + i * 0.18, -sz * 0.15 + i * 0.02), 0.08, sz * 0.4, mat_light_wood)
-		l.rotation.x = PI / 2.0
-	# Second row
-	for i in range(2):
-		var l: MeshInstance3D = _add_cylinder(root, Vector3(sx * 0.35, 0.48 + i * 0.18, -sz * 0.1), 0.08, sz * 0.3, mat_light_wood)
-		l.rotation.x = PI / 2.0
-
-	# Belt/gear mechanism
-	_add_torus(root, Vector3(-sx * 0.35, 0.8, -sz * 0.3), 0.06, 0.14, mat_brass, 6)
-	# Drive belt (thin box connecting)
-	_add_box(root, Vector3(-sx * 0.18, 0.8, -sz * 0.3), Vector3(sx * 0.35, 0.02, 0.04), mat_iron)
-
-	# Wood chips / sawdust pile
-	_add_sphere(root, Vector3(sx * 0.1, 0.08, sz * 0.3), 0.15, _metal(Color(0.6, 0.45, 0.25), 0.0, 0.95))
-
-	# Smokestack (small steam engine)
-	_add_cylinder(root, Vector3(-sx * 0.38, 1.9, -sz * 0.25), 0.07, 0.5, mat_iron)
-
+	var anchor := Marker3D.new()
+	anchor.name = "FxAnchor"
+	anchor.position = blade_c + Vector3(0, blade_r * 0.7, 0.1)
+	root.add_child(anchor)
 	return root
 
 
@@ -856,7 +983,11 @@ static func _build_market(sx: float, sz: float) -> Node3D:
 		for cx in [-1, 1]:
 			for cz in [-1, 1]:
 				_add_box(root, Vector3(x + cx * sx * 0.1, 0.75, z + cz * sz * 0.12), Vector3(0.05, 1.1, 0.05), mat_iron)
-		_add_prism(root, Vector3(x, 1.35, z), Vector3(sx * 0.28, 0.3, sz * 0.32), awnings[i])
+		_add_prism(root, Vector3(x, 1.4, z), Vector3(sx * 0.34, 0.42, sz * 0.4), awnings[i])
+		# Mercancia en el mostrador: la funcion se ve desde fuera.
+		var goods := [Color(0.85, 0.2, 0.12), Color(0.95, 0.78, 0.2), Color(0.35, 0.62, 0.22)]
+		for g in 3:
+			_add_sphere(root, Vector3(x + (g - 1) * sx * 0.06, 0.8, z + sz * 0.09), 0.09, _shared_metal("market_goods_%d" % g, goods[g], 0.0, 0.7), 8)
 	# Balanza de laton en el centro
 	_add_box(root, Vector3(0, 0.6, sz * 0.38), Vector3(0.06, 0.9, 0.06), mat_brass)
 	_add_box(root, Vector3(0, 1.05, sz * 0.38), Vector3(sx * 0.3, 0.04, 0.04), mat_brass)
@@ -873,9 +1004,15 @@ static func _build_laboratory(sx: float, sz: float) -> Node3D:
 	var mat_glass := _emissive(Color(0.35, 0.8, 0.95), 0.9)
 	_add_box(root, Vector3(0, 0.8, 0), Vector3(sx * 0.8, 1.6, sz * 0.75), mat_stone)
 	_add_box(root, Vector3(0, 1.62, 0), Vector3(sx * 0.84, 0.08, sz * 0.79), mat_iron)
-	_add_box(root, Vector3(0, 2.05, 0), Vector3(sx * 0.4, 0.8, sz * 0.4), mat_glass)
-	_add_box(root, Vector3(sx * 0.3, 2.6, -sz * 0.25), Vector3(0.06, 1.6, 0.06), mat_iron)
-	_add_box(root, Vector3(sx * 0.3, 3.4, -sz * 0.25), Vector3(0.4, 0.05, 0.05), mat_copper)
+	# Cupula de cristal con luz azulada (la funcion se ve desde fuera); la antena
+	# grande, la exagerada, va en el patio (BuildingLot, "antenna").
+	_add_cylinder(root, Vector3(0, 1.75, 0), sx * 0.27, 0.18, mat_iron, 20)
+	_add_sphere(root, Vector3(0, 1.84, 0), sx * 0.25, mat_glass, 20)
+	_add_torus(root, Vector3(0, 1.86, 0), sx * 0.24, sx * 0.28, _metal(COL_BRASS, 0.9, 0.3), 20, 8)
+	for i in 4:
+		var a := TAU * float(i) / 4.0 + PI * 0.25
+		var rib := _add_box(root, Vector3(cos(a) * sx * 0.12, 2.0, sin(a) * sx * 0.12), Vector3(0.05, sx * 0.4, 0.05), mat_iron)
+		rib.rotation = Vector3(sin(a) * 0.9, 0, -cos(a) * 0.9)
 	for i in 3:
 		_add_box(root, Vector3(-sx * 0.42, 0.4 + 0.4 * i, sz * (-0.2 + 0.2 * i)), Vector3(0.08, 0.08, sz * 0.5), mat_copper)
 	_add_box(root, Vector3(0, 0.5, sz * 0.38), Vector3(sx * 0.25, 1.0, 0.04), mat_iron)
