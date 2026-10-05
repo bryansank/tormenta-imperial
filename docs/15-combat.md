@@ -743,7 +743,7 @@ and 1.0 whenever `GameMode.combat_hard()` is false):
 
 | Key | Gobernador | Applied in | Effect |
 |-----|-----------|------------|--------|
-| `expedition_enemy_mult` | `1.15` | `ExpeditionGenerator.enemy_scale()` | Every expedition enemy (and the boss) has +15 % HP/ATK. The first sortie keeps its fixed `combat_first_sortie_enemy_scale` |
+| `expedition_enemy_mult` | `1.05` | `ExpeditionGenerator.enemy_scale()` | Every expedition enemy (and the boss) has +5 % HP/ATK (1.15 was measured and is a wall: docs/16). The first sortie keeps its fixed `combat_first_sortie_enemy_scale` |
 | `tithe_force_mult` | `1.34` | `StormManager.assessor_roster()` | One more Assessor at severities 1-3 (3/4/5 → 4/5/6, rounding `raw × 1.34`); from severity 4 both tiers sit at `combat_deploy_cap` (6), so the late Tithe is as big as ever — the escalation per Tithe repelled gets there sooner |
 | `audit_enemy_mult` | `1.06` | `FinalAudit.wave_scale()` | Every siege wave hits 6 % harder |
 

@@ -129,7 +129,7 @@ Los servicios preguntan la regla, nunca el nivel:
 | Lo acumulado se estropea | `GameMode.spoilage_enabled()` | no | **sí** | la mecánica la pone `feat/comida-granja-recoger` (2 h, se pierde el 50 %); aquí solo la regla |
 | Mercado dinámico | `GameMode.market_dynamic()` | no | **sí** | `MarketManager` / `MarketPanel` (docs/05) |
 | Combate más duro | `GameMode.combat_hard()` | no | **sí** | enciende los tres multiplicadores |
-| Enemigos de expedición | `GameMode.expedition_enemy_mult()` | ×1 | **×1,15** | `ExpeditionGenerator.enemy_scale()` |
+| Enemigos de expedición | `GameMode.expedition_enemy_mult()` | ×1 | **×1,05** | `ExpeditionGenerator.enemy_scale()` |
 | Escolta del Diezmo | `GameMode.tithe_force_mult()` | ×1 | **×1,34** cuerpos | `StormManager.assessor_roster()` |
 | Oleadas de la Auditoría | `GameMode.audit_enemy_mult()` | ×1 | **×1,06** | `FinalAudit.wave_scale()` |
 

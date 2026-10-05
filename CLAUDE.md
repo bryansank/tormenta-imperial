@@ -403,7 +403,7 @@ rule (`GameMode.storm_enabled()`), never compare the mode. Saved as
 **Colono / Gobernador** (docs/20 §1b) are two *tiers* of the Campaign, not modes:
 Colono is today's game; Gobernador (provisional name) adds the Storm-calendar market
 with visible spread (docs/05), spoilage (`spoilage_enabled()`, mechanics owned by the
-food/collect branch) and a harder enemy (`expedition_enemy_mult` 1.15,
+food/collect branch) and a harder enemy (`expedition_enemy_mult` 1.05,
 `tithe_force_mult` 1.34, `audit_enemy_mult` 1.06; same `CombatRules`). Rules in
 `GameConfig.game_tier_rules`, queried through `GameMode.market_dynamic()`,
 `combat_hard()`, etc. It **unlocks per profile** — `settings.cfg [perfil]`, written by

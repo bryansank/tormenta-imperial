@@ -1716,7 +1716,7 @@ var game_tier_rules := {
 		"spoilage": true,
 		"market_dynamic": true,
 		"combat_hard": true,
-		"expedition_enemy_mult": 1.15,
+		"expedition_enemy_mult": 1.05,
 		"tithe_force_mult": 1.34,
 		"audit_enemy_mult": 1.06,
 	},
