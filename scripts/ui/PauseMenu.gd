@@ -4,7 +4,7 @@ extends CanvasLayer
 ## Ajustes en los dos y "Menu principal" solo en uno. Ahora hay un boton
 ## "☰ MENU" en la esquina superior derecha que abre una tarjeta con dos grupos:
 ##
-##   COLONIA  Que hacer · Progreso · Mercado · Tecnologia · Ejercito ·
+##   COLONIA  Que hacer · Progreso · Colonia (rango) · Ejercito ·
 ##            Escaramuzas · Sandbox        (solo lo que ya esta disponible)
 ##   PARTIDA  Reanudar · Guardar · Ajustes · Musica · Ayuda · Historia ·
 ##            Menu principal · Guardar y salir
@@ -40,6 +40,8 @@ const MENU_BTN_MIN_W := 118.0
 const COLONY_ENTRIES := [
 	["objectives", "BTN_OBJECTIVES", "ObjectivePanel"],
 	["progress", "BTN_PROGRESS", "ProgressPanel"],
+	# Rango del gobernador: rango, XP, bandera y color de la colonia.
+	["colony", "BTN_COLONY_RANK", "RankPanel"],
 	# Mercado y Tecnologia salen del menu (2026-09-28): se abren tocando su
 	# edificio (el Mercado y el Laboratorio, BuildingInfoPanel.SCREENS).
 	["army", "BTN_ARMY", "ArmyPanel"],

@@ -367,7 +367,7 @@ static func net_rates() -> Dictionary:
 		if not building and data.workers_required > 0 and not PopulationManager.is_building_staffed(node):
 			continue
 		var level: int = int(node.get_meta("level", 1))
-		var mult: float = (GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus) * morale_mult
+		var mult: float = (GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus + GameConfig.rank_production_bonus) * morale_mult
 		var interval: float = data.production_interval
 		rates["gold"] += float(data.produces_gold) * mult / interval
 		rates["wood"] += float(data.produces_wood) * mult / interval

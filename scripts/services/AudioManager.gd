@@ -65,6 +65,9 @@ const SFX_MANIFEST := {
 	"expedition_return": "era_up",        # expedition_ended(victory): brass sting
 	"audit_summoned": "event_danger",     # final_audit_summoned: the bell tolls
 	"storm_halted": "unlock",             # storm_halted_forever: the sky clears
+	# Rango del gobernador: alias del toque de laton de la era (solo coincide
+	# con el al cambiar de era, y la subida suele llegar con una obra o un ciclo).
+	"rank_up": "era_up",                  # governor_rank_up: a promotion sting
 }
 
 ## Ganancia por clip (dB), por NOMBRE DE FICHERO: las claves de combate reusan
@@ -377,6 +380,7 @@ func _connect_events() -> void:
 	EventBus.encounter_ended.connect(_on_encounter_ended)
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
+	EventBus.governor_rank_up.connect(_on_rank_up)
 	# Final Audit. These signals arrive with the Storm's final chapter; until that
 	# branch lands they may not exist, so they are wired only when present.
 	_connect_optional("final_audit_summoned", _on_final_audit_summoned)
@@ -474,6 +478,9 @@ func _on_expedition_started(_expedition_id: int, _node_count: int) -> void:
 func _on_expedition_ended(result: int, _rewards: Dictionary, _casualties: Dictionary) -> void:
 	play_sfx("expedition_return" if result == 0 else "combat_defeat")
 	_restore_music_after_combat()
+
+func _on_rank_up(_rank: int, _rewards: Dictionary) -> void:
+	play_sfx("rank_up")
 
 func _on_final_audit_summoned(_a = null, _b = null, _c = null) -> void:
 	play_sfx("audit_summoned")

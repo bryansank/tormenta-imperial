@@ -10,6 +10,7 @@ enum State { IDLE, PLACING, MOVING }
 ## Preloaded so placement does not depend on the editor's global class cache
 ## (a fresh clone runs the game headless before any editor scan).
 const StatusBadge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
+const ColonyFlag3D := preload("res://scripts/buildings/ColonyFlag3D.gd")
 ## Las cuentas de pantalla -> suelo son estaticas y viven en InputService, que es
 ## quien las usa para el dedo. Se cargan por script (no por el autoload) para
 ## llamarlas como lo que son: funciones sueltas, sin instancia de por medio.
@@ -742,6 +743,13 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		var look: Node3D = LookVisual.new()
 		root.add_child(look)
 		look.setup(root, data, top)
+
+	# La bandera de la colonia (rango del gobernador) ondea sobre el Nucleo. Va la
+	# ultima: el cartel de estado se midio sin ella.
+	if data.is_core:
+		var flag: Node3D = ColonyFlag3D.new()
+		root.add_child(flag)
+		flag.setup(Vector2(data.grid_size) * GridManager.cell_size, top)
 
 	return root
 

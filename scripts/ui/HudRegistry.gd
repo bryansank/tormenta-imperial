@@ -29,13 +29,15 @@ const ELEMENTS := {
 	## La pestana SANDBOX (y su tarjeta, que la sigue). Solo existe en Sandbox:
 	## fuera de ese modo su capa esta oculta y el editor no la enmarca.
 	"SandboxPanel": {"label": "HUD_SANDBOX", "hideable": true, "movable": true, "mode": "holder"},
+	## La insignia del rango del gobernador (bandera, numero y barra de XP).
+	"RankPanel": {"label": "HUD_RANK", "hideable": true, "movable": true, "mode": "holder"},
 }
 
 ## Orden en Ajustes y en el editor.
 const ORDER := [
 	"ResourceHUD",
 	"NotificationPanel.objective", "StormHUD", "NotificationPanel.toasts",
-	"HelperPanel.callouts", "BattleScreen.turn", "SandboxPanel",
+	"HelperPanel.callouts", "BattleScreen.turn", "SandboxPanel", "RankPanel",
 	"NotificationPanel.log", "ConstructionMenu.button", "BuildingInfoPanel",
 ]
 

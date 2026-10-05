@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1440 tests in 109 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1540 tests in 117 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -62,13 +62,13 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-26 autoloads in `project.godot`: the 25 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile` (so `DeviceProfile` is last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText` and `Objectives` are static helpers (a `class_name` or a `preload`), not autoloads.
+27 autoloads in `project.godot`: the 26 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, and `RankManager` goes after `DeviceProfile` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText` and `Objectives` are static helpers (a `class_name` or a `preload`), not autoloads.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 108 signals in ~26 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 111 signals in ~27 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (40x40 to 48x48, even sides, `grid_size_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed, building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
@@ -91,6 +91,7 @@ holds a service's state of its own.
 | 23 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 24 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
 | 25 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size). See `docs/21-interfaz-y-dispositivos.md` |
+| 26 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses), colony flag and colour. See `docs/06-progression-victory.md` §Governor rank |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -133,13 +134,14 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
+  +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, title, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (flag/colour)
   +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back
   +-- TitleMenu (CanvasLayer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal
 
 Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
   +-- Camera2D (Camera2DController) / StormTint (CanvasModulate, StormTint2D) / Island (Island2D)
   +-- GridOverlay (GridOverlay2D) / BuildingPlacer (BuildingPlacer2D) / MapGenerator (MapGenerator2D)
-  +-- OnScreenControls ... TitleMenu -- the same 23 UI nodes as above
+  +-- OnScreenControls ... TitleMenu -- the same 24 UI nodes as above
 
 Created at runtime, not in either .tscn:
   PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, three folios in plain language
@@ -151,7 +153,7 @@ Created at runtime, not in either .tscn:
 ```
 
 UI panels are positioned by `UILayoutManager` using the slot definitions in
-`scripts/ui/UILayoutConfig.gd` (20 named slots — 13 screen areas and 7 help-callout
+`scripts/ui/UILayoutConfig.gd` (21 named slots — 14 screen areas and 7 help-callout
 anchors (`tip_*`) —, `NARROW_SLOTS` / `COLUMN_SLOTS` for narrow canvases, panel->slot map, slot
 conflicts).
 `UIManager.open_panel()` handles stacking and closes conflicting panels.
@@ -391,6 +393,25 @@ Per mode: **Constructor** wins directly at HQ 3 (`GameMode.capstone_wins()`, no 
 **Sandbox** never summons it on its own (only from the SANDBOX tab) and has no victory.
 Full detail in `docs/15-combat.md` §6 and `docs/20-modos-de-juego.md`.
 
+### Governor Rank — full doc: `docs/06-progression-victory.md` §Governor rank
+
+A third axis next to eras and milestones: XP inside the run (owner's decision,
+2026-10-04). `RankManager` adds XP from EventBus signals (`GameConfig.rank_xp_sources`:
+build 15, upgrade 25, production cycle 1, process/mining 5, trade 5, unit 10, fight won
+40, expedition won 80, storm 30 + 10/severity, milestone 100) and **derives** the rank
+from it (`rank_xp_thresholds`, 18 ranks, step `100 + 60*(n-1)`, ~9860 XP for the last;
+not yet measured with the line probe). Titles `RANK_TITLE_<n>` (Colono, Capataz … Cónsul
+… Archigobernador). `rank_rewards` gives decorations (Garden 2, Fountain 5, Statue 8),
+extra building slots (`rank_limit_bonus`), small bonuses (`rank_production_bonus`
++7 % and `rank_storage_bonus` +8 % at rank 18, **assigned**, never added, so loading
+twice is safe) and cosmetics: six procedural flags (`scripts/ui/ColonyFlag.gd`) and six
+colony colours, chosen in ☰ MENÚ → COLONIA → Colonia, shown on the Nucleo
+(`ColonyFlag3D`/`ColonyFlag2D`) and on our board tokens' round mark. The basic
+buildings keep their era unlocks. Locks go through `PlacementRules.check_rank()`; the
+CONSTRUIR card shows a padlock and "Rango N". UI: `RankPanel` (badge in slot
+`rank_badge`, rank-up toast with SFX `rank_up`, the COLONIA card). Saved as `"rank"`;
+a save without it is rank 1. Sandbox has every rank unlock open.
+
 ### Game Modes — full doc: `docs/20-modos-de-juego.md`
 
 **Only Campaña is offered today (2026-09-28).** `GameMode.OFFERED` lists the modes
@@ -538,7 +559,7 @@ and Settings closes; accepted). With a board open it does not reload
 ### Save/Load System
 
 - Path: `user://save_game.json`
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `rank` (RankManager: XP, flag, colour), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -559,7 +580,7 @@ and Settings closes; accepted). With a board open it does not reload
 
 ```
 tormenta-imperial/
-+-- project.godot                    # Engine config, 26 autoloads (25 game + BeckettRuntime)
++-- project.godot                    # Engine config, 27 autoloads (26 game + BeckettRuntime)
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
 +-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
@@ -587,6 +608,7 @@ tormenta-imperial/
 |   |   +-- PlacementRules.gd        # Shared placement rules for 3D and 2D: deposit adjacency, footprint, road network and auto-road, upgrade effects
 |   |   +-- PlacementAssist.gd       # Touch placement (tap aims, tap ghost/✓ builds), valid-spot highlight — docs/21 §9
 |   |   +-- BuildingStatusBadge.gd   # Worker pictogram / "Zzz" + why a building is stopped (3D)
+|   |   +-- ColonyFlag3D.gd          # The colony flag on a pole over the Nucleo (governor rank cosmetics)
 |   |   +-- BuildingLook.gd          # Rule (both views): construction phase / upgrade / ruin / active / idle; site style per type + seeded layout per instance
 |   |   +-- BuildingLookVisual.gd    # Applies it in 3D (child "LookVisual"); BuildingPlacer syncs it with one map-wide clock
 |   |   +-- BuildingFx.gd            # Generated smoke/dust/glow/sparks sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D
@@ -611,7 +633,7 @@ tormenta-imperial/
 |   |   +-- WorkerWalkers.gd         # Worker figures walking the road network (view only, 3D and 2D)
 |   |   +-- StormSky.gd              # Autoload: sky/light during the storm
 |   +-- storm/StormCycle.gd          # PURE model: the storm's phase clock
-|   +-- services/                    # The 25 game autoloads (table above) + BeckettGate.gd
+|   +-- services/                    # The 26 game autoloads (table above) + BeckettGate.gd
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
@@ -625,6 +647,7 @@ tormenta-imperial/
 |   |   +-- BattleScreen.gd, SkirmishPanel.gd, WarReportScreen.gd, AuditWaveBanner.gd, AuditDefeatScreen.gd
 |   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd
 |   |   +-- HelperPanel.gd, HelpCallout.gd, HelpCatalog.gd, HelpTargets.gd, HelpIndexPanel.gd
+|   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the procedural colony flags
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
 |   |   +-- OnScreenControls.gd, ProcessActionsPanel.gd, ProgressPanel.gd, ResourceHUD.gd, VictoryScreen.gd
@@ -632,7 +655,7 @@ tormenta-imperial/
 |       +-- ViewRouter.gd, ViewMode.gd, View2D.gd  # Scene routing, the view preference, world<->pixel maths
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
-|       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd
+|       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd
 +-- data/buildings/                  # 16 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
@@ -696,7 +719,7 @@ Laboratory have no model yet). GLBs made for 1x1 or 2x1 fill their 2x2 plot thro
 
 ### Key Rule: GDScript first (decided 2026-09-12)
 
-- **GDScript for everything**, combat included. The whole project (25 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
+- **GDScript for everything**, combat included. The whole project (26 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
 - The old plan put unit AI, combat math and pathfinding in C# **for performance**. That argument does not apply at the agreed combat scale: an 8x8 board with 4–6 units per side. GDScript is orders of magnitude more than enough.
 - **Migrate later, only on evidence**: if a profiled module proves too slow, port that module to C#. Do not create the .NET project speculatively.
 
@@ -775,6 +798,7 @@ All balance values live in `GameConfig.gd`:
 - `resource_colors` - display colors for floating text
 - `unit_types` / `army_base_capacity` / `army_capacity_per_barracks` / `army_upkeep_interval` - army
 - `tech_definitions` + `tech_*` bonuses - tech tree
+- `rank_xp_sources` / `rank_xp_thresholds` / `rank_rewards` / `colony_colors` - governor rank (XP, curve, unlocks, bonuses, cosmetics)
 - `audio_*_volume` / `audio_music_fade` / `audio_sfx_voices` - audio
 - `phase_triggers` / `early_*` - onboarding phase pacing
 - `combat_*` - board, deploy cap, unit combat stats, enemy/risk scaling, map shape,

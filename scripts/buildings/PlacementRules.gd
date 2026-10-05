@@ -116,6 +116,15 @@ static func check_building_limit(building_id: String) -> bool:
 		return true
 	return count_building(building_id) < limit
 
+## El rango del gobernador abre decoraciones y edificios opcionales
+## (GameConfig.rank_rewards). Sandbox lo tiene todo abierto.
+static func check_rank(building_id: String) -> bool:
+	return RankManager.is_building_unlocked(building_id)
+
+## "Necesitas rango 5": lo que dice el detalle de CONSTRUIR y el aviso al colocar.
+static func rank_lock_text(building_id: String) -> String:
+	return Tr.t("LBL_RANK_NEEDED") % RankManager.building_rank(building_id)
+
 static func check_prerequisites(building_id: String) -> bool:
 	for req_id in GameConfig.get_prerequisites(building_id):
 		if count_building(req_id) < 1:
@@ -133,6 +142,8 @@ static func keeps_placing(data: BuildingData) -> bool:
 ## "" si nada lo impide. En el mismo orden en que lo comprobaba BuildingPlacer:
 ## tope, requisitos, obreros y coste. No cobra nada.
 static func purchase_block_message(data: BuildingData) -> String:
+	if not check_rank(data.id):
+		return rank_lock_text(data.id)
 	if not check_building_limit(data.id):
 		return Tr.t("LBL_LIMIT_REACHED") % [count_building(data.id), GameConfig.get_building_limit(data.id)]
 	if not check_prerequisites(data.id):
@@ -177,6 +188,11 @@ static func purchase_block_detail(data: BuildingData) -> String:
 ## Lo que impide construir `data` ahora, en frases para el jugador. [] si nada.
 static func block_reasons(data: BuildingData) -> Array:
 	var out: Array = []
+	# Bloqueado por rango: es lo primero y lo unico que importa, el resto llega
+	# despues de subir.
+	if not check_rank(data.id):
+		out.append(rank_lock_text(data.id))
+		return out
 	# Lo que falta de un recurso aun bloqueado se explica como "llega con...":
 	# "te faltan 100 de acero" sin acero en el juego no dice que hacer. Si ya lo
 	# tienes (del mercado, de un evento) no se bloquea nada: solo falta lo que falta.

@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**108 signals**, in the order they are declared in `EventBus.gd`. Emitters and
+**111 signals**, in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -355,13 +355,24 @@ intro was a paged modal; today they open and close the `PrologueScreen`.
 
 See [20-modos-de-juego.md](20-modos-de-juego.md).
 
+## Governor rank
+
+Emitted only by `RankManager`. XP comes from the signals above; the rank is derived
+from it ([06-progression-victory.md](06-progression-victory.md) §Governor rank).
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `governor_xp_changed` | `xp: int, rank: int, gained: int` (`gained` 0 on load) | RankManager | RankPanel |
+| `governor_rank_up` | `rank: int, rewards: Dictionary` (merged `rank_rewards` of every rank crossed) | RankManager | RankPanel, ConstructionMenu, AudioManager |
+| `colony_cosmetics_changed` | `flag_id: String, color_id: String` | RankManager | RankPanel, ColonyFlag3D, ColonyFlag2D |
+
 ## Orphan signals
 
 Declared in `EventBus.gd` but not wired on one or both sides. Most are suppressed
 with `@warning_ignore("unused_signal")`, so the editor will not flag them; this
 list is the only record.
 
-**9 of the 108 signals** have a gap on one side or the other.
+**9 of the 111 signals** have a gap on one side or the other.
 
 ### Neither emitted nor consumed (3)
 

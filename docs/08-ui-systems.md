@@ -21,6 +21,7 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 - **Behavior:** Each card shows its cost (red when it cannot be paid). Cards are picked on release inside them, and locked ones can be tapped too: the detail says everything that is missing (resource to unlock and what brings it, previous buildings by translated name, limit, workers, cost). The cost sits at the top of the detail, before the preview; when something blocks the build it is said next to the button ("Te falta: 20 Madera") and the button does not start. The detail also states the road rule. Columns follow the width. Rebuilds when resources unlock.
 - **Placing:** one building per placement — after it, placement mode ends; only decorations, roads and `repeat_placement` buildings stay in hand (`PlacementRules.keeps_placing()`).
 - **Layer:** 12
+- **Rank locks:** a building gated by the governor rank (decorations) shows a drawn padlock and "Rango N" instead of its cost; the detail says "Necesitas rango N" (`PlacementRules.check_rank()`)
 
 ### BuildingInfoPanel (`scripts/ui/BuildingInfoPanel.gd`)
 - **Position:** Right side, full height
@@ -64,7 +65,7 @@ There is ONE menu (it replaced the "II" pause button and the ☰ sidebar, which
 lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - **Button:** "☰ MENÚ", top-right, finger-sized, always visible in play (hidden while the menu itself is open). No other menu button exists; the old sidebar buttons of each panel stay hidden (nobody emits `sidebar_toggled(true)` any more)
 - **Card:** title, "Modo: X", and two groups side by side (one column with scroll below 700 px):
-  - **COLONIA** — ¿Qué hacer?, Progreso, Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode), Registro (the activity log). Mercado and Tecnología left the menu on 2026-09-28: they open from their buildings. Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
+  - **COLONIA** — ¿Qué hacer?, Progreso, Colonia (rank, flag and colour: `RankPanel`), Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode), Registro (the activity log). Mercado and Tecnología left the menu on 2026-09-28: they open from their buildings. Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
   - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Historia (closes the menu, then `TutorialManager.show_prologue()` replays the prologue, docs/23), Menú principal, Guardar y salir
 - **Behavior:**
   - Real pause while open (`get_tree().paused`); tapping the backdrop resumes.
@@ -76,6 +77,12 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - **Layer:** 30
 - **Tests:** `tests/ui/test_game_menu.gd`, `test_main_menu_exit.gd`, `test_settings_respond.gd` (real mouse events pushed at the slider and a toggle, from the title menu, the game menu and in play, with a full-screen trap layer at 17), `test_pause_menu.gd`
 - **Probe:** `tools/menu_probe.gd` (`-- --shot-size=1280x800 --profile=tablet [--view=2d]`), screenshots in `docs/media/dev/menu/`
+
+### RankPanel (`scripts/ui/RankPanel.gd`) — governor rank
+- **Badge:** top-right, left of "☰ MENÚ" (own slot `rank_badge` in `UILayoutConfig`; under the menu button on a narrow screen, without the title). The colony flag, the rank number, the title and a thin XP bar. Registered in `HudRegistry` as `RankPanel` (hideable and movable). Tapping it opens the card
+- **Rank-up toast:** "▲ 5 · Alcalde" and one short line per reward ("Fuente", "+1 % producción", "bandera nueva"), under the badge, ~4 s. Sound `rank_up` (AudioManager, alias of `era_up`)
+- **COLONIA card** (☰ MENÚ → COLONIA → Colonia, `RankPanel.modal` in `center_modal`): rank and XP, what the next rank brings, and the flag and colour galleries; what is not earned yet is disabled with a padlock and the rank
+- **Layer:** 11. Reads everything from `RankManager`; holds no state. Docs: [06-progression-victory.md](06-progression-victory.md) §Governor rank
 
 ### War reports and the Final Audit screens
 - `AuditWaveBanner` (layer 19): "Oleada X de N" on `final_audit_wave_ready`, with the cleared wave from `final_audit_wave_cleared` above it and the last-wave line. Ignores the mouse, fades by itself
