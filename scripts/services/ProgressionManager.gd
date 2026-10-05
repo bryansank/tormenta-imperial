@@ -143,7 +143,8 @@ func begin_final_audit() -> bool:
 	# dejaba fuera a la artilleria viva, que el asedio borraba por "sobrar".
 	var home: Dictionary = CombatManager.get_deployable_units() if final_audit.started \
 			else CombatManager.get_garrison()
-	_publish_audit(final_audit.begin(home))
+	# La moral se lee aqui, al abrir la puerta, no al convocar (FinalAudit.begin).
+	_publish_audit(final_audit.begin(home, _read_morale()))
 	_announce_wave()
 	return true
 
