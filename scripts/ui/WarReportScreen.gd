@@ -17,6 +17,8 @@ extends CanvasLayer
 ## el asedio (los Tasadores no cobran, ya lo dice un aviso) y cuando es el Diezmo
 ## maximo de un asedio perdido, que ya cuenta AuditDefeatScreen.
 
+const TextKit := preload("res://scripts/ui/TextKit.gd")
+
 const LAYER := 19
 const CARD_WIDTH := 500.0
 
@@ -164,7 +166,7 @@ func _paint_tithe(report: Dictionary) -> void:
 	_body.text = "\n".join(tithe_lines(repelled, report.get("taken", {})))
 
 ## Las lineas del parte de una defensa a ciegas. Sin estado, para las pruebas.
-static func defense_lines(victory: bool, rounds: int, summary: Dictionary) -> Array:
+static func defense_lines(_victory: bool, rounds: int, summary: Dictionary) -> Array:
 	var lines: Array = []
 	lines.append(Tr.t("LBL_REPORT_ROUNDS") % rounds)
 	lines.append("%s: %s" % [Tr.t("LBL_REPORT_OUR_LOSSES"), _unit_list(summary.get("casualties", {}))])
@@ -175,21 +177,22 @@ static func defense_lines(victory: bool, rounds: int, summary: Dictionary) -> Ar
 	var morale: int = int(summary.get("morale_delta", 0))
 	if morale != 0:
 		lines.append(Tr.t("LBL_MORALE_DELTA") % morale)
-	lines.append(Tr.t("STORM_TITHE_REPELLED") if victory else Tr.t("STORM_TITHE_PAID"))
+	# "Los Tasadores se retiran / han cobrado" ya no va aqui (2026-10-04): lo
+	# dice el titulo, y el parte del Diezmo sale detras con su sello.
 	return lines
 
 ## Las lineas del parte del Diezmo, leyendo `taken` tal y como lo deja
 ## StormManager: recursos por nombre, `buildings` y `workers`.
 static func tithe_lines(repelled: bool, taken: Dictionary) -> Array:
 	if repelled:
-		return [Tr.t("STORM_TITHE_REPELLED")]
+		return [Tr.t("LBL_TITHE_NOTHING_TAKEN")]
 	var lines: Array = []
 	var resources: Dictionary = {}
 	for key in taken:
 		if key in ["gold", "wood", "steel", "oil"] and int(taken[key]) > 0:
 			resources[key] = int(taken[key])
 	if not resources.is_empty():
-		lines.append(Tr.t("LBL_TITHE_TOOK") % Tr.amount_list(resources))
+		lines.append(Tr.t("LBL_TITHE_TOOK") % TextKit.cost_text(resources))
 	if int(taken.get("buildings", 0)) > 0:
 		lines.append(Tr.t("LBL_TITHE_SEIZED_N") % int(taken["buildings"]))
 	if int(taken.get("workers", 0)) > 0:

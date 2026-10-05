@@ -214,6 +214,33 @@ static func block_reasons(data: BuildingData) -> Array:
 		out.append(Tr.t("OBJ_MISSING") % Tr.amount_list(short))
 	return out
 
+## Como block_reasons, en corto, para la linea junto al boton CONSTRUIR (la fila
+## del coste ya marca en rojo lo que falta): el recurso bloqueado solo por su
+## nombre (como llega va en el tooltip, que es block_reasons entero) y lo que
+## falta separado por comas.
+static func block_reasons_short(data: BuildingData) -> Array:
+	var out: Array = []
+	var locked: Array = []
+	var short := missing_cost(data)
+	for res_id in short.keys():
+		if not ResourceManager.is_unlocked_by_name(String(res_id)):
+			locked.append(Tr.res_name(res_id))
+			short.erase(res_id)
+	if not locked.is_empty():
+		out.append(Tr.t("LBL_NEEDS_UNLOCK") % ", ".join(locked))
+	if not check_prerequisites(data.id):
+		out.append(Tr.t("LBL_NEEDS_FIRST") % missing_prerequisite_names(data.id))
+	if not check_building_limit(data.id):
+		out.append(Tr.t("LBL_LIMIT_REACHED") % [count_building(data.id), GameConfig.get_building_limit(data.id)])
+	if data.workers_required > 0 and PopulationManager.get_free_workers() < data.workers_required:
+		out.append(Tr.t("LBL_NEEDS_WORKERS") % [data.workers_required, PopulationManager.get_free_workers()])
+	if not short.is_empty():
+		var parts: Array = []
+		for res_id in short:
+			parts.append("%d %s" % [int(short[res_id]), Tr.res_name(res_id)])
+		out.append(Tr.t("OBJ_MISSING") % ", ".join(parts))
+	return out
+
 ## Los requisitos que aun no estan en pie, con su nombre.
 static func missing_prerequisite_names(building_id: String) -> String:
 	var names: Array = []

@@ -182,19 +182,20 @@ func _build_board_view() -> void:
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_board_view.add_child(column)
 
-	# Cabecera: que pelea es esta, y cuanto tiempo queda dentro.
+	# Cabecera: que pelea es esta, cuanto tiempo queda dentro y de quien es el
+	# turno, en una sola fila (2026-10-04: el turno iba en una linea propia).
 	var header := HBoxContainer.new()
+	header.name = "BoardHeader"
 	header.alignment = BoxContainer.ALIGNMENT_CENTER
 	header.add_theme_constant_override("separation", 24)
 	_title_label = UITheme.make_label("", "title", UITheme.ACCENT)
 	header.add_child(_title_label)
 	_round_label = UITheme.make_label("", "section", UITheme.TEXT_DIM)
 	header.add_child(_round_label)
-	column.add_child(header)
-
 	_turn_label = UITheme.make_label("", "section", UITheme.TEXT)
 	_turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_turn_label)
+	header.add_child(_turn_label)
+	column.add_child(header)
 	HudRegistry.register("BattleScreen.turn", _turn_label)
 
 	# Franja de iniciativa: la ronda entera, en el orden en que va a pasar (FR-006).
@@ -1267,6 +1268,9 @@ func _refresh_order() -> void:
 		# la misma pareja circulo/esquina que la marca de las casillas.
 		style.set_corner_radius_all(13 if unit.side == PLAYER else 0)
 		chip.set_meta("side", "ally" if unit.side == PLAYER else "enemy")
+		# Quien es, en el tooltip: la ficha solo lleva la silueta.
+		chip.mouse_filter = Control.MOUSE_FILTER_PASS
+		chip.tooltip_text = chip_tooltip(unit)
 		style.border_color = UITheme.ACCENT if is_active else UITheme.ACCENT_DIM
 		style.set_border_width_all(2 if is_active else 1)
 		if boss >= 0 and uid == boss:
@@ -1275,6 +1279,14 @@ func _refresh_order() -> void:
 		# Una unidad que ya actuo se apaga, para que la franja muestre lo que queda.
 		chip.modulate.a = 1.0 if not unit.has_acted else 0.45
 		_order_box.add_child(chip)
+
+## "Infanteria · 12/20" (y JEFE si lo es): lo que dice el tooltip de una ficha.
+func chip_tooltip(unit: CombatUnit) -> String:
+	var def := GameConfig.get_unit_def(unit.unit_id)
+	var text := "%s · %d/%d" % [Tr.t(def.get("name", unit.unit_id)), unit.hp, unit.max_hp]
+	if unit.uid == boss_uid():
+		text += " · " + Tr.t("LBL_BOSS")
+	return text
 
 ## El retrato de una ficha de iniciativa. Mismo trato que en la celda: silueta si
 ## la hay, inicial si no. El apagado de "ya actuo" lo pone `chip.modulate`, que

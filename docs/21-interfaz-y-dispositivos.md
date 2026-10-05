@@ -207,6 +207,35 @@ para pasar folio" en tablet y "← → o Intro" en PC. El interruptor "Globos de
 ayuda" de Interfaz (`HelperPanel.callouts`) es ahora el de las ayudas que salen
 solas: apagado, el índice de AYUDA sigue reabriendo la que se pida.
 
+### Menos texto (2026-10-04, rama `feat/menos-texto`)
+
+Reglas para los paneles y overlays (todos menos el HUD de recursos y la tarjeta de
+estado de población, que lleva su propia rama):
+
+- **Icono + cifra antes que frase.** Los costes son una fila de iconos con su
+  cifra y en rojo solo lo que falta: `TextKit.cost_row()` (o `cost_inline()` dentro
+  de otra fila). Un material sin icono se escribe con su nombre. Nada de "Costo:",
+  "Produce:", "Duración:" delante.
+- **Tiempos cortos**: `TextKit.short_time()` → `45 s`, `1:30`, `2 h`.
+- **Un verbo por botón** (CONSTRUIR, MEJORAR → Nv 2, MOVER, ENTRENAR).
+- **El motivo de "no se puede" en ≤ 6 palabras** junto al botón
+  (`PlacementRules.block_reasons_short`); el motivo entero, en su tooltip.
+- **Las explicaciones al tooltip**: descripción del edificio (título), regla de la
+  carretera, qué hace MOVER, por qué retirar trabajadores, tasa de cancelación, de
+  dónde salen los topes del ejército, la intro y las ramas del árbol tecnológico, el
+  lore de cada tecnología, la frase de cada grupo del menú. En táctil no hay tooltip
+  (no existe "mantener pulsado para leer"): lo movido tiene que estar también en la
+  ayuda (guía rápida, guía de edificios, consejos del índice de AYUDA). Lo que el
+  jugador necesita para decidir (coste, motivo de bloqueo, producción, tiempo) no se
+  mueve.
+- **Nada repetido**: ni el nombre del recurso junto a su icono, ni "Modo: Campaña"
+  en cada pausa, ni una línea del parte que diga lo mismo que su título.
+- **Medir**: `tools/texto_probe.gd` fotografía cada panel y overlay
+  (`-- --profile=pc|tablet --prefix=antes|despues`, con `override.cfg` propio).
+  Las suites `tests/ui/test_menos_texto_*.gd` fijan que los datos clave siguen a la
+  vista y los topes de palabras; `test_tr_en_parity.gd`, que toda clave tiene ES y EN
+  con los mismos huecos de formato.
+
 ## 7. Disposición por tamaño de lienzo
 
 - **< 1080 px de ancho** (tablet 4:3 con escala, 150 %…): la columna central
