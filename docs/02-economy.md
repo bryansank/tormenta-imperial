@@ -4,14 +4,22 @@
 
 The economy is era-gated: resources unlock progressively as the player advances. Gold is the universal currency. All balance lives in `GameConfig.gd`.
 
-## 4 Resources
+## 5 Resources
 
 | Resource | Key | Role | Starting | Unlock |
 |----------|-----|------|----------|--------|
-| Gold | `gold` | Currency, wages, trading | 300 | Era 1 (always) |
-| Wood | `wood` | Basic construction, heating | 200 | Era 1 (always) |
+| Gold | `gold` | Currency, troop wages, trading | 300 | Era 1 (always) |
+| Wood | `wood` | Basic construction | 200 | Era 1 (always) |
+| Food | `food` | What people eat (2026-10-04) | 80 | Era 1 (always) |
 | Steel | `steel` | Advanced construction | 0 | Era 2 (build Foundry) |
 | Oil | `oil` | Late-game construction | 0 | Era 3 (build Refinery) |
+
+**Food (2026-10-04).** `ResourceManager.Type.FOOD`, appended after the materials so no
+number moves. It is a **pool** resource (it counts against the shared cap, the Tithe
+takes it last) and it is grown at the **Farm** (docs/03). Buy and sell it at the
+Market (base price 2, the cheapest: buying food is the immediate fix for hunger). A
+save from before food loads with `GameConfig.legacy_save_food` (120) so nobody starves
+on load.
 
 ## 4 Workshop Materials (2026-09-28)
 
@@ -41,12 +49,13 @@ own resource — the **first** process of its list in `GameConfig.building_proce
 ## Resource Flow
 
 ```
-Deposits (finite, by hand)    Buildings (infinite, slow)
+Deposits (finite, by hand)    Buildings (infinite, slow) -- wait in the building
   gold_vein -> 20 gold (12s)    Sawmill -> 6 wood/12s
   forest -> 20 wood (8s)        Gold Mine -> 8 gold/12s
   iron_deposit -> 15 steel (18s) Foundry -> 5 steel/15s
   oil_well -> 10 oil (22s)      Refinery -> 4 oil/18s
   (GameConfig.mining_data)      HQ -> 10 gold/20s
+                                Farm -> 20 / 125 / 600 food per 1 / 5 / 20 min crop
                                 (Nucleo: no passive output, manual processes only)
 
 Manual Processes (active, ~1.5x margin)
@@ -69,9 +78,41 @@ it up.
 A Sawmill, Gold Mine or Foundry whose deposit was mined out by hand **stops**: it
 needs its vein alive next to it (`PlacementRules.has_its_deposit()`, badge "sin veta").
 
+## Production that waits to be collected (2026-10-04)
+
+**Every producer keeps what it makes** until the player collects it with one tap on
+the building or on the floating icon above it (`StockIcon3D` / `StockIcon2D`, PC and
+touch, 3D and 2D; also the RECOGER button in its panel). `ProductionManager` holds the
+stock per building (`_stock`), and the cap is `GameConfig.get_stock_cap(id, level)`:
+about six minutes of base production, multiplied by the level's production multiplier.
+
+| Building | Holds at level 1 | ≈ minutes of its base output |
+|---|---|---|
+| Sawmill | 180 wood | 6 |
+| Gold Mine | 240 gold | 6 |
+| Foundry | 120 steel | 6 |
+| Refinery | 80 oil | 6 |
+| HQ | 180 gold | 6 |
+| Farm | 800 food | one long crop with room for high morale |
+
+- **Full, it stops.** The production clock does not run and the badge says "lleno:
+  recógelo" (`BuildingStatusBadge` reason `full`; the smoke goes out).
+- **Collecting** puts in the bag what fits (`ResourceManager.fit_into_storage`, split in
+  proportion) and **leaves the rest in the building**: nothing is thrown away. This is
+  Bryan's "bag full = stop production, do not throw it away". A workshop process whose
+  output does not fit leaves the rest in its building too (`keep_in_building`); hand
+  mining a deposit still loses what does not fit (a deposit has nowhere to keep it).
+- **It goes bad** (`spoil_after_seconds` 7200 = 2 h, `spoil_ratio` 0.5): after 2 h
+  uncollected, half is lost and the clock starts again. **Only when
+  `GameMode.spoilage_enabled()`** (rule `spoilage`, false in every mode today; the
+  Governor mode turns it on). Collecting resets the clock.
+- **Offline**, production accumulates in the buildings with their caps (docs/09).
+- Signals: `building_stock_changed`, `production_collected`, `stock_spoiled`,
+  `crop_planted`. Saved under `stockpiles` (docs/09).
+
 ## Storage
 
-One **shared pool** for all four resources (not a cap per resource):
+One **shared pool** for the five resources (not a cap per resource):
 
 - Base cap by era: 600 / 800 / 1000 (`base_storage_cap_by_era`)
 - Each warehouse: +500 (`warehouse_storage_bonus`), max 5; each level above 1 adds
@@ -80,8 +121,9 @@ One **shared pool** for all four resources (not a cap per resource):
 - Era 3 with five warehouses: 1000 + 5×500 = **3500**, exactly the HQ level 3 upgrade;
   with the three storage techs (+1000) the ceiling is **4500** (`GameConfig.get_storage_cap()`)
 - Sandbox ignores the cap (`sandbox_storage_cap`) and refills resources to `sandbox_resource_floor`
-- What does not fit is lost — gold and wood for food included. In era 3 steel and oil
-  fill the pool on their own; see `docs/22-linea-jugable.md` §3.1 (A4, A5)
+- Production no longer overflows: it waits in the buildings and stops when they are
+  full. What still overflows (and is lost, with the one-time warning) is what enters
+  the bag directly: hand mining, market purchases, loot, refunds, events
 
 ## Where extractors can go
 
@@ -107,13 +149,14 @@ building, they also need a road joined to the Núcleo (docs/03 "Road network").
 
 ## Consumption (Population Drain)
 
-Each population unit consumes per tick (30s):
-- 1 wood (heating/shelter)
-- 1 gold (wages)
+Since 2026-10-04 people eat **food**, not wood and gold. Each population unit eats
+`GameConfig.food_per_pop` (1) food per tick (30 s; 60 s in the first two phases),
+reduced by the consumption tech. Gold is still paid to the troops (army upkeep).
 
-If resources run out:
+If food runs out:
 - Morale drops -8 per failed tick
 - Partial payment is still deducted
+- After two unpaid ticks people starve (docs/04)
 
 ## Production Modifiers
 
@@ -136,7 +179,8 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
 ## Economy Balance Design
 
 ### Early Game (Era 1)
-- Player has 300g + 200w; roads cost 1 gold per tile and are laid automatically
+- Player has 300g + 200w + 80 food; roads cost 1 gold per tile and are laid automatically
+- Farm: 40g + 30w, 2 workers, anywhere with a road (the second step of the line)
 - House: 50g + 30w (first priority for workers)
 - Sawmill: 80g + 50w (wood engine)
 - Gold Mine: 120g + 80w (gold engine)

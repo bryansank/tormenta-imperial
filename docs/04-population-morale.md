@@ -90,11 +90,12 @@ Workers for one of each: 2+3+3+4+3+1+1+1+2+5 = 25. For every building at its lim
 
 ## Consumption
 
-Every 30 seconds (`GameConfig.consumption_interval`; 60 s in the first two phases), each pop unit consumes:
-- 1 wood (heating/shelter)
-- 1 gold (wages)
+Every 30 seconds (`GameConfig.consumption_interval`; 60 s in the first two phases), each pop unit eats
+**1 food** (`GameConfig.food_per_pop`; `PopulationManager.food_due()`), reduced by the
+consumption tech. Until 2026-10-04 it was 1 wood + 1 gold; now wood and gold are not
+eaten (gold still pays the troops). Food comes from the Farm (docs/03) and the Market.
 
-### What happens when resources run out:
+### What happens when food runs out:
 - Partial payment: spends whatever is available
 - `EventBus.consumption_failed` emitted
 - Notification posted to activity log

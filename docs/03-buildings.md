@@ -15,14 +15,14 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | `cost_gold/steel/oil/wood` | int | Construction cost |
 | `cost_materials` | Dictionary | Workshop materials it also asks for (`planks`, `ingots`, `beams`, `fuel`) |
 | `build_time` | float | Seconds to construct (0 = instant) |
-| `produces_gold/steel/oil/wood` | int | Passive production per cycle |
+| `produces_gold/steel/oil/wood/food` | int | Passive production per cycle (the Farm's comes from its crop) |
 | `production_interval` | float | Seconds between production cycles |
 | `workers_required` | int | Workers needed to operate |
 | `population_capacity` | int | Housing capacity (houses only) |
 | `morale_bonus` | int | Passive morale bonus (decorations) |
 | `mesh_height` | float | Visual height for procedural mesh |
 | `mesh_color` | Color | Visual color |
-| `model_scene` | PackedScene | GLB model (12 of 16 buildings; `nucleo`, `road`, `market` and `laboratory` fall back to `DieselpunkBuildingFactory`) |
+| `model_scene` | PackedScene | GLB model (12 of 17 buildings; `nucleo`, `road`, `market`, `laboratory` and `farm` fall back to `DieselpunkBuildingFactory`) |
 | `model_scale` / `model_stretch` | float / Vector3 | Scale a GLB made for 1x1 or 2x1 up to its 2x2 plot; spawn models only through `instantiate_model()` |
 | `repeat_placement` | bool | Keep the same building in hand after placing it (decorations and roads do anyway; the rest place one and leave placement mode) |
 | `max_health` | int | HP for storm and siege damage (`BuildingHealth`) |
@@ -37,6 +37,7 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 |----|------|------|--------------|---------|------------|----------|----------|
 | `nucleo` | Núcleo | 3x3 | Free | 0 | instant | — (manual processes, +5 worker room) | — |
 | `sawmill` | Aserradero | 2x2 | 80/0/0/50 | 2 | 5s | 6 wood (+ planks by hand) | 12s |
+| `farm` | Granja | 2x2 | 40/0/0/30 | 2 | 5s | food, by crop (below) | the crop's |
 | `gold_mine` | Mina de Oro | 2x2 | 120/0/0/80 | 3 | 8s | 8 gold (+ ingots by hand) | 12s |
 | `foundry` | Fundición | 2x2 | 200/0/0/120 | 3 | 12s | 5 steel (+ beams by hand) | 15s |
 | `refinery` | Refinería | 2x2 | 300/150/0/100 + 6 beams | 4 | 18s | 4 oil (+ fuel by hand) | 18s |
@@ -45,6 +46,38 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 Materials (planks, ingots, beams, fuel) are made with the first manual process of
 each extractor and live outside the shared pool: see
 [02-economy.md](02-economy.md) "4 Workshop Materials".
+
+Everything a producer makes **waits in the building** until it is collected with one
+tap (on the building or on its floating icon), up to a cap; full, it stops. See
+[02-economy.md](02-economy.md) "Production that waits to be collected".
+
+### The Farm (2026-10-04)
+
+Era 1, 2x2, **anywhere with a road** (no deposit rule), cheap (40 gold + 30 wood), 2
+workers, limit 6. The player picks a **crop by duration** in its panel (CULTIVO), and
+the crop repeats by itself while it fits in the Farm (`GameConfig.farm_crops`):
+
+| Crop | Duration | Food | Food per minute |
+|---|---|---|---|
+| Lechugas (`crop_short`, the default) | 1 min | 20 | 20 |
+| Patatas (`crop_medium`) | 5 min | 125 | 25 |
+| Trigo (`crop_long`) | 20 min | 600 | 30 |
+
+Short gives little and soon; long gives more per minute but you wait for it. Changing
+crop starts over (what was growing is lost); choosing the same one does nothing. A
+Farm without workers, in ruins or without a road does not grow. Its yield takes the
+level, tech and morale multipliers like any producer. It holds 800 food at level 1.
+
+It is not a manual process (`ProcessManager`): a process is one-shot, delivers to the
+bag, keeps the building "busy" and is lost to the Storm. A crop is the Farm's own
+production cycle (`ProductionManager.get_cycle_seconds()` / `base_cycle_production()`),
+so it accumulates and stops like every producer, survives the Storm and runs offline.
+
+**Look.** 3D: `DieselpunkBuildingFactory._build_farm()` — furrowed plot, a crop
+(`CropField`, script `FarmField3D`) that grows with the cycle and turns golden when
+ripe, red barn, brass grain hopper and a windmill that turns while it works. 2D:
+`BuildingArt2D._farm()` — the same field with plants that grow and ripen
+(`opts.growth`, `opts.ripe`).
 
 ### Support Buildings
 
@@ -121,8 +154,9 @@ veta"). See [04-population-morale.md](04-population-morale.md).
 
 `BuildingStatusBadge.reason_text()` (3D) and `StatusBadge2D` (2D): "en obras", "en
 ruinas", "sin trabajadores", "sin trabajadores (retirados)", "sin carretera", "sin
-veta". While under construction the label above the building gives the percentage
-and the time left ("En obras 61% · faltan 16 s") with a progress bar.
+veta", "lleno: recógelo" (full of what it produced: it stopped until collected). While
+under construction the label above the building gives the percentage and the time left
+("En obras 61% · faltan 16 s") with a progress bar.
 
 ## Building Limits
 
@@ -131,6 +165,7 @@ Defined in `GameConfig.building_limits`:
 | Building | Max |
 |----------|-----|
 | house | 10 |
+| farm | 6 |
 | sawmill | 5 |
 | gold_mine | 4 |
 | foundry | 3 |
@@ -262,7 +297,7 @@ la ruina sobre la actividad.
 ## Key Files
 
 - `scripts/buildings/BuildingData.gd` — Resource class definition
-- `data/buildings/*.tres` — 16 building data files
+- `data/buildings/*.tres` — 17 building data files
 - `scripts/buildings/PlacementRules.gd` — placement, road network, auto-road, upgrade effects
 - `scripts/map/WorkerWalkers.gd` — the walking workers
 - `scripts/services/GameConfig.gd` — limits, prerequisites, processes

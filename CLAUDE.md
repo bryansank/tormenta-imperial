@@ -178,22 +178,37 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 
 | Era | Name | Resources | Unlocked by |
 |-----|------|-----------|-------------|
-| 1 | Frontier | Gold, Wood | Game start |
+| 1 | Frontier | Gold, Wood, Food | Game start |
 | 2 | Industrial | + Steel | Build first Foundry |
 | 3 | Petroleum | + Oil | Build first Refinery |
 
-- Starting resources: 300 gold, 200 wood
+- Starting resources: 300 gold, 200 wood, 80 food
 - Deposits visible from start but locked until era unlocks the resource
-- Storage: **one shared pool for all four resources**, not a cap per resource. Base scales
+- Storage: **one shared pool for the five resources** (food included), not a cap per resource. Base scales
   by era (600 / 800 / 1000) + 500 per warehouse (max 5, see `GameConfig.building_limits`).
-  Era 1 is 600 so the opening fits: 500 starting resources, plus sawmill + gold mine (330).
+  Era 1 is 600 so the opening fits: 580 starting resources, plus sawmill + gold mine (330).
   Era 3 ceiling without techs = 1000 + 5x500 = **3500**, exactly the price of the HQ
   level 3 upgrade. On top of that, `GameConfig.tech_storage_bonus` adds the storage
   techs: `ind_2` +200, `log_2` +300, `log_5` +500 — **+1000**, so the absolute ceiling
   is **4500** (`GameConfig.get_storage_cap()`). Sandbox ignores all of it
   (`sandbox_storage_cap`).
-  Whatever does not fit is lost; `EventBus.storage_overflow` fires and the player is
+  Production never overflows: it waits in the buildings (below) and they stop when full.
+  What enters the bag directly (hand mining, purchases, loot, refunds, events) and does
+  not fit is lost; `EventBus.storage_overflow` fires and the player is
   warned once per game. Loading a save that holds more than fits trims it proportionally.
+- **Production that is collected (2026-10-04):** every producer keeps what it makes in
+  the building (`ProductionManager._stock`) up to `GameConfig.get_stock_cap(id, level)`
+  (`building_stock_caps`: ~6 min of base output; sawmill 180, mine 240, foundry 120,
+  refinery 80, HQ 180, farm 800; x level multiplier). Full, it **stops** (badge "lleno:
+  recógelo"). One tap on the building or on its floating icon (`StockIcon3D` /
+  `StockIcon2D`, named "StockIcon"; also RECOGER in its panel, `HarvestSection`) calls
+  `ProductionManager.collect()`: what fits goes to the bag, **the rest stays in the
+  building** (nothing is thrown away). Workshop processes leave what does not fit in
+  their building too (`keep_in_building`). After `spoil_after_seconds` (2 h) uncollected,
+  `spoil_ratio` (50%) goes bad — **only if `GameMode.spoilage_enabled()`** (rule
+  `spoilage`, false in every mode; the Governor mode turns it on). Offline, production
+  accumulates in the buildings with their caps and the absence report lists what is
+  waiting. Saved under `stockpiles`.
 - Extractors must touch their deposit (`GameConfig.building_deposit_rules`): sawmill
   next to a forest, gold mine next to a gold vein, foundry next to iron (reach 1); the
   refinery sits on an oil well (reach 0) and consumes it.
@@ -202,18 +217,20 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 
 | Resource | Role | Starting | Unlock |
 |----------|------|----------|--------|
-| Gold | Universal currency, wages | 300 | Era 1 |
-| Wood | Construction, heating | 200 | Era 1 |
+| Gold | Universal currency, troop wages | 300 | Era 1 |
+| Wood | Construction | 200 | Era 1 |
+| Food | What people eat (Farm, Market); in the pool; `Type.FOOD` after the materials | 80 | Era 1 |
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (16 total, `data/buildings/*.tres`)
+### Buildings (17 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
 | Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only | - |
 | House | 2x2 | 50/0/0/30 | 0 | +6 workers (room in houses; 9 / 12 at levels 2 / 3) | 1 |
 | Sawmill | 2x2 | 80/0/0/50 | 2 | 6 wood/12s; makes planks | 1 |
+| Farm | 2x2 | 40/0/0/30 | 2 | Food by crop: 20 / 125 / 600 per 1 / 5 / 20 min; anywhere with a road; max 6 | 1 |
 | Gold Mine | 2x2 | 120/0/0/80 | 3 | 8 gold/12s; makes ingots | 1 |
 | Warehouse | 2x2 | 60/0/0/40 | 1 | +500 shared storage (+250 per level above 1) | 1 |
 | Market | 2x2 | 100/0/0/60 | 1 | Opens the market (ABRIR MERCADO); needs a Gold Mine; max 1 | 1 |
@@ -229,6 +246,13 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Statue | 2x2 | 120/40/0/0 + 3 ingots | 0 | +10 morale | deco |
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
+
+**Farm (2026-10-04):** the crop is picked in its panel (CULTIVO, `GameConfig.farm_crops`:
+`crop_short` 1 min / 20, `crop_medium` 5 min / 125, `crop_long` 20 min / 600 — longer
+gives more per minute) and repeats by itself (`ProductionManager.plant_crop()` /
+`get_crop()`; changing restarts the crop). It is the Farm's production cycle, not a
+`ProcessManager` process. Procedural mesh with a growing `CropField` (`FarmField3D`) and
+a windmill; 2D drawing `BuildingArt2D._farm()` grows and ripens too.
 
 **Market and Laboratory (2026-09-28):** trade and research are no longer entries of
 ☰ MENÚ. Each opens by tapping its building (`BuildingInfoPanel.SCREENS`: ABRIR
@@ -314,8 +338,9 @@ AYUDA index.
   joined to the Núcleo (`ProcessManager.mining_blocker()`: `MINE_NEEDS_ROAD` /
   `MINE_NEEDS_WORKERS`)
 - Population grows +1 per tick (20s) if morale > 30 and housing available
-- **Consumption:** Each pop consumes 1 wood + 1 gold per 30s tick
-- If can't pay: morale drops -8/tick. If paid: morale recovers +3/tick
+- **Consumption:** Each pop eats `food_per_pop` (1) **food** per 30s tick (60 s early;
+  `PopulationManager.food_due()`). Wood and gold are no longer eaten (2026-10-04)
+- If can't pay: morale drops -8/tick, and after two unpaid ticks people starve. If paid: morale recovers +3/tick
 
 ### Morale (0-100)
 
@@ -327,9 +352,9 @@ AYUDA index.
 ### Market (Imperial Exchange)
 
 - Opened by tapping a Market building (ABRIR MERCADO); there is no menu entry any more
-- Gold is the currency. Buy/sell wood, steel, oil for gold
+- Gold is the currency. Buy/sell food, wood, steel, oil for gold
 - Floating prices with 30% spread (buy higher, sell lower)
-- Price base: wood=3, steel=8, oil=12 gold/unit
+- Price base: food=2, wood=3, steel=8, oil=12 gold/unit
 - Buying raises price, selling lowers it, mean-reversion over time
 - Price range: 0.5x to 2.5x base
 
@@ -527,7 +552,7 @@ and Settings closes; accepted). With a board open it does not reload
 ### Save/Load System
 
 - Path: `user://save_game.json`
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -621,7 +646,7 @@ tormenta-imperial/
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd
-+-- data/buildings/                  # 16 .tres building definitions
++-- data/buildings/                  # 17 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
 |   +-- models/buildings/<id>/       # GLB models (12 of the 16 buildings use one)
@@ -750,6 +775,9 @@ Rules:
 
 All balance values live in `GameConfig.gd`:
 - `starting_resources` - initial amounts
+- `food_per_pop` / `farm_crops` / `farm_default_crop` - what people eat and the Farm's crops
+- `building_stock_caps` / `building_stock_cap_default` - what each producer holds before it stops
+- `spoil_after_seconds` / `spoil_ratio` - spoilage (only with `GameMode.spoilage_enabled()`); `legacy_save_food`
 - `building_processes` - manual crafting recipes with margins
 - `mining_data` - deposit yields and durations
 - `market_*` - market prices, spread, volatility

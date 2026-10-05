@@ -107,6 +107,19 @@ Since 2026-09-28 the save also carries:
 - per building, `workers_off` when the player took its workers off.
 - the four workshop materials, alongside the resources.
 
+Since 2026-10-04:
+
+- `"food"` among the resources. A save without it loads with
+  `GameConfig.legacy_save_food` (120) so nobody starves on opening it.
+- `"stockpiles"` (`ProductionManager.get_save_data()`): one entry per producer with
+  something waiting, a crop or a running clock — `cell_x`, `cell_y` (origin cell),
+  `stock` (resource → amount), `age` (seconds uncollected), `crop` (Farm) and `timer`
+  (the production clock, so a 20-minute crop does not restart on load). Loading is
+  idempotent (it overwrites), an entry whose building is gone is ignored, and a save
+  without the key has nothing to collect and default crops. Reset by
+  `ProductionManager.reset()`, called from the three new-game paths of GameManager.
+- the market's food price (`price_mods.food`); an old market save gets it at 1.0.
+
 `game_mode` (docs/20-modos-de-juego.md) is read **first** on load. A save without
 it is a Campaign in progress. `"result": "defeat"` marks a lost Survival run: the
 save is kept but sealed (GameManager never writes it again), and Survival skips the
@@ -171,9 +184,14 @@ When loading a save, if `elapsed > 2 seconds`, `ProductionManager.apply_offline_
    or an unstaffed one produces nothing offline either, and level multiplier,
    `tech_production_bonus` and the morale multiplier all apply. Morale is the one at save
    time (it is not simulated).
-5. Population consumption is subtracted, capped to what was produced offline (you never
-   come back poorer than you left).
-6. The result goes through the shared storage cap; the report shows what actually fit.
+5. **What is produced waits in the buildings** (2026-10-04), up to each building's cap
+   (a full building stops, also offline). Nothing is added to the bag.
+6. People eat from the **food grown offline** (in the farms' stock), never from the bag:
+   you never come back poorer than you left.
+7. If `GameMode.spoilage_enabled()`, what sat uncollected for 2 h loses half per period
+   (`ProductionManager.last_offline_spoiled`).
+8. The report says **what is waiting to be collected** (all stock, including what was
+   there before leaving) and what went bad.
 
 **Offline is production-only.** The Imperial Storm, random events (the plague), the army
 (upkeep, desertion, training), manual processes and the tech research are *frozen* while
