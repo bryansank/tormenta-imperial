@@ -85,12 +85,12 @@ func test_hiding_wraps_the_panel_and_leaves_its_own_visibility_alone() -> void:
 	assert_bool(panel.is_visible_in_tree()).is_true()
 
 func test_a_panel_that_hides_itself_stays_hidden_when_the_hud_shows_it() -> void:
-	# La poblacion se esconde sola hasta la fase de asentamiento: mostrarla
-	# desde Ajustes no la adelanta.
-	var panel := _place("NotificationPanel.status", 2, true)
+	# La Tormenta se esconde sola en calma: mostrarla desde Ajustes no la
+	# adelanta.
+	var panel := _place("StormHUD", 2, true)
 	panel.visible = false
-	HudRegistry.set_hidden("NotificationPanel.status", true)
-	HudRegistry.set_hidden("NotificationPanel.status", false)
+	HudRegistry.set_hidden("StormHUD", true)
+	HudRegistry.set_hidden("StormHUD", false)
 	assert_bool(panel.visible).is_false()
 
 func test_hidden_state_survives_a_save_and_a_load() -> void:
@@ -123,7 +123,7 @@ func test_non_hideable_entries_cannot_be_hidden() -> void:
 func test_hiding_the_panel_above_compacts_the_column() -> void:
 	UILayoutManager._viewport_size = Vector2(1280, 720)
 	var resources := _place("ResourceHUD", 3, true)
-	var status := _place("NotificationPanel.status", 2)
+	var status := _place("NotificationPanel.log", 2)
 	await _settle()
 	var stacked_top := _rect(status).position.y
 	HudRegistry.set_hidden("ResourceHUD", true)
@@ -174,7 +174,7 @@ func test_a_moved_panel_never_leaves_the_screen() -> void:
 func test_moving_a_panel_out_of_its_column_lets_the_next_one_move_up() -> void:
 	UILayoutManager._viewport_size = Vector2(1280, 720)
 	var resources := _place("ResourceHUD", 3)
-	var status := _place("NotificationPanel.status", 2)
+	var status := _place("NotificationPanel.log", 2)
 	await _settle()
 	UILayoutManager.set_user_offset("ResourceHUD", Vector2(400, 300))
 	await _settle()
@@ -257,7 +257,7 @@ func test_the_center_column_never_overlaps_the_left_one(width: float, height: fl
 	UILayoutManager._viewport_size = Vector2(width, height)
 	UILayoutManager._reapply_all()
 	var resources := _place("ResourceHUD", 2)
-	var status := _place("NotificationPanel.status", 4)
+	var status := _place("NotificationPanel.log", 4)
 	var storm := _place("StormHUD", 1)
 	var objective := _place("NotificationPanel.objective", 2)
 	await _settle()
@@ -275,7 +275,7 @@ func test_a_4_3_tablet_moves_only_the_column_not_the_build_button() -> void:
 	UILayoutManager._viewport_size = Vector2(1024, 768)
 	assert_bool(UILayoutManager.is_column_narrow()).is_true()
 	assert_bool(UILayoutManager.is_narrow()).is_false()
-	assert_str(String(UILayoutManager.get_slot("storm_banner").get("stack_after", ""))).is_equal("NotificationPanel.status")
+	assert_str(String(UILayoutManager.get_slot("storm_banner").get("stack_after", ""))).is_equal("ResourceHUD")
 	assert_int(int(UILayoutManager.get_slot("bottom_center")["margin"]["bottom"])).is_equal(int(UILayoutConfig.SLOTS["bottom_center"]["margin"]["bottom"]))
 
 func test_a_help_tip_follows_the_panel_it_explains() -> void:
@@ -314,7 +314,7 @@ func test_four_resources_push_the_pause_and_the_center_column_aside(width: float
 	UILayoutManager._reapply_all()
 	var hud: CanvasLayer = auto_free(load("res://scenes/ui/ResourceHUD.tscn").instantiate())
 	add_child(hud)
-	var status := _place("NotificationPanel.status", 4)
+	var status := _place("NotificationPanel.log", 4)
 	var storm := _place("StormHUD", 1)
 	var objective := _place("NotificationPanel.objective", 2)
 	var menu: CanvasLayer = auto_free(load("res://scenes/ui/PauseMenu.tscn").instantiate())

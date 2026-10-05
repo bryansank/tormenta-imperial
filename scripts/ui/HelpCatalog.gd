@@ -72,7 +72,7 @@ const ENTRIES := {
 	"overflow": {"kind": "tip", "cat": CAT_ECONOMY, "basic": false,
 		"title": "TUT_TIP_OVERFLOW_TITLE", "body": "TUT_TIP_OVERFLOW_BODY", "target": "resources"},
 	"consumption": {"kind": "tip", "cat": CAT_ECONOMY, "basic": false,
-		"title": "TUT_TIP_CONSUMPTION_TITLE", "body": "HELP_TIP_CONSUMPTION_BODY", "target": "status"},
+		"title": "TUT_TIP_CONSUMPTION_TITLE", "body": "HELP_TIP_CONSUMPTION_BODY", "target": "workers"},
 	"market": {"kind": "tip", "cat": CAT_ECONOMY, "basic": false,
 		"title": "TUT_TIP_MARKET_TITLE", "body": "TUT_TIP_MARKET_BODY", "target": ""},
 	"tech_tree": {"kind": "tip", "cat": CAT_ECONOMY, "basic": false,

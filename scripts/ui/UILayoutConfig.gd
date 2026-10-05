@@ -23,7 +23,8 @@ class_name UILayoutConfig
 ## disposicion), por defecto este slot ocupa su hueco en la columna; con true lo
 ## sigue a donde este (los globos de ayuda, que hablan de ese panel).
 const SLOTS := {
-	## Columna izquierda: recursos -> poblacion/moral -> log.
+	## Columna izquierda: recursos (con obreros y moral en la misma fila) -> log.
+	## La tarjeta de estado de debajo ("status_bar") se quito en 2026-10.
 	"top_left": {
 		"anchor": Rect2(0, 0, 0, 0),
 		"margin": {"left": 10, "top": 8, "right": 0, "bottom": 0},
@@ -31,21 +32,13 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
-	"status_bar": {
-		"anchor": Rect2(0, 0, 0, 0),
-		"margin": {"left": 10, "top": 62, "right": 0, "bottom": 0},
-		"max_size": Vector2(300, 0),
-		"grow_h": Control.GROW_DIRECTION_END,
-		"grow_v": Control.GROW_DIRECTION_END,
-		"stack_after": "ResourceHUD",
-	},
 	"left_panel": {
 		"anchor": Rect2(0, 0, 0, 1),
 		"margin": {"left": 10, "top": 186, "right": 0, "bottom": 10},
 		"max_size": Vector2(354, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
-		"stack_after": "NotificationPanel.status",
+		"stack_after": "ResourceHUD",
 	},
 	## Pestana SANDBOX (solo en ese modo): al pie de la columna izquierda, bajo lo
 	## que haya en ella (poblacion, y la Tormenta y el objetivo cuando bajan a la
@@ -219,7 +212,7 @@ const CENTER_COLUMN_HALF_WIDTH := 220.0
 const COLUMN_GAP := 6.0
 ## Paneles cuyo ancho REAL marca el borde de la columna izquierda, y lo que
 ## ocupa el boton de pausa que va a su derecha (hueco + 44).
-const LEFT_COLUMN_IDS := ["ResourceHUD", "NotificationPanel.status"]
+const LEFT_COLUMN_IDS := ["ResourceHUD"]
 const PAUSE_GAP := 4.0
 ## El boton II de pausa ya no existe (menu unico, arriba a la derecha): la
 ## columna izquierda no reserva nada a su derecha.
@@ -239,7 +232,7 @@ const NARROW_SLOTS := {
 		"anchor": Rect2(0, 0, 0, 0),
 		"margin": {"left": 10, "top": 62, "right": 0, "bottom": 0},
 		"grow_h": Control.GROW_DIRECTION_END,
-		"stack_after": "NotificationPanel.status",
+		"stack_after": "ResourceHUD",
 	},
 	"top_center": {
 		"anchor": Rect2(0, 0, 0, 0),
@@ -286,7 +279,6 @@ const SIDEBAR_STACK_REF := "sidebar_buttons"
 ## Panel-to-slot assignment
 const PANEL_SLOTS := {
 	"ResourceHUD":                "top_left",
-	"NotificationPanel.status":   "status_bar",
 	"NotificationPanel.objective":"top_center",
 	"StormHUD":                   "storm_banner",
 	"NotificationPanel.toasts":   "toast_area",

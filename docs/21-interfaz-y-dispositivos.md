@@ -96,7 +96,7 @@ y se verá al terminar.
 ## 3. Mostrar / ocultar HUD (`HudRegistry`)
 
 `scripts/ui/HudRegistry.gd` es el registro central. Elementos que se pueden
-ocultar: recursos y almacén, población/obreros/moral, botón del registro,
+ocultar: recursos y almacén (con obreros y moral, que van en esa fila), botón del registro,
 objetivo, indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
 mismo interruptor que AYUDA del menú ☰), texto de turno en batalla y las
 herramientas Sandbox (solo existen en ese modo, docs/20). El botón ☰ MENÚ (el
@@ -134,7 +134,7 @@ idiomas y, si es movible, slot.
 
 **Ajustes → Interfaz → EDITAR DISPOSICIÓN** cierra Ajustes (y la pausa o el menú
 principal que lo prestaba, que vuelven al terminar) y abre `LayoutEditor`: un
-marco sobre cada panel movible (recursos, población, objetivo, Tormenta,
+marco sobre cada panel movible (recursos, objetivo, Tormenta,
 avisos, registro, CONSTRUIR, panel de edificio) que se arrastra con el ratón o
 con el dedo. Es un modo aparte a propósito: fuera de él un toque en el HUD es
 un toque en el HUD y nada se mueve por accidente. Un velo se come los toques al
@@ -236,10 +236,13 @@ solas: apagado, el índice de AYUDA sigue reabriendo la que se pida.
 - **Volumen**: `AudioManager.slider_to_db(v) = linear_to_db(v * v)` en los
   cuatro buses, y cada efecto con su ganancia fija (`SFX_GAIN_DB`, por nombre
   de fichero: `era_up` −11 dB, `ui_click` −10 dB, el resto −6 a −8 dB).
-- **HUD con palabras**: "ALMACÉN COMPARTIDO 500 / 600" con leyenda de colores,
-  nombre de cada recurso (tooltip; con el dedo, un toque despliega los
-  nombres), "Habitantes", "Obreros: N trabajan, M libres", "Moral: producción
-  xN", y el Zzz con su motivo.
+- **HUD sin texto fijo** (2026-10, sustituye al "HUD con palabras"): una fila
+  de `[icono] número` (recursos, obreros libres y, con la Tormenta armada, la
+  moral) y la barra del almacén con `500/600`. Las palabras están en el tooltip
+  de cada ficha y, con el dedo, en el detalle que despliega un toque (nombres,
+  leyenda de colores de la barra, obreros, moral). La tarjeta de estado
+  (Trabajadores / En su puesto / Moral) ya no existe. El Zzz sigue con su
+  motivo. Detalle en docs/08 (ResourceHUD).
 - **Sonda**: `tools/menu_probe.gd` captura título, Ajustes sobre el título, el
   HUD en era 1 y 3, el menú y cada pestaña de Ajustes, y el tablero, en
   `docs/media/dev/menu/`.
@@ -390,5 +393,18 @@ flujos de `qa/maestro/` recorren lo mismo en el emulador de tableta. Siempre con
   pantalla completa (sus contenedores no paran el dedo, §9).
 - Si el fantasma sale de la pantalla, el botón ✓ se queda abajo al centro en
   vez de flotar sobre él.
-- La barra de recursos (ResourceHUD) es un panel STOP de ~280x100: es de verdad,
-  pero tapa el mapa en la esquina.
+- La barra de recursos (ResourceHUD) es un panel STOP: es de verdad, pero tapa
+  el mapa en la esquina (ahora ~350x75 en PC con seis fichas, más bajo que la
+  barra y la tarjeta de estado de antes juntas).
+- Tooltips con el dedo: Godot no los enseña al tocar y el proyecto no tiene
+  "mantener pulsado para ver la ayuda" en el HUD (mantener pulsado solo repite
+  en los controles en pantalla, §9). El equivalente es el toque en una ficha,
+  que despliega el detalle con las mismas palabras.
+- En tablet 16:10 (lienzo ~1113 px) con los cuatro recursos y la moral a la
+  vista, la fila de recursos pasa del borde que deja libre la columna central y
+  la Tormenta y el objetivo bajan a la columna izquierda (`is_column_narrow()`,
+  el mismo mecanismo que ya existía con LIMPIAR o letra grande). Con oro,
+  madera y obreros (eras 1-2) no pasa.
+- Un `settings.cfg` que nombre la tarjeta retirada (`NotificationPanel.status`,
+  oculta o movida) carga sin ella: `GameConfig.load_user_settings()` la quita
+  (`HudRegistry.RETIRED`).
