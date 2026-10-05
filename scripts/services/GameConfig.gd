@@ -794,6 +794,96 @@ var tech_definitions := [
 	 "bonus": {"storage_bonus": 500, "build_speed": 0.2}},
 ]
 
+# ── Rango del gobernador (docs/06 §Rango) ──
+#
+# XP dentro de la partida, aparte de eras e hitos. Lo reparte RankManager
+# escuchando el EventBus; el rango se DERIVA de la XP (nunca se guarda suelto),
+# asi que cargar dos veces da el mismo rango y los mismos bonos.
+#
+# Curva: subir del rango n al n+1 cuesta 100 + 60*(n-1). Estimacion para una
+# campana de 2-4 h (sin medir aun con tools/line_probe.gd): ~4500 XP de
+# acciones (obras, mejoras, combate, tormentas, hitos) + ~1 XP por ciclo de
+# produccion, unas 9000-11000 en total. El rango 18 cae al final de la campana.
+
+## XP por fuente. Las claves son las que RankManager.XP_SOURCES conoce.
+var rank_xp_sources := {
+	"build": 15,            # construction_completed (ni calzadas ni Nucleo)
+	"build_decoration": 5,  # construction_completed de una decoracion
+	"upgrade": 25,          # building_upgrade_completed
+	"production": 1,        # production_tick: un ciclo de produccion pasiva
+	"process": 5,           # process_completed: fabricar a mano
+	"mining": 5,            # mining_completed: minar un yacimiento a mano
+	"trade": 5,             # market_trade_completed
+	"train": 10,            # unit_trained
+	"fight_won": 40,        # encounter_ended(victory) y defense_auto_resolved(victory)
+	"expedition_won": 80,   # expedition_ended(0): la campana entera vuelve con botin
+	"storm": 30,            # storm_ended: aguantar una tormenta...
+	"storm_per_severity": 10, # ...mas esto por punto de severidad
+	"milestone": 100,       # milestone_completed
+}
+
+## XP acumulada para ESTAR en cada rango (indice 0 = rango 1). 18 rangos.
+var rank_xp_thresholds := [
+	0, 100, 260, 480, 760, 1100, 1500, 1960, 2480,
+	3060, 3700, 4400, 5160, 5980, 6860, 7800, 8800, 9860,
+]
+
+## Titulo de cada rango (clave de Tr: RANK_TITLE_<n>).
+func rank_title_key(rank: int) -> String:
+	return "RANK_TITLE_%d" % clampi(rank, 1, rank_xp_thresholds.size())
+
+## Lo que da cada rango al alcanzarlo. Claves posibles:
+##   buildings   ids de edificio que se desbloquean (antes, bloqueados)
+##   limit       id -> huecos extra sobre building_limits
+##   production  fraccion sumada al multiplicador de produccion (0.01 = +1 %)
+##   storage     fraccion sobre el tope de la bolsa (0.02 = +2 %)
+##   flags       banderas de la colonia que se pueden elegir
+##   colors      colores de la colonia que se pueden elegir
+## No toca los edificios basicos ni sus eras (la linea jugable sigue igual): el
+## rango abre decoraciones, huecos extra y cosmeticos. Un edificio nuevo y
+## opcional entra aqui con `buildings`.
+var rank_rewards := {
+	1: {"flags": ["plain", "band"], "colors": ["brass", "crimson"]},
+	2: {"buildings": ["garden"]},
+	3: {"production": 0.01, "flags": ["cross"]},
+	4: {"storage": 0.02, "colors": ["steel"]},
+	5: {"buildings": ["fountain"]},
+	6: {"production": 0.01, "flags": ["diagonal"]},
+	7: {"colors": ["moss"]},
+	8: {"buildings": ["statue"], "storage": 0.02},
+	9: {"production": 0.01, "flags": ["gear"]},
+	10: {"limit": {"house": 2}},
+	11: {"colors": ["soot"]},
+	12: {"production": 0.01, "storage": 0.02, "flags": ["chevron"]},
+	13: {"limit": {"statue": 2, "fountain": 2}},
+	14: {"colors": ["copper"]},
+	15: {"production": 0.01},
+	16: {"storage": 0.02, "limit": {"tower": 1}},
+	17: {"limit": {"house": 2}},
+	18: {"production": 0.02},
+}
+
+## Banderas de la colonia, en orden de la galeria. Las dibuja ColonyFlag.
+const COLONY_FLAGS := ["plain", "band", "cross", "diagonal", "gear", "chevron"]
+## Colores de la colonia: el principal de la bandera y del Nucleo.
+var colony_colors := {
+	"brass": Color(0.80, 0.62, 0.25),
+	"crimson": Color(0.68, 0.14, 0.14),
+	"steel": Color(0.30, 0.45, 0.62),
+	"moss": Color(0.33, 0.50, 0.24),
+	"soot": Color(0.18, 0.18, 0.20),
+	"copper": Color(0.72, 0.40, 0.20),
+}
+const COLONY_COLOR_ORDER := ["brass", "crimson", "steel", "moss", "soot", "copper"]
+const COLONY_DEFAULT_FLAG := "band"
+const COLONY_DEFAULT_COLOR := "brass"
+
+## Bonos del rango, aplicados en tiempo de ejecucion por RankManager (asigna el
+## total del rango actual; nunca suma sobre lo que habia).
+var rank_production_bonus := 0.0
+var rank_storage_bonus := 0.0
+var rank_limit_bonus: Dictionary = {}
+
 # ── Aspecto de los edificios: obra, ruina y actividad (docs/03, docs/18) ──
 
 ## Fases de obra, compartidas por huella (1x1 / 2x2 / 3x3): valla con
@@ -902,7 +992,11 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 func get_building_limit(building_id: String) -> int:
 	if GameMode.all_unlocked():
 		return -1  # Sandbox: sin tope por tipo (ver docs/20-modos-de-juego.md).
-	return building_limits.get(building_id, -1)
+	var limit: int = building_limits.get(building_id, -1)
+	if limit < 0:
+		return limit
+	# Huecos extra que da el rango del gobernador (RankManager los asigna).
+	return limit + int(rank_limit_bonus.get(building_id, 0))
 
 func get_prerequisites(building_id: String) -> Array:
 	if GameMode.all_unlocked():
@@ -1375,7 +1469,12 @@ func get_base_storage_cap(era: int) -> int:
 func get_storage_cap(warehouse_count: int, era: int = 1) -> int:
 	if GameMode.infinite_resources():
 		return sandbox_storage_cap
-	return get_base_storage_cap(era) + (warehouse_count * warehouse_storage_bonus) + tech_storage_bonus
+	var cap: int = get_base_storage_cap(era) + (warehouse_count * warehouse_storage_bonus) + tech_storage_bonus
+	# El bono del rango del gobernador es un porcentaje pequeno sobre todo lo
+	# demas (RankManager lo asigna, no lo suma: cargar dos veces no lo dobla).
+	if rank_storage_bonus > 0.0:
+		cap = int(round(float(cap) * (1.0 + rank_storage_bonus)))
+	return cap
 
 # ── Deposit Helpers ──
 

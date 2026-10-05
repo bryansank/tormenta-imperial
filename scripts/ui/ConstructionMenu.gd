@@ -64,6 +64,12 @@ func _ready() -> void:
 	_setup_ui()
 	_generate_thumbnails()
 	EventBus.resource_unlocked.connect(func(_r): _refresh_grid())
+	# Subir de rango quita candados; cargar otra partida puede ponerlos.
+	EventBus.governor_rank_up.connect(func(_r, _w):
+		_refresh_grid()
+		_refresh_block())
+	EventBus.game_load_completed.connect(_refresh_grid)
+	EventBus.game_new_started.connect(_refresh_grid)
 	# Con la lista abierta, el coste en rojo o no y el aviso siguen a lo que hay.
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	# CONSTRUIR es la accion principal: siempre a la vista, no escondida tras el
@@ -440,7 +446,9 @@ func _refresh_grid() -> void:
 	_mark_selected_card()
 
 func _create_grid_card(data: BuildingData) -> PanelContainer:
-	var locked := _has_locked_resource_cost(data)
+	# Bloqueado por rango del gobernador: candado y "Rango N" en vez del coste.
+	var rank_locked := not Rules.check_rank(data.id)
+	var locked := rank_locked or _has_locked_resource_cost(data)
 	var cat_color: Color = _cat_colors.get(_get_category(data), UITheme.ACCENT)
 
 	var card := PanelContainer.new()
@@ -491,8 +499,11 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	name_label.custom_minimum_size.x = 110
 	vbox.add_child(name_label)
 
+	if rank_locked:
+		vbox.add_child(make_rank_lock_row(RankManager.building_rank(data.id)))
+
 	# El coste en la propia tarjeta: se ve sin elegir, y en rojo si no llega.
-	var cost_text := card_cost_text(data)
+	var cost_text := "" if rank_locked else card_cost_text(data)
 	if cost_text != "":
 		var cost_label := UITheme.make_label(cost_text, "small",
 			UITheme.TEXT_DIM if locked else (UITheme.DANGER if not Rules.missing_cost(data).is_empty() else UITheme.WARNING))
@@ -535,6 +546,32 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	)
 
 	return card
+
+## Candado dibujado + "Rango N". El candado se pinta (no es un emoji): la
+## tipografia del juego no lo tiene y el respaldo del sistema no esta en todos.
+static func make_rank_lock_row(rank: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "RankLock"
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var lock := Control.new()
+	lock.custom_minimum_size = Vector2(14, 16)
+	lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lock.draw.connect(func(): draw_lock(lock, Rect2(Vector2.ZERO, lock.custom_minimum_size), UITheme.WARNING))
+	row.add_child(lock)
+	var label := UITheme.make_label(Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
+	label.name = "RankLockLabel"
+	row.add_child(label)
+	return row
+
+## Un candado: arco del grillete y cuerpo con ojo de cerradura.
+static func draw_lock(ci: CanvasItem, r: Rect2, color: Color) -> void:
+	var body := Rect2(r.position.x, r.position.y + r.size.y * 0.45, r.size.x, r.size.y * 0.55)
+	var shackle_c := Vector2(r.get_center().x, r.position.y + r.size.y * 0.45)
+	ci.draw_arc(shackle_c, r.size.x * 0.32, PI, TAU, 12, color, 2.0)
+	ci.draw_rect(body, color)
+	ci.draw_circle(body.get_center(), maxf(1.0, r.size.x * 0.1), UITheme.BG_DARK)
 
 ## "50 Oro · 30 Madera", o "" si es gratis.
 static func card_cost_text(data: BuildingData) -> String:

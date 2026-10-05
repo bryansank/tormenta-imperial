@@ -1179,6 +1179,11 @@ func _paint_side_mark(mark: Panel, unit: CombatUnit) -> void:
 	style.bg_color = UITheme.unit_icon_tint(is_player)
 	style.border_color = UITheme.OUTLINE_COLOR
 	style.set_border_width_all(2)
+	# Nuestras fichas llevan el color de la colonia (☰ MENU > COLONIA). El bando
+	# lo sigue diciendo la FORMA (circulo / rombo), asi que el color es libre.
+	if is_player:
+		style.bg_color = RankManager.get_color()
+	mark.set_meta("colony_color", RankManager.get_color_id() if is_player else "")
 	if is_player:
 		style.set_corner_radius_all(int(side_size))
 		mark.rotation = 0.0

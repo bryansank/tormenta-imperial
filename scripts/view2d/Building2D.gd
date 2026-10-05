@@ -12,6 +12,7 @@ extends Node2D
 const Art := preload("res://scripts/view2d/BuildingArt2D.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const StatusBadge2D := preload("res://scripts/view2d/StatusBadge2D.gd")
+const ColonyFlag2D := preload("res://scripts/view2d/ColonyFlag2D.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 ## Obra por fases, ruina y actividad: la misma regla que en 3D (docs/03).
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
@@ -55,6 +56,11 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	var badge: Node2D = StatusBadge2D.new()
 	add_child(badge)
 	badge.setup(self, data)
+	# La bandera de la colonia (rango del gobernador) sobre el Nucleo.
+	if data.is_core:
+		var flag: Node2D = ColonyFlag2D.new()
+		add_child(flag)
+		flag.setup(base_size_px())
 
 func set_selected(value: bool) -> void:
 	_selected = value

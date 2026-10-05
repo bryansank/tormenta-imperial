@@ -97,6 +97,15 @@ const SLOTS := {
 		"stack_after": "sidebar_buttons",
 		"gap": 8,
 	},
+	## Insignia del rango del gobernador: a la izquierda del boton "☰ MENU"
+	## (PauseMenu: 118 px + 10 de margen + 10 de hueco), en la misma franja.
+	"rank_badge": {
+		"anchor": Rect2(1, 0, 1, 0),
+		"margin": {"left": 0, "top": 10, "right": 138, "bottom": 0},
+		"max_size": Vector2(200, 0),
+		"grow_h": Control.GROW_DIRECTION_BEGIN,
+		"grow_v": Control.GROW_DIRECTION_END,
+	},
 	"center_modal": {
 		"anchor": Rect2(0.5, 0.5, 0.5, 0.5),
 		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 0},
@@ -259,6 +268,12 @@ const NARROW_SLOTS := {
 	"toast_area": {
 		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 256},
 	},
+	## La insignia del rango, bajo el boton ☰ MENU (10 + 48 + 6): a su izquierda
+	## chocaria con la columna de recursos.
+	"rank_badge": {
+		"margin": {"left": 0, "top": 64, "right": 10, "bottom": 0},
+		"max_size": Vector2(120, 0),
+	},
 	## El globo del menu ☰ (con la guia de edificios) es el unico que cabe en
 	## una pantalla estrecha: HelperPanel oculta los demas (NARROW_TIPS).
 	"tip_top_right": {
@@ -323,6 +338,8 @@ const PANEL_SLOTS := {
 	"VictoryScreen":              "full_overlay",
 	"OnScreenControls":           "bottom_controls",
 	"SandboxPanel":               "sandbox_tab",
+	"RankPanel":                  "rank_badge",
+	"RankPanel.modal":            "center_modal",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)

@@ -56,6 +56,7 @@ UILayoutManager="*res://scripts/services/UILayoutManager.gd"
 AudioManager="*res://scripts/services/AudioManager.gd"
 BeckettRuntime="*res://scripts/services/BeckettGate.gd"
 DeviceProfile="*res://scripts/services/DeviceProfile.gd"
+RankManager="*res://scripts/services/RankManager.gd"
 
 [beckett]
 
