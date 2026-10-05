@@ -12,12 +12,14 @@ extends Node2D
 const Art := preload("res://scripts/view2d/BuildingArt2D.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const StatusBadge2D := preload("res://scripts/view2d/StatusBadge2D.gd")
+const ColonyFlag2D := preload("res://scripts/view2d/ColonyFlag2D.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 ## Obra por fases, ruina y actividad: la misma regla que en 3D (docs/03).
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
 const Fx := preload("res://scripts/buildings/BuildingFx.gd")
 ## La parcela: la misma plantilla que la 3D (docs/03, "Parcela y atrezo").
 const LotPlan := preload("res://scripts/buildings/LotPlan.gd")
+const SiteFx := preload("res://scripts/buildings/SiteFx.gd")
 
 var data: BuildingData = null
 ## Fantasma de colocacion: no esta en la rejilla, se pinta translucido.
@@ -41,6 +43,12 @@ var _lot_key: Array = []
 var _lot_dirty := true
 var _lot_origin := Vector2i(-99999, -99999)
 var _lot_sides := 0
+## Lo que se mueve en una obra (pluma y carro de la grua, banderin, chispas o
+## polvo), rehecho al cambiar de fase o de semilla; y esa semilla (la misma que
+## en 3D: BuildingLook.seed_of).
+var _site_fx: Node2D = null
+var _site_key := ""
+var _site_seed := 0
 
 func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	data = building_data
@@ -100,6 +108,11 @@ func _update_lot() -> void:
 	_lot_key = key
 	_lot_plan = LotPlan.plan(data.id, data.grid_size, LotPlan.seed_for(_lot_origin, data.id), _lot_sides, state, phase)
 	queue_redraw()
+	# La bandera de la colonia (rango del gobernador) sobre el Nucleo.
+	if data.is_core:
+		var flag: Node2D = ColonyFlag2D.new()
+		add_child(flag)
+		flag.setup(base_size_px())
 
 func set_selected(value: bool) -> void:
 	_selected = value
@@ -163,9 +176,10 @@ func _current_signature() -> Array:
 		if not info.is_empty():
 			mask = Rules.road_neighbor_mask(info["origin_cell"])
 	_look = LookRule.derive(LookRule.facts_of(self, data))
+	_site_seed = LookRule.seed_of(self, data) if int(_look["look"]) == LookRule.Look.CONSTRUCTION else 0
 	return [constructing, progress, int(get_meta("level", 1)), int(get_meta("health", data.max_health)),
 		BuildingHealth.is_ruined(self), mask, int(get_meta("rotation_steps", 0)), String(get_meta("custom_name", "")),
-		Tr.get_locale(), int(_look["look"]), int(_look["phase"])]
+		Tr.get_locale(), int(_look["look"]), int(_look["phase"]), _site_seed]
 
 func get_look() -> Dictionary:
 	return _look
@@ -175,6 +189,88 @@ func get_active_fx() -> Node2D:
 
 func get_ruin_fx() -> Node2D:
 	return _ruin_fx
+
+func get_site_fx() -> Node2D:
+	return _site_fx
+
+func get_site_seed() -> int:
+	return _site_seed
+
+## Las piezas animadas de la obra: se crean al entrar en una fase (o cambiar
+## de semilla) y se van al acabar. Las mueve un shader (SiteFx/BuildingFx):
+## ni este nodo ni ellas tienen _process por la animacion.
+func _apply_site_fx() -> void:
+	var look := int(_look["look"])
+	var key := ""
+	if look == LookRule.Look.CONSTRUCTION:
+		key = "%d:%d:%d" % [int(_look["phase"]), _site_seed, int(get_meta("rotation_steps", 0))]
+	if key == _site_key:
+		return
+	_site_key = key
+	if _site_fx != null:
+		remove_child(_site_fx)
+		_site_fx.queue_free()
+		_site_fx = null
+	if key == "":
+		return
+	_site_fx = _make_site_fx(int(_look["phase"]))
+	add_child(_site_fx)
+
+func _make_site_fx(phase: int) -> Node2D:
+	var holder := Node2D.new()
+	holder.name = "SiteFx"
+	holder.z_index = 5
+	holder.rotation = float(int(get_meta("rotation_steps", 0))) * PI * 0.5
+	var n := LookRule.footprint_class(data.grid_size)
+	var style := LookRule.site_style(data.id)
+	var layout := LookRule.site_layout(_site_seed, style, n)
+	# La obra ocupa el rectangulo del edificio; el patio es la parcela a medio preparar.
+	var site_size := base_size_px() - Vector2.ONE * yard_px() * 2.0
+	var anchors := Art.site_anchors(site_size, phase, n, style, layout)
+	var crane: Dictionary = anchors["crane"]
+	if not crane.is_empty():
+		var jib := float(crane["jib"])
+		var color: Color = style["crane"]
+		var outline := Line2D.new()
+		outline.name = "CraneJibOutline"
+		outline.points = PackedVector2Array([Vector2(-jib * 0.22, 0), Vector2(jib, 0)])
+		outline.width = 4.5
+		outline.default_color = Art.OUTLINE
+		var arm := Line2D.new()
+		arm.name = "CraneJib"
+		arm.points = outline.points
+		arm.width = 2.6
+		arm.default_color = color
+		var weight := Polygon2D.new()
+		weight.name = "CraneWeight"
+		weight.polygon = PackedVector2Array([Vector2(-jib * 0.24, -3), Vector2(-jib * 0.12, -3), Vector2(-jib * 0.12, 3), Vector2(-jib * 0.24, 3)])
+		weight.color = Art.CONCRETE_DARK
+		var trolley := Polygon2D.new()
+		trolley.name = "CraneHook"
+		var tx := jib * 0.5
+		trolley.polygon = PackedVector2Array([Vector2(tx - 2.5, -2.5), Vector2(tx + 2.5, -2.5), Vector2(tx + 2.5, 2.5), Vector2(tx - 2.5, 2.5)])
+		trolley.color = Art.IRON
+		for part in [outline, arm, weight]:
+			part.material = SiteFx.crane_material_2d()
+		trolley.material = SiteFx.crane_material_2d(jib * 0.4)
+		for part in [outline, arm, weight, trolley]:
+			part.position = crane["mast"]
+			part.rotation = float(crane["angle"])
+			holder.add_child(part)
+	var flag := Polygon2D.new()
+	flag.name = "SiteFlag"
+	flag.polygon = PackedVector2Array([Vector2(0, -3), Vector2(3.3, -2.4), Vector2(6.6, -1.4), Vector2(10, 0),
+		Vector2(6.6, 1.4), Vector2(3.3, 2.4), Vector2(0, 3)])
+	flag.color = style["flag"]
+	flag.material = SiteFx.flag_material_2d()
+	flag.position = anchors["flag"]
+	holder.add_child(flag)
+	var kind := String(anchors["fx_kind"])
+	if kind != "":
+		var fx := Fx.sprite_2d(kind, minf(site_size.x, site_size.y) * 0.45, "site" if kind == "dust" else "")
+		fx.position = anchors["fx"]
+		holder.add_child(fx)
+	return holder
 
 ## Enciende o apaga los efectos animados segun el aspecto. Los sprites los
 ## anima un shader (BuildingFx): aqui solo se crean una vez y se muestran.
@@ -195,6 +291,7 @@ func _apply_fx() -> void:
 		add_child(_ruin_fx)
 	if _ruin_fx:
 		_ruin_fx.visible = look == LookRule.Look.RUIN
+	_apply_site_fx()
 
 func _make_active_fx() -> Node2D:
 	var kind := LookRule.fx_kind(data.id)
@@ -288,7 +385,7 @@ func _draw() -> void:
 	if look == LookRule.Look.CONSTRUCTION:
 		# Obra nueva: la fase de la huella EN LUGAR del edificio (que aun no esta).
 		Art.draw_construction_phase(self, inner, int(_look["phase"]),
-			ProductionManager.get_construction_progress(self), n)
+			ProductionManager.get_construction_progress(self), n, data.id, _site_seed)
 	else:
 		if has_lot:
 			Art.draw_lot_shadow(self, Rect2(-inner * 0.5, inner).grow(-Art.INSET))

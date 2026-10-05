@@ -35,7 +35,7 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(_resync_storm_phase)
 
 func _resync_storm_phase() -> void:
-	_ash_overhead = StormManager.is_ashfall()
+	_ash_overhead = StormManager.is_ashfall() and not StormManager.is_trial_running()
 
 func get_processes_for(building_id: String) -> Array:
 	return GameConfig.get_processes_for(building_id)
@@ -258,6 +258,9 @@ func _convert_cost(cost_dict: Dictionary) -> Dictionary:
 
 ## Empieza la ceniza: la ultima ventana para sacar de la cola lo que haya dentro.
 func _on_ash_started() -> void:
+	# La tormenta de prueba de la era 1 no se lleva la cola: es un ensayo.
+	if StormManager.is_trial_running():
+		return
 	_ash_overhead = true
 	_warn_if_ash()
 
@@ -296,6 +299,9 @@ func _warn_if_ash() -> void:
 ## sin saber que perdio, y saberlo es lo que le ensena a vaciar la cola antes.
 func _on_storm_started(_severity: int) -> void:
 	_ash_overhead = false
+	# La tormenta de prueba de la era 1 no se lleva la cola: es un ensayo.
+	if StormManager.is_trial_running():
+		return
 	if _active.is_empty():
 		return
 	for node in _active.keys():

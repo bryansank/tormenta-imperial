@@ -36,9 +36,11 @@ A house only counts while it is joined to the Núcleo by road.
   does not produce. Its status badge says "sin trabajadores" (`BuildingStatusBadge` in
   3D, `StatusBadge2D` in 2D)
 - Player must balance: more production buildings need more houses
-- **Naming (2026-09-28):** the UI calls the people *trabajadores* everywhere. The HUD
-  card reads "Trabajadores: 12 de 17" (population of room) and "En su puesto: 8 ·
-  libres: 4"; a House "da sitio a 6"
+- **Naming (2026-09-28):** the UI calls the people *trabajadores* everywhere; a House
+  "da sitio a 6". **HUD (2026-10):** a worker icon in the resource row shows the
+  *free* workers (warning colour when a building is left without them); inhabitants,
+  room, working and withdrawn are in its tooltip. Morale is a heart icon in the same
+  row, only once the Storm is armed (docs/08, ResourceHUD)
 
 ### What takes a building out of the count
 

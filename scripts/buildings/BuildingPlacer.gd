@@ -10,6 +10,7 @@ enum State { IDLE, PLACING, MOVING }
 ## Preloaded so placement does not depend on the editor's global class cache
 ## (a fresh clone runs the game headless before any editor scan).
 const StatusBadge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
+const ColonyFlag3D := preload("res://scripts/buildings/ColonyFlag3D.gd")
 ## Las cuentas de pantalla -> suelo son estaticas y viven en InputService, que es
 ## quien las usa para el dedo. Se cargan por script (no por el autoload) para
 ## llamarlas como lo que son: funciones sueltas, sin instancia de por medio.
@@ -202,6 +203,7 @@ func _handle_left_drag(event: InputEventMouseMotion) -> void:
 
 func _process(delta: float) -> void:
 	_tick_looks(delta)
+	_tick_block_flash(delta)
 	if _state == State.IDLE:
 		return
 	_update_preview()
@@ -361,6 +363,7 @@ func _on_demolish_requested(building: Node) -> void:
 		return
 	if result.has("blocked"):
 		_show_feedback(String(result["blocked"]))
+		flash_buildings(result.get("stranded", []))
 		return
 	var data: BuildingData = result["data"]
 	var cell: Vector2i = result["cell"]
@@ -422,6 +425,9 @@ func _try_place(cell: Vector2i) -> void:
 	if _rotation_steps % 2 == 1:
 		place_data = _create_rotated_data(_current_data)
 	GridManager.place_building(cell, place_data, building)
+	# El primer extractor de un yacimiento le abre su camino de acceso, gratis.
+	if Rules.pave_access_ring(self, _current_data, verdict, building) > 0:
+		_show_feedback(Tr.t("LBL_ACCESS_RING_LAID"))
 	# Update warehouse count
 	if _current_data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
@@ -460,9 +466,13 @@ func _try_move(cell: Vector2i) -> void:
 	var rotated_size := _get_rotated_size()
 	# Moving obeys the same deposit rule as placing; otherwise a sawmill could be
 	# planted by a forest and then dragged anywhere.
-	if _current_data.id == "road" and Rules.road_removal_strands(_moving_building) != null:
-		_show_feedback(Tr.t("LBL_ROAD_NEEDED_BY"))
-		return
+	# Una carretera solo se mueve si en su sitio nuevo sigue uniendo lo que unia.
+	if _current_data.id == "road":
+		var stranded := Rules.road_removal_stranded(_moving_building, GridManager.cells_for(cell, rotated_size))
+		if not stranded.is_empty():
+			_show_feedback(Rules.move_first_message(stranded))
+			flash_buildings(stranded)
+			return
 	var map_gen := _map_generator()
 	var verdict := evaluate_placement(_current_data.id, cell, rotated_size, map_gen, _moving_building)
 	if not verdict["ok"]:
@@ -746,6 +756,12 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		var lot: Node3D = Lot.new()
 		root.add_child(lot)
 		lot.setup(root, data)
+	# La bandera de la colonia (rango del gobernador) ondea sobre el Nucleo. Va la
+	# ultima: el cartel de estado se midio sin ella.
+	if data.is_core:
+		var flag: Node3D = ColonyFlag3D.new()
+		root.add_child(flag)
+		flag.setup(Vector2(data.grid_size) * GridManager.cell_size, top)
 
 	return root
 
@@ -960,3 +976,61 @@ func get_spot_highlight() -> MultiMeshInstance3D:
 
 func get_assist() -> Node:
 	return _assist
+
+# ── "Primero mueve": los edificios que un tramo de carretera mantiene unidos ──
+
+## Rojo latiendo sobre la huella de los edificios que impiden quitar un tramo
+## (PlacementRules.road_removal_stranded), GameConfig.road_block_highlight_seconds.
+## Se ve a traves de la malla: el aviso es para encontrarlos, no para adornar.
+var _block_flash: MultiMeshInstance3D = null
+var _block_flash_nodes: Array = []
+var _block_flash_left := 0.0
+
+func flash_buildings(nodes: Array) -> void:
+	_block_flash_nodes = nodes.duplicate()
+	_block_flash_left = GameConfig.road_block_highlight_seconds if not nodes.is_empty() else 0.0
+	if _block_flash == null:
+		_block_flash = MultiMeshInstance3D.new()
+		_block_flash.name = "BlockedBuildings"
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		var plane := PlaneMesh.new()
+		plane.size = Vector2.ONE * GridManager.cell_size
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(UITheme.DANGER, 0.5)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.no_depth_test = true
+		mat.render_priority = 1
+		plane.material = mat
+		mm.mesh = plane
+		_block_flash.multimesh = mm
+		add_child(_block_flash)
+	_tick_block_flash(0.0)
+
+## Los edificios resaltados ahora mismo ([] si no hay resaltado).
+func get_flash_nodes() -> Array:
+	return _block_flash_nodes if _block_flash_left > 0.0 else []
+
+func _tick_block_flash(delta: float) -> void:
+	if _block_flash == null:
+		return
+	_block_flash_left -= delta
+	if _block_flash_left <= 0.0:
+		_block_flash.visible = false
+		_block_flash_nodes.clear()
+		return
+	# Se releen las celdas cada vez: si el jugador ya movio uno, el rojo le sigue.
+	var cells: Array = []
+	for n in _block_flash_nodes:
+		if is_instance_valid(n):
+			cells.append_array(GridManager.get_building_info(n).get("cells", []))
+	var mm := _block_flash.multimesh
+	mm.instance_count = cells.size()
+	for i in cells.size():
+		var w := GridManager.cell_to_world(cells[i])
+		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(w.x, 0.1, w.z)))
+	var mat := (mm.mesh as PlaneMesh).material as StandardMaterial3D
+	mat.albedo_color.a = 0.3 + 0.25 * sin(Time.get_ticks_msec() * 0.008)
+	_block_flash.visible = not cells.is_empty()

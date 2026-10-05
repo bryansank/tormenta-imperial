@@ -92,9 +92,36 @@ network" below.
 
 - **Everything touches a road joined to the Núcleo.** `PlacementRules.is_connected_spot()`
   is part of `evaluate_placement()` (reason `"road"`, message `LBL_NEEDS_ROAD`). A new
-  road must touch the network or the Núcleo. A road whose removal would strand a
-  building cannot be demolished or moved (`road_removal_strands()`). With no Núcleo on
-  the grid (hand-built test scenes) the rule is off.
+  road must touch the network or the Núcleo. With no Núcleo on the grid (hand-built
+  test scenes) the rule is off.
+- **Removing a road: move the buildings first (2026-10-04).** Demolishing a road
+  tile, or moving it, is refused when it would leave a building without a link to the
+  Núcleo. `PlacementRules.road_removal_stranded(road, new_cells = [])` returns those
+  buildings: anything on the grid except the Núcleo, decorations and other roads,
+  **under construction included**; a building that was already loose before (old
+  saves) does not count, and `new_cells` is where a moved road goes (it still counts
+  as road). `Rules.demolish()` answers `{"blocked", "stranded"}`; both placers show
+  the toast `LBL_MOVE_FIRST` ("Primero mueve: Aserradero, Mina de oro", at most
+  `GameConfig.road_block_max_names` names, then "+N") and `flash_buildings()` paints
+  those buildings red for `GameConfig.road_block_highlight_seconds` (3D: a pulsing
+  red quad per cell drawn through the mesh; 2D: a red frame above the building).
+  Tapping one selects it as usual: its panel opens with MOVER. There is no batch or
+  drag demolish. Tests: `tests/map/test_road_removal.gd`.
+- **Access road around a deposit (2026-10-04).** The first extractor planted next to
+  a deposit (sawmill-forest, gold mine-gold vein, foundry-iron) lays a free ring of
+  road around it (`PlacementRules.pave_access_ring()`, called by both placers before
+  `building_placed`; toast `LBL_ACCESS_RING_LAID`). The ring runs at
+  `extractor size + 1` cells from the deposit (3 with today's 2x2 extractors), so the
+  2-cell band touching the deposit stays **entirely free**: any extractor there
+  touches the deposit (reach 1) and the ring. Occupied cells (buildings, other
+  deposits) and cells off the grid are skipped, and only the pieces that end up
+  joined to the Núcleo's network are laid (the extractor's own auto-road crosses
+  the ring, so normally all of it); no extra route is paved. The deposit is marked
+  (`access_ring` meta, saved in its `deposits` entry, idempotent: a new map has new
+  deposits) and an old save with an extractor already touching it gets no ring.
+  The refinery eats its oil well, so wells get no ring. Moving an extractor never
+  lays one. The ring is ordinary road: removable under the "move first" rule.
+  Tests: `tests/map/test_access_ring.gd`.
 - **The Núcleo starts with its sidewalk:** `GameManager.pave_core_ring()` lays the 16
   road cells around it in `_new_game()`.
 - **Auto-road:** placing (or moving) a building where the network does not reach is
@@ -225,19 +252,19 @@ la ruina sobre la actividad.
 
 | Aspecto | Cuando | 3D | 2D |
 |---|---|---|---|
-| **Obra, fase 0** | progreso < 34 % | modelo oculto; tierra removida, valla de tablas con puerta y cinta de peligro, pilas de tablones / vigas / ladrillo (una por clase de huella) | tierra, valla con postes y puerta, pilas de material |
-| **Obra, fase 1** | 34-67 % | losa de cimentacion, zapatas, esperas de ferralla, conos | losa con zapatas y ferralla, conos |
-| **Obra, fase 2** | ≥ 67 % | pilares, medio forjado, vigas de coronacion, andamio y, desde 2x2, grua | pilares, medio forjado, andamio y grua |
+| **Obra, fase 0** | progreso < 34 % | modelo oculto; tierra removida, valla (tablas, chapa o lona, segun el edificio) con puerta, cinta de peligro y banderin, las pilas de material del edificio, una con lona, y algo de desorden | lo mismo visto desde arriba |
+| **Obra, fase 1** | 34-67 % | losa (de piedra en los de piedra), zapatas, ferralla o estacas, lo que ya asoma de la silueta (base de la chimenea, anillos, zapata de la torre...), conos, sobrante de una pila y banderin | lo mismo visto desde arriba |
+| **Obra, fase 2** | ≥ 67 % | la estructura con la silueta del edificio (chimenea, tejado a dos aguas, torre, depositos, cupula...), andamio, banderin, chispas o polvo y, desde 2x2, grua que gira | lo mismo, con la pluma de la grua girando |
 | **Mejora** | obra que es una mejora | el modelo a la vista con andamio alrededor | el dibujo con rayas, andamio en aspa y barra |
 | **Ruina** | `BuildingHealth.is_ruined()` | el modelo se hunde un 38 % y se ladea, con el hollin de siempre, suelo quemado, cascotes, muro roto, vigas carbonizadas y humo negro animado | tizne, muro dentado, cascotes, vigas con ascuas, grietas y humo negro animado |
 | **Trabajando** | el badge dice WORKING y el edificio tiene efecto | humo, serrin o luz que parpadea sobre la cima | humo/serrin desde las chimeneas del dibujo, luz en la puerta |
 | **Quieto** | lo demas | el modelo, sin animacion | el dibujo, sin animacion |
 
-- **Las fases de obra van por huella, no por edificio** (1x1 / 2x2 / 3x3):
-  `DieselpunkBuildingFactory.create_construction_phase(footprint, phase, cell_size)`
-  y `BuildingArt2D.draw_construction_phase()`. La clase de huella (el lado
-  mayor, 1-3) decide cuantas pilas, cuantos pilares y si hay grua. Umbrales en
-  `GameConfig.construction_phase_thresholds`.
+- **Las tres fases son las mismas para todos** (valla -> cimientos ->
+  estructura: se reconocen siempre) y la **clase de huella** (el lado mayor,
+  1-3) decide el tamano, cuantas pilas, cuantos pilares y si hay grua (desde
+  2x2). Umbrales en `GameConfig.construction_phase_thresholds`. Lo que cambia
+  es como se visten; ver "Obra por edificio" abajo.
 - **Que efecto lleva cada edificio**: `GameConfig.building_active_fx` (`smoke`,
   `dust`, `glow`). Casas y decoracion no llevan: no "trabajan".
 - **La animacion** es una hoja de 8 fotogramas en rejilla 4x2 a 12 fps
@@ -257,7 +284,10 @@ la ruina sobre la actividad.
   sprites del efecto la primera vez que hacen falta (docs/18).
 - Sonda con capturas: `godot --path . -s tools/look_probe.gd -- --no-dev`
   (con `override.cfg` propio) deja `docs/media/dev/look_probe_3d.png` y
-  `look_probe_2d.png`.
+  `look_probe_2d.png` (todos los aspectos) y `look_probe_obras_3d.png`,
+  `look_probe_obras_3d_b.png` (un instante despues: la grua se ha movido) y
+  `look_probe_obras_2d.png`: una fila por fase con fundicion, aserradero,
+  refineria, DOS casas, estatua y torre.
 - Todo es original y generado por el proyecto (mallas procedurales, dibujo en
   codigo, hojas de sprite generadas): ningun asset externo.
 
@@ -293,9 +323,14 @@ verde en lo residencial).
 | Nucleo | losas | bordillo | farolas, macetas, bancos | — (ya es monumental) |
 | Jardin / Fuente / Estatua | hierba / losas / losas | bordillo | banco, farola, maceta | — |
 
-- **Variacion por instancia**: la semilla es `LotPlan.seed_for(celda, id)` (la
-  celda de origen y el id). Dos aserraderos no tienen el mismo atrezo; el mismo,
-  tras guardar y cargar, si. Nada de esto va al guardado.
+- **Variacion por instancia**: la semilla es `LotPlan.seed_for(celda, id)`, que
+  es la misma de la obra (`BuildingLook.site_seed(id, celda)`, ver "Obra por
+  edificio y por instancia"): la parcela a medio preparar y la obra que va
+  encima salen de la misma tirada. Dos aserraderos no tienen el mismo atrezo;
+  el mismo, tras guardar y cargar, si. Nada de esto va al guardado.
+- **Las puertas quedan libres**: la vida de la ciudad (los obreros que andan)
+  entra por el lado que da a la calzada, y ahi la parcela no pone ni remate ni
+  atrezo.
 - **No pisa nada**: cada pieza cabe entera en el patio (ni toca el rectangulo
   del modelo ni sale de la parcela, asi que nunca pisa una calzada vecina), los
   lados que dan a calzada quedan libres (son la entrada) y la esquina del
@@ -350,8 +385,79 @@ dominando el dibujo y el icono.
 
 Capturas: `tools/look_probe.gd` (con `override.cfg` propio) deja ademas
 `look_probe_style_3d.png`, `look_probe_style_storm_3d.png`,
-`look_probe_style_2d.png`, `look_probe_style_storm_2d.png` y
-`look_probe_sawmill_3d.png` en `docs/media/dev/`.
+`look_probe_style_2d.png`, `look_probe_style_storm_2d.png`,
+`look_probe_style_close_3d.png` y `look_probe_sawmill_3d.png` en `docs/media/dev/`.
+
+### Obra por edificio y por instancia
+
+Dos casas en obras una al lado de otra no se ven iguales, y la obra de una
+fundicion no se parece a la de una casa. Dos capas, las dos decididas en
+`BuildingLook` para que 3D y 2D coincidan:
+
+**Estilo por tipo** (`BuildingLook.site_style(id)`): una fila por edificio en
+`GameConfig.construction_style`, encima de `construction_style_default` (lo que
+la fila no diga sale del defecto; la calzada usa el defecto).
+
+| Campo | Que decide | Valores |
+|---|---|---|
+| `piles` | que se apila en la fase 0 (y lo que sobra en la 1) | planks, beams, bricks, logs, sawdust, rivets, pipes, drums, sacks, stone, crates, sandbags, gravel, soil |
+| `fence` | la valla de la fase 0 | planks, dark_planks, sheet (chapa), canvas (lona del color `tarp`) |
+| `tarp` | color de la lona (valla de lona, la que tapa una pila, la figura tapada de la estatua) | Color |
+| `frame` | la silueta de la fase 2, que insinua el edificio (y lo que asoma ya en la fase 1) | box, chimney, gable, tower, tanks, dome, plinth, basin, hall, headframe, low, mast |
+| `frame_mat` | de que son pilares y vigas (y estacas o ferralla en la fase 1, losa de piedra) | steel, wood, stone |
+| `site_fx` | lo que se mueve mientras se trabaja | sparks (soldadura; fases 1 y 2), dust (polvo; todas), "" |
+| `flag`, `crane` | color del banderin y de la grua | Color |
+
+| Edificio | Pilas | Valla | Silueta | Material | Efecto |
+|---|---|---|---|---|---|
+| Nucleo | piedra, vigas, remaches | chapa | cupula | piedra | chispas |
+| Casa | sacos, ladrillo, tablones | tablas | tejado a dos aguas | madera | polvo |
+| Aserradero | troncos, serrin, tablones | tablas oscuras | nave | madera | polvo |
+| Mina de oro | grava, vigas, cajas | tablas oscuras | castillete con rueda | madera | polvo |
+| Almacen | cajas, tablones, sacos | tablas | nave | acero | — |
+| Fundicion | vigas, remaches, ladrillo | chapa | chimenea alta | acero | chispas |
+| Cuartel | sacos terreros, cajas, vigas | chapa | nave (grua oliva) | acero | chispas |
+| Refineria | tuberias, bidones, vigas | chapa | depositos | acero | chispas |
+| Torre | sacos terreros, vigas, remaches | lona oliva | torre de celosia | acero | chispas |
+| Cuartel general | piedra, vigas, remaches | lona roja | mastil con bandera (grua roja) | acero | chispas |
+| Mercado | cajas, sacos, tablones | lona naranja | tejado a dos aguas | madera | polvo |
+| Laboratorio | bidones, tuberias, cajas | chapa | cupula | acero | chispas |
+| Jardin | tierra, sacos, tablones | tablas | pergola y bancales | madera | polvo |
+| Fuente | piedra, tuberias, grava | tablas | pilon con cabria | piedra | polvo |
+| Estatua | piedra, piedra, sacos | lona | pedestal con la figura tapada | piedra | polvo |
+
+**Disposicion por instancia** (`BuildingLook.site_layout(seed, style, n)`): la
+semilla es `BuildingLook.site_seed(id, celda de origen)` (FNV-1a, sin `hash()`
+ni azar global) y `seed_of(nodo, data)` la saca de `GridManager` — la misma
+celda en 3D y en 2D, y la que viaja en la partida, asi que la obra es estable
+entre frames, recargas, guardados y cambios de vista. Fuera de la rejilla
+(sondas, pruebas) sale de la posicion. Decide: el lado de la puerta y a que
+lado de ella va el banderin, la separacion de los postes (mas o menos postes),
+el orden, sitio, giro y tamano de las pilas, cual lleva lona, el desorden (un
+bidon, una caja, un cono), el lado del andamio, la esquina de la grua y su
+giro de reposo, las esquinas de los conos y del sobrante, y donde salen las
+chispas o el polvo. Mover un edificio en obras cambia su celda y con ella su
+obra.
+
+**Animacion** (`scripts/buildings/SiteFx.gd`, mismo principio que
+`BuildingFx`): todo lo mueve un shader con `TIME`, sin timers, tweens,
+AnimationPlayer ni `_process` por edificio. La grua gira a un lado y a otro
+(pluma, contrapeso y cable con gancho son mallas con el origen en el eje, que
+el shader gira; el gancho sube y baja porque solo se mueven los vertices por
+debajo del eje), el banderin ondea, las chispas (`sparks`, nueva hoja de
+`BuildingFx`, aditiva) y el polvo (`dust` con variante `site`) usan las hojas
+de sprite. Cada instancia saca su desfase y su velocidad (0,7-1,3 veces la
+base) de su posicion en el mundo, asi que dos gruas vecinas nunca van al
+unisono. Velocidad y apertura base: `GameConfig.construction_crane_speed` /
+`construction_crane_swing`. Materiales compartidos por color para todo el mapa
+y sin uniforms por instancia (que el renderizador Compatibility del APK de QA
+no tiene).
+
+**Coste**: una obra son unas 25-45 mallas low-poly (medido: casa 41/31/34 por fase, fundicion
+30/39/32, nucleo 3x3 46/41/45) con materiales cacheados, y solo mientras dura la obra; la
+animacion son 3 mallas de grua + 1 banderin + 1 quad de efecto, en GPU. En
+2D, la obra se dibuja una vez por cambio de firma (fase, progreso, semilla) y
+lo que se mueve son 4-6 nodos con shader.
 
 ## Key Files
 
@@ -364,4 +470,5 @@ Capturas: `tools/look_probe.gd` (con `override.cfg` propio) deja ademas
 - `scripts/buildings/BuildingLook.gd` — rule: construction phase / upgrade / ruin / active / idle (both views)
 - `scripts/buildings/BuildingLookVisual.gd` — applies it in 3D; `scripts/buildings/BuildingFx.gd` — animated sprite sheets + shaders
 - `scripts/buildings/LotPlan.gd` — rule: lot ground, trim, props and exaggerated element (both views); `scripts/buildings/BuildingLot.gd` — the 3D lot; `scripts/buildings/LotMesh.gd` — one vertex-coloured mesh per lot
+- `scripts/buildings/SiteFx.gd` — construction-site animation shaders (crane, hook, pennant) for both views; site style/layout in `BuildingLook.gd`
 - `scenes/buildings/BuildingPlacer.tscn` — placement/move/demolish logic

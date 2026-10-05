@@ -4,6 +4,7 @@ extends CanvasLayer
 
 const PlacementAssistScript := preload("res://scripts/buildings/PlacementAssist.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+const TextKit := preload("res://scripts/ui/TextKit.gd")
 
 var _root: Control
 var _backdrop: ColorRect
@@ -27,12 +28,13 @@ var _grid_scroll: ScrollContainer
 # Detail panel (right side)
 var _detail_panel: VBoxContainer
 var _detail_name: Label
-var _detail_cost: Label
-var _detail_production: Label
+## El coste en fila de iconos con su cifra; en rojo lo que falta (2026-10-04).
+var _detail_cost: HFlowContainer
+## Lo que produce: "+6 [madera] cada 12 s".
+var _detail_production: HBoxContainer
 var _detail_extras: Label
 ## "Necesita bosque adyacente": la regla del yacimiento, antes de colocar (bug 10).
 var _detail_rule: Label
-var _detail_size: Label
 ## Por que no se puede construir ahora ("Te falta: 20 Madera"), junto al boton.
 var _detail_block: Label
 var _detail_build_btn: Button
@@ -64,6 +66,12 @@ func _ready() -> void:
 	_setup_ui()
 	_generate_thumbnails()
 	EventBus.resource_unlocked.connect(func(_r): _refresh_grid())
+	# Subir de rango quita candados; cargar otra partida puede ponerlos.
+	EventBus.governor_rank_up.connect(func(_r, _w):
+		_refresh_grid()
+		_refresh_block())
+	EventBus.game_load_completed.connect(_refresh_grid)
+	EventBus.game_new_started.connect(_refresh_grid)
 	# Con la lista abierta, el coste en rojo o no y el aviso siguen a lo que hay.
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	# CONSTRUIR es la accion principal: siempre a la vista, no escondida tras el
@@ -161,7 +169,7 @@ func _setup_ui() -> void:
 	header.add_theme_constant_override("separation", 10)
 	main_vbox.add_child(header)
 
-	var title := UITheme.make_label(Tr.t("LBL_BUILDINGS_AVAILABLE"), "title", UITheme.ACCENT)
+	var title := UITheme.make_label(Tr.t("LBL_BUILDINGS_TITLE"), "title", UITheme.ACCENT)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 
@@ -303,33 +311,34 @@ func _setup_ui() -> void:
 	_detail_panel.add_child(preview_wrapper)
 
 	# Detail labels
+	# El nombre; el tamano (todos 2x2 salvo la carretera) va en su tooltip.
 	_detail_name = UITheme.make_label("", "title", UITheme.TEXT_BRIGHT)
 	_detail_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_detail_name.mouse_filter = Control.MOUSE_FILTER_PASS
 	_detail_panel.add_child(_detail_name)
 
-	_detail_size = UITheme.make_label("", "small", UITheme.TEXT_DIM)
-	_detail_size.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_detail_panel.add_child(_detail_size)
-
-	# El coste, lo primero tras el nombre: es lo que decide si se puede.
-	_detail_cost = UITheme.make_label("", "section", UITheme.WARNING)
+	# El coste, lo primero tras el nombre: es lo que decide si se puede. Iconos
+	# con su cifra y en rojo lo que falta, sin repetir "Costo:" ni los nombres.
+	_detail_cost = TextKit.cost_row({}, {}, "section", UITheme.WARNING)
 	_detail_cost.name = "DetailCost"
-	_detail_cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_detail_cost.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_detail_cost.alignment = FlowContainer.ALIGNMENT_CENTER
 	_detail_panel.add_child(_detail_cost)
 
 	_detail_panel.add_child(UITheme.make_separator())
-	# Nombre, tamano y coste arriba del todo; la vista previa, detras. En
-	# tableta la vista previa empujaba el coste fuera de la pantalla.
+	# Nombre y coste arriba del todo; la vista previa, detras. En tableta la
+	# vista previa empujaba el coste fuera de la pantalla.
 	_detail_panel.move_child(preview_wrapper, _detail_panel.get_child_count() - 1)
 
-	_detail_production = UITheme.make_label("", "body", UITheme.POSITIVE)
-	_detail_production.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_detail_production = HBoxContainer.new()
+	_detail_production.name = "DetailProduction"
+	_detail_production.add_theme_constant_override("separation", 6)
 	_detail_panel.add_child(_detail_production)
 
-	_detail_rule = UITheme.make_label("", "body", UITheme.INFO)
+	_detail_rule = UITheme.make_label("", "small", UITheme.INFO)
 	_detail_rule.name = "DepositRule"
 	_detail_rule.autowrap_mode = TextServer.AUTOWRAP_WORD
+	# La regla de la carretera, entera, en el tooltip (y en la guia rapida).
+	_detail_rule.mouse_filter = Control.MOUSE_FILTER_PASS
 	_detail_panel.add_child(_detail_rule)
 
 	_detail_extras = UITheme.make_label("", "small", UITheme.TEXT_DIM)
@@ -341,6 +350,7 @@ func _setup_ui() -> void:
 	_detail_block.name = "DetailBlock"
 	_detail_block.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_detail_block.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_detail_block.mouse_filter = Control.MOUSE_FILTER_PASS
 	_detail_block.visible = false
 	detail_column.add_child(_detail_block)
 
@@ -440,7 +450,9 @@ func _refresh_grid() -> void:
 	_mark_selected_card()
 
 func _create_grid_card(data: BuildingData) -> PanelContainer:
-	var locked := _has_locked_resource_cost(data)
+	# Bloqueado por rango del gobernador: candado y "Rango N" en vez del coste.
+	var rank_locked := not Rules.check_rank(data.id)
+	var locked := rank_locked or _has_locked_resource_cost(data)
 	var cat_color: Color = _cat_colors.get(_get_category(data), UITheme.ACCENT)
 
 	var card := PanelContainer.new()
@@ -491,16 +503,21 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	name_label.custom_minimum_size.x = 110
 	vbox.add_child(name_label)
 
-	# El coste en la propia tarjeta: se ve sin elegir, y en rojo si no llega.
-	var cost_text := card_cost_text(data)
-	if cost_text != "":
-		var cost_label := UITheme.make_label(cost_text, "small",
-			UITheme.TEXT_DIM if locked else (UITheme.DANGER if not Rules.missing_cost(data).is_empty() else UITheme.WARNING))
-		cost_label.name = "CardCost"
-		cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-		cost_label.custom_minimum_size.x = 110
-		vbox.add_child(cost_label)
+	if rank_locked:
+		vbox.add_child(make_rank_lock_row(RankManager.building_rank(data.id)))
+
+	# El coste en la propia tarjeta: se ve sin elegir. Icono y cifra por recurso,
+	# y en rojo solo lo que falta (antes la linea entera en rojo, con nombres).
+	# Bloqueado por rango, la tarjeta ensena el candado en su lugar.
+	var cost := {} if rank_locked else Rules.cost_by_name(data)
+	if not cost.is_empty():
+		var cost_row := TextKit.cost_row(cost, {} if locked else Rules.missing_cost(data), "small",
+			UITheme.TEXT_DIM if locked else UITheme.WARNING)
+		cost_row.name = "CardCost"
+		cost_row.alignment = FlowContainer.ALIGNMENT_CENTER
+		cost_row.add_theme_constant_override("h_separation", 6)
+		cost_row.custom_minimum_size.x = 110
+		vbox.add_child(cost_row)
 
 	# Lo que da una vivienda, en la propia tarjeta: "+6 trabajadores".
 	if data.population_capacity > 0 and not data.is_core:
@@ -536,6 +553,32 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 
 	return card
 
+## Candado dibujado + "Rango N". El candado se pinta (no es un emoji): la
+## tipografia del juego no lo tiene y el respaldo del sistema no esta en todos.
+static func make_rank_lock_row(rank: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "RankLock"
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var lock := Control.new()
+	lock.custom_minimum_size = Vector2(14, 16)
+	lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lock.draw.connect(func(): draw_lock(lock, Rect2(Vector2.ZERO, lock.custom_minimum_size), UITheme.WARNING))
+	row.add_child(lock)
+	var label := UITheme.make_label(Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
+	label.name = "RankLockLabel"
+	row.add_child(label)
+	return row
+
+## Un candado: arco del grillete y cuerpo con ojo de cerradura.
+static func draw_lock(ci: CanvasItem, r: Rect2, color: Color) -> void:
+	var body := Rect2(r.position.x, r.position.y + r.size.y * 0.45, r.size.x, r.size.y * 0.55)
+	var shackle_c := Vector2(r.get_center().x, r.position.y + r.size.y * 0.45)
+	ci.draw_arc(shackle_c, r.size.x * 0.32, PI, TAU, 12, color, 2.0)
+	ci.draw_rect(body, color)
+	ci.draw_circle(body.get_center(), maxf(1.0, r.size.x * 0.1), UITheme.BG_DARK)
+
 ## "50 Oro · 30 Madera", o "" si es gratis.
 static func card_cost_text(data: BuildingData) -> String:
 	var parts: Array = []
@@ -567,9 +610,9 @@ func _mark_selected_card() -> void:
 func _show_no_selection() -> void:
 	_selected_data = null
 	_detail_name.text = Tr.t("LBL_SELECT_BUILDING")
-	_detail_size.text = ""
-	_detail_cost.text = ""
-	_detail_production.text = ""
+	_detail_name.tooltip_text = ""
+	TextKit.fill_cost_row(_detail_cost, {})
+	_fill_production({}, 0)
 	_detail_extras.text = ""
 	_detail_rule.text = ""
 	_detail_block.visible = false
@@ -583,61 +626,34 @@ func _select_building(data: BuildingData) -> void:
 	_preview_spin = 0.0
 	_mark_selected_card()
 
-	# Name + size
+	# Nombre; el tamano y la descripcion, en su tooltip.
 	_detail_name.text = data.get_display_name()
-	_detail_size.text = "%dx%d" % [data.grid_size.x, data.grid_size.y]
+	_detail_name.tooltip_text = "%dx%d · %s" % [data.grid_size.x, data.grid_size.y, data.get_description()]
 
-	# Cost
-	var cost_parts: Array = []
-	if data.cost_gold > 0:
-		cost_parts.append("%d %s" % [data.cost_gold, Tr.res_name("gold")])
-	if data.cost_steel > 0:
-		cost_parts.append("%d %s" % [data.cost_steel, Tr.res_name("steel")])
-	if data.cost_oil > 0:
-		cost_parts.append("%d %s" % [data.cost_oil, Tr.res_name("oil")])
-	if data.cost_wood > 0:
-		cost_parts.append("%d %s" % [data.cost_wood, Tr.res_name("wood")])
-	_detail_cost.text = Tr.t("FMT_COST") % " | ".join(cost_parts) if not cost_parts.is_empty() else Tr.t("LBL_FREE")
+	# Coste: fila de iconos (el rojo de lo que falta lo pone _refresh_block).
+	_refresh_cost()
 
-	# Production
-	var prod_parts: Array = []
-	if data.produces_gold > 0:
-		prod_parts.append("+%d %s" % [data.produces_gold, Tr.res_name("gold")])
-	if data.produces_steel > 0:
-		prod_parts.append("+%d %s" % [data.produces_steel, Tr.res_name("steel")])
-	if data.produces_oil > 0:
-		prod_parts.append("+%d %s" % [data.produces_oil, Tr.res_name("oil")])
-	if data.produces_wood > 0:
-		prod_parts.append("+%d %s" % [data.produces_wood, Tr.res_name("wood")])
-	if data.production_interval > 0 and not prod_parts.is_empty():
-		_detail_production.text = Tr.t("FMT_PRODUCES_EVERY") % [" | ".join(prod_parts), int(data.production_interval)]
-	elif not prod_parts.is_empty():
-		_detail_production.text = Tr.t("FMT_PRODUCES") % " | ".join(prod_parts)
-	else:
-		_detail_production.text = ""
+	# Produccion: "+6 [madera] cada 12 s".
+	var prod := {}
+	for pair in [["gold", data.produces_gold], ["steel", data.produces_steel], ["oil", data.produces_oil], ["wood", data.produces_wood]]:
+		if int(pair[1]) > 0:
+			prod[pair[0]] = int(pair[1])
+	_fill_production(prod, data.production_interval)
 
-	# Regla del yacimiento (PlacementAssist.rule_text): se dice aqui, no al fallar.
+	# Regla del yacimiento (PlacementAssist.rule_text): se dice aqui, no al
+	# fallar. La de la carretera, en corto; entera en el tooltip.
 	var rule := PlacementAssistScript.rule_text(data.id)
 	var rules: Array = []
 	if rule != "":
 		rules.append("▲ " + rule)
 	if not data.is_core and data.id != "road":
-		rules.append("▲ " + Tr.t("LBL_RULE_ROAD"))
+		rules.append("▲ " + Tr.t("LBL_RULE_ROAD_SHORT"))
 	_detail_rule.text = "\n".join(rules)
+	_detail_rule.tooltip_text = Tr.t("LBL_RULE_ROAD") if not data.is_core and data.id != "road" else ""
 	_detail_rule.visible = not rules.is_empty()
 
-	# Extras
-	var extras: Array = []
-	if data.workers_required > 0:
-		extras.append(Tr.t("LBL_WORKERS_NEEDED") % data.workers_required)
-	if data.population_capacity > 0:
-		extras.append(Tr.t("LBL_POP_CAPACITY") % data.population_capacity)
-	if data.morale_bonus > 0:
-		extras.append(Tr.t("LBL_MORALE_BONUS") % data.morale_bonus)
-	var reqs := GameConfig.get_prerequisites(data.id)
-	if not reqs.is_empty():
-		extras.append(Tr.t("LBL_REQUIRES") % Rules.prerequisite_names(data.id))
-	_detail_extras.text = "\n".join(extras)
+	# Extras, en una linea: trabajadores, alojamiento, moral y requisitos.
+	_detail_extras.text = " · ".join(extras_parts(data))
 
 	# Build button, y lo que lo impide si algo lo impide
 	_detail_build_btn.visible = true
@@ -676,26 +692,62 @@ func _refresh_block() -> void:
 	if _selected_data == null:
 		_detail_block.visible = false
 		return
+	# En corto junto al boton; entero (como se desbloquea cada cosa) en el tooltip.
 	var block := Rules.purchase_block_detail(_selected_data)
-	_detail_block.text = block
+	_detail_block.text = "\n".join(Rules.block_reasons_short(_selected_data))
+	_detail_block.tooltip_text = block
 	_detail_block.visible = block != ""
 	_detail_build_btn.disabled = block != ""
-	var short := Rules.missing_cost(_selected_data)
-	_detail_cost.add_theme_color_override("font_color", UITheme.DANGER if not short.is_empty() else UITheme.WARNING)
+	_refresh_cost()
+
+## La fila del coste del elegido, con lo que falta en rojo. Gratis lo dice.
+func _refresh_cost() -> void:
+	if _selected_data == null:
+		TextKit.fill_cost_row(_detail_cost, {})
+		return
+	var cost := Rules.cost_by_name(_selected_data)
+	TextKit.fill_cost_row(_detail_cost, cost, Rules.missing_cost(_selected_data), "section", UITheme.WARNING)
+	if cost.is_empty():
+		_detail_cost.add_child(UITheme.make_label(Tr.t("LBL_FREE"), "section", UITheme.POSITIVE))
+
+## "+6 [madera] cada 12 s", o nada si no produce.
+func _fill_production(prod: Dictionary, interval: float) -> void:
+	for child in _detail_production.get_children():
+		_detail_production.remove_child(child)
+		child.free()
+	_detail_production.visible = not prod.is_empty()
+	if prod.is_empty():
+		return
+	_detail_production.add_child(TextKit.cost_inline(prod, {}, "body", UITheme.POSITIVE, "+"))
+	if interval > 0:
+		_detail_production.add_child(UITheme.make_label(Tr.t("FMT_EVERY") % TextKit.short_time(interval), "body", UITheme.POSITIVE))
+
+## Lo que pide y lo que da, en piezas cortas: "2 trabajadores", "+6 trabajadores",
+## "+5 moral", "Requiere: Fundicion". Estatica y publica para las pruebas.
+static func extras_parts(data: BuildingData) -> Array:
+	var extras: Array = []
+	if data.workers_required > 0:
+		extras.append(Tr.t("LBL_WORKERS_SHORT") % data.workers_required)
+	if data.population_capacity > 0:
+		extras.append(Tr.t("LBL_CARD_WORKERS") % data.population_capacity)
+	if data.morale_bonus > 0:
+		extras.append(Tr.t("LBL_MORALE_BONUS") % data.morale_bonus)
+	if not GameConfig.get_prerequisites(data.id).is_empty():
+		extras.append(Tr.t("LBL_REQUIRES") % Rules.prerequisite_names(data.id))
+	return extras
 
 func _on_resources_changed() -> void:
 	if not _is_open:
 		return
 	_refresh_block()
 	for card in _grid_container.get_children():
-		var label := card.find_child("CardCost", true, false) as Label
+		var row := card.find_child("CardCost", true, false) as HFlowContainer
 		var id := String(card.get_meta("building_id", ""))
-		if label == null or not _card_styles.has(id) or bool(_card_styles[id].get("locked", false)):
+		if row == null or not _card_styles.has(id) or bool(_card_styles[id].get("locked", false)):
 			continue
 		var data: BuildingData = _data_by_id(id)
 		if data != null:
-			label.add_theme_color_override("font_color",
-				UITheme.DANGER if not Rules.missing_cost(data).is_empty() else UITheme.WARNING)
+			TextKit.fill_cost_row(row, Rules.cost_by_name(data), Rules.missing_cost(data), "small", UITheme.WARNING)
 
 func _data_by_id(id: String) -> BuildingData:
 	for data in _all_buildings:

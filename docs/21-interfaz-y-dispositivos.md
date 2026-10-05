@@ -35,9 +35,13 @@ Tablet / Móvil (`GameConfig.ui_device_profile`: `auto`, `pc`, `tablet`, `phone`
 | Textos de ayuda | ratón | dedo | dedo |
 | Disposición movida | la suya | la suya | la suya |
 
-"Automático" en *Controles en pantalla* ya no se enciende en un PC porque llegue
-un toque: un portátil táctil tocado una vez no se llena de flechas. Quien los
-quiera en PC elige **Siempre** o el perfil Tablet.
+"Automático" en *Controles en pantalla* es **solo móvil y tablet** (decisión de
+Bryan, 2026-10-04): sigue al perfil, y en un PC no se enciende ni porque la pantalla
+se declare táctil ni porque llegue un toque real; un portátil táctil tocado una vez
+no se llena de flechas. El portátil táctil elige **Siempre** a mano (o el perfil
+Tablet), y Ajustes lo dice debajo del selector (`LBL_TOUCH_AUTO_HINT`). Un toque real
+sí cambia los textos de ayuda a dedo (`input_style`) y la colocación táctil (§9):
+eso no son los controles en pantalla.
 
 ### Escala y proporción de pantalla
 
@@ -96,7 +100,7 @@ y se verá al terminar.
 ## 3. Mostrar / ocultar HUD (`HudRegistry`)
 
 `scripts/ui/HudRegistry.gd` es el registro central. Elementos que se pueden
-ocultar: recursos y almacén, población/obreros/moral, botón del registro,
+ocultar: recursos y almacén (con obreros y moral, que van en esa fila), botón del registro,
 objetivo, indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
 mismo interruptor que AYUDA del menú ☰), texto de turno en batalla y las
 herramientas Sandbox (solo existen en ese modo, docs/20). El botón ☰ MENÚ (el
@@ -134,7 +138,7 @@ idiomas y, si es movible, slot.
 
 **Ajustes → Interfaz → EDITAR DISPOSICIÓN** cierra Ajustes (y la pausa o el menú
 principal que lo prestaba, que vuelven al terminar) y abre `LayoutEditor`: un
-marco sobre cada panel movible (recursos, población, objetivo, Tormenta,
+marco sobre cada panel movible (recursos, objetivo, Tormenta,
 avisos, registro, CONSTRUIR, panel de edificio) que se arrastra con el ratón o
 con el dedo. Es un modo aparte a propósito: fuera de él un toque en el HUD es
 un toque en el HUD y nada se mueve por accidente. Un velo se come los toques al
@@ -207,6 +211,35 @@ para pasar folio" en tablet y "← → o Intro" en PC. El interruptor "Globos de
 ayuda" de Interfaz (`HelperPanel.callouts`) es ahora el de las ayudas que salen
 solas: apagado, el índice de AYUDA sigue reabriendo la que se pida.
 
+### Menos texto (2026-10-04, rama `feat/menos-texto`)
+
+Reglas para los paneles y overlays (todos menos el HUD de recursos y la tarjeta de
+estado de población, que lleva su propia rama):
+
+- **Icono + cifra antes que frase.** Los costes son una fila de iconos con su
+  cifra y en rojo solo lo que falta: `TextKit.cost_row()` (o `cost_inline()` dentro
+  de otra fila). Un material sin icono se escribe con su nombre. Nada de "Costo:",
+  "Produce:", "Duración:" delante.
+- **Tiempos cortos**: `TextKit.short_time()` → `45 s`, `1:30`, `2 h`.
+- **Un verbo por botón** (CONSTRUIR, MEJORAR → Nv 2, MOVER, ENTRENAR).
+- **El motivo de "no se puede" en ≤ 6 palabras** junto al botón
+  (`PlacementRules.block_reasons_short`); el motivo entero, en su tooltip.
+- **Las explicaciones al tooltip**: descripción del edificio (título), regla de la
+  carretera, qué hace MOVER, por qué retirar trabajadores, tasa de cancelación, de
+  dónde salen los topes del ejército, la intro y las ramas del árbol tecnológico, el
+  lore de cada tecnología, la frase de cada grupo del menú. En táctil no hay tooltip
+  (no existe "mantener pulsado para leer"): lo movido tiene que estar también en la
+  ayuda (guía rápida, guía de edificios, consejos del índice de AYUDA). Lo que el
+  jugador necesita para decidir (coste, motivo de bloqueo, producción, tiempo) no se
+  mueve.
+- **Nada repetido**: ni el nombre del recurso junto a su icono, ni "Modo: Campaña"
+  en cada pausa, ni una línea del parte que diga lo mismo que su título.
+- **Medir**: `tools/texto_probe.gd` fotografía cada panel y overlay
+  (`-- --profile=pc|tablet --prefix=antes|despues`, con `override.cfg` propio).
+  Las suites `tests/ui/test_menos_texto_*.gd` fijan que los datos clave siguen a la
+  vista y los topes de palabras; `test_tr_en_parity.gd`, que toda clave tiene ES y EN
+  con los mismos huecos de formato.
+
 ## 7. Disposición por tamaño de lienzo
 
 - **< 1080 px de ancho** (tablet 4:3 con escala, 150 %…): la columna central
@@ -236,10 +269,13 @@ solas: apagado, el índice de AYUDA sigue reabriendo la que se pida.
 - **Volumen**: `AudioManager.slider_to_db(v) = linear_to_db(v * v)` en los
   cuatro buses, y cada efecto con su ganancia fija (`SFX_GAIN_DB`, por nombre
   de fichero: `era_up` −11 dB, `ui_click` −10 dB, el resto −6 a −8 dB).
-- **HUD con palabras**: "ALMACÉN COMPARTIDO 500 / 600" con leyenda de colores,
-  nombre de cada recurso (tooltip; con el dedo, un toque despliega los
-  nombres), "Habitantes", "Obreros: N trabajan, M libres", "Moral: producción
-  xN", y el Zzz con su motivo.
+- **HUD sin texto fijo** (2026-10, sustituye al "HUD con palabras"): una fila
+  de `[icono] número` (recursos, obreros libres y, con la Tormenta armada, la
+  moral) y la barra del almacén con `500/600`. Las palabras están en el tooltip
+  de cada ficha y, con el dedo, en el detalle que despliega un toque (nombres,
+  leyenda de colores de la barra, obreros, moral). La tarjeta de estado
+  (Trabajadores / En su puesto / Moral) ya no existe. El Zzz sigue con su
+  motivo. Detalle en docs/08 (ResourceHUD).
 - **Sonda**: `tools/menu_probe.gd` captura título, Ajustes sobre el título, el
   HUD en era 1 y 3, el menú y cada pestaña de Ajustes, y el tablero, en
   `docs/media/dev/menu/`.
@@ -258,7 +294,8 @@ solas: apagado, el índice de AYUDA sigue reabriendo la que se pida.
 - Suites: `tests/ui/test_device_profile.gd`, `test_ui_palettes.gd`,
   `test_hud_layout.gd`, `test_settings_tabs.gd`, y `test_touch_controls.gd`
   ("Automático" sigue al perfil: en PC no enciende los controles aunque llegue un
-  toque; "Siempre" y "Nunca" fuerzan).
+  toque, tampoco en un portátil táctil; "Siempre" y "Nunca" fuerzan; Ajustes
+  muestra la nota para el portátil táctil).
 - Tacto: ver §9.
 
 ## 9. Tacto (dedo)
@@ -390,5 +427,18 @@ flujos de `qa/maestro/` recorren lo mismo en el emulador de tableta. Siempre con
   pantalla completa (sus contenedores no paran el dedo, §9).
 - Si el fantasma sale de la pantalla, el botón ✓ se queda abajo al centro en
   vez de flotar sobre él.
-- La barra de recursos (ResourceHUD) es un panel STOP de ~280x100: es de verdad,
-  pero tapa el mapa en la esquina.
+- La barra de recursos (ResourceHUD) es un panel STOP: es de verdad, pero tapa
+  el mapa en la esquina (ahora ~350x75 en PC con seis fichas, más bajo que la
+  barra y la tarjeta de estado de antes juntas).
+- Tooltips con el dedo: Godot no los enseña al tocar y el proyecto no tiene
+  "mantener pulsado para ver la ayuda" en el HUD (mantener pulsado solo repite
+  en los controles en pantalla, §9). El equivalente es el toque en una ficha,
+  que despliega el detalle con las mismas palabras.
+- En tablet 16:10 (lienzo ~1113 px) con los cuatro recursos y la moral a la
+  vista, la fila de recursos pasa del borde que deja libre la columna central y
+  la Tormenta y el objetivo bajan a la columna izquierda (`is_column_narrow()`,
+  el mismo mecanismo que ya existía con LIMPIAR o letra grande). Con oro,
+  madera y obreros (eras 1-2) no pasa.
+- Un `settings.cfg` que nombre la tarjeta retirada (`NotificationPanel.status`,
+  oculta o movida) carga sin ella: `GameConfig.load_user_settings()` la quita
+  (`HudRegistry.RETIRED`).

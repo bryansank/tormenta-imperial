@@ -367,7 +367,7 @@ static func net_rates() -> Dictionary:
 		if not building and data.workers_required > 0 and not PopulationManager.is_building_staffed(node):
 			continue
 		var level: int = int(node.get_meta("level", 1))
-		var mult: float = (GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus) * morale_mult
+		var mult: float = (GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus + GameConfig.rank_production_bonus) * morale_mult
 		var interval: float = data.production_interval
 		rates["gold"] += float(data.produces_gold) * mult / interval
 		rates["wood"] += float(data.produces_wood) * mult / interval
@@ -697,6 +697,12 @@ static func route() -> Array:
 			continue
 		var done: bool = _line_entry_done(entry)
 		var row := {"text": describe(entry)["title"], "done": done, "current": false}
+		# En EL CAMINO cada fila es un paso: "Construye:" delante de cada
+		# edificio sobraba (2026-10-04). Basta el nombre.
+		if String(entry["kind"]) == "build":
+			var bdata: BuildingData = Rules.load_building_data(String(entry["id"]))
+			if bdata != null:
+				row["text"] = bdata.get_display_name()
 		if String(entry["kind"]) == "train":
 			var as_step := _army_step(String(entry["id"]), int(entry["count"]), "", "train")
 			as_step["any"] = bool(entry.get("any", false))

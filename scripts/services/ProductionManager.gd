@@ -360,7 +360,7 @@ func get_cycle_yield(node: Node, data: BuildingData, include_events := true) -> 
 	if data.workers_required > 0 and not PopulationManager.is_building_staffed(node):
 		return {}
 	var level: int = node.get_meta("level", 1)
-	var base_mult := GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus
+	var base_mult := GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus + GameConfig.rank_production_bonus
 	var mult := base_mult * PopulationManager.get_morale_multiplier()
 	# Temporary, event-driven penalties (the Imperial Storm, the plague) ride on
 	# their own multipliers so they can be lifted cleanly. Folding them into the

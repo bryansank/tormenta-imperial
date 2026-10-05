@@ -237,3 +237,21 @@ func test_recarga_con_ejercito_crecido() -> void:
 	CombatManager.end_encounter()
 	ProgressionManager.final_audit = null
 	ProgressionManager.load_save_data(progression_saved)
+
+## QUE BAJEN lee la moral del pueblo en ese momento, no la de la convocatoria.
+func test_the_gate_reads_the_town_morale_when_it_opens() -> void:
+	var progression_saved: Dictionary = ProgressionManager.get_save_data()
+	ArmyManager.load_save_data({"units": {"infantry": 3, "artillery": 2}, "training": [], "upkeep_accum": 0.0})
+	ProgressionManager.final_audit = null
+	PopulationManager._morale = 90
+	assert_bool(ProgressionManager.summon_final_audit()).is_true()
+	assert_float(ProgressionManager.final_audit.morale_snapshot).is_equal(90.0)
+	PopulationManager._morale = 25
+	assert_bool(ProgressionManager.begin_final_audit()).is_true()
+	assert_float(ProgressionManager.final_audit.morale_snapshot).is_equal(25.0)
+	for unit in ProgressionManager.final_audit.living_garrison():
+		assert_float(unit.morale_attack_mod).is_equal(CombatRules.morale_attack_mod(25.0))
+	CombatManager.reset()
+	CombatManager.end_encounter()
+	ProgressionManager.final_audit = null
+	ProgressionManager.load_save_data(progression_saved)

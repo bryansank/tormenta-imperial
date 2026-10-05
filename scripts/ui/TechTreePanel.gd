@@ -1,5 +1,11 @@
 extends CanvasLayer
 ## Tech tree UI panel. Shows 3 branches with 5 tiers each.
+##
+## Menos texto (2026-10-04): una linea de intro (el parrafo, en el tooltip), la
+## rama explicada en el tooltip de su cabecera y el lore de cada tecnologia en
+## el tooltip de su boton. El boton dice nivel, nombre, coste y ventaja.
+
+const TextKit := preload("res://scripts/ui/TextKit.gd")
 
 var _panel: PanelContainer
 var _backdrop: ColorRect
@@ -102,8 +108,13 @@ func _setup_ui() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_branches_scroll.add_child(content)
 
-	# Que es el arbol y que representa: sin esto nadie sabe para que subir.
-	content.add_child(_wrapped_label(Tr.t("LBL_TECH_INTRO"), "body", UITheme.TEXT))
+	# Que es el arbol, en una linea; el parrafo entero (y su lore) en el tooltip
+	# y en el consejo del arbol tecnologico de AYUDA (2026-10-04: eran 57 palabras).
+	var intro := _wrapped_label(Tr.t("LBL_TECH_INTRO_SHORT"), "body", UITheme.TEXT)
+	intro.name = "Intro"
+	intro.mouse_filter = Control.MOUSE_FILTER_PASS
+	intro.tooltip_text = Tr.t("LBL_TECH_INTRO")
+	content.add_child(intro)
 
 	var branches_row := HBoxContainer.new()
 	branches_row.add_theme_constant_override("separation", 12)
@@ -123,13 +134,13 @@ func _setup_ui() -> void:
 
 		# Cabecera en laton para las tres ramas; la rama solo se nota en la
 		# franja izquierda de sus tarjetas (docs/24-paleta.md).
-		col.add_child(UITheme.section_header(
-			Tr.t("TECH_BRANCH_" + branch.to_upper()), UITheme.ACCENT
-		))
-		# Que hace la rama y que significa en el mundo.
-		col.add_child(_wrapped_label(
-			Tr.t("TECH_BRANCH_" + branch.to_upper() + "_DESC"), "small", UITheme.TEXT_DIM
-		))
+		# Que hace la rama y que significa en el mundo: en el tooltip de su
+		# cabecera; cada ventaja ya lo dice con numeros en su boton.
+		var head := UITheme.section_header(Tr.t("TECH_BRANCH_" + branch.to_upper()), UITheme.ACCENT)
+		head.name = "Branch_" + branch
+		head.mouse_filter = Control.MOUSE_FILTER_PASS
+		head.tooltip_text = Tr.t("TECH_BRANCH_" + branch.to_upper() + "_DESC")
+		col.add_child(head)
 
 		var techs := TechTreeManager.get_branch_techs(branch)
 		techs.sort_custom(func(a, b): return a["tier"] < b["tier"])
@@ -137,9 +148,6 @@ func _setup_ui() -> void:
 			var btn := _create_tech_button(tech, branch_colors[branch])
 			col.add_child(btn)
 			_tech_buttons[tech["id"]] = btn
-			# El lore va fuera del boton: el texto del boton se reescribe con el
-			# motivo del bloqueo en cada refresco.
-			col.add_child(_wrapped_label(lore_text(tech["id"]), "small", UITheme.TEXT_DIM))
 
 		branches_row.add_child(col)
 
@@ -153,23 +161,12 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 	var researched := TechTreeManager.is_researched(tech["id"])
 	var can_research := TechTreeManager.can_research(tech["id"])
 
-	var lines: Array = []
-	lines.append("T%d: %s" % [tech["tier"], Tr.t(tech["name"])])
-
-	var cost_parts: Array = []
-	for res_name in tech.get("cost", {}):
-		cost_parts.append("%d %s" % [tech["cost"][res_name], Tr.res_name(res_name)])
-	if not cost_parts.is_empty():
-		lines.append(Tr.t("FMT_COST") % " | ".join(cost_parts))
-
-	var advantage := advantage_text(tech)
-	if advantage != "":
-		lines.append(Tr.t("LBL_TECH_ADVANTAGE") % advantage)
-
-	# El texto fijo se guarda aparte: el motivo del bloqueo se reescribe en cada
-	# refresco y no puede ir acumulandose encima.
-	btn.set_meta("base_text", "\n".join(lines))
-	btn.text = "\n".join(lines)
+	# "1 · Eficiencia Basica" / "150 oro · 80 madera" / "+10% produccion": sin
+	# "Costo:" ni "Ventaja:" (2026-10-04). El texto fijo se guarda aparte: el
+	# motivo del bloqueo se reescribe en cada refresco y no puede acumularse.
+	var text := tech_card_text(tech)
+	btn.set_meta("base_text", text)
+	btn.text = text
 
 	if researched:
 		UITheme.style_card_button(btn, UITheme.POSITIVE.darkened(0.4), UITheme.POSITIVE)
@@ -188,6 +185,18 @@ func _create_tech_button(tech: Dictionary, branch_color: Color) -> Button:
 		_refresh_tech_states()
 	)
 	return btn
+
+## Lo fijo de una tarjeta: nivel y nombre, coste y ventaja, una cosa por linea.
+## Estatica y publica para las pruebas.
+static func tech_card_text(tech: Dictionary) -> String:
+	var lines: Array = ["%d · %s" % [int(tech["tier"]), Tr.t(tech["name"])]]
+	var cost: Dictionary = tech.get("cost", {})
+	if not cost.is_empty():
+		lines.append(TextKit.cost_text(cost))
+	var advantage := advantage_text(tech)
+	if advantage != "":
+		lines.append(advantage)
+	return "\n".join(lines)
 
 ## La ventaja en claro, con los numeros de GameConfig.tech_definitions. Estatica
 ## y publica para las pruebas. Varias ventajas van separadas por coma.
@@ -238,7 +247,9 @@ func _apply_blocker_text(btn: Button, tech_id: String) -> void:
 	var base: String = String(btn.get_meta("base_text", btn.text))
 	var reason: String = blocker_text(tech_id)
 	btn.text = base if reason == "" else "%s\n%s" % [base, reason]
-	btn.tooltip_text = reason
+	# El lore (que es en el mundo) vive en el tooltip, debajo del motivo.
+	var lore := lore_text(tech_id)
+	btn.tooltip_text = lore if reason == "" else "%s\n\n%s" % [reason, lore]
 
 ## El motivo legible. Publico para las pruebas; lee el veredicto del manager y no
 ## repite sus reglas.
@@ -252,7 +263,7 @@ func blocker_text(tech_id: String) -> String:
 				names.append(Tr.t(TechTreeManager.get_tech(req).get("name", req)))
 			return Tr.t("TECH_BLOCK_PREREQ") % ", ".join(names)
 		"TECH_BLOCK_COST":
-			return Tr.t("TECH_BLOCK_COST") % Tr.amount_list(TechTreeManager.get_missing_cost(tech_id))
+			return Tr.t("TECH_BLOCK_COST") % TextKit.cost_text(TechTreeManager.get_missing_cost(tech_id))
 	return ""
 
 func _toggle_panel() -> void:

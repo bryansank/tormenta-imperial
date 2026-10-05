@@ -46,12 +46,23 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 			return HudRegistry.control_of("NotificationPanel.objective")
 		"resources":
 			return HudRegistry.control_of("ResourceHUD")
-		"status":
-			return HudRegistry.control_of("NotificationPanel.status")
+		# Obreros y moral son fichas de la fila de recursos. "status" era la
+		# tarjeta de estado que ya no existe: ahora senala a los obreros.
+		"workers", "status":
+			return _resource_hud_chip(tree, "workers_chip")
+		"morale":
+			return _resource_hud_chip(tree, "morale_chip")
 		"storm":
 			return HudRegistry.control_of("StormHUD")
 	if target_name.begins_with("card:"):
 		return card_or_build(tree, target_name.substr(5))
+	return null
+
+## La ficha de obreros o de moral del panel de recursos (ResourceHUD).
+static func _resource_hud_chip(tree: SceneTree, getter: String) -> Control:
+	var hud := _scene_node(tree, "ResourceHUD")
+	if hud != null and hud.has_method(getter):
+		return hud.call(getter)
 	return null
 
 ## El paso "elige la Vivienda": mientras no este elegida, su tarjeta, desplazada

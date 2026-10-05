@@ -289,3 +289,14 @@ func test_sawmill_dust_comes_out_of_the_saw() -> void:
 	assert_float(fx.position.y).is_less(Badge.measure_top(root))
 	assert_float(absf(fx.position.x - blade.get_center().x)).is_less(0.5)
 	assert_float(absf(fx.position.z - blade.get_center().z)).is_less(0.5)
+
+func test_nucleo_flag_corner_and_seed_are_shared() -> void:
+	# La bandera de la colonia (ColonyFlag3D/2D) va en la esquina NE del Nucleo:
+	# ahi no hay atrezo.
+	var fp := _data("nucleo").grid_size
+	var c := Plan.corner_center(fp, Plan.yard_of("nucleo"), Vector2(1, -1))
+	for k in 6:
+		for p in Plan.plan("nucleo", fp, Plan.seed_for(Vector2i(k, k + 2), "nucleo"))["props"]:
+			assert_float((p["pos"] as Vector2).distance_to(c)).is_greater(Plan.yard_of("nucleo") * 1.1)
+	# La parcela usa la misma semilla que la obra.
+	assert_int(Plan.seed_for(Vector2i(4, 9), "foundry")).is_equal(LookRule.site_seed("foundry", Vector2i(4, 9)))

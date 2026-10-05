@@ -67,10 +67,10 @@ func _setup_ui() -> void:
 
 	vbox.add_child(UITheme.make_panel_header(Tr.t("LBL_MARKET_TITLE"), _toggle_panel))
 
-	# Column headers
+	# Column headers. La de "Recurso" sobraba: cada fila lleva el icono del suyo.
 	var col_header := HBoxContainer.new()
 	col_header.add_theme_constant_override("separation", 4)
-	_add_col(col_header, Tr.t("LBL_RESOURCE"), 80)
+	_add_col(col_header, "", RES_COL_W)
 	_add_col(col_header, Tr.t("LBL_BUY_PRICE"), 55)
 	_add_col(col_header, Tr.t("LBL_SELL_PRICE"), 55)
 	_add_col(col_header, "", 120)
@@ -89,25 +89,36 @@ func _setup_ui() -> void:
 	var gold_row := HBoxContainer.new()
 	gold_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	gold_row.add_theme_constant_override("separation", 8)
+	# Tu oro: el icono y la cifra, sin "Tu oro:" (el nombre va en el tooltip).
+	gold_row.name = "GoldRow"
+	gold_row.mouse_filter = Control.MOUSE_FILTER_PASS
+	gold_row.tooltip_text = Tr.t("LBL_YOUR_GOLD") % ResourceManager.get_amount(ResourceManager.Type.GOLD)
 	gold_row.add_child(UITheme.make_icon("gold"))
 	var gold_label := UITheme.make_label(
-		Tr.t("LBL_YOUR_GOLD") % ResourceManager.get_amount(ResourceManager.Type.GOLD),
-		"body", UITheme.RES_GOLD
+		str(ResourceManager.get_amount(ResourceManager.Type.GOLD)), "body", UITheme.RES_GOLD
 	)
 	gold_label.name = "GoldLabel"
 	gold_row.add_child(gold_label)
 	vbox.add_child(gold_row)
 
+## Ancho de la columna del recurso: el icono, no el nombre.
+const RES_COL_W := 40.0
+
 func _add_resource_row(parent: VBoxContainer, res_name: String) -> void:
 	# Fila que se parte en dos si no cabe: con botones de tamano dedo, en un
 	# movil en vertical (400 px) la fila entera no entraba y el panel se salia.
 	var row := HFlowContainer.new()
+	row.name = "Row_" + res_name
 	row.add_theme_constant_override("h_separation", 4)
 	row.add_theme_constant_override("v_separation", 6)
 
-	var name_label := UITheme.make_label(Tr.res_cap(res_name), "body", UITheme.TEXT)
-	name_label.custom_minimum_size.x = 80
-	row.add_child(name_label)
+	# El recurso por su icono; su nombre, en el tooltip.
+	var icon := UITheme.make_icon(res_name, 28)
+	icon.name = "ResIcon"
+	icon.custom_minimum_size = Vector2(RES_COL_W, 28)
+	icon.mouse_filter = Control.MOUSE_FILTER_PASS
+	icon.tooltip_text = Tr.res_cap(res_name)
+	row.add_child(icon)
 
 	var buy_label := UITheme.make_label(str(MarketManager.get_buy_price(res_name)), "body", UITheme.DANGER)
 	buy_label.custom_minimum_size.x = 55
@@ -182,7 +193,8 @@ func _update_prices() -> void:
 		_rows[res_name]["sell_price"].text = str(MarketManager.get_sell_price(res_name))
 	var gold_label := _panel.find_child("GoldLabel", true, false)
 	if gold_label:
-		gold_label.text = Tr.t("LBL_YOUR_GOLD") % ResourceManager.get_amount(ResourceManager.Type.GOLD)
+		gold_label.text = str(ResourceManager.get_amount(ResourceManager.Type.GOLD))
+		gold_label.get_parent().tooltip_text = Tr.t("LBL_YOUR_GOLD") % ResourceManager.get_amount(ResourceManager.Type.GOLD)
 
 func _on_prices_updated(_prices: Dictionary) -> void:
 	if _is_open:

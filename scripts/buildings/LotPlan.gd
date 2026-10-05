@@ -47,8 +47,10 @@ static func accent_of(id: String) -> Color:
 
 ## Semilla de una instancia: la celda de origen y el id. Dos aserraderos en
 ## celdas distintas no se parecen; el mismo, tras guardar y cargar, si.
+## Es la MISMA semilla que la obra (BuildingLook.site_seed): la parcela a
+## medio preparar y la obra que va encima salen de la misma tirada.
 static func seed_for(cell: Vector2i, id: String) -> int:
-	return hash("%s@%d,%d" % [id, cell.x, cell.y])
+	return LookRule.site_seed(id, cell)
 
 ## Rectangulo libre para el modelo, en casillas y centrado.
 static func model_rect(id: String, footprint: Vector2i) -> Rect2:
@@ -131,7 +133,12 @@ static func plan(id: String, footprint: Vector2i, seed_val: int, road_sides: int
 	rng.seed = seed_val
 	var sig := signature_of(id)
 	out["signature"] = sig
-	var props := _place_props(style, lot, yard, road_sides, rng, sig.get("corners", []))
+	# Esquinas sin atrezo: la del elemento exagerado y las que pida la tabla
+	# ("keep_clear": la bandera de la colonia sobre el Nucleo, por ejemplo).
+	var reserved: Array = (sig.get("corners", []) as Array).duplicate()
+	for c in style.get("keep_clear", []):
+		reserved.append(Vector2(1.0 if String(c).contains("E") else -1.0, 1.0 if String(c).begins_with("S") else -1.0))
+	var props := _place_props(style, lot, yard, road_sides, rng, reserved)
 	var runs := _trim_runs(lot, road_sides)
 	match state:
 		"construction":

@@ -1,16 +1,21 @@
 extends CanvasLayer
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+const TextKit := preload("res://scripts/ui/TextKit.gd")
 ## Panel that appears when selecting a building or deposit.
 ## Scrollable, styled, with upgrade, demolish confirm, level display.
+##
+## Menos texto (2026-10-04): la descripcion va en el tooltip del titulo, los
+## costes son filas de iconos con lo que falta en rojo, la produccion es
+## "+6 [madera] cada 12 s" y cada boton lleva su explicacion en el tooltip.
 
 var _panel: PanelContainer
 var _scroll: ScrollContainer
 var _vbox: VBoxContainer
 var _title_label: Label
 var _level_label: Label
-var _desc_label: Label
 var _production_container: PanelContainer
-var _production_label: Label
+## "+6 [madera] cada 12 s" dentro de la tarjeta verde.
+var _production_box: HBoxContainer
 var _construction_container: VBoxContainer
 var _construction_label: Label
 var _construction_bar: ProgressBar
@@ -19,10 +24,16 @@ var _name_container: HBoxContainer
 var _name_edit: LineEdit
 var _upgrade_container: VBoxContainer
 var _upgrade_btn: Button
+## Lo que da la mejora ("Mejora: 6 → 9 madera cada 12 s").
 var _upgrade_cost_label: Label
+var _upgrade_cost_row: HFlowContainer
 var _repair_container: VBoxContainer
 var _repair_btn: Button
 var _repair_label: Label
+var _repair_cost_row: HFlowContainer
+## La cabecera "Acciones" y su separador: solo con procesos que ofrecer.
+var _actions_header: Label
+var _actions_sep: HSeparator
 var _actions_box: HBoxContainer
 var _move_container: VBoxContainer
 var _move_btn: Button
@@ -103,19 +114,17 @@ func _build_ui() -> void:
 	_title_label = UITheme.make_label("", "title", UITheme.ACCENT)
 	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	# La descripcion del edificio, en el tooltip (y en la guia de edificios).
+	_title_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	header.add_child(_title_label)
 	_close_btn = UITheme.make_close_button(_hide_panel)
 	header.add_child(_close_btn)
 	_vbox.add_child(header)
 
-	# Level label
+	# "Nv 1 · 2 trabajadores"
 	_level_label = UITheme.make_label("", "body", UITheme.INFO)
+	_level_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_vbox.add_child(_level_label)
-
-	# Description
-	_desc_label = UITheme.make_label("", "small", UITheme.TEXT_DIM)
-	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_vbox.add_child(_desc_label)
 
 	# Production info card
 	_production_container = PanelContainer.new()
@@ -126,15 +135,17 @@ func _build_ui() -> void:
 	prod_style.border_color = UITheme.POSITIVE.darkened(0.3)
 	prod_style.border_width_left = 3
 	_production_container.add_theme_stylebox_override("panel", prod_style)
-	_production_label = UITheme.make_label("", "body", UITheme.POSITIVE)
-	_production_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_production_container.add_child(_production_label)
+	_production_box = HBoxContainer.new()
+	_production_box.name = "Production"
+	_production_box.add_theme_constant_override("separation", 6)
+	_production_container.add_child(_production_box)
 	_vbox.add_child(_production_container)
 
-	# Deposit uses
+	# Deposit uses ("12 usos restantes" y, debajo, a mano o con su edificio)
 	_deposit_uses_label = UITheme.make_label("", "body", UITheme.WARNING)
 	_deposit_uses_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_deposit_uses_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_deposit_uses_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	_vbox.add_child(_deposit_uses_label)
 
 	# Construction state
@@ -169,6 +180,9 @@ func _build_ui() -> void:
 	_repair_label = UITheme.make_label("", "small", UITheme.WARNING)
 	_repair_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_repair_container.add_child(_repair_label)
+	_repair_cost_row = TextKit.cost_row({})
+	_repair_cost_row.name = "RepairCost"
+	_repair_container.add_child(_repair_cost_row)
 	_repair_btn = Button.new()
 	_repair_btn.text = Tr.t("BTN_REPAIR")
 	UITheme.style_button(_repair_btn, UITheme.WARNING.darkened(0.2))
@@ -183,6 +197,9 @@ func _build_ui() -> void:
 	_upgrade_cost_label = UITheme.make_label("", "small", UITheme.TEXT_DIM)
 	_upgrade_cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_upgrade_container.add_child(_upgrade_cost_label)
+	_upgrade_cost_row = TextKit.cost_row({})
+	_upgrade_cost_row.name = "UpgradeCost"
+	_upgrade_container.add_child(_upgrade_cost_row)
 	_upgrade_btn = Button.new()
 	_upgrade_btn.text = Tr.t("BTN_UPGRADE")
 	UITheme.style_button(_upgrade_btn, UITheme.INFO)
@@ -192,14 +209,13 @@ func _build_ui() -> void:
 
 	# Mover, a la altura de Reparar y Mejorar (A13). El boton existia pero iba
 	# en una fila pequena al fondo, junto a Demoler, y el dueno no lo encontro.
-	# Ahora es una seccion propia: ancha, con icono y una linea que dice que hace.
+	# Ahora es una seccion propia: ancha y con icono. Lo que hace (gratis, conserva
+	# el nivel) va en su tooltip: el boton ya lo dice con una palabra.
 	_move_container = VBoxContainer.new()
 	_move_container.add_theme_constant_override("separation", 4)
-	var move_hint := UITheme.make_label(Tr.t("LBL_MOVE_HINT"), "small", UITheme.TEXT_DIM)
-	move_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_move_container.add_child(move_hint)
 	_move_btn = Button.new()
 	_move_btn.text = Tr.t("BTN_MOVE")
+	_move_btn.tooltip_text = Tr.t("LBL_MOVE_HINT")
 	_move_btn.icon = UITheme.icon_texture("move")
 	_move_btn.add_theme_constant_override("h_separation", 10)
 	_move_btn.custom_minimum_size.y = 52
@@ -228,10 +244,12 @@ func _build_ui() -> void:
 	_workers_btn.pressed.connect(_on_toggle_workers)
 	_vbox.add_child(_workers_btn)
 
-	_vbox.add_child(UITheme.make_separator())
+	_actions_sep = UITheme.make_separator()
+	_vbox.add_child(_actions_sep)
 
-	# Processes header
-	_vbox.add_child(UITheme.section_header(Tr.t("LBL_ACTIONS"), UITheme.ACCENT))
+	# Processes header: solo si hay procesos (antes "Sin acciones disponibles").
+	_actions_header = UITheme.section_header(Tr.t("LBL_ACTIONS"), UITheme.ACCENT)
+	_vbox.add_child(_actions_header)
 
 	# Process actions (delegated)
 	var processes_box := VBoxContainer.new()
@@ -333,35 +351,22 @@ func _show_building_panel() -> void:
 	_confirm_container.visible = false
 	var custom_name: String = _selected_node.get_meta("custom_name", "")
 	_title_label.text = custom_name if not custom_name.is_empty() else _selected_data.get_display_name()
-	_desc_label.text = _selected_data.get_description()
-	_desc_label.visible = not _selected_data.get_description().is_empty()
+	_title_label.tooltip_text = _selected_data.get_description()
 
-	# Level display + workers/morale info
+	# "Nv 1 · 2 trabajadores · +5 moral"
 	var level: int = _selected_node.get_meta("level", 1)
-	var level_text := Tr.t("LBL_LEVEL") % [level]
-	if _selected_data.workers_required > 0:
-		level_text += "  |  " + Tr.t("LBL_WORKERS_NEEDED") % _selected_data.workers_required
-	if _selected_data.population_capacity > 0:
-		level_text += "  |  " + Tr.t("LBL_POP_CAPACITY") % _selected_data.population_capacity
-	if _selected_data.morale_bonus > 0:
-		level_text += "  |  " + Tr.t("LBL_MORALE_BONUS") % _selected_data.morale_bonus
-	_level_label.text = level_text
+	_level_label.text = level_line(_selected_data, level)
 	_level_label.visible = true
 
-	# Production info (with level multiplier)
-	var mult := GameConfig.get_production_multiplier(level)
-	var prod_parts: Array = []
-	if _selected_data.produces_gold > 0:
-		prod_parts.append("+%d %s" % [int(_selected_data.produces_gold * mult), Tr.res_name("gold")])
-	if _selected_data.produces_steel > 0:
-		prod_parts.append("+%d %s" % [int(_selected_data.produces_steel * mult), Tr.res_name("steel")])
-	if _selected_data.produces_oil > 0:
-		prod_parts.append("+%d %s" % [int(_selected_data.produces_oil * mult), Tr.res_name("oil")])
-	if _selected_data.produces_wood > 0:
-		prod_parts.append("+%d %s" % [int(_selected_data.produces_wood * mult), Tr.res_name("wood")])
-	if not prod_parts.is_empty():
+	# Production info (with level multiplier): "+6 [madera] cada 12 s"
+	var prod := production_amounts(_selected_data, level)
+	for child in _production_box.get_children():
+		_production_box.remove_child(child)
+		child.free()
+	if not prod.is_empty():
 		var interval := GameConfig.get_production_interval(_selected_data.production_interval)
-		_production_label.text = Tr.t("FMT_PRODUCES_EVERY") % [" | ".join(prod_parts), int(interval)]
+		_production_box.add_child(TextKit.cost_inline(prod, {}, "body", UITheme.POSITIVE, "+"))
+		_production_box.add_child(UITheme.make_label(Tr.t("FMT_EVERY") % TextKit.short_time(interval), "body", UITheme.POSITIVE))
 		_production_container.visible = true
 	else:
 		_production_container.visible = false
@@ -388,18 +393,21 @@ func _show_building_panel() -> void:
 		_upgrade_container.visible = false
 	elif next_level <= GameConfig.max_building_level and not is_building:
 		var cost := GameConfig.get_upgrade_cost(_selected_data, next_level)
-		var cost_parts: Array = []
-		for type in cost:
-			cost_parts.append("%d %s" % [cost[type], Tr.res_name(ResourceManager.get_type_name(type))])
 		_upgrade_btn.text = Tr.t("LBL_UPGRADE_TO") % [next_level]
-		# Que da la mejora, con sus numeros, y luego lo que cuesta.
+		_upgrade_btn.visible = true
+		# Que da la mejora, con sus numeros, y debajo lo que cuesta en iconos.
 		var effects: Array = Rules.upgrade_effect_lines(_selected_data, level)
-		_upgrade_cost_label.text = "\n".join(effects + [Tr.t("FMT_COST") % " | ".join(cost_parts)])
+		_upgrade_cost_label.text = "\n".join(effects)
+		_upgrade_cost_label.visible = not effects.is_empty()
+		TextKit.fill_cost_row(_upgrade_cost_row, by_name(cost), missing_by_name(cost))
+		_upgrade_cost_row.visible = true
 		_upgrade_btn.disabled = not ResourceManager.can_afford(cost)
 		_upgrade_container.visible = true
 	else:
 		if level >= GameConfig.max_building_level:
 			_upgrade_cost_label.text = Tr.t("LBL_MAX_LEVEL")
+			_upgrade_cost_label.visible = true
+			_upgrade_cost_row.visible = false
 			_upgrade_btn.visible = false
 			_upgrade_container.visible = true
 		else:
@@ -409,6 +417,7 @@ func _show_building_panel() -> void:
 	_demolish_btn.visible = not _selected_data.is_core
 
 	_process_panel.populate_building(_selected_node, _selected_data, is_building)
+	_set_actions_header(_process_panel.action_count() > 0)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
 	UIManager.open_panel(self)
@@ -421,8 +430,7 @@ func _show_deposit_panel() -> void:
 			display_name = child.text
 			break
 	_title_label.text = display_name
-	_desc_label.text = Tr.t("LBL_NATURAL_RESOURCE")
-	_desc_label.visible = true
+	_title_label.tooltip_text = Tr.t("LBL_NATURAL_RESOURCE")
 	_level_label.visible = false
 	_production_container.visible = false
 	_construction_container.visible = false
@@ -431,7 +439,11 @@ func _show_deposit_panel() -> void:
 	_move_container.visible = false
 	_demolish_btn.visible = false
 	_update_deposit_uses()
+	_refresh_workers_toggle()
+	_refresh_open_button()
+	_repair_container.visible = false
 	_process_panel.populate_deposit(_selected_node, _selected_deposit_id)
+	_set_actions_header(_process_panel.action_count() > 0)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
 	UIManager.open_panel(self)
@@ -475,12 +487,16 @@ func _refresh_workers_toggle() -> void:
 	if not uses:
 		return
 	var off: bool = bool(_selected_node.get_meta("workers_off", false))
+	# A la vista, el estado en corto; la explicacion entera, en el tooltip.
 	if not bool(_selected_node.get_meta("has_vein", true)):
-		_workers_hint.text = Tr.t("LBL_NO_VEIN_HINT")
+		_workers_hint.text = Tr.t("LBL_NO_VEIN_SHORT")
+		_workers_btn.tooltip_text = Tr.t("LBL_NO_VEIN_HINT")
 	elif off:
-		_workers_hint.text = Tr.t("LBL_WORKERS_OFF_HINT") % _selected_data.workers_required
+		_workers_hint.text = Tr.t("LBL_WORKERS_OFF_SHORT")
+		_workers_btn.tooltip_text = Tr.t("LBL_WORKERS_OFF_HINT") % _selected_data.workers_required
 	else:
-		_workers_hint.text = Tr.t("LBL_WORKERS_ON_HINT") % _selected_data.workers_required
+		_workers_hint.text = Tr.t("LBL_WORKERS_ON_SHORT") % _selected_data.workers_required
+		_workers_btn.tooltip_text = Tr.t("LBL_WORKERS_ON_HINT") % _selected_data.workers_required
 	_workers_btn.text = Tr.t("BTN_WORKERS_ON") if off else Tr.t("BTN_WORKERS_OFF")
 
 func _on_toggle_workers() -> void:
@@ -495,11 +511,14 @@ func _update_deposit_uses() -> void:
 		var uses: int = _selected_node.get_meta("uses_remaining")
 		# Los usos y, debajo, la diferencia entre sacarlo a mano (se agota) y
 		# ponerle su edificio especializado (produce sin gastarlo).
-		var hint_key := "DEP_HINT_" + _selected_deposit_id.to_upper()
-		var hint := Tr.t(hint_key)
+		# En corto a la vista; la explicacion entera en el tooltip.
+		var key := _selected_deposit_id.to_upper()
+		var short := Tr.t("DEP_SHORT_" + key)
+		var hint := Tr.t("DEP_HINT_" + key)
 		_deposit_uses_label.text = Tr.t("LBL_DEPOSIT_USES") % [uses]
-		if hint != hint_key:
-			_deposit_uses_label.text += "\n" + hint
+		if short != "DEP_SHORT_" + key:
+			_deposit_uses_label.text += "\n" + short
+		_deposit_uses_label.tooltip_text = hint if hint != "DEP_HINT_" + key else ""
 		_deposit_uses_label.visible = true
 	else:
 		_deposit_uses_label.visible = false
@@ -544,15 +563,8 @@ func _refresh_repair() -> void:
 	var ruined: bool = BuildingHealth.is_ruined(_selected_node)
 	var pct: int = roundi(BuildingHealth.get_health_ratio(_selected_node) * 100.0)
 	var cost := BuildingHealth.repair_cost(_selected_node)
-	var parts: Array = []
-	for type in cost:
-		parts.append("%d %s" % [
-			int(cost[type]), Tr.res_name(ResourceManager.get_type_name(type))])
-
-	_repair_label.text = "%s  ·  %s" % [
-		Tr.t("LBL_RUINED") if ruined else Tr.t("LBL_DAMAGED") % pct,
-		Tr.t("FMT_COST") % " | ".join(parts),
-	]
+	_repair_label.text = Tr.t("LBL_RUINED") if ruined else Tr.t("LBL_DAMAGED") % pct
+	TextKit.fill_cost_row(_repair_cost_row, by_name(cost), missing_by_name(cost))
 	UITheme.set_label_color(_repair_label, UITheme.DANGER if ruined else UITheme.WARNING)
 	_repair_btn.disabled = not BuildingHealth.can_repair(_selected_node)["ok"]
 	_repair_container.visible = true
@@ -625,4 +637,46 @@ func _update_construction() -> void:
 	var progress := ProductionManager.get_construction_progress(_selected_node)
 	_construction_bar.value = progress
 	var remaining := ProductionManager.get_construction_remaining(_selected_node)
-	_construction_label.text = Tr.t("FMT_CONSTRUCTION") % [int(progress * 100), ceili(remaining)]
+	_construction_label.text = Tr.t("FMT_CONSTRUCTION_SHORT") % [int(progress * 100), TextKit.short_time(remaining)]
+
+# ── Textos cortos (publicos y estaticos para las pruebas) ──
+
+## "Nv 1 · 2 trabajadores · +6 trabajadores · +5 moral".
+static func level_line(data: BuildingData, level: int) -> String:
+	var parts: Array = [Tr.t("LBL_LEVEL_SHORT") % level]
+	if data.workers_required > 0:
+		parts.append(Tr.t("LBL_WORKERS_SHORT") % data.workers_required)
+	if data.population_capacity > 0:
+		parts.append(Tr.t("LBL_CARD_WORKERS") % data.population_capacity)
+	if data.morale_bonus > 0:
+		parts.append(Tr.t("LBL_MORALE_BONUS") % data.morale_bonus)
+	return " · ".join(parts)
+
+## Lo que produce por ciclo a este nivel, por nombre de recurso.
+static func production_amounts(data: BuildingData, level: int) -> Dictionary:
+	var mult := GameConfig.get_production_multiplier(level)
+	var out := {}
+	for pair in [["gold", data.produces_gold], ["steel", data.produces_steel], ["oil", data.produces_oil], ["wood", data.produces_wood]]:
+		if int(pair[1]) > 0:
+			out[pair[0]] = int(int(pair[1]) * mult)
+	return out
+
+## Un coste por tipo (ResourceManager.Type) pasado a nombre de recurso.
+static func by_name(cost: Dictionary) -> Dictionary:
+	var out := {}
+	for type in cost:
+		out[ResourceManager.get_type_name(type)] = int(cost[type])
+	return out
+
+## Lo que falta para pagar `cost` (por tipo), por nombre de recurso.
+static func missing_by_name(cost: Dictionary) -> Dictionary:
+	var out := {}
+	for type in cost:
+		var short: int = int(cost[type]) - ResourceManager.get_amount(type)
+		if short > 0:
+			out[ResourceManager.get_type_name(type)] = short
+	return out
+
+func _set_actions_header(shown: bool) -> void:
+	_actions_header.visible = shown
+	_actions_sep.visible = shown

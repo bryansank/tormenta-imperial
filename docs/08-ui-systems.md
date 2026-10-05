@@ -8,35 +8,38 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 
 ### ResourceHUD (`scripts/ui/ResourceHUD.gd`)
 - **Position:** Top-left card (slot `top_left`)
-- **Shows:** Unlocked resource amounts (gold, wood, then steel/oil when unlocked) and ONE shared storage bar labelled "ALMACÉN COMPARTIDO 500 / 600"
-- **Behavior:** Resource values update in real-time via `EventBus.resource_changed`. Each number has its name in a tooltip; a tap (or click) on a number or on the storage row unfolds a row per resource with name, amount and a colour swatch that is the legend of the storage bar, plus one line explaining the shared cap. The bar turns red when full. Animates glow when a new resource unlocks.
-- **TALLER row** (2026-09-28): the workshop materials (planks, ingots, beams, fuel), outside the shared bar; the row appears once one material is unlocked or held.
+- **Shows:** one row of `[icon] number` chips, with no names written beside them: the unlocked resources (gold, wood, then steel/oil), the **free workers** and, once the Imperial Storm is armed, the **morale**. Under it, ONE shared storage bar with `500/600` at its right, no title.
+- **Workers chip** (2026-10): the number is the workers that are free for the next building (`population - used`). Inhabitants, cap, working and withdrawn go to the tooltip. It turns `UITheme.WARNING` when a building is left without workers (`PopulationManager.get_understaffed_count()`). Follows `workers_changed` / `population_changed`.
+- **Morale chip** (2026-10): hidden until the Storm cycle is armed (`ResourceHUD.morale_visible()` = `StormManager.is_armed() or is_halted()`; never in Constructor, where the Storm does not run). Number coloured by threshold (`POSITIVE` > 60, `WARNING` 31-60, `DANGER` ≤ 30); the tooltip says what it does (output multiplier, nobody is born below 30). Re-derived on `phase_advanced`, every `storm_*` signal, `game_load_completed` and `game_new_started` (deferred, after StormManager).
+- **Behavior:** Resource values update in real-time via `EventBus.resource_changed`. Every chip has its meaning in a tooltip. Touch has no tooltips in Godot, so a tap (or click) on any chip or on the storage row unfolds the detail: a row per resource with name, amount and the colour swatch that is the legend of the bar, the workers and morale lines (same text as their tooltips) and the shared-cap explanation; another tap folds it. There is no ▼ button any more. With touch controls on, chips are at least `UITheme.MIN_BTN_H` tall. The row is an `HFlowContainer` that wraps before the ☰ MENÚ button when they would meet (phone in portrait). The bar turns red when full. Animates glow when a new resource unlocks.
+- **Materials row** (2026-09-28): the workshop materials (planks, ingots, beams, fuel), outside the shared bar; the row appears once one material is unlocked or held. No "TALLER" title since 2026-10 (it is in the tooltip).
 - **Layer:** 10
 
 ### ConstructionMenu (`scripts/ui/ConstructionMenu.gd`)
 - **Position:** Bottom center: a big CONSTRUIR button (240x64, brass border), ALWAYS visible — it used to appear only while the ☰ column was open
 - **Shows:** Scrollable list of all non-core buildings from `data/buildings/` (15 cards), with a category filter; the category colour is only the stripe of each card (docs/24)
-- **Behavior:** Each card shows its cost (red when it cannot be paid). Cards are picked on release inside them, and locked ones can be tapped too: the detail says everything that is missing (resource to unlock and what brings it, previous buildings by translated name, limit, workers, cost). The cost sits at the top of the detail, before the preview; when something blocks the build it is said next to the button ("Te falta: 20 Madera") and the button does not start. The detail also states the road rule. Columns follow the width. Rebuilds when resources unlock.
+- **Behavior:** Each card shows its cost as a row of resource icons with their amounts (`TextKit.cost_row`), only the missing amounts in red. Cards are picked on release inside them, and locked ones can be tapped too: the detail says what is missing. The cost sits at the top of the detail, before the preview, again as icons; production reads "+5 [steel] every 15 s"; workers, housing, morale and requirements share one line. When something blocks the build it is said next to the button in short (`PlacementRules.block_reasons_short`: "Bloqueado: vigas", "Antes: Refinería", "Te falta: 20 madera") and the button does not start; the full version (how each resource unlocks) is its tooltip. The road rule is one short line ("Carretera al Núcleo (1 oro por tramo)", full sentence as tooltip); size and description are the tooltip of the name. Columns follow the width. Rebuilds when resources unlock.
 - **Placing:** one building per placement — after it, placement mode ends; only decorations, roads and `repeat_placement` buildings stay in hand (`PlacementRules.keeps_placing()`).
 - **Layer:** 12
+- **Rank locks:** a building gated by the governor rank (decorations) shows a drawn padlock and "Rango N" instead of its cost; the detail says "Necesitas rango N" (`PlacementRules.check_rank()`)
 
 ### BuildingInfoPanel (`scripts/ui/BuildingInfoPanel.gd`)
 - **Position:** Right side, full height
 - **Shows:** Selected building/deposit details
-- **Sections:** Title, level, description, production info, construction progress, upgrade button+cost with what the next level gives (only on buildings whose upgrade does something), process actions (via ProcessActionsPanel), move/demolish buttons, demolish confirmation
-- **RETIRAR / PONER TRABAJADORES** on every building that uses workers, with a line saying how many it frees or takes (or "sin veta" when its deposit is gone)
+- **Sections:** Title (description in its tooltip), "Nv 1 · 2 trabajadores", production "+6 [wood] every 12 s", construction progress ("En obras 61% · 0:16"), upgrade button "MEJORAR → Nv 2" with what the next level gives and its cost as icons (only on buildings whose upgrade does something), repair with its cost as icons, process actions (via ProcessActionsPanel; the "Acciones" header only when there are any), move (what it does is its tooltip) / demolish, demolish confirmation
+- **RETIRAR / PONER TRABAJADORES** on every building that uses workers, with a short state ("2 trabajando", "Parado por ti", "Sin veta: no produce"); the full explanation is the button's tooltip
 - **ABRIR MERCADO / INVESTIGAR** on the Market and the Laboratory (`SCREENS`): the only way to open `MarketPanel` and `TechTreePanel`; disabled while the building has no road
-- **Deposits:** uses left, plus the difference between mining it by hand (it runs out, holds 2 workers, needs a road) and putting its specialised building next to it (produces without using it up)
+- **Deposits:** uses left and one short line ("A mano se agota; con Aserradero al lado, no"); the long difference between mining by hand and its specialised building is the tooltip
 - **Layer:** 10
 
 ### ProcessActionsPanel (`scripts/ui/ProcessActionsPanel.gd`)
 - **Type:** Helper class (not a scene, instantiated by BuildingInfoPanel)
-- **Shows:** Available manual processes for selected building, or mining button for deposits
-- **Behavior:** Hides processes that use locked resources. Shows progress bar during active process. Disables buttons while process running or building constructing.
+- **Shows:** Available manual processes for selected building, or mining button for deposits. Each card is the name plus one line: "15 madera → +25 madera · +5 oro · 30 s" (mining: "+20 madera · 8 s · 2 trabajadores" and "✖ reason" when it cannot start)
+- **Behavior:** Hides processes that use locked resources. Shows progress bar during active process ("Talar · 0:16") and "Cancelar (vuelven 7 madera)"; the normal cancel rate is the button's tooltip, the Storm rate (it costs double) stays visible in red. Disables buttons while process running or building constructing.
 
 ### MarketPanel (`scripts/ui/MarketPanel.gd`)
 - **Position:** Center overlay, opened from a Market building (ABRIR MERCADO in its BuildingInfoPanel); no menu entry since 2026-09-28
-- **Shows:** Buy/sell prices for each unlocked resource, amount selector (+-5), buy/sell buttons, gold balance
+- **Shows:** One row per unlocked resource: its icon (name in the tooltip), buy/sell prices, amount selector (+-5), buy/sell buttons; the gold balance as icon + number
 - **Behavior:** Prices update via `EventBus.market_prices_updated`. Rebuilds when resources unlock.
 - **Layer:** 11
 
@@ -61,8 +64,8 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 There is ONE menu (it replaced the "II" pause button and the ☰ sidebar, which
 lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - **Button:** "☰ MENÚ", top-right, finger-sized, always visible in play (hidden while the menu itself is open). No other menu button exists; the old sidebar buttons of each panel stay hidden (nobody emits `sidebar_toggled(true)` any more)
-- **Card:** title, "Modo: X", and two groups side by side (one column with scroll below 700 px):
-  - **COLONIA** — ¿Qué hacer?, Progreso, Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode), Registro (the activity log). Mercado and Tecnología left the menu on 2026-09-28: they open from their buildings. Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
+- **Card:** title, "Modo: X" (only when the run is not Campaña, 2026-10-04), and two groups side by side (one column with scroll below 700 px). Each group's sentence ("Los paneles de tu isla...", "La isla espera...") is the tooltip of its header:
+  - **COLONIA** — ¿Qué hacer?, Progreso, Colonia (rank, flag and colour: `RankPanel`), Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode), Registro (the activity log). Mercado and Tecnología left the menu on 2026-09-28: they open from their buildings. Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
   - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Historia (closes the menu, then `TutorialManager.show_prologue()` replays the prologue, docs/23), Menú principal, Guardar y salir
 - **Behavior:**
   - Real pause while open (`get_tree().paused`); tapping the backdrop resumes.
@@ -75,15 +78,21 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - **Tests:** `tests/ui/test_game_menu.gd`, `test_main_menu_exit.gd`, `test_settings_respond.gd` (real mouse events pushed at the slider and a toggle, from the title menu, the game menu and in play, with a full-screen trap layer at 17), `test_pause_menu.gd`
 - **Probe:** `tools/menu_probe.gd` (`-- --shot-size=1280x800 --profile=tablet [--view=2d]`), screenshots in `docs/media/dev/menu/`
 
+### RankPanel (`scripts/ui/RankPanel.gd`) — governor rank
+- **Badge:** top-right, left of "☰ MENÚ" (own slot `rank_badge` in `UILayoutConfig`; under the menu button on a narrow screen, without the title). The colony flag, the rank number, the title and a thin XP bar. Registered in `HudRegistry` as `RankPanel` (hideable and movable). Tapping it opens the card
+- **Rank-up toast:** "▲ 5 · Alcalde" and one short line per reward ("Fuente", "+1 % producción", "bandera nueva"), under the badge, ~4 s. Sound `rank_up` (AudioManager, alias of `era_up`)
+- **COLONIA card** (☰ MENÚ → COLONIA → Colonia, `RankPanel.modal` in `center_modal`): rank and XP, what the next rank brings, and the flag and colour galleries; what is not earned yet is disabled with a padlock and the rank
+- **Layer:** 11. Reads everything from `RankManager`; holds no state. Docs: [06-progression-victory.md](06-progression-victory.md) §Governor rank
+
 ### War reports and the Final Audit screens
 - `AuditWaveBanner` (layer 19): "Oleada X de N" on `final_audit_wave_ready`, with the cleared wave from `final_audit_wave_cleared` above it and the last-wave line. Ignores the mouse, fades by itself
-- `WarReportScreen` (layer 19): queued, one at a time, never over an open board — after-action report for `defense_auto_resolved`, and the Tithe report with its COBRADO / REPELIDO stamp for `tithe_resolved`
+- `WarReportScreen` (layer 19): queued, one at a time, never over an open board — after-action report for `defense_auto_resolved` (rounds, losses on both sides, tower crews, morale; it no longer repeats the result, which the title and the Tithe report behind it say), and the Tithe report with its COBRADO / REPELIDO stamp for `tithe_resolved`
 - `AuditDefeatScreen` (layer 20): on `final_audit_lost` — wave reached, Tithe taken, storm damage, casualties, and what it takes to resummon (`final_audit_resummon_min_units`). Not a game over
 - All built with `ModalKit` (`scripts/ui/ModalKit.gd`), which only places UITheme pieces
 
 ### NotificationPanel (`scripts/ui/NotificationPanel.gd`)
-- **Position:** Top-left status bar (workers/morale), bottom-left toasts, left side log panel
-- **Shows:** "Trabajadores: 26 de 32", "En su puesto: 14 · libres: 12", "Moral 72 %: producción x1.1" (tooltips per row; a tap on the card unfolds the three explanations), toast notifications, scrollable activity log
+- **Position:** bottom-left toasts, left side log panel (under the resources), the objective line at the top centre
+- **Shows:** toast notifications and the scrollable activity log. The old status card under the resources ("Trabajadores: 26 de 32", "En su puesto…", "Moral 72 %…") was removed in 2026-10: workers and morale are chips of the ResourceHUD row. What was urgent in it already arrives as a toast from `PopulationManager` (no wood, no gold, low morale, starvation).
 - **Behavior:** Listens to `EventBus.notification_posted`. Only `warning`, `danger` and `notice` become toasts (`shows_toast()`); routine news ("Camino construido", the population grew) goes to the log only. Toasts auto-fade after 4 seconds, at most 3 at a time (1 on a narrow screen), and drop under the CONSTRUIR window while it is open. The log stores the last 50 entries and opens from ☰ MENÚ → COLONIA → Registro (`open_log()`); the old REGISTRO DE AVISOS button on the HUD is gone. Colours come from `UITheme.notice_color(category)`.
 - **Layer:** 11
 
@@ -101,12 +110,12 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 
 | Panel | Layer | What it is |
 |---|---|---|
-| `TechTreePanel` | 11 | 3 branches x 5 tiers, research progress, what each branch and tech gives; opened from a Laboratory (INVESTIGAR) ([11-tech-tree.md](11-tech-tree.md)) |
+| `TechTreePanel` | 11 | 3 branches x 5 tiers, research progress; each button "1 · Name / cost / advantage" (+ reason if blocked). One intro line; the long intro, each branch's sentence and each tech's lore are tooltips; opened from a Laboratory (INVESTIGAR) ([11-tech-tree.md](11-tech-tree.md)) |
 | `QuickGuide` | 33 | Child of `TutorialPanel`: "how the game works" in four blocks (resources, extraction, buildings and roads, progress), once per game after the prologue; the same texts are `guide_qg_*` in AYUDA |
-| `ArmyPanel` | 11 | Training slots, Military Power, upkeep, who is away on campaign |
-| `SkirmishPanel` | 11 | Commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" for the Final Audit ([15-combat.md](15-combat.md)) |
-| `BattleScreen` | 18 | The 8x8 board plus the expedition map, draft modal and final report; outside UIManager's stack so ESC cannot dismiss a fight |
-| `ObjectivePanel` | 15 | ¿QUÉ HACER?: the next step from `Objectives.next_step()` ([22-linea-jugable.md](22-linea-jugable.md) §4) |
+| `ArmyPanel` | 11 | "Tropa 5/11 · En cola 1/1" (where each cap comes from in the tooltip), Military Power; per unit "×3", cost as icons, power and wage; who is away on campaign |
+| `SkirmishPanel` | 11 | Commit troops ("Salen 3/6") and launch an expedition; campaign status while a column is out ("Nodos 2/5"); "QUE BAJEN" for the Final Audit ([15-combat.md](15-combat.md)) |
+| `BattleScreen` | 18 | The 8x8 board plus the expedition map, draft modal and final report; outside UIManager's stack so ESC cannot dismiss a fight. Header in one row: encounter, round and whose turn; each initiative chip names its unit and HP in the tooltip |
+| `ObjectivePanel` | 15 | ¿QUÉ HACER?: the next step from `Objectives.next_step()` and its why in one sentence (≤ 16 words); EL CAMINO by building name; the mode's mission is the title's tooltip ([22-linea-jugable.md](22-linea-jugable.md) §4) |
 | `SettingsPanel` | 15 | Tabs Audio · Interfaz · Controles · Accesibilidad · Juego ([21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md)) |
 | `StormHUD` | 16 (11 under modals) | Storm phase: colour and icon, no countdown |
 | `SandboxPanel` | 11 | Sandbox only: the SANDBOX tab with INVOCAR TORMENTA / INVOCAR AUDITORÍA ([20-modos-de-juego.md](20-modos-de-juego.md)) |
@@ -191,6 +200,12 @@ Everything goes through `UITheme` (tokens, factories, `UITheme.style_tabs`).
   the gesture starts (`scripts/ui/DragScroll.gd`, hooked by UIManager); a drag never
   presses what is under it, and the wheel scrolls the list instead of changing a
   slider.
+
+## Less text (2026-10-04)
+
+Rules and tools for short panels (`TextKit`, tooltips, word caps, the
+`tools/texto_probe.gd` probe and the `test_menos_texto_*` suites):
+[21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) §6, "Menos texto".
 
 ## Translation
 

@@ -9,8 +9,10 @@ extends Node3D
 ## (GameConfig.building_look_sync_interval). La regla vive en BuildingLook,
 ## compartida con la vista 2D.
 ##
-## - Obra: el modelo se oculta y en su sitio sale la fase de la huella
-##   (DieselpunkBuildingFactory.create_construction_phase).
+## - Obra: el modelo se oculta y en su sitio sale la fase, con el estilo de su
+##   tipo y la disposicion de su semilla (BuildingLook.seed_of; la misma que
+##   usa la vista 2D), via DieselpunkBuildingFactory.create_construction_phase.
+##   Grua, gancho, banderin y chispas/polvo los anima un shader (SiteFx).
 ## - Mejora: el modelo sigue a la vista, rodeado de andamio.
 ## - Ruina: el modelo se hunde y se ladea (encima ya lleva el hollin de
 ##   BuildingHealth), rodeado de escombros y con humo negro animado.
@@ -28,6 +30,7 @@ var _cell := 2.0
 var _model: Node3D = null
 var _look := -1
 var _phase := -1
+var _seed := 0
 var _site: Node3D = null
 var _ruin: Node3D = null
 var _active: Node3D = null
@@ -58,10 +61,14 @@ func get_phase() -> int:
 func apply(verdict: Dictionary) -> void:
 	var look := int(verdict.get("look", LookRule.Look.IDLE))
 	var phase := int(verdict.get("phase", 0))
-	if look == _look and phase == _phase:
+	# La obra de esta instancia: estilo de su tipo + semilla de su celda. Si la
+	# semilla cambia (se registro en la rejilla, o se movio), se rehace.
+	var seed_val := LookRule.seed_of(_building, _data) if look == LookRule.Look.CONSTRUCTION else 0
+	if look == _look and phase == _phase and seed_val == _seed:
 		return
 	_look = look
 	_phase = phase
+	_seed = seed_val
 	_clear_site()
 	if look != LookRule.Look.RUIN:
 		_leave_ruin()
@@ -69,7 +76,7 @@ func apply(verdict: Dictionary) -> void:
 		_model.visible = look != LookRule.Look.CONSTRUCTION
 	match look:
 		LookRule.Look.CONSTRUCTION:
-			_site = DieselpunkBuildingFactory.create_construction_phase(_data.grid_size, phase, _cell)
+			_site = DieselpunkBuildingFactory.create_construction_phase(_data.grid_size, phase, _cell, _data.id, seed_val)
 		LookRule.Look.UPGRADE:
 			_site = DieselpunkBuildingFactory.create_scaffold(_data.grid_size, _cell, _top + 0.3)
 		LookRule.Look.RUIN:

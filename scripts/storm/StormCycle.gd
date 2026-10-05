@@ -42,6 +42,13 @@ var _first: bool = true
 ## The next Warning cannot turn out to be a false alarm. Set by `summon_now()`
 ## (a storm called on demand is a storm that comes) and spent on that Warning.
 var forced: bool = false
+## La tormenta de prueba de la era 1 (StormManager): recorre Aviso, Ceniza y
+## Tormenta igual que una de verdad, pero al pasar no bajan los Tasadores: vuelve
+## a la calma y se da por terminada (`finished`). Es otro ciclo, no este con una
+## bandera puesta a medias: el reloj de verdad no se entera de que paso.
+var trial: bool = false
+## La de prueba ya paso. Un ciclo terminado no vuelve a moverse.
+var finished: bool = false
 var _tick_accum: float = 0.0
 ## The cycle owns its randomness so a test can seed it and get the same run
 ## twice. Never the global `randf()`: a model that reads global state is not
@@ -58,6 +65,17 @@ static func create(rng_seed: int = -1) -> StormCycle:
 	cycle.seconds_left = GameConfig.get_storm_first_interval()
 	cycle.severity = clampi(GameConfig.storm_first_severity + GameConfig.get_storm_severity_bonus(),
 		1, GameConfig.storm_severity_max)
+	cycle.seed_rng(rng_seed)
+	return cycle
+
+## La tormenta de prueba: severidad fija, sin falsa alarma (`forced`) y sin
+## Diezmo al final. Se arranca con `summon_now()`.
+static func create_trial(rng_seed: int = -1) -> StormCycle:
+	var cycle := StormCycle.new()
+	cycle.phase = Phase.CALM
+	cycle.seconds_left = 0.0
+	cycle.severity = clampi(GameConfig.storm_trial_severity, 1, GameConfig.storm_severity_max)
+	cycle.trial = true
 	cycle.seed_rng(rng_seed)
 	return cycle
 
@@ -110,7 +128,7 @@ func seconds_until_ash() -> float:
 ## Assessors are on the board the world holds its breath, and the countdown to
 ## the next storm only restarts once the fight is settled.
 func advance(delta: float) -> Array:
-	if phase == Phase.TITHE or delta <= 0.0:
+	if phase == Phase.TITHE or finished or delta <= 0.0:
 		return []
 
 	var events: Array = []
@@ -153,7 +171,7 @@ func _enter_warning() -> Array:
 ## Only from CALM — a storm already on its way is not summoned twice. Used by
 ## the Sandbox tools; the rules of the storm itself do not change.
 func summon_now() -> Array:
-	if phase != Phase.CALM:
+	if phase != Phase.CALM or finished:
 		return []
 	forced = true
 	return _enter_warning()
@@ -203,6 +221,8 @@ func _enter_storm() -> Array:
 ## The ash clears and the Assessors walk in. Ruin first, bill second — always in
 ## that order, because a province that just lost its roofs does not argue.
 func _enter_tithe() -> Array:
+	if trial:
+		return _end_trial()
 	phase = Phase.TITHE
 	seconds_left = 0.0
 	var hit: int = effective_severity()
@@ -210,6 +230,18 @@ func _enter_tithe() -> Array:
 		{"e": "phase", "phase": phase, "left": 0.0},
 		{"e": "storm_ended", "severity": hit},
 		{"e": "tithe", "severity": hit},
+	]
+
+## La de prueba no cobra: escampa, vuelve la calma y no hay siguiente. Nada de
+## `storms_survived`: no se ha sobrevivido a nada que la Regencia anote.
+func _end_trial() -> Array:
+	var hit: int = effective_severity()
+	phase = Phase.CALM
+	seconds_left = 0.0
+	finished = true
+	return [
+		{"e": "storm_ended", "severity": hit},
+		{"e": "phase", "phase": phase, "left": 0.0},
 	]
 
 ## Called once the collection is settled, whether it was repelled or paid.
@@ -265,6 +297,8 @@ func to_dict() -> Dictionary:
 		"tithes_repelled": tithes_repelled,
 		"first": _first,
 		"forced": forced,
+		"trial": trial,
+		"finished": finished,
 	}
 
 static func from_dict(data: Dictionary) -> StormCycle:
@@ -282,6 +316,8 @@ static func from_dict(data: Dictionary) -> StormCycle:
 	cycle.tithes_repelled = maxi(0, int(data.get("tithes_repelled", 0)))
 	cycle._first = bool(data.get("first", true))
 	cycle.forced = bool(data.get("forced", false))
+	cycle.trial = bool(data.get("trial", false))
+	cycle.finished = bool(data.get("finished", false))
 	# Un save hecho con los Tasadores en la puerta vuelve con los Tasadores en la
 	# puerta. Antes se perdonaba y el reloj volvia a la calma: salir del juego
 	# durante el Diezmo era la forma de no pagarlo. El tablero no se guarda, asi

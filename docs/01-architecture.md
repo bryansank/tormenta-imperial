@@ -17,7 +17,7 @@ Tormenta Imperial uses a **Service-Signal-Component** architecture native to God
 +------------------------------v------------------------------+
 |                      Scene Components                        |
 |  Main.tscn (3D) or Main2D.tscn (2D): camera, island, placer, |
-|  map generator + the same 23 UI panels in both               |
+|  map generator + the same 24 UI panels in both               |
 +-------------------------------------------------------------+
         ^
         | pure models, no nodes: scripts/combat/, scripts/storm/
@@ -38,14 +38,14 @@ Tormenta Imperial uses a **Service-Signal-Component** architecture native to God
 
 ## Autoload Load Order (matters!)
 
-The autoloads in `project.godot` load in this order. 26 entries: 25 game services and
+The autoloads in `project.godot` load in this order. 27 entries: 26 game services and
 the `BeckettRuntime` dev bridge.
 
 | Order | Service | Purpose |
 |-------|---------|---------|
 | 1 | Tr | Translation strings (ES/EN) |
 | 2 | GameConfig | All balance/tuning values, user settings, `dev_mode` |
-| 3 | EventBus | Signal bus (no logic, just 108 signal declarations) |
+| 3 | EventBus | Signal bus (no logic, just 111 signal declarations) |
 | 4 | InputService | Keyboard/mouse/touch -> signals |
 | 5 | GridManager | Cell grid (40x40 to 48x48, rolled per game and saved), placement logic |
 | 6 | ResourceManager | 4 resources in one shared pool + unlock tracking |
@@ -69,6 +69,7 @@ the `BeckettRuntime` dev bridge.
 | 24 | AudioManager | Signal-driven music/SFX |
 | — | BeckettRuntime | Dev bridge: `scripts/services/BeckettGate.gd`, loads `addons/beckett` only in the editor |
 | 25 | DeviceProfile | PC/tablet/phone profile, UI scale, `UITheme` tokens |
+| 26 | RankManager | Governor rank: XP, rank, rank rewards and bonuses, colony flag and colour |
 
 `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `Objectives` and
 `FloatingText` are static helpers, not autoloads.

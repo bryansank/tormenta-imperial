@@ -1,7 +1,10 @@
 extends CanvasLayer
 ## Activity log and notification panel.
 ## Shows toast notifications and maintains a scrollable history.
-## Status bar shows population, workers, and morale.
+## La tarjeta de estado (trabajadores, "en su puesto", moral en palabras) se
+## quito en 2026-10: obreros y moral son iconos de la fila de recursos
+## (ResourceHUD). Lo urgente (sin madera, sin oro, moral baja, hambre) ya llega
+## aqui como aviso de PopulationManager.
 
 const MAX_LOG_ENTRIES := 50
 const TOAST_DURATION := 4.0
@@ -25,22 +28,12 @@ var _is_open := false
 var _log_entries: Array = []
 var _log_vbox: VBoxContainer
 var _toast_container: VBoxContainer
-var _pop_label: Label
-var _morale_label: Label
-var _morale_bar: ProgressBar
-var _workers_label: Label
-## Las tres explicaciones de la tarjeta de poblacion, que un toque despliega.
-var _status_hint: Label
-var _status_panel: PanelContainer
 var _objective_label: Label
 
 func _ready() -> void:
 	layer = 11
 	_setup_ui()
 	EventBus.notification_posted.connect(_on_notification)
-	EventBus.population_changed.connect(_on_population_changed)
-	EventBus.morale_changed.connect(_on_morale_changed)
-	EventBus.workers_changed.connect(_on_workers_changed)
 	EventBus.phase_advanced.connect(_on_phase_advanced)
 	EventBus.milestone_completed.connect(func(_m): _update_objective_hint())
 	# El modo se sabe al terminar de cargar (o de empezar): el objetivo depende de el.
@@ -56,88 +49,13 @@ func _ready() -> void:
 	# vuelve al mapa sin saber que se trajo ni a quien dejo por el camino.
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
-	_update_status_labels()
 	_update_objective_hint()
-	# Hide status bar until Phase 1 when pop/morale become relevant
-	if ProgressionManager.current_phase < GameConfig.Phase.SETTLEMENT:
-		_status_panel.visible = false
 
 func _setup_ui() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-
-	# Status bar (top-left below HUD)
-	_status_panel = PanelContainer.new()
-	var status_panel := _status_panel
-	UILayoutManager.apply_layout("NotificationPanel.status", status_panel)
-	# Misma tarjeta que el panel de recursos, justo encima: se leen como una
-	# sola columna de estado (recursos -> poblacion y moral).
-	status_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2, true))
-	root.add_child(status_panel)
-	HudRegistry.register("NotificationPanel.status", status_panel)
-
-	var status_vbox := VBoxContainer.new()
-	status_vbox.add_theme_constant_override("separation", 5)
-	status_panel.add_child(status_vbox)
-
-	# Population row with icon
-	var pop_row := HBoxContainer.new()
-	pop_row.add_theme_constant_override("separation", 6)
-	var pop_icon := UITheme.make_label("\u2302", "body", UITheme.POSITIVE)  # House icon
-	pop_row.add_child(pop_icon)
-	_pop_label = UITheme.make_label("", "small", UITheme.POSITIVE)
-	pop_row.add_child(_pop_label)
-	status_vbox.add_child(pop_row)
-
-	# Workers row with icon
-	var work_row := HBoxContainer.new()
-	work_row.add_theme_constant_override("separation", 6)
-	var work_icon := UITheme.make_label("\u2692", "body", UITheme.INFO)  # Hammer & pick
-	work_row.add_child(work_icon)
-	_workers_label = UITheme.make_label("", "small", UITheme.INFO)
-	work_row.add_child(_workers_label)
-	status_vbox.add_child(work_row)
-
-	# Morale row with icon + progress bar
-	var morale_row := HBoxContainer.new()
-	morale_row.add_theme_constant_override("separation", 6)
-	var morale_icon := UITheme.make_label("\u2665", "body", UITheme.WARNING)  # Heart
-	morale_row.add_child(morale_icon)
-	_morale_label = UITheme.make_label("", "small", UITheme.WARNING)
-	morale_row.add_child(_morale_label)
-	status_vbox.add_child(morale_row)
-
-	# Que es cada fila, en palabras (bug 11): al pasar el raton sale en el
-	# tooltip de la fila y, con el dedo, un toque en la tarjeta despliega las
-	# tres explicaciones debajo.
-	pop_row.tooltip_text = Tr.t("HINT_HUD_POPULATION")
-	work_row.tooltip_text = Tr.t("HINT_HUD_WORKERS")
-	morale_row.tooltip_text = Tr.t("HINT_HUD_MORALE")
-	for row in [pop_row, work_row, morale_row]:
-		(row as Control).mouse_filter = Control.MOUSE_FILTER_STOP
-		(row as Control).gui_input.connect(_on_status_tap)
-
-	# Morale bar
-	_morale_bar = UITheme.make_progress_bar(UITheme.WARNING, 8)
-	_morale_bar.custom_minimum_size.x = 110
-	_morale_bar.max_value = 100.0
-	_morale_bar.value = PopulationManager.get_morale()
-	status_vbox.add_child(_morale_bar)
-
-	_status_hint = UITheme.make_label("%s\n%s\n%s" % [Tr.t("HINT_HUD_POPULATION"),
-		Tr.t("HINT_HUD_WORKERS"), Tr.t("HINT_HUD_MORALE")], "small", UITheme.TEXT_DIM)
-	_status_hint.name = "StatusHint"
-	_status_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status_hint.custom_minimum_size.x = 220
-	_status_hint.visible = false
-	status_vbox.add_child(_status_hint)
-
-	# Log button integrated below status
-	# El registro de avisos ya no tiene boton en el HUD (2026-09-28): es para
-	# revisar que paso o buscar un fallo, no para tenerlo a la vista. Se abre
-	# desde el menu (☰ MENU -> REGISTRO, PauseMenu).
 
 	# Objective hint (top-center)
 	var obj_panel := PanelContainer.new()
@@ -296,51 +214,6 @@ func _refresh_log() -> void:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		_log_vbox.add_child(label)
 
-func _on_population_changed(current: int, max_pop: int) -> void:
-	_pop_label.text = Tr.t("LBL_HUD_POPULATION") % [current, max_pop]
-
-func _on_morale_changed(new_morale: int) -> void:
-	_morale_label.text = morale_text(new_morale)
-	_morale_bar.value = new_morale
-	var color: Color
-	if new_morale <= 30:
-		color = UITheme.DANGER
-	elif new_morale <= 60:
-		color = UITheme.WARNING
-	else:
-		color = UITheme.POSITIVE
-	UITheme.set_label_color(_morale_label, color)
-	# Update bar fill color
-	var fill := _morale_bar.get_theme_stylebox("fill") as StyleBoxFlat
-	if fill:
-		fill.bg_color = color
-
-func _on_workers_changed(used: int, total: int) -> void:
-	_workers_label.text = workers_text(used, total)
-
-func _update_status_labels() -> void:
-	_pop_label.text = Tr.t("LBL_HUD_POPULATION") % [PopulationManager.get_population(), PopulationManager.get_max_population()]
-	_workers_label.text = workers_text(PopulationManager.get_used_workers(), PopulationManager.get_population())
-	_morale_label.text = morale_text(PopulationManager.get_morale())
-
-## "Obreros: 3 trabajan, 2 libres" en vez de "Trabajadores: 3/5", que no decia
-## si eran libres u ocupados.
-static func workers_text(used: int, total: int) -> String:
-	return Tr.t("LBL_HUD_WORKERS") % [used, maxi(0, total - used)]
-
-## "Moral 75 %: produccion x1.1": lo que la moral HACE, no solo cuanta hay.
-static func morale_text(morale: int) -> String:
-	return Tr.t("LBL_HUD_MORALE") % [morale, PopulationManager.morale_to_multiplier(morale)]
-
-func _on_status_tap(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_status_hint.visible = not _status_hint.visible
-		get_viewport().set_input_as_handled()
-
-## Si las explicaciones de la tarjeta estan desplegadas. Para tests.
-func is_status_hint_shown() -> bool:
-	return _status_hint != null and _status_hint.visible
-
 ## Que categorias salen en pantalla ademas de ir al registro.
 static func shows_toast(category: String) -> bool:
 	return category in ["warning", "danger", "notice"]
@@ -360,9 +233,6 @@ func _toggle_panel() -> void:
 # ── Phase & Objective System ──
 
 func _on_phase_advanced(new_phase: int) -> void:
-	# Show status bar once consumption kicks in
-	if new_phase >= GameConfig.Phase.SETTLEMENT:
-		_status_panel.visible = true
 	# Notify the player about the new phase
 	var phase_msg: String = Tr.t("PHASE_%d" % new_phase)
 	if phase_msg != "PHASE_%d" % new_phase:
