@@ -1002,6 +1002,80 @@ var building_active_fx := {
 var ruin_sink_ratio := 0.38
 var ruin_tilt := 0.07
 
+# ── Parcela y atrezo de cada edificio (docs/03, "Parcela y atrezo") ──
+## Cada edificio vive en su parcela (guia de estilo, regla 1): suelo propio que
+## cubre la huella entera y atrezo en el patio que queda entre el modelo y el
+## borde. Las dos vistas leen esta misma tabla (LotPlan), asi que dicen lo mismo.
+##
+## - "ground": "slabs" (losas), "dirt" (tierra batida), "plate" (chapa
+##   remachada) o "grass" (hierba con bordillo).
+## - "trim": lo que corre por el borde que no da a calzada: "fence" (valla baja),
+##   "curb" (bordillo), "rail" (barandilla de hierro), "sandbags" (sacos
+##   terreros) o "pipes" (tuberia con valvulas).
+## - "yard": ancho del patio, en casillas. El modelo se encoge (solo en planta,
+##   nunca en altura) para dejarlo libre; nunca se agranda.
+## - "props": el atrezo que se reparte por el patio. El primero sale siempre;
+##   el resto se elige con la semilla de la instancia (celda + id).
+## - "count": cuantas piezas [min, max]. "accent": la familia del color saturado.
+## - "signature": el elemento exagerado que el modelo GLB no trae (regla 3), en
+##   la esquina "corner" del patio ("NE", "SW"...; "N" = las dos de atras): la
+##   chimenea de la Fundicion, la grua del Almacen, la antena del Laboratorio,
+##   el emblema del Cuartel General... Esa esquina no lleva atrezo. "ROOF":
+##   encima del tejado, apoyado en la altura medida del modelo.
+## - "keep_clear": esquinas sin atrezo por otra cosa (la del Nucleo es la de la
+##   bandera de la colonia, ColonyFlag3D/2D).
+## Sin entrada (la calzada), sin parcela.
+var building_lot_style := {
+	"sawmill": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "industrial",
+		"props": ["logs", "planks", "logs", "crate", "barrel", "lamp"], "count": [5, 7]},
+	"gold_mine": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "industrial",
+		"props": ["cart", "ore", "crate", "barrel", "lamp"], "count": [4, 6],
+		"signature": "ore_heap", "corner": "SW"},
+	"foundry": {"ground": "plate", "trim": "rail", "yard": 0.3, "accent": "industrial",
+		"props": ["ingots", "coal", "ingots", "barrel", "crate", "drums"], "count": [4, 6],
+		"signature": "chimney", "corner": "NE"},
+	"refinery": {"ground": "plate", "trim": "pipes", "yard": 0.3, "accent": "industrial",
+		"props": ["drums", "valve", "drums", "barrel", "crate"], "count": [4, 6],
+		"signature": "manifold", "corner": "SE"},
+	"warehouse": {"ground": "slabs", "trim": "curb", "yard": 0.3, "accent": "civic",
+		"props": ["crate", "pallet", "crate", "sacks", "barrel", "crate"], "count": [5, 7],
+		"signature": "crane", "corner": "NE"},
+	"market": {"ground": "slabs", "trim": "curb", "yard": 0.28, "accent": "civic",
+		"props": ["goods", "sacks", "goods", "barrel", "planter", "crate"], "count": [5, 7]},
+	"laboratory": {"ground": "slabs", "trim": "rail", "yard": 0.28, "accent": "civic",
+		"props": ["gas", "crate", "gas", "lamp", "planter"], "count": [4, 6],
+		"signature": "antenna", "corner": "NW"},
+	"barracks": {"ground": "dirt", "trim": "sandbags", "yard": 0.3, "accent": "military",
+		"props": ["dummy", "target", "ammo", "dummy", "sacks"], "count": [4, 6],
+		"signature": "flag", "corner": "NE"},
+	"tower": {"ground": "plate", "trim": "sandbags", "yard": 0.3, "accent": "military",
+		"props": ["ammo", "sacks", "ammo", "lamp", "barrel"], "count": [4, 6],
+		"signature": "cannon", "corner": "SE"},
+	"headquarters": {"ground": "slabs", "trim": "rail", "yard": 0.28, "accent": "military",
+		"props": ["flag", "lamp", "planter", "ammo"], "count": [3, 5],
+		"signature": "emblem", "corner": "ROOF"},
+	"house": {"ground": "grass", "trim": "fence", "yard": 0.3, "accent": "residential",
+		"props": ["clothesline", "planter", "bench", "barrel", "planter"], "count": [3, 5]},
+	"nucleo": {"ground": "slabs", "trim": "curb", "yard": 0.15, "accent": "civic",
+		"props": ["lamp", "planter", "bench", "lamp", "planter"], "count": [6, 9],
+		"keep_clear": ["NE"]},
+	"garden": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential",
+		"props": ["bench", "lamp", "planter"], "count": [3, 5]},
+	"fountain": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic",
+		"props": ["bench", "lamp", "planter", "bench"], "count": [3, 5]},
+	"statue": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic",
+		"props": ["lamp", "planter", "bench"], "count": [3, 5]},
+}
+## El acento saturado de cada familia (guia, regla 4): rojo valvula en lo
+## industrial, amarillo senal en lo militar, laton en lo civico, verde en lo
+## residencial.
+var building_lot_accents := {
+	"industrial": Color(0.80, 0.16, 0.10),
+	"military": Color(0.95, 0.74, 0.12),
+	"civic": Color(0.82, 0.63, 0.20),
+	"residential": Color(0.30, 0.60, 0.22),
+}
+
 # ── Duration Helpers ──
 
 func get_duration(base: float) -> float:
