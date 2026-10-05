@@ -403,6 +403,10 @@ var hold_repeat_delay_sec := 0.3
 var hold_repeat_interval_sec := 0.08
 ## Grados por segundo que gira la camara con ↺/↻ mantenidos (tras el primer paso).
 var hold_rotate_degrees_per_sec := 90.0
+## Mantener el dedo quieto esto (segundos) sobre un control con tooltip lo ensena
+## en una burbuja (TouchTooltip, docs/21 §9). Un toque mas corto pulsa como
+## siempre. Mas bajo: un toque lento se queda leyendo en vez de pulsar.
+var touch_tooltip_hold_sec := 0.5
 ## Opacidad de los controles en pantalla (cruceta, zoom, giro, colocar): fondo,
 ## borde y simbolo. Al pulsar un boton se ve entero; en reposo vuelve a esto.
 ## Del dispositivo, en settings.cfg [ui] touch_controls_opacity.

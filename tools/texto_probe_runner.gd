@@ -14,7 +14,8 @@ extends Node
 ##   escaramuza     ESCARAMUZAS (elegir tropa)
 ##   menu           ☰ MENU
 ##   mercado        Mercado
-##   tecnologia     Arbol tecnologico
+##   tecnologia     Arbol tecnologico (con la ficha de la elegida)
+##   burbuja        "mantener pulsado para leer" sobre la cabecera de una rama
 ##   parte_defensa  parte de defensa a ciegas
 ##   parte_diezmo   parte del Diezmo cobrado
 ##   ayuda          globo de ayuda de CONSTRUIR
@@ -133,6 +134,7 @@ func _run() -> void:
 	await _panel_shot("SkirmishPanel", "_toggle_panel", "escaramuza")
 	await _panel_shot("MarketPanel", "_toggle_panel", "mercado")
 	await _panel_shot("TechTreePanel", "_toggle_panel", "tecnologia")
+	await _bubble_shot()
 
 	var menu: Node = _main.get_node_or_null("PauseMenu")
 	if menu != null:
@@ -199,6 +201,25 @@ func _panel_shot(node_name: String, method: String, file_name: String) -> void:
 	await _frames(12)
 	await _shot(file_name)
 	panel.call(method)
+	await _frames(5)
+
+## "Mantener pulsado para leer" (TouchTooltip): la burbuja sobre la cabecera de
+## una rama del arbol, como la veria un dedo que la mantiene (docs/21 §9).
+func _bubble_shot() -> void:
+	var panel: Node = _main.get_node_or_null("TechTreePanel")
+	var tt: Node = InputService.touch_tooltip()
+	if panel == null or tt == null:
+		return
+	panel.call("_toggle_panel")
+	await _frames(12)
+	var head: Control = panel.find_child("Branch_military", true, false)
+	if head != null:
+		var finger := head.get_global_rect().get_center()
+		tt.show_bubble(head.tooltip_text, finger)
+		await _frames(4)
+		await _shot("burbuja")
+		tt.call("_hide")
+	panel.call("_toggle_panel")
 	await _frames(5)
 
 ## Sin prologo, guia rapida ni tutorial: tapan los paneles.

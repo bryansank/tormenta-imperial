@@ -25,6 +25,8 @@ const SECTIONS := [
 	["QG_BUILDINGS_T", "QG_BUILDINGS_B"],
 	["QG_PROGRESS_T", "QG_PROGRESS_B"],
 ]
+## El pie: "Manten pulsado para leer" (con Tr.ti: con raton dice "pasa el raton").
+const READ_HINT := "QG_READ_HINT"
 
 var _root: Control
 var _card: PanelContainer
@@ -71,6 +73,12 @@ func _build() -> void:
 		body.custom_minimum_size.x = 200
 		box.add_child(body)
 		_grid.add_child(box)
+	# Como leer lo que no esta escrito: con el raton, el tooltip; con el dedo,
+	# mantener pulsado (TouchTooltip). Una linea, bajo los cuatro bloques.
+	var read := ModalKit.make_text(Tr.ti(READ_HINT), "body", UITheme.ACCENT)
+	read.name = "QuickGuideReadHint"
+	read.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(read)
 	var ok := ModalKit.make_menu_button(Tr.t("QG_OK"), UITheme.POSITIVE, close)
 	ok.name = "QuickGuideOk"
 	column.add_child(ok)
