@@ -98,7 +98,8 @@ Los servicios no saben que vista corre. Lo que hizo falta tocar:
 `custom_name`) y los mismos hijos con nombre (`NameLabel`, `StatusBadge`,
 `ConstructionLabel`). **No escucha senales para pintarse**: cada frame compara
 una firma barata de su estado (obra y su progreso a saltos de 5%, nivel, vida,
-ruina, calzadas vecinas, giro, nombre) y solo repinta si cambio. Asi una
+ruina, calzadas vecinas, giro, nombre, y el aspecto de `BuildingLook`: fase de
+obra, mejora, ruina, trabajando) y solo repinta si cambio. Asi una
 partida cargada, una tormenta o una reparacion se ven sin que ningun servicio
 sepa que existe.
 
@@ -106,10 +107,28 @@ El dibujo es `BuildingArt2D`: la huella exacta (con un margen de 2 px) vista
 desde arriba, con sombra, relieve y una silueta propia por edificio en la paleta
 de `DieselpunkBuildingFactory` (hierro, laton, oxido, hormigon, fuego). Encima:
 obra (rayas amarillo/negro, andamio, barra de progreso), dano (ceniza en
-proporcion a lo perdido, como la capa 3D, y barra de vida), ruina (grietas,
-escombro, humo), seleccion (borde de laton que late) y galones de nivel. El
+proporcion a lo perdido, como la capa 3D, y barra de vida), seleccion (borde de
+laton que late) y galones de nivel. El
 mismo dibujo sirve al fantasma de colocacion y al menu de construccion
 (`BuildingIcon2D`), asi que lo que se elige es lo que aparece en el suelo.
+
+**Obra, ruina y actividad** (la regla compartida con 3D, docs/03 "Aspecto en
+el mapa"):
+
+- **Obra nueva**: en lugar del edificio se pinta la fase de su huella
+  (`BuildingArt2D.draw_construction_phase`): valla con pilas de material,
+  luego losa con zapatas y ferralla, luego pilares, medio forjado, andamio y
+  grua. Debajo, la barra de progreso.
+- **Mejora**: el edificio a la vista con rayas amarillo/negro, andamio en aspa
+  y barra (`draw_construction`).
+- **Ruina**: encima del dibujo, `draw_ruin` (tizne, muro dentado, cascotes,
+  vigas carbonizadas con ascuas, grietas) y un sprite de humo negro animado
+  (`RuinFx`). Al reparar se apaga.
+- **Trabajando**: sprites de humo, serrin o luz (`ActiveFx`) en las chimeneas
+  del propio dibujo (`BuildingArt2D.fx_anchors`), girados con el edificio. Los
+  anima un shader `canvas_item` con `TIME` sobre la hoja de `BuildingFx`
+  (`Sprite2D` recortado al fotograma 0): el edificio no repinta por la
+  animacion.
 
 Rotulos y badges se contraescalan con el zoom para leerse igual a cualquier
 distancia (algo mas pequenos al alejarse). En una pantalla estrecha la camara
@@ -178,4 +197,8 @@ docs/21 §9).
 - `tests/view2d/`: colocar (huella, giro, ocupado, fuera de rejilla, regla de
   yacimiento, compra, mover, demoler), guardado cruzado 3D ↔ 2D por el camino
   real de GameManager, preferencia de vista y linea de comandos, pantalla →
-  celda a varios zooms, la camara 2D y los pasos de la tormenta.
+  celda a varios zooms, la camara 2D y los pasos de la tormenta;
+  `test_building2d_look.gd`: las fases, la ruina y los efectos se dibujan sin
+  error y Building2D enciende/apaga lo que toca.
+- `tools/look_probe.gd`: captura de todos los aspectos en 3D y 2D
+  (docs/03, "Aspecto en el mapa").

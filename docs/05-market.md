@@ -66,7 +66,12 @@ Every market tick (60s, or 10s in dev mode):
 
 ## UI (MarketPanel)
 
-- Opened from ☰ MENÚ → COLONIA → Mercado (the entry appears from the ECONOMY phase, after the first Gold Mine; before that the market does not tick)
+- Opened by tapping a **Market** building → ABRIR MERCADO (`BuildingInfoPanel.SCREENS`,
+  2026-09-28; disabled while the Market has no road). It used to be an entry of
+  ☰ MENÚ → COLONIA; that entry is gone. The Market (2x2, 100 gold + 60 wood, 1
+  worker, max 1) needs a Gold Mine, and prices only tick from the ECONOMY phase
+  (first Gold Mine)
+- ¿QUÉ HACER? does not suggest buying or selling while there is no Market
 - Shows: resource name, buy price, sell price, amount selector (+/- 5), buy/sell buttons
 - Gold display at bottom
 - Only shows unlocked resources
@@ -74,7 +79,8 @@ Every market tick (60s, or 10s in dev mode):
 
 ## Milestone Integration
 
-Completing 10 trades triggers the "Merchant" milestone.
+Completing 10 trades triggers the "Merchant" milestone — which now needs a Market
+building first.
 
 ## Key Files
 

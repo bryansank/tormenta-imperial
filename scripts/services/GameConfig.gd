@@ -794,6 +794,36 @@ var tech_definitions := [
 	 "bonus": {"storage_bonus": 500, "build_speed": 0.2}},
 ]
 
+# ── Aspecto de los edificios: obra, ruina y actividad (docs/03, docs/18) ──
+
+## Fases de obra, compartidas por huella (1x1 / 2x2 / 3x3): valla con
+## materiales -> solar con cimientos -> estructura a medio levantar. Se pasa de
+## una a la siguiente cuando el progreso de la obra cruza cada umbral.
+var construction_phase_thresholds := [0.34, 0.67]
+## Cada cuanto relee la vista 3D el estado de TODOS los edificios (un solo
+## reloj para todo el mapa, no uno por edificio). Las senales de obra, ruina y
+## reparacion repintan al instante; esto solo cubre el paso de fase y el
+## encendido/apagado de la actividad.
+var building_look_sync_interval := 0.25
+## La animacion de "trabajando": hoja de 8 fotogramas en rejilla 4x2 a 12 fps.
+## La anima un shader con TIME: ni timers ni tweens por edificio.
+var building_fx_frames := 8
+var building_fx_columns := 4
+var building_fx_fps := 12.0
+## Que efecto lleva cada edificio que trabaja. "smoke": humo de chimenea;
+## "dust": serrin claro; "glow": luz que parpadea sin humo. Un edificio que no
+## esta aqui no tiene animacion de actividad. Sus columnas de humo y su luz
+## salen de la cima medida del modelo (3D) o de las chimeneas del dibujo (2D).
+var building_active_fx := {
+	"nucleo": "smoke", "gold_mine": "smoke", "foundry": "smoke", "refinery": "smoke",
+	"headquarters": "smoke", "barracks": "smoke", "sawmill": "dust",
+	"warehouse": "glow", "market": "glow", "laboratory": "glow", "tower": "glow",
+}
+## Una ruina se hunde esta fraccion de su altura en el suelo y se inclina estos
+## radianes: con el hollin y los escombros, se distingue de lejos.
+var ruin_sink_ratio := 0.38
+var ruin_tilt := 0.07
+
 # ── Duration Helpers ──
 
 func get_duration(base: float) -> float:
@@ -1016,6 +1046,20 @@ var combat_draft_focus_multiplier := 2
 
 ## Base reward per cleared encounter, scaled by node depth and risk.
 var combat_reward_base := {"gold": 60, "wood": 30}
+
+## La primera escaramuza de la partida (docs/15-combat.md §4). La pide el paso de
+## ¿QUE HACER? en cuanto sale del cuartel la primera unidad, y no es una
+## expedicion entera: es un solo nodo, sin mapa ni jefe, contra un enemigo debil.
+## Con la expedicion normal la columna de un infante recien entrenado se estrella
+## en el nodo 0 (dos infantes enteros) y nunca llega al jefe; esta se gana con un
+## solo infante a cualquier moral (medido en tests/combat/test_first_sortie.gd).
+## El botin es el doble largo del nodo 0 normal: tiene que notarse en la bolsa de
+## la era 1 (600) y pagar de sobra el infante que costo (40 oro + 20 madera).
+var combat_first_sortie_roster := {"infantry": 1}
+## Multiplicador de HP y ataque del enemigo, en vez del de profundidad/era/riesgo.
+## 0.6: un infante de 60 HP que pega 5 (3 de dano contra la defensa 2).
+var combat_first_sortie_enemy_scale := 0.6
+var combat_first_sortie_rewards := {"gold": 150, "wood": 100}
 
 ## Morale is the bridge between base and battlefield: a demoralised population
 ## reacts late and hits softer, and casualties cost morale back home.

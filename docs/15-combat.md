@@ -191,7 +191,7 @@ serves both armies. `UITheme` owns the reading rules:
 
 | API | What it gives |
 |-----|---------------|
-| `UITheme.unit_icon_path(unit_id)` / `unit_icon(unit_id)` | The texture, or **`null` when there is no file on disk** |
+| `UITheme.unit_icon_path(unit_id, px)` / `unit_icon(unit_id, px)` | The texture, or **`null` when there is no file on disk**. With `px`, the icon traced at the matching scale of the icon system (24 / 42 / 60 / 96, `UITheme.icon_scale_for`), falling back to the 64 px file. The board asks for its cell size, the initiative strip for 24 |
 | `UITheme.unit_icon_tint(is_player)` | `POSITIVE` / `DANGER` lightened by 0.62 — the cell behind is the same colour *darkened*, and that gap is what keeps the silhouette from dissolving into its own background |
 | `UITheme.unit_face_color(is_player, spent)` | The same tint, dropped to `UNIT_ICON_SPENT_ALPHA` (0.42) once the unit has acted |
 | `UITheme.mark_boss(style)` | The brass halo (`BOSS_GLOW_SIZE`, `BOSS_BORDER_MIN`) stamped on a cell style **last**, so it adds to whatever border the state already chose instead of hiding it |
@@ -319,6 +319,51 @@ across a branching map, and settle up only when the column comes home.
 
 `Array.shuffle()` is banned here — it reaches for the global generator.
 `_shuffled()` is a Fisher-Yates against the expedition's own RNG.
+
+### The first sortie
+
+The first fight of a game is not a full expedition. With the normal map, a lone
+infantry fresh from the Barracks walks into node 0 (two full-strength infantry) and
+loses it in almost every seed, so the player's first contact with combat was a
+defeat — or nothing at all, because nothing in the game pointed at it. Now:
+
+- **The step.** As soon as one unit stands at home, `Objectives.next_step()` asks
+  for it (`kind: "sortie"`, "Lanza tu primera escaramuza: MENÚ > ESCARAMUZAS"),
+  **before** the five-unit garrison and before any other line step. Not with a
+  column already out, nor with the Final Audit summoned or under way. The route
+  shows it as its own row just before the garrison.
+- **The tip.** The first `unit_trained` offers `first_sortie` (`TutorialManager.TIPS`,
+  `HelpCatalog`, category army): a tip card whose blue frame points at ☰ MENÚ, where
+  ESCARAMUZAS lives (`TUT_TIP_FIRST_SORTIE_BODY`, with a `_TOUCH` variant). It goes
+  out before the upkeep tip that the same signal triggers.
+- **The run.** `SkirmishPanel` launches with
+  `CombatManager.launch_expedition(party, 0, CombatManager.is_first_sortie_due())`.
+  When that flag is true, `Expedition.create(..., first_sortie = true)` swaps the
+  generated map for `ExpeditionGenerator.first_sortie_map()`: **one node**, depth 0,
+  risk 0, no exits, not a boss, carrying its own `enemy_roster`, `enemy_scale` and
+  `rewards` (`GameConfig.combat_first_sortie_*`). `node_scale()` and `node_rewards()`
+  prefer those fields to the depth/era/risk curve, so the fight is the same in every
+  era. Winning the node ends the run won (`Expedition.at_end()`: the boss, or a node
+  with no exits — in a generated map only the boss has none), with no draft.
+- **Done.** `TutorialManager.first_sortie_done` goes true on the first
+  `expedition_ended` with `RESULT_WON`. Losing or abandoning does not spend it: the
+  next launch is the easy one again. It travels in the save (`"tutorial"` key),
+  `reset()` clears it, loading is idempotent, and a save without the key derives it
+  from the `expedition_map` tip (whoever saw it has been on an expedition before).
+  The `expedition_map` tip is held back for the first sortie, which has no map.
+- **Saved mid-run.** `Expedition.to_dict()` carries `first_sortie`; `from_dict()`
+  rebuilds the single node instead of the seed's map. A save without it is a normal
+  expedition.
+- `launch_expedition()` without the third argument is a normal expedition: the tests
+  and probes that launch with a seed keep their maps. `tools/line_probe_player.gd`
+  answers the `sortie` step the way the panel says.
+
+Measured in `tests/combat/test_first_sortie.gd` with `AutoResolver` (the same AI on
+both sides), 50 seeds, launch morale spread 0-100: one infantry wins it **46 of 50
+(92%)**, about 12 rounds, coming home with ~69% HP on average (the losses are the
+lowest-morale launches); two infantry win 50 of 50. On the normal node 0 the same
+lone infantry wins **0 of 50**, and two infantry 25 of 50. Loot: 150 gold + 100 wood, against 60 + 30 for a normal
+node 0 — a quarter of the era-1 bag, and almost four times what the infantry cost.
 
 ### Nodes and rosters
 
@@ -654,6 +699,9 @@ All of it in `scripts/services/GameConfig.gd`. No magic numbers anywhere in
 | `combat_draft_values` | `atk 2, def 2, move 1, initiative 2, heal_pct 0.3` | What one pick is worth | A run is 6–8 fights: a pick should tilt a fight, never decide the expedition |
 | `combat_draft_focus_multiplier` | `2` | Multiplier when a card targets one unit type | Higher rewards mono-type parties |
 | `combat_reward_base` | `{gold 60, wood 30}` | Loot per cleared encounter, before scaling | The whole economic case for going out at all |
+| `combat_first_sortie_roster` | `{infantry 1}` | The only enemy of the first sortie (§4) | More bodies and a lone infantry stops winning it: keep it at one unless the scale drops |
+| `combat_first_sortie_enemy_scale` | `0.6` | HP/ATK multiplier of that enemy, instead of the depth/era/risk curve | 0.6 is a 60 HP infantry hitting for 3 net; at 1.0 the fight is an even duel that morale decides |
+| `combat_first_sortie_rewards` | `{gold 150, wood 100}` | Fixed loot of the first sortie, no curve | It has to show in the era-1 bag (600) and pay back the infantry (40 gold + 20 wood) several times over |
 | `combat_morale_initiative_bonus` | `2` | Initiative swing across the morale range | At ±2 a demoralised squad can lose the first move entirely; at 0 morale stops touching turn order |
 | `combat_morale_attack_range` | `(0.85, 1.15)` | Attack multiplier at 0 and 100 morale | Widen it and the base's mood decides fights; narrow it and the two halves of the game stop talking |
 | `combat_morale_on_victory` | `8.0` | Morale gained by a win | |

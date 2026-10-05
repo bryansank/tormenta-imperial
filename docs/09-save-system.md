@@ -96,6 +96,17 @@ the run in flight, as seed + cleared nodes — never an open board), `storm`
 and helps seen) and, inside `progression`, `played_seconds` and `final_audit`. Buildings
 carry their `health`. The same save serves the 3D and the 2D view.
 
+Since 2026-09-28 the save also carries:
+
+- `"format": 2` (`GameManager.SAVE_FORMAT`). A save without it, or older, does not fit
+  the map of 2x2 buildings and roads: it is copied to
+  `user://save_game.v1-<date>.json` and a new colony starts, with a notice
+  (`MSG_SAVE_OLD_FORMAT`). A test that writes a save fixture must add `"format"`.
+- `"grid"`: width, height and island seed (`GridManager.get_save_data()`), restored
+  **before** anything is placed. A save without it is 40x40.
+- per building, `workers_off` when the player took its workers off.
+- the four workshop materials, alongside the resources.
+
 `game_mode` (docs/20-modos-de-juego.md) is read **first** on load. A save without
 it is a Campaign in progress. `"result": "defeat"` marks a lost Survival run: the
 save is kept but sealed (GameManager never writes it again), and Survival skips the

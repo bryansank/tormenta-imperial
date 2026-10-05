@@ -910,7 +910,12 @@ func can_launch(party: Dictionary) -> Dictionary:
 ## reproducir una partida) y la moral que la base tiene ahora mismo, avisa y
 ## abre el tablero del nodo 0. Las unidades NO se descuentan de ArmyManager:
 ## siguen contando en el Poder Militar hasta que se sepa quien vuelve.
-func launch_expedition(party: Dictionary, seed_value: int = 0) -> bool:
+##
+## `first_sortie`: en vez del mapa, la primera escaramuza de la partida (un solo
+## nodo facil, docs/15-combat.md §4). Lo decide quien lanza preguntando
+## is_first_sortie_due(); por defecto es una expedicion normal, que es lo que
+## esperan los tests y las sondas que lanzan con semilla.
+func launch_expedition(party: Dictionary, seed_value: int = 0, first_sortie: bool = false) -> bool:
 	if not bool(can_launch(party).get("ok", false)):
 		return false
 	var committed: Dictionary = {}
@@ -919,7 +924,7 @@ func launch_expedition(party: Dictionary, seed_value: int = 0) -> bool:
 			committed[String(unit_id)] = int(party[unit_id])
 	_expedition = ExpeditionScript.create(
 		_next_expedition_id, seed_value if seed_value != 0 else _new_seed(),
-		committed, _read_morale(), ProgressionManager.current_era
+		committed, _read_morale(), ProgressionManager.current_era, first_sortie
 	)
 	_next_expedition_id += 1
 	_morale_snapshot = _expedition.morale_snapshot
@@ -928,6 +933,12 @@ func launch_expedition(party: Dictionary, seed_value: int = 0) -> bool:
 	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
 	enter_current_node()
 	return true
+
+## La siguiente salida de la base es la primera escaramuza: la partida aun no ha
+## ganado ninguna (lo recuerda TutorialManager, en la partida). Mientras no se
+## gane, cada salida vuelve a ser la facil; perderla o abandonarla no la gasta.
+func is_first_sortie_due() -> bool:
+	return not TutorialManager.is_first_sortie_done()
 
 ## Elige la ruta. Solo una salida del nodo actual, y solo con la carta del draft
 ## ya elegida; despues abre el tablero del nodo elegido.
@@ -1189,7 +1200,7 @@ func load_save_data(data: Dictionary) -> void:
 	_morale_snapshot = run.morale_snapshot
 	EventBus.expedition_resumed.emit(run.id)
 	var node: Dictionary = run.current_node_data()
-	if bool(data.get("draft_pending", false)) and bool(node.get("cleared", false)) and not run.at_boss():
+	if bool(data.get("draft_pending", false)) and bool(node.get("cleared", false)) and not run.at_end():
 		_offer_draft()
 
 func reset() -> void:

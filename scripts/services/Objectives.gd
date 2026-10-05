@@ -12,7 +12,7 @@ extends RefCounted
 ##
 ## Un paso es un Dictionary:
 ##   kind  "build" | "upgrade" | "train" | "repair" | "sell" | "buy" | "research" | "siege" | "resummon"
-##         | "rebuild" | "sandbox"
+##         | "rebuild" | "sandbox" | "sortie"
 ##   id    edificio o unidad
 ##   level nivel al que sube una mejora
 ##   why   clave de Tr con el porque (una frase)
@@ -114,6 +114,14 @@ static func next_step() -> Dictionary:
 			return _support_or(fill)
 		return {"kind": "siege", "why": "OBJ_WHY_SIEGE"}
 
+	# ── La primera escaramuza ──
+	# En cuanto sale del cuartel la primera unidad, a pelear: una salida facil y
+	# con botin antes de juntar la guarnicion (docs/15-combat.md §4). No pasa por
+	# _support_or: no cuesta nada, y el botin es justo oro y madera.
+	var sortie: Dictionary = first_sortie_step()
+	if not sortie.is_empty():
+		return sortie
+
 	# ── La linea ──
 	var target: Dictionary = _first_open_line_step()
 	if target.is_empty():
@@ -177,6 +185,29 @@ static func _siege_army_step(why: String, kind: String) -> Dictionary:
 	if _army_count("vehicle") - int(CombatManager.get_units_away().get("vehicle", 0)) >= wanted:
 		return {}
 	return _army_step("vehicle", wanted, why, kind)
+
+## "Lanza tu primera escaramuza", o {} si no toca: ya se gano una, hay columna
+## fuera, la Regencia esta convocada o no queda nadie en casa que mandar.
+static func first_sortie_step() -> Dictionary:
+	if TutorialManager.is_first_sortie_done():
+		return {}
+	if CombatManager.has_active_expedition():
+		return {}
+	if ProgressionManager.is_final_audit_pending() or ProgressionManager.is_final_audit_active():
+		return {}
+	var party: Dictionary = first_sortie_party()
+	if party.is_empty():
+		return {}
+	return {"kind": "sortie", "id": String(party.keys()[0]), "why": "OBJ_WHY_FIRST_SORTIE"}
+
+## La columna que se propone para la primera escaramuza: una unidad de casa, la
+## del primer tipo que haya (infanteria antes que canones). Vacio si no hay nadie.
+static func first_sortie_party() -> Dictionary:
+	var home: Dictionary = CombatManager.get_deployable_units()
+	for unit_id in GameConfig.get_unit_ids():
+		if int(home.get(unit_id, 0)) > 0:
+			return {String(unit_id): 1}
+	return {}
 
 ## El primer paso de la linea que no esta hecho.
 static func _first_open_line_step() -> Dictionary:
@@ -652,6 +683,16 @@ static func route() -> Array:
 	var rows: Array = []
 	var current_found := false
 	for entry in LINE:
+		# La primera escaramuza va justo antes de la guarnicion: es lo primero que
+		# se hace con la tropa. Tambien sin Diezmo (Constructor), donde la
+		# guarnicion no es un paso pero pelear si.
+		if String(entry["kind"]) == "train" and bool(entry.get("any", false)):
+			var sortie_done: bool = TutorialManager.is_first_sortie_done()
+			var sortie_row := {"text": Tr.t("OBJ_ROUTE_FIRST_SORTIE"), "done": sortie_done, "current": false}
+			if not sortie_done and not current_found:
+				sortie_row["current"] = true
+				current_found = true
+			rows.append(sortie_row)
 		if not _entry_applies(entry):
 			continue
 		var done: bool = _line_entry_done(entry)
@@ -714,6 +755,8 @@ static func describe(step: Dictionary) -> Dictionary:
 				src.get_display_name() if src != null else String(step.get("building", ""))]
 		"siege":
 			title = Tr.t("OBJ_DO_SIEGE")
+		"sortie":
+			title = Tr.t("OBJ_DO_FIRST_SORTIE")
 		"resummon":
 			title = Tr.t("OBJ_DO_RESUMMON")
 		_:
@@ -793,6 +836,12 @@ static func blocker(step: Dictionary) -> String:
 				if short > 0:
 					need[res_name] = short
 			return "" if need.is_empty() else Tr.t("OBJ_MISSING") % Tr.amount_list(need)
+		"sortie":
+			var party: Dictionary = first_sortie_party()
+			if party.is_empty():
+				return Tr.t("MSG_NO_UNITS")
+			var check: Dictionary = CombatManager.can_launch(party)
+			return "" if bool(check["ok"]) else Tr.t(String(check["reason"]))
 		"siege":
 			if ProgressionManager.is_final_audit_active():
 				return Tr.t("OBJ_SIEGE_UNDER_WAY")

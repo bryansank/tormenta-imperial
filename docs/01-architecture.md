@@ -85,15 +85,15 @@ in `CLAUDE.md` → "Scene Tree". The 2D view is described in
 
 ```
 scripts/services/    -- Autoload singletons (the "brain") + static helpers (GameMode, Objectives, FloatingText)
-scripts/ui/          -- UI panel scripts (subscribe to EventBus), UITheme, UILayoutConfig, HudRegistry
-scripts/buildings/   -- BuildingData, BuildingPlacer (3D), PlacementRules, PlacementAssist, status badge, mesh factory
+scripts/ui/          -- UI panel scripts (subscribe to EventBus), UITheme (one 10-colour palette), UILayoutConfig, HudRegistry, DragScroll, QuickGuide
+scripts/buildings/   -- BuildingData, BuildingPlacer (3D), PlacementRules (deposits, road network, auto-road, upgrades), PlacementAssist, status badge, mesh factory
 scripts/view2d/      -- The 2D view: router, camera, island, placer, drawings
 scripts/combat/      -- Pure combat models
 scripts/storm/       -- Pure storm cycle model
 scripts/camera/      -- 3D camera controller
 scripts/grid/        -- Grid management + grid overlay
-scripts/map/         -- Island + deposit generation, storm sky
-data/buildings/      -- 14 .tres building definitions
+scripts/map/         -- Island + random deposits (3-6 per type), walking workers (WorkerWalkers), storm sky
+data/buildings/      -- 16 .tres building definitions
 scenes/main/         -- Main.tscn (entry, 3D) and Main2D.tscn
 scenes/ui/           -- UI .tscn files (minimal, scripts do the work)
 scenes/buildings/    -- BuildingPlacer.tscn

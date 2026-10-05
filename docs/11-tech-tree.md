@@ -54,6 +54,17 @@ of adding them on top: loading twice without a `reset()` no longer doubles them.
 
 ## UI
 
+**Opened from a Laboratory building** (2026-09-28): tap it → INVESTIGAR
+(`BuildingInfoPanel.SCREENS`; disabled while the Laboratory has no road). The old
+"Tecnología" entry of ☰ MENÚ → COLONIA is gone. The Laboratory is 2x2, costs 150 gold
++ 100 wood, takes 2 workers, needs a House and there is one per island; ¿QUÉ HACER?
+asks for it before suggesting any research. The rule lives in the UI: `TechTreeManager`
+itself does not check for the building.
+
+The panel explains itself (`tests/ui/test_tech_tree_explained.gd`): what the tree is,
+what each branch is for, and each tech's gain with its real numbers and its lore line
+(`TECH_LORE_*`). Branch headers use the palette's brass (docs/24).
+
 TechTreePanel shows 3 columns (one per branch) with 5 tier buttons each:
 - Green = researched
 - Colored = available for research

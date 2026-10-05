@@ -253,6 +253,12 @@ func _decide() -> void:
 				_cover_with_market(Objectives.step_cost(step))
 		"make":
 			_try_make(step)
+		"sortie":
+			# La primera escaramuza: la columna que propone el panel. El tablero
+			# lo juega el bucle de arriba como cualquier otro.
+			var party: Dictionary = Objectives.first_sortie_party()
+			if not party.is_empty() and CombatManager.launch_expedition(party, 0, CombatManager.is_first_sortie_due()):
+				_act("first sortie", true)
 		"buy":
 			if MarketManager.buy(String(step["id"]), int(step["amount"])):
 				_r["trades"] += 1

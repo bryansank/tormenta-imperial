@@ -23,12 +23,23 @@ hay construido, no se cree a ciegas.
 
 ## 1. Prólogo (`scripts/ui/PrologueScreen.gd`)
 
-El lore contado como el **expediente 114-B de la Regencia** sobre nuestra isla. El texto
-oficial va a máquina (Special Elite); en el margen, a mano y en tinta azul (Caveat), las
-notas de los Amortizados cuentan lo que el papel calla ("El Perpetuo está muerto, y el
-sello sigue bajando"). La portada lleva el tampón **DADO DE BAJA** y el último folio
-**REABIERTO**; cada folio, el sello de lacre con "NADA SE PIERDE" (`RegenciaSeal.gd`,
-dibujado, sin imagen). El papel y la mesa son ruido generado (`UITheme.parchment_texture`).
+El lore en **tres folios y en lenguaje claro** (2026-09-28): frases cortas y palabras
+normales, en ES y EN. Ya no hay membrete ni subtítulo de expediente: cada hoja empieza
+por su título. El texto va a máquina; debajo, a mano y en tinta azul
+(`UITheme.hand_font()`), una nota de los Amortizados (`PRO_<n>_NOTE`). El primer folio
+lleva el tampón **FIRMADO** y el último **VIVOS**; cada folio, el sello de lacre con
+"NADA SE PIERDE" (`RegenciaSeal.gd`, dibujado, sin imagen). El papel y la mesa son ruido
+generado (`UITheme.parchment_texture`).
+
+| Folio | Título | Qué cuenta |
+|---|---|---|
+| 1 | La firma del Emperador | El Imperio manda en casi todo el mundo; el Emperador lleva un siglo muerto y la Regencia firma por él |
+| 2 | La Tormenta | La ceniza que manda el Imperio, los Tasadores y el Diezmo |
+| 3 | Quiénes somos | Los Amortizados, la isla dada por perdida, y lo que vamos a hacer: construir, aguantar y no pagar |
+
+Los textos son `PRO_1_*`, `PRO_2_*`, `PRO_3_*` en `Tr.gd`. El agente
+`.claude/agents/escritor-lore.md` es el que escribe lore y tutoriales con esta guía de
+estilo.
 
 - **Pie:** `Saltar historia` · puntos de página · `◀ Atrás` · `Siguiente ▶` (`Empezar`
   en el último). Atrás está apagado en el primer folio.
@@ -41,7 +52,7 @@ dibujado, sin imagen). El papel y la mesa son ruido generado (`UITheme.parchment
 
 | Modo | Prólogo |
 |---|---|
-| Campaña, Supervivencia | Completo, 3 folios (quiénes somos, la Tormenta y el Diezmo, la reapertura) |
+| Campaña, Supervivencia | Completo, 3 folios (la firma del Emperador, la Tormenta, quiénes somos) |
 | Constructor | Corto: portada y un cierre propio, **EN TRÁMITE** ("Aquí no llega la Tormenta") |
 | Sandbox | Ninguno (cuenta como visto). "Historia" a mano cuenta el completo |
 
@@ -57,6 +68,20 @@ comía los toques de Ajustes.
 
 `PrologueScreen` es hija de `TutorialPanel` (se instancia en su `_ready`), así que no hay
 que tocar `Main.tscn` ni `Main2D.tscn` y existe en las dos vistas.
+
+Hoy la Nueva partida solo ofrece la Campaña (docs/20), así que en la práctica sale
+siempre el completo; las variantes de los modos apartados siguen en el código.
+
+### Guía rápida (`scripts/ui/QuickGuide.gd`)
+
+Al cerrar el prólogo, **una vez por partida** (ayuda vista `quick_guide`) y antes de la
+primera marca del tutorial, sale una pantalla con cuatro bloques: **recursos** (qué hay,
+cuándo llega cada uno, el almacén y el taller), **extraer** (a mano se agota; con su
+edificio, no), **edificios** (trabajadores, viviendas y carretera hasta el Núcleo) y
+**progreso** (eras, árbol tecnológico y la Tormenta). Capa 33, hija de `TutorialPanel`,
+grupo `quick_guide`; Esc, Intro o el botón la cierran. Mientras está abierta el tutorial
+no se ve. Los mismos textos son las guías básicas `guide_qg_*` del índice de AYUDA.
+No es el lore (eso es el prólogo) ni el tutorial (eso son las marcas).
 
 ---
 
@@ -76,7 +101,7 @@ Coach marks sobre la interfaz real. Cada paso:
 | 1 | `open_build` | CONSTRUIR, el botón grande de abajo, siempre a la vista (grupo `hud_build_button`) | se abre `ConstructionMenu` |
 | 2 | `pick_sawmill` | la tarjeta del Aserradero dentro de la lista | se elige el aserradero para colocar |
 | 3 | `place_sawmill` | un aro sobre el bosque más cercano (flecha al borde si no se ve); con el dedo conviven con las casillas verdes de `PlacementAssist` (docs/21 §9) | se coloca: con ratón, clic; con el dedo, tocar la casilla y ✓ CONSTRUIR AQUÍ (o el fantasma) |
-| 4 | `wait_sawmill` | un aro sobre la obra | termina la obra (los obreros llegan solos) |
+| 4 | `wait_sawmill` | un aro sobre la obra | termina la obra (la carretera se tiende sola y los trabajadores llegan andando) |
 | 5 | `open_house` / `pick_house` / `place_house` | CONSTRUIR, la tarjeta de la Casa | se coloca una casa |
 | — | `done` | el objetivo | "Entendido" o 10 s |
 
@@ -92,6 +117,13 @@ mano. Por eso:
   quien vio la intro vieja (que traía "Cómo se juega") no lo repite.
 - **Repetir tutorial** (índice de AYUDA) cuenta desde lo que hay (`guide_baseline`): pide
   un aserradero más.
+
+**El tutorial pide CONSTRUIR** (2026-09-28): en los pasos de elegir (`pick_sawmill`,
+`pick_house`), si el edificio pedido ya está elegido en la lista, la marca pasa al botón
+CONSTRUIR del detalle y el texto cambia a "Bien. Ahora pulsa CONSTRUIR"
+(`GUIDE_PRESS_BUILD`). La tarjeta pedida (la Vivienda es la última de la lista) se
+desplaza sola a la vista. Con otra ventana abierta encima (Tecnología, Mercado...) la
+marca no se pinta; con CONSTRUIR sí, porque los pasos ocurren ahí dentro.
 
 **Texto de dedo o de ratón:** cada paso usa `Tr.ti`, con variantes `_TOUCH` ("Toca
 CONSTRUIR" / "Haz clic en CONSTRUIR"; "arrastra el mapa" / "WASD o arrastrar").
@@ -129,6 +161,14 @@ apunta.
 7. **Interruptor global** (`GameConfig.ui_helper_visible`, el de Ajustes > Interfaz de
    #29 y el del índice): apaga las que salen solas; las que se piden en el índice salen
    igual.
+
+**La primera escaramuza** (docs/15-combat.md §4). Al salir del cuartel la primera
+unidad, el consejo `first_sortie` señala ☰ MENÚ (donde vive ESCARAMUZAS) y ¿QUÉ HACER?
+pide "Lanza tu primera escaramuza" antes de la guarnición. La marca
+`TutorialManager.first_sortie_done` (en la partida) se pone al ganar una salida; hasta
+entonces cada salida es un solo nodo fácil con botín. El globo antiguo
+`callout_skirmish` sigue atado al botón de la columna lateral, que ya no se abre desde
+que ESCARAMUZAS pasó al menú ☰: en la práctica no sale.
 
 ### Índice de AYUDA (`scripts/ui/HelpIndexPanel.gd`)
 
@@ -174,12 +214,14 @@ artillerías), `HELP_B_STORM` (la Tormenta ya no se presenta al empezar: es una 
 
 | Suite | Qué fija |
 |---|---|
+| `tests/tutorial/test_quick_guide.gd` | la guía rápida se abre sin pausar y avisa al cerrarse, sus cuatro bloques en ES y EN, y los mismos bloques en el índice de AYUDA |
 | `tests/tutorial/test_prologue_screen.gd` | Atrás/Siguiente/Saltar, Siguiente×3 + Atrás = folio 2, Atrás apagado en el primero, deslizar, máquina de escribir, pausa, variantes, textos ES/EN, estilo propio |
 | `tests/tutorial/test_guide_steps.gd` | `derive_step`, recorrido entero, cancelar, saltar, fuera de orden, isla hecha, repetir, reanudar al cargar, guardado y basura |
 | `tests/tutorial/test_tutorial_panel.gd` | prólogo alojado, paso con texto y número, el velo no se come toques, saltar, esconderse en pausa y con el prólogo, la tarjeta no tapa lo señalado |
 | `tests/tutorial/test_tutorial_manager.gd` | consejos una vez, prólogo pendiente hasta poder salir, modos, reset y guardado |
 | `tests/ui/test_helper_callouts.gd` | una a la vez, ✕ y vista, reloj y pausa con el dedo, prioridad, silencios, interruptor, reabrir pedida |
 | `tests/ui/test_helper_skirmish_callout.gd` | el globo de ESCARAMUZAS sigue a su botón y sale una vez |
+| `tests/tutorial/test_first_sortie_tip.gd` | el consejo `first_sortie` sale con la primera unidad (antes que el sueldo) y una vez, señala ☰ MENÚ, textos ES/EN con `_TOUCH`; la marca `first_sortie_done` solo con una victoria, guardado idempotente, `reset()` y guardados viejos |
 | `tests/ui/test_help_index.gd` | grupo `help_index`, lista básicas y vistas, modo Constructor, reabrir |
 | `tests/ui/test_title_prologue_order.gd` | menú principal abierto → sin prólogo; Ajustes desde el menú arriba y sin nada encima; soltar → prólogo encima de todo; la pausa también lo retiene |
 

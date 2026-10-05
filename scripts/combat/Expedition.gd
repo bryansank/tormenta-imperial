@@ -43,6 +43,11 @@ var draft_picks: Array = []          ## Chosen DraftOptions, in order
 var rewards: Dictionary = {}         ## resource_name -> int, accumulated
 var morale_snapshot: float = 50.0
 var state: int = State.ACTIVE
+## La primera escaramuza de la partida: un solo nodo facil en vez del mapa
+## (ExpeditionGenerator.first_sortie_map, docs/15-combat.md §4). Viaja en el
+## guardado porque el mapa no se guarda: sin ella, recargar a mitad levantaria
+## el mapa entero de la semilla.
+var first_sortie: bool = false
 
 ## uid counter, unique inside this expedition and shared with the enemies it
 ## fields, so no two units on a board can collide (data-model, CombatUnit.uid).
@@ -54,15 +59,14 @@ var _next_uid: int = 1
 ## base; `morale_snapshot` freezes the base's spirit for the whole expedition,
 ## exactly as the design intends — the battle is fought with the morale the town
 ## had when the column marched out, not with live numbers.
-static func create(p_id: int, p_seed: int, party_counts: Dictionary, p_morale: float, p_era: int = 1) -> Expedition:
+static func create(p_id: int, p_seed: int, party_counts: Dictionary, p_morale: float, p_era: int = 1, p_first_sortie: bool = false) -> Expedition:
 	var run := Expedition.new()
 	run.id = p_id
 	run.seed_value = p_seed
 	run.era = maxi(1, p_era)
 	run.morale_snapshot = p_morale
-	run.map = Generator.generate_map(
-		Generator.make_rng(p_seed), Vector2i.ZERO, Vector2i.ZERO, run.era
-	)
+	run.first_sortie = p_first_sortie
+	run.map = run._build_map()
 	run.current_node = 0
 	run.state = State.ACTIVE
 	run.from_army(party_counts)
@@ -80,6 +84,13 @@ func from_army(party_counts: Dictionary) -> Array:
 			unit.morale_initiative_bonus = initiative_bonus
 			party.append(unit)
 	return party
+
+## El mapa de esta expedicion: el de la semilla, o el nodo unico de la primera
+## escaramuza. Lo usan la creacion y la carga, que tienen que dar el mismo.
+func _build_map() -> Array:
+	if first_sortie:
+		return Generator.first_sortie_map()
+	return Generator.generate_map(Generator.make_rng(seed_value), Vector2i.ZERO, Vector2i.ZERO, era)
 
 func next_uid() -> int:
 	var uid: int = _next_uid
@@ -104,6 +115,13 @@ func current_node_data() -> Dictionary:
 
 func at_boss() -> bool:
 	return bool(current_node_data().get("is_boss", false))
+
+## El nodo actual es el ultimo de la campana: el jefe, o un nodo sin salidas (la
+## primera escaramuza). En un mapa generado solo el jefe no tiene salidas.
+func at_end() -> bool:
+	if current_node_data().is_empty():
+		return false
+	return at_boss() or current_exits().is_empty()
 
 ## Routes out of the node the player is standing on. Empty at the boss, which is
 ## exactly how the run ends.
@@ -155,7 +173,9 @@ func nodes_cleared() -> int:
 
 func boss_defeated() -> bool:
 	var boss: int = Generator.boss_index(map)
-	return boss >= 0 and boss < map.size() and bool(map[boss].get("cleared", false))
+	if boss < 0 or boss >= map.size() or not bool(map[boss].get("is_boss", false)):
+		return false
+	return bool(map[boss].get("cleared", false))
 
 # ── The encounter of the current node ────────────────────────────────
 
@@ -166,9 +186,7 @@ func build_enemy_units() -> Array:
 	var node: Dictionary = current_node_data()
 	if node.is_empty():
 		return []
-	var scale: float = Generator.enemy_scale(
-		int(node.get("depth", 0)), era, int(node.get("risk", 0)), bool(node.get("is_boss", false))
-	)
+	var scale: float = Generator.node_scale(node, era)
 	var units: Array = []
 	var roster: Dictionary = node.get("enemy_roster", {})
 	for unit_id in roster.keys():
@@ -196,7 +214,7 @@ func mark_cleared() -> Array:
 	node["cleared"] = true
 	add_rewards(Generator.node_rewards(node, era))
 	var events: Array = [{"e": "node_cleared", "index": current_node, "is_boss": at_boss()}]
-	if at_boss():
+	if at_end():
 		state = State.COMPLETED
 		events.append({"e": "expedition_ended", "result": RESULT_WON})
 	return events
@@ -296,6 +314,7 @@ func to_dict() -> Dictionary:
 		"draft_picks": draft_picks.duplicate(true),
 		"rewards": rewards.duplicate(),
 		"cleared": cleared_indices(),
+		"first_sortie": first_sortie,
 	}
 
 ## Rebuilds a run from a save. `default_era` covers saves written before `era`
@@ -318,10 +337,11 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> Expedition:
 	for res_name in data.get("rewards", {}):
 		run.rewards[res_name] = int(data["rewards"][res_name])
 	run.draft_picks = data.get("draft_picks", []).duplicate(true)
+	# Sin la clave (guardado anterior) es una expedicion normal.
+	var first: Variant = data.get("first_sortie", false)
+	run.first_sortie = first is bool and first
 
-	run.map = Generator.generate_map(
-		Generator.make_rng(run.seed_value), Vector2i.ZERO, Vector2i.ZERO, run.era
-	)
+	run.map = run._build_map()
 	for index in data.get("cleared", []):
 		var i: int = int(index)
 		if i >= 0 and i < run.map.size():

@@ -13,6 +13,11 @@ extends SceneTree
 const OUT_DIR := "res://assets/textures/ui/icons/"
 const SIZE := 32
 const SS := 4  # supersampling
+## Escalas del sistema de iconos (24 / 42 / 60 / 96 px): cada icono sale tambien
+## como `<id>_<px>.png`, trazado a esa medida (no reescalado del de 32), y
+## UITheme.icon_texture(id, px) sirve la escala que toca. El `<id>.png` de 32 se
+## queda como estaba para quien lo pida sin medida.
+const SCALES := [24, 42, 60, 96]
 
 var _img: Image
 var _w: int
@@ -29,13 +34,20 @@ func _initialize() -> void:
 	quit()
 
 func _draw_icon(fname: String, painter: Callable) -> void:
-	_w = SIZE * SS
+	_draw_icon_at(fname + ".png", SIZE, painter)
+	for px in SCALES:
+		_draw_icon_at("%s_%d.png" % [fname, px], px, painter)
+
+## Las primitivas trabajan en 0..1 del lienzo: el mismo pintor sirve a todas
+## las medidas, cada una trazada a 4x de su tamano final.
+func _draw_icon_at(out_name: String, px: int, painter: Callable) -> void:
+	_w = px * SS
 	_img = Image.create(_w, _w, false, Image.FORMAT_RGBA8)
 	_img.fill(Color(0, 0, 0, 0))
 	painter.call()
-	_img.resize(SIZE, SIZE, Image.INTERPOLATE_LANCZOS)
-	var err := _img.save_png(ProjectSettings.globalize_path(OUT_DIR + fname + ".png"))
-	print("GEN_ICON %s.png err=%d" % [fname, err])
+	_img.resize(px, px, Image.INTERPOLATE_LANCZOS)
+	var err := _img.save_png(ProjectSettings.globalize_path(OUT_DIR + out_name))
+	print("GEN_ICON %s err=%d" % [out_name, err])
 
 # ── Primitivas (en coordenadas 0..1 del lienzo) ─────────────────────
 

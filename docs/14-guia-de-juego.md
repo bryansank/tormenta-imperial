@@ -8,7 +8,10 @@ salen del código: `data/buildings/*.tres` y `scripts/services/GameConfig.gd`.
 ## 1. Qué es esto
 
 Levantas una base en una isla generada al azar y la haces crecer a través de **tres
-eras económicas**. La presión viene de que tu gente come, cobra y se desmoraliza si
+eras económicas**. Cada isla es distinta: la rejilla sale entre 40×40 y 48×48 casillas
+y trae de **3 a 6 yacimientos de cada tipo** (bosque, oro, hierro y petróleo), así que
+nunca falta un pozo ni un bosque. Todo lo que construyes se une al **Núcleo** por
+carretera, y verás a tus trabajadores ir andando por ella. La presión viene de que tu gente come, cobra y se desmoraliza si
 no le llega.
 
 El bucle es: **produce recursos → gasta en edificios → desbloquea la siguiente era
@@ -54,18 +57,50 @@ Logística 2 (+300) e Industria 2 (+200) la agrandan un poco más.
 Los yacimientos de la isla se ven desde el principio, pero **no puedes explotarlos
 hasta que su recurso esté desbloqueado**.
 
+### Los materiales del taller
+
+Además de los cuatro recursos hay cuatro **materiales**, que fabrica a mano cada
+edificio especializado con su recurso. Se guardan en el taller del Núcleo, **fuera de
+la bolsa compartida** (no ocupan sitio y el Diezmo no se los lleva), y salen en la
+fila TALLER, debajo de los recursos.
+
+| Material | Lo fabrica | Receta | Lo piden |
+|---|---|---|---|
+| **Tablones** | Aserradero | 20 madera → 5 (20 s) | Cuartel (10) |
+| **Lingotes** | Mina de oro | 30 oro → 3 (30 s) | Estatua (3), Cuartel General (10) |
+| **Vigas** | Fundición | 20 acero · 10 madera → 4 (30 s) | Torre (4), Refinería (6), Cuartel General (20) |
+| **Combustible** | Refinería | 15 petróleo → 5 (25 s) | Cuartel General (10) |
+
+Las subidas del Cuartel General también piden materiales (ver sección 11). Cada
+material aparece cuando terminas el primero de su edificio; si te falta uno,
+**¿QUÉ HACER?** te dice que lo fabriques.
+
 ---
 
-## 4. La gente: población, trabajadores y moral
+## 4. La gente: trabajadores y moral
 
-Es el sistema que más gente pasa por alto y el que te mata la partida.
+Es el sistema que más gente pasa por alto y el que te mata la partida. En el juego, a
+tu gente se la llama **trabajadores**.
 
-**Población.** Empiezas con 5. Crece sola si hay casas libres y la moral está por
-encima de 30. Cada casa da +6 de capacidad; el Núcleo da 5.
+**Cuántos hay.** Empiezas con 5. Crecen solos si hay sitio en las viviendas y la moral
+está por encima de 30. Cada vivienda da sitio a 6 (9 y 12 si la mejoras); el Núcleo, a
+5. El HUD lo dice así: "Trabajadores: 12 de 17" y "En su puesto: 8 · libres: 4".
 
-**Trabajadores.** Casi todo edificio que produce necesita gente. Si no hay
-trabajadores libres, **el edificio se queda parado** y te lo avisa con un cartel rojo
-encima. Construir una fábrica sin gente que la atienda no sirve de nada.
+**En su puesto.** Casi todo edificio que produce necesita gente. Si no hay
+trabajadores libres, **el edificio se queda parado** y te lo avisa con un cartel encima.
+Construir una fábrica sin gente que la atienda no sirve de nada. Los primeros
+edificios en construirse son los primeros en recibir gente.
+
+**Retirar y poner trabajadores.** Cada edificio que usa gente tiene en su panel el botón
+**RETIRAR TRABAJADORES**: quedan libres para otro edificio y ese se para hasta que
+pulses **PONER TRABAJADORES**. Se guarda con la partida.
+
+**Sin carretera no funciona.** Un edificio que no esté unido al Núcleo por carretera no
+recibe trabajadores ni produce, y una vivienda sin carretera no da sitio. Su cartel dice
+"sin carretera".
+
+**Sin veta no funciona.** El Aserradero, la Mina de oro y la Fundición necesitan su
+yacimiento vivo al lado. Si lo agotas minándolo a mano, se paran ("sin veta").
 
 **Consumo.** Cada persona come **1 madera y 1 oro** por ciclo. Con 20 habitantes son
 20 de cada uno por ciclo. Si no puedes pagarlo, **la moral se desploma**.
@@ -78,7 +113,7 @@ encima. Construir una fábrica sin gente que la atienda no sirve de nada.
 | 50 | ×1,0 |
 | 100 | ×1,2 |
 
-Por debajo de **30** la población deja de crecer. Por debajo de **20** salta el aviso
+Por debajo de **30** dejan de llegar trabajadores. Por debajo de **20** salta el aviso
 de peligro. La moral sube sola si pagas el consumo, y las decoraciones la recuperan
 pasivamente.
 
@@ -91,16 +126,30 @@ pasivamente.
 
 ## 5. Catálogo de edificios
 
-Los 14 edificios del juego. Las imágenes son los modelos reales del juego.
+Los 16 edificios del juego. **Todos ocupan 2×2** salvo el Núcleo (3×3) y la carretera
+(1×1). Las imágenes son los modelos reales del juego (de antes de pasar a 2×2; el
+Mercado y el Laboratorio aún no tienen foto).
+
+### Carreteras: todo se une al Núcleo
+
+- La partida empieza con la **acera** del Núcleo: un anillo de carretera a su
+  alrededor.
+- **Todo edificio tiene que tocar una carretera unida al Núcleo.** Si lo colocas donde
+  no llega la red, el juego **tiende la carretera solo** por el camino libre más corto
+  y te la cobra con el edificio (1 oro por tramo). Si no hay camino libre, no te deja:
+  "No hay camino libre hasta la carretera del Núcleo".
+- Las carreteras son instantáneas, cuestan 1 oro y no se rompen con la Tormenta. No
+  puedes quitar ni mover una que deje un edificio suelto.
+- Sin carretera, un edificio no recibe trabajadores ni produce.
 
 ### Producen recursos
 
 | | Edificio | Tamaño | Coste | Gente | Produce |
 |---|---|---|---|---|---|
-| <img src="media/guia/sawmill.png" width="110"> | **Aserradero** | 2×1 | 80 oro · 50 madera | 2 | 6 madera / 12s |
-| <img src="media/guia/gold_mine.png" width="110"> | **Mina de oro** | 2×2 | 120 oro · 80 madera | 3 | 8 oro / 12s |
-| <img src="media/guia/foundry.png" width="110"> | **Fundición** | 2×1 | 200 oro · 120 madera | 3 | 5 acero / 15s |
-| <img src="media/guia/refinery.png" width="110"> | **Refinería** | 2×2 | 300 oro · 150 acero · 100 madera | 4 | 4 petróleo / 18s |
+| <img src="media/guia/sawmill.png" width="110"> | **Aserradero** | 2×2 | 80 oro · 50 madera | 2 | 6 madera / 12s · fabrica tablones |
+| <img src="media/guia/gold_mine.png" width="110"> | **Mina de oro** | 2×2 | 120 oro · 80 madera | 3 | 8 oro / 12s · fabrica lingotes |
+| <img src="media/guia/foundry.png" width="110"> | **Fundición** | 2×2 | 200 oro · 120 madera | 3 | 5 acero / 15s · fabrica vigas |
+| <img src="media/guia/refinery.png" width="110"> | **Refinería** | 2×2 | 300 oro · 150 acero · 100 madera · 6 vigas | 4 | 4 petróleo / 18s · fabrica combustible |
 
 **La Fundición desbloquea el acero y la era 2. La Refinería desbloquea el petróleo y
 la era 3.** Por eso ninguna de las dos cuesta el recurso que desbloquea.
@@ -112,26 +161,28 @@ la era 3.** Por eso ninguna de las dos cuesta el recurso que desbloquea.
 
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
-| <img src="media/guia/nucleo.png" width="110"> | **Núcleo** | 3×3 | — | 0 | Tu punto de partida. +5 de población. No se puede demoler |
-| <img src="media/guia/house.png" width="110"> | **Casa** | 1×1 | 50 oro · 30 madera | 0 | +6 de capacidad de población. Máximo 10 |
-| <img src="media/guia/warehouse.png" width="110"> | **Almacén** | 1×1 | 60 oro · 40 madera | 1 | +500 a la bolsa compartida. Máximo 5 |
+| <img src="media/guia/nucleo.png" width="110"> | **Núcleo** | 3×3 | — | 0 | Tu punto de partida. Sitio para 5 trabajadores. No se puede demoler |
+| <img src="media/guia/house.png" width="110"> | **Vivienda** | 2×2 | 50 oro · 30 madera | 0 | Sitio para 6 trabajadores (9 y 12 mejorada). Máximo 10 |
+| <img src="media/guia/warehouse.png" width="110"> | **Almacén** | 2×2 | 60 oro · 40 madera | 1 | +500 a la bolsa compartida (+250 por nivel mejorado). Máximo 5 |
+| | **Mercado** | 2×2 | 100 oro · 60 madera | 1 | Abre la Bolsa Imperial: tócalo y pulsa **ABRIR MERCADO**. Pide una Mina de oro. Solo uno |
+| | **Laboratorio** | 2×2 | 150 oro · 100 madera | 2 | Abre el árbol tecnológico: tócalo y pulsa **INVESTIGAR**. Pide una Vivienda. Solo uno |
 
 ### Militares
 
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
-| <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 250 oro · 100 acero · 80 madera | 3 | Entrena unidades. Cada cuartel es una plaza de entrenamiento en paralelo |
-| <img src="media/guia/tower.png" width="110"> | **Torre** | 1×1 | 150 oro · 60 acero · 20 petróleo · 30 madera | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
-| <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca la Auditoría Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
+| <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 250 oro · 100 acero · 80 madera · 10 tablones | 3 | Entrena unidades. Cada cuartel es una plaza de entrenamiento en paralelo |
+| <img src="media/guia/tower.png" width="110"> | **Torre** | 2×2 | 150 oro · 60 acero · 20 petróleo · 30 madera · 4 vigas | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
+| <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera · 20 vigas · 10 lingotes · 10 combustible | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca la Auditoría Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
 
 ### Decoraciones (suben la moral)
 
 | | Edificio | Coste | Moral |
 |---|---|---|---|
-| <img src="media/guia/road.png" width="90"> | **Carretera** | 10 oro · 5 madera | +2 |
-| <img src="media/guia/garden.png" width="90"> | **Jardín** | 30 oro · 20 madera | +5 |
-| <img src="media/guia/fountain.png" width="90"> | **Fuente** | 60 oro · 20 acero · 10 madera | +7 |
-| <img src="media/guia/statue.png" width="90"> | **Estatua** | 120 oro · 40 acero | +10 |
+| <img src="media/guia/road.png" width="90"> | **Carretera** (1×1) | 1 oro | +2 |
+| <img src="media/guia/garden.png" width="90"> | **Jardín** (2×2) | 30 oro · 20 madera | +5 |
+| <img src="media/guia/fountain.png" width="90"> | **Fuente** (2×2) | 60 oro · 20 acero · 10 madera | +7 |
+| <img src="media/guia/statue.png" width="90"> | **Estatua** (2×2) | 120 oro · 40 acero · 3 lingotes | +10 |
 
 Las decoraciones no dan moral de golpe: **aceleran su recuperación** (+1 por cada 10
 puntos de bonus, por ciclo). No arreglan una base que no puede pagar el consumo;
@@ -141,17 +192,30 @@ ayudan a una base que sí puede.
 
 | Edificio | Requiere tener |
 |---|---|
-| Fundición | Aserradero |
+| Mercado | Mina de oro |
+| Laboratorio | Vivienda |
+| Fundición (era 2) | Aserradero + Mina de oro + Vivienda + Almacén |
 | Cuartel | Fundición + Aserradero |
-| Refinería | Fundición |
+| Refinería (era 3) | Fundición + Cuartel |
 | Torre | Cuartel |
 | Cuartel General | Cuartel + Refinería |
 
+No se sube de era sin la base de la anterior en pie. La lista de **CONSTRUIR** enseña
+el coste de cada tarjeta (en rojo si no te llega) y, si tocas una bloqueada, te dice
+todo lo que falta.
+
 ### Límites
 
-Aserradero 5 · Mina de oro 4 · Fundición 3 · Refinería 2 · Almacén 5 · Cuartel 3 ·
-Torre 6 · Casa 10 · Estatua 5 · Fuente 5 · **Cuartel General 1** · Jardín y
-carretera sin límite.
+Aserradero 5 · Mina de oro 4 · Fundición 3 · Refinería 2 · Almacén 5 · Mercado 1 ·
+Laboratorio 1 · Cuartel 3 · Torre 6 · Vivienda 10 · Estatua 5 · Fuente 5 · **Cuartel
+General 1** · Jardín y carretera sin límite.
+
+### Mejorar
+
+Solo se puede mejorar lo que gana algo al subir: los que producen (×1,6 y ×2,5), la
+vivienda (más sitio), el almacén (+250), las decoraciones (más moral) y el Cuartel
+General. El Cuartel, la Torre, la carretera y el Núcleo no tienen mejora. El panel te
+dice con números qué da el siguiente nivel.
 
 ---
 
@@ -163,7 +227,11 @@ cuando te falta algo concreto.
 
 | Dónde | Receta | Metes | Sacas | Tarda |
 |---|---|---|---|---|
-| Núcleo | Tablones | 20 madera | 35 madera | 30s |
+| Aserradero | **Hacer tablones** | 20 madera | 5 tablones | 20s |
+| Mina de oro | **Hacer lingotes** | 30 oro | 3 lingotes | 30s |
+| Fundición | **Hacer vigas** | 20 acero · 10 madera | 4 vigas | 30s |
+| Refinería | **Hacer combustible** | 15 petróleo | 5 combustible | 25s |
+| Núcleo | Tablones (madera) | 20 madera | 35 madera | 30s |
 | Núcleo | Chapa de hierro | 20 acero | 30 acero | 45s |
 | Núcleo | **Tuberías** | 15 acero · 10 madera | **60 oro** | 60s |
 | Aserradero | Madera refinada | 15 madera | 25 madera · 5 oro | 30s |
@@ -179,12 +247,22 @@ cuando te falta algo concreto.
 > tener Fundición, y las **tuberías** del núcleo son la mejor conversión a oro del
 > juego.
 
+### Minar a mano
+
+También puedes tocar un yacimiento y **minarlo a mano**: 20 oro de una veta, 20 madera
+de un bosque, 15 acero del hierro o 10 petróleo de un pozo. Cada vez gasta uno de sus
+usos y, cuando se acaban, el yacimiento desaparece (y el edificio que lo explotaba se
+para). Mientras dura **ocupa 2 trabajadores**, y solo se puede si el yacimiento **toca
+una carretera unida al Núcleo**; la tarjeta te dice qué falta. Su edificio especializado,
+en cambio, produce a su lado sin gastarlo.
+
 ---
 
 ## 7. El mercado — la Bolsa Imperial
 
 Compras y vendes madera, acero y petróleo **a cambio de oro**. El oro no se compra:
-es la moneda.
+es la moneda. **Hace falta un Mercado:** constrúyelo (pide una Mina de oro), tócalo y
+pulsa **ABRIR MERCADO**. Ya no está en el menú.
 
 Los precios flotan. Base: madera 3, acero 8, petróleo 12 oro por unidad, con un
 **30% de diferencia entre lo que pagas al comprar y lo que cobras al vender**.
@@ -198,7 +276,9 @@ entre ×0,5 y ×2,5 del precio base.
 ## 8. La tecnología
 
 15 tecnologías en 3 ramas (Industrial, Militar y Logística), 5 niveles cada una en
-línea: para la tercera necesitas la segunda.
+línea: para la tercera necesitas la segunda. **Se investiga en el Laboratorio:**
+constrúyelo (pide una Vivienda), tócalo y pulsa **INVESTIGAR**. El panel explica qué da
+cada rama y cada tecnología, con sus números.
 
 Cuestan **recursos** y tiempo, y **solo puedes investigar una a la vez**. Los bonos
 son permanentes: más producción, más almacenamiento, menos consumo, mejor moral o
@@ -379,8 +459,10 @@ Subir el Cuartel General cuesta aparte:
 
 | Nivel | Coste |
 |---|---|
-| 2 | 800 oro · 500 acero · 300 petróleo · 400 madera |
-| 3 | 1.500 oro · 800 acero · 500 petróleo · 700 madera |
+| 2 | 800 oro · 500 acero · 300 petróleo · 400 madera · 15 vigas · 10 lingotes · 15 combustible |
+| 3 | 1.500 oro · 800 acero · 500 petróleo · 700 madera · 25 vigas · 20 lingotes · 25 combustible |
+
+Los materiales van aparte, en el taller: no cuentan para la bolsa.
 
 ### Orden recomendado, paso a paso
 
@@ -394,22 +476,27 @@ comer está en ruinas) te pide eso antes.
 3. **Una casa** — necesitas gente para atender lo que construyas.
 4. **Segundo aserradero** — tu gente come madera; adelántate.
 5. **Almacén** — ⚠️ ojo, lee la nota de la sección 12 antes de ponerlo.
-6. **Fundición**, pegada a un hierro — entras en la era 2, se desbloquea el acero **y se
+6. **Fundición**, pegada a un hierro — solo se puede con Aserradero, Mina de oro,
+   Vivienda y Almacén en pie. Entras en la era 2, se desbloquea el acero **y se
    arma la Tormenta**: la primera llega unos diez minutos después.
-7. **Cuartel** y **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
+7. **Cuartel** (fabrica antes 10 tablones en el Aserradero) y **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
    infantes solos pierden incluso el Diezmo más pequeño.
-8. **Refinería, encima de un pozo** — era 3, petróleo.
+8. **Refinería, encima de un pozo** (pide Cuartel y 6 vigas de la Fundición) — era 3,
+   petróleo.
 9. **Dos Torres** — cierran el hito Comandante, mitigan la Tormenta y bajan dotaciones al
    tablero del Diezmo.
 10. **Cuartel General** — y a partir de aquí acumulas para las dos subidas.
 11. **HQ nivel 2**, y **seis blindados** en casa.
 12. **HQ nivel 3** — con esto **convocas la Auditoría Final**. Cuesta 3.500, exactamente
-    la bolsa máxima sin tecnología: investiga Logística 1-2 e Industria 1-2 (+500) para
+    la bolsa máxima sin tecnología: levanta el Laboratorio e investiga Logística 1-2 e
+    Industria 1-2 (+500) para
     tener holgura, o tendrás que cuadrar los cuatro recursos al céntimo mientras tu
     gente come. No lo subas hasta tener el ejército hecho y las torres reparadas: a
     partir de ahí ya no se entrena nada.
 
-Por el camino, **10 operaciones de mercado** en cualquier momento.
+Por el camino, un **Mercado** y **10 operaciones** en él en cualquier momento, y los
+**materiales** que pida cada paso (¿QUÉ HACER? te dice cuál fabricar). Recuerda que
+todo necesita carretera hasta el Núcleo: deja pasos libres.
 
 ### La Auditoría Final
 
@@ -453,7 +540,8 @@ ciclo de la tormenta para siempre**: el cielo se despeja, dejan de caer cenizas 
 vuelve a haber Diezmo. Primero se calla el mundo y después sale la pantalla de
 victoria. Esa es la Victoria Imperial.
 
-> **Esto es la Campaña.** En los otros modos cambia el final
+> **Esto es la Campaña**, el único modo que ofrece hoy la Nueva partida. En los otros
+> modos (apartados, pero vivos en el código y en las partidas viejas) cambia el final
 > ([20-modos-de-juego.md](20-modos-de-juego.md)): en **Constructor** no hay Tormenta
 > ni asedio y el Cuartel General a nivel 3 gana directamente; en **Supervivencia** la
 > Auditoría solo se puede intentar una vez y perderla **sí** acaba la partida; en
@@ -532,8 +620,14 @@ Para jugar desde el editor con los tiempos reales, arranca con `-- --no-dev`
 ### Empezar una isla nueva
 
 **Desde el juego:** `☰ MENÚ` → `Menú principal` → `Nueva partida`, o `Nueva partida`
-en el menú principal al arrancar. Sale el selector de modo (Campaña, Constructor,
-Supervivencia, Sandbox) y pide confirmación si hay una partida que perder.
+en el menú principal al arrancar. Sale el selector de modo, que hoy solo ofrece la
+**Campaña** (Constructor, Supervivencia y Sandbox están apartados, ver
+[20-modos-de-juego.md](20-modos-de-juego.md)), y pide confirmación si hay una partida
+que perder. Cada isla nueva sortea su tamaño y sus yacimientos.
+
+Una partida guardada antes del mapa de 2×2 y carreteras (sin `"format": 2`) no cabe en
+el mapa nuevo: se aparta como `save_game.v1-<fecha>.json` y empieza una colonia nueva,
+con un aviso.
 
 **Borrando la partida a mano:** la partida vive en un único JSON, sin base de datos ni
 nada en la nube. En Windows:

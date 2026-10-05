@@ -473,13 +473,22 @@ const UNIT_ICON_SPENT_ALPHA := 0.42
 const BOSS_GLOW_SIZE := 3
 const BOSS_BORDER_MIN := 3
 
-static func unit_icon_path(unit_id: String) -> String:
+## Con `px` > 0, la silueta trazada a la escala del sistema que le toca
+## (`<id>_<escala>.png`, ver ICON_SCALES); sin medida, la de 64 de siempre.
+static func unit_icon_path(unit_id: String, px: int = 0) -> String:
+	if px > 0:
+		return UNIT_ICON_DIR + "%s_%d.png" % [unit_id, icon_scale_for(px)]
 	return UNIT_ICON_DIR + unit_id + ".png"
 
-## The silhouette for a unit type, or null when there is no icon on disk.
-static func unit_icon(unit_id: String) -> Texture2D:
+## The silhouette for a unit type, or null when there is no icon on disk. With
+## `px`, the closest scale of the icon system, falling back to the 64 px file.
+static func unit_icon(unit_id: String, px: int = 0) -> Texture2D:
 	if unit_id == "":
 		return null
+	if px > 0:
+		var scaled := _tex(unit_icon_path(unit_id, px))
+		if scaled != null:
+			return scaled
 	return _tex(unit_icon_path(unit_id))
 
 ## Icon tint per side. Lightened over the side's base colour because the cell
@@ -790,18 +799,40 @@ static func make_hud_card_style(border: Color = ACCENT, border_width: int = 2, l
 # del oxido tiene que poder leer el recurso igual.
 const ICON_DIR := "res://assets/textures/ui/icons/"
 const ICON_SIZE := 24
+## Escalas del sistema de iconos. Los generadores (gen_resource_icons.gd,
+## gen_unit_icons.gd) trazan cada icono a cada una, no lo reescalan: a 24 px el
+## trazo sale limpio y a 96 no se emborrona.
+const ICON_SCALES := [24, 42, 60, 96]
 
-static func icon_path(icon_id: String) -> String:
+## La escala del sistema para pintar a `px`: la menor que llega (reducir se ve
+## bien, ampliar no), o la mayor si `px` se pasa de todas.
+static func icon_scale_for(px: int) -> int:
+	for s in ICON_SCALES:
+		if px <= int(s):
+			return int(s)
+	return int(ICON_SCALES[ICON_SCALES.size() - 1])
+
+## Con `px` > 0, el PNG de la escala que toca (`<id>_<escala>.png`); sin
+## medida, el `<id>.png` de siempre.
+static func icon_path(icon_id: String, px: int = 0) -> String:
+	if px > 0:
+		return ICON_DIR + "%s_%d.png" % [icon_id, icon_scale_for(px)]
 	return ICON_DIR + icon_id + ".png"
 
-static func icon_texture(icon_id: String) -> Texture2D:
+## El icono a la escala de `px`; si esa escala no existe (un icono sin generar
+## aun), el de siempre.
+static func icon_texture(icon_id: String, px: int = 0) -> Texture2D:
+	if px > 0:
+		var scaled := _tex(icon_path(icon_id, px))
+		if scaled != null:
+			return scaled
 	return _tex(icon_path(icon_id))
 
 ## TextureRect cuadrado con el icono. Si el PNG aun no esta importado queda
 ## vacio en vez de romper: el numero al lado sigue leyendose.
 static func make_icon(icon_id: String, px: int = ICON_SIZE) -> TextureRect:
 	var rect := TextureRect.new()
-	rect.texture = icon_texture(icon_id)
+	rect.texture = icon_texture(icon_id, px)
 	rect.custom_minimum_size = Vector2(px, px)
 	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

@@ -20,9 +20,11 @@ Population is the human engine of the economy. Without workers, buildings don't 
 | Building | Pop Capacity |
 |----------|-------------|
 | Nucleo | 5 (built-in) |
-| House | 6 per house |
+| House | 6 per house (9 at level 2, 12 at level 3: `upgrade_capacity_multiplier`) |
 | Max houses | 10 (`building_limits`) |
-| Theoretical max pop | 5 + 10*6 = 65 |
+| Theoretical max pop | 5 + 10*6 = 65 at level 1, 5 + 10*12 = 125 with every house at level 3 |
+
+A house only counts while it is joined to the Núcleo by road.
 
 ## Workers
 
@@ -30,9 +32,38 @@ Population is the human engine of the economy. Without workers, buildings don't 
 - `used_workers` = sum of all completed buildings' `workers_required`
 - `free_workers` = `population - used_workers`
 - Workers are really assigned: `_recalculate_all()` marks each building with the
-  `staffed` meta, and a building without enough workers does not produce. Its status
-  badge says "sin obreros" (`BuildingStatusBadge` in 3D, `StatusBadge2D` in 2D)
+  `staffed` meta, first built = first served, and a building without enough workers
+  does not produce. Its status badge says "sin trabajadores" (`BuildingStatusBadge` in
+  3D, `StatusBadge2D` in 2D)
 - Player must balance: more production buildings need more houses
+- **Naming (2026-09-28):** the UI calls the people *trabajadores* everywhere. The HUD
+  card reads "Trabajadores: 12 de 17" (population of room) and "En su puesto: 8 ·
+  libres: 4"; a House "da sitio a 6"
+
+### What takes a building out of the count
+
+`_recalculate_all()` skips a building, which then neither gets workers nor produces,
+when:
+
+| Case | Meta | Badge | How it comes back |
+|---|---|---|---|
+| No road to the Núcleo | `connected = false` | "sin carretera" | Lay a road (a house without road gives no room either) |
+| Its deposit was mined out by hand (Sawmill, Gold Mine, Foundry) | `has_vein = false` | "sin veta" | None: place it by another deposit |
+| The player took its workers off | `workers_off = true` | "sin trabajadores (retirados)" | PONER TRABAJADORES |
+| Under construction | `under_construction` | (the construction label) | It finishes |
+
+**Retirar / poner trabajadores:** every building that uses workers has the button in
+its panel (`BuildingInfoPanel._on_toggle_workers()` → `PopulationManager.set_workers_off()`).
+The workers become free for other buildings; the flag is saved per building
+(`workers_off` in the `buildings` entry).
+
+**Manual mining** holds `GameConfig.mining_workers` (2) workers while it lasts
+(`ProcessManager.busy_mining_workers()`), discounted before the buildings are staffed.
+It also needs the deposit to touch a road joined to the Núcleo.
+
+**Walking workers:** when a building gets staffed, little figures leave the Núcleo and
+walk the road network to it (`scripts/map/WorkerWalkers.gd`, 3D and 2D, plus one every
+25 s as a shift change). View only.
 
 ### Worker Requirements
 
@@ -47,12 +78,15 @@ Population is the human engine of the economy. Without workers, buildings don't 
 | Barracks | 3 |
 | Tower | 1 |
 | Warehouse | 1 |
+| Market | 1 |
+| Laboratory | 2 |
 | HQ | 5 |
-| Decorations | 0 |
+| Decorations, roads | 0 |
+| Manual mining (while it lasts) | 2 |
 
-Workers for one of each: 2+3+3+4+3+1+1+5 = 22. For every building at its limit
+Workers for one of each: 2+3+3+4+3+1+1+1+2+5 = 25. For every building at its limit
 (5 sawmills, 4 mines, 3 foundries, 2 refineries, 3 barracks, 6 towers, 5 warehouses,
-1 HQ): 10+12+9+8+9+6+5+5 = 64.
+1 market, 1 laboratory, 1 HQ): 10+12+9+8+9+6+5+1+2+5 = 67.
 
 ## Consumption
 
@@ -118,14 +152,16 @@ Example: 3 gardens (5 each) + 1 statue (10) = 25 total bonus = +2 morale/tick ex
 
 `PopulationManager._recalculate_all()` is called when:
 - Building construction completes
-- Building is demolished
+- Building is placed (roads included: a new tile can connect others) or demolished
 - Building is upgraded
+- The player takes workers off or puts them back (`set_workers_off()`)
+- Manual mining starts, ends or is cancelled, or a deposit is depleted
 
 It recalculates: `max_population`, `used_workers`, `morale_bonus` from all buildings.
 
 ## Save/Load
 
-Saved fields: `population`, `morale`
+Saved fields: `population`, `morale` (the `workers_off` flag travels with each building)
 On load: calls `_recalculate_all()` to rebuild derived values from buildings.
 
 ## Key File

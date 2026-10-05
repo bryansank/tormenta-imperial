@@ -1155,7 +1155,8 @@ func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vect
 ## la inicial de repuesto distinga bando igual que lo haria el icono.
 func _paint_unit_face(cell: Button, icon: TextureRect, unit: CombatUnit) -> Color:
 	var tint: Color = UITheme.unit_face_color(unit.side == PLAYER, unit.has_acted)
-	var texture := UITheme.unit_icon(unit.unit_id)
+	# La escala del sistema de iconos que cabe en la celda (34-62 px).
+	var texture := UITheme.unit_icon(unit.unit_id, _cell_size)
 	icon.texture = texture
 	icon.visible = texture != null
 	icon.modulate = tint
@@ -1274,7 +1275,8 @@ func _refresh_order() -> void:
 ## la hay, inicial si no. El apagado de "ya actuo" lo pone `chip.modulate`, que
 ## arrastra tambien al icono, asi que aqui el tinte va siempre a plena opacidad.
 func _paint_order_face(chip: Label, unit: CombatUnit, is_active: bool) -> void:
-	var texture := UITheme.unit_icon(unit.unit_id)
+	# Ficha de 26 px: la silueta de la escala pequena, trazada para esa medida.
+	var texture := UITheme.unit_icon(unit.unit_id, 24)
 	if texture == null:
 		chip.text = _unit_glyph(unit)
 		chip.add_theme_color_override("font_color", UITheme.TEXT_BRIGHT if is_active else UITheme.TEXT_DIM)

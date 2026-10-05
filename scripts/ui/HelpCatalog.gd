@@ -95,6 +95,10 @@ const ENTRIES := {
 		"title": "TUT_TIP_BOARD_TITLE", "body": "TUT_TIP_BOARD_BODY", "target": ""},
 	"expedition_map": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
 		"title": "TUT_TIP_MAP_TITLE", "body": "TUT_TIP_MAP_BODY", "target": ""},
+	# La primera unidad sale del cuartel: ESCARAMUZAS vive en ☰ MENU > COLONIA,
+	# asi que el marco senala el boton del menu (docs/15-combat.md §4).
+	"first_sortie": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
+		"title": "TUT_TIP_FIRST_SORTIE_TITLE", "body": "TUT_TIP_FIRST_SORTIE_BODY", "target": "menu_button"},
 	"final_audit": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
 		"title": "TUT_TIP_AUDIT_TITLE", "body": "HELP_TIP_AUDIT_BODY", "target": ""},
 }
