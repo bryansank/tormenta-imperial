@@ -90,9 +90,21 @@ network" below.
 
 - **Everything touches a road joined to the Núcleo.** `PlacementRules.is_connected_spot()`
   is part of `evaluate_placement()` (reason `"road"`, message `LBL_NEEDS_ROAD`). A new
-  road must touch the network or the Núcleo. A road whose removal would strand a
-  building cannot be demolished or moved (`road_removal_strands()`). With no Núcleo on
-  the grid (hand-built test scenes) the rule is off.
+  road must touch the network or the Núcleo. With no Núcleo on the grid (hand-built
+  test scenes) the rule is off.
+- **Removing a road: move the buildings first (2026-10-04).** Demolishing a road
+  tile, or moving it, is refused when it would leave a building without a link to the
+  Núcleo. `PlacementRules.road_removal_stranded(road, new_cells = [])` returns those
+  buildings: anything on the grid except the Núcleo, decorations and other roads,
+  **under construction included**; a building that was already loose before (old
+  saves) does not count, and `new_cells` is where a moved road goes (it still counts
+  as road). `Rules.demolish()` answers `{"blocked", "stranded"}`; both placers show
+  the toast `LBL_MOVE_FIRST` ("Primero mueve: Aserradero, Mina de oro", at most
+  `GameConfig.road_block_max_names` names, then "+N") and `flash_buildings()` paints
+  those buildings red for `GameConfig.road_block_highlight_seconds` (3D: a pulsing
+  red quad per cell drawn through the mesh; 2D: a red frame above the building).
+  Tapping one selects it as usual: its panel opens with MOVER. There is no batch or
+  drag demolish. Tests: `tests/map/test_road_removal.gd`.
 - **The Núcleo starts with its sidewalk:** `GameManager.pave_core_ring()` lays the 16
   road cells around it in `_new_game()`.
 - **Auto-road:** placing (or moving) a building where the network does not reach is

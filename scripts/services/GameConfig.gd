@@ -683,6 +683,11 @@ var audio_sfx_voices := 8
 # ── Economy ──
 
 var demolish_refund_ratio := 0.5
+## Quitar un tramo de carretera que deja edificios sin conexion no se deja: se
+## resaltan esos edificios en el mapa estos segundos (docs/03, red de carreteras).
+var road_block_highlight_seconds := 4.0
+## Cuantos nombres caben en el aviso "Primero mueve: ..." (el resto, "+N").
+var road_block_max_names := 2
 var max_offline_seconds := 28800.0
 
 # ── Autosave ──

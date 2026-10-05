@@ -227,8 +227,10 @@ static func core_cells() -> Array:
 	return []
 
 ## Las celdas de carretera unidas al Nucleo (celda -> true). `ignore` es una
-## carretera que no cuenta: la que se esta moviendo o se quiere quitar.
-static func connected_roads(ignore: Node = null) -> Dictionary:
+## carretera que no cuenta: la que se esta moviendo o se quiere quitar. `extra`
+## (celda -> true) son celdas que cuentan como carretera aunque aun no lo sean:
+## adonde se lleva la que se mueve.
+static func connected_roads(ignore: Node = null, extra: Dictionary = {}) -> Dictionary:
 	var core := core_cells()
 	var out := {}
 	if core.is_empty():
@@ -237,14 +239,14 @@ static func connected_roads(ignore: Node = null) -> Dictionary:
 	for c in core:
 		for d in NEIGHBORS4:
 			var n: Vector2i = c + d
-			if not out.has(n) and _is_road_cell(n, ignore):
+			if not out.has(n) and (extra.has(n) or _is_road_cell(n, ignore)):
 				out[n] = true
 				queue.append(n)
 	while not queue.is_empty():
 		var cur: Vector2i = queue.pop_back()
 		for d in NEIGHBORS4:
 			var n: Vector2i = cur + d
-			if not out.has(n) and _is_road_cell(n, ignore):
+			if not out.has(n) and (extra.has(n) or _is_road_cell(n, ignore)):
 				out[n] = true
 				queue.append(n)
 	return out
@@ -285,25 +287,54 @@ static func is_connected_spot(building_id: String, cell: Vector2i, size: Vector2
 		return _touches(cells, network) or _touches(cells, core_set)
 	return _touches(cells, network)
 
-## Quitar esta carretera dejaria algun edificio sin conexion? Devuelve el
-## primero que se quedaria suelto, o null.
-static func road_removal_strands(road: Node) -> Node:
-	if core_cells().is_empty():
-		return null
-	var network := connected_roads(road)
+## "Si quito un camino, primero me hace mover los edificios" (2026-10-04).
+## Los edificios que se quedarian sin conexion al Nucleo si `road` desaparece, o
+## si se lleva a `new_cells` (al MOVERla). Cuentan los edificios de verdad,
+## tambien los que estan en obras; no cuentan el Nucleo, las decoraciones ni
+## otras carreteras (una calle suelta no rompe nada por si sola), ni lo que ya
+## estaba suelto antes (partida vieja): no es culpa de este tramo. [] si se puede
+## quitar. La usan demoler y mover, en 3D y en 2D.
+static func road_removal_stranded(road: Node, new_cells: Array = []) -> Array:
+	var out: Array = []
+	if road == null or core_cells().is_empty():
+		return out
+	var extra := {}
+	for c in new_cells:
+		extra[c] = true
+	var before := connected_roads()
+	var after := connected_roads(road, extra)
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info.get("data")
-		if data == null or data.is_core or info.get("node") == road:
+		var node: Node = info.get("node")
+		if data == null or data.is_core or data.is_decoration or node == road:
 			continue
-		if data.id == ROAD_ID:
-			# Una carretera que se queda suelta no rompe nada por si sola: lo que
-			# importa es el edificio al que llevaba.
+		var cells: Array = info.get("cells", [])
+		if _touches(cells, before) and not _touches(cells, after):
+			out.append(node)
+	return out
+
+## El primero de road_removal_stranded(), o null. Se queda por compatibilidad.
+static func road_removal_strands(road: Node) -> Node:
+	var stranded := road_removal_stranded(road)
+	return stranded[0] if not stranded.is_empty() else null
+
+## El aviso corto de "primero mueve": "Primero mueve: Aserradero, Mina de oro".
+## Nombres sin repetir, como mucho `road_block_max_names`, y "+N" con el resto.
+static func move_first_message(nodes: Array) -> String:
+	var names: Array = []
+	for n in nodes:
+		var info := GridManager.get_building_info(n) if is_instance_valid(n) else {}
+		if info.is_empty():
 			continue
-		if not _touches(info.get("cells", []), network):
-			# Ya estaba suelto antes (partida cargada): no es culpa de esta.
-			if _touches(info.get("cells", []), connected_roads()):
-				return info.get("node")
-	return null
+		var data: BuildingData = info["data"]
+		var nm := data.get_display_name()
+		if not names.has(nm):
+			names.append(nm)
+	var shown: Array = names.slice(0, GameConfig.road_block_max_names)
+	var text := ", ".join(shown)
+	if names.size() > shown.size():
+		text += " +%d" % (names.size() - shown.size())
+	return Tr.t("LBL_MOVE_FIRST") % text
 
 ## Las celdas libres que hay que pavimentar para unir una huella a la red, por
 ## el camino mas corto (sin pisar edificios, yacimientos ni la propia huella).
@@ -532,8 +563,10 @@ static func demolish(building: Node) -> Dictionary:
 	var data: BuildingData = info["data"]
 	if data.is_core:
 		return {}
-	if data.id == ROAD_ID and road_removal_strands(building) != null:
-		return {"blocked": Tr.t("LBL_ROAD_NEEDED_BY")}
+	if data.id == ROAD_ID:
+		var stranded := road_removal_stranded(building)
+		if not stranded.is_empty():
+			return {"blocked": move_first_message(stranded), "stranded": stranded}
 	var cell: Vector2i = info["origin_cell"]
 	var cost := data.get_cost()
 	for type in cost:

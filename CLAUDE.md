@@ -272,8 +272,14 @@ AYUDA index.
 - **Everything touches a road joined to the Núcleo.** `PlacementRules.is_connected_spot()`
   is part of `evaluate_placement()` (reason `"road"`, feedback `LBL_NEEDS_ROAD`); a new
   road must touch the network or the Núcleo. No Núcleo on the grid (hand-built test
-  scenes) means no rule. A road whose removal would strand a building cannot be
-  demolished or moved (`road_removal_strands()`).
+  scenes) means no rule.
+- **Removing a road: move the buildings first.** Demolishing or moving a road tile is
+  refused when `PlacementRules.road_removal_stranded(road, new_cells)` is not empty:
+  the buildings (under construction included; not the Núcleo, decorations or roads,
+  nor ones already loose) that would lose their link to the Núcleo. Both placers
+  show `LBL_MOVE_FIRST` ("Primero mueve: Aserradero") and `flash_buildings()` them in
+  red for `GameConfig.road_block_highlight_seconds`; a tap selects one (panel with
+  MOVER). Tests: `tests/map/test_road_removal.gd`.
 - **The Núcleo starts with its sidewalk:** `GameManager.pave_core_ring()` lays the 16
   road cells around it in `_new_game()`. Roads cost 1 gold, are drawn as full-cell
   pavement with a curb on the unconnected sides (3D and 2D), and take no damage
