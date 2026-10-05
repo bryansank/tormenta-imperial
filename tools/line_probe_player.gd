@@ -663,6 +663,10 @@ func _connect_probes() -> void:
 		if not _r["milestones"].has(id):
 			_r["milestones"][id] = _clock)
 	EventBus.storm_started.connect(func(sev: int) -> void:
+		# La tormenta de prueba de la era 1 no cuenta como tormenta: se anota aparte.
+		if StormManager.is_trial_running():
+			_r["trial_at"] = _clock
+			return
 		_r["storms"].append({"t": _clock, "severity": sev, "ruined": 0,
 			"morale_before": PopulationManager.get_morale(), "towers": CombatManager.count_standing_towers(),
 			"stored": ResourceManager.get_total_stored()}))
@@ -756,6 +760,9 @@ func _print_run(r: Dictionary) -> void:
 	for id in MILESTONE_ORDER:
 		line += "%s=%s " % [id, _mins(r["milestones"].get(id, -1.0))]
 	print("hitos (min): " + line)
+	print("era 1: era 2 en el minuto %.1f | tormenta de prueba en el %s" % [
+		float(r["milestones"].get("era_2", -60.0)) / 60.0,
+		"%.1f" % (float(r["trial_at"]) / 60.0) if r.has("trial_at") else "—"])
 	for st in r["storms"]:
 		var tithe: Dictionary = st.get("tithe", {})
 		print("  tormenta %5s sev %d torres %d ruinas %d moral %d->%s bolsa %d | diezmo %s %s" % [
