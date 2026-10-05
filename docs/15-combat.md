@@ -734,6 +734,24 @@ column marched out.
 | `final_audit_extra_gun_chance` | `0.35` | The siege's one coin flip | Set to 0 and every siege of the same era looks identical |
 | `final_audit_resummon_min_units` | `3` | Living units needed to call the Regency back after a loss | The price of losing: rebuild this much before trying again |
 
+### Gobernador: the same rules, a harder enemy
+
+The **Gobernador** tier of the Campaign (docs/20) does not touch `CombatRules`,
+the AI, the board or the loot. It only multiplies the enemy, through three keys of
+`GameConfig.game_tier_rules["governor"]`, read via `GameMode` (all 1.0 in Colono,
+and 1.0 whenever `GameMode.combat_hard()` is false):
+
+| Key | Gobernador | Applied in | Effect |
+|-----|-----------|------------|--------|
+| `expedition_enemy_mult` | `1.15` | `ExpeditionGenerator.enemy_scale()` | Every expedition enemy (and the boss) has +15 % HP/ATK. The first sortie keeps its fixed `combat_first_sortie_enemy_scale` |
+| `tithe_force_mult` | `1.34` | `StormManager.assessor_roster()` | One more Assessor at severities 1-3 (3/4/5 → 4/5/6, rounding `raw × 1.34`); from severity 4 both tiers sit at `combat_deploy_cap` (6), so the late Tithe is as big as ever — the escalation per Tithe repelled gets there sooner |
+| `audit_enemy_mult` | `1.06` | `FinalAudit.wave_scale()` | Every siege wave hits 6 % harder |
+
+Measured with `tools/siege_probe.gd -- --tier=governor` and
+`tools/balance_probe.gd` (`-- --tier=governor`): the siege stays winnable with the
+maximum garrison (docs/17, "Gobernador") and expeditions get harder without
+becoming a wall (docs/16, "Gobernador").
+
 Tower crews are configured on the storm side, not here:
 `storm_tower_garrison_unit` (`artillery`), `storm_tower_garrison_per_tower` (1),
 `storm_tower_garrison_max` (2), and `GameConfig.get_tower_garrison()`, which caps

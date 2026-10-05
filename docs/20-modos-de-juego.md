@@ -88,6 +88,92 @@ hereda de Campaña.
 - **Hitos.** Siguen contándose en todos los modos (dan fases y avisos), pero en
   Sandbox no llevan a nada.
 
+## 1b. Colono y Gobernador (niveles de la Campaña)
+
+Decisión de Bryan (2026-10-04, contexto `17_DECISIONES_Y_PENDIENTES.md`): el
+público son chavales de 10-15 **y** adultos que saben de economía. El juego se
+bifurca en dos **niveles de la Campaña** — no son modos nuevos del selector:
+
+| Nivel | Para quién | Qué es |
+|---|---|---|
+| **Colono** (`colonist`) | todo el mundo, de serie | el juego de hoy, sin cambios |
+| **Gobernador** (`governor`, nombre provisional) | quien ya terminó una partida | mercado con calendario de la Tormenta y spread visible, lo acumulado se estropea, combate y defensa más duros |
+
+### Cómo se desbloquea
+
+- Es del **perfil**, no de la partida: `settings.cfg`, sección `[perfil]`
+  (`runs_finished`, `campaigns_won`; `GameConfig.profile_*`). Sobrevive a "Nueva
+  partida" y **nunca** va en `save_game.json`.
+- Se abre al **terminar una partida**: ganar (cualquier modo con victoria),
+  perder la Auditoría Final en Campaña (la partida se jugó entera aunque pueda
+  reconvocarse) o una Supervivencia sellada. Ganar una Campaña cuenta además en
+  `campaigns_won`. Lo anota `GameManager` (`victory_achieved`, `final_audit_lost`
+  con `resummon_allowed()`, `run_ended`) llamando a
+  `GameConfig.record_run_finished()`. Así se lee "segunda partida o tras ganar":
+  la segunda partida de quien llegó al final de la primera.
+- `GameMode.governor_unlocked()` = perfil abierto **o** `dev_mode` (siempre
+  abierto desde el editor).
+- En `NewGameDialog`, con la Campaña elegida, sale una fila **Nivel de la
+  Campaña** con dos tarjetas. Gobernador cerrado: tarjeta apagada, candado
+  dibujado y la condición en ≤ 8 palabras ("Se abre al terminar tu primera
+  partida"); no se deja elegir. Abierto: se elige como cualquier tarjeta. El
+  selector repite el nivel de la partida que se deja si sigue abierto.
+
+### Qué cambia en Gobernador
+
+Tabla `GameConfig.game_tier_rules` (Colono manda en lo que Gobernador no diga).
+Los servicios preguntan la regla, nunca el nivel:
+
+| Regla | Consulta | Colono | Gobernador | Dónde se aplica |
+|---|---|---|---|---|
+| Lo acumulado se estropea | `GameMode.spoilage_enabled()` | no | **sí** | la mecánica la pone `feat/comida-granja-recoger` (2 h, se pierde el 50 %); aquí solo la regla |
+| Mercado dinámico | `GameMode.market_dynamic()` | no | **sí** | `MarketManager` / `MarketPanel` (docs/05) |
+| Combate más duro | `GameMode.combat_hard()` | no | **sí** | enciende los tres multiplicadores |
+| Enemigos de expedición | `GameMode.expedition_enemy_mult()` | ×1 | **×1,15** | `ExpeditionGenerator.enemy_scale()` |
+| Escolta del Diezmo | `GameMode.tithe_force_mult()` | ×1 | **×1,34** cuerpos | `StormManager.assessor_roster()` |
+| Oleadas de la Auditoría | `GameMode.audit_enemy_mult()` | ×1 | **×1,06** | `FinalAudit.wave_scale()` |
+
+Mismas reglas de `CombatRules` en los dos niveles; el botín no cambia. Cifras de
+las sondas en docs/16 y docs/17 (apartado "Gobernador").
+
+**Mercado (Gobernador):** calendario fijo — en el Aviso (y la Ceniza) la madera
+sube +30 %, en la Tormenta el acero baja −25 %, tras el Diezmo (120 s) el oro vale
+menos y todo cuesta +15 %, en la calma vuelta a la media —, tick de 15 s y el
+panel enseña el margen (compra − venta), una flecha de tendencia y la estación.
+Detalle en docs/05.
+
+### Guardado
+
+```json
+"game_mode": {"mode": "campaign", "result": "", "tier": "governor"}
+```
+
+Fijo para la partida. Sin `tier` (guardado anterior) o con uno desconocido:
+Colono. Fuera de la Campaña el nivel siempre es Colono (`GameMode.tier_allowed`).
+`GameMode.begin_run(mode, tier)` es el reset (sin nivel = Colono); los tres
+reinicios de GameManager pasan `GameMode.tier` para conservar el de la partida.
+El mercado guarda además `after_tithe_left`.
+
+### Lo que falta del modo complejo (anotado, no implementado)
+
+Segunda parte de Gobernador, para después (lista acordada en `17_DECISIONES`):
+
+- **Sueldos, impuestos y presupuesto de la colonia.** Los obreros cobran un
+  sueldo en oro por tick (hoy solo comen); un impuesto por habitante que el
+  jugador fija (más impuesto = más oro y menos moral); un presupuesto con
+  partidas (sueldos, mantenimiento, ejército) y su saldo a la vista. Encaja como
+  reglas nuevas en `game_tier_rules` (`wages`, `taxes`) que lean
+  `PopulationManager` y `ArmyManager`.
+- **Cadenas de producción más largas.** Productos intermedios (p. ej. mineral →
+  lingote → piezas; madera → tablones) con edificios que consumen la salida de
+  otros, solo en Gobernador; en Colono la cadena corta de hoy.
+- **Mantenimiento de edificios.** Coste periódico por edificio (oro/madera)
+  que, si no se paga, los desgasta hacia el estado de ruina que ya existe
+  (`BuildingHealth`), igual que la Tormenta pero lento.
+- **Oferta y demanda de verdad** en el mercado (que lo que produce la colonia
+  mueva el precio, no solo las compras y ventas del jugador), sobre el
+  calendario de hoy.
+
 ## 2. Cómo está hecho
 
 ### Una sola fuente de verdad
@@ -127,7 +213,7 @@ y no puede depender del orden de carga.
 ### Guardado
 
 ```json
-"game_mode": {"mode": "survival", "result": ""}
+"game_mode": {"mode": "survival", "result": "", "tier": "colonist"}
 ```
 
 - Se escribe en `_write_save()` y se lee **lo primero** en `_load_game()`, antes
@@ -208,6 +294,10 @@ cámara ni del placer.
   guardado, colonias nuevas por modo, Supervivencia sellada, sin offline.
 - `tests/modes/test_game_mode_ui.gd` — selector, pausa, menú principal,
   pestaña Sandbox, victoria de Constructor, fin de Supervivencia.
+- `tests/modes/test_governor_tier.gd` — Colono/Gobernador: reglas por nivel,
+  guardado (viejo = Colono), reset, desbloqueo por perfil (settings.cfg, no la
+  partida), selector con y sin candado, mercado dinámico y combate más duro solo
+  en Gobernador.
 - `tools/modes_probe.gd` — capturas con ventana (selector y cada modo un
   minuto dentro, en 3D y 2D). Instrucciones en su cabecera; siempre con una
   carpeta de usuario propia en `override.cfg`.

@@ -51,6 +51,39 @@ Every market tick (60s, or 10s in dev mode):
 1. Add random volatility: `modifier += random(-0.015, +0.015)`
 2. Revert toward 1.0: `modifier = lerp(modifier, 1.0, 0.05)`
 
+## Mercado dinámico (solo Gobernador)
+
+En el nivel **Gobernador** de la Campaña (`GameMode.market_dynamic()`, docs/20) la
+"media" a la que vuelven los precios deja de ser 1.0: la marca un **calendario
+fijo de la Tormenta** (`GameConfig.market_calendar`). El patrón es siempre el mismo,
+para que se pueda aprender y jugar con él (comprar madera en la calma, vender acero
+antes de la Tormenta...). En **Colono** el mercado es exactamente el de arriba.
+
+| Estación (`MarketManager.season()`) | Cuándo | Objetivo del precio |
+|---|---|---|
+| `warning` | Aviso y Ceniza | madera **+30 %** |
+| `storm` | Tormenta | acero **−25 %** |
+| `after_tithe` | Diezmo y los **120 s** siguientes (`market_after_tithe_seconds`) | el oro vale menos: madera, acero y petróleo **+15 %** |
+| `calm` | el resto | vuelta a la media (1.0) |
+
+- Cada tick (cada **15 s** en Gobernador, `market_dynamic_tick_interval`; 3 s en
+  dev_mode) el modificador se acerca a su objetivo un **35 %**
+  (`market_calendar_pull`), además de la volatilidad de siempre. Un Aviso de 45 s
+  ya lleva la madera a ~+22 %; la Tormenta (60 s) deja el acero en ~−20 %.
+- Comprar y vender siguen moviendo el precio igual (`market_price_sensitivity`).
+- "Tras el Diezmo" lleva su propio reloj (`_after_tithe_left`), que **se guarda**
+  (`market.after_tithe_left`; un guardado viejo sin la clave = 0) y `reset()` tira.
+- La tendencia (`get_price_trend`) en Gobernador dice **hacia dónde va** el precio
+  (objetivo frente a ahora, con zona muerta `market_trend_deadband` = 0.02); en
+  Colono sigue diciendo si está caro o barato.
+
+**Panel (solo Gobernador):** una línea con la estación ("Aviso de Tormenta: la
+madera sube."), y por recurso, además de compra y venta, el **margen** (spread =
+compra − venta, `MarketManager.get_spread()`) y una **flecha de tendencia**
+dibujada (triángulo rojo arriba = sube, verde abajo = baja, barra = estable; no es
+un carácter porque las fuentes no garantizan ▲▼ en Android). Se refresca con el
+tick del mercado, con cada cambio de fase de la Tormenta y con el Diezmo.
+
 ## Configuration (GameConfig.gd)
 
 | Variable | Default | Purpose |
@@ -63,6 +96,11 @@ Every market tick (60s, or 10s in dev mode):
 | `market_min_price_mult` | 0.5 | Minimum price modifier |
 | `market_max_price_mult` | 2.5 | Maximum price modifier |
 | `market_mean_reversion` | 0.05 | Reversion speed toward 1.0 |
+| `market_calendar` | ver arriba | Gobernador: desplazamiento del precio por estación de la Tormenta |
+| `market_calendar_pull` | 0.35 | Gobernador: cuánto se acerca al objetivo por tick |
+| `market_dynamic_tick_interval` | 15.0 | Gobernador: segundos entre ticks |
+| `market_after_tithe_seconds` | 120.0 | Gobernador: duración de "tras el Diezmo" |
+| `market_trend_deadband` | 0.02 | Gobernador: por debajo, la flecha dice "estable" |
 
 ## UI (MarketPanel)
 

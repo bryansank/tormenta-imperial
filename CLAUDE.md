@@ -398,7 +398,18 @@ no caps, resources refill, Storm/Audit only via the SANDBOX tools tab, no victor
 `scripts/services/GameMode.gd` (static class, not an autoload) holds the mode and
 answers rule queries; the table is `GameConfig.game_mode_rules`. Services ask a
 rule (`GameMode.storm_enabled()`), never compare the mode. Saved as
-`"game_mode": {"mode", "result"}`; `GameMode.begin_run()` is its reset.
+`"game_mode": {"mode", "result", "tier"}`; `GameMode.begin_run(mode, tier)` is its reset.
+
+**Colono / Gobernador** (docs/20 §1b) are two *tiers* of the Campaign, not modes:
+Colono is today's game; Gobernador (provisional name) adds the Storm-calendar market
+with visible spread (docs/05), spoilage (`spoilage_enabled()`, mechanics owned by the
+food/collect branch) and a harder enemy (`expedition_enemy_mult` 1.15,
+`tithe_force_mult` 1.34, `audit_enemy_mult` 1.06; same `CombatRules`). Rules in
+`GameConfig.game_tier_rules`, queried through `GameMode.market_dynamic()`,
+`combat_hard()`, etc. It **unlocks per profile** — `settings.cfg [perfil]`, written by
+`GameConfig.record_run_finished()` when a run reaches its end (victory, a lost Final
+Audit in Campaña, a sealed Survival) — and is always open in `dev_mode`. The tier is
+fixed for the run; saves without `tier` load as Colono.
 
 ### Army & Units (management -> combat bridge)
 
@@ -514,7 +525,9 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
   `touch_controls_opacity`, `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
 - `[interfaz]`: device profile, UI scale, text size, palette, high contrast, panel
-  opacity, hidden HUD elements, moved layout — docs/21.
+  opacity, hidden HUD elements, moved layout — docs/21;
+- `[perfil]`: `runs_finished`, `campaigns_won` — the player profile that unlocks
+  Gobernador (docs/20 §1b). Of the player on this device, never of the run.
 
 Never put any of this in the save, and never put game state in `settings.cfg`. The
 locale is `es`/`en`, applied to `Tr` at startup. The language selector lives in SettingsPanel:
@@ -713,7 +726,7 @@ and that `reset()` has to be called from **all three** places in `GameManager` t
 start a fresh game: `_new_game()`, `clear_save()` and `clear_save_and_reload_from()`.
 They are three duplicated lists and it is easy to update one and forget the others —
 that is exactly how `ProcessManager` shipped without a `reset()` at all. Each of the
-three starts with `GameMode.begin_run()` (or `GameMode.load_save_data()` when
+three starts with `GameMode.begin_run(GameMode.current, GameMode.tier)` (or `GameMode.load_save_data()` when
 reloading a save) **before** the resets, because the resets read the mode's rules.
 
 Checklist:
