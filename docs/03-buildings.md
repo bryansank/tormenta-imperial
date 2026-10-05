@@ -105,9 +105,10 @@ network" below.
 - Roads and the Núcleo take no damage (`BuildingHealth.is_immune()`): the Storm and the
   Tithe do not spend themselves on the sidewalk. Roads are drawn as full-cell pavement
   with a curb on the unconnected sides, in 3D and 2D.
-- **Workers you can see:** `scripts/map/WorkerWalkers.gd` sends little figures from the
-  Núcleo along `PlacementRules.walk_route()` when a building gets staffed, plus one
-  every 25 s as a shift change. View only.
+- **Workers you can see:** `scripts/map/WorkerWalkers.gd` sends workers from their
+  houses to the staffed buildings along the road network, through each building's
+  door (the road cell its footprint touches). Citizens walk too. View only; detail in
+  docs/04, "Life in the streets".
 
 ## Workers per building
 

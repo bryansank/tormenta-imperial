@@ -1361,6 +1361,29 @@ func get_tower_garrison(standing_towers: int, garrison_size: int) -> int:
 		maxi(0, standing_towers) * storm_tower_garrison_per_tower, storm_tower_garrison_max)
 	return maxi(0, mini(crews, combat_board_size.x - maxi(0, garrison_size)))
 
+# ── Vida de la ciudad: obreros y ciudadanos que andan (solo vista, docs/04) ──
+
+## Una figura por cada tantos habitantes (obreros y ciudadanos por separado).
+var life_people_per_figure := 2
+## Tope de figuras a la vez (dentro y fuera) por perfil de dispositivo. Una
+## figura de mas cuesta una matriz por fotograma, no una llamada de dibujo:
+## el tope es por la CPU del movil, no por la GPU.
+var life_figure_cap := {"pc": 72, "tablet": 44, "phone": 26}
+## Celdas por segundo andando, y cuanto apuran el paso en el Aviso de Tormenta.
+var life_walk_speed := 1.5
+var life_hurry_multiplier := 1.8
+## Cuanto se quedan dentro (segundos reales, min y max): en el trabajo, en
+## casa entre salida y salida, en el Mercado; y parados ante una decoracion o
+## en mitad de un paseo.
+var life_stay_work := Vector2(10.0, 20.0)
+var life_stay_home := Vector2(4.0, 12.0)
+var life_stay_market := Vector2(4.0, 8.0)
+var life_pause_decoration := Vector2(3.0, 6.0)
+var life_pause_stroll := Vector2(1.0, 2.5)
+## Gancho del dia y la noche (aun no existe): la fraccion de gente que sale de
+## noche. WorkerWalkers.set_presence() la aplica cuando alguien se la pida.
+var life_night_presence := 0.4
+
 # ── Storage Helpers ──
 
 ## Tope base de la era. Una era fuera de tabla se acota a la mas cercana en vez de
