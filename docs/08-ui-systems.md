@@ -91,8 +91,8 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - All built with `ModalKit` (`scripts/ui/ModalKit.gd`), which only places UITheme pieces
 
 ### NotificationPanel (`scripts/ui/NotificationPanel.gd`)
-- **Position:** bottom-left toasts, left side log panel (under the resources), the objective line at the top centre
-- **Shows:** toast notifications and the scrollable activity log. The old status card under the resources ("Trabajadores: 26 de 32", "En su puesto…", "Moral 72 %…") was removed in 2026-10: workers and morale are chips of the ResourceHUD row. What was urgent in it already arrives as a toast from `PopulationManager` (no wood, no gold, low morale, starvation).
+- **Position:** bottom-left toasts, left side log panel (under the resources)
+- **Shows:** toast notifications and the scrollable activity log. The old status card under the resources ("Trabajadores: 26 de 32", "En su puesto…", "Moral 72 %…") was removed in 2026-10: workers and morale are chips of the ResourceHUD row. What was urgent in it already arrives as a toast from `PopulationManager` (no wood, no gold, low morale, starvation). The objective strip at the top centre ("Avanza hacia la Victoria Imperial. Construye el Cuartel General y mejóralo.") was removed on 2026-10-05: it was a per-phase sentence that repeated, less precisely, what ¿QUÉ HACER? says (`Objectives.next_step()`), which is now the only place for the next step. Its slot (`top_center`), its HUD entry and the help tip under it (`tip_center`) went with it; an old `settings.cfg` that hides or moves it loads without it (`HudRegistry.RETIRED`), and the helps that pointed at it (`callout_objective`, the guide's last step, the PROGRESO block) point at ¿QUÉ HACER?: its ☰ MENÚ entry when the menu is open, the ☰ MENÚ button otherwise (`HelpTargets.objective_entry`).
 - **Behavior:** Listens to `EventBus.notification_posted`. Only `warning`, `danger` and `notice` become toasts (`shows_toast()`); routine news ("Camino construido", the population grew) goes to the log only. Toasts auto-fade after 4 seconds, at most 3 at a time (1 on a narrow screen), and drop under the CONSTRUIR window while it is open. The log stores the last 50 entries and opens from ☰ MENÚ → COLONIA → Registro (`open_log()`); the old REGISTRO DE AVISOS button on the HUD is gone. Colours come from `UITheme.notice_color(category)`.
 - **Layer:** 11
 
@@ -110,7 +110,7 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 
 | Panel | Layer | What it is |
 |---|---|---|
-| `TechTreePanel` | 11 | 3 branches x 5 tiers, research progress; each button "1 · Name / cost / advantage" (+ reason if blocked). One intro line; the long intro, each branch's sentence and each tech's lore are tooltips; opened from a Laboratory (INVESTIGAR) ([11-tech-tree.md](11-tech-tree.md)) |
+| `TechTreePanel` | 11 | 3 branches x 5 tiers, research progress; each card "1 · Name / cost / advantage" (+ reason if blocked). Tapping a card (any, locked ones too) **chooses** it; a detail card beside the branches (below them on a canvas under 880 px) shows name, tier and branch, the tech's lore, the branch's sentence, the cost as icons (`TextKit.cost_row`, missing in red), the time (`TextKit.short_time`), the advantage, the requirement and the reason it cannot start, with the INVESTIGAR button (2026-10-05). The long intro is a tooltip; lore and branch sentence are also tooltips of the card and header. Opened from a Laboratory (INVESTIGAR) ([11-tech-tree.md](11-tech-tree.md)) |
 | `QuickGuide` | 33 | Child of `TutorialPanel`: "how the game works" in four blocks (resources, extraction, buildings and roads, progress), once per game after the prologue; the same texts are `guide_qg_*` in AYUDA |
 | `ArmyPanel` | 11 | "Tropa 5/11 · En cola 1/1" (where each cap comes from in the tooltip), Military Power; per unit "×3", cost as icons, power and wage; who is away on campaign |
 | `SkirmishPanel` | 11 | Commit troops ("Salen 3/6") and launch an expedition; campaign status while a column is out ("Nodos 2/5"); "QUE BAJEN" for the Final Audit ([15-combat.md](15-combat.md)) |
@@ -200,6 +200,11 @@ Everything goes through `UITheme` (tokens, factories, `UITheme.style_tabs`).
   the gesture starts (`scripts/ui/DragScroll.gd`, hooked by UIManager); a drag never
   presses what is under it, and the wheel scrolls the list instead of changing a
   slider.
+- **Hold to read (touch):** with the touch input style, keeping a finger still
+  `GameConfig.touch_tooltip_hold_sec` (0.5 s) on any `Control` with a tooltip shows it
+  in a bubble above the finger; the button is not pressed. A short tap still presses.
+  `scripts/ui/TouchTooltip.gd`, a child of `InputService`; full rules in
+  [21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) §9.
 
 ## Less text (2026-10-04)
 

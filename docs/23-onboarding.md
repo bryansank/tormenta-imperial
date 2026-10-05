@@ -124,7 +124,7 @@ Repetir tutorial no hace nada (si no, sería la forma de saltarlo).
 | 3 | `place_sawmill` | un aro sobre el bosque más cercano (flecha al borde si no se ve); con el dedo conviven con las casillas verdes de `PlacementAssist` (docs/21 §9) | se coloca: con ratón, clic; con el dedo, tocar la casilla y ✓ CONSTRUIR AQUÍ (o el fantasma) |
 | 4 | `wait_sawmill` | un aro sobre la obra | termina la obra (la carretera se tiende sola y los trabajadores llegan andando) |
 | 5 | `open_house` / `pick_house` / `place_house` | CONSTRUIR, la tarjeta de la Casa | se coloca una casa |
-| — | `done` | el objetivo | "Entendido" o 10 s |
+| — | `done` | ¿QUÉ HACER? (su entrada del ☰ MENÚ, o el botón ☰ MENÚ) | "Entendido" o 10 s |
 
 **El paso se deduce, no se cuenta.** `TutorialManager.derive_step(hechos)` es pura:
 aserraderos (en obra y hechos), casas, lista de construir abierta, qué se tiene en la

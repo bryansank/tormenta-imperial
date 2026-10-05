@@ -101,7 +101,7 @@ y se verá al terminar.
 
 `scripts/ui/HudRegistry.gd` es el registro central. Elementos que se pueden
 ocultar: recursos y almacén (con obreros y moral, que van en esa fila), botón del registro,
-objetivo, indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
+indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
 mismo interruptor que AYUDA del menú ☰), texto de turno en batalla y las
 herramientas Sandbox (solo existen en ese modo, docs/20). El botón ☰ MENÚ (el
 menú único, que sustituye al ☰ y a la pausa II) no está en el registro: no se
@@ -109,7 +109,7 @@ puede ocultar.
 
 La pestaña SANDBOX es también movible: su slot `sandbox_tab` la apila al pie de
 la columna izquierda (tras el globo de los recursos, que va tras el registro),
-así que baja sola cuando la Tormenta y el objetivo pasan a esa columna. Su
+así que baja sola cuando la Tormenta pasa a esa columna. Su
 tarjeta de herramientas cuelga de ella y la sigue (a su derecha, a su izquierda
 o debajo, siempre dentro de la pantalla). `tests/ui/test_modes_meet_interface.gd`
 lo comprueba, junto con que el selector de "Nueva partida" (NewGameDialog) usa
@@ -138,7 +138,7 @@ idiomas y, si es movible, slot.
 
 **Ajustes → Interfaz → EDITAR DISPOSICIÓN** cierra Ajustes (y la pausa o el menú
 principal que lo prestaba, que vuelven al terminar) y abre `LayoutEditor`: un
-marco sobre cada panel movible (recursos, objetivo, Tormenta,
+marco sobre cada panel movible (recursos, Tormenta,
 avisos, registro, CONSTRUIR, panel de edificio) que se arrastra con el ratón o
 con el dedo. Es un modo aparte a propósito: fuera de él un toque en el HUD es
 un toque en el HUD y nada se mueve por accidente. Un velo se come los toques al
@@ -227,11 +227,11 @@ estado de población, que lleva su propia rama):
 - **Las explicaciones al tooltip**: descripción del edificio (título), regla de la
   carretera, qué hace MOVER, por qué retirar trabajadores, tasa de cancelación, de
   dónde salen los topes del ejército, la intro y las ramas del árbol tecnológico, el
-  lore de cada tecnología, la frase de cada grupo del menú. En táctil no hay tooltip
-  (no existe "mantener pulsado para leer"): lo movido tiene que estar también en la
-  ayuda (guía rápida, guía de edificios, consejos del índice de AYUDA). Lo que el
-  jugador necesita para decidir (coste, motivo de bloqueo, producción, tiempo) no se
-  mueve.
+  lore de cada tecnología, la frase de cada grupo del menú. En táctil el tooltip se lee
+  **manteniendo pulsado** (§9, `TouchTooltip`, desde 2026-10-05), y aun así lo que
+  importa tiene que estar también a la vista o en la ayuda: el lore y la frase de rama
+  del árbol tecnológico salen en la ficha de la tecnología elegida. Lo que el jugador
+  necesita para decidir (coste, motivo de bloqueo, producción, tiempo) no se mueve.
 - **Nada repetido**: ni el nombre del recurso junto a su icono, ni "Modo: Campaña"
   en cada pausa, ni una línea del parte que diga lo mismo que su título.
 - **Medir**: `tools/texto_probe.gd` fotografía cada panel y overlay
@@ -243,7 +243,7 @@ estado de población, que lleva su propia rama):
 ## 7. Disposición por tamaño de lienzo
 
 - **< 1080 px de ancho** (tablet 4:3 con escala, 150 %…): la columna central
-  (Tormenta y objetivo) baja a la columna izquierda
+  (la Tormenta) baja a la columna izquierda
   (`UILayoutConfig.COLUMN_NARROW_WIDTH`, `COLUMN_SLOTS`), los avisos pasan al
   centro encima de CONSTRUIR (`COLUMN_NARROW_SLOTS`) y solo queda el globo del
   menú ☰. El indicador de la Tormenta, que normalmente gana a las ventanas
@@ -385,6 +385,48 @@ la cruceta panea cada frame, zoom y giro siguen de forma continua
 (`HOLD_ZOOM_PER_SEC`, `hold_rotate_degrees_per_sec` = 90°/s tras el paso de 45°),
 R un cuarto de vuelta cada 0,45 s. CANCELAR no repite.
 
+### Mantener pulsado para leer (`TouchTooltip`)
+
+Decisión de Bryan (2026-10-05): con el dedo, los tooltips se leen manteniendo
+pulsado. `scripts/ui/TouchTooltip.gd` es una `CanvasLayer` (capa 50) hija de
+`InputService`: sobrevive a las recargas de escena y corre en pausa
+(`PROCESS_MODE_ALWAYS`, el ☰ MENÚ pausa el árbol). Mira la entrada en `_input`, antes
+que la interfaz:
+
+| Gesto | Qué pasa |
+|---|---|
+| Toque corto | Pulsa como siempre. El gesto ni se entera |
+| Dedo quieto `GameConfig.touch_tooltip_hold_sec` (0,5 s) sobre un control con tooltip | Burbuja con el texto encima del dedo; el botón **no** se pulsa |
+| Levantar el dedo | Cierra la burbuja. El soltar no llega al botón |
+| Mover el dedo más que `InputService.touch_slop_px()` | Cancela: es un arrastre (mapa o lista) |
+| Segundo dedo | Cancela o cierra: pellizco, giro o tocar fuera |
+| Botones que actúan al tocar (`ACTION_MODE_BUTTON_PRESS`) | No se leen: la cruceta, el zoom y el giro repiten al mantener (abajo) |
+
+- **Qué control.** `TouchTooltip.control_at()` busca el `Control` bajo el dedo como la
+  interfaz: la capa más alta, el último hijo, visible, que no sea `IGNORE` y que no
+  esté recortado por un `ScrollContainer`. Si no tiene tooltip, el primer padre que lo
+  tenga (`tooltip_owner`), igual que el tooltip del ratón. Un fondo `STOP` (el de un
+  modal) tapa lo de debajo: sin burbuja.
+- **Sin pulsar.** Al salir la burbuja, el botón recibe un "soltar" lejos de todo
+  control (el mismo truco que `DragScroll`): no se dispara y no se queda hundido. El
+  soltar del ratón emulado al levantar el dedo se come.
+- **Con DragScroll.** Arrastrar una lista manda ese soltar-lejos: el gesto lo ve y se
+  cancela, aunque `DragScroll` se quede los movimientos.
+- **La burbuja.** Estilo `UITheme.make_hud_card_style`, texto "body" (sigue el tamaño
+  de texto de Ajustes), 360 px de ancho máximo con ajuste de línea, centrada sobre el
+  dedo y 56 px por encima (debajo si no cabe), nunca fuera de la pantalla
+  (`bubble_position`, pura).
+- **Solo táctil.** Activo cuando `DeviceProfile.input_style()` es `touch` (tablet,
+  móvil, controles táctiles forzados o un toque real en esta sesión). Con ratón no
+  llega ningún toque, así que en PC siguen los tooltips de Godot.
+- **El mapa.** Los edificios y yacimientos del mapa no son `Control` y no tienen
+  tooltip (su información está en BuildingInfoPanel): mantener pulsado sobre el mapa
+  no enseña nada. Sí funciona sobre todo el HUD (fichas de recursos, Tormenta,
+  menú…).
+- **Ayuda.** La guía rápida acaba con una línea, y AYUDA tiene la entrada "Leer qué es
+  cada cosa" (`guide_read`), con `Tr.ti("QG_READ_HINT")`: "Mantén pulsado un botón o
+  un icono para leer qué es" con el dedo, "Pasa el ratón por encima…" con ratón.
+
 ### Controles semitransparentes
 
 `GameConfig.ui_touch_controls_opacity` (0,45 de serie, 15–100 %), en
@@ -406,7 +448,9 @@ zoom.
 
 ### Tests y sonda
 
-`tests/input/test_twist_gesture.gd`, `tests/ui/test_touch_hold_opacity.gd`,
+`tests/input/test_twist_gesture.gd`, `tests/input/test_touch_tooltip.gd` (toque corto
+pulsa, largo enseña y no pulsa, moverse o un segundo dedo cancelan, en PC no hace
+nada), `tests/ui/test_touch_hold_opacity.gd`,
 `tests/ui/test_touch_passthrough.gd`, `tests/ui/test_touch_placement.gd` (3D y
 2D). La sonda con ventana del diagnóstico (fuera del repositorio) sirvió para el mapa
 de bloqueo y el recorrido completo con toques sintéticos; en el repositorio, los
@@ -430,15 +474,18 @@ flujos de `qa/maestro/` recorren lo mismo en el emulador de tableta. Siempre con
 - La barra de recursos (ResourceHUD) es un panel STOP: es de verdad, pero tapa
   el mapa en la esquina (ahora ~350x75 en PC con seis fichas, más bajo que la
   barra y la tarjeta de estado de antes juntas).
-- Tooltips con el dedo: Godot no los enseña al tocar y el proyecto no tiene
-  "mantener pulsado para ver la ayuda" en el HUD (mantener pulsado solo repite
-  en los controles en pantalla, §9). El equivalente es el toque en una ficha,
-  que despliega el detalle con las mismas palabras.
+- Tooltips con el dedo: se leen manteniendo pulsado (§9). Los objetos del mapa
+  (edificios, yacimientos) no tienen tooltip que leer: mantener pulsado sobre el
+  mapa no enseña nada.
 - En tablet 16:10 (lienzo ~1113 px) con los cuatro recursos y la moral a la
   vista, la fila de recursos pasa del borde que deja libre la columna central y
-  la Tormenta y el objetivo bajan a la columna izquierda (`is_column_narrow()`,
+  la Tormenta baja a la columna izquierda (`is_column_narrow()`,
   el mismo mecanismo que ya existía con LIMPIAR o letra grande). Con oro,
   madera y obreros (eras 1-2) no pasa.
-- Un `settings.cfg` que nombre la tarjeta retirada (`NotificationPanel.status`,
-  oculta o movida) carga sin ella: `GameConfig.load_user_settings()` la quita
+- Un `settings.cfg` que nombre un elemento retirado (la tarjeta de estado
+  `NotificationPanel.status` o la franja de objetivo `NotificationPanel.objective`,
+  ocultos o movidos) carga sin él: `GameConfig.load_user_settings()` lo quita
   (`HudRegistry.RETIRED`).
+- `UILayoutConfig.CENTER_COLUMN_HALF_WIDTH` sigue en 220 (se midió con la franja de
+  objetivo, de 440 px): la Tormenta (380) cabe con margen y así no se mueven los
+  umbrales de las tablets.

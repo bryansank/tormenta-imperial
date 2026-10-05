@@ -70,6 +70,16 @@ TechTreePanel shows 3 columns (one per branch) with 5 tier buttons each:
 - Colored = available for research
 - Gray = locked (prerequisites not met or already researching)
 
+**Tapping a card chooses it, it does not research it** (2026-10-05). Every card can be
+tapped, locked ones too. Beside the branches (below them on a canvas under 880 px,
+`TechTreePanel.detail_below`) a detail card shows the chosen tech: name, tier and
+branch, its lore, the branch's sentence, the cost as icons (`TextKit.cost_row`, what is
+missing in red), the time (`TextKit.short_time`), the advantage, the requirement
+("Sin requisitos" or "Requiere: …") and why it cannot start, plus the **INVESTIGAR**
+button, the only one that starts research. On opening it shows the tech in progress,
+or the first one that can be researched. The chosen card has a brass border. Tests:
+`tests/ui/test_tech_detalle.gd`.
+
 Progress bar shown during active research.
 
 ## Key Files

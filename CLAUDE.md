@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1540 tests in 117 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1700 tests in 133 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -69,7 +69,7 @@ holds a service's state of its own.
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
 | 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 111 signals in ~27 categories (`docs/10-signals-reference.md`) |
-| 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch |
+| 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (40x40 to 48x48, even sides, `grid_size_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed, building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
 | 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave, new game (`request_new_game()` → mode picker), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
@@ -120,7 +120,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- MarketPanel (CanvasLayer 11) -- buy/sell UI, opened from a Market building (not from the menu)
   +-- ProgressPanel (CanvasLayer 11) -- milestones + era display
   +-- VictoryScreen (CanvasLayer 20) -- victory overlay
-  +-- NotificationPanel (CanvasLayer 11) -- toasts (only warning, danger and notice) + objective line + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips)
+  +-- NotificationPanel (CanvasLayer 11) -- toasts (only warning, danger and notice) + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips; the objective strip at the top centre is gone too, 2026-10-05: the next step lives in ¿QUÉ HACER?)
   +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI, opened from a Laboratory building (not from the menu)
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step()
   +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign
@@ -153,7 +153,7 @@ Created at runtime, not in either .tscn:
 ```
 
 UI panels are positioned by `UILayoutManager` using the slot definitions in
-`scripts/ui/UILayoutConfig.gd` (21 named slots — 14 screen areas and 7 help-callout
+`scripts/ui/UILayoutConfig.gd` (19 named slots — 13 screen areas and 6 help-callout
 anchors (`tip_*`) —, `NARROW_SLOTS` / `COLUMN_SLOTS` for narrow canvases, panel->slot map, slot
 conflicts).
 `UIManager.open_panel()` handles stacking and closes conflicting panels.
@@ -612,7 +612,7 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 109 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 133 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
@@ -666,7 +666,7 @@ tormenta-imperial/
 |   |   +-- ModalKit.gd              # Builds the war-report / dialog cards from UITheme pieces
 |   |   +-- PauseMenu.gd, TitleMenu.gd, NewGameDialog.gd, PauseWatcher.gd
 |   |   +-- BattleScreen.gd, SkirmishPanel.gd, WarReportScreen.gd, AuditWaveBanner.gd, AuditDefeatScreen.gd
-|   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd
+|   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd, TouchTooltip.gd
 |   |   +-- HelperPanel.gd, HelpCallout.gd, HelpCatalog.gd, HelpTargets.gd, HelpIndexPanel.gd
 |   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the procedural colony flags
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
