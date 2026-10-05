@@ -10,18 +10,23 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 - **Position:** Top-left card (slot `top_left`)
 - **Shows:** Unlocked resource amounts (gold, wood, then steel/oil when unlocked) and ONE shared storage bar labelled "ALMACÉN COMPARTIDO 500 / 600"
 - **Behavior:** Resource values update in real-time via `EventBus.resource_changed`. Each number has its name in a tooltip; a tap (or click) on a number or on the storage row unfolds a row per resource with name, amount and a colour swatch that is the legend of the storage bar, plus one line explaining the shared cap. The bar turns red when full. Animates glow when a new resource unlocks.
+- **TALLER row** (2026-09-28): the workshop materials (planks, ingots, beams, fuel), outside the shared bar; the row appears once one material is unlocked or held.
 - **Layer:** 10
 
 ### ConstructionMenu (`scripts/ui/ConstructionMenu.gd`)
 - **Position:** Bottom center: a big CONSTRUIR button (240x64, brass border), ALWAYS visible — it used to appear only while the ☰ column was open
-- **Shows:** Scrollable list of all non-core buildings from `data/buildings/`
-- **Behavior:** Each button shows name, size, cost, production, prerequisites, worker requirements. Buildings requiring locked resources are grayed out. Rebuilds when resources unlock.
+- **Shows:** Scrollable list of all non-core buildings from `data/buildings/` (15 cards), with a category filter; the category colour is only the stripe of each card (docs/24)
+- **Behavior:** Each card shows its cost (red when it cannot be paid). Cards are picked on release inside them, and locked ones can be tapped too: the detail says everything that is missing (resource to unlock and what brings it, previous buildings by translated name, limit, workers, cost). The cost sits at the top of the detail, before the preview; when something blocks the build it is said next to the button ("Te falta: 20 Madera") and the button does not start. The detail also states the road rule. Columns follow the width. Rebuilds when resources unlock.
+- **Placing:** one building per placement — after it, placement mode ends; only decorations, roads and `repeat_placement` buildings stay in hand (`PlacementRules.keeps_placing()`).
 - **Layer:** 12
 
 ### BuildingInfoPanel (`scripts/ui/BuildingInfoPanel.gd`)
 - **Position:** Right side, full height
 - **Shows:** Selected building/deposit details
-- **Sections:** Title, level, description, production info, construction progress, upgrade button+cost, process actions (via ProcessActionsPanel), move/demolish buttons, demolish confirmation
+- **Sections:** Title, level, description, production info, construction progress, upgrade button+cost with what the next level gives (only on buildings whose upgrade does something), process actions (via ProcessActionsPanel), move/demolish buttons, demolish confirmation
+- **RETIRAR / PONER TRABAJADORES** on every building that uses workers, with a line saying how many it frees or takes (or "sin veta" when its deposit is gone)
+- **ABRIR MERCADO / INVESTIGAR** on the Market and the Laboratory (`SCREENS`): the only way to open `MarketPanel` and `TechTreePanel`; disabled while the building has no road
+- **Deposits:** uses left, plus the difference between mining it by hand (it runs out, holds 2 workers, needs a road) and putting its specialised building next to it (produces without using it up)
 - **Layer:** 10
 
 ### ProcessActionsPanel (`scripts/ui/ProcessActionsPanel.gd`)
@@ -30,7 +35,7 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 - **Behavior:** Hides processes that use locked resources. Shows progress bar during active process. Disables buttons while process running or building constructing.
 
 ### MarketPanel (`scripts/ui/MarketPanel.gd`)
-- **Position:** Center overlay, opened from ☰ MENÚ → COLONIA → Mercado
+- **Position:** Center overlay, opened from a Market building (ABRIR MERCADO in its BuildingInfoPanel); no menu entry since 2026-09-28
 - **Shows:** Buy/sell prices for each unlocked resource, amount selector (+-5), buy/sell buttons, gold balance
 - **Behavior:** Prices update via `EventBus.market_prices_updated`. Rebuilds when resources unlock.
 - **Layer:** 11
@@ -57,7 +62,7 @@ There is ONE menu (it replaced the "II" pause button and the ☰ sidebar, which
 lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - **Button:** "☰ MENÚ", top-right, finger-sized, always visible in play (hidden while the menu itself is open). No other menu button exists; the old sidebar buttons of each panel stay hidden (nobody emits `sidebar_toggled(true)` any more)
 - **Card:** title, "Modo: X", and two groups side by side (one column with scroll below 700 px):
-  - **COLONIA** — ¿Qué hacer?, Progreso, Mercado (from the ECONOMY phase), Tecnología, Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode). Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
+  - **COLONIA** — ¿Qué hacer?, Progreso, Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode), Registro (the activity log). Mercado and Tecnología left the menu on 2026-09-28: they open from their buildings. Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
   - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Historia (closes the menu, then `TutorialManager.show_prologue()` replays the prologue, docs/23), Menú principal, Guardar y salir
 - **Behavior:**
   - Real pause while open (`get_tree().paused`); tapping the backdrop resumes.
@@ -77,13 +82,14 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - All built with `ModalKit` (`scripts/ui/ModalKit.gd`), which only places UITheme pieces
 
 ### NotificationPanel (`scripts/ui/NotificationPanel.gd`)
-- **Position:** Top-left status bar (pop/workers/morale), bottom-left toasts, left side log panel
-- **Shows:** "Habitantes: 26 de 32", "Obreros: 14 trabajan, 12 libres", "Moral 72 %: producción x1.1" (tooltips per row; a tap on the card unfolds the three explanations), the REGISTRO DE AVISOS button, scrollable activity log, toast notifications
-- **Behavior:** Listens to `EventBus.notification_posted`. Toasts auto-fade after 4 seconds. Log stores last 50 entries.
+- **Position:** Top-left status bar (workers/morale), bottom-left toasts, left side log panel
+- **Shows:** "Trabajadores: 26 de 32", "En su puesto: 14 · libres: 12", "Moral 72 %: producción x1.1" (tooltips per row; a tap on the card unfolds the three explanations), toast notifications, scrollable activity log
+- **Behavior:** Listens to `EventBus.notification_posted`. Only `warning`, `danger` and `notice` become toasts (`shows_toast()`); routine news ("Camino construido", the population grew) goes to the log only. Toasts auto-fade after 4 seconds, at most 3 at a time (1 on a narrow screen), and drop under the CONSTRUIR window while it is open. The log stores the last 50 entries and opens from ☰ MENÚ → COLONIA → Registro (`open_log()`); the old REGISTRO DE AVISOS button on the HUD is gone. Colours come from `UITheme.notice_color(category)`.
 - **Layer:** 11
 
 ### Status badge (`scripts/buildings/BuildingStatusBadge.gd`, `scripts/view2d/StatusBadge2D.gd`)
-- Over every building that can work: a worker pictogram when it works, and "Zzz" plus WHY it is stopped when it does not: "sin obreros" (red), "parado", "en obras", "en ruinas" (`BuildingStatusBadge.reason_text`). Same text in 3D and 2D.
+- Over every building that can work: a worker pictogram when it works, and "Zzz" plus WHY it is stopped when it does not: "sin trabajadores", "sin trabajadores (retirados)", "sin carretera", "sin veta", "en ruinas", "parado" (`BuildingStatusBadge.reason_text`). Same text in 3D and 2D.
+- Under construction the badge steps aside: the construction label says "En obras 61% · faltan 16 s", with a progress bar above the building (3D and 2D).
 
 ### OnScreenControls (`scripts/ui/OnScreenControls.gd`)
 - **Position:** Bottom-right
@@ -95,7 +101,8 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 
 | Panel | Layer | What it is |
 |---|---|---|
-| `TechTreePanel` | 11 | 3 branches x 5 tiers, research progress ([11-tech-tree.md](11-tech-tree.md)) |
+| `TechTreePanel` | 11 | 3 branches x 5 tiers, research progress, what each branch and tech gives; opened from a Laboratory (INVESTIGAR) ([11-tech-tree.md](11-tech-tree.md)) |
+| `QuickGuide` | 33 | Child of `TutorialPanel`: "how the game works" in four blocks (resources, extraction, buildings and roads, progress), once per game after the prologue; the same texts are `guide_qg_*` in AYUDA |
 | `ArmyPanel` | 11 | Training slots, Military Power, upkeep, who is away on campaign |
 | `SkirmishPanel` | 11 | Commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" for the Final Audit ([15-combat.md](15-combat.md)) |
 | `BattleScreen` | 18 | The 8x8 board plus the expedition map, draft modal and final report; outside UIManager's stack so ESC cannot dismiss a fight |
@@ -138,7 +145,8 @@ Tres piezas que no se mezclan, cada una con su estilo:
 
 | Pieza | Script | Capa | Estilo | Que hace |
 |---|---|---|---|---|
-| Prologo | `PrologueScreen` (hija de `TutorialPanel`) | 32 | papel, maquina de escribir, lacre | El lore como expediente de la Regencia. Atras / Siguiente / Saltar historia, puntos de pagina, deslizar el dedo. Pausa el juego |
+| Prologo | `PrologueScreen` (hija de `TutorialPanel`) | 32 | papel, maquina de escribir, lacre | El lore en tres folios y en lenguaje claro (la firma del Emperador, la Tormenta, quienes somos), sin membrete. Atras / Siguiente / Saltar historia, puntos de pagina, deslizar el dedo. Pausa el juego |
+| Guia rapida | `QuickGuide` (hija de `TutorialPanel`) | 33 | tarjeta de `ModalKit` | Como funciona el juego en cuatro bloques. Una vez por partida, al cerrar el prologo y antes del tutorial; despues, en AYUDA |
 | Tutorial guiado | `TutorialPanel` | 19 | laton sobre metal | Coach marks sobre la interfaz real: velo con hueco, marco, flecha, una linea. Avanza cuando el jugador hace la cosa (`TutorialManager.derive_step`). "Saltar tutorial" |
 | Ayudas | `HelperPanel` (+ `HelpCallout`, `HelpCatalog`) | 14 (globos) / 19 (tarjeta) | azul acero | Una a la vez, en cola por prioridad, con ✕ y cierre solo (6-12 s, barra, pausa con el dedo encima). Cerrada = vista |
 | Indice de AYUDA | `HelpIndexPanel` (grupo `help_index`, `open()`) | pila de UIManager | metal | Lo visto y lo basico, por categoria; tocar reabre esa ayuda senalando su control. Interruptor global, guia de edificios, Repetir tutorial, Historia |
@@ -169,12 +177,20 @@ func _setup_ui() -> void:
 ## Styling
 
 Everything goes through `UITheme` (tokens, factories, `UITheme.style_tabs`).
-Historic defaults of the dark theme:
-- Background: `Color(0.08-0.12, alpha 0.85-0.96)`
-- Borders: `Color(0.7, 0.55, 0.15)` (gold accent)
-- Buttons: `_style_button(btn, bg_color)` helper (each panel has its own)
-- Font sizes: 11-18px range
-- Gold text: `Color(0.95, 0.82, 0.25)` for titles
+
+- **One palette of ten colours** (2026-09-28): `UITheme._BASE` holds surface, neutral,
+  brass, three text tones and four semantic colours; every other token is derived from
+  them in `_derive()`. Colour-blind palettes and high contrast only change base
+  colours. A new tone is a `darkened()` / `lightened()` of a palette colour, never a
+  new `Color(...)`. From 71 hand-written UI colours to 10 + 4 resource colours. Full
+  table: [24-paleta.md](24-paleta.md).
+- **Plain boxes:** the textured metal plates under panels and buttons are off
+  (`UITheme.METAL_TEXTURES = false`; the textures stay in `assets/`). Every panel and
+  button uses a flat box that follows palette, contrast and opacity.
+- **Drag to scroll:** every `ScrollContainer` drags with a finger or the mouse wherever
+  the gesture starts (`scripts/ui/DragScroll.gd`, hooked by UIManager); a drag never
+  presses what is under it, and the wheel scrolls the list instead of changing a
+  slider.
 
 ## Translation
 
