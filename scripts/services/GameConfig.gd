@@ -794,6 +794,36 @@ var tech_definitions := [
 	 "bonus": {"storage_bonus": 500, "build_speed": 0.2}},
 ]
 
+# ── Aspecto de los edificios: obra, ruina y actividad (docs/03, docs/18) ──
+
+## Fases de obra, compartidas por huella (1x1 / 2x2 / 3x3): valla con
+## materiales -> solar con cimientos -> estructura a medio levantar. Se pasa de
+## una a la siguiente cuando el progreso de la obra cruza cada umbral.
+var construction_phase_thresholds := [0.34, 0.67]
+## Cada cuanto relee la vista 3D el estado de TODOS los edificios (un solo
+## reloj para todo el mapa, no uno por edificio). Las senales de obra, ruina y
+## reparacion repintan al instante; esto solo cubre el paso de fase y el
+## encendido/apagado de la actividad.
+var building_look_sync_interval := 0.25
+## La animacion de "trabajando": hoja de 8 fotogramas en rejilla 4x2 a 12 fps.
+## La anima un shader con TIME: ni timers ni tweens por edificio.
+var building_fx_frames := 8
+var building_fx_columns := 4
+var building_fx_fps := 12.0
+## Que efecto lleva cada edificio que trabaja. "smoke": humo de chimenea;
+## "dust": serrin claro; "glow": luz que parpadea sin humo. Un edificio que no
+## esta aqui no tiene animacion de actividad. Sus columnas de humo y su luz
+## salen de la cima medida del modelo (3D) o de las chimeneas del dibujo (2D).
+var building_active_fx := {
+	"nucleo": "smoke", "gold_mine": "smoke", "foundry": "smoke", "refinery": "smoke",
+	"headquarters": "smoke", "barracks": "smoke", "sawmill": "dust",
+	"warehouse": "glow", "market": "glow", "laboratory": "glow", "tower": "glow",
+}
+## Una ruina se hunde esta fraccion de su altura en el suelo y se inclina estos
+## radianes: con el hollin y los escombros, se distingue de lejos.
+var ruin_sink_ratio := 0.38
+var ruin_tilt := 0.07
+
 # ── Duration Helpers ──
 
 func get_duration(base: float) -> float:
