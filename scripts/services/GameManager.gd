@@ -278,6 +278,7 @@ func _new_game() -> void:
 	StormManager.reset()
 	TutorialManager.reset()
 	ProductionManager.reset()
+	RankManager.reset()
 	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
 	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
 	# una partida nueva (la carga lo pisa con el del guardado).
@@ -395,7 +396,9 @@ func _load_game() -> void:
 		for entry in data["deposits"]:
 			var uses: int = entry.get("uses_remaining", -1)
 			var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
-			_map_gen.spawn_deposit(entry["id"], Vector2i(entry["cell_x"], entry["cell_y"]), uses, dep_size)
+			var dep: Node = _map_gen.spawn_deposit(entry["id"], Vector2i(entry["cell_x"], entry["cell_y"]), uses, dep_size)
+			if dep != null and bool(entry.get("access_ring", false)):
+				dep.set_meta("access_ring", true)
 
 	# Restore camera
 	if data.has("camera") and _camera and _camera.has_method("set_state"):
@@ -447,6 +450,11 @@ func _load_game() -> void:
 	# tutorial) no ha visto nada, y la intro se le ofrece al terminar la carga.
 	if data.has("tutorial"):
 		TutorialManager.load_save_data(data["tutorial"])
+
+	# Rango del gobernador. Sin la clave (partida anterior al rango) es XP 0 =
+	# rango 1. Va antes del recorte de la bolsa: su bono de almacen cuenta.
+	var rank_data: Variant = data.get("rank", {})
+	RankManager.load_save_data(rank_data if rank_data is Dictionary else {})
 
 	# La bolsa es una sola y su tope depende de la era, de los almacenes y del arbol
 	# tecnologico: hasta que los tres no estan restaurados no se sabe cuanto cabe. Por
@@ -577,6 +585,7 @@ func _write_save() -> void:
 	data["storm"] = StormManager.get_save_data()
 	data["tutorial"] = TutorialManager.get_save_data()
 	data["game_mode"] = GameMode.get_save_data()
+	data["rank"] = RankManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -637,6 +646,7 @@ func clear_save() -> void:
 	StormManager.reset()
 	TutorialManager.reset()
 	ProductionManager.reset()
+	RankManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null
@@ -679,6 +689,7 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	StormManager.reset()
 	TutorialManager.reset()
 	ProductionManager.reset()
+	RankManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null

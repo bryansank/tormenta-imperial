@@ -111,11 +111,11 @@ python herramientas/recoger.py "$RUN" "$OUT"
 | `04_construir_aserradero.yaml` | No deja construir el aserradero | Lista llena y X a la vista (`04_01`), CONSTRUIR del detalle visible (`04_02`), casillas verdes + ✓ + tutorial sin taparlo (`04_03`), aserradero en obras y oro 300→220 (`04_04`) |
 | `05_mantener_dpad.yaml` | Mantener pulsado debería repetir | Pares `05_*` con `comparar.py` |
 | `06_arrastre_vista.yaml` | El arrastre solo funciona en algunos sitios | `herramientas/analizar_arrastre.py` → tabla 4x4 y mapa |
-| `07_ayudas_cerrar.yaml` | Las ayudas no se cierran | Tras saltar el tutorial: una ayuda cada vez, con ✕ y barra (`07_00`, `07_04`), se van solas (`07_01`..`07_03`); ☰ MENÚ → AYUDA abre el índice (`07_05`) y reabre una (`07_06`) |
+| `07_ayudas_cerrar.yaml` | Las ayudas no se cierran | Tras el tutorial (ya no se salta: hay que hacerlo antes, o las ayudas no salen): una ayuda cada vez, con ✕ y barra (`07_00`, `07_04`), se van solas (`07_01`..`07_03`); ☰ MENÚ → AYUDA abre el índice (`07_05`) y reabre una (`07_06`) |
 | `08_rotar_dos_dedos.py` | El giro con dos dedos no rota | Script de adb (Maestro no tiene multitouch). Tabla pellizco/giro. **Ojo:** los toques de `adb emu event send` llegan a Android (se ven con "Ubicación del puntero") pero **no a la app**: con logs en `InputService` no entra ni un evento, mientras que `adb shell input swipe` (el control de un dedo) sí. En el emulador el resultado de dos dedos no es concluyente; lo fija `tests/input/test_twist_gesture.gd` y hay que probarlo en una tableta real |
 
 `comun/` contiene los trozos compartidos: `arrancar`, `nueva_partida`, `saltar_lore`
-("Saltar historia" del prólogo), `saltar_tutorial`, `en_partida` (los cuatro seguidos),
+("Saltar historia" del prólogo), `saltar_tutorial` (desde 2026-10-04 solo espera: el tutorial ya no se salta), `en_partida` (los cuatro seguidos),
 `probar_ajustes`, `esperar` y `salida`. Las coordenadas son las de la interfaz tras #31
 (☰ MENÚ arriba a la derecha, CONSTRUIR abajo al centro), #32 (prólogo y tutorial) y
 #34 (✓ CONSTRUIR AQUÍ).

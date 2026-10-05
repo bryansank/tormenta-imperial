@@ -1,8 +1,16 @@
 class_name ProcessActionsPanel
 ## Manages process/mining buttons and progress display.
 ## Uses UITheme card buttons for consistent styling.
+##
+## Menos texto (2026-10-04): cada tarjeta es "Nombre" y una linea
+## "15 madera → 25 madera · 5 oro · 30 s"; la tasa de cancelacion normal va en el
+## tooltip de Cancelar (la de la Tormenta, que cuesta el doble, sigue a la vista).
+
+const TextKit := preload("res://scripts/ui/TextKit.gd")
 
 var _processes_box: VBoxContainer
+## Cuantas tarjetas de proceso ofrece el panel ahora (clear() libera en diferido).
+var _count := 0
 var _progress_container: VBoxContainer
 var _progress_bar: ProgressBar
 var _progress_label: Label
@@ -40,8 +48,14 @@ func _on_cancel_pressed() -> void:
 	set_buttons_disabled(false)
 
 func clear() -> void:
+	_count = 0
 	for child in _processes_box.get_children():
 		child.queue_free()
+
+## Tarjetas (o avisos) que ofrece el panel. Sin ninguna, el panel del edificio
+## esconde la cabecera "Acciones" en vez de decir "Sin acciones disponibles".
+func action_count() -> int:
+	return _count
 
 func populate_building(node: Node, data: BuildingData, is_constructing: bool) -> void:
 	clear()
@@ -50,10 +64,6 @@ func populate_building(node: Node, data: BuildingData, is_constructing: bool) ->
 		if _process_has_locked_resource(proc):
 			continue
 		_add_process_card(proc, node)
-	if processes.is_empty() and not data.is_core:
-		var no_actions := UITheme.make_label(Tr.t("LBL_NO_ACTIONS"), "small", UITheme.TEXT_DIM)
-		no_actions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_processes_box.add_child(no_actions)
 	if is_constructing:
 		set_buttons_disabled(true)
 	update_progress(node, false, data)
@@ -65,6 +75,7 @@ func populate_deposit(node: Node, deposit_id: String) -> void:
 		locked_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		locked_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		_processes_box.add_child(locked_label)
+		_count += 1
 		_progress_container.visible = false
 		return
 	var mining := ProcessManager.get_mining_info(deposit_id)
@@ -88,22 +99,25 @@ func update_progress(node: Node, is_deposit: bool, data: BuildingData) -> void:
 	_progress_container.visible = true
 	_progress_bar.value = ProcessManager.get_progress(node)
 	var remaining: float = active["remaining"]
-	_progress_label.text = Tr.t("FMT_PROGRESS") % [ProcessManager.get_active_name(node), ceili(remaining)]
+	_progress_label.text = Tr.t("FMT_PROGRESS_SHORT") % [ProcessManager.get_active_name(node), TextKit.short_time(remaining)]
 	_update_cancel_text(node)
 	set_buttons_disabled(true)
 
-## El boton dice exactamente cuanto devuelve, y la linea de encima por que. Con
-## la Tormenta en marcha lo dice en rojo: cancelar entonces cuesta el doble.
+## El boton dice exactamente cuanto devuelve. La tasa normal va en su tooltip;
+## con la Tormenta en marcha se dice a la vista y en rojo: cancelar entonces
+## cuesta el doble.
 func _update_cancel_text(node: Node) -> void:
 	var refund := ProcessManager.get_refund_preview(node)
 	if refund.is_empty():
 		_cancel_btn.text = Tr.t("LBL_CANCEL_NO_REFUND")
 	else:
-		_cancel_btn.text = Tr.t("FMT_CANCEL_REFUND") % Tr.amount_list(refund)
+		_cancel_btn.text = Tr.t("FMT_CANCEL_REFUND") % TextKit.cost_text(refund)
 	var pct := int(round(GameConfig.get_cancel_refund_ratio() * 100.0))
 	var stormy := pct < int(round(GameConfig.cancel_refund_ratio * 100.0))
-	_rate_label.text = Tr.t("LBL_CANCEL_RATE_STORM") % pct if stormy else Tr.t("LBL_CANCEL_RATE") % pct
-	UITheme.set_label_color(_rate_label, UITheme.DANGER if stormy else UITheme.TEXT_DIM)
+	_rate_label.text = Tr.t("LBL_CANCEL_RATE_STORM") % pct if stormy else ""
+	_rate_label.visible = stormy
+	_cancel_btn.tooltip_text = Tr.t("LBL_CANCEL_RATE_STORM") % pct if stormy else Tr.t("LBL_CANCEL_RATE") % pct
+	UITheme.set_label_color(_rate_label, UITheme.DANGER)
 
 func set_buttons_disabled(disabled: bool) -> void:
 	for child in _processes_box.get_children():
@@ -114,54 +128,52 @@ func _add_process_card(proc: Dictionary, node: Node) -> void:
 	var btn := Button.new()
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	var lines: Array = []
-	lines.append(Tr.t(proc["name"]))
-
-	if proc.has("cost") and not proc["cost"].is_empty():
-		var cost_parts: Array = []
-		for res_id in proc["cost"]:
-			cost_parts.append("-%d %s" % [proc["cost"][res_id], Tr.res_name(res_id)])
-		lines.append(Tr.t("FMT_COST") % " | ".join(cost_parts))
-
-	var produce_parts: Array = []
-	for res_id in proc["produces"]:
-		produce_parts.append("+%d %s" % [proc["produces"][res_id], Tr.res_name(res_id)])
-	lines.append(Tr.t("FMT_PRODUCES") % " | ".join(produce_parts))
-
-	lines.append(Tr.t("FMT_DURATION") % int(proc["duration"]))
-
-	btn.text = "\n".join(lines)
+	btn.text = process_card_text(proc)
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	UITheme.style_card_button(btn, UITheme.CARD_BG, UITheme.ACCENT)
 	btn.pressed.connect(func(): _start_process(node, proc))
 	_processes_box.add_child(btn)
+	_count += 1
+
+## "Madera refinada\n15 madera → 25 madera · 5 oro · 30 s". Estatica para las
+## pruebas: coste, producto y tiempo, sin "Costo:", "Produce:" ni "Duracion:".
+static func process_card_text(proc: Dictionary) -> String:
+	var line := ""
+	if proc.has("cost") and not proc["cost"].is_empty():
+		line = TextKit.cost_text(proc["cost"]) + " → "
+	line += TextKit.cost_text(proc["produces"], "+")
+	line += " · " + TextKit.short_time(float(proc["duration"]))
+	return "%s\n%s" % [Tr.t(proc["name"]), line]
 
 func _add_mining_card(mining: Dictionary, node: Node, deposit_id: String) -> void:
 	var btn := Button.new()
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	var lines: Array = []
-	lines.append(Tr.t(mining["name"]))
-
-	var parts: Array = []
-	for res_id in mining["produces"]:
-		parts.append("+%d %s" % [mining["produces"][res_id], Tr.res_name(res_id)])
-	lines.append(Tr.t("FMT_PRODUCES") % " | ".join(parts))
-	lines.append(Tr.t("FMT_DURATION") % int(mining["duration"]))
-	lines.append(Tr.t("LBL_MINE_WORKERS") % GameConfig.mining_workers)
 	# Sin carretera hasta la veta o sin trabajadores libres, no se puede: se dice.
 	var block: String = ProcessManager.mining_blocker(node)
-	if block != "":
-		lines.append("✖ " + Tr.t(block))
-		btn.disabled = true
-
-	btn.text = "\n".join(lines)
+	btn.text = mining_card_text(mining, block)
+	btn.disabled = block != ""
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	UITheme.style_card_button(btn, UITheme.POSITIVE.darkened(0.6), UITheme.POSITIVE)
 	btn.pressed.connect(func(): _start_mining(node, deposit_id))
 	_processes_box.add_child(btn)
+	_count += 1
+
+## "Talar\n+10 madera · 30 s · 2 trabajadores" y, si no se puede, "✖ motivo".
+static func mining_card_text(mining: Dictionary, block: String = "") -> String:
+	var line := "%s · %s · %s" % [
+		TextKit.cost_text(mining["produces"], "+"),
+		TextKit.short_time(float(mining["duration"])),
+		Tr.t("LBL_WORKERS_SHORT") % GameConfig.mining_workers,
+	]
+	var text := "%s\n%s" % [Tr.t(mining["name"]), line]
+	if block != "":
+		text += "\n✖ " + Tr.t(block)
+	return text
 
 func _process_has_locked_resource(proc: Dictionary) -> bool:
 	if proc.has("cost"):

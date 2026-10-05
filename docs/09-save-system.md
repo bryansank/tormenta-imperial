@@ -107,6 +107,12 @@ Since 2026-09-28 the save also carries:
 - per building, `workers_off` when the player took its workers off.
 - the four workshop materials, alongside the resources.
 
+`rank` (since 2026-10-04): the governor rank, `{"xp": int, "flag": String, "color": String}`
+(`RankManager`). The rank and its bonuses are derived from `xp`, so loading is
+idempotent. A save without it is XP 0 = rank 1 with the default flag and colour; a
+flag or colour above the saved rank falls back to the default. See
+[06-progression-victory.md](06-progression-victory.md) §Governor rank.
+
 `game_mode` (docs/20-modos-de-juego.md) is read **first** on load. A save without
 it is a Campaign in progress. `"result": "defeat"` marks a lost Survival run: the
 save is kept but sealed (GameManager never writes it again), and Survival skips the

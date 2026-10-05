@@ -49,6 +49,14 @@ var _gesture_lock: String = ""
 func _ready() -> void:
 	# Ensure mouse cursor is always visible
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# "Mantener pulsado para leer" (docs/21 §9): hijo de este autoload para que
+	# sobreviva a las recargas de escena.
+	var tooltip: Node = (load("res://scripts/ui/TouchTooltip.gd") as GDScript).new()
+	add_child(tooltip)
+
+## El nodo del gesto "mantener pulsado para leer" (scripts/ui/TouchTooltip.gd).
+func touch_tooltip() -> Node:
+	return get_node_or_null("TouchTooltip")
 
 ## La aplicacion se va a segundo plano con el dedo puesto. El motor NO purga
 ## nada por su cuenta al perder el foco: reenvia lo que mande el sistema y ya.

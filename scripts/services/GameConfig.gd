@@ -254,11 +254,19 @@ func get_material_of(building_id: String) -> String:
 
 # ── Mining Data ──
 
+## Era 1 de 8-12 minutos (decision de Bryan, 2026-10-04). Con 20 de oro cada
+## 12 s y 20 de madera cada 8 s, dos obreros minando a mano sacaban 2,5 veces lo
+## que una Mina de oro con tres, y el jugador que minaba llegaba a la Fundicion
+## en el minuto 3,8 (tools/line_probe.gd --active=1, docs/22-linea-jugable.md).
+## Ahora la veta y el bosque rinden por obrero lo mismo que su extractor (oro
+## 12/30 s = 12 por obrero y minuto, la Mina 13,3; madera 10/20 s = 15, el
+## Aserradero 15): minar sirve para arrancar o para un apuro, no es la via rapida.
+## Hierro y petroleo (eras 2-3) no cambian.
 var mining_data := {
-	"gold_vein": {"id": "mine_gold", "name": "PROC_MINE_GOLD", "duration": 12.0, "produces": {"gold": 20}},
+	"gold_vein": {"id": "mine_gold", "name": "PROC_MINE_GOLD", "duration": 30.0, "produces": {"gold": 12}},
 	"iron_deposit": {"id": "mine_iron", "name": "PROC_MINE_IRON", "duration": 18.0, "produces": {"steel": 15}},
 	"oil_well": {"id": "mine_oil", "name": "PROC_MINE_OIL", "duration": 22.0, "produces": {"oil": 10}},
-	"forest": {"id": "mine_wood", "name": "PROC_MINE_WOOD", "duration": 8.0, "produces": {"wood": 20}},
+	"forest": {"id": "mine_wood", "name": "PROC_MINE_WOOD", "duration": 20.0, "produces": {"wood": 10}},
 }
 
 ## Trabajadores que ocupa sacar una veta a mano mientras dura (2026-09-28):
@@ -395,6 +403,10 @@ var hold_repeat_delay_sec := 0.3
 var hold_repeat_interval_sec := 0.08
 ## Grados por segundo que gira la camara con ↺/↻ mantenidos (tras el primer paso).
 var hold_rotate_degrees_per_sec := 90.0
+## Mantener el dedo quieto esto (segundos) sobre un control con tooltip lo ensena
+## en una burbuja (TouchTooltip, docs/21 §9). Un toque mas corto pulsa como
+## siempre. Mas bajo: un toque lento se queda leyendo en vez de pulsar.
+var touch_tooltip_hold_sec := 0.5
 ## Opacidad de los controles en pantalla (cruceta, zoom, giro, colocar): fondo,
 ## borde y simbolo. Al pulsar un boton se ve entero; en reposo vuelve a esto.
 ## Del dispositivo, en settings.cfg [ui] touch_controls_opacity.
@@ -535,9 +547,18 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	ui_hud_hidden = []
 	if hidden is Array:
 		for id in hidden:
-			ui_hud_hidden.append(str(id))
+			# Un elemento retirado del HUD (la tarjeta de estado) no se arrastra.
+			if not str(id) in HudRegistry.RETIRED:
+				ui_hud_hidden.append(str(id))
 	var layout: Variant = cf.get_value("interfaz", "layout", ui_layout)
 	ui_layout = layout.duplicate(true) if layout is Dictionary else {}
+	for key in ui_layout.keys():
+		var moved: Variant = ui_layout[key]
+		if moved is Dictionary:
+			for id in HudRegistry.RETIRED:
+				(moved as Dictionary).erase(id)
+			if (moved as Dictionary).is_empty():
+				ui_layout.erase(key)
 	profile_runs_finished = maxi(0, int(cf.get_value("perfil", "runs_finished", profile_runs_finished)))
 	profile_campaigns_won = maxi(0, int(cf.get_value("perfil", "campaigns_won", profile_campaigns_won)))
 
@@ -593,11 +614,12 @@ var _real_touch_seen := false
 ## Si los controles en pantalla deben verse ahora, resolviendo el "auto".
 ## Es la unica pregunta que hace OnScreenControls.
 ##
-## "auto" sigue al perfil de dispositivo (DeviceProfile): tablet y movil los
-## llevan, PC NUNCA (norma de Bryan). Ni DisplayServer.is_touchscreen_available()
-## ni un toque real los encienden en un PC: un portatil Windows tactil que se
-## toca una vez no se llena de flechas. Quien los quiera en PC elige "Siempre"
-## o el perfil Tablet.
+## "auto" = solo movil y tablet (decision de Bryan, 2026-10-04): sigue al perfil
+## de dispositivo (DeviceProfile), y en PC NUNCA. Ni
+## DisplayServer.is_touchscreen_available() ni un toque real los encienden en un
+## PC: un portatil Windows tactil que se toca una vez no se llena de flechas. El
+## portatil tactil elige "Siempre" a mano (lo dice LBL_TOUCH_AUTO_HINT en
+## Ajustes), o el perfil Tablet.
 func touch_controls_enabled() -> bool:
 	match ui_touch_controls:
 		"always":
@@ -710,6 +732,11 @@ var audio_sfx_voices := 8
 # ── Economy ──
 
 var demolish_refund_ratio := 0.5
+## Quitar un tramo de carretera que deja edificios sin conexion no se deja: se
+## resaltan esos edificios en el mapa estos segundos (docs/03, red de carreteras).
+var road_block_highlight_seconds := 4.0
+## Cuantos nombres caben en el aviso "Primero mueve: ..." (el resto, "+N").
+var road_block_max_names := 2
 var max_offline_seconds := 28800.0
 
 # ── Autosave ──
@@ -848,12 +875,163 @@ var tech_definitions := [
 	 "bonus": {"storage_bonus": 500, "build_speed": 0.2}},
 ]
 
+# ── Rango del gobernador (docs/06 §Rango) ──
+#
+# XP dentro de la partida, aparte de eras e hitos. Lo reparte RankManager
+# escuchando el EventBus; el rango se DERIVA de la XP (nunca se guarda suelto),
+# asi que cargar dos veces da el mismo rango y los mismos bonos.
+#
+# Curva: subir del rango n al n+1 cuesta 100 + 60*(n-1). Estimacion para una
+# campana de 2-4 h (sin medir aun con tools/line_probe.gd): ~4500 XP de
+# acciones (obras, mejoras, combate, tormentas, hitos) + ~1 XP por ciclo de
+# produccion, unas 9000-11000 en total. El rango 18 cae al final de la campana.
+
+## XP por fuente. Las claves son las que RankManager.XP_SOURCES conoce.
+var rank_xp_sources := {
+	"build": 15,            # construction_completed (ni calzadas ni Nucleo)
+	"build_decoration": 5,  # construction_completed de una decoracion
+	"upgrade": 25,          # building_upgrade_completed
+	"production": 1,        # production_tick: un ciclo de produccion pasiva
+	"process": 5,           # process_completed: fabricar a mano
+	"mining": 5,            # mining_completed: minar un yacimiento a mano
+	"trade": 5,             # market_trade_completed
+	"train": 10,            # unit_trained
+	"fight_won": 40,        # encounter_ended(victory) y defense_auto_resolved(victory)
+	"expedition_won": 80,   # expedition_ended(0): la campana entera vuelve con botin
+	"storm": 30,            # storm_ended: aguantar una tormenta...
+	"storm_per_severity": 10, # ...mas esto por punto de severidad
+	"milestone": 100,       # milestone_completed
+}
+
+## XP acumulada para ESTAR en cada rango (indice 0 = rango 1). 18 rangos.
+var rank_xp_thresholds := [
+	0, 100, 260, 480, 760, 1100, 1500, 1960, 2480,
+	3060, 3700, 4400, 5160, 5980, 6860, 7800, 8800, 9860,
+]
+
+## Titulo de cada rango (clave de Tr: RANK_TITLE_<n>).
+func rank_title_key(rank: int) -> String:
+	return "RANK_TITLE_%d" % clampi(rank, 1, rank_xp_thresholds.size())
+
+## Lo que da cada rango al alcanzarlo. Claves posibles:
+##   buildings   ids de edificio que se desbloquean (antes, bloqueados)
+##   limit       id -> huecos extra sobre building_limits
+##   production  fraccion sumada al multiplicador de produccion (0.01 = +1 %)
+##   storage     fraccion sobre el tope de la bolsa (0.02 = +2 %)
+##   flags       banderas de la colonia que se pueden elegir
+##   colors      colores de la colonia que se pueden elegir
+## No toca los edificios basicos ni sus eras (la linea jugable sigue igual): el
+## rango abre decoraciones, huecos extra y cosmeticos. Un edificio nuevo y
+## opcional entra aqui con `buildings`.
+var rank_rewards := {
+	1: {"flags": ["plain", "band"], "colors": ["brass", "crimson"]},
+	2: {"buildings": ["garden"]},
+	3: {"production": 0.01, "flags": ["cross"]},
+	4: {"storage": 0.02, "colors": ["steel"]},
+	5: {"buildings": ["fountain"]},
+	6: {"production": 0.01, "flags": ["diagonal"]},
+	7: {"colors": ["moss"]},
+	8: {"buildings": ["statue"], "storage": 0.02},
+	9: {"production": 0.01, "flags": ["gear"]},
+	10: {"limit": {"house": 2}},
+	11: {"colors": ["soot"]},
+	12: {"production": 0.01, "storage": 0.02, "flags": ["chevron"]},
+	13: {"limit": {"statue": 2, "fountain": 2}},
+	14: {"colors": ["copper"]},
+	15: {"production": 0.01},
+	16: {"storage": 0.02, "limit": {"tower": 1}},
+	17: {"limit": {"house": 2}},
+	18: {"production": 0.02},
+}
+
+## Banderas de la colonia, en orden de la galeria. Las dibuja ColonyFlag.
+const COLONY_FLAGS := ["plain", "band", "cross", "diagonal", "gear", "chevron"]
+## Colores de la colonia: el principal de la bandera y del Nucleo.
+var colony_colors := {
+	"brass": Color(0.80, 0.62, 0.25),
+	"crimson": Color(0.68, 0.14, 0.14),
+	"steel": Color(0.30, 0.45, 0.62),
+	"moss": Color(0.33, 0.50, 0.24),
+	"soot": Color(0.18, 0.18, 0.20),
+	"copper": Color(0.72, 0.40, 0.20),
+}
+const COLONY_COLOR_ORDER := ["brass", "crimson", "steel", "moss", "soot", "copper"]
+const COLONY_DEFAULT_FLAG := "band"
+const COLONY_DEFAULT_COLOR := "brass"
+
+## Bonos del rango, aplicados en tiempo de ejecucion por RankManager (asigna el
+## total del rango actual; nunca suma sobre lo que habia).
+var rank_production_bonus := 0.0
+var rank_storage_bonus := 0.0
+var rank_limit_bonus: Dictionary = {}
+
 # ── Aspecto de los edificios: obra, ruina y actividad (docs/03, docs/18) ──
 
 ## Fases de obra, compartidas por huella (1x1 / 2x2 / 3x3): valla con
 ## materiales -> solar con cimientos -> estructura a medio levantar. Se pasa de
 ## una a la siguiente cuando el progreso de la obra cruza cada umbral.
 var construction_phase_thresholds := [0.34, 0.67]
+## La obra de cada edificio (docs/03, "Obra por edificio"): las tres fases son
+## las mismas para todos, pero cada edificio las viste a su manera. Lo que no
+## diga su fila sale de construction_style_default. Campos:
+## - "piles": que se apila en la fase 0 (y lo que sobra en la 1), en orden:
+##   planks, beams, bricks, logs, sawdust, rivets, pipes, drums, sacks, stone,
+##   crates, sandbags, gravel, soil.
+## - "fence": la valla de la fase 0: planks, dark_planks, sheet (chapa), canvas (lona).
+## - "tarp": color de la lona (la valla de lona y la que tapa una pila).
+## - "frame": la silueta de la fase 2, que insinua el edificio: box, chimney,
+##   gable, tower, tanks, dome, plinth, basin, hall, headframe, low, mast.
+## - "frame_mat": de que son pilares y vigas: steel, wood, stone.
+## - "site_fx": lo que se mueve mientras se trabaja: sparks (soldadura, edificios
+##   de acero), dust (polvo, piedra y madera) o "" (nada mas que grua y banderin).
+## - "flag": color del banderin que ondea en la valla o en la grua.
+## - "crane": color de la grua.
+## La disposicion (donde va cada pila, la puerta, el andamio, la grua...) no
+## esta aqui: la decide la semilla de cada instancia (BuildingLook.site_layout).
+var construction_style_default := {
+	"piles": ["planks", "beams", "bricks"], "fence": "planks",
+	"tarp": Color(0.52, 0.48, 0.38), "frame": "box", "frame_mat": "steel",
+	"site_fx": "", "flag": Color(0.72, 0.13, 0.10), "crane": Color(0.95, 0.72, 0.10),
+}
+var construction_style := {
+	"nucleo": {"piles": ["stone", "beams", "rivets"], "fence": "sheet", "tarp": Color(0.36, 0.34, 0.40),
+		"frame": "dome", "frame_mat": "stone", "site_fx": "sparks", "flag": Color(0.77, 0.59, 0.16)},
+	"house": {"piles": ["sacks", "bricks", "planks"], "fence": "planks", "tarp": Color(0.62, 0.55, 0.40),
+		"frame": "gable", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.20, 0.42, 0.62)},
+	"sawmill": {"piles": ["logs", "sawdust", "planks"], "fence": "dark_planks", "tarp": Color(0.40, 0.46, 0.26),
+		"frame": "hall", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.90, 0.55, 0.12)},
+	"gold_mine": {"piles": ["gravel", "beams", "crates"], "fence": "dark_planks", "tarp": Color(0.48, 0.34, 0.20),
+		"frame": "headframe", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.93, 0.78, 0.32)},
+	"warehouse": {"piles": ["crates", "planks", "sacks"], "fence": "planks", "tarp": Color(0.30, 0.38, 0.50),
+		"frame": "hall", "frame_mat": "steel", "site_fx": "", "flag": Color(0.30, 0.55, 0.30)},
+	"foundry": {"piles": ["beams", "rivets", "bricks"], "fence": "sheet", "tarp": Color(0.45, 0.22, 0.14),
+		"frame": "chimney", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.95, 0.45, 0.08)},
+	"barracks": {"piles": ["sandbags", "crates", "beams"], "fence": "sheet", "tarp": Color(0.33, 0.37, 0.20),
+		"frame": "hall", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.72, 0.13, 0.10),
+		"crane": Color(0.42, 0.45, 0.24)},
+	"refinery": {"piles": ["pipes", "drums", "beams"], "fence": "sheet", "tarp": Color(0.18, 0.18, 0.20),
+		"frame": "tanks", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.95, 0.85, 0.20)},
+	"tower": {"piles": ["sandbags", "beams", "rivets"], "fence": "canvas", "tarp": Color(0.30, 0.33, 0.18),
+		"frame": "tower", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.72, 0.13, 0.10)},
+	"headquarters": {"piles": ["stone", "beams", "rivets"], "fence": "canvas", "tarp": Color(0.55, 0.12, 0.10),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.77, 0.59, 0.16),
+		"crane": Color(0.72, 0.13, 0.10)},
+	"market": {"piles": ["crates", "sacks", "planks"], "fence": "canvas", "tarp": Color(0.70, 0.36, 0.16),
+		"frame": "gable", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.20, 0.55, 0.50)},
+	"laboratory": {"piles": ["drums", "pipes", "crates"], "fence": "sheet", "tarp": Color(0.22, 0.36, 0.42),
+		"frame": "dome", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.45, 0.80, 0.85)},
+	"garden": {"piles": ["soil", "sacks", "planks"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.85, 0.35, 0.55)},
+	"fountain": {"piles": ["stone", "pipes", "gravel"], "fence": "planks", "tarp": Color(0.30, 0.45, 0.58),
+		"frame": "basin", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
+	"statue": {"piles": ["stone", "stone", "sacks"], "fence": "canvas", "tarp": Color(0.58, 0.54, 0.46),
+		"frame": "plinth", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.77, 0.59, 0.16)},
+}
+## La animacion de la obra (grua, polea, banderin): velocidad base de giro de
+## la grua (rad/s de la fase del vaiven) y cuanto se abre el vaiven (rad). Cada
+## instancia la multiplica por su propio factor (0,7-1,3) y arranca desfasada.
+var construction_crane_speed := 0.45
+var construction_crane_swing := 0.7
 ## Cada cuanto relee la vista 3D el estado de TODOS los edificios (un solo
 ## reloj para todo el mapa, no uno por edificio). Las senales de obra, ruina y
 ## reparacion repintan al instante; esto solo cubre el paso de fase y el
@@ -956,7 +1134,11 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 func get_building_limit(building_id: String) -> int:
 	if GameMode.all_unlocked():
 		return -1  # Sandbox: sin tope por tipo (ver docs/20-modos-de-juego.md).
-	return building_limits.get(building_id, -1)
+	var limit: int = building_limits.get(building_id, -1)
+	if limit < 0:
+		return limit
+	# Huecos extra que da el rango del gobernador (RankManager los asigna).
+	return limit + int(rank_limit_bonus.get(building_id, 0))
 
 func get_prerequisites(building_id: String) -> Array:
 	if GameMode.all_unlocked():
@@ -1182,6 +1364,28 @@ var storm_arm_phase: int = Phase.EXPANSION
 var storm_first_interval := 600.0
 var storm_first_severity := 1
 
+## La tormenta de prueba de la era 1 (decision de Bryan, 2026-10-04). Sin ella la
+## era 1 eran 8-10 minutos sin otra presion que el consumo, y la primera Tormenta
+## llegaba de nuevas con los Tasadores detras. Esta es un ensayo: Aviso, Ceniza,
+## Tormenta y calma, con los consejos del Aviso, pero SIN Diezmo, sin romper
+## edificios ni la cola y con un mordisco de moral pequeno. Una vez por partida, y
+## no arma el reloj de verdad (ese sigue llegando con la Fundicion).
+##
+## `storm_trial_at` son segundos de partida jugados (ProgressionManager), no de
+## reloj de pared; pasan por get_duration(), asi que dev_mode los comprime. Si la
+## Fundicion llega antes, la prueba ya no hace falta y no sale.
+var storm_trial_at := 300.0
+var storm_trial_severity := 1
+## Lo que deja producir durante su Ceniza y su Tormenta: bastante mas que una de
+## verdad (0,5 y 0,15). Se nota, no hunde.
+var storm_trial_production_multiplier := 0.75
+## Fraccion del mordisco de moral de una tormenta normal. Con 0,25 una de
+## severidad 1 se lleva 3 puntos en vez de 12.
+var storm_trial_morale_factor := 0.25
+
+func get_storm_trial_at() -> float:
+	return get_duration(storm_trial_at)
+
 ## One Warning in four turns out to be nothing. The player still paid to prepare,
 ## and the Regency loses nothing by crying wolf — which is the point.
 var storm_false_alarm_chance := 0.25
@@ -1398,6 +1602,10 @@ var storm_tower_garrison_unit := "artillery"
 ## la mitigación: una fila de torres no puede convertir el Diezmo en un trámite.
 var storm_tower_garrison_per_tower := 1
 var storm_tower_garrison_max := 2
+## Lo que pierde una torre cuando cae su dotacion en un tablero (Diezmo o
+## Auditoria), como fraccion de su vida maxima. Queda dañada, nunca en ruinas:
+## sigue en pie, pero hay que repararla (CombatManager.damage_towers_for_lost_crews).
+var storm_tower_crew_loss_damage := 0.4
 
 ## Cuántas dotaciones se suman a la guarnición.
 ##
@@ -1415,6 +1623,29 @@ func get_tower_garrison(standing_towers: int, garrison_size: int) -> int:
 		maxi(0, standing_towers) * storm_tower_garrison_per_tower, storm_tower_garrison_max)
 	return maxi(0, mini(crews, combat_board_size.x - maxi(0, garrison_size)))
 
+# ── Vida de la ciudad: obreros y ciudadanos que andan (solo vista, docs/04) ──
+
+## Una figura por cada tantos habitantes (obreros y ciudadanos por separado).
+var life_people_per_figure := 2
+## Tope de figuras a la vez (dentro y fuera) por perfil de dispositivo. Una
+## figura de mas cuesta una matriz por fotograma, no una llamada de dibujo:
+## el tope es por la CPU del movil, no por la GPU.
+var life_figure_cap := {"pc": 72, "tablet": 44, "phone": 26}
+## Celdas por segundo andando, y cuanto apuran el paso en el Aviso de Tormenta.
+var life_walk_speed := 1.5
+var life_hurry_multiplier := 1.8
+## Cuanto se quedan dentro (segundos reales, min y max): en el trabajo, en
+## casa entre salida y salida, en el Mercado; y parados ante una decoracion o
+## en mitad de un paseo.
+var life_stay_work := Vector2(10.0, 20.0)
+var life_stay_home := Vector2(4.0, 12.0)
+var life_stay_market := Vector2(4.0, 8.0)
+var life_pause_decoration := Vector2(3.0, 6.0)
+var life_pause_stroll := Vector2(1.0, 2.5)
+## Gancho del dia y la noche (aun no existe): la fraccion de gente que sale de
+## noche. WorkerWalkers.set_presence() la aplica cuando alguien se la pida.
+var life_night_presence := 0.4
+
 # ── Storage Helpers ──
 
 ## Tope base de la era. Una era fuera de tabla se acota a la mas cercana en vez de
@@ -1429,7 +1660,12 @@ func get_base_storage_cap(era: int) -> int:
 func get_storage_cap(warehouse_count: int, era: int = 1) -> int:
 	if GameMode.infinite_resources():
 		return sandbox_storage_cap
-	return get_base_storage_cap(era) + (warehouse_count * warehouse_storage_bonus) + tech_storage_bonus
+	var cap: int = get_base_storage_cap(era) + (warehouse_count * warehouse_storage_bonus) + tech_storage_bonus
+	# El bono del rango del gobernador es un porcentaje pequeno sobre todo lo
+	# demas (RankManager lo asigna, no lo suma: cargar dos veces no lo dobla).
+	if rank_storage_bonus > 0.0:
+		cap = int(round(float(cap) * (1.0 + rank_storage_bonus)))
+	return cap
 
 # ── Deposit Helpers ──
 
@@ -1636,6 +1872,8 @@ var final_audit_resummon_min_units := 3
 var game_mode_rules := {
 	"campaign": {
 		"storm": true,
+		# La tormenta de prueba de la era 1 (storm_trial_*).
+		"storm_trial": true,
 		"tithe": true,
 		"audit_on_capstone": true,
 		"capstone_wins": false,
@@ -1659,6 +1897,7 @@ var game_mode_rules := {
 	# los danos (tormenta menor, accidente, plaga, bandidos) no salen.
 	"builder": {
 		"storm": false,
+		"storm_trial": false,
 		"tithe": false,
 		"audit_on_capstone": false,
 		"capstone_wins": true,
@@ -1680,6 +1919,7 @@ var game_mode_rules := {
 	# la Auditoria solo cuando se invocan a mano. Sin victoria.
 	"sandbox": {
 		"storm": false,
+		"storm_trial": false,
 		"audit_on_capstone": false,
 		"victory": false,
 		"random_events": false,

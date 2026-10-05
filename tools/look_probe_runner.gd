@@ -19,6 +19,8 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	await _shoot_3d()
 	await _shoot_2d()
+	await _shoot_sites_3d()
+	await _shoot_sites_2d()
 	get_tree().quit()
 
 func _settle() -> void:
@@ -191,3 +193,115 @@ func _shoot_2d() -> void:
 	await _save("look_probe_2d.png")
 	for b in _world.get_children():
 		ProductionManager.unregister(b)
+	_world.queue_free()
+	await get_tree().process_frame
+
+# ── Obras: una fila por fase, varios edificios y dos casas ────────────
+
+## Los edificios de cada fila: estilos distintos y DOS casas (la misma obra en
+## dos sitios, que no deben verse iguales).
+const SITE_IDS := ["foundry", "sawmill", "refinery", "house", "house", "statue", "tower"]
+
+func _shoot_sites_3d() -> void:
+	_world = Node3D.new()
+	add_child(_world)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_COLOR
+	env.environment.background_color = Color(0.32, 0.4, 0.46)
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.75, 0.75, 0.8)
+	env.environment.ambient_light_energy = 0.6
+	_world.add_child(env)
+	var sun := DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-50, 35, 0)
+	sun.shadow_enabled = true
+	_world.add_child(sun)
+	var ground := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(140, 60)
+	ground.mesh = plane
+	var gmat := StandardMaterial3D.new()
+	gmat.albedo_color = Color(0.3, 0.42, 0.22)
+	ground.material_override = gmat
+	_world.add_child(ground)
+	var placer: Node3D = Placer.new()
+	var cols := SITE_IDS.size()
+	for phase in 3:
+		for i in cols:
+			var id := String(SITE_IDS[i])
+			var root: Node3D = placer._create_building_mesh(_data(id))
+			var badge := root.get_node_or_null("StatusBadge")
+			if badge:
+				root.remove_child(badge)
+				badge.free()
+			root.position = Vector3((i - (cols - 1) * 0.5) * 7.0, 0, (phase - 1) * 8.5)
+			_world.add_child(root)
+			root.get_node("LookVisual").apply({"look": LookRule.Look.CONSTRUCTION, "phase": phase})
+			var label := Label3D.new()
+			label.text = "F%d %s" % [phase, id]
+			label.font_size = 56
+			label.pixel_size = 0.012
+			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			label.outline_size = 12
+			label.position = Vector3(0, -0.2, 3.0)
+			label.no_depth_test = true
+			root.add_child(label)
+	placer.free()
+	var cam := Camera3D.new()
+	cam.position = Vector3(0, 25, 21)
+	cam.rotation_degrees = Vector3(-52, 0, 0)
+	cam.fov = 58
+	_world.add_child(cam)
+	cam.make_current()
+	await _settle()
+	await _save("look_probe_obras_3d.png")
+	# Un instante despues: la grua, el gancho y el banderin se han movido.
+	for i in 45:
+		await get_tree().process_frame
+	await _save("look_probe_obras_3d_b.png")
+	_world.queue_free()
+	await get_tree().process_frame
+
+func _shoot_sites_2d() -> void:
+	_world = Node2D.new()
+	add_child(_world)
+	var bg := ColorRect.new()
+	bg.color = Color(0.3, 0.42, 0.22)
+	bg.size = Vector2(4000, 4000)
+	bg.position = Vector2(-2000, -2000)
+	bg.z_index = -10
+	_world.add_child(bg)
+	var cam := Camera2D.new()
+	cam.zoom = Vector2(1.7, 1.7)
+	_world.add_child(cam)
+	cam.make_current()
+	var cell := View2D.cell_px()
+	var step := cell * 2.9
+	var cols := SITE_IDS.size()
+	var done := [0.1, 0.5, 0.85]
+	# Sin reloj de obra: cada fila se queda en su fase mientras se fotografia.
+	ProductionManager.process_mode = Node.PROCESS_MODE_DISABLED
+	for phase in 3:
+		for i in cols:
+			var data := _data(String(SITE_IDS[i]))
+			var b: Node2D = Building2D.new()
+			b.setup(data)
+			b.position = Vector2((i - (cols - 1) * 0.5) * step, (phase - 1) * step * 1.15)
+			_world.add_child(b)
+			var total := GameConfig.get_build_time(maxf(1.0, data.build_time))
+			ProductionManager.register_building(b, data, total * (1.0 - float(done[phase])))
+			var label := Label.new()
+			label.text = "F%d %s" % [phase, data.id]
+			label.position = Vector2(-cell, cell * 1.35)
+			label.add_theme_font_size_override("font_size", 12)
+			label.add_theme_color_override("font_outline_color", Color.BLACK)
+			label.add_theme_constant_override("outline_size", 4)
+			b.add_child(label)
+	await _settle()
+	await _save("look_probe_obras_2d.png")
+	ProductionManager.process_mode = Node.PROCESS_MODE_INHERIT
+	for b in _world.get_children():
+		ProductionManager.unregister(b)
+	_world.queue_free()
+	await get_tree().process_frame

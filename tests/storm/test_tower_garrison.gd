@@ -273,3 +273,62 @@ func test_winning_a_defence_with_towers_still_pays_nothing() -> void:
 	assert_bool(result["victory"]).is_true()
 	assert_bool(result["defense"]).is_true()
 	assert_bool(result["rewards"].is_empty()).is_true()
+
+# ── Una dotacion caida deja su torre dañada (decision de Bryan, 2026-10-04) ──
+
+func test_a_fallen_crew_leaves_its_tower_damaged_not_ruined() -> void:
+	_given_army({"vehicle": GameConfig.combat_deploy_cap})
+	_given_towers(1)
+	assert_bool(CombatManager.start_defense({"infantry": 1})).is_true()
+	_wipe(PLAYER, GameConfig.storm_tower_garrison_unit)
+	_wipe(ENEMY)
+	_let_the_board_settle()
+
+	var tower: Node = _towers[0]
+	var expected: int = TOWER_MAX_HEALTH - roundi(TOWER_MAX_HEALTH * GameConfig.storm_tower_crew_loss_damage)
+	assert_int(BuildingHealth.get_health(tower)).is_equal(expected)
+	assert_bool(BuildingHealth.is_ruined(tower)).is_false()
+	assert_bool(BuildingHealth.is_damaged(tower)).is_true()
+	assert_int(int(CombatManager.get_last_result()["towers_damaged"])).is_equal(1)
+
+func test_a_crew_that_holds_leaves_its_tower_whole() -> void:
+	_given_army({"infantry": 2})
+	_given_towers(1)
+	assert_bool(CombatManager.start_defense({"infantry": 1})).is_true()
+	_wipe(ENEMY)
+	_let_the_board_settle()
+	assert_int(BuildingHealth.get_health(_towers[0])).is_equal(TOWER_MAX_HEALTH)
+	assert_int(int(CombatManager.get_last_result()["towers_damaged"])).is_equal(0)
+
+func test_one_damaged_tower_per_fallen_crew_the_soundest_first() -> void:
+	_given_army({"vehicle": GameConfig.combat_deploy_cap})
+	_given_towers(2)
+	_towers[0].set_meta("health", 200)
+	assert_bool(CombatManager.start_defense({"infantry": 1})).is_true()
+	# Cae una sola de las dos dotaciones.
+	for unit in _units_of_side(PLAYER):
+		if unit.unit_id == GameConfig.storm_tower_garrison_unit:
+			unit.take_damage(unit.hp + 999)
+			break
+	_wipe(ENEMY)
+	_let_the_board_settle()
+	assert_int(int(CombatManager.get_last_result()["towers_damaged"])).is_equal(1)
+	assert_int(BuildingHealth.get_health(_towers[0])).is_equal(200)
+	assert_int(BuildingHealth.get_health(_towers[1])).is_less(TOWER_MAX_HEALTH)
+
+func test_a_tower_hanging_by_a_thread_is_never_ruined_by_its_crew() -> void:
+	_given_army({"vehicle": GameConfig.combat_deploy_cap})
+	_given_towers(1)
+	_towers[0].set_meta("health", 1)
+	assert_bool(CombatManager.start_defense({"infantry": 1})).is_true()
+	_wipe(PLAYER, GameConfig.storm_tower_garrison_unit)
+	_wipe(ENEMY)
+	_let_the_board_settle()
+	assert_int(BuildingHealth.get_health(_towers[0])).is_equal(1)
+	assert_bool(BuildingHealth.is_operational(_towers[0])).is_true()
+
+func test_the_war_report_says_which_towers_need_repairs() -> void:
+	var lines: Array = load("res://scripts/ui/WarReportScreen.gd").defense_lines(true, 3, {
+		"casualties": {}, "enemy_casualties": {}, "tower_crews": 1,
+		"tower_crews_lost": 1, "towers_damaged": 1, "morale_delta": 0})
+	assert_array(lines).contains([Tr.t("LBL_REPORT_TOWERS_DAMAGED") % 1])

@@ -27,11 +27,13 @@ signal page_changed(index: int)
 ## es lo unico que hay en pantalla.
 const LAYER := 32
 
-## Paginas por variante, tres como mucho: el prologo se lee de un tiron y el
+## Paginas por variante, cuatro como mucho: el prologo se lee de un tiron y el
 ## detalle queda para la partida. Cada una son claves PRO_<id>_TITLE/_BODY/_NOTE y, si la
-## pagina lleva sello de tampon, PRO_<id>_STAMP.
+## pagina lleva sello de tampon, PRO_<id>_STAMP. La "4" (2026-10-04) es la hoja
+## final antes de jugar: que vamos a hacer (construir desde cero, economia,
+## soldados, pelear contra el Imperio), sin instrucciones de botones.
 const VARIANTS := {
-	"full": ["1", "2", "3"],
+	"full": ["1", "2", "3", "4"],
 	# Constructor: no hay Tormenta ni Diezmo que explicar. La portada y un cierre
 	# propio: el expediente esta "en tramite" y no se despacha ceniza.
 	"short": ["1", "B"],

@@ -145,10 +145,12 @@ Measured by the balance line and left to the owner
    (1-25 min per game, 350-9,000 resources lost). Levers: the HQ-3 price (3,100 instead
    of 3,500 let 2 of 5 stuck games finish) or stopping steel/oil production when the
    pool is full instead of throwing it away.
-3. ❓ **A scripted test storm in era 1.** Era 1 has no Storm by design; that is 8-10 min
-   with no pressure but consumption.
-4. ❓ **How long era 1 should last.** Manual mining is the strongest era-1 lever (era 2
-   by minute 3 with it); if era 1 should last longer, the lever is `mining_data`.
+3. ✅ **A scripted test storm in era 1** (decided 2026-10-04): a gentle trial storm
+   around minute 5, no Tithe, once per game (`storm_trial_*`, docs/22 §5.5).
+4. ✅ **How long era 1 should last** (decided 2026-10-04: 8-12 min): hand mining cut
+   (`mining_data`), era 2 at 8.6-10.2 min for the default probe player. Still open: the
+   Núcleo/sawmill processes take a player who chains them to the Foundry by minute
+   4.6-4.9 (lever: `building_processes`).
 
 5. ❓ **Where the set-aside modes go.** Constructor, Supervivencia and Sandbox still
    work and load, but the New Game dialog only offers Campaña until their place is

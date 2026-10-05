@@ -36,9 +36,11 @@ A house only counts while it is joined to the Núcleo by road.
   does not produce. Its status badge says "sin trabajadores" (`BuildingStatusBadge` in
   3D, `StatusBadge2D` in 2D)
 - Player must balance: more production buildings need more houses
-- **Naming (2026-09-28):** the UI calls the people *trabajadores* everywhere. The HUD
-  card reads "Trabajadores: 12 de 17" (population of room) and "En su puesto: 8 ·
-  libres: 4"; a House "da sitio a 6"
+- **Naming (2026-09-28):** the UI calls the people *trabajadores* everywhere; a House
+  "da sitio a 6". **HUD (2026-10):** a worker icon in the resource row shows the
+  *free* workers (warning colour when a building is left without them); inhabitants,
+  room, working and withdrawn are in its tooltip. Morale is a heart icon in the same
+  row, only once the Storm is armed (docs/08, ResourceHUD)
 
 ### What takes a building out of the count
 
@@ -61,9 +63,7 @@ The workers become free for other buildings; the flag is saved per building
 (`ProcessManager.busy_mining_workers()`), discounted before the buildings are staffed.
 It also needs the deposit to touch a road joined to the Núcleo.
 
-**Walking workers:** when a building gets staffed, little figures leave the Núcleo and
-walk the road network to it (`scripts/map/WorkerWalkers.gd`, 3D and 2D, plus one every
-25 s as a shift change). View only.
+**Walking workers:** see "Life in the streets" below.
 
 ### Worker Requirements
 
@@ -167,3 +167,74 @@ On load: calls `_recalculate_all()` to rebuild derived values from buildings.
 ## Key File
 
 `scripts/services/PopulationManager.gd`
+
+## Life in the streets (view only)
+
+`scripts/map/WorkerWalkers.gd` (2026-10-04) puts the population on the roads. It
+only **reads** PopulationManager and the buildings' metas; it decides nothing,
+emits nothing and saves nothing (`tests/map/test_city_life.gd`).
+
+**Who walks**
+
+- **Workers.** Each one lives in a house and works in a building whose `staffed`
+  meta is true. They leave home through its door, walk the road network to the
+  work building's door, shrink into it, stay `life_stay_work` seconds, come out and
+  walk home, stay `life_stay_home` and go again. A building that is not staffed —
+  workers withdrawn, "sin carretera", vein gone, not enough people — gets nobody;
+  when it loses its staff, the figures inside vanish and the ones on the way turn
+  back home.
+- **Citizens** (people not working). They leave home and either stop in front of a
+  fountain, garden or statue (`life_pause_decoration`), go into the Market
+  (`life_stay_market`), or stroll to a random road cell and back. Three
+  silhouettes: man (hat), woman (skirt and bun), child (smaller, cap); workers wear
+  a helmet and carry a toolbox. Each figure gets its own colours from a small
+  palette per silhouette, and a skin tone.
+- **How many.** One figure per `life_people_per_figure` (2) people: workers count
+  the used workers, citizens the rest. Capped per device profile,
+  `life_figure_cap` = PC 72 / tablet 44 / phone 26; when the cap bites, it is split
+  in proportion. Figures inside buildings count against the cap too.
+- **Houses** are homes; with no house yet, the Núcleo is.
+
+**Doors.** A building's door is the road cell of the network that its footprint
+touches nearest to its centre; the figure enters along the half-cell between the
+road and the wall, scaling from 1 to 0.25 (alpha too in 2D). No collisions.
+
+**The Storm.** In the Warning they walk `life_hurry_multiplier` (1.8x) faster. From
+the Ash through the Storm and the Tithe everybody out shrinks indoors in 0.6 s
+and nobody leaves: the streets are empty. Back to calm, they trickle out over
+0.5-8 s. The phase is re-read on `game_load_completed`, so a save made in the Ash
+loads with empty streets.
+
+**Night hook.** There is no day/night yet. `WorkerWalkers.set_presence(fraction)`
+scales the head count; `GameConfig.life_night_presence` (0.4) is the value meant for
+the night.
+
+**How it is drawn.** Figures are plain data (`scripts/map/WalkerActor.gd`), moved by
+WorkerWalkers and drawn by one node per view: `WalkerFigures3D` keeps one MultiMesh
+per silhouette (four draw calls for the whole island; each silhouette is one merged
+mesh whose `UV.x` says body / skin / accent, coloured per instance by a tiny shader;
+the walk bob and sway go into the instance matrix; no shadows on tablet/phone) and
+writes each MultiMesh buffer once per frame. `WalkerFigures2D` draws them all in one
+`_draw`. Routes are a BFS over the road network when a figure sets out, cached per
+pair of doors; the town is re-read on signals (workers, population, construction,
+roads) and every 30 s as a safety net.
+
+**Cost** (measured with `tools/life_probe.gd`, Windows desktop, editor binary — debug
+GDScript —, with other Godot instances running on the machine): 72 figures, ~68 of
+them in the street, cost ~0.36 ms per frame to move and ~0.33 ms to fill the
+buffers (best of 15 batches of 60 frames; medians 0.39 / 0.33 ms), about 10 µs per
+figure. Frame time with and without the figures differed by 0.8-2 ms, inside the
+noise of the shared machine. A re-read of the town with ~330 buildings (250 of them
+roads) costs 3-5 ms and only happens on signals. The phone cap of 26 is about a
+third of the per-frame cost. GPU: four instanced draws. Not measured on a real
+Android device yet.
+
+**Probe.** `godot --path . -s tools/life_probe.gd -- --no-title --no-dev` with an
+`override.cfg` of its own: seeds a town (road grid, 14 houses, workshops, market,
+decorations, 80 people) and writes `docs/media/dev/life_probe_3d.png`,
+`life_probe_3d_close.png`, `life_probe_3d_ash.png`, `life_probe_3d_stress.png` and
+`life_probe_2d.png`, printing head counts and the cost.
+
+Tunables in `GameConfig` ("Vida de la ciudad"): `life_people_per_figure`,
+`life_figure_cap`, `life_walk_speed`, `life_hurry_multiplier`, `life_stay_*`,
+`life_pause_*`, `life_night_presence`.

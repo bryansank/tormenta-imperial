@@ -4,7 +4,7 @@ extends CanvasLayer
 ## Ajustes en los dos y "Menu principal" solo en uno. Ahora hay un boton
 ## "☰ MENU" en la esquina superior derecha que abre una tarjeta con dos grupos:
 ##
-##   COLONIA  Que hacer · Progreso · Mercado · Tecnologia · Ejercito ·
+##   COLONIA  Que hacer · Progreso · Colonia (rango) · Ejercito ·
 ##            Escaramuzas · Sandbox        (solo lo que ya esta disponible)
 ##   PARTIDA  Reanudar · Guardar · Ajustes · Musica · Ayuda · Historia ·
 ##            Menu principal · Guardar y salir
@@ -40,6 +40,8 @@ const MENU_BTN_MIN_W := 118.0
 const COLONY_ENTRIES := [
 	["objectives", "BTN_OBJECTIVES", "ObjectivePanel"],
 	["progress", "BTN_PROGRESS", "ProgressPanel"],
+	# Rango del gobernador: rango, XP, bandera y color de la colonia.
+	["colony", "BTN_COLONY_RANK", "RankPanel"],
 	# Mercado y Tecnologia salen del menu (2026-09-28): se abren tocando su
 	# edificio (el Mercado y el Laboratorio, BuildingInfoPanel.SCREENS).
 	["army", "BTN_ARMY", "ArmyPanel"],
@@ -195,13 +197,15 @@ func _make_group(node_name: String, title: String, hint: String) -> VBoxContaine
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	box.add_theme_constant_override("separation", 6)
-	box.add_child(UITheme.section_header(title))
-	var sub := UITheme.make_label(hint, "small", UITheme.TEXT_DIM)
-	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# Con ancho minimo: una etiqueta que envuelve sin ancho mide su minimo como
-	# una palabra por linea, y la tarjeta crecia de alto sin motivo.
-	sub.custom_minimum_size.x = 240.0
-	box.add_child(sub)
+	# La frase de cada grupo ("Los paneles de tu isla...", "La isla espera...")
+	# pasa al tooltip de su cabecera (2026-10-04): el titulo y los botones ya
+	# dicen que hay ahi. La columna conserva su ancho minimo.
+	var header := UITheme.section_header(title)
+	header.name = "Header"
+	header.mouse_filter = Control.MOUSE_FILTER_PASS
+	header.tooltip_text = hint
+	header.custom_minimum_size.x = 240.0
+	box.add_child(header)
 	_groups.add_child(box)
 	return box
 
@@ -372,6 +376,9 @@ func open_pause() -> void:
 	_open = true
 	_status.visible = false
 	_mode_label.text = Tr.t("LBL_MODE_CURRENT") % GameMode.display_name()
+	# Solo se juega Campana (2026-09-28): "Modo: Campana" en cada pausa no dice
+	# nada. Se ensena cuando la partida es de otro modo (los apartados).
+	_mode_label.visible = GameMode.current != GameMode.Mode.CAMPAIGN
 	_refresh_entries()
 	_relayout()
 	_root.visible = true

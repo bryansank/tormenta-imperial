@@ -143,3 +143,37 @@ func test_the_on_screen_layer_obeys_the_setting_live() -> void:
 	GameConfig.set_touch_controls("never")
 	await await_idle_frame()
 	assert_bool(controls.visible).is_false()
+
+func test_auto_on_a_touch_laptop_stays_off_however_many_touches() -> void:
+	# Portatil Windows tactil: perfil PC detectado, toques reales, pantalla que se
+	# declara tactil. "Automatico" es solo movil y tablet: nada de eso lo enciende.
+	var saved_profile := GameConfig.ui_device_profile
+	GameConfig.ui_device_profile = "auto"
+	GameConfig.ui_touch_controls = "auto"
+	GameConfig._real_touch_seen = false
+	for i in 5:
+		GameConfig.notice_real_touch()
+	var auto_on := GameConfig.touch_controls_enabled()
+	GameConfig.ui_touch_controls = "always"
+	var always_on := GameConfig.touch_controls_enabled()
+	GameConfig.ui_device_profile = saved_profile
+	assert_str(DeviceProfile.detected()).is_equal(DeviceProfile.PC)
+	assert_bool(auto_on).is_false()
+	# Lo que le queda al portatil tactil: "Siempre".
+	assert_bool(always_on).is_true()
+
+func test_the_setting_tells_a_touch_laptop_to_pick_always() -> void:
+	assert_str(Tr.t("OPT_TOUCH_AUTO")).contains("tablet")
+	assert_str(Tr.t("LBL_TOUCH_AUTO_HINT")).contains(Tr.t("OPT_TOUCH_ALWAYS"))
+	var panel = load("res://scenes/ui/SettingsPanel.tscn").instantiate()
+	add_child(panel)
+	panel.toggle()
+	var hint: Label = panel.find_child("TouchAutoHint", true, false)
+	var found: bool = hint != null
+	var text: String = hint.text if found else ""
+	if panel.is_open():
+		panel._needs_rebuild = false
+		panel.toggle()
+	panel.free()
+	assert_bool(found).is_true()
+	assert_str(text).is_equal(Tr.t("LBL_TOUCH_AUTO_HINT"))
