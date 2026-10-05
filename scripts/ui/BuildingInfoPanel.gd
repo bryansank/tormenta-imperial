@@ -365,7 +365,7 @@ func _show_building_panel() -> void:
 		child.free()
 	if not prod.is_empty():
 		var interval := GameConfig.get_production_interval(_selected_data.production_interval)
-		_production_box.add_child(TextKit.cost_row(prod, {}, "body", UITheme.POSITIVE, "+"))
+		_production_box.add_child(TextKit.cost_inline(prod, {}, "body", UITheme.POSITIVE, "+"))
 		_production_box.add_child(UITheme.make_label(Tr.t("FMT_EVERY") % TextKit.short_time(interval), "body", UITheme.POSITIVE))
 		_production_container.visible = true
 	else:

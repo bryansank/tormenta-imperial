@@ -680,7 +680,7 @@ func _fill_production(prod: Dictionary, interval: float) -> void:
 	_detail_production.visible = not prod.is_empty()
 	if prod.is_empty():
 		return
-	_detail_production.add_child(TextKit.cost_row(prod, {}, "body", UITheme.POSITIVE, "+"))
+	_detail_production.add_child(TextKit.cost_inline(prod, {}, "body", UITheme.POSITIVE, "+"))
 	if interval > 0:
 		_detail_production.add_child(UITheme.make_label(Tr.t("FMT_EVERY") % TextKit.short_time(interval), "body", UITheme.POSITIVE))
 

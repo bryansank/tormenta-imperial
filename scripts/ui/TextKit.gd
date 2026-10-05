@@ -42,12 +42,22 @@ static func cost_row(amounts: Dictionary, short: Dictionary = {}, size_name: Str
 	row.name = "CostRow"
 	row.add_theme_constant_override("h_separation", 10)
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
-	row.set_meta("amounts", amounts.duplicate())
 	fill_cost_row(row, amounts, short, size_name, color, prefix)
 	return row
 
-## Rehace el contenido de una fila de cost_row con otras cifras.
-static func fill_cost_row(row: HFlowContainer, amounts: Dictionary, short: Dictionary = {},
+## Como cost_row, pero en una fila que no se parte: para meterla dentro de otra
+## fila (un HFlow dentro de otro se queda con el ancho de una ficha y apila).
+static func cost_inline(amounts: Dictionary, short: Dictionary = {}, size_name: String = "small",
+		color: Color = UITheme.TEXT, prefix: String = "") -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "CostRow"
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	fill_cost_row(row, amounts, short, size_name, color, prefix)
+	return row
+
+## Rehace el contenido de una fila de cost_row o cost_inline con otras cifras.
+static func fill_cost_row(row: Container, amounts: Dictionary, short: Dictionary = {},
 		size_name: String = "small", color: Color = UITheme.TEXT, prefix: String = "") -> void:
 	for child in row.get_children():
 		row.remove_child(child)
