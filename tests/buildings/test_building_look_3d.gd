@@ -192,3 +192,120 @@ func test_placer_gives_every_building_but_roads_a_look() -> void:
 	assert_object(road.get_node_or_null("LookVisual")).is_null()
 	# El modelo sigue siendo el primer hijo: la placa de nivel lo encuentra.
 	assert_bool(foundry.get_child(0).is_in_group("building_fx")).is_false()
+
+# ── Obra por edificio (estilo) y por instancia (semilla) ─────────────
+
+const ALL_IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "foundry", "barracks",
+	"refinery", "tower", "headquarters", "market", "laboratory", "garden", "fountain", "statue", "road"]
+
+## Huella de cada malla de la obra: posiciones y tamanos, para comparar dos obras.
+func _fingerprint(node: Node, xform: Transform3D = Transform3D.IDENTITY) -> Array:
+	var out: Array = []
+	for c in node.get_children():
+		if not (c is Node3D):
+			continue
+		var local: Transform3D = xform * (c as Node3D).transform
+		if c is MeshInstance3D and (c as MeshInstance3D).mesh:
+			var label := "mesh" if String(c.name).begins_with("@") else String(c.name)
+			out.append("%s|%s" % [label, str(local.origin.snapped(Vector3.ONE * 0.001))])
+		out.append_array(_fingerprint(c, local))
+	return out
+
+func _site(id: String, phase: int, seed_val: int) -> Node3D:
+	var data: BuildingData = load("res://data/buildings/%s.tres" % id)
+	return auto_free(DieselpunkBuildingFactory.create_construction_phase(data.grid_size, phase, CELL, id, seed_val))
+
+func test_the_same_instance_builds_the_same_site_every_time() -> void:
+	var seed_val := LookRule.site_seed("house", Vector2i(8, 8))
+	for phase in 3:
+		assert_array(_fingerprint(_site("house", phase, seed_val))).is_equal(_fingerprint(_site("house", phase, seed_val)))
+
+func test_two_houses_next_to_each_other_differ() -> void:
+	var a := LookRule.site_seed("house", Vector2i(8, 8))
+	var b := LookRule.site_seed("house", Vector2i(10, 8))
+	for phase in 3:
+		assert_array(_fingerprint(_site("house", phase, a))).is_not_equal(_fingerprint(_site("house", phase, b)))
+
+func test_different_buildings_raise_different_sites() -> void:
+	var seed_val := 1234
+	var foundry := _site("foundry", 2, seed_val)
+	var house := _site("house", 2, seed_val)
+	assert_str(String(foundry.get_meta("site_frame"))).is_equal("chimney")
+	assert_str(String(house.get_meta("site_frame"))).is_equal("gable")
+	assert_array(_fingerprint(foundry)).is_not_equal(_fingerprint(house))
+	# Y la fase 0 apila otra cosa: troncos en el aserradero, tuberias en la refineria.
+	var saw := _site("sawmill", 0, seed_val)
+	var ref := _site("refinery", 0, seed_val)
+	var saw_kinds := []
+	for p in saw.get_node("Piles").get_children():
+		saw_kinds.append(String(p.name))
+	assert_bool(saw_kinds.any(func(k): return k in ["Pile_logs", "Pile_sawdust", "Pile_planks"])).is_true()
+	assert_bool(saw_kinds.has("Pile_pipes")).is_false()
+	var ref_kinds := []
+	for p in ref.get_node("Piles").get_children():
+		ref_kinds.append(String(p.name))
+	assert_bool(ref_kinds.any(func(k): return k in ["Pile_pipes", "Pile_drums", "Pile_beams"])).is_true()
+	assert_bool(ref_kinds.has("Pile_logs")).is_false()
+
+func test_every_building_keeps_its_three_phases_recognisable() -> void:
+	for id in ALL_IDS:
+		for seed_val in [1, 99, 123456]:
+			var fence := _site(id, 0, seed_val)
+			var found := _site(id, 1, seed_val)
+			var frame := _site(id, 2, seed_val)
+			# 0: siempre valla (postes y tablas o paneles) y pilas.
+			assert_int(_mesh_count(fence.get_node("Fence"))).override_failure_message(id).is_greater(8)
+			assert_int(fence.get_node("Piles").get_child_count()).is_greater(0)
+			# 1: siempre losa con zapatas; ni valla ni estructura.
+			assert_object(found.get_node_or_null("Foundation")).is_not_null()
+			assert_object(found.get_node_or_null("Fence")).is_null()
+			assert_object(found.get_node_or_null("Frame")).is_null()
+			# 2: siempre estructura, alta, con andamio; y la grua desde 2x2.
+			assert_int(_mesh_count(frame.get_node("Frame"))).override_failure_message(id).is_greater(3)
+			assert_object(frame.get_node_or_null("Scaffold")).is_not_null()
+			assert_float(_top(frame)).override_failure_message(id).is_greater(_top(fence) + 0.8)
+			var data: BuildingData = load("res://data/buildings/%s.tres" % id)
+			var has_crane := frame.find_child("CraneJib", true, false) != null
+			assert_bool(has_crane).is_equal(LookRule.footprint_class(data.grid_size) >= 2)
+
+func test_the_site_moves_by_shader_with_shared_materials() -> void:
+	var a := _site("foundry", 2, 7)
+	var b := _site("foundry", 2, 8)
+	var jib_a: MeshInstance3D = a.find_child("CraneJib", true, false)
+	var jib_b: MeshInstance3D = b.find_child("CraneJib", true, false)
+	assert_bool(jib_a.material_override is ShaderMaterial).is_true()
+	assert_object(jib_a.material_override).is_same(jib_b.material_override)
+	var flag_a: MeshInstance3D = a.find_child("SiteFlag", true, false)
+	assert_bool(flag_a.material_override is ShaderMaterial).is_true()
+	assert_object(flag_a.material_override).is_same((b.find_child("SiteFlag", true, false) as MeshInstance3D).material_override)
+	# Acero: chispas. Piedra: polvo. Ni timers ni AnimationPlayer ni scripts.
+	assert_object(a.find_child("SiteFx_sparks", true, false)).is_not_null()
+	assert_object(_site("statue", 2, 7).find_child("SiteFx_dust", true, false)).is_not_null()
+	for site in [a, _site("statue", 0, 7), _site("house", 1, 7)]:
+		assert_array(site.find_children("*", "Timer", true, false)).is_empty()
+		assert_array(site.find_children("*", "AnimationPlayer", true, false)).is_empty()
+
+func test_sparks_sheet_has_frames() -> void:
+	var img: Image = Fx.sheet_image("sparks")
+	for i in Fx.frames():
+		var rect := Rect2i((i % Fx.columns()) * Fx.FRAME_PX, (i / Fx.columns()) * Fx.FRAME_PX, Fx.FRAME_PX, Fx.FRAME_PX)
+		assert_bool(img.get_region(rect).is_invisible()).is_false()
+
+func test_look_visual_builds_the_site_of_its_instance() -> void:
+	var parts := _building("house")
+	var root: Node3D = parts[0]
+	var look = parts[2]
+	root.position = Vector3(6, 0, -4)
+	look.apply({"look": LookRule.Look.CONSTRUCTION, "phase": 2})
+	var data: BuildingData = load("res://data/buildings/house.tres")
+	var expected := LookRule.seed_of(root, data)
+	assert_int(int(look.get_site().get_meta("site_seed"))).is_equal(expected)
+	assert_str(String(look.get_site().get_meta("site_frame"))).is_equal("gable")
+	# Una segunda pasada con el mismo veredicto no rehace nada.
+	var site: Node3D = look.get_site()
+	look.apply({"look": LookRule.Look.CONSTRUCTION, "phase": 2})
+	assert_object(look.get_site()).is_same(site)
+	# Movida a otra celda: otra semilla, otra obra.
+	root.position = Vector3(-10, 0, 8)
+	look.apply({"look": LookRule.Look.CONSTRUCTION, "phase": 2})
+	assert_int(int(look.get_site().get_meta("site_seed"))).is_not_equal(expected)

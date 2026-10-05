@@ -115,10 +115,24 @@ mismo dibujo sirve al fantasma de colocacion y al menu de construccion
 **Obra, ruina y actividad** (la regla compartida con 3D, docs/03 "Aspecto en
 el mapa"):
 
-- **Obra nueva**: en lugar del edificio se pinta la fase de su huella
-  (`BuildingArt2D.draw_construction_phase`): valla con pilas de material,
-  luego losa con zapatas y ferralla, luego pilares, medio forjado, andamio y
-  grua. Debajo, la barra de progreso.
+- **Obra nueva**: en lugar del edificio se pinta su fase
+  (`BuildingArt2D.draw_construction_phase(ci, size, phase, progress, n, id,
+  seed)`): valla con pilas de material, luego losa con zapatas, luego la
+  estructura con andamio. Debajo, la barra de progreso. Como en 3D, cada
+  edificio la viste con su **estilo** (`BuildingLook.site_style`: pilas, valla
+  de tablas/chapa/lona, color de la lona, silueta de la fase 2 —chimenea,
+  tejado a dos aguas, torre, depositos, cupula, pedestal...— y lo que ya asoma
+  en la 1) y cada instancia con su **semilla** (`BuildingLook.seed_of`, de la
+  celda de origen: la misma que en 3D, estable tras guardar y cargar): lado de
+  la puerta, postes, sitio de las pilas y la lona, desorden, lado del
+  andamio, esquina de la grua. La semilla entra en la firma de repintado.
+  Lo que se mueve no se repinta: `Building2D` cuelga un `SiteFx` (girado con
+  el edificio) con la pluma y el contrapeso (`Line2D`/`Polygon2D`) y el carro
+  de la grua, que un shader `canvas_item` gira y desliza por la pluma; el
+  banderin (`Polygon2D` que ondea) y las chispas o el polvo (`Sprite2D` de
+  `BuildingFx`), en los puntos de `BuildingArt2D.site_anchors()`. Se rehace
+  solo al cambiar de fase, semilla o giro, y se va al acabar la obra
+  (docs/03, "Obra por edificio y por instancia").
 - **Mejora**: el edificio a la vista con rayas amarillo/negro, andamio en aspa
   y barra (`draw_construction`).
 - **Ruina**: encima del dibujo, `draw_ruin` (tizne, muro dentado, cascotes,
@@ -198,7 +212,11 @@ docs/21 §9).
   yacimiento, compra, mover, demoler), guardado cruzado 3D ↔ 2D por el camino
   real de GameManager, preferencia de vista y linea de comandos, pantalla →
   celda a varios zooms, la camara 2D y los pasos de la tormenta;
-  `test_building2d_look.gd`: las fases, la ruina y los efectos se dibujan sin
-  error y Building2D enciende/apaga lo que toca.
-- `tools/look_probe.gd`: captura de todos los aspectos en 3D y 2D
+  `test_building2d_look.gd`: las fases (de los 16 edificios, con dos semillas),
+  la ruina y los efectos se dibujan sin
+  error y Building2D enciende/apaga lo que toca (incluida la grua y el
+  banderin de la obra, con su semilla); `test_view2d_save_compat.gd` comprueba
+  que una obra conserva su semilla al guardar en 3D, cargar en 2D y volver.
+- `tools/look_probe.gd`: captura de todos los aspectos en 3D y 2D, y de las
+  obras (una fila por fase, varios edificios y dos casas)
   (docs/03, "Aspecto en el mapa").

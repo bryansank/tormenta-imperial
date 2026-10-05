@@ -12,6 +12,10 @@ extends RefCounted
 ## Building2D (el mapa), el fantasma de colocacion y el icono del menu de
 ## construccion, asi que las tres cosas son siempre el mismo dibujo.
 
+## La obra: estilo y disposicion compartidos con 3D (docs/03).
+const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
+const SiteFx := preload("res://scripts/buildings/SiteFx.gd")
+
 # ── Paleta (la de DieselpunkBuildingFactory, vista desde arriba) ─────────
 const IRON := Color(0.22, 0.20, 0.22)
 const GUNMETAL := Color(0.30, 0.30, 0.33)
@@ -503,110 +507,460 @@ static func draw_selection(ci: CanvasItem, size: Vector2, pulse: float) -> void:
 	ci.draw_rect(r, Color(0, 0, 0, 0.6), false, 4.0)
 	ci.draw_rect(r, Color(BRASS_LIGHT, 0.75 + pulse * 0.25), false, 2.0)
 
-# ── Obra por fases (compartida por huella) ────────────────────────────
+# ── Obra por fases (estilo por tipo, disposicion por instancia) ───────
 
-## Las tres fases de obra vistas desde arriba, compartidas por HUELLA como en
-## 3D (DieselpunkBuildingFactory.create_construction_phase): 0 valla con
-## materiales, 1 solar con cimientos, 2 estructura a medio levantar. Se pinta EN
-## LUGAR del edificio; `n` es la clase de huella (1, 2, 3: cuantas pilas,
-## cuantos pilares). Lleva debajo la barra de progreso.
-static func draw_construction_phase(ci: CanvasItem, size: Vector2, phase: int, progress: float, n: int = 2) -> void:
+## Colores de obra vistos desde arriba (los de la paleta de obra 3D).
+const SITE_STONE := Color(0.64, 0.61, 0.55)
+const SITE_STONE_DARK := Color(0.47, 0.45, 0.41)
+const SITE_SACK := Color(0.78, 0.68, 0.48)
+const SITE_SANDBAG := Color(0.62, 0.57, 0.40)
+const SITE_SAWDUST := Color(0.86, 0.74, 0.52)
+const SITE_GRAVEL := Color(0.50, 0.48, 0.45)
+const SITE_SOIL := Color(0.24, 0.17, 0.11)
+const SITE_SHEET := Color(0.44, 0.46, 0.48)
+const SITE_CRATE := Color(0.47, 0.32, 0.16)
+const SITE_LOG := Color(0.42, 0.28, 0.15)
+const SITE_DRUM := Color(0.22, 0.30, 0.25)
+
+## Las tres fases de obra vistas desde arriba, como en 3D
+## (DieselpunkBuildingFactory.create_construction_phase): 0 valla con
+## materiales, 1 solar con cimientos, 2 estructura a medio levantar. El estilo
+## de `building_id` (BuildingLook.site_style: materiales, valla, lona, silueta)
+## y la semilla `seed_val` (BuildingLook.site_layout: donde va cada cosa) son
+## los mismos que en 3D. Se pinta EN LUGAR del edificio; `n` es la clase de
+## huella. Lleva debajo la barra de progreso. Lo que se mueve (pluma de la
+## grua, banderin, chispas/polvo) no se pinta aqui: son nodos animados por
+## shader que pone Building2D en los puntos de site_anchors().
+static func draw_construction_phase(ci: CanvasItem, size: Vector2, phase: int, progress: float, n: int = 2,
+		building_id: String = "", seed_val: int = 0) -> void:
 	var r := Rect2(-size * 0.5, size).grow(-INSET)
+	var style := LookRule.site_style(building_id)
+	var layout := LookRule.site_layout(seed_val, style, n)
 	ci.draw_rect(Rect2(r.position + Vector2(3, 4), r.size), SHADOW)
 	ci.draw_rect(r, SITE_DIRT)
 	# Terrones: la tierra removida se lee como obra, no como cesped.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_val
 	for i in range(6 * n):
-		var p := r.position + r.size * Vector2(fposmod(i * 0.381, 1.0), fposmod(i * 0.617 + 0.13, 1.0))
+		var p := r.position + r.size * Vector2(rng.randf(), rng.randf())
 		ci.draw_circle(p, 1.4, SITE_DIRT.darkened(0.25))
+	var anchors := site_anchors(size, phase, n, style, layout)
 	match phase:
-		0: _site_fence(ci, r, n)
-		1: _site_foundation(ci, r, n)
-		_: _site_frame(ci, r, n)
+		0: _site_fence(ci, r, n, style, layout)
+		1: _site_foundation(ci, r, n, style, layout)
+		_: _site_frame(ci, r, n, style, layout, anchors)
+	# El palo del banderin (la tela la mueve Building2D).
+	var flag: Vector2 = anchors["flag"]
+	ci.draw_circle(flag, 2.2, OUTLINE)
+	ci.draw_circle(flag, 1.4, DARK_WOOD.lightened(0.2))
 	ci.draw_rect(r, OUTLINE, false, 1.5)
 	var bar := Rect2(Vector2(r.position.x + 3, r.end.y - 7), Vector2(r.size.x - 6, 4))
 	ci.draw_rect(bar.grow(1), OUTLINE)
 	ci.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(progress, 0.0, 1.0), bar.size.y)), HAZARD)
 
-## Fase 0: valla de tablas con puerta abajo y pilas de material dentro.
-static func _site_fence(ci: CanvasItem, r: Rect2, n: int) -> void:
+## Donde van las piezas animadas de una obra 2D, en px del marco SIN girar y
+## centrado: "flag" (pie del banderin), "fx" (chispas/polvo, o "" si no hay),
+## "fx_kind", y "crane" ({mast, jib, angle}, o {} sin grua: solo desde 2x2 y en
+## la fase 2). Mismos sitios que en 3D, porque salen de la misma disposicion.
+static func site_anchors(size: Vector2, phase: int, n: int, style: Dictionary, layout: Dictionary) -> Dictionary:
+	var r := Rect2(-size * 0.5, size).grow(-INSET)
+	var half := r.size * 0.5
+	var flag := Vector2.ZERO
+	match phase:
+		0:
+			var gn := LookRule.side_normal(int(layout["gate_side"]))
+			var glen := r.size.x if gn.x == 0.0 else r.size.y
+			var off := half.y if gn.x == 0.0 else half.x
+			flag = gn * (off - 2.0) + Vector2(-gn.y, gn.x) * glen * 0.2 * float(layout["flag_post"])
+		1:
+			flag = (layout["cone_corners"][1] as Vector2) * half * 0.8
+		_:
+			flag = Vector2.ZERO if String(style["frame"]) == "mast" else -(layout["crane_corner"] as Vector2) * half * 0.8
+	var crane := {}
+	if phase == 2 and n >= 2:
+		var cc: Vector2 = layout["crane_corner"]
+		var yaw := atan2(-cc.y, cc.x) + (float(layout["crane_yaw"]) / TAU - 0.5) * 1.2
+		crane = {"mast": cc * half * 0.84, "jib": r.size.x * 0.7, "angle": atan2(sin(yaw), -cos(yaw))}
+	return {
+		"flag": flag,
+		"fx": (layout["fx_spot"] as Vector2) * r.size,
+		"fx_kind": SiteFx.fx_for(style, phase),
+		"crane": crane,
+	}
+
+## Recorre los cuatro lados: [normal, inicio, fin] en px.
+static func _sides(r: Rect2) -> Array:
+	var out: Array = []
+	var c := r.get_center()
+	for side in 4:
+		var nrm := LookRule.side_normal(side)
+		var along := Vector2(-nrm.y, nrm.x)
+		var length := r.size.x if nrm.x == 0.0 else r.size.y
+		var off := r.size.y * 0.5 if nrm.x == 0.0 else r.size.x * 0.5
+		var mid := c + nrm * off
+		out.append([nrm, mid - along * length * 0.5, mid + along * length * 0.5])
+	return out
+
+## Fase 0: valla (tablas, chapa o lona) con la puerta en su lado y las pilas
+## del estilo donde diga la semilla, una con lona, mas el desorden.
+static func _site_fence(ci: CanvasItem, r: Rect2, n: int, style: Dictionary, layout: Dictionary) -> void:
 	var fence := r.grow(-2)
-	var gate_half := fence.size.x * 0.16
-	var gate_c := fence.get_center().x
-	# Travesanos
-	ci.draw_line(fence.position, Vector2(fence.end.x, fence.position.y), LIGHT_WOOD, 2.0)
-	ci.draw_line(fence.position, Vector2(fence.position.x, fence.end.y), LIGHT_WOOD, 2.0)
-	ci.draw_line(Vector2(fence.end.x, fence.position.y), fence.end, LIGHT_WOOD, 2.0)
-	ci.draw_line(Vector2(fence.position.x, fence.end.y), Vector2(gate_c - gate_half, fence.end.y), LIGHT_WOOD, 2.0)
-	ci.draw_line(Vector2(gate_c + gate_half, fence.end.y), fence.end, LIGHT_WOOD, 2.0)
-	# Postes
-	var step := 7.0
-	var t := 0.0
-	var perimeter := 2.0 * (fence.size.x + fence.size.y)
-	while t < perimeter:
-		var p := _perimeter_point(fence, t)
-		if not (absf(p.y - fence.end.y) < 0.5 and absf(p.x - gate_c) < gate_half):
-			ci.draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)), DARK_WOOD)
-		t += step
-	# Cinta de peligro en la puerta
-	ci.draw_line(Vector2(gate_c - gate_half, fence.end.y), Vector2(gate_c + gate_half, fence.end.y), HAZARD, 2.0)
-	# Pilas: tablones, vigas, ladrillo
-	var spots := [Vector2(0.3, 0.32), Vector2(0.7, 0.58), Vector2(0.32, 0.7)]
+	var kind := String(style["fence"])
+	var col := LIGHT_WOOD
+	var width := 2.0
+	var post_col := DARK_WOOD
+	match kind:
+		"dark_planks": col = DARK_WOOD.lightened(0.15)
+		"sheet":
+			col = SITE_SHEET
+			width = 3.0
+			post_col = IRON
+		"canvas":
+			col = style["tarp"]
+			width = 3.5
+	var gate := int(layout["gate_side"])
+	var step := 7.0 * float(layout["post_step"]) / 0.9
+	var sides := _sides(fence)
+	for side in 4:
+		var s: Array = sides[side]
+		var a: Vector2 = s[1]
+		var b: Vector2 = s[2]
+		var length := a.distance_to(b)
+		var dir := (b - a) / maxf(length, 0.001)
+		var gap := length * 0.16
+		var mid := (a + b) * 0.5
+		if side == gate:
+			ci.draw_line(a, mid - dir * gap, col, width)
+			ci.draw_line(mid + dir * gap, b, col, width)
+			ci.draw_line(mid - dir * gap, mid + dir * gap, HAZARD, 2.0)
+		else:
+			ci.draw_line(a, b, col, width)
+		var t := 0.0
+		while t <= length:
+			var p := a + dir * t
+			if not (side == gate and absf(t - length * 0.5) < gap):
+				ci.draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)), post_col)
+			t += step
 	var m := minf(r.size.x, r.size.y)
-	for k in n:
-		var c: Vector2 = r.position + r.size * (spots[k % spots.size()] as Vector2)
-		var pile := Rect2(c - Vector2(m * 0.17, m * 0.1), Vector2(m * 0.34, m * 0.2))
-		match k % 3:
-			0:
-				ci.draw_rect(pile, LIGHT_WOOD)
-				for j in range(1, 4):
-					var y := pile.position.y + pile.size.y * j / 4.0
-					ci.draw_line(Vector2(pile.position.x, y), Vector2(pile.end.x, y), DARK_WOOD, 1.0)
-			1:
-				for j in 3:
-					ci.draw_rect(Rect2(pile.position + Vector2(0, j * pile.size.y / 3.0), Vector2(pile.size.x, pile.size.y / 3.0 - 1.0)), STEEL)
-			2:
-				ci.draw_rect(pile, TILE_RED)
-				ci.draw_line(Vector2(pile.get_center().x, pile.position.y), Vector2(pile.get_center().x, pile.end.y), TILE_RED_DARK, 1.0)
-				ci.draw_line(Vector2(pile.position.x, pile.get_center().y), Vector2(pile.end.x, pile.get_center().y), TILE_RED_DARK, 1.0)
-		ci.draw_rect(pile, OUTLINE, false, 1.0)
+	var piles: Array = layout["piles"]
+	for k in piles.size():
+		var p: Dictionary = piles[k]
+		var c: Vector2 = r.get_center() + (p["pos"] as Vector2) * r.size
+		var turned := absf(float(p["yaw"])) > PI * 0.25
+		var dims := Vector2(m * 0.34, m * 0.2) * float(p["scale"])
+		if turned:
+			dims = Vector2(dims.y, dims.x)
+		_pile_2d(ci, String(p["kind"]), Rect2(c - dims * 0.5, dims), turned)
+		if k == int(layout["tarp_pile"]):
+			var tarp := Rect2(c - dims * 0.5 + Vector2(dims.x * 0.3, -1), Vector2(dims.x * 0.75, dims.y + 2))
+			ci.draw_rect(tarp, style["tarp"])
+			ci.draw_line(tarp.position, tarp.end, (style["tarp"] as Color).darkened(0.3), 1.0)
+			ci.draw_rect(tarp, OUTLINE, false, 1.0)
+	for c in layout["clutter"]:
+		var q: Vector2 = r.get_center() + (c["pos"] as Vector2) * r.size
+		match String(c["kind"]):
+			"barrel": _disc(ci, q, 2.6, SITE_DRUM, OUTLINE, 1.0)
+			"crate":
+				ci.draw_rect(Rect2(q - Vector2(3, 3), Vector2(6, 6)), SITE_CRATE)
+				ci.draw_rect(Rect2(q - Vector2(3, 3), Vector2(6, 6)), OUTLINE, false, 1.0)
+			_: _cone(ci, q)
 
-## Fase 1: losa de hormigon con zapatas y esperas de ferralla, conos en dos esquinas.
-static func _site_foundation(ci: CanvasItem, r: Rect2, n: int) -> void:
-	var slab := r.grow(-r.size.x * 0.08)
-	_plate(ci, slab, CONCRETE.lightened(0.2), OUTLINE, 1.5)
-	for p in _site_points(slab.grow(-slab.size.x * 0.08), n):
-		ci.draw_rect(Rect2(p - Vector2(4, 4), Vector2(8, 8)), CONCRETE_DARK)
-		ci.draw_circle(p + Vector2(-1.5, -1.5), 1.3, RUST)
-		ci.draw_circle(p + Vector2(1.5, 1.5), 1.3, RUST)
-	for c in [r.position + Vector2(4, 4), r.end - Vector2(4, 10)]:
-		_cone(ci, c)
+## Una pila de material vista desde arriba en `p` (`turned`: tumbada en vertical).
+static func _pile_2d(ci: CanvasItem, kind: String, p: Rect2, turned: bool) -> void:
+	var long_axis := Vector2(0, 1) if turned else Vector2(1, 0)
+	var across := Vector2(1, 0) if turned else Vector2(0, 1)
+	var long_len := p.size.y if turned else p.size.x
+	var across_len := p.size.x if turned else p.size.y
+	var c := p.get_center()
+	match kind:
+		"planks":
+			ci.draw_rect(p, LIGHT_WOOD)
+			for j in range(1, 4):
+				var o := c + across * (across_len * (j / 4.0 - 0.5))
+				ci.draw_line(o - long_axis * long_len * 0.5, o + long_axis * long_len * 0.5, DARK_WOOD, 1.0)
+		"beams", "pipes":
+			var count := 3 if kind == "beams" else 4
+			var bar_col := STEEL if kind == "beams" else COPPER
+			for j in count:
+				var o := c + across * (across_len * ((j + 0.5) / count - 0.5))
+				var a := o - long_axis * long_len * 0.5
+				var b := o + long_axis * long_len * 0.5
+				ci.draw_line(a, b, OUTLINE, across_len / count + 1.0)
+				ci.draw_line(a, b, bar_col, across_len / count - 1.0)
+				if kind == "pipes":
+					ci.draw_circle(b, across_len / count * 0.35, bar_col.darkened(0.45))
+			return
+		"logs":
+			for j in 3:
+				var o := c + across * (across_len * ((j + 0.5) / 3.0 - 0.5))
+				var a := o - long_axis * long_len * 0.5
+				var b := o + long_axis * long_len * 0.5
+				ci.draw_line(a, b, OUTLINE, across_len / 3.0 + 1.0)
+				ci.draw_line(a, b, SITE_LOG, across_len / 3.0 - 1.0)
+				ci.draw_circle(b, across_len / 6.0, LIGHT_WOOD)
+			return
+		"bricks":
+			ci.draw_rect(p, TILE_RED)
+			ci.draw_line(Vector2(c.x, p.position.y), Vector2(c.x, p.end.y), TILE_RED_DARK, 1.0)
+			ci.draw_line(Vector2(p.position.x, c.y), Vector2(p.end.x, c.y), TILE_RED_DARK, 1.0)
+		"sawdust", "gravel", "soil":
+			var fill: Color = {"sawdust": SITE_SAWDUST, "gravel": SITE_GRAVEL}.get(kind, SITE_SOIL)
+			var rad := minf(p.size.x, p.size.y) * 0.75
+			_disc(ci, c, rad, fill, OUTLINE, 1.0)
+			ci.draw_circle(c - Vector2(rad, rad) * 0.25, rad * 0.45, fill.lightened(0.15))
+			if kind == "gravel":
+				for j in 5:
+					ci.draw_circle(c + Vector2(cos(j * 1.3), sin(j * 1.3)) * rad * 0.55, 0.9, fill.darkened(0.4))
+			return
+		"rivets":
+			var box := Rect2(p.position, Vector2(p.size.x * 0.45, p.size.y))
+			ci.draw_rect(box, SITE_CRATE)
+			ci.draw_rect(box, OUTLINE, false, 1.0)
+			for j in 3:
+				_disc(ci, Vector2(p.position.x + p.size.x * (0.6 + 0.14 * j), c.y + (j - 1) * 2.0), 2.2, RUST, OUTLINE, 1.0)
+			return
+		"drums":
+			var rad := minf(p.size.x, p.size.y) * 0.32
+			for o in [Vector2(-0.28, -0.1), Vector2(0.05, 0.12), Vector2(0.32, -0.12)]:
+				_disc(ci, c + o * p.size, rad, SITE_DRUM, OUTLINE, 1.0)
+				ci.draw_circle(c + o * p.size, rad * 0.4, SITE_DRUM.lightened(0.25))
+			return
+		"sacks", "sandbags":
+			var fill := SITE_SACK if kind == "sacks" else SITE_SANDBAG
+			var per := 3 if kind == "sacks" else 4
+			for row in 2:
+				for j in per:
+					var o := c + long_axis * long_len * ((j + 0.5) / per - 0.5) + across * across_len * (row - 0.5) * 0.5
+					_disc(ci, o, minf(long_len / per, across_len * 0.5) * 0.55, fill, OUTLINE, 1.0)
+			return
+		"stone":
+			ci.draw_rect(Rect2(p.position, p.size * Vector2(0.55, 1.0)), SITE_STONE)
+			ci.draw_rect(Rect2(p.position + p.size * Vector2(0.5, 0.15), p.size * Vector2(0.5, 0.75)), SITE_STONE_DARK)
+			ci.draw_rect(Rect2(p.position, p.size * Vector2(0.55, 1.0)), OUTLINE, false, 1.0)
+		"crates":
+			for j in 2:
+				var box := Rect2(p.position + Vector2(p.size.x * 0.5 * j, 0), Vector2(p.size.x * 0.5 - 1, p.size.y))
+				ci.draw_rect(box, SITE_CRATE)
+				ci.draw_line(box.position, box.end, DARK_WOOD, 1.0)
+				ci.draw_line(Vector2(box.end.x, box.position.y), Vector2(box.position.x, box.end.y), DARK_WOOD, 1.0)
+				ci.draw_rect(box, OUTLINE, false, 1.0)
+			return
+		_:
+			ci.draw_rect(p, CONCRETE_DARK)
+	ci.draw_rect(p, OUTLINE, false, 1.0)
 
-## Fase 2: pilares, medio forjado arriba, vigas de borde, andamio abajo y grua.
-static func _site_frame(ci: CanvasItem, r: Rect2, n: int) -> void:
+## Fase 1: losa (de piedra en los de piedra) con zapatas, esperas de ferralla o
+## estacas, conos y lo que sobro de la primera pila.
+static func _site_foundation(ci: CanvasItem, r: Rect2, n: int, style: Dictionary, layout: Dictionary) -> void:
+	var stone := String(style["frame_mat"]) == "stone"
 	var slab := r.grow(-r.size.x * 0.08)
-	_plate(ci, slab, CONCRETE.lightened(0.2), OUTLINE, 1.5)
-	# Medio forjado (mitad de arriba)
+	_plate(ci, slab, SITE_STONE if stone else CONCRETE.lightened(0.2), OUTLINE, 1.5)
+	var wood := String(style["frame_mat"]) == "wood"
+	_foundation_hint_2d(ci, slab, style, layout)
+	for p in _frame_points_2d(slab.grow(-slab.size.x * 0.08), n, String(style["frame"])):
+		ci.draw_rect(Rect2(p - Vector2(4, 4), Vector2(8, 8)), SITE_STONE_DARK if stone else CONCRETE_DARK)
+		if wood:
+			ci.draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)), DARK_WOOD)
+		else:
+			ci.draw_circle(p + Vector2(-1.5, -1.5), 1.3, RUST)
+			ci.draw_circle(p + Vector2(1.5, 1.5), 1.3, RUST)
+	var half := r.size * 0.5
+	var piles: Array = layout["piles"]
+	if not piles.is_empty():
+		var c: Vector2 = r.get_center() + (layout["leftover_corner"] as Vector2) * half * 0.72
+		var m := minf(r.size.x, r.size.y)
+		var dims := Vector2(m * 0.24, m * 0.14)
+		_pile_2d(ci, String(piles[0]["kind"]), Rect2(c - dims * 0.5, dims), false)
+	for corner in layout["cone_corners"]:
+		_cone(ci, r.get_center() + (corner as Vector2) * (half - Vector2(5, 7)))
+
+## Lo que ya asoma en los cimientos de cada silueta (como en 3D): base de la
+## chimenea, anillos, zapata de la torre, escalon, bancales, durmientes.
+static func _foundation_hint_2d(ci: CanvasItem, slab: Rect2, style: Dictionary, layout: Dictionary) -> void:
+	var c := slab.get_center()
+	var cc: Vector2 = layout["crane_corner"]
+	var m := minf(slab.size.x, slab.size.y)
+	match String(style["frame"]):
+		"chimney":
+			_disc(ci, c - cc * slab.size * 0.26, m * 0.19, TILE_RED, OUTLINE, 1.0)
+		"tanks":
+			for side in [-1.0, 1.0]:
+				_disc(ci, c + Vector2(side * slab.size.x * 0.24, 0), m * 0.2, CONCRETE_DARK, OUTLINE, 1.0)
+		"dome", "basin":
+			ci.draw_arc(c, m * 0.4, 0.0, TAU, 28, OUTLINE, 5.0)
+			ci.draw_arc(c, m * 0.4, 0.0, TAU, 28, SITE_STONE_DARK if style["frame_mat"] == "stone" else CONCRETE_DARK, 3.5)
+		"tower":
+			var pad := Rect2(c - slab.size * 0.3, slab.size * 0.6)
+			ci.draw_rect(pad, CONCRETE_DARK)
+			ci.draw_rect(pad, OUTLINE, false, 1.0)
+		"plinth":
+			var step := Rect2(c - slab.size * 0.4, slab.size * 0.8)
+			ci.draw_rect(step, SITE_STONE.darkened(0.08))
+			ci.draw_rect(step, OUTLINE, false, 1.0)
+		"low":
+			for zs in [-1.0, 1.0]:
+				var bed := Rect2(Vector2(c.x - slab.size.x * 0.3, c.y + zs * slab.size.y * 0.18 - 4), Vector2(slab.size.x * 0.6, 8))
+				ci.draw_rect(bed, SITE_SOIL)
+				ci.draw_rect(bed, OUTLINE, false, 1.0)
+		"headframe":
+			for zs in [-1.0, 1.0]:
+				for xs in [-1.0, 1.0]:
+					var p := c + Vector2(xs * slab.size.x * 0.35, zs * slab.size.y * 0.18)
+					ci.draw_rect(Rect2(p - Vector2(5, 5), Vector2(10, 10)), CONCRETE_DARK)
+					ci.draw_rect(Rect2(p - Vector2(5, 5), Vector2(10, 10)), OUTLINE, false, 1.0)
+		"gable", "hall":
+			var sill := slab.grow(-slab.size.x * 0.08)
+			ci.draw_rect(sill, OUTLINE, false, 4.0)
+			ci.draw_rect(sill, DARK_WOOD.lightened(0.2) if style["frame_mat"] == "wood" else GUNMETAL, false, 2.5)
+		"mast":
+			_disc(ci, c, 5.0, CONCRETE_DARK, OUTLINE, 1.0)
+
+## Fase 2: losa, la silueta del edificio, andamio en su lado y el mastil de la
+## grua (la pluma la anima Building2D).
+static func _site_frame(ci: CanvasItem, r: Rect2, n: int, style: Dictionary, layout: Dictionary, anchors: Dictionary) -> void:
+	var slab := r.grow(-r.size.x * 0.08)
+	var stone := String(style["frame_mat"]) == "stone"
+	_plate(ci, slab, SITE_STONE if stone else CONCRETE.lightened(0.2), OUTLINE, 1.5)
+	var mat_col: Color = {"wood": WOOD, "stone": SITE_STONE_DARK}.get(String(style["frame_mat"]), GUNMETAL)
+	var inner := slab.grow(-slab.size.x * 0.08)
+	var c := slab.get_center()
+	var cc: Vector2 = layout["crane_corner"]
+	match String(style["frame"]):
+		"chimney":
+			_site_box(ci, slab, inner, n, mat_col)
+			var ch := c - cc * slab.size * 0.26
+			var rad := minf(slab.size.x, slab.size.y) * 0.17
+			_disc(ci, ch, rad, TILE_RED, OUTLINE, 1.5)
+			ci.draw_arc(ch, rad * 0.8, 0.0, TAU, 16, GUNMETAL, 1.5)
+			_disc(ci, ch, rad * 0.5, OIL_BLACK, OUTLINE, 1.0)
+		"gable", "hall":
+			for p in _site_points(inner, n):
+				_pillar_2d(ci, p, mat_col)
+			var count := n + 2
+			for i in count:
+				var x := lerpf(inner.position.x, inner.end.x, float(i) / float(count - 1))
+				ci.draw_line(Vector2(x, slab.position.y + 2), Vector2(x, slab.end.y - 2), OUTLINE, 3.0)
+				ci.draw_line(Vector2(x, slab.position.y + 2), Vector2(x, slab.end.y - 2), mat_col.lightened(0.15), 1.6)
+			if String(style["frame"]) == "gable":
+				# Medio faldon ya entablado: el tejado a dos aguas que viene.
+				var plank := Rect2(Vector2(inner.position.x, slab.position.y + 2), Vector2(inner.size.x * 0.55, c.y - slab.position.y - 2))
+				ci.draw_rect(plank, LIGHT_WOOD)
+				for j in range(1, 5):
+					var y := plank.position.y + plank.size.y * j / 5.0
+					ci.draw_line(Vector2(plank.position.x, y), Vector2(plank.end.x, y), DARK_WOOD, 1.0)
+				ci.draw_rect(plank, OUTLINE, false, 1.0)
+			else:
+				# Cerchas en aspa de nave.
+				for i in count - 1:
+					var x0 := lerpf(inner.position.x, inner.end.x, float(i) / float(count - 1))
+					var x1 := lerpf(inner.position.x, inner.end.x, float(i + 1) / float(count - 1))
+					ci.draw_line(Vector2(x0, inner.position.y), Vector2(x1, inner.end.y), mat_col, 1.2)
+					ci.draw_line(Vector2(x1, inner.position.y), Vector2(x0, inner.end.y), mat_col, 1.2)
+			ci.draw_line(Vector2(slab.position.x + 2, c.y), Vector2(slab.end.x - 2, c.y), OUTLINE, 4.0)
+			ci.draw_line(Vector2(slab.position.x + 2, c.y), Vector2(slab.end.x - 2, c.y), mat_col.lightened(0.3), 2.4)
+		"tower":
+			var outer := Rect2(c - slab.size * 0.3, slab.size * 0.6)
+			var top := Rect2(c - slab.size * 0.18, slab.size * 0.36)
+			ci.draw_rect(top, mat_col.darkened(0.1))
+			for k in 4:
+				var a: Vector2 = c + (LookRule.CORNERS[k] as Vector2) * slab.size * 0.3
+				var b: Vector2 = c + (LookRule.CORNERS[k] as Vector2) * slab.size * 0.18
+				var a2: Vector2 = c + (LookRule.CORNERS[(k + 1) % 4] as Vector2) * slab.size * 0.18
+				ci.draw_line(a, b, mat_col, 3.0)
+				ci.draw_line(a, a2, mat_col.lightened(0.2), 1.2)
+			ci.draw_rect(outer, mat_col, false, 2.0)
+			ci.draw_rect(top, OUTLINE, false, 1.0)
+		"tanks":
+			var rad := minf(slab.size.x, slab.size.y) * 0.2
+			for side in [-1.0, 1.0]:
+				var tc := c + Vector2(side * slab.size.x * 0.24, 0)
+				if side > 0.0:
+					_disc(ci, tc, rad, SITE_SHEET, OUTLINE, 1.0)
+				ci.draw_arc(tc, rad, 0.0, TAU, 20, OUTLINE, 3.0)
+				ci.draw_arc(tc, rad, 0.0, TAU, 20, mat_col.lightened(0.2), 1.8)
+				for k in 6:
+					ci.draw_circle(tc + Vector2.from_angle(TAU * k / 6.0) * rad, 1.6, mat_col)
+			ci.draw_line(c + Vector2(-slab.size.x * 0.24, slab.size.y * 0.12), c + Vector2(slab.size.x * 0.24, slab.size.y * 0.12), COPPER, 2.5)
+		"dome":
+			var rad := minf(slab.size.x, slab.size.y) * 0.4
+			for p in _frame_points_2d(inner, n, "dome"):
+				_pillar_2d(ci, p, mat_col)
+			ci.draw_arc(c, rad, 0.0, TAU, 28, OUTLINE, 3.5)
+			ci.draw_arc(c, rad, 0.0, TAU, 28, mat_col.lightened(0.2), 2.0)
+			for k in 6:
+				var tip := c + Vector2.from_angle(TAU * k / 6.0) * rad
+				ci.draw_line(tip, c, mat_col.lightened(0.1), 1.6)
+			_disc(ci, c, 3.0, mat_col, OUTLINE, 1.0)
+		"plinth":
+			for i in 3:
+				var s := 0.8 - 0.18 * i
+				var step := Rect2(c - slab.size * s * 0.5, slab.size * s)
+				ci.draw_rect(step, SITE_STONE if i % 2 == 0 else SITE_STONE_DARK)
+				ci.draw_rect(step, OUTLINE, false, 1.0)
+			var fig := Rect2(c - Vector2(5, 5), Vector2(10, 10))
+			ci.draw_rect(fig, style["tarp"])
+			ci.draw_rect(fig, OUTLINE, false, 1.0)
+			for k in 4:
+				ci.draw_circle(c + (LookRule.CORNERS[k] as Vector2) * slab.size * 0.3, 1.8, DARK_WOOD)
+		"basin":
+			var count := 10 + 2 * n
+			for k in count:
+				if k % 5 == 4:
+					continue
+				var p := c + Vector2.from_angle(TAU * k / count) * slab.size * 0.38
+				ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), SITE_STONE)
+				ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), OUTLINE, false, 1.0)
+			for k in 3:
+				ci.draw_line(c + Vector2.from_angle(TAU * k / 3.0 + 0.3) * slab.size * 0.32, c, DARK_WOOD, 1.6)
+			_disc(ci, c, 2.5, COPPER, OUTLINE, 1.0)
+		"headframe":
+			for p in _site_points(inner, 1):
+				_pillar_2d(ci, p, mat_col)
+			for zs in [-1.0, 1.0]:
+				for xs in [-1.0, 1.0]:
+					ci.draw_line(c + Vector2(xs * slab.size.x * 0.35, zs * slab.size.y * 0.18), c + Vector2(0, zs * slab.size.y * 0.1), mat_col, 2.4)
+			ci.draw_line(c + Vector2(-5, 0), c + Vector2(5, 0), OUTLINE, 4.0)
+			ci.draw_arc(c, 4.0, 0.0, TAU, 12, STEEL, 1.5)
+		"low":
+			for zs in [-1.0, 1.0]:
+				var bed := Rect2(Vector2(c.x - slab.size.x * 0.3, c.y + zs * slab.size.y * 0.18 - 4), Vector2(slab.size.x * 0.6, 8))
+				ci.draw_rect(bed, SITE_SOIL)
+				ci.draw_rect(bed, OUTLINE, false, 1.0)
+			for i in 4:
+				var x := lerpf(c.x - slab.size.x * 0.32, c.x + slab.size.x * 0.32, float(i) / 3.0)
+				ci.draw_line(Vector2(x, c.y - slab.size.y * 0.32), Vector2(x, c.y + slab.size.y * 0.32), mat_col, 1.4)
+			for k in 4:
+				_pillar_2d(ci, c + (LookRule.CORNERS[k] as Vector2) * slab.size * 0.32, mat_col)
+		"mast":
+			_site_box(ci, slab, inner, n, mat_col)
+			_disc(ci, c, 3.0, STEEL, OUTLINE, 1.0)
+		_:
+			_site_box(ci, slab, inner, n, mat_col)
+	# Andamio: tablones en el lado de la semilla.
+	var side: Array = _sides(slab.grow(-4))[int(layout["scaffold_side"])]
+	var a: Vector2 = side[1]
+	var b: Vector2 = side[2]
+	ci.draw_line(a, b, OUTLINE, 6.0)
+	ci.draw_line(a, b, LIGHT_WOOD, 4.0)
+	var crane: Dictionary = anchors["crane"]
+	if not crane.is_empty():
+		var mast: Vector2 = crane["mast"]
+		var col: Color = style["crane"]
+		ci.draw_rect(Rect2(mast - Vector2(4, 4), Vector2(8, 8)), col)
+		ci.draw_rect(Rect2(mast - Vector2(4, 4), Vector2(8, 8)), OUTLINE, false, 1.0)
+
+## La estructura de caja: medio forjado arriba, vigas de borde y pilares.
+static func _site_box(ci: CanvasItem, slab: Rect2, inner: Rect2, n: int, mat_col: Color) -> void:
 	var deck := Rect2(slab.position, Vector2(slab.size.x, slab.size.y * 0.48))
 	ci.draw_rect(deck, CONCRETE)
 	ci.draw_rect(deck, OUTLINE, false, 1.0)
-	# Vigas de borde
-	ci.draw_rect(slab.grow(-2), GUNMETAL, false, 3.0)
-	for p in _site_points(slab.grow(-slab.size.x * 0.08), n):
-		ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), GUNMETAL.lightened(0.15))
-		ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), OUTLINE, false, 1.0)
-	# Andamio: tablones en el borde de abajo
-	var plank_y := slab.end.y - 6.0
-	ci.draw_rect(Rect2(Vector2(slab.position.x + 2, plank_y), Vector2(slab.size.x - 4, 4)), LIGHT_WOOD)
-	ci.draw_rect(Rect2(Vector2(slab.position.x + 2, plank_y), Vector2(slab.size.x - 4, 4)), OUTLINE, false, 1.0)
-	if n >= 2:
-		# Grua: mastil en la esquina de arriba a la derecha, pluma cruzando la obra.
-		var mast := Vector2(slab.end.x - 4, slab.position.y + 4)
-		var tip := mast + Vector2(-slab.size.x * 0.85, slab.size.y * 0.35)
-		ci.draw_line(mast + Vector2(3, 4), tip + Vector2(3, 4), SHADOW, 4.0)
-		ci.draw_line(mast, tip, OUTLINE, 4.0)
-		ci.draw_line(mast, tip, HAZARD, 2.5)
-		ci.draw_rect(Rect2(mast - Vector2(4, 4), Vector2(8, 8)), HAZARD)
-		ci.draw_rect(Rect2(mast - Vector2(4, 4), Vector2(8, 8)), OUTLINE, false, 1.0)
+	ci.draw_rect(slab.grow(-2), mat_col, false, 3.0)
+	for p in _site_points(inner, n):
+		_pillar_2d(ci, p, mat_col)
+
+static func _pillar_2d(ci: CanvasItem, p: Vector2, col: Color) -> void:
+	ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), col.lightened(0.15))
+	ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), OUTLINE, false, 1.0)
 
 ## Puntos de pilar: esquinas para la clase 1, rejilla 3x3 para la 2, 4x4 la 3.
 static func _site_points(r: Rect2, n: int) -> Array:
@@ -616,6 +970,16 @@ static func _site_points(r: Rect2, n: int) -> Array:
 		for j in per:
 			pts.append(r.position + r.size * Vector2(float(i) / float(per - 1), float(j) / float(per - 1)))
 	return pts
+
+## Como en 3D: rejilla, o anillo para las siluetas redondas.
+static func _frame_points_2d(r: Rect2, n: int, shape: String) -> Array:
+	if shape in ["dome", "basin", "tanks"]:
+		var pts: Array = []
+		var count := 4 + 2 * n
+		for k in count:
+			pts.append(r.get_center() + Vector2.from_angle(TAU * k / count) * r.size * 0.48)
+		return pts
+	return _site_points(r, n)
 
 static func _cone(ci: CanvasItem, c: Vector2) -> void:
 	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -3), c + Vector2(3, 3), c + Vector2(-3, 3)]), Color(1.0, 0.45, 0.08))

@@ -814,6 +814,67 @@ var tech_definitions := [
 ## materiales -> solar con cimientos -> estructura a medio levantar. Se pasa de
 ## una a la siguiente cuando el progreso de la obra cruza cada umbral.
 var construction_phase_thresholds := [0.34, 0.67]
+## La obra de cada edificio (docs/03, "Obra por edificio"): las tres fases son
+## las mismas para todos, pero cada edificio las viste a su manera. Lo que no
+## diga su fila sale de construction_style_default. Campos:
+## - "piles": que se apila en la fase 0 (y lo que sobra en la 1), en orden:
+##   planks, beams, bricks, logs, sawdust, rivets, pipes, drums, sacks, stone,
+##   crates, sandbags, gravel, soil.
+## - "fence": la valla de la fase 0: planks, dark_planks, sheet (chapa), canvas (lona).
+## - "tarp": color de la lona (la valla de lona y la que tapa una pila).
+## - "frame": la silueta de la fase 2, que insinua el edificio: box, chimney,
+##   gable, tower, tanks, dome, plinth, basin, hall, headframe, low, mast.
+## - "frame_mat": de que son pilares y vigas: steel, wood, stone.
+## - "site_fx": lo que se mueve mientras se trabaja: sparks (soldadura, edificios
+##   de acero), dust (polvo, piedra y madera) o "" (nada mas que grua y banderin).
+## - "flag": color del banderin que ondea en la valla o en la grua.
+## - "crane": color de la grua.
+## La disposicion (donde va cada pila, la puerta, el andamio, la grua...) no
+## esta aqui: la decide la semilla de cada instancia (BuildingLook.site_layout).
+var construction_style_default := {
+	"piles": ["planks", "beams", "bricks"], "fence": "planks",
+	"tarp": Color(0.52, 0.48, 0.38), "frame": "box", "frame_mat": "steel",
+	"site_fx": "", "flag": Color(0.72, 0.13, 0.10), "crane": Color(0.95, 0.72, 0.10),
+}
+var construction_style := {
+	"nucleo": {"piles": ["stone", "beams", "rivets"], "fence": "sheet", "tarp": Color(0.36, 0.34, 0.40),
+		"frame": "dome", "frame_mat": "stone", "site_fx": "sparks", "flag": Color(0.77, 0.59, 0.16)},
+	"house": {"piles": ["sacks", "bricks", "planks"], "fence": "planks", "tarp": Color(0.62, 0.55, 0.40),
+		"frame": "gable", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.20, 0.42, 0.62)},
+	"sawmill": {"piles": ["logs", "sawdust", "planks"], "fence": "dark_planks", "tarp": Color(0.40, 0.46, 0.26),
+		"frame": "hall", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.90, 0.55, 0.12)},
+	"gold_mine": {"piles": ["gravel", "beams", "crates"], "fence": "dark_planks", "tarp": Color(0.48, 0.34, 0.20),
+		"frame": "headframe", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.93, 0.78, 0.32)},
+	"warehouse": {"piles": ["crates", "planks", "sacks"], "fence": "planks", "tarp": Color(0.30, 0.38, 0.50),
+		"frame": "hall", "frame_mat": "steel", "site_fx": "", "flag": Color(0.30, 0.55, 0.30)},
+	"foundry": {"piles": ["beams", "rivets", "bricks"], "fence": "sheet", "tarp": Color(0.45, 0.22, 0.14),
+		"frame": "chimney", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.95, 0.45, 0.08)},
+	"barracks": {"piles": ["sandbags", "crates", "beams"], "fence": "sheet", "tarp": Color(0.33, 0.37, 0.20),
+		"frame": "hall", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.72, 0.13, 0.10),
+		"crane": Color(0.42, 0.45, 0.24)},
+	"refinery": {"piles": ["pipes", "drums", "beams"], "fence": "sheet", "tarp": Color(0.18, 0.18, 0.20),
+		"frame": "tanks", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.95, 0.85, 0.20)},
+	"tower": {"piles": ["sandbags", "beams", "rivets"], "fence": "canvas", "tarp": Color(0.30, 0.33, 0.18),
+		"frame": "tower", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.72, 0.13, 0.10)},
+	"headquarters": {"piles": ["stone", "beams", "rivets"], "fence": "canvas", "tarp": Color(0.55, 0.12, 0.10),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.77, 0.59, 0.16),
+		"crane": Color(0.72, 0.13, 0.10)},
+	"market": {"piles": ["crates", "sacks", "planks"], "fence": "canvas", "tarp": Color(0.70, 0.36, 0.16),
+		"frame": "gable", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.20, 0.55, 0.50)},
+	"laboratory": {"piles": ["drums", "pipes", "crates"], "fence": "sheet", "tarp": Color(0.22, 0.36, 0.42),
+		"frame": "dome", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.45, 0.80, 0.85)},
+	"garden": {"piles": ["soil", "sacks", "planks"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.85, 0.35, 0.55)},
+	"fountain": {"piles": ["stone", "pipes", "gravel"], "fence": "planks", "tarp": Color(0.30, 0.45, 0.58),
+		"frame": "basin", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
+	"statue": {"piles": ["stone", "stone", "sacks"], "fence": "canvas", "tarp": Color(0.58, 0.54, 0.46),
+		"frame": "plinth", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.77, 0.59, 0.16)},
+}
+## La animacion de la obra (grua, polea, banderin): velocidad base de giro de
+## la grua (rad/s de la fase del vaiven) y cuanto se abre el vaiven (rad). Cada
+## instancia la multiplica por su propio factor (0,7-1,3) y arranca desfasada.
+var construction_crane_speed := 0.45
+var construction_crane_swing := 0.7
 ## Cada cuanto relee la vista 3D el estado de TODOS los edificios (un solo
 ## reloj para todo el mapa, no uno por edificio). Las senales de obra, ruina y
 ## reparacion repintan al instante; esto solo cubre el paso de fase y el

@@ -7,7 +7,10 @@ extends SceneTree
 ##
 ## Con ventana (los shaders solo compilan con un renderizador de verdad) y
 ## SIEMPRE con un override.cfg que apunte a otra carpeta de datos. Las capturas
-## van a docs/media/dev/look_probe_3d.png y look_probe_2d.png (git-ignored).
+## van a docs/media/dev/look_probe_3d.png y look_probe_2d.png, y las obras (una
+## fila por fase, varios edificios y dos casas) a look_probe_obras_3d.png,
+## look_probe_obras_3d_b.png (un instante despues: la grua se ha movido) y
+## look_probe_obras_2d.png (git-ignored).
 
 func _initialize() -> void:
 	root.add_child.call_deferred(load("res://tools/look_probe_runner.gd").new())
