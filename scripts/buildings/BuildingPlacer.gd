@@ -422,6 +422,9 @@ func _try_place(cell: Vector2i) -> void:
 	if _rotation_steps % 2 == 1:
 		place_data = _create_rotated_data(_current_data)
 	GridManager.place_building(cell, place_data, building)
+	# El primer extractor de un yacimiento le abre su camino de acceso, gratis.
+	if Rules.pave_access_ring(self, _current_data, verdict, building) > 0:
+		_show_feedback(Tr.t("LBL_ACCESS_RING_LAID"))
 	# Update warehouse count
 	if _current_data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))

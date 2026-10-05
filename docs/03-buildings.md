@@ -105,6 +105,21 @@ network" below.
   red quad per cell drawn through the mesh; 2D: a red frame above the building).
   Tapping one selects it as usual: its panel opens with MOVER. There is no batch or
   drag demolish. Tests: `tests/map/test_road_removal.gd`.
+- **Access road around a deposit (2026-10-04).** The first extractor planted next to
+  a deposit (sawmill-forest, gold mine-gold vein, foundry-iron) lays a free ring of
+  road around it (`PlacementRules.pave_access_ring()`, called by both placers before
+  `building_placed`; toast `LBL_ACCESS_RING_LAID`). The ring runs at
+  `extractor size + 1` cells from the deposit (3 with today's 2x2 extractors), so the
+  2-cell band touching the deposit stays **entirely free**: any extractor there
+  touches the deposit (reach 1) and the ring. Occupied cells (buildings, other
+  deposits) and cells off the grid are skipped, and only the pieces that end up
+  joined to the Núcleo's network are laid (the extractor's own auto-road crosses
+  the ring, so normally all of it); no extra route is paved. The deposit is marked
+  (`access_ring` meta, saved in its `deposits` entry, idempotent: a new map has new
+  deposits) and an old save with an extractor already touching it gets no ring.
+  The refinery eats its oil well, so wells get no ring. Moving an extractor never
+  lays one. The ring is ordinary road: removable under the "move first" rule.
+  Tests: `tests/map/test_access_ring.gd`.
 - **The Núcleo starts with its sidewalk:** `GameManager.pave_core_ring()` lays the 16
   road cells around it in `_new_game()`.
 - **Auto-road:** placing (or moving) a building where the network does not reach is

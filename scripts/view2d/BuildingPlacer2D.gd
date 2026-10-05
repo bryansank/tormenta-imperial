@@ -281,6 +281,9 @@ func try_place(cell: Vector2i) -> Node:
 	Rules.consume_deposit_if_required(_current_data.id, verdict, map_gen)
 	var building := _spawn(_current_data, cell, _rotation_steps)
 	building.set_meta("level", 1)
+	# El primer extractor de un yacimiento le abre su camino de acceso, gratis.
+	if Rules.pave_access_ring(self, _current_data, verdict, building) > 0:
+		_show_feedback(Tr.t("LBL_ACCESS_RING_LAID"))
 	if _current_data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
 	_redraw_roads_around(cell)

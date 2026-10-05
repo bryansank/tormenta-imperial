@@ -418,6 +418,117 @@ static func pave_route(placer: Node, route: Array) -> int:
 			EventBus.building_placed.emit(road, c)
 	return n
 
+# ── Camino de acceso alrededor de un yacimiento (2026-10-04) ───────────
+#
+# El primer extractor que se planta junto a un yacimiento tiende gratis un
+# anillo de carretera alrededor, para que siempre haya acceso. El anillo va a
+# `extractor + 1` casillas del yacimiento (con los extractores de 2x2, a 3):
+# asi la franja de 2 casillas pegada al yacimiento queda ENTERA libre para
+# extractores —todos lo tocan (alcance 1) y todos tocan el anillo—, y el anillo
+# es un lazo seguido en vez de trozos sueltos. Salta lo ocupado (edificios,
+# yacimientos) y lo que cae fuera de la rejilla; de lo que queda solo se tiende
+# lo que acaba unido a la red del Nucleo (sin Nucleo, todo). No se tiende una
+# ruta extra: el extractor ya llego con la suya, que cruza el anillo. La
+# Refineria se come su pozo, asi que su pozo no lleva anillo.
+
+## El yacimiento ya tuvo su anillo (meta guardada con el yacimiento).
+const ACCESS_RING_META := "access_ring"
+
+## Las casillas del anillo de acceso alrededor de `deposit` para extractores de
+## huella `extractor_size`, libres y unidas a la red. Sin tender nada.
+static func access_ring_cells(deposit: Node, extractor_size: Vector2i) -> Array:
+	if deposit == null or not is_instance_valid(deposit):
+		return []
+	var origin: Vector2i = deposit.get_meta("cell", Vector2i(-1, -1))
+	var size: Vector2i = deposit.get_meta("deposit_size", Vector2i(2, 2))
+	var gap := maxi(extractor_size.x, extractor_size.y)
+	var outer := Rect2i(origin, size).grow(gap + 1)
+	var free := {}
+	for y in range(outer.position.y, outer.end.y):
+		for x in range(outer.position.x, outer.end.x):
+			var on_border := x == outer.position.x or x == outer.end.x - 1 \
+				or y == outer.position.y or y == outer.end.y - 1
+			var c := Vector2i(x, y)
+			if on_border and GridManager.is_valid_cell(c) and GridManager.is_cell_free(c):
+				free[c] = true
+	if core_cells().is_empty():
+		return free.keys()
+	# Solo los trozos que tocan la red (o el Nucleo) llegan a ser camino.
+	var reach := connected_roads()
+	for c in core_cells():
+		reach[c] = true
+	var kept := {}
+	var queue: Array = []
+	for c in free:
+		if _touches([c], reach):
+			kept[c] = true
+			queue.append(c)
+	while not queue.is_empty():
+		var cur: Vector2i = queue.pop_back()
+		for d in NEIGHBORS4:
+			var n: Vector2i = cur + d
+			if free.has(n) and not kept.has(n):
+				kept[n] = true
+				queue.append(n)
+	return kept.keys()
+
+## Toca anillo al plantar `data` con este veredicto? Solo un extractor con veta
+## al lado (no la Refineria), el primero de ese yacimiento: ni el que ya tuvo
+## anillo ni uno que ya tenia extractor pegado (partidas de antes del anillo).
+## `building` es el recien plantado, que no cuenta como "otro extractor".
+static func wants_access_ring(data: BuildingData, verdict: Dictionary, building: Node) -> bool:
+	var rule: Dictionary = GameConfig.get_deposit_rule(data.id)
+	if rule.is_empty() or bool(rule.get("consumes", false)):
+		return false
+	var deposit: Node = verdict.get("deposit", null)
+	if deposit == null or not is_instance_valid(deposit) or bool(deposit.get_meta(ACCESS_RING_META, false)):
+		return false
+	var origin: Vector2i = deposit.get_meta("cell", Vector2i(-1, -1))
+	var size: Vector2i = deposit.get_meta("deposit_size", Vector2i(2, 2))
+	for info in GridManager.get_all_buildings():
+		var other: BuildingData = info.get("data")
+		if info.get("node") == building or other == null:
+			continue
+		var other_rule: Dictionary = GameConfig.get_deposit_rule(other.id)
+		if other_rule.get("deposit", "") != rule["deposit"]:
+			continue
+		if _deposit_within_reach(origin, size, info.get("cells", []), int(other_rule["reach"])):
+			return false
+	return true
+
+## Misma cuenta que MapGenerator.deposit_within_reach (Chebyshev), sin cargar
+## el generador.
+static func _deposit_within_reach(dep_origin: Vector2i, dep_size: Vector2i, cells: Array, reach: int) -> bool:
+	var max_x: int = dep_origin.x + dep_size.x - 1
+	var max_y: int = dep_origin.y + dep_size.y - 1
+	for c in cells:
+		var dx: int = maxi(0, maxi(dep_origin.x - c.x, c.x - max_x))
+		var dy: int = maxi(0, maxi(dep_origin.y - c.y, c.y - max_y))
+		if maxi(dx, dy) <= reach:
+			return true
+	return false
+
+## Tiende gratis el anillo de acceso si toca (wants_access_ring) con `placer`
+## (3D o 2D) y marca el yacimiento. Llamar con el extractor ya en la rejilla y
+## ANTES de emitir su building_placed: esa senal recalcula y guarda una vez para
+## todo. Los tramos se registran como los de la acera del Nucleo, sin senal por
+## tramo. Devuelve cuantos tramos puso.
+static func pave_access_ring(placer: Node, data: BuildingData, verdict: Dictionary, building: Node) -> int:
+	if not wants_access_ring(data, verdict, building):
+		return 0
+	var deposit: Node = verdict["deposit"]
+	deposit.set_meta(ACCESS_RING_META, true)
+	var road := load_building_data(ROAD_ID)
+	if road == null:
+		return 0
+	var n := 0
+	for c in access_ring_cells(deposit, data.grid_size):
+		var node: Node = placer.place_building_at(road, c)
+		if node != null:
+			ProductionManager.register_building(node, road, 0.0)
+			n += 1
+	return n
+
 ## Un extractor (Aserradero, Mina de oro, Fundicion) necesita su veta viva al
 ## lado para funcionar (2026-09-28): si se agota a mano, se para. Los que no
 ## tienen regla, y la Refineria (que se come su pozo al colocarse), siempre

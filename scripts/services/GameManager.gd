@@ -391,7 +391,9 @@ func _load_game() -> void:
 		for entry in data["deposits"]:
 			var uses: int = entry.get("uses_remaining", -1)
 			var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
-			_map_gen.spawn_deposit(entry["id"], Vector2i(entry["cell_x"], entry["cell_y"]), uses, dep_size)
+			var dep: Node = _map_gen.spawn_deposit(entry["id"], Vector2i(entry["cell_x"], entry["cell_y"]), uses, dep_size)
+			if dep != null and bool(entry.get("access_ring", false)):
+				dep.set_meta("access_ring", true)
 
 	# Restore camera
 	if data.has("camera") and _camera and _camera.has_method("set_state"):

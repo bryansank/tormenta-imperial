@@ -369,6 +369,10 @@ func get_all_deposits() -> Array:
 			}
 			if node.has_meta("uses_remaining"):
 				dep_entry["uses_remaining"] = node.get_meta("uses_remaining")
+			# Ya tuvo su camino de acceso (PlacementRules.pave_access_ring): solo
+			# se guarda si es asi; un save sin la clave es "aun no".
+			if bool(node.get_meta("access_ring", false)):
+				dep_entry["access_ring"] = true
 			result.append(dep_entry)
 	return result
 

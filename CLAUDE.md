@@ -280,6 +280,11 @@ AYUDA index.
   show `LBL_MOVE_FIRST` ("Primero mueve: Aserradero") and `flash_buildings()` them in
   red for `GameConfig.road_block_highlight_seconds`; a tap selects one (panel with
   MOVER). Tests: `tests/map/test_road_removal.gd`.
+- **Access ring:** the first extractor next to a deposit (not the refinery's oil
+  well) lays a free road ring `extractor size + 1` cells around it
+  (`PlacementRules.pave_access_ring()`), leaving the touching band free for more
+  extractors; only pieces joined to the network are laid, the deposit keeps an
+  `access_ring` mark in its save entry. Tests: `tests/map/test_access_ring.gd`.
 - **The Núcleo starts with its sidewalk:** `GameManager.pave_core_ring()` lays the 16
   road cells around it in `_new_game()`. Roads cost 1 gold, are drawn as full-cell
   pavement with a curb on the unconnected sides (3D and 2D), and take no damage
