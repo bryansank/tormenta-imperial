@@ -348,7 +348,7 @@ func _make_unit_row(unit_id: String, owned: int) -> PanelContainer:
 	var title_row := HBoxContainer.new()
 	title_row.add_theme_constant_override("separation", 8)
 	title_row.add_child(UITheme.make_label(Tr.t(def.get("name", unit_id)), "section", UITheme.TEXT))
-	title_row.add_child(UITheme.make_label(Tr.t("LBL_ARMY_OWNED") % owned, "small", UITheme.POSITIVE))
+	title_row.add_child(UITheme.make_label(Tr.t("LBL_ARMY_OWNED") % owned, "section", UITheme.POSITIVE))
 	info.add_child(title_row)
 
 	# The combat stats, not the economic ones: this is a tactical decision.
@@ -356,7 +356,12 @@ func _make_unit_row(unit_id: String, owned: int) -> PanelContainer:
 		int(stats.get("hp", 0)), int(stats.get("atk", 0)), int(stats.get("def", 0)),
 		int(stats.get("move", 0)), int(stats.get("min_range", 1)), int(stats.get("range", 1)),
 	]
-	info.add_child(UITheme.make_label(line, "small", UITheme.TEXT_DIM))
+	var stats_label := UITheme.make_label(line, "small", UITheme.TEXT_DIM)
+	stats_label.name = "CombatStats"
+	# Que es cada sigla, en el tooltip (y en la ayuda del tablero).
+	stats_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	stats_label.tooltip_text = Tr.t("LBL_COMBAT_STATS_HINT")
+	info.add_child(stats_label)
 
 	var minus := Button.new()
 	minus.text = "-"
