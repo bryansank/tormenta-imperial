@@ -15,19 +15,31 @@ extends SceneTree
 const OUT_DIR := "res://assets/textures/ui/units/"
 const SIZE := 64          ## Lado del PNG final, en pixeles.
 const SS := 4             ## Supermuestreo: se traza a SIZE*SS y se promedia.
+## Escalas del sistema de iconos (24 / 42 / 60 / 96 px): cada silueta sale
+## tambien como `<id>_<px>.png`, trazada a esa medida desde las mismas
+## coordenadas logicas de 64. UITheme.unit_icon(id, px) sirve la que toca.
+const SCALES := [24, 42, 60, 96]
 
+## Medida de salida en curso y su lienzo grande (_out * SS).
+var _out: int = SIZE
 var _canvas: int = SIZE * SS
 var _mask: PackedByteArray
 
 func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 
-	_draw_infantry()
-	_save("infantry.png")
-	_draw_artillery()
-	_save("artillery.png")
-	_draw_vehicle()
-	_save("vehicle.png")
+	var sizes: Array = [SIZE]
+	sizes.append_array(SCALES)
+	for px in sizes:
+		_out = px
+		_canvas = px * SS
+		var suffix := "" if px == SIZE else "_%d" % px
+		_draw_infantry()
+		_save("infantry%s.png" % suffix)
+		_draw_artillery()
+		_save("artillery%s.png" % suffix)
+		_draw_vehicle()
+		_save("vehicle%s.png" % suffix)
 
 	print("GEN_DONE")
 
@@ -107,11 +119,15 @@ func _plot(x: int, y: int) -> void:
 
 ## Devuelve el centro del pixel (x, y) del lienzo grande en coordenadas logicas.
 func _at(x: int, y: int) -> Vector2:
-	return Vector2((float(x) + 0.5) / float(SS), (float(y) + 0.5) / float(SS))
+	return Vector2((float(x) + 0.5) / _px_per_unit(), (float(y) + 0.5) / _px_per_unit())
+
+## Pixeles del lienzo grande por unidad logica (64 unidades de lado).
+func _px_per_unit() -> float:
+	return float(_canvas) / float(SIZE)
 
 ## Rango de pixeles del lienzo grande que cubre un rectangulo logico.
 func _span(lo: float, hi: float) -> Vector2i:
-	return Vector2i(int(floor(lo * SS)) - 1, int(ceil(hi * SS)) + 1)
+	return Vector2i(int(floor(lo * _px_per_unit())) - 1, int(ceil(hi * _px_per_unit())) + 1)
 
 func _disc(cx: float, cy: float, r: float) -> void:
 	var xs := _span(cx - r, cx + r)
@@ -187,10 +203,10 @@ func _inside(p: Vector2, points: Array) -> bool:
 ## donde el alfa es cero: si no, el filtrado bilineal del motor arrastraria un
 ## halo negro por todo el contorno al escalar el icono.
 func _save(fname: String) -> void:
-	var img := Image.create(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	var img := Image.create(_out, _out, false, Image.FORMAT_RGBA8)
 	var samples := float(SS * SS)
-	for y in range(SIZE):
-		for x in range(SIZE):
+	for y in range(_out):
+		for x in range(_out):
 			var hits := 0
 			for sy in range(SS):
 				for sx in range(SS):

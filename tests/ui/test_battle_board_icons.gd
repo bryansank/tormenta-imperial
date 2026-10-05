@@ -230,7 +230,8 @@ func test_the_initiative_chip_wears_the_same_silhouette() -> void:
 	assert_str(chip.text).is_empty()
 	assert_int(chip.get_child_count()).is_equal(1)
 	var icon: TextureRect = chip.get_child(0)
-	assert_object(icon.texture).is_same(UITheme.unit_icon("artillery"))
+	# La misma silueta, en la escala de 24 px del sistema de iconos (la ficha mide 26).
+	assert_object(icon.texture).is_same(UITheme.unit_icon("artillery", 24))
 	assert_bool(icon.texture.get_size().x > 0.0).is_true()
 
 func test_the_initiative_chip_falls_back_to_the_initial_too() -> void:

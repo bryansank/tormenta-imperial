@@ -13,6 +13,9 @@ const Art := preload("res://scripts/view2d/BuildingArt2D.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const StatusBadge2D := preload("res://scripts/view2d/StatusBadge2D.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
+## Obra por fases, ruina y actividad: la misma regla que en 3D (docs/03).
+const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
+const Fx := preload("res://scripts/buildings/BuildingFx.gd")
 
 var data: BuildingData = null
 ## Fantasma de colocacion: no esta en la rejilla, se pinta translucido.
@@ -23,6 +26,11 @@ var _selected := false
 var _signature: Array = []
 var _pulse := 0.0
 var _name_label: Label = null
+## Veredicto de LookRule.derive() del ultimo repintado.
+var _look: Dictionary = {"look": LookRule.Look.IDLE, "phase": 0}
+## Humo/luz de "trabajando" (creado la primera vez) y humo negro de la ruina.
+var _active_fx: Node2D = null
+var _ruin_fx: Node2D = null
 
 func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	data = building_data
@@ -95,6 +103,7 @@ func _process(delta: float) -> void:
 		_signature = sig
 		if _name_label:
 			_name_label.text = _label_text()
+		_apply_fx()
 		queue_redraw()
 
 func _current_signature() -> Array:
@@ -107,9 +116,65 @@ func _current_signature() -> Array:
 		var info := GridManager.get_building_info(self)
 		if not info.is_empty():
 			mask = Rules.road_neighbor_mask(info["origin_cell"])
+	_look = LookRule.derive(LookRule.facts_of(self, data))
 	return [constructing, progress, int(get_meta("level", 1)), int(get_meta("health", data.max_health)),
 		BuildingHealth.is_ruined(self), mask, int(get_meta("rotation_steps", 0)), String(get_meta("custom_name", "")),
-		Tr.get_locale()]
+		Tr.get_locale(), int(_look["look"]), int(_look["phase"])]
+
+func get_look() -> Dictionary:
+	return _look
+
+func get_active_fx() -> Node2D:
+	return _active_fx
+
+func get_ruin_fx() -> Node2D:
+	return _ruin_fx
+
+## Enciende o apaga los efectos animados segun el aspecto. Los sprites los
+## anima un shader (BuildingFx): aqui solo se crean una vez y se muestran.
+func _apply_fx() -> void:
+	var look := int(_look["look"])
+	if look == LookRule.Look.ACTIVE and _active_fx == null:
+		_active_fx = _make_active_fx()
+	if _active_fx:
+		_active_fx.visible = look == LookRule.Look.ACTIVE
+		_place_fx(_active_fx)
+	if look == LookRule.Look.RUIN and _ruin_fx == null:
+		_ruin_fx = Node2D.new()
+		_ruin_fx.name = "RuinFx"
+		_ruin_fx.z_index = 6
+		var smoke := Fx.sprite_2d("smoke", minf(footprint_px().x, footprint_px().y) * 0.7, "ruin")
+		smoke.position = Vector2(0, -footprint_px().y * 0.2)
+		_ruin_fx.add_child(smoke)
+		add_child(_ruin_fx)
+	if _ruin_fx:
+		_ruin_fx.visible = look == LookRule.Look.RUIN
+
+func _make_active_fx() -> Node2D:
+	var kind := LookRule.fx_kind(data.id)
+	if kind == "":
+		return null
+	var holder := Node2D.new()
+	holder.name = "ActiveFx"
+	holder.z_index = 6
+	var size := minf(base_size_px().x, base_size_px().y)
+	for anchor in Art.fx_anchors(data.id):
+		var sprite := Fx.sprite_2d(kind, size * (0.6 if kind == "glow" else 0.85))
+		sprite.set_meta("anchor", anchor)
+		holder.add_child(sprite)
+	add_child(holder)
+	return holder
+
+## Cada sprite en su chimenea, con el giro del edificio aplicado. El humo sube
+## un poco por encima de la boca para que salga de ella y no la tape.
+func _place_fx(holder: Node2D) -> void:
+	var size := base_size_px()
+	var angle := float(int(get_meta("rotation_steps", 0))) * PI * 0.5
+	for sprite in holder.get_children():
+		var anchor: Vector2 = sprite.get_meta("anchor", Vector2(0.5, 0.5))
+		var local := (anchor - Vector2(0.5, 0.5)) * size
+		var rise := 0.04 if String(sprite.name).ends_with("glow") else 0.28
+		sprite.position = local.rotated(angle) + Vector2(0, -size.y * rise)
 
 ## El rotulo: el nombre que le puso el jugador o, si no tiene, el del edificio en
 ## el idioma actual. Nunca el campo crudo del .tres, que esta en espanol.
@@ -163,16 +228,24 @@ func _draw() -> void:
 	var angle := 0.0 if data.id == "road" else steps * PI * 0.5
 	draw_set_transform(Vector2.ZERO, angle, Vector2.ONE)
 	var level: int = get_meta("level", 1)
-	Art.draw_building(self, data.id, size, {"road_mask": mask, "level": level, "shadow": not ghost})
+	var look := int(_look["look"]) if not ghost else LookRule.Look.IDLE
+	var n := LookRule.footprint_class(data.grid_size)
+	if look == LookRule.Look.CONSTRUCTION:
+		# Obra nueva: la fase de la huella EN LUGAR del edificio (que aun no esta).
+		Art.draw_construction_phase(self, size, int(_look["phase"]),
+			ProductionManager.get_construction_progress(self), n)
+	else:
+		Art.draw_building(self, data.id, size, {"road_mask": mask, "level": level, "shadow": not ghost})
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if ghost:
 		return
 	var fp2 := footprint_px()
-	if has_meta("under_construction"):
+	if look == LookRule.Look.UPGRADE:
+		# Mejora: el edificio sigue a la vista, con andamio y rayas encima.
 		Art.draw_construction(self, fp2, ProductionManager.get_construction_progress(self))
 	var ratio := BuildingHealth.get_health_ratio(self)
 	var ruined := BuildingHealth.is_ruined(self)
 	if ratio < 1.0 or ruined:
-		Art.draw_damage(self, fp2, ratio, ruined, hash(name))
+		Art.draw_damage(self, fp2, ratio, ruined, hash(name), n)
 	if _selected:
 		Art.draw_selection(self, fp2, _pulse)

@@ -39,6 +39,9 @@ const LEAF_DARK := Color(0.16, 0.34, 0.11)
 const OUTLINE := Color(0.05, 0.045, 0.035, 0.95)
 const SHADOW := Color(0.0, 0.0, 0.0, 0.28)
 const IMPERIAL_RED := Color(0.72, 0.13, 0.10)
+## Obra: tierra removida y el amarillo de peligro (el de la grua en 3D).
+const SITE_DIRT := Color(0.40, 0.30, 0.20)
+const HAZARD := Color(0.95, 0.75, 0.12)
 
 ## Hueco entre la huella y el borde del dibujo, para que dos edificios pegados
 ## se lean como dos.
@@ -477,30 +480,17 @@ static func _perimeter_point(r: Rect2, t: float) -> Vector2:
 	return Vector2(r.position.x, r.end.y - t)
 
 ## Dano: ceniza encima en proporcion a lo perdido (como la capa 3D); en ruinas,
-## grietas, escombro y humo. Mas una barra de vida si esta tocado.
-static func draw_damage(ci: CanvasItem, size: Vector2, ratio: float, ruined: bool, seed_val: int) -> void:
+## el dibujo de ruina (draw_ruin). Mas una barra de vida si esta tocado.
+## `n`: clase de huella (1, 2, 3), para el tamano de los escombros de la ruina.
+static func draw_damage(ci: CanvasItem, size: Vector2, ratio: float, ruined: bool, seed_val: int, n: int = 2) -> void:
 	var r := Rect2(-size * 0.5, size).grow(-INSET)
 	if ratio >= 1.0 and not ruined:
 		return
 	ci.draw_rect(r, Color(0.10, 0.09, 0.08, (1.0 - ratio) * 0.75))
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_val
 	if ruined:
-		ci.draw_rect(r, Color(0.05, 0.04, 0.03, 0.45))
-		for k in range(3):
-			var p := r.position + Vector2(rng.randf() * r.size.x, rng.randf() * r.size.y)
-			var pts := PackedVector2Array([p])
-			for j in range(4):
-				p += Vector2(rng.randf_range(-7, 7), rng.randf_range(-7, 7))
-				pts.append(p)
-			ci.draw_polyline(pts, Color(0.02, 0.02, 0.02), 1.5)
-		for k in range(6):
-			var q := r.position + Vector2(rng.randf() * r.size.x, rng.randf() * r.size.y)
-			ci.draw_rect(Rect2(q, Vector2(3, 2)), CONCRETE_DARK)
-		var sc := r.get_center() + Vector2(rng.randf_range(-4, 4), -2)
-		ci.draw_circle(sc, 5.0, Color(0.25, 0.25, 0.25, 0.55))
-		ci.draw_circle(sc + Vector2(4, -5), 4.0, Color(0.35, 0.35, 0.35, 0.45))
-		ci.draw_circle(sc + Vector2(8, -10), 3.0, Color(0.45, 0.45, 0.45, 0.35))
+		# La ruina tiene dibujo propio (muro roto, cascotes, vigas); el humo
+		# negro lo anima Building2D con la hoja de BuildingFx.
+		draw_ruin(ci, size, seed_val, n)
 	# Barra de vida
 	var bar := Rect2(Vector2(r.position.x + 3, r.position.y + 3), Vector2(r.size.x - 6, 4))
 	ci.draw_rect(bar.grow(1), OUTLINE)
@@ -512,6 +502,187 @@ static func draw_selection(ci: CanvasItem, size: Vector2, pulse: float) -> void:
 	var r := Rect2(-size * 0.5, size).grow(1.0 + pulse * 2.0)
 	ci.draw_rect(r, Color(0, 0, 0, 0.6), false, 4.0)
 	ci.draw_rect(r, Color(BRASS_LIGHT, 0.75 + pulse * 0.25), false, 2.0)
+
+# ── Obra por fases (compartida por huella) ────────────────────────────
+
+## Las tres fases de obra vistas desde arriba, compartidas por HUELLA como en
+## 3D (DieselpunkBuildingFactory.create_construction_phase): 0 valla con
+## materiales, 1 solar con cimientos, 2 estructura a medio levantar. Se pinta EN
+## LUGAR del edificio; `n` es la clase de huella (1, 2, 3: cuantas pilas,
+## cuantos pilares). Lleva debajo la barra de progreso.
+static func draw_construction_phase(ci: CanvasItem, size: Vector2, phase: int, progress: float, n: int = 2) -> void:
+	var r := Rect2(-size * 0.5, size).grow(-INSET)
+	ci.draw_rect(Rect2(r.position + Vector2(3, 4), r.size), SHADOW)
+	ci.draw_rect(r, SITE_DIRT)
+	# Terrones: la tierra removida se lee como obra, no como cesped.
+	for i in range(6 * n):
+		var p := r.position + r.size * Vector2(fposmod(i * 0.381, 1.0), fposmod(i * 0.617 + 0.13, 1.0))
+		ci.draw_circle(p, 1.4, SITE_DIRT.darkened(0.25))
+	match phase:
+		0: _site_fence(ci, r, n)
+		1: _site_foundation(ci, r, n)
+		_: _site_frame(ci, r, n)
+	ci.draw_rect(r, OUTLINE, false, 1.5)
+	var bar := Rect2(Vector2(r.position.x + 3, r.end.y - 7), Vector2(r.size.x - 6, 4))
+	ci.draw_rect(bar.grow(1), OUTLINE)
+	ci.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(progress, 0.0, 1.0), bar.size.y)), HAZARD)
+
+## Fase 0: valla de tablas con puerta abajo y pilas de material dentro.
+static func _site_fence(ci: CanvasItem, r: Rect2, n: int) -> void:
+	var fence := r.grow(-2)
+	var gate_half := fence.size.x * 0.16
+	var gate_c := fence.get_center().x
+	# Travesanos
+	ci.draw_line(fence.position, Vector2(fence.end.x, fence.position.y), LIGHT_WOOD, 2.0)
+	ci.draw_line(fence.position, Vector2(fence.position.x, fence.end.y), LIGHT_WOOD, 2.0)
+	ci.draw_line(Vector2(fence.end.x, fence.position.y), fence.end, LIGHT_WOOD, 2.0)
+	ci.draw_line(Vector2(fence.position.x, fence.end.y), Vector2(gate_c - gate_half, fence.end.y), LIGHT_WOOD, 2.0)
+	ci.draw_line(Vector2(gate_c + gate_half, fence.end.y), fence.end, LIGHT_WOOD, 2.0)
+	# Postes
+	var step := 7.0
+	var t := 0.0
+	var perimeter := 2.0 * (fence.size.x + fence.size.y)
+	while t < perimeter:
+		var p := _perimeter_point(fence, t)
+		if not (absf(p.y - fence.end.y) < 0.5 and absf(p.x - gate_c) < gate_half):
+			ci.draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)), DARK_WOOD)
+		t += step
+	# Cinta de peligro en la puerta
+	ci.draw_line(Vector2(gate_c - gate_half, fence.end.y), Vector2(gate_c + gate_half, fence.end.y), HAZARD, 2.0)
+	# Pilas: tablones, vigas, ladrillo
+	var spots := [Vector2(0.3, 0.32), Vector2(0.7, 0.58), Vector2(0.32, 0.7)]
+	var m := minf(r.size.x, r.size.y)
+	for k in n:
+		var c: Vector2 = r.position + r.size * (spots[k % spots.size()] as Vector2)
+		var pile := Rect2(c - Vector2(m * 0.17, m * 0.1), Vector2(m * 0.34, m * 0.2))
+		match k % 3:
+			0:
+				ci.draw_rect(pile, LIGHT_WOOD)
+				for j in range(1, 4):
+					var y := pile.position.y + pile.size.y * j / 4.0
+					ci.draw_line(Vector2(pile.position.x, y), Vector2(pile.end.x, y), DARK_WOOD, 1.0)
+			1:
+				for j in 3:
+					ci.draw_rect(Rect2(pile.position + Vector2(0, j * pile.size.y / 3.0), Vector2(pile.size.x, pile.size.y / 3.0 - 1.0)), STEEL)
+			2:
+				ci.draw_rect(pile, TILE_RED)
+				ci.draw_line(Vector2(pile.get_center().x, pile.position.y), Vector2(pile.get_center().x, pile.end.y), TILE_RED_DARK, 1.0)
+				ci.draw_line(Vector2(pile.position.x, pile.get_center().y), Vector2(pile.end.x, pile.get_center().y), TILE_RED_DARK, 1.0)
+		ci.draw_rect(pile, OUTLINE, false, 1.0)
+
+## Fase 1: losa de hormigon con zapatas y esperas de ferralla, conos en dos esquinas.
+static func _site_foundation(ci: CanvasItem, r: Rect2, n: int) -> void:
+	var slab := r.grow(-r.size.x * 0.08)
+	_plate(ci, slab, CONCRETE.lightened(0.2), OUTLINE, 1.5)
+	for p in _site_points(slab.grow(-slab.size.x * 0.08), n):
+		ci.draw_rect(Rect2(p - Vector2(4, 4), Vector2(8, 8)), CONCRETE_DARK)
+		ci.draw_circle(p + Vector2(-1.5, -1.5), 1.3, RUST)
+		ci.draw_circle(p + Vector2(1.5, 1.5), 1.3, RUST)
+	for c in [r.position + Vector2(4, 4), r.end - Vector2(4, 10)]:
+		_cone(ci, c)
+
+## Fase 2: pilares, medio forjado arriba, vigas de borde, andamio abajo y grua.
+static func _site_frame(ci: CanvasItem, r: Rect2, n: int) -> void:
+	var slab := r.grow(-r.size.x * 0.08)
+	_plate(ci, slab, CONCRETE.lightened(0.2), OUTLINE, 1.5)
+	# Medio forjado (mitad de arriba)
+	var deck := Rect2(slab.position, Vector2(slab.size.x, slab.size.y * 0.48))
+	ci.draw_rect(deck, CONCRETE)
+	ci.draw_rect(deck, OUTLINE, false, 1.0)
+	# Vigas de borde
+	ci.draw_rect(slab.grow(-2), GUNMETAL, false, 3.0)
+	for p in _site_points(slab.grow(-slab.size.x * 0.08), n):
+		ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), GUNMETAL.lightened(0.15))
+		ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), OUTLINE, false, 1.0)
+	# Andamio: tablones en el borde de abajo
+	var plank_y := slab.end.y - 6.0
+	ci.draw_rect(Rect2(Vector2(slab.position.x + 2, plank_y), Vector2(slab.size.x - 4, 4)), LIGHT_WOOD)
+	ci.draw_rect(Rect2(Vector2(slab.position.x + 2, plank_y), Vector2(slab.size.x - 4, 4)), OUTLINE, false, 1.0)
+	if n >= 2:
+		# Grua: mastil en la esquina de arriba a la derecha, pluma cruzando la obra.
+		var mast := Vector2(slab.end.x - 4, slab.position.y + 4)
+		var tip := mast + Vector2(-slab.size.x * 0.85, slab.size.y * 0.35)
+		ci.draw_line(mast + Vector2(3, 4), tip + Vector2(3, 4), SHADOW, 4.0)
+		ci.draw_line(mast, tip, OUTLINE, 4.0)
+		ci.draw_line(mast, tip, HAZARD, 2.5)
+		ci.draw_rect(Rect2(mast - Vector2(4, 4), Vector2(8, 8)), HAZARD)
+		ci.draw_rect(Rect2(mast - Vector2(4, 4), Vector2(8, 8)), OUTLINE, false, 1.0)
+
+## Puntos de pilar: esquinas para la clase 1, rejilla 3x3 para la 2, 4x4 la 3.
+static func _site_points(r: Rect2, n: int) -> Array:
+	var per := clampi(n, 1, 3) + 1
+	var pts: Array = []
+	for i in per:
+		for j in per:
+			pts.append(r.position + r.size * Vector2(float(i) / float(per - 1), float(j) / float(per - 1)))
+	return pts
+
+static func _cone(ci: CanvasItem, c: Vector2) -> void:
+	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -3), c + Vector2(3, 3), c + Vector2(-3, 3)]), Color(1.0, 0.45, 0.08))
+	ci.draw_line(c + Vector2(-2, 1), c + Vector2(2, 1), Color(1, 1, 1, 0.9), 1.0)
+
+# ── Ruina ─────────────────────────────────────────────────────────────
+
+## Ruina: encima del dibujo del edificio, tizne, un muro roto, cascotes y vigas
+## carbonizadas con ascuas. Mucho mas oscura y quebrada que un edificio tocado,
+## para que se distinga desde lejos. Determinista por `seed_val`.
+static func draw_ruin(ci: CanvasItem, size: Vector2, seed_val: int, n: int = 2) -> void:
+	var r := Rect2(-size * 0.5, size).grow(-INSET)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_val
+	ci.draw_rect(r, Color(0.06, 0.05, 0.04, 0.72))
+	# Manchas de hollin que se salen un poco de la huella
+	for k in range(3 + n):
+		var p := r.position + Vector2(rng.randf() * r.size.x, rng.randf() * r.size.y)
+		ci.draw_circle(p, rng.randf_range(5.0, 9.0) * (0.8 + 0.2 * n), Color(0.02, 0.02, 0.02, 0.55))
+	# Muro roto: borde superior dentado
+	var wall := PackedVector2Array([r.position, Vector2(r.end.x, r.position.y)])
+	var x := r.end.x
+	var steps := 5 + n
+	for i in steps + 1:
+		x = r.end.x - r.size.x * float(i) / float(steps)
+		wall.append(Vector2(x, r.position.y + rng.randf_range(3.0, 10.0)))
+	ci.draw_colored_polygon(wall, CONCRETE_DARK)
+	ci.draw_polyline(wall, OUTLINE, 1.5)
+	# Cascotes
+	for k in range(6 + 3 * n):
+		var c := r.position + Vector2(rng.randf_range(0.1, 0.9) * r.size.x, rng.randf_range(0.2, 0.9) * r.size.y)
+		var rad := rng.randf_range(2.0, 4.5)
+		var pts := PackedVector2Array()
+		for s in 5:
+			var a := TAU * s / 5.0 + rng.randf_range(-0.3, 0.3)
+			pts.append(c + Vector2(cos(a), sin(a)) * rad * rng.randf_range(0.7, 1.1))
+		_poly(ci, pts, CONCRETE if k % 2 == 0 else CONCRETE_DARK.lightened(0.1), OUTLINE, 1.0)
+	# Vigas carbonizadas cruzadas, con ascuas en la punta
+	for k in range(2 + n):
+		var a0 := r.position + Vector2(rng.randf_range(0.1, 0.9) * r.size.x, rng.randf_range(0.3, 0.9) * r.size.y)
+		var dir := Vector2.from_angle(rng.randf() * TAU) * minf(r.size.x, r.size.y) * rng.randf_range(0.35, 0.55)
+		ci.draw_line(a0, a0 + dir, OUTLINE, 5.0)
+		ci.draw_line(a0, a0 + dir, Color(0.16, 0.11, 0.08), 3.0)
+		ci.draw_circle(a0 + dir, 1.6, FIRE)
+	# Grietas
+	for k in range(3):
+		var p := r.position + Vector2(rng.randf() * r.size.x, rng.randf() * r.size.y)
+		var crack := PackedVector2Array([p])
+		for j in range(4):
+			p += Vector2(rng.randf_range(-7, 7), rng.randf_range(-7, 7))
+			crack.append(p)
+		ci.draw_polyline(crack, Color(0.02, 0.02, 0.02), 1.5)
+
+# ── Actividad ─────────────────────────────────────────────────────────
+
+## Donde sale el humo (o la luz) de cada edificio, en fracciones de su huella
+## SIN girar: las chimeneas y bocas del propio dibujo de arriba.
+static func fx_anchors(id: String) -> Array:
+	match id:
+		"foundry": return [Vector2(0.14, 0.5), Vector2(0.86, 0.5)]
+		"refinery": return [Vector2(0.78, 0.2)]
+		"gold_mine": return [Vector2(0.5, 0.37)]
+		"sawmill": return [Vector2(0.72, 0.5)]
+		"barracks": return [Vector2(0.5, 0.35)]
+		"tower": return [Vector2(0.33, 0.67)]
+		"warehouse": return [Vector2(0.5, 0.85)]
+	return [Vector2(0.5, 0.45)]
 
 # ── Yacimientos ───────────────────────────────────────────────────────
 

@@ -158,6 +158,10 @@ func _apply_visual(node: Node) -> void:
 func _meshes_of(node: Node) -> Array:
 	var found: Array = []
 	for child in node.get_children():
+		# La obra, los escombros y el humo (BuildingLookVisual) llevan su propio
+		# color: con la capa de ceniza encima, el humo seria un cuadro negro.
+		if child.is_in_group("building_fx"):
+			continue
 		if child is MeshInstance3D:
 			found.append(child)
 		if child.get_child_count() > 0:

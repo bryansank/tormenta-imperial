@@ -264,8 +264,9 @@ static func _measure_top_rec(node: Node, xform: Transform3D) -> float:
 		if not (child is Node3D):
 			continue
 		var n3: Node3D = child
-		# Los rotulos no cuentan: son lo que estamos colocando.
-		if n3 is Label3D or n3 is Sprite3D:
+		# Los rotulos no cuentan: son lo que estamos colocando. Tampoco el
+		# aspecto (obra, ruina, humo: grupo "building_fx"), que flota encima.
+		if n3 is Label3D or n3 is Sprite3D or n3.is_in_group("building_fx"):
 			continue
 		var local: Transform3D = xform * n3.transform
 		if n3 is MeshInstance3D and (n3 as MeshInstance3D).mesh:

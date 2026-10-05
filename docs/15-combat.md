@@ -191,7 +191,7 @@ serves both armies. `UITheme` owns the reading rules:
 
 | API | What it gives |
 |-----|---------------|
-| `UITheme.unit_icon_path(unit_id)` / `unit_icon(unit_id)` | The texture, or **`null` when there is no file on disk** |
+| `UITheme.unit_icon_path(unit_id, px)` / `unit_icon(unit_id, px)` | The texture, or **`null` when there is no file on disk**. With `px`, the icon traced at the matching scale of the icon system (24 / 42 / 60 / 96, `UITheme.icon_scale_for`), falling back to the 64 px file. The board asks for its cell size, the initiative strip for 24 |
 | `UITheme.unit_icon_tint(is_player)` | `POSITIVE` / `DANGER` lightened by 0.62 — the cell behind is the same colour *darkened*, and that gap is what keeps the silhouette from dissolving into its own background |
 | `UITheme.unit_face_color(is_player, spent)` | The same tint, dropped to `UNIT_ICON_SPENT_ALPHA` (0.42) once the unit has acted |
 | `UITheme.mark_boss(style)` | The brass halo (`BOSS_GLOW_SIZE`, `BOSS_BORDER_MIN`) stamped on a cell style **last**, so it adds to whatever border the state already chose instead of hiding it |
