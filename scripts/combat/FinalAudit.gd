@@ -136,7 +136,8 @@ func wave_scale(index: int, total: int) -> float:
 		+ GameConfig.final_audit_scale_per_era * float(maxi(0, era - 1))
 	if index >= total - 1:
 		scale *= GameConfig.final_audit_last_wave_multiplier
-	return scale
+	# Gobernador: la misma Regencia, mas dura (GameConfig.game_tier_rules).
+	return scale * GameMode.audit_enemy_mult()
 
 ## Bodies in this wave, never more than the board holds.
 func wave_slots(index: int) -> int:

@@ -387,7 +387,10 @@ func _auto_resolve_tithe(roster: Dictionary, severity: int) -> void:
 ## pagar más, y la próxima partida de gasto se aprueba sola. Ganarles hoy no
 ## quita el problema, lo encarece.
 func assessor_roster(severity: int) -> Dictionary:
-	var raw: float = float(GameConfig.storm_tithe_base_force + severity - 1) 		* GameConfig.get_assessor_escalation(tithes_repelled())
+	# Gobernador: la escolta trae `tithe_force_mult` veces los cuerpos.
+	var raw: float = float(GameConfig.storm_tithe_base_force + severity - 1) \
+		* GameConfig.get_assessor_escalation(tithes_repelled()) \
+		* GameMode.tithe_force_mult()
 	var force: int = clampi(roundi(raw), 1, GameConfig.combat_deploy_cap)
 	var guns: int = force / 3
 	var line: int = maxi(1, force - guns)

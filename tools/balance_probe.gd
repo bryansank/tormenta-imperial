@@ -10,6 +10,8 @@ extends Node
 ##   project.godot -> [autoload] -> BalanceProbe="*res://tools/balance_probe.gd"
 ##   godot --headless --path .
 ## Quitar la linea al terminar (la sonda cierra el juego sola).
+## Nivel Gobernador (enemigos de expedicion `expedition_enemy_mult` veces mas
+## fuertes):  godot --headless --path . -- --tier=governor
 ##
 ## Hermana de tools/storm_probe.gd y tools/battle_probe.gd.
 ##
@@ -90,9 +92,15 @@ func _running_a_tool_script() -> bool:
 	return false
 
 func _run() -> void:
+	var tier: int = GameMode.TIER_DEFAULT
+	for arg in OS.get_cmdline_user_args():
+		if String(arg).begins_with("--tier="):
+			tier = GameMode.tier_from_key(String(arg).trim_prefix("--tier="))
+	GameMode.begin_run(GameMode.Mode.CAMPAIGN, tier)
 	print("")
 	print("==============================================================")
-	print(" SONDA DE BALANCE DE COMBATE — %d semillas/celda" % SEEDS)
+	print(" SONDA DE BALANCE DE COMBATE — %d semillas/celda — nivel %s (enemigos x%.2f)" % [
+		SEEDS, GameMode.tier_key_of(GameMode.tier), GameMode.expedition_enemy_mult()])
 	print("==============================================================")
 	_print_config()
 	_sweep_encounters()
