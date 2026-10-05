@@ -7,7 +7,9 @@ extends CanvasLayer
 ##   - un velo que oscurece la pantalla menos el control del que se habla (el
 ##     boton CONSTRUIR, la tarjeta del Aserradero...), con un marco de laton;
 ##   - una flecha que lo senala;
-##   - una tarjeta con UNA linea: que hacer ahora. Y "Saltar tutorial".
+##   - una tarjeta con UNA linea: que hacer ahora, y debajo lo que falta si algo
+##     lo impide (obreros, recursos). Sin "Saltar tutorial" (2026-10-04); solo
+##     el repaso pedido desde AYUDA tiene "Terminar repaso".
 ## El velo no se come nada (MOUSE_FILTER_IGNORE): el jugador puede tocar lo que
 ## quiera, tambien fuera de orden. El paso no avanza con "Siguiente": avanza
 ## cuando TutorialManager ve que se hizo (derive_step), asi que da igual el
@@ -42,7 +44,7 @@ var _ring: Control
 var _card: PanelContainer
 var _badge: Label
 var _text: Label
-var _skip_btn: Button
+var _end_replay_btn: Button
 var _ok_btn: Button
 var _step := ""
 var _quick_guide: CanvasLayer = null
@@ -184,14 +186,18 @@ func _build_coach() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_END
 	row.add_theme_constant_override("separation", 8)
 	col.add_child(row)
-	_skip_btn = Button.new()
-	_skip_btn.name = "SkipTutorial"
-	_skip_btn.text = Tr.t("BTN_GUIDE_SKIP")
-	_skip_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
-	_skip_btn.focus_mode = Control.FOCUS_NONE
-	UITheme.style_button(_skip_btn, UITheme.BTN, UITheme.FONT_SMALL)
-	_skip_btn.pressed.connect(func(): TutorialManager.skip_guide())
-	row.add_child(_skip_btn)
+	# Sin "Saltar tutorial" (decision de Bryan, 2026-10-04): el tutorial de una
+	# partida nueva se hace entero. Solo el repaso que se pide desde AYUDA se
+	# puede dejar a medias.
+	_end_replay_btn = Button.new()
+	_end_replay_btn.name = "EndReplay"
+	_end_replay_btn.text = Tr.t("BTN_GUIDE_END_REPLAY")
+	_end_replay_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
+	_end_replay_btn.focus_mode = Control.FOCUS_NONE
+	UITheme.style_button(_end_replay_btn, UITheme.BTN, UITheme.FONT_SMALL)
+	_end_replay_btn.pressed.connect(func(): TutorialManager.stop_replay())
+	_end_replay_btn.visible = false
+	row.add_child(_end_replay_btn)
 	_ok_btn = Button.new()
 	_ok_btn.name = "GuideOk"
 	_ok_btn.text = Tr.t("BTN_GUIDE_OK")
@@ -206,7 +212,7 @@ func _on_step_changed(step_id: String) -> void:
 	_step = step_id
 	_done_left = DONE_SECONDS if step_id == "done" else 0.0
 	_ok_btn.visible = step_id == "done"
-	_skip_btn.visible = step_id != "done"
+	_end_replay_btn.visible = step_id != "done" and TutorialManager.is_replay()
 	_render_text()
 
 func _render_text() -> void:
@@ -226,8 +232,9 @@ func is_coach_visible() -> bool:
 func coach_text() -> String:
 	return _text.text
 
-func skip_button() -> Button:
-	return _skip_btn
+## El "Terminar repaso" (solo visible en un repaso pedido desde AYUDA).
+func end_replay_button() -> Button:
+	return _end_replay_btn
 
 ## El rectangulo resaltado ahora (vacio si no hay control).
 func highlight_rect() -> Rect2:
@@ -287,6 +294,11 @@ func _layout_step() -> void:
 		rect = HelpTargets.rect(get_tree(), target)
 	if not point.is_empty() and not bool(point.get("ok", true)):
 		text += "\n" + Tr.ti("GUIDE_MOVE_CAMERA")
+	# Lo que falta para este paso (obreros, recursos): el tutorial no se salta, asi
+	# que tiene que decir por que no se puede seguir.
+	var hint := TutorialManager.step_hint(_step)
+	if hint != "":
+		text += "\n" + hint
 	if _text.text != text:
 		_text.text = text
 
@@ -406,7 +418,11 @@ func _edge_point(c: Vector2, dir: Vector2, vp: Vector2, margin: float) -> Vector
 ## El bosque que toca senalar: el mas cercano al centro de la pantalla, o al
 ## Nucleo si ninguno se ve. {} si no hay mapa (pruebas).
 func _forest_point(vp: Vector2) -> Dictionary:
-	var gen := _scene_node("MapGenerator")
+	# El registrado en GameManager vale en 3D y en 2D (MapGenerator2D hereda);
+	# el de la escena, por si aun no se registro.
+	var gen: Node = GameManager.map_generator()
+	if gen == null:
+		gen = _scene_node("MapGenerator")
 	if gen == null or not gen.has_method("get_all_deposits"):
 		return {}
 	var best := {}

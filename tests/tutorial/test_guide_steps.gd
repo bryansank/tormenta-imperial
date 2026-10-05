@@ -139,6 +139,8 @@ func test_cancelling_the_placement_goes_back_one_step() -> void:
 	EventBus.building_placement_cancelled.emit()
 	assert_str(TutorialManager.current_step()).is_equal("open_build")
 
+## skip_guide() ya no esta en la interfaz (2026-10-04): es API interna para
+## sondas y pruebas, en modo dev (las pruebas corren con el editor: dev).
 func test_skipping_finishes_it_and_says_so() -> void:
 	_start()
 	TutorialManager.skip_guide()
