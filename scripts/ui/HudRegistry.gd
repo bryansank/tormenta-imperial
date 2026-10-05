@@ -19,7 +19,6 @@ class_name HudRegistry
 const ELEMENTS := {
 	"ResourceHUD": {"label": "HUD_RESOURCES", "hideable": true, "movable": true, "mode": "holder"},
 	"NotificationPanel.log": {"label": "HUD_LOG", "hideable": false, "movable": true, "mode": "holder"},
-	"NotificationPanel.objective": {"label": "HUD_OBJECTIVE", "hideable": true, "movable": true, "mode": "holder"},
 	"StormHUD": {"label": "HUD_STORM", "hideable": true, "movable": true, "mode": "holder"},
 	"NotificationPanel.toasts": {"label": "HUD_TOASTS", "hideable": true, "movable": true, "mode": "holder"},
 	"HelperPanel.callouts": {"label": "HUD_HELP", "hideable": true, "movable": false, "mode": "helper"},
@@ -36,15 +35,17 @@ const ELEMENTS := {
 ## Orden en Ajustes y en el editor.
 const ORDER := [
 	"ResourceHUD",
-	"NotificationPanel.objective", "StormHUD", "NotificationPanel.toasts",
+	"StormHUD", "NotificationPanel.toasts",
 	"HelperPanel.callouts", "BattleScreen.turn", "SandboxPanel", "RankPanel",
 	"NotificationPanel.log", "ConstructionMenu.button", "BuildingInfoPanel",
 ]
 
 ## Ids que existieron y ya no: un settings.cfg viejo que los nombre (ocultos o
 ## movidos) carga sin ellos (GameConfig.load_user_settings). La tarjeta de
-## estado de NotificationPanel paso a iconos de ResourceHUD en 2026-10.
-const RETIRED := ["NotificationPanel.status"]
+## estado de NotificationPanel paso a iconos de ResourceHUD en 2026-10; la
+## franja de objetivo se quito el 2026-10-05 (el siguiente paso vive en ¿QUE
+## HACER?).
+const RETIRED := ["NotificationPanel.status", "NotificationPanel.objective"]
 
 ## id -> WeakRef del control registrado mas reciente (y de su contenedor).
 static var _controls := {}

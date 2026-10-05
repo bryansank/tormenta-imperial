@@ -69,7 +69,7 @@ func _run() -> void:
 	GameConfig.ui_helper_visible = true
 	if _arg("edited") == "true":
 		GameConfig.ui_layout[DeviceProfile.layout_key()] = {
-			"NotificationPanel.objective": [0, 520],
+			"StormHUD": [0, 520],
 			"ConstructionMenu.button": [-360, 0],
 		}
 	DeviceProfile.apply_all()

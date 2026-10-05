@@ -1,12 +1,12 @@
 extends RefCounted
 ## Encuentra en pantalla el control real del que habla una ayuda o un paso del
-## tutorial: el boton CONSTRUIR, el ☰, el objetivo, una tarjeta de la lista de
+## tutorial: el boton CONSTRUIR, el ☰, ¿QUE HACER?, una tarjeta de la lista de
 ## edificios... Devuelve el Control (o su rectangulo) o null si ahora no esta.
 ##
 ## Lo que busca lo buscan por nombres estables, no por rutas de escena, porque
 ## esos controles son de otros paneles y cambian de sitio:
 ##   - grupo "hud_build_button" / "hud_menu_button" (lo pone quien crea el boton);
-##   - si no hay grupo, HudRegistry (ConstructionMenu.button, NotificationPanel.objective...);
+##   - si no hay grupo, HudRegistry (ConstructionMenu.button, StormHUD...);
 ##   - como ultimo recurso, el nodo del panel por su nombre en Main.tscn.
 ## Una busqueda que no encuentra nada no es un error: el tutorial sigue con su
 ## texto y sin foco.
@@ -43,7 +43,10 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 			# El boton "☰ MENÚ" del menu unico (PauseMenu).
 			return _first_in_group(tree, MENU_GROUP)
 		"objective":
-			return HudRegistry.control_of("NotificationPanel.objective")
+			# El siguiente paso vive en ¿QUE HACER? (la franja de objetivo del HUD
+			# se quito el 2026-10-05): su entrada del menu si esta a la vista, y
+			# si no, el boton "☰ MENÚ" que lleva a ella.
+			return objective_entry(tree)
 		"resources":
 			return HudRegistry.control_of("ResourceHUD")
 		# Obreros y moral son fichas de la fila de recursos. "status" era la
@@ -57,6 +60,15 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 	if target_name.begins_with("card:"):
 		return card_or_build(tree, target_name.substr(5))
 	return null
+
+## ¿QUE HACER?: la entrada del menu ☰ abierto o, cerrado, el boton del menu.
+static func objective_entry(tree: SceneTree) -> Control:
+	var menu := _scene_node(tree, "PauseMenu")
+	if menu != null and menu.has_method("entry"):
+		var e: Control = menu.entry("Colony_objectives")
+		if e != null and is_instance_valid(e) and e.is_visible_in_tree():
+			return e
+	return _first_in_group(tree, MENU_GROUP)
 
 ## La ficha de obreros o de moral del panel de recursos (ResourceHUD).
 static func _resource_hud_chip(tree: SceneTree, getter: String) -> Control:

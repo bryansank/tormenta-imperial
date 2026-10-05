@@ -5,6 +5,9 @@ extends CanvasLayer
 ## quito en 2026-10: obreros y moral son iconos de la fila de recursos
 ## (ResourceHUD). Lo urgente (sin madera, sin oro, moral baja, hambre) ya llega
 ## aqui como aviso de PopulationManager.
+## La franja de objetivo de arriba al centro ("Avanza hacia la Victoria
+## Imperial...") se quito el 2026-10-05: repetia, peor, lo que dice ¿QUE HACER?
+## (Objectives.next_step), que es el unico sitio del siguiente paso.
 
 const MAX_LOG_ENTRIES := 50
 const TOAST_DURATION := 4.0
@@ -28,17 +31,12 @@ var _is_open := false
 var _log_entries: Array = []
 var _log_vbox: VBoxContainer
 var _toast_container: VBoxContainer
-var _objective_label: Label
 
 func _ready() -> void:
 	layer = 11
 	_setup_ui()
 	EventBus.notification_posted.connect(_on_notification)
 	EventBus.phase_advanced.connect(_on_phase_advanced)
-	EventBus.milestone_completed.connect(func(_m): _update_objective_hint())
-	# El modo se sabe al terminar de cargar (o de empezar): el objetivo depende de el.
-	EventBus.game_load_completed.connect(_update_objective_hint)
-	EventBus.game_new_started.connect(_update_objective_hint)
 	EventBus.tutorial_intro_requested.connect(func(): _toast_layer.layer = TOAST_LAYER_UNDER_INTRO)
 	EventBus.tutorial_intro_closed.connect(func(): _toast_layer.layer = TOAST_LAYER)
 	# Con CONSTRUIR abierto, los avisos no tapan la
@@ -49,27 +47,12 @@ func _ready() -> void:
 	# vuelve al mapa sin saber que se trajo ni a quien dejo por el camino.
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
-	_update_objective_hint()
 
 func _setup_ui() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-
-	# Objective hint (top-center)
-	var obj_panel := PanelContainer.new()
-	UILayoutManager.apply_layout("NotificationPanel.objective", obj_panel)
-	obj_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT))
-	obj_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(obj_panel)
-	HudRegistry.register("NotificationPanel.objective", obj_panel)
-
-	_objective_label = UITheme.make_label("", "small", UITheme.ACCENT)
-	_objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_objective_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	obj_panel.add_child(_objective_label)
 
 	# Toast container (bottom-left), en su propia capa para verse sobre el tablero.
 	_toast_layer = CanvasLayer.new()
@@ -230,42 +213,10 @@ func _toggle_panel() -> void:
 	_is_open = not _is_open
 	_panel.visible = _is_open
 
-# ── Phase & Objective System ──
+# ── Fases ──
 
 func _on_phase_advanced(new_phase: int) -> void:
 	# Notify the player about the new phase
 	var phase_msg: String = Tr.t("PHASE_%d" % new_phase)
 	if phase_msg != "PHASE_%d" % new_phase:
 		EventBus.notification_posted.emit(phase_msg, "info", UITheme.ACCENT)
-	_update_objective_hint()
-
-func _update_objective_hint() -> void:
-	if not _objective_label:
-		return
-	# Sandbox lo tiene todo abierto: los pasos de la campana no aplican.
-	if GameMode.all_unlocked():
-		_objective_label.text = Tr.t(GameMode.goal_key())
-		return
-	var phase: int = ProgressionManager.current_phase
-	var hint: String = ""
-	match phase:
-		GameConfig.Phase.FOUNDATION:
-			hint = Tr.t("OBJ_PHASE_0")
-		GameConfig.Phase.SETTLEMENT:
-			if not ProgressionManager.is_milestone_completed("first_gold_mine"):
-				hint = Tr.t("OBJ_PHASE_1")
-			else:
-				hint = Tr.t("OBJ_PHASE_1_DONE")
-		GameConfig.Phase.ECONOMY:
-			if not ProgressionManager.is_milestone_completed("first_warehouse"):
-				hint = Tr.t("OBJ_PHASE_2")
-			else:
-				hint = Tr.t("OBJ_PHASE_2_DONE")
-		GameConfig.Phase.SURVIVAL:
-			if not ProgressionManager.is_milestone_completed("era_2"):
-				hint = Tr.t("OBJ_PHASE_3")
-			else:
-				hint = Tr.t("OBJ_PHASE_3_DONE")
-		_:
-			hint = Tr.t("OBJ_PHASE_4")
-	_objective_label.text = hint
