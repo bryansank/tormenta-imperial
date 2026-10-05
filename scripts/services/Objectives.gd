@@ -697,6 +697,12 @@ static func route() -> Array:
 			continue
 		var done: bool = _line_entry_done(entry)
 		var row := {"text": describe(entry)["title"], "done": done, "current": false}
+		# En EL CAMINO cada fila es un paso: "Construye:" delante de cada
+		# edificio sobraba (2026-10-04). Basta el nombre.
+		if String(entry["kind"]) == "build":
+			var bdata: BuildingData = Rules.load_building_data(String(entry["id"]))
+			if bdata != null:
+				row["text"] = bdata.get_display_name()
 		if String(entry["kind"]) == "train":
 			var as_step := _army_step(String(entry["id"]), int(entry["count"]), "", "train")
 			as_step["any"] = bool(entry.get("any", false))
