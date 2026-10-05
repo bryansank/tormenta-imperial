@@ -103,7 +103,21 @@ obra, mejora, ruina, trabajando) y solo repinta si cambio. Asi una
 partida cargada, una tormenta o una reparacion se ven sin que ningun servicio
 sepa que existe.
 
-El dibujo es `BuildingArt2D`: la huella exacta (con un margen de 2 px) vista
+**La parcela** (docs/03, "Parcela y atrezo"): debajo, el suelo de la parcela
+con su borde oscuro y el remate de los lados sin calzada
+(`BuildingArt2D.draw_lot_ground`) y la sombra de contacto bajo el edificio
+(`draw_lot_shadow`); encima, el atrezo del patio y el elemento exagerado
+(`draw_lot_props`: la grua del Almacen, la chimenea de la Fundicion, el
+emblema sobre el Cuartel General...). Es el mismo plan que la 3D
+(`LotPlan.plan`), con la misma semilla por celda. El plan se rehace solo si
+cambia la celda, las calzadas vecinas (que se releen cuando llega
+`building_placed` / `building_demolished` / `building_moved` /
+`game_load_completed`, no cada frame), la obra o la ruina. El fantasma y el
+icono no llevan parcela; el fantasma si deja libre el patio, para medir lo
+mismo que el edificio.
+
+El dibujo es `BuildingArt2D`: la huella menos el patio de su parcela (opcion
+`inset` de `draw_building`; el icono del menu usa la huella entera) vista
 desde arriba, con sombra, relieve y una silueta propia por edificio en la paleta
 de `DieselpunkBuildingFactory` (hierro, laton, oxido, hormigon, fuego). Encima:
 obra (rayas amarillo/negro, andamio, barra de progreso), dano (ceniza en
@@ -118,14 +132,18 @@ el mapa"):
 - **Obra nueva**: en lugar del edificio se pinta la fase de su huella
   (`BuildingArt2D.draw_construction_phase`): valla con pilas de material,
   luego losa con zapatas y ferralla, luego pilares, medio forjado, andamio y
-  grua. Debajo, la barra de progreso.
+  grua. Debajo, la barra de progreso. Ocupa el rectangulo del edificio: el
+  patio de alrededor es la parcela a medio preparar (tierra, jalones, palet
+  de losas, el remate puesto lado a lado).
 - **Mejora**: el edificio a la vista con rayas amarillo/negro, andamio en aspa
   y barra (`draw_construction`).
 - **Ruina**: encima del dibujo, `draw_ruin` (tizne, muro dentado, cascotes,
   vigas carbonizadas con ascuas, grietas) y un sprite de humo negro animado
-  (`RuinFx`). Al reparar se apaga.
+  (`RuinFx`). Al reparar se apaga. El dano y la ruina van sobre el edificio;
+  la parcela tiene los suyos (suelo quemado, atrezo volcado y carbonizado).
 - **Trabajando**: sprites de humo, serrin o luz (`ActiveFx`) en las chimeneas
-  del propio dibujo (`BuildingArt2D.fx_anchors`), girados con el edificio. Los
+  del propio dibujo (`BuildingArt2D.fx_anchors`, fracciones del rectangulo del
+  edificio; el serrin del Aserradero sale de la sierra), girados con el edificio. Los
   anima un shader `canvas_item` con `TIME` sobre la hoja de `BuildingFx`
   (`Sprite2D` recortado al fotograma 0): el edificio no repinta por la
   animacion.
@@ -199,6 +217,8 @@ docs/21 §9).
   real de GameManager, preferencia de vista y linea de comandos, pantalla →
   celda a varios zooms, la camara 2D y los pasos de la tormenta;
   `test_building2d_look.gd`: las fases, la ruina y los efectos se dibujan sin
-  error y Building2D enciende/apaga lo que toca.
+  error y Building2D enciende/apaga lo que toca; `test_building2d_lot.gd`: los
+  16 edificios con su parcela en pie, en obra y en ruina.
 - `tools/look_probe.gd`: captura de todos los aspectos en 3D y 2D
-  (docs/03, "Aspecto en el mapa").
+  (docs/03, "Aspecto en el mapa") y la fila "estilo": los 16 en su parcela, con
+  luz normal y con el tinte de la Tormenta (docs/03, "Parcela y atrezo").

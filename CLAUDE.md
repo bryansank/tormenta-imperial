@@ -580,6 +580,7 @@ tormenta-imperial/
 |   |   +-- BuildingLookVisual.gd    # Applies it in 3D (child "LookVisual"); BuildingPlacer syncs it with one map-wide clock
 |   |   +-- BuildingFx.gd            # Generated smoke/dust/glow sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D
 |   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes (fallback when there is no GLB)
+|   |   +-- LotPlan.gd, BuildingLot.gd, LotMesh.gd  # The lot: rule (both views), 3D node, one-mesh builder
 |   +-- camera/MonumentalCamera.gd   # Orthographic 45deg RTS camera
 |   +-- combat/                      # PURE models: no nodes, no signals, no global RNG
 |   |   +-- CombatUnit.gd            # One unit: hp, position, draft bonuses, morale mods
@@ -624,7 +625,7 @@ tormenta-imperial/
 +-- data/buildings/                  # 16 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
-|   +-- models/buildings/<id>/       # GLB models (12 of the 16 buildings use one)
+|   +-- models/buildings/<id>/       # GLB models (11 of the 16 buildings use one; sawmill's is kept, unused)
 |   +-- textures/                    # metal_plate PBR maps; ui/ 9-patch sprites, ui/icons/, ui/units/ (silhouettes)
 |   +-- fonts/, branding/            # Fonts with their licences; logo, banner, key art
 +-- tools/
@@ -662,11 +663,24 @@ Note: unit and tech definitions live as inline dictionaries in `GameConfig.gd`
 
 Building 3D meshes come from **two** sources. `BuildingPlacer._create_building_mesh()`
 prefers a building's `model_scene` (a GLB under `assets/models/buildings/<id>/`) and
-falls back to `DieselpunkBuildingFactory` when it is unset. **12 of the 16 buildings
-ship a GLB**; `nucleo`, `road`, `market` and `laboratory` are procedural today (road
-needs the factory because its mesh is connectivity-aware; the Market and the
-Laboratory have no model yet). GLBs made for 1x1 or 2x1 fill their 2x2 plot through
-`model_scale` / `model_stretch`.
+falls back to `DieselpunkBuildingFactory` when it is unset:
+
+| Source | Buildings |
+|---|---|
+| GLB (`model_scene`) | `barracks`, `foundry`, `fountain`, `garden`, `gold_mine`, `headquarters`, `house`, `refinery`, `statue`, `tower`, `warehouse` (11) |
+| Procedural (`DieselpunkBuildingFactory`) | `nucleo`, `road` (connectivity-aware), `market`, `laboratory`, `sawmill` (5) |
+
+The Market and the Laboratory have no model yet. The sawmill went procedural on
+2026-10-04 (an open shed with the big saw in view, docs/03); its old GLB stays in
+`assets/models/buildings/sawmill/`, unused. GLBs made for 1x1 or 2x1 fill their 2x2
+plot through `model_scale` / `model_stretch`.
+
+Every building but the road sits on its **lot** (child `Lot`,
+`scripts/buildings/BuildingLot.gd`): ground, contact shadow, trim, props and, where the
+model lacks one, the exaggerated element (the foundry chimney, the warehouse crane, the
+HQ emblem...), decided by `LotPlan.gd` from `GameConfig.building_lot_style` and drawn
+the same in 2D. The model is shrunk in plan to leave the yard free
+(`BuildingLot.fit_model`). See docs/03 "Parcela y atrezo" and the building style guide.
 
 ---
 
@@ -696,7 +710,7 @@ Laboratory have no model yet). GLBs made for 1x1 or 2x1 fill their 2x2 plot thro
 2. Add limit in `GameConfig.building_limits`
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any), and a row in `GameConfig.building_deposit_rules` if it must touch a deposit
-5. Give it a look in both views: a GLB in `model_scene` (or a case in `DieselpunkBuildingFactory`) for 3D, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it)
+5. Give it a look in both views: a GLB in `model_scene` (or a case in `DieselpunkBuildingFactory`) for 3D, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it). Give it a lot in `GameConfig.building_lot_style` (ground, trim, yard, props and a `signature` if the model lacks an exaggerated element) — docs/03 "Parcela y atrezo"
 6. Add translations in `Tr.gd` (both ES and EN), including `BLD_<ID>_NAME` and `BLD_<ID>_DESC`. UI shows buildings through `BuildingData.get_display_name()` / `get_description()`, never the raw `.tres` fields
 7. Building auto-appears in ConstructionMenu (loads all .tres from data/buildings/)
 
@@ -782,7 +796,7 @@ All balance values live in `GameConfig.gd`:
 ### Shared Utilities
 
 - **FloatingText** (`scripts/services/FloatingText.gd`): Static class for spawning animated 3D text labels. Use `FloatingText.spawn()` for custom text or `FloatingText.spawn_resource()` for resource gain/loss display (`spawn_on()` / `spawn_resource_on()` work on any node, 2D included; the 2D view draws them with `FloatingText2D`). Colors come from `GameConfig.resource_colors`.
-- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and ConstructionMenu previews **as the fallback when a building has no `model_scene` GLB** — today that is `nucleo`, `road`, `market` and `laboratory`.
+- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and ConstructionMenu previews **as the fallback when a building has no `model_scene` GLB** — today that is `nucleo`, `road`, `market`, `laboratory` and `sawmill`.
 - **UITheme** (`scripts/ui/UITheme.gd`): Static theme — call its factories for any new UI instead of hand-styling controls.
 
 ### Dev Mode
