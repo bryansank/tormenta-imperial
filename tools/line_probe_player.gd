@@ -46,8 +46,11 @@ const SIEGE_TARGET := {"vehicle": 6}
 const RESERVE_TICKS := 2.0
 ## Cada cuanto pasa a recoger (segundos de juego), si nada se llena antes.
 const COLLECT_EVERY := 60.0
-## Minutos de comida por delante a partir de los que planta el cultivo largo.
-const LONG_CROP_MINUTES := 10.0
+## Minutos de comida por delante a partir de los que planta el cultivo medio y
+## el largo. El largo llega de golpe cada 20 min: sin colchon, la gente pasa
+## hambre esperandolo (medido en la semilla 1, 2026-10-04).
+const MEDIUM_CROP_MINUTES := 8.0
+const LONG_CROP_MINUTES := 25.0
 
 var options: Dictionary = {}
 
@@ -488,7 +491,39 @@ func _collect() -> void:
 	if not due:
 		return
 	_collect_accum = 0.0
-	var got: Dictionary = ProductionManager.collect_all()
+	# Con sitio de sobra se recoge todo. Con la bolsa por encima del 75%, solo lo
+	# que hace falta: lo que le falta al paso (y a su receta), comida si va justa y
+	# oro si no llega para la tropa. Lo demas espera en su edificio (parado).
+	var got: Dictionary = {}
+	if ResourceManager.get_total_stored() < int(float(ResourceManager.get_storage_cap()) * 0.75):
+		got = ProductionManager.collect_all()
+	else:
+		var wanted: Dictionary = {}
+		var step: Dictionary = _r.get("last_step", {})
+		for res in Objectives.missing_for(step):
+			wanted[String(res)] = true
+			if ResourceManager.is_material_name(String(res)):
+				for input in Objectives.material_recipe(String(res)).get("cost", {}):
+					wanted[String(input)] = true
+		if String(step.get("kind", "")) == "make":
+			for input in Objectives.material_recipe(String(step["id"])).get("cost", {}):
+				wanted[String(input)] = true
+		if ResourceManager.get_amount(ResourceManager.Type.FOOD) < PopulationManager.food_due() * 8:
+			wanted["food"] = true
+		if ResourceManager.get_amount(ResourceManager.Type.GOLD) < 200:
+			wanted["gold"] = true
+		for node in ProductionManager._stock.keys():
+			if not is_instance_valid(node):
+				continue
+			var hit := false
+			for res in ProductionManager.get_stock(node):
+				if wanted.has(res):
+					hit = true
+			if not hit:
+				continue
+			var part: Dictionary = ProductionManager.collect(node)
+			for res in part:
+				got[res] = int(got.get(res, 0)) + int(part[res])
 	if got.is_empty():
 		return
 	_r["collects"] += 1
@@ -503,7 +538,11 @@ func _tend_farms() -> void:
 		/ maxf(1.0, GameConfig.get_duration(GameConfig.consumption_interval))
 	var food_ahead: float = float(ResourceManager.get_amount(ResourceManager.Type.FOOD)) \
 		+ float(ProductionManager.get_all_stock().get("food", 0))
-	var want: String = "crop_long" if food_ahead >= due_per_min * LONG_CROP_MINUTES else "crop_short"
+	var want: String = "crop_short"
+	if food_ahead >= due_per_min * LONG_CROP_MINUTES:
+		want = "crop_long"
+	elif food_ahead >= due_per_min * MEDIUM_CROP_MINUTES:
+		want = "crop_medium"
 	for info in GridManager.get_all_buildings():
 		if (info["data"] as BuildingData).id != ProductionManager.FARM_ID:
 			continue

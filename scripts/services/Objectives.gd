@@ -29,7 +29,10 @@ const LINE := [
 	{"kind": "build", "id": "farm", "count": 1, "why": "OBJ_WHY_FARM"},
 	{"kind": "build", "id": "gold_mine", "count": 1, "why": "OBJ_WHY_GOLD_MINE"},
 	{"kind": "build", "id": "house", "count": 1, "why": "OBJ_WHY_HOUSE"},
-	{"kind": "build", "id": "sawmill", "count": 2, "why": "OBJ_WHY_SAWMILL_2"},
+	# Antes un segundo aserradero "porque la gente come madera". Desde que come
+	# comida (2026-10-04) la madera sobra y atasca la bolsa: lo que hace falta es
+	# el Mercado, para vender lo que sobra y comprar comida si falta.
+	{"kind": "build", "id": "market", "count": 1, "why": "OBJ_WHY_MARKET"},
 	{"kind": "build", "id": "warehouse", "count": 1, "why": "OBJ_WHY_WAREHOUSE"},
 	{"kind": "build", "id": "foundry", "count": 1, "why": "OBJ_WHY_FOUNDRY"},
 	{"kind": "build", "id": "barracks", "count": 1, "why": "OBJ_WHY_BARRACKS"},
@@ -135,6 +138,12 @@ static func next_step() -> Dictionary:
 	return _support_or(target)
 
 static func _support_or(target: Dictionary) -> Dictionary:
+	# La bolsa atascada de lo que el paso no pide: vender eso primero, o lo que
+	# espera en los edificios (el acero de la fundicion, el oro de la mina) no
+	# entra nunca (2026-10-04: la produccion ya no se tira, se para).
+	var unclog: Dictionary = _unclog_step(target)
+	if not unclog.is_empty():
+		return unclog
 	# Lo que el paso pide del taller va antes que cualquier otra cosa: sin
 	# fabricarlo, juntar oro no acerca al paso.
 	var make: Dictionary = make_step_for(target)
@@ -147,6 +156,47 @@ static func _support_or(target: Dictionary) -> Dictionary:
 	# obreros para atenderlo es un consejo que el juego rechaza al hacer clic.
 	var hands: Dictionary = _workers_step(support)
 	return hands if not hands.is_empty() else support
+
+## Vender lo que sobra cuando la bolsa esta a rebosar y algo espera en los
+## edificios para entrar. Sobra lo que ni el paso ni su receta de taller piden,
+## y de la comida lo que pasa de ocho ciclos. {} si no hace falta o no hay Mercado.
+static func _unclog_step(target: Dictionary) -> Dictionary:
+	if Rules.count_building("market") == 0:
+		return {}
+	var cap: int = ResourceManager.get_storage_cap()
+	if ResourceManager.get_total_stored() < int(float(cap) * CROWDED_BAG):
+		return {}
+	var waiting: Dictionary = ProductionManager.get_all_stock()
+	var keep := {}
+	var cost: Dictionary = step_cost(target)
+	for type in cost:
+		keep[ResourceManager.get_type_name(type)] = int(cost[type])
+	for res in missing_for(target):
+		if not ResourceManager.is_material_name(String(res)):
+			continue
+		for res_name in material_recipe(String(res)).get("cost", {}):
+			keep[res_name] = int(keep.get(res_name, 0)) + 2 * int(material_recipe(String(res))["cost"][res_name])
+	keep["food"] = int(keep.get("food", 0)) + PopulationManager.food_due() * 8
+	# Solo si lo que espera fuera es justo lo que falta: si no, sobra vender.
+	var blocked := false
+	for res_name in keep:
+		if ResourceManager.get_amount(ResourceManager.name_to_type(String(res_name))) < int(keep[res_name]) \
+				and int(waiting.get(res_name, 0)) > 0:
+			blocked = true
+	if not blocked:
+		return {}
+	var best := ""
+	var best_excess := MIN_SALE - 1
+	for res in ["food", "wood", "oil", "steel"]:
+		if not ResourceManager.is_unlocked_by_name(res):
+			continue
+		var excess: int = ResourceManager.get_amount(ResourceManager.name_to_type(res)) - int(keep.get(res, 0))
+		if excess > best_excess:
+			best = res
+			best_excess = excess
+	if best == "":
+		return {}
+	return {"kind": "sell", "id": best, "amount": mini(best_excess, maxi(MIN_SALE, cap / 5)), "why": "OBJ_WHY_SELL"}
 
 ## "Fabrica vigas en la Fundicion" si `target` pide un material que falta y su
 ## edificio esta en pie. {} si no pide materiales, ya los hay, o aun no hay donde

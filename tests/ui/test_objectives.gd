@@ -236,7 +236,7 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 	# El orden de la linea, en la secuencia visitada (con lo que haya en medio).
 	# La Granja ocupa dos obreros: la primera casa puede llegar antes que la mina,
 	# como paso de apoyo, asi que aqui no se exige su sitio (2026-10-04).
-	var expected: Array = ["build:sawmill", "build:farm", "build:gold_mine", "build:sawmill",
+	var expected: Array = ["build:sawmill", "build:farm", "build:gold_mine", "build:market",
 		"build:warehouse", "build:foundry", "build:barracks", "train:artillery", "sortie:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
 		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]
