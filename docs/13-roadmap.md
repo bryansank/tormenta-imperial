@@ -17,13 +17,19 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 
 ### Core
 
-- ✅ Grid building placement (**40×40**, the island covers every cell), 14 buildings,
-  rotation, move, demolish; extractors must touch their deposit
-  (`GameConfig.building_deposit_rules`)
+- ✅ Grid building placement (**40×40 to 48×48, rolled per game**, the island covers
+  every cell), 16 buildings (all 2x2 but the Núcleo and the road), rotation, move,
+  demolish; extractors must touch their deposit (`GameConfig.building_deposit_rules`)
+- ✅ Random map: 3-6 deposits of each type, each with room and a road path for its
+  extractor; island shape from a saved seed
+- ✅ Road network joined to the Núcleo, auto-road when placing, "no road, no work",
+  workers walking the roads
 - ✅ 4 resources in one shared pool + 3-era unlock, passive production, manual
-  processes, mining
-- ✅ Population / workers (really assigned) / morale / consumption, famine and the
-  ruin floor
+  processes, mining (holds 2 workers, needs a road); 4 workshop materials outside the
+  pool (planks, ingots, beams, fuel) asked for by the advanced buildings
+- ✅ Market and Laboratory as buildings: trade and research open from them
+- ✅ Population / workers (really assigned, and the player can take them off a
+  building) / morale / consumption, famine and the ruin floor
 - ✅ Internal market with floating prices
 - ✅ 8 random events (from the SURVIVAL phase, per mode)
 - ✅ 9 milestones; the capstone summons the Final Audit (Campaña) or wins (Constructor)
@@ -48,11 +54,14 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 | Item | Status | Where it lives |
 |---|---|---|
 | **2D view**: flat top-down world on the same services, UI and save; switch in Settings or `-- --view=2d` | ✅ | `scenes/main/Main2D.tscn`, `scripts/view2d/`, [18-vista-2d.md](18-vista-2d.md) |
-| **Game modes**: Campaña, Constructor, Supervivencia, Sandbox, picked in the New Game dialog and saved with the run | ✅ | `scripts/services/GameMode.gd`, `GameConfig.game_mode_rules`, `NewGameDialog`, `SandboxPanel`, [20-modos-de-juego.md](20-modos-de-juego.md) |
+| **Game modes**: Campaña, Constructor, Supervivencia, Sandbox, picked in the New Game dialog and saved with the run. Since 2026-09-28 the dialog only offers Campaña (`GameMode.OFFERED`); the other three are set aside, not deleted | ✅ | `scripts/services/GameMode.gd`, `GameConfig.game_mode_rules`, `NewGameDialog`, `SandboxPanel`, [20-modos-de-juego.md](20-modos-de-juego.md) |
 | **Configurable UI and devices**: PC / tablet / phone profiles, UI scale and text size, `aspect=expand`, Settings in tabs, show/hide HUD elements, movable panels per profile, colour-blind palettes, high contrast, panel opacity | ✅ | `DeviceProfile`, `HudRegistry`, `LayoutEditor`, `UITheme.configure()`, [21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) |
 | **One game menu**: ☰ MENÚ (COLONIA + PARTIDA, real pause, ESC / Android back) and the title menu | ✅ | `PauseMenu`, `TitleMenu`, [08-ui-systems.md](08-ui-systems.md) |
 | **Tablet / touch**: one-finger grab-pan with the same maths as the mouse, pinch zoom, two-finger twist, tap-to-aim and tap-to-build placement with valid spots, finger-sized controls, hold-to-repeat, help texts per input | ✅ | `InputService`, `PlacementAssist`, `OnScreenControls`, `Tr.ti()`, [21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) §9 |
-| **Onboarding**: the prologue as a Regency dossier, a guided coach-mark tutorial on the real UI, help callouts one at a time, the AYUDA index | ✅ | `PrologueScreen`, `TutorialPanel`, `TutorialManager`, `HelperPanel`, `HelpIndexPanel`, [23-onboarding.md](23-onboarding.md) |
+| **Onboarding**: the prologue in three folios and plain language, a quick guide after it, a guided coach-mark tutorial on the real UI (it asks for CONSTRUIR once the card is picked), help callouts one at a time, the AYUDA index | ✅ | `PrologueScreen`, `QuickGuide`, `TutorialPanel`, `TutorialManager`, `HelperPanel`, `HelpIndexPanel`, [23-onboarding.md](23-onboarding.md) |
+| **Build UX**: cost on every card and why a locked card cannot be built, one building per placement, construction label with % and time left, drag-to-scroll on every list | ✅ | `ConstructionMenu`, `PlacementRules.keeps_placing()`, `DragScroll`, [08-ui-systems.md](08-ui-systems.md) |
+| **One UI palette**: ten named colours, everything else derived; plain boxes instead of textured metal; the activity log moved to the menu, only important toasts on screen | ✅ | `UITheme._BASE`, [24-paleta.md](24-paleta.md) |
+| **Save format 2**: the grid size and seed saved; a save from before roads and 2x2 is set aside with a date and a new colony starts | ✅ | `GameManager.SAVE_FORMAT`, [09-save-system.md](09-save-system.md) |
 | **War reports**: blind-defence report, Tithe report (COBRADO / REPELIDO), siege banner, lost-siege report | ✅ | `WarReportScreen`, `AuditWaveBanner`, `AuditDefeatScreen` |
 | **Balance line**: the whole campaign played at real timings over ten seeds; dead ends fixed; 10/10 won in 2 h 18 min – 4 h (median 3 h 11 min); the ¿QUÉ HACER? panel | ✅ | `tools/line_probe.gd`, `scripts/services/Objectives.gd`, [22-linea-jugable.md](22-linea-jugable.md) |
 | **Combat balance** measured, not guessed | ✅ | `tools/balance_probe.gd`, `tools/siege_probe.gd`, [16-balance-combate.md](16-balance-combate.md), [17-balance-asedio.md](17-balance-asedio.md) |
@@ -141,8 +150,16 @@ Measured by the balance line and left to the owner
 4. ❓ **How long era 1 should last.** Manual mining is the strongest era-1 lever (era 2
    by minute 3 with it); if era 1 should last longer, the lever is `mining_data`.
 
+5. ❓ **Where the set-aside modes go.** Constructor, Supervivencia and Sandbox still
+   work and load, but the New Game dialog only offers Campaña until their place is
+   decided (`GameMode.OFFERED`).
+
 Also pending on the balance side: a human playtest with real timings (checklist in
-[22-linea-jugable.md](22-linea-jugable.md) §9) and a test on a physical tablet.
+[22-linea-jugable.md](22-linea-jugable.md) §9) and a test on a physical tablet. The
+balance line of docs/22 was measured **before** roads, 2x2 buildings, materials,
+the Market/Laboratory buildings and the stricter era gates (2026-09-28): its timings
+need a new run of `tools/line_probe.gd` (the probe player already lays roads and
+makes materials).
 
 ## 💤 Backlog
 
@@ -155,6 +172,11 @@ Also pending on the balance side: a human playtest with real timings (checklist 
 - 💤 Missions / contracts: timed delivery challenges for rewards
 - 💤 Towers with an attack of their own on the base map
 - 💤 More buildings / decorations and a second island biome
+- 💤 Sea and shore resources: the shore band is kept free of land deposits and
+  `MapGenerator.shore_cells()` / `_generate_shore_deposits()` are the hook
+- 💤 GLB models for the Market and the Laboratory (procedural today), and 2x2 models
+  for the buildings whose 1x1 / 2x1 GLB is scaled up
+- 💤 Guide screenshots (`docs/media/guia/`) retaken at 2x2 with roads
 - 💤 Day-night visual layer outside the storm
 - 💤 Achievements / statistics
 - 💤 Distribution: Windows code signing (SmartScreen), Android release keystore, AAB
