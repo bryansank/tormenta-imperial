@@ -39,20 +39,26 @@ la [sección 11](#11-el-camino-a-la-victoria).
 
 ---
 
-## 3. Los cuatro recursos
+## 3. Los cinco recursos
 
 | Recurso | Para qué | Empiezas con | Se desbloquea |
 |---|---|---|---|
-| **Oro** | Moneda universal. Todo cuesta oro, y tu gente cobra sueldo | 300 | Era 1 |
-| **Madera** | Construcción, y tu gente la quema para calentarse | 200 | Era 1 |
+| **Oro** | Moneda universal. Todo cuesta oro, y la tropa cobra sueldo | 300 | Era 1 |
+| **Madera** | Construcción | 200 | Era 1 |
+| **Comida** | Lo que come tu gente. La cultiva la Granja | 80 | Era 1 |
 | **Acero** | Construcción avanzada y unidades | 0 | Era 2 — al construir la Fundición |
 | **Petróleo** | Construcción de final de partida | 0 | Era 3 — al construir la Refinería |
 
-**Una sola bolsa para los cuatro recursos**, no un tope por recurso: 600 en la era 1,
-800 en la era 2 y 1.000 en la era 3, más 500 por cada Almacén (máximo 5). Lo que no
-cabe se pierde, **también el oro y la madera que tu gente necesita para comer**: una
-bolsa llena de acero y petróleo deja a la colonia sin comida. Las tecnologías
-Logística 2 (+300) e Industria 2 (+200) la agrandan un poco más.
+**Una sola bolsa para los cinco recursos**, no un tope por recurso: 600 en la era 1,
+800 en la era 2 y 1.000 en la era 3, más 500 por cada Almacén (máximo 5). Las
+tecnologías Logística 2 (+300) e Industria 2 (+200) la agrandan un poco más.
+
+**Lo que producen los edificios se queda en ellos hasta que lo recoges.** Cuando hay
+algo, sale un icono encima: tócalo (o toca el edificio) y entra en la bolsa. Cada
+edificio guarda unos seis minutos de lo suyo; **lleno, se para** ("lleno: recógelo").
+Si la bolsa está llena al recoger, lo que no cabe **se queda en el edificio**: no se
+pierde nada. Lo que sí se pierde si no cabe es lo que entra directo en la bolsa
+(minar a mano, comprar, botín).
 
 Los yacimientos de la isla se ven desde el principio, pero **no puedes explotarlos
 hasta que su recurso esté desbloqueado**.
@@ -102,8 +108,9 @@ recibe trabajadores ni produce, y una vivienda sin carretera no da sitio. Su car
 **Sin veta no funciona.** El Aserradero, la Mina de oro y la Fundición necesitan su
 yacimiento vivo al lado. Si lo agotas minándolo a mano, se paran ("sin veta").
 
-**Consumo.** Cada persona come **1 madera y 1 oro** por ciclo. Con 20 habitantes son
-20 de cada uno por ciclo. Si no puedes pagarlo, **la moral se desploma**.
+**Consumo.** Cada persona come **1 de comida** por ciclo. Con 20 habitantes son 20 de
+comida por ciclo. Si no hay, **la moral se desploma** y a los tres ciclos empieza a
+morir gente. Remedio inmediato: recoger las granjas o comprar comida en el Mercado.
 
 **Moral (0-100).** Empieza en 75 y multiplica tu producción:
 
@@ -147,12 +154,17 @@ Mercado y el Laboratorio aún no tienen foto).
 | | Edificio | Tamaño | Coste | Gente | Produce |
 |---|---|---|---|---|---|
 | <img src="media/guia/sawmill.png" width="110"> | **Aserradero** | 2×2 | 80 oro · 50 madera | 2 | 6 madera / 12s · fabrica tablones |
+| | **Granja** | 2×2 | 40 oro · 30 madera | 2 | Comida según el cultivo: Lechugas 20 en 1 min · Patatas 125 en 5 min · Trigo 600 en 20 min. En cualquier sitio con carretera |
 | <img src="media/guia/gold_mine.png" width="110"> | **Mina de oro** | 2×2 | 120 oro · 80 madera | 3 | 8 oro / 12s · fabrica lingotes |
 | <img src="media/guia/foundry.png" width="110"> | **Fundición** | 2×2 | 200 oro · 120 madera | 3 | 5 acero / 15s · fabrica vigas |
 | <img src="media/guia/refinery.png" width="110"> | **Refinería** | 2×2 | 300 oro · 150 acero · 100 madera · 6 vigas | 4 | 4 petróleo / 18s · fabrica combustible |
 
 **La Fundición desbloquea el acero y la era 2. La Refinería desbloquea el petróleo y
 la era 3.** Por eso ninguna de las dos cuesta el recurso que desbloquea.
+
+**La Granja** se elige en su panel (CULTIVO): el cultivo corto da poco y enseguida;
+el largo da más por minuto, pero hay que esperarlo. El cultivo se repite solo
+mientras quepa en la Granja. Cambiarlo empieza de cero.
 
 > ⚠️ **La Refinería solo se puede colocar encima de un pozo de petróleo.** Es el único
 > edificio con esa restricción. Si no encuentras un pozo en tu isla, no hay era 3.
@@ -207,7 +219,7 @@ todo lo que falta.
 ### Límites
 
 Aserradero 5 · Mina de oro 4 · Fundición 3 · Refinería 2 · Almacén 5 · Mercado 1 ·
-Laboratorio 1 · Cuartel 3 · Torre 6 · Vivienda 10 · Estatua 5 · Fuente 5 · **Cuartel
+Laboratorio 1 · Granja 6 · Cuartel 3 · Torre 6 · Vivienda 10 · Estatua 5 · Fuente 5 · **Cuartel
 General 1** · Jardín y carretera sin límite.
 
 ### Mejorar
@@ -472,22 +484,23 @@ imposible (no hay oro para comer, faltan obreros, no cabe en la bolsa, algo que 
 comer está en ruinas) te pide eso antes.
 
 1. **Aserradero**, pegado a un bosque — lo primero, siempre.
-2. **Mina de oro**, pegada a una veta.
-3. **Una casa** — necesitas gente para atender lo que construyas.
-4. **Segundo aserradero** — tu gente come madera; adelántate.
-5. **Almacén** — ⚠️ ojo, lee la nota de la sección 12 antes de ponerlo.
-6. **Fundición**, pegada a un hierro — solo se puede con Aserradero, Mina de oro,
+2. **Granja**, donde quieras con carretera — tu gente come comida.
+3. **Mina de oro**, pegada a una veta.
+4. **Una casa** — necesitas gente para atender lo que construyas.
+5. **Segundo aserradero** — la madera lo paga casi todo.
+6. **Almacén** — ⚠️ ojo, lee la nota de la sección 12 antes de ponerlo.
+7. **Fundición**, pegada a un hierro — solo se puede con Aserradero, Mina de oro,
    Vivienda y Almacén en pie. Entras en la era 2, se desbloquea el acero **y se
    arma la Tormenta**: la primera llega unos diez minutos después.
-7. **Cuartel** (fabrica antes 10 tablones en el Aserradero) y **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
+8. **Cuartel** (fabrica antes 10 tablones en el Aserradero) y **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
    infantes solos pierden incluso el Diezmo más pequeño.
-8. **Refinería, encima de un pozo** (pide Cuartel y 6 vigas de la Fundición) — era 3,
+9. **Refinería, encima de un pozo** (pide Cuartel y 6 vigas de la Fundición) — era 3,
    petróleo.
-9. **Dos Torres** — cierran el hito Comandante, mitigan la Tormenta y bajan dotaciones al
+10. **Dos Torres** — cierran el hito Comandante, mitigan la Tormenta y bajan dotaciones al
    tablero del Diezmo.
-10. **Cuartel General** — y a partir de aquí acumulas para las dos subidas.
-11. **HQ nivel 2**, y **seis blindados** en casa.
-12. **HQ nivel 3** — con esto **convocas la Auditoría Final**. Cuesta 3.500, exactamente
+11. **Cuartel General** — y a partir de aquí acumulas para las dos subidas.
+12. **HQ nivel 2**, y **seis blindados** en casa.
+13. **HQ nivel 3** — con esto **convocas la Auditoría Final**. Cuesta 3.500, exactamente
     la bolsa máxima sin tecnología: levanta el Laboratorio e investiga Logística 1-2 e
     Industria 1-2 (+500) para
     tener holgura, o tendrás que cuadrar los cuatro recursos al céntimo mientras tu

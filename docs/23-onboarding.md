@@ -92,7 +92,7 @@ Coach marks sobre la interfaz real. Cada paso:
 - **oscurece** la pantalla menos el control del que habla, con un marco de latón que
   late (el velo es `MOUSE_FILTER_IGNORE`: se puede tocar todo, también fuera de orden);
 - **señala** con una flecha;
-- pone **una línea** de lo que hay que hacer, con "TUTORIAL · PASO n DE 5" y
+- pone **una línea** de lo que hay que hacer, con "TUTORIAL · PASO n DE 7" y
   `Saltar tutorial`. La tarjeta va junto a lo señalado (debajo si cabe, si no encima),
   nunca encima.
 
@@ -102,12 +102,25 @@ Coach marks sobre la interfaz real. Cada paso:
 | 2 | `pick_sawmill` | la tarjeta del Aserradero dentro de la lista | se elige el aserradero para colocar |
 | 3 | `place_sawmill` | un aro sobre el bosque más cercano (flecha al borde si no se ve); con el dedo conviven con las casillas verdes de `PlacementAssist` (docs/21 §9) | se coloca: con ratón, clic; con el dedo, tocar la casilla y ✓ CONSTRUIR AQUÍ (o el fantasma) |
 | 4 | `wait_sawmill` | un aro sobre la obra | termina la obra (la carretera se tiende sola y los trabajadores llegan andando) |
-| 5 | `open_house` / `pick_house` / `place_house` | CONSTRUIR, la tarjeta de la Casa | se coloca una casa |
+| 5 | `collect` | el aserradero (su icono flotante sale cuando ha producido) | se recoge algo (`EventBus.production_collected`) |
+| 6 | `open_farm` / `pick_farm` / `place_farm` | CONSTRUIR, la tarjeta de la Granja | se coloca una granja |
+| 7 | `open_house` / `pick_house` / `place_house` | CONSTRUIR, la tarjeta de la Casa | se coloca una casa |
 | — | `done` | el objetivo | "Entendido" o 10 s |
 
+**Recoger y la Granja (2026-10-04, rama `feat/comida-granja-recoger`).** Lo que
+producen los edificios se queda en ellos hasta recogerlo, y la gente come comida: los
+dos pasos van en el orden en que pasan al arrancar (el aserradero produce su primera
+madera; la comida de salida dura pocos minutos). Hechos nuevos de `derive_step`:
+`collected` (bool: se recogió algo desde que empezó el tutorial; se guarda en la
+partida como `guide_collected`, y repetir el tutorial lo vuelve a pedir) y `farms`
+(granjas desde la línea base). Sin esas claves la regla las da por hechas, así que una
+isla vieja con aserradero y casa sigue saltándose el tutorial. Al integrar con el
+formato nuevo de pasos (`GUIDE_GOALS`, §2.3 de la rama del tutorial) son: una meta
+"fact" (`collected`) y una meta "build" (`farm`), entre el aserradero y la casa.
+
 **El paso se deduce, no se cuenta.** `TutorialManager.derive_step(hechos)` es pura:
-aserraderos (en obra y hechos), casas, lista de construir abierta, qué se tiene en la
-mano. Por eso:
+aserraderos (en obra y hechos), recogido, granjas, casas, lista de construir abierta,
+qué se tiene en la mano. Por eso:
 
 - **Fuera de orden** no se rompe: si coloca una casa primero, sigue pidiendo el
   aserradero y luego ya no pide la casa. Si cancela, vuelve un paso.
