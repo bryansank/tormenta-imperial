@@ -209,6 +209,10 @@ func _assert_readable(step: Dictionary, where: String) -> void:
 func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 	# Partida nueva de verdad: la primera escaramuza esta por hacer.
 	TutorialManager.first_sortie_done = false
+	# La bolsa de una partida nueva (con la comida de salida, 2026-10-04).
+	var start := {"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0}
+	start.merge(GameConfig.starting_resources, true)
+	ResourceManager.set_amounts(start)
 	var visited: Array = []
 	var guard := 0
 	while not ProgressionManager.is_final_audit_pending():
@@ -230,7 +234,7 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 			ProgressionManager.summon_final_audit()
 
 	# El orden de la linea, en la secuencia visitada (con lo que haya en medio).
-	var expected: Array = ["build:sawmill", "build:gold_mine", "build:house", "build:sawmill",
+	var expected: Array = ["build:sawmill", "build:farm", "build:gold_mine", "build:house", "build:sawmill",
 		"build:warehouse", "build:foundry", "build:barracks", "train:artillery", "sortie:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
 		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]

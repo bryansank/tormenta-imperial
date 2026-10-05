@@ -9,6 +9,7 @@ extends GdUnitTestSuite
 
 const SAWMILL := preload("res://data/buildings/sawmill.tres")
 const HOUSE := preload("res://data/buildings/house.tres")
+const FARM := preload("res://data/buildings/farm.tres")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 
 var _saved: Dictionary = {}
@@ -77,6 +78,30 @@ func test_a_built_sawmill_asks_for_a_house() -> void:
 	f["placing"] = "house"
 	assert_str(TutorialManager.derive_step(f)).is_equal("place_house")
 
+func test_a_built_sawmill_asks_to_collect_then_for_a_farm() -> void:
+	var f := {"sawmills": 1, "sawmills_built": 1, "collected": false, "farms": 0}
+	assert_str(TutorialManager.derive_step(f)).is_equal("collect")
+	f["collected"] = true
+	assert_str(TutorialManager.derive_step(f)).is_equal("open_farm")
+	f["menu_open"] = true
+	assert_str(TutorialManager.derive_step(f)).is_equal("pick_farm")
+	f["placing"] = "farm"
+	assert_str(TutorialManager.derive_step(f)).is_equal("place_farm")
+	f["farms"] = 1
+	f["placing"] = ""
+	f["menu_open"] = false
+	assert_str(TutorialManager.derive_step(f)).is_equal("open_house")
+
+func test_collecting_is_remembered_with_the_game() -> void:
+	_start()
+	EventBus.production_collected.emit(Node.new(), {"wood": 1})
+	assert_bool(TutorialManager.guide_collected).is_true()
+	var saved := TutorialManager.get_save_data()
+	TutorialManager.reset()
+	assert_bool(TutorialManager.guide_collected).is_false()
+	TutorialManager.load_save_data(saved)
+	assert_bool(TutorialManager.guide_collected).is_true()
+
 func test_a_house_built_first_is_not_lost() -> void:
 	# Fuera de orden: casa antes que aserradero. El paso sigue pidiendo el
 	# aserradero, y al tenerlo ya no pide la casa.
@@ -121,6 +146,13 @@ func test_the_guide_walks_the_whole_opening() -> void:
 	assert_str(TutorialManager.current_step()).is_equal("wait_sawmill")
 	node.remove_meta("under_construction")
 	EventBus.construction_completed.emit(node)
+	# Recoger lo que hizo el aserradero (2026-10-04).
+	assert_str(TutorialManager.current_step()).is_equal("collect")
+	EventBus.production_collected.emit(node, {"wood": 6})
+	# La Granja: la gente come.
+	assert_str(TutorialManager.current_step()).is_equal("open_farm")
+	_place(FARM, Vector2i(10, 2))
+	EventBus.building_placed.emit(FARM, Vector2i(10, 2))
 	assert_str(TutorialManager.current_step()).is_equal("open_house")
 	_place(HOUSE, Vector2i(6, 6))
 	EventBus.building_placed.emit(HOUSE, Vector2i(6, 6))
@@ -130,7 +162,8 @@ func test_the_guide_walks_the_whole_opening() -> void:
 	menu.free()
 	assert_str(TutorialManager.guide_state).is_equal(TutorialManager.GUIDE_DONE)
 	assert_array(_finished).contains_exactly([false])
-	assert_array(_steps).contains(["open_build", "pick_sawmill", "place_sawmill", "wait_sawmill", "open_house", "done"])
+	assert_array(_steps).contains(["open_build", "pick_sawmill", "place_sawmill", "wait_sawmill",
+		"collect", "open_farm", "open_house", "done"])
 
 func test_cancelling_the_placement_goes_back_one_step() -> void:
 	_start()

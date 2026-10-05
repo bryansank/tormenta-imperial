@@ -43,7 +43,7 @@ func before_test() -> void:
 	PopulationManager.load_save_data({"morale": 100})
 	# Almacen vacio y grande, para que el botin de una campana entera quepa y se
 	# pueda comparar al centimo con lo que dice la expedicion.
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0})
 	ResourceManager.set_era(3)
 	ResourceManager.set_warehouse_count(5)
 

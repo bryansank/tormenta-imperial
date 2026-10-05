@@ -894,10 +894,12 @@ func _first_node_of(building_id: String) -> Node3D:
 	return null
 
 ## Lo que un edificio rinde en un ciclo de produccion, ahora mismo.
+## Lo producido se queda en el edificio hasta recogerlo (2026-10-04): se mide
+## ahi, con la mina vaciada antes para que el tope no la tenga parada.
 func _one_production_tick(node: Node3D) -> int:
-	var before: int = ResourceManager.get_amount(ResourceManager.Type.GOLD)
+	ProductionManager._stock.erase(node)
 	ProductionManager._tick_production(GameConfig.get_production_interval(1.0) + 1.0)
-	return ResourceManager.get_amount(ResourceManager.Type.GOLD) - before
+	return int(ProductionManager.get_stock(node).get("gold", 0))
 
 # ══════════════════════════════════════════════════════════════════════
 # 4. Ejercito y expedicion
@@ -914,7 +916,7 @@ func test_an_expedition_comes_home_with_its_survivors_and_its_loot_once() -> voi
 
 	# Almacen vacio y con sitio de sobra: asi el botin que llega se puede comparar
 	# al centimo con lo que la expedicion dice haber ganado.
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0})
 	var stores_before: Dictionary = _resource_amounts()
 
 	assert_bool(CombatManager.launch_expedition(party, EXPEDITION_SEED)).override_failure_message(

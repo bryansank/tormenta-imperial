@@ -45,7 +45,7 @@ func _rich() -> void:
 	ResourceManager.set_amounts({"gold": 5000, "wood": 5000, "steel": 5000, "oil": 5000})
 
 func _broke() -> void:
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0})
 
 # ── Arbol tecnologico: el manager ────────────────────────────────────
 

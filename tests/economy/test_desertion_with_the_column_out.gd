@@ -62,7 +62,7 @@ func _army(units: Dictionary) -> void:
 	ArmyManager.load_save_data({"units": units, "training": [], "upkeep_accum": 0.0})
 
 func _broke() -> void:
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0})
 
 func _grace() -> int:
 	return GameConfig.unpaid_grace_ticks

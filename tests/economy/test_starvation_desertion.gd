@@ -29,10 +29,10 @@ func _resource_snapshot() -> Dictionary:
 	return snap
 
 func _broke() -> void:
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0})
 
 func _rich() -> void:
-	ResourceManager.set_amounts({"gold": 600, "wood": 600, "steel": 600, "oil": 600})
+	ResourceManager.set_amounts({"gold": 600, "wood": 600, "steel": 600, "oil": 600, "food": 600})
 
 func _army(units: Dictionary) -> void:
 	ArmyManager.load_save_data({"units": units, "training": [], "upkeep_accum": 0.0})

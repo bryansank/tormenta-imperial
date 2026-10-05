@@ -16,6 +16,8 @@ func before_test() -> void:
 	_saved_resources = _resource_snapshot()
 	_saved_army = ArmyManager.get_save_data()
 	ArmyManager.reset()
+	# La comida de la bolsa (2026-10-04) le quitaria sitio al reembolso.
+	ResourceManager.set_amounts({"food": 0})
 	_set_phase(StormCycle.Phase.CALM)
 
 func after_test() -> void:

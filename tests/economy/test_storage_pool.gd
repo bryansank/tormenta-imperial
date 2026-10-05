@@ -45,6 +45,7 @@ func _given(era: int, warehouses: int, stock: Dictionary = {}) -> void:
 		"steel": int(stock.get("steel", 0)),
 		"oil": int(stock.get("oil", 0)),
 		"wood": int(stock.get("wood", 0)),
+		"food": int(stock.get("food", 0)),
 	})
 
 # ── The cap scales with the era ──────────────────────────────────────
@@ -118,7 +119,8 @@ func test_a_brand_new_game_fits_in_the_bag_it_starts_with() -> void:
 	var starting := 0
 	for res_name in GameConfig.starting_resources:
 		starting += int(GameConfig.starting_resources[res_name])
-	assert_int(starting).is_equal(500)
+	# 300 de oro + 200 de madera + 80 de comida (2026-10-04).
+	assert_int(starting).is_equal(580)
 	assert_int(GameConfig.get_storage_cap(0, 1)).is_equal(600)
 	assert_int(GameConfig.get_storage_cap(0, 1)).is_greater(starting)
 
