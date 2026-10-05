@@ -28,6 +28,9 @@ const DATA_DIR := "res://data/buildings/"
 @export var produces_steel: int = 0
 @export var produces_oil: int = 0
 @export var produces_wood: int = 0
+## Comida (2026-10-04). La Granja la da por cultivo (GameConfig.farm_crops): este
+## campo es lo que rinde el cultivo de serie, para quien lee el .tres sin cultivo.
+@export var produces_food: int = 0
 @export var production_interval: float = 10.0  # seconds between production
 
 # Visual
@@ -97,7 +100,17 @@ func get_cost() -> Dictionary:
 
 ## Helper: check if this building produces any resources.
 func is_producer() -> bool:
-	return produces_gold > 0 or produces_steel > 0 or produces_oil > 0 or produces_wood > 0
+	return produces_gold > 0 or produces_steel > 0 or produces_oil > 0 or produces_wood > 0 \
+		or produces_food > 0
+
+## Lo que produce por ciclo, por nombre de recurso (solo lo que no es cero).
+func get_production() -> Dictionary:
+	var out := {}
+	for pair in [["gold", produces_gold], ["steel", produces_steel], ["oil", produces_oil],
+			["wood", produces_wood], ["food", produces_food]]:
+		if int(pair[1]) > 0:
+			out[pair[0]] = int(pair[1])
+	return out
 
 
 ## Every building definition, in an exported game too. An export renames each

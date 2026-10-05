@@ -145,6 +145,11 @@ static func random_events_enabled() -> bool:
 static func danger_events_enabled() -> bool:
 	return _flag("danger_events")
 
+## Lo acumulado en los edificios se echa a perder si no se recoge a tiempo
+## (GameConfig.spoil_after_seconds). Apagado por defecto: es del modo complejo.
+static func spoilage_enabled() -> bool:
+	return bool(rule("spoilage")) if rule("spoilage") != null else false
+
 static func infinite_resources() -> bool:
 	return _flag("infinite_resources")
 

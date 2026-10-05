@@ -12,6 +12,7 @@ var _type_map := {
 	"ingots": ResourceManager.Type.INGOTS,
 	"beams": ResourceManager.Type.BEAMS,
 	"fuel": ResourceManager.Type.FUEL,
+	"food": ResourceManager.Type.FOOD,
 }
 
 # Active processes: Node -> {id, name_key, remaining, duration, produces, cost}
@@ -228,10 +229,25 @@ func _complete(node: Node) -> void:
 	# que la produccion de una partida muerta caiga en la siguiente.
 	if not is_instance_valid(node):
 		return
+	# Lo que no cabe en la bolsa se queda en el edificio para recogerlo despues
+	# (2026-10-04: bolsa llena = parar, no tirar). Un minado no tiene donde
+	# guardarlo: ahi lo que no cabe se sigue perdiendo, avisado.
+	var leftover := {}
+	var in_building: bool = not GridManager.get_building_info(node).is_empty()
 	for res_name in info["produces"]:
 		if _type_map.has(res_name):
-			ResourceManager.add(_type_map[res_name], info["produces"][res_name])
-			FloatingText.spawn_resource_on(node, info["produces"][res_name], res_name)
+			var amount: int = int(info["produces"][res_name])
+			if in_building:
+				var rest: int = ResourceManager.add_fitting(_type_map[res_name], amount)
+				if rest > 0:
+					leftover[res_name] = rest
+				amount -= rest
+			else:
+				ResourceManager.add(_type_map[res_name], amount)
+			if amount > 0:
+				FloatingText.spawn_resource_on(node, amount, res_name)
+	if not leftover.is_empty():
+		ProductionManager.keep_in_building(node, leftover)
 	if pid.begins_with("mine_"):
 		EventBus.mining_completed.emit(node, pid)
 	else:

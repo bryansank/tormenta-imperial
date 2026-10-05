@@ -44,6 +44,9 @@ var event_interval_max_dev := 60.0
 var starting_resources := {
 	"gold": 300,
 	"wood": 200,
+	# Comida para los primeros minutos, hasta que la primera Granja rinda
+	# (2026-10-04). 580 en total: cabe en la bolsa de 600 de la era 1.
+	"food": 80,
 }
 
 # ── Upgrade System ──
@@ -101,6 +104,7 @@ var building_limits := {
 	"statue": 5,
 	"fountain": 5,
 	"road": -1,
+	"farm": 6,
 }
 
 # ── Building Prerequisites (must have at least 1 of each listed) ──
@@ -252,6 +256,74 @@ func get_material_of(building_id: String) -> String:
 			return m
 	return ""
 
+# ══════════════════════════════════════════════════════════════════════
+# ── Comida, Granja y produccion que se recoge (2026-10-04) ──
+# ══════════════════════════════════════════════════════════════════════
+# Decisiones de Bryan (tormenta-imperial-contexto/17): la gente come COMIDA en
+# vez de madera y oro; la Granja la cultiva eligiendo cultivo por duracion; y
+# TODO lo que producen los edificios se queda en el edificio hasta que el
+# jugador lo recoge con un toque. Lleno, el edificio se para. Detalle y cifras
+# en docs/02-economy.md y docs/03-buildings.md.
+
+## Comida que come cada habitante en cada tic de consumo (30 s; 60 s en las
+## fases tempranas). La tecnologia de consumo la rebaja como antes.
+var food_per_pop := 1
+
+## Cultivos de la Granja, del mas corto al mas largo. El corto rinde poco y da
+## comida enseguida; el largo rinde mas por minuto pero hay que esperarlo. El
+## cultivo elegido se repite solo mientras quepa en la Granja. Duracion en
+## segundos de juego (dev_mode la acorta con get_duration). Por minuto, a moral
+## 50 y nivel 1: 20 / 25 / 30 de comida.
+var farm_crops := [
+	{"id": "crop_short", "name": "CROP_SHORT", "duration": 60.0, "food": 20},
+	{"id": "crop_medium", "name": "CROP_MEDIUM", "duration": 300.0, "food": 125},
+	{"id": "crop_long", "name": "CROP_LONG", "duration": 1200.0, "food": 600},
+]
+## El que se planta solo al terminar la obra: el corto, para que una Granja nueva
+## de de comer en el primer minuto.
+var farm_default_crop := "crop_short"
+
+## Lo que cabe en cada edificio antes de pararse, a nivel 1 (se multiplica por
+## el de produccion del nivel: un nivel 2 llena igual de rapido, no antes).
+## Unos 6 minutos de su produccion: algo que recoger cada pocos minutos. La
+## Granja guarda una cosecha larga entera (600) con margen para la moral alta.
+var building_stock_caps := {
+	"sawmill": 180,
+	"gold_mine": 240,
+	"foundry": 120,
+	"refinery": 80,
+	"headquarters": 180,
+	"farm": 800,
+}
+var building_stock_cap_default := 150
+
+## Lo acumulado sin recoger aguanta esto (segundos de juego); pasado, se echa a
+## perder la mitad (`spoil_ratio`) y vuelve a contar. Solo si el modo lo pide
+## (GameMode.spoilage_enabled(), apagado en el modo sencillo).
+var spoil_after_seconds := 7200.0
+var spoil_ratio := 0.5
+
+## Comida con la que carga un guardado de antes de la comida: sin ella la gente
+## pasaria hambre nada mas abrir la partida.
+var legacy_save_food := 120
+
+## Tope de lo acumulado en un edificio de este tipo a este nivel.
+func get_stock_cap(building_id: String, level: int = 1) -> int:
+	var base: int = int(building_stock_caps.get(building_id, building_stock_cap_default))
+	return int(round(float(base) * get_production_multiplier(level)))
+
+## El cultivo por id, o {} si no existe.
+func get_crop(crop_id: String) -> Dictionary:
+	for crop in farm_crops:
+		if String(crop["id"]) == crop_id:
+			return crop
+	return {}
+
+## Duracion de un cultivo ya escalada (dev_mode la acorta).
+func get_crop_duration(crop_id: String) -> float:
+	var crop := get_crop(crop_id)
+	return get_duration(float(crop.get("duration", 60.0))) if not crop.is_empty() else 0.0
+
 # ── Mining Data ──
 
 var mining_data := {
@@ -327,6 +399,7 @@ var resource_colors := {
 	"ingots": Color(1.0, 0.72, 0.25),
 	"beams": Color(0.55, 0.62, 0.72),
 	"fuel": Color(0.85, 0.38, 0.2),
+	"food": Color(0.55, 0.8, 0.3),
 }
 
 # ── Audio ──
@@ -700,6 +773,8 @@ var market_base_prices := {
 	"wood": 3,
 	"steel": 8,
 	"oil": 12,
+	# Barata: comprar comida tiene que ser el remedio inmediato del hambre.
+	"food": 2,
 }
 
 var market_spread := 0.3
@@ -1600,6 +1675,9 @@ var game_mode_rules := {
 		"starting_resources_mult": 1.0,
 		"starting_resources": {},
 		"hidden_tips": [],
+		# Lo que no se recoge en 2 h se echa a perder a medias. Apagado en la
+		# Campana (modo sencillo); lo enciende el modo complejo (Gobernador).
+		"spoilage": false,
 	},
 	# Relajado: sin Tormenta, sin Diezmo, sin asedio. Los eventos buenos siguen;
 	# los danos (tormenta menor, accidente, plaga, bandidos) no salen.
@@ -1632,7 +1710,7 @@ var game_mode_rules := {
 		"infinite_resources": true,
 		"all_unlocked": true,
 		"sandbox_tools": true,
-		"starting_resources": {"gold": 20000, "steel": 20000, "oil": 20000, "wood": 20000},
+		"starting_resources": {"gold": 20000, "steel": 20000, "oil": 20000, "wood": 20000, "food": 20000},
 		"hidden_tips": ["final_audit"],
 	},
 }

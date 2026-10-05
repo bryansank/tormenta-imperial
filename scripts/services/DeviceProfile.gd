@@ -221,10 +221,11 @@ func apply_theme() -> void:
 		GameConfig.ui_panel_opacity, effective_text_size(), int(defaults()["touch_target"]))
 	get_tree().root.theme = UITheme.build_global_theme()
 	# El texto flotante del mundo usa GameConfig.resource_colors: misma paleta.
-	GameConfig.resource_colors = {
-		"gold": UITheme.RES_GOLD, "steel": UITheme.RES_STEEL,
-		"oil": UITheme.RES_OIL, "wood": UITheme.RES_WOOD,
-	}
+	# Se pisan los cuatro de la paleta y se conservan los demas (materiales,
+	# comida): reemplazar el diccionario entero los dejaba sin color.
+	for pair in [["gold", UITheme.RES_GOLD], ["steel", UITheme.RES_STEEL],
+			["oil", UITheme.RES_OIL], ["wood", UITheme.RES_WOOD]]:
+		GameConfig.resource_colors[pair[0]] = pair[1]
 
 ## Escala al momento. En headless no se toca: los tests miden paneles contra el
 ## lienzo de 1280x720 y no deben depender de la pantalla de quien los corre.

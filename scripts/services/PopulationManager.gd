@@ -122,38 +122,24 @@ func _set_population(value: int) -> void:
 func _tick_consumption() -> void:
 	if _population <= 0:
 		return
-	# Each pop unit consumes 1 wood and 1 gold per tick, reduced by tech bonus
-	var reduction := GameConfig.tech_consumption_reduction
-	var wood_needed: int = maxi(1, int(_population * maxf(0.1, 1.0 - reduction)))
-	var gold_needed: int = maxi(1, int(_population * maxf(0.1, 1.0 - reduction)))
+	# La gente come COMIDA (2026-10-04): antes eran 1 de madera y 1 de oro por
+	# habitante y tic. La tecnologia de consumo la rebaja como entonces.
+	var food_needed: int = food_due()
+	var food_ok := ResourceManager.has_enough(ResourceManager.Type.FOOD, food_needed)
 
-	var wood_ok := ResourceManager.has_enough(ResourceManager.Type.WOOD, wood_needed)
-	var gold_ok := ResourceManager.has_enough(ResourceManager.Type.GOLD, gold_needed)
-
-	if wood_ok:
-		ResourceManager.spend(ResourceManager.Type.WOOD, wood_needed)
+	if food_ok:
+		ResourceManager.spend(ResourceManager.Type.FOOD, food_needed)
 	else:
-		var available := ResourceManager.get_amount(ResourceManager.Type.WOOD)
+		var available := ResourceManager.get_amount(ResourceManager.Type.FOOD)
 		if available > 0:
-			ResourceManager.spend(ResourceManager.Type.WOOD, available)
-		EventBus.consumption_failed.emit("wood")
+			ResourceManager.spend(ResourceManager.Type.FOOD, available)
+		EventBus.consumption_failed.emit("food")
 		if _notif_cooldown <= 0.0:
-			EventBus.notification_posted.emit(Tr.t("NOTIF_NO_WOOD"), "warning", Color(0.9, 0.6, 0.2))
-			_notif_cooldown = 30.0
-
-	if gold_ok:
-		ResourceManager.spend(ResourceManager.Type.GOLD, gold_needed)
-	else:
-		var available := ResourceManager.get_amount(ResourceManager.Type.GOLD)
-		if available > 0:
-			ResourceManager.spend(ResourceManager.Type.GOLD, available)
-		EventBus.consumption_failed.emit("gold")
-		if _notif_cooldown <= 0.0:
-			EventBus.notification_posted.emit(Tr.t("NOTIF_NO_GOLD"), "warning", Color(0.9, 0.6, 0.2))
+			EventBus.notification_posted.emit(Tr.t("NOTIF_NO_FOOD"), "warning", Color(0.9, 0.6, 0.2))
 			_notif_cooldown = 30.0
 
 	# Morale adjustments
-	if wood_ok and gold_ok:
+	if food_ok:
 		_adjust_morale(GameConfig.morale_satisfied_recovery)
 		# Un tic pagado entero borra la cuenta: el hambre no se arrastra.
 		_unpaid_ticks = 0
@@ -164,6 +150,11 @@ func _tick_consumption() -> void:
 	# Dos tics de gracia. Al tercero la gente deja de aguantar.
 	if GameConfig.unpaid_hurts(_unpaid_ticks):
 		_starve()
+
+## Comida que pide un tic de consumo con la poblacion de ahora (minimo 1).
+func food_due() -> int:
+	var reduction := GameConfig.tech_consumption_reduction
+	return maxi(1, int(float(_population * GameConfig.food_per_pop) * maxf(0.1, 1.0 - reduction)))
 
 ## El impago sostenido mata. Hasta ahora solo restaba moral y avisaba, asi que
 ## se podia ignorar indefinidamente; una advertencia que nunca se cumple deja de

@@ -11,10 +11,13 @@ extends Node
 
 const StormCycleScript := preload("res://scripts/storm/StormCycle.gd")
 ## El orden en que se vacía la bolsa. El oro primero porque es lo que duele
-## anotar, y la madera al final porque es lo que permite reconstruir.
+## anotar, y la madera al final porque es lo que permite reconstruir. La comida
+## (2026-10-04) va en la bolsa y cuenta para el porcentaje, asi que tambien se
+## cobra, la ultima de todas: es lo que se quita a la mesa de la gente.
 const _TITHE_ORDER: Array = [
 	ResourceManager.Type.GOLD, ResourceManager.Type.STEEL,
 	ResourceManager.Type.OIL, ResourceManager.Type.WOOD,
+	ResourceManager.Type.FOOD,
 ]
 
 var _cycle: StormCycle = null

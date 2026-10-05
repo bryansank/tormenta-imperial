@@ -78,6 +78,8 @@ func _autosave_triggers() -> Array:
 		[EventBus.building_upgrade_started, 2],
 		[EventBus.building_upgrade_completed, 2],
 		[EventBus.storm_phase_changed, 2],
+		[EventBus.production_collected, 2],
+		[EventBus.crop_planted, 2],
 	]
 
 func _ready() -> void:
@@ -345,6 +347,10 @@ func _load_game() -> void:
 	# Restore resources
 	if data.has("resources"):
 		ResourceManager.set_amounts(data["resources"])
+		# Un guardado de antes de la comida (2026-10-04) no la trae: carga con un
+		# poco para que la gente no pase hambre nada mas abrir la partida.
+		if data["resources"] is Dictionary and not (data["resources"] as Dictionary).has("food"):
+			ResourceManager.set_amounts({"food": GameConfig.legacy_save_food})
 
 	# Restore buildings
 	if data.has("buildings"):
@@ -420,6 +426,12 @@ func _load_game() -> void:
 	# Restore active processes
 	if data.has("active_processes"):
 		ProcessManager.load_save_data(data["active_processes"])
+
+	# Lo acumulado en los edificios, los cultivos y sus relojes (2026-10-04). Sin
+	# la clave, guardado anterior: nada que recoger y cada Granja con su cultivo
+	# de serie.
+	var stock_data: Variant = data.get("stockpiles", [])
+	ProductionManager.load_save_data(stock_data if stock_data is Array else [])
 
 	# Restore tech tree
 	if data.has("tech_tree"):
@@ -564,6 +576,9 @@ func _write_save() -> void:
 	# Active processes
 	data["active_processes"] = ProcessManager.get_save_data()
 
+	# Lo que espera a ser recogido en cada edificio, y los cultivos
+	data["stockpiles"] = ProductionManager.get_save_data()
+
 	# Tech tree
 	data["tech_tree"] = TechTreeManager.get_save_data()
 
@@ -701,12 +716,20 @@ func _on_building_renamed(_node: Node, _name: String) -> void:
 func _on_building_demolished(_node: Node, _cell: Vector2i) -> void:
 	save_game()
 
-func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
-	var has_any := false
-	for res in earnings:
-		if earnings[res] != 0:
-			has_any = true
-			break
+## El parte de ausencia (2026-10-04): lo producido fuera espera en los edificios,
+## asi que el parte dice lo que hay PARA RECOGER (todo lo acumulado, lo de antes
+## de irse incluido) y, si el modo lo pide, lo que se echo a perder.
+func _show_offline_report(elapsed: float, _earnings: Dictionary) -> void:
+	var waiting: Dictionary = ProductionManager.get_all_stock()
+	var spoiled: Dictionary = ProductionManager.last_offline_spoiled
+	var earnings := {}
+	for res in waiting:
+		if int(waiting[res]) > 0:
+			earnings[res] = int(waiting[res])
+	for res in spoiled:
+		if int(spoiled[res]) > 0:
+			earnings["spoiled:" + String(res)] = -int(spoiled[res])
+	var has_any := not earnings.is_empty()
 	if not has_any:
 		return
 
@@ -732,12 +755,18 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 
 	vbox.add_child(UITheme.make_separator())
 
-	var res_names: Dictionary = {"gold": Tr.res_cap("gold"), "steel": Tr.res_cap("steel"), "oil": Tr.res_cap("oil"), "wood": Tr.res_cap("wood")}
-	for res in earnings:
-		if earnings[res] == 0:
-			continue
-		var amount: int = earnings[res]
-		var text := ("+%d %s" if amount > 0 else "%d %s") % [amount, res_names.get(res, res)]
+	if not waiting.is_empty():
+		var hint := UITheme.make_label(Tr.ti("LBL_OFFLINE_TO_COLLECT"), "body", UITheme.TEXT)
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint.custom_minimum_size.x = 280
+		vbox.add_child(hint)
+	for key in earnings:
+		var amount: int = earnings[key]
+		var res: String = String(key).trim_prefix("spoiled:")
+		var text := ("+%d %s" if amount > 0 else "%d %s") % [amount, Tr.res_cap(res)]
+		if String(key).begins_with("spoiled:"):
+			text = Tr.t("LBL_OFFLINE_SPOILED") % [-amount, Tr.res_name(res)]
 		var lbl := UITheme.make_label(text, "body", UITheme.resource_color(res) if amount > 0 else UITheme.DANGER)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vbox.add_child(lbl)

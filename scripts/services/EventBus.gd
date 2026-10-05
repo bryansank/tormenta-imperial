@@ -355,3 +355,20 @@ signal tutorial_guide_finished(skipped: bool)
 ## de HelpCatalog. HelperPanel la ensena ya, senalando su control.
 @warning_ignore("unused_signal")
 signal help_reopen_requested(help_id: String)
+
+# ── comida-granja-recoger (2026-10-04) ──
+## Cambio lo acumulado en un edificio (produjo, se recogio, se echo a perder).
+## `stock` es recurso -> cantidad. Lo escuchan el icono flotante y el badge.
+@warning_ignore("unused_signal")
+signal building_stock_changed(node: Node, stock: Dictionary)
+## El jugador recogio lo de un edificio. `collected` es lo que entro en la bolsa;
+## lo que no cupo se queda en el edificio.
+@warning_ignore("unused_signal")
+signal production_collected(node: Node, collected: Dictionary)
+## Lo acumulado paso demasiado tiempo sin recoger y se perdio una parte
+## (solo con GameMode.spoilage_enabled()).
+@warning_ignore("unused_signal")
+signal stock_spoiled(node: Node, lost: Dictionary)
+## Se planto (o cambio) el cultivo de una Granja.
+@warning_ignore("unused_signal")
+signal crop_planted(node: Node, crop_id: String)
