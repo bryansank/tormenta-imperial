@@ -576,9 +576,10 @@ tormenta-imperial/
 |   |   +-- PlacementRules.gd        # Shared placement rules for 3D and 2D: deposit adjacency, footprint, road network and auto-road, upgrade effects
 |   |   +-- PlacementAssist.gd       # Touch placement (tap aims, tap ghost/✓ builds), valid-spot highlight — docs/21 §9
 |   |   +-- BuildingStatusBadge.gd   # Worker pictogram / "Zzz" + why a building is stopped (3D)
-|   |   +-- BuildingLook.gd          # Rule (both views): construction phase by footprint / upgrade / ruin / active / idle
+|   |   +-- BuildingLook.gd          # Rule (both views): construction phase / upgrade / ruin / active / idle; site style per type + seeded layout per instance
 |   |   +-- BuildingLookVisual.gd    # Applies it in 3D (child "LookVisual"); BuildingPlacer syncs it with one map-wide clock
-|   |   +-- BuildingFx.gd            # Generated smoke/dust/glow sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D
+|   |   +-- BuildingFx.gd            # Generated smoke/dust/glow/sparks sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D
+|   |   +-- SiteFx.gd                # Construction-site animation by shader (crane swing, hook, pennant), 3D and 2D
 |   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes (fallback when there is no GLB)
 |   +-- camera/MonumentalCamera.gd   # Orthographic 45deg RTS camera
 |   +-- combat/                      # PURE models: no nodes, no signals, no global RNG
@@ -632,7 +633,7 @@ tormenta-imperial/
     +-- package_release.sh, .ps1     # Zips an exported .exe / APK with LICENSE, notices and dist/LEEME-*.txt (docs/19 §8)
     +-- gen_godot_notices.gd         # Regenerates licenses/GODOT-COPYRIGHT.txt from the engine binary
     +-- gen_ui_textures.gd, gen_resource_icons.gd, gen_unit_icons.gd  # Asset generators (headless, -s); icons also at 24/42/60/96 (`<id>_<px>.png`, `UITheme.icon_texture(id, px)`)
-    +-- look_probe.gd, look_probe_runner.gd  # Screenshots of every building look (construction phases, ruin, active) in 3D and 2D
+    +-- look_probe.gd, look_probe_runner.gd  # Screenshots of every building look (construction phases, ruin, active) and a site row per phase, 3D and 2D
     +-- render_brand.gd, render_branding.gd, render_catalog.gd, showcase_shots.gd  # Branding and screenshots
     +-- *_probe.gd                   # Dev probes, see below
     +-- ui_audit.gd, ui_tour.gd      # Screenshot every panel
@@ -696,7 +697,7 @@ Laboratory have no model yet). GLBs made for 1x1 or 2x1 fill their 2x2 plot thro
 2. Add limit in `GameConfig.building_limits`
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any), and a row in `GameConfig.building_deposit_rules` if it must touch a deposit
-5. Give it a look in both views: a GLB in `model_scene` (or a case in `DieselpunkBuildingFactory`) for 3D, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it)
+5. Give it a look in both views: a GLB in `model_scene` (or a case in `DieselpunkBuildingFactory`) for 3D, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it); and a row in `GameConfig.construction_style` so its construction site has its own materials, fence, tarp and phase-2 silhouette (docs/03, "Obra por edificio y por instancia"; without one it uses `construction_style_default`)
 6. Add translations in `Tr.gd` (both ES and EN), including `BLD_<ID>_NAME` and `BLD_<ID>_DESC`. UI shows buildings through `BuildingData.get_display_name()` / `get_description()`, never the raw `.tres` fields
 7. Building auto-appears in ConstructionMenu (loads all .tres from data/buildings/)
 
@@ -770,7 +771,7 @@ All balance values live in `GameConfig.gd`:
 - `storm_*` - storm cycle, damage, the Tithe, tower mitigation and tower crews
 - `final_audit_*` - the closing siege: wave count, slots, scaling, resummon floor
 - `building_deposit_rules` - which extractor must touch which deposit
-- `construction_phase_thresholds` / `building_active_fx` / `building_fx_*` / `ruin_*` /
+- `construction_phase_thresholds` / `construction_style*` / `construction_crane_*` / `building_active_fx` / `building_fx_*` / `ruin_*` /
   `building_look_sync_interval` - how buildings look on the map (docs/03, "Aspecto en el mapa")
 - `deposit_per_type_min/max` / `deposit_core_gap` / `map_shore_band` / `deposit_sizes` - the random map's deposits
 - `grid_size_min/max` - the grid side rolled per game (even, saved in the `grid` key)

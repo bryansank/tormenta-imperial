@@ -116,3 +116,79 @@ func test_a_house_never_animates() -> void:
 	assert_int(b.get_look()["look"]).is_equal(LookRule.Look.IDLE)
 	assert_object(b.get_active_fx()).is_null()
 	b.queue_free()
+
+# ── Obra por edificio y por instancia ────────────────────────────────
+
+const ALL_IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "foundry", "barracks",
+	"refinery", "tower", "headquarters", "market", "laboratory", "garden", "fountain", "statue", "road"]
+
+func test_every_building_draws_its_three_phases_with_two_seeds() -> void:
+	var calls: Array = []
+	for id in ALL_IDS:
+		var data: BuildingData = load("res://data/buildings/%s.tres" % id)
+		var n := LookRule.footprint_class(data.grid_size)
+		var size: Vector2 = Vector2(data.grid_size) * 32.0
+		for phase in 3:
+			for seed_val in [LookRule.site_seed(id, Vector2i(4, 4)), LookRule.site_seed(id, Vector2i(6, 4))]:
+				calls.append(func(ci): Art.draw_construction_phase(ci, size, phase, 0.5, n, id, seed_val))
+	await _draw_on_canvas(calls)
+	assert_int(_drawn).is_greater(0)
+
+func test_anchors_follow_the_instance() -> void:
+	var style := LookRule.site_style("foundry")
+	var a := LookRule.site_layout(LookRule.site_seed("foundry", Vector2i(4, 4)), style, 2)
+	var b := LookRule.site_layout(LookRule.site_seed("foundry", Vector2i(6, 4)), style, 2)
+	var size := Vector2(64, 64)
+	assert_dict(Art.site_anchors(size, 2, 2, style, a)).is_equal(Art.site_anchors(size, 2, 2, style, a))
+	assert_dict(Art.site_anchors(size, 2, 2, style, a)).is_not_equal(Art.site_anchors(size, 2, 2, style, b))
+	# Grua solo con estructura y desde 2x2; chispas solo cuando ya hay acero.
+	assert_dict(Art.site_anchors(size, 2, 2, style, a)["crane"]).is_not_empty()
+	assert_dict(Art.site_anchors(size, 1, 2, style, a)["crane"]).is_empty()
+	assert_dict(Art.site_anchors(Vector2(32, 32), 2, 1, style, a)["crane"]).is_empty()
+	assert_str(String(Art.site_anchors(size, 0, 2, style, a)["fx_kind"])).is_empty()
+	assert_str(String(Art.site_anchors(size, 2, 2, style, a)["fx_kind"])).is_equal("sparks")
+
+func _spawn_building(id: String, done: float) -> Node2D:
+	var data: BuildingData = load("res://data/buildings/%s.tres" % id)
+	var b: Node2D = Building2D.new()
+	b.setup(data)
+	add_child(b)
+	var total := GameConfig.get_build_time(maxf(1.0, data.build_time))
+	ProductionManager.register_building(b, data, total * (1.0 - done))
+	return b
+
+func test_a_site_in_frame_phase_animates_crane_and_flag() -> void:
+	var b := _spawn_building("foundry", 0.9)
+	await _settle()
+	assert_int(b.get_look()["phase"]).is_equal(LookRule.PHASE_FRAME)
+	var fx: Node2D = b.get_site_fx()
+	assert_object(fx).is_not_null()
+	var jib: Line2D = fx.get_node("CraneJib")
+	assert_bool(jib.material is ShaderMaterial).is_true()
+	assert_object(fx.get_node_or_null("SiteFlag")).is_not_null()
+	assert_object(fx.get_node_or_null("Fx_sparks")).is_not_null()
+	# Sin _process por la animacion: lo mueve el shader.
+	assert_array(fx.find_children("*", "Timer", true, false)).is_empty()
+	assert_array(fx.find_children("*", "AnimationPlayer", true, false)).is_empty()
+	# Al terminar la obra, las piezas se van.
+	ProductionManager.unregister(b)
+	b.remove_meta("under_construction")
+	await _settle()
+	assert_object(b.get_site_fx()).is_null()
+	b.queue_free()
+
+func test_two_sites_of_the_same_building_get_their_own_seed() -> void:
+	var a := _spawn_building("house", 0.1)
+	var b := _spawn_building("house", 0.1)
+	a.position = Vector2(100, 100)
+	b.position = Vector2(164, 100)
+	await _settle()
+	assert_int(a.get_site_seed()).is_not_equal(b.get_site_seed())
+	assert_int(a.get_site_seed()).is_equal(LookRule.seed_of(a, a.data))
+	# Estable entre frames: no se rehace sola.
+	var site: Node2D = a.get_site_fx()
+	await _settle()
+	assert_object(a.get_site_fx()).is_same(site)
+	for n in [a, b]:
+		ProductionManager.unregister(n)
+		n.queue_free()
