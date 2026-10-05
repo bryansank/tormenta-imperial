@@ -17,6 +17,11 @@ extends Node
 ##   7. mercado: vender lo que sobra para cerrar lo que falta (y las 10 operaciones);
 ##   8. el asedio cuando la guarnicion esta lista.
 ##
+## Desde 2026-10-04 lo producido espera en los edificios: el jugador RECOGE
+## (todo, cada `--collect=N` segundos, 60 por defecto, y en cuanto algo se
+## llena) y CULTIVA (cultivo corto mientras la comida va justa, largo cuando
+## sobra para diez minutos). La gente come comida, no madera ni oro.
+##
 ## Las peleas (Diezmo y oleadas) las juega AutoResolver con la IA a los dos
 ## lados, que es peor que una persona: el resultado del asedio es un suelo. El
 ## tiempo de cada pelea se estima con la formula de tools/balance_probe.gd y la
@@ -39,6 +44,10 @@ const DEAD_WAIT := 120.0
 const SIEGE_TARGET := {"vehicle": 6}
 ## Ciclos de consumo que el jugador razonable deja siempre en la caja.
 const RESERVE_TICKS := 2.0
+## Cada cuanto pasa a recoger (segundos de juego), si nada se llena antes.
+const COLLECT_EVERY := 60.0
+## Minutos de comida por delante a partir de los que planta el cultivo largo.
+const LONG_CROP_MINUTES := 10.0
 
 var options: Dictionary = {}
 
@@ -49,6 +58,7 @@ var _clock_probe: Object = null
 var _clock := 0.0
 var _decide_accum := 0.0
 var _sample_accum := 0.0
+var _collect_accum := 0.0
 
 # ── Registro de la partida ──
 var _r: Dictionary = {}
@@ -129,10 +139,12 @@ func _play_seed(map_seed: int) -> Dictionary:
 		"sieges": [], "victory_at": -1.0, "stuck": "", "deposits": {},
 		"full_time": 0.0, "false_alarms": 0, "repairs": 0, "trades": 0,
 		"board_minutes": 0.0, "events": 0, "step_time": {},
+		"collects": 0, "collected": {}, "crop_changes": 0, "full_stop": 0.0,
 	}
 	_clock = 0.0
 	_decide_accum = 0.0
 	_sample_accum = 0.0
+	_collect_accum = 0.0
 	_open_colony(map_seed)
 	for dep in _map.get_all_deposits():
 		_r["deposits"][dep["id"]] = int(_r["deposits"].get(dep["id"], 0)) + 1
@@ -155,6 +167,7 @@ func _play_seed(map_seed: int) -> Dictionary:
 	if _r["victory_at"] < 0.0:
 		_r["stuck"] = _describe_state()
 	_r["end"] = _snapshot()
+	_r["farms"] = Rules.count_building("farm")
 	_close_colony()
 	return _r
 
@@ -170,15 +183,20 @@ func _tick(dt: float) -> void:
 	ProgressionManager._process(dt)
 	_clock += dt
 	_sample_accum += dt
+	_collect_accum += dt
 	if ResourceManager.get_free_space() <= int(ResourceManager.get_storage_cap() * 0.02):
 		_r["full_time"] += dt
+	# Tiempo-edificio parado por lleno (suma de todos los productores llenos).
+	for node in ProductionManager._producing:
+		if is_instance_valid(node) and ProductionManager.is_full(node):
+			_r["full_stop"] += dt
 	if _sample_accum >= SAMPLE_EVERY:
 		_sample_accum = 0.0
 		var snap: Dictionary = _snapshot()
 		_r["samples"].append(snap)
 		if bool(options.get("log", false)):
-			print("  %6.1f min  · moral %d pob %d/%d oro %d madera %d acero %d petroleo %d bolsa %d/%d fase %d ejercito %s" % [
-				_clock / 60.0, snap["morale"], snap["pop"], snap["max_pop"], snap["gold"], snap["wood"],
+			print("  %6.1f min  · moral %d pob %d/%d oro %d madera %d comida %d acero %d petroleo %d bolsa %d/%d fase %d ejercito %s" % [
+				_clock / 60.0, snap["morale"], snap["pop"], snap["max_pop"], snap["gold"], snap["wood"], snap["food"],
 				snap["steel"], snap["oil"], snap["stored"], snap["cap"], StormManager.get_phase(), str(snap["army"])])
 
 ## Las etiquetas flotantes necesitan fotogramas reales para morirse; con el reloj
@@ -226,6 +244,8 @@ func _fight_open_board() -> void:
 func _decide() -> void:
 	if CombatManager.is_board_open():
 		return
+	_collect()
+	_tend_farms()
 	_feed_with_market()
 	if _repair():
 		return
@@ -287,7 +307,7 @@ func _repair() -> bool:
 		var id: String = (info["data"] as BuildingData).id
 		var ruined: bool = BuildingHealth.is_ruined(node)
 		var rank := 5
-		if id in ["sawmill", "gold_mine", "foundry", "refinery"]:
+		if id in ["farm", "sawmill", "gold_mine", "foundry", "refinery"]:
 			rank = 0 if ruined else 3
 		elif id in ["tower", "barracks", "headquarters"]:
 			rank = 1 if ruined else 4
@@ -376,13 +396,13 @@ func _keeps_reserve(cost: Dictionary) -> bool:
 		return true
 	if StormManager.get_phase() != StormCycle.Phase.CALM:
 		ticks *= 2.0
-	var pop: float = float(PopulationManager.get_population())
 	var upkeep := 0
 	for unit_id in GameConfig.get_unit_ids():
 		upkeep += ArmyManager.get_count(unit_id) * int(GameConfig.get_unit_def(unit_id).get("upkeep_gold", 0))
+	# La gente come comida (2026-10-04): el oro de la caja es para la tropa, y
+	# ninguna obra cuesta comida, asi que la reserva de comida no la toca nadie.
 	var gold_left: int = ResourceManager.get_amount(ResourceManager.Type.GOLD) - int(cost.get(ResourceManager.Type.GOLD, 0))
-	var wood_left: int = ResourceManager.get_amount(ResourceManager.Type.WOOD) - int(cost.get(ResourceManager.Type.WOOD, 0))
-	return float(gold_left) >= (pop + float(upkeep)) * ticks and float(wood_left) >= pop * ticks
+	return float(gold_left) >= float(upkeep) * ticks
 
 ## Si la tropa ya no se puede pagar, no se entrena mas: lo decide el paso de
 ## Objectives. Aqui solo se mira que no quede nada entrenandose con la ceniza.
@@ -434,17 +454,66 @@ func _cover_with_market(cost: Dictionary) -> void:
 				_r["trades"] += 1
 				_act("buy %d %s" % [int(need[res]), res], false)
 
-## Sin oro para la comida de este ciclo, se vende lo que sobre: es lo que dice el
-## consejo "La gente come" y lo que hace cualquiera antes de ver morir a su gente.
+## Sin comida para este ciclo, se compra (con Mercado); sin oro para el sueldo
+## de la tropa, se vende lo que sobre: lo que dice el consejo "La gente come" y lo
+## que hace cualquiera antes de ver morir a su gente.
 func _feed_with_market() -> void:
 	var upkeep := 0
 	for unit_id in GameConfig.get_unit_ids():
 		upkeep += ArmyManager.get_count(unit_id) * int(GameConfig.get_unit_def(unit_id).get("upkeep_gold", 0))
-	var due: int = PopulationManager.get_population() + upkeep
+	var food_due: int = PopulationManager.food_due()
+	if ProgressionManager.current_phase >= GameConfig.Phase.SETTLEMENT \
+			and ResourceManager.get_amount(ResourceManager.Type.FOOD) < food_due \
+			and Rules.count_building("market") > 0:
+		var want: int = food_due * 2 - ResourceManager.get_amount(ResourceManager.Type.FOOD)
+		var price: int = maxi(1, MarketManager.get_buy_price("food"))
+		var can: int = mini(want, (ResourceManager.get_amount(ResourceManager.Type.GOLD) - upkeep) / price)
+		if can > 0 and MarketManager.buy("food", can):
+			_r["trades"] += 1
+			_act("buy %d food (hambre)" % can, false)
 	var gold: int = ResourceManager.get_amount(ResourceManager.Type.GOLD)
-	if gold >= due:
+	if upkeep <= 0 or gold >= upkeep:
 		return
-	_cover_with_market({ResourceManager.Type.GOLD: due * 2})
+	_cover_with_market({ResourceManager.Type.GOLD: upkeep * 2})
+
+## Recoger: todo, cada COLLECT_EVERY segundos o en cuanto algo se llena. Lo que
+## no cabe en la bolsa se queda en el edificio (nada se tira).
+func _collect() -> void:
+	var due: bool = _collect_accum >= float(options.get("collect", COLLECT_EVERY))
+	if not due:
+		for node in ProductionManager._producing:
+			if is_instance_valid(node) and ProductionManager.is_full(node):
+				due = true
+				break
+	if not due:
+		return
+	_collect_accum = 0.0
+	var got: Dictionary = ProductionManager.collect_all()
+	if got.is_empty():
+		return
+	_r["collects"] += 1
+	for res in got:
+		_r["collected"][res] = int(_r["collected"].get(res, 0)) + int(got[res])
+
+## Cultivar: el corto mientras la comida va justa (da enseguida), el largo
+## cuando hay para LONG_CROP_MINUTES (rinde mas por minuto). Solo se cambia con
+## el campo recien cosechado, para no tirar lo que esta creciendo.
+func _tend_farms() -> void:
+	var due_per_min: float = float(PopulationManager.food_due()) * 60.0 \
+		/ maxf(1.0, GameConfig.get_duration(GameConfig.consumption_interval))
+	var food_ahead: float = float(ResourceManager.get_amount(ResourceManager.Type.FOOD)) \
+		+ float(ProductionManager.get_all_stock().get("food", 0))
+	var want: String = "crop_long" if food_ahead >= due_per_min * LONG_CROP_MINUTES else "crop_short"
+	for info in GridManager.get_all_buildings():
+		if (info["data"] as BuildingData).id != ProductionManager.FARM_ID:
+			continue
+		var node: Node = info["node"]
+		if ProductionManager.get_crop(node) == want:
+			continue
+		if ProductionManager.get_cycle_progress(node) > 0.05:
+			continue
+		if ProductionManager.plant_crop(node, want):
+			_r["crop_changes"] += 1
 
 func _do_trades() -> void:
 	# Diez operaciones minimas y baratas: comprar y vender cinco de madera.
@@ -706,6 +775,7 @@ func _snapshot() -> Dictionary:
 		"t": _clock,
 		"gold": ResourceManager.get_amount(ResourceManager.Type.GOLD),
 		"wood": ResourceManager.get_amount(ResourceManager.Type.WOOD),
+		"food": ResourceManager.get_amount(ResourceManager.Type.FOOD),
 		"steel": ResourceManager.get_amount(ResourceManager.Type.STEEL),
 		"oil": ResourceManager.get_amount(ResourceManager.Type.OIL),
 		"stored": ResourceManager.get_total_stored(),
@@ -719,8 +789,8 @@ func _snapshot() -> Dictionary:
 
 func _describe_state() -> String:
 	var s: Dictionary = _snapshot()
-	return "paso=%s era=%d oro=%d madera=%d acero=%d petroleo=%d bolsa=%d/%d pob=%d/%d moral=%d ejercito=%s" % [
-		str(_r.get("last_step", {})), s["era"], s["gold"], s["wood"], s["steel"], s["oil"],
+	return "paso=%s era=%d oro=%d madera=%d comida=%d acero=%d petroleo=%d bolsa=%d/%d pob=%d/%d moral=%d ejercito=%s" % [
+		str(_r.get("last_step", {})), s["era"], s["gold"], s["wood"], s["food"], s["steel"], s["oil"],
 		s["stored"], s["cap"], s["pop"], s["max_pop"], s["morale"], str(s["army"])]
 
 # ══════════════════════════════════════════════════════════════════════
@@ -781,6 +851,9 @@ func _print_run(r: Dictionary) -> void:
 	for i in range(mini(8, waits.size())):
 		top += "%s=%.0f " % [waits[i][1], waits[i][0] / 60.0]
 	print("  espera por paso (min): " + top)
+	print("  recoger: %d veces %s | cambios de cultivo %d | edificio-minutos parado por lleno %.0f | granjas %d" % [
+		int(r["collects"]), str(r["collected"]), int(r["crop_changes"]), float(r["full_stop"]) / 60.0,
+		int(r.get("farms", 0))])
 	if r["stuck"] != "":
 		print("  ATASCO: " + String(r["stuck"]))
 	print("  final: " + str(r["end"]))
