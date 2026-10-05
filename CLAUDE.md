@@ -112,14 +112,14 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- GridOverlay (MeshInstance3D) -- faint cell grid, on by default (Settings toggle), fitted to GridManager at runtime
   +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist
   +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" follows the device profile (tablet/phone yes, PC no)
-  +-- ResourceHUD (CanvasLayer 10) -- top-left card: named resources + ALMACÉN COMPARTIDO bar with legend + TALLER row (materials, once one is unlocked)
+  +-- ResourceHUD (CanvasLayer 10) -- top-left card: one row of [icon] number chips (resources, free workers, morale once the Storm is armed; names and meaning in tooltips, a tap unfolds them) + shared storage bar with used/cap + materials row (once one is unlocked)
   +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), none on the Núcleo sidewalk or the shore band, each with room and a road path for its extractor; `shore_cells()` is the hook for future sea/shore resources
   +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + building list
   +-- BuildingInfoPanel (CanvasLayer 10) -- right panel: selected building / deposit info; RETIRAR / PONER TRABAJADORES; ABRIR MERCADO / INVESTIGAR on the Market / Laboratory (`SCREENS`)
   +-- MarketPanel (CanvasLayer 11) -- buy/sell UI, opened from a Market building (not from the menu)
   +-- ProgressPanel (CanvasLayer 11) -- milestones + era display
   +-- VictoryScreen (CanvasLayer 20) -- victory overlay
-  +-- NotificationPanel (CanvasLayer 11) -- status (Trabajadores / En su puesto · libres / Moral in words) + toasts (only warning, danger and notice) + the activity log, opened from ☰ MENÚ → REGISTRO
+  +-- NotificationPanel (CanvasLayer 11) -- toasts (only warning, danger and notice) + objective line + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips)
   +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI, opened from a Laboratory building (not from the menu)
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step()
   +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign
@@ -253,7 +253,7 @@ building. A material is unlocked when the first of its building finishes
 (`get_total_stored()` skips them, the Tithe does not take them) because the pool is
 tuned to the exact HQ L3 price. Advanced buildings ask for them via
 `BuildingData.cost_materials` (Barracks planks, Tower/Refinery beams, HQ beams +
-ingots + fuel, Statue ingots) and `hq_upgrade_costs`. The HUD shows them in a TALLER
+ingots + fuel, Statue ingots) and `hq_upgrade_costs`. The HUD shows them in a materials
 row; `Objectives.make_step_for()` turns a missing material into a `"make"` step.
 
 **Era gates:** Foundry (era 2) needs Sawmill + Gold Mine + House + Warehouse;

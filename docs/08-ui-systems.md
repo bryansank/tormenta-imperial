@@ -8,9 +8,11 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 
 ### ResourceHUD (`scripts/ui/ResourceHUD.gd`)
 - **Position:** Top-left card (slot `top_left`)
-- **Shows:** Unlocked resource amounts (gold, wood, then steel/oil when unlocked) and ONE shared storage bar labelled "ALMACÉN COMPARTIDO 500 / 600"
-- **Behavior:** Resource values update in real-time via `EventBus.resource_changed`. Each number has its name in a tooltip; a tap (or click) on a number or on the storage row unfolds a row per resource with name, amount and a colour swatch that is the legend of the storage bar, plus one line explaining the shared cap. The bar turns red when full. Animates glow when a new resource unlocks.
-- **TALLER row** (2026-09-28): the workshop materials (planks, ingots, beams, fuel), outside the shared bar; the row appears once one material is unlocked or held.
+- **Shows:** one row of `[icon] number` chips, with no names written beside them: the unlocked resources (gold, wood, then steel/oil), the **free workers** and, once the Imperial Storm is armed, the **morale**. Under it, ONE shared storage bar with `500/600` at its right, no title.
+- **Workers chip** (2026-10): the number is the workers that are free for the next building (`population - used`). Inhabitants, cap, working and withdrawn go to the tooltip. It turns `UITheme.WARNING` when a building is left without workers (`PopulationManager.get_understaffed_count()`). Follows `workers_changed` / `population_changed`.
+- **Morale chip** (2026-10): hidden until the Storm cycle is armed (`ResourceHUD.morale_visible()` = `StormManager.is_armed() or is_halted()`; never in Constructor, where the Storm does not run). Number coloured by threshold (`POSITIVE` > 60, `WARNING` 31-60, `DANGER` ≤ 30); the tooltip says what it does (output multiplier, nobody is born below 30). Re-derived on `phase_advanced`, every `storm_*` signal, `game_load_completed` and `game_new_started` (deferred, after StormManager).
+- **Behavior:** Resource values update in real-time via `EventBus.resource_changed`. Every chip has its meaning in a tooltip. Touch has no tooltips in Godot, so a tap (or click) on any chip or on the storage row unfolds the detail: a row per resource with name, amount and the colour swatch that is the legend of the bar, the workers and morale lines (same text as their tooltips) and the shared-cap explanation; another tap folds it. There is no ▼ button any more. With touch controls on, chips are at least `UITheme.MIN_BTN_H` tall. The row is an `HFlowContainer` that wraps before the ☰ MENÚ button when they would meet (phone in portrait). The bar turns red when full. Animates glow when a new resource unlocks.
+- **Materials row** (2026-09-28): the workshop materials (planks, ingots, beams, fuel), outside the shared bar; the row appears once one material is unlocked or held. No "TALLER" title since 2026-10 (it is in the tooltip).
 - **Layer:** 10
 
 ### ConstructionMenu (`scripts/ui/ConstructionMenu.gd`)
@@ -82,8 +84,8 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - All built with `ModalKit` (`scripts/ui/ModalKit.gd`), which only places UITheme pieces
 
 ### NotificationPanel (`scripts/ui/NotificationPanel.gd`)
-- **Position:** Top-left status bar (workers/morale), bottom-left toasts, left side log panel
-- **Shows:** "Trabajadores: 26 de 32", "En su puesto: 14 · libres: 12", "Moral 72 %: producción x1.1" (tooltips per row; a tap on the card unfolds the three explanations), toast notifications, scrollable activity log
+- **Position:** bottom-left toasts, left side log panel (under the resources), the objective line at the top centre
+- **Shows:** toast notifications and the scrollable activity log. The old status card under the resources ("Trabajadores: 26 de 32", "En su puesto…", "Moral 72 %…") was removed in 2026-10: workers and morale are chips of the ResourceHUD row. What was urgent in it already arrives as a toast from `PopulationManager` (no wood, no gold, low morale, starvation).
 - **Behavior:** Listens to `EventBus.notification_posted`. Only `warning`, `danger` and `notice` become toasts (`shows_toast()`); routine news ("Camino construido", the population grew) goes to the log only. Toasts auto-fade after 4 seconds, at most 3 at a time (1 on a narrow screen), and drop under the CONSTRUIR window while it is open. The log stores the last 50 entries and opens from ☰ MENÚ → COLONIA → Registro (`open_log()`); the old REGISTRO DE AVISOS button on the HUD is gone. Colours come from `UITheme.notice_color(category)`.
 - **Layer:** 11
 
