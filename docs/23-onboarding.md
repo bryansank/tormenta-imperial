@@ -162,6 +162,14 @@ apunta.
    #29 y el del índice): apaga las que salen solas; las que se piden en el índice salen
    igual.
 
+**La primera escaramuza** (docs/15-combat.md §4). Al salir del cuartel la primera
+unidad, el consejo `first_sortie` señala ☰ MENÚ (donde vive ESCARAMUZAS) y ¿QUÉ HACER?
+pide "Lanza tu primera escaramuza" antes de la guarnición. La marca
+`TutorialManager.first_sortie_done` (en la partida) se pone al ganar una salida; hasta
+entonces cada salida es un solo nodo fácil con botín. El globo antiguo
+`callout_skirmish` sigue atado al botón de la columna lateral, que ya no se abre desde
+que ESCARAMUZAS pasó al menú ☰: en la práctica no sale.
+
 ### Índice de AYUDA (`scripts/ui/HelpIndexPanel.gd`)
 
 - Grupo **`help_index`**, método **`open()`**: el menú ☰ único lo abre con
@@ -213,6 +221,7 @@ artillerías), `HELP_B_STORM` (la Tormenta ya no se presenta al empezar: es una 
 | `tests/tutorial/test_tutorial_manager.gd` | consejos una vez, prólogo pendiente hasta poder salir, modos, reset y guardado |
 | `tests/ui/test_helper_callouts.gd` | una a la vez, ✕ y vista, reloj y pausa con el dedo, prioridad, silencios, interruptor, reabrir pedida |
 | `tests/ui/test_helper_skirmish_callout.gd` | el globo de ESCARAMUZAS sigue a su botón y sale una vez |
+| `tests/tutorial/test_first_sortie_tip.gd` | el consejo `first_sortie` sale con la primera unidad (antes que el sueldo) y una vez, señala ☰ MENÚ, textos ES/EN con `_TOUCH`; la marca `first_sortie_done` solo con una victoria, guardado idempotente, `reset()` y guardados viejos |
 | `tests/ui/test_help_index.gd` | grupo `help_index`, lista básicas y vistas, modo Constructor, reabrir |
 | `tests/ui/test_title_prologue_order.gd` | menú principal abierto → sin prólogo; Ajustes desde el menú arriba y sin nada encima; soltar → prólogo encima de todo; la pausa también lo retiene |
 

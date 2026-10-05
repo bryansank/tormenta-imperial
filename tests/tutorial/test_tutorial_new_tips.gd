@@ -62,6 +62,9 @@ func test_the_first_expedition_explains_the_map() -> void:
 	assert_array(_tips).contains_exactly(["expedition_map"])
 
 func test_the_first_trained_unit_explains_upkeep_before_it_bites() -> void:
+	# Con la primera escaramuza ya ganada sale solo el sueldo; la otra mitad la
+	# vigila tests/tutorial/test_first_sortie_tip.gd.
+	TutorialManager.first_sortie_done = true
 	EventBus.unit_trained.emit("infantry")
 	EventBus.army_upkeep_unpaid.emit(10)
 	assert_array(_tips).contains_exactly(["upkeep"])

@@ -39,8 +39,12 @@ func before_test() -> void:
 		"army": ArmyManager.get_save_data(),
 		"storm": StormManager.get_save_data(),
 		"tech": TechTreeManager.get_save_data(),
+		"tutorial": TutorialManager.get_save_data(),
 	}
 	TechTreeManager.reset()
+	# La primera escaramuza ya ganada: estos casos prueban la linea de siempre. Los
+	# que hablan de ella la vuelven a abrir (test_first_sortie_*).
+	TutorialManager.first_sortie_done = true
 	_scene = get_tree().current_scene
 	if _scene == null:
 		_scene = Node.new()
@@ -88,6 +92,7 @@ func after_test() -> void:
 		amounts[ResourceManager.get_type_name(type)] = _saved["resources"][type]
 	ResourceManager.set_amounts(amounts)
 	PopulationManager.load_save_data(_saved["population"])
+	TutorialManager.load_save_data(_saved["tutorial"])
 
 # ── Utilleria ────────────────────────────────────────────────────────
 
@@ -174,6 +179,10 @@ func _take(step: Dictionary) -> void:
 			TechTreeManager._apply_tech_bonus(TechTreeManager.get_tech(String(step["id"])))
 		"sell":
 			MarketManager.sell(String(step["id"]), int(step["amount"]))
+		"sortie":
+			# Sale y la gana: lo que cuenta aqui es que el panel pase pagina.
+			assert_bool(bool(CombatManager.can_launch({String(step["id"]): 1})["ok"])).is_true()
+			EventBus.expedition_ended.emit(Expedition.RESULT_WON, {}, {})
 		"make":
 			# Como entrenar: el taller termina al instante. Se paga la receta que
 			# _give puso en la bolsa y entra lo que el paso pide (el jugador repetiria
@@ -198,6 +207,8 @@ func _assert_readable(step: Dictionary, where: String) -> void:
 ## lo que cuesta: el panel nunca se atasca, nunca pide algo imposible, y el orden
 ## de la linea es el de la guia.
 func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
+	# Partida nueva de verdad: la primera escaramuza esta por hacer.
+	TutorialManager.first_sortie_done = false
 	var visited: Array = []
 	var guard := 0
 	while not ProgressionManager.is_final_audit_pending():
@@ -220,7 +231,7 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 
 	# El orden de la linea, en la secuencia visitada (con lo que haya en medio).
 	var expected: Array = ["build:sawmill", "build:gold_mine", "build:house", "build:sawmill",
-		"build:warehouse", "build:foundry", "build:barracks", "train:artillery", "train:artillery",
+		"build:warehouse", "build:foundry", "build:barracks", "train:artillery", "sortie:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
 		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]
 	var cursor := 0
@@ -316,8 +327,11 @@ func test_after_victory_the_panel_is_a_sandbox() -> void:
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("sandbox")
 	_assert_readable(step, "tras ganar")
-	var final_row: Dictionary = Objectives.route()[Objectives.LINE.size()]
-	assert_bool(bool(final_row["done"])).is_true()
+	var final_row: Dictionary = {}
+	for row in Objectives.route():
+		if String(row["text"]) == Tr.t("OBJ_ROUTE_FINAL"):
+			final_row = row
+	assert_bool(bool(final_row.get("done", false))).is_true()
 
 # ── El panel ─────────────────────────────────────────────────────────
 
@@ -412,3 +426,75 @@ func test_the_builder_skips_the_army_and_the_sandbox_has_no_goal() -> void:
 	assert_str(String(Objectives.next_step()["why"])).is_equal("OBJ_WHY_SANDBOX_MODE")
 	GameMode.current = saved_mode
 	GameMode.run_result = saved_result
+
+# ── La primera escaramuza ────────────────────────────────────────────
+
+## Una base de era 1 con el cuartel en pie, sin tropa.
+func _a_base_with_barracks() -> void:
+	for id in ["sawmill", "gold_mine", "house", "sawmill", "warehouse", "foundry", "barracks"]:
+		_build(id)
+	ResourceManager.set_amounts({"gold": 300, "wood": 200, "steel": 50})
+
+## Con el cuartel y sin tropa, el panel pide entrenar; en cuanto sale la primera
+## unidad, pide la escaramuza ANTES de seguir con la guarnicion de cinco.
+func test_first_sortie_is_asked_as_soon_as_the_first_unit_stands() -> void:
+	TutorialManager.first_sortie_done = false
+	_a_base_with_barracks()
+	var before: Dictionary = Objectives.next_step()
+	assert_str(String(before["kind"])).is_not_equal("sortie")
+	_add_unit("infantry")
+	var step: Dictionary = Objectives.next_step()
+	assert_str(String(step["kind"])).is_equal("sortie")
+	assert_str(String(step["id"])).is_equal("infantry")
+	assert_str(String(step["why"])).is_equal("OBJ_WHY_FIRST_SORTIE")
+	_assert_readable(step, "primera escaramuza")
+	assert_str(Objectives.blocker(step)).is_empty()
+	# En el camino va justo antes de la guarnicion, y es la fila de ahora.
+	var rows: Array = Objectives.route()
+	var sortie_at := -1
+	for i in rows.size():
+		if String(rows[i]["text"]) == Tr.t("OBJ_ROUTE_FIRST_SORTIE"):
+			sortie_at = i
+	assert_int(sortie_at).is_greater(0)
+	assert_bool(bool(rows[sortie_at]["current"])).is_true()
+	assert_str(String(rows[sortie_at + 1]["text"])).contains(Tr.t(String(GameConfig.get_unit_def("infantry")["name"])))
+
+## Ganada la primera, el panel vuelve a la linea: la guarnicion de cinco.
+func test_first_sortie_goes_away_once_won() -> void:
+	TutorialManager.first_sortie_done = false
+	_a_base_with_barracks()
+	_add_unit("infantry")
+	assert_str(String(Objectives.next_step()["kind"])).is_equal("sortie")
+	EventBus.expedition_ended.emit(Expedition.RESULT_WON, {}, {})
+	assert_bool(TutorialManager.is_first_sortie_done()).is_true()
+	var step: Dictionary = Objectives.next_step()
+	assert_str(String(step["kind"])).is_not_equal("sortie")
+	var garrison_or_support: bool = String(step["kind"]) in ["train", "build", "make", "sell", "buy"]
+	assert_bool(garrison_or_support).override_failure_message("tras la primera: %s" % str(step)).is_true()
+
+## Perderla o abandonarla no la gasta: se vuelve a pedir.
+func test_a_lost_or_abandoned_first_sortie_is_asked_again() -> void:
+	TutorialManager.first_sortie_done = false
+	_a_base_with_barracks()
+	_add_unit("infantry")
+	EventBus.expedition_ended.emit(Expedition.RESULT_LOST, {}, {})
+	EventBus.expedition_ended.emit(Expedition.RESULT_ABANDONED, {}, {})
+	assert_bool(TutorialManager.is_first_sortie_done()).is_false()
+	assert_str(String(Objectives.next_step()["kind"])).is_equal("sortie")
+
+## Con la Regencia convocada nadie sale: el paso no se pide.
+func test_first_sortie_is_not_asked_with_the_audit_summoned() -> void:
+	TutorialManager.first_sortie_done = false
+	_summon_with({"vehicle": Objectives.SIEGE_VEHICLES})
+	assert_str(String(Objectives.next_step()["kind"])).is_equal("siege")
+
+## Ya hecha (o en una partida que ya salio de expedicion), el flujo es el de
+## siempre: con una unidad en casa se sigue pidiendo la guarnicion.
+func test_with_the_first_sortie_done_the_flow_is_unchanged() -> void:
+	_a_base_with_barracks()
+	_add_unit("infantry")
+	var step: Dictionary = Objectives.next_step()
+	assert_str(String(step["kind"])).is_not_equal("sortie")
+	for row in Objectives.route():
+		if String(row["text"]) == Tr.t("OBJ_ROUTE_FIRST_SORTIE"):
+			assert_bool(bool(row["done"])).is_true()

@@ -168,6 +168,13 @@ era 2 → 7. Cuartel → 8. Guarnición: 5 unidades, 2 de artillería → 9. Ref
 un pozo, era 3 → 10. Dos torres → 11. Cuartel General → 12. CG nivel 2 → 13. Seis
 blindados → 14. CG nivel 3 (convoca la Auditoría) → sobrevivirla.
 
+**La primera escaramuza** va entre el 7 y el 8: en cuanto hay una unidad en casa, y
+mientras la partida no haya ganado ninguna salida, el panel pide "Lanza tu primera
+escaramuza" (`kind: "sortie"`) por delante de todo lo demás de la línea, sin pasar por
+los pasos de apoyo (no cuesta nada y su botín es oro y madera). No sale con una columna
+fuera ni con la Auditoría convocada. Es un solo nodo fácil con 150 de oro y 100 de
+madera (docs/15-combat.md §4); la sonda la lanza igual que el jugador.
+
 Antes de cada paso, lo que lo haría imposible o absurdo, en este orden:
 
 - algo que da de comer está en ruinas → **repáralo**;

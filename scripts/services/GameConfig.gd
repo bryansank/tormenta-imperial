@@ -1017,6 +1017,20 @@ var combat_draft_focus_multiplier := 2
 ## Base reward per cleared encounter, scaled by node depth and risk.
 var combat_reward_base := {"gold": 60, "wood": 30}
 
+## La primera escaramuza de la partida (docs/15-combat.md §4). La pide el paso de
+## ¿QUE HACER? en cuanto sale del cuartel la primera unidad, y no es una
+## expedicion entera: es un solo nodo, sin mapa ni jefe, contra un enemigo debil.
+## Con la expedicion normal la columna de un infante recien entrenado se estrella
+## en el nodo 0 (dos infantes enteros) y nunca llega al jefe; esta se gana con un
+## solo infante a cualquier moral (medido en tests/combat/test_first_sortie.gd).
+## El botin es el doble largo del nodo 0 normal: tiene que notarse en la bolsa de
+## la era 1 (600) y pagar de sobra el infante que costo (40 oro + 20 madera).
+var combat_first_sortie_roster := {"infantry": 1}
+## Multiplicador de HP y ataque del enemigo, en vez del de profundidad/era/riesgo.
+## 0.6: un infante de 60 HP que pega 5 (3 de dano contra la defensa 2).
+var combat_first_sortie_enemy_scale := 0.6
+var combat_first_sortie_rewards := {"gold": 150, "wood": 100}
+
 ## Morale is the bridge between base and battlefield: a demoralised population
 ## reacts late and hits softer, and casualties cost morale back home.
 ##

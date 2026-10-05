@@ -93,6 +93,23 @@ static func generate_map(rng: RandomNumberGenerator, depth_range: Vector2i = Vec
 
 	return nodes
 
+## La primera escaramuza de la partida: un solo nodo, sin salidas ni jefe, con su
+## enemigo, su escala y su botin fijados en GameConfig.combat_first_sortie_*. No
+## gasta el generador: no hay nada que sortear, y la expedicion que la lleva se
+## reconstruye igual desde el guardado sin depender de la semilla.
+##
+## El nodo lleva `enemy_scale` y `rewards` propios; node_scale() y node_rewards()
+## los prefieren a la curva de profundidad, era y riesgo.
+static func first_sortie_map() -> Array:
+	var nodes: Array = []
+	_add_node(nodes, 0, 0, false)
+	var node: Dictionary = nodes[0]
+	node["enemy_roster"] = GameConfig.combat_first_sortie_roster.duplicate()
+	node["enemy_scale"] = GameConfig.combat_first_sortie_enemy_scale
+	node["rewards"] = GameConfig.combat_first_sortie_rewards.duplicate()
+	node["first_sortie"] = true
+	return nodes
+
 static func _add_node(nodes: Array, depth: int, risk: int, is_boss: bool) -> int:
 	var index: int = nodes.size()
 	nodes.append({
@@ -246,18 +263,28 @@ static func roster_power(roster: Dictionary, scale: float = 1.0) -> float:
 		total += float(power) * float(roster[unit_id])
 	return total * scale
 
+## The HP/ATK multiplier of one node's enemies: the node's own `enemy_scale` if it
+## carries one (the first sortie), the depth/era/risk curve otherwise.
+static func node_scale(node: Dictionary, era: int) -> float:
+	if node.has("enemy_scale"):
+		return float(node["enemy_scale"])
+	return enemy_scale(int(node.get("depth", 0)), era, int(node.get("risk", 0)), bool(node.get("is_boss", false)))
+
 ## Strength of a whole node, roster and stat multiplier together.
 static func node_power(node: Dictionary, era: int) -> float:
-	return roster_power(
-		node.get("enemy_roster", {}),
-		enemy_scale(int(node.get("depth", 0)), era, int(node.get("risk", 0)), bool(node.get("is_boss", false)))
-	)
+	return roster_power(node.get("enemy_roster", {}), node_scale(node, era))
 
 # ── Rewards ──────────────────────────────────────────────────────────
 
 ## What clearing this node pays. Deeper, riskier and later-era nodes pay more, on
 ## the same curve the enemy grows on, so the dangerous road stays worth taking.
 static func node_rewards(node: Dictionary, era: int) -> Dictionary:
+	# Un nodo con su botin fijado (la primera escaramuza) paga eso, sin curva.
+	if node.get("rewards", null) is Dictionary:
+		var fixed: Dictionary = {}
+		for res_name in node["rewards"]:
+			fixed[res_name] = int(node["rewards"][res_name])
+		return fixed
 	var depth: int = int(node.get("depth", 0))
 	var risk: int = int(node.get("risk", 0))
 	var mult: float = 1.0 \

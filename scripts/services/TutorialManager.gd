@@ -47,6 +47,11 @@ var guide_state: String = GUIDE_PENDING
 ## Lo que ya habia cuando empezo el tutorial. Repetirlo con una isla hecha pide
 ## un aserradero MAS, no dar el paso por hecho.
 var guide_baseline: Dictionary = {}
+## La partida ya gano su primera escaramuza (docs/15-combat.md §4). Hasta
+## entonces ¿QUE HACER? la pide en cuanto hay una unidad en casa, el consejo
+## `first_sortie` la senala al salir la primera unidad, y cada salida es el nodo
+## facil en vez del mapa. Perderla o abandonarla no la gasta.
+var first_sortie_done: bool = false
 
 ## El prologo esta pedido y espera a que no haya nada encima (menu principal,
 ## pausa, selector de modo).
@@ -71,6 +76,7 @@ const TIPS := {
 	"market":         {"title": "TUT_TIP_MARKET_TITLE",   "body": "TUT_TIP_MARKET_BODY"},
 	"tech_tree":      {"title": "TUT_TIP_TECH_TITLE",     "body": "TUT_TIP_TECH_BODY"},
 	"expedition_map": {"title": "TUT_TIP_MAP_TITLE",      "body": "TUT_TIP_MAP_BODY"},
+	"first_sortie":   {"title": "TUT_TIP_FIRST_SORTIE_TITLE", "body": "TUT_TIP_FIRST_SORTIE_BODY"},
 	"upkeep":         {"title": "TUT_TIP_UPKEEP_TITLE",   "body": "TUT_TIP_UPKEEP_BODY"},
 	"consumption":    {"title": "TUT_TIP_CONSUMPTION_TITLE", "body": "HELP_TIP_CONSUMPTION_BODY"},
 	"final_audit":    {"title": "TUT_TIP_AUDIT_TITLE",    "body": "HELP_TIP_AUDIT_BODY"},
@@ -104,6 +110,7 @@ func _ready() -> void:
 	EventBus.encounter_started.connect(_on_encounter_started)
 	EventBus.building_placed.connect(_on_building_placed)
 	EventBus.expedition_started.connect(_on_expedition_started)
+	EventBus.expedition_ended.connect(_on_expedition_ended)
 	EventBus.unit_trained.connect(_on_unit_trained)
 	EventBus.army_upkeep_unpaid.connect(_on_upkeep_unpaid)
 	EventBus.consumption_failed.connect(_on_consumption_failed)
@@ -405,12 +412,29 @@ func _on_building_placed(data: Resource, _cell: Vector2i) -> void:
 	_refresh_guide()
 
 func _on_expedition_started(_expedition_id: int, _node_count: int) -> void:
+	# La primera escaramuza no tiene mapa: el consejo del mapa espera a la
+	# primera expedicion de verdad.
+	var run: Expedition = CombatManager.get_expedition()
+	if run != null and run.first_sortie:
+		return
 	offer_tip("expedition_map")
+
+## Ganar una salida, la que sea, cumple la primera escaramuza.
+func _on_expedition_ended(result: int, _rewards: Dictionary, _casualties: Dictionary) -> void:
+	if result == Expedition.RESULT_WON:
+		first_sortie_done = true
+
+func is_first_sortie_done() -> bool:
+	return first_sortie_done
 
 ## El sueldo se explica con la primera unidad, antes de que falte el oro: cuando
 ## ya no se puede pagar, el consejo llega tarde. Si aun asi falta primero, el
 ## impago lo dispara (mismo id, sale una vez).
 func _on_unit_trained(_unit_id: String) -> void:
+	# La primera unidad va a pelear ya: primero donde (☰ MENU > ESCARAMUZAS),
+	# despues lo que cobra.
+	if not first_sortie_done:
+		offer_tip("first_sortie")
 	offer_tip("upkeep")
 
 func _on_upkeep_unpaid(_gold_short: int) -> void:
@@ -449,6 +473,7 @@ func get_save_data() -> Dictionary:
 		"helps_seen": helps_seen.duplicate(),
 		"guide_state": guide_state,
 		"guide_baseline": guide_baseline.duplicate(),
+		"first_sortie_done": first_sortie_done,
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -480,6 +505,13 @@ func load_save_data(data: Dictionary) -> void:
 		for k in ["sawmills", "sawmills_built", "houses"]:
 			if gb.has(k):
 				guide_baseline[k] = int(gb[k])
+	# Sin la clave es un guardado de antes de la primera escaramuza: si ya vio el
+	# consejo del mapa, ya salio de expedicion y no se le vuelve a pedir.
+	var fs: Variant = data.get("first_sortie_done", null)
+	if fs is bool:
+		first_sortie_done = fs
+	else:
+		first_sortie_done = "expedition_map" in tips_seen
 	_step = ""
 	_prologue_pending = false
 
@@ -491,6 +523,7 @@ func reset() -> void:
 	helps_seen.clear()
 	guide_state = GUIDE_PENDING
 	guide_baseline = {}
+	first_sortie_done = false
 	_prologue_pending = false
 	_step = ""
 	_menu_open = false
