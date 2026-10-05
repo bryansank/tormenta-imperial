@@ -48,18 +48,27 @@ func test_intro_and_branch_descriptions_exist_in_both_languages() -> void:
 		for key in keys:
 			assert_bool(Tr._STRINGS[locale].has(key)).override_failure_message("%s falta en %s" % [key, locale]).is_true()
 
+## Menos texto (2026-10-04): la ventaja y el coste en el boton; el lore en su
+## tooltip; la intro en una linea con el parrafo entero de tooltip; la rama
+## explicada en el tooltip de su cabecera.
 func test_the_panel_shows_the_advantage_and_the_lore() -> void:
 	var panel: CanvasLayer = auto_free(load("res://scenes/ui/TechTreePanel.tscn").instantiate())
 	add_child(panel)
+	panel._refresh_tech_states()
 	var tech: Dictionary = GameConfig.tech_definitions[0]
 	var btn: Button = panel._tech_buttons[tech["id"]]
 	assert_str(btn.text).contains(TechTreePanelScript.advantage_text(tech))
-	var found_lore := false
-	var found_intro := false
-	for label in panel.find_children("*", "Label", true, false):
-		if label.text == TechTreePanelScript.lore_text(tech["id"]):
-			found_lore = true
-		if label.text == Tr.t("LBL_TECH_INTRO"):
-			found_intro = true
-	assert_bool(found_lore).is_true()
-	assert_bool(found_intro).is_true()
+	for res in tech.get("cost", {}):
+		assert_str(btn.text).contains("%d %s" % [int(tech["cost"][res]), Tr.res_name(res)])
+	assert_str(btn.tooltip_text).contains(TechTreePanelScript.lore_text(tech["id"]))
+	var intro: Label = panel.find_child("Intro", true, false)
+	assert_str(intro.text).is_equal(Tr.t("LBL_TECH_INTRO_SHORT"))
+	assert_str(intro.tooltip_text).is_equal(Tr.t("LBL_TECH_INTRO"))
+	var branch: Label = panel.find_child("Branch_industrial", true, false)
+	assert_str(branch.tooltip_text).is_equal(Tr.t("TECH_BRANCH_INDUSTRIAL_DESC"))
+
+func test_a_tech_card_is_three_short_lines_at_most() -> void:
+	for tech in GameConfig.tech_definitions:
+		var text: String = TechTreePanelScript.tech_card_text(tech)
+		assert_int(text.split("\n").size()).is_less_equal(3)
+		assert_str(text).not_contains(Tr.t("FMT_COST") % "")
