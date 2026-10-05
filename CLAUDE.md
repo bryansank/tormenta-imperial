@@ -197,6 +197,16 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 - Extractors must touch their deposit (`GameConfig.building_deposit_rules`): sawmill
   next to a forest, gold mine next to a gold vein, foundry next to iron (reach 1); the
   refinery sits on an oil well (reach 0) and consumes it.
+- Hand mining (`mining_data`, 2 workers, needs a road to the deposit) yields per worker
+  no more than the matching extractor: gold 12 per 30 s, wood 10 per 20 s (iron and oil
+  unchanged). Era 1 measures 8.6-10.2 min with the default probe player (docs/22 §5.5).
+- **Trial storm (era 1):** around minute 5 of play (`storm_trial_at` = 300 s of played
+  time, through `get_duration()`), a scripted gentle storm runs Warning → Ash → Storm →
+  calm with the usual tips, but **no Tithe**, no building or queue damage, production
+  at 75% and a quarter of the morale bite. Once per game (saved as `trial_done` /
+  `trial_storm` in the storm save), on its own `StormCycle` (`create_trial()`), so it
+  never arms the real clock (that still comes with the Foundry); skipped if the
+  Foundry comes first, and off in Constructor/Sandbox (`GameMode.storm_trial_enabled()`).
 
 ### Resources
 
@@ -369,7 +379,8 @@ HQ upgrade costs: L2 = 800g/500s/300o/400w, L3 = 1500g/800s/500o/700w
 catches `hq_max` and, when `GameMode.audit_enabled()`, calls `summon_final_audit()`:
 the Regency comes down for a 3-5 wave siege (`final_audit_waves`) fought by whatever
 garrison is at home plus the tower crews, with attrition across waves and no
-retraining in between. The siege is summoned pending; the player walks in with "QUE
+retraining in between. The garrison and its morale are read when the gate opens
+("QUE BAJEN", `FinalAudit.begin(home, morale)`), not at the summons. The siege is summoned pending; the player walks in with "QUE
 BAJEN" in `SkirmishPanel`. Surviving it emits `storm_halted_forever` (the Storm stops
 for good) and only then `victory_achieved`. Losing is **not** a game over in Campaña —
 maximum Tithe, maximum storm damage, and the siege can be summoned again once
@@ -461,7 +472,9 @@ tests use it); the dev-only test fight goes through `dev_start_encounter()`.
 `storm_tower_mitigation*`) and fields one artillery crew on defensive boards — Tithe
 and Final Audit — outside the deploy cap, in the back row (max 2,
 `storm_tower_garrison_*`); crews lost during a siege are not replaced. Only while
-operational (not ruined, not under construction). They have no attack of their own on
+operational (not ruined, not under construction). A crew that falls on any defensive
+board leaves its tower **damaged** (`storm_tower_crew_loss_damage`, 40% of max health,
+never ruined) until it is repaired; the war reports say how many. They have no attack of their own on
 the base map.
 
 **Unit icons:** the board paints unit silhouettes (`assets/textures/ui/units/*.png`,
@@ -767,7 +780,8 @@ All balance values live in `GameConfig.gd`:
 - `phase_triggers` / `early_*` - onboarding phase pacing
 - `combat_*` - board, deploy cap, unit combat stats, enemy/risk scaling, map shape,
   drafts, rewards, morale-in-combat (table with effects in `docs/15-combat.md` §8)
-- `storm_*` - storm cycle, damage, the Tithe, tower mitigation and tower crews
+- `storm_*` - storm cycle, damage, the Tithe, tower mitigation and tower crews (and the
+  damage a lost crew leaves), the era-1 trial storm (`storm_trial_*`)
 - `final_audit_*` - the closing siege: wave count, slots, scaling, resummon floor
 - `building_deposit_rules` - which extractor must touch which deposit
 - `construction_phase_thresholds` / `building_active_fx` / `building_fx_*` / `ruin_*` /
@@ -844,8 +858,9 @@ What is still not there:
   on defensive boards; they have no attack of their own on the base map
 - **Dedicated combat audio and an ambient track** (today aliases and an empty `ambient/`)
 - **Open balance decisions** listed in `docs/22-linea-jugable.md` §7 and
-  `docs/13-roadmap.md` (a "resolve alone" Tithe, the era-3 storage squeeze, a scripted
-  era-1 storm, the length of era 1)
+  `docs/13-roadmap.md` (a "resolve alone" Tithe, the era-3 storage squeeze; the era-1
+  trial storm and the hand-mining cut landed 2026-10-04, but the Núcleo/sawmill
+  processes still reach the Foundry by minute 4.6-4.9 for a player who chains them)
 - **Distribution:** Windows code signing (SmartScreen), Android release keystore, AAB
   and store listing
 - **Out of scope for v1:** PvP and co-op
