@@ -202,7 +202,7 @@ const _STRINGS := {
 
 		# Locked resources
 		"LBL_LOCKED_RESOURCE": "Recurso bloqueado",
-		"LBL_DEPOSIT_LOCKED": "Recurso aún no desbloqueado. Avanza de era para acceder.",
+		"LBL_DEPOSIT_LOCKED": "Bloqueado: llega en otra era",
 
 		# Population & Workers
 		"LBL_POPULATION": "Trabajadores: %d/%d",
@@ -399,10 +399,10 @@ const _STRINGS := {
 		"NOTIF_UPKEEP_UNPAID": "Sin oro para el ejército: faltan %d oro",
 
 		# Cancelacion (Tasa de Corrupcion), hambruna y desercion
-		"FMT_CANCEL_REFUND": "Cancelar — devuelve %s",
+		"FMT_CANCEL_REFUND": "Cancelar (vuelven %s)",
 		"LBL_CANCEL_NO_REFUND": "Cancelar — sin reembolso",
 		"LBL_CANCEL_RATE": "Tasa de Corrupción: vuelve el %d%%",
-		"LBL_CANCEL_RATE_STORM": "Con la Tormenta en marcha solo vuelve el %d%%",
+		"LBL_CANCEL_RATE_STORM": "Tormenta: solo vuelve el %d%%",
 		"FMT_DEMOLISH_IN_PROGRESS": "Hay algo en curso: devuelve %s",
 		"NOTIF_STARVATION": "Hambruna: muere %d trabajador por falta de suministros.",
 		"NOTIF_DESERTION": "Deserción: %d %s abandonan el ejército sin cobrar.",
@@ -840,7 +840,7 @@ const _STRINGS := {
 		"LBL_STATUS_WHY_CONSTRUCTION": "en obras",
 		"LBL_STATUS_WHY_RUINED": "en ruinas",
 		"LBL_MINE_WORKERS": "Ocupa %d trabajadores mientras dura",
-		"MINE_NEEDS_ROAD": "Necesita una carretera hasta el Núcleo",
+		"MINE_NEEDS_ROAD": "Sin carretera al Núcleo",
 		"MINE_NEEDS_WORKERS": "No hay trabajadores libres",
 		"FMT_UPGRADE_FROM_TO": "%d → %d %s",
 		"LBL_UPGRADE_PRODUCES": "Mejora: produce %s cada %d s",
@@ -1201,7 +1201,7 @@ const _STRINGS := {
 
 		# Locked resources
 		"LBL_LOCKED_RESOURCE": "Resource locked",
-		"LBL_DEPOSIT_LOCKED": "Resource not yet unlocked. Advance your era to access.",
+		"LBL_DEPOSIT_LOCKED": "Locked: comes in a later era",
 
 		# Population & Workers
 		"LBL_POPULATION": "Workers: %d/%d",
@@ -1398,10 +1398,10 @@ const _STRINGS := {
 		"NOTIF_UPKEEP_UNPAID": "No gold for the army: %d gold short",
 
 		# Cancelling (Corruption Rate), famine and desertion
-		"FMT_CANCEL_REFUND": "Cancel — refunds %s",
+		"FMT_CANCEL_REFUND": "Cancel (back: %s)",
 		"LBL_CANCEL_NO_REFUND": "Cancel — no refund",
 		"LBL_CANCEL_RATE": "Corruption Rate: %d%% comes back",
-		"LBL_CANCEL_RATE_STORM": "With the Storm under way only %d%% comes back",
+		"LBL_CANCEL_RATE_STORM": "Storm: only %d%% comes back",
 		"FMT_DEMOLISH_IN_PROGRESS": "Something is under way: refunds %s",
 		"NOTIF_STARVATION": "Famine: %d worker dies for lack of supplies.",
 		"NOTIF_DESERTION": "Desertion: %d %s walk out of the army unpaid.",
@@ -1837,7 +1837,7 @@ const _STRINGS := {
 		"LBL_STATUS_WHY_CONSTRUCTION": "being built",
 		"LBL_STATUS_WHY_RUINED": "in ruins",
 		"LBL_MINE_WORKERS": "Takes %d workers while it lasts",
-		"MINE_NEEDS_ROAD": "Needs a road to the Core",
+		"MINE_NEEDS_ROAD": "No road to the Core",
 		"MINE_NEEDS_WORKERS": "No free workers",
 		"FMT_UPGRADE_FROM_TO": "%d → %d %s",
 		"LBL_UPGRADE_PRODUCES": "Upgrade: produces %s every %d s",
