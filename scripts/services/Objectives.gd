@@ -24,6 +24,9 @@ const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 ## (docs/14-guia-de-juego.md, seccion 11).
 const LINE := [
 	{"kind": "build", "id": "sawmill", "count": 1, "why": "OBJ_WHY_SAWMILL"},
+	# La gente come comida (2026-10-04): la Granja va justo despues del primer
+	# aserradero, antes de que se acabe la comida de salida.
+	{"kind": "build", "id": "farm", "count": 1, "why": "OBJ_WHY_FARM"},
 	{"kind": "build", "id": "gold_mine", "count": 1, "why": "OBJ_WHY_GOLD_MINE"},
 	{"kind": "build", "id": "house", "count": 1, "why": "OBJ_WHY_HOUSE"},
 	{"kind": "build", "id": "sawmill", "count": 2, "why": "OBJ_WHY_SAWMILL_2"},
@@ -72,6 +75,7 @@ const SLOW_RESOURCE_SECONDS := 360.0
 const FULL_BAG := 0.9
 
 const PRODUCER_OF := {
+	"food": "farm",
 	"gold": "gold_mine",
 	"wood": "sawmill",
 	"steel": "foundry",
@@ -281,8 +285,11 @@ static func _support_step(target: Dictionary) -> Dictionary:
 	# Mientras la gente no come (Fundacion) no hay saldo que vigilar: la linea
 	# empieza por el aserradero, no por una mina que nadie necesita todavia.
 	var eating: bool = ProgressionManager.current_phase >= GameConfig.Phase.SETTLEMENT
-	for res in ["gold", "wood"]:
+	# La gente come comida; el oro solo hace falta para el sueldo de la tropa.
+	for res in ["food", "gold"]:
 		if not eating:
+			continue
+		if res == "gold" and _army_upkeep() <= 0:
 			continue
 		# Hambre ya: lo que hay no llega a dos ciclos de comida. Un aserradero nuevo
 		# tarda en rendir (y puede no tener obreros: con la moral bajo 30 no nace
@@ -351,7 +358,7 @@ static func _support_step(target: Dictionary) -> Dictionary:
 ## (con moral, nivel y tecnologia) menos lo que come la gente y cobra la tropa.
 ## Sin la Tormenta: es la cuenta de un dia normal, no la del peor.
 static func net_rates() -> Dictionary:
-	var rates := {"gold": 0.0, "wood": 0.0, "steel": 0.0, "oil": 0.0}
+	var rates := {"gold": 0.0, "wood": 0.0, "steel": 0.0, "oil": 0.0, "food": 0.0}
 	var morale_mult: float = PopulationManager.get_morale_multiplier()
 	for info in GridManager.get_all_buildings():
 		var data: BuildingData = info["data"]
@@ -369,22 +376,28 @@ static func net_rates() -> Dictionary:
 		var level: int = int(node.get_meta("level", 1))
 		var mult: float = (GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus) * morale_mult
 		var interval: float = data.production_interval
-		rates["gold"] += float(data.produces_gold) * mult / interval
-		rates["wood"] += float(data.produces_wood) * mult / interval
-		rates["steel"] += float(data.produces_steel) * mult / interval
-		rates["oil"] += float(data.produces_oil) * mult / interval
+		if data.id == ProductionManager.FARM_ID:
+			# La Granja rinde lo que su cultivo, en lo que dura el cultivo.
+			var crop: Dictionary = GameConfig.get_crop(ProductionManager.get_crop(node))
+			interval = float(crop.get("duration", interval))
+		var base: Dictionary = ProductionManager.base_cycle_production(node, data)
+		for res_name in base:
+			rates[res_name] = float(rates.get(res_name, 0.0)) + float(base[res_name]) * mult / interval
 	if ProgressionManager.current_phase >= GameConfig.Phase.SETTLEMENT:
 		var early: bool = ProgressionManager.current_phase < GameConfig.Phase.SURVIVAL
 		var interval: float = GameConfig.early_consumption_interval if early else GameConfig.consumption_interval
-		var eat: float = float(PopulationManager.get_population()) \
+		var eat: float = float(PopulationManager.get_population() * GameConfig.food_per_pop) \
 			* maxf(0.1, 1.0 - GameConfig.tech_consumption_reduction) / interval
-		rates["gold"] -= eat
-		rates["wood"] -= eat
+		rates["food"] -= eat
+	rates["gold"] -= float(_army_upkeep()) / GameConfig.army_upkeep_interval
+	return rates
+
+## Lo que cobra la tropa por ciclo de sueldo, en oro.
+static func _army_upkeep() -> int:
 	var upkeep := 0
 	for unit_id in GameConfig.get_unit_ids():
 		upkeep += ArmyManager.get_count(unit_id) * int(GameConfig.get_unit_def(unit_id).get("upkeep_gold", 0))
-	rates["gold"] -= float(upkeep) / GameConfig.army_upkeep_interval
-	return rates
+	return upkeep
 
 ## Lo que cuesta el paso, indexado por ResourceManager.Type. Vacio si no cuesta.
 static func step_cost(step: Dictionary) -> Dictionary:
@@ -424,34 +437,33 @@ static func missing_for(step: Dictionary) -> Dictionary:
 			missing[ResourceManager.get_type_name(type)] = short
 	return missing
 
-## Comprar comida (madera) con el oro que sobre, o vender lo que sobre por oro,
-## cuando lo que hay de `res` no llega a dos ciclos de consumo. {} si no hay hambre
-## o no hay con que.
+## Comprar comida con el oro que sobre, o vender lo que sobre por oro (para el
+## sueldo de la tropa), cuando lo que hay de `res` no llega a dos ciclos. {} si
+## no hay hambre o no hay con que. Lo que espera en los edificios cuenta:
+## recogerlo es gratis y no pide Mercado.
 static func _food_market_step(res: String) -> Dictionary:
 	# Sin Mercado no se compra ni se vende (2026-09-28).
 	if Rules.count_building("market") == 0:
 		return {}
-	var pop: int = PopulationManager.get_population()
-	var upkeep := 0
-	for unit_id in GameConfig.get_unit_ids():
-		upkeep += ArmyManager.get_count(unit_id) * int(GameConfig.get_unit_def(unit_id).get("upkeep_gold", 0))
-	var due: int = pop + (upkeep if res == "gold" else 0)
-	var have: int = ResourceManager.get_amount(ResourceManager.name_to_type(res))
+	var upkeep: int = _army_upkeep()
+	var due: int = PopulationManager.food_due() if res == "food" else upkeep
+	var have: int = ResourceManager.get_amount(ResourceManager.name_to_type(res)) \
+		+ int(ProductionManager.get_all_stock().get(res, 0))
 	if have >= due * 2:
 		return {}
 	var wanted: int = maxi(MIN_SALE, due * 4 - have)
-	if res == "wood":
-		var gold_spare: int = ResourceManager.get_amount(ResourceManager.Type.GOLD) - (pop + upkeep) * 2
-		var price: int = maxi(1, MarketManager.get_buy_price("wood"))
+	if res == "food":
+		var gold_spare: int = ResourceManager.get_amount(ResourceManager.Type.GOLD) - upkeep * 2
+		var price: int = maxi(1, MarketManager.get_buy_price("food"))
 		var can: int = mini(wanted, gold_spare / price)
 		if can >= MIN_SALE and ResourceManager.get_free_space() >= can:
-			return {"kind": "buy", "id": "wood", "amount": can, "why": "OBJ_WHY_HUNGRY"}
+			return {"kind": "buy", "id": "food", "amount": can, "why": "OBJ_WHY_HUNGRY"}
 	# Vender lo que no se come: el acero y el petroleo primero.
 	for other in ["oil", "steel", "wood"]:
 		if other == res or not ResourceManager.is_unlocked_by_name(other):
 			continue
 		var stock: int = ResourceManager.get_amount(ResourceManager.name_to_type(other))
-		var keep: int = pop * 4 if other == "wood" else 0
+		var keep: int = 0
 		if stock - keep < MIN_SALE:
 			continue
 		var sell_price: int = maxi(1, MarketManager.get_sell_price(other))
@@ -486,7 +498,7 @@ static func _sell_step(target: Dictionary) -> Dictionary:
 	if ResourceManager.get_total_stored() < int(float(cap) * CROWDED_BAG):
 		return {}
 	var missing: Dictionary = missing_for(target)
-	var food_short: bool = ResourceManager.get_amount(ResourceManager.Type.GOLD) < PopulationManager.get_population() * 2
+	var food_short: bool = ResourceManager.get_amount(ResourceManager.Type.FOOD) < PopulationManager.food_due() * 2
 	if not missing.has("gold") and not missing.has("wood") and not food_short:
 		return {}
 	var cost: Dictionary = step_cost(target)
@@ -494,8 +506,10 @@ static func _sell_step(target: Dictionary) -> Dictionary:
 	# sitio (sale mas oro del que entra de lo comprado), que con la bolsa llena es
 	# justo lo que hace falta.
 	var gold_spare: int = ResourceManager.get_amount(ResourceManager.Type.GOLD) \
-		- int(cost.get(ResourceManager.Type.GOLD, 0)) - PopulationManager.get_population() * 2
-	for res in ["wood", "steel", "oil"]:
+		- int(cost.get(ResourceManager.Type.GOLD, 0)) - _army_upkeep() * 2
+	if food_short:
+		missing["food"] = PopulationManager.food_due() * 4 - ResourceManager.get_amount(ResourceManager.Type.FOOD)
+	for res in ["food", "wood", "steel", "oil"]:
 		if not missing.has(res) or not ResourceManager.is_unlocked_by_name(res):
 			continue
 		var buy_price: int = maxi(1, MarketManager.get_buy_price(res))
@@ -509,8 +523,6 @@ static func _sell_step(target: Dictionary) -> Dictionary:
 		if not ResourceManager.is_unlocked(type) or missing.has(res):
 			continue
 		var keep: int = int(cost.get(type, 0))
-		if res == "wood":
-			keep += PopulationManager.get_population() * 4
 		var excess: int = ResourceManager.get_amount(type) - keep
 		if excess > best_excess:
 			best = res

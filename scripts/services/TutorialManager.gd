@@ -25,18 +25,25 @@ const GUIDE_DONE := "done"
 const GUIDE_SKIPPED := "skipped"
 
 ## Los pasos del tutorial guiado, en orden. `n` es el numero que ve el jugador
-## (de GUIDE_TOTAL): abrir, elegir y colocar la casa son el mismo paso 5.
+## (de GUIDE_TOTAL): abrir, elegir y colocar la casa son el mismo paso 7.
+## Recoger lo producido (5) y la Granja (6) entran el 2026-10-04: lo que hace
+## un edificio se queda en el y la gente come comida, y las dos cosas se ensenan
+## en el orden en que pasan al arrancar.
 const GUIDE_STEPS := {
 	"open_build":    {"n": 1, "text": "GUIDE_OPEN_BUILD",    "target": "build_button"},
 	"pick_sawmill":  {"n": 2, "text": "GUIDE_PICK_SAWMILL",  "target": "card:sawmill"},
 	"place_sawmill": {"n": 3, "text": "GUIDE_PLACE_SAWMILL", "target": "forest"},
 	"wait_sawmill":  {"n": 4, "text": "GUIDE_WAIT_SAWMILL",  "target": "building:sawmill"},
-	"open_house":    {"n": 5, "text": "GUIDE_OPEN_HOUSE",    "target": "build_button"},
-	"pick_house":    {"n": 5, "text": "GUIDE_PICK_HOUSE",    "target": "card:house"},
-	"place_house":   {"n": 5, "text": "GUIDE_PLACE_HOUSE",   "target": ""},
-	"done":          {"n": 5, "text": "GUIDE_DONE",          "target": "objective"},
+	"collect":       {"n": 5, "text": "GUIDE_COLLECT",       "target": "building:sawmill"},
+	"open_farm":     {"n": 6, "text": "GUIDE_OPEN_FARM",     "target": "build_button"},
+	"pick_farm":     {"n": 6, "text": "GUIDE_PICK_FARM",     "target": "card:farm"},
+	"place_farm":    {"n": 6, "text": "GUIDE_PLACE_FARM",    "target": ""},
+	"open_house":    {"n": 7, "text": "GUIDE_OPEN_HOUSE",    "target": "build_button"},
+	"pick_house":    {"n": 7, "text": "GUIDE_PICK_HOUSE",    "target": "card:house"},
+	"place_house":   {"n": 7, "text": "GUIDE_PLACE_HOUSE",   "target": ""},
+	"done":          {"n": 7, "text": "GUIDE_DONE",          "target": "objective"},
 }
-const GUIDE_TOTAL := 5
+const GUIDE_TOTAL := 7
 
 var intro_seen: bool = false
 var tips_seen: Array[String] = []
@@ -52,6 +59,9 @@ var guide_baseline: Dictionary = {}
 ## `first_sortie` la senala al salir la primera unidad, y cada salida es el nodo
 ## facil en vez del mapa. Perderla o abandonarla no la gasta.
 var first_sortie_done: bool = false
+## El jugador ya recogio algo durante el tutorial (paso "collect"). Viaja en la
+## partida; repetir el tutorial lo vuelve a pedir.
+var guide_collected: bool = false
 
 ## El prologo esta pedido y espera a que no haya nada encima (menu principal,
 ## pausa, selector de modo).
@@ -124,6 +134,7 @@ func _ready() -> void:
 	EventBus.building_placement_cancelled.connect(func(): _set_placing(""))
 	EventBus.building_moved.connect(func(_f, _t): _set_placing(""))
 	EventBus.construction_completed.connect(func(_n): _refresh_guide())
+	EventBus.production_collected.connect(_on_production_collected)
 	EventBus.building_demolished.connect(func(_n, _c): _refresh_guide())
 
 # ══════════════════════════════════════════════════════════════════════
@@ -240,9 +251,16 @@ func _begin_or_resume_guide() -> void:
 ## aserradero y casa lo da por hecho sin ensenar nada.
 func start_guide(from_scratch: bool = true) -> void:
 	guide_baseline = _counts() if from_scratch else {}
+	if from_scratch:
+		guide_collected = false
 	guide_state = GUIDE_ACTIVE
 	_step = ""
 	var facts := guide_facts()
+	# Una isla que ya tiene aserradero y casa es una partida jugada (vieja, sin
+	# la marca): no se le ensena nada, tampoco recoger ni la Granja, que llegaron
+	# despues (2026-10-04).
+	facts["collected"] = true
+	facts["farms"] = maxi(1, int(facts.get("farms", 0)))
 	if not from_scratch and derive_step(facts) == "done":
 		# Nada que ensenar: ya se hizo todo (partida vieja sin la marca).
 		guide_state = GUIDE_DONE
@@ -285,6 +303,12 @@ static func derive_step(f: Dictionary) -> String:
 		return "pick_sawmill" if menu else "open_build"
 	if int(f.get("sawmills_built", 0)) <= 0:
 		return "wait_sawmill"
+	if not bool(f.get("collected", true)):
+		return "collect"
+	if int(f.get("farms", 1)) <= 0:
+		if placing == "farm":
+			return "place_farm"
+		return "pick_farm" if menu else "open_farm"
 	if int(f.get("houses", 0)) <= 0:
 		if placing == "house":
 			return "place_house"
@@ -298,6 +322,8 @@ func guide_facts() -> Dictionary:
 		"sawmills": int(now["sawmills"]) - int(guide_baseline.get("sawmills", 0)),
 		"sawmills_built": int(now["sawmills_built"]) - int(guide_baseline.get("sawmills_built", 0)),
 		"houses": int(now["houses"]) - int(guide_baseline.get("houses", 0)),
+		"farms": int(now["farms"]) - int(guide_baseline.get("farms", 0)),
+		"collected": guide_collected,
 		"menu_open": _menu_open,
 		"placing": _placing_id,
 	}
@@ -306,6 +332,7 @@ func _counts() -> Dictionary:
 	var sawmills := 0
 	var built := 0
 	var houses := 0
+	var farms := 0
 	for info in GridManager.get_all_buildings():
 		var data: Resource = info.get("data")
 		if data == null:
@@ -318,7 +345,9 @@ func _counts() -> Dictionary:
 				built += 1
 		elif id == "house":
 			houses += 1
-	return {"sawmills": sawmills, "sawmills_built": built, "houses": houses}
+		elif id == "farm":
+			farms += 1
+	return {"sawmills": sawmills, "sawmills_built": built, "houses": houses, "farms": farms}
 
 func _refresh_guide() -> void:
 	if guide_state != GUIDE_ACTIVE:
@@ -328,6 +357,12 @@ func _refresh_guide() -> void:
 		return
 	_step = step
 	EventBus.tutorial_step_changed.emit(step)
+
+func _on_production_collected(_node: Node, _collected: Dictionary) -> void:
+	if guide_collected:
+		return
+	guide_collected = true
+	_refresh_guide()
 
 func _on_placement_started(data: Resource) -> void:
 	_menu_open = false
@@ -474,6 +509,7 @@ func get_save_data() -> Dictionary:
 		"guide_state": guide_state,
 		"guide_baseline": guide_baseline.duplicate(),
 		"first_sortie_done": first_sortie_done,
+		"guide_collected": guide_collected,
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -502,7 +538,7 @@ func load_save_data(data: Dictionary) -> void:
 	guide_baseline = {}
 	var gb: Variant = data.get("guide_baseline", {})
 	if gb is Dictionary:
-		for k in ["sawmills", "sawmills_built", "houses"]:
+		for k in ["sawmills", "sawmills_built", "houses", "farms"]:
 			if gb.has(k):
 				guide_baseline[k] = int(gb[k])
 	# Sin la clave es un guardado de antes de la primera escaramuza: si ya vio el
@@ -512,6 +548,10 @@ func load_save_data(data: Dictionary) -> void:
 		first_sortie_done = fs
 	else:
 		first_sortie_done = "expedition_map" in tips_seen
+	# Sin la clave (guardado de antes de recoger): si el tutorial ya acabo da
+	# igual; si va a medias, se pide recoger una vez.
+	var gc: Variant = data.get("guide_collected", null)
+	guide_collected = gc if gc is bool else guide_state != GUIDE_ACTIVE
 	_step = ""
 	_prologue_pending = false
 
@@ -524,6 +564,7 @@ func reset() -> void:
 	guide_state = GUIDE_PENDING
 	guide_baseline = {}
 	first_sortie_done = false
+	guide_collected = false
 	_prologue_pending = false
 	_step = ""
 	_menu_open = false
