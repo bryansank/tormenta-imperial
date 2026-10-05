@@ -261,6 +261,7 @@ func _new_game() -> void:
 	# tira el resultado de la anterior. Va primero: los reset leen sus reglas.
 	GameMode.begin_run(GameMode.current)
 	_run_sealed = false
+	_close_offline_report()
 	ResourceManager.reset()
 	ProcessManager.reset()
 	ProgressionManager.reset()
@@ -618,6 +619,7 @@ func clear_save() -> void:
 	# El modo es el que se eligio (start_new_game); se tira el resultado.
 	GameMode.begin_run(GameMode.current)
 	_run_sealed = false
+	_close_offline_report()
 	GridManager.clear_all()
 	ResourceManager.reset()
 	ProcessManager.reset()
@@ -659,6 +661,7 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	else:
 		GameMode.load_save_data(mode_data if mode_data is Dictionary else {})
 	_run_sealed = false
+	_close_offline_report()
 	GridManager.clear_all()
 	ResourceManager.reset()
 	ProcessManager.reset()
@@ -760,6 +763,16 @@ func _show_offline_report(elapsed: float, earnings: Dictionary) -> void:
 ## El parte offline sigue en pantalla. Lo pregunta VictoryScreen antes de abrirse.
 func is_offline_report_open() -> bool:
 	return _offline_canvas != null and is_instance_valid(_offline_canvas)
+
+## Quita el parte offline si sigue en pantalla. Lo llaman los tres caminos de
+## partida nueva: la capa cuelga de este autoload, no de la escena, asi que
+## sobrevive a reload_current_scene() y sin esto el parte de la partida
+## anterior se quedaba encima de la nueva. No emite offline_report_closed:
+## nadie espera ese parte en una partida que empieza.
+func _close_offline_report() -> void:
+	if _offline_canvas != null and is_instance_valid(_offline_canvas):
+		_offline_canvas.queue_free()
+	_offline_canvas = null
 
 func _format_elapsed(seconds: float) -> String:
 	var s := int(seconds)
