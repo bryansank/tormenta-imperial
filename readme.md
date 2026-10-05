@@ -19,7 +19,7 @@
 
 **Tormenta Imperial** es un juego **dieselpunk de gestión de base y estrategia por turnos**, hecho en Godot 4.7.
 
-Llegas a una isla generada proceduralmente con un núcleo, 300 de oro y 200 de madera. A partir de ahí, todo lo que tengas lo habrás construido: aserraderos que muerden el bosque, minas, una fundición que enciende la era del acero, una refinería que abre la del petróleo. Tu gente trabaja, consume y **tiene moral** — y la moral decide si tu imperio produce o se para.
+Llegas a una isla generada proceduralmente (cada una de su tamaño, con sus propios bosques y vetas) con un núcleo, 300 de oro y 200 de madera. A partir de ahí, todo lo que tengas lo habrás construido: aserraderos que muerden el bosque, minas, una fundición que enciende la era del acero, una refinería que abre la del petróleo. Todo se une al núcleo por carretera, y tus trabajadores van andando por ella. Tu gente trabaja, consume y **tiene moral** — y la moral decide si tu imperio produce o se para.
 
 Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán —o no— a ella. Porque la Tormenta Imperial vuelve: apaga el cielo, rompe lo que construiste y manda a los Tasadores a cobrar el Diezmo. Ese cobro se pelea en un tablero de 8x8 con lo que tengas en casa.
 
@@ -38,7 +38,7 @@ Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán �
 | | |
 |---|---|
 | <img src="docs/media/02_construccion.png" alt="Catálogo de construcción"> | <img src="docs/media/03_mercado.png" alt="Mercado Imperial"> |
-| **Construcción** — catálogo filtrable de 14 edificios, con requisitos y coste. | **Mercado Imperial** — compra y venta con precios que flotan según lo que hagas. |
+| **Construcción** — catálogo filtrable de 16 edificios, con requisitos y coste a la vista. | **Mercado Imperial** — compra y venta con precios que flotan según lo que hagas. |
 | <img src="docs/media/04_tecnologia.png" alt="Árbol tecnológico"> | <img src="docs/media/05_ejercito.png" alt="Cuartel y ejército"> |
 | **Tecnología** — 15 mejoras en tres ramas, cinco escalones cada una. | **Ejército** — entrenamiento por ranuras, poder militar y mantenimiento en oro. |
 
@@ -46,11 +46,11 @@ Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán �
 
 ## El bucle
 
-1. **Construye** para producir: cada edificio necesita trabajadores, y los trabajadores necesitan casas.
+1. **Construye** para producir: cada edificio necesita trabajadores y una carretera hasta el núcleo, y los trabajadores necesitan viviendas. Los edificios avanzados piden además materiales del taller (tablones, lingotes, vigas y combustible).
 2. **Sostén a tu gente**: cada habitante consume oro y madera. Si no puedes pagar, la moral cae y con ella la producción.
-3. **Comercia** en el Mercado Imperial, con precios que flotan según lo que compres y vendas.
+3. **Comercia** en el Mercado Imperial (levanta antes el edificio del Mercado), con precios que flotan según lo que compres y vendas.
 4. **Progresa** por tres eras: Frontera → Industrial → Petróleo. Cada una desbloquea un recurso y con él media docena de decisiones nuevas.
-5. **Investiga** quince tecnologías en tres ramas, con bonificaciones permanentes.
+5. **Investiga** en el Laboratorio quince tecnologías en tres ramas, con bonificaciones permanentes.
 6. **Entrena un ejército** en el Cuartel — y págale el mantenimiento, todos los turnos, en oro.
 7. **Sobrevive** a la Tormenta Imperial: ceniza, edificios en ruinas y el Diezmo, que se paga o se pelea.
 8. **Aguanta la Auditoría Final.** En la Campaña, subir el Cuartel General al nivel 3 no gana la partida: convoca a la Regencia. De 3 a 5 oleadas seguidas contra la guarnición que tengas en casa, sin reentrenar entre medias. Sobrevivirlas para la Tormenta para siempre — y eso sí es ganar.
@@ -63,7 +63,7 @@ Ningún otro juego del género cruza esas dos mitades. Esa es la apuesta.
 
 ## Estado
 
-El **juego se puede jugar de principio a fin**: economía, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline, la Tormenta y su Diezmo, el combate y la Auditoría Final. Alrededor: **cuatro modos** (Campaña, Constructor, Supervivencia y Sandbox), una **vista 2D** además de la 3D, una **interfaz configurable** por dispositivo (PC, tableta, móvil) con juego táctil, un **prólogo, un tutorial guiado y un índice de ayudas**, y exportados para **Windows y Android**. La campaña se ha medido entera con tiempos reales: diez de diez partidas simuladas se ganan, en 2 h 18 min a 4 h.
+El **juego se puede jugar de principio a fin**: economía, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline, la Tormenta y su Diezmo, el combate y la Auditoría Final. Alrededor: **cuatro modos** (Campaña, Constructor, Supervivencia y Sandbox; hoy la partida nueva solo ofrece la Campaña y los otros tres están apartados), una **vista 2D** además de la 3D, una **interfaz configurable** por dispositivo (PC, tableta, móvil) con juego táctil, un **prólogo, un tutorial guiado y un índice de ayudas**, y exportados para **Windows y Android**. La campaña se midió entera con tiempos reales antes de las carreteras y los materiales: diez de diez partidas simuladas se ganaban, en 2 h 18 min a 4 h; falta volver a medirla.
 
 El **combate PVE por turnos está en el juego**: tablero de 8x8, orden de iniciativa, mover/atacar/defender/esperar, IA enemiga, el Diezmo peleado en vez de pagado, y la Auditoría Final que cierra la partida. Todo el modelo vive en `scripts/combat/` como objetos puros, sin nodos ni señales, y se prueba en headless con gdUnit4.
 
@@ -88,7 +88,7 @@ Detalle técnico en [`docs/15-combat.md`](docs/15-combat.md); especificación en
 | **Arquitectura** | Servicio–señal–componente: 25 autoloads de juego que se **avisan** solo por un `EventBus` (107 señales); ningún productor conoce a quien le escucha |
 | **Modelos puros** | La lógica de combate y de la Tormenta vive en `scripts/combat/` y `scripts/storm/` como `RefCounted` sin nodos ni señales: devuelven listas de eventos y un servicio las publica. Por eso se prueban enteras en headless |
 | **Balance** | Todo valor ajustable vive en `GameConfig.gd`. Cero números mágicos repartidos por el código |
-| **Modelos 3D** | 12 de los 14 edificios son GLB; `nucleo` y `road` se generan proceduralmente por `DieselpunkBuildingFactory` (la calzada necesita conocer a sus vecinas) |
+| **Modelos 3D** | 12 de los 16 edificios son GLB; `nucleo`, `road`, `market` y `laboratory` se generan proceduralmente por `DieselpunkBuildingFactory` (la calzada necesita conocer a sus vecinas; el Mercado y el Laboratorio aún no tienen modelo) |
 | **Guardado** | JSON local con autoguardado y progresión offline de hasta 8 horas; las peleas no se guardan a medias |
 | **Tests** | gdUnit4: unos 1.360 tests en 102 suites, lanzados siempre con `tools/run_tests.sh`, que les da una carpeta de usuario propia |
 | **Exportados** | Windows (`.exe` único) y Android (APK para tableta); ver [`docs/19-exportar.md`](docs/19-exportar.md) |
@@ -110,9 +110,9 @@ tormenta-imperial/
 │   ├── ui/          Un script por panel, más tema y disposición
 │   ├── view2d/      La vista 2D: cámara, isla, colocación y dibujos
 │   ├── grid/        Rejilla de 40x40 a 48x48 celdas, sorteada por partida
-│   ├── map/         Isla y depósitos procedurales
+│   ├── map/         Isla, depósitos aleatorios y trabajadores que andan
 │   └── camera/      Cámara ortográfica a 45°
-├── data/buildings/  Los 14 edificios, como recursos .tres
+├── data/buildings/  Los 16 edificios, como recursos .tres
 ├── assets/          Audio, fuentes, texturas y marca
 ├── specs/           Especificaciones previas a cada pilar
 ├── tests/           Suites de gdUnit4
@@ -139,7 +139,7 @@ godot --path . --editor     # y pulsa F5
 | Construir | Botón CONSTRUIR | Tocar el sitio y tocar el fantasma o ✓ |
 | Menú | ☰ MENÚ o Esc | ☰ MENÚ o el botón atrás |
 
-Desde el editor, `GameConfig.dev_mode` está encendido solo (todo corre cinco veces más rápido); en un exportado está apagado. Para jugar desde el editor con tiempos reales: `godot --path . -- --no-dev`. Vista 2D: `-- --view=2d` o en Ajustes. Para empezar de cero: **☰ MENÚ → Menú principal → Nueva partida**, que deja elegir el modo.
+Desde el editor, `GameConfig.dev_mode` está encendido solo (todo corre cinco veces más rápido); en un exportado está apagado. Para jugar desde el editor con tiempos reales: `godot --path . -- --no-dev`. Vista 2D: `-- --view=2d` o en Ajustes. Para empezar de cero: **☰ MENÚ → Menú principal → Nueva partida** (hoy solo ofrece la Campaña).
 
 ### Utilidades de desarrollo
 
