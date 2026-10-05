@@ -35,6 +35,7 @@ const COLOR_IDLE := Color(0.78, 0.86, 1.0, 0.95)        # duerme: azul palido
 const COLOR_UNSTAFFED := Color(1.0, 0.35, 0.25, 0.95)   # el rojo del cartel viejo
 const COLOR_RUINED := Color(0.65, 0.28, 0.22, 0.95)
 const COLOR_CONSTRUCTION := Color(1.0, 0.8, 0.2, 0.9)   # el ambar de ConstructionLabel
+const COLOR_FULL := Color(1.0, 0.62, 0.2, 0.95)          # lleno: recogelo
 
 var _building: Node3D = null
 var _data: BuildingData = null
@@ -90,6 +91,7 @@ func _ready() -> void:
 	bus.building_upgrade_started.connect(_on_upgrade_signal)
 	bus.building_upgrade_completed.connect(_on_upgrade_signal)
 	bus.workers_changed.connect(_on_workers_changed)
+	bus.building_stock_changed.connect(_on_stock_changed)
 	refresh()
 
 func _exit_tree() -> void:
@@ -110,6 +112,7 @@ func _exit_tree() -> void:
 		[bus.building_upgrade_started, _on_upgrade_signal],
 		[bus.building_upgrade_completed, _on_upgrade_signal],
 		[bus.workers_changed, _on_workers_changed],
+		[bus.building_stock_changed, _on_stock_changed],
 	]:
 		var sig: Signal = pair[0]
 		var cb: Callable = pair[1]
@@ -119,6 +122,10 @@ func _exit_tree() -> void:
 # ── Senales ───────────────────────────────────────────────────────────
 
 func _on_building_signal(node: Node) -> void:
+	if node == _building:
+		refresh()
+
+func _on_stock_changed(node: Node, _stock: Dictionary) -> void:
 	if node == _building:
 		refresh()
 
@@ -167,6 +174,7 @@ func refresh() -> void:
 		"needs_workers": _data.workers_required > 0,
 		"staffed": bool(_building.get_meta("staffed", false)),
 		"produces": _data.is_producer(),
+		"full": ProductionManager.is_full(_building),
 	}
 	var verdict := derive(facts)
 	_apply(int(verdict["status"]), String(verdict["reason"]))
@@ -192,6 +200,9 @@ static func derive(facts: Dictionary) -> Dictionary:
 		return {"status": Status.IDLE, "reason": "workers_off"}
 	if bool(facts.get("ruined", false)):
 		return {"status": Status.IDLE, "reason": "ruined"}
+	# Lleno de lo que produjo: parado hasta que se recoja (2026-10-04).
+	if bool(facts.get("full", false)):
+		return {"status": Status.IDLE, "reason": "full"}
 	if bool(facts.get("busy", false)):
 		return {"status": Status.WORKING, "reason": ""}
 	if bool(facts.get("needs_workers", false)) and not bool(facts.get("staffed", false)):
@@ -214,6 +225,7 @@ static func color_for_reason(reason: String) -> Color:
 		"construction": return COLOR_CONSTRUCTION
 		"ruined": return COLOR_RUINED
 		"unstaffed", "no_road", "no_vein": return COLOR_UNSTAFFED
+		"full": return COLOR_FULL
 	return COLOR_IDLE
 
 ## Lo que dice el badge parado: "Zzz" y, debajo, por que (bug 11: nadie sabia
@@ -227,6 +239,7 @@ static func reason_text(reason: String) -> String:
 		"no_road": key = "LBL_STATUS_WHY_NO_ROAD"
 		"no_vein": key = "LBL_STATUS_WHY_NO_VEIN"
 		"workers_off": key = "LBL_STATUS_WHY_WORKERS_OFF"
+		"full": key = "LBL_STATUS_WHY_FULL"
 	return Tr.t(key)
 
 func _apply(status: int, reason: String) -> void:

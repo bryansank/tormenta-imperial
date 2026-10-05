@@ -419,7 +419,7 @@ static func upgrade_effect_lines(data: BuildingData, level: int) -> Array:
 		var parts: Array = []
 		var now_m := GameConfig.get_production_multiplier(level)
 		var next_m := GameConfig.get_production_multiplier(nxt)
-		for pair in [["gold", data.produces_gold], ["steel", data.produces_steel], ["oil", data.produces_oil], ["wood", data.produces_wood]]:
+		for pair in [["gold", data.produces_gold], ["steel", data.produces_steel], ["oil", data.produces_oil], ["wood", data.produces_wood], ["food", data.produces_food]]:
 			if int(pair[1]) > 0:
 				parts.append(Tr.t("FMT_UPGRADE_FROM_TO") % [int(int(pair[1]) * now_m), int(int(pair[1]) * next_m), Tr.res_name(String(pair[0]))])
 		out.append(Tr.t("LBL_UPGRADE_PRODUCES") % [", ".join(parts), int(GameConfig.get_production_interval(data.production_interval))])

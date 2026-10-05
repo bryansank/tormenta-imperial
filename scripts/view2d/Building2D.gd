@@ -12,6 +12,8 @@ extends Node2D
 const Art := preload("res://scripts/view2d/BuildingArt2D.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const StatusBadge2D := preload("res://scripts/view2d/StatusBadge2D.gd")
+## Icono flotante de "listo para recoger" (2026-10-04).
+const StockIcon2D := preload("res://scripts/view2d/StockIcon2D.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 ## Obra por fases, ruina y actividad: la misma regla que en 3D (docs/03).
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
@@ -55,6 +57,10 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	var badge: Node2D = StatusBadge2D.new()
 	add_child(badge)
 	badge.setup(self, data)
+	if data.is_producer():
+		var stock_icon: Node2D = StockIcon2D.new()
+		add_child(stock_icon)
+		stock_icon.setup(self)
 
 func set_selected(value: bool) -> void:
 	_selected = value
@@ -119,7 +125,19 @@ func _current_signature() -> Array:
 	_look = LookRule.derive(LookRule.facts_of(self, data))
 	return [constructing, progress, int(get_meta("level", 1)), int(get_meta("health", data.max_health)),
 		BuildingHealth.is_ruined(self), mask, int(get_meta("rotation_steps", 0)), String(get_meta("custom_name", "")),
-		Tr.get_locale(), int(_look["look"]), int(_look["phase"])]
+		Tr.get_locale(), int(_look["look"]), int(_look["phase"]), _crop_signature()]
+
+## La Granja repinta su cultivo al crecer (en decimos) y al madurar.
+func _crop_signature() -> int:
+	if data == null or data.id != ProductionManager.FARM_ID:
+		return 0
+	return int(_crop_growth() * 10.0) + (100 if ProductionManager.has_stock(self) else 0)
+
+## Lo crecido del cultivo, 0..1 (alto y maduro con la cosecha esperando).
+func _crop_growth() -> float:
+	if ProductionManager.has_stock(self) and ProductionManager.is_full(self):
+		return 1.0
+	return ProductionManager.get_cycle_progress(self)
 
 func get_look() -> Dictionary:
 	return _look
@@ -235,7 +253,11 @@ func _draw() -> void:
 		Art.draw_construction_phase(self, size, int(_look["phase"]),
 			ProductionManager.get_construction_progress(self), n)
 	else:
-		Art.draw_building(self, data.id, size, {"road_mask": mask, "level": level, "shadow": not ghost})
+		var opts := {"road_mask": mask, "level": level, "shadow": not ghost}
+		if data.id == ProductionManager.FARM_ID:
+			opts["growth"] = 0.6 if ghost else _crop_growth()
+			opts["ripe"] = not ghost and ProductionManager.has_stock(self)
+		Art.draw_building(self, data.id, size, opts)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if ghost:
 		return

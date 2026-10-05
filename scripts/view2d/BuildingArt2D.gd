@@ -66,6 +66,7 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"warehouse": _warehouse(ci, r)
 		"market": _market(ci, r)
 		"laboratory": _laboratory(ci, r)
+		"farm": _farm(ci, r, float(opts.get("growth", 0.6)), bool(opts.get("ripe", false)))
 		"foundry": _foundry(ci, r)
 		"barracks": _barracks(ci, r)
 		"refinery": _refinery(ci, r)
@@ -234,6 +235,36 @@ static func _market(ci: CanvasItem, r: Rect2) -> void:
 			var x := tr.position.x + tr.size.x * k / 4.0
 			ci.draw_line(Vector2(x, tr.position.y), Vector2(x, tr.end.y), Color(1, 1, 1, 0.35), 2.0)
 		ci.draw_rect(tr, OUTLINE, false, 1.0)
+
+## Granja (2026-10-04): campo de surcos con el cultivo creciendo (`growth`
+## 0..1: brotes verdes que se hacen matas y se doran), granero rojo con tejado
+## de chapa y una tolva de laton. Con la cosecha esperando (`ripe`) el campo
+## entero esta dorado.
+static func _farm(ci: CanvasItem, r: Rect2, growth: float, ripe: bool) -> void:
+	_plate(ci, r, Color(0.40, 0.27, 0.14), OUTLINE)
+	var field := Rect2(r.position + Vector2(3, 3), Vector2(r.size.x * 0.62, r.size.y - 6))
+	ci.draw_rect(field, Color(0.34, 0.22, 0.11))
+	var g := clampf(growth, 0.0, 1.0)
+	var green := Color(0.35, 0.68, 0.22)
+	var gold := Color(0.90, 0.74, 0.26)
+	var crop := gold if ripe else green.lerp(gold, clampf((g - 0.55) / 0.45, 0.0, 1.0))
+	var rows := 4
+	for i in rows:
+		var y := field.position.y + field.size.y * (i + 0.5) / float(rows)
+		ci.draw_line(Vector2(field.position.x + 2, y), Vector2(field.end.x - 2, y), Color(0.24, 0.15, 0.07), 3.0)
+		var plants := 5
+		for k in plants:
+			var x := field.position.x + field.size.x * (k + 0.5) / float(plants)
+			var rad := lerpf(1.2, field.size.y / float(rows) * 0.42, g)
+			ci.draw_circle(Vector2(x, y), rad, crop.darkened(0.25))
+			ci.draw_circle(Vector2(x - rad * 0.2, y - rad * 0.2), rad * 0.7, crop)
+	ci.draw_rect(field, OUTLINE, false, 1.0)
+	# Granero de tejado rojo y tolva de laton, a la derecha.
+	var barn := Rect2(Vector2(field.end.x + 3, r.position.y + 4), Vector2(r.end.x - field.end.x - 7, r.size.y * 0.5))
+	_plate(ci, barn, TILE_RED, OUTLINE)
+	ci.draw_line(Vector2(barn.position.x, barn.get_center().y), Vector2(barn.end.x, barn.get_center().y), TILE_RED_DARK, 2.0)
+	var silo_c := Vector2(barn.get_center().x, r.end.y - barn.size.x * 0.45 - 3)
+	_shaded_disc(ci, silo_c, minf(barn.size.x * 0.4, r.size.y * 0.18), BRASS)
 
 ## Laboratorio: hormigon con una cupula de cristal que brilla.
 static func _laboratory(ci: CanvasItem, r: Rect2) -> void:

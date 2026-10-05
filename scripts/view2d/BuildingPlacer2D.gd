@@ -166,7 +166,8 @@ func handle_click(screen_pos: Vector2) -> void:
 	var cell := screen_to_cell(screen_pos)
 	match _state:
 		State.IDLE:
-			_try_select(cell)
+			if not _try_collect_icon(screen_pos):
+				_try_select(cell)
 		State.PLACING:
 			if GridManager.is_valid_cell(cell):
 				try_place(cell)
@@ -412,12 +413,38 @@ func _try_select(cell: Vector2i) -> void:
 		EventBus.building_deselected.emit()
 		return
 	var info := GridManager.get_building_info(node)
+	# Con algo que recoger, el toque recoge; si no cupo nada, selecciona.
+	if not info.is_empty() and ProductionManager.has_stock(node) and not ProductionManager.collect(node).is_empty():
+		return
 	if not info.is_empty():
 		EventBus.building_clicked.emit(node, info["data"])
 	elif node.has_meta("deposit_id"):
 		EventBus.deposit_clicked.emit(node, node.get_meta("deposit_id"), cell)
 	else:
 		EventBus.building_deselected.emit()
+
+## Recoge el edificio cuyo icono flotante ("StockIcon") esta bajo `screen_pos`.
+## Con la bolsa llena no entra nada: abre su panel. Devuelve si toco un icono.
+func _try_collect_icon(screen_pos: Vector2) -> bool:
+	var xform := get_viewport().get_canvas_transform()
+	var best: Node = null
+	var best_d := 40.0
+	for info in GridManager.get_all_buildings():
+		var node: Node = info["node"]
+		if node == null or not is_instance_valid(node):
+			continue
+		var icon := node.get_node_or_null("StockIcon") as Node2D
+		if icon == null or not icon.visible:
+			continue
+		var d := (xform * icon.global_position).distance_to(screen_pos)
+		if d < best_d:
+			best = node
+			best_d = d
+	if best == null:
+		return false
+	if ProductionManager.collect(best).is_empty():
+		EventBus.building_clicked.emit(best, GridManager.get_building_info(best)["data"])
+	return true
 
 func _set_selected(node: Node) -> void:
 	if is_instance_valid(_selected) and _selected.has_method("set_selected"):

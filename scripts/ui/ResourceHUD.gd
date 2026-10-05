@@ -35,9 +35,9 @@ var _mat_labels: Dictionary = {}  # Type -> Label
 var _is_expanded := false
 
 ## En orden de era: lo primero que ve un jugador nuevo es oro y madera.
-var _resource_ids := ["gold", "wood", "steel", "oil"]
+var _resource_ids := ["gold", "wood", "food", "steel", "oil"]
 var _resource_types := [
-	ResourceManager.Type.GOLD, ResourceManager.Type.WOOD,
+	ResourceManager.Type.GOLD, ResourceManager.Type.WOOD, ResourceManager.Type.FOOD,
 	ResourceManager.Type.STEEL, ResourceManager.Type.OIL,
 ]
 

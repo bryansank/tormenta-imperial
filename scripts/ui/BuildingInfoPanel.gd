@@ -38,6 +38,8 @@ var _confirm_container: VBoxContainer
 var _confirm_label: Label
 
 var _process_panel: ProcessActionsPanel
+## PARA RECOGER y, en la Granja, CULTIVO (2026-10-04).
+var _harvest: VBoxContainer = null
 var _selected_node: Node = null
 var _selected_data: BuildingData = null
 var _selected_deposit_id: String = ""
@@ -70,6 +72,8 @@ func _process(_delta: float) -> void:
 		return
 	_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
 	_update_construction()
+	if _harvest != null and not _is_deposit:
+		_harvest.refresh()
 
 # ── UI Construction ──
 
@@ -130,6 +134,10 @@ func _build_ui() -> void:
 	_production_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_production_container.add_child(_production_label)
 	_vbox.add_child(_production_container)
+
+	_harvest = preload("res://scripts/ui/HarvestSection.gd").new()
+	_harvest.visible = false
+	_vbox.add_child(_harvest)
 
 	# Deposit uses
 	_deposit_uses_label = UITheme.make_label("", "body", UITheme.WARNING)
@@ -359,6 +367,9 @@ func _show_building_panel() -> void:
 		prod_parts.append("+%d %s" % [int(_selected_data.produces_oil * mult), Tr.res_name("oil")])
 	if _selected_data.produces_wood > 0:
 		prod_parts.append("+%d %s" % [int(_selected_data.produces_wood * mult), Tr.res_name("wood")])
+	# La Granja rinde lo que diga su cultivo, que lo ensena su seccion.
+	if _selected_data.id == ProductionManager.FARM_ID:
+		prod_parts.clear()
 	if not prod_parts.is_empty():
 		var interval := GameConfig.get_production_interval(_selected_data.production_interval)
 		_production_label.text = Tr.t("FMT_PRODUCES_EVERY") % [" | ".join(prod_parts), int(interval)]
@@ -367,6 +378,7 @@ func _show_building_panel() -> void:
 		_production_container.visible = false
 
 	_deposit_uses_label.visible = false
+	_harvest.show_for(_selected_node, _selected_data)
 	_refresh_workers_toggle()
 	_refresh_open_button()
 
@@ -425,6 +437,7 @@ func _show_deposit_panel() -> void:
 	_desc_label.visible = true
 	_level_label.visible = false
 	_production_container.visible = false
+	_harvest.visible = false
 	_construction_container.visible = false
 	_name_container.visible = false
 	_upgrade_container.visible = false

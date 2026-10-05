@@ -21,6 +21,10 @@ const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
 ## Obra por fases, ruina y humo de "trabajando" (docs/03, "Aspecto en el mapa").
 const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
+## Icono flotante de "listo para recoger" (2026-10-04).
+const StockIcon := preload("res://scripts/buildings/StockIcon3D.gd")
+## Radio del toque sobre el icono flotante, en pixeles de pantalla.
+const COLLECT_ICON_RADIUS_PX := 48.0
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
@@ -331,6 +335,10 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 		_try_move(cell)
 
 func _try_select_building(screen_pos: Vector2) -> void:
+	# Un toque sobre el icono flotante recoge (va antes: el icono flota encima de
+	# su edificio y el rayo al suelo caeria en otra casilla).
+	if _try_collect_icon(screen_pos):
+		return
 	var hit = _raycast_to_ground(screen_pos)
 	if hit == null:
 		EventBus.building_deselected.emit()
@@ -342,12 +350,44 @@ func _try_select_building(screen_pos: Vector2) -> void:
 		return
 	# Check if it's a building (has info) or a deposit (has metadata)
 	var info := GridManager.get_building_info(node)
+	# Un edificio con algo que recoger se recoge con el toque; si no cupo nada
+	# (bolsa llena), el toque lo selecciona como siempre.
+	if not info.is_empty() and ProductionManager.has_stock(node) and not ProductionManager.collect(node).is_empty():
+		return
 	if not info.is_empty():
 		EventBus.building_clicked.emit(node, info["data"])
 	elif node.has_meta("deposit_id"):
 		EventBus.deposit_clicked.emit(node, node.get_meta("deposit_id"), cell)
 	else:
 		EventBus.building_deselected.emit()
+
+## Recoge el edificio cuyo icono flotante esta bajo `screen_pos`. Devuelve si
+## recogio algo. Mira todos los iconos visibles y se queda con el mas cercano.
+func _try_collect_icon(screen_pos: Vector2) -> bool:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return false
+	var best: Node = null
+	var best_d := COLLECT_ICON_RADIUS_PX
+	for info in GridManager.get_all_buildings():
+		var node: Node = info["node"]
+		if node == null or not is_instance_valid(node):
+			continue
+		var icon := node.get_node_or_null("StockIcon") as Node3D
+		if icon == null or not icon.visible:
+			continue
+		if cam.is_position_behind(icon.global_position):
+			continue
+		var d := cam.unproject_position(icon.global_position).distance_to(screen_pos)
+		if d < best_d:
+			best = node
+			best_d = d
+	if best == null:
+		return false
+	# Con la bolsa llena no entra nada: se abre su panel, que dice por que.
+	if ProductionManager.collect(best).is_empty():
+		EventBus.building_clicked.emit(best, GridManager.get_building_info(best)["data"])
+	return true
 
 func _on_move_requested(building: Node) -> void:
 	_start_moving(building)
@@ -725,6 +765,12 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	var top: float = maxf(data.mesh_height, StatusBadge.measure_top(root))
 	root.add_child(badge)
 	badge.setup(root, data, top)
+
+	# Lo producido espera en el edificio: icono flotante para recogerlo (2026-10-04).
+	if data.is_producer():
+		var stock_icon: Node3D = StockIcon.new()
+		root.add_child(stock_icon)
+		stock_icon.setup(root, top)
 
 	# Aspecto: obra por fases, ruina, humo de trabajo. Las calzadas no: no se
 	# construyen, no se arruinan, no trabajan, y su malla se rehace entera al

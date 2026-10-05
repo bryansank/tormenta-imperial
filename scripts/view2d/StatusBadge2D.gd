@@ -48,6 +48,7 @@ func refresh() -> void:
 		"needs_workers": _data.workers_required > 0,
 		"staffed": bool(_building.get_meta("staffed", false)),
 		"produces": _data.is_producer(),
+		"full": ProductionManager.is_full(_building),
 	}
 	var verdict := Badge3D.derive(facts)
 	_apply(int(verdict["status"]), String(verdict["reason"]))

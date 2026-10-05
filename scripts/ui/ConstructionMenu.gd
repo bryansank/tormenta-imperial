@@ -609,6 +609,8 @@ func _select_building(data: BuildingData) -> void:
 		prod_parts.append("+%d %s" % [data.produces_oil, Tr.res_name("oil")])
 	if data.produces_wood > 0:
 		prod_parts.append("+%d %s" % [data.produces_wood, Tr.res_name("wood")])
+	if data.produces_food > 0:
+		prod_parts.append("+%d %s" % [data.produces_food, Tr.res_name("food")])
 	if data.production_interval > 0 and not prod_parts.is_empty():
 		_detail_production.text = Tr.t("FMT_PRODUCES_EVERY") % [" | ".join(prod_parts), int(data.production_interval)]
 	elif not prod_parts.is_empty():

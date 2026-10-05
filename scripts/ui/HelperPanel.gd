@@ -583,7 +583,7 @@ func _meta_line(data: BuildingData) -> String:
 		parts.append("%s: %d" % [Tr.t("LBL_GUIDE_WORKERS"), data.workers_required])
 
 	var produces: Array[String] = []
-	for pair in [[data.produces_gold, "gold"], [data.produces_steel, "steel"], [data.produces_oil, "oil"], [data.produces_wood, "wood"]]:
+	for pair in [[data.produces_gold, "gold"], [data.produces_steel, "steel"], [data.produces_oil, "oil"], [data.produces_wood, "wood"], [data.produces_food, "food"]]:
 		if pair[0] > 0:
 			produces.append("%d %s" % [pair[0], Tr.res_name(pair[1])])
 	if not produces.is_empty():

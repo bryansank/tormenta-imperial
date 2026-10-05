@@ -8,7 +8,7 @@ var _sidebar_visible := false
 var _is_open := false
 var _rows: Dictionary = {}
 
-const TRADEABLE := ["wood", "steel", "oil"]
+const TRADEABLE := ["food", "wood", "steel", "oil"]
 
 func _ready() -> void:
 	layer = 11
