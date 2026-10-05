@@ -1177,3 +1177,234 @@ static func _build_road(sx: float, sz: float, neighbors: int = 0) -> Node3D:
 		_add_box(root, Vector3(0, 0.052, 0), Vector3(sx, 0.01, 0.05), mat_line)
 
 	return root
+
+
+# ════════════════════════════════════════════════════════════════
+# OBRA Y RUINA — compartidas por huella (docs/03, "Aspecto en el mapa")
+# Tres fases de obra: valla con materiales -> solar con cimientos ->
+# estructura a medio levantar. La huella manda, no el edificio: una
+# parcela 2x2 en obras se ve igual levante lo que levante. Piezas
+# low-poly (cilindros de 6 lados) y materiales cacheados: el mapa
+# entero comparte una docena de materiales.
+# ════════════════════════════════════════════════════════════════
+
+static var _site_mats: Dictionary = {}
+
+## Material de obra cacheado por nombre (sin mapas de chapa: son piezas
+## pequenas y lejanas, y asi se agrupan mejor en Mobile).
+static func _site_mat(key: String) -> StandardMaterial3D:
+	if _site_mats.has(key):
+		return _site_mats[key]
+	var colors := {
+		"dirt": Color(0.36, 0.27, 0.18), "wood": Color(0.55, 0.40, 0.22),
+		"dark_wood": COL_DARK_WOOD, "steel": COL_GUNMETAL, "brick": Color(0.55, 0.25, 0.17),
+		"concrete": Color(0.58, 0.56, 0.52), "concrete_dark": COL_CONCRETE,
+		"rebar": COL_RUST, "hazard": Color(0.95, 0.72, 0.1), "char": Color(0.07, 0.06, 0.055),
+		"scorch": Color(0.1, 0.085, 0.07), "rubble": Color(0.3, 0.28, 0.26),
+	}
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = colors.get(key, COL_CONCRETE)
+	mat.roughness = 0.9
+	mat.metallic = 0.5 if key in ["steel", "rebar", "hazard"] else 0.0
+	_site_mats[key] = mat
+	return mat
+
+static func _foot_dims(footprint: Vector2i, cell_size: float) -> Vector2:
+	return Vector2(footprint.x * cell_size * 0.9, footprint.y * cell_size * 0.9)
+
+## Fase de obra `phase` (0, 1, 2) para una parcela de `footprint` celdas.
+## Raiz "ConstructionPhase<N>"; null si la fase no existe.
+static func create_construction_phase(footprint: Vector2i, phase: int, cell_size: float) -> Node3D:
+	if phase < 0 or phase > 2:
+		return null
+	var d := _foot_dims(footprint, cell_size)
+	var n := clampi(maxi(footprint.x, footprint.y), 1, 3)
+	var root := Node3D.new()
+	root.name = "ConstructionPhase%d" % phase
+	match phase:
+		0: _phase_fence(root, d.x, d.y, n)
+		1: _phase_foundation(root, d.x, d.y, n)
+		2: _phase_frame(root, d.x, d.y, n)
+	return root
+
+## Fase 0: tierra removida, valla de tablas con su puerta y pilas de material
+## (tablones, vigas de acero, palets de ladrillo): una por clase de huella.
+static func _phase_fence(root: Node3D, sx: float, sz: float, n: int) -> void:
+	_add_box(root, Vector3(0, 0.02, 0), Vector3(sx, 0.04, sz), _site_mat("dirt"))
+	var wood := _site_mat("wood")
+	var post_h := 0.75
+	# Postes cada ~0.9 u por el perimetro y dos travesanos por lado. Hueco de
+	# puerta en el lado de delante (+Z, lado 2).
+	for side in 4:
+		var horizontal := side % 2 == 0
+		var length := sx if horizontal else sz
+		var sign_v := -1.0 if side < 2 else 1.0
+		var posts := maxi(2, int(length / 0.9) + 1)
+		for i in posts:
+			var t := lerpf(-length * 0.5, length * 0.5, float(i) / float(posts - 1))
+			if side == 2 and absf(t) < length * 0.18:
+				continue
+			var p := Vector3(t, post_h * 0.5, sign_v * sz * 0.5) if horizontal else Vector3(sign_v * sx * 0.5, post_h * 0.5, t)
+			_add_cylinder(root, p, 0.05, post_h, wood, 6)
+		for h in [0.3, 0.62]:
+			if side == 2:
+				# Dos tramos a los lados de la puerta.
+				for s in [-1.0, 1.0]:
+					var seg := length * 0.32
+					_add_box(root, Vector3(s * (length * 0.5 - seg * 0.5), h, sz * 0.5), Vector3(seg, 0.08, 0.05), wood)
+			elif horizontal:
+				_add_box(root, Vector3(0, h, sign_v * sz * 0.5), Vector3(length, 0.08, 0.05), wood)
+			else:
+				_add_box(root, Vector3(sign_v * sx * 0.5, h, 0), Vector3(0.05, 0.08, length), wood)
+	# Cinta de peligro sobre la puerta.
+	_add_box(root, Vector3(0, post_h, sz * 0.5), Vector3(sx * 0.36, 0.06, 0.06), _site_mat("hazard"))
+	# Pilas de material repartidas por dentro: tantas como la clase de huella.
+	var spots := [Vector2(-0.22, -0.2), Vector2(0.22, 0.15), Vector2(-0.2, 0.22)]
+	for k in n:
+		var s: Vector2 = spots[k % spots.size()]
+		var c := Vector3(s.x * sx, 0.0, s.y * sz)
+		match k % 3:
+			0: _pile_planks(root, c, n)
+			1: _pile_beams(root, c, n)
+			2: _add_box(root, c + Vector3(0, 0.25, 0), Vector3(0.6, 0.5, 0.45), _site_mat("brick"))
+
+static func _pile_planks(root: Node3D, c: Vector3, n: int) -> void:
+	var wood := _site_mat("wood")
+	for layer in 3:
+		var crossed := layer % 2 == 1
+		for j in 3:
+			var b := _add_box(root, Vector3.ZERO, Vector3(0.9 + 0.15 * n, 0.09, 0.14), wood)
+			var off := (j - 1) * 0.18
+			if crossed:
+				b.rotation.y = PI * 0.5
+				b.position = c + Vector3(off, 0.05 + layer * 0.1, 0.0)
+			else:
+				b.position = c + Vector3(0.0, 0.05 + layer * 0.1, off)
+
+static func _pile_beams(root: Node3D, c: Vector3, n: int) -> void:
+	var steel := _site_mat("steel")
+	for j in 3:
+		var y := 0.07 + (0.13 if j == 2 else 0.0)
+		var z := (-0.1 + 0.2 * (j % 2)) if j < 2 else 0.0
+		_add_box(root, c + Vector3(0, y, z), Vector3(1.0 + 0.2 * n, 0.12, 0.12), steel)
+
+## Fase 1: solar despejado con la losa de cimentacion, zapatas marcadas y las
+## esperas de ferralla asomando en cada punto donde ira un pilar.
+static func _phase_foundation(root: Node3D, sx: float, sz: float, n: int) -> void:
+	_foundation_slab(root, sx, sz)
+	var slab_h := 0.22
+	var dark := _site_mat("concrete_dark")
+	var rebar := _site_mat("rebar")
+	for p in _grid_points(sx * 0.8, sz * 0.8, n):
+		_add_box(root, Vector3(p.x, slab_h + 0.02, p.y), Vector3(0.36, 0.05, 0.36), dark)
+		for o in [Vector2(-0.08, -0.08), Vector2(0.08, 0.08)]:
+			_add_cylinder(root, Vector3(p.x + o.x, slab_h + 0.3, p.y + o.y), 0.025, 0.6, rebar, 6)
+	# Conos de aviso en dos esquinas: el solar se lee como obra, no como plaza.
+	var hazard := _site_mat("hazard")
+	for s in [Vector2(-1, -1), Vector2(1, 1)]:
+		_add_cone(root, Vector3(s.x * sx * 0.47, 0.18, s.y * sz * 0.47), 0.1, 0.02, 0.36, hazard, 6)
+
+## Fase 2: pilares, medio forjado, vigas de coronacion, andamio en un lado y,
+## en las parcelas de 2x2 o mas, una grua: lo que de lejos dice "aun no esta".
+static func _phase_frame(root: Node3D, sx: float, sz: float, n: int) -> void:
+	_foundation_slab(root, sx, sz)
+	var h := 1.3 + 0.45 * n
+	var steel := _site_mat("steel")
+	for p in _grid_points(sx * 0.8, sz * 0.8, n):
+		_add_box(root, Vector3(p.x, 0.22 + h * 0.5, p.y), Vector3(0.18, h, 0.18), steel)
+	# Forjado a media altura, solo en la mitad trasera.
+	_add_box(root, Vector3(0, 0.22 + h * 0.5, -sz * 0.2), Vector3(sx * 0.82, 0.12, sz * 0.42), _site_mat("concrete"))
+	# Vigas de coronacion por el perimetro.
+	var top := 0.22 + h
+	_add_box(root, Vector3(0, top, -sz * 0.4), Vector3(sx * 0.82, 0.12, 0.12), steel)
+	_add_box(root, Vector3(0, top, sz * 0.4), Vector3(sx * 0.82, 0.12, 0.12), steel)
+	_add_box(root, Vector3(-sx * 0.4, top, 0), Vector3(0.12, 0.12, sz * 0.82), steel)
+	_add_box(root, Vector3(sx * 0.4, top, 0), Vector3(0.12, 0.12, sz * 0.82), steel)
+	_add_scaffold_side(root, sx, sz, h)
+	if n >= 2:
+		_add_crane(root, Vector3(sx * 0.42, 0, -sz * 0.42), h + 1.2, sx * 0.7)
+
+static func _foundation_slab(root: Node3D, sx: float, sz: float) -> void:
+	_add_box(root, Vector3(0, 0.02, 0), Vector3(sx, 0.04, sz), _site_mat("dirt"))
+	_add_box(root, Vector3(0, 0.11, 0), Vector3(sx * 0.86, 0.22, sz * 0.86), _site_mat("concrete"))
+
+## Puntos de pilar: esquinas para la clase 1, rejilla 3x3 para la 2 y 4x4 para la 3.
+static func _grid_points(w: float, d: float, n: int) -> Array:
+	var per := n + 1
+	var pts: Array = []
+	for i in per:
+		for j in per:
+			pts.append(Vector2(lerpf(-w * 0.5, w * 0.5, float(i) / float(per - 1)), lerpf(-d * 0.5, d * 0.5, float(j) / float(per - 1))))
+	return pts
+
+## Andamio en la cara de delante (+Z): pies derechos y plataformas de tabla.
+static func _add_scaffold_side(root: Node3D, sx: float, sz: float, h: float) -> void:
+	var wood := _site_mat("wood")
+	var pole := _site_mat("dark_wood")
+	var z := sz * 0.5
+	for i in 3:
+		var x := lerpf(-sx * 0.42, sx * 0.42, float(i) / 2.0)
+		_add_cylinder(root, Vector3(x, h * 0.5 + 0.1, z), 0.035, h + 0.2, pole, 6)
+	var level := 0.7
+	while level < h:
+		_add_box(root, Vector3(0, level, z), Vector3(sx * 0.86, 0.05, 0.28), wood)
+		level += 0.75
+
+static func _add_crane(root: Node3D, base: Vector3, height: float, jib: float) -> void:
+	var yellow := _site_mat("hazard")
+	_add_box(root, base + Vector3(0, height * 0.5, 0), Vector3(0.16, height, 0.16), yellow)
+	var arm := _add_box(root, base + Vector3(-jib * 0.4, height, 0), Vector3(jib, 0.1, 0.1), yellow)
+	arm.name = "CraneJib"
+	_add_box(root, base + Vector3(jib * 0.18, height - 0.12, 0), Vector3(0.3, 0.24, 0.24), _site_mat("concrete_dark"))
+	_add_cylinder(root, base + Vector3(-jib * 0.75, height - 0.45, 0), 0.012, 0.9, _site_mat("steel"), 4)
+
+## Andamio alrededor de un edificio que se esta MEJORANDO: el edificio sigue a
+## la vista y el andamio dice que hay obra. Raiz "UpgradeScaffold".
+static func create_scaffold(footprint: Vector2i, cell_size: float, height: float) -> Node3D:
+	var d := _foot_dims(footprint, cell_size)
+	var root := Node3D.new()
+	root.name = "UpgradeScaffold"
+	var h := maxf(1.0, height)
+	var pole := _site_mat("dark_wood")
+	var wood := _site_mat("wood")
+	for s in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1), Vector2(0, 1), Vector2(0, -1)]:
+		_add_cylinder(root, Vector3(s.x * d.x * 0.52, h * 0.5, s.y * d.y * 0.52), 0.035, h, pole, 6)
+	var level := 0.8
+	while level < h:
+		_add_box(root, Vector3(0, level, d.y * 0.52), Vector3(d.x * 1.04, 0.05, 0.22), wood)
+		_add_box(root, Vector3(0, level, -d.y * 0.52), Vector3(d.x * 1.04, 0.05, 0.22), wood)
+		level += 0.9
+	_add_box(root, Vector3(0, h * 0.5, d.y * 0.53), Vector3(d.x, 0.07, 0.03), _site_mat("hazard"))
+	return root
+
+## Escombros de una ruina, alrededor del modelo hundido y tiznado: suelo
+## quemado, montones de cascote, un muro roto y vigas carbonizadas al aire.
+## Determinista por `seed_val`: la misma ruina se ve igual tras cargar.
+## Raiz "RuinOverlay".
+static func create_ruin_overlay(footprint: Vector2i, cell_size: float, seed_val: int = 0) -> Node3D:
+	var d := _foot_dims(footprint, cell_size)
+	var n := clampi(maxi(footprint.x, footprint.y), 1, 3)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_val
+	var root := Node3D.new()
+	root.name = "RuinOverlay"
+	_add_box(root, Vector3(0, 0.015, 0), Vector3(d.x * 1.05, 0.03, d.y * 1.05), _site_mat("scorch"))
+	var rubble := _site_mat("rubble")
+	var dark := _site_mat("concrete_dark")
+	for k in 3 + n * 2:
+		var p := Vector3(rng.randf_range(-0.45, 0.45) * d.x, 0.0, rng.randf_range(-0.45, 0.45) * d.y)
+		var s := Vector3(rng.randf_range(0.25, 0.6), rng.randf_range(0.12, 0.35), rng.randf_range(0.25, 0.6)) * (0.8 + 0.2 * n)
+		var b := _add_box(root, p + Vector3(0, s.y * 0.4, 0), s, rubble if k % 2 == 0 else dark)
+		b.rotation = Vector3(rng.randf_range(-0.3, 0.3), rng.randf() * TAU, rng.randf_range(-0.3, 0.3))
+	# Muro roto: tres trozos de altura decreciente en el lado de atras.
+	var wall_h := [1.1, 0.7, 0.35]
+	for i in 3:
+		var w := d.x * 0.26
+		var hh: float = float(wall_h[i]) * (0.8 + 0.25 * n)
+		_add_box(root, Vector3(-d.x * 0.33 + i * w, hh * 0.5, -d.y * 0.45), Vector3(w * 0.92, hh, 0.16), dark)
+	# Vigas carbonizadas clavadas en angulo: la silueta que se lee de lejos.
+	var char_mat := _site_mat("char")
+	for k in 2 + n:
+		var beam := _add_box(root, Vector3(rng.randf_range(-0.3, 0.3) * d.x, 0.6, rng.randf_range(-0.3, 0.3) * d.y), Vector3(0.12, 1.4 + 0.3 * n, 0.12), char_mat)
+		beam.rotation = Vector3(rng.randf_range(0.4, 0.9) * (1.0 if k % 2 == 0 else -1.0), rng.randf() * TAU, rng.randf_range(-0.3, 0.3))
+	return root

@@ -19,6 +19,8 @@ const PointerMath := preload("res://scripts/services/InputService.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
+## Obra por fases, ruina y humo de "trabajando" (docs/03, "Aspecto en el mapa").
+const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
@@ -51,6 +53,9 @@ var _buildings_container: Node3D
 var _assist: Node = null
 ## Casillas donde cabe el extractor en curso, en verde sobre el suelo.
 var _spot_highlight: MultiMeshInstance3D = null
+## Un solo reloj para releer el aspecto de TODOS los edificios (paso de fase,
+## humo encendido/apagado). Las senales repintan al momento.
+var _look_timer := 0.0
 
 func _ready() -> void:
 	_buildings_container = Node3D.new()
@@ -85,6 +90,11 @@ func _ready() -> void:
 	EventBus.building_clicked.connect(_on_building_clicked)
 	EventBus.building_deselected.connect(_on_building_deselected)
 	EventBus.building_rotate_requested.connect(_on_rotate_requested)
+	for sig in [EventBus.construction_started, EventBus.construction_completed,
+			EventBus.building_ruined, EventBus.building_repaired]:
+		(sig as Signal).connect(sync_look)
+	EventBus.building_upgrade_started.connect(_on_upgrade_look)
+	EventBus.building_upgrade_completed.connect(_on_upgrade_look)
 	GameManager.register_placer(self)
 	_assist = Assist.new()
 	_assist.name = "PlacementAssist"
@@ -188,10 +198,33 @@ func _handle_left_drag(event: InputEventMouseMotion) -> void:
 	EventBus.camera_drag_world_requested.emit(world_delta)
 	get_viewport().set_input_as_handled()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_tick_looks(delta)
 	if _state == State.IDLE:
 		return
 	_update_preview()
+
+## Relee el aspecto de todos los edificios cada building_look_sync_interval.
+func _tick_looks(delta: float) -> void:
+	_look_timer -= delta
+	if _look_timer > 0.0:
+		return
+	_look_timer = GameConfig.building_look_sync_interval
+	for building in _buildings_container.get_children():
+		var look := building.get_node_or_null("LookVisual")
+		if look:
+			look.sync()
+
+func _on_upgrade_look(node: Node, _level: int) -> void:
+	sync_look(node)
+
+## Repinta ya el aspecto de `node` (obra empezada o terminada, ruina, reparacion).
+func sync_look(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	var look := node.get_node_or_null("LookVisual")
+	if look:
+		look.sync()
 
 # ── Rotation Helpers ──
 
@@ -692,6 +725,14 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	var top: float = maxf(data.mesh_height, StatusBadge.measure_top(root))
 	root.add_child(badge)
 	badge.setup(root, data, top)
+
+	# Aspecto: obra por fases, ruina, humo de trabajo. Las calzadas no: no se
+	# construyen, no se arruinan, no trabajan, y su malla se rehace entera al
+	# cambiar de vecinos.
+	if data.id != "road":
+		var look: Node3D = LookVisual.new()
+		root.add_child(look)
+		look.setup(root, data, top)
 
 	return root
 
