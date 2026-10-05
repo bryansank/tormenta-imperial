@@ -9,6 +9,7 @@ queda fija hasta la siguiente: no se cambia a mitad.
 > sus reglas, su guardado y sus pruebas siguen en pie (un guardado viejo en uno
 > de esos modos carga igual). Para devolver uno, quitar el comentario de su línea
 > en `GameMode.OFFERED`. Lo que sigue describe los cuatro tal como funcionan.
+> La captura del selector de abajo es de cuando enseñaba los cuatro.
 
 | Modo | Etiqueta | En una línea |
 |---|---|---|
@@ -145,10 +146,13 @@ de Supervivencia, y Pausa → Menú principal → Nueva partida) pasa por
 `GameManager.request_new_game(ask_confirm)`, que abre `NewGameDialog`
 (`scripts/ui/NewGameDialog.gd`, capa 40, procesa en pausa):
 
-1. Cuatro tarjetas (nombre, dificultad, descripción) y el objetivo del modo
-   elegido. Cada tarjeta es un botón de 150 px de alto como mínimo. La rejilla
-   va a 4 columnas desde 900 px de ancho de tarjeta (1280x800, 1024x768), a 2
-   desde 520 y a 1 en un móvil en vertical, con desplazamiento si no cabe.
+1. Una tarjeta por modo **ofrecido** (`GameMode.OFFERED`; hoy solo Campaña: las
+   otras tres se crean ocultas) con nombre, dificultad y descripción, y el
+   objetivo del modo elegido. Cada tarjeta es un botón de 150 px de alto como
+   mínimo. La rejilla va a 4 columnas desde 900 px de ancho de tarjeta
+   (1280x800, 1024x768), a 2 desde 520 y a 1 en un móvil en vertical, sin pasar
+   nunca del número de modos ofrecidos, con desplazamiento si no cabe. Si la
+   partida en curso es de un modo apartado, el selector abre en Campaña.
 2. Solo si hay algo que perder: "Se borrará tu partida actual (Campaña) y
    empezará una nueva en modo X".
 
@@ -182,7 +186,8 @@ cámara ni del placer.
 ## 3. Cómo añadir un modo
 
 1. `GameMode.gd`: un valor nuevo en `Mode`, su clave en `KEYS` (texto estable:
-   es lo que se guarda) y su sitio en `ORDER` (el orden del selector).
+   es lo que se guarda), su sitio en `ORDER` (el orden del selector) y una
+   línea en `OFFERED` para que el selector lo enseñe.
 2. `GameConfig.game_mode_rules`: una entrada con **solo** lo que cambia respecto
    a Campaña.
 3. Si necesita una regla que no existe: una clave nueva en la entrada
