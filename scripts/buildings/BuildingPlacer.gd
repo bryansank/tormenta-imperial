@@ -21,6 +21,8 @@ const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
 ## Obra por fases, ruina y humo de "trabajando" (docs/03, "Aspecto en el mapa").
 const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
+## La parcela (suelo, sombra de contacto, remate y atrezo): docs/03, "Parcela y atrezo".
+const Lot := preload("res://scripts/buildings/BuildingLot.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
@@ -553,6 +555,8 @@ func _create_preview() -> void:
 		model = DieselpunkBuildingFactory.create(_current_data.id, GridManager.cell_size, _current_data.grid_size)
 
 	if model:
+		# El mismo encaje que el edificio de verdad: el fantasma mide lo mismo.
+		Lot.fit_model(model, _current_data, GridManager.cell_size)
 		_preview_node.add_child(model)
 		_collect_mesh_instances(_preview_node)
 		_apply_ghost_material(true)
@@ -703,6 +707,8 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 			mesh_inst.set_surface_override_material(0, mat)
 			mesh_inst.position.y = data.mesh_height * 0.5
 			root.add_child(mesh_inst)
+	# El modelo se encoge en planta para dejar libre el patio de su parcela.
+	Lot.fit_model(root.get_child(0) as Node3D, data, GridManager.cell_size)
 
 	# Label above building — large, bold, readable (hidden by default)
 	var label := Label3D.new()
@@ -733,6 +739,13 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		var look: Node3D = LookVisual.new()
 		root.add_child(look)
 		look.setup(root, data, top)
+
+	# Parcela: suelo, sombra de contacto, remate y atrezo (no las calzadas, que
+	# ya son suelo). Se coloca sola cuando sabe su celda y sus calzadas vecinas.
+	if Lot.Plan.has_lot(data.id):
+		var lot: Node3D = Lot.new()
+		root.add_child(lot)
+		lot.setup(root, data)
 
 	return root
 

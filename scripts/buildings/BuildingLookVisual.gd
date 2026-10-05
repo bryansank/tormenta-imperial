@@ -80,6 +80,10 @@ func apply(verdict: Dictionary) -> void:
 		_ensure_active()
 	if _active != null:
 		_active.visible = look == LookRule.Look.ACTIVE
+	# La parcela acompana: a medio preparar en obra, volcada y quemada en ruina.
+	var lot := _building.get_node_or_null("Lot") if _building != null else null
+	if lot != null and lot.has_method("set_look"):
+		lot.set_look(look, phase)
 
 # ── Piezas ────────────────────────────────────────────────────────────
 
@@ -147,10 +151,30 @@ func _ensure_active() -> void:
 		_active.add_child(glow)
 	else:
 		var size := 2.0 + 0.5 * n
+		var anchor = _fx_anchor()
+		if anchor != null:
+			# El modelo marca de donde sale (la sierra del Aserradero): mas
+			# pequeno, y pegado a la boca en vez de flotar sobre el tejado.
+			size *= 0.6
 		var col := Fx.quad_3d(kind, size)
-		col.position = Vector3(0.0, _top + size * 0.35, 0.0)
+		col.position = (anchor + Vector3(0.0, size * 0.3, 0.0)) if anchor != null else Vector3(0.0, _top + size * 0.35, 0.0)
 		_active.add_child(col)
 	add_child(_active)
+
+## Un Marker3D "FxAnchor" dentro del modelo, en el espacio del edificio, o null.
+func _fx_anchor() -> Variant:
+	if _model == null:
+		return null
+	var marker := _model.find_child("FxAnchor", true, false) as Node3D
+	if marker == null:
+		return null
+	var xf := Transform3D.IDENTITY
+	var n: Node = marker
+	while n != null and n != _building:
+		if n is Node3D:
+			xf = (n as Node3D).transform * xf
+		n = n.get_parent()
+	return xf.origin
 
 func _find_model() -> Node3D:
 	if _building == null:
