@@ -32,6 +32,9 @@ const Rules := preload("res://scripts/combat/CombatRules.gd")
 const SEEDS := 200
 ## Semillas por tamano de plantilla en el barrido de expediciones completas.
 const EXPEDITION_SEEDS := 200
+## `-- --exp-seeds=N` la baja para una medida rapida; `-- --only=expeditions`
+## salta el barrido de encuentros; `-- --expedition_mult=F` pisa el de Gobernador.
+var _exp_seeds: int = EXPEDITION_SEEDS
 const SEED_BASE := 1_000_003
 
 const ERAS := [1, 2, 3]
@@ -93,9 +96,17 @@ func _running_a_tool_script() -> bool:
 
 func _run() -> void:
 	var tier: int = GameMode.TIER_DEFAULT
+	var only_expeditions := false
 	for arg in OS.get_cmdline_user_args():
-		if String(arg).begins_with("--tier="):
-			tier = GameMode.tier_from_key(String(arg).trim_prefix("--tier="))
+		var a := String(arg)
+		if a.begins_with("--tier="):
+			tier = GameMode.tier_from_key(a.trim_prefix("--tier="))
+		elif a.begins_with("--exp-seeds="):
+			_exp_seeds = maxi(1, int(a.trim_prefix("--exp-seeds=")))
+		elif a == "--only=expeditions":
+			only_expeditions = true
+		elif a.begins_with("--expedition_mult="):
+			GameConfig.game_tier_rules["governor"]["expedition_enemy_mult"] = float(a.trim_prefix("--expedition_mult="))
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN, tier)
 	print("")
 	print("==============================================================")
@@ -103,7 +114,8 @@ func _run() -> void:
 		SEEDS, GameMode.tier_key_of(GameMode.tier), GameMode.expedition_enemy_mult()])
 	print("==============================================================")
 	_print_config()
-	_sweep_encounters()
+	if not only_expeditions:
+		_sweep_encounters()
 	_sweep_expeditions()
 	print("")
 
@@ -333,7 +345,7 @@ func _measure_expeditions(era: int, size: int, played: bool = false) -> Dictiona
 	for d in range(16):
 		pool_by_depth.append({"sum": 0.0, "n": 0})
 
-	for s in range(EXPEDITION_SEEDS):
+	for s in range(_exp_seeds):
 		var rng: RandomNumberGenerator = Generator.make_rng(SEED_BASE + 31 * s + 7)
 		var counts: Dictionary = _party_counts(rng, era, size)
 		var run: Expedition = Expedition.create(s, SEED_BASE + s, counts, MORALE, era)
@@ -377,9 +389,9 @@ func _measure_expeditions(era: int, size: int, played: bool = false) -> Dictiona
 		casualties_sum += float(run.casualties().size())
 		minutes_sum += minutes
 
-	var n: float = float(EXPEDITION_SEEDS)
+	var n: float = float(_exp_seeds)
 	return {
-		"n": EXPEDITION_SEEDS,
+		"n": _exp_seeds,
 		"win_rate": float(wins) / n,
 		"nodes_mean": nodes_sum / n,
 		"casualties_mean": casualties_sum / n,
