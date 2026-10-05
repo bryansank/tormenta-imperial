@@ -1374,6 +1374,10 @@ var storm_tower_garrison_unit := "artillery"
 ## la mitigación: una fila de torres no puede convertir el Diezmo en un trámite.
 var storm_tower_garrison_per_tower := 1
 var storm_tower_garrison_max := 2
+## Lo que pierde una torre cuando cae su dotacion en un tablero (Diezmo o
+## Auditoria), como fraccion de su vida maxima. Queda dañada, nunca en ruinas:
+## sigue en pie, pero hay que repararla (CombatManager.damage_towers_for_lost_crews).
+var storm_tower_crew_loss_damage := 0.4
 
 ## Cuántas dotaciones se suman a la guarnición.
 ##
