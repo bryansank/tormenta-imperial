@@ -461,7 +461,9 @@ func _on_launch_pressed() -> void:
 		)
 		_refresh()
 		return
-	CombatManager.launch_expedition(party)
+	# Hasta ganar la primera, cada salida es la escaramuza facil de un solo nodo
+	# (docs/15-combat.md §4).
+	CombatManager.launch_expedition(party, 0, CombatManager.is_first_sortie_due())
 	_close()
 
 ## Vuelve al mapa de la campana en curso sin tocar nada de su estado.
