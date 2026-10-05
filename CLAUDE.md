@@ -542,6 +542,9 @@ tormenta-imperial/
 |   |   +-- PlacementRules.gd        # Shared placement rules (deposit adjacency, footprint) for 3D and 2D
 |   |   +-- PlacementAssist.gd       # Touch placement (tap aims, tap ghost/✓ builds), valid-spot highlight — docs/21 §9
 |   |   +-- BuildingStatusBadge.gd   # Worker pictogram / "Zzz" + why a building is stopped (3D)
+|   |   +-- BuildingLook.gd          # Rule (both views): construction phase by footprint / upgrade / ruin / active / idle
+|   |   +-- BuildingLookVisual.gd    # Applies it in 3D (child "LookVisual"); BuildingPlacer syncs it with one map-wide clock
+|   |   +-- BuildingFx.gd            # Generated smoke/dust/glow sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D
 |   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes (fallback when there is no GLB)
 |   +-- camera/MonumentalCamera.gd   # Orthographic 45deg RTS camera
 |   +-- combat/                      # PURE models: no nodes, no signals, no global RNG
@@ -593,7 +596,8 @@ tormenta-imperial/
     +-- run_tests.sh, run_tests.ps1  # THE way to run the tests (private user dir)
     +-- package_release.sh, .ps1     # Zips an exported .exe / APK with LICENSE, notices and dist/LEEME-*.txt (docs/19 §8)
     +-- gen_godot_notices.gd         # Regenerates licenses/GODOT-COPYRIGHT.txt from the engine binary
-    +-- gen_ui_textures.gd, gen_resource_icons.gd, gen_unit_icons.gd  # Asset generators (headless, -s)
+    +-- gen_ui_textures.gd, gen_resource_icons.gd, gen_unit_icons.gd  # Asset generators (headless, -s); icons also at 24/42/60/96 (`<id>_<px>.png`, `UITheme.icon_texture(id, px)`)
+    +-- look_probe.gd, look_probe_runner.gd  # Screenshots of every building look (construction phases, ruin, active) in 3D and 2D
     +-- render_brand.gd, render_branding.gd, render_catalog.gd, showcase_shots.gd  # Branding and screenshots
     +-- *_probe.gd                   # Dev probes, see below
     +-- ui_audit.gd, ui_tour.gd      # Screenshot every panel
@@ -727,6 +731,8 @@ All balance values live in `GameConfig.gd`:
 - `storm_*` - storm cycle, damage, the Tithe, tower mitigation and tower crews
 - `final_audit_*` - the closing siege: wave count, slots, scaling, resummon floor
 - `building_deposit_rules` - which extractor must touch which deposit
+- `construction_phase_thresholds` / `building_active_fx` / `building_fx_*` / `ruin_*` /
+  `building_look_sync_interval` - how buildings look on the map (docs/03, "Aspecto en el mapa")
 - `deposit_per_type_min/max` / `deposit_core_gap` / `map_shore_band` / `deposit_sizes` - the random map's deposits
 - `grid_size_min/max` - the grid side rolled per game (even, saved in the `grid` key)
 - `game_mode_rules` / `sandbox_*` - per-mode rules and multipliers on top of the base

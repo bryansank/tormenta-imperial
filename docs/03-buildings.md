@@ -128,9 +128,55 @@ Buildings can run timed manual processes (one at a time per building). Defined i
 3. BuildingPlacer (or `BuildingPlacer2D`) shows a green/red ghost on the grid; on touch, `PlacementAssist` highlights the valid spots, a tap aims and a tap on the ghost / ✓ builds
 4. On confirm: `PlacementRules` checks the spot, then `ResourceManager.spend_cost()`, `GridManager.place_building()`
 5. `EventBus.building_placed` emitted
-6. ProductionManager starts construction timer (translucent visual + label)
+6. ProductionManager starts construction timer (label + progress bar); the building shows its construction phase (see below)
 7. Timer complete: `EventBus.construction_completed` emitted
 8. Building starts producing, PopulationManager recalculates workers
+
+## Aspecto en el mapa: obra, ruina y actividad
+
+Cada edificio se ve en uno de cinco aspectos, en las dos vistas. La regla es
+una sola, pura y estatica: `scripts/buildings/BuildingLook.gd` (`derive()`), de
+los hechos del edificio (`under_construction`, mejora o no, progreso, ruina,
+lo que dice su `StatusBadge`) al aspecto. Orden: la obra manda sobre la ruina,
+la ruina sobre la actividad.
+
+| Aspecto | Cuando | 3D | 2D |
+|---|---|---|---|
+| **Obra, fase 0** | progreso < 34 % | modelo oculto; tierra removida, valla de tablas con puerta y cinta de peligro, pilas de tablones / vigas / ladrillo (una por clase de huella) | tierra, valla con postes y puerta, pilas de material |
+| **Obra, fase 1** | 34-67 % | losa de cimentacion, zapatas, esperas de ferralla, conos | losa con zapatas y ferralla, conos |
+| **Obra, fase 2** | ≥ 67 % | pilares, medio forjado, vigas de coronacion, andamio y, desde 2x2, grua | pilares, medio forjado, andamio y grua |
+| **Mejora** | obra que es una mejora | el modelo a la vista con andamio alrededor | el dibujo con rayas, andamio en aspa y barra |
+| **Ruina** | `BuildingHealth.is_ruined()` | el modelo se hunde un 38 % y se ladea, con el hollin de siempre, suelo quemado, cascotes, muro roto, vigas carbonizadas y humo negro animado | tizne, muro dentado, cascotes, vigas con ascuas, grietas y humo negro animado |
+| **Trabajando** | el badge dice WORKING y el edificio tiene efecto | humo, serrin o luz que parpadea sobre la cima | humo/serrin desde las chimeneas del dibujo, luz en la puerta |
+| **Quieto** | lo demas | el modelo, sin animacion | el dibujo, sin animacion |
+
+- **Las fases de obra van por huella, no por edificio** (1x1 / 2x2 / 3x3):
+  `DieselpunkBuildingFactory.create_construction_phase(footprint, phase, cell_size)`
+  y `BuildingArt2D.draw_construction_phase()`. La clase de huella (el lado
+  mayor, 1-3) decide cuantas pilas, cuantos pilares y si hay grua. Umbrales en
+  `GameConfig.construction_phase_thresholds`.
+- **Que efecto lleva cada edificio**: `GameConfig.building_active_fx` (`smoke`,
+  `dust`, `glow`). Casas y decoracion no llevan: no "trabajan".
+- **La animacion** es una hoja de 8 fotogramas en rejilla 4x2 a 12 fps
+  (`GameConfig.building_fx_*`), dibujada en codigo por `BuildingFx.gd` y animada
+  por un shader con `TIME`: ni timers, ni tweens, ni AnimationPlayer por
+  edificio. Un material por efecto para todo el mapa.
+- **3D**: `BuildingLookVisual` (hijo `LookVisual` de cada edificio salvo las
+  calzadas, lo pone `BuildingPlacer._create_building_mesh`). `BuildingPlacer`
+  lo resincroniza al momento con las senales de obra, mejora, ruina y
+  reparacion, y con **un solo reloj para todo el mapa**
+  (`GameConfig.building_look_sync_interval`, 0,25 s) para el paso de fase y el
+  encendido del humo. Todo lo que cuelga de el esta en el grupo `building_fx`:
+  ni el hollin de `BuildingHealth` ni `BuildingStatusBadge.measure_top()` lo
+  cuentan. Hundir la ruina toca la `position`/`rotation` del modelo (no su
+  escala, que es la del nivel) y lo devuelve al repararlo.
+- **2D**: `Building2D` mete el aspecto en su firma de repintado y crea los
+  sprites del efecto la primera vez que hacen falta (docs/18).
+- Sonda con capturas: `godot --path . -s tools/look_probe.gd -- --no-dev`
+  (con `override.cfg` propio) deja `docs/media/dev/look_probe_3d.png` y
+  `look_probe_2d.png`.
+- Todo es original y generado por el proyecto (mallas procedurales, dibujo en
+  codigo, hojas de sprite generadas): ningun asset externo.
 
 ## Key Files
 
@@ -138,4 +184,6 @@ Buildings can run timed manual processes (one at a time per building). Defined i
 - `data/buildings/*.tres` — 14 building data files
 - `scripts/services/GameConfig.gd` — limits, prerequisites, processes
 - `scripts/services/ProductionManager.gd` — construction + passive production
+- `scripts/buildings/BuildingLook.gd` — rule: construction phase / upgrade / ruin / active / idle (both views)
+- `scripts/buildings/BuildingLookVisual.gd` — applies it in 3D; `scripts/buildings/BuildingFx.gd` — animated sprite sheets + shaders
 - `scenes/buildings/BuildingPlacer.tscn` — placement/move/demolish logic
