@@ -35,9 +35,13 @@ Tablet / Móvil (`GameConfig.ui_device_profile`: `auto`, `pc`, `tablet`, `phone`
 | Textos de ayuda | ratón | dedo | dedo |
 | Disposición movida | la suya | la suya | la suya |
 
-"Automático" en *Controles en pantalla* ya no se enciende en un PC porque llegue
-un toque: un portátil táctil tocado una vez no se llena de flechas. Quien los
-quiera en PC elige **Siempre** o el perfil Tablet.
+"Automático" en *Controles en pantalla* es **solo móvil y tablet** (decisión de
+Bryan, 2026-10-04): sigue al perfil, y en un PC no se enciende ni porque la pantalla
+se declare táctil ni porque llegue un toque real; un portátil táctil tocado una vez
+no se llena de flechas. El portátil táctil elige **Siempre** a mano (o el perfil
+Tablet), y Ajustes lo dice debajo del selector (`LBL_TOUCH_AUTO_HINT`). Un toque real
+sí cambia los textos de ayuda a dedo (`input_style`) y la colocación táctil (§9):
+eso no son los controles en pantalla.
 
 ### Escala y proporción de pantalla
 
@@ -258,7 +262,8 @@ solas: apagado, el índice de AYUDA sigue reabriendo la que se pida.
 - Suites: `tests/ui/test_device_profile.gd`, `test_ui_palettes.gd`,
   `test_hud_layout.gd`, `test_settings_tabs.gd`, y `test_touch_controls.gd`
   ("Automático" sigue al perfil: en PC no enciende los controles aunque llegue un
-  toque; "Siempre" y "Nunca" fuerzan).
+  toque, tampoco en un portátil táctil; "Siempre" y "Nunca" fuerzan; Ajustes
+  muestra la nota para el portátil táctil).
 - Tacto: ver §9.
 
 ## 9. Tacto (dedo)

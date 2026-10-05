@@ -574,11 +574,12 @@ var _real_touch_seen := false
 ## Si los controles en pantalla deben verse ahora, resolviendo el "auto".
 ## Es la unica pregunta que hace OnScreenControls.
 ##
-## "auto" sigue al perfil de dispositivo (DeviceProfile): tablet y movil los
-## llevan, PC NUNCA (norma de Bryan). Ni DisplayServer.is_touchscreen_available()
-## ni un toque real los encienden en un PC: un portatil Windows tactil que se
-## toca una vez no se llena de flechas. Quien los quiera en PC elige "Siempre"
-## o el perfil Tablet.
+## "auto" = solo movil y tablet (decision de Bryan, 2026-10-04): sigue al perfil
+## de dispositivo (DeviceProfile), y en PC NUNCA. Ni
+## DisplayServer.is_touchscreen_available() ni un toque real los encienden en un
+## PC: un portatil Windows tactil que se toca una vez no se llena de flechas. El
+## portatil tactil elige "Siempre" a mano (lo dice LBL_TOUCH_AUTO_HINT en
+## Ajustes), o el perfil Tablet.
 func touch_controls_enabled() -> bool:
 	match ui_touch_controls:
 		"always":

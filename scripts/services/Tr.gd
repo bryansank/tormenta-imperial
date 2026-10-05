@@ -684,7 +684,8 @@ const _STRINGS := {
 		"TUT_TIP_AUDIT_BODY": "El Cuartel General a nivel 3 ha llamado a la Auditoría Final: de 3 a 5 oleadas seguidas contra lo que esté en casa, sin reentrenar entre una y otra. Cuando estés listo, pulsa QUE BAJEN en ESCARAMUZAS.\n\nPerder no acaba la partida: se paga caro, y se puede volver a intentar.",
 		# ── hud-movil ──
 		"LBL_TOUCH_CONTROLS": "Controles en pantalla (flechas, zoom, girar)",
-		"OPT_TOUCH_AUTO": "Automático (tablet y móvil; en PC no)",
+		"OPT_TOUCH_AUTO": "Automático (solo tablet y móvil)",
+		"LBL_TOUCH_AUTO_HINT": "Automático los muestra solo en tablet y móvil. ¿Portátil con pantalla táctil? Elige «Siempre».",
 		"OPT_TOUCH_ALWAYS": "Siempre",
 		"OPT_TOUCH_NEVER": "Nunca",
 		"BTN_HELP": "AYUDA",
@@ -1670,7 +1671,8 @@ const _STRINGS := {
 		"TUT_TIP_AUDIT_BODY": "The Headquarters at level 3 has called the Final Audit: 3 to 5 waves in a row against whoever is home, with no retraining in between. When you are ready, press LET THEM COME in SKIRMISHES.\n\nLosing does not end the game: it costs dearly, and you can try again.",
 		# ── hud-movil ──
 		"LBL_TOUCH_CONTROLS": "On-screen controls (arrows, zoom, rotate)",
-		"OPT_TOUCH_AUTO": "Automatic (tablet and phone; never on PC)",
+		"OPT_TOUCH_AUTO": "Automatic (tablet and phone only)",
+		"LBL_TOUCH_AUTO_HINT": "Automatic shows them only on tablets and phones. Touchscreen laptop? Choose “Always”.",
 		"OPT_TOUCH_ALWAYS": "Always",
 		"OPT_TOUCH_NEVER": "Never",
 		"BTN_HELP": "HELP",
