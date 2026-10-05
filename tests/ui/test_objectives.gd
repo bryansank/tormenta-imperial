@@ -234,7 +234,9 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 			ProgressionManager.summon_final_audit()
 
 	# El orden de la linea, en la secuencia visitada (con lo que haya en medio).
-	var expected: Array = ["build:sawmill", "build:farm", "build:gold_mine", "build:house", "build:sawmill",
+	# La Granja ocupa dos obreros: la primera casa puede llegar antes que la mina,
+	# como paso de apoyo, asi que aqui no se exige su sitio (2026-10-04).
+	var expected: Array = ["build:sawmill", "build:farm", "build:gold_mine", "build:sawmill",
 		"build:warehouse", "build:foundry", "build:barracks", "train:artillery", "sortie:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
 		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]
@@ -266,7 +268,7 @@ func test_a_ruined_producer_is_repaired_before_anything_else() -> void:
 ## La mejora que no cabe en la bolsa no se pide a ciegas: primero el almacen.
 func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
-	for id in ["sawmill", "gold_mine", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
 			"refinery", "tower", "tower", "headquarters"]:
 		_build(id)
 	for i in range(Objectives.GARRISON_UNITS):
@@ -282,7 +284,7 @@ func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 ## Una base de era 3 que ya produce de todo y con la bolsa sana: lo que se
 ## prueba despues es el asedio, no la economia.
 func _a_running_base() -> void:
-	for id in ["sawmill", "gold_mine", "house", "foundry", "barracks", "refinery"]:
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "house", "foundry", "barracks", "refinery"]:
 		_build(id)
 	ResourceManager.set_amounts({"gold": 400, "wood": 100, "steel": 200, "oil": 100})
 
@@ -365,7 +367,7 @@ func _panel_says(node: Node, text: String) -> bool:
 ## jugador cuadrando los cuatro recursos al centimo.
 func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
-	for id in ["sawmill", "gold_mine", "gold_mine", "gold_mine", "house", "house", "house", "house", "house", "sawmill",
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "gold_mine", "gold_mine", "house", "house", "house", "house", "house", "sawmill",
 			"warehouse", "warehouse", "warehouse", "warehouse", "warehouse", "foundry", "barracks",
 			"refinery", "tower", "tower", "headquarters"]:
 		_build(id)
@@ -435,7 +437,7 @@ func test_the_builder_skips_the_army_and_the_sandbox_has_no_goal() -> void:
 
 ## Una base de era 1 con el cuartel en pie, sin tropa.
 func _a_base_with_barracks() -> void:
-	for id in ["sawmill", "gold_mine", "house", "sawmill", "warehouse", "foundry", "barracks"]:
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "house", "sawmill", "warehouse", "foundry", "barracks"]:
 		_build(id)
 	ResourceManager.set_amounts({"gold": 300, "wood": 200, "steel": 50})
 

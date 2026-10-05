@@ -94,7 +94,7 @@ func test_a_built_sawmill_asks_to_collect_then_for_a_farm() -> void:
 
 func test_collecting_is_remembered_with_the_game() -> void:
 	_start()
-	EventBus.production_collected.emit(Node.new(), {"wood": 1})
+	EventBus.production_collected.emit(auto_free(Node.new()), {"wood": 1})
 	assert_bool(TutorialManager.guide_collected).is_true()
 	var saved := TutorialManager.get_save_data()
 	TutorialManager.reset()
