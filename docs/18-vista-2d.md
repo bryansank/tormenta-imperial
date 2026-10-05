@@ -64,6 +64,7 @@ en el agua es una celda invalida, no la del borde.
 | Silueta de la isla | funciones estaticas de `IslandGenerator.gd` | `Island2D` |
 | Regla del badge Zzz / obrero y su pictograma | `BuildingStatusBadge.derive()`, `worker_texture()` | `StatusBadge2D` |
 | Pasos del cielo de tormenta | constantes de `StormSky.gd` | `StormTint2D.target_weight()` |
+| Obreros y ciudadanos que andan: quien, a donde, puertas, rutas, Tormenta | `scripts/map/WorkerWalkers.gd` (+ `WalkerActor.gd`) | las dos vistas; dibujan `WalkerFigures3D` (MultiMesh) y `scripts/view2d/WalkerFigures2D.gd` (un solo `_draw`: las cuatro siluetas vistas desde arriba, encogen y se desvanecen en la puerta, saltito al andar) |
 | Formato del guardado | `PlacementRules.serialize_building`, `MapGenerator.get_all_deposits`, `get_state()` de la camara | las dos vistas |
 
 ### Los ganchos en los servicios
@@ -220,3 +221,7 @@ docs/21 §9).
 - `tools/look_probe.gd`: captura de todos los aspectos en 3D y 2D, y de las
   obras (una fila por fase, varios edificios y dos casas)
   (docs/03, "Aspecto en el mapa").
+- `tools/life_probe.gd`: un pueblo sembrado con obreros y ciudadanos en la calle,
+  en 3D y en 2D (`life_probe_2d.png`); `tests/map/test_city_life.gd` comprueba que
+  las dos vistas dibujan tantas figuras como hay en la calle (docs/04, "Life in
+  the streets").

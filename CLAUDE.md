@@ -146,7 +146,7 @@ Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
 Created at runtime, not in either .tscn:
   PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, three folios in plain language
   QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks, once per game after the prologue
-  WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: worker figures walking the roads (view only)
+  WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: workers and citizens walking the roads (view only, docs/04)
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker, created by GameManager.request_new_game()
   LayoutEditor (layer 35, scripts/ui/LayoutEditor.gd) -- EDITAR DISPOSICIÓN (Settings), created by UILayoutManager
@@ -304,10 +304,17 @@ AYUDA index.
 - `PlacementRules.road_route(origin, size)` gives the free cells to pave to join a
   footprint (tests and `tools/line_probe_player.gd` use it); `walk_route(node)` gives
   the road path from the Núcleo to a building.
-- **Workers you can see:** `scripts/map/WorkerWalkers.gd` (child of both placers)
-  sends little figures from the Núcleo along `walk_route()` when a building gets
-  staffed, plus one every 25 s as a shift change. View only; staffing stays in
-  PopulationManager.
+- **Life in the streets:** `scripts/map/WorkerWalkers.gd` (child of both placers).
+  Workers live in a house and commute along the road network to a building that is
+  really staffed (PopulationManager's `staffed` meta: withdrawn, "sin carretera" and
+  vein-less buildings get nobody), go in through its door, stay, come out and go
+  home; citizens (the unemployed) stroll, stop at decorations and shop at the
+  Market. One figure per `life_people_per_figure` people, capped per device profile
+  (`life_figure_cap`); they hurry in the Warning and stay indoors through Ash, Storm
+  and Tithe; `set_presence()` is the night hook. Figures are data (`WalkerActor.gd`)
+  drawn by one node: `WalkerFigures3D` (a MultiMesh per silhouette) or
+  `WalkerFigures2D` (one `_draw`). View only, never saved; staffing stays in
+  PopulationManager. Detail in docs/04.
 - **Auto-road:** `evaluate_placement()` accepts an unconnected spot when a free route
   to the network exists and returns it as `"route"`; the placers charge building +
   route together (`Rules.cost_with_route`, 1 gold per tile) and lay it with
@@ -643,7 +650,8 @@ tormenta-imperial/
 |   +-- map/
 |   |   +-- IslandGenerator.gd       # Procedural island mesh
 |   |   +-- MapGenerator.gd          # Random deposits: 3-6 per type, room and a road path for each extractor
-|   |   +-- WorkerWalkers.gd         # Worker figures walking the road network (view only, 3D and 2D)
+|   |   +-- WorkerWalkers.gd         # Workers and citizens walking the road network (view only, 3D and 2D)
+|   |   +-- WalkerActor.gd, WalkerFigures3D.gd  # One figure's data; the 3D MultiMesh drawer (2D: view2d/WalkerFigures2D.gd)
 |   |   +-- StormSky.gd              # Autoload: sky/light during the storm
 |   +-- storm/StormCycle.gd          # PURE model: the storm's phase clock
 |   +-- services/                    # The 26 game autoloads (table above) + BeckettGate.gd
@@ -681,6 +689,7 @@ tormenta-imperial/
     +-- gen_godot_notices.gd         # Regenerates licenses/GODOT-COPYRIGHT.txt from the engine binary
     +-- gen_ui_textures.gd, gen_resource_icons.gd, gen_unit_icons.gd  # Asset generators (headless, -s); icons also at 24/42/60/96 (`<id>_<px>.png`, `UITheme.icon_texture(id, px)`)
     +-- look_probe.gd, look_probe_runner.gd  # Screenshots of every building look (construction phases, ruin, active) and a site row per phase, 3D and 2D
+    +-- life_probe.gd, life_probe_runner.gd  # Seeded town: street life in 3D/2D, the empty Ash, CPU cost with 60+ figures
     +-- render_brand.gd, render_branding.gd, render_catalog.gd, showcase_shots.gd  # Branding and screenshots
     +-- *_probe.gd                   # Dev probes, see below
     +-- ui_audit.gd, ui_tour.gd      # Screenshot every panel
@@ -702,7 +711,8 @@ Probes come in two shapes, and **every one of them runs with a private user dir*
   (also `interfaz_probe`, `onboarding_probe`, `view2d_probe`, each driving its
   `*_probe_runner.gd`); `line_probe.gd` (the whole campaign at real timings,
   headless, `-- --no-dev --seeds=1,2,3`, refuses to run without its own user dir,
-  docs/22) and `siege_probe.gd` (siege balance, docs/17).
+  docs/22), `siege_probe.gd` (siege balance, docs/17) and `life_probe.gd` (street
+  life and its cost, `-- --no-title --no-dev`, docs/04).
 - Screenshots go to `docs/media/dev/` (git-ignored).
 
 Note: unit and tech definitions live as inline dictionaries in `GameConfig.gd`
