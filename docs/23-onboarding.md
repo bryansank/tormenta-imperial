@@ -161,6 +161,13 @@ apunta.
 7. **Interruptor global** (`GameConfig.ui_helper_visible`, el de Ajustes > Interfaz de
    #29 y el del índice): apaga las que salen solas; las que se piden en el índice salen
    igual.
+8. **Cortos** (2026-10-04): un globo está junto a su control, así que no lo describe
+   ("CONSTRUIR (el botón grande de abajo)" sobraba). Cada globo, en 14 palabras como
+   mucho, con su `_TOUCH` (`test_menos_texto_avisos.gd`). El de ☰ MENÚ ya no nombra
+   Mercado ni Tecnología, que se abren desde sus edificios. Las explicaciones que los
+   paneles mandan al tooltip (descripción del edificio, regla de la carretera, intro
+   del árbol tecnológico) siguen en la guía rápida, la guía de edificios y los
+   consejos del índice: en táctil es donde se leen (docs/21 §6, "Menos texto").
 
 **La primera escaramuza** (docs/15-combat.md §4). Al salir del cuartel la primera
 unidad, el consejo `first_sortie` señala ☰ MENÚ (donde vive ESCARAMUZAS) y ¿QUÉ HACER?
