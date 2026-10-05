@@ -254,11 +254,19 @@ func get_material_of(building_id: String) -> String:
 
 # ── Mining Data ──
 
+## Era 1 de 8-12 minutos (decision de Bryan, 2026-10-04). Con 20 de oro cada
+## 12 s y 20 de madera cada 8 s, dos obreros minando a mano sacaban 2,5 veces lo
+## que una Mina de oro con tres, y el jugador que minaba llegaba a la Fundicion
+## en el minuto 3,8 (tools/line_probe.gd --active=1, docs/22-linea-jugable.md).
+## Ahora la veta y el bosque rinden por obrero lo mismo que su extractor (oro
+## 12/30 s = 12 por obrero y minuto, la Mina 13,3; madera 10/20 s = 15, el
+## Aserradero 15): minar sirve para arrancar o para un apuro, no es la via rapida.
+## Hierro y petroleo (eras 2-3) no cambian.
 var mining_data := {
-	"gold_vein": {"id": "mine_gold", "name": "PROC_MINE_GOLD", "duration": 12.0, "produces": {"gold": 20}},
+	"gold_vein": {"id": "mine_gold", "name": "PROC_MINE_GOLD", "duration": 30.0, "produces": {"gold": 12}},
 	"iron_deposit": {"id": "mine_iron", "name": "PROC_MINE_IRON", "duration": 18.0, "produces": {"steel": 15}},
 	"oil_well": {"id": "mine_oil", "name": "PROC_MINE_OIL", "duration": 22.0, "produces": {"oil": 10}},
-	"forest": {"id": "mine_wood", "name": "PROC_MINE_WOOD", "duration": 8.0, "produces": {"wood": 20}},
+	"forest": {"id": "mine_wood", "name": "PROC_MINE_WOOD", "duration": 20.0, "produces": {"wood": 10}},
 }
 
 ## Trabajadores que ocupa sacar una veta a mano mientras dura (2026-09-28):
