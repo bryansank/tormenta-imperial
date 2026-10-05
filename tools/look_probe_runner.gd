@@ -7,7 +7,8 @@ extends Node
 ## con luz normal y con la Tormenta, en 3D (look_probe_style_3d.png,
 ## look_probe_style_storm_3d.png) y en 2D (look_probe_style_2d.png,
 ## look_probe_style_storm_2d.png), mas el Aserradero de cerca y en sus estados
-## (look_probe_sawmill_3d.png).
+## (look_probe_sawmill_3d.png) y los productivos de cerca, cada uno con su
+## elemento exagerado (look_probe_style_close_3d.png).
 
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
 const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
@@ -30,6 +31,7 @@ func _ready() -> void:
 	await _shoot_style_3d(false)
 	await _shoot_style_3d(true)
 	await _shoot_sawmill_3d()
+	await _shoot_close_3d()
 	await _shoot_style_2d(false)
 	await _shoot_style_2d(true)
 	get_tree().quit()
@@ -336,7 +338,7 @@ func _shoot_style_2d(storm: bool) -> void:
 		tint.color = Color(0.46, 0.40, 0.35)
 		_world.add_child(tint)
 	var cam := Camera2D.new()
-	cam.zoom = Vector2(1.9, 1.9)
+	cam.zoom = Vector2(1.6, 1.6)
 	_world.add_child(cam)
 	cam.make_current()
 	var cell := View2D.cell_px()
@@ -362,5 +364,23 @@ func _shoot_style_2d(storm: bool) -> void:
 		b.add_child(label)
 	await _settle()
 	await _save("look_probe_style_storm_2d.png" if storm else "look_probe_style_2d.png")
+	_world.queue_free()
+	await get_tree().process_frame
+
+## Los productivos de cerca: parcela, atrezo y elemento exagerado.
+func _shoot_close_3d() -> void:
+	var cam := _style_world(false)
+	var placer: Node3D = Placer.new()
+	var ids := ["sawmill", "gold_mine", "foundry", "refinery", "warehouse", "laboratory", "barracks", "tower", "headquarters", "market"]
+	for i in ids.size():
+		var pos := Vector3((i % 5 - 2.0) * 6.2, 0, (i / 5) * 8.0 - 4.0)
+		var root := _style_building(placer, String(ids[i]), pos)
+		_style_label(root, _data(String(ids[i])).get_display_name(), 3.2)
+	placer.free()
+	cam.position = Vector3(0, 19, 18)
+	cam.rotation_degrees = Vector3(-45, 0, 0)
+	cam.fov = 50
+	await _settle()
+	await _save("look_probe_style_close_3d.png")
 	_world.queue_free()
 	await get_tree().process_frame

@@ -322,8 +322,10 @@ suelo, generada en codigo y cacheada por suelo y huella), `ContactShadow` (un
 plano con un unico material para todo el mapa) y `Props` (el borde, el remate,
 el atrezo y el elemento exagerado en **una sola malla** con color por vertice,
 `LotMesh.gd`, con dos materiales compartidos: con luz y sin luz). Son tres
-llamadas de dibujo por parcela y **nada por frame**: se reconstruye solo cuando
-cambia algo que la parcela ve (su celda o las calzadas de al lado, por las
+o cuatro llamadas de dibujo por parcela (la malla del atrezo lleva una segunda
+superficie si hay algo encendido), unos 1.500 triangulos de media, y **nada por
+frame**: la parcela se monta una vez en unos 6 ms de GDScript (medido en PC) y
+se reconstruye solo cuando cambia algo que la parcela ve (su celda o las calzadas de al lado, por las
 senales `building_placed` / `building_demolished` / `building_moved` /
 `game_load_completed`; la obra y la ruina, por `BuildingLookVisual.apply()`).
 Lo que va por encima del modelo (la grua, el emblema) se mide con su AABB real y,

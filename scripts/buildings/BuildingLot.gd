@@ -540,10 +540,10 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 				_valve_wheel(mb, c + Vector3(r * 0.55, h * 0.95, -r * 0.5 + 0.1), 0.18, Color(0.95, 0.75, 0.12))
 				mb.cyl(c + Vector3(-r * 0.55, h * 0.9, -r * 0.5 + 0.08), 0.12, 0.04, Color(0.95, 0.95, 0.9), 10, Vector3.BACK, -1.0, true)
 		"ore_heap":
-			mb.cyl(c, r * 1.15, 0.62 * maxf(k, 0.6), Color(0.47, 0.39, 0.28), 8, Vector3.UP, r * 0.2)
+			mb.cyl(c, r * 1.35, 0.85 * maxf(k, 0.5), Color(0.47, 0.39, 0.28), 8, Vector3.UP, r * 0.2)
 			var nuggets := [Vector3(-0.3, 0.35, 0.25), Vector3(0.25, 0.3, -0.2), Vector3(0.05, 0.55, 0.05), Vector3(0.4, 0.15, 0.3), Vector3(-0.4, 0.12, -0.3), Vector3(0.1, 0.2, 0.45)]
 			for i in nuggets.size():
-				mb.ball(c + (nuggets[i] as Vector3) * r * 1.3, r * 0.22, GOLD if i % 2 == 0 else GOLD.lightened(0.2), Vector3.ONE, i == 2 and not ruined)
+				mb.ball(c + (nuggets[i] as Vector3) * r * 1.5, r * 0.3, GOLD if i % 2 == 0 else GOLD.lightened(0.2), Vector3.ONE, i == 2 and not ruined)
 			if not ruined:
 				# Pico clavado en el monton
 				mb.beam(c + Vector3(r * 0.6, 0.3, 0), c + Vector3(r * 0.2, 1.1, r * 0.3), 0.05, WOOD)
@@ -559,10 +559,11 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 			if not ruined:
 				var out := Vector3(sgn.x, 0, sgn.y).normalized()
 				mb.box(c + Vector3(0, 0.25, 0), Vector3(0.36, 0.22, 0.36), OLIVE)
-				var base := c + Vector3(0, 0.42, 0) - out * 0.3
-				var tip := c + out * 0.42 + Vector3(0, 0.75, 0)
-				mb.beam(base, tip, 0.17, IRON)
-				mb.beam(tip - (tip - base).normalized() * 0.1, tip, 0.22, Color(0.12, 0.12, 0.12))
+				# El canon, exagerado: mas largo y grueso que lo que pide el nido.
+				var base := c + Vector3(0, 0.45, 0) - out * 0.35
+				var tip := c + out * 0.55 + Vector3(0, 1.0, 0)
+				mb.beam(base, tip, 0.24, IRON)
+				mb.beam(tip - (tip - base).normalized() * 0.14, tip, 0.3, Color(0.12, 0.12, 0.12))
 				mb.box(base, Vector3(0.3, 0.26, 0.3), OLIVE.darkened(0.1))
 				var wheel_axis := out.cross(Vector3.UP).normalized()
 				for side in [-1.0, 1.0]:
