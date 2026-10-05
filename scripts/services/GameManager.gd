@@ -88,6 +88,10 @@ func _ready() -> void:
 	EventBus.encounter_started.connect(_on_encounter_started)
 	EventBus.locale_changed.connect(_on_locale_changed)
 	EventBus.run_ended.connect(_on_run_ended)
+	# El perfil (settings.cfg, no la partida) recuerda las partidas terminadas:
+	# es lo que desbloquea Gobernador en el selector.
+	EventBus.victory_achieved.connect(_on_victory_for_profile)
+	EventBus.final_audit_lost.connect(_on_audit_lost_for_profile)
 
 ## Pide un guardado. No escribe en el acto: espera `autosave_debounce` para que
 ## una rafaga de eventos del mismo instante acabe en un solo guardado.
@@ -259,7 +263,7 @@ func _begin() -> void:
 func _new_game() -> void:
 	# El modo ya lo eligio quien pidio la partida (start_new_game); aqui solo se
 	# tira el resultado de la anterior. Va primero: los reset leen sus reglas.
-	GameMode.begin_run(GameMode.current)
+	GameMode.begin_run(GameMode.current, GameMode.tier)
 	_run_sealed = false
 	_close_offline_report()
 	ResourceManager.reset()
@@ -598,26 +602,26 @@ func _write_save() -> void:
 ## de pausa, con el arbol pausado, y un dialogo pausado no recibe clics.
 func request_new_game(ask_confirm: bool = true) -> CanvasLayer:
 	var dialog: CanvasLayer = NewGameDialogScript.new()
-	dialog.setup(ask_confirm, GameMode.current)
+	dialog.setup(ask_confirm, GameMode.current, GameMode.tier)
 	# El dialogo cuelga de este autoload, que sobrevive a la recarga: si no se
 	# libera tambien al confirmar, cada "Partida nueva" deja uno huerfano.
 	dialog.confirmed.connect(dialog.queue_free)
-	dialog.confirmed.connect(func(): start_new_game(dialog.chosen_mode))
+	dialog.confirmed.connect(func(): start_new_game(dialog.chosen_mode, dialog.effective_tier()))
 	dialog.canceled.connect(dialog.queue_free)
 	add_child(dialog)
 	return dialog
 
 ## Empieza una partida nueva en `mode`, borrando la actual. Irreversible: la UI
 ## llega aqui solo a traves de request_new_game().
-func start_new_game(mode: int) -> void:
-	GameMode.begin_run(mode)
+func start_new_game(mode: int, tier: int = GameMode.TIER_DEFAULT) -> void:
+	GameMode.begin_run(mode, tier)
 	clear_save()
 
 func clear_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
 	# El modo es el que se eligio (start_new_game); se tira el resultado.
-	GameMode.begin_run(GameMode.current)
+	GameMode.begin_run(GameMode.current, GameMode.tier)
 	_run_sealed = false
 	_close_offline_report()
 	GridManager.clear_all()
@@ -657,7 +661,7 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	# Sin guardado, la escena empieza partida nueva en el modo de ahora.
 	var mode_data: Variant = save_data.get("game_mode", {})
 	if save_data.is_empty():
-		GameMode.begin_run(GameMode.current)
+		GameMode.begin_run(GameMode.current, GameMode.tier)
 	else:
 		GameMode.load_save_data(mode_data if mode_data is Dictionary else {})
 	_run_sealed = false
@@ -842,7 +846,20 @@ func reload_keeping_game() -> void:
 ## queda pendiente como cualquier otro guardado y la escritura que la salda es
 ## la que sella.
 func _on_run_ended(_result: String) -> void:
+	GameConfig.record_run_finished(false)
 	save_game()
+
+## Ganar (el asedio, o el Cuartel en Constructor) termina la partida para el
+## perfil; ganar una Campana, ademas, cuenta como Campana ganada.
+func _on_victory_for_profile(_stats: Dictionary) -> void:
+	GameConfig.record_run_finished(GameMode.current == GameMode.Mode.CAMPAIGN)
+
+## Perder la Auditoria en la Campana tambien es llegar al final (se puede volver
+## a convocar, pero la partida ya se jugo entera). En Supervivencia lo anota
+## run_ended, que llega justo despues: no se cuenta dos veces.
+func _on_audit_lost_for_profile(_wave: int) -> void:
+	if GameMode.resummon_allowed():
+		GameConfig.record_run_finished(false)
 
 ## El guardado es de una partida terminada y ya no se escribe.
 func is_run_sealed() -> bool:

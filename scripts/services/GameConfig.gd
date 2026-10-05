@@ -461,6 +461,16 @@ var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
 var ui_layout: Dictionary = {}
 
+# ── Perfil del jugador (settings.cfg [perfil]) ──
+# Del jugador en este dispositivo, NO de la partida: sobrevive a "Nueva partida"
+# y no viaja en save_game.json. Hoy solo sirve para desbloquear Gobernador.
+
+## Partidas llevadas hasta su final: ganar, perder la Auditoria Final o una
+## Supervivencia sellada. GameManager lo anota (record_run_finished).
+var profile_runs_finished := 0
+## Campanas ganadas (Auditoria Final superada).
+var profile_campaigns_won := 0
+
 func _ready() -> void:
 	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
 	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
@@ -528,6 +538,8 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 			ui_hud_hidden.append(str(id))
 	var layout: Variant = cf.get_value("interfaz", "layout", ui_layout)
 	ui_layout = layout.duplicate(true) if layout is Dictionary else {}
+	profile_runs_finished = maxi(0, int(cf.get_value("perfil", "runs_finished", profile_runs_finished)))
+	profile_campaigns_won = maxi(0, int(cf.get_value("perfil", "campaigns_won", profile_campaigns_won)))
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -554,7 +566,22 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
+	cf.set_value("perfil", "runs_finished", profile_runs_finished)
+	cf.set_value("perfil", "campaigns_won", profile_campaigns_won)
 	cf.save(USER_SETTINGS_PATH)
+
+## El perfil ya abre Gobernador: una partida terminada o una Campana ganada.
+## (En dev_mode se ofrece siempre; eso lo decide GameMode.governor_unlocked().)
+func governor_unlocked_by_profile() -> bool:
+	return profile_runs_finished >= 1 or profile_campaigns_won >= 1
+
+## Anota en el perfil que una partida llego a su final (y si fue una Campana
+## ganada) y lo guarda. Lo llama GameManager; nunca toca la partida.
+func record_run_finished(campaign_won: bool) -> void:
+	profile_runs_finished += 1
+	if campaign_won:
+		profile_campaigns_won += 1
+	save_user_settings()
 
 # ── Controles tactiles ──
 
@@ -709,6 +736,33 @@ var market_price_sensitivity := 0.02
 var market_min_price_mult := 0.5
 var market_max_price_mult := 2.5
 var market_mean_reversion := 0.05
+
+## Mercado dinamico (solo Gobernador, GameMode.market_dynamic()): un calendario
+## FIJO que sigue a la Tormenta. Cada fase empuja el precio de lo que el jugador
+## necesita en ella; el patron se repite igual en cada tormenta para que se pueda
+## aprender y aprovechar (comprar madera en la calma, vender antes del Aviso...).
+## Valores: desplazamiento sobre el precio medio (0.30 = +30 %).
+##   warning      Aviso y Ceniza: todos quieren madera para tapiar y reparar.
+##   storm        Tormenta: nadie mueve acero bajo el granizo; se malvende.
+##   after_tithe  Tras el Diezmo: la Regencia ha sacado oro de la isla y lo que
+##                queda vale menos: todo cuesta mas oro (y se vende por mas).
+##   calm         Calma: vuelta a la media.
+var market_calendar := {
+	"calm": {},
+	"warning": {"wood": 0.30},
+	"storm": {"steel": -0.25},
+	"after_tithe": {"wood": 0.15, "steel": 0.15, "oil": 0.15},
+}
+## Cuanto se acerca el precio a su objetivo del calendario en cada tick (0..1).
+## Con 0.35 y ticks de 15 s, un Aviso de 45 s ya lleva la madera a ~+22 %.
+var market_calendar_pull := 0.35
+## El tick del mercado dinamico: mas corto que el de Colono (60 s) para que una
+## fase de 45-60 s se note en el precio.
+var market_dynamic_tick_interval := 15.0
+## Cuanto dura "tras el Diezmo" desde que se resuelve (pagado o repelido).
+var market_after_tithe_seconds := 120.0
+## Por debajo de esta distancia al objetivo la flecha dice "estable".
+var market_trend_deadband := 0.02
 
 # ── Era Config ──
 
@@ -1634,6 +1688,37 @@ var game_mode_rules := {
 		"sandbox_tools": true,
 		"starting_resources": {"gold": 20000, "steel": 20000, "oil": 20000, "wood": 20000},
 		"hidden_tips": ["final_audit"],
+	},
+}
+
+## Niveles de la Campana (GameMode.Tier): "colonist" es el juego de siempre y
+## manda en todo lo que "governor" no diga. Gobernador se desbloquea por perfil
+## (governor_unlocked_by_profile) y es fijo para la partida. docs/20.
+##   spoilage                lo acumulado sin recoger se estropea (lo implementa
+##                           feat/comida-granja-recoger; aqui solo se enciende)
+##   market_dynamic          calendario de la Tormenta + spread y tendencia visibles
+##   combat_hard             enciende los tres multiplicadores de abajo
+##   expedition_enemy_mult   escala (vida y ataque) de los enemigos de expedicion
+##   tithe_force_mult        cuerpos de la escolta del Diezmo
+##   audit_enemy_mult        escala de cada oleada de la Auditoria Final
+## Las cifras de combate salen de tools/siege_probe.gd y tools/balance_probe.gd
+## (docs/16 y docs/17): con la guarnicion maxima el asedio sigue >= 60 %.
+var game_tier_rules := {
+	"colonist": {
+		"spoilage": false,
+		"market_dynamic": false,
+		"combat_hard": false,
+		"expedition_enemy_mult": 1.0,
+		"tithe_force_mult": 1.0,
+		"audit_enemy_mult": 1.0,
+	},
+	"governor": {
+		"spoilage": true,
+		"market_dynamic": true,
+		"combat_hard": true,
+		"expedition_enemy_mult": 1.15,
+		"tithe_force_mult": 1.34,
+		"audit_enemy_mult": 1.06,
 	},
 }
 
