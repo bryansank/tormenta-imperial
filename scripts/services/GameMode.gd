@@ -114,6 +114,10 @@ static func _num(name: String) -> float:
 static func storm_enabled() -> bool:
 	return _flag("storm")
 
+## La tormenta de prueba de la era 1 (sin Diezmo). En Constructor y Sandbox no.
+static func storm_trial_enabled() -> bool:
+	return _flag("storm_trial")
+
 ## Los Tasadores cobran al final de una tormenta.
 static func tithe_enabled() -> bool:
 	return _flag("tithe")

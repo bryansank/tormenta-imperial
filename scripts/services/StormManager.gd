@@ -39,6 +39,11 @@ var _on_demand: bool = false
 ## encima de la partida recien cargada) y espera al primer frame con el juego en
 ## marcha. Transitorio, como el de arriba.
 var _resume_when_running: bool = false
+## La tormenta de prueba de la era 1 mientras pasa (otro StormCycle, con
+## `trial` puesto), y si ya paso o ya no toca. Las dos viajan en el guardado: la
+## prueba sale una vez por partida, tambien si se guarda y se carga en medio.
+var _trial: StormCycle = null
+var _trial_done: bool = false
 
 func _ready() -> void:
 	_cycle = StormCycleScript.create()
@@ -56,6 +61,7 @@ func _process(delta: float) -> void:
 	if _resume_when_running:
 		_resume_when_running = false
 		_resume_tithe()
+	_tick_trial(delta)
 	if _halted or _cycle == null or not is_armed():
 		return
 	_publish(_cycle.advance(delta))
@@ -70,13 +76,29 @@ func get_cycle() -> StormCycle:
 func is_armed() -> bool:
 	return (_armed and GameMode.storm_enabled()) or _on_demand
 
+## La fase que se ve: la de la tormenta de prueba mientras pasa, si no la del
+## reloj de verdad. El cielo, el HUD y la cola leen esta, asi que la prueba se
+## ve y se siente como una tormenta sin tocar el reloj que cuenta.
 func get_phase() -> int:
-	return _cycle.phase if _cycle != null else StormCycle.Phase.CALM
+	var cycle: StormCycle = _visible_cycle()
+	return cycle.phase if cycle != null else StormCycle.Phase.CALM
 
 ## What the storm actually hits with: the severity the base earned by growing,
 ## plus whatever a false alarm deferred onto it.
 func get_severity() -> int:
-	return _cycle.effective_severity() if _cycle != null else 1
+	var cycle: StormCycle = _visible_cycle()
+	return cycle.effective_severity() if cycle != null else 1
+
+func _visible_cycle() -> StormCycle:
+	return _trial if _trial != null else _cycle
+
+## La tormenta de prueba esta pasando (Aviso, Ceniza o Tormenta).
+func is_trial_running() -> bool:
+	return _trial != null
+
+## La tormenta de prueba ya paso (o ya no tocaba: llego la Fundicion antes).
+func is_trial_done() -> bool:
+	return _trial_done
 
 ## Severity a false alarm has postponed onto the next storm. Never shown: the
 ## whole point of deferring it is that the player cannot price the next one.
@@ -84,10 +106,12 @@ func get_deferred_severity() -> int:
 	return _cycle.deferred_severity if _cycle != null else 0
 
 func is_ashfall() -> bool:
-	return _cycle != null and _cycle.is_ashfall()
+	var cycle: StormCycle = _visible_cycle()
+	return cycle != null and cycle.is_ashfall()
 
 func is_storming() -> bool:
-	return _cycle != null and _cycle.is_storming()
+	var cycle: StormCycle = _visible_cycle()
+	return cycle != null and cycle.is_storming()
 
 ## Seconds until the ash starts falling. Dev tooling only — the HUD stopped
 ## counting, and a false alarm can make this number mean nothing at all.
@@ -126,6 +150,8 @@ func is_halted() -> bool:
 func _on_halted_forever() -> void:
 	_halted = true
 	_armed = false
+	_trial = null
+	_trial_done = true
 	GameConfig.event_production_multiplier = 1.0
 	_cycle = StormCycleScript.create()
 	EventBus.storm_phase_changed.emit(StormCycle.Phase.CALM, 0.0)
@@ -141,6 +167,97 @@ func _on_final_audit_lost(_wave: int) -> void:
 
 func _on_phase_advanced(_phase: int) -> void:
 	_check_arming()
+
+# ── La tormenta de prueba (era 1) ────────────────────────────────────
+#
+# Un ensayo guionizado hacia el minuto 5 de partida: Aviso, Ceniza, Tormenta y
+# calma, con los mismos avisos y consejos que la de verdad, pero sin Diezmo, sin
+# romper edificios ni la cola y con poca moral. Va en su propio StormCycle para
+# que el reloj de verdad (que se arma con la Fundicion) no se entere.
+
+## Cuenta la partida hasta la hora de la prueba y la mueve mientras pasa.
+func _tick_trial(delta: float) -> void:
+	if _trial != null:
+		_publish_trial(_trial.advance(delta))
+		return
+	# Solo con una partida en marcha: sin ella no hay a quien ensenarle nada.
+	if GameManager.is_started():
+		check_trial()
+
+## Lanza la prueba si ya toca. Devuelve true si la lanzo. Publica para las pruebas.
+func check_trial() -> bool:
+	if _trial != null or _trial_done or _halted or not GameMode.storm_trial_enabled():
+		return false
+	# Si la Fundicion ya armo la Tormenta de verdad, la prueba sobra: no se
+	# ensaya lo que ya viene de camino.
+	if _armed or ProgressionManager.current_era > 1:
+		_trial_done = true
+		return false
+	if ProgressionManager.get_played_seconds() >= GameConfig.get_storm_trial_at():
+		return start_trial()
+	return false
+
+## Lanza la tormenta de prueba ya. Una sola vez por partida. Publica para las
+## pruebas y la sonda; el juego la lanza solo desde _tick_trial().
+func start_trial() -> bool:
+	if _trial != null or _trial_done or _halted:
+		return false
+	_trial = StormCycleScript.create_trial()
+	_publish_trial(_trial.summon_now())
+	return true
+
+## Lo mismo que _publish() para la de prueba, con sus textos y sin cobro. Las
+## senales son las de siempre: el cielo, el HUD, el sonido y los consejos del
+## tutorial reaccionan igual que a una de verdad.
+func _publish_trial(events: Array) -> void:
+	for event in events:
+		match event.get("e", ""):
+			"phase":
+				var phase: int = int(event["phase"])
+				_on_trial_phase(phase)
+				EventBus.storm_phase_changed.emit(phase, float(event["left"]))
+			"incoming":
+				EventBus.storm_incoming.emit(float(event["seconds"]))
+				EventBus.notification_posted.emit(Tr.t("STORM_TRIAL_INCOMING"), "warning", UITheme.WARNING)
+			"ash_started":
+				EventBus.storm_ash_started.emit()
+				EventBus.notification_posted.emit(Tr.t("STORM_TRIAL_ASH"), "warning", UITheme.WARNING)
+			"storm_started":
+				EventBus.storm_started.emit(int(event["severity"]))
+				EventBus.notification_posted.emit(Tr.t("STORM_TRIAL_STARTED"), "danger", UITheme.DANGER)
+			"storm_tick":
+				_apply_trial_tick(int(event["phase"]))
+				EventBus.storm_tick.emit(int(event["phase"]), float(event["left"]))
+			"storm_ended":
+				EventBus.storm_ended.emit(int(event["severity"]))
+				EventBus.notification_posted.emit(Tr.t("STORM_TRIAL_ENDED"), "info", UITheme.TEXT_DIM)
+
+## Produccion de la prueba: un recorte suave en la Ceniza y en la Tormenta, y de
+## vuelta a 1,0 al escampar. Al volver la calma la prueba se da por cerrada.
+func _on_trial_phase(phase: int) -> void:
+	match phase:
+		StormCycle.Phase.ASH, StormCycle.Phase.STORM:
+			GameConfig.event_production_multiplier = GameConfig.storm_trial_production_multiplier
+		StormCycle.Phase.CALM:
+			GameConfig.event_production_multiplier = 1.0
+			if _trial != null and _trial.finished:
+				_trial = null
+				_trial_done = true
+				_morale_debt = 0.0
+		_:
+			GameConfig.event_production_multiplier = 1.0
+
+## Un tic de la prueba: solo moral, una fraccion de la de verdad. No rompe nada.
+func _apply_trial_tick(phase: int) -> void:
+	var bleed: float = GameConfig.storm_morale_per_tick * float(_trial.effective_severity()) \
+		* GameConfig.storm_trial_morale_factor
+	if phase == StormCycle.Phase.STORM:
+		bleed *= GameConfig.storm_morale_storm_multiplier
+	_morale_debt += bleed
+	var whole: int = int(floor(_morale_debt))
+	if whole > 0:
+		_morale_debt -= float(whole)
+		PopulationManager.adjust_morale(-whole)
 
 # ── Event translation ────────────────────────────────────────────────
 
@@ -208,7 +325,7 @@ func _on_phase_entered(phase: int) -> void:
 ## por tic, asi que no habia forma de que una tormenta leve costara poco: con 24
 ## tics por tormenta, la de severidad 1 se llevaba 96 puntos (docs/22-linea-jugable.md).
 func _apply_storm_tick(phase: int) -> void:
-	var severity: int = get_severity()
+	var severity: int = _cycle.effective_severity()
 	var bleed: float = GameConfig.storm_morale_per_tick * float(severity)
 	if phase == StormCycle.Phase.STORM:
 		bleed *= GameConfig.storm_morale_storm_multiplier
@@ -406,7 +523,7 @@ func _on_encounter_ended(victory: bool, _turns: int) -> void:
 		repel_tithe()
 	else:
 		EventBus.notification_posted.emit(Tr.t("STORM_TITHE_PAID"), "danger", UITheme.DANGER)
-		_pay_tithe(get_severity())
+		_pay_tithe(_cycle.effective_severity())
 
 func _pay_tithe(severity: int) -> void:
 	var taken: Dictionary = _collect_tithe(severity)
@@ -565,6 +682,8 @@ func get_save_data() -> Dictionary:
 	data["armed"] = _armed
 	data["halted"] = _halted
 	data["on_demand"] = _on_demand
+	data["trial_done"] = _trial_done
+	data["trial_storm"] = _trial.to_dict() if _trial != null else {}
 	return data
 
 func load_save_data(data: Dictionary) -> void:
@@ -580,6 +699,19 @@ func load_save_data(data: Dictionary) -> void:
 		GameConfig.event_production_multiplier = 1.0
 	else:
 		_on_phase_entered(_cycle.phase)
+	# La prueba: hecha o no (un guardado de antes no trae la clave: no hecha), y
+	# si se guardo en medio, vuelve en su fase con su recorte de produccion.
+	_trial_done = bool(data.get("trial_done", false)) or _halted
+	_trial = null
+	var trial_data: Variant = data.get("trial_storm", {})
+	if not _trial_done and trial_data is Dictionary and not (trial_data as Dictionary).is_empty():
+		_trial = StormCycleScript.from_dict(trial_data)
+		_trial.trial = true
+		if _trial.finished or _trial.phase == StormCycle.Phase.CALM:
+			_trial = null
+			_trial_done = true
+		else:
+			_on_trial_phase(_trial.phase)
 	_tithe_to_resume = not _halted and _cycle.is_collecting()
 
 ## El Diezmo que la carga trajo pendiente se reclama cuando la escena ya escucha,
@@ -606,7 +738,7 @@ func _resume_tithe() -> void:
 	_tithe_to_resume = false
 	if _halted or _cycle == null or not _cycle.is_collecting():
 		return
-	var severity: int = get_severity()
+	var severity: int = _cycle.effective_severity()
 	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_RESUMED"), "warning", UITheme.WARNING)
 	EventBus.tithe_demanded.emit(severity)
 	_begin_tithe(severity)
@@ -619,6 +751,8 @@ func reset() -> void:
 	_morale_debt = 0.0
 	_on_demand = false
 	_resume_when_running = false
+	_trial = null
+	_trial_done = false
 	GameConfig.event_production_multiplier = 1.0
 
 # ── modos-de-juego ──

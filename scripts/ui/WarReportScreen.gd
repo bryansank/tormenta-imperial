@@ -174,6 +174,9 @@ static func defense_lines(_victory: bool, rounds: int, summary: Dictionary) -> A
 	var crews: int = int(summary.get("tower_crews", 0))
 	if crews > 0:
 		lines.append(Tr.t("LBL_REPORT_TOWER_CREWS") % [crews, int(summary.get("tower_crews_lost", 0))])
+	var towers: int = int(summary.get("towers_damaged", 0))
+	if towers > 0:
+		lines.append(Tr.t("LBL_REPORT_TOWERS_DAMAGED") % towers)
 	var morale: int = int(summary.get("morale_delta", 0))
 	if morale != 0:
 		lines.append(Tr.t("LBL_MORALE_DELTA") % morale)

@@ -62,8 +62,10 @@ var _next_uid: int = 1
 # ── Construction ─────────────────────────────────────────────────────
 
 ## Calls the audit down. `garrison_counts` is `unit_id -> count` as it stands at
-## home: whatever is there is what fights every wave. `p_morale` freezes the
-## town's spirit for the whole siege, the way an expedition freezes it at launch.
+## home: whatever is there is what fights every wave. `p_morale` is only the
+## spirit at summon time, a preview: the one that counts is read when the gate
+## opens (`begin()`), and from then on it is frozen for the whole siege, the way
+## an expedition freezes it at launch.
 ##
 ## The siege opens PENDING, not ACTIVE: being summoned and being under attack are
 ## two different things, and the player is owed the moment in between.
@@ -111,7 +113,7 @@ func _build_waves() -> void:
 		})
 
 ## Turns whatever is at home into the garrison, stamping each unit with the
-## spirit the town had when the Regency was summoned. Returns what it built.
+## spirit in `morale_snapshot`. Returns what it built.
 func _muster(garrison_counts: Dictionary) -> Array:
 	var attack_mod: float = Rules.morale_attack_mod(morale_snapshot)
 	var initiative_bonus: int = Rules.morale_initiative_bonus(morale_snapshot)
@@ -122,6 +124,14 @@ func _muster(garrison_counts: Dictionary) -> Array:
 			unit.morale_initiative_bonus = initiative_bonus
 			garrison.append(unit)
 	return garrison
+
+## Vuelve a sellar a cada unidad con la moral de `morale_snapshot`.
+func _apply_morale(units: Array) -> void:
+	var attack_mod: float = Rules.morale_attack_mod(morale_snapshot)
+	var initiative_bonus: int = Rules.morale_initiative_bonus(morale_snapshot)
+	for unit in units:
+		unit.morale_attack_mod = attack_mod
+		unit.morale_initiative_bonus = initiative_bonus
 
 # ── Wave shape ───────────────────────────────────────────────────────
 
@@ -293,10 +303,20 @@ func release_survivors() -> void:
 ## never re-mustered (that would heal the wounded and raise the dead); it is only
 ## reconciled, so nobody who has left the army since keeps fighting in it.
 ## `null` keeps the garrison as it is.
-func begin(garrison_counts: Variant = null) -> Array:
+##
+## La moral, igual: `p_morale` es la del pueblo al pulsar QUE BAJEN (decision de
+## Bryan, 2026-10-04). Entre convocar y abrir la puerta la moral se mueve —una
+## tormenta, un Diezmo, una fiesta— y el asedio se pelea con el animo de ese
+## momento, no con el de cuando se convoco. Solo la primera vez: un asedio ya
+## empezado conserva la suya (recargar no puede cambiarle el animo a una
+## guarnicion que ya esta peleando). Negativa = la que ya hay.
+func begin(garrison_counts: Variant = null, p_morale: float = -1.0) -> Array:
 	if not is_pending():
 		return []
 	var events: Array = []
+	if not started and p_morale >= 0.0:
+		morale_snapshot = p_morale
+		_apply_morale(garrison)
 	if garrison_counts != null:
 		if not started:
 			garrison = []

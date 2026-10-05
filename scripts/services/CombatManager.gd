@@ -381,6 +381,36 @@ func count_standing_towers() -> int:
 			standing += 1
 	return standing
 
+## Una dotacion que cae en un tablero deja su torre **dañada** (decision de
+## Bryan, 2026-10-04): la torre no se defiende sola, alguien tiene que
+## reparar el puesto que se quedo sin gente. Daña una torre en pie por cada
+## dotacion caida, la mas entera primero, en `storm_tower_crew_loss_damage` de
+## su vida maxima, y **nunca la deja en ruinas**: sigue mitigando y poniendo dotacion,
+## pero hay que pagar la reparacion. Devuelve cuantas torres dañó.
+func damage_towers_for_lost_crews(crews_lost: int) -> int:
+	if crews_lost <= 0:
+		return 0
+	var towers: Array = []
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info["data"]
+		if data == null or data.id != GameConfig.storm_tower_building_id:
+			continue
+		if BuildingHealth.is_operational(info["node"]):
+			towers.append(info["node"])
+	towers.sort_custom(func(a, b): return BuildingHealth.get_health(a) > BuildingHealth.get_health(b))
+	var damaged: int = 0
+	for node in towers:
+		if damaged >= crews_lost:
+			break
+		var max_health: int = BuildingHealth.get_max_health(node)
+		var amount: int = maxi(1, roundi(float(max_health) * GameConfig.storm_tower_crew_loss_damage))
+		amount = mini(amount, BuildingHealth.get_health(node) - 1)
+		if amount <= 0:
+			continue
+		BuildingHealth.damage_building(node, amount)
+		damaged += 1
+	return damaged
+
 ## Cuántas unidades suma un roster unit_id -> count.
 func roster_size(roster: Dictionary) -> int:
 	var total := 0
@@ -771,6 +801,9 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 	if morale_delta != 0:
 		PopulationManager.adjust_morale(morale_delta)
 
+	var crews_lost: int = fallen.size() - roster_fallen.size()
+	var towers_damaged: int = damage_towers_for_lost_crews(crews_lost) if encounter.is_defense else 0
+
 	_last_result = {
 		"victory": victory,
 		"rounds": rounds,
@@ -781,7 +814,9 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 		"morale_delta": morale_delta,
 		# Para que el parte de la defensa pueda decir cuánto pusieron las torres.
 		"tower_crews": crew_uids.size(),
-		"tower_crews_lost": fallen.size() - roster_fallen.size(),
+		"tower_crews_lost": crews_lost,
+		# Torres que quedaron dañadas por perder su dotación (hay que repararlas).
+		"towers_damaged": towers_damaged,
 		# Lo que cayo del otro lado: el parte de una defensa resuelta a ciegas
 		# tiene que contar las dos columnas, no solo la nuestra.
 		"enemy_casualties": _count_by_unit(encounter.casualties(Encounter.ENEMY)),
@@ -1042,6 +1077,7 @@ func _apply_expedition_encounter(victory: bool, rounds: int) -> void:
 		"morale_delta": 0,
 		"tower_crews": 0,
 		"tower_crews_lost": 0,
+		"towers_damaged": 0,
 	}
 
 func _publish_expedition_followups() -> void:
@@ -1130,6 +1166,7 @@ func _resolve_expedition(result: int) -> void:
 		"boss_defeated": bool(summary.get("boss_defeated", false)),
 		"tower_crews": 0,
 		"tower_crews_lost": 0,
+		"towers_damaged": 0,
 	}
 
 	_expedition = null

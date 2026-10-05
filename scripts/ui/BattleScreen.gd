@@ -1037,6 +1037,11 @@ func _result_text(turns_used: int) -> String:
 	else:
 		lines.append("%s: %s" % [Tr.t("LBL_CASUALTIES"), _unit_list(casualties)])
 
+	# Una dotacion caida deja su torre dañada (CombatManager.damage_towers_for_lost_crews).
+	var towers: int = int(result.get("towers_damaged", 0))
+	if towers > 0:
+		lines.append(Tr.t("LBL_REPORT_TOWERS_DAMAGED") % towers)
+
 	var morale_delta: int = int(result.get("morale_delta", 0))
 	if morale_delta != 0:
 		lines.append(Tr.t("LBL_MORALE_DELTA") % morale_delta)

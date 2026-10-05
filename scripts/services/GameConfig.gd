@@ -254,11 +254,19 @@ func get_material_of(building_id: String) -> String:
 
 # ── Mining Data ──
 
+## Era 1 de 8-12 minutos (decision de Bryan, 2026-10-04). Con 20 de oro cada
+## 12 s y 20 de madera cada 8 s, dos obreros minando a mano sacaban 2,5 veces lo
+## que una Mina de oro con tres, y el jugador que minaba llegaba a la Fundicion
+## en el minuto 3,8 (tools/line_probe.gd --active=1, docs/22-linea-jugable.md).
+## Ahora la veta y el bosque rinden por obrero lo mismo que su extractor (oro
+## 12/30 s = 12 por obrero y minuto, la Mina 13,3; madera 10/20 s = 15, el
+## Aserradero 15): minar sirve para arrancar o para un apuro, no es la via rapida.
+## Hierro y petroleo (eras 2-3) no cambian.
 var mining_data := {
-	"gold_vein": {"id": "mine_gold", "name": "PROC_MINE_GOLD", "duration": 12.0, "produces": {"gold": 20}},
+	"gold_vein": {"id": "mine_gold", "name": "PROC_MINE_GOLD", "duration": 30.0, "produces": {"gold": 12}},
 	"iron_deposit": {"id": "mine_iron", "name": "PROC_MINE_IRON", "duration": 18.0, "produces": {"steel": 15}},
 	"oil_well": {"id": "mine_oil", "name": "PROC_MINE_OIL", "duration": 22.0, "produces": {"oil": 10}},
-	"forest": {"id": "mine_wood", "name": "PROC_MINE_WOOD", "duration": 8.0, "produces": {"wood": 20}},
+	"forest": {"id": "mine_wood", "name": "PROC_MINE_WOOD", "duration": 20.0, "produces": {"wood": 10}},
 }
 
 ## Trabajadores que ocupa sacar una veta a mano mientras dura (2026-09-28):
@@ -575,11 +583,12 @@ var _real_touch_seen := false
 ## Si los controles en pantalla deben verse ahora, resolviendo el "auto".
 ## Es la unica pregunta que hace OnScreenControls.
 ##
-## "auto" sigue al perfil de dispositivo (DeviceProfile): tablet y movil los
-## llevan, PC NUNCA (norma de Bryan). Ni DisplayServer.is_touchscreen_available()
-## ni un toque real los encienden en un PC: un portatil Windows tactil que se
-## toca una vez no se llena de flechas. Quien los quiera en PC elige "Siempre"
-## o el perfil Tablet.
+## "auto" = solo movil y tablet (decision de Bryan, 2026-10-04): sigue al perfil
+## de dispositivo (DeviceProfile), y en PC NUNCA. Ni
+## DisplayServer.is_touchscreen_available() ni un toque real los encienden en un
+## PC: un portatil Windows tactil que se toca una vez no se llena de flechas. El
+## portatil tactil elige "Siempre" a mano (lo dice LBL_TOUCH_AUTO_HINT en
+## Ajustes), o el perfil Tablet.
 func touch_controls_enabled() -> bool:
 	match ui_touch_controls:
 		"always":
@@ -1297,6 +1306,28 @@ var storm_arm_phase: int = Phase.EXPANSION
 var storm_first_interval := 600.0
 var storm_first_severity := 1
 
+## La tormenta de prueba de la era 1 (decision de Bryan, 2026-10-04). Sin ella la
+## era 1 eran 8-10 minutos sin otra presion que el consumo, y la primera Tormenta
+## llegaba de nuevas con los Tasadores detras. Esta es un ensayo: Aviso, Ceniza,
+## Tormenta y calma, con los consejos del Aviso, pero SIN Diezmo, sin romper
+## edificios ni la cola y con un mordisco de moral pequeno. Una vez por partida, y
+## no arma el reloj de verdad (ese sigue llegando con la Fundicion).
+##
+## `storm_trial_at` son segundos de partida jugados (ProgressionManager), no de
+## reloj de pared; pasan por get_duration(), asi que dev_mode los comprime. Si la
+## Fundicion llega antes, la prueba ya no hace falta y no sale.
+var storm_trial_at := 300.0
+var storm_trial_severity := 1
+## Lo que deja producir durante su Ceniza y su Tormenta: bastante mas que una de
+## verdad (0,5 y 0,15). Se nota, no hunde.
+var storm_trial_production_multiplier := 0.75
+## Fraccion del mordisco de moral de una tormenta normal. Con 0,25 una de
+## severidad 1 se lleva 3 puntos en vez de 12.
+var storm_trial_morale_factor := 0.25
+
+func get_storm_trial_at() -> float:
+	return get_duration(storm_trial_at)
+
 ## One Warning in four turns out to be nothing. The player still paid to prepare,
 ## and the Regency loses nothing by crying wolf — which is the point.
 var storm_false_alarm_chance := 0.25
@@ -1513,6 +1544,10 @@ var storm_tower_garrison_unit := "artillery"
 ## la mitigación: una fila de torres no puede convertir el Diezmo en un trámite.
 var storm_tower_garrison_per_tower := 1
 var storm_tower_garrison_max := 2
+## Lo que pierde una torre cuando cae su dotacion en un tablero (Diezmo o
+## Auditoria), como fraccion de su vida maxima. Queda dañada, nunca en ruinas:
+## sigue en pie, pero hay que repararla (CombatManager.damage_towers_for_lost_crews).
+var storm_tower_crew_loss_damage := 0.4
 
 ## Cuántas dotaciones se suman a la guarnición.
 ##
@@ -1756,6 +1791,8 @@ var final_audit_resummon_min_units := 3
 var game_mode_rules := {
 	"campaign": {
 		"storm": true,
+		# La tormenta de prueba de la era 1 (storm_trial_*).
+		"storm_trial": true,
 		"tithe": true,
 		"audit_on_capstone": true,
 		"capstone_wins": false,
@@ -1779,6 +1816,7 @@ var game_mode_rules := {
 	# los danos (tormenta menor, accidente, plaga, bandidos) no salen.
 	"builder": {
 		"storm": false,
+		"storm_trial": false,
 		"tithe": false,
 		"audit_on_capstone": false,
 		"capstone_wins": true,
@@ -1800,6 +1838,7 @@ var game_mode_rules := {
 	# la Auditoria solo cuando se invocan a mano. Sin victoria.
 	"sandbox": {
 		"storm": false,
+		"storm_trial": false,
 		"audit_on_capstone": false,
 		"victory": false,
 		"random_events": false,
