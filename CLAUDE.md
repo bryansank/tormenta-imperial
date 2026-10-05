@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET. The player builds and manages a persistent base on a procedurally generated island, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop is complete (economy, population, market, tech tree, army training, audio). Turn-based PVE combat is live: an 8x8 tactical board, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, and the Final Audit — in Campaña HQ level 3 no longer wins, it summons a 3-5 wave siege you have to survive. Around that core: four game modes, a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done and what is left.
+**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET. The player builds and manages a persistent base on a procedurally generated island (a 40x40 to 48x48 grid rolled per game, 3-6 deposits of each type), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop is complete (economy with workshop materials, population, market and laboratory as buildings, tech tree, army training, audio). Turn-based PVE combat is live: an 8x8 tactical board, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, and the Final Audit — in Campaña HQ level 3 no longer wins, it summons a 3-5 wave siege you have to survive. Around that core: four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done and what is left.
 
 Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
@@ -14,12 +14,12 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1360 tests in 102 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1440 tests in 109 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
   ```
-  (`tools\run_tests.ps1` on PowerShell; extra args go to GdUnitCmdTool). It writes a temporary `override.cfg` so the run gets its own user dir (`%APPDATA%\TormentaImperial_tests`, override with `TI_TEST_USER_DIR`; it refuses the player's dir names), runs headless with `--ignoreHeadlessMode`, and removes the file on exit. Never call `GdUnitCmdTool.gd` directly: that runs in the editor's user dir, where the player's `save_game.json` lives. As a backstop, `tests/save/save_parking.gd` refuses to park in the player's dir and the suites that write the save skip themselves there
+  (`tools\run_tests.ps1` on PowerShell; extra args go to GdUnitCmdTool). It writes a temporary `override.cfg` so the run gets its own user dir (`%APPDATA%\TormentaImperial_tests`, override with `TI_TEST_USER_DIR`; it refuses the player's dir names), runs headless with `--ignoreHeadlessMode`, and removes the file on exit. Never call `GdUnitCmdTool.gd` directly: that runs in the editor's user dir, where the player's `save_game.json` lives. As a backstop, `tests/save/save_parking.gd` refuses to park in the player's dir and the suites that write the save skip themselves there. Two traps in a **fresh worktree**: `addons/gdUnit4/bin/` (where `GdUnitCmdTool.gd` lives) is caught by the `bin/` rule of `.gitignore`, so it has to be copied from a checkout that has it; and there is no `.godot/` yet, so run one headless `--import` first (with its own `override.cfg`)
 - **Backend:** Supabase (CloudSaveManager implements auth + save/load via REST, but nothing calls it yet — needs `.env` config and UI wiring)
 - **Multiplayer:** none. PvP and co-op are out of scope for v1 (constitution v2.0.0 dropped the old Nakama plan; if PvP ever happens it would sit on Supabase)
 
@@ -29,7 +29,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 2. Press **F5** to run. The title menu (`TitleMenu`) opens first over the loaded game
 3. WASD / arrows to pan, Q/E or right-drag to rotate, scroll to zoom, middle-drag or left-drag on the ground to grab-pan, F11 fullscreen
 4. Touch: one finger grabs the terrain, two-finger pinch to zoom and twist to rotate (3D only); tap to aim a building, tap the ghost / ✓ to build (docs/21 §9)
-5. A fresh game: ☰ MENÚ → Menú principal → Nueva partida (mode picker). Deleting `user://save_game.json` also works
+5. A fresh game: ☰ MENÚ → Menú principal → Nueva partida (mode picker; today it only offers Campaña). Deleting `user://save_game.json` also works
 6. **2D view:** Settings → Map view, or `godot --path . -- --view=2d`. Same services, UI and save; only the world view differs (`scenes/main/Main2D.tscn`, `scripts/view2d/`). See `docs/18-vista-2d.md`
 7. **User args** (after `--`): `--view=2d|3d`, `--no-title` (skip the title menu, used by probes), `--dev` / `--no-dev` (force `dev_mode`, see "Dev Mode")
 8. **Your save lives in the editor's user dir** (`%APPDATA%\Godot\app_userdata\Tormenta Imperial`). Anything that plays or writes saves outside a normal play session (probes, experiments, a second agent) needs a git-ignored `override.cfg` at the project root with its own dir, deleted afterwards:
@@ -112,15 +112,15 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- GridOverlay (MeshInstance3D) -- faint cell grid, on by default (Settings toggle), fitted to GridManager at runtime
   +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist
   +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" follows the device profile (tablet/phone yes, PC no)
-  +-- ResourceHUD (CanvasLayer 10) -- top-left card: named resources + ALMACÉN COMPARTIDO bar with legend
+  +-- ResourceHUD (CanvasLayer 10) -- top-left card: named resources + ALMACÉN COMPARTIDO bar with legend + TALLER row (materials, once one is unlocked)
   +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), none on the Núcleo sidewalk or the shore band, each with room and a road path for its extractor; `shore_cells()` is the hook for future sea/shore resources
   +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + building list
-  +-- BuildingInfoPanel (CanvasLayer 10) -- right panel: selected building / deposit info
-  +-- MarketPanel (CanvasLayer 11) -- buy/sell UI
+  +-- BuildingInfoPanel (CanvasLayer 10) -- right panel: selected building / deposit info; RETIRAR / PONER TRABAJADORES; ABRIR MERCADO / INVESTIGAR on the Market / Laboratory (`SCREENS`)
+  +-- MarketPanel (CanvasLayer 11) -- buy/sell UI, opened from a Market building (not from the menu)
   +-- ProgressPanel (CanvasLayer 11) -- milestones + era display
   +-- VictoryScreen (CanvasLayer 20) -- victory overlay
-  +-- NotificationPanel (CanvasLayer 11) -- activity log + toasts + status (Habitantes / Obreros / Moral in words)
-  +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI
+  +-- NotificationPanel (CanvasLayer 11) -- status (Trabajadores / En su puesto · libres / Moral in words) + toasts (only warning, danger and notice) + the activity log, opened from ☰ MENÚ → REGISTRO
+  +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI, opened from a Laboratory building (not from the menu)
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step()
   +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign
   +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
@@ -142,7 +142,9 @@ Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
   +-- OnScreenControls ... TitleMenu -- the same 23 UI nodes as above
 
 Created at runtime, not in either .tscn:
-  PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore as a Regency dossier
+  PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, three folios in plain language
+  QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks, once per game after the prologue
+  WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: worker figures walking the roads (view only)
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker, created by GameManager.request_new_game()
   LayoutEditor (layer 35, scripts/ui/LayoutEditor.gd) -- EDITAR DISPOSICIÓN (Settings), created by UILayoutManager
@@ -153,8 +155,11 @@ UI panels are positioned by `UILayoutManager` using the slot definitions in
 anchors (`tip_*`) —, `NARROW_SLOTS` / `COLUMN_SLOTS` for narrow canvases, panel->slot map, slot
 conflicts).
 `UIManager.open_panel()` handles stacking and closes conflicting panels.
-All styling comes from the static `UITheme` class (dieselpunk metal 9-patch
-textures generated by `tools/gen_ui_textures.gd`). Its colours and font sizes are
+All styling comes from the static `UITheme` class. Panels and buttons are plain
+boxes since 2026-09-28 (`UITheme.METAL_TEXTURES = false`; the metal 9-patch
+textures generated by `tools/gen_ui_textures.gd` stay in `assets/` in case they
+come back), and every `ScrollContainer` drags with finger or mouse
+(`scripts/ui/DragScroll.gd`, hooked by UIManager). Its colours and font sizes are
 **tokens** (`static var`) rewritten by `UITheme.configure()` (colour-blind
 palettes, high contrast, panel opacity, text size): use `UITheme.POSITIVE` etc.,
 never hand-written colours. Every token comes from one 10-colour palette
@@ -202,26 +207,40 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (14 total)
+### Buildings (16 total, `data/buildings/*.tres`)
 
-| Building | Size | Cost (G/S/O/W) | Workers | Production | Era |
+| Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
-| Nucleo (core) | 3x3 | Free | 0 | +5 pop capacity; manual processes only | - |
-| House | 2x2 | 50/0/0/30 | 0 | +6 workers (room in houses) | 1 |
-| Sawmill | 2x2 | 80/0/0/50 | 2 | 6 wood/12s | 1 |
-| Gold Mine | 2x2 | 120/0/0/80 | 3 | 8 gold/12s | 1 |
-| Warehouse | 2x2 | 60/0/0/40 | 1 | +500 shared storage | 1 |
-| Foundry | 2x2 | 200/0/0/120 | 3 | 5 steel/15s | 1->2 |
-| Barracks | 2x2 | 250/100/0/80 | 3 | Trains units (ArmyManager) | 2 |
-| Refinery | 2x2 | 300/150/0/100 | 4 | 4 oil/18s | 2->3 |
-| Tower | 2x2 | 150/60/20/30 | 1 | Storm mitigation + an artillery crew on defensive boards (only while operational) | 2-3 |
-| HQ (capstone) | 2x2 | 500/300/200/200 | 5 | 10 gold/20s | 3 |
-| Road | 1x1 | 1/0/0/0 | 0 | +2 morale | deco |
+| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only | - |
+| House | 2x2 | 50/0/0/30 | 0 | +6 workers (room in houses; 9 / 12 at levels 2 / 3) | 1 |
+| Sawmill | 2x2 | 80/0/0/50 | 2 | 6 wood/12s; makes planks | 1 |
+| Gold Mine | 2x2 | 120/0/0/80 | 3 | 8 gold/12s; makes ingots | 1 |
+| Warehouse | 2x2 | 60/0/0/40 | 1 | +500 shared storage (+250 per level above 1) | 1 |
+| Market | 2x2 | 100/0/0/60 | 1 | Opens the market (ABRIR MERCADO); needs a Gold Mine; max 1 | 1 |
+| Laboratory | 2x2 | 150/0/0/100 | 2 | Opens the tech tree (INVESTIGAR); needs a House; max 1 | 1 |
+| Foundry | 2x2 | 200/0/0/120 | 3 | 5 steel/15s; makes beams | 1->2 |
+| Barracks | 2x2 | 250/100/0/80 + 10 planks | 3 | Trains units (ArmyManager) | 2 |
+| Refinery | 2x2 | 300/150/0/100 + 6 beams | 4 | 4 oil/18s; makes fuel | 2->3 |
+| Tower | 2x2 | 150/60/20/30 + 4 beams | 1 | Storm mitigation + an artillery crew on defensive boards (only while operational) | 2-3 |
+| HQ (capstone) | 2x2 | 500/300/200/200 + 20 beams, 10 ingots, 10 fuel | 5 | 10 gold/20s | 3 |
+| Road | 1x1 | 1/0/0/0 | 0 | +2 morale; instant; joins everything to the Núcleo | deco |
 | Garden | 2x2 | 30/0/0/20 | 0 | +5 morale | deco |
 | Fountain | 2x2 | 60/20/0/10 | 0 | +7 morale | deco |
-| Statue | 2x2 | 120/40/0/0 | 0 | +10 morale | deco |
+| Statue | 2x2 | 120/40/0/0 + 3 ingots | 0 | +10 morale | deco |
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
+
+**Market and Laboratory (2026-09-28):** trade and research are no longer entries of
+☰ MENÚ. Each opens by tapping its building (`BuildingInfoPanel.SCREENS`: ABRIR
+MERCADO / INVESTIGAR, disabled while the building has no road); ¿QUÉ HACER? asks for
+the Laboratory before research and does not suggest trading without a Market.
+
+**Upgrades** only exist where they give something (`PlacementRules.upgrade_does_something()`):
+producers (x1.6 / x2.5), houses (room x1.5 / x2), the warehouse (+250 per level),
+decorations with morale (x1.5 / x2) and the HQ (its level 3 summons the Audit). The
+Barracks, Tower, Road and Núcleo offer no upgrade. The panel lists what the next level
+gives with real numbers (`upgrade_effect_lines()`), and in 3D the building grows and
+carries a II / III plate.
 
 ### Materials (2026-09-28)
 
@@ -280,9 +299,20 @@ AYUDA index.
 
 ### Population & Workers
 
-- **PopulationManager** tracks: population, max capacity, used workers, morale
-- Nucleo provides 5 starting pop capacity. Houses provide 6 each
-- Each production building requires workers (see table above)
+- **PopulationManager** tracks: population, max capacity, used workers, morale. The UI
+  calls the people **trabajadores** everywhere ("Trabajadores: 12 de 17", "En su
+  puesto: 8 · libres: 4")
+- Nucleo provides 5 starting room. Houses provide 6 each
+- Each production building requires workers (see table above), first built = first served
+- **Retirar / poner trabajadores:** `PopulationManager.set_workers_off(node, off)` (button
+  in BuildingInfoPanel) frees a building's workers for others and stops it; saved per
+  building as `workers_off`. Badge: "sin trabajadores (retirados)"
+- **No vein, no work:** a Sawmill, Gold Mine or Foundry whose deposit was mined out by
+  hand stops (`PlacementRules.has_its_deposit()`, meta `has_vein`, badge "sin veta")
+- **Manual mining takes workers:** mining a deposit by hand holds
+  `GameConfig.mining_workers` (2) while it lasts and needs the deposit to touch a road
+  joined to the Núcleo (`ProcessManager.mining_blocker()`: `MINE_NEEDS_ROAD` /
+  `MINE_NEEDS_WORKERS`)
 - Population grows +1 per tick (20s) if morale > 30 and housing available
 - **Consumption:** Each pop consumes 1 wood + 1 gold per 30s tick
 - If can't pay: morale drops -8/tick. If paid: morale recovers +3/tick
@@ -296,6 +326,7 @@ AYUDA index.
 
 ### Market (Imperial Exchange)
 
+- Opened by tapping a Market building (ABRIR MERCADO); there is no menu entry any more
 - Gold is the currency. Buy/sell wood, steel, oil for gold
 - Floating prices with 30% spread (buy higher, sell lower)
 - Price base: wood=3, steel=8, oil=12 gold/unit
@@ -354,7 +385,8 @@ Full detail in `docs/15-combat.md` §6 and `docs/20-modos-de-juego.md`.
 **Only Campaña is offered today (2026-09-28).** `GameMode.OFFERED` lists the modes
 the New Game dialog shows; Constructor, Supervivencia and Sandbox are commented out
 there — their cards are built but hidden, and their rules, saves and tests stay
-intact (an old save in one of them still loads). Uncomment a line to bring it back.
+intact (an old save in one of them still loads, and its Nueva partida opens the
+picker on Campaña). Uncomment a line to bring it back.
 
 Four modes, picked in the New Game dialog (`NewGameDialog`, opened by
 `GameManager.request_new_game()` from every entry point) and fixed for the run:
@@ -444,6 +476,8 @@ PNG is missing.
 - Research costs **resources** (not points) and takes time; only one tech at a time.
 - Bonuses are permanent: production multiplier, storage, consumption reduction,
   morale recovery (Military branch), market spread / build speed (Logistics).
+- The panel opens from a Laboratory building (INVESTIGAR), not from the menu, and explains
+  what the tree is, what each branch does and each tech's gain with its numbers and lore.
 - No HQ requirement (deliberate: the HQ is era 3). The old vestigial `_research_points`
   counter was removed; a `research_points` key in old saves is ignored.
 
@@ -526,7 +560,7 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 102 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 109 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
@@ -535,11 +569,11 @@ tormenta-imperial/
 |   +-- main/Main2D.tscn             # The 2D view: same UI nodes, 2D world nodes
 |   +-- buildings/BuildingPlacer.tscn
 |   +-- ui/                          # One .tscn per panel (25), incl. PrologueScreen and HelpIndexPanel
-+-- scripts/                         # 101 .gd files, ~34.5k lines
++-- scripts/                         # 104 .gd files, ~37k lines
 |   +-- buildings/
 |   |   +-- BuildingData.gd          # Resource class for building definitions (get_display_name())
 |   |   +-- BuildingPlacer.gd        # 3D placement/move/demolish + mesh spawning
-|   |   +-- PlacementRules.gd        # Shared placement rules (deposit adjacency, footprint) for 3D and 2D
+|   |   +-- PlacementRules.gd        # Shared placement rules for 3D and 2D: deposit adjacency, footprint, road network and auto-road, upgrade effects
 |   |   +-- PlacementAssist.gd       # Touch placement (tap aims, tap ghost/✓ builds), valid-spot highlight — docs/21 §9
 |   |   +-- BuildingStatusBadge.gd   # Worker pictogram / "Zzz" + why a building is stopped (3D)
 |   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes (fallback when there is no GLB)
@@ -558,7 +592,8 @@ tormenta-imperial/
 |   |   +-- GridOverlayControl.gd    # Applies the grid toggle to the 3D overlay
 |   +-- map/
 |   |   +-- IslandGenerator.gd       # Procedural island mesh
-|   |   +-- MapGenerator.gd          # Random deposit spawning
+|   |   +-- MapGenerator.gd          # Random deposits: 3-6 per type, room and a road path for each extractor
+|   |   +-- WorkerWalkers.gd         # Worker figures walking the road network (view only, 3D and 2D)
 |   |   +-- StormSky.gd              # Autoload: sky/light during the storm
 |   +-- storm/StormCycle.gd          # PURE model: the storm's phase clock
 |   +-- services/                    # The 25 game autoloads (table above) + BeckettGate.gd
@@ -566,14 +601,14 @@ tormenta-imperial/
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
 |   |   +-- FloatingText.gd          # Static utility: animated 3D text labels
-|   +-- ui/                          # 38 scripts: one per panel, plus
+|   +-- ui/                          # 40 scripts: one per panel, plus
 |   |   +-- UITheme.gd               # Static dieselpunk theme: tokens, fonts, styleboxes, unit icons
 |   |   +-- UILayoutConfig.gd        # Screen slots, panel->slot map, conflicts
 |   |   +-- HudRegistry.gd, LayoutEditor.gd        # Hideable/movable HUD elements, the layout editor
 |   |   +-- ModalKit.gd              # Builds the war-report / dialog cards from UITheme pieces
 |   |   +-- PauseMenu.gd, TitleMenu.gd, NewGameDialog.gd, PauseWatcher.gd
 |   |   +-- BattleScreen.gd, SkirmishPanel.gd, WarReportScreen.gd, AuditWaveBanner.gd, AuditDefeatScreen.gd
-|   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd
+|   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd
 |   |   +-- HelperPanel.gd, HelpCallout.gd, HelpCatalog.gd, HelpTargets.gd, HelpIndexPanel.gd
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
@@ -583,10 +618,10 @@ tormenta-imperial/
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd
-+-- data/buildings/                  # 14 .tres building definitions
++-- data/buildings/                  # 16 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
-|   +-- models/buildings/<id>/       # GLB models (12 of 14 buildings)
+|   +-- models/buildings/<id>/       # GLB models (12 of the 16 buildings use one)
 |   +-- textures/                    # metal_plate PBR maps; ui/ 9-patch sprites, ui/icons/, ui/units/ (silhouettes)
 |   +-- fonts/, branding/            # Fonts with their licences; logo, banner, key art
 +-- tools/
@@ -623,9 +658,11 @@ Note: unit and tech definitions live as inline dictionaries in `GameConfig.gd`
 
 Building 3D meshes come from **two** sources. `BuildingPlacer._create_building_mesh()`
 prefers a building's `model_scene` (a GLB under `assets/models/buildings/<id>/`) and
-falls back to `DieselpunkBuildingFactory` when it is unset. **12 of the 14 buildings
-ship a GLB**; only `nucleo` and `road` are procedural today (road needs the factory
-because its mesh is connectivity-aware).
+falls back to `DieselpunkBuildingFactory` when it is unset. **12 of the 16 buildings
+ship a GLB**; `nucleo`, `road`, `market` and `laboratory` are procedural today (road
+needs the factory because its mesh is connectivity-aware; the Market and the
+Laboratory have no model yet). GLBs made for 1x1 or 2x1 fill their 2x2 plot through
+`model_scale` / `model_stretch`.
 
 ---
 
@@ -649,7 +686,9 @@ because its mesh is connectivity-aware).
 
 ### Adding a New Building
 
-1. Create `data/buildings/my_building.tres` with BuildingData fields
+1. Create `data/buildings/my_building.tres` with BuildingData fields (at least 2x2: only the
+   road is 1x1; materials go in `cost_materials`). It will need a road to the Núcleo like
+   everything else
 2. Add limit in `GameConfig.building_limits`
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any), and a row in `GameConfig.building_deposit_rules` if it must touch a deposit
@@ -737,7 +776,7 @@ All balance values live in `GameConfig.gd`:
 ### Shared Utilities
 
 - **FloatingText** (`scripts/services/FloatingText.gd`): Static class for spawning animated 3D text labels. Use `FloatingText.spawn()` for custom text or `FloatingText.spawn_resource()` for resource gain/loss display (`spawn_on()` / `spawn_resource_on()` work on any node, 2D included; the 2D view draws them with `FloatingText2D`). Colors come from `GameConfig.resource_colors`.
-- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and ConstructionMenu previews **as the fallback when a building has no `model_scene` GLB** — today that is only `nucleo` and `road`.
+- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and ConstructionMenu previews **as the fallback when a building has no `model_scene` GLB** — today that is `nucleo`, `road`, `market` and `laboratory`.
 - **UITheme** (`scripts/ui/UITheme.gd`): Static theme — call its factories for any new UI instead of hand-styling controls.
 
 ### Dev Mode
