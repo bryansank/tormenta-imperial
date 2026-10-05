@@ -1,7 +1,7 @@
 # Tormenta Imperial — Documentation Index
 
 Complete technical documentation for AI and developer context. `CLAUDE.md` (root) is
-the operational guide; these are the per-system deep dives. Docs 14 and 16-23 are in
+the operational guide; these are the per-system deep dives. Docs 14 and 16-25 are in
 Spanish, the rest in English.
 
 ## Documents
@@ -32,6 +32,7 @@ Spanish, the rest in English.
 | 22 | [Línea jugable](22-linea-jugable.md) | The whole campaign at real timings (`tools/line_probe.gd`, ten seeds, before/after), dead ends fixed, storm/Tithe pacing, the ¿QUÉ HACER? panel, remaining risks and open decisions, human playtest checklist |
 | 23 | [Prólogo, tutorial y ayudas](23-onboarding.md) | The lore as a Regency dossier (`PrologueScreen`), the guided coach-mark tutorial on the real UI, the help callouts one at a time, the AYUDA index (`HelpIndexPanel`) |
 | 24 | [Paleta](24-paleta.md) | The ten UI colours in `UITheme` (name, hex, use, where not to use them), what is derived from them, categories and tech branches, what stays out of the palette (world, resources, sides) |
+| 25 | [Marco legal](25-marco-legal.md) | Venezuelan law that touches the game (the 2009 war-videogame ban, copyright and trademark at SAPI, third-party licences, personal data, selling), the content and marketing rules that follow from it, the review checklist and what is pending before publishing |
 
 ## Quick Reference
 
