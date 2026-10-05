@@ -17,7 +17,7 @@ const LAYER := 35
 ## Paneles que se enmarcan aunque su panel los tenga ocultos ahora (la
 ## Tormenta en calma, la poblacion antes de la fase de asentamiento, avisos
 ## sin avisos): el jugador tiene que poder colocarlos antes de verlos.
-const ALWAYS_FRAMED := ["ResourceHUD", "NotificationPanel.status", "NotificationPanel.objective",
+const ALWAYS_FRAMED := ["ResourceHUD", "NotificationPanel.objective",
 	"StormHUD", "NotificationPanel.toasts", "ConstructionMenu.button"]
 const MIN_FRAME := Vector2(140, 44)
 

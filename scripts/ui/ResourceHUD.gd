@@ -1,6 +1,7 @@
 extends CanvasLayer
 ## Panel de recursos, esquina superior izquierda: [icono] cantidad por cada
-## recurso desbloqueado y, debajo, UNA barra de almacen.
+## recurso desbloqueado, los obreros libres y (con la Tormenta armada) la moral,
+## todo en una fila; debajo, UNA barra de almacen con su cifra.
 ##
 ## El almacen es una bolsa compartida: un solo tope para la suma de los cuatro.
 ## Antes el HUD ensenaba "528/600" pegado a un recurso y mentia: parecia el tope
@@ -8,14 +9,32 @@ extends CanvasLayer
 ## como se reparte la bolsa. Cuando se llena, la barra y el numero se ponen
 ## rojos: lo que entre a partir de ahi se pierde y el jugador tiene que verlo.
 ##
-## El desplegable (▼) anade una fila con nombre por recurso: el icono basta de
-## un vistazo, pero quien aun no sabe cual es cual lo lee ahi.
+## Sin texto fijo (2026-10): ni nombres al lado de los numeros, ni "ALMACEN
+## COMPARTIDO", ni la tarjeta aparte de trabajadores y moral (NotificationPanel)
+## que repetia en palabras lo mismo. Lo que significa cada cifra va en su
+## tooltip con el raton y, con el dedo (Godot no ensena tooltips al tocar), un
+## toque en cualquier ficha o en la barra despliega el detalle con nombres y
+## explicaciones; otro toque lo recoge.
 ##
-## Los iconos (moneda, tronco, lingote, gota) los genera
+## Obreros: la cifra es los LIBRES, lo que decide si cabe el siguiente edificio.
+## Habitantes, ocupados y retirados van al tooltip. Si algun edificio se queda
+## sin obreros, la cifra pasa a UITheme.WARNING.
+## Moral: solo desde que la Tormenta esta armada (morale_visible()): antes no
+## presiona y era ruido. Numero con el color de su umbral.
+##
+## Los iconos (moneda, tronco, lingote, gota, obrero, corazon) los genera
 ## tools/gen_resource_icons.gd; los estilos salen todos de UITheme.
 
-## Lado del boton ▼ en escritorio. Con el dedo crece a UITheme.MIN_BTN_H.
-const TOGGLE_PX := 28.0
+## Umbrales de color de la moral (los mismos que tenia la tarjeta vieja).
+const MORALE_DANGER := 30
+const MORALE_WARNING := 60
+## Hueco entre fichas, y entre la fila y el boton ☰ cuando se parte.
+const ROW_SEPARATION := 10
+const MENU_GAP := 6.0
+## Margenes de la tarjeta del HUD (UITheme.make_hud_card_style), izq. + der.
+const CARD_MARGINS := 20.0
+## Alto del LIMPIAR de desarrollo en escritorio (con el dedo, MIN_BTN_H).
+const DEV_BTN_PX := 28.0
 
 var _panel: PanelContainer
 var _chips: Dictionary = {}       # Type -> HBoxContainer (UITheme.make_resource_chip)
@@ -24,10 +43,14 @@ var _exp_labels: Dictionary = {}  # Type -> Label (cantidad en la fila desplegad
 var _segments: Dictionary = {}    # Type -> ColorRect, su tajada de la barra
 var _free_segment: ColorRect
 var _pool_bar: PanelContainer
-var _storage_label: Label
 var _storage_value: Label
-var _toggle_btn: Button
 var _content_box: VBoxContainer
+var _chips_row: HFlowContainer
+## Obreros y moral: fichas como las de recursos, con su detalle desplegable.
+var _workers_chip: HBoxContainer
+var _morale_chip: HBoxContainer
+var _workers_detail: Label
+var _morale_detail: Label
 ## TALLER: los materiales (tablones, lingotes, vigas, combustible), fuera de la
 ## bolsa. Una fila aparte, solo con los que ya estan en el juego.
 var _mat_row: HBoxContainer
@@ -48,7 +71,23 @@ func _ready() -> void:
 	EventBus.resources_insufficient.connect(_on_insufficient)
 	EventBus.resource_unlocked.connect(_on_resource_unlocked)
 	EventBus.storage_overflow.connect(_on_overflow)
-	EventBus.touch_controls_changed.connect(func(_on): _size_toggle())
+	# Con el dedo, cada ficha que se toca crece a UITheme.MIN_BTN_H.
+	EventBus.touch_controls_changed.connect(func(_on): _size_for_touch())
+	EventBus.population_changed.connect(func(_c, _m): _refresh_people())
+	EventBus.workers_changed.connect(func(_u, _t): _refresh_people())
+	EventBus.morale_changed.connect(func(_m): _refresh_people())
+	# La moral aparece cuando se arma la Tormenta. No hay senal de "armada":
+	# se arma al subir de fase (y al cargar), y en Sandbox se invoca a mano.
+	# Se mira en diferido, cuando StormManager ya ha procesado la senal.
+	EventBus.phase_advanced.connect(func(_p): _refresh_people.call_deferred())
+	EventBus.storm_phase_changed.connect(func(_p, _s): _refresh_people.call_deferred())
+	EventBus.storm_incoming.connect(func(_s): _refresh_people.call_deferred())
+	EventBus.storm_ash_started.connect(func(): _refresh_people.call_deferred())
+	EventBus.storm_started.connect(func(_s): _refresh_people.call_deferred())
+	EventBus.storm_ended.connect(func(_s): _refresh_people.call_deferred())
+	EventBus.storm_halted_forever.connect(func(): _refresh_people.call_deferred())
+	EventBus.game_load_completed.connect(func(): _refresh_people.call_deferred())
+	EventBus.game_new_started.connect(func(): _refresh_people.call_deferred())
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -66,37 +105,37 @@ func _setup_ui() -> void:
 	vbox.add_theme_constant_override("separation", 6)
 	_panel.add_child(vbox)
 
-	# ── Fila de fichas: [▼] [icono] cantidad, una por recurso desbloqueado ──
-	var chips_row := HBoxContainer.new()
-	chips_row.add_theme_constant_override("separation", 12)
+	# ── Fila de fichas: [icono] cantidad por recurso, obreros y moral ──
+	# Una fila que se parte en dos si choca con el boton ☰ (movil en vertical):
+	# seis fichas no caben en 400 px. Ver _fit_row().
+	var chips_row := HFlowContainer.new()
+	chips_row.name = "ChipsRow"
+	chips_row.add_theme_constant_override("h_separation", ROW_SEPARATION)
+	chips_row.add_theme_constant_override("v_separation", 4)
 	vbox.add_child(chips_row)
-
-	_toggle_btn = Button.new()
-	_toggle_btn.text = "▼"  # ▼
-	_toggle_btn.tooltip_text = Tr.t("BTN_RESOURCES_DETAIL")
-	UITheme.style_button(_toggle_btn, UITheme.BTN, UITheme.FONT_SMALL)
-	_toggle_btn.pressed.connect(_toggle_expanded)
-	chips_row.add_child(_toggle_btn)
-	_size_toggle()
+	_chips_row = chips_row
 
 	for i in range(_resource_ids.size()):
 		var type: ResourceManager.Type = _resource_types[i]
 		var chip := UITheme.make_resource_chip(_resource_ids[i])
 		chip.visible = ResourceManager.is_unlocked(type)
 		# Cada numero dice que es (bug 11): nombre al pasar el raton y, con el
-		# dedo, un toque despliega la fila con nombres (lo mismo que el ▼).
+		# dedo, un toque despliega la fila con nombres.
 		chip.name = "Chip_" + _resource_ids[i]
 		chip.mouse_filter = Control.MOUSE_FILTER_STOP
 		chip.gui_input.connect(_on_tap_expand)
 		chips_row.add_child(chip)
 		_chips[type] = chip
 
+	_workers_chip = _make_people_chip("workers", chips_row)
+	_morale_chip = _make_people_chip("morale", chips_row)
+
 	# Dev-only shortcut to wipe the save. Players use Settings > New game instead.
 	if GameConfig.dev_mode:
 		var clear_btn := Button.new()
 		clear_btn.text = Tr.t("BTN_CLEAR")
 		UITheme.style_button(clear_btn, UITheme.DANGER, UITheme.FONT_SMALL)
-		clear_btn.custom_minimum_size.y = UITheme.touch_px(TOGGLE_PX)
+		clear_btn.custom_minimum_size.y = UITheme.touch_px(DEV_BTN_PX)
 		clear_btn.pressed.connect(GameManager.request_new_game)
 		chips_row.add_child(clear_btn)
 
@@ -129,39 +168,36 @@ func _setup_ui() -> void:
 		_exp_rows[type] = row
 		_exp_labels[type] = amt
 
+	# Obreros y moral, en palabras: lo mismo que sus tooltips, para el dedo.
+	_workers_detail = _make_detail_label("WorkersDetail")
+	_morale_detail = _make_detail_label("MoraleDetail")
 	# Que es la barra: un tope para los cuatro, y lo que no cabe se pierde.
-	var legend := UITheme.make_label(Tr.t("HINT_HUD_STORAGE"), "small", UITheme.TEXT_DIM)
-	legend.name = "StorageLegend"
-	legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	legend.custom_minimum_size.x = 200
-	_content_box.add_child(legend)
+	var legend := _make_detail_label("StorageLegend")
+	legend.text = Tr.t("HINT_HUD_STORAGE")
 
-	# ── Almacen: un nombre, un numero, una barra ──
+	# ── Almacen: la barra y "730/1000" en una linea. Sin titulo: lo que es va
+	# en el tooltip y en el detalle (el tope es uno para los cuatro). ──
 	var storage_row := HBoxContainer.new()
 	storage_row.name = "StorageRow"
-	storage_row.add_theme_constant_override("separation", 6)
+	storage_row.add_theme_constant_override("separation", 8)
 	storage_row.mouse_filter = Control.MOUSE_FILTER_STOP
 	storage_row.tooltip_text = Tr.t("HINT_HUD_STORAGE")
 	storage_row.gui_input.connect(_on_tap_expand)
 	vbox.add_child(storage_row)
 
-	# "ALMACEN COMPARTIDO  730 / 1000": el tope es uno para los cuatro.
-	_storage_label = UITheme.make_label(Tr.t("LBL_HUD_STORAGE"), "small", UITheme.TEXT_DIM)
-	_storage_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	storage_row.add_child(_storage_label)
-
-	_storage_value = UITheme.make_label("", "small", UITheme.TEXT_DIM)
-	_storage_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	storage_row.add_child(_storage_value)
-
 	var colors: Array = []
 	for res_id in _resource_ids:
 		colors.append(UITheme.resource_color(res_id))
 	_pool_bar = UITheme.make_pool_bar(colors, 8)
-	_pool_bar.mouse_filter = Control.MOUSE_FILTER_STOP
-	_pool_bar.tooltip_text = Tr.t("HINT_HUD_STORAGE")
-	_pool_bar.gui_input.connect(_on_tap_expand)
-	vbox.add_child(_pool_bar)
+	_pool_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pool_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	storage_row.add_child(_pool_bar)
+
+	_storage_value = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_storage_value.name = "StorageValue"
+	_storage_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_storage_value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	storage_row.add_child(_storage_value)
 	var segs := UITheme.pool_bar_segments(_pool_bar)
 	for i in range(_resource_types.size()):
 		_segments[_resource_types[i]] = segs[i]
@@ -174,7 +210,7 @@ func _setup_ui() -> void:
 	_mat_row.tooltip_text = Tr.t("HINT_MATERIALS")
 	_mat_row.mouse_filter = Control.MOUSE_FILTER_STOP
 	vbox.add_child(_mat_row)
-	_mat_row.add_child(UITheme.make_label(Tr.t("LBL_MATERIALS"), "small", UITheme.TEXT_DIM))
+	# Sin el rotulo "TALLER": los nombres ya dicen lo que son; el tooltip, donde estan.
 	for type in ResourceManager.MATERIALS:
 		var res_id: String = ResourceManager.get_type_name(type)
 		var lbl := UITheme.make_label("", "small", UITheme.resource_color(res_id))
@@ -184,15 +220,70 @@ func _setup_ui() -> void:
 		_mat_labels[type] = lbl
 
 	_refresh()
+	_refresh_people()
+	_size_for_touch()
+	get_viewport().size_changed.connect(_fit_row.call_deferred)
+	_fit_row.call_deferred()
 
-## El ▼ es pequeno con raton y de tamano dedo en tactil. Va despues de
-## style_button, que impone MIN_BTN_H de alto: en escritorio el ▼ es mas bajo a
-## proposito, para no doblar la altura de la unica fila del panel.
-func _size_toggle() -> void:
-	var side := UITheme.touch_px(TOGGLE_PX)
-	_toggle_btn.custom_minimum_size = Vector2(side, side)
+## Las fichas se tocan: con el dedo no bajan de MIN_BTN_H de alto (el ancho
+## lo da el numero; forzarlo ensanchaba la fila y empujaba la columna central).
+## Con el raton se quedan en su tamano natural. La barra del almacen no crece:
+## las fichas ya despliegan el mismo detalle.
+func _size_for_touch() -> void:
+	var side := UITheme.touch_px(0.0)
+	for c in tap_targets():
+		(c as Control).custom_minimum_size.y = side
 
-## Un toque (o clic) en un recurso o en el almacen despliega la leyenda.
+## La fila de fichas, en una linea mientras quepa a la izquierda del boton ☰;
+## si no, se parte (HFlowContainer) al ancho que deja libre. En PC y tablet en
+## horizontal el ☰ queda lejos y la fila nunca se parte.
+func _fit_row() -> void:
+	if _chips_row == null:
+		return
+	var natural := 0.0
+	var shown := 0
+	for c in _chips_row.get_children():
+		if (c as Control).visible:
+			natural += (c as Control).get_combined_minimum_size().x
+			shown += 1
+	# +1: sin holgura, un redondeo parte la fila aunque quepa.
+	natural += float(maxi(0, shown - 1) * ROW_SEPARATION) + 1.0
+	_chips_row.custom_minimum_size.x = minf(natural, _room_before_menu())
+
+## Ancho util de la fila hasta el boton ☰ (o sin limite si no hay boton o no
+## esta en la misma franja de arriba).
+func _room_before_menu() -> float:
+	var btn := get_tree().get_first_node_in_group("hud_menu_button") as Control
+	if btn == null or not btn.is_visible_in_tree() or _panel == null:
+		return INF
+	var b := btn.get_global_rect()
+	var p := _panel.get_global_rect()
+	if b.position.y > p.position.y + 60.0:
+		return INF
+	return maxf(120.0, b.position.x - MENU_GAP - p.position.x - CARD_MARGINS)
+
+## Las fichas que se tocan (tests).
+func tap_targets() -> Array:
+	return _chips.values() + [_workers_chip, _morale_chip]
+
+## Ficha de obreros o de moral: la misma forma que la de un recurso.
+func _make_people_chip(icon_id: String, row: Container) -> HBoxContainer:
+	var chip := UITheme.make_resource_chip(icon_id)
+	chip.name = "Chip_" + icon_id
+	chip.mouse_filter = Control.MOUSE_FILTER_STOP
+	chip.gui_input.connect(_on_tap_expand)
+	row.add_child(chip)
+	return chip
+
+func _make_detail_label(node_name: String) -> Label:
+	var lbl := UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	lbl.name = node_name
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.custom_minimum_size.x = 220
+	_content_box.add_child(lbl)
+	return lbl
+
+## Un toque (o clic) en una ficha o en el almacen despliega el detalle.
 func _on_tap_expand(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_toggle_expanded()
@@ -201,13 +292,64 @@ func _on_tap_expand(event: InputEvent) -> void:
 func _toggle_expanded() -> void:
 	_is_expanded = not _is_expanded
 	_content_box.visible = _is_expanded
-	_toggle_btn.text = "▲" if _is_expanded else "▼"
 
 func is_expanded() -> bool:
 	return _is_expanded
 
-func get_toggle_button() -> Button:
-	return _toggle_btn
+## La ficha de obreros / de moral (tests, HelpTargets).
+func workers_chip() -> HBoxContainer:
+	return _workers_chip
+
+func morale_chip() -> HBoxContainer:
+	return _morale_chip
+
+## La moral se ensena desde que la Tormenta esta armada (y despues de pararla
+## para siempre, cuando importa igual). Antes de eso no aprieta: era ruido.
+static func morale_visible() -> bool:
+	return StormManager.is_armed() or StormManager.is_halted()
+
+## Color de la moral por umbral, de los tokens de la paleta.
+static func morale_color(morale: int) -> Color:
+	if morale <= MORALE_DANGER:
+		return UITheme.DANGER
+	if morale <= MORALE_WARNING:
+		return UITheme.WARNING
+	return UITheme.POSITIVE
+
+## Obreros y moral, leidos de los servicios (no de los argumentos de la senal:
+## varias senales disparan esto y cada una trae otra cosa).
+func _refresh_people() -> void:
+	if _workers_chip == null:
+		return
+	var pop := PopulationManager.get_population()
+	var max_pop := PopulationManager.get_max_population()
+	var used := PopulationManager.get_used_workers()
+	var free := maxi(0, pop - used)
+	var short := PopulationManager.get_understaffed_count()
+	var retired := PopulationManager.get_retired_workers()
+	var amount := UITheme.chip_amount(_workers_chip)
+	amount.text = str(free)
+	UITheme.set_label_color(amount, UITheme.WARNING if short > 0 else UITheme.TEXT_BRIGHT)
+	var lines: Array = [Tr.t("HINT_HUD_WORKERS") % [free, pop, max_pop, used]]
+	if retired > 0:
+		lines.append(Tr.t("HINT_HUD_WORKERS_OFF") % retired)
+	if short > 0:
+		lines.append(Tr.t("HINT_HUD_WORKERS_SHORT") % short)
+	var tip := "\n".join(lines)
+	_workers_chip.tooltip_text = tip
+	_workers_detail.text = tip
+
+	var shown := morale_visible()
+	_morale_chip.visible = shown
+	_morale_detail.visible = shown
+	var morale := PopulationManager.get_morale()
+	var m_amount := UITheme.chip_amount(_morale_chip)
+	m_amount.text = str(morale)
+	UITheme.set_label_color(m_amount, morale_color(morale))
+	var m_tip := Tr.t("HINT_HUD_MORALE") % [morale, PopulationManager.morale_to_multiplier(morale)]
+	_morale_chip.tooltip_text = m_tip
+	_morale_detail.text = m_tip
+	_fit_row()
 
 ## Una bolsa significa un refresco: cualquier recurso que se mueva cambia el
 ## total compartido, asi que no hay nada que actualizar por separado.
@@ -226,9 +368,8 @@ func _refresh() -> void:
 
 	# Rojo mientras la bolsa esta llena: desde aqui, lo producido se pierde.
 	var tone: Color = UITheme.DANGER if is_full else UITheme.TEXT_DIM
-	_storage_value.text = "%d / %d" % [total, cap]
+	_storage_value.text = "%d/%d" % [total, cap]
 	UITheme.set_label_color(_storage_value, tone)
-	UITheme.set_label_color(_storage_label, tone)
 	UITheme.set_pool_bar_alert(_pool_bar, is_full)
 
 	for type in _segments:
@@ -247,6 +388,7 @@ func _refresh() -> void:
 		lbl.text = "%s %d" % [Tr.res_cap(ResourceManager.get_type_name(type)), ResourceManager.get_amount(type)]
 		any_material = any_material or on
 	_mat_row.visible = any_material
+	_fit_row()
 
 func _on_resource_changed(_resource_type: String, _new_amount: int, _delta: int) -> void:
 	_refresh()

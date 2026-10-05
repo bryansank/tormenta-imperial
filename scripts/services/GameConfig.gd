@@ -525,9 +525,18 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	ui_hud_hidden = []
 	if hidden is Array:
 		for id in hidden:
-			ui_hud_hidden.append(str(id))
+			# Un elemento retirado del HUD (la tarjeta de estado) no se arrastra.
+			if not str(id) in HudRegistry.RETIRED:
+				ui_hud_hidden.append(str(id))
 	var layout: Variant = cf.get_value("interfaz", "layout", ui_layout)
 	ui_layout = layout.duplicate(true) if layout is Dictionary else {}
+	for key in ui_layout.keys():
+		var moved: Variant = ui_layout[key]
+		if moved is Dictionary:
+			for id in HudRegistry.RETIRED:
+				(moved as Dictionary).erase(id)
+			if (moved as Dictionary).is_empty():
+				ui_layout.erase(key)
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()

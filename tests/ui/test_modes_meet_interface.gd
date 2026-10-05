@@ -94,7 +94,7 @@ func test_the_sandbox_tab_sits_below_the_left_column() -> void:
 	await _settle()
 	var dock := HudRegistry.control_of("SandboxPanel")
 	var tab_top := dock.get_global_rect().position.y
-	for id in ["ResourceHUD", "NotificationPanel.status", "HelperPanel.tip_resources"]:
+	for id in ["ResourceHUD", "NotificationPanel.log", "HelperPanel.tip_resources"]:
 		var c := UILayoutManager.placed_control(id)
 		if c != null and c.is_visible_in_tree():
 			assert_float(tab_top).override_failure_message("la pestana pisa %s" % id) \

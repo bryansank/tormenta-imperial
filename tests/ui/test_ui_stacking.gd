@@ -50,9 +50,9 @@ func _bottom(c: Control) -> float:
 	return c.get_global_rect().end.y
 
 @warning_ignore("unused_parameter")
-func test_the_status_panel_starts_below_resources_whatever_their_height(lines: int, test_parameters := [[1], [3], [7]]) -> void:
+func test_the_log_starts_below_resources_whatever_their_height(lines: int, test_parameters := [[1], [3], [7]]) -> void:
 	var resources := _place("ResourceHUD", lines)
-	var status := _place("NotificationPanel.status", 2)
+	var status := _place("NotificationPanel.log", 2)
 	await _settle()
 	assert_float(resources.size.y).is_greater(0.0)
 	assert_float(_top(status)).is_greater_equal(_bottom(resources))
@@ -61,7 +61,7 @@ func test_the_status_panel_starts_below_resources_whatever_their_height(lines: i
 
 func test_when_the_panel_above_grows_the_one_below_moves_down() -> void:
 	var resources := _place("ResourceHUD", 1)
-	var status := _place("NotificationPanel.status", 2)
+	var status := _place("NotificationPanel.log", 2)
 	await _settle()
 	var before := _top(status)
 
@@ -75,7 +75,7 @@ func test_when_the_panel_above_grows_the_one_below_moves_down() -> void:
 
 func test_a_hidden_panel_above_gives_its_place_to_the_one_below() -> void:
 	var resources := _place("ResourceHUD", 3)
-	var status := _place("NotificationPanel.status", 2)
+	var status := _place("NotificationPanel.log", 2)
 	await _settle()
 	assert_float(_top(status)).is_greater_equal(_bottom(resources))
 
@@ -91,11 +91,11 @@ func test_a_hidden_panel_above_gives_its_place_to_the_one_below() -> void:
 
 func test_a_three_level_column_never_overlaps() -> void:
 	var resources := _place("ResourceHUD", 2)
-	var status := _place("NotificationPanel.status", 4)
-	var log := _place("NotificationPanel.log", 1)
+	var status := _place("NotificationPanel.log", 4)
+	var tip := _place("HelperPanel.tip_resources", 1)
 	await _settle()
 	assert_float(_top(status)).is_greater_equal(_bottom(resources))
-	assert_float(_top(log)).is_greater_equal(_bottom(status))
+	assert_float(_top(tip)).is_greater_equal(_bottom(status))
 
 func test_the_objective_takes_the_top_of_the_center_column_when_the_storm_is_calm() -> void:
 	var storm := _place("StormHUD", 1)
@@ -148,7 +148,7 @@ func test_every_stack_reference_exists_and_has_no_cycles() -> void:
 func test_the_layout_rect_reports_the_stacked_top_too() -> void:
 	var resources := _place("ResourceHUD", 3)
 	await _settle()
-	var rect := UILayoutManager.get_layout_rect("NotificationPanel.status")
+	var rect := UILayoutManager.get_layout_rect("NotificationPanel.log")
 	assert_float(rect.position.y).is_greater_equal(_bottom(resources))
 
 # ── Pantalla estrecha (movil en vertical) ────────────────────────────
@@ -158,12 +158,14 @@ func test_on_a_narrow_screen_the_center_column_drops_into_the_left_one() -> void
 	UILayoutManager._viewport_size = Vector2(400, 720)
 	assert_bool(UILayoutManager.is_narrow()).is_true()
 	var resources := _place("ResourceHUD", 2)
-	var status := _place("NotificationPanel.status", 3)
+	var status := _place("NotificationPanel.log", 3)
 	var storm := _place("StormHUD", 1)
 	var objective := _place("NotificationPanel.objective", 2)
 	await _settle()
-	assert_float(_top(storm)).is_greater_equal(_bottom(status))
+	# Recursos -> Tormenta -> objetivo -> registro (sin tarjeta de estado).
+	assert_float(_top(storm)).is_greater_equal(_bottom(resources))
 	assert_float(_top(objective)).is_greater_equal(_bottom(storm))
+	assert_float(_top(status)).is_greater_equal(_bottom(objective))
 	# Todo cabe en 400 px: nada se sale por la derecha.
 	for c in [resources, status, storm, objective]:
 		assert_float((c as Control).get_global_rect().end.x).is_less_equal(400.0)
