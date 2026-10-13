@@ -189,11 +189,15 @@ emits nothing and saves nothing (`tests/map/test_city_life.gd`).
   (`life_stay_market`), or stroll to a random road cell and back. Three
   silhouettes: man (hat), woman (skirt and bun), child (smaller, cap); workers wear
   a helmet and carry a toolbox. Each figure gets its own colours from a small
-  palette per silhouette, and a skin tone.
+  palette per silhouette (all of it from the toy palette, `ToyTones`), and a
+  skin tone. Toy-figurine proportions in 3D (2026-10-12): big head, short stout
+  body, a block for the legs and an oversized hat or helmet.
 - **How many.** One figure per `life_people_per_figure` (2) people: workers count
   the used workers, citizens the rest. Capped per device profile,
-  `life_figure_cap` = PC 72 / tablet 44 / phone 26; when the cap bites, it is split
-  in proportion. Figures inside buildings count against the cap too.
+  `life_figure_cap` = PC 72 / tablet 44 / phone 26, and on top of it a quality
+  cap `life_figure_cap_quality` (-1 = none; the future "Minima" preset will set
+  it to `life_figure_cap_minimal`, 12); `WorkerWalkers.figure_cap()` takes the
+  lower of the two. When the cap bites, it is split in proportion. Figures inside buildings count against the cap too.
 - **Houses** are homes; with no house yet, the Núcleo is.
 
 **Doors.** A building's door is the road cell of the network that its footprint

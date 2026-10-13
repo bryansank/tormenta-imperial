@@ -1798,6 +1798,12 @@ var life_people_per_figure := 2
 ## figura de mas cuesta una matriz por fotograma, no una llamada de dibujo:
 ## el tope es por la CPU del movil, no por la GPU.
 var life_figure_cap := {"pc": 72, "tablet": 44, "phone": 26}
+## Tope de calidad encima del del perfil (-1: ninguno). Lo pondra el preset de
+## calidad "Minima" (equipos muy modestos); WorkerWalkers.figure_cap() se queda
+## con el menor de los dos. 0 = nadie por la calle.
+var life_figure_cap_quality := -1
+## El tope que usaria el preset "Minima" (aun sin preset que lo aplique).
+var life_figure_cap_minimal := 12
 ## Celdas por segundo andando, y cuanto apuran el paso en el Aviso de Tormenta.
 var life_walk_speed := 1.5
 var life_hurry_multiplier := 1.8

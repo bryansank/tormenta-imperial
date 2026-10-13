@@ -531,11 +531,24 @@ unisono. Velocidad y apertura base: `GameConfig.construction_crane_speed` /
 y sin uniforms por instancia (que el renderizador Compatibility del APK de QA
 no tiene).
 
-**Coste**: una obra son unas 25-45 mallas low-poly (medido: casa 41/31/34 por fase, fundicion
-30/39/32, nucleo 3x3 46/41/45) con materiales cacheados, y solo mientras dura la obra; la
-animacion son 3 mallas de grua + 1 banderin + 1 quad de efecto, en GPU. En
-2D, la obra se dibuja una vez por cambio de firma (fase, progreso, semilla) y
-lo que se mueve son 4-6 nodos con shader.
+**Coste** (2026-10-12, maqueta): todo lo quieto de una obra (suelo, valla,
+pilas, losa, estructura, andamio, mastil de la grua, palos de los banderines)
+es **una sola malla** con color por vertice (`scripts/buildings/SiteMesh.gd`,
+sobre `LotMesh`) y los dos materiales compartidos de `ToyPalette`, igual que el
+andamio de mejora y los escombros de la ruina. Lo animado son la pluma, el
+contrapeso y el gancho de la grua (mallas cacheadas por largo y color), un quad
+de banderin compartido y el quad del efecto: shaders con `TIME`, sin crear ni
+destruir nodos. Montar una obra cuesta ~4 ms de GDScript y solo pasa al cambiar
+de fase. Que grupos y pilas lleva cada obra queda en metas de la raiz
+(`site_groups`, `site_piles`). Ninguna luz propia.
+
+**Tonos** (`scripts/buildings/ToyTones.gd`): obra, ruina, atrezo de las
+parcelas, calzada y figuritas piden su color por papel (`Tone.of("wood")`,
+`"brick"`, `"pave"`...); cada papel es una casilla de `ToyPalette` aclarada u
+oscurecida. Los colores sueltos de `GameConfig` (acentos de parcela, lonas,
+banderines, gruas) pasan por `Tone.snap()`, la misma regla del horneado. Los
+shaders propios (grua, banderin, figuritas) leen el color igual que el material
+solido de la paleta (`vertex_color_is_srgb`).
 
 ## Key Files
 
@@ -548,5 +561,6 @@ lo que se mueve son 4-6 nodos con shader.
 - `scripts/buildings/BuildingLook.gd` — rule: construction phase / upgrade / ruin / active / idle (both views)
 - `scripts/buildings/BuildingLookVisual.gd` — applies it in 3D; `scripts/buildings/BuildingFx.gd` — animated sprite sheets + shaders
 - `scripts/buildings/LotPlan.gd` — rule: lot ground, trim, props and exaggerated element (both views); `scripts/buildings/BuildingLot.gd` — the 3D lot; `scripts/buildings/LotMesh.gd` — one vertex-coloured mesh per lot
+- `scripts/buildings/SiteMesh.gd` — 3D construction phases, upgrade scaffold and ruin in the toy palette (one static mesh each); `scripts/buildings/ToyTones.gd` — palette-derived tones for everything around the buildings
 - `scripts/buildings/SiteFx.gd` — construction-site animation shaders (crane, hook, pennant) for both views; site style/layout in `BuildingLook.gd`
 - `scenes/buildings/BuildingPlacer.tscn` — placement/move/demolish logic

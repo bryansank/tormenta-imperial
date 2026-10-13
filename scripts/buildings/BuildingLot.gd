@@ -22,6 +22,7 @@ extends Node3D
 const Plan := preload("res://scripts/buildings/LotPlan.gd")
 const MeshKit := preload("res://scripts/buildings/LotMesh.gd")
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
+const Tone := preload("res://scripts/buildings/ToyTones.gd")
 
 ## Alturas de cada capa sobre la isla (separadas lo bastante para no parpadear
 ## con la camara ortografica). La obra (0.04) y la ruina (0.03) quedan encima.
@@ -29,24 +30,26 @@ const Y_GROUND := 0.012
 const Y_SHADOW := 0.022
 const BORDER_H := 0.034
 
-const WOOD := Color(0.55, 0.38, 0.20)
-const WOOD_LIGHT := Color(0.70, 0.54, 0.32)
-const DARK_WOOD := Color(0.30, 0.20, 0.10)
-const IRON := Color(0.22, 0.20, 0.22)
-const STEEL := Color(0.50, 0.52, 0.55)
-const RUST := Color(0.50, 0.28, 0.15)
-const COPPER := Color(0.65, 0.38, 0.22)
-const BRASS := Color(0.80, 0.62, 0.20)
-const STONE := Color(0.64, 0.61, 0.56)
-const TERRACOTTA := Color(0.62, 0.32, 0.20)
-const SACK := Color(0.72, 0.62, 0.42)
-const LEAF := Color(0.24, 0.50, 0.17)
-const GOLD := Color(0.98, 0.78, 0.22)
-const COAL := Color(0.12, 0.11, 0.11)
-const OLIVE := Color(0.33, 0.37, 0.20)
-const WARM := Color(1.0, 0.82, 0.45)
-const HAZARD := Color(1.0, 0.45, 0.08)
-const BORDER := Color(0.10, 0.085, 0.07)
+## Los tonos del atrezo: todos de la paleta de la maqueta (ToyTones -> ToyPalette),
+## los mismos que llevan los edificios horneados.
+static var WOOD: Color = Tone.of("wood")
+static var WOOD_LIGHT: Color = Tone.of("wood_light")
+static var DARK_WOOD: Color = Tone.of("wood_dark")
+static var IRON: Color = Tone.of("iron")
+static var STEEL: Color = Tone.of("steel")
+static var RUST: Color = Tone.of("rust")
+static var COPPER: Color = Tone.of("copper")
+static var BRASS: Color = Tone.of("brass")
+static var STONE: Color = Tone.of("stone")
+static var TERRACOTTA: Color = Tone.of("terracotta")
+static var SACK: Color = Tone.of("sack")
+static var LEAF: Color = Tone.of("leaf")
+static var GOLD: Color = Tone.of("gold")
+static var COAL: Color = Tone.of("coal")
+static var OLIVE: Color = Tone.of("olive")
+static var WARM: Color = Tone.of("warm")
+static var HAZARD: Color = Tone.of("terracotta")
+static var BORDER: Color = Tone.of("border")
 
 static var _ground_mats: Dictionary = {}
 static var _ground_meshes: Dictionary = {}
@@ -303,7 +306,7 @@ static func ground_material(kind: String, footprint: Vector2i) -> StandardMateri
 	mat.albedo_texture = ImageTexture.create_from_image(ground_image(base))
 	mat.uv1_scale = Vector3(footprint.x, footprint.y, 1.0)
 	mat.roughness = 0.6 if base == "plate" else 0.92
-	mat.metallic = 0.35 if base == "plate" else 0.0
+	mat.metallic = 0.0
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	if kind.ends_with(":scorched"):
 		mat.albedo_color = Color(0.42, 0.38, 0.35)
@@ -321,33 +324,33 @@ static func ground_image(kind: String) -> Image:
 			var c: Color
 			match kind:
 				"dirt":
-					c = Color(0.47, 0.37, 0.25).darkened(rng.randf_range(-0.06, 0.12))
+					c = Tone.of("dirt").darkened(rng.randf_range(-0.06, 0.12))
 				"plate":
-					c = Color(0.40, 0.41, 0.43).darkened(rng.randf_range(0.0, 0.06))
+					c = Tone.of("steel").darkened(rng.randf_range(0.0, 0.06))
 					if x % 32 == 0 or y % 32 == 0:
-						c = Color(0.22, 0.22, 0.24)
+						c = Tone.of("iron")
 					elif x % 32 == 1 or y % 32 == 1:
 						c = c.lightened(0.15)
 					var rx := x % 32
 					var ry := y % 32
 					if (rx == 4 or rx == 28) and (ry == 4 or ry == 28 or ry == 16):
-						c = Color(0.72, 0.6, 0.3)
+						c = Tone.of("brass")
 				"grass":
-					c = Color(0.30, 0.50, 0.20).darkened(rng.randf_range(-0.08, 0.14))
+					c = Tone.of("grass").darkened(rng.randf_range(-0.08, 0.14))
 				_:
 					# Losas: 2x2 por casilla, cada una con su tono, llaga oscura.
 					var tile := (x / 32) + (y / 32) * 2
 					var tone := 0.04 * float((tile * 7 + 3) % 5) - 0.08
-					c = Color(0.60, 0.58, 0.54).darkened(tone + rng.randf_range(0.0, 0.04))
+					c = Tone.of("stone").darkened(tone + rng.randf_range(0.0, 0.04))
 					if x % 32 < 2 or y % 32 < 2:
-						c = Color(0.36, 0.34, 0.31)
+						c = Tone.of("stone_dark")
 			img.set_pixel(x, y, c)
 	if kind == "dirt":
 		# Guijarros.
 		for k in 18:
 			var p := Vector2i(rng.randi_range(1, s - 3), rng.randi_range(1, s - 3))
-			img.set_pixel(p.x, p.y, Color(0.62, 0.55, 0.45))
-			img.set_pixel(p.x + 1, p.y, Color(0.32, 0.25, 0.17))
+			img.set_pixel(p.x, p.y, Tone.of("stone"))
+			img.set_pixel(p.x + 1, p.y, Tone.of("soil"))
 	img.generate_mipmaps()
 	return img
 
@@ -400,7 +403,7 @@ static func shadow_material() -> StandardMaterial3D:
 static func build_props_mesh(plan: Dictionary, cell: float, model_rect := Rect2(), model_top := 2.0, model_roof := -1.0) -> ArrayMesh:
 	var mb = MeshKit.new()
 	var lot: Vector2 = plan["lot"] * cell
-	var accent: Color = plan["accent"]
+	var accent: Color = Tone.snap(plan["accent"])
 	# Borde oscuro fino alrededor de la parcela: la separa de la isla en cualquier
 	# fondo (tambien con la Tormenta oscureciendo la luz).
 	var bw := 0.05
@@ -460,7 +463,7 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 	match String(sig["kind"]):
 		"chimney":
 			var h := maxf(top * 1.5, 3.6) * k
-			var brick := Color(0.56, 0.26, 0.17)
+			var brick := Tone.of("brick")
 			mb.box(c + Vector3(0, 0.15, 0), Vector3(r * 2.1, 0.3, r * 2.1), STONE.darkened(0.2))
 			mb.cyl(c + Vector3(0, 0.3, 0), r * 0.95, h - 0.3, brick, 10, Vector3.UP, r * 0.7)
 			for t in [0.3, 0.55]:
@@ -468,14 +471,14 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 			if not ruined:
 				mb.cyl(c + Vector3(0, h - 0.55, 0), r * 0.74, 0.28, accent, 10)
 				mb.cyl(c + Vector3(0, h, 0), r * 0.8, 0.12, IRON, 10)
-				mb.cyl(c + Vector3(0, h + 0.1, 0), r * 0.55, 0.03, Color(1.0, 0.5, 0.1), 10, Vector3.UP, -1.0, true)
+				mb.cyl(c + Vector3(0, h + 0.1, 0), r * 0.55, 0.03, Tone.of("ember"), 10, Vector3.UP, -1.0, true)
 				# Tiro de humos hasta la esquina del edificio.
 				var hp := top * 0.45
 				var to := Vector3(mr.end.x - 0.12 if sgn.x > 0 else mr.position.x + 0.12, hp, mr.position.y + 0.12 if sgn.y < 0 else mr.end.y - 0.12)
 				mb.beam(c + Vector3(0, hp, 0), to, 0.16, COPPER.darkened(0.15))
 		"crane":
 			var hm := (top + 1.1) * k
-			var yellow := Color(0.95, 0.72, 0.12)
+			var yellow := Tone.of("hazard")
 			var s := r * 0.55
 			for lx in [-s, s]:
 				for lz in [-s, s]:
@@ -491,8 +494,8 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 				var back := base + (base - tip).normalized() * 0.9
 				back.y = hm
 				mb.beam(base, back, 0.1, yellow)
-				mb.box(back + Vector3(0, -0.15, 0), Vector3(0.35, 0.35, 0.35), Color(0.3, 0.3, 0.32))
-				mb.box(base + Vector3(0, 0.22, 0), Vector3(0.32, 0.3, 0.32), Color(0.2, 0.2, 0.22))
+				mb.box(back + Vector3(0, -0.15, 0), Vector3(0.35, 0.35, 0.35), Tone.of("steel"))
+				mb.box(base + Vector3(0, 0.22, 0), Vector3(0.32, 0.3, 0.32), Tone.of("iron"))
 				var hang := 1.25
 				mb.beam(tip, Vector3(tip.x, hang + 0.3, tip.z), 0.025, IRON)
 				mb.box(Vector3(tip.x, hang + 0.3, tip.z), Vector3(0.08, 0.1, 0.08), IRON)
@@ -514,8 +517,8 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 				y += 0.7
 			if not ruined:
 				mb.cyl(c + Vector3(0, h, 0), 0.03, 0.7, IRON, 5)
-				mb.ball(c + Vector3(0, h + 0.75, 0), 0.14, Color(0.45, 0.85, 1.0), Vector3.ONE, true)
-				mb.cyl(c + Vector3(0, h * 0.75, 0.05), 0.32, 0.12, Color(0.85, 0.85, 0.8), 10, Vector3(0.0, 0.5, 1.0), 0.05)
+				mb.ball(c + Vector3(0, h + 0.75, 0), 0.14, Tone.of("blue_light"), Vector3.ONE, true)
+				mb.cyl(c + Vector3(0, h * 0.75, 0.05), 0.32, 0.12, Tone.of("cream"), 10, Vector3(0.0, 0.5, 1.0), 0.05)
 		"flag":
 			var h := maxf(top * 1.6, 4.2) * k
 			mb.box(c + Vector3(0, 0.12, 0), Vector3(r * 1.6, 0.24, r * 1.6), STONE)
@@ -524,7 +527,7 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 				var dir := -1.0 if sgn.x > 0 else 1.0
 				var f := c + Vector3(dir * 0.68, h - 0.5, 0)
 				mb.box(f, Vector3(1.3, 0.85, 0.04), accent)
-				mb.box(f, Vector3(1.32, 0.22, 0.05), Color(0.1, 0.09, 0.08))
+				mb.box(f, Vector3(1.32, 0.22, 0.05), Tone.of("iron"))
 				mb.ball(c + Vector3(0, h + 0.08, 0), 0.11, BRASS)
 		"manifold":
 			var h := 1.5 * k
@@ -536,11 +539,11 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 				mb.beam(c + Vector3(-r * 0.55, h * 0.75, -r * 0.5), c + Vector3(r * 0.55, h * 0.75, -r * 0.5), 0.1, COPPER.darkened(0.1))
 				var to := Vector3(mr.end.x - 0.1 if sgn.x > 0 else mr.position.x + 0.1, h * 0.75, c.z - r * 0.5)
 				mb.beam(c + Vector3(0, h * 0.75, -r * 0.5), to, 0.1, COPPER.darkened(0.1))
-				_valve_wheel(mb, c + Vector3(0, h * 0.62, r * 0.45 + 0.08), 0.36, Color(0.82, 0.12, 0.08))
-				_valve_wheel(mb, c + Vector3(r * 0.55, h * 0.95, -r * 0.5 + 0.1), 0.18, Color(0.95, 0.75, 0.12))
-				mb.cyl(c + Vector3(-r * 0.55, h * 0.9, -r * 0.5 + 0.08), 0.12, 0.04, Color(0.95, 0.95, 0.9), 10, Vector3.BACK, -1.0, true)
+				_valve_wheel(mb, c + Vector3(0, h * 0.62, r * 0.45 + 0.08), 0.36, Tone.of("red"))
+				_valve_wheel(mb, c + Vector3(r * 0.55, h * 0.95, -r * 0.5 + 0.1), 0.18, Tone.of("brass"))
+				mb.cyl(c + Vector3(-r * 0.55, h * 0.9, -r * 0.5 + 0.08), 0.12, 0.04, Tone.of("cream"), 10, Vector3.BACK, -1.0, true)
 		"ore_heap":
-			mb.cyl(c, r * 1.35, 0.85 * maxf(k, 0.5), Color(0.47, 0.39, 0.28), 8, Vector3.UP, r * 0.2)
+			mb.cyl(c, r * 1.35, 0.85 * maxf(k, 0.5), Tone.of("ore"), 8, Vector3.UP, r * 0.2)
 			var nuggets := [Vector3(-0.3, 0.35, 0.25), Vector3(0.25, 0.3, -0.2), Vector3(0.05, 0.55, 0.05), Vector3(0.4, 0.15, 0.3), Vector3(-0.4, 0.12, -0.3), Vector3(0.1, 0.2, 0.45)]
 			for i in nuggets.size():
 				mb.ball(c + (nuggets[i] as Vector3) * r * 1.5, r * 0.3, GOLD if i % 2 == 0 else GOLD.lightened(0.2), Vector3.ONE, i == 2 and not ruined)
@@ -554,7 +557,7 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 				var p := c + Vector3(cos(a), 0, sin(a)) * r * 1.05
 				var saved: Transform3D = mb.xf
 				mb.xf = saved * Transform3D(Basis(Vector3.UP, -a), p)
-				mb.box(Vector3(0, 0.1, 0), Vector3(0.18, 0.2, 0.3), Color(0.62, 0.55, 0.38))
+				mb.box(Vector3(0, 0.1, 0), Vector3(0.18, 0.2, 0.3), Tone.of("sandbag"))
 				mb.xf = saved
 			if not ruined:
 				var out := Vector3(sgn.x, 0, sgn.y).normalized()
@@ -563,7 +566,7 @@ static func add_signature(mb, sig: Dictionary, plan: Dictionary, cell: float, mr
 				var base := c + Vector3(0, 0.45, 0) - out * 0.35
 				var tip := c + out * 0.55 + Vector3(0, 1.0, 0)
 				mb.beam(base, tip, 0.24, IRON)
-				mb.beam(tip - (tip - base).normalized() * 0.14, tip, 0.3, Color(0.12, 0.12, 0.12))
+				mb.beam(tip - (tip - base).normalized() * 0.14, tip, 0.3, Tone.of("coal"))
 				mb.box(base, Vector3(0.3, 0.26, 0.3), OLIVE.darkened(0.1))
 				var wheel_axis := out.cross(Vector3.UP).normalized()
 				for side in [-1.0, 1.0]:
@@ -602,7 +605,7 @@ static func _valve_wheel(mb, c: Vector3, rad: float, col: Color) -> void:
 ## Emblema de la Regencia (propio): rueda dentada de laton con el rayo de la
 ## Tormenta sobre un disco rojo, de cara a la camara.
 static func _emblem(mb, c: Vector3, re: float, accent: Color) -> void:
-	mb.cyl(c - Vector3(0, 0, 0.04), re, 0.08, Color(0.16, 0.15, 0.16), 20, Vector3.BACK)
+	mb.cyl(c - Vector3(0, 0, 0.04), re, 0.08, Tone.of("iron"), 20, Vector3.BACK)
 	for i in 14:
 		var a := TAU * float(i) / 14.0
 		var saved: Transform3D = mb.xf
@@ -610,7 +613,7 @@ static func _emblem(mb, c: Vector3, re: float, accent: Color) -> void:
 		mb.box(Vector3.ZERO, Vector3(re * 0.22, re * 0.18, 0.1), BRASS)
 		mb.xf = saved
 	mb.cyl(c + Vector3(0, 0, 0.04), re * 0.8, 0.02, BRASS, 20, Vector3.BACK)
-	mb.cyl(c + Vector3(0, 0, 0.06), re * 0.62, 0.02, Color(0.75, 0.12, 0.09), 20, Vector3.BACK)
+	mb.cyl(c + Vector3(0, 0, 0.06), re * 0.62, 0.02, Tone.of("red"), 20, Vector3.BACK)
 	# El rayo: tres tramos en zigzag, en el amarillo militar.
 	var z := c.z + 0.1
 	var pts := [Vector2(-0.12, 0.45), Vector2(0.12, 0.05), Vector2(-0.1, -0.02), Vector2(0.14, -0.45)]
@@ -646,7 +649,7 @@ static func _add_trim(mb, trim: String, run: Dictionary, cell: float, accent: Co
 				_seg(mb, c, along_x, seg_len, 0.05, 0.42, 0.04, IRON)
 				_seg(mb, c, along_x, seg_len, 0.025, 0.2, 0.025, IRON.lightened(0.12))
 			"sandbags":
-				var bag := Color(0.62, 0.55, 0.38)
+				var bag := Tone.of("sandbag")
 				_seg(mb, c, along_x, seg_len * 0.94, 0.12, 0.08, 0.16, bag)
 				_seg(mb, c, along_x, seg_len * 0.7, 0.1, 0.21, 0.11, bag.lightened(0.08))
 			"pipes":
@@ -695,7 +698,7 @@ static func add_prop(mb, kind: String, r: float, accent: Color) -> void:
 		"goods":
 			mb.box(Vector3(0, 0.5 * r, 0), Vector3(1.6, 1.0, 1.2) * r, WOOD_LIGHT)
 			mb.box(Vector3(0, 0.98 * r, 0), Vector3(1.64, 0.08, 1.24) * r, DARK_WOOD)
-			var fruit := [Color(0.85, 0.18, 0.12), Color(0.95, 0.75, 0.15), Color(0.4, 0.65, 0.2), accent]
+			var fruit := [Tone.of("red"), Tone.of("gold"), Tone.of("leaf"), accent]
 			for i in 4:
 				mb.ball(Vector3((-0.5 + 0.33 * i) * r, 1.15 * r, (0.2 if i % 2 == 0 else -0.2) * r), 0.26 * r, fruit[i])
 		"sacks":
@@ -705,7 +708,7 @@ static func add_prop(mb, kind: String, r: float, accent: Color) -> void:
 		"logs":
 			for l in [Vector3(0, 0.33, -0.34), Vector3(0, 0.33, 0.34), Vector3(0, 0.9, 0)]:
 				var base := Vector3(-1.0 * r, l.y * r, l.z * r)
-				mb.cyl(base, 0.33 * r, 2.0 * r, Color(0.42, 0.28, 0.15), 7, Vector3.RIGHT)
+				mb.cyl(base, 0.33 * r, 2.0 * r, Tone.of("log"), 7, Vector3.RIGHT)
 				mb.cyl(base - Vector3(0.01, 0, 0), 0.27 * r, 0.02, WOOD_LIGHT, 7, Vector3.LEFT)
 		"planks":
 			for layer in 4:
@@ -718,7 +721,7 @@ static func add_prop(mb, kind: String, r: float, accent: Color) -> void:
 			mb.box(Vector3(0, 6.35 * r, 0), Vector3(0.5, 0.18, 0.5) * r, IRON)
 			mb.ball(Vector3(0, 5.95 * r, 0), 0.3 * r, WARM, Vector3.ONE, true)
 		"ore":
-			mb.cyl(Vector3.ZERO, 0.95 * r, 0.9 * r, Color(0.45, 0.38, 0.28), 7, Vector3.UP, 0.15 * r)
+			mb.cyl(Vector3.ZERO, 0.95 * r, 0.9 * r, Tone.of("ore"), 7, Vector3.UP, 0.15 * r)
 			for g in [Vector3(-0.3, 0.55, 0.2), Vector3(0.25, 0.45, -0.25), Vector3(0.05, 0.85, 0.0), Vector3(0.5, 0.25, 0.35)]:
 				mb.ball(g * r, 0.22 * r, GOLD)
 		"cart":
@@ -736,7 +739,7 @@ static func add_prop(mb, kind: String, r: float, accent: Color) -> void:
 			for layer in 2:
 				for j in 3:
 					var glow := layer == 1 and j == 1
-					var col := Color(1.0, 0.55, 0.12) if glow else STEEL
+					var col := Tone.of("ember") if glow else STEEL
 					var b := Vector3(0, (0.12 + 0.24 * layer) * r, (-0.42 + 0.42 * j) * r)
 					mb.box(b, Vector3(1.6, 0.22, 0.36) * r, col, glow)
 		"coal":
@@ -745,7 +748,7 @@ static func add_prop(mb, kind: String, r: float, accent: Color) -> void:
 		"drums":
 			for k in 2:
 				var x := (-0.48 + 0.96 * k) * r
-				var col := accent if k == 0 else Color(0.2, 0.22, 0.25)
+				var col := accent if k == 0 else Tone.of("steel")
 				mb.cyl(Vector3(x, 0, 0), 0.47 * r, 1.7 * r, col, 8)
 				mb.cyl(Vector3(x, 0.55 * r, 0), 0.5 * r, 0.1 * r, IRON, 8)
 				mb.cyl(Vector3(x, 1.15 * r, 0), 0.5 * r, 0.1 * r, IRON, 8)
@@ -758,7 +761,7 @@ static func add_prop(mb, kind: String, r: float, accent: Color) -> void:
 			mb.box(Vector3(0, 0.08 * r, 0), Vector3(1.8, 0.16, 0.7) * r, IRON)
 			for k in 3:
 				var x := (-0.6 + 0.6 * k) * r
-				var col := Color(0.25, 0.5, 0.42) if k != 1 else Color(0.3, 0.45, 0.7)
+				var col := Tone.of("leaf_dark") if k != 1 else Tone.of("sky")
 				mb.cyl(Vector3(x, 0.16 * r, 0), 0.24 * r, 2.4 * r, col, 7)
 				mb.cyl(Vector3(x, 2.56 * r, 0), 0.1 * r, 0.25 * r, BRASS, 6)
 			mb.box(Vector3(0, 1.8 * r, -0.3 * r), Vector3(1.9, 0.08, 0.06) * r, IRON)
@@ -771,14 +774,14 @@ static func add_prop(mb, kind: String, r: float, accent: Color) -> void:
 		"target":
 			mb.beam(Vector3(-0.5 * r, 0, 0.3 * r), Vector3(0, 2.4 * r, 0), 0.1 * r, DARK_WOOD)
 			mb.beam(Vector3(0.5 * r, 0, 0.3 * r), Vector3(0, 2.4 * r, 0), 0.1 * r, DARK_WOOD)
-			var rings := [[0.95, Color(0.92, 0.9, 0.84)], [0.7, Color(0.8, 0.15, 0.1)], [0.45, Color(0.92, 0.9, 0.84)], [0.2, accent]]
+			var rings := [[0.95, Tone.of("cream")], [0.7, Tone.of("red")], [0.45, Tone.of("cream")], [0.2, accent]]
 			for i in rings.size():
 				mb.cyl(Vector3(0, 1.6 * r, (0.12 + 0.03 * i) * r), float(rings[i][0]) * r, 0.03 * r, rings[i][1], 10, Vector3.BACK)
 		"flag":
 			mb.box(Vector3(0, 0.1 * r, 0), Vector3(0.6, 0.2, 0.6) * r, STONE)
 			mb.cyl(Vector3.ZERO, 0.07 * r, 8.0 * r, IRON, 6)
 			mb.box(Vector3(0.85 * r, 7.3 * r, 0), Vector3(1.6, 1.1, 0.05) * r, accent)
-			mb.box(Vector3(0.85 * r, 7.3 * r, 0), Vector3(1.62, 0.25, 0.06) * r, Color(0.12, 0.1, 0.08))
+			mb.box(Vector3(0.85 * r, 7.3 * r, 0), Vector3(1.62, 0.25, 0.06) * r, Tone.of("iron"))
 			mb.ball(Vector3(0, 8.1 * r, 0), 0.16 * r, BRASS)
 		"ammo":
 			mb.box(Vector3(0, 0.4 * r, 0), Vector3(1.6, 0.8, 1.0) * r, OLIVE)
@@ -792,13 +795,13 @@ static func add_prop(mb, kind: String, r: float, accent: Color) -> void:
 		"planter":
 			mb.box(Vector3(0, 0.3 * r, 0), Vector3(1.2, 0.6, 1.2) * r, TERRACOTTA)
 			mb.ball(Vector3(0, 0.82 * r, 0), 0.62 * r, LEAF, Vector3(1.0, 0.8, 1.0))
-			mb.ball(Vector3(0.3 * r, 1.12 * r, 0.2 * r), 0.16 * r, accent if accent.g < 0.5 else Color(0.9, 0.3, 0.3))
-			mb.ball(Vector3(-0.25 * r, 1.08 * r, -0.2 * r), 0.15 * r, Color(0.98, 0.85, 0.3))
+			mb.ball(Vector3(0.3 * r, 1.12 * r, 0.2 * r), 0.16 * r, accent if accent.g < 0.5 else Tone.of("red"))
+			mb.ball(Vector3(-0.25 * r, 1.08 * r, -0.2 * r), 0.15 * r, Tone.of("gold"))
 		"clothesline":
 			for x in [-1.0, 1.0]:
 				mb.cyl(Vector3(x * r, 0, 0), 0.07 * r, 3.4 * r, DARK_WOOD, 5)
-			mb.box(Vector3(0, 3.2 * r, 0), Vector3(2.0, 0.03, 0.03) * r, Color(0.85, 0.82, 0.75))
-			var cloth := [Color(0.92, 0.9, 0.84), accent, Color(0.35, 0.45, 0.7)]
+			mb.box(Vector3(0, 3.2 * r, 0), Vector3(2.0, 0.03, 0.03) * r, Tone.of("cream"))
+			var cloth := [Tone.of("cream"), accent, Tone.of("sky")]
 			for i in 3:
 				mb.box(Vector3((-0.6 + 0.6 * i) * r, 2.75 * r, 0), Vector3(0.45, 0.85, 0.03) * r, cloth[i])
 		"stake":

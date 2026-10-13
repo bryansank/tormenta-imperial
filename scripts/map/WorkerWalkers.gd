@@ -31,6 +31,7 @@ const Figures3D := preload("res://scripts/map/WalkerFigures3D.gd")
 const Figures2D := preload("res://scripts/view2d/WalkerFigures2D.gd")
 ## Una figura (sus campos, en WalkerActor.gd: los comparte con quien la dibuja).
 const Actor := preload("res://scripts/map/WalkerActor.gd")
+const Tone := preload("res://scripts/buildings/ToyTones.gd")
 
 enum Kind { WORKER, MAN, WOMAN, CHILD }
 enum State { INSIDE, WALK, IDLE, HIDING }
@@ -130,12 +131,15 @@ func is_sheltered() -> bool:
 func is_hurrying() -> bool:
 	return _hurry
 
-## El tope de figuras del perfil de dispositivo actual.
+## El tope de figuras del perfil de dispositivo actual, recortado por el de
+## calidad (GameConfig.life_figure_cap_quality, si lo hay).
 static func figure_cap(profile: String = "") -> int:
 	var p := profile
 	if p == "":
 		p = DeviceProfile.current()
-	return int(GameConfig.life_figure_cap.get(p, GameConfig.life_figure_cap.get("pc", 60)))
+	var cap := int(GameConfig.life_figure_cap.get(p, GameConfig.life_figure_cap.get("pc", 60)))
+	var quality := int(GameConfig.life_figure_cap_quality)
+	return mini(cap, quality) if quality >= 0 else cap
 
 ## Cuantas figuras de cada clase: una por cada `per` personas (obreros por un
 ## lado, ciudadanos sin ocupar por otro), con el tope; si no caben, a partes
@@ -646,15 +650,19 @@ func _apply_storm_phase(phase: int) -> void:
 
 # ── Paleta ──────────────────────────────────────────────────────────────
 
-const PAL := {
-	Kind.WORKER: [[Color(0.22, 0.32, 0.52), Color(0.36, 0.30, 0.22), Color(0.30, 0.33, 0.30), Color(0.42, 0.26, 0.18)],
-		[Color(0.92, 0.72, 0.18), Color(0.85, 0.48, 0.14), Color(0.72, 0.60, 0.32)]],
-	Kind.MAN: [[Color(0.20, 0.30, 0.22), Color(0.36, 0.24, 0.16), Color(0.22, 0.22, 0.25), Color(0.45, 0.16, 0.16), Color(0.30, 0.34, 0.42)],
-		[Color(0.10, 0.09, 0.08), Color(0.32, 0.22, 0.14), Color(0.42, 0.42, 0.40)]],
-	Kind.WOMAN: [[Color(0.62, 0.16, 0.18), Color(0.72, 0.56, 0.20), Color(0.16, 0.42, 0.42), Color(0.40, 0.20, 0.42), Color(0.55, 0.36, 0.20)],
-		[Color(0.20, 0.12, 0.08), Color(0.08, 0.07, 0.06), Color(0.52, 0.22, 0.10), Color(0.80, 0.66, 0.36)]],
-	Kind.CHILD: [[Color(0.78, 0.24, 0.20), Color(0.24, 0.44, 0.70), Color(0.30, 0.58, 0.28), Color(0.82, 0.62, 0.18)],
-		[Color(0.20, 0.12, 0.08), Color(0.46, 0.30, 0.16), Color(0.86, 0.80, 0.70)]],
+## [cuerpos, accesorios] por silueta, todos de la paleta de la maqueta
+## (ToyTones -> ToyPalette): vivos y calidos, que se lean sobre la hierba y la
+## calzada. Obreros de mono azul, rojo o teja con casco de senal; ciudadanos de
+## verde, laton, cielo...; los ninos, lo mas vivo.
+static var PAL := {
+	Kind.WORKER: [[Tone.of("sky"), Tone.of("navy"), Tone.of("terracotta"), Tone.of("steel")],
+		[Tone.of("hazard"), Tone.of("terracotta").lightened(0.1), Tone.of("cream")]],
+	Kind.MAN: [[Tone.of("leaf_dark"), Tone.of("wood"), Tone.of("steel"), Tone.of("red").darkened(0.2), Tone.of("navy")],
+		[Tone.of("iron"), Tone.of("wood_dark"), Tone.of("stone_dark")]],
+	Kind.WOMAN: [[Tone.of("red"), Tone.of("brass"), Tone.of("sky"), Tone.of("terracotta"), Tone.of("leaf")],
+		[Tone.of("wood_dark"), Tone.of("iron"), Tone.of("rust"), Tone.of("gold")]],
+	Kind.CHILD: [[Tone.of("red"), Tone.of("sky"), Tone.of("leaf"), Tone.of("brass")],
+		[Tone.of("wood_dark"), Tone.of("terracotta"), Tone.of("cream")]],
 }
 
 ## Colores de la figura: cuerpo y accesorio de la paleta de su silueta, con un
@@ -664,7 +672,7 @@ func _paint(a: Actor) -> void:
 	var bodies: Array = p[0]
 	var accents: Array = p[1]
 	var body: Color = bodies[_rng.randi() % bodies.size()]
-	var k := _rng.randf_range(0.88, 1.12)
+	var k := _rng.randf_range(0.93, 1.07)
 	a.body = Color(clampf(body.r * k, 0.0, 1.0), clampf(body.g * k, 0.0, 1.0), clampf(body.b * k, 0.0, 1.0))
 	a.accent = accents[_rng.randi() % accents.size()]
 	a.skin = _rng.randf()
