@@ -53,7 +53,7 @@ in `licenses/CC0-KENNEY-*.txt`.
 | `sfx/tithe_collected`, `collect`, `harvest` | Coins, purse, chop | CC0 | Kenney — RPG Audio (`handleCoins2`, `handleSmallLeather`, `chop`) |
 | `sfx/combat_unit_lost` | Crunching blast | CC0 | Kenney — Sci-Fi Sounds (`explosionCrunch_000`) |
 | `sfx/ui_toggle` | Soft switch for toggles and tabs | CC0 | Kenney — UI Audio (`switch2`) |
-| `ambient/day`, `ambient/storm`, `sfx/storm_warning`, `sfx/storm_thunder` | Ambience loops, siren, thunder | Original (game) | Synthesised by `tools/gen_ambient_audio.gd` |
+| `ambient/day`, `ambient/night`, `ambient/storm`, `sfx/storm_warning`, `sfx/storm_thunder` | Ambience loops (day, night crickets, storm), siren, thunder | Original (game) | Synthesised by `tools/gen_ambient_audio.gd` |
 
 Source URLs: Kenney — https://kenney.nl/assets/impact-sounds,
 https://kenney.nl/assets/interface-sounds, https://kenney.nl/assets/music-jingles,
