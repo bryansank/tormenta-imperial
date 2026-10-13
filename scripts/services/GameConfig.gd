@@ -41,12 +41,13 @@ var event_interval_max_dev := 60.0
 
 # ── Starting Resources ──
 
-## 2026-10-12 (docs/22 §11): 60 de oro mas y 40 de madera menos. La madera
+## 2026-10-12 (docs/22 §11): 30 de oro mas y 20 de madera menos. La madera
 ## sobraba (la sonda la vendia en el minuto 5) y el oro era lo que frenaba la
-## Fundicion; 360 + 160 + 80 = 600 sigue cabiendo justo en la bolsa de la era 1.
+## Fundicion. 330 + 180 + 80 = 590 deja hueco en la bolsa de 600 de la era 1, y
+## Supervivencia (x0.75: 135 de madera) sigue pagando aserradero + mina (130).
 var starting_resources := {
-	"gold": 360,
-	"wood": 160,
+	"gold": 330,
+	"wood": 180,
 	# Comida para los primeros minutos, hasta que la primera Granja rinda
 	# (2026-10-04). 580 en total: cabe en la bolsa de 600 de la era 1.
 	"food": 80,

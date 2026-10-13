@@ -71,6 +71,9 @@ var _r: Dictionary = {}
 func run() -> void:
 	GameConfig.dev_mode = false
 	GameConfig.time_multiplier = 1.0
+	# Velocidad x1 siempre (la x2 de la partida vive en settings.cfg).
+	if "game_speed" in GameConfig:
+		GameConfig.set("game_speed", 1.0)
 	# `--cfg.clave=valor` pisa un numero de GameConfig solo en esta corrida, para
 	# medir un cambio antes de escribirlo (ej. --cfg.storm_morale_per_tick=0.25).
 	for key in options:

@@ -126,8 +126,8 @@ func test_a_brand_new_game_fits_in_the_bag_it_starts_with() -> void:
 	var starting := 0
 	for res_name in GameConfig.starting_resources:
 		starting += int(GameConfig.starting_resources[res_name])
-	# 300 de oro + 200 de madera + 80 de comida (2026-10-04).
-	assert_int(starting).is_equal(580)
+	# 330 de oro + 180 de madera + 80 de comida (2026-10-12, docs/22 §11).
+	assert_int(starting).is_equal(590)
 	assert_int(GameConfig.get_storage_cap(0, 1)).is_equal(600)
 	assert_int(GameConfig.get_storage_cap(0, 1)).is_greater(starting)
 

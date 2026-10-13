@@ -173,7 +173,14 @@ static func _support_or(target: Dictionary) -> Dictionary:
 	# El paso de apoyo tiene que poder darse el tambien: otro aserradero sin
 	# obreros para atenderlo es un consejo que el juego rechaza al hacer clic.
 	var hands: Dictionary = _workers_step(support)
-	return hands if not hands.is_empty() else support
+	if not hands.is_empty():
+		return hands
+	# Sin obreros libres ahora y con la gente ya de camino (hay aforo): una casa
+	# no ayuda y el aserradero de apoyo se rechazaria con "Sin trabajadores
+	# disponibles". Se sigue con el paso de la linea hasta que nazcan.
+	if _workers_for(support) > PopulationManager.get_free_workers():
+		return target
+	return support
 
 ## El primer requisito que le falta a un paso de obra, como paso de obra (y el
 ## requisito del requisito, si tambien falta). {} si no le falta ninguno.
