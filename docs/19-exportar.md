@@ -2,7 +2,8 @@
 
 Cómo sacar de este proyecto un `TormentaImperial.exe` que otra persona pueda
 descargar y jugar, qué viaja dentro, qué se queda fuera y qué falta para publicarlo.
-Android (tableta primero) está en la sección 11.
+Android (tableta primero) está en la sección 11; la lista de comprobación de una
+publicación (itch.io y GitHub Releases), en la 12.
 
 Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11 (RTX 3060, Vulkan).
 
@@ -216,7 +217,7 @@ Deja un zip por plataforma, cada uno con una carpeta dentro:
 | Fichero | Windows (`TormentaImperial-<versión>-windows.zip`) | Android (`TormentaImperial-<versión>-android.zip`) |
 |---|---|---|
 | Binario | `TormentaImperial.exe` | `TormentaImperial-<versión>.apk` |
-| `LEEME.txt` | cómo abrirlo, SmartScreen, dónde se guarda (`%APPDATA%\TormentaImperial`), controles, cómo reportar fallos; resumen en inglés | sideload, "orígenes desconocidos", Play Protect, partida, controles táctiles, fallos; resumen en inglés |
+| `LEEME.txt` | requisitos, cómo abrirlo, SmartScreen, dónde se guarda (`%APPDATA%\TormentaImperial`), cómo desinstalar, controles, cómo reportar fallos, licencia y créditos; entero en español y en inglés | requisitos, sideload con "orígenes desconocidos", Play Protect, actualizar, partida, desinstalar, controles táctiles, fallos, licencia y créditos; entero en español y en inglés |
 | `LICENSE.txt` | `LICENSE` del repo (PolyForm Strict 1.0.0 + derechos reservados) | igual |
 | `THIRD-PARTY-NOTICES.md` | todo lo de terceros que viaja, con MIT, Apache 2.0 y OFL completas | igual |
 | `GODOT-COPYRIGHT.txt` | los 101 componentes del motor (FreeType, HarfBuzz, Jolt...) con sus licencias completas | igual |
@@ -267,12 +268,14 @@ hash de `THIRD-PARTY-NOTICES.md` §1:
 
 ### Dónde publicar
 
-1. **Testers:** el zip tal cual, por el canal que sea. La licencia no deja que ellos
-   lo redistribuyan, y el LEEME lo dice.
+1. **Testers:** el zip tal cual, por el canal que sea. La licencia no deja que nadie
+   lo vuelva a subir a otra página, y el LEEME lo dice.
 2. **itch.io:** crear el proyecto como "Downloadable", subir el zip marcado como
    Windows (y el de Android como Android). Para publicar versiones sin la web, `butler`:
    `butler push TormentaImperial-0.9.0-windows.zip usuario/tormenta-imperial:windows --userversion 0.9.0`.
 3. GitHub Releases también vale (adjuntar el zip a un tag), nunca dentro del repo.
+
+El paso a paso de una publicación está en §12.
 
 ### SmartScreen y el aviso de "editor desconocido"
 
@@ -546,3 +549,147 @@ Compatibility (OpenGL ES 3) en equipos sin Vulkan fiable.
   táctiles, colocación táctil, textos por dispositivo) ya está hecha
   ([21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md)); falta probarla en
   una tableta física.
+
+---
+
+## 12. Publicar una versión: lista de comprobación
+
+Para cada versión que se reparte en itch.io o GitHub Releases. El juego se publica
+gratis; si algún día se cobra, antes hay que resolver `docs/25-marco-legal.md` §7.
+
+### 12.1 Antes de exportar
+
+- [ ] **Textos y comunicación revisados contra `docs/25-marco-legal.md`** (§3 y §4,
+      y la búsqueda de verbos de §10 en `Tr.gd`). Las notas de versión y la página de
+      la tienda también pasan por ahí.
+- [ ] **Versión en un solo sitio:** `config/version` en `project.godot` (por ejemplo
+      `1.0.0`). De ahí salen la versión del .exe (*Propiedades → Detalles*), el
+      `versionName` del APK, la primera línea del log y el nombre de los zips.
+- [ ] **`version/code` en los dos presets de Android** (`Android` y `Android QA
+      (emulador)`), con la regla de §11.6: `mayor*10000 + menor*100 + parche`
+      (0.9.0 → 900, 1.0.0 → 10000). Tiene que crecer siempre: Android no instala
+      encima un APK con un número menor.
+- [ ] Copia limpia del repo en la versión exacta (un worktree en el commit que se
+      publica) y `override.cfg` temporal con carpeta de usuario propia (§3).
+- [ ] `--import` y **tests en verde** por el envoltorio (`tools/run_tests.sh`).
+
+### 12.2 Exportar los dos
+
+```bash
+mkdir -p build/windows build/android
+"$GODOT" --headless --path . --export-release "Windows Desktop" build/windows/TormentaImperial.exe
+adb start-server   # evita que el export de Android se quede colgado (§11.5)
+# Con el keystore de release cargado en el entorno (12.5):
+"$GODOT" --headless --path . --export-release "Android" build/android/TormentaImperial.apk
+# Sin keystore de release (solo para testers): --export-debug ... TormentaImperial-debug.apk
+```
+
+- [ ] La primera línea de `logs/godot.log` del exportado dice `dev_mode=false` y la
+      versión correcta.
+
+### 12.3 Empaquetar
+
+```bash
+bash tools/package_release.sh --apk build/android/TormentaImperial.apk
+# (sin --apk toma el de depuración, build/android/TormentaImperial-debug.apk)
+```
+
+- [ ] Salen `dist/TormentaImperial-<versión>-windows.zip` y `-android.zip`, cada uno
+      con su `LEEME.txt`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.md`,
+      `GODOT-COPYRIGHT.txt` y `licenses/fonts/`. Si falta una licencia, el script no
+      crea el zip (§8).
+- [ ] Opcional: una suma de comprobación para quien quiera verificar la descarga:
+      `sha256sum dist/*.zip > dist/SHA256SUMS.txt`.
+
+### 12.4 Probar el zip en limpio
+
+Se prueba **el zip**, no la carpeta `build/`: es lo que recibe el jugador.
+
+- [ ] **Windows:** descomprimir en una carpeta nueva. Para ver la primera partida de
+      un jugador nuevo, renombrar antes `%APPDATA%\TormentaImperial` (no borrarlo) y
+      devolverle el nombre al terminar. Comprobar: el aviso de SmartScreen y *Más
+      información → Ejecutar de todas formas*, el prólogo y el tutorial, unos minutos
+      de partida, cerrar y volver a abrir con la partida guardada, F11 y el cambio
+      de idioma.
+- [ ] **Android:** instalar el APK del zip en una tableta real por sideload (no por
+      `adb`), siguiendo el `LEEME.txt` tal cual. Comprobar: arranque, controles
+      táctiles, colocar un edificio, salir y volver con la partida guardada. Con una
+      versión nueva, instalarla **encima** de la anterior y ver que la partida sigue.
+- [ ] Leer los dos `LEEME.txt` del zip: versión correcta y nada desfasado.
+
+### 12.5 El keystore de release de Android
+
+Un APK de depuración se firma con una clave genérica que cambia de una máquina a otra,
+y Android no instala encima una versión firmada con otra clave: el jugador tendría que
+desinstalar antes (y perder la partida). Por eso, **antes de la primera versión pública
+del APK** conviene firmar ya con la clave de release, y no cambiarla nunca. Es la misma
+clave que pedirá Google Play (§11.10).
+
+1. **Crear la clave una vez** con el `keytool` del JDK 17, en una carpeta fuera del
+   repositorio (comando en §11.4). `keytool` pide la contraseña por teclado: no se
+   escribe en el comando.
+2. **Guardarla con copia:** el `.keystore` y su contraseña en un gestor de
+   contraseñas, más una copia offline. Sin ella no hay actualizaciones con la misma
+   identidad.
+3. **No tocar `export_presets.cfg`:** los campos `keystore/release*` se quedan vacíos
+   (`tests/build/test_export_guards.gd` falla si no). Godot los lee del entorno al
+   exportar:
+
+   | Variable | Qué lleva |
+   |---|---|
+   | `GODOT_ANDROID_KEYSTORE_RELEASE_PATH` | la ruta al `.keystore` |
+   | `GODOT_ANDROID_KEYSTORE_RELEASE_USER` | el alias de la clave |
+   | `GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD` | la contraseña |
+
+4. **Cargarlas solo en la sesión que exporta**, sin que la contraseña quede en el
+   historial ni en ningún fichero:
+
+   ```powershell
+   $env:GODOT_ANDROID_KEYSTORE_RELEASE_PATH = "<ruta al .keystore>"
+   $env:GODOT_ANDROID_KEYSTORE_RELEASE_USER = "<alias>"
+   $p = Read-Host "Contraseña del keystore" -AsSecureString
+   $env:GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+       [Runtime.InteropServices.Marshal]::SecureStringToBSTR($p))
+   & $GODOT --headless --path . --export-release "Android" build/android/TormentaImperial.apk
+   Remove-Item Env:GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
+   ```
+
+   ```bash
+   export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="<ruta al .keystore>"
+   export GODOT_ANDROID_KEYSTORE_RELEASE_USER="<alias>"
+   read -rsp "Contraseña del keystore: " GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD; echo
+   export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
+   "$GODOT" --headless --path . --export-release "Android" build/android/TormentaImperial.apk
+   unset GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
+   ```
+
+   Nunca en un `.env` dentro del repo, en un script versionado ni en las variables
+   permanentes del sistema.
+5. **Comprobar la firma** con `apksigner` (en `build-tools\35.0.1`):
+   `apksigner verify --print-certs build/android/TormentaImperial.apk`. Tiene que
+   salir tu certificado, no `CN=Android Debug`.
+
+Si ya se repartió un APK de depuración, avisarlo en las notas de versión: el primer
+APK firmado con la clave de release obliga a desinstalar el anterior una vez.
+
+### 12.6 Subir
+
+- [ ] **itch.io:** subir los dos zips (o con `butler`, §8) y marcar cada uno con su
+      plataforma: Windows y Android. Nombre visible del archivo con la versión.
+- [ ] **GitHub Releases:** crear el tag `v<versión>` en el commit exportado y una
+      release con los dos zips (y `SHA256SUMS.txt` si se hizo). Los binarios van
+      adjuntos a la release, nunca dentro del repositorio.
+- [ ] En las dos páginas, el aviso de SmartScreen y el de "orígenes desconocidos".
+- [ ] Probar la descarga desde la página publicada (otra cuenta o una ventana
+      privada) y abrir el zip descargado.
+- [ ] Poner el enlace de itch.io en la sección "Descargar y jugar" del `readme.md`.
+
+### 12.7 Notas de versión
+
+- [ ] Unas notas cortas por versión: qué hay de nuevo, qué se arregló, problemas
+      conocidos y requisitos. Las mismas en itch.io (*devlog* o descripción) y en la
+      release de GitHub, en español y en inglés.
+- [ ] Mismo criterio que la página (`docs/25-marco-legal.md` §4): el juego es de
+      gestión y estrategia; el combate se cuenta como defensa, nunca como gancho.
+- [ ] No anunciar lo que no está: nada de nube, PvP ni multijugador mientras no exista.
+- [ ] Al terminar: borrar `override.cfg` y el worktree de publicación.
