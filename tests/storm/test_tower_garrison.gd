@@ -168,8 +168,11 @@ func test_every_defender_gets_its_own_cell_in_the_player_rows() -> void:
 		assert_bool(unit.position.y >= board.y - 2 and unit.position.y < board.y).is_true()
 		assert_bool(taken.has(unit.position)).is_false()
 		taken[unit.position] = true
-	assert_int(taken.size()) \
-		.is_equal(GameConfig.combat_deploy_cap + GameConfig.storm_tower_garrison_max)
+	# Con la guarnicion llena, las dotaciones son las que caben en la fila (desde
+	# 2026-10-12 el tope de dotaciones, 4, pasa de lo que deja una guarnicion de 6).
+	var crews: int = GameConfig.get_tower_garrison(
+		GameConfig.building_limits[GameConfig.storm_tower_building_id], GameConfig.combat_deploy_cap)
+	assert_int(taken.size()).is_equal(GameConfig.combat_deploy_cap + crews)
 
 # ── Quien puede plantarse ────────────────────────────────────────────
 

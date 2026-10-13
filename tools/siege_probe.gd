@@ -17,6 +17,7 @@ extends SceneTree
 ##   --era=N          era de la guarnicion (3)
 ##   --morale=F       moral congelada (100)
 ##   --towers=N       torres en pie (2)
+##   --crews=N        pisa `storm_tower_garrison_max` (dotaciones de torre a la vez)
 ##   --spw --spe --last --base --per --gun --armour --chance --waves=min,max
 ##                    pisan los `final_audit_*` correspondientes
 ##   --only=etiqueta  una sola configuracion de guarnicion
@@ -233,6 +234,7 @@ func _apply_overrides() -> void:
 			"armour": _cfg.final_audit_armour_wave = int(value)
 			"chance": _cfg.final_audit_extra_gun_chance = float(value)
 			"audit_mult": _cfg.game_tier_rules["governor"]["audit_enemy_mult"] = float(value)
+			"crews": _cfg.storm_tower_garrison_max = int(value)
 			"waves":
 				var pair: PackedStringArray = value.split(",")
 				if pair.size() == 2:

@@ -511,3 +511,30 @@ func test_with_the_first_sortie_done_the_flow_is_unchanged() -> void:
 	for row in Objectives.route():
 		if String(row["text"]) == Tr.t("OBJ_ROUTE_FIRST_SORTIE"):
 			assert_bool(bool(row["done"])).is_true()
+
+# ── Requisitos y torres del asedio (2026-10-12) ──────────────────────
+
+## Un paso cuyo edificio pide otro en pie antes (building_prerequisites) no se
+## propone a ciegas: primero el requisito, y el requisito del requisito.
+func test_a_step_with_missing_prerequisites_asks_for_them_first() -> void:
+	var step: Dictionary = Objectives.prerequisite_step({"kind": "build", "id": "refinery"})
+	# Sin nada en pie: Refineria -> Fundicion -> Aserradero.
+	assert_str(String(step.get("id", ""))).is_equal("sawmill")
+	assert_str(String(step.get("why", ""))).is_equal("OBJ_WHY_PREREQUISITE")
+	_assert_readable(step, "requisito")
+
+func test_a_step_with_its_prerequisites_standing_is_left_alone() -> void:
+	for id in ["sawmill", "gold_mine", "house", "warehouse", "foundry", "barracks"]:
+		_build(id)
+	var saved: Array = GameConfig.building_prerequisites["refinery"].duplicate()
+	GameConfig.building_prerequisites["refinery"] = ["foundry", "barracks"]
+	assert_bool(Objectives.prerequisite_step({"kind": "build", "id": "refinery"}).is_empty()).is_true()
+	GameConfig.building_prerequisites["refinery"] = saved
+
+## La linea pide para el asedio tantas torres como dotaciones caben a la vez.
+func test_the_siege_towers_follow_the_crew_cap() -> void:
+	var entry := {"kind": "build", "id": "tower", "count_from": "audit_towers"}
+	var saved: int = GameConfig.storm_tower_garrison_max
+	GameConfig.storm_tower_garrison_max = 4
+	assert_int(Objectives.entry_count(entry)).is_equal(4)
+	GameConfig.storm_tower_garrison_max = saved

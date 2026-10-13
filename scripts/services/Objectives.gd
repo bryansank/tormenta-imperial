@@ -47,6 +47,12 @@ const LINE := [
 	{"kind": "build", "id": "headquarters", "count": 1, "why": "OBJ_WHY_HQ"},
 	{"kind": "upgrade", "id": "headquarters", "level": 2, "why": "OBJ_WHY_HQ_2"},
 	{"kind": "train", "id": "vehicle", "count": 6, "needs": "audit", "why": "OBJ_WHY_ARMOUR"},
+	# Las torres que el asedio aprovecha: cada una manda una dotacion de
+	# artilleria, y con la guarnicion mermada caben mas en el tablero
+	# (GameConfig.storm_tower_garrison_max). Es la preparacion del final
+	# (docs/17-balance-asedio.md, 2026-10-12): con dos torres el asedio se gana
+	# siete de cada diez; con las que pide aqui, casi siempre.
+	{"kind": "build", "id": "tower", "count_from": "audit_towers", "needs": "audit", "why": "OBJ_WHY_TOWERS_AUDIT"},
 	{"kind": "upgrade", "id": "headquarters", "level": 3, "why": "OBJ_WHY_HQ_3"},
 ]
 
@@ -138,6 +144,12 @@ static func next_step() -> Dictionary:
 	return _support_or(target)
 
 static func _support_or(target: Dictionary) -> Dictionary:
+	# Lo que el edificio pide en pie antes (GameConfig.building_prerequisites)
+	# va primero: si no, el panel pedia algo que el juego rechaza al hacer clic
+	# y la partida se quedaba ahi para siempre.
+	var prereq: Dictionary = prerequisite_step(target)
+	if not prereq.is_empty():
+		target = prereq
 	# La bolsa atascada de lo que el paso no pide: vender eso primero, o lo que
 	# espera en los edificios (el acero de la fundicion, el oro de la mina) no
 	# entra nunca (2026-10-04: la produccion ya no se tira, se para).
@@ -148,6 +160,12 @@ static func _support_or(target: Dictionary) -> Dictionary:
 	# fabricarlo, juntar oro no acerca al paso.
 	var make: Dictionary = make_step_for(target)
 	if not make.is_empty():
+		# Al taller le falta su receta (acero para las vigas...) y la bolsa esta
+		# llena de otra cosa: comprarla con el oro que sobra. Sin esto la sonda
+		# se quedo horas con 3.000 de oro y sin acero para una viga (2026-10-12).
+		var trade: Dictionary = _sell_step(make)
+		if not trade.is_empty():
+			return trade
 		return make
 	var support: Dictionary = _support_step(target)
 	if support.is_empty():
@@ -156,6 +174,20 @@ static func _support_or(target: Dictionary) -> Dictionary:
 	# obreros para atenderlo es un consejo que el juego rechaza al hacer clic.
 	var hands: Dictionary = _workers_step(support)
 	return hands if not hands.is_empty() else support
+
+## El primer requisito que le falta a un paso de obra, como paso de obra (y el
+## requisito del requisito, si tambien falta). {} si no le falta ninguno.
+static func prerequisite_step(target: Dictionary, depth: int = 0) -> Dictionary:
+	if String(target.get("kind", "")) != "build" or depth > 4:
+		return {}
+	for req_id in GameConfig.get_prerequisites(String(target["id"])):
+		if Rules.count_building(String(req_id)) >= 1:
+			continue
+		var req := {"kind": "build", "id": String(req_id), "count": 1,
+			"why": "OBJ_WHY_PREREQUISITE", "for": String(target["id"])}
+		var deeper: Dictionary = prerequisite_step(req, depth + 1)
+		return deeper if not deeper.is_empty() else req
+	return {}
 
 ## Vender lo que sobra cuando la bolsa esta a rebosar y algo espera en los
 ## edificios para entrar. Sobra lo que ni el paso ni su receta de taller piden,
@@ -196,7 +228,15 @@ static func _unclog_step(target: Dictionary) -> Dictionary:
 			best_excess = excess
 	if best == "":
 		return {}
-	return {"kind": "sell", "id": best, "amount": mini(best_excess, maxi(MIN_SALE, cap / 5)), "why": "OBJ_WHY_SELL"}
+	# Lo que se vende vuelve como oro, que tambien ocupa bolsa: con la bolsa a
+	# rebosar, vender de golpe un quinto de la bolsa tiraba el oro que no cabia
+	# (hasta 8.000 de oro perdidos por partida, tools/line_probe.gd 2026-10-12).
+	# Se vende solo lo que cabe; si no cabe ni un poco, no se vende (la gente
+	# come y hace sitio en unos ciclos).
+	var amount: int = _sale_that_fits(best, mini(best_excess, maxi(MIN_SALE, cap / 5)))
+	if amount <= 0:
+		return {}
+	return {"kind": "sell", "id": best, "amount": amount, "why": "OBJ_WHY_SELL"}
 
 ## "Fabrica vigas en la Fundicion" si `target` pide un material que falta y su
 ## edificio esta en pie. {} si no pide materiales, ya los hay, o aun no hay donde
@@ -270,8 +310,10 @@ static func _first_open_line_step() -> Dictionary:
 			continue
 		match String(entry["kind"]):
 			"build":
-				if Rules.count_building(String(entry["id"])) < int(entry["count"]):
-					return entry.duplicate()
+				if Rules.count_building(String(entry["id"])) < entry_count(entry):
+					var open_step: Dictionary = entry.duplicate()
+					open_step["count"] = entry_count(entry)
+					return open_step
 			"upgrade":
 				var node: Node = _first_building(String(entry["id"]))
 				if node == null:
@@ -286,6 +328,15 @@ static func _first_open_line_step() -> Dictionary:
 					step["any"] = bool(entry.get("any", false))
 					return step
 	return {}
+
+## Cuantos pide una entrada de la linea. Las torres del asedio salen de
+## GameConfig: tantas como dotaciones caben a la vez (storm_tower_garrison_max).
+static func entry_count(entry: Dictionary) -> int:
+	match String(entry.get("count_from", "")):
+		"audit_towers":
+			var per: int = maxi(1, GameConfig.storm_tower_garrison_per_tower)
+			return int(ceil(float(GameConfig.storm_tower_garrison_max) / float(per)))
+	return int(entry.get("count", 1))
 
 ## Que se entrena para un paso de guarnicion: canones hasta tener los que pide,
 ## luego infanteria. Un paso de un solo tipo entrena ese tipo.
@@ -518,6 +569,10 @@ static func _food_market_step(res: String) -> Dictionary:
 			continue
 		var sell_price: int = maxi(1, MarketManager.get_sell_price(other))
 		var units: int = mini(stock - keep, maxi(MIN_SALE, int(ceil(float(wanted) / float(sell_price)))))
+		# El oro tiene que caber (el que no cabe se tira). Con hambre de oro para
+		# la tropa se vende igual un poco: es eso o que deserte.
+		if sell_price > 1:
+			units = mini(units, maxi(MIN_SALE, ResourceManager.get_free_space() / (sell_price - 1)))
 		return {"kind": "sell", "id": other, "amount": units, "why": "OBJ_WHY_HUNGRY"}
 	return {}
 
@@ -549,7 +604,11 @@ static func _sell_step(target: Dictionary) -> Dictionary:
 		return {}
 	var missing: Dictionary = missing_for(target)
 	var food_short: bool = ResourceManager.get_amount(ResourceManager.Type.FOOD) < PopulationManager.food_due() * 2
-	if not missing.has("gold") and not missing.has("wood") and not food_short:
+	# Los materiales no se compran: los hace el taller (make_step_for).
+	for res in missing.keys():
+		if ResourceManager.is_material_name(String(res)):
+			missing.erase(res)
+	if missing.is_empty() and not food_short:
 		return {}
 	var cost: Dictionary = step_cost(target)
 	# Falta madera, acero o petroleo y sobra oro: se compra. Comprar ademas hace
@@ -564,7 +623,8 @@ static func _sell_step(target: Dictionary) -> Dictionary:
 			continue
 		var buy_price: int = maxi(1, MarketManager.get_buy_price(res))
 		var can: int = mini(int(missing[res]), gold_spare / buy_price)
-		if can >= MIN_SALE:
+		# Lo que falta puede ser menos que MIN_SALE (los 16 de acero de una viga).
+		if can >= mini(MIN_SALE, int(missing[res])) and can > 0:
 			return {"kind": "buy", "id": res, "amount": can, "why": "OBJ_WHY_BUY"}
 	var best := ""
 	var best_excess := MIN_SALE - 1
@@ -579,10 +639,22 @@ static func _sell_step(target: Dictionary) -> Dictionary:
 			best_excess = excess
 	if best == "":
 		return {}
-	var price: int = maxi(2, MarketManager.get_sell_price(best))
-	var fits: int = ResourceManager.get_free_space() / (price - 1)
-	var amount: int = clampi(maxi(fits, MIN_SALE), 1, best_excess)
+	# Lo que cabe: el oro de mas se tiraria (hasta 8.000 de oro por partida con
+	# el minimo de MIN_SALE de antes, 2026-10-12). Si lo que falta no es oro, el
+	# oro de la venta paga la compra del siguiente vistazo.
+	var amount: int = _sale_that_fits(best, best_excess)
+	if amount <= 0:
+		return {}
 	return {"kind": "sell", "id": best, "amount": amount, "why": "OBJ_WHY_SELL"}
+
+## Cuanto de `res` (hasta `wanted`) se puede vender sin que el oro que trae se
+## salga de la bolsa: vender X deja X de sitio y mete precio*X de oro. 0 si no
+## llega a un lote que merezca la pena (5).
+static func _sale_that_fits(res: String, wanted: int) -> int:
+	var price: int = maxi(1, MarketManager.get_sell_price(res))
+	var fits: int = wanted if price <= 1 else ResourceManager.get_free_space() / (price - 1)
+	var amount: int = mini(wanted, fits)
+	return amount if amount >= 5 else 0
 
 ## El recurso cuya falta mas tarda en cubrirse, si tarda demasiado. "" si nada.
 static func _slowest_missing(step: Dictionary, net: Dictionary) -> String:
@@ -783,7 +855,7 @@ static func route() -> Array:
 static func _line_entry_done(entry: Dictionary) -> bool:
 	match String(entry["kind"]):
 		"build":
-			return Rules.count_building(String(entry["id"])) >= int(entry["count"])
+			return Rules.count_building(String(entry["id"])) >= entry_count(entry)
 		"upgrade":
 			var node: Node = _first_building(String(entry["id"]))
 			return node != null and int(node.get_meta("level", 1)) >= int(entry["level"])
