@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode specular_schlick_ggx;
+#include "res://scripts/map/storm_grade.gdshaderinc"
 
 // El cesped de la isla (docs/21 §12): diorama de juguete, verdes calidos y
 // saturados con tres tonos, calvas de tierra, manchas secas y flores sueltas.
@@ -27,7 +28,9 @@ float hash(vec2 p) {
 float noise(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f);
+	// Fundido de quinto grado: con el cubico las celdas del ruido se leian
+	// como facetas rectas en las manchas grandes.
+	f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
 	float a = hash(i);
 	float b = hash(i + vec2(1.0, 0.0));
 	float c = hash(i + vec2(0.0, 1.0));
@@ -35,28 +38,40 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+// Cada octava girada ~37 grados: el ruido de valor alineado con los ejes
+// dejaba manchas cuadradas que se leian como una rejilla.
+const mat2 OCTAVE_ROT = mat2(vec2(0.8, -0.6), vec2(0.6, 0.8));
+
+// Tres octavas escritas a mano (sin bucle: igual en cualquier GPU vieja).
 float fbm(vec2 p) {
-	float val = 0.0;
-	float amp = 0.5;
-	for (int i = 0; i < 3; i++) {
-		val += amp * noise(p);
-		p *= 2.13;
-		amp *= 0.5;
-	}
+	float val = 0.5 * noise(p);
+	p = OCTAVE_ROT * p * 2.13;
+	val += 0.25 * noise(p);
+	p = OCTAVE_ROT * p * 2.13;
+	val += 0.125 * noise(p);
 	return val / 0.875;
 }
 
 void fragment() {
-	vec2 uv = world_pos.xz;
+	// Girada tambien la base: ninguna mancha sigue las calles de la rejilla.
+	vec2 uv = OCTAVE_ROT * world_pos.xz;
 
-	// Grandes manchas de dos verdes y una sombra mas oscura.
-	float n1 = fbm(uv / noise_scale);
+	// Grandes manchas de dos verdes y una sombra mas oscura. En la version
+	// completa el dominio se dobla con dos ruidos lentos: sin eso el ruido de
+	// valor deja manchas de lados rectos, como facetas.
+	vec2 puv = uv;
+	if (!simple) {
+		puv += (vec2(noise(uv * 0.08), noise(uv * 0.08 + vec2(17.0, 5.0))) - 0.5) * 9.0;
+	}
+	float n1 = fbm(puv / noise_scale);
 	vec3 col = mix(grass_color_1.rgb, grass_color_2.rgb, smoothstep(0.38, 0.62, n1));
-	float dark = fbm(uv / (noise_scale * 0.6) + vec2(37.0, 11.0));
-	col = mix(col, grass_color_3.rgb, smoothstep(0.55, 0.75, dark) * 0.7);
-	// Zonas secas, amarillentas.
-	float dry = fbm(uv / (noise_scale * 1.7) + vec2(-21.0, 64.0));
-	col = mix(col, dry_color.rgb, smoothstep(0.6, 0.78, dry) * 0.45);
+	// La sombra y las zonas secas (amarillentas), solo en la version completa.
+	if (!simple) {
+		float dark = fbm(puv / (noise_scale * 0.6) + vec2(37.0, 11.0));
+		col = mix(col, grass_color_3.rgb, smoothstep(0.55, 0.75, dark) * 0.7);
+		float dry = fbm(puv / (noise_scale * 1.7) + vec2(-21.0, 64.0));
+		col = mix(col, dry_color.rgb, smoothstep(0.6, 0.78, dry) * 0.45);
+	}
 
 	// Calvas de tierra: pocas, de borde suave.
 	float dirt = fbm(uv / 5.0 + vec2(91.0, -13.0));
@@ -64,8 +79,10 @@ void fragment() {
 	col = mix(col, dirt_color.rgb, dirt_m);
 
 	// Matas: un grano fino de luz y sombra, como cesped de maqueta.
-	float tuft = noise(uv * 3.1) * 0.6 + noise(uv * 7.3) * 0.4;
-	col *= 0.9 + 0.18 * tuft;
+	if (!simple) {
+		float tuft = noise(uv * 3.1) * 0.6 + noise(uv * 7.3) * 0.4;
+		col *= 0.9 + 0.18 * tuft;
+	}
 
 	// Flores sueltas: una por celda de 0.7 unidades, en pocas celdas.
 	vec2 cell = floor(uv / 0.7);
@@ -80,7 +97,7 @@ void fragment() {
 		col = mix(col, flower, petal);
 	}
 
-	ALBEDO = col;
+	ALBEDO = storm_grade(col, 0.85);
 	ROUGHNESS = roughness_val;
 	SPECULAR = 0.2;
 	METALLIC = 0.0;

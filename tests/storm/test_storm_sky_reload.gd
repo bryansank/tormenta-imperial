@@ -102,3 +102,38 @@ func test_every_phase_has_its_weight() -> void:
 	assert_float(StormSky.weight_for(StormCycle.Phase.WARNING, 3)).is_equal(StormSky.WEIGHT_WARNING)
 	assert_float(StormSky.weight_for(StormCycle.Phase.ASH, 3)).is_equal(StormSky.WEIGHT_ASH)
 	assert_float(StormSky.weight_for(StormCycle.Phase.STORM, 1)).is_greater_equal(0.6)
+
+## La espuma de la isla, con su shader de verdad, colgada de la escena.
+func _add_foam(scene: Node) -> ShaderMaterial:
+	var foam := MeshInstance3D.new()
+	foam.name = "Foam"
+	foam.mesh = PlaneMesh.new()
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://scripts/map/island_foam.gdshader")
+	foam.set_surface_override_material(0, mat)
+	scene.add_child(foam)
+	return mat
+
+func test_the_island_darkens_with_the_sky_and_comes_back_clean() -> void:
+	var scene := _scene()
+	var foam := _add_foam(scene)
+	_load_phase(StormCycle.Phase.ASH)
+	EventBus.game_load_completed.emit()
+	assert_float(float(foam.get_shader_parameter("storm_weight"))).is_equal_approx(StormSky.WEIGHT_ASH, 0.0001)
+	assert_float(StormSky.get_island_weight()).is_equal_approx(StormSky.WEIGHT_ASH, 0.0001)
+	_load_phase(StormCycle.Phase.CALM)
+	EventBus.game_load_completed.emit()
+	assert_float(float(foam.get_shader_parameter("storm_weight"))).is_equal(0.0)
+
+func test_without_a_sky_the_island_weight_is_still_kept() -> void:
+	# Vista 2D o escena a medio montar: no hay cielo, pero la isla que se cree
+	# despues tiene que nacer con la Tormenta puesta.
+	var bare := Node3D.new()
+	get_tree().root.add_child(bare)
+	get_tree().current_scene = bare
+	_scenes.append(bare)
+	_load_phase(StormCycle.Phase.STORM)
+	StormSky.sync_to_storm()
+	assert_float(StormSky.get_island_weight()).is_greater_equal(0.6)
+	StormSky.restore_now()
+	assert_float(StormSky.get_island_weight()).is_equal(0.0)

@@ -489,3 +489,130 @@ flujos de `qa/maestro/` recorren lo mismo en el emulador de tableta. Siempre con
 - `UILayoutConfig.CENTER_COLUMN_HALF_WIDTH` sigue en 220 (se midió con la franja de
   objetivo, de 440 px): la Tormenta (380) cabe con margen y así no se mueven los
   umbrales de las tablets.
+
+## 12. Luz y ambiente del mapa 3D (aire de maqueta)
+
+> Número fijo: el código lo cita como "docs/21 §12" desde la rama de arte. El §11
+> queda libre.
+
+Dirección de arte (2026-10-05): diorama de juguete. Colores cálidos y saturados,
+luz suave y sombras marcadas que anclan cada pieza al suelo. Esta sección cubre
+lo que no es edificio: cielo, sol, isla, agua y lo que les hace la Tormenta.
+Los edificios, las parcelas y su paleta están en docs/03 ("Modelos: maqueta de
+juguete", `scripts/buildings/ToyPalette.gd`).
+
+### Quién hace qué
+
+| Pieza | Archivo | Qué decide |
+|---|---|---|
+| Cielo, sol, tonemapping | `scenes/main/Main.tscn` (`WorldEnvironment`, `DirectionalLight`) | Los colores **limpios**: cielo procedural cálido, luz ambiental del cielo (70 %), sol cálido a 1,35, ACES, contraste 1,06 y saturación 1,2 |
+| Lo que cuesta GPU | `scripts/map/WorldLook.gd` (script del `WorldEnvironment`) | SSAO, glow, cortes de sombra, radiancia, isla sencilla, escala 3D. Nunca toca colores ni energías |
+| La Tormenta | `scripts/map/StormSky.gd` (autoload) | Guarda los valores limpios y los oscurece por fase: cielo, niebla, sol, luz ambiental **y la isla** |
+| La isla | `scripts/map/IslandGenerator.gd` + cinco shaders | Cesped (`grass_ground`), canto (`island_cliff`), playa (`island_sand`), espuma (`island_foam`), agua (`water_border`). Sin texturas: todo en coordenadas de mundo |
+| Lo común de los shaders | `scripts/map/storm_grade.gdshaderinc` | Los uniforms `storm_weight` (0-1) y `simple` (bool), y la función `storm_grade()` |
+
+La isla 2D (`scripts/view2d/Island2D.gd`) usa la misma geometría y la misma
+paleta cálida, pero no pasa por nada de esto: se tiñe con `StormTint2D`.
+
+### La isla de maqueta
+
+- **Cesped** en y = 0 (la rejilla, el ratón y los edificios cuentan con ello):
+  tres verdes, zonas secas, calvas de tierra, grano de matas y flores sueltas.
+  Las octavas del ruido van giradas y el dominio se dobla con dos ruidos lentos:
+  sin eso las manchas salían cuadradas, alineadas con las calles.
+- **Canto**: una pared de y = 0 a y = −0,6 por todo el borde, con un labio verde
+  arriba y tierra con vetas (la `WOOD` de ToyPalette oscurecida).
+- **Playa**: un anillo que baja de −0,28 a −0,9; arena entre `CREAM` y `BRASS`,
+  mojada donde la corta el agua, y una franja oscura al pie del canto que hace de
+  **sombra de contacto** (ancla la placa de cesped sin SSAO, que Mobile no tiene).
+- **Agua** a y = −0,5: el `SKY` de ToyPalette, hondo lejos y turquesa junto a la
+  costa (distancia a un rectángulo redondeado ajustado a la isla). Ondas de
+  senos, sin ruido: el ruido de valor derivado dejaba un mosaico de rombos.
+- **Espuma**: cinta `unshaded` que sigue la costa exacta, con una franja fija
+  pegada a la arena (legible desde lejos) y líneas que salen hacia el mar.
+- Todo se rehace en `grid_resized` (la rejilla cambia por partida).
+
+### Calidades (`WorldLook.settings_for`)
+
+El jugador elige en Ajustes → Interfaz: `auto`, `high`, `low`
+(`GameConfig.ui_graphics_quality`, en `settings.cfg`). `auto` es alta solo con
+Forward+; con Mobile o Compatibility es baja. `minimal` existe en WorldLook pero
+aún **no tiene entrada en Ajustes** (2026-10-12): se activa poniendo
+`GameConfig.ui_graphics_quality = "minimal"` y emitiendo
+`graphics_quality_changed` (lo hace `tools/arte_probe_runner.gd`).
+
+| | Alta | Baja | Mínima |
+|---|---|---|---|
+| SSAO | solo Forward+ | no | no |
+| Glow | Forward+ y Mobile | no | no |
+| Sombras del sol | 4 cortes (Forward+), 2 (Mobile) | 1 corte (ortogonal) | **apagadas** |
+| Radiancia del cielo | 64 | 32 | 32 |
+| Isla | completa | sencilla | sencilla |
+| `scaling_3d_scale` | 1,0 | 1,0 | **0,7** (la UI no se escala) |
+
+- **Isla sencilla** (uniform `simple`): agua lisa (solo el degradado, sin ondas
+  ni crestas), espuma con la franja fija y sin líneas, cesped sin sombra, zonas
+  secas, matas ni doblado de dominio, arena sin grano ni guijarros. El valor es
+  el mismo para todo el material, así que la rama no cuesta. WorldLook lo pinta
+  en los materiales al cambiar de calidad, e IslandGenerator lo lee
+  (`WorldLook.island_simple()`) al crearlos.
+- **Distancia de sombra**: sigue al zoom de la cámara
+  (`shadow_distance_for`: distancia × 1,6 + 18, entre 30 y 200), para que de
+  cerca la sombra use toda su resolución. Sin sombras no se calcula.
+- El SSAO está apagado en `Main.tscn` y lo enciende WorldLook: así Mobile no
+  avisa al cargar la escena.
+- Shaders "para una papa": sin bucles (las tres octavas del cesped van escritas a
+  mano), sin texturas ni muestreos, nada recalculado por frame en GDScript.
+
+### Por renderizador
+
+- **Forward+** (PC): todo lo de la tabla.
+- **Mobile** (APK Android): sin SSAO (no existe); glow y dos cortes de sombra
+  solo si el jugador fuerza alta. Con `auto` va en baja.
+- **Compatibility** (APK de QA del emulador): sin SSAO ni glow; con `auto`, baja.
+
+### Lo que oscurece la Tormenta (`StormSky`)
+
+Un peso por fase: Aviso 0,35, Ceniza 0,7, Tormenta entre 0,6 y 1 según la
+severidad (solo ahora se ve la severidad: el Aviso no adelanta la factura).
+Funde en 3 s al cerrarse y en 5 s al abrirse; ganada la Auditoría Final aclara
+de golpe y para siempre.
+
+- **Cielo**: color de fondo, los cuatro colores del `ProceduralSkyMaterial`
+  hacia ceniza, luz ambiental hacia ceniza clara y al 30 % de energía, sol al
+  15 %, niebla de ceniza hasta 0,014.
+- **Isla, agua y espuma**: el mismo peso, con el mismo fundido (un
+  `tween_method` sobre el uniform `storm_weight` de los cinco materiales).
+  `storm_grade()` desatura y enfría hacia la pizarra (`SLATE`) y baja el valor;
+  el agua además pierde brillo (más rugosa). La espuma no tiene luz, así que
+  aquí se apaga a mano y pierde opacidad: sin esto era lo único blanco bajo la
+  ceniza.
+- **Cargar o empezar partida** (`game_load_completed`, `game_new_started`):
+  `sync_to_storm()` pinta al instante la fase en que está la Tormenta, sin
+  fundido; en calma vuelve todo limpio. Los valores limpios se guardan una vez
+  por `Environment` (el de `Main.tscn` es un sub-recurso que puede sobrevivir a la
+  recarga con la ceniza puesta).
+- **Isla rehecha** (`grid_resized`, recarga): el peso vive en el autoload
+  (`StormSky.get_island_weight()`); IslandGenerator lo pone en los materiales al
+  crearlos, así que no nace limpia a media tormenta. Sin cielo (vista 2D) el
+  peso se guarda igual.
+- **Coste**: solo se tocan uniforms y propiedades del entorno durante los
+  fundidos (3-5 s por fase); nada de materiales ni mallas nuevas.
+
+### Sonda
+
+`tools/arte_probe.gd` (con ventana y con `override.cfg` propio) fotografía la
+colonia en calma, de cerca, la costa (`3d_costa`), las calidades baja y mínima
+con su FPS, las tres fases de la Tormenta y la costa en Tormenta
+(`3d_costa_tormenta`), y la vista 2D. Con `--rendering-method mobile` repite todo
+en Mobile. Capturas en `docs/media/dev/arte_<tag>_*.png` (git-ignored).
+
+Medida de referencia (2026-10-12, PC de desarrollo, 1600x900, colonia sembrada):
+Forward+ alta ≈ 85 fps, baja ≈ 88, mínima ≈ 139; Mobile ≈ 135 / 138 / 151.
+
+### Pendiente
+
+- Las parcelas de los edificios (césped de los solares) no reciben
+  `storm_weight`: bajo la Tormenta quedan algo más verdes que la isla. Son de
+  los edificios, no de esta sección.
+- `minimal` sin entrada en Ajustes ni en `GameConfig.GRAPHICS_QUALITY_MODES`.
