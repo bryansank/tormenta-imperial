@@ -8,8 +8,7 @@ extends RefCounted
 ## Las piezas se colocan con `xf` (la transformacion en curso): el atrezo se
 ## gira, se vuelca o se parte cambiandola, sin repetir la geometria.
 
-static var _mat_solid: StandardMaterial3D = null
-static var _mat_glow: StandardMaterial3D = null
+const Palette := preload("res://scripts/buildings/ToyPalette.gd")
 
 var xf := Transform3D.IDENTITY
 ## Quemado: los colores van hacia el carbon (ruina).
@@ -27,20 +26,13 @@ var _gc := PackedColorArray()
 
 const CHAR := Color(0.08, 0.07, 0.06)
 
-static func solid_material() -> StandardMaterial3D:
-	if _mat_solid == null:
-		_mat_solid = StandardMaterial3D.new()
-		_mat_solid.vertex_color_use_as_albedo = true
-		_mat_solid.roughness = 0.85
-		_mat_solid.metallic = 0.1
-	return _mat_solid
+## Los dos materiales de la paleta comun (ToyPalette): los mismos que llevan
+## los modelos horneados de los edificios, asi parcela y edificio comparten.
+static func solid_material() -> Material:
+	return Palette.solid_material()
 
-static func glow_material() -> StandardMaterial3D:
-	if _mat_glow == null:
-		_mat_glow = StandardMaterial3D.new()
-		_mat_glow.vertex_color_use_as_albedo = true
-		_mat_glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	return _mat_glow
+static func glow_material() -> Material:
+	return Palette.glow_material()
 
 func is_empty() -> bool:
 	return _sv.is_empty() and _gv.is_empty()
@@ -97,6 +89,50 @@ func _tri(a: Vector3, b: Vector3, c: Vector3, n: Vector3, col: Color, glow: bool
 func _quad(a: Vector3, b: Vector3, c: Vector3, d: Vector3, n: Vector3, col: Color, glow: bool) -> void:
 	_tri(a, b, c, n, col, glow)
 	_tri(a, c, d, n, col, glow)
+
+## Triangulos ya hechos (una pieza horneada, ver ToyPalette y
+## tools/build_toy_models.gd): `v`, `n` y `c` de tres en tres, en el espacio de
+## la pieza, colocados con `xf`. `glow` los manda a la superficie sin luz. El
+## quemado de la ruina tambien les llega.
+func append(v: PackedVector3Array, n: PackedVector3Array, c: PackedColorArray, glow := false) -> void:
+	var nb := xf.basis.inverse().transposed()
+	var flip := xf.basis.determinant() < 0.0
+	var tv := _gv if glow else _sv
+	var tn := _gn if glow else _sn
+	var tc := _gc if glow else _sc
+	var base := tv.size()
+	tv.resize(base + v.size())
+	tn.resize(base + v.size())
+	tc.resize(base + v.size())
+	var i := 0
+	while i < v.size():
+		for k in 3:
+			var src := i + (k if not flip or k == 0 else 3 - k)
+			var col: Color = c[src]
+			if burnt > 0.0 and not glow:
+				col = col.lerp(CHAR, burnt)
+			tv[base + i + k] = xf * v[src]
+			tn[base + i + k] = (nb * n[src]).normalized()
+			tc[base + i + k] = col
+		i += 3
+	if glow:
+		_gv = tv
+		_gn = tn
+		_gc = tc
+	else:
+		_sv = tv
+		_sn = tn
+		_sc = tc
+
+## Lo mismo con una malla ya hecha (ArrayMesh horneada): la superficie que use
+## el material sin luz va a "brillo", el resto a "solida".
+func append_mesh(mesh: ArrayMesh) -> void:
+	if mesh == null:
+		return
+	for s in mesh.get_surface_count():
+		var arr := mesh.surface_get_arrays(s)
+		var glow := mesh.surface_get_material(s) == glow_material()
+		append(arr[Mesh.ARRAY_VERTEX], arr[Mesh.ARRAY_NORMAL], arr[Mesh.ARRAY_COLOR], glow)
 
 # ── Primitivas ───────────────────────────────────────────────────────
 
