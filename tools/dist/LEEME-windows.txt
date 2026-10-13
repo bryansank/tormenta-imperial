@@ -77,9 +77,10 @@ Abre un issue en:
 
    https://github.com/bryansank/tormenta-imperial/issues
 
-o escribe un comentario en la página de itch.io. Cuenta qué hacías, qué
+o escríbele a quien te pasó el juego. En ☰ MENÚ → PARTIDA, "Informar de un
+fallo" copia los datos que hacen falta: pégalos en el mensaje. Cuenta qué hacías, qué
 esperabas y qué pasó, y la versión ({{VERSION}}). Una captura (Win + Mayús +
-S) y el archivo logs\godot.log de la carpeta de la partida ayudan mucho.
+S) y el archivo logsegistro.txt de la carpeta de la partida ayudan mucho.
 
 
 LICENCIA Y CRÉDITOS
@@ -142,9 +143,10 @@ explanation. Language (Spanish or English) and the 2D view are in
 Settings.
 
 REPORTING A BUG
-https://github.com/bryansank/tormenta-imperial/issues or a comment on the
-itch.io page. Say what you did, what you expected, what happened and the
-version ({{VERSION}}). A screenshot and logs\godot.log help a lot.
+https://github.com/bryansank/tormenta-imperial/issues or a message to whoever
+sent you the game. ☰ MENU → GAME, "Report a bug" copies the details: paste
+them in. Say what you did, what you expected, what happened and the
+version ({{VERSION}}). A screenshot and logsegistro.txt help a lot.
 
 LICENCE AND CREDITS
 Tormenta Imperial © 2026 Bryan Key. All rights reserved. You may play it for
