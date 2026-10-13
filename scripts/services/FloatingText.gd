@@ -18,12 +18,41 @@ static func spawn(scene_tree: SceneTree, world_pos: Vector3, text: String, color
 	label.no_depth_test = true
 	label.outline_size = 3
 	label.modulate = color
-	scene_tree.current_scene.add_child(label)
-	label.global_position = world_pos + Vector3(randf_range(-0.3, 0.3), 2.5, randf_range(-0.3, 0.3))
-	var tween := label.create_tween()
-	tween.tween_property(label, "global_position:y", world_pos.y + 5.0, 1.8).set_ease(Tween.EASE_OUT)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, 1.8).set_delay(0.4)
-	tween.tween_callback(label.queue_free)
+	var start_pos := world_pos + Vector3(randf_range(-0.3, 0.3), 2.5, randf_range(-0.3, 0.3))
+	# La posicion global y el tween solo existen dentro del arbol: se ponen al
+	# colgarla, sea ahora o al final del frame (attach).
+	attach(scene_tree.current_scene, label, func() -> void:
+		label.global_position = start_pos
+		var tween := label.create_tween()
+		tween.tween_property(label, "global_position:y", world_pos.y + 5.0, 1.8).set_ease(Tween.EASE_OUT)
+		tween.parallel().tween_property(label, "modulate:a", 0.0, 1.8).set_delay(0.4)
+		tween.tween_callback(label.queue_free))
+
+## Cuelga `label` de `parent` y llama a `on_attached` ya dentro del arbol. Si
+## `parent` aun esta montando sus hijos (una carga que termina obras dentro del
+## _ready de la escena), add_child fallaria con "Parent node is busy setting up
+## children": se difiere al final del frame. Si para entonces `parent` ya no esta,
+## la etiqueta se libera en vez de quedar huerfana. La usa tambien FloatingText2D.
+static func attach(parent: Node, label: Node, on_attached: Callable) -> void:
+	if parent == null or not is_instance_valid(parent):
+		label.free()
+		return
+	if parent.is_node_ready():
+		parent.add_child(label)
+		on_attached.call()
+	else:
+		_attach_now.call_deferred(parent, label, on_attached)
+
+## Sin tipos: al final del frame `parent` puede ser ya un objeto liberado, y un
+## parametro `Node` rechazaria la llamada diferida antes de poder comprobarlo.
+static func _attach_now(parent, label, on_attached: Callable) -> void:
+	if not is_instance_valid(label):
+		return
+	if not is_instance_valid(parent) or not (parent as Node).is_inside_tree():
+		(label as Node).free()
+		return
+	(parent as Node).add_child(label)
+	on_attached.call()
 
 static func spawn_resource(scene_tree: SceneTree, world_pos: Vector3, amount: int, res_name: String) -> void:
 	var color: Color = GameConfig.resource_colors.get(res_name, Color.WHITE)
