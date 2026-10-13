@@ -7,9 +7,12 @@ extends Node2D
 
 const View2D := preload("res://scripts/view2d/View2D.gd")
 
-const LINE := Color(0.92, 0.92, 0.80, 0.13)
-const LINE_MAJOR := Color(0.95, 0.92, 0.75, 0.22)
-const BORDER := Color(0.95, 0.85, 0.55, 0.35)
+## Tenue (arte, 2026-10-05): solo se ve al colocar o mover, salvo que el
+## jugador la deje siempre en Ajustes; tiene que ayudar a encajar, no pintar
+## una malla sobre el cesped.
+const LINE := Color(0.95, 0.95, 0.85, 0.08)
+const LINE_MAJOR := Color(0.95, 0.92, 0.78, 0.14)
+const BORDER := Color(0.95, 0.85, 0.55, 0.25)
 
 func _ready() -> void:
 	z_index = -10

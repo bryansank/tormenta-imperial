@@ -2,15 +2,24 @@ extends Camera3D
 ## RTS camera with perspective projection, orbiting around a ground target.
 ## Supports pan, zoom, and 360° rotation around the Y axis.
 ## Uses pivot pattern: _ground_target (XZ) + spherical offset (distance, pitch, yaw).
+##
+## Maqueta (arte, 2026-10-05, docs/21 §12): lente cerrada (fov 40) desde mas
+## lejos y algo mas picada (52 grados). Con la lente cerrada la perspectiva se
+## aplana y la isla se lee como un diorama visto desde arriba, no como una
+## foto gran angular. Las distancias crecen en proporcion para encuadrar lo
+## mismo que antes (fov 60 a 20 unidades ~ fov 40 a 32).
 
 @export var move_speed: float = 30.0
-@export var zoom_speed: float = 2.0
+@export var zoom_speed: float = 3.0
 @export var rotate_speed: float = 60.0
 @export var rotate_step_degrees: float = 45.0  # degrees per rotate-button press
 @export var rotate_lerp_speed: float = 10.0    # how fast yaw eases to its target
-@export var min_distance: float = 8.0
-@export var max_distance: float = 60.0
-@export var pitch_angle: float = -45.0
+@export var min_distance: float = 12.0
+@export var max_distance: float = 95.0
+@export var pitch_angle: float = -52.0
+@export var lens_fov: float = 40.0
+## Distancia con la que arranca una partida (y la de una partida sin camara).
+@export var default_distance: float = 32.0
 
 @export var boundary_min: Vector2 = Vector2(-40, -40)
 @export var boundary_max: Vector2 = Vector2(40, 40)
@@ -18,14 +27,16 @@ extends Camera3D
 var _ground_target: Vector2 = Vector2.ZERO
 var _yaw: float = 0.0
 var _target_yaw: float = 0.0
-var _distance: float = 20.0
-var _target_distance: float = 20.0
+var _distance: float = 32.0
+var _target_distance: float = 32.0
 
 func _ready() -> void:
 	projection = Camera3D.PROJECTION_PERSPECTIVE
-	fov = 60.0
-	near = 0.1
-	far = 200.0
+	fov = lens_fov
+	near = 0.3
+	far = 400.0
+	_distance = default_distance
+	_target_distance = default_distance
 	EventBus.camera_pan_requested.connect(_on_pan)
 	EventBus.camera_zoom_requested.connect(_on_zoom)
 	EventBus.camera_drag_moved.connect(_on_drag)
@@ -104,7 +115,7 @@ func set_state(data: Dictionary) -> void:
 	_ground_target = Vector2(data.get("target_x", 0.0), data.get("target_y", 0.0))
 	_yaw = data.get("yaw", 0.0)
 	_target_yaw = _yaw
-	_distance = data.get("distance", 20.0)
+	_distance = clampf(float(data.get("distance", default_distance)), min_distance, max_distance)
 	_target_distance = _distance
 	_update_transform()
 

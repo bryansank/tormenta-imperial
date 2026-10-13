@@ -11,16 +11,16 @@ const View2D := preload("res://scripts/view2d/View2D.gd")
 
 ## Los mismos limites que MonumentalCamera, en su unidad (distancia de camara).
 @export var move_speed: float = 30.0
-@export var zoom_speed: float = 2.0
-@export var min_distance: float = 8.0
-@export var max_distance: float = 60.0
+@export var zoom_speed: float = 3.0
+@export var min_distance: float = 12.0
+@export var max_distance: float = 95.0
 @export var boundary_min: Vector2 = Vector2(-40, -40)
 @export var boundary_max: Vector2 = Vector2(40, 40)
 
 ## Objetivo en unidades de mundo (X, Z), como la 3D.
 var _target := Vector2.ZERO
-var _distance := 20.0
-var _target_distance := 20.0
+var _distance := 32.0
+var _target_distance := 32.0
 var _yaw := 0.0
 
 func _ready() -> void:
@@ -113,7 +113,7 @@ func get_state() -> Dictionary:
 func set_state(data: Dictionary) -> void:
 	_target = Vector2(float(data.get("target_x", 0.0)), float(data.get("target_y", 0.0)))
 	_yaw = float(data.get("yaw", 0.0))
-	_distance = clampf(float(data.get("distance", 20.0)), min_distance, max_distance)
+	_distance = clampf(float(data.get("distance", 32.0)), min_distance, max_distance)
 	_target_distance = _distance
 	_clamp()
 	_apply()

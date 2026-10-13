@@ -281,6 +281,10 @@ signal objective_panel_toggled()
 signal sidebar_toggled(visible: bool)
 @warning_ignore("unused_signal")
 signal grid_overlay_toggled(visible: bool)
+## La calidad grafica del mapa cambio en Ajustes ("auto", "high", "low");
+## WorldLook la aplica al entorno y al sol de la escena 3D.
+@warning_ignore("unused_signal")
+signal graphics_quality_changed(quality: String)
 
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)

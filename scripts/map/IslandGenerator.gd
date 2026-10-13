@@ -1,6 +1,12 @@
 extends Node3D
 ## Generates the island: grass ground, sandy shore and the water around it.
 ##
+## Maqueta (arte, 2026-10-05, docs/21 §12): el cesped es una placa con canto de
+## tierra ("Cliff"), la playa baja hacia el mar ("Shore"), el agua la corta y
+## alli va la espuma ("Foam"). Todo con shaders propios de scripts/map, sin
+## texturas: grass_ground, island_cliff, island_sand, island_foam y
+## water_border.
+##
 ## Owner decision (P2, 2026-09-14): **the island grows until it fills the grid.**
 ## The old island was a superellipse *inscribed* in the grid square, so the four
 ## corners of the grid were water while `GridManager.can_place()` happily let you
@@ -17,9 +23,6 @@ extends Node3D
 ## The border geometry lives in static, pure functions so a test can prove that
 ## every cell corner is inside the grass polygon without rendering anything.
 
-@export var water_color: Color = Color(0.15, 0.35, 0.58, 1.0)
-@export var shore_color: Color = Color(0.72, 0.62, 0.45, 1.0)
-
 ## How far the grass extends past the grid edge, in world units. This is what
 ## guarantees the outermost cells are fully on land even before any wobble.
 @export var land_margin: float = 3.0
@@ -30,7 +33,7 @@ extends Node3D
 ## only push the border further out — never into the grid.
 @export var wobble_amplitude: float = 2.0
 ## How much wider than the grass the sandy shore is.
-@export var shore_width: float = 3.5
+@export var shore_width: float = 4.5
 
 ## Border resolution. A rounded square spends most segments on straight edges,
 ## so it needs more than the old organic blob to keep the corners smooth.
@@ -166,6 +169,25 @@ static func grid_half_extents() -> Vector2:
 
 # ── Mesh generation ───────────────────────────────────────────────────
 
+## Alturas de la maqueta (docs/21 §12). El cesped esta en y=0 (la rejilla, los
+## rayos del raton y los edificios cuentan con ello); su canto baja hasta
+## CLIFF_BOTTOM; la playa empieza mas abajo y desciende hacia el mar, y el agua
+## la corta: donde se cruzan va la espuma.
+const GRASS_Y := 0.0
+const CLIFF_BOTTOM := -0.6
+const BEACH_TOP_Y := -0.28
+const BEACH_BOTTOM_Y := -0.9
+const WATER_Y := -0.5
+const FOAM_INNER := 0.35
+const FOAM_OUTER := 1.9
+
+## Nodos que genera esta isla (para quitarlos al rehacerla).
+const NODE_NAMES := ["Ground", "Cliff", "Shore", "Foam", "Water"]
+
+## Fraccion del ancho de playa en la que el agua corta la arena.
+static func waterline_t() -> float:
+	return (BEACH_TOP_Y - WATER_Y) / (BEACH_TOP_Y - BEACH_BOTTOM_Y)
+
 func _generate_island() -> void:
 	_regen_queued = false
 	# La escena ya se fue (ViewRouter la cambio por la vista 2D antes de este
@@ -184,44 +206,58 @@ func _generate_island() -> void:
 				old.get_parent().remove_child(old)
 			old.queue_free()
 	_made.clear()
-	for node_name in ["Ground", "Shore", "Water"]:
+	for node_name in NODE_NAMES:
 		var old := main.get_node_or_null(node_name)
 		if old:
 			main.remove_child(old)
 			old.queue_free()
 
-	# Water plane (huge, below everything) — add first so it's behind
+	var half := grid_half_extents()
+	var water_at: float = shore_width * waterline_t()
+
+	# El mar: un plano enorme por debajo de todo, el primero (queda detras).
 	var water_node := MeshInstance3D.new()
 	water_node.name = "Water"
 	var water_plane := PlaneMesh.new()
-	water_plane.size = Vector2(300, 300)
+	water_plane.size = Vector2(400, 400)
 	water_node.mesh = water_plane
-	var water_mat := StandardMaterial3D.new()
-	water_mat.albedo_color = water_color
-	water_mat.roughness = 0.3
-	water_mat.metallic = 0.1
-	water_node.set_surface_override_material(0, water_mat)
-	water_node.position.y = -0.35
+	water_node.set_surface_override_material(0, _shader_material("water_border", {
+		"island_half": Vector2(half.x + land_margin + water_at, half.y + land_margin + water_at),
+		"island_radius": corner_radius + water_at,
+	}))
+	water_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	water_node.position.y = WATER_Y
 	main.add_child(water_node)
 
-	# Shore (slightly larger than grass, sandy color)
+	# La playa: un anillo que baja del pie del canto hasta debajo del agua.
 	var shore_node := MeshInstance3D.new()
 	shore_node.name = "Shore"
-	shore_node.mesh = _build_island_mesh(shore_width, -0.05)
-	var shore_mat := StandardMaterial3D.new()
-	shore_mat.albedo_color = shore_color
-	shore_mat.roughness = 0.95
-	shore_node.set_surface_override_material(0, shore_mat)
+	shore_node.mesh = _build_ring_mesh(0.0, BEACH_TOP_Y, shore_width, BEACH_BOTTOM_Y)
+	shore_node.set_surface_override_material(0, _shader_material("island_sand", {"water_y": WATER_Y}))
 	main.add_child(shore_node)
+
+	# El canto de la maqueta: del borde del cesped hacia abajo.
+	var cliff_node := MeshInstance3D.new()
+	cliff_node.name = "Cliff"
+	cliff_node.mesh = _build_skirt_mesh(GRASS_Y, CLIFF_BOTTOM)
+	cliff_node.set_surface_override_material(0, _shader_material("island_cliff", {"top_y": GRASS_Y}))
+	main.add_child(cliff_node)
+
+	# La espuma, justo encima del agua y siguiendo la costa exacta.
+	var foam_node := MeshInstance3D.new()
+	foam_node.name = "Foam"
+	foam_node.mesh = _build_ring_mesh(water_at - FOAM_INNER, WATER_Y + 0.02, water_at + FOAM_OUTER, WATER_Y + 0.02)
+	foam_node.set_surface_override_material(0, _shader_material("island_foam", {}))
+	foam_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	main.add_child(foam_node)
 
 	# Grass island (main ground)
 	var grass_node := MeshInstance3D.new()
 	grass_node.name = "Ground"
-	grass_node.mesh = _build_island_mesh(0.0, 0.0)
-	var grass_mat := _create_grass_material()
-	grass_node.set_surface_override_material(0, grass_mat)
+	grass_node.mesh = _build_island_mesh(0.0, GRASS_Y)
+	grass_node.set_surface_override_material(0, _create_grass_material())
 	main.add_child(grass_node)
-	_made = [water_node, shore_node, grass_node]
+	_made = [water_node, shore_node, cliff_node, foam_node, grass_node]
 
 func _build_island_mesh(expand: float, y_offset: float) -> ArrayMesh:
 	var st := SurfaceTool.new()
@@ -286,20 +322,71 @@ func _build_island_mesh(expand: float, y_offset: float) -> ArrayMesh:
 
 	return st.commit()
 
-func _create_grass_material() -> ShaderMaterial:
-	var shader := load("res://scripts/map/grass_ground.gdshader") as Shader
-	if not shader:
-		# Fallback to simple green if shader not found
-		var fallback := StandardMaterial3D.new()
-		fallback.albedo_color = Color(0.30, 0.50, 0.20, 1)
-		# Can't return StandardMaterial3D as ShaderMaterial, use shader
-		push_warning("Grass shader not found, using default")
+## Anillo entre el borde de la isla crecido `expand_in` (a altura y_in) y el
+## crecido `expand_out` (a y_out). UV.x: distancia recorrida a lo largo de la
+## costa; UV.y: 0 dentro, 1 fuera. Para la playa y la espuma.
+func _build_ring_mesh(expand_in: float, y_in: float, expand_out: float, y_out: float) -> ArrayMesh:
+	var half := grid_half_extents()
+	var inner := border_points(half.x, half.y, land_margin, corner_radius, _border_offsets, expand_in)
+	var outer := border_points(half.x, half.y, land_margin, corner_radius, _border_offsets, expand_out)
+	var n: int = inner.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var along := 0.0
+	for i in range(n):
+		var j := (i + 1) % n
+		var step: float = inner[i].distance_to(inner[j])
+		var verts := [
+			[Vector3(inner[i].x, y_in, inner[i].y), Vector2(along, 0.0)],
+			[Vector3(outer[i].x, y_out, outer[i].y), Vector2(along, 1.0)],
+			[Vector3(outer[j].x, y_out, outer[j].y), Vector2(along + step, 1.0)],
+			[Vector3(inner[i].x, y_in, inner[i].y), Vector2(along, 0.0)],
+			[Vector3(outer[j].x, y_out, outer[j].y), Vector2(along + step, 1.0)],
+			[Vector3(inner[j].x, y_in, inner[j].y), Vector2(along + step, 0.0)],
+		]
+		for v in verts:
+			st.set_uv(v[1])
+			st.add_vertex(v[0])
+		along += step
+	st.generate_normals()
+	return st.commit()
+
+## El canto: una pared del borde del cesped (y_top) hasta y_bottom, mirando
+## hacia fuera.
+func _build_skirt_mesh(y_top: float, y_bottom: float) -> ArrayMesh:
+	var half := grid_half_extents()
+	var pts := border_points(half.x, half.y, land_margin, corner_radius, _border_offsets, 0.0)
+	var n: int = pts.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var along := 0.0
+	for i in range(n):
+		var j := (i + 1) % n
+		var step: float = pts[i].distance_to(pts[j])
+		var ni := Vector3(pts[i].x, 0.0, pts[i].y).normalized()
+		var nj := Vector3(pts[j].x, 0.0, pts[j].y).normalized()
+		var top_i := Vector3(pts[i].x, y_top, pts[i].y)
+		var bot_i := Vector3(pts[i].x, y_bottom, pts[i].y)
+		var top_j := Vector3(pts[j].x, y_top, pts[j].y)
+		var bot_j := Vector3(pts[j].x, y_bottom, pts[j].y)
+		var verts := [
+			[top_i, ni, Vector2(along, 0.0)], [bot_i, ni, Vector2(along, 1.0)], [bot_j, nj, Vector2(along + step, 1.0)],
+			[top_i, ni, Vector2(along, 0.0)], [bot_j, nj, Vector2(along + step, 1.0)], [top_j, nj, Vector2(along + step, 0.0)],
+		]
+		for v in verts:
+			st.set_normal(v[1])
+			st.set_uv(v[2])
+			st.add_vertex(v[0])
+		along += step
+	return st.commit()
+
+## Un ShaderMaterial con el shader `shader_name` de scripts/map y sus parametros.
+func _shader_material(shader_name: String, params: Dictionary) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
-	m.shader = shader
-	m.set_shader_parameter("grass_color_1", Color(0.30, 0.52, 0.18, 1))
-	m.set_shader_parameter("grass_color_2", Color(0.38, 0.58, 0.22, 1))
-	m.set_shader_parameter("grass_color_3", Color(0.25, 0.45, 0.15, 1))
-	m.set_shader_parameter("noise_scale", 12.0)
-	m.set_shader_parameter("detail_scale", 80.0)
-	m.set_shader_parameter("roughness_val", 0.85)
+	m.shader = load("res://scripts/map/%s.gdshader" % shader_name) as Shader
+	for key in params:
+		m.set_shader_parameter(key, params[key])
 	return m
+
+func _create_grass_material() -> ShaderMaterial:
+	return _shader_material("grass_ground", {})

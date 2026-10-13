@@ -254,7 +254,7 @@ func _make_active_fx() -> Node2D:
 	holder.z_index = 6
 	var size := minf(base_size_px().x, base_size_px().y)
 	for anchor in Art.fx_anchors(data.id):
-		var sprite := Fx.sprite_2d(kind, size * (0.6 if kind == "glow" else 0.85))
+		var sprite := Fx.sprite_2d(kind, size * (0.34 if kind == "glow" else 0.85))
 		sprite.set_meta("anchor", anchor)
 		holder.add_child(sprite)
 	add_child(holder)

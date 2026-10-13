@@ -359,7 +359,13 @@ const _STRINGS := {
 		"LBL_VOL_MUSIC": "Música",
 		"LBL_VOL_SFX": "Efectos de sonido",
 		"LBL_SETTINGS_UI": "INTERFAZ",
-		"LBL_SHOW_GRID": "Mostrar cuadrícula del mapa",
+		"LBL_SHOW_GRID": "Cuadrícula siempre visible (si no, solo al construir)",
+		"LBL_GRAPHICS_QUALITY": "Calidad gráfica del mapa",
+		"OPT_QUALITY_AUTO": "Automática (%s)",
+		"OPT_QUALITY_HIGH": "Alta",
+		"OPT_QUALITY_LOW": "Baja (más fluida en móvil)",
+		"LBL_STATUS_STOPPED": "Parado",
+		"FMT_STATUS_STOPPED_WHY": "Parado: %s",
 		"LBL_FULLSCREEN": "Pantalla completa (F11)",
 
 		# Helper
@@ -1412,7 +1418,13 @@ const _STRINGS := {
 		"LBL_VOL_MUSIC": "Music",
 		"LBL_VOL_SFX": "Sound effects",
 		"LBL_SETTINGS_UI": "INTERFACE",
-		"LBL_SHOW_GRID": "Show map grid",
+		"LBL_SHOW_GRID": "Grid always visible (otherwise only while building)",
+		"LBL_GRAPHICS_QUALITY": "Map graphics quality",
+		"OPT_QUALITY_AUTO": "Automatic (%s)",
+		"OPT_QUALITY_HIGH": "High",
+		"OPT_QUALITY_LOW": "Low (smoother on phones)",
+		"LBL_STATUS_STOPPED": "Stopped",
+		"FMT_STATUS_STOPPED_WHY": "Stopped: %s",
 		"LBL_FULLSCREEN": "Fullscreen (F11)",
 
 		# Helper
