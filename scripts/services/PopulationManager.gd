@@ -128,6 +128,9 @@ func _set_population(value: int) -> void:
 	if clamped == _population:
 		return
 	_population = clamped
+	# Menos gente, menos puestos cubiertos: se reparten de nuevo (antes un muerto
+	# de hambre seguia "trabajando" hasta la siguiente obra).
+	_restaff()
 	EventBus.population_changed.emit(_population, _max_population)
 
 # ── Consumption ──
@@ -222,6 +225,10 @@ func _tick_growth() -> void:
 		return  # Too unhappy to grow
 	# Grow 1 pop if morale is decent
 	_population = mini(_population + 1, _max_population)
+	# El que nace va a trabajar YA. Sin esto los puestos solo se repartian al
+	# terminar una obra: la primera Mina de oro se quedaba sin obreros diez
+	# minutos con la gente ya nacida (medido con tools/line_probe.gd, 2026-10-12).
+	_restaff()
 	EventBus.population_changed.emit(_population, _max_population)
 	if _notif_cooldown <= 0.0:
 		EventBus.notification_posted.emit(Tr.t("NOTIF_POP_GREW") % [_population, _max_population], "info", Color(0.4, 0.8, 0.4))
@@ -236,6 +243,13 @@ func _on_building_demolished(_node: Node, _cell: Vector2i) -> void:
 	_recalculate_all()
 
 func _on_upgrade_completed(_node: Node, _new_level: int) -> void:
+	_recalculate_all()
+
+## Reparte de nuevo los puestos cuando cambia la gente. Sin edificios en la
+## rejilla no hay puestos que repartir (y recalcular dejaria el aforo en cero).
+func _restaff() -> void:
+	if GridManager.get_all_buildings().is_empty():
+		return
 	_recalculate_all()
 
 func _recalculate_all() -> void:

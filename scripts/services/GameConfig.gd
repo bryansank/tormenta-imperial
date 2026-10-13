@@ -863,11 +863,13 @@ var market_mean_reversion := 0.05
 ##   after_tithe  Tras el Diezmo: la Regencia ha sacado oro de la isla y lo que
 ##                queda vale menos: todo cuesta mas oro (y se vende por mas).
 ##   calm         Calma: vuelta a la media.
+## La comida sube ANTES del Diezmo: en el Aviso todos hacen acopio y en la
+## Tormenta las granjas rinden el 15 %; quien compra en la calma ahorra.
 var market_calendar := {
 	"calm": {},
-	"warning": {"wood": 0.30},
-	"storm": {"steel": -0.25},
-	"after_tithe": {"wood": 0.15, "steel": 0.15, "oil": 0.15},
+	"warning": {"wood": 0.30, "food": 0.25},
+	"storm": {"steel": -0.25, "food": 0.40},
+	"after_tithe": {"wood": 0.15, "steel": 0.15, "oil": 0.15, "food": 0.15},
 }
 ## Cuanto se acerca el precio a su objetivo del calendario en cada tick (0..1).
 ## Con 0.35 y ticks de 15 s, un Aviso de 45 s ya lleva la madera a ~+22 %.
