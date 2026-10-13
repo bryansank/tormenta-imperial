@@ -11,8 +11,9 @@ extends Node3D
 ##
 ## - Obra: el modelo se oculta y en su sitio sale la fase, con el estilo de su
 ##   tipo y la disposicion de su semilla (BuildingLook.seed_of; la misma que
-##   usa la vista 2D), via DieselpunkBuildingFactory.create_construction_phase.
-##   Grua, gancho, banderin y chispas/polvo los anima un shader (SiteFx).
+##   usa la vista 2D), via SiteMesh.construction_phase: todo lo quieto en UNA
+##   malla con los materiales de ToyPalette (la maqueta). Grua, gancho,
+##   banderin y chispas/polvo los anima un shader (SiteFx), sin crear nodos.
 ## - Mejora: el modelo sigue a la vista, rodeado de andamio.
 ## - Ruina: el modelo se hunde y se ladea (encima ya lleva el hollin de
 ##   BuildingHealth), rodeado de escombros y con humo negro animado.
@@ -22,6 +23,7 @@ extends Node3D
 
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
 const Fx := preload("res://scripts/buildings/BuildingFx.gd")
+const Site := preload("res://scripts/buildings/SiteMesh.gd")
 
 var _building: Node3D = null
 var _data: BuildingData = null
@@ -76,9 +78,9 @@ func apply(verdict: Dictionary) -> void:
 		_model.visible = look != LookRule.Look.CONSTRUCTION
 	match look:
 		LookRule.Look.CONSTRUCTION:
-			_site = DieselpunkBuildingFactory.create_construction_phase(_data.grid_size, phase, _cell, _data.id, seed_val)
+			_site = Site.construction_phase(_data.grid_size, phase, _cell, _data.id, seed_val)
 		LookRule.Look.UPGRADE:
-			_site = DieselpunkBuildingFactory.create_scaffold(_data.grid_size, _cell, _top + 0.3)
+			_site = Site.scaffold(_data.grid_size, _cell, _top + 0.3)
 		LookRule.Look.RUIN:
 			_enter_ruin()
 	if _site != null:
@@ -117,7 +119,7 @@ func _clear_site() -> void:
 ## La posicion original se guarda en el propio modelo para devolverla al reparar.
 func _enter_ruin() -> void:
 	if _ruin == null:
-		_ruin = DieselpunkBuildingFactory.create_ruin_overlay(_data.grid_size, _cell, hash(_building.name))
+		_ruin = Site.ruin_overlay(_data.grid_size, _cell, hash(_building.name))
 		var smoke := Fx.quad_3d("smoke", 1.4 + 0.3 * LookRule.footprint_class(_data.grid_size), "ruin")
 		smoke.position = Vector3(0.0, _top * (1.0 - GameConfig.ruin_sink_ratio) + 0.6, 0.0)
 		_ruin.add_child(smoke)
