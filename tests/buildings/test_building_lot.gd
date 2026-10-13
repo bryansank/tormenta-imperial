@@ -250,33 +250,39 @@ func test_roof_emblem_sits_on_the_roof() -> void:
 
 # ── El Aserradero abierto ────────────────────────────────────────────
 
-func test_sawmill_is_procedural_and_open() -> void:
+func test_sawmill_is_baked_and_open() -> void:
+	# El modelo horneado (tools/build_toy_models.gd): una sola malla con el
+	# FxAnchor en la sierra.
 	var d := _data("sawmill")
-	assert_object(d.model_scene).is_null()
-	var saw: Node3D = auto_free(DieselpunkBuildingFactory.create("sawmill", CELL, d.grid_size))
-	for path in ["Shed/Roof", "Shed/Rafters", "Shed/BackWall", "Saw/SawBlade", "Saw/SawTable", "Saw/Log", "PlankStack", "LogPile", "FxAnchor"]:
-		assert_object(saw.get_node_or_null(path)).override_failure_message("falta " + path).is_not_null()
-	assert_object(saw.find_child("FrontWall", true, false)).is_null()
-	# Sin pared en el frente: ninguna pieza de la mitad de delante cierra mas
-	# de la mitad del ancho entre el suelo y el tejado.
-	var width := Lot.model_aabb(saw).size.x
-	var shed := saw.get_node("Shed")
-	for mi in shed.find_children("*", "MeshInstance3D", true, false):
-		var a := Lot.model_aabb(mi as Node3D, saw)
-		if a.get_center().z > 0.3 and a.size.y > 0.6:
-			assert_float(a.size.x).is_less(width * 0.5)
-	# La cubierta solo tapa la mitad de atras: la sierra queda a la vista.
-	var roof := Lot.model_aabb(saw.get_node("Shed/Roof") as Node3D, saw)
-	var blade := Lot.model_aabb(saw.get_node("Saw/SawBlade") as Node3D, saw)
-	assert_float(roof.end.z).is_less(blade.position.z)
+	assert_object(d.model_scene).is_not_null()
+	assert_str(d.model_scene.resource_path).is_equal("res://assets/models/toy/sawmill.tscn")
+	var saw: Node3D = auto_free(d.instantiate_model())
+	assert_object(saw).is_instanceof(MeshInstance3D)
+	var anchor := saw.get_node_or_null("FxAnchor") as Node3D
+	assert_object(anchor).is_not_null()
+	# La cubierta solo tapa la mitad de atras: nada alto (tejado, cerchas)
+	# llega por delante de la sierra, que queda a la vista desde la camara.
+	var faces: PackedVector3Array = (saw as MeshInstance3D).mesh.get_faces()
+	var top := Lot.model_aabb(saw).end.y
+	for v in faces:
+		if v.y > top - 0.45:
+			assert_float(v.z).override_failure_message("tejado delante de la sierra").is_less(anchor.position.z - 0.1)
+	# Sin pared en el frente: entre la mesa y el tejado, por delante de la
+	# sierra, solo los dos postes de esquina (nada en el tercio central).
+	var a := Lot.model_aabb(saw)
+	for i in range(0, faces.size(), 3):
+		var c := (faces[i] + faces[i + 1] + faces[i + 2]) / 3.0
+		if c.z > anchor.position.z + 0.15 and c.y > 0.8 and c.y < top - 0.6:
+			assert_float(absf(c.x - a.get_center().x)).override_failure_message("pared delante").is_greater(a.size.x / 6.0)
 
 func test_sawmill_blade_is_the_exaggerated_element() -> void:
-	var saw: Node3D = auto_free(DieselpunkBuildingFactory.create("sawmill", CELL, Vector2i(2, 2)))
-	var blade := Lot.model_aabb(saw.get_node("Saw/SawBlade") as Node3D, saw)
-	var table := Lot.model_aabb(saw.get_node("Saw/SawTable") as Node3D, saw)
-	# Casi tan alta como el cobertizo hasta las cerchas y mas que la mesa de ancha.
-	assert_float(blade.size.y).is_greater(1.6)
-	assert_float(blade.size.x).is_greater(table.size.z * 2.0)
+	# La hoja (y con ella el FxAnchor, sobre su filo) sube casi hasta el alero.
+	var d := _data("sawmill")
+	var saw: Node3D = auto_free(d.instantiate_model())
+	var anchor := saw.get_node("FxAnchor") as Node3D
+	var a := Lot.model_aabb(saw)
+	assert_float(anchor.position.y).is_greater(a.size.y * 0.6)
+	assert_float(anchor.position.y).is_less(a.end.y)
 
 func test_sawmill_dust_comes_out_of_the_saw() -> void:
 	var parts := _building("sawmill")
@@ -284,11 +290,13 @@ func test_sawmill_dust_comes_out_of_the_saw() -> void:
 	var look = root.get_node("LookVisual")
 	look.apply({"look": LookRule.Look.ACTIVE, "phase": 0})
 	var fx: Node3D = look.get_active().get_child(0)
-	var blade := Lot.model_aabb(root.get_child(0).get_node("Saw/SawBlade") as Node3D, root)
+	var model: Node3D = root.get_child(0)
+	var anchor := model.get_node("FxAnchor") as Node3D
+	var at: Vector3 = model.transform * anchor.position
 	# A la altura de la hoja (no flotando sobre el tejado) y sobre ella en planta.
 	assert_float(fx.position.y).is_less(Badge.measure_top(root))
-	assert_float(absf(fx.position.x - blade.get_center().x)).is_less(0.5)
-	assert_float(absf(fx.position.z - blade.get_center().z)).is_less(0.5)
+	assert_float(absf(fx.position.x - at.x)).is_less(0.5)
+	assert_float(absf(fx.position.z - at.z)).is_less(0.5)
 
 func test_nucleo_flag_corner_and_seed_are_shared() -> void:
 	# La bandera de la colonia (ColonyFlag3D/2D) va en la esquina NE del Nucleo:

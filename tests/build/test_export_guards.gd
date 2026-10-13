@@ -25,6 +25,9 @@ const MUST_EXCLUDE := [
 	".claude/*", ".specify/*", ".beckett/*", ".cursor/*", ".vscode/*",
 	".mcp.json", "secret.json", ".env*", "override.cfg",
 	"estrategia/*", "ui_tour/*", "build/*", "*.md",
+	# Los GLB viejos de los edificios: se quedan en el repo, pero el juego ya
+	# usa los modelos horneados de assets/models/toy/ (docs/03).
+	"assets/models/buildings/*",
 ]
 
 

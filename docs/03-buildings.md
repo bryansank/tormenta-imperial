@@ -22,7 +22,7 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | `morale_bonus` | int | Passive morale bonus (decorations) |
 | `mesh_height` | float | Visual height for procedural mesh |
 | `mesh_color` | Color | Visual color |
-| `model_scene` | PackedScene | GLB model (11 of 16 buildings; `nucleo`, `road`, `market`, `laboratory` and `sawmill` are procedural, from `DieselpunkBuildingFactory`). On the map every model is shrunk in plan to leave its lot yard free (see "Parcela y atrezo") |
+| `model_scene` | PackedScene | The baked "maqueta" model, `assets/models/toy/<id>.tscn` (15 of 16; the road stays procedural, its mesh depends on its neighbours). See "Modelos: maqueta de juguete". `model_scale` / `model_stretch` stay at 1 (they were for the old GLBs) |
 | `model_scale` / `model_stretch` | float / Vector3 | Scale a GLB made for 1x1 or 2x1 up to its 2x2 plot; spawn models only through `instantiate_model()` |
 | `repeat_placement` | bool | Keep the same building in hand after placing it (decorations and roads do anyway; the rest place one and leave placement mode) |
 | `max_health` | int | HP for storm and siege damage (`BuildingHealth`) |
@@ -372,7 +372,7 @@ el emblema, con la altura del tejado en el centro (`BuildingLot.roof_height()`).
 su rectangulo (opcion `inset` de `draw_building`) y la obra, el dano y la ruina
 sobre el, no sobre la parcela (docs/18).
 
-**El Aserradero abierto (2026-10-04).** Pasa a procedural
+**El Aserradero abierto (2026-10-04; desde el 2026-10-12 es el modelo horneado `assets/models/toy/sawmill.tscn`, con la misma idea).** Paso a procedural
 (`DieselpunkBuildingFactory._build_sawmill`; su GLB sigue en
 `assets/models/buildings/sawmill/` pero `sawmill.tres` ya no lo usa): un
 cobertizo con media cubierta de chapa de una sola agua atras, cerchas al aire
@@ -388,6 +388,47 @@ Capturas: `tools/look_probe.gd` (con `override.cfg` propio) deja ademas
 `look_probe_style_3d.png`, `look_probe_style_storm_3d.png`,
 `look_probe_style_2d.png`, `look_probe_style_storm_2d.png`,
 `look_probe_style_close_3d.png` y `look_probe_sawmill_3d.png` en `docs/media/dev/`.
+
+## Modelos: maqueta de juguete (2026-10-12)
+
+Los edificios 3D son **modelos horneados**: una sola malla con color por
+vertice y, como mucho, dos superficies con los dos materiales que comparte todo
+el mapa (`assets/models/toy/toy_solid.tres` con luz, `toy_glow.tres` sin luz para
+ventanas, brasas y faroles). Nada de materiales por instancia ni luces propias:
+lo que pide el renderizador Mobile en una tablet barata. Entre 650 y 2.700
+triangulos por edificio (el horneador los imprime).
+
+- **Horneado**: `godot --headless --path . -s tools/build_toy_models.gd`
+  (`-- --only=house,farm` para unos pocos, `-- --dump=all` para ver las piezas
+  CC0 con su tamano y su reparto de paleta). Cada edificio tiene su receta en
+  `tools/toy_recipes/<id>.gd`; las piezas propias (tejados, ventanas, chimeneas,
+  tuberias, valvulas, depositos, toldos, troncos, sacos) estan en
+  `tools/toy_recipes/_parts.gd` y las CC0 se cargan con `tools/toy_kit.gd`.
+- **Salida**: `assets/models/toy/<id>.tscn` (raiz = un `MeshInstance3D`) con su
+  malla en `<id>_mesh.res`, y un `Marker3D` `FxAnchor` en los que echan humo o
+  serrin (`GameConfig.building_active_fx`): la sierra, la chimenea del horno, la
+  antorcha de la columna...
+- **A la medida**: cada modelo sale ya del tamano del rectangulo que le deja su
+  parcela (`LotPlan.model_rect`), centrado, base en y = 0 y frente hacia +Z; lo
+  que una receta deje salirse se encoge en planta al hornear, asi que
+  `BuildingLot.fit_model()` no tiene que escalar. La granja (otra rama) se
+  hornea sin parcela, a 3,6 m.
+- **Color**: la paleta (`ToyPalette`) esta escrita en sRGB y el horneado la pasa
+  a lineal (los materiales leen el color por vertice como lineal, igual que el
+  atrezo de `BuildingLot`); ademas oscurece lo que toca el suelo (AO de contacto).
+- **Estilo** (guia de estilo de edificios): la funcion se ve desde fuera, un
+  elemento exagerado por modelo que complementa el de la parcela (la sierra del
+  Aserradero, la rueda del castillete, el portalon del Almacen, la sombrilla del
+  Mercado, la cupula del Laboratorio, la boca del horno de la Fundicion, el galon
+  del Cuartel, la columna de la Refineria, el canon de la Torre, la torre del
+  Cuartel General, la cupula y el manometro del Nucleo, el surtidor de la
+  Fuente, la rueda dentada de la Estatua, el molino de la Granja) y un acento
+  por familia.
+- Los GLB viejos siguen en `assets/models/buildings/` (sin uso).
+- Capturas: `godot --path . -s tools/toy_probe.gd` (con `override.cfg` propio)
+  deja `toy_probe_all.png` (distancia de arranque), `toy_probe_close_<n>.png`,
+  `toy_probe_storm.png` y, con `-- --near=9 --ids=...`, `toy_probe_near.png`;
+  `-- --pieces=kk:barrel,...` fotografia piezas CC0 sueltas.
 
 ### Obra por edificio y por instancia
 
