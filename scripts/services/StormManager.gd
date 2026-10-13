@@ -59,6 +59,8 @@ func _ready() -> void:
 	_check_arming()
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	# _process no corre con el arbol en pausa: llegar aqui es que el jugador ya
 	# solto el menu que tapaba la partida.
 	if _resume_when_running:

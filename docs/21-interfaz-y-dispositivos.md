@@ -103,7 +103,8 @@ y se verá al terminar.
 ocultar: recursos y almacén (con obreros y moral, que van en esa fila), botón del registro,
 indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
 mismo interruptor que AYUDA del menú ☰), texto de turno en batalla y las
-herramientas Sandbox (solo existen en ese modo, docs/20). El botón ☰ MENÚ (el
+herramientas Sandbox (solo existen en ese modo, docs/20) y el botón de velocidad
+x1 / x2 (§13). El botón ☰ MENÚ (el
 menú único, que sustituye al ☰ y a la pausa II) no está en el registro: no se
 puede ocultar.
 
@@ -688,3 +689,55 @@ Forward+ alta ≈ 85 fps, baja ≈ 88, mínima ≈ 139; Mobile ≈ 135 / 138 / 1
   `storm_weight`: bajo la Tormenta quedan algo más verdes que la isla. Son de
   los edificios, no de esta sección.
 - `minimal` sin entrada en Ajustes ni en `GameConfig.GRAPHICS_QUALITY_MODES`.
+
+## 13. Velocidad del juego (x1 / x2) e Informar de un fallo
+
+> Número fijo: el código lo cita como "docs/21 §13" (rama `feat/soporte-y-velocidad`).
+
+### Velocidad x1 / x2
+
+- **Botón:** `scripts/ui/GameSpeedButton.gd`, una capa (10) que crea `PauseMenu`
+  al arrancar como hermana suya (las dos vistas tienen `PauseMenu`; no está en
+  las escenas). Dice `x1` o `x2` y nada más; en x2 se tiñe de acento. Slot
+  `speed_button`: arriba en el centro, bajo el indicador de la Tormenta (en calma,
+  en su sitio); con la columna central bajada (tablet 4:3) se queda arriba en el
+  centro sin apilarse; en móvil vertical va bajo la insignia del rango. Registrado
+  en `HudRegistry` (`GameSpeedButton`): se oculta en Ajustes → Interfaz y se mueve
+  en Editar disposición.
+- **Atajo:** tecla **F** (sin Ctrl/Alt), en `_unhandled_key_input`: un campo de
+  texto con foco se la queda. Con el juego en pausa no responde
+  (`PROCESS_MODE_PAUSABLE`).
+- **Qué acelera:** la simulación. `GameConfig.game_speed` (1.0 o 2.0,
+  `GAME_SPEEDS`) y `GameConfig.sim_delta(delta)`, que leen en su `_process`
+  ProductionManager (construcción, producción, caducidad), ProcessManager,
+  PopulationManager (consumo y crecimiento), ArmyManager (entrenamiento y
+  sueldo), TechTreeManager, StormManager (ciclo y tormenta de prueba), DayClock,
+  RandomEventManager y MarketManager. En el tablero, `get_combat_ai_step_delay()`
+  pasa por `GameConfig.combat_pace()`: el turno enemigo va al doble.
+- **Qué no:** la interfaz (tweens, avisos, cámara, arrastre), el autoguardado
+  (segundos reales), los enfriamientos de avisos, el reloj del tutorial, el tiempo
+  jugado (`ProgressionManager.get_played_seconds()`, que es de verdad) y la
+  progresión offline.
+- **Por qué no `Engine.time_scale`:** escala el `delta` de *todo* nodo y de todo
+  tween y `Timer`: la cámara, los avisos, `DragScroll`, los globos, el
+  autoguardado y las animaciones de menús irían al doble, y cada uno pediría su
+  excepción (`ignore_time_scale`, o dividir el delta) en archivos de otras ramas.
+  Con el multiplicador, la regla es una línea al principio de cada `_process` de
+  servicio y lo demás no se entera. Coste: una multiplicación por servicio y
+  fotograma. Con `dev_time_scale` se compone sin pisarse (uno acorta duraciones,
+  el otro acelera el reloj).
+- **La vista de combate** (otra rama) lee `GameConfig.game_speed`, acorta sus
+  animaciones con `GameConfig.combat_pace(segundos)` y escucha
+  `EventBus.game_speed_changed(speed)` para cambiar a mitad de tablero.
+- **No se guarda:** ni en `save_game.json` ni en `settings.cfg`. Al abrir el
+  juego siempre es x1 (escribirla en `settings.cfg` sería un valor que nadie lee).
+  Lo que sí guarda `settings.cfg` es el botón: oculto o movido (HudRegistry). La
+  pausa real sigue igual: con el árbol en pausa ningún `_process` corre.
+- **Tests:** `tests/support/test_game_speed.gd`.
+
+### Informar de un fallo
+
+**☰ MENÚ → PARTIDA → Informar de un fallo** (tras AYUDA) copia al portapapeles
+el informe de `scripts/services/BugReport.gd` y lo dice bajo los grupos, como
+Guardar: "Copiado. Pégalo en un mensaje." Nada sale del equipo. Qué lleva, dónde
+está el registro y cómo se limpian las rutas: docs/19 §7.

@@ -12,6 +12,8 @@ func _ready() -> void:
 	_schedule_next_event()
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	# Random events don't start until Phase 3 (Survival)
 	if ProgressionManager.current_phase < GameConfig.Phase.SURVIVAL:
 		return

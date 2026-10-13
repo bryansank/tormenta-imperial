@@ -66,7 +66,8 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - **Button:** "☰ MENÚ", top-right, finger-sized, always visible in play (hidden while the menu itself is open). No other menu button exists; the old sidebar buttons of each panel stay hidden (nobody emits `sidebar_toggled(true)` any more)
 - **Card:** title, "Modo: X" (only when the run is not Campaña, 2026-10-04), and two groups side by side (one column with scroll below 700 px). Each group's sentence ("Los paneles de tu isla...", "La isla espera...") is the tooltip of its header:
   - **COLONIA** — ¿Qué hacer?, Progreso, Colonia (rank, flag and colour: `RankPanel`), Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode), Registro (the activity log). Mercado and Tecnología left the menu on 2026-09-28: they open from their buildings. Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
-  - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Historia (closes the menu, then `TutorialManager.show_prologue()` replays the prologue, docs/23), Menú principal, Guardar y salir
+  - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Informar de un fallo (copies `BugReport.build()` to the clipboard and says "Copiado. Pégalo en un mensaje." under the groups; nothing leaves the device, docs/19 §7), Historia (closes the menu, then `TutorialManager.show_prologue()` replays the prologue, docs/23), Menú principal, Guardar y salir
+- **Speed button:** `PauseMenu._ready()` adds `GameSpeedButton` (x1 / x2, key F) as its sibling, so both views get it without touching the scenes (docs/21 §13)
 - **Behavior:**
   - Real pause while open (`get_tree().paused`); tapping the backdrop resumes.
   - The button NEVER fails silently: it cancels a placement (`building_placement_cancelled`) and closes every UIManager window (`UIManager.close_all_windows()`) and then opens. `can_pause()` is only for ESC.
@@ -75,7 +76,7 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
   - Borrowed screens (Ajustes, Ayuda, the intro) get `PROCESS_MODE_ALWAYS` and a layer ABOVE the menu (`LAYER + 1`, re-pinned every frame and on every UIManager reorder) while in use, and their mode and layer back on close. TitleMenu does the same with Ajustes. Bug 1 was the intro (layer 17) sitting over Ajustes (UIManager put it at 13) and eating every touch.
   - Menú principal saves, cancels placement, closes windows and opens TitleMenu, in 3D and 2D and in every mode.
 - **Layer:** 30
-- **Tests:** `tests/ui/test_game_menu.gd`, `test_main_menu_exit.gd`, `test_settings_respond.gd` (real mouse events pushed at the slider and a toggle, from the title menu, the game menu and in play, with a full-screen trap layer at 17), `test_pause_menu.gd`
+- **Tests:** `tests/ui/test_game_menu.gd`, `tests/support/test_bug_report.gd`, `tests/support/test_game_speed.gd`, `test_main_menu_exit.gd`, `test_settings_respond.gd` (real mouse events pushed at the slider and a toggle, from the title menu, the game menu and in play, with a full-screen trap layer at 17), `test_pause_menu.gd`
 - **Probe:** `tools/menu_probe.gd` (`-- --shot-size=1280x800 --profile=tablet [--view=2d]`), screenshots in `docs/media/dev/menu/`
 
 ### RankPanel (`scripts/ui/RankPanel.gd`) — governor rank

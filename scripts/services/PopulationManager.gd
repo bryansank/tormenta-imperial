@@ -47,6 +47,8 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _notif_cooldown > 0.0:
 		_notif_cooldown -= delta
+	# x2: consumo y crecimiento al doble; el enfriamiento del aviso, en real.
+	delta = GameConfig.sim_delta(delta)
 
 	# Phase 0 (Foundation): no consumption, no growth — just build freely
 	if ProgressionManager.current_phase < GameConfig.Phase.SETTLEMENT:

@@ -200,6 +200,8 @@ func start_mining(node: Node, deposit_id: String) -> bool:
 	return true
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	var completed: Array = []
 	var vanished: Array = []
 	for node in _active:
