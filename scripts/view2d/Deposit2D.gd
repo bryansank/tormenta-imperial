@@ -15,6 +15,7 @@ var _selected := false
 ## Se atenua mientras su recurso no esta desbloqueado (como la vista 3D, que lo
 ## ensena pero no deja usarlo).
 var _locked := false
+var _tick := 0
 
 func setup(id: String, display_name: String, size_cells: Vector2i) -> void:
 	deposit_id = id
@@ -30,10 +31,13 @@ func set_selected(value: bool) -> void:
 	queue_redraw()
 
 func _process(_delta: float) -> void:
-	var locked := not _resource_unlocked()
-	if locked != _locked:
-		_locked = locked
-		modulate = Color(0.75, 0.75, 0.75, 0.85) if locked else Color.WHITE
+	# El desbloqueo cambia una vez por partida: se mira cada medio segundo.
+	_tick += 1
+	if _tick % 30 == 1:
+		var locked := not _resource_unlocked()
+		if locked != _locked:
+			_locked = locked
+			modulate = Color(0.75, 0.75, 0.75, 0.85) if locked else Color.WHITE
 	if _selected:
 		queue_redraw()
 

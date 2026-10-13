@@ -30,6 +30,12 @@ func _draw_on_canvas(calls: Array) -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
+## Building2D mira su estado cada CHECK_FRAMES fotogramas (repartidos entre
+## edificios): se espera algo mas que eso.
+func _settle() -> void:
+	for i in Building2D.CHECK_FRAMES + 2:
+		await get_tree().process_frame
+
 func test_every_lot_draws_in_every_state() -> void:
 	var calls: Array = []
 	for d in BuildingData.load_all():
@@ -72,13 +78,11 @@ func test_ruin_and_construction_change_the_2d_lot() -> void:
 	await get_tree().process_frame
 	assert_str(String(b.get_lot_plan()["state"])).is_equal("idle")
 	b.set_meta("health", 0)
-	await get_tree().process_frame
-	await get_tree().process_frame
+	await _settle()
 	assert_str(String(b.get_lot_plan()["state"])).is_equal("ruin")
 	b.remove_meta("health")
 	ProductionManager.register_building(b, data, GameConfig.get_build_time(data.build_time) * 0.5)
-	await get_tree().process_frame
-	await get_tree().process_frame
+	await _settle()
 	assert_str(String(b.get_lot_plan()["state"])).is_equal("construction")
 	ProductionManager.unregister(b)
 	b.remove_meta("under_construction")

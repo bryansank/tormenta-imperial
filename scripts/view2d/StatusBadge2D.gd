@@ -10,7 +10,7 @@ extends Node2D
 
 const Badge3D := preload("res://scripts/buildings/BuildingStatusBadge.gd")
 
-const REFRESH_EVERY := 0.25
+const REFRESH_EVERY := 0.5
 const ICON_PX := 18.0
 
 var _building: Node2D = null
@@ -18,6 +18,9 @@ var _data: BuildingData = null
 var _status: int = Badge3D.Status.NONE
 var _reason: String = ""
 var _timer := 0.0
+## Ultimo zoom y huella con que se coloco (solo se recoloca si cambian).
+var _placed_zoom := -1.0
+var _placed_fp := Vector2.ZERO
 
 func setup(building: Node2D, data: BuildingData) -> void:
 	_building = building
@@ -25,6 +28,8 @@ func setup(building: Node2D, data: BuildingData) -> void:
 	name = "StatusBadge"
 	z_index = 30
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# Repartidos: no todos los badges se releen en el mismo fotograma.
+	_timer = randf() * REFRESH_EVERY
 	refresh()
 
 func get_status() -> int:
@@ -68,11 +73,28 @@ func _process(delta: float) -> void:
 		refresh()
 	if not visible or _building == null:
 		return
+	# Solo se recoloca si cambio el zoom o la huella (girar, mover).
+	var z := _frame_zoom(self)
+	var fp: Vector2 = _building.footprint_px() if _building.has_method("footprint_px") else Vector2(32, 32)
+	if is_equal_approx(z, _placed_zoom) and fp == _placed_fp:
+		return
+	_placed_zoom = z
+	_placed_fp = fp
 	var inv: float = _building.label_scale(self) if _building.has_method("label_scale") else 1.0
 	scale = Vector2(inv, inv)
 	# Esquina superior derecha de la huella
-	var fp: Vector2 = _building.footprint_px() if _building.has_method("footprint_px") else Vector2(32, 32)
 	position = Vector2(fp.x * 0.5 - 4.0, -fp.y * 0.5 + 2.0)
+
+## El zoom de la camara, leido UNA vez por fotograma para todos los badges.
+static var _zoom_frame := -1
+static var _zoom := 1.0
+static func _frame_zoom(ci: CanvasItem) -> float:
+	var f := Engine.get_process_frames()
+	if f != _zoom_frame:
+		_zoom_frame = f
+		var cam := ci.get_viewport().get_camera_2d()
+		_zoom = cam.zoom.x if cam != null else 1.0
+	return _zoom
 
 func _draw() -> void:
 	match _status:
