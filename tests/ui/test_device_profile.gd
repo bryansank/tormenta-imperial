@@ -137,6 +137,14 @@ func test_a_chosen_cap_below_the_pause_cap_stays_below() -> void:
 	assert_int(DeviceProfile.fps_for("30", 60, true, true)).is_equal(30)
 	GameConfig.fps_paused = 30
 
+func test_paused_and_without_focus_the_lower_of_both_wins() -> void:
+	assert_int(DeviceProfile.fps_for("auto", 60, false, true)).is_equal(10)
+	# Aunque alguien suba el de segundo plano por encima del de pausa.
+	GameConfig.fps_background = 1000
+	assert_int(DeviceProfile.fps_for("auto", 60, false, true)).is_equal(30)
+	assert_int(DeviceProfile.fps_for("auto", 60, false, false)).is_equal(60)
+	GameConfig.fps_background = 10
+
 func test_unlimited_still_drops_in_pause_and_in_the_background() -> void:
 	assert_int(DeviceProfile.fps_for("unlimited", 60, false, false)).is_equal(10)
 	assert_int(DeviceProfile.fps_for("unlimited", 60, true, true)).is_equal(30)

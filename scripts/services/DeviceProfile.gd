@@ -273,10 +273,11 @@ static func fps_for(mode: String, profile_fps: int, focused: bool, paused: bool)
 		cap = profile_fps
 	elif mode != "unlimited" and mode.is_valid_int():
 		cap = int(mode)
-	if not focused:
-		return _min_cap(cap, GameConfig.fps_background)
+	# Los dos a la vez: en pausa y sin foco manda el menor de los dos.
 	if paused:
-		return _min_cap(cap, GameConfig.fps_paused)
+		cap = _min_cap(cap, GameConfig.fps_paused)
+	if not focused:
+		cap = _min_cap(cap, GameConfig.fps_background)
 	return cap
 
 ## El menor de dos topes, donde 0 es "sin tope" (infinito).
