@@ -21,6 +21,7 @@ var _saved_warehouses := 0
 var _saved_era := 1
 var _saved_tier: int = 0
 var _saved_tech_bonus := 0.0
+var _saved_rank_bonus := 0.0
 var _saved_reduction := 0.0
 var _nodes: Array = []
 var _farm: BuildingData
@@ -51,6 +52,9 @@ func before_test() -> void:
 	PopulationManager._population = 10
 	_saved_tier = GameMode.tier
 	_saved_tech_bonus = GameConfig.tech_production_bonus
+	# El rango de otra suite deja su bono de produccion (+x %): 126 en vez de 125.
+	_saved_rank_bonus = GameConfig.rank_production_bonus
+	GameConfig.rank_production_bonus = 0.0
 	GameConfig.tech_production_bonus = 0.0
 	_saved_reduction = GameConfig.tech_consumption_reduction
 	GameConfig.tech_consumption_reduction = 0.0
@@ -72,6 +76,7 @@ func after_test() -> void:
 	PopulationManager.load_save_data(_saved_population)
 	GameMode.tier = _saved_tier
 	GameConfig.tech_production_bonus = _saved_tech_bonus
+	GameConfig.rank_production_bonus = _saved_rank_bonus
 	GameConfig.tech_consumption_reduction = _saved_reduction
 
 # ── Ayudas ───────────────────────────────────────────────────────────

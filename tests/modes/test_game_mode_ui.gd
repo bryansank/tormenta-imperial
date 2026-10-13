@@ -89,12 +89,18 @@ func test_the_grid_folds_for_tablet_laptop_and_phone() -> void:
 
 func test_start_follows_at_once_without_a_wipe_step() -> void:
 	# Una partida nueva no borra ninguna: no hay paso de "se borrara tu partida".
+	# Tras el modo viene solo el nombre y la bandera del pais (2026-10-12), y al
+	# confirmarlo la partida empieza.
 	var dialog := _dialog()
 	var confirmed: Array = []
 	dialog.confirmed.connect(func(): confirmed.append(dialog.chosen_mode))
 	dialog.pick(GameMode.Mode.SANDBOX)
+	assert_bool(dialog.is_naming()).is_true()
+	assert_array(confirmed).is_empty()
+	dialog._on_identity_confirmed("Puerto Hierro", {})
 	assert_array(confirmed).contains_exactly([GameMode.Mode.SANDBOX])
 	assert_bool(dialog.is_naming()).is_false()
+	assert_str(String(dialog.chosen_identity["name"])).is_equal("Puerto Hierro")
 
 func test_cancel_says_so() -> void:
 	var dialog := _dialog()
