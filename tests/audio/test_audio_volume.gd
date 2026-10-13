@@ -60,8 +60,12 @@ func test_clipping_and_frequent_clips_are_attenuated() -> void:
 	assert_float(AudioManager.sfx_gain_db("era_up")).is_less_equal(-10.0)
 	# ui_click suena en cada boton.
 	assert_float(AudioManager.sfx_gain_db("ui_click")).is_less_equal(-9.0)
-	# Las claves de combate que reusan un clip se llevan su ganancia.
-	assert_float(AudioManager.sfx_gain_db("expedition_return")).is_equal(AudioManager.sfx_gain_db("era_up"))
+	# Una clave que reusa el clip de otra se lleva su ganancia (hoy ninguna lo
+	# hace: el combate ya tiene clips propios; la regla sigue valiendo).
+	for key in AudioManager.SFX_MANIFEST:
+		var file: String = String(AudioManager.SFX_MANIFEST[key])
+		if file != key and AudioManager.SFX_MANIFEST.has(file):
+			assert_float(AudioManager.sfx_gain_db(key)).is_equal(AudioManager.sfx_gain_db(file))
 	# Ningun efecto sale sin atenuar.
 	for key in AudioManager.SFX_MANIFEST:
 		assert_float(AudioManager.sfx_gain_db(key)).is_less(0.0)
