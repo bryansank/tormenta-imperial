@@ -2,13 +2,22 @@
 
 ## Overview
 
-Game state is persisted to a JSON file at `user://save_game.json`. Auto-saves on every significant action. Supports offline progression.
+Up to **five saved games** (2026-10-12), each one a JSON file in `user://partidas/`, plus
+a small index to paint the list. The game being played is the **active** one. Auto-saves
+on every significant action. Supports offline progression (silently: no report).
 
 ## Save Path
 
-- Godot path: `user://save_game.json`
-- Windows, from the editor (F5): `%APPDATA%/Godot/app_userdata/Tormenta Imperial/save_game.json`
-- Windows, exported `.exe`: `%APPDATA%/TormentaImperial/save_game.json`
+- Folder: `user://partidas/` (`scripts/services/SaveSlots.gd`, static, used with `preload`)
+  - `partida_<id>.json` — one game, in the format below
+  - `partida_<id>.corrupt-<date>.json` / `partida_<id>.v1-<date>.json` — copies set aside
+    from that game (unreadable / old format)
+  - `indice.json` — `{"version": 1, "slots": [...]}`, one summary per game
+- Active game: `settings.cfg` `[partidas] activa = <id>` (`GameConfig.saves_active_slot`).
+  It is a device preference, not game state. **`GameManager.save_path()`** is its file:
+  nothing hard-codes a path any more (`GameManager.SAVE_PATH` is gone)
+- Windows, from the editor (F5): `%APPDATA%/Godot/app_userdata/Tormenta Imperial/partidas/`
+- Windows, exported `.exe`: `%APPDATA%/TormentaImperial/partidas/`
   (`application/config/use_custom_user_dir.template` in `project.godot`)
 - Android: the app's internal storage
 - Tests: `%APPDATA%/TormentaImperial_tests/` — only if they are launched with
@@ -131,6 +140,53 @@ it is a Campaign in progress. `"result": "defeat"` marks a lost Survival run: th
 save is kept but sealed (GameManager never writes it again), and Survival skips the
 offline progression below.
 
+## Saved games (partidas)
+
+**The index** holds, per game: `id`, `colony_name`, `flag_spec` (from
+`RankManager.get_colony_name()` / `get_flag_spec()` when they exist — the flag-and-country
+branch; empty until then, and the list says "Colonia N"), `color`, `mode`, `tier`, `era`,
+`played_seconds`, `saved_at`, `sealed` (and `broken` for an unreadable file). It is a
+cache: every write of a game updates its line (`SaveSlots.record`), and `SaveSlots.list()`
+reconciles it with the files on disk (a file without a line is summarised by reading it,
+a line without a file is dropped). Lose the index and it is rebuilt.
+
+**Which game opens** (`GameManager._resolve_active_slot()`, on every start):
+1. A `user://save_game.json` from before the slots is **migrated**: copied to the next free
+   `partida_<id>.json`, the copy compared byte for byte, and only then the original
+   deleted (a failed copy leaves the original untouched). It becomes the active game.
+2. `start_new_game()` reserved a fresh id: a new game starts there.
+3. The active game, if its file exists ("Continuar" = the last game played).
+4. Otherwise the most recent (`saved_at`); with no games at all, a new id and a new game.
+
+**Nueva partida never deletes.** `request_new_game()` opens the mode picker; confirming
+calls `start_new_game(mode, tier, identity)`, which saves the current game (with its own
+mode, before `GameMode.begin_run`), reserves `SaveSlots.next_id()` and reloads into a new
+game. With five games (`is_save_list_full()`), `request_new_game()` opens the list in
+`make_room` mode instead: delete one (confirmed) and it goes on to the picker; it never
+deletes anything by itself, and `start_new_game()` refuses to make a sixth. An island that
+was born by itself (there were no games) and was never built on
+(`is_current_disposable()`) is not "a game": the next Nueva partida reuses its slot
+(`clear_save()`). The picker has a hook for a name-and-flag step
+(`ColonyIdentityPanel.gd`, if it exists: `open("new")`, `confirmed(name, spec)` /
+`cancelled`); the choice is applied with `RankManager.set_colony()` right after the resets
+of `_new_game()`.
+
+**The list** (`SavesPanel`, `GameManager.open_saves_list()`, layer 40, works paused), from
+the title menu ("PARTIDAS n/5") and from ☰ MENÚ → PARTIDA: one row per game, most recent
+first — flag, name, EN JUEGO / TERMINADA, then mode · tier · era · played time · date, and
+CARGAR / BORRAR. Delete asks in the same row. `load_slot(id)` saves the current game and
+reloads with that one (`clear_save_and_reload_from`). `delete_slot(id)` removes file and
+line; deleting the game in memory stops all writes to it (`_active_deleted`) and
+`leave_deleted_slot()` opens the most recent one left, or a new game.
+
+**Sealed per game.** A lost Survival run seals *its* slot: GameManager never writes that
+file again, its line says `sealed`, the list shows it as TERMINADA with CARGAR disabled
+(only BORRAR) and the title menu offers no "Continuar" while it is the active one. The
+other games are untouched.
+
+**Global, not per game:** the profile that unlocks Gobernador (`profile_runs_finished`,
+`profile_campaigns_won` in `settings.cfg`) and every other device preference.
+
 ## Auto-Save Triggers
 
 Immediate writes (`GameManager.save_game()`):
@@ -162,7 +218,7 @@ is never written again (`GameManager._can_write()`).
 1. `GameManager._try_start()` called when both the placer and the map generator register
    (3D or 2D), and it waits for the scene root to be ready, so load signals reach the UI.
    `ViewRouter` can `hold_start()` it while it switches to the other view
-2. Check if `save_game.json` exists
+2. Resolve the active game (see "Saved games") and check if its file exists
 3. If yes: parse JSON, restore all systems in order:
    - Resources (amounts)
    - Buildings (placement, level, construction state, names)
@@ -174,12 +230,15 @@ is never written again (`GameManager._can_write()`).
    - Random events (trigger count)
    - Resource unlock state
    - Camera position
-   - Offline progression calculation
+   - Offline progression calculation (not after an internal reload)
 4. If no: run `_new_game()` (reset all, place nucleo, generate deposits)
 
 ## Offline Progression
 
-When loading a save, if `elapsed > 2 seconds`, `ProductionManager.apply_offline_progression(elapsed)`:
+When loading a save, if `elapsed > 2 seconds`, `ProductionManager.apply_offline_progression(elapsed)`.
+**Internal reloads are not an absence** (2026-10-12): the 3D↔2D switch
+(`switch_to_scene()`), the language reload (`reload_keeping_game()`) and reopening the game
+already in play from the list set `_skip_offline_once`, and that load applies nothing.
 1. Ignores garbage: a negative elapsed (clock rolled back) or NaN pays nothing.
 2. Caps the absence at 8 hours (`GameConfig.max_offline_seconds = 28800`). A suspicious
    forward jump (clock pushed ahead, years away) is clamped to the same cap.
@@ -196,8 +255,9 @@ When loading a save, if `elapsed > 2 seconds`, `ProductionManager.apply_offline_
    you never come back poorer than you left.
 7. If `GameMode.spoilage_enabled()`, what sat uncollected for 2 h loses half per period
    (`ProductionManager.last_offline_spoiled`).
-8. The report says **what is waiting to be collected** (all stock, including what was
-   there before leaving) and what went bad.
+8. **There is no report** (2026-10-12: the "Mientras estuviste fuera" window and its
+   `offline_report_closed` / `is_offline_report_open()` are gone, and VictoryScreen no
+   longer waits for it). The buildings show on the map what is waiting to be collected.
 
 **Offline is production-only.** The Imperial Storm, random events (the plague), the army
 (upkeep, desertion, training), manual processes and the tech research are *frozen* while
@@ -207,13 +267,15 @@ to; a management game should not punish closing the window. For the same reason 
 storm's and the plague's production penalties are not applied to offline earnings: the
 events themselves do not advance, so they do not charge either.
 
-An unreadable save is copied to `user://save_game.corrupt-<date>.json` before a new
-game replaces it.
+An unreadable save is copied to `user://partidas/partida_<id>.corrupt-<date>.json` before
+a new game replaces it in the same slot (an old-format one to `.v1-<date>.json`).
 
 ## Clear Save
 
-`GameManager.clear_save()`:
-1. Delete save file
+`GameManager.clear_save()` discards **only the active game** and starts a new one in its
+slot. The UI reaches it only for an untouched fresh island (`start_new_game` reusing it);
+tests use it too. Every other path keeps the games:
+1. Delete the active game's file and its index line; mark the slot as fresh
 2. `GameMode.begin_run()` (keeps the chosen mode, drops the result), then `reset()` on
    ResourceManager, ProcessManager, ProgressionManager, MarketManager,
    PopulationManager, RandomEventManager, TechTreeManager, ArmyManager, CombatManager,
@@ -221,9 +283,18 @@ game replaces it.
 3. Unpause the tree and reload the current scene (full fresh start)
 
 The same resets run in `_new_game()` and `clear_save_and_reload_from()` (used by the
-3D↔2D switch and the cloud path). Any new persistent state must be added to all three —
+3D↔2D switch, the language reload, loading a game from the list, a new game in a new slot
+and the cloud path, which writes into the active game). Any new persistent state must be added to all three —
 see `CLAUDE.md` → "Adding Persistent State".
 
-## Key File
+## Tests
 
-`scripts/services/GameManager.gd`
+`tests/save/save_parking.gd` parks the whole `user://partidas/` folder (renamed to
+`<backup>.partidas`), the active slot id (`<backup>.activa`) and a legacy
+`save_game.json`, restores them afterwards, and still refuses to touch the player's
+folders. Suites that write a save use `GameManager.save_path()`. The slots themselves:
+`tests/save/test_save_slots.gd` and `tests/save/test_save_slots_game.gd`.
+
+## Key Files
+
+`scripts/services/GameManager.gd`, `scripts/services/SaveSlots.gd`, `scripts/ui/SavesPanel.gd`
