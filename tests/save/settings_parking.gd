@@ -13,6 +13,7 @@ const PATH := "user://settings.cfg"
 const FIELDS := ["ui_device_profile", "ui_scale_pct", "ui_text_size", "ui_palette",
 	"ui_high_contrast", "ui_panel_opacity", "ui_hud_hidden", "ui_layout",
 	"ui_helper_visible", "ui_touch_controls", "ui_grid_visible", "ui_touch_controls_opacity",
+	"ui_fps_cap",
 	"profile_runs_finished", "profile_campaigns_won"]
 
 static func park() -> Dictionary:
