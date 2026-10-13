@@ -1,6 +1,6 @@
 extends SceneTree
-## Genera por sintesis los sonidos que no tienen una pista CC0 que encaje: los dos
-## bucles de ambiente (dia y Tormenta) y dos efectos de la Tormenta (sirena lejana
+## Genera por sintesis los sonidos que no tienen una pista CC0 que encaje: los tres
+## bucles de ambiente (dia, noche y Tormenta) y dos efectos de la Tormenta (sirena lejana
 ## del Aviso y trueno). Es obra propia del proyecto: ruido filtrado y osciladores,
 ## sin ninguna muestra de fuera.
 ##
@@ -14,6 +14,7 @@ extends SceneTree
 ##
 ##   ambient/day      40 s, estereo, bucle: olas suaves + pajaros
 ##   ambient/storm    40 s, estereo, bucle: viento con rachas + truenos lejanos
+##   ambient/night    40 s, estereo, bucle: grillos + olas suaves, sin pajaros
 ##   sfx/storm_warning  ~5 s, mono: sirena lejana con eco
 ##   sfx/storm_thunder  ~5.5 s, mono: chasquido y retumbo
 
@@ -38,6 +39,8 @@ func _init() -> void:
 	_write(out + "storm.wav", _storm())
 	_write(out + "storm_warning.wav", [_siren()])
 	_write(out + "storm_thunder.wav", [_thunder_sfx()])
+	# La noche va la ultima: asi la semilla sigue dando los mismos cuatro de antes.
+	_write(out + "night.wav", _night())
 	print("gen_ambient_audio: escritos en ", ProjectSettings.globalize_path(out))
 	quit()
 
@@ -153,6 +156,14 @@ func _smooth_random(n: int, min_s: float, max_s: float) -> PackedFloat32Array:
 
 func _day() -> Array:
 	var n := int((LOOP_SECONDS + XFADE_SECONDS) * RATE)
+	var chans := _waves(n, 1100.0)
+	_add_birds(chans, n)
+	_normalize(chans, 0.5)
+	return _seamless(chans)
+
+## Oleaje en estereo. `brightness` es cuanto se abre el filtro en la cresta de
+## cada ola: de noche, menos (el mar suena mas lejos y mas tranquilo).
+func _waves(n: int, brightness: float) -> Array:
 	var env := _swell_envelope(n)
 	var chans: Array = []
 	for ch in range(2):
@@ -168,16 +179,69 @@ func _day() -> Array:
 		for i in range(n):
 			var e := env[(i - lag + n) % n]
 			if i % 32 == 0:
-				lp.set_lowpass(260.0 + 1100.0 * e, 0.6, RATE)
+				lp.set_lowpass(260.0 + brightness * e, 0.6, RATE)
 			var w := _white()
 			brown = (brown + 0.02 * w) / 1.02
 			var hiss := lp.tick(pink.tick(w)) * (0.12 + 0.88 * e)
 			var boom := low.tick(brown * 3.5) * (0.25 + 0.75 * e)
 			buf[i] = hiss * 0.9 + boom * 0.6
 		chans.append(buf)
-	_add_birds(chans, n)
-	_normalize(chans, 0.5)
+	return chans
+
+# ── Noche: grillos + olas suaves (sin pajaros) ───────────────────────
+
+func _night() -> Array:
+	var n := int((LOOP_SECONDS + XFADE_SECONDS) * RATE)
+	var chans := _waves(n, 550.0)
+	# Las olas bajan: de noche mandan los grillos.
+	for ci in range(chans.size()):
+		var c: PackedFloat32Array = chans[ci]
+		for i in range(n):
+			c[i] = c[i] * 0.45
+		chans[ci] = c
+	_add_crickets(chans, n)
+	_normalize(chans, 0.45)
 	return _seamless(chans)
+
+## Varios grillos, cada uno con su tono (3,6-4,9 kHz), su ritmo y su sitio en
+## el estereo. Cada chirrido son 2-4 pulsos muy cortos; cada grillo se calla y
+## vuelve de vez en cuando para que el coro no suene a metronomo.
+func _add_crickets(chans: Array, n: int) -> void:
+	var left: PackedFloat32Array = chans[0]
+	var right: PackedFloat32Array = chans[1]
+	for _c in range(6):
+		var freq := _rng.randf_range(3600.0, 4900.0)
+		var period := _rng.randf_range(0.45, 0.85)
+		var pulses := _rng.randi_range(2, 4)
+		var pulse_len := _rng.randf_range(0.010, 0.016)
+		var pulse_gap := _rng.randf_range(0.018, 0.028)
+		var amp := _rng.randf_range(0.10, 0.22) * (0.5 if _rng.randf() < 0.4 else 1.0)
+		var pan := _rng.randf_range(0.1, 0.9)
+		var gl := sqrt(1.0 - pan)
+		var gr := sqrt(pan)
+		var presence := _smooth_random(n, 3.0, 8.0)
+		var t := _rng.randf_range(0.0, period)
+		var total := float(n) / RATE
+		while t < total:
+			var start := int(t * RATE)
+			var p := presence[mini(start, n - 1)]
+			# Por debajo de un umbral este grillo calla un rato.
+			var level := clampf((p - 0.3) / 0.4, 0.0, 1.0)
+			if level > 0.0:
+				for k in range(pulses):
+					var ps := start + int(k * (pulse_len + pulse_gap) * RATE)
+					var pl := int(pulse_len * RATE)
+					for i in range(pl):
+						var idx := ps + i
+						if idx >= n:
+							break
+						var s := float(i) / pl
+						var v := sin(TAU * freq * float(idx) / RATE) * sin(PI * s) * amp * level
+						left[idx] = left[idx] + v * gl
+						right[idx] = right[idx] + v * gr
+			t += period * _rng.randf_range(0.93, 1.07)
+	chans[0] = left
+	chans[1] = right
 
 ## Grupos de trinos: cada uno con su tono, su barrido (baja, sube o trino) y su
 ## sitio en el estereo. Algunos lejos (mas bajos).
