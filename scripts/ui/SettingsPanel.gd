@@ -283,6 +283,8 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 	EventBus.fullscreen_changed.connect(func(enabled: bool):
 		_fullscreen_check.set_pressed_no_signal(enabled)
 	)
+	body.add_child(_make_fps_row())
+	body.add_child(_make_hint(Tr.t("LBL_FPS_HINT")))
 
 	body.add_child(UITheme.make_separator())
 	body.add_child(UITheme.section_header(Tr.t("LBL_SECTION_HUD")))
@@ -317,6 +319,24 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 
 	_add_reset(body, reset_interface)
 
+## Fotogramas por segundo: el del perfil, un numero o sin tope. Se aplica al
+## momento, sin reconstruir la interfaz.
+func _make_fps_row() -> HBoxContainer:
+	var modes: Array = GameConfig.FPS_CAP_MODES
+	var labels: Array = []
+	for mode in modes:
+		if mode == "auto":
+			labels.append(Tr.t("OPT_FPS_AUTO") % int(DeviceProfile.defaults()["fps"]))
+		elif mode == "unlimited":
+			labels.append(Tr.t("OPT_FPS_UNLIMITED"))
+		else:
+			labels.append(String(mode))
+	var row := UITheme.make_option_row(Tr.t("LBL_FPS_CAP"), labels,
+		maxi(0, modes.find(GameConfig.ui_fps_cap)), func(idx: int):
+			DeviceProfile.set_fps_cap(modes[idx]))
+	row.name = "FpsRow"
+	return row
+
 func _profile_name(profile: String) -> String:
 	return Tr.t("OPT_PROFILE_" + profile.to_upper())
 
@@ -327,12 +347,14 @@ func reset_interface() -> void:
 	GameConfig.ui_device_profile = "auto"
 	GameConfig.ui_scale_pct = 0
 	GameConfig.ui_text_size = "auto"
+	GameConfig.ui_fps_cap = "auto"
 	GameConfig.ui_grid_visible = true
 	EventBus.grid_overlay_toggled.emit(true)
 	HudRegistry.show_all()
 	UILayoutManager.reset_user_layout()
 	GameConfig.save_user_settings()
 	DeviceProfile.apply_scale()
+	DeviceProfile.apply_fps()
 	_sync_hud_checks()
 	_mark_rebuild()
 

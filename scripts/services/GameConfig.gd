@@ -472,6 +472,17 @@ var ui_panel_opacity := 1.0
 var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
 var ui_layout: Dictionary = {}
+## Tope de fotogramas por segundo: "auto" (el del perfil, DeviceProfile.DEFAULTS
+## "fps"), un numero, o "unlimited" (sin tope propio: lo marca el vsync, es decir,
+## el refresco de la pantalla). Sin tope el motor repinta la escena entera a 144 Hz
+## en un monitor de 144 Hz aunque nada se mueva, y eso es bateria y calor.
+const FPS_CAP_MODES := ["auto", "30", "45", "60", "90", "120", "unlimited"]
+var ui_fps_cap := "auto"
+## Fotogramas por segundo con la ventana sin foco o minimizada (nadie mira), y
+## con el juego en pausa (menu de pausa, menu de titulo, prologo: solo se mueve el
+## agua). Nunca por encima del tope elegido. Docs/21 §10.
+var fps_background := 10
+var fps_paused := 30
 
 # ── Perfil del jugador (settings.cfg [perfil]) ──
 # Del jugador en este dispositivo, NO de la partida: sobrevive a "Nueva partida"
@@ -559,6 +570,8 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 				(moved as Dictionary).erase(id)
 			if (moved as Dictionary).is_empty():
 				ui_layout.erase(key)
+	var fps := str(cf.get_value("interfaz", "fps_cap", ui_fps_cap))
+	ui_fps_cap = fps if fps in FPS_CAP_MODES else "auto"
 	profile_runs_finished = maxi(0, int(cf.get_value("perfil", "runs_finished", profile_runs_finished)))
 	profile_campaigns_won = maxi(0, int(cf.get_value("perfil", "campaigns_won", profile_campaigns_won)))
 
@@ -587,6 +600,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
+	cf.set_value("interfaz", "fps_cap", ui_fps_cap)
 	cf.set_value("perfil", "runs_finished", profile_runs_finished)
 	cf.set_value("perfil", "campaigns_won", profile_campaigns_won)
 	cf.save(USER_SETTINGS_PATH)
