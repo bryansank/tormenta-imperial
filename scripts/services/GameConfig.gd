@@ -1472,10 +1472,16 @@ var combat_ai_step_delay := 0.45
 ## relacion que hace que la artilleria pegue y el vehiculo aguante, y ademas la
 ## IA de objetivos esta fijada sobre esos numeros en `tests/combat/test_combat_ai.gd`.
 ## Medido en `tools/balance_probe.gd`; tablas en `docs/16-balance-combate.md`.
+##
+## `domain` es el medio por el que se mueve la unidad: "land" (tierra) para las
+## tres de hoy. Ninguna regla lo lee todavia; existe para que las unidades de
+## mar y aire (y, muy a futuro, espacio) entren sin cambiar el formato: el
+## modelo puro lo expone (`CombatUnit.domain()`) y la vista 3D coloca la unidad
+## segun el (docs/15 §11). Una entrada sin `domain` es de tierra.
 var combat_unit_stats := {
-	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5},
-	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3},
-	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4},
+	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5, "domain": "land"},
+	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3, "domain": "land"},
+	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4, "domain": "land"},
 }
 
 ## Enemy scaling: deeper nodes and later eras field tougher rosters.
