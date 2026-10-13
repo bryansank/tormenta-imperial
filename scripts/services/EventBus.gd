@@ -198,6 +198,14 @@ signal building_ruined(building_node: Node)
 @warning_ignore("unused_signal")
 signal building_repaired(building_node: Node)
 
+# ── Day and night ──
+## Emitted only by DayClock when the day clock enters a phase. `phase` follows
+## DayCycle.Phase (DAWN, DAY, DUSK, NIGHT); `hour` is the time of day, 0-1.
+## Not emitted on load or new game: a consumer re-derives from
+## `DayClock.get_phase()` on `game_load_completed` / `game_new_started`.
+@warning_ignore("unused_signal")
+signal day_phase_changed(phase: int, hour: float)
+
 # ── Imperial Storm ──
 ## Emitted only by StormManager. The storm is dispatched on a schedule, not rolled
 ## at random — the player is meant to see it coming and prepare (see the design in

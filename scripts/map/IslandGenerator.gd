@@ -384,12 +384,14 @@ func _build_skirt_mesh(y_top: float, y_bottom: float) -> ArrayMesh:
 ## Todos llevan `storm_weight` (storm_grade.gdshaderinc): nacen con el peso de
 ## Tormenta que tenga StormSky ahora, asi que rehacer la isla a media tormenta
 ## (grid_resized, recarga) no la devuelve limpia. Luego StormSky los funde.
+## Lo mismo con `night_weight`: una isla rehecha de noche nace de noche.
 func _shader_material(shader_name: String, params: Dictionary) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://scripts/map/%s.gdshader" % shader_name) as Shader
 	for key in params:
 		m.set_shader_parameter(key, params[key])
 	m.set_shader_parameter("storm_weight", StormSky.get_island_weight())
+	m.set_shader_parameter("night_weight", StormSky.get_island_night_weight())
 	# Version sencilla en calidad baja o minima (WorldLook, hermano en Main).
 	var look := get_parent().get_node_or_null("WorldEnvironment") if get_parent() != null else null
 	if look != null and look.has_method("island_simple"):

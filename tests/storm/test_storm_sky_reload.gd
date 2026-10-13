@@ -11,6 +11,9 @@ var _saved_mult: float = 1.0
 var _saved_scene: Node = null
 var _scenes: Array = []
 var _env: Environment = null
+## El cielo limpio es el del dia pleno: la prueba fija la hora para que el reloj
+## del dia (que corre, y en dev_mode rapido) no la cambie por debajo.
+var _saved_day: Dictionary = {}
 
 func before_test() -> void:
 	_saved_storm = StormManager.get_save_data()
@@ -20,6 +23,8 @@ func before_test() -> void:
 	_env.background_color = Color(0.5, 0.6, 0.7)
 	_env.ambient_light_color = Color(0.8, 0.8, 0.8)
 	_env.ambient_light_energy = 1.0
+	_saved_day = DayClock.get_save_data()
+	DayClock.set_hour(DayClock.get_cycle().day_start() + 0.01)
 	StormSky.reset()
 
 func after_test() -> void:
@@ -33,6 +38,7 @@ func after_test() -> void:
 	StormManager.load_save_data(_saved_storm)
 	StormManager._tithe_to_resume = false
 	GameConfig.event_production_multiplier = _saved_mult
+	DayClock.load_save_data(_saved_day)
 
 ## Una Main minima con el mismo Environment, como hace el sub-recurso cacheado.
 func _scene() -> Node:
@@ -137,3 +143,40 @@ func test_without_a_sky_the_island_weight_is_still_kept() -> void:
 	assert_float(StormSky.get_island_weight()).is_greater_equal(0.6)
 	StormSky.restore_now()
 	assert_float(StormSky.get_island_weight()).is_equal(0.0)
+
+## De noche el cielo se enfria y baja, pero la Tormenta encima pinta la misma
+## ceniza que de dia (la ceniza manda), y al pasar vuelve la noche.
+func test_at_night_the_sky_is_blue_and_the_storm_still_rules() -> void:
+	var scene := _scene()
+	var foam := _add_foam(scene)
+	var c := DayClock.get_cycle()
+	_load_phase(StormCycle.Phase.CALM)
+	DayClock.set_hour(1.0 - 0.5 * c.night_seconds / c.length())
+	EventBus.game_load_completed.emit()
+	var sun := _sun_of(scene)
+	assert_float(sun.light_energy).is_less(2.0)
+	assert_float(sun.light_energy).is_greater(0.5)
+	assert_float(sun.light_color.b).is_greater(sun.light_color.r)
+	assert_float(float(foam.get_shader_parameter("night_weight"))).is_equal_approx(1.0, 0.0001)
+	var night_bg := _env.background_color
+	_load_phase(StormCycle.Phase.ASH)
+	StormSky.sync_to_storm()
+	var night_ash := _env.background_color
+	assert_float(float(foam.get_shader_parameter("night_weight"))).is_less(0.5)
+	DayClock.set_hour(c.day_start() + 0.01)
+	StormSky.sync_to_storm()
+	var day_ash := _env.background_color
+	# Con ceniza la noche se nota menos que sin ella.
+	assert_float(absf(night_ash.b - day_ash.b)).is_less(absf(night_bg.b - Color(0.5, 0.6, 0.7).b))
+	assert_float(_env.fog_density).is_equal_approx(StormSky.MAX_FOG * StormSky.WEIGHT_ASH, 0.0001)
+
+func test_windows_glow_more_at_night_than_by_day() -> void:
+	_scene()
+	var c := DayClock.get_cycle()
+	_load_phase(StormCycle.Phase.CALM)
+	StormSky.sync_to_storm()
+	var day_gain := StormSky.glow_gain_now()
+	DayClock.set_hour(1.0 - 0.5 * c.night_seconds / c.length())
+	StormSky.refresh_day()
+	assert_float(StormSky.glow_gain_now()).is_greater(day_gain)
+	assert_float(day_gain).is_less(1.0)

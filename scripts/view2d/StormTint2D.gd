@@ -13,12 +13,21 @@ extends CanvasModulate
 ##
 ## CanvasModulate solo tine el lienzo del mapa: la interfaz (CanvasLayer) queda
 ## igual de legible. La ceniza que cae va en su propia capa, por debajo de la UI.
+##
+## Dia y noche (DayClock, docs/21 §12): el mismo tinte parte del color del
+## momento del dia (blanco de dia, anaranjado al alba y al ocaso, azul de noche,
+## siempre legible) y la Tormenta se mezcla encima hacia la ceniza de siempre:
+## con la Tormenta en pleno la hora no se nota. Son dos `lerp` por frame sobre
+## un color, sin materiales.
 
 const StormSkyScript := preload("res://scripts/map/StormSky.gd")
 const StormCycleScript := preload("res://scripts/storm/StormCycle.gd")
 
 ## El tono al que tiende el mapa con la tormenta encima (ceniza de hierro).
 const ASH_TINT := Color(0.46, 0.40, 0.35)
+## El alba y el ocaso, y la noche (azul, pero se sigue leyendo el mapa).
+const WARM_TINT := Color(1.0, 0.8, 0.62)
+const NIGHT_TINT := Color(0.56, 0.64, 0.92)
 
 var _weight := 0.0
 var _ash: CPUParticles2D = null
@@ -60,6 +69,12 @@ static func target_weight(phase: int, severity: int, halted: bool) -> float:
 			return clampf(float(severity) / float(maxi(1, GameConfig.storm_severity_max)), 0.6, 1.0)
 	return 0.0
 
+## El tinte del momento del dia: `light` 1 = dia pleno (blanco), 0 = noche;
+## `warm` el peso del sol bajo (DayCycle.warm_weight()).
+static func day_tint(light: float, warm: float) -> Color:
+	var n := 1.0 - light
+	return Color.WHITE.lerp(WARM_TINT, warm * 0.8).lerp(NIGHT_TINT, n * n)
+
 func current_weight() -> float:
 	return _weight
 
@@ -72,7 +87,7 @@ func _process(delta: float) -> void:
 	_weight = move_toward(_weight, target, delta / fade)
 	if forced_weight >= 0.0:
 		_weight = forced_weight
-	color = Color.WHITE.lerp(ASH_TINT, _weight)
+	color = day_tint(DayClock.light_weight(), DayClock.warm_weight()).lerp(ASH_TINT, _weight)
 	var vp := get_viewport().get_visible_rect().size
 	# Emite desde toda la pantalla (y un poco por encima): la ceniza aparece
 	# repartida en el acto, no como una cortina que baja desde el borde.
