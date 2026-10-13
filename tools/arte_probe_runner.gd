@@ -6,6 +6,8 @@ extends Node
 ##   2. 3D en Aviso, Ceniza y Tormenta (el cielo de StormSky);
 ##   3. FPS sin vsync en la vista general (calidad alta y baja);
 ##   4. 2D en calma y en Tormenta.
+## Mas dos tomas de la costa (3d_costa y 3d_costa_tormenta): ahi se ve si la
+## Tormenta oscurece tambien la isla, el agua y la espuma.
 ## Imprime "arte_probe: ..." con las cifras.
 
 const SAVE_PATH := "user://save_game.json"
@@ -14,6 +16,10 @@ const BACKUP_PATH := "user://save_game.arte_probe.bak"
 const OUT_DIR := "res://docs/media/dev"
 const StormCycleScript := preload("res://scripts/storm/StormCycle.gd")
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
+
+## Donde mira la toma de la costa: el borde oeste de la rejilla de 40x40.
+const COAST := Vector2(-40.0, 4.0)
+const COAST_ZOOM := 0.14
 
 var _tag := "despues"
 var _saved_view := "3d"
@@ -49,6 +55,10 @@ func _run() -> void:
 	_camera(Vector2(-4.0, 0.0), 0.4)
 	await _seconds(1.5)
 	await _shot("3d_general")
+	# La costa de cerca: canto, playa, espuma y agua (docs/21 §12).
+	_camera(COAST, COAST_ZOOM)
+	await _seconds(1.5)
+	await _shot("3d_costa")
 	_camera(Vector2(-6.0, -2.0), -1.0)
 	await _seconds(1.0)
 	# 3) Rendimiento en calma.
@@ -59,6 +69,12 @@ func _run() -> void:
 		await _frames(30)
 		await _fps("baja")
 		await _shot("3d_calma_baja")
+		# Minima (WorldLook "minimal"): aun sin entrada en Ajustes.
+		GameConfig.set("ui_graphics_quality", "minimal")
+		EventBus.emit_signal("graphics_quality_changed", "minimal")
+		await _frames(30)
+		await _fps("minima")
+		await _shot("3d_calma_minima")
 		GameConfig.set("ui_graphics_quality", _saved_quality if _saved_quality != "" else "auto")
 		EventBus.emit_signal("graphics_quality_changed", GameConfig.get("ui_graphics_quality"))
 		await _frames(30)
@@ -75,6 +91,10 @@ func _run() -> void:
 	EventBus.storm_phase_changed.emit(StormCycleScript.Phase.STORM, 30.0)
 	await _seconds(4.0)
 	await _shot("3d_tormenta")
+	_camera(COAST, COAST_ZOOM)
+	await _seconds(1.5)
+	await _shot("3d_costa_tormenta")
+	_camera(Vector2(-6.0, -2.0), -1.0)
 	EventBus.storm_ended.emit(3)
 	EventBus.storm_phase_changed.emit(StormCycleScript.Phase.CALM, 0.0)
 	await _seconds(6.0)

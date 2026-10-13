@@ -12,6 +12,13 @@ extends Node
 ## cielo, asi que oscurecer el color de fondo ya no basta: tambien se tinen de
 ## ceniza los cuatro colores del `ProceduralSkyMaterial`, y con ellos la luz
 ## ambiental y los reflejos del agua.
+##
+## La isla tambien: el cesped, el canto, la playa, la espuma y el agua llevan el
+## uniform `storm_weight` (scripts/map/storm_grade.gdshaderinc), y aqui se le
+## da el mismo peso y el mismo fundido que al cielo. La espuma no tiene luz, asi
+## que sin esto era lo unico blanco y limpio bajo la ceniza. El peso vive en este
+## autoload: si la isla se rehace (grid_resized, recarga), IslandGenerator lo
+## lee al crear los materiales y no se pierde la Tormenta.
 
 ## Cuánto tarda el cielo en cerrarse y en volver a abrirse.
 const FADE_IN := 3.0
@@ -42,6 +49,8 @@ const SKY_KEYS := {
 const WEIGHT_WARNING := 0.35
 const WEIGHT_ASH := 0.7
 
+const IslandGen := preload("res://scripts/map/IslandGenerator.gd")
+
 var _env: Environment = null
 var _sun: DirectionalLight3D = null
 var _tween: Tween = null
@@ -55,6 +64,9 @@ var _clear: Dictionary = {}
 var _clear_env: Environment = null
 ## Y de que luz salio la energia del sol limpio.
 var _clear_sun_id: int = 0
+## El peso de Tormenta que lleva ahora la isla (0 = calma). Durante un fundido
+## es el valor del momento.
+var _island_weight: float = 0.0
 
 func _ready() -> void:
 	EventBus.storm_incoming.connect(_on_incoming)
@@ -141,6 +153,7 @@ func _on_false_alarm(_deferred: int) -> void:
 
 func _close_to(weight: float) -> void:
 	if not _resolve():
+		_paint_island(weight)
 		return
 	_start_tween()
 	_tween.tween_property(_env, "background_color", _clear["bg"].lerp(ASH, weight), FADE_IN)
@@ -156,12 +169,14 @@ func _close_to(weight: float) -> void:
 		for key in SKY_KEYS:
 			if _clear.has(key):
 				_tween.parallel().tween_property(sky_mat, key, (_clear[key] as Color).lerp(SKY_KEYS[key], weight), FADE_IN)
+	_tween.parallel().tween_method(_paint_island, _island_weight, weight, FADE_IN)
 
 func _on_ended(_severity: int) -> void:
 	_clear_sky()
 
 func _clear_sky() -> void:
 	if not _resolve():
+		_paint_island(0.0)
 		return
 	_start_tween()
 	_tween.tween_property(_env, "background_color", _clear["bg"], FADE_OUT)
@@ -174,6 +189,7 @@ func _clear_sky() -> void:
 		for key in SKY_KEYS:
 			if _clear.has(key):
 				_tween.parallel().tween_property(sky_mat, key, _clear[key], FADE_OUT)
+	_tween.parallel().tween_method(_paint_island, _island_weight, 0.0, FADE_OUT)
 
 func _start_tween() -> void:
 	if _tween != null and _tween.is_valid():
@@ -207,11 +223,14 @@ static func weight_for(phase: int, severity: int) -> float:
 func sync_to_storm() -> void:
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
-	if not _resolve():
-		return
 	var weight: float = 0.0
 	if not StormManager.is_halted():
 		weight = weight_for(StormManager.get_phase(), StormManager.get_severity())
+	if not _resolve():
+		# Sin cielo (vista 2D, escena a medio montar): la isla 3D que se cree
+		# despues leera este peso.
+		_paint_island(weight)
+		return
 	_apply_now(weight)
 
 func _apply_now(weight: float) -> void:
@@ -221,6 +240,7 @@ func _apply_now(weight: float) -> void:
 	_sun.light_energy = lerpf(_clear["sun"], _clear["sun"] * 0.15, weight)
 	_env.fog_density = MAX_FOG * weight
 	_paint_sky(weight)
+	_paint_island(weight)
 
 ## Tine el cielo procedural `weight` hacia la ceniza (0 = el limpio).
 func _paint_sky(weight: float) -> void:
@@ -230,6 +250,27 @@ func _paint_sky(weight: float) -> void:
 	for key in SKY_KEYS:
 		if _clear.has(key):
 			sky_mat.set(key, (_clear[key] as Color).lerp(SKY_KEYS[key], weight))
+
+## Lo que pesa ahora la Tormenta sobre la isla. IslandGenerator lo pone en los
+## materiales que crea, para que una isla rehecha a media tormenta salga oscura.
+func get_island_weight() -> float:
+	return _island_weight
+
+## Pone `weight` en el `storm_weight` de los materiales de la isla 3D de la
+## escena actual (los nodos de IslandGenerator.NODE_NAMES). Sin isla, solo se
+## recuerda el peso.
+func _paint_island(weight: float) -> void:
+	_island_weight = weight
+	var tree := get_tree()
+	if tree == null or tree.current_scene == null:
+		return
+	for node_name in IslandGen.NODE_NAMES:
+		var mesh := tree.current_scene.get_node_or_null(node_name) as MeshInstance3D
+		if mesh == null:
+			continue
+		var mat := mesh.get_surface_override_material(0) as ShaderMaterial
+		if mat != null:
+			mat.set_shader_parameter("storm_weight", weight)
 
 ## El cielo procedural del Environment, o null si el fondo es un color liso.
 func _sky_material() -> ProceduralSkyMaterial:
@@ -247,10 +288,12 @@ func reset() -> void:
 	_clear = {}
 	_clear_env = null
 	_clear_sun_id = 0
+	_island_weight = 0.0
 
 ## Devuelve el cielo al instante. Para cargar partida o empezar de cero.
 func restore_now() -> void:
 	if not _resolve():
+		_paint_island(0.0)
 		return
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
@@ -260,3 +303,4 @@ func restore_now() -> void:
 	_sun.light_energy = _clear["sun"]
 	_env.fog_density = 0.0
 	_paint_sky(0.0)
+	_paint_island(0.0)
