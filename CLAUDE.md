@@ -62,13 +62,13 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-27 autoloads in `project.godot`: the 26 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, and `RankManager` goes after `DeviceProfile` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText` and `Objectives` are static helpers (a `class_name` or a `preload`), not autoloads.
+28 autoloads in `project.godot`: the 27 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, and `RankManager` goes after `DeviceProfile` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText` and `Objectives` are static helpers (a `class_name` or a `preload`), not autoloads.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 116 signals in ~29 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 117 signals in ~30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (40x40 to 48x48, even sides, `grid_size_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed, building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
@@ -83,15 +83,16 @@ holds a service's state of its own.
 | 15 | `RandomEventManager` | `scripts/services/RandomEventManager.gd` | Random events (storms, plagues, festivals...) |
 | 16 | `BuildingHealth` | `scripts/services/BuildingHealth.gd` | Building damage, ruined state that halts output, proportional repair |
 | 17 | `StormManager` | `scripts/services/StormManager.gd` | Drives the Imperial Storm cycle (`scripts/storm/StormCycle.gd`), storm damage and the Tithe |
-| 18 | `StormSky` | `scripts/map/StormSky.gd` | Darkens the `WorldEnvironment` and light during the storm, restores them after |
-| 19 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
-| 20 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
-| 21 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
-| 22 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built) and which tips/helps were seen; state saved with the game (docs/23) |
-| 23 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
-| 24 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
-| 25 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size). See `docs/21-interfaz-y-dispositivos.md` |
-| 26 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses), colony flag and colour. See `docs/06-progression-victory.md` §Governor rank |
+| 18 | `DayClock` | `scripts/services/DayClock.gd` | Day/night clock: ticks the pure `scripts/storm/DayCycle.gd` (dawn, day, dusk, night; 16 min, night 3 min), emits `day_phase_changed`, answers `is_night()` / `light_weight()`; the hour travels in the save (`day`). Visual only today (docs/21 §12) |
+| 19 | `StormSky` | `scripts/map/StormSky.gd` | Paints the `WorldEnvironment`, sun and island: the time of day from `DayClock` (refreshed every few seconds) with the storm's ash blended on top; also the shared window-glow material |
+| 20 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
+| 21 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
+| 22 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
+| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built) and which tips/helps were seen; state saved with the game (docs/23) |
+| 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
+| 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
+| 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size). See `docs/21-interfaz-y-dispositivos.md` |
+| 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses), colony flag and colour. See `docs/06-progression-victory.md` §Governor rank |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -576,6 +577,22 @@ PNG is missing.
 `early_morale_penalty`, `early_growth_interval`) so consumption/morale pressure
 ramps up gradually instead of punishing the first minutes.
 
+### Day and night (2026-10-12) — full doc: `docs/21-interfaz-y-dispositivos.md` §12
+
+- **Visual only, ready for rules.** `scripts/storm/DayCycle.gd` is a pure model like
+  `StormCycle` (`tick(delta)` returns events; hour 0-1, phase DAWN/DAY/DUSK/NIGHT,
+  `light_weight()`, `warm_weight()`, `sun_arc()`, `is_night()`). `DayClock` (autoload)
+  ticks it, emits `day_phase_changed` and is what a future rule asks (`DayClock.is_night()`).
+- Lengths in `GameConfig.day_cycle_*`: 90 s dawn, 600 s day, 90 s dusk, 180 s night
+  (16 min); `day_cycle_enabled = false` means always day. Paused with the real pause.
+- **The storm rules over the night:** StormSky computes the light of the moment every
+  `day_cycle_refresh` s (2) and blends the ash on top, toward the same targets as by
+  day. The island gets `night_weight` (storm_grade.gdshaderinc); windows/lanterns get a
+  gain on the shared `ToyPalette.glow_material()`. 2D: `StormTint2D` does the same with
+  its CanvasModulate. Night is bluish but never really dark (10-15 year olds).
+- Saved as `"day": {"hour"}`; a save without it starts in daylight. **Offline the clock
+  does not move** (like the storm, docs/09).
+
 ### Audio
 
 - **AudioManager** creates Music/SFX/Ambient buses at runtime and auto-plays from
@@ -617,7 +634,7 @@ and Settings closes; accepted). With a board open it does not reload
 ### Save/Load System
 
 - Path: `user://save_game.json`
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `rank` (RankManager: XP, flag, colour), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `day` (DayClock: the hour, 0-1; frozen while the game is closed), `tutorial`, `rank` (RankManager: XP, flag, colour), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -638,7 +655,7 @@ and Settings closes; accepted). With a board open it does not reload
 
 ```
 tormenta-imperial/
-+-- project.godot                    # Engine config, 27 autoloads (26 game + BeckettRuntime)
++-- project.godot                    # Engine config, 28 autoloads (27 game + BeckettRuntime)
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
 +-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
@@ -691,9 +708,10 @@ tormenta-imperial/
 |   |   +-- MapGenerator.gd          # Random deposits: 3-6 per type, room and a road path for each extractor
 |   |   +-- WorkerWalkers.gd         # Workers and citizens walking the road network (view only, 3D and 2D)
 |   |   +-- WalkerActor.gd, WalkerFigures3D.gd  # One figure's data; the 3D MultiMesh drawer (2D: view2d/WalkerFigures2D.gd)
-|   |   +-- StormSky.gd              # Autoload: sky/light during the storm
+|   |   +-- StormSky.gd              # Autoload: sky/light of the time of day and the storm
 |   +-- storm/StormCycle.gd          # PURE model: the storm's phase clock
-|   +-- services/                    # The 26 game autoloads (table above) + BeckettGate.gd
+|   +-- storm/DayCycle.gd            # PURE model: the day/night clock (DayClock ticks it)
+|   +-- services/                    # The 27 game autoloads (table above) + BeckettGate.gd
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
@@ -794,7 +812,7 @@ the same in 2D. The model is shrunk in plan to leave the yard free
 
 ### Key Rule: GDScript first (decided 2026-09-12)
 
-- **GDScript for everything**, combat included. The whole project (26 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
+- **GDScript for everything**, combat included. The whole project (27 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
 - The old plan put unit AI, combat math and pathfinding in C# **for performance**. That argument does not apply at the agreed combat scale: an 8x8 board with 4–6 units per side. GDScript is orders of magnitude more than enough.
 - **Migrate later, only on evidence**: if a profiled module proves too slow, port that module to C#. Do not create the .NET project speculatively.
 
@@ -881,6 +899,7 @@ All balance values live in `GameConfig.gd`:
 - `phase_triggers` / `early_*` - onboarding phase pacing
 - `combat_*` - board, deploy cap, unit combat stats, enemy/risk scaling, map shape,
   drafts, rewards, morale-in-combat (table with effects in `docs/15-combat.md` §8)
+- `day_cycle_*` - day and night: on/off switch (`day_cycle_enabled`), the four phase lengths, the light refresh interval (docs/21 §12)
 - `storm_*` - storm cycle, damage, the Tithe, tower mitigation and tower crews (and the
   damage a lost crew leaves), the era-1 trial storm (`storm_trial_*`)
 - `final_audit_*` - the closing siege: wave count, slots, scaling, resummon floor

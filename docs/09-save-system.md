@@ -126,6 +126,14 @@ idempotent. A save without it is XP 0 = rank 1 with the default flag and colour;
 flag or colour above the saved rank falls back to the default. See
 [06-progression-victory.md](06-progression-victory.md) §Governor rank.
 
+`day` (since 2026-10-12): the time of day, `{"hour": float}` (0-1, `DayClock` /
+`scripts/storm/DayCycle.gd`). Only the hour is saved: the phase lengths come from
+today's `GameConfig.day_cycle_*`, so retuning them does not break old saves. Loading
+just sets the hour (idempotent). A save without it starts in full daylight. Reset by
+`DayClock.reset()` (a fresh morning, no signal), called from the three new-game paths
+of GameManager. Not to be confused with `StormSky.reset()`, which is never called on a
+new game (docs/21 §12).
+
 `game_mode` (docs/20-modos-de-juego.md) is read **first** on load. A save without
 it is a Campaign in progress. `"result": "defeat"` marks a lost Survival run: the
 save is kept but sealed (GameManager never writes it again), and Survival skips the
@@ -206,6 +214,12 @@ would mean resolving fights and ruining buildings the player never saw and could
 to; a management game should not punish closing the window. For the same reason the
 storm's and the plague's production penalties are not applied to offline earnings: the
 events themselves do not advance, so they do not charge either.
+
+The **day clock** is frozen too (2026-10-12): coming back, it is the same hour the
+player left. It is visual only, so advancing it would change nothing but the light,
+and reopening the game always at a random hour (often at night) would only surprise.
+If the night ever gets rules (less production, say), this decision has to be revisited
+together with the offline production, which today ignores the time of day.
 
 An unreadable save is copied to `user://save_game.corrupt-<date>.json` before a new
 game replaces it.
