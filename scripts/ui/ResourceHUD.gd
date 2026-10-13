@@ -253,6 +253,8 @@ func _fit_row() -> void:
 ## Ancho util de la fila hasta el boton ☰ (o sin limite si no hay boton o no
 ## esta en la misma franja de arriba).
 func _room_before_menu() -> float:
+	if not is_inside_tree():
+		return INF
 	var btn := get_tree().get_first_node_in_group("hud_menu_button") as Control
 	if btn == null or not btn.is_visible_in_tree() or _panel == null:
 		return INF
