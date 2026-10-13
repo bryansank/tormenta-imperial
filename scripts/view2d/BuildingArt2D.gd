@@ -1,51 +1,81 @@
 extends RefCounted
 ## El dibujo de los edificios y yacimientos de la vista 2D, en codigo.
 ##
-## Sin pipeline de arte: cada edificio es su huella exacta vista desde arriba,
-## con una silueta que se reconoce de un vistazo (la cupula del Nucleo, las
-## chimeneas de la Fundicion, los tanques de la Refineria...) en la paleta
-## dieselpunk de DieselpunkBuildingFactory y UITheme: hierro, laton, oxido,
-## hormigon, fuego.
+## Maqueta de juguete (2026-10-12, guia de estilo de edificios): los mismos
+## diez colores calidos y saturados que la 3D (`ToyPalette`), volumenes gruesos
+## y la funcion de cada edificio a la vista desde fuera, con UN elemento
+## exagerado que da la silueta en miniatura (la sierra del Aserradero, la
+## chimenea de la Fundicion, la columna de la Refineria, la cupula del
+## Laboratorio, el canon de la Torre, la bandera del Cuartel...) y un acento por
+## funcion: rojo en lo industrial, amarillo/negro en lo militar, laton en lo
+## civico, verde en lo residencial. Contorno oscuro fino y sombra suave que lo
+## ancla al suelo.
+##
+## Vista "de maqueta": desde arriba pero un poco desde el sur, como la camara
+## 3D. Cada volumen ensena su tejado y, hacia abajo en PANTALLA, la pared
+## (`_block`, `_cyl`); lo alto (mastiles, chimeneas) sube hacia arriba en
+## pantalla. Como el edificio se dibuja girado, `draw_building` recibe el giro
+## ("rot") y traduce "abajo en pantalla" a su marco local (`_set_view`): la
+## pared siempre asoma por el sur de la pantalla y la luz siempre viene de
+## arriba a la izquierda, gire como gire.
 ##
 ## Todo se dibuja centrado en (0, 0) sobre un CanvasItem, con la huella SIN girar
 ## (`size` en pixeles); quien llama aplica el giro con draw_set_transform. Lo usan
-## Building2D (el mapa), el fantasma de colocacion y el icono del menu de
-## construccion, asi que las tres cosas son siempre el mismo dibujo.
+## Building2D (el mapa, a traves de la cache horneada ArtCache2D), el fantasma de
+## colocacion y el icono del menu de construccion, asi que las tres cosas son
+## siempre el mismo dibujo.
 
 ## La obra: estilo y disposicion compartidos con 3D (docs/03).
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
 const SiteFx := preload("res://scripts/buildings/SiteFx.gd")
+## La paleta comun de la maqueta (solo lectura).
+const Toy := preload("res://scripts/buildings/ToyPalette.gd")
 
-# ── Paleta (la de DieselpunkBuildingFactory, vista desde arriba) ─────────
-const IRON := Color(0.22, 0.20, 0.22)
-const GUNMETAL := Color(0.30, 0.30, 0.33)
-const STEEL := Color(0.46, 0.47, 0.50)
-const BRASS := Color(0.77, 0.59, 0.16)
-const BRASS_LIGHT := Color(0.93, 0.78, 0.32)
-const COPPER := Color(0.65, 0.38, 0.22)
-const RUST := Color(0.50, 0.28, 0.15)
-const DARK_WOOD := Color(0.30, 0.20, 0.10)
-const WOOD := Color(0.52, 0.36, 0.19)
-const LIGHT_WOOD := Color(0.66, 0.50, 0.30)
-const CONCRETE := Color(0.46, 0.44, 0.41)
-const CONCRETE_DARK := Color(0.33, 0.31, 0.29)
-const FIRE := Color(1.0, 0.50, 0.08)
-const FIRE_CORE := Color(1.0, 0.85, 0.35)
-const OIL_BLACK := Color(0.08, 0.08, 0.10)
-const OLIVE := Color(0.33, 0.37, 0.20)
-const OLIVE_DARK := Color(0.23, 0.26, 0.14)
-const TILE_RED := Color(0.55, 0.22, 0.15)
-const TILE_RED_DARK := Color(0.42, 0.16, 0.11)
-const MARBLE := Color(0.84, 0.80, 0.73)
-const WATER := Color(0.25, 0.55, 0.78)
-const LEAF := Color(0.26, 0.50, 0.18)
-const LEAF_DARK := Color(0.16, 0.34, 0.11)
-const OUTLINE := Color(0.05, 0.045, 0.035, 0.95)
-const SHADOW := Color(0.0, 0.0, 0.0, 0.28)
-const IMPERIAL_RED := Color(0.72, 0.13, 0.10)
+# ── Paleta: las diez casillas de ToyPalette ──────────────────────────
+const CREAM: Color = Toy.COLORS[Toy.Slot.CREAM]
+const STONE: Color = Toy.COLORS[Toy.Slot.STONE]
+const SLATE: Color = Toy.COLORS[Toy.Slot.SLATE]
+const IRON: Color = Toy.COLORS[Toy.Slot.IRON]
+const WOOD: Color = Toy.COLORS[Toy.Slot.WOOD]
+const TERRACOTTA: Color = Toy.COLORS[Toy.Slot.TERRACOTTA]
+const RED: Color = Toy.COLORS[Toy.Slot.RED]
+const BRASS: Color = Toy.COLORS[Toy.Slot.BRASS]
+const GREEN: Color = Toy.COLORS[Toy.Slot.GREEN]
+const SKY: Color = Toy.COLORS[Toy.Slot.SKY]
+const GLOW: Color = Toy.COLORS[Toy.Slot.GLOW]
+
+# Matices de esas casillas (claro / oscuro), hechos a mano porque una
+# constante no puede llamar a lightened(). Cada uno dice de que casilla sale.
+const GUNMETAL := Color8(96, 98, 110)        # SLATE
+const STEEL := Color8(150, 152, 162)         # SLATE claro: hojas, chapa nueva
+const BRASS_LIGHT := Color8(250, 210, 120)   # BRASS claro
+const BRASS_DARK := Color8(178, 124, 30)     # BRASS oscuro
+const COPPER := Color8(200, 112, 62)         # TERRACOTTA tostado: tuberias
+const RUST := Color8(122, 72, 40)            # WOOD oscuro
+const DARK_WOOD := Color8(104, 62, 34)       # WOOD oscuro
+const LIGHT_WOOD := Color8(212, 152, 92)     # WOOD claro: tablones
+const CONCRETE := Color8(186, 168, 140)      # STONE
+const CONCRETE_DARK := Color8(140, 124, 102) # STONE oscuro
+const FIRE := Color8(255, 138, 40)           # entre GLOW y RED
+const FIRE_CORE := Color8(255, 236, 170)     # GLOW claro
+const OIL_BLACK := Color8(32, 24, 24)        # IRON oscuro
+const OLIVE := Color8(76, 124, 46)           # GREEN oscuro
+const OLIVE_DARK := Color8(56, 94, 34)       # GREEN mas oscuro
+const TILE_RED := Color8(210, 92, 58)        # TERRACOTTA
+const TILE_RED_DARK := Color8(166, 66, 40)   # TERRACOTTA oscuro
+const MARBLE := Color8(242, 222, 180)        # CREAM
+const WATER := Color8(78, 160, 204)          # SKY
+const LEAF := Color8(108, 172, 62)           # GREEN
+const LEAF_DARK := Color8(70, 126, 40)       # GREEN oscuro
+const IMPERIAL_RED := Color8(220, 50, 38)    # RED
+## El contorno fino: IRON casi negro, calido. Separa el edificio de cualquier
+## fondo, tambien con la Tormenta.
+const OUTLINE := Color(0.13, 0.09, 0.08, 0.95)
+## Sombra calida y suave (luz de arriba a la izquierda).
+const SHADOW := Color(0.14, 0.07, 0.03, 0.26)
 ## Obra: tierra removida y el amarillo de peligro (el de la grua en 3D).
-const SITE_DIRT := Color(0.40, 0.30, 0.20)
-const HAZARD := Color(0.95, 0.75, 0.12)
+const SITE_DIRT := Color8(164, 112, 70)
+const HAZARD := Color8(232, 172, 58)         # BRASS
 
 ## Hueco entre la huella y el borde del dibujo, para que dos edificios pegados
 ## se lean como dos.
@@ -54,18 +84,29 @@ const INSET := 2.0
 ## La plantilla de la parcela (compartida con la 3D).
 const LotPlanRef := preload("res://scripts/buildings/LotPlan.gd")
 
+## "Abajo en pantalla" y la direccion de la sombra, en el marco LOCAL del
+## edificio que se esta dibujando (ver `_set_view`). Estado de un solo dibujo:
+## lo fija cada llamada de entrada.
+static var _down := Vector2(0, 1)
+static var _shade := Vector2(0.55, 0.8)
+
 # ── Entrada ───────────────────────────────────────────────────────────
 
 ## Dibuja el edificio `id` con huella `size` (px, sin girar) centrado en el origen.
 ## `opts`: "road_mask" (int, calzadas), "level" (int), "shadow" (bool, por defecto true),
-## "inset" (px por lado: el patio de la parcela, que el edificio deja libre).
+## "inset" (px por lado: el patio de la parcela, que el edificio deja libre),
+## "rot" (pasos de 90 grados con los que quien llama lo gira: la pared y la
+## sombra caen siempre hacia abajo en pantalla), y en la Granja "growth" (0..1)
+## y "ripe" (bool); "growth" < 0 pinta el campo sin cultivo (lo pone encima
+## `draw_farm_crops`, que cambia sin rehornear el resto).
 static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dictionary = {}) -> void:
+	_set_view(int(opts.get("rot", 0)))
 	var r := Rect2(-size * 0.5, size).grow(-INSET - float(opts.get("inset", 0.0)))
 	if id == "road":
 		_road(ci, Rect2(-size * 0.5, size), int(opts.get("road_mask", 0)))
 		return
 	if bool(opts.get("shadow", true)):
-		ci.draw_rect(Rect2(r.position + Vector2(3, 4), r.size), SHADOW)
+		_ground_shadow(ci, r, minf(r.size.x, r.size.y) * 0.22)
 	match id:
 		"nucleo": _nucleo(ci, r)
 		"house": _house(ci, r)
@@ -84,429 +125,856 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"fountain": _fountain(ci, r)
 		"statue": _statue(ci, r)
 		_:
-			_plate(ci, r, CONCRETE, IRON)
+			_block(ci, r, minf(r.size.x, r.size.y) * 0.16, STONE, CONCRETE_DARK)
 	var level: int = int(opts.get("level", 1))
 	if level > 1:
 		_level_chevrons(ci, r, level)
 
-# ── Primitivas ────────────────────────────────────────────────────────
+## El cultivo de la Granja, encima de su dibujo horneado sin cultivo: crece
+## (`growth` 0..1, brotes que se hacen matas y se doran) sin rehornear nada.
+static func draw_farm_crops(ci: CanvasItem, size: Vector2, inset: float, growth: float, ripe: bool) -> void:
+	var r := Rect2(-size * 0.5, size).grow(-INSET - inset)
+	_farm_crops(ci, _farm_field(r), growth, ripe)
 
-static func _plate(ci: CanvasItem, r: Rect2, fill: Color, border: Color, width: float = 2.0) -> void:
+## Pasa "abajo en pantalla" (y la sombra, de arriba-izquierda) al marco local
+## de un edificio girado `steps` cuartos de vuelta.
+static func _set_view(steps: int) -> void:
+	var a := -float(steps) * PI * 0.5
+	_down = Vector2(0, 1).rotated(a).round()
+	_shade = Vector2(0.55, 0.8).rotated(a)
+
+## La izquierda de la pantalla en el marco local (de donde viene la luz).
+static func _left() -> Vector2:
+	return Vector2(_down.y, -_down.x)
+
+# ── Primitivas de maqueta ─────────────────────────────────────────────
+
+## Sombra suave que ancla el volumen al suelo: dos manchas hacia abajo-derecha.
+static func _ground_shadow(ci: CanvasItem, r: Rect2, h: float) -> void:
+	ci.draw_rect(Rect2(r.position + _shade * h * 0.9, r.size).grow(1.0), Color(SHADOW, SHADOW.a * 0.55))
+	ci.draw_rect(Rect2(r.position + _shade * h * 0.45, r.size), SHADOW)
+
+## Parte `r` en [tejado, pared]: la pared es la franja de alto `h` del lado que
+## da hacia abajo en pantalla.
+static func _split(r: Rect2, h: float) -> Array:
+	h = minf(h, minf(r.size.x, r.size.y) * 0.6)
+	if _down.y > 0.5:
+		return [Rect2(r.position, Vector2(r.size.x, r.size.y - h)), Rect2(Vector2(r.position.x, r.end.y - h), Vector2(r.size.x, h))]
+	if _down.y < -0.5:
+		return [Rect2(r.position + Vector2(0, h), Vector2(r.size.x, r.size.y - h)), Rect2(r.position, Vector2(r.size.x, h))]
+	if _down.x > 0.5:
+		return [Rect2(r.position, Vector2(r.size.x - h, r.size.y)), Rect2(Vector2(r.end.x - h, r.position.y), Vector2(h, r.size.y))]
+	return [Rect2(r.position + Vector2(h, 0), Vector2(r.size.x - h, r.size.y)), Rect2(r.position, Vector2(h, r.size.y))]
+
+## Un filo de `r` (el lado cuya normal es `n`), por dentro.
+static func _edge(ci: CanvasItem, r: Rect2, n: Vector2, col: Color, w: float) -> void:
+	var half := r.size * 0.5
+	var along := Vector2(-n.y, n.x)
+	var mid := r.get_center() + n * (absf(n.x) * half.x + absf(n.y) * half.y - w * 0.5)
+	var length := absf(along.x) * half.x + absf(along.y) * half.y
+	ci.draw_line(mid - along * length, mid + along * length, col, w)
+
+## Un volumen de caja: contorno, pared hacia abajo en pantalla (alto `h`) y
+## tejado con su filo de luz. Devuelve el tejado (la pared queda en `_wall`).
+static var _wall := Rect2()
+static func _block(ci: CanvasItem, r: Rect2, h: float, roof: Color, wall: Color) -> Rect2:
+	var parts := _split(r, h)
+	var top: Rect2 = parts[0]
+	_wall = parts[1]
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(_wall, wall)
+	# La pared tambien recibe la luz por la izquierda: un poco mas clara alli.
+	_edge(ci, _wall, _left(), wall.lightened(0.12), minf(3.0, _wall.size.x * 0.2))
+	ci.draw_rect(top, roof)
+	_edge(ci, top, -_down, roof.lightened(0.3), 1.5)
+	_edge(ci, top, _left(), roof.lightened(0.14), 1.2)
+	_edge(ci, top, _down, roof.darkened(0.32), 1.2)
+	return top
+
+## Ventanas o huecos repartidos a lo largo de la pared que da a la pantalla.
+static func _wall_marks(ci: CanvasItem, wall: Rect2, count: int, fill: Color, frac := 0.55, frame := OUTLINE) -> void:
+	var horizontal := absf(_down.y) > 0.5
+	var length := wall.size.x if horizontal else wall.size.y
+	var thick := wall.size.y if horizontal else wall.size.x
+	var w := length / float(count) * frac
+	var hh := thick * 0.55
+	for i in count:
+		var t := length * (i + 0.5) / float(count)
+		var c := (Vector2(wall.position.x + t, wall.get_center().y) if horizontal else Vector2(wall.get_center().x, wall.position.y + t))
+		var s := Vector2(w, hh) if horizontal else Vector2(hh, w)
+		ci.draw_rect(Rect2(c - s * 0.5, s).grow(0.8), frame)
+		ci.draw_rect(Rect2(c - s * 0.5, s), fill)
+
+## Un cilindro de maqueta: tapa en `c` (arriba) y el cuerpo bajando `h` hacia
+## abajo en pantalla. Contorno por debajo, luz por la izquierda.
+static func _cyl(ci: CanvasItem, c: Vector2, rad: float, h: float, top: Color, wall: Color) -> void:
+	var base := c + _down * h
+	var perp := _left() * rad
+	var po := _left() * (rad + 1.0)
+	_dot(ci, base, rad + 1.0, OUTLINE)
+	ci.draw_colored_polygon(PackedVector2Array([c + po, c - po, base - po, base + po]), OUTLINE)
+	_dot(ci, c, rad + 1.0, OUTLINE)
+	_dot(ci, base, rad, wall)
+	ci.draw_colored_polygon(PackedVector2Array([c + perp, c - perp, base - perp, base + perp]), wall)
+	if h > 2.0:
+		ci.draw_line(c + perp * 0.55, base + perp * 0.55, wall.lightened(0.18), maxf(1.0, rad * 0.3))
+		ci.draw_line(c - perp * 0.7, base - perp * 0.7, wall.darkened(0.18), maxf(1.0, rad * 0.25))
+	_dot(ci, c, rad, top)
+	_dot(ci, c + (perp - _down * rad) * 0.3, rad * 0.45, top.lightened(0.22))
+
+## Un anillo de color alrededor del cuerpo de un cilindro (a `t` de su alto).
+static func _cyl_band(ci: CanvasItem, c: Vector2, rad: float, h: float, t: float, w: float, col: Color) -> void:
+	var p := c + _down * h * t
+	var perp := _left() * rad
+	ci.draw_colored_polygon(PackedVector2Array([p + perp, p - perp, p - perp + _down * w, p + perp + _down * w]), col)
+	ci.draw_arc(p + _down * w, rad, _down.angle() - PI * 0.5, _down.angle() + PI * 0.5, 10, col, w * 0.9)
+
+## Un mastil (vertical en la maqueta: sube hacia arriba en pantalla). Devuelve la punta.
+static func _mast(ci: CanvasItem, base: Vector2, height: float, col := IRON, w := 2.0) -> Vector2:
+	var tip := base - _down * height
+	ci.draw_line(base + _shade * height * 0.3, base, Color(SHADOW, 0.3), w)
+	ci.draw_line(base, tip, OUTLINE, w + 1.5)
+	ci.draw_line(base, tip, col, w)
+	return tip
+
+## Un disco relleno con pocos lados (segun su radio). draw_circle() de Godot
+## gasta 64 lados por disco aunque mida dos pixeles; con cientos de piezas de
+## atrezo eso era la mitad de las primitivas del mapa. Los muy pequenos son un
+## cuadrado.
+static func _dot(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
+	if r <= 1.1:
+		ci.draw_rect(Rect2(c - Vector2(r, r), Vector2(r, r) * 2.0), col)
+		return
+	var n := clampi(int(r * 1.6) + 6, 8, 32)
+	var pts := PackedVector2Array()
+	pts.resize(n)
+	for i in n:
+		var a := TAU * float(i) / float(n)
+		pts[i] = c + Vector2(cos(a), sin(a)) * r
+	ci.draw_colored_polygon(pts, col)
+
+static func _plate(ci: CanvasItem, r: Rect2, fill: Color, border: Color, width: float = 1.5) -> void:
 	ci.draw_rect(r, fill)
 	# Luz arriba-izquierda, sombra abajo-derecha: relieve sin 3D.
 	ci.draw_line(r.position + Vector2(1, 1), Vector2(r.end.x - 1, r.position.y + 1), fill.lightened(0.25), 2.0)
 	ci.draw_line(r.position + Vector2(1, 1), Vector2(r.position.x + 1, r.end.y - 1), fill.lightened(0.18), 2.0)
-	ci.draw_line(Vector2(r.position.x + 1, r.end.y - 1), r.end - Vector2(1, 1), fill.darkened(0.35), 2.0)
-	ci.draw_line(Vector2(r.end.x - 1, r.position.y + 1), r.end - Vector2(1, 1), fill.darkened(0.3), 2.0)
+	ci.draw_line(Vector2(r.position.x + 1, r.end.y - 1), r.end - Vector2(1, 1), fill.darkened(0.3), 2.0)
+	ci.draw_line(Vector2(r.end.x - 1, r.position.y + 1), r.end - Vector2(1, 1), fill.darkened(0.25), 2.0)
 	ci.draw_rect(r, border, false, width)
 
-static func _rivets(ci: CanvasItem, r: Rect2, color: Color = BRASS, inset: float = 4.0) -> void:
+static func _rivets(ci: CanvasItem, r: Rect2, color: Color = BRASS, inset: float = 3.5) -> void:
 	for p in [r.position + Vector2(inset, inset), Vector2(r.end.x - inset, r.position.y + inset),
 			Vector2(r.position.x + inset, r.end.y - inset), r.end - Vector2(inset, inset)]:
-		ci.draw_circle(p, 1.6, color)
-		ci.draw_circle(p + Vector2(-0.4, -0.4), 0.7, color.lightened(0.5))
+		_dot(ci, p, 1.4, color.darkened(0.3))
+		_dot(ci, p + Vector2(-0.3, -0.3), 0.8, color.lightened(0.4))
 
-static func _disc(ci: CanvasItem, c: Vector2, radius: float, fill: Color, outline := OUTLINE, width := 1.5) -> void:
-	ci.draw_circle(c, radius, fill)
-	ci.draw_arc(c, radius, 0.0, TAU, maxi(12, int(radius * 1.5)), outline, width, true)
+static func _disc(ci: CanvasItem, c: Vector2, radius: float, fill: Color, outline := OUTLINE, width := 1.25) -> void:
+	_dot(ci, c, radius + width * 0.5, outline)
+	_dot(ci, c, radius - width * 0.5, fill)
 
 static func _shaded_disc(ci: CanvasItem, c: Vector2, radius: float, fill: Color) -> void:
-	ci.draw_circle(c, radius, fill.darkened(0.2))
-	ci.draw_circle(c - Vector2(radius, radius) * 0.18, radius * 0.78, fill)
-	ci.draw_circle(c - Vector2(radius, radius) * 0.38, radius * 0.3, fill.lightened(0.35))
-	ci.draw_arc(c, radius, 0.0, TAU, maxi(12, int(radius * 1.5)), OUTLINE, 1.5, true)
+	_dot(ci, c, radius + 0.8, OUTLINE)
+	_dot(ci, c, radius, fill.darkened(0.18))
+	_dot(ci, c - Vector2(radius, radius) * 0.15, radius * 0.8, fill)
+	_dot(ci, c - Vector2(radius, radius) * 0.36, radius * 0.3, fill.lightened(0.35))
 
-static func _poly(ci: CanvasItem, pts: PackedVector2Array, fill: Color, outline := OUTLINE, width := 1.5) -> void:
+static func _poly(ci: CanvasItem, pts: PackedVector2Array, fill: Color, outline := OUTLINE, width := 1.25) -> void:
 	ci.draw_colored_polygon(pts, fill)
 	var closed := pts.duplicate()
 	closed.append(pts[0])
 	ci.draw_polyline(closed, outline, width, true)
 
+## Galones de laton (nivel 2 y 3) en la esquina de abajo-derecha del dibujo.
 static func _level_chevrons(ci: CanvasItem, r: Rect2, level: int) -> void:
 	for i in range(level - 1):
-		var base := Vector2(r.end.x - 6.0 - i * 7.0, r.end.y - 5.0)
-		var pts := PackedVector2Array([base + Vector2(-3, 0), base + Vector2(0, -3), base + Vector2(3, 0), base + Vector2(3, 2), base + Vector2(0, -1), base + Vector2(-3, 2)])
-		ci.draw_colored_polygon(pts, BRASS_LIGHT)
+		var base := Vector2(r.end.x - 6.0 - i * 8.0, r.end.y - 5.0)
+		var pts := PackedVector2Array([base + Vector2(-4, 0), base + Vector2(0, -4), base + Vector2(4, 0), base + Vector2(4, 3), base + Vector2(0, -1), base + Vector2(-4, 3)])
+		_poly(ci, pts, BRASS_LIGHT, OUTLINE, 1.0)
 
-static func _smoke(ci: CanvasItem, c: Vector2, s: float) -> void:
-	ci.draw_circle(c + Vector2(2, -2) * s, 3.2 * s, Color(0.75, 0.75, 0.72, 0.45))
-	ci.draw_circle(c + Vector2(5, -5) * s, 2.4 * s, Color(0.8, 0.8, 0.78, 0.35))
+## Rayas amarillo/negro (lo militar) a lo largo de un rectangulo estrecho.
+static func _hazard_strip(ci: CanvasItem, r: Rect2) -> void:
+	ci.draw_rect(r, IRON)
+	var horizontal := r.size.x >= r.size.y
+	var length := r.size.x if horizontal else r.size.y
+	var step := maxf(3.0, (r.size.y if horizontal else r.size.x) * 1.4)
+	var t := 0.0
+	while t < length:
+		var a := t
+		var b := minf(t + step * 0.5, length)
+		if horizontal:
+			ci.draw_rect(Rect2(Vector2(r.position.x + a, r.position.y), Vector2(b - a, r.size.y)), BRASS)
+		else:
+			ci.draw_rect(Rect2(Vector2(r.position.x, r.position.y + a), Vector2(r.size.x, b - a)), BRASS)
+		t += step
 
 # ── Edificios ─────────────────────────────────────────────────────────
 
+## Nucleo: plaza de piedra octogonal y, en medio, el tambor crema con ventanas
+## encendidas bajo la gran cupula de laton con el engranaje imperial (lo
+## exagerado). Cuatro tuberias rojas a las esquinas, con sus arquetas.
 static func _nucleo(ci: CanvasItem, r: Rect2) -> void:
 	var c := r.get_center()
 	var h := minf(r.size.x, r.size.y) * 0.5
-	# Base octogonal de hormigon
 	var oct := PackedVector2Array()
 	for i in range(8):
 		var a := TAU * (i + 0.5) / 8.0
 		oct.append(c + Vector2(cos(a), sin(a)) * h * 1.06)
-	_poly(ci, oct, CONCRETE, OUTLINE, 2.0)
-	# Tuberias a las esquinas
+	_poly(ci, oct, Color8(214, 198, 170), OUTLINE, 1.5)
+	# Losas de la plaza en anillo
+	ci.draw_arc(c, h * 0.86, 0.0, TAU, 32, CONCRETE, 1.5)
+	for i in range(8):
+		var a := TAU * i / 8.0
+		ci.draw_line(c + Vector2(cos(a), sin(a)) * h * 0.72, c + Vector2(cos(a), sin(a)) * h * 0.98, CONCRETE, 1.0)
+	# Tuberias a las esquinas, con arqueta
 	for d in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-		ci.draw_line(c + d * h * 0.35, c + d * h * 0.8, COPPER.darkened(0.2), 5.0)
-		ci.draw_line(c + d * h * 0.35, c + d * h * 0.8, COPPER, 3.0)
-		_disc(ci, c + d * h * 0.8, 3.5, IRON)
-	# Anillo de laton y cupula
-	_disc(ci, c, h * 0.66, BRASS, OUTLINE, 2.0)
-	_shaded_disc(ci, c, h * 0.55, GUNMETAL.lightened(0.1))
+		var a0: Vector2 = c + d * h * 0.4
+		var a1: Vector2 = c + d * h * 0.82
+		ci.draw_line(a0, a1, OUTLINE, 6.0)
+		ci.draw_line(a0, a1, RED, 4.0)
+		ci.draw_line(a0, a1, Color(1, 1, 1, 0.25), 1.0)
+		_block(ci, Rect2(a1 - Vector2(4.5, 4.5), Vector2(9, 9)), 3.0, SLATE.lightened(0.15), IRON)
+	# El tambor con sus ventanas encendidas y la cupula encima
+	var drum_h := h * 0.2
+	var top := c - _down * drum_h * 0.5
+	_cyl(ci, top, h * 0.6, drum_h, BRASS_DARK, CREAM)
+	for i in 7:
+		var t := -0.75 + 1.5 * float(i) / 6.0
+		var p := top + _down * drum_h * 0.55 + _left() * h * 0.6 * t
+		ci.draw_rect(Rect2(p - Vector2(1.6, 1.6), Vector2(3.2, 3.2)), GLOW)
+	_shaded_disc(ci, top, h * 0.52, BRASS)
+	for i in 8:
+		var a := TAU * i / 8.0
+		ci.draw_line(top + Vector2(cos(a), sin(a)) * h * 0.24, top + Vector2(cos(a), sin(a)) * h * 0.5, BRASS_DARK, 1.0)
 	# Engranaje imperial
 	for i in range(10):
 		var a := TAU * i / 10.0
-		ci.draw_line(c + Vector2(cos(a), sin(a)) * h * 0.16, c + Vector2(cos(a), sin(a)) * h * 0.3, BRASS_LIGHT, 3.0)
-	_disc(ci, c, h * 0.2, BRASS, OUTLINE, 1.5)
-	_disc(ci, c, h * 0.08, IMPERIAL_RED, OUTLINE, 1.0)
+		ci.draw_line(top + Vector2(cos(a), sin(a)) * h * 0.14, top + Vector2(cos(a), sin(a)) * h * 0.26, IRON, 3.0)
+	_disc(ci, top, h * 0.17, BRASS_LIGHT, OUTLINE, 1.25)
+	_disc(ci, top, h * 0.08, RED, OUTLINE, 1.0)
 
+## Vivienda: paredes crema con ventanas de luz calida, tejado de teja a dos
+## aguas y una chimenea gorda (lo exagerado); un seto verde delante.
 static func _house(ci: CanvasItem, r: Rect2) -> void:
-	var c := r.get_center()
-	ci.draw_rect(r, TILE_RED)
-	# Dos aguas: mitad en sombra
-	ci.draw_rect(Rect2(Vector2(r.position.x, c.y), Vector2(r.size.x, r.size.y * 0.5)), TILE_RED_DARK)
-	# Tejas
-	var rows := 4
-	for i in range(1, rows):
-		var y := r.position.y + r.size.y * i / float(rows)
-		ci.draw_line(Vector2(r.position.x + 1, y), Vector2(r.end.x - 1, y), TILE_RED.darkened(0.35), 1.0)
-	ci.draw_line(Vector2(r.position.x, c.y), Vector2(r.end.x, c.y), BRASS.darkened(0.2), 2.0)
-	ci.draw_rect(r, OUTLINE, false, 2.0)
-	# Chimenea
-	var ch := Rect2(Vector2(r.end.x - r.size.x * 0.34, r.position.y + r.size.y * 0.12), Vector2(r.size.x * 0.18, r.size.y * 0.2))
-	ci.draw_rect(ch, CONCRETE_DARK)
-	ci.draw_rect(ch, OUTLINE, false, 1.0)
-	_smoke(ci, ch.get_center(), 0.8)
-
-## Aserradero abierto (2026-10-04), como el 3D: la media cubierta de chapa
-## atras, las cerchas al aire delante y, a la vista, la mesa con el tronco, el
-## tablon cortado y la sierra GRANDE de buje rojo, que es lo que se reconoce.
-static func _sawmill(ci: CanvasItem, r: Rect2) -> void:
-	_plate(ci, r, WOOD, OUTLINE)
-	# Tablas del suelo
-	for i in range(1, 8):
-		var y := r.position.y + r.size.y * i / 8.0
-		ci.draw_line(Vector2(r.position.x + 2, y), Vector2(r.end.x - 2, y), DARK_WOOD, 1.0)
 	var m := minf(r.size.x, r.size.y)
-	# Media cubierta (atras = arriba), con su sombra sobre el suelo
-	var roof := Rect2(r.position, Vector2(r.size.x, r.size.y * 0.4))
-	ci.draw_rect(Rect2(roof.position + Vector2(0, roof.size.y), Vector2(roof.size.x, m * 0.06)), Color(0, 0, 0, 0.3))
-	ci.draw_rect(roof, Color(0.42, 0.30, 0.22))
-	for i in range(1, 9):
-		var x := roof.position.x + roof.size.x * i / 9.0
-		ci.draw_line(Vector2(x, roof.position.y + 1), Vector2(x, roof.end.y - 1), Color(0.55, 0.40, 0.30), 1.5)
-	ci.draw_line(Vector2(roof.position.x, roof.end.y), roof.end, OUTLINE, 2.0)
-	ci.draw_rect(roof, OUTLINE, false, 1.5)
-	# Chimenea de la maquina de vapor asomando por la chapa
-	var chim := roof.position + roof.size * Vector2(0.78, 0.45)
-	_disc(ci, chim, m * 0.07, IRON)
-	ci.draw_circle(chim, m * 0.035, IMPERIAL_RED)
-	# Cerchas al aire sobre la zona de trabajo
-	for fx in [0.03, 0.36, 0.64, 0.97]:
-		var x: float = r.position.x + r.size.x * fx
-		ci.draw_line(Vector2(x, roof.end.y), Vector2(x, r.end.y - 1), DARK_WOOD.darkened(0.2), 2.0)
-	ci.draw_line(Vector2(r.position.x, r.end.y - 2), Vector2(r.end.x, r.end.y - 2), DARK_WOOD.darkened(0.2), 3.0)
+	var body := Rect2(r.position + r.size * Vector2(0.02, 0.0), r.size * Vector2(0.96, 0.8))
+	var top := _gable(ci, body, m * 0.22, TILE_RED, CREAM, true)
+	_wall_marks(ci, _wall, 3, GLOW, 0.42, DARK_WOOD)
+	# Puerta de madera en medio de la pared
+	var horizontal := absf(_down.y) > 0.5
+	var dc := _wall.get_center()
+	var ds := Vector2(m * 0.14, _wall.size.y * 0.8) if horizontal else Vector2(_wall.size.x * 0.8, m * 0.14)
+	ci.draw_rect(Rect2(dc - ds * 0.5, ds).grow(0.8), OUTLINE)
+	ci.draw_rect(Rect2(dc - ds * 0.5, ds), WOOD)
+	# Chimenea de ladrillo con su remate
+	var ch := Rect2(Vector2(top.end.x - top.size.x * 0.3, top.position.y + top.size.y * 0.06), Vector2(m * 0.17, m * 0.17))
+	_ground_shadow(ci, ch, m * 0.1)
+	var ct := _block(ci, ch, m * 0.08, TILE_RED_DARK, TILE_RED_DARK.darkened(0.25))
+	ci.draw_rect(ct.grow(-ct.size.x * 0.22), OIL_BLACK)
+	# Seto y flores (el acento verde de lo residencial)
+	var hedge_y := r.position.y + r.size.y * 0.91
+	for i in 4:
+		var p := Vector2(r.position.x + r.size.x * (0.14 + 0.24 * i), hedge_y)
+		_disc(ci, p, m * 0.075, GREEN, OUTLINE, 1.0)
+		_dot(ci, p - Vector2(1, 1), m * 0.03, GREEN.lightened(0.3))
+	_dot(ci, Vector2(r.position.x + r.size.x * 0.26, hedge_y - 1.0), 1.4, RED)
+	_dot(ci, Vector2(r.position.x + r.size.x * 0.74, hedge_y - 1.0), 1.4, BRASS_LIGHT)
+
+## Tejado a dos aguas sobre un volumen: la cumbrera a lo largo de x
+## (`ridge_x`) o de y. El faldon que mira a la luz, mas claro.
+static func _gable(ci: CanvasItem, r: Rect2, h: float, roof: Color, wall: Color, ridge_x: bool) -> Rect2:
+	var top := _block(ci, r, h, roof, wall)
+	var wall_saved := _wall
+	var c := top.get_center()
+	var a: Rect2
+	var b: Rect2
+	var na: Vector2
+	if ridge_x:
+		a = Rect2(top.position, Vector2(top.size.x, top.size.y * 0.5))
+		b = Rect2(Vector2(top.position.x, c.y), Vector2(top.size.x, top.size.y * 0.5))
+		na = Vector2(0, -1)
+	else:
+		a = Rect2(top.position, Vector2(top.size.x * 0.5, top.size.y))
+		b = Rect2(Vector2(c.x, top.position.y), Vector2(top.size.x * 0.5, top.size.y))
+		na = Vector2(-1, 0)
+	var lit := na.dot(-_down) + na.dot(_left()) * 0.5 > 0.0
+	ci.draw_rect(a, roof.lightened(0.1) if lit else roof.darkened(0.14))
+	ci.draw_rect(b, roof.darkened(0.14) if lit else roof.lightened(0.1))
+	# Hileras de teja paralelas a la cumbrera
+	for half in [a, b]:
+		var hr: Rect2 = half
+		for i in range(1, 3):
+			if ridge_x:
+				var y := hr.position.y + hr.size.y * i / 3.0
+				ci.draw_line(Vector2(hr.position.x + 1, y), Vector2(hr.end.x - 1, y), roof.darkened(0.3), 1.0)
+			else:
+				var x := hr.position.x + hr.size.x * i / 3.0
+				ci.draw_line(Vector2(x, hr.position.y + 1), Vector2(x, hr.end.y - 1), roof.darkened(0.3), 1.0)
+	if ridge_x:
+		ci.draw_line(Vector2(top.position.x, c.y), Vector2(top.end.x, c.y), roof.lightened(0.35), 2.0)
+	else:
+		ci.draw_line(Vector2(c.x, top.position.y), Vector2(c.x, top.end.y), roof.lightened(0.35), 2.0)
+	ci.draw_rect(top, OUTLINE, false, 1.0)
+	_wall = wall_saved
+	return top
+
+## Aserradero abierto (como el 3D): media cubierta de chapa atras, el suelo de
+## tablas al aire delante y, a la vista, la mesa con el tronco, el tablon cortado
+## y la sierra ENORME de buje rojo (lo exagerado). Pilas de troncos y tablones.
+static func _sawmill(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	# Suelo de tablas (plano)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, LIGHT_WOOD)
+	for i in range(1, 7):
+		var y := r.position.y + r.size.y * i / 7.0
+		ci.draw_line(Vector2(r.position.x + 1, y), Vector2(r.end.x - 1, y), WOOD, 1.0)
+	# Media cubierta atras (arriba en el marco local), con su pared
+	var roof_r := Rect2(r.position, Vector2(r.size.x, r.size.y * 0.42))
+	_ground_shadow(ci, roof_r, m * 0.12)
+	var roof := _block(ci, roof_r, m * 0.12, SLATE.lightened(0.12), WOOD.darkened(0.2))
+	for i in range(1, 7):
+		var x := roof.position.x + roof.size.x * i / 7.0
+		ci.draw_line(Vector2(x, roof.position.y + 1), Vector2(x, roof.end.y - 1), SLATE.lightened(0.32), 1.0)
+	# Postes del frente
+	for fx in [0.04, 0.96]:
+		var p := Vector2(r.position.x + r.size.x * fx, r.position.y + r.size.y * 0.42)
+		ci.draw_rect(Rect2(p - Vector2(2, 0), Vector2(4, r.size.y * 0.56)), OUTLINE)
+		ci.draw_rect(Rect2(p - Vector2(1.2, 0), Vector2(2.4, r.size.y * 0.56)), DARK_WOOD)
+	# Chimenea de la maquina de vapor, con el anillo rojo
+	var chim := roof.position + roof.size * Vector2(0.84, 0.3)
+	_cyl(ci, chim, m * 0.07, m * 0.08, IRON, SLATE)
+	_dot(ci, chim, m * 0.035, RED)
 	# Mesa de la sierra, de lado a lado
 	var ty := r.position.y + r.size.y * 0.63
-	var table := Rect2(Vector2(r.position.x + r.size.x * 0.08, ty - m * 0.09), Vector2(r.size.x * 0.84, m * 0.18))
-	ci.draw_rect(table, GUNMETAL)
-	ci.draw_rect(table, OUTLINE, false, 1.0)
+	var table := Rect2(Vector2(r.position.x + r.size.x * 0.06, ty - m * 0.08), Vector2(r.size.x * 0.88, m * 0.16))
+	ci.draw_rect(table.grow(1.0), OUTLINE)
+	ci.draw_rect(table, SLATE)
 	# Tronco entrando por la izquierda y tablon saliendo por la derecha
-	var log_r := Rect2(Vector2(table.position.x + 2, ty - m * 0.07), Vector2(r.size.x * 0.32, m * 0.14))
-	ci.draw_rect(log_r, Color(0.42, 0.28, 0.15))
-	ci.draw_rect(log_r, OUTLINE, false, 1.0)
-	ci.draw_circle(Vector2(log_r.position.x + 2, ty), m * 0.06, LIGHT_WOOD)
-	var plank := Rect2(Vector2(r.position.x + r.size.x * 0.62, ty - m * 0.05), Vector2(r.size.x * 0.28, m * 0.1))
-	ci.draw_rect(plank, LIGHT_WOOD)
-	ci.draw_rect(plank, OUTLINE, false, 1.0)
-	# Pila de troncos delante a la izquierda, tablones delante a la derecha
+	var log_r := Rect2(Vector2(table.position.x + 1, ty - m * 0.07), Vector2(r.size.x * 0.3, m * 0.14))
+	ci.draw_rect(log_r.grow(0.8), OUTLINE)
+	ci.draw_rect(log_r, WOOD)
+	ci.draw_line(log_r.position + Vector2(0, 2), Vector2(log_r.end.x, log_r.position.y + 2), WOOD.lightened(0.2), 1.0)
+	_disc(ci, Vector2(log_r.position.x + 1, ty), m * 0.07, LIGHT_WOOD.lightened(0.15), OUTLINE, 1.0)
+	ci.draw_arc(Vector2(log_r.position.x + 1, ty), m * 0.035, 0.0, TAU, 10, WOOD, 1.0)
+	var plank := Rect2(Vector2(r.position.x + r.size.x * 0.64, ty - m * 0.05), Vector2(r.size.x * 0.28, m * 0.1))
+	ci.draw_rect(plank.grow(0.8), OUTLINE)
+	ci.draw_rect(plank, CREAM)
+	# Troncos delante a la izquierda, tablones delante a la derecha
 	var lr := m * 0.07
 	for k in 3:
-		var p := Vector2(r.position.x + r.size.x * 0.12 + k * lr * 1.9, r.end.y - lr * 1.7)
-		_disc(ci, p, lr, LIGHT_WOOD, OUTLINE, 1.0)
-		ci.draw_circle(p, lr * 0.3, DARK_WOOD)
-	var stack := Rect2(Vector2(r.position.x + r.size.x * 0.66, r.end.y - m * 0.2), Vector2(r.size.x * 0.26, m * 0.15))
-	ci.draw_rect(stack, LIGHT_WOOD)
-	for j in range(1, 4):
-		var y := stack.position.y + stack.size.y * j / 4.0
-		ci.draw_line(Vector2(stack.position.x, y), Vector2(stack.end.x, y), DARK_WOOD, 1.0)
-	ci.draw_rect(stack, OUTLINE, false, 1.0)
-	# La sierra: el elemento exagerado. Dientes, disco y buje rojo.
+		var p := Vector2(r.position.x + r.size.x * 0.12 + k * lr * 2.0, r.end.y - lr * 1.5)
+		_disc(ci, p, lr, LIGHT_WOOD.lightened(0.1), OUTLINE, 1.0)
+		_dot(ci, p, lr * 0.35, WOOD)
+	var stack := Rect2(Vector2(r.position.x + r.size.x * 0.64, r.end.y - m * 0.2), Vector2(r.size.x * 0.3, m * 0.15))
+	ci.draw_rect(stack.grow(0.8), OUTLINE)
+	ci.draw_rect(stack, CREAM.darkened(0.06))
+	for j in range(1, 3):
+		var y := stack.position.y + stack.size.y * j / 3.0
+		ci.draw_line(Vector2(stack.position.x, y), Vector2(stack.end.x, y), WOOD, 1.0)
+	# La sierra: el elemento exagerado. Dientes, disco brillante y buje rojo.
 	var b := Vector2(r.get_center().x, ty)
-	var sr := m * 0.27
-	for i in range(18):
-		var ang := TAU * i / 18.0
-		ci.draw_line(b + Vector2(cos(ang), sin(ang)) * sr * 0.8, b + Vector2(cos(ang + 0.22), sin(ang + 0.22)) * sr * 1.06, STEEL.lightened(0.3), 2.5)
-	_disc(ci, b, sr * 0.86, STEEL.lightened(0.15), OUTLINE, 2.0)
-	ci.draw_arc(b, sr * 0.55, 0.0, TAU, 18, STEEL.lightened(0.4), 1.0)
-	ci.draw_arc(b, sr * 0.86, PI * 1.1, PI * 1.6, 8, Color(1, 1, 1, 0.6), 1.5)
-	_disc(ci, b, sr * 0.24, IMPERIAL_RED, OUTLINE, 1.5)
-	ci.draw_circle(b, sr * 0.08, BRASS_LIGHT)
+	var sr := m * 0.3
+	_dot(ci, b + _shade * 2.5, sr * 1.02, SHADOW)
+	_dot(ci, b, sr * 1.1, OUTLINE)
+	for i in range(16):
+		var ang := TAU * i / 16.0
+		var pts := PackedVector2Array([b + Vector2.from_angle(ang) * sr * 0.86, b + Vector2.from_angle(ang + 0.2) * sr * 1.08,
+			b + Vector2.from_angle(ang + 0.36) * sr * 0.86])
+		ci.draw_colored_polygon(pts, STEEL.lightened(0.25))
+	_dot(ci, b, sr * 0.88, STEEL.lightened(0.18))
+	ci.draw_arc(b, sr * 0.6, 0.0, TAU, 18, STEEL.lightened(0.4), 1.0)
+	ci.draw_arc(b, sr * 0.78, PI * 1.05, PI * 1.6, 8, Color(1, 1, 1, 0.75), 2.0)
+	_disc(ci, b, sr * 0.28, RED, OUTLINE, 1.25)
+	_dot(ci, b, sr * 0.09, BRASS_LIGHT)
 
+## Mina de oro: el cerro de roca con la boca oscura entibada de madera, los
+## railes que bajan al frente con la vagoneta llena de oro, y arriba el
+## castillete con su rueda de laton (lo exagerado).
 static func _gold_mine(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
 	var c := r.get_center()
-	_plate(ci, r, Color(0.45, 0.38, 0.28), OUTLINE)
-	# Vias de vagoneta
-	ci.draw_line(Vector2(r.position.x + 4, c.y + r.size.y * 0.28), Vector2(r.end.x - 4, c.y + r.size.y * 0.28), IRON, 2.0)
-	ci.draw_line(Vector2(r.position.x + 4, c.y + r.size.y * 0.36), Vector2(r.end.x - 4, c.y + r.size.y * 0.36), IRON, 2.0)
-	for i in range(8):
-		var x := r.position.x + 6 + i * (r.size.x - 12) / 7.0
-		ci.draw_line(Vector2(x, c.y + r.size.y * 0.25), Vector2(x, c.y + r.size.y * 0.39), DARK_WOOD, 2.0)
-	# Pozo y castillete
-	var shaft := Rect2(c - Vector2(r.size.x * 0.17, r.size.y * 0.3), Vector2(r.size.x * 0.34, r.size.y * 0.34))
-	ci.draw_rect(shaft, Color(0.04, 0.03, 0.03))
-	ci.draw_rect(shaft, OUTLINE, false, 1.5)
-	ci.draw_line(shaft.position, shaft.end, DARK_WOOD.lightened(0.2), 3.0)
-	ci.draw_line(Vector2(shaft.end.x, shaft.position.y), Vector2(shaft.position.x, shaft.end.y), DARK_WOOD.lightened(0.2), 3.0)
-	_disc(ci, shaft.get_center(), 4.0, BRASS)
-	# Vagoneta con oro y pepitas sueltas
-	var cart := Rect2(Vector2(r.position.x + r.size.x * 0.62, c.y + r.size.y * 0.2), Vector2(r.size.x * 0.22, r.size.y * 0.2))
-	ci.draw_rect(cart, RUST)
-	ci.draw_rect(cart, OUTLINE, false, 1.5)
-	for p in [Vector2(0.3, 0.4), Vector2(0.6, 0.35), Vector2(0.45, 0.65)]:
-		ci.draw_circle(cart.position + cart.size * p, 2.6, BRASS_LIGHT)
-	for p in [Vector2(0.18, 0.2), Vector2(0.82, 0.24), Vector2(0.15, 0.62)]:
-		ci.draw_circle(r.position + r.size * p, 2.2, BRASS_LIGHT)
-		ci.draw_circle(r.position + r.size * p, 1.0, Color(1, 0.95, 0.7))
+	# Explanada de tierra
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, SITE_DIRT.lightened(0.08))
+	# El cerro: un monte de piedra con su cara de luz
+	var hill := PackedVector2Array()
+	var hc := c + Vector2(0, -r.size.y * 0.1)
+	for i in 12:
+		var a := TAU * i / 12.0
+		var k := 1.0 + 0.1 * sin(a * 3.0)
+		hill.append(hc + Vector2(cos(a) * r.size.x * 0.46, sin(a) * r.size.y * 0.34) * k)
+	_poly(ci, hill, STONE, OUTLINE, 1.5)
+	var lit := PackedVector2Array()
+	for p in hill:
+		lit.append(hc + (p - hc) * 0.62 - Vector2(2, 3))
+	ci.draw_colored_polygon(lit, STONE.lightened(0.16))
+	for p in [Vector2(-0.3, -0.12), Vector2(0.28, 0.0), Vector2(-0.12, 0.12)]:
+		_dot(ci, hc + p * r.size, m * 0.04, CONCRETE_DARK)
+	# Railes que salen de la boca hasta el borde
+	var mouth := Vector2(c.x, r.position.y + r.size.y * 0.52)
+	for side in [-1.0, 1.0]:
+		ci.draw_line(Vector2(c.x + side * m * 0.09, mouth.y), Vector2(c.x + side * m * 0.09, r.end.y - 1), IRON, 1.5)
+	for i in 5:
+		var y := mouth.y + (r.end.y - mouth.y) * (i + 0.5) / 5.0
+		ci.draw_line(Vector2(c.x - m * 0.14, y), Vector2(c.x + m * 0.14, y), DARK_WOOD, 1.5)
+	# La boca entibada
+	var mw := m * 0.34
+	var arch := Rect2(Vector2(mouth.x - mw * 0.5, mouth.y - mw * 0.5), Vector2(mw, mw * 0.55))
+	ci.draw_rect(arch.grow(2.5), OUTLINE)
+	ci.draw_rect(arch.grow(1.5), WOOD)
+	ci.draw_rect(arch, OIL_BLACK)
+	ci.draw_rect(Rect2(arch.position - Vector2(2, 3), Vector2(arch.size.x + 4, 3)), DARK_WOOD)
+	_dot(ci, arch.get_center() + Vector2(0, 1), 1.2, GLOW)
+	# La vagoneta llena de oro, en los railes
+	var cart := Rect2(Vector2(c.x - m * 0.15, r.end.y - m * 0.28), Vector2(m * 0.3, m * 0.18))
+	ci.draw_rect(cart.grow(1.0), OUTLINE)
+	ci.draw_rect(cart, RED)
+	ci.draw_rect(Rect2(cart.position, Vector2(cart.size.x, 2)), RED.lightened(0.25))
+	for p in [Vector2(0.25, 0.35), Vector2(0.55, 0.3), Vector2(0.75, 0.55), Vector2(0.4, 0.6)]:
+		_disc(ci, cart.position + cart.size * p, m * 0.05, BRASS_LIGHT, BRASS_DARK, 1.0)
+	# El castillete con su rueda (lo exagerado), sobre el cerro
+	var wheel := Vector2(c.x + r.size.x * 0.22, r.position.y + r.size.y * 0.18)
+	var foot_l := wheel + Vector2(-m * 0.14, m * 0.22)
+	var foot_r := wheel + Vector2(m * 0.14, m * 0.22)
+	for f in [foot_l, foot_r]:
+		ci.draw_line(f, wheel, OUTLINE, 4.0)
+		ci.draw_line(f, wheel, WOOD, 2.5)
+	var wr := m * 0.15
+	ci.draw_arc(wheel, wr, 0.0, TAU, 20, OUTLINE, 4.5)
+	ci.draw_arc(wheel, wr, 0.0, TAU, 20, BRASS, 3.0)
+	for i in 4:
+		var a := TAU * i / 4.0 + 0.4
+		ci.draw_line(wheel - Vector2.from_angle(a) * wr, wheel + Vector2.from_angle(a) * wr, BRASS_DARK, 1.2)
+	_disc(ci, wheel, m * 0.045, RED, OUTLINE, 1.0)
+	ci.draw_line(wheel, mouth + Vector2(0, -mw * 0.3), IRON, 1.0)
 
-## Mercado visto desde arriba: tres toldos a rayas sobre un entarimado.
+## Mercado: tres toldos grandes a rayas (lo exagerado) sobre su entarimado, con
+## la mercancia delante de cada puesto. Acento de laton: el letrero.
 static func _market(ci: CanvasItem, r: Rect2) -> void:
-	_plate(ci, r, LIGHT_WOOD.darkened(0.25), OUTLINE)
-	var cols := [Color(0.72, 0.18, 0.12), Color(0.85, 0.7, 0.25), Color(0.2, 0.42, 0.6)]
-	for i in 3:
-		var w := r.size.x * 0.28
-		var tr := Rect2(Vector2(r.position.x + r.size.x * (0.06 + 0.32 * i), r.position.y + r.size.y * (0.12 if i != 1 else 0.45)), Vector2(w, r.size.y * 0.4))
-		ci.draw_rect(tr, cols[i])
-		for k in range(1, 4):
-			var x := tr.position.x + tr.size.x * k / 4.0
-			ci.draw_line(Vector2(x, tr.position.y), Vector2(x, tr.end.y), Color(1, 1, 1, 0.35), 2.0)
-		ci.draw_rect(tr, OUTLINE, false, 1.0)
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, LIGHT_WOOD)
+	for i in range(1, 6):
+		var x := r.position.x + r.size.x * i / 6.0
+		ci.draw_line(Vector2(x, r.position.y + 1), Vector2(x, r.end.y - 1), WOOD, 1.0)
+	var stalls := [
+		[Rect2(r.position + r.size * Vector2(0.02, 0.02), r.size * Vector2(0.46, 0.42)), RED, [RED.lightened(0.1), GREEN, RED]],
+		[Rect2(r.position + r.size * Vector2(0.52, 0.02), r.size * Vector2(0.46, 0.42)), SKY, [BRASS_LIGHT, LIGHT_WOOD, BRASS]],
+		[Rect2(r.position + r.size * Vector2(0.27, 0.52), r.size * Vector2(0.46, 0.4)), GREEN, [TERRACOTTA, BRASS_LIGHT, GREEN.lightened(0.2)]],
+	]
+	for s in stalls:
+		var sr: Rect2 = s[0]
+		var col: Color = s[1]
+		_ground_shadow(ci, sr, m * 0.1)
+		var top := _block(ci, sr, m * 0.08, CREAM, col.darkened(0.15))
+		# Rayas del toldo
+		var n := 4
+		for k in n:
+			if k % 2 == 0:
+				var x0 := top.position.x + top.size.x * k / float(n)
+				ci.draw_rect(Rect2(Vector2(x0, top.position.y), Vector2(top.size.x / float(n), top.size.y)), col)
+		ci.draw_rect(top, OUTLINE, false, 1.0)
+		# Faldon festoneado en la pared
+		var horizontal := absf(_down.y) > 0.5
+		var wl := _wall.size.x if horizontal else _wall.size.y
+		for k in 5:
+			var t := wl * (k + 0.5) / 5.0
+			var p := (Vector2(_wall.position.x + t, _wall.end.y) if (horizontal and _down.y > 0) else
+				(Vector2(_wall.position.x + t, _wall.position.y) if horizontal else
+				(Vector2(_wall.end.x, _wall.position.y + t) if _down.x > 0 else Vector2(_wall.position.x, _wall.position.y + t))))
+			_dot(ci, p, wl / 10.0, col)
+		# La mercancia: tres montones delante del puesto
+		var goods: Array = s[2]
+		for k in 3:
+			var g := sr.get_center() + Vector2(sr.size.x * (k - 1) * 0.3, -sr.size.y * 0.05)
+			_disc(ci, g, m * 0.055, goods[k], OUTLINE, 1.0)
+	# Letrero de laton en medio
+	var sign_c := r.position + r.size * Vector2(0.5, 0.47)
+	_disc(ci, sign_c, m * 0.06, BRASS, OUTLINE, 1.0)
 
-## Granja (2026-10-04): campo de surcos con el cultivo creciendo (`growth`
-## 0..1: brotes verdes que se hacen matas y se doran), granero rojo con tejado
-## de chapa y una tolva de laton. Con la cosecha esperando (`ripe`) el campo
-## entero esta dorado.
+## Laboratorio: un bloque crema con remaches y la gran cupula de cristal que
+## brilla en azul (lo exagerado), con nervios de laton; una antena con la luz
+## roja en la punta.
+static func _laboratory(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	var top := _block(ci, r, m * 0.16, Color8(214, 198, 170), CREAM.darkened(0.08))
+	_wall_marks(ci, _wall, 4, SKY.lightened(0.3), 0.45)
+	_rivets(ci, top, BRASS)
+	# La cupula: halo azul, cuerpo de cristal, nervios y brillo
+	var c := top.get_center() - _down * m * 0.04
+	var rad := m * 0.3
+	_dot(ci, c, rad * 1.28, Color(SKY.lightened(0.3), 0.35))
+	_cyl(ci, c, rad, m * 0.06, SKY, BRASS_DARK)
+	_dot(ci, c, rad * 0.78, SKY.lightened(0.18))
+	for i in 3:
+		var a := PI * i / 3.0
+		ci.draw_line(c - Vector2.from_angle(a) * rad, c + Vector2.from_angle(a) * rad, BRASS, 1.25)
+	_dot(ci, c + (_left() - _down) * rad * 0.32, rad * 0.26, Color(1, 1, 1, 0.75))
+	_disc(ci, c, m * 0.05, BRASS_LIGHT, OUTLINE, 1.0)
+	# Antena con su luz
+	var base := Vector2(top.end.x - m * 0.1, top.position.y + m * 0.14)
+	var tip := _mast(ci, base, m * 0.28, IRON, 1.6)
+	ci.draw_line(tip + _left() * 3.0 + _down * 3.0, tip - _left() * 3.0 + _down * 3.0, IRON, 1.2)
+	_disc(ci, tip, 1.8, RED, OUTLINE, 1.0)
+
+## Granja: el campo de surcos (el cultivo lo pone `_farm_crops`), el granero
+## rojo con la cruz crema en el porton y el silo de laton (lo exagerado).
 static func _farm(ci: CanvasItem, r: Rect2, growth: float, ripe: bool) -> void:
-	_plate(ci, r, Color(0.40, 0.27, 0.14), OUTLINE)
-	var field := Rect2(r.position + Vector2(3, 3), Vector2(r.size.x * 0.62, r.size.y - 6))
-	ci.draw_rect(field, Color(0.34, 0.22, 0.11))
-	var g := clampf(growth, 0.0, 1.0)
-	var green := Color(0.35, 0.68, 0.22)
-	var gold := Color(0.90, 0.74, 0.26)
-	var crop := gold if ripe else green.lerp(gold, clampf((g - 0.55) / 0.45, 0.0, 1.0))
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, SITE_DIRT)
+	var field := _farm_field(r)
+	ci.draw_rect(field, Color8(130, 84, 48))
 	var rows := 4
 	for i in rows:
 		var y := field.position.y + field.size.y * (i + 0.5) / float(rows)
-		ci.draw_line(Vector2(field.position.x + 2, y), Vector2(field.end.x - 2, y), Color(0.24, 0.15, 0.07), 3.0)
-		var plants := 5
+		ci.draw_line(Vector2(field.position.x + 1, y), Vector2(field.end.x - 1, y), Color8(96, 58, 32), 3.0)
+	ci.draw_rect(field, OUTLINE, false, 1.0)
+	if growth >= 0.0:
+		_farm_crops(ci, field, growth, ripe)
+	# Granero rojo
+	var barn := Rect2(Vector2(field.end.x + 2, r.position.y + 1), Vector2(r.end.x - field.end.x - 3, r.size.y * 0.5))
+	_ground_shadow(ci, barn, m * 0.12)
+	var top := _gable(ci, barn, m * 0.14, SLATE.lightened(0.1), RED, false)
+	var dc := _wall.get_center()
+	var horizontal := absf(_down.y) > 0.5
+	var ds := Vector2(_wall.size.x * 0.5, _wall.size.y * 0.8) if horizontal else Vector2(_wall.size.x * 0.8, _wall.size.y * 0.5)
+	var door := Rect2(dc - ds * 0.5, ds)
+	ci.draw_rect(door, RED.darkened(0.25))
+	ci.draw_line(door.position, door.end, CREAM, 1.2)
+	ci.draw_line(Vector2(door.end.x, door.position.y), Vector2(door.position.x, door.end.y), CREAM, 1.2)
+	ci.draw_rect(door, CREAM, false, 1.0)
+	# Silo de laton con su cupula
+	var silo := Vector2(barn.get_center().x, r.position.y + r.size.y * 0.66)
+	var sr := minf(barn.size.x * 0.42, m * 0.17)
+	_cyl(ci, silo, sr, m * 0.2, BRASS, CREAM.darkened(0.05))
+	_cyl_band(ci, silo, sr, m * 0.2, 0.45, 1.5, RED)
+	_dot(ci, silo, sr * 0.3, BRASS_DARK)
+
+static func _farm_field(r: Rect2) -> Rect2:
+	return Rect2(r.position + Vector2(2, 2), Vector2(r.size.x * 0.6, r.size.y - 4))
+
+static func _farm_crops(ci: CanvasItem, field: Rect2, growth: float, ripe: bool) -> void:
+	var g := clampf(growth, 0.0, 1.0)
+	var crop := BRASS if ripe else GREEN.lerp(BRASS, clampf((g - 0.55) / 0.45, 0.0, 1.0))
+	var rows := 4
+	var plants := 4
+	for i in rows:
+		var y := field.position.y + field.size.y * (i + 0.5) / float(rows)
 		for k in plants:
 			var x := field.position.x + field.size.x * (k + 0.5) / float(plants)
-			var rad := lerpf(1.2, field.size.y / float(rows) * 0.42, g)
-			ci.draw_circle(Vector2(x, y), rad, crop.darkened(0.25))
-			ci.draw_circle(Vector2(x - rad * 0.2, y - rad * 0.2), rad * 0.7, crop)
-	ci.draw_rect(field, OUTLINE, false, 1.0)
-	# Granero de tejado rojo y tolva de laton, a la derecha.
-	var barn := Rect2(Vector2(field.end.x + 3, r.position.y + 4), Vector2(r.end.x - field.end.x - 7, r.size.y * 0.5))
-	_plate(ci, barn, TILE_RED, OUTLINE)
-	ci.draw_line(Vector2(barn.position.x, barn.get_center().y), Vector2(barn.end.x, barn.get_center().y), TILE_RED_DARK, 2.0)
-	var silo_c := Vector2(barn.get_center().x, r.end.y - barn.size.x * 0.45 - 3)
-	_shaded_disc(ci, silo_c, minf(barn.size.x * 0.4, r.size.y * 0.18), BRASS)
+			var rad := lerpf(1.0, field.size.y / float(rows) * 0.42, g)
+			_dot(ci, Vector2(x, y), rad + 0.6, crop.darkened(0.45))
+			_dot(ci, Vector2(x, y), rad, crop)
+			if rad > 2.0:
+				_dot(ci, Vector2(x - rad * 0.3, y - rad * 0.3), rad * 0.4, crop.lightened(0.3))
 
-## Laboratorio: hormigon con una cupula de cristal que brilla.
-static func _laboratory(ci: CanvasItem, r: Rect2) -> void:
-	_plate(ci, r, CONCRETE, OUTLINE)
-	var c := r.get_center()
-	var rad := minf(r.size.x, r.size.y) * 0.28
-	ci.draw_circle(c, rad + 2.0, OUTLINE)
-	ci.draw_circle(c, rad, Color(0.35, 0.8, 0.95))
-	ci.draw_circle(c + Vector2(-rad * 0.3, -rad * 0.3), rad * 0.3, Color(0.85, 0.97, 1.0, 0.7))
-	ci.draw_line(Vector2(r.end.x - 6, r.position.y + 5), Vector2(r.end.x - 6, r.position.y + r.size.y * 0.4), IRON, 2.0)
-	_rivets(ci, r)
-
+## Deposito: la gran nave de chapa a rayas con la franja de laton y, en la
+## pared, el porton abierto con las cajas dentro. La grua (lo exagerado) es el
+## remate de su parcela.
 static func _warehouse(ci: CanvasItem, r: Rect2) -> void:
-	_plate(ci, r, GUNMETAL, OUTLINE)
-	# Chapa ondulada
-	var n := 6
-	for i in range(1, n):
-		var x := r.position.x + r.size.x * i / float(n)
-		ci.draw_line(Vector2(x, r.position.y + 3), Vector2(x, r.end.y - 3), GUNMETAL.lightened(0.18), 1.0)
-	# Franja de laton y portón
-	ci.draw_rect(Rect2(Vector2(r.position.x, r.get_center().y - 2), Vector2(r.size.x, 4)), BRASS)
-	var door := Rect2(Vector2(r.get_center().x - r.size.x * 0.2, r.end.y - r.size.y * 0.3), Vector2(r.size.x * 0.4, r.size.y * 0.3))
-	ci.draw_rect(door, RUST)
-	ci.draw_rect(door, OUTLINE, false, 1.0)
-	_rivets(ci, r)
-
-static func _foundry(ci: CanvasItem, r: Rect2) -> void:
-	var long_x := r.size.x >= r.size.y
-	_plate(ci, r, Color(0.45, 0.25, 0.18), OUTLINE)
-	# Ladrillo
-	var rows := 5
-	for i in range(1, rows):
-		if long_x:
-			var y := r.position.y + r.size.y * i / float(rows)
-			ci.draw_line(Vector2(r.position.x + 2, y), Vector2(r.end.x - 2, y), Color(0.32, 0.17, 0.12), 1.0)
+	var m := minf(r.size.x, r.size.y)
+	var top := _block(ci, r, m * 0.24, SLATE.lightened(0.12), SLATE.darkened(0.12))
+	# Chapa ondulada perpendicular a la pared
+	var horizontal := absf(_down.y) > 0.5
+	for i in range(1, 8):
+		if horizontal:
+			var x := top.position.x + top.size.x * i / 8.0
+			ci.draw_line(Vector2(x, top.position.y + 1), Vector2(x, top.end.y - 1), SLATE.lightened(0.32), 1.0)
 		else:
-			var x := r.position.x + r.size.x * i / float(rows)
-			ci.draw_line(Vector2(x, r.position.y + 2), Vector2(x, r.end.y - 2), Color(0.32, 0.17, 0.12), 1.0)
-	# Boca del horno encendida en el centro
-	var c := r.get_center()
-	var m := minf(r.size.x, r.size.y)
-	var mouth := Rect2(c - Vector2(m * 0.3, m * 0.22), Vector2(m * 0.6, m * 0.44))
-	ci.draw_rect(mouth, IRON)
-	ci.draw_rect(mouth.grow(-3), FIRE)
-	ci.draw_rect(mouth.grow(-6), FIRE_CORE)
-	ci.draw_rect(mouth, OUTLINE, false, 1.5)
-	# Dos chimeneas en los extremos
-	var ends: Array = [Vector2(0.14, 0.5), Vector2(0.86, 0.5)] if long_x else [Vector2(0.5, 0.14), Vector2(0.5, 0.86)]
-	for e in ends:
-		var p: Vector2 = r.position + r.size * (e as Vector2)
-		_disc(ci, p, m * 0.26, CONCRETE_DARK)
-		ci.draw_circle(p, m * 0.15, Color(0.08, 0.06, 0.05))
-		ci.draw_circle(p, m * 0.07, FIRE)
-		_smoke(ci, p, 1.0)
+			var y := top.position.y + top.size.y * i / 8.0
+			ci.draw_line(Vector2(top.position.x + 1, y), Vector2(top.end.x - 1, y), SLATE.lightened(0.32), 1.0)
+	# Franja de laton atravesando el tejado
+	if horizontal:
+		ci.draw_rect(Rect2(Vector2(top.position.x, top.get_center().y - 2), Vector2(top.size.x, 4)), BRASS)
+	else:
+		ci.draw_rect(Rect2(Vector2(top.get_center().x - 2, top.position.y), Vector2(4, top.size.y)), BRASS)
+	_rivets(ci, top, BRASS_LIGHT, 3.0)
+	# El porton abierto en la pared, con cajas dentro
+	var dc := _wall.get_center()
+	var ds := Vector2(r.size.x * 0.46, _wall.size.y) if horizontal else Vector2(_wall.size.x, r.size.y * 0.46)
+	var door := Rect2(dc - ds * 0.5, ds)
+	ci.draw_rect(door.grow(1.0), BRASS_DARK)
+	ci.draw_rect(door, OIL_BLACK)
+	for k in 2:
+		var bc := dc + (_left() * ds.length() * 0.18 * (1.0 if k == 0 else -1.0)) + _down * 1.0
+		var bs := Vector2(m * 0.09, m * 0.09)
+		ci.draw_rect(Rect2(bc - bs * 0.5, bs), WOOD)
+		ci.draw_rect(Rect2(bc - bs * 0.5, bs), OUTLINE, false, 1.0)
+	# El polipasto: una viga de laton que sale del tejado sobre el porton, con
+	# su gancho y una caja colgando (la grua grande va en la parcela).
+	var root := dc - _down * (_wall.size.y if horizontal else _wall.size.x) - _down * m * 0.18
+	var tipp := root + _down * m * 0.3
+	var lift := -_down * m * 0.14
+	ci.draw_line(root + lift, tipp + lift, OUTLINE, 5.0)
+	ci.draw_line(root + lift, tipp + lift, BRASS, 3.0)
+	ci.draw_line(tipp + lift, tipp + lift * 0.3, IRON, 1.0)
+	var cs := Vector2(m * 0.12, m * 0.12)
+	ci.draw_rect(Rect2(tipp + lift * 0.3 - cs * 0.5, cs).grow(0.8), OUTLINE)
+	ci.draw_rect(Rect2(tipp + lift * 0.3 - cs * 0.5, cs), LIGHT_WOOD)
 
+## Fundicion: nave de ladrillo con la boca del horno encendida en la pared, una
+## chimenea pequena y la GRANDE de ladrillo con el anillo rojo (lo exagerado).
+static func _foundry(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	var top := _block(ci, r, m * 0.24, SLATE, TILE_RED)
+	# Ladrillo en la pared
+	var horizontal := absf(_down.y) > 0.5
+	for i in range(1, 3):
+		if horizontal:
+			var y := _wall.position.y + _wall.size.y * i / 3.0
+			ci.draw_line(Vector2(_wall.position.x, y), Vector2(_wall.end.x, y), TILE_RED_DARK, 1.0)
+		else:
+			var x := _wall.position.x + _wall.size.x * i / 3.0
+			ci.draw_line(Vector2(x, _wall.position.y), Vector2(x, _wall.end.y), TILE_RED_DARK, 1.0)
+	# La boca del horno, incandescente, en medio de la pared
+	var dc := _wall.get_center()
+	var ds := Vector2(r.size.x * 0.4, _wall.size.y * 0.8) if horizontal else Vector2(_wall.size.x * 0.8, r.size.y * 0.4)
+	var mouth := Rect2(dc - ds * 0.5, ds)
+	ci.draw_rect(mouth.grow(1.0), OUTLINE)
+	ci.draw_rect(mouth, FIRE)
+	ci.draw_rect(mouth.grow(-minf(ds.x, ds.y) * 0.25), FIRE_CORE)
+	# Respiraderos en el tejado
+	for k in 3:
+		var p := top.position + top.size * Vector2(0.18 + 0.2 * k, 0.72)
+		ci.draw_rect(Rect2(p - Vector2(2.5, 1.5), Vector2(5, 3)), IRON)
+	# Chimenea pequena y la grande (lo exagerado)
+	var a: Vector2 = r.position + r.size * (fx_anchors("foundry")[0] as Vector2)
+	var b: Vector2 = r.position + r.size * (fx_anchors("foundry")[1] as Vector2)
+	_cyl(ci, a, m * 0.09, m * 0.12, OIL_BLACK, TILE_RED_DARK)
+	var ch := m * 0.46
+	ci.draw_line(b + _down * ch, b + _down * ch + _shade * ch * 0.7, Color(SHADOW, 0.32), m * 0.2)
+	_cyl(ci, b, m * 0.12, ch, OIL_BLACK, TILE_RED)
+	for k in 3:
+		_cyl_band(ci, b, m * 0.12, ch, 0.28 + 0.2 * k, 1.0, TILE_RED_DARK)
+	_cyl_band(ci, b, m * 0.12, ch, 0.06, 2.5, RED)
+	_dot(ci, b, m * 0.07, FIRE.darkened(0.2))
+	_dot(ci, a, m * 0.04, FIRE.darkened(0.2))
+
+## Cuartel: barracon de piedra con tejado de chapa, la franja amarillo/negro
+## de lo militar, la estrella de laton y la bandera grande (lo exagerado).
 static func _barracks(ci: CanvasItem, r: Rect2) -> void:
-	var c := r.get_center()
-	# Sacos terreros alrededor
-	ci.draw_rect(r, Color(0.55, 0.50, 0.36))
-	var step := 8.0
-	var x := r.position.x + 1
-	while x < r.end.x - 4:
-		ci.draw_rect(Rect2(Vector2(x, r.position.y + 1), Vector2(step - 1, 5)), Color(0.65, 0.58, 0.40))
-		ci.draw_rect(Rect2(Vector2(x, r.end.y - 6), Vector2(step - 1, 5)), Color(0.65, 0.58, 0.40))
-		x += step
-	ci.draw_rect(r, OUTLINE, false, 2.0)
-	# Tejado verde oliva con la estrella
-	var roof := r.grow(-8)
-	_plate(ci, roof, OLIVE, OUTLINE)
-	ci.draw_line(Vector2(roof.position.x, c.y), Vector2(roof.end.x, c.y), OLIVE_DARK, 2.0)
-	_star(ci, c, minf(roof.size.x, roof.size.y) * 0.24, BRASS_LIGHT)
-	# Mastil con bandera
-	var pole := Vector2(roof.end.x - 5, roof.position.y + 4)
-	ci.draw_line(pole, pole + Vector2(0, 14), IRON, 2.0)
-	ci.draw_colored_polygon(PackedVector2Array([pole, pole + Vector2(-11, 3), pole + Vector2(0, 6)]), IMPERIAL_RED)
-
-static func _refinery(ci: CanvasItem, r: Rect2) -> void:
-	_plate(ci, r, CONCRETE_DARK, OUTLINE)
 	var m := minf(r.size.x, r.size.y)
-	var t1 := r.position + r.size * Vector2(0.3, 0.32)
-	var t2 := r.position + r.size * Vector2(0.3, 0.72)
-	var t3 := r.position + r.size * Vector2(0.7, 0.62)
-	# Tuberias entre tanques
-	for pair in [[t1, t3], [t2, t3], [t1, t2]]:
-		ci.draw_line(pair[0], pair[1], COPPER.darkened(0.25), 5.0)
-		ci.draw_line(pair[0], pair[1], COPPER, 3.0)
-	for t in [t1, t2]:
-		_shaded_disc(ci, t, m * 0.17, STEEL)
-		ci.draw_arc(t, m * 0.1, 0.0, TAU, 16, STEEL.darkened(0.3), 1.0)
-	_shaded_disc(ci, t3, m * 0.22, Color(0.55, 0.52, 0.45))
-	ci.draw_arc(t3, m * 0.13, 0.0, TAU, 16, RUST, 2.0)
-	# Antorcha de gas
-	var flare := r.position + r.size * Vector2(0.78, 0.2)
-	_disc(ci, flare, 4.0, IRON)
-	ci.draw_circle(flare + Vector2(0, -1), 3.2, FIRE)
-	ci.draw_circle(flare + Vector2(0, -1.5), 1.6, FIRE_CORE)
-	_rivets(ci, r, BRASS, 4.0)
+	var body := Rect2(r.position + Vector2(0, r.size.y * 0.12), Vector2(r.size.x, r.size.y * 0.76))
+	var top := _gable(ci, body, m * 0.2, OLIVE, STONE, true)
+	_wall_marks(ci, _wall, 3, OIL_BLACK.lightened(0.15), 0.28)
+	# Franja militar a lo largo de la cumbrera
+	var c := top.get_center()
+	_hazard_strip(ci, Rect2(Vector2(top.position.x + 2, c.y - 1.5), Vector2(top.size.x - 4, 3)))
+	_star(ci, c + Vector2(-top.size.x * 0.24, -top.size.y * 0.22), m * 0.11, BRASS_LIGHT)
+	# La bandera: mastil alto y pano rojo con la estrella
+	var base := Vector2(r.position.x + r.size.x * 0.8, r.position.y + r.size.y * 0.26)
+	var tip := _mast(ci, base, m * 0.42, IRON, 1.8)
+	var side := _left() * -1.0
+	var fw := m * 0.34
+	var fh := m * 0.22
+	var flag := PackedVector2Array([tip, tip + side * fw, tip + side * fw + _down * fh, tip + _down * fh])
+	_poly(ci, flag, RED, OUTLINE, 1.0)
+	_star(ci, tip + side * fw * 0.5 + _down * fh * 0.5, fh * 0.32, BRASS_LIGHT)
+	_disc(ci, tip, 1.6, BRASS, OUTLINE, 1.0)
+	# Estufa del barracon (de ahi sale el humo de "trabajando")
+	var stove: Vector2 = r.position + r.size * (fx_anchors("barracks")[0] as Vector2)
+	_cyl(ci, stove, m * 0.06, m * 0.1, OIL_BLACK, SLATE)
 
+## Refineria: losa de chapa con un deposito grande (tapa crema, anillo rojo),
+## uno pequeno, tuberias de laton con valvulas rojas y la columna de
+## destilacion alta (lo exagerado) con la antorcha encendida.
+static func _refinery(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	_plate(ci, r, SLATE.lightened(0.18), OUTLINE, 1.0)
+	_rivets(ci, r, BRASS, 3.0)
+	var t1 := r.position + r.size * Vector2(0.3, 0.3)
+	var t2 := r.position + r.size * Vector2(0.26, 0.74)
+	var col: Vector2 = r.position + r.size * (fx_anchors("refinery")[0] as Vector2)
+	var col_h := m * 0.44
+	# Tuberias de laton entre todo (por el suelo)
+	for pair in [[t1, t2], [t2, col + _down * col_h], [t1, col + _down * col_h * 0.6]]:
+		ci.draw_line(pair[0], pair[1], OUTLINE, 5.0)
+		ci.draw_line(pair[0], pair[1], BRASS, 3.0)
+	for p in [(t1 + t2) * 0.5, (t2 + col + _down * col_h) * 0.5]:
+		ci.draw_arc(p, 3.2, 0.0, TAU, 10, OUTLINE, 2.5)
+		ci.draw_arc(p, 3.2, 0.0, TAU, 10, RED, 1.5)
+	# Depositos
+	_cyl(ci, t1, m * 0.2, m * 0.16, CREAM, CREAM.darkened(0.12))
+	_cyl_band(ci, t1, m * 0.2, m * 0.16, 0.35, 2.0, RED)
+	ci.draw_arc(t1, m * 0.11, 0.0, TAU, 16, STONE, 1.0)
+	_cyl(ci, t2, m * 0.13, m * 0.1, STONE.lightened(0.1), STONE)
+	# La columna de destilacion con sus anillos y la antorcha
+	_cyl(ci, col, m * 0.11, col_h, SLATE.lightened(0.25), SLATE.lightened(0.1))
+	for k in 3:
+		_cyl_band(ci, col, m * 0.11, col_h, 0.2 + 0.28 * k, 1.5, RED)
+	_dot(ci, col, m * 0.12, Color(FIRE, 0.45))
+	_disc(ci, col, m * 0.06, FIRE, OUTLINE, 1.0)
+	_dot(ci, col, m * 0.03, FIRE_CORE)
+
+## Torre de vigilancia: bastion redondo de piedra con la franja amarillo/negro,
+## corona de sacos terreros y el canon largo (lo exagerado) asomando; un foco.
 static func _tower(ci: CanvasItem, r: Rect2) -> void:
-	var c := r.get_center()
-	var h := minf(r.size.x, r.size.y) * 0.5
-	ci.draw_rect(r.grow(-2), CONCRETE_DARK.darkened(0.2))
-	ci.draw_rect(r.grow(-2), OUTLINE, false, 1.5)
-	_shaded_disc(ci, c, h * 0.8, CONCRETE)
-	# Almenas
-	for i in range(8):
-		var a := TAU * i / 8.0
-		ci.draw_circle(c + Vector2(cos(a), sin(a)) * h * 0.72, 1.8, CONCRETE_DARK)
-	# Cañon y reflector
-	ci.draw_line(c, c + Vector2(h * 0.95, -h * 0.35), IRON, 4.0)
-	ci.draw_line(c, c + Vector2(h * 0.95, -h * 0.35), GUNMETAL.lightened(0.2), 2.0)
-	_disc(ci, c, h * 0.3, GUNMETAL)
-	ci.draw_circle(c + Vector2(-h * 0.35, h * 0.35), 3.0, Color(1.0, 0.95, 0.7))
+	var m := minf(r.size.x, r.size.y)
+	var h := m * 0.5
+	var c := r.get_center() - _down * m * 0.08
+	var wall_h := m * 0.2
+	_cyl(ci, c, h * 0.84, wall_h, CONCRETE, STONE.darkened(0.08))
+	_cyl_band(ci, c, h * 0.84, wall_h, 0.45, 3.0, BRASS)
+	# Corona de sacos
+	for i in range(12):
+		var a := TAU * i / 12.0
+		_disc(ci, c + Vector2(cos(a), sin(a)) * h * 0.7, h * 0.13, CREAM.darkened(0.06), OUTLINE, 1.0)
+	_dot(ci, c, h * 0.56, CONCRETE_DARK)
+	# Torreta y canon
+	var aim := Vector2(1.0, -0.55).normalized()
+	ci.draw_line(c + _shade * 3.0, c + _shade * 3.0 + aim * h * 1.15, SHADOW, 5.0)
+	ci.draw_line(c, c + aim * h * 1.15, OUTLINE, 6.5)
+	ci.draw_line(c, c + aim * h * 1.15, IRON.lightened(0.18), 4.0)
+	ci.draw_line(c + aim * h * 1.0, c + aim * h * 1.15, RED, 4.0)
+	_shaded_disc(ci, c, h * 0.3, SLATE)
+	_hazard_strip(ci, Rect2(c - Vector2(h * 0.18, h * 0.05), Vector2(h * 0.36, h * 0.1)))
+	# Foco
+	var lamp: Vector2 = r.position + r.size * (fx_anchors("tower")[0] as Vector2)
+	_disc(ci, lamp, 2.6, GLOW, OUTLINE, 1.0)
 
+## Cuartel General: escalinata de piedra, gran edificio crema con columnas en
+## la fachada y estandartes rojos, tejado de pizarra con filo de laton y, en el
+## centro, el emblema de la Regencia sobre su torreon (lo exagerado).
 static func _headquarters(ci: CanvasItem, r: Rect2) -> void:
-	var c := r.get_center()
-	_plate(ci, r, MARBLE.darkened(0.15), OUTLINE, 2.5)
-	var inner := r.grow(-6)
-	_plate(ci, inner, MARBLE, BRASS, 2.0)
-	# Estandartes imperiales
-	var bw := inner.size.x * 0.16
-	for fx in [0.12, 0.72]:
-		var band := Rect2(Vector2(inner.position.x + inner.size.x * fx, inner.position.y + 3), Vector2(bw, inner.size.y - 6))
-		ci.draw_rect(band, IMPERIAL_RED)
-		ci.draw_rect(Rect2(band.position + Vector2(bw * 0.4, 0), Vector2(bw * 0.2, band.size.y)), BRASS)
-		ci.draw_rect(band, OUTLINE, false, 1.0)
-	# Aguila / estrella al centro, con neon ambar
-	_disc(ci, c, minf(inner.size.x, inner.size.y) * 0.24, Color(0.18, 0.18, 0.2), BRASS, 2.0)
-	_star(ci, c, minf(inner.size.x, inner.size.y) * 0.18, Color(1.0, 0.75, 0.15))
-	_rivets(ci, r, BRASS_LIGHT, 3.5)
+	var m := minf(r.size.x, r.size.y)
+	_block(ci, r, m * 0.06, Color8(214, 198, 170), CONCRETE)
+	var hall := r.grow(-m * 0.08)
+	var top := _block(ci, hall, m * 0.2, SLATE.lightened(0.05), CREAM)
+	ci.draw_rect(top.grow(-1.5), BRASS, false, 1.5)
+	# Columnas en la fachada
+	_wall_marks(ci, _wall, 5, CREAM.darkened(0.25), 0.3, CREAM.darkened(0.4))
+	# Estandartes rojos colgando del tejado
+	var horizontal := absf(_down.y) > 0.5
+	for fx in [0.2, 0.8]:
+		var p := (Vector2(_wall.position.x + _wall.size.x * fx, _wall.get_center().y) if horizontal
+			else Vector2(_wall.get_center().x, _wall.position.y + _wall.size.y * fx))
+		var s := Vector2(m * 0.1, _wall.size.y * 1.1) if horizontal else Vector2(_wall.size.x * 1.1, m * 0.1)
+		ci.draw_rect(Rect2(p - s * 0.5, s).grow(0.8), OUTLINE)
+		ci.draw_rect(Rect2(p - s * 0.5, s), RED)
+		_dot(ci, p, minf(s.x, s.y) * 0.25, BRASS_LIGHT)
+	# El torreon con el emblema
+	var e := top.get_center() - _down * m * 0.02
+	_cyl(ci, e, m * 0.22, m * 0.1, BRASS_DARK, CREAM.darkened(0.08))
+	_emblem_2d(ci, e, m * 0.19, BRASS_LIGHT, false)
 
+## Jardin: seto alrededor, cesped claro con un sendero, parterres de flores y
+## un arbol grande y redondo (lo exagerado). Acento verde.
 static func _garden(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
 	ci.draw_rect(r, LEAF_DARK)
-	ci.draw_rect(r.grow(-3), LEAF)
-	var pts := [Vector2(0.25, 0.3), Vector2(0.7, 0.25), Vector2(0.5, 0.55), Vector2(0.28, 0.75), Vector2(0.75, 0.72)]
-	var cols := [Color(0.95, 0.35, 0.3), Color(0.98, 0.85, 0.3), Color(0.85, 0.45, 0.85), Color(1, 1, 0.95), Color(0.95, 0.55, 0.2)]
-	for i in range(pts.size()):
+	ci.draw_rect(r.grow(-3.5), GREEN.lightened(0.12))
+	# Sendero de piedra
+	ci.draw_line(Vector2(r.position.x + 3, r.end.y - m * 0.22), Vector2(r.end.x - 3, r.position.y + m * 0.4), STONE.lightened(0.2), m * 0.1)
+	# Parterres
+	var cols := [RED, BRASS_LIGHT, CREAM, TERRACOTTA, RED]
+	var pts := [Vector2(0.2, 0.24), Vector2(0.22, 0.6), Vector2(0.45, 0.8), Vector2(0.78, 0.78), Vector2(0.5, 0.42)]
+	for i in pts.size():
 		var p: Vector2 = r.position + r.size * (pts[i] as Vector2)
-		ci.draw_circle(p, 3.2, LEAF_DARK)
-		ci.draw_circle(p, 2.0, cols[i])
-	ci.draw_rect(r, OUTLINE, false, 1.5)
+		_disc(ci, p, m * 0.08, LEAF_DARK, OUTLINE, 1.0)
+		for k in 3:
+			_dot(ci, p + Vector2.from_angle(TAU * k / 3.0 + i) * m * 0.035, m * 0.025, cols[i])
+	# El arbol grande
+	var t := r.position + r.size * Vector2(0.7, 0.36)
+	var tr := m * 0.24
+	_dot(ci, t + _shade * tr * 0.6, tr, SHADOW)
+	_dot(ci, t, tr + 1.0, OUTLINE)
+	_dot(ci, t, tr, GREEN.darkened(0.08))
+	_dot(ci, t + (_left() - _down) * tr * 0.25, tr * 0.6, GREEN.lightened(0.12))
+	_dot(ci, t + (_left() - _down) * tr * 0.42, tr * 0.22, GREEN.lightened(0.35))
+	_dot(ci, t + Vector2(tr * 0.35, tr * 0.2), 1.6, RED)
 
+## Fuente: pilon redondo de piedra con el agua azul y sus ondas, y el surtidor
+## crema con la taza de laton en medio (lo exagerado).
 static func _fountain(ci: CanvasItem, r: Rect2) -> void:
-	var c := r.get_center()
-	var h := minf(r.size.x, r.size.y) * 0.5
-	ci.draw_rect(r, CONCRETE.lightened(0.1))
-	ci.draw_rect(r, OUTLINE, false, 1.5)
-	_disc(ci, c, h * 0.86, MARBLE.darkened(0.1))
-	ci.draw_circle(c, h * 0.68, WATER)
-	ci.draw_arc(c, h * 0.45, 0.4, 2.2, 10, WATER.lightened(0.4), 1.0)
-	ci.draw_arc(c, h * 0.3, 3.5, 5.2, 10, WATER.lightened(0.4), 1.0)
-	_disc(ci, c, h * 0.18, MARBLE)
-	ci.draw_circle(c, h * 0.08, Color(0.85, 0.95, 1.0))
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, Color8(214, 198, 170))
+	var h := m * 0.5
+	var c := r.get_center() - _down * m * 0.03
+	_cyl(ci, c, h * 0.88, m * 0.08, STONE.lightened(0.1), STONE.darkened(0.1))
+	_dot(ci, c, h * 0.72, WATER.darkened(0.1))
+	_dot(ci, c, h * 0.62, WATER)
+	ci.draw_arc(c, h * 0.45, 0.4, 2.2, 10, WATER.lightened(0.45), 1.25)
+	ci.draw_arc(c, h * 0.3, 3.5, 5.2, 10, WATER.lightened(0.45), 1.25)
+	var spout_h := m * 0.2
+	_cyl(ci, c - _down * spout_h * 0.6, h * 0.14, spout_h, BRASS, CREAM)
+	var top := c - _down * spout_h * 0.6
+	_disc(ci, top, h * 0.26, BRASS, OUTLINE, 1.0)
+	_dot(ci, top, h * 0.16, WATER.lightened(0.25))
+	for i in 6:
+		_dot(ci, top + Vector2.from_angle(TAU * i / 6.0) * h * 0.34, 1.3, Color(1, 1, 1, 0.85))
 
+## Estatua Imperial: pedestal de piedra en dos escalones y la figura de laton
+## grande (lo exagerado): capa roja, hombros, cabeza y el brazo en alto con la
+## antorcha encendida.
 static func _statue(ci: CanvasItem, r: Rect2) -> void:
-	var c := r.get_center()
-	var h := minf(r.size.x, r.size.y) * 0.5
-	_plate(ci, r.grow(-1), CONCRETE, OUTLINE)
-	_plate(ci, r.grow(-h * 0.35), MARBLE.darkened(0.08), OUTLINE, 1.5)
-	# Figura vista desde arriba: hombros, cabeza y laurel dorado
-	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-h * 0.42, h * 0.12), c + Vector2(h * 0.42, h * 0.12), c + Vector2(h * 0.3, h * 0.3), c + Vector2(-h * 0.3, h * 0.3)]), MARBLE)
-	_disc(ci, c + Vector2(0, -h * 0.05), h * 0.2, MARBLE.lightened(0.1))
-	ci.draw_arc(c + Vector2(0, -h * 0.05), h * 0.22, PI * 0.9, PI * 2.1, 10, BRASS_LIGHT, 2.0)
+	var m := minf(r.size.x, r.size.y)
+	_block(ci, r.grow(-m * 0.04), m * 0.07, STONE.lightened(0.12), CONCRETE_DARK)
+	var top := _block(ci, r.grow(-m * 0.2), m * 0.1, CREAM, STONE)
+	var c := top.get_center() + _down * m * 0.06
+	var fig_h := m * 0.3
+	var shoulders := c - _down * fig_h
+	var side := _left() * m * 0.15
+	# Capa roja por detras, del hombro al pedestal
+	ci.draw_colored_polygon(PackedVector2Array([shoulders + side * 1.05, shoulders - side * 1.05,
+		c - side * 1.3 + _down * m * 0.03, c + side * 1.3 + _down * m * 0.03]), OUTLINE)
+	ci.draw_colored_polygon(PackedVector2Array([shoulders + side * 0.95, shoulders - side * 0.95,
+		c - side * 1.18, c + side * 1.18]), RED)
+	# Cuerpo de laton
+	_cyl(ci, shoulders, m * 0.1, fig_h * 0.9, BRASS, BRASS_DARK)
+	# Cabeza
+	var head := shoulders - _down * m * 0.12
+	_disc(ci, head, m * 0.075, BRASS_LIGHT, OUTLINE, 1.0)
+	# El brazo en alto con la antorcha
+	var hand := shoulders - side * 1.3 - _down * m * 0.26
+	ci.draw_line(shoulders - side * 0.6, hand, OUTLINE, 4.0)
+	ci.draw_line(shoulders - side * 0.6, hand, BRASS, 2.5)
+	_dot(ci, hand - _down * 2.0, 3.4, Color(FIRE, 0.5))
+	_disc(ci, hand - _down * 1.5, 2.0, FIRE_CORE, OUTLINE, 1.0)
 
-## Calzada: adoquin oscuro, con un brazo hacia cada vecino que tambien es calzada.
+## Calzada: adoquin calido de piedra, con bordillo crema en los lados que no
+## siguen la calle y la raya de laton en los tramos rectos.
 static func _road(ci: CanvasItem, cell_rect: Rect2, mask: int) -> void:
 	# La celda entera, como en 3D: los tramos vecinos se tocan y la red se lee
-	# como una sola carretera. Acera clara en los lados que no siguen la calle.
-	var base := Color(0.36, 0.34, 0.31)
-	var curb := Color(0.64, 0.6, 0.54)
-	var line := Color(0.85, 0.72, 0.3)
+	# como una sola carretera. Bordillo en los lados que no siguen la calle.
+	var base := Color8(150, 134, 112)
+	var stone := Color8(172, 156, 132)
+	var curb := Color8(226, 210, 178)
+	var line := BRASS
 	ci.draw_rect(cell_rect, base)
-	# Adoquines
-	var y := cell_rect.position.y + 3.0
+	var y := cell_rect.position.y + 2.5
 	var row := 0
 	while y < cell_rect.end.y - 2.0:
-		var x := cell_rect.position.x + (3.0 if row % 2 == 0 else 6.0)
+		var x := cell_rect.position.x + (2.5 if row % 2 == 0 else 5.5)
 		while x < cell_rect.end.x - 2.0:
-			ci.draw_rect(Rect2(Vector2(x, y), Vector2(4, 3)), base.lightened(0.1))
+			ci.draw_rect(Rect2(Vector2(x, y), Vector2(4.5, 3.5)), stone)
 			x += 6.0
 		y += 5.0
 		row += 1
 	var cw := cell_rect.size.x * 0.16
 	var p0 := cell_rect.position
 	var sz := cell_rect.size
+	var edge := Color8(120, 104, 84)
 	if not (mask & 1):
 		ci.draw_rect(Rect2(p0, Vector2(sz.x, cw)), curb)
+		ci.draw_line(Vector2(p0.x, p0.y + cw), Vector2(p0.x + sz.x, p0.y + cw), edge, 1.0)
 	if not (mask & 4):
 		ci.draw_rect(Rect2(Vector2(p0.x, p0.y + sz.y - cw), Vector2(sz.x, cw)), curb)
+		ci.draw_line(Vector2(p0.x, p0.y + sz.y - cw), Vector2(p0.x + sz.x, p0.y + sz.y - cw), edge, 1.0)
 	if not (mask & 2):
 		ci.draw_rect(Rect2(Vector2(p0.x + sz.x - cw, p0.y), Vector2(cw, sz.y)), curb)
+		ci.draw_line(Vector2(p0.x + sz.x - cw, p0.y), Vector2(p0.x + sz.x - cw, p0.y + sz.y), edge, 1.0)
 	if not (mask & 8):
 		ci.draw_rect(Rect2(p0, Vector2(cw, sz.y)), curb)
+		ci.draw_line(Vector2(p0.x + cw, p0.y), Vector2(p0.x + cw, p0.y + sz.y), edge, 1.0)
 	var c := cell_rect.get_center()
 	if (mask & 1) and (mask & 4) and not (mask & 2) and not (mask & 8):
-		ci.draw_rect(Rect2(Vector2(c.x - 1.0, p0.y), Vector2(2.0, sz.y)), line)
+		ci.draw_rect(Rect2(Vector2(c.x - 1.0, p0.y + 3.0), Vector2(2.0, sz.y - 6.0)), line)
 	elif (mask & 2) and (mask & 8) and not (mask & 1) and not (mask & 4):
-		ci.draw_rect(Rect2(Vector2(p0.x, c.y - 1.0), Vector2(sz.x, 2.0)), line)
+		ci.draw_rect(Rect2(Vector2(p0.x + 3.0, c.y - 1.0), Vector2(sz.x - 6.0, 2.0)), line)
 
 static func _star(ci: CanvasItem, c: Vector2, radius: float, color: Color) -> void:
 	var pts := PackedVector2Array()
@@ -531,7 +999,7 @@ static func draw_construction(ci: CanvasItem, size: Vector2, progress: float) ->
 	var perimeter := 2.0 * (r.size.x + r.size.y)
 	var i := 0
 	while t < perimeter:
-		var col := Color(0.95, 0.75, 0.12) if i % 2 == 0 else Color(0.08, 0.07, 0.05)
+		var col := HAZARD if i % 2 == 0 else IRON
 		var a := _perimeter_point(r, t)
 		var b := _perimeter_point(r, minf(t + stripe, perimeter))
 		ci.draw_line(a, b, col, 3.0)
@@ -540,7 +1008,7 @@ static func draw_construction(ci: CanvasItem, size: Vector2, progress: float) ->
 	# Barra de progreso bajo la huella
 	var bar := Rect2(Vector2(r.position.x + 3, r.end.y - 7), Vector2(r.size.x - 6, 4))
 	ci.draw_rect(bar.grow(1), OUTLINE)
-	ci.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(progress, 0.0, 1.0), bar.size.y)), Color(1.0, 0.8, 0.2))
+	ci.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(progress, 0.0, 1.0), bar.size.y)), BRASS_LIGHT)
 
 static func _perimeter_point(r: Rect2, t: float) -> Vector2:
 	if t <= r.size.x:
@@ -569,7 +1037,7 @@ static func draw_damage(ci: CanvasItem, size: Vector2, ratio: float, ruined: boo
 	# Barra de vida
 	var bar := Rect2(Vector2(r.position.x + 3, r.position.y + 3), Vector2(r.size.x - 6, 4))
 	ci.draw_rect(bar.grow(1), OUTLINE)
-	var col := Color(0.85, 0.2, 0.15) if ratio < 0.34 else (Color(0.95, 0.65, 0.15) if ratio < 0.67 else Color(0.4, 0.8, 0.3))
+	var col := RED if ratio < 0.34 else (BRASS if ratio < 0.67 else GREEN)
 	ci.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(ratio, 0.0, 1.0), bar.size.y)), col)
 
 ## Borde de seleccion en laton.
@@ -581,17 +1049,17 @@ static func draw_selection(ci: CanvasItem, size: Vector2, pulse: float) -> void:
 # ── Obra por fases (estilo por tipo, disposicion por instancia) ───────
 
 ## Colores de obra vistos desde arriba (los de la paleta de obra 3D).
-const SITE_STONE := Color(0.64, 0.61, 0.55)
-const SITE_STONE_DARK := Color(0.47, 0.45, 0.41)
-const SITE_SACK := Color(0.78, 0.68, 0.48)
-const SITE_SANDBAG := Color(0.62, 0.57, 0.40)
-const SITE_SAWDUST := Color(0.86, 0.74, 0.52)
-const SITE_GRAVEL := Color(0.50, 0.48, 0.45)
-const SITE_SOIL := Color(0.24, 0.17, 0.11)
-const SITE_SHEET := Color(0.44, 0.46, 0.48)
-const SITE_CRATE := Color(0.47, 0.32, 0.16)
-const SITE_LOG := Color(0.42, 0.28, 0.15)
-const SITE_DRUM := Color(0.22, 0.30, 0.25)
+const SITE_STONE := Color8(208, 192, 166)
+const SITE_STONE_DARK := Color8(160, 144, 120)
+const SITE_SACK := Color8(226, 200, 150)
+const SITE_SANDBAG := Color8(200, 174, 124)
+const SITE_SAWDUST := Color8(238, 204, 142)
+const SITE_GRAVEL := Color8(156, 146, 132)
+const SITE_SOIL := Color8(112, 72, 44)
+const SITE_SHEET := Color8(128, 130, 142)
+const SITE_CRATE := Color8(160, 98, 54)
+const SITE_LOG := Color8(134, 82, 46)
+const SITE_DRUM := Color8(190, 60, 40)
 
 ## Las tres fases de obra vistas desde arriba, como en 3D
 ## (DieselpunkBuildingFactory.create_construction_phase): 0 valla con
@@ -614,7 +1082,7 @@ static func draw_construction_phase(ci: CanvasItem, size: Vector2, phase: int, p
 	rng.seed = seed_val
 	for i in range(6 * n):
 		var p := r.position + r.size * Vector2(rng.randf(), rng.randf())
-		ci.draw_circle(p, 1.4, SITE_DIRT.darkened(0.25))
+		_dot(ci, p, 1.4, SITE_DIRT.darkened(0.25))
 	var anchors := site_anchors(size, phase, n, style, layout)
 	match phase:
 		0: _site_fence(ci, r, n, style, layout)
@@ -622,8 +1090,8 @@ static func draw_construction_phase(ci: CanvasItem, size: Vector2, phase: int, p
 		_: _site_frame(ci, r, n, style, layout, anchors)
 	# El palo del banderin (la tela la mueve Building2D).
 	var flag: Vector2 = anchors["flag"]
-	ci.draw_circle(flag, 2.2, OUTLINE)
-	ci.draw_circle(flag, 1.4, DARK_WOOD.lightened(0.2))
+	_dot(ci, flag, 2.2, OUTLINE)
+	_dot(ci, flag, 1.4, DARK_WOOD.lightened(0.2))
 	ci.draw_rect(r, OUTLINE, false, 1.5)
 	var bar := Rect2(Vector2(r.position.x + 3, r.end.y - 7), Vector2(r.size.x - 6, 4))
 	ci.draw_rect(bar.grow(1), OUTLINE)
@@ -759,7 +1227,7 @@ static func _pile_2d(ci: CanvasItem, kind: String, p: Rect2, turned: bool) -> vo
 				ci.draw_line(a, b, OUTLINE, across_len / count + 1.0)
 				ci.draw_line(a, b, bar_col, across_len / count - 1.0)
 				if kind == "pipes":
-					ci.draw_circle(b, across_len / count * 0.35, bar_col.darkened(0.45))
+					_dot(ci, b, across_len / count * 0.35, bar_col.darkened(0.45))
 			return
 		"logs":
 			for j in 3:
@@ -768,7 +1236,7 @@ static func _pile_2d(ci: CanvasItem, kind: String, p: Rect2, turned: bool) -> vo
 				var b := o + long_axis * long_len * 0.5
 				ci.draw_line(a, b, OUTLINE, across_len / 3.0 + 1.0)
 				ci.draw_line(a, b, SITE_LOG, across_len / 3.0 - 1.0)
-				ci.draw_circle(b, across_len / 6.0, LIGHT_WOOD)
+				_dot(ci, b, across_len / 6.0, LIGHT_WOOD)
 			return
 		"bricks":
 			ci.draw_rect(p, TILE_RED)
@@ -778,10 +1246,10 @@ static func _pile_2d(ci: CanvasItem, kind: String, p: Rect2, turned: bool) -> vo
 			var fill: Color = {"sawdust": SITE_SAWDUST, "gravel": SITE_GRAVEL}.get(kind, SITE_SOIL)
 			var rad := minf(p.size.x, p.size.y) * 0.75
 			_disc(ci, c, rad, fill, OUTLINE, 1.0)
-			ci.draw_circle(c - Vector2(rad, rad) * 0.25, rad * 0.45, fill.lightened(0.15))
+			_dot(ci, c - Vector2(rad, rad) * 0.25, rad * 0.45, fill.lightened(0.15))
 			if kind == "gravel":
 				for j in 5:
-					ci.draw_circle(c + Vector2(cos(j * 1.3), sin(j * 1.3)) * rad * 0.55, 0.9, fill.darkened(0.4))
+					_dot(ci, c + Vector2(cos(j * 1.3), sin(j * 1.3)) * rad * 0.55, 0.9, fill.darkened(0.4))
 			return
 		"rivets":
 			var box := Rect2(p.position, Vector2(p.size.x * 0.45, p.size.y))
@@ -794,7 +1262,7 @@ static func _pile_2d(ci: CanvasItem, kind: String, p: Rect2, turned: bool) -> vo
 			var rad := minf(p.size.x, p.size.y) * 0.32
 			for o in [Vector2(-0.28, -0.1), Vector2(0.05, 0.12), Vector2(0.32, -0.12)]:
 				_disc(ci, c + o * p.size, rad, SITE_DRUM, OUTLINE, 1.0)
-				ci.draw_circle(c + o * p.size, rad * 0.4, SITE_DRUM.lightened(0.25))
+				_dot(ci, c + o * p.size, rad * 0.4, SITE_DRUM.lightened(0.25))
 			return
 		"sacks", "sandbags":
 			var fill := SITE_SACK if kind == "sacks" else SITE_SANDBAG
@@ -833,8 +1301,8 @@ static func _site_foundation(ci: CanvasItem, r: Rect2, n: int, style: Dictionary
 		if wood:
 			ci.draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)), DARK_WOOD)
 		else:
-			ci.draw_circle(p + Vector2(-1.5, -1.5), 1.3, RUST)
-			ci.draw_circle(p + Vector2(1.5, 1.5), 1.3, RUST)
+			_dot(ci, p + Vector2(-1.5, -1.5), 1.3, RUST)
+			_dot(ci, p + Vector2(1.5, 1.5), 1.3, RUST)
 	var half := r.size * 0.5
 	var piles: Array = layout["piles"]
 	if not piles.is_empty():
@@ -950,7 +1418,7 @@ static func _site_frame(ci: CanvasItem, r: Rect2, n: int, style: Dictionary, lay
 				ci.draw_arc(tc, rad, 0.0, TAU, 20, OUTLINE, 3.0)
 				ci.draw_arc(tc, rad, 0.0, TAU, 20, mat_col.lightened(0.2), 1.8)
 				for k in 6:
-					ci.draw_circle(tc + Vector2.from_angle(TAU * k / 6.0) * rad, 1.6, mat_col)
+					_dot(ci, tc + Vector2.from_angle(TAU * k / 6.0) * rad, 1.6, mat_col)
 			ci.draw_line(c + Vector2(-slab.size.x * 0.24, slab.size.y * 0.12), c + Vector2(slab.size.x * 0.24, slab.size.y * 0.12), COPPER, 2.5)
 		"dome":
 			var rad := minf(slab.size.x, slab.size.y) * 0.4
@@ -972,7 +1440,7 @@ static func _site_frame(ci: CanvasItem, r: Rect2, n: int, style: Dictionary, lay
 			ci.draw_rect(fig, style["tarp"])
 			ci.draw_rect(fig, OUTLINE, false, 1.0)
 			for k in 4:
-				ci.draw_circle(c + (LookRule.CORNERS[k] as Vector2) * slab.size * 0.3, 1.8, DARK_WOOD)
+				_dot(ci, c + (LookRule.CORNERS[k] as Vector2) * slab.size * 0.3, 1.8, DARK_WOOD)
 		"basin":
 			var count := 10 + 2 * n
 			for k in count:
@@ -1053,7 +1521,7 @@ static func _frame_points_2d(r: Rect2, n: int, shape: String) -> Array:
 	return _site_points(r, n)
 
 static func _cone(ci: CanvasItem, c: Vector2) -> void:
-	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -3), c + Vector2(3, 3), c + Vector2(-3, 3)]), Color(1.0, 0.45, 0.08))
+	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -3), c + Vector2(3, 3), c + Vector2(-3, 3)]), Color8(240, 120, 40))
 	ci.draw_line(c + Vector2(-2, 1), c + Vector2(2, 1), Color(1, 1, 1, 0.9), 1.0)
 
 # ── Ruina ─────────────────────────────────────────────────────────────
@@ -1069,7 +1537,7 @@ static func draw_ruin(ci: CanvasItem, size: Vector2, seed_val: int, n: int = 2) 
 	# Manchas de hollin que se salen un poco de la huella
 	for k in range(3 + n):
 		var p := r.position + Vector2(rng.randf() * r.size.x, rng.randf() * r.size.y)
-		ci.draw_circle(p, rng.randf_range(5.0, 9.0) * (0.8 + 0.2 * n), Color(0.02, 0.02, 0.02, 0.55))
+		_dot(ci, p, rng.randf_range(5.0, 9.0) * (0.8 + 0.2 * n), Color(0.02, 0.02, 0.02, 0.55))
 	# Muro roto: borde superior dentado
 	var wall := PackedVector2Array([r.position, Vector2(r.end.x, r.position.y)])
 	var x := r.end.x
@@ -1094,7 +1562,7 @@ static func draw_ruin(ci: CanvasItem, size: Vector2, seed_val: int, n: int = 2) 
 		var dir := Vector2.from_angle(rng.randf() * TAU) * minf(r.size.x, r.size.y) * rng.randf_range(0.35, 0.55)
 		ci.draw_line(a0, a0 + dir, OUTLINE, 5.0)
 		ci.draw_line(a0, a0 + dir, Color(0.16, 0.11, 0.08), 3.0)
-		ci.draw_circle(a0 + dir, 1.6, FIRE)
+		_dot(ci, a0 + dir, 1.6, FIRE)
 	# Grietas
 	for k in range(3):
 		var p := r.position + Vector2(rng.randf() * r.size.x, rng.randf() * r.size.y)
@@ -1110,19 +1578,20 @@ static func draw_ruin(ci: CanvasItem, size: Vector2, seed_val: int, n: int = 2) 
 ## SIN girar: las chimeneas y bocas del propio dibujo de arriba.
 static func fx_anchors(id: String) -> Array:
 	match id:
-		"foundry": return [Vector2(0.14, 0.5), Vector2(0.86, 0.5)]
-		"refinery": return [Vector2(0.78, 0.2)]
-		"gold_mine": return [Vector2(0.5, 0.37)]
+		"foundry": return [Vector2(0.22, 0.3), Vector2(0.76, 0.06)]
+		"refinery": return [Vector2(0.74, 0.2)]
+		"gold_mine": return [Vector2(0.5, 0.44)]
 		"sawmill": return [Vector2(0.5, 0.63)]
-		"barracks": return [Vector2(0.5, 0.35)]
-		"tower": return [Vector2(0.33, 0.67)]
+		"barracks": return [Vector2(0.24, 0.3)]
+		"tower": return [Vector2(0.28, 0.72)]
 		"warehouse": return [Vector2(0.5, 0.85)]
+		"laboratory": return [Vector2(0.5, 0.4)]
 	return [Vector2(0.5, 0.45)]
 
 # ── Parcela y atrezo (docs/03, "Parcela y atrezo") ────────────────────
 
-const LOT_CHAR := Color(0.07, 0.06, 0.05)
-const LOT_BORDER := Color(0.10, 0.085, 0.07, 0.95)
+const LOT_CHAR := Color8(38, 28, 24)
+const LOT_BORDER := Color(0.2, 0.13, 0.09, 0.85)
 
 ## El suelo de la parcela, su borde oscuro y el remate de los lados sin
 ## calzada, para un plan de LotPlan. `size`: la huella SIN girar (px). Va
@@ -1140,15 +1609,15 @@ static func draw_lot_ground(ci: CanvasItem, plan: Dictionary, size: Vector2) -> 
 	ci.draw_rect(lot, base)
 	_ground_pattern(ci, lot, kind, cell, base)
 	for run in plan["trim_runs"]:
-		_trim_2d(ci, String(plan["trim"]), run, cell, plan["accent"])
+		_trim_2d(ci, String(plan["trim"]), run, cell, _accent_of(plan))
 	ci.draw_rect(lot.grow(-0.75), LOT_BORDER, false, 1.5)
 
 ## Sombra de contacto bajo el edificio: una mancha oscura que lo ancla al suelo
 ## y un filo mas oscuro donde lo toca (el borde que lo separa del fondo).
 static func draw_lot_shadow(ci: CanvasItem, model_px: Rect2) -> void:
-	ci.draw_rect(model_px.grow(3.0), Color(0, 0, 0, 0.16))
-	ci.draw_rect(model_px.grow(1.5), Color(0, 0, 0, 0.22))
-	ci.draw_rect(model_px.grow(1.0), Color(0, 0, 0, 0.55), false, 2.0)
+	# Solo la oclusion de contacto: la sombra proyectada y el contorno van en el
+	# propio dibujo del edificio (horneado), con la luz siempre de arriba-izquierda.
+	ci.draw_rect(model_px.grow(2.0), Color(SHADOW, 0.12))
 
 ## El atrezo del patio. Va encima del edificio (no se tocan: el plan lo deja
 ## en el patio) y, en ruina, encima de los escombros.
@@ -1156,7 +1625,7 @@ static func draw_lot_props(ci: CanvasItem, plan: Dictionary, size: Vector2) -> v
 	if plan.is_empty():
 		return
 	var cell := size.x / maxf(1.0, (plan["lot"] as Vector2).x)
-	var accent: Color = plan["accent"]
+	var accent: Color = _accent_of(plan)
 	for p in plan["props"]:
 		var c: Vector2 = (p["pos"] as Vector2) * cell
 		var rad := float(p["radius"]) * cell
@@ -1164,12 +1633,14 @@ static func draw_lot_props(ci: CanvasItem, plan: Dictionary, size: Vector2) -> v
 			bool(p.get("toppled", false)), bool(p.get("snapped", false)), bool(p.get("burnt", false)))
 	draw_lot_signature(ci, plan, size)
 
+## El suelo de la parcela, en la paleta: tierra batida (WOOD claro), chapa
+## (SLATE claro), cesped segado (GREEN claro) y losas (STONE/CREAM).
 static func _ground_color(kind: String) -> Color:
 	match kind:
-		"dirt": return Color(0.47, 0.37, 0.25)
-		"plate": return Color(0.40, 0.41, 0.43)
-		"grass": return Color(0.31, 0.50, 0.21)
-	return Color(0.60, 0.58, 0.54)
+		"dirt": return Color8(190, 138, 88)
+		"plate": return Color8(136, 138, 148)
+		"grass": return Color8(130, 190, 76)
+	return Color8(214, 198, 170)
 
 static func _ground_pattern(ci: CanvasItem, lot: Rect2, kind: String, cell: float, base: Color) -> void:
 	match kind:
@@ -1189,13 +1660,13 @@ static func _ground_pattern(ci: CanvasItem, lot: Rect2, kind: String, cell: floa
 				while yy < lot.end.y:
 					var xx := lot.position.x + step * 0.15
 					while xx < lot.end.x:
-						ci.draw_circle(Vector2(xx, yy), 0.9, BRASS.darkened(0.1))
+						_dot(ci, Vector2(xx, yy), 0.9, BRASS.darkened(0.1))
 						xx += step * 0.7
 					yy += step * 0.7
 		"dirt":
 			for i in int(lot.size.x * lot.size.y / 90.0):
 				var p := lot.position + lot.size * Vector2(fposmod(i * 0.381, 1.0), fposmod(i * 0.617 + 0.21, 1.0))
-				ci.draw_circle(p, 1.1, base.darkened(0.22) if i % 3 else base.lightened(0.18))
+				_dot(ci, p, 1.1, base.darkened(0.22) if i % 3 else base.lightened(0.18))
 		"grass":
 			for i in int(lot.size.x * lot.size.y / 70.0):
 				var p := lot.position + lot.size * Vector2(fposmod(i * 0.437, 1.0), fposmod(i * 0.719 + 0.07, 1.0))
@@ -1219,26 +1690,26 @@ static func _trim_2d(ci: CanvasItem, trim: String, run: Dictionary, cell: float,
 				ci.draw_rect(Rect2(p0 - Vector2(1.5, 1.5), Vector2(3, 3)), DARK_WOOD)
 			"rail":
 				ci.draw_line(p0, p1, IRON.lightened(0.15).lerp(LOT_CHAR, dim), maxf(1.5, w * 0.8))
-				ci.draw_circle(p0, 1.6, IRON)
+				_dot(ci, p0, 1.6, IRON)
 			"sandbags":
 				var mid := (p0 + p1) * 0.5
-				var sack := Color(0.66, 0.58, 0.40).lerp(LOT_CHAR, dim)
-				ci.draw_circle(mid, maxf(2.0, w * 1.1), sack.darkened(0.25))
-				ci.draw_circle(mid - Vector2(0.4, 0.4), maxf(1.6, w * 0.9), sack)
+				var sack := CREAM.darkened(0.16).lerp(LOT_CHAR, dim)
+				_dot(ci, mid, maxf(2.0, w * 1.1), sack.darkened(0.25))
+				_dot(ci, mid - Vector2(0.4, 0.4), maxf(1.6, w * 0.9), sack)
 			"pipes":
 				ci.draw_line(p0, p1, COPPER.darkened(0.25).lerp(LOT_CHAR, dim), maxf(2.5, w * 1.2))
 				ci.draw_line(p0, p1, COPPER.lerp(LOT_CHAR, dim), maxf(1.2, w * 0.6))
 				if i % 3 == 1:
 					_disc(ci, (p0 + p1) * 0.5, maxf(2.0, w), accent, OUTLINE, 1.0)
 			_:
-				ci.draw_line(p0, p1, (Color(0.74, 0.71, 0.66) if i % 2 == 0 else Color(0.66, 0.63, 0.58)).lerp(LOT_CHAR, dim), maxf(2.0, w * 1.4))
+				ci.draw_line(p0, p1, (Color8(226, 210, 178) if i % 2 == 0 else Color8(200, 184, 154)).lerp(LOT_CHAR, dim), maxf(2.0, w * 1.4))
 
 ## Una pieza de atrezo vista desde arriba, en `c` con radio `rad` (px). Volcada:
 ## tumbada a lo largo de su lado; partida: un munon; quemada: hacia el carbon.
 static func draw_lot_prop(ci: CanvasItem, kind: String, c: Vector2, rad: float, rot: float, accent: Color, toppled := false, snapped := false, burnt := false) -> void:
 	var dim := 0.6 if burnt else 0.0
 	var col := _prop_color(kind, accent).lerp(LOT_CHAR, dim)
-	ci.draw_circle(c + Vector2(1.2, 1.6), rad, Color(0, 0, 0, 0.25))
+	_dot(ci, c + Vector2(1.2, 1.6), rad, Color(0, 0, 0, 0.25))
 	if snapped:
 		_disc(ci, c, rad * 0.45, col, OUTLINE, 1.0)
 		ci.draw_line(c, c + Vector2.from_angle(rot) * rad * 1.4, col.darkened(0.2), 2.0)
@@ -1262,9 +1733,9 @@ static func draw_lot_prop(ci: CanvasItem, kind: String, c: Vector2, rad: float, 
 				_rot_rect(ci, c, Vector2(rad * 1.5, rad * 0.35), rot, accent.lerp(LOT_CHAR, dim), false)
 			elif kind == "goods":
 				for k in 3:
-					ci.draw_circle(c + Vector2.from_angle(rot) * rad * (k - 1) * 0.45, rad * 0.28, [Color(0.85, 0.18, 0.12), Color(0.95, 0.75, 0.15), Color(0.4, 0.65, 0.2)][k].lerp(LOT_CHAR, dim))
+					_dot(ci, c + Vector2.from_angle(rot) * rad * (k - 1) * 0.45, rad * 0.28, [RED, BRASS, GREEN][k].lerp(LOT_CHAR, dim))
 			elif kind == "pallet":
-				_rot_rect(ci, c, Vector2(rad * 1.2, rad * 1.2), rot, Color(0.66, 0.63, 0.58).lerp(LOT_CHAR, dim))
+				_rot_rect(ci, c, Vector2(rad * 1.2, rad * 1.2), rot, Color8(200, 184, 154).lerp(LOT_CHAR, dim))
 			else:
 				var d := Vector2.from_angle(rot) * rad * 0.7
 				var e := Vector2.from_angle(rot + PI * 0.5) * rad * 0.7
@@ -1278,62 +1749,62 @@ static func draw_lot_prop(ci: CanvasItem, kind: String, c: Vector2, rad: float, 
 				ci.draw_line(c + o - d * rad, c + o + d * rad, OUTLINE, rad * 0.62)
 				ci.draw_line(c + o - d * rad * 0.95, c + o + d * rad * 0.95, col if k % 2 == 0 else col.lightened(0.12), rad * 0.45)
 				if kind == "logs":
-					ci.draw_circle(c + o + d * rad, rad * 0.24, LIGHT_WOOD.lerp(LOT_CHAR, dim))
+					_dot(ci, c + o + d * rad, rad * 0.24, LIGHT_WOOD.lerp(LOT_CHAR, dim))
 		"sacks", "ore", "coal":
 			for k in 3:
 				var o := Vector2.from_angle(rot + TAU * k / 3.0) * rad * 0.4
 				_disc(ci, c + o, rad * 0.5, col if k != 1 else col.lightened(0.1), OUTLINE, 1.0)
 			if kind == "ore":
 				for k in 3:
-					ci.draw_circle(c + Vector2.from_angle(rot + 1.0 + TAU * k / 3.0) * rad * 0.35, rad * 0.18, BRASS_LIGHT.lerp(LOT_CHAR, dim))
+					_dot(ci, c + Vector2.from_angle(rot + 1.0 + TAU * k / 3.0) * rad * 0.35, rad * 0.18, BRASS_LIGHT.lerp(LOT_CHAR, dim))
 		"cart":
-			_rot_rect(ci, c, Vector2(rad * 1.8, rad * 0.9), rot, Color(0.25, 0.22, 0.22), false)
+			_rot_rect(ci, c, Vector2(rad * 1.8, rad * 0.9), rot, IRON, false)
 			_rot_rect(ci, c, Vector2(rad * 1.2, rad * 1.0), rot, RUST.lerp(LOT_CHAR, dim))
-			ci.draw_circle(c, rad * 0.3, BRASS_LIGHT.lerp(LOT_CHAR, dim))
+			_dot(ci, c, rad * 0.3, BRASS_LIGHT.lerp(LOT_CHAR, dim))
 		"ingots":
 			var d := Vector2.from_angle(rot + PI * 0.5)
 			for k in 3:
-				_rot_rect(ci, c + d * rad * (k - 1) * 0.45, Vector2(rad * 1.5, rad * 0.35), rot, (Color(1.0, 0.55, 0.12) if k == 1 else STEEL).lerp(LOT_CHAR, dim))
+				_rot_rect(ci, c + d * rad * (k - 1) * 0.45, Vector2(rad * 1.5, rad * 0.35), rot, (BRASS if k == 1 else STEEL).lerp(LOT_CHAR, dim))
 		"lamp":
 			if not burnt:
-				ci.draw_circle(c, rad * 1.5, Color(1.0, 0.82, 0.45, 0.22))
+				_dot(ci, c, rad * 1.5, Color(GLOW, 0.28))
 			_disc(ci, c, rad * 0.45, IRON, OUTLINE, 1.0)
-			ci.draw_circle(c, rad * 0.25, Color(1.0, 0.85, 0.5).lerp(LOT_CHAR, dim))
+			_dot(ci, c, rad * 0.25, GLOW.lerp(LOT_CHAR, dim))
 		"bench":
 			_rot_rect(ci, c, Vector2(rad * 2.0, rad * 0.7), rot, col)
 		"planter":
-			_rot_rect(ci, c, Vector2(rad * 1.3, rad * 1.3), rot, Color(0.62, 0.32, 0.20).lerp(LOT_CHAR, dim))
+			_rot_rect(ci, c, Vector2(rad * 1.3, rad * 1.3), rot, TERRACOTTA.lerp(LOT_CHAR, dim))
 			_disc(ci, c, rad * 0.55, LEAF.lerp(LOT_CHAR, dim), LEAF_DARK, 1.0)
-			ci.draw_circle(c + Vector2(rad * 0.2, -rad * 0.15), rad * 0.15, Color(0.95, 0.35, 0.3).lerp(LOT_CHAR, dim))
+			_dot(ci, c + Vector2(rad * 0.2, -rad * 0.15), rad * 0.15, RED.lerp(LOT_CHAR, dim))
 		"gas":
 			var d := Vector2.from_angle(rot)
 			for k in 3:
-				_disc(ci, c + d * rad * (k - 1) * 0.6, rad * 0.3, (Color(0.25, 0.5, 0.42) if k != 1 else Color(0.3, 0.45, 0.7)).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+				_disc(ci, c + d * rad * (k - 1) * 0.6, rad * 0.3, (OLIVE if k != 1 else SKY).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
 		"dummy":
-			_disc(ci, c, rad * 0.45, Color(0.72, 0.62, 0.42).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+			_disc(ci, c, rad * 0.45, CREAM.darkened(0.12).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
 			var d := Vector2.from_angle(rot) * rad * 0.85
 			ci.draw_line(c - d, c + d, DARK_WOOD, 2.0)
 		"target":
-			_disc(ci, c, rad * 0.9, Color(0.92, 0.9, 0.84).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
-			ci.draw_circle(c, rad * 0.62, Color(0.8, 0.15, 0.1).lerp(LOT_CHAR, dim))
-			ci.draw_circle(c, rad * 0.35, Color(0.92, 0.9, 0.84).lerp(LOT_CHAR, dim))
-			ci.draw_circle(c, rad * 0.15, accent.lerp(LOT_CHAR, dim))
+			_disc(ci, c, rad * 0.9, CREAM.lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+			_dot(ci, c, rad * 0.62, RED.lerp(LOT_CHAR, dim))
+			_dot(ci, c, rad * 0.35, CREAM.lerp(LOT_CHAR, dim))
+			_dot(ci, c, rad * 0.15, accent.lerp(LOT_CHAR, dim))
 		"flag":
-			ci.draw_circle(c, rad * 0.3, IRON)
+			_dot(ci, c, rad * 0.3, IRON)
 			var tip := c + Vector2.from_angle(rot) * rad * 1.3
 			ci.draw_colored_polygon(PackedVector2Array([c, tip + Vector2(0, -rad * 0.3), tip + Vector2(0, rad * 0.5)]), accent.lerp(LOT_CHAR, dim))
 		"clothesline":
 			var d := Vector2.from_angle(rot) * rad
-			ci.draw_line(c - d, c + d, Color(0.85, 0.82, 0.75), 1.0)
+			ci.draw_line(c - d, c + d, CREAM.darkened(0.1), 1.0)
 			for k in 3:
-				_rot_rect(ci, c + d * (k - 1) * 0.6, Vector2(rad * 0.4, rad * 0.25), rot, [Color(0.92, 0.9, 0.84), accent, Color(0.35, 0.45, 0.7)][k].lerp(LOT_CHAR, dim))
+				_rot_rect(ci, c + d * (k - 1) * 0.6, Vector2(rad * 0.4, rad * 0.25), rot, [CREAM, accent, SKY][k].lerp(LOT_CHAR, dim))
 		"valve":
 			_disc(ci, c, rad * 0.55, accent.lerp(LOT_CHAR, dim), OUTLINE, 1.0)
 			ci.draw_line(c - Vector2(rad * 0.5, 0), c + Vector2(rad * 0.5, 0), COPPER, 1.5)
 			ci.draw_line(c - Vector2(0, rad * 0.5), c + Vector2(0, rad * 0.5), COPPER, 1.5)
 		"stake":
-			ci.draw_circle(c, rad * 0.22, LIGHT_WOOD)
-			ci.draw_colored_polygon(PackedVector2Array([c, c + Vector2(rad * 0.7, -rad * 0.2), c + Vector2(0, -rad * 0.45)]), Color(1.0, 0.45, 0.08))
+			_dot(ci, c, rad * 0.22, LIGHT_WOOD)
+			ci.draw_colored_polygon(PackedVector2Array([c, c + Vector2(rad * 0.7, -rad * 0.2), c + Vector2(0, -rad * 0.45)]), Color8(240, 120, 40))
 		_:
 			_disc(ci, c, rad * 0.7, col, OUTLINE, 1.0)
 
@@ -1346,8 +1817,7 @@ static func draw_lot_signature(ci: CanvasItem, plan: Dictionary, size: Vector2) 
 	var corners: Array = sig.get("corners", [])
 	var cell := size.x / maxf(1.0, (plan["lot"] as Vector2).x)
 	if bool(sig.get("on_roof", false)):
-		var mr0: Rect2 = plan["model"]
-		_emblem_2d(ci, mr0.get_center() * cell, minf(mr0.size.x, mr0.size.y) * cell * 0.26, plan["accent"], bool(sig.get("ruined", false)))
+		# El emblema del Cuartel General ya va en su propio dibujo (torreon).
 		return
 	if corners.is_empty():
 		return
@@ -1360,18 +1830,17 @@ static func draw_lot_signature(ci: CanvasItem, plan: Dictionary, size: Vector2) 
 	var model := Rect2(mr.position * cell, mr.size * cell)
 	var ruined := bool(sig.get("ruined", false))
 	var dim := 0.65 if ruined else 0.0
-	var accent: Color = plan["accent"]
+	var accent: Color = _accent_of(plan)
 	match String(sig["kind"]):
 		"chimney":
-			ci.draw_circle(c + Vector2(3, 4), r * 1.05, Color(0, 0, 0, 0.3))
-			_disc(ci, c, r, Color(0.56, 0.26, 0.17).lerp(LOT_CHAR, dim), OUTLINE, 1.5)
+			_dot(ci, c + Vector2(3, 4), r * 1.05, Color(0, 0, 0, 0.3))
+			_disc(ci, c, r, TILE_RED.lerp(LOT_CHAR, dim), OUTLINE, 1.5)
 			if not ruined:
 				ci.draw_arc(c, r * 0.78, 0.0, TAU, 14, accent, 2.0)
-				ci.draw_circle(c, r * 0.55, Color(0.08, 0.06, 0.05))
-				ci.draw_circle(c, r * 0.3, FIRE)
-				_smoke(ci, c, 1.2)
+				_dot(ci, c, r * 0.55, OIL_BLACK)
+				_dot(ci, c, r * 0.3, FIRE)
 		"crane":
-			var yellow := Color(0.95, 0.72, 0.12).lerp(LOT_CHAR, dim)
+			var yellow := BRASS.lerp(LOT_CHAR, dim)
 			var tip := Vector2(model.get_center().x, model.end.y + yard * cell * 0.5)
 			if not ruined:
 				ci.draw_line(c + Vector2(4, 5), tip + Vector2(4, 5), Color(0, 0, 0, 0.3), 4.0)
@@ -1393,11 +1862,11 @@ static func draw_lot_signature(ci: CanvasItem, plan: Dictionary, size: Vector2) 
 				ci.draw_line(pts[i], pts[(i + 1) % 3], COPPER.lerp(LOT_CHAR, dim), 1.5)
 				ci.draw_line(pts[i], c, IRON, 1.5)
 			if not ruined:
-				ci.draw_circle(c, r * 0.9, Color(0.45, 0.85, 1.0, 0.25))
-				ci.draw_circle(c, r * 0.35, Color(0.45, 0.85, 1.0))
+				_dot(ci, c, r * 0.9, Color(SKY.lightened(0.35), 0.3))
+				_dot(ci, c, r * 0.35, SKY.lightened(0.3))
 		"flag":
-			ci.draw_rect(Rect2(c - Vector2(r * 0.5, r * 0.5), Vector2(r, r)), Color(0.64, 0.61, 0.56).lerp(LOT_CHAR, dim))
-			ci.draw_circle(c, 2.0, IRON)
+			ci.draw_rect(Rect2(c - Vector2(r * 0.5, r * 0.5), Vector2(r, r)), STONE.lerp(LOT_CHAR, dim))
+			_dot(ci, c, 2.0, IRON)
 			if not ruined:
 				var d := -1.0 if sgn.x > 0 else 1.0
 				var f := PackedVector2Array([c, c + Vector2(d * cell * 0.62, -r * 0.4), c + Vector2(d * cell * 0.62, r * 0.9), c + Vector2(0, r * 0.6)])
@@ -1413,20 +1882,20 @@ static func draw_lot_signature(ci: CanvasItem, plan: Dictionary, size: Vector2) 
 			if not ruined:
 				var w := c + Vector2(0, r * 0.45)
 				ci.draw_arc(w, r * 0.62, 0.0, TAU, 14, OUTLINE, 3.5)
-				ci.draw_arc(w, r * 0.62, 0.0, TAU, 14, Color(0.82, 0.12, 0.08), 2.2)
+				ci.draw_arc(w, r * 0.62, 0.0, TAU, 14, RED, 2.2)
 				for i in 3:
-					ci.draw_line(w, w + Vector2.from_angle(TAU * i / 3.0) * r * 0.6, Color(0.82, 0.12, 0.08), 1.5)
+					ci.draw_line(w, w + Vector2.from_angle(TAU * i / 3.0) * r * 0.6, RED, 1.5)
 		"ore_heap":
-			_disc(ci, c, r * 1.1, Color(0.47, 0.39, 0.28).lerp(LOT_CHAR, dim), OUTLINE, 1.5)
+			_disc(ci, c, r * 1.1, STONE.darkened(0.12).lerp(LOT_CHAR, dim), OUTLINE, 1.5)
 			for p in [Vector2(-0.35, 0.2), Vector2(0.3, -0.25), Vector2(0.05, 0.05), Vector2(0.45, 0.35), Vector2(-0.3, -0.4)]:
-				ci.draw_circle(c + p * r * 1.2, r * 0.22, BRASS_LIGHT.lerp(LOT_CHAR, dim))
+				_dot(ci, c + p * r * 1.2, r * 0.22, BRASS_LIGHT.lerp(LOT_CHAR, dim))
 			if not ruined:
-				ci.draw_circle(c + Vector2(0.05, 0.05) * r, r * 0.12, Color(1, 0.97, 0.8))
+				_dot(ci, c + Vector2(0.05, 0.05) * r, r * 0.12, FIRE_CORE)
 				ci.draw_line(c + Vector2(r * 0.6, 0), c + Vector2(r * 0.1, -r * 0.6), WOOD, 2.0)
 		"cannon":
 			for i in 9:
 				var p := c + Vector2.from_angle(TAU * i / 9.0) * r * 1.05
-				_disc(ci, p, r * 0.3, Color(0.62, 0.55, 0.38).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+				_disc(ci, p, r * 0.3, CREAM.darkened(0.16).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
 			_disc(ci, c, r * 0.45, OLIVE.lerp(LOT_CHAR, dim), OUTLINE, 1.0)
 			if not ruined:
 				var out := sgn.normalized()
@@ -1437,31 +1906,43 @@ static func draw_lot_signature(ci: CanvasItem, plan: Dictionary, size: Vector2) 
 ## rojo y el rayo de la Tormenta.
 static func _emblem_2d(ci: CanvasItem, e: Vector2, re: float, accent: Color, ruined: bool) -> void:
 	if ruined:
-		_disc(ci, e, re * 0.5, Color(0.2, 0.18, 0.16), OUTLINE, 1.0)
+		_disc(ci, e, re * 0.5, IRON, OUTLINE, 1.0)
 		return
-	ci.draw_circle(e + Vector2(3, 4), re * 1.1, Color(0, 0, 0, 0.3))
+	_dot(ci, e + Vector2(3, 4), re * 1.1, Color(0, 0, 0, 0.3))
 	for i in 14:
 		var a := TAU * i / 14.0
 		ci.draw_line(e + Vector2.from_angle(a) * re * 0.8, e + Vector2.from_angle(a) * re * 1.14, BRASS, 3.5)
 	_disc(ci, e, re * 0.92, BRASS, OUTLINE, 1.5)
-	_disc(ci, e, re * 0.64, Color(0.75, 0.12, 0.09), OUTLINE, 1.0)
+	_disc(ci, e, re * 0.64, RED, OUTLINE, 1.0)
 	ci.draw_polyline(PackedVector2Array([e + Vector2(-0.12, -0.45) * re, e + Vector2(0.12, -0.05) * re, e + Vector2(-0.1, 0.02) * re, e + Vector2(0.14, 0.45) * re]), accent.lightened(0.15), 3.0)
+
+static func _accent_of(plan: Dictionary) -> Color:
+	return lot_accent(String(plan.get("id", ""))) if plan.has("id") else (plan["accent"] as Color)
 
 static func _prop_color(kind: String, accent: Color) -> Color:
 	match kind:
-		"barrel": return RUST
-		"drums": return Color(0.2, 0.22, 0.25)
+		"barrel": return WOOD
+		"drums": return SLATE
 		"crate", "bench": return WOOD
 		"goods", "pallet": return LIGHT_WOOD
 		"ammo": return OLIVE
-		"logs": return Color(0.42, 0.28, 0.15)
+		"logs": return RUST
 		"planks": return LIGHT_WOOD
-		"sacks": return Color(0.72, 0.62, 0.42)
-		"ore": return Color(0.48, 0.40, 0.30)
-		"coal": return Color(0.14, 0.13, 0.13)
-		"cart": return RUST
+		"sacks": return CREAM.darkened(0.08)
+		"ore": return STONE
+		"coal": return IRON
+		"cart": return RED
 		"lamp": return IRON
 	return accent
+
+## El acento de la parcela por familia, en la paleta de la maqueta: rojo
+## industrial, amarillo senal militar, laton civico, verde residencial.
+static func lot_accent(id: String) -> Color:
+	match String(LotPlanRef.style_of(id).get("accent", "civic")):
+		"industrial": return RED
+		"military": return BRASS
+		"residential": return GREEN
+	return BRASS_LIGHT
 
 ## Rectangulo girado `rot` centrado en `c`, con contorno.
 static func _rot_rect(ci: CanvasItem, c: Vector2, size: Vector2, rot: float, fill: Color, outline := true) -> void:
@@ -1483,15 +1964,15 @@ static func draw_deposit(ci: CanvasItem, deposit_id: String, size: Vector2, seed
 	rng.seed = seed_val
 	match deposit_id:
 		"forest": _forest(ci, r, rng)
-		"gold_vein": _rocks(ci, r, rng, Color(0.42, 0.37, 0.32), BRASS_LIGHT, true)
-		"iron_deposit": _rocks(ci, r, rng, Color(0.36, 0.37, 0.43), Color(0.72, 0.74, 0.82), false)
+		"gold_vein": _rocks(ci, r, rng, Color8(160, 138, 112), BRASS_LIGHT, true)
+		"iron_deposit": _rocks(ci, r, rng, Color8(112, 114, 130), STEEL.lightened(0.2), false)
 		"oil_well": _oil(ci, r, rng)
 		_:
 			ci.draw_rect(r, Color(0.5, 0.5, 0.5, 0.6))
 
 static func _forest(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> void:
 	# Suelo de bosque
-	ci.draw_rect(r.grow(-2), Color(0.17, 0.30, 0.12, 0.55))
+	ci.draw_rect(r.grow(-2), Color(LEAF_DARK.darkened(0.25), 0.5))
 	var trees: Array = []
 	var cells := r.size / 32.0
 	var count := int(cells.x * cells.y * 3.2) + 3
@@ -1506,17 +1987,17 @@ static func _forest(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> voi
 	for t in trees:
 		var p: Vector2 = t["p"]
 		var rad: float = t["r"]
-		ci.draw_circle(p + Vector2(2, 3), rad, Color(0, 0, 0, 0.25))
+		_dot(ci, p + Vector2(2, 3), rad, Color(0, 0, 0, 0.25))
 	for t in trees:
 		var p: Vector2 = t["p"]
 		var rad: float = t["r"]
-		var base := LEAF_DARK.lerp(Color(0.22, 0.42, 0.14), float(t["tone"]))
+		var base := LEAF_DARK.lerp(GREEN, float(t["tone"]))
 		if float(t["tone"]) > 0.88:
-			base = Color(0.48, 0.38, 0.12)  # algun arbol de otono
-		ci.draw_circle(p, rad, OUTLINE)
-		ci.draw_circle(p, rad - 1.2, base)
-		ci.draw_circle(p - Vector2(rad, rad) * 0.25, rad * 0.55, base.lightened(0.18))
-		ci.draw_circle(p - Vector2(rad, rad) * 0.4, rad * 0.2, base.lightened(0.35))
+			base = BRASS.darkened(0.15) if float(t["tone"]) > 0.94 else TERRACOTTA  # algun arbol de otono
+		_dot(ci, p, rad, OUTLINE)
+		_dot(ci, p, rad - 1.2, base)
+		_dot(ci, p - Vector2(rad, rad) * 0.25, rad * 0.55, base.lightened(0.18))
+		_dot(ci, p - Vector2(rad, rad) * 0.4, rad * 0.2, base.lightened(0.35))
 
 static func _rocks(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, rock: Color, vein: Color, nuggets: bool) -> void:
 	ci.draw_rect(r.grow(-3), Color(rock.darkened(0.3), 0.35))
@@ -1546,9 +2027,9 @@ static func _rocks(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, rock: C
 	if nuggets:
 		for i in range(count + 2):
 			var q := r.position + Vector2(rng.randf_range(0.12, 0.88) * r.size.x, rng.randf_range(0.12, 0.88) * r.size.y)
-			ci.draw_circle(q, 2.4, OUTLINE)
-			ci.draw_circle(q, 1.8, BRASS_LIGHT)
-			ci.draw_circle(q - Vector2(0.5, 0.5), 0.7, Color(1, 0.97, 0.8))
+			_dot(ci, q, 2.4, OUTLINE)
+			_dot(ci, q, 1.8, BRASS_LIGHT)
+			_dot(ci, q - Vector2(0.5, 0.5), 0.7, FIRE_CORE)
 
 static func _oil(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> void:
 	var c := r.get_center()
@@ -1561,13 +2042,13 @@ static func _oil(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> void:
 		for s in range(14):
 			var a := TAU * s / 14.0
 			pts.append(p + Vector2(cos(a) * 1.25, sin(a) * 0.9) * rad * rng.randf_range(0.85, 1.05))
-		_poly(ci, pts, OIL_BLACK, Color(0.18, 0.12, 0.25), 1.5)
-		ci.draw_arc(p + Vector2(-rad * 0.2, -rad * 0.2), rad * 0.45, PI, PI * 1.6, 8, Color(0.45, 0.3, 0.6, 0.8), 2.0)
+		_poly(ci, pts, OIL_BLACK, OUTLINE, 1.5)
+		ci.draw_arc(p + Vector2(-rad * 0.2, -rad * 0.2), rad * 0.45, PI, PI * 1.6, 8, Color(SKY.lightened(0.2), 0.6), 2.0)
 	# El respiradero con estacas de aviso
 	_disc(ci, c, 5.0, GUNMETAL)
-	ci.draw_circle(c, 2.5, Color(0.02, 0.02, 0.02))
+	_dot(ci, c, 2.5, Color(0.02, 0.02, 0.02))
 	for i in range(4):
 		var a := TAU * i / 4.0 + PI / 4.0
 		var sp := c + Vector2(cos(a), sin(a)) * minf(r.size.x, r.size.y) * 0.36
-		ci.draw_circle(sp, 2.6, OUTLINE)
-		ci.draw_circle(sp, 1.9, Color(1.0, 0.35, 0.08))
+		_dot(ci, sp, 2.6, OUTLINE)
+		_dot(ci, sp, 1.9, Color8(240, 120, 40))

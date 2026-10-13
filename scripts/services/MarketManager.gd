@@ -26,6 +26,8 @@ func _ready() -> void:
 	EventBus.tithe_resolved.connect(_on_tithe_resolved)
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	if _after_tithe_left > 0.0:
 		_after_tithe_left = maxf(0.0, _after_tithe_left - delta)
 	# Market not available until Phase 2 (Economy)

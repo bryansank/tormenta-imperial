@@ -2,7 +2,7 @@
 
 > **Estado (2026-10-12):** todas las claves tienen su propio archivo. Ya no queda
 > ningun alias: el combate, la Tormenta, el rango, la comida y la UI suenan con
-> clips propios, y el ambiente tiene dos bucles (dia y Tormenta). Terceros: solo
+> clips propios, y el ambiente tiene tres bucles (dia, noche y Tormenta). Terceros: solo
 > **CC0** (ver `assets/CREDITS.md` y `THIRD-PARTY-NOTICES.md`). Lo sintetizado es
 > obra propia (`tools/gen_ambient_audio.gd`).
 
@@ -23,8 +23,8 @@ El juego tiene que ir en equipos y tablets muy flojos y cuidar el tamano del .ex
 del APK:
 
 - **Bucles largos** (musica, ambiente) en **OGG** (Vorbis, se decodifica en
-  streaming). El ambiente son **dos bucles de 40 s a 22 050 Hz** (~250-300 KB cada
-  uno) y nunca suenan mas de dos a la vez (solo durante el fundido).
+  streaming). El ambiente son **tres bucles de 40 s a 22 050 Hz** (~250-320 KB cada
+  uno); suena uno, y dos solo durante el fundido.
 - **Efectos cortos** en OGG, de 0,1 a 5,5 s, 44,1 kHz o menos. Ninguno pasa de 30 KB.
 - **Voces simultaneas:** los efectos salen de un pool de `GameConfig.audio_sfx_voices`
   reproductores; el limite de rafaga (`SFX_BURST_GAP_MSEC`, 60 ms) impide que la
@@ -54,17 +54,26 @@ ese interruptor.
 The combat theme is no longer a loan of `era_3_petroleum`. A chained encounter keeps
 the theme; if victory music took the bus during the fight, it is left alone.
 
-## `ambient/` — dos bucles con fundido (bus Ambient)
+## `ambient/` — tres bucles con fundido (bus Ambient)
 
 | Filename (base) | When it plays | EventBus trigger | Source |
 |-----------------|---------------|------------------|--------|
-| `day`   | Calma y Aviso: olas suaves + pajaros | `game_new_started`, `game_load_completed`; vuelve con `storm_phase_changed(CALM)` | Sintesis propia (`tools/gen_ambient_audio.gd`). 40 s, estereo, 22 050 Hz, 247 KB |
+| `day`   | Sin Tormenta y fuera de la noche (alba, dia, ocaso): olas suaves + pajaros | `game_new_started`, `game_load_completed`; vuelve con `storm_phase_changed(CALM)` o `day_phase_changed(DAWN)` | Sintesis propia (`tools/gen_ambient_audio.gd`). 40 s, estereo, 22 050 Hz, 247 KB |
+| `night` | Sin Tormenta y de noche: grillos + olas mas suaves, sin pajaros | `day_phase_changed(NIGHT)` | Sintesis propia. 40 s, estereo, 22 050 Hz, 320 KB |
 | `storm` | Ceniza, Tormenta y Diezmo: viento con rachas + truenos lejanos; los pajaros callan | `storm_phase_changed(ASH / STORM / TITHE)` | Sintesis propia. 40 s, estereo, 22 050 Hz, 289 KB |
 
-The loop is chosen from the storm phase (`StormCycle.Phase`): ASH, STORM and TITHE →
-`storm`; CALM and WARNING → `day`. Switching cross-fades in `AMBIENT_FADE_SECONDS`
-(4 s). On `game_load_completed` the phase is read from `StormManager.get_phase()`, so
-a save made mid-storm reloads with wind (and no phase sound). `storm_halted_forever`
+Como se elige el bucle (`_ambient_for_phase(storm_phase, night)`):
+
+1. **La Tormenta manda sobre todo:** ASH, STORM y TITHE (`StormCycle.Phase`) → `storm`,
+   sea de dia o de noche.
+2. Si no, **de noche** (`DayCycle.Phase.NIGHT`) → `night`.
+3. El resto (CALM o WARNING con alba, dia u ocaso) → `day`.
+
+Se reevalua con `storm_phase_changed` y con `day_phase_changed`; cada cambio funde en
+`AMBIENT_FADE_SECONDS` (4 s). Al `game_load_completed` la fase de la Tormenta se lee de
+`StormManager.get_phase()` y la noche de `DayClock.is_night()`, asi que una partida
+guardada en plena Tormenta o de noche vuelve con su bucle (y sin sonido de fase). Si
+falta el archivo del bucle que toca, los demas se apagan y no suena nada. `storm_halted_forever`
 puts the cycle back to CALM, and the birds come back. Both loops are flagged as
 looping at load (`_make_ambient_loop()`), with the `finished` restart as a safety net.
 
@@ -157,8 +166,9 @@ un solo sonido.
 godot --headless --path . -s tools/gen_ambient_audio.gd -- --out=res://build/audio_gen/
 ```
 
-Escribe `day.wav`, `storm.wav`, `storm_warning.wav` y `storm_thunder.wav` (PCM 16 bits,
-22 050 Hz; semilla fija, asi que sale lo mismo cada vez). Los OGG del repo se
+Escribe `day.wav`, `storm.wav`, `storm_warning.wav`, `storm_thunder.wav` y `night.wav`
+(PCM 16 bits, 22 050 Hz; semilla fija, asi que sale lo mismo cada vez; la noche se
+genera la ultima para no cambiar los otros cuatro). Los OGG del repo se
 codificaron desde esos WAV con libsndfile (Vorbis, `compression_level` 0,6 para el
 ambiente y 0,5 para los efectos); vale cualquier codificador Vorbis (p. ej.
 `ffmpeg -i day.wav -c:a libvorbis -q:a 3 day.ogg`). Como es por un `-s`, conviene

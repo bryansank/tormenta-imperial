@@ -22,7 +22,7 @@ const COLORS := [
 	Color8(186, 168, 140),  # STONE: piedra calida, bordillos, sillares
 	Color8(96, 98, 110),    # SLATE: chapa, pizarra, acero pavonado
 	Color8(58, 46, 42),     # IRON: hierro oscuro, carbon, remaches
-	Color8(160, 98, 54),    # WOOD: madera, tablones, vigas
+	Color8(140, 100, 70),   # WOOD: madera, tablones, vigas (marron natural, no naranja)
 	Color8(210, 92, 58),    # TERRACOTTA: tejas, ladrillo
 	Color8(220, 50, 38),    # RED: rojo valvula (acento industrial)
 	Color8(232, 172, 58),   # BRASS: laton, oro, amarillo senal

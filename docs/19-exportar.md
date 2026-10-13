@@ -3,7 +3,7 @@
 Cómo sacar de este proyecto un `TormentaImperial.exe` que otra persona pueda
 descargar y jugar, qué viaja dentro, qué se queda fuera y qué falta para publicarlo.
 Android (tableta primero) está en la sección 11; la lista de comprobación de una
-publicación (itch.io y GitHub Releases), en la 12.
+publicación (GitHub Releases y enlaces directos), en la 12.
 
 Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11 (RTX 3060, Vulkan).
 
@@ -185,8 +185,42 @@ El exportado usa un directorio de usuario propio, distinto del editor:
 Así las partidas de prueba (con tiempos de dev) y las reales no se pisan. Lo hacen
 dos overrides con el feature tag `template` en `project.godot`
 (`config/use_custom_user_dir.template`, `config/custom_user_dir_name.template`).
-Ahí viven `save_game.json`, `settings.cfg` y `logs/godot.log`, que es lo primero que
-hay que pedir a quien reporte un fallo.
+Ahí viven las partidas (`partidas/`), `settings.cfg` y `logs/`.
+
+### El registro de errores (`logs/registro.txt`)
+
+Lo primero que hay que pedir a quien reporte un fallo, y casi nunca hace falta
+buscarlo: **☰ MENÚ → PARTIDA → Informar de un fallo** copia al portapapeles un
+bloque corto (versión, sistema, vídeo, perfil, calidad, vista, idioma, modo/nivel,
+era, velocidad y las últimas 40 líneas del registro) listo para pegar en WhatsApp o
+en un issue. No se envía nada: el juego no usa la red para esto.
+
+| Plataforma | Dónde está |
+|---|---|
+| Windows (exportado) | `%APPDATA%\TormentaImperial\logs\registro.txt` |
+| Windows (editor) | `%APPDATA%\Godot\app_userdata\Tormenta Imperial\logs\registro.txt` |
+| Android | almacenamiento interno de la app: `/data/user/0/com.bryankey.tormentaimperial/files/logs/registro.txt`. Sin root solo se lee desde el propio juego (el botón) o, con el APK de depuración, `adb shell run-as com.bryankey.tormentaimperial cat files/logs/registro.txt` |
+
+- **Quién lo escribe:** `scripts/services/ErrorLog.gd`, un `Logger` propio que
+  `GameConfig._ready()` engancha con `OS.add_logger()`. Recibe lo mismo que la
+  consola: `print`, `push_error` / `push_warning`, errores de script (con el archivo
+  y la línea del script cuando hay pila) y del motor.
+- **Por qué uno propio y no solo `debug/file_logging`:** el log de archivo de Godot
+  viene apagado en Android, no tiene tope por archivo (una sesión que repite un error
+  lo hace crecer sin fin) y el juego no puede leer sus últimas líneas al día. El de
+  Godot se deja como viene (`logs/godot*.log` en PC); el informe no lo necesita.
+- **Tope:** 200 KB por archivo y dos rotaciones (`registro.1.txt`,
+  `registro.2.txt`): ~600 KB como mucho.
+- **Rendimiento:** nada por fotograma. Las líneas van a memoria y se escriben en
+  bloque cada 3 s (un `Timer`), al cerrar y al pasar a segundo plano. Una línea
+  repetida seguida se cuenta (`(x27)`), no se repite; con más de 600 líneas sin
+  escribir se tiran las más viejas y se anota cuántas.
+- **Al abrir** se recuperan en memoria las últimas líneas de la sesión anterior: si
+  el juego se cerró de golpe, el informe del arranque siguiente las incluye.
+- **Sin datos personales** (`scripts/services/BugReport.gd`): las rutas de la
+  carpeta del usuario (`C:\Users\<nombre>`, `/home/<nombre>`, `/Users/<nombre>`)
+  pasan a `~`, y el nombre de la colonia (el del país del jugador) a `<colonia>`.
+  Tests: `tests/support/test_bug_report.gd`.
 
 ---
 
@@ -270,10 +304,10 @@ hash de `THIRD-PARTY-NOTICES.md` §1:
 
 1. **Testers:** el zip tal cual, por el canal que sea. La licencia no deja que nadie
    lo vuelva a subir a otra página, y el LEEME lo dice.
-2. **itch.io:** crear el proyecto como "Downloadable", subir el zip marcado como
-   Windows (y el de Android como Android). Para publicar versiones sin la web, `butler`:
-   `butler push TormentaImperial-0.9.0-windows.zip usuario/tormenta-imperial:windows --userversion 0.9.0`.
-3. GitHub Releases también vale (adjuntar el zip a un tag), nunca dentro del repo.
+2. **GitHub Releases:** adjuntar los zips a un tag, nunca dentro del repo. Es el sitio
+   de referencia: enlace fijo, historial de versiones y sumas de control.
+3. **Enlace directo** (Drive, WhatsApp, una web propia): el mismo zip de la release,
+   nunca uno distinto. Decidido el 2026-10-12: **sin itch.io ni tiendas** por ahora.
 
 El paso a paso de una publicación está en §12.
 
@@ -283,7 +317,7 @@ El .exe **no está firmado**. En la primera ejecución Windows enseña "Windows 
 su PC"; el jugador tiene que pulsar *Más información → Ejecutar de todas formas*.
 Algunos antivirus marcan de más los ejecutables de Godot sin firma. Opciones:
 
-- decirlo en la página de descarga (lo habitual en itch.io para indies);
+- decirlo en la página de descarga y en el LEEME (lo habitual en juegos indie);
 - firmar con un certificado de firma de código (OV o EV; EV quita el aviso antes)
   y activar `codesign/enable` en el preset con `signtool`;
 - la reputación de SmartScreen también crece sola con descargas.
@@ -554,7 +588,7 @@ Compatibility (OpenGL ES 3) en equipos sin Vulkan fiable.
 
 ## 12. Publicar una versión: lista de comprobación
 
-Para cada versión que se reparte en itch.io o GitHub Releases. El juego se publica
+Para cada versión que se reparte por GitHub Releases o enlace directo. El juego se publica
 gratis; si algún día se cobra, antes hay que resolver `docs/25-marco-legal.md` §7.
 
 ### 12.1 Antes de exportar
@@ -674,21 +708,19 @@ APK firmado con la clave de release obliga a desinstalar el anterior una vez.
 
 ### 12.6 Subir
 
-- [ ] **itch.io:** subir los dos zips (o con `butler`, §8) y marcar cada uno con su
-      plataforma: Windows y Android. Nombre visible del archivo con la versión.
 - [ ] **GitHub Releases:** crear el tag `v<versión>` en el commit exportado y una
       release con los dos zips (y `SHA256SUMS.txt` si se hizo). Los binarios van
       adjuntos a la release, nunca dentro del repositorio.
-- [ ] En las dos páginas, el aviso de SmartScreen y el de "orígenes desconocidos".
+- [ ] En la release, el aviso de SmartScreen y el de "orígenes desconocidos".
 - [ ] Probar la descarga desde la página publicada (otra cuenta o una ventana
       privada) y abrir el zip descargado.
-- [ ] Poner el enlace de itch.io en la sección "Descargar y jugar" del `readme.md`.
+- [ ] Si se reparte por enlace directo, que apunte al mismo zip de la release.
 
 ### 12.7 Notas de versión
 
 - [ ] Unas notas cortas por versión: qué hay de nuevo, qué se arregló, problemas
-      conocidos y requisitos. Las mismas en itch.io (*devlog* o descripción) y en la
-      release de GitHub, en español y en inglés.
+      conocidos y requisitos. En la release de GitHub, en español y en
+      inglés.
 - [ ] Mismo criterio que la página (`docs/25-marco-legal.md` §4): el juego es de
       gestión y estrategia; el combate se cuenta como defensa, nunca como gancho.
 - [ ] No anunciar lo que no está: nada de nube, PvP ni multijugador mientras no exista.

@@ -43,6 +43,8 @@ func _resync_storm_phase() -> void:
 	_ash_overhead = StormManager.is_ashfall() and not StormManager.is_trial_running()
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	_advance_training(delta)
 	_advance_upkeep(delta)
 

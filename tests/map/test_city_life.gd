@@ -2,13 +2,15 @@ extends GdUnitTestSuite
 ## La vida de la ciudad (WorkerWalkers, 2026-10-04): cuantas figuras salen
 ## segun la poblacion y el tope del dispositivo, que los obreros solo van a
 ## edificios con dotacion de verdad, que la Tormenta vacia las calles, que las
-## dos vistas dibujan sin errores y que nada de esto viaja en el guardado.
+## dos vistas dibujan sin errores y que nada de esto viaja en el guardado. De
+## noche (DayClock) quedan unos pocos obreros por la calle, con paso suave.
 ##
 ## Edificios de mentira en GridManager (como test_road_network) y la poblacion
 ## real de PopulationManager, que es quien marca `staffed`.
 
 const Walkers := preload("res://scripts/map/WorkerWalkers.gd")
 const StormCycleScript := preload("res://scripts/storm/StormCycle.gd")
+const DayCycleScript := preload("res://scripts/storm/DayCycle.gd")
 
 var _nodes: Array = []
 var house_a: Node
@@ -21,6 +23,7 @@ var market: Node
 func before_test() -> void:
 	GridManager.clear_all()
 	_nodes.clear()
+	DayClock.reset()   # de dia: la cuenta de figuras no depende de la hora
 
 func after_test() -> void:
 	GridManager.clear_all()
@@ -28,6 +31,7 @@ func after_test() -> void:
 		if is_instance_valid(n):
 			n.free()
 	PopulationManager.reset()
+	DayClock.reset()
 
 func _data(id: String) -> BuildingData:
 	return load("res://data/buildings/%s.tres" % id)
@@ -226,6 +230,50 @@ func test_the_storm_empties_the_streets_and_the_calm_fills_them() -> void:
 	w._on_storm_phase(StormCycleScript.Phase.CALM, 0.0)
 	assert_bool(w.is_sheltered()).is_false()
 	assert_int(_most_out(w, 15.0)).is_greater(0)
+
+# ── La noche ─────────────────────────────────────────────────────────────
+
+func test_at_night_mostly_workers_stay_out() -> void:
+	# 80 habitantes, 6 obreros: de dia 40 figuras; de noche unas pocas, y los
+	# obreros (faroleros, vigilantes) antes que los ciudadanos.
+	var day: Dictionary = Walkers.figure_budget(80, 6, 72, 2)
+	var night: Dictionary = Walkers.figure_budget(80, 6, 72, 2, GameConfig.life_night_presence, GameConfig.life_night_citizen_share)
+	var n := int(night["workers"]) + int(night["citizens"])
+	assert_int(n).is_between(2, 8)
+	assert_int(n).is_less(int(day["workers"]) + int(day["citizens"]))
+	assert_int(int(night["workers"])).is_greater_equal(int(night["citizens"]))
+
+func test_dusk_thins_the_streets_step_by_step_and_dawn_fills_them() -> void:
+	_town(30)
+	var w := _walkers()
+	w.reconcile()
+	var by_day: int = w.actor_count()
+	w._on_day_phase(DayCycleScript.Phase.NIGHT, 0.9)
+	# No de golpe: el primer salto llega enseguida, la noche entera tarda.
+	w.tick(0.1)
+	assert_float(w.night_weight()).is_less(1.0)
+	_run(w, GameConfig.life_night_step_seconds * (1.0 / GameConfig.life_night_step + 1.0) + 1.0)
+	assert_float(w.night_weight()).is_equal(1.0)
+	# Los que sobran vuelven a casa andando; al rato la calle se ha vaciado.
+	_run(w, 40.0)
+	assert_int(w.actor_count()).is_less(by_day)
+	# Amanece: vuelven a salir.
+	w._on_day_phase(DayCycleScript.Phase.DAY, 0.2)
+	_run(w, GameConfig.life_night_step_seconds * (1.0 / GameConfig.life_night_step + 1.0) + 1.0)
+	assert_float(w.night_weight()).is_equal(0.0)
+	assert_int(w.actor_count()).is_equal(by_day)
+
+func test_storm_at_night_leaves_nobody_out() -> void:
+	_town(30)
+	var w := _walkers()
+	w.reconcile()
+	w._apply_day_phase(DayCycleScript.Phase.NIGHT, true)
+	w.reconcile()
+	assert_int(w.actor_count()).is_greater(0)
+	w._on_storm_phase(StormCycleScript.Phase.STORM, 10.0)
+	for i in 200:
+		w.tick(0.1)
+		assert_int(w.walker_count()).is_equal(0)
 
 # ── Las dos vistas ───────────────────────────────────────────────────────
 

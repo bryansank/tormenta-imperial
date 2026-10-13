@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1800 tests in 138 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1850 tests in 141 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -29,7 +29,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 2. Press **F5** to run. The title menu (`TitleMenu`) opens first over the loaded game
 3. WASD / arrows to pan, Q/E or right-drag to rotate, scroll to zoom, middle-drag or left-drag on the ground to grab-pan, F11 fullscreen
 4. Touch: one finger grabs the terrain, two-finger pinch to zoom and twist to rotate (3D only); tap to aim a building, tap the ghost / ✓ to build (docs/21 §9)
-5. A fresh game: ☰ MENÚ → Menú principal → Nueva partida (mode picker; today it only offers Campaña). Deleting `user://save_game.json` also works
+5. A fresh game: ☰ MENÚ → Menú principal → Nueva partida (mode picker; today it only offers Campaña). It never deletes the current game: it goes to a new slot (up to 5, see "Save/Load System"). Deleting `user://partidas/` starts from scratch
 6. **2D view:** Settings → Map view, or `godot --path . -- --view=2d`. Same services, UI and save; only the world view differs (`scenes/main/Main2D.tscn`, `scripts/view2d/`). See `docs/18-vista-2d.md`
 7. **User args** (after `--`): `--view=2d|3d`, `--no-title` (skip the title menu, used by probes), `--dev` / `--no-dev` (force `dev_mode`, see "Dev Mode")
 8. **Your save lives in the editor's user dir** (`%APPDATA%\Godot\app_userdata\Tormenta Imperial`). Anything that plays or writes saves outside a normal play session (probes, experiments, a second agent) needs a git-ignored `override.cfg` at the project root with its own dir, deleted afterwards:
@@ -62,17 +62,17 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-27 autoloads in `project.godot`: the 26 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, and `RankManager` goes after `DeviceProfile` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText` and `Objectives` are static helpers (a `class_name` or a `preload`), not autoloads.
+28 autoloads in `project.godot`: the 27 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, and `RankManager` goes after `DeviceProfile` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText` and `Objectives` are static helpers (a `class_name` or a `preload`), not autoloads.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 116 signals in ~29 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 118 signals in ~30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (40x40 to 48x48, even sides, `grid_size_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed, building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
-| 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave, new game (`request_new_game()` → mode picker), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
+| 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave of up to 5 saved games (`SaveSlots`, `save_path()`, `open_saves_list()`), new game (`request_new_game()` → mode picker, never deletes), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
 | 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining) |
 | 9 | `ProductionManager` | `scripts/services/ProductionManager.gd` | Passive production, construction, upgrades |
 | 10 | `ProgressionManager` | `scripts/services/ProgressionManager.gd` | Era system (3 eras), 9 milestones, **and the Final Audit** (owns the `FinalAudit` model and publishes it) |
@@ -83,15 +83,16 @@ holds a service's state of its own.
 | 15 | `RandomEventManager` | `scripts/services/RandomEventManager.gd` | Random events (storms, plagues, festivals...) |
 | 16 | `BuildingHealth` | `scripts/services/BuildingHealth.gd` | Building damage, ruined state that halts output, proportional repair |
 | 17 | `StormManager` | `scripts/services/StormManager.gd` | Drives the Imperial Storm cycle (`scripts/storm/StormCycle.gd`), storm damage and the Tithe |
-| 18 | `StormSky` | `scripts/map/StormSky.gd` | Darkens the `WorldEnvironment` and light during the storm, restores them after |
-| 19 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
-| 20 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
-| 21 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
-| 22 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built) and which tips/helps were seen; state saved with the game (docs/23) |
-| 23 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
-| 24 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
-| 25 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size). See `docs/21-interfaz-y-dispositivos.md` |
-| 26 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses), colony flag and colour. See `docs/06-progression-victory.md` §Governor rank |
+| 18 | `DayClock` | `scripts/services/DayClock.gd` | Day/night clock: ticks the pure `scripts/storm/DayCycle.gd` (dawn, day, dusk, night; 16 min, night 3 min), emits `day_phase_changed`, answers `is_night()` / `light_weight()`; the hour travels in the save (`day`). Visual only today (docs/21 §12) |
+| 19 | `StormSky` | `scripts/map/StormSky.gd` | Paints the `WorldEnvironment`, sun and island: the time of day from `DayClock` (refreshed every few seconds) with the storm's ash blended on top; also the shared window-glow material |
+| 20 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
+| 21 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
+| 22 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
+| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built) and which tips/helps were seen; state saved with the game (docs/23) |
+| 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
+| 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
+| 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size). See `docs/21-interfaz-y-dispositivos.md` |
+| 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`, `queue_colony_for_new_game()`). See `docs/06-progression-victory.md` §Governor rank |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -127,15 +128,15 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
   +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close; building guide; instances HelpIndexPanel
   +-- SkirmishPanel (CanvasLayer 11) -- commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" (Final Audit)
-  +-- BattleScreen (CanvasLayer 18) -- the 8x8 board plus the expedition map, draft modal and final report (outside UIManager's stack)
+  +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
   +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator (colour + icon, no countdown)
   +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI; instances PrologueScreen
   +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
-  +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, title, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (flag/colour)
-  +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back
+  +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, country name, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel)
+  +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back; adds the GameSpeedButton sibling (x1 / x2, layer 10)
   +-- TitleMenu (CanvasLayer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal
 
 Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
@@ -149,6 +150,7 @@ Created at runtime, not in either .tscn:
   WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: workers and citizens walking the roads (view only, docs/04)
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker, created by GameManager.request_new_game()
+  SavesPanel (layer 40, scripts/ui/SavesPanel.gd) -- PARTIDAS, the saved-games list, created by GameManager.open_saves_list()
   LayoutEditor (layer 35, scripts/ui/LayoutEditor.gd) -- EDITAR DISPOSICIÓN (Settings), created by UILayoutManager
 ```
 
@@ -447,13 +449,28 @@ not yet measured with the line probe). Titles `RANK_TITLE_<n>` (Colono, Capataz 
 … Archigobernador). `rank_rewards` gives decorations (Garden 2, Fountain 5, Statue 8),
 extra building slots (`rank_limit_bonus`), small bonuses (`rank_production_bonus`
 +7 % and `rank_storage_bonus` +8 % at rank 18, **assigned**, never added, so loading
-twice is safe) and cosmetics: six procedural flags (`scripts/ui/ColonyFlag.gd`) and six
-colony colours, chosen in ☰ MENÚ → COLONIA → Colonia, shown on the Nucleo
-(`ColonyFlag3D`/`ColonyFlag2D`) and on our board tokens' round mark. The basic
+twice is safe) and flag pieces (`patterns`, `emblems`, `colors`).
+
+**The player's country (2026-10-12):** a name (max `COLONY_NAME_MAX` = 26, "Al azar"
+names like "Liga de Vaporia" in ES/EN, a short ES/EN word filter in
+`scripts/services/ColonyIdentity.gd`) and a flag built from pieces: a recipe
+`{"pattern", "emblem", "colors": [field 1, field 2, emblem]}` drawn by code in
+`scripts/ui/ColonyFlag.gd` (14 patterns, 12 emblems + none, 13 colours from
+`colony_colors` / ToyPalette; `fix_spec()` keeps it readable, cached textures,
+`draw_spec()` for lists). Rank 1 opens 5 patterns, 4 emblems and 6 colours; the
+showier ones come by rank (`rank_rewards`). Picked in the editor
+`scripts/ui/ColonyIdentityPanel.gd` (`open("new"|"edit")`, signals `confirmed` /
+`cancelled`), opened from ☰ MENÚ → COLONIA (RankPanel) and meant for the New Game step
+(`RankManager.queue_colony_for_new_game()` before the reset). Flies on the Nucleo and
+the HQ (`ColonyFlag3D`: small plane + vertex-shader wave, off in low quality; hangs
+from the model's `FlagAnchor` marker when it has one; `ColonyFlag2D`), signs the war
+reports, the audit defeat, the victory and the board header (`ColonyByline`), and its
+first colour fills our board tokens' round mark. Signal `colony_identity_changed`. The basic
 buildings keep their era unlocks. Locks go through `PlacementRules.check_rank()`; the
 CONSTRUIR card shows a padlock and "Rango N". UI: `RankPanel` (badge in slot
-`rank_badge`, rank-up toast with SFX `rank_up`, the COLONIA card). Saved as `"rank"`;
-a save without it is rank 1. Sandbox has every rank unlock open.
+`rank_badge`, rank-up toast with SFX `rank_up`, the COLONIA card). Saved as `"rank": {"xp", "colony": {"name", "flag"}}`;
+a save without it is rank 1 with a country rolled from `GridManager.island_seed`; an old
+`"flag"`/`"color"` pair is translated to pieces. Sandbox has every rank unlock open.
 
 ### Game Modes — full doc: `docs/20-modos-de-juego.md`
 
@@ -527,6 +544,30 @@ service drains it onto the `EventBus`; the UI only reads and calls.
   `SkirmishPanel` (commit troops and launch; campaign status while a column is out;
   "QUE BAJEN"), plus the war reports: `WarReportScreen`, `AuditWaveBanner`,
   `AuditDefeatScreen`.
+- **The 3D board (view only, 2026-10-12):** `scripts/combat_view/` +
+  `scenes/combat/Board3D.tscn`, never inside `scripts/combat/`. `BattleScreen` puts a
+  `BoardViewport3D` (SubViewport with its own world) behind its header and buttons
+  and forwards the same signals to `Board3D.push()`; the diorama **tells** what the
+  model already did, one event after another (deploy drop, hop-by-hop BFS route,
+  wind-up + shell / bayonet / tracer, hit shake + damage number + HP bar, fall,
+  guard ring), then reconciles with the `Encounter` and emits `idle`. While it
+  animates (`BattleScreen._board_busy()`) the board takes no input and the
+  report / draft / final report wait (`_after_board_animations()`). Toy units are
+  baked with `tools/build_toy_models.gd -- --units` (recipes in
+  `tools/toy_recipes/units/`, output `assets/models/toy/units/<id>_player|_regency`,
+  410-570 tris; player pieces carry a grey `team` surface painted with
+  `RankManager.get_color()`, one shared material per colour; the Regency is baked in
+  purple; round stand ours, diamond stand theirs; boss standard; tower-crew sandbag
+  nest). The map's 3D is switched off (`Viewport.disable_3d`) while the 3D board
+  covers it, so the board costs less GPU than the map. `pick_board_style()`: 3D
+  everywhere (minimal quality = simplified: no shadows, no dust, no sway, 0.7 res),
+  2D grid in the 2D map view and headless (tests); `force_board_style()` for tests
+  and probes. Rules, AI, `CombatManager` and audio untouched. Full detail and FPS:
+  `docs/15-combat.md` §3 "El tablero 3D".
+- **`domain`:** every `combat_unit_stats` row carries `"domain": "land"`;
+  `CombatUnit.domain()` exposes it, no rule reads it; the 3D view places a piece by
+  domain (`BoardLayout3D.DOMAIN_HEIGHT`: sea / air / space ready). Design for sea and
+  air units: `docs/15-combat.md` §11.
 
 Three roads reach the same board: an expedition node (player picks the party in
 `SkirmishPanel`, which calls `CombatManager.launch_expedition()`; a win pays loot),
@@ -552,7 +593,7 @@ board leaves its tower **damaged** (`storm_tower_crew_loss_damage`, 40% of max h
 never ruined) until it is repaired; the war reports say how many. They have no attack of their own on
 the base map.
 
-**Unit icons:** the board paints unit silhouettes (`assets/textures/ui/units/*.png`,
+**Unit icons:** the 2D board and the initiative strip paint unit silhouettes (`assets/textures/ui/units/*.png`,
 generated by `tools/gen_unit_icons.gd`, read by `UITheme.unit_icon()`), tinted per
 side, with the boss marked; the translated name's initial is only a fallback when a
 PNG is missing.
@@ -575,6 +616,22 @@ PNG is missing.
 `phase_triggers` gates early-game pacing (`early_consumption_interval`,
 `early_morale_penalty`, `early_growth_interval`) so consumption/morale pressure
 ramps up gradually instead of punishing the first minutes.
+
+### Day and night (2026-10-12) — full doc: `docs/21-interfaz-y-dispositivos.md` §12
+
+- **Visual only, ready for rules.** `scripts/storm/DayCycle.gd` is a pure model like
+  `StormCycle` (`tick(delta)` returns events; hour 0-1, phase DAWN/DAY/DUSK/NIGHT,
+  `light_weight()`, `warm_weight()`, `sun_arc()`, `is_night()`). `DayClock` (autoload)
+  ticks it, emits `day_phase_changed` and is what a future rule asks (`DayClock.is_night()`).
+- Lengths in `GameConfig.day_cycle_*`: 90 s dawn, 600 s day, 90 s dusk, 180 s night
+  (16 min); `day_cycle_enabled = false` means always day. Paused with the real pause.
+- **The storm rules over the night:** StormSky computes the light of the moment every
+  `day_cycle_refresh` s (2) and blends the ash on top, toward the same targets as by
+  day. The island gets `night_weight` (storm_grade.gdshaderinc); windows/lanterns get a
+  gain on the shared `ToyPalette.glow_material()`. 2D: `StormTint2D` does the same with
+  its CanvasModulate. Night is bluish but never really dark (10-15 year olds).
+- Saved as `"day": {"hour"}`; a save without it starts in daylight. **Offline the clock
+  does not move** (like the storm, docs/09).
 
 ### Audio
 
@@ -614,10 +671,44 @@ so every panel is rebuilt in the new language (the in-memory notification log is
 and Settings closes; accepted). With a board open it does not reload
 (the board is not saved); the language shows everywhere on the next start.
 
+### Game speed x1 / x2 and bug reports (docs/21 §13, docs/19 §7)
+
+- **Speed:** `GameConfig.game_speed` (1.0 / 2.0), changed with the small `x1`/`x2`
+  button (`scripts/ui/GameSpeedButton.gd`, added by `PauseMenu` as its sibling, slot
+  `speed_button`, in `HudRegistry`) or the **F** key; emits
+  `EventBus.game_speed_changed(speed)`. It is **not** `Engine.time_scale` (that would
+  speed up UI tweens, camera, toasts and the real-seconds autosave too): each service
+  that ticks the simulation does `delta = GameConfig.sim_delta(delta)` at the top of
+  its `_process` (Production, Process, Population, Army, TechTree, Storm, DayClock,
+  RandomEvent, Market). Combat waits go through `GameConfig.combat_pace(seconds)`
+  (`get_combat_ai_step_delay()` already does). A new ticking service uses `sim_delta`;
+  UI cooldowns and real-time clocks do not. Never saved (not in the save, not in
+  `settings.cfg`): every launch starts at x1. Offline progression is unchanged.
+- **Local error log:** `scripts/services/ErrorLog.gd`, a `Logger` hooked by
+  `GameConfig._ready()` via `OS.add_logger()`. Writes `user://logs/registro.txt` in
+  blocks every 3 s (and on close / background), 200 KB cap, 2 rotations, repeated
+  lines counted. Never leaves the device.
+- **Report:** ☰ MENÚ → PARTIDA → Informar de un fallo copies `BugReport.build()`
+  (version, OS, GPU/renderer, profile, quality, view, locale, mode/tier, era, speed,
+  last 40 log lines) to the clipboard. `BugReport.sanitize()` turns home-dir paths
+  into `~` and the colony name into `<colonia>`.
+
 ### Save/Load System
 
-- Path: `user://save_game.json`
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `rank` (RankManager: XP, flag, colour), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- **Up to 5 saved games** (2026-10-12): one file each, `user://partidas/partida_<id>.json`, plus a small index
+  `user://partidas/indice.json` (id, colony name, flag spec, colour, mode, tier, era, played time, `saved_at`, sealed)
+  so the list paints without opening each game. `scripts/services/SaveSlots.gd` (static, `preload`) owns the folder;
+  the index is a cache that `list()` reconciles with the files. The **active** game is a device preference,
+  `settings.cfg` `[partidas] activa` (`GameConfig.saves_active_slot`); `GameManager.save_path()` is its file — never
+  hard-code a path. On start: a legacy `user://save_game.json` is migrated into a new slot (copied, verified byte for
+  byte, then deleted) and opened; otherwise the active one; if it is gone, the most recent; if there are none, a new game
+- **Nueva partida never deletes**: `start_new_game()` saves the current game and starts the new one in a new slot. With
+  five, `request_new_game()` opens the list (`SavesPanel`, `make_room`) to delete one first. A fresh island that was born
+  by itself and never built on (`is_current_disposable()`) is reused instead of taking a place. The list
+  (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
+  (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
+  recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -627,10 +718,17 @@ and Settings closes; accepted). With a board open it does not reload
   `CombatManager.is_save_safe()` is false (fight in play, or a siege-wave report not yet closed). Quitting mid-fight
   replays it from the start. A save made during the Tithe reloads with the Tithe re-demanded (defence or payment)
 - The game starts only once `Main` is ready (GameManager waits for the scene root), so load signals reach the UI.
-  An unreadable save is copied to `user://save_game.corrupt-<date>.json` before a new game replaces it
-- Offline progression: calculates production earned while game closed (max 8h, `max_offline_seconds`; off in Supervivencia)
-- A lost Survival run is written once more with `"result": "defeat"` and then **sealed**: GameManager never writes it
-  again, loading it shows the end screen (only Nueva partida or Salir) and the title menu offers no "Continuar"
+  An unreadable save is copied to `user://partidas/partida_<id>.corrupt-<date>.json` (an old-format one to
+  `.v1-<date>.json`) before a new game replaces it in the same slot
+- Offline progression: production earned while the game was closed waits in the buildings (max 8h,
+  `max_offline_seconds`; off in Supervivencia). There is **no report and no notice** (the "Mientras estuviste fuera"
+  window is gone, 2026-10-12). Internal reloads — the 3D↔2D switch (`switch_to_scene()`) and the language reload
+  (`reload_keeping_game()`) — are not an absence: they set `_skip_offline_once` and apply nothing
+- A lost Survival run is written once more with `"result": "defeat"` and then **sealed** — per game: GameManager never
+  writes that slot again, loading it shows the end screen (only Nueva partida or Salir), the title menu offers no
+  "Continuar" and the list shows it as TERMINADA with Load disabled. The other games are not affected
+- The profile that unlocks Gobernador (`profile_runs_finished`, `profile_campaigns_won` in `settings.cfg`) is global,
+  not per game
 
 ---
 
@@ -638,7 +736,7 @@ and Settings closes; accepted). With a board open it does not reload
 
 ```
 tormenta-imperial/
-+-- project.godot                    # Engine config, 27 autoloads (26 game + BeckettRuntime)
++-- project.godot                    # Engine config, 28 autoloads (27 game + BeckettRuntime)
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
 +-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
@@ -650,14 +748,15 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 138 suites: audio/ build/ buildings/ combat/ economy/ input/
-|                                    #   integration/ map/ modes/ save/ storm/ tutorial/ ui/ view2d/
++-- tests/                           # gdUnit4, 141 suites: audio/ build/ buildings/ combat/ economy/ input/
+|                                    #   integration/ map/ modes/ save/ storm/ support/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
 +-- scenes/
 |   +-- main/Main.tscn               # Entry scene (3D); ViewRouter may hand over to Main2D
 |   +-- main/Main2D.tscn             # The 2D view: same UI nodes, 2D world nodes
 |   +-- buildings/BuildingPlacer.tscn
+|   +-- combat/Board3D.tscn          # The 3D combat diorama (camera, sun, terrain, marks, units, fx)
 |   +-- ui/                          # One .tscn per panel (26), incl. PrologueScreen and HelpIndexPanel
 +-- scripts/                         # 127 .gd files, ~48k lines
 |   +-- buildings/
@@ -666,7 +765,7 @@ tormenta-imperial/
 |   |   +-- PlacementRules.gd        # Shared placement rules for 3D and 2D: deposit adjacency, footprint, road network and auto-road, upgrade effects
 |   |   +-- PlacementAssist.gd       # Touch placement (tap aims, tap ghost/✓ builds), valid-spot highlight — docs/21 §9
 |   |   +-- BuildingStatusBadge.gd   # Worker pictogram / "Zzz" + why a building is stopped (3D)
-|   |   +-- ColonyFlag3D.gd          # The colony flag on a pole over the Nucleo (governor rank cosmetics)
+|   |   +-- ColonyFlag3D.gd          # The country flag on the Nucleo and HQ masts (shader wave, FlagAnchor)
 |   |   +-- BuildingLook.gd          # Rule (both views): construction phase / upgrade / ruin / active / idle; site style per type + seeded layout per instance
 |   |   +-- BuildingLookVisual.gd    # Applies it in 3D (child "LookVisual"); BuildingPlacer syncs it with one map-wide clock
 |   |   +-- BuildingFx.gd            # Generated smoke/dust/glow/sparks sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D
@@ -683,6 +782,11 @@ tormenta-imperial/
 |   |   +-- Expedition.gd            # One roguelike run: map, party, loot, state
 |   |   +-- ExpeditionGenerator.gd   # Seeded map graph, rosters, rewards, drafts
 |   |   +-- FinalAudit.gd            # The closing siege: waves, garrison, resummon
+|   +-- combat_view/                 # VIEW of the board in 3D (docs/15 §3): never rules
+|   |   +-- Board3D.gd               # The diorama + the animation queue (push / is_busy / idle / event_played)
+|   |   +-- BoardViewport3D.gd       # SubViewportContainer: own world, tap/click -> cell, wheel/pinch zoom, tooltip
+|   |   +-- UnitToy3D.gd             # One toy piece: model, HP bar, rings, tweened animations
+|   |   +-- CombatFx3D.gd, BoardTerrain3D.gd, BoardLayout3D.gd, UnitModels3D.gd, board_marks.gdshader
 |   +-- grid/
 |   |   +-- GridManager.gd           # Cell grid (size per game, saved); the island covers every cell
 |   |   +-- GridOverlayControl.gd    # Applies the grid toggle to the 3D overlay
@@ -691,13 +795,16 @@ tormenta-imperial/
 |   |   +-- MapGenerator.gd          # Random deposits: 3-6 per type, room and a road path for each extractor
 |   |   +-- WorkerWalkers.gd         # Workers and citizens walking the road network (view only, 3D and 2D)
 |   |   +-- WalkerActor.gd, WalkerFigures3D.gd  # One figure's data; the 3D MultiMesh drawer (2D: view2d/WalkerFigures2D.gd)
-|   |   +-- StormSky.gd              # Autoload: sky/light during the storm
+|   |   +-- StormSky.gd              # Autoload: sky/light of the time of day and the storm
 |   +-- storm/StormCycle.gd          # PURE model: the storm's phase clock
-|   +-- services/                    # The 26 game autoloads (table above) + BeckettGate.gd
+|   +-- storm/DayCycle.gd            # PURE model: the day/night clock (DayClock ticks it)
+|   +-- services/                    # The 27 game autoloads (table above) + BeckettGate.gd
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
+|   |   +-- ColonyIdentity.gd        # Static: country flag pieces by rank, random names/flags, word filter
 |   |   +-- FloatingText.gd          # Static utility: animated 3D text labels
+|   |   +-- ErrorLog.gd, BugReport.gd  # Local error log (Logger, rotated) and the "Informar de un fallo" text
 |   +-- ui/                          # 45 scripts: one per panel, plus
 |   |   +-- UITheme.gd               # Static dieselpunk theme: tokens, fonts, styleboxes, unit icons
 |   |   +-- UILayoutConfig.gd        # Screen slots, panel->slot map, conflicts
@@ -707,7 +814,8 @@ tormenta-imperial/
 |   |   +-- BattleScreen.gd, SkirmishPanel.gd, WarReportScreen.gd, AuditWaveBanner.gd, AuditDefeatScreen.gd
 |   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd, TouchTooltip.gd
 |   |   +-- HelperPanel.gd, HelpCallout.gd, HelpCatalog.gd, HelpTargets.gd, HelpIndexPanel.gd
-|   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the procedural colony flags
+|   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the flag drawn from pieces
+|   |   +-- ColonyIdentityPanel.gd, ColonyByline.gd  # Country name + flag editor; flag + name line on reports
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
 |   |   +-- OnScreenControls.gd, ProcessActionsPanel.gd, ProgressPanel.gd, ResourceHUD.gd, VictoryScreen.gd
@@ -719,6 +827,7 @@ tormenta-imperial/
 +-- data/buildings/                  # 17 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
+|   +-- models/toy/units/            # Baked combat toys (<id>_player / <id>_regency, boss_mark, crew_nest)
 |   +-- models/buildings/<id>/       # GLB models (11 of the 17 buildings use one; sawmill's is kept, unused)
 |   +-- textures/                    # metal_plate PBR maps; ui/ 9-patch sprites, ui/icons/, ui/units/ (silhouettes)
 |   +-- fonts/, branding/            # Fonts with their licences; logo, banner, key art
@@ -730,6 +839,8 @@ tormenta-imperial/
     +-- look_probe.gd, look_probe_runner.gd  # Screenshots of every building look (construction phases, ruin, active) and a site row per phase, 3D and 2D
     +-- life_probe.gd, life_probe_runner.gd  # Seeded town: street life in 3D/2D, the empty Ash, CPU cost with 60+ figures
     +-- render_brand.gd, render_branding.gd, render_catalog.gd, showcase_shots.gd  # Branding and screenshots
+    +-- build_toy_models.gd, toy_recipes/  # Bakes the toy buildings; `-- --units` the combat toys (toy_recipes/units/)
+    +-- unit_toy_probe.gd            # Photo of the baked unit toys in a row (-s, docs/media/dev/unit_toys.png)
     +-- *_probe.gd                   # Dev probes, see below
     +-- ui_audit.gd, ui_tour.gd      # Screenshot every panel
     +-- beckett_mcp.py               # Dev bridge helper
@@ -794,7 +905,7 @@ the same in 2D. The model is shrunk in plan to leave the yard free
 
 ### Key Rule: GDScript first (decided 2026-09-12)
 
-- **GDScript for everything**, combat included. The whole project (26 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
+- **GDScript for everything**, combat included. The whole project (27 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
 - The old plan put unit AI, combat math and pathfinding in C# **for performance**. That argument does not apply at the agreed combat scale: an 8x8 board with 4–6 units per side. GDScript is orders of magnitude more than enough.
 - **Migrate later, only on evidence**: if a profiled module proves too slow, port that module to C#. Do not create the .NET project speculatively.
 
@@ -834,8 +945,8 @@ Checklist:
    top of what is already there (loading twice without a `reset()` used to double the
    tech bonuses).
 4. Old saves: a missing key means the default, an unknown key is ignored.
-5. A test that writes `user://save_game.json` parks the player's save with
-   `tests/save/save_parking.gd` (`park()` in `before_test()`, `restore()` in
+5. A test that writes a save (`GameManager.save_path()`, the active slot) parks the player's games with
+   `tests/save/save_parking.gd` (the whole `user://partidas/`, the active slot id and a legacy `save_game.json`) (`park()` in `before_test()`, `restore()` in
    `after_test()`) and skips itself in the player's dir: `func before(do_skip := Parking.in_player_dir(),
    skip_reason := ...)`. A test that writes `settings.cfg` uses
    `tests/save/settings_parking.gd` (byte-for-byte copy and restore). `save_parking`
@@ -876,11 +987,12 @@ All balance values live in `GameConfig.gd`:
 - `resource_colors` - display colors for floating text
 - `unit_types` / `army_base_capacity` / `army_capacity_per_barracks` / `army_upkeep_interval` - army
 - `tech_definitions` + `tech_*` bonuses - tech tree
-- `rank_xp_sources` / `rank_xp_thresholds` / `rank_rewards` / `colony_colors` - governor rank (XP, curve, unlocks, bonuses, cosmetics)
+- `rank_xp_sources` / `rank_xp_thresholds` / `rank_rewards` / `colony_colors` / `COLONY_PATTERNS` / `COLONY_EMBLEMS` - governor rank (XP, curve, unlocks, bonuses, flag pieces)
 - `audio_*_volume` / `audio_music_fade` / `audio_sfx_voices` - audio
 - `phase_triggers` / `early_*` - onboarding phase pacing
 - `combat_*` - board, deploy cap, unit combat stats, enemy/risk scaling, map shape,
   drafts, rewards, morale-in-combat (table with effects in `docs/15-combat.md` §8)
+- `day_cycle_*` - day and night: on/off switch (`day_cycle_enabled`), the four phase lengths, the light refresh interval (docs/21 §12)
 - `storm_*` - storm cycle, damage, the Tithe, tower mitigation and tower crews (and the
   damage a lost crew leaves), the era-1 trial storm (`storm_trial_*`)
 - `final_audit_*` - the closing siege: wave count, slots, scaling, resummon floor

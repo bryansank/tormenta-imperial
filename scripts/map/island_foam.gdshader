@@ -40,6 +40,6 @@ void fragment() {
 		line *= step(0.35, noise(vec2(x * 0.9, y * 3.0 - TIME * 0.3)));
 		a = max(edge, line * (1.0 - y) * 0.8);
 	}
-	ALBEDO = storm_grade(foam_color.rgb, 1.0) * (1.0 - 0.35 * storm_weight);
+	ALBEDO = storm_grade(foam_color.rgb, 1.0) * (1.0 - 0.35 * storm_weight) * (1.0 - 0.4 * night_weight);
 	ALPHA = a * opacity * (1.0 - 0.3 * storm_weight) * (1.0 - smoothstep(0.75, 1.0, y));
 }

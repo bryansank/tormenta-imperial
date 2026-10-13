@@ -10,7 +10,10 @@ const Placer := preload("res://scripts/buildings/BuildingPlacer.gd")
 const MapGen := preload("res://scripts/map/MapGenerator.gd")
 const Parking := preload("res://tests/save/save_parking.gd")
 
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 const BACKUP_PATH := "user://save_game.game_modes.bak"
 
 ## Esta suite escribe user://save_game.json. Si corre en la carpeta del jugador
@@ -73,9 +76,6 @@ func after_test() -> void:
 	GameManager._camera = _saved_camera
 	GameManager._warehouse_count = 0
 	GameManager.loaded_from_save = _saved_loaded
-	if GameManager._offline_canvas != null and is_instance_valid(GameManager._offline_canvas):
-		GameManager._offline_canvas.queue_free()
-	GameManager._offline_canvas = null
 	CombatManager.reset()
 	ProgressionManager.final_audit = null
 	ProgressionManager.load_save_data(_saved_progression)
@@ -176,10 +176,10 @@ func test_a_save_from_before_the_road_network_starts_a_new_colony() -> void:
 	assert_int(ResourceManager.get_amount(ResourceManager.Type.GOLD)).is_not_equal(111)
 	assert_bool(GameManager.loaded_from_save).is_false()
 	var kept := false
-	for f in DirAccess.get_files_at("user://"):
-		if f.begins_with("save_game.v1-"):
+	for f in DirAccess.get_files_at("user://partidas"):
+		if f.begins_with("partida_%d.v1-" % GameManager.active_slot()):
 			kept = true
-			DirAccess.remove_absolute("user://" + f)
+			DirAccess.remove_absolute("user://partidas/" + f)
 	assert_bool(kept).is_true()
 
 func test_a_saved_mode_comes_back_on_load() -> void:
@@ -272,6 +272,7 @@ func test_loading_a_finished_run_keeps_it_sealed_and_skips_offline_earnings() ->
 	_open_colony()
 	assert_bool(GameMode.is_run_over()).is_true()
 	assert_bool(GameManager.is_run_sealed()).is_true()
-	assert_bool(GameManager.is_offline_report_open()).is_false()
+	# Supervivencia no produce fuera: lo de los edificios no crecio.
+	assert_bool(ProductionManager.get_all_stock().is_empty()).is_true()
 	GameManager.save_game()
 	assert_str(FileAccess.get_file_as_string(SAVE_PATH)).is_equal(before)

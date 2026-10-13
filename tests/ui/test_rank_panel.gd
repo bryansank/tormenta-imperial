@@ -27,7 +27,7 @@ func _panel() -> CanvasLayer:
 	add_child(panel)
 	return panel
 
-func test_the_badge_shows_the_number_title_and_xp_bar() -> void:
+func test_the_badge_shows_the_number_country_name_and_xp_bar() -> void:
 	var panel := _panel()
 	await await_idle_frame()
 	var badge: Button = panel.badge()
@@ -38,8 +38,10 @@ func test_the_badge_shows_the_number_title_and_xp_bar() -> void:
 	RankManager.add_xp((int(t[2]) + int(t[3])) / 2)
 	assert_str(number.text).is_equal("3")
 	assert_float(bar.value).is_between(0.3, 0.7)
-	var title: Label = badge.find_child("RankTitle", true, false)
-	assert_str(title.text).is_equal(Tr.t(GameConfig.rank_title_key(3)))
+	var colony: Label = badge.find_child("ColonyName", true, false)
+	assert_str(colony.text).is_equal(RankManager.get_colony_name())
+	# El titulo del rango sigue a mano, en el tooltip.
+	assert_str(badge.tooltip_text).contains(Tr.t(GameConfig.rank_title_key(3)))
 
 func test_the_badge_has_its_own_slot_and_is_registered() -> void:
 	assert_str(String(UILayoutConfig.PANEL_SLOTS.get("RankPanel", ""))).is_equal("rank_badge")
@@ -62,21 +64,29 @@ func test_ranking_up_shows_a_short_toast_with_what_it_opened() -> void:
 		texts.append((label as Label).text)
 	assert_bool(texts.any(func(s): return String(s).contains(garden.get_display_name()))).is_true()
 
-func test_the_colony_card_opens_from_the_menu_entry_and_locks_what_is_not_earned() -> void:
+func test_the_colony_card_opens_the_editor_and_locks_what_is_not_earned() -> void:
 	var panel := _panel()
 	await await_idle_frame()
 	panel.open()
 	assert_bool(panel.is_open()).is_true()
 	var card: PanelContainer = panel.card()
-	var locked_flag: Button = card.find_child("Flag_chevron", true, false)
-	var open_flag: Button = card.find_child("Flag_band", true, false)
-	assert_bool(locked_flag.disabled).is_true()
-	assert_object(locked_flag.find_child("RankLock", true, false)).is_not_null()
-	assert_bool(open_flag.disabled).is_false()
-	var locked_color: Button = card.find_child("Color_copper", true, false)
+	assert_str((card.find_child("ColonyName", true, false) as Label).text).is_equal(RankManager.get_colony_name())
+	(card.find_child("EditColony", true, false) as Button).pressed.emit()
+	await await_idle_frame()
+	var editor: CanvasLayer = panel.editor()
+	assert_object(editor).is_not_null()
+	assert_str(editor.get_mode()).is_equal("edit")
+	var locked: Button = editor.find_child("Piece_checks", true, false)
+	var open_one: Button = editor.find_child("Piece_bands_h", true, false)
+	assert_bool(locked.disabled).is_true()
+	assert_object(locked.find_child("RankLock", true, false)).is_not_null()
+	assert_bool(open_one.disabled).is_false()
+	editor.select_tab("colors")
+	var locked_color: Button = editor.find_child("Color_0_gold", true, false)
 	assert_bool(locked_color.disabled).is_true()
-	# Elegir uno libre lo aplica en RankManager.
-	(card.find_child("Color_crimson", true, false) as Button).pressed.emit()
+	# Elegir uno libre y LISTO lo aplica en RankManager.
+	(editor.find_child("Color_0_crimson", true, false) as Button).pressed.emit()
+	assert_bool(editor.confirm()).is_true()
 	assert_str(RankManager.get_color_id()).is_equal("crimson")
 	panel._close()
 	assert_bool(panel.is_open()).is_false()
@@ -103,11 +113,17 @@ func test_the_core_flag_follows_the_chosen_cosmetics_in_3d_and_2d() -> void:
 	add_child(flag2d)
 	flag2d.setup(Vector2(96, 96))
 	var before: Texture2D = flag3d.flag_texture()
-	RankManager.set_color("crimson")
+	var before_2d: String = flag2d.flag_spec_key()
+	var spec := RankManager.get_flag_spec()
+	spec["colors"][0] = "soot" if spec["colors"][0] != "soot" else "crimson"
+	assert_bool(RankManager.set_colony(RankManager.get_colony_name(), spec)).is_true()
 	assert_object(flag3d.flag_texture()).is_not_same(before)
+	assert_str(flag2d.flag_spec_key()).is_not_equal(before_2d)
 
 func test_own_board_tokens_wear_the_colony_colour() -> void:
-	RankManager.set_color("crimson")
+	var spec := RankManager.get_flag_spec()
+	spec["colors"][0] = "crimson"
+	RankManager.set_colony(RankManager.get_colony_name(), spec)
 	var screen: CanvasLayer = auto_free(load("res://scenes/ui/BattleScreen.tscn").instantiate())
 	add_child(screen)
 	screen._recalculate_cell_size()
@@ -122,3 +138,29 @@ func test_own_board_tokens_wear_the_colony_colour() -> void:
 	screen._paint_side_mark(mark, CombatUnit.create(2, "infantry", 1, 1.0))
 	style = mark.get_theme_stylebox("panel")
 	assert_bool(style.bg_color == GameConfig.colony_colors["crimson"]).is_false()
+
+func test_the_3d_flag_hangs_from_the_model_flag_anchor_when_there_is_one() -> void:
+	var building: Node3D = auto_free(Node3D.new())
+	add_child(building)
+	var model := Node3D.new()
+	model.name = "Model"
+	building.add_child(model)
+	var marker := Marker3D.new()
+	marker.name = "FlagAnchor"
+	marker.position = Vector3(1.0, 5.0, -0.5)
+	model.add_child(marker)
+	var flag: Node3D = ColonyFlag3D.new()
+	building.add_child(flag)
+	flag.setup(Vector2(4, 4), 3.0, building, true)
+	assert_bool(flag.is_anchored()).is_true()
+	assert_vector(flag.position).is_equal_approx(Vector3(1.0, 5.0, -0.5), Vector3.ONE * 0.001)
+	assert_bool((flag.get_node("Pole") as Node3D).visible).is_false()
+	# Sin marcador: el mastil propio, en su esquina.
+	var bare: Node3D = auto_free(Node3D.new())
+	add_child(bare)
+	bare.add_child(Node3D.new())
+	var flag2: Node3D = ColonyFlag3D.new()
+	bare.add_child(flag2)
+	flag2.setup(Vector2(4, 4), 3.0, bare)
+	assert_bool(flag2.is_anchored()).is_false()
+	assert_bool((flag2.get_node("Pole") as Node3D).visible).is_true()

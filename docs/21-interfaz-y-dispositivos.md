@@ -103,7 +103,8 @@ y se verá al terminar.
 ocultar: recursos y almacén (con obreros y moral, que van en esa fila), botón del registro,
 indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
 mismo interruptor que AYUDA del menú ☰), texto de turno en batalla y las
-herramientas Sandbox (solo existen en ese modo, docs/20). El botón ☰ MENÚ (el
+herramientas Sandbox (solo existen en ese modo, docs/20) y el botón de velocidad
+x1 / x2 (§13). El botón ☰ MENÚ (el
 menú único, que sustituye al ☰ y a la pausa II) no está en el registro: no se
 puede ocultar.
 
@@ -497,7 +498,8 @@ flujos de `qa/maestro/` recorren lo mismo en el emulador de tableta. Siempre con
 
 Dirección de arte (2026-10-05): diorama de juguete. Colores cálidos y saturados,
 luz suave y sombras marcadas que anclan cada pieza al suelo. Esta sección cubre
-lo que no es edificio: cielo, sol, isla, agua y lo que les hace la Tormenta.
+lo que no es edificio: cielo, sol, isla, agua, el día y la noche, y lo que les
+hace la Tormenta.
 Los edificios, las parcelas y su paleta están en docs/03 ("Modelos: maqueta de
 juguete", `scripts/buildings/ToyPalette.gd`).
 
@@ -507,12 +509,14 @@ juguete", `scripts/buildings/ToyPalette.gd`).
 |---|---|---|
 | Cielo, sol, tonemapping | `scenes/main/Main.tscn` (`WorldEnvironment`, `DirectionalLight`) | Los colores **limpios**: cielo procedural cálido, luz ambiental del cielo (70 %), sol cálido a 1,35, ACES, contraste 1,06 y saturación 1,2 |
 | Lo que cuesta GPU | `scripts/map/WorldLook.gd` (script del `WorldEnvironment`) | SSAO, glow, cortes de sombra, radiancia, isla sencilla, escala 3D. Nunca toca colores ni energías |
-| La Tormenta | `scripts/map/StormSky.gd` (autoload) | Guarda los valores limpios y los oscurece por fase: cielo, niebla, sol, luz ambiental **y la isla** |
+| La hora del día | `scripts/storm/DayCycle.gd` (modelo puro) + `scripts/services/DayClock.gd` (autoload) | El reloj: amanecer, día, atardecer, noche; la hora viaja en el save |
+| La Tormenta y el día | `scripts/map/StormSky.gd` (autoload) | Guarda los valores limpios (los del mediodía), pinta los del momento del día y oscurece por fase encima: cielo, niebla, sol, luz ambiental, **la isla** y las ventanas |
 | La isla | `scripts/map/IslandGenerator.gd` + cinco shaders | Cesped (`grass_ground`), canto (`island_cliff`), playa (`island_sand`), espuma (`island_foam`), agua (`water_border`). Sin texturas: todo en coordenadas de mundo |
-| Lo común de los shaders | `scripts/map/storm_grade.gdshaderinc` | Los uniforms `storm_weight` (0-1) y `simple` (bool), y la función `storm_grade()` |
+| Lo común de los shaders | `scripts/map/storm_grade.gdshaderinc` | Los uniforms `storm_weight` (0-1), `night_weight` (0-1) y `simple` (bool), y la función `storm_grade()` |
 
 La isla 2D (`scripts/view2d/Island2D.gd`) usa la misma geometría y la misma
-paleta cálida, pero no pasa por nada de esto: se tiñe con `StormTint2D`.
+paleta cálida, pero no pasa por nada de esto: se tiñe con `StormTint2D` (día,
+noche y Tormenta en un solo `CanvasModulate`).
 
 ### La isla de maqueta
 
@@ -599,6 +603,68 @@ de golpe y para siempre.
 - **Coste**: solo se tocan uniforms y propiedades del entorno durante los
   fundidos (3-5 s por fase); nada de materiales ni mallas nuevas.
 
+### Día y noche (2026-10-12)
+
+Solo visual, preparado para reglas. El público tiene 10-15 años: la noche es
+azulada y más baja de luz, **nunca oscura de verdad**.
+
+- **Modelo puro** `scripts/storm/DayCycle.gd` (como `StormCycle`): sin nodos, sin
+  señales, sin azar. `tick(delta)` devuelve eventos `day_phase_changed`. La hora va
+  de 0 a 1 y empieza al rayar el alba; fases `DAWN`, `DAY`, `DUSK`, `NIGHT`.
+  Consultas: `is_night()`, `light_weight()` (1 de día, 0 de noche, curva suave en
+  alba y ocaso), `warm_weight()` (el naranja del sol bajo, un arco dentro del alba y
+  del ocaso), `sun_arc()` (−1 este, 0 mediodía, 1 oeste; de noche la luna lo
+  recorre al revés, así la dirección de la luz nunca salta).
+- **Duración** (`GameConfig.day_cycle_*`): amanecer 90 s, día 600 s, atardecer
+  90 s, noche 180 s = **16 min** por vuelta. En dev_mode se comprime como todo.
+  `day_cycle_enabled = false` = siempre de día pleno (la luz de `Main.tscn`).
+- **Servicio**: `DayClock`, autoload propio (antes de StormSky). No vive en
+  StormSky porque la hora es estado de partida (save + `reset()` desde los tres
+  sitios de GameManager) y el `reset()` de StormSky no se puede llamar al empezar
+  partida (olvidaría los valores limpios del Environment). Se para con la pausa
+  real. Emite `day_phase_changed(phase, hour)` al entrar en cada fase. Una regla
+  futura pregunta `DayClock.is_night()` o `light_weight()`.
+- **3D (StormSky)**: los valores limpios de `Main.tscn` son los del **mediodía**.
+  Cada `day_cycle_refresh` segundos (2) y al cambiar de fase se calculan los del
+  momento (`_day`): sol, color del sol, luz ambiental, fondo y los cuatro colores
+  del cielo procedural. Alba y ocaso: sol y cielo hacia naranja (`SUN_WARM`,
+  `SKY_WARM`), el sol más bajo y girado (`SUN_DIP`, `SUN_SWEEP`, nunca bajo
+  `MIN_ELEVATION`: la maqueta se sigue leyendo). Noche: luna azulada al 50 % de
+  energía, luz ambiental azul a energía plena, cielo azul pizarra (`SKY_NIGHT`). Los
+  colores de la noche entran con n² (en mitad del ocaso manda el naranja).
+- **La Tormenta manda sobre la noche**: se mezcla *encima* del momento del día
+  hacia los mismos objetivos de ceniza que de día (calculados sobre los valores
+  limpios). Con la Tormenta en pleno da igual la hora, y la noche con Tormenta
+  nunca queda más oscura que la Tormenta de día. Los fundidos de 3-5 s son un solo
+  `tween_method` que relee `_day` en cada paso: el refresco del día no se pelea
+  con ellos.
+- **Isla**: uniform `night_weight` en `storm_grade.gdshaderinc` (= noche × (1 −
+  Tormenta)): quita un 30 % de saturación y enfría hacia el azul sin oscurecer (la
+  luna ya baja la luz). La espuma, sin luz, se apaga un 40 %; el agua pierde
+  además saturación y algo de brillo (agua azul bajo luna azul salía chillona).
+  IslandGenerator lo lee (`StormSky.get_island_night_weight()`) al crear la isla.
+- **Ventanas y faroles**: un parámetro del material compartido
+  `ToyPalette.glow_material()` (el `albedo_color` si es `StandardMaterial3D`, el
+  uniform `glow_gain` si un día es `ShaderMaterial`): ×0,8 de día, ×1,7 de noche,
+  ×1,4 con la Tormenta encima. Más de 1 es HDR: con glow (calidad alta) brillan.
+  Sin luces nuevas. Hoy solo lo usan las parcelas (`LotMesh`); los edificios
+  horneados de la rama de arte lo heredan sin tocar nada.
+- **2D (`StormTint2D`)**: el `CanvasModulate` parte del tinte del momento
+  (`day_tint()`: blanco de día, `WARM_TINT` al alba y al ocaso, `NIGHT_TINT` azul
+  de noche) y la ceniza se mezcla encima. Dos `lerp` por frame sobre un color.
+- **Guardado**: clave `day` (`{"hour"}`), docs/09. Partida vieja = de día.
+  **Offline el reloj no avanza**: al volver es la misma hora (como la Tormenta,
+  solo la producción corre con el juego cerrado).
+- **Coste**: nada nuevo por frame salvo durante los fundidos de la Tormenta (como
+  antes). El refresco cada 2 s toca propiedades del Environment y de la luz, cinco
+  uniforms y un color de material; el cielo (radiancia incremental) se recalcula
+  entonces. En calidad mínima sigue sin sombras: la luz que gira no cuesta nada.
+  Medida (2026-10-12, misma máquina cargada, 1600x900): alta día 50 fps / noche 49;
+  mínima día 77 / noche 75 — de noche cuesta lo mismo que de día.
+- Sonda: `tools/dianoche_probe.gd` (amanecer, día, atardecer, noche, costa y
+  cerca de noche, mínima de noche, noche con Tormenta y después, y lo mismo en 2D;
+  FPS de día y de noche). Capturas `docs/media/dev/dianoche_<tag>_*.png`.
+
 ### Sonda
 
 `tools/arte_probe.gd` (con ventana y con `override.cfg` propio) fotografía la
@@ -612,7 +678,66 @@ Forward+ alta ≈ 85 fps, baja ≈ 88, mínima ≈ 139; Mobile ≈ 135 / 138 / 1
 
 ### Pendiente
 
+- Día y noche: sin reglas todavía (producción nocturna, consumo de madera en luz,
+  Tormenta de noche). Los caminantes tienen el gancho
+  (`WorkerWalkers.set_presence()`, `GameConfig.life_night_presence`) sin cablear:
+  colgaría de `day_phase_changed`. AudioManager no cambia de noche (un ambiente
+  nocturno colgaría de la misma señal). Las parcelas no reciben `night_weight`
+  (como con `storm_weight`). Sin entrada en Ajustes para apagar el ciclo.
+
 - Las parcelas de los edificios (césped de los solares) no reciben
   `storm_weight`: bajo la Tormenta quedan algo más verdes que la isla. Son de
   los edificios, no de esta sección.
 - `minimal` sin entrada en Ajustes ni en `GameConfig.GRAPHICS_QUALITY_MODES`.
+
+## 13. Velocidad del juego (x1 / x2) e Informar de un fallo
+
+> Número fijo: el código lo cita como "docs/21 §13" (rama `feat/soporte-y-velocidad`).
+
+### Velocidad x1 / x2
+
+- **Botón:** `scripts/ui/GameSpeedButton.gd`, una capa (10) que crea `PauseMenu`
+  al arrancar como hermana suya (las dos vistas tienen `PauseMenu`; no está en
+  las escenas). Dice `x1` o `x2` y nada más; en x2 se tiñe de acento. Slot
+  `speed_button`: arriba en el centro, bajo el indicador de la Tormenta (en calma,
+  en su sitio); con la columna central bajada (tablet 4:3) se queda arriba en el
+  centro sin apilarse; en móvil vertical va bajo la insignia del rango. Registrado
+  en `HudRegistry` (`GameSpeedButton`): se oculta en Ajustes → Interfaz y se mueve
+  en Editar disposición.
+- **Atajo:** tecla **F** (sin Ctrl/Alt), en `_unhandled_key_input`: un campo de
+  texto con foco se la queda. Con el juego en pausa no responde
+  (`PROCESS_MODE_PAUSABLE`).
+- **Qué acelera:** la simulación. `GameConfig.game_speed` (1.0 o 2.0,
+  `GAME_SPEEDS`) y `GameConfig.sim_delta(delta)`, que leen en su `_process`
+  ProductionManager (construcción, producción, caducidad), ProcessManager,
+  PopulationManager (consumo y crecimiento), ArmyManager (entrenamiento y
+  sueldo), TechTreeManager, StormManager (ciclo y tormenta de prueba), DayClock,
+  RandomEventManager y MarketManager. En el tablero, `get_combat_ai_step_delay()`
+  pasa por `GameConfig.combat_pace()`: el turno enemigo va al doble.
+- **Qué no:** la interfaz (tweens, avisos, cámara, arrastre), el autoguardado
+  (segundos reales), los enfriamientos de avisos, el reloj del tutorial, el tiempo
+  jugado (`ProgressionManager.get_played_seconds()`, que es de verdad) y la
+  progresión offline.
+- **Por qué no `Engine.time_scale`:** escala el `delta` de *todo* nodo y de todo
+  tween y `Timer`: la cámara, los avisos, `DragScroll`, los globos, el
+  autoguardado y las animaciones de menús irían al doble, y cada uno pediría su
+  excepción (`ignore_time_scale`, o dividir el delta) en archivos de otras ramas.
+  Con el multiplicador, la regla es una línea al principio de cada `_process` de
+  servicio y lo demás no se entera. Coste: una multiplicación por servicio y
+  fotograma. Con `dev_time_scale` se compone sin pisarse (uno acorta duraciones,
+  el otro acelera el reloj).
+- **La vista de combate** (otra rama) lee `GameConfig.game_speed`, acorta sus
+  animaciones con `GameConfig.combat_pace(segundos)` y escucha
+  `EventBus.game_speed_changed(speed)` para cambiar a mitad de tablero.
+- **No se guarda:** ni en `save_game.json` ni en `settings.cfg`. Al abrir el
+  juego siempre es x1 (escribirla en `settings.cfg` sería un valor que nadie lee).
+  Lo que sí guarda `settings.cfg` es el botón: oculto o movido (HudRegistry). La
+  pausa real sigue igual: con el árbol en pausa ningún `_process` corre.
+- **Tests:** `tests/support/test_game_speed.gd`.
+
+### Informar de un fallo
+
+**☰ MENÚ → PARTIDA → Informar de un fallo** (tras AYUDA) copia al portapapeles
+el informe de `scripts/services/BugReport.gd` y lo dice bajo los grupos, como
+Guardar: "Copiado. Pégalo en un mensaje." Nada sale del equipo. Qué lleva, dónde
+está el registro y cómo se limpian las rutas: docs/19 §7.

@@ -93,8 +93,11 @@ func run() -> void:
 # ══════════════════════════════════════════════════════════════════════
 
 func _open_colony(map_seed: int) -> void:
+	# Cada colonia empieza de cero: ni partidas guardadas ni el guardado viejo.
 	if FileAccess.file_exists("user://save_game.json"):
 		DirAccess.remove_absolute(OS.get_user_data_dir().path_join("save_game.json"))
+	var slots := preload("res://scripts/services/SaveSlots.gd")
+	slots.remove_dir_recursive(slots.DIR)
 	seed(map_seed)
 	_scene = Node.new()
 	_scene.name = "LineScene"

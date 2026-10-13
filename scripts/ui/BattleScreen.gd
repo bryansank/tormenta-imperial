@@ -15,8 +15,21 @@ extends CanvasLayer
 ## El nucleo de la expedicion (`launch_expedition`, `select_node`, `apply_draft`,
 ## `abandon_expedition`...) vive en `CombatManager` y la pantalla solo lo llama:
 ## aqui no se decide nada, ni siquiera si un nodo es elegible.
+##
+## **El tablero se ve en 3D** (2026-10-12, docs/15 §3 "El tablero 3D"): una
+## maqueta con unidades de juguete (scripts/combat_view/, escena
+## scenes/combat/Board3D.tscn) dentro de un SubViewport, y esta pantalla pone
+## encima la cabecera, la franja de iniciativa y los botones. Las reglas no
+## cambian: la maqueta recibe los mismos eventos y cuenta lo que ya paso a su
+## ritmo, y mientras anima (`_board_busy()`) no se deja actuar ni se saca el
+## parte. El tablero 2D de siempre sigue aqui como alternativa: en la vista 2D
+## del mapa y sin pantalla (pruebas headless). Ver `pick_board_style()`.
 
+const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
+const Board3DView := preload("res://scripts/combat_view/BoardViewport3D.gd")
+const WorldLook := preload("res://scripts/map/WorldLook.gd")
+const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
 
 const PLAYER := 0
 const ENEMY := 1
@@ -69,6 +82,23 @@ var _result_detail: Label
 var _board: Vector2i = Vector2i(8, 8)
 var _cell_size: int = 52
 var _board_open := false
+
+# ── Tablero 3D ───────────────────────────────────────────────────────
+
+## "3d" o "2d": como se pinta el tablero abierto (se decide al abrirlo).
+var _board_style := "2d"
+## Forzado por pruebas y sondas ("2d" / "3d"); "" = lo que diga `pick_board_style()`.
+var _forced_style := ""
+var _board3d = null                 ## BoardViewport3D, creado la primera vez
+var _board_column: VBoxContainer
+var _grid_center: HBoxContainer
+var _board_spacer: Control
+var _actions_row: HBoxContainer
+## Lo que espera a que la maqueta termine de animar: el parte, el draft, el
+## informe final. Nunca se ensena el resultado de algo que aun no se ha visto.
+var _deferred_ui: Array = []
+## Si esta pantalla apago el 3D del mapa de la base (el tablero 3D lo tapa entero).
+var _world_paused := false
 
 # ── Mapa ─────────────────────────────────────────────────────────────
 
@@ -131,7 +161,7 @@ func _ready() -> void:
 	EventBus.turn_started.connect(_on_turn_started)
 	EventBus.unit_moved.connect(_on_unit_moved)
 	EventBus.unit_attacked.connect(_on_unit_attacked)
-	EventBus.unit_defended.connect(func(_uid): _refresh())
+	EventBus.unit_defended.connect(_on_unit_defended)
 	EventBus.unit_died.connect(_on_unit_died)
 	EventBus.encounter_ended.connect(_on_encounter_ended)
 	EventBus.expedition_started.connect(_on_expedition_started)
@@ -181,6 +211,7 @@ func _build_board_view() -> void:
 	column.add_theme_constant_override("separation", 10)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_board_view.add_child(column)
+	_board_column = column
 
 	# Cabecera: que pelea es esta, cuanto tiempo queda dentro y de quien es el
 	# turno, en una sola fila (2026-10-04: el turno iba en una linea propia).
@@ -188,6 +219,8 @@ func _build_board_view() -> void:
 	header.name = "BoardHeader"
 	header.alignment = BoxContainer.ALIGNMENT_CENTER
 	header.add_theme_constant_override("separation", 24)
+	# Nuestro lado: la bandera y el nombre del pais.
+	header.add_child(ColonyByline.new("small"))
 	_title_label = UITheme.make_label("", "title", UITheme.ACCENT)
 	header.add_child(_title_label)
 	_round_label = UITheme.make_label("", "section", UITheme.TEXT_DIM)
@@ -207,6 +240,16 @@ func _build_board_view() -> void:
 	var grid_center := HBoxContainer.new()
 	grid_center.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.add_child(grid_center)
+	_grid_center = grid_center
+
+	# Con el tablero 3D la maqueta ocupa toda la pantalla por detras: la columna
+	# deja la cabecera arriba y los botones abajo, y este hueco en medio.
+	_board_spacer = Control.new()
+	_board_spacer.name = "Board3DSpacer"
+	_board_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_board_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_board_spacer.visible = false
+	column.add_child(_board_spacer)
 
 	_grid = GridContainer.new()
 	_grid.add_theme_constant_override("h_separation", 2)
@@ -229,6 +272,7 @@ func _build_board_view() -> void:
 	_abandon_board_btn.visible = false
 	actions.add_child(_abandon_board_btn)
 	column.add_child(actions)
+	_actions_row = actions
 
 func _make_action(text: String, callback: Callable) -> Button:
 	var btn := Button.new()
@@ -241,6 +285,10 @@ func _make_action(text: String, callback: Callable) -> Button:
 func _build_result_panel() -> void:
 	_result_panel = PanelContainer.new()
 	_result_panel.set_anchors_preset(Control.PRESET_CENTER)
+	# Crece hacia los dos lados desde el centro: sin esto la esquina de arriba a
+	# la izquierda quedaba en el centro y el panel salia corrido abajo a la derecha.
+	_result_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_result_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_result_panel.custom_minimum_size = Vector2(340, 0)
 	_result_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	_result_panel.visible = false
@@ -334,6 +382,10 @@ func _build_draft_panel() -> void:
 
 	_draft_panel = PanelContainer.new()
 	_draft_panel.set_anchors_preset(Control.PRESET_CENTER)
+	# Crece hacia los dos lados desde el centro: sin esto la esquina de arriba a
+	# la izquierda quedaba en el centro y el panel salia corrido abajo a la derecha.
+	_draft_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_draft_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_draft_panel.custom_minimum_size = Vector2(360, 0)
 	_draft_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	_draft_panel.visible = false
@@ -354,6 +406,10 @@ func _build_draft_panel() -> void:
 func _build_report_panel() -> void:
 	_report_panel = PanelContainer.new()
 	_report_panel.set_anchors_preset(Control.PRESET_CENTER)
+	# Crece hacia los dos lados desde el centro: sin esto la esquina de arriba a
+	# la izquierda quedaba en el centro y el panel salia corrido abajo a la derecha.
+	_report_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_report_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_report_panel.custom_minimum_size = Vector2(360, 0)
 	_report_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	_report_panel.visible = false
@@ -479,7 +535,10 @@ func _recalculate_node_size() -> void:
 	_node_size = int(clampf(minf(vp.x * 0.14, vp.y * 0.12), float(UITheme.MIN_BTN_H), 64.0))
 
 func _on_viewport_resized() -> void:
-	if _view == View.BOARD:
+	if _view == View.BOARD and _uses_3d():
+		_queue_margin_update()
+		_refresh()
+	elif _view == View.BOARD:
 		var previous := _cell_size
 		_recalculate_cell_size()
 		if previous != _cell_size:
@@ -528,6 +587,10 @@ func sync_with_state() -> void:
 		_on_draft_offered(CombatManager.get_draft_options())
 
 func _on_expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary) -> void:
+	# Con la maqueta animando la ultima caida, el informe espera a que se vea.
+	_after_board_animations(_show_expedition_report.bind(result, rewards, casualties))
+
+func _show_expedition_report(result: int, rewards: Dictionary, casualties: Dictionary) -> void:
 	_pending_draft.clear()
 	_close_draft()
 	_result_panel.visible = false
@@ -561,14 +624,18 @@ func _on_expedition_ended(result: int, rewards: Dictionary, casualties: Dictiona
 
 	_report_panel.visible = true
 	visible = true
+	_sync_world_render()
 
 # ── Draft ────────────────────────────────────────────────────────────
 
 func _on_draft_offered(options: Array) -> void:
 	_pending_draft = options.duplicate()
+	_after_board_animations(_offer_pending_draft)
+
+func _offer_pending_draft() -> void:
 	# Si el parte del encuentro sigue en pantalla, el draft espera su turno: dos
 	# modales a la vez convierten la recompensa en un accidente.
-	if _result_panel.visible:
+	if _result_panel.visible or _pending_draft.is_empty():
 		return
 	_open_draft()
 
@@ -651,6 +718,7 @@ func open_map(run = null) -> void:
 	_report_panel.visible = false
 	_map_view.visible = true
 	visible = true
+	_sync_world_render()
 
 func _build_map() -> void:
 	for child in _map_canvas.get_children():
@@ -913,6 +981,8 @@ func armed_node() -> int:
 ## Fuerza el modo tactil (pruebas). En partida lo decide `_input`.
 func set_touch_mode(enabled: bool) -> void:
 	_touch_mode = enabled
+	if _board3d != null:
+		_board3d.set_touch_mode(enabled)
 	if not enabled:
 		_armed_node = -1
 	if _view == View.MAP:
@@ -979,11 +1049,17 @@ func is_confirming_abandon() -> bool:
 
 func _on_encounter_started(index: int, is_boss: bool) -> void:
 	_board = CombatManager.get_board_size()
-	_recalculate_cell_size()
-	_build_grid()
+	_board_style = _forced_style if _forced_style != "" else pick_board_style(
+		DisplayServer.get_name(), ViewMode.current(get_tree()), _graphics_quality())
 	_title_label.text = _encounter_title(index, is_boss)
 	_result_panel.visible = false
 	_report_panel.visible = false
+	if _board_style == "3d":
+		_open_board_3d(index)
+	else:
+		_show_board_2d()
+		_recalculate_cell_size()
+		_build_grid()
 	_open_board()
 	_refresh()
 
@@ -996,22 +1072,41 @@ func _encounter_title(index: int, is_boss: bool) -> String:
 		return Tr.t("LBL_ENCOUNTER_N") % (index + 1)
 	return Tr.t("LBL_SKIRMISH_FIGHT")
 
-func _on_turn_started(_side: int, _uid: int) -> void:
+func _on_turn_started(side: int, uid: int) -> void:
+	if _board_open and _uses_3d():
+		_board3d.board.push({"e": "turn", "side": side, "uid": uid})
 	_refresh()
 
-func _on_unit_moved(_uid: int, _from: Vector2i, _to: Vector2i) -> void:
+func _on_unit_moved(uid: int, from: Vector2i, to: Vector2i) -> void:
+	if _board_open and _uses_3d():
+		_board3d.board.push({"e": "move", "uid": uid, "from": from, "to": to})
 	_refresh()
 
-func _on_unit_attacked(_attacker_uid: int, target_uid: int, damage: int) -> void:
-	var target := CombatManager.get_unit(target_uid)
-	if target != null:
-		_spawn_damage_number(target.position, damage)
+func _on_unit_attacked(attacker_uid: int, target_uid: int, damage: int) -> void:
+	if _board_open and _uses_3d():
+		_board3d.board.push({"e": "attack", "attacker": attacker_uid, "target": target_uid, "damage": damage})
+	else:
+		var target := CombatManager.get_unit(target_uid)
+		if target != null:
+			_spawn_damage_number(target.position, damage)
 	_refresh()
 
-func _on_unit_died(_uid: int, _side: int) -> void:
+func _on_unit_died(uid: int, _side: int) -> void:
+	if _board_open and _uses_3d():
+		_board3d.board.push({"e": "die", "uid": uid})
+	_refresh()
+
+func _on_unit_defended(uid: int) -> void:
+	if _board_open and _uses_3d():
+		_board3d.board.push({"e": "defend", "uid": uid})
 	_refresh()
 
 func _on_encounter_ended(victory: bool, turns_used: int) -> void:
+	_set_actions_enabled(false)
+	# En 3D el parte sale cuando la maqueta termina de contar la pelea.
+	_after_board_animations(_show_encounter_result.bind(victory, turns_used))
+
+func _show_encounter_result(victory: bool, turns_used: int) -> void:
 	_refresh()
 	_result_title.text = Tr.t("LBL_VICTORY") if victory else Tr.t("LBL_DEFEAT")
 	_result_title.add_theme_color_override("font_color", UITheme.POSITIVE if victory else UITheme.DANGER)
@@ -1063,7 +1158,15 @@ func _unit_list(counts: Dictionary) -> String:
 # ── Refresco del tablero ─────────────────────────────────────────────
 
 func _refresh() -> void:
-	if not _board_open or _cells.is_empty():
+	if not _board_open:
+		return
+	if _uses_3d():
+		_refresh_header()
+		_refresh_board3d()
+		_refresh_order()
+		_refresh_actions()
+		return
+	if _cells.is_empty():
 		return
 	_refresh_header()
 	_refresh_cells()
@@ -1320,7 +1423,7 @@ func _paint_order_face(chip: Label, unit: CombatUnit, is_active: bool) -> void:
 	chip.add_child(icon)
 
 func _refresh_actions() -> void:
-	_set_actions_enabled(CombatManager.is_player_turn())
+	_set_actions_enabled(CombatManager.is_player_turn() and not _board_busy())
 	# Una defensa en pleno campaña no es de la columna: abandonar desde ella no
 	# retira a nadie de ese tablero, asi que el boton no se ofrece.
 	_abandon_board_btn.visible = has_expedition() and not CombatManager.is_defending()
@@ -1335,16 +1438,27 @@ func _set_actions_enabled(enabled: bool) -> void:
 ## Un clic, un significado: un enemigo en rango es un ataque, una celda
 ## encendida es un movimiento, lo demas no es nada. Sin modos, sin clic derecho.
 func _on_cell_pressed(coords: Vector2i) -> void:
+	# Mientras la maqueta cuenta lo ultimo que paso, el tablero no se toca: se
+	# jugaria sobre algo que el jugador aun no ha visto.
+	if _board_busy():
+		return
+	var occupant := CombatManager.get_unit_at(coords)
 	if not CombatManager.is_player_turn():
+		_inspect_3d(occupant)
 		return
 	var active := CombatManager.get_active_unit()
 	if active == null or active.side != PLAYER:
 		return
 
-	var occupant := CombatManager.get_unit_at(coords)
 	if occupant != null and occupant.side == ENEMY:
 		if CombatManager.get_valid_targets(active.uid).has(occupant.uid):
 			CombatManager.attack(active.uid, occupant.uid)
+		else:
+			_inspect_3d(occupant)
+		return
+	if occupant != null:
+		# Tocar una pieza propia dice quien es (con el dedo no hay tooltip).
+		_inspect_3d(occupant)
 		return
 	if occupant == null and CombatManager.get_valid_moves(active.uid).has(coords):
 		CombatManager.move_unit(active.uid, coords)
@@ -1390,6 +1504,7 @@ func _open_board() -> void:
 	_map_view.visible = false
 	_board_view.visible = true
 	visible = true
+	_sync_world_render()
 
 ## Cerrar el parte de un encuentro no es cerrar la expedicion: si queda mapa por
 ## delante, se vuelve a el; si hay draft pendiente, se ofrece antes.
@@ -1397,6 +1512,7 @@ func _close_board() -> void:
 	_board_open = false
 	_board_view.visible = false
 	_result_panel.visible = false
+	_sync_world_render()
 	CombatManager.end_encounter()
 
 	# Cerrar la oleada de un asedio ABRE la siguiente, y lo hace dentro de esa
@@ -1429,3 +1545,166 @@ func _close_all() -> void:
 	_result_panel.visible = false
 	_report_panel.visible = false
 	visible = false
+	_sync_world_render()
+
+# ── Tablero 3D ───────────────────────────────────────────────────────
+
+## Como se pinta el tablero: "3d" (la maqueta) salvo donde no tiene sentido.
+##   * Sin pantalla ("headless": pruebas, sondas sin ventana) no hay nada que
+##     ver: el 2D de siempre, que ademas es el que fijan las pruebas de lectura.
+##   * En la vista 2D del mapa (docs/18) el jugador eligio lo plano: el tablero
+##     2D, que es de su misma familia.
+##   * En la calidad "minimal" de WorldLook tambien es 3D, simplificado: sin
+##     sombras, sin polvo, sin vaiven de camara y a 0,7 de resolucion. Mientras
+##     el tablero esta abierto el 3D del mapa se apaga (tapa la pantalla
+##     entera), asi que la maqueta cuesta MENOS que el mapa que el equipo ya
+##     mueve: medido en docs/15 §3, "Rendimiento".
+static func pick_board_style(display_name: String, view_mode: String, _quality: String) -> String:
+	if display_name == "headless":
+		return "2d"
+	if view_mode == ViewMode.MODE_2D:
+		return "2d"
+	return "3d"
+
+## Fuerza el estilo del proximo tablero ("2d", "3d" o "" para el automatico).
+## Pruebas y sondas.
+func force_board_style(style: String) -> void:
+	_forced_style = style if style in ["2d", "3d"] else ""
+
+func board_style() -> String:
+	return _board_style
+
+## La vista 3D (BoardViewport3D), o null si nunca se abrio un tablero 3D.
+func board3d():
+	return _board3d
+
+func _uses_3d() -> bool:
+	return _board_style == "3d" and _board3d != null
+
+## La maqueta esta contando algo: no se actua ni se saca el parte.
+func _board_busy() -> bool:
+	return _uses_3d() and _board3d.board.is_busy()
+
+func _graphics_quality() -> String:
+	return WorldLook.effective_quality(GameConfig.ui_graphics_quality, RenderingServer.get_current_rendering_method())
+
+func _ensure_board3d() -> void:
+	if _board3d != null:
+		return
+	_board3d = Board3DView.new()
+	_board_view.add_child(_board3d)
+	# Detras de la cabecera y los botones: es el fondo de la vista.
+	_board_view.move_child(_board3d, 0)
+	_board3d.cell_pressed.connect(_on_cell_pressed)
+	_board3d.board.idle.connect(_on_board3d_idle)
+	_board3d.tooltip_provider = _board3d_tooltip
+	_board3d.set_touch_mode(_touch_mode)
+	# El hueco de la maqueta depende de donde acaban la cabecera y los botones.
+	_board3d.resized.connect(_queue_margin_update)
+	_actions_row.resized.connect(_queue_margin_update)
+
+func _open_board_3d(index: int) -> void:
+	_ensure_board3d()
+	_board3d.visible = true
+	_grid_center.visible = false
+	_board_spacer.visible = true
+	_board_column.offset_top = UITheme.MARGIN
+	_board_column.offset_bottom = -UITheme.MARGIN
+	var quality := _graphics_quality()
+	var settings: Dictionary = WorldLook.settings_for(quality, RenderingServer.get_current_rendering_method())
+	settings["high"] = quality == "high"
+	_board3d.apply_quality(settings)
+	var encounter: Encounter = CombatManager.get_encounter()
+	if encounter == null:
+		return
+	_board3d.board.setup(encounter, {
+		"team_color": RankManager.get_color(),
+		"boss_uid": boss_uid(),
+		"crew_uids": encounter.back_row_uids,
+		"seed": index * 7919 + encounter.units.size() * 31 + (1 if encounter.is_defense else 0),
+	})
+	_queue_margin_update()
+
+func _show_board_2d() -> void:
+	if _board3d != null:
+		_board3d.visible = false
+	_grid_center.visible = true
+	_board_spacer.visible = false
+	_board_column.offset_top = 0
+	_board_column.offset_bottom = 0
+
+## Recalcula el hueco cuando los contenedores ya se han colocado (dos fotogramas:
+## la columna acaba de hacerse visible y aun no ha repartido su alto).
+func _queue_margin_update() -> void:
+	if not _uses_3d() or not is_inside_tree():
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_update_board3d_margins()
+
+## Lo que tapan la cabecera y los botones, para que la camara encaje la maqueta
+## en el hueco de en medio.
+func _update_board3d_margins() -> void:
+	if not _uses_3d() or not _board3d.is_inside_tree() or not _board3d.is_visible_in_tree():
+		return
+	if _actions_row.size.y <= 0.0:
+		return
+	var top_y: float = _order_box.get_global_rect().end.y - _board3d.global_position.y + 6.0
+	var bottom_y: float = _board3d.size.y - (_actions_row.global_position.y - _board3d.global_position.y) + 6.0
+	_board3d.board.set_safe_margins(maxf(top_y, 40.0), maxf(bottom_y, 40.0))
+
+func _refresh_board3d() -> void:
+	var b = _board3d.board
+	if b.is_busy():
+		return
+	var active := CombatManager.get_active_unit()
+	if active == null:
+		b.clear_marks()
+		return
+	if CombatManager.is_player_turn():
+		b.show_state(active.uid, CombatManager.get_valid_moves(active.uid), CombatManager.get_valid_targets(active.uid))
+	else:
+		b.show_state(active.uid, [], [])
+
+## Dice quien es una pieza tocada: nombre y vida (y JEFE), sobre ella.
+func _inspect_3d(unit: CombatUnit) -> void:
+	if unit == null or not _uses_3d():
+		return
+	_board3d.board.inspect(unit.uid, chip_tooltip(unit))
+
+func _board3d_tooltip(cell: Vector2i) -> String:
+	var unit := CombatManager.get_unit_at(cell)
+	return chip_tooltip(unit) if unit != null else ""
+
+func _on_board3d_idle() -> void:
+	_refresh()
+	# Lo que esperaba a que la maqueta terminara, en el orden en que llego. Si
+	# algo de ello vuelve a poner la maqueta a animar, el resto sigue esperando.
+	while not _deferred_ui.is_empty() and not _board_busy():
+		var fn: Callable = _deferred_ui.pop_front()
+		fn.call()
+
+## Ejecuta `fn` ya, o cuando la maqueta termine de animar si esta en ello.
+func _after_board_animations(fn: Callable) -> void:
+	if _board_busy() or not _deferred_ui.is_empty():
+		_deferred_ui.append(fn)
+		return
+	fn.call()
+
+## Con el tablero 3D en pantalla el mapa de la base no se ve (la maqueta lo tapa
+## entero): se deja de dibujar su 3D y la GPU solo pinta la pelea. Se devuelve
+## en cuanto se cierra el tablero o se vuelve al mapa de la expedicion.
+func _sync_world_render() -> void:
+	var want: bool = visible and _view == View.BOARD and _board_view.visible and _uses_3d()
+	if want == _world_paused:
+		return
+	var vp := get_viewport()
+	if vp == null:
+		return
+	_world_paused = want
+	vp.disable_3d = want
+
+func _exit_tree() -> void:
+	if _world_paused and get_viewport() != null:
+		get_viewport().disable_3d = false
+		_world_paused = false

@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## Lo que el jugador ve de los modos: el selector de "Nueva partida" (tematico,
-## tactil, con confirmacion solo si hay algo que perder), el modo en el menu de
+## tactil, sin paso de borrar: una partida nueva no borra ninguna), el modo en el menu de
 ## pausa, la pestana de Sandbox y la derrota final de Supervivencia.
 
 const DialogScript := preload("res://scripts/ui/NewGameDialog.gd")
@@ -20,9 +20,9 @@ func after_test() -> void:
 		if child.get_script() == DialogScript:
 			child.queue_free()
 
-func _dialog(ask_confirm: bool, current: int = GameMode.Mode.CAMPAIGN) -> CanvasLayer:
+func _dialog(current: int = GameMode.Mode.CAMPAIGN) -> CanvasLayer:
 	var dialog: CanvasLayer = auto_free(DialogScript.new())
-	dialog.setup(ask_confirm, current)
+	dialog.setup(current)
 	add_child(dialog)
 	return dialog
 
@@ -38,7 +38,7 @@ func _find_button(node: Node, text: String) -> Button:
 # ── El selector ──────────────────────────────────────────────────────
 
 func test_it_offers_the_four_modes_as_touch_sized_cards() -> void:
-	var dialog := _dialog(true)
+	var dialog := _dialog()
 	for mode in GameMode.ORDER:
 		var card: Button = dialog.mode_card(mode)
 		assert_object(card).is_not_null()
@@ -48,30 +48,30 @@ func test_it_offers_the_four_modes_as_touch_sized_cards() -> void:
 ## Constructor, Supervivencia y Sandbox estan apartados (2026-09-28): sus
 ## tarjetas existen pero el selector solo ensena la Campana.
 func test_only_the_offered_modes_are_shown() -> void:
-	var dialog := _dialog(true)
+	var dialog := _dialog()
 	for mode in GameMode.ORDER:
 		assert_bool(dialog.mode_card(mode).visible).is_equal(GameMode.is_offered(mode))
 	assert_bool(GameMode.is_offered(GameMode.Mode.CAMPAIGN)).is_true()
 
 func test_a_run_in_a_hidden_mode_starts_the_picker_on_campaign() -> void:
-	var dialog := _dialog(true, GameMode.Mode.SANDBOX)
+	var dialog := _dialog(GameMode.Mode.SANDBOX)
 	if GameMode.is_offered(GameMode.Mode.SANDBOX):
 		return
 	assert_int(dialog.chosen_mode).is_equal(GameMode.DEFAULT)
 
 func test_it_works_while_the_tree_is_paused() -> void:
-	var dialog := _dialog(true)
+	var dialog := _dialog()
 	assert_int(dialog.process_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
 
 func test_it_starts_on_the_mode_being_played() -> void:
 	# Con un modo ofrecido; uno apartado empieza en la Campana (prueba de arriba).
 	var mode: int = GameMode.OFFERED[GameMode.OFFERED.size() - 1]
-	var dialog := _dialog(true, mode)
+	var dialog := _dialog(mode)
 	assert_int(dialog.chosen_mode).is_equal(mode)
 	assert_bool(dialog.mode_card(mode).button_pressed).is_true()
 
 func test_tapping_a_card_selects_it_and_only_it() -> void:
-	var dialog := _dialog(true)
+	var dialog := _dialog()
 	dialog.mode_card(GameMode.Mode.SANDBOX).pressed.emit()
 	assert_int(dialog.chosen_mode).is_equal(GameMode.Mode.SANDBOX)
 	var pressed := 0
@@ -87,37 +87,17 @@ func test_the_grid_folds_for_tablet_laptop_and_phone() -> void:
 	assert_int(DialogScript.columns_for(700.0)).is_equal(2)
 	assert_int(DialogScript.columns_for(400.0 - 32.0)).is_equal(1)
 
-func test_with_something_to_lose_it_asks_before_confirming() -> void:
-	var dialog := _dialog(true)
-	var confirmed: Array = []
-	dialog.confirmed.connect(func(): confirmed.append(dialog.chosen_mode))
-	dialog.pick(GameMode.Mode.BUILDER)
-	assert_bool(dialog.is_confirming()).is_true()
-	assert_array(confirmed).is_empty()
-	# El aviso dice que se pierde y en que se empieza.
-	assert_str(dialog._confirm_label.text).contains(GameMode.display_name(GameMode.Mode.CAMPAIGN))
-	assert_str(dialog._confirm_label.text).contains(GameMode.display_name(GameMode.Mode.BUILDER))
-	_find_button(dialog, Tr.t("BTN_MODE_WIPE_START")).pressed.emit()
-	assert_array(confirmed).contains_exactly([GameMode.Mode.BUILDER])
-
-func test_back_returns_to_the_cards_without_confirming() -> void:
-	var dialog := _dialog(true)
-	var confirmed: Array = []
-	dialog.confirmed.connect(func(): confirmed.append(true))
-	dialog.pick(GameMode.Mode.SURVIVAL)
-	_find_button(dialog, Tr.t("BTN_MODE_BACK")).pressed.emit()
-	assert_bool(dialog.is_confirming()).is_false()
-	assert_array(confirmed).is_empty()
-
-func test_with_nothing_to_lose_it_starts_at_once() -> void:
-	var dialog := _dialog(false)
+func test_start_follows_at_once_without_a_wipe_step() -> void:
+	# Una partida nueva no borra ninguna: no hay paso de "se borrara tu partida".
+	var dialog := _dialog()
 	var confirmed: Array = []
 	dialog.confirmed.connect(func(): confirmed.append(dialog.chosen_mode))
 	dialog.pick(GameMode.Mode.SANDBOX)
 	assert_array(confirmed).contains_exactly([GameMode.Mode.SANDBOX])
+	assert_bool(dialog.is_naming()).is_false()
 
 func test_cancel_says_so() -> void:
-	var dialog := _dialog(true)
+	var dialog := _dialog()
 	var canceled: Array = []
 	dialog.canceled.connect(func(): canceled.append(true))
 	_find_button(dialog, Tr.t("BTN_CANCEL")).pressed.emit()
@@ -125,7 +105,7 @@ func test_cancel_says_so() -> void:
 
 func test_game_manager_opens_it_themed_and_it_frees_itself_on_cancel() -> void:
 	var before: int = GameManager.get_child_count()
-	var dialog: CanvasLayer = GameManager.request_new_game(false)
+	var dialog: CanvasLayer = GameManager.request_new_game()
 	assert_object(dialog.get_script()).is_equal(DialogScript)
 	assert_int(GameManager.get_child_count()).is_equal(before + 1)
 	dialog.cancel()
@@ -135,7 +115,7 @@ func test_game_manager_opens_it_themed_and_it_frees_itself_on_cancel() -> void:
 
 func test_start_new_game_is_what_confirm_calls() -> void:
 	# Sin disparar la recarga: se mira el cableado, no se borra nada.
-	var dialog: CanvasLayer = GameManager.request_new_game(true)
+	var dialog: CanvasLayer = GameManager.request_new_game()
 	var calls_start := false
 	for c in dialog.confirmed.get_connections():
 		var cb: Callable = c["callable"]

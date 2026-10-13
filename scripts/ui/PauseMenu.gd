@@ -6,8 +6,8 @@ extends CanvasLayer
 ##
 ##   COLONIA  Que hacer · Progreso · Colonia (rango) · Ejercito ·
 ##            Escaramuzas · Sandbox        (solo lo que ya esta disponible)
-##   PARTIDA  Reanudar · Guardar · Ajustes · Musica · Ayuda · Historia ·
-##            Menu principal · Guardar y salir
+##   PARTIDA  Reanudar · Guardar · Partidas · Ajustes · Musica · Ayuda ·
+##            Informar de un fallo · Historia · Menu principal · Guardar y salir
 ##
 ## - Con el menu abierto la partida esta en pausa de verdad (`get_tree().paused`).
 ##   Todo lo que no marque PROCESS_MODE_ALWAYS se para; este menu y la musica no.
@@ -35,6 +35,7 @@ const CHROME_H := 150.0
 ## El boton del menu: esquina superior derecha, con palabra y no solo icono.
 const MENU_BTN_MARGIN := 10.0
 const MENU_BTN_MIN_W := 118.0
+const GameSpeedButtonScript := preload("res://scripts/ui/GameSpeedButton.gd")
 
 ## Entradas de COLONIA: [id, clave Tr, nodo hermano].
 const COLONY_ENTRIES := [
@@ -85,6 +86,7 @@ func _ready() -> void:
 	EventBus.tutorial_intro_closed.connect(_on_intro_closed)
 	EventBus.music_toggled.connect(func(_on): _sync_music())
 	get_viewport().size_changed.connect(_relayout)
+	_add_speed_button()
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -177,9 +179,12 @@ func _setup_ui() -> void:
 	var game := _make_group("GameGroup", Tr.t("LBL_MENU_GROUP_GAME"), Tr.t("LBL_PAUSE_SUBTITLE"))
 	_resume_btn = _add_game_button(game, "Resume", Tr.t("BTN_RESUME"), UITheme.POSITIVE, resume)
 	_add_game_button(game, "Save", Tr.t("BTN_SAVE_GAME"), UITheme.BTN, save)
+	_add_game_button(game, "Saves", Tr.t("BTN_SAVES"), UITheme.BTN, _on_saves)
 	_add_game_button(game, "Settings", Tr.t("BTN_SETTINGS"), UITheme.BTN, _on_settings)
 	_music_btn = _add_game_button(game, "Music", "", UITheme.BTN, AudioManager.toggle_music)
 	_help_btn = _add_game_button(game, "Help", Tr.t("BTN_HELP"), UITheme.INFO, _on_help)
+	var report := _add_game_button(game, "Report", Tr.t("BTN_REPORT_BUG"), UITheme.BTN, report_bug)
+	report.tooltip_text = Tr.t("BTN_REPORT_BUG_HINT")
 	_add_game_button(game, "Story", Tr.t("BTN_STORY"), UITheme.BTN, _on_story)
 	_add_game_button(game, "MainMenu", Tr.t("BTN_MAIN_MENU"), UITheme.BTN, _on_main_menu)
 	_add_game_button(game, "Quit", Tr.t("BTN_SAVE_QUIT"), UITheme.DANGER, _on_quit)
@@ -190,6 +195,17 @@ func _setup_ui() -> void:
 
 	_sync_music()
 	_relayout()
+
+## El boton x1 / x2 del HUD (docs/21 §13). Lo pone este menu y no las escenas:
+## las dos vistas lo tienen. Va de HERMANO (no de hijo): es HUD de la partida,
+## se para con la pausa y no es parte de este menu.
+func _add_speed_button() -> void:
+	var parent := get_parent()
+	if parent == null or parent.get_node_or_null("GameSpeedButton") != null:
+		return
+	var speed := GameSpeedButtonScript.new()
+	speed.name = "GameSpeedButton"
+	parent.add_child.call_deferred(speed)
 
 func _make_group(node_name: String, title: String, hint: String) -> VBoxContainer:
 	var box := VBoxContainer.new()
@@ -470,10 +486,24 @@ func save() -> void:
 	_status.visible = true
 	EventBus.notification_posted.emit(Tr.t(key), "warning" if deferred else "success", color)
 
+## INFORMAR DE UN FALLO: copia el informe (BugReport) al portapapeles y lo dice
+## aqui mismo, como Guardar. No envia nada: el jugador lo pega donde quiera.
+func report_bug() -> void:
+	BugReport.copy_to_clipboard()
+	_status.text = Tr.t("MSG_REPORT_COPIED")
+	_status.add_theme_color_override("font_color", UITheme.POSITIVE)
+	_status.visible = true
+
 ## Guarda si hay partida en marcha. Sin escena de juego (pruebas) no hay nada.
 func _save_now() -> void:
 	if GameManager.is_started():
 		GameManager.save_game()
+
+## PARTIDAS: la misma lista que el menu principal (SavesPanel, encima de este
+## menu). Antes se guarda, para que la partida en curso salga al dia.
+func _on_saves() -> void:
+	_save_now()
+	GameManager.open_saves_list()
 
 func _on_settings() -> void:
 	var settings: Node = _find_sibling("SettingsPanel")

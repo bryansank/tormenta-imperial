@@ -576,7 +576,15 @@ var profile_runs_finished := 0
 ## Campanas ganadas (Auditoria Final superada).
 var profile_campaigns_won := 0
 
+## La partida activa (settings.cfg [partidas] activa): la ultima que se jugo en
+## este dispositivo, la que abre "Continuar". Es preferencia del dispositivo, no
+## estado de juego. 0 = ninguna todavia (GameManager elige al arrancar).
+var saves_active_slot := 0
+
 func _ready() -> void:
+	# El registro local de errores va lo primero: asi recoge tambien lo que pase
+	# al cargar los ajustes (docs/19 §7). Nunca sale del equipo.
+	ErrorLog.install(self)
 	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
 	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
 	load_user_settings()
@@ -656,6 +664,7 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 				ui_layout.erase(key)
 	profile_runs_finished = maxi(0, int(cf.get_value("perfil", "runs_finished", profile_runs_finished)))
 	profile_campaigns_won = maxi(0, int(cf.get_value("perfil", "campaigns_won", profile_campaigns_won)))
+	saves_active_slot = maxi(0, int(cf.get_value("partidas", "activa", saves_active_slot)))
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -687,6 +696,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("perfil", "runs_finished", profile_runs_finished)
 	cf.set_value("perfil", "campaigns_won", profile_campaigns_won)
+	cf.set_value("partidas", "activa", saves_active_slot)
 	cf.save(USER_SETTINGS_PATH)
 
 ## El perfil ya abre Gobernador: una partida terminada o una Campana ganada.
@@ -1020,46 +1030,78 @@ func rank_title_key(rank: int) -> String:
 ##   limit       id -> huecos extra sobre building_limits
 ##   production  fraccion sumada al multiplicador de produccion (0.01 = +1 %)
 ##   storage     fraccion sobre el tope de la bolsa (0.02 = +2 %)
-##   flags       banderas de la colonia que se pueden elegir
-##   colors      colores de la colonia que se pueden elegir
+##   patterns    fondos de la bandera que se pueden elegir (COLONY_PATTERNS)
+##   emblems     emblemas de la bandera (COLONY_EMBLEMS)
+##   colors      colores de la bandera (colony_colors)
 ## No toca los edificios basicos ni sus eras (la linea jugable sigue igual): el
 ## rango abre decoraciones, huecos extra y cosmeticos. Un edificio nuevo y
 ## opcional entra aqui con `buildings`.
 var rank_rewards := {
-	1: {"flags": ["plain", "band"], "colors": ["brass", "crimson"]},
-	2: {"buildings": ["garden"]},
-	3: {"production": 0.01, "flags": ["cross"]},
-	4: {"storage": 0.02, "colors": ["steel"]},
+	1: {"patterns": ["plain", "bands_h", "bands_v", "halves_h", "cross"],
+		"emblems": ["none", "gear", "anchor", "wheat", "hammer"],
+		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"]},
+	2: {"buildings": ["garden"], "emblems": ["tower"]},
+	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"]},
+	4: {"storage": 0.02, "emblems": ["star"]},
 	5: {"buildings": ["fountain"]},
-	6: {"production": 0.01, "flags": ["diagonal"]},
-	7: {"colors": ["moss"]},
+	6: {"production": 0.01, "patterns": ["diagonal", "saltire"]},
+	7: {"colors": ["copper", "red"]},
 	8: {"buildings": ["statue"], "storage": 0.02},
-	9: {"production": 0.01, "flags": ["gear"]},
+	9: {"production": 0.01, "patterns": ["quartered"], "emblems": ["wrench"]},
 	10: {"limit": {"house": 2}},
-	11: {"colors": ["soot"]},
-	12: {"production": 0.01, "storage": 0.02, "flags": ["chevron"]},
-	13: {"limit": {"statue": 2, "fountain": 2}},
-	14: {"colors": ["copper"]},
-	15: {"production": 0.01},
-	16: {"storage": 0.02, "limit": {"tower": 1}},
-	17: {"limit": {"house": 2}},
-	18: {"production": 0.02},
+	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
+	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
+	13: {"limit": {"statue": 2, "fountain": 2}, "emblems": ["ship"]},
+	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
+	15: {"production": 0.01, "patterns": ["stripes"]},
+	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
+	17: {"limit": {"house": 2}, "patterns": ["waves"]},
+	18: {"production": 0.02, "patterns": ["checks"], "emblems": ["airship"]},
 }
 
-## Banderas de la colonia, en orden de la galeria. Las dibuja ColonyFlag.
-const COLONY_FLAGS := ["plain", "band", "cross", "diagonal", "gear", "chevron"]
-## Colores de la colonia: el principal de la bandera y del Nucleo.
+# ── Bandera y nombre del pais (ColonyFlag, ColonyIdentity, RankManager) ──
+# La bandera es una receta de piezas: un fondo (dibujo con uno o dos colores),
+# un emblema encima y tres colores [fondo 1, fondo 2, emblema]. Todo se dibuja
+# por codigo en scripts/ui/ColonyFlag.gd; nada viene de otro juego ni imita
+# simbolos reales de estados, partidos o ideologias. Lo que abre cada rango esta
+# en rank_rewards (patterns / emblems / colors).
+
+## Fondos, en orden de la galeria.
+const COLONY_PATTERNS := ["plain", "bands_h", "bands_v", "halves_h", "cross", "border",
+	"diagonal", "saltire", "quartered", "canton", "hoist_triangle", "stripes", "waves", "checks"]
+## Emblemas, en orden de la galeria. "none" = sin emblema.
+const COLONY_EMBLEMS := ["none", "gear", "anchor", "wheat", "hammer", "tower", "star",
+	"wrench", "wheel", "ship", "cogs", "sun", "airship"]
+## Colores de la bandera. Los seis primeros son los de siempre de la colonia; el
+## resto sale de la paleta de la maqueta (ToyPalette): marfil = CREAM, cielo =
+## SKY, rojo = RED, hierba = GREEN, pizarra = SLATE, teja = TERRACOTTA, oro = BRASS.
 var colony_colors := {
+	"ivory": Color8(242, 222, 180),
 	"brass": Color(0.80, 0.62, 0.25),
 	"crimson": Color(0.68, 0.14, 0.14),
 	"steel": Color(0.30, 0.45, 0.62),
 	"moss": Color(0.33, 0.50, 0.24),
 	"soot": Color(0.18, 0.18, 0.20),
+	"sky": Color8(78, 160, 204),
 	"copper": Color(0.72, 0.40, 0.20),
+	"red": Color8(220, 50, 38),
+	"grass": Color8(108, 172, 62),
+	"slate": Color8(96, 98, 110),
+	"terracotta": Color8(210, 92, 58),
+	"gold": Color8(232, 172, 58),
 }
-const COLONY_COLOR_ORDER := ["brass", "crimson", "steel", "moss", "soot", "copper"]
-const COLONY_DEFAULT_FLAG := "band"
-const COLONY_DEFAULT_COLOR := "brass"
+const COLONY_COLOR_ORDER := ["ivory", "brass", "crimson", "steel", "moss", "soot", "sky",
+	"copper", "red", "grass", "slate", "terracotta", "gold"]
+## La bandera de serie (la de una partida sin nada que elegir).
+const COLONY_DEFAULT_SPEC := {"pattern": "bands_h", "emblem": "gear", "colors": ["brass", "ivory", "crimson"]}
+## Largo maximo del nombre del pais ("Republica de Puerto Hierro" cabe justo).
+const COLONY_NAME_MAX := 26
+## Las seis banderas de antes (guardados con "rank": {"flag", "color"}),
+## traducidas a piezas al cargar: [fondo, emblema].
+const COLONY_LEGACY_FLAGS := {
+	"plain": ["plain", "none"], "band": ["bands_h", "none"], "cross": ["cross", "none"],
+	"diagonal": ["diagonal", "none"], "gear": ["plain", "gear"], "chevron": ["hoist_triangle", "none"],
+}
 
 ## Bonos del rango, aplicados en tiempo de ejecucion por RankManager (asigna el
 ## total del rango actual; nunca suma sobre lo que habia).
@@ -1178,8 +1220,8 @@ var ruin_tilt := 0.07
 ##   chimenea de la Fundicion, la grua del Almacen, la antena del Laboratorio,
 ##   el emblema del Cuartel General... Esa esquina no lleva atrezo. "ROOF":
 ##   encima del tejado, apoyado en la altura medida del modelo.
-## - "keep_clear": esquinas sin atrezo por otra cosa (la del Nucleo es la de la
-##   bandera de la colonia, ColonyFlag3D/2D).
+## - "keep_clear": esquinas sin atrezo por otra cosa (la del Nucleo y la del
+##   Cuartel General son las del mastil con la bandera del pais, ColonyFlag3D/2D).
 ## Sin entrada (la calzada), sin parcela.
 var building_lot_style := {
 	"sawmill": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "industrial",
@@ -1209,7 +1251,7 @@ var building_lot_style := {
 		"signature": "cannon", "corner": "SE"},
 	"headquarters": {"ground": "slabs", "trim": "rail", "yard": 0.28, "accent": "military",
 		"props": ["flag", "lamp", "planter", "ammo"], "count": [3, 5],
-		"signature": "emblem", "corner": "ROOF"},
+		"signature": "emblem", "corner": "ROOF", "keep_clear": ["NE"]},
 	# La Granja (rama comida): tierra batida, valla baja y sacos de la cosecha. El
 	# patio es mas estrecho que el de los demas: el campo es el edificio.
 	"farm": {"ground": "dirt", "trim": "fence", "yard": 0.25, "accent": "residential",
@@ -1235,6 +1277,42 @@ var building_lot_accents := {
 	"civic": Color(0.82, 0.63, 0.20),
 	"residential": Color(0.30, 0.60, 0.22),
 }
+
+# ── Velocidad del juego (x1 / x2) ──
+# Un multiplicador que leen los servicios que tickean la simulacion, y NO
+# Engine.time_scale: time_scale tambien acelera los tweens de la interfaz, la
+# camara, los avisos, el autoguardado (que cuenta segundos reales) y el reloj
+# del tutorial, y cada uno pediria su excepcion en archivos de otros. Aqui la
+# interfaz va a su ritmo sin tocar nada y la simulacion pasa por sim_delta().
+# Es estado del dispositivo, no de la partida: no viaja en save_game.json y al
+# abrir el juego siempre es x1 (no se escribe en settings.cfg: seria un valor
+# que nadie lee). Lo que si se guarda es el boton (oculto/movido, HudRegistry).
+const GAME_SPEEDS := [1.0, 2.0]
+var game_speed := 1.0
+
+## Pone la velocidad (solo valores de GAME_SPEEDS) y avisa por EventBus.
+func set_game_speed(speed: float) -> void:
+	var next := speed if speed in GAME_SPEEDS else 1.0
+	if is_equal_approx(next, game_speed):
+		return
+	game_speed = next
+	EventBus.game_speed_changed.emit(game_speed)
+
+## x1 <-> x2 (el boton del HUD y la tecla F).
+func toggle_game_speed() -> void:
+	var i := GAME_SPEEDS.find(game_speed)
+	set_game_speed(GAME_SPEEDS[(i + 1) % GAME_SPEEDS.size()])
+
+## El delta de simulacion de este fotograma: lo que tickean produccion,
+## construccion, procesos, Tormenta, dia y noche, ejercito, eventos...
+func sim_delta(delta: float) -> float:
+	return delta * game_speed
+
+## Una pausa o animacion del tablero de combate, acortada con x2. Para el
+## turno enemigo (get_combat_ai_step_delay) y las animaciones de la vista de
+## combate, que la leen de aqui y escuchan EventBus.game_speed_changed.
+func combat_pace(seconds: float) -> float:
+	return seconds / maxf(game_speed, 0.01)
 
 # ── Duration Helpers ──
 
@@ -1411,10 +1489,16 @@ var combat_ai_step_delay := 0.45
 ## relacion que hace que la artilleria pegue y el vehiculo aguante, y ademas la
 ## IA de objetivos esta fijada sobre esos numeros en `tests/combat/test_combat_ai.gd`.
 ## Medido en `tools/balance_probe.gd`; tablas en `docs/16-balance-combate.md`.
+##
+## `domain` es el medio por el que se mueve la unidad: "land" (tierra) para las
+## tres de hoy. Ninguna regla lo lee todavia; existe para que las unidades de
+## mar y aire (y, muy a futuro, espacio) entren sin cambiar el formato: el
+## modelo puro lo expone (`CombatUnit.domain()`) y la vista 3D coloca la unidad
+## segun el (docs/15 §11). Una entrada sin `domain` es de tierra.
 var combat_unit_stats := {
-	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5},
-	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3},
-	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4},
+	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5, "domain": "land"},
+	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3, "domain": "land"},
+	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4, "domain": "land"},
 }
 
 ## Enemy scaling: deeper nodes and later eras field tougher rosters.
@@ -1504,7 +1588,9 @@ func get_combat_stats(unit_id: String) -> Dictionary:
 	return combat_unit_stats.get(unit_id, {})
 
 func get_combat_ai_step_delay() -> float:
-	return combat_ai_step_delay if not dev_mode else combat_ai_step_delay * 0.5
+	var base := combat_ai_step_delay if not dev_mode else combat_ai_step_delay * 0.5
+	# x2 tambien acelera el turno enemigo (combat_pace).
+	return combat_pace(base)
 
 # ══════════════════════════════════════════════════════════════════════
 # ── The Imperial Storm ──
@@ -1837,9 +1923,36 @@ var life_stay_home := Vector2(4.0, 12.0)
 var life_stay_market := Vector2(4.0, 8.0)
 var life_pause_decoration := Vector2(3.0, 6.0)
 var life_pause_stroll := Vector2(1.0, 2.5)
-## Gancho del dia y la noche (aun no existe): la fraccion de gente que sale de
-## noche. WorkerWalkers.set_presence() la aplica cuando alguien se la pida.
-var life_night_presence := 0.4
+## La noche en la calle (DayClock; solo vista): la fraccion de figuras que
+## quedan de noche cerrada y, de esas, la parte de ciudadanos (el resto son
+## obreros: faroleros, vigilantes). Con 80 habitantes y 6 obreros, unas 4-5
+## figuras. El paso al anochecer y al amanecer es a saltos de
+## `life_night_step` cada `life_night_step_seconds` segundos reales.
+var life_night_presence := 0.3
+var life_night_citizen_share := 0.15
+var life_night_step := 0.1
+var life_night_step_seconds := 3.0
+
+# ── Dia y noche (docs/21 §12) ──
+#
+# Solo visual hoy: el reloj (scripts/storm/DayCycle.gd, lo mueve DayClock) cambia
+# la luz del mapa y nada mas. Un ciclo dura la suma de las cuatro fases: 16 min
+# reales, con la noche corta (3 min) para que nunca se haga larga a oscuras. En
+# dev_mode se comprime como todo (get_duration).
+
+## Apagado = siempre de dia (la luz de Main.tscn tal cual) y el reloj quieto.
+var day_cycle_enabled := true
+var day_cycle_dawn := 90.0
+var day_cycle_day := 600.0
+var day_cycle_dusk := 90.0
+var day_cycle_night := 180.0
+## Cada cuantos segundos reales se repinta la luz del dia. Nada se recalcula por
+## frame: entre dos repintados el cambio es de un 1-2 %, invisible.
+var day_cycle_refresh := 2.0
+
+func get_day_cycle_durations() -> Array:
+	return [get_duration(day_cycle_dawn), get_duration(day_cycle_day),
+		get_duration(day_cycle_dusk), get_duration(day_cycle_night)]
 
 # ── Storage Helpers ──
 

@@ -29,7 +29,14 @@ func build(mk, kit, ctx: Dictionary) -> Dictionary:
 	P.block(mk, tc, Vector3(1.0, 1.05, 0.9), wall.lightened(0.04))
 	mk.box(tc + Vector3(0, 1.08, 0), Vector3(1.12, 0.1, 1.02), stone.darkened(0.1))
 	P.hazard(mk, tc + Vector3(0, 0.95, 0.46), 1.0, 0.1, 0.03, 8)
-	P.window(mk, tc + Vector3(0, 0.55, 0.45), Vector3.BACK, 0.4, 0.42, stone.darkened(0.1))
+	# Emblema de la Regencia en la fachada de la torre: rueda dentada de laton,
+	# disco rojo y el rayo de la Tormenta en amarillo.
+	var em := tc + Vector3(0, 0.5, 0.47)
+	P.gear(mk, em, 0.34, 0.08, P.C(S.BRASS, 0.05), Vector3.BACK, 10)
+	mk.cyl(em + Vector3(0, 0, 0.04), 0.24, 0.03, P.C(S.RED), 12, Vector3.BACK)
+	mk.beam(em + Vector3(0.07, 0.16, 0.08), em + Vector3(-0.06, -0.01, 0.08), 0.07, yellow)
+	mk.beam(em + Vector3(-0.06, -0.01, 0.08), em + Vector3(0.06, 0.01, 0.08), 0.07, yellow)
+	mk.beam(em + Vector3(0.06, 0.01, 0.08), em + Vector3(-0.07, -0.17, 0.08), 0.07, yellow)
 	# Chimeneas detras (de ahi el humo)
 	var mouth := P.chimney(mk, c + Vector3(-1.0, 1.72, -0.5), 0.24, 0.6, stone.darkened(0.15), P.iron())
 	P.chimney(mk, c + Vector3(1.0, 1.72, -0.5), 0.24, 0.6, stone.darkened(0.15), P.iron())
@@ -50,4 +57,10 @@ func build(mk, kit, ctx: Dictionary) -> Dictionary:
 		mk.box(Vector3(bx, 1.3, fz + 0.06), Vector3(0.26, 0.14, 0.02), P.iron())
 		mk.box(Vector3(bx, 0.62, fz + 0.06), Vector3(0.26, 0.08, 0.02), P.iron())
 		mk._tri(Vector3(bx - 0.13, 0.545, fz + 0.04), Vector3(bx + 0.13, 0.545, fz + 0.04), Vector3(bx, 0.42, fz + 0.04), Vector3.BACK, yellow, false)
-	return {"fx": mouth}
+	# Mastil alto en la esquina delantera derecha del tejado; la bandera del pais
+	# la cuelga otro (FlagAnchor), aqui solo el palo.
+	var mb := Vector3(1.18, 1.82, fz - 0.25)
+	P.block(mk, mb, Vector3(0.26, 0.14, 0.26), stone.darkened(0.12))
+	mk.cyl(mb + Vector3(0, 0.14, 0), 0.055, 2.1, P.iron(0.15), 6, Vector3.UP, 0.04)
+	mk.ball(mb + Vector3(0, 2.28, 0), 0.08, P.C(S.BRASS, 0.08))
+	return {"fx": mouth, "flag": mb + Vector3(0, 2.18, 0)}

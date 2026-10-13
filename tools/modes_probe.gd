@@ -36,13 +36,9 @@ func _ready() -> void:
 	get_tree().quit()
 
 func _picker() -> void:
-	var dialog: CanvasLayer = GameManager.request_new_game(true)
+	var dialog: CanvasLayer = GameManager.request_new_game()
 	await _frames(6)
 	await _shot(String(_args["shot"]))
-	dialog.mode_card(GameMode.Mode.SURVIVAL).pressed.emit()
-	dialog._on_start()
-	await _frames(6)
-	await _shot(String(_args["shot"]).replace(".png", "_confirm.png"))
 	dialog.cancel()
 
 func _mode(mode: int) -> void:

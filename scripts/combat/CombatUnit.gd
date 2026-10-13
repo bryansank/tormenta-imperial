@@ -6,6 +6,8 @@ class_name CombatUnit
 ## Base stats come from GameConfig.combat_unit_stats. Draft bonuses and the base's
 ## morale modify the derived getters, never the stored stats.
 
+const DOMAIN_LAND := "land"
+
 var uid: int = 0
 var unit_id: String = ""
 var side: int = 0            ## 0 = player, 1 = enemy
@@ -59,6 +61,13 @@ func min_range() -> int:
 
 func initiative() -> int:
 	return _base("initiative", 1) + int(draft_bonuses.get("initiative", 0)) + morale_initiative_bonus
+
+## El medio por el que se mueve: "land" hoy para todas (GameConfig.combat_unit_stats,
+## campo `domain`). Ninguna regla lo consulta todavia: se conserva y se expone
+## para la vista y para las unidades de mar y aire futuras (docs/15 §11).
+func domain() -> String:
+	var stats: Dictionary = GameConfig.get_combat_stats(unit_id)
+	return String(stats.get("domain", DOMAIN_LAND))
 
 ## Power contribution, reused for AI target priority.
 func power() -> int:

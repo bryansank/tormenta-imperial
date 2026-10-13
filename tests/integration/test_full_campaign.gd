@@ -91,7 +91,10 @@ const Parking := preload("res://tests/save/save_parking.gd")
 func before(do_skip := Parking.in_player_dir(), skip_reason := "Carpeta de usuario del jugador: lanza los tests con tools/run_tests.sh") -> void:
 	pass
 
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 const BACKUP_PATH := "user://save_game.full_campaign.bak"
 
 ## Los yacimientos, en celdas fijas y lejos del Nucleo (3x3 en el centro de una
@@ -1460,9 +1463,10 @@ func test_an_unreadable_save_is_backed_up_and_the_player_is_told() -> void:
 	EventBus.notification_posted.disconnect(probe)
 
 	var backups: Array = []
-	for name in DirAccess.get_files_at("user://"):
-		if name.begins_with("save_game.corrupt-"):
-			backups.append("user://" + name)
+	# La copia va junto a la partida: user://partidas/partida_<id>.corrupt-<fecha>.json
+	for name in DirAccess.get_files_at("user://partidas"):
+		if name.begins_with("partida_%d.corrupt-" % GameManager.active_slot()):
+			backups.append("user://partidas/" + name)
 	assert_array(backups).override_failure_message(
 		"el guardado ilegible se piso sin dejar copia").is_not_empty()
 	var kept: bool = false
@@ -1474,7 +1478,7 @@ func test_an_unreadable_save_is_backed_up_and_the_player_is_told() -> void:
 	assert_bool(kept).is_true()
 	var mentioned: bool = false
 	for msg in told:
-		if String(msg).contains("save_game.corrupt-"):
+		if String(msg).contains(".corrupt-"):
 			mentioned = true
 	assert_bool(mentioned).override_failure_message(
 		"no se aviso al jugador de la copia").is_true()

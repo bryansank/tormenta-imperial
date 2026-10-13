@@ -6,6 +6,12 @@ extends SceneTree
 ##     godot --headless --path . -s tools/build_toy_models.gd -- --only=house,sawmill
 ##     godot --headless --path . -s tools/build_toy_models.gd -- --dump=kk:barrel,kn:chimney-large
 ##     godot --headless --path . -s tools/build_toy_models.gd -- --dump=all
+##     godot --headless --path . -s tools/build_toy_models.gd -- --units
+##     godot --headless --path . -s tools/build_toy_models.gd -- --units --only=infantry
+##
+## `--units` hornea las unidades de combate en vez de los edificios (docs/15
+## §3, "El tablero 3D"): recetas en tools/toy_recipes/units/<id>.gd, salida en
+## assets/models/toy/units/ (ver `_bake_units()`).
 ##
 ## Cada edificio tiene su receta en tools/toy_recipes/<id>.gd: compone piezas
 ## CC0 (KayKit, Kenney; assets/models/cc0/, solo fuente) pasadas a la paleta
@@ -53,8 +59,11 @@ func _initialize() -> void:
 func _run() -> void:
 	var only: Array = []
 	var dump := ""
+	var units := false
 	for a in OS.get_cmdline_user_args():
-		if a.begins_with("--only="):
+		if a == "--units":
+			units = true
+		elif a.begins_with("--only="):
 			only = Array(a.substr(7).split(",", false))
 		elif a.begins_with("--dump="):
 			dump = a.substr(7)
@@ -65,6 +74,11 @@ func _run() -> void:
 		return
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
 	_ensure_materials()
+	if units:
+		var bad := _bake_units(only)
+		print("build_toy_models: unidades hechas (%d con error)" % bad)
+		quit(1 if bad > 0 else 0)
+		return
 	var failed := 0
 	for id in IDS:
 		if not only.is_empty() and not only.has(id):
@@ -142,6 +156,27 @@ func _bake(id: String) -> bool:
 		anchor.position = out["fx"]
 		root.add_child(anchor)
 		anchor.owner = root
+	# FlagAnchor: donde se cuelga la bandera del pais (feat/bandera-y-pais).
+	# "flag" va en el marco de la receta (sigue al encaje); "flag_over_top" es
+	# {x, z, alto sobre la cima} en el marco del edificio, para casar con un
+	# mastil que no es del modelo (ColonyFlag3D en el Nucleo).
+	var flag_at = null
+	if out.has("flag"):
+		flag_at = fitted * (out["flag"] as Vector3)
+	elif out.has("flag_over_top"):
+		# La misma cima que mide BuildingPlacer: max(mesh_height, la malla).
+		var f: Vector3 = out["flag_over_top"]
+		var top := mesh.get_aabb().end.y
+		var tres := "res://data/buildings/%s.tres" % id
+		if ResourceLoader.exists(tres):
+			top = maxf(top, float(load(tres).mesh_height))
+		flag_at = Vector3(f.x, top + f.y, f.z)
+	if flag_at != null:
+		var fa := Marker3D.new()
+		fa.name = "FlagAnchor"
+		fa.position = flag_at
+		root.add_child(fa)
+		fa.owner = root
 	var scene := PackedScene.new()
 	scene.pack(root)
 	err = ResourceSaver.save(scene, OUT + id + ".tscn")
@@ -152,7 +187,7 @@ func _bake(id: String) -> bool:
 	var a := mesh.get_aabb()
 	print("build_toy_models: %-13s %5d tri  %.2f x %.2f x %.2f (objetivo %.2f x %.2f)%s" % [
 		id, Kit.tri_count(mesh), a.size.x, a.size.y, a.size.z, ctx["w"], ctx["d"],
-		"  FxAnchor" if out.has("fx") else ""])
+		("  FxAnchor" if out.has("fx") else "") + ("  FlagAnchor" if flag_at != null else "")])
 	return true
 
 ## Lo mismo que BuildingLot.fit_model(), pero horneado: encoge en planta (nunca
@@ -199,6 +234,124 @@ func _finish_colors(mk) -> void:
 		if y < AO_HEIGHT:
 			c[i] = c[i].darkened(AO_DARK * (1.0 - maxf(0.0, y) / AO_HEIGHT))
 	mk._sc = c
+
+# ── Unidades de combate ───────────────────────────────────────────────
+#
+# Una unidad por tipo y bando: `<id>_player` y `<id>_regency`, mas dos piezas de
+# atrezo que la vista pone encima (`boss_mark`, el estandarte del jefe, y
+# `crew_nest`, el nido de sacos de una dotacion de torre). La receta recibe DOS
+# LotMesh: `mk` (lo de siempre, con su color) y `team` (lo que lleva el color
+# del bando, pintado en grises que multiplican). Con el jugador `team` sale como
+# una TERCERA superficie llamada "team", con material `toy_team.tres`: la vista
+# le pone encima el color de la colonia (RankManager.get_color()) con un unico
+# material compartido por color. Con la Regencia se hornea ya con su paleta
+# (REGENCY_COLOR) dentro de la superficie solida: no hay nada que cambiar.
+#
+# Cada unidad cabe en UNIT_FOOTPRINT (una casilla del tablero mide 2 m), base en
+# y = 0, frente hacia +Z. Presupuesto: UNIT_TRI_BUDGET triangulos.
+
+const UNIT_RECIPES := "res://tools/toy_recipes/units/"
+const UNIT_OUT := "res://assets/models/toy/units/"
+const UNIT_IDS := ["infantry", "artillery", "vehicle"]
+const UNIT_SIDES := ["player", "regency"]
+const UNIT_PROPS := ["boss_mark", "crew_nest"]
+const UNIT_FOOTPRINT := 1.7
+const UNIT_TRI_BUDGET := 800
+const TEAM_PATH := "res://assets/models/toy/units/toy_team.tres"
+## El morado de la Regencia: no lo lleva ninguna colonia (GameConfig.colony_colors),
+## asi que el bando enemigo nunca se confunde con el del jugador.
+const REGENCY_COLOR := Color8(104, 58, 122)
+
+func _bake_units(only: Array) -> int:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(UNIT_OUT))
+	var team_mat := _material(TEAM_PATH, _make_team_material())
+	var failed := 0
+	for id in UNIT_IDS:
+		if not only.is_empty() and not only.has(id):
+			continue
+		for side in UNIT_SIDES:
+			if not _bake_unit(id, side, team_mat):
+				failed += 1
+	for id in UNIT_PROPS:
+		if not only.is_empty() and not only.has(id):
+			continue
+		if not _bake_unit(id, "", team_mat):
+			failed += 1
+	return failed
+
+static func _make_team_material() -> StandardMaterial3D:
+	var m: StandardMaterial3D = Palette.make_solid()
+	m.albedo_color = Color(1, 1, 1)
+	return m
+
+func _bake_unit(id: String, side: String, team_mat: Material) -> bool:
+	var path := UNIT_RECIPES + id + ".gd"
+	if not ResourceLoader.exists(path):
+		push_error("build_toy_models: falta la receta " + path)
+		return false
+	var recipe: Object = (load(path) as GDScript).new()
+	var mk := MeshKit.new()
+	var team := MeshKit.new()
+	var ctx := {"id": id, "side": side, "footprint": UNIT_FOOTPRINT}
+	var res = recipe.call("build", mk, team, ctx)
+	var out: Dictionary = res if res is Dictionary else {}
+	var name := id if side == "" else "%s_%s" % [id, side]
+	# La Regencia lleva su color horneado: el gris del equipo pasa a morado.
+	if side != "player" and not team._sv.is_empty():
+		var tc: PackedColorArray = team._sc
+		for i in tc.size():
+			var g: float = tc[i].r
+			tc[i] = Color(REGENCY_COLOR.r * g, REGENCY_COLOR.g * g, REGENCY_COLOR.b * g)
+		mk.append(team._sv, team._sn, tc, false)
+		team = MeshKit.new()
+	_finish_colors(mk)
+	var mesh := mk.commit()
+	if mesh == null:
+		mesh = ArrayMesh.new()
+	if not team._sv.is_empty():
+		_finish_colors(team)
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = team._sv
+		arrays[Mesh.ARRAY_NORMAL] = team._sn
+		arrays[Mesh.ARRAY_COLOR] = team._sc
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		var idx := mesh.get_surface_count() - 1
+		mesh.surface_set_material(idx, team_mat)
+		mesh.surface_set_name(idx, "team")
+	if mesh.get_surface_count() == 0:
+		push_error("build_toy_models: %s sale vacio" % name)
+		return false
+	mesh.resource_name = name
+	var mesh_path := UNIT_OUT + name + "_mesh.res"
+	var err := ResourceSaver.save(mesh, mesh_path, ResourceSaver.FLAG_CHANGE_PATH | ResourceSaver.FLAG_COMPRESS)
+	if err != OK:
+		push_error("build_toy_models: no guarda %s (%d)" % [mesh_path, err])
+		return false
+	var root := MeshInstance3D.new()
+	root.name = "Toy_" + name
+	root.mesh = mesh
+	# Marcadores que lee la vista: de donde sale el disparo y hasta donde llega
+	# la unidad (la barra de vida va encima).
+	for key in ["muzzle", "top"]:
+		if out.has(key):
+			var m := Marker3D.new()
+			m.name = key.capitalize()
+			m.position = out[key]
+			root.add_child(m)
+			m.owner = root
+	var scene := PackedScene.new()
+	scene.pack(root)
+	err = ResourceSaver.save(scene, UNIT_OUT + name + ".tscn")
+	root.free()
+	if err != OK:
+		push_error("build_toy_models: no guarda la escena de %s (%d)" % [name, err])
+		return false
+	var a := mesh.get_aabb()
+	var tris := Kit.tri_count(mesh)
+	var warn := "" if tris <= UNIT_TRI_BUDGET else "  ** PASA DEL PRESUPUESTO (%d) **" % UNIT_TRI_BUDGET
+	print("build_toy_models: %-18s %5d tri  %.2f x %.2f x %.2f%s" % [name, tris, a.size.x, a.size.y, a.size.z, warn])
+	return true
 
 # ── Inspeccion de piezas ──────────────────────────────────────────────
 

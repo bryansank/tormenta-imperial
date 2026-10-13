@@ -1,19 +1,15 @@
 extends CanvasLayer
 ## Full-screen victory overlay shown when HQ reaches max level.
 
+const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
+
 var _backdrop: ColorRect
 
 func _ready() -> void:
 	layer = 20
 	EventBus.victory_achieved.connect(_on_victory_achieved)
 
-## La victoria y el parte de progreso offline comparten la capa 20. Si el parte
-## sigue en pantalla, la victoria espera a que se cierre: dos modales en la misma
-## capa se tapan el uno al otro y el jugador no sabe cual esta pulsando.
 func _on_victory_achieved(stats: Dictionary) -> void:
-	if GameManager.is_offline_report_open():
-		GameManager.offline_report_closed.connect(func(): _show_victory(stats), CONNECT_ONE_SHOT)
-		return
 	_show_victory(stats)
 
 ## Esta la pantalla en pantalla. Para pruebas y para quien tenga que esperarla.
@@ -38,6 +34,8 @@ func _show_victory(stats: Dictionary) -> void:
 
 	# Title. Constructor gana sin asedio: su victoria no habla de la Tormenta.
 	var builder: bool = GameMode.capstone_wins()
+	# El pais que gana: su bandera y su nombre encima del titulo.
+	vbox.add_child(ColonyByline.new("section", UITheme.TEXT_BRIGHT, Vector2(72, 48)))
 	var title := UITheme.make_label(Tr.t("LBL_VICTORY_TITLE_BUILDER" if builder else "LBL_VICTORY_TITLE"), "title", UITheme.ACCENT)
 	title.add_theme_font_size_override("font_size", 28)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

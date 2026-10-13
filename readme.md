@@ -46,9 +46,8 @@ Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán �
 
 ## Descargar y jugar
 
-El juego es **gratis**. Hay una versión para Windows y otra para Android (tableta primero):
+El juego es **gratis** e independiente: se reparte como `.exe` para Windows y APK para Android (tableta primero), sin tienda. También circula en enlaces directos; descárgalo solo de aquí o de alguien de confianza:
 
-- **itch.io:** *(enlace pendiente: la página aún no está publicada)*
 - **GitHub Releases:** [github.com/bryansank/tormenta-imperial/releases](https://github.com/bryansank/tormenta-imperial/releases)
 
 | | Windows | Android |

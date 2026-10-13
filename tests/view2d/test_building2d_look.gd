@@ -62,9 +62,11 @@ func _spawn(id: String) -> Node2D:
 	add_child(b)
 	return b
 
+## Building2D mira su estado cada CHECK_FRAMES fotogramas (repartidos entre
+## edificios): se espera algo mas que eso.
 func _settle() -> void:
-	await get_tree().process_frame
-	await get_tree().process_frame
+	for i in Building2D.CHECK_FRAMES + 2:
+		await get_tree().process_frame
 
 func test_construction_shows_the_phase_of_its_progress() -> void:
 	var data: BuildingData = load("res://data/buildings/foundry.tres")

@@ -198,6 +198,14 @@ signal building_ruined(building_node: Node)
 @warning_ignore("unused_signal")
 signal building_repaired(building_node: Node)
 
+# ── Day and night ──
+## Emitted only by DayClock when the day clock enters a phase. `phase` follows
+## DayCycle.Phase (DAWN, DAY, DUSK, NIGHT); `hour` is the time of day, 0-1.
+## Not emitted on load or new game: a consumer re-derives from
+## `DayClock.get_phase()` on `game_load_completed` / `game_new_started`.
+@warning_ignore("unused_signal")
+signal day_phase_changed(phase: int, hour: float)
+
 # ── Imperial Storm ──
 ## Emitted only by StormManager. The storm is dispatched on a schedule, not rolled
 ## at random — the player is meant to see it coming and prepare (see the design in
@@ -285,6 +293,11 @@ signal grid_overlay_toggled(visible: bool)
 ## WorldLook la aplica al entorno y al sol de la escena 3D.
 @warning_ignore("unused_signal")
 signal graphics_quality_changed(quality: String)
+## La velocidad del juego cambio (1.0 o 2.0; GameConfig.set_game_speed). La
+## simulacion la lee en GameConfig.sim_delta(); la vista de combate, para
+## acortar sus animaciones con GameConfig.combat_pace().
+@warning_ignore("unused_signal")
+signal game_speed_changed(speed: float)
 
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
@@ -356,10 +369,12 @@ signal governor_xp_changed(xp: int, rank: int, gained: int)
 ## rango alcanzado en este salto (un hito gordo puede saltar dos).
 @warning_ignore("unused_signal")
 signal governor_rank_up(rank: int, rewards: Dictionary)
-## El jugador eligio otra bandera o color (☰ MENU > COLONIA). El Nucleo y las
-## fichas propias del tablero se repintan al oirla.
+## El pais cambio de nombre o de bandera (☰ MENU > COLONIA, el paso de Nueva
+## partida o una carga). `flag_spec` es la receta de ColonyFlag:
+## {"pattern", "emblem", "colors": [fondo 1, fondo 2, emblema]}. Los mastiles
+## del Nucleo y del Cuartel General, la insignia y los partes se repintan al oirla.
 @warning_ignore("unused_signal")
-signal colony_cosmetics_changed(flag_id: String, color_id: String)
+signal colony_identity_changed(colony_name: String, flag_spec: Dictionary)
 
 # ── prologo-ayudas ──
 ## El tutorial guiado cambio de paso (TutorialManager.GUIDE_STEPS). "" = ninguno

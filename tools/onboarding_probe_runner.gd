@@ -78,9 +78,6 @@ func _run() -> void:
 	var main := get_tree().current_scene
 	var tut: Node = main.get_node("TutorialPanel")
 	var title: Node = main.get_node_or_null("TitleMenu")
-	var offline: Variant = GameManager.get("_offline_canvas")
-	if offline != null and is_instance_valid(offline):
-		(offline as Node).queue_free()
 	await _frames(10)
 	print("onboarding_probe: title open=", title != null and title.call("is_open"),
 		" prologue open behind title=", tut.call("is_intro_open"),

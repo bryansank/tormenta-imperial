@@ -107,7 +107,7 @@ func test_the_mode_picker_uses_the_live_palette_contrast_and_touch_size() -> voi
 	var default_danger := UITheme.DANGER
 	UITheme.configure("red_green", true, 1.0, "large", 56)
 	assert_bool(UITheme.DANGER != default_danger).is_true()
-	var dialog: CanvasLayer = GameManager.request_new_game(false)
+	var dialog: CanvasLayer = GameManager.request_new_game()
 	await _settle()
 	assert_that(DialogScript.mode_color(GameMode.Mode.SURVIVAL)).is_equal(UITheme.DANGER)
 	for mode in GameMode.ORDER:

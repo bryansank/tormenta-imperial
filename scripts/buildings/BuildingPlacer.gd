@@ -802,12 +802,12 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		var lot: Node3D = Lot.new()
 		root.add_child(lot)
 		lot.setup(root, data)
-	# La bandera de la colonia (rango del gobernador) ondea sobre el Nucleo. Va la
+	# La bandera del pais ondea sobre el Nucleo y el Cuartel General. Va la
 	# ultima: el cartel de estado se midio sin ella.
-	if data.is_core:
+	if ColonyFlag3D.flies_over(data):
 		var flag: Node3D = ColonyFlag3D.new()
 		root.add_child(flag)
-		flag.setup(Vector2(data.grid_size) * GridManager.cell_size, top)
+		flag.setup(Vector2(data.grid_size) * GridManager.cell_size, top, root, not data.is_core)
 
 	return root
 

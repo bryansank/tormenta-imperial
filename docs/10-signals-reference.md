@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**111 signals**, in the order they are declared in `EventBus.gd`. Emitters and
+**112 signals**, in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -247,6 +247,21 @@ A warning that comes to nothing emits `storm_false_alarm(deferred)`, and `deferr
 is the severity the next real storm inherits: postponed, not forgiven.
 `taken` on `tithe_resolved` is resource → amount.
 
+## Day and night
+
+Emitted only by `DayClock` (docs/21 §12). `phase` follows `DayCycle.Phase`
+(`DAWN`, `DAY`, `DUSK`, `NIGHT`); `hour` is the time of day, 0-1.
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `day_phase_changed` | `phase: int, hour: float` | DayClock | StormSky |
+
+It fires when the clock **enters** a phase, never on load or on a new game: a
+consumer re-derives from `DayClock.get_phase()` on `game_load_completed` /
+`game_new_started`. StormSky repaints on it (otherwise every
+`day_cycle_refresh` s). Visual only today; a future rule (night production, the
+walkers' `set_presence()`, a night ambient track) would hang from it.
+
 ## The Final Audit
 
 Emitted only by `ProgressionManager`. HQ level 3 no longer wins the game: it
@@ -304,6 +319,7 @@ refresh its tech states on any message.
 | `sidebar_toggled` | `visible: bool` | PlacementAssist | ArmyPanel, HelperPanel, MarketPanel, ObjectivePanel, ProgressPanel, SettingsPanel, SkirmishPanel, TechTreePanel, PlacementAssist, UILayoutManager |
 | `grid_overlay_toggled` | `visible: bool` | SettingsPanel | GridOverlayControl, GridOverlay2D |
 | `fullscreen_changed` | `enabled: bool` | GameConfig | SettingsPanel |
+| `game_speed_changed` | `speed: float` | GameConfig (`set_game_speed`) | GameSpeedButton; the combat view (shortens its animations with `combat_pace`) |
 | `touch_controls_changed` | `enabled: bool` (resolved: "auto" already checked against the device) | GameConfig, DeviceProfile | OnScreenControls, ResourceHUD, HelperPanel |
 | `touch_controls_opacity_changed` | `opacity: float` | GameConfig | OnScreenControls |
 | `helper_visibility_changed` | `visible: bool` | HudRegistry | HelperPanel, SettingsPanel |
@@ -364,7 +380,7 @@ from it ([06-progression-victory.md](06-progression-victory.md) §Governor rank)
 |--------|--------|------------|-------------|
 | `governor_xp_changed` | `xp: int, rank: int, gained: int` (`gained` 0 on load) | RankManager | RankPanel |
 | `governor_rank_up` | `rank: int, rewards: Dictionary` (merged `rank_rewards` of every rank crossed) | RankManager | RankPanel, ConstructionMenu, AudioManager |
-| `colony_cosmetics_changed` | `flag_id: String, color_id: String` | RankManager | RankPanel, ColonyFlag3D, ColonyFlag2D |
+| `colony_identity_changed` | `colony_name: String, flag_spec: Dictionary` (ColonyFlag recipe: `pattern`, `emblem`, `colors` [field 1, field 2, emblem]) | RankManager (`set_colony()`, load) | RankPanel, ColonyFlag3D, ColonyFlag2D, ColonyByline (war reports, audit defeat, victory, board header) |
 
 ## Orphan signals
 
@@ -372,7 +388,7 @@ Declared in `EventBus.gd` but not wired on one or both sides. Most are suppresse
 with `@warning_ignore("unused_signal")`, so the editor will not flag them; this
 list is the only record.
 
-**9 of the 111 signals** have a gap on one side or the other.
+**9 of the 112 signals** have a gap on one side or the other.
 
 ### Neither emitted nor consumed (3)
 
