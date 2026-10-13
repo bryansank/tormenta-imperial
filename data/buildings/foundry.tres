@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="BuildingData" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
-[ext_resource type="PackedScene" path="res://assets/models/buildings/foundry/foundry.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://assets/models/toy/foundry.tscn" id="2"]
 
 [resource]
 script = ExtResource("1")
@@ -10,7 +10,6 @@ id = "foundry"
 display_name = "Fundición"
 description = "Produce acero a partir de minerales."
 grid_size = Vector2i(2, 2)
-model_stretch = Vector3(1.05, 1.1, 1.8)
 cost_gold = 200
 cost_steel = 0
 cost_oil = 0
