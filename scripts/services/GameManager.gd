@@ -403,6 +403,7 @@ func _new_game() -> void:
 	ArmyManager.reset()
 	CombatManager.reset()
 	StormManager.reset()
+	DayClock.reset()
 	TutorialManager.reset()
 	ProductionManager.reset()
 	RankManager.reset()
@@ -584,6 +585,10 @@ func _load_game() -> void:
 	if data.has("storm"):
 		StormManager.load_save_data(data["storm"])
 
+	# La hora del dia. Sin la clave (partida anterior al ciclo) empieza de dia.
+	var day_data: Variant = data.get("day", {})
+	DayClock.load_save_data(day_data if day_data is Dictionary else {})
+
 	# Que ha visto ya el jugador del tutorial. Sin la clave (partida anterior al
 	# tutorial) no ha visto nada, y la intro se le ofrece al terminar la carga.
 	if data.has("tutorial"):
@@ -730,6 +735,7 @@ func _write_save() -> void:
 	data["army"] = ArmyManager.get_save_data()
 	data["expedition"] = CombatManager.get_save_data()
 	data["storm"] = StormManager.get_save_data()
+	data["day"] = DayClock.get_save_data()
 	data["tutorial"] = TutorialManager.get_save_data()
 	data["game_mode"] = GameMode.get_save_data()
 	data["rank"] = RankManager.get_save_data()
@@ -843,6 +849,7 @@ func clear_save() -> void:
 	ArmyManager.reset()
 	CombatManager.reset()
 	StormManager.reset()
+	DayClock.reset()
 	TutorialManager.reset()
 	ProductionManager.reset()
 	RankManager.reset()
@@ -887,6 +894,7 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	ArmyManager.reset()
 	CombatManager.reset()
 	StormManager.reset()
+	DayClock.reset()
 	TutorialManager.reset()
 	ProductionManager.reset()
 	RankManager.reset()

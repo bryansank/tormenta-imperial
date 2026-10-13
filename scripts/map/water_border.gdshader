@@ -65,6 +65,8 @@ void fragment() {
 	}
 
 	// Con la Tormenta: agua de pizarra, y menos brillo (el cielo ya no es azul).
+	// De noche, ademas, mas apagada: agua azul bajo luna azul salia chillona.
+	col = mix(col, vec3(dot(col, vec3(0.299, 0.587, 0.114))), 0.35 * night_weight) * (1.0 - 0.2 * night_weight);
 	ALBEDO = storm_grade(col, 0.9);
 	ROUGHNESS = mix(roughness_val, 0.45, storm_weight);
 	SPECULAR = 0.5;

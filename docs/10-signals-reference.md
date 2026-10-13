@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**111 signals**, in the order they are declared in `EventBus.gd`. Emitters and
+**112 signals**, in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -247,6 +247,21 @@ A warning that comes to nothing emits `storm_false_alarm(deferred)`, and `deferr
 is the severity the next real storm inherits: postponed, not forgiven.
 `taken` on `tithe_resolved` is resource → amount.
 
+## Day and night
+
+Emitted only by `DayClock` (docs/21 §12). `phase` follows `DayCycle.Phase`
+(`DAWN`, `DAY`, `DUSK`, `NIGHT`); `hour` is the time of day, 0-1.
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `day_phase_changed` | `phase: int, hour: float` | DayClock | StormSky |
+
+It fires when the clock **enters** a phase, never on load or on a new game: a
+consumer re-derives from `DayClock.get_phase()` on `game_load_completed` /
+`game_new_started`. StormSky repaints on it (otherwise every
+`day_cycle_refresh` s). Visual only today; a future rule (night production, the
+walkers' `set_presence()`, a night ambient track) would hang from it.
+
 ## The Final Audit
 
 Emitted only by `ProgressionManager`. HQ level 3 no longer wins the game: it
@@ -372,7 +387,7 @@ Declared in `EventBus.gd` but not wired on one or both sides. Most are suppresse
 with `@warning_ignore("unused_signal")`, so the editor will not flag them; this
 list is the only record.
 
-**9 of the 111 signals** have a gap on one side or the other.
+**9 of the 112 signals** have a gap on one side or the other.
 
 ### Neither emitted nor consumed (3)
 

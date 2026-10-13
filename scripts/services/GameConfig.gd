@@ -1858,6 +1858,27 @@ var life_pause_stroll := Vector2(1.0, 2.5)
 ## noche. WorkerWalkers.set_presence() la aplica cuando alguien se la pida.
 var life_night_presence := 0.4
 
+# ── Dia y noche (docs/21 §12) ──
+#
+# Solo visual hoy: el reloj (scripts/storm/DayCycle.gd, lo mueve DayClock) cambia
+# la luz del mapa y nada mas. Un ciclo dura la suma de las cuatro fases: 16 min
+# reales, con la noche corta (3 min) para que nunca se haga larga a oscuras. En
+# dev_mode se comprime como todo (get_duration).
+
+## Apagado = siempre de dia (la luz de Main.tscn tal cual) y el reloj quieto.
+var day_cycle_enabled := true
+var day_cycle_dawn := 90.0
+var day_cycle_day := 600.0
+var day_cycle_dusk := 90.0
+var day_cycle_night := 180.0
+## Cada cuantos segundos reales se repinta la luz del dia. Nada se recalcula por
+## frame: entre dos repintados el cambio es de un 1-2 %, invisible.
+var day_cycle_refresh := 2.0
+
+func get_day_cycle_durations() -> Array:
+	return [get_duration(day_cycle_dawn), get_duration(day_cycle_day),
+		get_duration(day_cycle_dusk), get_duration(day_cycle_night)]
+
 # ── Storage Helpers ──
 
 ## Tope base de la era. Una era fuera de tabla se acota a la mas cercana en vez de
