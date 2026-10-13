@@ -7,13 +7,7 @@ func _ready() -> void:
 	layer = 20
 	EventBus.victory_achieved.connect(_on_victory_achieved)
 
-## La victoria y el parte de progreso offline comparten la capa 20. Si el parte
-## sigue en pantalla, la victoria espera a que se cierre: dos modales en la misma
-## capa se tapan el uno al otro y el jugador no sabe cual esta pulsando.
 func _on_victory_achieved(stats: Dictionary) -> void:
-	if GameManager.is_offline_report_open():
-		GameManager.offline_report_closed.connect(func(): _show_victory(stats), CONNECT_ONE_SHOT)
-		return
 	_show_victory(stats)
 
 ## Esta la pantalla en pantalla. Para pruebas y para quien tenga que esperarla.

@@ -565,6 +565,11 @@ var profile_runs_finished := 0
 ## Campanas ganadas (Auditoria Final superada).
 var profile_campaigns_won := 0
 
+## La partida activa (settings.cfg [partidas] activa): la ultima que se jugo en
+## este dispositivo, la que abre "Continuar". Es preferencia del dispositivo, no
+## estado de juego. 0 = ninguna todavia (GameManager elige al arrancar).
+var saves_active_slot := 0
+
 func _ready() -> void:
 	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
 	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
@@ -645,6 +650,7 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 				ui_layout.erase(key)
 	profile_runs_finished = maxi(0, int(cf.get_value("perfil", "runs_finished", profile_runs_finished)))
 	profile_campaigns_won = maxi(0, int(cf.get_value("perfil", "campaigns_won", profile_campaigns_won)))
+	saves_active_slot = maxi(0, int(cf.get_value("partidas", "activa", saves_active_slot)))
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -676,6 +682,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("perfil", "runs_finished", profile_runs_finished)
 	cf.set_value("perfil", "campaigns_won", profile_campaigns_won)
+	cf.set_value("partidas", "activa", saves_active_slot)
 	cf.save(USER_SETTINGS_PATH)
 
 ## El perfil ya abre Gobernador: una partida terminada o una Campana ganada.

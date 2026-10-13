@@ -223,7 +223,7 @@ func is_run_over_variant() -> bool:
 	return visible and GameMode.is_run_over()
 
 func _on_new_game() -> void:
-	GameManager.request_new_game(false)
+	GameManager.request_new_game()
 
 func _on_quit() -> void:
 	get_tree().quit()
