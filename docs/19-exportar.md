@@ -185,8 +185,42 @@ El exportado usa un directorio de usuario propio, distinto del editor:
 Así las partidas de prueba (con tiempos de dev) y las reales no se pisan. Lo hacen
 dos overrides con el feature tag `template` en `project.godot`
 (`config/use_custom_user_dir.template`, `config/custom_user_dir_name.template`).
-Ahí viven las partidas (`partidas/`), `settings.cfg` y `logs/godot.log`, que es lo primero que
-hay que pedir a quien reporte un fallo.
+Ahí viven las partidas (`partidas/`), `settings.cfg` y `logs/`.
+
+### El registro de errores (`logs/registro.txt`)
+
+Lo primero que hay que pedir a quien reporte un fallo, y casi nunca hace falta
+buscarlo: **☰ MENÚ → PARTIDA → Informar de un fallo** copia al portapapeles un
+bloque corto (versión, sistema, vídeo, perfil, calidad, vista, idioma, modo/nivel,
+era, velocidad y las últimas 40 líneas del registro) listo para pegar en WhatsApp o
+en un issue. No se envía nada: el juego no usa la red para esto.
+
+| Plataforma | Dónde está |
+|---|---|
+| Windows (exportado) | `%APPDATA%\TormentaImperial\logs\registro.txt` |
+| Windows (editor) | `%APPDATA%\Godot\app_userdata\Tormenta Imperial\logs\registro.txt` |
+| Android | almacenamiento interno de la app: `/data/user/0/com.bryankey.tormentaimperial/files/logs/registro.txt`. Sin root solo se lee desde el propio juego (el botón) o, con el APK de depuración, `adb shell run-as com.bryankey.tormentaimperial cat files/logs/registro.txt` |
+
+- **Quién lo escribe:** `scripts/services/ErrorLog.gd`, un `Logger` propio que
+  `GameConfig._ready()` engancha con `OS.add_logger()`. Recibe lo mismo que la
+  consola: `print`, `push_error` / `push_warning`, errores de script (con el archivo
+  y la línea del script cuando hay pila) y del motor.
+- **Por qué uno propio y no solo `debug/file_logging`:** el log de archivo de Godot
+  viene apagado en Android, no tiene tope por archivo (una sesión que repite un error
+  lo hace crecer sin fin) y el juego no puede leer sus últimas líneas al día. El de
+  Godot se deja como viene (`logs/godot*.log` en PC); el informe no lo necesita.
+- **Tope:** 200 KB por archivo y dos rotaciones (`registro.1.txt`,
+  `registro.2.txt`): ~600 KB como mucho.
+- **Rendimiento:** nada por fotograma. Las líneas van a memoria y se escriben en
+  bloque cada 3 s (un `Timer`), al cerrar y al pasar a segundo plano. Una línea
+  repetida seguida se cuenta (`(x27)`), no se repite; con más de 600 líneas sin
+  escribir se tiran las más viejas y se anota cuántas.
+- **Al abrir** se recuperan en memoria las últimas líneas de la sesión anterior: si
+  el juego se cerró de golpe, el informe del arranque siguiente las incluye.
+- **Sin datos personales** (`scripts/services/BugReport.gd`): las rutas de la
+  carpeta del usuario (`C:\Users\<nombre>`, `/home/<nombre>`, `/Users/<nombre>`)
+  pasan a `~`, y el nombre de la colonia (el del país del jugador) a `<colonia>`.
+  Tests: `tests/support/test_bug_report.gd`.
 
 ---
 

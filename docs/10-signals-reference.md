@@ -319,6 +319,7 @@ refresh its tech states on any message.
 | `sidebar_toggled` | `visible: bool` | PlacementAssist | ArmyPanel, HelperPanel, MarketPanel, ObjectivePanel, ProgressPanel, SettingsPanel, SkirmishPanel, TechTreePanel, PlacementAssist, UILayoutManager |
 | `grid_overlay_toggled` | `visible: bool` | SettingsPanel | GridOverlayControl, GridOverlay2D |
 | `fullscreen_changed` | `enabled: bool` | GameConfig | SettingsPanel |
+| `game_speed_changed` | `speed: float` | GameConfig (`set_game_speed`) | GameSpeedButton; the combat view (shortens its animations with `combat_pace`) |
 | `touch_controls_changed` | `enabled: bool` (resolved: "auto" already checked against the device) | GameConfig, DeviceProfile | OnScreenControls, ResourceHUD, HelperPanel |
 | `touch_controls_opacity_changed` | `opacity: float` | GameConfig | OnScreenControls |
 | `helper_visibility_changed` | `visible: bool` | HudRegistry | HelperPanel, SettingsPanel |
