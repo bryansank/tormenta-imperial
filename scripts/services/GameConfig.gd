@@ -421,9 +421,12 @@ var ui_touch_controls_opacity := 0.45
 const USER_SETTINGS_PATH := "user://settings.cfg"
 
 ## Whether the map cell grid overlay is shown permanently (toggle in Settings).
-## On by default (A10): the owner wants to see the cells at all times, faintly;
-## the alpha lives in the GridOverlay material in Main.tscn.
-var ui_grid_visible := true
+## Off by default (arte, 2026-10-05: "el suelo con la rejilla blanca parece un
+## prototipo"): the grid shows only while placing or moving a building
+## (BuildingPlacer forces it on), very faint; the alpha lives in the GridOverlay
+## material in Main.tscn. Saved as [ui] grid_always: the old key grid_visible
+## was written as true by every install, so it is ignored and dropped on save.
+var ui_grid_visible := false
 
 ## Whether the on-screen helper callouts are shown ("?" button). On by default
 ## so new players get guidance; the choice persists once toggled.
@@ -468,6 +471,12 @@ var ui_text_size := "auto"
 var ui_palette := "default"
 var ui_high_contrast := false
 var ui_panel_opacity := 1.0
+## Calidad grafica del mapa 3D (WorldLook, docs/21 §12): "high" pone SSAO (solo
+## Forward+), glow y sombras con cuatro cortes; "low" los quita y deja una sombra
+## de un corte. "auto" es "low" con el renderizador Mobile o Compatibility
+## (Android, el APK de QA) y "high" en Forward+ (PC).
+const GRAPHICS_QUALITY_MODES := ["auto", "high", "low"]
+var ui_graphics_quality := "auto"
 ## Ids de HudRegistry que el jugador oculto.
 var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
@@ -509,7 +518,7 @@ func load_user_settings() -> void:
 	audio_sfx_volume = clampf(float(cf.get_value("audio", "sfx", audio_sfx_volume)), 0.0, 1.0)
 	audio_ambient_volume = clampf(float(cf.get_value("audio", "ambient", audio_ambient_volume)), 0.0, 1.0)
 	audio_music_enabled = bool(cf.get_value("audio", "music_enabled", audio_music_enabled))
-	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
+	ui_grid_visible = bool(cf.get_value("ui", "grid_always", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
 	var view := String(cf.get_value("ui", "view_mode", ui_view_mode))
@@ -543,6 +552,8 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	ui_high_contrast = bool(cf.get_value("interfaz", "high_contrast", ui_high_contrast))
 	ui_panel_opacity = clampf(float(cf.get_value("interfaz", "panel_opacity", ui_panel_opacity)),
 		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
+	var quality := str(cf.get_value("interfaz", "graphics_quality", ui_graphics_quality))
+	ui_graphics_quality = quality if quality in GRAPHICS_QUALITY_MODES else "auto"
 	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
 	ui_hud_hidden = []
 	if hidden is Array:
@@ -570,7 +581,9 @@ func save_user_settings() -> void:
 	cf.set_value("audio", "sfx", audio_sfx_volume)
 	cf.set_value("audio", "ambient", audio_ambient_volume)
 	cf.set_value("audio", "music_enabled", audio_music_enabled)
-	cf.set_value("ui", "grid_visible", ui_grid_visible)
+	cf.set_value("ui", "grid_always", ui_grid_visible)
+	if cf.has_section_key("ui", "grid_visible"):
+		cf.erase_section_key("ui", "grid_visible")
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
 	cf.set_value("ui", "view_mode", ui_view_mode)
@@ -585,6 +598,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "palette", ui_palette)
 	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
+	cf.set_value("interfaz", "graphics_quality", ui_graphics_quality)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("perfil", "runs_finished", profile_runs_finished)

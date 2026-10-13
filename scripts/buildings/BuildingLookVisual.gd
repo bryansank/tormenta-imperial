@@ -141,7 +141,7 @@ func _leave_ruin() -> void:
 		_model.remove_meta("look_base_pos")
 		_model.remove_meta("look_base_rot")
 
-## Humo / serrin desde la cima, o una luz que parpadea en el tejado. Se crea la
+## Humo / serrin desde la cima, o un farol encendido en el tejado. Se crea la
 ## primera vez que el edificio trabaja; luego solo se enciende y apaga.
 func _ensure_active() -> void:
 	if _active != null:
@@ -153,8 +153,10 @@ func _ensure_active() -> void:
 	_active.name = "ActiveFx"
 	var n := LookRule.footprint_class(_data.grid_size)
 	if kind == "glow":
-		var glow := Fx.quad_3d("glow", 1.4 + 0.3 * n)
-		glow.position = Vector3(0.0, _top + 0.15, 0.0)
+		# Un farol pequeno posado en el tejado (no una bola de luz encima).
+		var lamp_size := 0.6 + 0.1 * n
+		var glow := Fx.quad_3d("glow", lamp_size)
+		glow.position = Vector3(0.0, _top + lamp_size * 0.3, 0.0)
 		_active.add_child(glow)
 	else:
 		var size := 2.0 + 0.5 * n
