@@ -48,6 +48,8 @@ cuentan como progreso.
 
 Lo que la sonda no hace: expediciones (el botín es opcional), decoraciones, y en el
 modo por defecto tampoco procesos manuales ni minado a mano (`--active=1` sí, §5.4).
+Desde 2026-10-04 el jugador activo tiende la carretera hasta la veta (hasta 4 tramos)
+antes de minar: minar pide carretera y dos obreros libres, y sin eso no minaba nunca.
 
 ---
 
@@ -271,7 +273,8 @@ los procesos.
 
 `--active=1`: el mismo jugador, además, mina a mano un yacimiento a la vez (gratis:
 20 de madera cada 8 s, 20 de oro cada 12 s, sin tocar el último de cada tipo) y
-mantiene ocupados los procesos del Núcleo, el aserradero y la mina.
+mantiene ocupados los procesos del Núcleo, el aserradero y la mina. (Tabla de antes del
+recorte del minado y de la carretera hasta la veta; lo de ahora, en §5.5.)
 
 | Semilla | Era 2 | Era 3 | CG | CG nv3 | Victoria | Tormentas | Diezmos echados | Mayor espera | Bolsa llena |
 |---|---|---|---|---|---|---|---|---|---|
@@ -294,6 +297,45 @@ mantiene ocupados los procesos del Núcleo, el aserradero y la mina.
   era 1 dura lo que el jugador tarde en hacer clic.
 - **El jugador activo llena la bolsa antes** (9-79 min con la bolsa llena, hasta 28.000
   recursos perdidos): los procesos producen de más en la era 3. Es el mismo riesgo de §7.
+
+### 5.5 La era 1 (2026-10-04): tormenta de prueba y minado recortado
+
+Dos decisiones de Bryan para la era 1: que dure **8-12 minutos** y que tenga una
+**tormenta de prueba** suave hacia el minuto 5.
+
+- **Tormenta de prueba** (`GameConfig.storm_trial_*`, `StormManager`): a los 300 s de
+  partida jugada (escalados por `dev_time_scale` en dev) entra el Aviso, con sus avisos y
+  consejos; luego Ceniza y Tormenta de duración normal, y calma. Sin Diezmo, sin romper
+  edificios, sin llevarse la cola de procesos ni de entrenamiento, producción al 75% y un
+  cuarto del mordisco de moral (−3 a severidad 1). Una vez por partida, guardada. Va en
+  su propio `StormCycle`: el reloj de verdad sigue armándose con la Fundición. Si la
+  Fundición llega antes del minuto 5, no sale. No en Constructor ni Sandbox (regla de
+  modo `storm_trial`). La sonda no la cuenta como tormenta y la anota aparte.
+- **Minado a mano**: oro 20 cada 12 s → **12 cada 30 s**; madera 20 cada 8 s → **10 cada
+  20 s** (hierro y petróleo igual). Por obrero y minuto rinden ahora lo mismo que su
+  extractor (oro 12 frente a 13,3 de la Mina; madera 15 frente a 15 del Aserradero):
+  minar sirve para arrancar o salir de un apuro, no es la vía rápida a la Fundición.
+
+Minuto en que llega la era 2 (la Fundición), cinco semillas, `--no-dev`:
+
+| Jugador | Antes | Con la tormenta de prueba | Con prueba y minado recortado |
+|---|---|---|---|
+| Por defecto (sin procesos ni minado) | 9-10 | 8,9 · 9,0 · 9,6 · 10,2 · 10,2 | **8,6 · 9,0 · 9,2 · 9,6 · 10,2** |
+| Activo que mina (carretera hasta la veta) | **3,8** en las cinco | — | **6,7 · 6,7 · 6,7 · 6,7 · 7,6** |
+| Activo sin minar (la sonda de antes: no podía) | 4,6 · 4,6 · 4,6 · 4,8 · 4,9 | igual (la era 2 llega antes del minuto 5 y la prueba no sale) | — |
+
+La tormenta de prueba llega (fase Tormenta) en el minuto 6,7-6,8 en todas; su Aviso, en
+el 5. Lo que dice la tabla:
+
+- **El jugador por defecto cumple**: era 1 de 8,6 a 10,2 minutos.
+- **El minado ya no rompe la era 1**: el que mina pasa del minuto 3,8 al 6,7-7,6, y la
+  tormenta de prueba le pilla en la era 1.
+- **Lo que sigue acortando la era 1 son los procesos**, no el minado: el jugador activo
+  que solo encadena `wood_planks` y `refined_lumber` (Núcleo y aserradero) llega a la
+  Fundición en el minuto 4,6-4,9, antes de la prueba. Con el minado recortado, minar
+  además le quita obreros y lo retrasa. Si se quiere que la era 1 dure 8 minutos también
+  para quien exprime los procesos, la palanca es `building_processes` (margen o
+  duración de esas dos recetas): fuera de este cambio, pendiente de decisión.
 
 ---
 
@@ -323,12 +365,10 @@ mantiene ocupados los procesos del Núcleo, el aserradero y la mina.
   quiere que no haga falta, las palancas son el precio del CG nv3 (con 3.100 en vez de
   3.500 se ganaron 2 de 5 partidas que antes se atascaban, serie `i` de la sonda), o
   que la producción de acero/petróleo se pare con la bolsa llena en vez de tirarse.
-- **La era 1 no tiene Tormenta.** Es lo que dice el diseño (Acto I), pero son 8-10 min
-  sin otra presión que el consumo. Si se quiere una "tormenta de prueba" guionizada en la
-  era 1, es una decisión de diseño abierta (ver [13-roadmap.md](13-roadmap.md), decisiones abiertas).
-- **El minado a mano es la palanca más fuerte de la era 1** (§5.4): con él la era 2
-  llega en el minuto 3. Si se quiere que la era 1 dure, la palanca es
-  `mining_data` (rendimiento o duración), no la línea.
+- ~~La era 1 no tiene Tormenta~~ y ~~el minado a mano se come la era 1~~: resueltos el
+  2026-10-04 con la tormenta de prueba y el recorte del minado (§5.5). Queda que **los
+  procesos manuales** (`wood_planks`, `refined_lumber`) llevan a la Fundición en el
+  minuto 4,6-4,9 a quien los encadena sin parar.
 - **El jugador de la sonda es rápido en la era 1** (actúa cada 2 s y coloca al primer
   intento). Una persona tardará más en encontrar el bosque y la veta; los minutos de la
   era 1 son un mínimo.
@@ -364,7 +404,9 @@ que se hicieron se deshicieron en `a2f2b45`). Lo que la línea medida contradice
 
 - [ ] La intro se lee entera y el primer paso del panel es "Construye: Aserradero".
 - [ ] El aserradero rechaza el sitio si no toca un bosque, y lo dice.
-- [ ] Antes de la Fundición no hay tormentas; la primera llega ~10 min después.
+- [ ] Hacia el minuto 5 pasa la tormenta de prueba: se ve el Aviso y su consejo, cae
+      ceniza, pasa la tormenta y escampa sin que bajen los Tasadores ni se rompa nada.
+- [ ] Antes de la Fundición no hay más tormentas; la primera de verdad llega ~10 min después.
 - [ ] La primera tormenta: el consejo del Aviso sale, la moral baja poco, el Diezmo se
       pelea (si hay cuartel) o se paga poco.
 - [ ] El panel ¿QUÉ HACER? dice siempre algo que se puede hacer ahora o dice qué falta.

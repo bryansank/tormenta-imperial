@@ -172,8 +172,11 @@ static func enemy_pressure(depth: int, era: int, risk: int) -> float:
 		+ GameConfig.combat_risk_enemy_scale * float(clampi(risk, 0, 2))
 
 ## The HP/ATK multiplier handed to CombatUnit.create() for this node's enemies.
+## En Gobernador (GameMode.combat_hard) todo sale `expedition_enemy_mult` mas
+## fuerte; las reglas del tablero no cambian. La primera escaramuza, que trae su
+## escala fijada en el nodo, no pasa por aqui.
 static func enemy_scale(depth: int, era: int, risk: int, is_boss: bool = false) -> float:
-	var scale: float = enemy_pressure(depth, era, risk)
+	var scale: float = enemy_pressure(depth, era, risk) * GameMode.expedition_enemy_mult()
 	if is_boss:
 		scale *= GameConfig.combat_boss_multiplier
 	return scale

@@ -1,9 +1,10 @@
-# Salta el tutorial guiado (paso 1: la tarjeta sobre CONSTRUIR, boton
-# "Saltar tutorial" a su derecha). Sin tutorial empiezan las ayudas, de una en una.
+# El tutorial guiado ya no se salta (decision de Bryan, 2026-10-04: sin "Saltar
+# tutorial"). Este subflujo se queda como espera para no romper a quien lo
+# llama: la tarjeta del tutorial sigue en pantalla, pero su velo no se come los
+# toques, asi que los flujos pueden seguir tocando el HUD. Un flujo que necesite
+# el HUD sin la tarjeta tiene que hacer el tutorial (aserradero + vivienda).
 appId: com.bryankey.tormentaimperial.qa
 ---
-- tapOn:
-    point: "65%,74%"      # Saltar tutorial (tarjeta del paso 1)
 - runFlow:
     file: esperar.yaml
     env:

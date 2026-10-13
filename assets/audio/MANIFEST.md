@@ -80,6 +80,7 @@ on the `EventBus` (they arrive with the Storm's last chapter).
 | `expedition_return` | `expedition_ended(0)`           | `era_up`       | Triumphant return sting |
 | `audit_summoned`    | `final_audit_summoned`          | `event_danger` | Great bell toll, reverb |
 | `storm_halted`      | `storm_halted_forever`          | `unlock`       | Wind dying, one bright chord |
+| `rank_up`           | `governor_rank_up`              | `era_up`       | Short promotion stamp + snare roll |
 
 Burst guard: the same key is not re-triggered within `SFX_BURST_GAP_MSEC` (60 ms), so
 an AI turn landing several hits at once does not stack the clip or drain the voice

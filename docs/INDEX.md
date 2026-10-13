@@ -8,7 +8,7 @@ Spanish, the rest in English.
 
 | # | Document | Description |
 |---|----------|-------------|
-| 01 | [Architecture](01-architecture.md) | Service-Signal-Component pattern, the 25 game autoloads in load order, the two scenes, file structure, how to add a system |
+| 01 | [Architecture](01-architecture.md) | Service-Signal-Component pattern, the 26 game autoloads in load order, the two scenes, file structure, how to add a system |
 | 02 | [Economy](02-economy.md) | 4 resources in one shared pool and 4 workshop materials outside it, production flow, manual mining (workers, road), the random map (40-48 grid, 3-6 deposits per type), storage caps (3,500 / 4,500 with techs), deposit rules, balance design |
 | 03 | [Buildings](03-buildings.md) | 16 building definitions (all 2x2 but the Núcleo and the road; Market and Laboratory), the road network and auto-road, costs with materials, workers, limits, prerequisites, deposit rules, upgrades that do something, status badges, construction flow |
 | 04 | [Population & Morale](04-population-morale.md) | Housing, real worker assignment, taking workers off, no road / no vein, workers held by mining, consumption, famine and the ruin floor, every morale source |

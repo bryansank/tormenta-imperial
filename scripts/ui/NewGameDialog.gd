@@ -7,6 +7,10 @@ extends CanvasLayer
 ##           Campana; las de los modos apartados se crean pero no se ven), con
 ##           nombre, dificultad, una linea y lo que pide el modo elegido. Tocar
 ##           una tarjeta la elige; EMPEZAR sigue.
+##           Con la Campana elegida, debajo, el NIVEL: Colono (el de siempre)
+##           o Gobernador (el complejo). Gobernador sale con candado y la
+##           condicion hasta que el perfil lo abre (GameMode.governor_unlocked;
+##           en dev_mode, siempre abierto).
 ##   Paso 2  solo con `ask_confirm`: "se borrara la partida actual (modo X)".
 ##
 ## No borra nada por su cuenta: emite `confirmed` con `chosen_mode` puesto, o
@@ -30,6 +34,8 @@ const MEDIUM := 520.0
 
 ## El modo elegido. Lo lee quien escucha `confirmed`.
 var chosen_mode: int = GameMode.DEFAULT
+## El nivel elegido (GameMode.Tier). Solo cuenta si el modo admite niveles.
+var chosen_tier: int = GameMode.TIER_DEFAULT
 
 var _ask_confirm := true
 var _current_mode: int = GameMode.DEFAULT
@@ -44,11 +50,21 @@ var _goal_label: Label
 var _confirm_label: Label
 var _start_btn: Button
 var _cards: Dictionary = {}   ## mode -> Button
+var _current_tier: int = GameMode.TIER_DEFAULT
+var _tier_box: VBoxContainer
+var _tier_cards: Dictionary = {}   ## tier -> Button
+var _tier_lock_label: Label
+
+const TIER_CARD_MIN_H := 84.0
 
 ## Antes de add_child. `current_mode` es el de la partida que se perderia.
-func setup(ask_confirm: bool, current_mode: int) -> void:
+func setup(ask_confirm: bool, current_mode: int, current_tier: int = GameMode.TIER_DEFAULT) -> void:
 	_ask_confirm = ask_confirm
 	_current_mode = current_mode
+	_current_tier = current_tier
+	# Se repite el nivel de la partida que se deja, si sigue abierto.
+	chosen_tier = current_tier if (current_tier == GameMode.TIER_DEFAULT or GameMode.governor_unlocked()) \
+		else GameMode.TIER_DEFAULT
 	# Una partida en un modo apartado (Sandbox de antes) no deja elegido un modo
 	# que ya no se ve: se empieza en el de siempre.
 	chosen_mode = current_mode if GameMode.is_offered(current_mode) else GameMode.DEFAULT
@@ -98,6 +114,24 @@ func _setup_ui() -> void:
 		btn.visible = GameMode.is_offered(mode)
 		_cards[mode] = btn
 		_grid.add_child(btn)
+
+	# ── Nivel de la Campana: Colono / Gobernador ──
+	_tier_box = VBoxContainer.new()
+	_tier_box.name = "TierBox"
+	_tier_box.add_theme_constant_override("separation", 6)
+	_pick_box.add_child(_tier_box)
+	_tier_box.add_child(ModalKit.make_text(Tr.t("LBL_TIER_PICK"), "small", UITheme.TEXT_DIM))
+	var tier_row := HBoxContainer.new()
+	tier_row.add_theme_constant_override("separation", 10)
+	_tier_box.add_child(tier_row)
+	for t in [GameMode.Tier.COLONIST, GameMode.Tier.GOVERNOR]:
+		var tbtn := _make_tier_card(t)
+		_tier_cards[t] = tbtn
+		tier_row.add_child(tbtn)
+	_tier_lock_label = ModalKit.make_text(Tr.t("TIER_GOVERNOR_LOCKED"), "small", UITheme.WARNING)
+	_tier_lock_label.name = "TierLockLabel"
+	_tier_box.add_child(_tier_lock_label)
+	_tier_lock_label.visible = not GameMode.governor_unlocked()
 
 	_goal_label = ModalKit.make_text("", "body", UITheme.TEXT)
 	_pick_box.add_child(_goal_label)
@@ -160,6 +194,64 @@ func _make_mode_card(mode: int) -> Button:
 		btn.custom_minimum_size.y = maxf(CARD_MIN_H, box.get_combined_minimum_size().y + 20.0))
 	return btn
 
+## Una tarjeta de nivel, mas baja que la de modo. Gobernador cerrado: apagada,
+## con un candado dibujado (las fuentes no garantizan el emoji) y sin seleccion.
+func _make_tier_card(t: int) -> Button:
+	var color: Color = UITheme.ACCENT if t == GameMode.TIER_DEFAULT else UITheme.DANGER
+	var locked: bool = t != GameMode.TIER_DEFAULT and not GameMode.governor_unlocked()
+	var btn := Button.new()
+	btn.name = "Tier_%s" % GameMode.tier_key_of(t)
+	btn.toggle_mode = true
+	btn.focus_mode = Control.FOCUS_ALL
+	btn.clip_contents = true
+	btn.disabled = locked
+	btn.custom_minimum_size = Vector2(0, TIER_CARD_MIN_H)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_card_button(btn, UITheme.CARD_BG, UITheme.TEXT_DIM if locked else color)
+	btn.pressed.connect(pick_tier.bind(t))
+
+	var box := VBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 14
+	box.offset_right = -10
+	box.offset_top = 8
+	box.offset_bottom = -8
+	box.add_theme_constant_override("separation", 2)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(box)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 6)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(head)
+	if locked:
+		var lock := make_lock_icon()
+		lock.name = "Lock"
+		head.add_child(lock)
+	var name_label := UITheme.make_label(Tr.t(GameMode.tier_name_key(t)), "section",
+		UITheme.TEXT_DIM if locked else UITheme.TEXT_BRIGHT)
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(name_label)
+	var desc := UITheme.make_label(Tr.t(GameMode.tier_desc_key(t)), "small", UITheme.TEXT_DIM if locked else UITheme.TEXT)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(desc)
+	box.minimum_size_changed.connect(func():
+		btn.custom_minimum_size.y = maxf(TIER_CARD_MIN_H, box.get_combined_minimum_size().y + 16.0))
+	return btn
+
+## Un candado: arco y cuerpo, del color del texto apagado.
+static func make_lock_icon() -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(16, 20)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.draw.connect(func():
+		var col: Color = UITheme.TEXT_DIM
+		c.draw_arc(Vector2(8, 9), 5.0, PI, TAU, 12, col, 2.0)
+		c.draw_line(Vector2(3, 9), Vector2(3, 11), col, 2.0)
+		c.draw_line(Vector2(13, 9), Vector2(13, 11), col, 2.0)
+		c.draw_rect(Rect2(1, 10, 14, 10), col))
+	return c
+
 ## El color de cada modo: el de su dificultad.
 static func mode_color(mode: int) -> Color:
 	match mode:
@@ -207,6 +299,31 @@ func _select(mode: int) -> void:
 	for m in _cards:
 		(_cards[m] as Button).set_pressed_no_signal(m == mode)
 	_goal_label.text = Tr.t(GameMode.goal_key(mode))
+	_tier_box.visible = GameMode.tier_allowed(mode)
+	_refresh_tiers()
+
+## Elige nivel. Gobernador cerrado no se deja elegir: devuelve false.
+func pick_tier(t: int) -> bool:
+	if t != GameMode.TIER_DEFAULT and not GameMode.governor_unlocked():
+		_refresh_tiers()
+		return false
+	chosen_tier = t
+	_refresh_tiers()
+	return true
+
+func _refresh_tiers() -> void:
+	for t in _tier_cards:
+		(_tier_cards[t] as Button).set_pressed_no_signal(t == chosen_tier)
+
+## El nivel con el que empezara la partida: el elegido si el modo los admite.
+func effective_tier() -> int:
+	return chosen_tier if GameMode.tier_allowed(chosen_mode) else GameMode.TIER_DEFAULT
+
+func tier_card(t: int) -> Button:
+	return _tier_cards.get(t, null)
+
+func is_governor_locked() -> bool:
+	return (_tier_cards[GameMode.Tier.GOVERNOR] as Button).disabled
 
 func _show_pick() -> void:
 	_pick_box.visible = true
@@ -222,7 +339,8 @@ func _on_start() -> void:
 		confirm()
 		return
 	_confirm_label.text = Tr.t("CONFIRM_NEW_GAME_MODE") % [
-		GameMode.display_name(_current_mode), GameMode.display_name(chosen_mode)]
+		GameMode.display_name_with_tier(_current_mode, _current_tier),
+		GameMode.display_name_with_tier(chosen_mode, effective_tier())]
 	_pick_box.visible = false
 	_confirm_box.visible = true
 	_relayout()

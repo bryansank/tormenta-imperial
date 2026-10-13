@@ -17,10 +17,10 @@ const Objectives := preload("res://scripts/services/Objectives.gd")
 ## respuesta (una obra que acaba, oro que entra) pasa todo el rato; un segundo es
 ## lo bastante vivo para leerlo y no cuesta nada.
 const REFRESH_EVERY := 1.0
-## Lo que pide el modo de esta partida. Se rellena al abrir: el panel se
-## construye antes de que la partida cargue y sepa en que modo esta.
-var _mode_header: Label
-var _mode_goal: Label
+## El titulo; lo que pide el modo de esta partida va en su tooltip. Se rellena
+## al abrir: el panel se construye antes de que la partida cargue y sepa en que
+## modo esta.
+var _title: Label
 
 func _ready() -> void:
 	layer = 15 # Higher than other UI
@@ -76,8 +76,12 @@ func _setup_ui() -> void:
 	vbox.add_theme_constant_override("separation", 15)
 	margin.add_child(vbox)
 
-	# Header
+	# Header. La mision del modo va en el tooltip del titulo (2026-10-04): la
+	# ultima linea de EL CAMINO ya la dice, y antes ocupaba la cabecera entera.
 	var header := UITheme.make_panel_header(Tr.t("LBL_OBJ_TITLE"), toggle)
+	_title = header.get_child(0) as Label
+	if _title != null:
+		_title.mouse_filter = Control.MOUSE_FILTER_PASS
 	vbox.add_child(header)
 
 	vbox.add_child(UITheme.make_separator())
@@ -92,14 +96,6 @@ func _setup_ui() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 20)
 	scroll.add_child(content)
-
-	# El modo primero: en Constructor o Sandbox el objetivo no es el asedio.
-	_mode_header = UITheme.section_header("", UITheme.ACCENT)
-	content.add_child(_mode_header)
-	_mode_goal = UITheme.make_label("", "body", UITheme.TEXT_BRIGHT)
-	_mode_goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	content.add_child(_mode_goal)
-	content.add_child(UITheme.make_separator())
 
 	# ── AHORA: el siguiente paso, calculado desde la partida (Objectives) ──
 	# Antes esto eran cinco pasos fijos, y tres eran falsos: construir un Nucleo
@@ -124,13 +120,8 @@ func _setup_ui() -> void:
 	_route_box.add_theme_constant_override("separation", 4)
 	content.add_child(_route_box)
 
-	# La mision la dice la cabecera del modo (arriba): en Constructor o Sandbox no
-	# hay asedio que sobrevivir.
-	content.add_child(UITheme.make_separator())
-	var tip := UITheme.make_label(Tr.t("OBJ_TIP_TEXT"), "small", UITheme.ACCENT)
-	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(tip)
+	# La nota de "CONSTRUIR abajo, el resto en MENU" (29 palabras, y con Mercado y
+	# Tecnologia ya fuera del menu) se quito el 2026-10-04: lo dicen las ayudas.
 
 	# Close Button at bottom
 	var close_btn := Button.new()
@@ -189,5 +180,9 @@ func get_now_text() -> Dictionary:
 # ── modos-de-juego ──
 
 func refresh_mode() -> void:
-	_mode_header.text = Tr.t("LBL_OBJ_MODE") % GameMode.display_name().to_upper()
-	_mode_goal.text = Tr.t(GameMode.goal_key())
+	if _title != null:
+		_title.tooltip_text = "%s\n%s" % [Tr.t("LBL_OBJ_MODE") % GameMode.display_name().to_upper(), Tr.t(GameMode.goal_key())]
+
+## La mision del modo, como la ve el jugador (tooltip del titulo). Para pruebas.
+func mode_text() -> String:
+	return _title.tooltip_text if _title != null else ""

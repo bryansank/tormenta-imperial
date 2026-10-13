@@ -548,6 +548,21 @@ lost razes the base as a side effect.
   `ProgressionManager._announce_wave()` reconciles against `get_deployable_units()`
   before **every** wave, so a desertion between waves takes a soldier out of the
   siege too. Reinforcements never join a siege in progress.
+- **So is the morale (2026-10-04, Bryan's call).** `ProgressionManager.begin_final_audit()`
+  hands `FinalAudit.begin(home, morale)` the town's morale **when "QUE BAJEN" is
+  pressed**; the first time a summons begins it replaces `morale_snapshot` and is
+  stamped on the garrison. The summon-time value is only a preview. Once `started`,
+  the snapshot is frozen for the rest of the siege (a reload does not change it). A
+  save with a summoned, never-opened siege (`started` false, or no key) follows the
+  new rule when the gate opens.
+- **A fallen tower crew leaves its tower damaged** (2026-10-04, Bryan's call), in any
+  defensive board — Tithe (open or blind) or siege wave. `CombatManager._apply_result_for()`
+  calls `damage_towers_for_lost_crews()`: one operational tower per fallen crew, the
+  soundest first, loses `storm_tower_crew_loss_damage` (40%) of its max health through
+  `BuildingHealth`, **never down to ruins** (it keeps at least 1 HP, so it still
+  mitigates and still fields a crew), and has to be repaired. The result carries
+  `towers_damaged`; `BattleScreen`'s report and `WarReportScreen`'s blind-defence
+  report print it (`LBL_REPORT_TOWERS_DAMAGED`).
 - **The Tithe still comes while the siege is only summoned.** That is a decision,
   not an accident: the Regency waits for the player, the Assessors do not. The
   garrison defends as usual, casualties leave `ArmyManager`, and the muster at the
@@ -715,9 +730,10 @@ Default `combat_unit_stats`:
 | `artillery` | 22 | 14 | 1 | 1 | 3 | 2 | 3 |
 | `vehicle` | 60 | 12 | 5 | 4 | 1 | 1 | 4 |
 
-Morale is captured once, at launch (`_morale_snapshot`), and frozen for the whole
-expedition or siege: the battle is fought with the spirit the town had when the
-column marched out.
+Morale is captured once and frozen for the whole expedition or siege: at launch for
+an expedition (`_morale_snapshot`), when the gate opens ("QUE BAJEN",
+`FinalAudit.begin()`) for the siege — the battle is fought with the spirit the town
+had when the column marched out or the gate opened.
 
 ### `final_audit_*`
 
@@ -734,10 +750,29 @@ column marched out.
 | `final_audit_extra_gun_chance` | `0.35` | The siege's one coin flip | Set to 0 and every siege of the same era looks identical |
 | `final_audit_resummon_min_units` | `3` | Living units needed to call the Regency back after a loss | The price of losing: rebuild this much before trying again |
 
+### Gobernador: the same rules, a harder enemy
+
+The **Gobernador** tier of the Campaign (docs/20) does not touch `CombatRules`,
+the AI, the board or the loot. It only multiplies the enemy, through three keys of
+`GameConfig.game_tier_rules["governor"]`, read via `GameMode` (all 1.0 in Colono,
+and 1.0 whenever `GameMode.combat_hard()` is false):
+
+| Key | Gobernador | Applied in | Effect |
+|-----|-----------|------------|--------|
+| `expedition_enemy_mult` | `1.05` | `ExpeditionGenerator.enemy_scale()` | Every expedition enemy (and the boss) has +5 % HP/ATK (1.15 was measured and is a wall: docs/16). The first sortie keeps its fixed `combat_first_sortie_enemy_scale` |
+| `tithe_force_mult` | `1.34` | `StormManager.assessor_roster()` | One more Assessor at severities 1-3 (3/4/5 → 4/5/6, rounding `raw × 1.34`); from severity 4 both tiers sit at `combat_deploy_cap` (6), so the late Tithe is as big as ever — the escalation per Tithe repelled gets there sooner |
+| `audit_enemy_mult` | `1.06` | `FinalAudit.wave_scale()` | Every siege wave hits 6 % harder |
+
+Measured with `tools/siege_probe.gd -- --tier=governor` and
+`tools/balance_probe.gd` (`-- --tier=governor`): the siege stays winnable with the
+maximum garrison (docs/17, "Gobernador") and expeditions get harder without
+becoming a wall (docs/16, "Gobernador").
+
 Tower crews are configured on the storm side, not here:
 `storm_tower_garrison_unit` (`artillery`), `storm_tower_garrison_per_tower` (1),
 `storm_tower_garrison_max` (2), and `GameConfig.get_tower_garrison()`, which caps
 the crews so the defender's row never overflows `combat_board_size.x`.
+`storm_tower_crew_loss_damage` (0.4) is what a tower loses when its crew falls.
 
 ---
 
@@ -769,7 +804,7 @@ GODOT=godot tools/run_tests.sh -a tests/combat
 | `tests/combat/test_final_audit.gd` | Wave rolling, shape per wave, attrition across waves, loss without game over, resummon floor, persistence |
 | `tests/storm/test_defense.gd` | The Tithe defence path through `start_defense()` |
 | `tests/storm/test_defense_auto_resolve.gd` | `auto_resolve_defense()` when the board is busy |
-| `tests/storm/test_tower_garrison.gd` | Crew count, back-row deployment, crews outside the deploy cap and outside the ledger |
+| `tests/storm/test_tower_garrison.gd` | Crew count, back-row deployment, crews outside the deploy cap and outside the ledger, and the tower damaged (never ruined) when its crew falls |
 | `tests/storm/test_final_audit_wiring.gd` | `ProgressionManager` ↔ `CombatManager` seam, `storm_halted_forever`, victory ordering |
 | **`tests/storm/test_board_handoff.gd`** | **The seams.** A resolved board still counts as open; the Tithe never opens a board over an unread report; winning the boss and losing a run both close the board they were fought on; the Tithe stands down while the siege is *active* but not while it is merely summoned; and closing a wave's report leaves the next wave on screen. Four bugs that left the game unfinishable lived here, and none of them was visible from the pure models |
 | `tests/storm/test_storm_toasts_over_board.gd` | Notification toasts draw above `BattleScreen` and below `VictoryScreen` |
@@ -823,7 +858,8 @@ Verified against the code, not the spec. Update this list as things land.
   cannot produce this.
 - **Towers have no behaviour of their own** beyond mitigating storm damage
   (`StormManager._damage_buildings()` via `GameConfig.get_storm_damage()`) and
-  fielding a crew on a defensive board. There is no tower attack on the base map.
+  fielding a crew on a defensive board (and taking damage when that crew falls).
+  There is no tower attack on the base map.
 - **What losing a siege costs is a balance call, per mode.** In Campaña
   `final_audit_lost` takes a maximum-severity Tithe and maximum storm damage, and the
   siege can be resummoned once `final_audit_resummon_min_units` (3) stand — but the

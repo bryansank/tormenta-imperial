@@ -41,11 +41,13 @@ func test_the_defense_report_counts_both_sides_and_the_rounds() -> void:
 	assert_str(text).contains(Tr.t("LBL_REPORT_THEIR_LOSSES"))
 	assert_str(text).contains("3 %s" % Tr.t(GameConfig.get_unit_def("infantry").get("name", "infantry")))
 	assert_str(text).contains(Tr.t("LBL_REPORT_TOWER_CREWS") % [1, 0])
-	assert_str(text).contains(Tr.t("STORM_TITHE_REPELLED"))
+	# El resultado lo dicen el titulo y el parte del Diezmo, que sale detras: el
+	# cuerpo no lo repite (menos texto, 2026-10-04).
+	assert_str(text).not_contains(Tr.t("STORM_TITHE_REPELLED"))
 
-func test_a_lost_defense_says_the_tithe_was_collected() -> void:
+func test_a_lost_defense_with_no_casualties_says_so() -> void:
 	var text := "\n".join(_script().defense_lines(false, 4, {}))
-	assert_str(text).contains(Tr.t("STORM_TITHE_PAID"))
+	assert_str(text).not_contains(Tr.t("STORM_TITHE_PAID"))
 	# Sin bajas se dice, no se deja la linea en blanco.
 	assert_str(text).contains(Tr.t("LBL_REPORT_NONE"))
 
@@ -61,7 +63,8 @@ func test_the_signal_nobody_listened_to_now_opens_a_report() -> void:
 
 func test_the_tithe_report_reads_the_taken_dictionary() -> void:
 	var text := "\n".join(_script().tithe_lines(false, {"gold": 50, "steel": 10, "buildings": 1, "workers": 2}))
-	assert_str(text).contains(Tr.amount_list({"gold": 50, "steel": 10}))
+	assert_str(text).contains("50 " + Tr.res_name("gold"))
+	assert_str(text).contains("10 " + Tr.res_name("steel"))
 	assert_str(text).contains(Tr.t("LBL_TITHE_SEIZED_N") % 1)
 	assert_str(text).contains(Tr.t("LBL_TITHE_WORKERS_N") % 2)
 

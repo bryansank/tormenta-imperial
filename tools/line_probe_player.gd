@@ -538,6 +538,17 @@ func _mine_by_hand() -> void:
 	for entry in _map._deposit_cells:
 		if entry["id"] != want or not is_instance_valid(entry["node"]) or int(counts.get(want, 0)) <= 1:
 			continue
+		# Desde 2026-09-28 minar pide carretera hasta la veta y dos obreros
+		# libres. Sin esto el jugador activo no minaba nunca (todas las vetas
+		# daban MINE_NEEDS_ROAD) y la sonda no podia medir el minado a mano: una
+		# persona tiende la carretera. Solo si es corta (<= 4 tramos).
+		var node: Node = entry["node"]
+		if ProcessManager.mining_blocker(node) == "MINE_NEEDS_ROAD":
+			var route: Variant = Rules.road_route(node.get_meta("cell", Vector2i(-1, -1)),
+				node.get_meta("deposit_size", Vector2i(2, 2)))
+			if route == null or (route as Array).size() > 4:
+				continue
+			_pave_to(node.get_meta("cell", Vector2i(-1, -1)), node.get_meta("deposit_size", Vector2i(2, 2)))
 		if ProcessManager.start_mining(entry["node"], want):
 			_act("mine %s" % want, false)
 			return
@@ -663,6 +674,10 @@ func _connect_probes() -> void:
 		if not _r["milestones"].has(id):
 			_r["milestones"][id] = _clock)
 	EventBus.storm_started.connect(func(sev: int) -> void:
+		# La tormenta de prueba de la era 1 no cuenta como tormenta: se anota aparte.
+		if StormManager.is_trial_running():
+			_r["trial_at"] = _clock
+			return
 		_r["storms"].append({"t": _clock, "severity": sev, "ruined": 0,
 			"morale_before": PopulationManager.get_morale(), "towers": CombatManager.count_standing_towers(),
 			"stored": ResourceManager.get_total_stored()}))
@@ -756,6 +771,9 @@ func _print_run(r: Dictionary) -> void:
 	for id in MILESTONE_ORDER:
 		line += "%s=%s " % [id, _mins(r["milestones"].get(id, -1.0))]
 	print("hitos (min): " + line)
+	print("era 1: era 2 en el minuto %.1f | tormenta de prueba en el %s" % [
+		float(r["milestones"].get("era_2", -60.0)) / 60.0,
+		"%.1f" % (float(r["trial_at"]) / 60.0) if r.has("trial_at") else "—"])
 	for st in r["storms"]:
 		var tithe: Dictionary = st.get("tithe", {})
 		print("  tormenta %5s sev %d torres %d ruinas %d moral %d->%s bolsa %d | diezmo %s %s" % [

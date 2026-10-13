@@ -59,6 +59,9 @@ const ENTRIES := {
 		"title": "QG_BUILDINGS_T", "body": "QG_BUILDINGS_B", "target": "build_button"},
 	"guide_qg_progress": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "QG_PROGRESS_T", "body": "QG_PROGRESS_B", "target": "objective"},
+	# Mantener pulsado para leer (TouchTooltip): el pie de la guia rapida.
+	"guide_read": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_READ", "body": "QG_READ_HINT", "target": ""},
 	# ── Guias basicas (las antiguas paginas "Como se juega") ──
 	"guide_first_steps": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "TUT_PLAY_1_TITLE", "body": "HELP_B_FIRST_STEPS", "target": "build_button"},
@@ -72,7 +75,7 @@ const ENTRIES := {
 	"overflow": {"kind": "tip", "cat": CAT_ECONOMY, "basic": false,
 		"title": "TUT_TIP_OVERFLOW_TITLE", "body": "TUT_TIP_OVERFLOW_BODY", "target": "resources"},
 	"consumption": {"kind": "tip", "cat": CAT_ECONOMY, "basic": false,
-		"title": "TUT_TIP_CONSUMPTION_TITLE", "body": "HELP_TIP_CONSUMPTION_BODY", "target": "status"},
+		"title": "TUT_TIP_CONSUMPTION_TITLE", "body": "HELP_TIP_CONSUMPTION_BODY", "target": "workers"},
 	"market": {"kind": "tip", "cat": CAT_ECONOMY, "basic": false,
 		"title": "TUT_TIP_MARKET_TITLE", "body": "TUT_TIP_MARKET_BODY", "target": ""},
 	"tech_tree": {"kind": "tip", "cat": CAT_ECONOMY, "basic": false,

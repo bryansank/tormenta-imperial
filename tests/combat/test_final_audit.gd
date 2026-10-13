@@ -429,3 +429,38 @@ func test_the_summary_counts_the_standing_and_the_fallen() -> void:
 		fallen += int(count)
 	assert_int(standing + fallen).is_equal(5)
 	assert_int(fallen).is_equal(1)
+
+# ── La moral se lee al abrir la puerta (decision de Bryan, 2026-10-04) ──
+
+func test_the_morale_that_counts_is_the_one_at_the_gate() -> void:
+	var audit := _audit(4242, 3, 90.0)
+	audit.begin(GARRISON, 15.0)
+	assert_float(audit.morale_snapshot).is_equal(15.0)
+	for unit in audit.living_garrison():
+		assert_float(unit.morale_attack_mod).is_equal(CombatRules.morale_attack_mod(15.0))
+		assert_int(unit.morale_initiative_bonus).is_equal(CombatRules.morale_initiative_bonus(15.0))
+
+func test_without_a_morale_the_gate_keeps_the_summon_one() -> void:
+	var audit := _audit(4242, 3, 70.0)
+	audit.begin(GARRISON)
+	assert_float(audit.morale_snapshot).is_equal(70.0)
+
+func test_a_siege_already_fought_keeps_its_morale_after_a_reload() -> void:
+	var audit := _audit(4242, 3, 50.0)
+	audit.begin(GARRISON, 80.0)
+	var restored := FinalAudit.from_dict(audit.to_dict(), 3)
+	assert_bool(restored.is_pending()).is_true()
+	restored.begin(GARRISON, 10.0)
+	assert_float(restored.morale_snapshot).is_equal(80.0)
+	for unit in restored.living_garrison():
+		assert_float(unit.morale_attack_mod).is_equal(CombatRules.morale_attack_mod(80.0))
+
+func test_a_save_summoned_but_never_opened_reads_the_morale_at_the_gate() -> void:
+	# Un guardado de antes de la regla, con el asedio convocado y sin abrir:
+	# trae la moral de cuando se convoco, y al pulsar QUE BAJEN manda la de ahora.
+	var saved: Dictionary = _audit(4242, 3, 95.0).to_dict()
+	saved.erase("started")
+	var restored := FinalAudit.from_dict(saved, 3)
+	assert_bool(restored.started).is_false()
+	restored.begin(GARRISON, 30.0)
+	assert_float(restored.morale_snapshot).is_equal(30.0)

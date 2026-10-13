@@ -122,7 +122,7 @@ func _build() -> void:
 			helper.open_building_guide()))
 	tools.add_child(_tool_button("BTN_GUIDE_REPLAY", func():
 		close()
-		TutorialManager.start_guide(true)))
+		TutorialManager.replay_guide()))
 	tools.add_child(_tool_button("BTN_STORY", func():
 		close()
 		TutorialManager.show_prologue()))

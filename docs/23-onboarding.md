@@ -23,11 +23,11 @@ hay construido, no se cree a ciegas.
 
 ## 1. Prólogo (`scripts/ui/PrologueScreen.gd`)
 
-El lore en **tres folios y en lenguaje claro** (2026-09-28): frases cortas y palabras
+El lore en **cuatro folios y en lenguaje claro** (2026-09-28; el cuarto, 2026-10-04): frases cortas y palabras
 normales, en ES y EN. Ya no hay membrete ni subtítulo de expediente: cada hoja empieza
 por su título. El texto va a máquina; debajo, a mano y en tinta azul
 (`UITheme.hand_font()`), una nota de los Amortizados (`PRO_<n>_NOTE`). El primer folio
-lleva el tampón **FIRMADO** y el último **VIVOS**; cada folio, el sello de lacre con
+lleva el tampón **FIRMADO** y el tercero **VIVOS** (la hoja final no lleva tampón); cada folio, el sello de lacre con
 "NADA SE PIERDE" (`RegenciaSeal.gd`, dibujado, sin imagen). El papel y la mesa son ruido
 generado (`UITheme.parchment_texture`).
 
@@ -36,11 +36,24 @@ generado (`UITheme.parchment_texture`).
 | 1 | La firma del Emperador | El Imperio manda en casi todo el mundo; el Emperador lleva un siglo muerto y la Regencia firma por él |
 | 2 | La Tormenta | La ceniza que manda el Imperio, los Tasadores y el Diezmo |
 | 3 | Quiénes somos | Los Amortizados, la isla dada por perdida, y lo que vamos a hacer: construir, aguantar y no pagar |
+| 4 | Desde cero | **La hoja final, la última antes de jugar** (idea de Bryan, 2026-10-04): construirlo todo desde cero para pelear contra el Imperio y que no nos opriman; para eso, hacer crecer la economía y entrenar soldados. Sin instrucciones de botones |
 
-Los textos son `PRO_1_*`, `PRO_2_*`, `PRO_3_*` en `Tr.gd`. El agente
+Los textos son `PRO_1_*` … `PRO_4_*` en `Tr.gd`. La hoja final, tal cual:
+
+> **Desde cero.** Empezamos con casi nada: un Núcleo, unos árboles y nuestras manos. Lo
+> vamos a construir todo desde cero. / Primero haremos crecer nuestra economía. Con ella
+> entrenaremos soldados. Y con soldados pelearemos contra el Imperio, para que nunca más
+> nos opriman. *Nota:* «Ladrillo a ladrillo, hasta que dejen de darnos órdenes.»
+>
+> **From nothing.** We start with almost nothing: a Core, a few trees and our own hands.
+> We will build everything from scratch. / First we grow our economy. With it we train
+> soldiers. And with soldiers we fight the Empire, so no one ever oppresses us again.
+> *Note:* “Brick by brick, until they stop giving us orders.”
+ El agente
 `.claude/agents/escritor-lore.md` es el que escribe lore y tutoriales con esta guía de
 estilo.
 
+- **El prólogo sí se salta** (`Saltar historia`, Esc): es lore, no tutorial.
 - **Pie:** `Saltar historia` · puntos de página · `◀ Atrás` · `Siguiente ▶` (`Empezar`
   en el último). Atrás está apagado en el primer folio.
 - **Deslizar** el dedo a la izquierda pasa folio, a la derecha vuelve. Un deslizamiento
@@ -52,7 +65,7 @@ estilo.
 
 | Modo | Prólogo |
 |---|---|
-| Campaña, Supervivencia | Completo, 3 folios (la firma del Emperador, la Tormenta, quiénes somos) |
+| Campaña, Supervivencia | Completo, 4 folios (la firma del Emperador, la Tormenta, quiénes somos, desde cero) |
 | Constructor | Corto: portada y un cierre propio, **EN TRÁMITE** ("Aquí no llega la Tormenta") |
 | Sandbox | Ninguno (cuenta como visto). "Historia" a mano cuenta el completo |
 
@@ -92,9 +105,17 @@ Coach marks sobre la interfaz real. Cada paso:
 - **oscurece** la pantalla menos el control del que habla, con un marco de latón que
   late (el velo es `MOUSE_FILTER_IGNORE`: se puede tocar todo, también fuera de orden);
 - **señala** con una flecha;
-- pone **una línea** de lo que hay que hacer, con "TUTORIAL · PASO n DE 5" y
-  `Saltar tutorial`. La tarjeta va junto a lo señalado (debajo si cabe, si no encima),
-  nunca encima.
+- pone **una línea** de lo que hay que hacer, con "TUTORIAL · PASO n DE 5", y debajo
+  **lo que falta** si algo lo impide. La tarjeta va junto a lo señalado (debajo si cabe,
+  si no encima), nunca encima.
+
+**No se salta** (decisión de Bryan, 2026-10-04). La tarjeta ya no tiene `Saltar
+tutorial`: el tutorial de una partida nueva se hace entero. `TutorialManager.skip_guide()`
+queda como API interna para sondas y pruebas, y fuera de `GameConfig.dev_mode` no hace
+nada. Los guardados con el tutorial ya saltado (`"skipped"`) o hecho cargan igual. El
+**repaso** que se pide en AYUDA > Repetir tutorial (`replay_guide()`) sí tiene `Terminar
+repaso` (`stop_replay()`): lo pidió el jugador. Con el tutorial de verdad aún en marcha,
+Repetir tutorial no hace nada (si no, sería la forma de saltarlo).
 
 | # | Paso (`GUIDE_STEPS`) | Señala | Avanza cuando |
 |---|---|---|---|
@@ -103,7 +124,7 @@ Coach marks sobre la interfaz real. Cada paso:
 | 3 | `place_sawmill` | un aro sobre el bosque más cercano (flecha al borde si no se ve); con el dedo conviven con las casillas verdes de `PlacementAssist` (docs/21 §9) | se coloca: con ratón, clic; con el dedo, tocar la casilla y ✓ CONSTRUIR AQUÍ (o el fantasma) |
 | 4 | `wait_sawmill` | un aro sobre la obra | termina la obra (la carretera se tiende sola y los trabajadores llegan andando) |
 | 5 | `open_house` / `pick_house` / `place_house` | CONSTRUIR, la tarjeta de la Casa | se coloca una casa |
-| — | `done` | el objetivo | "Entendido" o 10 s |
+| — | `done` | ¿QUÉ HACER? (su entrada del ☰ MENÚ, o el botón ☰ MENÚ) | "Entendido" o 10 s |
 
 **El paso se deduce, no se cuenta.** `TutorialManager.derive_step(hechos)` es pura:
 aserraderos (en obra y hechos), casas, lista de construir abierta, qué se tiene en la
@@ -124,6 +145,54 @@ CONSTRUIR del detalle y el texto cambia a "Bien. Ahora pulsa CONSTRUIR"
 (`GUIDE_PRESS_BUILD`). La tarjeta pedida (la Vivienda es la última de la lista) se
 desplaza sola a la vista. Con otra ventana abierta encima (Tecnología, Mercado...) la
 marca no se pinta; con CONSTRUIR sí, porque los pasos ocurren ahí dentro.
+
+### 2.1 Que ningún paso se atasque
+
+Sin botón de saltar, ningún paso puede quedarse pidiendo algo imposible. Cada segundo
+(`GUIDE_CHECK_SECONDS`), con el tutorial activo, `TutorialManager` repasa las metas:
+
+| Caso | Qué hace | Prueba (`tests/tutorial/test_guide_never_stuck.gd`) |
+|---|---|---|
+| Sin bosque al que llegar (agotado, tapado, sin carretera posible) | La meta del aserradero se pasa de largo (`has_reachable_deposit`, en los dos giros) y pide la casa. Si vuelve a haber sitio, la vuelve a pedir | `no_reachable_forest`, `no_forest_at_all`, `a_forest_lost_mid_guide` |
+| Mapa aún sin sortear | No se salta nada a ciegas | `a_map_not_drawn_yet` |
+| Tope de edificios (un repaso con los 5 aserraderos) | Se pasa de largo (`goal_impossible_reason` = `limit`; también `prereq`) | `the_building_limit_reached` |
+| Paso ya cumplido antes de llegar | El paso sale de lo construido: no lo pide | `a_step_already_done`, `a_sawmill_built_before` |
+| Faltan recursos | Debajo del paso, "Te falta: 70 oro \| 50 madera" (`step_hint` con `OBJ_MISSING`, ≤ 8 palabras: el aserradero y la casa solo cuestan oro y madera) | `short_of_resources`, `the_panel_shows_the_missing_line` |
+| Faltan obreros | "Faltan obreros: construye antes una Vivienda." (`GUIDE_NEED_WORKERS`); la casa no pide obreros | `short_of_workers` |
+| Táctil | Todos los pasos tienen texto con el dedo; lo que falta se dice igual | `touch_steps_all_resolve` |
+| Vista 2D | El bosque se busca en el generador registrado (`GameManager.map_generator()`, también `MapGenerator2D`) y su punto sin Camera3D | `the_2d_view_finds_the_forest_too` |
+
+Las metas imposibles (`blocked_goals()`) no se guardan: se recalculan al cargar y cada
+segundo. La obra (`wait_sawmill`) no puede atascarse: termina por tiempo.
+
+### 2.2 Cómo están hechos los pasos
+
+`GUIDE_GOALS` es la lista **ordenada** de metas; `GUIDE_STEPS`, el texto, el número y el
+objetivo de cada paso. `derive_step(hechos, metas)` recorre las metas y devuelve el
+primer paso sin cumplir. Dos clases de meta:
+
+- `"build"`: un edificio, con pasos `open`, `pick`, `place` y, si se espera la obra,
+  `wait`. Los hechos son `<id>s` y `<id>s_built` (lo que hay menos el punto de partida).
+- `"fact"`: algo que no es un edificio. Se cumple con
+  `TutorialManager.note_guide_fact("<fact>")`, que se guarda en la partida
+  (`guide_flags`) y vale aunque el tutorial no haya llegado a ese paso.
+
+### 2.3 Hueco para la granja y "recoger producción"
+
+La rama `feat/comida-granja-recoger` añade dos pasos **sin reescribir nada**:
+
+1. En `GUIDE_GOALS`, detrás de la casa:
+   `{"goal": "farm", "kind": "build", "building": "farm", "steps": {"open": "open_farm", "pick": "pick_farm", "place": "place_farm", "wait": "wait_farm"}}`
+   y `{"goal": "collect", "kind": "fact", "fact": "collected", "step": "collect_output"}`.
+2. En `GUIDE_STEPS`, esos pasos con su `n` (6 y 7), su clave de texto y su objetivo
+   (`card:farm`, `building:farm`...); `GUIDE_TOTAL` pasa a 7 (una prueba exige que sea el
+   mayor `n`).
+3. Las claves `GUIDE_*_FARM` y `GUIDE_COLLECT_OUTPUT` en `Tr.gd`, ES y EN, con `_TOUCH`.
+4. Quien vea la recogida llama `TutorialManager.note_guide_fact("collected")`.
+
+El resto (contar, saltar lo imposible, decir lo que falta, guardar, cargar) ya funciona
+para cualquier meta: `test_a_farm_and_a_collect_goal_slot_in_without_rewriting` lo
+comprueba con esas dos metas inyectadas.
 
 **Texto de dedo o de ratón:** cada paso usa `Tr.ti`, con variantes `_TOUCH` ("Toca
 CONSTRUIR" / "Haz clic en CONSTRUIR"; "arrastra el mapa" / "WASD o arrastrar").
@@ -151,7 +220,7 @@ apunta.
 3. **Cerrada o agotada, vista** (`TutorialManager.helps_seen`, en la partida). No vuelve
    a salir sola.
 4. **Contextual:** nada sale durante el tutorial guiado. Al terminarlo salen los básicos
-   de uno en uno (y si lo salta, primero el de construir). El de ESCARAMUZAS sale cuando
+   de uno en uno (y si se saltó, solo posible con la API interna, primero el de construir). El de ESCARAMUZAS sale cuando
    aparece su botón. Los consejos, cuando pasa lo que explican.
 5. **Se callan y vuelven** sin contar como vistas: con una ventana abierta, en pausa, con
    el índice de AYUDA abierto, colocando con el dedo y, los globos, con la Tormenta
@@ -161,6 +230,13 @@ apunta.
 7. **Interruptor global** (`GameConfig.ui_helper_visible`, el de Ajustes > Interfaz de
    #29 y el del índice): apaga las que salen solas; las que se piden en el índice salen
    igual.
+8. **Cortos** (2026-10-04): un globo está junto a su control, así que no lo describe
+   ("CONSTRUIR (el botón grande de abajo)" sobraba). Cada globo, en 14 palabras como
+   mucho, con su `_TOUCH` (`test_menos_texto_avisos.gd`). El de ☰ MENÚ ya no nombra
+   Mercado ni Tecnología, que se abren desde sus edificios. Las explicaciones que los
+   paneles mandan al tooltip (descripción del edificio, regla de la carretera, intro
+   del árbol tecnológico) siguen en la guía rápida, la guía de edificios y los
+   consejos del índice: en táctil es donde se leen (docs/21 §6, "Menos texto").
 
 **La primera escaramuza** (docs/15-combat.md §4). Al salir del cuartel la primera
 unidad, el consejo `first_sortie` señala ☰ MENÚ (donde vive ESCARAMUZAS) y ¿QUÉ HACER?
@@ -215,9 +291,10 @@ artillerías), `HELP_B_STORM` (la Tormenta ya no se presenta al empezar: es una 
 | Suite | Qué fija |
 |---|---|
 | `tests/tutorial/test_quick_guide.gd` | la guía rápida se abre sin pausar y avisa al cerrarse, sus cuatro bloques en ES y EN, y los mismos bloques en el índice de AYUDA |
-| `tests/tutorial/test_prologue_screen.gd` | Atrás/Siguiente/Saltar, Siguiente×3 + Atrás = folio 2, Atrás apagado en el primero, deslizar, máquina de escribir, pausa, variantes, textos ES/EN, estilo propio |
-| `tests/tutorial/test_guide_steps.gd` | `derive_step`, recorrido entero, cancelar, saltar, fuera de orden, isla hecha, repetir, reanudar al cargar, guardado y basura |
-| `tests/tutorial/test_tutorial_panel.gd` | prólogo alojado, paso con texto y número, el velo no se come toques, saltar, esconderse en pausa y con el prólogo, la tarjeta no tapa lo señalado |
+| `tests/tutorial/test_prologue_screen.gd` | 4 folios, Atrás/Siguiente/Saltar, Siguiente×2 + Atrás = folio 2, Atrás apagado en el primero, deslizar, máquina de escribir, pausa, variantes, textos ES/EN, estilo propio; la hoja final (última, Empezar, el plan en palabras llanas ES/EN sin botones, teclado y deslizar) |
+| `tests/tutorial/test_guide_steps.gd` | `derive_step`, recorrido entero, cancelar, saltar (API interna), fuera de orden, isla hecha, repetir, reanudar al cargar, guardado y basura |
+| `tests/tutorial/test_guide_never_stuck.gd` | sin "Saltar" (solo dev), repetir no salta, terminar un repaso, guardados saltados; un test por caso de atasco (§2.1); el hueco para granja y recoger (§2.3) |
+| `tests/tutorial/test_tutorial_panel.gd` | prólogo alojado, paso con texto y número, el velo no se come toques, sin botón de saltar, "Terminar repaso" solo en un repaso, esconderse en pausa y con el prólogo, la tarjeta no tapa lo señalado |
 | `tests/tutorial/test_tutorial_manager.gd` | consejos una vez, prólogo pendiente hasta poder salir, modos, reset y guardado |
 | `tests/ui/test_helper_callouts.gd` | una a la vez, ✕ y vista, reloj y pausa con el dedo, prioridad, silencios, interruptor, reabrir pedida |
 | `tests/ui/test_helper_skirmish_callout.gd` | el globo de ESCARAMUZAS sigue a su botón y sale una vez |
@@ -236,13 +313,16 @@ godot --path . -s tools/onboarding_probe.gd -- --mode=builder
 
 Arranca una partida nueva con el menú principal delante, lo suelta, pasa folios
 (deslizando con el dedo en tablet), recorre tres pasos del tutorial con toques reales, lo
-salta y fotografía un globo, un consejo, el índice y una ayuda reabierta. Capturas en
+salta (con `skip_guide()`: en el editor es modo dev) y fotografía un globo, un consejo, el índice y una ayuda reabierta. Capturas en
 `docs/media/dev/onboarding/` (ignorada por git).
 
 ## 6. Lo que queda
 
 - El globo de cámara no sabe si el jugador ya movió la cámara: sale igual, una vez.
 - El bosque que se señala es el más cercano al centro de la pantalla; puede caer bajo la
-  cruceta en tablet.
+  cruceta en tablet, y puede ser uno tapado aunque haya otro libre (la meta solo se pasa
+  de largo si no queda **ninguno**).
+- Los flujos de Maestro (`qa/maestro/`) usaban `saltar_tutorial`: ahora solo espera. Un
+  flujo que necesite el HUD sin la tarjeta tiene que hacer el tutorial.
 - (Resuelto en la integración con el menú único: CONSTRUIR está siempre abajo y el
   paso 1 lo señala a él; ya no hay texto "abre ☰".)

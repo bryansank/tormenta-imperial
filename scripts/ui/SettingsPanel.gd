@@ -363,6 +363,11 @@ func _build_controls_tab(body: VBoxContainer) -> void:
 	)
 	row.name = "TouchControlsRow"
 	body.add_child(row)
+	# "Automatico" es solo tablet y movil: un portatil tactil no los saca por
+	# tocarlo (decision de Bryan, 2026-10-04). Se dice aqui, que es donde se elige.
+	var auto_hint := _make_hint(Tr.t("LBL_TOUCH_AUTO_HINT"))
+	auto_hint.name = "TouchAutoHint"
+	body.add_child(auto_hint)
 	# Opacidad de los controles en pantalla (tactil): se ve al momento y se guarda.
 	body.add_child(_make_percent_row("touch_opacity", Tr.t("LBL_TOUCH_OPACITY"),
 		GameConfig.ui_touch_controls_opacity, GameConfig.TOUCH_OPACITY_MIN, GameConfig.TOUCH_OPACITY_MAX,

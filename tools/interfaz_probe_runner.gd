@@ -69,7 +69,7 @@ func _run() -> void:
 	GameConfig.ui_helper_visible = true
 	if _arg("edited") == "true":
 		GameConfig.ui_layout[DeviceProfile.layout_key()] = {
-			"NotificationPanel.objective": [0, 520],
+			"StormHUD": [0, 520],
 			"ConstructionMenu.button": [-360, 0],
 		}
 	DeviceProfile.apply_all()
@@ -148,9 +148,6 @@ func _seed_state() -> void:
 		var panel: Control = storm.get("_panel")
 		panel.visible = true
 		storm.call("_style_for", StormCycle.Phase.WARNING)
-	var notif: Node = get_tree().current_scene.get_node_or_null("NotificationPanel")
-	if notif and notif.get("_status_panel") != null:
-		(notif.get("_status_panel") as Control).visible = true
 	EventBus.notification_posted.emit("Aviso de prueba: la sonda de interfaz", "info", UITheme.INFO)
 
 func _close_intro(main: Node) -> void:
@@ -162,6 +159,10 @@ func _close_intro(main: Node) -> void:
 	var tut: Node = main.get_node_or_null("TutorialPanel")
 	if tut and tut.has_method("is_intro_open") and tut.call("is_intro_open"):
 		tut.call("_close")
+	# La guia rapida ("Como funciona..."), que sale tras la intro y tapa el HUD.
+	for guide in get_tree().get_nodes_in_group("quick_guide"):
+		if guide.has_method("is_open") and guide.call("is_open"):
+			guide.call("close")
 
 func _frames(n: int) -> void:
 	for i in range(n):
