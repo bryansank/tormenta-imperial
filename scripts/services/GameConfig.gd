@@ -1014,46 +1014,78 @@ func rank_title_key(rank: int) -> String:
 ##   limit       id -> huecos extra sobre building_limits
 ##   production  fraccion sumada al multiplicador de produccion (0.01 = +1 %)
 ##   storage     fraccion sobre el tope de la bolsa (0.02 = +2 %)
-##   flags       banderas de la colonia que se pueden elegir
-##   colors      colores de la colonia que se pueden elegir
+##   patterns    fondos de la bandera que se pueden elegir (COLONY_PATTERNS)
+##   emblems     emblemas de la bandera (COLONY_EMBLEMS)
+##   colors      colores de la bandera (colony_colors)
 ## No toca los edificios basicos ni sus eras (la linea jugable sigue igual): el
 ## rango abre decoraciones, huecos extra y cosmeticos. Un edificio nuevo y
 ## opcional entra aqui con `buildings`.
 var rank_rewards := {
-	1: {"flags": ["plain", "band"], "colors": ["brass", "crimson"]},
-	2: {"buildings": ["garden"]},
-	3: {"production": 0.01, "flags": ["cross"]},
-	4: {"storage": 0.02, "colors": ["steel"]},
+	1: {"patterns": ["plain", "bands_h", "bands_v", "halves_h", "cross"],
+		"emblems": ["none", "gear", "anchor", "wheat", "hammer"],
+		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"]},
+	2: {"buildings": ["garden"], "emblems": ["tower"]},
+	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"]},
+	4: {"storage": 0.02, "emblems": ["star"]},
 	5: {"buildings": ["fountain"]},
-	6: {"production": 0.01, "flags": ["diagonal"]},
-	7: {"colors": ["moss"]},
+	6: {"production": 0.01, "patterns": ["diagonal", "saltire"]},
+	7: {"colors": ["copper", "red"]},
 	8: {"buildings": ["statue"], "storage": 0.02},
-	9: {"production": 0.01, "flags": ["gear"]},
+	9: {"production": 0.01, "patterns": ["quartered"], "emblems": ["wrench"]},
 	10: {"limit": {"house": 2}},
-	11: {"colors": ["soot"]},
-	12: {"production": 0.01, "storage": 0.02, "flags": ["chevron"]},
-	13: {"limit": {"statue": 2, "fountain": 2}},
-	14: {"colors": ["copper"]},
-	15: {"production": 0.01},
-	16: {"storage": 0.02, "limit": {"tower": 1}},
-	17: {"limit": {"house": 2}},
-	18: {"production": 0.02},
+	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
+	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
+	13: {"limit": {"statue": 2, "fountain": 2}, "emblems": ["ship"]},
+	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
+	15: {"production": 0.01, "patterns": ["stripes"]},
+	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
+	17: {"limit": {"house": 2}, "patterns": ["waves"]},
+	18: {"production": 0.02, "patterns": ["checks"], "emblems": ["airship"]},
 }
 
-## Banderas de la colonia, en orden de la galeria. Las dibuja ColonyFlag.
-const COLONY_FLAGS := ["plain", "band", "cross", "diagonal", "gear", "chevron"]
-## Colores de la colonia: el principal de la bandera y del Nucleo.
+# ── Bandera y nombre del pais (ColonyFlag, ColonyIdentity, RankManager) ──
+# La bandera es una receta de piezas: un fondo (dibujo con uno o dos colores),
+# un emblema encima y tres colores [fondo 1, fondo 2, emblema]. Todo se dibuja
+# por codigo en scripts/ui/ColonyFlag.gd; nada viene de otro juego ni imita
+# simbolos reales de estados, partidos o ideologias. Lo que abre cada rango esta
+# en rank_rewards (patterns / emblems / colors).
+
+## Fondos, en orden de la galeria.
+const COLONY_PATTERNS := ["plain", "bands_h", "bands_v", "halves_h", "cross", "border",
+	"diagonal", "saltire", "quartered", "canton", "hoist_triangle", "stripes", "waves", "checks"]
+## Emblemas, en orden de la galeria. "none" = sin emblema.
+const COLONY_EMBLEMS := ["none", "gear", "anchor", "wheat", "hammer", "tower", "star",
+	"wrench", "wheel", "ship", "cogs", "sun", "airship"]
+## Colores de la bandera. Los seis primeros son los de siempre de la colonia; el
+## resto sale de la paleta de la maqueta (ToyPalette): marfil = CREAM, cielo =
+## SKY, rojo = RED, hierba = GREEN, pizarra = SLATE, teja = TERRACOTTA, oro = BRASS.
 var colony_colors := {
+	"ivory": Color8(242, 222, 180),
 	"brass": Color(0.80, 0.62, 0.25),
 	"crimson": Color(0.68, 0.14, 0.14),
 	"steel": Color(0.30, 0.45, 0.62),
 	"moss": Color(0.33, 0.50, 0.24),
 	"soot": Color(0.18, 0.18, 0.20),
+	"sky": Color8(78, 160, 204),
 	"copper": Color(0.72, 0.40, 0.20),
+	"red": Color8(220, 50, 38),
+	"grass": Color8(108, 172, 62),
+	"slate": Color8(96, 98, 110),
+	"terracotta": Color8(210, 92, 58),
+	"gold": Color8(232, 172, 58),
 }
-const COLONY_COLOR_ORDER := ["brass", "crimson", "steel", "moss", "soot", "copper"]
-const COLONY_DEFAULT_FLAG := "band"
-const COLONY_DEFAULT_COLOR := "brass"
+const COLONY_COLOR_ORDER := ["ivory", "brass", "crimson", "steel", "moss", "soot", "sky",
+	"copper", "red", "grass", "slate", "terracotta", "gold"]
+## La bandera de serie (la de una partida sin nada que elegir).
+const COLONY_DEFAULT_SPEC := {"pattern": "bands_h", "emblem": "gear", "colors": ["brass", "ivory", "crimson"]}
+## Largo maximo del nombre del pais ("Republica de Puerto Hierro" cabe justo).
+const COLONY_NAME_MAX := 26
+## Las seis banderas de antes (guardados con "rank": {"flag", "color"}),
+## traducidas a piezas al cargar: [fondo, emblema].
+const COLONY_LEGACY_FLAGS := {
+	"plain": ["plain", "none"], "band": ["bands_h", "none"], "cross": ["cross", "none"],
+	"diagonal": ["diagonal", "none"], "gear": ["plain", "gear"], "chevron": ["hoist_triangle", "none"],
+}
 
 ## Bonos del rango, aplicados en tiempo de ejecucion por RankManager (asigna el
 ## total del rango actual; nunca suma sobre lo que habia).
@@ -1172,8 +1204,8 @@ var ruin_tilt := 0.07
 ##   chimenea de la Fundicion, la grua del Almacen, la antena del Laboratorio,
 ##   el emblema del Cuartel General... Esa esquina no lleva atrezo. "ROOF":
 ##   encima del tejado, apoyado en la altura medida del modelo.
-## - "keep_clear": esquinas sin atrezo por otra cosa (la del Nucleo es la de la
-##   bandera de la colonia, ColonyFlag3D/2D).
+## - "keep_clear": esquinas sin atrezo por otra cosa (la del Nucleo y la del
+##   Cuartel General son las del mastil con la bandera del pais, ColonyFlag3D/2D).
 ## Sin entrada (la calzada), sin parcela.
 var building_lot_style := {
 	"sawmill": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "industrial",
@@ -1203,7 +1235,7 @@ var building_lot_style := {
 		"signature": "cannon", "corner": "SE"},
 	"headquarters": {"ground": "slabs", "trim": "rail", "yard": 0.28, "accent": "military",
 		"props": ["flag", "lamp", "planter", "ammo"], "count": [3, 5],
-		"signature": "emblem", "corner": "ROOF"},
+		"signature": "emblem", "corner": "ROOF", "keep_clear": ["NE"]},
 	# La Granja (rama comida): tierra batida, valla baja y sacos de la cosecha. El
 	# patio es mas estrecho que el de los demas: el campo es el edificio.
 	"farm": {"ground": "dirt", "trim": "fence", "yard": 0.25, "accent": "residential",

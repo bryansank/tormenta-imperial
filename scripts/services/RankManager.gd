@@ -17,12 +17,18 @@ extends Node
 ## Auditoria Final. Va el ultimo de la lista: solo depende de GameConfig,
 ## EventBus y GameMode, y nadie lo necesita durante el _ready de los demas.
 
+const ColonyIdentity := preload("res://scripts/services/ColonyIdentity.gd")
+const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
+
 var _xp := 0
 var _rank := 1
-## Cosmeticos elegidos. Se guardan con la partida (son de esta colonia, no del
-## dispositivo).
-var _flag := GameConfig.COLONY_DEFAULT_FLAG
-var _color := GameConfig.COLONY_DEFAULT_COLOR
+## El pais: nombre y receta de la bandera (ColonyFlag). Se guardan con la
+## partida (son de esta colonia, no del dispositivo).
+var _colony_name := ""
+var _flag_spec: Dictionary = GameConfig.COLONY_DEFAULT_SPEC.duplicate(true)
+## Lo que eligio el jugador en el paso de Nueva partida, para la partida que va
+## a empezar: reset() lo consume (queue_colony_for_new_game).
+var _queued: Dictionary = {}
 
 func _ready() -> void:
 	EventBus.construction_completed.connect(_on_construction_completed)
@@ -38,6 +44,9 @@ func _ready() -> void:
 	EventBus.storm_ended.connect(_on_storm_ended)
 	EventBus.milestone_completed.connect(func(_m): add_xp_from("milestone"))
 	_apply_bonuses()
+	# Hasta la primera partida (o en escenas de prueba), un nombre ya puesto.
+	if _colony_name.is_empty():
+		_colony_name = ColonyIdentity.random_name(1, Tr.get_locale())
 
 # ── XP ──
 
@@ -165,27 +174,23 @@ func is_building_unlocked(building_id: String) -> bool:
 		return true
 	return building_rank(building_id) <= _rank
 
-static func flag_rank(flag_id: String) -> int:
-	return _reward_rank("flags", flag_id)
+## El rango que abre una pieza de la bandera ("patterns", "emblems", "colors").
+static func piece_rank(kind: String, id: String) -> int:
+	return ColonyIdentity.piece_rank(kind, id)
 
 static func color_rank(color_id: String) -> int:
-	return _reward_rank("colors", color_id)
+	return ColonyIdentity.piece_rank("colors", color_id)
 
-static func _reward_rank(key: String, id: String) -> int:
-	for r in GameConfig.rank_rewards:
-		if id in GameConfig.rank_rewards[r].get(key, []):
-			return int(r)
-	return 0
-
-func is_flag_unlocked(flag_id: String) -> bool:
-	if not (flag_id in GameConfig.COLONY_FLAGS):
-		return false
-	return GameMode.all_unlocked() or flag_rank(flag_id) <= _rank
+## ¿Puede elegirse ya esta pieza? Sandbox lo tiene todo abierto.
+func is_piece_unlocked(kind: String, id: String) -> bool:
+	return ColonyIdentity.is_piece_open(kind, id, _rank, GameMode.all_unlocked())
 
 func is_color_unlocked(color_id: String) -> bool:
-	if not GameConfig.colony_colors.has(color_id):
-		return false
-	return GameMode.all_unlocked() or color_rank(color_id) <= _rank
+	return is_piece_unlocked("colors", color_id)
+
+## ¿Todas las piezas de la receta estan abiertas con el rango de ahora?
+func is_spec_unlocked(spec: Dictionary) -> bool:
+	return ColonyIdentity.is_spec_open(spec, _rank, GameMode.all_unlocked())
 
 ## Pone en GameConfig los bonos del rango actual. Asigna, no suma.
 func _apply_bonuses() -> void:
@@ -194,60 +199,109 @@ func _apply_bonuses() -> void:
 	GameConfig.rank_storage_bonus = float(total.get("storage", 0.0))
 	GameConfig.rank_limit_bonus = total.get("limit", {}).duplicate()
 
-# ── Cosmeticos ──
+# ── El pais: nombre y bandera ──
 
-func get_flag() -> String:
-	return _flag
+func get_colony_name() -> String:
+	return _colony_name
 
+## La receta de la bandera (copia: cambiarla no cambia la partida).
+func get_flag_spec() -> Dictionary:
+	return _flag_spec.duplicate(true)
+
+## El color principal del pais (el primero de la bandera): el de las fichas
+## propias del tablero.
 func get_color_id() -> String:
-	return _color
+	return String(_flag_spec["colors"][0])
 
 func get_color() -> Color:
-	return GameConfig.colony_colors.get(_color, GameConfig.colony_colors[GameConfig.COLONY_DEFAULT_COLOR])
+	return ColonyFlag.color_of(get_color_id())
 
-## Elige bandera; solo si el rango la tiene. Devuelve si cambio.
-func set_flag(flag_id: String) -> bool:
-	if flag_id == _flag or not is_flag_unlocked(flag_id):
+## Cambia nombre y bandera. Falla (false, sin tocar nada) si el nombre no pasa
+## el filtro o queda vacio, o si alguna pieza no esta abierta por rango. La
+## receta se arregla para que se lea (ColonyFlag.fix_spec). Avisa y guarda solo
+## si algo cambio.
+func set_colony(colony_name: String, spec: Dictionary) -> bool:
+	var clean := ColonyIdentity.clean_name(colony_name)
+	if not ColonyIdentity.is_name_allowed(clean) or not is_spec_unlocked(spec):
 		return false
-	_flag = flag_id
-	EventBus.colony_cosmetics_changed.emit(_flag, _color)
+	var fixed := ColonyFlag.fix_spec(spec, ColonyIdentity.open_pieces("colors", _rank, GameMode.all_unlocked()))
+	if clean == _colony_name and ColonyFlag.spec_key(fixed) == ColonyFlag.spec_key(_flag_spec):
+		return true
+	_colony_name = clean
+	_flag_spec = fixed
+	EventBus.colony_identity_changed.emit(_colony_name, get_flag_spec())
 	GameManager.request_save()
 	return true
 
-func set_color(color_id: String) -> bool:
-	if color_id == _color or not is_color_unlocked(color_id):
+## Para el paso de Nueva partida: guarda nombre y bandera para la partida que va
+## a empezar (la de ahora no cambia). El reset() de la partida nueva los pone.
+## Se valida con rango 1, que es con el que empieza toda partida.
+func queue_colony_for_new_game(colony_name: String, spec: Dictionary) -> bool:
+	var clean := ColonyIdentity.clean_name(colony_name)
+	if not ColonyIdentity.is_name_allowed(clean) or not ColonyIdentity.is_spec_open(spec, 1):
+		_queued = {}
 		return false
-	_color = color_id
-	EventBus.colony_cosmetics_changed.emit(_flag, _color)
-	GameManager.request_save()
+	_queued = {"name": clean, "flag": ColonyFlag.fix_spec(spec, ColonyIdentity.open_pieces("colors", 1))}
 	return true
+
+func has_queued_colony() -> bool:
+	return not _queued.is_empty()
 
 # ── Guardado ──
 
 func get_save_data() -> Dictionary:
-	return {"xp": _xp, "flag": _flag, "color": _color}
+	return {"xp": _xp, "colony": {"name": _colony_name, "flag": get_flag_spec()}}
 
 ## Idempotente: todo se deriva de lo guardado. Sin clave (guardado viejo) =
-## XP 0, rango 1, cosmeticos de serie. Un cosmetico desconocido o por encima del
-## rango vuelve al de serie.
+## XP 0, rango 1. El pais:
+##   - "colony" guardado: su nombre y su bandera; una pieza por encima del rango
+##     (o desconocida) vuelve a la de serie, un nombre que no pasa el filtro
+##     se cambia por uno al azar;
+##   - sin "colony" pero con la bandera de antes ("flag", "color"): esa bandera
+##     traducida a piezas y un nombre al azar;
+##   - sin nada: nombre y bandera al azar.
+## Lo "al azar" sale de la semilla de la isla (GridManager.island_seed, que se
+## carga antes): la misma partida vieja da siempre el mismo pais.
 func load_save_data(data: Dictionary) -> void:
 	_xp = maxi(0, int(data.get("xp", 0)))
 	_rank = rank_for_xp(_xp)
 	_apply_bonuses()
-	_flag = String(data.get("flag", GameConfig.COLONY_DEFAULT_FLAG))
-	if not is_flag_unlocked(_flag):
-		_flag = GameConfig.COLONY_DEFAULT_FLAG
-	_color = String(data.get("color", GameConfig.COLONY_DEFAULT_COLOR))
-	if not is_color_unlocked(_color):
-		_color = GameConfig.COLONY_DEFAULT_COLOR
+	var all := GameMode.all_unlocked()
+	var seed_value := ColonyIdentity.seed_for_island(GridManager.island_seed)
+	var colony: Variant = data.get("colony", null)
+	var spec: Dictionary
+	var colony_name := ""
+	if colony is Dictionary:
+		colony_name = String(colony.get("name", ""))
+		var raw: Variant = colony.get("flag", {})
+		spec = raw if raw is Dictionary else {}
+	elif data.has("flag") or data.has("color"):
+		spec = ColonyIdentity.legacy_spec(String(data.get("flag", "band")), String(data.get("color", "brass")))
+	else:
+		spec = ColonyIdentity.random_spec(seed_value, _rank, all)
+	_flag_spec = ColonyIdentity.clamp_spec(spec, _rank, all)
+	colony_name = ColonyIdentity.clean_name(colony_name)
+	if not ColonyIdentity.is_name_allowed(colony_name):
+		colony_name = ColonyIdentity.random_name(seed_value, Tr.get_locale())
+	_colony_name = colony_name
 	EventBus.governor_xp_changed.emit(_xp, _rank, 0)
-	EventBus.colony_cosmetics_changed.emit(_flag, _color)
+	EventBus.colony_identity_changed.emit(_colony_name, get_flag_spec())
 
 ## Tira el rango de la partida anterior. Sin avisos: una partida nueva no
-## anuncia lo que perdio.
+## anuncia lo que perdio. El pais nuevo es el que se eligio en el paso de Nueva
+## partida (queue_colony_for_new_game) o, si se salto o no hubo paso, uno al
+## azar (con su propio generador: no mueve el RNG global que sortea el mapa).
 func reset() -> void:
 	_xp = 0
 	_rank = 1
-	_flag = GameConfig.COLONY_DEFAULT_FLAG
-	_color = GameConfig.COLONY_DEFAULT_COLOR
 	_apply_bonuses()
+	if not _queued.is_empty():
+		_colony_name = String(_queued["name"])
+		_flag_spec = (_queued["flag"] as Dictionary).duplicate(true)
+		_queued = {}
+	else:
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		var seed_value := rng.randi()
+		_colony_name = ColonyIdentity.random_name(seed_value, Tr.get_locale())
+		_flag_spec = ColonyIdentity.random_spec(seed_value, 1)

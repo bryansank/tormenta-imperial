@@ -16,6 +16,7 @@ extends CanvasLayer
 ## `abandon_expedition`...) vive en `CombatManager` y la pantalla solo lo llama:
 ## aqui no se decide nada, ni siquiera si un nodo es elegible.
 
+const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
 
 const PLAYER := 0
@@ -188,6 +189,8 @@ func _build_board_view() -> void:
 	header.name = "BoardHeader"
 	header.alignment = BoxContainer.ALIGNMENT_CENTER
 	header.add_theme_constant_override("separation", 24)
+	# Nuestro lado: la bandera y el nombre del pais.
+	header.add_child(ColonyByline.new("small"))
 	_title_label = UITheme.make_label("", "title", UITheme.ACCENT)
 	header.add_child(_title_label)
 	_round_label = UITheme.make_label("", "section", UITheme.TEXT_DIM)

@@ -364,7 +364,7 @@ from it ([06-progression-victory.md](06-progression-victory.md) §Governor rank)
 |--------|--------|------------|-------------|
 | `governor_xp_changed` | `xp: int, rank: int, gained: int` (`gained` 0 on load) | RankManager | RankPanel |
 | `governor_rank_up` | `rank: int, rewards: Dictionary` (merged `rank_rewards` of every rank crossed) | RankManager | RankPanel, ConstructionMenu, AudioManager |
-| `colony_cosmetics_changed` | `flag_id: String, color_id: String` | RankManager | RankPanel, ColonyFlag3D, ColonyFlag2D |
+| `colony_identity_changed` | `colony_name: String, flag_spec: Dictionary` (ColonyFlag recipe: `pattern`, `emblem`, `colors` [field 1, field 2, emblem]) | RankManager (`set_colony()`, load) | RankPanel, ColonyFlag3D, ColonyFlag2D, ColonyByline (war reports, audit defeat, victory, board header) |
 
 ## Orphan signals
 
