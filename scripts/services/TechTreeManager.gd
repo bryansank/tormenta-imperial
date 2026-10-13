@@ -16,6 +16,8 @@ func _ready() -> void:
 	_base_morale_recovery = GameConfig.morale_satisfied_recovery
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	if _researching.is_empty():
 		return
 	_researching["remaining"] -= delta

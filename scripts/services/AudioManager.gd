@@ -32,19 +32,22 @@ const MUSIC_MANIFEST := {
 ## Music key the combat theme is stored under; encounters cross-fade to it.
 const MUSIC_COMBAT_KEY := "combat"
 
-## Dos bucles cortos (40 s, OGG en streaming) y nunca mas de dos sonando a la
-## vez: solo mientras se funden el uno en el otro. `day` = olas + pajaros;
-## `storm` = viento + truenos lejanos (los pajaros callan con la Tormenta).
-## Generados por sintesis con tools/gen_ambient_audio.gd (obra propia).
+## Tres bucles cortos (40 s, OGG en streaming); suena uno, y dos solo mientras
+## se funden. `day` = olas + pajaros; `night` = grillos + olas suaves, sin
+## pajaros; `storm` = viento + truenos lejanos (los pajaros callan con la
+## Tormenta). Generados por sintesis con tools/gen_ambient_audio.gd (obra propia).
 const AMBIENT_MANIFEST := {
 	"day": "day",
+	"night": "night",
 	"storm": "storm",
 }
 const AMBIENT_DAY := "day"
+const AMBIENT_NIGHT := "night"
 const AMBIENT_STORM := "storm"
 ## Ganancia de cada bucle (dB): el ambiente es una cama, va por debajo de todo.
 const AMBIENT_GAIN_DB := {
 	"day": -4.0,
+	"night": -5.0,
 	"storm": -3.0,
 }
 const AMBIENT_FADE_SECONDS := 4.0
@@ -143,6 +146,7 @@ var _ambient_players: Dictionary = {}  # ambient key → AudioStreamPlayer
 var _ambient_tweens: Dictionary = {}   # ambient key → Tween del fundido en curso
 var _ambient_key: String = ""          # el bucle que deberia sonar ("" = ninguno)
 var _storm_phase: int = -1             # ultima fase de la Tormenta oida (-1 = ninguna)
+var _night: bool = false               # DayClock: es de noche (fase NIGHT)
 var _hooked_buttons: Dictionary = {}   # instance_id → true: botones ya enganchados
 var _current_music_key: String = ""
 var _music_before_combat: String = ""  # what was playing when the first encounter opened
@@ -379,7 +383,7 @@ func play_music_for_era(era: int) -> void:
 
 ## Arranca el ambiente que toca segun la fase de la Tormenta (dia o tormenta).
 func start_ambient() -> void:
-	set_ambient(_ambient_for_phase(_storm_phase))
+	set_ambient(_ambient_for_phase(_storm_phase, _night))
 
 ## Funde el ambiente hacia `key` ("day", "storm" o "" para silencio). Solo hay
 ## dos reproductores y solo los dos suenan durante el fundido. Si falta el
@@ -420,13 +424,14 @@ func _fade_ambient(key: String, target_db: float, stop_after: bool) -> void:
 				p.stop())
 	_ambient_tweens[key] = tw
 
-## La ceniza trae el viento y no se va hasta que vuelve la calma; el Aviso es
-## todavia de dia (los pajaros aun cantan).
-func _ambient_for_phase(phase: int) -> String:
+## Que bucle toca. La Tormenta manda sobre todo: la ceniza trae el viento y no
+## se va hasta que vuelve la calma (el Aviso aun no cuenta). Sin Tormenta, de
+## noche los grillos; el resto del dia (alba y ocaso incluidos), olas y pajaros.
+func _ambient_for_phase(phase: int, night: bool = false) -> String:
 	if phase == StormCycle.Phase.ASH or phase == StormCycle.Phase.STORM \
 			or phase == StormCycle.Phase.TITHE:
 		return AMBIENT_STORM
-	return AMBIENT_DAY
+	return AMBIENT_NIGHT if night else AMBIENT_DAY
 
 func stop_music() -> void:
 	_current_music_key = ""
@@ -499,6 +504,8 @@ func _connect_events() -> void:
 	_connect_optional("storm_halted_forever", _on_storm_halted_forever)
 	# La Tormenta: el ambiente sigue a la fase y cada cambio relevante suena.
 	_connect_optional("storm_phase_changed", _on_storm_phase_changed)
+	# Dia y noche (DayClock): de noche cambia el ambiente, nada mas.
+	_connect_optional("day_phase_changed", _on_day_phase_changed)
 	_connect_optional("tithe_resolved", _on_tithe_resolved)
 	# Comida (rama comida-granja-recoger): solo si esa rama ya esta dentro.
 	_connect_optional("production_collected", _on_production_collected)
@@ -561,6 +568,7 @@ func _on_game_started() -> void:
 	# La fase se lee del servicio: una partida guardada en plena Tormenta vuelve
 	# con viento, y una nueva empieza de dia. Sin sonido de cambio de fase.
 	_storm_phase = _current_storm_phase()
+	_night = _current_is_night()
 	start_ambient()
 	# Default to Era 1 music; era_advanced switches tracks as the player progresses.
 	if _current_music_key.is_empty():
@@ -610,6 +618,20 @@ func _on_storm_halted_forever(_a = null, _b = null, _c = null) -> void:
 
 # ── La Tormenta ──────────────────────────────────────────────────────
 
+## De noche segun DayClock (sin DayClock, o con el ciclo apagado, siempre de dia).
+func _current_is_night() -> bool:
+	var dc: Node = get_node_or_null("/root/DayClock")
+	if dc != null and dc.has_method("is_night"):
+		return bool(dc.is_night())
+	return false
+
+## Al cambiar la fase del dia solo se elige otro bucle; si la Tormenta esta
+## encima, sigue mandando ella. Sin sonido propio.
+func _on_day_phase_changed(phase = 0, _hour = 0.0) -> void:
+	_night = int(phase) == DayCycle.Phase.NIGHT
+	if not _ambient_key.is_empty():
+		set_ambient(_ambient_for_phase(_storm_phase, _night))
+
 func _current_storm_phase() -> int:
 	var sm: Node = get_node_or_null("/root/StormManager")
 	if sm != null and sm.has_method("get_phase"):
@@ -624,7 +646,7 @@ func _on_storm_phase_changed(phase: int = 0, _seconds_left: float = 0.0) -> void
 	var previous := _storm_phase
 	_storm_phase = phase
 	if not _ambient_key.is_empty():
-		set_ambient(_ambient_for_phase(phase))
+		set_ambient(_ambient_for_phase(phase, _night))
 	if phase == previous:
 		return
 	match phase:

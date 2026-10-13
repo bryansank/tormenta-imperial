@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1800 tests in 138 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1850 tests in 141 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -68,7 +68,7 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 117 signals in ~30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 118 signals in ~30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
@@ -128,7 +128,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
   +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close; building guide; instances HelpIndexPanel
   +-- SkirmishPanel (CanvasLayer 11) -- commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" (Final Audit)
-  +-- BattleScreen (CanvasLayer 18) -- the 8x8 board plus the expedition map, draft modal and final report (outside UIManager's stack)
+  +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
   +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator (colour + icon, no countdown)
   +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI; instances PrologueScreen
   +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit
@@ -136,7 +136,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
   +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, country name, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel)
-  +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back
+  +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back; adds the GameSpeedButton sibling (x1 / x2, layer 10)
   +-- TitleMenu (CanvasLayer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal
 
 Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
@@ -544,6 +544,30 @@ service drains it onto the `EventBus`; the UI only reads and calls.
   `SkirmishPanel` (commit troops and launch; campaign status while a column is out;
   "QUE BAJEN"), plus the war reports: `WarReportScreen`, `AuditWaveBanner`,
   `AuditDefeatScreen`.
+- **The 3D board (view only, 2026-10-12):** `scripts/combat_view/` +
+  `scenes/combat/Board3D.tscn`, never inside `scripts/combat/`. `BattleScreen` puts a
+  `BoardViewport3D` (SubViewport with its own world) behind its header and buttons
+  and forwards the same signals to `Board3D.push()`; the diorama **tells** what the
+  model already did, one event after another (deploy drop, hop-by-hop BFS route,
+  wind-up + shell / bayonet / tracer, hit shake + damage number + HP bar, fall,
+  guard ring), then reconciles with the `Encounter` and emits `idle`. While it
+  animates (`BattleScreen._board_busy()`) the board takes no input and the
+  report / draft / final report wait (`_after_board_animations()`). Toy units are
+  baked with `tools/build_toy_models.gd -- --units` (recipes in
+  `tools/toy_recipes/units/`, output `assets/models/toy/units/<id>_player|_regency`,
+  410-570 tris; player pieces carry a grey `team` surface painted with
+  `RankManager.get_color()`, one shared material per colour; the Regency is baked in
+  purple; round stand ours, diamond stand theirs; boss standard; tower-crew sandbag
+  nest). The map's 3D is switched off (`Viewport.disable_3d`) while the 3D board
+  covers it, so the board costs less GPU than the map. `pick_board_style()`: 3D
+  everywhere (minimal quality = simplified: no shadows, no dust, no sway, 0.7 res),
+  2D grid in the 2D map view and headless (tests); `force_board_style()` for tests
+  and probes. Rules, AI, `CombatManager` and audio untouched. Full detail and FPS:
+  `docs/15-combat.md` §3 "El tablero 3D".
+- **`domain`:** every `combat_unit_stats` row carries `"domain": "land"`;
+  `CombatUnit.domain()` exposes it, no rule reads it; the 3D view places a piece by
+  domain (`BoardLayout3D.DOMAIN_HEIGHT`: sea / air / space ready). Design for sea and
+  air units: `docs/15-combat.md` §11.
 
 Three roads reach the same board: an expedition node (player picks the party in
 `SkirmishPanel`, which calls `CombatManager.launch_expedition()`; a win pays loot),
@@ -569,7 +593,7 @@ board leaves its tower **damaged** (`storm_tower_crew_loss_damage`, 40% of max h
 never ruined) until it is repaired; the war reports say how many. They have no attack of their own on
 the base map.
 
-**Unit icons:** the board paints unit silhouettes (`assets/textures/ui/units/*.png`,
+**Unit icons:** the 2D board and the initiative strip paint unit silhouettes (`assets/textures/ui/units/*.png`,
 generated by `tools/gen_unit_icons.gd`, read by `UITheme.unit_icon()`), tinted per
 side, with the boss marked; the translated name's initial is only a fallback when a
 PNG is missing.
@@ -647,6 +671,28 @@ so every panel is rebuilt in the new language (the in-memory notification log is
 and Settings closes; accepted). With a board open it does not reload
 (the board is not saved); the language shows everywhere on the next start.
 
+### Game speed x1 / x2 and bug reports (docs/21 §13, docs/19 §7)
+
+- **Speed:** `GameConfig.game_speed` (1.0 / 2.0), changed with the small `x1`/`x2`
+  button (`scripts/ui/GameSpeedButton.gd`, added by `PauseMenu` as its sibling, slot
+  `speed_button`, in `HudRegistry`) or the **F** key; emits
+  `EventBus.game_speed_changed(speed)`. It is **not** `Engine.time_scale` (that would
+  speed up UI tweens, camera, toasts and the real-seconds autosave too): each service
+  that ticks the simulation does `delta = GameConfig.sim_delta(delta)` at the top of
+  its `_process` (Production, Process, Population, Army, TechTree, Storm, DayClock,
+  RandomEvent, Market). Combat waits go through `GameConfig.combat_pace(seconds)`
+  (`get_combat_ai_step_delay()` already does). A new ticking service uses `sim_delta`;
+  UI cooldowns and real-time clocks do not. Never saved (not in the save, not in
+  `settings.cfg`): every launch starts at x1. Offline progression is unchanged.
+- **Local error log:** `scripts/services/ErrorLog.gd`, a `Logger` hooked by
+  `GameConfig._ready()` via `OS.add_logger()`. Writes `user://logs/registro.txt` in
+  blocks every 3 s (and on close / background), 200 KB cap, 2 rotations, repeated
+  lines counted. Never leaves the device.
+- **Report:** ☰ MENÚ → PARTIDA → Informar de un fallo copies `BugReport.build()`
+  (version, OS, GPU/renderer, profile, quality, view, locale, mode/tier, era, speed,
+  last 40 log lines) to the clipboard. `BugReport.sanitize()` turns home-dir paths
+  into `~` and the colony name into `<colonia>`.
+
 ### Save/Load System
 
 - **Up to 5 saved games** (2026-10-12): one file each, `user://partidas/partida_<id>.json`, plus a small index
@@ -702,14 +748,15 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 138 suites: audio/ build/ buildings/ combat/ economy/ input/
-|                                    #   integration/ map/ modes/ save/ storm/ tutorial/ ui/ view2d/
++-- tests/                           # gdUnit4, 141 suites: audio/ build/ buildings/ combat/ economy/ input/
+|                                    #   integration/ map/ modes/ save/ storm/ support/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
 +-- scenes/
 |   +-- main/Main.tscn               # Entry scene (3D); ViewRouter may hand over to Main2D
 |   +-- main/Main2D.tscn             # The 2D view: same UI nodes, 2D world nodes
 |   +-- buildings/BuildingPlacer.tscn
+|   +-- combat/Board3D.tscn          # The 3D combat diorama (camera, sun, terrain, marks, units, fx)
 |   +-- ui/                          # One .tscn per panel (26), incl. PrologueScreen and HelpIndexPanel
 +-- scripts/                         # 127 .gd files, ~48k lines
 |   +-- buildings/
@@ -735,6 +782,11 @@ tormenta-imperial/
 |   |   +-- Expedition.gd            # One roguelike run: map, party, loot, state
 |   |   +-- ExpeditionGenerator.gd   # Seeded map graph, rosters, rewards, drafts
 |   |   +-- FinalAudit.gd            # The closing siege: waves, garrison, resummon
+|   +-- combat_view/                 # VIEW of the board in 3D (docs/15 §3): never rules
+|   |   +-- Board3D.gd               # The diorama + the animation queue (push / is_busy / idle / event_played)
+|   |   +-- BoardViewport3D.gd       # SubViewportContainer: own world, tap/click -> cell, wheel/pinch zoom, tooltip
+|   |   +-- UnitToy3D.gd             # One toy piece: model, HP bar, rings, tweened animations
+|   |   +-- CombatFx3D.gd, BoardTerrain3D.gd, BoardLayout3D.gd, UnitModels3D.gd, board_marks.gdshader
 |   +-- grid/
 |   |   +-- GridManager.gd           # Cell grid (size per game, saved); the island covers every cell
 |   |   +-- GridOverlayControl.gd    # Applies the grid toggle to the 3D overlay
@@ -752,6 +804,7 @@ tormenta-imperial/
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
 |   |   +-- ColonyIdentity.gd        # Static: country flag pieces by rank, random names/flags, word filter
 |   |   +-- FloatingText.gd          # Static utility: animated 3D text labels
+|   |   +-- ErrorLog.gd, BugReport.gd  # Local error log (Logger, rotated) and the "Informar de un fallo" text
 |   +-- ui/                          # 45 scripts: one per panel, plus
 |   |   +-- UITheme.gd               # Static dieselpunk theme: tokens, fonts, styleboxes, unit icons
 |   |   +-- UILayoutConfig.gd        # Screen slots, panel->slot map, conflicts
@@ -774,6 +827,7 @@ tormenta-imperial/
 +-- data/buildings/                  # 17 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
+|   +-- models/toy/units/            # Baked combat toys (<id>_player / <id>_regency, boss_mark, crew_nest)
 |   +-- models/buildings/<id>/       # GLB models (11 of the 17 buildings use one; sawmill's is kept, unused)
 |   +-- textures/                    # metal_plate PBR maps; ui/ 9-patch sprites, ui/icons/, ui/units/ (silhouettes)
 |   +-- fonts/, branding/            # Fonts with their licences; logo, banner, key art
@@ -785,6 +839,8 @@ tormenta-imperial/
     +-- look_probe.gd, look_probe_runner.gd  # Screenshots of every building look (construction phases, ruin, active) and a site row per phase, 3D and 2D
     +-- life_probe.gd, life_probe_runner.gd  # Seeded town: street life in 3D/2D, the empty Ash, CPU cost with 60+ figures
     +-- render_brand.gd, render_branding.gd, render_catalog.gd, showcase_shots.gd  # Branding and screenshots
+    +-- build_toy_models.gd, toy_recipes/  # Bakes the toy buildings; `-- --units` the combat toys (toy_recipes/units/)
+    +-- unit_toy_probe.gd            # Photo of the baked unit toys in a row (-s, docs/media/dev/unit_toys.png)
     +-- *_probe.gd                   # Dev probes, see below
     +-- ui_audit.gd, ui_tour.gd      # Screenshot every panel
     +-- beckett_mcp.py               # Dev bridge helper

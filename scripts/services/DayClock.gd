@@ -26,6 +26,8 @@ func _ready() -> void:
 	_cycle = _make()
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	if not is_enabled() or _cycle == null:
 		return
 	for event in _cycle.tick(delta):

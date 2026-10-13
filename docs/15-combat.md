@@ -23,6 +23,7 @@ piece is specified but not wired, it says so.
 8. [Balance](#8-balance)
 9. [Testing](#9-testing)
 10. [Known gaps](#10-known-gaps)
+11. [Dominios: mar, aire (y espacio)](#11-dominios-mar-aire-y-espacio)
 
 ---
 
@@ -106,6 +107,7 @@ blind defence, the Tithe, each siege wave, a lost siege).
 
 | Script | Role |
 |--------|------|
+| `scripts/combat_view/` + `scenes/combat/Board3D.tscn` | **El tablero 3D** (2026-10-12): la maqueta de 8x8 con unidades de juguete que `BattleScreen` pone de fondo en la vista del tablero. Solo vista: anima los eventos que ya publico `CombatManager`. Ver [§3, "El tablero 3D"](#el-tablero-3d-2026-10-12) |
 | `scripts/ui/BattleScreen.gd` | The expedition screen. `CanvasLayer` at `layer = 18`, deliberately kept out of `UIManager`'s window stack so ESC cannot dismiss a fight. Four views (`View.BOARD`, `View.MAP`, the draft modal, the final report). Opens on `encounter_started` and on `expedition_started` / `expedition_resumed` / `game_load_completed`, redraws on every combat signal, routes every click back through `CombatManager`. Its close button calls `CombatManager.end_encounter()` — which is what advances the Final Audit to the next wave |
 | `scripts/ui/SkirmishPanel.gd` | Troop commitment before a board opens, plus the "QUE BAJEN" button that begins or re-summons the Final Audit. Its launch button calls `CombatManager.launch_expedition()`; the dev-only test fight calls `dev_start_encounter()` (which uses `start_encounter()`). Nothing in `scripts/` calls `start_skirmish()` any more — only tests do. With a column out it stops being a selector and becomes the campaign status, with a "back to the map" button that calls `BattleScreen.open_map()` |
 | `scripts/ui/ArmyPanel.gd` | Paints who is away "en campaña" from `CombatManager.get_units_on_expedition()`, and refreshes on `expedition_started` / `expedition_ended` / `expedition_resumed` |
@@ -207,6 +209,155 @@ a boss encounter, and it is the enemy with the highest `power()`, ties broken by
 to the title. In era 1, where the enemy can only field infantry, everything ties
 and the mark lands on whoever deployed first — still exactly one unit, which is
 what the player needs to see.
+
+### El tablero 3D (2026-10-12)
+
+Decision del dueno: el combate se ve **en 3D, por turnos**, con el "flow" de
+Empires & Allies como referencia de *sensacion* (nunca de arte). **Las reglas no
+cambian**: el 8x8 de `Encounter` / `CombatRules` / `CombatAI`, el movimiento, el
+alcance, la iniciativa y la IA son los mismos, y una pelea sembrada da el mismo
+resultado en 2D y en 3D (`tools/battle_probe.gd`: victoria en 19 rondas con las
+mismas bajas en las dos vistas). Solo cambia como se ve y como se siente.
+
+**Donde vive.** Fuera de `scripts/combat/` (que son modelos puros):
+
+| Pieza | Que hace |
+|---|---|
+| `scripts/combat_view/BoardViewport3D.gd` | `SubViewportContainer` a pantalla completa dentro de la vista del tablero de `BattleScreen`. Su `SubViewport` tiene **mundo propio** (`own_world_3d`): la luz y el cielo de la base no entran. Traduce toque / clic a casilla (`cell_pressed`), rueda y pellizco a un zoom leve, y da el tooltip de la casilla con raton |
+| `scenes/combat/Board3D.tscn` + `scripts/combat_view/Board3D.gd` | La maqueta: camara, sol, entorno, terreno, marcas de casilla, piezas y la **cola de animaciones** |
+| `scripts/combat_view/UnitToy3D.gd` | Una pieza: modelo horneado, barra de vida (dos `Sprite3D` en cartel), aros (rojo = se le puede pegar, laton = su turno, azul = en guardia) y las animaciones (saltitos, anticipacion, embestida, culatazo, sacudida, caida) |
+| `scripts/combat_view/CombatFx3D.gd` | Fogonazo, trazadora, obus en parabola, polvo, numero de dano (`Label3D`), crater donde cae una pieza y la etiqueta de "quien es" |
+| `scripts/combat_view/BoardTerrain3D.gd` | El terreno: losetas de hierba a dos tonos, alguna de tierra, craters pintados, y en el borde (fuera de las casillas) sacos terreros, arbolitos, piedras; todo sobre una peana y una mesa de guerra oscura. Una malla, semilla por encuentro |
+| `scripts/combat_view/BoardLayout3D.gd` | Puro: casilla <-> mundo (2 m por casilla, la fila del jugador delante), la ruta casilla a casilla de un movimiento y la altura de cada dominio |
+| `scripts/combat_view/UnitModels3D.gd` | Carga las piezas horneadas y el unico material que se anade: el del color de la colonia, **uno por color**, compartido |
+| `scripts/combat_view/board_marks.gdshader` | Las marcas de casilla (alcanzable, objetivo, activa, bajo el puntero): una `MultiMesh`, el color por instancia en `INSTANCE_CUSTOM`, el latido con `TIME` |
+
+**Como cuenta la pelea.** `BattleScreen` recibe los mismos eventos que antes
+(`turn_started`, `unit_moved`, `unit_attacked`, `unit_defended`, `unit_died`) y,
+con el tablero en 3D, se los pasa a `Board3D.push()`. Cuando llegan, el modelo
+**ya** movio y ya pego: la maqueta solo los cuenta, uno detras de otro:
+
+- `deploy` (al abrir): las piezas caen sobre la maqueta con rebote, la Regencia primero.
+- `move`: la ruta casilla a casilla (`BoardLayout3D.path`, una BFS sobre lo que la
+  VISTA tiene ocupado) con un saltito de juguete por casilla, mirando a donde va.
+- `attack`: gira hacia el objetivo, anticipacion (se echa atras y se encoge), y
+  segun el tipo (`Board3D.attack_kind`): la artilleria tira un obus en parabola
+  con culatazo y un leve acercamiento de camara; la infanteria a una casilla
+  embiste (bayoneta y descarga); el blindado dispara directo con trazadora. Al
+  llegar: sacudida y aplastamiento del objetivo, polvo, numero de dano que salta
+  y sube, la barra baja (la vista descuenta golpe a golpe: la vida del modelo
+  puede ir por delante) y la imagen tiembla.
+- `die`: la pieza se vuelca, se hunde y deja un crater.
+- `defend`: aparece el aro azul de "en guardia".
+- `turn`: aro de laton bajo quien actua; la camara se va un poco hacia el.
+
+La cola acelera si se acumula trabajo (`_tempo()`), asi la vista nunca se queda
+lejos del modelo; el ritmo del turno enemigo lo sigue marcando
+`combat_ai_step_delay` en `CombatManager`, que no se ha tocado. Al vaciarse, la
+maqueta se **reconcilia** con el `Encounter` (posicion, vida, guardia, "ya
+actuo") por si algo no llego a animarse, y emite `idle`. Tambien emite
+`event_played(ev)` al empezar cada evento (sondas, pruebas).
+
+**Mientras anima no se juega** (`BattleScreen._board_busy()`): las casillas no
+responden y los botones se apagan, para que el jugador nunca actue sobre algo
+que aun no ha visto. Por lo mismo el parte del encuentro, el draft y el informe
+final de la expedicion esperan a que la maqueta termine
+(`BattleScreen._after_board_animations()`); en 2D todo eso sale al instante,
+como siempre.
+
+**Seleccion.** Igual que en 2D: la unidad que actua ya esta elegida (lo dice el
+orden de iniciativa). Sus casillas alcanzables se encienden en azul, los enemigos
+a tiro llevan aro rojo; tocar una casilla encendida mueve, tocar un enemigo con
+aro ataca. Tocar cualquier otra pieza (propia, o enemiga fuera de alcance) dice
+quien es encima de ella ("Infanteria · 80/100", y JEFE): con el dedo no hay
+tooltip. Con raton, la casilla bajo el puntero se marca y el tooltip lo dice.
+
+**Bandos y marcas.** Los nuestros con el color de la colonia
+(`RankManager.get_color()`) y peana **redonda**; los recaudadores de la Regencia
+en su morado (que no lleva ninguna colonia) con peana en **rombo**: el bando se
+lee por la forma, como el circulo / rombo del tablero 2D. El jefe (el mismo que
+elige `BattleScreen.boss_uid()`) es algo mayor y lleva estandarte y aro de
+laton; las dotaciones de torre (`Encounter.back_row_uids`) llevan su nido de
+sacos terreros.
+
+**Camara.** Perspectiva estrecha (34 grados), picado de 52 y giro de -24: la
+maqueta en tres cuartos. Se encaja sola en el hueco entre la cabecera y los
+botones (`Board3D._fit()`: busca la distancia y corre la imagen con
+`h_offset` / `v_offset`). Sigue la accion con suavidad (como mucho 1,1 m), hace
+un leve vaiven en reposo (no en calidad sencilla) y deja acercar un poco con la
+rueda o el pellizco (0,82-1,12).
+
+**Las piezas** se hornean con la misma herramienta que los edificios:
+
+```bash
+godot --headless --path . -s tools/build_toy_models.gd -- --units
+```
+
+Recetas en `tools/toy_recipes/units/` (`infantry`, `artillery`, `vehicle`, mas el
+atrezo `boss_mark` y `crew_nest`; piezas comunes en `_unit_parts.gd`), salida en
+`assets/models/toy/units/<id>_player.tscn` / `<id>_regency.tscn` con su
+`_mesh.res`. Una malla con color por vertice y los dos materiales de la maqueta;
+las del jugador llevan ademas una superficie `team` en grises que la vista pinta
+con el color de la colonia (`toy_team.tres` es solo el de por defecto). Marcadores
+`Muzzle` (de donde sale el disparo) y `Top` (la barra va encima). Triangulos:
+
+| Pieza | Jugador | Regencia |
+|---|---|---|
+| Infanteria (escuadra de tres soldaditos) | 564 | 474 |
+| Artilleria (canon con escudo y artillero) | 510 | 418 |
+| Vehiculo (blindado diesel; la Regencia, "caldera de cobro" con dos chimeneas) | 510 | 516 |
+| Estandarte del jefe / nido de la dotacion | 230 / 180 | |
+
+**Rendimiento** ("tiene que ir en una papa"). Una sola luz direccional para todo
+el tablero (ninguna por pieza), con sombra solo si la calidad la tiene; terreno
+de una malla; marcas en una `MultiMesh`; piezas de 400-600 triangulos con los
+materiales compartidos; efectos de una o pocas mallas diminutas con material sin
+luz y sin particulas de GPU; todo animado con tweens, ningun `_process`. Y,
+sobre todo: **mientras el tablero 3D esta en pantalla el 3D del mapa se apaga**
+(`Viewport.disable_3d` en la ventana, `BattleScreen._sync_world_render()`), porque
+la maqueta lo tapa entero. Se devuelve al cerrar el tablero o volver al mapa de
+la expedicion (y en `_exit_tree`).
+
+Por calidad (`WorldLook.settings_for()`): **alta**, sombra de un corte y MSAA x2
+en el SubViewport, polvo y vaiven; **baja**, sombra, sin MSAA, sin polvo ni
+vaiven; **minima**, sin sombras, sin MSAA, sin polvo ni vaiven y el 3D a 0,7 de
+resolucion (`scaling_3d_scale` del SubViewport; la UI no se escala).
+
+Medido con `tools/battle_probe.gd -- --no-title --fps` (sin vsync; ventana
+1280x800; NVIDIA RTX 3060 Laptop; la pelea animandose mientras se mide; GPU = ms
+por fotograma de la ventana mas el SubViewport):
+
+| Renderizador | Calidad | Mapa solo | Tablero 3D | Tablero 2D (sobre el mapa) |
+|---|---|---|---|---|
+| Forward+ | alta | 310 fps · 0,73 ms | 305 fps · 0,73 ms | 223 fps · 1,82 ms |
+| Forward+ | baja | 286 fps · 1,25 ms | 370 fps · 0,62 ms | 264 fps · 1,26 ms |
+| Forward+ | minima | 362 fps · 0,62 ms | 351 fps · 0,39 ms | 306 fps · 0,65 ms |
+| Mobile | alta | 330 fps · 0,52 ms | 283 fps · 0,56 ms | 269 fps · 1,19 ms |
+| Mobile | baja | 246 fps · 0,96 ms | 383 fps · 0,51 ms | 269 fps · 1,00 ms |
+| Mobile | minima | 293 fps · 0,47 ms | 323 fps · 0,32 ms | 286 fps · 0,49 ms |
+| Compatibility | alta | 90 fps | 80 fps | 64 fps |
+| Compatibility | baja | 74 fps | 80 fps | 67 fps |
+| Compatibility | minima | 83 fps | 80 fps | 67 fps |
+
+(En Compatibility el tiempo de GPU que da Godot no es fiable; solo los fps.)
+
+**Decision para la calidad minima: 3D simplificado, no el 2D.** La maqueta
+cuesta en GPU lo mismo o menos que el mapa que ese equipo ya tiene que mover
+(Mobile minima: 0,32 ms contra 0,47), porque el mapa deja de dibujarse mientras
+ella esta en pantalla; el tablero 2D, en cambio, se pinta ENCIMA del mapa (su
+fondo es translucido) y sale el mas caro de los tres en todas las filas. Quien
+mueve el mapa mueve la pelea. El tablero 2D de siempre se queda como
+alternativa donde tiene sentido (`BattleScreen.pick_board_style()`): en la
+**vista 2D del mapa** (el jugador eligio lo plano) y **sin pantalla** (pruebas
+headless, que fijan su lectura). `BattleScreen.force_board_style()` lo fuerza
+para pruebas y sondas.
+
+**Lo que no se ha tocado:** `CombatManager`, los modelos (salvo `domain`, §11) y
+el sonido: `AudioManager` sigue sonando con las senales, asi que el golpe suena
+cuando el modelo pega y la maqueta lo ensena unas decimas despues (la
+anticipacion es corta a proposito).
+
+Capturas: `tools/battle_probe.gd` (ver §9) deja `docs/media/dev/battle_<tag>_*.png`.
 
 ### Turn flow
 
@@ -722,13 +873,16 @@ All of it in `scripts/services/GameConfig.gd`. No magic numbers anywhere in
 | `combat_morale_on_victory` | `8.0` | Morale gained by a win | |
 | `combat_morale_per_casualty` | `3.0` | Morale lost per unit that does not come back | With the default pair, three dead cancel a victory. That is the point: a costly win should be able to leave the town worse off |
 
-Default `combat_unit_stats`:
+Default `combat_unit_stats` (los HP son los de `GameConfig`: x3,3 sobre los
+30/22/60 originales, docs/16):
 
-| Unit | hp | atk | def | move | range | min_range | initiative |
-|------|----|-----|-----|------|-------|-----------|------------|
-| `infantry` | 30 | 8 | 2 | 3 | 1 | 1 | 5 |
-| `artillery` | 22 | 14 | 1 | 1 | 3 | 2 | 3 |
-| `vehicle` | 60 | 12 | 5 | 4 | 1 | 1 | 4 |
+| Unit | hp | atk | def | move | range | min_range | initiative | domain |
+|------|----|-----|-----|------|-------|-----------|------------|--------|
+| `infantry` | 100 | 8 | 2 | 3 | 1 | 1 | 5 | `land` |
+| `artillery` | 75 | 14 | 1 | 1 | 3 | 2 | 3 | `land` |
+| `vehicle` | 200 | 12 | 5 | 4 | 1 | 1 | 4 | `land` |
+
+`domain` no lo lee ninguna regla: ver [§11](#11-dominios-mar-aire-y-espacio).
 
 Morale is captured once and frozen for the whole expedition or siege: at launch for
 an expedition (`_morale_snapshot`), when the gate opens ("QUE BAJEN",
@@ -810,6 +964,7 @@ GODOT=godot tools/run_tests.sh -a tests/combat
 | `tests/storm/test_storm_toasts_over_board.gd` | Notification toasts draw above `BattleScreen` and below `VictoryScreen` |
 | `tests/audio/test_audio_combat.gd` | `AudioManager` connects the combat and audit signals it claims to |
 | `tests/ui/test_expedition_ui.gd` | `BattleScreen`'s map, draft modal, final report and abandon flow, plus `SkirmishPanel`'s launch refusals — including that the map stays touchable on a phone |
+| `tests/ui/test_battle_board_3d.gd` | El tablero 3D: 3D salvo sin pantalla y en la vista 2D, casilla <-> mundo, la ruta casilla a casilla, una pieza por unidad viva, nada se juega ni sale el parte mientras la maqueta anima, la pieza acaba donde dice el modelo, la barra baja golpe a golpe y se reconcilia, el 3D del mapa se apaga bajo la maqueta, piezas horneadas de los dos bandos <= 800 triangulos, un material por color de colonia, y `domain` ("land" hoy, ninguna regla cambia) |
 | `tests/ui/test_battle_board_icons.gd` | Unit silhouettes on the cell and on the initiative strip, side tint, the dimming of a unit that already acted, the boss frame and who wears it, the fallback to the name's initial when the PNG is missing, and the cell still fitting a 400x720 screen |
 | `tests/ui/test_helper_skirmish_callout.gd` | The Escaramuzas callout appears with the Barracks and only once |
 | `tests/combat/test_combat_integrity.gd` | The ledger across boards and saves: no walking past an unfought node, the siege ledger balanced through a mid-wave save (garrison and tower crews), the garrison mustered at the gate and reconciled before every wave, abandoning leaving a Tithe board alone, one enemy loop per board, a busy board queuing a wave instead of losing it, board units never counted at home, and the seeded skirmish roster |
@@ -827,7 +982,7 @@ the line is removed afterwards. They all no-op unless `GameConfig.dev_mode` is o
 
 | Probe | What it does |
 |-------|--------------|
-| `tools/battle_probe.gd` | Seeds an army, opens the skirmish panel and the board, and screenshots them into `res://docs/media/dev/`. For reviewing the battle screen without playing up to a Barracks |
+| `tools/battle_probe.gd` | Seeds an army, opens the skirmish panel and a showcase board (a home defence with a boss and a tower crew), plays the whole fight and screenshots it into `res://docs/media/dev/battle_<tag>_*.png`: deploy, move (mid-hop), attack, shell, targets, death (two frames), result, and on a tablet the tap-to-inspect label. In 3D it shoots when the **maqueta** reaches each event (`Board3D.event_played`), not when the signal fires. Args after `--`: `--no-title --profile=pc\|tablet --quality=high\|low\|minimal --board=3d\|2d --tag=<name>`; `--fps` measures FPS and GPU ms (map alone vs board, every quality) instead of shooting |
 | `tools/audit_probe.gd` | Summons the Final Audit, plays the whole siege without touching the UI, and logs what happened. `FORCE_SHORT_SIEGE = true` forces a one-wave siege so the victory path (the Storm stopping for good) can be seen without luck. It is the proof that **the game can be finished** |
 | `tools/expedition_probe.gd` | Plays a whole expedition without the UI (same `CombatAI`, applied through the public `CombatManager` API) and checks the roguelike invariants: attrition, permadeath, one payout on return, and that the army left at home is exactly the one that survived (T045, `specs/001-combate-pve/quickstart.md`) |
 
@@ -842,6 +997,10 @@ user dir (`override.cfg`, see `CLAUDE.md`).
 Besides the probes, the expedition is exercised by
 `tests/combat/test_expedition_wiring.gd` (the service) and
 `tests/ui/test_expedition_ui.gd` (the screens).
+
+`tools/unit_toy_probe.gd` (`extends SceneTree`, `godot --path . -s
+tools/unit_toy_probe.gd`) photographs the six baked unit toys and the two props
+in a row (`docs/media/dev/unit_toys.png`); re-run it after touching a unit recipe.
 
 `tools/gen_unit_icons.gd` is not a probe: it is a one-shot generator, run headless
 and never registered as an autoload. Re-run it after touching a silhouette.
@@ -874,3 +1033,47 @@ interface (map, draft modal, final report, abandon), listeners for
 silhouettes on the board in place of the name's initial, the after-action report
 for the blind defence (`WarReportScreen`), the siege banner (`AuditWaveBanner`), and
 the removal of the `has_method()` / `has_signal()` scaffolding.
+
+---
+
+## 11. Dominios: mar, aire (y espacio)
+
+El dueno quiere, mas adelante, unidades de **mar** y de **aire** (y, muy a
+futuro, de espacio). Nada de eso esta implementado; lo que hay es el hueco para
+que entren sin cambiar formatos.
+
+**Hoy (2026-10-12).** Cada fila de `GameConfig.combat_unit_stats` lleva
+`"domain": "land"`. El modelo puro lo conserva y lo expone sin que ninguna regla
+lo mire: `CombatUnit.domain()` lo lee de la fila (una fila sin la clave, o un
+tipo desconocido, es `CombatUnit.DOMAIN_LAND`). No se guarda en la partida: sale
+del tipo de unidad, como el resto de estadisticas. La vista 3D coloca cada pieza
+segun su dominio (`BoardLayout3D.DOMAIN_HEIGHT`): tierra en el suelo; mar en la
+lamina de agua, algo por debajo; aire a 1,7 m con sombra en el suelo; espacio
+por encima. Las que no son de tierra se mecen en reposo (`DOMAIN_BOBS`).
+`tests/ui/test_battle_board_3d.gd` fija que las tres de hoy son de tierra y que
+quitar o poner el campo no cambia ni dano, ni alcance, ni iniciativa.
+
+**Diseno para cuando llegue** (propuesta, por decidir con el dueno):
+
+1. **Casillas con medio.** El tablero gana un tipo por casilla (tierra, agua,
+   costa) generado por el encuentro; el terreno 3D pinta el agua con su lamina.
+   Es la unica pieza nueva del modelo: `Encounter` tendria `terrain[cell]`.
+2. **Quien puede pisar que.** Una tabla en `GameConfig` (p. ej.
+   `combat_domain_moves = {"land": ["land", "shore"], "sea": ["water", "shore"],
+   "air": ["land", "water", "shore"]}`) que lea `CombatRules` al calcular la BFS
+   de movimiento: hoy todas las casillas son tierra y todas las unidades son de
+   tierra, asi que la tabla no cambiaria ningun resultado actual.
+3. **Quien puede pegar a quien.** Otra tabla (`combat_domain_targets`): por
+   ejemplo, la infanteria no alcanza al aire, la artilleria antiaerea si. Se
+   comprobaria en `in_attack_range()` junto a `range` / `min_range`.
+4. **Ocupacion.** Una unidad de aire podria compartir casilla con una de tierra
+   (otra capa); eso toca `get_unit_at()` y el despliegue, y es la decision mas
+   cara: dejarla para el final.
+5. **La vista** ya sabe la altura; faltaria la pieza horneada (receta en
+   `tools/toy_recipes/units/<id>.gd`, mismo presupuesto) y, si se quiere, una
+   animacion de despegue en vez del saltito (`UnitToy3D.hop_along`).
+6. **La IA** (`CombatAI`) puntua casillas alcanzables: si la BFS ya respeta el
+   medio, la IA lo hereda sin cambios.
+
+Ninguno de estos pasos cambia el equilibrio de las tres unidades de tierra; los
+numeros de `docs/16` siguen valiendo mientras no se anada una unidad nueva.

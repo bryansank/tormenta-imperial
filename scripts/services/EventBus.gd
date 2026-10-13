@@ -293,6 +293,11 @@ signal grid_overlay_toggled(visible: bool)
 ## WorldLook la aplica al entorno y al sol de la escena 3D.
 @warning_ignore("unused_signal")
 signal graphics_quality_changed(quality: String)
+## La velocidad del juego cambio (1.0 o 2.0; GameConfig.set_game_speed). La
+## simulacion la lee en GameConfig.sim_delta(); la vista de combate, para
+## acortar sus animaciones con GameConfig.combat_pace().
+@warning_ignore("unused_signal")
+signal game_speed_changed(speed: float)
 
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)

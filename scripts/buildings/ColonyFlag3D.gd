@@ -77,7 +77,9 @@ func setup(footprint: Vector2, top: float, building: Node = null, big: bool = fa
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.06
 	cyl.bottom_radius = 0.09
-	cyl.height = height
+	# Colgada del FlagAnchor del modelo el palo propio no se ve, pero un cilindro
+	# de altura 0 deja normales nulas ("Vector3 cannot be normalized" al cargar).
+	cyl.height = maxf(height, 0.05)
 	cyl.radial_segments = 8
 	cyl.rings = 1
 	pole.mesh = cyl

@@ -98,7 +98,8 @@ Los servicios no saben que vista corre. Lo que hizo falta tocar:
 `Building2D` es la entidad que ven los servicios, con los mismos metadatos
 (`level`, `rotation_steps`, `health`, `staffed`, `under_construction`,
 `custom_name`) y los mismos hijos con nombre (`NameLabel`, `StatusBadge`,
-`ConstructionLabel`). **No escucha senales para pintarse**: cada frame compara
+`ConstructionLabel`). **No escucha senales para pintarse**: cada
+`CHECK_FRAMES` fotogramas (repartidos entre edificios; las calzadas, nunca) compara
 una firma barata de su estado (obra y su progreso a saltos de 5%, nivel, vida,
 ruina, calzadas vecinas, giro, nombre, y el aspecto de `BuildingLook`: fase de
 obra, mejora, ruina, trabajando) y solo repinta si cambio. Asi una
@@ -171,6 +172,79 @@ distancia (algo mas pequenos al alejarse). En una pantalla estrecha la camara
 se acerca sola (`Camera2DController.screen_boost()`) para que una celda siga
 siendo tocable.
 
+### Maqueta de juguete en 2D (2026-10-12)
+
+La 2D sigue la misma direccion de arte que la 3D (guia de estilo de edificios):
+**los diez colores de `ToyPalette`** (`scripts/buildings/ToyPalette.gd`, solo
+lectura para la 2D: `BuildingArt2D` toma sus casillas como constantes),
+volumenes gruesos, la funcion a la vista y un elemento exagerado por edificio
+(la sierra del Aserradero, la rueda del castillete de la Mina, la chimenea alta
+de la Fundicion, la columna de la Refineria, la cupula azul del Laboratorio, el
+canon de la Torre, la bandera del Cuartel, los toldos del Mercado, el silo de la
+Granja, el torreon con el emblema del Cuartel General, la cupula de laton del
+Nucleo...). Acento por funcion: rojo industrial, amarillo/negro militar, laton
+civico, verde residencial (tambien en el atrezo: `BuildingArt2D.lot_accent`).
+
+La vista es "de maqueta": desde arriba, pero cada volumen ensena su tejado y,
+**hacia abajo en pantalla**, su pared (`_block`, `_cyl`); mastiles y chimeneas
+suben hacia arriba en pantalla. Como el edificio se dibuja girado,
+`draw_building` recibe `"rot"` y traduce "abajo en pantalla" a su marco local:
+la pared y la sombra caen siempre al sur de la pantalla y la luz viene siempre
+de arriba a la izquierda. Contorno fino calido (`OUTLINE`) y sombra suave
+(`SHADOW`) en todos.
+
+La isla (cesped GREEN, arena crema, mar SKY, el canto WOOD de la placa), las
+calzadas (adoquin de piedra calida, bordillo crema, raya de laton), la obra, la
+ruina, el atrezo y los caminantes (`WalkerFigures2D`: munecos con cabeza, cuerpo
+y sombrero, colores llevados a la casilla de paleta mas cercana) usan la misma
+paleta. La Tormenta tine hacia una ceniza **calida** (sepia-oxido,
+`StormTint2D.ASH_TINT`), pasando por un tono calido en el Aviso (`WARN_TINT`).
+
+### Rendimiento: la 2D tiene que ir "en una papa"
+
+La 2D es la vista de los equipos flojos. Medido con la sonda
+(`tools/view2d_probe.gd -- --view=2d --no-title --perf`: 482 piezas, unas 320
+calzadas y 160 edificios, vistas enteras, sin vsync):
+
+| | Antes | Despues |
+|---|---|---|
+| Fotograma | ~83 ms | ~7 ms |
+| `_process` de edificios y sus badges | ~42 ms | ~2 ms |
+| CPU de render del mapa | ~21 ms | ~2.5 ms |
+| Primitivas | ~600 000 | ~13 000 |
+
+Donde estaba el coste y que se cambio:
+
+- **Cada edificio eran cien o doscientas ordenes de dibujo** (discos,
+  poligonos, lineas) que el renderizador recorre en cada fotograma, y
+  `draw_circle()` gasta 64 lados por disco aunque mida dos pixeles. Ahora:
+  - `ArtCache2D` **hornea** cada dibujo una vez en un SubViewport pequeno y lo
+    guarda como textura con mipmaps. El cuerpo, compartido por clave (edificio,
+    giro, nivel, calzadas vecinas: unos 20 en una partida normal, ~2 MB). La
+    parcela entera de cada instancia en pie (suelo, cuerpo y atrezo), suelta y
+    propiedad del edificio (~70 KB cada una a 1.5 px por px). Un edificio es
+    un rectangulo con textura.
+  - Lo que cambia a menudo no se hornea: obra, ruina, dano, seleccion y el
+    cultivo de la Granja (va a mano encima).
+  - Sin renderizador (pruebas headless) o mientras la textura no esta, se
+    dibuja a mano como antes.
+  - Los discos de lo que se dibuja a mano son poligonos de pocos lados (`_dot`).
+- **`_process` en todos los nodos, todos los fotogramas.** Cada edificio
+  recalculaba su firma (unos 40 us) en cada fotograma, y cada uno, calzadas
+  incluidas, tenia un badge que releia el estado cada 0.25 s y se recolocaba
+  cada fotograma. Ahora: las calzadas no tienen `_process` (ni su badge), se
+  repintan cuando la rejilla cambia a su alrededor; los demas edificios miran su
+  firma cada `Building2D.CHECK_FRAMES` (10) fotogramas, repartidos; los badges
+  releen cada 0.5 s, repartidos, y solo se recolocan si cambia el zoom (leido una
+  vez por fotograma para todos).
+- **Isla**: el detalle menudo (matas, flores, olas) va en 6x6 trozos que Godot
+  descarta si no se ven, se oculta al alejarse mucho, y son rectangulos y
+  polilineas en vez de discos y arcos. La textura de hierba, a un texel cada 6 px.
+- **Caminantes**: un disco blanco con contorno, generado una vez y tenido por
+  pieza: 4 o 5 cuadrados por figura en un solo lote; tope `GameConfig.life_figure_cap`
+  por perfil y, si hace falta, `WalkerFigures2D.max_fps`.
+- **Ceniza**: menos particulas en tableta y movil (`StormTint2D.ASH_AMOUNT`).
+
 ## Que es jugable en 2D
 
 Todo lo que es partida: construir (con giro, fantasma verde/rojo, regla de
@@ -229,8 +303,12 @@ docs/21 §9).
   `docs/media/dev/` (ignorada por git). `-- --view=2d` para las capturas,
   `-- --view=2d --play` para jugar una partida nueva con eventos de raton de
   verdad (arrastrar, colocar un aserradero junto a un bosque, seleccionarlo),
-  `--shot-size=400x720` para cambiar la ventana. Aparta el guardado del jugador
-  y devuelve la preferencia de vista al terminar.
+  `--shot-size=400x720` para cambiar la ventana, `--no-title` para saltar el
+  menu principal y `--perf` para medir un mapa grande (fotograma, `_process`,
+  render y primitivas, con la cache y sin ella). Las capturas de arte
+  (`2d_overview`, `2d_far`, `2d_close`, `2d_storm`, `2d_storm_warning`) van sin
+  interfaz encima. Aparta el guardado del jugador y devuelve la preferencia de
+  vista al terminar.
 - `tests/view2d/`: colocar (huella, giro, ocupado, fuera de rejilla, regla de
   yacimiento, compra, mover, demoler), guardado cruzado 3D ↔ 2D por el camino
   real de GameManager, preferencia de vista y linea de comandos, pantalla →
@@ -246,6 +324,9 @@ docs/21 §9).
   obras (una fila por fase, varios edificios y dos casas)
   (docs/03, "Aspecto en el mapa"), y la fila "estilo": los 16 en su parcela,
   con luz normal y con el tinte de la Tormenta (docs/03, "Parcela y atrezo").
+  `-- --only-2d` hace solo las 2D, mas `look_probe_close_2d.png` (los
+  productivos de cerca) y `look_probe_icons_2d.png` (los iconos del menu a tres
+  tamanos).
 - `tools/life_probe.gd`: un pueblo sembrado con obreros y ciudadanos en la calle,
   en 3D y en 2D (`life_probe_2d.png`); `tests/map/test_city_life.gd` comprueba que
   las dos vistas dibujan tantas figuras como hay en la calle (docs/04, "Life in

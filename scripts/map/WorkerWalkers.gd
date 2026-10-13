@@ -17,7 +17,14 @@ extends Node
 ##     tope por perfil de dispositivo (`life_figure_cap`).
 ##   - La Tormenta: en el Aviso apuran el paso; en la Ceniza, la Tormenta y el
 ##     Diezmo se meten dentro y las calles quedan vacias; con la calma vuelven a
-##     salir poco a poco. De noche (cuando exista) `set_presence()`.
+##     salir poco a poco.
+##   - La noche (DayClock, `EventBus.day_phase_changed`): la gente se recoge en
+##     casa y quedan unos pocos obreros por la calle (faroleros, vigilantes). Es
+##     solo vista: ni la produccion ni la dotacion cambian. El paso es suave: la
+##     mezcla dia-noche avanza a saltos de `life_night_step` cada
+##     `life_night_step_seconds` (un repaso por salto, nada por fotograma), y
+##     los que sobran vuelven andando a casa antes de desaparecer. Con Tormenta
+##     manda la Tormenta: dentro todos, sea de dia o de noche.
 ##
 ## Las figuras son datos (un Actor por figura); las dibuja un solo nodo:
 ## WalkerFigures3D (un MultiMesh por silueta) o WalkerFigures2D (un _draw).
@@ -27,6 +34,7 @@ extends Node
 
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const StormCycleScript := preload("res://scripts/storm/StormCycle.gd")
+const DayCycleScript := preload("res://scripts/storm/DayCycle.gd")
 const Figures3D := preload("res://scripts/map/WalkerFigures3D.gd")
 const Figures2D := preload("res://scripts/view2d/WalkerFigures2D.gd")
 ## Una figura (sus campos, en WalkerActor.gd: los comparte con quien la dibuja).
@@ -61,6 +69,10 @@ var _rescan_left := RESCAN_EVERY
 var _sheltered := false
 var _hurry := false
 var _presence := 1.0
+## Cuanto pesa la noche en la calle (0 dia, 1 noche cerrada) y a donde va.
+var _night := 0.0
+var _night_target := 0.0
+var _night_step_left := 0.0
 ## Lo que se calcula al repasar: la red, las puertas y las rutas ya hechas.
 var _net := {}
 var _net_keys: Array = []
@@ -92,6 +104,7 @@ func _ready() -> void:
 	EventBus.building_demolished.connect(_mark_dirty)
 	EventBus.storm_phase_changed.connect(_on_storm_phase)
 	EventBus.game_load_completed.connect(_on_load)
+	EventBus.day_phase_changed.connect(_on_day_phase)
 	_on_load()
 	if _layer != null:
 		_figures = Figures2D.new() if _is_2d else Figures3D.new()
@@ -107,6 +120,8 @@ func _mark_dirty(_a: Variant = null, _b: Variant = null) -> void:
 func _on_load() -> void:
 	_dirty = true
 	_apply_storm_phase(StormManager.get_phase())
+	# La hora se re-deriva sin transicion: se cargo de noche, arranca de noche.
+	_apply_day_phase(DayClock.get_phase(), true)
 
 # ── Consultas (pruebas y sonda) ─────────────────────────────────────────
 
@@ -144,7 +159,9 @@ static func figure_cap(profile: String = "") -> int:
 ## Cuantas figuras de cada clase: una por cada `per` personas (obreros por un
 ## lado, ciudadanos sin ocupar por otro), con el tope; si no caben, a partes
 ## proporcionales. Devuelve {"workers": int, "citizens": int}.
-static func figure_budget(population: int, used_workers: int, cap: int, per: int = 0, presence: float = 1.0) -> Dictionary:
+## `citizen_share` (0-1) recorta aun mas a los ciudadanos: de noche quedan
+## sobre todo obreros.
+static func figure_budget(population: int, used_workers: int, cap: int, per: int = 0, presence: float = 1.0, citizen_share: float = 1.0) -> Dictionary:
 	var k := maxi(1, per if per > 0 else GameConfig.life_people_per_figure)
 	var total := mini(cap, ceili(float(maxi(0, population)) / k))
 	total = int(round(total * clampf(presence, 0.0, 1.0)))
@@ -155,16 +172,66 @@ static func figure_budget(population: int, used_workers: int, cap: int, per: int
 		# Con el tope se reparte en proporcion: ni la calle solo de obreros ni
 		# un taller sin nadie que vaya.
 		workers = clampi(roundi(float(total) * used / maxf(1.0, population)), mini(1, used), total)
+		if citizen_share < 1.0:
+			# De noche los obreros primero: son los que quedan por la calle.
+			workers = mini(ceili(float(used) / k), total)
 		citizens = total - workers
+	if citizen_share < 1.0:
+		citizens = int(round(citizens * clampf(citizen_share, 0.0, 1.0)))
 	return {"workers": workers, "citizens": citizens}
 
 ## Semilla fija (pruebas y sonda): la misma ciudad, la misma gente.
 func seed_rng(value: int) -> void:
 	_rng.seed = value
 
-## El gancho de la noche: la fraccion de gente que sale (1 = toda).
+## La fraccion de gente que sale (1 = toda), por encima de la noche. 1 por
+## defecto; la noche la aplica aparte (night_weight()).
 func set_presence(fraction: float) -> void:
 	_presence = clampf(fraction, 0.0, 1.0)
+	_dirty = true
+
+## Cuanto pesa la noche ahora en la calle (0 dia, 1 noche cerrada).
+func night_weight() -> float:
+	return _night
+
+## A donde va la mezcla en cada fase: la noche entera de noche, la mitad en el
+## alba y el ocaso (que la calle se vaya vaciando antes de que oscurezca del
+## todo, y se vaya llenando al amanecer).
+static func night_target_for(phase: int) -> float:
+	match phase:
+		DayCycleScript.Phase.NIGHT:
+			return 1.0
+		DayCycleScript.Phase.DUSK, DayCycleScript.Phase.DAWN:
+			return 0.5
+	return 0.0
+
+func _on_day_phase(phase: int, _hour: float) -> void:
+	_apply_day_phase(phase, false)
+
+## `instant`: sin transicion (al cargar).
+func _apply_day_phase(phase: int, instant: bool) -> void:
+	_night_target = night_target_for(phase) if DayClock.is_enabled() else 0.0
+	if instant and _night != _night_target:
+		_night = _night_target
+		_dirty = true
+	_night_step_left = 0.0
+
+## Presencia y parte de ciudadanos con la noche que toca.
+func _budget_factors() -> Array:
+	var presence := _presence * lerpf(1.0, GameConfig.life_night_presence, _night)
+	var share := lerpf(1.0, GameConfig.life_night_citizen_share, _night)
+	return [presence, share]
+
+## Un salto de la mezcla dia-noche si toca (una resta por fotograma; el repaso
+## solo cuando salta).
+func _step_night(delta: float) -> void:
+	if _night == _night_target:
+		return
+	_night_step_left -= delta
+	if _night_step_left > 0.0:
+		return
+	_night_step_left = GameConfig.life_night_step_seconds
+	_night = move_toward(_night, _night_target, GameConfig.life_night_step)
 	_dirty = true
 
 # ── Puertas y rutas ─────────────────────────────────────────────────────
@@ -319,8 +386,9 @@ func reconcile() -> void:
 		_sweep()
 		last_reconcile_usec = Time.get_ticks_usec() - t0
 		return
+	var f := _budget_factors()
 	var budget := figure_budget(PopulationManager.get_population(),
-		PopulationManager.get_used_workers(), figure_cap(), 0, _presence)
+		PopulationManager.get_used_workers(), figure_cap(), 0, float(f[0]), float(f[1]))
 	var n_workers: int = budget["workers"]
 	var n_citizens: int = budget["citizens"]
 	# Asientos de obrero: por vueltas, para que cada edificio tenga al menos uno
@@ -433,6 +501,7 @@ func _process(delta: float) -> void:
 ## Un paso de la ciudad. Publico para las pruebas.
 func tick(delta: float) -> void:
 	_rescan_left -= delta
+	_step_night(delta)
 	if _dirty or _rescan_left <= 0.0:
 		reconcile()
 	var speed: float = GameConfig.life_walk_speed * (GameConfig.life_hurry_multiplier if _hurry else 1.0) * delta

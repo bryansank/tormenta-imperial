@@ -616,6 +616,9 @@ var profile_campaigns_won := 0
 var saves_active_slot := 0
 
 func _ready() -> void:
+	# El registro local de errores va lo primero: asi recoge tambien lo que pase
+	# al cargar los ajustes (docs/19 §7). Nunca sale del equipo.
+	ErrorLog.install(self)
 	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
 	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
 	load_user_settings()
@@ -1307,6 +1310,42 @@ var building_lot_accents := {
 	"residential": Color(0.30, 0.60, 0.22),
 }
 
+# ── Velocidad del juego (x1 / x2) ──
+# Un multiplicador que leen los servicios que tickean la simulacion, y NO
+# Engine.time_scale: time_scale tambien acelera los tweens de la interfaz, la
+# camara, los avisos, el autoguardado (que cuenta segundos reales) y el reloj
+# del tutorial, y cada uno pediria su excepcion en archivos de otros. Aqui la
+# interfaz va a su ritmo sin tocar nada y la simulacion pasa por sim_delta().
+# Es estado del dispositivo, no de la partida: no viaja en save_game.json y al
+# abrir el juego siempre es x1 (no se escribe en settings.cfg: seria un valor
+# que nadie lee). Lo que si se guarda es el boton (oculto/movido, HudRegistry).
+const GAME_SPEEDS := [1.0, 2.0]
+var game_speed := 1.0
+
+## Pone la velocidad (solo valores de GAME_SPEEDS) y avisa por EventBus.
+func set_game_speed(speed: float) -> void:
+	var next := speed if speed in GAME_SPEEDS else 1.0
+	if is_equal_approx(next, game_speed):
+		return
+	game_speed = next
+	EventBus.game_speed_changed.emit(game_speed)
+
+## x1 <-> x2 (el boton del HUD y la tecla F).
+func toggle_game_speed() -> void:
+	var i := GAME_SPEEDS.find(game_speed)
+	set_game_speed(GAME_SPEEDS[(i + 1) % GAME_SPEEDS.size()])
+
+## El delta de simulacion de este fotograma: lo que tickean produccion,
+## construccion, procesos, Tormenta, dia y noche, ejercito, eventos...
+func sim_delta(delta: float) -> float:
+	return delta * game_speed
+
+## Una pausa o animacion del tablero de combate, acortada con x2. Para el
+## turno enemigo (get_combat_ai_step_delay) y las animaciones de la vista de
+## combate, que la leen de aqui y escuchan EventBus.game_speed_changed.
+func combat_pace(seconds: float) -> float:
+	return seconds / maxf(game_speed, 0.01)
+
 # ── Duration Helpers ──
 
 func get_duration(base: float) -> float:
@@ -1478,10 +1517,16 @@ var combat_ai_step_delay := 0.45
 ## relacion que hace que la artilleria pegue y el vehiculo aguante, y ademas la
 ## IA de objetivos esta fijada sobre esos numeros en `tests/combat/test_combat_ai.gd`.
 ## Medido en `tools/balance_probe.gd`; tablas en `docs/16-balance-combate.md`.
+##
+## `domain` es el medio por el que se mueve la unidad: "land" (tierra) para las
+## tres de hoy. Ninguna regla lo lee todavia; existe para que las unidades de
+## mar y aire (y, muy a futuro, espacio) entren sin cambiar el formato: el
+## modelo puro lo expone (`CombatUnit.domain()`) y la vista 3D coloca la unidad
+## segun el (docs/15 §11). Una entrada sin `domain` es de tierra.
 var combat_unit_stats := {
-	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5},
-	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3},
-	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4},
+	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5, "domain": "land"},
+	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3, "domain": "land"},
+	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4, "domain": "land"},
 }
 
 ## Enemy scaling: deeper nodes and later eras field tougher rosters.
@@ -1571,7 +1616,9 @@ func get_combat_stats(unit_id: String) -> Dictionary:
 	return combat_unit_stats.get(unit_id, {})
 
 func get_combat_ai_step_delay() -> float:
-	return combat_ai_step_delay if not dev_mode else combat_ai_step_delay * 0.5
+	var base := combat_ai_step_delay if not dev_mode else combat_ai_step_delay * 0.5
+	# x2 tambien acelera el turno enemigo (combat_pace).
+	return combat_pace(base)
 
 # ══════════════════════════════════════════════════════════════════════
 # ── The Imperial Storm ──
@@ -1899,9 +1946,15 @@ var life_stay_home := Vector2(4.0, 12.0)
 var life_stay_market := Vector2(4.0, 8.0)
 var life_pause_decoration := Vector2(3.0, 6.0)
 var life_pause_stroll := Vector2(1.0, 2.5)
-## Gancho del dia y la noche (aun no existe): la fraccion de gente que sale de
-## noche. WorkerWalkers.set_presence() la aplica cuando alguien se la pida.
-var life_night_presence := 0.4
+## La noche en la calle (DayClock; solo vista): la fraccion de figuras que
+## quedan de noche cerrada y, de esas, la parte de ciudadanos (el resto son
+## obreros: faroleros, vigilantes). Con 80 habitantes y 6 obreros, unas 4-5
+## figuras. El paso al anochecer y al amanecer es a saltos de
+## `life_night_step` cada `life_night_step_seconds` segundos reales.
+var life_night_presence := 0.3
+var life_night_citizen_share := 0.15
+var life_night_step := 0.1
+var life_night_step_seconds := 3.0
 
 # ── Dia y noche (docs/21 §12) ──
 #

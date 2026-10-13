@@ -314,9 +314,12 @@ func _complete_construction(stale_or_node) -> void:
 # ── Production ──
 
 func _process(delta: float) -> void:
-	_tick_construction(delta)
-	_tick_production(delta)
-	_tick_spoilage(delta)
+	# x2: construccion, produccion y caducidad al doble (GameConfig.sim_delta).
+	# El enfriamiento del aviso de saco lleno es de la interfaz: segundos reales.
+	var sim := GameConfig.sim_delta(delta)
+	_tick_construction(sim)
+	_tick_production(sim)
+	_tick_spoilage(sim)
 	if _full_bag_notice_cooldown > 0.0:
 		_full_bag_notice_cooldown -= delta
 
