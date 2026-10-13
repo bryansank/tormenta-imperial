@@ -381,11 +381,19 @@ func _build_skirt_mesh(y_top: float, y_bottom: float) -> ArrayMesh:
 	return st.commit()
 
 ## Un ShaderMaterial con el shader `shader_name` de scripts/map y sus parametros.
+## Todos llevan `storm_weight` (storm_grade.gdshaderinc): nacen con el peso de
+## Tormenta que tenga StormSky ahora, asi que rehacer la isla a media tormenta
+## (grid_resized, recarga) no la devuelve limpia. Luego StormSky los funde.
 func _shader_material(shader_name: String, params: Dictionary) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://scripts/map/%s.gdshader" % shader_name) as Shader
 	for key in params:
 		m.set_shader_parameter(key, params[key])
+	m.set_shader_parameter("storm_weight", StormSky.get_island_weight())
+	# Version sencilla en calidad baja o minima (WorldLook, hermano en Main).
+	var look := get_parent().get_node_or_null("WorldEnvironment") if get_parent() != null else null
+	if look != null and look.has_method("island_simple"):
+		m.set_shader_parameter("simple", look.island_simple())
 	return m
 
 func _create_grass_material() -> ShaderMaterial:
