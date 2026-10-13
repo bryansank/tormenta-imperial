@@ -100,18 +100,23 @@ static func read(id: int) -> Dictionary:
 # ── Resumen e indice ─────────────────────────────────────────────────
 
 ## Lo que la lista ensena de una partida, sacado de su guardado. Los campos que
-## el guardado no trae (colony_name, flag_spec: llegan con la rama de bandera y
-## pais) quedan vacios y la lista pone "Colonia N".
+## el guardado no trae (una partida sin nombre de pais) quedan vacios y la lista
+## pone "Colonia N".
 static func summary_of(data: Dictionary, id: int) -> Dictionary:
 	var mode: Dictionary = data.get("game_mode", {}) if data.get("game_mode", {}) is Dictionary else {}
 	var prog: Dictionary = data.get("progression", {}) if data.get("progression", {}) is Dictionary else {}
 	var rank: Dictionary = data.get("rank", {}) if data.get("rank", {}) is Dictionary else {}
-	var spec: Variant = rank.get("flag_spec", {})
+	# La rama de bandera y pais guarda "rank": {"colony": {"name", "flag"}}; los
+	# guardados de antes traian "color" suelto.
+	var colony: Dictionary = rank.get("colony", {}) if rank.get("colony", {}) is Dictionary else {}
+	var spec: Variant = colony.get("flag", {})
+	var colors: Variant = (spec as Dictionary).get("colors", []) if spec is Dictionary else []
+	var first_color := String((colors as Array)[0]) if colors is Array and not (colors as Array).is_empty() else String(rank.get("color", String(GameConfig.COLONY_DEFAULT_SPEC["colors"][0])))
 	return {
 		"id": id,
-		"colony_name": String(rank.get("colony_name", "")),
+		"colony_name": String(colony.get("name", "")),
 		"flag_spec": spec if spec is Dictionary else {},
-		"color": String(rank.get("color", GameConfig.COLONY_DEFAULT_COLOR)),
+		"color": first_color,
 		"mode": String(mode.get("mode", "campaign")),
 		"tier": String(mode.get("tier", "colonist")),
 		"era": int(prog.get("current_era", 1)),

@@ -220,9 +220,9 @@ func _make_flag(entry: Dictionary) -> Control:
 	flag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var spec: Variant = entry.get("flag_spec", {})
 	var drawer: GDScript = _flag_drawer()
-	var color_id := String(entry.get("color", GameConfig.COLONY_DEFAULT_COLOR))
+	var color_id := String(entry.get("color", String(GameConfig.COLONY_DEFAULT_SPEC["colors"][0])))
 	var fill: Color = GameConfig.colony_colors.get(color_id,
-		GameConfig.colony_colors[GameConfig.COLONY_DEFAULT_COLOR])
+		GameConfig.colony_colors[String(GameConfig.COLONY_DEFAULT_SPEC["colors"][0])])
 	flag.draw.connect(func():
 		var rect := Rect2(Vector2.ZERO, FLAG_SIZE)
 		if drawer != null and spec is Dictionary and not (spec as Dictionary).is_empty():
