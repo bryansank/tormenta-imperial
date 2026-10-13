@@ -73,6 +73,8 @@ var _active_uid := -1
 var _simple := false
 var _team_color := Color(0.8, 0.62, 0.25)
 var _boss_uid := -1
+## El escenario de la maqueta (BoardTerrain3D.SCENES): solo decorado.
+var _scene := "land"
 
 var _mark_of: Dictionary = {}     ## cell -> Mark
 var _hover := Vector2i(-1, -1)
@@ -117,7 +119,8 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 	_mark_of.clear()
 	_active_uid = -1
 
-	_terrain.mesh = Terrain.build(board, int(opts.get("seed", 1)), _simple)
+	_scene = String(opts.get("scene", Terrain.SCENE_LAND))
+	_terrain.mesh = Terrain.build(board, int(opts.get("seed", 1)), _simple, _scene)
 	_layout_marks()
 
 	for unit in encounter.units:
@@ -197,8 +200,9 @@ func _pump() -> void:
 	idle.emit()
 
 ## Si hay cola, todo va mas deprisa: la vista nunca se queda muy atras del modelo.
+## Con el juego a x2 (GameConfig.combat_pace) todo dura la mitad.
 func _tempo() -> float:
-	return 1.0 / (1.0 + 0.45 * float(clampi(_queue.size(), 0, 5)))
+	return GameConfig.combat_pace(1.0) / (1.0 + 0.45 * float(clampi(_queue.size(), 0, 5)))
 
 func _play(ev: Dictionary) -> void:
 	match String(ev.get("e", "")):
@@ -228,9 +232,9 @@ func _play_deploy() -> void:
 		toy.position = rest + Vector3(0, 3.2, 0)
 		toy.scale = Vector3.ONE * 0.6
 		var tw: Tween = toy.create_tween()
-		tw.tween_interval(DEPLOY_STAGGER * float(i))
-		tw.tween_property(toy, "position", rest, DEPLOY_TIME).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
-		tw.parallel().tween_property(toy, "scale", Vector3.ONE, DEPLOY_TIME * 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_interval(GameConfig.combat_pace(DEPLOY_STAGGER) * float(i))
+		tw.tween_property(toy, "position", rest, GameConfig.combat_pace(DEPLOY_TIME)).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(toy, "scale", Vector3.ONE, GameConfig.combat_pace(DEPLOY_TIME) * 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		last = tw
 		i += 1
 	if last != null:
@@ -368,6 +372,9 @@ func _reconcile() -> void:
 func toy(uid: int) -> Node3D:
 	return _toys.get(uid)
 
+func scene_name() -> String:
+	return _scene
+
 func toy_count() -> int:
 	return _toys.size()
 
@@ -383,9 +390,12 @@ func mark_at(cell: Vector2i) -> int:
 # ── Marcas de casilla ────────────────────────────────────────────────
 
 ## Lo que el jugador puede hacer ahora: su unidad, a donde llega, a quien pega.
-func show_state(active_uid: int, moves: Array, targets: Array) -> void:
+## `hints`: uid -> ventaja de tipo del atacante contra ese objetivo (+1 / -1).
+func show_state(active_uid: int, moves: Array, targets: Array, hints: Dictionary = {}) -> void:
 	for uid in _toys:
 		_toys[uid].set_targeted(targets.has(uid))
+		if targets.has(uid):
+			_toys[uid].set_target_hint(int(hints.get(uid, 0)))
 		_toys[uid].set_active(uid == active_uid)
 	_mark_of.clear()
 	for cell in moves:

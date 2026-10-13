@@ -29,6 +29,7 @@ func after_test() -> void:
 	CombatManager.reset()
 	GameConfig.combat_ai_step_delay = _delay
 	get_tree().root.disable_3d = false
+	GameConfig.set_game_speed(1.0)
 
 # ── Utilidades ───────────────────────────────────────────────────────
 
@@ -251,3 +252,77 @@ func test_a_2d_board_keeps_the_classic_grid_and_the_map_3d() -> void:
 	assert_bool(screen._grid_center.visible).is_true()
 	assert_int(screen._cells.size()).is_equal(64)
 	assert_bool(get_viewport().disable_3d).is_false()
+
+# ── Segunda tanda: placa, aro, mira, ventaja, escenarios, x2 ─────────
+
+const TerrainScript := preload("res://scripts/combat_view/BoardTerrain3D.gd")
+
+func test_every_piece_wears_a_plate_with_its_current_hp() -> void:
+	var screen := _screen_3d()
+	_open_fight()
+	var board = screen.board3d().board
+	await _until_idle(board)
+	for unit in CombatManager.get_units():
+		assert_str(board.toy(unit.uid).plate_text()).is_equal(str(unit.hp))
+
+func test_targets_get_the_crosshair_and_the_type_hint() -> void:
+	var screen := _screen_3d()
+	# Nuestra artilleria contra un blindado (buen objetivo) y una infanteria (malo).
+	var units: Array = [CombatUnit.create(601, "artillery", Encounter.PLAYER)]
+	CombatManager.start_encounter_with_units(units, {"vehicle": 1, "infantry": 1})
+	var board = screen.board3d().board
+	await _until_idle(board)
+	var gun := CombatManager.get_unit(601)
+	var tank: CombatUnit = null
+	var foot: CombatUnit = null
+	for u in CombatManager.get_units():
+		if u.unit_id == "vehicle":
+			tank = u
+		elif u.unit_id == "infantry":
+			foot = u
+	var hints: Dictionary = screen.target_hints(gun, [tank.uid, foot.uid])
+	assert_int(int(hints[tank.uid])).is_equal(1)
+	assert_int(int(hints[foot.uid])).is_equal(-1)
+	board.show_state(gun.uid, [], [tank.uid, foot.uid], hints)
+	assert_bool(board.toy(tank.uid).is_targeted()).is_true()
+	assert_str(board.toy(tank.uid).target_hint_text()).is_equal(Tr.t("LBL_GOOD_TARGET"))
+	assert_str(board.toy(foot.uid).target_hint_text()).is_equal(Tr.t("LBL_BAD_TARGET"))
+	# Sin ser objetivo, ni mira ni etiqueta.
+	board.show_state(gun.uid, [], [], {})
+	assert_str(board.toy(tank.uid).target_hint_text()).is_empty()
+
+func test_the_good_and_bad_target_labels_exist_in_both_languages() -> void:
+	for key in ["LBL_GOOD_TARGET", "LBL_BAD_TARGET"]:
+		for locale in ["es", "en"]:
+			assert_bool(Tr._STRINGS[locale].has(key)).is_true()
+
+func test_the_scenery_changes_but_never_the_cells() -> void:
+	var board := Vector2i(8, 8)
+	for scene in TerrainScript.SCENES:
+		assert_object(TerrainScript.build(board, 7, false, scene)).is_not_null()
+		assert_object(TerrainScript.build(board, 7, true, scene)).is_not_null()
+	# Determinista y siempre uno de los conocidos.
+	for seed_value in range(40):
+		var a: String = TerrainScript.pick_scene(seed_value, false)
+		assert_str(a).is_equal(TerrainScript.pick_scene(seed_value, false))
+		assert_bool(TerrainScript.SCENES.has(a)).is_true()
+	# En casa la Regencia llega casi siempre por mar.
+	var beaches := 0
+	for seed_value in range(100):
+		if TerrainScript.pick_scene(seed_value, true) == TerrainScript.SCENE_BEACH:
+			beaches += 1
+	assert_int(beaches).is_greater(50)
+
+func test_the_board_has_its_own_speed_button_and_x2_shortens_the_animations() -> void:
+	var screen := _screen_3d()
+	_open_fight()
+	var board = screen.board3d().board
+	var btn: Button = screen.speed_button()
+	assert_object(btn).is_not_null()
+	assert_object(btn.get_parent()).is_same(screen.find_child("BoardHeader", true, false))
+	var slow: float = board._tempo()
+	btn.pressed.emit()
+	assert_float(GameConfig.game_speed).is_equal(2.0)
+	assert_str(btn.text).is_equal("x2")
+	assert_float(board._tempo()).is_equal_approx(slow * 0.5, 0.001)
+	GameConfig.set_game_speed(1.0)

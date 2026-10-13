@@ -96,7 +96,7 @@ static func _cell_key(unit: CombatUnit, cell: Vector2i, enemies: Array) -> Array
 	var nearest: int = 9999
 	for enemy in enemies:
 		nearest = mini(nearest, Rules.manhattan(cell, enemy.position))
-	return [1, absi(nearest - unit.min_range()), 0, 0]
+	return [1, absi(nearest - unit.min_range()), 0, 0, 0]
 
 # ── Eleccion de objetivo (T038) ────────────────────────
 
@@ -104,12 +104,15 @@ static func _cell_key(unit: CombatUnit, cell: Vector2i, enemies: Array) -> Array
 ##   1. Un rival al que **puede matar este turno**: el dano calculado (con la
 ##      guardia del rival ya contada) alcanza o supera sus HP restantes. Un
 ##      muerto deja de pegar; nada rinde mas en un turno.
-##   2. Si ninguno muere, el de mayor **valor** (`power` de GameConfig): mejor
+##   2. Si ninguno muere (o entre los que mueren), el de **ventaja por tipo**:
+##      primero al que se pega con ventaja, el ultimo al que se pega con
+##      desventaja (CombatRules.type_matchup, GameConfig.combat_type_advantage).
+##   3. Despues, el de mayor **valor** (`power` de GameConfig): mejor
 ##      morder al vehiculo que a la infanteria que lo escolta.
-##   3. A igual valor, el de **menos HP**: es el que antes caera.
-##   4. A igual HP, el **mas cercano**, para no dejar hueco al que ya tienes
+##   4. A igual valor, el de **menos HP**: es el que antes caera.
+##   5. A igual HP, el **mas cercano**, para no dejar hueco al que ya tienes
 ##      encima.
-##   5. A igual distancia, el **`uid` menor**. Es el desempate que garantiza
+##   6. A igual distancia, el **`uid` menor**. Es el desempate que garantiza
 ##      determinismo: el mismo tablero siempre produce el mismo plan.
 static func _pick_target(unit: CombatUnit, from: Vector2i, enemies: Array) -> CombatUnit:
 	var best: CombatUnit = null
@@ -128,9 +131,15 @@ static func _pick_target(unit: CombatUnit, from: Vector2i, enemies: Array) -> Co
 
 ## Los tres criterios que no dependen de donde este la unidad: rematable, valor y
 ## HP. `_pick_target` les anade distancia y uid; `_cell_key` solo el uid.
+##
+## Entre 1 y 2 entra la **ventaja por tipo** (CombatRules.type_matchup): a igual
+## "puedo matarlo o no", la IA prefiere el rival al que pega con ventaja y evita
+## el que le pega a ella con desventaja. Es el mismo criterio que la etiqueta
+## "¡Buen objetivo!" del tablero, y lo usa igual AutoResolver.
 static func _target_quality(unit: CombatUnit, enemy: CombatUnit) -> Array:
 	var lethal: int = 0 if Rules.damage(unit, enemy) >= enemy.hp else 1
-	return [lethal, -enemy.power(), enemy.hp]
+	var edge: int = -Rules.type_matchup(unit.unit_id, enemy.unit_id)
+	return [lethal, edge, -enemy.power(), enemy.hp]
 
 ## Orden lexicografico: `true` si `a` es estrictamente mejor que `b`.
 static func _precedes(a: Array, b: Array) -> bool:

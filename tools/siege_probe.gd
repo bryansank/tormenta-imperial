@@ -23,6 +23,8 @@ extends SceneTree
 ##   --tier=governor  juega el asedio en nivel Gobernador (GameMode.Tier)
 ##   --audit_mult=F   pisa `game_tier_rules.governor.audit_enemy_mult`
 ##   --detail=1       desglose por longitud de asedio (3, 4 y 5 oleadas)
+##   --adv=off        sin ventaja por tipo (combat_type_advantage), para medir
+##                    el "antes"; --adv=1.5,0.75 pisa los dos multiplicadores
 ##
 ## Nota: siendo el script de arranque (`-s`) no puede nombrar los autoloads en
 ## tiempo de compilacion —todavia no existen—, asi que GameConfig se resuelve a
@@ -233,6 +235,14 @@ func _apply_overrides() -> void:
 			"armour": _cfg.final_audit_armour_wave = int(value)
 			"chance": _cfg.final_audit_extra_gun_chance = float(value)
 			"audit_mult": _cfg.game_tier_rules["governor"]["audit_enemy_mult"] = float(value)
+			"adv":
+				if value == "off":
+					_cfg.combat_type_advantage["beats"] = {}
+				else:
+					var m: PackedStringArray = value.split(",")
+					if m.size() == 2:
+						_cfg.combat_type_advantage["advantage"] = float(m[0])
+						_cfg.combat_type_advantage["disadvantage"] = float(m[1])
 			"waves":
 				var pair: PackedStringArray = value.split(",")
 				if pair.size() == 2:

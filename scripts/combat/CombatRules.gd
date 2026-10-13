@@ -7,8 +7,38 @@ class_name CombatRules
 
 ## Damage is deterministic on purpose: variance at this scale adds frustration,
 ## not depth. Always at least 1 so a fight can never stall.
+##
+## Encima va la ventaja por tipo (GameConfig.combat_type_advantage): el dano neto
+## se multiplica por la ventaja o la desventaja del emparejamiento y se redondea,
+## sin bajar nunca de 1.
 static func damage(attacker: CombatUnit, target: CombatUnit) -> int:
-	return maxi(1, attacker.attack_power() - target.defense())
+	var net: int = maxi(1, attacker.attack_power() - target.defense())
+	var mult: float = type_multiplier(attacker.unit_id, target.unit_id)
+	if is_equal_approx(mult, 1.0):
+		return net
+	return maxi(1, roundi(float(net) * mult))
+
+## +1 si `attacker_id` pega con ventaja a `target_id`, -1 con desventaja, 0 si
+## no hay nada entre ellos (o son del mismo tipo). La desventaja es la ventaja
+## leida al reves: con el circulo basta escribir quien gana a quien.
+static func type_matchup(attacker_id: String, target_id: String) -> int:
+	if attacker_id == target_id:
+		return 0
+	var beats: Dictionary = GameConfig.combat_type_advantage.get("beats", {})
+	if (beats.get(attacker_id, []) as Array).has(target_id):
+		return 1
+	if (beats.get(target_id, []) as Array).has(attacker_id):
+		return -1
+	return 0
+
+## El multiplicador de dano del emparejamiento (1.0 si no hay ventaja).
+static func type_multiplier(attacker_id: String, target_id: String) -> float:
+	match type_matchup(attacker_id, target_id):
+		1:
+			return float(GameConfig.combat_type_advantage.get("advantage", 1.0))
+		-1:
+			return float(GameConfig.combat_type_advantage.get("disadvantage", 1.0))
+	return 1.0
 
 ## Morale 0 -> low end, 50 -> 1.0, 100 -> high end of combat_morale_attack_range.
 static func morale_attack_mod(morale: float) -> float:

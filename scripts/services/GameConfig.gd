@@ -1484,6 +1484,28 @@ var combat_unit_stats := {
 	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4, "domain": "land"},
 }
 
+## Ventajas por tipo (piedra-papel-tijera, 2026-10-12, docs/15 §3 "Ventaja por
+## tipo"). El circulo de tierra:
+##   artilleria > vehiculo : el obus de alto explosivo raja la chapa remachada
+##                           que las balas solo rayan;
+##   vehiculo > infanteria : el blindado diesel arrolla la linea de fusiles;
+##   infanteria > artilleria: la escuadra asalta la pieza a la bayoneta, donde el
+##                           canon no puede bajar el tubo (su alcance minimo).
+## `beats[a]` = los tipos a los que `a` pega con ventaja. La desventaja no se
+## escribe: es el reves (si b esta en beats[a], b pega a "a" con desventaja).
+## El multiplicador va sobre el dano neto (atk - def), con suelo de 1, en
+## CombatRules.damage(): lo usan igual el jugador, la IA y AutoResolver. Mar y
+## aire entran anadiendo su fila aqui (docs/15 §11), sin tocar codigo.
+var combat_type_advantage := {
+	"beats": {
+		"artillery": ["vehicle"],
+		"vehicle": ["infantry"],
+		"infantry": ["artillery"],
+	},
+	"advantage": 1.5,
+	"disadvantage": 0.75,
+}
+
 ## Enemy scaling: deeper nodes and later eras field tougher rosters.
 ##
 ## Son deliberadamente pequenos. El multiplicador sube los HP **y** el ataque a
