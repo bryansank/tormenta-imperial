@@ -210,9 +210,17 @@ and nobody leaves: the streets are empty. Back to calm, they trickle out over
 0.5-8 s. The phase is re-read on `game_load_completed`, so a save made in the Ash
 loads with empty streets.
 
-**Night hook.** There is no day/night yet. `WorkerWalkers.set_presence(fraction)`
-scales the head count; `GameConfig.life_night_presence` (0.4) is the value meant for
-the night.
+**Night** (2026-10-12, view only). `WorkerWalkers` listens to
+`EventBus.day_phase_changed` (DayClock): people go home and only a few stay out,
+workers first (lamplighters, watchmen). Production and staffing do not change. A
+night weight goes 0 (day) -> 0.5 (dusk, dawn) -> 1 (night) in steps of
+`life_night_step` (0.1) every `life_night_step_seconds` (3 s): one reconcile per
+step, nothing new per frame, and the extras walk home before vanishing. At full
+night the head count is `life_night_presence` (0.3) of the day one and citizens
+keep only `life_night_citizen_share` (0.15) of theirs (80 people, 6 workers: about
+4 figures). On load the hour applies at once. The Storm wins: sheltered, nobody
+goes out, day or night. `set_presence(fraction)` still scales on top. Both views
+share it (the logic is in `WorkerWalkers`).
 
 **How it is drawn.** Figures are plain data (`scripts/map/WalkerActor.gd`), moved by
 WorkerWalkers and drawn by one node per view: `WalkerFigures3D` keeps one MultiMesh
@@ -242,4 +250,5 @@ decorations, 80 people) and writes `docs/media/dev/life_probe_3d.png`,
 
 Tunables in `GameConfig` ("Vida de la ciudad"): `life_people_per_figure`,
 `life_figure_cap`, `life_walk_speed`, `life_hurry_multiplier`, `life_stay_*`,
-`life_pause_*`, `life_night_presence`.
+`life_pause_*`, `life_night_presence`, `life_night_citizen_share`, `life_night_step`,
+`life_night_step_seconds`.

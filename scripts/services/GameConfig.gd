@@ -1854,9 +1854,15 @@ var life_stay_home := Vector2(4.0, 12.0)
 var life_stay_market := Vector2(4.0, 8.0)
 var life_pause_decoration := Vector2(3.0, 6.0)
 var life_pause_stroll := Vector2(1.0, 2.5)
-## Gancho del dia y la noche (aun no existe): la fraccion de gente que sale de
-## noche. WorkerWalkers.set_presence() la aplica cuando alguien se la pida.
-var life_night_presence := 0.4
+## La noche en la calle (DayClock; solo vista): la fraccion de figuras que
+## quedan de noche cerrada y, de esas, la parte de ciudadanos (el resto son
+## obreros: faroleros, vigilantes). Con 80 habitantes y 6 obreros, unas 4-5
+## figuras. El paso al anochecer y al amanecer es a saltos de
+## `life_night_step` cada `life_night_step_seconds` segundos reales.
+var life_night_presence := 0.3
+var life_night_citizen_share := 0.15
+var life_night_step := 0.1
+var life_night_step_seconds := 3.0
 
 # ── Dia y noche (docs/21 §12) ──
 #
