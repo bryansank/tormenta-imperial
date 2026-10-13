@@ -275,10 +275,15 @@ static func _pile(mb, kind: String, n: int) -> void:
 		"sacks", "sandbags":
 			var sack := _t("sack" if kind == "sacks" else "sandbag")
 			var per := 3 if kind == "sacks" else 4
+			# Sacos de juguete: un taco ancho y bajo con el nudo encima (dos
+			# cajas, 20 triangulos; una bola eran 48 y la pila pesaba mas que
+			# la estructura de la fase 2).
 			for layer in 2:
 				for j in per - layer:
 					var col := sack if (j + layer) % 2 == 0 else sack.darkened(0.08)
-					mb.ball(Vector3((j - (per - layer - 1) * 0.5) * 0.25, 0.09 + layer * 0.14, 0.0), 0.15, col, Vector3(1.0, 0.6, 0.78))
+					var c := Vector3((j - (per - layer - 1) * 0.5) * 0.25, 0.08 + layer * 0.15, 0.0)
+					mb.box(c, Vector3(0.23, 0.15, 0.22), col)
+					mb.box(c + Vector3(0.0, 0.085, 0.0), Vector3(0.12, 0.03, 0.12), col.darkened(0.12))
 		"stone":
 			var blocks := [[Vector3(-0.2, 0.13, -0.1), Vector3(0.38, 0.26, 0.3)], [Vector3(0.2, 0.11, 0.08), Vector3(0.34, 0.22, 0.34)],
 				[Vector3(-0.05, 0.36, 0.0), Vector3(0.3, 0.22, 0.26)]]
@@ -316,10 +321,9 @@ static func _cone(mb, p: Vector3) -> void:
 ## zapatas, esperas de ferralla (o estacas de madera), conos en dos esquinas de
 ## la semilla y lo que sobro de la primera pila en otra.
 static func _phase_foundation(root: Node3D, mb, sx: float, sz: float, n: int, style: Dictionary, layout: Dictionary) -> void:
-	var dark := _t("stone_dark" if style["frame_mat"] == "stone" else "concrete_dark")
+	_footings(mb, sx, sz, n, style)
 	var wood := String(style["frame_mat"]) == "wood"
 	for p in _frame_points(sx * 0.8, sz * 0.8, n, String(style["frame"])):
-		mb.box(Vector3(p.x, SLAB_H + 0.03, p.y), Vector3(0.4, 0.07, 0.4), dark)
 		if wood:
 			mb.box(Vector3(p.x, SLAB_H + 0.28, p.y), Vector3(0.14, 0.5, 0.14), _t("wood"))
 			mb.box(Vector3(p.x, SLAB_H + 0.55, p.y), Vector3(0.16, 0.05, 0.16), _t("terracotta"))
@@ -329,17 +333,28 @@ static func _phase_foundation(root: Node3D, mb, sx: float, sz: float, n: int, st
 	_foundation_hint(mb, sx, sz, SLAB_H, style, layout)
 	for s in layout["cone_corners"]:
 		_cone(mb, Vector3(s.x * sx * 0.47, Y_SITE, s.y * sz * 0.47))
-	var left: Vector2 = layout["leftover_corner"]
-	var piles: Array = layout["piles"]
-	if not piles.is_empty():
-		# Lo que sobro de la primera pila, mas pequeno, en otra esquina.
-		(root.get_meta("site_piles") as Array).append("Pile_" + String(piles[0]["kind"]))
-		mb.xf = Transform3D(Basis(Vector3.UP, float(piles[0]["yaw"])).scaled(Vector3.ONE * 0.7), Vector3(left.x * sx * 0.36, SLAB_H, left.y * sz * 0.36))
-		_pile(mb, String(piles[0]["kind"]), n)
-		mb.xf = Transform3D.IDENTITY
+	_leftover(root, mb, sx, sz, n, layout, layout["leftover_corner"])
 	var cc: Vector2 = layout["cone_corners"][1]
 	_add_flag(root, mb, Vector3(cc.x * sx * 0.4, SLAB_H, cc.y * sz * 0.4), 1.0, style["flag"])
 	_add_site_fx(root, SiteFxKit.fx_for(style, 1), _at(layout["fx_spot"], sx, sz, SLAB_H + 0.4), 1.0 + 0.2 * n)
+
+## Las zapatas de la silueta, sobre la losa (fases 1 y 2: la estructura se
+## levanta encima de ellas).
+static func _footings(mb, sx: float, sz: float, n: int, style: Dictionary) -> void:
+	var dark := _t("stone_dark" if style["frame_mat"] == "stone" else "concrete_dark")
+	for p in _frame_points(sx * 0.8, sz * 0.8, n, String(style["frame"])):
+		mb.box(Vector3(p.x, SLAB_H + 0.03, p.y), Vector3(0.4, 0.07, 0.4), dark)
+
+## Lo que sobro de la primera pila, mas pequeno, en la esquina `corner` (fase
+## 1, y en la 2 sigue ahi: aun queda material a pie de obra).
+static func _leftover(root: Node3D, mb, sx: float, sz: float, n: int, layout: Dictionary, corner: Vector2) -> void:
+	var piles: Array = layout["piles"]
+	if piles.is_empty():
+		return
+	(root.get_meta("site_piles") as Array).append("Pile_" + String(piles[0]["kind"]))
+	mb.xf = Transform3D(Basis(Vector3.UP, float(piles[0]["yaw"])).scaled(Vector3.ONE * 0.7), Vector3(corner.x * sx * 0.36, SLAB_H, corner.y * sz * 0.36))
+	_pile(mb, String(piles[0]["kind"]), n)
+	mb.xf = Transform3D.IDENTITY
 
 ## Lo que ya asoma en los cimientos de cada silueta: la base redonda de la
 ## chimenea, los anillos de los depositos o la cupula, la zapata de la torre,
@@ -382,9 +397,15 @@ static func _foundation_hint(mb, sx: float, sz: float, y: float, style: Dictiona
 ## girando. Banderin en lo alto y chispas o polvo.
 static func _phase_frame(root: Node3D, mb, sx: float, sz: float, n: int, style: Dictionary, layout: Dictionary) -> void:
 	var h := 1.3 + 0.45 * n
+	# La estructura se levanta sobre las zapatas de la fase 1, y lo que sobro
+	# sigue a pie de obra (lejos de la grua): la fase 2 es siempre mas obra
+	# que la 1, nunca menos.
+	_footings(mb, sx, sz, n, style)
 	var top := _frame_shape(mb, sx, sz, n, h, style, layout)
 	_scaffold_side(mb, sx, sz, h, int(layout["scaffold_side"]))
 	var cc: Vector2 = layout["crane_corner"]
+	var left: Vector2 = layout["leftover_corner"]
+	_leftover(root, mb, sx, sz, n, layout, -left if left == cc else left)
 	if n >= 2:
 		var yaw := atan2(-cc.y, cc.x) + (float(layout["crane_yaw"]) / TAU - 0.5) * 1.2
 		_add_crane(root, mb, Vector3(cc.x * sx * 0.42, 0, cc.y * sz * 0.42), maxf(h, top) + 1.2, sx * 0.7, yaw, style["crane"])
@@ -562,6 +583,16 @@ static func _frame_shape(mb, sx: float, sz: float, n: int, h: float, style: Dict
 			top = base + mh
 		_:
 			_pillars(mb, sx, sz, n, h, col, true)
+			# Riostras en aspa en cada cara y las vigas del piso de arriba
+			# esperando en lo alto: la caja se lee como estructura, no como jaula.
+			var hx := sx * 0.4
+			var hz := sz * 0.4
+			for c in [[Vector3(-hx, base, hz), Vector3(hx, base + h, hz)], [Vector3(hx, base, -hz), Vector3(-hx, base + h, -hz)],
+					[Vector3(hx, base, hz), Vector3(hx, base + h, -hz)], [Vector3(-hx, base, -hz), Vector3(-hx, base + h, hz)]]:
+				mb.beam(c[0], c[1], 0.07, col.darkened(0.12))
+			for k in 2:
+				mb.box(Vector3(0, base + h + 0.13 + 0.12 * k, (k - 0.5) * sz * 0.2), Vector3(sx * 0.6, 0.11, 0.11), _t("red") if k == 1 else steel)
+			top = base + h + 0.3
 	return top
 
 ## Pilares en rejilla, medio forjado detras y (si `ring`) vigas de coronacion.
