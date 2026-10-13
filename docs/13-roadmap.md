@@ -62,6 +62,12 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 | **Build UX**: cost on every card and why a locked card cannot be built, one building per placement, construction label with % and time left, drag-to-scroll on every list | ✅ | `ConstructionMenu`, `PlacementRules.keeps_placing()`, `DragScroll`, [08-ui-systems.md](08-ui-systems.md) |
 | **One UI palette**: ten named colours, everything else derived; plain boxes instead of textured metal; the activity log moved to the menu, only important toasts on screen | ✅ | `UITheme._BASE`, [24-paleta.md](24-paleta.md) |
 | **Save format 2**: the grid size and seed saved; a save from before roads and 2x2 is set aside with a date and a new colony starts | ✅ | `GameManager.SAVE_FORMAT`, [09-save-system.md](09-save-system.md) |
+| **Colono / Gobernador**: two tiers of the Campaña. Colono is the plain game; Gobernador (unlocked by profile after a won game) adds the Storm calendar and a visible spread in the Market, harder enemies, Tithe and Final Audit (x1.05 expedition enemies, measured) | ✅ | `GameMode.tier()`, `GameConfig.game_mode_rules`, `NewGameDialog`, [20-modos-de-juego.md](20-modos-de-juego.md), [16-balance-combate.md](16-balance-combate.md) |
+| **Governor rank**: XP from what the colony does, 18 ranks with titles, decoration unlocks, extra slots, small permanent bonuses, a colony flag and colour | ✅ | `RankManager` (autoload 26), `RankPanel`, `PlacementRules.check_rank()`, [06-progression-victory.md](06-progression-victory.md) §Governor rank |
+| **City life**: workers and citizens leave their houses, walk the roads to work and hide during the Storm | ✅ | `scripts/buildings/` walkers in 3D and 2D, [04-population-morale.md](04-population-morale.md) |
+| **Less text**: icons and numbers before sentences in every panel, one-line notices and war reports, help bubbles of one or two sentences, hold-to-read tooltips on touch, the tech card with INVESTIGAR, the objective strip gone (the next step lives in ¿QUÉ HACER?) | ✅ | `TextKit`, `TouchTooltip`, `TechTreePanel`, `ObjectivePanel`, [21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) |
+| **Building look**: construction phases that differ per building and per instance (animated), ruin and working smoke in 3D and 2D, icon scales 24/42/60/96 | ✅ | `BuildingLook*`, `BuildingFx`, `BuildingArt2D`, `tools/look_probe.gd`, [03-buildings.md](03-buildings.md) |
+| **Balance 2026-10-04**: gentle trial storm in era 1 (no Tithe), hand mining cut so era 2 lands at 8.6-10.2 min, a tower whose crew dies is left damaged, siege morale read at QUE BAJEN, touch "auto" only on phone/tablet, the first skirmish as an easy single-node run with fixed loot | ✅ | `storm_trial_*`, `mining_data`, `StormManager`, `FinalAudit`, [22-linea-jugable.md](22-linea-jugable.md) §5.5, [17-balance-asedio.md](17-balance-asedio.md) |
 | **War reports**: blind-defence report, Tithe report (COBRADO / REPELIDO), siege banner, lost-siege report | ✅ | `WarReportScreen`, `AuditWaveBanner`, `AuditDefeatScreen` |
 | **Balance line**: the whole campaign played at real timings over ten seeds; dead ends fixed; 10/10 won in 2 h 18 min – 4 h (median 3 h 11 min); the ¿QUÉ HACER? panel | ✅ | `tools/line_probe.gd`, `scripts/services/Objectives.gd`, [22-linea-jugable.md](22-linea-jugable.md) |
 | **Combat balance** measured, not guessed | ✅ | `tools/balance_probe.gd`, `tools/siege_probe.gd`, [16-balance-combate.md](16-balance-combate.md), [17-balance-asedio.md](17-balance-asedio.md) |
@@ -138,13 +144,13 @@ end to end from the UI.
 Measured by the balance line and left to the owner
 ([22-linea-jugable.md](22-linea-jugable.md) §7):
 
-1. ❓ **A "resolve alone" button for the Tithe.** Boards take about a third of a
+1. ✅ **A "resolve alone" button for the Tithe** — decided 2026-10-04: **no**, the board is the game. Original note: Boards take about a third of a
    campaign (45-100 of 140-240 min); a Tithe that is won before it starts still has to
    be played. `AutoResolver` already exists and is the one used when the board is busy.
-2. ❓ **The era-3 storage squeeze.** Steel and oil fill the shared pool on their own
-   (1-25 min per game, 350-9,000 resources lost). Levers: the HQ-3 price (3,100 instead
-   of 3,500 let 2 of 5 stuck games finish) or stopping steel/oil production when the
-   pool is full instead of throwing it away.
+2. ✅ **The era-3 storage squeeze** (decided 2026-10-04: **production stops when the pool
+   is full, nothing is thrown away** — not built yet, it lands with `feat/comida-granja-recoger`).
+   Measured: steel and oil fill the shared pool on their own (1-25 min per game,
+   350-9,000 resources lost).
 3. ✅ **A scripted test storm in era 1** (decided 2026-10-04): a gentle trial storm
    around minute 5, no Tithe, once per game (`storm_trial_*`, docs/22 §5.5).
 4. ✅ **How long era 1 should last** (decided 2026-10-04: 8-12 min): hand mining cut
@@ -152,9 +158,10 @@ Measured by the balance line and left to the owner
    Núcleo/sawmill processes take a player who chains them to the Foundry by minute
    4.6-4.9 (lever: `building_processes`).
 
-5. ❓ **Where the set-aside modes go.** Constructor, Supervivencia and Sandbox still
-   work and load, but the New Game dialog only offers Campaña until their place is
-   decided (`GameMode.OFFERED`).
+5. ✅ **Where the set-aside modes go** (decided 2026-10-04): Constructor, Supervivencia and
+   Sandbox still work and load, and they come back one at a time, later; meanwhile the
+   Campaña got two tiers (Colono / Gobernador). The New Game dialog offers only Campaña
+   (`GameMode.OFFERED`).
 
 Also pending on the balance side: a human playtest with real timings (checklist in
 [22-linea-jugable.md](22-linea-jugable.md) §9) and a test on a physical tablet. The
@@ -163,6 +170,15 @@ the Market/Laboratory buildings and the stricter era gates (2026-09-28): its tim
 need a new run of `tools/line_probe.gd` (the probe player already lays roads and
 makes materials).
 
+## 🚧 In progress (branches outside `main`, 2026-10-12)
+
+| Branch | What | State |
+|---|---|---|
+| `integracion/jugable-v3` | Everything in the table above from Colono/Gobernador down, integrated and tested | Suite green; PR pending |
+| `feat/estilo-parcelas` | Every building on its own lot with ground, kerb and props; the sawmill as an open shed; the same in 2D (style guide: five legibility rules, no third-party art) | Committed, not integrated |
+| `feat/arte-modelos-cc0` | The "toy diorama" art direction: CC0 pieces (KayKit, Kenney) baked through a common ten-colour `ToyPalette` into one vertex-coloured mesh per lot (`tools/toy_kit.gd`); includes `feat/estilo-parcelas` | Work in progress |
+| `feat/arte-ambiente` | The world look: warm sky and sun, SSAO/glow/shadow quality per renderer (`WorldLook`), island cliff / sand / foam shaders, graphics quality in Settings | Work in progress |
+| `feat/comida-granja-recoger` | Food as a resource the people eat instead of wood + gold; the Farm (2x2, era 1) with 1 / 5 / 20 min crops; every producer stores up to a cap and is collected with a tap (full = stops); spoilage after 2 h only in Gobernador; tutorial steps | Committed, not integrated |
 ## 💤 Backlog
 
 - 🚧 Cloud saves: `CloudSaveManager` (Supabase REST, auth + save/load) implemented but
