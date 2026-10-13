@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET. The player builds and manages a persistent base on a procedurally generated island (a 40x40 to 48x48 grid rolled per game, 3-6 deposits of each type), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop is complete (economy with workshop materials, population, market and laboratory as buildings, tech tree, army training, audio). Turn-based PVE combat is live: an 8x8 tactical board, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, and the Final Audit — in Campaña HQ level 3 no longer wins, it summons a 3-5 wave siege you have to survive. Around that core: four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done and what is left.
+**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET. The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a 60-74 x 60-74 grid rolled per game, the sea inside the grid, 3-6 deposits of each type), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop is complete (economy with workshop materials, population, market and laboratory as buildings, tech tree, army training, audio). Turn-based PVE combat is live: an 8x8 tactical board, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, and the Final Audit — in Campaña HQ level 3 no longer wins, it summons a 3-5 wave siege you have to survive. Around that core: four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done and what is left.
 
 Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
@@ -70,7 +70,7 @@ holds a service's state of its own.
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
 | 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 117 signals in ~30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
-| 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (40x40 to 48x48, even sides, `grid_size_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed, building/obstacle placement; emits `grid_resized` |
+| 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
 | 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave of up to 5 saved games (`SaveSlots`, `save_path()`, `open_saves_list()`), new game (`request_new_game()` → mode picker, never deletes), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
 | 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining) |
@@ -110,12 +110,12 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- MonumentalCamera (Camera3D) -- orthographic 45deg RTS camera
   +-- DirectionalLight
   +-- WorldEnvironment
-  +-- IslandGenerator (Node3D) -- procedural island mesh: a rounded square that covers the whole grid (shore and water start outside it); its shape comes from `GridManager.island_seed` and it rebuilds on `grid_resized`
-  +-- GridOverlay (MeshInstance3D) -- faint cell grid, on by default (Settings toggle), fitted to GridManager at runtime
+  +-- IslandGenerator (Node3D) -- procedural island mesh: the irregular coast of the land mask (`IslandShape.coast_polygon`: grass, cliff, sand and foam along it; the sea shades from a distance texture); an old square-island save keeps the rounded square that covers the grid. Rebuilds on `grid_resized`
+  +-- GridOverlay (MeshInstance3D) -- faint cell grid (Settings toggle), fitted to GridManager at runtime, drawn on land only (a land-mask texture in the shader)
   +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist
   +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" follows the device profile (tablet/phone yes, PC no)
   +-- ResourceHUD (CanvasLayer 10) -- top-left card: one row of [icon] number chips (resources, free workers, morale once the Storm is armed; names and meaning in tooltips, a tap unfolds them) + shared storage bar with used/cap + materials row (once one is unlocked)
-  +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), none on the Núcleo sidewalk or the shore band, each with room and a road path for its extractor; `shore_cells()` is the hook for future sea/shore resources
+  +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), on land only, none on the Núcleo sidewalk or the shore band (land next to the water), each with room and a road path for its extractor; `shore_cells()` is the hook for future sea/shore resources
   +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + building list
   +-- BuildingInfoPanel (CanvasLayer 10) -- right panel: selected building / deposit info; RETIRAR / PONER TRABAJADORES; ABRIR MERCADO / INVESTIGAR on the Market / Laboratory (`SCREENS`)
   +-- MarketPanel (CanvasLayer 11) -- buy/sell UI, opened from a Market building (not from the menu)
@@ -944,7 +944,8 @@ All balance values live in `GameConfig.gd`:
 - `construction_phase_thresholds` / `construction_style*` / `construction_crane_*` / `building_active_fx` / `building_fx_*` / `ruin_*` /
   `building_look_sync_interval` - how buildings look on the map (docs/03, "Aspecto en el mapa")
 - `deposit_per_type_min/max` / `deposit_core_gap` / `map_shore_band` / `deposit_sizes` - the random map's deposits
-- `grid_size_min/max` - the grid side rolled per game (even, saved in the `grid` key)
+- `grid_width_min/max` / `grid_height_min/max` - the grid rolled per game (even, saved in the `grid` key)
+- `island_coast` - the irregular coast (`scripts/map/IslandShape.gd`, docs/02 "The irregular island"): land area, lobes, noise, bays, capes, clean-up radii, sea border and the land kept around the Núcleo. Copied into each new game's save: retuning it only changes new islands
 - `game_mode_rules` / `sandbox_*` - per-mode rules and multipliers on top of the base
   values (modes apply factors; the balance line changes the base values — docs/20, docs/22)
 - `population_floor` / `population_regrow_floor` - the ruin floor

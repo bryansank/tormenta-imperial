@@ -61,7 +61,8 @@ en el agua es una celda invalida, no la del borde.
 |---|---|---|
 | Veredicto de colocacion, giro, topes, requisitos, bolsa, demoler, uniones de calzada, entrada de guardado | `scripts/buildings/PlacementRules.gd` | `BuildingPlacer` (3D) y `BuildingPlacer2D` |
 | Sorteo, registro, usos, agotamiento, guardado y alcance de yacimientos | `MapGenerator.gd` | `MapGenerator2D` hereda y solo cambia los 4 ganchos de dibujo (`_make_container`, `_build_deposit_node`, `_place_deposit_node`, `_show_depleted_text`) |
-| Silueta de la isla | funciones estaticas de `IslandGenerator.gd` | `Island2D` |
+| Silueta de la isla | isla irregular: `IslandGenerator.coast_for_grid()` (de la mascara de `GridManager`, `IslandShape`); isla cuadrada vieja: funciones estaticas de `IslandGenerator.gd` | `Island2D` (los anillos de arena, espuma y agua con `Geometry2D.offset_polygon`) |
+| Tierra y agua de la rejilla | `GridManager.is_land_cell()` | `GridOverlay2D` (solo los lados que tocan tierra), `Camera2DController` (limites = rectangulo de la tierra), el colocador (motivo `"water"`) |
 | Regla del badge Zzz / obrero y su pictograma | `BuildingStatusBadge.derive()`, `worker_texture()` | `StatusBadge2D` |
 | Pasos del cielo de tormenta | constantes de `StormSky.gd` | `StormTint2D.target_weight()` |
 | Obreros y ciudadanos que andan: quien, a donde, puertas, rutas, Tormenta | `scripts/map/WorkerWalkers.gd` (+ `WalkerActor.gd`) | las dos vistas; dibujan `WalkerFigures3D` (MultiMesh) y `scripts/view2d/WalkerFigures2D.gd` (un solo `_draw`: las cuatro siluetas vistas desde arriba, encogen y se desvanecen en la puerta, saltito al andar) |
@@ -191,9 +192,10 @@ docs/21 §9).
   girar de OnScreenControls no aparecen. El `yaw` guardado se
   conserva para la 3D.
 - **Las calzadas no giran**: sus uniones ya dicen hacia donde van.
-- **La isla se sortea al abrir la escena** (la silueta no viaja en el guardado,
-  igual que en 3D): cambiar de vista redibuja la costa con otra ondulacion. La
-  rejilla y las celdas no cambian.
+- **La isla sale de la semilla** (`GridManager.island_seed`): la costa irregular
+  es la misma en las dos vistas y al cargar. Solo una partida vieja de isla
+  cuadrada sin semilla (`island_seed` = -1, escenas de test) sortea su ondulacion
+  al abrir la escena.
 - **La tormenta** tine el mapa con `CanvasModulate` (la interfaz no se tine) y
   deja caer ceniza desde la fase de Ceniza; no hay niebla por profundidad.
 - **El nivel** se ve como galones de laton, no como un modelo mas grande.
