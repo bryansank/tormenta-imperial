@@ -461,6 +461,9 @@ triangulos por edificio (el horneador los imprime).
   Fuente, la rueda dentada de la Estatua, el molino de la Granja) y un acento
   por familia.
 - Los GLB viejos siguen en `assets/models/buildings/` (sin uso).
+- **Unidades de combate**: la misma herramienta hornea las piezas de juguete del
+  tablero 3D con `-- --units` (recetas en `tools/toy_recipes/units/`, salida en
+  `assets/models/toy/units/`): ver docs/15 §3, "El tablero 3D".
 - Capturas: `godot --path . -s tools/toy_probe.gd` (con `override.cfg` propio)
   deja `toy_probe_all.png` (distancia de arranque), `toy_probe_close_<n>.png`,
   `toy_probe_storm.png` y, con `-- --near=9 --ids=...`, `toy_probe_near.png`;
