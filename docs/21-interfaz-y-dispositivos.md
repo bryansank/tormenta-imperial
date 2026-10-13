@@ -457,7 +457,58 @@ de bloqueo y el recorrido completo con toques sintéticos; en el repositorio, lo
 flujos de `qa/maestro/` recorren lo mismo en el emulador de tableta. Siempre con un
 `override.cfg` que apunte a otra carpeta de datos.
 
-## 10. Huecos conocidos
+## 10. Tope de fotogramas
+
+Sin tope propio, Godot repinta la escena entera tan rápido como deja el vsync: 144
+veces por segundo en un monitor de 144 Hz, 90 o 120 en un Android de pantalla
+rápida, también con el juego en pausa o la ventana detrás de otra. En un juego de
+gestión eso no se ve, pero se paga en batería, calor y ventilador. El ejecutable
+exportado hace lo mismo, así que el tope vive en el juego.
+
+Ajustes → Interfaz → Vista → **Fotogramas por segundo** (`FpsRow`, debajo de
+pantalla completa): "Del perfil (N)", 30, 45, 60, 90, 120 o "Sin tope". Se aplica
+al momento con `Engine.max_fps` (no reconstruye la interfaz) y se guarda en
+`settings.cfg` como `[interfaz] fps_cap` (`GameConfig.ui_fps_cap`: `"auto"`, un
+número como texto o `"unlimited"`; un valor desconocido carga como `"auto"`). El
+vsync sigue como está.
+
+| Perfil | "Del perfil" | Por qué |
+|---|---|---|
+| PC | 60 | Por encima no aporta nada en un juego de gestión |
+| Tablet | 30 | Batería y calor: las tablets baratas bajan el reloj al calentarse y entonces tironean |
+| Móvil | 30 | Igual, y en pantalla pequeña 30 estables se ven bien |
+
+Además del elegido, el juego baja solo:
+
+- **En pausa** (`get_tree().paused`: menú de pausa, menú de título, prólogo) a
+  `GameConfig.fps_paused` = 30. La pausa no tiene señal; `DeviceProfile` corre con
+  `PROCESS_MODE_ALWAYS` y mira el booleano en `_process`.
+- **Sin foco** (otra ventana delante, minimizada, la app en segundo plano;
+  `NOTIFICATION_APPLICATION_FOCUS_OUT/IN`) a `GameConfig.fps_background` = 10.
+- Nunca por encima de lo elegido: con 30 elegido la pausa se queda en 30. "Sin
+  tope" también baja en pausa y sin foco.
+
+La cuenta es pura: `DeviceProfile.fps_for(mode, profile_fps, focused, paused)`
+(0 = sin tope); `effective_fps_cap()` la hace con el estado de ahora y
+`apply_fps()` la aplica (al arrancar, al cambiar de perfil, al restablecer
+Interfaz, al pausar y al perder o recuperar el foco). Valores por perfil en
+`DeviceProfile.DEFAULTS["fps"]`. Diseño y medidas: `docs/26-rendimiento.md` §7.4.
+
+- **Headless no se toca**: `apply_fps()` no hace nada con
+  `DisplayServer.get_name() == "headless"`, así que los tests y las sondas sin
+  ventana corren sin tope.
+- **Sondas con ventana que miden "sin tope"** (`life_probe_runner`, y las de
+  rendimiento y arte de otras ramas) ponen `Engine.max_fps = 0` ellas mismas, pero
+  `DeviceProfile` lo vuelve a aplicar en cuanto cambia la pausa o el foco. Una
+  sonda que quiera medir sin tope de verdad pone antes
+  `GameConfig.ui_fps_cap = "unlimited"` (sin guardar) y no pierde el foco, o
+  ajusta `fps_paused` / `fps_background`.
+
+Tests: `tests/ui/test_device_profile.gd` (la cuenta por perfil, números, sin
+tope, pausa, foco, carga y guardado) y `tests/ui/test_settings_tabs.gd` (la fila
+y Restablecer).
+
+## 11. Huecos conocidos
 
 - Cambiar texto, paleta, contraste u opacidad recarga la escena: no hay
   repintado en caliente de los paneles ya construidos.

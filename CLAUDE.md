@@ -577,7 +577,8 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
   `touch_controls_opacity`, `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
 - `[interfaz]`: device profile, UI scale, text size, palette, high contrast, panel
-  opacity, hidden HUD elements, moved layout — docs/21;
+  opacity, hidden HUD elements, moved layout, `fps_cap` (`auto` / `30`…`120` /
+  `unlimited`: the FPS cap, 30 while paused and 10 without focus) — docs/21 §10;
 - `[perfil]`: `runs_finished`, `campaigns_won` — the player profile that unlocks
   Gobernador (docs/20 §1b). Of the player on this device, never of the run.
 
