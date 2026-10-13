@@ -24,16 +24,23 @@ var _world: Node = null
 func _ready() -> void:
 	DisplayServer.window_set_size(Vector2i(1600, 900))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
-	await _shoot_3d()
+	# `-- --only-2d`: solo las capturas 2D (mas rapido al iterar el arte 2D).
+	var only_2d := OS.get_cmdline_user_args().has("--only-2d")
+	if not only_2d:
+		await _shoot_3d()
 	await _shoot_2d()
-	await _shoot_sites_3d()
+	if not only_2d:
+		await _shoot_sites_3d()
 	await _shoot_sites_2d()
-	await _shoot_style_3d(false)
-	await _shoot_style_3d(true)
-	await _shoot_sawmill_3d()
-	await _shoot_close_3d()
+	if not only_2d:
+		await _shoot_style_3d(false)
+		await _shoot_style_3d(true)
+		await _shoot_sawmill_3d()
+		await _shoot_close_3d()
 	await _shoot_style_2d(false)
 	await _shoot_style_2d(true)
+	await _shoot_close_2d()
+	await _shoot_icons_2d()
 	get_tree().quit()
 
 func _settle() -> void:
@@ -454,10 +461,10 @@ func _shoot_style_2d(storm: bool) -> void:
 	_world.add_child(cam)
 	cam.make_current()
 	var cell := View2D.cell_px()
-	var cols := 8
+	var cols := 9
 	var step := cell * 3.0
-	for i in STYLE_IDS.size():
-		var id: String = STYLE_IDS[i]
+	for i in STYLE_IDS_2D.size():
+		var id: String = STYLE_IDS_2D[i]
 		var data := _data(id)
 		var b: Node2D = Building2D.new()
 		b.setup(data)
@@ -477,6 +484,72 @@ func _shoot_style_2d(storm: bool) -> void:
 	await _settle()
 	await _save("look_probe_style_storm_2d.png" if storm else "look_probe_style_2d.png")
 	_world.queue_free()
+	await get_tree().process_frame
+
+## La fila 2D lleva tambien la Granja (rama comida).
+const STYLE_IDS_2D := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", "laboratory", "foundry",
+	"farm", "barracks", "refinery", "tower", "headquarters", "garden", "fountain", "statue", "road"]
+
+## Los 2D de cerca (zoom 3, el maximo de la camara): para ver el detalle.
+func _shoot_close_2d() -> void:
+	_world = Node2D.new()
+	add_child(_world)
+	var bg := ColorRect.new()
+	bg.color = Color(0.42, 0.62, 0.26)
+	bg.size = Vector2(4000, 4000)
+	bg.position = Vector2(-2000, -2000)
+	bg.z_index = -10
+	_world.add_child(bg)
+	var cam := Camera2D.new()
+	cam.zoom = Vector2(2.6, 2.6)
+	_world.add_child(cam)
+	cam.make_current()
+	var cell := View2D.cell_px()
+	var ids := ["sawmill", "gold_mine", "foundry", "refinery", "warehouse", "market", "laboratory", "farm",
+		"barracks", "tower", "headquarters", "house"]
+	var cols := 6
+	var step := cell * 2.35
+	for i in ids.size():
+		var data := _data(String(ids[i]))
+		var b: Node2D = Building2D.new()
+		b.setup(data)
+		b.position = Vector2((i % cols - (cols - 1) * 0.5) * step, (i / cols - 0.5) * step * 1.1)
+		_world.add_child(b)
+		b.set("_lot_origin", Vector2i(i * 3, 9))
+		b.set("_lot_dirty", false)
+		var badge := b.get_node_or_null("StatusBadge")
+		if badge:
+			badge.process_mode = Node.PROCESS_MODE_DISABLED
+			badge.visible = false
+	await _settle()
+	await _save("look_probe_close_2d.png")
+	_world.queue_free()
+	await get_tree().process_frame
+
+## Los iconos del menu de construir (BuildingIcon2D) a tres tamanos.
+func _shoot_icons_2d() -> void:
+	const Icon2D := preload("res://scripts/view2d/BuildingIcon2D.gd")
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	var bg := ColorRect.new()
+	bg.color = Color(0.16, 0.14, 0.12)
+	bg.size = Vector2(1600, 900)
+	layer.add_child(bg)
+	var x := 10.0
+	var y := 10.0
+	for px in [36, 56, 96]:
+		x = 10.0
+		for id in STYLE_IDS_2D:
+			var icon: Control = Icon2D.new()
+			icon.size = Vector2(px, px)
+			icon.position = Vector2(x, y)
+			icon.data = _data(String(id))
+			layer.add_child(icon)
+			x += px + 6.0
+		y += px + 14.0
+	await _settle()
+	await _save("look_probe_icons_2d.png")
+	layer.queue_free()
 	await get_tree().process_frame
 
 ## Los productivos de cerca: parcela, atrezo y elemento exagerado.
