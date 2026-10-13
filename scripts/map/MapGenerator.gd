@@ -105,14 +105,20 @@ func core_ring_rect() -> Rect2i:
 		size = data.grid_size
 	return Rect2i(core_origin(), size).grow(1)
 
-## ¿Es `cell` de la franja de costa? La franja son las `map_shore_band` celdas
-## exteriores de la rejilla: tierra construible, pero sin yacimientos de tierra.
+## ¿Es `cell` de la franja de costa? La franja son las celdas de tierra a
+## `map_shore_band` celdas (o menos, contando diagonales) del agua: de la que
+## entra en la rejilla (isla irregular) o de la de fuera (la isla cuadrada de
+## antes, donde la franja es el anillo exterior). Tierra construible, pero sin
+## yacimientos de tierra: es el gancho de los futuros recursos del mar.
 static func is_shore_cell(cell: Vector2i) -> bool:
-	if not GridManager.is_valid_cell(cell):
+	if not GridManager.is_land_cell(cell):
 		return false
 	var band: int = GameConfig.map_shore_band
-	return cell.x < band or cell.y < band \
-		or cell.x >= GridManager.grid_width - band or cell.y >= GridManager.grid_height - band
+	for dy in range(-band, band + 1):
+		for dx in range(-band, band + 1):
+			if not GridManager.is_land_cell(cell + Vector2i(dx, dy)):
+				return true
+	return false
 
 ## Todas las celdas de la franja de costa.
 static func shore_cells() -> Array:
@@ -124,11 +130,11 @@ static func shore_cells() -> Array:
 				out.append(c)
 	return out
 
-## ¿Es mar? Todo lo que queda fuera de la rejilla: margen de hierba, arena y agua
-## (IslandGenerator). Ahi no se construye; un recurso marino se trabajaria desde
-## una celda de costa pegada a el.
+## ¿Es mar? El agua de dentro de la rejilla (isla irregular) y todo lo de fuera.
+## Ahi no se construye; un recurso marino se trabajaria desde una celda de costa
+## pegada a el.
 static func is_sea_cell(cell: Vector2i) -> bool:
-	return not GridManager.is_valid_cell(cell)
+	return not GridManager.is_land_cell(cell)
 
 ## Yacimientos de costa y mar. Hoy no hay ninguno. Cuando los haya (pesca,
 ## petroleo en alta mar, sal...): se anade su tipo a DEPOSIT_TYPES y a esta
@@ -703,15 +709,17 @@ func remove_deposit(node: Node) -> void:
 ## rejilla pero fuera de la franja de costa, lejos del centro y sin tocar la
 ## acera del Nucleo (queda `deposit_core_gap` de hueco para que la red crezca).
 func _random_cell_for_deposit(center: Vector2i, dep_size: Vector2i) -> Vector2i:
-	var band: int = GameConfig.map_shore_band
 	var keep_out: Rect2i = core_ring_rect().grow(GameConfig.deposit_core_gap)
-	var max_x: int = GridManager.grid_width - band - dep_size.x
-	var max_y: int = GridManager.grid_height - band - dep_size.y
-	if max_x < band or max_y < band:
+	# Se sortea dentro del rectangulo de la tierra (en una isla irregular el mar
+	# se come buena parte de la rejilla) y nunca en la franja de costa.
+	var land: Rect2i = GridManager.land_bounds()
+	var max_x: int = land.end.x - dep_size.x
+	var max_y: int = land.end.y - dep_size.y
+	if max_x < land.position.x or max_y < land.position.y:
 		return Vector2i(-1, -1)
-	for attempt in range(80):
-		var cx: int = randi_range(band, max_x)
-		var cy: int = randi_range(band, max_y)
+	for attempt in range(120):
+		var cx: int = randi_range(land.position.x, max_x)
+		var cy: int = randi_range(land.position.y, max_y)
 		var cell := Vector2i(cx, cy)
 		# Check center exclusion from deposit center
 		var mid_x: float = cx + dep_size.x * 0.5
@@ -721,8 +729,16 @@ func _random_cell_for_deposit(center: Vector2i, dep_size: Vector2i) -> Vector2i:
 			continue
 		if keep_out.intersects(Rect2i(cell, dep_size)):
 			continue
-		# Check all cells are free
+		# Check all cells are free (y en tierra: can_place no acepta agua)
 		if not GridManager.can_place(cell, dep_size):
+			continue
+		if _touches_shore(cell, dep_size):
 			continue
 		return cell
 	return Vector2i(-1, -1)
+
+func _touches_shore(cell: Vector2i, dep_size: Vector2i) -> bool:
+	for c in GridManager.cells_for(cell, dep_size):
+		if is_shore_cell(c):
+			return true
+	return false

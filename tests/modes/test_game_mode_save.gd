@@ -194,8 +194,11 @@ func test_a_saved_mode_comes_back_on_load() -> void:
 func test_a_new_game_writes_its_grid_size() -> void:
 	_open_colony()
 	var grid: Dictionary = _read_save().get("grid", {})
-	assert_int(int(grid.get("width", 0))).is_between(GameConfig.grid_size_min, GameConfig.grid_size_max)
-	assert_int(int(grid.get("height", 0))).is_between(GameConfig.grid_size_min, GameConfig.grid_size_max)
+	assert_int(int(grid.get("width", 0))).is_between(GameConfig.grid_width_min, GameConfig.grid_width_max)
+	assert_int(int(grid.get("height", 0))).is_between(GameConfig.grid_height_min, GameConfig.grid_height_max)
+	# Isla irregular: la version de forma y la costa viajan con el tamano.
+	assert_int(int(grid.get("shape", 0))).is_equal(2)
+	assert_bool(grid.get("coast", null) is Dictionary).is_true()
 	assert_int(int(grid.get("width", 0))).is_equal(GridManager.grid_width)
 	# El Nucleo, en el centro de esa rejilla.
 	var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
@@ -212,6 +215,10 @@ func test_a_saved_grid_size_comes_back_before_anything_is_placed() -> void:
 	assert_int(GridManager.island_seed).is_equal(1234)
 	# Una celda que en 40x40 no existe: solo se pudo poner con el tamano ya cargado.
 	assert_object(GridManager.get_building_at(Vector2i(45, 41))).is_not_null()
+	# Sin "shape": la isla cuadrada de antes, toda la rejilla es tierra.
+	assert_bool(GridManager.is_irregular()).is_false()
+	assert_bool(GridManager.is_land_cell(Vector2i(0, 0))).is_true()
+	assert_int(GridManager.land_cell_count()).is_equal(46 * 42)
 
 func test_a_save_without_grid_is_forty_by_forty() -> void:
 	GridManager.set_grid_size(48, 48)

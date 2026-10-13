@@ -14,6 +14,13 @@ extends Node2D
 ## hunde hacia el azul, y el canto de la placa de diorama (tierra WOOD con su
 ## franja oscura) asomando por el sur.
 ##
+## Isla irregular (2026-10-12): con GridManager.is_irregular() la silueta es la
+## costa de la mascara de tierra (IslandGenerator.coast_for_grid, la misma que
+## la 3D) y los anillos de arena, espuma y agua son ese contorno crecido con
+## Geometry2D.offset_polygon (calculados una vez por forma). Las matas y flores
+## solo caen en celdas de tierra. Una partida de isla cuadrada (sin "shape" en
+## el guardado) sigue con el cuadrado redondeado de siempre.
+##
 ## Rendimiento: el agua, la costa y el cesped son siete poligonos y una
 ## textura. El detalle menudo (matas, flores, olas) va en trozos (`CHUNKS` x
 ## `CHUNKS` nodos hijos): Godot descarta los trozos que no se ven, y al
@@ -63,6 +70,10 @@ var _grass_pts := PackedVector2Array()
 var _grass_tex: Texture2D = null
 var _grass_bounds := Rect2()
 var _details: Node2D = null
+## Isla irregular: la costa en px de mapa y los anillos ya crecidos (expand ->
+## poligono). Vacia con la isla cuadrada.
+var _coast_px := PackedVector2Array()
+var _ring_cache := {}
 var _check := 0
 
 func _ready() -> void:
@@ -94,6 +105,10 @@ func _rebuild() -> void:
 	elif _seed_val == 0.0:
 		_seed_val = randf() * 100.0
 	_wobble = Island.make_wobble(Island.SEGMENTS, _seed_val, amplitude, detail)
+	_ring_cache.clear()
+	_coast_px = PackedVector2Array()
+	for p in Island.coast_for_grid():
+		_coast_px.append(p * View2D.PX_PER_UNIT)
 	_grass_pts = polygon_px(0.0)
 	_grass_bounds = _bounds(_grass_pts)
 	_grass_tex = _make_grass_texture(_grass_bounds)
@@ -102,6 +117,8 @@ func _rebuild() -> void:
 
 ## Borde de la isla en pixeles de mapa, crecido `expand` unidades de mundo.
 func polygon_px(expand: float) -> PackedVector2Array:
+	if not _coast_px.is_empty():
+		return _coast_ring_px(expand)
 	var half := Island.grid_half_extents()
 	var radius := minf(_radius, Island.max_corner_radius(_margin))
 	var pts := Island.border_points(half.x, half.y, _margin, radius, _wobble, expand)
@@ -109,6 +126,32 @@ func polygon_px(expand: float) -> PackedVector2Array:
 	for p in pts:
 		out.append(p * View2D.PX_PER_UNIT)
 	return out
+
+## La costa irregular crecida `expand` unidades de mundo (esquinas redondas).
+## De lo que devuelve offset_polygon se queda el contorno mas grande (un
+## agujero, si lo hubiera, siempre es menor que el contorno de fuera).
+func _coast_ring_px(expand: float) -> PackedVector2Array:
+	if expand <= 0.0:
+		return _coast_px
+	if _ring_cache.has(expand):
+		return _ring_cache[expand]
+	var best := _coast_px
+	var best_area := -1.0
+	for poly in Geometry2D.offset_polygon(_coast_px, expand * View2D.PX_PER_UNIT, Geometry2D.JOIN_ROUND):
+		var r := _bounds(poly)
+		var area := r.size.x * r.size.y
+		if area > best_area:
+			best_area = area
+			best = poly
+	_ring_cache[expand] = best
+	return best
+
+## ¿Cae el punto (px de mapa) sobre tierra? En la isla cuadrada, todo lo que
+## esta dentro de la hierba lo es.
+func _on_land_px(p: Vector2) -> bool:
+	if _coast_px.is_empty():
+		return true
+	return GridManager.is_land_cell(View2D.px_to_cell(p))
 
 func _bounds(pts: PackedVector2Array) -> Rect2:
 	var r := Rect2(pts[0], Vector2.ZERO)
@@ -162,7 +205,7 @@ func _scatter_details() -> void:
 		return cy * CHUNKS + cx
 	for i in range(900):
 		var p := b.position + Vector2(rng.randf() * b.size.x, rng.randf() * b.size.y)
-		if Geometry2D.is_point_in_polygon(p, _grass_pts):
+		if Geometry2D.is_point_in_polygon(p, _grass_pts) and _on_land_px(p):
 			buckets[bucket_of.call(p)]["tufts"].append([p, rng.randi_range(0, 3), rng.randf()])
 	var outer := polygon_px(SHORE_WIDTH + 1.0)
 	for i in range(220):

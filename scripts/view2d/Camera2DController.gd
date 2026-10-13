@@ -34,12 +34,13 @@ func _ready() -> void:
 	fit_to_grid()
 	_apply()
 
-## Los limites del paneo son los de la rejilla (su tamano cambia por partida).
+## Los limites del paneo son los de la tierra (el rectangulo que la contiene;
+## con la isla cuadrada, la rejilla entera): el centro de la vista nunca se va
+## al mar abierto.
 func fit_to_grid() -> void:
-	var o: Vector3 = GridManager.get_origin()
-	var size: Vector2 = GridManager.get_world_size()
-	boundary_min = Vector2(o.x, o.z)
-	boundary_max = Vector2(o.x + size.x, o.z + size.y)
+	var land: Rect2 = GridManager.land_world_rect()
+	boundary_min = land.position
+	boundary_max = land.end
 
 func _on_grid_resized(_w: int, _h: int) -> void:
 	fit_to_grid()

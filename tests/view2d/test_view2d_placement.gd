@@ -40,6 +40,9 @@ func before_test() -> void:
 	_resources = ResourceManager.get_all().duplicate()
 	_warehouses = ResourceManager.get_warehouse_count()
 	GridManager.clear_all()
+	# Celdas fijas: la rejilla cuadrada de siempre, toda tierra (otra suite pudo
+	# dejar una isla irregular, con agua donde estos casos colocan).
+	GridManager.reset_size()
 	GameManager._started = false
 	GameManager.hold_start()
 	_map = MapGen2D.new()

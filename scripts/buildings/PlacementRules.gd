@@ -60,8 +60,12 @@ static func prerequisite_names(building_id: String) -> String:
 ## Veredicto completo para `building_id` con huella `size` en `cell`: la regla de
 ## yacimiento de GameConfig (alcance / encima) Y celdas libres. `ignore_building`
 ## es el edificio que se esta moviendo (sus celdas cuentan como libres).
-## Devuelve {"ok": bool, "reason": "" | "deposit" | "occupied", "deposit": Node}.
+## Devuelve {"ok": bool, "reason": "" | "water" | "deposit" | "occupied" | "road",
+## "deposit": Node}. "water": alguna celda de la huella es agua (la de la isla
+## irregular o la de fuera de la rejilla); ni edificios ni carreteras.
 static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector2i, map_gen: Node, ignore_building: Node = null) -> Dictionary:
+	if not on_land(cell, size):
+		return {"ok": false, "reason": "water", "deposit": null}
 	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
 	var deposit: Node = null
 	if not rule.is_empty():
@@ -84,6 +88,13 @@ static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector
 				return {"ok": true, "reason": "", "deposit": deposit, "route": route}
 		return {"ok": false, "reason": "road", "deposit": deposit}
 	return {"ok": true, "reason": "", "deposit": deposit, "route": []}
+
+## ¿Cae toda la huella en tierra?
+static func on_land(cell: Vector2i, size: Vector2i) -> bool:
+	for c in GridManager.cells_for(cell, size):
+		if not GridManager.is_land_cell(c):
+			return false
+	return true
 
 ## Quita el yacimiento sobre el que se planta un edificio que lo consume (la
 ## Refineria). Solo tras pasar todas las comprobaciones.

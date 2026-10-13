@@ -134,18 +134,99 @@ building, they also need a road joined to the Núcleo (docs/03 "Road network").
 
 ## The random map (2026-09-28)
 
-- **Grid:** each new game rolls its width and height between `grid_size_min` (40) and
-  `grid_size_max` (48), even sides, centred on the world origin. Saved in the `grid` key
-  with the island seed; a save without it is 40x40.
+- **Grid:** each new game rolls its width and its height separately between
+  `grid_width_min/max` and `grid_height_min/max` (60-74 since the irregular island),
+  even sides, centred on the world origin. Saved in the `grid` key with the island
+  seed; a save without it is 40x40.
+- **Irregular island (2026-10-12):** the sea comes into the grid. The land is a mask
+  derived from the island seed (`scripts/map/IslandShape.gd`, pure and static, no
+  global RNG): same seed, same island. See "The irregular island" below.
 - **Deposits:** each type (forest, gold vein, iron, oil well) rolls its own count
   between `deposit_per_type_min` (3) and `deposit_per_type_max` (6), so no island comes
   without oil or forest. Sizes from `deposit_sizes` (2-3 cells a side, forests 2-4).
 - None lands on the Núcleo or its sidewalk (`deposit_core_gap` = 2 free cells,
-  `deposit_center_exclusion` = 6) nor on the outer shore band (`map_shore_band` = 1,
-  kept for future sea and shore resources: `MapGenerator.shore_cells()`).
+  `deposit_center_exclusion` = 6) nor on the shore band (`map_shore_band` = 1: the
+  land cells within one cell, diagonals included, of the water; on an old square
+  island that is the outer ring). It is kept for future sea and shore resources:
+  `MapGenerator.shore_cells()`. Deposits are only rolled on land.
 - Every deposit leaves room for its extractor and a free path to the Núcleo's
   sidewalk; a final pass removes and re-rolls any that ended boxed in.
-- The island shape (margin, corners, waviness) also comes from the seed, in 3D and 2D.
+- The island shape also comes from the seed, in 3D and 2D.
+
+## The irregular island (2026-10-12)
+
+Owner decision: the map is not a square any more. Bays, capes and peninsulas, with
+the water inside the grid, and a different island every game.
+
+**How the coast is made** (`IslandShape.build_mask`, parameters in
+`GameConfig.island_coast`):
+
+1. A field per cell: a superellipse (`power_min/max`, 2 = ellipse, 3 = nearly
+   square) whose radius changes with the angle (harmonics of 2 to 6 lobes,
+   `harmonic_amp`), fractal noise for the small coast (`noise_amp`, `noise_freq`),
+   2-4 bays that bite the edge and 1-3 capes that stick out of it. Near the grid's
+   sea border the field slopes down, so the coast never flattens against it.
+2. The threshold is a quantile: exactly the target number of land cells stays land.
+   The target is `fraction_min..max` (0.46-0.58) of the usable grid, clamped to
+   `land_min..land_max` (1550-2300 cells; the old square was 1600-2304, all of it
+   buildable, so the land is the same size within the ±25 % the owner asked for).
+3. Morphological clean-up: a closing (`close_radius` 2.5: inlets narrower than about
+   5 cells are filled, where the sand of both shores would overlap) and an opening
+   (`open_radius` 1.5: every land cell sits in a 3x3 block of land, so no one-cell
+   spits). Only the landmass that touches the Núcleo stays; lakes are filled. One
+   island, no holes (no lagoon for now).
+4. The Núcleo, its sidewalk and `core_margin` (3) cells around it are always land;
+   the outer `edge_water` (3) cells of the grid are always sea.
+
+The mask is about 150-250 ms per game and is never saved: the save keeps width,
+height, seed, `"shape": 2` and the `"coast"` parameters used (so retuning
+`island_coast` does not move the coast under an old game's buildings). A save
+without `"shape"` is the old square island: every cell is land, exactly as before.
+Changing the algorithm itself means a new shape version, keeping version 2 as is.
+
+**What respects the water:** `GridManager.is_land_cell()`; `is_cell_free()` and
+`can_place()` refuse water, so obstacles, buildings, roads and the auto-road
+(`road_route`) never go there. `PlacementRules.evaluate_placement()` answers
+`"water"` first (`LBL_ON_WATER`, "Ahí hay agua: construye en tierra."); touch
+placement only offers spots on land; both cameras pan within the land's bounding
+rectangle (`GridManager.land_world_rect()`); the grid overlay is drawn on land only
+(3D: a one-texel-per-cell mask in the shader; 2D: only the cell sides that touch
+land, the coast line a little brighter).
+
+**The view:** the grass outline is the mask's contour
+(`IslandShape.coast_polygon`): marching squares on the cell corners, two Chaikin
+passes, ten relaxation steps that never come closer than 0.2 cells to land, and an
+outward-only wobble. Every land cell is fully on grass (a test checks every corner);
+grass shows at most about one cell beyond the land. 3D: the outline triangulated
+(grass), a cliff skirt, a sand ring and a foam ring grown along its normals, and the
+sea shades shallow water from a small distance texture. 2D: the same outline,
+grown with `Geometry2D.offset_polygon`. Around a thousand outline points and a few
+thousand triangles, built once per game.
+
+**Land check (10 seeds, `tools/isla_check.gd`):** the same map a new game makes
+(grid, island, Núcleo with its sidewalk, deposits). "Buildable" is free land after
+the Núcleo, its sidewalk and the deposits; "enclosed" are free cells with no walk
+to the sidewalk.
+
+| Seed | Grid | Land | Buildable | Gold | Iron | Oil | Forest | Workable | Enclosed | Coast points |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 62x60 | 1609 | 1457 | 3 | 4 | 5 | 6 | yes | 0 | 832 |
+| 7 | 66x62 | 1624 | 1440 | 4 | 6 | 4 | 6 | yes | 0 | 880 |
+| 42 | 62x68 | 1740 | 1601 | 6 | 4 | 3 | 4 | yes | 0 | 896 |
+| 99 | 64x64 | 1802 | 1645 | 5 | 3 | 6 | 3 | yes | 0 | 856 |
+| 314 | 62x72 | 2026 | 1868 | 5 | 6 | 5 | 4 | yes | 0 | 968 |
+| 2718 | 68x70 | 1968 | 1827 | 4 | 5 | 3 | 5 | yes | 0 | 1024 |
+| 4242 | 64x64 | 1841 | 1675 | 6 | 4 | 5 | 6 | yes | 0 | 880 |
+| 9001 | 66x66 | 1935 | 1784 | 3 | 5 | 6 | 5 | yes | 0 | 976 |
+| 12345 | 68x66 | 1889 | 1770 | 3 | 3 | 4 | 3 | yes | 0 | 880 |
+| 55555 | 74x64 | 2093 | 1926 | 5 | 3 | 5 | 6 | yes | 0 | 1072 |
+
+Buildable 1440-1926 cells (mean about 1700). The old square island had 1600-2304
+cells minus its deposits, about 1450-2150: the same size, within the ±25 %.
+
+Every island has 3-6 deposits of each type, every one workable (room for its
+extractor and a road to the network), and no free cell is cut off from the
+Núcleo. The 4-6 h balance line (`tools/line_probe.gd`) is another branch's job.
 
 ## Consumption (Population Drain)
 
