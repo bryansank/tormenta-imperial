@@ -456,11 +456,19 @@ triangulos por edificio (el horneador los imprime).
   elemento exagerado por modelo que complementa el de la parcela (la sierra del
   Aserradero, la rueda del castillete, el portalon del Almacen, la sombrilla del
   Mercado, la cupula del Laboratorio, la boca del horno de la Fundicion, el galon
-  del Cuartel, la columna de la Refineria, el canon de la Torre, la torre del
-  Cuartel General, la cupula y el manometro del Nucleo, el surtidor de la
+  del Cuartel, la columna de la Refineria, el canon largo con aros y franja de laton de la Torre, la torre del
+  Cuartel General con el emblema de la Regencia en la fachada, la cupula y el manometro del Nucleo, el surtidor de la
   Fuente, la rueda dentada de la Estatua, el molino de la Granja) y un acento
   por familia.
-- Los GLB viejos siguen en `assets/models/buildings/` (sin uso).
+- **FlagAnchor**: un `Marker3D` donde se cuelga la bandera del pais. En el
+  Cuartel General, en lo alto de su mastil (esquina delantera derecha del
+  tejado); en el Nucleo, en lo alto del mastil de la colonia (`ColonyFlag3D`,
+  que no es del modelo: el horneado lo coloca con la misma cima que mide
+  `BuildingPlacer`, `max(mesh_height, malla) + 2,4`). El modelo no dibuja bandera.
+- **Madera** (2026-10-12): la casilla WOOD de `ToyPalette` es un marron natural
+  (140, 100, 70), no naranja; la siguen las piezas CC0, el atrezo y la obra
+  (`ToyTones`).
+- Los GLB viejos siguen en `assets/models/buildings/`, sin uso y fuera del exportado.
 - Capturas: `godot --path . -s tools/toy_probe.gd` (con `override.cfg` propio)
   deja `toy_probe_all.png` (distancia de arranque), `toy_probe_close_<n>.png`,
   `toy_probe_storm.png` y, con `-- --near=9 --ids=...`, `toy_probe_near.png`;

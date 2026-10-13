@@ -18,10 +18,9 @@ const S := Palette.Slot
 static func C(slot: int, d := 0.0) -> Color:
 	return Palette.tint(slot, d)
 
-## La madera de la paleta sale muy anaranjada con el etalonaje del juego: la
-## de las piezas propias va algo mas oscura y apagada.
+## La madera de las piezas propias, un pelo mas oscura que la casilla.
 static func wood(d := 0.0) -> Color:
-	return C(S.WOOD, d - 0.12)
+	return C(S.WOOD, d - 0.04)
 
 static func iron(d := 0.0) -> Color:
 	return C(S.IRON, d)

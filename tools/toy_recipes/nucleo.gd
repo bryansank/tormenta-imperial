@@ -66,4 +66,6 @@ func build(mk, kit, ctx: Dictionary) -> Dictionary:
 	for k in 5:
 		var a := PI * 0.85 - k * PI * 0.17
 		mk.box(gc + Vector3(cos(a) * 0.32, sin(a) * 0.32, 0.06), Vector3(0.05, 0.05, 0.02), P.iron())
-	return {"fx": mouth}
+	# La bandera: en lo alto del mastil de la colonia (ColonyFlag3D, esquina NE,
+	# 2,4 por encima de la cima); el mastil no es del modelo.
+	return {"fx": mouth, "flag_over_top": Vector3(6.0 * 0.38, 2.4 - 0.05, -6.0 * 0.38)}

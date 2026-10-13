@@ -142,6 +142,27 @@ func _bake(id: String) -> bool:
 		anchor.position = out["fx"]
 		root.add_child(anchor)
 		anchor.owner = root
+	# FlagAnchor: donde se cuelga la bandera del pais (feat/bandera-y-pais).
+	# "flag" va en el marco de la receta (sigue al encaje); "flag_over_top" es
+	# {x, z, alto sobre la cima} en el marco del edificio, para casar con un
+	# mastil que no es del modelo (ColonyFlag3D en el Nucleo).
+	var flag_at = null
+	if out.has("flag"):
+		flag_at = fitted * (out["flag"] as Vector3)
+	elif out.has("flag_over_top"):
+		# La misma cima que mide BuildingPlacer: max(mesh_height, la malla).
+		var f: Vector3 = out["flag_over_top"]
+		var top := mesh.get_aabb().end.y
+		var tres := "res://data/buildings/%s.tres" % id
+		if ResourceLoader.exists(tres):
+			top = maxf(top, float(load(tres).mesh_height))
+		flag_at = Vector3(f.x, top + f.y, f.z)
+	if flag_at != null:
+		var fa := Marker3D.new()
+		fa.name = "FlagAnchor"
+		fa.position = flag_at
+		root.add_child(fa)
+		fa.owner = root
 	var scene := PackedScene.new()
 	scene.pack(root)
 	err = ResourceSaver.save(scene, OUT + id + ".tscn")
@@ -152,7 +173,7 @@ func _bake(id: String) -> bool:
 	var a := mesh.get_aabb()
 	print("build_toy_models: %-13s %5d tri  %.2f x %.2f x %.2f (objetivo %.2f x %.2f)%s" % [
 		id, Kit.tri_count(mesh), a.size.x, a.size.y, a.size.z, ctx["w"], ctx["d"],
-		"  FxAnchor" if out.has("fx") else ""])
+		("  FxAnchor" if out.has("fx") else "") + ("  FlagAnchor" if flag_at != null else "")])
 	return true
 
 ## Lo mismo que BuildingLot.fit_model(), pero horneado: encoge en planta (nunca

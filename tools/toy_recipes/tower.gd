@@ -41,11 +41,21 @@ func build(mk, kit, ctx: Dictionary) -> Dictionary:
 	mk.cyl(base, 0.48, 0.18, P.iron(0.05), 10)
 	P.block(mk, base + Vector3(0, 0.18, 0), Vector3(0.62, 0.36, 0.6), P.C(S.SLATE, -0.08))
 	mk.box(base + Vector3(0, 0.5, 0.05), Vector3(0.66, 0.08, 0.64), yellow)
-	var breech := base + Vector3(0, 0.45, -0.15)
-	var muzzle := base + Vector3(0, 0.95, 1.5)
-	mk.cyl(breech, 0.22, breech.distance_to(muzzle), P.C(S.SLATE, -0.05), 10, (muzzle - breech).normalized(), 0.15)
-	mk.cyl(muzzle - (muzzle - breech).normalized() * 0.22, 0.2, 0.24, P.iron(-0.05), 10, (muzzle - breech).normalized(), -1.0, false, true)
-	mk.cyl(breech + (muzzle - breech).normalized() * 0.55, 0.23, 0.12, yellow, 10, (muzzle - breech).normalized())
+	# Mas largo (de la culata, atras, a la boca, asomando por delante) y con
+	# laton: aros, boca y una franja amarilla por encima que se lee desde arriba.
+	var breech := base + Vector3(0, 0.5, -0.75)
+	var muzzle := base + Vector3(0, 1.0, 1.5)
+	var ax := (muzzle - breech).normalized()
+	var blen := breech.distance_to(muzzle)
+	mk.cyl(breech, 0.25, blen, P.C(S.SLATE, -0.05), 10, ax, 0.17, false, true)
+	mk.ball(breech, 0.25, P.C(S.SLATE, -0.1))
+	var brass := P.C(S.BRASS, 0.08)
+	for t in [0.12, 0.42, 0.7]:
+		mk.cyl(breech + ax * blen * t, 0.25 - 0.08 * t + 0.035, 0.1, brass, 10, ax)
+	mk.cyl(muzzle - ax * 0.2, 0.22, 0.22, brass, 10, ax, -1.0, false, true)
+	mk.cyl(muzzle + ax * 0.005, 0.12, 0.02, P.iron(-0.2), 8, ax)
+	var up := ax.cross(Vector3.RIGHT).normalized()
+	mk.beam(breech + ax * blen * 0.15 + up * 0.24, breech + ax * blen * 0.9 + up * 0.18, 0.08, yellow)
 	# Escudo del canon
 	mk.box(base + Vector3(0, 0.6, 0.38), Vector3(0.9, 0.42, 0.06), P.C(S.SLATE, -0.1))
 	P.hazard(mk, base + Vector3(0, 0.78, 0.42), 0.9, 0.08, 0.02, 6)
