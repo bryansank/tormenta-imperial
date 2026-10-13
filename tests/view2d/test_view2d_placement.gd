@@ -14,7 +14,10 @@ const MapGen2D := preload("res://scripts/view2d/MapGenerator2D.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 ## Aparca la partida del jugador sin perder nunca una copia varada.
 const SaveParking := preload("res://tests/save/save_parking.gd")
 const BACKUP_PATH := "user://save_game.view2d_placement.bak"

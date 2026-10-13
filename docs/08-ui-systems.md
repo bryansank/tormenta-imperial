@@ -52,11 +52,11 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 ### VictoryScreen (`scripts/ui/VictoryScreen.gd`)
 - **Position:** Center overlay (full screen)
 - **Shows:** "VICTORIA IMPERIAL" title, flavor text, stats, continue/new game buttons
-- **Trigger:** `EventBus.victory_achieved`. Waits for `GameManager.offline_report_closed` if the offline report (also layer 20) is still open. "Nueva partida" goes through `GameManager.request_new_game()`
+- **Trigger:** `EventBus.victory_achieved` (opens at once; the offline report it used to wait for is gone). "Nueva partida" goes through `GameManager.request_new_game()`
 - **Layer:** 20
 
 ### TitleMenu (`scripts/ui/TitleMenu.gd`)
-- **Shows:** keyart background (logo + name on portrait), Continuar (only if a save was loaded or the player already played this session), Nueva partida (via `GameManager.request_new_game()` when there is something to lose), Ajustes, Salir
+- **Shows:** keyart background (logo + name on portrait), Continuar (the last game played, only if a save was loaded or the player already played this session, and not a sealed run), Nueva partida (via `GameManager.request_new_game()`; never deletes, it creates another game), PARTIDAS n/5 (the saved-games list, `SavesPanel`), Ajustes, Salir
 - **Behavior:** opens on launch over the already-loaded game and pauses the tree (`get_tree().paused`). Skipped headless and with `-- --no-title` (probes). Shown once per session (static flag survives the new-game reload)
 - **Layer:** 30, `PROCESS_MODE_ALWAYS`
 
@@ -120,6 +120,7 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 | `StormHUD` | 16 (11 under modals) | Storm phase: colour and icon, no countdown |
 | `SandboxPanel` | 11 | Sandbox only: the SANDBOX tab with INVOCAR TORMENTA / INVOCAR AUDITORÍA ([20-modos-de-juego.md](20-modos-de-juego.md)) |
 | `NewGameDialog` | 40 | The mode picker, created by `GameManager.request_new_game()` from every "Nueva partida" |
+| `SavesPanel` | 40 | PARTIDAS: the saved games (name, flag, mode/tier, era, time, date; Load / Delete), from the title menu and ☰ MENÚ → PARTIDA, and from Nueva partida with five games (`make_room`) |
 | `LayoutEditor` | 35 | EDITAR DISPOSICIÓN: drag panels, saved per device profile |
 
 Every panel exists in both `Main.tscn` and `Main2D.tscn` with the same name; the

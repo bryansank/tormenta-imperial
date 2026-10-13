@@ -185,7 +185,7 @@ El exportado usa un directorio de usuario propio, distinto del editor:
 Así las partidas de prueba (con tiempos de dev) y las reales no se pisan. Lo hacen
 dos overrides con el feature tag `template` en `project.godot`
 (`config/use_custom_user_dir.template`, `config/custom_user_dir_name.template`).
-Ahí viven `save_game.json`, `settings.cfg` y `logs/godot.log`, que es lo primero que
+Ahí viven las partidas (`partidas/`), `settings.cfg` y `logs/godot.log`, que es lo primero que
 hay que pedir a quien reporte un fallo.
 
 ---

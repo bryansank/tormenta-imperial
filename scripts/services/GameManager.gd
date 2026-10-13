@@ -2,19 +2,17 @@ extends Node
 ## Orchestrates game lifecycle: new game, save, load, clear.
 ## Waits for BuildingPlacer and MapGenerator to register before starting.
 
-const SAVE_PATH := "user://save_game.json"
+## Las partidas guardadas: una por archivo en user://partidas/, con su indice
+## (docs/09-save-system.md). La que se juega es la activa: save_path().
+const SaveSlots := preload("res://scripts/services/SaveSlots.gd")
 const NewGameDialogScript := preload("res://scripts/ui/NewGameDialog.gd")
-const CORRUPT_PATH_FMT := "user://save_game.corrupt-%s.json"
+const SavesPanelScript := preload("res://scripts/ui/SavesPanel.gd")
+## Cuantas partidas caben en la lista.
+const MAX_SAVES := SaveSlots.MAX_SLOTS
 ## Version del formato del guardado. La 2 (2026-09-28) trae edificios de 2x2 y
 ## la red de carreteras unida al Nucleo: un guardado de antes no cabe en ella
 ## (casas de 1x1, nada conectado), asi que se aparta y se empieza de nuevo.
 const SAVE_FORMAT := 2
-const OLD_FORMAT_PATH_FMT := "user://save_game.v1-%s.json"
-
-## El parte de progreso offline se cerro. La pantalla de victoria espera a esta
-## senal si el parte sigue en pantalla: las dos usan la capa 20 y no deben
-## solaparse nunca.
-signal offline_report_closed
 
 var _placer: Node = null
 var _map_gen: Node = null
@@ -37,8 +35,24 @@ var loaded_from_save := false
 ## partida, cambio de vista 3D/2D) sin depender de que el script del menu siga
 ## cargado. De sesion: no se guarda ni lo limpia ningun reset().
 var title_dismissed := false
-## La capa del parte offline mientras esta en pantalla.
-var _offline_canvas: CanvasLayer = null
+## start_new_game() aparto un id nuevo, todavia sin archivo: el proximo _begin
+## empieza ahi una partida en vez de abrir la mas reciente.
+var _fresh_slot_pending := false
+## La proxima carga viene de una recarga interna (cambio de vista 3D/2D, de
+## idioma): no es una ausencia y no lleva progresion offline.
+var _skip_offline_once := false
+## La partida activa nacio sola (no habia ninguna) y el jugador aun no ha
+## construido nada en ella: "Nueva partida" la reutiliza en vez de dejarla
+## ocupando un hueco de los cinco.
+var _auto_fresh := false
+## La siguiente partida la pidio el jugador (start_new_game): no nace sola.
+var _chosen_new := false
+## El jugador borro la partida que esta en memoria: ya no se escribe (se
+## resucitaria) hasta abrir otra.
+var _active_deleted := false
+## Nombre y bandera elegidos en "Nueva partida" (paso de identidad, rama de
+## bandera y pais), para aplicarlos cuando la partida nueva arranque.
+var _pending_identity: Dictionary = {}
 ## La partida termino (Supervivencia perdida) y su guardado ya se escribio
 ## marcado: desde aqui es de solo lectura. Lo levanta cualquier partida nueva.
 var _run_sealed := false
@@ -158,7 +172,115 @@ func _save_now_if_safe() -> void:
 	_write_save()
 
 func _can_write() -> bool:
-	return not _run_sealed and is_instance_valid(_placer) and is_instance_valid(_map_gen)
+	return not _run_sealed and not _active_deleted and is_instance_valid(_placer) and is_instance_valid(_map_gen)
+
+# ── Partidas guardadas ───────────────────────────────────────────────
+
+## El id de la partida activa (settings.cfg [partidas] activa).
+func active_slot() -> int:
+	return GameConfig.saves_active_slot
+
+## La ruta del guardado de la partida activa. Si aun no hay ninguna activa, se
+## elige ya (la mas reciente, o un id nuevo) para que siempre haya una ruta.
+func save_path() -> String:
+	if GameConfig.saves_active_slot <= 0:
+		var recent: int = SaveSlots.most_recent_id()
+		_set_active_slot(recent if recent > 0 else SaveSlots.next_id())
+	return SaveSlots.path_of(GameConfig.saves_active_slot)
+
+func _set_active_slot(id: int) -> void:
+	if GameConfig.saves_active_slot == id:
+		return
+	GameConfig.saves_active_slot = id
+	GameConfig.save_user_settings()
+
+## Que partida abre este arranque. Un save_game.json de antes de las partidas
+## pasa a ser una mas y es la que se abre. Si no, la activa; si la activa ya no
+## existe, la mas reciente; si no hay ninguna, un id nuevo (partida nueva).
+func _resolve_active_slot() -> void:
+	var migrated: int = SaveSlots.migrate_legacy()
+	if migrated > 0:
+		_fresh_slot_pending = false
+		_set_active_slot(migrated)
+		return
+	if _fresh_slot_pending:
+		_fresh_slot_pending = false
+		return
+	if SaveSlots.exists(GameConfig.saves_active_slot):
+		return
+	var recent: int = SaveSlots.most_recent_id()
+	_set_active_slot(recent if recent > 0 else SaveSlots.next_id())
+
+## Las partidas para la lista, la mas reciente primero (SaveSlots.list()).
+func list_saves() -> Array:
+	return SaveSlots.list()
+
+## Ya hay cinco y la activa no es una isla recien nacida que se pueda reutilizar:
+## "Nueva partida" pide antes borrar una.
+func is_save_list_full() -> bool:
+	return SaveSlots.is_full() and not is_current_disposable()
+
+## La partida activa nacio sola y nadie ha construido en ella: no es "una
+## partida" que guardar, y la siguiente "Nueva partida" ocupa su sitio.
+func is_current_disposable() -> bool:
+	return _auto_fresh and _started
+
+## La partida en memoria se borro de la lista (y ya no se escribe).
+func is_active_slot_deleted() -> bool:
+	return _active_deleted
+
+## Abre la lista de partidas (SavesPanel). `make_room`: la abre "Nueva partida"
+## con las cinco ocupadas, para borrar una antes de seguir.
+func open_saves_list(make_room: bool = false) -> CanvasLayer:
+	var panel: CanvasLayer = SavesPanelScript.new()
+	panel.setup(make_room)
+	add_child(panel)
+	return panel
+
+## Abre la partida `id`. Guarda antes la que se deja. Devuelve false si no se
+## puede (no existe, o hay una pelea en juego: el tablero no viaja en el
+## guardado).
+func load_slot(id: int) -> bool:
+	if not SaveSlots.exists(id):
+		return false
+	if _started and (CombatManager.is_board_open() or not CombatManager.is_save_safe()):
+		EventBus.notification_posted.emit(Tr.t("NOTIF_VIEW_AFTER_BATTLE"), "info", UITheme.INFO)
+		return false
+	title_dismissed = true
+	_open_slot(id)
+	return true
+
+func _open_slot(id: int) -> void:
+	if _started and _can_write():
+		_save_pending = false
+		_write_save()
+	# Volver a abrir la que ya estaba en juego no es una ausencia.
+	_skip_offline_once = _started and id == active_slot() and not _active_deleted
+	_fresh_slot_pending = false
+	_set_active_slot(id)
+	clear_save_and_reload_from(SaveSlots.read(id))
+
+## Borra la partida `id`. Si es la que esta en memoria, deja de escribirse (y
+## quien borra decide a donde ir: leave_deleted_slot). Con una pelea en juego no
+## se borra la activa.
+func delete_slot(id: int) -> bool:
+	if id == active_slot() and _started:
+		if CombatManager.is_board_open() or not CombatManager.is_save_safe():
+			return false
+		_active_deleted = true
+		_save_pending = false
+	return SaveSlots.remove(id)
+
+## Se borro la partida en memoria: se abre la mas reciente que quede o, si no
+## queda ninguna, una nueva en el modo de ahora.
+func leave_deleted_slot() -> void:
+	var recent: int = SaveSlots.most_recent_id()
+	if recent > 0:
+		_open_slot(recent)
+		return
+	_fresh_slot_pending = true
+	_set_active_slot(SaveSlots.next_id())
+	clear_save_and_reload_from({})
 
 func register_placer(placer: Node) -> void:
 	_placer = placer
@@ -192,7 +314,8 @@ func release_start() -> void:
 
 ## Cambia de vista (3D <-> 2D) sin perder nada: guarda, suelta los servicios
 ## como una carga desde la nube y abre la otra escena, que vuelve a cargar el
-## mismo save_game.json (el formato es el mismo en las dos vistas).
+## mismo guardado de la partida activa (el formato es el mismo en las dos
+## vistas). No cuenta como ausencia: no aplica progresion offline.
 ##
 ## Con un tablero abierto (o una pelea sin saldar) no se cambia: el tablero no
 ## viaja en el guardado, igual que al cambiar de idioma. La preferencia ya quedo
@@ -203,12 +326,9 @@ func switch_to_scene(scene_path: String) -> void:
 		return
 	if _started:
 		save_game()
-	var data := {}
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if file:
-		var json := JSON.new()
-		if json.parse(file.get_as_text()) == OK and json.data is Dictionary:
-			data = json.data
+	var data: Dictionary = SaveSlots.read(active_slot()) if active_slot() > 0 else {}
+	# Recarga interna: la misma partida en la otra vista, no una ausencia.
+	_skip_offline_once = _started and not data.is_empty()
 	clear_save_and_reload_from(data, scene_path)
 
 func _try_start() -> void:
@@ -248,11 +368,17 @@ func _begin() -> void:
 	# La vista 2D ya registro su camara (register_camera); la 3D se busca.
 	if _camera == null or not is_instance_valid(_camera):
 		_camera = get_viewport().get_camera_3d()
-	loaded_from_save = FileAccess.file_exists(SAVE_PATH)
+	_resolve_active_slot()
+	_active_deleted = false
+	var chosen: bool = _chosen_new
+	_chosen_new = false
+	loaded_from_save = FileAccess.file_exists(save_path())
 	if loaded_from_save:
 		_load_game()
 	else:
 		_new_game()
+	_skip_offline_once = false
+	_auto_fresh = not loaded_from_save and not chosen
 	if not EventBus.building_placed.is_connected(_on_building_changed):
 		EventBus.building_placed.connect(_on_building_changed)
 	if not EventBus.building_moved.is_connected(_on_building_moved):
@@ -267,7 +393,6 @@ func _new_game() -> void:
 	# tira el resultado de la anterior. Va primero: los reset leen sus reglas.
 	GameMode.begin_run(GameMode.current, GameMode.tier)
 	_run_sealed = false
-	_close_offline_report()
 	ResourceManager.reset()
 	ProcessManager.reset()
 	ProgressionManager.reset()
@@ -281,6 +406,7 @@ func _new_game() -> void:
 	TutorialManager.reset()
 	ProductionManager.reset()
 	RankManager.reset()
+	_apply_pending_identity()
 	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
 	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
 	# una partida nueva (la carga lo pisa con el del guardado).
@@ -322,7 +448,7 @@ func pave_core_ring(origin: Vector2i, size: Vector2i) -> void:
 				ProductionManager.register_building(node, road, 0.0)
 
 func _load_game() -> void:
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var file := FileAccess.open(save_path(), FileAccess.READ)
 	if not file:
 		_recover_from_unreadable_save()
 		return
@@ -476,14 +602,17 @@ func _load_game() -> void:
 	ResourceManager.set_era(ProgressionManager.current_era)
 	ResourceManager.clamp_to_storage()
 
-	# Apply offline progression (Supervivencia no tiene: cerrar el juego no produce)
-	if data.has("saved_at") and GameMode.offline_enabled() and not GameMode.is_run_over():
+	# Progresion offline (Supervivencia no tiene: cerrar el juego no produce). Lo
+	# producido espera en los edificios, que lo ensenan en el mapa: no hay parte
+	# ni aviso (2026-10-12). Una recarga interna (cambio de vista o de idioma) no
+	# es una ausencia y no produce nada.
+	if not _skip_offline_once and data.has("saved_at") and GameMode.offline_enabled() and not GameMode.is_run_over():
 		var saved_at: float = float(data["saved_at"])
 		var now := Time.get_unix_time_from_system()
 		var elapsed := now - saved_at
 		if elapsed > 2.0:
-			var earnings := ProductionManager.apply_offline_progression(elapsed)
-			_show_offline_report(elapsed, earnings)
+			ProductionManager.apply_offline_progression(elapsed)
+	_skip_offline_once = false
 
 	# Partidas de antes de la Auditoria Final con el Cuartel General ya al maximo:
 	# sin esto no hay asedio que ganar. Va despues de todo lo demas porque la
@@ -512,18 +641,21 @@ func _recover_from_unreadable_save() -> void:
 			Tr.t("MSG_SAVE_CORRUPT") % backup, "danger", UITheme.DANGER)
 
 func _restart_from_old_format() -> void:
-	var backup: String = backup_unreadable_save(OLD_FORMAT_PATH_FMT)
+	var backup: String = backup_unreadable_save("v1")
 	loaded_from_save = false
 	_new_game()
 	EventBus.notification_posted.emit(Tr.t("MSG_SAVE_OLD_FORMAT"), "notice", UITheme.INFO)
 	if not backup.is_empty():
 		print("GameManager: guardado viejo apartado en ", backup)
 
-## Copia el guardado ilegible a user://save_game.corrupt-<fecha>.json y devuelve
-## la ruta, o "" si no habia nada que copiar.
-func backup_unreadable_save(path_fmt: String = CORRUPT_PATH_FMT) -> String:
-	if not FileAccess.file_exists(SAVE_PATH):
+## Copia el guardado ilegible de la partida activa a
+## user://partidas/partida_<id>.<kind>-<fecha>.json ("corrupt", o "v1" para uno
+## de formato viejo) y devuelve la ruta, o "" si no habia nada que copiar.
+func backup_unreadable_save(kind: String = "corrupt") -> String:
+	var source: String = save_path()
+	if not FileAccess.file_exists(source):
 		return ""
+	var path_fmt: String = SaveSlots.backup_fmt(active_slot(), kind)
 	var t: Dictionary = Time.get_datetime_dict_from_system()
 	var stamp: String = "%04d%02d%02d-%02d%02d%02d" % [
 		int(t["year"]), int(t["month"]), int(t["day"]),
@@ -533,7 +665,7 @@ func backup_unreadable_save(path_fmt: String = CORRUPT_PATH_FMT) -> String:
 	while FileAccess.file_exists(path):
 		n += 1
 		path = path_fmt % ("%s-%d" % [stamp, n])
-	if DirAccess.copy_absolute(SAVE_PATH, path) != OK:
+	if DirAccess.copy_absolute(source, path) != OK:
 		return ""
 	return path
 
@@ -606,48 +738,100 @@ func _write_save() -> void:
 	if _camera and _camera.has_method("get_state"):
 		data["camera"] = _camera.get_state()
 
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(save_path(), FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(data, "\t"))
+		file.close()
+		SaveSlots.record(active_slot(), _summary_for_index(data))
 	# La ultima escritura de una partida terminada: la que la deja marcada.
 	if GameMode.is_run_over():
 		_run_sealed = true
 
-## Asks the player to confirm before wiping the save. Every UI entry point to a
-## new game must go through here: clear_save() is irreversible.
+## La entrada a "Nueva partida" desde cualquier sitio de la UI. Nunca borra
+## nada: la partida nueva va a su propio archivo y la que se deja se queda en la
+## lista (2026-10-12). Con las cinco ocupadas abre antes la lista para borrar
+## una (SavesPanel en modo `make_room`), que luego vuelve aqui.
 ##
-## Abre el selector de modo (NewGameDialog): cuatro tarjetas y, si hay una
-## partida que perder, un segundo paso que lo dice antes de borrar nada.
-## `ask_confirm` en false salta ese segundo paso (el menu principal sobre una
-## isla recien nacida: no hay nada que perder).
-##
-## Devuelve el dialogo para que quien lo pide pueda reaccionar a `confirmed` o
-## `canceled`. Se procesa siempre: se puede pedir desde el menu principal o el
-## de pausa, con el arbol pausado, y un dialogo pausado no recibe clics.
-func request_new_game(ask_confirm: bool = true) -> CanvasLayer:
+## Abre el selector de modo (NewGameDialog) y devuelve el dialogo para que quien
+## lo pide pueda reaccionar a `confirmed` o `canceled`. Se procesa siempre: se
+## puede pedir desde el menu principal o el de pausa, con el arbol pausado, y un
+## dialogo pausado no recibe clics.
+func request_new_game() -> CanvasLayer:
+	if is_save_list_full():
+		return open_saves_list(true)
 	var dialog: CanvasLayer = NewGameDialogScript.new()
-	dialog.setup(ask_confirm, GameMode.current, GameMode.tier)
+	dialog.setup(GameMode.current, GameMode.tier)
 	# El dialogo cuelga de este autoload, que sobrevive a la recarga: si no se
 	# libera tambien al confirmar, cada "Partida nueva" deja uno huerfano.
 	dialog.confirmed.connect(dialog.queue_free)
-	dialog.confirmed.connect(func(): start_new_game(dialog.chosen_mode, dialog.effective_tier()))
+	dialog.confirmed.connect(func(): start_new_game(dialog.chosen_mode, dialog.effective_tier(), dialog.chosen_identity))
 	dialog.canceled.connect(dialog.queue_free)
+	# Se borro la partida en memoria para hacer sitio y luego no se empezo
+	# otra: se abre la mas reciente que quede.
+	dialog.canceled.connect(func():
+		if _active_deleted:
+			leave_deleted_slot())
 	add_child(dialog)
 	return dialog
 
-## Empieza una partida nueva en `mode`, borrando la actual. Irreversible: la UI
-## llega aqui solo a traves de request_new_game().
-func start_new_game(mode: int, tier: int = GameMode.TIER_DEFAULT) -> void:
+## Empieza una partida nueva en `mode`, en un archivo nuevo: la de ahora se
+## guarda y se queda en la lista. Con las cinco ocupadas no hace nada (la UI
+## pide antes borrar una: request_new_game). La isla recien nacida que nadie ha
+## tocado (is_current_disposable) no ocupa sitio: se reutiliza su hueco.
+##
+## `identity` ({"name", "spec"}), si llega, es el nombre y la bandera elegidos en
+## el paso de identidad; se aplican al arrancar la partida nueva.
+func start_new_game(mode: int, tier: int = GameMode.TIER_DEFAULT, identity: Dictionary = {}) -> void:
+	if is_save_list_full():
+		push_warning("GameManager: ya hay %d partidas; borra una antes de empezar otra" % SaveSlots.MAX_SLOTS)
+		return
+	# La que se deja, guardada con SU modo: va antes de begin_run.
+	if _started and _can_write() and CombatManager.is_save_safe():
+		_save_pending = false
+		_write_save()
+	var reuse: bool = is_current_disposable() and not _active_deleted
 	GameMode.begin_run(mode, tier)
-	clear_save()
+	_pending_identity = identity.duplicate(true)
+	_chosen_new = true
+	title_dismissed = true
+	if reuse:
+		clear_save()
+		return
+	_fresh_slot_pending = true
+	_set_active_slot(SaveSlots.next_id())
+	clear_save_and_reload_from({})
 
+## Nombre y bandera de "Nueva partida", cuando la rama de bandera y pais los
+## trae (RankManager.set_colony). Va tras RankManager.reset().
+func _apply_pending_identity() -> void:
+	if _pending_identity.is_empty():
+		return
+	var identity: Dictionary = _pending_identity
+	_pending_identity = {}
+	if RankManager.has_method("set_colony"):
+		RankManager.call("set_colony", String(identity.get("name", "")), identity.get("spec", {}))
+
+## El resumen de la partida para el indice. Nombre y bandera salen de
+## RankManager cuando ya los tiene (rama de bandera y pais).
+func _summary_for_index(data: Dictionary) -> Dictionary:
+	var summary: Dictionary = SaveSlots.summary_of(data, active_slot())
+	if RankManager.has_method("get_colony_name"):
+		summary["colony_name"] = String(RankManager.call("get_colony_name"))
+	if RankManager.has_method("get_flag_spec"):
+		var spec: Variant = RankManager.call("get_flag_spec")
+		summary["flag_spec"] = spec if spec is Dictionary else {}
+	summary["sealed"] = GameMode.is_run_over()
+	return summary
+
+## Tira la partida activa y empieza otra en su mismo hueco. Es la de la isla
+## recien nacida que nadie toco (start_new_game) y la de las pruebas; las demas
+## partidas no se tocan.
 func clear_save() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
+	SaveSlots.remove(active_slot())
+	_fresh_slot_pending = true
 	# El modo es el que se eligio (start_new_game); se tira el resultado.
 	GameMode.begin_run(GameMode.current, GameMode.tier)
 	_run_sealed = false
-	_close_offline_report()
 	GridManager.clear_all()
 	ResourceManager.reset()
 	ProcessManager.reset()
@@ -673,15 +857,17 @@ func clear_save() -> void:
 	get_tree().paused = false
 	get_tree().reload_current_scene()
 
-## Replaces local save with provided data and reloads the scene.
-## Used by CloudSaveManager to apply cloud-downloaded saves.
+## Escribe `save_data` en la partida activa y recarga la escena con ella.
+## Lo usan CloudSaveManager, abrir otra partida de la lista y las recargas
+## internas (cambio de vista y de idioma).
 ## `scene_path` vacio recarga la escena actual; con ruta abre esa (cambio de vista).
 ## Un `save_data` vacio no escribe nada: la escena nueva empieza partida.
 func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") -> void:
 	if not save_data.is_empty():
-		var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+		var file := FileAccess.open(save_path(), FileAccess.WRITE)
 		if file:
 			file.store_string(JSON.stringify(save_data, "\t"))
+			file.close()
 	# El modo del guardado que va a cargarse, antes de los reset (leen reglas).
 	# Sin guardado, la escena empieza partida nueva en el modo de ahora.
 	var mode_data: Variant = save_data.get("game_mode", {})
@@ -690,7 +876,6 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	else:
 		GameMode.load_save_data(mode_data if mode_data is Dictionary else {})
 	_run_sealed = false
-	_close_offline_report()
 	GridManager.clear_all()
 	ResourceManager.reset()
 	ProcessManager.reset()
@@ -720,6 +905,8 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 		get_tree().reload_current_scene()
 
 func _on_building_changed(_data: Resource, _cell: Vector2i) -> void:
+	# El jugador ya construyo: la isla deja de ser "recien nacida".
+	_auto_fresh = false
 	save_game()
 
 func _on_building_moved(_from: Vector2i, _to: Vector2i) -> void:
@@ -730,103 +917,6 @@ func _on_building_renamed(_node: Node, _name: String) -> void:
 
 func _on_building_demolished(_node: Node, _cell: Vector2i) -> void:
 	save_game()
-
-## El parte de ausencia (2026-10-04): lo producido fuera espera en los edificios,
-## asi que el parte dice lo que hay PARA RECOGER (todo lo acumulado, lo de antes
-## de irse incluido) y, si el modo lo pide, lo que se echo a perder.
-func _show_offline_report(elapsed: float, _earnings: Dictionary) -> void:
-	var waiting: Dictionary = ProductionManager.get_all_stock()
-	var spoiled: Dictionary = ProductionManager.last_offline_spoiled
-	var earnings := {}
-	for res in waiting:
-		if int(waiting[res]) > 0:
-			earnings[res] = int(waiting[res])
-	for res in spoiled:
-		if int(spoiled[res]) > 0:
-			earnings["spoiled:" + String(res)] = -int(spoiled[res])
-	var has_any := not earnings.is_empty()
-	if not has_any:
-		return
-
-	var canvas := CanvasLayer.new()
-	canvas.layer = 20
-	add_child(canvas)
-	_offline_canvas = canvas
-
-	# Colores y estilos de UITheme (docs/24-paleta.md), como cualquier panel.
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	panel.add_child(vbox)
-
-	var title := UITheme.make_label(Tr.t("FMT_OFFLINE_TITLE") % _format_elapsed(elapsed), "section", UITheme.ACCENT)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-
-	vbox.add_child(UITheme.make_separator())
-
-	if not waiting.is_empty():
-		var hint := UITheme.make_label(Tr.ti("LBL_OFFLINE_TO_COLLECT"), "body", UITheme.TEXT)
-		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		hint.custom_minimum_size.x = 280
-		vbox.add_child(hint)
-	for key in earnings:
-		var amount: int = earnings[key]
-		var res: String = String(key).trim_prefix("spoiled:")
-		var text := ("+%d %s" if amount > 0 else "%d %s") % [amount, Tr.res_cap(res)]
-		if String(key).begins_with("spoiled:"):
-			text = Tr.t("LBL_OFFLINE_SPOILED") % [-amount, Tr.res_name(res)]
-		var lbl := UITheme.make_label(text, "body", UITheme.resource_color(res) if amount > 0 else UITheme.DANGER)
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(lbl)
-
-	# Close button
-	var close_btn := Button.new()
-	close_btn.text = Tr.t("BTN_CLOSE")
-	close_btn.custom_minimum_size = Vector2(100, 36)
-	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	UITheme.style_button(close_btn, UITheme.BTN)
-	vbox.add_child(close_btn)
-
-	canvas.add_child(panel)
-
-	close_btn.pressed.connect(func():
-		var tw := create_tween()
-		tw.tween_property(panel, "modulate:a", 0.0, 0.3)
-		tw.tween_callback(canvas.queue_free)
-		_offline_canvas = null
-		offline_report_closed.emit()
-	)
-
-## El parte offline sigue en pantalla. Lo pregunta VictoryScreen antes de abrirse.
-func is_offline_report_open() -> bool:
-	return _offline_canvas != null and is_instance_valid(_offline_canvas)
-
-## Quita el parte offline si sigue en pantalla. Lo llaman los tres caminos de
-## partida nueva: la capa cuelga de este autoload, no de la escena, asi que
-## sobrevive a reload_current_scene() y sin esto el parte de la partida
-## anterior se quedaba encima de la nueva. No emite offline_report_closed:
-## nadie espera ese parte en una partida que empieza.
-func _close_offline_report() -> void:
-	if _offline_canvas != null and is_instance_valid(_offline_canvas):
-		_offline_canvas.queue_free()
-	_offline_canvas = null
-
-func _format_elapsed(seconds: float) -> String:
-	var s := int(seconds)
-	if s < 60:
-		return "%ds" % s
-	if s < 3600:
-		return "%dm %ds" % [s / 60, s % 60]
-	var h := s / 3600
-	var m := (s % 3600) / 60
-	return "%dh %dm" % [h, m]
 
 func _load_building_data(id: String) -> BuildingData:
 	var path := "res://data/buildings/%s.tres" % id
@@ -870,13 +960,11 @@ func reload_keeping_game() -> void:
 		_write_save()
 	elif not _run_sealed:
 		return
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if not file:
+	var parsed: Dictionary = SaveSlots.read(active_slot())
+	if parsed.is_empty():
 		return
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	file.close()
-	if not parsed is Dictionary:
-		return
+	# La misma partida en el idioma nuevo: no es una ausencia.
+	_skip_offline_once = true
 	clear_save_and_reload_from(parsed)
 
 # ── modos-de-juego ──

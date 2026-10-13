@@ -20,7 +20,10 @@ extends Node
 ## guardado 3D carga en 2D.
 
 const View2D := preload("res://scripts/view2d/View2D.gd")
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 const SaveParking := preload("res://tests/save/save_parking.gd")
 const BACKUP_PATH := "user://save_game.view2d_probe.bak"
 const OUT_DIR := "res://docs/media/dev"

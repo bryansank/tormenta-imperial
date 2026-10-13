@@ -6,7 +6,7 @@ extends CanvasLayer
 ##
 ##   COLONIA  Que hacer · Progreso · Colonia (rango) · Ejercito ·
 ##            Escaramuzas · Sandbox        (solo lo que ya esta disponible)
-##   PARTIDA  Reanudar · Guardar · Ajustes · Musica · Ayuda · Historia ·
+##   PARTIDA  Reanudar · Guardar · Partidas · Ajustes · Musica · Ayuda · Historia ·
 ##            Menu principal · Guardar y salir
 ##
 ## - Con el menu abierto la partida esta en pausa de verdad (`get_tree().paused`).
@@ -177,6 +177,7 @@ func _setup_ui() -> void:
 	var game := _make_group("GameGroup", Tr.t("LBL_MENU_GROUP_GAME"), Tr.t("LBL_PAUSE_SUBTITLE"))
 	_resume_btn = _add_game_button(game, "Resume", Tr.t("BTN_RESUME"), UITheme.POSITIVE, resume)
 	_add_game_button(game, "Save", Tr.t("BTN_SAVE_GAME"), UITheme.BTN, save)
+	_add_game_button(game, "Saves", Tr.t("BTN_SAVES"), UITheme.BTN, _on_saves)
 	_add_game_button(game, "Settings", Tr.t("BTN_SETTINGS"), UITheme.BTN, _on_settings)
 	_music_btn = _add_game_button(game, "Music", "", UITheme.BTN, AudioManager.toggle_music)
 	_help_btn = _add_game_button(game, "Help", Tr.t("BTN_HELP"), UITheme.INFO, _on_help)
@@ -474,6 +475,12 @@ func save() -> void:
 func _save_now() -> void:
 	if GameManager.is_started():
 		GameManager.save_game()
+
+## PARTIDAS: la misma lista que el menu principal (SavesPanel, encima de este
+## menu). Antes se guarda, para que la partida en curso salga al dia.
+func _on_saves() -> void:
+	_save_now()
+	GameManager.open_saves_list()
 
 func _on_settings() -> void:
 	var settings: Node = _find_sibling("SettingsPanel")

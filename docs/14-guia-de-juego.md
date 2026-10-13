@@ -638,22 +638,24 @@ Para jugar desde el editor con los tiempos reales, arranca con `-- --no-dev`
 **Desde el juego:** `☰ MENÚ` → `Menú principal` → `Nueva partida`, o `Nueva partida`
 en el menú principal al arrancar. Sale el selector de modo, que hoy solo ofrece la
 **Campaña** (Constructor, Supervivencia y Sandbox están apartados, ver
-[20-modos-de-juego.md](20-modos-de-juego.md)), y pide confirmación si hay una partida
-que perder. Cada isla nueva sortea su tamaño y sus yacimientos.
+[20-modos-de-juego.md](20-modos-de-juego.md)). **No borra nada**: la isla nueva es otra
+partida guardada y la de antes se queda en la lista (`PARTIDAS`, en el menú principal y
+en `☰ MENÚ`). Caben cinco; con cinco, te pide borrar una antes. Cada isla nueva sortea
+su tamaño y sus yacimientos.
 
 Una partida guardada antes del mapa de 2×2 y carreteras (sin `"format": 2`) no cabe en
-el mapa nuevo: se aparta como `save_game.v1-<fecha>.json` y empieza una colonia nueva,
+el mapa nuevo: se aparta como `partida_<n>.v1-<fecha>.json` y empieza una colonia nueva,
 con un aviso.
 
-**Borrando la partida a mano:** la partida vive en un único JSON, sin base de datos ni
-nada en la nube. En Windows:
+**Borrando partidas a mano:** cada partida es un JSON en la carpeta `partidas`, sin base
+de datos ni nada en la nube (lo normal es borrarlas desde la lista `PARTIDAS`). En Windows:
 
 ```
-%APPDATA%\Godot\app_userdata\Tormenta Imperial\save_game.json   (desde el editor)
-%APPDATA%\TormentaImperial\save_game.json                       (el .exe exportado)
+%APPDATA%\Godot\app_userdata\Tormenta Imperial\partidas\   (desde el editor)
+%APPDATA%\TormentaImperial\partidas\                       (el .exe exportado)
 ```
 
-Bórralo y al abrir el juego tendrás una isla nueva generada desde cero.
+Borra la carpeta y al abrir el juego tendrás una isla nueva generada desde cero.
 
 El guardado en la nube (Supabase) está implementado pero **desconectado a propósito**:
 hoy todo es local.

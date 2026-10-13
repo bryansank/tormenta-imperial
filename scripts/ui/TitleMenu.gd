@@ -3,10 +3,12 @@ extends CanvasLayer
 ## arbol en pausa: la isla se ve detras, quieta, y nada corre hasta que el
 ## jugador elige.
 ##
-##   Continuar      solo si hay algo que continuar (se cargo una partida, o ya
-##                  se estuvo jugando en esta sesion)
-##   Nueva partida  abre el selector de modo (GameManager.request_new_game), que
-##                  pide confirmacion solo si hay algo que perder
+##   Continuar      la ultima partida jugada (la activa, ya cargada detras),
+##                  solo si hay algo que continuar (se cargo una partida, o ya
+##                  se estuvo jugando en esta sesion) y no esta terminada
+##   Nueva partida  abre el selector de modo (GameManager.request_new_game).
+##                  Nunca borra: crea otra partida (con cinco, pide borrar una)
+##   Partidas  n/5  la lista de partidas guardadas (SavesPanel): cargar, borrar
 ##   Ajustes        abre el SettingsPanel de siempre, que funciona en pausa, sobre
 ##                  la ilustracion del menu: la partida no se ve detras
 ##   Salir
@@ -35,6 +37,7 @@ var _brand: VBoxContainer
 var _card: PanelContainer
 var _continue_btn: Button
 var _new_btn: Button
+var _saves_btn: Button
 var _settings_btn: Button
 var _quit_btn: Button
 ## "Partida en curso: Campana", bajo Continuar. Discreto: el modo se ve, no manda.
@@ -158,6 +161,9 @@ func _setup_ui() -> void:
 	column.add_child(_mode_label)
 	_new_btn = ModalKit.make_menu_button(Tr.t("BTN_NEW_GAME"), UITheme.BTN, _on_new_game)
 	column.add_child(_new_btn)
+	_saves_btn = ModalKit.make_menu_button(Tr.t("BTN_SAVES"), UITheme.BTN, _on_saves)
+	_saves_btn.name = "SavesButton"
+	column.add_child(_saves_btn)
 	_settings_btn = ModalKit.make_menu_button(Tr.t("BTN_SETTINGS"), UITheme.BTN, _on_settings)
 	column.add_child(_settings_btn)
 	_quit_btn = ModalKit.make_menu_button(Tr.t("BTN_QUIT"), UITheme.DANGER, _on_quit)
@@ -229,6 +235,9 @@ func _refresh_buttons() -> void:
 	_continue_btn.visible = has_game_to_continue()
 	_mode_label.visible = _continue_btn.visible
 	_mode_label.text = Tr.t("LBL_TITLE_RUN_MODE") % GameMode.display_name()
+	var saves: int = GameManager.list_saves().size()
+	_saves_btn.text = "%s  %d/%d" % [Tr.t("BTN_SAVES"), saves, GameManager.MAX_SAVES]
+	_saves_btn.visible = saves > 0
 
 func _on_game_ready() -> void:
 	if visible:
@@ -245,15 +254,19 @@ func _exit_tree() -> void:
 func _on_continue() -> void:
 	close_menu()
 
-## Abre el selector de modo. Con una partida que perder, el selector confirma
-## antes de borrar; si la isla acaba de nacer no hay nada que perder y no
-## pregunta. En los dos casos, elegir recarga la escena en el modo elegido.
+## Abre el selector de modo (o, con las cinco ocupadas, la lista para hacer
+## sitio). Elegir recarga la escena en una partida nueva; GameManager suelta el
+## menu (title_dismissed) para que la nueva arranque con su intro.
 func _on_new_game() -> void:
-	var dialog: CanvasLayer = GameManager.request_new_game(has_game_to_continue())
-	if dialog != null:
-		# La escena se recarga al confirmar: el menu no vuelve a salir encima de
-		# la partida nueva, que arranca con su intro.
-		dialog.confirmed.connect(func(): GameManager.title_dismissed = true)
+	GameManager.request_new_game()
+
+## La lista de partidas, encima del menu. Cargar una suelta el menu y abre esa.
+func _on_saves() -> void:
+	var panel: CanvasLayer = GameManager.open_saves_list()
+	if panel != null:
+		panel.tree_exited.connect(func():
+			if is_inside_tree() and visible:
+				_refresh_buttons())
 
 func _on_settings() -> void:
 	var settings: CanvasLayer = _find_sibling("SettingsPanel")

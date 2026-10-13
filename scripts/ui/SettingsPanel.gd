@@ -525,7 +525,8 @@ func _build_game_tab(body: VBoxContainer) -> void:
 	body.add_child(UITheme.make_separator())
 	var new_game_btn := Button.new()
 	new_game_btn.text = Tr.t("BTN_NEW_GAME")
-	UITheme.style_button(new_game_btn, UITheme.DANGER, UITheme.FONT_BODY)
+	# Ya no borra nada (crea otra partida): sin color de peligro.
+	UITheme.style_button(new_game_btn, UITheme.BTN, UITheme.FONT_BODY)
 	new_game_btn.pressed.connect(GameManager.request_new_game)
 	body.add_child(new_game_btn)
 

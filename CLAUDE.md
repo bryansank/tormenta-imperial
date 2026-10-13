@@ -29,7 +29,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 2. Press **F5** to run. The title menu (`TitleMenu`) opens first over the loaded game
 3. WASD / arrows to pan, Q/E or right-drag to rotate, scroll to zoom, middle-drag or left-drag on the ground to grab-pan, F11 fullscreen
 4. Touch: one finger grabs the terrain, two-finger pinch to zoom and twist to rotate (3D only); tap to aim a building, tap the ghost / ✓ to build (docs/21 §9)
-5. A fresh game: ☰ MENÚ → Menú principal → Nueva partida (mode picker; today it only offers Campaña). Deleting `user://save_game.json` also works
+5. A fresh game: ☰ MENÚ → Menú principal → Nueva partida (mode picker; today it only offers Campaña). It never deletes the current game: it goes to a new slot (up to 5, see "Save/Load System"). Deleting `user://partidas/` starts from scratch
 6. **2D view:** Settings → Map view, or `godot --path . -- --view=2d`. Same services, UI and save; only the world view differs (`scenes/main/Main2D.tscn`, `scripts/view2d/`). See `docs/18-vista-2d.md`
 7. **User args** (after `--`): `--view=2d|3d`, `--no-title` (skip the title menu, used by probes), `--dev` / `--no-dev` (force `dev_mode`, see "Dev Mode")
 8. **Your save lives in the editor's user dir** (`%APPDATA%\Godot\app_userdata\Tormenta Imperial`). Anything that plays or writes saves outside a normal play session (probes, experiments, a second agent) needs a git-ignored `override.cfg` at the project root with its own dir, deleted afterwards:
@@ -72,7 +72,7 @@ holds a service's state of its own.
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (40x40 to 48x48, even sides, `grid_size_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed, building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
-| 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave, new game (`request_new_game()` → mode picker), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
+| 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave of up to 5 saved games (`SaveSlots`, `save_path()`, `open_saves_list()`), new game (`request_new_game()` → mode picker, never deletes), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
 | 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining) |
 | 9 | `ProductionManager` | `scripts/services/ProductionManager.gd` | Passive production, construction, upgrades |
 | 10 | `ProgressionManager` | `scripts/services/ProgressionManager.gd` | Era system (3 eras), 9 milestones, **and the Final Audit** (owns the `FinalAudit` model and publishes it) |
@@ -149,6 +149,7 @@ Created at runtime, not in either .tscn:
   WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: workers and citizens walking the roads (view only, docs/04)
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker, created by GameManager.request_new_game()
+  SavesPanel (layer 40, scripts/ui/SavesPanel.gd) -- PARTIDAS, the saved-games list, created by GameManager.open_saves_list()
   LayoutEditor (layer 35, scripts/ui/LayoutEditor.gd) -- EDITAR DISPOSICIÓN (Settings), created by UILayoutManager
 ```
 
@@ -616,7 +617,19 @@ and Settings closes; accepted). With a board open it does not reload
 
 ### Save/Load System
 
-- Path: `user://save_game.json`
+- **Up to 5 saved games** (2026-10-12): one file each, `user://partidas/partida_<id>.json`, plus a small index
+  `user://partidas/indice.json` (id, colony name, flag spec, colour, mode, tier, era, played time, `saved_at`, sealed)
+  so the list paints without opening each game. `scripts/services/SaveSlots.gd` (static, `preload`) owns the folder;
+  the index is a cache that `list()` reconciles with the files. The **active** game is a device preference,
+  `settings.cfg` `[partidas] activa` (`GameConfig.saves_active_slot`); `GameManager.save_path()` is its file — never
+  hard-code a path. On start: a legacy `user://save_game.json` is migrated into a new slot (copied, verified byte for
+  byte, then deleted) and opened; otherwise the active one; if it is gone, the most recent; if there are none, a new game
+- **Nueva partida never deletes**: `start_new_game()` saves the current game and starts the new one in a new slot. With
+  five, `request_new_game()` opens the list (`SavesPanel`, `make_room`) to delete one first. A fresh island that was born
+  by itself and never built on (`is_current_disposable()`) is reused instead of taking a place. The list
+  (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
+  (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
+  recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
 - Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `rank` (RankManager: XP, flag, colour), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
@@ -627,10 +640,17 @@ and Settings closes; accepted). With a board open it does not reload
   `CombatManager.is_save_safe()` is false (fight in play, or a siege-wave report not yet closed). Quitting mid-fight
   replays it from the start. A save made during the Tithe reloads with the Tithe re-demanded (defence or payment)
 - The game starts only once `Main` is ready (GameManager waits for the scene root), so load signals reach the UI.
-  An unreadable save is copied to `user://save_game.corrupt-<date>.json` before a new game replaces it
-- Offline progression: calculates production earned while game closed (max 8h, `max_offline_seconds`; off in Supervivencia)
-- A lost Survival run is written once more with `"result": "defeat"` and then **sealed**: GameManager never writes it
-  again, loading it shows the end screen (only Nueva partida or Salir) and the title menu offers no "Continuar"
+  An unreadable save is copied to `user://partidas/partida_<id>.corrupt-<date>.json` (an old-format one to
+  `.v1-<date>.json`) before a new game replaces it in the same slot
+- Offline progression: production earned while the game was closed waits in the buildings (max 8h,
+  `max_offline_seconds`; off in Supervivencia). There is **no report and no notice** (the "Mientras estuviste fuera"
+  window is gone, 2026-10-12). Internal reloads — the 3D↔2D switch (`switch_to_scene()`) and the language reload
+  (`reload_keeping_game()`) — are not an absence: they set `_skip_offline_once` and apply nothing
+- A lost Survival run is written once more with `"result": "defeat"` and then **sealed** — per game: GameManager never
+  writes that slot again, loading it shows the end screen (only Nueva partida or Salir), the title menu offers no
+  "Continuar" and the list shows it as TERMINADA with Load disabled. The other games are not affected
+- The profile that unlocks Gobernador (`profile_runs_finished`, `profile_campaigns_won` in `settings.cfg`) is global,
+  not per game
 
 ---
 
@@ -834,8 +854,8 @@ Checklist:
    top of what is already there (loading twice without a `reset()` used to double the
    tech bonuses).
 4. Old saves: a missing key means the default, an unknown key is ignored.
-5. A test that writes `user://save_game.json` parks the player's save with
-   `tests/save/save_parking.gd` (`park()` in `before_test()`, `restore()` in
+5. A test that writes a save (`GameManager.save_path()`, the active slot) parks the player's games with
+   `tests/save/save_parking.gd` (the whole `user://partidas/`, the active slot id and a legacy `save_game.json`) (`park()` in `before_test()`, `restore()` in
    `after_test()`) and skips itself in the player's dir: `func before(do_skip := Parking.in_player_dir(),
    skip_reason := ...)`. A test that writes `settings.cfg` uses
    `tests/save/settings_parking.gd` (byte-for-byte copy and restore). `save_parking`

@@ -1,12 +1,13 @@
 extends GdUnitTestSuite
 ## El menu principal: sale sobre la partida con el arbol en pausa, ofrece
-## "Continuar" solo cuando hay algo que continuar, pide confirmacion antes de
-## borrar una partida y presta el panel de Ajustes sin que la pausa lo congele.
+## "Continuar" solo cuando hay algo que continuar, abre el selector de modo y la
+## lista de partidas y presta el panel de Ajustes sin que la pausa lo congele.
 ##
 ## Todo lo que pausa el arbol se deshace en el mismo test, sin esperar frames:
 ## con el arbol en pausa el propio runner de gdUnit se pararia.
 
 const NewGameDialogScript := preload("res://scripts/ui/NewGameDialog.gd")
+const SavesPanelScript := preload("res://scripts/ui/SavesPanel.gd")
 
 var _loaded_saved := false
 
@@ -19,7 +20,7 @@ func after_test() -> void:
 	GameManager.loaded_from_save = _loaded_saved
 	load("res://scripts/ui/TitleMenu.gd").set_dismissed_for_tests(false)
 	for child in GameManager.get_children():
-		if child.get_script() == NewGameDialogScript:
+		if child.get_script() == NewGameDialogScript or child.get_script() == SavesPanelScript:
 			child.queue_free()
 
 func _menu() -> CanvasLayer:
@@ -82,19 +83,8 @@ func test_continue_is_offered_after_loading_a_save() -> void:
 	menu.close_menu()
 	assert_bool(offered).is_true()
 
-func test_a_brand_new_island_picks_a_mode_without_asking() -> void:
-	# No habia partida: la nueva ya esta montada detras, no hay nada que borrar.
-	# Se elige el modo, pero sin el paso de "se borrara tu partida".
-	var menu := _menu()
-	GameManager.loaded_from_save = false
-	menu.open_menu()
-	menu._on_new_game()
-	var dialogs := _dialogs()
-	menu.close_menu()
-	assert_int(dialogs.size()).is_equal(1)
-	assert_bool(dialogs[0]._ask_confirm).is_false()
-
-func test_new_game_over_a_save_asks_for_confirmation_first() -> void:
+func test_new_game_opens_the_mode_picker_that_works_paused() -> void:
+	# Nueva partida ya no pregunta "se borrara tu partida": crea otra.
 	var menu := _menu()
 	GameManager.loaded_from_save = true
 	menu.open_menu()
@@ -105,8 +95,20 @@ func test_new_game_over_a_save_asks_for_confirmation_first() -> void:
 	assert_int(dialogs.size()).is_equal(1)
 	# El dialogo tiene que poder pulsarse con el arbol en pausa.
 	assert_int(dialogs[0].process_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
-	assert_bool(dialogs[0]._ask_confirm).is_true()
 	assert_bool(still_open).is_true()
+
+func test_the_saves_entry_opens_the_list_over_the_menu() -> void:
+	var menu := _menu()
+	menu.open_menu()
+	menu._on_saves()
+	var panels: Array = []
+	for child in GameManager.get_children():
+		if child.get_script() == SavesPanelScript and not child.is_queued_for_deletion():
+			panels.append(child)
+	menu.close_menu()
+	assert_int(panels.size()).is_equal(1)
+	assert_int(panels[0].process_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
+	assert_int(panels[0].layer).is_greater(menu.layer)
 
 func test_settings_open_over_the_menu_and_give_it_back_on_close() -> void:
 	var settings: CanvasLayer = auto_free(load("res://scenes/ui/SettingsPanel.tscn").instantiate())
