@@ -1,6 +1,8 @@
 extends CanvasLayer
 ## Full-screen victory overlay shown when HQ reaches max level.
 
+const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
+
 var _backdrop: ColorRect
 
 func _ready() -> void:
@@ -38,6 +40,8 @@ func _show_victory(stats: Dictionary) -> void:
 
 	# Title. Constructor gana sin asedio: su victoria no habla de la Tormenta.
 	var builder: bool = GameMode.capstone_wins()
+	# El pais que gana: su bandera y su nombre encima del titulo.
+	vbox.add_child(ColonyByline.new("section", UITheme.TEXT_BRIGHT, Vector2(72, 48)))
 	var title := UITheme.make_label(Tr.t("LBL_VICTORY_TITLE_BUILDER" if builder else "LBL_VICTORY_TITLE"), "title", UITheme.ACCENT)
 	title.add_theme_font_size_override("font_size", 28)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

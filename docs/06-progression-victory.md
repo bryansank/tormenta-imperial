@@ -106,24 +106,24 @@ Acero · 18 Archigobernador (keys `RANK_TITLE_<n>`, ES and EN).
 
 | Rank | Reward |
 |---|---|
-| 1 | flags `plain`, `band`; colours brass, crimson |
-| 2 | Garden (decoration) |
-| 3 | +1 % production; flag `cross` |
-| 4 | +2 % storage; colour steel |
+| 1 | flag basics: patterns `plain`, `bands_h`, `bands_v`, `halves_h`, `cross`; emblems `none`, `gear`, `anchor`, `wheat`, `hammer`; colours ivory, brass, crimson, steel, moss, soot |
+| 2 | Garden (decoration); emblem `tower` |
+| 3 | +1 % production; pattern `border`; colour sky |
+| 4 | +2 % storage; emblem `star` |
 | 5 | Fountain |
-| 6 | +1 % production; flag `diagonal` |
-| 7 | colour moss |
+| 6 | +1 % production; patterns `diagonal`, `saltire` |
+| 7 | colours copper, red |
 | 8 | Statue; +2 % storage |
-| 9 | +1 % production; flag `gear` |
+| 9 | +1 % production; pattern `quartered`; emblem `wrench` |
 | 10 | +2 houses (limit) |
-| 11 | colour soot |
-| 12 | +1 % production, +2 % storage; flag `chevron` |
-| 13 | +2 statues, +2 fountains (limit) |
-| 14 | colour copper |
-| 15 | +1 % production |
-| 16 | +2 % storage; +1 tower (limit) |
-| 17 | +2 houses (limit) |
-| 18 | +2 % production |
+| 11 | colours grass, slate; emblem `wheel` |
+| 12 | +1 % production, +2 % storage; patterns `canton`, `hoist_triangle` |
+| 13 | +2 statues, +2 fountains (limit); emblem `ship` |
+| 14 | colours terracotta, gold; emblem `cogs` |
+| 15 | +1 % production; pattern `stripes` |
+| 16 | +2 % storage; +1 tower (limit); emblem `sun` |
+| 17 | +2 houses (limit); pattern `waves` |
+| 18 | +2 % production; pattern `checks`; emblem `airship` |
 
 Totals at rank 18: +7 % production, +8 % storage. The basic buildings keep their era
 unlocks (the playable line in docs/22 does not move): the rank only opens
@@ -138,13 +138,61 @@ with `"buildings": [id]`. Sandbox has every rank unlock open.
   +1-3 % bonus only shows on bigger yields (upgraded buildings, techs).
 - **Locks:** `PlacementRules.check_rank()` blocks the purchase ("Necesitas rango N");
   CONSTRUIR draws a padlock and "Rango N" on the card.
-- **Cosmetics:** six procedural flags (`scripts/ui/ColonyFlag.gd`) and six colony
-  colours, picked in ☰ MENÚ → COLONIA → Colonia. The flag flies over the Nucleo
-  (`ColonyFlag3D` / `ColonyFlag2D`) and the colour fills the round "ours" mark on the
-  board tokens (the side is still told by shape). Saved with the game.
-- **Save:** `"rank": {"xp", "flag", "color"}`. A save without it is XP 0 = rank 1.
-  `RankManager.reset()` is called from the three fresh-game paths of GameManager.
-- **Tests:** `tests/economy/test_governor_rank.gd`, `tests/ui/test_rank_panel.gd`.
+- **The country (name and flag):** see "The player's country" below.
+- **Save:** `"rank": {"xp", "colony": {"name", "flag": {"pattern", "emblem", "colors"}}}`.
+  A save without it is XP 0 = rank 1. `RankManager.reset()` is called from the three
+  fresh-game paths of GameManager.
+
+### The player's country (decided 2026-10-12)
+
+The player names the country and builds its flag from pieces. Data in `RankManager`,
+pure helpers in `scripts/services/ColonyIdentity.gd`, drawing in `scripts/ui/ColonyFlag.gd`.
+
+- **Recipe:** `{"pattern": id, "emblem": id, "colors": [field 1, field 2, emblem]}`, ids
+  from `GameConfig.COLONY_PATTERNS` (14: plain, band, vertical band, two halves, Nordic
+  cross, border, diagonal, saltire, quartered, canton, hoist triangle, stripes, waves,
+  checkered), `COLONY_EMBLEMS` (none + 12: gear, anchor, wheat, hammer, tower, 8-point
+  star, wrench, helm, steamer, cogwheels, sun, airship) and `colony_colors` (13: the six
+  old colony colours + ivory, sky, red, grass, slate, terracotta, gold from ToyPalette).
+  All own geometry drawn by code: nothing from other games, no real state, party or
+  ideology symbols. What each rank opens is the table above (`patterns` / `emblems` /
+  `colors` keys of `rank_rewards`); Sandbox has everything open.
+- **Always readable:** two field colours must differ (`fields_distinct`: WCAG contrast
+  ≥ 1.35 or hues ≥ 0.16 apart), the emblem must reach contrast 1.9 against what lies
+  under it (`emblem_legible`, per pattern `on`), and gets a 1 px outline of the opposite
+  tone. `fix_spec()` repairs a recipe (deterministic, idempotent); the editor greys out
+  colours that would fail.
+- **Name:** up to `COLONY_NAME_MAX` (26) characters, cleaned (`clean_name`). "Al azar"
+  makes "<form> de <place>" or the place alone, ES and EN lists in ColonyIdentity
+  ("República de Puerto Hierro", "Liga de Vaporia", "Duchy of Sootmoor"). A short ES/EN
+  word filter (base64 in the code, substring and whole-word lists, accents and leet
+  normalised, repeated letters squeezed) rejects rude names; the editor just says
+  "Prueba otro nombre".
+- **API:** `RankManager.get_colony_name()`, `get_flag_spec()`, `set_colony(name, spec) -> bool`
+  (false if the name fails or a piece is locked; emits `colony_identity_changed` and
+  saves only on change), `queue_colony_for_new_game(name, spec) -> bool` (validated at
+  rank 1, consumed by the next `reset()`), `is_piece_unlocked(kind, id)`,
+  `is_spec_unlocked(spec)`, `piece_rank(kind, id)`. `get_color()` / `get_color_id()` =
+  the first colour (our board tokens). Drawing: `ColonyFlag.texture(spec)` (96x64),
+  `small_texture(spec)` (48x32), `draw_spec(canvas_item, rect, spec)` — all cached per
+  recipe, nothing per frame.
+- **When:** the New Game step (`ColonyIdentityPanel.open("new")`, preset with a random
+  name and flag, rank-1 pieces, "Saltar" accepts the preset) — wired by NewGameDialog —
+  and later ☰ MENÚ → COLONIA → BANDERA Y NOMBRE (`open("edit")`, RankPanel applies it with
+  `set_colony()`).
+- **Where it shows:** the Nucleo and HQ masts (`ColonyFlag3D`: a 6-segment plane with
+  the cached texture and a vertex-shader wave, no wave in low graphics quality, big on
+  the HQ, hangs from the model's `FlagAnchor` Marker3D when the baked model has one,
+  hidden while the HQ is a construction site; `ColonyFlag2D` draws the cached texture),
+  the HUD badge (flag + name; the rank title moved to the tooltip and the card), and
+  `ColonyByline` (small flag + name above the title, so sentences do not grow) on
+  `WarReportScreen`, `AuditDefeatScreen`, `VictoryScreen` and the `BattleScreen` header.
+- **Old saves:** `"colony"` missing → a country rolled from `GridManager.island_seed`
+  (loaded first), stable for that save; an old `"flag"`/`"color"` pair becomes pieces
+  (`COLONY_LEGACY_FLAGS`, e.g. `gear` → plain + gear emblem). A piece above the rank
+  falls back to the default one; a name that fails the filter is re-rolled.
+- **Probe:** `godot --path . -s tools/flag_probe.gd -- --shot-size=1280x800 --profile=tablet`
+  (own `override.cfg`), screenshots and `gallery.png` in `docs/media/dev/flag/`.
 
 ## Player Flow (measured, real timings)
 

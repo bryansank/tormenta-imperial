@@ -83,11 +83,11 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 		for sig in [EventBus.building_placed, EventBus.building_demolished, EventBus.building_moved,
 				EventBus.game_load_completed]:
 			(sig as Signal).connect(_on_map_changed)
-	# La bandera de la colonia (rango del gobernador) sobre el Nucleo.
-	if data.is_core:
+	# La bandera del pais sobre el Nucleo y el Cuartel General.
+	if ColonyFlag2D.flies_over(data):
 		var flag: Node2D = ColonyFlag2D.new()
 		add_child(flag)
-		flag.setup(base_size_px())
+		flag.setup(base_size_px(), self)
 
 func _on_map_changed(_a = null, _b = null) -> void:
 	_lot_dirty = true

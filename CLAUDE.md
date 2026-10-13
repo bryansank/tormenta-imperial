@@ -91,7 +91,7 @@ holds a service's state of its own.
 | 23 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 24 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
 | 25 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size). See `docs/21-interfaz-y-dispositivos.md` |
-| 26 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses), colony flag and colour. See `docs/06-progression-victory.md` §Governor rank |
+| 26 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`, `queue_colony_for_new_game()`). See `docs/06-progression-victory.md` §Governor rank |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -134,7 +134,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
-  +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, title, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (flag/colour)
+  +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, country name, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel)
   +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back
   +-- TitleMenu (CanvasLayer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal
 
@@ -447,13 +447,28 @@ not yet measured with the line probe). Titles `RANK_TITLE_<n>` (Colono, Capataz 
 … Archigobernador). `rank_rewards` gives decorations (Garden 2, Fountain 5, Statue 8),
 extra building slots (`rank_limit_bonus`), small bonuses (`rank_production_bonus`
 +7 % and `rank_storage_bonus` +8 % at rank 18, **assigned**, never added, so loading
-twice is safe) and cosmetics: six procedural flags (`scripts/ui/ColonyFlag.gd`) and six
-colony colours, chosen in ☰ MENÚ → COLONIA → Colonia, shown on the Nucleo
-(`ColonyFlag3D`/`ColonyFlag2D`) and on our board tokens' round mark. The basic
+twice is safe) and flag pieces (`patterns`, `emblems`, `colors`).
+
+**The player's country (2026-10-12):** a name (max `COLONY_NAME_MAX` = 26, "Al azar"
+names like "Liga de Vaporia" in ES/EN, a short ES/EN word filter in
+`scripts/services/ColonyIdentity.gd`) and a flag built from pieces: a recipe
+`{"pattern", "emblem", "colors": [field 1, field 2, emblem]}` drawn by code in
+`scripts/ui/ColonyFlag.gd` (14 patterns, 12 emblems + none, 13 colours from
+`colony_colors` / ToyPalette; `fix_spec()` keeps it readable, cached textures,
+`draw_spec()` for lists). Rank 1 opens 5 patterns, 4 emblems and 6 colours; the
+showier ones come by rank (`rank_rewards`). Picked in the editor
+`scripts/ui/ColonyIdentityPanel.gd` (`open("new"|"edit")`, signals `confirmed` /
+`cancelled`), opened from ☰ MENÚ → COLONIA (RankPanel) and meant for the New Game step
+(`RankManager.queue_colony_for_new_game()` before the reset). Flies on the Nucleo and
+the HQ (`ColonyFlag3D`: small plane + vertex-shader wave, off in low quality; hangs
+from the model's `FlagAnchor` marker when it has one; `ColonyFlag2D`), signs the war
+reports, the audit defeat, the victory and the board header (`ColonyByline`), and its
+first colour fills our board tokens' round mark. Signal `colony_identity_changed`. The basic
 buildings keep their era unlocks. Locks go through `PlacementRules.check_rank()`; the
 CONSTRUIR card shows a padlock and "Rango N". UI: `RankPanel` (badge in slot
-`rank_badge`, rank-up toast with SFX `rank_up`, the COLONIA card). Saved as `"rank"`;
-a save without it is rank 1. Sandbox has every rank unlock open.
+`rank_badge`, rank-up toast with SFX `rank_up`, the COLONIA card). Saved as `"rank": {"xp", "colony": {"name", "flag"}}`;
+a save without it is rank 1 with a country rolled from `GridManager.island_seed`; an old
+`"flag"`/`"color"` pair is translated to pieces. Sandbox has every rank unlock open.
 
 ### Game Modes — full doc: `docs/20-modos-de-juego.md`
 
@@ -617,7 +632,7 @@ and Settings closes; accepted). With a board open it does not reload
 ### Save/Load System
 
 - Path: `user://save_game.json`
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `rank` (RankManager: XP, flag, colour), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -666,7 +681,7 @@ tormenta-imperial/
 |   |   +-- PlacementRules.gd        # Shared placement rules for 3D and 2D: deposit adjacency, footprint, road network and auto-road, upgrade effects
 |   |   +-- PlacementAssist.gd       # Touch placement (tap aims, tap ghost/✓ builds), valid-spot highlight — docs/21 §9
 |   |   +-- BuildingStatusBadge.gd   # Worker pictogram / "Zzz" + why a building is stopped (3D)
-|   |   +-- ColonyFlag3D.gd          # The colony flag on a pole over the Nucleo (governor rank cosmetics)
+|   |   +-- ColonyFlag3D.gd          # The country flag on the Nucleo and HQ masts (shader wave, FlagAnchor)
 |   |   +-- BuildingLook.gd          # Rule (both views): construction phase / upgrade / ruin / active / idle; site style per type + seeded layout per instance
 |   |   +-- BuildingLookVisual.gd    # Applies it in 3D (child "LookVisual"); BuildingPlacer syncs it with one map-wide clock
 |   |   +-- BuildingFx.gd            # Generated smoke/dust/glow/sparks sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D
@@ -697,6 +712,7 @@ tormenta-imperial/
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
+|   |   +-- ColonyIdentity.gd        # Static: country flag pieces by rank, random names/flags, word filter
 |   |   +-- FloatingText.gd          # Static utility: animated 3D text labels
 |   +-- ui/                          # 45 scripts: one per panel, plus
 |   |   +-- UITheme.gd               # Static dieselpunk theme: tokens, fonts, styleboxes, unit icons
@@ -707,7 +723,8 @@ tormenta-imperial/
 |   |   +-- BattleScreen.gd, SkirmishPanel.gd, WarReportScreen.gd, AuditWaveBanner.gd, AuditDefeatScreen.gd
 |   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd, TouchTooltip.gd
 |   |   +-- HelperPanel.gd, HelpCallout.gd, HelpCatalog.gd, HelpTargets.gd, HelpIndexPanel.gd
-|   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the procedural colony flags
+|   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the flag drawn from pieces
+|   |   +-- ColonyIdentityPanel.gd, ColonyByline.gd  # Country name + flag editor; flag + name line on reports
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
 |   |   +-- OnScreenControls.gd, ProcessActionsPanel.gd, ProgressPanel.gd, ResourceHUD.gd, VictoryScreen.gd
@@ -876,7 +893,7 @@ All balance values live in `GameConfig.gd`:
 - `resource_colors` - display colors for floating text
 - `unit_types` / `army_base_capacity` / `army_capacity_per_barracks` / `army_upkeep_interval` - army
 - `tech_definitions` + `tech_*` bonuses - tech tree
-- `rank_xp_sources` / `rank_xp_thresholds` / `rank_rewards` / `colony_colors` - governor rank (XP, curve, unlocks, bonuses, cosmetics)
+- `rank_xp_sources` / `rank_xp_thresholds` / `rank_rewards` / `colony_colors` / `COLONY_PATTERNS` / `COLONY_EMBLEMS` - governor rank (XP, curve, unlocks, bonuses, flag pieces)
 - `audio_*_volume` / `audio_music_fade` / `audio_sfx_voices` - audio
 - `phase_triggers` / `early_*` - onboarding phase pacing
 - `combat_*` - board, deploy cap, unit combat stats, enemy/risk scaling, map shape,

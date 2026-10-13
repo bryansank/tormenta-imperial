@@ -356,10 +356,12 @@ signal governor_xp_changed(xp: int, rank: int, gained: int)
 ## rango alcanzado en este salto (un hito gordo puede saltar dos).
 @warning_ignore("unused_signal")
 signal governor_rank_up(rank: int, rewards: Dictionary)
-## El jugador eligio otra bandera o color (☰ MENU > COLONIA). El Nucleo y las
-## fichas propias del tablero se repintan al oirla.
+## El pais cambio de nombre o de bandera (☰ MENU > COLONIA, el paso de Nueva
+## partida o una carga). `flag_spec` es la receta de ColonyFlag:
+## {"pattern", "emblem", "colors": [fondo 1, fondo 2, emblema]}. Los mastiles
+## del Nucleo y del Cuartel General, la insignia y los partes se repintan al oirla.
 @warning_ignore("unused_signal")
-signal colony_cosmetics_changed(flag_id: String, color_id: String)
+signal colony_identity_changed(colony_name: String, flag_spec: Dictionary)
 
 # ── prologo-ayudas ──
 ## El tutorial guiado cambio de paso (TutorialManager.GUIDE_STEPS). "" = ninguno
