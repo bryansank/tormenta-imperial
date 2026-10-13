@@ -17,8 +17,15 @@ extends CanvasModulate
 const StormSkyScript := preload("res://scripts/map/StormSky.gd")
 const StormCycleScript := preload("res://scripts/storm/StormCycle.gd")
 
-## El tono al que tiende el mapa con la tormenta encima (ceniza de hierro).
-const ASH_TINT := Color(0.46, 0.40, 0.35)
+## El tono al que tiende el mapa con la tormenta encima: ceniza CALIDA, sepia
+## tirando a oxido (como el cielo y la luz de StormSky en 3D), no un gris frio:
+## la maqueta se apaga pero sigue pareciendo de juguete (2026-10-12).
+const ASH_TINT := Color(0.56, 0.43, 0.34)
+## Con el Aviso el mapa se calienta un poco antes de apagarse (luz de tormenta).
+const WARN_TINT := Color(0.98, 0.86, 0.70)
+## Particulas de ceniza por perfil de dispositivo (la 2D es la vista de los
+## equipos flojos: menos en tableta y movil).
+const ASH_AMOUNT := {"pc": 180, "tablet": 120, "phone": 80}
 
 var _weight := 0.0
 var _ash: CPUParticles2D = null
@@ -32,7 +39,7 @@ func _ready() -> void:
 	add_child(_ash_layer)
 	_ash = CPUParticles2D.new()
 	_ash.name = "Ash"
-	_ash.amount = 220
+	_ash.amount = int(ASH_AMOUNT.get(DeviceProfile.current(), 180))
 	_ash.lifetime = 6.0
 	_ash.preprocess = 6.0
 	_ash.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
@@ -43,7 +50,7 @@ func _ready() -> void:
 	_ash.initial_velocity_max = 110.0
 	_ash.scale_amount_min = 2.0
 	_ash.scale_amount_max = 4.5
-	_ash.color = Color(0.78, 0.75, 0.70, 0.8)
+	_ash.color = Color(0.86, 0.76, 0.66, 0.8)
 	_ash.emitting = false
 	_ash_layer.add_child(_ash)
 
@@ -60,6 +67,15 @@ static func target_weight(phase: int, severity: int, halted: bool) -> float:
 			return clampf(float(severity) / float(maxi(1, GameConfig.storm_severity_max)), 0.6, 1.0)
 	return 0.0
 
+## El color del CanvasModulate para un peso de oscuridad: primero se calienta
+## (el Aviso), despues se apaga hacia la ceniza calida.
+static func tint_for(weight: float) -> Color:
+	var w := clampf(weight, 0.0, 1.0)
+	var warn := StormSkyScript.WEIGHT_WARNING
+	if w <= warn:
+		return Color.WHITE.lerp(WARN_TINT, w / warn)
+	return WARN_TINT.lerp(ASH_TINT, (w - warn) / (1.0 - warn))
+
 func current_weight() -> float:
 	return _weight
 
@@ -72,7 +88,9 @@ func _process(delta: float) -> void:
 	_weight = move_toward(_weight, target, delta / fade)
 	if forced_weight >= 0.0:
 		_weight = forced_weight
-	color = Color.WHITE.lerp(ASH_TINT, _weight)
+	color = tint_for(_weight)
+	if not _ash.emitting and _weight <= 0.0:
+		return
 	var vp := get_viewport().get_visible_rect().size
 	# Emite desde toda la pantalla (y un poco por encima): la ceniza aparece
 	# repartida en el acto, no como una cortina que baja desde el borde.
