@@ -185,10 +185,14 @@ func test_a_click_on_free_ground_buys_and_places_the_building() -> void:
 ## Las decoraciones (y los caminos) si se ponen en serie.
 func test_a_decoration_keeps_the_next_one_in_hand() -> void:
 	_rich()
+	# El jardin se desbloquea con el rango 2 (rank_rewards): sin rango, candado.
+	var saved_rank: Dictionary = RankManager.get_save_data()
+	RankManager.load_save_data({"xp": 100000})
 	EventBus.building_selected_for_placement.emit(_data("garden"))
 	assert_object(_placer.try_place(Vector2i(6, 6))).is_not_null()
 	assert_bool(_placer.is_idle()).is_false()
 	assert_object(_placer.try_place(Vector2i(8, 6))).is_not_null()
+	RankManager.load_save_data(saved_rank)
 
 func test_only_series_buildings_keep_placing() -> void:
 	assert_bool(Rules.keeps_placing(_data("garden"))).is_true()
