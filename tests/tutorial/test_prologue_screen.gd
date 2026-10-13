@@ -24,7 +24,8 @@ func test_it_opens_at_the_first_folio_on_top_of_everything() -> void:
 	var s := _screen()
 	assert_bool(s.is_open()).is_true()
 	assert_int(s.current_page()).is_equal(0)
-	assert_int(s.page_count()).is_equal(3)
+	# Cuatro folios: la firma, la Tormenta, quienes somos y la hoja final.
+	assert_int(s.page_count()).is_equal(4)
 	# Encima del menu de pausa y del principal (capa 30).
 	assert_int(s.layer).is_greater(30)
 
@@ -35,7 +36,7 @@ func test_back_is_disabled_on_the_first_folio_and_does_nothing() -> void:
 	assert_int(s.current_page()).is_equal(0)
 
 func test_next_twice_then_back_lands_on_folio_two() -> void:
-	# El caso de docs/07 bug 2 (Siguiente + Atras vuelve un folio), con los tres
+	# El caso de docs/07 bug 2 (Siguiente + Atras vuelve un folio), con los
 	# folios de ahora: Siguiente x2 + Atras -> folio 2 (indice 1).
 	var s := _screen()
 	for i in 2:
@@ -88,10 +89,11 @@ func test_a_short_or_vertical_drag_is_not_a_swipe() -> void:
 func test_a_swipe_never_closes_it_on_the_last_folio() -> void:
 	# Cerrar es una decision (Empezar / Saltar), no un gesto que se escapa.
 	var s := _screen()
-	s.go_to_page(2)
+	var last: int = s.page_count() - 1
+	s.go_to_page(last)
 	s.handle_swipe(Vector2(-300, 0))
 	assert_bool(s.is_open()).is_true()
-	assert_int(s.current_page()).is_equal(2)
+	assert_int(s.current_page()).is_equal(last)
 
 func test_it_pauses_the_game_and_gives_the_pause_back() -> void:
 	get_tree().paused = false
@@ -142,3 +144,47 @@ func test_it_does_not_look_like_the_tutorial() -> void:
 	var body: Label = s.find_child("Body", true, false)
 	assert_object(body.get_theme_font("font")).is_equal(UITheme.typewriter_font())
 	assert_that(body.get_theme_color("font_color")).is_equal(UITheme.INK)
+
+# ── La hoja final (2026-10-04) ───────────────────────────────────────
+
+func test_the_last_folio_before_playing_is_the_plan() -> void:
+	# Construir desde cero, economia, soldados, pelear contra el Imperio. Es la
+	# ultima del prologo completo y su boton es Empezar.
+	var s := _screen()
+	s.go_to_page(s.page_count() - 1)
+	assert_str(s.title_text()).is_equal(Tr.t("PRO_4_TITLE"))
+	assert_str(s.next_button().text).contains(Tr.t("BTN_PROLOGUE_START"))
+	assert_bool(s.skip_button().visible).is_true()
+
+func test_the_last_folio_says_the_plan_in_plain_words_in_both_languages() -> void:
+	var saved := Tr.get_locale()
+	var words := {"es": ["cero", "economía", "soldados", "Imperio", "opriman"],
+		"en": ["scratch", "economy", "soldiers", "Empire", "oppresses"]}
+	for loc in ["es", "en"]:
+		Tr.set_locale(loc)
+		var body := Tr.t("PRO_4_BODY")
+		for w in words[loc]:
+			assert_str(body).contains(w)
+		# Sin instrucciones de botones: eso es del tutorial.
+		for b in ["CONSTRUIR", "BUILD", "clic", "click", "Toca", "Tap", "☰"]:
+			assert_str(body).not_contains(b)
+		# 4-6 lineas de hoja: dos parrafos cortos, frases de 15 palabras o menos.
+		assert_int(body.split("\n\n").size()).is_equal(2)
+		for sentence in body.replace("\n", " ").split(".", false):
+			assert_int(sentence.strip_edges().split(" ", false).size()).is_less_equal(15)
+		assert_int(Tr.t("PRO_4_NOTE").split(" ", false).size()).is_less_equal(12)
+	Tr.set_locale(saved)
+
+func test_the_last_folio_turns_with_keys_and_swipes_like_the_others() -> void:
+	var s := _screen()
+	var last: int = s.page_count() - 1
+	s.go_to_page(last - 1)
+	var key := InputEventKey.new()
+	key.pressed = true
+	key.keycode = KEY_RIGHT
+	s._input(key)
+	assert_int(s.current_page()).is_equal(last)
+	assert_bool(s.handle_swipe(Vector2(220, 0))).is_true()
+	assert_int(s.current_page()).is_equal(last - 1)
+	assert_bool(s.handle_swipe(Vector2(-220, 0))).is_true()
+	assert_int(s.current_page()).is_equal(last)

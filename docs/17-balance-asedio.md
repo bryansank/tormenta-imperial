@@ -81,6 +81,37 @@ Lo que dice esta tabla, que es lo que se buscaba:
 - **La infantería sola no llega.** Seis infantes pierden siempre. Para el final
   hacen falta blindados, y eso es una afirmación de diseño, no un accidente.
 
+## Gobernador
+
+En el nivel Gobernador de la Campaña (docs/20 §1b) cada oleada lleva además
+`audit_enemy_mult` (`GameConfig.game_tier_rules.governor`) sobre su escala.
+Objetivo: con la guarnición máxima el asedio sigue siendo ganable **≥ 60 %**.
+Medido el 2026-10-04 con 200 semillas, era 3, moral 100, 2 torres:
+
+| Guarnición | Colono (×1,00) | **Gobernador ×1,06** | ×1,10 |
+|---|---|---|---|
+| 3 infantería (mínima) | 0,0 % | 0,0 % | 0,0 % |
+| 3 vehículos | 6,0 % | 0,0 % | 0,0 % |
+| 4 vehículos | 33,5 % | 33,5 % | 33,5 % |
+| 5 vehículos | 65,0 % | **43,0 %** | 33,5 % |
+| 6 infantería | 0,0 % | 0,0 % | 0,0 % |
+| Mixta 3+2+1 | 29,0 % | 0,0 % | 0,0 % |
+| Mixta 2+2+2 | 33,5 % | 29,0 % | 15,0 % |
+| **6 vehículos (máxima)** | 82,0 % | **68,0 %** (2,46 vivos; 3,63 al ganar) | 68,0 % |
+
+Se queda **×1,06**: la máxima gana 68 % (≥ 60 %), cinco vehículos bajan de 65 %
+a 43 % (en Gobernador hay que llegar con el ejército entero) y las mixtas
+siguen teniendo opciones. Con ×1,10 la máxima no se mueve (el combate es
+determinista y salta a escalones), pero las mixtas y los cinco vehículos se
+hunden: más castigo sin ganar nada. Duración igual (~21 min con la máxima).
+
+```
+godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --tier=governor
+godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --tier=governor --audit_mult=1.10
+```
+
+(Con un `override.cfg` propio en la raíz, como toda sonda; bórralo al terminar.)
+
 ## Advertencias
 
 - **La medición es un suelo pesimista.** La juega `AutoResolver` con

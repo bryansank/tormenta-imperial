@@ -19,7 +19,7 @@ var _saved_crops: Dictionary = {}
 var _saved_population: Dictionary = {}
 var _saved_warehouses := 0
 var _saved_era := 1
-var _saved_spoil: Variant = null
+var _saved_tier: int = 0
 var _saved_tech_bonus := 0.0
 var _saved_reduction := 0.0
 var _nodes: Array = []
@@ -49,7 +49,7 @@ func before_test() -> void:
 	PopulationManager.load_save_data({"population": 10, "morale": 50})
 	PopulationManager._max_population = 10
 	PopulationManager._population = 10
-	_saved_spoil = GameConfig.game_mode_rules["campaign"].get("spoilage", false)
+	_saved_tier = GameMode.tier
 	_saved_tech_bonus = GameConfig.tech_production_bonus
 	GameConfig.tech_production_bonus = 0.0
 	_saved_reduction = GameConfig.tech_consumption_reduction
@@ -70,7 +70,7 @@ func after_test() -> void:
 	ResourceManager.set_era(_saved_era)
 	ResourceManager.set_amounts(_saved_resources)
 	PopulationManager.load_save_data(_saved_population)
-	GameConfig.game_mode_rules["campaign"]["spoilage"] = _saved_spoil
+	GameMode.tier = _saved_tier
 	GameConfig.tech_production_bonus = _saved_tech_bonus
 	GameConfig.tech_consumption_reduction = _saved_reduction
 
@@ -328,17 +328,21 @@ func test_a_workshop_process_that_does_not_fit_stays_in_its_building() -> void:
 # ══════════════════════════════════════════════════════════════════════
 
 func test_spoilage_is_off_by_default() -> void:
+	# Colono (el nivel de siempre) no estropea; Gobernador si.
+	GameMode.tier = GameMode.Tier.COLONIST
 	assert_bool(GameMode.spoilage_enabled()).is_false()
+	GameMode.tier = GameMode.Tier.GOVERNOR
+	assert_bool(GameMode.spoilage_enabled()).is_true()
 
 func test_without_spoilage_nothing_goes_bad_however_long() -> void:
-	GameConfig.game_mode_rules["campaign"]["spoilage"] = false
+	GameMode.tier = GameMode.Tier.COLONIST
 	var farm := _producer(_farm)
 	ProductionManager._add_to_stock(farm, {"food": 100})
 	ProductionManager._tick_spoilage(GameConfig.spoil_after_seconds * 3.0)
 	assert_dict(ProductionManager.get_stock(farm)).is_equal({"food": 100})
 
 func test_with_spoilage_half_is_lost_after_two_hours() -> void:
-	GameConfig.game_mode_rules["campaign"]["spoilage"] = true
+	GameMode.tier = GameMode.Tier.GOVERNOR  # se estropea solo en Gobernador
 	assert_float(GameConfig.spoil_after_seconds).is_equal(7200.0)
 	var farm := _producer(_farm)
 	ProductionManager._add_to_stock(farm, {"food": 100})
@@ -355,7 +359,7 @@ func test_with_spoilage_half_is_lost_after_two_hours() -> void:
 	assert_float(ProductionManager.get_stock_age(farm)).is_equal(0.0)
 
 func test_collecting_resets_the_spoil_clock() -> void:
-	GameConfig.game_mode_rules["campaign"]["spoilage"] = true
+	GameMode.tier = GameMode.Tier.GOVERNOR  # se estropea solo en Gobernador
 	ResourceManager.set_amounts({"gold": ResourceManager.get_storage_cap() - 10})
 	var farm := _producer(_farm)
 	ProductionManager._add_to_stock(farm, {"food": 60})

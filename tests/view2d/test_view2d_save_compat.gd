@@ -235,3 +235,34 @@ func test_the_warehouse_counts_toward_storage_in_the_2d_view() -> void:
 	_write_seed()
 	_open_view(true)
 	assert_int(ResourceManager.get_warehouse_count()).is_equal(1)
+
+## La obra de una instancia (docs/03, "Obra por edificio") sale de su celda de
+## origen: la misma en 3D, tras guardar, en 2D y de vuelta en 3D.
+func test_a_construction_site_looks_the_same_after_saving_and_in_both_views() -> void:
+	const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
+	var cell := Vector2i(26, 20)
+	var expected := LookRule.site_seed("foundry", cell)
+	_write_seed()
+	_open_view(false)
+	var node3d: Node = GridManager.get_building_at(cell)
+	var look: Node = node3d.get_node("LookVisual")
+	look.sync()
+	assert_int(look.get_look()).is_equal(LookRule.Look.CONSTRUCTION)
+	assert_int(int(look.get_site().get_meta("site_seed"))).is_equal(expected)
+	GameManager.save_game()
+	_close_view()
+
+	_open_view(true)
+	var node2d: Node = GridManager.get_building_at(cell)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_int(node2d.get_site_seed()).is_equal(expected)
+	assert_object(node2d.get_site_fx()).is_not_null()
+	GameManager.save_game()
+	_close_view()
+
+	_open_view(false)
+	var again: Node = GridManager.get_building_at(cell)
+	var look2: Node = again.get_node("LookVisual")
+	look2.sync()
+	assert_int(int(look2.get_site().get_meta("site_seed"))).is_equal(expected)

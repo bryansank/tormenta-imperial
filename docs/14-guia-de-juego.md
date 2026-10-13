@@ -90,7 +90,10 @@ tu gente se la llama **trabajadores**.
 
 **Cuántos hay.** Empiezas con 5. Crecen solos si hay sitio en las viviendas y la moral
 está por encima de 30. Cada vivienda da sitio a 6 (9 y 12 si la mejoras); el Núcleo, a
-5. El HUD lo dice así: "Trabajadores: 12 de 17" y "En su puesto: 8 · libres: 4".
+5. En el HUD, el icono del obrero junto a los recursos dice cuántos tienes **libres**
+para el siguiente edificio (cambia al color de aviso si algún edificio se ha quedado sin gente); al
+pasar el ratón, o tocándolo, ves cuántos viven en la isla, el sitio que hay y cuántos
+trabajan. Cuando la Tormenta ya acecha, al lado aparece la moral, con un corazón.
 
 **En su puesto.** Casi todo edificio que produce necesita gente. Si no hay
 trabajadores libres, **el edificio se queda parado** y te lo avisa con un cartel encima.

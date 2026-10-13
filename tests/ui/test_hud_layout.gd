@@ -85,12 +85,12 @@ func test_hiding_wraps_the_panel_and_leaves_its_own_visibility_alone() -> void:
 	assert_bool(panel.is_visible_in_tree()).is_true()
 
 func test_a_panel_that_hides_itself_stays_hidden_when_the_hud_shows_it() -> void:
-	# La poblacion se esconde sola hasta la fase de asentamiento: mostrarla
-	# desde Ajustes no la adelanta.
-	var panel := _place("NotificationPanel.status", 2, true)
+	# La Tormenta se esconde sola en calma: mostrarla desde Ajustes no la
+	# adelanta.
+	var panel := _place("StormHUD", 2, true)
 	panel.visible = false
-	HudRegistry.set_hidden("NotificationPanel.status", true)
-	HudRegistry.set_hidden("NotificationPanel.status", false)
+	HudRegistry.set_hidden("StormHUD", true)
+	HudRegistry.set_hidden("StormHUD", false)
 	assert_bool(panel.visible).is_false()
 
 func test_hidden_state_survives_a_save_and_a_load() -> void:
@@ -100,8 +100,8 @@ func test_hidden_state_survives_a_save_and_a_load() -> void:
 	assert_bool(HudRegistry.is_hidden("StormHUD")).is_true()
 
 func test_a_new_panel_registered_later_starts_hidden_if_the_player_hid_it() -> void:
-	GameConfig.ui_hud_hidden = ["NotificationPanel.objective"]
-	var panel := _place("NotificationPanel.objective", 1, true)
+	GameConfig.ui_hud_hidden = ["StormHUD"]
+	var panel := _place("StormHUD", 1, true)
 	assert_bool(panel.is_visible_in_tree()).is_false()
 
 func test_the_help_entry_is_the_ayuda_switch() -> void:
@@ -123,7 +123,7 @@ func test_non_hideable_entries_cannot_be_hidden() -> void:
 func test_hiding_the_panel_above_compacts_the_column() -> void:
 	UILayoutManager._viewport_size = Vector2(1280, 720)
 	var resources := _place("ResourceHUD", 3, true)
-	var status := _place("NotificationPanel.status", 2)
+	var status := _place("NotificationPanel.log", 2)
 	await _settle()
 	var stacked_top := _rect(status).position.y
 	HudRegistry.set_hidden("ResourceHUD", true)
@@ -163,8 +163,8 @@ func test_offsets_are_saved_per_profile_and_aspect() -> void:
 
 func test_a_moved_panel_never_leaves_the_screen() -> void:
 	UILayoutManager._viewport_size = Vector2(1280, 720)
-	var panel := _place("NotificationPanel.objective", 2)
-	UILayoutManager.set_user_offset("NotificationPanel.objective", Vector2(5000, 5000))
+	var panel := _place("StormHUD", 2)
+	UILayoutManager.set_user_offset("StormHUD", Vector2(5000, 5000))
 	await _settle()
 	var r := _rect(panel)
 	assert_float(r.end.x).is_less_equal(1280.0 - UILayoutManager.EDGE_MARGIN + 0.5)
@@ -174,7 +174,7 @@ func test_a_moved_panel_never_leaves_the_screen() -> void:
 func test_moving_a_panel_out_of_its_column_lets_the_next_one_move_up() -> void:
 	UILayoutManager._viewport_size = Vector2(1280, 720)
 	var resources := _place("ResourceHUD", 3)
-	var status := _place("NotificationPanel.status", 2)
+	var status := _place("NotificationPanel.log", 2)
 	await _settle()
 	UILayoutManager.set_user_offset("ResourceHUD", Vector2(400, 300))
 	await _settle()
@@ -211,23 +211,23 @@ func test_the_editor_frames_the_movable_panels_and_drags_them() -> void:
 	UILayoutManager._viewport_size = Vector2(1280, 720)
 	var scene: Node = auto_free(Node.new())
 	add_child(scene)
-	var panel := _place("NotificationPanel.objective", 1)
+	var panel := _place("StormHUD", 1)
 	await _settle()
 	var editor: CanvasLayer = auto_free(LayoutEditor.new())
 	scene.add_child(editor)
 	await _settle()
-	var frame: Control = editor.frame_of("NotificationPanel.objective")
+	var frame: Control = editor.frame_of("StormHUD")
 	assert_object(frame).is_not_null()
 	assert_bool(frame.visible).is_true()
 	assert_vector(frame.global_position).is_equal_approx(_rect(panel).position, Vector2(1, 1))
 	# Arrastre simulado: pulsar, mover 100 px abajo, soltar.
-	editor._drag_id = "NotificationPanel.objective"
+	editor._drag_id = "StormHUD"
 	editor._drag_mouse0 = Vector2(600, 80)
 	editor._drag_off0 = Vector2.ZERO
 	editor._drag_rect0 = _rect(panel)
 	editor._drag_to(Vector2(600, 180), true)
 	await _settle()
-	var off := UILayoutManager.get_user_offset("NotificationPanel.objective")
+	var off := UILayoutManager.get_user_offset("StormHUD")
 	assert_float(off.y).is_equal_approx(96.0, 8.1)
 	editor.finish()
 
@@ -257,36 +257,35 @@ func test_the_center_column_never_overlaps_the_left_one(width: float, height: fl
 	UILayoutManager._viewport_size = Vector2(width, height)
 	UILayoutManager._reapply_all()
 	var resources := _place("ResourceHUD", 2)
-	var status := _place("NotificationPanel.status", 4)
+	var status := _place("NotificationPanel.log", 4)
 	var storm := _place("StormHUD", 1)
-	var objective := _place("NotificationPanel.objective", 2)
 	await _settle()
 	for left in [resources, status]:
-		for center in [storm, objective]:
+		for center in [storm]:
 			assert_bool(_rect(left).intersects(_rect(center))) \
 				.override_failure_message("%dx%d: %s pisa %s" % [width, height, _rect(left), _rect(center)]).is_false()
-	for c in [resources, status, storm, objective]:
+	for c in [resources, status, storm]:
 		assert_float(_rect(c).end.x).is_less_equal(width)
 	# Y lo centrado no se mete bajo el menu ☰ (176 px a la derecha).
-	for center in [storm, objective]:
+	for center in [storm]:
 		assert_float(_rect(center).end.x).is_less_equal(width - UILayoutConfig.SIDEBAR_BTN_WIDTH - 10.0)
 
 func test_a_4_3_tablet_moves_only_the_column_not_the_build_button() -> void:
 	UILayoutManager._viewport_size = Vector2(1024, 768)
 	assert_bool(UILayoutManager.is_column_narrow()).is_true()
 	assert_bool(UILayoutManager.is_narrow()).is_false()
-	assert_str(String(UILayoutManager.get_slot("storm_banner").get("stack_after", ""))).is_equal("NotificationPanel.status")
+	assert_str(String(UILayoutManager.get_slot("storm_banner").get("stack_after", ""))).is_equal("ResourceHUD")
 	assert_int(int(UILayoutManager.get_slot("bottom_center")["margin"]["bottom"])).is_equal(int(UILayoutConfig.SLOTS["bottom_center"]["margin"]["bottom"]))
 
 func test_a_help_tip_follows_the_panel_it_explains() -> void:
 	UILayoutManager._viewport_size = Vector2(1280, 720)
-	var objective := _place("NotificationPanel.objective", 1)
-	var tip := _place("HelperPanel.tip_objective", 1)
+	var log_panel := _place("NotificationPanel.log", 1)
+	var tip := _place("HelperPanel.tip_resources", 1)
 	await _settle()
-	UILayoutManager.set_user_offset("NotificationPanel.objective", Vector2(0, 320))
+	UILayoutManager.set_user_offset("NotificationPanel.log", Vector2(300, 320))
 	await _settle()
-	assert_float(_rect(tip).position.y).is_greater_equal(_rect(objective).end.y)
-	assert_float(_rect(tip).position.y - _rect(objective).end.y).is_less_equal(9.0)
+	assert_float(_rect(tip).position.y).is_greater_equal(_rect(log_panel).end.y)
+	assert_float(_rect(tip).position.y - _rect(log_panel).end.y).is_less_equal(9.0)
 
 func test_toasts_are_capped_so_they_do_not_climb_over_the_column() -> void:
 	var panel: CanvasLayer = auto_free(load("res://scenes/ui/NotificationPanel.tscn").instantiate())
@@ -314,9 +313,8 @@ func test_four_resources_push_the_pause_and_the_center_column_aside(width: float
 	UILayoutManager._reapply_all()
 	var hud: CanvasLayer = auto_free(load("res://scenes/ui/ResourceHUD.tscn").instantiate())
 	add_child(hud)
-	var status := _place("NotificationPanel.status", 4)
+	var status := _place("NotificationPanel.log", 4)
 	var storm := _place("StormHUD", 1)
-	var objective := _place("NotificationPanel.objective", 2)
 	var menu: CanvasLayer = auto_free(load("res://scenes/ui/PauseMenu.tscn").instantiate())
 	add_child(menu)
 	await _settle()
@@ -330,7 +328,7 @@ func test_four_resources_push_the_pause_and_the_center_column_aside(width: float
 	# El boton del menu (antes la pausa II junto a los recursos) va anclado a la
 	# esquina superior derecha del viewport REAL, no del lienzo simulado.
 	assert_float(pause_rect.end.x).override_failure_message(tag).is_less_equal(menu.get_viewport().get_visible_rect().size.x)
-	for c in [storm, objective]:
+	for c in [storm]:
 		assert_bool(_rect(c).intersects(pause_rect)).override_failure_message("%s centro=%s" % [tag, _rect(c)]).is_false()
 		assert_bool(_rect(c).intersects(res_rect)).override_failure_message("%s centro=%s" % [tag, _rect(c)]).is_false()
 		assert_bool(_rect(c).intersects(_rect(status))).override_failure_message("%s centro=%s" % [tag, _rect(c)]).is_false()

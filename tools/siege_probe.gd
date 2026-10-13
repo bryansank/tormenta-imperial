@@ -20,6 +20,8 @@ extends SceneTree
 ##   --spw --spe --last --base --per --gun --armour --chance --waves=min,max
 ##                    pisan los `final_audit_*` correspondientes
 ##   --only=etiqueta  una sola configuracion de guarnicion
+##   --tier=governor  juega el asedio en nivel Gobernador (GameMode.Tier)
+##   --audit_mult=F   pisa `game_tier_rules.governor.audit_enemy_mult`
 ##   --detail=1       desglose por longitud de asedio (3, 4 y 5 oleadas)
 ##
 ## Nota: siendo el script de arranque (`-s`) no puede nombrar los autoloads en
@@ -63,6 +65,7 @@ var _morale := 100.0
 var _towers := 2
 var _only := ""
 var _detail := false
+var _tier := "colonist"
 var _pending: Dictionary = {}
 
 func _initialize() -> void:
@@ -75,8 +78,11 @@ func _initialize() -> void:
 	_clock = load("res://tools/balance_probe.gd").new()
 	_parse_args()
 	_apply_overrides()
+	var game_mode: GDScript = load("res://scripts/services/GameMode.gd")
+	game_mode.begin_run(0, game_mode.tier_from_key(_tier))
 	print("=== sonda de asedio ===")
-	print("semillas=%d era=%d moral=%.0f torres=%d" % [_seeds, _era, _morale, _towers])
+	print("semillas=%d era=%d moral=%.0f torres=%d nivel=%s (escala x%.3f)" % [
+		_seeds, _era, _morale, _towers, game_mode.tier_key_of(game_mode.tier), game_mode.audit_enemy_mult()])
 	print("oleadas=%s cuerpos=%d+%d/oleada | escala: oleada=%.3f era=%.3f final=%.3f | canon=1/%d blindado>=%d" % [
 		str(_cfg.final_audit_waves),
 		_cfg.final_audit_base_slots,
@@ -211,6 +217,7 @@ func _parse_args() -> void:
 			"towers": _towers = maxi(0, int(parts[1]))
 			"only": _only = parts[1]
 			"detail": _detail = parts[1] != "0"
+			"tier": _tier = parts[1]
 			_: _pending[parts[0]] = parts[1]
 
 func _apply_overrides() -> void:
@@ -225,6 +232,7 @@ func _apply_overrides() -> void:
 			"gun": _cfg.final_audit_artillery_share = int(value)
 			"armour": _cfg.final_audit_armour_wave = int(value)
 			"chance": _cfg.final_audit_extra_gun_chance = float(value)
+			"audit_mult": _cfg.game_tier_rules["governor"]["audit_enemy_mult"] = float(value)
 			"waves":
 				var pair: PackedStringArray = value.split(",")
 				if pair.size() == 2:

@@ -23,7 +23,8 @@ class_name UILayoutConfig
 ## disposicion), por defecto este slot ocupa su hueco en la columna; con true lo
 ## sigue a donde este (los globos de ayuda, que hablan de ese panel).
 const SLOTS := {
-	## Columna izquierda: recursos -> poblacion/moral -> log.
+	## Columna izquierda: recursos (con obreros y moral en la misma fila) -> log.
+	## La tarjeta de estado de debajo ("status_bar") se quito en 2026-10.
 	"top_left": {
 		"anchor": Rect2(0, 0, 0, 0),
 		"margin": {"left": 10, "top": 8, "right": 0, "bottom": 0},
@@ -31,24 +32,16 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
-	"status_bar": {
-		"anchor": Rect2(0, 0, 0, 0),
-		"margin": {"left": 10, "top": 62, "right": 0, "bottom": 0},
-		"max_size": Vector2(300, 0),
-		"grow_h": Control.GROW_DIRECTION_END,
-		"grow_v": Control.GROW_DIRECTION_END,
-		"stack_after": "ResourceHUD",
-	},
 	"left_panel": {
 		"anchor": Rect2(0, 0, 0, 1),
 		"margin": {"left": 10, "top": 186, "right": 0, "bottom": 10},
 		"max_size": Vector2(354, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
-		"stack_after": "NotificationPanel.status",
+		"stack_after": "ResourceHUD",
 	},
 	## Pestana SANDBOX (solo en ese modo): al pie de la columna izquierda, bajo lo
-	## que haya en ella (poblacion, y la Tormenta y el objetivo cuando bajan a la
+	## que haya en ella (poblacion, y la Tormenta cuando baja a la
 	## izquierda). Se apila tras el globo de los recursos, que a su vez va tras el
 	## registro: oculto cualquiera de los dos, ocupa su sitio. `margin.top` es el
 	## hueco que tenia antes de apilarse, por si ninguno existe.
@@ -61,24 +54,18 @@ const SLOTS := {
 		"stack_after": "HelperPanel.tip_resources",
 		"gap": 8,
 	},
-	## Columna central: fase de la Tormenta -> objetivo.
+	## Columna central: la fase de la Tormenta. La franja de objetivo que iba
+	## debajo ("top_center") se quito el 2026-10-05: el siguiente paso es ¿QUE
+	## HACER?, en el menu ☰.
 	## La Tormenta va ARRIBA: cuando hay ceniza en camino es lo mas importante
 	## de la pantalla y el jugador tiene que leerla sin buscarla. En calma el
-	## indicador se oculta y el objetivo sube a ocupar su sitio.
+	## indicador se oculta.
 	"storm_banner": {
 		"anchor": Rect2(0.5, 0, 0.5, 0),
 		"margin": {"left": 0, "top": 8, "right": 0, "bottom": 0},
 		"max_size": Vector2(380, 0),
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_END,
-	},
-	"top_center": {
-		"anchor": Rect2(0.5, 0, 0.5, 0),
-		"margin": {"left": 0, "top": 62, "right": 0, "bottom": 0},
-		"max_size": Vector2(440, 0),
-		"grow_h": Control.GROW_DIRECTION_BOTH,
-		"grow_v": Control.GROW_DIRECTION_END,
-		"stack_after": "StormHUD",
 	},
 	## Columna derecha: botones del menu lateral -> panel de edificio.
 	"sidebar_buttons": {
@@ -96,6 +83,15 @@ const SLOTS := {
 		"grow_v": Control.GROW_DIRECTION_END,
 		"stack_after": "sidebar_buttons",
 		"gap": 8,
+	},
+	## Insignia del rango del gobernador: a la izquierda del boton "☰ MENU"
+	## (PauseMenu: 118 px + 10 de margen + 10 de hueco), en la misma franja.
+	"rank_badge": {
+		"anchor": Rect2(1, 0, 1, 0),
+		"margin": {"left": 0, "top": 10, "right": 138, "bottom": 0},
+		"max_size": Vector2(200, 0),
+		"grow_h": Control.GROW_DIRECTION_BEGIN,
+		"grow_v": Control.GROW_DIRECTION_END,
 	},
 	"center_modal": {
 		"anchor": Rect2(0.5, 0.5, 0.5, 0.5),
@@ -145,16 +141,8 @@ const SLOTS := {
 		"gap": 8,
 		"follow_moved": true,
 	},
-	"tip_center": {
-		"anchor": Rect2(0.5, 0, 0.5, 0),
-		"margin": {"left": 0, "top": 120, "right": 0, "bottom": 0},
-		"max_size": Vector2(300, 0),
-		"grow_h": Control.GROW_DIRECTION_BOTH,
-		"grow_v": Control.GROW_DIRECTION_END,
-		"stack_after": "NotificationPanel.objective",
-		"gap": 8,
-		"follow_moved": true,
-	},
+	## "tip_center" (el globo bajo la franja de objetivo) se quito con ella el
+	## 2026-10-05: la ayuda del objetivo sale junto al menu ☰ (tip_top_right).
 	## A la izquierda del boton "☰ MENU" (PauseMenu: 118 px + 10 de margen +
 	## 10 de hueco).
 	"tip_top_right": {
@@ -202,24 +190,24 @@ const SLOTS := {
 
 ## Por debajo de este ancho de viewport (movil en vertical, 400x720) la columna
 ## central no cabe entre la izquierda (300 px) y el menu ☰: NARROW_SLOTS la baja
-## a la columna izquierda, que queda recursos -> poblacion -> Tormenta ->
-## objetivo -> registro. UILayoutManager.get_slot() mezcla estos cambios sobre
+## a la columna izquierda, que queda recursos -> Tormenta -> registro. UILayoutManager.get_slot() mezcla estos cambios sobre
 ## SLOTS; lo que no se nombra aqui no cambia.
 const NARROW_WIDTH := 720.0
-## Solo la columna central tiene un umbral mas alto: centrada, el objetivo
-## (440 px) empieza en ancho/2 - 220 y la columna izquierda acaba en 310. Por
+## Solo la columna central tiene un umbral mas alto: centrada, la columna
+## (440 px de referencia) empieza en ancho/2 - 220 y la columna izquierda acaba en 310. Por
 ## debajo de ~1060 px de lienzo se tocan (tablet 4:3: 960x720 o 1002x626 con la
 ## escala de tablet). Entre COLUMN_NARROW_WIDTH y NARROW_WIDTH solo bajan a la
 ## izquierda los slots de COLUMN_SLOTS; CONSTRUIR, avisos y globos no cambian.
 const COLUMN_NARROW_WIDTH := 1080.0
-const COLUMN_SLOTS := ["storm_banner", "top_center", "left_panel"]
-## Media anchura de la columna central (el objetivo, 440 px) y hueco minimo
-## con la izquierda.
+const COLUMN_SLOTS := ["storm_banner", "left_panel"]
+## Media anchura de la columna central y hueco minimo con la izquierda. Se
+## midio con la franja de objetivo (440 px), ya quitada; la Tormenta (380 px)
+## cabe de sobra y se deja asi para no mover los umbrales de las tablets.
 const CENTER_COLUMN_HALF_WIDTH := 220.0
 const COLUMN_GAP := 6.0
 ## Paneles cuyo ancho REAL marca el borde de la columna izquierda, y lo que
 ## ocupa el boton de pausa que va a su derecha (hueco + 44).
-const LEFT_COLUMN_IDS := ["ResourceHUD", "NotificationPanel.status"]
+const LEFT_COLUMN_IDS := ["ResourceHUD"]
 const PAUSE_GAP := 4.0
 ## El boton II de pausa ya no existe (menu unico, arriba a la derecha): la
 ## columna izquierda no reserva nada a su derecha.
@@ -239,16 +227,10 @@ const NARROW_SLOTS := {
 		"anchor": Rect2(0, 0, 0, 0),
 		"margin": {"left": 10, "top": 62, "right": 0, "bottom": 0},
 		"grow_h": Control.GROW_DIRECTION_END,
-		"stack_after": "NotificationPanel.status",
-	},
-	"top_center": {
-		"anchor": Rect2(0, 0, 0, 0),
-		"margin": {"left": 10, "top": 62, "right": 0, "bottom": 0},
-		"max_size": Vector2(380, 0),
-		"grow_h": Control.GROW_DIRECTION_END,
+		"stack_after": "ResourceHUD",
 	},
 	"left_panel": {
-		"stack_after": "NotificationPanel.objective",
+		"stack_after": "StormHUD",
 	},
 	## CONSTRUIR sube por encima de las flechas y del zoom: en 400 px de ancho
 	## los tres no caben en la misma franja de abajo.
@@ -259,6 +241,12 @@ const NARROW_SLOTS := {
 	"toast_area": {
 		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 256},
 	},
+	## La insignia del rango, bajo el boton ☰ MENU (10 + 48 + 6): a su izquierda
+	## chocaria con la columna de recursos.
+	"rank_badge": {
+		"margin": {"left": 0, "top": 64, "right": 10, "bottom": 0},
+		"max_size": Vector2(120, 0),
+	},
 	## El globo del menu ☰ (con la guia de edificios) es el unico que cabe en
 	## una pantalla estrecha: HelperPanel oculta los demas (NARROW_TIPS).
 	"tip_top_right": {
@@ -267,7 +255,7 @@ const NARROW_SLOTS := {
 		# 250 y no 280: a la derecha, en tactil, estan girar/zoom (x >= 272).
 		"max_size": Vector2(250, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
-		"stack_after": "NotificationPanel.objective",
+		"stack_after": "StormHUD",
 		"gap": 8,
 	},
 }
@@ -286,8 +274,6 @@ const SIDEBAR_STACK_REF := "sidebar_buttons"
 ## Panel-to-slot assignment
 const PANEL_SLOTS := {
 	"ResourceHUD":                "top_left",
-	"NotificationPanel.status":   "status_bar",
-	"NotificationPanel.objective":"top_center",
 	"StormHUD":                   "storm_banner",
 	"NotificationPanel.toasts":   "toast_area",
 	"NotificationPanel.log":      "left_panel",
@@ -310,7 +296,8 @@ const PANEL_SLOTS := {
 	"HelperPanel.button":         "sidebar_buttons",
 	"HelperPanel.modal":          "center_modal",
 	"HelperPanel.tip_resources":  "tip_left",
-	"HelperPanel.tip_objective":  "tip_center",
+	## La ayuda del objetivo senala ¿QUE HACER?, que vive en el menu ☰.
+	"HelperPanel.tip_objective":  "tip_top_right",
 	"HelperPanel.tip_menus":      "tip_top_right",
 	"HelperPanel.tip_build":      "tip_bottom_center",
 	"HelperPanel.tip_camera":     "tip_bottom_left",
@@ -323,6 +310,8 @@ const PANEL_SLOTS := {
 	"VictoryScreen":              "full_overlay",
 	"OnScreenControls":           "bottom_controls",
 	"SandboxPanel":               "sandbox_tab",
+	"RankPanel":                  "rank_badge",
+	"RankPanel.modal":            "center_modal",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)
@@ -333,7 +322,8 @@ const PANEL_SIZES := {
 	"ProgressPanel.modal":     Vector2(470, 0),
 	"ArmyPanel.modal":         Vector2(620, 0),
 	"SkirmishPanel.modal":     Vector2(640, 0),
-	"TechTreePanel.modal":     Vector2(860, 0),
+	## 1000: tres ramas y, a su derecha, la ficha de la tecnologia elegida.
+	"TechTreePanel.modal":     Vector2(1000, 0),
 	"ObjectivePanel":          Vector2(640, 560),
 	"SettingsPanel.modal":     Vector2(640, 0),
 	"HelperPanel.modal":       Vector2(700, 600),

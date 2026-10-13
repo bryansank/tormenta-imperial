@@ -2,6 +2,9 @@ extends RefCounted
 ## Los efectos animados de los edificios (humo, serrin, luz que parpadea), en
 ## las dos vistas. Todo original y generado en codigo:
 ##
+## - **Los efectos**: humo, serrin y farol de "trabajando"; humo negro de ruina
+##   (variante "ruin"); y en las obras chispas de soldadura ("sparks") y polvo
+##   ("dust" con la variante "site"), ver SiteFx.
 ## - **La hoja**: 8 fotogramas en rejilla 4x2 (GameConfig.building_fx_*),
 ##   dibujados aqui pixel a pixel y cacheados (una textura por efecto para todo
 ##   el mapa).
@@ -68,9 +71,14 @@ static var _mats2d: Dictionary = {}
 static func tint_for(kind: String, variant: String = "") -> Color:
 	if variant == "ruin":
 		return Color(0.22, 0.2, 0.19, 0.9)
+	if variant == "site":
+		# Polvo de obra: mas gris y menos denso que el serrin del aserradero.
+		return Color(0.74, 0.68, 0.58, 0.7)
 	match kind:
+		"sparks": return Color(1.0, 0.78, 0.35, 1.0)
 		"dust": return Color(0.86, 0.72, 0.5, 0.85)
-		"glow": return Color(1.0, 0.62, 0.18, 0.95)
+		# El farol ya lleva sus colores pintados en la hoja.
+		"glow": return Color(1.0, 1.0, 1.0, 1.0)
 	return Color(0.8, 0.8, 0.78, 0.8)
 
 static func frames() -> int:
@@ -103,6 +111,7 @@ static func sheet_image(kind: String) -> Image:
 		var t := float(i) / float(n)
 		match kind:
 			"glow": _glow_frame(img, origin, i)
+			"sparks": _sparks_frame(img, origin, i, t)
 			"dust": _dust_frame(img, origin, t)
 			_: _smoke_frame(img, origin, t)
 	return img
@@ -124,11 +133,48 @@ static func _dust_frame(img: Image, o: Vector2i, t: float) -> void:
 		var c := Vector2(16, 27) + Vector2(cos(ang), sin(ang)) * ph * 20.0 + Vector2(0, ph * ph * 7.0)
 		_soft_disc(img, o, c, 2.4 + ph * 2.2, 1.0 - ph * 0.85)
 
-## Un brillo redondo cuya fuerza cambia en cada fotograma: parpadeo de llama.
+## Un farol pequeno encendido (arte, 2026-10-05): sombrerete y base de hierro,
+## cristal calido que parpadea un poco y un halo tenue. Sustituye a la bola
+## naranja de antes, que desde la camara parecia un fallo. Pintado en color:
+## su tinte es blanco.
 static func _glow_frame(img: Image, o: Vector2i, i: int) -> void:
-	var flicker := [1.0, 0.72, 0.9, 0.58, 0.96, 0.8, 0.64, 0.88]
+	var flicker := [1.0, 0.82, 0.94, 0.76, 0.98, 0.88, 0.8, 0.92]
 	var k: float = flicker[i % flicker.size()]
-	_soft_disc(img, o, Vector2(16, 16), 9.0 + 4.0 * k, 0.95 * k)
+	var iron := Color(0.17, 0.14, 0.12, 1.0)
+	var lit := Color(1.0, 0.72, 0.28).lerp(Color(1.0, 0.95, 0.62), k)
+	# Halo: muy suave, solo para que el cristal no quede recortado.
+	for y in range(4, 28):
+		for x in range(4, 28):
+			var d := Vector2(x + 0.5, y + 0.5).distance_to(Vector2(16, 15)) / 11.0
+			if d < 1.0:
+				img.set_pixel(o.x + x, o.y + y, Color(1.0, 0.82, 0.45, (1.0 - d) * (1.0 - d) * 0.35 * k))
+	_paint_rect(img, o, 15, 3, 17, 4, iron)       # asa
+	_paint_rect(img, o, 14, 5, 18, 5, iron)       # sombrerete
+	_paint_rect(img, o, 13, 6, 19, 6, iron)
+	_paint_rect(img, o, 12, 7, 20, 8, iron)
+	_paint_rect(img, o, 12, 9, 20, 20, lit)       # cristal
+	_paint_rect(img, o, 12, 9, 12, 20, iron)      # montantes
+	_paint_rect(img, o, 20, 9, 20, 20, iron)
+	_paint_rect(img, o, 16, 9, 16, 20, Color(iron, 0.55))
+	_paint_rect(img, o, 11, 21, 21, 22, iron)     # base
+	_paint_rect(img, o, 14, 23, 18, 24, iron)
+
+static func _paint_rect(img: Image, o: Vector2i, x0: int, y0: int, x1: int, y1: int, c: Color) -> void:
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			img.set_pixel(o.x + x, o.y + y, c)
+
+## Chispas de soldadura: un punto blanco que chisporrotea y motas que saltan
+## en abanico y caen. El fogonazo cambia de fuerza cada fotograma.
+static func _sparks_frame(img: Image, o: Vector2i, i: int, t: float) -> void:
+	var flash := [1.0, 0.55, 0.85, 0.4, 0.95, 0.6, 0.75, 0.5]
+	var k: float = flash[i % flash.size()]
+	_soft_disc(img, o, Vector2(16, 22), 3.0 + 3.0 * k, k)
+	for m in 7:
+		var ph := fposmod(t + float(m) / 7.0, 1.0)
+		var ang := -PI * 0.5 + (float(m) - 3.0) * 0.45
+		var c := Vector2(16, 22) + Vector2(cos(ang), sin(ang)) * ph * 14.0 + Vector2(0, ph * ph * 12.0)
+		_soft_disc(img, o, c, 1.6, 1.0 - ph * 0.7)
 
 ## Disco de borde suave, mezclado por maximo de alfa (las bocanadas se funden).
 static func _soft_disc(img: Image, o: Vector2i, c: Vector2, r: float, alpha: float) -> void:
@@ -146,15 +192,20 @@ static func _soft_disc(img: Image, o: Vector2i, c: Vector2, r: float, alpha: flo
 
 # ── Materiales ────────────────────────────────────────────────────────
 
+## Las chispas se suman (son luz pura); el humo y el farol se mezclan (el farol
+## tiene hierro oscuro, que sumado desapareceria).
+static func _additive(kind: String) -> bool:
+	return kind == "sparks"
+
 static func _blend(kind: String) -> String:
-	return "blend_add" if kind == "glow" else "blend_mix"
+	return "blend_add" if _additive(kind) else "blend_mix"
 
 static func material_3d(kind: String, variant: String = "") -> ShaderMaterial:
 	var key := kind + ":" + variant
 	if _mats3d.has(key):
 		return _mats3d[key]
 	var shader := Shader.new()
-	shader.code = _SPATIAL % [", blend_add" if kind == "glow" else ""]
+	shader.code = _SPATIAL % [", blend_add" if _additive(kind) else ""]
 	var mat := ShaderMaterial.new()
 	mat.shader = shader
 	mat.set_shader_parameter("sheet", sheet(kind))

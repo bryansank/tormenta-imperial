@@ -8,6 +8,11 @@ const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 var _population: int = GameConfig.population_start
 var _max_population: int = GameConfig.population_start
 var _used_workers := 0
+## Derivados en cada recuento, no se guardan: edificios con hueco y sin
+## obreros, y obreros que el jugador retiro a mano. Los lee el icono de obreros
+## del HUD (alerta y tooltip).
+var _understaffed := 0
+var _retired_workers := 0
 
 # ── Morale ──
 var _morale: int = GameConfig.morale_start
@@ -79,6 +84,14 @@ func get_free_workers() -> int:
 
 func get_used_workers() -> int:
 	return _used_workers
+
+## Edificios que piden obreros y no los tienen (paran). Ver _recalculate_all.
+func get_understaffed_count() -> int:
+	return _understaffed
+
+## Obreros que el jugador retiro de sus edificios (quedan libres).
+func get_retired_workers() -> int:
+	return _retired_workers
 
 func get_morale() -> int:
 	return _morale
@@ -228,8 +241,12 @@ func _on_upgrade_completed(_node: Node, _new_level: int) -> void:
 func _recalculate_all() -> void:
 	var old_max := _max_population
 	var old_workers := _used_workers
+	var old_understaffed := _understaffed
+	var old_retired := _retired_workers
 	_max_population = 0
 	_used_workers = 0
+	_understaffed = 0
+	_retired_workers = 0
 	_morale_bonus = 0
 
 	# Sin carretera hasta el Nucleo, un edificio no funciona (2026-09-28): ni
@@ -274,6 +291,8 @@ func _recalculate_all() -> void:
 		# quedan libres para otro edificio.
 		var off: bool = node != null and is_instance_valid(node) and bool(node.get_meta("workers_off", false))
 		if data.workers_required > 0 and (off or not has_vein):
+			if off:
+				_retired_workers += data.workers_required
 			if node and is_instance_valid(node):
 				node.set_meta("staffed", false)
 			continue
@@ -299,6 +318,7 @@ func _recalculate_all() -> void:
 				node.set_meta("staffed", true)
 				_update_worker_visual(node, true)
 		else:
+			_understaffed += 1
 			if node and is_instance_valid(node):
 				node.set_meta("staffed", false)
 				_update_worker_visual(node, false)
@@ -307,7 +327,9 @@ func _recalculate_all() -> void:
 		EventBus.population_changed.emit(_population, _max_population)
 	# Tambien si solo cambio quien esta conectado: los carteles de estado
 	# ("sin carretera") se repintan con esta senal.
-	if _used_workers != old_workers or connection_changed:
+	# Y si cambio cuantos edificios se quedan sin obreros (uno nuevo sin gente
+	# libre no mueve los ocupados): el icono de obreros del HUD se pone en alerta.
+	if _used_workers != old_workers or connection_changed 			or _understaffed != old_understaffed or _retired_workers != old_retired:
 		EventBus.workers_changed.emit(_used_workers, _population)
 
 ## El jugador retira (off = true) o devuelve los trabajadores de un edificio.
@@ -360,6 +382,8 @@ func reset() -> void:
 	_population = GameConfig.population_start
 	_max_population = GameConfig.population_start
 	_used_workers = 0
+	_understaffed = 0
+	_retired_workers = 0
 	_morale = GameConfig.morale_start
 	_morale_bonus = 0
 	_consumption_timer = 0.0

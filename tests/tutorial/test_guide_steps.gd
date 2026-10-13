@@ -71,7 +71,8 @@ func test_a_sawmill_under_construction_waits() -> void:
 	assert_str(TutorialManager.derive_step({"sawmills": 1})).is_equal("wait_sawmill")
 
 func test_a_built_sawmill_asks_for_a_house() -> void:
-	var f := {"sawmills": 1, "sawmills_built": 1}
+	# Ya recogido y con su Granja: lo siguiente es la casa.
+	var f := {"sawmills": 1, "sawmills_built": 1, "collected": true, "farms": 1}
 	assert_str(TutorialManager.derive_step(f)).is_equal("open_house")
 	f["menu_open"] = true
 	assert_str(TutorialManager.derive_step(f)).is_equal("pick_house")
@@ -95,18 +96,27 @@ func test_a_built_sawmill_asks_to_collect_then_for_a_farm() -> void:
 func test_collecting_is_remembered_with_the_game() -> void:
 	_start()
 	EventBus.production_collected.emit(auto_free(Node.new()), {"wood": 1})
-	assert_bool(TutorialManager.guide_collected).is_true()
+	assert_bool(bool(TutorialManager.guide_flags.get("collected", false))).is_true()
 	var saved := TutorialManager.get_save_data()
 	TutorialManager.reset()
-	assert_bool(TutorialManager.guide_collected).is_false()
+	assert_bool(TutorialManager.guide_flags.has("collected")).is_false()
 	TutorialManager.load_save_data(saved)
-	assert_bool(TutorialManager.guide_collected).is_true()
+	assert_bool(bool(TutorialManager.guide_flags.get("collected", false))).is_true()
+
+func test_a_save_from_before_the_goal_list_keeps_its_collect() -> void:
+	# Los guardados de la rama de comida anteriores a GUIDE_GOALS traian
+	# `guide_collected`; se leen como la meta "collected".
+	TutorialManager.load_save_data({"intro_seen": true, "guide_state": "active", "guide_collected": true})
+	assert_bool(bool(TutorialManager.guide_flags.get("collected", false))).is_true()
+	TutorialManager.load_save_data({"intro_seen": true, "guide_state": "active", "guide_collected": false})
+	assert_bool(TutorialManager.guide_flags.has("collected")).is_false()
 
 func test_a_house_built_first_is_not_lost() -> void:
 	# Fuera de orden: casa antes que aserradero. El paso sigue pidiendo el
 	# aserradero, y al tenerlo ya no pide la casa.
 	assert_str(TutorialManager.derive_step({"houses": 1})).is_equal("open_build")
-	assert_str(TutorialManager.derive_step({"houses": 1, "sawmills": 1, "sawmills_built": 1})).is_equal("done")
+	assert_str(TutorialManager.derive_step({"houses": 1, "sawmills": 1, "sawmills_built": 1,
+		"collected": true, "farms": 1})).is_equal("done")
 
 func test_every_step_has_text_in_both_languages_and_both_devices() -> void:
 	var saved := Tr.get_locale()
@@ -172,6 +182,8 @@ func test_cancelling_the_placement_goes_back_one_step() -> void:
 	EventBus.building_placement_cancelled.emit()
 	assert_str(TutorialManager.current_step()).is_equal("open_build")
 
+## skip_guide() ya no esta en la interfaz (2026-10-04): es API interna para
+## sondas y pruebas, en modo dev (las pruebas corren con el editor: dev).
 func test_skipping_finishes_it_and_says_so() -> void:
 	_start()
 	TutorialManager.skip_guide()

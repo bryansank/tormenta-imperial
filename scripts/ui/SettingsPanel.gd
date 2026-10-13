@@ -15,6 +15,7 @@ extends CanvasLayer
 ## a abrir Ajustes en la misma pestana. Ver docs/21-interfaz-y-dispositivos.md.
 
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
+const WorldLook := preload("res://scripts/map/WorldLook.gd")
 
 enum Tab { AUDIO, INTERFACE, CONTROLS, ACCESSIBILITY, GAME }
 
@@ -273,6 +274,17 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 	)
 	grid_check.name = "GridCheck"
 	body.add_child(grid_check)
+	# Calidad grafica del mapa 3D (WorldLook): "auto" dice cual le toca a este
+	# dispositivo. Se ve al momento, sin recargar.
+	var q_modes: Array = GameConfig.GRAPHICS_QUALITY_MODES
+	var auto_q := WorldLook.effective_quality("auto", RenderingServer.get_current_rendering_method())
+	var q_labels: Array = [Tr.t("OPT_QUALITY_AUTO") % Tr.t("OPT_QUALITY_" + auto_q.to_upper()),
+		Tr.t("OPT_QUALITY_HIGH"), Tr.t("OPT_QUALITY_LOW")]
+	var quality_row := UITheme.make_option_row(Tr.t("LBL_GRAPHICS_QUALITY"), q_labels,
+		maxi(0, q_modes.find(GameConfig.ui_graphics_quality)), func(idx: int):
+			set_graphics_quality(q_modes[idx]))
+	quality_row.name = "QualityRow"
+	body.add_child(quality_row)
 	# Pantalla completa — tambien con F11; el interruptor se sincroniza si se
 	# cambia por teclado mientras el panel esta abierto.
 	_fullscreen_check = UITheme.make_check_button(
@@ -317,6 +329,14 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 
 	_add_reset(body, reset_interface)
 
+## Cambia la calidad grafica del mapa, la guarda y la aplica ya.
+func set_graphics_quality(quality: String) -> void:
+	if not quality in GameConfig.GRAPHICS_QUALITY_MODES:
+		return
+	GameConfig.ui_graphics_quality = quality
+	GameConfig.save_user_settings()
+	EventBus.graphics_quality_changed.emit(quality)
+
 func _profile_name(profile: String) -> String:
 	return Tr.t("OPT_PROFILE_" + profile.to_upper())
 
@@ -327,8 +347,16 @@ func reset_interface() -> void:
 	GameConfig.ui_device_profile = "auto"
 	GameConfig.ui_scale_pct = 0
 	GameConfig.ui_text_size = "auto"
-	GameConfig.ui_grid_visible = true
-	EventBus.grid_overlay_toggled.emit(true)
+	GameConfig.ui_grid_visible = false
+	EventBus.grid_overlay_toggled.emit(false)
+	var grid_check := find_child("GridCheck", true, false) as BaseButton
+	if grid_check != null:
+		grid_check.set_pressed_no_signal(false)
+	GameConfig.ui_graphics_quality = "auto"
+	EventBus.graphics_quality_changed.emit("auto")
+	var quality_row := find_child("QualityRow", true, false)
+	if quality_row != null:
+		(quality_row.get_child(1) as OptionButton).selected = 0
 	HudRegistry.show_all()
 	UILayoutManager.reset_user_layout()
 	GameConfig.save_user_settings()
@@ -363,6 +391,11 @@ func _build_controls_tab(body: VBoxContainer) -> void:
 	)
 	row.name = "TouchControlsRow"
 	body.add_child(row)
+	# "Automatico" es solo tablet y movil: un portatil tactil no los saca por
+	# tocarlo (decision de Bryan, 2026-10-04). Se dice aqui, que es donde se elige.
+	var auto_hint := _make_hint(Tr.t("LBL_TOUCH_AUTO_HINT"))
+	auto_hint.name = "TouchAutoHint"
+	body.add_child(auto_hint)
 	# Opacidad de los controles en pantalla (tactil): se ve al momento y se guarda.
 	body.add_child(_make_percent_row("touch_opacity", Tr.t("LBL_TOUCH_OPACITY"),
 		GameConfig.ui_touch_controls_opacity, GameConfig.TOUCH_OPACITY_MIN, GameConfig.TOUCH_OPACITY_MAX,

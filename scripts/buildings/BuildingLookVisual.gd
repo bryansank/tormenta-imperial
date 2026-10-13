@@ -9,8 +9,10 @@ extends Node3D
 ## (GameConfig.building_look_sync_interval). La regla vive en BuildingLook,
 ## compartida con la vista 2D.
 ##
-## - Obra: el modelo se oculta y en su sitio sale la fase de la huella
-##   (DieselpunkBuildingFactory.create_construction_phase).
+## - Obra: el modelo se oculta y en su sitio sale la fase, con el estilo de su
+##   tipo y la disposicion de su semilla (BuildingLook.seed_of; la misma que
+##   usa la vista 2D), via DieselpunkBuildingFactory.create_construction_phase.
+##   Grua, gancho, banderin y chispas/polvo los anima un shader (SiteFx).
 ## - Mejora: el modelo sigue a la vista, rodeado de andamio.
 ## - Ruina: el modelo se hunde y se ladea (encima ya lleva el hollin de
 ##   BuildingHealth), rodeado de escombros y con humo negro animado.
@@ -28,6 +30,7 @@ var _cell := 2.0
 var _model: Node3D = null
 var _look := -1
 var _phase := -1
+var _seed := 0
 var _site: Node3D = null
 var _ruin: Node3D = null
 var _active: Node3D = null
@@ -58,10 +61,14 @@ func get_phase() -> int:
 func apply(verdict: Dictionary) -> void:
 	var look := int(verdict.get("look", LookRule.Look.IDLE))
 	var phase := int(verdict.get("phase", 0))
-	if look == _look and phase == _phase:
+	# La obra de esta instancia: estilo de su tipo + semilla de su celda. Si la
+	# semilla cambia (se registro en la rejilla, o se movio), se rehace.
+	var seed_val := LookRule.seed_of(_building, _data) if look == LookRule.Look.CONSTRUCTION else 0
+	if look == _look and phase == _phase and seed_val == _seed:
 		return
 	_look = look
 	_phase = phase
+	_seed = seed_val
 	_clear_site()
 	if look != LookRule.Look.RUIN:
 		_leave_ruin()
@@ -69,7 +76,7 @@ func apply(verdict: Dictionary) -> void:
 		_model.visible = look != LookRule.Look.CONSTRUCTION
 	match look:
 		LookRule.Look.CONSTRUCTION:
-			_site = DieselpunkBuildingFactory.create_construction_phase(_data.grid_size, phase, _cell)
+			_site = DieselpunkBuildingFactory.create_construction_phase(_data.grid_size, phase, _cell, _data.id, seed_val)
 		LookRule.Look.UPGRADE:
 			_site = DieselpunkBuildingFactory.create_scaffold(_data.grid_size, _cell, _top + 0.3)
 		LookRule.Look.RUIN:
@@ -80,6 +87,10 @@ func apply(verdict: Dictionary) -> void:
 		_ensure_active()
 	if _active != null:
 		_active.visible = look == LookRule.Look.ACTIVE
+	# La parcela acompana: a medio preparar en obra, volcada y quemada en ruina.
+	var lot := _building.get_node_or_null("Lot") if _building != null else null
+	if lot != null and lot.has_method("set_look"):
+		lot.set_look(look, phase)
 
 # ── Piezas ────────────────────────────────────────────────────────────
 
@@ -130,7 +141,7 @@ func _leave_ruin() -> void:
 		_model.remove_meta("look_base_pos")
 		_model.remove_meta("look_base_rot")
 
-## Humo / serrin desde la cima, o una luz que parpadea en el tejado. Se crea la
+## Humo / serrin desde la cima, o un farol encendido en el tejado. Se crea la
 ## primera vez que el edificio trabaja; luego solo se enciende y apaga.
 func _ensure_active() -> void:
 	if _active != null:
@@ -142,15 +153,37 @@ func _ensure_active() -> void:
 	_active.name = "ActiveFx"
 	var n := LookRule.footprint_class(_data.grid_size)
 	if kind == "glow":
-		var glow := Fx.quad_3d("glow", 1.4 + 0.3 * n)
-		glow.position = Vector3(0.0, _top + 0.15, 0.0)
+		# Un farol pequeno posado en el tejado (no una bola de luz encima).
+		var lamp_size := 0.6 + 0.1 * n
+		var glow := Fx.quad_3d("glow", lamp_size)
+		glow.position = Vector3(0.0, _top + lamp_size * 0.3, 0.0)
 		_active.add_child(glow)
 	else:
 		var size := 2.0 + 0.5 * n
+		var anchor = _fx_anchor()
+		if anchor != null:
+			# El modelo marca de donde sale (la sierra del Aserradero): mas
+			# pequeno, y pegado a la boca en vez de flotar sobre el tejado.
+			size *= 0.6
 		var col := Fx.quad_3d(kind, size)
-		col.position = Vector3(0.0, _top + size * 0.35, 0.0)
+		col.position = (anchor + Vector3(0.0, size * 0.3, 0.0)) if anchor != null else Vector3(0.0, _top + size * 0.35, 0.0)
 		_active.add_child(col)
 	add_child(_active)
+
+## Un Marker3D "FxAnchor" dentro del modelo, en el espacio del edificio, o null.
+func _fx_anchor() -> Variant:
+	if _model == null:
+		return null
+	var marker := _model.find_child("FxAnchor", true, false) as Node3D
+	if marker == null:
+		return null
+	var xf := Transform3D.IDENTITY
+	var n: Node = marker
+	while n != null and n != _building:
+		if n is Node3D:
+			xf = (n as Node3D).transform * xf
+		n = n.get_parent()
+	return xf.origin
 
 func _find_model() -> Node3D:
 	if _building == null:

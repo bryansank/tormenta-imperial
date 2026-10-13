@@ -4,9 +4,14 @@ extends Node
 ## Sin esto la Tormenta es un número que baja y un aviso de texto. Con esto es
 ## algo que ves llegar por el horizonte, que es de lo que va el juego.
 ##
-## No toca nada más: solo el `WorldEnvironment` y la luz direccional de `Main`,
-## que hasta ahora eran estáticos y ningún script referenciaba. Al pasar la
-## tormenta devuelve los valores exactos que había, no unos por defecto.
+## No toca nada más: solo el `WorldEnvironment` (y su cielo procedural, si lo
+## tiene) y la luz direccional de `Main`. Al pasar la tormenta devuelve los
+## valores exactos que había, no unos por defecto.
+##
+## Con el cielo de maqueta (docs/21 §12) la luz ambiental sale sobre todo del
+## cielo, asi que oscurecer el color de fondo ya no basta: tambien se tinen de
+## ceniza los cuatro colores del `ProceduralSkyMaterial`, y con ellos la luz
+## ambiental y los reflejos del agua.
 
 ## Cuánto tarda el cielo en cerrarse y en volver a abrirse.
 const FADE_IN := 3.0
@@ -17,8 +22,18 @@ const ASH := Color(0.32, 0.27, 0.22)
 const ASH_LIGHT := Color(0.55, 0.45, 0.35)
 
 ## Densidad de niebla con la tormenta encima. Lo bastante para comerse el fondo
-## de la isla sin dejar al jugador sin ver donde construye.
-const MAX_FOG := 0.035
+## de la isla sin dejar al jugador sin ver donde construye. Con el suelo y el
+## cielo nuevos (que si responden a la luz) basta mucho menos que antes (0.035,
+## que lo dejaba todo de color arena).
+const MAX_FOG := 0.014
+
+## Los colores del cielo procedural que se tinen de ceniza, y hacia que tono.
+const SKY_KEYS := {
+	"sky_top_color": Color(0.24, 0.22, 0.21),
+	"sky_horizon_color": Color(0.5, 0.42, 0.34),
+	"ground_horizon_color": Color(0.45, 0.38, 0.31),
+	"ground_bottom_color": Color(0.16, 0.15, 0.14),
+}
 
 ## El cielo se cierra en tres pasos, uno por fase, y ninguno depende de la
 ## severidad hasta que la tormenta ya esta encima: si el Aviso oscureciera en
@@ -82,6 +97,10 @@ func _resolve() -> bool:
 			"ambient_energy": _env.ambient_light_energy,
 			"sun": _sun.light_energy,
 		}
+		var sky_mat := _sky_material()
+		if sky_mat != null:
+			for key in SKY_KEYS:
+				_clear[key] = sky_mat.get(key)
 	elif _clear_sun_id != _sun.get_instance_id():
 		# Mismo Environment, luz nueva: la luz es un nodo de la escena recien
 		# cargada, asi que llega limpia y su energia es la de cielo despejado.
@@ -132,6 +151,11 @@ func _close_to(weight: float) -> void:
 		lerpf(_clear["sun"], _clear["sun"] * 0.15, weight), FADE_IN)
 	_tween.parallel().tween_property(_env, "fog_density", MAX_FOG * weight, FADE_IN)
 	_tween.parallel().tween_property(_env, "fog_light_color", ASH_LIGHT, FADE_IN)
+	var sky_mat := _sky_material()
+	if sky_mat != null:
+		for key in SKY_KEYS:
+			if _clear.has(key):
+				_tween.parallel().tween_property(sky_mat, key, (_clear[key] as Color).lerp(SKY_KEYS[key], weight), FADE_IN)
 
 func _on_ended(_severity: int) -> void:
 	_clear_sky()
@@ -145,6 +169,11 @@ func _clear_sky() -> void:
 	_tween.parallel().tween_property(_env, "ambient_light_energy", _clear["ambient_energy"], FADE_OUT)
 	_tween.parallel().tween_property(_sun, "light_energy", _clear["sun"], FADE_OUT)
 	_tween.parallel().tween_property(_env, "fog_density", 0.0, FADE_OUT)
+	var sky_mat := _sky_material()
+	if sky_mat != null:
+		for key in SKY_KEYS:
+			if _clear.has(key):
+				_tween.parallel().tween_property(sky_mat, key, _clear[key], FADE_OUT)
 
 func _start_tween() -> void:
 	if _tween != null and _tween.is_valid():
@@ -191,6 +220,22 @@ func _apply_now(weight: float) -> void:
 	_env.ambient_light_energy = lerpf(_clear["ambient_energy"], _clear["ambient_energy"] * 0.3, weight)
 	_sun.light_energy = lerpf(_clear["sun"], _clear["sun"] * 0.15, weight)
 	_env.fog_density = MAX_FOG * weight
+	_paint_sky(weight)
+
+## Tine el cielo procedural `weight` hacia la ceniza (0 = el limpio).
+func _paint_sky(weight: float) -> void:
+	var sky_mat := _sky_material()
+	if sky_mat == null:
+		return
+	for key in SKY_KEYS:
+		if _clear.has(key):
+			sky_mat.set(key, (_clear[key] as Color).lerp(SKY_KEYS[key], weight))
+
+## El cielo procedural del Environment, o null si el fondo es un color liso.
+func _sky_material() -> ProceduralSkyMaterial:
+	if _env == null or _env.sky == null:
+		return null
+	return _env.sky.sky_material as ProceduralSkyMaterial
 
 ## Vuelve a estado de fabrica: sin escena, sin valores capturados. Para tests y
 ## para quien necesite empezar de cero de verdad.
@@ -214,3 +259,4 @@ func restore_now() -> void:
 	_env.ambient_light_energy = _clear["ambient_energy"]
 	_sun.light_energy = _clear["sun"]
 	_env.fog_density = 0.0
+	_paint_sky(0.0)

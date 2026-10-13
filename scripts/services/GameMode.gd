@@ -13,8 +13,15 @@ extends RefCounted
 ## (`GameManager.start_new_game(mode)`) o cargar un guardado (que lo trae
 ## escrito). Un guardado sin la clave es de antes de los modos: Campana.
 ##
-## Estado persistido: el modo y, en Supervivencia, si la partida ya termino.
-## Lo guarda y lo restaura GameManager; `begin_run()` es su reset.
+## Estado persistido: el modo, el nivel (Colono / Gobernador) y, en
+## Supervivencia, si la partida ya termino. Lo guarda y lo restaura GameManager;
+## `begin_run()` es su reset.
+##
+## El NIVEL es una dificultad sobre la Campana, no un modo mas: "Colono" es el
+## juego de siempre (para chavales de 10-15 y para cualquiera que empiece) y
+## "Gobernador" el complejo, para quien sabe de economia. Se desbloquea por
+## perfil (GameConfig.profile_*, en settings.cfg, nunca en la partida) y queda
+## fijo para la partida. Sus reglas viven en `GameConfig.game_tier_rules`.
 
 enum Mode { CAMPAIGN, BUILDER, SURVIVAL, SANDBOX }
 
@@ -44,17 +51,51 @@ const OFFERED := [
 const RESULT_NONE := ""
 const RESULT_DEFEAT := "defeat"
 
+## Niveles de la Campana. Ver docs/20-modos-de-juego.md, "Colono y Gobernador".
+enum Tier { COLONIST, GOVERNOR }
+const TIER_KEYS := {
+	Tier.COLONIST: "colonist",
+	Tier.GOVERNOR: "governor",
+}
+const TIER_DEFAULT := Tier.COLONIST
+
 static var current: int = DEFAULT
+## El nivel de la partida. Fuera de la Campana siempre es Colono.
+static var tier: int = TIER_DEFAULT
 ## La partida termino y ya no se puede seguir (Supervivencia perdida). El
 ## guardado se conserva, marcado, y deja de escribirse.
 static var run_result: String = RESULT_NONE
 
 # ── Estado ───────────────────────────────────────────────────────────
 
-## Empieza una partida en `mode`. Es el reset: tira el resultado anterior.
-static func begin_run(mode: int) -> void:
+## Empieza una partida en `mode` (y `run_tier`). Es el reset: tira el resultado
+## anterior. Sin nivel, Colono: quien reinicia la partida en curso pasa el suyo
+## (`begin_run(current, tier)`).
+static func begin_run(mode: int, run_tier: int = TIER_DEFAULT) -> void:
 	current = mode if KEYS.has(mode) else DEFAULT
+	tier = run_tier if (TIER_KEYS.has(run_tier) and tier_allowed(current)) else TIER_DEFAULT
 	run_result = RESULT_NONE
+
+## Gobernador es una dificultad de la Campana; los otros modos no tienen niveles.
+static func tier_allowed(mode: int) -> bool:
+	return mode == Mode.CAMPAIGN
+
+static func is_governor() -> bool:
+	return tier == Tier.GOVERNOR
+
+## Si el selector ofrece Gobernador: lo abre el perfil (haber terminado o ganado
+## una partida, GameConfig.governor_unlocked_by_profile) y, en dev_mode, siempre.
+static func governor_unlocked() -> bool:
+	return GameConfig.dev_mode or GameConfig.governor_unlocked_by_profile()
+
+static func tier_key_of(t: int) -> String:
+	return String(TIER_KEYS.get(t, TIER_KEYS[TIER_DEFAULT]))
+
+static func tier_from_key(key: String) -> int:
+	for t in TIER_KEYS:
+		if TIER_KEYS[t] == key:
+			return t
+	return TIER_DEFAULT
 
 static func is_offered(mode: int) -> bool:
 	return OFFERED.has(mode)
@@ -83,11 +124,14 @@ static func current_key() -> String:
 # ── Persistencia ─────────────────────────────────────────────────────
 
 static func get_save_data() -> Dictionary:
-	return {"mode": current_key(), "result": run_result}
+	return {"mode": current_key(), "result": run_result, "tier": tier_key_of(tier)}
 
-## Sin datos (guardado anterior a los modos) = Campana en curso.
+## Sin datos (guardado anterior a los modos) = Campana en curso. Sin "tier"
+## (guardado anterior a los niveles) = Colono.
 static func load_save_data(data: Dictionary) -> void:
-	begin_run(from_key(String(data.get("mode", KEYS[DEFAULT]))))
+	var tier_raw: Variant = data.get("tier", TIER_KEYS[TIER_DEFAULT])
+	begin_run(from_key(String(data.get("mode", KEYS[DEFAULT]))),
+		tier_from_key(String(tier_raw)) if tier_raw is String else TIER_DEFAULT)
 	var result: Variant = data.get("result", RESULT_NONE)
 	run_result = String(result) if result is String else RESULT_NONE
 
@@ -113,6 +157,10 @@ static func _num(name: String) -> float:
 ## El reloj de la Tormenta corre solo. En Constructor y Sandbox no.
 static func storm_enabled() -> bool:
 	return _flag("storm")
+
+## La tormenta de prueba de la era 1 (sin Diezmo). En Constructor y Sandbox no.
+static func storm_trial_enabled() -> bool:
+	return _flag("storm_trial")
 
 ## Los Tasadores cobran al final de una tormenta.
 static func tithe_enabled() -> bool:
@@ -144,11 +192,6 @@ static func random_events_enabled() -> bool:
 ## Los eventos de categoria "danger" (tormenta menor, plaga, bandidos...).
 static func danger_events_enabled() -> bool:
 	return _flag("danger_events")
-
-## Lo acumulado en los edificios se echa a perder si no se recoge a tiempo
-## (GameConfig.spoil_after_seconds). Apagado por defecto: es del modo complejo.
-static func spoilage_enabled() -> bool:
-	return bool(rule("spoilage")) if rule("spoilage") != null else false
 
 static func infinite_resources() -> bool:
 	return _flag("infinite_resources")
@@ -190,6 +233,49 @@ static func tip_allowed(tip_id: String) -> bool:
 	var hidden: Variant = rule("hidden_tips")
 	return not (hidden is Array and tip_id in hidden)
 
+# ── Reglas del nivel (Colono / Gobernador) ───────────────────────────
+
+## Una regla del nivel en curso (o de `t`). Lo que Gobernador no dice lo dice
+## Colono, igual que la tabla de modos.
+static func tier_rule(name: String, t: int = -1) -> Variant:
+	var which: int = tier if t < 0 else t
+	var rules: Dictionary = GameConfig.game_tier_rules
+	var own: Dictionary = rules.get(tier_key_of(which), {})
+	if own.has(name):
+		return own[name]
+	return rules.get(tier_key_of(TIER_DEFAULT), {}).get(name, null)
+
+static func _tier_num(name: String) -> float:
+	var v: Variant = tier_rule(name)
+	return float(v) if v != null else 1.0
+
+## Lo acumulado en un edificio sin recoger se estropea con el tiempo. La
+## mecanica es la de ProductionManager (GameConfig.spoil_after_seconds, solo
+## Gobernador: GameConfig.game_tier_rules).
+static func spoilage_enabled() -> bool:
+	return bool(tier_rule("spoilage"))
+
+## El mercado sigue el calendario de la Tormenta y ensena el spread y la
+## tendencia (MarketManager / MarketPanel).
+static func market_dynamic() -> bool:
+	return bool(tier_rule("market_dynamic"))
+
+## Enemigos y defensa mas duros: mismas reglas de CombatRules, mas escala.
+static func combat_hard() -> bool:
+	return bool(tier_rule("combat_hard"))
+
+## Multiplicador de la escala (vida y ataque) de los enemigos de expedicion.
+static func expedition_enemy_mult() -> float:
+	return _tier_num("expedition_enemy_mult") if combat_hard() else 1.0
+
+## Multiplicador de los cuerpos que bajan a cobrar el Diezmo.
+static func tithe_force_mult() -> float:
+	return _tier_num("tithe_force_mult") if combat_hard() else 1.0
+
+## Multiplicador de la escala de cada oleada de la Auditoria Final.
+static func audit_enemy_mult() -> float:
+	return _tier_num("audit_enemy_mult") if combat_hard() else 1.0
+
 # ── Textos ───────────────────────────────────────────────────────────
 
 static func name_key(mode: int = -1) -> String:
@@ -206,3 +292,17 @@ static func goal_key(mode: int = -1) -> String:
 
 static func display_name(mode: int = -1) -> String:
 	return Tr.t(name_key(mode))
+
+static func tier_name_key(t: int = -1) -> String:
+	return "TIER_%s_NAME" % tier_key_of(tier if t < 0 else t).to_upper()
+
+static func tier_desc_key(t: int = -1) -> String:
+	return "TIER_%s_DESC" % tier_key_of(tier if t < 0 else t).to_upper()
+
+## "Campana" o "Campana · Gobernador": lo que la confirmacion dice que se pierde.
+static func display_name_with_tier(mode: int = -1, t: int = -1) -> String:
+	var m: int = current if mode < 0 else mode
+	var which: int = tier if t < 0 else t
+	if not tier_allowed(m) or which == TIER_DEFAULT:
+		return display_name(m)
+	return "%s · %s" % [display_name(m), Tr.t(tier_name_key(which))]

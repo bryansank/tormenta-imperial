@@ -175,7 +175,8 @@ func handle_click(screen_pos: Vector2) -> void:
 			if GridManager.is_valid_cell(cell):
 				try_move(cell)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_tick_block_flash(delta)
 	if _state == State.IDLE or _ghost == null:
 		return
 	# Con el dedo el fantasma esta donde lo dejo el ultimo toque.
@@ -281,6 +282,9 @@ func try_place(cell: Vector2i) -> Node:
 	Rules.consume_deposit_if_required(_current_data.id, verdict, map_gen)
 	var building := _spawn(_current_data, cell, _rotation_steps)
 	building.set_meta("level", 1)
+	# El primer extractor de un yacimiento le abre su camino de acceso, gratis.
+	if Rules.pave_access_ring(self, _current_data, verdict, building) > 0:
+		_show_feedback(Tr.t("LBL_ACCESS_RING_LAID"))
 	if _current_data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
 	_redraw_roads_around(cell)
@@ -324,10 +328,14 @@ func _on_move_requested(building: Node) -> void:
 func try_move(cell: Vector2i) -> bool:
 	if _moving_building == null or _current_data == null:
 		return false
-	if _current_data.id == "road" and Rules.road_removal_strands(_moving_building) != null:
-		_show_feedback(Tr.t("LBL_ROAD_NEEDED_BY"))
-		return false
 	var size := Rules.rotated_size(_current_data, _rotation_steps)
+	# Una carretera solo se mueve si en su sitio nuevo sigue uniendo lo que unia.
+	if _current_data.id == "road":
+		var stranded := Rules.road_removal_stranded(_moving_building, GridManager.cells_for(cell, size))
+		if not stranded.is_empty():
+			_show_feedback(Rules.move_first_message(stranded))
+			flash_buildings(stranded)
+			return false
 	var map_gen := _map_generator()
 	var verdict := Rules.evaluate_placement(_current_data.id, cell, size, map_gen, _moving_building)
 	if not verdict["ok"]:
@@ -374,6 +382,7 @@ func _on_demolish_requested(building: Node) -> void:
 		return
 	if result.has("blocked"):
 		_show_feedback(String(result["blocked"]))
+		flash_buildings(result.get("stranded", []))
 		return
 	var data: BuildingData = result["data"]
 	var cell: Vector2i = result["cell"]
@@ -639,3 +648,56 @@ func get_spot_cells() -> Array:
 
 func get_assist() -> Node:
 	return _assist
+
+# ── "Primero mueve": los edificios que un tramo de carretera mantiene unidos ──
+
+## Marco rojo latiendo encima de los edificios que impiden quitar un tramo
+## (PlacementRules.road_removal_stranded), GameConfig.road_block_highlight_seconds.
+## Lo mismo que en 3D; tocarlos los selecciona como siempre (panel con MOVER).
+var _block_flash: Node2D = null
+var _block_flash_nodes: Array = []
+var _block_flash_left := 0.0
+
+func flash_buildings(nodes: Array) -> void:
+	_block_flash_nodes = nodes.duplicate()
+	_block_flash_left = GameConfig.road_block_highlight_seconds if not nodes.is_empty() else 0.0
+	if _block_flash == null:
+		_block_flash = Node2D.new()
+		_block_flash.name = "BlockedBuildings"
+		# Encima de los edificios (z 2) y de los que andan (z 3).
+		_block_flash.z_index = 4
+		_block_flash.draw.connect(_draw_block_flash)
+		add_child(_block_flash)
+	_block_flash.visible = not nodes.is_empty()
+	_block_flash.queue_redraw()
+
+## Los edificios resaltados ahora mismo ([] si no hay resaltado).
+func get_flash_nodes() -> Array:
+	return _block_flash_nodes if _block_flash_left > 0.0 else []
+
+func _tick_block_flash(delta: float) -> void:
+	if _block_flash == null or _block_flash_left <= 0.0:
+		return
+	_block_flash_left -= delta
+	if _block_flash_left <= 0.0:
+		_block_flash.visible = false
+		_block_flash_nodes.clear()
+		return
+	_block_flash.queue_redraw()
+
+func _draw_block_flash() -> void:
+	var a := 0.55 + 0.35 * sin(Time.get_ticks_msec() * 0.008)
+	for n in _block_flash_nodes:
+		if not is_instance_valid(n):
+			continue
+		var info := GridManager.get_building_info(n)
+		if info.is_empty():
+			continue
+		var r := Rect2()
+		var first := true
+		for c in info.get("cells", []):
+			var cr := View2D.footprint_rect_px(c, Vector2i.ONE)
+			r = cr if first else r.merge(cr)
+			first = false
+		_block_flash.draw_rect(r, Color(UITheme.DANGER, a * 0.35), true)
+		_block_flash.draw_rect(r.grow(1.0), Color(UITheme.DANGER, a), false, 3.0)

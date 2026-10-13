@@ -1,6 +1,11 @@
 extends CanvasLayer
 ## Army / Barracks panel: train units, see Military Power, capacity and upkeep.
 ## The management → combat bridge — a bigger base fields a stronger army.
+##
+## Menos texto (2026-10-04): "Tropa 5/11 · En cola 1/1", cada unidad con "×3" y
+## su coste en iconos; de donde salen los topes y el sueldo, en tooltips.
+
+const TextKit := preload("res://scripts/ui/TextKit.gd")
 
 var _panel: PanelContainer
 var _backdrop: ColorRect
@@ -90,8 +95,13 @@ func _setup_ui() -> void:
 	var stats_row := HFlowContainer.new()
 	stats_row.alignment = FlowContainer.ALIGNMENT_CENTER
 	stats_row.add_theme_constant_override("h_separation", 20)
+	# "Tropa 5/11" y "En cola 1/1"; de donde sale cada tope, en el tooltip.
 	_capacity_label = UITheme.make_label("", "body", UITheme.TEXT)
+	_capacity_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	_capacity_label.tooltip_text = Tr.t("LBL_ARMY_CAPACITY_HINT") % [GameConfig.army_base_capacity, GameConfig.army_capacity_per_barracks]
 	_slots_label = UITheme.make_label("", "body", UITheme.TEXT_DIM)
+	_slots_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	_slots_label.tooltip_text = Tr.t("LBL_ARMY_SLOTS_HINT")
 	stats_row.add_child(_capacity_label)
 	stats_row.add_child(_slots_label)
 	vbox.add_child(stats_row)
@@ -167,27 +177,35 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	info.add_theme_constant_override("separation", 1)
 	row.add_child(info)
 
+	# Nombre y "×3" (cuantas tienes). El nivel de era sobraba: si la era no
+	# llega, el motivo lo dice debajo.
 	var title_row := HFlowContainer.new()
 	title_row.add_theme_constant_override("h_separation", 8)
 	var name_label := UITheme.make_label(Tr.t(def.get("name", unit_id)), "section", UITheme.TEXT if unlocked else UITheme.TEXT_DIM)
 	title_row.add_child(name_label)
-	var tier_label := UITheme.make_label(Tr.t("LBL_ARMY_TIER") % int(def.get("tier", 1)), "small", UITheme.TEXT_DIM)
-	title_row.add_child(tier_label)
-	var owned_label := UITheme.make_label(Tr.t("LBL_ARMY_OWNED") % ArmyManager.get_count(unit_id), "small", UITheme.POSITIVE)
+	var owned_label := UITheme.make_label(Tr.t("LBL_ARMY_OWNED") % ArmyManager.get_count(unit_id), "section", UITheme.POSITIVE)
+	owned_label.name = "Owned"
 	title_row.add_child(owned_label)
 	var on_campaign: int = int(_units_on_expedition().get(unit_id, 0))
 	if on_campaign > 0:
 		title_row.add_child(UITheme.make_label(Tr.t("LBL_ON_CAMPAIGN") % on_campaign, "small", UITheme.WARNING))
 	info.add_child(title_row)
 
-	var stats := "%s   |   %s   |   %s" % [
-		_cost_text(def.get("cost", {})),
-		Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0)),
-		Tr.t("LBL_ARMY_UPKEEP") % int(def.get("upkeep_gold", 0)),
-	]
-	var stats_label := UITheme.make_label(stats, "small", UITheme.TEXT_DIM)
-	stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	info.add_child(stats_label)
+	# Coste en iconos (en rojo lo que falta), poder y sueldo: [oro] 40 [madera] 20 · Poder 10 · Sueldo [oro] 1
+	var stats := HFlowContainer.new()
+	stats.name = "Stats"
+	stats.add_theme_constant_override("h_separation", 8)
+	var cost: Dictionary = def.get("cost", {})
+	stats.add_child(TextKit.cost_inline(cost, _missing(cost), "small", UITheme.TEXT_DIM))
+	stats.add_child(UITheme.make_label(Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0)), "small", UITheme.TEXT_DIM))
+	var upkeep := UITheme.make_label(Tr.t("LBL_ARMY_UPKEEP_SHORT"), "small", UITheme.TEXT_DIM)
+	upkeep.mouse_filter = Control.MOUSE_FILTER_PASS
+	upkeep.tooltip_text = Tr.t("LBL_ARMY_UPKEEP_HINT") % int(GameConfig.army_upkeep_interval)
+	stats.add_child(upkeep)
+	var upkeep_row := TextKit.cost_inline({"gold": int(def.get("upkeep_gold", 0))}, {}, "small", UITheme.TEXT_DIM)
+	upkeep_row.name = "Upkeep"
+	stats.add_child(upkeep_row)
+	info.add_child(stats)
 
 	# Right: train button
 	var check := ArmyManager.can_train(unit_id)
@@ -247,7 +265,7 @@ func _make_cancel_button(index: int) -> Button:
 	if refund.is_empty():
 		btn.text = Tr.t("LBL_CANCEL_NO_REFUND")
 	else:
-		btn.text = Tr.t("FMT_CANCEL_REFUND") % Tr.amount_list(refund)
+		btn.text = Tr.t("FMT_CANCEL_REFUND") % TextKit.cost_text(refund)
 	# En rojo cuando la Tormenta se esta cobrando su parte de la cancelacion.
 	var stormy := GameConfig.get_cancel_refund_ratio() < GameConfig.cancel_refund_ratio
 	UITheme.style_button(btn, UITheme.DANGER.darkened(0.2) if stormy else UITheme.BTN, UITheme.FONT_SMALL)
@@ -268,11 +286,17 @@ func _training_progress(item: Dictionary) -> float:
 		return 1.0
 	return clampf(1.0 - (item.get("remaining", 0.0) / dur), 0.0, 1.0)
 
-func _cost_text(cost: Dictionary) -> String:
-	var parts: Array = []
+## Lo que falta para pagar `cost` (por nombre de recurso).
+func _missing(cost: Dictionary) -> Dictionary:
+	var out := {}
 	for res_name in cost:
-		parts.append("%d %s" % [cost[res_name], Tr.res_name(res_name)])
-	return " ".join(parts) if not parts.is_empty() else Tr.t("LBL_FREE")
+		var type: int = ResourceManager.name_to_type(String(res_name))
+		if type < 0:
+			continue
+		var short: int = int(cost[res_name]) - ResourceManager.get_amount(type)
+		if short > 0:
+			out[res_name] = short
+	return out
 
 # ── Visibility / open-close ──
 

@@ -130,21 +130,25 @@ func test_touch_px_grows_small_targets_only_on_touch() -> void:
 	GameConfig.ui_touch_controls = "never"
 	assert_float(UITheme.touch_px(22.0)).is_equal(22.0)
 
-func test_the_resource_toggle_is_finger_sized_on_touch() -> void:
+## Sin boton ▼ (2026-10): se toca la ficha misma, que crece a tamano dedo.
+func test_the_resource_chips_are_finger_sized_on_touch() -> void:
 	GameConfig.ui_touch_controls = "always"
 	var hud := _instance("res://scenes/ui/ResourceHUD.tscn")
-	var btn: Button = hud.get_toggle_button()
-	assert_float(btn.custom_minimum_size.x).is_greater_equal(float(UITheme.MIN_BTN_H))
-	assert_float(btn.custom_minimum_size.y).is_greater_equal(float(UITheme.MIN_BTN_H))
+	for c in hud.tap_targets():
+		assert_float((c as Control).custom_minimum_size.y).is_greater_equal(float(UITheme.MIN_BTN_H))
+	GameConfig.ui_touch_controls = "never"
+	var desk := _instance("res://scenes/ui/ResourceHUD.tscn")
+	for c in desk.tap_targets():
+		assert_float((c as Control).custom_minimum_size.y).is_less(float(UITheme.MIN_BTN_H))
 
-func test_the_resource_toggle_expands_the_named_rows() -> void:
+func test_a_tap_on_the_workers_icon_expands_the_named_rows() -> void:
 	var hud := _instance("res://scenes/ui/ResourceHUD.tscn")
 	assert_bool(hud.is_expanded()).is_false()
-	hud.get_toggle_button().pressed.emit()
+	_click(hud.workers_chip())
 	assert_bool(hud.is_expanded()).is_true()
 
 func test_every_resource_has_an_icon_on_disk() -> void:
-	for res_id in ["gold", "wood", "steel", "oil"]:
+	for res_id in ["gold", "wood", "steel", "oil", "workers", "morale"]:
 		assert_bool(ResourceLoader.exists(UITheme.icon_path(res_id))).override_failure_message("falta el icono de %s" % res_id).is_true()
 
 func test_no_hud_font_below_the_small_theme_size() -> void:

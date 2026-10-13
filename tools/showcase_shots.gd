@@ -141,13 +141,6 @@ func _announce(main: Node) -> void:
 	EventBus.resource_unlocked.emit("steel")
 	EventBus.era_advanced.emit(ProgressionManager.current_era)
 	EventBus.army_changed.emit()
-	# El aviso de objetivo es texto de onboarding: con la base ya levantada
-	# dice lo contrario de lo que se ve, asi que se retira de las fotos.
-	var notif: Node = main.get_node_or_null("NotificationPanel")
-	if notif != null:
-		var hint: Variant = notif.get("_objective_label")
-		if hint is CanvasItem and (hint as Node).get_parent() is CanvasItem:
-			((hint as Node).get_parent() as CanvasItem).visible = false
 	var tech: Node = main.get_node_or_null("TechTreePanel")
 	if tech != null and tech.has_method("_refresh_tech_states"):
 		tech._refresh_tech_states()

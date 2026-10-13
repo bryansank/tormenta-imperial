@@ -29,6 +29,8 @@ func _initialize() -> void:
 	_draw_icon("steel", _paint_ingot)
 	_draw_icon("oil", _paint_drop)
 	_draw_icon("food", _paint_wheat)
+	_draw_icon("workers", _paint_worker)
+	_draw_icon("morale", _paint_heart)
 	_draw_icon("move", _paint_move_arrows)
 	_draw_icon("drag", _paint_drag_grip)
 	print("GEN_ICONS_DONE")
@@ -176,6 +178,52 @@ func _paint_wheat() -> void:
 	_ellipse(Vector2(0.50, 0.10), 0.045, 0.065, grain)
 	_poly(PackedVector2Array([Vector2(0.30, 0.10), Vector2(0.32, 0.09), Vector2(0.40, 0.30), Vector2(0.38, 0.31)]), grain_dark)
 	_poly(PackedVector2Array([Vector2(0.70, 0.06), Vector2(0.72, 0.07), Vector2(0.62, 0.26), Vector2(0.60, 0.25)]), grain_dark)
+## Obrero: busto con casco de laton y mono azul acero. Es el icono de los
+## obreros libres en la fila de recursos (ResourceHUD); forma de persona, no de
+## recurso, para que no se confunda con ninguno de los cuatro.
+func _paint_worker() -> void:
+	var rim := Color(0.12, 0.10, 0.08)
+	var overalls := Color(0.36, 0.46, 0.60)
+	var overalls_dark := Color(0.26, 0.33, 0.44)
+	var skin := Color(0.88, 0.70, 0.52)
+	var brass := Color(0.92, 0.70, 0.22)
+	var brass_dark := Color(0.62, 0.45, 0.12)
+	# Hombros y torso (trapecio), con borde oscuro para leerse sobre la isla.
+	_poly(PackedVector2Array([Vector2(0.27, 0.56), Vector2(0.73, 0.56), Vector2(0.92, 0.97), Vector2(0.08, 0.97)]), rim)
+	_poly(PackedVector2Array([Vector2(0.30, 0.60), Vector2(0.70, 0.60), Vector2(0.87, 0.94), Vector2(0.13, 0.94)]), overalls)
+	# Peto del mono y tirantes.
+	_rect(0.38, 0.70, 0.62, 0.94, overalls_dark)
+	_rect(0.36, 0.60, 0.41, 0.72, overalls_dark)
+	_rect(0.59, 0.60, 0.64, 0.72, overalls_dark)
+	# Cabeza.
+	_circle(Vector2(0.5, 0.42), 0.19, rim)
+	_circle(Vector2(0.5, 0.43), 0.155, skin)
+	# Casco: media cupula y ala.
+	_fill(func(p: Vector2) -> bool: return p.y <= 0.37 and p.distance_to(Vector2(0.5, 0.37)) <= 0.215, rim)
+	_fill(func(p: Vector2) -> bool: return p.y <= 0.35 and p.distance_to(Vector2(0.5, 0.36)) <= 0.18, brass)
+	_rounded_rect(0.20, 0.33, 0.80, 0.40, 0.02, rim)
+	_rect(0.23, 0.345, 0.77, 0.385, brass_dark)
+	_rect(0.47, 0.18, 0.53, 0.34, brass_dark)  # cresta del casco
+	_ellipse(Vector2(0.41, 0.26), 0.05, 0.03, Color(1.0, 0.95, 0.7, 0.85))  # brillo
+
+## Corazon con remaches: la moral. Rojo oxido con brillo; el numero de al lado
+## lleva el color del umbral (UITheme), el icono no cambia.
+func _paint_heart() -> void:
+	var rim := Color(0.22, 0.06, 0.05)
+	var body := Color(0.80, 0.22, 0.18)
+	var light := Color(0.95, 0.45, 0.38)
+	var heart := func(p: Vector2, grow: float) -> bool:
+		var l := p.distance_to(Vector2(0.335, 0.38)) <= 0.19 + grow
+		var r := p.distance_to(Vector2(0.665, 0.38)) <= 0.19 + grow
+		var tri := Geometry2D.is_point_in_polygon(p, PackedVector2Array([
+			Vector2(0.15 - grow, 0.44), Vector2(0.85 + grow, 0.44), Vector2(0.5, 0.88 + grow * 1.4)]))
+		return l or r or tri
+	_fill(func(p: Vector2) -> bool: return heart.call(p, 0.045), rim)
+	_fill(func(p: Vector2) -> bool: return heart.call(p, 0.0), body)
+	_ellipse(Vector2(0.32, 0.34), 0.08, 0.06, light)
+	# Dos remaches de laton: el corazon de la colonia es de chapa.
+	_circle(Vector2(0.5, 0.70), 0.035, Color(0.92, 0.70, 0.22))
+	_circle(Vector2(0.5, 0.52), 0.035, Color(0.92, 0.70, 0.22))
 
 ## Cuatro flechas en cruz: el icono del boton MOVER del panel de edificio.
 func _paint_move_arrows() -> void:

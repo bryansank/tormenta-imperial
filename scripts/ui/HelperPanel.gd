@@ -102,6 +102,8 @@ func _ready() -> void:
 	EventBus.storm_incoming.connect(func(_s): _set_storm_silenced(true))
 	EventBus.tithe_resolved.connect(func(_paid, _taken): _set_storm_silenced(false))
 	EventBus.storm_false_alarm.connect(func(_deferred): _set_storm_silenced(false))
+	# La tormenta de prueba no trae Diezmo: lo que la cierra es volver a la calma.
+	EventBus.storm_phase_changed.connect(_on_storm_phase_changed)
 	EventBus.touch_controls_changed.connect(func(_enabled): _refresh_tips())
 	EventBus.helper_visibility_changed.connect(func(_vis): _refresh_callouts())
 	# La pausa y el menu principal no estan en la pila de UIManager: un vigia que
@@ -619,6 +621,10 @@ func _refresh_callouts() -> void:
 ## menu (the tree is paused), or the Storm.
 func is_quiet() -> bool:
 	return _storm_silenced or UIManager.is_any_window_open() or get_tree().paused
+
+func _on_storm_phase_changed(phase: int, _left: float) -> void:
+	if phase == StormCycle.Phase.CALM:
+		_set_storm_silenced(false)
 
 func _set_storm_silenced(silenced: bool) -> void:
 	_storm_silenced = silenced

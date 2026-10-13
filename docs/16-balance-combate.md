@@ -462,6 +462,30 @@ medición.
 
 ---
 
+## 8b. Gobernador
+
+El nivel Gobernador de la Campaña (docs/20 §1b) multiplica la escala de todo
+enemigo de expedición por `expedition_enemy_mult`
+(`GameConfig.game_tier_rules.governor`); la primera escaramuza conserva su escala
+fija y el botín no cambia. Medido el 2026-10-04/05 con `tools/balance_probe.gd`
+(modo `jugado`, expediciones completas; Colono y ×1,15 con 200 semillas, ×1,05 y
+×1,08 con 60 — `-- --tier=governor --only=expeditions --exp-seeds=60
+--expedition_mult=F`):
+
+| Era / plantilla | Colono | **×1,05 (elegido)** | ×1,08 | ×1,15 |
+|---|---|---|---|---|
+| e1 / 4 | 53 % | **13 %** | 2 % | 0 % |
+| e1 / 6 | 100 % | **100 %** | 97 % | 80 % |
+| e2 / 6 | 76 % | **43 %** | 32 % | 9 % |
+| e3 / 6 | 30 % | **8 %** | 5 % | — (no terminó) |
+| 3 unidades, cualquier era | 0-2 % | 0 % | 0 % | 0 % |
+
+El combate es determinista y va a escalones (§8.1): un 5 % más de vida y ataque
+ya pide la columna llena en era 1 y la mitad de las expediciones de era 2.
+×1,15 era un muro (la de 4 en era 1 no gana nunca, era 2 casi nunca). Si
+Gobernador resulta demasiado duro jugando a mano, la palanca es bajar a ×1,03;
+si se queda corto, subir antes la escolta del Diezmo que esto.
+
 ## 9. Lo que esto mueve fuera de la expedición
 
 Los mismos `combat_*` los usan la escaramuza suelta, la defensa del Diezmo y la

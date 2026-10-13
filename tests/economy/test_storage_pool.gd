@@ -19,6 +19,8 @@ var _saved_warehouses := 0
 var _saved_era := 1
 var _saved_tech_bonus := 0
 
+var _saved_rank_bonus := 0.0
+
 func before_test() -> void:
 	_saved_amounts = {}
 	for type in ResourceManager.get_all():
@@ -28,9 +30,14 @@ func before_test() -> void:
 	_saved_era = ResourceManager.get_era()
 	_saved_tech_bonus = GameConfig.tech_storage_bonus
 	GameConfig.tech_storage_bonus = 0
+	# El bono del rango del gobernador tambien estira la bolsa: fuera mientras
+	# se miden los topes exactos (otra suite pudo dejar el rango subido).
+	_saved_rank_bonus = GameConfig.rank_storage_bonus
+	GameConfig.rank_storage_bonus = 0.0
 
 func after_test() -> void:
 	GameConfig.tech_storage_bonus = _saved_tech_bonus
+	GameConfig.rank_storage_bonus = _saved_rank_bonus
 	ResourceManager.set_warehouse_count(_saved_warehouses)
 	ResourceManager.set_era(_saved_era)
 	ResourceManager.set_amounts(_saved_amounts)

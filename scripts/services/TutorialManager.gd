@@ -7,7 +7,9 @@ extends Node
 ##   2. TUTORIAL  pasos guiados sobre la interfaz de verdad (TutorialPanel):
 ##                "Pulsa CONSTRUIR" -> "Elige el Aserradero" -> "Junto a un
 ##                bosque" -> "Espera la obra" -> "Una casa". Avanza cuando el
-##                jugador HACE la cosa, no cuando pulsa "Siguiente".
+##                jugador HACE la cosa, no cuando pulsa "Siguiente". No se
+##                salta (2026-10-04); a cambio, ningun paso puede atascarse: lo
+##                imposible se pasa de largo y lo que falta se dice.
 ##   3. AYUDAS    consejos la primera vez que pasa cada cosa, y globos del HUD
 ##                (HelperPanel). Aqui solo se decide que consejo toca y se
 ##                recuerda que ya se vio.
@@ -24,11 +26,36 @@ const GUIDE_ACTIVE := "active"
 const GUIDE_DONE := "done"
 const GUIDE_SKIPPED := "skipped"
 
-## Los pasos del tutorial guiado, en orden. `n` es el numero que ve el jugador
-## (de GUIDE_TOTAL): abrir, elegir y colocar la casa son el mismo paso 7.
-## Recoger lo producido (5) y la Granja (6) entran el 2026-10-04: lo que hace
-## un edificio se queda en el y la gente come comida, y las dos cosas se ensenan
-## en el orden en que pasan al arrancar.
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+
+## Las METAS del tutorial guiado, en orden. Cada meta es algo que el jugador
+## tiene que tener en la isla; el paso que toca sale de la primera meta sin
+## cumplir (derive_step). Dos clases:
+##
+##   - "build": un edificio. Pasos `open` (CONSTRUIR), `pick` (su tarjeta),
+##     `place` (en el mapa) y, si tiene `wait`, esperar a que acabe la obra.
+##   - "fact":  algo que no es un edificio (recoger la produccion...). Se cumple
+##     con TutorialManager.note_guide_fact(<fact>), que llama quien lo vea.
+##     `needs` (opcional): la meta sin la que no se puede cumplir; si esa se pasa
+##     de largo (imposible en esta isla), esta tambien.
+##
+## Recoger lo producido y la Granja (rama feat/comida-granja-recoger, 2026-10-04)
+## van entre el aserradero y la casa: lo que hace un edificio se queda en el y la
+## gente come comida, y las dos cosas se ensenan en el orden en que pasan al
+## arrancar. La Granja no espera a su obra (se cultiva sola al terminar).
+## El orden de esta lista es el orden del tutorial.
+const GUIDE_GOALS := [
+	{"goal": "sawmill", "kind": "build", "building": "sawmill",
+		"steps": {"open": "open_build", "pick": "pick_sawmill", "place": "place_sawmill", "wait": "wait_sawmill"}},
+	{"goal": "collect", "kind": "fact", "fact": "collected", "step": "collect", "needs": "sawmill"},
+	{"goal": "farm", "kind": "build", "building": "farm",
+		"steps": {"open": "open_farm", "pick": "pick_farm", "place": "place_farm"}},
+	{"goal": "house", "kind": "build", "building": "house",
+		"steps": {"open": "open_house", "pick": "pick_house", "place": "place_house"}},
+]
+
+## Los pasos, con lo que ve el jugador. `n` es el numero de "PASO n DE
+## GUIDE_TOTAL": abrir, elegir y colocar la casa son el mismo paso 7.
 const GUIDE_STEPS := {
 	"open_build":    {"n": 1, "text": "GUIDE_OPEN_BUILD",    "target": "build_button"},
 	"pick_sawmill":  {"n": 2, "text": "GUIDE_PICK_SAWMILL",  "target": "card:sawmill"},
@@ -43,7 +70,10 @@ const GUIDE_STEPS := {
 	"place_house":   {"n": 7, "text": "GUIDE_PLACE_HOUSE",   "target": ""},
 	"done":          {"n": 7, "text": "GUIDE_DONE",          "target": "objective"},
 }
+## El mayor `n` de GUIDE_STEPS (una prueba lo comprueba: al insertar pasos, se sube).
 const GUIDE_TOTAL := 7
+## Cada cuanto se repasa si una meta se ha vuelto imposible (segundos).
+const GUIDE_CHECK_SECONDS := 1.0
 
 var intro_seen: bool = false
 var tips_seen: Array[String] = []
@@ -59,9 +89,8 @@ var guide_baseline: Dictionary = {}
 ## `first_sortie` la senala al salir la primera unidad, y cada salida es el nodo
 ## facil en vez del mapa. Perderla o abandonarla no la gasta.
 var first_sortie_done: bool = false
-## El jugador ya recogio algo durante el tutorial (paso "collect"). Viaja en la
-## partida; repetir el tutorial lo vuelve a pedir.
-var guide_collected: bool = false
+## Metas "fact" del tutorial ya cumplidas (GUIDE_GOALS). Van en la partida.
+var guide_flags: Dictionary = {}
 
 ## El prologo esta pedido y espera a que no haya nada encima (menu principal,
 ## pausa, selector de modo).
@@ -70,6 +99,10 @@ var _step := ""
 var _menu_open := false
 var _placing_id := ""
 var _last_scan := 0.0
+var _last_check := 0.0
+## Metas que no se pueden cumplir en esta isla ahora mismo (sin bosque al que
+## llegar, tope de edificios): el tutorial las pasa de largo.
+var _blocked_goals: Array = []
 
 ## Consejos contextuales: id -> claves de Tr. El disparador vive en _ready().
 ## Los ids son los que se guardan en la partida, asi que no se renombran a la
@@ -190,6 +223,15 @@ func _on_intro_closed() -> void:
 ## menu principal (docs/07 bug 1): alli quedaba en la capa 17, congelado por la
 ## pausa, comiendose los toques de Ajustes.
 func _process(delta: float) -> void:
+	# Con el tutorial en marcha, cada segundo: una meta pudo volverse imposible
+	# (se agoto el bosque, se tapo el ultimo hueco) y el paso no puede quedarse
+	# pidiendola para siempre.
+	if guide_state == GUIDE_ACTIVE:
+		_last_check += delta
+		if _last_check >= GUIDE_CHECK_SECONDS:
+			_last_check = 0.0
+			_update_blocked_goals()
+			_refresh_guide()
 	if not _prologue_pending:
 		return
 	_last_scan += delta
@@ -244,6 +286,7 @@ func _begin_or_resume_guide() -> void:
 		start_guide(false)
 	elif guide_state == GUIDE_ACTIVE:
 		_step = ""
+		_update_blocked_goals()
 		_refresh_guide()
 
 ## Empieza el tutorial. `from_scratch` (Repetir tutorial) toma lo que ya hay
@@ -252,9 +295,11 @@ func _begin_or_resume_guide() -> void:
 func start_guide(from_scratch: bool = true) -> void:
 	guide_baseline = _counts() if from_scratch else {}
 	if from_scratch:
-		guide_collected = false
+		guide_flags = {}
 	guide_state = GUIDE_ACTIVE
 	_step = ""
+	_last_check = 0.0
+	_update_blocked_goals()
 	var facts := guide_facts()
 	# Una isla que ya tiene aserradero y casa es una partida jugada (vieja, sin
 	# la marca): no se le ensena nada, tampoco recoger ni la Granja, que llegaron
@@ -268,8 +313,32 @@ func start_guide(from_scratch: bool = true) -> void:
 		return
 	_refresh_guide()
 
+## "Repetir tutorial" del indice de AYUDA. Con el tutorial de verdad aun en
+## marcha no hace nada: si no, repetirlo seria la forma de saltarlo.
+func replay_guide() -> void:
+	if guide_state == GUIDE_ACTIVE:
+		return
+	start_guide(true)
+
+## Es un repaso pedido desde AYUDA, y no el tutorial obligatorio? El repaso
+## guarda su punto de partida (`guide_baseline`); el obligatorio cuenta desde cero.
+func is_replay() -> bool:
+	return guide_state == GUIDE_ACTIVE and not guide_baseline.is_empty()
+
+## El repaso se puede dejar a medias (lo pidio el jugador); el tutorial
+## obligatorio no.
+func stop_replay() -> void:
+	if is_replay():
+		finish_guide()
+
+## API interna, para sondas y pruebas: el jugador ya no tiene "Saltar tutorial"
+## (decision de Bryan, 2026-10-04). Fuera del modo dev no hace nada. Los
+## guardados con el tutorial ya saltado siguen cargando como "skipped".
 func skip_guide() -> void:
 	if guide_state != GUIDE_ACTIVE:
+		return
+	if not GameConfig.dev_mode:
+		push_warning("TutorialManager.skip_guide(): solo en modo dev")
 		return
 	guide_state = GUIDE_SKIPPED
 	_step = ""
@@ -294,60 +363,80 @@ func current_step() -> String:
 ## El paso que toca con estos hechos. Pura, para poder probarla sin escena, y es
 ## la que hace el tutorial robusto: no importa en que orden haga las cosas el
 ## jugador ni que cargue a medias; el paso sale de lo que hay.
-static func derive_step(f: Dictionary) -> String:
+##
+## Hechos: `<edificio>s` (en pie o en obra), `<edificio>s_built` (obra acabada),
+## una clave por cada meta "fact", `menu_open`, `placing` (el id en la mano) y
+## `skip` (metas imposibles en esta isla, que se pasan de largo).
+static func derive_step(f: Dictionary, goals: Array = GUIDE_GOALS) -> String:
 	var placing := String(f.get("placing", ""))
 	var menu := bool(f.get("menu_open", false))
-	if int(f.get("sawmills", 0)) <= 0:
-		if placing == "sawmill":
-			return "place_sawmill"
-		return "pick_sawmill" if menu else "open_build"
-	if int(f.get("sawmills_built", 0)) <= 0:
-		return "wait_sawmill"
-	if not bool(f.get("collected", true)):
-		return "collect"
-	if int(f.get("farms", 1)) <= 0:
-		if placing == "farm":
-			return "place_farm"
-		return "pick_farm" if menu else "open_farm"
-	if int(f.get("houses", 0)) <= 0:
-		if placing == "house":
-			return "place_house"
-		return "pick_house" if menu else "open_house"
+	var skip: Array = f["skip"] if f.get("skip") is Array else []
+	for g in goals:
+		if String(g["goal"]) in skip:
+			continue
+		if String(g.get("kind", "build")) == "fact":
+			if not bool(f.get(String(g["fact"]), false)):
+				return String(g["step"])
+			continue
+		var b := String(g["building"])
+		var steps: Dictionary = g["steps"]
+		if int(f.get(b + "s", 0)) <= 0:
+			if placing == b:
+				return String(steps["place"])
+			return String(steps["pick"]) if menu else String(steps["open"])
+		if steps.has("wait") and int(f.get(b + "s_built", 0)) <= 0:
+			return String(steps["wait"])
 	return "done"
 
 ## Lo que hay ahora, menos lo que ya habia al empezar.
 func guide_facts() -> Dictionary:
 	var now := _counts()
-	return {
-		"sawmills": int(now["sawmills"]) - int(guide_baseline.get("sawmills", 0)),
-		"sawmills_built": int(now["sawmills_built"]) - int(guide_baseline.get("sawmills_built", 0)),
-		"houses": int(now["houses"]) - int(guide_baseline.get("houses", 0)),
-		"farms": int(now["farms"]) - int(guide_baseline.get("farms", 0)),
-		"collected": guide_collected,
+	var f := {
 		"menu_open": _menu_open,
 		"placing": _placing_id,
+		"skip": _blocked_goals.duplicate(),
 	}
+	for key in now:
+		f[key] = int(now[key]) - int(guide_baseline.get(key, 0))
+	for g in GUIDE_GOALS:
+		if String(g.get("kind", "build")) == "fact":
+			f[String(g["fact"])] = bool(guide_flags.get(String(g["fact"]), false))
+	return f
 
+## Una meta "fact" se cumplio (la llama quien lo ve: p. ej. al recoger la
+## produccion). Vale aunque el tutorial aun no haya llegado a ese paso.
+func note_guide_fact(fact: String) -> void:
+	if fact == "" or bool(guide_flags.get(fact, false)):
+		return
+	guide_flags[fact] = true
+	_refresh_guide()
+
+## Los edificios que cuentan las metas "build".
+static func _goal_buildings() -> Array:
+	var out: Array = []
+	for g in GUIDE_GOALS:
+		if String(g.get("kind", "build")) == "build" and not String(g["building"]) in out:
+			out.append(String(g["building"]))
+	return out
+
+## Cuantos hay de cada edificio de las metas: `<id>s` y `<id>s_built`.
 func _counts() -> Dictionary:
-	var sawmills := 0
-	var built := 0
-	var houses := 0
-	var farms := 0
+	var out := {}
+	for b in _goal_buildings():
+		out[b + "s"] = 0
+		out[b + "s_built"] = 0
 	for info in GridManager.get_all_buildings():
 		var data: Resource = info.get("data")
 		if data == null:
 			continue
 		var id := String(data.get("id"))
+		if not out.has(id + "s"):
+			continue
+		out[id + "s"] += 1
 		var node: Node = info.get("node")
-		if id == "sawmill":
-			sawmills += 1
-			if node != null and not node.has_meta("under_construction"):
-				built += 1
-		elif id == "house":
-			houses += 1
-		elif id == "farm":
-			farms += 1
-	return {"sawmills": sawmills, "sawmills_built": built, "houses": houses, "farms": farms}
+		if node != null and not node.has_meta("under_construction"):
+			out[id + "s_built"] += 1
+	return out
 
 func _refresh_guide() -> void:
 	if guide_state != GUIDE_ACTIVE:
@@ -358,11 +447,113 @@ func _refresh_guide() -> void:
 	_step = step
 	EventBus.tutorial_step_changed.emit(step)
 
+## Recoger cualquier produccion cumple la meta "collected" del tutorial.
 func _on_production_collected(_node: Node, _collected: Dictionary) -> void:
-	if guide_collected:
-		return
-	guide_collected = true
-	_refresh_guide()
+	note_guide_fact("collected")
+
+# ── Que ningun paso se atasque ───────────────────────────────────────
+
+## Repasa que metas son imposibles ahora en esta isla.
+func _update_blocked_goals() -> void:
+	var blocked: Array = []
+	var now := _counts()
+	for g in GUIDE_GOALS:
+		if String(g.get("kind", "build")) != "build":
+			continue
+		var b := String(g["building"])
+		# Ya cumplida: nada que comprobar (y la comprobacion del bosque cuesta).
+		if int(now[b + "s"]) - int(guide_baseline.get(b + "s", 0)) > 0:
+			continue
+		if goal_impossible_reason(b) != "":
+			blocked.append(String(g["goal"]))
+	# Una meta "fact" que necesita otra que se pasa de largo, tambien: recoger lo
+	# del aserradero no se puede si no hay aserradero.
+	for g in GUIDE_GOALS:
+		if String(g.get("kind", "build")) == "fact" and String(g.get("needs", "")) in blocked:
+			blocked.append(String(g["goal"]))
+	_blocked_goals = blocked
+
+## Las metas que el tutorial pasa de largo ahora mismo (para pruebas y sondas).
+func blocked_goals() -> Array:
+	return _blocked_goals.duplicate()
+
+## Por que no se puede levantar otro `building_id` en esta isla, pase lo que
+## pase con los recursos: "limit" (tope alcanzado), "prereq" (le falta un
+## edificio que el tutorial no pide), "deposit" (ningun yacimiento al que llegar),
+## "missing" (no existe) o "" si se puede. Faltar recursos u obreros NO es
+## imposible: se arregla esperando o en el Mercado, y lo dice step_hint().
+func goal_impossible_reason(building_id: String) -> String:
+	var data := Rules.load_building_data(building_id)
+	if data == null:
+		return "missing"
+	if not Rules.check_building_limit(building_id):
+		return "limit"
+	if not Rules.check_prerequisites(building_id):
+		return "prereq"
+	if not has_reachable_deposit(data, GameManager.map_generator()):
+		return "deposit"
+	return ""
+
+## Hay al menos un sitio donde `data` toca su yacimiento y llega a la red (con
+## carretera automatica), en cualquiera de sus dos giros? Para que no tenga regla
+## de yacimiento, si. Sin generador o sin ningun yacimiento sorteado aun el mapa
+## no esta listo: tambien si, para no pasar nada de largo a ciegas.
+static func has_reachable_deposit(data: BuildingData, map_gen: Node) -> bool:
+	if data == null:
+		return true
+	var rule: Dictionary = GameConfig.get_deposit_rule(data.id)
+	if rule.is_empty() or map_gen == null or not map_gen.has_method("get_all_deposits"):
+		return true
+	var deposits: Array = map_gen.get_all_deposits()
+	if deposits.is_empty():
+		return true
+	var reach := int(rule["reach"])
+	var sizes: Array = [data.grid_size]
+	if data.grid_size.x != data.grid_size.y:
+		sizes.append(Vector2i(data.grid_size.y, data.grid_size.x))
+	for dep in deposits:
+		if String(dep.get("id", "")) != String(rule["deposit"]):
+			continue
+		var dx := int(dep["cell_x"])
+		var dy := int(dep["cell_y"])
+		var dw := int(dep.get("size_x", 2))
+		var dh := int(dep.get("size_y", 2))
+		for size in sizes:
+			for ox in range(dx - size.x - reach + 1, dx + dw + reach):
+				for oy in range(dy - size.y - reach + 1, dy + dh + reach):
+					var origin := Vector2i(ox, oy)
+					if not GridManager.is_valid_cell(origin):
+						continue
+					if Rules.evaluate_placement(data.id, origin, size, map_gen)["ok"]:
+						return true
+	return false
+
+## Lo que le falta al jugador para el paso de ahora, en una linea corta, o "".
+## Solo en los pasos de construir (abrir, elegir, colocar): obreros o recursos.
+static func step_hint(step_id: String) -> String:
+	var b := building_for_step(step_id)
+	if b == "":
+		return ""
+	var data := Rules.load_building_data(b)
+	if data == null:
+		return ""
+	if data.workers_required > 0 and PopulationManager.get_free_workers() < data.workers_required:
+		return Tr.t("GUIDE_NEED_WORKERS")
+	var short := Rules.missing_cost(data)
+	if not short.is_empty():
+		return Tr.t("OBJ_MISSING") % Tr.amount_list(short)
+	return ""
+
+## El edificio de un paso de construir (abrir, elegir o colocar), o "".
+static func building_for_step(step_id: String) -> String:
+	for g in GUIDE_GOALS:
+		if String(g.get("kind", "build")) != "build":
+			continue
+		var steps: Dictionary = g["steps"]
+		for k in ["open", "pick", "place"]:
+			if String(steps.get(k, "")) == step_id:
+				return String(g["building"])
+	return ""
 
 func _on_placement_started(data: Resource) -> void:
 	_menu_open = false
@@ -509,7 +700,7 @@ func get_save_data() -> Dictionary:
 		"guide_state": guide_state,
 		"guide_baseline": guide_baseline.duplicate(),
 		"first_sortie_done": first_sortie_done,
-		"guide_collected": guide_collected,
+		"guide_flags": guide_flags.duplicate(),
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -538,9 +729,18 @@ func load_save_data(data: Dictionary) -> void:
 	guide_baseline = {}
 	var gb: Variant = data.get("guide_baseline", {})
 	if gb is Dictionary:
-		for k in ["sawmills", "sawmills_built", "houses", "farms"]:
-			if gb.has(k):
-				guide_baseline[k] = int(gb[k])
+		# Las claves de los edificios de las metas de hoy (`<id>s`, `<id>s_built`).
+		# Una meta nueva sin clave en un guardado viejo cuenta desde cero.
+		for b in _goal_buildings():
+			for k in [b + "s", b + "s_built"]:
+				if gb.has(k):
+					guide_baseline[k] = int(gb[k])
+	guide_flags = {}
+	var gf: Variant = data.get("guide_flags", {})
+	if gf is Dictionary:
+		for k in gf:
+			if k is String and gf[k] is bool and gf[k]:
+				guide_flags[k] = true
 	# Sin la clave es un guardado de antes de la primera escaramuza: si ya vio el
 	# consejo del mapa, ya salio de expedicion y no se le vuelve a pedir.
 	var fs: Variant = data.get("first_sortie_done", null)
@@ -548,10 +748,14 @@ func load_save_data(data: Dictionary) -> void:
 		first_sortie_done = fs
 	else:
 		first_sortie_done = "expedition_map" in tips_seen
-	# Sin la clave (guardado de antes de recoger): si el tutorial ya acabo da
-	# igual; si va a medias, se pide recoger una vez.
-	var gc: Variant = data.get("guide_collected", null)
-	guide_collected = gc if gc is bool else guide_state != GUIDE_ACTIVE
+	# Guardado de antes de las metas "fact" (rama comida): traia `guide_collected`.
+	# Sin ninguna de las dos claves: si el tutorial ya acabo da igual; si va a
+	# medias, se pide recoger una vez.
+	if not data.has("guide_flags"):
+		var gc: Variant = data.get("guide_collected", null)
+		if (gc is bool and gc) or (not (gc is bool) and guide_state != GUIDE_ACTIVE):
+			guide_flags["collected"] = true
+	_blocked_goals = []
 	_step = ""
 	_prologue_pending = false
 
@@ -564,7 +768,9 @@ func reset() -> void:
 	guide_state = GUIDE_PENDING
 	guide_baseline = {}
 	first_sortie_done = false
-	guide_collected = false
+	guide_flags = {}
+	_blocked_goals = []
+	_last_check = 0.0
 	_prologue_pending = false
 	_step = ""
 	_menu_open = false

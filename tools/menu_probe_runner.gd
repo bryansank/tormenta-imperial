@@ -136,9 +136,6 @@ func _seed_era3() -> void:
 	EventBus.population_changed.emit(26, 32)
 	EventBus.morale_changed.emit(72)
 	EventBus.workers_changed.emit(14, 26)
-	var notif: Node = get_tree().current_scene.get_node_or_null("NotificationPanel")
-	if notif and notif.get("_status_panel") != null:
-		(notif.get("_status_panel") as Control).visible = true
 	# Un hito y una era a la vez: salen en cola, sin pisarse.
 	EventBus.milestone_completed.emit("era_3")
 	EventBus.era_advanced.emit(3)

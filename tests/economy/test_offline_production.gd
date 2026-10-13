@@ -15,7 +15,7 @@ var _saved_producing: Dictionary = {}
 var _saved_constructing: Dictionary = {}
 var _saved_stock: Dictionary = {}
 var _saved_crops: Dictionary = {}
-var _saved_spoil: Variant = null
+var _saved_tier: int = 0
 var _saved_resources: Dictionary = {}
 var _saved_population: Dictionary = {}
 var _saved_tech_bonus := 0.0
@@ -32,7 +32,7 @@ func before_test() -> void:
 	_saved_crops = ProductionManager._crops
 	ProductionManager._stock = {}
 	ProductionManager._crops = {}
-	_saved_spoil = GameConfig.game_mode_rules["campaign"].get("spoilage", false)
+	_saved_tier = GameMode.tier
 	_saved_resources = {}
 	for type in ResourceManager.get_all():
 		_saved_resources[ResourceManager.get_type_name(type)] = ResourceManager.get_amount(type)
@@ -54,7 +54,7 @@ func after_test() -> void:
 	ProductionManager._constructing = _saved_constructing
 	ProductionManager._stock = _saved_stock
 	ProductionManager._crops = _saved_crops
-	GameConfig.game_mode_rules["campaign"]["spoilage"] = _saved_spoil
+	GameMode.tier = _saved_tier
 	ResourceManager.set_amounts(_saved_resources)
 	PopulationManager.load_save_data(_saved_population)
 	GameConfig.tech_production_bonus = _saved_tech_bonus
@@ -161,12 +161,12 @@ func test_offline_spoilage_only_when_the_mode_asks() -> void:
 	var node := _foundry()
 	ProductionManager._add_to_stock(node, {"steel": 100})
 	node.set_meta("staffed", false)
-	GameConfig.game_mode_rules["campaign"]["spoilage"] = false
+	GameMode.tier = GameMode.Tier.COLONIST
 	ProductionManager.apply_offline_progression(GameConfig.spoil_after_seconds + 10.0)
 	assert_dict(ProductionManager.get_stock(node)).is_equal({"steel": 100})
 	assert_dict(ProductionManager.last_offline_spoiled).is_empty()
 	ProductionManager._stock[node]["age"] = 0.0
-	GameConfig.game_mode_rules["campaign"]["spoilage"] = true
+	GameMode.tier = GameMode.Tier.GOVERNOR  # se estropea solo en Gobernador
 	ProductionManager.apply_offline_progression(GameConfig.spoil_after_seconds + 10.0)
 	assert_dict(ProductionManager.get_stock(node)).is_equal({"steel": 50})
 	assert_dict(ProductionManager.last_offline_spoiled).is_equal({"steel": 50})

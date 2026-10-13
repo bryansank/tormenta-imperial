@@ -281,6 +281,10 @@ signal objective_panel_toggled()
 signal sidebar_toggled(visible: bool)
 @warning_ignore("unused_signal")
 signal grid_overlay_toggled(visible: bool)
+## La calidad grafica del mapa cambio en Ajustes ("auto", "high", "low");
+## WorldLook la aplica al entorno y al sol de la escena 3D.
+@warning_ignore("unused_signal")
+signal graphics_quality_changed(quality: String)
 
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
@@ -341,6 +345,21 @@ signal run_ended(result: String)
 ## "audit". Solo informativo (avisos, sonido); las reglas no cambian.
 @warning_ignore("unused_signal")
 signal sandbox_invoked(what: String)
+
+# ── Rango del gobernador ──
+## Emitidas solo por RankManager. La XP sale de las senales de arriba; el rango
+## se deriva de ella (GameConfig.rank_xp_thresholds).
+## La XP cambio. `gained` es lo que acaba de entrar (0 al cargar o empezar).
+@warning_ignore("unused_signal")
+signal governor_xp_changed(xp: int, rank: int, gained: int)
+## Se subio de rango. `rewards` es la union de GameConfig.rank_rewards de cada
+## rango alcanzado en este salto (un hito gordo puede saltar dos).
+@warning_ignore("unused_signal")
+signal governor_rank_up(rank: int, rewards: Dictionary)
+## El jugador eligio otra bandera o color (☰ MENU > COLONIA). El Nucleo y las
+## fichas propias del tablero se repintan al oirla.
+@warning_ignore("unused_signal")
+signal colony_cosmetics_changed(flag_id: String, color_id: String)
 
 # ── prologo-ayudas ──
 ## El tutorial guiado cambio de paso (TutorialManager.GUIDE_STEPS). "" = ninguno

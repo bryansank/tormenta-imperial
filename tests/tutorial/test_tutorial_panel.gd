@@ -2,8 +2,9 @@ extends GdUnitTestSuite
 ## TutorialPanel: aloja el prologo y pinta los pasos del tutorial guiado sobre la
 ## interfaz real (velo con hueco, marco, flecha y una linea de texto). Se prueba
 ## que el prologo se abre a peticion y avisa al cerrar, que un paso ensena su
-## texto y su numero, que el velo no se come ningun toque, que "Saltar tutorial"
-## lo salta, y que la tarjeta nunca tapa lo que senala.
+## texto y su numero, que el velo no se come ningun toque, que no hay "Saltar
+## tutorial" (solo "Terminar repaso" en un repaso pedido), y que la tarjeta nunca
+## tapa lo que senala.
 
 var _closed := 0
 var _saved: Dictionary = {}
@@ -83,14 +84,31 @@ func test_the_veil_never_eats_a_touch() -> void:
 		if not in_card:
 			assert_int(ctl.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
 
-func test_skip_tutorial_skips_it() -> void:
+func test_there_is_no_skip_tutorial_button() -> void:
+	# Decision de Bryan (2026-10-04): el tutorial no se salta.
 	var panel := _panel()
 	await await_idle_frame()
 	_start_guide()
 	await await_idle_frame()
-	panel.skip_button().pressed.emit()
+	assert_object(panel.find_child("SkipTutorial", true, false)).is_null()
+	for b in panel.find_child("CoachCard", true, false).find_children("*", "Button", true, false):
+		if (b as Button).is_visible_in_tree():
+			assert_str((b as Button).text).is_not_equal("Saltar tutorial")
+			assert_str((b as Button).text).is_not_equal("Skip tutorial")
+	assert_bool(panel.end_replay_button().visible).is_false()
+	assert_bool(Tr._STRINGS["es"].has("BTN_GUIDE_SKIP")).is_false()
+
+func test_a_replay_from_help_can_be_ended() -> void:
+	var panel := _panel()
 	await await_idle_frame()
-	assert_str(TutorialManager.guide_state).is_equal(TutorialManager.GUIDE_SKIPPED)
+	TutorialManager.intro_seen = true
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	TutorialManager.replay_guide()
+	await await_idle_frame()
+	assert_bool(panel.end_replay_button().visible).is_true()
+	panel.end_replay_button().pressed.emit()
+	await await_idle_frame()
+	assert_str(TutorialManager.guide_state).is_equal(TutorialManager.GUIDE_DONE)
 	assert_bool(panel.is_coach_visible()).is_false()
 
 func test_the_coach_hides_while_paused() -> void:

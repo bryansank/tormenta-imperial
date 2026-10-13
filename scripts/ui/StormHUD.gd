@@ -149,7 +149,8 @@ func _refresh() -> void:
 ## En calma no hay nada que indicar: un banner permanente que dice "tranquilo"
 ## acaba siendo mobiliario y deja de leerse cuando por fin cambia.
 func _should_show(phase: int) -> bool:
-	if not StormManager.is_armed():
+	# La tormenta de prueba de la era 1 se ve como una de verdad.
+	if not StormManager.is_armed() and not StormManager.is_trial_running():
 		return false
 	return phase in [StormCycle.Phase.WARNING, StormCycle.Phase.ASH,
 		StormCycle.Phase.STORM, StormCycle.Phase.TITHE]
