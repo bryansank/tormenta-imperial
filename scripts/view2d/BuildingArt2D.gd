@@ -51,12 +51,16 @@ const HAZARD := Color(0.95, 0.75, 0.12)
 ## se lean como dos.
 const INSET := 2.0
 
+## La plantilla de la parcela (compartida con la 3D).
+const LotPlanRef := preload("res://scripts/buildings/LotPlan.gd")
+
 # ── Entrada ───────────────────────────────────────────────────────────
 
 ## Dibuja el edificio `id` con huella `size` (px, sin girar) centrado en el origen.
-## `opts`: "road_mask" (int, calzadas), "level" (int), "shadow" (bool, por defecto true).
+## `opts`: "road_mask" (int, calzadas), "level" (int), "shadow" (bool, por defecto true),
+## "inset" (px por lado: el patio de la parcela, que el edificio deja libre).
 static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dictionary = {}) -> void:
-	var r := Rect2(-size * 0.5, size).grow(-INSET)
+	var r := Rect2(-size * 0.5, size).grow(-INSET - float(opts.get("inset", 0.0)))
 	if id == "road":
 		_road(ci, Rect2(-size * 0.5, size), int(opts.get("road_mask", 0)))
 		return
@@ -171,34 +175,70 @@ static func _house(ci: CanvasItem, r: Rect2) -> void:
 	ci.draw_rect(ch, OUTLINE, false, 1.0)
 	_smoke(ci, ch.get_center(), 0.8)
 
+## Aserradero abierto (2026-10-04), como el 3D: la media cubierta de chapa
+## atras, las cerchas al aire delante y, a la vista, la mesa con el tronco, el
+## tablon cortado y la sierra GRANDE de buje rojo, que es lo que se reconoce.
 static func _sawmill(ci: CanvasItem, r: Rect2) -> void:
-	var long_x := r.size.x >= r.size.y
 	_plate(ci, r, WOOD, OUTLINE)
-	# Tablones
-	var n := 7
-	for i in range(1, n):
-		if long_x:
-			var y := r.position.y + r.size.y * i / float(n)
-			ci.draw_line(Vector2(r.position.x + 2, y), Vector2(r.end.x - 2, y), DARK_WOOD, 1.0)
-		else:
-			var x := r.position.x + r.size.x * i / float(n)
-			ci.draw_line(Vector2(x, r.position.y + 2), Vector2(x, r.end.y - 2), DARK_WOOD, 1.0)
-	# Pila de troncos en un extremo, sierra en el otro
-	var a := r.position + r.size * (Vector2(0.27, 0.5) if long_x else Vector2(0.5, 0.27))
-	var b := r.position + r.size * (Vector2(0.72, 0.5) if long_x else Vector2(0.5, 0.72))
-	var lr := minf(r.size.x, r.size.y) * 0.17
-	for off in [Vector2(-1, -0.5), Vector2(1, -0.5), Vector2(0, 0.55)]:
-		var p: Vector2 = a + off * lr * 1.05
-		_disc(ci, p, lr, LIGHT_WOOD)
-		ci.draw_arc(p, lr * 0.55, 0.0, TAU, 12, DARK_WOOD, 1.0)
-		ci.draw_circle(p, lr * 0.15, DARK_WOOD)
-	var sr := minf(r.size.x, r.size.y) * 0.34
-	for i in range(16):
-		var ang := TAU * i / 16.0
-		ci.draw_line(b + Vector2(cos(ang), sin(ang)) * sr * 0.8, b + Vector2(cos(ang + 0.2), sin(ang + 0.2)) * sr, STEEL.lightened(0.2), 2.0)
-	_disc(ci, b, sr * 0.82, STEEL)
-	ci.draw_arc(b, sr * 0.55, 0.0, TAU, 16, STEEL.lightened(0.3), 1.0)
-	_disc(ci, b, sr * 0.2, BRASS)
+	# Tablas del suelo
+	for i in range(1, 8):
+		var y := r.position.y + r.size.y * i / 8.0
+		ci.draw_line(Vector2(r.position.x + 2, y), Vector2(r.end.x - 2, y), DARK_WOOD, 1.0)
+	var m := minf(r.size.x, r.size.y)
+	# Media cubierta (atras = arriba), con su sombra sobre el suelo
+	var roof := Rect2(r.position, Vector2(r.size.x, r.size.y * 0.4))
+	ci.draw_rect(Rect2(roof.position + Vector2(0, roof.size.y), Vector2(roof.size.x, m * 0.06)), Color(0, 0, 0, 0.3))
+	ci.draw_rect(roof, Color(0.42, 0.30, 0.22))
+	for i in range(1, 9):
+		var x := roof.position.x + roof.size.x * i / 9.0
+		ci.draw_line(Vector2(x, roof.position.y + 1), Vector2(x, roof.end.y - 1), Color(0.55, 0.40, 0.30), 1.5)
+	ci.draw_line(Vector2(roof.position.x, roof.end.y), roof.end, OUTLINE, 2.0)
+	ci.draw_rect(roof, OUTLINE, false, 1.5)
+	# Chimenea de la maquina de vapor asomando por la chapa
+	var chim := roof.position + roof.size * Vector2(0.78, 0.45)
+	_disc(ci, chim, m * 0.07, IRON)
+	ci.draw_circle(chim, m * 0.035, IMPERIAL_RED)
+	# Cerchas al aire sobre la zona de trabajo
+	for fx in [0.03, 0.36, 0.64, 0.97]:
+		var x: float = r.position.x + r.size.x * fx
+		ci.draw_line(Vector2(x, roof.end.y), Vector2(x, r.end.y - 1), DARK_WOOD.darkened(0.2), 2.0)
+	ci.draw_line(Vector2(r.position.x, r.end.y - 2), Vector2(r.end.x, r.end.y - 2), DARK_WOOD.darkened(0.2), 3.0)
+	# Mesa de la sierra, de lado a lado
+	var ty := r.position.y + r.size.y * 0.63
+	var table := Rect2(Vector2(r.position.x + r.size.x * 0.08, ty - m * 0.09), Vector2(r.size.x * 0.84, m * 0.18))
+	ci.draw_rect(table, GUNMETAL)
+	ci.draw_rect(table, OUTLINE, false, 1.0)
+	# Tronco entrando por la izquierda y tablon saliendo por la derecha
+	var log_r := Rect2(Vector2(table.position.x + 2, ty - m * 0.07), Vector2(r.size.x * 0.32, m * 0.14))
+	ci.draw_rect(log_r, Color(0.42, 0.28, 0.15))
+	ci.draw_rect(log_r, OUTLINE, false, 1.0)
+	ci.draw_circle(Vector2(log_r.position.x + 2, ty), m * 0.06, LIGHT_WOOD)
+	var plank := Rect2(Vector2(r.position.x + r.size.x * 0.62, ty - m * 0.05), Vector2(r.size.x * 0.28, m * 0.1))
+	ci.draw_rect(plank, LIGHT_WOOD)
+	ci.draw_rect(plank, OUTLINE, false, 1.0)
+	# Pila de troncos delante a la izquierda, tablones delante a la derecha
+	var lr := m * 0.07
+	for k in 3:
+		var p := Vector2(r.position.x + r.size.x * 0.12 + k * lr * 1.9, r.end.y - lr * 1.7)
+		_disc(ci, p, lr, LIGHT_WOOD, OUTLINE, 1.0)
+		ci.draw_circle(p, lr * 0.3, DARK_WOOD)
+	var stack := Rect2(Vector2(r.position.x + r.size.x * 0.66, r.end.y - m * 0.2), Vector2(r.size.x * 0.26, m * 0.15))
+	ci.draw_rect(stack, LIGHT_WOOD)
+	for j in range(1, 4):
+		var y := stack.position.y + stack.size.y * j / 4.0
+		ci.draw_line(Vector2(stack.position.x, y), Vector2(stack.end.x, y), DARK_WOOD, 1.0)
+	ci.draw_rect(stack, OUTLINE, false, 1.0)
+	# La sierra: el elemento exagerado. Dientes, disco y buje rojo.
+	var b := Vector2(r.get_center().x, ty)
+	var sr := m * 0.27
+	for i in range(18):
+		var ang := TAU * i / 18.0
+		ci.draw_line(b + Vector2(cos(ang), sin(ang)) * sr * 0.8, b + Vector2(cos(ang + 0.22), sin(ang + 0.22)) * sr * 1.06, STEEL.lightened(0.3), 2.5)
+	_disc(ci, b, sr * 0.86, STEEL.lightened(0.15), OUTLINE, 2.0)
+	ci.draw_arc(b, sr * 0.55, 0.0, TAU, 18, STEEL.lightened(0.4), 1.0)
+	ci.draw_arc(b, sr * 0.86, PI * 1.1, PI * 1.6, 8, Color(1, 1, 1, 0.6), 1.5)
+	_disc(ci, b, sr * 0.24, IMPERIAL_RED, OUTLINE, 1.5)
+	ci.draw_circle(b, sr * 0.08, BRASS_LIGHT)
 
 static func _gold_mine(ci: CanvasItem, r: Rect2) -> void:
 	var c := r.get_center()
@@ -1042,11 +1082,365 @@ static func fx_anchors(id: String) -> Array:
 		"foundry": return [Vector2(0.14, 0.5), Vector2(0.86, 0.5)]
 		"refinery": return [Vector2(0.78, 0.2)]
 		"gold_mine": return [Vector2(0.5, 0.37)]
-		"sawmill": return [Vector2(0.72, 0.5)]
+		"sawmill": return [Vector2(0.5, 0.63)]
 		"barracks": return [Vector2(0.5, 0.35)]
 		"tower": return [Vector2(0.33, 0.67)]
 		"warehouse": return [Vector2(0.5, 0.85)]
 	return [Vector2(0.5, 0.45)]
+
+# ── Parcela y atrezo (docs/03, "Parcela y atrezo") ────────────────────
+
+const LOT_CHAR := Color(0.07, 0.06, 0.05)
+const LOT_BORDER := Color(0.10, 0.085, 0.07, 0.95)
+
+## El suelo de la parcela, su borde oscuro y el remate de los lados sin
+## calzada, para un plan de LotPlan. `size`: la huella SIN girar (px). Va
+## debajo del edificio.
+static func draw_lot_ground(ci: CanvasItem, plan: Dictionary, size: Vector2) -> void:
+	if plan.is_empty():
+		return
+	var lot := Rect2(-size * 0.5, size)
+	var cell := size.x / maxf(1.0, (plan["lot"] as Vector2).x)
+	var state := String(plan["state"])
+	var kind := String(plan["ground"])
+	var base := _ground_color(kind)
+	if state == "ruin":
+		base = base.lerp(LOT_CHAR, 0.45)
+	ci.draw_rect(lot, base)
+	_ground_pattern(ci, lot, kind, cell, base)
+	for run in plan["trim_runs"]:
+		_trim_2d(ci, String(plan["trim"]), run, cell, plan["accent"])
+	ci.draw_rect(lot.grow(-0.75), LOT_BORDER, false, 1.5)
+
+## Sombra de contacto bajo el edificio: una mancha oscura que lo ancla al suelo
+## y un filo mas oscuro donde lo toca (el borde que lo separa del fondo).
+static func draw_lot_shadow(ci: CanvasItem, model_px: Rect2) -> void:
+	ci.draw_rect(model_px.grow(3.0), Color(0, 0, 0, 0.16))
+	ci.draw_rect(model_px.grow(1.5), Color(0, 0, 0, 0.22))
+	ci.draw_rect(model_px.grow(1.0), Color(0, 0, 0, 0.55), false, 2.0)
+
+## El atrezo del patio. Va encima del edificio (no se tocan: el plan lo deja
+## en el patio) y, en ruina, encima de los escombros.
+static func draw_lot_props(ci: CanvasItem, plan: Dictionary, size: Vector2) -> void:
+	if plan.is_empty():
+		return
+	var cell := size.x / maxf(1.0, (plan["lot"] as Vector2).x)
+	var accent: Color = plan["accent"]
+	for p in plan["props"]:
+		var c: Vector2 = (p["pos"] as Vector2) * cell
+		var rad := float(p["radius"]) * cell
+		draw_lot_prop(ci, String(p["kind"]), c, rad, float(p["rot"]), accent,
+			bool(p.get("toppled", false)), bool(p.get("snapped", false)), bool(p.get("burnt", false)))
+	draw_lot_signature(ci, plan, size)
+
+static func _ground_color(kind: String) -> Color:
+	match kind:
+		"dirt": return Color(0.47, 0.37, 0.25)
+		"plate": return Color(0.40, 0.41, 0.43)
+		"grass": return Color(0.31, 0.50, 0.21)
+	return Color(0.60, 0.58, 0.54)
+
+static func _ground_pattern(ci: CanvasItem, lot: Rect2, kind: String, cell: float, base: Color) -> void:
+	match kind:
+		"slabs", "plate":
+			var step := cell * 0.5
+			var line := base.darkened(0.35) if kind == "slabs" else base.darkened(0.45)
+			var x := lot.position.x + step
+			while x < lot.end.x - 1.0:
+				ci.draw_line(Vector2(x, lot.position.y), Vector2(x, lot.end.y), line, 1.0)
+				x += step
+			var y := lot.position.y + step
+			while y < lot.end.y - 1.0:
+				ci.draw_line(Vector2(lot.position.x, y), Vector2(lot.end.x, y), line, 1.0)
+				y += step
+			if kind == "plate":
+				var yy := lot.position.y + step * 0.15
+				while yy < lot.end.y:
+					var xx := lot.position.x + step * 0.15
+					while xx < lot.end.x:
+						ci.draw_circle(Vector2(xx, yy), 0.9, BRASS.darkened(0.1))
+						xx += step * 0.7
+					yy += step * 0.7
+		"dirt":
+			for i in int(lot.size.x * lot.size.y / 90.0):
+				var p := lot.position + lot.size * Vector2(fposmod(i * 0.381, 1.0), fposmod(i * 0.617 + 0.21, 1.0))
+				ci.draw_circle(p, 1.1, base.darkened(0.22) if i % 3 else base.lightened(0.18))
+		"grass":
+			for i in int(lot.size.x * lot.size.y / 70.0):
+				var p := lot.position + lot.size * Vector2(fposmod(i * 0.437, 1.0), fposmod(i * 0.719 + 0.07, 1.0))
+				ci.draw_line(p, p + Vector2(0.6, -2.2), base.lightened(0.18) if i % 2 else base.darkened(0.2), 1.0)
+
+static func _trim_2d(ci: CanvasItem, trim: String, run: Dictionary, cell: float, accent: Color) -> void:
+	var a: Vector2 = (run["a"] as Vector2) * cell
+	var b: Vector2 = (run["b"] as Vector2) * cell
+	var broken := int(run.get("broken", 0))
+	var segs := maxi(2, int(a.distance_to(b) / (cell * 0.25)))
+	var w := cell * 0.06
+	for i in segs:
+		if broken != 0 and (broken >> (i % 30)) & 1 == 1 and (broken >> ((i + 7) % 30)) & 1 == 1:
+			continue
+		var p0 := a.lerp(b, float(i) / float(segs))
+		var p1 := a.lerp(b, float(i + 1) / float(segs))
+		var dim := 0.55 if broken != 0 else 0.0
+		match trim:
+			"fence":
+				ci.draw_line(p0, p1, LIGHT_WOOD.lerp(LOT_CHAR, dim), maxf(1.5, w))
+				ci.draw_rect(Rect2(p0 - Vector2(1.5, 1.5), Vector2(3, 3)), DARK_WOOD)
+			"rail":
+				ci.draw_line(p0, p1, IRON.lightened(0.15).lerp(LOT_CHAR, dim), maxf(1.5, w * 0.8))
+				ci.draw_circle(p0, 1.6, IRON)
+			"sandbags":
+				var mid := (p0 + p1) * 0.5
+				var sack := Color(0.66, 0.58, 0.40).lerp(LOT_CHAR, dim)
+				ci.draw_circle(mid, maxf(2.0, w * 1.1), sack.darkened(0.25))
+				ci.draw_circle(mid - Vector2(0.4, 0.4), maxf(1.6, w * 0.9), sack)
+			"pipes":
+				ci.draw_line(p0, p1, COPPER.darkened(0.25).lerp(LOT_CHAR, dim), maxf(2.5, w * 1.2))
+				ci.draw_line(p0, p1, COPPER.lerp(LOT_CHAR, dim), maxf(1.2, w * 0.6))
+				if i % 3 == 1:
+					_disc(ci, (p0 + p1) * 0.5, maxf(2.0, w), accent, OUTLINE, 1.0)
+			_:
+				ci.draw_line(p0, p1, (Color(0.74, 0.71, 0.66) if i % 2 == 0 else Color(0.66, 0.63, 0.58)).lerp(LOT_CHAR, dim), maxf(2.0, w * 1.4))
+
+## Una pieza de atrezo vista desde arriba, en `c` con radio `rad` (px). Volcada:
+## tumbada a lo largo de su lado; partida: un munon; quemada: hacia el carbon.
+static func draw_lot_prop(ci: CanvasItem, kind: String, c: Vector2, rad: float, rot: float, accent: Color, toppled := false, snapped := false, burnt := false) -> void:
+	var dim := 0.6 if burnt else 0.0
+	var col := _prop_color(kind, accent).lerp(LOT_CHAR, dim)
+	ci.draw_circle(c + Vector2(1.2, 1.6), rad, Color(0, 0, 0, 0.25))
+	if snapped:
+		_disc(ci, c, rad * 0.45, col, OUTLINE, 1.0)
+		ci.draw_line(c, c + Vector2.from_angle(rot) * rad * 1.4, col.darkened(0.2), 2.0)
+		return
+	if toppled:
+		var d := Vector2.from_angle(rot)
+		ci.draw_line(c - d * rad * 1.1, c + d * rad * 1.1, OUTLINE, rad * 1.2)
+		ci.draw_line(c - d * rad * 1.0, c + d * rad * 1.0, col, rad * 0.9)
+		return
+	match kind:
+		"barrel", "drums":
+			var n := 2 if kind == "drums" else 1
+			for k in n:
+				var o := Vector2.from_angle(rot) * rad * (0.5 if n == 2 else 0.0) * (1.0 if k == 0 else -1.0)
+				var cc := (accent if (kind == "drums" and k == 0) else col).lerp(LOT_CHAR, dim)
+				_disc(ci, c + o, rad * (0.55 if n == 2 else 0.8), cc, OUTLINE, 1.0)
+				ci.draw_arc(c + o, rad * (0.35 if n == 2 else 0.5), 0.0, TAU, 10, cc.darkened(0.3), 1.0)
+		"crate", "ammo", "goods", "pallet":
+			_rot_rect(ci, c, Vector2(rad * 1.5, rad * 1.5), rot, col)
+			if kind == "ammo":
+				_rot_rect(ci, c, Vector2(rad * 1.5, rad * 0.35), rot, accent.lerp(LOT_CHAR, dim), false)
+			elif kind == "goods":
+				for k in 3:
+					ci.draw_circle(c + Vector2.from_angle(rot) * rad * (k - 1) * 0.45, rad * 0.28, [Color(0.85, 0.18, 0.12), Color(0.95, 0.75, 0.15), Color(0.4, 0.65, 0.2)][k].lerp(LOT_CHAR, dim))
+			elif kind == "pallet":
+				_rot_rect(ci, c, Vector2(rad * 1.2, rad * 1.2), rot, Color(0.66, 0.63, 0.58).lerp(LOT_CHAR, dim))
+			else:
+				var d := Vector2.from_angle(rot) * rad * 0.7
+				var e := Vector2.from_angle(rot + PI * 0.5) * rad * 0.7
+				ci.draw_line(c - d - e, c + d + e, DARK_WOOD, 1.0)
+				ci.draw_line(c - d + e, c + d - e, DARK_WOOD, 1.0)
+		"logs", "planks":
+			var d := Vector2.from_angle(rot)
+			var e := Vector2.from_angle(rot + PI * 0.5)
+			for k in 3:
+				var o := e * rad * (k - 1) * 0.6
+				ci.draw_line(c + o - d * rad, c + o + d * rad, OUTLINE, rad * 0.62)
+				ci.draw_line(c + o - d * rad * 0.95, c + o + d * rad * 0.95, col if k % 2 == 0 else col.lightened(0.12), rad * 0.45)
+				if kind == "logs":
+					ci.draw_circle(c + o + d * rad, rad * 0.24, LIGHT_WOOD.lerp(LOT_CHAR, dim))
+		"sacks", "ore", "coal":
+			for k in 3:
+				var o := Vector2.from_angle(rot + TAU * k / 3.0) * rad * 0.4
+				_disc(ci, c + o, rad * 0.5, col if k != 1 else col.lightened(0.1), OUTLINE, 1.0)
+			if kind == "ore":
+				for k in 3:
+					ci.draw_circle(c + Vector2.from_angle(rot + 1.0 + TAU * k / 3.0) * rad * 0.35, rad * 0.18, BRASS_LIGHT.lerp(LOT_CHAR, dim))
+		"cart":
+			_rot_rect(ci, c, Vector2(rad * 1.8, rad * 0.9), rot, Color(0.25, 0.22, 0.22), false)
+			_rot_rect(ci, c, Vector2(rad * 1.2, rad * 1.0), rot, RUST.lerp(LOT_CHAR, dim))
+			ci.draw_circle(c, rad * 0.3, BRASS_LIGHT.lerp(LOT_CHAR, dim))
+		"ingots":
+			var d := Vector2.from_angle(rot + PI * 0.5)
+			for k in 3:
+				_rot_rect(ci, c + d * rad * (k - 1) * 0.45, Vector2(rad * 1.5, rad * 0.35), rot, (Color(1.0, 0.55, 0.12) if k == 1 else STEEL).lerp(LOT_CHAR, dim))
+		"lamp":
+			if not burnt:
+				ci.draw_circle(c, rad * 1.5, Color(1.0, 0.82, 0.45, 0.22))
+			_disc(ci, c, rad * 0.45, IRON, OUTLINE, 1.0)
+			ci.draw_circle(c, rad * 0.25, Color(1.0, 0.85, 0.5).lerp(LOT_CHAR, dim))
+		"bench":
+			_rot_rect(ci, c, Vector2(rad * 2.0, rad * 0.7), rot, col)
+		"planter":
+			_rot_rect(ci, c, Vector2(rad * 1.3, rad * 1.3), rot, Color(0.62, 0.32, 0.20).lerp(LOT_CHAR, dim))
+			_disc(ci, c, rad * 0.55, LEAF.lerp(LOT_CHAR, dim), LEAF_DARK, 1.0)
+			ci.draw_circle(c + Vector2(rad * 0.2, -rad * 0.15), rad * 0.15, Color(0.95, 0.35, 0.3).lerp(LOT_CHAR, dim))
+		"gas":
+			var d := Vector2.from_angle(rot)
+			for k in 3:
+				_disc(ci, c + d * rad * (k - 1) * 0.6, rad * 0.3, (Color(0.25, 0.5, 0.42) if k != 1 else Color(0.3, 0.45, 0.7)).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+		"dummy":
+			_disc(ci, c, rad * 0.45, Color(0.72, 0.62, 0.42).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+			var d := Vector2.from_angle(rot) * rad * 0.85
+			ci.draw_line(c - d, c + d, DARK_WOOD, 2.0)
+		"target":
+			_disc(ci, c, rad * 0.9, Color(0.92, 0.9, 0.84).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+			ci.draw_circle(c, rad * 0.62, Color(0.8, 0.15, 0.1).lerp(LOT_CHAR, dim))
+			ci.draw_circle(c, rad * 0.35, Color(0.92, 0.9, 0.84).lerp(LOT_CHAR, dim))
+			ci.draw_circle(c, rad * 0.15, accent.lerp(LOT_CHAR, dim))
+		"flag":
+			ci.draw_circle(c, rad * 0.3, IRON)
+			var tip := c + Vector2.from_angle(rot) * rad * 1.3
+			ci.draw_colored_polygon(PackedVector2Array([c, tip + Vector2(0, -rad * 0.3), tip + Vector2(0, rad * 0.5)]), accent.lerp(LOT_CHAR, dim))
+		"clothesline":
+			var d := Vector2.from_angle(rot) * rad
+			ci.draw_line(c - d, c + d, Color(0.85, 0.82, 0.75), 1.0)
+			for k in 3:
+				_rot_rect(ci, c + d * (k - 1) * 0.6, Vector2(rad * 0.4, rad * 0.25), rot, [Color(0.92, 0.9, 0.84), accent, Color(0.35, 0.45, 0.7)][k].lerp(LOT_CHAR, dim))
+		"valve":
+			_disc(ci, c, rad * 0.55, accent.lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+			ci.draw_line(c - Vector2(rad * 0.5, 0), c + Vector2(rad * 0.5, 0), COPPER, 1.5)
+			ci.draw_line(c - Vector2(0, rad * 0.5), c + Vector2(0, rad * 0.5), COPPER, 1.5)
+		"stake":
+			ci.draw_circle(c, rad * 0.22, LIGHT_WOOD)
+			ci.draw_colored_polygon(PackedVector2Array([c, c + Vector2(rad * 0.7, -rad * 0.2), c + Vector2(0, -rad * 0.45)]), Color(1.0, 0.45, 0.08))
+		_:
+			_disc(ci, c, rad * 0.7, col, OUTLINE, 1.0)
+
+## El elemento exagerado visto desde arriba (la chimenea, la grua, la antena,
+## el emblema...), en su esquina del patio: el mismo que en 3D (BuildingLot).
+static func draw_lot_signature(ci: CanvasItem, plan: Dictionary, size: Vector2) -> void:
+	var sig: Dictionary = plan.get("signature", {})
+	if sig.is_empty():
+		return
+	var corners: Array = sig.get("corners", [])
+	var cell := size.x / maxf(1.0, (plan["lot"] as Vector2).x)
+	if bool(sig.get("on_roof", false)):
+		var mr0: Rect2 = plan["model"]
+		_emblem_2d(ci, mr0.get_center() * cell, minf(mr0.size.x, mr0.size.y) * cell * 0.26, plan["accent"], bool(sig.get("ruined", false)))
+		return
+	if corners.is_empty():
+		return
+	var yard := float(plan["yard"])
+	var fp: Vector2i = plan["footprint"]
+	var sgn: Vector2 = corners[0]
+	var c: Vector2 = LotPlanRef.corner_center(fp, yard, sgn) * cell
+	var r := yard * cell * 0.45
+	var mr: Rect2 = plan["model"]
+	var model := Rect2(mr.position * cell, mr.size * cell)
+	var ruined := bool(sig.get("ruined", false))
+	var dim := 0.65 if ruined else 0.0
+	var accent: Color = plan["accent"]
+	match String(sig["kind"]):
+		"chimney":
+			ci.draw_circle(c + Vector2(3, 4), r * 1.05, Color(0, 0, 0, 0.3))
+			_disc(ci, c, r, Color(0.56, 0.26, 0.17).lerp(LOT_CHAR, dim), OUTLINE, 1.5)
+			if not ruined:
+				ci.draw_arc(c, r * 0.78, 0.0, TAU, 14, accent, 2.0)
+				ci.draw_circle(c, r * 0.55, Color(0.08, 0.06, 0.05))
+				ci.draw_circle(c, r * 0.3, FIRE)
+				_smoke(ci, c, 1.2)
+		"crane":
+			var yellow := Color(0.95, 0.72, 0.12).lerp(LOT_CHAR, dim)
+			var tip := Vector2(model.get_center().x, model.end.y + yard * cell * 0.5)
+			if not ruined:
+				ci.draw_line(c + Vector2(4, 5), tip + Vector2(4, 5), Color(0, 0, 0, 0.3), 4.0)
+				ci.draw_line(c, tip, OUTLINE, 4.5)
+				ci.draw_line(c, tip, yellow, 2.5)
+				var back := c + (c - tip).normalized() * cell * 0.25
+				ci.draw_line(c, back, OUTLINE, 4.0)
+				ci.draw_line(c, back, yellow, 2.2)
+				ci.draw_rect(Rect2(back - Vector2(3, 3), Vector2(6, 6)), CONCRETE_DARK)
+				_rot_rect(ci, tip, Vector2(r * 1.3, r * 1.3), 0.0, WOOD)
+			ci.draw_rect(Rect2(c - Vector2(r * 0.6, r * 0.6), Vector2(r * 1.2, r * 1.2)), yellow)
+			ci.draw_rect(Rect2(c - Vector2(r * 0.6, r * 0.6), Vector2(r * 1.2, r * 1.2)), OUTLINE, false, 1.5)
+		"antenna":
+			var pts := PackedVector2Array()
+			for i in 3:
+				pts.append(c + Vector2.from_angle(TAU * i / 3.0 + 0.3) * r)
+			ci.draw_colored_polygon(pts, Color(0, 0, 0, 0.2))
+			for i in 3:
+				ci.draw_line(pts[i], pts[(i + 1) % 3], COPPER.lerp(LOT_CHAR, dim), 1.5)
+				ci.draw_line(pts[i], c, IRON, 1.5)
+			if not ruined:
+				ci.draw_circle(c, r * 0.9, Color(0.45, 0.85, 1.0, 0.25))
+				ci.draw_circle(c, r * 0.35, Color(0.45, 0.85, 1.0))
+		"flag":
+			ci.draw_rect(Rect2(c - Vector2(r * 0.5, r * 0.5), Vector2(r, r)), Color(0.64, 0.61, 0.56).lerp(LOT_CHAR, dim))
+			ci.draw_circle(c, 2.0, IRON)
+			if not ruined:
+				var d := -1.0 if sgn.x > 0 else 1.0
+				var f := PackedVector2Array([c, c + Vector2(d * cell * 0.62, -r * 0.4), c + Vector2(d * cell * 0.62, r * 0.9), c + Vector2(0, r * 0.6)])
+				_poly(ci, f, accent, OUTLINE, 1.0)
+				ci.draw_line(c + Vector2(0, r * 0.15), c + Vector2(d * cell * 0.62, r * 0.25), OUTLINE, 2.0)
+		"manifold":
+			var to := Vector2(model.end.x if sgn.x > 0 else model.position.x, c.y - r * 0.5)
+			if not ruined:
+				ci.draw_line(c - Vector2(0, r * 0.5), to, COPPER.darkened(0.25), 4.0)
+				ci.draw_line(c - Vector2(0, r * 0.5), to, COPPER, 2.0)
+			for p in [Vector2(-0.55, -0.5), Vector2(0.55, -0.5), Vector2(0, 0.45)]:
+				_disc(ci, c + p * r, 2.5, COPPER.lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+			if not ruined:
+				var w := c + Vector2(0, r * 0.45)
+				ci.draw_arc(w, r * 0.62, 0.0, TAU, 14, OUTLINE, 3.5)
+				ci.draw_arc(w, r * 0.62, 0.0, TAU, 14, Color(0.82, 0.12, 0.08), 2.2)
+				for i in 3:
+					ci.draw_line(w, w + Vector2.from_angle(TAU * i / 3.0) * r * 0.6, Color(0.82, 0.12, 0.08), 1.5)
+		"ore_heap":
+			_disc(ci, c, r * 1.1, Color(0.47, 0.39, 0.28).lerp(LOT_CHAR, dim), OUTLINE, 1.5)
+			for p in [Vector2(-0.35, 0.2), Vector2(0.3, -0.25), Vector2(0.05, 0.05), Vector2(0.45, 0.35), Vector2(-0.3, -0.4)]:
+				ci.draw_circle(c + p * r * 1.2, r * 0.22, BRASS_LIGHT.lerp(LOT_CHAR, dim))
+			if not ruined:
+				ci.draw_circle(c + Vector2(0.05, 0.05) * r, r * 0.12, Color(1, 0.97, 0.8))
+				ci.draw_line(c + Vector2(r * 0.6, 0), c + Vector2(r * 0.1, -r * 0.6), WOOD, 2.0)
+		"cannon":
+			for i in 9:
+				var p := c + Vector2.from_angle(TAU * i / 9.0) * r * 1.05
+				_disc(ci, p, r * 0.3, Color(0.62, 0.55, 0.38).lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+			_disc(ci, c, r * 0.45, OLIVE.lerp(LOT_CHAR, dim), OUTLINE, 1.0)
+			if not ruined:
+				var out := sgn.normalized()
+				ci.draw_line(c - out * r * 0.4, c + out * r * 1.3, OUTLINE, 5.0)
+				ci.draw_line(c - out * r * 0.4, c + out * r * 1.3, GUNMETAL.lightened(0.1), 3.0)
+
+## Emblema de la Regencia visto desde arriba: rueda dentada de laton, disco
+## rojo y el rayo de la Tormenta.
+static func _emblem_2d(ci: CanvasItem, e: Vector2, re: float, accent: Color, ruined: bool) -> void:
+	if ruined:
+		_disc(ci, e, re * 0.5, Color(0.2, 0.18, 0.16), OUTLINE, 1.0)
+		return
+	ci.draw_circle(e + Vector2(3, 4), re * 1.1, Color(0, 0, 0, 0.3))
+	for i in 14:
+		var a := TAU * i / 14.0
+		ci.draw_line(e + Vector2.from_angle(a) * re * 0.8, e + Vector2.from_angle(a) * re * 1.14, BRASS, 3.5)
+	_disc(ci, e, re * 0.92, BRASS, OUTLINE, 1.5)
+	_disc(ci, e, re * 0.64, Color(0.75, 0.12, 0.09), OUTLINE, 1.0)
+	ci.draw_polyline(PackedVector2Array([e + Vector2(-0.12, -0.45) * re, e + Vector2(0.12, -0.05) * re, e + Vector2(-0.1, 0.02) * re, e + Vector2(0.14, 0.45) * re]), accent.lightened(0.15), 3.0)
+
+static func _prop_color(kind: String, accent: Color) -> Color:
+	match kind:
+		"barrel": return RUST
+		"drums": return Color(0.2, 0.22, 0.25)
+		"crate", "bench": return WOOD
+		"goods", "pallet": return LIGHT_WOOD
+		"ammo": return OLIVE
+		"logs": return Color(0.42, 0.28, 0.15)
+		"planks": return LIGHT_WOOD
+		"sacks": return Color(0.72, 0.62, 0.42)
+		"ore": return Color(0.48, 0.40, 0.30)
+		"coal": return Color(0.14, 0.13, 0.13)
+		"cart": return RUST
+		"lamp": return IRON
+	return accent
+
+## Rectangulo girado `rot` centrado en `c`, con contorno.
+static func _rot_rect(ci: CanvasItem, c: Vector2, size: Vector2, rot: float, fill: Color, outline := true) -> void:
+	var d := Vector2.from_angle(rot) * size.x * 0.5
+	var e := Vector2.from_angle(rot + PI * 0.5) * size.y * 0.5
+	var pts := PackedVector2Array([c - d - e, c + d - e, c + d + e, c - d + e])
+	if outline:
+		_poly(ci, pts, fill, OUTLINE, 1.0)
+	else:
+		ci.draw_colored_polygon(pts, fill)
 
 # ── Yacimientos ───────────────────────────────────────────────────────
 

@@ -17,6 +17,8 @@ const View2D := preload("res://scripts/view2d/View2D.gd")
 ## Obra por fases, ruina y actividad: la misma regla que en 3D (docs/03).
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
 const Fx := preload("res://scripts/buildings/BuildingFx.gd")
+## La parcela: la misma plantilla que la 3D (docs/03, "Parcela y atrezo").
+const LotPlan := preload("res://scripts/buildings/LotPlan.gd")
 const SiteFx := preload("res://scripts/buildings/SiteFx.gd")
 
 var data: BuildingData = null
@@ -33,6 +35,14 @@ var _look: Dictionary = {"look": LookRule.Look.IDLE, "phase": 0}
 ## Humo/luz de "trabajando" (creado la primera vez) y humo negro de la ruina.
 var _active_fx: Node2D = null
 var _ruin_fx: Node2D = null
+## Plan de la parcela (LotPlan.plan) y lo que lo decidio: [origen, lados de
+## calzada locales, estado, fase]. Se rehace solo si eso cambia; las calzadas
+## vecinas se releen cuando una senal de la rejilla avisa (_lot_dirty).
+var _lot_plan: Dictionary = {}
+var _lot_key: Array = []
+var _lot_dirty := true
+var _lot_origin := Vector2i(-99999, -99999)
+var _lot_sides := 0
 ## Lo que se mueve en una obra (pluma y carro de la grua, banderin, chispas o
 ## polvo), rehecho al cambiar de fase o de semilla; y esa semilla (la misma que
 ## en 3D: BuildingLook.seed_of).
@@ -63,6 +73,41 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	var badge: Node2D = StatusBadge2D.new()
 	add_child(badge)
 	badge.setup(self, data)
+	if LotPlan.has_lot(data.id):
+		for sig in [EventBus.building_placed, EventBus.building_demolished, EventBus.building_moved,
+				EventBus.game_load_completed]:
+			(sig as Signal).connect(_on_map_changed)
+
+func _on_map_changed(_a = null, _b = null) -> void:
+	_lot_dirty = true
+
+## Patio de la parcela en px (lo que el dibujo del edificio deja libre por lado).
+func yard_px() -> float:
+	return LotPlan.yard_of(data.id) * View2D.cell_px() if data else 0.0
+
+func get_lot_plan() -> Dictionary:
+	return _lot_plan
+
+## Rehace el plan de la parcela si cambio su celda, sus calzadas, la obra o la ruina.
+func _update_lot() -> void:
+	if ghost or data == null or not LotPlan.has_lot(data.id):
+		return
+	if _lot_dirty:
+		_lot_dirty = false
+		var info := GridManager.get_building_info(self)
+		var steps := int(get_meta("rotation_steps", 0))
+		if not info.is_empty():
+			_lot_origin = info["origin_cell"]
+			var world := LotPlan.road_sides_of(_lot_origin, (info["data"] as BuildingData).grid_size)
+			_lot_sides = LotPlan.local_sides(world, steps, true)
+	var state := LotPlan.state_for(int(_look["look"]))
+	var phase := int(_look["phase"]) if state == "construction" else 0
+	var key := [_lot_origin, _lot_sides, state, phase]
+	if key == _lot_key:
+		return
+	_lot_key = key
+	_lot_plan = LotPlan.plan(data.id, data.grid_size, LotPlan.seed_for(_lot_origin, data.id), _lot_sides, state, phase)
+	queue_redraw()
 	# La bandera de la colonia (rango del gobernador) sobre el Nucleo.
 	if data.is_core:
 		var flag: Node2D = ColonyFlag2D.new()
@@ -112,6 +157,7 @@ func _process(delta: float) -> void:
 	if ghost:
 		return
 	var sig := _current_signature()
+	_update_lot()
 	if sig != _signature:
 		_signature = sig
 		if _name_label:
@@ -178,7 +224,9 @@ func _make_site_fx(phase: int) -> Node2D:
 	var n := LookRule.footprint_class(data.grid_size)
 	var style := LookRule.site_style(data.id)
 	var layout := LookRule.site_layout(_site_seed, style, n)
-	var anchors := Art.site_anchors(base_size_px(), phase, n, style, layout)
+	# La obra ocupa el rectangulo del edificio; el patio es la parcela a medio preparar.
+	var site_size := base_size_px() - Vector2.ONE * yard_px() * 2.0
+	var anchors := Art.site_anchors(site_size, phase, n, style, layout)
 	var crane: Dictionary = anchors["crane"]
 	if not crane.is_empty():
 		var jib := float(crane["jib"])
@@ -219,7 +267,7 @@ func _make_site_fx(phase: int) -> Node2D:
 	holder.add_child(flag)
 	var kind := String(anchors["fx_kind"])
 	if kind != "":
-		var fx := Fx.sprite_2d(kind, minf(base_size_px().x, base_size_px().y) * 0.45, "site" if kind == "dust" else "")
+		var fx := Fx.sprite_2d(kind, minf(site_size.x, site_size.y) * 0.45, "site" if kind == "dust" else "")
 		fx.position = anchors["fx"]
 		holder.add_child(fx)
 	return holder
@@ -263,7 +311,8 @@ func _make_active_fx() -> Node2D:
 ## Cada sprite en su chimenea, con el giro del edificio aplicado. El humo sube
 ## un poco por encima de la boca para que salga de ella y no la tape.
 func _place_fx(holder: Node2D) -> void:
-	var size := base_size_px()
+	# Las bocas estan en el dibujo del edificio, que deja libre el patio.
+	var size := base_size_px() - Vector2.ONE * yard_px() * 2.0
 	var angle := float(int(get_meta("rotation_steps", 0))) * PI * 0.5
 	for sprite in holder.get_children():
 		var anchor: Vector2 = sprite.get_meta("anchor", Vector2(0.5, 0.5))
@@ -325,22 +374,35 @@ func _draw() -> void:
 	var level: int = get_meta("level", 1)
 	var look := int(_look["look"]) if not ghost else LookRule.Look.IDLE
 	var n := LookRule.footprint_class(data.grid_size)
+	# La parcela: el suelo y el remate debajo, el edificio en su rectangulo (la
+	# huella menos el patio) y el atrezo en el patio. Obra, dano y ruina van
+	# sobre el edificio, no sobre la parcela, que tiene su propio aspecto.
+	var inset := yard_px()
+	var inner := size - Vector2.ONE * inset * 2.0
+	var has_lot := not ghost and not _lot_plan.is_empty()
+	if has_lot:
+		Art.draw_lot_ground(self, _lot_plan, size)
 	if look == LookRule.Look.CONSTRUCTION:
 		# Obra nueva: la fase de la huella EN LUGAR del edificio (que aun no esta).
-		Art.draw_construction_phase(self, size, int(_look["phase"]),
+		Art.draw_construction_phase(self, inner, int(_look["phase"]),
 			ProductionManager.get_construction_progress(self), n, data.id, _site_seed)
 	else:
-		Art.draw_building(self, data.id, size, {"road_mask": mask, "level": level, "shadow": not ghost})
+		if has_lot:
+			Art.draw_lot_shadow(self, Rect2(-inner * 0.5, inner).grow(-Art.INSET))
+		Art.draw_building(self, data.id, size, {"road_mask": mask, "level": level, "shadow": not ghost, "inset": inset})
+	if has_lot:
+		Art.draw_lot_props(self, _lot_plan, size)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if ghost:
 		return
 	var fp2 := footprint_px()
+	var fp_inner := fp2 - Vector2.ONE * inset * 2.0
 	if look == LookRule.Look.UPGRADE:
 		# Mejora: el edificio sigue a la vista, con andamio y rayas encima.
-		Art.draw_construction(self, fp2, ProductionManager.get_construction_progress(self))
+		Art.draw_construction(self, fp_inner, ProductionManager.get_construction_progress(self))
 	var ratio := BuildingHealth.get_health_ratio(self)
 	var ruined := BuildingHealth.is_ruined(self)
 	if ratio < 1.0 or ruined:
-		Art.draw_damage(self, fp2, ratio, ruined, hash(name), n)
+		Art.draw_damage(self, fp_inner, ratio, ruined, hash(name), n)
 	if _selected:
 		Art.draw_selection(self, fp2, _pulse)
