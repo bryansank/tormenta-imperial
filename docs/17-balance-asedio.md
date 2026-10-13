@@ -141,3 +141,23 @@ desglosa por longitud de asedio.
 Los dos casos de guardia viven en `tests/integration/test_full_campaign.gd`:
 `test_the_siege_is_hard_but_winnable_with_a_full_garrison` y
 `test_the_smallest_garrison_that_can_resummon_does_not_win`.
+
+## 2026-10-12: un final que pide preparación
+
+Decisión de Bryan: la Auditoría pide más ejército y más preparación. Valores:
+`final_audit_waves` 3-5 → **4-5**, `final_audit_last_wave_multiplier` 1,05 →
+**1,10**, `storm_tower_garrison_max` 2 → **4** (con la guarnición mermada caben
+más dotaciones: el tablero deja 8 − vivos), Gobernador ×1,06 → **×1,05**. 200
+semillas, era 3, moral 100:
+
+| Guarnición | 4 torres | 2 torres | 4 torres, moral 75 | Gobernador ×1,05 (4 torres) |
+|---|---|---|---|---|
+| 3 infantería | 0 % | 0 % | — | — |
+| 4 vehículos | 33,5 % | 0 % | 0 % | 10,5 % |
+| 5 vehículos | 45 % | 34 % | 26,5 % | 45 % |
+| mixtas | 0 % | 0 % | 0 % | 0 % |
+| **6 vehículos** | **82,5 %** | **45 %** | **43 %** | **64 %** |
+
+La guarnición máxima bien preparada gana como antes (82 %); sin las torres o con
+la moral a medias, una de cada dos. Con moral 50, nunca. Gobernador ≥ 60 %.
+`tools/siege_probe.gd` acepta `--crews=N`.

@@ -443,3 +443,68 @@ storm_damage_per_tick=0.06 storm_arm_phase=1 storm_interval_min=240.0
 storm_interval_max=420.0 storm_first_interval=420.0 storm_first_tithe_has_floor=true
 population_regrow_floor=0`). Una semilla tarda 1-4 min de reloj; conviene lanzar una por
 proceso. La sonda se niega a correr sin carpeta de usuario propia.
+
+---
+
+## 11. Campaña de 4-6 horas (2026-10-12, a medias)
+
+Decisión de Bryan: una Campaña en Colono dura 4-6 h, la era 1 se queda en 8-12
+min, las eras 2 y 3 traen más construcción y el final pide más ejército y más
+preparación. Medido con `line_probe` (`--no-dev`, 10 semillas, sobre
+`integracion/arte-v1` fusionada), minutos de partida:
+
+| Semilla | Antes: era 2 | era 3 | victoria | Después: era 2 | era 3 | CG nv3 | victoria | era 1 | era 3 dura | Diezmos echados | asedios | huecos >3 min sin decidir | mayor |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 15 | 32 | 131 | 11 | 31 | 234 | **255** | 11,2 | 224 | 14/14 | 1 | 10 | 7,9 |
+| 2 | 15 | 32 | 128 | 14 | 34 | 330 | **351** | 14,2 | 317 | 19/19 | 1 | 15 | 12,5 |
+| 3 | 14 | 31 | 141 | 13 | 32 | 252 | **281** | 13,2 | 250 | 15/15 | 1 | 11 | 8,7 |
+| 4 | 16 | 33 | 156 | 11 | 33 | 204 | **226** | 11,2 | 193 | 12/12 | 1 | 4 | 12,3 |
+| 5 | 14 | 33 | 154 | 12 | 32 | 199 | **272** | 12,2 | 239 | 15/16 | 2 | 7 | 6,1 |
+| 6 | 16 | 33 | 134 | 12 | 32 | 261 | **282** | 12,2 | 250 | 13/13 | 1 | 8 | 7,8 |
+| 7 | 14 | 32 | 131 | 12 | 33 | 252 | **274** | 12,2 | 240 | 15/15 | 1 | 11 | 9,6 |
+| 8 | 14 | 32 | 271 | 12 | 32 | 245 | **315** | 12,2 | 282 | 14/15 | 2 | 12 | 8,3 |
+| 9 | 16 | 33 | 181 | 12 | 32 | 254 | **282** | 12,2 | 249 | 15/15 | 1 | 8 | 6,5 |
+| 10 | 15 | 32 | 125 | 11 | 37 | 268 | **289** | 11,2 | 252 | 14/15 | 1 | 9 | 8,2 |
+
+- **Antes**: 125-271 min, mediana ~2 h 13 min; era 1 de 14-16 min; hasta 35.000
+  recursos tirados por vender con la bolsa llena; 25-48 muertos de hambre.
+- **Después**: 226-351 min, **mediana 4 h 42 min** (9 de 10 entre 4 y 6 h); era 1
+  de 11-14 min; lo desbordado baja a 60-790 (eventos aleatorios y ventas
+  pequeñas); 10 de 10 victorias, 2 con un asedio perdido y reconvocado.
+- Tras ganar (`--after=20`, medido en 3 semillas): 0 tormentas, 0 Diezmos, 0
+  convocatorias, la Tormenta sigue parada tras guardar y cargar, el panel dice
+  "mundo libre" y la colonia produce (la bolsa se llena y para, no se tira).
+
+Lo que se movió y por qué:
+
+| Valor | Antes | Después | Por qué |
+|---|---|---|---|
+| (bug) `PopulationManager` | puestos solo al terminar una obra | también al nacer o morir alguien | la 1.ª mina pasaba ~10 min sin obreros con la gente ya nacida: era 1 de 15 min |
+| `starting_resources` | 300 / 200 / 80 | 330 / 180 / 80 | el oro frenaba la Fundición; la madera sobraba. Medido con 360/160; 330/180 deja hueco en la bolsa y Supervivencia paga la apertura |
+| `building_prerequisites.refinery` | Fundición, Cuartel | + Laboratorio | una obra más en la era 2 y el árbol abierto antes del petróleo |
+| `unit_types.artillery` | 80 oro / 30 acero, 35 s | 120 / 50, 45 s | guarnición de la era 2 algo más cara |
+| `unit_types.vehicle` | 140 / 60 / 30, 55 s | 400 / 180 / 90, 100 s | los seis blindados son el último gran esfuerzo |
+| `hq_upgrade_costs[2]` | 800/500/300/400 + 15 vigas/10 lingotes/15 combustible | 1300/900/500/300 + 100/70/100 | más bolsa (3.000) y mucho más taller |
+| `hq_upgrade_costs[3]` | 3.500 + 25/20/25 | 3.500 + 200/140/200 | el invariante 3.500 = bolsa máxima no se toca; los materiales alargan con trabajo |
+| `final_audit_waves` | 3-5 | 4-5 | final más exigente |
+| `final_audit_last_wave_multiplier` | 1,05 | 1,10 | ídem |
+| `storm_tower_garrison_max` | 2 | 4 | preparación: con la guarnición mermada caben más dotaciones; Objectives pide 4 torres antes del CG nv3 |
+| `game_tier_rules.governor.audit_enemy_mult` | 1,06 | 1,05 | con 4-5 oleadas, ×1,06 dejaba la máxima en 49 % |
+| `market_calendar` (Gobernador) | sin comida | comida +25 % Aviso, +40 % Tormenta, +15 % tras el Diezmo | sube antes del Diezmo, como el resto |
+
+Arreglos en `Objectives.gd`: los requisitos de un edificio se piden antes que él
+(con la Refinería pidiendo Laboratorio la partida se quedaba atascada para
+siempre); las torres del asedio salen de `storm_tower_garrison_max`; con la
+bolsa llena se compra la receta del taller (horas con 3.000 de oro y sin acero
+para una viga); las ventas solo venden lo que cabe (tiraban miles de oro); un
+productor de apoyo sin obreros libres no se pide si la gente ya viene de camino
+(el fallo de `test_following_the_panel_walks_the_whole_line_to_the_siege`).
+`OBJ_WHY_SAWMILL_2` ya no dice que la gente come madera.
+
+**Falta**: los huecos sin decidir pasan de 3 min (4-15 por partida, el mayor de
+6-12 min), casi todos ahorrando para el CG nv2/nv3 con la bolsa casi llena y
+entrenando blindados. Probado a medias (sin medir): bajar
+`Objectives.SLOW_RESOURCE_SECONDS` de 360 a 180 para que el panel pida otro
+productor antes. La era 2 solo creció de ~17 a ~20 min (sin tocar los `.tres`
+no hay más palanca que el Laboratorio y la artillería). La era 1 queda en 11-14
+min para la sonda, en el borde alto. La moral pesa mucho en el asedio (doc 17).
