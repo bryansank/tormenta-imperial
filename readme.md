@@ -44,6 +44,22 @@ Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán �
 
 > Capturas del juego corriendo, generadas por [`tools/showcase_shots.gd`](tools/showcase_shots.gd). No son montajes.
 
+## Descargar y jugar
+
+El juego es **gratis**. Hay una versión para Windows y otra para Android (tableta primero):
+
+- **itch.io:** *(enlace pendiente: la página aún no está publicada)*
+- **GitHub Releases:** [github.com/bryansank/tormenta-imperial/releases](https://github.com/bryansank/tormenta-imperial/releases)
+
+| | Windows | Android |
+|---|---|---|
+| Necesitas | Windows 10/11 de 64 bits y una gráfica con Vulkan | Android 7 o superior, 64 bits (ARM64), con Vulkan |
+| Cómo se abre | Descomprimir el zip y abrir `TormentaImperial.exe` (no hay instalador) | Instalar el `.apk` a mano, permitiendo "orígenes desconocidos" para esa app |
+
+**Si Windows dice "Windows protegió su PC":** es SmartScreen, que avisa de los programas nuevos sin firma digital de pago. No es un virus. Pulsa **Más información → Ejecutar de todas formas**; solo pasa la primera vez.
+
+Cada zip trae un `LEEME.txt` (en español e inglés) con la instalación, los controles, dónde se guarda la partida y cómo desinstalar. El juego no usa internet ni pide permisos: la partida se guarda en tu equipo.
+
 ## El bucle
 
 1. **Construye** para producir: cada edificio necesita trabajadores y una carretera hasta el núcleo, y los trabajadores necesitan viviendas. Los edificios avanzados piden además materiales del taller (tablones, lingotes, vigas y combustible).
