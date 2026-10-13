@@ -9,6 +9,12 @@ extends Node2D
 ## una vez y pegada al poligono; el resto son primitivas de _draw, que Godot
 ## guarda y no vuelve a calcular mientras nada cambie.
 ##
+## Isla irregular (2026-10-12): con GridManager.is_irregular() la silueta es la
+## costa de la mascara de tierra (IslandGenerator.coast_for_grid, la misma que
+## la 3D) y los anillos de arena, espuma y agua son ese contorno crecido con
+## Geometry2D.offset_polygon. Una partida de isla cuadrada sigue con el cuadrado
+## redondeado de siempre.
+##
 ## Maqueta (arte, 2026-10-05, docs/21 §12): la misma paleta calida que la isla
 ## 3D (tres verdes, zonas secas, calvas de tierra y flores en la textura), el
 ## canto de tierra asomando por el sur como el de una placa de diorama, y un
@@ -51,6 +57,10 @@ var _grass_tex: Texture2D = null
 var _grass_bounds := Rect2()
 var _tufts: Array = []
 var _waves: Array = []
+## Isla irregular: la costa en px de mapa y los anillos ya crecidos (expand ->
+## poligono), calculados una vez por forma.
+var _coast_px := PackedVector2Array()
+var _ring_cache := {}
 
 func _ready() -> void:
 	z_index = -20
@@ -77,6 +87,10 @@ func _rebuild() -> void:
 	elif _seed_val == 0.0:
 		_seed_val = randf() * 100.0
 	_wobble = Island.make_wobble(Island.SEGMENTS, _seed_val, amplitude, detail)
+	_ring_cache.clear()
+	_coast_px = PackedVector2Array()
+	for p in Island.coast_for_grid():
+		_coast_px.append(p * View2D.PX_PER_UNIT)
 	_grass_pts = polygon_px(0.0)
 	_grass_bounds = _bounds(_grass_pts)
 	_grass_tex = _make_grass_texture(_grass_bounds)
@@ -87,6 +101,8 @@ func _rebuild() -> void:
 
 ## Borde de la isla en pixeles de mapa, crecido `expand` unidades de mundo.
 func polygon_px(expand: float) -> PackedVector2Array:
+	if not _coast_px.is_empty():
+		return _coast_ring_px(expand)
 	var half := Island.grid_half_extents()
 	var radius := minf(_radius, Island.max_corner_radius(_margin))
 	var pts := Island.border_points(half.x, half.y, _margin, radius, _wobble, expand)
@@ -94,6 +110,25 @@ func polygon_px(expand: float) -> PackedVector2Array:
 	for p in pts:
 		out.append(p * View2D.PX_PER_UNIT)
 	return out
+
+## La costa irregular crecida `expand` unidades de mundo (esquinas redondas).
+## De lo que devuelve offset_polygon se queda el contorno mas grande (un
+## agujero, si lo hubiera, siempre es menor que el contorno de fuera).
+func _coast_ring_px(expand: float) -> PackedVector2Array:
+	if expand <= 0.0:
+		return _coast_px
+	if _ring_cache.has(expand):
+		return _ring_cache[expand]
+	var best := _coast_px
+	var best_area := -1.0
+	for poly in Geometry2D.offset_polygon(_coast_px, expand * View2D.PX_PER_UNIT, Geometry2D.JOIN_ROUND):
+		var r := _bounds(poly)
+		var area := r.size.x * r.size.y
+		if area > best_area:
+			best_area = area
+			best = poly
+	_ring_cache[expand] = best
+	return best
 
 func _bounds(pts: PackedVector2Array) -> Rect2:
 	var r := Rect2(pts[0], Vector2.ZERO)

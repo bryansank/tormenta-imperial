@@ -6,6 +6,11 @@ extends GdUnitTestSuite
 ## La decision del dueno fue que la isla crezca hasta cubrir las 40x40 celdas.
 ## Estos casos fijan la geometria: cada esquina de cada celda queda dentro del
 ## poligono de hierba, con cualquier semilla de ondulacion.
+##
+## Desde la isla irregular (2026-10-12) esta es la forma de las partidas
+## guardadas de antes (sin "shape" en "grid"): siguen cargando con ella, asi que
+## estos casos se quedan. La isla nueva la cubren test_island_shape.gd y
+## test_random_map.gd.
 
 const IslandGen := preload("res://scripts/map/IslandGenerator.gd")
 

@@ -20,6 +20,15 @@ extends Node3D
 ## esquinas, ondulacion y su detalle varian, siempre dentro de la garantia. Al
 ## oir EventBus.grid_resized la isla se rehace.
 ##
+## Isla irregular (2026-10-12): las partidas nuevas ya no son cuadradas. La
+## mascara de tierra sale de la semilla (IslandShape, la tiene GridManager) y la
+## costa es su contorno (IslandShape.coast_polygon): bahias, cabos y
+## peninsulas, con el agua dentro de la rejilla. El canto, la arena y la espuma
+## siguen ese contorno, crecido a lo largo de sus normales. Una partida guardada
+## con la isla cuadrada (sin "shape" en "grid") sigue usando el cuadrado
+## redondeado de abajo, tal cual. La malla se hace una vez por partida (o al
+## cambiar la rejilla): unos miles de triangulos, nada por frame.
+##
 ## The border geometry lives in static, pure functions so a test can prove that
 ## every cell corner is inside the grass polygon without rendering anything.
 
@@ -49,6 +58,18 @@ var _regen_queued := false
 # Nodos de isla que ha creado este generador (para rehacerlos al cambiar la rejilla)
 var _made: Array = []
 
+const IslandShape := preload("res://scripts/map/IslandShape.gd")
+
+## Isla irregular: el contorno de la hierba (antihorario, mundo XZ) y sus
+## normales hacia fuera. Vacios con la isla cuadrada de antes.
+var _coast := PackedVector2Array()
+var _coast_normals := PackedVector2Array()
+
+## Celdas de mar alrededor de la rejilla en la textura de distancia del agua.
+const COAST_MAP_PAD := 16
+## Distancia maxima (mundo) que guarda esa textura.
+const COAST_MAP_RANGE := 24.0
+
 func _ready() -> void:
 	_apply_shape()
 	EventBus.grid_resized.connect(_on_grid_resized)
@@ -57,6 +78,11 @@ func _ready() -> void:
 ## La forma de esta partida: de GridManager.island_seed si la hay (partida
 ## nueva o cargada), si no los valores exportados con una ondulacion al azar.
 func _apply_shape() -> void:
+	_coast = PackedVector2Array()
+	_coast_normals = PackedVector2Array()
+	if GridManager.is_irregular():
+		_coast = coast_for_grid()
+		_coast_normals = IslandShape.outward_normals(_coast, 3)
 	if GridManager.island_seed >= 0:
 		var shape := shape_for_seed(GridManager.island_seed)
 		_seed_val = shape["seed_val"]
@@ -161,6 +187,15 @@ static func border_points(half_w: float, half_h: float, margin: float, radius: f
 		pts.append(Vector2(cos(angle), sin(angle)) * dist)
 	return pts
 
+## La costa de la isla irregular de esta partida (mundo XZ), de la mascara de
+## GridManager. La misma que dibuja la 2D. Vacia si la isla es cuadrada.
+static func coast_for_grid() -> PackedVector2Array:
+	if not GridManager.is_irregular():
+		return PackedVector2Array()
+	var o: Vector3 = GridManager.get_origin()
+	return IslandShape.coast_polygon(GridManager.get_land_mask(), GridManager.grid_width,
+		GridManager.grid_height, GridManager.cell_size, Vector2(o.x, o.z))
+
 ## Grid half extents in world units, straight from GridManager.
 static func grid_half_extents() -> Vector2:
 	return Vector2(
@@ -221,10 +256,13 @@ func _generate_island() -> void:
 	var water_plane := PlaneMesh.new()
 	water_plane.size = Vector2(400, 400)
 	water_node.mesh = water_plane
-	water_node.set_surface_override_material(0, _shader_material("water_border", {
+	var water_params := {
 		"island_half": Vector2(half.x + land_margin + water_at, half.y + land_margin + water_at),
 		"island_radius": corner_radius + water_at,
-	}))
+	}
+	if not _coast.is_empty():
+		water_params.merge(_coast_map_params(water_at), true)
+	water_node.set_surface_override_material(0, _shader_material("water_border", water_params))
 	water_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	water_node.position.y = WATER_Y
 	main.add_child(water_node)
@@ -259,7 +297,79 @@ func _generate_island() -> void:
 	main.add_child(grass_node)
 	_made = [water_node, shore_node, cliff_node, foam_node, grass_node]
 
+## Contorno de la isla crecido `expand` (mundo XZ). Isla irregular: a lo largo
+## de las normales de la costa; cuadrada: el cuadrado redondeado de siempre.
+func _ring(expand: float) -> PackedVector2Array:
+	if not _coast.is_empty():
+		return IslandShape.offset_along(_coast, _coast_normals, expand)
+	var half := grid_half_extents()
+	return border_points(half.x, half.y, land_margin, corner_radius, _border_offsets, expand)
+
+## Normal hacia fuera del contorno en el vertice i (para el canto).
+func _ring_normal(pts: PackedVector2Array, i: int) -> Vector3:
+	if not _coast.is_empty():
+		return Vector3(_coast_normals[i].x, 0.0, _coast_normals[i].y)
+	return Vector3(pts[i].x, 0.0, pts[i].y).normalized()
+
+## Hierba de la isla irregular: el poligono de la costa triangulado (un
+## triangulo por vertice, mas o menos). Las caras miran hacia arriba.
+func _build_coast_fill_mesh(y_offset: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var idx := Geometry2D.triangulate_polygon(_coast)
+	var centre := Vector2.ZERO
+	if idx.is_empty():
+		push_warning("IslandGenerator: no se pudo triangular la costa; abanico desde el centro")
+		for p in _coast:
+			centre += p
+		centre /= float(_coast.size())
+		for i in range(_coast.size()):
+			idx.append_array(PackedInt32Array([-1, i, (i + 1) % _coast.size()]))
+	for t in range(0, idx.size(), 3):
+		var tri: Array = []
+		for k in range(3):
+			var i: int = idx[t + k]
+			tri.append(centre if i < 0 else _coast[i])
+		# Mismo sentido que el abanico de la isla cuadrada (la cara de arriba).
+		var a: Vector2 = tri[0]
+		var b: Vector2 = tri[1]
+		var c: Vector2 = tri[2]
+		if (b - a).cross(c - a) < 0.0:
+			tri = [a, c, b]
+		for p in tri:
+			var v: Vector2 = p
+			st.set_normal(Vector3.UP)
+			st.set_uv(Vector2(v.x / 100.0 + 0.5, v.y / 100.0 + 0.5))
+			st.add_vertex(Vector3(v.x, y_offset, v.y))
+	return st.commit()
+
+## Parametros del agua para la costa irregular: una textura pequena con la
+## distancia de cada punto del mar a la linea del agua (un texel por celda,
+## filtrado lineal), en lugar del rectangulo redondeado.
+func _coast_map_params(water_at: float) -> Dictionary:
+	var w := GridManager.grid_width
+	var h := GridManager.grid_height
+	var pad := COAST_MAP_PAD
+	var d := IslandShape.water_distance(GridManager.get_land_mask(), w, h, GridManager.cell_size, pad)
+	var pw := w + 2 * pad
+	var ph := h + 2 * pad
+	var bytes := PackedByteArray()
+	bytes.resize(pw * ph)
+	for i in range(d.size()):
+		bytes[i] = int(clampf((d[i] - water_at) / COAST_MAP_RANGE, 0.0, 1.0) * 255.0)
+	var img := Image.create_from_data(pw, ph, false, Image.FORMAT_L8, bytes)
+	var o: Vector3 = GridManager.get_origin()
+	var cs := GridManager.cell_size
+	return {
+		"use_coast_map": true,
+		"coast_map": ImageTexture.create_from_image(img),
+		"coast_rect": Vector4(o.x - pad * cs, o.z - pad * cs, pw * cs, ph * cs),
+		"coast_map_range": COAST_MAP_RANGE,
+	}
+
 func _build_island_mesh(expand: float, y_offset: float) -> ArrayMesh:
+	if not _coast.is_empty():
+		return _build_coast_fill_mesh(y_offset)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 
@@ -326,9 +436,8 @@ func _build_island_mesh(expand: float, y_offset: float) -> ArrayMesh:
 ## crecido `expand_out` (a y_out). UV.x: distancia recorrida a lo largo de la
 ## costa; UV.y: 0 dentro, 1 fuera. Para la playa y la espuma.
 func _build_ring_mesh(expand_in: float, y_in: float, expand_out: float, y_out: float) -> ArrayMesh:
-	var half := grid_half_extents()
-	var inner := border_points(half.x, half.y, land_margin, corner_radius, _border_offsets, expand_in)
-	var outer := border_points(half.x, half.y, land_margin, corner_radius, _border_offsets, expand_out)
+	var inner := _ring(expand_in)
+	var outer := _ring(expand_out)
 	var n: int = inner.size()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -354,8 +463,7 @@ func _build_ring_mesh(expand_in: float, y_in: float, expand_out: float, y_out: f
 ## El canto: una pared del borde del cesped (y_top) hasta y_bottom, mirando
 ## hacia fuera.
 func _build_skirt_mesh(y_top: float, y_bottom: float) -> ArrayMesh:
-	var half := grid_half_extents()
-	var pts := border_points(half.x, half.y, land_margin, corner_radius, _border_offsets, 0.0)
+	var pts := _ring(0.0)
 	var n: int = pts.size()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -363,8 +471,8 @@ func _build_skirt_mesh(y_top: float, y_bottom: float) -> ArrayMesh:
 	for i in range(n):
 		var j := (i + 1) % n
 		var step: float = pts[i].distance_to(pts[j])
-		var ni := Vector3(pts[i].x, 0.0, pts[i].y).normalized()
-		var nj := Vector3(pts[j].x, 0.0, pts[j].y).normalized()
+		var ni := _ring_normal(pts, i)
+		var nj := _ring_normal(pts, j)
 		var top_i := Vector3(pts[i].x, y_top, pts[i].y)
 		var bot_i := Vector3(pts[i].x, y_bottom, pts[i].y)
 		var top_j := Vector3(pts[j].x, y_top, pts[j].y)
