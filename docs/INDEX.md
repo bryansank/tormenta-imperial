@@ -33,6 +33,7 @@ Spanish, the rest in English.
 | 23 | [Prólogo, tutorial y ayudas](23-onboarding.md) | The lore in three plain-language folios (`PrologueScreen`), the quick guide (`QuickGuide`), the guided coach-mark tutorial on the real UI, the help callouts one at a time, the AYUDA index (`HelpIndexPanel`) |
 | 24 | [Paleta](24-paleta.md) | The ten UI colours in `UITheme` (name, hex, use, where not to use them), what is derived from them, categories and tech branches, what stays out of the palette (world, resources, sides) |
 | 25 | [Marco legal](25-marco-legal.md) | Venezuelan law that touches the game (the 2009 war-videogame ban, copyright and trademark at SAPI, third-party licences, personal data, selling), the content and marketing rules that follow from it, the review checklist and what is pending before publishing |
+| 26 | [Rendimiento](26-rendimiento.md) | Performance budget (60 fps mid PC, 30 fps on an old integrated GPU and low-end Android, RAM/VRAM/.exe/APK), the reproducible probe (`tools/perf_probe.gd`: six seeded scenarios, CSV/JSON in `reports/perf/`), today's measurements per renderer and quality, the static audit with file:line, the prioritised optimisation list, the "Mínima" quality, first-boot detection and the FPS cap |
 
 ## Quick Reference
 
