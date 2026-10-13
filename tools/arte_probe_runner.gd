@@ -8,7 +8,10 @@ extends Node
 ##   4. 2D en calma y en Tormenta.
 ## Imprime "arte_probe: ..." con las cifras.
 
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 const SaveParking := preload("res://tests/save/save_parking.gd")
 const BACKUP_PATH := "user://save_game.arte_probe.bak"
 const OUT_DIR := "res://docs/media/dev"
