@@ -66,6 +66,9 @@ static func glow_material() -> Material:
 static func make_solid() -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.vertex_color_use_as_albedo = true
+	# La paleta esta escrita en sRGB (Color8): sin esto el color por vertice se
+	# leeria como lineal y todo saldria lavado, pastel en vez de calido.
+	m.vertex_color_is_srgb = true
 	m.roughness = 0.82
 	m.metallic = 0.0
 	m.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
@@ -74,6 +77,7 @@ static func make_solid() -> StandardMaterial3D:
 static func make_glow() -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.vertex_color_use_as_albedo = true
+	m.vertex_color_is_srgb = true
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return m
 
