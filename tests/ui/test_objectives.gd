@@ -61,6 +61,9 @@ func before_test() -> void:
 	StormManager.reset()
 	ResourceManager.set_era(1)
 	ResourceManager.set_warehouse_count(0)
+	# Comida de sobra para unos ciclos (2026-10-04): lo que dejo la suite anterior
+	# no puede convertir cada paso en "compra comida".
+	ResourceManager.set_amounts({"food": 400})
 	# La colonia nueva de verdad trae su Nucleo (+5 de aforo): sin el no habria ni
 	# los obreros del primer aserradero.
 	_build("nucleo")
@@ -268,11 +271,13 @@ func test_a_ruined_producer_is_repaired_before_anything_else() -> void:
 ## La mejora que no cabe en la bolsa no se pide a ciegas: primero el almacen.
 func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
-	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
 			"refinery", "tower", "tower", "headquarters"]:
 		_build(id)
 	for i in range(Objectives.GARRISON_UNITS):
 		_add_unit("artillery")
+	# Comida para unos ciclos: sin ella el paso seria comprarla (2026-10-04).
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 400})
 	# Era 3 con un almacen: 1000 + 500 = 1500, y la mejora a nivel 2 cuesta 2000.
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("build")
@@ -284,7 +289,7 @@ func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 ## Una base de era 3 que ya produce de todo y con la bolsa sana: lo que se
 ## prueba despues es el asedio, no la economia.
 func _a_running_base() -> void:
-	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "house", "foundry", "barracks", "refinery"]:
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "foundry", "barracks", "refinery"]:
 		_build(id)
 	ResourceManager.set_amounts({"gold": 400, "wood": 100, "steel": 200, "oil": 100})
 
@@ -367,7 +372,7 @@ func _panel_says(node: Node, text: String) -> bool:
 ## jugador cuadrando los cuatro recursos al centimo.
 func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
-	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "gold_mine", "gold_mine", "house", "house", "house", "house", "house", "sawmill",
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "gold_mine", "gold_mine", "house", "house", "house", "house", "house", "sawmill",
 			"warehouse", "warehouse", "warehouse", "warehouse", "warehouse", "foundry", "barracks",
 			"refinery", "tower", "tower", "headquarters"]:
 		_build(id)
@@ -378,8 +383,10 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	# se vigila es que antes de la mejora final aparezca la tecnologia de almacen.
 	var research: Array = []
 	var step: Dictionary = {}
-	for i in range(30):
+	var seen: Array = []
+	for i in range(60):
 		step = Objectives.next_step()
+		seen.append("%s:%s" % [step.get("kind", ""), step.get("id", "")])
 		if String(step["kind"]) == "upgrade" and int(step.get("level", 0)) == 3:
 			break
 		_assert_readable(step, "antes de la mejora final")
@@ -390,8 +397,8 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	assert_array(research).override_failure_message(
 		"la mejora final se pidio sin pasar por las tecnologias de almacen").is_not_empty()
 	assert_str(String(research[0])).is_equal("log_1")
-	assert_str(String(step["kind"])).is_equal("upgrade")
-	assert_int(int(step["level"])).is_equal(3)
+	assert_str(String(step["kind"])).override_failure_message(str(seen)).is_equal("upgrade")
+	assert_int(int(step.get("level", 0))).is_equal(3)
 	# Y con la holgura, la mejora ya no es el 100% de la bolsa.
 	assert_int(Objectives._cost_total(Objectives.step_cost(step))).is_less(ResourceManager.get_storage_cap())
 
@@ -405,7 +412,7 @@ func test_the_builder_skips_the_army_and_the_sandbox_has_no_goal() -> void:
 	var saved_result: String = GameMode.run_result
 	GameMode.begin_run(GameMode.Mode.BUILDER)
 	var visited: Array = []
-	for i in range(80):
+	for i in range(160):
 		var step: Dictionary = Objectives.next_step()
 		if String(step["kind"]) == "sandbox":
 			break
@@ -437,7 +444,7 @@ func test_the_builder_skips_the_army_and_the_sandbox_has_no_goal() -> void:
 
 ## Una base de era 1 con el cuartel en pie, sin tropa.
 func _a_base_with_barracks() -> void:
-	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "house", "sawmill", "warehouse", "foundry", "barracks"]:
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "sawmill", "warehouse", "foundry", "barracks"]:
 		_build(id)
 	ResourceManager.set_amounts({"gold": 300, "wood": 200, "steel": 50})
 

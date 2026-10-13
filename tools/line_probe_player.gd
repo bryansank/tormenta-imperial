@@ -322,6 +322,8 @@ func _repair() -> bool:
 		if rank < best_rank and bool(BuildingHealth.can_repair(node)["ok"]):
 			best = node
 			best_rank = rank
+		elif id == "tower":
+			_make_for_repair(node)
 	if best == null:
 		return false
 	if BuildingHealth.repair(best):
@@ -329,6 +331,19 @@ func _repair() -> bool:
 		_act("repair %s" % (GridManager.get_building_info(best)["data"] as BuildingData).id, false)
 		return true
 	return false
+
+## Una torre pide vigas para repararse; sin ellas no se repara nunca y el
+## asedio espera para siempre (las torres tienen que estar enteras). Se fabrican.
+func _make_for_repair(node: Node) -> void:
+	var cost: Dictionary = BuildingHealth.repair_cost(node)
+	for type in cost:
+		if not ResourceManager.is_material(int(type)):
+			continue
+		var short: int = int(cost[type]) - ResourceManager.get_amount(type)
+		if short <= 0:
+			continue
+		var mat: String = ResourceManager.get_type_name(type)
+		_try_make({"kind": "make", "id": mat, "building": GameConfig.get_material_source(mat), "amount": short})
 
 func _try_build(building_id: String, step: Dictionary) -> void:
 	var data: BuildingData = Rules.load_building_data(building_id)
@@ -465,10 +480,13 @@ func _feed_with_market() -> void:
 	for unit_id in GameConfig.get_unit_ids():
 		upkeep += ArmyManager.get_count(unit_id) * int(GameConfig.get_unit_def(unit_id).get("upkeep_gold", 0))
 	var food_due: int = PopulationManager.food_due()
+	# Con la Tormenta a la vista las granjas van a rendir el 15%: se hace acopio
+	# para diez ciclos (cinco minutos), como haria quien ya paso hambre una vez.
+	var cycles: int = 2 if StormManager.get_phase() == StormCycle.Phase.CALM else 10
 	if ProgressionManager.current_phase >= GameConfig.Phase.SETTLEMENT \
-			and ResourceManager.get_amount(ResourceManager.Type.FOOD) < food_due \
+			and ResourceManager.get_amount(ResourceManager.Type.FOOD) < food_due * cycles / 2 \
 			and Rules.count_building("market") > 0:
-		var want: int = food_due * 2 - ResourceManager.get_amount(ResourceManager.Type.FOOD)
+		var want: int = food_due * cycles - ResourceManager.get_amount(ResourceManager.Type.FOOD)
 		var price: int = maxi(1, MarketManager.get_buy_price("food"))
 		var can: int = mini(want, (ResourceManager.get_amount(ResourceManager.Type.GOLD) - upkeep) / price)
 		if can > 0 and MarketManager.buy("food", can):
@@ -508,7 +526,7 @@ func _collect() -> void:
 		if String(step.get("kind", "")) == "make":
 			for input in Objectives.material_recipe(String(step["id"])).get("cost", {}):
 				wanted[String(input)] = true
-		if ResourceManager.get_amount(ResourceManager.Type.FOOD) < PopulationManager.food_due() * 8:
+		if ResourceManager.get_amount(ResourceManager.Type.FOOD) < PopulationManager.food_due() * 12:
 			wanted["food"] = true
 		if ResourceManager.get_amount(ResourceManager.Type.GOLD) < 200:
 			wanted["gold"] = true
