@@ -7,30 +7,47 @@ extends Node3D
 ## y el shader la pinta con los colores de esa figura: el del cuerpo va en el
 ## color de instancia y el del accesorio + el tono de piel en el dato propio.
 ## Cuatro llamadas de dibujo para toda la isla, haya 5 figuras o 70. Por
-## fotograma solo se escriben las matrices de las figuras en la calle.
+## fotograma solo se escriben las matrices de las figuras en la calle. Un solo
+## material para las cuatro, sin luces propias.
+##
+## Proporciones de figurita de juguete (la maqueta, ToyPalette): cabeza grande,
+## cuerpo corto y rechoncho, piernas en un taco y el accesorio exagerado (casco,
+## sombrero, mono), para que se lean como gente a la distancia de la camara.
+## Los colores salen de la paleta (WorkerWalkers.PAL) y se leen igual que el
+## color por vertice del material solido de la maqueta (vc_srgb).
 
 const SHADER_CODE := """
 shader_type spatial;
 render_mode cull_back, specular_disabled;
-uniform vec3 skin_light : source_color = vec3(0.90, 0.74, 0.60);
-uniform vec3 skin_dark : source_color = vec3(0.46, 0.31, 0.22);
+uniform vec3 skin_light = vec3(0.93, 0.85, 0.66);
+uniform vec3 skin_dark = vec3(0.6, 0.37, 0.2);
+uniform bool vc_srgb = false;
 varying vec3 v_albedo;
 void vertex() {
 	float part = UV.x;
 	vec3 skin = mix(skin_light, skin_dark, INSTANCE_CUSTOM.a);
-	v_albedo = part < 0.5 ? COLOR.rgb : (part < 1.5 ? skin : INSTANCE_CUSTOM.rgb);
+	// 0 cuerpo, 1 piel, 2 accesorio, 3 piernas y botas (cuerpo oscurecido).
+	v_albedo = part < 0.5 ? COLOR.rgb : (part < 1.5 ? skin : (part < 2.5 ? INSTANCE_CUSTOM.rgb : COLOR.rgb * 0.45));
 }
 void fragment() {
-	ALBEDO = v_albedo;
-	ROUGHNESS = 0.85;
+	vec3 c = v_albedo;
+	if (vc_srgb) {
+		c = mix(pow((c + vec3(0.055)) * (1.0 / 1.055), vec3(2.4)), c * (1.0 / 12.92), lessThan(c, vec3(0.04045)));
+	}
+	ALBEDO = c;
+	ROUGHNESS = 0.82;
 }
 """
 
 const Actor := preload("res://scripts/map/WalkerActor.gd")
+const Tone := preload("res://scripts/buildings/ToyTones.gd")
 
 const BODY := 0.0
 const SKIN := 1.0
 const ACCENT := 2.0
+const LEGS := 3.0
+## Las figuritas, algo mayores que una persona a escala: se leen de lejos.
+const FIGURE_SCALE := 1.15
 
 var _mms: Array = []          # un MultiMesh por Kind
 var _bufs: Array = []         # su buffer (PackedFloat32Array), reutilizado
@@ -51,6 +68,11 @@ func setup(cap: int) -> void:
 		_meshes = [_worker_mesh(), _man_mesh(), _woman_mesh(), _child_mesh()]
 	var mat := ShaderMaterial.new()
 	mat.shader = _shader
+	var sl := Tone.of("skin_light")
+	var sd := Tone.of("skin_dark")
+	mat.set_shader_parameter("skin_light", Vector3(sl.r, sl.g, sl.b))
+	mat.set_shader_parameter("skin_dark", Vector3(sd.r, sd.g, sd.b))
+	mat.set_shader_parameter("vc_srgb", Tone.vertex_color_is_srgb())
 	# En tableta y movil sin sombra: ahorra un pase por figura en el Mobile.
 	var shadows: bool = DeviceProfile.current() == DeviceProfile.PC
 	for k in _meshes.size():
@@ -174,7 +196,7 @@ static func _merge(parts: Array) -> ArrayMesh:
 		var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var n: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 		for j in v.size():
-			verts.append(v[j] + off)
+			verts.append((v[j] + off) * FIGURE_SCALE)
 			normals.append(n[j])
 			uvs.append(Vector2(part, 0.0))
 		var ii: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
@@ -190,35 +212,51 @@ static func _merge(parts: Array) -> ArrayMesh:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, out)
 	return mesh
 
+static func _box(size: Vector3) -> PrimitiveMesh:
+	var m := BoxMesh.new()
+	m.size = size
+	return m
+
+## Alto total ~0,85 (la figura mide como una puerta de la maqueta); la cabeza
+## es un tercio largo de la figura.
 static func _worker_mesh() -> ArrayMesh:
 	return _merge([
-		[_capsule(0.16, 0.60), Vector3(0, 0.30, 0), BODY],
-		[_sphere(0.12), Vector3(0, 0.72, 0), SKIN],
-		[_cyl(0.10, 0.155, 0.08), Vector3(0, 0.83, 0), ACCENT],
+		[_box(Vector3(0.26, 0.2, 0.16)), Vector3(0, 0.1, 0), LEGS],
+		[_capsule(0.17, 0.42), Vector3(0, 0.36, 0), BODY],
+		[_sphere(0.17), Vector3(0, 0.66, 0), SKIN],
+		# El casco, ancho y con ala: lo que dice "obrero" de lejos.
+		[_cyl(0.13, 0.2, 0.1), Vector3(0, 0.8, 0), ACCENT],
+		[_cyl(0.21, 0.21, 0.025), Vector3(0, 0.75, 0), ACCENT],
 		# La caja de herramientas a la espalda.
-		[_cyl(0.07, 0.07, 0.2), Vector3(0, 0.44, -0.15), ACCENT],
+		[_box(Vector3(0.2, 0.16, 0.1)), Vector3(0, 0.4, -0.19), ACCENT],
 	])
 
 static func _man_mesh() -> ArrayMesh:
 	return _merge([
-		[_capsule(0.15, 0.62), Vector3(0, 0.31, 0), BODY],
-		[_sphere(0.115), Vector3(0, 0.74, 0), SKIN],
-		[_cyl(0.16, 0.16, 0.02), Vector3(0, 0.83, 0), ACCENT],
-		[_cyl(0.085, 0.095, 0.16), Vector3(0, 0.92, 0), ACCENT],
+		[_box(Vector3(0.24, 0.2, 0.15)), Vector3(0, 0.1, 0), LEGS],
+		[_capsule(0.16, 0.44), Vector3(0, 0.37, 0), BODY],
+		[_sphere(0.16), Vector3(0, 0.68, 0), SKIN],
+		# Sombrero de copa baja y ala ancha.
+		[_cyl(0.22, 0.22, 0.03), Vector3(0, 0.8, 0), ACCENT],
+		[_cyl(0.12, 0.13, 0.16), Vector3(0, 0.89, 0), ACCENT],
 	])
 
 static func _woman_mesh() -> ArrayMesh:
 	return _merge([
-		[_cyl(0.09, 0.21, 0.44), Vector3(0, 0.22, 0), BODY],
-		[_capsule(0.1, 0.34), Vector3(0, 0.52, 0), BODY],
-		[_sphere(0.11), Vector3(0, 0.76, 0), SKIN],
-		[_sphere(0.075), Vector3(0, 0.82, -0.08), ACCENT],
-		[_cyl(0.105, 0.12, 0.05), Vector3(0, 0.84, -0.01), ACCENT],
+		[_cyl(0.12, 0.23, 0.36), Vector3(0, 0.2, 0), BODY],
+		[_capsule(0.13, 0.28), Vector3(0, 0.44, 0), BODY],
+		[_sphere(0.16), Vector3(0, 0.67, 0), SKIN],
+		# Mono grande detras y pelo por encima.
+		[_sphere(0.1), Vector3(0, 0.75, -0.14), ACCENT],
+		[_cyl(0.15, 0.17, 0.07), Vector3(0, 0.78, -0.02), ACCENT],
 	])
 
 static func _child_mesh() -> ArrayMesh:
 	return _merge([
-		[_capsule(0.11, 0.38), Vector3(0, 0.19, 0), BODY],
-		[_sphere(0.1), Vector3(0, 0.47, 0), SKIN],
-		[_cyl(0.09, 0.105, 0.05), Vector3(0, 0.56, 0), ACCENT],
+		[_box(Vector3(0.18, 0.12, 0.12)), Vector3(0, 0.06, 0), LEGS],
+		[_capsule(0.12, 0.26), Vector3(0, 0.22, 0), BODY],
+		[_sphere(0.14), Vector3(0, 0.46, 0), SKIN],
+		# Gorra con visera.
+		[_cyl(0.12, 0.145, 0.07), Vector3(0, 0.57, 0), ACCENT],
+		[_box(Vector3(0.14, 0.02, 0.1)), Vector3(0, 0.545, 0.14), ACCENT],
 	])
