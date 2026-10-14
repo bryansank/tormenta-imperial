@@ -111,7 +111,12 @@ func test_the_target_guard_counts_before_calling_it_a_kill() -> void:
 	dying.position = Vector2i(3, 4)
 	dying.hp = 5
 	dying.defending = true                         # dano 8-4 = 4 < 5: sobrevive
+	# Sin ventaja por tipo: aqui se mira solo la guardia (con ella, la infanteria
+	# evitaria al vehiculo, que es su mal objetivo: ver test_type_advantage.gd).
+	var saved: Dictionary = GameConfig.combat_type_advantage["beats"]
+	GameConfig.combat_type_advantage["beats"] = {}
 	var plan := AIScript.plan_turn(e, enemy.uid)
+	GameConfig.combat_type_advantage["beats"] = saved
 	assert_int(plan[plan.size() - 1]["target"]).is_equal(armour.uid)
 
 func test_without_a_finishing_blow_it_bites_the_most_valuable_rival() -> void:
@@ -124,7 +129,13 @@ func test_without_a_finishing_blow_it_bites_the_most_valuable_rival() -> void:
 	enemy.position = Vector2i(4, 4)
 	armour.position = Vector2i(4, 5)
 	escort.position = Vector2i(3, 4)
+	# Sin ventaja por tipo: con tres tipos en circulo dos tipos distintos nunca
+	# son neutros entre si, asi que el poder solo se ve a igual ventaja. Aqui se
+	# mira el poder a secas (la ventaja: test_type_advantage.gd).
+	var saved: Dictionary = GameConfig.combat_type_advantage["beats"]
+	GameConfig.combat_type_advantage["beats"] = {}
 	var plan := AIScript.plan_turn(e, enemy.uid)
+	GameConfig.combat_type_advantage["beats"] = saved
 	assert_array(_actions(plan)).is_equal(["attack"])
 	assert_int(plan[0]["target"]).is_equal(armour.uid)
 

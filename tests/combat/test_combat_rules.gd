@@ -35,11 +35,12 @@ func test_defending_doubles_defense() -> void:
 	assert_int(target.defense()).is_equal(10)
 
 func test_defending_cuts_incoming_artillery_damage() -> void:
+	# La artilleria pega al vehiculo con ventaja de tipo (x1,5 sobre el neto).
 	var attacker := _unit("artillery", PLAYER, 1)   # atk 14
 	var target := _unit("vehicle", ENEMY, 2)        # def 5
-	assert_int(Rules.damage(attacker, target)).is_equal(9)
+	assert_int(Rules.damage(attacker, target)).is_equal(14)   # (14-5) x1,5 = 13,5 -> 14
 	target.defending = true                          # def 10
-	assert_int(Rules.damage(attacker, target)).is_equal(4)
+	assert_int(Rules.damage(attacker, target)).is_equal(6)    # (14-10) x1,5 = 6
 
 # ── Morale: the differentiator ───────────────────────────────────────
 

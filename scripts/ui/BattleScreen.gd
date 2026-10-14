@@ -28,6 +28,7 @@ extends CanvasLayer
 const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
 const Board3DView := preload("res://scripts/combat_view/BoardViewport3D.gd")
+const BoardTerrain := preload("res://scripts/combat_view/BoardTerrain3D.gd")
 const WorldLook := preload("res://scripts/map/WorldLook.gd")
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
 
@@ -89,11 +90,14 @@ var _board_open := false
 var _board_style := "2d"
 ## Forzado por pruebas y sondas ("2d" / "3d"); "" = lo que diga `pick_board_style()`.
 var _forced_style := ""
+## Escenario forzado de la maqueta (sondas): "" = el de la semilla.
+var _forced_scene := ""
 var _board3d = null                 ## BoardViewport3D, creado la primera vez
 var _board_column: VBoxContainer
 var _grid_center: HBoxContainer
 var _board_spacer: Control
-var _actions_row: HBoxContainer
+var _actions_row: Container
+var _speed_btn: Button
 ## Lo que espera a que la maqueta termine de animar: el parte, el draft, el
 ## informe final. Nunca se ensena el resultado de algo que aun no se ha visto.
 var _deferred_ui: Array = []
@@ -215,10 +219,14 @@ func _build_board_view() -> void:
 
 	# Cabecera: que pelea es esta, cuanto tiempo queda dentro y de quien es el
 	# turno, en una sola fila (2026-10-04: el turno iba en una linea propia).
-	var header := HBoxContainer.new()
+	# Fila que PARTE en un movil (HFlowContainer): con la bandera del pais y el
+	# boton x1/x2 ya no cabe en 400 px, y una fila rigida mas ancha que la
+	# pantalla ensanchaba la columna entera y sacaba el tablero por la derecha.
+	var header := HFlowContainer.new()
 	header.name = "BoardHeader"
-	header.alignment = BoxContainer.ALIGNMENT_CENTER
-	header.add_theme_constant_override("separation", 24)
+	header.alignment = FlowContainer.ALIGNMENT_CENTER
+	header.add_theme_constant_override("h_separation", 24)
+	header.add_theme_constant_override("v_separation", 4)
 	# Nuestro lado: la bandera y el nombre del pais.
 	header.add_child(ColonyByline.new("small"))
 	_title_label = UITheme.make_label("", "title", UITheme.ACCENT)
@@ -228,6 +236,15 @@ func _build_board_view() -> void:
 	_turn_label = UITheme.make_label("", "section", UITheme.TEXT)
 	_turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(_turn_label)
+	# x1 / x2 propio: el boton del HUD (capa 10) queda tapado por el tablero (18).
+	_speed_btn = Button.new()
+	_speed_btn.name = "BoardSpeed"
+	_speed_btn.focus_mode = Control.FOCUS_NONE
+	_speed_btn.custom_minimum_size = Vector2(UITheme.touch_px(56.0), UITheme.MIN_BTN_H)
+	_speed_btn.pressed.connect(GameConfig.toggle_game_speed)
+	header.add_child(_speed_btn)
+	EventBus.game_speed_changed.connect(func(_s): _refresh_speed_button())
+	_refresh_speed_button()
 	column.add_child(header)
 	HudRegistry.register("BattleScreen.turn", _turn_label)
 
@@ -256,9 +273,12 @@ func _build_board_view() -> void:
 	_grid.add_theme_constant_override("v_separation", 2)
 	grid_center.add_child(_grid)
 
-	var actions := HBoxContainer.new()
-	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 8)
+	# Los botones tambien parten en dos filas si no caben (tres de 132 px y el
+	# de abandonar no entran en un movil de 400).
+	var actions := HFlowContainer.new()
+	actions.alignment = FlowContainer.ALIGNMENT_CENTER
+	actions.add_theme_constant_override("h_separation", 8)
+	actions.add_theme_constant_override("v_separation", 6)
 	_defend_btn = _make_action(Tr.t("BTN_DEFEND"), func(): _act_defend())
 	_wait_btn = _make_action(Tr.t("BTN_WAIT"), func(): _act_wait())
 	_end_btn = _make_action(Tr.t("BTN_END_TURN"), func(): _act_end_turn())
@@ -1571,6 +1591,11 @@ static func pick_board_style(display_name: String, view_mode: String, _quality: 
 func force_board_style(style: String) -> void:
 	_forced_style = style if style in ["2d", "3d"] else ""
 
+## Fuerza el escenario de la maqueta (BoardTerrain3D.SCENES, o "" para el de la
+## semilla). Sondas.
+func force_board_scene(scene: String) -> void:
+	_forced_scene = scene if scene in BoardTerrain.SCENES else ""
+
 func board_style() -> String:
 	return _board_style
 
@@ -1617,11 +1642,13 @@ func _open_board_3d(index: int) -> void:
 	var encounter: Encounter = CombatManager.get_encounter()
 	if encounter == null:
 		return
+	var seed_value: int = index * 7919 + encounter.units.size() * 31 + (1 if encounter.is_defense else 0)
 	_board3d.board.setup(encounter, {
+		"scene": _forced_scene if _forced_scene != "" else BoardTerrain.pick_scene(seed_value, encounter.is_defense),
 		"team_color": RankManager.get_color(),
 		"boss_uid": boss_uid(),
 		"crew_uids": encounter.back_row_uids,
-		"seed": index * 7919 + encounter.units.size() * 31 + (1 if encounter.is_defense else 0),
+		"seed": seed_value,
 	})
 	_queue_margin_update()
 
@@ -1662,9 +1689,34 @@ func _refresh_board3d() -> void:
 		b.clear_marks()
 		return
 	if CombatManager.is_player_turn():
-		b.show_state(active.uid, CombatManager.get_valid_moves(active.uid), CombatManager.get_valid_targets(active.uid))
+		var targets: Array = CombatManager.get_valid_targets(active.uid)
+		b.show_state(active.uid, CombatManager.get_valid_moves(active.uid), targets, target_hints(active, targets))
 	else:
 		b.show_state(active.uid, [], [])
+
+## La ventaja de tipo del atacante contra cada objetivo a tiro: uid -> +1 / -1
+## (los neutros no van). Es lo que pinta "Buen objetivo" / "Mal objetivo".
+func target_hints(attacker: CombatUnit, targets: Array) -> Dictionary:
+	var out := {}
+	for uid in targets:
+		var t := CombatManager.get_unit(int(uid))
+		if t == null:
+			continue
+		var m: int = Rules.type_matchup(attacker.unit_id, t.unit_id)
+		if m != 0:
+			out[int(uid)] = m
+	return out
+
+func _refresh_speed_button() -> void:
+	if _speed_btn == null:
+		return
+	var fast := GameConfig.game_speed > 1.0
+	_speed_btn.text = "x%d" % int(GameConfig.game_speed)
+	_speed_btn.tooltip_text = Tr.ti("LBL_GAME_SPEED_TIP")
+	UITheme.style_button(_speed_btn, UITheme.ACCENT.darkened(0.35) if fast else UITheme.BTN, UITheme.FONT_SECTION)
+
+func speed_button() -> Button:
+	return _speed_btn
 
 ## Dice quien es una pieza tocada: nombre y vida (y JEFE), sobre ella.
 func _inspect_3d(unit: CombatUnit) -> void:
