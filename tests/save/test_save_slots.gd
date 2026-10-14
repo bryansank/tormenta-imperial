@@ -210,7 +210,7 @@ func test_the_list_shows_name_mode_era_time_and_date() -> void:
 	assert_int(panel.process_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
 
 func test_a_colony_name_from_the_index_is_the_title() -> void:
-	_write_slot(1, 10.0, {"rank": {"colony_name": "Valdoria"}})
+	_write_slot(1, 10.0, {"rank": {"colony": {"name": "Valdoria"}}})
 	var panel: CanvasLayer = GameManager.open_saves_list()
 	await await_idle_frame()
 	assert_str((panel.row(1).find_child("Name", true, false) as Label).text).is_equal("Valdoria")

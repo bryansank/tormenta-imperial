@@ -289,7 +289,12 @@ func _open_new_colony() -> void:
 	).is_false()
 
 	# El mapa que sortea la partida nueva se cambia por uno fijo: mismos
-	# yacimientos, mismas celdas, mismo recorrido todas las veces.
+	# yacimientos, mismas celdas, mismo recorrido todas las veces. Y en una isla
+	# cuadrada, toda tierra (la de los guardados de antes): la isla irregular
+	# pondria mar bajo las celdas fijas de DEPOSITS. Lo que aqui se mide es la
+	# economia, no la costa (esa la cubren tests/map/test_island_shape.gd).
+	GridManager.load_save_data({"width": GridManager.grid_width, "height": GridManager.grid_height,
+		"island_seed": GridManager.island_seed})
 	_map.clear_all_deposits()
 	for entry in DEPOSITS:
 		_map.spawn_deposit(String(entry[0]), entry[1] as Vector2i, -1, DEPOSIT_SIZE)

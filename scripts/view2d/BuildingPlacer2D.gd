@@ -257,6 +257,8 @@ func try_place(cell: Vector2i) -> Node:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "water":
+			_show_feedback(Tr.t("LBL_ON_WATER"))
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
@@ -341,6 +343,8 @@ func try_move(cell: Vector2i) -> bool:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "water":
+			_show_feedback(Tr.t("LBL_ON_WATER"))
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
@@ -589,6 +593,8 @@ func assist_explain(origin: Vector2i) -> void:
 	var verdict := Rules.evaluate_placement(_current_data.id, origin, Rules.rotated_size(_current_data, _rotation_steps), _map_generator(), ignore)
 	if verdict["reason"] == "deposit":
 		_reject_for_deposit(_current_data.id)
+	elif verdict["reason"] == "water":
+		_show_feedback(Tr.t("LBL_ON_WATER"))
 	elif verdict["reason"] == "occupied":
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 	elif verdict["reason"] == "road":

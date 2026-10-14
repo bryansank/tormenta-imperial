@@ -112,7 +112,12 @@ Since 2026-09-28 the save also carries:
   `user://save_game.v1-<date>.json` and a new colony starts, with a notice
   (`MSG_SAVE_OLD_FORMAT`). A test that writes a save fixture must add `"format"`.
 - `"grid"`: width, height and island seed (`GridManager.get_save_data()`), restored
-  **before** anything is placed. A save without it is 40x40.
+  **before** anything is placed. A save without it is 40x40. Since 2026-10-12 it also
+  carries `"shape"` (2 = the irregular island) and `"coast"` (the
+  `GameConfig.island_coast` parameters the island was made with). The land mask is
+  not saved: it is derived from seed, size and those parameters
+  (`IslandShape.build_mask`). A `"grid"` without `"shape"` is the old square island
+  (all land) and loads as it always did; `SAVE_FORMAT` stays 2.
 - per building, `workers_off` when the player took its workers off.
 - the four workshop materials, alongside the resources.
 

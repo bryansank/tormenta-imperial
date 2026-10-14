@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## Mapa aleatorio (2026-09-28): cada partida sortea el tamano de la rejilla
-## (GameConfig.grid_size_min..max, lados pares), la forma de la isla
+## (GameConfig.grid_width_* y grid_height_*, lados pares), la forma de la isla
 ## (GridManager.island_seed) y, para CADA tipo de yacimiento, cuantos trae
 ## (GameConfig.deposit_per_type_min..max). Ningun yacimiento pisa el Nucleo ni su
 ## acera, ninguno cae en la franja de costa, y todos dejan hueco a su extractor
@@ -135,8 +135,9 @@ func test_the_grid_size_is_in_range_and_even() -> void:
 	for s in SEEDS:
 		seed(s)
 		GridManager.roll_new_map()
+		assert_int(GridManager.grid_width).is_between(GameConfig.grid_width_min, GameConfig.grid_width_max)
+		assert_int(GridManager.grid_height).is_between(GameConfig.grid_height_min, GameConfig.grid_height_max)
 		for side in [GridManager.grid_width, GridManager.grid_height]:
-			assert_int(side).is_between(GameConfig.grid_size_min, GameConfig.grid_size_max)
 			assert_int(side % 2).is_equal(0)
 		sizes[Vector2i(GridManager.grid_width, GridManager.grid_height)] = true
 	assert_int(sizes.size()).is_greater(1)
@@ -182,24 +183,30 @@ func test_resizing_announces_it_once() -> void:
 	EventBus.grid_resized.disconnect(cb)
 	assert_array(calls).is_equal([Vector2i(44, 44)])
 
-# ── La isla cubre cualquier rejilla, con cualquier forma ──────────────
+# ── Isla irregular: toda celda de tierra queda bajo la hierba ─────────
 
-func test_every_rolled_island_covers_its_grid() -> void:
-	for s in SEEDS:
+func test_every_rolled_island_keeps_its_land_under_the_grass() -> void:
+	# La costa de la 3D y la 2D (IslandGenerator.coast_for_grid) deja dentro
+	# las cuatro esquinas de cada celda de tierra: nunca se construye en el agua
+	# que se ve, ni hay hierba que no se pueda pisar mas alla de media celda.
+	for s in [1, 42, 9001]:
 		seed(s)
 		GridManager.roll_new_map()
-		var shape: Dictionary = IslandGen.shape_for_seed(GridManager.island_seed)
-		var half: Vector2 = IslandGen.grid_half_extents()
-		var wobble: Array = IslandGen.make_wobble(IslandGen.SEGMENTS, shape["seed_val"], shape["amplitude"], shape["detail"])
-		var poly := IslandGen.border_points(half.x, half.y, shape["margin"], shape["radius"], wobble)
+		assert_bool(GridManager.is_irregular()).is_true()
+		var poly: PackedVector2Array = IslandGen.coast_for_grid()
+		assert_int(poly.size()).is_greater(100)
 		var o: Vector3 = GridManager.get_origin()
 		var cs: float = GridManager.cell_size
-		for x in range(GridManager.grid_width + 1):
-			for y in range(GridManager.grid_height + 1):
-				var corner := Vector2(o.x + x * cs, o.z + y * cs)
-				if not Geometry2D.is_point_in_polygon(corner, poly):
-					fail("semilla %d (%dx%d): esquina %s en el agua" % [s, GridManager.grid_width, GridManager.grid_height, corner])
-					return
+		var eps := 0.01
+		for y in range(GridManager.grid_height):
+			for x in range(GridManager.grid_width):
+				if not GridManager.is_land_cell(Vector2i(x, y)):
+					continue
+				for corner in [Vector2(x + eps, y + eps), Vector2(x + 1 - eps, y + eps), Vector2(x + eps, y + 1 - eps), Vector2(x + 1 - eps, y + 1 - eps)]:
+					var w: Vector2 = Vector2(o.x, o.z) + corner * cs
+					if not Geometry2D.is_point_in_polygon(w, poly):
+						fail("semilla %d (%dx%d): esquina de (%d,%d) fuera de la hierba" % [s, GridManager.grid_width, GridManager.grid_height, x, y])
+						return
 
 func test_island_shapes_differ_between_seeds() -> void:
 	var a: Dictionary = IslandGen.shape_for_seed(1)
