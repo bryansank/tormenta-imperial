@@ -21,6 +21,7 @@ const View2D := preload("res://scripts/view2d/View2D.gd")
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
 ## Dedo, casillas validas y boton ✓: lo mismo que en 3D (docs/21 §Tactil).
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 
 var _state: State = State.IDLE
 var _current_data: BuildingData = null
@@ -236,7 +237,7 @@ func _show_grid_overlay(forced: bool) -> void:
 	var scene := get_tree().current_scene if is_inside_tree() else null
 	var grid := scene.get_node_or_null("GridOverlay") if scene else null
 	if grid:
-		grid.visible = forced or GameConfig.ui_grid_visible
+		grid.visible = forced or GraphicsQuality.grid_always_visible()
 
 # ── Colocar ───────────────────────────────────────────────────────────
 
