@@ -37,6 +37,9 @@ func _screen_3d() -> CanvasLayer:
 	var screen: CanvasLayer = auto_free(load("res://scenes/ui/BattleScreen.tscn").instantiate())
 	add_child(screen)
 	screen.force_board_style("3d")
+	# Estas pruebas son del tablero 8x8 (casillas, marcas); el frente va en
+	# test_combat_views.gd.
+	screen.force_combat_view("board")
 	return screen
 
 ## Abre una pelea pequena: dos infanterias nuestras contra una suya.

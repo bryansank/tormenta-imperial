@@ -53,13 +53,28 @@ static func pick_scene(seed_value: int, is_defense: bool) -> String:
 static func C(slot: int, d := 0.0) -> Color:
 	return Palette.tint(slot, d)
 
-static func build(board: Vector2i, seed_value: int, simple := false, scene := SCENE_LAND) -> ArrayMesh:
+## `front` (la vista frontal, docs/15 §3 "Las dos vistas"): el mismo decorado de
+## borde, pero el suelo es un CAMPO seguido que llega al horizonte, sin losetas
+## ni juntas: no se ve ninguna casilla. Y menos cajas que el tablero (un plano
+## para el campo en vez de 64 losetas), asi que no cuesta mas.
+static func build(board: Vector2i, seed_value: int, simple := false, scene := SCENE_LAND, front := false) -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var mk := MeshKit.new()
 	var ext := Layout.board_extent(board)
 	var w := ext.x + MARGIN * 2.0
 	var d := ext.y + MARGIN * 2.0
+	if front:
+		_field(mk, board, ext, rng, simple, scene)
+		_edges(mk, board, ext, rng, simple, scene)
+		match scene:
+			SCENE_BEACH:
+				_beach(mk, ext, w, d, rng, simple)
+			SCENE_FOREST:
+				_forest(mk, ext, rng, simple)
+		_far_trees(mk, ext, rng, simple, scene)
+		_divider(mk, ext, rng, simple, scene)
+		return mk.commit()
 
 	# La mesa de guerra: madera oscura, muy grande, para que la maqueta no flote.
 	mk.flat(Vector3(0, TABLE_Y, 0), Vector2(w * 8.0, d * 8.0), TABLE_COLOR)
@@ -114,6 +129,61 @@ static func _tiles(mk, board: Vector2i, rng: RandomNumberGenerator, simple: bool
 					mk.box(c + corner + Vector3(0.09, 0.04, 0.05), Vector3(0.07, 0.08, 0.07), C(S.GREEN, 0.0))
 				else:
 					mk.box(c + corner + Vector3(0, 0.03, 0), Vector3(0.14, 0.06, 0.11), C(S.STONE, -0.05))
+
+## El campo de la vista frontal: hierba seguida hasta el horizonte, la tierra
+## de nadie batida en medio (una franja parda de bordes irregulares) y craters
+## donde caigan, no en el centro de ninguna casilla.
+static func _field(mk, board: Vector2i, ext: Vector2, rng: RandomNumberGenerator, simple: bool, scene := SCENE_LAND) -> void:
+	var y0 := -0.11
+	# El campo grande y, encima, el del frente (un poco mas claro): sin peana ni
+	# mesa, el suelo sigue hasta perderse. En la playa el campo acaba en la
+	# orilla (detras esta el mar de _beach, mas bajo).
+	var back := -ext.y * 4.5
+	if scene == SCENE_BEACH:
+		back = -(ext.y * 0.5 + MARGIN)
+	var front_edge := ext.y * 4.5
+	mk.flat(Vector3(0, y0 - 0.02, (back + front_edge) * 0.5), Vector2(ext.x * 9.0, front_edge - back), C(S.GREEN, -0.22))
+	var near_back := maxf(back, -(ext.y * 0.5 + MARGIN * 1.5))
+	var near_front := ext.y * 0.5 + MARGIN * 1.5
+	mk.flat(Vector3(0, y0, (near_back + near_front) * 0.5), Vector2(ext.x + MARGIN * 3.0, near_front - near_back), C(S.GREEN, -0.08))
+	# Tierra de nadie: las filas del medio, en manchas solapadas.
+	var dirt := C(S.STONE, -0.16).lerp(C(S.WOOD, 0.0), 0.35)
+	var hx := ext.x * 0.5
+	var x := -hx - 0.6
+	while x < hx + 0.6:
+		var wd := rng.randf_range(1.6, 2.6)
+		var dz := rng.randf_range(2.6, 4.0)
+		mk.flat(Vector3(x + wd * 0.5, y0 + 0.008, rng.randf_range(-0.5, 0.5)), Vector2(wd, dz), dirt.darkened(rng.randf() * 0.08))
+		x += wd * 0.8
+	# Craters sueltos en la tierra de nadie y alguno mas cerca de cada bando.
+	for i in (3 if simple else 6):
+		var c := Vector3(rng.randf_range(-hx + 0.6, hx - 0.6), y0 + 0.012, rng.randf_range(-ext.y * 0.3, ext.y * 0.3))
+		mk.cyl(c, rng.randf_range(0.5, 0.75), 0.02, C(S.WOOD, -0.25), 9)
+		mk.cyl(c, 0.32, 0.025, C(S.IRON, 0.05), 7)
+	if simple:
+		return
+	# Matas sueltas por el campo, a voleo (no en rejilla).
+	for i in 26:
+		var p := Vector3(rng.randf_range(-hx - 1.0, hx + 1.0), y0, rng.randf_range(-ext.y * 0.5 - 1.0, ext.y * 0.5 + 1.0))
+		mk.box(p + Vector3(0, 0.05, 0), Vector3(0.09, 0.1, 0.09), C(S.GREEN, 0.04))
+		mk.box(p + Vector3(0.1, 0.04, 0.05), Vector3(0.07, 0.08, 0.07), C(S.GREEN, -0.02))
+
+## Arboledas lejanas a los lados y al fondo del frente: el campo no acaba en un
+## borde de mesa. Pocos arboles grandes (cada uno, dos conos y un tronco).
+static func _far_trees(mk, ext: Vector2, rng: RandomNumberGenerator, simple: bool, scene: String) -> void:
+	var y0 := -0.13
+	var hx := ext.x * 0.5
+	var hz := ext.y * 0.5
+	var n := 6 if simple else 14
+	for i in n:
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var p := Vector3(side * rng.randf_range(hx + 3.0, hx + 9.0), y0, rng.randf_range(-hz - 6.0, hz + 4.0))
+		_tree(mk, p, rng.randf_range(1.3, 2.0))
+	if scene == SCENE_BEACH:
+		return
+	for i in (4 if simple else 9):
+		var p := Vector3(rng.randf_range(-hx - 6.0, hx + 6.0), y0, -hz - rng.randf_range(3.5, 9.0))
+		_tree(mk, p, rng.randf_range(1.4, 2.1))
 
 static func _edges(mk, board: Vector2i, ext: Vector2, rng: RandomNumberGenerator, simple: bool, scene := SCENE_LAND) -> void:
 	var hx := ext.x * 0.5
@@ -229,3 +299,32 @@ static func _forest(mk, ext: Vector2, rng: RandomNumberGenerator, simple: bool) 
 		var p := Vector3(-side * (hx + 0.9), y0, rng.randf_range(-hz + 1.0, hz - 1.0))
 		mk.cyl(p - Vector3(0.45, -0.12, 0), 0.12, 0.9, C(S.WOOD, -0.18), 7, Vector3.RIGHT)
 		mk.cyl(p + Vector3(0, 0, 0.45), 0.16, 0.2, C(S.WOOD, -0.1), 7)
+
+## La linea entre los dos bandos en la vista frontal, segun el escenario: un
+## arroyo en campo abierto, la linea de la marea en la playa, un seto bajo en la
+## linde del bosque. Va a ras de suelo y con huecos: se cruza como cualquier
+## casilla (las reglas no tienen obstaculos y el decorado no debe insinuarlos).
+## Corre a lo largo de X por el medio del tablero (entre la fila 3 y la 4).
+static func _divider(mk, ext: Vector2, rng: RandomNumberGenerator, simple: bool, scene: String) -> void:
+	var hx := ext.x * 0.5
+	var y0 := -0.11
+	var x := -hx - 2.5
+	while x < hx + 2.5:
+		var seg := rng.randf_range(1.2, 2.2)
+		var z := rng.randf_range(-0.25, 0.25)
+		match scene:
+			SCENE_BEACH:
+				# Arena mojada y una raya de espuma.
+				mk.flat(Vector3(x + seg * 0.5, y0 + 0.014, z), Vector2(seg * 1.05, 0.7), C(S.STONE, -0.1))
+				mk.flat(Vector3(x + seg * 0.5, y0 + 0.018, z + 0.22), Vector2(seg * 0.9, 0.12), C(S.CREAM, 0.1))
+			SCENE_FOREST:
+				# Seto bajo a trozos, con hueco entre trozo y trozo.
+				if rng.randf() < 0.65:
+					mk.box(Vector3(x + seg * 0.4, y0 + 0.11, z), Vector3(seg * 0.6, 0.22, 0.3), C(S.GREEN, -0.18 + rng.randf() * 0.06))
+			_:
+				# Arroyo: agua somera con orillas de tierra y alguna piedra de paso.
+				mk.flat(Vector3(x + seg * 0.5, y0 + 0.012, z), Vector2(seg * 1.05, 0.8), C(S.WOOD, -0.1))
+				mk.flat(Vector3(x + seg * 0.5, y0 + 0.018, z), Vector2(seg * 1.05, 0.46), C(S.SKY, -0.05))
+				if not simple and rng.randf() < 0.5:
+					mk.box(Vector3(x + seg * 0.5, y0 + 0.04, z), Vector3(0.26, 0.06, 0.22), C(S.STONE, -0.05))
+		x += seg

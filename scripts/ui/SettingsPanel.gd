@@ -285,6 +285,18 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 			set_graphics_quality(q_modes[idx]))
 	quality_row.name = "QualityRow"
 	body.add_child(quality_row)
+	# Vista del combate (docs/15 §3, "Las dos vistas"): frente (por defecto) o
+	# el tablero 8x8. Preferencia del dispositivo; tambien se cambia en la pelea.
+	var cv_modes: Array = GameConfig.COMBAT_VIEWS
+	var cv_labels: Array = []
+	for mode in cv_modes:
+		cv_labels.append(Tr.t("OPT_COMBAT_VIEW_" + String(mode).to_upper()))
+	var combat_row := UITheme.make_option_row(Tr.t("LBL_COMBAT_VIEW"), cv_labels,
+		maxi(0, cv_modes.find(GameConfig.ui_combat_view)), func(idx: int):
+			GameConfig.set_combat_view(cv_modes[idx]))
+	combat_row.name = "CombatViewRow"
+	combat_row.tooltip_text = Tr.t("LBL_COMBAT_VIEW_TIP")
+	body.add_child(combat_row)
 	# Pantalla completa — tambien con F11; el interruptor se sincroniza si se
 	# cambia por teclado mientras el panel esta abierto.
 	_fullscreen_check = UITheme.make_check_button(
@@ -357,6 +369,10 @@ func reset_interface() -> void:
 	var quality_row := find_child("QualityRow", true, false)
 	if quality_row != null:
 		(quality_row.get_child(1) as OptionButton).selected = 0
+	GameConfig.ui_combat_view = "front"
+	var combat_row := find_child("CombatViewRow", true, false)
+	if combat_row != null:
+		(combat_row.get_child(1) as OptionButton).selected = 0
 	HudRegistry.show_all()
 	UILayoutManager.reset_user_layout()
 	GameConfig.save_user_settings()

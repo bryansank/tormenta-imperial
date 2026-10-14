@@ -595,6 +595,12 @@ var ui_panel_opacity := 1.0
 ## (Android, el APK de QA) y "high" en Forward+ (PC).
 const GRAPHICS_QUALITY_MODES := ["auto", "high", "low"]
 var ui_graphics_quality := "auto"
+## Vista del combate (docs/15 §3, "Las dos vistas"): "front" (por defecto) los
+## dos bandos cara a cara, sin casillas a la vista; "board" el tablero 8x8 en 3D.
+## Preferencia del dispositivo ([interfaz] combat_view), nunca de la partida: las
+## dos vistas mueven el mismo Encounter y una pelea da lo mismo en las dos.
+const COMBAT_VIEWS := ["front", "board"]
+var ui_combat_view := "front"
 ## Ids de HudRegistry que el jugador oculto.
 var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
@@ -680,6 +686,8 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
 	var quality := str(cf.get_value("interfaz", "graphics_quality", ui_graphics_quality))
 	ui_graphics_quality = quality if quality in GRAPHICS_QUALITY_MODES else "auto"
+	var cview := str(cf.get_value("interfaz", "combat_view", ui_combat_view))
+	ui_combat_view = cview if cview in COMBAT_VIEWS else "front"
 	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
 	ui_hud_hidden = []
 	if hidden is Array:
@@ -726,12 +734,22 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
 	cf.set_value("interfaz", "graphics_quality", ui_graphics_quality)
+	cf.set_value("interfaz", "combat_view", ui_combat_view)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("perfil", "runs_finished", profile_runs_finished)
 	cf.set_value("perfil", "campaigns_won", profile_campaigns_won)
 	cf.set_value("partidas", "activa", saves_active_slot)
 	cf.save(USER_SETTINGS_PATH)
+
+## Elige la vista del combate ("front" / "board"), la guarda en settings.cfg y
+## devuelve si cambio. Un valor desconocido no hace nada.
+func set_combat_view(view: String) -> bool:
+	if not view in COMBAT_VIEWS or view == ui_combat_view:
+		return false
+	ui_combat_view = view
+	save_user_settings()
+	return true
 
 ## El perfil ya abre Gobernador: una partida terminada o una Campana ganada.
 ## (En dev_mode se ofrece siempre; eso lo decide GameMode.governor_unlocked().)

@@ -10,6 +10,8 @@ extends Node
 ##   godot --path . --resolution 1280x800 -- --no-title --profile=tablet --tag=tablet
 ##   godot --path . --resolution 1280x800 -- --no-title --board=2d --tag=2d
 ##   godot --path . --resolution 1280x800 -- --no-title --fps
+##   godot --path . --resolution 1280x800 -- --no-title --view=front --tag=front
+##   godot --path . --resolution 1280x800 -- --no-title --view=board --tag=board
 ## Salida: res://docs/media/dev/battle_<tag>_*.png (git-ignorado). Con --fps no
 ## hace capturas: mide fotogramas por segundo (sin vsync) con el mapa solo y con
 ## el tablero 3D abierto, en las calidades alta, baja y minima, y lo imprime.
@@ -17,7 +19,9 @@ extends Node
 ##
 ## Argumentos tras `--`: --board=3d|2d (por defecto 3d), --profile=pc|tablet|phone,
 ## --tag=<nombre> (prefijo de las capturas), --quality=high|low|minimal,
-## --scene=land|beach|forest (escenario de la maqueta), --x2, --fps.
+## --scene=land|beach|forest (escenario de la maqueta), --x2, --fps,
+## --view=front|board (vista de la maqueta 3D; por defecto la preferencia, que
+## de serie es la frontal). No toca settings.cfg.
 ##
 ## Hermano de tools/showcase_shots.gd y tools/ui_tour.gd.
 
@@ -30,6 +34,8 @@ var _tag := "pc"
 var _style := "3d"
 ## Escenario forzado (land / beach / forest) o "" para el de la semilla.
 var _scene := ""
+## Vista forzada de la maqueta (front / board) o "" para la preferencia.
+var _view := ""
 var _screen: Node = null
 var _deaths := 0
 var _shot_attack := false
@@ -49,6 +55,8 @@ func _ready() -> void:
 			_style = a.substr(8)
 		elif a.begins_with("--scene="):
 			_scene = a.substr(8)
+		elif a.begins_with("--view="):
+			_view = a.substr(7)
 		elif a == "--x2":
 			GameConfig.set_game_speed(2.0)
 		elif a.begins_with("--profile="):
@@ -87,6 +95,7 @@ func _run() -> void:
 	if _screen != null:
 		_screen.force_board_style(_style)
 		_screen.force_board_scene(_scene)
+		_screen.force_combat_view(_view)
 		if DeviceProfile.current() != "pc":
 			_screen.set_touch_mode(true)
 

@@ -15,6 +15,10 @@ func _ready() -> void:
 	UIManager.register_panel(self, "ProgressPanel.modal")
 	EventBus.milestone_completed.connect(_on_milestone_completed)
 	EventBus.era_advanced.connect(_on_era_advanced)
+	# Hitos y eras que llegan en plena pelea esperan al cierre del tablero.
+	EventBus.encounter_closed.connect(func():
+		if not _toast_busy:
+			_next_toast())
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -137,7 +141,9 @@ func pending_toasts() -> int:
 	return _toast_queue.size() + (1 if _toast_busy else 0)
 
 func _next_toast() -> void:
-	if _toast_queue.is_empty():
+	# Con un tablero de combate abierto la placa quedaria debajo (capa 11 < 18)
+	# y se gastaria sin verse: la cola espera a EventBus.encounter_closed.
+	if _toast_queue.is_empty() or CombatManager.is_board_open():
 		_toast_busy = false
 		return
 	_toast_busy = true

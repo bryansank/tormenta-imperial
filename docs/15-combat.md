@@ -115,6 +115,7 @@ blind defence, the Tithe, each siege wave, a lost siege).
 | `scripts/services/AudioManager.gd` | SFX on `encounter_started`, `unit_attacked`, `unit_died`, `encounter_ended`, `expedition_started`, `expedition_ended`, `final_audit_summoned`, `storm_halted_forever` |
 | `scripts/ui/HelperPanel.gd` | One callout pointing at the Escaramuzas button once a Barracks exists |
 | `scripts/services/TutorialManager.gd` | A one-shot contextual tip on `encounter_started` |
+| Avisos retenidos (2026-10-14) | Con un tablero abierto (`CombatManager.is_board_open()`: pelea o parte) los avisos de la colonia **no salen en pantalla**: los toasts de `NotificationPanel` van al registro al momento y se retienen; las placas de hito/era de `ProgressPanel` esperan en su cola; el ascenso de `RankPanel` se guarda (el ultimo). Al cerrarse el tablero (`EventBus.encounter_closed`, emitida al final de `CombatManager.end_encounter()`) salen: los ultimos que caben y, si habia mas, "Mientras peleabas: N avisos mas en el REGISTRO" (`MSG_HELD_NOTICES`). Si el cierre abrio otro tablero (la oleada siguiente del asedio) siguen esperando. Una partida nueva o cargada tira lo retenido. Los avisos del propio combate (categoria `combat`: la columna sale / vuelve) si salen. Las ayudas de `HelperPanel` (consejos, globos, tarjetas) tambien esperan: `is_quiet()` y `_can_show()` miran `is_board_open()` (salvo el consejo `encounter`, que es del combate) y la cola se reanuda con `encounter_closed`. Los partes de guerra (`WarReportScreen`) ya tenian su cola |
 | `scripts/ui/WarReportScreen.gd` | Queued war reports, never over an open board: the blind defence (`defense_auto_resolved`) and the Tithe with its COBRADO / REPELIDO stamp (`tithe_resolved`) |
 | `scripts/ui/AuditWaveBanner.gd` | "Oleada X de N" on `final_audit_wave_ready`, with the cleared wave from `final_audit_wave_cleared` |
 | `scripts/ui/AuditDefeatScreen.gd` | A lost siege (`final_audit_lost`): what was taken, in which wave, and what it takes to resummon — or, in Supervivencia, the end of the run |
@@ -358,6 +359,102 @@ cuando el modelo pega y la maqueta lo ensena unas decimas despues (la
 anticipacion es corta a proposito).
 
 Capturas: `tools/battle_probe.gd` (ver §9) deja `docs/media/dev/battle_<tag>_*.png`.
+
+### Segunda tanda: leer la pelea (2026-10-12/13)
+
+- **Ventaja por tipo** (piedra-papel-tijera). Circulo de tierra: artilleria >
+  vehiculo > infanteria > artilleria (`GameConfig.combat_type_advantage`:
+  `beats`, `advantage` 1,5, `disadvantage` 0,75). Va sobre el dano neto en
+  `CombatRules.damage()` (redondeado, nunca menos de 1), asi que la aplican
+  igual el jugador, `CombatAI` y `AutoResolver`. `CombatRules.type_matchup()`
+  da +1 / -1 / 0. La IA la usa como segundo criterio de objetivo (tras "lo
+  puedo matar"). Mar y aire entrarian anadiendo su fila (§11). Efecto medido en
+  el asedio y propuesta pendiente en [17](17-balance-asedio.md) §"Ventaja por tipo".
+- **Placa de vida** amarilla con el numero sobre cada pieza (`UnitToy3D`), **aro
+  azul** del que actua, **mira roja** sobre los objetivos y la etiqueta
+  "¡Buen objetivo!" / "Mal objetivo" (`BattleScreen.target_hints()`,
+  `LBL_GOOD_TARGET` / `LBL_BAD_TARGET`).
+- **Escenarios** de decorado (`BoardTerrain3D.SCENES`: tierra, playa, bosque),
+  elegidos por semilla; en casa (Diezmo, asedio) casi siempre playa. Solo
+  decorado: ni casillas ni reglas cambian.
+- **x1 / x2 en la cabecera** del tablero (el del HUD queda tapado): las
+  animaciones duran la mitad (`GameConfig.combat_pace`). La cabecera y los
+  botones parten en dos filas en un movil (`HFlowContainer`).
+
+### Las dos vistas (2026-10-14)
+
+Decision del dueno: **dos vistas de combate**, elegibles, sobre la misma pelea.
+
+| Vista | Que se ve | Como se juega |
+|---|---|---|
+| **Frente** (`"front"`, por defecto) | Los dos bandos cara a cara al estilo de Empires & Allies (solo el estilo: nada de su arte): los nuestros abajo a la izquierda, la Regencia arriba a la derecha, camara baja de costado (picado 30, giro 60, 30 de campo), un campo seguido hasta el horizonte con la tierra de nadie batida en medio, sacos terreros delante de cada bando y arboledas lejanas. **Ninguna casilla a la vista** | Tocar a un enemigo con mira: la unidad se acerca lo justo y dispara. **AVANZAR** acerca sin disparar. Defender / Esperar / Terminar como siempre. **Mover**: los sitios a los que llega la unidad se iluminan como **manchas** en el suelo (discos, no casillas) y se tocan para ir |
+| **Tablero** (`"board"`) | El 8x8 3D de siempre, con las casillas marcadas | Tocar casilla encendida mueve, tocar enemigo con aro ataca |
+
+**Es la misma maqueta.** `Board3D.set_style()` cambia solo camara, suelo
+(`BoardTerrain3D.build(..., front)`: un plano de campo en lugar de 64 losetas),
+la forma de las marcas y el sitio y tamano de las piezas; cola de animaciones,
+efectos, placas y aros son los mismos.
+
+- **Sitios, no casillas.** En el frente cada casilla se dibuja en su "sitio
+  libre": el centro corrido hasta `BoardLayout3D.SPOT_JITTER` (0,38 m, menos de
+  media casilla) por un hash de la casilla y la semilla
+  (`BoardLayout3D.spot_offset`). Siempre el mismo para la misma casilla: las
+  piezas no tiemblan y la mancha que se ilumina es justo donde acaba la pieza.
+  Tocar el sitio cae en su casilla, asi que el toque no cambia.
+- **Manchas.** Las marcas de mover del frente son discos de borde suave
+  (`Board3D._front_spot_mesh`) en la misma `MultiMesh` y con el mismo shader;
+  turno y objetivos ya los dicen el aro azul, el aro rojo con la mira y la
+  etiqueta de ventaja, asi que en el frente solo se iluminan los sitios.
+- **Piezas mayores**: x1,3 en el frente (`FRONT_UNIT_SCALE`,
+  `UnitToy3D.set_view_scale`).
+- **La linea entre bandos** (`BoardTerrain3D._divider`), a ras de suelo y con
+  huecos, segun el escenario: un arroyo con piedras de paso en campo abierto, la
+  linea de la marea en la playa, un seto bajo a trozos en la linde del bosque.
+  Se cruza como cualquier casilla: el decorado no insinua obstaculos. Por eso se puede cambiar **a mitad de
+pelea** sin rehacer nada (si la maqueta esta contando algo, al terminar).
+
+**El mismo modelo.** El frente no tiene reglas propias:
+`scripts/combat_view/FrontOrders.gd` (puro, de solo lectura) traduce las intenciones
+del frente a las acciones de siempre:
+
+- `approach_cell(enc, uid, target)`: la casilla alcanzable desde la que el
+  objetivo queda a tiro con el camino mas corto (a igualdad, la mas lejana del
+  objetivo: la artilleria no se mete encima); la propia si ya esta a tiro;
+  `NO_CELL` si no se le llega este turno.
+- `reachable_targets(enc, uid)`: los enemigos a los que se llega este turno
+  (los que llevan mira en el frente; en el tablero solo los que ya estan a tiro).
+- `advance_cell(enc, uid)`: la casilla a la que iria `CombatAI` con esa unidad
+  (AVANZAR), sin atacar.
+
+`BattleScreen.order_attack()` ejecuta "acercate y dispara" como
+`CombatManager.move_unit()` + `CombatManager.attack()`: las dos mismas llamadas
+que haria el jugador a toques en el tablero. Jugada igual, una pelea da lo
+mismo en las dos vistas (`tests/ui/test_combat_views.gd`).
+
+**La preferencia** es del dispositivo, no de la partida:
+`GameConfig.ui_combat_view` (`COMBAT_VIEWS = ["front", "board"]`), en
+`settings.cfg [interfaz] combat_view`; un valor desconocido vuelve a "front".
+Se elige en Ajustes → Interfaz → Vista ("Vista del combate", fila
+`CombatViewRow`) y con el boton de la cabecera del combate (`BoardViewToggle`,
+dice a donde lleva: TABLERO / FRENTE), que la guarda. Restablecer la interfaz la
+devuelve a "front". Pruebas y sondas: `BattleScreen.force_combat_view()`,
+`tools/battle_probe.gd -- --view=front|board`. Con el tablero 2D (vista 2D del
+mapa, headless) el selector de la cabecera no sale: no hay frente en 2D.
+
+**Calidad minima: tablero.** Con `ui_graphics_quality` "minimal" la vista es
+el tablero aunque la preferencia diga frente (`BattleScreen.combat_view()`): es
+la vista medida mas barata (0,32 ms de GPU en Mobile minima, arriba) y el frente
+pinta mas suelo hasta el horizonte, arboledas lejanas y cielo. La preferencia
+no se toca: al subir la calidad vuelve el frente.
+
+**Rendimiento.** El frente cuesta lo mismo o menos que el tablero: el suelo es
+una malla con MENOS cajas (un plano de campo y unas manchas en vez de 64
+losetas con sus matas), las marcas son la misma `MultiMesh` de 64 instancias con otra malla (un disco), y los arboles lejanos son 6
+(sencilla) o 14 (alta) arbolitos de tres primitivas dentro de la misma malla
+(una llamada de dibujo). Sin luces nuevas, sin `_process`, sin particulas. La
+camara mas baja ensena mas suelo, que es un plano sin luz extra; la sombra
+sigue el mismo reglaje por calidad. **Sin medir todavia** con
+`battle_probe --fps` (pendiente del pase final, ver docs/26).
 
 ### Turn flow
 
@@ -836,6 +933,10 @@ time. What follows is only what a reader of *this* document needs on top of them
   `AuditDefeatScreen`, which matches it to `final_audit_lost` by process frame.
 - `victory_achieved(stats)` is still emitted by `ProgressionManager` and consumed
   by `VictoryScreen`, but it is now reached **only** through a won Final Audit.
+- `encounter_closed()` (2026-10-14) is emitted at the very end of
+  `CombatManager.end_encounter()`, after a siege wave may have opened the next
+  board: listeners (`NotificationPanel`, `ProgressPanel`, `RankPanel`, which
+  release the notices held during the fight) re-check `is_board_open()`.
 
 ---
 
@@ -899,7 +1000,7 @@ had when the column marched out or the gate opened.
 | `final_audit_scale_per_wave` | `0.22` | HP/ATK multiplier added per wave | The real curve after the board fills |
 | `final_audit_scale_per_era` | `0.25` | HP/ATK multiplier added per era past 1 | |
 | `final_audit_last_wave_multiplier` | `1.5` | Extra multiplier on the closing wave | It is the end of the game, not one more step |
-| `final_audit_artillery_share` | `3` | One gun per N bodies, from wave 1 | Lower = more guns = the garrison gets punished for bunching up |
+| `final_audit_artillery_share` | `3` | One gun per N bodies, from wave 1 | Lower = more guns = the garrison gets punished for bunching up. **Pendiente:** con la ventaja por tipo, 4 devuelve el asedio maximo al 83 % ([17](17-balance-asedio.md)); se decide al integrar con `balance/campana-4-6h` |
 | `final_audit_armour_wave` | `2` | First wave that can field a vehicle | |
 | `final_audit_extra_gun_chance` | `0.35` | The siege's one coin flip | Set to 0 and every siege of the same era looks identical |
 | `final_audit_resummon_min_units` | `3` | Living units needed to call the Regency back after a loss | The price of losing: rebuild this much before trying again |
@@ -965,6 +1066,10 @@ GODOT=godot tools/run_tests.sh -a tests/combat
 | `tests/audio/test_audio_combat.gd` | `AudioManager` connects the combat and audit signals it claims to |
 | `tests/ui/test_expedition_ui.gd` | `BattleScreen`'s map, draft modal, final report and abandon flow, plus `SkirmishPanel`'s launch refusals — including that the map stays touchable on a phone |
 | `tests/ui/test_battle_board_3d.gd` | El tablero 3D: 3D salvo sin pantalla y en la vista 2D, casilla <-> mundo, la ruta casilla a casilla, una pieza por unidad viva, nada se juega ni sale el parte mientras la maqueta anima, la pieza acaba donde dice el modelo, la barra baja golpe a golpe y se reconcilia, el 3D del mapa se apaga bajo la maqueta, piezas horneadas de los dos bandos <= 800 triangulos, un material por color de colonia, y `domain` ("land" hoy, ninguna regla cambia) |
+| `tests/combat/test_type_advantage.gd` | El circulo de ventaja por tipo, los multiplicadores sobre el dano neto con suelo 1, y que la IA prefiere el buen objetivo |
+| `tests/combat/test_front_orders.gd` | `FrontOrders`: objetivo ya a tiro sin mover, casilla de acercamiento alcanzable y con tiro por el camino mas corto, la artilleria no se mete encima, objetivo inalcanzable, unidad que ya movio, AVANZAR = el movimiento de `CombatAI`, que no muta nada y que ejecutar una orden es mover + atacar legales |
+| `tests/ui/test_combat_views.gd` | Las dos vistas: "front" por defecto, la preferencia en `settings.cfg` (no en la partida; un valor raro vuelve a "front"), la fila de Ajustes, textos ES/EN, el frente sin casillas (piezas en sitios libres con desorden, x1,3, manchas de mover en vez de casillas) y con AVANZAR, la calidad minima con el tablero sin tocar la preferencia, el tablero con casillas, el boton de la cabecera cambia a mitad de pelea sin rehacer piezas, tocar a un enemigo en el frente acerca y ataca, **la misma pelea jugada igual da el mismo resultado en las dos vistas**, y el campo del frente para cada escenario |
+| `tests/ui/test_held_notices.gd` | Avisos retenidos: un toast con tablero abierto va al registro y sale al cerrar, sin tablero sale al momento, muchos se resumen en uno con la cuenta, una partida nueva tira lo retenido, placas de hito y ascenso de rango esperan al cierre, los avisos `combat` si salen, `HelperPanel` calla con el tablero abierto, y `encounter_closed` se emite |
 | `tests/ui/test_battle_board_icons.gd` | Unit silhouettes on the cell and on the initiative strip, side tint, the dimming of a unit that already acted, the boss frame and who wears it, the fallback to the name's initial when the PNG is missing, and the cell still fitting a 400x720 screen |
 | `tests/ui/test_helper_skirmish_callout.gd` | The Escaramuzas callout appears with the Barracks and only once |
 | `tests/combat/test_combat_integrity.gd` | The ledger across boards and saves: no walking past an unfought node, the siege ledger balanced through a mid-wave save (garrison and tower crews), the garrison mustered at the gate and reconciled before every wave, abandoning leaving a Tithe board alone, one enemy loop per board, a busy board queuing a wave instead of losing it, board units never counted at home, and the seeded skirmish roster |
@@ -982,7 +1087,7 @@ the line is removed afterwards. They all no-op unless `GameConfig.dev_mode` is o
 
 | Probe | What it does |
 |-------|--------------|
-| `tools/battle_probe.gd` | Seeds an army, opens the skirmish panel and a showcase board (a home defence with a boss and a tower crew), plays the whole fight and screenshots it into `res://docs/media/dev/battle_<tag>_*.png`: deploy, move (mid-hop), attack, shell, targets, death (two frames), result, and on a tablet the tap-to-inspect label. In 3D it shoots when the **maqueta** reaches each event (`Board3D.event_played`), not when the signal fires. Args after `--`: `--no-title --profile=pc\|tablet --quality=high\|low\|minimal --board=3d\|2d --tag=<name>`; `--fps` measures FPS and GPU ms (map alone vs board, every quality) instead of shooting |
+| `tools/battle_probe.gd` | Seeds an army, opens the skirmish panel and a showcase board (a home defence with a boss and a tower crew), plays the whole fight and screenshots it into `res://docs/media/dev/battle_<tag>_*.png`: deploy, move (mid-hop), attack, shell, targets, death (two frames), result, and on a tablet the tap-to-inspect label. In 3D it shoots when the **maqueta** reaches each event (`Board3D.event_played`), not when the signal fires. Args after `--`: `--no-title --profile=pc\|tablet --quality=high\|low\|minimal --board=3d\|2d --view=front\|board --scene=land\|beach\|forest --x2 --tag=<name>`; `--fps` measures FPS and GPU ms (map alone vs board, every quality) instead of shooting |
 | `tools/audit_probe.gd` | Summons the Final Audit, plays the whole siege without touching the UI, and logs what happened. `FORCE_SHORT_SIEGE = true` forces a one-wave siege so the victory path (the Storm stopping for good) can be seen without luck. It is the proof that **the game can be finished** |
 | `tools/expedition_probe.gd` | Plays a whole expedition without the UI (same `CombatAI`, applied through the public `CombatManager` API) and checks the roguelike invariants: attrition, permadeath, one payout on return, and that the army left at home is exactly the one that survived (T045, `specs/001-combate-pve/quickstart.md`) |
 

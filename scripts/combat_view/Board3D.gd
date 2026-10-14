@@ -51,6 +51,21 @@ const ZOOM_MAX := 1.12
 const FOLLOW_WEIGHT := 0.2
 const FOLLOW_MAX := 1.1
 
+## La vista frontal (docs/15 §3, "Las dos vistas"): los dos bandos cara a cara,
+## los nuestros abajo a la izquierda y la Regencia arriba a la derecha, con la
+## camara mas baja y de costado; sin marcas de casilla y con el campo seguido.
+## Es la MISMA maqueta, las mismas piezas y la misma cola: solo cambian la
+## camara, el suelo y que no se pintan casillas.
+const STYLE_BOARD := "board"
+const STYLE_FRONT := "front"
+const STYLES := [STYLE_FRONT, STYLE_BOARD]
+const FRONT_PITCH_DEG := 30.0
+const FRONT_YAW_DEG := 60.0
+const FRONT_FOV := 30.0
+## En el frente las piezas van mas grandes (unidades mas grandes, como en la
+## referencia) y las manchas de "puedes ir aqui" son discos en el suelo.
+const FRONT_UNIT_SCALE := 1.3
+
 const PLAYER := 0
 
 @onready var _pivot: Node3D = $CamPivot
@@ -75,6 +90,9 @@ var _team_color := Color(0.8, 0.62, 0.25)
 var _boss_uid := -1
 ## El escenario de la maqueta (BoardTerrain3D.SCENES): solo decorado.
 var _scene := "land"
+## "front" o "board" (STYLES). Lo pone BattleScreen con la preferencia.
+var _style := STYLE_BOARD
+var _seed := 1
 
 var _mark_of: Dictionary = {}     ## cell -> Mark
 var _hover := Vector2i(-1, -1)
@@ -90,8 +108,8 @@ var _shake_tween: Tween
 var _sway_tween: Tween
 
 func _ready() -> void:
-	_camera.fov = CAM_FOV
-	_pivot.rotation.y = deg_to_rad(CAM_YAW_DEG)
+	_camera.fov = _fov()
+	_pivot.rotation.y = deg_to_rad(_yaw_deg())
 	_build_environment()
 	_build_marks_mesh()
 	get_viewport().size_changed.connect(_fit)
@@ -120,7 +138,10 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 	_active_uid = -1
 
 	_scene = String(opts.get("scene", Terrain.SCENE_LAND))
-	_terrain.mesh = Terrain.build(board, int(opts.get("seed", 1)), _simple, _scene)
+	_seed = int(opts.get("seed", 1))
+	var st := String(opts.get("style", _style))
+	_style = st if st in STYLES else STYLE_BOARD
+	_build_terrain()
 	_layout_marks()
 
 	for unit in encounter.units:
@@ -134,7 +155,7 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 			"boss": unit.uid == _boss_uid, "crew": crews.has(unit.uid),
 			"team_color": _team_color,
 		})
-		toy.position = Layout.cell_to_world(unit.position, board)
+		toy.position = _world_of(unit.position)
 		# Cada bando mira al otro: los nuestros al fondo, la Regencia hacia aca.
 		toy.rotation.y = PI if unit.side == PLAYER else 0.0
 		_toys[unit.uid] = toy
@@ -144,9 +165,77 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 	_pivot.position = _center
 	_zoom = 1.0
 	_punch = 1.0
+	_apply_style_look()
+	_place_toys()
 	_fit()
 	_start_sway()
 	push({"e": "deploy"})
+
+## Cambia de vista con la pelea abierta (el selector de la cabecera). No toca
+## piezas ni cola: solo suelo, marcas y camara. Rehacer el suelo es una malla.
+func set_style(style: String) -> void:
+	if not style in STYLES or style == _style:
+		return
+	_style = style
+	if _encounter != null:
+		_build_terrain()
+	_apply_style_look()
+	# Las piezas pasan a sus sitios de la otra vista. BattleScreen solo llama aqui
+	# con la cola vacia (_after_board_animations): no se corta ninguna animacion.
+	_place_toys()
+	_layout_marks()
+	_fit()
+	_start_sway()
+
+func style() -> String:
+	return _style
+
+func is_front() -> bool:
+	return _style == STYLE_FRONT
+
+## Donde se dibuja una casilla en esta vista: el centro en el tablero; en el
+## frente, su sitio libre (BoardLayout3D.spot_offset), que no parece rejilla.
+func _world_of(cell: Vector2i) -> Vector3:
+	var p := Layout.cell_to_world(cell, board)
+	if is_front():
+		p += Layout.spot_offset(cell, _seed)
+	return p
+
+## Coloca las piezas quietas en sus sitios de la vista actual y con su tamano.
+func _place_toys() -> void:
+	for uid in _toys:
+		var toy = _toys[uid]
+		toy.set_view_scale(FRONT_UNIT_SCALE if is_front() else 1.0)
+		if _cell_of.has(uid):
+			toy.position = _world_of(_cell_of[uid])
+
+func _build_terrain() -> void:
+	_terrain.mesh = Terrain.build(board, _seed, _simple, _scene, is_front())
+
+## Lo que cambia entre las dos vistas ademas del suelo: las marcas de casilla
+## (en el frente no hay) y el fondo (en el frente, un cielo de bruma en vez de
+## la sala oscura de la mesa de guerra).
+func _apply_style_look() -> void:
+	# En el frente las marcas siguen, pero como manchas en el suelo (solo los
+	# sitios a los que se puede ir; objetivo y turno los dicen los aros).
+	_marks.visible = true
+	if _marks.multimesh != null:
+		_marks.multimesh.mesh = _front_spot_mesh() if is_front() else _tile_mark_mesh
+	_camera.fov = _fov()
+	if _world_env != null and _world_env.environment != null:
+		_world_env.environment.background_color = FRONT_SKY if is_front() else UITheme.BG_DARK.darkened(0.35)
+
+## Bruma del horizonte del frente: el cielo de la paleta, apagado y calido.
+const FRONT_SKY := Color(0.55, 0.6, 0.58)
+
+func _pitch_deg() -> float:
+	return FRONT_PITCH_DEG if is_front() else CAM_PITCH_DEG
+
+func _yaw_deg() -> float:
+	return FRONT_YAW_DEG if is_front() else CAM_YAW_DEG
+
+func _fov() -> float:
+	return FRONT_FOV if is_front() else CAM_FOV
 
 ## Calidad: sombras del sol solo si la calidad las tiene; polvo fuera en sencilla.
 func apply_quality(settings: Dictionary) -> void:
@@ -249,9 +338,9 @@ func _play_move(uid: int, from: Vector2i, to: Vector2i) -> void:
 	var route: Array = Layout.path(start, to, _occupied_except(uid), board)
 	var points: Array = []
 	for i in range(1, route.size()):
-		points.append(Layout.cell_to_world(route[i], board))
+		points.append(_world_of(route[i]))
 	_cell_of[uid] = to
-	_follow(Layout.cell_to_world(to, board), 0.35)
+	_follow(_world_of(to), 0.35)
 	var tw: Tween = toy.hop_along(points, MOVE_STEP * _tempo())
 	await tw.finished
 
@@ -361,7 +450,7 @@ func _reconcile() -> void:
 			continue
 		if _cell_of.get(unit.uid, Vector2i(-99, -99)) != unit.position:
 			_cell_of[unit.uid] = unit.position
-			toy.position = Layout.cell_to_world(unit.position, board)
+			toy.position = _world_of(unit.position)
 		if toy.shown_hp != unit.hp:
 			toy.set_hp(unit.hp, false)
 		toy.set_defending(unit.defending, false)
@@ -407,6 +496,12 @@ func show_state(active_uid: int, moves: Array, targets: Array, hints: Dictionary
 	var ac: Vector2i = _cell_of.get(active_uid, Vector2i(-1, -1))
 	if ac.x >= 0:
 		_mark_of[ac] = Mark.ACTIVE
+	# En el frente solo se iluminan los sitios a los que ir (manchas); el turno y
+	# los objetivos ya los dicen el aro azul, el rojo y la mira.
+	if is_front():
+		for c in _mark_of.keys():
+			if int(_mark_of[c]) != Mark.MOVE:
+				_mark_of.erase(c)
 	_paint_marks()
 
 func clear_marks() -> void:
@@ -416,6 +511,8 @@ func clear_marks() -> void:
 	_paint_marks()
 
 func set_hover(cell: Vector2i) -> void:
+	if is_front():
+		cell = Vector2i(-1, -1)
 	if cell == _hover:
 		return
 	_hover = cell
@@ -423,7 +520,7 @@ func set_hover(cell: Vector2i) -> void:
 
 func _set_only_mark(cell: Vector2i, mark: int) -> void:
 	_mark_of.clear()
-	if cell.x >= 0:
+	if cell.x >= 0 and not is_front():
 		_mark_of[cell] = mark
 	_paint_marks()
 
@@ -453,6 +550,7 @@ func _build_marks_mesh() -> void:
 	_quad(st, Vector2(-h, -h + b), Vector2(-h + b, h - b), edge)
 	_quad(st, Vector2(h - b, -h + b), Vector2(h, h - b), edge)
 	var mesh := st.commit()
+	_tile_mark_mesh = mesh
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
@@ -462,6 +560,34 @@ func _build_marks_mesh() -> void:
 	mat.shader = MARKS_SHADER
 	_marks.material_override = mat
 	_marks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+var _tile_mark_mesh: Mesh = null
+static var _spot_mesh: Mesh = null
+
+## La mancha del frente: un disco de borde suave (centro tenue, aro intenso), no
+## un cuadrado. Misma MultiMesh y mismo shader que las casillas.
+static func _front_spot_mesh() -> Mesh:
+	if _spot_mesh == null:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var segs := 16
+		var r_in := 0.5
+		var r_out := 0.72
+		for i in segs:
+			var a0 := TAU * float(i) / float(segs)
+			var a1 := TAU * float(i + 1) / float(segs)
+			var d0 := Vector3(cos(a0), 0, sin(a0))
+			var d1 := Vector3(cos(a1), 0, sin(a1))
+			for v in [[Vector3.ZERO, 0.22], [d1 * r_in, 0.35], [d0 * r_in, 0.35]]:
+				st.set_color(Color(1, 1, 1, v[1]))
+				st.set_normal(Vector3.UP)
+				st.add_vertex(v[0])
+			for v in [[d0 * r_in, 0.9], [d1 * r_in, 0.9], [d1 * r_out, 0.0], [d0 * r_in, 0.9], [d1 * r_out, 0.0], [d0 * r_out, 0.0]]:
+				st.set_color(Color(1, 1, 1, v[1]))
+				st.set_normal(Vector3.UP)
+				st.add_vertex(v[0])
+		_spot_mesh = st.commit()
+	return _spot_mesh
 
 static func _quad(st: SurfaceTool, a: Vector2, b: Vector2, col: Color) -> void:
 	var p := [Vector3(a.x, 0, a.y), Vector3(b.x, 0, a.y), Vector3(b.x, 0, b.y), Vector3(a.x, 0, b.y)]
@@ -476,7 +602,7 @@ func _layout_marks() -> void:
 	for y in board.y:
 		for x in board.x:
 			var i := y * board.x + x
-			mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, Layout.cell_to_world(Vector2i(x, y), board) + Vector3(0, 0.035, 0)))
+			mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, _world_of(Vector2i(x, y)) + Vector3(0, 0.035, 0)))
 			mm.set_instance_custom_data(i, Color(0, 0, 0, 0))
 	_paint_marks()
 
@@ -528,7 +654,7 @@ func _unit_pick_radius() -> float:
 
 ## Las coordenadas de pantalla del centro de una casilla (pruebas, sondas).
 func cell_screen(cell: Vector2i) -> Vector2:
-	return _camera.unproject_position(Layout.cell_to_world(cell, board))
+	return _camera.unproject_position(_world_of(cell))
 
 func unit_screen(uid: int) -> Vector2:
 	var toy = _toys.get(uid)
@@ -553,7 +679,7 @@ func zoom_by(factor: float) -> void:
 
 func _apply_camera() -> void:
 	var dist := _fit_dist * _zoom * _punch
-	var pitch := deg_to_rad(CAM_PITCH_DEG)
+	var pitch := deg_to_rad(_pitch_deg())
 	_camera.position = Vector3(0, sin(pitch), cos(pitch)) * dist
 	_camera.rotation = Vector3(-pitch, 0, 0)
 
@@ -598,7 +724,7 @@ func _fit() -> void:
 	for i in 2:
 		var r := _projected_rect(pts)
 		var delta := safe.get_center() - r.get_center()
-		var px_per_m := size.y / (2.0 * _fit_dist * tan(deg_to_rad(CAM_FOV) * 0.5))
+		var px_per_m := size.y / (2.0 * _fit_dist * tan(deg_to_rad(_fov()) * 0.5))
 		_camera.h_offset -= delta.x / px_per_m
 		_camera.v_offset += delta.y / px_per_m
 	_base_offset = Vector2(_camera.h_offset, _camera.v_offset)
@@ -652,7 +778,7 @@ func _start_sway() -> void:
 	if _sway_tween != null:
 		_sway_tween.kill()
 		_sway_tween = null
-	var yaw := deg_to_rad(CAM_YAW_DEG)
+	var yaw := deg_to_rad(_yaw_deg())
 	_pivot.rotation.y = yaw
 	if _simple:
 		return

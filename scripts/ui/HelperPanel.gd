@@ -131,6 +131,10 @@ func _ready() -> void:
 	EventBus.tutorial_tip_requested.connect(_on_tip_requested)
 	EventBus.help_reopen_requested.connect(show_help)
 	EventBus.tutorial_guide_finished.connect(_on_guide_finished)
+	# Durante una pelea las ayudas de la colonia esperan (docs/15 §3): al abrir
+	# el tablero la que este en pantalla se aparta y vuelve al cerrar el parte.
+	EventBus.encounter_started.connect(func(_i, _b): _refresh_callouts())
+	EventBus.encounter_closed.connect(_refresh_callouts)
 	_update_skirmish_callout()
 	_refresh_tips()
 	_refresh_callouts()
@@ -342,10 +346,17 @@ func _on_game_started() -> void:
 			enqueue(id)
 
 ## ¿Puede salir esta ayuda ahora mismo?
+## Ayudas que son del combate y SI salen con el tablero abierto.
+const COMBAT_HELP_IDS := ["encounter"]
+
 func _can_show(item: Dictionary) -> bool:
 	var id := String(item["id"])
 	var forced := bool(item["forced"])
 	if get_tree().paused or _guide_open:
+		return false
+	# Con un tablero de combate abierto (pelea o su parte) solo pasan las ayudas
+	# del propio combate; el resto espera a EventBus.encounter_closed.
+	if CombatManager.is_board_open() and not id in COMBAT_HELP_IDS:
 		return false
 	# Con el indice de AYUDA abierto se esta eligiendo que leer: nada encima.
 	if _index != null and _index.has_method("is_open") and _index.call("is_open"):
@@ -620,7 +631,7 @@ func _refresh_callouts() -> void:
 ## Something more important is on screen: an open window, the pause or title
 ## menu (the tree is paused), or the Storm.
 func is_quiet() -> bool:
-	return _storm_silenced or UIManager.is_any_window_open() or get_tree().paused
+	return _storm_silenced or UIManager.is_any_window_open() or get_tree().paused 		or CombatManager.is_board_open()
 
 func _on_storm_phase_changed(phase: int, _left: float) -> void:
 	if phase == StormCycle.Phase.CALM:
