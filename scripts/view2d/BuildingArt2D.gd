@@ -1954,101 +1954,403 @@ static func _rot_rect(ci: CanvasItem, c: Vector2, size: Vector2, rot: float, fil
 	else:
 		ci.draw_colored_polygon(pts, fill)
 
-# ── Yacimientos ───────────────────────────────────────────────────────
+# ── Yacimientos ──
+# Los cuatro yacimientos en "maqueta", con el mismo vocabulario que la 3D
+# (scripts/map/DepositMesh.gd): suelo de borde irregular con su reborde
+# oscuro, piezas con volumen (pared hacia abajo en pantalla, luz por la
+# izquierda, sombra hacia abajo-derecha) y un elemento exagerado por tipo:
+# el pino alto del bosque, el racimo de cristales del oro, las dos agujas del
+# hierro y la torreta del petroleo. `stage` (4 entero .. 1 casi gastado) quita
+# arboles, cristales, pepitas y mineral, y encoge la balsa de petroleo.
+
+## Pixeles de alto por metro de altura (la maqueta vista de tres cuartos).
+const DEP_RISE := 7.0
 
 ## Dibuja el yacimiento `deposit_id` sobre `size` px centrado en el origen.
-## Determinista por `seed_val` (la celda): el mismo bosque siempre igual.
-static func draw_deposit(ci: CanvasItem, deposit_id: String, size: Vector2, seed_val: int) -> void:
-	var r := Rect2(-size * 0.5, size).grow(-1.0)
+## Determinista por `seed_val` (la variante) y `stage`: el mismo dibujo siempre.
+static func draw_deposit(ci: CanvasItem, deposit_id: String, size: Vector2, seed_val: int, stage: int = 4) -> void:
+	_set_view(0)
+	var r := Rect2(-size * 0.5, size).grow(-2.0)
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_val
+	rng.seed = hash([deposit_id, seed_val])
+	var f := float(clampi(stage, 1, 4)) / 4.0
 	match deposit_id:
-		"forest": _forest(ci, r, rng)
-		"gold_vein": _rocks(ci, r, rng, Color8(160, 138, 112), BRASS_LIGHT, true)
-		"iron_deposit": _rocks(ci, r, rng, Color8(112, 114, 130), STEEL.lightened(0.2), false)
-		"oil_well": _oil(ci, r, rng)
+		"forest": _dep_forest(ci, r, rng, f)
+		"gold_vein": _dep_gold(ci, r, rng, f)
+		"iron_deposit": _dep_iron(ci, r, rng, f)
+		"oil_well": _dep_oil(ci, r, rng, f)
 		_:
 			ci.draw_rect(r, Color(0.5, 0.5, 0.5, 0.6))
 
-static func _forest(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> void:
-	# Suelo de bosque
-	ci.draw_rect(r.grow(-2), Color(LEAF_DARK.darkened(0.25), 0.5))
-	var trees: Array = []
-	var cells := r.size / 32.0
-	var count := int(cells.x * cells.y * 3.2) + 3
-	for i in range(count):
-		trees.append({
-			"p": r.position + Vector2(rng.randf_range(0.14, 0.86) * r.size.x, rng.randf_range(0.14, 0.86) * r.size.y),
-			"r": rng.randf_range(7.0, 11.0),
-			"tone": rng.randf(),
-		})
-	# De arriba a abajo, para que las copas de delante tapen a las de detras
-	trees.sort_custom(func(a, b): return a["p"].y < b["p"].y)
-	for t in trees:
-		var p: Vector2 = t["p"]
-		var rad: float = t["r"]
-		_dot(ci, p + Vector2(2, 3), rad, Color(0, 0, 0, 0.25))
-	for t in trees:
-		var p: Vector2 = t["p"]
-		var rad: float = t["r"]
-		var base := LEAF_DARK.lerp(GREEN, float(t["tone"]))
-		if float(t["tone"]) > 0.88:
-			base = BRASS.darkened(0.15) if float(t["tone"]) > 0.94 else TERRACOTTA  # algun arbol de otono
-		_dot(ci, p, rad, OUTLINE)
-		_dot(ci, p, rad - 1.2, base)
-		_dot(ci, p - Vector2(rad, rad) * 0.25, rad * 0.55, base.lightened(0.18))
-		_dot(ci, p - Vector2(rad, rad) * 0.4, rad * 0.2, base.lightened(0.35))
+# ── Bosque ──
 
-static func _rocks(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, rock: Color, vein: Color, nuggets: bool) -> void:
-	ci.draw_rect(r.grow(-3), Color(rock.darkened(0.3), 0.35))
-	var cells := r.size / 32.0
-	var count := int(cells.x * cells.y * 2.0) + 2
-	for i in range(count):
-		var c := r.position + Vector2(rng.randf_range(0.2, 0.8) * r.size.x, rng.randf_range(0.2, 0.8) * r.size.y)
-		var rad := rng.randf_range(8.0, 13.0)
-		var pts := PackedVector2Array()
-		var sides := rng.randi_range(5, 7)
-		for s in range(sides):
-			var a := TAU * s / float(sides) + rng.randf_range(-0.25, 0.25)
-			pts.append(c + Vector2(cos(a), sin(a)) * rad * rng.randf_range(0.7, 1.1))
-		var shadow := PackedVector2Array()
-		for p in pts:
-			shadow.append(p + Vector2(2, 3))
-		ci.draw_colored_polygon(shadow, Color(0, 0, 0, 0.3))
-		var tone := rock.lerp(rock.lightened(0.15), rng.randf())
-		_poly(ci, pts, tone, OUTLINE, 1.5)
-		# Cara iluminada
-		ci.draw_colored_polygon(PackedVector2Array([pts[0], pts[1], c]), tone.lightened(0.15))
-		# Vetas
-		var a0 := rng.randf() * TAU
-		ci.draw_line(c + Vector2(cos(a0), sin(a0)) * rad * 0.6, c - Vector2(cos(a0), sin(a0)) * rad * 0.3, vein, 2.0)
-		if not nuggets:
-			ci.draw_line(c + Vector2(cos(a0 + 1.4), sin(a0 + 1.4)) * rad * 0.5, c, RUST.lightened(0.1), 1.5)
-	if nuggets:
-		for i in range(count + 2):
-			var q := r.position + Vector2(rng.randf_range(0.12, 0.88) * r.size.x, rng.randf_range(0.12, 0.88) * r.size.y)
-			_dot(ci, q, 2.4, OUTLINE)
-			_dot(ci, q, 1.8, BRASS_LIGHT)
-			_dot(ci, q - Vector2(0.5, 0.5), 0.7, FIRE_CORE)
+static func _dep_forest(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, f: float) -> void:
+	_dep_ground(ci, r, rng, LEAF_DARK.darkened(0.12), OLIVE_DARK.darkened(0.3))
+	var pts := _dep_points(rng, r, 19.0, 9.0)
+	var hero := 0
+	for i in pts.size():
+		if (pts[i] as Vector2).y < (pts[hero] as Vector2).y:
+			hero = i
+	var kept := maxi(1, ceili(float(pts.size()) * f))
+	var order: Array = range(pts.size())
+	order.erase(hero)
+	order.push_front(hero)
+	var items: Array = []
+	for k in order.size():
+		var i: int = order[k]
+		# Mismo numero de tiradas por arbol en cualquier etapa: talar uno no
+		# cambia a los demas.
+		var round_roll := rng.randf()
+		var h := rng.randf_range(1.15, 1.6)
+		var tone := rng.randf()
+		var kind := "stump"
+		if k < kept:
+			if i == hero:
+				kind = "hero"
+			elif round_roll < 0.3:
+				kind = "round"
+			else:
+				kind = "pine"
+		items.append({"p": pts[i], "kind": kind, "h": h, "tone": tone})
+	# Matorral, debajo de todo
+	for k in maxi(2, int(r.size.x * r.size.y / 1500.0)):
+		var b := r.get_center() + Vector2(rng.randf_range(-0.42, 0.42) * r.size.x, rng.randf_range(-0.42, 0.42) * r.size.y)
+		_dot(ci, b, 3.6, OUTLINE)
+		_dot(ci, b, 2.8, OLIVE)
+	# La pila de troncos, abajo a la derecha
+	var pile := r.end - Vector2(10, 7)
+	_dep_log(ci, pile + Vector2(-2.5, 0))
+	_dep_log(ci, pile + Vector2(2.5, 0))
+	_dep_log(ci, pile + Vector2(0, -3))
+	# De atras adelante: las copas de delante tapan a las de detras
+	items.sort_custom(func(a, b): return (a["p"] as Vector2).y < (b["p"] as Vector2).y)
+	for it in items:
+		var p: Vector2 = it["p"]
+		match String(it["kind"]):
+			"stump": _dep_stump(ci, p)
+			"round": _dep_round_tree(ci, p, float(it["h"]) * 0.85, float(it["tone"]))
+			"hero": _dep_pine(ci, p, float(it["h"]) * 1.35, float(it["tone"]))
+			_: _dep_pine(ci, p, float(it["h"]), float(it["tone"]))
 
-static func _oil(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> void:
+static func _dep_pine(ci: CanvasItem, p: Vector2, h: float, tone: float) -> void:
+	var hp := h * DEP_RISE * 1.6
+	var w := h * 6.0
+	_dep_shadow(ci, p, w * 0.9, hp)
+	var base := LEAF_DARK.lerp(OLIVE, tone * 0.6)
+	ci.draw_line(p, p - Vector2(0, hp * 0.3), OUTLINE, 3.0)
+	ci.draw_line(p, p - Vector2(0, hp * 0.3), DARK_WOOD, 1.6)
+	for t in 3:
+		var y0 := p.y - hp * (0.18 + 0.24 * t)
+		var hw := w * (1.0 - 0.22 * t)
+		var tip := Vector2(p.x, y0 - hp * 0.42)
+		var tri := PackedVector2Array([Vector2(p.x - hw, y0), Vector2(p.x + hw, y0), tip])
+		var col := base.lightened(0.06 * t)
+		_poly(ci, tri, col, OUTLINE, 1.2)
+		# Mitad en luz (izquierda)
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(p.x - hw + 1.5, y0 - 0.8), Vector2(p.x, y0 - 0.8), tip + Vector2(0, 1.5)]), col.lightened(0.14))
+
+static func _dep_round_tree(ci: CanvasItem, p: Vector2, h: float, tone: float) -> void:
+	var hp := h * DEP_RISE * 1.6
+	var rad := h * 5.5
+	var leaf := LEAF.lerp(GREEN.lightened(0.1), tone)
+	if tone > 0.9:
+		leaf = BRASS.darkened(0.06) if tone > 0.95 else TERRACOTTA
+	_dep_shadow(ci, p, rad, hp)
+	ci.draw_line(p, p - Vector2(0, hp * 0.5), OUTLINE, 3.0)
+	ci.draw_line(p, p - Vector2(0, hp * 0.5), DARK_WOOD, 1.6)
+	var c := p - Vector2(0, hp * 0.62)
+	_dot(ci, c, rad + 1.2, OUTLINE)
+	_dot(ci, c, rad, leaf.darkened(0.1))
+	_dot(ci, c - Vector2(rad, rad) * 0.2, rad * 0.7, leaf)
+	_dot(ci, c - Vector2(rad, rad) * 0.42, rad * 0.25, leaf.lightened(0.3))
+
+static func _dep_stump(ci: CanvasItem, p: Vector2) -> void:
+	_dot(ci, p + Vector2(0, 1.5), 3.6, OUTLINE)
+	_dot(ci, p + Vector2(0, 1.0), 2.9, DARK_WOOD)
+	_dot(ci, p, 2.9, OUTLINE)
+	_dot(ci, p, 2.3, MARBLE.darkened(0.12))
+	_dot(ci, p, 0.9, LIGHT_WOOD)
+
+static func _dep_log(ci: CanvasItem, c: Vector2) -> void:
+	var a := c - Vector2(0, 5)
+	var b := c + Vector2(0, 5)
+	ci.draw_line(a, b, OUTLINE, 5.0)
+	ci.draw_line(a, b, WOOD.darkened(0.12), 3.4)
+	_dot(ci, b, 2.4, OUTLINE)
+	_dot(ci, b, 1.7, MARBLE.darkened(0.1))
+
+# ── Oro ──
+
+static func _dep_gold(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, f: float) -> void:
+	_dep_ground(ci, r, rng, CONCRETE.darkened(0.1), CONCRETE_DARK.darkened(0.3))
+	_dep_patches(ci, r, rng, 3, MARBLE.darkened(0.14))
+	var m := minf(minf(r.size.x, r.size.y), 74.0)
+	var c := r.get_center() + Vector2(0, -r.size.y * 0.06)
+	var rocks: Array = []
+	for p in _dep_points(rng, r, 20.0, 9.0):
+		if (p as Vector2).distance_to(c) < m * 0.3:
+			continue
+		rocks.append({"p": p, "rad": rng.randf_range(3.6, 5.6), "h": rng.randf_range(2.0, 3.6)})
+	rocks.sort_custom(func(a, b): return (a["p"] as Vector2).y < (b["p"] as Vector2).y)
+	var tops: Array = []
+	# Las de detras, antes que la pena madre
+	for rk in rocks:
+		if (rk["p"] as Vector2).y < c.y:
+			tops.append(_dep_rock(ci, rk["p"], rk["rad"], rk["h"], CONCRETE.lightened(0.04), rng, 5))
+	# La pena madre con el racimo encima
+	var top := _dep_rock(ci, c, m * 0.24, m * 0.13, CONCRETE.lightened(0.06), rng, 7)
+	var crystals := maxi(1, int(round(6.0 * f)))
+	var h0 := m * 0.3
+	# Azar aparte para lo que se gasta: las penas no cambian entre etapas.
+	var crng := _dep_fork(rng)
+	var vrng := _dep_fork(rng)
+	for k in range(crystals - 1, -1, -1):
+		var lean := 0.0 if k == 0 else (float(k) - 3.0) * 0.25
+		var at := top + (Vector2.ZERO if k == 0 else Vector2((float(k) - 3.0) * m * 0.035, 2.0))
+		var h := h0 if k == 0 else crng.randf_range(0.45, 0.7) * h0
+		_dep_crystal(ci, at, h, maxf(2.5, h * 0.24), lean)
+	if f > 0.3:
+		_dep_sparkle(ci, top - Vector2(0, h0 - 1.0), 3.5)
+		_dep_sparkle(ci, top + Vector2(h0 * 0.22, -h0 * 0.4), 2.5)
+	for rk in rocks:
+		if (rk["p"] as Vector2).y >= c.y:
+			tops.append(_dep_rock(ci, rk["p"], rk["rad"], rk["h"], CONCRETE.lightened(0.04), rng, 5))
+	for k in mini(tops.size(), int(round(3.0 * f))):
+		_dep_crystal(ci, tops[k], 6.0, 2.2, vrng.randf_range(-0.3, 0.3))
+	# Pepitas al pie (una de cada tres, encendida)
+	for k in int(round(9.0 * f)):
+		var a := rng.randf() * TAU
+		var p := c + Vector2(cos(a), sin(a) * 0.8) * rng.randf_range(m * 0.27, m * 0.4)
+		_dot(ci, p, 2.4, OUTLINE)
+		_dot(ci, p, 1.8, FIRE_CORE if k % 3 == 0 else BRASS_LIGHT)
+	_dep_pennant(ci, Vector2(r.end.x - 7, r.end.y - 5), 15.0)
+
+static func _dep_crystal(ci: CanvasItem, base: Vector2, h: float, w: float, lean: float) -> void:
+	var up := Vector2(sin(lean), -cos(lean))
+	var side := Vector2(-up.y, up.x)
+	var tip := base + up * h
+	var l := base + up * h * 0.55 - side * w
+	var rr := base + up * h * 0.55 + side * w
+	_poly(ci, PackedVector2Array([base, l, tip, rr]), BRASS_DARK, OUTLINE, 1.2)
+	ci.draw_colored_polygon(PackedVector2Array([base + up, l + side * 0.8, tip - up * 0.8, base + up * h * 0.5]), BRASS_LIGHT)
+	ci.draw_line(tip - up * 1.0, l + side * 1.2, FIRE_CORE, 1.0)
+
+static func _dep_sparkle(ci: CanvasItem, c: Vector2, s: float) -> void:
+	ci.draw_line(c - Vector2(s, 0), c + Vector2(s, 0), FIRE_CORE, 1.2)
+	ci.draw_line(c - Vector2(0, s), c + Vector2(0, s), FIRE_CORE, 1.2)
+	_dot(ci, c, 1.1, Color.WHITE)
+
+static func _dep_pennant(ci: CanvasItem, base: Vector2, height: float) -> void:
+	var tip := _mast(ci, base, height, WOOD, 1.6)
+	_poly(ci, PackedVector2Array([tip, tip + Vector2(0, 5), tip + Vector2(9, 2)]), IMPERIAL_RED, OUTLINE, 1.0)
+
+# ── Hierro ──
+
+static func _dep_iron(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, f: float) -> void:
+	_dep_ground(ci, r, rng, CONCRETE_DARK.darkened(0.25), IRON)
+	_dep_patches(ci, r, rng, 4, RUST.darkened(0.05))
+	var m := minf(minf(r.size.x, r.size.y), 74.0)
+	var c := r.get_center() + Vector2(0, -r.size.y * 0.05)
+	var crags: Array = []
+	var pts := _dep_points(rng, r, 18.0, 8.0)
+	var kept := maxi(1, ceili(float(pts.size()) * f))
+	var k := 0
+	for p in pts:
+		if (p as Vector2).distance_to(c) < m * 0.28:
+			continue
+		var roll := rng.randf()
+		var col := GUNMETAL.darkened(rng.randf_range(0.0, 0.2))
+		if roll < 0.45:
+			col = RUST.lightened(rng.randf_range(0.0, 0.15))
+		elif roll < 0.6:
+			col = IRON.lightened(0.15)
+		var hh := rng.randf_range(3.0, 6.0) * (1.0 if k < kept else 0.35)
+		crags.append({"p": p, "rad": rng.randf_range(3.6, 5.2), "h": hh, "col": col, "lean": rng.randf_range(-0.12, 0.12)})
+		k += 1
+	# Las dos agujas (lo exagerado), una de pizarra y otra de oxido
+	for side in [-1.0, 1.0]:
+		var h: float = (m * 0.26 if side < 0.0 else m * 0.21) * lerpf(0.45, 1.0, f)
+		crags.append({"p": c + Vector2(side * m * 0.13, 0), "rad": m * 0.13, "h": h, "col": GUNMETAL if side < 0.0 else RUST, "lean": -side * 0.2})
+	crags.sort_custom(func(a, b): return (a["p"] as Vector2).y < (b["p"] as Vector2).y)
+	for cg in crags:
+		_dep_crag(ci, cg["p"], cg["rad"], cg["h"], cg["col"], float(cg["lean"]), rng)
+	# El monton de mineral, delante
+	var pile := Vector2(c.x + m * 0.18, r.end.y - 8.0)
+	for i in int(round(10.0 * f)) + 2:
+		var a := rng.randf() * TAU
+		var p := pile + Vector2(cos(a), sin(a) * 0.6) * rng.randf_range(0.0, 5.0)
+		_rot_rect(ci, p, Vector2(3.2, 2.6), rng.randf() * TAU, TILE_RED_DARK.darkened(rng.randf_range(0.2, 0.45)))
+
+## Una cresta: base poligonal, cuerpo que sube `h` px estrechandose, inclinado
+## `lean`, con una banda de oxido y la cima oxidada.
+static func _dep_crag(ci: CanvasItem, p: Vector2, rad: float, h: float, col: Color, lean: float, rng: RandomNumberGenerator) -> void:
+	var sides := rng.randi_range(4, 5)
+	var base := PackedVector2Array()
+	var top := PackedVector2Array()
+	var shift := Vector2(lean * h, -h)
+	for s in sides:
+		var a := TAU * s / float(sides) + rng.randf_range(-0.3, 0.3)
+		var d := Vector2(cos(a), sin(a) * 0.7) * rad
+		base.append(p + d)
+		top.append(p + shift + d * 0.45)
+	var shadow := PackedVector2Array()
+	for q in base:
+		shadow.append(q + _shade * h * 0.5)
+	ci.draw_colored_polygon(shadow, SHADOW)
+	var body_pts := PackedVector2Array(base)
+	body_pts.append_array(top)
+	var hull := Geometry2D.convex_hull(body_pts)
+	if hull.size() > 3:
+		hull.remove_at(hull.size() - 1)
+		_poly(ci, hull, col.darkened(0.25), OUTLINE, 1.3)
+	# Cara de luz (izquierda) del cuerpo
+	ci.draw_colored_polygon(PackedVector2Array([p - Vector2(rad * 0.8, 0), p + shift - Vector2(rad * 0.36, 0), p + shift, p]), col)
+	# Banda: de oxido en la roca gris, de hierro oscuro en la roja
+	var bcol := IRON if col.r > col.b + 0.12 else RUST
+	ci.draw_line(p + shift * 0.4 - Vector2(rad * 0.75, 0), p + shift * 0.4 + Vector2(rad * 0.75, 0), bcol, 1.6)
+	_poly(ci, top, col.lightened(0.12), OUTLINE, 1.0)
+	_dot(ci, p + shift, rad * 0.22, bcol.lightened(0.1))
+
+# ── Petroleo ──
+
+static func _dep_oil(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, f: float) -> void:
+	_dep_ground(ci, r, rng, DARK_WOOD.darkened(0.3), IRON)
+	var shrink := lerpf(0.5, 1.0, f)
+	var pc := r.get_center() + Vector2(0, r.size.y * 0.08)
+	var rx := r.size.x * 0.3 * shrink
+	var ry := r.size.y * 0.25 * shrink
+	# Charcos satelite (solo mientras queda mucho), con su propio azar
+	var srng := _dep_fork(rng)
+	if f > 0.5:
+		for sx in [-1.0, 1.0]:
+			var sp: Vector2 = pc + Vector2(sx * r.size.x * 0.33, -sx * r.size.y * 0.2)
+			_poly(ci, _dep_oval(sp, r.size.x * 0.08, r.size.y * 0.06, srng), OIL_BLACK, OUTLINE, 1.0)
+	# La balsa: reborde de brea, negro, reflejo y chispas
+	_poly(ci, _dep_oval(pc, rx + 2.5, ry + 2.0, rng), IRON.darkened(0.2), OUTLINE, 1.4)
+	ci.draw_colored_polygon(_dep_oval(pc, rx, ry, rng), OIL_BLACK)
+	ci.draw_colored_polygon(_dep_oval(pc - Vector2(rx, ry) * 0.25, rx * 0.42, ry * 0.32, rng), OIL_BLACK.lerp(SKY.darkened(0.45), 0.45))
+	ci.draw_line(pc + Vector2(-rx * 0.5, -ry * 0.42), pc + Vector2(-rx * 0.2, -ry * 0.42), SKY.lightened(0.15), 1.5)
+	ci.draw_line(pc + Vector2(-rx * 0.12, -ry * 0.55), pc + Vector2(-rx * 0.02, -ry * 0.55), SKY.lightened(0.15), 1.2)
+	for k in 3:
+		var a := rng.randf() * TAU
+		var bp := pc + Vector2(cos(a) * rx, sin(a) * ry) * 0.5
+		ci.draw_arc(bp, 2.0, 0.0, TAU, 10, IRON.lightened(0.25), 1.0)
+	# Juncos en el borde de delante
+	for k in 6:
+		var a := rng.randf_range(0.3, 2.6)
+		var p := pc + Vector2(cos(a) * (rx + 1.0), sin(a) * (ry + 1.5))
+		ci.draw_line(p, p + Vector2(rng.randf_range(-1.5, 1.5), -rng.randf_range(3.0, 5.0)), OLIVE, 1.3)
+	# La torreta de prospeccion (cuatro patas), detras de la balsa
+	var tp := Vector2(pc.x, pc.y - ry - 4.0)
+	var tw := 7.0
+	var th := 2.0 * DEP_RISE * 1.6
+	var apex := tp - Vector2(0, th)
+	ci.draw_colored_polygon(PackedVector2Array([tp + Vector2(-tw, 0), tp + Vector2(tw, 0), tp + _shade * th * 0.7]), SHADOW)
+	for back in [1.0, 0.0]:
+		for sx in [-1.0, 1.0]:
+			var foot: Vector2 = tp + Vector2(sx * tw, -back * 3.0)
+			var head: Vector2 = apex + Vector2(sx * 1.5, 0)
+			ci.draw_line(foot, head, OUTLINE, 3.2)
+			ci.draw_line(foot, head, WOOD if back < 0.5 else DARK_WOOD, 1.8)
+	for t in [0.3, 0.62]:
+		var y: float = tp.y - th * t
+		var hw := lerpf(tw, 1.5, t)
+		ci.draw_line(Vector2(tp.x - hw, y), Vector2(tp.x + hw, y), DARK_WOOD, 1.4)
+	ci.draw_line(apex, apex + Vector2(0, th * 0.55), IRON, 1.0)
+	_cyl(ci, apex + Vector2(0, th * 0.55), 1.8, 2.5, GUNMETAL.lightened(0.2), GUNMETAL)
+	_disc(ci, apex, 2.4, IMPERIAL_RED, OUTLINE, 1.0)
+	ci.draw_line(apex, apex - Vector2(0, 6), OUTLINE, 1.2)
+	_poly(ci, PackedVector2Array([apex - Vector2(0, 6), apex - Vector2(0, 1.5), apex + Vector2(8, -4)]), IMPERIAL_RED, OUTLINE, 1.0)
+	# Bidones: uno de pie y uno volcado
+	var bx := r.end.x - 8.0
+	var drum_top := Vector2(bx, pc.y - r.size.y * 0.24)
+	_cyl(ci, drum_top, 4.0, 5.5, IMPERIAL_RED.lightened(0.12), IMPERIAL_RED.darkened(0.15))
+	_cyl_band(ci, drum_top, 4.0, 5.5, 0.5, 1.2, IMPERIAL_RED.darkened(0.4))
+	_rot_rect(ci, Vector2(bx - 1.0, pc.y + 4.0), Vector2(10.0, 7.0), 0.3, IMPERIAL_RED.darkened(0.1))
+	_dot(ci, Vector2(bx + 4.0, pc.y + 5.5), 3.0, IMPERIAL_RED.lightened(0.1))
+
+static func _dep_oval(c: Vector2, rx: float, ry: float, rng: RandomNumberGenerator) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in 14:
+		var a := TAU * float(i) / 14.0
+		pts.append(c + Vector2(cos(a) * rx, sin(a) * ry) * rng.randf_range(0.88, 1.04))
+	return pts
+
+# ── Piezas comunes ──
+
+## Suelo de borde irregular (superelipse) con su reborde oscuro.
+static func _dep_ground(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, fill: Color, rim: Color) -> void:
 	var c := r.get_center()
-	var cells := r.size / 32.0
-	var blobs := int(cells.x * cells.y) + 2
-	for i in range(blobs):
-		var p := c + Vector2(rng.randf_range(-0.28, 0.28) * r.size.x, rng.randf_range(-0.28, 0.28) * r.size.y)
-		var rad := rng.randf_range(9.0, 15.0)
-		var pts := PackedVector2Array()
-		for s in range(14):
-			var a := TAU * s / 14.0
-			pts.append(p + Vector2(cos(a) * 1.25, sin(a) * 0.9) * rad * rng.randf_range(0.85, 1.05))
-		_poly(ci, pts, OIL_BLACK, OUTLINE, 1.5)
-		ci.draw_arc(p + Vector2(-rad * 0.2, -rad * 0.2), rad * 0.45, PI, PI * 1.6, 8, Color(SKY.lightened(0.2), 0.6), 2.0)
-	# El respiradero con estacas de aviso
-	_disc(ci, c, 5.0, GUNMETAL)
-	_dot(ci, c, 2.5, Color(0.02, 0.02, 0.02))
-	for i in range(4):
-		var a := TAU * i / 4.0 + PI / 4.0
-		var sp := c + Vector2(cos(a), sin(a)) * minf(r.size.x, r.size.y) * 0.36
-		_dot(ci, sp, 2.6, OUTLINE)
-		_dot(ci, sp, 1.9, Color8(240, 120, 40))
+	var outer := PackedVector2Array()
+	var inner := PackedVector2Array()
+	for i in 20:
+		var a := TAU * float(i) / 20.0
+		var ca := cos(a)
+		var sa := sin(a)
+		var k := pow(pow(absf(ca), 4.0) + pow(absf(sa), 4.0), -0.25) * rng.randf_range(0.9, 1.0)
+		var d := Vector2(ca * r.size.x * 0.5, sa * r.size.y * 0.5) * k
+		outer.append(c + d)
+		inner.append(c + d * 0.94)
+	_poly(ci, outer, rim, OUTLINE, 1.2)
+	ci.draw_colored_polygon(inner, fill)
+
+static func _dep_patches(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, n: int, col: Color) -> void:
+	for k in n:
+		var p := r.get_center() + Vector2(rng.randf_range(-0.3, 0.3) * r.size.x, rng.randf_range(-0.3, 0.3) * r.size.y)
+		ci.draw_colored_polygon(_dep_oval(p, rng.randf_range(4.0, 7.0), rng.randf_range(3.0, 5.0), rng), col)
+
+## Un azar hijo, sacado siempre: lo que viene despues no cambia con la etapa.
+static func _dep_fork(rng: RandomNumberGenerator) -> RandomNumberGenerator:
+	var r := RandomNumberGenerator.new()
+	r.seed = rng.randi()
+	return r
+
+## Sombra de una pieza de alto `h` px: una mancha hacia abajo-derecha.
+static func _dep_shadow(ci: CanvasItem, p: Vector2, rad: float, h: float) -> void:
+	_dot(ci, p + _shade * h * 0.35, rad, SHADOW)
+
+## Una pena: base, cuerpo que sube `h` px y cara de arriba mas clara.
+## Devuelve el centro de la cara de arriba (donde va un cristal).
+static func _dep_rock(ci: CanvasItem, p: Vector2, rad: float, h: float, col: Color, rng: RandomNumberGenerator, sides: int) -> Vector2:
+	var base := PackedVector2Array()
+	var top := PackedVector2Array()
+	for s in sides:
+		var a := TAU * s / float(sides) + rng.randf_range(-0.25, 0.25)
+		var d := Vector2(cos(a), sin(a) * 0.75) * rad * rng.randf_range(0.85, 1.05)
+		base.append(p + d)
+		top.append(p + Vector2(0, -h) + d * 0.65)
+	var shadow := PackedVector2Array()
+	for q in base:
+		shadow.append(q + _shade * h * 0.5)
+	ci.draw_colored_polygon(shadow, SHADOW)
+	var all_pts := PackedVector2Array(base)
+	all_pts.append_array(top)
+	var hull := Geometry2D.convex_hull(all_pts)
+	if hull.size() > 3:
+		hull.remove_at(hull.size() - 1)
+		_poly(ci, hull, col.darkened(0.28), OUTLINE, 1.3)
+	_poly(ci, top, col, OUTLINE, 1.0)
+	var tc := p + Vector2(0, -h)
+	ci.draw_colored_polygon(PackedVector2Array([top[0], top[1], tc]), col.lightened(0.16))
+	return tc
+
+## Puntos repartidos por `r` (rejilla con jitter), en orden al azar.
+static func _dep_points(rng: RandomNumberGenerator, r: Rect2, spacing: float, margin: float) -> Array:
+	var w := r.size.x - margin * 2.0
+	var h := r.size.y - margin * 2.0
+	var nx := maxi(1, int(floor(w / spacing)) + 1)
+	var ny := maxi(1, int(floor(h / spacing)) + 1)
+	var out: Array = []
+	for iy in ny:
+		for ix in nx:
+			var fx := float(ix) / float(nx - 1) if nx > 1 else 0.5
+			var fy := float(iy) / float(ny - 1) if ny > 1 else 0.5
+			var x := r.position.x + margin + w * fx
+			var y := r.position.y + margin + h * fy
+			out.append(Vector2(x + rng.randf_range(-0.22, 0.22) * spacing, y + rng.randf_range(-0.22, 0.22) * spacing))
+	for i in range(out.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t = out[i]
+		out[i] = out[j]
+		out[j] = t
+	return out
