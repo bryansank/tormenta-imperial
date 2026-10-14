@@ -446,7 +446,7 @@ proceso. La sonda se niega a correr sin carpeta de usuario propia.
 
 ---
 
-## 11. Campaña de 4-6 horas (2026-10-12, a medias)
+## 11. Campaña de 4-6 horas (2026-10-12; 2026-10-14 sin medir)
 
 Decisión de Bryan: una Campaña en Colono dura 4-6 h, la era 1 se queda en 8-12
 min, las eras 2 y 3 traen más construcción y el final pide más ejército y más
@@ -508,3 +508,51 @@ entrenando blindados. Probado a medias (sin medir): bajar
 productor antes. La era 2 solo creció de ~17 a ~20 min (sin tocar los `.tres`
 no hay más palanca que el Laboratorio y la artillería). La era 1 queda en 11-14
 min para la sonda, en el borde alto. La moral pesa mucho en el asedio (doc 17).
+
+### 2026-10-14: con la isla irregular, y los huecos de la era 3
+
+Fusionada `origin/integracion/arte-v1` (isla irregular, aspecto maqueta) sin
+conflictos. **Sin medir del todo**: Bryan pidió dejar todas las pruebas y
+mediciones para el pase final. Solo llegó a terminar la semilla 1 de la sonda
+(antes del cambio de abajo, 1 Godot más en marcha en la máquina): victoria en el
+minuto **231** (antes 255), era 2 en el 13,2, era 3 en el 34, CG nv3 en el 209,
+asedio ganado a la primera (4/4 oleadas, moral 100); 5 huecos de más de 3 min sin
+decidir, el mayor de 9,9 min (minuto 114, el panel pedía otra Fundición), y
+otros dos esperando blindados. Una sola semilla no dice si la mediana sigue en
+4-6 h: con la isla irregular podría bajar.
+
+**Arreglo de los huecos (sin medir):** casi todos caen con la bolsa por encima
+del 75 % (`ROOMY_BAG`), donde el panel ya no pide otro productor y solo queda
+esperar el recurso lento (acero/petróleo para el blindado o el CG). Ahora, en
+ese caso, `Objectives._surplus_upgrade_step()` pide **subir de nivel el
+productor del recurso que frena**, pagado solo con lo que sobra (lo que hay por
+encima del coste del paso y de dos sueldos de la tropa). No retrasa el paso ni
+una unidad, rinde más y hace sitio en la bolsa (que con la bolsa llena se
+desperdicia: 238 edificio-minutos parados por lleno en la semilla 1). Texto
+`OBJ_WHY_SURPLUS_UPGRADE`; test
+`test_a_full_bag_waiting_on_a_slow_resource_upgrades_its_producer_with_the_surplus`.
+Riesgo: acorta la partida (más producción en la era 3); si la mediana baja de
+4 h, compensar con el coste del CG nv2/nv3, no quitando el paso.
+
+**Para decidir (Bryan), si los huecos siguen:** bajar
+`Objectives.SLOW_RESOURCE_SECONDS` de 360 a 180 (pide otro productor antes,
+solo con la bolsa holgada), o aceptar que la espera del final es "ahorrar para
+el CG" y darle una meta intermedia visible (misiones/contratos, roadmap). El
+test `test_following_the_panel_walks_the_whole_line_to_the_siege` pasaba ya
+(19/19 en `test_objectives.gd`, corrido tras la fusión y antes de la orden de no
+probar): lo arregló `d3db834`.
+
+**Plan de medición del pase final** (con `override.cfg` propio, pocos Godot en
+marcha y diciendo cuántos):
+
+1. `godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5,6,7,8,9,10`
+   y, en 3 semillas, `--after=20`. Mirar en la tabla final: victoria 240-360 min
+   (mediana 4-6 h), 10/10 victorias, era 1 (minuto de la era 2) en 11-14,
+   "huecos>3min sin decidir" (antes 4-15) y "mayor sin decidir" (antes 6-12 min),
+   desbordado (antes 60-790), sin `ATASCO`. Comparar con la tabla de arriba.
+2. `godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4`
+   y `--towers=2`, `--morale=75`, `--tier=governor`: 6 blindados + 4 torres
+   ≈ 80 %, Gobernador ≥ 60 % (tabla de docs/17). Repetir con
+   `final_audit_artillery_share` 4 tras fusionar `feat/combate-3d`.
+3. Tests: `tests/ui/test_objectives.gd`, `tests/economy`, `tests/integration`,
+   `tests/storm`, `tests/modes` con `tools/run_tests.sh -a`.
