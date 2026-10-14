@@ -456,7 +456,45 @@ static func _support_step(target: Dictionary) -> Dictionary:
 		var more: Dictionary = _producer_step(slow, "OBJ_WHY_SLOW_%s" % slow.to_upper())
 		if not more.is_empty() and String(more["id"]) != String(target.get("id", "")):
 			return more
+	# La bolsa casi llena y el paso esperando un recurso lento: la espera muerta
+	# de la era 3 (4-15 huecos de mas de 3 min por partida ahorrando para el CG
+	# nv2/nv3 y los blindados, tools/line_probe.gd 2026-10-12). Lo que sobra
+	# (lo que el paso no pide) se gasta en subir de nivel el productor de lo que
+	# frena: rinde mas, hace sitio en la bolsa y no retrasa el paso ni una unidad.
+	if slow == "":
+		var surplus: Dictionary = _surplus_upgrade_step(target, net)
+		if not surplus.is_empty():
+			return surplus
 	return {}
+
+## Subir de nivel el productor del recurso que frena el paso, pagado solo con lo
+## que sobra: cada recurso de la mejora sale de lo que hay por encima de lo que
+## el paso cuesta. {} si nada frena, no hay productor que subir o no sobra.
+static func _surplus_upgrade_step(target: Dictionary, net: Dictionary) -> Dictionary:
+	if ResourceManager.get_total_stored() < int(float(ResourceManager.get_storage_cap()) * ROOMY_BAG):
+		return {}
+	var slow: String = _slowest_missing(target, net)
+	if slow == "":
+		return {}
+	var building_id: String = PRODUCER_OF.get(slow, "")
+	if building_id == "" or String(target.get("id", "")) == building_id:
+		return {}
+	var lowest: Node = _lowest_level(building_id)
+	if lowest == null:
+		return {}
+	var level: int = int(lowest.get_meta("level", 1))
+	if level >= GameConfig.max_building_level or ProductionManager.is_constructing(lowest):
+		return {}
+	var step := {"kind": "upgrade", "id": building_id, "level": level + 1, "pick": "lowest",
+		"why": "OBJ_WHY_SURPLUS_UPGRADE"}
+	var keep: Dictionary = step_cost(target).duplicate()
+	# Y dos sueldos de la tropa, como en las compras (_sell_step).
+	keep[ResourceManager.Type.GOLD] = int(keep.get(ResourceManager.Type.GOLD, 0)) + _army_upkeep() * 2
+	var cost: Dictionary = step_cost(step)
+	for type in cost:
+		if ResourceManager.get_amount(type) - int(keep.get(type, 0)) < int(cost[type]):
+			return {}
+	return step
 
 # ══════════════════════════════════════════════════════════════════════
 # Cuentas
