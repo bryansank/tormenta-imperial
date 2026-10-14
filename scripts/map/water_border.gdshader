@@ -18,6 +18,13 @@ uniform vec4 water_color_deep : source_color = vec4(0.10, 0.34, 0.58, 1.0);
 uniform vec4 water_color_shallow : source_color = vec4(0.28, 0.68, 0.76, 1.0);
 uniform vec2 island_half = vec2(46.0, 46.0);
 uniform float island_radius = 10.0;
+// Isla irregular (2026-10-12): la distancia a la linea del agua sale de una
+// textura pequena (un texel por celda, filtrado lineal) que IslandGenerator
+// hace una vez por partida. coast_rect: origen (xy) y tamano (zw) en mundo.
+uniform bool use_coast_map = false;
+uniform sampler2D coast_map : filter_linear, repeat_disable;
+uniform vec4 coast_rect = vec4(-80.0, -80.0, 160.0, 160.0);
+uniform float coast_map_range = 24.0;
 uniform float shallow_width : hint_range(1.0, 30.0) = 9.0;
 uniform float wave_speed : hint_range(0.0, 3.0) = 0.6;
 uniform float wave_strength : hint_range(0.0, 3.0) = 0.9;
@@ -48,6 +55,11 @@ void fragment() {
 	vec2 p = world_pos.xz;
 	float t = TIME * wave_speed;
 	float d = sd_round_box(p, island_half, island_radius);
+	if (use_coast_map) {
+		vec2 cuv = (p - coast_rect.xy) / coast_rect.zw;
+		bool inside = cuv.x >= 0.0 && cuv.y >= 0.0 && cuv.x <= 1.0 && cuv.y <= 1.0;
+		d = inside ? texture(coast_map, cuv).r * coast_map_range : coast_map_range;
+	}
 	float shallow = 1.0 - smoothstep(0.0, shallow_width, d);
 	vec3 col = mix(water_color_deep.rgb, water_color_shallow.rgb, shallow * shallow);
 

@@ -29,6 +29,9 @@ func _draw() -> void:
 	var origin := View2D.cell_origin_px(Vector2i.ZERO)
 	var w := GridManager.grid_width
 	var h := GridManager.grid_height
+	if GridManager.is_irregular():
+		_draw_on_land(origin, cs, w, h)
+		return
 	for x in range(w + 1):
 		var col := LINE_MAJOR if x % 5 == 0 else LINE
 		draw_line(origin + Vector2(x * cs, 0), origin + Vector2(x * cs, h * cs), col, 1.0)
@@ -36,3 +39,47 @@ func _draw() -> void:
 		var col := LINE_MAJOR if y % 5 == 0 else LINE
 		draw_line(origin + Vector2(0, y * cs), origin + Vector2(w * cs, y * cs), col, 1.0)
 	draw_rect(Rect2(origin, Vector2(w, h) * cs), BORDER, false, 2.0)
+
+## Isla irregular: solo los lados de celda que tocan tierra (y el borde
+## tierra-agua mas marcado). Se arma una vez por redibujado en tres listas de
+## segmentos (draw_multiline), no una llamada por linea.
+func _draw_on_land(origin: Vector2, cs: float, w: int, h: int) -> void:
+	var minor := PackedVector2Array()
+	var major := PackedVector2Array()
+	var border := PackedVector2Array()
+	# Verticales: entre la celda (x-1, y) y la (x, y).
+	for y in range(h):
+		for x in range(w + 1):
+			var a := GridManager.is_land_cell(Vector2i(x - 1, y))
+			var b := GridManager.is_land_cell(Vector2i(x, y))
+			if not a and not b:
+				continue
+			var seg := [origin + Vector2(x * cs, y * cs), origin + Vector2(x * cs, (y + 1) * cs)]
+			# (Las Packed* se copian al asignarlas: se anade a cada una por su nombre.)
+			if a != b:
+				border.append_array(PackedVector2Array(seg))
+			elif x % 5 == 0:
+				major.append_array(PackedVector2Array(seg))
+			else:
+				minor.append_array(PackedVector2Array(seg))
+	# Horizontales: entre la celda (x, y-1) y la (x, y).
+	for y in range(h + 1):
+		for x in range(w):
+			var a := GridManager.is_land_cell(Vector2i(x, y - 1))
+			var b := GridManager.is_land_cell(Vector2i(x, y))
+			if not a and not b:
+				continue
+			var seg := [origin + Vector2(x * cs, y * cs), origin + Vector2((x + 1) * cs, y * cs)]
+			# (Las Packed* se copian al asignarlas: se anade a cada una por su nombre.)
+			if a != b:
+				border.append_array(PackedVector2Array(seg))
+			elif y % 5 == 0:
+				major.append_array(PackedVector2Array(seg))
+			else:
+				minor.append_array(PackedVector2Array(seg))
+	if not minor.is_empty():
+		draw_multiline(minor, LINE, 1.0)
+	if not major.is_empty():
+		draw_multiline(major, LINE_MAJOR, 1.0)
+	if not border.is_empty():
+		draw_multiline(border, BORDER, 2.0)

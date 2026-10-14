@@ -385,11 +385,56 @@ var deposit_core_gap := 2
 var map_shore_band := 1
 
 # ── Map Size ──
-## Lado de la rejilla, en celdas, que sortea cada partida nueva (ancho y alto por
-## separado, siempre pares para que el Nucleo quede en el centro del mundo). Se
-## guarda con la partida (clave "grid"); un guardado sin ella es de 40x40.
-var grid_size_min := 40
-var grid_size_max := 48
+## Ancho y alto de la rejilla, en celdas, que sortea cada partida nueva (por
+## separado, siempre pares para que el Nucleo quede en el centro del mundo; la
+## isla no sale siempre cuadrada). Se guardan con la partida (clave "grid"); un
+## guardado sin ella es de 40x40. Con la isla irregular (2026-10-12) la rejilla
+## es mas grande que la de antes (40-48) porque el mar entra en ella: la tierra
+## la fija island_coast (land_min..land_max), no el tamano de la rejilla.
+var grid_width_min := 60
+var grid_width_max := 74
+var grid_height_min := 60
+var grid_height_max := 74
+
+## La costa de la isla irregular (scripts/map/IslandShape.gd, docs/02 "Mapa
+## aleatorio"). Mismas claves y valores que IslandShape.DEFAULTS (un test lo
+## comprueba). Se copian al guardado de cada partida nueva: cambiarlos aqui solo
+## afecta a las islas nuevas.
+##  edge_water: celdas de mar en el borde de la rejilla
+##  core_size / core_margin: el Nucleo y la tierra garantizada alrededor de su acera
+##  fraction_min/max: parte de la rejilla util (sin el borde) que es tierra
+##  land_min/max: celdas de tierra (la de antes era 1600-2304, toda construible)
+##  power_min/max: superelipse (2 elipse, 3 casi cuadrada)
+##  harmonic_amp: lobulos grandes; noise_amp / noise_freq: costa menuda
+##  bays_* / capes_*: cuantas bahias y cabos, y de que tamano (en radios de isla)
+##  close_radius: entrantes mas estrechos que unas 2x celdas se rellenan
+##  open_radius: lenguas de tierra mas finas que unas 2x celdas se quitan
+var island_coast := {
+	"edge_water": 3,
+	"core_size": 3,
+	"core_margin": 3,
+	"fraction_min": 0.46,
+	"fraction_max": 0.58,
+	"land_min": 1550,
+	"land_max": 2300,
+	"power_min": 2.0,
+	"power_max": 3.0,
+	"harmonic_amp": 0.30,
+	"noise_amp": 0.30,
+	"noise_freq": 0.05,
+	"bays_min": 2,
+	"bays_max": 4,
+	"bay_size_min": 0.20,
+	"bay_size_max": 0.36,
+	"capes_min": 1,
+	"capes_max": 3,
+	"cape_length_min": 1.00,
+	"cape_length_max": 1.25,
+	"cape_width_min": 0.08,
+	"cape_width_max": 0.14,
+	"close_radius": 2.5,
+	"open_radius": 1.5,
+}
 
 # ── Deposit Sizes (random range per type: min_w, max_w, min_h, max_h) ──
 var deposit_sizes := {

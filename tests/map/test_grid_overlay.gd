@@ -60,12 +60,13 @@ func test_the_plane_is_centred_on_the_grid() -> void:
 	assert_float(overlay.position.x).is_equal_approx(origin.x + size.x * 0.5, 0.001)
 	assert_float(overlay.position.z).is_equal_approx(origin.z + size.y * 0.5, 0.001)
 
-func test_the_grid_is_on_by_default() -> void:
-	# Fresh preferences (no settings.cfg) mean the owner's default: visible.
+func test_the_grid_is_off_by_default() -> void:
+	# Apagada por defecto (arte, 2026-10-05: "la rejilla blanca parece un
+	# prototipo"): solo se ve al colocar o mover un edificio.
 	# Una instancia suelta del script no pasa por _ready(), asi que no lee el
 	# settings.cfg de esta maquina: es el valor por defecto puro.
 	var fresh: Node = load("res://scripts/services/GameConfig.gd").new()
-	assert_bool(fresh.ui_grid_visible).is_true()
+	assert_bool(fresh.ui_grid_visible).is_false()
 	fresh.free()
 
 func test_visibility_follows_the_preference_and_the_toggle_signal() -> void:
@@ -95,7 +96,25 @@ func test_the_scene_material_is_faint() -> void:
 				origin = (value as ShaderMaterial).get_shader_parameter("grid_origin")
 			elif pname == "mesh" and value is PlaneMesh:
 				size = (value as PlaneMesh).size
-	assert_float(alpha).is_between(0.07, 0.11)
+	# Muy tenue desde el arte de 2026-10-05 (0,06): solo se ve al colocar.
+	assert_float(alpha).is_between(0.04, 0.11)
 	assert_vector(origin).is_equal(Vector2(-40, -40))
 	assert_float(size.x).is_greater_equal(80.0)
 	assert_float(size.y).is_greater_equal(80.0)
+
+func test_on_an_irregular_island_the_grid_is_drawn_only_on_land() -> void:
+	# Isla irregular: el shader recibe la mascara de tierra (un texel por celda)
+	# y solo pinta lineas donde hay tierra. La isla cuadrada no la necesita.
+	var overlay := _make_overlay()
+	var mat := overlay.get_surface_override_material(0) as ShaderMaterial
+	assert_bool(bool(mat.get_shader_parameter("use_land_mask"))).is_false()
+	seed(5)
+	GridManager.roll_new_map()
+	assert_bool(bool(mat.get_shader_parameter("use_land_mask"))).is_true()
+	var tex := mat.get_shader_parameter("land_mask") as Texture2D
+	assert_object(tex).is_not_null()
+	assert_vector(Vector2(tex.get_size())).is_equal(Vector2(GridManager.grid_width, GridManager.grid_height))
+	var img := tex.get_image()
+	var core := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
+	assert_float(img.get_pixelv(core).r).is_greater(0.5)
+	assert_float(img.get_pixel(0, 0).r).is_less(0.5)
