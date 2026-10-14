@@ -60,7 +60,7 @@ en el agua es una celda invalida, no la del borde.
 | Pieza | Donde vive | Quien la usa |
 |---|---|---|
 | Veredicto de colocacion, giro, topes, requisitos, bolsa, demoler, uniones de calzada, entrada de guardado | `scripts/buildings/PlacementRules.gd` | `BuildingPlacer` (3D) y `BuildingPlacer2D` |
-| Sorteo, registro, usos, agotamiento, guardado y alcance de yacimientos | `MapGenerator.gd` | `MapGenerator2D` hereda y solo cambia los 4 ganchos de dibujo (`_make_container`, `_build_deposit_node`, `_place_deposit_node`, `_show_depleted_text`) |
+| Sorteo, registro, usos, agotamiento, guardado y alcance de yacimientos | `MapGenerator.gd` | `MapGenerator2D` hereda y solo cambia los 5 ganchos de dibujo (`_make_container`, `_build_deposit_node`, `_place_deposit_node`, `_refresh_deposit_look` (la etapa de agotamiento, docs/02), `_show_depleted_text`) |
 | Silueta de la isla | isla irregular: `IslandGenerator.coast_for_grid()` (de la mascara de `GridManager`, `IslandShape`); isla cuadrada vieja: funciones estaticas de `IslandGenerator.gd` | `Island2D` (los anillos de arena, espuma y agua con `Geometry2D.offset_polygon`) |
 | Tierra y agua de la rejilla | `GridManager.is_land_cell()` | `GridOverlay2D` (solo los lados que tocan tierra), `Camera2DController` (limites = rectangulo de la tierra), el colocador (motivo `"water"`) |
 | Regla del badge Zzz / obrero y su pictograma | `BuildingStatusBadge.derive()`, `worker_texture()` | `StatusBadge2D` |
