@@ -45,6 +45,14 @@ var _guard: MeshInstance3D
 ## Aros en el suelo: rojo = se le puede pegar, laton = es su turno. Se ven aunque
 ## la pieza tape su casilla (la marca de la casilla queda debajo).
 var _target_ring: MeshInstance3D
+## La placa: chapa amarilla con contorno y la vida actual en grande (lo que se
+## lee de un vistazo en una tablet). La barra fina queda debajo, para la
+## proporcion.
+var _plate: Sprite3D
+var _plate_label: Label3D
+## La mira roja sobre un objetivo a tiro, y la etiqueta corta de ventaja.
+var _crosshair: Sprite3D
+var _hint: Label3D
 var _active_ring: MeshInstance3D
 var _ring_pulse: Tween
 var _muzzle_local := Vector3(0, 0.6, 0.8)
@@ -55,6 +63,12 @@ static var _bar_tex: Texture2D = null
 static var _guard_mesh: Mesh = null
 static var _guard_mat: Material = null
 static var _ring_mats: Dictionary = {}
+static var _plate_tex: Dictionary = {}
+static var _crosshair_tex: Texture2D = null
+
+const PLATE_PX := Vector2i(104, 52)
+const PLATE_PIXEL := 0.0135
+const PLATE_GAP := 0.48
 static var _shadow_mat: Material = null
 
 ## `info`: uid, unit_id, side, hp, max_hp, domain, boss, crew, team_color.
@@ -115,7 +129,8 @@ func setup(info: Dictionary) -> void:
 	_guard.visible = false
 	_lift.add_child(_guard)
 	_target_ring = _ring("TargetRing", UITheme.DANGER.lightened(0.15), 1.12)
-	_active_ring = _ring("ActiveRing", UITheme.ACCENT.lightened(0.2), 1.0)
+	# El atacante elegido, en azul (2026-10-12); la guardia pasa al laton.
+	_active_ring = _ring("ActiveRing", UITheme.INFO.lightened(0.25), 1.0)
 
 	_build_bar()
 	set_hp(shown_hp, false)
@@ -133,6 +148,62 @@ func _build_bar() -> void:
 	_bar.add_child(_bar_bg)
 	_bar_fill = _bar_sprite(1)
 	_bar.add_child(_bar_fill)
+
+	# Placa con la cifra, encima de la barra.
+	_plate = Sprite3D.new()
+	_plate.name = "Plate"
+	_plate.texture = _plate_texture(side)
+	_plate.pixel_size = PLATE_PIXEL
+	_plate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_plate.no_depth_test = true
+	_plate.shaded = false
+	_plate.render_priority = 5
+	_plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_plate.position.y = PLATE_GAP
+	_bar.add_child(_plate)
+	_plate_label = Label3D.new()
+	_plate_label.name = "PlateValue"
+	_plate_label.font_size = 64
+	_plate_label.pixel_size = 0.0118
+	_plate_label.modulate = Color(0.13, 0.09, 0.05)
+	_plate_label.outline_size = 0
+	_plate_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_plate_label.no_depth_test = true
+	_plate_label.render_priority = 6
+	_plate_label.position.y = PLATE_GAP
+	var font := UITheme.heavy_font()
+	if font != null:
+		_plate_label.font = font
+	_bar.add_child(_plate_label)
+
+	# Mira y etiqueta de ventaja, apagadas hasta que la unidad sea objetivo.
+	_crosshair = Sprite3D.new()
+	_crosshair.name = "Crosshair"
+	_crosshair.texture = _crosshair_texture()
+	_crosshair.pixel_size = 0.016
+	_crosshair.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_crosshair.no_depth_test = true
+	_crosshair.shaded = false
+	_crosshair.render_priority = 3
+	_crosshair.modulate = UITheme.DANGER.lightened(0.2)
+	_crosshair.position.y = _top * 0.55
+	_crosshair.visible = false
+	_lift.add_child(_crosshair)
+	_hint = Label3D.new()
+	_hint.name = "TargetHint"
+	_hint.font_size = 52
+	_hint.pixel_size = 0.0135
+	_hint.outline_size = 12
+	_hint.outline_modulate = Color(0.06, 0.05, 0.04)
+	_hint.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_hint.no_depth_test = true
+	_hint.render_priority = 7
+	_hint.outline_render_priority = 6
+	_hint.position.y = _top + BAR_GAP + PLATE_GAP + 0.55
+	_hint.visible = false
+	if font != null:
+		_hint.font = font
+	_lift.add_child(_hint)
 
 func _bar_sprite(priority: int) -> Sprite3D:
 	var s := Sprite3D.new()
@@ -159,6 +230,12 @@ static func _bar_texture() -> Texture2D:
 ## descuenta golpe a golpe a medida que los anima).
 func set_hp(hp: int, animate := true) -> void:
 	shown_hp = clampi(hp, 0, max_hp)
+	if _plate_label != null:
+		_plate_label.text = str(shown_hp)
+		if animate and is_inside_tree():
+			# La cifra salta al cambiar: se nota que bajo.
+			_plate_label.scale = Vector3.ONE * 1.35
+			create_tween().tween_property(_plate_label, "scale", Vector3.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	var ratio := float(shown_hp) / float(max_hp)
 	var color: Color = UITheme.POSITIVE if ratio > 0.5 else (UITheme.WARNING if ratio > 0.25 else UITheme.DANGER)
 	color.a = _bar_fill.modulate.a if _bar_fill.modulate.a > 0.0 else 1.0
@@ -190,6 +267,8 @@ func set_spent(spent: bool) -> void:
 	var a := SPENT_ALPHA if spent else 1.0
 	_bar_fill.modulate.a = a
 	_bar_bg.modulate.a = 0.85 * a
+	_plate.modulate.a = 0.55 + 0.45 * a
+	_plate_label.modulate.a = 0.55 + 0.45 * a
 
 func set_defending(on: bool, animate := true) -> void:
 	if _guard.visible == on:
@@ -205,9 +284,12 @@ func is_defending_shown() -> bool:
 
 ## Se le puede pegar ahora: aro rojo que late.
 func set_targeted(on: bool) -> void:
+	if not on:
+		set_target_hint(0)
 	if _target_ring.visible == on:
 		return
 	_target_ring.visible = on and alive
+	_crosshair.visible = on and alive
 	_restart_pulse()
 
 ## Es su turno: aro de laton.
@@ -219,6 +301,25 @@ func set_active(on: bool) -> void:
 
 func is_targeted() -> bool:
 	return _target_ring.visible
+
+## La etiqueta de ventaja de tipo: +1 buen objetivo, -1 mal objetivo, 0 nada
+## (CombatRules.type_matchup del atacante contra esta unidad).
+func set_target_hint(matchup: int) -> void:
+	if _hint == null:
+		return
+	_hint.visible = matchup != 0 and alive
+	if matchup > 0:
+		_hint.text = Tr.t("LBL_GOOD_TARGET")
+		_hint.modulate = UITheme.POSITIVE.lightened(0.35)
+	elif matchup < 0:
+		_hint.text = Tr.t("LBL_BAD_TARGET")
+		_hint.modulate = UITheme.WARNING.lightened(0.2)
+
+func target_hint_text() -> String:
+	return _hint.text if _hint != null and _hint.visible else ""
+
+func plate_text() -> String:
+	return _plate_label.text if _plate_label != null else ""
 
 func _ring(node_name: String, color: Color, s: float) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
@@ -251,6 +352,7 @@ func _restart_pulse() -> void:
 func _pulse_step(t: float) -> void:
 	var k := 1.0 + 0.07 * sin(t * TAU)
 	_target_ring.scale = Vector3(1.12 * k, 1.0, 1.12 * k)
+	_crosshair.scale = Vector3.ONE * (1.0 + 0.12 * sin(t * TAU))
 	_active_ring.scale = Vector3(k, 1.0, k)
 
 # ── Puntos de interes ────────────────────────────────────────────────
@@ -264,7 +366,8 @@ func chest_world() -> Vector3:
 	return _lift.global_position + Vector3(0, _top * 0.5, 0)
 
 func top_world() -> Vector3:
-	return _lift.global_position + Vector3(0, _top + BAR_GAP + 0.25, 0)
+	# Por encima de la placa: el numero de dano no la tapa.
+	return _lift.global_position + Vector3(0, _top + BAR_GAP + PLATE_GAP + 0.55, 0)
 
 func ground_world() -> Vector3:
 	return global_position
@@ -351,6 +454,8 @@ func die(time := 0.5) -> Tween:
 	alive = false
 	_bar.visible = false
 	_guard.visible = false
+	_crosshair.visible = false
+	_hint.visible = false
 	set_targeted(false)
 	set_active(false)
 	if _bob != null:
@@ -413,10 +518,53 @@ static func _guard_ring_mesh() -> Mesh:
 		_guard_mesh = t
 	return _guard_mesh
 
+## La chapa de la placa: amarilla con contorno oscuro (pardo los nuestros, rojo
+## oscuro la Regencia) y esquinas romas. Una textura por bando, generada una vez.
+static func _plate_texture(side_: int) -> Texture2D:
+	if not _plate_tex.has(side_):
+		var img := Image.create(PLATE_PX.x, PLATE_PX.y, false, Image.FORMAT_RGBA8)
+		var edge := Color(0.18, 0.11, 0.05) if side_ == 0 else Color(0.42, 0.08, 0.07)
+		var fill := Color(0.98, 0.8, 0.26)
+		var shine := Color(1.0, 0.9, 0.5)
+		var r := 12.0
+		var border := 5.0
+		for y in PLATE_PX.y:
+			for x in PLATE_PX.x:
+				var dx := maxf(0.0, maxf(r - x, x - (PLATE_PX.x - 1 - r)))
+				var dy := maxf(0.0, maxf(r - y, y - (PLATE_PX.y - 1 - r)))
+				var d := sqrt(dx * dx + dy * dy)
+				if d > r:
+					img.set_pixel(x, y, Color(0, 0, 0, 0))
+				elif d > r - border or x < border or y < border or x >= PLATE_PX.x - border or y >= PLATE_PX.y - border:
+					img.set_pixel(x, y, edge)
+				else:
+					img.set_pixel(x, y, shine if y < PLATE_PX.y * 0.38 else fill)
+		_plate_tex[side_] = ImageTexture.create_from_image(img)
+	return _plate_tex[side_]
+
+## La mira: aro con cuatro trazos hacia el centro, en blanco (se tine de rojo).
+static func _crosshair_texture() -> Texture2D:
+	if _crosshair_tex == null:
+		var n := 64
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		img.fill(Color(0, 0, 0, 0))
+		var c := (n - 1) * 0.5
+		for y in n:
+			for x in n:
+				var dx := x - c
+				var dy := y - c
+				var d := sqrt(dx * dx + dy * dy)
+				var ring := d > 22.0 and d < 27.0
+				var tick := (absf(dx) < 2.5 and absf(dy) > 9.0 and absf(dy) < 31.0) or (absf(dy) < 2.5 and absf(dx) > 9.0 and absf(dx) < 31.0)
+				if ring or tick:
+					img.set_pixel(x, y, Color(1, 1, 1, 1))
+		_crosshair_tex = ImageTexture.create_from_image(img)
+	return _crosshair_tex
+
 static func _guard_material() -> Material:
 	if _guard_mat == null:
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.albedo_color = UITheme.INFO.lightened(0.25)
+		m.albedo_color = UITheme.ACCENT.lightened(0.15)
 		_guard_mat = m
 	return _guard_mat

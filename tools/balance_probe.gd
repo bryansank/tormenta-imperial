@@ -10,6 +10,8 @@ extends Node
 ##   project.godot -> [autoload] -> BalanceProbe="*res://tools/balance_probe.gd"
 ##   godot --headless --path .
 ## Quitar la linea al terminar (la sonda cierra el juego sola).
+## Ventaja por tipo: `-- --adv=off` mide sin ella (el "antes");
+## `-- --adv=1.5,0.75` pisa sus dos multiplicadores.
 ## Nivel Gobernador (enemigos de expedicion `expedition_enemy_mult` veces mas
 ## fuertes):  godot --headless --path . -- --tier=governor
 ##
@@ -105,6 +107,13 @@ func _run() -> void:
 			_exp_seeds = maxi(1, int(a.trim_prefix("--exp-seeds=")))
 		elif a == "--only=expeditions":
 			only_expeditions = true
+		elif a == "--adv=off":
+			GameConfig.combat_type_advantage["beats"] = {}
+		elif a.begins_with("--adv="):
+			var m: PackedStringArray = a.trim_prefix("--adv=").split(",")
+			if m.size() == 2:
+				GameConfig.combat_type_advantage["advantage"] = float(m[0])
+				GameConfig.combat_type_advantage["disadvantage"] = float(m[1])
 		elif a.begins_with("--expedition_mult="):
 			GameConfig.game_tier_rules["governor"]["expedition_enemy_mult"] = float(a.trim_prefix("--expedition_mult="))
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN, tier)
@@ -122,6 +131,7 @@ func _run() -> void:
 func _print_config() -> void:
 	print("")
 	print("-- Valores combat_* leidos --")
+	print("  type_advantage=%s" % GameConfig.combat_type_advantage)
 	print("  turn_limit=%d  enemy_base_slots=%d  deploy_cap=%d  board=%s" % [
 		GameConfig.combat_turn_limit, GameConfig.combat_enemy_base_slots,
 		GameConfig.combat_deploy_cap, str(GameConfig.combat_board_size),

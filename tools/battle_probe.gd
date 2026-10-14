@@ -16,7 +16,8 @@ extends Node
 ## Quitar la linea del autoload al terminar.
 ##
 ## Argumentos tras `--`: --board=3d|2d (por defecto 3d), --profile=pc|tablet|phone,
-## --tag=<nombre> (prefijo de las capturas), --quality=high|low|minimal, --fps.
+## --tag=<nombre> (prefijo de las capturas), --quality=high|low|minimal,
+## --scene=land|beach|forest (escenario de la maqueta), --x2, --fps.
 ##
 ## Hermano de tools/showcase_shots.gd y tools/ui_tour.gd.
 
@@ -27,6 +28,8 @@ const FPS_SAMPLE := 3.0
 
 var _tag := "pc"
 var _style := "3d"
+## Escenario forzado (land / beach / forest) o "" para el de la semilla.
+var _scene := ""
 var _screen: Node = null
 var _deaths := 0
 var _shot_attack := false
@@ -44,6 +47,10 @@ func _ready() -> void:
 			_tag = a.substr(6)
 		elif a.begins_with("--board="):
 			_style = a.substr(8)
+		elif a.begins_with("--scene="):
+			_scene = a.substr(8)
+		elif a == "--x2":
+			GameConfig.set_game_speed(2.0)
 		elif a.begins_with("--profile="):
 			DeviceProfile.set_profile_override(a.substr(10))
 		elif a.begins_with("--quality="):
@@ -79,6 +86,7 @@ func _run() -> void:
 
 	if _screen != null:
 		_screen.force_board_style(_style)
+		_screen.force_board_scene(_scene)
 		if DeviceProfile.current() != "pc":
 			_screen.set_touch_mode(true)
 
@@ -126,8 +134,41 @@ func _run() -> void:
 	await get_tree().create_timer(0.4).timeout
 	await _shot("06_result")
 	var after := _snapshot()
+	await _hints_board()
 	print("[battle] resultado: %s  (oro %d -> %d, tropas %d -> %d)" % [
 		CombatManager.get_last_result(), before["gold"], after["gold"], before["units"], after["units"]])
+
+## Un tablero montado para ver las dos etiquetas de ventaja a la vez: nuestra
+## artilleria con un blindado (buen objetivo) y una infanteria (mal objetivo) a
+## tiro. Se colocan a mano solo en la sonda; las reglas no se tocan.
+func _hints_board() -> void:
+	if _screen == null:
+		return
+	if CombatManager.is_board_open():
+		_screen._close_all()
+		CombatManager.end_encounter()
+	await get_tree().create_timer(0.3).timeout
+	GameConfig.combat_ai_step_delay = 0.45
+	var gun := CombatUnit.create(990, "artillery", Encounter.PLAYER)
+	CombatManager.start_encounter_with_units([gun], {"infantry": 1, "vehicle": 1}, false, 0, false)
+	await _until_player_turn()
+	var tank: CombatUnit = null
+	var foot: CombatUnit = null
+	for u in CombatManager.get_units():
+		if u.unit_id == "vehicle":
+			tank = u
+		elif u.unit_id == "infantry" and u.side == Encounter.ENEMY:
+			foot = u
+	if tank == null or foot == null or not CombatManager.is_player_turn():
+		return
+	var g: Vector2i = CombatManager.get_unit(990).position
+	tank.position = Vector2i(clampi(g.x - 1, 0, 7), g.y - 2)
+	foot.position = Vector2i(clampi(g.x + 1, 0, 7), g.y - 2)
+	var b = _board()
+	if b != null:
+		b._reconcile()
+	_screen._refresh()
+	await _shot("08_hints", 0.5)
 
 func _open_showcase_board() -> void:
 	var units: Array = []

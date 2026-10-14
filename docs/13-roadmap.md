@@ -178,6 +178,7 @@ makes materials).
 | `feat/estilo-parcelas` | Every building on its own lot with ground, kerb and props; the sawmill as an open shed; the same in 2D (style guide: five legibility rules, no third-party art) | Committed, not integrated |
 | `feat/arte-modelos-cc0` | The "toy diorama" art direction: CC0 pieces (KayKit, Kenney) baked through a common ten-colour `ToyPalette` into one vertex-coloured mesh per lot (`tools/toy_kit.gd`); includes `feat/estilo-parcelas` | Work in progress |
 | `feat/arte-ambiente` | The world look: warm sky and sun, SSAO/glow/shadow quality per renderer (`WorldLook`), island cliff / sand / foam shaders, graphics quality in Settings | Work in progress |
+| `perf/tope-fps` | FPS cap: 60 on PC and 30 on tablet/phone by default, chosen in Settings → Interfaz (30-120 or unlimited), 30 while paused and 10 without focus, so the game stops repainting at 144 Hz for nothing ([21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) §10) | PR pending |
 | `feat/comida-granja-recoger` | Food as a resource the people eat instead of wood + gold; the Farm (2x2, era 1) with 1 / 5 / 20 min crops; every producer stores up to a cap and is collected with a tap (full = stops); spoilage after 2 h only in Gobernador; tutorial steps | Committed, not integrated |
 ## 💤 Backlog
 
@@ -201,7 +202,7 @@ makes materials).
   and store listing ([19-exportar.md](19-exportar.md) §8, §11.10)
 - 💤 Small known gaps listed per system: [15-combat.md](15-combat.md) §10,
   [18-vista-2d.md](18-vista-2d.md) "Huecos conocidos",
-  [21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) §10,
+  [21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) §11,
   [23-onboarding.md](23-onboarding.md) §6, and the orphan signals in
   [10-signals-reference.md](10-signals-reference.md)
 

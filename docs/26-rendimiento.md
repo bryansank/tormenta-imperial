@@ -597,7 +597,7 @@ sin 3D, unos 2600 nodos frente a 5400) y entonces se recomienda:
 
 Ajustes → Interfaz → "Fotogramas por segundo", con estas opciones: 30, 45, 60, 90,
 120 y "Sin tope". Se aplica con `Engine.max_fps` y se guarda en `settings.cfg`
-(`[interfaz] max_fps`). El vsync sigue encendido salvo con "Sin tope" en PC.
+(`[interfaz] fps_cap`, hecho en la rama `perf/tope-fps`, 2026-10-14). El vsync sigue encendido salvo con "Sin tope" en PC.
 
 | Perfil | Por defecto | Por qué |
 |---|---|---|
