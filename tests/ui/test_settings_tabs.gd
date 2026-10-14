@@ -119,17 +119,33 @@ func test_the_ui_scale_applies_and_persists() -> void:
 	GameConfig.load_user_settings()
 	assert_int(GameConfig.ui_scale_pct).is_equal(130)
 
+func test_the_fps_row_sets_the_cap() -> void:
+	var p = _open()
+	var tabs: TabContainer = p.find_child("SettingsTabs", true, false)
+	var row: Node = tabs.get_child(1).find_child("FpsRow", true, false)
+	assert_object(row).is_not_null()
+	var picker := row.get_child(1) as OptionButton
+	assert_int(picker.item_count).is_equal(GameConfig.FPS_CAP_MODES.size())
+	picker.item_selected.emit(GameConfig.FPS_CAP_MODES.find("45"))
+	assert_str(GameConfig.ui_fps_cap).is_equal("45")
+	picker.item_selected.emit(GameConfig.FPS_CAP_MODES.find("unlimited"))
+	assert_str(GameConfig.ui_fps_cap).is_equal("unlimited")
+	# Se aplica al momento: no pide reconstruir la interfaz.
+	assert_bool(p.needs_rebuild()).is_false()
+
 func test_reset_interface_puts_everything_back() -> void:
 	var p = _open()
 	GameConfig.ui_scale_pct = 150
 	GameConfig.ui_text_size = "xlarge"
 	GameConfig.ui_device_profile = "phone"
+	GameConfig.ui_fps_cap = "90"
 	HudRegistry.set_hidden("StormHUD", true)
 	UILayoutManager.set_user_offset("StormHUD", Vector2(16, 16))
 	p.reset_interface()
 	assert_int(GameConfig.ui_scale_pct).is_equal(0)
 	assert_str(GameConfig.ui_text_size).is_equal("auto")
 	assert_str(GameConfig.ui_device_profile).is_equal("auto")
+	assert_str(GameConfig.ui_fps_cap).is_equal("auto")
 	assert_bool(HudRegistry.is_hidden("StormHUD")).is_false()
 	assert_vector(UILayoutManager.get_user_offset("StormHUD")).is_equal(Vector2.ZERO)
 	assert_bool((p.find_child("Hud_StormHUD", true, false) as CheckButton).button_pressed).is_true()
