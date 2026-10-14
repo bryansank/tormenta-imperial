@@ -153,6 +153,39 @@ building, they also need a road joined to the Núcleo (docs/03 "Road network").
   sidewalk; a final pass removes and re-rolls any that ended boxed in.
 - The island shape also comes from the seed, in 3D and 2D.
 
+## Yacimientos en el mapa (aspecto, 2026-10-14)
+
+Los cuatro yacimientos son miniaturas de la maqueta, como los edificios: la paleta
+comun (`ToyPalette`), color por vertice y los dos materiales compartidos. Todo es
+pieza propia (cajas, cilindros, conos y bolas de `LotMesh`), sin modelos ajenos.
+Las reglas (tamanos, alcance, usos, guardado) no cambian.
+
+| Yacimiento | Suelo | Lo que se ve | Lo exagerado | Al minarlo |
+|---|---|---|---|---|
+| Bosque | verde oscuro con reborde | pinos de tres pisos, alguna copa redonda (una de cada ocho de otono), matas, setas, pila de troncos | el pino de atras, un 35 % mas alto | los arboles pasan a tocones |
+| Veta de oro | cascajo arenoso | peñas claras, pepitas, pico clavado, estaca con banderin rojo | racimo de cristales de oro sobre la peña madre; pepitas y destellos sin luz | se van cristales y pepitas |
+| Hierro | grava oscura con manchas de oxido | crestas de pizarra y roca roja con bandas de oxido, monton de mineral rojizo | dos agujas que se inclinan una contra otra | las crestas bajan a tocones, el monton mengua |
+| Petroleo | tierra parda | balsa negra con reborde de brea, reflejo, burbujas, juncos, dos bidones rojos | torreta de prospeccion de cuatro patas con polea roja, cubo y banderin | la balsa encoge y se secan los charcos |
+
+- **3D:** `scripts/map/DepositMesh.gd` (pura, sin nodos). Cada yacimiento es UN
+  `MeshInstance3D` ("Look"): una llamada de dibujo (dos en el oro, por lo que brilla).
+  La malla mide su huella, no se estira. Sale de una cache por tipo, tamano,
+  variante (4, de la semilla de la celda) y **etapa** de agotamiento
+  (`stage_of(usos, max)`: 4 entero ... 1 el ultimo uso). `MapGenerator` la pone al
+  crear el yacimiento y la cambia en `_refresh_deposit_look()` solo cuando la etapa
+  cambia al minarlo. Nada por fotograma. Coste por yacimiento: ~1-3,5 mil
+  triangulos (el bosque de 4x4 es el mayor; tope en las pruebas: 4000).
+- **2D:** `BuildingArt2D.draw_deposit(ci, id, size, variante, etapa)` con el mismo
+  vocabulario (suelo irregular, volumen hacia abajo, luz por la izquierda). `Deposit2D`
+  lo hornea en `ArtCache2D` (clave tipo/tamano/variante/etapa) y ya no tiene `_process`
+  por fotograma: solo mientras esta seleccionado; el atenuado de "bloqueado" llega por
+  `resource_unlocked`. `MapGenerator2D._refresh_deposit_look()` le pone la etapa.
+- La etapa sale de los usos, que ya se guardan: un save viejo carga igual y el
+  yacimiento aparece con su etapa.
+- Sonda: `tools/deposito_probe.gd` (capturas 3D de dia, Tormenta y noche, 2D de dia
+  y Tormenta, coste por yacimiento) a `docs/media/dev/dep_<tag>_*.png`.
+- Pruebas: `tests/map/test_deposit_mesh.gd`, `tests/view2d/test_deposit2d_look.gd`.
+
 ## The irregular island (2026-10-12)
 
 Owner decision: the map is not a square any more. Bays, capes and peninsulas, with
