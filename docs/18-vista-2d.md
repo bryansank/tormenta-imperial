@@ -125,7 +125,7 @@ desde arriba, con sombra, relieve y una silueta propia por edificio en la paleta
 de `DieselpunkBuildingFactory` (hierro, laton, oxido, hormigon, fuego). Encima:
 obra (rayas amarillo/negro, andamio, barra de progreso), dano (ceniza en
 proporcion a lo perdido, como la capa 3D, y barra de vida), seleccion (borde de
-laton que late) y galones de nivel. El
+laton que late) y la placa de nivel (`draw_level_plate`). El
 mismo dibujo sirve al fantasma de colocacion y al menu de construccion
 (`BuildingIcon2D`), asi que lo que se elige es lo que aparece en el suelo.
 
@@ -182,7 +182,22 @@ volumenes gruesos, la funcion a la vista y un elemento exagerado por edificio
 de la Fundicion, la columna de la Refineria, la cupula azul del Laboratorio, el
 canon de la Torre, la bandera del Cuartel, los toldos del Mercado, el silo de la
 Granja, el torreon con el emblema del Cuartel General, la cupula de laton del
-Nucleo...). Acento por funcion: rojo industrial, amarillo/negro militar, laton
+Nucleo...).
+
+**El Nucleo monumental y la bandera del pais (2026-10-14).** Como la receta 3D
+(`tools/toy_recipes/nucleo.gd`), el Nucleo domina la colonia sin salirse de
+sus 3x3 casillas: peana de losas, escalinata circular, las dos calderas detras
+con chimeneas altas (de la izquierda sale el humo, `fx_anchors`), un tambor
+alto con su anillo de columnas y dos pisos de ventanas, la cupula de laton
+escalonada con nervios, la linterna encendida y, delante, puerta, manometro y
+faroles. Lo alto sube hacia arriba en pantalla; el tambor se adelanta un poco
+para que la cupula quepa en la huella. La bandera del pais (`ColonyFlag2D`)
+cuelga de un mastil que sale de la linterna, y en el Cuartel General del mastil
+de la esquina delantera derecha del tejado (su peana va en el dibujo):
+`BuildingArt2D.flag_mount(id, size, inset, rot, level)` da la base con las
+mismas medidas que el dibujo y `Building2D` se la pasa a la bandera solo
+cuando cambia la firma (giro, nivel). El palo lo pinta la bandera, no el
+horneado: es lo mas alto y se saldria del margen de `ArtCache2D`. Acento por funcion: rojo industrial, amarillo/negro militar, laton
 civico, verde residencial (tambien en el atrezo: `BuildingArt2D.lot_accent`).
 
 La vista es "de maqueta": desde arriba, pero cada volumen ensena su tejado y,
@@ -272,7 +287,14 @@ docs/21 §9).
   al abrir la escena.
 - **La tormenta** tine el mapa con `CanvasModulate` (la interfaz no se tine) y
   deja caer ceniza desde la fase de Ceniza; no hay niebla por profundidad.
-- **El nivel** se ve como galones de laton, no como un modelo mas grande.
+- **El nivel** (2026-10-14, como la 3D): el MISMO dibujo un 8 % mayor por nivel
+  (`BuildingArt2D.level_scale` / `grown_rect`), con el remate de laton de
+  `LevelTrim` visto desde arriba (`_level_trim`: corona de cuatro remates
+  unidos por un fleje en el II; ademas, mastil corto con banderin rojo en el
+  III) dentro del horneado, que ya va por nivel. La placa II / III
+  (`draw_level_plate`) va sin girar en la esquina de arriba-izquierda de la
+  huella, con las barras del numero romano (sin fuente). Humo, sombra de la
+  parcela, obra de mejora y dano siguen al dibujo crecido.
 - **El nombre del edificio** aparece al seleccionarlo, debajo de la huella.
 
 ## Huecos conocidos
@@ -296,6 +318,18 @@ docs/21 §9).
   `Main2D.tscn` (hoy las dos tienen los mismos 23, en el mismo orden);
   `tests/view2d/test_view_mode.gd` comprueba una lista de nombres en las dos y
   conviene ampliarla: `SandboxPanel` aun no esta en ella.
+
+- **El combate desde la 2D** usa el tablero 2D de siempre
+  (`BattleScreen.pick_board_style`: vista 2D del mapa -> "2d"), asi que la vista
+  frontal y la maqueta 3D del tablero no se abren; el boton de cambiar de vista
+  se esconde (`_refresh_view_button`) e `is_front_view()` es falso. No hay
+  version 2D de la vista frontal (pendiente, si se quiere). Mientras el tablero
+  2D esta abierto el mapa 2D sigue dibujandose debajo (horneado: barato); la 3D
+  apaga su mundo (`disable_3d`), la 2D no tiene equivalente.
+- **Tormenta y noche en las parcelas**: en 3D el suelo de la parcela necesito
+  su shader con `storm_weight` / `night_weight`; en 2D no hace falta nada, el
+  `CanvasModulate` de `StormTint2D` (Tormenta y DayClock) tine todo el mundo,
+  parcelas incluidas.
 
 ## Herramientas y tests
 
