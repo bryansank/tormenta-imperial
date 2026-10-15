@@ -1176,7 +1176,7 @@ var rank_rewards := {
 	10: {"limit": {"house": 2}},
 	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
 	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
-	13: {"limit": {"statue": 2, "fountain": 2}, "emblems": ["ship"]},
+	13: {"buildings": ["palm_trees"], "emblems": ["ship"]},
 	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
 	15: {"production": 0.01, "patterns": ["stripes"]},
 	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
