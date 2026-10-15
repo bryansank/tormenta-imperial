@@ -958,7 +958,7 @@ static func set_pool_bar_alert(bar: PanelContainer, alert: bool) -> void:
 	# Se llama en cada cambio de recursos: solo se crea un estilo nuevo si cambia
 	# el estado o la paleta.
 	var key := [alert, DANGER, ACCENT_DIM, BG_DARK]
-	if bar.get_meta("pool_alert_key", null) == key:
+	if bar.has_meta("pool_alert_key") and bar.get_meta("pool_alert_key") == key:
 		return
 	bar.set_meta("pool_alert_key", key)
 	bar.add_theme_stylebox_override("panel", _pool_frame_style(alert))

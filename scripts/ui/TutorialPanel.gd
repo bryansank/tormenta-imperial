@@ -21,6 +21,7 @@ extends CanvasLayer
 const PrologueScene := preload("res://scenes/ui/PrologueScreen.tscn")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const CoachArrow := preload("res://scripts/ui/CoachArrow.gd")
+const TypeCircleScript := preload("res://scripts/ui/TypeCircle.gd")
 
 ## Encima de las ventanas de UIManager (12+) y del texto de colocar (15), para
 ## poder senalar una tarjeta dentro de la lista de CONSTRUIR. El tablero (18) lo
@@ -69,6 +70,18 @@ var _res_picked := false
 var _card_key := ""
 var _card_h := 0.0
 
+## Combate guiado (docs/23 §2.4): el paso de TutorialManager.COMBAT_STEPS en
+## pantalla, o "". Usa el mismo velo, flecha, aro y tarjeta que la colonia, pero
+## sobre el tablero (capa 19, por encima de BattleScreen, 18) y sin oscurecer:
+## lo que se ensena es el tablero entero.
+var _cstep := ""
+var _circle: Control
+var _combat_skip_btn: Button
+var _combat_ok_btn: Button
+## El circulo de ventajas se cierra solo pasado este tiempo (segundos).
+const CIRCLE_SECONDS := 15.0
+var _circle_left := 0.0
+
 func _ready() -> void:
 	layer = COACH_LAYER
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -85,6 +98,7 @@ func _ready() -> void:
 	EventBus.tutorial_intro_requested.connect(_open_intro)
 	EventBus.tutorial_step_changed.connect(_on_step_changed)
 	EventBus.tutorial_guide_finished.connect(func(_skipped): _on_step_changed(""))
+	EventBus.combat_lesson_step_changed.connect(_on_combat_step_changed)
 	# Si el tutorial ya estaba en marcha (cambio de vista 3D/2D recarga la escena),
 	# se recoge el paso actual.
 	_on_step_changed.call_deferred(TutorialManager.current_step())
@@ -98,12 +112,12 @@ func _open_intro() -> void:
 
 func _on_prologue_closed() -> void:
 	EventBus.tutorial_intro_closed.emit()
-	# La guia rapida, una vez por partida, justo despues del lore y antes de la
-	# primera marca del tutorial (que no se ve mientras la guia pausa el juego).
-	if not TutorialManager.has_seen_help(QUICK_GUIDE_ID):
-		_quick_guide.open()
+	# La guia rapida ya no sale sola al cerrar el prologo (Bryan, 14-10: la
+	# ventana "Como funciona Tormenta Imperial" sobraba al empezar). Sus cuatro
+	# bloques siguen en AYUDA (`guide_qg_*`). Un `quick_guide` visto en una
+	# partida vieja se carga igual y no cambia nada.
 
-## La guia rapida (Como funciona). Tambien la abre AYUDA.
+## La guia rapida (Como funciona). Ya no se abre sola; queda para quien la pida.
 func quick_guide() -> CanvasLayer:
 	return _quick_guide
 
@@ -197,6 +211,11 @@ func _build_coach() -> void:
 	_text.name = "Instruction"
 	_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_text)
+	# El circulo de ventajas: solo en el paso 7 del combate guiado.
+	_circle = TypeCircleScript.new()
+	_circle.name = "TypeCircle"
+	_circle.visible = false
+	col.add_child(_circle)
 
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_END
@@ -223,6 +242,25 @@ func _build_coach() -> void:
 	_ok_btn.pressed.connect(func(): TutorialManager.finish_guide())
 	_ok_btn.visible = false
 	row.add_child(_ok_btn)
+	# Combate guiado: "Saltar" (pasos 4-7) y "Entendido" (el circulo).
+	_combat_skip_btn = Button.new()
+	_combat_skip_btn.name = "CombatSkip"
+	_combat_skip_btn.text = Tr.t("BTN_CGUIDE_SKIP")
+	_combat_skip_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
+	_combat_skip_btn.focus_mode = Control.FOCUS_NONE
+	UITheme.style_button(_combat_skip_btn, UITheme.BTN, UITheme.FONT_SMALL)
+	_combat_skip_btn.pressed.connect(func(): TutorialManager.skip_combat_lessons())
+	_combat_skip_btn.visible = false
+	row.add_child(_combat_skip_btn)
+	_combat_ok_btn = Button.new()
+	_combat_ok_btn.name = "CombatOk"
+	_combat_ok_btn.text = Tr.t("BTN_CGUIDE_OK")
+	_combat_ok_btn.custom_minimum_size = Vector2(140, UITheme.MIN_BTN_H)
+	_combat_ok_btn.focus_mode = Control.FOCUS_NONE
+	UITheme.style_button(_combat_ok_btn, UITheme.ACCENT.darkened(0.2), UITheme.FONT_BUTTON)
+	_combat_ok_btn.pressed.connect(func(): TutorialManager.close_combat_step(_cstep))
+	_combat_ok_btn.visible = false
+	row.add_child(_combat_ok_btn)
 
 func _on_step_changed(step_id: String) -> void:
 	_step = step_id
@@ -231,7 +269,7 @@ func _on_step_changed(step_id: String) -> void:
 	_resolve_left = 0.0
 	_res_control = null
 	_res_cell = Vector2i(-1, -1)
-	set_process(step_id != "")
+	set_process(step_id != "" or _cstep != "")
 	if step_id == "":
 		_coach.visible = false
 	_done_left = DONE_SECONDS if step_id == "done" else 0.0
@@ -240,7 +278,8 @@ func _on_step_changed(step_id: String) -> void:
 	_render_text()
 
 func _render_text() -> void:
-	if _step == "":
+	# Con una marca de combate en pantalla, la tarjeta es suya.
+	if _step == "" or _cstep != "":
 		return
 	var n := TutorialManager.step_number(_step)
 	_badge.text = Tr.t("LBL_GUIDE_DONE_BADGE") if _step == "done" \
@@ -283,6 +322,9 @@ func _should_hide() -> bool:
 	return false
 
 func _process(delta: float) -> void:
+	if _cstep != "" and CombatManager.is_board_open():
+		_layout_combat(delta)
+		return
 	if _should_hide():
 		_coach.visible = false
 		# Al volver a verse, el destino se busca de nuevo en ese fotograma.
@@ -527,3 +569,114 @@ func _scene_node(node_name: String) -> Node:
 		if n != null:
 			return n
 	return null
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Combate guiado (docs/23 §2.4) ──
+# ══════════════════════════════════════════════════════════════════════
+
+func _on_combat_step_changed(step_id: String) -> void:
+	_cstep = step_id
+	_circle_left = CIRCLE_SECONDS
+	var combat := step_id != ""
+	_circle.visible = combat and TutorialManager.combat_step_has_circle(step_id)
+	_combat_ok_btn.visible = combat and TutorialManager.combat_step_has_ok(step_id)
+	_combat_skip_btn.visible = combat and TutorialManager.combat_step_skippable(step_id)
+	if combat:
+		_ok_btn.visible = false
+		_end_replay_btn.visible = false
+		_badge.text = Tr.t("LBL_CGUIDE_STEP") % [TutorialManager.combat_step_number(step_id), TutorialManager.COMBAT_TOTAL]
+		_text.text = TutorialManager.combat_step_text(step_id)
+		set_process(true)
+	else:
+		_coach.visible = false
+		# Vuelve lo de la colonia, si habia un paso (se esconde igual mientras
+		# el tablero siga abierto).
+		_on_step_changed(_step)
+
+## El paso de combate en pantalla (pruebas).
+func combat_step() -> String:
+	return _cstep
+
+func combat_skip_button() -> Button:
+	return _combat_skip_btn
+
+func combat_ok_button() -> Button:
+	return _combat_ok_btn
+
+func type_circle() -> Control:
+	return _circle
+
+## La tarjeta, la flecha y el aro sobre el tablero. Cada fotograma solo pregunta
+## a BattleScreen donde esta lo que se senala (sigue a la camara y a la pieza).
+func _layout_combat(delta: float) -> void:
+	if get_tree().paused:
+		_coach.visible = false
+		return
+	var bs: Node = get_tree().get_first_node_in_group("battle_screen")
+	var anchor := {}
+	if bs != null and bs.has_method("coach_anchor"):
+		anchor = bs.coach_anchor(TutorialManager.combat_step_target(_cstep))
+	# La maqueta aun cuenta lo que paso: la marca espera a que se vea.
+	if bool(anchor.get("busy", false)):
+		_coach.visible = false
+		return
+	_coach.visible = true
+	_pulse += delta
+	if _circle.visible:
+		_circle_left -= delta
+		if _circle_left <= 0.0:
+			TutorialManager.close_combat_step(_cstep)
+			return
+	for r in _dim:
+		r.visible = false
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var rect: Rect2 = anchor.get("rect", Rect2())
+	var has_rect := rect.size.x > 1.0 and rect.size.y > 1.0
+	var has_point := anchor.has("point")
+	if has_rect:
+		rect = rect.grow(HOLE_PAD)
+	_frame.visible = has_rect
+	if has_rect:
+		_frame.position = rect.position
+		_frame.size = rect.size
+		_frame.modulate.a = 0.65 + 0.35 * sin(_pulse * 4.0)
+
+	var w: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
+	var key := "%s|%s|%d|%s|%s|%s" % [_badge.text, _text.text, int(w), _combat_ok_btn.visible, _combat_skip_btn.visible, _circle.visible]
+	if key != _card_key:
+		_card_key = key
+		_card.custom_minimum_size = Vector2(w, 0)
+		_card.size = Vector2(w, 0)
+		_card.reset_size()
+		_card_h = _card.get_combined_minimum_size().y
+	var focus := Rect2()
+	if has_rect:
+		focus = rect
+	elif has_point:
+		focus = Rect2(Vector2(anchor["point"]) - Vector2(40, 40), Vector2(80, 80))
+	_card.position = combat_card_position(vp, Vector2(w, _card_h), focus)
+
+	_ring.visible = false
+	_arrow.visible = false
+	if has_rect:
+		var above := _card.position.y < rect.position.y
+		var tip := Vector2(rect.get_center().x, rect.position.y - 4.0) if above \
+			else Vector2(rect.get_center().x, rect.end.y + 4.0)
+		_arrow.visible = true
+		_arrow.point_at(tip, Vector2.DOWN if above else Vector2.UP)
+	elif has_point:
+		var pt: Vector2 = anchor["point"]
+		_ring.visible = true
+		var sc := 1.0 + 0.12 * sin(_pulse * 4.0)
+		_ring.scale = Vector2(sc, sc)
+		_ring.position = pt - _ring.size * 0.5
+		_arrow.visible = true
+		_arrow.point_at(pt - Vector2(0, 44), Vector2.DOWN)
+
+## Donde va la tarjeta en el combate: junto a lo senalado como en la colonia;
+## sin nada que senalar (el circulo), arriba al centro, lejos de los botones de
+## abajo. Publica para las pruebas.
+static func combat_card_position(vp: Vector2, size: Vector2, focus: Rect2) -> Vector2:
+	if focus.size == Vector2.ZERO:
+		return Vector2((vp.x - size.x) * 0.5, maxf(EDGE, vp.y * 0.16))
+	return card_position(vp, size, focus)

@@ -68,7 +68,7 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 118 signals in ~30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 119 signals in ~30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
@@ -88,7 +88,7 @@ holds a service's state of its own.
 | 20 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
 | 21 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
 | 22 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
-| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built) and which tips/helps were seen; state saved with the game (docs/23) |
+| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built), the guided first fights on the board (combat lessons, docs/23 §2.4) and which tips/helps were seen; state saved with the game (docs/23) |
 | 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
@@ -124,13 +124,13 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- NotificationPanel (CanvasLayer 11) -- toasts (only warning, danger and notice) + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips; the objective strip at the top centre is gone too, 2026-10-05: the next step lives in ¿QUÉ HACER?)
   +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI, opened from a Laboratory building (not from the menu)
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step()
-  +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign
+  +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign; FICHA opens each unit's card (UnitCard)
   +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
   +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close; building guide; instances HelpIndexPanel
   +-- SkirmishPanel (CanvasLayer 11) -- commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" (Final Audit)
   +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
   +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator (colour + icon, no countdown)
-  +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI; instances PrologueScreen
+  +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI, also over the combat board (combat lessons); instances PrologueScreen
   +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
@@ -147,7 +147,7 @@ Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
 
 Created at runtime, not in either .tscn:
   PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, three folios in plain language
-  QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks, once per game after the prologue
+  QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks; no longer opens by itself (2026-10-14), texts in AYUDA
   WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: workers and citizens walking the roads (view only, docs/04)
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker, created by GameManager.request_new_game()
@@ -190,7 +190,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 - Starting resources: 300 gold, 200 wood, 80 food
 - Deposits visible from start but locked until era unlocks the resource
 - Storage: **one shared pool for the five resources** (food included), not a cap per resource. Base scales
-  by era (600 / 800 / 1000) + 500 per warehouse (max 5, see `GameConfig.building_limits`).
+  by era (600 / 800 / 1000) + 500 per warehouse (max 5 in every era: the warehouse cap does not rise, see below).
   Era 1 is 600 so the opening fits: 580 starting resources, plus sawmill + gold mine (330).
   Era 3 ceiling without techs = 1000 + 5x500 = **3500**, exactly the price of the HQ
   level 3 upgrade. On top of that, `GameConfig.tech_storage_bonus` adds the storage
@@ -238,11 +238,11 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (17 total, `data/buildings/*.tres`)
+### Buildings (27 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
-| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only | - |
+| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only: its own, every unlocked workshop recipe and hand mining, 1.5x slower | - |
 | House | 2x2 | 50/0/0/30 | 0 | +6 workers (room in houses; 9 / 12 at levels 2 / 3) | 1 |
 | Sawmill | 2x2 | 80/0/0/50 | 2 | 6 wood/12s; makes planks | 1 |
 | Farm | 2x2 | 40/0/0/30 | 2 | Food by crop: 20 / 125 / 600 per 1 / 5 / 20 min; anywhere with a road; max 6 | 1 |
@@ -259,15 +259,36 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Garden | 2x2 | 30/0/0/20 | 0 | +5 morale | deco |
 | Fountain | 2x2 | 60/20/0/10 | 0 | +7 morale | deco |
 | Statue | 2x2 | 120/40/0/0 + 3 ingots | 0 | +10 morale | deco |
+| 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
+
+**Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
+`avenue_tree`, `flower_planter`, `colony_sign`, `hay_cart`, `bonfire`, `flagpole`,
+`palm_trees` (doc 21 §6.4 of the private context). One shared mesh per type from
+`scripts/buildings/DecorMesh.gd` (baked `assets/models/toy/<id>_mesh.res` when it
+exists, procedural until then), returned by `DieselpunkBuildingFactory.create()`;
+2D in `BuildingArt2D`. Table, pieces and what is pending: `docs/03-buildings.md`.
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
+
+**Building caps rise with the era (2026-10-14, Bryan's D1).** `GameConfig.building_limits_by_era`
+holds `[era 1, era 2, era 3]` (≈ ×1.5 / ×2: house 10/15/20, farm 6/9/12, sawmill 5/8/10,
+gold mine 4/6/8, foundry 3/5/6, refinery 2/3/4, barracks 3/4/5); era 1 is the old cap.
+Warehouse stays 5 (keeps 1000 + 5×500 = 3500 = HQ L3) and tower stays 6 (4 already
+reach the 60 % mitigation cap); Market, Laboratory and HQ stay 1. **Decorations have no
+cap** (any `BuildingData.is_decoration`, no table entry needed). The only reader is
+`GameConfig.get_building_limit(id)`: era in progress + `rank_limit_bonus`; -1 in
+Sandbox. Nothing new is saved (derived from era and rank). CONSTRUIR shows
+"3/6 · era 2: 9" on each card and refreshes on `era_advanced`. Detail: docs/03.
 
 **Farm (2026-10-04):** the crop is picked in its panel (CULTIVO, `GameConfig.farm_crops`:
 `crop_short` 1 min / 20, `crop_medium` 5 min / 125, `crop_long` 20 min / 600 — longer
 gives more per minute) and repeats by itself (`ProductionManager.plant_crop()` /
 `get_crop()`; changing restarts the crop). It is the Farm's production cycle, not a
-`ProcessManager` process. Procedural mesh with a growing `CropField` (`FarmField3D`) and
-a windmill; 2D drawing `BuildingArt2D._farm()` grows and ripens too.
+`ProcessManager` process. Baked toy model (`assets/models/toy/farm.tscn`: windpump,
+shed, fence) plus its beds as a separate mesh (`Crops`, `FarmCrops3D`): the three crops
+and the windpump rotor grow, ripen, sway and turn in the shared shader
+`toy_crops.gdshader` through per-instance parameters; 2D drawing `BuildingArt2D._farm()`
+grows and ripens too.
 
 **Market and Laboratory (2026-09-28):** trade and research are no longer entries of
 ☰ MENÚ. Each opens by tapping its building (`BuildingInfoPanel.SCREENS`: ABRIR
@@ -299,9 +320,25 @@ row; `Objectives.make_step_for()` turns a missing material into a `"make"` step.
 Refinery (era 3) needs Foundry + Barracks (`building_prerequisites`).
 
 **Quick guide:** `scripts/ui/QuickGuide.gd`, one screen with four blocks (resources,
-extraction, buildings and roads, progress), opened by TutorialPanel once per game
-after the prologue (help id `quick_guide`); the same texts are `guide_qg_*` in the
-AYUDA index.
+extraction, buildings and roads, progress). Since 2026-10-14 it **no longer opens by
+itself** after the prologue (the owner found the "Cómo funciona Tormenta Imperial"
+window too much at the start); the same texts are `guide_qg_*` in the AYUDA index. A
+`quick_guide` id in an old save's `helps_seen` loads and changes nothing.
+
+**Batches and the Núcleo as every workshop (2026-10-14):** every process and hand
+mining can be ordered ×1 / ×5 / MÁX from its card (`scripts/ui/ProcessCard.gd`, built by
+`ProcessActionsPanel`): paid up front, run one cycle after another in the same place
+(`ProcessManager.start_process(node, proc, count)` / `start_mining(node, dep, count)`;
+entry fields `count`, `total`, `workers`, saved in `active_processes`, old entries load
+as one cycle). MÁX = `ProcessManager.max_batch()`: resources, free shared storage, the
+deposit's uses left, cap `process_batch_max` (20). Cancel refunds the usual rate on
+everything paid and not delivered; the Storm takes the whole batch. The Núcleo also
+offers every workshop recipe and hand mining of each deposit type
+(`GameConfig.get_core_extra_processes()`, through `ProcessManager.get_processes_for("nucleo")`)
+as soon as all their resources/materials are unlocked, with the same output and
+`core_process_time_mult` (1.5x) the time, so the dedicated building stays worth it;
+hand mining there holds `mining_workers`, needs no road and spends no deposit use (id
+`core_mine_*`). Detail: docs/02 "Lotes" and "El Núcleo, taller de todo".
 
 ### Road network (2026-09-28)
 
@@ -447,7 +484,7 @@ build 15, upgrade 25, production cycle 1, process/mining 5, trade 5, unit 10, fi
 40, expedition won 80, storm 30 + 10/severity, milestone 100) and **derives** the rank
 from it (`rank_xp_thresholds`, 18 ranks, step `100 + 60*(n-1)`, ~9860 XP for the last;
 not yet measured with the line probe). Titles `RANK_TITLE_<n>` (Colono, Capataz … Cónsul
-… Archigobernador). `rank_rewards` gives decorations (Garden 2, Fountain 5, Statue 8),
+… Archigobernador). `rank_rewards` gives decorations (Garden, Flower pots, Hay cart 2; Bonfire 3; Fountain, Flagpole 5; Statue 8; Palm trees 13),
 extra building slots (`rank_limit_bonus`), small bonuses (`rank_production_bonus`
 +7 % and `rank_storage_bonus` +8 % at rank 18, **assigned**, never added, so loading
 twice is safe) and flag pieces (`patterns`, `emblems`, `colors`).
@@ -645,6 +682,26 @@ generated by `tools/gen_unit_icons.gd`, read by `UITheme.unit_icon()`), tinted p
 side, with the boss marked; the translated name's initial is only a fallback when a
 PNG is missing.
 
+**Teaching combat (2026-10-14, `docs/15-combat.md` §3 "Enseñar el combate", docs/23 §2.4):**
+- *Previews*, pure functions added to `CombatRules`: `preview_damage()` (the hit you
+  would deal, written over every target: "-18 de 75", "¡Cae!"), `threat_cells()` (where
+  the enemy can move and shoot next turn: the **Ver alcance enemigo** toggle in
+  `BattleScreen`, orange cells/spots), `min_range_cells()` (the artillery's ✕ next to
+  it) and `fire_cells_from()`. Computed in `BattleScreen._refresh()` per combat event,
+  never per frame; drawn by `Board3D.set_overlays()` (new `Mark` values at the end of
+  the enum) in both 3D views and by the 2D cells.
+- *Unit card* (`scripts/ui/UnitCard.gd`): health, attack, defence, move, range (min
+  range for artillery), strong/weak against with multipliers, one phrase. Icons drawn,
+  numbers read from `combat_unit_stats` / `combat_type_advantage` or from the live unit.
+  Tap a piece on the board (any view) or FICHA in `ArmyPanel`.
+- *Guided fights*: `TutorialManager` lessons `basics` (steps 1-5, first board of the
+  game) and `artillery` (6-7, first board with our artillery), derived from combat
+  signals by the pure `derive_combat_step()`; `EventBus.combat_lesson_step_changed`;
+  `TutorialPanel` draws them where `BattleScreen.coach_anchor()` says. Saved as
+  `combat_lessons_done` inside the `tutorial` key. No Skip on steps 1-3, Skip on 4-7,
+  "Repetir combate guiado" in the AYUDA index. Six combat guides at the end of
+  `HelpCatalog.ENTRIES`. The practice range (design doc 21 §4.4) is not done.
+
 ### Tech Tree (15 techs, 3 branches)
 
 - **TechTreeManager** + `GameConfig.tech_definitions`. Branches: Industrial,
@@ -764,7 +821,7 @@ and Settings closes; accepted). With a board open it does not reload
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `storm`, `tutorial`, `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `storm`, `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -876,13 +933,13 @@ tormenta-imperial/
 |   |   +-- ColonyIdentityPanel.gd, ColonyByline.gd  # Country name + flag editor; flag + name line on reports
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
-|   |   +-- OnScreenControls.gd, ProcessActionsPanel.gd, ProgressPanel.gd, ResourceHUD.gd, VictoryScreen.gd
+|   |   +-- OnScreenControls.gd, ProcessActionsPanel.gd (+ ProcessCard.gd), ProgressPanel.gd, ResourceHUD.gd, VictoryScreen.gd
 |   +-- view2d/                      # The 2D view (docs/18): same services, flat world
 |       +-- ViewRouter.gd, ViewMode.gd, View2D.gd  # Scene routing, the view preference, world<->pixel maths
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
-+-- data/buildings/                  # 17 .tres building definitions
++-- data/buildings/                  # 27 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
 |   +-- models/toy/units/            # Baked combat toys (<id>_player / <id>_regency, boss_mark, crew_nest)
@@ -933,9 +990,9 @@ falls back to `DieselpunkBuildingFactory` when it is unset:
 | Source | Buildings |
 |---|---|
 | GLB (`model_scene`) | `barracks`, `foundry`, `fountain`, `garden`, `gold_mine`, `headquarters`, `house`, `refinery`, `statue`, `tower`, `warehouse` (11) |
-| Procedural (`DieselpunkBuildingFactory`) | `nucleo`, `road` (connectivity-aware), `market`, `laboratory`, `sawmill`, `farm` (6) |
+| Procedural (`DieselpunkBuildingFactory`) | `nucleo`, `road` (connectivity-aware), `market`, `laboratory`, `sawmill` (5) |
 
-The Market and the Laboratory have no model yet; the Farm is procedural by design (its crop field grows with the cycle, `FarmField3D`). The sawmill went procedural on
+The Market and the Laboratory have no model yet; the Farm is now the baked toy model with its growing beds (`FarmCrops3D`, docs/03). The sawmill went procedural on
 2026-10-04 (an open shed with the big saw in view, docs/03); its old GLB stays in
 `assets/models/buildings/sawmill/`, unused. GLBs made for 1x1 or 2x1 fill their 2x2
 plot through `model_scale` / `model_stretch`.
@@ -972,7 +1029,7 @@ the same in 2D. The model is shrunk in plan to leave the yard free
 1. Create `data/buildings/my_building.tres` with BuildingData fields (at least 2x2: only the
    road is 1x1; materials go in `cost_materials`). It will need a road to the Núcleo like
    everything else
-2. Add limit in `GameConfig.building_limits`
+2. Add its cap: a row in `GameConfig.building_limits_by_era` if it rises with the era, or in `GameConfig.building_limits` if fixed. A decoration (`is_decoration`) needs neither: it has no cap
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any), and a row in `GameConfig.building_deposit_rules` if it must touch a deposit
 5. Give it a look in both views: a GLB in `model_scene` (or a case in `DieselpunkBuildingFactory`) for 3D, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it); and a row in `GameConfig.construction_style` so its construction site has its own materials, fence, tarp and phase-2 silhouette (docs/03, "Obra por edificio y por instancia"; without one it uses `construction_style_default`). Give it a lot in `GameConfig.building_lot_style` (ground, trim, yard, props and a `signature` if the model lacks an exaggerated element) — docs/03 "Parcela y atrezo"

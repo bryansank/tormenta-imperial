@@ -104,6 +104,40 @@ const ENTRIES := {
 		"title": "TUT_TIP_FIRST_SORTIE_TITLE", "body": "TUT_TIP_FIRST_SORTIE_BODY", "target": "menu_button"},
 	"final_audit": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
 		"title": "TUT_TIP_AUDIT_TITLE", "body": "HELP_TIP_AUDIT_BODY", "target": ""},
+	# ── Novedades (2026-10-14): basicas, asi estan en el indice desde el principio ──
+	"saves": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_SAVES", "body": "HELP_B_SAVES", "target": "menu_button"},
+	"callout_speed": {"kind": "callout", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_SPEED", "body": "HELP_B_SPEED", "target": "speed_button"},
+	"rank": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_RANK", "body": "HELP_B_RANK", "target": "rank_badge"},
+	"flag": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_FLAG", "body": "HELP_B_FLAG", "target": "menu_button"},
+	"island": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_ISLAND", "body": "HELP_B_ISLAND", "target": ""},
+	"night": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_NIGHT", "body": "HELP_B_NIGHT", "target": ""},
+	"bug_report": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_BUG", "body": "HELP_B_BUG", "target": "menu_button"},
+	"farm": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_FARM", "body": "HELP_B_FARM", "target": ""},
+	"collect_full": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_COLLECT", "body": "HELP_B_COLLECT", "target": ""},
+	# ── Ensenar el combate (2026-10-14, rama feat/ensenar-combate, docs/23 §2.4) ──
+	# Guias basicas: siempre en el indice. Lo mismo que cuentan las marcas del
+	# combate guiado y la ficha de unidad, para leerlo con calma.
+	"guide_combat_units": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_COMBAT_UNITS", "body": "HELP_B_COMBAT_UNITS", "target": ""},
+	"guide_combat_move": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_COMBAT_MOVE", "body": "HELP_B_COMBAT_MOVE", "target": ""},
+	"guide_type_advantage": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_TYPE_ADVANTAGE", "body": "HELP_B_TYPE_ADVANTAGE", "target": ""},
+	"guide_artillery_range": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_ARTILLERY_RANGE", "body": "HELP_B_ARTILLERY_RANGE", "target": ""},
+	"guide_combat_previews": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_COMBAT_PREVIEWS", "body": "HELP_B_COMBAT_PREVIEWS", "target": ""},
+	"guide_combat_defend": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_COMBAT_DEFEND", "body": "HELP_B_COMBAT_DEFEND", "target": ""},
 }
 
 ## Prioridad de los globos que salen solos: mayor sale antes. Los consejos van

@@ -27,7 +27,9 @@ const Terrain := preload("res://scripts/combat_view/BoardTerrain3D.gd")
 const UnitToy := preload("res://scripts/combat_view/UnitToy3D.gd")
 const MARKS_SHADER := preload("res://scripts/combat_view/board_marks.gdshader")
 
-enum Mark { NONE, MOVE, TARGET, ACTIVE, HOVER }
+## THREAT..FIRE: las vistas previas (ensenar el combate, 2026-10-14). Van al
+## final para no mover los valores de las de antes.
+enum Mark { NONE, MOVE, TARGET, ACTIVE, HOVER, THREAT, MOVE_THREAT, NO_FIRE, FIRE }
 
 ## Tiempos base (segundos). La cola los acorta si se acumula trabajo.
 const MOVE_STEP := 0.14
@@ -135,6 +137,11 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 	_toys.clear()
 	_cell_of.clear()
 	_mark_of.clear()
+	_threat.clear()
+	_no_fire.clear()
+	_fire.clear()
+	for l in _cross_labels:
+		l.visible = false
 	_active_uid = -1
 
 	_scene = String(opts.get("scene", Terrain.SCENE_LAND))
@@ -480,11 +487,14 @@ func mark_at(cell: Vector2i) -> int:
 
 ## Lo que el jugador puede hacer ahora: su unidad, a donde llega, a quien pega.
 ## `hints`: uid -> ventaja de tipo del atacante contra ese objetivo (+1 / -1).
-func show_state(active_uid: int, moves: Array, targets: Array, hints: Dictionary = {}) -> void:
+## `previews`: uid -> la linea de encima de la pieza (dano previsto en los
+## objetivos; "✕ Muy cerca" en los que no se pueden atacar), BattleScreen.
+func show_state(active_uid: int, moves: Array, targets: Array, hints: Dictionary = {}, previews: Dictionary = {}) -> void:
 	for uid in _toys:
 		_toys[uid].set_targeted(targets.has(uid))
-		if targets.has(uid):
-			_toys[uid].set_target_hint(int(hints.get(uid, 0)))
+		if targets.has(uid) or previews.has(uid):
+			_toys[uid].set_target_hint(int(hints.get(uid, 0)) if targets.has(uid) else 0,
+				String(previews.get(uid, "")), not targets.has(uid))
 		_toys[uid].set_active(uid == active_uid)
 	_mark_of.clear()
 	for cell in moves:
@@ -510,6 +520,69 @@ func clear_marks() -> void:
 	_mark_of.clear()
 	_paint_marks()
 
+# ── Vistas previas: peligro, alcance minimo, zona de tiro ────────────
+
+var _threat: Dictionary = {}     ## cell -> true: a donde llega el enemigo
+var _no_fire: Dictionary = {}    ## cell -> true: demasiado cerca para disparar
+var _fire: Dictionary = {}       ## cell -> true: zona de tiro (leccion de artilleria)
+var _cross_labels: Array = []    ## Label3D "✕", reutilizadas
+
+## Capas que se pintan por debajo de las marcas de turno. Se llaman una vez por
+## refresco de BattleScreen (eventos), nunca por fotograma. Las mismas en las dos
+## vistas: en el frente salen como manchas en el suelo.
+func set_overlays(threat: Array, no_fire: Array, fire: Array = []) -> void:
+	_threat.clear()
+	_no_fire.clear()
+	_fire.clear()
+	for c in threat:
+		_threat[c] = true
+	for c in no_fire:
+		_no_fire[c] = true
+	for c in fire:
+		_fire[c] = true
+	_place_crosses()
+	_paint_marks()
+
+func overlay_threat() -> Array:
+	return _threat.keys()
+
+func overlay_no_fire() -> Array:
+	return _no_fire.keys()
+
+## La ✕ encima de cada casilla demasiado cercana: como mucho cuatro (alcance
+## minimo 2), creadas la primera vez y reutilizadas.
+func _place_crosses() -> void:
+	var cells: Array = _no_fire.keys()
+	while _cross_labels.size() < cells.size():
+		var l := Label3D.new()
+		l.name = "NoFireCross%d" % _cross_labels.size()
+		l.text = "✕"
+		l.font_size = 64
+		l.pixel_size = 0.012
+		l.outline_size = 10
+		l.modulate = UITheme.DANGER.lightened(0.3)
+		l.outline_modulate = Color(0.06, 0.05, 0.04)
+		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		l.no_depth_test = true
+		l.render_priority = 6
+		var font := UITheme.heavy_font()
+		if font != null:
+			l.font = font
+		add_child(l)
+		_cross_labels.append(l)
+	for i in _cross_labels.size():
+		var l: Label3D = _cross_labels[i]
+		l.visible = i < cells.size()
+		if l.visible:
+			l.position = _world_of(cells[i]) + Vector3(0, 0.35, 0)
+
+func no_fire_cross_count() -> int:
+	var n := 0
+	for l in _cross_labels:
+		if l.visible:
+			n += 1
+	return n
+
 func set_hover(cell: Vector2i) -> void:
 	if is_front():
 		cell = Vector2i(-1, -1)
@@ -534,6 +607,14 @@ func _mark_color(mark: int) -> Color:
 			return Color(UITheme.ACCENT.lightened(0.2), 1.0)
 		Mark.HOVER:
 			return Color(1, 1, 1, 0.55)
+		Mark.THREAT:
+			return Color(UITheme.WARNING, 0.75)
+		Mark.MOVE_THREAT:
+			return Color(UITheme.INFO.lerp(UITheme.WARNING, 0.5).lightened(0.2), 1.0)
+		Mark.NO_FIRE:
+			return Color(UITheme.DANGER.darkened(0.2), 0.8)
+		Mark.FIRE:
+			return Color(UITheme.DANGER.lightened(0.45), 0.7)
 	return Color(0, 0, 0, 0)
 
 func _build_marks_mesh() -> void:
@@ -613,10 +694,26 @@ func _paint_marks() -> void:
 	for y in board.y:
 		for x in board.x:
 			var cell := Vector2i(x, y)
-			var mark: int = int(_mark_of.get(cell, Mark.NONE))
+			var mark: int = overlay_mark(int(_mark_of.get(cell, Mark.NONE)), cell)
 			if mark == Mark.NONE and cell == _hover:
 				mark = Mark.HOVER
 			mm.set_instance_custom_data(y * board.x + x, _mark_color(mark))
+
+## La marca de turno de una casilla con las capas de vista previa debajo: lo que
+## se puede hacer (mover, atacar, el activo) manda; una casilla a la que se puede
+## ir pero donde llega el enemigo se pinta mezclada.
+func overlay_mark(mark: int, cell: Vector2i) -> int:
+	if mark == Mark.MOVE and _threat.has(cell):
+		return Mark.MOVE_THREAT
+	if mark != Mark.NONE:
+		return mark
+	if _no_fire.has(cell):
+		return Mark.NO_FIRE
+	if _fire.has(cell):
+		return Mark.FIRE
+	if _threat.has(cell):
+		return Mark.THREAT
+	return Mark.NONE
 
 # ── Toque y raton ────────────────────────────────────────────────────
 
