@@ -29,13 +29,13 @@ const TOY_DIR := "res://assets/models/toy/"
 
 static var _meshes: Dictionary = {}
 
-static func has(id: String) -> bool:
+static func handles(id: String) -> bool:
 	return id in IDS
 
 ## El modelo para el mapa, el fantasma y la vista previa: el horneado si ya
 ## existe, si no la malla procedural (compartida). null si `id` no es de aqui.
 static func create(id: String) -> Node3D:
-	if not has(id):
+	if not handles(id):
 		return null
 	var baked := TOY_DIR + id + ".tscn"
 	if ResourceLoader.exists(baked):

@@ -208,7 +208,7 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 		"road": return _build_road(sx, sz, 0)
 	# Los edificios utiles de la 1.1: una malla de maqueta compartida (o su
 	# modelo horneado en cuanto exista). Ver UtilityToys.
-	if _Utility.has(building_id):
+	if _Utility.handles(building_id):
 		return _Utility.create(building_id)
 	return null
 
