@@ -184,6 +184,7 @@ func _play_seed(map_seed: int) -> Dictionary:
 	_r["farms"] = Rules.count_building("farm")
 	# Consumo al final: casas, gente y comida que se come por minuto.
 	_r["houses"] = Rules.count_building("house")
+	_r["parts_end"] = ResourceManager.get_amount(ResourceManager.Type.PARTS)
 	_r["food_per_min"] = float(PopulationManager.food_due()) * 60.0 		/ maxf(1.0, GameConfig.get_duration(GameConfig.consumption_interval))
 	_close_colony()
 	return _r
@@ -351,6 +352,9 @@ func _decide() -> void:
 		return
 	if _siege():
 		return
+	_tidy_expedition()
+	if _raid():
+		return
 	var step: Dictionary = Objectives.next_step()
 	_r["last_step"] = step
 	var skey: String = "%s:%s" % [step.get("kind", ""), step.get("id", "")]
@@ -395,6 +399,55 @@ func _decide() -> void:
 	_army_upkeep_guard()
 	if bool(options.get("active", false)):
 		_run_processes()
+
+## Escaramuzas (2026-10-14): cuando la segunda linea de ¿QUE HACER?
+## (Objectives.sortie_step) dice que conviene salir -repuestos para el nivel 3
+## de un productor, el puesto avanzado que rebaja el Diezmo, una oferta nueva-,
+## el jugador sale a una INCURSION (un combate), solo con la Tormenta en calma y
+## sin asedio convocado, con lo mas fuerte de casa. "Resolver solo" si se puede.
+## Las expediciones de tres combates no las juega (mapa y draft).
+func _raid() -> bool:
+	if Objectives.sortie_step().is_empty():
+		return false
+	if StormManager.get_phase() != StormCycle.Phase.CALM:
+		return false
+	# Lejos del siguiente Aviso: la columna fuera no defiende el Diezmo.
+	var cycle: StormCycle = StormManager.get_cycle()
+	if StormManager.is_armed() and cycle != null and float(cycle.seconds_left) < 240.0:
+		return false
+	var home: Dictionary = CombatManager.get_deployable_units()
+	var party: Dictionary = {}
+	var room: int = GameConfig.combat_deploy_cap
+	for unit_id in ["vehicle", "artillery", "infantry"]:
+		var n: int = mini(int(home.get(unit_id, 0)), room)
+		if n > 0:
+			party[unit_id] = n
+			room -= n
+	if party.is_empty():
+		return false
+	for offer in CombatManager.get_sortie_offers():
+		if String(offer.get("kind", "")) != "raid":
+			continue
+		var preview: Dictionary = CombatManager.sortie_preview(offer, party)
+		if float(preview.get("player_power", 0.0)) < float(preview.get("enemy_power", 0.0)):
+			continue
+		var parts_before: int = ResourceManager.get_amount(ResourceManager.Type.PARTS)
+		if CombatManager.launch_sortie(int(offer.get("id", -1)), party, bool(preview.get("can_auto", false))):
+			_r["raids"] = int(_r.get("raids", 0)) + 1
+			_r["parts_before_raid"] = parts_before
+			_act("raid (%s)" % String(Objectives.sortie_step().get("why", "")), true)
+			return true
+	return false
+
+## Una columna que volvio (o una expedicion que pide elegir camino) no se queda
+## colgada: sin esto el asedio esperaria para siempre a "la columna fuera".
+func _tidy_expedition() -> void:
+	if not CombatManager.has_active_expedition() or CombatManager.is_board_open():
+		return
+	for i in range(4):
+		if CombatManager.select_node(i):
+			return
+	CombatManager.abandon_expedition()
 
 ## Lo que haria cualquiera: lo roto se arregla en cuanto se puede, empezando por
 ## lo que da de comer. Nunca con la Tormenta encima (la volveria a romper).
@@ -1092,6 +1145,7 @@ func _print_run(r: Dictionary) -> void:
 	print("  espera por paso (min): " + top)
 	print("  sin ninguna decision: huecos>3min %d | el mas largo %.1f min | era1 %.1f min | era2 %.1f min | era3 %.1f min | intentos de asedio %d" % [
 		int(g["idle_count"]), float(g["idle_longest"]) / 60.0, _era_len(r, 1), _era_len(r, 2), _era_len(r, 3), r["sieges"].size()])
+	print("  incursiones %d | repuestos al final %d" % [int(r.get("raids", 0)), int(r.get("parts_end", 0))])
 	print("  CG nv2 en el minuto %s | CG nv3 (convocatoria) en el %s | casas %d | granjas %d | gente %d | comida %.0f/min" % [
 		_mins(r.get("hq2_at", -1.0)), _mins(r.get("hq3_at", -1.0)), int(r.get("houses", 0)), int(r.get("farms", 0)),
 		int(r["end"]["pop"]), float(r.get("food_per_min", 0.0))])
