@@ -1293,6 +1293,13 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edificio.",
 		"HELP_T_ISLAND": "La isla",
 		"HELP_B_ISLAND": "La costa es irregular y cambia en cada partida. Solo se construye en tierra: si una casilla del edificio cae en el agua, no se puede. Busca un hueco más adentro.",
+		# Topes por era (feat/topes-por-era): "3/6 · era 2: 9" en CONSTRUIR.
+		"FMT_LIMIT_COUNT": "%d/%d",
+		"FMT_LIMIT_NEXT_ERA": "era %d: %d",
+		"FMT_LIMIT_TIP": "Tienes %d. Tope en esta era: %d.",
+		"FMT_LIMIT_TIP_NEXT": "En la era %d el tope sube a %d.",
+		"LBL_LIMIT_TIP_MAX": "Es el tope más alto.",
+		"LBL_LIMIT_UNIQUE": "Único",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -2542,6 +2549,12 @@ When full, the building stops. What does not fit in your storage stays in the bu
 When full, the building stops. What does not fit in your storage stays in the building.",
 		"HELP_T_ISLAND": "The island",
 		"HELP_B_ISLAND": "The coast is irregular and changes every game. You can only build on land: if any cell of the building is on water, it will not go. Look for a spot further inland.",
+		"FMT_LIMIT_COUNT": "%d/%d",
+		"FMT_LIMIT_NEXT_ERA": "era %d: %d",
+		"FMT_LIMIT_TIP": "You have %d. Limit in this era: %d.",
+		"FMT_LIMIT_TIP_NEXT": "In era %d the limit rises to %d.",
+		"LBL_LIMIT_TIP_MAX": "This is the highest limit.",
+		"LBL_LIMIT_UNIQUE": "Unique",
 	},
 }
 
