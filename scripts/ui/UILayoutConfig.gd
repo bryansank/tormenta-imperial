@@ -125,6 +125,15 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_BEGIN,
 	},
+	## El boton ESCARAMUZAS (SkirmishButton), a la derecha de CONSTRUIR en la
+	## misma franja de abajo: media anchura de CONSTRUIR (240 / 2) + 12 de hueco.
+	"skirmish_button": {
+		"anchor": Rect2(0.5, 1, 0.5, 1),
+		"margin": {"left": 132, "top": 0, "right": 0, "bottom": 20},
+		"max_size": Vector2(176, 0),
+		"grow_h": Control.GROW_DIRECTION_END,
+		"grow_v": Control.GROW_DIRECTION_BEGIN,
+	},
 	"bottom_controls": {
 		"anchor": Rect2(0, 0, 1, 1),
 		"margin": {"left": 20, "top": 20, "right": 20, "bottom": 20},
@@ -255,6 +264,12 @@ const NARROW_SLOTS := {
 	"toast_area": {
 		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 256},
 	},
+	## ESCARAMUZAS no cabe a la derecha de CONSTRUIR en 400 px: va centrado justo
+	## encima (196 + 64 de CONSTRUIR + 8 de hueco), por debajo de los avisos.
+	"skirmish_button": {
+		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 268},
+		"grow_h": Control.GROW_DIRECTION_BOTH,
+	},
 	## La insignia del rango, bajo el boton ☰ MENU (10 + 48 + 6): a su izquierda
 	## chocaria con la columna de recursos.
 	"rank_badge": {
@@ -335,6 +350,7 @@ const PANEL_SLOTS := {
 	"RankPanel":                  "rank_badge",
 	"GameSpeedButton":            "speed_button",
 	"RankPanel.modal":            "center_modal",
+	"SkirmishButton":             "skirmish_button",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)

@@ -40,6 +40,8 @@ const BoardTerrain := preload("res://scripts/combat_view/BoardTerrain3D.gd")
 const WorldLook := preload("res://scripts/map/WorldLook.gd")
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
 const Orders := preload("res://scripts/combat_view/FrontOrders.gd")
+## Para las lineas del botin exclusivo (las mismas palabras que la seleccion).
+const SkirmishPanelScript := preload("res://scripts/ui/SkirmishPanel.gd")
 
 const PLAYER := 0
 const ENEMY := 1
@@ -85,6 +87,9 @@ var _defend_btn: Button
 var _wait_btn: Button
 var _end_btn: Button
 var _abandon_board_btn: Button
+## RESOLVER SOLO (doc 21 §3.4, D6 = A): en el Diezmo y en incursiones, con la
+## fuerza doble. Lo decide CombatManager.can_auto_resolve().
+var _auto_btn: Button
 var _result_panel: PanelContainer
 var _result_title: Label
 var _result_detail: Label
@@ -319,6 +324,11 @@ func _build_board_view() -> void:
 	UITheme.style_button(_abandon_board_btn, UITheme.DANGER.darkened(0.25), UITheme.FONT_BUTTON)
 	_abandon_board_btn.visible = false
 	actions.add_child(_abandon_board_btn)
+	_auto_btn = _make_action(Tr.t("BTN_AUTO_RESOLVE"), func(): _act_auto_resolve())
+	_auto_btn.name = "AutoResolveButton"
+	_auto_btn.tooltip_text = Tr.t("HINT_AUTO_RESOLVE")
+	_auto_btn.visible = false
+	actions.add_child(_auto_btn)
 	column.add_child(actions)
 	_actions_row = actions
 
@@ -668,6 +678,12 @@ func _show_expedition_report(result: int, rewards: Dictionary, casualties: Dicti
 		lines.append(Tr.t("LBL_NO_CASUALTIES"))
 	else:
 		lines.append("%s: %s" % [Tr.t("LBL_CASUALTIES"), _unit_list(casualties)])
+	# Lo que solo se consigue fuera (repuestos, colonos, planos, rebaja del
+	# Diezmo), ya aplicado a la colonia: lo deja CombatManager en el parte.
+	var last: Dictionary = CombatManager.get_last_result()
+	if bool(last.get("expedition", false)):
+		for text in SkirmishPanelScript.loot_lines(last.get("loot", {})):
+			lines.append(String(text))
 	_report_detail.text = "\n".join(lines)
 
 	_report_panel.visible = true
@@ -1189,6 +1205,17 @@ func _result_text(turns_used: int) -> String:
 	var morale_delta: int = int(result.get("morale_delta", 0))
 	if morale_delta != 0:
 		lines.append(Tr.t("LBL_MORALE_DELTA") % morale_delta)
+
+	# Salidas (doc 21 §3): como acabo, lo exclusivo del nodo y la cura al seguir.
+	if bool(result.get("routed", false)):
+		lines.insert(0, Tr.t("LBL_ENEMY_ROUTED"))
+	if bool(result.get("auto_resolved", false)):
+		lines.insert(0, Tr.t("LBL_AUTO_RESOLVED"))
+	for text in SkirmishPanelScript.loot_lines(result.get("loot", {})):
+		lines.append(String(text))
+	var healed: float = float(result.get("healed_pct", 0.0))
+	if healed > 0.0:
+		lines.append(Tr.t("LBL_HEALED_BETWEEN") % roundi(healed * 100.0))
 	return "\n".join(lines)
 
 func _resource_list(amounts: Dictionary) -> String:
@@ -1476,6 +1503,9 @@ func _refresh_actions() -> void:
 	# Una defensa en pleno campaña no es de la columna: abandonar desde ella no
 	# retira a nadie de ese tablero, asi que el boton no se ofrece.
 	_abandon_board_btn.visible = has_expedition() and not CombatManager.is_defending()
+	# RESOLVER SOLO solo se ve cuando vale (incursion o Diezmo, fuerza doble).
+	_auto_btn.visible = CombatManager.can_auto_resolve()
+	_auto_btn.disabled = not (CombatManager.is_player_turn() and not _board_busy())
 
 func _set_actions_enabled(enabled: bool) -> void:
 	_defend_btn.disabled = not enabled
@@ -1539,6 +1569,13 @@ func _act_advance() -> void:
 	var cell: Vector2i = Orders.advance_cell(CombatManager.get_encounter(), active.uid)
 	if cell != Orders.NO_CELL:
 		CombatManager.move_unit(active.uid, cell)
+
+## Juega el resto del tablero de un tiron con la IA (AutoResolver). El parte
+## sale como siempre, con "Resuelto solo".
+func _act_auto_resolve() -> void:
+	if _board_busy() or not CombatManager.is_player_turn():
+		return
+	CombatManager.auto_resolve_current()
 
 func _act_defend() -> void:
 	var active := CombatManager.get_active_unit()
