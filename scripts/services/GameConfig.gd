@@ -1198,27 +1198,29 @@ func rank_title_key(rank: int) -> String:
 ##   patterns    fondos de la bandera que se pueden elegir (COLONY_PATTERNS)
 ##   emblems     emblemas de la bandera (COLONY_EMBLEMS)
 ##   colors      colores de la bandera (colony_colors)
+##   paints      pinturas del regimiento (REGIMENT_PAINTS; solo cosmetico)
 ## No toca los edificios basicos ni sus eras (la linea jugable sigue igual): el
 ## rango abre decoraciones, huecos extra y cosmeticos. Un edificio nuevo y
 ## opcional entra aqui con `buildings`.
 var rank_rewards := {
 	1: {"patterns": ["plain", "bands_h", "bands_v", "halves_h", "cross"],
 		"emblems": ["none", "gear", "anchor", "wheat", "hammer"],
-		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"]},
+		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"],
+		"paints": ["plain"]},
 	2: {"buildings": ["garden"], "emblems": ["tower"]},
-	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"]},
+	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"], "paints": ["stripes"]},
 	4: {"storage": 0.02, "emblems": ["star"]},
 	5: {"buildings": ["fountain"]},
-	6: {"production": 0.01, "patterns": ["diagonal", "saltire"]},
+	6: {"production": 0.01, "patterns": ["diagonal", "saltire"], "paints": ["spots"]},
 	7: {"colors": ["copper", "red"]},
 	8: {"buildings": ["statue"], "storage": 0.02},
-	9: {"production": 0.01, "patterns": ["quartered"], "emblems": ["wrench"]},
+	9: {"production": 0.01, "patterns": ["quartered"], "emblems": ["wrench"], "paints": ["desert"]},
 	10: {"limit": {"house": 2}},
 	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
-	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
+	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"], "paints": ["snow"]},
 	13: {"limit": {"statue": 2, "fountain": 2}, "emblems": ["ship"]},
 	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
-	15: {"production": 0.01, "patterns": ["stripes"]},
+	15: {"production": 0.01, "patterns": ["stripes"], "paints": ["parade"]},
 	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
 	17: {"limit": {"house": 2}, "patterns": ["waves"]},
 	18: {"production": 0.02, "patterns": ["checks"], "emblems": ["airship"]},
@@ -1267,6 +1269,18 @@ const COLONY_LEGACY_FLAGS := {
 	"plain": ["plain", "none"], "band": ["bands_h", "none"], "cross": ["cross", "none"],
 	"diagonal": ["diagonal", "none"], "gear": ["plain", "gear"], "chevron": ["hoist_triangle", "none"],
 }
+
+# ── Regimiento (solo cosmetico: ArmyManager guarda "regiment", RegimentLook lo
+# pinta; docs/15 §11) ──
+# El ejercito del jugador lleva nombre, color, emblema y pintura, y gana
+# estrellas por combates ganados. Nada de esto cambia una sola cifra del combate.
+# Color y emblema salen de las piezas de la bandera (colony_colors /
+# COLONY_EMBLEMS, abiertas por rango); las pinturas, de rank_rewards "paints".
+
+## Pinturas, en orden de la galeria. "plain" = liso (el de siempre).
+const REGIMENT_PAINTS := ["plain", "stripes", "spots", "desert", "snow", "parade"]
+## Combates ganados para cada estrella (1, 2 y 3 estrellas).
+var regiment_star_wins := [10, 25, 50]
 
 ## Bonos del rango, aplicados en tiempo de ejecucion por RankManager (asigna el
 ## total del rango actual; nunca suma sobre lo que habia).
