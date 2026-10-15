@@ -357,6 +357,7 @@ scene. Full detail of the prologue, the guided tutorial and the help callouts:
 | `tutorial_step_changed` | `step_id: String` (`""` = no step on screen) | TutorialManager | TutorialPanel |
 | `tutorial_guide_finished` | `skipped: bool` | TutorialManager | TutorialPanel, HelperPanel |
 | `help_reopen_requested` | `help_id: String` (a `HelpCatalog` id) | TutorialManager | HelperPanel |
+| `combat_lesson_step_changed` | `step_id: String` (a `TutorialManager.COMBAT_STEPS` id, `""` = none) | TutorialManager | TutorialPanel, BattleScreen |
 
 The tip text arrives already translated so the panel does not have to know what it
 is about. `tutorial_intro_closed` is what marks the prologue as seen, whether it was

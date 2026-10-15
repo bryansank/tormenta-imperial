@@ -221,7 +221,52 @@ lo comprueba con la lista real.
 CONSTRUIR" / "Haz clic en CONSTRUIR"; "arrastra el mapa" / "WASD o arrastrar").
 
 **Modos:** el tutorial es el mismo en los cuatro y no tiene pasos de Tormenta ni de
-Auditoría. Se esconde durante el prólogo, la pausa, el menú principal y el tablero.
+Auditoría. Se esconde durante el prólogo, la pausa, el menú principal y el tablero. Lo del
+tablero lo enseña el combate guiado (§2.4).
+
+### 2.4 El combate guiado (2026-10-14, rama `feat/ensenar-combate`)
+
+Hasta aquí el tutorial acababa en el mapa de la colonia y nadie explicaba el tablero.
+Ahora hay **dos lecciones** con marcas sobre el tablero de verdad, en las dos vistas
+(frente y tablero) y en el tablero 2D. Diseño: `21_REDISENO_CICLO_Y_CONTENIDO.md` §4.1.
+
+| Paso | Clave | Señala | Se cierra cuando |
+|---|---|---|---|
+| 1 | `CGUIDE_SELECT` | tu unidad (la del aro dorado) | la tocas (abre su ficha) o ya te mueves/atacas |
+| 2 | `CGUIDE_MOVE` | la casilla azul que más te acerca al enemigo | te mueves |
+| 3 | `CGUIDE_ATTACK` / `CGUIDE_ATTACK_FAR` | el objetivo (el de ventaja, si no el más tocado) / Terminar turno si no llegas | atacas |
+| 4 | `CGUIDE_ENEMY_TURN` | el botón Ver alcance enemigo; el alcance se pinta solo | vuelve tu turno |
+| 5 | `CGUIDE_DEFEND` | Defender — **solo si te han quitado vida** | haces cualquier cosa |
+| 6 | `CGUIDE_ART_RANGE` | tu artillería; se pinta su zona de tiro y las ✕ de al lado | actúa o pasa su turno |
+| 7 | `CGUIDE_TYPE_CIRCLE` | nada: la tarjeta dibuja el círculo (`TypeCircle.gd`) | Entendido, o 15 s |
+
+- **Lección `basics`** (pasos 1-5): la primera pelea con tablero de la partida (en la
+  práctica, la primera escaramuza: un infante contra uno débil). Cuenta como dada al
+  terminar el paso 5 o al acabar esa pelea, gane o pierda.
+- **Lección `artillery`** (pasos 6-7): la primera pelea con artillería propia (también una
+  dotación de torre en una defensa), ya dada la de lo básico. Si la pieza no llega a
+  actuar, espera a la próxima pelea con artillería.
+- **Cómo se decide el paso:** igual que en la colonia, sale de lo que ha pasado
+  (`TutorialManager.derive_combat_step(lesson, facts)`, pura, probada sin tablero), no de
+  un "Siguiente". Los hechos se apuntan con las señales del combate (`turn_started`,
+  `unit_moved`, `unit_attacked`, `unit_defended`) y con
+  `note_combat_fact("selected")`, que llama `BattleScreen` al tocar una pieza propia.
+- **Saltar:** los pasos 1-3 no tienen (la misma regla del 04-10 que la colonia; ninguno
+  puede atascarse: sin objetivo a tiro, el 3 señala Terminar turno). Del 4 al 7, el botón
+  Saltar da por vistas las dos lecciones.
+- **Quién pinta:** `TutorialManager` emite `EventBus.combat_lesson_step_changed`;
+  `TutorialPanel` (capa 19, encima de `BattleScreen`, 18) usa la misma tarjeta, flecha y
+  aro, sin velo; pregunta cada fotograma a `BattleScreen.coach_anchor(target)` dónde
+  está lo señalado y espera mientras la maqueta 3D anima (`{"busy": true}`).
+- **La tarjeta "Combate" de siempre** (`encounter`) no sale encima de una lección: se da
+  por vista y queda en el índice.
+- **Guardado:** `combat_lessons_done` en la clave `tutorial` (`["basics", "artillery"]`),
+  limpiado por `reset()` (llamado en los tres sitios de `GameManager`), carga idempotente.
+  Un guardado de antes sin la clave: quien ya ganó su primera escaramuza no repite lo
+  básico; la de artillería sí le sale una vez. Lo de dentro de una lección no se guarda
+  (una pelea nunca se guarda).
+- **Repetir:** en AYUDA, **Repetir combate guiado** (`replay_combat_lessons()`) vuelve a
+  dar las dos en la próxima pelea.
 
 ---
 
@@ -290,6 +335,17 @@ Los targets nuevos de `HelpTargets` son `speed_button` (`GameSpeedButton`) y
 `rank_badge` (`RankPanel`). Lo de combate (unidades, placa, aro, mira, ventaja por
 tipo) va en otra rama (`feat/ensenar-combate`).
 
+### Ayudas de combate (2026-10-14, rama `feat/ensenar-combate`)
+
+Seis guías básicas en la categoría Ejército, al final de `HelpCatalog.ENTRIES`:
+`guide_combat_units` (las tres unidades), `guide_combat_move` (turnos, mover y atacar,
+el frente), `guide_type_advantage` (quién gana a quién), `guide_artillery_range` (la ✕),
+`guide_combat_previews` (el daño previsto y Ver alcance enemigo) y
+`guide_combat_defend` (Defender y Esperar). Claves `HELP_T_COMBAT_*` / `HELP_B_COMBAT_*`
+(y `_TYPE_ADVANTAGE`, `_ARTILLERY_RANGE`), con `_TOUCH` donde se habla de hacer clic.
+Sin números escritos a mano: si cambia el balance, el texto sigue valiendo (los números
+están en la ficha de unidad, que los lee de `GameConfig`).
+
 ### Índice de AYUDA (`scripts/ui/HelpIndexPanel.gd`)
 
 - Grupo **`help_index`**, método **`open()`**: el menú ☰ único lo abre con
@@ -344,6 +400,8 @@ artillerías), `HELP_B_STORM` (la Tormenta ya no se presenta al empezar: es una 
 | `tests/ui/test_helper_skirmish_callout.gd` | el globo de ESCARAMUZAS sigue a su botón y sale una vez |
 | `tests/tutorial/test_first_sortie_tip.gd` | el consejo `first_sortie` sale con la primera unidad (antes que el sueldo) y una vez, señala ☰ MENÚ, textos ES/EN con `_TOUCH`; la marca `first_sortie_done` solo con una victoria, guardado idempotente, `reset()` y guardados viejos |
 | `tests/ui/test_help_index.gd` | grupo `help_index`, lista básicas y vistas, modo Constructor, reabrir |
+| `tests/tutorial/test_combat_lessons.gd` | *(sin correr aún, 2026-10-14)* qué lección toca, cada paso de `derive_combat_step`, sin Saltar en 1-3, textos ES/EN, números hasta `COMBAT_TOTAL`, guardado idempotente, `reset()`, guardados viejos, repetir |
+| `tests/ui/test_combat_teaching.gd` | *(sin correr aún)* el combate guiado en la pantalla de verdad (tablero 2D): empieza solo, señala a la unidad, tocar tu pieza abre la ficha y pasa el paso 1, la tarjeta `encounter` no sale encima |
 | `tests/ui/test_title_prologue_order.gd` | menú principal abierto → sin prólogo; Ajustes desde el menú arriba y sin nada encima; soltar → prólogo encima de todo; la pausa también lo retiene |
 
 **Sonda con ventana:** `tools/onboarding_probe.gd` (siempre con un `override.cfg` de

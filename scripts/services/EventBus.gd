@@ -403,6 +403,10 @@ signal tutorial_guide_finished(skipped: bool)
 ## de HelpCatalog. HelperPanel la ensena ya, senalando su control.
 @warning_ignore("unused_signal")
 signal help_reopen_requested(help_id: String)
+## El combate guiado cambio de paso (TutorialManager.COMBAT_STEPS: "c_select",
+## "c_move"...). "" = ninguna marca en el tablero. Lo pinta TutorialPanel.
+@warning_ignore("unused_signal")
+signal combat_lesson_step_changed(step_id: String)
 
 # ── comida-granja-recoger (2026-10-04) ──
 ## Cambio lo acumulado en un edificio (produjo, se recogio, se echo a perder).

@@ -456,6 +456,47 @@ camara mas baja ensena mas suelo, que es un plano sin luz extra; la sombra
 sigue el mismo reglaje por calidad. **Sin medir todavia** con
 `battle_probe --fps` (pendiente del pase final, ver docs/26).
 
+### Enseñar el combate (2026-10-14, rama `feat/ensenar-combate`)
+
+Diseño: `tormenta-imperial-contexto/21_REDISENO_CICLO_Y_CONTENIDO.md` §4.1-4.3. Tres
+piezas, las mismas en las dos vistas 3D (frente y tablero) y en el tablero 2D. Todo lo
+que se calcula sale de `CombatRules` (puro) y se recalcula en `BattleScreen._refresh()`,
+que corre **por evento** del combate, nunca por fotograma.
+
+**Vistas previas (`CombatRules`, solo funciones nuevas):**
+
+| Función | Qué da | Dónde se ve |
+|---|---|---|
+| `preview_damage(attacker, target)` | `{damage, hp, max_hp, hp_after, kills, matchup, mult}`; usa `damage()`, así que la ventaja por tipo, la guardia y la moral ya van dentro. No toca a nadie | encima de cada objetivo: "-18 de 75" o "-75 ¡Cae!" (`LBL_PREVIEW_*`), junto a "¡Buen objetivo!" en la misma etiqueta 3D (`UnitToy3D.set_target_hint(matchup, preview, blocked)`); en 2D una etiqueta por casilla (`BattleScreen.board_cell_preview()`); con ratón, también en el tooltip |
+| `threat_cells(units, side, board)` | toda casilla a la que alguna unidad viva de `side` llega y dispara en su próximo turno (su movimiento entero + su alcance) | botón **Ver alcance enemigo** (`BattleScreen.toggle_threat()`, del jugador, no se guarda): casillas naranjas (`Board3D.Mark.THREAT`; las azules que además están en peligro, `MOVE_THREAT`); en el frente salen como manchas. Se cachea por posiciones de los vivos |
+| `min_range_cells(unit, board)` | las casillas dentro del alcance mínimo (la artillería: las cuatro de al lado) | una ✕ (`Label3D`, como mucho cuatro, reutilizadas) y casilla roja oscura (`NO_FIRE`); el enemigo que está ahí dice "✕ Muy cerca" en rojo |
+| `fire_cells_from(unit, from, board)` | las casillas entre alcance mínimo y máximo | solo en el paso 6 del combate guiado (`FIRE`, rojo claro) |
+
+`Board3D.set_overlays(threat, no_fire, fire)` pinta esas capas por debajo de las marcas
+de turno (`overlay_mark()`: mover/atacar/activo mandan). Los valores nuevos de `Mark`
+van al final del enum.
+
+**Ficha de unidad (`scripts/ui/UnitCard.gd`):** vida, ataque, defensa, movimiento,
+alcance (con "Dispara de 2 a 3 casillas" y "No dispara a quien tiene al lado" en la
+artillería), fuerte contra / débil contra con la silueta y el multiplicador (×1,5 /
+×0,75), y una frase (`UNIT_<ID>_CARD_TIP`). Iconos dibujados (`StatGlyph`), sin emojis
+(la fuente no los garantiza). Números de `combat_unit_stats` y `combat_type_advantage`,
+o de la unidad viva (mejoras, moral). Se abre al **tocar una pieza** (propia, o enemiga
+que no se puede atacar) en cualquier vista — sigue a su unidad y se cierra si cae — y
+con el botón **FICHA** de cada fila del Cuartel (`ArmyPanel.toggle_unit_card()`). La
+selección de tropa (`SkirmishPanel`) aún no la lleva: es de la rama de escaramuzas.
+
+**Combate guiado:** `TutorialManager` (docs/23 §2.4) decide el paso;
+`BattleScreen.coach_anchor(target)` dice dónde está lo señalado en pantalla (una pieza o
+una casilla 3D como punto, en 2D o un botón como rectángulo, `{"busy": true}` mientras la
+maqueta anima); `TutorialPanel` pinta la tarjeta, la flecha y el aro en la capa 19,
+encima del tablero. Tocar una pieza propia cuenta como el paso 1
+(`TutorialManager.note_combat_fact("selected")`). Durante el paso 4 se ve el alcance
+enemigo aunque el botón esté apagado (`BattleScreen.threat_visible()`).
+
+**Simulacro (§4.4 del diseño): no hecho.** Pide un edificio nuevo y un `is_practice` en
+`CombatManager`, que es de la rama de escaramuzas: queda para cuando esa rama entre.
+
 ### Turn flow
 
 1. `start()` → `_begin_round()`: every living unit gets `begin_turn()` (clears
@@ -1073,6 +1114,9 @@ GODOT=godot tools/run_tests.sh -a tests/combat
 | `tests/ui/test_battle_board_icons.gd` | Unit silhouettes on the cell and on the initiative strip, side tint, the dimming of a unit that already acted, the boss frame and who wears it, the fallback to the name's initial when the PNG is missing, and the cell still fitting a 400x720 screen |
 | `tests/ui/test_helper_skirmish_callout.gd` | The Escaramuzas callout appears with the Barracks and only once |
 | `tests/combat/test_combat_integrity.gd` | The ledger across boards and saves: no walking past an unfought node, the siege ledger balanced through a mid-wave save (garrison and tower crews), the garrison mustered at the gate and reconciled before every wave, abandoning leaving a Tithe board alone, one enemy loop per board, a busy board queuing a wave instead of losing it, board units never counted at home, and the seeded skirmish roster |
+| `tests/combat/test_combat_previews.gd` | *(sin correr aún, 2026-10-14)* `preview_damage` = el golpe de verdad y no toca a nadie, "cae", la guardia; la ✕ de la artillería (centro y esquina), la infantería sin ✕, la zona de tiro; el alcance enemigo (mover + pegar, ni muertos ni el otro bando, no mueve a nadie) |
+| `tests/ui/test_unit_card.gd` | *(sin correr aún)* fuerte/débil del círculo, números de `GameConfig`, vida de la unidad viva, el alcance mínimo en la ficha, la ficha se monta con su ✕, "×1,5" / "×1.5", el círculo con tres flechas, las seis guías de combate en AYUDA |
+| `tests/ui/test_combat_teaching.gd` | *(sin correr aún)* la primera pelea empieza la lección y señala a la unidad, la tarjeta del tablero no sale encima, tocar tu pieza abre la ficha y pasa el paso 1, el daño previsto, Ver alcance enemigo, la ✕ de la artillería |
 
 `test_board_handoff.gd`, `test_expedition_ui.gd` and `test_battle_board_icons.gd`
 touch the real autoloads and private members on purpose: what they are watching —
