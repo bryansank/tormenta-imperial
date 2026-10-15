@@ -66,6 +66,9 @@ const GARRISON_GUNS := 2
 ## Las tecnologias que agrandan la bolsa, con sus requisitos delante: Logistica 1
 ## y 2 (+300) e Industria 1 y 2 (+200).
 const STORAGE_TECH_PATH := ["log_1", "log_2", "ind_1", "ind_2"]
+## Lo que se investiga con lo que sobra mientras se ahorra (2026-10-14).
+const SURPLUS_TECH_PATH := ["ind_1", "mil_1", "log_1", "ind_2", "mil_2", "log_2",
+	"ind_3", "mil_3", "log_3", "ind_4", "mil_4", "log_4", "ind_5", "mil_5", "log_5"]
 
 ## Por debajo de esta fraccion de la bolsa se puede pedir un productor mas.
 const ROOMY_BAG := 0.75
@@ -465,6 +468,38 @@ static func _support_step(target: Dictionary) -> Dictionary:
 		var surplus: Dictionary = _surplus_upgrade_step(target, net)
 		if not surplus.is_empty():
 			return surplus
+		var study: Dictionary = _surplus_research_step(target)
+		if not study.is_empty():
+			return study
+	return {}
+
+## Mientras se ahorra con la bolsa casi llena: investigar con lo que sobra (lo
+## que el paso no pide). Produccion primero, luego moral (pesa en el asedio,
+## docs/17) y logistica. {} si no hay Laboratorio, ya se investiga algo, el paso
+## no espera nada o no sobra para ninguna.
+static func _surplus_research_step(target: Dictionary) -> Dictionary:
+	if Rules.count_building("laboratory") == 0 or TechTreeManager.is_researching():
+		return {}
+	if ResourceManager.get_total_stored() < int(float(ResourceManager.get_storage_cap()) * ROOMY_BAG):
+		return {}
+	if missing_for(target).is_empty():
+		return {}
+	var keep: Dictionary = step_cost(target).duplicate()
+	keep[ResourceManager.Type.GOLD] = int(keep.get(ResourceManager.Type.GOLD, 0)) + _army_upkeep() * 2
+	for tech_id in SURPLUS_TECH_PATH:
+		if TechTreeManager.is_researched(tech_id):
+			continue
+		if not TechTreeManager.get_missing_prerequisites(tech_id).is_empty():
+			continue
+		var step := {"kind": "research", "id": tech_id, "why": "OBJ_WHY_SURPLUS_RESEARCH"}
+		var cost: Dictionary = step_cost(step)
+		var ok := true
+		for type in cost:
+			if ResourceManager.get_amount(type) - int(keep.get(type, 0)) < int(cost[type]):
+				ok = false
+				break
+		if ok:
+			return step
 	return {}
 
 ## Subir de nivel el productor del recurso que frena el paso, pagado solo con lo
