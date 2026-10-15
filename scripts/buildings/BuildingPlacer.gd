@@ -30,6 +30,7 @@ const COLLECT_ICON_RADIUS_PX := 48.0
 const Lot := preload("res://scripts/buildings/BuildingLot.gd")
 ## Todas las calzadas en un MultiMesh por mascara de vecinos (docs/26 §6.2).
 const RoadBatch := preload("res://scripts/buildings/RoadBatch3D.gd")
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
@@ -845,7 +846,8 @@ func _hide_grid_overlay() -> void:
 	# toggle can keep the grid permanently visible.
 	var scene_grid: Node = get_tree().current_scene.get_node_or_null("GridOverlay") if get_tree().current_scene else null
 	if scene_grid:
-		scene_grid.visible = GameConfig.ui_grid_visible
+		# En calidad Minima la rejilla no vuelve tras colocar (GraphicsQuality).
+		scene_grid.visible = GraphicsQuality.grid_always_visible()
 
 # ── Limit / Prerequisite Helpers ──
 

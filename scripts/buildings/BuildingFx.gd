@@ -231,6 +231,8 @@ static func warm_up(parent: Node3D) -> Array:
 	for pair in WARM_KINDS:
 		var mi := quad_3d(String(pair[0]), 0.01, String(pair[1]))
 		mi.remove_from_group("building_fx")
+		mi.remove_from_group(FX_GROUP)
+		mi.visible = true
 		parent.add_child(mi)
 		out.append(mi)
 	return out
