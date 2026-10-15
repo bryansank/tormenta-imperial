@@ -39,9 +39,16 @@ const OUT := "res://assets/models/toy/"
 const RECIPES := "res://tools/toy_recipes/"
 const CELL := 2.0
 
-## Los 17 que se hornean (la calzada no: su malla depende de los vecinos).
+## Los que se hornean (la calzada no: su malla depende de los vecinos).
 const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", "laboratory",
-	"foundry", "barracks", "refinery", "tower", "headquarters", "garden", "fountain", "statue", "farm"]
+	"foundry", "barracks", "refinery", "tower", "headquarters", "garden", "fountain", "statue", "farm",
+	# Las diez decoraciones baratas (feat/decoraciones-1); en el juego las carga
+	# DecorMesh (<id>_mesh.res) y, sin hornear, usa su version procedural.
+	"lamp_post", "park_bench", "hedge", "avenue_tree", "flower_planter",
+	"colony_sign", "hay_cart", "bonfire", "flagpole", "palm_trees"]
+
+## Presupuesto de triangulos de una decoracion 2x2 (doc 21 §6.6).
+const DECOR_TRI_BUDGET := 600
 
 ## Huella y patio de lo que no tiene .tres en esta rama (la granja llega en otra).
 const EXTRA := {"farm": {"grid": Vector2i(2, 2), "yard": 0.1}}
@@ -185,6 +192,8 @@ func _bake(id: String) -> bool:
 		push_error("build_toy_models: no guarda la escena de %s (%d)" % [id, err])
 		return false
 	var a := mesh.get_aabb()
+	if preload("res://scripts/buildings/DecorMesh.gd").handles(id) and Kit.tri_count(mesh) > DECOR_TRI_BUDGET:
+		print("build_toy_models:   ** %s PASA DEL PRESUPUESTO DE DECORACION (%d) **" % [id, DECOR_TRI_BUDGET])
 	print("build_toy_models: %-13s %5d tri  %.2f x %.2f x %.2f (objetivo %.2f x %.2f)%s" % [
 		id, Kit.tri_count(mesh), a.size.x, a.size.y, a.size.z, ctx["w"], ctx["d"],
 		("  FxAnchor" if out.has("fx") else "") + ("  FlagAnchor" if flag_at != null else "")])
