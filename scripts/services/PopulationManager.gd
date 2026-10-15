@@ -28,10 +28,16 @@ var _notif_cooldown := 0.0  # Prevent notification spam
 ## Viaja en el guardado: el hambre no se olvida al cerrar el juego.
 var _unpaid_ticks := 0
 
+## Tanda de colocacion en curso (auto-road): un solo recuento al cerrarla.
+var _batch_depth := 0
+var _batch_dirty := false
+
 func _ready() -> void:
 	EventBus.construction_completed.connect(_on_building_completed)
 	# Una carretera es instantanea: al ponerla puede conectar algo que estaba suelto.
-	EventBus.building_placed.connect(func(_d, _c): _recalculate_all())
+	EventBus.building_placed.connect(_on_building_placed)
+	EventBus.placement_batch_started.connect(func(): _batch_depth += 1)
+	EventBus.placement_batch_finished.connect(_on_placement_batch_finished)
 	# Una veta agotada para al extractor de al lado (el nodo muere al final del frame).
 	EventBus.deposit_depleted.connect(func(_n, _id): _recalculate_all.call_deferred())
 	# Minar a mano ocupa trabajadores mientras dura (ProcessManager.busy_mining_workers).
@@ -241,6 +247,20 @@ func _tick_growth() -> void:
 func _on_building_completed(node: Node) -> void:
 	_recalculate_all()
 
+## Tramo a tramo del auto-road, el recuento entero (nucleo, red, vetas, todos
+## los edificios) se repetia por cada tramo. Dentro de una tanda solo se apunta.
+func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
+	if _batch_depth > 0:
+		_batch_dirty = true
+		return
+	_recalculate_all()
+
+func _on_placement_batch_finished(_count: int) -> void:
+	_batch_depth = maxi(0, _batch_depth - 1)
+	if _batch_depth == 0 and _batch_dirty:
+		_batch_dirty = false
+		_recalculate_all()
+
 func _on_building_demolished(_node: Node, _cell: Vector2i) -> void:
 	_recalculate_all()
 
@@ -269,12 +289,12 @@ func _recalculate_all() -> void:
 	# recibe trabajadores, ni una vivienda da sitio, ni produce (ProductionManager
 	# mira la misma meta `connected`). Se calcula la red una vez por recuento.
 	var has_core: bool = not Rules.core_cells().is_empty()
-	var network: Dictionary = Rules.connected_roads() if has_core else {}
+	var network: Dictionary = Rules.network_view() if has_core else {}
 	var connection_changed := false
 
 	# First pass: count capacity and morale
 	var buildings_needing_workers: Array = []
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		var node: Node = info.get("node", null)
 		var connected := true

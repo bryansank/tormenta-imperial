@@ -37,6 +37,20 @@ static func world_to_cell(p: Vector3, board: Vector2i) -> Vector2i:
 		return Vector2i(-1, -1)
 	return Vector2i(cx, cy)
 
+## Desorden del frente (docs/15 §3, "Las dos vistas"): cuanto se aparta una pieza
+## del centro de su casilla, como mucho, en metros. Menos de media casilla, asi
+## que tocar su sitio sigue cayendo en la misma casilla.
+const SPOT_JITTER := 0.38
+
+## El "sitio libre" de una casilla en la vista frontal: el centro corrido un poco,
+## siempre igual para la misma casilla y semilla (las piezas no tiemblan entre
+## turnos y el sitio al que se mueve es el que se ilumino). Puro: un hash.
+static func spot_offset(cell: Vector2i, seed_value: int) -> Vector3:
+	var h: int = hash(Vector3i(cell.x, cell.y, seed_value))
+	var a := float(h & 0xffff) / 65535.0
+	var b := float((h >> 16) & 0xffff) / 65535.0
+	return Vector3((a - 0.5) * 2.0 * SPOT_JITTER, 0.0, (b - 0.5) * 2.0 * SPOT_JITTER)
+
 static func domain_height(domain: String) -> float:
 	return float(DOMAIN_HEIGHT.get(domain, 0.0))
 

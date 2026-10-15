@@ -27,6 +27,8 @@ func _ready() -> void:
 	_setup_ui()
 	EventBus.objective_panel_toggled.connect(toggle)
 	UIManager.register_panel(self, "ObjectivePanel")
+	# El reloj de refresco solo corre con el panel abierto.
+	set_process(false)
 
 func _setup_ui() -> void:
 	# Root control holds the always-present sidebar button; the modal itself
@@ -136,6 +138,7 @@ func toggle() -> void:
 		refresh_mode()
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
+	set_process(_is_open)
 	if _is_open:
 		refresh()
 		UIManager.open_panel(self)
@@ -164,15 +167,27 @@ func refresh() -> void:
 	_paint_route()
 
 ## La linea de Objectives.LINE, una fila por paso: hecho, el de ahora, o por hacer.
+## Se refresca cada segundo con el panel abierto: las etiquetas que ya hay se
+## reescriben (antes se tiraban y se creaban todas cada vez).
 func _paint_route() -> void:
-	for child in _route_box.get_children():
-		child.queue_free()
-	for row in Objectives.route():
+	var rows: Array = Objectives.route()
+	var labels := _route_box.get_children()
+	for i in rows.size():
+		var row: Dictionary = rows[i]
 		var mark: String = "✔ " if bool(row["done"]) else ("▶ " if bool(row["current"]) else "· ")
 		var color: Color = UITheme.TEXT_DIM if bool(row["done"]) else (UITheme.ACCENT if bool(row["current"]) else UITheme.TEXT)
-		var label := UITheme.make_label(mark + String(row["text"]), "small", color)
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_route_box.add_child(label)
+		var text := mark + String(row["text"])
+		if i < labels.size():
+			var label := labels[i] as Label
+			label.text = text
+			UITheme.set_label_color(label, color)
+		else:
+			var label := UITheme.make_label(text, "small", color)
+			label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_route_box.add_child(label)
+	for i in range(rows.size(), labels.size()):
+		_route_box.remove_child(labels[i])
+		labels[i].queue_free()
 
 func get_now_text() -> Dictionary:
 	return {"title": _now_title.text, "why": _now_why.text, "blocker": _now_blocker.text}

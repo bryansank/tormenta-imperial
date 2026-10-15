@@ -541,7 +541,7 @@ static func _surplus_upgrade_step(target: Dictionary, net: Dictionary) -> Dictio
 static func net_rates() -> Dictionary:
 	var rates := {"gold": 0.0, "wood": 0.0, "steel": 0.0, "oil": 0.0, "food": 0.0}
 	var morale_mult: float = PopulationManager.get_morale_multiplier()
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		var node: Node = info["node"]
 		if not data.is_producer() or data.production_interval <= 0.0:
@@ -833,7 +833,7 @@ static func _producer_step(res: String, why: String) -> Dictionary:
 ## El edificio de ese tipo con el nivel mas bajo que no este en obras, o null.
 static func _lowest_level(building_id: String) -> Node:
 	var best: Node = null
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		if (info["data"] as BuildingData).id != building_id:
 			continue
 		var node: Node = info["node"]
@@ -875,14 +875,14 @@ static func _army_count(unit_id: String) -> int:
 static func _ruined_producer() -> Node:
 	if StormManager.is_storming():
 		return null
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		if data.is_producer() and BuildingHealth.is_ruined(info["node"]):
 			return info["node"]
 	return null
 
 static func _first_building(building_id: String) -> Node:
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		if (info["data"] as BuildingData).id == building_id:
 			return info["node"]
 	return null

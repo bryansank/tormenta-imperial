@@ -52,6 +52,22 @@ const QuickGuideScript := preload("res://scripts/ui/QuickGuide.gd")
 const QUICK_GUIDE_ID := "quick_guide"
 var _done_left := 0.0
 var _pulse := 0.0
+## Lo caro del paso (que control senala, su texto con lo que falta, que bosque)
+## se busca cada RESOLVE_SECONDS, no en cada fotograma (docs/26 §6.9). Cada
+## fotograma solo lee el rectangulo del control ya encontrado y proyecta la
+## celda: asi sigue a la camara y a la lista de CONSTRUIR sin retraso.
+const RESOLVE_SECONDS := 0.25
+var _resolve_left := 0.0
+var _res_text := ""
+var _res_hint := ""
+var _res_control: Control = null
+var _res_cell := Vector2i(-1, -1)
+var _res_cell_size := Vector2i.ONE
+var _res_card_id := ""
+var _res_picked := false
+## El alto de la tarjeta solo cambia con el texto o el ancho.
+var _card_key := ""
+var _card_h := 0.0
 
 func _ready() -> void:
 	layer = COACH_LAYER
@@ -82,12 +98,12 @@ func _open_intro() -> void:
 
 func _on_prologue_closed() -> void:
 	EventBus.tutorial_intro_closed.emit()
-	# La guia rapida, una vez por partida, justo despues del lore y antes de la
-	# primera marca del tutorial (que no se ve mientras la guia pausa el juego).
-	if not TutorialManager.has_seen_help(QUICK_GUIDE_ID):
-		_quick_guide.open()
+	# La guia rapida ya no sale sola al cerrar el prologo (Bryan, 14-10: la
+	# ventana "Como funciona Tormenta Imperial" sobraba al empezar). Sus cuatro
+	# bloques siguen en AYUDA (`guide_qg_*`). Un `quick_guide` visto en una
+	# partida vieja se carga igual y no cambia nada.
 
-## La guia rapida (Como funciona). Tambien la abre AYUDA.
+## La guia rapida (Como funciona). Ya no se abre sola; queda para quien la pida.
 func quick_guide() -> CanvasLayer:
 	return _quick_guide
 
@@ -210,6 +226,14 @@ func _build_coach() -> void:
 
 func _on_step_changed(step_id: String) -> void:
 	_step = step_id
+	# Paso nuevo: su destino se busca en el siguiente fotograma. Sin paso el
+	# panel no trabaja (antes corria cada fotograma aunque no hubiera tutorial).
+	_resolve_left = 0.0
+	_res_control = null
+	_res_cell = Vector2i(-1, -1)
+	set_process(step_id != "")
+	if step_id == "":
+		_coach.visible = false
 	_done_left = DONE_SECONDS if step_id == "done" else 0.0
 	_ok_btn.visible = step_id == "done"
 	_end_replay_btn.visible = step_id != "done" and TutorialManager.is_replay()
@@ -261,6 +285,8 @@ func _should_hide() -> bool:
 func _process(delta: float) -> void:
 	if _should_hide():
 		_coach.visible = false
+		# Al volver a verse, el destino se busca de nuevo en ese fotograma.
+		_resolve_left = 0.0
 		return
 	_coach.visible = true
 	_pulse += delta
@@ -269,36 +295,66 @@ func _process(delta: float) -> void:
 		if _done_left <= 0.0:
 			TutorialManager.finish_guide()
 			return
+	_resolve_left -= delta
+	# El control encontrado se fue (la lista se cerro, la tarjeta se recreo): se
+	# busca otra vez ya, sin esperar al reloj.
+	# Igual si el jugador acaba de elegir (o soltar) la tarjeta que pide el paso:
+	# la marca salta al CONSTRUIR del detalle en ese mismo fotograma.
+	if _resolve_left <= 0.0 or (_res_control != null \
+			and (not is_instance_valid(_res_control) or not _res_control.is_visible_in_tree())) \
+			or (_res_card_id != "" and _card_already_picked(_res_card_id) != _res_picked):
+		_resolve_step()
 	_layout_step()
 
-## Coloca velo, marco, flecha y tarjeta para el paso actual. Se repite cada
-## frame: los controles se mueven (la lista de CONSTRUIR se abre, la camara se
-## desplaza) y el foco tiene que seguirlos.
-func _layout_step() -> void:
+## Lo caro del paso, cada RESOLVE_SECONDS: el texto, lo que falta, el control
+## que se senala y la celda del mapa (el bosque mas cercano al centro, la obra).
+func _resolve_step() -> void:
+	_resolve_left = RESOLVE_SECONDS
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var target := TutorialManager.step_target(_step)
 	var text := TutorialManager.step_text(_step)
 	# El edificio que pide el paso ya esta elegido en la lista: la marca esta en
 	# CONSTRUIR (HelpTargets.card_or_build) y el texto deja de pedir que se elija.
-	if target.begins_with("card:") and _card_already_picked(target.substr(5)):
+	_res_card_id = target.substr(5) if target.begins_with("card:") else ""
+	_res_picked = _res_card_id != "" and _card_already_picked(_res_card_id)
+	if _res_picked:
 		text = Tr.ti("GUIDE_PRESS_BUILD")
-	var rect := Rect2()
-	var point := {}
+	_res_text = text
+	_res_control = null
+	_res_cell = Vector2i(-1, -1)
 	# CONSTRUIR es un boton grande siempre visible abajo (menu unico, #31): el
 	# paso 1 lo senala a el directamente (grupo hud_build_button).
+	var site := {}
 	if target == "forest":
-		point = _forest_point(vp)
+		site = _forest_cell(vp)
 	elif target.begins_with("building:"):
-		point = _building_point(target.substr(9))
+		site = _building_cell(target.substr(9))
 	elif target != "":
-		rect = HelpTargets.rect(get_tree(), target)
-	if not point.is_empty() and not bool(point.get("ok", true)):
-		text += "\n" + Tr.ti("GUIDE_MOVE_CAMERA")
+		_res_control = HelpTargets.control(get_tree(), target)
+	if not site.is_empty():
+		_res_cell = site["cell"]
+		_res_cell_size = site["size"]
 	# Lo que falta para este paso (obreros, recursos): el tutorial no se salta, asi
 	# que tiene que decir por que no se puede seguir.
-	var hint := TutorialManager.step_hint(_step)
-	if hint != "":
-		text += "\n" + hint
+	_res_hint = TutorialManager.step_hint(_step)
+
+## Coloca velo, marco, flecha y tarjeta para el paso actual. Se repite cada
+## frame: los controles se mueven (la lista de CONSTRUIR se abre, la camara se
+## desplaza) y el foco tiene que seguirlos. Que se senala y con que texto lo
+## deja _resolve_step; aqui solo se mide y se coloca.
+func _layout_step() -> void:
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var text := _res_text
+	var rect := Rect2()
+	var point := {}
+	if _res_cell.x >= 0:
+		point = HelpTargets.cell_screen_point(get_viewport(), _res_cell, _res_cell_size)
+	elif _res_control != null and is_instance_valid(_res_control) and _res_control.is_visible_in_tree():
+		rect = _res_control.get_global_rect()
+	if not point.is_empty() and not bool(point.get("ok", true)):
+		text += "\n" + Tr.ti("GUIDE_MOVE_CAMERA")
+	if _res_hint != "":
+		text += "\n" + _res_hint
 	if _text.text != text:
 		_text.text = text
 
@@ -314,10 +370,16 @@ func _layout_step() -> void:
 
 	# La tarjeta, junto a lo senalado (debajo si cabe, si no encima), sin taparlo.
 	var w: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
-	_card.custom_minimum_size = Vector2(w, 0)
-	_card.size = Vector2(w, 0)
-	_card.reset_size()
-	var ch: float = _card.get_combined_minimum_size().y
+	# Medir la tarjeta (reset_size + tamano minimo) solo si cambia su texto, su
+	# ancho o los botones; cada fotograma era trabajo de maquetado para nada.
+	var key := "%s|%s|%d|%s|%s" % [_badge.text, text, int(w), _ok_btn.visible, _end_replay_btn.visible]
+	if key != _card_key:
+		_card_key = key
+		_card.custom_minimum_size = Vector2(w, 0)
+		_card.size = Vector2(w, 0)
+		_card.reset_size()
+		_card_h = _card.get_combined_minimum_size().y
+	var ch: float = _card_h
 	var focus := Rect2()
 	if has_rect:
 		focus = rect
@@ -416,8 +478,8 @@ func _edge_point(c: Vector2, dir: Vector2, vp: Vector2, margin: float) -> Vector
 	return c + dir * minf(tx, ty)
 
 ## El bosque que toca senalar: el mas cercano al centro de la pantalla, o al
-## Nucleo si ninguno se ve. {} si no hay mapa (pruebas).
-func _forest_point(vp: Vector2) -> Dictionary:
+## Nucleo si ninguno se ve, como {"cell", "size"}. {} si no hay mapa (pruebas).
+func _forest_cell(vp: Vector2) -> Dictionary:
 	# El registrado en GameManager vale en 3D y en 2D (MapGenerator2D hereda);
 	# el de la escena, por si aun no se registro.
 	var gen: Node = GameManager.map_generator()
@@ -438,10 +500,16 @@ func _forest_point(vp: Vector2) -> Dictionary:
 		var d: float = p.distance_to(center) + (0.0 if bool(sp["ok"]) else 100000.0)
 		if d < best_d:
 			best_d = d
-			best = sp
+			best = {"cell": cell, "size": sz}
 	return best
 
-func _building_point(building_id: String) -> Dictionary:
+## El punto en pantalla de ese bosque ({"ok", "point"}), o {}. Para las pruebas.
+func _forest_point(vp: Vector2) -> Dictionary:
+	var f := _forest_cell(vp)
+	return {} if f.is_empty() else HelpTargets.cell_screen_point(get_viewport(), f["cell"], f["size"])
+
+## La obra de `building_id`, como {"cell", "size"}, o {}.
+func _building_cell(building_id: String) -> Dictionary:
 	for info in GridManager.get_all_buildings():
 		var data: Resource = info.get("data")
 		if data == null or String(data.get("id")) != building_id:
@@ -449,7 +517,7 @@ func _building_point(building_id: String) -> Dictionary:
 		var node: Node = info.get("node")
 		if node != null and not node.has_meta("under_construction"):
 			continue
-		return HelpTargets.cell_screen_point(get_viewport(), info.get("origin_cell", Vector2i.ZERO), data.get("grid_size"))
+		return {"cell": info.get("origin_cell", Vector2i.ZERO), "size": data.get("grid_size")}
 	return {}
 
 func _scene_node(node_name: String) -> Node:

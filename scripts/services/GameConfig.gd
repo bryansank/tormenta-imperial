@@ -95,6 +95,10 @@ var hq_upgrade_costs := {
 }
 
 # ── Building Limits (max per type, -1 = unlimited) ──
+# Topes de la ERA 1 y de lo que no sube con la era. Los que suben estan en
+# `building_limits_by_era` (seccion "Building Limit Helpers"); las decoraciones
+# (BuildingData.is_decoration) no tienen tope aunque salgan aqui. Se lee siempre
+# con get_building_limit(id), nunca a mano.
 
 var building_limits := {
 	"sawmill": 5,
@@ -357,6 +361,59 @@ var mining_data := {
 ## minar no es gratis, se quitan a un edificio o se esperan.
 var mining_workers := 2
 
+# ── Lotes y el Nucleo como taller de todo (2026-10-14, partidas de Bryan) ──
+#
+# Lotes: un proceso o un minado se puede pedir varias veces de un toque (x1, x5
+# o MAX). Se paga todo al arrancar y se hacen una vuelta tras otra en el mismo
+# sitio; cada vuelta entrega lo suyo al terminar. Cancelar devuelve la tasa de
+# siempre sobre todo lo pagado que aun no se entrego, y la Tormenta se lleva el
+# lote entero, como se llevaba una sola vuelta.
+
+## Botones fijos de lote ademas de MAX.
+var process_batch_sizes := [1, 5]
+## Techo de MAX: aun con el almacen lleno de madera, un lote no pasa de aqui
+## (20 vueltas de 30 s son 10 minutos: mas ya es dejarlo olvidado).
+var process_batch_max := 20
+
+## El Nucleo hace lo de todos los talleres y saca a mano lo de cada yacimiento,
+## en cuanto el recurso o material de ese proceso esta desbloqueado. Rinde lo
+## mismo pero tarda esto mas: asi el Nucleo saca de un apuro y el edificio
+## propio sigue valiendo la pena (y deja el Nucleo libre para otra cosa).
+var core_process_time_mult := 1.5
+## El minado a mano desde el Nucleo lleva este prefijo en su id ("core_mine_gold"),
+## para no confundirlo con el de una veta (MapGenerator gasta un uso por cada
+## "mine_*" que termina en un yacimiento; el Nucleo no tiene usos).
+const CORE_MINING_PREFIX := "core_"
+
+## Lo que el Nucleo ofrece ademas de sus procesos propios: los de cada taller
+## (grupo "workshop") y el minado a mano de cada yacimiento (grupo "hand"), con
+## la duracion ya escalada y multiplicada por `core_process_time_mult`. Sin
+## filtrar por desbloqueo: eso lo decide quien lo ensena (ProcessActionsPanel).
+func get_core_extra_processes() -> Array:
+	var result: Array = []
+	for building_id in building_processes:
+		if building_id == "nucleo":
+			continue
+		for proc in building_processes[building_id]:
+			var copy: Dictionary = proc.duplicate(true)
+			copy["duration"] = get_duration(float(proc["duration"]) * core_process_time_mult)
+			copy["core_group"] = "workshop"
+			copy["from"] = building_id
+			result.append(copy)
+	for deposit_id in mining_data:
+		var mine: Dictionary = mining_data[deposit_id]
+		result.append({
+			"id": CORE_MINING_PREFIX + String(mine["id"]),
+			"name": mine["name"],
+			"duration": get_duration(float(mine["duration"]) * core_process_time_mult),
+			"cost": {},
+			"produces": (mine["produces"] as Dictionary).duplicate(),
+			"workers": mining_workers,
+			"core_group": "hand",
+			"from": deposit_id,
+		})
+	return result
+
 # ── Deposit Config ──
 
 var deposit_max_uses := {
@@ -604,9 +661,22 @@ var ui_panel_opacity := 1.0
 ## Calidad grafica del mapa 3D (WorldLook, docs/21 §12): "high" pone SSAO (solo
 ## Forward+), glow y sombras con cuatro cortes; "low" los quita y deja una sombra
 ## de un corte. "auto" es "low" con el renderizador Mobile o Compatibility
-## (Android, el APK de QA) y "high" en Forward+ (PC).
-const GRAPHICS_QUALITY_MODES := ["auto", "high", "low"]
+## (Android, el APK de QA) y "high" en Forward+ (PC). "minimal" es para "una
+## papa" (docs/26 §7): sin sombras, MSAA, humo ni rejilla, menos caminantes, 3D
+## a menor resolucion, 30 fps en PC y, en PC, el renderizador Mobile desde el
+## siguiente arranque (GraphicsQuality).
+const GRAPHICS_QUALITY_MODES := ["auto", "high", "low", "minimal"]
 var ui_graphics_quality := "auto"
+## Vista del combate (docs/15 §3, "Las dos vistas"): "front" (por defecto) los
+## dos bandos cara a cara, sin casillas a la vista; "board" el tablero 8x8 en 3D.
+## Preferencia del dispositivo ([interfaz] combat_view), nunca de la partida: las
+## dos vistas mueven el mismo Encounter y una pelea da lo mismo en las dos.
+const COMBAT_VIEWS := ["front", "board"]
+var ui_combat_view := "front"
+## Deteccion del primer arranque (DeviceProfile, docs/26 §7.2): si ya se hizo
+## (no se repite sola) y por que decidio lo que decidio (para depurar).
+var quality_detected := false
+var quality_detected_reason := ""
 ## Ids de HudRegistry que el jugador oculto.
 var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
@@ -622,6 +692,43 @@ var ui_fps_cap := "auto"
 ## agua). Nunca por encima del tope elegido. Docs/21 §10.
 var fps_background := 10
 var fps_paused := 30
+## Tope "auto" en PC con la calidad Minima (en tablet y movil ya es 30).
+var fps_minimal_pc := 30
+
+# ── Deteccion de la calidad en el primer arranque (docs/26 §7.2) ──
+# Solo con la calidad en "auto" y sin quality_detected en settings.cfg. Paso 1:
+# senales estaticas; paso 2: medir unos segundos detras del menu de titulo.
+
+## Nombres de GPU flojas (expresiones regulares, sin distinguir mayusculas).
+## Ampliable sin tocar codigo cuando un probador diga "en mi equipo va mal".
+var quality_weak_gpu_patterns: Array = [
+	r"Intel\(R\) HD Graphics( [2-6]\d\d\b|$| Family)",
+	r"\bUHD Graphics 6\d\d\b",
+	r"\bHD Graphics [45]\d\d\b",
+	r"\bRadeon R[2-7]\b",
+	r"\bRadeon\(TM\) Vega [368] ",
+	r"\bMali-T",
+	r"\bMali-G(31|51|52|57)\b",
+	r"\bAdreno \(TM\) ([345]\d\d|61[023])\b",
+	r"PowerVR",
+	r"\bGE8\d\d\d\b",
+]
+## RAM del sistema (MB) a partir de la cual el equipo es flojo. 4600 y no 4096:
+## un equipo de 4 GB declara algo menos (la integrada se queda una parte).
+var quality_weak_ram_mb := 4600
+## Hilos de CPU a partir de los cuales es flojo (2 nucleos / 4 hilos).
+var quality_weak_threads := 4
+## Un movil (perfil "phone") con esta RAM o menos va en Minima.
+var quality_phone_ram_mb := 6600
+## Paso 2: espera a que se asiente la carga y luego mide (segundos reales).
+var quality_detect_warmup := 2.0
+var quality_detect_seconds := 3.0
+## Mediana o p95 del fotograma por encima de esto (ms) -> Minima; mediana
+## por encima de quality_detect_low_ms midiendo en Alta -> Baja (nunca por debajo
+## de 1,1 fotogramas del refresco de la pantalla: con vsync no se mide menos).
+var quality_detect_median_ms := 25.0
+var quality_detect_p95_ms := 33.0
+var quality_detect_low_ms := 16.7
 
 # ── Perfil del jugador (settings.cfg [perfil]) ──
 # Del jugador en este dispositivo, NO de la partida: sobrevive a "Nueva partida"
@@ -703,6 +810,10 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
 	var quality := str(cf.get_value("interfaz", "graphics_quality", ui_graphics_quality))
 	ui_graphics_quality = quality if quality in GRAPHICS_QUALITY_MODES else "auto"
+	var cview := str(cf.get_value("interfaz", "combat_view", ui_combat_view))
+	ui_combat_view = cview if cview in COMBAT_VIEWS else "front"
+	quality_detected = bool(cf.get_value("interfaz", "quality_detected", quality_detected))
+	quality_detected_reason = str(cf.get_value("interfaz", "quality_detected_reason", quality_detected_reason))
 	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
 	ui_hud_hidden = []
 	if hidden is Array:
@@ -751,6 +862,9 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
 	cf.set_value("interfaz", "graphics_quality", ui_graphics_quality)
+	cf.set_value("interfaz", "combat_view", ui_combat_view)
+	cf.set_value("interfaz", "quality_detected", quality_detected)
+	cf.set_value("interfaz", "quality_detected_reason", quality_detected_reason)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("interfaz", "fps_cap", ui_fps_cap)
@@ -758,6 +872,15 @@ func save_user_settings() -> void:
 	cf.set_value("perfil", "campaigns_won", profile_campaigns_won)
 	cf.set_value("partidas", "activa", saves_active_slot)
 	cf.save(USER_SETTINGS_PATH)
+
+## Elige la vista del combate ("front" / "board"), la guarda en settings.cfg y
+## devuelve si cambio. Un valor desconocido no hace nada.
+func set_combat_view(view: String) -> bool:
+	if not view in COMBAT_VIEWS or view == ui_combat_view:
+		return false
+	ui_combat_view = view
+	save_user_settings()
+	return true
 
 ## El perfil ya abre Gobernador: una partida terminada o una Campana ganada.
 ## (En dev_mode se ofrece siempre; eso lo decide GameMode.governor_unlocked().)
@@ -1449,14 +1572,97 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 
 # ── Building Limit Helpers ──
 
+## Topes que suben con la era (decision D1 de Bryan, 14-10-2026; docs/03 §Topes).
+## [era 1, era 2, era 3]. La era 1 es el tope de siempre (`building_limits`): una
+## partida guardada nunca queda por encima de su tope. Regla general ≈ ×1,5 en la
+## era 2 y ×2 en la era 3, con tres excepciones que no suben:
+##   warehouse 5  la bolsa de la era 3 sin tecnologias es 1000 + 5×500 = 3500, el
+##                precio justo del CG nivel 3 (hq_upgrade_costs[3] sin materiales).
+##                Con 7 almacenes serian 4500 (5500 con las tecnologias) y el CG 3
+##                dejaria de pedir la bolsa llena. La bolsa ya crece por era sola
+##                (base_storage_cap_by_era 600/800/1000) y por nivel de almacen.
+##   tower 6      4 torres ya dan el 60 % de mitigacion (storm_tower_mitigation_max)
+##                y solo 2 salen al tablero (storm_tower_garrison_max): mas torres
+##                no darian nada. El rango sigue dando +1 (rango 16).
+##   unicos 1     Mercado, Laboratorio y Cuartel General (no estan en esta tabla).
+## El Cuartel sube menos (3/4/5): cada uno es un hueco de entrenamiento y +8 de
+## capacidad; con 5 ya caben 43 unidades y el mantenimiento en oro es el freno.
+## Un id que no esta aqui usa `building_limits` en todas las eras.
+var building_limits_by_era := {
+	"sawmill": [5, 8, 10],
+	"gold_mine": [4, 6, 8],
+	"foundry": [3, 5, 6],
+	"refinery": [2, 3, 4],
+	"house": [10, 15, 20],
+	"farm": [6, 9, 12],
+	"barracks": [3, 4, 5],
+	"warehouse": [5, 5, 5],
+	"tower": [6, 6, 6],
+}
+
+## El tope de `building_id` AHORA: la era en curso (ProgressionManager), mas los
+## huecos del rango. -1 = sin tope. Es el unico sitio que deben leer las reglas
+## de colocar, CONSTRUIR, ¿QUE HACER? y el tutorial. Nada de esto se guarda: sale
+## de la era y del rango, que ya van en el save.
 func get_building_limit(building_id: String) -> int:
+	return get_building_limit_for_era(building_id, current_era())
+
+## El tope de `building_id` en la era `era` (1..3, se acota), con el rango encima.
+## Sandbox: -1 siempre (docs/20). Decoraciones: -1 siempre (las limita el terreno).
+func get_building_limit_for_era(building_id: String, era: int) -> int:
 	if GameMode.all_unlocked():
 		return -1  # Sandbox: sin tope por tipo (ver docs/20-modos-de-juego.md).
-	var limit: int = building_limits.get(building_id, -1)
+	if is_uncapped_building(building_id):
+		return -1
+	var limit := base_building_limit(building_id, era)
 	if limit < 0:
 		return limit
 	# Huecos extra que da el rango del gobernador (RankManager los asigna).
 	return limit + int(rank_limit_bonus.get(building_id, 0))
+
+## El tope de la tabla en `era`, sin rango ni modo. -1 = sin tope.
+func base_building_limit(building_id: String, era: int) -> int:
+	if building_limits_by_era.has(building_id):
+		var row: Array = building_limits_by_era[building_id]
+		if not row.is_empty():
+			return int(row[clampi(era, 1, row.size()) - 1])
+	return int(building_limits.get(building_id, -1))
+
+## La proxima era en la que sube el tope de `building_id` y a cuanto (con el
+## rango), o {} si ya no sube. Para "3/6 · era 2: 9" en CONSTRUIR.
+func next_building_limit(building_id: String) -> Dictionary:
+	var era := current_era()
+	var now := get_building_limit_for_era(building_id, era)
+	if now < 0:
+		return {}
+	for e in range(era + 1, max_era() + 1):
+		var later := get_building_limit_for_era(building_id, e)
+		if later > now:
+			return {"era": e, "limit": later}
+	return {}
+
+## La era en curso, o 1 sin ProgressionManager (pruebas sin arbol, arranque).
+func current_era() -> int:
+	var pm := get_node_or_null("/root/ProgressionManager")
+	return int(pm.get("current_era")) if pm != null else 1
+
+func max_era() -> int:
+	return base_storage_cap_by_era.size()
+
+## Sin tope por tipo: las decoraciones (BuildingData.is_decoration, carreteras
+## incluidas). Se mira el .tres y no una lista, para que una decoracion nueva no
+## necesite entrada en ninguna tabla. Se recuerda por id.
+var _uncapped_cache: Dictionary = {}
+func is_uncapped_building(building_id: String) -> bool:
+	if _uncapped_cache.has(building_id):
+		return bool(_uncapped_cache[building_id])
+	var path := "res://data/buildings/%s.tres" % building_id
+	var data: BuildingData = null
+	if ResourceLoader.exists(path):
+		data = load(path) as BuildingData
+	var uncapped := data != null and data.is_decoration
+	_uncapped_cache[building_id] = uncapped
+	return uncapped
 
 func get_prerequisites(building_id: String) -> Array:
 	if GameMode.all_unlocked():
@@ -1992,7 +2198,8 @@ var life_figure_cap := {"pc": 72, "tablet": 44, "phone": 26}
 ## calidad "Minima" (equipos muy modestos); WorkerWalkers.figure_cap() se queda
 ## con el menor de los dos. 0 = nadie por la calle.
 var life_figure_cap_quality := -1
-## El tope que usaria el preset "Minima" (aun sin preset que lo aplique).
+## El tope de la calidad "Minima" (GraphicsQuality.apply_runtime lo pone en
+## life_figure_cap_quality).
 var life_figure_cap_minimal := 12
 ## Celdas por segundo andando, y cuanto apuran el paso en el Aviso de Tormenta.
 var life_walk_speed := 1.5

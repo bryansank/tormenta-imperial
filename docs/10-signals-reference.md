@@ -52,6 +52,8 @@ fit. The player is warned once per game, via a TutorialManager tip, and
 | `building_selected_for_placement` | `building_data: Resource` | ConstructionMenu | BuildingPlacer, BuildingInfoPanel, OnScreenControls, TutorialManager, HelperPanel, BuildingPlacer2D |
 | `building_placement_cancelled` | — | BuildingPlacer, OnScreenControls, PauseMenu, BuildingPlacer2D | BuildingPlacer, OnScreenControls, TutorialManager, HelperPanel, BuildingPlacer2D |
 | `building_placed` | `building_data: Resource, cell: Vector2i` | BuildingPlacer, BuildingPlacer2D | ProductionManager, GameManager, ProgressionManager, ArmyPanel, SkirmishPanel, HelperPanel, OnScreenControls, AudioManager, TutorialManager |
+| `placement_batch_started` | — | PlacementRules.pave_route (antes de los tramos del auto-road) | GameManager, PopulationManager (aplazan guardado y recuento) |
+| `placement_batch_finished` | `count: int` | PlacementRules.pave_route (tras el ultimo tramo) | GameManager (un guardado), PopulationManager (un recuento) |
 | `building_moved` | `from_cell: Vector2i, to_cell: Vector2i` | BuildingPlacer, BuildingPlacer2D | GameManager, TutorialManager, HelperPanel, OnScreenControls |
 | `building_removed` | `cell: Vector2i` | *(no emitter)* | *(no listener)* |
 

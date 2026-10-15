@@ -24,6 +24,14 @@ extends CanvasLayer
 ## ritmo, y mientras anima (`_board_busy()`) no se deja actuar ni se saca el
 ## parte. El tablero 2D de siempre sigue aqui como alternativa: en la vista 2D
 ## del mapa y sin pantalla (pruebas headless). Ver `pick_board_style()`.
+##
+## **Dos vistas 3D** (2026-10-14, docs/15 §3 "Las dos vistas"): la frontal
+## ("front", por defecto: los dos bandos cara a cara, sin casillas; tocar a un
+## enemigo acerca a la unidad y dispara, FrontOrders) y el tablero 8x8 ("board").
+## Las dos son la misma maqueta (Board3D.set_style) y mueven el MISMO Encounter
+## con las mismas llamadas a CombatManager. La preferencia es del dispositivo
+## (GameConfig.ui_combat_view, settings.cfg) y se cambia en Ajustes o con el
+## boton de la cabecera, tambien a mitad de pelea.
 
 const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
@@ -31,6 +39,7 @@ const Board3DView := preload("res://scripts/combat_view/BoardViewport3D.gd")
 const BoardTerrain := preload("res://scripts/combat_view/BoardTerrain3D.gd")
 const WorldLook := preload("res://scripts/map/WorldLook.gd")
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
+const Orders := preload("res://scripts/combat_view/FrontOrders.gd")
 
 const PLAYER := 0
 const ENEMY := 1
@@ -98,6 +107,10 @@ var _grid_center: HBoxContainer
 var _board_spacer: Control
 var _actions_row: Container
 var _speed_btn: Button
+var _view_btn: Button
+var _advance_btn: Button
+## Forzada por pruebas y sondas ("front" / "board"); "" = GameConfig.ui_combat_view.
+var _forced_view := ""
 ## Lo que espera a que la maqueta termine de animar: el parte, el draft, el
 ## informe final. Nunca se ensena el resultado de algo que aun no se ha visto.
 var _deferred_ui: Array = []
@@ -245,6 +258,16 @@ func _build_board_view() -> void:
 	header.add_child(_speed_btn)
 	EventBus.game_speed_changed.connect(func(_s): _refresh_speed_button())
 	_refresh_speed_button()
+	# FRENTE / TABLERO: la otra vista de la pelea, al momento y guardada como
+	# preferencia. Solo con la maqueta 3D (el tablero 2D no tiene frente).
+	_view_btn = Button.new()
+	_view_btn.name = "BoardViewToggle"
+	_view_btn.focus_mode = Control.FOCUS_NONE
+	_view_btn.custom_minimum_size = Vector2(UITheme.touch_px(96.0), UITheme.MIN_BTN_H)
+	_view_btn.tooltip_text = Tr.t("LBL_COMBAT_VIEW_TIP")
+	_view_btn.pressed.connect(toggle_combat_view)
+	_view_btn.visible = false
+	header.add_child(_view_btn)
 	column.add_child(header)
 	HudRegistry.register("BattleScreen.turn", _turn_label)
 
@@ -282,6 +305,11 @@ func _build_board_view() -> void:
 	_defend_btn = _make_action(Tr.t("BTN_DEFEND"), func(): _act_defend())
 	_wait_btn = _make_action(Tr.t("BTN_WAIT"), func(): _act_wait())
 	_end_btn = _make_action(Tr.t("BTN_END_TURN"), func(): _act_end_turn())
+	# AVANZAR: solo en el frente, donde no hay casillas que tocar para moverse.
+	_advance_btn = _make_action(Tr.t("BTN_ADVANCE"), func(): _act_advance())
+	_advance_btn.name = "AdvanceButton"
+	_advance_btn.visible = false
+	actions.add_child(_advance_btn)
 	actions.add_child(_defend_btn)
 	actions.add_child(_wait_btn)
 	actions.add_child(_end_btn)
@@ -1080,6 +1108,7 @@ func _on_encounter_started(index: int, is_boss: bool) -> void:
 		_show_board_2d()
 		_recalculate_cell_size()
 		_build_grid()
+	_refresh_view_button()
 	_open_board()
 	_refresh()
 
@@ -1452,6 +1481,10 @@ func _set_actions_enabled(enabled: bool) -> void:
 	_defend_btn.disabled = not enabled
 	_wait_btn.disabled = not enabled
 	_end_btn.disabled = not enabled
+	_advance_btn.visible = is_front_view()
+	var active: CombatUnit = CombatManager.get_active_unit() if enabled else null
+	_advance_btn.disabled = active == null or \
+		Orders.advance_cell(CombatManager.get_encounter(), active.uid) == Orders.NO_CELL
 
 # ── Entrada ──────────────────────────────────────────────────────────
 
@@ -1473,7 +1506,7 @@ func _on_cell_pressed(coords: Vector2i) -> void:
 	if occupant != null and occupant.side == ENEMY:
 		if CombatManager.get_valid_targets(active.uid).has(occupant.uid):
 			CombatManager.attack(active.uid, occupant.uid)
-		else:
+		elif not (is_front_view() and order_attack(active.uid, occupant.uid)):
 			_inspect_3d(occupant)
 		return
 	if occupant != null:
@@ -1482,6 +1515,30 @@ func _on_cell_pressed(coords: Vector2i) -> void:
 		return
 	if occupant == null and CombatManager.get_valid_moves(active.uid).has(coords):
 		CombatManager.move_unit(active.uid, coords)
+
+## El frente: "acercate y dispara". Si el objetivo no esta a tiro pero se le
+## llega moviendo, la unidad va a la casilla de FrontOrders.approach_cell y
+## ataca: las dos MISMAS llamadas que daria el jugador en el tablero 8x8.
+func order_attack(uid: int, target_uid: int) -> bool:
+	var cell: Vector2i = Orders.approach_cell(CombatManager.get_encounter(), uid, target_uid)
+	if cell == Orders.NO_CELL:
+		return false
+	var unit := CombatManager.get_unit(uid)
+	if unit != null and cell != unit.position and not CombatManager.move_unit(uid, cell):
+		return false
+	return CombatManager.attack(uid, target_uid)
+
+## AVANZAR (frente): la unidad va a donde la llevaria el mando (CombatAI), sin
+## atacar; despues el jugador elige objetivo, defiende o espera.
+func _act_advance() -> void:
+	if _board_busy():
+		return
+	var active := CombatManager.get_active_unit()
+	if active == null or active.side != PLAYER:
+		return
+	var cell: Vector2i = Orders.advance_cell(CombatManager.get_encounter(), active.uid)
+	if cell != Orders.NO_CELL:
+		CombatManager.move_unit(active.uid, cell)
 
 func _act_defend() -> void:
 	var active := CombatManager.get_active_unit()
@@ -1599,6 +1656,66 @@ func force_board_scene(scene: String) -> void:
 func board_style() -> String:
 	return _board_style
 
+## La vista de la maqueta 3D: "front" (por defecto) o "board". Con el tablero 2D
+## no aplica, pero devuelve igual la preferencia.
+##
+## En calidad "minimal" manda el tablero: es la vista medida mas barata (0,32 ms
+## de GPU en Mobile, docs/15 §3) y la frontal pinta mas suelo hasta el horizonte,
+## arboledas lejanas y un cielo. La preferencia guardada no se toca: al subir la
+## calidad vuelve la frontal.
+func combat_view() -> String:
+	if _forced_view != "":
+		return _forced_view
+	if _graphics_quality() == "minimal":
+		return "board"
+	return GameConfig.ui_combat_view if GameConfig.ui_combat_view in GameConfig.COMBAT_VIEWS else "front"
+
+## Hay una pelea en pantalla en la vista frontal.
+func is_front_view() -> bool:
+	return _uses_3d() and combat_view() == "front"
+
+## Fuerza la vista de la maqueta ("front" / "board", o "" para la preferencia),
+## sin tocar settings.cfg. Pruebas y sondas.
+func force_combat_view(view: String) -> void:
+	_forced_view = view if view in GameConfig.COMBAT_VIEWS else ""
+	_apply_combat_view()
+
+## Cambia a la otra vista: la guarda como preferencia y la aplica ya, tambien a
+## mitad de pelea (si la maqueta esta contando algo, al terminar).
+func set_combat_view(view: String) -> void:
+	if not view in GameConfig.COMBAT_VIEWS:
+		return
+	_forced_view = ""
+	GameConfig.set_combat_view(view)
+	_refresh_view_button()
+	_after_board_animations(_apply_combat_view)
+
+func toggle_combat_view() -> void:
+	set_combat_view("board" if combat_view() == "front" else "front")
+
+func _apply_combat_view() -> void:
+	_refresh_view_button()
+	if _board3d == null or not _board_open:
+		return
+	_board3d.board.set_style(combat_view())
+	_queue_margin_update()
+	_refresh()
+
+func _refresh_view_button() -> void:
+	if _view_btn == null:
+		return
+	_view_btn.visible = _board_style == "3d"
+	# El boton dice a donde lleva, no donde se esta.
+	var other := "OPT_COMBAT_VIEW_BOARD" if combat_view() == "front" else "OPT_COMBAT_VIEW_FRONT"
+	_view_btn.text = Tr.t(other)
+	UITheme.style_button(_view_btn, UITheme.BTN, UITheme.FONT_SECTION)
+
+func view_button() -> Button:
+	return _view_btn
+
+func advance_button() -> Button:
+	return _advance_btn
+
 ## La vista 3D (BoardViewport3D), o null si nunca se abrio un tablero 3D.
 func board3d():
 	return _board3d
@@ -1649,6 +1766,7 @@ func _open_board_3d(index: int) -> void:
 		"boss_uid": boss_uid(),
 		"crew_uids": encounter.back_row_uids,
 		"seed": seed_value,
+		"style": combat_view(),
 	})
 	_queue_margin_update()
 
@@ -1689,7 +1807,11 @@ func _refresh_board3d() -> void:
 		b.clear_marks()
 		return
 	if CombatManager.is_player_turn():
+		# En el frente el aro rojo va en todo enemigo al que se llega este turno,
+		# moviendose o no (tocarlo acerca y dispara); en el tablero, solo a tiro.
 		var targets: Array = CombatManager.get_valid_targets(active.uid)
+		if is_front_view():
+			targets = Orders.reachable_targets(CombatManager.get_encounter(), active.uid)
 		b.show_state(active.uid, CombatManager.get_valid_moves(active.uid), targets, target_hints(active, targets))
 	else:
 		b.show_state(active.uid, [], [])

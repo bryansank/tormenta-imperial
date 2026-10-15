@@ -36,6 +36,13 @@ signal building_selected_for_placement(building_data: Resource)
 signal building_placement_cancelled()  # ESC, right-click or the on-screen CANCEL; BuildingPlacer._cancel listens
 @warning_ignore("unused_signal")
 signal building_placed(building_data: Resource, cell: Vector2i)
+## Una tanda de building_placed del mismo gesto (los tramos del auto-road,
+## PlacementRules.pave_route). Quien hace trabajo caro por building_placed
+## (guardar, recontar) lo aplaza hasta `placement_batch_finished` y lo hace una vez.
+@warning_ignore("unused_signal")
+signal placement_batch_started()
+@warning_ignore("unused_signal")
+signal placement_batch_finished(count: int)
 @warning_ignore("unused_signal")
 signal building_moved(from_cell: Vector2i, to_cell: Vector2i)
 @warning_ignore("unused_signal")
@@ -177,6 +184,13 @@ signal unit_defended(unit_uid: int)
 signal unit_died(unit_uid: int, side: int)
 @warning_ignore("unused_signal")
 signal encounter_ended(victory: bool, turns_used: int)
+## El tablero se cerro (CombatManager.end_encounter): el parte ya se leyo. Lo
+## que esperaba a que terminara la pelea (los avisos de la colonia retenidos)
+## sale ahora, salvo que otro tablero se haya abierto en la misma llamada (la
+## oleada siguiente del asedio): por eso quien escucha vuelve a mirar
+## CombatManager.is_board_open().
+@warning_ignore("unused_signal")
+signal encounter_closed()
 @warning_ignore("unused_signal")
 signal draft_offered(options: Array)
 @warning_ignore("unused_signal")

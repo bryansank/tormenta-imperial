@@ -15,14 +15,16 @@ extends WorldEnvironment
 ## - **Isla sencilla** (`island_simple`, en baja y minima): los shaders de la isla
 ##   se saltan las ondas del agua, las lineas de espuma y el grano del cesped
 ##   (uniform `simple`, el mismo valor en todo el material: la rama no cuesta).
-## - **Minima** ("minimal", 2026-10-12, aun sin entrada en Ajustes): para "una
+## - **Minima** ("minimal", 2026-10-12; en Ajustes desde 2026-10-14): para "una
 ##   papa" (grafica integrada vieja, tablet barata). Sin sombras, sin SSAO, sin
-##   glow, isla sencilla y el 3D a `MINIMAL_SCALE` de la resolucion
-##   (`scaling_3d_scale`; la UI no se escala). Se activa poniendo
-##   GameConfig.ui_graphics_quality = "minimal" y emitiendo graphics_quality_changed.
+##   glow, sin MSAA, isla sencilla y el 3D a `MINIMAL_SCALE` de la resolucion
+##   (`MINIMAL_SCALE_MOBILE` en Android; `scaling_3d_scale`, la UI no se escala).
+##   Lo que no es del mundo (humo, rejilla, caminantes, FPS, renderizador) lo
+##   pone GraphicsQuality.
 ##
 ## La calidad la elige el jugador en Ajustes -> Interfaz ("auto", "high",
-## "low"; GameConfig.ui_graphics_quality en settings.cfg). "auto" es baja con
+## "low", "minimal"; GameConfig.ui_graphics_quality en settings.cfg), o la
+## deteccion del primer arranque (DeviceProfile, docs/26 §7.2). "auto" es baja con
 ## Mobile o Compatibility. No toca colores ni energias: eso es de StormSky,
 ## que los guarda limpios y los oscurece por fase.
 
@@ -34,6 +36,8 @@ const SHADOW_DISTANCE_MIN := 30.0
 const SHADOW_DISTANCE_MAX := 200.0
 ## Resolucion del 3D en calidad minima (fraccion de la de la ventana).
 const MINIMAL_SCALE := 0.7
+## La misma en movil y tablet (pantallas densas: 0,6 se sigue viendo bien).
+const MINIMAL_SCALE_MOBILE := 0.6
 const QUALITIES := ["high", "low", "minimal"]
 ## Los nodos de la isla (IslandGenerator.NODE_NAMES) con el uniform `simple`.
 const ISLAND_NODES := ["Ground", "Cliff", "Shore", "Foam", "Water"]
@@ -93,14 +97,23 @@ static func effective_quality(pref: String, renderer: String) -> String:
 		return pref
 	return "high" if renderer == "forward_plus" else "low"
 
-## Que se enciende con cada calidad en cada renderizador.
-static func settings_for(quality: String, renderer: String) -> Dictionary:
+## Que se enciende con cada calidad en cada renderizador. `platform`: "mobile",
+## "pc" o "" (el de este equipo).
+static func settings_for(quality: String, renderer: String, platform: String = "") -> Dictionary:
 	var high := quality == "high"
 	var minimal := quality == "minimal"
+	var mobile := platform == "mobile"
+	if platform == "":
+		mobile = OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
 	var shadow_mode := DirectionalLight3D.SHADOW_ORTHOGONAL
 	if high:
 		shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if renderer == "forward_plus" \
 			else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	# Fuera de Minima, la de project.godot (rendering/scaling_3d/scale: 0,75
+	# en movil con su variante .mobile, 1,0 en PC).
+	var scale_3d := float(ProjectSettings.get_setting_with_override("rendering/scaling_3d/scale"))
+	if minimal:
+		scale_3d = MINIMAL_SCALE_MOBILE if mobile else MINIMAL_SCALE
 	return {
 		"ssao": high and renderer == "forward_plus",
 		"glow": high and renderer != "gl_compatibility",
@@ -108,7 +121,8 @@ static func settings_for(quality: String, renderer: String) -> Dictionary:
 		"radiance_size": Sky.RADIANCE_SIZE_64 if high else Sky.RADIANCE_SIZE_32,
 		"shadows": not minimal,
 		"island_simple": not high,
-		"scale_3d": MINIMAL_SCALE if minimal else 1.0,
+		"scale_3d": scale_3d,
+		"msaa": not minimal,
 	}
 
 ## Distancia de sombra del sol para una camara a `cam_distance` de su objetivo.
@@ -127,3 +141,10 @@ static func configure(env: Environment, sun: DirectionalLight3D, s: Dictionary, 
 		sun.directional_shadow_mode = int(s["shadow_mode"])
 	if viewport != null:
 		viewport.scaling_3d_scale = float(s["scale_3d"])
+		# Sin MSAA en Minima: el reescalado bilineal ya suaviza. Con las demas,
+		# el de project.godot (con su variante .mobile).
+		var msaa: int = Viewport.MSAA_DISABLED
+		if bool(s.get("msaa", true)):
+			msaa = int(ProjectSettings.get_setting_with_override("rendering/anti_aliasing/quality/msaa_3d"))
+		viewport.msaa_3d = msaa as Viewport.MSAA
+

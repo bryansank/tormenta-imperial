@@ -545,3 +545,27 @@ ejecución de los tests.
 Para medir un cambio, lo único que hace falta es tocar el valor en
 `GameConfig.gd` y volver a correrla. Un barrido completo de 200 semillas tarda
 unos minutos.
+
+---
+
+## Ventaja por tipo (2026-10-13, rama `feat/combate-3d`)
+
+Artilleria > vehiculo > infanteria > artilleria, x1,5 / x0,75 sobre el dano neto
+(`GameConfig.combat_type_advantage`, docs/15 §3). Danos netos con la regla (sin
+borradores ni moral):
+
+| Ataca \ recibe | infanteria | artilleria | vehiculo |
+|---|---|---|---|
+| infanteria | 6 | **11** (x1,5) | 2 (x0,75) |
+| artilleria | 9 (x0,75) | 13 | **14** (x1,5) |
+| vehiculo | **15** (x1,5) | 8 (x0,75) | 7 |
+
+Medido con `tools/balance_probe.gd` (`-- --adv=off` para el antes), 200
+semillas por celda: el barrido de encuentros y expediciones se mueve poco. En
+era 1 no cambia nada (solo infanteria contra infanteria). En las celdas de era
+3 con plantilla mixta el ganar% se mueve unos puntos arriba o abajo (p. ej. era
+3, profundidad 5, riesgo medio, plantilla 4: 79 % -> 78 %; riesgo alto,
+plantilla 3: 42 % -> 32 %; plantilla 4: 73 % -> 75 %). Ninguna celda pasa a
+trivial ni a imposible. Las tablas completas salen con
+`-- --only=expeditions` y `-- --adv=off`; cuadrarlas con la rama de balance al
+integrar.

@@ -475,7 +475,7 @@ vsync sigue como está.
 
 | Perfil | "Del perfil" | Por qué |
 |---|---|---|
-| PC | 60 | Por encima no aporta nada en un juego de gestión |
+| PC | 60 (30 con la calidad Mínima, `GameConfig.fps_minimal_pc`) | Por encima no aporta nada en un juego de gestión; en Mínima, estable antes que alto |
 | Tablet | 30 | Batería y calor: las tablets baratas bajan el reloj al calentarse y entonces tironean |
 | Móvil | 30 | Igual, y en pantalla pequeña 30 estables se ven bien |
 
@@ -491,9 +491,13 @@ Además del elegido, el juego baja solo:
 
 La cuenta es pura: `DeviceProfile.fps_for(mode, profile_fps, focused, paused)`
 (0 = sin tope); `effective_fps_cap()` la hace con el estado de ahora y
-`apply_fps()` la aplica (al arrancar, al cambiar de perfil, al restablecer
-Interfaz, al pausar y al perder o recuperar el foco). Valores por perfil en
-`DeviceProfile.DEFAULTS["fps"]`. Diseño y medidas: `docs/26-rendimiento.md` §7.4.
+`apply_fps()` la aplica (al arrancar, al cambiar de perfil o de calidad, al
+restablecer Interfaz, al pausar y al perder o recuperar el foco). Valores por
+perfil en `DeviceProfile.DEFAULTS["fps"]`; el "Del perfil" lo da
+`DeviceProfile.auto_fps()` (`auto_fps_for(perfil, minima)`, pura), que en PC con
+Mínima baja a 30. Mientras se mide la calidad en el primer arranque (§12,
+"Detección") no hay tope: la pausa del menú de título lo bajaría a 30 y la medida
+vería un equipo flojo en cualquiera. Diseño y medidas: `docs/26-rendimiento.md` §7.4.
 
 - **Headless no se toca**: `apply_fps()` no hace nada con
   `DisplayServer.get_name() == "headless"`, así que los tests y las sondas sin
@@ -589,12 +593,15 @@ noche y Tormenta en un solo `CanvasModulate`).
 
 ### Calidades (`WorldLook.settings_for`)
 
-El jugador elige en Ajustes → Interfaz: `auto`, `high`, `low`
-(`GameConfig.ui_graphics_quality`, en `settings.cfg`). `auto` es alta solo con
-Forward+; con Mobile o Compatibility es baja. `minimal` existe en WorldLook pero
-aún **no tiene entrada en Ajustes** (2026-10-12): se activa poniendo
-`GameConfig.ui_graphics_quality = "minimal"` y emitiendo
-`graphics_quality_changed` (lo hace `tools/arte_probe_runner.gd`).
+El jugador elige en Ajustes → Interfaz: `auto`, `high`, `low`, `minimal`
+(`GameConfig.ui_graphics_quality`, en `settings.cfg`), con una línea de ayuda debajo
+y el botón **DETECTAR DE NUEVO**. `auto` es alta solo con Forward+; con Mobile o
+Compatibility es baja. La única puerta para cambiarla es
+`GraphicsQuality.set_quality()` (`scripts/services/GraphicsQuality.gd`, estático, con
+`preload`): guarda, emite `graphics_quality_changed` y pone o quita el override del
+renderizador. WorldLook pinta el mundo; lo demás lo aplica
+`GraphicsQuality.apply_runtime()`, que llama `DeviceProfile` al arrancar y con cada
+cambio.
 
 | | Alta | Baja | Mínima |
 |---|---|---|---|
@@ -603,7 +610,43 @@ aún **no tiene entrada en Ajustes** (2026-10-12): se activa poniendo
 | Sombras del sol | 4 cortes (Forward+), 2 (Mobile) | 1 corte (ortogonal) | **apagadas** |
 | Radiancia del cielo | 64 | 32 | 32 |
 | Isla | completa | sencilla | sencilla |
-| `scaling_3d_scale` | 1,0 | 1,0 | **0,7** (la UI no se escala) |
+| `scaling_3d_scale` | la de project.godot (1,0 PC, 0,75 móvil) | igual | **0,7** PC, **0,6** móvil (la UI no se escala) |
+| MSAA 3D | el de project.godot (2x PC, 0 móvil) | igual | **no** |
+| Humo, serrín, farol, chispas (`BuildingFx`) | sí | sí | **ocultos** (grupo `building_fx_anim`) |
+| Banderines de obra / bandera de la colonia | ondean / ondea | ondean / quieta | **quietos** |
+| Rejilla "siempre visible" | la de Ajustes | igual | **no** (solo al construir) |
+| Caminantes | tope del perfil | igual | **`life_figure_cap_minimal`** (12) |
+| FPS "Del perfil" en PC | 60 | 60 | **30** |
+| Renderizador en PC | Forward+ | Forward+ | **Mobile**, desde el siguiente arranque |
+| Tablero de combate 3D | completo | completo | simplificado (lo lee `BattleScreen` de `settings_for`) |
+
+- **Mínima en PC cambia el renderizador al reiniciar** (decisión del dueño): al
+  elegirla, `GraphicsQuality.sync_renderer_override()` escribe
+  `user://renderer_override.cfg` con `[rendering] renderer/rendering_method="mobile"`
+  y avisa "se aplica al reiniciar". El motor lo lee al arrancar porque
+  `project.godot` lo nombra en `application/config/project_settings_override`: vive
+  en el user dir (se puede escribir aunque el `.exe` esté en `Program Files`) y no
+  toca la instalación. El editor no lee ese archivo (solo el juego), así que no se
+  cuela en `project.godot`. Volver a otra calidad lo borra (y avisa igual). No se
+  pide Mobile si hoy se va en Compatibility (sin Vulkan ni D3D12), ni en Android
+  (ya es Mobile), ni en headless. Al arrancar, `DeviceProfile` lo resincroniza con
+  la calidad guardada. `--rendering-method` en la línea de órdenes sigue mandando
+  (las sondas).
+- **Detección del primer arranque** (`DeviceProfile.start_quality_detection`, reglas
+  puras en `GraphicsQuality.static_verdict` / `measure_verdict`; docs/26 §7.2). Solo
+  con la calidad en `auto` y sin `[interfaz] quality_detected`. Nunca en headless ni
+  con `-- --no-title` / `-- --no-detect`. Paso 1: renderizador Compatibility, nombre
+  de GPU en `GameConfig.quality_weak_gpu_patterns`, RAM ≤ `quality_weak_ram_mb`
+  (4600 MB), ≤ `quality_weak_threads` (4) hilos o móvil con ≤ 6600 MB → Mínima. Paso
+  2 (si el 1 no decide, y solo en la vista 3D): 2 s de espera detrás del menú de
+  título y 3 s de medida sin tope de FPS; mediana > 25 ms o p95 > 33 ms → Mínima;
+  mediana > 16,7 ms midiendo en Alta → Baja (nunca por debajo de 1,1 fotogramas del
+  refresco de la pantalla: con vsync un monitor de 50 Hz da 20 ms y no es flojo). Perder el foco descarta la medida (se
+  repite en el siguiente arranque); si el jugador elige calidad mientras se mide,
+  manda la suya. Paso 3: si se bajó, un aviso de una línea al cerrar el menú de
+  título (`MSG_QUALITY_AUTO_MINIMAL` / `_LOW`, más `MSG_QUALITY_RESTART` si cambia
+  el renderizador). Se guardan `quality_detected = true` y
+  `quality_detected_reason` (para depurar; también sale en el log).
 
 - **Isla sencilla** (uniform `simple`): agua lisa (solo el degradado, sin ondas
   ni crestas), espuma con la franja fija y sin líneas, cesped sin sombra, zonas
@@ -739,7 +782,12 @@ Forward+ alta ≈ 85 fps, baja ≈ 88, mínima ≈ 139; Mobile ≈ 135 / 138 / 1
 - Las parcelas de los edificios (césped de los solares) no reciben
   `storm_weight`: bajo la Tormenta quedan algo más verdes que la isla. Son de
   los edificios, no de esta sección.
-- `minimal` sin entrada en Ajustes ni en `GameConfig.GRAPHICS_QUALITY_MODES`.
+- Mínima: `BuildingPlacer.gd` (3D) restaura la rejilla con
+  `GameConfig.ui_grid_visible` al terminar de colocar; debería usar
+  `GraphicsQuality.grid_always_visible()` (como ya hace `BuildingPlacer2D`), o en
+  Mínima con la rejilla "siempre" marcada vuelve a verse tras construir.
+- Mínima: el tope de caminantes nuevo se aplica en la siguiente reconciliación de
+  `WorkerWalkers` (al cambiar población, obreros o edificios), no al instante.
 
 ## 13. Velocidad del juego (x1 / x2) e Informar de un fallo
 
@@ -788,7 +836,12 @@ Forward+ alta ≈ 85 fps, baja ≈ 88, mínima ≈ 139; Mobile ≈ 135 / 138 / 1
 
 ### Informar de un fallo
 
-**☰ MENÚ → PARTIDA → Informar de un fallo** (tras AYUDA) copia al portapapeles
+**☰ MENÚ → PARTIDA → Informar fallo** (en la fila de Historia, tras AYUDA; el
+nombre largo va en su tooltip) copia al portapapeles
 el informe de `scripts/services/BugReport.gd` y lo dice bajo los grupos, como
 Guardar: "Copiado. Pégalo en un mensaje." Nada sale del equipo. Qué lleva, dónde
 está el registro y cómo se limpian las rutas: docs/19 §7.
+
+PARTIDA lleva dos filas de dos botones (Guardar | PARTIDAS, Historia | Informar
+fallo, con letra de cuerpo): con diez botones en columna, en una tablet de 720 px
+de alto "Guardar y salir" quedaba tras el scroll; con ocho filas cabe entero.

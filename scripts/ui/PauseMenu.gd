@@ -6,8 +6,9 @@ extends CanvasLayer
 ##
 ##   COLONIA  Que hacer · Progreso · Colonia (rango) · Ejercito ·
 ##            Escaramuzas · Sandbox        (solo lo que ya esta disponible)
-##   PARTIDA  Reanudar · Guardar · Partidas · Ajustes · Musica · Ayuda ·
-##            Informar de un fallo · Historia · Menu principal · Guardar y salir
+##   PARTIDA  Reanudar · Guardar | Partidas · Ajustes · Musica · Ayuda ·
+##            Historia | Informar fallo · Menu principal · Guardar y salir
+##            (los "|" comparten fila: asi cabe entero en 720 px de alto)
 ##
 ## - Con el menu abierto la partida esta en pausa de verdad (`get_tree().paused`).
 ##   Todo lo que no marque PROCESS_MODE_ALWAYS se para; este menu y la musica no.
@@ -178,14 +179,19 @@ func _setup_ui() -> void:
 	# ── PARTIDA ──
 	var game := _make_group("GameGroup", Tr.t("LBL_MENU_GROUP_GAME"), Tr.t("LBL_PAUSE_SUBTITLE"))
 	_resume_btn = _add_game_button(game, "Resume", Tr.t("BTN_RESUME"), UITheme.POSITIVE, resume)
-	_add_game_button(game, "Save", Tr.t("BTN_SAVE_GAME"), UITheme.BTN, save)
-	_add_game_button(game, "Saves", Tr.t("BTN_SAVES"), UITheme.BTN, _on_saves)
+	# Guardar y PARTIDAS, Historia e Informar fallo van de dos en dos: en una
+	# tablet de 720 px de alto el grupo entero cabe sin scroll y "Guardar y
+	# salir" queda a la vista (antes caia tras el desplazamiento).
+	var save_row := _make_pair_row(game)
+	_add_game_button(save_row, "Save", Tr.t("BTN_SAVE_GAME"), UITheme.BTN, save, true)
+	_add_game_button(save_row, "Saves", Tr.t("BTN_SAVES"), UITheme.BTN, _on_saves, true)
 	_add_game_button(game, "Settings", Tr.t("BTN_SETTINGS"), UITheme.BTN, _on_settings)
 	_music_btn = _add_game_button(game, "Music", "", UITheme.BTN, AudioManager.toggle_music)
 	_help_btn = _add_game_button(game, "Help", Tr.t("BTN_HELP"), UITheme.INFO, _on_help)
-	var report := _add_game_button(game, "Report", Tr.t("BTN_REPORT_BUG"), UITheme.BTN, report_bug)
+	var story_row := _make_pair_row(game)
+	_add_game_button(story_row, "Story", Tr.t("BTN_STORY"), UITheme.BTN, _on_story, true)
+	var report := _add_game_button(story_row, "Report", Tr.t("BTN_REPORT_BUG"), UITheme.BTN, report_bug, true)
 	report.tooltip_text = Tr.t("BTN_REPORT_BUG_HINT")
-	_add_game_button(game, "Story", Tr.t("BTN_STORY"), UITheme.BTN, _on_story)
 	_add_game_button(game, "MainMenu", Tr.t("BTN_MAIN_MENU"), UITheme.BTN, _on_main_menu)
 	_add_game_button(game, "Quit", Tr.t("BTN_SAVE_QUIT"), UITheme.DANGER, _on_quit)
 
@@ -225,11 +231,29 @@ func _make_group(node_name: String, title: String, hint: String) -> VBoxContaine
 	_groups.add_child(box)
 	return box
 
-func _add_game_button(group: VBoxContainer, id: String, text: String, color: Color, cb: Callable) -> Button:
+## `half`: el boton comparte fila con otro (_make_pair_row) y va con letra de
+## cuerpo para que su palabra quepa en media columna.
+func _add_game_button(group: Container, id: String, text: String, color: Color, cb: Callable,
+		half := false) -> Button:
 	var btn := ModalKit.make_menu_button(text, color, cb)
 	btn.name = "Game_" + id
+	if half:
+		UITheme.style_button(btn, color, UITheme.FONT_BODY)
+		btn.clip_text = true
+		btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		btn.custom_minimum_size.x = 0.0
+		if btn.tooltip_text == "":
+			btn.tooltip_text = text
 	group.add_child(btn)
 	return btn
+
+## Una fila de dos botones a partes iguales dentro de un grupo del menu.
+func _make_pair_row(group: VBoxContainer) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", int(group.get_theme_constant("separation")))
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group.add_child(row)
+	return row
 
 func _relayout() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
@@ -490,6 +514,8 @@ func save() -> void:
 ## aqui mismo, como Guardar. No envia nada: el jugador lo pega donde quiera.
 func report_bug() -> void:
 	BugReport.copy_to_clipboard()
+	# La primera vez, al volver al juego, la ayuda dice donde pegarlo.
+	TutorialManager.offer_tip("bug_report")
 	_status.text = Tr.t("MSG_REPORT_COPIED")
 	_status.add_theme_color_override("font_color", UITheme.POSITIVE)
 	_status.visible = true

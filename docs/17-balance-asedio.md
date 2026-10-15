@@ -161,3 +161,66 @@ semillas, era 3, moral 100:
 La guarnición máxima bien preparada gana como antes (82 %); sin las torres o con
 la moral a medias, una de cada dos. Con moral 50, nunca. Gobernador ≥ 60 %.
 `tools/siege_probe.gd` acepta `--crews=N`.
+
+---
+
+## Ventaja por tipo (2026-10-13, rama `feat/combate-3d`)
+
+La regla nueva del combate (docs/15 §3 "Segunda tanda"): artilleria > vehiculo >
+infanteria > artilleria, x1,5 con ventaja y x0,75 con desventaja sobre el dano
+neto (`GameConfig.combat_type_advantage`). Medido con `tools/siege_probe.gd`
+(era 3, moral 100, 2 torres, nivel Colono), con los `final_audit_*` de esta rama
+(oleada 0.03, era 0.05, ultima x1.05, 3+1 cuerpos, un canon cada 3, blindado
+desde la oleada 2). `-- --adv=off` mide el antes; `-- --adv=A,D` pisa los
+multiplicadores.
+
+| Guarnicion | Antes (sin ventaja, 200 sem.) | Despues x1,5/x0,75 (200 sem.) |
+|---|---|---|
+| min 3 infanteria | 0 % | 0 % |
+| min 3 vehiculos | 6,0 % | 6,0 % |
+| 4 vehiculos | 33,5 % | 33,5 % |
+| 5 vehiculos | 65,0 % | 48,5 % |
+| 6 infanteria | 0 % | 0 % |
+| mixta 3+2+1 | 29,0 % | 25,5 % |
+| mixta 2+2+2 | 33,5 % | 33,5 % |
+| **MAX 6 vehiculos** | **82,0 %** | **68,0 %** |
+
+Por que baja: las oleadas llevan un canon por cada 3 cuerpos, y el canon pega al
+blindado con ventaja; la guarnicion maxima es toda blindados. Variantes (100
+semillas, MAX 6 vehiculos / mixta 2+2+2):
+
+| Multiplicadores | Canones de la Regencia | MAX 6 vehiculos | mixta 2+2+2 |
+|---|---|---|---|
+| 1,25 / 0,8 | 1 de cada 3 | 71 % | 34 % |
+| 1,35 / 0,85 | 1 de cada 3 | 76 % | 34 % |
+| 1,5 / 0,9 | 1 de cada 3 | 71 % | 34 % |
+| 1,25 / 0,9 | 1 de cada 3 | 76 % | 34 % |
+| **1,5 / 0,75** | **1 de cada 4** (`--gun=4`) | **83 %** | 34 % |
+| 1,5 / 0,75 | 1 de cada 5 (`--gun=5`) | 83 % | 34 % |
+| 1,35 / 0,85 | 1 de cada 4 | 88 % | 34 % |
+
+**Propuesta (sin aplicar, la decide la rama de balance):** mantener x1,5 / x0,75
+y subir `final_audit_artillery_share` de 3 a 4. Devuelve la guarnicion maxima al
+~82 % de antes (83 %) sin tocar la escala de las oleadas, y deja intacta la
+mixta. 5 no da mas. Hay que medirlo junto a lo que endurezca el final la rama
+`balance/campana-4-6h`: los dos cambios tocan el mismo asedio.
+
+## Las dos cosas juntas (2026-10-14): 4-5 oleadas, 4 dotaciones y ventaja por tipo
+
+Con la ventaja por tipo fusionada y los valores del 2026-10-12 (4-5 oleadas,
+última ×1,10, hasta 4 dotaciones), 200 semillas, era 3:
+
+| Guarnición | canón 1/3, 4 torres | 1/3, 2 torres | 1/3, moral 75 | 1/3, Gobernador | canón 1/4, 4 torres | 1/4, 2 torres | 1/4, moral 75 | 1/4, Gobernador |
+|---|---|---|---|---|---|---|---|---|
+| 3 vehículos | 0 % | 0 % | 0 % | 0 % | 13,5 % | 0 % | 0 % | 0 % |
+| 4 vehículos | 33,5 % | 0 % | 0 % | 19 % | 45 % | 0 % | 19 % | 32 % |
+| 5 vehículos | 69 % | 6,5 % | 19 % | 41 % | 86 % | 28,5 % | 38,5 % | 62,5 % |
+| mixtas | 0 % | 0 % | 0 % | 0 % | 0 % | 0 % | 0 % | 0 % |
+| **6 vehículos** | **86 %** | **45 %** | **40,5 %** | **75,5 %** | **97,5 %** | **71,5 %** | **71,5 %** | **92 %** |
+
+**Decisión: `final_audit_artillery_share` se queda en 3.** La propuesta de 4
+compensaba la ventaja por tipo sobre el asedio de 3-5 oleadas; sobre el de 4-5
+oleadas el final se volvería un trámite (97,5 % con 6 blindados, 86 % con 5,
+71,5 % sin las torres). Con 3, la guarnición máxima bien preparada gana el 86 %
+(como el 82 % de siempre), sin las torres o con la moral a 75 una de cada dos o
+menos, y Gobernador el 75,5 % (≥ 60 %).

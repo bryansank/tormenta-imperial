@@ -288,6 +288,10 @@ static func valid_spots(building_id: String, size: Vector2i, map_gen: Node, igno
 	var reach := int(rule["reach"])
 	var seen := {}
 	var out: Array = []
+	# Cientos de veredictos seguidos sobre el mismo mapa: la red, el Nucleo y las
+	# rutas salen de la cache de PlacementRules, y los sitios sin camino posible
+	# se descartan sin un BFS por la rejilla libre cada uno (docs/26 §6.5).
+	Rules.prepare_route_queries()
 	for dep in map_gen.get_all_deposits():
 		if String(dep["id"]) != String(rule["deposit"]):
 			continue
@@ -328,9 +332,14 @@ static func rule_text(building_id: String) -> String:
 func _build_confirm() -> void:
 	_layer = CanvasLayer.new()
 	_layer.name = "PlacementConfirm"
-	# Por encima del HUD y de los globos de ayuda (hasta 15), por debajo de los
-	# modales (tutorial 17, avisos 19).
-	_layer.layer = 16
+	# Debajo de toda la interfaz que se abre (bug de Bryan, 2026-10-14): en la 16
+	# se pintaba encima de los menus y paneles, que UIManager apila de la 12 hacia
+	# arriba. En la 11 (la base de UIManager) queda por encima del mapa y de la
+	# barra del HUD (10), y por debajo de cualquier ventana abierta, de los globos
+	# de ayuda, del tutorial (19) y del menu de la partida (30). Con la misma capa
+	# que algun panel suelto (11) dibuja antes que el, porque el colocador va antes
+	# que la interfaz en la escena.
+	_layer.layer = 11
 	add_child(_layer)
 	_confirm = Button.new()
 	_confirm.name = "ConfirmPlacement"

@@ -34,6 +34,9 @@ var _badge_title: Label
 var _badge_bar: ProgressBar
 var _toast: PanelContainer = null
 var _toast_tween: Tween = null
+## Ascenso que llego con un tablero de combate abierto (la XP de ganar una pelea
+## lo provoca a menudo): [rango, recompensas]. Sale al cerrarse el tablero.
+var _held_rank: Array = []
 
 var _backdrop: ColorRect
 var _card: PanelContainer
@@ -50,8 +53,9 @@ func _ready() -> void:
 	layer = LAYER
 	_setup_ui()
 	UIManager.register_panel(self, "RankPanel.modal")
-	EventBus.governor_xp_changed.connect(func(_x, _r, _g): refresh())
+	EventBus.governor_xp_changed.connect(_on_xp_changed)
 	EventBus.governor_rank_up.connect(_on_rank_up)
+	EventBus.encounter_closed.connect(_release_held_rank)
 	EventBus.colony_identity_changed.connect(func(_n, _s): refresh())
 	EventBus.game_load_completed.connect(refresh)
 	EventBus.game_new_started.connect(refresh)
@@ -202,6 +206,23 @@ func _relayout() -> void:
 
 # ── Refresco ──
 
+## Cada ciclo de produccion da 1 XP: con muchos edificios llegan varias en el
+## mismo fotograma. Si el rango no cambia, se repinta una vez al final del
+## fotograma; si cambia, ya.
+var _refresh_queued := false
+func _on_xp_changed(_xp: int, rank: int, _gained: int) -> void:
+	if _badge_rank != null and _badge_rank.text != str(rank):
+		refresh()
+		return
+	if _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
+	refresh()
+
 func refresh() -> void:
 	var rank: int = RankManager.get_rank()
 	var flag_tex := ColonyFlag.current_texture()
@@ -256,6 +277,10 @@ static func reward_lines(rewards: Dictionary) -> Array:
 		out.append(data.get_display_name() if data != null else String(id))
 	var limits: Dictionary = rewards.get("limit", {})
 	for id in limits:
+		# Huecos de algo sin tope (las decoraciones desde los topes por era) no
+		# dan nada: no se anuncian.
+		if GameConfig.is_uncapped_building(String(id)):
+			continue
 		var data := Rules.load_building_data(String(id))
 		out.append(Tr.t("FMT_RANK_REWARD_SLOTS") % [int(limits[id]), data.get_display_name() if data != null else String(id)])
 	if float(rewards.get("production", 0.0)) > 0.0:
@@ -274,7 +299,21 @@ static func reward_lines(rewards: Dictionary) -> Array:
 
 func _on_rank_up(rank: int, rewards: Dictionary) -> void:
 	refresh()
+	if CombatManager.is_board_open():
+		# El ultimo manda: dos ascensos en una pelea dicen el rango final.
+		_held_rank = [rank, rewards]
+		return
 	show_rank_toast(rank, rewards)
+
+func held_rank() -> int:
+	return int(_held_rank[0]) if not _held_rank.is_empty() else 0
+
+func _release_held_rank() -> void:
+	if _held_rank.is_empty() or CombatManager.is_board_open():
+		return
+	var item: Array = _held_rank
+	_held_rank = []
+	show_rank_toast(int(item[0]), item[1])
 
 func show_rank_toast(rank: int, rewards: Dictionary) -> void:
 	if _toast != null and is_instance_valid(_toast):

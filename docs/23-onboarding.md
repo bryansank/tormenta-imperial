@@ -87,8 +87,15 @@ siempre el completo; las variantes de los modos apartados siguen en el código.
 
 ### Guía rápida (`scripts/ui/QuickGuide.gd`)
 
-Al cerrar el prólogo, **una vez por partida** (ayuda vista `quick_guide`) y antes de la
-primera marca del tutorial, sale una pantalla con cuatro bloques: **recursos** (qué hay,
+**Ya no sale sola (14-10-2026, partidas de Bryan):** la ventana "Cómo funciona Tormenta
+Imperial" sobraba al empezar, así que `TutorialPanel._on_prologue_closed()` ya no la
+abre; tras el prólogo va directo la primera marca del tutorial. Sus cuatro bloques
+siguen en el índice de AYUDA (`guide_qg_*`) y el nodo existe (`TutorialPanel.open_quick_guide()`)
+por si se quiere volver a ofrecer. Un `quick_guide` en `helps_seen` de una partida vieja
+se carga y no cambia nada. Lo que sigue describe la pantalla.
+
+Antes salía al cerrar el prólogo, **una vez por partida** (ayuda vista `quick_guide`) y
+antes de la primera marca del tutorial: una pantalla con cuatro bloques: **recursos** (qué hay,
 cuándo llega cada uno, el almacén y el taller), **extraer** (a mano se agota; con su
 edificio, no), **edificios** (trabajadores, viviendas y carretera hasta el Núcleo) y
 **progreso** (eras, árbol tecnológico y la Tormenta). Capa 33, hija de `TutorialPanel`,
@@ -262,6 +269,27 @@ entonces cada salida es un solo nodo fácil con botín. El globo antiguo
 `callout_skirmish` sigue atado al botón de la columna lateral, que ya no se abre desde
 que ESCARAMUZAS pasó al menú ☰: en la práctica no sale.
 
+### Ayudas de las novedades (2026-10-14, rama `feat/ayudas-novedades`)
+
+Cosas nuevas que no tenían ayuda. Todas son **básicas** (están en el índice desde el
+principio) y salen solas una vez, cuando el jugador se encuentra con lo que explican.
+Claves `HELP_T_*` / `HELP_B_*` (con `_TOUCH` donde se habla de ratón).
+
+| Id | Tipo | Cuándo sale sola | Dispara |
+|---|---|---|---|
+| `saves` | consejo | al terminar el tutorial | `TutorialManager._connect_news` (`tutorial_guide_finished`) |
+| `callout_speed` | globo (señala x1/x2) | detrás de los globos básicos, al terminar el tutorial o al cargar con él hecho | `HelperPanel.NEWS_AFTER_GUIDE` |
+| `rank` y `flag` | consejos | el primer ascenso de rango (uno detrás de otro) | `governor_rank_up` |
+| `night` | consejo | el primer anochecer | `day_phase_changed` (DUSK/NIGHT) |
+| `farm` | consejo | la primera Granja terminada | `construction_completed` |
+| `collect_full` | consejo | el primer edificio lleno sin recoger | `building_stock_changed` + `ProductionManager.is_full` |
+| `island` | consejo | el primer intento de construir en el agua | los colocadores 3D y 2D, rama `"water"` |
+| `bug_report` | consejo | tras pulsar Informar de un fallo (sale al cerrar el menú) | `PauseMenu.report_bug` |
+
+Los targets nuevos de `HelpTargets` son `speed_button` (`GameSpeedButton`) y
+`rank_badge` (`RankPanel`). Lo de combate (unidades, placa, aro, mira, ventaja por
+tipo) va en otra rama (`feat/ensenar-combate`).
+
 ### Índice de AYUDA (`scripts/ui/HelpIndexPanel.gd`)
 
 - Grupo **`help_index`**, método **`open()`**: el menú ☰ único lo abre con
@@ -306,7 +334,7 @@ artillerías), `HELP_B_STORM` (la Tormenta ya no se presenta al empezar: es una 
 
 | Suite | Qué fija |
 |---|---|
-| `tests/tutorial/test_quick_guide.gd` | la guía rápida se abre sin pausar y avisa al cerrarse, sus cuatro bloques en ES y EN, y los mismos bloques en el índice de AYUDA |
+| `tests/tutorial/test_quick_guide.gd` | la guía rápida se abre sin pausar y avisa al cerrarse, sus cuatro bloques en ES y EN, los mismos bloques en el índice de AYUDA, y que cerrar el prólogo ya no la abre |
 | `tests/tutorial/test_prologue_screen.gd` | 4 folios, Atrás/Siguiente/Saltar, Siguiente×2 + Atrás = folio 2, Atrás apagado en el primero, deslizar, máquina de escribir, pausa, variantes, textos ES/EN, estilo propio; la hoja final (última, Empezar, el plan en palabras llanas ES/EN sin botones, teclado y deslizar) |
 | `tests/tutorial/test_guide_steps.gd` | `derive_step`, recorrido entero, cancelar, saltar (API interna), fuera de orden, isla hecha, repetir, reanudar al cargar, guardado y basura |
 | `tests/tutorial/test_guide_never_stuck.gd` | sin "Saltar" (solo dev), repetir no salta, terminar un repaso, guardados saltados; un test por caso de atasco (§2.1); la granja y recoger entre aserradero y casa (§2.3) |
