@@ -490,6 +490,8 @@ func save() -> void:
 ## aqui mismo, como Guardar. No envia nada: el jugador lo pega donde quiera.
 func report_bug() -> void:
 	BugReport.copy_to_clipboard()
+	# La primera vez, al volver al juego, la ayuda dice donde pegarlo.
+	TutorialManager.offer_tip("bug_report")
 	_status.text = Tr.t("MSG_REPORT_COPIED")
 	_status.add_theme_color_override("font_color", UITheme.POSITIVE)
 	_status.visible = true

@@ -57,6 +57,11 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 			return _resource_hud_chip(tree, "morale_chip")
 		"storm":
 			return HudRegistry.control_of("StormHUD")
+		# Novedades (2026-10-14): el boton x1/x2 y la insignia de rango.
+		"speed_button":
+			return HudRegistry.control_of("GameSpeedButton")
+		"rank_badge":
+			return HudRegistry.control_of("RankPanel")
 	if target_name.begins_with("card:"):
 		return card_or_build(tree, target_name.substr(5))
 	return null

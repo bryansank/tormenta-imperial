@@ -262,6 +262,27 @@ entonces cada salida es un solo nodo fácil con botín. El globo antiguo
 `callout_skirmish` sigue atado al botón de la columna lateral, que ya no se abre desde
 que ESCARAMUZAS pasó al menú ☰: en la práctica no sale.
 
+### Ayudas de las novedades (2026-10-14, rama `feat/ayudas-novedades`)
+
+Cosas nuevas que no tenían ayuda. Todas son **básicas** (están en el índice desde el
+principio) y salen solas una vez, cuando el jugador se encuentra con lo que explican.
+Claves `HELP_T_*` / `HELP_B_*` (con `_TOUCH` donde se habla de ratón).
+
+| Id | Tipo | Cuándo sale sola | Dispara |
+|---|---|---|---|
+| `saves` | consejo | al terminar el tutorial | `TutorialManager._connect_news` (`tutorial_guide_finished`) |
+| `callout_speed` | globo (señala x1/x2) | detrás de los globos básicos, al terminar el tutorial o al cargar con él hecho | `HelperPanel.NEWS_AFTER_GUIDE` |
+| `rank` y `flag` | consejos | el primer ascenso de rango (uno detrás de otro) | `governor_rank_up` |
+| `night` | consejo | el primer anochecer | `day_phase_changed` (DUSK/NIGHT) |
+| `farm` | consejo | la primera Granja terminada | `construction_completed` |
+| `collect_full` | consejo | el primer edificio lleno sin recoger | `building_stock_changed` + `ProductionManager.is_full` |
+| `island` | consejo | el primer intento de construir en el agua | los colocadores 3D y 2D, rama `"water"` |
+| `bug_report` | consejo | tras pulsar Informar de un fallo (sale al cerrar el menú) | `PauseMenu.report_bug` |
+
+Los targets nuevos de `HelpTargets` son `speed_button` (`GameSpeedButton`) y
+`rank_badge` (`RankPanel`). Lo de combate (unidades, placa, aro, mira, ventaja por
+tipo) va en otra rama (`feat/ensenar-combate`).
+
 ### Índice de AYUDA (`scripts/ui/HelpIndexPanel.gd`)
 
 - Grupo **`help_index`**, método **`open()`**: el menú ☰ único lo abre con
