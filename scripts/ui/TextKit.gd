@@ -62,7 +62,7 @@ static func fill_cost_row(row: Container, amounts: Dictionary, short: Dictionary
 	# Las mismas cifras, lo mismo en rojo y el mismo estilo: la fila ya dice eso
 	# y no se rehace (llega una senal por recurso y por tick; docs/26 §6.9).
 	var sig := [amounts, short, size_name, color, prefix, UITheme.DANGER]
-	if row.get_meta("fill_sig", null) == sig and row.get_child_count() == amounts.size():
+	if row.has_meta("fill_sig") and row.get_meta("fill_sig") == sig and row.get_child_count() == amounts.size():
 		return
 	row.set_meta("fill_sig", sig)
 	for child in row.get_children():
