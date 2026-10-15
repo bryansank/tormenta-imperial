@@ -420,3 +420,25 @@ signal stock_spoiled(node: Node, lost: Dictionary)
 ## Se planto (o cambio) el cultivo de una Granja.
 @warning_ignore("unused_signal")
 signal crop_planted(node: Node, crop_id: String)
+
+# ── Encargos (feat/encargos) ──
+## ContractManager publica lo que devuelve el modelo puro ContractBoard. `source`
+## es "regency", "neighbors" o "smuggler"; `contract` es el encargo entero
+## ({id, source, template, ask, reward, seconds_total, seconds_left}).
+## Llego un encargo nuevo al tablon.
+@warning_ignore("unused_signal")
+signal contract_offered(source: String, contract: Dictionary)
+## Se entrego: lo pedido ya salio de la bolsa y `reward` ya se pago.
+@warning_ignore("unused_signal")
+signal contract_delivered(source: String, contract: Dictionary, reward: Dictionary)
+## Se acabo el plazo sin entregarlo. En Colono no castiga; en Gobernador baja
+## la reputacion con quien lo pidio (`reputation`, 0 a contract_reputation_min).
+@warning_ignore("unused_signal")
+signal contract_expired(source: String, contract: Dictionary, reputation: int)
+## El jugador lo rechazo ("No, gracias").
+@warning_ignore("unused_signal")
+signal contract_discarded(source: String, contract: Dictionary)
+## Algo cambio en el tablon (cualquiera de las de arriba, o una carga/reset).
+## El panel se repinta con esta.
+@warning_ignore("unused_signal")
+signal contract_board_changed()

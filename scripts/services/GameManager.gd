@@ -413,6 +413,7 @@ func _new_game() -> void:
 	TutorialManager.reset()
 	ProductionManager.reset()
 	RankManager.reset()
+	ContractManager.reset()
 	_apply_pending_identity()
 	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
 	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
@@ -609,6 +610,11 @@ func _load_game() -> void:
 	var rank_data: Variant = data.get("rank", {})
 	RankManager.load_save_data(rank_data if rank_data is Dictionary else {})
 
+	# El tablon de encargos. Sin la clave (partida anterior a los encargos) es
+	# un tablon nuevo, con la primera espera de cada fuente.
+	var contracts_data: Variant = data.get("contracts", {})
+	ContractManager.load_save_data(contracts_data if contracts_data is Dictionary else {})
+
 	# La bolsa es una sola y su tope depende de la era, de los almacenes y del arbol
 	# tecnologico: hasta que los tres no estan restaurados no se sabe cuanto cabe. Por
 	# eso el recorte va aqui y no junto a los recursos. Una partida guardada cuando el
@@ -749,6 +755,7 @@ func _write_save() -> void:
 	data["tutorial"] = TutorialManager.get_save_data()
 	data["game_mode"] = GameMode.get_save_data()
 	data["rank"] = RankManager.get_save_data()
+	data["contracts"] = ContractManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -863,6 +870,7 @@ func clear_save() -> void:
 	TutorialManager.reset()
 	ProductionManager.reset()
 	RankManager.reset()
+	ContractManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null
@@ -908,6 +916,7 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	TutorialManager.reset()
 	ProductionManager.reset()
 	RankManager.reset()
+	ContractManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null

@@ -509,6 +509,8 @@ func _connect_events() -> void:
 	_connect_optional("tithe_resolved", _on_tithe_resolved)
 	# Comida (rama comida-granja-recoger): solo si esa rama ya esta dentro.
 	_connect_optional("production_collected", _on_production_collected)
+	# Encargos (feat/encargos): entregar uno suena como un hito pequeno.
+	_connect_optional("contract_delivered", _on_contract_delivered)
 
 ## Connects to an EventBus signal that may not be declared yet. Handlers take
 ## optional arguments so they accept whatever arity the signal ends up having.
@@ -518,6 +520,9 @@ func _connect_optional(signal_name: String, handler: Callable) -> void:
 	if EventBus.is_connected(signal_name, handler):
 		return
 	EventBus.connect(signal_name, handler)
+
+func _on_contract_delivered(_source = null, _contract = null, _reward = null) -> void:
+	play_sfx("milestone")
 
 func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
 	play_sfx("build_place")
