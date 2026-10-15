@@ -36,8 +36,17 @@ static func _ensure_textures() -> void:
 	_tex_rough = _load_tex(TEX_METAL_ROUGH)
 	_tex_normal = _load_tex(TEX_METAL_NORMAL)
 
+## Un material por (color, metalico, rugosidad) para todo el mapa (docs/26
+## §6, punto 6): antes cada pieza creaba el suyo y el motor no podia agrupar.
+## Nadie modifica el material devuelto; quien necesite uno propio, que lo duplique.
+static var _metal_cache: Dictionary = {}
+
 static func _metal(color: Color, metallic: float = 0.7, roughness: float = 0.45) -> StandardMaterial3D:
+	var key := "%s|%.3f|%.3f" % [color.to_html(), metallic, roughness]
+	if _metal_cache.has(key):
+		return _metal_cache[key]
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	_metal_cache[key] = mat
 	mat.albedo_color = color
 	mat.metallic = metallic
 	mat.roughness = roughness
@@ -157,7 +166,9 @@ static func _add_rivets(parent: Node3D, start: Vector3, end: Vector3, count: int
 	for i in range(count):
 		var t: float = float(i) / float(count - 1) if count > 1 else 0.5
 		var pos: Vector3 = start.lerp(end, t)
-		_add_sphere(parent, pos, radius, mat)
+		# Un remache no da sombra que se vea: fuera de los pases de sombra.
+		var rivet := _add_sphere(parent, pos, radius, mat, 8)
+		rivet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 # Horizontal pipe between two points
 static func _add_pipe(parent: Node3D, from: Vector3, to: Vector3, radius: float, mat: StandardMaterial3D) -> void:

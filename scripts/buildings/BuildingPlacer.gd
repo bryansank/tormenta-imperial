@@ -28,6 +28,9 @@ const StockIcon := preload("res://scripts/buildings/StockIcon3D.gd")
 const COLLECT_ICON_RADIUS_PX := 48.0
 ## La parcela (suelo, sombra de contacto, remate y atrezo): docs/03, "Parcela y atrezo".
 const Lot := preload("res://scripts/buildings/BuildingLot.gd")
+## Todas las calzadas en un MultiMesh por mascara de vecinos (docs/26 §6.2).
+const RoadBatch := preload("res://scripts/buildings/RoadBatch3D.gd")
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
@@ -63,11 +66,17 @@ var _spot_highlight: MultiMeshInstance3D = null
 ## Un solo reloj para releer el aspecto de TODOS los edificios (paso de fase,
 ## humo encendido/apagado). Las senales repintan al momento.
 var _look_timer := 0.0
+## Las calzadas del mapa, dibujadas en lote (RoadBatch3D).
+var _road_batch: Node3D = null
+## El rotulo con el nombre del edificio seleccionado (se crea al seleccionarlo).
+var _shown_label: Label3D = null
 
 func _ready() -> void:
 	_buildings_container = Node3D.new()
 	_buildings_container.name = "Buildings"
 	add_child(_buildings_container)
+	_road_batch = RoadBatch.new()
+	add_child(_road_batch)
 	# Los trabajadores que andan del Nucleo a su edificio: fuera del contenedor
 	# de edificios, que es lo que se guarda.
 	var walkers_layer := Node3D.new()
@@ -107,6 +116,33 @@ func _ready() -> void:
 	_assist.name = "PlacementAssist"
 	_assist.setup(self)
 	add_child(_assist)
+	_warm_shaders.call_deferred()
+
+## Calentar shaders (docs/26 §6, punto 10): humo, polvo, chispas, farol, grua y
+## banderin se dibujan una vez, diminutos, delante de la camara durante unos
+## frames de la carga, y se quitan. El tiron de compilar se paga aqui, tapado
+## por el menu de titulo, y no la primera vez que algo echa humo en partida.
+const _WARM_FRAMES := 3
+
+func _warm_shaders() -> void:
+	if not is_inside_tree() or DisplayServer.get_name() == "headless":
+		return
+	var holder := Node3D.new()
+	holder.name = "ShaderWarmup"
+	add_child(holder)
+	var quads: Array = []
+	quads.append_array(preload("res://scripts/buildings/BuildingFx.gd").warm_up(holder))
+	quads.append_array(preload("res://scripts/buildings/SiteFx.gd").warm_up(holder))
+	for i in _WARM_FRAMES:
+		var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+		if cam != null and is_instance_valid(holder):
+			# Justo delante de la camara: dentro del frustum, aunque no ocupe ni un pixel.
+			holder.global_transform = Transform3D(cam.global_basis, cam.global_position - cam.global_basis.z * (cam.near + 0.5))
+		await get_tree().process_frame
+		if not is_inside_tree():
+			break
+	if is_instance_valid(holder):
+		holder.queue_free()
 
 func _input(event: InputEvent) -> void:
 	if _state != State.IDLE:
@@ -408,10 +444,9 @@ func _on_demolish_requested(building: Node) -> void:
 	var data: BuildingData = result["data"]
 	var cell: Vector2i = result["cell"]
 	building.queue_free()
-	# Update neighboring roads if we demolished a road
+	# Las calzadas vecinas pierden la union con esta.
 	if data.id == "road":
-		for n in Rules.neighbor_roads(cell):
-			_update_road_mesh(n["node"], n["cell"])
+		_update_road_connections(cell)
 	# Update warehouse count
 	if data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
@@ -473,9 +508,9 @@ func _try_place(cell: Vector2i) -> void:
 	# Update warehouse count
 	if _current_data.id == "warehouse":
 		ResourceManager.set_warehouse_count(count_building("warehouse"))
-	# Update road connections if placing a road
+	# La calzada nueva entra en el lote y sus vecinas se unen a ella.
 	if _current_data.id == "road":
-		_update_road_connections(cell)
+		_road_batch.add_road(building)
 	EventBus.building_placed.emit(_current_data, cell)
 	# Decoraciones y caminos se ponen en serie; el resto, de uno en uno: se sale
 	# del modo colocar por la misma senal que cualquier otra salida.
@@ -550,12 +585,9 @@ func _try_move(cell: Vector2i) -> void:
 	_moving_building.rotation.y = _get_rotation_angle()
 	_moving_building.set_meta("rotation_steps", _rotation_steps)
 	_moving_building.visible = true
-	# Update road connections at old and new positions
+	# Uniones en el sitio viejo y en el nuevo: el lote las relee todas de una vez.
 	if _current_data.id == "road":
 		_update_road_connections(cell)
-		# Update neighbors at old position (road no longer there)
-		for n in Rules.neighbor_roads(old_cell):
-			_update_road_mesh(n["node"], n["cell"])
 	EventBus.building_moved.emit(old_cell, cell)
 	_cleanup_preview()
 	_moving_building = null
@@ -685,9 +717,10 @@ func place_building_at(data: BuildingData, cell: Vector2i, rot_steps: int = 0) -
 	var world_pos := GridManager.building_center(cell, place_data.grid_size)
 	building.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
 	GridManager.place_building(cell, place_data, building)
-	# Update road connections after placement (deferred so all buildings load first)
+	# La calzada entra en el lote; el reparto se hace una vez al final del frame
+	# (al cargar, despues de poner todas).
 	if data.id == "road":
-		_update_road_connections.call_deferred(cell)
+		_road_batch.add_road(building)
 	return building
 
 func get_all_placed_buildings() -> Array:
@@ -711,28 +744,16 @@ func clear_all_buildings() -> void:
 func _get_road_neighbors(cell: Vector2i) -> int:
 	return Rules.road_neighbor_mask(cell)
 
-## Rebuild a road's visual mesh based on current neighbors.
-func _update_road_mesh(building: Node3D, cell: Vector2i) -> void:
-	var neighbors := _get_road_neighbors(cell)
-	# Remove old mesh children (keep NameLabel)
-	for child in building.get_children():
-		if child.name != "NameLabel":
-			child.queue_free()
-	# Add new procedural road mesh
-	var road_mesh := DieselpunkBuildingFactory.create_road(GridManager.cell_size, neighbors)
-	building.add_child(road_mesh)
+## La red cambio alrededor de `cell`: el lote de calzadas relee las mascaras
+## de todos los tramos UNA vez, al final del frame (RoadBatch3D). Ya no se
+## rehace la malla de la calzada y de sus cuatro vecinas por cada cambio.
+func _update_road_connections(_cell: Vector2i = Vector2i.ZERO) -> void:
+	if _road_batch != null:
+		_road_batch.mark_dirty()
 
-## Update this road and all adjacent roads' meshes.
-func _update_road_connections(cell: Vector2i) -> void:
-	# Update the road at this cell
-	var building := GridManager.get_building_at(cell)
-	if building:
-		var info := GridManager.get_building_info(building)
-		if not info.is_empty() and info["data"].id == "road":
-			_update_road_mesh(building, cell)
-	# Update all adjacent roads
-	for n in Rules.neighbor_roads(cell):
-		_update_road_mesh(n["node"], n["cell"])
+## El lote de calzadas (sondas y pruebas).
+func get_road_batch() -> Node3D:
+	return _road_batch
 
 # ── Create actual building mesh ──
 
@@ -740,6 +761,11 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	var root := Node3D.new()
 	root.name = data.id
 
+	if data.id == "road":
+		# La calzada no lleva malla propia: la dibuja el lote (RoadBatch3D) cuando
+		# se apunta al colocarla. Ni rotulo de estado, ni aspecto, ni parcela.
+		root.set_meta("label_y", data.mesh_height + 0.5)
+		return root
 	if data.model_scene:
 		var model_instance := data.instantiate_model()
 		root.add_child(model_instance)
@@ -762,29 +788,23 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 			mesh_inst.position.y = data.mesh_height * 0.5
 			root.add_child(mesh_inst)
 	# El modelo se encoge en planta para dejar libre el patio de su parcela.
-	Lot.fit_model(root.get_child(0) as Node3D, data, GridManager.cell_size)
+	if root.get_child_count() > 0:
+		Lot.fit_model(root.get_child(0) as Node3D, data, GridManager.cell_size)
 
-	# Label above building — large, bold, readable (hidden by default)
-	var label := Label3D.new()
-	label.name = "NameLabel"
-	label.text = data.get_display_name()
-	label.font_size = 64
-	label.pixel_size = 0.01
-	label.position.y = data.mesh_height + 0.5
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.outline_size = 12
-	label.outline_modulate = Color(0, 0, 0, 0.8)
-	label.modulate = Color(1, 1, 1, 1)
-	label.visible = false
-	root.add_child(label)
+	# El rotulo con el nombre ya no se crea aqui: solo se ve al seleccionar, asi
+	# que nace entonces (ensure_name_label). Un Label3D escondido por edificio
+	# era texto maquetado y un nodo mas para nada (docs/26 §6, punto 12).
+	root.set_meta("label_y", data.mesh_height + 0.5)
 
 	# Status badge (A11): Zzz / worker above every building that can work.
 	# Measured from the real mesh so it clears the Nucleo's scaled dome too.
-	var badge: Label3D = StatusBadge.new()
+	# Casas y decoracion no trabajan: sin badge (era un Label3D escondido que
+	# escuchaba 14 senales de todo el mapa).
 	var top: float = maxf(data.mesh_height, StatusBadge.measure_top(root))
-	root.add_child(badge)
-	badge.setup(root, data, top)
+	if StatusBadge.can_work(data):
+		var badge: Label3D = StatusBadge.new()
+		root.add_child(badge)
+		badge.setup(root, data, top)
 
 	# Lo producido espera en el edificio: icono flotante para recogerlo (2026-10-04).
 	if data.is_producer():
@@ -792,13 +812,11 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		root.add_child(stock_icon)
 		stock_icon.setup(root, top)
 
-	# Aspecto: obra por fases, ruina, humo de trabajo. Las calzadas no: no se
-	# construyen, no se arruinan, no trabajan, y su malla se rehace entera al
-	# cambiar de vecinos.
-	if data.id != "road":
-		var look: Node3D = LookVisual.new()
-		root.add_child(look)
-		look.setup(root, data, top)
+	# Aspecto: obra por fases, ruina, humo de trabajo (las calzadas no llegan
+	# aqui: salen antes, sin malla propia).
+	var look: Node3D = LookVisual.new()
+	root.add_child(look)
+	look.setup(root, data, top)
 
 	# Parcela: suelo, sombra de contacto, remate y atrezo (no las calzadas, que
 	# ya son suelo). Se coloca sola cuando sabe su celda y sus calzadas vecinas.
@@ -828,7 +846,8 @@ func _hide_grid_overlay() -> void:
 	# toggle can keep the grid permanently visible.
 	var scene_grid: Node = get_tree().current_scene.get_node_or_null("GridOverlay") if get_tree().current_scene else null
 	if scene_grid:
-		scene_grid.visible = GameConfig.ui_grid_visible
+		# En calidad Minima la rejilla no vuelve tras colocar (GraphicsQuality).
+		scene_grid.visible = GraphicsQuality.grid_always_visible()
 
 # ── Limit / Prerequisite Helpers ──
 
@@ -890,23 +909,50 @@ func _show_feedback(text: String) -> void:
 
 # ── Show/Hide building labels on selection ──
 
-func _on_building_clicked(building: Node, _data: BuildingData) -> void:
-	# Hide all labels first
-	for child in _buildings_container.get_children():
-		var name_label := child.get_node_or_null("NameLabel")
-		if name_label:
-			name_label.visible = false
-	# Show only selected building's label
-	var selected_label := building.get_node_or_null("NameLabel")
-	if selected_label:
-		selected_label.visible = true
+func _on_building_clicked(building: Node, data: BuildingData) -> void:
+	# Solo hay un rotulo encendido: el del seleccionado. Sin recorrer el mapa.
+	_hide_shown_label()
+	var label := ensure_name_label(building, data)
+	if label:
+		label.visible = true
+		_shown_label = label
 
 func _on_building_deselected() -> void:
-	# Hide all labels
-	for child in _buildings_container.get_children():
-		var name_label := child.get_node_or_null("NameLabel")
-		if name_label:
-			name_label.visible = false
+	_hide_shown_label()
+
+func _hide_shown_label() -> void:
+	if _shown_label != null and is_instance_valid(_shown_label):
+		_shown_label.visible = false
+	_shown_label = null
+
+## El rotulo "NameLabel" del edificio, creado la primera vez que hace falta
+## (con el nombre propio si lo tiene). Nace escondido.
+static func ensure_name_label(building: Node, data: BuildingData = null) -> Label3D:
+	if building == null or not (building is Node3D):
+		return null
+	var existing := building.get_node_or_null("NameLabel") as Label3D
+	if existing:
+		return existing
+	if data == null:
+		var info := GridManager.get_building_info(building)
+		if info.is_empty():
+			return null
+		data = info["data"]
+	var label := Label3D.new()
+	label.name = "NameLabel"
+	var custom := String(building.get_meta("custom_name", ""))
+	label.text = custom if custom != "" else data.get_display_name()
+	label.font_size = 64
+	label.pixel_size = 0.01
+	label.position.y = float(building.get_meta("label_y", data.mesh_height + 0.5))
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.outline_size = 12
+	label.outline_modulate = Color(0, 0, 0, 0.8)
+	label.modulate = Color(1, 1, 1, 1)
+	label.visible = false
+	building.add_child(label)
+	return label
 
 # ── PlacementAssist (dedo, casillas validas, ✓) ───────────────────────
 

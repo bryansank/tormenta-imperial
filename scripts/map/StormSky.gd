@@ -403,7 +403,17 @@ func _paint_island(weight: float) -> void:
 func _paint_night(night: float) -> void:
 	_set_island_param("night_weight", night)
 
+## El script de las parcelas 3D (sus suelos llevan el mismo storm_grade que la
+## isla). Se carga la primera vez, no con el autoload.
+var _lot_script: Script = null
+
 func _set_island_param(param: String, value: float) -> void:
+	# Los suelos de las parcelas, con la isla: el cesped de un patio no se queda
+	# verde chillon bajo la ceniza ni de noche. Materiales compartidos, pocos.
+	if _lot_script == null:
+		_lot_script = load("res://scripts/buildings/BuildingLot.gd")
+	if _lot_script != null:
+		_lot_script.call("set_ground_param", param, value)
 	var tree := get_tree()
 	if tree == null or tree.current_scene == null:
 		return

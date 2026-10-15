@@ -175,6 +175,22 @@ static func flag_material_2d() -> ShaderMaterial:
 	_mats["flag2d"] = mat
 	return mat
 
+## Calienta los dos shaders 3D de la obra (grua y banderin): un quad diminuto
+## de cada uno colgado de `parent`, dibujado una vez en la carga. Asi la
+## primera obra de la partida no tironea compilando. Devuelve los quads.
+static func warm_up(parent: Node3D) -> Array:
+	var out: Array = []
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.01, 0.01)
+	for mat in [crane_material_3d(Color.WHITE, 0.0), flag_material_3d(Color.WHITE)]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		parent.add_child(mi)
+		out.append(mi)
+	return out
+
 ## El efecto de obra de un estilo en una fase: "sparks" (solo con estructura o
 ## ferralla: fases 1 y 2), "dust" (en todas) o "".
 static func fx_for(style: Dictionary, phase: int) -> String:
