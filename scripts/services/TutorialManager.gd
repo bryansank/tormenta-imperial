@@ -91,6 +91,9 @@ var guide_baseline: Dictionary = {}
 var first_sortie_done: bool = false
 ## Metas "fact" del tutorial ya cumplidas (GUIDE_GOALS). Van en la partida.
 var guide_flags: Dictionary = {}
+## Lecciones de combate ya dadas en esta partida ("basics", "artillery"; docs/23
+## §2.4). Van en la partida, como el resto del tutorial.
+var combat_lessons_done: Array[String] = []
 
 ## El prologo esta pedido y espera a que no haya nada encima (menu principal,
 ## pausa, selector de modo).
@@ -182,6 +185,7 @@ func _ready() -> void:
 	EventBus.production_collected.connect(_on_production_collected)
 	EventBus.building_demolished.connect(func(_n, _c): _refresh_guide())
 	_connect_news()
+	_connect_combat_lessons()
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Prologo ──
@@ -642,6 +646,12 @@ func _on_storage_overflow(_resource: String, _lost: int, _cap: int) -> void:
 	offer_tip("overflow")
 
 func _on_encounter_started(_index: int, _is_boss: bool) -> void:
+	# Con una leccion de combate en marcha, la tarjeta del tablero sobra: lo
+	# cuentan las marcas. Se da por vista para que este en el indice de AYUDA.
+	if _begin_combat_lesson():
+		if not "encounter" in tips_seen:
+			tips_seen.append("encounter")
+		return
 	offer_tip("encounter")
 
 var _batch_depth := 0
@@ -723,6 +733,7 @@ func get_save_data() -> Dictionary:
 		"guide_baseline": guide_baseline.duplicate(),
 		"first_sortie_done": first_sortie_done,
 		"guide_flags": guide_flags.duplicate(),
+		"combat_lessons_done": combat_lessons_done.duplicate(),
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -777,6 +788,18 @@ func load_save_data(data: Dictionary) -> void:
 		var gc: Variant = data.get("guide_collected", null)
 		if (gc is bool and gc) or (not (gc is bool) and guide_state != GUIDE_ACTIVE):
 			guide_flags["collected"] = true
+	# Lecciones de combate. Sin la clave (guardado de antes, 2026-10-14): quien ya
+	# gano su primera escaramuza no repite la de lo basico; la de artilleria si
+	# le sale, una vez, porque explica algo que antes no se contaba.
+	combat_lessons_done.clear()
+	var cl: Variant = data.get("combat_lessons_done", null)
+	if cl is Array:
+		for l in cl:
+			if l is String and l in COMBAT_LESSONS and not l in combat_lessons_done:
+				combat_lessons_done.append(l)
+	elif first_sortie_done:
+		combat_lessons_done.append(LESSON_BASICS)
+	_clear_combat_lesson(false)
 	_blocked_goals = []
 	_step = ""
 	_prologue_pending = false
@@ -791,6 +814,8 @@ func reset() -> void:
 	guide_baseline = {}
 	first_sortie_done = false
 	guide_flags = {}
+	combat_lessons_done.clear()
+	_clear_combat_lesson(false)
 	_blocked_goals = []
 	_last_check = 0.0
 	_prologue_pending = false
@@ -835,3 +860,279 @@ func _on_news_stock(node: Node, _stock: Dictionary) -> void:
 		return
 	if ProductionManager.is_full(node):
 		offer_tip("collect_full")
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Combate guiado (2026-10-14, docs/23 §2.4, docs/15 §3) ──
+# ══════════════════════════════════════════════════════════════════════
+# Dos lecciones con marcas sobre el tablero de verdad, en las dos vistas (frente
+# y tablero) y en el tablero 2D:
+#
+#   "basics"     la primera pelea con el tablero abierto (normalmente la primera
+#                escaramuza: un infante contra uno debil). Pasos 1-5: tocar tu
+#                unidad, moverte, atacar, mirar el turno enemigo, defender (solo
+#                si te han dado).
+#   "artillery"  la primera pelea con artilleria propia, ya hecha la de lo
+#                basico. Pasos 6-7: el alcance minimo y el circulo de ventajas.
+#
+# Como el tutorial de la colonia: el paso SALE de lo que ha pasado
+# (derive_combat_step, pura), no de un "Siguiente"; cada marca se cierra sola al
+# hacer lo que pide. Los pasos 1-3 no tienen "Saltar" (decision del 04-10, la
+# misma de la colonia); del 4 en adelante si. Lo que se guarda es solo que
+# lecciones se dieron: una pelea no se guarda nunca (CombatManager), asi que lo
+# de dentro de la leccion es transitorio.
+#
+# No conoce a ningun panel: emite EventBus.combat_lesson_step_changed. Quien
+# pinta es TutorialPanel; a donde senala, BattleScreen.coach_anchor().
+
+const LESSON_BASICS := "basics"
+const LESSON_ARTILLERY := "artillery"
+const COMBAT_LESSONS := [LESSON_BASICS, LESSON_ARTILLERY]
+
+## Los pasos de combate. `n`: el numero de "COMBATE · PASO n DE COMBAT_TOTAL".
+## `target`: lo que senala BattleScreen.coach_anchor(). `skip`: tiene "Saltar".
+## `ok`: tiene "Entendido" (un paso que solo se lee). `circle`: dibuja el
+## circulo de ventajas (TypeCircle) en la tarjeta.
+const COMBAT_STEPS := {
+	"c_select":      {"n": 1, "text": "CGUIDE_SELECT",      "target": "active_unit"},
+	"c_move":        {"n": 2, "text": "CGUIDE_MOVE",        "target": "move_cell"},
+	"c_attack":      {"n": 3, "text": "CGUIDE_ATTACK",      "target": "target_unit"},
+	"c_attack_far":  {"n": 3, "text": "CGUIDE_ATTACK_FAR",  "target": "end_turn_button"},
+	"c_enemy_turn":  {"n": 4, "text": "CGUIDE_ENEMY_TURN",  "target": "threat_button", "skip": true},
+	"c_defend":      {"n": 5, "text": "CGUIDE_DEFEND",      "target": "defend_button", "skip": true},
+	"c_art_range":   {"n": 6, "text": "CGUIDE_ART_RANGE",   "target": "active_unit", "skip": true},
+	"c_type_circle": {"n": 7, "text": "CGUIDE_TYPE_CIRCLE", "target": "", "skip": true, "ok": true, "circle": true},
+}
+const COMBAT_TOTAL := 7
+
+## La leccion en marcha ("" ninguna), su paso y lo que ha pasado en ella.
+var _lesson := ""
+var _combat_step := ""
+var _lesson_facts: Dictionary = {}
+
+func _connect_combat_lessons() -> void:
+	EventBus.turn_started.connect(_on_lesson_turn_started)
+	EventBus.unit_moved.connect(func(uid, _f, _t): _on_lesson_action(uid, "moved"))
+	EventBus.unit_attacked.connect(func(uid, _t, _d): _on_lesson_action(uid, "attacked"))
+	EventBus.unit_defended.connect(func(uid): _on_lesson_action(uid, "defended"))
+	EventBus.unit_died.connect(func(_uid, _side): _refresh_combat_step())
+	EventBus.encounter_ended.connect(_on_lesson_encounter_ended)
+	EventBus.encounter_closed.connect(func(): _clear_combat_lesson(true))
+
+## Que leccion toca en el tablero que se acaba de abrir, o "". Pura: `player_units`
+## son los ids de tipo de las unidades propias del tablero.
+static func lesson_for(done: Array, player_units: Array) -> String:
+	if not LESSON_BASICS in done:
+		return LESSON_BASICS if not player_units.is_empty() else ""
+	if not LESSON_ARTILLERY in done and player_units.has("artillery"):
+		return LESSON_ARTILLERY
+	return ""
+
+## Empieza la leccion que toque en este tablero. true si empezo una.
+func _begin_combat_lesson() -> bool:
+	_clear_combat_lesson(true)
+	if not CombatManager.is_board_open():
+		return false
+	var mine: Array = []
+	for u in CombatManager.get_units():
+		if u.side == 0 and u.is_alive():
+			mine.append(u.unit_id)
+	var lesson := lesson_for(combat_lessons_done, mine)
+	if lesson == "":
+		return false
+	_lesson = lesson
+	_lesson_facts = {}
+	# El primer turno llega justo despues (turn_started): ahi se calcula el paso.
+	return true
+
+## La leccion en marcha, o "".
+func combat_lesson() -> String:
+	return _lesson
+
+## El paso de combate en pantalla, o "".
+func combat_step() -> String:
+	return _combat_step
+
+func is_combat_lesson_done(lesson: String) -> bool:
+	return lesson in combat_lessons_done
+
+static func combat_step_text(step_id: String) -> String:
+	var e: Dictionary = COMBAT_STEPS.get(step_id, {})
+	return Tr.ti(String(e.get("text", ""))) if not e.is_empty() else ""
+
+static func combat_step_number(step_id: String) -> int:
+	return int(COMBAT_STEPS.get(step_id, {}).get("n", 0))
+
+static func combat_step_target(step_id: String) -> String:
+	return String(COMBAT_STEPS.get(step_id, {}).get("target", ""))
+
+static func combat_step_skippable(step_id: String) -> bool:
+	return bool(COMBAT_STEPS.get(step_id, {}).get("skip", false))
+
+static func combat_step_has_ok(step_id: String) -> bool:
+	return bool(COMBAT_STEPS.get(step_id, {}).get("ok", false))
+
+static func combat_step_has_circle(step_id: String) -> bool:
+	return bool(COMBAT_STEPS.get(step_id, {}).get("circle", false))
+
+static func _fact(f: Dictionary, key: String) -> bool:
+	return bool(f.get(key, false))
+
+## El paso que toca con estos hechos. Pura (las pruebas la llaman sin tablero).
+##
+## Hechos de la leccion (se quedan puestos): selected, moved, attacked,
+## enemy_seen (un turno nuestro llego despues de uno enemigo), defend_closed,
+## art_shown, circle_closed. Hechos del momento: player_turn, enemy_turn,
+## can_move, has_targets, hurt (alguna nuestra ha perdido vida), art_active (le
+## toca a una artilleria nuestra). Devuelve un paso, "" (nada que senalar ahora:
+## esperar) o "done" (leccion acabada).
+static func derive_combat_step(lesson: String, f: Dictionary) -> String:
+	match lesson:
+		LESSON_BASICS:
+			if _fact(f, "enemy_turn"):
+				return "" if _fact(f, "enemy_seen") else "c_enemy_turn"
+			if not _fact(f, "player_turn"):
+				return ""
+			var acted: bool = _fact(f, "moved") or _fact(f, "attacked")
+			if not (_fact(f, "selected") or acted):
+				return "c_select"
+			if not acted and _fact(f, "can_move"):
+				return "c_move"
+			if not _fact(f, "attacked"):
+				return "c_attack" if _fact(f, "has_targets") else "c_attack_far"
+			if not _fact(f, "enemy_seen"):
+				return ""
+			if _fact(f, "hurt") and not _fact(f, "defend_closed"):
+				return "c_defend"
+			return "done"
+		LESSON_ARTILLERY:
+			if not _fact(f, "art_shown"):
+				return "c_art_range" if _fact(f, "player_turn") and _fact(f, "art_active") else ""
+			if not _fact(f, "circle_closed"):
+				return "c_type_circle"
+			return "done"
+	return "done"
+
+## Los hechos de ahora: los de la leccion mas lo que dice el tablero.
+func combat_facts() -> Dictionary:
+	var f := _lesson_facts.duplicate()
+	var active: CombatUnit = CombatManager.get_active_unit()
+	var player_turn: bool = active != null and active.side == 0 and CombatManager.is_player_turn()
+	f["player_turn"] = player_turn
+	f["enemy_turn"] = active != null and active.side != 0 and CombatManager.is_in_encounter()
+	f["can_move"] = player_turn and not CombatManager.get_valid_moves(active.uid).is_empty()
+	f["has_targets"] = player_turn and not CombatManager.get_valid_targets(active.uid).is_empty()
+	f["art_active"] = player_turn and active.unit_id == "artillery"
+	var hurt := false
+	for u in CombatManager.get_units():
+		if u.side == 0 and u.is_alive() and u.hp < u.max_hp:
+			hurt = true
+			break
+	f["hurt"] = hurt
+	return f
+
+## Un hecho de la leccion que ve la interfaz (BattleScreen: "selected" al tocar
+## una pieza propia). Vale aunque la leccion aun no haya llegado a ese paso.
+func note_combat_fact(fact: String) -> void:
+	if _lesson == "" or fact == "":
+		return
+	_lesson_facts[fact] = true
+	_refresh_combat_step()
+
+## "Entendido" (y el reloj) del paso que solo se lee: el circulo.
+func close_combat_step(step_id: String) -> void:
+	if step_id == "" or step_id != _combat_step:
+		return
+	if step_id == "c_type_circle":
+		note_combat_fact("circle_closed")
+
+## "Saltar" (pasos 4-7): esta leccion y las que queden se dan por vistas.
+func skip_combat_lessons() -> void:
+	if _lesson == "" or not combat_step_skippable(_combat_step):
+		return
+	for l in COMBAT_LESSONS:
+		if not l in combat_lessons_done:
+			combat_lessons_done.append(l)
+	_clear_combat_lesson(true)
+	GameManager.request_save()
+
+## "Repetir combate guiado" (indice de AYUDA): la proxima pelea vuelve a
+## ensenar todo. Con un tablero abierto no hace nada (empezaria a media pelea).
+func replay_combat_lessons() -> void:
+	if CombatManager.is_board_open():
+		return
+	combat_lessons_done.clear()
+	_clear_combat_lesson(false)
+
+func _on_lesson_turn_started(side: int, _uid: int) -> void:
+	if _lesson == "":
+		return
+	if side == 0:
+		if _fact(_lesson_facts, "_enemy_turn_seen"):
+			_lesson_facts["enemy_seen"] = true
+	else:
+		_lesson_facts["_enemy_turn_seen"] = true
+	# Pasar el turno (ESPERAR, TERMINAR) tambien cierra lo que se leia.
+	_close_reading_steps()
+	_refresh_combat_step()
+
+func _on_lesson_action(uid: int, what: String) -> void:
+	if _lesson == "":
+		return
+	var u: CombatUnit = CombatManager.get_unit(uid)
+	if u != null and u.side == 0:
+		_lesson_facts[what] = true
+		_close_reading_steps()
+	_refresh_combat_step()
+
+## Los pasos que se cierran con cualquier accion nuestra: "defender" (era un
+## aviso) y la zona de tiro de la artilleria (se cierra al actuar ella).
+func _close_reading_steps() -> void:
+	match _combat_step:
+		"c_defend":
+			_lesson_facts["defend_closed"] = true
+		"c_art_range":
+			_lesson_facts["art_shown"] = true
+
+func _on_lesson_encounter_ended(_victory: bool, _turns: int) -> void:
+	if _lesson == "":
+		return
+	# La pelea acabo: lo basico cuenta como dado (lo demas esta en AYUDA). La de
+	# artilleria solo si llego a ensenar su alcance; si la pieza ni actuo, espera
+	# a la proxima pelea con artilleria.
+	if _lesson == LESSON_BASICS or _fact(_lesson_facts, "art_shown"):
+		_finish_lesson()
+	else:
+		_clear_combat_lesson(false)
+	_set_combat_step("")
+
+func _refresh_combat_step() -> void:
+	if _lesson == "":
+		return
+	var step := derive_combat_step(_lesson, combat_facts())
+	if step == "done":
+		_finish_lesson()
+		step = ""
+	_set_combat_step(step)
+
+func _finish_lesson() -> void:
+	if _lesson != "" and not _lesson in combat_lessons_done:
+		combat_lessons_done.append(_lesson)
+		# La leccion va en la partida aunque la pelea no se guarde.
+		GameManager.request_save()
+	_lesson = ""
+	_lesson_facts = {}
+
+func _set_combat_step(step: String) -> void:
+	if step == _combat_step:
+		return
+	_combat_step = step
+	EventBus.combat_lesson_step_changed.emit(step)
+
+## Tira la leccion en marcha sin darla por hecha. `notify`: avisa al panel.
+func _clear_combat_lesson(notify: bool) -> void:
+	_lesson = ""
+	_lesson_facts = {}
+	if notify:
+		_set_combat_step("")
+	else:
+		_combat_step = ""
