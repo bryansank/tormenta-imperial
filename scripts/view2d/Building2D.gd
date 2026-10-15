@@ -70,6 +70,8 @@ var _boot := BOOT_FRAMES
 ## horneo; si cambia (calzadas, nivel, giro, ruina...) se pide otra.
 var _inst_tex: Texture2D = null
 var _inst_key := ""
+## La bandera del pais (Nucleo y Cuartel General), o null.
+var _flag: Node2D = null
 
 func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	data = building_data
@@ -109,9 +111,9 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	# seleccionarla.
 	# La bandera del pais sobre el Nucleo y el Cuartel General.
 	if ColonyFlag2D.flies_over(data):
-		var flag: Node2D = ColonyFlag2D.new()
-		add_child(flag)
-		flag.setup(base_size_px(), self)
+		_flag = ColonyFlag2D.new()
+		add_child(_flag)
+		_flag.setup(base_size_px(), self)
 
 ## Godot enciende _process al entrar en el arbol: las calzadas lo apagan aqui,
 ## y tambien el de su badge (una calzada nunca tiene obreros ni se para; con
@@ -212,7 +214,17 @@ func _process(delta: float) -> void:
 		if _name_label:
 			_name_label.text = _label_text()
 		_apply_fx()
+		_sync_flag()
 		queue_redraw()
+
+## La bandera cuelga del mastil del propio dibujo (linterna del Nucleo, esquina
+## del tejado del Cuartel General): se recoloca solo cuando cambia la firma
+## (giro, nivel), nunca por frame.
+func _sync_flag() -> void:
+	if _flag == null:
+		return
+	_flag.set_mount(Art.flag_mount(data.id, base_size_px(), yard_px(),
+		int(get_meta("rotation_steps", 0)), int(get_meta("level", 1))))
 
 func _current_signature() -> Array:
 	var constructing := has_meta("under_construction")
@@ -372,8 +384,9 @@ func _make_active_fx() -> Node2D:
 ## Cada sprite en su chimenea, con el giro del edificio aplicado. El humo sube
 ## un poco por encima de la boca para que salga de ella y no la tape.
 func _place_fx(holder: Node2D) -> void:
-	# Las bocas estan en el dibujo del edificio, que deja libre el patio.
-	var size := base_size_px() - Vector2.ONE * yard_px() * 2.0
+	# Las bocas estan en el dibujo del edificio, que deja libre el patio (y
+	# crece con el nivel, como el dibujo).
+	var size := (base_size_px() - Vector2.ONE * yard_px() * 2.0) * Art.level_scale(int(get_meta("level", 1)))
 	var angle := float(int(get_meta("rotation_steps", 0))) * PI * 0.5
 	for sprite in holder.get_children():
 		var anchor: Vector2 = sprite.get_meta("anchor", Vector2(0.5, 0.5))
@@ -425,7 +438,7 @@ func _instance_texture(size: Vector2, inset: float, level: int, steps: int) -> b
 		_inst_tex = null
 		var plan := _lot_plan
 		var id := data.id
-		var inner := size - Vector2.ONE * inset * 2.0
+		var inner := (size - Vector2.ONE * inset * 2.0) * Art.level_scale(level)
 		var opts := {"level": level, "shadow": true, "inset": inset, "rot": steps, "growth": -1.0}
 		var painter := func(ci: CanvasItem) -> void:
 			Art.draw_lot_ground(ci, plan, size)
@@ -505,7 +518,8 @@ func _draw() -> void:
 			ProductionManager.get_construction_progress(self), n, data.id, _site_seed)
 	else:
 		if has_lot:
-			Art.draw_lot_shadow(self, Rect2(-inner * 0.5, inner).grow(-Art.INSET))
+			var grown := inner * Art.level_scale(level)
+			Art.draw_lot_shadow(self, Rect2(-grown * 0.5, grown).grow(-Art.INSET))
 		_draw_body(size, inset, mask, level, steps)
 	if has_lot:
 		Art.draw_lot_props(self, _lot_plan, size)
@@ -513,7 +527,7 @@ func _draw() -> void:
 	if ghost:
 		return
 	var fp2 := footprint_px()
-	var fp_inner := fp2 - Vector2.ONE * inset * 2.0
+	var fp_inner := (fp2 - Vector2.ONE * inset * 2.0) * Art.level_scale(level)
 	if look == LookRule.Look.UPGRADE:
 		# Mejora: el edificio sigue a la vista, con andamio y rayas encima.
 		Art.draw_construction(self, fp_inner, ProductionManager.get_construction_progress(self))
@@ -521,5 +535,8 @@ func _draw() -> void:
 	var ruined := BuildingHealth.is_ruined(self)
 	if ratio < 1.0 or ruined:
 		Art.draw_damage(self, fp_inner, ratio, ruined, hash(name), n)
+	# La placa II / III (la Label3D de la 3D), sin girar.
+	if level > 1:
+		Art.draw_level_plate(self, fp2, level)
 	if _selected:
 		Art.draw_selection(self, fp2, _pulse)

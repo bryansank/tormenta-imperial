@@ -8,9 +8,12 @@ salen del código: `data/buildings/*.tres` y `scripts/services/GameConfig.gd`.
 ## 1. Qué es esto
 
 Levantas una base en una isla generada al azar y la haces crecer a través de **tres
-eras económicas**. Cada isla es distinta: la rejilla sale entre 40×40 y 48×48 casillas
-y trae de **3 a 6 yacimientos de cada tipo** (bosque, oro, hierro y petróleo), así que
-nunca falta un pozo ni un bosque. Todo lo que construyes se une al **Núcleo** por
+eras económicas**. Cada isla es distinta: la rejilla sale de 60 a 74 casillas por lado,
+pero solo una parte es tierra. La isla tiene una costa irregular, con bahías y cabos, y
+el mar entra en la rejilla: en el agua no se construye. Tierra hay más o menos la de
+antes, cuando la isla era un cuadrado de 40×40 a 48×48 todo de tierra (de 1.550 a 2.300
+casillas). Trae de **3 a 6 yacimientos de cada tipo** (bosque, oro, hierro y petróleo),
+siempre en tierra, así que nunca falta un pozo ni un bosque. Todo lo que construyes se une al **Núcleo** por
 carretera, y verás a tus trabajadores ir andando por ella. La presión viene de que tu gente come, cobra y se desmoraliza si
 no le llega.
 
@@ -136,9 +139,21 @@ pasivamente.
 
 ## 5. Catálogo de edificios
 
-Los 16 edificios del juego. **Todos ocupan 2×2** salvo el Núcleo (3×3) y la carretera
-(1×1). Las imágenes son los modelos reales del juego (de antes de pasar a 2×2; el
-Mercado y el Laboratorio aún no tienen foto).
+Los 27 edificios del juego (14 de ellos decoraciones, la carretera incluida). **Todos
+ocupan 2×2** salvo el Núcleo (3×3) y la carretera (1×1).
+
+> **Las imágenes son capturas de septiembre de 2026**: los modelos de antes de pasar a
+> 2×2 y al aspecto de maqueta de la 1.0. Hoy los edificios se ven distintos. El Mercado,
+> el Laboratorio, la Granja y las decoraciones nuevas no tienen foto. Están pendientes
+> de rehacer.
+
+**Topes.** Cada tipo tiene un máximo, y los de producir y vivir **suben con la era**
+(era 1 / era 2 / era 3): Vivienda 10 / 15 / 20, Granja 6 / 9 / 12, Aserradero 5 / 8 / 10,
+Mina de oro 4 / 6 / 8, Fundición 3 / 5 / 6, Refinería 2 / 3 / 4, Cuartel 3 / 4 / 5. El
+Almacén se queda en 5 y la Torre en 6; Mercado, Laboratorio y Cuartel General, uno.
+Algunos rangos dan huecos de más. **Las decoraciones no tienen tope**: solo el terreno
+y el precio. En CONSTRUIR cada tarjeta dice cuántos llevas y cuánto sube en la era
+siguiente ("3/6 · era 2: 9").
 
 ### Carreteras: todo se une al Núcleo
 
@@ -177,7 +192,7 @@ mientras quepa en la Granja. Cambiarlo empieza de cero.
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
 | <img src="media/guia/nucleo.png" width="110"> | **Núcleo** | 3×3 | — | 0 | Tu punto de partida. Sitio para 5 trabajadores. No se puede demoler |
-| <img src="media/guia/house.png" width="110"> | **Vivienda** | 2×2 | 50 oro · 30 madera | 0 | Sitio para 6 trabajadores (9 y 12 mejorada). Máximo 10 |
+| <img src="media/guia/house.png" width="110"> | **Vivienda** | 2×2 | 50 oro · 30 madera | 0 | Sitio para 6 trabajadores (9 y 12 mejorada). Máximo 10 / 15 / 20 según la era |
 | <img src="media/guia/warehouse.png" width="110"> | **Almacén** | 2×2 | 60 oro · 40 madera | 1 | +500 a la bolsa compartida (+250 por nivel mejorado). Máximo 5 |
 | | **Mercado** | 2×2 | 100 oro · 60 madera | 1 | Abre la Bolsa Imperial: tócalo y pulsa **ABRIR MERCADO**. Pide una Mina de oro. Solo uno |
 | | **Laboratorio** | 2×2 | 150 oro · 100 madera | 2 | Abre el árbol tecnológico: tócalo y pulsa **INVESTIGAR**. Pide una Vivienda. Solo uno |
@@ -198,6 +213,20 @@ mientras quepa en la Granja. Cambiarlo empieza de cero.
 | <img src="media/guia/garden.png" width="90"> | **Jardín** (2×2) | 30 oro · 20 madera | +5 |
 | <img src="media/guia/fountain.png" width="90"> | **Fuente** (2×2) | 60 oro · 20 acero · 10 madera | +7 |
 | <img src="media/guia/statue.png" width="90"> | **Estatua** (2×2) | 120 oro · 40 acero · 3 lingotes | +10 |
+| | **Farola** (2×2) | 20 oro · 5 madera | +2 |
+| | **Banco** (2×2) | 10 oro · 10 madera | +1 |
+| | **Seto** (2×2) | 10 oro · 15 madera | +1 |
+| | **Árbol de paseo** (2×2) | 15 oro · 20 madera | +2 |
+| | **Letrero de la colonia** (2×2) | 25 oro · 15 madera | +2 |
+| | **Macetero** (2×2) | 20 oro · 10 madera | +2 |
+| | **Carro de heno** (2×2) | 20 oro · 25 madera | +2 |
+| | **Hoguera** (2×2) | 15 oro · 30 madera | +2 |
+| | **Mástil con bandera** (2×2) | 40 oro · 20 madera | +3 |
+| | **Palmeras** (2×2) | 20 oro · 15 madera | +2 |
+
+Algunas se abren con el rango del gobernador: Jardín, Macetero y Carro de heno en el
+rango 2, Hoguera en el 3, Fuente y Mástil en el 5, Estatua en el 8 y Palmeras en el 13.
+Farola, Banco, Seto, Árbol de paseo y Letrero están desde el principio.
 
 Las decoraciones no dan moral de golpe: **aceleran su recuperación** (+1 por cada 10
 puntos de bonus, por ciclo). No arreglan una base que no puede pagar el consumo;

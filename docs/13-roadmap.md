@@ -11,11 +11,13 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 > "toy diorama" art, the irregular island, food and the Farm, collected production,
 > day and night, sound for everything, several saved games, the country and its flag,
 > the front view of combat, game speed, graphics quality down to "Mínima" and a round
-> of performance work. What comes next is **phase 1 of the loop redesign** (below),
-> which also goes into the 1.0, then a playtest and the release.
+> of performance work. **Phase 1 of the loop redesign** (below) has started landing
+> too (limits by era, ten cheap decorations, the finishing "pop" and the camera); the
+> rest of it goes into the 1.0, then a playtest and the release.
 >
-> This file describes the state of the `docs/puesta-al-dia-1.0` branch. Branches that
-> were still landing when it was written are listed under "In progress", not as done.
+> This file describes the state of `integracion/arte-v1` as merged into the
+> `docs/puesta-al-dia-1.0` branch on 2026-10-14. Branches that were still open then are
+> listed under "In progress", not as done.
 
 ---
 
@@ -24,8 +26,8 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 ### Core
 
 - ✅ Grid building placement (**60-74 cells a side, rolled per game**, an irregular
-  island with the sea inside the grid), 17 buildings (all 2x2 but the Núcleo and the
-  road), rotation, move, demolish; extractors must touch their deposit
+  island with the sea inside the grid), 27 building types (all 2x2 but the Núcleo and
+  the road; 14 of them decorations, the road included), caps per type that rise with the era, rotation, move, demolish; extractors must touch their deposit
   (`GameConfig.building_deposit_rules`)
 - ✅ Random map: 3-6 deposits of each type on land, each with room and a road path for
   its extractor; island shape from a saved seed
@@ -64,7 +66,7 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 
 | Item | Status | Where it lives |
 |---|---|---|
-| **Toy diorama look**: 15 of the 17 buildings are baked models (CC0 KayKit / Kenney pieces recoloured to one ten-colour `ToyPalette`, one vertex-coloured mesh each, two materials for the whole map); every building on its own lot with ground, kerb and props; the Núcleo as a tall monument with its own flag mast; upgraded buildings grow and carry a brass trim per level. The Farm stays procedural (its field grows) and the road is drawn in one batch | ✅ | `tools/build_toy_models.gd`, `tools/toy_recipes/`, `assets/models/toy/`, `LotPlan` / `BuildingLot` / `LotMesh`, `LevelTrim`, [03-buildings.md](03-buildings.md) "Modelos: maqueta de juguete" |
+| **Toy diorama look**: 16 buildings are baked models (CC0 KayKit / Kenney pieces recoloured to one ten-colour `ToyPalette`, one vertex-coloured mesh each, two materials for the whole map; the Farm adds its beds growing by shader, `toy_crops`) and the ten new decorations share one procedural mesh per type until they are baked; every building on its own lot with ground, kerb and props and a dark contact edge; the Núcleo as a tall monument with its own flag mast (also in 2D); upgraded buildings grow and carry a brass trim per level (also in 2D); the road is drawn in one batch | ✅ | `tools/build_toy_models.gd`, `tools/toy_recipes/`, `assets/models/toy/`, `LotPlan` / `BuildingLot` / `LotMesh`, `LevelTrim`, [03-buildings.md](03-buildings.md) "Modelos: maqueta de juguete" |
 | **World look**: warm sky and sun, island cliff / sand / foam / sea shaders, deposits as toy miniatures that change as they are mined, the same in 2D with baked drawings | ✅ | `WorldLook`, `IslandGenerator`, `DepositMesh`, `ArtCache2D`, [02-economy.md](02-economy.md), [21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) §12 |
 | **Irregular island**: 60-74 grid, 2-4 bays and 1-3 capes from the seed, sea inside the grid, land kept around the Núcleo; old saves keep their square island | ✅ | `IslandShape`, `GameConfig.island_coast`, [02-economy.md](02-economy.md) "The irregular island" |
 | **Food, the Farm and collecting**: people eat food (not wood and gold); the Farm with 1 / 5 / 20 min crops; production waits in the buildings and is collected with a tap; spoilage after 2 h only in Gobernador | ✅ | `ProductionManager`, `HarvestSection`, `StockIcon3D` / `StockIcon2D`, [02-economy.md](02-economy.md), [04-population-morale.md](04-population-morale.md) |
@@ -76,6 +78,7 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 | **Combat in 3D**: the board as a diorama with baked toy units in the colony colour; the **front view** by default (both sides face to face, no grid in sight) and the 8x8 board as the alternative; type advantage artillery > vehicle > infantry > artillery (×1.5 / ×0.75); colony notices held during a fight | ✅ | `scripts/combat_view/`, `scenes/combat/Board3D.tscn`, `combat_type_advantage`, [15-combat.md](15-combat.md) §3, [16-balance-combate.md](16-balance-combate.md), [17-balance-asedio.md](17-balance-asedio.md) |
 | **Game speed and bug reports**: x1 / x2 (button or F) on the simulation only; a local error log and "Informar de un fallo" that copies a sanitised report | ✅ | `GameConfig.sim_delta()`, `GameSpeedButton`, `ErrorLog`, `BugReport`, [21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) §13 |
 | **Performance**: measured and audited first; then an FPS cap per profile (lower while paused or unfocused), the "Mínima" quality with first-launch detection and the Mobile renderer on weak PCs, roads in one batch, fewer labels and shared materials, baked 2D art, auto-road in one batch, cached road network, panels that update instead of rebuilding. Not re-measured after the optimisations | ✅ | `tools/perf_probe.gd`, `GraphicsQuality`, `DeviceProfile`, `RoadBatch3D`, [26-rendimiento.md](26-rendimiento.md) |
+| **Helps for what is new**: one-time tips and AYUDA entries for saved games, speed, rank, flag and country, bug reports, day and night, the Farm, collecting and the irregular island | ✅ | `TutorialManager`, `HelperPanel`, `HelpCatalog`, [23-onboarding.md](23-onboarding.md) |
 | **Distribution notes**: free, direct downloads from GitHub Releases, no stores or itch.io for now; LEEME files for testers | ✅ | [19-exportar.md](19-exportar.md) §8, `tools/dist/` |
 
 ### Around the core (before the 1.0 round)
@@ -203,11 +206,11 @@ and the damage formula are not touched.
 | 1.1 | `feat/escaramuza-visible` | ESCARAMUZAS as a HUD button (with a red dot when there is a reason to go out); ¿QUÉ HACER? asks for a skirmish again when there is a motive | ⬜ not started |
 | 1.2 | `feat/expedicion-corta` | Short runs: a 3-fight expedition, the map rolled when it appears and shown before launching with its enemies and loot, "Favorable / Difícil" from both rosters' power, 30% healing between fights; exclusive loot (blueprints, spare parts, settlers, a cheaper Tithe) | ⬜ not started |
 | 1.3 | `feat/retirada-enemiga` | The enemy withdraws below 30% of its total health (not in the siege); "resolve alone" only with at least double strength, through the same `AutoResolver` | ⬜ not started |
-| 1.4 | `feat/tutorial-tablero` | A guided first fight (select, move, attack, watch the enemy, defend) and a second one with artillery (minimum range, the type circle) | ⬜ not started (the combat helps may land as `feat/ensenar-combate`) |
-| 1.5 | `feat/fichas-y-vistas-previas` | Unit cards from `combat_unit_stats` (move, range, strong / weak against), damage preview when aiming, the enemy's reach, the ✕ on the artillery's adjacent cells | ⬜ not started |
-| 1.6 | `feat/topes-por-era` | Building limits that rise with the era; decorations without a cap | 🚧 branch open, not in this branch |
-| 1.7 | `feat/decoraciones-1` | A first set of ten cheap decorations (lamp post, bench, hedge, trees, planter, colony sign, hay cart, bonfire, flag mast, palm trees) baked from CC0 pieces, with their 2D drawing, spread over the ranks | ⬜ not started |
-| 1.8 | `feat/salto-y-camara` | A "pop" when a building finishes, collect icons that bounce, a closer start camera, a dark contact edge on the baked models | 🚧 merged into `integracion/arte-v1` after this branch was cut |
+| 1.4 | `feat/tutorial-tablero` | A guided first fight (select, move, attack, watch the enemy, defend) and a second one with artillery (minimum range, the type circle) | 🚧 in `feat/ensenar-combate`, not integrated |
+| 1.5 | `feat/fichas-y-vistas-previas` | Unit cards from `combat_unit_stats` (move, range, strong / weak against), damage preview when aiming, the enemy's reach, the ✕ on the artillery's adjacent cells | 🚧 in `feat/ensenar-combate`, not integrated |
+| 1.6 | `feat/topes-por-era` | Building limits that rise with the era (`building_limits_by_era`: house 10/15/20, farm 6/9/12, sawmill 5/8/10, gold mine 4/6/8, foundry 3/5/6, refinery 2/3/4, barracks 3/4/5; warehouse 5 and tower 6 stay), read only through `GameConfig.get_building_limit()`; decorations without a cap; CONSTRUIR shows "3/6 · era 2: 9" | ✅ done |
+| 1.7 | `feat/decoraciones-1` | Ten cheap decorations (street lamp, bench, hedge, street tree, flower pots, colony sign, hay cart, bonfire, flagpole, palm trees), +1 to +3 morale, no cap, five free and the rest by rank (2, 3, 5, 13), with their 2D drawing | ✅ done; the 3D meshes are procedural (`DecorMesh`) until their CC0 recipes are baked |
+| 1.8 | `feat/salto-y-camara` | A "pop" when a building finishes, collect icons that bounce and fly to the HUD, a closer start camera that tilts as it zooms in, a dark contact edge on the baked models | ✅ done |
 
 Every phase ends by re-measuring the campaign (`tools/line_probe.gd`, with its player
 taught to raid), the siege (`tools/siege_probe.gd`), the fights
@@ -218,10 +221,8 @@ colony), and by updating `CLAUDE.md`, docs/03, docs/15, docs/23 and this file.
 
 | Branch | What | State |
 |---|---|---|
-| `feat/ayudas-novedades` | Helps and AYUDA entries for what is new (saved games, speed, rank, flag and country, bug reports, day and night, the Farm, collecting, the irregular island) | Merged into `integracion/arte-v1` after this branch was cut |
-| `feat/granja-maqueta` | The Farm as a baked toy model, its beds growing by shader | Merged into `integracion/arte-v1` after this branch was cut |
-| `feat/2d-paridad` | The 2D view catches up with the 3D: the monumental Núcleo with its mast, level II / III | Merged into `integracion/arte-v1` after this branch was cut |
 | `balance/campana-4-6h` | A 4-6 h campaign measured with the irregular island; ¿QUÉ HACER? suggests upgrading a producer when the pool is full | Open, not integrated |
+| `feat/ensenar-combate` | Teaching the combat (covers 1.4-1.5: guided fight, unit cards, previews) | 🚧 branch open, not integrated yet |
 
 ## ❓ Open balance decisions
 
@@ -305,6 +306,8 @@ M1 economy ──────────────┐
                                                    · combat 3D · performance
                                                         │
                                                         └──▶ redesign phase 1 ──▶ 1.0
+                                                             (limits by era, decorations,
+                                                              pop + camera done)
 ```
 
 Milestone 1 came first because it is tuning, not construction. Milestone 4 depended

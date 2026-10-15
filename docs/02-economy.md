@@ -169,7 +169,8 @@ about six minutes of base production, multiplied by the level's production multi
 One **shared pool** for the five resources (not a cap per resource):
 
 - Base cap by era: 600 / 800 / 1000 (`base_storage_cap_by_era`)
-- Each warehouse: +500 (`warehouse_storage_bonus`), max 5; each level above 1 adds
+- Each warehouse: +500 (`warehouse_storage_bonus`), max 5 in every era (los demás topes
+  suben con la era, este no: docs/03 §Building Limits); each level above 1 adds
   +250 more (`warehouse_level_bonus`, `ResourceManager.refresh_warehouse_levels()`)
 - Tech: Logistics 2 +300, Industrial 2 +200, Logistics 5 +500 (`tech_storage_bonus`)
 - Era 3 with five warehouses: 1000 + 5×500 = **3500**, exactly the HQ level 3 upgrade;
@@ -369,6 +370,16 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
   Audit in Campaña and Supervivencia (surviving it is the victory), wins directly in
   Constructor (docs/06, docs/20). The materials are outside the pool, so the 3,500 =
   3,500 invariant still holds
+
+### Topes que suben con la era (2026-10-14)
+- Los topes de edificios suben con la era (`GameConfig.building_limits_by_era`, ≈ ×1,5
+  en la era 2 y ×2 en la era 3; tabla y porqués en docs/03 §Building Limits). Más
+  extractores y casas en las eras 2-3 dan más con qué llenar la bolsa: la bolsa no
+  cambia, el tope de almacenes se queda en 5 para que siga valiendo 3.500 = 3.500, y lo
+  que no cabe espera en los edificios (§Production that waits to be collected).
+- Las decoraciones no tienen tope: son el sitio donde gastar lo que sobra (moral).
+- Para medir con `tools/line_probe.gd`: lo tirado por bolsa llena, el minuto del CG 3 y
+  cuántos extractores levanta de verdad el jugador de la sonda en cada era.
 
 ## Key Files
 

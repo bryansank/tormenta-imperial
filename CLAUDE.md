@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET, version **1.0.0** in progress (`project.godot` `config/version`; the 1.0 is assembled on the `integracion/arte-v1` branch). The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a grid rolled per game, 60-74 cells a side, with the sea inside the grid and 3-6 deposits of each type on land), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop: five resources in one shared pool (food included, grown on Farms and eaten by the people), four workshop materials, production that waits in each building until it is collected with a tap, manual processes in batches (the Núcleo can run every workshop recipe, slower), population and morale, market and laboratory as buildings, tech tree, army training. Turn-based PVE combat: an 8x8 board shown by default as a "front" view (both sides face to face, no grid in sight; the 3D 8x8 board and a flat 2D grid are the alternatives), rock-paper-scissors type advantage, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, and the Final Audit — in Campaña HQ level 3 summons a 3-5 wave siege you have to survive. Around that core: a "toy diorama" look (buildings and units baked from CC0 pieces into one vertex-coloured mesh each), a day/night cycle, ambient sound for day, night and Storm, up to five saved games, x1/x2 game speed, graphics quality down to "Mínima" with an FPS cap, four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done, what is left and the redesign in progress.
+**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET, version **1.0.0** in progress (`project.godot` `config/version`; the 1.0 is assembled on the `integracion/arte-v1` branch). The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a grid rolled per game, 60-74 cells a side, with the sea inside the grid and 3-6 deposits of each type on land), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop: five resources in one shared pool (food included, grown on Farms and eaten by the people), four workshop materials, production that waits in each building until it is collected with a tap, manual processes in batches (the Núcleo can run every workshop recipe, slower), population and morale, market and laboratory as buildings, tech tree, army training. Turn-based PVE combat: an 8x8 board shown by default as a "front" view (both sides face to face, no grid in sight; the 3D 8x8 board and a flat 2D grid are the alternatives), rock-paper-scissors type advantage, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, and the Final Audit — in Campaña HQ level 3 summons a 3-5 wave siege you have to survive. Around that core: a "toy diorama" look (buildings and units baked from CC0 pieces into one vertex-coloured mesh each; a building "pops" when it finishes and collected goods fly to the HUD), 27 building types (10 of them new cheap decorations, with no cap), building limits that rise with the era, a day/night cycle, ambient sound for day, night and Storm, up to five saved games, x1/x2 game speed, graphics quality down to "Mínima" with an FPS cap, four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done, what is left and the redesign in progress.
 
 Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~2040 tests (`func test_`) in 156 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~2070 tests (`func test_`) in 158 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -107,7 +107,7 @@ into that list.
 
 ```
 Main (Node3D, ViewRouter view_mode="3d")
-  +-- MonumentalCamera (Camera3D) -- orthographic 45deg RTS camera
+  +-- MonumentalCamera (Camera3D) -- orthographic RTS camera; a new game starts closer (distance 24) and the view tilts from -52 to -38 degrees as it zooms in (derived from the distance, nothing saved)
   +-- DirectionalLight
   +-- WorldEnvironment (WorldLook.gd) -- sky, tonemapping; WorldLook only decides what costs GPU per quality (SSAO, glow, shadow cascades, MSAA, 3D resolution, simple island)
   +-- IslandGenerator (Node3D) -- procedural island mesh: the irregular coast of the land mask (`IslandShape.coast_polygon`: grass, cliff, sand and foam along it; the sea shades from a distance texture); an old square-island save keeps the rounded square that covers the grid. Rebuilds on `grid_resized`
@@ -200,7 +200,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
   deposit is one baked toy mesh (forest, gold vein, iron, oil well) that changes with its
   depletion stage (`DepositMesh.gd`); the 2D view bakes the same idea (docs/02)
 - Storage: **one shared pool for the five resources** (food included), not a cap per resource. Base scales
-  by era (600 / 800 / 1000) + 500 per warehouse (max 5, see `GameConfig.building_limits`).
+  by era (600 / 800 / 1000) + 500 per warehouse (max 5 in every era: the warehouse cap does not rise, see below).
   Era 1 is 600 so the opening fits: 580 starting resources, plus sawmill + gold mine (330).
   Era 3 ceiling without techs = 1000 + 5x500 = **3500**, exactly the price of the HQ
   level 3 upgrade. On top of that, `GameConfig.tech_storage_bonus` adds the storage
@@ -248,7 +248,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (17 total, `data/buildings/*.tres`)
+### Buildings (27 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -269,15 +269,36 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Garden | 2x2 | 30/0/0/20 | 0 | +5 morale | deco |
 | Fountain | 2x2 | 60/20/0/10 | 0 | +7 morale | deco |
 | Statue | 2x2 | 120/40/0/0 + 3 ingots | 0 | +10 morale | deco |
+| 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
+
+**Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
+`avenue_tree`, `flower_planter`, `colony_sign`, `hay_cart`, `bonfire`, `flagpole`,
+`palm_trees` (doc 21 §6.4 of the private context). One shared mesh per type from
+`scripts/buildings/DecorMesh.gd` (baked `assets/models/toy/<id>_mesh.res` when it
+exists, procedural until then), returned by `DieselpunkBuildingFactory.create()`;
+2D in `BuildingArt2D`. Table, pieces and what is pending: `docs/03-buildings.md`.
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
+
+**Building caps rise with the era (2026-10-14, Bryan's D1).** `GameConfig.building_limits_by_era`
+holds `[era 1, era 2, era 3]` (≈ ×1.5 / ×2: house 10/15/20, farm 6/9/12, sawmill 5/8/10,
+gold mine 4/6/8, foundry 3/5/6, refinery 2/3/4, barracks 3/4/5); era 1 is the old cap.
+Warehouse stays 5 (keeps 1000 + 5×500 = 3500 = HQ L3) and tower stays 6 (4 already
+reach the 60 % mitigation cap); Market, Laboratory and HQ stay 1. **Decorations have no
+cap** (any `BuildingData.is_decoration`, no table entry needed). The only reader is
+`GameConfig.get_building_limit(id)`: era in progress + `rank_limit_bonus`; -1 in
+Sandbox. Nothing new is saved (derived from era and rank). CONSTRUIR shows
+"3/6 · era 2: 9" on each card and refreshes on `era_advanced`. Detail: docs/03.
 
 **Farm (2026-10-04):** the crop is picked in its panel (CULTIVO, `GameConfig.farm_crops`:
 `crop_short` 1 min / 20, `crop_medium` 5 min / 125, `crop_long` 20 min / 600 — longer
 gives more per minute) and repeats by itself (`ProductionManager.plant_crop()` /
 `get_crop()`; changing restarts the crop). It is the Farm's production cycle, not a
-`ProcessManager` process. Procedural mesh with a growing `CropField` (`FarmField3D`) and
-a windmill; 2D drawing `BuildingArt2D._farm()` grows and ripens too.
+`ProcessManager` process. Baked toy model (`assets/models/toy/farm.tscn`: windpump,
+shed, fence) plus its beds as a separate mesh (`Crops`, `FarmCrops3D`): the three crops
+and the windpump rotor grow, ripen, sway and turn in the shared shader
+`toy_crops.gdshader` through per-instance parameters; 2D drawing `BuildingArt2D._farm()`
+grows and ripens too.
 
 **Market and Laboratory (2026-09-28):** trade and research are no longer entries of
 ☰ MENÚ. Each opens by tapping its building (`BuildingInfoPanel.SCREENS`: ABRIR
@@ -292,11 +313,16 @@ gives with real numbers (`upgrade_effect_lines()`), and in 3D the same model gro
 little around its lot centre and carries a brass trim per level (`LevelTrim.gd`: a
 crown at II, plus a short mast with a pennant at III).
 
-**Decorations by rank:** the Garden opens at governor rank 2, the Fountain at 5 and the
-Statue at 8 (`rank_rewards`); the road is never locked. Building limits are fixed per
-type (`GameConfig.building_limits`, a few extra slots by rank via `rank_limit_bonus`);
-limits that rise with the era and decorations without a cap are the redesign in
-progress (docs/13).
+**Decorations by rank:** see the rank paragraph below and the decorations row above;
+the road is never locked.
+
+**Finishing and collecting feel (2026-10-14, `feat/salto-y-camara`):** a finished
+building jumps 1.0 → 1.12 → 1.0 in 0.3 s with a one-shot puff of 8 dust motes
+(`BuildingFx.bounce` / `dust_burst_3d` / `dust_burst_2d`, a Tween, no `_process`; only
+the jump in Minimal quality); collect icons pop in and bob only while there is
+something to collect, and on collecting the icon and its "+N" fly to their HUD chip
+(`FloatingText.fly_to_hud`). The baked models carry a dark contact edge at the foot of
+the walls (`LotMesh.contact_edge`).
 
 ### Materials (2026-09-28)
 
@@ -480,7 +506,7 @@ build 15, upgrade 25, production cycle 1, process/mining 5, trade 5, unit 10, fi
 40, expedition won 80, storm 30 + 10/severity, milestone 100) and **derives** the rank
 from it (`rank_xp_thresholds`, 18 ranks, step `100 + 60*(n-1)`, ~9860 XP for the last;
 not yet measured with the line probe). Titles `RANK_TITLE_<n>` (Colono, Capataz … Cónsul
-… Archigobernador). `rank_rewards` gives decorations (Garden 2, Fountain 5, Statue 8),
+… Archigobernador). `rank_rewards` gives decorations (Garden, Flower pots, Hay cart 2; Bonfire 3; Fountain, Flagpole 5; Statue 8; Palm trees 13),
 extra building slots (`rank_limit_bonus`), small bonuses (`rank_production_bonus`
 +7 % and `rank_storage_bonus` +8 % at rank 18, **assigned**, never added, so loading
 twice is safe) and flag pieces (`patterns`, `emblems`, `colors`).
@@ -861,7 +887,7 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 156 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 158 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ support/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
@@ -871,7 +897,7 @@ tormenta-imperial/
 |   +-- buildings/BuildingPlacer.tscn
 |   +-- combat/Board3D.tscn          # The 3D combat diorama (camera, sun, terrain, marks, units, fx)
 |   +-- ui/                          # One .tscn per panel (26), incl. PrologueScreen and HelpIndexPanel
-+-- scripts/                         # 154 .gd files, ~59k lines
++-- scripts/                         # 155 .gd files, ~61k lines
 |   +-- buildings/
 |   |   +-- BuildingData.gd          # Resource class for building definitions (get_display_name())
 |   |   +-- BuildingPlacer.gd        # 3D placement/move/demolish + mesh spawning
@@ -883,12 +909,13 @@ tormenta-imperial/
 |   |   +-- BuildingLookVisual.gd    # Applies it in 3D (child "LookVisual"); BuildingPlacer syncs it with one map-wide clock
 |   |   +-- BuildingFx.gd            # Generated smoke/dust/glow/sparks sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D
 |   |   +-- SiteFx.gd                # Construction-site animation by shader (crane swing, hook, pennant), 3D and 2D
-|   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes: the Farm and the road meshes (fallback when there is no model_scene)
+|   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes: decorations via DecorMesh and the road meshes (fallback when there is no model_scene)
 |   |   +-- LotPlan.gd, BuildingLot.gd, LotMesh.gd  # The lot: rule (both views), 3D node, one-mesh builder
 |   |   +-- ToyPalette.gd, ToyTones.gd # The shared toy palette and its two map-wide materials (solid, glow)
 |   |   +-- RoadBatch3D.gd           # Every 3D road as a MultiMesh per neighbour mask
 |   |   +-- LevelTrim.gd             # Brass trim of an upgraded building (II / III)
-|   |   +-- FarmField3D.gd, StockIcon3D.gd, SiteMesh.gd  # Growing crop field, collect icon, construction-site mesh
+|   |   +-- FarmCrops3D.gd, StockIcon3D.gd, SiteMesh.gd  # The Farm's beds (toy_crops shader), collect icon, construction-site mesh
+|   |   +-- DecorMesh.gd             # The 10 cheap decorations: one shared mesh per type (baked if present, procedural otherwise)
 |   +-- camera/MonumentalCamera.gd   # Orthographic 45deg RTS camera
 |   +-- combat/                      # PURE models: no nodes, no signals, no global RNG
 |   |   +-- CombatUnit.gd            # One unit: hp, position, draft bonuses, morale mods
@@ -949,12 +976,12 @@ tormenta-imperial/
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
 |       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
-+-- data/buildings/                  # 17 .tres building definitions
++-- data/buildings/                  # 27 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 5 tracks, 34 SFX, 3 ambient loops (see MANIFEST.md)
 |   +-- models/toy/                  # Baked toy buildings (<id>.tscn + <id>_mesh.res, toy_solid / toy_glow materials)
 |   +-- models/toy/units/            # Baked combat toys (<id>_player / <id>_regency, boss_mark, crew_nest)
-|   +-- models/cc0/                  # CC0 source pieces (KayKit, Kenney) the bakers read; never loaded by the game
+|   +-- models/cc0/                  # CC0 source pieces (KayKit, Kenney) the bakers read; each pack has a .gdignore, so Godot never imports or exports it
 |   +-- models/buildings/<id>/       # The old GLBs: unused, excluded from the export
 |   +-- textures/                    # metal_plate PBR maps; ui/ 9-patch sprites, ui/icons/, ui/units/ (silhouettes)
 |   +-- fonts/, branding/            # Fonts with their licences; logo, banner, key art
@@ -1003,19 +1030,20 @@ unset:
 
 | Source | Buildings |
 |---|---|
-| Baked toy model (`model_scene` = `assets/models/toy/<id>.tscn`) | `nucleo`, `house`, `sawmill`, `gold_mine`, `warehouse`, `market`, `laboratory`, `foundry`, `barracks`, `refinery`, `tower`, `headquarters`, `garden`, `fountain`, `statue` (15) |
-| Procedural (`DieselpunkBuildingFactory`) | `farm` (its crop field grows with the cycle, `FarmField3D`; a baked `toy/farm.tscn` exists, unused until the crops move onto it) |
+| Baked toy model (`model_scene` = `assets/models/toy/<id>.tscn`) | `nucleo`, `house`, `sawmill`, `farm`, `gold_mine`, `warehouse`, `market`, `laboratory`, `foundry`, `barracks`, `refinery`, `tower`, `headquarters`, `garden`, `fountain`, `statue` (16). The Farm adds its beds as a separate mesh (`Crops`, `FarmCrops3D`) animated by the shared `toy_crops.gdshader` |
+| `DecorMesh` (through `DieselpunkBuildingFactory.create()`) | the 10 cheap decorations: one shared mesh per type, baked `assets/models/toy/<id>_mesh.res` when it exists, procedural (LotMesh boxes, cylinders, balls) until then — none is baked yet |
 | `RoadBatch3D` | `road`: the node carries no mesh; the batch draws every tile with `DieselpunkBuildingFactory.road_mesh()` per neighbour mask |
 
 The toy models are baked offline by `tools/build_toy_models.gd` from the recipes in
 `tools/toy_recipes/<id>.gd`: CC0 pieces (KayKit, Kenney, `assets/models/cc0/`, source
 only) recoloured to the shared `ToyPalette` plus own pieces, merged by `LotMesh` into one
 vertex-coloured mesh with a solid and (if something glows) a glow surface; the whole
-map shares two materials (`toy_solid.tres`, `toy_glow.tres`). Each model is baked to the
-rectangle its lot leaves (`LotPlan.model_rect`), centre at the origin, base at y = 0,
-facing +Z, and may carry a `FxAnchor` (smoke) or `FlagAnchor` (colony flag) marker. The
-game only loads what is baked. The old GLBs stay in `assets/models/buildings/`, unused
-and excluded from the export. Full detail: docs/03 "Modelos: maqueta de juguete".
+map shares two materials (`toy_solid.tres`, `toy_glow.tres`, plus `toy_crops.tres` for
+the Farm's beds). Each model is baked to the rectangle its lot leaves
+(`LotPlan.model_rect`), centre at the origin, base at y = 0, facing +Z, and may carry a
+`FxAnchor` (smoke) or `FlagAnchor` (colony flag) marker. The game only loads what is
+baked. The old GLBs stay in `assets/models/buildings/`, unused and excluded from the
+export. Full detail: docs/03 "Modelos: maqueta de juguete".
 
 Every building but the road sits on its **lot** (child `Lot`,
 `scripts/buildings/BuildingLot.gd`): ground, contact shadow, trim, props and, where the
@@ -1049,7 +1077,7 @@ the same in 2D. The model is shrunk in plan to leave the yard free
 1. Create `data/buildings/my_building.tres` with BuildingData fields (at least 2x2: only the
    road is 1x1; materials go in `cost_materials`). It will need a road to the Núcleo like
    everything else
-2. Add limit in `GameConfig.building_limits`
+2. Add its cap: a row in `GameConfig.building_limits_by_era` if it rises with the era, or in `GameConfig.building_limits` if fixed. A decoration (`is_decoration`) needs neither: it has no cap
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any), and a row in `GameConfig.building_deposit_rules` if it must touch a deposit
 5. Give it a look in both views: a baked toy model for 3D (a recipe in `tools/toy_recipes/<id>.gd`, baked with `tools/build_toy_models.gd -- --only=<id>` into `assets/models/toy/<id>.tscn`, set as `model_scene`; only CC0 or own pieces, and new CC0 packs listed in `THIRD-PARTY-NOTICES.md`) or, failing that, a case in `DieselpunkBuildingFactory`, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it); and a row in `GameConfig.construction_style` so its construction site has its own materials, fence, tarp and phase-2 silhouette (docs/03, "Obra por edificio y por instancia"; without one it uses `construction_style_default`). Give it a lot in `GameConfig.building_lot_style` (ground, trim, yard, props and a `signature` if the model lacks an exaggerated element) — docs/03 "Parcela y atrezo"
@@ -1145,7 +1173,7 @@ All balance values live in `GameConfig.gd`:
 ### Shared Utilities
 
 - **FloatingText** (`scripts/services/FloatingText.gd`): Static class for spawning animated 3D text labels. Use `FloatingText.spawn()` for custom text or `FloatingText.spawn_resource()` for resource gain/loss display (`spawn_on()` / `spawn_resource_on()` work on any node, 2D included; the 2D view draws them with `FloatingText2D`). Colors come from `GameConfig.resource_colors`.
-- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and ConstructionMenu previews **as the fallback when a building has no `model_scene`** — today only `farm` — and by `RoadBatch3D` for the road meshes (`road_mesh()`).
+- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and ConstructionMenu previews **as the fallback when a building has no `model_scene`** — today only the 10 cheap decorations, which it hands to `DecorMesh` — and by `RoadBatch3D` for the road meshes (`road_mesh()`).
 - **UITheme** (`scripts/ui/UITheme.gd`): Static theme — call its factories for any new UI instead of hand-styling controls.
 
 ### Dev Mode
@@ -1196,16 +1224,16 @@ Combat detail, including a verified list of gaps: `docs/15-combat.md` §10.
 
 **In progress for the 1.0 (2026-10-14): phase 1 of the loop redesign.** After playing,
 the owner found the loop hard to follow, skirmishes optional, long and random, the
-units unexplained and the building limits too tight. Phase 1 (one branch per item, none
-merged into this branch yet) is: a visible ESCARAMUZAS button and ¿QUÉ HACER? asking to
-go out when there is a reason; short expeditions (a 1-fight raid, a 3-fight expedition)
-with map, enemies and loot shown before launching, and loot only found outside
-(blueprints, spare parts, settlers, a cheaper Tithe); the enemy withdrawing when it is
-lost (not in the siege) and "resolve alone" only with double strength; a guided first
-fight and unit cards with damage previews and enemy reach; building limits that rise
-with the era and decorations without a cap; a first set of cheap decorations; a
-"pop" when a building finishes, collect icons that bounce and a closer start camera.
-Do not document any of it as shipped until it lands here.
+units unexplained and the building limits too tight. Already landed from phase 1:
+limits by era and uncapped decorations (`feat/topes-por-era`), the ten cheap
+decorations (`feat/decoraciones-1`, their CC0 bakes still pending) and the finishing
+"pop", rewarding collect and closer start camera (`feat/salto-y-camara`). Still to
+come (do not document as shipped until it lands): a visible ESCARAMUZAS button and
+¿QUÉ HACER? asking to go out when there is a reason; short expeditions (a 1-fight raid,
+a 3-fight expedition) with map, enemies and loot shown before launching, and loot only
+found outside (blueprints, spare parts, settlers, a cheaper Tithe); the enemy
+withdrawing when it is lost (not in the siege) and "resolve alone" only with double
+strength; a guided first fight and unit cards with damage previews and enemy reach.
 
 Still not there:
 

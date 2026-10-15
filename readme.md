@@ -4,7 +4,7 @@
 
 <p align="center">
   <img alt="Godot 4.7" src="https://img.shields.io/badge/Godot-4.7%20.NET-478CBF">
-  <img alt="GDScript" src="https://img.shields.io/badge/GDScript-59k%20l%C3%ADneas-355570">
+  <img alt="GDScript" src="https://img.shields.io/badge/GDScript-61k%20l%C3%ADneas-355570">
   <img alt="Estado" src="https://img.shields.io/badge/estado-1.0%20en%20preparaci%C3%B3n-C49629">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-PolyForm%20Strict%201.0.0-8C3B29">
 </p>
@@ -39,7 +39,7 @@ Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán �
 | | |
 |---|---|
 | <img src="docs/media/02_construccion.png" alt="Catálogo de construcción"> | <img src="docs/media/03_mercado.png" alt="Mercado Imperial"> |
-| **Construcción** — catálogo de edificios (hoy 17), con requisitos y coste a la vista. | **Mercado Imperial** — compra y venta con precios que flotan según lo que hagas. |
+| **Construcción** — catálogo de edificios (hoy 27, diez de ellos decoraciones), con requisitos y coste a la vista. | **Mercado Imperial** — compra y venta con precios que flotan según lo que hagas. |
 | <img src="docs/media/04_tecnologia.png" alt="Árbol tecnológico"> | <img src="docs/media/05_ejercito.png" alt="Cuartel y ejército"> |
 | **Tecnología** — 15 mejoras en tres ramas, cinco escalones cada una. | **Ejército** — entrenamiento por ranuras, poder militar y mantenimiento en oro. |
 
@@ -81,7 +81,7 @@ Ningún otro juego del género cruza esas dos mitades. Esa es la apuesta.
 
 La **versión 1.0 está en preparación**. El **juego se puede jugar de principio a fin**: economía con comida y materiales, recoger la producción, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline, la Tormenta y su Diezmo, el combate y la Auditoría Final. Alrededor: el rango del gobernador y un **país propio** (nombre y bandera hecha por piezas), **día y noche**, sonido y ambiente, **hasta cinco partidas guardadas**, velocidad x1 / x2, **cuatro modos** (Campaña, Constructor, Supervivencia y Sandbox; hoy la partida nueva solo ofrece la Campaña y los otros tres están apartados), una **vista 2D** además de la 3D, una **interfaz configurable** por dispositivo (PC, tableta, móvil) con juego táctil, una **calidad gráfica "Mínima"** para equipos flojos, un **prólogo, un tutorial guiado y un índice de ayudas**, y exportados para **Windows y Android**.
 
-Lo que aún no está: la campaña se midió entera con tiempos reales (diez de diez partidas simuladas ganadas, de 2 h 18 min a 4 h) **antes** de las carreteras, los materiales, la comida y la isla irregular, así que falta volver a medirla; el rendimiento tampoco se ha vuelto a medir tras las optimizaciones; y nadie ha jugado aún una partida entera en una tableta real. Antes de publicar entra una primera tanda de cambios al ciclo de juego, después de jugarlo: escaramuzas más cortas, visibles y que den cosas que la colonia no tiene, un primer combate guiado, topes de edificios que suben con la era y decoraciones nuevas. Está en curso; el detalle, en [`docs/13-roadmap.md`](docs/13-roadmap.md).
+Lo que aún no está: la campaña se midió entera con tiempos reales (diez de diez partidas simuladas ganadas, de 2 h 18 min a 4 h) **antes** de las carreteras, los materiales, la comida y la isla irregular, así que falta volver a medirla; el rendimiento tampoco se ha vuelto a medir tras las optimizaciones; y nadie ha jugado aún una partida entera en una tableta real. Antes de publicar entra una primera tanda de cambios al ciclo de juego, después de jugarlo. Ya están los topes de edificios que suben con la era, diez decoraciones baratas y sin tope, y un edificio que "salta" al terminarse. Faltan las escaramuzas más cortas, visibles y que den cosas que la colonia no tiene, y un primer combate guiado. Está en curso; el detalle, en [`docs/13-roadmap.md`](docs/13-roadmap.md).
 
 El **combate PVE por turnos está en el juego**: un tablero de 8x8, orden de iniciativa, mover/atacar/defender/esperar, IA enemiga, ventaja por tipo de unidad, el Diezmo peleado en vez de pagado, y la Auditoría Final que cierra la partida. En 3D se ve como una maqueta: por defecto los dos bandos frente a frente sin casillas a la vista, o el tablero 8x8 si lo prefieres en Ajustes. Todo el modelo vive en `scripts/combat/` como objetos puros, sin nodos ni señales, y se prueba en headless con gdUnit4.
 
@@ -104,15 +104,15 @@ Detalle técnico en [`docs/15-combat.md`](docs/15-combat.md); especificación en
 | | |
 |---|---|
 | **Motor** | Godot 4.7 (.NET/mono), renderer Forward+ en PC y Mobile en Android (y en un PC con la calidad "Mínima") |
-| **Lenguaje** | GDScript — unas 59.000 líneas en 154 scripts, 30 escenas |
+| **Lenguaje** | GDScript — unas 61.000 líneas en 155 scripts, 30 escenas |
 | **Arquitectura** | Servicio–señal–componente: 27 autoloads de juego que se **avisan** solo por un `EventBus` (121 señales); ningún productor conoce a quien le escucha |
 | **Modelos puros** | La lógica de combate, de la Tormenta y del día y la noche vive en `scripts/combat/` y `scripts/storm/` como `RefCounted` sin nodos ni señales: devuelven listas de eventos y un servicio las publica. Por eso se prueban enteras en headless |
 | **Balance** | Todo valor ajustable vive en `GameConfig.gd`. Cero números mágicos repartidos por el código |
-| **Modelos 3D** | Maqueta de juguete: 15 de los 17 edificios y las unidades de combate son mallas horneadas con `tools/build_toy_models.gd` a partir de piezas CC0 (KayKit, Kenney) recoloreadas con una paleta común; la granja (su campo crece) y la calzada se generan por código |
+| **Modelos 3D** | Maqueta de juguete: los 16 edificios principales (la granja con sus bancales que crecen por shader) y las unidades de combate son mallas horneadas con `tools/build_toy_models.gd` a partir de piezas CC0 (KayKit, Kenney) recoloreadas con una paleta común; las diez decoraciones nuevas y la calzada se generan por código, una malla compartida por tipo |
 | **Sonido** | 5 temas de música, 34 efectos y 3 ambientes (día, noche y Tormenta); terceros solo CC0, el ambiente sintetizado es obra propia |
 | **Guardado** | JSON local, hasta cinco partidas, autoguardado y progresión offline de hasta 8 horas; las peleas no se guardan a medias |
 | **Rendimiento** | Tope de FPS por dispositivo, calidad "Mínima" con detección en el primer arranque y una sonda reproducible (`tools/perf_probe.gd`); ver [`docs/26-rendimiento.md`](docs/26-rendimiento.md) |
-| **Tests** | gdUnit4: unos 2.040 tests en 156 suites, lanzados siempre con `tools/run_tests.sh`, que les da una carpeta de usuario propia |
+| **Tests** | gdUnit4: unos 2.070 tests en 158 suites, lanzados siempre con `tools/run_tests.sh`, que les da una carpeta de usuario propia |
 | **Exportados** | Windows (`.exe` único) y Android (APK para tableta); ver [`docs/19-exportar.md`](docs/19-exportar.md) |
 
 El proyecto sigue **Spec-Driven Development**: cada pilar pasa por especificación, plan técnico y lista de tareas antes de escribirse. Las reglas que no se negocian están en [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
@@ -135,7 +135,7 @@ tormenta-imperial/
 │   ├── grid/        Rejilla de 60 a 74 celdas por lado, sorteada por partida, con su máscara de tierra
 │   ├── map/         Isla irregular, yacimientos, cielo y luz, trabajadores que andan
 │   └── camera/      Cámara ortográfica a 45°
-├── data/buildings/  Los 17 edificios, como recursos .tres
+├── data/buildings/  Los 27 edificios, como recursos .tres
 ├── assets/          Modelos horneados, audio, fuentes, texturas y marca
 ├── specs/           Especificaciones previas a cada pilar
 ├── tests/           Suites de gdUnit4

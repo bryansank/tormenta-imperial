@@ -85,6 +85,10 @@ var hq_upgrade_costs := {
 }
 
 # ── Building Limits (max per type, -1 = unlimited) ──
+# Topes de la ERA 1 y de lo que no sube con la era. Los que suben estan en
+# `building_limits_by_era` (seccion "Building Limit Helpers"); las decoraciones
+# (BuildingData.is_decoration) no tienen tope aunque salgan aqui. Se lee siempre
+# con get_building_limit(id), nunca a mano.
 
 var building_limits := {
 	"sawmill": 5,
@@ -1205,10 +1209,10 @@ var rank_rewards := {
 	1: {"patterns": ["plain", "bands_h", "bands_v", "halves_h", "cross"],
 		"emblems": ["none", "gear", "anchor", "wheat", "hammer"],
 		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"]},
-	2: {"buildings": ["garden"], "emblems": ["tower"]},
-	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"]},
+	2: {"buildings": ["garden", "flower_planter", "hay_cart"], "emblems": ["tower"]},
+	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"], "buildings": ["bonfire"]},
 	4: {"storage": 0.02, "emblems": ["star"]},
-	5: {"buildings": ["fountain"]},
+	5: {"buildings": ["fountain", "flagpole"]},
 	6: {"production": 0.01, "patterns": ["diagonal", "saltire"]},
 	7: {"colors": ["copper", "red"]},
 	8: {"buildings": ["statue"], "storage": 0.02},
@@ -1216,7 +1220,7 @@ var rank_rewards := {
 	10: {"limit": {"house": 2}},
 	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
 	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
-	13: {"limit": {"statue": 2, "fountain": 2}, "emblems": ["ship"]},
+	13: {"buildings": ["palm_trees"], "emblems": ["ship"]},
 	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
 	15: {"production": 0.01, "patterns": ["stripes"]},
 	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
@@ -1335,6 +1339,27 @@ var construction_style := {
 		"frame": "basin", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 	"statue": {"piles": ["stone", "stone", "sacks"], "fence": "canvas", "tarp": Color(0.58, 0.54, 0.46),
 		"frame": "plinth", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.77, 0.59, 0.16)},
+	# Decoraciones baratas (feat/decoraciones-1): obras pequenas y rapidas.
+	"lamp_post": {"piles": ["rivets", "stone", "planks"], "fence": "planks", "tarp": Color(0.36, 0.34, 0.40),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.93, 0.78, 0.32)},
+	"park_bench": {"piles": ["planks", "rivets", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.20, 0.42, 0.62)},
+	"hedge": {"piles": ["soil", "sacks", "soil"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"avenue_tree": {"piles": ["soil", "stone", "sacks"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"flower_planter": {"piles": ["soil", "bricks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.40, 0.30),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.85, 0.35, 0.55)},
+	"colony_sign": {"piles": ["planks", "logs", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "mast", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.72, 0.13, 0.10)},
+	"hay_cart": {"piles": ["sacks", "planks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.55, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.93, 0.78, 0.32)},
+	"bonfire": {"piles": ["logs", "stone", "logs"], "fence": "dark_planks", "tarp": Color(0.48, 0.34, 0.20),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.90, 0.55, 0.12)},
+	"flagpole": {"piles": ["beams", "stone", "rivets"], "fence": "canvas", "tarp": Color(0.55, 0.12, 0.10),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.72, 0.13, 0.10)},
+	"palm_trees": {"piles": ["soil", "sacks", "gravel"], "fence": "planks", "tarp": Color(0.70, 0.62, 0.42),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 }
 ## La animacion de la obra (grua, polea, banderin): velocidad base de giro de
 ## la grua (rad/s de la fase del vaiven) y cuanto se abre el vaiven (rad). Cada
@@ -1432,6 +1457,19 @@ var building_lot_style := {
 		"props": ["bench", "lamp", "planter", "bench"], "count": [3, 5]},
 	"statue": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic",
 		"props": ["lamp", "planter", "bench"], "count": [3, 5]},
+	# Decoraciones baratas (feat/decoraciones-1): suelo, bordillo y una o dos
+	# piezas de atrezo como mucho (la decoracion ya es atrezo, y cada pieza de
+	# mas cuesta en la tablet).
+	"lamp_post": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "bench"], "count": [1, 2]},
+	"park_bench": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hedge": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["planter", "bench"], "count": [1, 2]},
+	"avenue_tree": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "planter"], "count": [1, 2]},
+	"flower_planter": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "lamp"], "count": [1, 2]},
+	"colony_sign": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hay_cart": {"ground": "dirt", "trim": "fence", "yard": 0.25, "accent": "residential", "props": ["sacks", "barrel"], "count": [1, 2]},
+	"bonfire": {"ground": "dirt", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["logs", "barrel"], "count": [1, 2]},
+	"flagpole": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["lamp", "planter"], "count": [1, 2]},
+	"palm_trees": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["barrel", "crate"], "count": [1, 2]},
 }
 ## El acento saturado de cada familia (guia, regla 4): rojo valvula en lo
 ## industrial, amarillo senal en lo militar, laton en lo civico, verde en lo
@@ -1554,14 +1592,97 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 
 # ── Building Limit Helpers ──
 
+## Topes que suben con la era (decision D1 de Bryan, 14-10-2026; docs/03 §Topes).
+## [era 1, era 2, era 3]. La era 1 es el tope de siempre (`building_limits`): una
+## partida guardada nunca queda por encima de su tope. Regla general ≈ ×1,5 en la
+## era 2 y ×2 en la era 3, con tres excepciones que no suben:
+##   warehouse 5  la bolsa de la era 3 sin tecnologias es 1000 + 5×500 = 3500, el
+##                precio justo del CG nivel 3 (hq_upgrade_costs[3] sin materiales).
+##                Con 7 almacenes serian 4500 (5500 con las tecnologias) y el CG 3
+##                dejaria de pedir la bolsa llena. La bolsa ya crece por era sola
+##                (base_storage_cap_by_era 600/800/1000) y por nivel de almacen.
+##   tower 6      4 torres ya dan el 60 % de mitigacion (storm_tower_mitigation_max)
+##                y solo 2 salen al tablero (storm_tower_garrison_max): mas torres
+##                no darian nada. El rango sigue dando +1 (rango 16).
+##   unicos 1     Mercado, Laboratorio y Cuartel General (no estan en esta tabla).
+## El Cuartel sube menos (3/4/5): cada uno es un hueco de entrenamiento y +8 de
+## capacidad; con 5 ya caben 43 unidades y el mantenimiento en oro es el freno.
+## Un id que no esta aqui usa `building_limits` en todas las eras.
+var building_limits_by_era := {
+	"sawmill": [5, 8, 10],
+	"gold_mine": [4, 6, 8],
+	"foundry": [3, 5, 6],
+	"refinery": [2, 3, 4],
+	"house": [10, 15, 20],
+	"farm": [6, 9, 12],
+	"barracks": [3, 4, 5],
+	"warehouse": [5, 5, 5],
+	"tower": [6, 6, 6],
+}
+
+## El tope de `building_id` AHORA: la era en curso (ProgressionManager), mas los
+## huecos del rango. -1 = sin tope. Es el unico sitio que deben leer las reglas
+## de colocar, CONSTRUIR, ¿QUE HACER? y el tutorial. Nada de esto se guarda: sale
+## de la era y del rango, que ya van en el save.
 func get_building_limit(building_id: String) -> int:
+	return get_building_limit_for_era(building_id, current_era())
+
+## El tope de `building_id` en la era `era` (1..3, se acota), con el rango encima.
+## Sandbox: -1 siempre (docs/20). Decoraciones: -1 siempre (las limita el terreno).
+func get_building_limit_for_era(building_id: String, era: int) -> int:
 	if GameMode.all_unlocked():
 		return -1  # Sandbox: sin tope por tipo (ver docs/20-modos-de-juego.md).
-	var limit: int = building_limits.get(building_id, -1)
+	if is_uncapped_building(building_id):
+		return -1
+	var limit := base_building_limit(building_id, era)
 	if limit < 0:
 		return limit
 	# Huecos extra que da el rango del gobernador (RankManager los asigna).
 	return limit + int(rank_limit_bonus.get(building_id, 0))
+
+## El tope de la tabla en `era`, sin rango ni modo. -1 = sin tope.
+func base_building_limit(building_id: String, era: int) -> int:
+	if building_limits_by_era.has(building_id):
+		var row: Array = building_limits_by_era[building_id]
+		if not row.is_empty():
+			return int(row[clampi(era, 1, row.size()) - 1])
+	return int(building_limits.get(building_id, -1))
+
+## La proxima era en la que sube el tope de `building_id` y a cuanto (con el
+## rango), o {} si ya no sube. Para "3/6 · era 2: 9" en CONSTRUIR.
+func next_building_limit(building_id: String) -> Dictionary:
+	var era := current_era()
+	var now := get_building_limit_for_era(building_id, era)
+	if now < 0:
+		return {}
+	for e in range(era + 1, max_era() + 1):
+		var later := get_building_limit_for_era(building_id, e)
+		if later > now:
+			return {"era": e, "limit": later}
+	return {}
+
+## La era en curso, o 1 sin ProgressionManager (pruebas sin arbol, arranque).
+func current_era() -> int:
+	var pm := get_node_or_null("/root/ProgressionManager")
+	return int(pm.get("current_era")) if pm != null else 1
+
+func max_era() -> int:
+	return base_storage_cap_by_era.size()
+
+## Sin tope por tipo: las decoraciones (BuildingData.is_decoration, carreteras
+## incluidas). Se mira el .tres y no una lista, para que una decoracion nueva no
+## necesite entrada en ninguna tabla. Se recuerda por id.
+var _uncapped_cache: Dictionary = {}
+func is_uncapped_building(building_id: String) -> bool:
+	if _uncapped_cache.has(building_id):
+		return bool(_uncapped_cache[building_id])
+	var path := "res://data/buildings/%s.tres" % building_id
+	var data: BuildingData = null
+	if ResourceLoader.exists(path):
+		data = load(path) as BuildingData
+	var uncapped := data != null and data.is_decoration
+	_uncapped_cache[building_id] = uncapped
+	return uncapped
 
 func get_prerequisites(building_id: String) -> Array:
 	if GameMode.all_unlocked():

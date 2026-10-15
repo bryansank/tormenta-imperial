@@ -102,7 +102,8 @@ func test_research_stacks_on_top_of_era_and_warehouses() -> void:
 ## exactly what the HQ's level 3 upgrade costs, so winning means standing there full,
 ## with all five warehouses up — which is precisely when you have the most to lose.
 func test_the_fullest_bag_is_exactly_the_price_of_victory() -> void:
-	var max_warehouses: int = int(GameConfig.building_limits["warehouse"])
+	# El tope de la era 3 (los topes suben con la era; el almacen no: GameConfig).
+	var max_warehouses: int = GameConfig.base_building_limit("warehouse", 3)
 	var cap: int = GameConfig.get_storage_cap(max_warehouses, 3)
 	var hq_final: Dictionary = GameConfig.hq_upgrade_costs[3]
 	var price := 0

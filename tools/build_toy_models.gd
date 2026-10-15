@@ -23,6 +23,10 @@ extends SceneTree
 ## - assets/models/toy/<id>.tscn: un MeshInstance3D con esa malla como raiz y,
 ##   en los edificios con humo o serrin, un Marker3D "FxAnchor" (de ahi sale el
 ##   efecto de "trabajando", BuildingLookVisual);
+## - en la Granja, ademas, un hijo MeshInstance3D "Crops" con la malla de los
+##   bancales (`farm_crops_mesh.res`: los cultivos y el rotor del molino, ver
+##   tools/toy_crops.gd), el material compartido `toy_crops.tres` y el script
+##   FarmCrops3D, que los hace crecer con parametros por instancia;
 ## - assets/models/toy/toy_solid.tres / toy_glow.tres: los dos materiales que
 ##   comparte todo el mapa (solo se crean si faltan: se pueden retocar a mano).
 ##
@@ -39,17 +43,36 @@ const OUT := "res://assets/models/toy/"
 const RECIPES := "res://tools/toy_recipes/"
 const CELL := 2.0
 
-## Los 17 que se hornean (la calzada no: su malla depende de los vecinos).
+## Los que se hornean (la calzada no: su malla depende de los vecinos).
 const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", "laboratory",
-	"foundry", "barracks", "refinery", "tower", "headquarters", "garden", "fountain", "statue", "farm"]
+	"foundry", "barracks", "refinery", "tower", "headquarters", "garden", "fountain", "statue", "farm",
+	# Las diez decoraciones baratas (feat/decoraciones-1); en el juego las carga
+	# DecorMesh (<id>_mesh.res) y, sin hornear, usa su version procedural.
+	"lamp_post", "park_bench", "hedge", "avenue_tree", "flower_planter",
+	"colony_sign", "hay_cart", "bonfire", "flagpole", "palm_trees"]
 
-## Huella y patio de lo que no tiene .tres en esta rama (la granja llega en otra).
-const EXTRA := {"farm": {"grid": Vector2i(2, 2), "yard": 0.1}}
+## Presupuesto de triangulos de una decoracion 2x2 (doc 21 §6.6).
+const DECOR_TRI_BUDGET := 600
+
+## Huella y patio de lo que no tiene .tres ni parcela (hoy ninguno: la Granja
+## usa el rectangulo de su parcela, GameConfig.building_lot_style["farm"]).
+const EXTRA := {}
+
+## La malla de los bancales de la Granja (tools/toy_crops.gd): su material
+## compartido y el script que la mueve.
+const CROPS_MAT := "res://assets/models/toy/toy_crops.tres"
+const CROPS_SCRIPT := "res://scripts/buildings/FarmCrops3D.gd"
 
 ## Oscurecimiento de contacto: lo que queda por debajo de esta altura se
 ## oscurece hasta AO_DARK en y = 0 (ancla el modelo a la parcela, regla 5).
 const AO_HEIGHT := 0.22
 const AO_DARK := 0.22
+## Borde oscuro de contacto (V8): en las paredes, una franja fina de EDGE_HEIGHT
+## que se oscurece hasta EDGE_DARK en y = 0, encima del AO. Se lee de lejos,
+## en la Tormenta y de noche (LotMesh.contact_edge). Solo en los edificios: las
+## unidades siguen con el AO de _finish_colors().
+const EDGE_HEIGHT := 0.12
+const EDGE_DARK := 0.42
 
 var _kit: Kit = null
 
@@ -136,7 +159,7 @@ func _bake(id: String) -> bool:
 	var fitted := _fit_plan(mk, float(ctx["w"]), float(ctx["d"]))
 	if out.has("fx"):
 		out["fx"] = fitted * (out["fx"] as Vector3)
-	_finish_colors(mk)
+	mk.contact_edge(AO_HEIGHT, AO_DARK, EDGE_HEIGHT, EDGE_DARK)
 	var mesh := mk.commit()
 	if mesh == null:
 		push_error("build_toy_models: %s sale vacio" % id)
@@ -156,6 +179,12 @@ func _bake(id: String) -> bool:
 		anchor.position = out["fx"]
 		root.add_child(anchor)
 		anchor.owner = root
+	var crop_tris := 0
+	if out.has("crops"):
+		crop_tris = _add_crops(root, id, out["crops"], fitted)
+		if crop_tris < 0:
+			root.free()
+			return false
 	# FlagAnchor: donde se cuelga la bandera del pais (feat/bandera-y-pais).
 	# "flag" va en el marco de la receta (sigue al encaje); "flag_over_top" es
 	# {x, z, alto sobre la cima} en el marco del edificio, para casar con un
@@ -185,10 +214,35 @@ func _bake(id: String) -> bool:
 		push_error("build_toy_models: no guarda la escena de %s (%d)" % [id, err])
 		return false
 	var a := mesh.get_aabb()
+	if preload("res://scripts/buildings/DecorMesh.gd").handles(id) and Kit.tri_count(mesh) > DECOR_TRI_BUDGET:
+		print("build_toy_models:   ** %s PASA DEL PRESUPUESTO DE DECORACION (%d) **" % [id, DECOR_TRI_BUDGET])
 	print("build_toy_models: %-13s %5d tri  %.2f x %.2f x %.2f (objetivo %.2f x %.2f)%s" % [
 		id, Kit.tri_count(mesh), a.size.x, a.size.y, a.size.z, ctx["w"], ctx["d"],
-		("  FxAnchor" if out.has("fx") else "") + ("  FlagAnchor" if flag_at != null else "")])
+		("  FxAnchor" if out.has("fx") else "") + ("  FlagAnchor" if flag_at != null else "")
+		+ ("  Crops %d tri" % crop_tris if crop_tris > 0 else "")])
 	return true
+
+## Los bancales de la Granja: la malla aparte (`<id>_crops_mesh.res`) colgada
+## del modelo como "Crops", con el material compartido y FarmCrops3D. Devuelve
+## sus triangulos (-1 si falla).
+func _add_crops(root: Node3D, id: String, crops, fitted: Transform3D) -> int:
+	var mat: Material = load(CROPS_MAT)
+	var mesh: ArrayMesh = crops.commit(fitted, mat)
+	if mesh == null:
+		return 0
+	mesh.resource_name = id + "_crops"
+	var path := OUT + id + "_crops_mesh.res"
+	var err := ResourceSaver.save(mesh, path, ResourceSaver.FLAG_CHANGE_PATH | ResourceSaver.FLAG_COMPRESS)
+	if err != OK:
+		push_error("build_toy_models: no guarda %s (%d)" % [path, err])
+		return -1
+	var mi := MeshInstance3D.new()
+	mi.name = "Crops"
+	mi.mesh = mesh
+	mi.set_script(load(CROPS_SCRIPT))
+	root.add_child(mi)
+	mi.owner = root
+	return crops.tri_count()
 
 ## Lo mismo que BuildingLot.fit_model(), pero horneado: encoge en planta (nunca
 ## en altura, nunca agranda) y centra lo que la receta haya dejado salirse de
