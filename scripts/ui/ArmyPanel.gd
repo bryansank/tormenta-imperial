@@ -6,6 +6,7 @@ extends CanvasLayer
 ## su coste en iconos; de donde salen los topes y el sueldo, en tooltips.
 
 const TextKit := preload("res://scripts/ui/TextKit.gd")
+const RegimentCard := preload("res://scripts/ui/RegimentCard.gd")
 
 var _panel: PanelContainer
 var _backdrop: ColorRect
@@ -131,10 +132,18 @@ func _setup_ui() -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.add_child(scroll)
 
+	# Arriba de la lista, la tarjeta REGIMIENTO (nombre, color, emblema,
+	# pintura; solo cosmetica). Se gobierna sola: ver RegimentCard.gd.
+	var scroll_col := VBoxContainer.new()
+	scroll_col.add_theme_constant_override("separation", 6)
+	scroll_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(scroll_col)
+	scroll_col.add_child(RegimentCard.new())
+
 	_units_vbox = VBoxContainer.new()
 	_units_vbox.add_theme_constant_override("separation", 6)
 	_units_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_units_vbox)
+	scroll_col.add_child(_units_vbox)
 
 	vbox.add_child(UITheme.make_separator())
 
