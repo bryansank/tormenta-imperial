@@ -590,6 +590,11 @@ func _load_game() -> void:
 	if data.has("expedition"):
 		CombatManager.load_save_data(data["expedition"])
 
+	# El tablon de salidas, los planos y la rebaja del Diezmo (doc 21 §3). Sin la
+	# clave, tablon vacio: las ofertas salen solas en unos segundos.
+	var sorties_data: Variant = data.get("sorties", {})
+	CombatManager.load_sorties_save_data(sorties_data if sorties_data is Dictionary else {})
+
 	# Restore the storm clock. Same rule: no key means a save from before the
 	# storm existed, and the cycle simply starts fresh.
 	if data.has("storm"):
@@ -744,6 +749,7 @@ func _write_save() -> void:
 	# Army
 	data["army"] = ArmyManager.get_save_data()
 	data["expedition"] = CombatManager.get_save_data()
+	data["sorties"] = CombatManager.get_sorties_save_data()
 	data["storm"] = StormManager.get_save_data()
 	data["day"] = DayClock.get_save_data()
 	data["tutorial"] = TutorialManager.get_save_data()

@@ -146,3 +146,118 @@ static func occupied_cells(units: Array, ignore_uid: int = -1) -> Array:
 		if unit.is_alive() and unit.uid != ignore_uid and unit.position.x >= 0:
 			cells.append(unit.position)
 	return cells
+
+# ── Fuerza y probabilidades (doc 21 §3.4-3.5, 2026-10-14) ────────────
+
+## Un numero comparable para "cuanto pega este bando": el poder de cada unidad
+## viva (unit_types[...]["power"]) por la vida que le queda respecto a la de una
+## unidad base de su tipo. La escala del enemigo multiplica la vida, asi que un
+## enemigo mas duro cuenta mas; un herido cuenta menos. Es la misma medida que
+## roster_power() de ExpeditionGenerator para una columna entera y sin heridas.
+static func side_strength(units: Array, side: int) -> float:
+	var total: float = 0.0
+	for unit in units:
+		if unit == null or not unit.is_alive() or unit.side != side:
+			continue
+		var base_hp: float = float(maxi(1, int(GameConfig.get_combat_stats(unit.unit_id).get("hp", 1))))
+		total += float(unit.power()) * float(unit.hp) / base_hp
+	return total
+
+## La etiqueta de la seleccion de tropa: "favorable", "even" o "hard", segun la
+## proporcion entre tu fuerza y la del enemigo.
+static func odds_label(player_strength: float, enemy_strength: float) -> String:
+	if enemy_strength <= 0.0:
+		return "favorable"
+	var ratio: float = player_strength / enemy_strength
+	if ratio >= GameConfig.combat_odds_favorable:
+		return "favorable"
+	if ratio < GameConfig.combat_odds_hard:
+		return "hard"
+	return "even"
+
+## "Resolver solo" solo se ofrece cuando tu fuerza dobla (o mas) la del enemigo.
+static func can_auto_resolve(player_strength: float, enemy_strength: float) -> bool:
+	if player_strength <= 0.0:
+		return false
+	return player_strength >= GameConfig.combat_auto_resolve_ratio * enemy_strength
+
+## Lo que le queda al bando de la vida con la que empezo (0..1). `start_hp` es
+## la suma de vida del bando al abrir el tablero.
+static func hp_fraction(units: Array, side: int, start_hp: int) -> float:
+	if start_hp <= 0:
+		return 1.0
+	var now := 0
+	for unit in units:
+		if unit.side == side and unit.is_alive():
+			now += unit.hp
+	return float(now) / float(start_hp)
+
+# ── Vistas previas (docs/15 §3 "Ensenar el combate", 2026-10-14) ─────
+# Lo que el tablero ensena ANTES de actuar. Puras como todo lo de arriba: no
+# tocan las unidades, no tiran dados (no los hay) y no dependen de la vista.
+
+## Lo que haria `attacker` a `target` si le atacara ahora, sin hacerlo:
+## {damage, hp, max_hp, hp_after, kills, matchup (+1/0/-1), mult}. Usa damage(),
+## asi que la ventaja por tipo, la defensa doblada y la moral ya van dentro.
+static func preview_damage(attacker: CombatUnit, target: CombatUnit) -> Dictionary:
+	var dealt: int = damage(attacker, target)
+	var hp_after: int = maxi(0, target.hp - dealt)
+	return {
+		"damage": dealt,
+		"hp": target.hp,
+		"max_hp": target.max_hp,
+		"hp_after": hp_after,
+		"kills": hp_after == 0,
+		"matchup": type_matchup(attacker.unit_id, target.unit_id),
+		"mult": type_multiplier(attacker.unit_id, target.unit_id),
+	}
+
+## Las casillas a las que `unit` puede disparar desde `from`: distancia entre su
+## alcance minimo y el maximo, dentro del tablero.
+static func fire_cells_from(unit: CombatUnit, from: Vector2i, board: Vector2i) -> Array:
+	var out: Array = []
+	var lo: int = unit.min_range()
+	var hi: int = unit.attack_range()
+	for dx in range(-hi, hi + 1):
+		var rest: int = hi - absi(dx)
+		for dy in range(-rest, rest + 1):
+			var d: int = absi(dx) + absi(dy)
+			if d < lo or d == 0:
+				continue
+			var cell := from + Vector2i(dx, dy)
+			if in_board(cell, board):
+				out.append(cell)
+	return out
+
+## Las casillas demasiado cerca para que `unit` dispare (dentro de su alcance
+## minimo, sin contar la suya). Vacio para quien pega cuerpo a cuerpo: es la ✕
+## de la artilleria.
+static func min_range_cells(unit: CombatUnit, board: Vector2i) -> Array:
+	var out: Array = []
+	var lo: int = unit.min_range()
+	if lo <= 1 or unit.position.x < 0:
+		return out
+	for dx in range(-(lo - 1), lo):
+		var rest: int = (lo - 1) - absi(dx)
+		for dy in range(-rest, rest + 1):
+			if dx == 0 and dy == 0:
+				continue
+			var cell := unit.position + Vector2i(dx, dy)
+			if in_board(cell, board):
+				out.append(cell)
+	return out
+
+## El peligro: toda casilla a la que alguna unidad viva de `side` puede disparar
+## en su proximo turno, moviendose antes con su movimiento entero. Una vez por
+## turno, no cada fotograma: con 6 unidades y 64 casillas es poca cosa.
+static func threat_cells(units: Array, side: int, board: Vector2i) -> Array:
+	var seen := {}
+	for unit in units:
+		if not unit.is_alive() or unit.side != side or unit.position.x < 0:
+			continue
+		var stands: Array = [unit.position]
+		stands.append_array(reachable_cells(unit.position, unit.move_range(), board, occupied_cells(units, unit.uid)))
+		for stand in stands:
+			for cell in fire_cells_from(unit, stand, board):
+				seen[cell] = true
+	return seen.keys()

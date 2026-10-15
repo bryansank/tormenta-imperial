@@ -1,5 +1,13 @@
 # La línea jugable: de la primera obra a la victoria
 
+> **Ojo, medida vieja (nota del 2026-10-14).** Todo lo de este documento se midió
+> **antes** de las carreteras y los edificios de 2×2, los materiales del taller, la
+> comida con la Granja y la producción que se recoge, y la isla irregular (y antes de
+> los topes por era y las decoraciones nuevas). Las cifras de tiempos, esperas y
+> victorias ya no describen el juego de hoy. La rama `balance/campana-4-6h` vuelve a
+> medir la campaña entera con la sonda sobre la isla irregular; hasta que se integre,
+> lea esto como historia de cómo se arregló la línea, no como su estado.
+
 Qué pasa cuando alguien que no conoce el juego lo juega de principio a fin con los
 **tiempos de verdad** (sin `dev_mode`): cuánto tarda cada hito, dónde se espera sin
 nada que hacer, qué cuesta cada Tormenta, si el asedio se gana y dónde se atasca.

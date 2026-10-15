@@ -311,16 +311,29 @@ func is_targeted() -> bool:
 
 ## La etiqueta de ventaja de tipo: +1 buen objetivo, -1 mal objetivo, 0 nada
 ## (CombatRules.type_matchup del atacante contra esta unidad).
-func set_target_hint(matchup: int) -> void:
+##
+## `preview` (ensenar el combate, 2026-10-14): una linea encima, el dano previsto
+## ("−18 de 75") o, si no es objetivo, por que no ("✕ Muy cerca"). Va en la
+## MISMA etiqueta, para no sumar otra por pieza. `blocked`: la linea es un
+## "no puedes" y va en rojo.
+func set_target_hint(matchup: int, preview := "", blocked := false) -> void:
 	if _hint == null:
 		return
-	_hint.visible = matchup != 0 and alive
+	var parts: PackedStringArray = []
+	if preview != "":
+		parts.append(preview)
 	if matchup > 0:
-		_hint.text = Tr.t("LBL_GOOD_TARGET")
+		parts.append(Tr.t("LBL_GOOD_TARGET"))
 		_hint.modulate = UITheme.POSITIVE.lightened(0.35)
 	elif matchup < 0:
-		_hint.text = Tr.t("LBL_BAD_TARGET")
+		parts.append(Tr.t("LBL_BAD_TARGET"))
 		_hint.modulate = UITheme.WARNING.lightened(0.2)
+	else:
+		_hint.modulate = UITheme.TEXT_BRIGHT
+	if blocked:
+		_hint.modulate = UITheme.DANGER.lightened(0.35)
+	_hint.text = "\n".join(parts)
+	_hint.visible = not parts.is_empty() and alive
 
 func target_hint_text() -> String:
 	return _hint.text if _hint != null and _hint.visible else ""

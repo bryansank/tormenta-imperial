@@ -525,6 +525,8 @@ var resource_colors := {
 	"beams": Color(0.55, 0.62, 0.72),
 	"fuel": Color(0.85, 0.38, 0.2),
 	"food": Color(0.55, 0.8, 0.3),
+	## Repuestos (2026-10-14): solo se consiguen fuera, en escaramuzas (doc 21 §3.1).
+	"parts": Color(0.66, 0.72, 0.6),
 }
 
 # ── Audio ──
@@ -1226,10 +1228,10 @@ var rank_rewards := {
 	1: {"patterns": ["plain", "bands_h", "bands_v", "halves_h", "cross"],
 		"emblems": ["none", "gear", "anchor", "wheat", "hammer"],
 		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"]},
-	2: {"buildings": ["garden"], "emblems": ["tower"]},
-	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"]},
+	2: {"buildings": ["garden", "flower_planter", "hay_cart"], "emblems": ["tower"]},
+	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"], "buildings": ["bonfire"]},
 	4: {"storage": 0.02, "emblems": ["star"]},
-	5: {"buildings": ["fountain"]},
+	5: {"buildings": ["fountain", "flagpole"]},
 	6: {"production": 0.01, "patterns": ["diagonal", "saltire"]},
 	7: {"colors": ["copper", "red"]},
 	8: {"buildings": ["statue"], "storage": 0.02},
@@ -1237,7 +1239,7 @@ var rank_rewards := {
 	10: {"limit": {"house": 2}},
 	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
 	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
-	13: {"limit": {"statue": 2, "fountain": 2}, "emblems": ["ship"]},
+	13: {"buildings": ["palm_trees"], "emblems": ["ship"]},
 	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
 	15: {"production": 0.01, "patterns": ["stripes"]},
 	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
@@ -1356,6 +1358,27 @@ var construction_style := {
 		"frame": "basin", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 	"statue": {"piles": ["stone", "stone", "sacks"], "fence": "canvas", "tarp": Color(0.58, 0.54, 0.46),
 		"frame": "plinth", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.77, 0.59, 0.16)},
+	# Decoraciones baratas (feat/decoraciones-1): obras pequenas y rapidas.
+	"lamp_post": {"piles": ["rivets", "stone", "planks"], "fence": "planks", "tarp": Color(0.36, 0.34, 0.40),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.93, 0.78, 0.32)},
+	"park_bench": {"piles": ["planks", "rivets", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.20, 0.42, 0.62)},
+	"hedge": {"piles": ["soil", "sacks", "soil"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"avenue_tree": {"piles": ["soil", "stone", "sacks"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"flower_planter": {"piles": ["soil", "bricks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.40, 0.30),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.85, 0.35, 0.55)},
+	"colony_sign": {"piles": ["planks", "logs", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "mast", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.72, 0.13, 0.10)},
+	"hay_cart": {"piles": ["sacks", "planks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.55, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.93, 0.78, 0.32)},
+	"bonfire": {"piles": ["logs", "stone", "logs"], "fence": "dark_planks", "tarp": Color(0.48, 0.34, 0.20),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.90, 0.55, 0.12)},
+	"flagpole": {"piles": ["beams", "stone", "rivets"], "fence": "canvas", "tarp": Color(0.55, 0.12, 0.10),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.72, 0.13, 0.10)},
+	"palm_trees": {"piles": ["soil", "sacks", "gravel"], "fence": "planks", "tarp": Color(0.70, 0.62, 0.42),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 }
 ## La animacion de la obra (grua, polea, banderin): velocidad base de giro de
 ## la grua (rad/s de la fase del vaiven) y cuanto se abre el vaiven (rad). Cada
@@ -1453,6 +1476,19 @@ var building_lot_style := {
 		"props": ["bench", "lamp", "planter", "bench"], "count": [3, 5]},
 	"statue": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic",
 		"props": ["lamp", "planter", "bench"], "count": [3, 5]},
+	# Decoraciones baratas (feat/decoraciones-1): suelo, bordillo y una o dos
+	# piezas de atrezo como mucho (la decoracion ya es atrezo, y cada pieza de
+	# mas cuesta en la tablet).
+	"lamp_post": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "bench"], "count": [1, 2]},
+	"park_bench": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hedge": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["planter", "bench"], "count": [1, 2]},
+	"avenue_tree": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "planter"], "count": [1, 2]},
+	"flower_planter": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "lamp"], "count": [1, 2]},
+	"colony_sign": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hay_cart": {"ground": "dirt", "trim": "fence", "yard": 0.25, "accent": "residential", "props": ["sacks", "barrel"], "count": [1, 2]},
+	"bonfire": {"ground": "dirt", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["logs", "barrel"], "count": [1, 2]},
+	"flagpole": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["lamp", "planter"], "count": [1, 2]},
+	"palm_trees": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["barrel", "crate"], "count": [1, 2]},
 }
 ## El acento saturado de cada familia (guia, regla 4): rojo valvula en lo
 ## industrial, amarillo senal en lo militar, laton en lo civico, verde en lo
@@ -1544,7 +1580,19 @@ func get_upgrade_cost(data: BuildingData, to_level: int) -> Dictionary:
 	var base: Dictionary = data.get_cost()
 	for type in base:
 		cost[type] = int(base[type] * mult)
+	# Repuestos: solo salen de las escaramuzas (doc 21 §3.1). Los pide el nivel 3
+	# de los productores, para que salir sea una necesidad y no un extra.
+	var parts: int = upgrade_parts_needed(data.id, to_level)
+	if parts > 0:
+		cost[ResourceManager.Type.PARTS] = parts
 	return cost
+
+## Repuestos que pide subir `building_id` a `to_level` (0 = ninguno). Tabla en
+## `upgrade_parts_cost` / `upgrade_parts_buildings` (seccion de escaramuzas).
+func upgrade_parts_needed(building_id: String, to_level: int) -> int:
+	if not building_id in upgrade_parts_buildings:
+		return 0
+	return int(upgrade_parts_cost.get(to_level, 0))
 
 func get_production_multiplier(level: int) -> float:
 	if level < 1 or level > max_building_level:
@@ -1874,6 +1922,91 @@ var combat_morale_initiative_bonus := 2
 var combat_morale_attack_range := Vector2(0.60, 1.40)
 var combat_morale_on_victory := 8.0
 var combat_morale_per_casualty := 3.0
+
+# ── Salidas: incursiones, expediciones cortas y botin exclusivo (doc 21 §3) ──
+# 2026-10-14, rama feat/escaramuzas. Todo en claves NUEVAS: los combat_map_* y
+# combat_reward_base de siempre siguen valiendo para la expedicion antigua (las
+# partidas guardadas a medias, los tests y las sondas que lanzan con semilla).
+
+## Cada cuanto se revisa el tablon de salidas (segundos reales). Barato: mira
+## dos relojes y, si toca, sortea una oferta.
+var combat_sortie_refresh_interval := 2.0
+## Segundos de juego entre terminar una incursion (o una expedicion) y que
+## aparezca la siguiente. Pasan por get_duration() (dev_mode los acorta). Una
+## calma dura 360-600 s: hay una incursion por calma, mas o menos.
+var combat_raid_cooldown := 240.0
+var combat_expedition_cooldown := 480.0
+## La expedicion de 3 combates aparece desde esta era (la incursion, con el
+## primer Cuartel y la primera escaramuza ganada).
+var combat_expedition_min_era := 2
+## La incursion es un solo combate, un poco mas duro que la apertura de una
+## expedicion (profundidad 1 en la curva de enemy_pressure).
+var combat_raid_depth := 1
+## Expedicion corta (D3 = A): apertura -> elegir 1 de 2 -> jefe = 3 combates.
+## Mismo generador que la de siempre, con otros rangos.
+var combat_expedition_depth := Vector2i(1, 1)
+var combat_expedition_branching := Vector2i(2, 2)
+## El jefe de la expedicion corta lleva esta infanteria de escolta menos.
+var combat_expedition_boss_escort_cut := 1
+## Vida que recupera la columna al pasar al siguiente combate de una expedicion
+## corta (fraccion de la vida maxima de cada superviviente). La antigua no cura.
+var combat_expedition_heal_between := 0.30
+## El oro y la madera de las salidas nuevas: la mitad de la curva de siempre. Lo
+## que de verdad paga una salida es el botin exclusivo de abajo.
+var combat_sortie_reward_mult := 0.5
+
+## Botin exclusivo (D2 = A). Repuestos: material nuevo, fuera de la bolsa.
+## Colonos: habitantes al momento (hasta llenar las casas). Rebaja del Diezmo:
+## un % menos en el proximo Diezmo (avanzadilla). Planos: abren edificios.
+## Incursion de saqueadores: repuestos y colonos (rango min-max, sorteado al
+## aparecer y visible antes de salir).
+var combat_loot_raid_parts := Vector2i(1, 2)
+var combat_loot_raid_colonists := Vector2i(2, 4)
+## Incursion contra la avanzadilla de la Regencia (solo con la Tormenta armada y
+## Diezmo en el modo): repuestos y una rebaja del proximo Diezmo. Se va con el
+## Diezmo. La rebaja la aplica StormManager.add_tithe_discount() (rama
+## feat/orden-regencia, doc 21 §2.2) con su storm_order_expedition_pct si existe;
+## si no, con esta fraccion. Sin esa funcion (base sin la Orden) no rebaja nada:
+## solo se anota y se ensena.
+var combat_loot_outpost_parts := Vector2i(1, 1)
+var combat_loot_outpost_tithe_pct := 0.10
+
+## La rebaja del Diezmo que da echar la avanzadilla: la de la Orden de la
+## Regencia si esa rama esta (storm_order_expedition_pct), si no la nuestra.
+func sortie_tithe_discount_pct() -> float:
+	if "storm_order_expedition_pct" in self:
+		return float(get("storm_order_expedition_pct"))
+	return combat_loot_outpost_tithe_pct
+## Expedicion: repuestos por cada combate de paso; el jefe da mas, colonos y,
+## si queda alguno por conseguir, un plano.
+var combat_loot_expedition_node_parts := 2
+var combat_loot_expedition_boss_parts := 4
+var combat_loot_expedition_boss_colonists := 3
+
+## Planos: edificios que solo se construyen con su plano (doc 21 §6.3). La lista
+## puede empezar corta: un id solo se ofrece como botin cuando su
+## data/buildings/<id>.tres existe, asi que las ramas que traigan esos edificios
+## los activan sin tocar nada aqui. El candado lo pone quien construye
+## (CombatManager.blueprint_locked(); PlacementRules tiene que llamarlo, como
+## check_rank()).
+var combat_blueprint_buildings := ["infirmary", "military_forge", "scrapyard", "diesel_plant"]
+
+## Repuestos que pide una mejora: nivel -> cantidad, solo para los edificios de
+## la lista (los productores). El Cuartel General tiene su propia tabla.
+var upgrade_parts_cost := {3: 3}
+var upgrade_parts_buildings := ["sawmill", "gold_mine", "foundry", "refinery", "farm"]
+
+## Retirada enemiga (D7 = B): en expediciones e incursiones, cuando a los
+## enemigos les queda menos de esta fraccion de la vida con la que empezaron, se
+## retiran y el combate se gana. Nunca en el Diezmo ni en el asedio.
+var combat_retreat_ratio := 0.30
+## "Resolver solo" (D6 = A): solo en incursiones y en el Diezmo, y solo cuando
+## tu fuerza es al menos esta vez la del enemigo (CombatRules.side_strength).
+var combat_auto_resolve_ratio := 2.0
+## La etiqueta de la seleccion de tropa: Favorable desde esta proporcion,
+## Dificil por debajo de la otra, Igualada entre medias.
+var combat_odds_favorable := 1.25
+var combat_odds_hard := 0.85
 
 func get_combat_stats(unit_id: String) -> Dictionary:
 	return combat_unit_stats.get(unit_id, {})

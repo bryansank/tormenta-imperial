@@ -38,66 +38,72 @@ Tormenta Imperial uses a **Service-Signal-Component** architecture native to God
 
 ## Autoload Load Order (matters!)
 
-The autoloads in `project.godot` load in this order. 27 entries: 26 game services and
-the `BeckettRuntime` dev bridge.
+The autoloads in `project.godot` load in this order. 28 entries: 27 game services and
+the `BeckettRuntime` dev bridge (counted in `project.godot` on 2026-10-14).
 
 | Order | Service | Purpose |
 |-------|---------|---------|
 | 1 | Tr | Translation strings (ES/EN) |
-| 2 | GameConfig | All balance/tuning values, user settings, `dev_mode` |
-| 3 | EventBus | Signal bus (no logic, just 111 signal declarations) |
+| 2 | GameConfig | All balance/tuning values, user settings, `dev_mode`, game speed (`sim_delta()`) |
+| 3 | EventBus | Signal bus (no logic, just 121 signal declarations in 30 categories) |
 | 4 | InputService | Keyboard/mouse/touch -> signals |
-| 5 | GridManager | Cell grid (40x40 to 48x48, rolled per game and saved), placement logic |
-| 6 | ResourceManager | 4 resources in one shared pool + unlock tracking |
-| 7 | GameManager | Save/load, new game, offline progression, scene/view switching |
-| 8 | ProcessManager | Timed crafting/mining |
-| 9 | ProductionManager | Passive production, construction, upgrades |
+| 5 | GridManager | Cell grid (60-74 a side, rolled per game and saved), the island's land mask, placement logic |
+| 6 | ResourceManager | 5 resources in one shared pool (food included), 4 workshop materials outside it, unlock tracking |
+| 7 | GameManager | Save/load of up to five saved games, new game, offline progression, scene/view switching |
+| 8 | ProcessManager | Timed crafting/mining, in batches |
+| 9 | ProductionManager | Passive production that waits to be collected, Farm crops, construction, upgrades |
 | 10 | ProgressionManager | Eras, milestones, the Final Audit, victory |
 | 11 | MarketManager | Buy/sell with floating prices |
-| 12 | PopulationManager | Pop, workers, morale |
+| 12 | PopulationManager | Pop, workers, morale, food |
 | 13 | ArmyManager | Training, upkeep, desertion |
 | 14 | CombatManager | The active encounter and expedition |
 | 15 | RandomEventManager | Random events |
 | 16 | BuildingHealth | Damage, ruins, repair |
 | 17 | StormManager | The Imperial Storm cycle and the Tithe |
-| 18 | StormSky | Sky and light during the storm (`scripts/map/StormSky.gd`) |
-| 19 | TechTreeManager | Research and permanent bonuses |
-| 20 | CloudSaveManager | Supabase auth + cloud save (unwired) |
-| 21 | UIManager | Window stack, ESC, slot conflicts |
-| 22 | TutorialManager | Prologue, guided tutorial, tips and helps seen |
-| 23 | UILayoutManager | Positions panels from `UILayoutConfig` slots |
-| 24 | AudioManager | Signal-driven music/SFX |
+| 18 | DayClock | Day/night clock (ticks the pure `scripts/storm/DayCycle.gd`) |
+| 19 | StormSky | Sky and light of the time of day and the storm (`scripts/map/StormSky.gd`) |
+| 20 | TechTreeManager | Research and permanent bonuses |
+| 21 | CloudSaveManager | Supabase auth + cloud save (unwired) |
+| 22 | UIManager | Window stack, ESC, slot conflicts |
+| 23 | TutorialManager | Prologue, guided tutorial, tips and helps seen |
+| 24 | UILayoutManager | Positions panels from `UILayoutConfig` slots |
+| 25 | AudioManager | Signal-driven music, SFX and ambience (day, night, Storm) |
 | — | BeckettRuntime | Dev bridge: `scripts/services/BeckettGate.gd`, loads `addons/beckett` only in the editor |
-| 25 | DeviceProfile | PC/tablet/phone profile, UI scale, `UITheme` tokens |
-| 26 | RankManager | Governor rank: XP, rank, rank rewards and bonuses, colony flag and colour |
+| 26 | DeviceProfile | PC/tablet/phone profile, UI scale, `UITheme` tokens, FPS cap, graphics quality detection |
+| 27 | RankManager | Governor rank: XP, rank, rank rewards and bonuses, the player's country (name and flag) |
 
-`GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `Objectives` and
-`FloatingText` are static helpers, not autoloads.
+`GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `Objectives`, `FloatingText`,
+`GraphicsQuality`, `SaveSlots`, `ColonyIdentity`, `ErrorLog` and `BugReport` are
+static helpers, not autoloads. `WorldLook` is the script of the 3D `WorldEnvironment`.
 
 ## Scene Tree
 
 `Main.tscn` (3D) and `Main2D.tscn` (2D) have the same UI nodes with the same names;
 only the world nodes differ. The full annotated tree, with layers and the nodes
-created at runtime (PrologueScreen, HelpIndexPanel, NewGameDialog, LayoutEditor), is
+created at runtime (PrologueScreen, QuickGuide, HelpIndexPanel, NewGameDialog,
+ColonyIdentityPanel, SavesPanel, LayoutEditor, WorkerWalkers), is
 in `CLAUDE.md` → "Scene Tree". The 2D view is described in
 [18-vista-2d.md](18-vista-2d.md).
 
 ## File Organization
 
 ```
-scripts/services/    -- Autoload singletons (the "brain") + static helpers (GameMode, Objectives, FloatingText)
+scripts/services/    -- Autoload singletons (the "brain") + static helpers (GameMode, Objectives, FloatingText, GraphicsQuality, SaveSlots, ColonyIdentity, ErrorLog, BugReport)
 scripts/ui/          -- UI panel scripts (subscribe to EventBus), UITheme (one 10-colour palette), UILayoutConfig, HudRegistry, DragScroll, QuickGuide
-scripts/buildings/   -- BuildingData, BuildingPlacer (3D), PlacementRules (deposits, road network, auto-road, upgrades), PlacementAssist, status badge, mesh factory
+scripts/buildings/   -- BuildingData, BuildingPlacer (3D), PlacementRules (deposits, road network, auto-road, upgrades), PlacementAssist, status badge, lots (LotPlan, BuildingLot, LotMesh), ToyPalette, RoadBatch3D, DecorMesh, FarmCrops3D, mesh factory
 scripts/view2d/      -- The 2D view: router, camera, island, placer, drawings
 scripts/combat/      -- Pure combat models
-scripts/storm/       -- Pure storm cycle model
+scripts/combat_view/ -- The 3D combat board (view only: front and board views, toy units, effects)
+scripts/storm/       -- Pure storm cycle and day/night models
 scripts/camera/      -- 3D camera controller
 scripts/grid/        -- Grid management + grid overlay
-scripts/map/         -- Island + random deposits (3-6 per type), walking workers (WorkerWalkers), storm sky
-data/buildings/      -- 16 .tres building definitions
+scripts/map/         -- Irregular island (IslandShape, IslandGenerator), random deposits (3-6 per type, DepositMesh), walking workers (WorkerWalkers), sky and light (StormSky, WorldLook)
+data/buildings/      -- 27 .tres building definitions
 scenes/main/         -- Main.tscn (entry, 3D) and Main2D.tscn
 scenes/ui/           -- UI .tscn files (minimal, scripts do the work)
 scenes/buildings/    -- BuildingPlacer.tscn
+scenes/combat/       -- Board3D.tscn (the 3D combat diorama)
+assets/models/toy/   -- Baked toy models of the buildings and units (tools/build_toy_models.gd)
 tests/               -- gdUnit4 suites (run with tools/run_tests.sh)
 tools/               -- Probes, asset generators, test wrapper
 ```

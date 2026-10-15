@@ -16,6 +16,9 @@ const PACKS := {
 	"kk": "res://assets/models/cc0/kaykit_medieval_hexagon/",
 	"kn": "res://assets/models/cc0/kenney_city_kit_industrial/",
 	"kc": "res://assets/models/cc0/kaykit_city_builder_bits/",
+	"ft": "res://assets/models/cc0/kenney_fantasy_town_kit/",
+	"sur": "res://assets/models/cc0/kenney_survival_kit/",
+	"pir": "res://assets/models/cc0/kenney_pirate_kit/",
 }
 
 ## nombre ("kk:barrel") -> {"v", "n", "slot", "d", "aabb"} (triangulos sueltos).

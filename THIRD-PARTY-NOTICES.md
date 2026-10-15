@@ -205,6 +205,21 @@ third-party: they are synthesised from filtered noise and oscillators by
 | `metal_plate_diff_1k`, `metal_plate_nor_gl_1k`, `metal_plate_rough_1k` | [Poly Haven — Metal Plate](https://polyhaven.com/a/metal_plate) | CC0 1.0 |
 | `ui/panel_metal`, `ui/panel_inset_metal`, `ui/button_metal` | Derived from the Poly Haven texture above by `tools/gen_ui_textures.gd` | CC0 1.0 (source); the derived sprites are part of the game's art |
 
+### 3D model pieces (`assets/models/cc0/`)
+
+The "toy" building and decoration models in `assets/models/toy/` are baked by
+`tools/build_toy_models.gd` from the pieces below, recoloured to the game's palette.
+The source folders carry a `.gdignore` and are not exported; only the baked meshes ship.
+
+| Pieces | Source | Licence |
+|---|---|---|
+| `kaykit_city_builder_bits/` | [KayKit — City Builder Bits](https://kaylousberg.itch.io/city-builder-bits) (Kay Lousberg) | CC0 1.0 (`licenses/CC0-KAYKIT-CITY-BUILDER-BITS.txt`) |
+| `kaykit_medieval_hexagon/` | [KayKit — Medieval Hexagon Pack](https://kaylousberg.itch.io/kaykit-medieval-hexagon) (Kay Lousberg) | CC0 1.0 (`licenses/CC0-KAYKIT-MEDIEVAL-HEXAGON.txt`) |
+| `kenney_city_kit_industrial/` | [Kenney — City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial) | CC0 1.0 (`licenses/CC0-KENNEY-CITY-KIT-INDUSTRIAL.txt`) |
+| `kenney_fantasy_town_kit/` (`lantern`, `hedge`, `hedge-large`, `tree-high-round`) | [Kenney — Fantasy Town Kit](https://kenney.nl/assets/fantasy-town-kit) | CC0 1.0 (`licenses/CC0-KENNEY-FANTASY-TOWN-KIT.txt`) |
+| `kenney_survival_kit/` (`signpost`, `campfire-stand`, `resource-wood`) | [Kenney — Survival Kit](https://kenney.nl/assets/survival-kit) | CC0 1.0 (`licenses/CC0-KENNEY-SURVIVAL-KIT.txt`) |
+| `kenney_pirate_kit/` (`flag-high`, `palm-straight`, `patch-sand`) | [Kenney — Pirate Kit](https://kenney.nl/assets/pirate-kit) | CC0 1.0 (`licenses/CC0-KENNEY-PIRATE-KIT.txt`) |
+
 ## 6. Original content (not third-party)
 
 Made for this game by its author and covered by `LICENSE` (all rights reserved):
