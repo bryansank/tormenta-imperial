@@ -201,6 +201,21 @@ signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary
 ## actual. El tablero no se guarda (D6), asi que aqui nunca hay encuentro abierto.
 @warning_ignore("unused_signal")
 signal expedition_resumed(expedition_id: int)
+## Salidas (doc 21 §3, 2026-10-14). El tablon cambio: oferta nueva, lanzada,
+## vuelta, vista, o la rebaja del Diezmo se gano o se gasto. El boton
+## ESCARAMUZAS repinta su punto rojo con esto.
+@warning_ignore("unused_signal")
+signal sortie_offers_changed()
+## Lo que la columna trajo de fuera al volver: "parts", "colonists",
+## "tithe_pct", "blueprints" (Array). Ya aplicado a la colonia.
+@warning_ignore("unused_signal")
+signal sortie_loot_gained(loot: Dictionary)
+## Un plano nuevo: el edificio `building_id` ya se puede construir.
+@warning_ignore("unused_signal")
+signal blueprint_unlocked(building_id: String)
+## El enemigo se retiro con poca vida y el combate se gano (D7 = B).
+@warning_ignore("unused_signal")
+signal enemy_routed()
 
 # ── Building Health ──
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y

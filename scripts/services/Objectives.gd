@@ -13,6 +13,7 @@ extends RefCounted
 ## Un paso es un Dictionary:
 ##   kind  "build" | "upgrade" | "train" | "repair" | "sell" | "buy" | "research" | "siege" | "resummon"
 ##         | "rebuild" | "sandbox" | "sortie"
+##         ("sortie_offer" solo sale de sortie_step(), la segunda linea del panel)
 ##   id    edificio o unidad
 ##   level nivel al que sube una mejora
 ##   why   clave de Tr con el porque (una frase)
@@ -253,6 +254,17 @@ static func first_sortie_step() -> Dictionary:
 	if party.is_empty():
 		return {}
 	return {"kind": "sortie", "id": String(party.keys()[0]), "why": "OBJ_WHY_FIRST_SORTIE"}
+
+## "Sal de escaramuza" (doc 21 §3.6, 2026-10-14): la segunda linea de ¿QUE
+## HACER?, aparte del paso de la linea (next_step no la devuelve, asi la sonda de
+## linea sigue igual). {} si no hay motivo; si lo hay, el porque viene de
+## CombatManager.sortie_reason(), la misma respuesta que el punto rojo del boton.
+## La primera escaramuza ya tiene su paso propio (first_sortie_step).
+static func sortie_step() -> Dictionary:
+	var reason: String = CombatManager.sortie_reason()
+	if reason == "" or reason == "SORTIE_WHY_FIRST":
+		return {}
+	return {"kind": "sortie_offer", "why": reason}
 
 ## La columna que se propone para la primera escaramuza: una unidad de casa, la
 ## del primer tipo que haya (infanteria antes que canones). Vacio si no hay nadie.
@@ -676,6 +688,10 @@ static func _producer_step(res: String, why: String) -> Dictionary:
 	var level: int = int(lowest.get_meta("level", 1))
 	if level >= GameConfig.max_building_level or ProductionManager.is_constructing(lowest):
 		return {}
+	# Una mejora que pide repuestos (solo salen de las escaramuzas) no se propone
+	# como apoyo sin tenerlos: el motivo de salir lo da sortie_step().
+	if ResourceManager.get_amount(ResourceManager.Type.PARTS) < GameConfig.upgrade_parts_needed(building_id, level + 1):
+		return {}
 	return {"kind": "upgrade", "id": building_id, "level": level + 1, "pick": "lowest", "why": why}
 
 ## El edificio de ese tipo con el nivel mas bajo que no este en obras, o null.
@@ -825,6 +841,8 @@ static func describe(step: Dictionary) -> Dictionary:
 			title = Tr.t("OBJ_DO_SIEGE")
 		"sortie":
 			title = Tr.t("OBJ_DO_FIRST_SORTIE")
+		"sortie_offer":
+			title = Tr.t("OBJ_DO_SORTIE")
 		"resummon":
 			title = Tr.t("OBJ_DO_RESUMMON")
 		_:
