@@ -123,6 +123,15 @@ const TIPS := {
 	"upkeep":         {"title": "TUT_TIP_UPKEEP_TITLE",   "body": "TUT_TIP_UPKEEP_BODY"},
 	"consumption":    {"title": "TUT_TIP_CONSUMPTION_TITLE", "body": "HELP_TIP_CONSUMPTION_BODY"},
 	"final_audit":    {"title": "TUT_TIP_AUDIT_TITLE",    "body": "HELP_TIP_AUDIT_BODY"},
+	# ── Ayudas de las novedades (2026-10-14): disparadores en _connect_news() ──
+	"saves":          {"title": "HELP_T_SAVES",     "body": "HELP_B_SAVES"},
+	"rank":           {"title": "HELP_T_RANK",      "body": "HELP_B_RANK"},
+	"flag":           {"title": "HELP_T_FLAG",      "body": "HELP_B_FLAG"},
+	"bug_report":     {"title": "HELP_T_BUG",       "body": "HELP_B_BUG"},
+	"night":          {"title": "HELP_T_NIGHT",     "body": "HELP_B_NIGHT"},
+	"farm":           {"title": "HELP_T_FARM",      "body": "HELP_B_FARM"},
+	"collect_full":   {"title": "HELP_T_COLLECT",   "body": "HELP_B_COLLECT"},
+	"island":         {"title": "HELP_T_ISLAND",    "body": "HELP_B_ISLAND"},
 }
 
 ## Paneles cuya primera apertura merece un consejo: nombre del nodo en Main.tscn
@@ -172,6 +181,7 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(func(_n): _refresh_guide())
 	EventBus.production_collected.connect(_on_production_collected)
 	EventBus.building_demolished.connect(func(_n, _c): _refresh_guide())
+	_connect_news()
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Prologo ──
@@ -787,3 +797,41 @@ func reset() -> void:
 	_step = ""
 	_menu_open = false
 	_placing_id = ""
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Ayudas de las novedades (2026-10-14, docs/23 §3) ──
+# ══════════════════════════════════════════════════════════════════════
+# Cada una sale una vez, cuando el jugador se encuentra con lo que explica. La de la isla
+# la piden los colocadores al rechazar agua; la del informe de fallo, PauseMenu.
+
+func _connect_news() -> void:
+	EventBus.tutorial_guide_finished.connect(func(_skipped): offer_tip("saves"))
+	EventBus.governor_rank_up.connect(_on_news_rank_up)
+	EventBus.day_phase_changed.connect(_on_news_day_phase)
+	EventBus.construction_completed.connect(_on_news_construction)
+	EventBus.building_stock_changed.connect(_on_news_stock)
+
+## El primer ascenso: que da la XP y, detras, que la bandera tiene piezas nuevas.
+func _on_news_rank_up(_rank: int, _rewards: Dictionary) -> void:
+	offer_tip("rank")
+	offer_tip("flag")
+
+## Al anochecer por primera vez (solo luz: nada cambia en la economia).
+func _on_news_day_phase(phase: int, _hour: float) -> void:
+	if phase == DayCycle.Phase.DUSK or phase == DayCycle.Phase.NIGHT:
+		offer_tip("night")
+
+## La primera Granja terminada: los cultivos y sus cifras.
+func _on_news_construction(node: Node) -> void:
+	if has_seen_tip("farm") or node == null:
+		return
+	var info := GridManager.get_building_info(node)
+	if not info.is_empty() and info["data"] != null and String(info["data"].id) == "farm":
+		offer_tip("farm")
+
+## Un edificio se lleno sin recoger: para hasta que se recoge.
+func _on_news_stock(node: Node, _stock: Dictionary) -> void:
+	if has_seen_tip("collect_full") or node == null:
+		return
+	if ProductionManager.is_full(node):
+		offer_tip("collect_full")

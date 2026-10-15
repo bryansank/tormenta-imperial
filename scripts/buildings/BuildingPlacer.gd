@@ -31,6 +31,8 @@ const Lot := preload("res://scripts/buildings/BuildingLot.gd")
 ## Todas las calzadas en un MultiMesh por mascara de vecinos (docs/26 §6.2).
 const RoadBatch := preload("res://scripts/buildings/RoadBatch3D.gd")
 const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
+## Salto y polvo de obra terminada (V1).
+const Fx := preload("res://scripts/buildings/BuildingFx.gd")
 
 ## Left-drag camera panning (only while IDLE, so it doesn't fight placement).
 ## Grabs the terrain: the point under the cursor stays glued to the cursor.
@@ -111,6 +113,10 @@ func _ready() -> void:
 		(sig as Signal).connect(sync_look)
 	EventBus.building_upgrade_started.connect(_on_upgrade_look)
 	EventBus.building_upgrade_completed.connect(_on_upgrade_look)
+	# Obra terminada: salto y polvo (V1). Despues de sync_look: el modelo ya se ve.
+	EventBus.construction_completed.connect(_on_construction_done)
+	# Lo recogido vuela a la bolsa del HUD (V2).
+	EventBus.production_collected.connect(_on_production_collected)
 	GameManager.register_placer(self)
 	_assist = Assist.new()
 	_assist.name = "PlacementAssist"
@@ -261,6 +267,56 @@ func _tick_looks(delta: float) -> void:
 
 func _on_upgrade_look(node: Node, _level: int) -> void:
 	sync_look(node)
+
+## Obra terminada (V1, rediseno 2026-10-14): el modelo da un salto de juguete
+## (1,0 -> 1,12 -> 1,0 en 0,3 s, con un Tween que muere con el edificio) y suelta
+## un poco de polvo al pie (8 motas, un CPUParticles3D que se borra solo). En
+## calidad Minima, solo el salto. Ni calzadas ni nada sin modelo.
+func _on_construction_done(node: Node) -> void:
+	if node == null or not is_instance_valid(node) or not (node is Node3D) or not node.is_inside_tree():
+		return
+	var info := GridManager.get_building_info(node)
+	var data: BuildingData = info.get("data") as BuildingData if not info.is_empty() else null
+	if data == null or data.id == "road":
+		return
+	var look := node.get_node_or_null("LookVisual")
+	var model: Node3D = look.get_model() as Node3D if look != null and look.has_method("get_model") else null
+	if model != null and is_instance_valid(model):
+		var old: Tween = node.get_meta("_bounce_tween", null)
+		if old != null and old.is_valid():
+			old.kill()
+			model.scale = node.get_meta("_bounce_scale", model.scale)
+			model.position = node.get_meta("_bounce_pos", model.position)
+		var base_scale := model.scale
+		var base_pos := model.position
+		node.set_meta("_bounce_scale", base_scale)
+		node.set_meta("_bounce_pos", base_pos)
+		# Crece alrededor del centro de la parcela (como apply_level_visual): el
+		# desplazamiento de encaje escala con el, la base sigue en el suelo.
+		var set_k := func(k: float) -> void:
+			if is_instance_valid(model):
+				model.scale = base_scale * k
+				model.position = Vector3(base_pos.x * k, base_pos.y, base_pos.z * k)
+		node.set_meta("_bounce_tween", Fx.bounce(node, set_k))
+	if GraphicsQuality.fx_enabled():
+		var size := Vector2(data.grid_size) * GridManager.cell_size
+		var burst := Fx.dust_burst_3d(minf(size.x, size.y) * 0.5)
+		burst.position.y = 0.1
+		node.add_child(burst)
+		burst.emitting = true
+
+## Lo recogido vuela del edificio a su ficha de la bolsa (V2, FloatingText).
+func _on_production_collected(node: Node, collected: Dictionary) -> void:
+	if node == null or not is_instance_valid(node) or not (node is Node3D):
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var icon := node.get_node_or_null("StockIcon") as Node3D
+	var from_world: Vector3 = icon.global_position if icon != null else (node as Node3D).global_position + Vector3(0, 2.5, 0)
+	if cam.is_position_behind(from_world):
+		return
+	FloatingText.fly_to_hud(get_tree(), cam.unproject_position(from_world), collected)
 
 ## Repinta ya el aspecto de `node` (obra empezada o terminada, ruina, reparacion).
 func sync_look(node: Node) -> void:
@@ -461,6 +517,7 @@ func _try_place(cell: Vector2i) -> void:
 			_reject_for_deposit(_current_data.id)
 		elif verdict["reason"] == "water":
 			_show_feedback(Tr.t("LBL_ON_WATER"))
+			TutorialManager.offer_tip("island")
 		elif verdict["reason"] == "occupied":
 			# Antes, silencio: el clic no hacia nada y no se sabia por que.
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
@@ -557,6 +614,7 @@ func _try_move(cell: Vector2i) -> void:
 			_reject_for_deposit(_current_data.id)
 		elif verdict["reason"] == "water":
 			_show_feedback(Tr.t("LBL_ON_WATER"))
+			TutorialManager.offer_tip("island")
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
@@ -1008,6 +1066,7 @@ func assist_explain(origin: Vector2i) -> void:
 		_reject_for_deposit(_current_data.id)
 	elif verdict["reason"] == "water":
 		_show_feedback(Tr.t("LBL_ON_WATER"))
+		TutorialManager.offer_tip("island")
 	elif verdict["reason"] == "occupied":
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 	elif verdict["reason"] == "road":

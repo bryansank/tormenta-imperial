@@ -77,7 +77,7 @@ Abre un issue en:
 
    https://github.com/bryansank/tormenta-imperial/issues
 
-o escríbele a quien te pasó el juego. En ☰ MENÚ → PARTIDA, "Informar de un
+o escríbele a quien te pasó el juego. En ☰ MENÚ → PARTIDA, "Informar
 fallo" copia los datos que hacen falta: pégalos en el mensaje. Cuenta qué hacías, qué
 esperabas y qué pasó, y la versión ({{VERSION}}). Una captura (Win + Mayús +
 S) y el archivo logsegistro.txt de la carpeta de la partida ayudan mucho.
@@ -144,7 +144,7 @@ Settings.
 
 REPORTING A BUG
 https://github.com/bryansank/tormenta-imperial/issues or a message to whoever
-sent you the game. ☰ MENU → GAME, "Report a bug" copies the details: paste
+sent you the game. ☰ MENU → GAME, "Report bug" copies the details: paste
 them in. Say what you did, what you expected, what happened and the
 version ({{VERSION}}). A screenshot and logsegistro.txt help a lot.
 

@@ -98,12 +98,12 @@ func _open_intro() -> void:
 
 func _on_prologue_closed() -> void:
 	EventBus.tutorial_intro_closed.emit()
-	# La guia rapida, una vez por partida, justo despues del lore y antes de la
-	# primera marca del tutorial (que no se ve mientras la guia pausa el juego).
-	if not TutorialManager.has_seen_help(QUICK_GUIDE_ID):
-		_quick_guide.open()
+	# La guia rapida ya no sale sola al cerrar el prologo (Bryan, 14-10: la
+	# ventana "Como funciona Tormenta Imperial" sobraba al empezar). Sus cuatro
+	# bloques siguen en AYUDA (`guide_qg_*`). Un `quick_guide` visto en una
+	# partida vieja se carga igual y no cambia nada.
 
-## La guia rapida (Como funciona). Tambien la abre AYUDA.
+## La guia rapida (Como funciona). Ya no se abre sola; queda para quien la pida.
 func quick_guide() -> CanvasLayer:
 	return _quick_guide
 

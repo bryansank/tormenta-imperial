@@ -66,9 +66,11 @@ func test_no_rank_gives_slots_to_decorations() -> void:
 			assert_bool(_data(String(id)).is_decoration).override_failure_message("rango %d da huecos a %s" % [r, id]).is_false()
 
 func test_every_decoration_has_a_2d_drawing() -> void:
+	var names: Array = []
+	for m in (Art as GDScript).get_script_method_list():
+		names.append(String(m["name"]))
 	for id in IDS:
-		assert_bool(Art.new().has_method("_" + id) or (Art as Script).get_script_method_list().any(func(m): return m["name"] == "_" + id)) \
-			.override_failure_message("sin dibujo 2D: %s" % id).is_true()
+		assert_array(names).override_failure_message("sin dibujo 2D: %s" % id).contains(["_" + id])
 
 func test_the_2d_drawing_runs() -> void:
 	var canvas: Node2D = auto_free(Node2D.new())
