@@ -1234,10 +1234,10 @@ var rank_rewards := {
 	1: {"patterns": ["plain", "bands_h", "bands_v", "halves_h", "cross"],
 		"emblems": ["none", "gear", "anchor", "wheat", "hammer"],
 		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"]},
-	2: {"buildings": ["garden", "well"], "emblems": ["tower"]},
-	3: {"buildings": ["windmill"], "production": 0.01, "patterns": ["border"], "colors": ["sky"]},
+	2: {"buildings": ["garden", "flower_planter", "hay_cart", "well"], "emblems": ["tower"]},
+	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"], "buildings": ["bonfire", "windmill"]},
 	4: {"storage": 0.02, "emblems": ["star"]},
-	5: {"buildings": ["fountain"]},
+	5: {"buildings": ["fountain", "flagpole"]},
 	6: {"production": 0.01, "patterns": ["diagonal", "saltire"]},
 	7: {"colors": ["copper", "red"]},
 	8: {"buildings": ["statue"], "storage": 0.02},
@@ -1245,7 +1245,7 @@ var rank_rewards := {
 	10: {"limit": {"house": 2}},
 	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
 	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
-	13: {"limit": {"statue": 2, "fountain": 2}, "emblems": ["ship"]},
+	13: {"buildings": ["palm_trees"], "emblems": ["ship"]},
 	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
 	15: {"production": 0.01, "patterns": ["stripes"]},
 	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
@@ -1379,6 +1379,27 @@ var construction_style := {
 		"frame": "tower", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.95, 0.74, 0.12)},
 	"fuel_depot": {"piles": ["drums", "pipes", "rivets"], "fence": "sheet", "tarp": Color(0.18, 0.18, 0.20),
 		"frame": "tanks", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.95, 0.85, 0.20)},
+	# Decoraciones baratas (feat/decoraciones-1): obras pequenas y rapidas.
+	"lamp_post": {"piles": ["rivets", "stone", "planks"], "fence": "planks", "tarp": Color(0.36, 0.34, 0.40),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.93, 0.78, 0.32)},
+	"park_bench": {"piles": ["planks", "rivets", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.20, 0.42, 0.62)},
+	"hedge": {"piles": ["soil", "sacks", "soil"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"avenue_tree": {"piles": ["soil", "stone", "sacks"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"flower_planter": {"piles": ["soil", "bricks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.40, 0.30),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.85, 0.35, 0.55)},
+	"colony_sign": {"piles": ["planks", "logs", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "mast", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.72, 0.13, 0.10)},
+	"hay_cart": {"piles": ["sacks", "planks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.55, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.93, 0.78, 0.32)},
+	"bonfire": {"piles": ["logs", "stone", "logs"], "fence": "dark_planks", "tarp": Color(0.48, 0.34, 0.20),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.90, 0.55, 0.12)},
+	"flagpole": {"piles": ["beams", "stone", "rivets"], "fence": "canvas", "tarp": Color(0.55, 0.12, 0.10),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.72, 0.13, 0.10)},
+	"palm_trees": {"piles": ["soil", "sacks", "gravel"], "fence": "planks", "tarp": Color(0.70, 0.62, 0.42),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 }
 ## La animacion de la obra (grua, polea, banderin): velocidad base de giro de
 ## la grua (rad/s de la fase del vaiven) y cuanto se abre el vaiven (rad). Cada
@@ -1493,6 +1514,19 @@ var building_lot_style := {
 		"props": ["lamp", "ammo", "sacks", "barrel"], "count": [3, 5]},
 	"fuel_depot": {"ground": "plate", "trim": "pipes", "yard": 0.3, "accent": "industrial",
 		"props": ["drums", "valve", "drums", "barrel", "crate"], "count": [4, 6]},
+	# Decoraciones baratas (feat/decoraciones-1): suelo, bordillo y una o dos
+	# piezas de atrezo como mucho (la decoracion ya es atrezo, y cada pieza de
+	# mas cuesta en la tablet).
+	"lamp_post": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "bench"], "count": [1, 2]},
+	"park_bench": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hedge": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["planter", "bench"], "count": [1, 2]},
+	"avenue_tree": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "planter"], "count": [1, 2]},
+	"flower_planter": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "lamp"], "count": [1, 2]},
+	"colony_sign": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hay_cart": {"ground": "dirt", "trim": "fence", "yard": 0.25, "accent": "residential", "props": ["sacks", "barrel"], "count": [1, 2]},
+	"bonfire": {"ground": "dirt", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["logs", "barrel"], "count": [1, 2]},
+	"flagpole": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["lamp", "planter"], "count": [1, 2]},
+	"palm_trees": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["barrel", "crate"], "count": [1, 2]},
 }
 ## El acento saturado de cada familia (guia, regla 4): rojo valvula en lo
 ## industrial, amarillo senal en lo militar, laton en lo civico, verde en lo

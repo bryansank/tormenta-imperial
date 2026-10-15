@@ -19,6 +19,7 @@ const PACKS := {
 	# Kenney Fantasy Town y Pirate (feat/edificios-utiles-1): solo las piezas que
 	# usan las recetas (aspas del Molino, farol, torre del Faro, bandera, barril).
 	"ft": "res://assets/models/cc0/kenney_fantasy_town_kit/",
+	"sur": "res://assets/models/cc0/kenney_survival_kit/",
 	"pir": "res://assets/models/cc0/kenney_pirate_kit/",
 }
 

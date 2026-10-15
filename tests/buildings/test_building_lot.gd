@@ -33,11 +33,11 @@ func _building(id: String, cell := Vector2i(5, 5), sides := 0) -> Array:
 		lot.build(cell, sides)
 	return [root, lot]
 
-# ── Las 24 ───────────────────────────────────────────────────────────
+# ── Las 34 ───────────────────────────────────────────────────────────
 
 func test_every_building_but_the_road_has_a_lot() -> void:
 	var all := _all_data()
-	assert_int(all.size()).is_equal(24)
+	assert_int(all.size()).is_equal(34)
 	for d in all:
 		var id: String = (d as BuildingData).id
 		var parts := _building(id)

@@ -162,6 +162,41 @@ the defensive boards — the Tithe and each Final Audit wave — outside the dep
 | `fountain` | Fuente | 2x2 | 60/20/0/10 | 4s | +7 |
 | `statue` | Estatua | 2x2 | 120/40/0/0 + 3 ingots | 6s | +10 |
 
+#### Decoraciones baratas (feat/decoraciones-1, 2026-10-14)
+
+Las diez primeras del catalogo del doc 21 §6.4 (fila 1.7 del plan): sumideros
+baratos de oro y madera, **sin tope** (como toda decoracion, `GameConfig.is_uncapped_building()`; decision D1 = B) y
+abiertas por rango segun §6.5. Todas 2x2 (en el doc eran 1x1: el mapa no tiene
+huellas menores de 2x2 salvo la calzada), con su parcela de 0,25 casillas de patio
+y una o dos piezas de atrezo.
+
+| ID | Nombre | Coste G/S/O/W | Obra | Moral | Rango | Piezas del horneado |
+|----|--------|---------------|------|-------|-------|---------------------|
+| `lamp_post` | Farola | 20/0/0/5 | 1,5 s | +2 | libre | `kc:streetlight`, `ft:lantern` |
+| `park_bench` | Banco | 10/0/0/10 | 1 s | +1 | libre | `kc:bench` x2, `kc:bush` |
+| `hedge` | Seto | 10/0/0/15 | 1,5 s | +1 | libre | `ft:hedge-large` x2, `ft:hedge` x4 |
+| `avenue_tree` | Arbol de paseo | 15/0/0/20 | 2 s | +2 | libre | `ft:tree-high-round` |
+| `flower_planter` | Macetero | 20/0/0/10 | 1,5 s | +2 | 2 | `kc:bush` x3 + flores propias |
+| `colony_sign` | Letrero de la colonia | 25/0/0/15 | 2 s | +2 | libre | `sur:signpost`, `kc:bush` + bandera propia |
+| `hay_cart` | Carro de heno | 20/0/0/25 | 2 s | +2 | 2 | `kk:wheelbarrow`, `kk:sack` + pacas propias |
+| `bonfire` | Hoguera | 15/0/0/30 | 1,5 s | +2 | 3 | `sur:campfire-stand`, `sur:resource-wood` x2 + llama propia |
+| `flagpole` | Mastil con bandera | 40/0/0/20 | 2,5 s | +3 | 5 | `pir:flag-high` |
+| `palm_trees` | Palmeras | 20/0/0/15 | 2 s | +2 | 13 | `pir:patch-sand`, `pir:palm-straight` + palmera propia |
+
+- **3D:** `scripts/buildings/DecorMesh.gd` da UNA malla por tipo, compartida por
+  todas las instancias, con los dos materiales de `ToyPalette` (sin texturas, sin
+  `_process`, brillo de farol y hoguera en la superficie sin luz). Carga la
+  horneada (`assets/models/toy/<id>_mesh.res`) si existe y, si no, una version
+  procedural con las mismas proporciones; `DieselpunkBuildingFactory.create()`
+  la devuelve para estos ids. Recetas del horneado en
+  `tools/toy_recipes/<id>.gd` (ayuda `_decor.gd`); el horneador avisa si una pasa
+  de 600 triangulos.
+- **2D:** `BuildingArt2D._lamp_post()` ... `_palm_trees()`, con su suelo propio.
+- **Pendiente:** la bandera del pais en el mastil y el letrero (las recetas dejan
+  `FlagAnchor`, pero `ColonyFlag3D` solo se cuelga en el Nucleo y el CG), las
+  palmeras solo en la costa, y las 1x1 en MultiMesh por tipo (doc 21 §6.6).
+  Hasta el horneado se ve la version procedural.
+
 The road is still a decoration in data, but it is the backbone of the map: see "Road
 network" below.
 
@@ -271,7 +306,7 @@ under construction the label above the building gives the percentage and the tim
 | warehouse | 5 | 5 | 5 | **No sube.** Bolsa de la era 3 sin técnicas: 1000 + 5×500 = 3500 = CG nivel 3 (1500 + 800 + 500 + 700; los materiales van aparte). Con 7 almacenes serían 4500 (5500 con las técnicas) y el CG 3 dejaría de pedir la bolsa llena. La bolsa ya crece sola por era (600/800/1000) y por nivel de almacén (+250 por nivel) |
 | tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y solo 2 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
 | market, laboratory, headquarters | 1 | 1 | 1 | Únicos |
-| garden, fountain, statue, road (decoraciones) | — | — | — | Sin tope |
+| garden, fountain, statue, road y las diez decoraciones baratas (`lamp_post` … `palm_trees`) | — | — | — | Sin tope |
 
 Los huecos del rango van encima: casas +2 en los rangos 10 y 17 (era 3: 24), torre +1 en
 el 16.

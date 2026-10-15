@@ -210,6 +210,11 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 	# modelo horneado en cuanto exista). Ver UtilityToys.
 	if _Utility.handles(building_id):
 		return _Utility.create(building_id)
+	# Las diez decoraciones baratas (feat/decoraciones-1): una malla de la
+	# paleta compartida por tipo, horneada si existe (DecorMesh).
+	var decor := preload("res://scripts/buildings/DecorMesh.gd")
+	if decor.handles(building_id):
+		return decor.instantiate(building_id)
 	return null
 
 ## Create a road mesh with neighbor connectivity.
