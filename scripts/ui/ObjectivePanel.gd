@@ -9,6 +9,8 @@ var _is_open := false
 var _now_title: Label
 var _now_why: Label
 var _now_blocker: Label
+## La meta de la calma (Orden de la Regencia), debajo del paso. Oculta si no toca.
+var _calm_goal: Label
 var _route_box: VBoxContainer
 var _refresh_left := 0.0
 
@@ -114,6 +116,10 @@ func _setup_ui() -> void:
 	_now_blocker = UITheme.make_label("", "body", UITheme.WARNING)
 	_now_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_now_blocker)
+	_calm_goal = UITheme.make_label("", "body", UITheme.WARNING)
+	_calm_goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_calm_goal.visible = false
+	content.add_child(_calm_goal)
 
 	# ── EL CAMINO: la linea entera, con lo hecho marcado ──
 	content.add_child(UITheme.make_separator())
@@ -164,6 +170,9 @@ func refresh() -> void:
 	_now_why.text = String(text["why"])
 	_now_blocker.text = String(text["blocker"])
 	_now_blocker.visible = String(text["blocker"]) != ""
+	var goal: Dictionary = Objectives.calm_goal()
+	_calm_goal.text = String(goal.get("text", ""))
+	_calm_goal.visible = not goal.is_empty()
 	_paint_route()
 
 ## La linea de Objectives.LINE, una fila por paso: hecho, el de ahora, o por hacer.

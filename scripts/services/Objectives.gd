@@ -916,3 +916,28 @@ static func blocker(step: Dictionary) -> String:
 			var reason: String = CombatManager.final_audit_block_reason()
 			return Tr.t(reason) if reason != "" else ""
 	return ""
+
+# ══════════════════════════════════════════════════════════════════════
+# La meta de la calma (doc 21 §2.4)
+# ══════════════════════════════════════════════════════════════════════
+
+## La segunda linea de ¿QUE HACER?: lo que pide la Orden de la Regencia antes de
+## la proxima Tormenta, o {} si no toca (sin reloj, sin Diezmo en el modo, ya
+## entregado o con los Tasadores en la puerta). Va aparte de next_step() a
+## proposito: no es un paso de la linea, y la sonda de la linea no la sigue.
+##   {"kind": "order", "id": recurso, "amount": n, "pct": rebaja en %, "text": traducido}
+static func calm_goal() -> Dictionary:
+	if not StormManager.order_visible():
+		return {}
+	if StormManager.get_phase() == StormCycle.Phase.TITHE:
+		return {}
+	var order: Dictionary = StormManager.get_order()
+	if order.is_empty() or bool(order.get("done", false)):
+		return {}
+	var res: String = String(order["res"])
+	var amount: int = int(order["amount"])
+	var pct: int = roundi(GameConfig.storm_order_delivery_pct * 100.0)
+	return {
+		"kind": "order", "id": res, "amount": amount, "pct": pct,
+		"text": Tr.t("OBJ_CALM_GOAL") % [amount, Tr.res_name(res), pct],
+	}
