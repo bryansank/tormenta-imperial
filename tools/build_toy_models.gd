@@ -60,6 +60,12 @@ const CROPS_SCRIPT := "res://scripts/buildings/FarmCrops3D.gd"
 ## oscurece hasta AO_DARK en y = 0 (ancla el modelo a la parcela, regla 5).
 const AO_HEIGHT := 0.22
 const AO_DARK := 0.22
+## Borde oscuro de contacto (V8): en las paredes, una franja fina de EDGE_HEIGHT
+## que se oscurece hasta EDGE_DARK en y = 0, encima del AO. Se lee de lejos,
+## en la Tormenta y de noche (LotMesh.contact_edge). Solo en los edificios: las
+## unidades siguen con el AO de _finish_colors().
+const EDGE_HEIGHT := 0.12
+const EDGE_DARK := 0.42
 
 var _kit: Kit = null
 
@@ -146,7 +152,7 @@ func _bake(id: String) -> bool:
 	var fitted := _fit_plan(mk, float(ctx["w"]), float(ctx["d"]))
 	if out.has("fx"):
 		out["fx"] = fitted * (out["fx"] as Vector3)
-	_finish_colors(mk)
+	mk.contact_edge(AO_HEIGHT, AO_DARK, EDGE_HEIGHT, EDGE_DARK)
 	var mesh := mk.commit()
 	if mesh == null:
 		push_error("build_toy_models: %s sale vacio" % id)
