@@ -34,6 +34,7 @@ Spanish, the rest in English.
 | 24 | [Paleta](24-paleta.md) | The ten UI colours in `UITheme` (name, hex, use, where not to use them), what is derived from them, categories and tech branches, what stays out of the palette (world, resources, sides) |
 | 25 | [Marco legal](25-marco-legal.md) | Venezuelan law that touches the game (the 2009 war-videogame ban, copyright and trademark at SAPI, third-party licences, personal data, selling), the content and marketing rules that follow from it, the review checklist and what is pending before publishing |
 | 26 | [Rendimiento](26-rendimiento.md) | Performance budget (60 fps mid PC, 30 fps on an old integrated GPU and low-end Android, RAM/VRAM/.exe/APK), the reproducible probe (`tools/perf_probe.gd`: six seeded scenarios, CSV/JSON in `reports/perf/`), today's measurements per renderer and quality, the static audit with file:line, the prioritised optimisation list, the "Mínima" quality, first-boot detection and the FPS cap |
+| 27 | [Encargos](27-encargos.md) | El tablón de 3 encargos (Regencia, vecinos, contrabandista): modelo puro `ContractBoard`, `ContractManager`, panel ENCARGOS, plantillas y premios, rebaja del Diezmo, reputación en Gobernador, guardado `contracts`, reglas por modo |
 
 ## Quick Reference
 
@@ -51,6 +52,6 @@ Spanish, the rest in English.
 
 Everything done, what is open and the backlog live in [13-roadmap.md](13-roadmap.md).
 In short: the game is playable end to end in Campaña (the only mode the New Game dialog offers; the other three still load), in 3D and 2D, on PC and
-on an Android tablet build. Not implemented: cloud save wiring, missions/contracts,
+on an Android tablet build. Not implemented: cloud save wiring,
 dedicated combat and ambient audio, and store distribution. PvP and co-op are out of
 scope.
