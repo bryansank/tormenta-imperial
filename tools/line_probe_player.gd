@@ -182,6 +182,9 @@ func _play_seed(map_seed: int) -> Dictionary:
 	if _r["victory_at"] >= 0.0 and float(options.get("after", 0.0)) > 0.0:
 		await _play_after_victory(float(options.get("after", 0.0)) * 60.0)
 	_r["farms"] = Rules.count_building("farm")
+	# Consumo al final: casas, gente y comida que se come por minuto.
+	_r["houses"] = Rules.count_building("house")
+	_r["food_per_min"] = float(PopulationManager.food_due()) * 60.0 		/ maxf(1.0, GameConfig.get_duration(GameConfig.consumption_interval))
 	_close_colony()
 	return _r
 
@@ -733,16 +736,39 @@ func _try_make(step: Dictionary) -> void:
 	var recipe: Dictionary = Objectives.material_recipe(String(step["id"]))
 	if recipe.is_empty():
 		return
-	for info in GridManager.get_all_buildings():
-		var node: Node = info["node"]
-		if (info["data"] as BuildingData).id != String(step.get("building", "")):
-			continue
-		if ProcessManager.is_busy(node) or ProductionManager.is_constructing(node):
-			continue
-		if ProcessManager.start_process(node, recipe):
-			_act("make %s" % String(step["id"]), false)
-			return
-	_cover_with_market(Objectives.step_cost(step))
+	# Lotes (2026-10-14): tantas vueltas como pide el paso y caben (max_batch),
+	# en su taller y, si los talleres estan ocupados, tambien en el Nucleo (que
+	# hace las recetas de todos, x1.5 mas lento).
+	var per_run: int = int((recipe.get("produces", {}) as Dictionary).get(String(step["id"]), 1))
+	var runs_wanted: int = maxi(1, int(ceil(float(int(step.get("amount", 1))) / float(maxi(1, per_run)))))
+	var started := false
+	for pass_core in [false, true]:
+		for info in GridManager.get_all_buildings():
+			var node: Node = info["node"]
+			var bid: String = (info["data"] as BuildingData).id
+			if pass_core and bid != "nucleo":
+				continue
+			if not pass_core and bid != String(step.get("building", "")):
+				continue
+			if ProcessManager.is_busy(node) or ProductionManager.is_constructing(node):
+				continue
+			var proc: Dictionary = recipe
+			if pass_core:
+				proc = {}
+				for extra in GameConfig.get_core_extra_processes():
+					if String(extra.get("id", "")) == String(recipe.get("id", "")):
+						proc = extra
+				if proc.is_empty():
+					continue
+			var n: int = clampi(mini(runs_wanted, ProcessManager.max_batch(proc)), 1, GameConfig.process_batch_max)
+			if ProcessManager.start_process(node, proc, n):
+				_act("make %s x%d%s" % [String(step["id"]), n, " (nucleo)" if pass_core else ""], false)
+				runs_wanted -= n
+				started = true
+				if runs_wanted <= 0:
+					return
+	if not started:
+		_cover_with_market(Objectives.step_cost(step))
 
 func _run_processes() -> void:
 	_mine_by_hand()
@@ -910,6 +936,10 @@ func _drain_overflow(what: String) -> void:
 	_ov_pending.clear()
 
 func _connect_probes() -> void:
+	EventBus.building_upgrade_completed.connect(func(node: Node, lvl: int) -> void:
+		var info: Dictionary = GridManager.get_building_info(node)
+		if not info.is_empty() and (info["data"] as BuildingData).id == "headquarters":
+			_r["hq%d_at" % lvl] = _clock)
 	EventBus.milestone_completed.connect(func(id: String) -> void:
 		if not _r["milestones"].has(id):
 			_r["milestones"][id] = _clock)
@@ -1062,6 +1092,9 @@ func _print_run(r: Dictionary) -> void:
 	print("  espera por paso (min): " + top)
 	print("  sin ninguna decision: huecos>3min %d | el mas largo %.1f min | era1 %.1f min | era2 %.1f min | era3 %.1f min | intentos de asedio %d" % [
 		int(g["idle_count"]), float(g["idle_longest"]) / 60.0, _era_len(r, 1), _era_len(r, 2), _era_len(r, 3), r["sieges"].size()])
+	print("  CG nv2 en el minuto %s | CG nv3 (convocatoria) en el %s | casas %d | granjas %d | gente %d | comida %.0f/min" % [
+		_mins(r.get("hq2_at", -1.0)), _mins(r.get("hq3_at", -1.0)), int(r.get("houses", 0)), int(r.get("farms", 0)),
+		int(r["end"]["pop"]), float(r.get("food_per_min", 0.0))])
 	if int(r["overflow"]) > 0:
 		print("  desbordado por origen: " + str(r["overflow_by"]))
 	# Donde caen los huecos de mas de 3 min sin decidir nada, y que pedia el panel.
