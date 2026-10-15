@@ -9,6 +9,8 @@ var _is_open := false
 var _now_title: Label
 var _now_why: Label
 var _now_blocker: Label
+## Encargos: "Entrega el encargo: Los vecinos" cuando uno ya se puede entregar.
+var _now_contract: Label
 var _route_box: VBoxContainer
 var _refresh_left := 0.0
 
@@ -114,6 +116,11 @@ func _setup_ui() -> void:
 	_now_blocker = UITheme.make_label("", "body", UITheme.WARNING)
 	_now_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_now_blocker)
+	_now_contract = UITheme.make_label("", "body", UITheme.POSITIVE)
+	_now_contract.name = "ContractStep"
+	_now_contract.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_now_contract.visible = false
+	content.add_child(_now_contract)
 
 	# ── EL CAMINO: la linea entera, con lo hecho marcado ──
 	content.add_child(UITheme.make_separator())
@@ -164,6 +171,11 @@ func refresh() -> void:
 	_now_why.text = String(text["why"])
 	_now_blocker.text = String(text["blocker"])
 	_now_blocker.visible = String(text["blocker"]) != ""
+	var contract: Dictionary = Objectives.contract_step()
+	_now_contract.visible = not contract.is_empty()
+	if not contract.is_empty():
+		var ctext: Dictionary = Objectives.describe(contract)
+		_now_contract.text = "%s\n%s" % [String(ctext["title"]), String(ctext["why"])]
 	_paint_route()
 
 ## La linea de Objectives.LINE, una fila por paso: hecho, el de ahora, o por hacer.

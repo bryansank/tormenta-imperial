@@ -12,7 +12,7 @@ extends RefCounted
 ##
 ## Un paso es un Dictionary:
 ##   kind  "build" | "upgrade" | "train" | "repair" | "sell" | "buy" | "research" | "siege" | "resummon"
-##         | "rebuild" | "sandbox" | "sortie"
+##         | "rebuild" | "sandbox" | "sortie" | "contract"
 ##   id    edificio o unidad
 ##   level nivel al que sube una mejora
 ##   why   clave de Tr con el porque (una frase)
@@ -253,6 +253,18 @@ static func first_sortie_step() -> Dictionary:
 	if party.is_empty():
 		return {}
 	return {"kind": "sortie", "id": String(party.keys()[0]), "why": "OBJ_WHY_FIRST_SORTIE"}
+
+## Paso aparte, que no entra en next_step() (la linea y su sonda no cambian):
+## "Entrega el encargo de los vecinos" cuando uno del tablon ya se puede
+## entregar. {} si no hay ninguno o el modo no tiene encargos. ¿QUE HACER? lo
+## ensena debajo del paso principal.
+static func contract_step() -> Dictionary:
+	if not GameMode.contracts_enabled():
+		return {}
+	var source: String = ContractManager.first_deliverable()
+	if source.is_empty():
+		return {}
+	return {"kind": "contract", "id": source, "why": "OBJ_WHY_CONTRACT"}
 
 ## La columna que se propone para la primera escaramuza: una unidad de casa, la
 ## del primer tipo que haya (infanteria antes que canones). Vacio si no hay nadie.
@@ -825,6 +837,8 @@ static func describe(step: Dictionary) -> Dictionary:
 			title = Tr.t("OBJ_DO_SIEGE")
 		"sortie":
 			title = Tr.t("OBJ_DO_FIRST_SORTIE")
+		"contract":
+			title = Tr.t("OBJ_DO_CONTRACT") % Tr.t("CONTRACT_SRC_" + String(step.get("id", "")).to_upper())
 		"resummon":
 			title = Tr.t("OBJ_DO_RESUMMON")
 		_:
