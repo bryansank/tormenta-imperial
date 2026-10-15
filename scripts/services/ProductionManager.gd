@@ -35,6 +35,12 @@ func _on_building_placed(data: Resource, cell: Vector2i) -> void:
 	var node := GridManager.get_building_at(cell)
 	if not node:
 		return
+	# Ya registrado (en obras, en mejora o produciendo): un building_placed
+	# repetido no puede volver a ponerlo en obras. Antes pisaba la entrada, y una
+	# mejora en curso se convertia en una obra normal que al terminar no subia de
+	# nivel (bug 7: "los edificios pierden su nivel").
+	if _constructing.has(node) or _producing.has(node):
+		return
 	var build_time := GameConfig.get_build_time(building_data.build_time)
 	if build_time > 0.0:
 		_start_construction(node, building_data, build_time)
@@ -278,7 +284,8 @@ func _complete_construction(stale_or_node) -> void:
 		return
 	var node: Node = stale_or_node
 	var is_upgrade: bool = constr_info.get("is_upgrade", false)
-	var new_level: int = constr_info.get("new_level", 1)
+	# Una mejora nunca baja el nivel: como mucho lo deja donde estaba.
+	var new_level: int = maxi(int(constr_info.get("new_level", 1)), int(node.get_meta("level", 1)))
 	node.remove_meta("under_construction")
 	# Restore mesh opacity
 	var mesh_inst := node.get_child(0)
@@ -708,6 +715,12 @@ func load_save_data(entries: Array) -> void:
 
 ## Start upgrade on a building (reuses construction system)
 func start_upgrade(node: Node, data: BuildingData, new_level: int) -> void:
+	# Ya en obras (o en mejora): un segundo toque no cobra otra vez ni reinicia
+	# la obra. Y nunca se "mejora" a un nivel que no es mas alto.
+	if node == null or not is_instance_valid(node) or _constructing.has(node):
+		return
+	if new_level <= int(node.get_meta("level", 1)) or new_level > GameConfig.max_building_level:
+		return
 	var cost := GameConfig.get_upgrade_cost(data, new_level)
 	if not ResourceManager.can_afford(cost):
 		return

@@ -493,6 +493,23 @@ mismo escenario, semilla y calidad, y la máquina en reposo.
 | 11 | **Export más ligero**: plantilla estándar (no mono) y release | `export_presets.cfg`, docs/19 §2 | `.exe` de 120 a ~90 MB; APK de 39 a ~30 MB | Bajo (probado en docs/19 que el proyecto no usa C#) | Exportar |
 | 12 | **Badges 3D por despachador**: no crear el `Label3D` de estado en carreteras ni decoraciones; un único receptor de `production_tick` / `workers_changed` en BuildingPlacer que refresca solo el badge afectado | `buildings/BuildingStatusBadge.gd:79-92` | −300 `Label3D` en `grande` (hay 439) y de O(n²) a O(n) por ronda de producción | Bajo | Arte / edificios |
 
+**Hecho en `perf/servicios` (2026-10-14, sin medir todavía):**
+
+- **4**: `PlacementRules.pave_route` envuelve los tramos en una tanda
+  (`EventBus.placement_batch_started` / `placement_batch_finished`). GameManager,
+  PopulationManager y TutorialManager apuntan y hacen su trabajo una vez al cerrarla,
+  en la misma llamada: una ruta de N tramos pasa de N guardados y N recuentos a 1 (más
+  el del propio edificio). El JSON sigue indentado (no se toca el fichero).
+  WorkerWalkers y BuildingLot no se tocaron (zona de mundo / arte).
+- **5**: `GridManager.map_version()` sube con cada cambio de ocupación o de tierra;
+  `PlacementRules` guarda por versión el Núcleo, la red (`network_view()`), las rutas
+  de `road_route()` y los `BuildingData` cargados. `prepare_route_queries()` (lo llama
+  `PlacementAssist.valid_spots`) calcula una vez las celdas libres que llegan a la red
+  y descarta sin BFS los sitios sin camino. `GridManager.buildings_view()` /
+  `count_by_id()` recorren sin copiar; los servicios los usan. `get_all_buildings()`
+  sigue copiando (UI, herramientas y tests no cambian).
+- **8**: `BuildingHealth` usa 8 escalones de ceniza con un material compartido cada uno.
+
 Las dos primeras son las que mueven la aguja en la medida de hoy: el juego está
 **limitado por la CPU que prepara el render** (draw calls) en 3D y **por los scripts**
 en 2D. La GPU de este PC va holgada (3-5 ms por fotograma en 3D), pero en una

@@ -63,6 +63,7 @@ func _apply_map(width: int, height: int, new_seed: int, version: int = IslandSha
 	_origin = Vector3(-width * cell_size * 0.5, 0.0, -height * cell_size * 0.5)
 	if changed or (_land.is_empty() and is_irregular()) or (not _land.is_empty() and _land.size() != width * height):
 		_rebuild_land()
+		_bump()
 	if changed:
 		EventBus.grid_resized.emit(width, height)
 
@@ -158,8 +159,21 @@ func get_world_size() -> Vector2:
 
 # Cell → Node reference of the building occupying it
 var _cell_to_building: Dictionary = {}
-# Node → { "data": BuildingData, "origin_cell": Vector2i, "cells": Array[Vector2i] }
+# Node → { "data": BuildingData, "origin_cell": Vector2i, "cells": Array[Vector2i], "node": Node }
 var _building_info: Dictionary = {}
+
+## Version del mapa: sube cada vez que cambia que hay en alguna celda (edificio
+## o yacimiento puesto, movido o quitado) o la tierra. Las caches que dependen
+## de la ocupacion (la red de carreteras y las rutas de PlacementRules) se
+## comparan con ella en vez de recalcularse en cada consulta (docs/26 §6.5).
+## Nunca baja ni se reinicia: una cache vieja nunca coincide por casualidad.
+var _version := 0
+
+func map_version() -> int:
+	return _version
+
+func _bump() -> void:
+	_version += 1
 
 func world_to_cell(world_pos: Vector3) -> Vector2i:
 	var local := world_pos - _origin
@@ -216,7 +230,9 @@ func place_building(origin_cell: Vector2i, data: BuildingData, building_node: No
 		"data": data,
 		"origin_cell": origin_cell,
 		"cells": cells,
+		"node": building_node,
 	}
+	_bump()
 	return true
 
 ## Move a building to a new cell. Returns true if successful.
@@ -236,6 +252,7 @@ func move_building(building_node: Node, new_origin: Vector2i) -> bool:
 		_cell_to_building[cell] = building_node
 	_building_info[building_node]["origin_cell"] = new_origin
 	_building_info[building_node]["cells"] = new_cells
+	_bump()
 	return true
 
 ## Remove a building entirely.
@@ -245,6 +262,7 @@ func remove_building(building_node: Node) -> void:
 	for cell in _building_info[building_node]["cells"]:
 		_cell_to_building.erase(cell)
 	_building_info.erase(building_node)
+	_bump()
 
 ## Get the building node at a given cell, or null.
 func get_building_at(cell: Vector2i) -> Node:
@@ -262,6 +280,7 @@ func place_obstacle(cell: Vector2i, node: Node, grid_size: Vector2i = Vector2i(1
 			return false
 	for c in cells:
 		_cell_to_building[c] = node
+	_bump()
 	return true
 
 ## Remove an obstacle from one or more cells.
@@ -269,8 +288,11 @@ func remove_obstacle(cell: Vector2i, grid_size: Vector2i = Vector2i(1, 1)) -> vo
 	var cells := _get_cells_for(cell, grid_size)
 	for c in cells:
 		_cell_to_building.erase(c)
+	_bump()
 
 ## Get all placed buildings as an array of info dicts (includes "node" key).
+## Cada diccionario es una copia: quien llama puede tocarlo. Para recorrer sin
+## copiar (las rutas calientes de los servicios), buildings_view().
 func get_all_buildings() -> Array:
 	var result: Array = []
 	for node in _building_info:
@@ -280,10 +302,33 @@ func get_all_buildings() -> Array:
 			result.append(info)
 	return result
 
+## Como get_all_buildings(), pero sin copiar cada diccionario: son los de la
+## rejilla, de SOLO LECTURA (ni sus claves ni su "cells" se tocan). Un
+## move_building posterior los actualiza en sitio. Para recorrer en caliente
+## (recuento de trabajadores, reglas de colocacion, Objetivos, Tormenta).
+func buildings_view() -> Array:
+	var result: Array = []
+	for node in _building_info:
+		if is_instance_valid(node):
+			result.append(_building_info[node])
+	return result
+
+## Cuantos edificios de `building_id` hay en la rejilla, sin copiar nada.
+func count_by_id(building_id: String) -> int:
+	var n := 0
+	for node in _building_info:
+		if not is_instance_valid(node):
+			continue
+		var data: BuildingData = _building_info[node]["data"]
+		if data != null and data.id == building_id:
+			n += 1
+	return n
+
 ## Clear all tracked buildings and obstacles.
 func clear_all() -> void:
 	_cell_to_building.clear()
 	_building_info.clear()
+	_bump()
 
 func _get_cells_for(origin: Vector2i, grid_size: Vector2i) -> Array:
 	var cells: Array = []

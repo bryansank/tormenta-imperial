@@ -373,7 +373,7 @@ func get_tower_crews(garrison: Dictionary) -> Dictionary:
 ## la siguiente tormenta es la decisión que todo esto existe para provocar.
 func count_standing_towers() -> int:
 	var standing := 0
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		if data == null or data.id != GameConfig.storm_tower_building_id:
 			continue
@@ -391,7 +391,7 @@ func damage_towers_for_lost_crews(crews_lost: int) -> int:
 	if crews_lost <= 0:
 		return 0
 	var towers: Array = []
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		if data == null or data.id != GameConfig.storm_tower_building_id:
 			continue
