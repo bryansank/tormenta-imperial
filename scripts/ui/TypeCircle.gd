@@ -60,7 +60,7 @@ func _draw() -> void:
 		if tex != null:
 			draw_texture_rect(tex, Rect2(p - Vector2(half, half), Vector2(ICON_PX, ICON_PX)), false, UITheme.unit_icon_tint(true))
 		if font != null:
-			var name := Tr.t(String(GameConfig.get_unit_def(id).get("name", id)))
+			var label := Tr.t(String(GameConfig.get_unit_def(id).get("name", id)))
 			var fs := UITheme.FONT_SMALL
-			var w := font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-			draw_string(font, p + Vector2(-w * 0.5, half + fs + 2.0), name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UITheme.TEXT_BRIGHT)
+			var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			draw_string(font, p + Vector2(-w * 0.5, half + fs + 2.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UITheme.TEXT_BRIGHT)

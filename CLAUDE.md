@@ -68,7 +68,7 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 118 signals in ~30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 119 signals in ~30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
@@ -88,7 +88,7 @@ holds a service's state of its own.
 | 20 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
 | 21 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
 | 22 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
-| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built) and which tips/helps were seen; state saved with the game (docs/23) |
+| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built), the guided first fights on the board (combat lessons, docs/23 §2.4) and which tips/helps were seen; state saved with the game (docs/23) |
 | 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
@@ -124,13 +124,13 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- NotificationPanel (CanvasLayer 11) -- toasts (only warning, danger and notice) + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips; the objective strip at the top centre is gone too, 2026-10-05: the next step lives in ¿QUÉ HACER?)
   +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI, opened from a Laboratory building (not from the menu)
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step()
-  +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign
+  +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign; FICHA opens each unit's card (UnitCard)
   +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
   +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close; building guide; instances HelpIndexPanel
   +-- SkirmishPanel (CanvasLayer 11) -- commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" (Final Audit)
   +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
   +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator (colour + icon, no countdown)
-  +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI; instances PrologueScreen
+  +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI, also over the combat board (combat lessons); instances PrologueScreen
   +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
@@ -642,6 +642,26 @@ generated by `tools/gen_unit_icons.gd`, read by `UITheme.unit_icon()`), tinted p
 side, with the boss marked; the translated name's initial is only a fallback when a
 PNG is missing.
 
+**Teaching combat (2026-10-14, `docs/15-combat.md` §3 "Enseñar el combate", docs/23 §2.4):**
+- *Previews*, pure functions added to `CombatRules`: `preview_damage()` (the hit you
+  would deal, written over every target: "-18 de 75", "¡Cae!"), `threat_cells()` (where
+  the enemy can move and shoot next turn: the **Ver alcance enemigo** toggle in
+  `BattleScreen`, orange cells/spots), `min_range_cells()` (the artillery's ✕ next to
+  it) and `fire_cells_from()`. Computed in `BattleScreen._refresh()` per combat event,
+  never per frame; drawn by `Board3D.set_overlays()` (new `Mark` values at the end of
+  the enum) in both 3D views and by the 2D cells.
+- *Unit card* (`scripts/ui/UnitCard.gd`): health, attack, defence, move, range (min
+  range for artillery), strong/weak against with multipliers, one phrase. Icons drawn,
+  numbers read from `combat_unit_stats` / `combat_type_advantage` or from the live unit.
+  Tap a piece on the board (any view) or FICHA in `ArmyPanel`.
+- *Guided fights*: `TutorialManager` lessons `basics` (steps 1-5, first board of the
+  game) and `artillery` (6-7, first board with our artillery), derived from combat
+  signals by the pure `derive_combat_step()`; `EventBus.combat_lesson_step_changed`;
+  `TutorialPanel` draws them where `BattleScreen.coach_anchor()` says. Saved as
+  `combat_lessons_done` inside the `tutorial` key. No Skip on steps 1-3, Skip on 4-7,
+  "Repetir combate guiado" in the AYUDA index. Six combat guides at the end of
+  `HelpCatalog.ENTRIES`. The practice range (design doc 21 §4.4) is not done.
+
 ### Tech Tree (15 techs, 3 branches)
 
 - **TechTreeManager** + `GameConfig.tech_definitions`. Branches: Industrial,
@@ -761,7 +781,7 @@ and Settings closes; accepted). With a board open it does not reload
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
