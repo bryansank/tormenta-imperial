@@ -394,7 +394,12 @@ static func readable(color: Color, bg: Color = UI_BG_REFERENCE, min_ratio: float
 ## Pinta una etiqueta ya creada respetando el contraste minimo y el contorno.
 ## Usar esto en vez de add_theme_color_override("font_color", ...) a mano.
 static func set_label_color(control: Control, color: Color) -> void:
-	control.add_theme_color_override("font_color", readable(color))
+	var c := readable(color)
+	# El mismo color otra vez no se reaplica: un override nuevo avisa de cambio
+	# de tema y repinta (los HUD lo piden en cada senal).
+	if control.has_theme_color_override("font_color") and control.get_theme_color("font_color") == c:
+		return
+	control.add_theme_color_override("font_color", c)
 
 # ══════════════════════════════════════
 # TEXTURED SURFACES (9-patch metal — Kenney UI, CC0)
@@ -894,7 +899,14 @@ static func chip_amount(chip: HBoxContainer) -> Label:
 ## vuelta a su color. Se usa en vez de un texto flotante que tapa otros paneles.
 static func flash_label(label: Label, restore: Color, duration: float = 0.9) -> void:
 	set_label_color(label, DANGER)
+	# Un parpadeo a la vez: el anterior, si sigue, se corta (antes se apilaban y
+	# el primero devolvia el color a mitad del ultimo).
+	if label.has_meta("flash_tween"):
+		var old: Tween = label.get_meta("flash_tween")
+		if old != null and old.is_valid():
+			old.kill()
 	var tween := label.create_tween()
+	label.set_meta("flash_tween", tween)
 	tween.tween_interval(duration)
 	tween.tween_callback(func(): if is_instance_valid(label): set_label_color(label, restore))
 
@@ -943,6 +955,12 @@ static func pool_bar_free(bar: PanelContainer) -> ColorRect:
 
 ## Rojo cuando desborda; latón cuando cabe.
 static func set_pool_bar_alert(bar: PanelContainer, alert: bool) -> void:
+	# Se llama en cada cambio de recursos: solo se crea un estilo nuevo si cambia
+	# el estado o la paleta.
+	var key := [alert, DANGER, ACCENT_DIM, BG_DARK]
+	if bar.get_meta("pool_alert_key", null) == key:
+		return
+	bar.set_meta("pool_alert_key", key)
 	bar.add_theme_stylebox_override("panel", _pool_frame_style(alert))
 
 static func _pool_frame_style(alert: bool) -> StyleBoxFlat:

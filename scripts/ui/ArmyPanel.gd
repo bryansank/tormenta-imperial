@@ -25,9 +25,9 @@ func _ready() -> void:
 	layer = 11
 	_setup_ui()
 	UIManager.register_panel(self, "ArmyPanel.modal")
-	EventBus.army_changed.connect(_refresh)
+	EventBus.army_changed.connect(_request_refresh)
 	EventBus.era_advanced.connect(_on_era_advanced)
-	EventBus.resource_unlocked.connect(func(_r): _refresh())
+	EventBus.resource_unlocked.connect(_request_refresh)
 	EventBus.building_placed.connect(func(_d, _c): _on_base_changed())
 	EventBus.building_demolished.connect(func(_n, _c): _on_base_changed())
 	EventBus.game_load_completed.connect(_on_base_changed)
@@ -35,12 +35,28 @@ func _ready() -> void:
 	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 	# Lo que esta fuera sigue contando en el ejercito pero no se puede entrenar
 	# ni mandar a ningun otro sitio: el panel tiene que decirlo.
-	EventBus.expedition_started.connect(func(_id, _nodes): _refresh())
-	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _refresh())
+	EventBus.expedition_started.connect(func(_id, _nodes): _request_refresh())
+	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _request_refresh())
 	EventBus.expedition_resumed.connect(_on_expedition_resumed)
 	_update_button_visibility()
 	# Por si la partida se cargo antes de que este panel escuchara.
 	_on_base_changed.call_deferred()
+	# Las barras de entrenamiento solo se mueven con el panel abierto.
+	set_process(false)
+
+## Las senales del ejercito rehacen las filas solo con el panel abierto (al
+## abrirlo se rehacen de todos modos), y una vez por fotograma como mucho.
+var _refresh_queued := false
+func _request_refresh(_arg = null) -> void:
+	if not _is_open or _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
+	if _is_open:
+		_refresh()
 
 func _process(_delta: float) -> void:
 	if not _is_open:
@@ -146,7 +162,7 @@ func _units_on_expedition() -> Dictionary:
 	return CombatManager.get_units_on_expedition()
 
 func _on_expedition_resumed(_expedition_id: int) -> void:
-	_refresh()
+	_request_refresh()
 
 func _rebuild_units() -> void:
 	for child in _units_vbox.get_children():
@@ -301,7 +317,7 @@ func _missing(cost: Dictionary) -> Dictionary:
 # ── Visibility / open-close ──
 
 func _on_era_advanced(_new_era: int) -> void:
-	_refresh()
+	_request_refresh()
 	_update_button_visibility()
 
 func _on_base_changed(_arg = null) -> void:
@@ -324,6 +340,7 @@ func _toggle_panel() -> void:
 	_is_open = not _is_open
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
+	set_process(_is_open)
 	if _is_open:
 		_refresh()
 		UIManager.open_panel(self)

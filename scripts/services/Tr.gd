@@ -1075,8 +1075,8 @@ const _STRINGS := {
 		"BTN_COLONY_RANK": "Colonia",
 		"HUD_RANK": "Rango del gobernador",
 		# ── Soporte y velocidad ──
-		"BTN_REPORT_BUG": "Informar de un fallo",
-		"BTN_REPORT_BUG_HINT": "Copia un informe para pegarlo en un mensaje",
+		"BTN_REPORT_BUG": "Informar fallo",
+		"BTN_REPORT_BUG_HINT": "Informar de un fallo: copia un informe para pegarlo en un mensaje",
 		"MSG_REPORT_COPIED": "Copiado. Pégalo en un mensaje.",
 		"REPORT_TITLE": "Informe de fallo",
 		"REPORT_SYSTEM": "Sistema",
@@ -2261,8 +2261,8 @@ const _STRINGS := {
 		"BTN_COLONY_RANK": "Colony",
 		"HUD_RANK": "Governor rank",
 		# ── Support and speed ──
-		"BTN_REPORT_BUG": "Report a bug",
-		"BTN_REPORT_BUG_HINT": "Copies a report to paste in a message",
+		"BTN_REPORT_BUG": "Report bug",
+		"BTN_REPORT_BUG_HINT": "Report a bug: copies a report to paste in a message",
 		"MSG_REPORT_COPIED": "Copied. Paste it in a message.",
 		"REPORT_TITLE": "Bug report",
 		"REPORT_SYSTEM": "System",

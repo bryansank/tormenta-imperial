@@ -50,7 +50,7 @@ func _ready() -> void:
 	layer = LAYER
 	_setup_ui()
 	UIManager.register_panel(self, "RankPanel.modal")
-	EventBus.governor_xp_changed.connect(func(_x, _r, _g): refresh())
+	EventBus.governor_xp_changed.connect(_on_xp_changed)
 	EventBus.governor_rank_up.connect(_on_rank_up)
 	EventBus.colony_identity_changed.connect(func(_n, _s): refresh())
 	EventBus.game_load_completed.connect(refresh)
@@ -201,6 +201,23 @@ func _relayout() -> void:
 	_card.offset_bottom = _card.size.y * 0.5
 
 # ── Refresco ──
+
+## Cada ciclo de produccion da 1 XP: con muchos edificios llegan varias en el
+## mismo fotograma. Si el rango no cambia, se repinta una vez al final del
+## fotograma; si cambia, ya.
+var _refresh_queued := false
+func _on_xp_changed(_xp: int, rank: int, _gained: int) -> void:
+	if _badge_rank != null and _badge_rank.text != str(rank):
+		refresh()
+		return
+	if _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
+	refresh()
 
 func refresh() -> void:
 	var rank: int = RankManager.get_rank()
