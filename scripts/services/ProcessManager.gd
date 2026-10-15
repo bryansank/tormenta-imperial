@@ -161,7 +161,7 @@ func mining_blocker(node: Node) -> String:
 		return ""
 	var cell: Vector2i = node.get_meta("cell", Vector2i(-1, -1))
 	var size: Vector2i = node.get_meta("deposit_size", Vector2i(2, 2))
-	if not Rules.touches_network(GridManager.cells_for(cell, size), Rules.connected_roads()):
+	if not Rules.touches_network(GridManager.cells_for(cell, size), Rules.network_view()):
 		return "MINE_NEEDS_ROAD"
 	if PopulationManager.get_free_workers() < GameConfig.mining_workers:
 		return "MINE_NEEDS_WORKERS"

@@ -39,12 +39,22 @@ static func rotated_data(data: BuildingData) -> BuildingData:
 static func placement_data(data: BuildingData, rotation_steps: int) -> BuildingData:
 	return rotated_data(data) if rotation_steps % 2 == 1 else data
 
-## BuildingData original (sin girar) desde su .tres, o null.
+## BuildingData original (sin girar) desde su .tres, o null. Se recuerda por id:
+## evaluate_placement la pide en cada casilla que mira el fantasma, y cada load()
+## pagaba exists, formato de ruta y el cerrojo de la cache del motor (docs/26).
+## Es el mismo recurso que daria load(): la cache solo lo mantiene vivo.
+static var _data_cache: Dictionary = {}
+
 static func load_building_data(building_id: String) -> BuildingData:
+	if _data_cache.has(building_id):
+		return _data_cache[building_id]
 	var path := "res://data/buildings/%s.tres" % building_id
+	var data: BuildingData = null
 	if ResourceLoader.exists(path):
-		return load(path) as BuildingData
-	return null
+		data = load(path) as BuildingData
+	if data != null:
+		_data_cache[building_id] = data
+	return data
 
 ## "Fundicion + Aserradero": los requisitos de `building_id` con el nombre que
 ## lee el jugador, no el id interno ("foundry + sawmill").
@@ -114,12 +124,7 @@ static func deposit_reject_message(building_id: String) -> String:
 ## Cuantos hay en pie de este tipo, preguntado a GridManager (ver la nota
 ## historica en BuildingPlacer.count_building: el nombre del nodo no sirve).
 static func count_building(building_id: String) -> int:
-	var count := 0
-	for info in GridManager.get_all_buildings():
-		var data: BuildingData = info.get("data")
-		if data != null and data.id == building_id:
-			count += 1
-	return count
+	return GridManager.count_by_id(building_id)
 
 static func check_building_limit(building_id: String) -> bool:
 	var limit := GameConfig.get_building_limit(building_id)
@@ -272,19 +277,82 @@ static func missing_prerequisite_names(building_id: String) -> String:
 const ROAD_ID := "road"
 const NEIGHBORS4 := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
-## Las celdas del Nucleo, o [] si no hay.
+# ── Caches de la red (docs/26 §6.5) ──
+#
+# El Nucleo, la red unida a el y las rutas del auto-road solo cambian cuando
+# cambia que hay en alguna celda, y eso lo cuenta GridManager.map_version().
+# Antes cada evaluate_placement hacia 2-3 recorridos de todos los edificios
+# para encontrar el Nucleo y uno o dos BFS de la red; el fantasma lo pedia en
+# cada casilla y PlacementAssist.valid_spots en 100-250 origenes seguidos. Ahora
+# se calcula una vez por version del mapa y se reutiliza. Lo que se devuelve
+# desde aqui es lo mismo que se calculaba; las vistas compartidas (network_view,
+# core_cells) son de solo lectura.
+static var _cache_version := -1
+static var _core_cache: Variant = null      # Array o null (sin calcular)
+static var _core_set_cache: Variant = null  # Dictionary celda -> true
+static var _network_cache: Variant = null   # Dictionary celda -> true
+static var _route_cache: Dictionary = {}    # Vector4i(celda, huella) -> Array o null
+static var _reach_cache: Variant = null     # Dictionary: celdas libres que llegan a la red
+
+static func _sync_cache() -> void:
+	var v: int = GridManager.map_version()
+	if v == _cache_version:
+		return
+	_cache_version = v
+	_core_cache = null
+	_core_set_cache = null
+	_network_cache = null
+	_route_cache.clear()
+	_reach_cache = null
+
+## Las celdas del Nucleo, o [] si no hay. De solo lectura (es la de la rejilla).
 static func core_cells() -> Array:
-	for info in GridManager.get_all_buildings():
-		var data: BuildingData = info.get("data")
-		if data != null and data.is_core:
-			return info.get("cells", [])
-	return []
+	_sync_cache()
+	if _core_cache == null:
+		_core_cache = []
+		for info in GridManager.buildings_view():
+			var data: BuildingData = info.get("data")
+			if data != null and data.is_core:
+				_core_cache = info.get("cells", [])
+				break
+	return _core_cache
+
+static func _core_set() -> Dictionary:
+	_sync_cache()
+	if _core_set_cache == null:
+		var s := {}
+		for c in core_cells():
+			s[c] = true
+		_core_set_cache = s
+	return _core_set_cache
+
+## La red unida al Nucleo SIN copiar, de solo lectura: para quien solo pregunta
+## (recuento de trabajadores, minar a mano, rutas a pie). Para tocarla,
+## connected_roads(), que da una copia.
+static func network_view() -> Dictionary:
+	_sync_cache()
+	if _network_cache == null:
+		_network_cache = _compute_network(null, {})
+	return _network_cache
 
 ## Las celdas de carretera unidas al Nucleo (celda -> true). `ignore` es una
 ## carretera que no cuenta: la que se esta moviendo o se quiere quitar. `extra`
 ## (celda -> true) son celdas que cuentan como carretera aunque aun no lo sean:
-## adonde se lleva la que se mueve.
+## adonde se lleva la que se mueve. Devuelve un diccionario propio (se puede
+## tocar); sin `ignore` de carretera ni `extra` sale de la cache.
 static func connected_roads(ignore: Node = null, extra: Dictionary = {}) -> Dictionary:
+	if extra.is_empty() and not _is_road_node(ignore):
+		return network_view().duplicate()
+	return _compute_network(ignore, extra)
+
+## `node` es una carretera de la rejilla. Un `ignore` que no lo es no cambia la red.
+static func _is_road_node(node: Node) -> bool:
+	if node == null:
+		return false
+	var info := GridManager.get_building_info(node)
+	return not info.is_empty() and (info["data"] as BuildingData).id == ROAD_ID
+
+static func _compute_network(ignore: Node, extra: Dictionary) -> Dictionary:
 	var core := core_cells()
 	var out := {}
 	if core.is_empty():
@@ -333,12 +401,9 @@ static func is_connected_spot(building_id: String, cell: Vector2i, size: Vector2
 	if data != null and data.is_core:
 		return true
 	var cells: Array = GridManager.cells_for(cell, size)
-	var network := connected_roads(ignore)
+	var network: Dictionary = network_view() if not _is_road_node(ignore) else _compute_network(ignore, {})
 	if building_id == ROAD_ID:
-		var core_set := {}
-		for c in core:
-			core_set[c] = true
-		return _touches(cells, network) or _touches(cells, core_set)
+		return _touches(cells, network) or _touches(cells, _core_set())
 	return _touches(cells, network)
 
 ## "Si quito un camino, primero me hace mover los edificios" (2026-10-04).
@@ -355,9 +420,9 @@ static func road_removal_stranded(road: Node, new_cells: Array = []) -> Array:
 	var extra := {}
 	for c in new_cells:
 		extra[c] = true
-	var before := connected_roads()
+	var before := network_view()
 	var after := connected_roads(road, extra)
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info.get("data")
 		var node: Node = info.get("node")
 		if data == null or data.is_core or data.is_decoration or node == road:
@@ -394,15 +459,55 @@ static func move_first_message(nodes: Array) -> String:
 ## el camino mas corto (sin pisar edificios, yacimientos ni la propia huella).
 ## [] si ya toca la red; null si no hay camino. Lo usan las pruebas y las sondas
 ## que juegan solas, y el aviso de "te falta carretera".
+##
+## El resultado se recuerda por version del mapa (celda + huella): el fantasma y
+## valid_spots preguntan muchas veces por el mismo sitio sin que cambie nada.
 static func road_route(cell: Vector2i, size: Vector2i) -> Variant:
+	_sync_cache()
+	var key := Vector4i(cell.x, cell.y, size.x, size.y)
+	if _route_cache.has(key):
+		var hit: Variant = _route_cache[key]
+		return (hit as Array).duplicate() if hit != null else null
+	var route: Variant = _compute_road_route(cell, size)
+	_route_cache[key] = route
+	return (route as Array).duplicate() if route != null else null
+
+## Adonde tiene que llegar una ruta: la red o, sin red, el propio Nucleo.
+static func _route_targets() -> Dictionary:
+	var network := network_view()
+	return network if not network.is_empty() else _core_set()
+
+## Prepara una tanda de road_route() seguidas (PlacementAssist.valid_spots):
+## calcula una vez las celdas libres desde las que se puede llegar a la red. Un
+## sitio cuyas celdas de salida no estan en ese conjunto no tiene ruta, y se
+## descarta sin el BFS por toda la rejilla libre que costaba antes cada fallo.
+static func prepare_route_queries() -> void:
+	_sync_cache()
+	if _reach_cache != null:
+		return
+	var targets := _route_targets()
+	var reach := {}
+	var queue: Array = []
+	for t in targets:
+		for d in NEIGHBORS4:
+			var n: Vector2i = t + d
+			if not reach.has(n) and GridManager.is_cell_free(n):
+				reach[n] = true
+				queue.append(n)
+	while not queue.is_empty():
+		var cur: Vector2i = queue.pop_back()
+		for d in NEIGHBORS4:
+			var n: Vector2i = cur + d
+			if not reach.has(n) and GridManager.is_cell_free(n):
+				reach[n] = true
+				queue.append(n)
+	_reach_cache = reach
+
+static func _compute_road_route(cell: Vector2i, size: Vector2i) -> Variant:
 	var footprint := {}
 	for c in GridManager.cells_for(cell, size):
 		footprint[c] = true
-	var network := connected_roads()
-	if network.is_empty():
-		var core := core_cells()
-		for c in core:
-			network[c] = true
+	var network := _route_targets()
 	if _touches(footprint.keys(), network):
 		return []
 	# BFS desde las celdas libres pegadas a la huella hasta tocar la red.
@@ -414,6 +519,16 @@ static func road_route(cell: Vector2i, size: Vector2i) -> Variant:
 			if not footprint.has(n) and not came.has(n) and GridManager.is_valid_cell(n) and GridManager.is_cell_free(n):
 				came[n] = null
 				queue.append(n)
+	# Con la tanda preparada: si ninguna celda de salida llega a la red (ni
+	# pasando por la huella), no hay ruta. Sin preparar, el BFS de siempre.
+	if _reach_cache != null:
+		var any := false
+		for n in queue:
+			if (_reach_cache as Dictionary).has(n):
+				any = true
+				break
+		if not any:
+			return null
 	var head := 0
 	while head < queue.size():
 		var cur: Vector2i = queue[head]
@@ -458,6 +573,12 @@ static func cost_with_route(data: BuildingData, route: Array) -> Dictionary:
 ## o el de 2D: los dos tienen place_building_at). Emite building_placed por cada
 ## tramo, como si el jugador lo hubiera puesto: guardado, trabajadores y
 ## trabajadores que andan se enteran. Devuelve cuantos puso.
+##
+## Los tramos van en una tanda (docs/26 §6.4): entre `placement_batch_started` y
+## `placement_batch_finished` quien hace trabajo caro por building_placed
+## (GameManager guarda, PopulationManager recuenta) solo apunta que hay algo, y
+## lo hace UNA vez al cerrar la tanda, todavia dentro de esta llamada. Antes una
+## ruta de 15 tramos eran 15 guardados y 15 recuentos en el mismo fotograma.
 static func pave_route(placer: Node, route: Array) -> int:
 	var road := load_building_data(ROAD_ID)
 	if road == null or route.is_empty():
@@ -466,10 +587,12 @@ static func pave_route(placer: Node, route: Array) -> int:
 	if not cost.is_empty():
 		ResourceManager.spend_cost(cost)
 	var n := 0
+	EventBus.placement_batch_started.emit()
 	for c in route:
 		if placer.place_building_at(road, c) != null:
 			n += 1
 			EventBus.building_placed.emit(road, c)
+	EventBus.placement_batch_finished.emit(n)
 	return n
 
 # ── Camino de acceso alrededor de un yacimiento (2026-10-04) ───────────
@@ -539,7 +662,7 @@ static func wants_access_ring(data: BuildingData, verdict: Dictionary, building:
 		return false
 	var origin: Vector2i = deposit.get_meta("cell", Vector2i(-1, -1))
 	var size: Vector2i = deposit.get_meta("deposit_size", Vector2i(2, 2))
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var other: BuildingData = info.get("data")
 		if info.get("node") == building or other == null:
 			continue
@@ -637,7 +760,7 @@ static func upgrade_effect_lines(data: BuildingData, level: int) -> Array:
 ## encima del 1).
 static func warehouse_level_storage() -> int:
 	var total := 0
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info.get("data")
 		var node: Node = info.get("node")
 		if data != null and data.id == "warehouse" and node != null and is_instance_valid(node):
@@ -651,7 +774,7 @@ static func walk_route(target: Node) -> Array:
 	var info := GridManager.get_building_info(target)
 	if info.is_empty():
 		return []
-	var network := connected_roads()
+	var network := network_view()
 	if network.is_empty():
 		return []
 	var goal := {}

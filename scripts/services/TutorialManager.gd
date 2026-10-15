@@ -152,6 +152,9 @@ func _ready() -> void:
 	EventBus.storage_overflow.connect(_on_storage_overflow)
 	EventBus.encounter_started.connect(_on_encounter_started)
 	EventBus.building_placed.connect(_on_building_placed)
+	# Los tramos del auto-road: la guia se rederiva una vez al final, no por tramo.
+	EventBus.placement_batch_started.connect(func(): _batch_depth += 1)
+	EventBus.placement_batch_finished.connect(_on_placement_batch_finished)
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
 	EventBus.unit_trained.connect(_on_unit_trained)
@@ -425,7 +428,7 @@ func _counts() -> Dictionary:
 	for b in _goal_buildings():
 		out[b + "s"] = 0
 		out[b + "s_built"] = 0
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: Resource = info.get("data")
 		if data == null:
 			continue
@@ -631,11 +634,20 @@ func _on_storage_overflow(_resource: String, _lost: int, _cap: int) -> void:
 func _on_encounter_started(_index: int, _is_boss: bool) -> void:
 	offer_tip("encounter")
 
+var _batch_depth := 0
+
 func _on_building_placed(data: Resource, _cell: Vector2i) -> void:
 	if data != null and String(data.get("id")) == "barracks":
 		offer_tip("barracks")
 	_placing_id = ""
+	if _batch_depth > 0:
+		return
 	_refresh_guide()
+
+func _on_placement_batch_finished(_count: int) -> void:
+	_batch_depth = maxi(0, _batch_depth - 1)
+	if _batch_depth == 0:
+		_refresh_guide()
 
 func _on_expedition_started(_expedition_id: int, _node_count: int) -> void:
 	# La primera escaramuza no tiene mapa: el consejo del mapa espera a la
