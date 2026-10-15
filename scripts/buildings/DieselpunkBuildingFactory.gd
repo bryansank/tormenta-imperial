@@ -201,7 +201,6 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 		"warehouse": return _build_warehouse(sx, sz)
 		"market": return _build_market(sx, sz)
 		"laboratory": return _build_laboratory(sx, sz)
-		"farm": return _build_farm(sx, sz)
 		"house": return _build_house(sx, sz)
 		"garden": return _build_garden(sx, sz)
 		"fountain": return _build_fountain(sx, sz)
@@ -1024,79 +1023,6 @@ static func _build_laboratory(sx: float, sz: float) -> Node3D:
 	for i in 3:
 		_add_box(root, Vector3(-sx * 0.42, 0.4 + 0.4 * i, sz * (-0.2 + 0.2 * i)), Vector3(0.08, 0.08, sz * 0.5), mat_copper)
 	_add_box(root, Vector3(0, 0.5, sz * 0.38), Vector3(sx * 0.25, 1.0, 0.04), mat_iron)
-	return root
-
-## Granja (2026-10-04): parcela de tierra con surcos y un cultivo que CRECE
-## (el nodo "CropField" lleva FarmField3D, que lo escala con el ciclo y lo dora
-## al madurar), un granero de chapa con su tolva, un molino de aspas que gira y
-## una valla de madera. Tiene que parecer viva desde la camara de siempre.
-const FarmField := preload("res://scripts/buildings/FarmField3D.gd")
-
-static func _build_farm(sx: float, sz: float) -> Node3D:
-	var root: Node3D = Node3D.new()
-	var mat_soil := _metal(Color(0.36, 0.24, 0.13), 0.05, 0.95)
-	var mat_furrow := _metal(Color(0.27, 0.17, 0.09), 0.05, 0.95)
-	var mat_wood := _metal(COL_DARK_WOOD, 0.1, 0.85)
-	var mat_barn := _metal(Color(0.58, 0.16, 0.12), 0.35, 0.6)
-	var mat_roof := _metal(COL_GUNMETAL, 0.8, 0.4)
-	var mat_iron := _metal(COL_DARK_IRON, 0.8, 0.4)
-	var mat_brass := _metal(COL_BRASS, 0.9, 0.3)
-	# Parcela y surcos: ocupa los dos tercios de la izquierda.
-	var field_w: float = sx * 0.62
-	var field_x: float = -sx * 0.18
-	_add_box(root, Vector3(field_x, 0.05, 0), Vector3(field_w, 0.1, sz * 0.9), mat_soil)
-	var rows := 4
-	for r in rows:
-		var z: float = (-0.36 + 0.24 * r) * sz
-		_add_box(root, Vector3(field_x, 0.11, z), Vector3(field_w * 0.94, 0.04, sz * 0.07), mat_furrow)
-	# El cultivo: un nodo aparte para crecer sin tocar lo demas.
-	var field := Node3D.new()
-	field.name = "CropField"
-	field.set_script(FarmField)
-	field.position = Vector3(0, 0.12, 0)
-	root.add_child(field)
-	var mat_crop := StandardMaterial3D.new()
-	mat_crop.albedo_color = Color(0.35, 0.7, 0.22)
-	mat_crop.roughness = 0.85
-	field.set_meta("crop_material", mat_crop)
-	var cols := 6
-	for r in rows:
-		var z: float = (-0.36 + 0.24 * r) * sz
-		for c in cols:
-			var x: float = field_x - field_w * 0.42 + field_w * 0.84 * float(c) / float(cols - 1)
-			var h := 0.55 + 0.1 * float((r + c) % 3)
-			_add_cone(field, Vector3(x, h * 0.5, z), 0.13, 0.02, h, mat_crop, 6)
-	# Granero de chapa roja con tejado a dos aguas.
-	var bx: float = sx * 0.3
-	var bz: float = -sz * 0.12
-	_add_box(root, Vector3(bx, 0.55, bz), Vector3(sx * 0.3, 1.1, sz * 0.42), mat_barn)
-	_add_prism(root, Vector3(bx, 1.32, bz), Vector3(sx * 0.34, 0.45, sz * 0.46), mat_roof)
-	_add_box(root, Vector3(bx - sx * 0.151, 0.4, bz), Vector3(0.04, 0.75, sz * 0.18), mat_wood)
-	_add_rivets(root, Vector3(bx - sx * 0.152, 1.05, bz - sz * 0.2), Vector3(bx - sx * 0.152, 1.05, bz + sz * 0.2), 6, 0.03)
-	# Tolva de grano (un silo pequeno de laton) y saco de cosecha.
-	var silo_pos := Vector3(sx * 0.36, 0.0, sz * 0.3)
-	_add_cylinder(root, silo_pos + Vector3(0, 0.75, 0), 0.32, 1.5, mat_brass, 14)
-	_add_cone(root, silo_pos + Vector3(0, 1.65, 0), 0.34, 0.05, 0.35, mat_roof, 14)
-	_add_box(root, silo_pos + Vector3(-0.2, 0.15, -0.38), Vector3(0.3, 0.3, 0.22), _metal(Color(0.78, 0.68, 0.45), 0.05, 0.9))
-	# Molino de aspas sobre un poste: gira solo (FarmField3D lo encuentra por nombre).
-	var post_pos := Vector3(sx * 0.12, 0.0, sz * 0.36)
-	_add_box(root, post_pos + Vector3(0, 1.0, 0), Vector3(0.08, 2.0, 0.08), mat_iron)
-	var rotor := Node3D.new()
-	rotor.name = "WindRotor"
-	rotor.position = post_pos + Vector3(0, 2.0, 0.08)
-	root.add_child(rotor)
-	for k in 4:
-		var blade := _add_box(rotor, Vector3.ZERO, Vector3(0.09, 0.62, 0.02), mat_wood)
-		blade.rotation.z = float(k) * PI * 0.5
-		blade.position = Vector3(cos(float(k) * PI * 0.5 + PI * 0.5), sin(float(k) * PI * 0.5 + PI * 0.5), 0) * 0.3
-	_add_sphere(rotor, Vector3.ZERO, 0.07, mat_brass, 8)
-	# Valla baja de madera alrededor del campo.
-	for i in 7:
-		var x: float = field_x - field_w * 0.5 + field_w * float(i) / 6.0
-		_add_box(root, Vector3(x, 0.2, sz * 0.47), Vector3(0.05, 0.36, 0.05), mat_wood)
-		_add_box(root, Vector3(x, 0.2, -sz * 0.47), Vector3(0.05, 0.36, 0.05), mat_wood)
-	_add_box(root, Vector3(field_x, 0.3, sz * 0.47), Vector3(field_w, 0.04, 0.03), mat_wood)
-	_add_box(root, Vector3(field_x, 0.3, -sz * 0.47), Vector3(field_w, 0.04, 0.03), mat_wood)
 	return root
 
 static func _build_warehouse(sx: float, sz: float) -> Node3D:

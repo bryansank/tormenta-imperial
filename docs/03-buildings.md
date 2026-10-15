@@ -22,7 +22,7 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | `morale_bonus` | int | Passive morale bonus (decorations) |
 | `mesh_height` | float | Visual height for procedural mesh |
 | `mesh_color` | Color | Visual color |
-| `model_scene` | PackedScene | The baked "maqueta" model, `assets/models/toy/<id>.tscn` (15 of 17; the road stays procedural, its mesh depends on its neighbours, and so does the Farm for now, because its procedural mesh shows the crops growing. A baked `assets/models/toy/farm.tscn` exists for when the crops move onto it). See "Modelos: maqueta de juguete". `model_scale` / `model_stretch` stay at 1 (they were for the old GLBs) |
+| `model_scene` | PackedScene | The baked "maqueta" model, `assets/models/toy/<id>.tscn` (16 of 17; the road stays procedural, its mesh depends on its neighbours. The Farm's model carries its growing beds as a child mesh, see "The Farm"). See "Modelos: maqueta de juguete". `model_scale` / `model_stretch` stay at 1 (they were for the old GLBs) |
 | `model_scale` / `model_stretch` | float / Vector3 | Scale a GLB made for 1x1 or 2x1 up to its 2x2 plot; spawn models only through `instantiate_model()` |
 | `repeat_placement` | bool | Keep the same building in hand after placing it (decorations and roads do anyway; the rest place one and leave placement mode) |
 | `max_health` | int | HP for storm and siege damage (`BuildingHealth`) |
@@ -73,9 +73,25 @@ bag, keeps the building "busy" and is lost to the Storm. A crop is the Farm's ow
 production cycle (`ProductionManager.get_cycle_seconds()` / `base_cycle_production()`),
 so it accumulates and stops like every producer, survives the Storm and runs offline.
 
-**Look.** 3D: `DieselpunkBuildingFactory._build_farm()` — furrowed plot, a crop
-(`CropField`, script `FarmField3D`) that grows with the cycle and turns golden when
-ripe, red barn, brass grain hopper and a windmill that turns while it works. 2D:
+**Look.** 3D (2026-10-14): the baked toy model `assets/models/toy/farm.tscn`
+(recipe `tools/toy_recipes/farm.gd`: lattice windpump, plank shed with green roof,
+hay bales, trough, fence) and, as a child `MeshInstance3D` "Crops", **the beds as a
+separate mesh** (`farm_crops_mesh.res`, built by `tools/toy_crops.gd`). That one mesh
+holds the three crops (lettuce rosettes, potato bushes with a flower, wheat tufts with
+an ear) and the windpump rotor, all drawn with ONE shared material
+(`toy_crops.tres` / `toy_crops.gdshader`). `FarmCrops3D` reads the services every
+0.25 s and only sets the **per-instance** shader parameters that changed: `growth`
+(`get_cycle_progress`; 1 when the harvest waits and the farm stopped), `crop` (index in
+`farm_crops`: the other two crops fold into their base), `ripe` (`has_stock`: full
+height, ripe colour and a soft pulse of the albedo — no glow, so it does not shine at
+night), `wind` (more in the ash and the Storm) and `rotor_angle` (every frame, only
+while the farm works). Sprout pale green → leaf → ripe colour per crop (lettuce heart
+light green, potato flowers cream and leaves olive, wheat gold). Lit like the rest of
+the toy (night and Storm darken it with the scene light). Cost: two draw calls for the
+building (solid + glow) plus one for the beds; ~980 + 2,200 triangles (only a third of
+the crops is ever rasterised). Without the shader (the placement ghost overrides the
+material) the beds show lettuces and the rotor, never the three crops on top of each
+other. 2D:
 `BuildingArt2D._farm()` — the same field with plants that grow and ripen
 (`opts.growth`, `opts.ripe`).
 
@@ -447,8 +463,9 @@ triangulos por edificio (el horneador los imprime).
 - **A la medida**: cada modelo sale ya del tamano del rectangulo que le deja su
   parcela (`LotPlan.model_rect`), centrado, base en y = 0 y frente hacia +Z; lo
   que una receta deje salirse se encoge en planta al hornear, asi que
-  `BuildingLot.fit_model()` no tiene que escalar. La granja (otra rama) se
-  hornea sin parcela, a 3,6 m.
+  `BuildingLot.fit_model()` no tiene que escalar. La granja tambien: a 3,0 m,
+  el rectangulo de su parcela (`building_lot_style["farm"]`, patio 0,25), con los
+  bancales en su malla aparte (ver "The Farm").
 - **Color**: la paleta (`ToyPalette`) esta escrita en sRGB y el horneado la pasa
   a lineal (los materiales leen el color por vertice como lineal, igual que el
   atrezo de `BuildingLot`); ademas oscurece lo que toca el suelo (AO de contacto).

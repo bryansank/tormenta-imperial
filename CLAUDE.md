@@ -265,8 +265,11 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 `crop_short` 1 min / 20, `crop_medium` 5 min / 125, `crop_long` 20 min / 600 — longer
 gives more per minute) and repeats by itself (`ProductionManager.plant_crop()` /
 `get_crop()`; changing restarts the crop). It is the Farm's production cycle, not a
-`ProcessManager` process. Procedural mesh with a growing `CropField` (`FarmField3D`) and
-a windmill; 2D drawing `BuildingArt2D._farm()` grows and ripens too.
+`ProcessManager` process. Baked toy model (`assets/models/toy/farm.tscn`: windpump,
+shed, fence) plus its beds as a separate mesh (`Crops`, `FarmCrops3D`): the three crops
+and the windpump rotor grow, ripen, sway and turn in the shared shader
+`toy_crops.gdshader` through per-instance parameters; 2D drawing `BuildingArt2D._farm()`
+grows and ripens too.
 
 **Market and Laboratory (2026-09-28):** trade and research are no longer entries of
 ☰ MENÚ. Each opens by tapping its building (`BuildingInfoPanel.SCREENS`: ABRIR
@@ -927,9 +930,9 @@ falls back to `DieselpunkBuildingFactory` when it is unset:
 | Source | Buildings |
 |---|---|
 | GLB (`model_scene`) | `barracks`, `foundry`, `fountain`, `garden`, `gold_mine`, `headquarters`, `house`, `refinery`, `statue`, `tower`, `warehouse` (11) |
-| Procedural (`DieselpunkBuildingFactory`) | `nucleo`, `road` (connectivity-aware), `market`, `laboratory`, `sawmill`, `farm` (6) |
+| Procedural (`DieselpunkBuildingFactory`) | `nucleo`, `road` (connectivity-aware), `market`, `laboratory`, `sawmill` (5) |
 
-The Market and the Laboratory have no model yet; the Farm is procedural by design (its crop field grows with the cycle, `FarmField3D`). The sawmill went procedural on
+The Market and the Laboratory have no model yet; the Farm is now the baked toy model with its growing beds (`FarmCrops3D`, docs/03). The sawmill went procedural on
 2026-10-04 (an open shed with the big saw in view, docs/03); its old GLB stays in
 `assets/models/buildings/sawmill/`, unused. GLBs made for 1x1 or 2x1 fill their 2x2
 plot through `model_scale` / `model_stretch`.
