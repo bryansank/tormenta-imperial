@@ -449,6 +449,33 @@ juega una persona):
 Tras unos cuantos Diezmos echados la escolta llega al tope (4 infantes y 2 cañones) sea
 cual sea la severidad: cuenta como la columna de severidad 4-5 de la tabla.
 
+### El barómetro y la Orden de la Regencia (1.1)
+
+Desde la Fundición, en calma, arriba se ve el **barómetro**: una barra que se llena y un
+margen, **"3–5 min"** (al final, "< 2 min"). Es cuánto falta para el Aviso, **nunca el
+minuto exacto**: el margen está movido al azar, así que la Tormenta no se puede
+cronometrar.
+
+Tocando el barómetro se abre la **Orden de la Regencia** (sale sola al empezar cada calma
+y se cierra con la X). Dice, con números:
+
+- **Cuánto se llevarán** si no los echas: el porcentaje de lo guardado y, desde la segunda
+  visita, el mínimo. Con rebajas se ve "18 % → 13 %". Si la Tormenta se retrasó por una
+  falsa alarma puede ser algo más (eso sigue sin decirse).
+- **Cuántos Tasadores** bajan.
+- **Tres formas de pagar menos:**
+  1. **Entregar** lo que pide la Regencia (botón ENTREGAR): un material que ya sabes hacer
+     (tablones, lingotes, vigas o combustible; madera u oro si aún no hay ninguno). Se lleva
+     un **15 % menos**. Un encargo por calma; crece un 20 % por tormenta pasada (tope ×2).
+  2. **Torres en pie**: la meta son 2 (−30 % de daño de la Tormenta, y cada una pone un
+     cañón en la defensa).
+  3. **Ganar una escaramuza** en la calma (−10 %). Aparece cuando la rama de escaramuzas
+     la conecta.
+
+Las rebajas se suman con un tope del **50 %**, y se acaban con cada Diezmo (pagado o
+echado). La siguiente calma trae una Orden nueva. ¿QUÉ HACER? añade debajo del paso la
+línea "Antes de la Tormenta: entrega …" mientras el encargo esté pendiente.
+
 > ⚠️ **Tres infantes solos pierden incluso contra la escolta más pequeña.** La guarnición
 > que recomienda el panel es de cinco, dos de ellas artillería.
 
