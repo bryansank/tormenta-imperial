@@ -14,7 +14,8 @@ const FIELDS := ["ui_device_profile", "ui_scale_pct", "ui_text_size", "ui_palett
 	"ui_high_contrast", "ui_panel_opacity", "ui_hud_hidden", "ui_layout",
 	"ui_helper_visible", "ui_touch_controls", "ui_grid_visible", "ui_touch_controls_opacity",
 	"ui_fps_cap", "fps_background", "fps_paused",
-	"profile_runs_finished", "profile_campaigns_won", "ui_graphics_quality", "saves_active_slot"]
+	"profile_runs_finished", "profile_campaigns_won", "ui_graphics_quality", "saves_active_slot",
+	"quality_detected", "quality_detected_reason", "fps_minimal_pc", "life_figure_cap_quality", "ui_combat_view"]
 
 static func park() -> Dictionary:
 	var snap := {"had": FileAccess.file_exists(PATH), "bytes": PackedByteArray(), "fields": {}}

@@ -177,6 +177,13 @@ signal unit_defended(unit_uid: int)
 signal unit_died(unit_uid: int, side: int)
 @warning_ignore("unused_signal")
 signal encounter_ended(victory: bool, turns_used: int)
+## El tablero se cerro (CombatManager.end_encounter): el parte ya se leyo. Lo
+## que esperaba a que terminara la pelea (los avisos de la colonia retenidos)
+## sale ahora, salvo que otro tablero se haya abierto en la misma llamada (la
+## oleada siguiente del asedio): por eso quien escucha vuelve a mirar
+## CombatManager.is_board_open().
+@warning_ignore("unused_signal")
+signal encounter_closed()
 @warning_ignore("unused_signal")
 signal draft_offered(options: Array)
 @warning_ignore("unused_signal")

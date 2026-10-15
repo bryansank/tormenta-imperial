@@ -543,6 +543,9 @@ func end_encounter() -> void:
 		# (_resolve_expedition publica su parte, BattleScreen recoloca vistas), y
 		# abrir la oleada en mitad de eso la esconderia nada mas abrirla.
 		call_deferred("_release_queued_audit_wave")
+	# Al final: si report_audit_wave abrio la oleada siguiente, quien escucha
+	# ve el tablero nuevo abierto y sigue esperando.
+	EventBus.encounter_closed.emit()
 
 ## Deja bajar la oleada que esperaba en la puerta, si sigue habiendo asedio y el
 ## tablero sigue libre. Si otro tablero se abrio entretanto, vuelve a esperar.

@@ -64,6 +64,12 @@ void fragment() {
 
 static var _sheets: Dictionary = {}
 static var _mats3d: Dictionary = {}
+## Si los quads y sprites nuevos nacen visibles. En calidad Minima, no: los pone
+## GraphicsQuality.apply_runtime(), que tambien apaga los ya creados (grupo
+## FX_GROUP). Solo la hoja animada: su contenedor lo sigue encendiendo y
+## apagando el aspecto del edificio.
+static var anim_visible := true
+const FX_GROUP := "building_fx_anim"
 static var _mats2d: Dictionary = {}
 static var _quads: Dictionary = {}
 
@@ -276,6 +282,8 @@ static func quad_3d(kind: String, size: float, variant: String = "") -> MeshInst
 	mi.material_override = material_3d(kind, variant)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.add_to_group("building_fx")
+	mi.add_to_group(FX_GROUP)
+	mi.visible = anim_visible
 	return mi
 
 ## Un Sprite2D animado de `size_px` de lado, recortado al fotograma 0.
@@ -287,4 +295,6 @@ static func sprite_2d(kind: String, size_px: float, variant: String = "") -> Spr
 	s.region_rect = Rect2(0, 0, FRAME_PX, FRAME_PX)
 	s.material = material_2d(kind, variant)
 	s.scale = Vector2.ONE * (size_px / float(FRAME_PX))
+	s.add_to_group(FX_GROUP)
+	s.visible = anim_visible
 	return s

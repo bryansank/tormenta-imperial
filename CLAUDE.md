@@ -91,7 +91,7 @@ holds a service's state of its own.
 | 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built) and which tips/helps were seen; state saved with the game (docs/23) |
 | 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
-| 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size). See `docs/21-interfaz-y-dispositivos.md` |
+| 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
 | 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`, `queue_colony_for_new_game()`). See `docs/06-progression-victory.md` §Governor rank |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
@@ -568,6 +568,31 @@ service drains it onto the `EventBus`; the UI only reads and calls.
   `CombatUnit.domain()` exposes it, no rule reads it; the 3D view places a piece by
   domain (`BoardLayout3D.DOMAIN_HEIGHT`: sea / air / space ready). Design for sea and
   air units: `docs/15-combat.md` §11.
+- **Type advantage (rule, 2026-10-13):** artillery > vehicle > infantry > artillery,
+  x1.5 / x0.75 on net damage (`GameConfig.combat_type_advantage`, `beats` +
+  multipliers) inside `CombatRules.damage()`, so player, `CombatAI` and
+  `AutoResolver` share it; `CombatRules.type_matchup()` gives +1/-1/0 and the AI uses
+  it as its 2nd target criterion. Siege impact and the pending
+  `final_audit_artillery_share` 3 -> 4 proposal: docs/17. The board shows a yellow HP
+  plate per piece, a blue ring on the acting unit, a red ring + crosshair on targets
+  and "¡Buen objetivo!" / "Mal objetivo"; decorative scenes land / beach / forest
+  (`BoardTerrain3D.SCENES`); its own x1/x2 button (animations follow
+  `GameConfig.combat_pace`).
+- **Two combat views (2026-10-14), same 8x8 underneath:** "front" (default: both
+  sides face to face, low side camera, no grid; cells drawn as jittered "free
+  spots" `BoardLayout3D.spot_offset`, moves lit as ground blobs, bigger pieces, a
+  dividing creek / tide line / hedge per scene; tap an enemy = close in and fire via
+  `scripts/combat_view/FrontOrders.gd`, plus AVANZAR) and "board" (the 3D 8x8).
+  Device preference `GameConfig.ui_combat_view` in `settings.cfg [interfaz]
+  combat_view`, chosen in Settings → Interfaz or with the `BoardViewToggle` header
+  button mid-fight (`Board3D.set_style`, applied once the animation queue is
+  empty). Minimal quality forces "board" (cheapest measured). Models, AI and
+  AutoResolver never know which view is on.
+- **Colony notices wait for the fight:** while `CombatManager.is_board_open()`,
+  NotificationPanel holds its toasts (log at once; category `combat` still shows),
+  ProgressPanel/RankPanel hold their toasts and HelperPanel goes quiet (except the
+  `encounter` tip); all resume on `EventBus.encounter_closed` (end of
+  `CombatManager.end_encounter()`).
 
 Three roads reach the same board: an expedition node (player picks the party in
 `SkirmishPanel`, which calls `CombatManager.launch_expedition()`; a win pays loot),
@@ -660,7 +685,15 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   `touch_controls_opacity`, `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
 - `[interfaz]`: device profile, UI scale, text size, palette, high contrast, panel
   opacity, hidden HUD elements, moved layout, `fps_cap` (`auto` / `30`…`120` /
-  `unlimited`: the FPS cap, 30 while paused and 10 without focus) — docs/21 §10;
+  `unlimited`: the FPS cap, 30 while paused and 10 without focus; "auto" is 30 on a
+  PC in Minimal) — docs/21 §10; `graphics_quality` (`auto` / `high` / `low` /
+  `minimal`) plus `quality_detected` / `quality_detected_reason` (the first-launch
+  detection, once) — docs/21 §12, docs/26 §7;
+- `user://renderer_override.cfg` (not settings.cfg): written only when a PC picks
+  Minimal quality; `project.godot` names it in
+  `application/config/project_settings_override`, so the next launch runs the
+  Mobile renderer. Any other quality deletes it. Only `GraphicsQuality.set_quality()`
+  touches it;
 - `[perfil]`: `runs_finished`, `campaigns_won` — the player profile that unlocks
   Gobernador (docs/20 §1b). Of the player on this device, never of the run.
 
@@ -788,6 +821,7 @@ tormenta-imperial/
 |   |   +-- BoardViewport3D.gd       # SubViewportContainer: own world, tap/click -> cell, wheel/pinch zoom, tooltip
 |   |   +-- UnitToy3D.gd             # One toy piece: model, HP bar, rings, tweened animations
 |   |   +-- CombatFx3D.gd, BoardTerrain3D.gd, BoardLayout3D.gd, UnitModels3D.gd, board_marks.gdshader
+|   |   +-- FrontOrders.gd           # Front view orders (approach cell, reachable targets, AVANZAR) -> the same move/attack calls
 |   +-- grid/
 |   |   +-- GridManager.gd           # Cell grid (size per game, saved); the island covers every cell
 |   |   +-- GridOverlayControl.gd    # Applies the grid toggle to the 3D overlay
@@ -803,6 +837,7 @@ tormenta-imperial/
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
+|   |   +-- GraphicsQuality.gd       # Static (preload): set_quality(), what Minimal turns off outside WorldLook, renderer override, detection rules
 |   |   +-- ColonyIdentity.gd        # Static: country flag pieces by rank, random names/flags, word filter
 |   |   +-- FloatingText.gd          # Static utility: animated 3D text labels
 |   |   +-- ErrorLog.gd, BugReport.gd  # Local error log (Logger, rotated) and the "Informar de un fallo" text
