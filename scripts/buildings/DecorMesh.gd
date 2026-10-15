@@ -49,7 +49,8 @@ static func mesh_for(id: String) -> Mesh:
 	return mesh
 
 ## Lo que pone el mapa (y la vista previa de CONSTRUIR): un MeshInstance3D con
-## la malla compartida.
+## la malla compartida y, en las que tienen mastil (mastil, letrero), el
+## Marker3D "FlagAnchor" de donde ColonyFlag3D cuelga la bandera del pais.
 static func instantiate(id: String) -> MeshInstance3D:
 	var mesh := mesh_for(id)
 	if mesh == null:
@@ -57,7 +58,63 @@ static func instantiate(id: String) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.name = "Toy_" + id
 	mi.mesh = mesh
+	add_flag_anchor(mi, id)
 	return mi
+
+## Cuelga de `model` el FlagAnchor de `id` si lo tiene (ver flag_anchor()).
+static func add_flag_anchor(model: Node3D, id: String) -> void:
+	var at: Variant = flag_anchor(id)
+	if at == null:
+		return
+	var marker := Marker3D.new()
+	marker.name = ANCHOR_NAME
+	marker.position = at
+	model.add_child(marker)
+
+const ANCHOR_NAME := "FlagAnchor"
+const BAKED_SCENE := "res://assets/models/toy/%s.tscn"
+## Lo alto del mastil de la version procedural (marco de la malla).
+const PROCEDURAL_FLAG := {"flagpole": Vector3(0, 3.6, 0), "colony_sign": Vector3(0.7, 2.25, 0)}
+## id -> Vector3 o null (cacheado: se lee una vez por tipo).
+static var _anchor_cache := {}
+
+## Donde va la bandera del pais en la malla de `id` (su marco), o null. Con la
+## malla horneada, el FlagAnchor que dejo el horneado en `<id>.tscn` (se lee del
+## SceneState, sin instanciar la escena); sin hornear, el de la procedural.
+static func flag_anchor(id: String) -> Variant:
+	if _anchor_cache.has(id):
+		return _anchor_cache[id]
+	var at: Variant = null
+	# Solo las que tienen mastil: las demas no cargan su escena para nada.
+	if not PROCEDURAL_FLAG.has(id):
+		at = null
+	elif ResourceLoader.exists(BAKED % id):
+		at = _baked_anchor(id)
+	else:
+		at = PROCEDURAL_FLAG.get(id, null)
+	_anchor_cache[id] = at
+	return at
+
+static func _baked_anchor(id: String) -> Variant:
+	var path := BAKED_SCENE % id
+	if not ResourceLoader.exists(path):
+		return null
+	var scene := load(path) as PackedScene
+	if scene == null:
+		return null
+	var state := scene.get_state()
+	for i in state.get_node_count():
+		if state.get_node_name(i) != ANCHOR_NAME:
+			continue
+		# El horneado lo guarda como `transform` (Marker3D.position escrito asi).
+		for k in state.get_node_property_count(i):
+			var prop := state.get_node_property_name(i, k)
+			if prop == "transform":
+				return (state.get_node_property_value(i, k) as Transform3D).origin
+			if prop == "position":
+				return state.get_node_property_value(i, k)
+		return Vector3.ZERO
+	return null
 
 ## La version procedural, sin cache (las pruebas la miden).
 static func procedural(id: String) -> ArrayMesh:
@@ -111,13 +168,8 @@ static func flame(mk, base: Vector3, r: float, h: float) -> void:
 	mk.cyl(base, r, h, C(S.GLOW, 0.05), 5, Vector3.UP, 0.0, true)
 	mk.cyl(base + Vector3(0.05, 0, -0.04), r * 0.6, h * 1.35, Palette.color(S.GLOW).lightened(0.25), 4, Vector3.UP, 0.0, true)
 
-## Bandera de serie de la colonia (COLONY_DEFAULT_SPEC: franjas laton, marfil y
-## carmesi), horneada: la del pais elegido necesita ColonyFlag3D (pendiente).
-static func flag_cloth(mk, top: Vector3, w: float, h: float) -> void:
-	var cols := [C(S.BRASS), C(S.CREAM), C(S.RED, -0.05)]
-	for i in 3:
-		var y := top.y - h * (float(i) + 0.5) / 3.0
-		mk.box(Vector3(top.x + w * 0.5, y, top.z), Vector3(w, h / 3.0, 0.05), cols[i])
+# La bandera de mastil y letrero ya no se hornea: es la del pais, la cuelga
+# ColonyFlag3D del FlagAnchor (feat/decoraciones-remates).
 
 # ── Las diez ──────────────────────────────────────────────────────────
 
@@ -191,8 +243,8 @@ static func _flower_planter(mk) -> void:
 		flowers(mk, base + Vector3(0, h + 0.32, 0), r * 0.55, 3 + (i % 2), i)
 		i += 1
 
-## Letrero de la colonia: dos postes, el tablero con su marco de laton y la
-## bandera de la colonia encima.
+## Letrero de la colonia: dos postes, el tablero con su marco de laton y un
+## mastil corto (la bandera del pais la cuelga ColonyFlag3D, PROCEDURAL_FLAG).
 static func _colony_sign(mk) -> void:
 	var post := C(S.WOOD, -0.12)
 	for sx in [-0.7, 0.7]:
@@ -201,12 +253,12 @@ static func _colony_sign(mk) -> void:
 	mk.box(Vector3(0, 1.0, 0.1), Vector3(1.55, 0.5, 0.04), C(S.CREAM))
 	mk.box(Vector3(0, 1.0, 0.13), Vector3(1.1, 0.1, 0.02), C(S.IRON))
 	mk.cyl(Vector3(0.7, 1.35, 0), 0.04, 0.9, C(S.IRON, 0.05), 4)
-	flag_cloth(mk, Vector3(0.72, 2.2, 0), 0.6, 0.4)
 	mk.ball(Vector3(-0.5, 0.18, 0.45), 0.24, C(S.GREEN, -0.05))
 
 ## Carro de heno: carro de madera con sus dos ruedas, el heno amontonado
 ## (lo exagerado), dos pacas y un saco al lado.
-static func _hay_cart(mk) -> void:
+## `sack` = false: sin el saco (la receta horneada pone el de KayKit).
+static func _hay_cart(mk, sack := true) -> void:
 	var wood := C(S.WOOD, -0.05)
 	block(mk, Vector3(-0.2, 0.35, 0), Vector3(1.3, 0.35, 0.9), wood)
 	for sz in [-0.4, 0.4]:
@@ -218,7 +270,8 @@ static func _hay_cart(mk) -> void:
 	mk.ball(Vector3(-0.35, 1.05, 0.05), 0.35, C(S.BRASS, 0.04), Vector3(1.1, 0.6, 1.0))
 	hay_bale(mk, Vector3(0.45, 0, -0.95), Vector3(0.8, 0.4, 0.5), 10.0)
 	hay_bale(mk, Vector3(0.95, 0, 0.75), Vector3(0.8, 0.4, 0.5), -25.0)
-	mk.ball(Vector3(-0.9, 0.22, 0.85), 0.25, C(S.CREAM, -0.12), Vector3(0.9, 1.0, 0.8))
+	if sack:
+		mk.ball(Vector3(-0.9, 0.22, 0.85), 0.25, C(S.CREAM, -0.12), Vector3(0.9, 1.0, 0.8))
 
 ## Hoguera: corro de piedras, troncos en tienda y la llama encendida (lo
 ## exagerado, brilla de noche sin luz real), con dos troncos para sentarse.
@@ -234,14 +287,13 @@ static func _bonfire(mk) -> void:
 	for sz in [-1.0, 1.0]:
 		mk.cyl(Vector3(-0.55, 0.16, sz * 1.15), 0.16, 1.1, C(S.WOOD, -0.08), 6, Vector3.RIGHT, -1.0, false, true)
 
-## Mastil con bandera: peana de dos escalones, mastil alto (lo exagerado) con
-## remate de laton y la bandera de la colonia.
+## Mastil con bandera: peana de dos escalones y mastil alto (lo exagerado) con
+## remate de laton; la bandera del pais la cuelga ColonyFlag3D (PROCEDURAL_FLAG).
 static func _flagpole(mk) -> void:
 	block(mk, Vector3.ZERO, Vector3(1.0, 0.2, 1.0), C(S.STONE, -0.08))
 	block(mk, Vector3(0, 0.2, 0), Vector3(0.6, 0.2, 0.6), C(S.STONE, 0.04))
 	mk.cyl(Vector3(0, 0.4, 0), 0.07, 3.2, C(S.IRON, 0.08), 6, Vector3.UP, 0.05)
 	mk.cyl(Vector3(0, 3.6, 0), 0.1, 0.18, C(S.BRASS), 6, Vector3.UP, 0.0)
-	flag_cloth(mk, Vector3(0.05, 3.45, 0), 1.3, 0.85)
 
 ## Palmeras: corro de arena y dos palmeras, una recta y otra inclinada, con
 ## las hojas caidas.
@@ -251,7 +303,8 @@ static func _palm_trees(mk) -> void:
 	_palm(mk, Vector3(0.55, 0.05, 0.35), Vector3(0.35, 1, 0.2).normalized(), 1.9)
 	mk.box(Vector3(0.1, 0.12, 0.8), Vector3(0.25, 0.14, 0.22), C(S.STONE, -0.1))
 
-static func _palm(mk, base: Vector3, dir: Vector3, h: float) -> void:
+## `nuts` = false: sin el racimo de cocos (la receta horneada, por presupuesto).
+static func _palm(mk, base: Vector3, dir: Vector3, h: float, nuts := true) -> void:
 	var trunk := C(S.WOOD, -0.02)
 	var seg := h / 3.0
 	var p := base
@@ -266,4 +319,5 @@ static func _palm(mk, base: Vector3, dir: Vector3, h: float) -> void:
 		var out := Vector3(cos(a), 0, sin(a))
 		mk.beam(p, p + out * 0.6 + Vector3(0, 0.15, 0), 0.12, leaf)
 		mk.beam(p + out * 0.6 + Vector3(0, 0.15, 0), p + out * 0.95 - Vector3(0, 0.3, 0), 0.1, leaf.darkened(0.08))
-	mk.ball(p - Vector3(0, 0.08, 0), 0.13, C(S.WOOD, -0.2))
+	if nuts:
+		mk.ball(p - Vector3(0, 0.08, 0), 0.13, C(S.WOOD, -0.2))

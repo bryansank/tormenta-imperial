@@ -303,6 +303,8 @@ func try_place(cell: Vector2i) -> Node:
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return null
 	var blocked := Rules.purchase_block_detail(_current_data)
 	if blocked != "":
@@ -390,6 +392,8 @@ func try_move(cell: Vector2i) -> bool:
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return false
 	# Llevado a donde no llega la red: su carretera se tiende (y se paga) igual
 	# que al colocarlo.
@@ -641,6 +645,8 @@ func assist_explain(origin: Vector2i) -> void:
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 	elif verdict["reason"] == "road":
 		_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+	elif verdict["reason"] == Rules.SHORE_REASON:
+		_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 
 func assist_feedback(text: String) -> void:
 	_show_feedback(text)

@@ -1,5 +1,6 @@
 extends Node2D
-## La bandera del pais en la vista 2D, sobre el Nucleo y el Cuartel General.
+## La bandera del pais en la vista 2D, sobre el Nucleo, el Cuartel General y
+## los dibujos con mastil (el mastil y el letrero de la colonia).
 ## Se dibuja con la textura cacheada de ColonyFlag y solo se repinta al oir
 ## colony_identity_changed o cuando su edificio cambia de giro o de nivel
 ## (`set_mount`): nada por frame. En el Cuartel General no se ve mientras esta
