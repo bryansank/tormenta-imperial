@@ -31,7 +31,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 4. Touch: one finger grabs the terrain, two-finger pinch to zoom and twist to rotate (3D only); tap to aim a building, tap the ghost / ✓ to build (docs/21 §9)
 5. A fresh game: ☰ MENÚ → Menú principal → Nueva partida (mode picker; today it only offers Campaña). It never deletes the current game: it goes to a new slot (up to 5, see "Save/Load System"). Deleting `user://partidas/` starts from scratch
 6. **2D view:** Settings → Map view, or `godot --path . -- --view=2d`. Same services, UI and save; only the world view differs (`scenes/main/Main2D.tscn`, `scripts/view2d/`). See `docs/18-vista-2d.md`
-7. **User args** (after `--`): `--view=2d|3d`, `--no-title` (skip the title menu, used by probes), `--dev` / `--no-dev` (force `dev_mode`, see "Dev Mode")
+7. **User args** (after `--`): `--view=2d|3d`, `--no-title` (skip the title menu, used by probes), `--multi` (allow a second copy, see 9), `--dev` / `--no-dev` (force `dev_mode`, see "Dev Mode")
 8. **Your save lives in the editor's user dir** (`%APPDATA%\Godot\app_userdata\Tormenta Imperial`). Anything that plays or writes saves outside a normal play session (probes, experiments, a second agent) needs a git-ignored `override.cfg` at the project root with its own dir, deleted afterwards:
    ```ini
    [application]
@@ -39,6 +39,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
    config/custom_user_dir_name="TI_something"
    ```
    On Windows that dir is `%APPDATA%\TI_something`. Tests get this automatically from `tools/run_tests.sh`
+9. **One copy at a time (exports only):** an exported desktop build refuses a second copy over the same user dir (`scripts/services/InstanceGuard.gd`, called from `GameManager._ready()` before anything loads). It keeps `user://instancia.lock` (PID, version, exe, time) and checks the PID with `tasklist`: same version open → short notice and quit; another version open → asks to close it (`OS.kill`) and carry on. Not applied in the editor, headless, with `-- --no-title` / `-- --multi`, or on Android/web (Android is single-instance already). Detail in `docs/19-exportar.md` §7
 
 ---
 

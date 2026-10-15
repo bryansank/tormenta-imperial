@@ -240,6 +240,46 @@ en un issue. No se envía nada: el juego no usa la red para esto.
   pasan a `~`, y el nombre de la colonia (el del país del jugador) a `<colonia>`.
   Tests: `tests/support/test_bug_report.gd`.
 
+### Una sola copia abierta (`instancia.lock`)
+
+Dos juegos abiertos sobre la misma carpeta se pisan la partida (los dos
+autoguardan; gana el último que escribe). Por eso el exportado de escritorio no
+deja abrir una segunda copia (`scripts/services/InstanceGuard.gd`, lo llama
+`GameManager._ready()` antes de cargar nada):
+
+- Al arrancar se lee `user://instancia.lock` (en el exportado de Windows,
+  `%APPDATA%\TormentaImperial\instancia.lock`): JSON con `pid`, `version`
+  (`application/config/version`), `exe` y `time`. Se mira si ese PID sigue vivo y
+  es el juego con `tasklist /FI "PID eq <pid>" /FO CSV /NH` (nombre del ejecutable
+  igual al del bloqueo; en Linux/macOS, `ps -p`). Un bloqueo de un proceso muerto
+  (un cierre a lo bruto) o de un PID que ahora es otro programa se ignora y se
+  reescribe.
+- **Misma versión abierta:** aviso «Tormenta Imperial ya está abierto», se intenta
+  traer al frente la otra ventana (`WScript.Shell.AppActivate(pid)` con PowerShell;
+  si Windows no deja robar el foco, solo parpadea en la barra de tareas) y esta se
+  cierra sola a los 4 s o con Cerrar. No carga ni escribe nada.
+- **Otra versión abierta:** pregunta «Está abierta la versión X. ¿Cerrarla y abrir
+  esta (Y)?». SÍ: `OS.kill(pid)`, se espera hasta 5 s a que muera, se toma el
+  bloqueo y arranca la partida (lo que la otra no hubiera guardado se pierde; es
+  un cierre a lo bruto). NO: sale sin tocar nada.
+- **Versiones sin bloqueo** (las de antes de esto) y **dos copias lanzadas a la vez**
+  (doble clic impaciente): si no hay bloqueo vivo pero hay otros procesos con el
+  mismo nombre de ejecutable, se reclama el bloqueo y se vuelve a mirar tres veces
+  cada 3 s (pantalla «Comprobando si hay otra copia abierta...»). Si la otra era
+  una gemela, una de las dos ve el bloqueo de la otra, avisa y sale, y la otra
+  arranca. Si las copias sueltas siguen, se pregunta como con otra versión
+  («Está abierta la versión anterior»). Una copia de otra versión con **otro
+  nombre de ejecutable** y sin bloqueo no se detecta.
+- El bloqueo se borra al salir (cerrar la ventana, `NOTIFICATION_WM_CLOSE_REQUEST`,
+  o Salir del menú: `GameManager._exit_tree()`), y solo si es de este proceso.
+- **No se aplica** en el editor (F5, tests, sondas), sin ventana (`--headless`), con
+  `-- --no-title` o `-- --multi`, ni en móvil o web: cada worktree tiene su carpeta de
+  usuario y los agentes abren varios Godot a la vez. **Android** ya da una sola
+  instancia por app (el `launchMode` de la actividad de Godot no abre una segunda: tocar el icono con el
+  juego abierto lo trae al frente), así que no hace falta.
+- Tests de la parte pura (decidir según bloqueo, PID vivo y versión; leer el
+  bloqueo y la salida de `tasklist`): `tests/save/test_instance_guard.gd`.
+
 ---
 
 ## 8. Distribución
