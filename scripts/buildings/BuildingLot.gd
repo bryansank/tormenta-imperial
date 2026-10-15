@@ -295,23 +295,54 @@ static func _ground_mesh(footprint: Vector2i, lot: Vector2) -> PlaneMesh:
 	_ground_meshes[key] = plane
 	return plane
 
+const GROUND_SHADER := preload("res://scripts/buildings/lot_ground.gdshader")
+## Cuanto le llegan la Tormenta y la noche a cada suelo: el cesped como la
+## hierba de la isla; losas, tierra y chapa algo menos (son "de juguete").
+const GROUND_GRADE := {"grass": 1.0, "dirt": 0.8}
+const GROUND_GRADE_DEFAULT := 0.6
+
+static var _ground_texs: Dictionary = {}
+
 ## Material del suelo `kind` ("slabs", "dirt", "plate", "grass", con ":scorched"
-## en ruina) para una huella: la textura se repite una vez por casilla.
-static func ground_material(kind: String, footprint: Vector2i) -> StandardMaterial3D:
+## en ruina) para una huella: la textura se repite una vez por casilla. Lleva
+## la Tormenta y la noche de la isla (lot_ground.gdshader, storm_grade): nace
+## con el peso que tenga StormSky ahora y StormSky lo mueve con la isla
+## (set_ground_param). Una textura por tipo de suelo para todo el mapa.
+static func ground_material(kind: String, footprint: Vector2i) -> ShaderMaterial:
 	var key := "%s|%d,%d" % [kind, footprint.x, footprint.y]
 	if _ground_mats.has(key):
 		return _ground_mats[key]
 	var base := kind.get_slice(":", 0)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = ImageTexture.create_from_image(ground_image(base))
-	mat.uv1_scale = Vector3(footprint.x, footprint.y, 1.0)
-	mat.roughness = 0.6 if base == "plate" else 0.92
-	mat.metallic = 0.0
-	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	if not _ground_texs.has(base):
+		_ground_texs[base] = ImageTexture.create_from_image(ground_image(base))
+	var mat := ShaderMaterial.new()
+	mat.shader = GROUND_SHADER
+	mat.set_shader_parameter("albedo_tex", _ground_texs[base])
+	mat.set_shader_parameter("uv_scale", Vector2(footprint.x, footprint.y))
+	mat.set_shader_parameter("roughness_val", 0.6 if base == "plate" else 0.92)
+	mat.set_shader_parameter("grade_strength", float(GROUND_GRADE.get(base, GROUND_GRADE_DEFAULT)))
 	if kind.ends_with(":scorched"):
-		mat.albedo_color = Color(0.42, 0.38, 0.35)
+		mat.set_shader_parameter("tint", Color(0.42, 0.38, 0.35))
+	var sky := _storm_sky()
+	if sky != null:
+		mat.set_shader_parameter("storm_weight", float(sky.get_island_weight()))
+		mat.set_shader_parameter("night_weight", float(sky.get_island_night_weight()))
 	_ground_mats[key] = mat
 	return mat
+
+## Pone `param` ("storm_weight" o "night_weight") en todos los suelos de
+## parcela. Lo llama StormSky junto con los materiales de la isla: solo cuando
+## cambia el peso, nunca por frame.
+static func set_ground_param(param: String, value: float) -> void:
+	for key in _ground_mats:
+		(_ground_mats[key] as ShaderMaterial).set_shader_parameter(param, value)
+
+static func _storm_sky() -> Node:
+	var loop := Engine.get_main_loop() as SceneTree
+	if loop == null or loop.root == null:
+		return null
+	var sky := loop.root.get_node_or_null("StormSky")
+	return sky if sky != null and sky.has_method("get_island_weight") else null
 
 ## La textura de una casilla de suelo, 64x64, generada aqui (sin assets).
 static func ground_image(kind: String) -> Image:

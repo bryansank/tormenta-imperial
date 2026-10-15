@@ -69,6 +69,7 @@ func _on_stock_changed(node: Node, _stock: Dictionary) -> void:
 func refresh() -> void:
 	if _building == null or not is_instance_valid(_building) or _label == null:
 		visible = false
+		set_process(false)
 		return
 	var stock: Dictionary = ProductionManager.get_stock(_building)
 	var total := 0
@@ -80,6 +81,8 @@ func refresh() -> void:
 			top_amount = int(stock[res_name])
 			top_res = String(res_name)
 	visible = total > 0
+	# Sin nada que recoger no se mece: ni un _process por productor parado.
+	set_process(visible)
 	if not visible:
 		return
 	_full = ProductionManager.is_full(_building)

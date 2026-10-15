@@ -168,20 +168,41 @@ func _apply_construction_visual(node: Node) -> void:
 ## El nivel se ve (2026-09-28): el modelo crece un 8% por nivel y lleva una
 ## placa "II" / "III" encima. Antes solo crecia la malla procedural; los GLB
 ## (casi todos) no cambiaban. En 2D lo pinta el propio edificio (galones).
+##
+## Siempre el MISMO modelo (2026-10-14): el que conoce el aspecto del edificio
+## (LookVisual.get_model()), y si no hay aspecto, el primer hijo que no sea
+## rotulo, barra, placa ni del grupo "building_fx" (parcela, obra, andamio,
+## icono). Crece sin moverse de su sitio en planta y lleva un remate de laton
+## por nivel (LevelTrim), horneado una vez por medida.
 static func apply_level_visual(node: Node, level: int) -> void:
 	if not (node is Node3D):
 		return
-	var model: Node = null
-	for child in node.get_children():
-		if child is Node3D and not (child is Label3D) and not (child is Sprite3D) \
-				and child.name != "ConstructionBar" and child.name != "LevelPlate":
-			model = child
-			break
+	var model: Node3D = null
+	var look := node.get_node_or_null("LookVisual")
+	if look != null and look.has_method("get_model"):
+		model = look.get_model() as Node3D
+	if model == null:
+		for child in node.get_children():
+			if child is Node3D and not (child is Label3D) and not (child is Sprite3D) \
+					and not child.is_in_group("building_fx") \
+					and child.name != "ConstructionBar" and child.name != "LevelPlate" \
+					and child.name != "LookVisual" and child.name != "ColonyFlag":
+				model = child
+				break
 	if model != null:
 		if not model.has_meta("base_scale"):
-			model.set_meta("base_scale", (model as Node3D).scale)
+			model.set_meta("base_scale", model.scale)
+			model.set_meta("base_pos", model.position)
 		var base: Vector3 = model.get_meta("base_scale")
-		(model as Node3D).scale = base * (1.0 + 0.08 * float(maxi(0, level - 1)))
+		var f := 1.0 + 0.08 * float(maxi(0, level - 1))
+		model.scale = base * f
+		# Crecer alrededor del centro de la parcela, no del origen del modelo: el
+		# desplazamiento de encaje (fit_model) crece con el, la base sigue en y = 0.
+		if not model.has_meta("look_base_pos"):
+			var p0: Vector3 = model.get_meta("base_pos", model.position)
+			model.position = Vector3(p0.x * f, p0.y, p0.z * f)
+		var trim: Script = load("res://scripts/buildings/LevelTrim.gd")
+		trim.call("apply", model, level)
 	var plate := node.get_node_or_null("LevelPlate") as Label3D
 	if level <= 1:
 		if plate != null:

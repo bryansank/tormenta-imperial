@@ -65,6 +65,7 @@ void fragment() {
 static var _sheets: Dictionary = {}
 static var _mats3d: Dictionary = {}
 static var _mats2d: Dictionary = {}
+static var _quads: Dictionary = {}
 
 ## Tinte de cada variante: el humo de una ruina es mas negro que el de una
 ## chimenea en marcha. Paleta de DieselpunkBuildingFactory.
@@ -200,14 +201,40 @@ static func _additive(kind: String) -> bool:
 static func _blend(kind: String) -> String:
 	return "blend_add" if _additive(kind) else "blend_mix"
 
+## Dos shaders 3D para todos los efectos (mezcla y suma), compartidos: cada
+## material nuevo ya no compila el suyo. Los calienta warm_up() al cargar.
+static var _shaders3d: Dictionary = {}
+
+static func _shader_3d(additive: bool) -> Shader:
+	if not _shaders3d.has(additive):
+		var shader := Shader.new()
+		shader.code = _SPATIAL % [", blend_add" if additive else ""]
+		_shaders3d[additive] = shader
+	return _shaders3d[additive]
+
+## Los efectos 3D que pueden salir en partida: [tipo, variante].
+const WARM_KINDS := [["smoke", ""], ["dust", ""], ["glow", ""], ["sparks", ""],
+	["smoke", "ruin"], ["dust", "site"]]
+
+## Crea ya todos los materiales 3D (hojas de sprites incluidas) y cuelga de
+## `parent` un quad diminuto de cada uno: el motor compila sus shaders y
+## pipelines al dibujarlos una vez, en la carga, y no la primera vez que una
+## fundicion echa humo. Devuelve los quads (quien llama los libera).
+static func warm_up(parent: Node3D) -> Array:
+	var out: Array = []
+	for pair in WARM_KINDS:
+		var mi := quad_3d(String(pair[0]), 0.01, String(pair[1]))
+		mi.remove_from_group("building_fx")
+		parent.add_child(mi)
+		out.append(mi)
+	return out
+
 static func material_3d(kind: String, variant: String = "") -> ShaderMaterial:
 	var key := kind + ":" + variant
 	if _mats3d.has(key):
 		return _mats3d[key]
-	var shader := Shader.new()
-	shader.code = _SPATIAL % [", blend_add" if _additive(kind) else ""]
 	var mat := ShaderMaterial.new()
-	mat.shader = shader
+	mat.shader = _shader_3d(_additive(kind))
 	mat.set_shader_parameter("sheet", sheet(kind))
 	_set_common(mat, kind, variant)
 	_mats3d[key] = mat
@@ -236,8 +263,13 @@ static func _set_common(mat: ShaderMaterial, kind: String, variant: String) -> v
 ## Un quad 3D animado de `size` unidades. En el grupo "building_fx": ni el
 ## hollin de BuildingHealth ni la medida de la cima lo tocan.
 static func quad_3d(kind: String, size: float, variant: String = "") -> MeshInstance3D:
-	var quad := QuadMesh.new()
-	quad.size = Vector2(size, size)
+	# Un QuadMesh por medida para todo el mapa (antes, uno por efecto).
+	var qkey := snappedf(size, 0.001)
+	if not _quads.has(qkey):
+		var q := QuadMesh.new()
+		q.size = Vector2(size, size)
+		_quads[qkey] = q
+	var quad: QuadMesh = _quads[qkey]
 	var mi := MeshInstance3D.new()
 	mi.name = "Fx_" + kind
 	mi.mesh = quad
