@@ -1224,6 +1224,17 @@ const _STRINGS := {
 		"LBL_SAVE_BROKEN": "Dañada",
 		"LBL_SAVE_TIME_TIP": "Tiempo jugado",
 		"LBL_SAVE_DATE_TIP": "Última vez",
+		# Lotes y el Núcleo como taller de todo (fix/partidas-bryan, 2026-10-14)
+		"BTN_BATCH_N": "×%d",
+		"BTN_BATCH_MAX": "MÁX ×%d",
+		"LBL_BATCH_TIP": "Pagas %d veces ahora y se hacen una detrás de otra.",
+		"LBL_BATCH_MAX_TIP": "Todas las que puedes pagar y guardar ahora (como mucho %d).",
+		"LBL_BATCH_CANT": "No te alcanza para tantas.",
+		"FMT_PROGRESS_BATCH": "%s · %d de %d · %s",
+		"LBL_CORE_OWN": "Del Núcleo",
+		"LBL_CORE_WORKSHOPS": "Como en los talleres · tarda más",
+		"LBL_CORE_BY_HAND": "Sacar a mano · tarda más",
+		"LBL_CORE_FROM": "Lo mismo que en: %s. Aquí tarda más.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -2404,6 +2415,17 @@ const _STRINGS := {
 		"LBL_SAVE_BROKEN": "Damaged",
 		"LBL_SAVE_TIME_TIP": "Time played",
 		"LBL_SAVE_DATE_TIP": "Last played",
+		# Batches and the Core as every workshop (fix/partidas-bryan, 2026-10-14)
+		"BTN_BATCH_N": "×%d",
+		"BTN_BATCH_MAX": "MAX ×%d",
+		"LBL_BATCH_TIP": "You pay for %d now and they are made one after another.",
+		"LBL_BATCH_MAX_TIP": "As many as you can pay for and store now (at most %d).",
+		"LBL_BATCH_CANT": "You can't afford that many.",
+		"FMT_PROGRESS_BATCH": "%s · %d of %d · %s",
+		"LBL_CORE_OWN": "From the Core",
+		"LBL_CORE_WORKSHOPS": "Like the workshops · takes longer",
+		"LBL_CORE_BY_HAND": "Dig by hand · takes longer",
+		"LBL_CORE_FROM": "Same as at: %s. Takes longer here.",
 	},
 }
 
