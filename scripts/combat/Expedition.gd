@@ -10,7 +10,9 @@ class_name Expedition
 ##
 ## Three design rules hold this together, and none of them is an accident:
 ##   * **Attrition.** Nothing heals between encounters. HP only comes back at the
-##     base, when the expedition is over (FR-011).
+##     base, when the expedition is over (FR-011). Excepcion (2026-10-14): la
+##     expedicion corta de tres combates cura un 30 % entre nodos
+##     (heal_between_pct, doc 21 §3.3).
 ##   * **Permadeath.** A unit that falls stays in `party` as a casualty and never
 ##     fights again in this run (FR-010).
 ##   * **No meta-progression.** Draft picks live and die with the expedition
@@ -48,6 +50,16 @@ var state: int = State.ACTIVE
 ## guardado porque el mapa no se guarda: sin ella, recargar a mitad levantaria
 ## el mapa entero de la semilla.
 var first_sortie: bool = false
+## De que salida es este mapa (doc 21 §3, 2026-10-14): "raid" (incursion de un
+## combate), "expedition" (expedicion corta de tres) o "" (la expedicion de
+## siempre, la de los guardados viejos, los tests y las sondas con semilla).
+var kind: String = ""
+## La oferta del tablon de la que sale el mapa: {kind, flavor, seed, era,
+## blueprint, id}. Viaja en el guardado porque el mapa no se guarda.
+var offer: Dictionary = {}
+## Lo que solo se consigue fuera, acumulado nodo a nodo: "parts", "colonists",
+## "tithe_pct" y la lista "blueprints". Se liquida al volver, como `rewards`.
+var loot: Dictionary = {}
 
 ## uid counter, unique inside this expedition and shared with the enemies it
 ## fields, so no two units on a board can collide (data-model, CombatUnit.uid).
@@ -85,12 +97,44 @@ func from_army(party_counts: Dictionary) -> Array:
 			party.append(unit)
 	return party
 
-## El mapa de esta expedicion: el de la semilla, o el nodo unico de la primera
-## escaramuza. Lo usan la creacion y la carga, que tienen que dar el mismo.
+## El mapa de esta expedicion: el de la semilla, el nodo unico de la primera
+## escaramuza, o el de la oferta del tablon (incursion o expedicion corta). Lo
+## usan la creacion y la carga, que tienen que dar el mismo.
 func _build_map() -> Array:
 	if first_sortie:
 		return Generator.first_sortie_map()
+	if kind != "" and not offer.is_empty():
+		var built: Array = Generator.sortie_map(offer)
+		if not built.is_empty():
+			return built
 	return Generator.generate_map(Generator.make_rng(seed_value), Vector2i.ZERO, Vector2i.ZERO, era)
+
+## Una salida del tablon: el mapa sale entero de la oferta, la misma que el
+## jugador vio antes de lanzar (doc 21 §3.3).
+static func create_sortie(p_id: int, p_offer: Dictionary, party_counts: Dictionary, p_morale: float) -> Expedition:
+	var run := Expedition.new()
+	run.id = p_id
+	run.offer = p_offer.duplicate(true)
+	run.kind = String(p_offer.get("kind", ""))
+	run.seed_value = int(p_offer.get("seed", 1))
+	run.era = maxi(1, int(p_offer.get("era", 1)))
+	run.morale_snapshot = p_morale
+	run.map = run._build_map()
+	run.current_node = 0
+	run.state = State.ACTIVE
+	run.from_army(party_counts)
+	return run
+
+## Fraccion de vida que recupera la columna al pasar de un combate al siguiente.
+## Solo la expedicion corta: la de siempre sigue sin curar (FR-011).
+func heal_between_pct() -> float:
+	if kind == Generator.KIND_EXPEDITION:
+		return maxf(0.0, GameConfig.combat_expedition_heal_between)
+	return 0.0
+
+## Es una incursion: un solo combate (lo que permite "resolver solo").
+func is_raid() -> bool:
+	return kind == Generator.KIND_RAID
 
 func next_uid() -> int:
 	var uid: int = _next_uid
@@ -213,10 +257,22 @@ func mark_cleared() -> Array:
 		return []
 	node["cleared"] = true
 	add_rewards(Generator.node_rewards(node, era))
+	Generator.add_loot(loot, node.get("loot", {}))
 	var events: Array = [{"e": "node_cleared", "index": current_node, "is_boss": at_boss()}]
 	if at_end():
 		state = State.COMPLETED
 		events.append({"e": "expedition_ended", "result": RESULT_WON})
+		return events
+	# Entre combates de una expedicion corta, la columna se cura un poco.
+	var pct: float = heal_between_pct()
+	if pct > 0.0:
+		var healed: int = 0
+		for unit in living_party():
+			if unit.hp < unit.max_hp:
+				unit.heal_percent(pct)
+				healed += 1
+		if healed > 0:
+			events.append({"e": "party_healed", "pct": pct, "units": healed})
 	return events
 
 ## The party is gone. There is no retry: the run ends where it fell.
@@ -278,6 +334,7 @@ func result_summary() -> Dictionary:
 	return {
 		"result": result_code(),
 		"rewards": rewards.duplicate(),
+		"loot": loot.duplicate(true),
 		"casualties": _tally(casualties()),
 		"survivors": _tally(living_party()),
 		"nodes_cleared": nodes_cleared(),
@@ -315,6 +372,9 @@ func to_dict() -> Dictionary:
 		"rewards": rewards.duplicate(),
 		"cleared": cleared_indices(),
 		"first_sortie": first_sortie,
+		"kind": kind,
+		"offer": offer.duplicate(true),
+		"loot": loot.duplicate(true),
 	}
 
 ## Rebuilds a run from a save. `default_era` covers saves written before `era`
@@ -340,6 +400,15 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> Expedition:
 	# Sin la clave (guardado anterior) es una expedicion normal.
 	var first: Variant = data.get("first_sortie", false)
 	run.first_sortie = first is bool and first
+	# Sin `kind` (guardado anterior a las salidas nuevas) es la expedicion de
+	# siempre. La oferta trae lo necesario para rehacer el mapa.
+	var saved_offer: Variant = data.get("offer", {})
+	if saved_offer is Dictionary:
+		run.offer = (saved_offer as Dictionary).duplicate(true)
+	run.kind = String(data.get("kind", "")) if not run.offer.is_empty() else ""
+	var saved_loot: Variant = data.get("loot", {})
+	if saved_loot is Dictionary:
+		Generator.add_loot(run.loot, saved_loot)
 
 	run.map = run._build_map()
 	for index in data.get("cleared", []):

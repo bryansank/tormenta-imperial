@@ -17,6 +17,9 @@ const Rules := preload("res://scripts/combat/CombatRules.gd")
 ## what matters is that the draft at node 3 always rolls the same way without
 ## depending on how many times the map generator happened to call the RNG.
 const DRAFT_SEED_STRIDE := 7919
+## Lo mismo para el botin de una salida: un flujo propio, para que sortear el
+## botin no mueva el mapa ni los enemigos (y al reves).
+const LOOT_SEED_STRIDE := 104729
 
 ## The catalogue of draft upgrades. `stat` empty means the option heals instead
 ## of buffing a derived stat.
@@ -288,6 +291,13 @@ static func node_rewards(node: Dictionary, era: int) -> Dictionary:
 		for res_name in node["rewards"]:
 			fixed[res_name] = int(node["rewards"][res_name])
 		return fixed
+	return curve_rewards(node, era)
+
+## La curva de siempre (profundidad, era, riesgo, jefe) sobre combat_reward_base,
+## multiplicada por `scale`. node_rewards() la usa con 1.0 cuando el nodo no trae
+## su botin fijado; las salidas nuevas la fijan al sortear con
+## combat_sortie_reward_mult.
+static func curve_rewards(node: Dictionary, era: int, scale: float = 1.0) -> Dictionary:
 	var depth: int = int(node.get("depth", 0))
 	var risk: int = int(node.get("risk", 0))
 	var mult: float = 1.0 \
@@ -298,7 +308,7 @@ static func node_rewards(node: Dictionary, era: int) -> Dictionary:
 		mult *= GameConfig.combat_boss_multiplier
 	var rewards: Dictionary = {}
 	for res_name in GameConfig.combat_reward_base:
-		rewards[res_name] = maxi(1, roundi(float(GameConfig.combat_reward_base[res_name]) * mult))
+		rewards[res_name] = maxi(1, roundi(float(GameConfig.combat_reward_base[res_name]) * mult * scale))
 	return rewards
 
 # ── Drafts ───────────────────────────────────────────────────────────
@@ -430,3 +440,218 @@ static func every_node_reaches_boss(map: Array) -> bool:
 		if not reachable_from(map, i).has(boss):
 			return false
 	return true
+
+# ── Salidas nuevas: incursion y expedicion corta (doc 21 §3, 2026-10-14) ──
+#
+# Una salida es una OFERTA del tablon (SortieBoard): {kind, flavor, seed, era,
+# blueprint}. El mapa entero sale de la oferta, asi que se ve antes de lanzar y
+# se reconstruye igual al cargar la partida. Cada nodo lleva su `rewards`
+# (oro y madera, ya fijados) y su `loot` (lo que solo se consigue fuera:
+# "parts", "colonists", "tithe_pct" (rebaja del Diezmo en %), "blueprint").
+
+const KIND_RAID := "raid"
+const KIND_EXPEDITION := "expedition"
+const FLAVOR_BANDITS := "bandits"
+const FLAVOR_OUTPOST := "outpost"
+
+## Los nombres de destino de la expedicion (claves de Tr). Se elige uno por
+## semilla: es solo un nombre, no cambia nada del mapa.
+const EXPEDITION_NAMES := ["SORTIE_DEST_DOCK", "SORTIE_DEST_FACTORY", "SORTIE_DEST_MINE", "SORTIE_DEST_BRIDGE", "SORTIE_DEST_DEPOT"]
+
+## El mapa de una oferta. Vacio si la oferta no es de un tipo conocido.
+static func sortie_map(offer: Dictionary) -> Array:
+	var seed_value: int = int(offer.get("seed", 1))
+	var era: int = maxi(1, int(offer.get("era", 1)))
+	match String(offer.get("kind", "")):
+		KIND_RAID:
+			return raid_map(seed_value, era, String(offer.get("flavor", FLAVOR_BANDITS)))
+		KIND_EXPEDITION:
+			return short_expedition_map(seed_value, era, String(offer.get("blueprint", "")))
+	return []
+
+## La clave de Tr con el nombre de la oferta.
+static func offer_name_key(offer: Dictionary) -> String:
+	if String(offer.get("kind", "")) == KIND_RAID:
+		return "SORTIE_NAME_OUTPOST" if String(offer.get("flavor", "")) == FLAVOR_OUTPOST else "SORTIE_NAME_BANDITS"
+	var seed_value: int = absi(int(offer.get("seed", 0)))
+	return String(EXPEDITION_NAMES[seed_value % EXPEDITION_NAMES.size()])
+
+## La incursion: un solo combate, sin salidas ni jefe. Los saqueadores traen
+## repuestos y colonos rescatados; la avanzadilla de la Regencia, repuestos y la
+## rebaja del proximo Diezmo.
+static func raid_map(seed_value: int, era: int, flavor: String) -> Array:
+	var rng := make_rng(seed_value)
+	var nodes: Array = []
+	var depth: int = maxi(0, GameConfig.combat_raid_depth)
+	var risk: int = 1 if flavor == FLAVOR_OUTPOST else rng.randi_range(0, 1)
+	_add_node(nodes, depth, risk, false)
+	var node: Dictionary = nodes[0]
+	node["enemy_roster"] = enemy_roster(rng, depth, era, risk)
+	node["rewards"] = curve_rewards(node, era, GameConfig.combat_sortie_reward_mult)
+	node["loot"] = raid_loot(make_rng(seed_value + LOOT_SEED_STRIDE), flavor)
+	node["raid"] = true
+	return nodes
+
+## Lo que trae una incursion, sorteado dentro de los rangos de GameConfig.
+static func raid_loot(rng: RandomNumberGenerator, flavor: String) -> Dictionary:
+	var loot: Dictionary = {}
+	if flavor == FLAVOR_OUTPOST:
+		loot["parts"] = _roll_range(rng, GameConfig.combat_loot_outpost_parts)
+		# En puntos de porcentaje enteros: el botin solo lleva enteros.
+		loot["tithe_pct"] = maxi(0, roundi(GameConfig.sortie_tithe_discount_pct() * 100.0))
+	else:
+		loot["parts"] = _roll_range(rng, GameConfig.combat_loot_raid_parts)
+		loot["colonists"] = _roll_range(rng, GameConfig.combat_loot_raid_colonists)
+	return _drop_zeros(loot)
+
+## La expedicion corta: apertura -> elegir 1 de 2 -> jefe (3 combates). El jefe
+## lleva menos escolta y trae lo gordo: mas repuestos, colonos y el plano.
+## `blueprint` lo eligio quien sorteo la oferta (vacio = ninguno por conseguir).
+static func short_expedition_map(seed_value: int, era: int, blueprint: String = "") -> Array:
+	var rng := make_rng(seed_value)
+	var nodes: Array = generate_map(rng, GameConfig.combat_expedition_depth,
+		GameConfig.combat_expedition_branching, era)
+	for node in nodes:
+		node["rewards"] = curve_rewards(node, era, GameConfig.combat_sortie_reward_mult)
+		if bool(node.get("is_boss", false)):
+			node["enemy_roster"] = trim_escort(node["enemy_roster"], GameConfig.combat_expedition_boss_escort_cut)
+			node["loot"] = boss_loot(blueprint)
+		else:
+			node["loot"] = _drop_zeros({"parts": GameConfig.combat_loot_expedition_node_parts})
+	return nodes
+
+## Lo que da el jefe de una expedicion corta. Fijo y a la vista (doc 21 §2.3:
+## nada de cajas sorpresa).
+static func boss_loot(blueprint: String) -> Dictionary:
+	var loot: Dictionary = _drop_zeros({
+		"parts": GameConfig.combat_loot_expedition_boss_parts,
+		"colonists": GameConfig.combat_loot_expedition_boss_colonists,
+	})
+	if blueprint != "":
+		loot["blueprint"] = blueprint
+	return loot
+
+## Quita `cut` infantes de escolta, sin dejar nunca el roster vacio.
+static func trim_escort(roster: Dictionary, cut: int) -> Dictionary:
+	var result: Dictionary = roster.duplicate()
+	for i in range(maxi(0, cut)):
+		if int(result.get("infantry", 0)) <= 0 or roster_size(result) <= 1:
+			break
+		result["infantry"] = int(result["infantry"]) - 1
+		if int(result["infantry"]) <= 0:
+			result.erase("infantry")
+	return result
+
+## Todo el botin de un mapa sumado (lo que se lleva quien gana todos sus nodos;
+## en una expedicion solo se pisa uno de cada capa, ver path_loot()). Los planos
+## van en una lista aparte (`blueprints`).
+static func map_loot(map: Array) -> Dictionary:
+	var total: Dictionary = {}
+	for node in map:
+		add_loot(total, node.get("loot", {}))
+	return total
+
+## El botin de recorrer el mapa de punta a punta: en cada capa, el nodo que mas
+## da (en una expedicion corta todas las rutas dan lo mismo). Es lo que ensena la
+## tarjeta de la oferta antes de salir.
+static func path_loot(map: Array) -> Dictionary:
+	var by_depth: Dictionary = {}
+	for node in map:
+		var depth: int = int(node.get("depth", 0))
+		var loot: Dictionary = node.get("loot", {})
+		if not by_depth.has(depth) or _loot_weight(loot) > _loot_weight(by_depth[depth]):
+			by_depth[depth] = loot
+	var total: Dictionary = {}
+	for depth in by_depth:
+		add_loot(total, by_depth[depth])
+	return total
+
+## El oro y la madera de recorrer el mapa, por la ruta que mas paga.
+static func path_rewards(map: Array, era: int) -> Dictionary:
+	var by_depth: Dictionary = {}
+	for node in map:
+		var depth: int = int(node.get("depth", 0))
+		var rewards: Dictionary = node_rewards(node, era)
+		if not by_depth.has(depth) or _sum(rewards) > _sum(by_depth[depth]):
+			by_depth[depth] = rewards
+	var total: Dictionary = {}
+	for depth in by_depth:
+		for res_name in by_depth[depth]:
+			total[res_name] = int(total.get(res_name, 0)) + int(by_depth[depth][res_name])
+	return total
+
+## Suma `gained` sobre `into`: enteros sumados; "blueprint" (o la lista
+## "blueprints") a la lista "blueprints", sin repetir.
+static func add_loot(into: Dictionary, gained: Dictionary) -> void:
+	for key in gained:
+		match String(key):
+			"blueprint":
+				var list: Array = into.get("blueprints", [])
+				var id: String = String(gained[key])
+				if id != "" and not list.has(id):
+					list.append(id)
+				into["blueprints"] = list
+			"blueprints":
+				for id in gained[key]:
+					add_loot(into, {"blueprint": String(id)})
+			_:
+				into[key] = int(into.get(key, 0)) + int(gained[key])
+
+## La fuerza del nodo mas duro del mapa (el jefe, o el unico nodo de una
+## incursion): contra eso se mide la columna en la seleccion de tropa.
+static func hardest_node_power(map: Array, era: int) -> float:
+	var best: float = 0.0
+	for node in map:
+		best = maxf(best, node_power(node, era))
+	return best
+
+## Cuantos combates pelea quien recorre el mapa de principio a fin (una capa,
+## un combate).
+static func fights_on_path(map: Array) -> int:
+	var depths: Dictionary = {}
+	for node in map:
+		depths[int(node.get("depth", 0))] = true
+	return depths.size()
+
+## El mapa por capas, para pintarlo: Array de Arrays de indices, de la apertura
+## al jefe.
+static func layers_of(map: Array) -> Array:
+	var by_depth: Dictionary = {}
+	for node in map:
+		var depth: int = int(node.get("depth", 0))
+		var list: Array = by_depth.get(depth, [])
+		list.append(int(node.get("index", 0)))
+		by_depth[depth] = list
+	var depths: Array = by_depth.keys()
+	depths.sort()
+	var result: Array = []
+	for depth in depths:
+		result.append(by_depth[depth])
+	return result
+
+static func _roll_range(rng: RandomNumberGenerator, range_v: Vector2i) -> int:
+	return rng.randi_range(mini(range_v.x, range_v.y), maxi(range_v.x, range_v.y))
+
+static func _drop_zeros(loot: Dictionary) -> Dictionary:
+	var clean: Dictionary = {}
+	for key in loot:
+		if loot[key] is String or int(loot[key]) > 0:
+			clean[key] = loot[key]
+	return clean
+
+static func _loot_weight(loot: Dictionary) -> int:
+	var total: int = 0
+	for key in loot:
+		if loot[key] is String:
+			total += 100
+		elif loot[key] is Array:
+			total += 100 * (loot[key] as Array).size()
+		else:
+			total += int(loot[key])
+	return total
+
+static func _sum(amounts: Dictionary) -> int:
+	var total: int = 0
+	for value in amounts.values():
+		total += int(value)
+	return total

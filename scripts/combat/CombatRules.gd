@@ -146,3 +146,48 @@ static func occupied_cells(units: Array, ignore_uid: int = -1) -> Array:
 		if unit.is_alive() and unit.uid != ignore_uid and unit.position.x >= 0:
 			cells.append(unit.position)
 	return cells
+
+# ── Fuerza y probabilidades (doc 21 §3.4-3.5, 2026-10-14) ────────────
+
+## Un numero comparable para "cuanto pega este bando": el poder de cada unidad
+## viva (unit_types[...]["power"]) por la vida que le queda respecto a la de una
+## unidad base de su tipo. La escala del enemigo multiplica la vida, asi que un
+## enemigo mas duro cuenta mas; un herido cuenta menos. Es la misma medida que
+## roster_power() de ExpeditionGenerator para una columna entera y sin heridas.
+static func side_strength(units: Array, side: int) -> float:
+	var total: float = 0.0
+	for unit in units:
+		if unit == null or not unit.is_alive() or unit.side != side:
+			continue
+		var base_hp: float = float(maxi(1, int(GameConfig.get_combat_stats(unit.unit_id).get("hp", 1))))
+		total += float(unit.power()) * float(unit.hp) / base_hp
+	return total
+
+## La etiqueta de la seleccion de tropa: "favorable", "even" o "hard", segun la
+## proporcion entre tu fuerza y la del enemigo.
+static func odds_label(player_strength: float, enemy_strength: float) -> String:
+	if enemy_strength <= 0.0:
+		return "favorable"
+	var ratio: float = player_strength / enemy_strength
+	if ratio >= GameConfig.combat_odds_favorable:
+		return "favorable"
+	if ratio < GameConfig.combat_odds_hard:
+		return "hard"
+	return "even"
+
+## "Resolver solo" solo se ofrece cuando tu fuerza dobla (o mas) la del enemigo.
+static func can_auto_resolve(player_strength: float, enemy_strength: float) -> bool:
+	if player_strength <= 0.0:
+		return false
+	return player_strength >= GameConfig.combat_auto_resolve_ratio * enemy_strength
+
+## Lo que le queda al bando de la vida con la que empezo (0..1). `start_hp` es
+## la suma de vida del bando al abrir el tablero.
+static func hp_fraction(units: Array, side: int, start_hp: int) -> float:
+	if start_hp <= 0:
+		return 1.0
+	var now := 0
+	for unit in units:
+		if unit.side == side and unit.is_alive():
+			now += unit.hp
+	return float(now) / float(start_hp)
