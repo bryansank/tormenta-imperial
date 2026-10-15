@@ -1271,7 +1271,7 @@ const COLONY_LEGACY_FLAGS := {
 }
 
 # ── Regimiento (solo cosmetico: ArmyManager guarda "regiment", RegimentLook lo
-# pinta; docs/15 §11) ──
+# pinta; docs/15 §12) ──
 # El ejercito del jugador lleva nombre, color, emblema y pintura, y gana
 # estrellas por combates ganados. Nada de esto cambia una sola cifra del combate.
 # Color y emblema salen de las piezas de la bandera (colony_colors /

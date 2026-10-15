@@ -1,6 +1,6 @@
 extends RefCounted
 ## El regimiento del jugador: nombre, color, emblema, pintura y estrellas.
-## SOLO COSMETICO (doc 21 §5.1, docs/15 §11): nada de aqui cambia una cifra del
+## SOLO COSMETICO (doc 21 §5.1, docs/15 §12): nada de aqui cambia una cifra del
 ## combate, ni lo lee CombatRules, Encounter o la IA.
 ##
 ## Lo guardado (ArmyManager, clave "regiment" dentro de "army"):

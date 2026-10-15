@@ -1,6 +1,6 @@
 shader_type spatial;
 // La pintura del regimiento sobre la superficie "team" de nuestras unidades
-// (UnitModels3D.team_material). Solo cosmetica (docs/15 §11).
+// (UnitModels3D.team_material). Solo cosmetica (docs/15 §12).
 //
 // Un patron procedural en espacio del modelo, sin texturas: liso, rayas,
 // manchas, desierto, nieve y gala. El color por vertice de la malla (grises

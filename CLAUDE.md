@@ -465,7 +465,8 @@ not yet measured with the line probe). Titles `RANK_TITLE_<n>` (Colono, Capataz 
 … Archigobernador). `rank_rewards` gives decorations (Garden 2, Fountain 5, Statue 8),
 extra building slots (`rank_limit_bonus`), small bonuses (`rank_production_bonus`
 +7 % and `rank_storage_bonus` +8 % at rank 18, **assigned**, never added, so loading
-twice is safe) and flag pieces (`patterns`, `emblems`, `colors`).
+twice is safe), flag pieces (`patterns`, `emblems`, `colors`) and the regiment's
+paint schemes (`paints`: plain 1, stripes 3, spots 6, desert 9, snow 12, parade 15).
 
 **The player's country (2026-10-12):** a name (max `COLONY_NAME_MAX` = 26, "Al azar"
 names like "Liga de Vaporia" in ES/EN, a short ES/EN word filter in
@@ -543,6 +544,20 @@ fixed for the run; saves without `tier` load as Colono.
 - The Ejército and Escaramuzas entries of ☰ MENÚ → COLONIA only appear once a Barracks exists.
 - Combat stats for these three unit types are separate, in
   `GameConfig.combat_unit_stats` — see `docs/15-combat.md` §8.
+- **The regiment (cosmetic only, 2026-10-14, `docs/15-combat.md` §12):** name, colour
+  and emblem (the flag pieces open by rank; "" = same as the flag), a paint scheme
+  (`GameConfig.REGIMENT_PAINTS`, opened by rank with the `paints` key of
+  `rank_rewards`) and stars at 10/25/50 fights won (`regiment_star_wins`). Saved by
+  `ArmyManager` as `"regiment"` inside `"army"` (old saves = default, cleared in
+  `reset()`, idempotent load that does **not** clamp by rank: the army loads before the
+  rank, so `get_regiment_look()` resolves locked pieces when drawing). Edited in the
+  REGIMIENTO card at the top of the Cuartel list (`scripts/ui/RegimentCard.gd`);
+  pure helpers and cached badge/paint textures in `scripts/ui/RegimentLook.gd`.
+  Shown on our pieces in both 3D combat views (paint on the `team` surface through
+  `scripts/combat_view/regiment_paint.gdshader`, one shared material per colour and
+  paint; a badge sprite with emblem and stars beside the HP plate, one shared texture)
+  and as the colour of our round mark on the 2D board (brass ring with stars).
+  Nothing in `scripts/combat/` reads it. Signal `regiment_changed`.
 
 ### Combat (PVE) — full doc: `docs/15-combat.md`
 
@@ -837,6 +852,7 @@ tormenta-imperial/
 |   |   +-- BoardViewport3D.gd       # SubViewportContainer: own world, tap/click -> cell, wheel/pinch zoom, tooltip
 |   |   +-- UnitToy3D.gd             # One toy piece: model, HP bar, rings, tweened animations
 |   |   +-- CombatFx3D.gd, BoardTerrain3D.gd, BoardLayout3D.gd, UnitModels3D.gd, board_marks.gdshader
+|   |   +-- regiment_paint.gdshader  # The regiment's paint on our pieces' team surface (cosmetic)
 |   |   +-- FrontOrders.gd           # Front view orders (approach cell, reachable targets, AVANZAR) -> the same move/attack calls
 |   +-- grid/
 |   |   +-- GridManager.gd           # Cell grid (size per game, saved); the island covers every cell
@@ -867,6 +883,7 @@ tormenta-imperial/
 |   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd, TouchTooltip.gd
 |   |   +-- HelperPanel.gd, HelpCallout.gd, HelpCatalog.gd, HelpTargets.gd, HelpIndexPanel.gd
 |   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the flag drawn from pieces
+|   |   +-- RegimentCard.gd, RegimentLook.gd  # The REGIMIENTO card in the Cuartel; regiment look, badge and paint helpers (cosmetic)
 |   |   +-- ColonyIdentityPanel.gd, ColonyByline.gd  # Country name + flag editor; flag + name line on reports
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
@@ -1040,6 +1057,7 @@ All balance values live in `GameConfig.gd`:
 - `unit_types` / `army_base_capacity` / `army_capacity_per_barracks` / `army_upkeep_interval` - army
 - `tech_definitions` + `tech_*` bonuses - tech tree
 - `rank_xp_sources` / `rank_xp_thresholds` / `rank_rewards` / `colony_colors` / `COLONY_PATTERNS` / `COLONY_EMBLEMS` - governor rank (XP, curve, unlocks, bonuses, flag pieces)
+- `REGIMENT_PAINTS` / `regiment_star_wins` - the regiment's paints and stars (cosmetic only)
 - `audio_*_volume` / `audio_music_fade` / `audio_sfx_voices` - audio
 - `phase_triggers` / `early_*` - onboarding phase pacing
 - `combat_*` - board, deploy cap, unit combat stats, enemy/risk scaling, map shape,

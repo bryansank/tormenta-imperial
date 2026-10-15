@@ -23,7 +23,7 @@ const ColonyIdentity := preload("res://scripts/services/ColonyIdentity.gd")
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 
 ## El regimiento: nombre, color, emblema, pintura y combates ganados. SOLO
-## COSMETICO (docs/15 §11): nada del combate lo lee. Viaja en el guardado
+## COSMETICO (docs/15 §12): nada del combate lo lee. Viaja en el guardado
 ## dentro de "army" como "regiment"; lo que se pinta es get_regiment_look().
 var _regiment: Dictionary = RegimentLook.defaults()
 ## El aspecto ya resuelto, rehecho solo cuando cambia el regimiento, el rango,

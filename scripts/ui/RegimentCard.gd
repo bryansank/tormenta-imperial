@@ -2,7 +2,7 @@ extends PanelContainer
 ## La tarjeta REGIMIENTO del Cuartel (ArmyPanel), autocontenida: la insignia, el
 ## nombre y las victorias, y un boton CAMBIAR que despliega debajo el nombre
 ## (con "al azar"), el color, el emblema y la pintura. Solo cosmetico (docs/15
-## §11): lo guarda ArmyManager.set_regiment() y se ve en las dos vistas de
+## §12): lo guarda ArmyManager.set_regiment() y se ve en las dos vistas de
 ## combate 3D y en el tablero 2D.
 ##
 ## Cada eleccion se aplica al momento (no hay "guardar"). Lo que el rango aun no

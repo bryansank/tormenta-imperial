@@ -1182,3 +1182,49 @@ quitar o poner el campo no cambia ni dano, ni alcance, ni iniciativa.
 
 Ninguno de estos pasos cambia el equilibrio de las tres unidades de tierra; los
 numeros de `docs/16` siguen valiendo mientras no se anada una unidad nueva.
+
+## 12. El regimiento (solo cosmético)
+
+Fila 3.1 del rediseño (doc 21 §5.1, rama `feat/regimiento`, 2026-10-14). El
+ejército del jugador tiene **nombre, color, emblema, pintura y estrellas**. Nada
+de esto cambia una cifra del combate: ni `CombatUnit`, ni `CombatRules`, ni
+`Encounter`, ni la IA lo leen (`tests/combat/test_regiment.gd` lo fija leyendo
+sus fuentes).
+
+| Qué | Cómo se elige | Se abre con |
+|---|---|---|
+| Nombre | Texto libre (mismo filtro y largo que el nombre del país) o AL AZAR ("Brigada del Faro") | Libre; vacío = "Primer Regimiento" |
+| Color | "Como la bandera" o uno de `colony_colors` | Los colores de la bandera abiertos por rango |
+| Emblema | "Como la bandera" o uno de `COLONY_EMBLEMS` | Los emblemas de la bandera abiertos por rango |
+| Pintura | Liso, rayas, manchas, desierto, nieve, gala (`REGIMENT_PAINTS`) | Rangos 1, 3, 6, 9, 12, 15 (`rank_rewards` clave `paints`) |
+| Estrellas | Automáticas | 10 / 25 / 50 combates ganados (`regiment_star_wins`) |
+
+- **Dónde se edita:** tarjeta REGIMIENTO arriba de la lista del Cuartel
+  (`scripts/ui/RegimentCard.gd`, dentro de `ArmyPanel`). Insignia, nombre y
+  victorias; CAMBIAR despliega la galería. Cada elección se aplica al momento; lo
+  cerrado sale con candado y "Rango N".
+- **Datos:** `ArmyManager` guarda `"regiment": {"name", "color", "emblem", "paint",
+  "wins"}` dentro de `"army"`. "" en color o emblema = el de la bandera (un
+  regimiento sin tocar sigue a la colonia). Guardado viejo = el de serie;
+  `reset()` lo tira; `load_save_data()` deriva de lo guardado (idempotente) y **no
+  recorta** por rango, porque el ejército carga antes que el rango: lo que se pinta
+  lo resuelve `ArmyManager.get_regiment_look()` (`RegimentLook.resolve()`), que
+  cambia por la de la bandera (o liso) cualquier pieza que el rango no abra.
+  `set_regiment()` rechaza piezas cerradas y nombres que no pasan el filtro.
+  Las victorias se cuentan con `encounter_ended(true)` y
+  `defense_auto_resolved(true)`, como la XP del rango. Señal: `regiment_changed`.
+- **Cómo se ve:**
+  - **Vista frontal y tablero 8x8 3D** (`Board3D`, opción `regiment`): la
+    superficie `team` de nuestras piezas lleva el color y la pintura. Liso usa el
+    `StandardMaterial3D` de siempre; con pintura, un `ShaderMaterial` de
+    `scripts/combat_view/regiment_paint.gdshader` (patrón procedural en espacio
+    del modelo, sin texturas), **uno por color y pintura**, compartido por todas las
+    piezas. Junto a la placa de vida va la **insignia** (disco del color con el
+    emblema y las estrellas debajo): un `Sprite3D` por ficha con **una sola
+    textura** en caché (`RegimentLook.badge_texture()`). La Regencia no lleva nada.
+  - **Tablero 2D:** la marca circular de nuestras fichas toma el color del
+    regimiento, y un aro de latón si tiene estrellas.
+- **Rendimiento:** sin `_process`, sin luces, como mucho un material más por pelea;
+  la insignia y las muestras de pintura se generan una vez por aspecto.
+- **Pendiente (doc 21 §5.1):** cascos y chapas (piezas sueltas por planos raros),
+  "por tipo de unidad" en vez de por regimiento entero, coste en oro de pinturas.

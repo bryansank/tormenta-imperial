@@ -10,7 +10,7 @@ extends RefCounted
 ## Asi una pelea entera son, como mucho, tres materiales: solido, brillo y
 ## colonia. Nada de materiales por unidad ni luces propias.
 ##
-## El regimiento (docs/15 §11, solo cosmetico) cambia el color de esa superficie
+## El regimiento (docs/15 §12, solo cosmetico) cambia el color de esa superficie
 ## y le puede poner una pintura (rayas, manchas...): con pintura, el material es
 ## un ShaderMaterial de regiment_paint.gdshader, uno por color y pintura, y
 ## sigue siendo compartido por todas las piezas que lo llevan.
