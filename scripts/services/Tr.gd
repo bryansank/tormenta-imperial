@@ -362,6 +362,13 @@ const _STRINGS := {
 		"OPT_QUALITY_AUTO": "Automática (%s)",
 		"OPT_QUALITY_HIGH": "Alta",
 		"OPT_QUALITY_LOW": "Baja (más fluida en móvil)",
+		"OPT_QUALITY_MINIMAL": "Mínima (equipos modestos)",
+		"LBL_QUALITY_MINIMAL_HINT": "Mínima quita sombras, humo y rejilla, pinta el mapa a menos resolución y limita a 30 fotogramas en PC. En PC cambia también el motor de dibujo al reiniciar el juego.",
+		"BTN_DETECT_QUALITY": "DETECTAR DE NUEVO",
+		"MSG_QUALITY_MEASURING": "Comprobando cómo va el juego en este equipo. En unos segundos se elige la calidad.",
+		"MSG_QUALITY_AUTO_MINIMAL": "Hemos puesto la calidad Mínima para que el juego vaya fluido en este equipo. Puedes cambiarla en Ajustes → Interfaz.",
+		"MSG_QUALITY_AUTO_LOW": "Hemos puesto la calidad Baja para que el juego vaya fluido en este equipo. Puedes cambiarla en Ajustes → Interfaz.",
+		"MSG_QUALITY_RESTART": "El cambio de motor de dibujo se aplica al reiniciar el juego.",
 		"LBL_STATUS_STOPPED": "Parado",
 		"FMT_STATUS_STOPPED_WHY": "Parado: %s",
 		"LBL_FULLSCREEN": "Pantalla completa (F11)",
@@ -427,6 +434,13 @@ const _STRINGS := {
 		"LBL_BOSS": "JEFE",
 		"LBL_GOOD_TARGET": "¡Buen objetivo!",
 		"LBL_BAD_TARGET": "Mal objetivo",
+		"BTN_ADVANCE": "Avanzar",
+		"LBL_COMBAT_VIEW": "Vista del combate",
+		"OPT_COMBAT_VIEW_FRONT": "Frente",
+		"OPT_COMBAT_VIEW_BOARD": "Tablero",
+		"LBL_COMBAT_VIEW_TIP": "Frente: los dos bandos cara a cara; toca a un enemigo y tu unidad se acerca y dispara. Tablero: el 8x8 con sus casillas.",
+		"LBL_FRONT_HINT": "Toca a un enemigo marcado para atacar",
+		"MSG_HELD_NOTICES": "Mientras peleabas: %d avisos más en el REGISTRO",
 		"LBL_TURN_PLAYER": "Tu turno",
 		"LBL_TURN_ENEMY": "Turno enemigo",
 		"LBL_ROUND": "Ronda %d / %d",
@@ -1075,8 +1089,8 @@ const _STRINGS := {
 		"BTN_COLONY_RANK": "Colonia",
 		"HUD_RANK": "Rango del gobernador",
 		# ── Soporte y velocidad ──
-		"BTN_REPORT_BUG": "Informar de un fallo",
-		"BTN_REPORT_BUG_HINT": "Copia un informe para pegarlo en un mensaje",
+		"BTN_REPORT_BUG": "Informar fallo",
+		"BTN_REPORT_BUG_HINT": "Informar de un fallo: copia un informe para pegarlo en un mensaje",
 		"MSG_REPORT_COPIED": "Copiado. Pégalo en un mensaje.",
 		"REPORT_TITLE": "Informe de fallo",
 		"REPORT_SYSTEM": "Sistema",
@@ -1230,6 +1244,83 @@ const _STRINGS := {
 		"LBL_SAVE_BROKEN": "Dañada",
 		"LBL_SAVE_TIME_TIP": "Tiempo jugado",
 		"LBL_SAVE_DATE_TIP": "Última vez",
+		# Decoraciones baratas (feat/decoraciones-1)
+		"BLD_LAMP_POST_NAME": "Farola",
+		"BLD_LAMP_POST_DESC": "Farola de hierro con su farol. De noche alumbra la calle.",
+		"BLD_PARK_BENCH_NAME": "Banco",
+		"BLD_PARK_BENCH_DESC": "Un banco para sentarse a descansar. Poca cosa, pero se agradece.",
+		"BLD_HEDGE_NAME": "Seto",
+		"BLD_HEDGE_DESC": "Seto recortado que pone verde la calle.",
+		"BLD_AVENUE_TREE_NAME": "Árbol de paseo",
+		"BLD_AVENUE_TREE_DESC": "Árbol con su alcorque, para dar sombra a la calle.",
+		"BLD_FLOWER_PLANTER_NAME": "Macetero",
+		"BLD_FLOWER_PLANTER_DESC": "Macetas con flores de colores. Alegran el barrio.",
+		"BLD_COLONY_SIGN_NAME": "Letrero de la colonia",
+		"BLD_COLONY_SIGN_DESC": "Letrero con la bandera que dice a todos de quién es esta tierra.",
+		"BLD_HAY_CART_NAME": "Carro de heno",
+		"BLD_HAY_CART_DESC": "Carretilla cargada de heno y sacos. Huele a campo.",
+		"BLD_BONFIRE_NAME": "Hoguera",
+		"BLD_BONFIRE_DESC": "Fuego con troncos donde se junta la gente. De noche brilla.",
+		"BLD_FLAGPOLE_NAME": "Mástil con bandera",
+		"BLD_FLAGPOLE_DESC": "Mástil alto con una bandera al viento. Se ve desde lejos.",
+		"BLD_PALM_TREES_NAME": "Palmeras",
+		"BLD_PALM_TREES_DESC": "Un par de palmeras sobre arena. Quedan mejor cerca de la costa.",
+		# Lotes y el Núcleo como taller de todo (fix/partidas-bryan, 2026-10-14)
+		"BTN_BATCH_N": "×%d",
+		"BTN_BATCH_MAX": "MÁX ×%d",
+		"LBL_BATCH_TIP": "Pagas %d veces ahora y se hacen una detrás de otra.",
+		"LBL_BATCH_MAX_TIP": "Todas las que puedes pagar y guardar ahora (como mucho %d).",
+		"LBL_BATCH_CANT": "No te alcanza para tantas.",
+		"FMT_PROGRESS_BATCH": "%s · %d de %d · %s",
+		"LBL_CORE_OWN": "Del Núcleo",
+		"LBL_CORE_WORKSHOPS": "Como en los talleres · tarda más",
+		"LBL_CORE_BY_HAND": "Sacar a mano · tarda más",
+		"LBL_CORE_FROM": "Lo mismo que en: %s. Aquí tarda más.",
+		# ── Ayudas de las novedades (2026-10-14, HelpCatalog) ──
+		"HELP_T_SAVES": "Tus partidas",
+		"HELP_B_SAVES": "La partida se guarda sola. Puedes tener hasta 5.
+Están en ☰ MENÚ → PARTIDA → PARTIDAS y en el menú principal: CARGAR o BORRAR.
+Con 5, borra una para empezar otra.",
+		"HELP_T_SPEED": "Velocidad x1 / x2",
+		"HELP_B_SPEED": "x2: todo va el doble de rápido, también las peleas. Púlsalo otra vez (o la tecla F) para volver a x1.",
+		"HELP_B_SPEED_TOUCH": "x2: todo va el doble de rápido, también las peleas. Tócalo otra vez para volver a x1.",
+		"HELP_T_RANK": "Rango de gobernador",
+		"HELP_B_RANK": "Casi todo da XP: construir +15, mejorar +25, ganar una pelea +40, aguantar una Tormenta +30 o más, un hito +100.
+Con XP subes de rango (hay 18). Cada rango abre algo: decoraciones, más edificios, piezas de bandera o un poco más de producción y almacén.",
+		"HELP_T_FLAG": "Tu bandera y tu país",
+		"HELP_B_FLAG": "Tu bandera ondea en el Núcleo. Cámbiala cuando quieras: ☰ MENÚ → COLONIA → Colonia → BANDERA Y NOMBRE.
+Elige fondo, emblema, colores y nombre. Al subir de rango se abren piezas nuevas; las cerradas llevan candado.",
+		"HELP_T_BUG": "Informar de un fallo",
+		"HELP_B_BUG": "¿Algo falla? ☰ MENÚ → PARTIDA → Informar fallo copia los datos de tu partida. Pégalos (Ctrl+V) en un mensaje a quien te pasó el juego y cuenta qué hacías. No se envía nada solo.",
+		"HELP_B_BUG_TOUCH": "¿Algo falla? ☰ MENÚ → PARTIDA → Informar fallo copia los datos de tu partida. Pégalos en un mensaje (mantén pulsado → Pegar) y cuenta qué hacías. No se envía nada solo.",
+		"HELP_T_NIGHT": "Día y noche",
+		"HELP_B_NIGHT": "Solo cambia la luz: de día y de noche todo produce igual.
+De noche casi toda tu gente se recoge en casa y las calles se vacían. Un día entero dura unos 16 minutos.",
+		"HELP_T_FARM": "La Granja",
+		"HELP_B_FARM": "Tu gente come 1 de comida por ciclo. Haz clic en la Granja para elegir el cultivo:
+Lechugas: +20 en 1 min.
+Patatas: +125 en 5 min.
+Trigo: +600 en 20 min.
+Cambiar de cultivo empieza de cero.",
+		"HELP_B_FARM_TOUCH": "Tu gente come 1 de comida por ciclo. Toca la Granja para elegir el cultivo:
+Lechugas: +20 en 1 min.
+Patatas: +125 en 5 min.
+Trigo: +600 en 20 min.
+Cambiar de cultivo empieza de cero.",
+		"HELP_T_COLLECT": "Recoger",
+		"HELP_B_COLLECT": "Los edificios guardan lo que producen. Cuando salga el icono encima, haz clic en él o pulsa RECOGER en su ficha.
+Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edificio.",
+		"HELP_B_COLLECT_TOUCH": "Los edificios guardan lo que producen. Cuando salga el icono encima, tócalo o toca RECOGER en su ficha.
+Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edificio.",
+		"HELP_T_ISLAND": "La isla",
+		"HELP_B_ISLAND": "La costa es irregular y cambia en cada partida. Solo se construye en tierra: si una casilla del edificio cae en el agua, no se puede. Busca un hueco más adentro.",
+		# Topes por era (feat/topes-por-era): "3/6 · era 2: 9" en CONSTRUIR.
+		"FMT_LIMIT_COUNT": "%d/%d",
+		"FMT_LIMIT_NEXT_ERA": "era %d: %d",
+		"FMT_LIMIT_TIP": "Tienes %d. Tope en esta era: %d.",
+		"FMT_LIMIT_TIP_NEXT": "En la era %d el tope sube a %d.",
+		"LBL_LIMIT_TIP_MAX": "Es el tope más alto.",
+		"LBL_LIMIT_UNIQUE": "Único",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -1555,6 +1646,13 @@ const _STRINGS := {
 		"OPT_QUALITY_AUTO": "Automatic (%s)",
 		"OPT_QUALITY_HIGH": "High",
 		"OPT_QUALITY_LOW": "Low (smoother on phones)",
+		"OPT_QUALITY_MINIMAL": "Minimal (modest devices)",
+		"LBL_QUALITY_MINIMAL_HINT": "Minimal removes shadows, smoke and the grid, draws the map at a lower resolution and caps PC at 30 frames per second. On PC it also switches the rendering engine when you restart the game.",
+		"BTN_DETECT_QUALITY": "DETECT AGAIN",
+		"MSG_QUALITY_MEASURING": "Checking how the game runs on this device. The quality will be chosen in a few seconds.",
+		"MSG_QUALITY_AUTO_MINIMAL": "We set the quality to Minimal so the game runs smoothly on this device. You can change it in Settings → Interface.",
+		"MSG_QUALITY_AUTO_LOW": "We set the quality to Low so the game runs smoothly on this device. You can change it in Settings → Interface.",
+		"MSG_QUALITY_RESTART": "The rendering engine change takes effect when you restart the game.",
 		"LBL_STATUS_STOPPED": "Stopped",
 		"FMT_STATUS_STOPPED_WHY": "Stopped: %s",
 		"LBL_FULLSCREEN": "Fullscreen (F11)",
@@ -1620,6 +1718,13 @@ const _STRINGS := {
 		"LBL_BOSS": "BOSS",
 		"LBL_GOOD_TARGET": "Good target!",
 		"LBL_BAD_TARGET": "Bad target",
+		"BTN_ADVANCE": "Advance",
+		"LBL_COMBAT_VIEW": "Battle view",
+		"OPT_COMBAT_VIEW_FRONT": "Front",
+		"OPT_COMBAT_VIEW_BOARD": "Board",
+		"LBL_COMBAT_VIEW_TIP": "Front: both sides face to face; tap an enemy and your unit closes in and fires. Board: the 8x8 with its cells.",
+		"LBL_FRONT_HINT": "Tap a marked enemy to attack",
+		"MSG_HELD_NOTICES": "While you fought: %d more notices in the LOG",
 		"LBL_TURN_PLAYER": "Your turn",
 		"LBL_TURN_ENEMY": "Enemy turn",
 		"LBL_ROUND": "Round %d / %d",
@@ -2261,8 +2366,8 @@ const _STRINGS := {
 		"BTN_COLONY_RANK": "Colony",
 		"HUD_RANK": "Governor rank",
 		# ── Support and speed ──
-		"BTN_REPORT_BUG": "Report a bug",
-		"BTN_REPORT_BUG_HINT": "Copies a report to paste in a message",
+		"BTN_REPORT_BUG": "Report bug",
+		"BTN_REPORT_BUG_HINT": "Report a bug: copies a report to paste in a message",
 		"MSG_REPORT_COPIED": "Copied. Paste it in a message.",
 		"REPORT_TITLE": "Bug report",
 		"REPORT_SYSTEM": "System",
@@ -2416,6 +2521,82 @@ const _STRINGS := {
 		"LBL_SAVE_BROKEN": "Damaged",
 		"LBL_SAVE_TIME_TIP": "Time played",
 		"LBL_SAVE_DATE_TIP": "Last played",
+		# Cheap decorations (feat/decoraciones-1)
+		"BLD_LAMP_POST_NAME": "Street lamp",
+		"BLD_LAMP_POST_DESC": "An iron street lamp. It lights the street at night.",
+		"BLD_PARK_BENCH_NAME": "Bench",
+		"BLD_PARK_BENCH_DESC": "A bench to sit and rest. A small thing, but people like it.",
+		"BLD_HEDGE_NAME": "Hedge",
+		"BLD_HEDGE_DESC": "A trimmed hedge that makes the street green.",
+		"BLD_AVENUE_TREE_NAME": "Street tree",
+		"BLD_AVENUE_TREE_DESC": "A tree in its own bed, to shade the street.",
+		"BLD_FLOWER_PLANTER_NAME": "Flower pots",
+		"BLD_FLOWER_PLANTER_DESC": "Pots full of colourful flowers. They cheer up the neighbourhood.",
+		"BLD_COLONY_SIGN_NAME": "Colony sign",
+		"BLD_COLONY_SIGN_DESC": "A sign with the flag that tells everyone whose land this is.",
+		"BLD_HAY_CART_NAME": "Hay cart",
+		"BLD_HAY_CART_DESC": "A barrow full of hay and sacks. It smells of the fields.",
+		"BLD_BONFIRE_NAME": "Bonfire",
+		"BLD_BONFIRE_DESC": "A log fire where people gather. It glows at night.",
+		"BLD_FLAGPOLE_NAME": "Flagpole",
+		"BLD_FLAGPOLE_DESC": "A tall pole with a flag in the wind. You can see it from afar.",
+		"BLD_PALM_TREES_NAME": "Palm trees",
+		"BLD_PALM_TREES_DESC": "A pair of palm trees on sand. They look best near the shore.",
+		# Batches and the Core as every workshop (fix/partidas-bryan, 2026-10-14)
+		"BTN_BATCH_N": "×%d",
+		"BTN_BATCH_MAX": "MAX ×%d",
+		"LBL_BATCH_TIP": "You pay for %d now and they are made one after another.",
+		"LBL_BATCH_MAX_TIP": "As many as you can pay for and store now (at most %d).",
+		"LBL_BATCH_CANT": "You can't afford that many.",
+		"FMT_PROGRESS_BATCH": "%s · %d of %d · %s",
+		"LBL_CORE_OWN": "From the Core",
+		"LBL_CORE_WORKSHOPS": "Like the workshops · takes longer",
+		"LBL_CORE_BY_HAND": "Dig by hand · takes longer",
+		"LBL_CORE_FROM": "Same as at: %s. Takes longer here.",
+		# ── Help for the new features (2026-10-14, HelpCatalog) ──
+		"HELP_T_SAVES": "Your games",
+		"HELP_B_SAVES": "Your game saves itself. You can keep up to 5.
+Find them in ☰ MENU → GAME → SAVES and in the main menu: LOAD or DELETE.
+With 5, delete one to start another.",
+		"HELP_T_SPEED": "Speed x1 / x2",
+		"HELP_B_SPEED": "x2: everything runs twice as fast, fights too. Press it again (or the F key) to go back to x1.",
+		"HELP_B_SPEED_TOUCH": "x2: everything runs twice as fast, fights too. Tap it again to go back to x1.",
+		"HELP_T_RANK": "Governor rank",
+		"HELP_B_RANK": "Almost everything gives XP: building +15, upgrading +25, winning a fight +40, weathering a Storm +30 or more, a milestone +100.
+XP raises your rank (there are 18). Each rank opens something: decorations, more buildings, flag pieces or a little more production and storage.",
+		"HELP_T_FLAG": "Your flag and country",
+		"HELP_B_FLAG": "Your flag flies over the Core. Change it any time: ☰ MENU → COLONY → Colony → FLAG AND NAME.
+Pick background, emblem, colours and name. Ranking up opens new pieces; locked ones show a padlock.",
+		"HELP_T_BUG": "Report a bug",
+		"HELP_B_BUG": "Something wrong? ☰ MENU → GAME → Report bug copies your game's data. Paste it (Ctrl+V) in a message to whoever gave you the game and say what you were doing. Nothing is sent on its own.",
+		"HELP_B_BUG_TOUCH": "Something wrong? ☰ MENU → GAME → Report bug copies your game's data. Paste it in a message (press and hold → Paste) and say what you were doing. Nothing is sent on its own.",
+		"HELP_T_NIGHT": "Day and night",
+		"HELP_B_NIGHT": "Only the light changes: everything produces the same by day and by night.
+At night most of your people go home and the streets empty. A whole day lasts about 16 minutes.",
+		"HELP_T_FARM": "The Farm",
+		"HELP_B_FARM": "Your people eat 1 food per cycle. Click the Farm to pick the crop:
+Lettuce: +20 in 1 min.
+Potatoes: +125 in 5 min.
+Wheat: +600 in 20 min.
+Changing crop starts from zero.",
+		"HELP_B_FARM_TOUCH": "Your people eat 1 food per cycle. Tap the Farm to pick the crop:
+Lettuce: +20 in 1 min.
+Potatoes: +125 in 5 min.
+Wheat: +600 in 20 min.
+Changing crop starts from zero.",
+		"HELP_T_COLLECT": "Collect",
+		"HELP_B_COLLECT": "Buildings keep what they make. When the icon shows above one, click it or press COLLECT on its card.
+When full, the building stops. What does not fit in your storage stays in the building.",
+		"HELP_B_COLLECT_TOUCH": "Buildings keep what they make. When the icon shows above one, tap it or tap COLLECT on its card.
+When full, the building stops. What does not fit in your storage stays in the building.",
+		"HELP_T_ISLAND": "The island",
+		"HELP_B_ISLAND": "The coast is irregular and changes every game. You can only build on land: if any cell of the building is on water, it will not go. Look for a spot further inland.",
+		"FMT_LIMIT_COUNT": "%d/%d",
+		"FMT_LIMIT_NEXT_ERA": "era %d: %d",
+		"FMT_LIMIT_TIP": "You have %d. Limit in this era: %d.",
+		"FMT_LIMIT_TIP_NEXT": "In era %d the limit rises to %d.",
+		"LBL_LIMIT_TIP_MAX": "This is the highest limit.",
+		"LBL_LIMIT_UNIQUE": "Unique",
 	},
 }
 

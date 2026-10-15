@@ -58,10 +58,11 @@ render_mode cull_disabled;
 // vertice del material solido de la paleta (vc_srgb dice como).
 uniform vec4 albedo = vec4(0.86, 0.2, 0.15, 1.0);
 uniform bool vc_srgb = false;
+uniform float wave = 1.0;
 void vertex() {
 	float h = fract(sin(dot(MODEL_MATRIX[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
 	float w = clamp(UV.x, 0.0, 1.0);
-	VERTEX.z += sin(TIME * (4.0 + 2.0 * h) - UV.x * 5.0 + h * 6.2831) * 0.07 * w;
+	VERTEX.z += sin(TIME * (4.0 + 2.0 * h) - UV.x * 5.0 + h * 6.2831) * 0.07 * w * wave;
 }
 void fragment() {
 	vec3 c = albedo.rgb;
@@ -90,10 +91,11 @@ void vertex() {
 
 const _FLAG_2D := """
 shader_type canvas_item;
+uniform float wave = 1.0;
 void vertex() {
 	float h = fract(sin(dot(MODEL_MATRIX[3].xy, vec2(12.9898, 78.233))) * 43758.5453);
 	float w = clamp(VERTEX.x / 10.0, 0.0, 1.0);
-	VERTEX.y += sin(TIME * (4.0 + 2.0 * h) - VERTEX.x * 0.6 + h * 6.2831) * 1.6 * w;
+	VERTEX.y += sin(TIME * (4.0 + 2.0 * h) - VERTEX.x * 0.6 + h * 6.2831) * 1.6 * w * wave;
 }
 """
 
@@ -101,6 +103,17 @@ const Tone := preload("res://scripts/buildings/ToyTones.gd")
 
 static var _shaders: Dictionary = {}
 static var _mats: Dictionary = {}
+## Si ondean los banderines de obra (en calidad Minima, quietos). Lo pone
+## GraphicsQuality.apply_runtime() con set_flags_wave().
+static var _flags_wave := true
+
+## Enciende o apaga el ondeo de todos los banderines, los ya creados incluidos
+## (un material compartido por color: unos pocos set_shader_parameter).
+static func set_flags_wave(on: bool) -> void:
+	_flags_wave = on
+	for key in _mats:
+		if String(key).begins_with("flag"):
+			(_mats[key] as ShaderMaterial).set_shader_parameter("wave", 1.0 if on else 0.0)
 
 static func _shader(key: String, code: String) -> Shader:
 	if not _shaders.has(key):
@@ -134,6 +147,7 @@ static func flag_material_3d(color: Color) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = _shader("flag3d", _FLAG_3D)
 	mat.set_shader_parameter("albedo", color)
+	mat.set_shader_parameter("wave", 1.0 if _flags_wave else 0.0)
 	mat.set_shader_parameter("vc_srgb", Tone.vertex_color_is_srgb())
 	_mats[key] = mat
 	return mat
@@ -157,8 +171,25 @@ static func flag_material_2d() -> ShaderMaterial:
 		return _mats["flag2d"]
 	var mat := ShaderMaterial.new()
 	mat.shader = _shader("flag2d", _FLAG_2D)
+	mat.set_shader_parameter("wave", 1.0 if _flags_wave else 0.0)
 	_mats["flag2d"] = mat
 	return mat
+
+## Calienta los dos shaders 3D de la obra (grua y banderin): un quad diminuto
+## de cada uno colgado de `parent`, dibujado una vez en la carga. Asi la
+## primera obra de la partida no tironea compilando. Devuelve los quads.
+static func warm_up(parent: Node3D) -> Array:
+	var out: Array = []
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.01, 0.01)
+	for mat in [crane_material_3d(Color.WHITE, 0.0), flag_material_3d(Color.WHITE)]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		parent.add_child(mi)
+		out.append(mi)
+	return out
 
 ## El efecto de obra de un estilo en una fase: "sparks" (solo con estructura o
 ## ferralla: fases 1 y 2), "dust" (en todas) o "".

@@ -3,14 +3,23 @@ extends Node3D
 ## (2026-10-04). Aparece cuando el edificio tiene algo acumulado: una ficha
 ## redonda con el icono del recurso y la cantidad debajo, que sube y baja para
 ## llamar la atencion. Lleno, late y su aro se pone rojo (el edificio esta
-## parado). Un toque encima recoge (BuildingPlacer._try_collect_icon); tocar el
+## parado).
+##
+## Rebote de premio (V2, rediseno 2026-10-14): al aparecer salta de pequeno a su
+## tamano y luego bota cada poco (sube, cae y se aplasta un pelo al tocar). Todo
+## con un Tween en bucle que solo existe mientras hay algo que recoger: sin
+## _process por icono (antes, un seno por fotograma). Un toque encima recoge (BuildingPlacer._try_collect_icon); tocar el
 ## edificio tambien.
 ##
 ## Se llama "StockIcon": el placer lo busca por ese nombre para el toque.
 
 const ICON_PX := 60
 const BASE_PIXEL := 0.02
-const BOB := 0.15
+## El bote: altura, subida, caida y pausa hasta el siguiente.
+const HOP := 0.45
+const HOP_UP := 0.18
+const HOP_DOWN := 0.22
+const HOP_REST := 0.9
 
 var _building: Node3D = null
 var _base_y := 3.0
@@ -19,6 +28,9 @@ var _icon: Sprite3D = null
 var _label: Label3D = null
 var _full := false
 var _res := ""
+## Animacion en marcha: 0 ninguna, 1 bote, 2 latido de lleno.
+var _anim := 0
+var _anim_tween: Tween = null
 
 static var _disc_tex: Texture2D = null
 
@@ -69,6 +81,7 @@ func _on_stock_changed(node: Node, _stock: Dictionary) -> void:
 func refresh() -> void:
 	if _building == null or not is_instance_valid(_building) or _label == null:
 		visible = false
+		_set_anim(0)
 		return
 	var stock: Dictionary = ProductionManager.get_stock(_building)
 	var total := 0
@@ -80,9 +93,12 @@ func refresh() -> void:
 			top_amount = int(stock[res_name])
 			top_res = String(res_name)
 	visible = total > 0
+	# Sin nada que recoger no se mece: el Tween se mata.
 	if not visible:
+		_set_anim(0)
 		return
 	_full = ProductionManager.is_full(_building)
+	_set_anim(2 if _full else 1)
 	if top_res != _res:
 		_res = top_res
 		_icon.texture = UITheme.icon_texture(_res, ICON_PX)
@@ -90,13 +106,42 @@ func refresh() -> void:
 	_label.modulate = Color(1.0, 0.45, 0.35) if _full else Color(1, 1, 1)
 	_disc.modulate = Color(1.0, 0.4, 0.3) if _full else Color(1.0, 0.92, 0.6)
 
-func _process(_delta: float) -> void:
-	if not visible:
+## Cambia de animacion solo si cambia el estado (lo acumulado cambia a cada
+## ciclo de produccion: el bote no se reinicia por eso).
+func _set_anim(kind: int) -> void:
+	if kind == _anim and (kind == 0 or (_anim_tween != null and _anim_tween.is_valid())):
 		return
-	var t := Time.get_ticks_msec() * 0.001
-	position.y = _base_y + sin(t * 3.0) * BOB
-	var s := 1.0 + (0.12 * (0.5 + 0.5 * sin(t * 7.0)) if _full else 0.0)
-	scale = Vector3(s, s, s)
+	if not is_inside_tree():
+		return
+	var appearing := _anim == 0
+	_anim = kind
+	if _anim_tween != null and _anim_tween.is_valid():
+		_anim_tween.kill()
+	_anim_tween = null
+	position.y = _base_y
+	scale = Vector3.ONE
+	if kind == 0:
+		return
+	var tw := create_tween()
+	if appearing:
+		# Aparece: de pequeno a su tamano, con un pasito de mas.
+		scale = Vector3.ONE * 0.3
+		tw.tween_property(self, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var loop := create_tween().set_loops()
+	if kind == 1:
+		loop.tween_property(self, "position:y", _base_y + HOP, HOP_UP).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		loop.tween_property(self, "position:y", _base_y, HOP_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		loop.tween_property(self, "scale", Vector3(1.12, 0.86, 1.12), 0.06)
+		loop.tween_property(self, "scale", Vector3.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		loop.tween_interval(HOP_REST)
+	else:
+		# Lleno: late en rojo, mas rapido (el edificio esta parado).
+		loop.tween_property(self, "scale", Vector3.ONE * 1.14, 0.22).set_trans(Tween.TRANS_SINE)
+		loop.tween_property(self, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_SINE)
+	if appearing:
+		loop.pause()
+		tw.tween_callback(loop.play)
+	_anim_tween = loop
 
 func is_full() -> bool:
 	return _full

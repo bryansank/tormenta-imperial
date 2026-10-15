@@ -141,3 +141,46 @@ desglosa por longitud de asedio.
 Los dos casos de guardia viven en `tests/integration/test_full_campaign.gd`:
 `test_the_siege_is_hard_but_winnable_with_a_full_garrison` y
 `test_the_smallest_garrison_that_can_resummon_does_not_win`.
+
+---
+
+## Ventaja por tipo (2026-10-13, rama `feat/combate-3d`)
+
+La regla nueva del combate (docs/15 §3 "Segunda tanda"): artilleria > vehiculo >
+infanteria > artilleria, x1,5 con ventaja y x0,75 con desventaja sobre el dano
+neto (`GameConfig.combat_type_advantage`). Medido con `tools/siege_probe.gd`
+(era 3, moral 100, 2 torres, nivel Colono), con los `final_audit_*` de esta rama
+(oleada 0.03, era 0.05, ultima x1.05, 3+1 cuerpos, un canon cada 3, blindado
+desde la oleada 2). `-- --adv=off` mide el antes; `-- --adv=A,D` pisa los
+multiplicadores.
+
+| Guarnicion | Antes (sin ventaja, 200 sem.) | Despues x1,5/x0,75 (200 sem.) |
+|---|---|---|
+| min 3 infanteria | 0 % | 0 % |
+| min 3 vehiculos | 6,0 % | 6,0 % |
+| 4 vehiculos | 33,5 % | 33,5 % |
+| 5 vehiculos | 65,0 % | 48,5 % |
+| 6 infanteria | 0 % | 0 % |
+| mixta 3+2+1 | 29,0 % | 25,5 % |
+| mixta 2+2+2 | 33,5 % | 33,5 % |
+| **MAX 6 vehiculos** | **82,0 %** | **68,0 %** |
+
+Por que baja: las oleadas llevan un canon por cada 3 cuerpos, y el canon pega al
+blindado con ventaja; la guarnicion maxima es toda blindados. Variantes (100
+semillas, MAX 6 vehiculos / mixta 2+2+2):
+
+| Multiplicadores | Canones de la Regencia | MAX 6 vehiculos | mixta 2+2+2 |
+|---|---|---|---|
+| 1,25 / 0,8 | 1 de cada 3 | 71 % | 34 % |
+| 1,35 / 0,85 | 1 de cada 3 | 76 % | 34 % |
+| 1,5 / 0,9 | 1 de cada 3 | 71 % | 34 % |
+| 1,25 / 0,9 | 1 de cada 3 | 76 % | 34 % |
+| **1,5 / 0,75** | **1 de cada 4** (`--gun=4`) | **83 %** | 34 % |
+| 1,5 / 0,75 | 1 de cada 5 (`--gun=5`) | 83 % | 34 % |
+| 1,35 / 0,85 | 1 de cada 4 | 88 % | 34 % |
+
+**Propuesta (sin aplicar, la decide la rama de balance):** mantener x1,5 / x0,75
+y subir `final_audit_artillery_share` de 3 a 4. Devuelve la guarnicion maxima al
+~82 % de antes (83 %) sin tocar la escala de las oleadas, y deja intacta la
+mixta. 5 no da mas. Hay que medirlo junto a lo que endurezca el final la rama
+`balance/campana-4-6h`: los dos cambios tocan el mismo asedio.

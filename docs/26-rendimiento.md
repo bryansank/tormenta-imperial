@@ -475,7 +475,8 @@ aparecen en el tutorial y en las ayudas (§5.5). En el editor se suma el
 
 Por orden de ganancia esperada frente a riesgo. La columna "Zona" dice qué agente o
 qué parte del código lo toca, para repartirlo después de integrar. **Ninguna está
-hecha**: esta rama solo mide. Cada una se valida con la sonda antes y después, con el
+hecha** en la rama de medida; desde entonces están hechas la **3** y la **7**
+(rama `perf/calidad-minima`, 2026-10-14, ver §7.6). Cada una se valida con la sonda antes y después, con el
 mismo escenario, semilla y calidad, y la máquina en reposo.
 
 | # | Qué | Dónde | Ganancia esperada | Riesgo | Zona |
@@ -493,6 +494,23 @@ mismo escenario, semilla y calidad, y la máquina en reposo.
 | 11 | **Export más ligero**: plantilla estándar (no mono) y release | `export_presets.cfg`, docs/19 §2 | `.exe` de 120 a ~90 MB; APK de 39 a ~30 MB | Bajo (probado en docs/19 que el proyecto no usa C#) | Exportar |
 | 12 | **Badges 3D por despachador**: no crear el `Label3D` de estado en carreteras ni decoraciones; un único receptor de `production_tick` / `workers_changed` en BuildingPlacer que refresca solo el badge afectado | `buildings/BuildingStatusBadge.gd:79-92` | −300 `Label3D` en `grande` (hay 439) y de O(n²) a O(n) por ronda de producción | Bajo | Arte / edificios |
 
+**Hecho en `perf/servicios` (2026-10-14, sin medir todavía):**
+
+- **4**: `PlacementRules.pave_route` envuelve los tramos en una tanda
+  (`EventBus.placement_batch_started` / `placement_batch_finished`). GameManager,
+  PopulationManager y TutorialManager apuntan y hacen su trabajo una vez al cerrarla,
+  en la misma llamada: una ruta de N tramos pasa de N guardados y N recuentos a 1 (más
+  el del propio edificio). El JSON sigue indentado (no se toca el fichero).
+  WorkerWalkers y BuildingLot no se tocaron (zona de mundo / arte).
+- **5**: `GridManager.map_version()` sube con cada cambio de ocupación o de tierra;
+  `PlacementRules` guarda por versión el Núcleo, la red (`network_view()`), las rutas
+  de `road_route()` y los `BuildingData` cargados. `prepare_route_queries()` (lo llama
+  `PlacementAssist.valid_spots`) calcula una vez las celdas libres que llegan a la red
+  y descarta sin BFS los sitios sin camino. `GridManager.buildings_view()` /
+  `count_by_id()` recorren sin copiar; los servicios los usan. `get_all_buildings()`
+  sigue copiando (UI, herramientas y tests no cambian).
+- **8**: `BuildingHealth` usa 8 escalones de ceniza con un material compartido cada uno.
+
 Las dos primeras son las que mueven la aguja en la medida de hoy: el juego está
 **limitado por la CPU que prepara el render** (draw calls) en 3D y **por los scripts**
 en 2D. La GPU de este PC va holgada (3-5 ms por fotograma en 3D), pero en una
@@ -509,7 +527,8 @@ FPS** lo elige el jugador en Ajustes.
 
 El agente de mundo ya creó una calidad `minimal` en `WorldLook`, en la rama
 `feat/mundo-maqueta`: sin sombras, SSAO ni glow, isla sencilla y `scaling_3d_scale`
-0,7. Todavía no está en `GameConfig.GRAPHICS_QUALITY_MODES` ni en Ajustes. Midió a
+0,7. Desde el 2026-10-14 está en `GameConfig.GRAPHICS_QUALITY_MODES` y en Ajustes
+(§7.6). Midió a
 1600×900: **Forward+ alta 85 fps frente a mínima 139**; **Mobile alta 135 frente a
 mínima 151**. Este diseño parte de esa calidad y le añade lo que no es del mundo.
 
@@ -626,8 +645,49 @@ más riesgo:
    que comprobar que esa carpeta se puede escribir (en `Program Files` no se puede);
 3. dejar Forward+ en PC y aceptar la diferencia.
 
-La decisión es del dueño. Hasta entonces, Mínima en Forward+ ya cumple sobrada en
-este PC (71 fps) y la duda es solo para las integradas viejas.
+**Decisión del dueño (2026-10-14): la opción 2, pero con el override en el user
+dir.** Elegir Mínima en PC avisa "se aplica al reiniciar" y el siguiente arranque va
+en Mobile. El archivo no va junto al ejecutable (en `Program Files` no se puede
+escribir) sino en `user://renderer_override.cfg`, y el motor lo lee porque
+`project.godot` lo nombra en `application/config/project_settings_override`. Los
+argumentos `--rendering-method` se descartaron: solo valen si alguien relanza el
+juego con ellos, y el `.exe` se abre con doble clic. Detalle en §7.6.
+
+### 7.6 Hecho (2026-10-14, rama `perf/calidad-minima`)
+
+- **Mínima en Ajustes**: `"minimal"` en `GameConfig.GRAPHICS_QUALITY_MODES` y cuarta
+  opción de la fila de calidad (Ajustes → Interfaz), con una línea de ayuda y el
+  botón **DETECTAR DE NUEVO**. Una sola puerta para cambiarla:
+  `GraphicsQuality.set_quality()` (`scripts/services/GraphicsQuality.gd`).
+- **Lo que apaga**, todo de §7.1 salvo lo marcado abajo: `WorldLook` (sombras, SSAO,
+  glow, isla sencilla, **sin MSAA**, `scaling_3d_scale` 0,7 en PC y **0,6 en
+  móvil**); `GraphicsQuality.apply_runtime()` (lo llama `DeviceProfile`): humo,
+  serrín, farol y chispas ocultos (grupo `building_fx_anim`, los nuevos nacen
+  ocultos), banderines de obra quietos (uniform `wave` de `SiteFx`), rejilla
+  "siempre visible" apagada, caminantes a `life_figure_cap_minimal` (12). La bandera
+  de la colonia ya solo ondeaba en Alta. El tablero de combate 3D lee la calidad de
+  `WorldLook.settings_for` (`BattleScreen`).
+- **FPS**: el "Del perfil" de un PC en Mínima es 30 (`GameConfig.fps_minimal_pc`,
+  `DeviceProfile.auto_fps()`).
+- **Renderizador** (§7.5): Mínima en PC escribe `user://renderer_override.cfg`;
+  cualquier otra calidad lo borra. No se pide Mobile si hoy va en Compatibility.
+- **Detección del primer arranque** (§7.2) en `DeviceProfile`, con las reglas puras
+  en `GraphicsQuality` y los umbrales y la lista de GPU en `GameConfig`
+  (`quality_weak_gpu_patterns`, `quality_weak_ram_mb` 4600, `quality_weak_threads` 4,
+  `quality_phone_ram_mb` 6600, `quality_detect_*`). La RAM se compara con 4600 MB y
+  no con 4096: un equipo de 4 GB declara algo menos. La medida corre sin tope de FPS
+  (la pausa del título lo bajaría a 30), solo en la vista 3D, y se salta en headless
+  y con `-- --no-title` / `-- --no-detect`. El aviso sale al cerrar el menú de
+  título. Se guardan `[interfaz] quality_detected` y `quality_detected_reason`.
+- **`project.godot`** (§6, punto 7): `msaa_3d.mobile=0`, `scaling_3d/scale.mobile=0.75`,
+  `rendering_device/fallback_to_opengl3=true` y `config/project_settings_override`.
+  El tope de FPS ya estaba (`perf/tope-fps`).
+- **No hecho**: la "red de seguridad en partida" (opcional en §7.2); los topes de
+  caminantes por perfil (16 / 12 / 8 en la tabla de §7.1: hoy uno solo, 12); la
+  niebla solo con peso > 0 (`StormSky`); y en `BuildingPlacer.gd` (3D, de otro
+  agente) la rejilla se restaura con la preferencia tras construir, sin mirar la
+  calidad (una línea: usar `GraphicsQuality.grid_always_visible()`). Sin medir
+  todavía con la sonda la Mínima de verdad.
 
 ---
 

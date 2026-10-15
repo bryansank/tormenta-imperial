@@ -33,6 +33,8 @@ var _detail_cost: HFlowContainer
 ## Lo que produce: "+6 [madera] cada 12 s".
 var _detail_production: HBoxContainer
 var _detail_extras: Label
+## "[edificio] 3/6 · era 2: 9": cuantos hay, el tope de la era y el siguiente.
+var _detail_limit: HBoxContainer
 ## "Necesita bosque adyacente": la regla del yacimiento, antes de colocar (bug 10).
 var _detail_rule: Label
 ## Por que no se puede construir ahora ("Te falta: 20 Madera"), junto al boton.
@@ -65,19 +67,26 @@ func _ready() -> void:
 	_load_buildings()
 	_setup_ui()
 	_generate_thumbnails()
-	EventBus.resource_unlocked.connect(func(_r): _refresh_grid())
+	EventBus.resource_unlocked.connect(func(_r): _request_grid_refresh())
 	# Subir de rango quita candados; cargar otra partida puede ponerlos.
 	EventBus.governor_rank_up.connect(func(_r, _w):
-		_refresh_grid()
+		_request_grid_refresh()
 		_refresh_block())
-	EventBus.game_load_completed.connect(_refresh_grid)
-	EventBus.game_new_started.connect(_refresh_grid)
+	# Los topes suben con la era (GameConfig.building_limits_by_era): al cambiar
+	# de era, las tarjetas y el detalle dicen el tope nuevo.
+	EventBus.era_advanced.connect(func(_e):
+		_request_grid_refresh()
+		_refresh_block())
+	EventBus.game_load_completed.connect(_request_grid_refresh)
+	EventBus.game_new_started.connect(_request_grid_refresh)
 	# Con la lista abierta, el coste en rojo o no y el aviso siguen a lo que hay.
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	# CONSTRUIR es la accion principal: siempre a la vista, no escondida tras el
 	# menu (bug 9/11: solo salia al desplegar el antiguo ☰).
 	_build_btn.visible = true
 	UIManager.register_panel(self, "ConstructionMenu.modal")
+	# El giro de la maqueta solo hace falta con la lista abierta.
+	set_process(false)
 
 func _process(delta: float) -> void:
 	if _preview_model and _is_open and _selected_data:
@@ -345,6 +354,11 @@ func _setup_ui() -> void:
 	_detail_extras.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_detail_panel.add_child(_detail_extras)
 
+	_detail_limit = HBoxContainer.new()
+	_detail_limit.name = "DetailLimit"
+	_detail_limit.visible = false
+	_detail_panel.add_child(_detail_limit)
+
 	# Lo que impide construir, a la vista junto al boton (fuera del scroll).
 	_detail_block = UITheme.make_label("", "body", UITheme.DANGER)
 	_detail_block.name = "DetailBlock"
@@ -378,10 +392,12 @@ func _open() -> void:
 	_backdrop.visible = true
 	_refresh_grid()
 	_refresh_block()
+	set_process(true)
 	UIManager.open_panel(self)
 
 func _close() -> void:
 	_is_open = false
+	set_process(false)
 	_modal.visible = false
 	_backdrop.visible = false
 	UIManager.close_panel(self)
@@ -438,15 +454,58 @@ func _fit_columns() -> void:
 	if _grid_scroll != null and _grid_container != null:
 		_grid_container.columns = columns_for(_grid_scroll.size.x)
 
+## Tarjetas de la rejilla por id de edificio (HelpTargets las busca asi).
+var _cards: Dictionary = {}
+## Lo que decide como es cada tarjeta: [id, bloqueada, bloqueada por rango, con
+## miniatura]. Si no cambia, la rejilla no se recrea: solo se repintan costes.
+var _grid_sig: Array = []
+
+## La tarjeta de `building_id` en la rejilla, o null. Para el tutorial.
+func card_for(building_id: String) -> Control:
+	var card: Control = _cards.get(building_id)
+	return card if card != null and is_instance_valid(card) else null
+
+## Una senal pide rehacer la rejilla: con la lista cerrada no se hace nada
+## (_open la pone al dia), abierta se hace una vez al final del fotograma.
+var _grid_refresh_queued := false
+func _request_grid_refresh() -> void:
+	if not _is_open or _grid_refresh_queued:
+		return
+	_grid_refresh_queued = true
+	_flush_grid_refresh.call_deferred()
+
+func _flush_grid_refresh() -> void:
+	_grid_refresh_queued = false
+	if _is_open:
+		_refresh_grid()
+
+func _grid_signature(filtered: Array) -> Array:
+	var sig: Array = []
+	for data in filtered:
+		var rank_locked := not Rules.check_rank(data.id)
+		sig.append([data.id, rank_locked or _has_locked_resource_cost(data), rank_locked,
+			_thumb_cache.has(data.id)])
+	return sig
+
+## Rehace las tarjetas solo si cambia cuales hay o si alguna se bloquea o se
+## desbloquea; si no, deja las que hay y pone al dia su coste (docs/26 §6.9).
 func _refresh_grid() -> void:
+	var filtered := _get_filtered_buildings()
+	var sig := _grid_signature(filtered)
+	if sig == _grid_sig and _cards.size() == filtered.size() and _grid_container.get_child_count() == filtered.size():
+		_update_card_costs()
+		_mark_selected_card()
+		return
+	_grid_sig = sig
 	for child in _grid_container.get_children():
 		child.queue_free()
 	_card_styles.clear()
+	_cards.clear()
 
-	var filtered := _get_filtered_buildings()
 	for data in filtered:
 		var card := _create_grid_card(data)
 		_grid_container.add_child(card)
+		_cards[data.id] = card
 	_mark_selected_card()
 
 func _create_grid_card(data: BuildingData) -> PanelContainer:
@@ -526,6 +585,13 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		gain.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vbox.add_child(gain)
 
+	# Cuantos hay y el tope de la era: "3/6 · era 2: 9". Sin tope, nada.
+	var limit_row := HBoxContainer.new()
+	limit_row.name = "CardLimit"
+	limit_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	fill_limit_row(limit_row, data.id, "small")
+	vbox.add_child(limit_row)
+
 	# Interaction (A14): el hover solo RESALTA; la seleccion cambia solo con
 	# clic y queda bloqueada hasta el siguiente. Antes pasar el raton por otra
 	# tarjeta cambiaba la seleccion y el detalle saltaba de edificio en edificio.
@@ -571,6 +637,110 @@ static func make_rank_lock_row(rank: int) -> HBoxContainer:
 	row.add_child(label)
 	return row
 
+## Lo que dice CONSTRUIR del tope de `building_id`: {} si no tiene (decoraciones,
+## Sandbox). Si no, count / limit (de la era en curso, rango incluido), full, y
+## next_era / next_limit si una era posterior lo sube. Estatica para las pruebas.
+static func limit_info(building_id: String) -> Dictionary:
+	var limit := GameConfig.get_building_limit(building_id)
+	if building_id == "" or limit < 0:
+		return {}
+	var count := _count_of(building_id)
+	var info := {"count": count, "limit": limit, "full": count >= limit}
+	var next := GameConfig.next_building_limit(building_id)
+	if not next.is_empty():
+		info["next_era"] = int(next["era"])
+		info["next_limit"] = int(next["limit"])
+	return info
+
+## Cuantos hay de `building_id`, recordado mientras no cambie el mapa
+## (GridManager.map_version()): el refresco de costes llega con cada recurso que
+## cambia y contar recorre todos los edificios, carreteras incluidas.
+static var _count_version := -1
+static var _counts: Dictionary = {}
+static func _count_of(building_id: String) -> int:
+	var v: int = GridManager.map_version()
+	if v != _count_version:
+		_count_version = v
+		_counts.clear()
+	if not _counts.has(building_id):
+		_counts[building_id] = Rules.count_building(building_id)
+	return int(_counts[building_id])
+
+## "3/6 · era 2: 9", o "3/6" si ya no sube. "" sin tope.
+static func limit_text(building_id: String) -> String:
+	return _limit_text_of(limit_info(building_id))
+
+static func _limit_text_of(info: Dictionary) -> String:
+	if info.is_empty():
+		return ""
+	var text: String = Tr.t("FMT_LIMIT_COUNT") % [int(info["count"]), int(info["limit"])]
+	if info.has("next_era"):
+		text += " · " + Tr.t("FMT_LIMIT_NEXT_ERA") % [int(info["next_era"]), int(info["next_limit"])]
+	return text
+
+## El tooltip: lo mismo en frase ("Tienes 3. Tope en esta era: 6. En la era 2...").
+static func limit_tooltip(building_id: String) -> String:
+	return _limit_tooltip_of(limit_info(building_id))
+
+static func _limit_tooltip_of(info: Dictionary) -> String:
+	if info.is_empty():
+		return ""
+	var lines: Array = [Tr.t("FMT_LIMIT_TIP") % [int(info["count"]), int(info["limit"])]]
+	if info.has("next_era"):
+		lines.append(Tr.t("FMT_LIMIT_TIP_NEXT") % [int(info["next_era"]), int(info["next_limit"])])
+	elif int(info["limit"]) == 1:
+		lines.append(Tr.t("LBL_LIMIT_UNIQUE"))
+	else:
+		lines.append(Tr.t("LBL_LIMIT_TIP_MAX"))
+	return " ".join(lines)
+
+## Rellena `row` con el icono de edificio y limit_text(); la esconde sin tope.
+## No rehace nada si el texto no cambio (se llama en cada refresco de costes).
+static func fill_limit_row(row: HBoxContainer, building_id: String, font_size: String) -> void:
+	var info := limit_info(building_id)
+	var text := _limit_text_of(info)
+	var full := bool(info.get("full", false))
+	row.visible = text != ""
+	var same: bool = row.get_meta("limit_text", "") == text and row.get_meta("limit_full", false) == full
+	if same and row.get_child_count() > 0:
+		return
+	row.set_meta("limit_text", text)
+	row.set_meta("limit_full", full)
+	for child in row.get_children():
+		row.remove_child(child)
+		child.free()
+	if text == "":
+		return
+	row.add_theme_constant_override("separation", 4)
+	row.tooltip_text = _limit_tooltip_of(info)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	var color: Color = UITheme.WARNING if full else UITheme.TEXT_DIM
+	var icon := Control.new()
+	icon.name = "LimitIcon"
+	icon.custom_minimum_size = Vector2(14, 14)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.draw.connect(func(): draw_building_glyph(icon, Rect2(Vector2.ZERO, icon.custom_minimum_size), color))
+	row.add_child(icon)
+	var label := UITheme.make_label(text, font_size, color)
+	label.name = "LimitLabel"
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(label)
+
+## Una casita: tejado a dos aguas y cuerpo con puerta. Se pinta (como el
+## candado): la tipografia no trae un icono de edificio.
+static func draw_building_glyph(ci: CanvasItem, r: Rect2, color: Color) -> void:
+	var roof_h := r.size.y * 0.42
+	ci.draw_colored_polygon(PackedVector2Array([
+		Vector2(r.position.x, r.position.y + roof_h),
+		Vector2(r.get_center().x, r.position.y),
+		Vector2(r.end.x, r.position.y + roof_h)]), color)
+	var body := Rect2(r.position.x + r.size.x * 0.12, r.position.y + roof_h,
+		r.size.x * 0.76, r.size.y - roof_h)
+	ci.draw_rect(body, color)
+	var door := Rect2(body.get_center().x - r.size.x * 0.1, body.end.y - body.size.y * 0.6,
+		r.size.x * 0.2, body.size.y * 0.6)
+	ci.draw_rect(door, UITheme.BG_DARK)
+
 ## Un candado: arco del grillete y cuerpo con ojo de cerradura.
 static func draw_lock(ci: CanvasItem, r: Rect2, color: Color) -> void:
 	var body := Rect2(r.position.x, r.position.y + r.size.y * 0.45, r.size.x, r.size.y * 0.55)
@@ -614,6 +784,7 @@ func _show_no_selection() -> void:
 	TextKit.fill_cost_row(_detail_cost, {})
 	_fill_production({}, 0)
 	_detail_extras.text = ""
+	fill_limit_row(_detail_limit, "", "small")
 	_detail_rule.text = ""
 	_detail_block.visible = false
 	_detail_build_btn.visible = false
@@ -698,6 +869,7 @@ func _refresh_block() -> void:
 	_detail_block.tooltip_text = block
 	_detail_block.visible = block != ""
 	_detail_build_btn.disabled = block != ""
+	fill_limit_row(_detail_limit, _selected_data.id, "body")
 	_refresh_cost()
 
 ## La fila del coste del elegido, con lo que falta en rojo. Gratis lo dice.
@@ -736,13 +908,33 @@ static func extras_parts(data: BuildingData) -> Array:
 		extras.append(Tr.t("LBL_REQUIRES") % Rules.prerequisite_names(data.id))
 	return extras
 
+## Cambian los recursos (llega una senal por recurso, a veces varias en el mismo
+## fotograma): se repinta una sola vez, al final del fotograma.
+var _costs_queued := false
 func _on_resources_changed() -> void:
-	if not _is_open:
+	if not _is_open or _costs_queued:
 		return
-	_refresh_block()
+	_costs_queued = true
+	_flush_costs.call_deferred()
+
+func _flush_costs() -> void:
+	_costs_queued = false
+	if _is_open:
+		_refresh_block()
+		_update_card_costs()
+
+## El coste de cada tarjeta desbloqueada, con lo que falta en rojo. TextKit no
+## rehace la fila si no cambio nada.
+func _update_card_costs() -> void:
 	for card in _grid_container.get_children():
+		if card.is_queued_for_deletion():
+			continue
 		var row := card.find_child("CardCost", true, false) as HFlowContainer
 		var id := String(card.get_meta("building_id", ""))
+		# El tope cambia con lo construido y con la era, este o no bloqueada.
+		var limit_row := card.find_child("CardLimit", true, false) as HBoxContainer
+		if limit_row != null:
+			fill_limit_row(limit_row, id, "small")
 		if row == null or not _card_styles.has(id) or bool(_card_styles[id].get("locked", false)):
 			continue
 		var data: BuildingData = _data_by_id(id)
@@ -808,8 +1000,10 @@ func _generate_thumbnails() -> void:
 		await _render_thumbnail(viewport, camera, data)
 
 	viewport.queue_free()
-	# Refresh grid now that thumbnails are ready
-	_refresh_grid()
+	# Las miniaturas que no llegaron a tiempo a su tarjeta: la firma de la
+	# rejilla cambia y la proxima vez que se abra (o ya, si esta abierta) se
+	# rehace con ellas.
+	_request_grid_refresh()
 
 func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingData) -> void:
 	var model: Node3D = null

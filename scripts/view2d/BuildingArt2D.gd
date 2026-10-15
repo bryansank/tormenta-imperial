@@ -105,6 +105,10 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 	if id == "road":
 		_road(ci, Rect2(-size * 0.5, size), int(opts.get("road_mask", 0)))
 		return
+	var level: int = int(opts.get("level", 1))
+	# Mejorado: el MISMO dibujo, un 8 % mayor por nivel (como la 3D,
+	# ProductionManager.apply_level_visual), alrededor del centro.
+	r = grown_rect(r, level)
 	if bool(opts.get("shadow", true)):
 		_ground_shadow(ci, r, minf(r.size.x, r.size.y) * 0.22)
 	match id:
@@ -124,11 +128,20 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"garden": _garden(ci, r)
 		"fountain": _fountain(ci, r)
 		"statue": _statue(ci, r)
+		"lamp_post": _lamp_post(ci, r)
+		"park_bench": _park_bench(ci, r)
+		"hedge": _hedge(ci, r)
+		"avenue_tree": _avenue_tree(ci, r)
+		"flower_planter": _flower_planter(ci, r)
+		"colony_sign": _colony_sign(ci, r)
+		"hay_cart": _hay_cart(ci, r)
+		"bonfire": _bonfire(ci, r)
+		"flagpole": _flagpole(ci, r)
+		"palm_trees": _palm_trees(ci, r)
 		_:
 			_block(ci, r, minf(r.size.x, r.size.y) * 0.16, STONE, CONCRETE_DARK)
-	var level: int = int(opts.get("level", 1))
 	if level > 1:
-		_level_chevrons(ci, r, level)
+		_level_trim(ci, r, level)
 
 ## El cultivo de la Granja, encima de su dibujo horneado sin cultivo: crece
 ## (`growth` 0..1, brotes que se hacen matas y se doran) sin rehornear nada.
@@ -284,12 +297,72 @@ static func _poly(ci: CanvasItem, pts: PackedVector2Array, fill: Color, outline 
 	closed.append(pts[0])
 	ci.draw_polyline(closed, outline, width, true)
 
-## Galones de laton (nivel 2 y 3) en la esquina de abajo-derecha del dibujo.
-static func _level_chevrons(ci: CanvasItem, r: Rect2, level: int) -> void:
-	for i in range(level - 1):
-		var base := Vector2(r.end.x - 6.0 - i * 8.0, r.end.y - 5.0)
-		var pts := PackedVector2Array([base + Vector2(-4, 0), base + Vector2(0, -4), base + Vector2(4, 0), base + Vector2(4, 3), base + Vector2(0, -1), base + Vector2(-4, 3)])
-		_poly(ci, pts, BRASS_LIGHT, OUTLINE, 1.0)
+## Lo que crece el dibujo por nivel por encima del 1 (el mismo 8 % que la 3D).
+const LEVEL_GROWTH := 0.08
+
+## Escala del dibujo de un edificio de nivel `level` (1 = tal cual).
+static func level_scale(level: int) -> float:
+	return 1.0 + LEVEL_GROWTH * float(maxi(0, level - 1))
+
+## `r` crecido alrededor de su centro segun el nivel.
+static func grown_rect(r: Rect2, level: int) -> Rect2:
+	var f := level_scale(level)
+	if f == 1.0:
+		return r
+	var c := r.get_center()
+	return Rect2(c - r.size * f * 0.5, r.size * f)
+
+## El remate de laton de un edificio mejorado, como LevelTrim en 3D: en el II,
+## una corona (cuatro remates en las esquinas del tejado unidos por un fleje);
+## en el III, ademas, un mastil corto con un banderin rojo en el centro. Va
+## dentro del dibujo horneado (una textura por nivel en ArtCache2D).
+static func _level_trim(ci: CanvasItem, r: Rect2, level: int) -> void:
+	var c := r.get_center()
+	var m := minf(r.size.x, r.size.y)
+	var half := r.size * 0.36
+	var s := clampf(m * 0.07, 2.5, 5.5)
+	var corners: Array = []
+	for d in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		corners.append(c + d * half)
+	# El fleje: un aro de laton que une las cuatro esquinas.
+	var ring := PackedVector2Array(corners)
+	ring.append(corners[0])
+	ci.draw_polyline(ring, OUTLINE, s * 0.6 + 1.5)
+	ci.draw_polyline(ring, BRASS_DARK, s * 0.6)
+	ci.draw_polyline(ring, BRASS_LIGHT, maxf(0.8, s * 0.18))
+	# Los remates de las esquinas: un dado de laton con su pomo dorado.
+	for p: Vector2 in corners:
+		_block(ci, Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), s * 0.45, BRASS, BRASS_DARK)
+		_dot(ci, p - _down * s * 0.35, s * 0.3, BRASS_LIGHT)
+	if level < 3:
+		return
+	var h := clampf(m * 0.36, 10.0, 22.0)
+	_block(ci, Rect2(c - Vector2(s, s) * 0.7, Vector2(s, s) * 1.4), s * 0.5, IRON.lightened(0.15), IRON)
+	var tip := _mast(ci, c, h, IRON.lightened(0.2), 1.6)
+	# Banderin rojo hacia la derecha de la pantalla, colgando de la punta
+	# (_left() es, en el marco local, el lado +X de la pantalla).
+	var right := _left()
+	_poly(ci, PackedVector2Array([tip + _down * 1.0, tip + _down * h * 0.36, tip + right * h * 0.5 + _down * h * 0.18]), RED, OUTLINE, 1.0)
+	_dot(ci, tip - _down * 0.8, 1.6, BRASS_LIGHT)
+
+## La placa "II" / "III" de un edificio mejorado, sin girar (quien la llama ya
+## quito el giro): latón con las barras del numero romano, en la esquina de
+## arriba-izquierda de la huella `fp` (la bandera del pais va a la derecha).
+## Pocas ordenes de dibujo y solo al repintar: sin texto ni fuente.
+static func draw_level_plate(ci: CanvasItem, fp: Vector2, level: int) -> void:
+	if level <= 1:
+		return
+	var bars := clampi(level, 2, 3)
+	var size := Vector2(4.0 + 3.6 * bars, 10.0)
+	var pos := Vector2(-fp.x * 0.5 + 3.0, -fp.y * 0.5 - size.y * 0.35)
+	var rect := Rect2(pos, size)
+	ci.draw_rect(Rect2(rect.position + Vector2(1.5, 2.0), rect.size), Color(SHADOW, 0.5))
+	ci.draw_rect(rect.grow(1.0), OUTLINE)
+	ci.draw_rect(rect, BRASS)
+	ci.draw_line(rect.position + Vector2(0.5, 0.8), Vector2(rect.end.x - 0.5, rect.position.y + 0.8), BRASS_LIGHT, 1.2)
+	for i in bars:
+		var x := rect.position.x + 2.6 + 3.6 * float(i) + 0.9
+		ci.draw_line(Vector2(x, rect.position.y + 2.2), Vector2(x, rect.end.y - 2.2), IRON, 1.8)
 
 ## Rayas amarillo/negro (lo militar) a lo largo de un rectangulo estrecho.
 static func _hazard_strip(ci: CanvasItem, r: Rect2) -> void:
@@ -309,48 +382,137 @@ static func _hazard_strip(ci: CanvasItem, r: Rect2) -> void:
 
 # ── Edificios ─────────────────────────────────────────────────────────
 
-## Nucleo: plaza de piedra octogonal y, en medio, el tambor crema con ventanas
-## encendidas bajo la gran cupula de laton con el engranaje imperial (lo
-## exagerado). Cuatro tuberias rojas a las esquinas, con sus arquetas.
+## Nucleo MONUMENTAL (2026-10-14, como la receta 3D tools/toy_recipes/nucleo.gd:
+## "que domine la colonia"), en sus mismas 3x3 casillas: peana cuadrada y
+## escalinata circular; detras, las dos calderas con sus chimeneas altas (de
+## ahi el humo); el tambor alto de enlucido con su anillo de columnas, cinturon
+## de piedra y dos pisos de ventanas encendidas; la gran cupula de laton
+## escalonada con nervios, la linterna encendida y, delante, la puerta con su
+## escalinata, el manometro encima y dos faroles. Lo alto sube hacia arriba en
+## pantalla. El mastil de la bandera sale de la linterna, pero lo pinta
+## ColonyFlag2D (no se hornea: asi la bandera cuelga de su punta y el dibujo
+## cabe en el margen de la cache); `flag_mount` dice donde.
 static func _nucleo(ci: CanvasItem, r: Rect2) -> void:
+	var g := _nucleo_geom(r)
+	var m: float = g["m"]
 	var c := r.get_center()
-	var h := minf(r.size.x, r.size.y) * 0.5
-	var oct := PackedVector2Array()
-	for i in range(8):
-		var a := TAU * (i + 0.5) / 8.0
-		oct.append(c + Vector2(cos(a), sin(a)) * h * 1.06)
-	_poly(ci, oct, Color8(214, 198, 170), OUTLINE, 1.5)
-	# Losas de la plaza en anillo
-	ci.draw_arc(c, h * 0.86, 0.0, TAU, 32, CONCRETE, 1.5)
-	for i in range(8):
-		var a := TAU * i / 8.0
-		ci.draw_line(c + Vector2(cos(a), sin(a)) * h * 0.72, c + Vector2(cos(a), sin(a)) * h * 0.98, CONCRETE, 1.0)
-	# Tuberias a las esquinas, con arqueta
-	for d in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-		var a0: Vector2 = c + d * h * 0.4
-		var a1: Vector2 = c + d * h * 0.82
-		ci.draw_line(a0, a1, OUTLINE, 6.0)
-		ci.draw_line(a0, a1, RED, 4.0)
-		ci.draw_line(a0, a1, Color(1, 1, 1, 0.25), 1.0)
-		_block(ci, Rect2(a1 - Vector2(4.5, 4.5), Vector2(9, 9)), 3.0, SLATE.lightened(0.15), IRON)
-	# El tambor con sus ventanas encendidas y la cupula encima
-	var drum_h := h * 0.2
-	var top := c - _down * drum_h * 0.5
-	_cyl(ci, top, h * 0.6, drum_h, BRASS_DARK, CREAM)
-	for i in 7:
-		var t := -0.75 + 1.5 * float(i) / 6.0
-		var p := top + _down * drum_h * 0.55 + _left() * h * 0.6 * t
-		ci.draw_rect(Rect2(p - Vector2(1.6, 1.6), Vector2(3.2, 3.2)), GLOW)
-	_shaded_disc(ci, top, h * 0.52, BRASS)
-	for i in 8:
-		var a := TAU * i / 8.0
-		ci.draw_line(top + Vector2(cos(a), sin(a)) * h * 0.24, top + Vector2(cos(a), sin(a)) * h * 0.5, BRASS_DARK, 1.0)
-	# Engranaje imperial
-	for i in range(10):
-		var a := TAU * i / 10.0
-		ci.draw_line(top + Vector2(cos(a), sin(a)) * h * 0.14, top + Vector2(cos(a), sin(a)) * h * 0.26, IRON, 3.0)
-	_disc(ci, top, h * 0.17, BRASS_LIGHT, OUTLINE, 1.25)
-	_disc(ci, top, h * 0.08, RED, OUTLINE, 1.0)
+	var bc: Vector2 = g["base"]
+	var rad: float = g["rad"]
+	var drum_h: float = g["drum_h"]
+	var dt: Vector2 = g["drum_top"]
+	var front := Vector2(0, 1)
+	# Peana cuadrada de losas
+	_block(ci, r.grow(-m * 0.02), m * 0.03, Color8(214, 198, 170), CONCRETE_DARK)
+	var slab := r.grow(-m * 0.06)
+	for k in range(1, 4):
+		var t := float(k) / 4.0
+		ci.draw_line(Vector2(slab.position.x + slab.size.x * t, slab.position.y), Vector2(slab.position.x + slab.size.x * t, slab.end.y), CONCRETE, 1.0)
+		ci.draw_line(Vector2(slab.position.x, slab.position.y + slab.size.y * t), Vector2(slab.end.x, slab.position.y + slab.size.y * t), CONCRETE, 1.0)
+	# Calderas detras, con sus chimeneas altas y la tuberia al tambor
+	for sx: float in [-1.0, 1.0]:
+		var bpos: Vector2 = c + Vector2(sx * m * 0.3, -m * 0.3)
+		var box := Rect2(bpos - Vector2(m * 0.12, m * 0.09), Vector2(m * 0.24, m * 0.18))
+		_block(ci, box, m * 0.07, SLATE.lightened(0.12), IRON)
+		ci.draw_line(bpos, bc + Vector2(sx * rad * 0.7, -rad * 0.4), OUTLINE, 4.0)
+		ci.draw_line(bpos, bc + Vector2(sx * rad * 0.7, -rad * 0.4), BRASS_DARK, 2.4)
+		var stack: Vector2 = _nucleo_stack(c, m, sx)
+		_cyl(ci, stack, m * 0.045, m * 0.18, IRON.lightened(0.1), IRON.lightened(0.2))
+		_cyl_band(ci, stack, m * 0.045, m * 0.18, 0.15, 1.5, BRASS)
+		_dot(ci, stack, m * 0.028, OIL_BLACK)
+	# Escalinata circular de dos peldanos
+	_cyl(ci, bc, rad * 1.42, m * 0.025, STONE.darkened(0.04), CONCRETE_DARK)
+	_cyl(ci, bc - _down * m * 0.025, rad * 1.3, m * 0.025, STONE, CONCRETE)
+	var foot := bc - _down * m * 0.05
+	# Columnas de detras (asoman por los lados del tambor)
+	var columns: Array = []
+	for k in 12:
+		var a := TAU * float(k) / 12.0 + PI / 12.0
+		columns.append(Vector2(cos(a), sin(a)))
+	for dir: Vector2 in columns:
+		if dir.dot(_down) < 0.0:
+			_nucleo_column(ci, foot + dir * rad * 1.14, drum_h, m)
+	# El tambor alto: zocalo, cinturon de piedra y dos pisos de ventanas
+	_cyl(ci, dt, rad, drum_h - m * 0.05, CREAM.darkened(0.06), CREAM)
+	_cyl_band(ci, dt, rad, drum_h - m * 0.05, 0.9, 2.0, STONE.darkened(0.08))
+	_cyl_band(ci, dt, rad, drum_h - m * 0.05, 0.46, 1.5, STONE.lightened(0.04))
+	ci.draw_arc(dt, rad * 1.02, 0.0, TAU, 24, BRASS_DARK, 2.0)
+	# Entre las columnas (a +-30 grados): en el eje, abajo la puerta y arriba
+	# el manometro.
+	for t: float in [0.6, 0.2]:
+		for side: float in [-1.0, 1.0]:
+			var dir := _down.rotated(side * PI / 6.0)
+			var p := foot + dir * rad * 0.94 - _down * drum_h * t
+			var ws := Vector2(m * 0.035, m * 0.055)
+			ci.draw_rect(Rect2(p - ws * 0.5, ws).grow(0.8), STONE.darkened(0.25))
+			ci.draw_rect(Rect2(p - ws * 0.5, ws), GLOW)
+	# Columnas de delante
+	for dir: Vector2 in columns:
+		if dir.dot(_down) >= 0.0:
+			_nucleo_column(ci, foot + dir * rad * 1.14, drum_h, m)
+	# Puerta grande con su escalinata, el manometro encima y dos faroles
+	var door_c := foot + front * rad * 0.98
+	_block(ci, Rect2(door_c + front * rad * 0.3 - Vector2(m * 0.11, m * 0.035), Vector2(m * 0.22, m * 0.07)), m * 0.02, STONE, CONCRETE_DARK)
+	var ds := Vector2(m * 0.09, m * 0.11)
+	var dp := door_c - _down * drum_h * 0.18
+	ci.draw_rect(Rect2(dp - ds * 0.5, ds).grow(1.2), BRASS_DARK)
+	ci.draw_rect(Rect2(dp - ds * 0.5, ds), DARK_WOOD)
+	var gauge := door_c - _down * drum_h * 0.62
+	_disc(ci, gauge, m * 0.05, BRASS, OUTLINE, 1.2)
+	_dot(ci, gauge, m * 0.036, MARBLE)
+	ci.draw_line(gauge, gauge + Vector2(m * 0.024, -m * 0.024), RED, 1.4)
+	for sx: float in [-1.0, 1.0]:
+		var lamp: Vector2 = door_c + front * rad * 0.42 + Vector2(sx * m * 0.12, 0)
+		var lamp_top := _mast(ci, lamp, m * 0.07, IRON, 1.2)
+		_dot(ci, lamp_top, 1.8, GLOW)
+	# La cupula (exagerada): gajos de laton escalonados y nervios oscuros
+	var tiers: Array = g["tiers"]
+	for i in tiers.size():
+		var tier: Array = tiers[i]
+		_disc(ci, tier[0], tier[1], BRASS.lightened(0.05 * float(i)), OUTLINE, 1.0)
+		_dot(ci, (tier[0] as Vector2) + (_left() - _down) * float(tier[1]) * 0.3, float(tier[1]) * 0.35, BRASS.lightened(0.12 + 0.05 * float(i)))
+	for k in 8:
+		var dir := Vector2.from_angle(TAU * float(k) / 8.0)
+		if dir.dot(_down) < -0.3:
+			continue
+		var pts := PackedVector2Array()
+		for tier in tiers:
+			pts.append((tier[0] as Vector2) + dir * float(tier[1]))
+		ci.draw_polyline(pts, BRASS_DARK.darkened(0.2), 1.2)
+	# Linterna encendida en lo alto, con su balconcillo y su cupulin
+	var lt: Vector2 = g["lantern"]
+	_disc(ci, lt, rad * 0.26, IRON, OUTLINE, 1.0)
+	_cyl(ci, lt - _down * m * 0.05, rad * 0.17, m * 0.05, BRASS_DARK, GLOW)
+	_shaded_disc(ci, g["lantern_top"], rad * 0.13, BRASS)
+
+## Las medidas del Nucleo, compartidas por su dibujo y por `flag_mount`.
+## El tambor se adelanta un poco hacia abajo en pantalla para que lo alto
+## (cupula, linterna) quede dentro de la huella.
+static func _nucleo_geom(r: Rect2) -> Dictionary:
+	var m := minf(r.size.x, r.size.y)
+	var c := r.get_center()
+	var base := c + _down * m * 0.12
+	var rad := m * 0.25
+	var drum_h := m * 0.26
+	var drum_top := base - _down * drum_h
+	var dome_h := m * 0.19
+	var tiers: Array = []
+	for t in [[0.0, 1.0], [0.34, 0.92], [0.62, 0.74], [0.84, 0.5], [0.97, 0.24]]:
+		tiers.append([drum_top - _down * dome_h * float(t[0]), rad * float(t[1])])
+	var lantern: Vector2 = drum_top - _down * dome_h
+	var lantern_top := lantern - _down * m * 0.06
+	return {"m": m, "base": base, "rad": rad, "drum_h": drum_h, "drum_top": drum_top,
+		"tiers": tiers, "lantern": lantern, "lantern_top": lantern_top}
+
+## La boca de la chimenea de una caldera del Nucleo (`sx` -1 izquierda, 1 derecha).
+static func _nucleo_stack(c: Vector2, m: float, sx: float) -> Vector2:
+	return c + Vector2(sx * m * 0.34, -m * 0.3) - _down * m * 0.18
+
+static func _nucleo_column(ci: CanvasItem, foot: Vector2, h: float, m: float) -> void:
+	var top := foot - _down * h
+	var w := maxf(1.5, m * 0.03)
+	ci.draw_line(foot, top, OUTLINE, w + 1.5)
+	ci.draw_line(foot, top, STONE.lightened(0.12), w)
+	_dot(ci, top, w * 0.9, STONE)
 
 ## Vivienda: paredes crema con ventanas de luz calida, tejado de teja a dos
 ## aguas y una chimenea gorda (lo exagerado); un seto verde delante.
@@ -858,6 +1020,42 @@ static func _headquarters(ci: CanvasItem, r: Rect2) -> void:
 	var e := top.get_center() - _down * m * 0.02
 	_cyl(ci, e, m * 0.22, m * 0.1, BRASS_DARK, CREAM.darkened(0.08))
 	_emblem_2d(ci, e, m * 0.19, BRASS_LIGHT, false)
+	# La peana del mastil alto en la esquina delantera derecha del tejado (como
+	# la receta 3D); el palo y la bandera del pais los pinta ColonyFlag2D.
+	var mb := _hq_mast_base(top, m)
+	_block(ci, Rect2(mb - Vector2(m * 0.05, m * 0.05), Vector2(m * 0.1, m * 0.1)), m * 0.03, STONE.darkened(0.12), CONCRETE_DARK)
+	_dot(ci, mb, m * 0.022, IRON)
+
+## Donde nace el mastil del Cuartel General: la esquina delantera derecha de
+## su tejado (marco local: delante es +y).
+static func _hq_mast_base(top: Rect2, m: float) -> Vector2:
+	return Vector2(top.end.x - m * 0.08, top.end.y - m * 0.08)
+
+## El mastil de la bandera del pais de un edificio, en el marco del NODO (sin
+## girar: ya con el giro `steps` aplicado): {"base", "height", "flag_w"}, o {}
+## si su dibujo no trae mastil (ColonyFlag2D pone entonces el suyo de reserva).
+## Usa las mismas medidas que el dibujo (huella `size`, patio `inset`, nivel),
+## asi que la bandera cuelga justo de lo alto de la linterna del Nucleo o del
+## mastil del Cuartel General.
+static func flag_mount(id: String, size: Vector2, inset: float, steps: int, level: int = 1) -> Dictionary:
+	if id != "nucleo" and id != "headquarters":
+		return {}
+	_set_view(steps)
+	var r := grown_rect(Rect2(-size * 0.5, size).grow(-INSET - inset), level)
+	var m := minf(r.size.x, r.size.y)
+	var base := Vector2.ZERO
+	var height := 0.0
+	var flag_w := 0.0
+	if id == "nucleo":
+		base = _nucleo_geom(r)["lantern_top"]
+		height = m * 0.3
+		flag_w = m * 0.34
+	else:
+		var hall := r.grow(-m * 0.08)
+		base = _hq_mast_base(_split(hall, m * 0.2)[0], m)
+		height = m * 0.62
+		flag_w = m * 0.5
+	return {"base": base.rotated(float(steps) * PI * 0.5), "height": height, "flag_w": flag_w}
 
 ## Jardin: seto alrededor, cesped claro con un sendero, parterres de flores y
 ## un arbol grande y redondo (lo exagerado). Acento verde.
@@ -1586,6 +1784,8 @@ static func fx_anchors(id: String) -> Array:
 		"tower": return [Vector2(0.28, 0.72)]
 		"warehouse": return [Vector2(0.5, 0.85)]
 		"laboratory": return [Vector2(0.5, 0.4)]
+		# La chimenea de la caldera izquierda (la "fx" de la receta 3D).
+		"nucleo": return [Vector2(0.16, 0.04)]
 	return [Vector2(0.5, 0.45)]
 
 # ── Parcela y atrezo (docs/03, "Parcela y atrezo") ────────────────────
@@ -1954,101 +2154,583 @@ static func _rot_rect(ci: CanvasItem, c: Vector2, size: Vector2, rot: float, fil
 	else:
 		ci.draw_colored_polygon(pts, fill)
 
-# ── Yacimientos ───────────────────────────────────────────────────────
+# ── Yacimientos ──
+# Los cuatro yacimientos en "maqueta", con el mismo vocabulario que la 3D
+# (scripts/map/DepositMesh.gd): suelo de borde irregular con su reborde
+# oscuro, piezas con volumen (pared hacia abajo en pantalla, luz por la
+# izquierda, sombra hacia abajo-derecha) y un elemento exagerado por tipo:
+# el pino alto del bosque, el racimo de cristales del oro, las dos agujas del
+# hierro y la torreta del petroleo. `stage` (4 entero .. 1 casi gastado) quita
+# arboles, cristales, pepitas y mineral, y encoge la balsa de petroleo.
+
+## Pixeles de alto por metro de altura (la maqueta vista de tres cuartos).
+const DEP_RISE := 7.0
 
 ## Dibuja el yacimiento `deposit_id` sobre `size` px centrado en el origen.
-## Determinista por `seed_val` (la celda): el mismo bosque siempre igual.
-static func draw_deposit(ci: CanvasItem, deposit_id: String, size: Vector2, seed_val: int) -> void:
-	var r := Rect2(-size * 0.5, size).grow(-1.0)
+## Determinista por `seed_val` (la variante) y `stage`: el mismo dibujo siempre.
+static func draw_deposit(ci: CanvasItem, deposit_id: String, size: Vector2, seed_val: int, stage: int = 4) -> void:
+	_set_view(0)
+	var r := Rect2(-size * 0.5, size).grow(-2.0)
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_val
+	rng.seed = hash([deposit_id, seed_val])
+	var f := float(clampi(stage, 1, 4)) / 4.0
 	match deposit_id:
-		"forest": _forest(ci, r, rng)
-		"gold_vein": _rocks(ci, r, rng, Color8(160, 138, 112), BRASS_LIGHT, true)
-		"iron_deposit": _rocks(ci, r, rng, Color8(112, 114, 130), STEEL.lightened(0.2), false)
-		"oil_well": _oil(ci, r, rng)
+		"forest": _dep_forest(ci, r, rng, f)
+		"gold_vein": _dep_gold(ci, r, rng, f)
+		"iron_deposit": _dep_iron(ci, r, rng, f)
+		"oil_well": _dep_oil(ci, r, rng, f)
 		_:
 			ci.draw_rect(r, Color(0.5, 0.5, 0.5, 0.6))
 
-static func _forest(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> void:
-	# Suelo de bosque
-	ci.draw_rect(r.grow(-2), Color(LEAF_DARK.darkened(0.25), 0.5))
-	var trees: Array = []
-	var cells := r.size / 32.0
-	var count := int(cells.x * cells.y * 3.2) + 3
-	for i in range(count):
-		trees.append({
-			"p": r.position + Vector2(rng.randf_range(0.14, 0.86) * r.size.x, rng.randf_range(0.14, 0.86) * r.size.y),
-			"r": rng.randf_range(7.0, 11.0),
-			"tone": rng.randf(),
-		})
-	# De arriba a abajo, para que las copas de delante tapen a las de detras
-	trees.sort_custom(func(a, b): return a["p"].y < b["p"].y)
-	for t in trees:
-		var p: Vector2 = t["p"]
-		var rad: float = t["r"]
-		_dot(ci, p + Vector2(2, 3), rad, Color(0, 0, 0, 0.25))
-	for t in trees:
-		var p: Vector2 = t["p"]
-		var rad: float = t["r"]
-		var base := LEAF_DARK.lerp(GREEN, float(t["tone"]))
-		if float(t["tone"]) > 0.88:
-			base = BRASS.darkened(0.15) if float(t["tone"]) > 0.94 else TERRACOTTA  # algun arbol de otono
-		_dot(ci, p, rad, OUTLINE)
-		_dot(ci, p, rad - 1.2, base)
-		_dot(ci, p - Vector2(rad, rad) * 0.25, rad * 0.55, base.lightened(0.18))
-		_dot(ci, p - Vector2(rad, rad) * 0.4, rad * 0.2, base.lightened(0.35))
+# ── Bosque ──
 
-static func _rocks(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, rock: Color, vein: Color, nuggets: bool) -> void:
-	ci.draw_rect(r.grow(-3), Color(rock.darkened(0.3), 0.35))
-	var cells := r.size / 32.0
-	var count := int(cells.x * cells.y * 2.0) + 2
-	for i in range(count):
-		var c := r.position + Vector2(rng.randf_range(0.2, 0.8) * r.size.x, rng.randf_range(0.2, 0.8) * r.size.y)
-		var rad := rng.randf_range(8.0, 13.0)
-		var pts := PackedVector2Array()
-		var sides := rng.randi_range(5, 7)
-		for s in range(sides):
-			var a := TAU * s / float(sides) + rng.randf_range(-0.25, 0.25)
-			pts.append(c + Vector2(cos(a), sin(a)) * rad * rng.randf_range(0.7, 1.1))
-		var shadow := PackedVector2Array()
-		for p in pts:
-			shadow.append(p + Vector2(2, 3))
-		ci.draw_colored_polygon(shadow, Color(0, 0, 0, 0.3))
-		var tone := rock.lerp(rock.lightened(0.15), rng.randf())
-		_poly(ci, pts, tone, OUTLINE, 1.5)
-		# Cara iluminada
-		ci.draw_colored_polygon(PackedVector2Array([pts[0], pts[1], c]), tone.lightened(0.15))
-		# Vetas
-		var a0 := rng.randf() * TAU
-		ci.draw_line(c + Vector2(cos(a0), sin(a0)) * rad * 0.6, c - Vector2(cos(a0), sin(a0)) * rad * 0.3, vein, 2.0)
-		if not nuggets:
-			ci.draw_line(c + Vector2(cos(a0 + 1.4), sin(a0 + 1.4)) * rad * 0.5, c, RUST.lightened(0.1), 1.5)
-	if nuggets:
-		for i in range(count + 2):
-			var q := r.position + Vector2(rng.randf_range(0.12, 0.88) * r.size.x, rng.randf_range(0.12, 0.88) * r.size.y)
-			_dot(ci, q, 2.4, OUTLINE)
-			_dot(ci, q, 1.8, BRASS_LIGHT)
-			_dot(ci, q - Vector2(0.5, 0.5), 0.7, FIRE_CORE)
+static func _dep_forest(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, f: float) -> void:
+	_dep_ground(ci, r, rng, LEAF_DARK.darkened(0.12), OLIVE_DARK.darkened(0.3))
+	var pts := _dep_points(rng, r, 19.0, 9.0)
+	var hero := 0
+	for i in pts.size():
+		if (pts[i] as Vector2).y < (pts[hero] as Vector2).y:
+			hero = i
+	var kept := maxi(1, ceili(float(pts.size()) * f))
+	var order: Array = range(pts.size())
+	order.erase(hero)
+	order.push_front(hero)
+	var items: Array = []
+	for k in order.size():
+		var i: int = order[k]
+		# Mismo numero de tiradas por arbol en cualquier etapa: talar uno no
+		# cambia a los demas.
+		var round_roll := rng.randf()
+		var h := rng.randf_range(1.15, 1.6)
+		var tone := rng.randf()
+		var kind := "stump"
+		if k < kept:
+			if i == hero:
+				kind = "hero"
+			elif round_roll < 0.3:
+				kind = "round"
+			else:
+				kind = "pine"
+		items.append({"p": pts[i], "kind": kind, "h": h, "tone": tone})
+	# Matorral, debajo de todo
+	for k in maxi(2, int(r.size.x * r.size.y / 1500.0)):
+		var b := r.get_center() + Vector2(rng.randf_range(-0.42, 0.42) * r.size.x, rng.randf_range(-0.42, 0.42) * r.size.y)
+		_dot(ci, b, 3.6, OUTLINE)
+		_dot(ci, b, 2.8, OLIVE)
+	# La pila de troncos, abajo a la derecha
+	var pile := r.end - Vector2(10, 7)
+	_dep_log(ci, pile + Vector2(-2.5, 0))
+	_dep_log(ci, pile + Vector2(2.5, 0))
+	_dep_log(ci, pile + Vector2(0, -3))
+	# De atras adelante: las copas de delante tapan a las de detras
+	items.sort_custom(func(a, b): return (a["p"] as Vector2).y < (b["p"] as Vector2).y)
+	for it in items:
+		var p: Vector2 = it["p"]
+		match String(it["kind"]):
+			"stump": _dep_stump(ci, p)
+			"round": _dep_round_tree(ci, p, float(it["h"]) * 0.85, float(it["tone"]))
+			"hero": _dep_pine(ci, p, float(it["h"]) * 1.35, float(it["tone"]))
+			_: _dep_pine(ci, p, float(it["h"]), float(it["tone"]))
 
-static func _oil(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> void:
+static func _dep_pine(ci: CanvasItem, p: Vector2, h: float, tone: float) -> void:
+	var hp := h * DEP_RISE * 1.6
+	var w := h * 6.0
+	_dep_shadow(ci, p, w * 0.9, hp)
+	var base := LEAF_DARK.lerp(OLIVE, tone * 0.6)
+	ci.draw_line(p, p - Vector2(0, hp * 0.3), OUTLINE, 3.0)
+	ci.draw_line(p, p - Vector2(0, hp * 0.3), DARK_WOOD, 1.6)
+	for t in 3:
+		var y0 := p.y - hp * (0.18 + 0.24 * t)
+		var hw := w * (1.0 - 0.22 * t)
+		var tip := Vector2(p.x, y0 - hp * 0.42)
+		var tri := PackedVector2Array([Vector2(p.x - hw, y0), Vector2(p.x + hw, y0), tip])
+		var col := base.lightened(0.06 * t)
+		_poly(ci, tri, col, OUTLINE, 1.2)
+		# Mitad en luz (izquierda)
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(p.x - hw + 1.5, y0 - 0.8), Vector2(p.x, y0 - 0.8), tip + Vector2(0, 1.5)]), col.lightened(0.14))
+
+static func _dep_round_tree(ci: CanvasItem, p: Vector2, h: float, tone: float) -> void:
+	var hp := h * DEP_RISE * 1.6
+	var rad := h * 5.5
+	var leaf := LEAF.lerp(GREEN.lightened(0.1), tone)
+	if tone > 0.9:
+		leaf = BRASS.darkened(0.06) if tone > 0.95 else TERRACOTTA
+	_dep_shadow(ci, p, rad, hp)
+	ci.draw_line(p, p - Vector2(0, hp * 0.5), OUTLINE, 3.0)
+	ci.draw_line(p, p - Vector2(0, hp * 0.5), DARK_WOOD, 1.6)
+	var c := p - Vector2(0, hp * 0.62)
+	_dot(ci, c, rad + 1.2, OUTLINE)
+	_dot(ci, c, rad, leaf.darkened(0.1))
+	_dot(ci, c - Vector2(rad, rad) * 0.2, rad * 0.7, leaf)
+	_dot(ci, c - Vector2(rad, rad) * 0.42, rad * 0.25, leaf.lightened(0.3))
+
+static func _dep_stump(ci: CanvasItem, p: Vector2) -> void:
+	_dot(ci, p + Vector2(0, 1.5), 3.6, OUTLINE)
+	_dot(ci, p + Vector2(0, 1.0), 2.9, DARK_WOOD)
+	_dot(ci, p, 2.9, OUTLINE)
+	_dot(ci, p, 2.3, MARBLE.darkened(0.12))
+	_dot(ci, p, 0.9, LIGHT_WOOD)
+
+static func _dep_log(ci: CanvasItem, c: Vector2) -> void:
+	var a := c - Vector2(0, 5)
+	var b := c + Vector2(0, 5)
+	ci.draw_line(a, b, OUTLINE, 5.0)
+	ci.draw_line(a, b, WOOD.darkened(0.12), 3.4)
+	_dot(ci, b, 2.4, OUTLINE)
+	_dot(ci, b, 1.7, MARBLE.darkened(0.1))
+
+# ── Oro ──
+
+static func _dep_gold(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, f: float) -> void:
+	_dep_ground(ci, r, rng, CONCRETE.darkened(0.1), CONCRETE_DARK.darkened(0.3))
+	_dep_patches(ci, r, rng, 3, MARBLE.darkened(0.14))
+	var m := minf(minf(r.size.x, r.size.y), 74.0)
+	var c := r.get_center() + Vector2(0, -r.size.y * 0.06)
+	var rocks: Array = []
+	for p in _dep_points(rng, r, 20.0, 9.0):
+		if (p as Vector2).distance_to(c) < m * 0.3:
+			continue
+		rocks.append({"p": p, "rad": rng.randf_range(3.6, 5.6), "h": rng.randf_range(2.0, 3.6)})
+	rocks.sort_custom(func(a, b): return (a["p"] as Vector2).y < (b["p"] as Vector2).y)
+	var tops: Array = []
+	# Las de detras, antes que la pena madre
+	for rk in rocks:
+		if (rk["p"] as Vector2).y < c.y:
+			tops.append(_dep_rock(ci, rk["p"], rk["rad"], rk["h"], CONCRETE.lightened(0.04), rng, 5))
+	# La pena madre con el racimo encima
+	var top := _dep_rock(ci, c, m * 0.24, m * 0.13, CONCRETE.lightened(0.06), rng, 7)
+	var crystals := maxi(1, int(round(6.0 * f)))
+	var h0 := m * 0.3
+	# Azar aparte para lo que se gasta: las penas no cambian entre etapas.
+	var crng := _dep_fork(rng)
+	var vrng := _dep_fork(rng)
+	for k in range(crystals - 1, -1, -1):
+		var lean := 0.0 if k == 0 else (float(k) - 3.0) * 0.25
+		var at := top + (Vector2.ZERO if k == 0 else Vector2((float(k) - 3.0) * m * 0.035, 2.0))
+		var h := h0 if k == 0 else crng.randf_range(0.45, 0.7) * h0
+		_dep_crystal(ci, at, h, maxf(2.5, h * 0.24), lean)
+	if f > 0.3:
+		_dep_sparkle(ci, top - Vector2(0, h0 - 1.0), 3.5)
+		_dep_sparkle(ci, top + Vector2(h0 * 0.22, -h0 * 0.4), 2.5)
+	for rk in rocks:
+		if (rk["p"] as Vector2).y >= c.y:
+			tops.append(_dep_rock(ci, rk["p"], rk["rad"], rk["h"], CONCRETE.lightened(0.04), rng, 5))
+	for k in mini(tops.size(), int(round(3.0 * f))):
+		_dep_crystal(ci, tops[k], 6.0, 2.2, vrng.randf_range(-0.3, 0.3))
+	# Pepitas al pie (una de cada tres, encendida)
+	for k in int(round(9.0 * f)):
+		var a := rng.randf() * TAU
+		var p := c + Vector2(cos(a), sin(a) * 0.8) * rng.randf_range(m * 0.27, m * 0.4)
+		_dot(ci, p, 2.4, OUTLINE)
+		_dot(ci, p, 1.8, FIRE_CORE if k % 3 == 0 else BRASS_LIGHT)
+	_dep_pennant(ci, Vector2(r.end.x - 7, r.end.y - 5), 15.0)
+
+static func _dep_crystal(ci: CanvasItem, base: Vector2, h: float, w: float, lean: float) -> void:
+	var up := Vector2(sin(lean), -cos(lean))
+	var side := Vector2(-up.y, up.x)
+	var tip := base + up * h
+	var l := base + up * h * 0.55 - side * w
+	var rr := base + up * h * 0.55 + side * w
+	_poly(ci, PackedVector2Array([base, l, tip, rr]), BRASS_DARK, OUTLINE, 1.2)
+	ci.draw_colored_polygon(PackedVector2Array([base + up, l + side * 0.8, tip - up * 0.8, base + up * h * 0.5]), BRASS_LIGHT)
+	ci.draw_line(tip - up * 1.0, l + side * 1.2, FIRE_CORE, 1.0)
+
+static func _dep_sparkle(ci: CanvasItem, c: Vector2, s: float) -> void:
+	ci.draw_line(c - Vector2(s, 0), c + Vector2(s, 0), FIRE_CORE, 1.2)
+	ci.draw_line(c - Vector2(0, s), c + Vector2(0, s), FIRE_CORE, 1.2)
+	_dot(ci, c, 1.1, Color.WHITE)
+
+static func _dep_pennant(ci: CanvasItem, base: Vector2, height: float) -> void:
+	var tip := _mast(ci, base, height, WOOD, 1.6)
+	_poly(ci, PackedVector2Array([tip, tip + Vector2(0, 5), tip + Vector2(9, 2)]), IMPERIAL_RED, OUTLINE, 1.0)
+
+# ── Hierro ──
+
+static func _dep_iron(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, f: float) -> void:
+	_dep_ground(ci, r, rng, CONCRETE_DARK.darkened(0.25), IRON)
+	_dep_patches(ci, r, rng, 4, RUST.darkened(0.05))
+	var m := minf(minf(r.size.x, r.size.y), 74.0)
+	var c := r.get_center() + Vector2(0, -r.size.y * 0.05)
+	var crags: Array = []
+	var pts := _dep_points(rng, r, 18.0, 8.0)
+	var kept := maxi(1, ceili(float(pts.size()) * f))
+	var k := 0
+	for p in pts:
+		if (p as Vector2).distance_to(c) < m * 0.28:
+			continue
+		var roll := rng.randf()
+		var col := GUNMETAL.darkened(rng.randf_range(0.0, 0.2))
+		if roll < 0.45:
+			col = RUST.lightened(rng.randf_range(0.0, 0.15))
+		elif roll < 0.6:
+			col = IRON.lightened(0.15)
+		var hh := rng.randf_range(3.0, 6.0) * (1.0 if k < kept else 0.35)
+		crags.append({"p": p, "rad": rng.randf_range(3.6, 5.2), "h": hh, "col": col, "lean": rng.randf_range(-0.12, 0.12)})
+		k += 1
+	# Las dos agujas (lo exagerado), una de pizarra y otra de oxido
+	for side in [-1.0, 1.0]:
+		var h: float = (m * 0.26 if side < 0.0 else m * 0.21) * lerpf(0.45, 1.0, f)
+		crags.append({"p": c + Vector2(side * m * 0.13, 0), "rad": m * 0.13, "h": h, "col": GUNMETAL if side < 0.0 else RUST, "lean": -side * 0.2})
+	crags.sort_custom(func(a, b): return (a["p"] as Vector2).y < (b["p"] as Vector2).y)
+	for cg in crags:
+		_dep_crag(ci, cg["p"], cg["rad"], cg["h"], cg["col"], float(cg["lean"]), rng)
+	# El monton de mineral, delante
+	var pile := Vector2(c.x + m * 0.18, r.end.y - 8.0)
+	for i in int(round(10.0 * f)) + 2:
+		var a := rng.randf() * TAU
+		var p := pile + Vector2(cos(a), sin(a) * 0.6) * rng.randf_range(0.0, 5.0)
+		_rot_rect(ci, p, Vector2(3.2, 2.6), rng.randf() * TAU, TILE_RED_DARK.darkened(rng.randf_range(0.2, 0.45)))
+
+## Una cresta: base poligonal, cuerpo que sube `h` px estrechandose, inclinado
+## `lean`, con una banda de oxido y la cima oxidada.
+static func _dep_crag(ci: CanvasItem, p: Vector2, rad: float, h: float, col: Color, lean: float, rng: RandomNumberGenerator) -> void:
+	var sides := rng.randi_range(4, 5)
+	var base := PackedVector2Array()
+	var top := PackedVector2Array()
+	var shift := Vector2(lean * h, -h)
+	for s in sides:
+		var a := TAU * s / float(sides) + rng.randf_range(-0.3, 0.3)
+		var d := Vector2(cos(a), sin(a) * 0.7) * rad
+		base.append(p + d)
+		top.append(p + shift + d * 0.45)
+	var shadow := PackedVector2Array()
+	for q in base:
+		shadow.append(q + _shade * h * 0.5)
+	ci.draw_colored_polygon(shadow, SHADOW)
+	var body_pts := PackedVector2Array(base)
+	body_pts.append_array(top)
+	var hull := Geometry2D.convex_hull(body_pts)
+	if hull.size() > 3:
+		hull.remove_at(hull.size() - 1)
+		_poly(ci, hull, col.darkened(0.25), OUTLINE, 1.3)
+	# Cara de luz (izquierda) del cuerpo
+	ci.draw_colored_polygon(PackedVector2Array([p - Vector2(rad * 0.8, 0), p + shift - Vector2(rad * 0.36, 0), p + shift, p]), col)
+	# Banda: de oxido en la roca gris, de hierro oscuro en la roja
+	var bcol := IRON if col.r > col.b + 0.12 else RUST
+	ci.draw_line(p + shift * 0.4 - Vector2(rad * 0.75, 0), p + shift * 0.4 + Vector2(rad * 0.75, 0), bcol, 1.6)
+	_poly(ci, top, col.lightened(0.12), OUTLINE, 1.0)
+	_dot(ci, p + shift, rad * 0.22, bcol.lightened(0.1))
+
+# ── Petroleo ──
+
+static func _dep_oil(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, f: float) -> void:
+	_dep_ground(ci, r, rng, DARK_WOOD.darkened(0.3), IRON)
+	var shrink := lerpf(0.5, 1.0, f)
+	var pc := r.get_center() + Vector2(0, r.size.y * 0.08)
+	var rx := r.size.x * 0.3 * shrink
+	var ry := r.size.y * 0.25 * shrink
+	# Charcos satelite (solo mientras queda mucho), con su propio azar
+	var srng := _dep_fork(rng)
+	if f > 0.5:
+		for sx in [-1.0, 1.0]:
+			var sp: Vector2 = pc + Vector2(sx * r.size.x * 0.33, -sx * r.size.y * 0.2)
+			_poly(ci, _dep_oval(sp, r.size.x * 0.08, r.size.y * 0.06, srng), OIL_BLACK, OUTLINE, 1.0)
+	# La balsa: reborde de brea, negro, reflejo y chispas
+	_poly(ci, _dep_oval(pc, rx + 2.5, ry + 2.0, rng), IRON.darkened(0.2), OUTLINE, 1.4)
+	ci.draw_colored_polygon(_dep_oval(pc, rx, ry, rng), OIL_BLACK)
+	ci.draw_colored_polygon(_dep_oval(pc - Vector2(rx, ry) * 0.25, rx * 0.42, ry * 0.32, rng), OIL_BLACK.lerp(SKY.darkened(0.45), 0.45))
+	ci.draw_line(pc + Vector2(-rx * 0.5, -ry * 0.42), pc + Vector2(-rx * 0.2, -ry * 0.42), SKY.lightened(0.15), 1.5)
+	ci.draw_line(pc + Vector2(-rx * 0.12, -ry * 0.55), pc + Vector2(-rx * 0.02, -ry * 0.55), SKY.lightened(0.15), 1.2)
+	for k in 3:
+		var a := rng.randf() * TAU
+		var bp := pc + Vector2(cos(a) * rx, sin(a) * ry) * 0.5
+		ci.draw_arc(bp, 2.0, 0.0, TAU, 10, IRON.lightened(0.25), 1.0)
+	# Juncos en el borde de delante
+	for k in 6:
+		var a := rng.randf_range(0.3, 2.6)
+		var p := pc + Vector2(cos(a) * (rx + 1.0), sin(a) * (ry + 1.5))
+		ci.draw_line(p, p + Vector2(rng.randf_range(-1.5, 1.5), -rng.randf_range(3.0, 5.0)), OLIVE, 1.3)
+	# La torreta de prospeccion (cuatro patas), detras de la balsa
+	var tp := Vector2(pc.x, pc.y - ry - 4.0)
+	var tw := 7.0
+	var th := 2.0 * DEP_RISE * 1.6
+	var apex := tp - Vector2(0, th)
+	ci.draw_colored_polygon(PackedVector2Array([tp + Vector2(-tw, 0), tp + Vector2(tw, 0), tp + _shade * th * 0.7]), SHADOW)
+	for back in [1.0, 0.0]:
+		for sx in [-1.0, 1.0]:
+			var foot: Vector2 = tp + Vector2(sx * tw, -back * 3.0)
+			var head: Vector2 = apex + Vector2(sx * 1.5, 0)
+			ci.draw_line(foot, head, OUTLINE, 3.2)
+			ci.draw_line(foot, head, WOOD if back < 0.5 else DARK_WOOD, 1.8)
+	for t in [0.3, 0.62]:
+		var y: float = tp.y - th * t
+		var hw := lerpf(tw, 1.5, t)
+		ci.draw_line(Vector2(tp.x - hw, y), Vector2(tp.x + hw, y), DARK_WOOD, 1.4)
+	ci.draw_line(apex, apex + Vector2(0, th * 0.55), IRON, 1.0)
+	_cyl(ci, apex + Vector2(0, th * 0.55), 1.8, 2.5, GUNMETAL.lightened(0.2), GUNMETAL)
+	_disc(ci, apex, 2.4, IMPERIAL_RED, OUTLINE, 1.0)
+	ci.draw_line(apex, apex - Vector2(0, 6), OUTLINE, 1.2)
+	_poly(ci, PackedVector2Array([apex - Vector2(0, 6), apex - Vector2(0, 1.5), apex + Vector2(8, -4)]), IMPERIAL_RED, OUTLINE, 1.0)
+	# Bidones: uno de pie y uno volcado
+	var bx := r.end.x - 8.0
+	var drum_top := Vector2(bx, pc.y - r.size.y * 0.24)
+	_cyl(ci, drum_top, 4.0, 5.5, IMPERIAL_RED.lightened(0.12), IMPERIAL_RED.darkened(0.15))
+	_cyl_band(ci, drum_top, 4.0, 5.5, 0.5, 1.2, IMPERIAL_RED.darkened(0.4))
+	_rot_rect(ci, Vector2(bx - 1.0, pc.y + 4.0), Vector2(10.0, 7.0), 0.3, IMPERIAL_RED.darkened(0.1))
+	_dot(ci, Vector2(bx + 4.0, pc.y + 5.5), 3.0, IMPERIAL_RED.lightened(0.1))
+
+static func _dep_oval(c: Vector2, rx: float, ry: float, rng: RandomNumberGenerator) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in 14:
+		var a := TAU * float(i) / 14.0
+		pts.append(c + Vector2(cos(a) * rx, sin(a) * ry) * rng.randf_range(0.88, 1.04))
+	return pts
+
+# ── Piezas comunes ──
+
+## Suelo de borde irregular (superelipse) con su reborde oscuro.
+static func _dep_ground(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, fill: Color, rim: Color) -> void:
 	var c := r.get_center()
-	var cells := r.size / 32.0
-	var blobs := int(cells.x * cells.y) + 2
-	for i in range(blobs):
-		var p := c + Vector2(rng.randf_range(-0.28, 0.28) * r.size.x, rng.randf_range(-0.28, 0.28) * r.size.y)
-		var rad := rng.randf_range(9.0, 15.0)
-		var pts := PackedVector2Array()
-		for s in range(14):
-			var a := TAU * s / 14.0
-			pts.append(p + Vector2(cos(a) * 1.25, sin(a) * 0.9) * rad * rng.randf_range(0.85, 1.05))
-		_poly(ci, pts, OIL_BLACK, OUTLINE, 1.5)
-		ci.draw_arc(p + Vector2(-rad * 0.2, -rad * 0.2), rad * 0.45, PI, PI * 1.6, 8, Color(SKY.lightened(0.2), 0.6), 2.0)
-	# El respiradero con estacas de aviso
-	_disc(ci, c, 5.0, GUNMETAL)
-	_dot(ci, c, 2.5, Color(0.02, 0.02, 0.02))
-	for i in range(4):
-		var a := TAU * i / 4.0 + PI / 4.0
-		var sp := c + Vector2(cos(a), sin(a)) * minf(r.size.x, r.size.y) * 0.36
-		_dot(ci, sp, 2.6, OUTLINE)
-		_dot(ci, sp, 1.9, Color8(240, 120, 40))
+	var outer := PackedVector2Array()
+	var inner := PackedVector2Array()
+	for i in 20:
+		var a := TAU * float(i) / 20.0
+		var ca := cos(a)
+		var sa := sin(a)
+		var k := pow(pow(absf(ca), 4.0) + pow(absf(sa), 4.0), -0.25) * rng.randf_range(0.9, 1.0)
+		var d := Vector2(ca * r.size.x * 0.5, sa * r.size.y * 0.5) * k
+		outer.append(c + d)
+		inner.append(c + d * 0.94)
+	_poly(ci, outer, rim, OUTLINE, 1.2)
+	ci.draw_colored_polygon(inner, fill)
+
+static func _dep_patches(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator, n: int, col: Color) -> void:
+	for k in n:
+		var p := r.get_center() + Vector2(rng.randf_range(-0.3, 0.3) * r.size.x, rng.randf_range(-0.3, 0.3) * r.size.y)
+		ci.draw_colored_polygon(_dep_oval(p, rng.randf_range(4.0, 7.0), rng.randf_range(3.0, 5.0), rng), col)
+
+## Un azar hijo, sacado siempre: lo que viene despues no cambia con la etapa.
+static func _dep_fork(rng: RandomNumberGenerator) -> RandomNumberGenerator:
+	var r := RandomNumberGenerator.new()
+	r.seed = rng.randi()
+	return r
+
+## Sombra de una pieza de alto `h` px: una mancha hacia abajo-derecha.
+static func _dep_shadow(ci: CanvasItem, p: Vector2, rad: float, h: float) -> void:
+	_dot(ci, p + _shade * h * 0.35, rad, SHADOW)
+
+## Una pena: base, cuerpo que sube `h` px y cara de arriba mas clara.
+## Devuelve el centro de la cara de arriba (donde va un cristal).
+static func _dep_rock(ci: CanvasItem, p: Vector2, rad: float, h: float, col: Color, rng: RandomNumberGenerator, sides: int) -> Vector2:
+	var base := PackedVector2Array()
+	var top := PackedVector2Array()
+	for s in sides:
+		var a := TAU * s / float(sides) + rng.randf_range(-0.25, 0.25)
+		var d := Vector2(cos(a), sin(a) * 0.75) * rad * rng.randf_range(0.85, 1.05)
+		base.append(p + d)
+		top.append(p + Vector2(0, -h) + d * 0.65)
+	var shadow := PackedVector2Array()
+	for q in base:
+		shadow.append(q + _shade * h * 0.5)
+	ci.draw_colored_polygon(shadow, SHADOW)
+	var all_pts := PackedVector2Array(base)
+	all_pts.append_array(top)
+	var hull := Geometry2D.convex_hull(all_pts)
+	if hull.size() > 3:
+		hull.remove_at(hull.size() - 1)
+		_poly(ci, hull, col.darkened(0.28), OUTLINE, 1.3)
+	_poly(ci, top, col, OUTLINE, 1.0)
+	var tc := p + Vector2(0, -h)
+	ci.draw_colored_polygon(PackedVector2Array([top[0], top[1], tc]), col.lightened(0.16))
+	return tc
+
+## Puntos repartidos por `r` (rejilla con jitter), en orden al azar.
+static func _dep_points(rng: RandomNumberGenerator, r: Rect2, spacing: float, margin: float) -> Array:
+	var w := r.size.x - margin * 2.0
+	var h := r.size.y - margin * 2.0
+	var nx := maxi(1, int(floor(w / spacing)) + 1)
+	var ny := maxi(1, int(floor(h / spacing)) + 1)
+	var out: Array = []
+	for iy in ny:
+		for ix in nx:
+			var fx := float(ix) / float(nx - 1) if nx > 1 else 0.5
+			var fy := float(iy) / float(ny - 1) if ny > 1 else 0.5
+			var x := r.position.x + margin + w * fx
+			var y := r.position.y + margin + h * fy
+			out.append(Vector2(x + rng.randf_range(-0.22, 0.22) * spacing, y + rng.randf_range(-0.22, 0.22) * spacing))
+	for i in range(out.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t = out[i]
+		out[i] = out[j]
+		out[j] = t
+	return out
+
+# ── Decoraciones baratas (feat/decoraciones-1, doc 21 §6.4) ───────────
+# Las mismas diez que DecorMesh en 3D, con el mismo vocabulario: un suelo que
+# llena el rectangulo (encima de la sombra de draw_building) y la pieza
+# exagerada de cada una. Solo primitivas baratas: se hornean en ArtCache2D.
+
+## El suelo de la decoracion: losas, cesped o tierra con su borde.
+static func _deco_pad(ci: CanvasItem, r: Rect2, kind: String) -> void:
+	var fill := Color8(214, 198, 170)
+	match kind:
+		"grass": fill = GREEN.lightened(0.1)
+		"dirt": fill = SITE_DIRT.lightened(0.12)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, fill.darkened(0.1))
+	ci.draw_rect(r.grow(-2.5), fill)
+
+## Bandera de serie de la colonia (laton, marfil, carmesi) colgada de `tip`.
+static func _deco_flag(ci: CanvasItem, tip: Vector2, w: float, h: float) -> void:
+	var right := -_left()
+	var cols := [BRASS, CREAM, IMPERIAL_RED]
+	var frame := PackedVector2Array([tip - _down - right, tip + right * (w + 1.0) - _down,
+		tip + right * (w + 1.0) + _down * (h + 1.0), tip + _down * (h + 1.0) - right])
+	ci.draw_colored_polygon(frame, OUTLINE)
+	for i in 3:
+		var a := tip + _down * h * float(i) / 3.0
+		ci.draw_colored_polygon(PackedVector2Array([a, a + right * w, a + right * w + _down * h / 3.0, a + _down * h / 3.0]), cols[i])
+
+## Farola: peana, fuste alto de hierro y dos faroles encendidos.
+static func _lamp_post(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center() + _down * m * 0.22
+	_disc(ci, c, m * 0.1, STONE, OUTLINE, 1.0)
+	var tip := _mast(ci, c, m * 0.55, IRON, 2.5)
+	for s in [-1.0, 1.0]:
+		var lamp: Vector2 = tip + _left() * m * 0.13 * s + _down * m * 0.04
+		ci.draw_line(tip, lamp, IRON, 2.0)
+		_dot(ci, lamp, m * 0.1, Color(GLOW, 0.3))
+		_disc(ci, lamp, m * 0.05, GLOW, OUTLINE, 1.0)
+
+## Banco: dos bancos de madera frente a frente y una mata en maceta.
+static func _park_bench(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center()
+	var along := Vector2(absf(_down.y), absf(_down.x))
+	var across := Vector2(absf(_down.x), absf(_down.y))
+	for s in [-1.0, 1.0]:
+		var bc: Vector2 = c + _down * m * 0.28 * s
+		var size := along * m * 0.62 + across * m * 0.14
+		_block(ci, Rect2(bc - size * 0.5, size), m * 0.05, LIGHT_WOOD, DARK_WOOD)
+	_cyl(ci, c, m * 0.08, m * 0.05, TERRACOTTA, TILE_RED_DARK)
+	_shaded_disc(ci, c - _down * m * 0.05, m * 0.1, GREEN)
+
+## Seto: seto recortado en U, abierto hacia delante, con su bola en maceta.
+static func _hedge(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var t := m * 0.16
+	var h := m * 0.08
+	_block(ci, Rect2(r.position, Vector2(r.size.x, t)), h, GREEN.darkened(0.05), LEAF_DARK)
+	_block(ci, Rect2(r.position + Vector2(0, t), Vector2(t, r.size.y - t)), h, GREEN.darkened(0.05), LEAF_DARK)
+	_block(ci, Rect2(Vector2(r.end.x - t, r.position.y + t), Vector2(t, r.size.y - t)), h, GREEN.darkened(0.05), LEAF_DARK)
+	var c := r.get_center() + Vector2(0, m * 0.08)
+	_cyl(ci, c, m * 0.08, m * 0.05, TERRACOTTA, TILE_RED_DARK)
+	_shaded_disc(ci, c - _down * m * 0.1, m * 0.12, GREEN)
+
+## Arbol de paseo: alcorque de hierro y una copa grande y redonda.
+static func _avenue_tree(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center()
+	var g := Rect2(c - Vector2(m, m) * 0.2, Vector2(m, m) * 0.4)
+	ci.draw_rect(g.grow(1.0), OUTLINE)
+	ci.draw_rect(g, IRON.lightened(0.15))
+	ci.draw_rect(g.grow(-2.5), DARK_WOOD)
+	var t := c - _down * m * 0.12
+	var tr := m * 0.3
+	_dot(ci, t + _shade * tr * 0.6, tr, SHADOW)
+	_dot(ci, t, tr + 1.0, OUTLINE)
+	_dot(ci, t, tr, GREEN.darkened(0.08))
+	_dot(ci, t + (_left() - _down) * tr * 0.25, tr * 0.6, GREEN.lightened(0.12))
+	_dot(ci, t + (_left() - _down) * tr * 0.42, tr * 0.22, GREEN.lightened(0.35))
+
+## Macetero: tres macetas de barro con su mata y flores de colores.
+static func _flower_planter(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var cols := [RED, BRASS_LIGHT, CREAM, TERRACOTTA]
+	var pots := [Vector2(0.28, 0.62), Vector2(0.72, 0.68), Vector2(0.5, 0.3)]
+	var sizes := [0.13, 0.11, 0.15]
+	for i in pots.size():
+		var p: Vector2 = r.position + r.size * (pots[i] as Vector2)
+		var pr: float = m * float(sizes[i])
+		_cyl(ci, p, pr, m * 0.07, DARK_WOOD, TERRACOTTA)
+		_shaded_disc(ci, p - _down * pr * 0.25, pr * 0.95, GREEN)
+		for k in 3:
+			_dot(ci, p - _down * pr * 0.25 + Vector2.from_angle(TAU * k / 3.0 + i) * pr * 0.5, maxf(1.2, pr * 0.22), cols[(i + k) % cols.size()])
+
+## Letrero de la colonia: dos postes, el tablero con marco de laton y la
+## bandera de la colonia en su mastil.
+static func _colony_sign(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var c := r.get_center() + _down * m * 0.18
+	var side := _left() * m * 0.22
+	var a := _mast(ci, c + side, m * 0.3, DARK_WOOD, 2.5)
+	var b := _mast(ci, c - side, m * 0.3, DARK_WOOD, 2.5)
+	_poly(ci, PackedVector2Array([a, b, b + _down * m * 0.16, a + _down * m * 0.16]), BRASS, OUTLINE, 1.25)
+	ci.draw_colored_polygon(PackedVector2Array([a.lerp(b, 0.08) + _down * 2.0, b.lerp(a, 0.08) + _down * 2.0,
+		b.lerp(a, 0.08) + _down * (m * 0.16 - 2.0), a.lerp(b, 0.08) + _down * (m * 0.16 - 2.0)]), CREAM)
+	ci.draw_line(a.lerp(b, 0.25) + _down * m * 0.08, b.lerp(a, 0.25) + _down * m * 0.08, IRON, 1.5)
+	var tip := _mast(ci, c - side * 1.6 + _down * m * 0.02, m * 0.5, IRON, 1.8)
+	_deco_flag(ci, tip, m * 0.22, m * 0.15)
+
+## Carro de heno: carro de madera con dos ruedas, el heno amontonado encima y
+## dos pacas al lado.
+static func _hay_cart(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "dirt")
+	var c := r.get_center() - _down * m * 0.04
+	var size := Vector2(m * 0.48, m * 0.34)
+	var top := _block(ci, Rect2(c - size * 0.5, size), m * 0.08, LIGHT_WOOD, DARK_WOOD)
+	for s in [-1.0, 1.0]:
+		_disc(ci, c + _left() * size.x * 0.48 * s + _down * size.y * 0.42, m * 0.08, DARK_WOOD, OUTLINE, 1.25)
+	_shaded_disc(ci, top.get_center() - _down * m * 0.04, m * 0.17, BRASS)
+	for p in [Vector2(0.18, 0.8), Vector2(0.8, 0.2)]:
+		var bc: Vector2 = r.position + r.size * (p as Vector2)
+		var bs := Vector2(m * 0.2, m * 0.13)
+		_block(ci, Rect2(bc - bs * 0.5, bs), m * 0.05, BRASS_LIGHT, BRASS_DARK)
+
+## Hoguera: corro de piedras, troncos cruzados, la llama encendida y dos
+## troncos para sentarse.
+static func _bonfire(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "dirt")
+	var c := r.get_center()
+	_dot(ci, c, m * 0.3, Color(FIRE, 0.18))
+	for i in 8:
+		_disc(ci, c + Vector2.from_angle(TAU * i / 8.0) * m * 0.2, m * 0.05, STONE.darkened(0.05 * (i % 3)), OUTLINE, 1.0)
+	_dot(ci, c, m * 0.15, IRON)
+	for i in 3:
+		var d := Vector2.from_angle(TAU * i / 3.0 + 0.4) * m * 0.14
+		ci.draw_line(c - d, c + d, OUTLINE, 4.0)
+		ci.draw_line(c - d, c + d, DARK_WOOD, 2.6)
+	_dot(ci, c - _down * m * 0.03, m * 0.1, FIRE)
+	_dot(ci, c - _down * m * 0.06, m * 0.05, FIRE_CORE)
+	for s in [-1.0, 1.0]:
+		var lc: Vector2 = c + _down * m * 0.38 * s
+		ci.draw_line(lc - _left() * m * 0.2, lc + _left() * m * 0.2, OUTLINE, m * 0.09 + 2.0)
+		ci.draw_line(lc - _left() * m * 0.2, lc + _left() * m * 0.2, LIGHT_WOOD, m * 0.09)
+
+## Mastil con bandera: peana de dos escalones y el mastil alto con la bandera.
+static func _flagpole(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var base := r.get_center() + _down * m * 0.2
+	_block(ci, Rect2(base - Vector2(m, m) * 0.17, Vector2(m, m) * 0.34), m * 0.05, STONE.lightened(0.1), CONCRETE_DARK)
+	_block(ci, Rect2(base - Vector2(m, m) * 0.1, Vector2(m, m) * 0.2), m * 0.05, CREAM, STONE)
+	var tip := _mast(ci, base, m * 0.72, IRON, 2.5)
+	_disc(ci, tip, 2.2, BRASS, OUTLINE, 1.0)
+	_deco_flag(ci, tip + _down * 2.0, m * 0.36, m * 0.24)
+
+## Palmeras: corro de arena y dos palmeras con las hojas abiertas.
+static func _palm_trees(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	_disc(ci, r.get_center(), m * 0.44, CREAM.darkened(0.06), CREAM.darkened(0.25), 1.5)
+	for p in [[Vector2(0.36, 0.62), 0.42, 0.2], [Vector2(0.66, 0.7), 0.3, 0.16]]:
+		var base: Vector2 = r.position + r.size * (p[0] as Vector2)
+		var crown: Vector2 = base - _down * m * float(p[1]) + _left() * m * 0.04
+		ci.draw_line(base, crown, OUTLINE, 5.0)
+		ci.draw_line(base, crown, WOOD, 3.2)
+		var leaf: float = m * float(p[2])
+		for i in 5:
+			var d := Vector2.from_angle(TAU * i / 5.0 + 0.3)
+			var tip := crown + d * leaf
+			var side := Vector2(-d.y, d.x) * leaf * 0.22
+			_poly(ci, PackedVector2Array([crown, tip + side, tip + d * 2.0, tip - side]), GREEN.darkened(0.04 * (i % 2)), OUTLINE, 1.0)
+		_dot(ci, crown, 2.2, DARK_WOOD)

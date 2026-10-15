@@ -15,6 +15,7 @@ var _rows: Dictionary = {}
 var _season_label: Label
 
 const TREND_SIZE := Vector2(18, 18)
+var _gold_label: Label = null
 
 const TRADEABLE := ["food", "wood", "steel", "oil"]
 
@@ -230,6 +231,7 @@ func _rebuild() -> void:
 	for child in get_children():
 		child.queue_free()
 	_rows.clear()
+	_gold_label = null
 	_setup_ui()
 
 func _update_prices() -> void:
@@ -242,7 +244,10 @@ func _update_prices() -> void:
 			set_trend(_rows[res_name]["trend"], MarketManager.get_price_trend(res_name))
 	if _season_label != null:
 		_season_label.text = Tr.t("MARKET_SEASON_%s" % MarketManager.season().to_upper())
-	var gold_label := _panel.find_child("GoldLabel", true, false)
+	# El oro se busca una vez por construccion del panel, no en cada precio.
+	if _gold_label == null or not is_instance_valid(_gold_label) or _gold_label.is_queued_for_deletion():
+		_gold_label = _panel.find_child("GoldLabel", true, false) as Label
+	var gold_label := _gold_label
 	if gold_label:
 		gold_label.text = str(ResourceManager.get_amount(ResourceManager.Type.GOLD))
 		gold_label.get_parent().tooltip_text = Tr.t("LBL_YOUR_GOLD") % ResourceManager.get_amount(ResourceManager.Type.GOLD)

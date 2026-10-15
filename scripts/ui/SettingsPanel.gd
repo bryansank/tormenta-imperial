@@ -16,6 +16,7 @@ extends CanvasLayer
 
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
 const WorldLook := preload("res://scripts/map/WorldLook.gd")
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 
 enum Tab { AUDIO, INTERFACE, CONTROLS, ACCESSIBILITY, GAME }
 
@@ -269,7 +270,8 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 		Tr.t("LBL_SHOW_GRID"), GameConfig.ui_grid_visible,
 		func(pressed: bool):
 			GameConfig.ui_grid_visible = pressed
-			EventBus.grid_overlay_toggled.emit(pressed)
+			# En calidad Minima la preferencia se guarda pero no se pinta.
+			EventBus.grid_overlay_toggled.emit(GraphicsQuality.grid_always_visible())
 			GameConfig.save_user_settings()
 	)
 	grid_check.name = "GridCheck"
@@ -279,12 +281,40 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 	var q_modes: Array = GameConfig.GRAPHICS_QUALITY_MODES
 	var auto_q := WorldLook.effective_quality("auto", RenderingServer.get_current_rendering_method())
 	var q_labels: Array = [Tr.t("OPT_QUALITY_AUTO") % Tr.t("OPT_QUALITY_" + auto_q.to_upper()),
-		Tr.t("OPT_QUALITY_HIGH"), Tr.t("OPT_QUALITY_LOW")]
+		Tr.t("OPT_QUALITY_HIGH"), Tr.t("OPT_QUALITY_LOW"), Tr.t("OPT_QUALITY_MINIMAL")]
 	var quality_row := UITheme.make_option_row(Tr.t("LBL_GRAPHICS_QUALITY"), q_labels,
 		maxi(0, q_modes.find(GameConfig.ui_graphics_quality)), func(idx: int):
 			set_graphics_quality(q_modes[idx]))
 	quality_row.name = "QualityRow"
 	body.add_child(quality_row)
+	body.add_child(_make_hint(Tr.t("LBL_QUALITY_MINIMAL_HINT")))
+	# Detectar de nuevo (docs/26 §7.2): vuelve a "auto" y decide como en el
+	# primer arranque (si las senales no deciden, mide unos segundos el mapa).
+	var detect_btn := Button.new()
+	detect_btn.name = "DetectQualityButton"
+	detect_btn.text = Tr.t("BTN_DETECT_QUALITY")
+	UITheme.style_button(detect_btn, UITheme.BTN, UITheme.FONT_BODY)
+	detect_btn.pressed.connect(func():
+		DeviceProfile.start_quality_detection(true)
+		var picker := quality_row.get_child(1) as OptionButton
+		if picker != null:
+			picker.selected = maxi(0, q_modes.find(GameConfig.ui_graphics_quality))
+		_refresh_fps_auto_label()
+		if DeviceProfile.is_detecting_quality():
+			EventBus.notification_posted.emit(Tr.t("MSG_QUALITY_MEASURING"), "info", UITheme.INFO))
+	body.add_child(detect_btn)
+	# Vista del combate (docs/15 §3, "Las dos vistas"): frente (por defecto) o
+	# el tablero 8x8. Preferencia del dispositivo; tambien se cambia en la pelea.
+	var cv_modes: Array = GameConfig.COMBAT_VIEWS
+	var cv_labels: Array = []
+	for mode in cv_modes:
+		cv_labels.append(Tr.t("OPT_COMBAT_VIEW_" + String(mode).to_upper()))
+	var combat_row := UITheme.make_option_row(Tr.t("LBL_COMBAT_VIEW"), cv_labels,
+		maxi(0, cv_modes.find(GameConfig.ui_combat_view)), func(idx: int):
+			GameConfig.set_combat_view(cv_modes[idx]))
+	combat_row.name = "CombatViewRow"
+	combat_row.tooltip_text = Tr.t("LBL_COMBAT_VIEW_TIP")
+	body.add_child(combat_row)
 	# Pantalla completa — tambien con F11; el interruptor se sincroniza si se
 	# cambia por teclado mientras el panel esta abierto.
 	_fullscreen_check = UITheme.make_check_button(
@@ -331,13 +361,25 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 
 	_add_reset(body, reset_interface)
 
-## Cambia la calidad grafica del mapa, la guarda y la aplica ya.
+## Cambia la calidad grafica del mapa, la guarda y la aplica ya. En PC, entrar
+## en Minima o salir de ella cambia ademas el renderizador, y eso se aplica al
+## reiniciar (GraphicsQuality.sync_renderer_override): se avisa.
 func set_graphics_quality(quality: String) -> void:
 	if not quality in GameConfig.GRAPHICS_QUALITY_MODES:
 		return
-	GameConfig.ui_graphics_quality = quality
-	GameConfig.save_user_settings()
-	EventBus.graphics_quality_changed.emit(quality)
+	var restart := GraphicsQuality.set_quality(quality)
+	_refresh_fps_auto_label()
+	if restart:
+		EventBus.notification_posted.emit(Tr.t("MSG_QUALITY_RESTART"), "notice", UITheme.INFO)
+
+## El "Del perfil (N)" de la fila de FPS sigue a la calidad (30 en PC con Minima).
+func _refresh_fps_auto_label() -> void:
+	var row := find_child("FpsRow", true, false)
+	if row == null:
+		return
+	var picker := row.get_child(1) as OptionButton
+	if picker != null and picker.item_count > 0:
+		picker.set_item_text(0, Tr.t("OPT_FPS_AUTO") % DeviceProfile.auto_fps())
 
 ## Fotogramas por segundo: el del perfil, un numero o sin tope. Se aplica al
 ## momento, sin reconstruir la interfaz.
@@ -346,7 +388,7 @@ func _make_fps_row() -> HBoxContainer:
 	var labels: Array = []
 	for mode in modes:
 		if mode == "auto":
-			labels.append(Tr.t("OPT_FPS_AUTO") % int(DeviceProfile.defaults()["fps"]))
+			labels.append(Tr.t("OPT_FPS_AUTO") % DeviceProfile.auto_fps())
 		elif mode == "unlimited":
 			labels.append(Tr.t("OPT_FPS_UNLIMITED"))
 		else:
@@ -372,11 +414,15 @@ func reset_interface() -> void:
 	var grid_check := find_child("GridCheck", true, false) as BaseButton
 	if grid_check != null:
 		grid_check.set_pressed_no_signal(false)
-	GameConfig.ui_graphics_quality = "auto"
-	EventBus.graphics_quality_changed.emit("auto")
+	if GraphicsQuality.set_quality("auto"):
+		EventBus.notification_posted.emit(Tr.t("MSG_QUALITY_RESTART"), "notice", UITheme.INFO)
 	var quality_row := find_child("QualityRow", true, false)
 	if quality_row != null:
 		(quality_row.get_child(1) as OptionButton).selected = 0
+	GameConfig.ui_combat_view = "front"
+	var combat_row := find_child("CombatViewRow", true, false)
+	if combat_row != null:
+		(combat_row.get_child(1) as OptionButton).selected = 0
 	GameConfig.ui_fps_cap = "auto"
 	HudRegistry.show_all()
 	UILayoutManager.reset_user_layout()

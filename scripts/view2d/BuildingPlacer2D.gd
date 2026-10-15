@@ -21,6 +21,9 @@ const View2D := preload("res://scripts/view2d/View2D.gd")
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
 ## Dedo, casillas validas y boton ✓: lo mismo que en 3D (docs/21 §Tactil).
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
+## Salto y polvo de obra terminada (V1).
+const Fx := preload("res://scripts/buildings/BuildingFx.gd")
 
 var _state: State = State.IDLE
 var _current_data: BuildingData = null
@@ -61,11 +64,47 @@ func _ready() -> void:
 	EventBus.deposit_clicked.connect(_on_deposit_clicked)
 	EventBus.building_deselected.connect(_on_building_deselected)
 	EventBus.building_rotate_requested.connect(_on_rotate_requested)
+	# Obra terminada: salto y polvo (V1); lo recogido vuela a la bolsa (V2).
+	EventBus.construction_completed.connect(_on_construction_done)
+	EventBus.production_collected.connect(_on_production_collected)
 	GameManager.register_placer(self)
 	_assist = Assist.new()
 	_assist.name = "PlacementAssist"
 	_assist.setup(self)
 	add_child(_assist)
+
+## Obra terminada (V1): el edificio entero da el salto (crece desde el centro de
+## su huella, que es su origen) con un Tween que muere con el, y suelta 8 motas
+## de polvo desde el borde. En calidad Minima, solo el salto.
+func _on_construction_done(node: Node) -> void:
+	if node == null or not is_instance_valid(node) or not (node is Node2D) or not node.is_inside_tree():
+		return
+	var data: BuildingData = node.get("data") as BuildingData
+	if data == null or data.id == "road":
+		return
+	var b := node as Node2D
+	var old: Tween = b.get_meta("_bounce_tween", null)
+	if old != null and old.is_valid():
+		old.kill()
+	b.scale = Vector2.ONE
+	var set_k := func(k: float) -> void:
+		if is_instance_valid(b):
+			b.scale = Vector2(k, k)
+	b.set_meta("_bounce_tween", Fx.bounce(b, set_k))
+	if GraphicsQuality.fx_enabled():
+		var fp: Vector2 = b.footprint_px() if b.has_method("footprint_px") else Vector2(32, 32)
+		var burst := Fx.dust_burst_2d(minf(fp.x, fp.y) * 0.5)
+		burst.z_index = 5
+		b.add_child(burst)
+		burst.emitting = true
+
+## Lo recogido vuela del edificio a su ficha de la bolsa (V2, FloatingText).
+func _on_production_collected(node: Node, collected: Dictionary) -> void:
+	if node == null or not is_instance_valid(node) or not (node is Node2D) or not node.is_inside_tree():
+		return
+	var icon := node.get_node_or_null("StockIcon") as Node2D
+	var from: CanvasItem = icon if icon != null and icon.visible else node as Node2D
+	FloatingText.fly_to_hud(get_tree(), from.get_global_transform_with_canvas().origin, collected)
 
 func _input(event: InputEvent) -> void:
 	if _state != State.IDLE:
@@ -236,7 +275,7 @@ func _show_grid_overlay(forced: bool) -> void:
 	var scene := get_tree().current_scene if is_inside_tree() else null
 	var grid := scene.get_node_or_null("GridOverlay") if scene else null
 	if grid:
-		grid.visible = forced or GameConfig.ui_grid_visible
+		grid.visible = forced or GraphicsQuality.grid_always_visible()
 
 # ── Colocar ───────────────────────────────────────────────────────────
 
@@ -259,6 +298,7 @@ func try_place(cell: Vector2i) -> Node:
 			_reject_for_deposit(_current_data.id)
 		elif verdict["reason"] == "water":
 			_show_feedback(Tr.t("LBL_ON_WATER"))
+			TutorialManager.offer_tip("island")
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
@@ -345,6 +385,7 @@ func try_move(cell: Vector2i) -> bool:
 			_reject_for_deposit(_current_data.id)
 		elif verdict["reason"] == "water":
 			_show_feedback(Tr.t("LBL_ON_WATER"))
+			TutorialManager.offer_tip("island")
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
@@ -595,6 +636,7 @@ func assist_explain(origin: Vector2i) -> void:
 		_reject_for_deposit(_current_data.id)
 	elif verdict["reason"] == "water":
 		_show_feedback(Tr.t("LBL_ON_WATER"))
+		TutorialManager.offer_tip("island")
 	elif verdict["reason"] == "occupied":
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 	elif verdict["reason"] == "road":

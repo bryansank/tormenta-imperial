@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## La guia rapida (2026-09-28): una pantalla con cuatro bloques (recursos,
-## extraer, edificios y carreteras, progreso) que sale una vez tras el prologo,
+## extraer, edificios y carreteras, progreso). Desde el 14-10 ya no sale sola tras el prologo;
 ## pausa mientras se lee y queda en AYUDA con los mismos textos.
 
 const QuickGuide := preload("res://scripts/ui/QuickGuide.gd")
@@ -35,3 +35,16 @@ func test_every_block_is_written_in_both_languages() -> void:
 func test_the_blocks_are_also_in_the_help_index() -> void:
 	for id in ["guide_qg_resources", "guide_qg_extract", "guide_qg_buildings", "guide_qg_progress"]:
 		assert_bool(HelpCatalog.ENTRIES.has(id)).is_true()
+
+## Bryan, 14-10: la guia ya no sale sola al cerrar el prologo. Sus bloques
+## siguen en AYUDA (prueba de arriba). Un `quick_guide` visto en una partida
+## vieja se carga sin mas.
+func test_closing_the_prologue_does_not_open_the_guide() -> void:
+	var saved := TutorialManager.get_save_data()
+	TutorialManager.reset()
+	var panel: CanvasLayer = auto_free(load("res://scenes/ui/TutorialPanel.tscn").instantiate())
+	add_child(panel)
+	panel._on_prologue_closed()
+	var opened: bool = panel.quick_guide().is_open()
+	TutorialManager.load_save_data(saved)
+	assert_bool(opened).is_false()

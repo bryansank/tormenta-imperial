@@ -47,6 +47,25 @@ void fragment() {
 """
 
 static var _shader: Shader = null
+static var _flag_mat: ShaderMaterial = null
+static var _pole_mat: StandardMaterial3D = null
+
+static func flag_material() -> ShaderMaterial:
+	if _flag_mat == null:
+		if _shader == null:
+			_shader = Shader.new()
+			_shader.code = SHADER_CODE
+		_flag_mat = ShaderMaterial.new()
+		_flag_mat.shader = _shader
+	return _flag_mat
+
+static func pole_material() -> StandardMaterial3D:
+	if _pole_mat == null:
+		_pole_mat = StandardMaterial3D.new()
+		_pole_mat.albedo_color = Color(0.55, 0.45, 0.25)
+		_pole_mat.metallic = 0.7
+		_pole_mat.roughness = 0.4
+	return _pole_mat
 
 static func flies_over(data: BuildingData) -> bool:
 	return ColonyFlag.flies_over(data)
@@ -83,10 +102,7 @@ func setup(footprint: Vector2, top: float, building: Node = null, big: bool = fa
 	cyl.radial_segments = 8
 	cyl.rings = 1
 	pole.mesh = cyl
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.55, 0.45, 0.25)
-	mat.metallic = 0.7
-	mat.roughness = 0.4
+	var mat := pole_material()
 	pole.material_override = mat
 	pole.position.y = height * 0.5
 	pole.visible = not _anchored
@@ -113,11 +129,8 @@ func setup(footprint: Vector2, top: float, building: Node = null, big: bool = fa
 	_flag.name = "Flag"
 	_flag.mesh = quad
 	_flag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if _shader == null:
-		_shader = Shader.new()
-		_shader.code = SHADER_CODE
-	_material = ShaderMaterial.new()
-	_material.shader = _shader
+	# Un material para todas las banderas: la textura y el ondeo son los mismos.
+	_material = flag_material()
 	_flag.material_override = _material
 	# El borde izquierdo de la bandera, pegado al mastil, en lo alto.
 	_flag.position = Vector3(flag_w * 0.5 + 0.06, height - flag_h * 0.5 - 0.05, 0.0)

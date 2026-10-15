@@ -22,7 +22,7 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | `morale_bonus` | int | Passive morale bonus (decorations) |
 | `mesh_height` | float | Visual height for procedural mesh |
 | `mesh_color` | Color | Visual color |
-| `model_scene` | PackedScene | The baked "maqueta" model, `assets/models/toy/<id>.tscn` (15 of 17; the road stays procedural, its mesh depends on its neighbours, and so does the Farm for now, because its procedural mesh shows the crops growing. A baked `assets/models/toy/farm.tscn` exists for when the crops move onto it). See "Modelos: maqueta de juguete". `model_scale` / `model_stretch` stay at 1 (they were for the old GLBs) |
+| `model_scene` | PackedScene | The baked "maqueta" model, `assets/models/toy/<id>.tscn` (16 of 17; the road stays procedural, its mesh depends on its neighbours. The Farm's model carries its growing beds as a child mesh, see "The Farm"). See "Modelos: maqueta de juguete". `model_scale` / `model_stretch` stay at 1 (they were for the old GLBs) |
 | `model_scale` / `model_stretch` | float / Vector3 | Scale a GLB made for 1x1 or 2x1 up to its 2x2 plot; spawn models only through `instantiate_model()` |
 | `repeat_placement` | bool | Keep the same building in hand after placing it (decorations and roads do anyway; the rest place one and leave placement mode) |
 | `max_health` | int | HP for storm and siege damage (`BuildingHealth`) |
@@ -73,9 +73,25 @@ bag, keeps the building "busy" and is lost to the Storm. A crop is the Farm's ow
 production cycle (`ProductionManager.get_cycle_seconds()` / `base_cycle_production()`),
 so it accumulates and stops like every producer, survives the Storm and runs offline.
 
-**Look.** 3D: `DieselpunkBuildingFactory._build_farm()` — furrowed plot, a crop
-(`CropField`, script `FarmField3D`) that grows with the cycle and turns golden when
-ripe, red barn, brass grain hopper and a windmill that turns while it works. 2D:
+**Look.** 3D (2026-10-14): the baked toy model `assets/models/toy/farm.tscn`
+(recipe `tools/toy_recipes/farm.gd`: lattice windpump, plank shed with green roof,
+hay bales, trough, fence) and, as a child `MeshInstance3D` "Crops", **the beds as a
+separate mesh** (`farm_crops_mesh.res`, built by `tools/toy_crops.gd`). That one mesh
+holds the three crops (lettuce rosettes, potato bushes with a flower, wheat tufts with
+an ear) and the windpump rotor, all drawn with ONE shared material
+(`toy_crops.tres` / `toy_crops.gdshader`). `FarmCrops3D` reads the services every
+0.25 s and only sets the **per-instance** shader parameters that changed: `growth`
+(`get_cycle_progress`; 1 when the harvest waits and the farm stopped), `crop` (index in
+`farm_crops`: the other two crops fold into their base), `ripe` (`has_stock`: full
+height, ripe colour and a soft pulse of the albedo — no glow, so it does not shine at
+night), `wind` (more in the ash and the Storm) and `rotor_angle` (every frame, only
+while the farm works). Sprout pale green → leaf → ripe colour per crop (lettuce heart
+light green, potato flowers cream and leaves olive, wheat gold). Lit like the rest of
+the toy (night and Storm darken it with the scene light). Cost: two draw calls for the
+building (solid + glow) plus one for the beds; ~980 + 2,200 triangles (only a third of
+the crops is ever rasterised). Without the shader (the placement ghost overrides the
+material) the beds show lettuces and the rotor, never the three crops on top of each
+other. 2D:
 `BuildingArt2D._farm()` — the same field with plants that grow and ripen
 (`opts.growth`, `opts.ripe`).
 
@@ -91,7 +107,7 @@ ripe, red barn, brass grain hopper and a windmill that turns while it works. 2D:
 **Market and Laboratory (2026-09-28).** Trading and research used to be entries of
 ☰ MENÚ → COLONIA; now each opens by tapping its building
 (`BuildingInfoPanel.SCREENS`), and the button is disabled while the building has no
-road. One of each (`building_limits`). ¿QUÉ HACER? asks for the Laboratory before any
+road. One of each (`GameConfig.get_building_limit()`, in every era). ¿QUÉ HACER? asks for the Laboratory before any
 research and does not suggest buying or selling without a Market. Both are
 procedural (`DieselpunkBuildingFactory`, `BuildingArt2D`): no GLB yet. The
 Laboratory has a glass dome and its lattice antenna in the yard; the Market,
@@ -117,6 +133,41 @@ the defensive boards — the Tithe and each Final Audit wave — outside the dep
 | `garden` | Jardín | 2x2 | 30/0/0/20 | 2s | +5 |
 | `fountain` | Fuente | 2x2 | 60/20/0/10 | 4s | +7 |
 | `statue` | Estatua | 2x2 | 120/40/0/0 + 3 ingots | 6s | +10 |
+
+#### Decoraciones baratas (feat/decoraciones-1, 2026-10-14)
+
+Las diez primeras del catalogo del doc 21 §6.4 (fila 1.7 del plan): sumideros
+baratos de oro y madera, **sin tope** (como toda decoracion, `GameConfig.is_uncapped_building()`; decision D1 = B) y
+abiertas por rango segun §6.5. Todas 2x2 (en el doc eran 1x1: el mapa no tiene
+huellas menores de 2x2 salvo la calzada), con su parcela de 0,25 casillas de patio
+y una o dos piezas de atrezo.
+
+| ID | Nombre | Coste G/S/O/W | Obra | Moral | Rango | Piezas del horneado |
+|----|--------|---------------|------|-------|-------|---------------------|
+| `lamp_post` | Farola | 20/0/0/5 | 1,5 s | +2 | libre | `kc:streetlight`, `ft:lantern` |
+| `park_bench` | Banco | 10/0/0/10 | 1 s | +1 | libre | `kc:bench` x2, `kc:bush` |
+| `hedge` | Seto | 10/0/0/15 | 1,5 s | +1 | libre | `ft:hedge-large` x2, `ft:hedge` x4 |
+| `avenue_tree` | Arbol de paseo | 15/0/0/20 | 2 s | +2 | libre | `ft:tree-high-round` |
+| `flower_planter` | Macetero | 20/0/0/10 | 1,5 s | +2 | 2 | `kc:bush` x3 + flores propias |
+| `colony_sign` | Letrero de la colonia | 25/0/0/15 | 2 s | +2 | libre | `sur:signpost`, `kc:bush` + bandera propia |
+| `hay_cart` | Carro de heno | 20/0/0/25 | 2 s | +2 | 2 | `kk:wheelbarrow`, `kk:sack` + pacas propias |
+| `bonfire` | Hoguera | 15/0/0/30 | 1,5 s | +2 | 3 | `sur:campfire-stand`, `sur:resource-wood` x2 + llama propia |
+| `flagpole` | Mastil con bandera | 40/0/0/20 | 2,5 s | +3 | 5 | `pir:flag-high` |
+| `palm_trees` | Palmeras | 20/0/0/15 | 2 s | +2 | 13 | `pir:patch-sand`, `pir:palm-straight` + palmera propia |
+
+- **3D:** `scripts/buildings/DecorMesh.gd` da UNA malla por tipo, compartida por
+  todas las instancias, con los dos materiales de `ToyPalette` (sin texturas, sin
+  `_process`, brillo de farol y hoguera en la superficie sin luz). Carga la
+  horneada (`assets/models/toy/<id>_mesh.res`) si existe y, si no, una version
+  procedural con las mismas proporciones; `DieselpunkBuildingFactory.create()`
+  la devuelve para estos ids. Recetas del horneado en
+  `tools/toy_recipes/<id>.gd` (ayuda `_decor.gd`); el horneador avisa si una pasa
+  de 600 triangulos.
+- **2D:** `BuildingArt2D._lamp_post()` ... `_palm_trees()`, con su suelo propio.
+- **Pendiente:** la bandera del pais en el mastil y el letrero (las recetas dejan
+  `FlagAnchor`, pero `ColonyFlag3D` solo se cuelga en el Nucleo y el CG), las
+  palmeras solo en la costa, y las 1x1 en MultiMesh por tipo (doc 21 §6.6).
+  Hasta el horneado se ve la version procedural.
 
 The road is still a decoration in data, but it is the backbone of the map: see "Road
 network" below.
@@ -190,25 +241,55 @@ under construction the label above the building gives the percentage and the tim
 
 ## Building Limits
 
-Defined in `GameConfig.building_limits`:
+**Los topes suben con la era (2026-10-14, decisión D1 de Bryan, rama
+`feat/topes-por-era`).** Antes eran fijos y bajos (doc 21 §1.5 del contexto privado:
+"hay demasiados recursos para pocos edificios"). Ahora:
 
-| Building | Max |
-|----------|-----|
-| house | 10 |
-| farm | 6 |
-| sawmill | 5 |
-| gold_mine | 4 |
-| foundry | 3 |
-| refinery | 2 |
-| warehouse | 5 |
-| market | 1 |
-| laboratory | 1 |
-| barracks | 3 |
-| tower | 6 |
-| headquarters | 1 |
-| statue | 5 |
-| fountain | 5 |
-| garden, road | unlimited |
+- `GameConfig.building_limits_by_era` guarda `[era 1, era 2, era 3]` por edificio. La
+  era 1 es el tope de siempre, así que una partida guardada nunca queda por encima de su
+  tope. Regla general ≈ ×1,5 en la era 2 y ×2 en la era 3.
+- `GameConfig.building_limits` queda como tabla de lo que **no** sube con la era (y
+  como la era 1). Un id que no está en la tabla por era usa esta en todas las eras.
+- **Un solo lector:** `GameConfig.get_building_limit(id)` = tope de la era en curso
+  (`ProgressionManager.current_era`) + huecos del rango (`rank_limit_bonus`). Lo usan
+  `PlacementRules.check_building_limit()` (colocar en 3D, 2D y táctil, el detalle de
+  CONSTRUIR, `purchase_block_message()`), `Objectives` y el tutorial. Para otra era:
+  `get_building_limit_for_era(id, era)`; sin rango ni modo: `base_building_limit(id, era)`;
+  la siguiente subida: `next_building_limit(id)` → `{"era", "limit"}` o `{}`.
+- **Decoraciones sin tope:** todo `BuildingData` con `is_decoration` (jardín, fuente,
+  estatua, carretera y las decoraciones nuevas) da -1 aunque tenga entrada en
+  `building_limits`. Se mira el `.tres` (`GameConfig.is_uncapped_building()`, recordado
+  por id), así que una decoración nueva no necesita entrada en ninguna tabla. Las limita
+  el terreno y el precio. Los huecos de rango sobre una decoración no hacen nada y el
+  aviso de rango ya no los anuncia (`RankPanel.reward_lines()`; afecta al rango 13).
+- **Sandbox:** sin topes en ninguna era (`GameMode.all_unlocked()`).
+- **Nada se guarda:** el tope sale de la era (`progression.current_era`) y del rango
+  (`rank.xp`), que ya van en el save. Una partida vieja carga con los topes de su era.
+
+| Edificio | Era 1 | Era 2 | Era 3 | Por qué |
+|----------|------:|------:|------:|---------|
+| house | 10 | 15 | 20 | ×1,5 / ×2. Más gente = más consumo de comida, oro y madera: se paga sola |
+| farm | 6 | 9 | 12 | ×1,5 / ×2, acompaña a las casas |
+| sawmill | 5 | 8 | 10 | ×1,5 / ×2; lo limita también el número de bosques (3-6) |
+| gold_mine | 4 | 6 | 8 | ×1,5 / ×2; lo limitan las vetas (3-6) |
+| foundry | 3 | 5 | 6 | ×1,5 / ×2; lo limitan las vetas de hierro |
+| refinery | 2 | 3 | 4 | ×1,5 / ×2; además consume su pozo (3-6 por mapa) |
+| barracks | 3 | 4 | 5 | Sube menos: cada uno es un hueco de entrenamiento y +8 de capacidad (con 5, 43 unidades); el freno es el mantenimiento en oro |
+| warehouse | 5 | 5 | 5 | **No sube.** Bolsa de la era 3 sin técnicas: 1000 + 5×500 = 3500 = CG nivel 3 (1500 + 800 + 500 + 700; los materiales van aparte). Con 7 almacenes serían 4500 (5500 con las técnicas) y el CG 3 dejaría de pedir la bolsa llena. La bolsa ya crece sola por era (600/800/1000) y por nivel de almacén (+250 por nivel) |
+| tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y solo 2 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
+| market, laboratory, headquarters | 1 | 1 | 1 | Únicos |
+| garden, fountain, statue, road y las diez decoraciones baratas (`lamp_post` … `palm_trees`) | — | — | — | Sin tope |
+
+Los huecos del rango van encima: casas +2 en los rangos 10 y 17 (era 3: 24), torre +1 en
+el 16.
+
+**CONSTRUIR** lo enseña en cada tarjeta y en el detalle: una casita dibujada y
+"3/6 · era 2: 9" (cuántos hay / tope de esta era · la era que lo sube y a cuánto), en
+ámbar cuando está lleno; el tooltip lo dice en frase. Se pone al día al subir de era
+(`EventBus.era_advanced`) y al colocar. El recuento se recuerda mientras no cambia
+`GridManager.map_version()` (`ConstructionMenu._count_of()`): el refresco de costes llega
+con cada recurso que cambia y contar recorre todos los edificios, carreteras incluidas.
+Cuando se alcanza, el aviso sigue siendo `LBL_LIMIT_REACHED` ("Límite alcanzado (6/6)").
 
 ## Deposit Rules
 
@@ -447,8 +528,9 @@ triangulos por edificio (el horneador los imprime).
 - **A la medida**: cada modelo sale ya del tamano del rectangulo que le deja su
   parcela (`LotPlan.model_rect`), centrado, base en y = 0 y frente hacia +Z; lo
   que una receta deje salirse se encoge en planta al hornear, asi que
-  `BuildingLot.fit_model()` no tiene que escalar. La granja (otra rama) se
-  hornea sin parcela, a 3,6 m.
+  `BuildingLot.fit_model()` no tiene que escalar. La granja tambien: a 3,0 m,
+  el rectangulo de su parcela (`building_lot_style["farm"]`, patio 0,25), con los
+  bancales en su malla aparte (ver "The Farm").
 - **Color**: la paleta (`ToyPalette`) esta escrita en sRGB y el horneado la pasa
   a lineal (los materiales leen el color por vertice como lineal, igual que el
   atrezo de `BuildingLot`); ademas oscurece lo que toca el suelo (AO de contacto).

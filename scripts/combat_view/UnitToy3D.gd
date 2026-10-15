@@ -257,6 +257,13 @@ func _set_bar_ratio(r: float) -> void:
 	_bar_fill.offset.x = -(float(BAR_PX.x) - w) * 0.5
 	_bar_fill.visible = w > 0.5
 
+## Tamano de la pieza en la vista: en el frente las unidades van mas grandes
+## (camara mas baja, sin casillas que respetar). Escala el conjunto entero
+## (modelo, placa, aros) sin tocar su sitio.
+func set_view_scale(f: float) -> void:
+	if _lift != null:
+		_lift.scale = Vector3.ONE * f
+
 func bar_ratio() -> float:
 	return _bar_ratio()
 
@@ -363,11 +370,11 @@ func muzzle_world() -> Vector3:
 
 ## Donde mirar / donde pega: el centro del cuerpo.
 func chest_world() -> Vector3:
-	return _lift.global_position + Vector3(0, _top * 0.5, 0)
+	return _lift.global_position + Vector3(0, _top * 0.5 * _lift.scale.y, 0)
 
 func top_world() -> Vector3:
 	# Por encima de la placa: el numero de dano no la tapa.
-	return _lift.global_position + Vector3(0, _top + BAR_GAP + PLATE_GAP + 0.55, 0)
+	return _lift.global_position + Vector3(0, (_top + BAR_GAP + PLATE_GAP + 0.55) * _lift.scale.y, 0)
 
 func ground_world() -> Vector3:
 	return global_position

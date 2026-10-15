@@ -78,6 +78,60 @@ it up.
 A Sawmill, Gold Mine or Foundry whose deposit was mined out by hand **stops**: it
 needs its vein alive next to it (`PlacementRules.has_its_deposit()`, badge "sin veta").
 
+### Lotes: ×1 / ×5 / MÁX (2026-10-14, partidas de Bryan)
+
+Cada proceso y cada minado a mano se puede pedir varias veces de un toque. Regla:
+
+- **Se paga todo al arrancar** (`ProcessManager.start_process(node, proc, count)` /
+  `start_mining(node, deposit, count)`); si no alcanza para todas, no arranca ninguna.
+- **Una vuelta tras otra en el mismo sitio.** Una sola entrada por edificio o veta con
+  `count` (vueltas que faltan, la de ahora incluida) y `total`. Cada vuelta entrega lo
+  suyo al terminar y emite su `process_completed` / `mining_completed` (XP, sonido y la
+  veta gasta un uso por vuelta). Se eligió esto y no "un proceso multiplicado" porque
+  así el reparto, la bolsa llena (lo que no cabe espera en el edificio), el gasto de
+  usos de la veta y las señales siguen igual que con una vuelta.
+- **MÁX** (`ProcessManager.max_batch`) = lo que dejan los recursos para pagarlo todo,
+  el hueco de la bolsa compartida (lo que entra de más menos lo que se paga por vuelta;
+  los materiales no ocupan bolsa; siempre cabe una), los usos que le queden a la veta y
+  el techo `GameConfig.process_batch_max` (20). Los trabajadores no cambian el número:
+  un lote de minado ocupa los mismos 2 todo el rato. Botones fijos en
+  `GameConfig.process_batch_sizes` ([1, 5]).
+- **Cancelar** devuelve la tasa de siempre (70 %, 40 % con la Tormenta en marcha) sobre
+  **todo lo pagado y aún no entregado** (vueltas pendientes × coste de una). Una sola
+  tasa, un solo número en el botón.
+- **La Tormenta** se lleva el lote entero (`get_queue_at_risk` cuenta todas las vueltas
+  pendientes): esconder recursos en un lote largo no salva nada.
+- **Guardado:** cada entrada de `active_processes` lleva `count`, `total` y `workers`.
+  Una entrada de antes sin `count` es una vuelta; sin `workers`, un `mine_*` ocupa
+  `mining_workers`. `load_save_data` asigna, no suma (idempotente); `reset()` vacía sin
+  devolver nada.
+
+### El Núcleo, taller de todo (2026-10-14)
+
+El Núcleo ofrece, además de sus tres procesos propios, **todos los procesos de los
+talleres** (tablones, lingotes, vigas, combustible y las demás recetas de Aserradero,
+Mina de oro, Fundición y Refinería) y **el minado a mano de cada yacimiento** (oro,
+madera, hierro, petróleo) sin gastar ninguna veta (`GameConfig.get_core_extra_processes`,
+`ProcessManager.get_processes_for("nucleo")`).
+
+- **Cuándo sale cada uno:** en cuanto **todos** sus recursos y materiales están
+  desbloqueados (por era, o el material al terminar el primero de su edificio:
+  `ProgressionManager._unlock_material_of`). Es el mismo filtro de siempre
+  (`ProcessActionsPanel._process_has_locked_resource`); no hace falta que el edificio
+  siga en pie.
+- **Rinde lo mismo, tarda 1,5 veces más** (`GameConfig.core_process_time_mult`). Por
+  qué: el Núcleo es para salir de un apuro o arrancar, no para sustituir al taller. Con
+  el mismo tiempo, el Aserradero o la Fundición sobrarían; más lento, el edificio propio
+  sigue valiendo la pena, y además deja libre el Núcleo, que solo hace **una cosa a la
+  vez** (un lote cada vez, como cualquier edificio).
+- **Minar a mano desde el Núcleo** ocupa `mining_workers` (2) trabajadores libres
+  mientras dura (`ProcessManager.process_blocker` → `MINE_NEEDS_WORKERS`), no necesita
+  carretera hasta ninguna veta y no gasta usos. Su id es `core_` + el de la veta
+  (`core_mine_gold`) para que `MapGenerator` no le descuente usos a nada; avisa con
+  `mining_started` / `mining_completed` para que PopulationManager cuente los obreros.
+- La sonda de línea (`tools/line_probe_player.gd`) sigue usando `GameConfig.get_processes_for`
+  y no juega estas recetas del Núcleo: el balance medido no las incluye.
+
 ## Production that waits to be collected (2026-10-04)
 
 **Every producer keeps what it makes** until the player collects it with one tap on
@@ -115,7 +169,8 @@ about six minutes of base production, multiplied by the level's production multi
 One **shared pool** for the five resources (not a cap per resource):
 
 - Base cap by era: 600 / 800 / 1000 (`base_storage_cap_by_era`)
-- Each warehouse: +500 (`warehouse_storage_bonus`), max 5; each level above 1 adds
+- Each warehouse: +500 (`warehouse_storage_bonus`), max 5 in every era (los demás topes
+  suben con la era, este no: docs/03 §Building Limits); each level above 1 adds
   +250 more (`warehouse_level_bonus`, `ResourceManager.refresh_warehouse_levels()`)
 - Tech: Logistics 2 +300, Industrial 2 +200, Logistics 5 +500 (`tech_storage_bonus`)
 - Era 3 with five warehouses: 1000 + 5×500 = **3500**, exactly the HQ level 3 upgrade;
@@ -152,6 +207,39 @@ building, they also need a road joined to the Núcleo (docs/03 "Road network").
 - Every deposit leaves room for its extractor and a free path to the Núcleo's
   sidewalk; a final pass removes and re-rolls any that ended boxed in.
 - The island shape also comes from the seed, in 3D and 2D.
+
+## Yacimientos en el mapa (aspecto, 2026-10-14)
+
+Los cuatro yacimientos son miniaturas de la maqueta, como los edificios: la paleta
+comun (`ToyPalette`), color por vertice y los dos materiales compartidos. Todo es
+pieza propia (cajas, cilindros, conos y bolas de `LotMesh`), sin modelos ajenos.
+Las reglas (tamanos, alcance, usos, guardado) no cambian.
+
+| Yacimiento | Suelo | Lo que se ve | Lo exagerado | Al minarlo |
+|---|---|---|---|---|
+| Bosque | verde oscuro con reborde | pinos de tres pisos, alguna copa redonda (una de cada ocho de otono), matas, setas, pila de troncos | el pino de atras, un 35 % mas alto | los arboles pasan a tocones |
+| Veta de oro | cascajo arenoso | peñas claras, pepitas, pico clavado, estaca con banderin rojo | racimo de cristales de oro sobre la peña madre; pepitas y destellos sin luz | se van cristales y pepitas |
+| Hierro | grava oscura con manchas de oxido | crestas de pizarra y roca roja con bandas de oxido, monton de mineral rojizo | dos agujas que se inclinan una contra otra | las crestas bajan a tocones, el monton mengua |
+| Petroleo | tierra parda | balsa negra con reborde de brea, reflejo, burbujas, juncos, dos bidones rojos | torreta de prospeccion de cuatro patas con polea roja, cubo y banderin | la balsa encoge y se secan los charcos |
+
+- **3D:** `scripts/map/DepositMesh.gd` (pura, sin nodos). Cada yacimiento es UN
+  `MeshInstance3D` ("Look"): una llamada de dibujo (dos en el oro, por lo que brilla).
+  La malla mide su huella, no se estira. Sale de una cache por tipo, tamano,
+  variante (4, de la semilla de la celda) y **etapa** de agotamiento
+  (`stage_of(usos, max)`: 4 entero ... 1 el ultimo uso). `MapGenerator` la pone al
+  crear el yacimiento y la cambia en `_refresh_deposit_look()` solo cuando la etapa
+  cambia al minarlo. Nada por fotograma. Coste por yacimiento: ~1-3,5 mil
+  triangulos (el bosque de 4x4 es el mayor; tope en las pruebas: 4000).
+- **2D:** `BuildingArt2D.draw_deposit(ci, id, size, variante, etapa)` con el mismo
+  vocabulario (suelo irregular, volumen hacia abajo, luz por la izquierda). `Deposit2D`
+  lo hornea en `ArtCache2D` (clave tipo/tamano/variante/etapa) y ya no tiene `_process`
+  por fotograma: solo mientras esta seleccionado; el atenuado de "bloqueado" llega por
+  `resource_unlocked`. `MapGenerator2D._refresh_deposit_look()` le pone la etapa.
+- La etapa sale de los usos, que ya se guardan: un save viejo carga igual y el
+  yacimiento aparece con su etapa.
+- Sonda: `tools/deposito_probe.gd` (capturas 3D de dia, Tormenta y noche, 2D de dia
+  y Tormenta, coste por yacimiento) a `docs/media/dev/dep_<tag>_*.png`.
+- Pruebas: `tests/map/test_deposit_mesh.gd`, `tests/view2d/test_deposit2d_look.gd`.
 
 ## The irregular island (2026-10-12)
 
@@ -282,6 +370,16 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
   Audit in Campaña and Supervivencia (surviving it is the victory), wins directly in
   Constructor (docs/06, docs/20). The materials are outside the pool, so the 3,500 =
   3,500 invariant still holds
+
+### Topes que suben con la era (2026-10-14)
+- Los topes de edificios suben con la era (`GameConfig.building_limits_by_era`, ≈ ×1,5
+  en la era 2 y ×2 en la era 3; tabla y porqués en docs/03 §Building Limits). Más
+  extractores y casas en las eras 2-3 dan más con qué llenar la bolsa: la bolsa no
+  cambia, el tope de almacenes se queda en 5 para que siga valiendo 3.500 = 3.500, y lo
+  que no cabe espera en los edificios (§Production that waits to be collected).
+- Las decoraciones no tienen tope: son el sitio donde gastar lo que sobra (moral).
+- Para medir con `tools/line_probe.gd`: lo tirado por bolsa llena, el minuto del CG 3 y
+  cuántos extractores levanta de verdad el jugador de la sonda en cada era.
 
 ## Key Files
 

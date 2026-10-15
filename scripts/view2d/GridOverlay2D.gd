@@ -6,6 +6,8 @@ extends Node2D
 ## que en 3D. Medida desde GridManager, nunca a mano.
 
 const View2D := preload("res://scripts/view2d/View2D.gd")
+## En calidad Minima la rejilla "siempre visible" no se pinta (docs/26 §7.1).
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 
 ## Tenue (arte, 2026-10-05): solo se ve al colocar o mover, salvo que el
 ## jugador la deje siempre en Ajustes; tiene que ayudar a encajar, no pintar
@@ -16,7 +18,7 @@ const BORDER := Color(0.95, 0.85, 0.55, 0.25)
 
 func _ready() -> void:
 	z_index = -10
-	visible = GameConfig.ui_grid_visible
+	visible = GraphicsQuality.grid_always_visible()
 	EventBus.grid_overlay_toggled.connect(func(vis: bool): visible = vis)
 	EventBus.grid_resized.connect(_on_grid_resized)
 	queue_redraw()

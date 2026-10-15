@@ -63,6 +63,10 @@ var _run_sealed := false
 var _save_pending := false
 var _save_debounce_left := 0.0
 var _autosave_elapsed := 0.0
+## Dentro de una tanda de colocacion (los tramos del auto-road) no se guarda por
+## tramo: se apunta y se guarda una vez al cerrarla (docs/26 §6.4).
+var _batch_depth := 0
+var _batch_dirty := false
 
 ## Lo que cambia la partida sin pasar por un edificio. Cada senal con su numero
 ## de argumentos, para poder desatarlos y llamar a request_save() sin mas.
@@ -102,6 +106,8 @@ func _ready() -> void:
 		var cb: Callable = request_save.unbind(int(trigger[1])) if int(trigger[1]) > 0 else request_save
 		sig.connect(cb)
 	EventBus.encounter_started.connect(_on_encounter_started)
+	EventBus.placement_batch_started.connect(_on_placement_batch_started)
+	EventBus.placement_batch_finished.connect(_on_placement_batch_finished)
 	EventBus.locale_changed.connect(_on_locale_changed)
 	EventBus.run_ended.connect(_on_run_ended)
 	# El perfil (settings.cfg, no la partida) recuerda las partidas terminadas:
@@ -501,8 +507,13 @@ func _load_game() -> void:
 					var label: Node = node.get_node_or_null("NameLabel")
 					if label and (label is Label3D or label is Label):
 						label.text = entry["custom_name"]
-				# Restore level
-				var level: int = entry.get("level", 1)
+				# Restore level. El JSON trae numeros en coma flotante: se pasa a
+				# entero y al rango valido. Una mejora pendiente a N (upgrade_to)
+				# dice que el edificio esta al menos en N-1 aunque falte la clave.
+				var upgrade_to: int = int(entry.get("upgrade_to", 0))
+				var level: int = clampi(int(entry.get("level", 1)), 1, GameConfig.max_building_level)
+				if upgrade_to > 1:
+					level = maxi(level, upgrade_to - 1)
 				node.set_meta("level", level)
 				if level > 1:
 					ProductionManager.apply_level_visual(node, level)
@@ -515,7 +526,6 @@ func _load_game() -> void:
 				if entry.has("construction_remaining"):
 					constr_remaining = float(entry["construction_remaining"])
 				# Sin la clave (save anterior) es una construccion, como siempre fue.
-				var upgrade_to: int = int(entry.get("upgrade_to", 0))
 				ProductionManager.register_building(node, building_data, constr_remaining, upgrade_to)
 				# Count warehouses
 				if building_data.id == "warehouse":
@@ -915,7 +925,21 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 func _on_building_changed(_data: Resource, _cell: Vector2i) -> void:
 	# El jugador ya construyo: la isla deja de ser "recien nacida".
 	_auto_fresh = false
+	if _batch_depth > 0:
+		_batch_dirty = true
+		return
 	save_game()
+
+func _on_placement_batch_started() -> void:
+	_batch_depth += 1
+
+## Cierra la tanda: lo que se habria guardado tramo a tramo se guarda una vez,
+## en el mismo instante (sin esperar al debounce), con todos los tramos puestos.
+func _on_placement_batch_finished(_count: int) -> void:
+	_batch_depth = maxi(0, _batch_depth - 1)
+	if _batch_depth == 0 and _batch_dirty:
+		_batch_dirty = false
+		save_game()
 
 func _on_building_moved(_from: Vector2i, _to: Vector2i) -> void:
 	save_game()

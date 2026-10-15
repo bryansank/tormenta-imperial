@@ -20,12 +20,22 @@ extends Node
 ##     movil use la disposicion estrecha (UILayoutConfig.NARROW_SLOTS).
 ##   - Engine.max_fps: el tope de fotogramas (fps_for, puro). El del perfil o el
 ##     elegido en Ajustes; menos con el juego en pausa y aun menos sin foco.
+##     En PC con calidad Minima, el "auto" es GameConfig.fps_minimal_pc.
+##
+## Calidad grafica (docs/26 §7): aplica lo que no es del mundo 3D
+## (GraphicsQuality.apply_runtime) al arrancar y con cada cambio, y hace la
+## deteccion del primer arranque: solo con la calidad en "auto" y sin
+## quality_detected en settings.cfg. Paso 1, senales estaticas; paso 2, una
+## medida corta detras del menu de titulo; paso 3, un aviso de una linea al
+## cerrar el menu, una sola vez.
 ## Los paneles se construyen una vez: lo que cambia tokens de UITheme (texto,
 ## paleta, contraste, opacidad) se ve tras rebuild_ui(), que recarga la escena
 ## conservando la partida. La escala se aplica al momento.
 ##
 ## Todo vive en user://settings.cfg [interfaz] (es del dispositivo, no de la
 ## partida). Ver docs/21-interfaz-y-dispositivos.md.
+
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 
 signal profile_changed(profile: String)
 signal scale_applied(factor: float)
@@ -74,13 +84,30 @@ var _paused := false
 ## Estatica: sobrevive a la recarga de escena, que es justo cuando hace falta.
 static var reopen_settings_tab := -1
 
+## Deteccion de la calidad: estado de la medida del paso 2.
+enum Detect { OFF, WAIT_GAME, WARMUP, MEASURE }
+var _detect := Detect.OFF
+var _detect_timer := 0.0
+var _detect_frames: Array = []
+var _detect_quality := ""
+## Aviso pendiente hasta que se cierre el menu de titulo ("" = ninguno).
+var _pending_notice := ""
+
 func _ready() -> void:
 	_detected = detect_from(_os_features(), _screen_px(), _screen_dpi())
 	print("[DeviceProfile] detectado=%s, activo=%s" % [_detected, current()])
 	get_tree().root.size_changed.connect(_on_window_resized)
 	# Sigue corriendo en pausa: es justo cuando tiene que bajar los fotogramas.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	EventBus.graphics_quality_changed.connect(_on_graphics_quality_changed)
+	GraphicsQuality.apply_runtime(get_tree())
+	# El override del renderizador sigue a la calidad guardada (por si alguien
+	# borro o edito settings.cfg a mano).
+	GraphicsQuality.sync_renderer_override()
 	apply_all()
+	print("[DeviceProfile] calidad=%s (%s), renderizador=%s" % [GraphicsQuality.current(),
+		GameConfig.ui_graphics_quality, RenderingServer.get_current_rendering_method()])
+	start_quality_detection(false)
 
 # ── Deteccion (pura) ──────────────────────────────────────────────────
 
@@ -289,9 +316,24 @@ static func _min_cap(a: int, b: int) -> int:
 		return a
 	return mini(a, b)
 
-## El tope que vale ahora mismo, con el foco y la pausa de este momento.
+## El tope de "auto": el del perfil, o GameConfig.fps_minimal_pc en un PC con
+## la calidad Minima.
+func auto_fps() -> int:
+	return auto_fps_for(current(), GraphicsQuality.is_minimal())
+
+static func auto_fps_for(profile: String, minimal: bool) -> int:
+	var fps := int(DEFAULTS.get(profile, DEFAULTS[PC])["fps"])
+	if profile == PC and minimal:
+		fps = mini(fps, int(GameConfig.fps_minimal_pc))
+	return fps
+
+## El tope que vale ahora mismo, con el foco y la pausa de este momento. Sin
+## tope mientras se mide la calidad (la pausa del menu de titulo lo bajaria a 30
+## y la medida veria un equipo flojo en cualquiera).
 func effective_fps_cap() -> int:
-	return fps_for(GameConfig.ui_fps_cap, int(defaults()["fps"]), _focused, _paused)
+	if _detect == Detect.WARMUP or _detect == Detect.MEASURE:
+		return 0
+	return fps_for(GameConfig.ui_fps_cap, auto_fps(), _focused, _paused)
 
 ## Lo aplica. En headless no: los tests esperan fotogramas y un tope los haria
 ## lentos, y las sondas sin ventana miden sin el.
@@ -311,11 +353,16 @@ func set_fps_cap(mode: String) -> void:
 
 ## La pausa no avisa por ninguna senal (la ponen PauseMenu, TitleMenu y
 ## PrologueScreen a mano): se mira aqui, un booleano por fotograma.
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var paused := get_tree().paused
 	if paused != _paused:
 		_paused = paused
 		apply_fps()
+	if _detect != Detect.OFF:
+		_step_detection(delta)
+	elif _pending_notice != "" and not paused and GameManager.is_started():
+		EventBus.notification_posted.emit(_pending_notice, "notice", UITheme.INFO)
+		_pending_notice = ""
 
 ## La de aplicacion y no la de ventana: esto es un autoload (ver InputService).
 ## Minimizar en Windows tambien quita el foco.
@@ -323,6 +370,11 @@ func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_APPLICATION_FOCUS_OUT:
 			_focused = false
+			# Una medida sin foco no vale: se descarta y se repite en el
+			# siguiente arranque (quality_detected sigue sin guardarse).
+			if _detect != Detect.OFF:
+				_detect = Detect.OFF
+				print("[DeviceProfile] medida de calidad descartada (sin foco)")
 			apply_fps()
 		NOTIFICATION_APPLICATION_FOCUS_IN:
 			_focused = true
@@ -342,3 +394,101 @@ func rebuild_ui(reopen_tab: int = -1) -> bool:
 	reopen_settings_tab = reopen_tab
 	GameManager.reload_keeping_game.call_deferred()
 	return true
+
+# ── Calidad grafica ───────────────────────────────────────────────────
+
+func _on_graphics_quality_changed(_q: String) -> void:
+	GraphicsQuality.apply_runtime(get_tree())
+	apply_fps()
+
+## Arranca la deteccion. Sin `force`, solo la primera vez (calidad "auto" y sin
+## quality_detected); con `force` ("Detectar de nuevo" en Ajustes), siempre:
+## vuelve a "auto" y decide otra vez. Nunca en headless (tests, sondas sin
+## ventana) ni con `-- --no-title` / `-- --no-detect` (sondas con ventana).
+func start_quality_detection(force: bool) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var args := OS.get_cmdline_user_args()
+	if args.has("--no-title") or args.has("--no-detect"):
+		return
+	if not force and (GameConfig.ui_graphics_quality != "auto" or GameConfig.quality_detected):
+		return
+	if force and GameConfig.ui_graphics_quality != "auto":
+		GraphicsQuality.set_quality("auto")
+	var info := {
+		"renderer": RenderingServer.get_current_rendering_method(),
+		"adapter_type": RenderingServer.get_video_adapter_type(),
+		"adapter_name": RenderingServer.get_video_adapter_name(),
+		"ram_mb": _system_ram_mb(),
+		"threads": OS.get_processor_count(),
+		"profile": current(),
+		"mobile": GraphicsQuality.is_mobile_platform(),
+	}
+	var verdict := GraphicsQuality.static_verdict(info)
+	print("[DeviceProfile] deteccion de calidad, paso 1: %s -> %s" % [info, verdict])
+	if str(verdict["quality"]) != "":
+		_finish_detection(str(verdict["quality"]), str(verdict["reason"]))
+		return
+	# Paso 2: se mide el mapa 3D, que es lo que Minima abarata. En la vista 2D
+	# no se mide: queda pendiente para un arranque en 3D.
+	if GameConfig.ui_view_mode == "2d":
+		return
+	_detect = Detect.WAIT_GAME
+	_detect_timer = 0.0
+	_detect_frames.clear()
+
+func is_detecting_quality() -> bool:
+	return _detect != Detect.OFF
+
+func _system_ram_mb() -> int:
+	var mem := OS.get_memory_info()
+	var bytes := int(mem.get("physical", -1))
+	return int(bytes / (1024 * 1024)) if bytes > 0 else -1
+
+func _step_detection(delta: float) -> void:
+	match _detect:
+		Detect.WAIT_GAME:
+			# El mapa ya cargado detras del menu de titulo (TitleMenu va encima).
+			if GameManager.is_started():
+				_detect = Detect.WARMUP
+				_detect_timer = 0.0
+				apply_fps()
+		Detect.WARMUP:
+			_detect_timer += delta
+			if _detect_timer >= float(GameConfig.quality_detect_warmup):
+				_detect = Detect.MEASURE
+				_detect_timer = 0.0
+				_detect_frames.clear()
+				_detect_quality = GraphicsQuality.current()
+		Detect.MEASURE:
+			_detect_timer += delta
+			_detect_frames.append(delta * 1000.0)
+			if _detect_timer >= float(GameConfig.quality_detect_seconds):
+				_detect = Detect.OFF
+				var hz := DisplayServer.screen_get_refresh_rate()
+				var q := GraphicsQuality.measure_verdict(_detect_frames, _detect_quality,
+					hz if hz > 0.0 else 60.0)
+				# Si el jugador eligio una calidad mientras se media, manda la suya.
+				if GameConfig.ui_graphics_quality != "auto":
+					q = ""
+				var sorted := _detect_frames.duplicate()
+				sorted.sort()
+				var median := float(sorted[sorted.size() / 2]) if not sorted.is_empty() else 0.0
+				_finish_detection(q, "medida %s: mediana %.1f ms, %d fotogramas" % [
+					_detect_quality, median, _detect_frames.size()])
+				apply_fps()
+
+## Guarda el resultado (una sola vez) y, si se bajo la calidad, deja el aviso
+## para cuando se cierre el menu de titulo.
+func _finish_detection(quality: String, reason: String) -> void:
+	GameConfig.quality_detected = true
+	GameConfig.quality_detected_reason = reason
+	print("[DeviceProfile] deteccion de calidad: '%s' (%s)" % [quality, reason])
+	if quality == "":
+		GameConfig.save_user_settings()
+		return
+	var restart := GraphicsQuality.set_quality(quality)
+	var msg := Tr.t("MSG_QUALITY_AUTO_MINIMAL" if quality == "minimal" else "MSG_QUALITY_AUTO_LOW")
+	if restart:
+		msg += " " + Tr.t("MSG_QUALITY_RESTART")
+	_pending_notice = msg

@@ -134,6 +134,83 @@ func append_mesh(mesh: ArrayMesh) -> void:
 		var glow := mesh.surface_get_material(s) == glow_material()
 		append(arr[Mesh.ARRAY_VERTEX], arr[Mesh.ARRAY_NORMAL], arr[Mesh.ARRAY_COLOR], glow)
 
+# ── Borde de contacto (V8, regla 5 de la guia de estilo) ─────────────
+
+## Oscurece la base de lo solido, horneado en el color de vertice (cero coste
+## en el juego). Dos capas:
+## - AO suave: todo lo que queda por debajo de `ao_h` se oscurece hasta `ao_dark`
+##   en y = 0;
+## - borde: las caras de pared (normal casi horizontal) se oscurecen ademas
+##   hasta `edge_dark` en una franja fina de `edge_h`. Es la linea oscura que
+##   separa el edificio del suelo en cualquier fondo, tambien en la Tormenta.
+## Antes se cortan por y = `edge_h` las paredes que la cruzan: si no, una pared
+## con vertices solo abajo y arriba llevaria el oscuro degradado por toda su
+## altura en vez de en una franja. Solo se parten paredes de la base (lo plano
+## y el AO suave no se cortan: seria pagar triangulos que no se ven).
+## El color esta en sRGB, como lo escribe ToyPalette.
+func contact_edge(ao_h: float, ao_dark: float, edge_h: float, edge_dark: float) -> void:
+	var v := _sv
+	var n := _sn
+	var c := _sc
+	var out := _split_at(v, n, c, edge_h)
+	v = out[0]
+	n = out[1]
+	c = out[2]
+	for i in v.size():
+		var y := maxf(0.0, v[i].y)
+		var k := 1.0
+		if y < ao_h:
+			k *= 1.0 - ao_dark * (1.0 - y / ao_h)
+		if y < edge_h and absf(n[i].y) < 0.6:
+			k *= 1.0 - edge_dark * (1.0 - y / edge_h)
+		if k < 1.0:
+			c[i] = Color(c[i].r * k, c[i].g * k, c[i].b * k, c[i].a)
+	_sv = v
+	_sn = n
+	_sc = c
+
+## Corta por el plano y = `h` las paredes (normal casi horizontal) que lo
+## cruzan (de tres en tres), interpolando normal y color. Cada trozo se abre en abanico desde su primer
+## vertice: el orden de cara se conserva.
+static func _split_at(v: PackedVector3Array, n: PackedVector3Array, c: PackedColorArray, h: float) -> Array:
+	var ov := PackedVector3Array()
+	var on := PackedVector3Array()
+	var oc := PackedColorArray()
+	var i := 0
+	while i + 2 < v.size():
+		var below := 0
+		for k in 3:
+			if v[i + k].y < h:
+				below += 1
+		var wall := absf((n[i] + n[i + 1] + n[i + 2]).normalized().y) < 0.6
+		if below == 0 or below == 3 or not wall:
+			for k in 3:
+				ov.append(v[i + k]); on.append(n[i + k]); oc.append(c[i + k])
+			i += 3
+			continue
+		for side in [true, false]:
+			var pv := PackedVector3Array()
+			var pn := PackedVector3Array()
+			var pc := PackedColorArray()
+			for k in 3:
+				var a := i + k
+				var b := i + (k + 1) % 3
+				var a_in: bool = (v[a].y < h) == side
+				var b_in: bool = (v[b].y < h) == side
+				if a_in:
+					pv.append(v[a]); pn.append(n[a]); pc.append(c[a])
+				if a_in != b_in:
+					var t := (h - v[a].y) / (v[b].y - v[a].y)
+					pv.append(v[a].lerp(v[b], t))
+					pn.append(n[a].lerp(n[b], t).normalized())
+					pc.append(c[a].lerp(c[b], t))
+			for k in range(1, pv.size() - 1):
+				ov.append(pv[0]); on.append(pn[0]); oc.append(pc[0])
+				ov.append(pv[k]); on.append(pn[k]); oc.append(pc[k])
+				ov.append(pv[k + 1]); on.append(pn[k + 1]); oc.append(pc[k + 1])
+		i += 3
+	return [ov, on, oc]
+
 # ── Primitivas ───────────────────────────────────────────────────────
 
 ## Caja centrada en `c`. Sin la cara de abajo (nunca se ve), salvo `bottom`.
