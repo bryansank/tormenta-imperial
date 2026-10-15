@@ -9,6 +9,11 @@ extends RefCounted
 ## (RankManager.get_color()). Las de la Regencia llevan su morado ya horneado.
 ## Asi una pelea entera son, como mucho, tres materiales: solido, brillo y
 ## colonia. Nada de materiales por unidad ni luces propias.
+##
+## El regimiento (docs/15 §11, solo cosmetico) cambia el color de esa superficie
+## y le puede poner una pintura (rayas, manchas...): con pintura, el material es
+## un ShaderMaterial de regiment_paint.gdshader, uno por color y pintura, y
+## sigue siendo compartido por todas las piezas que lo llevan.
 
 const Palette := preload("res://scripts/buildings/ToyPalette.gd")
 
@@ -16,6 +21,7 @@ const DIR := "res://assets/models/toy/units/"
 const BOSS_MARK := DIR + "boss_mark.tscn"
 const CREW_NEST := DIR + "crew_nest.tscn"
 const TEAM_SURFACE := "team"
+const PAINT_SHADER := preload("res://scripts/combat_view/regiment_paint.gdshader")
 
 static var _scenes: Dictionary = {}
 static var _team_mats: Dictionary = {}
@@ -35,12 +41,14 @@ static func load_scene(path: String) -> PackedScene:
 
 ## Instancia el modelo de una unidad. Sin modelo, una caja de juguete del color
 ## del bando: una unidad nueva nunca se queda sin cuerpo en el tablero.
-static func instantiate(unit_id: String, side: int, team_color: Color) -> Node3D:
+## `paint`: la pintura del regimiento (GameConfig.REGIMENT_PAINTS), solo para
+## las nuestras; "plain" = el material de siempre.
+static func instantiate(unit_id: String, side: int, team_color: Color, paint: String = "plain") -> Node3D:
 	var scene := load_scene(scene_path(unit_id, side))
 	if scene == null:
 		return _fallback(team_color)
 	var node: Node3D = scene.instantiate()
-	paint_team(node, team_color)
+	paint_team(node, team_color, paint)
 	return node
 
 static func instantiate_prop(path: String) -> Node3D:
@@ -48,21 +56,30 @@ static func instantiate_prop(path: String) -> Node3D:
 	return scene.instantiate() if scene != null else null
 
 ## Pone el material del color del bando en la superficie "team" de la malla.
-static func paint_team(node: Node, color: Color) -> void:
+static func paint_team(node: Node, color: Color, paint: String = "plain") -> void:
 	var mi := node as MeshInstance3D
 	if mi == null or mi.mesh == null:
 		return
 	var idx: int = mi.mesh.surface_find_by_name(TEAM_SURFACE)
 	if idx >= 0:
-		mi.set_surface_override_material(idx, team_material(color))
+		mi.set_surface_override_material(idx, team_material(color, paint))
 
-## Un material por color (no por unidad): el mismo para las seis piezas.
-static func team_material(color: Color) -> Material:
-	var key := color.to_html(false)
+## Un material por color y pintura (no por unidad): el mismo para las seis
+## piezas. Liso = el StandardMaterial de la maqueta, como antes del regimiento.
+static func team_material(color: Color, paint: String = "plain") -> Material:
+	var plain := paint == "plain" or not (paint in GameConfig.REGIMENT_PAINTS)
+	var key := color.to_html(false) if plain else "%s|%s" % [color.to_html(false), paint]
 	if not _team_mats.has(key):
-		var m: StandardMaterial3D = Palette.make_solid()
-		m.albedo_color = color
-		_team_mats[key] = m
+		if plain:
+			var m: StandardMaterial3D = Palette.make_solid()
+			m.albedo_color = color
+			_team_mats[key] = m
+		else:
+			var sm := ShaderMaterial.new()
+			sm.shader = PAINT_SHADER
+			sm.set_shader_parameter("team_color", color)
+			sm.set_shader_parameter("paint", GameConfig.REGIMENT_PAINTS.find(paint))
+			_team_mats[key] = sm
 	return _team_mats[key]
 
 static func _fallback(color: Color) -> Node3D:

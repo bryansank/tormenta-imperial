@@ -15,6 +15,7 @@ extends Node3D
 
 const Layout := preload("res://scripts/combat_view/BoardLayout3D.gd")
 const Models := preload("res://scripts/combat_view/UnitModels3D.gd")
+const RegimentLook := preload("res://scripts/ui/RegimentLook.gd")
 
 const HOP_HEIGHT := 0.38
 const BAR_PX := Vector2i(64, 9)
@@ -54,6 +55,9 @@ var _plate_label: Label3D
 var _crosshair: Sprite3D
 var _hint: Label3D
 var _active_ring: MeshInstance3D
+## La insignia del regimiento junto a la placa (solo las nuestras): emblema en
+## un disco del color y las estrellas. Textura compartida (RegimentLook).
+var _badge: Sprite3D
 var _ring_pulse: Tween
 var _muzzle_local := Vector3(0, 0.6, 0.8)
 var _top := 1.1
@@ -71,7 +75,8 @@ const PLATE_PIXEL := 0.0135
 const PLATE_GAP := 0.48
 static var _shadow_mat: Material = null
 
-## `info`: uid, unit_id, side, hp, max_hp, domain, boss, crew, team_color.
+## `info`: uid, unit_id, side, hp, max_hp, domain, boss, crew, team_color,
+## regiment (aspecto del regimiento, RegimentLook.resolve; vacio = sin nada).
 func setup(info: Dictionary) -> void:
 	uid = int(info.get("uid", -1))
 	unit_id = String(info.get("unit_id", ""))
@@ -92,7 +97,8 @@ func setup(info: Dictionary) -> void:
 	_lift.add_child(_body)
 
 	var team_color: Color = info.get("team_color", Color.WHITE)
-	_model = Models.instantiate(unit_id, side, team_color)
+	var regiment: Dictionary = info.get("regiment", {}) if side == 0 else {}
+	_model = Models.instantiate(unit_id, side, team_color, String(regiment.get("paint", "plain")))
 	_model.name = "Model"
 	_model.scale = Vector3.ONE * MODEL_SCALE
 	_body.add_child(_model)
@@ -133,6 +139,8 @@ func setup(info: Dictionary) -> void:
 	_active_ring = _ring("ActiveRing", UITheme.INFO.lightened(0.25), 1.0)
 
 	_build_bar()
+	if not regiment.is_empty():
+		_add_regiment_badge(regiment)
 	set_hp(shown_hp, false)
 
 # ── Barra de vida ────────────────────────────────────────────────────
@@ -205,6 +213,29 @@ func _build_bar() -> void:
 		_hint.font = font
 	_lift.add_child(_hint)
 
+## La insignia a la izquierda de la placa, a su altura. Va colgada de la barra:
+## se apaga con ella al caer. El desplazamiento va en pixeles de la textura
+## (Sprite3D.offset), asi sigue al lado de la placa aunque la camara gire.
+func _add_regiment_badge(look: Dictionary) -> void:
+	var tex := RegimentLook.badge_texture(look)
+	if tex == null:
+		return
+	_badge = Sprite3D.new()
+	_badge.name = "RegimentBadge"
+	_badge.texture = tex
+	_badge.pixel_size = PLATE_PIXEL
+	_badge.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_badge.no_depth_test = true
+	_badge.shaded = false
+	_badge.render_priority = 5
+	_badge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_badge.position.y = PLATE_GAP
+	_badge.offset = Vector2(-(float(PLATE_PX.x) + float(RegimentLook.BADGE)) * 0.5 - 2.0, 0.0)
+	_bar.add_child(_badge)
+
+func has_regiment_badge() -> bool:
+	return _badge != null
+
 func _bar_sprite(priority: int) -> Sprite3D:
 	var s := Sprite3D.new()
 	s.texture = _bar_texture()
@@ -276,6 +307,8 @@ func set_spent(spent: bool) -> void:
 	_bar_bg.modulate.a = 0.85 * a
 	_plate.modulate.a = 0.55 + 0.45 * a
 	_plate_label.modulate.a = 0.55 + 0.45 * a
+	if _badge != null:
+		_badge.modulate.a = 0.55 + 0.45 * a
 
 func set_defending(on: bool, animate := true) -> void:
 	if _guard.visible == on:

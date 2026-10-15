@@ -1337,11 +1337,15 @@ func _paint_side_mark(mark: Panel, unit: CombatUnit) -> void:
 	style.bg_color = UITheme.unit_icon_tint(is_player)
 	style.border_color = UITheme.OUTLINE_COLOR
 	style.set_border_width_all(2)
-	# Nuestras fichas llevan el color de la colonia (☰ MENU > COLONIA). El bando
-	# lo sigue diciendo la FORMA (circulo / rombo), asi que el color es libre.
+	# Nuestras fichas llevan el color del regimiento (Cuartel > REGIMIENTO; de
+	# serie, el de la colonia). El bando lo sigue diciendo la FORMA (circulo /
+	# rombo), asi que el color es libre. Con estrellas, un aro de laton.
+	var look: Dictionary = ArmyManager.get_regiment_look() if is_player else {}
 	if is_player:
-		style.bg_color = RankManager.get_color()
-	mark.set_meta("colony_color", RankManager.get_color_id() if is_player else "")
+		style.bg_color = look["color"]
+		if int(look["stars"]) > 0:
+			style.border_color = UITheme.ACCENT
+	mark.set_meta("colony_color", String(look["color_id"]) if is_player else "")
 	if is_player:
 		style.set_corner_radius_all(int(side_size))
 		mark.rotation = 0.0
@@ -1762,7 +1766,8 @@ func _open_board_3d(index: int) -> void:
 	var seed_value: int = index * 7919 + encounter.units.size() * 31 + (1 if encounter.is_defense else 0)
 	_board3d.board.setup(encounter, {
 		"scene": _forced_scene if _forced_scene != "" else BoardTerrain.pick_scene(seed_value, encounter.is_defense),
-		"team_color": RankManager.get_color(),
+		"team_color": ArmyManager.get_regiment_look()["color"],
+		"regiment": ArmyManager.get_regiment_look(),
 		"boss_uid": boss_uid(),
 		"crew_uids": encounter.back_row_uids,
 		"seed": seed_value,
