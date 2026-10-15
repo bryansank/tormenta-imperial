@@ -109,6 +109,15 @@ var building_limits := {
 	"fountain": 5,
 	"road": -1,
 	"farm": 6,
+	# Edificios utiles de la 1.1: el tope de era 1 (lo que sube con la era esta
+	# en building_limits_by_era, y la prueba exige que la era 1 coincida).
+	"windmill": 2,
+	"silo": 2,
+	"tavern": 1,
+	"carpentry": 1,
+	"well": 3,
+	"lighthouse": 1,
+	"fuel_depot": 2,
 }
 
 # ── Building Prerequisites (must have at least 1 of each listed) ──
