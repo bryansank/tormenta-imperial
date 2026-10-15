@@ -1,4 +1,5 @@
 extends Node
+const UtilityEffects := preload("res://scripts/buildings/UtilityEffects.gd")
 ## Manages passive resource production from buildings and construction timers.
 ## Buildings with build_time > 0 go through construction before producing.
 ## Spawns floating text when resources are awarded.
@@ -27,6 +28,29 @@ var last_offline_spoiled: Dictionary = {}
 
 func _ready() -> void:
 	EventBus.building_placed.connect(_on_building_placed)
+	# Areas de los edificios utiles (Molino, Pozo, Taberna, Silo, Deposito,
+	# Faro): se recalculan cuando cambia lo que hay en pie, agrupado y diferido.
+	EventBus.building_placed.connect(_mark_areas_dirty.unbind(2))
+	EventBus.building_moved.connect(_mark_areas_dirty.unbind(2))
+	EventBus.building_demolished.connect(_mark_areas_dirty.unbind(2))
+	EventBus.construction_completed.connect(_mark_areas_dirty.unbind(1))
+	EventBus.building_ruined.connect(_mark_areas_dirty.unbind(1))
+	EventBus.building_repaired.connect(_mark_areas_dirty.unbind(1))
+	EventBus.game_load_completed.connect(_mark_areas_dirty)
+
+## Las areas de efecto de los edificios utiles (UtilityEffects): un solo
+## recuento al final del frame, aunque se coloquen veinte tramos de carretera.
+var _areas_dirty := false
+
+func _mark_areas_dirty() -> void:
+	if _areas_dirty:
+		return
+	_areas_dirty = true
+	_refresh_areas.call_deferred()
+
+func _refresh_areas() -> void:
+	_areas_dirty = false
+	UtilityEffects.refresh()
 
 # ── Registration ──
 
@@ -82,6 +106,7 @@ func reset() -> void:
 	_crops.clear()
 	last_offline_spoiled = {}
 	_full_bag_notice_cooldown = 0.0
+	UtilityEffects.clear()
 
 func _register_producer(node: Node, data: BuildingData) -> void:
 	if data.is_producer():
@@ -422,6 +447,8 @@ func get_cycle_yield(node: Node, data: BuildingData, include_events := true) -> 
 	var level: int = node.get_meta("level", 1)
 	var base_mult := GameConfig.get_production_multiplier(level) + GameConfig.tech_production_bonus + GameConfig.rank_production_bonus
 	var mult := base_mult * PopulationManager.get_morale_multiplier()
+	# Molino cerca (solo Granjas, meta de UtilityEffects).
+	mult *= 1.0 + float(node.get_meta(UtilityEffects.MILL_META, 0.0))
 	# Temporary, event-driven penalties (the Imperial Storm, the plague) ride on
 	# their own multipliers so they can be lifted cleanly. Folding them into the
 	# tech bonus would mix a passing squall with permanent research.
@@ -647,8 +674,13 @@ func _tick_spoilage(delta: float) -> void:
 			_stock.erase(node)
 			continue
 		_stock[node]["age"] = float(_stock[node]["age"]) + delta
-		if spoil and float(_stock[node]["age"]) >= GameConfig.spoil_after_seconds:
+		if spoil and float(_stock[node]["age"]) >= _spoil_after(node):
 			_spoil(node, 1)
+
+## Plazo de caducidad de lo acumulado en `node` (el Silo lo alarga en las Granjas).
+func _spoil_after(node: Node) -> float:
+	var data := _data_of(node)
+	return GameConfig.spoil_after_for(data.id if data != null else "")
 
 ## Pierde `spoil_ratio` de lo acumulado `times` veces seguidas y vuelve a contar.
 ## Devuelve lo perdido.
@@ -884,11 +916,12 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 			var age: float = float(_stock[node]["age"])
 			if aged_before.has(node):
 				age += elapsed
-			var periods := int(age / GameConfig.spoil_after_seconds)
+			var after := _spoil_after(node)
+			var periods := int(age / after)
 			if periods <= 0:
 				_stock[node]["age"] = age
 				continue
-			var rest: float = age - float(periods) * GameConfig.spoil_after_seconds
+			var rest: float = age - float(periods) * after
 			var lost := _spoil(node, periods)
 			if _stock.has(node):
 				_stock[node]["age"] = rest

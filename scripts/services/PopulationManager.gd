@@ -28,6 +28,11 @@ var _notif_cooldown := 0.0  # Prevent notification spam
 ## Viaja en el guardado: el hambre no se olvida al cerrar el juego.
 var _unpaid_ticks := 0
 
+## Tabernas que pudieron servir en el ultimo tic de consumo (comida y oro
+## pagados, obreros y casas en su barrio). Dan moral en ese tic y gente de mas
+## en el de crecimiento. Derivado: no se guarda (tras cargar, 0 hasta el tic).
+var _served_taverns := 0
+
 ## Tanda de colocacion en curso (auto-road): un solo recuento al cerrarla.
 var _batch_depth := 0
 var _batch_dirty := false
@@ -159,6 +164,8 @@ func _tick_consumption() -> void:
 			EventBus.notification_posted.emit(Tr.t("NOTIF_NO_FOOD"), "warning", Color(0.9, 0.6, 0.2))
 			_notif_cooldown = 30.0
 
+	_tick_taverns()
+
 	# Morale adjustments
 	if food_ok:
 		_adjust_morale(GameConfig.morale_satisfied_recovery)
@@ -171,6 +178,38 @@ func _tick_consumption() -> void:
 	# Dos tics de gracia. Al tercero la gente deja de aguantar.
 	if GameConfig.unpaid_hurts(_unpaid_ticks):
 		_starve()
+
+## Las Tabernas (1.1): cada una con obreros, carretera y casas en su barrio
+## (meta `tavern_houses`, UtilityEffects) gasta su comida y su oro; si los hay,
+## sube la moral. Sin pagar, no sirve: ni moral ni gente de mas.
+func _tick_taverns() -> void:
+	_served_taverns = 0
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info.get("data")
+		var node: Node = info.get("node")
+		if data == null or data.id != "tavern" or node == null or not is_instance_valid(node):
+			continue
+		if int(node.get_meta("tavern_houses", 0)) <= 0:
+			continue
+		if not BuildingHealth.is_operational(node) or not is_building_staffed(node):
+			continue
+		if not bool(node.get_meta("connected", true)):
+			continue
+		var cost := {
+			ResourceManager.Type.FOOD: GameConfig.tavern_food_cost,
+			ResourceManager.Type.GOLD: GameConfig.tavern_gold_cost,
+		}
+		# Sin bastante, no sirve (y no se avisa: la Taberna se queda vacia).
+		if not ResourceManager.can_afford(cost):
+			continue
+		ResourceManager.spend_cost(cost)
+		_served_taverns += 1
+	if _served_taverns > 0:
+		_adjust_morale(GameConfig.tavern_morale * _served_taverns)
+
+## Tabernas que sirvieron en el ultimo tic.
+func get_served_taverns() -> int:
+	return _served_taverns
 
 ## Comida que pide un tic de consumo con la poblacion de ahora (minimo 1).
 func food_due() -> int:
@@ -228,8 +267,8 @@ func _tick_growth() -> void:
 	var regrowing: bool = _population < GameConfig.population_regrow_floor
 	if _morale < GameConfig.morale_growth_threshold and not regrowing:
 		return  # Too unhappy to grow
-	# Grow 1 pop if morale is decent
-	_population = mini(_population + 1, _max_population)
+	# Grow 1 pop if morale is decent (y uno mas por Taberna que sirvio).
+	_population = mini(_population + 1 + _served_taverns * GameConfig.tavern_growth_bonus, _max_population)
 	EventBus.population_changed.emit(_population, _max_population)
 	if _notif_cooldown <= 0.0:
 		EventBus.notification_posted.emit(Tr.t("NOTIF_POP_GREW") % [_population, _max_population], "info", Color(0.4, 0.8, 0.4))
@@ -411,3 +450,4 @@ func reset() -> void:
 	_consumption_timer = 0.0
 	_growth_timer = 0.0
 	_unpaid_ticks = 0
+	_served_taverns = 0
