@@ -41,9 +41,13 @@ var event_interval_max_dev := 60.0
 
 # ── Starting Resources ──
 
+## 2026-10-12 (docs/22 §11): 30 de oro mas y 20 de madera menos. La madera
+## sobraba (la sonda la vendia en el minuto 5) y el oro era lo que frenaba la
+## Fundicion. 330 + 180 + 80 = 590 deja hueco en la bolsa de 600 de la era 1, y
+## Supervivencia (x0.75: 135 de madera) sigue pagando aserradero + mina (130).
 var starting_resources := {
-	"gold": 300,
-	"wood": 200,
+	"gold": 330,
+	"wood": 180,
 	# Comida para los primeros minutos, hasta que la primera Granja rinda
 	# (2026-10-04). 580 en total: cabe en la bolsa de 600 de la era 1.
 	"food": 80,
@@ -79,9 +83,18 @@ var upgrade_base_duration := 15.0
 
 # ── HQ Upgrade Override (capstone building, much more expensive) ──
 
+## 2026-10-12 (docs/22 §11, Campaña de 4-6 h): el nivel 2 pide 3.000 de bolsa
+## (antes 2.000) y los dos piden muchos mas materiales del taller (antes 15/10/15
+## y 25/20/25). Los materiales van fuera de la bolsa, asi que alargan la era 3 con
+## trabajo (vigas, lingotes y combustible que fabricar cada 25-30 s, y fundiciones
+## y refinerias de mas que levantar) sin tocar el invariante 3.500 = bolsa maxima
+## del nivel 3.
 var hq_upgrade_costs := {
-	2: {"gold": 800, "steel": 500, "oil": 300, "wood": 400, "beams": 15, "ingots": 10, "fuel": 15},
-	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700, "beams": 25, "ingots": 20, "fuel": 25},
+	# 2026-10-14: el doble de materiales otra vez (antes 100/70/100 y
+	# 200/140/200). Con los lotes y el Nucleo haciendo las recetas de todos, el
+	# taller va mucho mas rapido y la campana habia bajado a ~3 h 35 (docs/22 §11).
+	2: {"gold": 1300, "steel": 900, "oil": 500, "wood": 300, "beams": 200, "ingots": 140, "fuel": 200},
+	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700, "beams": 400, "ingots": 280, "fuel": 400},
 }
 
 # ── Building Limits (max per type, -1 = unlimited) ──
@@ -120,7 +133,9 @@ var building_prerequisites := {
 	"foundry": ["sawmill", "gold_mine", "house", "warehouse"],
 	"market": ["gold_mine"],
 	"laboratory": ["house"],
-	"refinery": ["foundry", "barracks"],
+	# Y el Laboratorio (2026-10-12): la era 2 trae una obra mas y el arbol abierto
+	# antes del petroleo, que es cuando se piden las tecnologias de almacen.
+	"refinery": ["foundry", "barracks", "laboratory"],
 	"barracks": ["foundry", "sawmill"],
 	"tower": ["barracks"],
 	"headquarters": ["barracks", "refinery"],
@@ -1057,11 +1072,13 @@ var market_mean_reversion := 0.05
 ##   after_tithe  Tras el Diezmo: la Regencia ha sacado oro de la isla y lo que
 ##                queda vale menos: todo cuesta mas oro (y se vende por mas).
 ##   calm         Calma: vuelta a la media.
+## La comida sube ANTES del Diezmo: en el Aviso todos hacen acopio y en la
+## Tormenta las granjas rinden el 15 %; quien compra en la calma ahorra.
 var market_calendar := {
 	"calm": {},
-	"warning": {"wood": 0.30},
-	"storm": {"steel": -0.25},
-	"after_tithe": {"wood": 0.15, "steel": 0.15, "oil": 0.15},
+	"warning": {"wood": 0.30, "food": 0.25},
+	"storm": {"steel": -0.25, "food": 0.40},
+	"after_tithe": {"wood": 0.15, "steel": 0.15, "oil": 0.15, "food": 0.15},
 }
 ## Cuanto se acerca el precio a su objetivo del calendario en cada tick (0..1).
 ## Con 0.35 y ticks de 15 s, un Aviso de 45 s ya lleva la madera a ~+22 %.
@@ -1725,8 +1742,10 @@ var unit_types := {
 		"name": "UNIT_ARTILLERY",
 		"tier": 2,
 		"era": 2,
-		"cost": {"gold": 80, "steel": 30},
-		"train_time": 35.0,
+		# 2026-10-12: 120/50 y 45 s (antes 80/30 y 35 s). La guarnicion de la era 2
+		# pesa algo mas (docs/22 §11).
+		"cost": {"gold": 120, "steel": 50},
+		"train_time": 45.0,
 		"upkeep_gold": 2,
 		"power": 28,
 	},
@@ -1734,8 +1753,10 @@ var unit_types := {
 		"name": "UNIT_VEHICLE",
 		"tier": 3,
 		"era": 3,
-		"cost": {"gold": 140, "steel": 60, "oil": 30},
-		"train_time": 55.0,
+		# 2026-10-12: 400/180/90 y 100 s (antes 140/60/30 y 55 s). Los seis
+		# blindados del asedio son el ultimo gran esfuerzo de la era 3, no un tramite.
+		"cost": {"gold": 400, "steel": 180, "oil": 90},
+		"train_time": 100.0,
 		"upkeep_gold": 4,
 		"power": 65,
 	},
@@ -2274,7 +2295,12 @@ var storm_tower_garrison_unit := "artillery"
 ## Dotaciones por torre en pie, y su tope. El tope existe por lo mismo que el de
 ## la mitigación: una fila de torres no puede convertir el Diezmo en un trámite.
 var storm_tower_garrison_per_tower := 1
-var storm_tower_garrison_max := 2
+## Tope 4 desde 2026-10-12: el asedio del final pide preparacion, y cada torre de
+## mas manda su dotacion cuando la guarnicion ya ha caido (el tablero solo deja
+## sitio a 8 - guarnicion viva). Con 6 blindados y 2 torres el asedio se gana el
+## 45 %; con 4 torres, el 82 % (docs/17). Objectives pide estas torres antes del
+## Cuartel General nivel 3.
+var storm_tower_garrison_max := 4
 ## Lo que pierde una torre cuando cae su dotacion en un tablero (Diezmo o
 ## Auditoria), como fraccion de su vida maxima. Queda dañada, nunca en ruinas:
 ## sigue en pie, pero hay que repararla (CombatManager.damage_towers_for_lost_crews).
@@ -2520,7 +2546,8 @@ func get_storm_loss_refund(cost: Dictionary) -> Dictionary:
 
 ## Cuantas oleadas trae el asedio (minimo, maximo). Sale de la semilla, no de una
 ## eleccion del jugador: convocar es apostar sin saber cuanto dura la noche.
-var final_audit_waves := Vector2i(3, 5)
+## 4-5 desde 2026-10-12 (antes 3-5): un final mas exigente (docs/17, "2026-10-12").
+var final_audit_waves := Vector2i(4, 5)
 
 ## Cuerpos de la primera oleada, y cuantos suma cada oleada siguiente. El techo
 ## real lo pone `combat_deploy_cap`: el tablero sigue siendo el mismo de siempre.
@@ -2554,7 +2581,10 @@ var final_audit_scale_per_era := 0.05
 ## `FinalAudit._compose()`); esto es lo que se le suma encima. Un 5% parece poco
 ## y no lo es: es lo que separa un asedio de 5 oleadas ganable el 44% de las
 ## veces de uno que no se gana nunca.
-var final_audit_last_wave_multiplier := 1.05
+## 1.10 desde 2026-10-12 (antes 1.05), con 4-5 oleadas: seis blindados y cuatro
+## torres ganan el 82 %, como antes con 3-5 oleadas y dos torres; cinco blindados,
+## el 45 %; dos torres, el 45 %; las mixtas, nunca.
+var final_audit_last_wave_multiplier := 1.10
 
 ## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
 ## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
@@ -2665,7 +2695,9 @@ var game_tier_rules := {
 		"combat_hard": true,
 		"expedition_enemy_mult": 1.05,
 		"tithe_force_mult": 1.34,
-		"audit_enemy_mult": 1.06,
+		# 1.05 desde 2026-10-12 (antes 1.06): con el asedio de 4-5 oleadas, x1.06
+		# dejaba la guarnicion maxima en el 49 %; x1.05 la deja en el 64 % (>= 60 %).
+		"audit_enemy_mult": 1.05,
 	},
 }
 

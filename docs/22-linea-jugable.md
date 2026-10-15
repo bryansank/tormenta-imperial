@@ -451,3 +451,151 @@ storm_damage_per_tick=0.06 storm_arm_phase=1 storm_interval_min=240.0
 storm_interval_max=420.0 storm_first_interval=420.0 storm_first_tithe_has_floor=true
 population_regrow_floor=0`). Una semilla tarda 1-4 min de reloj; conviene lanzar una por
 proceso. La sonda se niega a correr sin carpeta de usuario propia.
+
+---
+
+## 11. Campaña de 4-6 horas (2026-10-12 y 2026-10-14)
+
+Decisión de Bryan: una Campaña en Colono dura 4-6 h, la era 1 se queda en 8-12
+min, las eras 2 y 3 traen más construcción y el final pide más ejército y más
+preparación. Medido con `line_probe` (`--no-dev`, 10 semillas, sobre
+`integracion/arte-v1` fusionada), minutos de partida:
+
+| Semilla | Antes: era 2 | era 3 | victoria | Después: era 2 | era 3 | CG nv3 | victoria | era 1 | era 3 dura | Diezmos echados | asedios | huecos >3 min sin decidir | mayor |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 15 | 32 | 131 | 11 | 31 | 234 | **255** | 11,2 | 224 | 14/14 | 1 | 10 | 7,9 |
+| 2 | 15 | 32 | 128 | 14 | 34 | 330 | **351** | 14,2 | 317 | 19/19 | 1 | 15 | 12,5 |
+| 3 | 14 | 31 | 141 | 13 | 32 | 252 | **281** | 13,2 | 250 | 15/15 | 1 | 11 | 8,7 |
+| 4 | 16 | 33 | 156 | 11 | 33 | 204 | **226** | 11,2 | 193 | 12/12 | 1 | 4 | 12,3 |
+| 5 | 14 | 33 | 154 | 12 | 32 | 199 | **272** | 12,2 | 239 | 15/16 | 2 | 7 | 6,1 |
+| 6 | 16 | 33 | 134 | 12 | 32 | 261 | **282** | 12,2 | 250 | 13/13 | 1 | 8 | 7,8 |
+| 7 | 14 | 32 | 131 | 12 | 33 | 252 | **274** | 12,2 | 240 | 15/15 | 1 | 11 | 9,6 |
+| 8 | 14 | 32 | 271 | 12 | 32 | 245 | **315** | 12,2 | 282 | 14/15 | 2 | 12 | 8,3 |
+| 9 | 16 | 33 | 181 | 12 | 32 | 254 | **282** | 12,2 | 249 | 15/15 | 1 | 8 | 6,5 |
+| 10 | 15 | 32 | 125 | 11 | 37 | 268 | **289** | 11,2 | 252 | 14/15 | 1 | 9 | 8,2 |
+
+- **Antes**: 125-271 min, mediana ~2 h 13 min; era 1 de 14-16 min; hasta 35.000
+  recursos tirados por vender con la bolsa llena; 25-48 muertos de hambre.
+- **Después**: 226-351 min, **mediana 4 h 42 min** (9 de 10 entre 4 y 6 h); era 1
+  de 11-14 min; lo desbordado baja a 60-790 (eventos aleatorios y ventas
+  pequeñas); 10 de 10 victorias, 2 con un asedio perdido y reconvocado.
+- Tras ganar (`--after=20`, medido en 3 semillas): 0 tormentas, 0 Diezmos, 0
+  convocatorias, la Tormenta sigue parada tras guardar y cargar, el panel dice
+  "mundo libre" y la colonia produce (la bolsa se llena y para, no se tira).
+
+Lo que se movió y por qué:
+
+| Valor | Antes | Después | Por qué |
+|---|---|---|---|
+| (bug) `PopulationManager` | puestos solo al terminar una obra | también al nacer o morir alguien | la 1.ª mina pasaba ~10 min sin obreros con la gente ya nacida: era 1 de 15 min |
+| `starting_resources` | 300 / 200 / 80 | 330 / 180 / 80 | el oro frenaba la Fundición; la madera sobraba. Medido con 360/160; 330/180 deja hueco en la bolsa y Supervivencia paga la apertura |
+| `building_prerequisites.refinery` | Fundición, Cuartel | + Laboratorio | una obra más en la era 2 y el árbol abierto antes del petróleo |
+| `unit_types.artillery` | 80 oro / 30 acero, 35 s | 120 / 50, 45 s | guarnición de la era 2 algo más cara |
+| `unit_types.vehicle` | 140 / 60 / 30, 55 s | 400 / 180 / 90, 100 s | los seis blindados son el último gran esfuerzo |
+| `hq_upgrade_costs[2]` | 800/500/300/400 + 15 vigas/10 lingotes/15 combustible | 1300/900/500/300 + 100/70/100 | más bolsa (3.000) y mucho más taller |
+| `hq_upgrade_costs[3]` | 3.500 + 25/20/25 | 3.500 + 200/140/200 | el invariante 3.500 = bolsa máxima no se toca; los materiales alargan con trabajo |
+| `final_audit_waves` | 3-5 | 4-5 | final más exigente |
+| `final_audit_last_wave_multiplier` | 1,05 | 1,10 | ídem |
+| `storm_tower_garrison_max` | 2 | 4 | preparación: con la guarnición mermada caben más dotaciones; Objectives pide 4 torres antes del CG nv3 |
+| `game_tier_rules.governor.audit_enemy_mult` | 1,06 | 1,05 | con 4-5 oleadas, ×1,06 dejaba la máxima en 49 % |
+| `market_calendar` (Gobernador) | sin comida | comida +25 % Aviso, +40 % Tormenta, +15 % tras el Diezmo | sube antes del Diezmo, como el resto |
+
+Arreglos en `Objectives.gd`: los requisitos de un edificio se piden antes que él
+(con la Refinería pidiendo Laboratorio la partida se quedaba atascada para
+siempre); las torres del asedio salen de `storm_tower_garrison_max`; con la
+bolsa llena se compra la receta del taller (horas con 3.000 de oro y sin acero
+para una viga); las ventas solo venden lo que cabe (tiraban miles de oro); un
+productor de apoyo sin obreros libres no se pide si la gente ya viene de camino
+(el fallo de `test_following_the_panel_walks_the_whole_line_to_the_siege`).
+`OBJ_WHY_SAWMILL_2` ya no dice que la gente come madera.
+
+**Falta**: los huecos sin decidir pasan de 3 min (4-15 por partida, el mayor de
+6-12 min), casi todos ahorrando para el CG nv2/nv3 con la bolsa casi llena y
+entrenando blindados. Probado a medias (sin medir): bajar
+`Objectives.SLOW_RESOURCE_SECONDS` de 360 a 180 para que el panel pida otro
+productor antes. La era 2 solo creció de ~17 a ~20 min (sin tocar los `.tres`
+no hay más palanca que el Laboratorio y la artillería). La era 1 queda en 11-14
+min para la sonda, en el borde alto. La moral pesa mucho en el asedio (doc 17).
+
+### 2026-10-14: medido sobre la integración de la fase 1
+
+Fusionada `integracion/arte-v1` con todo lo de la fase 1: isla irregular
+(rejillas 60-74 con agua), ventaja por tipo en combate, topes de edificios por
+era, procesos en lote y el Núcleo haciendo las recetas de todos los talleres,
+escaramuzas (incursiones, repuestos para el nivel 3 de los productores). El
+jugador de la sonda fabrica en lotes (también en el Núcleo), sale de incursión
+cuando ¿QUÉ HACER? lo pide (`Objectives.sortie_step`: repuestos, puesto
+avanzado, oferta nueva; solo en calma y a más de 4 min del Aviso) y no deja
+columnas colgadas. 10 semillas por línea, `--no-dev`, en paralelo.
+
+**Cómo se movió la duración** (mediana de la victoria, minutos):
+
+| Medida | Qué había | Mediana | Rango | Huecos >3 min sin decidir | Mayor |
+|---|---|---|---|---|---|
+| 12-10, antes del balance | integración vieja | 133 | 125-271 | — | — |
+| 12-10, balance (§11 arriba) | integración vieja | 282 | 226-351 | 4-15 | 6-12,5 |
+| B | fase 1 sin escaramuzas, subir productor con lo que sobra | 214 | 191-443 | 4-23 | 4,9-19,8 |
+| C | B + `SLOW_RESOURCE_SECONDS` 240 | 210 | 176-334 | 2-9 | 3,9-15,1 |
+| D1 | C + taller del CG ×1,5 | 231 | 193-270 | 1-7 | 3,4-9,1 |
+| D3 | C + taller del CG ×2 | 282 | 247-330 + 2 atascos | 3-27 | 5-38 |
+| **Final** | D3 + venta de comida + escaramuzas | **282** | **238-368** | **3-15** | **4,9-11,3** |
+
+**La tabla final**, por semilla:
+
+| Semilla | Era 2 | Era 3 | CG | CG nv2 | CG nv3 | Victoria | Era 1 | Era 3 dura | Diezmos echados | Asedios | Huecos >3 min | Mayor | Desbordado | Incursiones | Casas / gente / comida al final |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 12 | 36 | 66 | 151 | 273 | **298** | 12,2 | 262 | 15/15 | 1 | 7 | 8,0 | 298 | 2 | 8 / 53 / 106 por min |
+| 2 | 12 | 35 | 60 | 148 | 274 | **301** | 12,2 | 266 | 16/16 | 1 | 5 | 9,0 | 374 | 2 | 8 / 53 / 106 |
+| 3 | 12 | 35 | 78 | 137 | 243 | **274** | 12,2 | 239 | 14/14 | 1 | 9 | 11,3 | 447 | 2 | 11 / 71 / 142 |
+| 4 | 13 | 37 | 69 | 149 | 267 | **294** | 13,2 | 258 | 15/15 | 1 | 11 | 7,4 | 141 | 2 | 8 / 53 / 106 |
+| 5 | 13 | 37 | 68 | 127 | 211 | **238** | 13,2 | 201 | 12/12 | 1 | 3 | 5,1 | 26 | 1 | 11 / 71 / 142 |
+| 6 | 12 | 33 | 71 | 186 | 349 | **368** | 12,3 | 335 | 17/17 | 1 | 15 | 7,6 | 267 | 7 | 9 / 59 / 118 |
+| 7 | 12 | 36 | 67 | 147 | 241 | **267** | 12,2 | 231 | 14/14 | 1 | 4 | 4,9 | 152 | 3 | 11 / 71 / 142 |
+| 8 | 11 | 34 | 58 | 165 | 263 | **290** | 11,2 | 256 | 12/12 | 1 | 8 | 7,5 | 214 | 2 | 8 / 53 / 106 |
+| 9 | 12 | 35 | 63 | 144 | 241 | **261** | 12,2 | 226 | 13/13 | 1 | 4 | 5,2 | 381 | 2 | 10 / 64 / 128 |
+| 10 | 10 | 33 | 69 | 125 | 222 | **241** | 10,2 | 208 | 12/12 | 1 | 3 | 5,9 | 116 | 1 | 9 / 58 / 116 |
+
+- **Duración**: 238-368 min, **mediana 4 h 42**; 9 de 10 entre 4 y 6 h (la
+  semilla 5 se queda en 3 h 58). 10 de 10 victorias, todas al primer asedio. Todos
+  los Diezmos echados.
+- **Era 1**: 10-13 min (la era 2 llega en el minuto 10,2-13,2). Está en el borde
+  alto de los 8-12.
+- **CG**: nivel 2 entre el minuto 125 y el 186; nivel 3 (la convocatoria) entre
+  el 211 y el 349.
+- **Lo tirado por bolsa llena**: 26-447 por partida, y **todo** de eventos
+  aleatorios (hallazgo, caravana, buena cosecha): la producción y las ventas ya no
+  tiran nada (antes de §11, hasta 35.000).
+- **Consumo**: ninguna partida llega a 20 casas. Las que más gente tienen acaban
+  con 11 casas, 71 personas y 142 de comida por minuto (6-7 granjas). Las 20
+  casas que dejan los topes de la era 3 no se usan: el panel no las pide.
+- **Tras ganar** (3 semillas, 20 min): 0 tormentas, 0 Diezmos, 0 convocatorias, y
+  la Tormenta sigue parada tras guardar y cargar.
+- **Huecos sin decidir**: 3-15 por partida, el mayor de 4,9-11,3 min. Por paso
+  pedido: entrenar blindado (13 huecos en total), fabricar tablones al empezar la
+  era 2 (9), fabricar combustible (9), vender comida (7).
+
+Valores movidos este día y por qué:
+
+| Valor | Antes | Después | Por qué |
+|---|---|---|---|
+| `hq_upgrade_costs` (materiales) | 100/70/100 y 200/140/200 | **200/140/200 y 400/280/400** | con los lotes y el Núcleo, el taller va mucho más rápido: la campaña había bajado a ~3 h 35 (B, C) |
+| `Objectives.SLOW_RESOURCE_SECONDS` | 360 | **240** | pide otro productor antes: de 4-23 a 2-9 huecos (C) |
+| `Objectives._surplus_upgrade_step` | — | nuevo | con la bolsa casi llena y el paso esperando un recurso lento, sube el productor que frena con lo que sobra |
+| `Objectives._surplus_research_step` | — | nuevo | después, investiga con lo que sobra (producción, moral, logística) |
+| `Objectives._sell_step` | solo petróleo/acero/madera | **+ la comida que sobra (8 ciclos de reserva)**, y la venta mayor que quepa | la comida se vende casi 1:1 y no tira oro; sin ella, 2 de 10 partidas se atascaban ante el CG nv3 con la bolsa llena (D3) |
+| `final_audit_artillery_share` | 3 | **3** (se queda) | con la ventaja por tipo y las 4-5 oleadas, 1 de cada 4 cañones deja el final en trámite (97,5 %); con 3, 86 % (docs/17) |
+
+**Falta**:
+
+- Los huecos de más de 3 min no bajan de 3-15 por partida. Casi todos son
+  esperas de recursos que el panel no llena:
+  - el blindado (400/180/90): se podría abaratar a cambio de más materiales, o
+    permitir entrenarlo pagando con repuestos;
+  - los tablones del Cuartel al llegar a la era 2: madera escasa en el minuto 12;
+  - el combustible: poco petróleo con una refinería.
+- La era 1 queda en el borde alto.
+- Nadie usa las 20 casas que deja la era 3.
+- La semilla 5 se queda a 2 min de las 4 h.
+- Riesgo de la sonda: 20 Godot en paralelo comparten carpeta de usuario. En 1 de
+  60 corridas la partida arrancó rota (hitos vacíos, Fundición en el minuto 2) y
+  se descartó.

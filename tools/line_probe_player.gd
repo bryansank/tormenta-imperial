@@ -62,6 +62,8 @@ var _clock := 0.0
 var _decide_accum := 0.0
 var _sample_accum := 0.0
 var _collect_accum := 0.0
+## Desbordamientos aun sin origen (se le pone el de la accion que se anota justo despues).
+var _ov_pending: Array = []
 
 # ── Registro de la partida ──
 var _r: Dictionary = {}
@@ -69,6 +71,9 @@ var _r: Dictionary = {}
 func run() -> void:
 	GameConfig.dev_mode = false
 	GameConfig.time_multiplier = 1.0
+	# Velocidad x1 siempre (la x2 de la partida vive en settings.cfg).
+	if "game_speed" in GameConfig:
+		GameConfig.set("game_speed", 1.0)
 	# `--cfg.clave=valor` pisa un numero de GameConfig solo en esta corrida, para
 	# medir un cambio antes de escribirlo (ej. --cfg.storm_morale_per_tick=0.25).
 	for key in options:
@@ -146,6 +151,7 @@ func _play_seed(map_seed: int) -> Dictionary:
 		"full_time": 0.0, "false_alarms": 0, "repairs": 0, "trades": 0,
 		"board_minutes": 0.0, "events": 0, "step_time": {},
 		"collects": 0, "collected": {}, "crop_changes": 0, "full_stop": 0.0,
+		"activity_times": [0.0], "after": {}, "overflow_by": {}, "step_log": [],
 	}
 	_clock = 0.0
 	_decide_accum = 0.0
@@ -173,11 +179,84 @@ func _play_seed(map_seed: int) -> Dictionary:
 	if _r["victory_at"] < 0.0:
 		_r["stuck"] = _describe_state()
 	_r["end"] = _snapshot()
+	if _r["victory_at"] >= 0.0 and float(options.get("after", 0.0)) > 0.0:
+		await _play_after_victory(float(options.get("after", 0.0)) * 60.0)
 	_r["farms"] = Rules.count_building("farm")
+	# Consumo al final: casas, gente y comida que se come por minuto.
+	_r["houses"] = Rules.count_building("house")
+	_r["parts_end"] = ResourceManager.get_amount(ResourceManager.Type.PARTS)
+	_r["food_per_min"] = float(PopulationManager.food_due()) * 60.0 		/ maxf(1.0, GameConfig.get_duration(GameConfig.consumption_interval))
 	_close_colony()
 	return _r
 
+## Tras ganar se sigue jugando la colonia ("Continuar" de VictoryScreen): la
+## mitad del tiempo pedido, un guardado y su carga de los servicios que llevan
+## el final (Tormenta, Auditoria, modo), y la otra mitad. Cuenta lo que no
+## deberia volver: tormentas, Diezmos, convocatorias.
+func _play_after_victory(seconds: float) -> void:
+	var a: Dictionary = {"storms": 0, "tithes": 0, "summons": 0, "phases": 0, "victories": 0}
+	var on_storm := func(_s: int) -> void: a["storms"] += 1
+	var on_tithe := func(_d: int) -> void: a["tithes"] += 1
+	var on_summon := func(_w: int, _n: int) -> void: a["summons"] += 1
+	var on_phase := func(p: int, _l: float) -> void:
+		if p != StormCycle.Phase.CALM:
+			a["phases"] += 1
+	var on_victory := func(_st: Dictionary) -> void: a["victories"] += 1
+	EventBus.storm_started.connect(on_storm)
+	EventBus.tithe_demanded.connect(on_tithe)
+	EventBus.final_audit_summoned.connect(on_summon)
+	EventBus.storm_phase_changed.connect(on_phase)
+	EventBus.victory_achieved.connect(on_victory)
+	var before: Dictionary = _snapshot()
+	a["step_before"] = String(Objectives.next_step().get("why", ""))
+	var t := 0.0
+	var reloaded := false
+	while t < seconds:
+		_tick(DT)
+		t += DT
+		_decide_accum += DT
+		if _decide_accum >= DECIDE_EVERY:
+			_decide_accum = 0.0
+			_collect()
+			_tend_farms()
+			_feed_with_market()
+		if not reloaded and t >= seconds / 2.0:
+			reloaded = true
+			var storm: Dictionary = StormManager.get_save_data()
+			var prog: Dictionary = ProgressionManager.get_save_data()
+			var mode: Dictionary = GameMode.get_save_data()
+			var json: String = JSON.stringify({"storm": storm, "progression": prog, "game_mode": mode})
+			var back: Dictionary = JSON.parse_string(json)
+			StormManager.reset()
+			GameMode.load_save_data(back["game_mode"])
+			ProgressionManager.load_save_data(back["progression"])
+			StormManager.load_save_data(back["storm"])
+			ProgressionManager.migrate_legacy_capstone()
+			a["halted_after_load"] = StormManager.is_halted()
+			a["audit_after_load"] = ProgressionManager.final_audit.to_dict().get("state", "?") 				if ProgressionManager.final_audit != null else "none"
+		if frame_ready(t):
+			_sweep_labels()
+			await get_tree().process_frame
+	a["minutes"] = seconds / 60.0
+	a["halted"] = StormManager.is_halted()
+	a["step_after"] = String(Objectives.next_step().get("why", ""))
+	a["resummon_possible"] = ProgressionManager.can_resummon_final_audit()
+	a["gold_delta"] = int(_snapshot()["gold"]) - int(before["gold"])
+	a["stored_before"] = int(before["stored"])
+	a["stored_after"] = int(_snapshot()["stored"])
+	EventBus.storm_started.disconnect(on_storm)
+	EventBus.tithe_demanded.disconnect(on_tithe)
+	EventBus.final_audit_summoned.disconnect(on_summon)
+	EventBus.storm_phase_changed.disconnect(on_phase)
+	EventBus.victory_achieved.disconnect(on_victory)
+	_r["after"] = a
+
+func frame_ready(t: float) -> bool:
+	return int(t) % 300 == 0
+
 func _tick(dt: float) -> void:
+	if not _ov_pending.is_empty():
+		_drain_overflow("produccion/combate")
 	ProductionManager._process(dt)
 	PopulationManager._process(dt)
 	ProcessManager._process(dt)
@@ -229,11 +308,19 @@ func _fight_open_board() -> void:
 		var timing: Dictionary = _clock_probe._timing_of(outcome["events"], board.units)
 		var seconds: float = _clock_probe._minutes(timing, _clock_probe.PLAYER_SECONDS_PER_TURN) * 60.0
 		_r["board_minutes"] += seconds / 60.0
-		# El jugador esta en el tablero: la base sigue, el jugador no decide nada.
+		# El jugador esta en el tablero: la base sigue, el jugador no decide nada
+		# de la base, pero esta jugando (cuenta como actividad cada minuto).
 		var passed := 0.0
+		var since_mark := 0.0
+		_r["activity_times"].append(_clock)
 		while passed < seconds:
 			_tick(DT)
 			passed += DT
+			since_mark += DT
+			if since_mark >= 60.0:
+				since_mark = 0.0
+				_r["activity_times"].append(_clock)
+		_r["activity_times"].append(_clock)
 		CombatManager._emit_events(outcome["events"])
 		if audit_wave:
 			var last: Dictionary = _r["sieges"][-1] if not _r["sieges"].is_empty() else {}
@@ -241,6 +328,14 @@ func _fight_open_board() -> void:
 				last["waves_fought"] = int(last.get("waves_fought", 0)) + 1
 				last["minutes"] = float(last.get("minutes", 0.0)) + seconds / 60.0
 		CombatManager.end_encounter()
+		# Entre un tablero y el siguiente (las oleadas del asedio) el jugador
+		# vuelve un momento a la base: recoge y da de comer. Sin esto, 25 min de
+		# asedio con todo esperando en los edificios mataban de hambre a la
+		# colonia (medido 2026-10-12), cosa que una persona no dejaria pasar.
+		_collect_accum = INF
+		_collect()
+		_tend_farms()
+		_feed_with_market()
 		await get_tree().process_frame
 
 # ══════════════════════════════════════════════════════════════════════
@@ -257,8 +352,14 @@ func _decide() -> void:
 		return
 	if _siege():
 		return
+	_tidy_expedition()
+	if _raid():
+		return
 	var step: Dictionary = Objectives.next_step()
 	_r["last_step"] = step
+	var skey: String = "%s:%s" % [step.get("kind", ""), step.get("id", "")]
+	if _r["step_log"].is_empty() or String(_r["step_log"][-1][1]) != skey:
+		_r["step_log"].append([_clock, skey])
 	# Cuanto tiempo pasa el panel diciendo lo mismo: es donde se espera.
 	var key: String = "%s:%s%s" % [step.get("kind", ""), step.get("id", ""),
 		(":L%d" % int(step["level"])) if step.has("level") else ""]
@@ -298,6 +399,55 @@ func _decide() -> void:
 	_army_upkeep_guard()
 	if bool(options.get("active", false)):
 		_run_processes()
+
+## Escaramuzas (2026-10-14): cuando la segunda linea de ¿QUE HACER?
+## (Objectives.sortie_step) dice que conviene salir -repuestos para el nivel 3
+## de un productor, el puesto avanzado que rebaja el Diezmo, una oferta nueva-,
+## el jugador sale a una INCURSION (un combate), solo con la Tormenta en calma y
+## sin asedio convocado, con lo mas fuerte de casa. "Resolver solo" si se puede.
+## Las expediciones de tres combates no las juega (mapa y draft).
+func _raid() -> bool:
+	if Objectives.sortie_step().is_empty():
+		return false
+	if StormManager.get_phase() != StormCycle.Phase.CALM:
+		return false
+	# Lejos del siguiente Aviso: la columna fuera no defiende el Diezmo.
+	var cycle: StormCycle = StormManager.get_cycle()
+	if StormManager.is_armed() and cycle != null and float(cycle.seconds_left) < 240.0:
+		return false
+	var home: Dictionary = CombatManager.get_deployable_units()
+	var party: Dictionary = {}
+	var room: int = GameConfig.combat_deploy_cap
+	for unit_id in ["vehicle", "artillery", "infantry"]:
+		var n: int = mini(int(home.get(unit_id, 0)), room)
+		if n > 0:
+			party[unit_id] = n
+			room -= n
+	if party.is_empty():
+		return false
+	for offer in CombatManager.get_sortie_offers():
+		if String(offer.get("kind", "")) != "raid":
+			continue
+		var preview: Dictionary = CombatManager.sortie_preview(offer, party)
+		if float(preview.get("player_power", 0.0)) < float(preview.get("enemy_power", 0.0)):
+			continue
+		var parts_before: int = ResourceManager.get_amount(ResourceManager.Type.PARTS)
+		if CombatManager.launch_sortie(int(offer.get("id", -1)), party, bool(preview.get("can_auto", false))):
+			_r["raids"] = int(_r.get("raids", 0)) + 1
+			_r["parts_before_raid"] = parts_before
+			_act("raid (%s)" % String(Objectives.sortie_step().get("why", "")), true)
+			return true
+	return false
+
+## Una columna que volvio (o una expedicion que pide elegir camino) no se queda
+## colgada: sin esto el asedio esperaria para siempre a "la columna fuera".
+func _tidy_expedition() -> void:
+	if not CombatManager.has_active_expedition() or CombatManager.is_board_open():
+		return
+	for i in range(4):
+		if CombatManager.select_node(i):
+			return
+	CombatManager.abandon_expedition()
 
 ## Lo que haria cualquiera: lo roto se arregla en cuanto se puede, empezando por
 ## lo que da de comer. Nunca con la Tormenta encima (la volveria a romper).
@@ -456,6 +606,11 @@ func _cover_with_market(cost: Dictionary) -> void:
 				continue
 			var price: int = maxi(1, MarketManager.get_sell_price(res))
 			var units: int = mini(spare, int(ceil(float(gold_needed) / float(price))))
+			# El oro de la venta tiene que caber: con la bolsa llena se tiraria.
+			if price > 1:
+				units = mini(units, ResourceManager.get_free_space() / (price - 1))
+			if units < 5:
+				continue
 			if units > 0 and MarketManager.sell(res, units):
 				_r["trades"] += 1
 				gold_needed -= units * price
@@ -468,7 +623,8 @@ func _cover_with_market(cost: Dictionary) -> void:
 		var total_price := 0
 		for res in need:
 			total_price += MarketManager.get_buy_price(res) * int(need[res])
-		if total_price > gold_left or ResourceManager.get_free_space() < _sum(need):
+		# Comprar paga con oro que sale de la bolsa: hace sitio, no lo pide.
+		if total_price > gold_left or ResourceManager.get_free_space() + total_price < _sum(need):
 			return
 		for res in need:
 			if MarketManager.buy(res, int(need[res])):
@@ -633,16 +789,39 @@ func _try_make(step: Dictionary) -> void:
 	var recipe: Dictionary = Objectives.material_recipe(String(step["id"]))
 	if recipe.is_empty():
 		return
-	for info in GridManager.get_all_buildings():
-		var node: Node = info["node"]
-		if (info["data"] as BuildingData).id != String(step.get("building", "")):
-			continue
-		if ProcessManager.is_busy(node) or ProductionManager.is_constructing(node):
-			continue
-		if ProcessManager.start_process(node, recipe):
-			_act("make %s" % String(step["id"]), false)
-			return
-	_cover_with_market(Objectives.step_cost(step))
+	# Lotes (2026-10-14): tantas vueltas como pide el paso y caben (max_batch),
+	# en su taller y, si los talleres estan ocupados, tambien en el Nucleo (que
+	# hace las recetas de todos, x1.5 mas lento).
+	var per_run: int = int((recipe.get("produces", {}) as Dictionary).get(String(step["id"]), 1))
+	var runs_wanted: int = maxi(1, int(ceil(float(int(step.get("amount", 1))) / float(maxi(1, per_run)))))
+	var started := false
+	for pass_core in [false, true]:
+		for info in GridManager.get_all_buildings():
+			var node: Node = info["node"]
+			var bid: String = (info["data"] as BuildingData).id
+			if pass_core and bid != "nucleo":
+				continue
+			if not pass_core and bid != String(step.get("building", "")):
+				continue
+			if ProcessManager.is_busy(node) or ProductionManager.is_constructing(node):
+				continue
+			var proc: Dictionary = recipe
+			if pass_core:
+				proc = {}
+				for extra in GameConfig.get_core_extra_processes():
+					if String(extra.get("id", "")) == String(recipe.get("id", "")):
+						proc = extra
+				if proc.is_empty():
+					continue
+			var n: int = clampi(mini(runs_wanted, ProcessManager.max_batch(proc)), 1, GameConfig.process_batch_max)
+			if ProcessManager.start_process(node, proc, n):
+				_act("make %s x%d%s" % [String(step["id"]), n, " (nucleo)" if pass_core else ""], false)
+				runs_wanted -= n
+				started = true
+				if runs_wanted <= 0:
+					return
+	if not started:
+		_cover_with_market(Objectives.step_cost(step))
 
 func _run_processes() -> void:
 	_mine_by_hand()
@@ -793,12 +972,27 @@ func _sum(d: Dictionary) -> int:
 
 func _act(what: String, progress: bool) -> void:
 	_r["actions"].append([_clock, what])
+	# Cualquier decision del jugador (obra, taller, compra, reparacion...) cuenta
+	# como "algo que hacer"; recoger y cultivar no (son rutina).
+	_r["activity_times"].append(_clock)
+	_drain_overflow(what.get_slice(" ", 0))
 	if progress:
 		_r["progress_times"].append(_clock)
 	if bool(options.get("log", false)):
 		print("  %6.1f min  %s" % [_clock / 60.0, what])
 
+func _drain_overflow(what: String) -> void:
+	for p in _ov_pending:
+		var src: String = String(p[3]) if String(p[3]) != "" else what
+		var key: String = "%s<-%s" % [String(p[1]), src]
+		_r["overflow_by"][key] = int(_r["overflow_by"].get(key, 0)) + int(p[2])
+	_ov_pending.clear()
+
 func _connect_probes() -> void:
+	EventBus.building_upgrade_completed.connect(func(node: Node, lvl: int) -> void:
+		var info: Dictionary = GridManager.get_building_info(node)
+		if not info.is_empty() and (info["data"] as BuildingData).id == "headquarters":
+			_r["hq%d_at" % lvl] = _clock)
 	EventBus.milestone_completed.connect(func(id: String) -> void:
 		if not _r["milestones"].has(id):
 			_r["milestones"][id] = _clock)
@@ -822,7 +1016,14 @@ func _connect_probes() -> void:
 		_r["tithes"].append(entry)
 		if not _r["storms"].is_empty():
 			_r["storms"][-1]["tithe"] = entry)
-	EventBus.storage_overflow.connect(func(_res: String, lost: int, _cap: int) -> void: _r["overflow"] += lost)
+	EventBus.storage_overflow.connect(func(res: String, lost: int, _cap: int) -> void:
+		_r["overflow"] += lost
+		# De donde viene: la accion que se anota justo despues (vender anota
+		# despues de cobrar), o el evento de este segundo, o "?".
+		var src := ""
+		if float(_r.get("last_event_t", -10.0)) >= _clock - 1.0:
+			src = "evento " + String(_r.get("last_event", ""))
+		_ov_pending.append([_clock, res, lost, src]))
 	EventBus.population_starved.connect(func(deaths: int, _pop: int) -> void: _r["deaths_starve"] += deaths)
 	EventBus.army_deserted.connect(func(_id: String, count: int) -> void: _r["deserted"] += count)
 	EventBus.unit_died.connect(func(_uid: int, side: int) -> void:
@@ -836,6 +1037,8 @@ func _connect_probes() -> void:
 		_r["victory_stats"] = _stats.duplicate())
 	EventBus.random_event_started.connect(func(id: String, _d: Dictionary) -> void:
 		_r["events"] += 1
+		_r["last_event"] = id
+		_r["last_event_t"] = _clock
 		if bool(options.get("log", false)):
 			print("  %6.1f min  ! evento %s" % [_clock / 60.0, id]))
 	EventBus.storm_phase_changed.connect(func(phase: int, _left: float) -> void:
@@ -892,7 +1095,18 @@ func _gaps(r: Dictionary) -> Dictionary:
 		if gap > DEAD_WAIT:
 			dead += gap
 			count += 1
-	return {"dead": dead, "longest": longest, "count": count, "early_longest": early_longest}
+	# Huecos sin NINGUNA decision (cualquier _act), mayores de 3 min.
+	var acts: Array = r["activity_times"].duplicate()
+	acts.append(end_t)
+	var idle_count := 0
+	var idle_longest := 0.0
+	for i in range(1, acts.size()):
+		var gap2: float = float(acts[i]) - float(acts[i - 1])
+		idle_longest = maxf(idle_longest, gap2)
+		if gap2 > 180.0:
+			idle_count += 1
+	return {"dead": dead, "longest": longest, "count": count, "early_longest": early_longest,
+		"idle_count": idle_count, "idle_longest": idle_longest}
 
 func _print_run(r: Dictionary) -> void:
 	print("")
@@ -929,6 +1143,25 @@ func _print_run(r: Dictionary) -> void:
 	for i in range(mini(8, waits.size())):
 		top += "%s=%.0f " % [waits[i][1], waits[i][0] / 60.0]
 	print("  espera por paso (min): " + top)
+	print("  sin ninguna decision: huecos>3min %d | el mas largo %.1f min | era1 %.1f min | era2 %.1f min | era3 %.1f min | intentos de asedio %d" % [
+		int(g["idle_count"]), float(g["idle_longest"]) / 60.0, _era_len(r, 1), _era_len(r, 2), _era_len(r, 3), r["sieges"].size()])
+	print("  incursiones %d | repuestos al final %d" % [int(r.get("raids", 0)), int(r.get("parts_end", 0))])
+	print("  CG nv2 en el minuto %s | CG nv3 (convocatoria) en el %s | casas %d | granjas %d | gente %d | comida %.0f/min" % [
+		_mins(r.get("hq2_at", -1.0)), _mins(r.get("hq3_at", -1.0)), int(r.get("houses", 0)), int(r.get("farms", 0)),
+		int(r["end"]["pop"]), float(r.get("food_per_min", 0.0))])
+	if int(r["overflow"]) > 0:
+		print("  desbordado por origen: " + str(r["overflow_by"]))
+	# Donde caen los huecos de mas de 3 min sin decidir nada, y que pedia el panel.
+	var acts: Array = r["activity_times"]
+	var idle := ""
+	for i in range(1, acts.size()):
+		var gap: float = float(acts[i]) - float(acts[i - 1])
+		if gap > 180.0:
+			idle += "%.0f(+%.1f %s) " % [float(acts[i - 1]) / 60.0, gap / 60.0, _step_at(r, float(acts[i - 1]) + 1.0)]
+	if idle != "":
+		print("  huecos>3min: " + idle)
+	if not (r["after"] as Dictionary).is_empty():
+		print("  TRAS GANAR: " + str(r["after"]))
 	print("  recoger: %d veces %s | cambios de cultivo %d | edificio-minutos parado por lleno %.0f | granjas %d" % [
 		int(r["collects"]), str(r["collected"]), int(r["crop_changes"]), float(r["full_stop"]) / 60.0,
 		int(r.get("farms", 0))])
@@ -938,8 +1171,8 @@ func _print_run(r: Dictionary) -> void:
 
 func _print_table(results: Array) -> void:
 	print("")
-	print("| semilla | serreria | mina | almacen | era 2 | era 3 | comandante | CG | CG nv3 | asedio | victoria | tormentas | diezmos repelidos | esperas>2min | hueco max | bolsa llena |")
-	print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	print("| semilla | era 2 | era 3 | CG | CG nv3 | asedio | victoria | era 1 | era 2 dura | era 3 dura | tormentas | diezmos repelidos | asedios | esperas>2min | hueco max | huecos>3min sin decidir | mayor sin decidir | bolsa llena | desbordado |")
+	print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for r in results:
 		var m: Dictionary = r["milestones"]
 		var repelled := 0
@@ -948,12 +1181,29 @@ func _print_table(results: Array) -> void:
 				repelled += 1
 		var g: Dictionary = _gaps(r)
 		var siege_t: float = float(r["sieges"][0]["t"]) if not r["sieges"].is_empty() else -1.0
-		print("| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %d | %d/%d | %d (%.0f min) | %.1f min | %.0f min |" % [
-			r["seed"], _mins(m.get("first_sawmill", -1.0)), _mins(m.get("first_gold_mine", -1.0)),
-			_mins(m.get("first_warehouse", -1.0)), _mins(m.get("era_2", -1.0)), _mins(m.get("era_3", -1.0)),
-			_mins(m.get("military_ready", -1.0)), _mins(m.get("hq_built", -1.0)), _mins(m.get("hq_max", -1.0)),
-			_mins(siege_t), _mins(r["victory_at"]), r["storms"].size(), repelled, r["tithes"].size(),
-			g["count"], g["dead"] / 60.0, g["longest"] / 60.0, r["full_time"] / 60.0])
+		print("| %d | %s | %s | %s | %s | %s | %s | %.1f | %.0f | %.0f | %d | %d/%d | %d | %d (%.0f min) | %.1f min | %d | %.1f min | %.0f min | %d |" % [
+			r["seed"], _mins(m.get("era_2", -1.0)), _mins(m.get("era_3", -1.0)),
+			_mins(m.get("hq_built", -1.0)), _mins(m.get("hq_max", -1.0)),
+			_mins(siege_t), _mins(r["victory_at"]), _era_len(r, 1), _era_len(r, 2), _era_len(r, 3),
+			r["storms"].size(), repelled, r["tithes"].size(), r["sieges"].size(),
+			g["count"], g["dead"] / 60.0, g["longest"] / 60.0, int(g["idle_count"]), float(g["idle_longest"]) / 60.0,
+			r["full_time"] / 60.0, r["overflow"]])
+
+## El paso que pedia el panel en el segundo `t`.
+func _step_at(r: Dictionary, t: float) -> String:
+	var out := ""
+	for e in r["step_log"]:
+		if float(e[0]) > t:
+			break
+		out = String(e[1])
+	return out
+
+## Duracion de una era en minutos (la 3, hasta la victoria o el final).
+func _era_len(r: Dictionary, era: int) -> float:
+	var m: Dictionary = r["milestones"]
+	var end_t: float = float(r["victory_at"]) if float(r["victory_at"]) >= 0.0 else float(r["end"]["t"])
+	var starts := [0.0, float(m.get("era_2", end_t)), float(m.get("era_3", end_t)), end_t]
+	return (float(starts[era]) - float(starts[era - 1])) / 60.0
 
 func _mins(t) -> String:
 	var f: float = float(t)

@@ -398,7 +398,9 @@ func _resource_amounts() -> Dictionary:
 ## dinero: fabricarlos es un proceso de su edificio, probado aparte.
 func _bankroll(gold: int = 4000, wood: int = 4000, steel: int = 2000, oil: int = 2000) -> void:
 	ResourceManager.set_amounts({"gold": gold, "wood": wood, "steel": steel, "oil": oil,
-		"planks": 200, "ingots": 200, "beams": 200, "fuel": 200})
+		# Lo que pida la obra mas cara del taller (el CG nivel 3, 2026-10-12:
+		# 200 vigas, 140 lingotes, 200 de combustible), con margen.
+		"planks": 400, "ingots": 400, "beams": 400, "fuel": 400})
 
 func _count(building_id: String) -> int:
 	var total := 0
@@ -599,6 +601,8 @@ func _industrialise() -> void:
 	_build("barracks")
 	_build("tower")
 	_build("tower")
+	# La Refineria pide el Laboratorio en pie (2026-10-12, docs/22 §11).
+	_build("laboratory")
 	_build("refinery")
 	_bankroll()
 
@@ -690,7 +694,9 @@ func test_each_era_opens_because_of_the_building_the_design_says() -> void:
 	# Cuartel + 2 Torres es el hito del Comandante.
 	assert_bool(ProgressionManager.is_milestone_completed("military_ready")).is_true()
 
-	# ── La Refineria abre la Era 3 ──
+	# ── La Refineria abre la Era 3 (con el Laboratorio en pie, que la pide) ──
+	_build("laboratory")
+	assert_int(ProgressionManager.current_era).is_equal(2)
 	var refinery: Node3D = _place("refinery")
 	assert_int(ProgressionManager.current_era).override_failure_message(
 		"la era avanzo al COLOCAR la Refineria, no al terminarla").is_equal(2)
