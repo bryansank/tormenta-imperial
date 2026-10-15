@@ -82,7 +82,10 @@ const MIN_SALE := 20
 const MIN_NET_PER_SECOND := 0.05
 ## Si lo que falta para el paso tarda mas que esto en llegar, un productor mas
 ## del recurso que frena es mejor inversion que esperar.
-const SLOW_RESOURCE_SECONDS := 360.0
+## 240 desde 2026-10-14 (antes 360): pide otro productor antes de que la espera
+## pase de 4 min. Con 360 quedaban 4-23 huecos de mas de 3 min sin decidir por
+## partida; con 240, 2-9 (docs/22 §11).
+const SLOW_RESOURCE_SECONDS := 240.0
 ## Bolsa casi llena: por encima de esta fraccion se pide otro almacen.
 const FULL_BAG := 0.9
 
@@ -707,25 +710,30 @@ static func _sell_step(target: Dictionary) -> Dictionary:
 		if can >= mini(MIN_SALE, int(missing[res])) and can > 0:
 			return {"kind": "buy", "id": res, "amount": can, "why": "OBJ_WHY_BUY"}
 	var best := ""
-	var best_excess := MIN_SALE - 1
-	for res in ["oil", "steel", "wood"]:
+	var best_excess := 0
+	# La comida va primero: se vende casi a 1 de oro por unidad, asi que con la
+	# bolsa llena es lo unico que se convierte en oro sin tirar nada. Sin ella,
+	# la sonda se quedo horas ante el CG nivel 3 con la bolsa llena de comida y
+	# sin hueco para el oro (2026-10-14). Se guardan ocho ciclos.
+	for res in ["food", "oil", "steel", "wood"]:
 		var type: int = ResourceManager.name_to_type(res)
 		if not ResourceManager.is_unlocked(type) or missing.has(res):
 			continue
 		var keep: int = int(cost.get(type, 0))
+		if res == "food":
+			keep += PopulationManager.food_due() * 8
 		var excess: int = ResourceManager.get_amount(type) - keep
-		if excess > best_excess:
+		# Lo que cabe: el oro de mas se tiraria (hasta 8.000 de oro por partida
+		# con el minimo de MIN_SALE de antes, 2026-10-12). Gana la venta mas
+		# grande que quepa. Si lo que falta no es oro, el oro de la venta paga la
+		# compra del siguiente vistazo.
+		var fit: int = _sale_that_fits(res, excess) if excess >= 5 else 0
+		if fit > best_excess:
 			best = res
-			best_excess = excess
-	if best == "":
+			best_excess = fit
+	if best == "" or best_excess <= 0:
 		return {}
-	# Lo que cabe: el oro de mas se tiraria (hasta 8.000 de oro por partida con
-	# el minimo de MIN_SALE de antes, 2026-10-12). Si lo que falta no es oro, el
-	# oro de la venta paga la compra del siguiente vistazo.
-	var amount: int = _sale_that_fits(best, best_excess)
-	if amount <= 0:
-		return {}
-	return {"kind": "sell", "id": best, "amount": amount, "why": "OBJ_WHY_SELL"}
+	return {"kind": "sell", "id": best, "amount": best_excess, "why": "OBJ_WHY_SELL"}
 
 ## Cuanto de `res` (hasta `wanted`) se puede vender sin que el oro que trae se
 ## salga de la bolsa: vender X deja X de sitio y mete precio*X de oro. 0 si no
