@@ -237,7 +237,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (17 total, `data/buildings/*.tres`)
+### Buildings (24 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -258,6 +258,18 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Garden | 2x2 | 30/0/0/20 | 0 | +5 morale | deco |
 | Fountain | 2x2 | 60/20/0/10 | 0 | +7 morale | deco |
 | Statue | 2x2 | 120/40/0/0 + 3 ingots | 0 | +10 morale | deco |
+| Windmill (1.1) | 2x2 | 70/0/0/50 | 1 | Farms within 4 cells +20 %; needs a Farm; rank 3 | 1 |
+| Silo (1.1) | 2x2 | 60/0/0/40 | 0 | +300 food outside the shared bag; slows spoilage in Gobernador; needs a Farm | 1 |
+| Tavern (1.1) | 2x2 | 90/0/0/60 | 2 | 6 food + 4 gold per consumption tick: +2 morale, +1 growth (houses within 4) | 1 |
+| Carpentry (1.1) | 2x2 | 70/0/0/60 | 2 | Own processes: planks and furniture; needs a Sawmill | 1 |
+| Well (1.1) | 2x2 | 40/0/0/30 | 0 | −20 % storm damage within 3 cells, +15 % health after the storm; rank 2 | 1 |
+| Lighthouse (1.1) | 2x2 | 180/0/0/120 + 6 planks | 1 | Storm Warning +20 s; max 1 | 1-2 |
+| Fuel depot (1.1) | 2x2 | 200/80/0/80 + 4 beams | 1 | +500 oil outside the shared bag; needs a Refinery | 3 |
+
+The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
+`scripts/buildings/UtilityEffects.gd` (on build/demolish, never per frame), look in
+`scripts/buildings/UtilityToys.gd` (one procedural toy mesh per type until its bake
+exists) and `BuildingArt2D._utility`. Full table: `docs/03-buildings.md`.
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
 
@@ -889,7 +901,7 @@ tormenta-imperial/
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
-+-- data/buildings/                  # 17 .tres building definitions
++-- data/buildings/                  # 24 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
 |   +-- models/toy/units/            # Baked combat toys (<id>_player / <id>_regency, boss_mark, crew_nest)

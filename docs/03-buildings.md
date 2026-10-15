@@ -113,6 +113,34 @@ procedural (`DieselpunkBuildingFactory`, `BuildingArt2D`): no GLB yet. The
 Laboratory has a glass dome and its lattice antenna in the yard; the Market,
 big striped awnings with goods on the counters (see "Parcela y atrezo").
 
+### Utility buildings of 1.1 (2026-10-14, `feat/edificios-utiles-1`)
+
+Doc 21 §6.3 (fila 2.6 del plan). Content of 1.1: not merged before the 1.0 export.
+All 2x2, all need a road like everything else. Their areas are computed by
+`scripts/buildings/UtilityEffects.gd` when something is placed, finished,
+demolished, ruined, repaired or moved, and on load — never per frame — and are left
+as building metas (`mill_bonus`, `well_cover`, `tavern_houses`) or runtime values
+(`GameConfig.storm_warning_bonus`, `food_spoil_delay_mult`, `ResourceManager`
+side storage). Distances are free cells between footprints (Chebyshev). Nothing new
+goes in the save: it all derives from the buildings.
+
+| ID | Name | Cost G/S/O/W + mat. | Workers | Build | Caps (era 1/2/3) | Prereqs / rank | Effect (tunables in `GameConfig`, block "Edificios utiles de la 1.1") |
+|----|------|------|---|---|---|---|---|
+| `windmill` | Molino | 70/0/0/50 | 1 | 6s | 2/3/4 | farm · rank 3 | Farms within `windmill_radius` (4) produce +`windmill_farm_bonus` (20 %), not stacking (`ProductionManager.get_cycle_yield`) |
+| `silo` | Silo | 60/0/0/40 | 0 | 5s | 2/4/5 | farm | +`silo_food_storage` (300) food outside the shared bag; in Gobernador farm stock spoils `silo_spoil_delay_mult` (×1.5) later |
+| `tavern` | Taberna | 90/0/0/60 | 2 | 6s | 1/2/3 | house + farm | Each consumption tick, with a house within `tavern_radius` (4): spends 6 food + 4 gold; if paid, +2 morale and +1 person on the next growth tick (`PopulationManager._tick_taverns`) |
+| `carpentry` | Carpintería | 70/0/0/60 | 2 | 5s | 1/2/2 | sawmill | Own processes: planks (20 wood → 5, 15 s) and furniture (15 wood + 2 planks → 30 gold, 35 s). The Núcleo does not repeat them (`core_skip_workshops`) |
+| `well` | Pozo | 40/0/0/30 | 0 | 4s | 3/5/6 | house · rank 2 | Buildings within `well_radius` (3) take −`well_storm_reduction` (20 %) storm damage and recover `well_repair_ratio` (15 %) of their health when the storm ends, free (`StormManager`, `BuildingHealth.heal`; never lifts a ruin) |
+| `lighthouse` | Faro | 180/0/0/120 + 6 planks | 1 | 8s | 1/1/1 | warehouse | The Warning lasts `lighthouse_warning_bonus` (20 s) longer (`GameConfig.get_storm_warning`). "Threats one calm earlier" waits for `feat/amenazas-mapa` |
+| `fuel_depot` | Depósito de combustible | 200/80/0/80 + 4 beams | 1 | 8s | 2/2/3 | refinery | +`fuel_depot_oil_storage` (500) oil outside the shared bag (eases the full era-3 bag, docs/22 §7) |
+
+Side storage: `ResourceManager.get_total_stored()` only counts what overflows each
+side bag, and `add()` / `add_fitting()` use `get_free_space_for(type)`. The Tithe
+still takes from the raw amount. Looks: one procedural mesh per type
+(`UtilityToys.gd`, LotMesh + ToyPalette, cached) until `tools/build_toy_models.gd
+-- --only=windmill,...` bakes `assets/models/toy/<id>.tscn`; then `UtilityToys.create`
+picks the bake without touching the `.tres`. 2D: `BuildingArt2D._utility`.
+
 ### Military Buildings
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Prereqs |
