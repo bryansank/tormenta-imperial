@@ -332,8 +332,7 @@ func set_target_hint(matchup: int, preview := "", blocked := false) -> void:
 		_hint.modulate = UITheme.TEXT_BRIGHT
 	if blocked:
 		_hint.modulate = UITheme.DANGER.lightened(0.35)
-	_hint.text = "
-".join(parts)
+	_hint.text = "\n".join(parts)
 	_hint.visible = not parts.is_empty() and alive
 
 func target_hint_text() -> String:
