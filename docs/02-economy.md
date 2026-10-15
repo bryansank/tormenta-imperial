@@ -78,6 +78,60 @@ it up.
 A Sawmill, Gold Mine or Foundry whose deposit was mined out by hand **stops**: it
 needs its vein alive next to it (`PlacementRules.has_its_deposit()`, badge "sin veta").
 
+### Lotes: ×1 / ×5 / MÁX (2026-10-14, partidas de Bryan)
+
+Cada proceso y cada minado a mano se puede pedir varias veces de un toque. Regla:
+
+- **Se paga todo al arrancar** (`ProcessManager.start_process(node, proc, count)` /
+  `start_mining(node, deposit, count)`); si no alcanza para todas, no arranca ninguna.
+- **Una vuelta tras otra en el mismo sitio.** Una sola entrada por edificio o veta con
+  `count` (vueltas que faltan, la de ahora incluida) y `total`. Cada vuelta entrega lo
+  suyo al terminar y emite su `process_completed` / `mining_completed` (XP, sonido y la
+  veta gasta un uso por vuelta). Se eligió esto y no "un proceso multiplicado" porque
+  así el reparto, la bolsa llena (lo que no cabe espera en el edificio), el gasto de
+  usos de la veta y las señales siguen igual que con una vuelta.
+- **MÁX** (`ProcessManager.max_batch`) = lo que dejan los recursos para pagarlo todo,
+  el hueco de la bolsa compartida (lo que entra de más menos lo que se paga por vuelta;
+  los materiales no ocupan bolsa; siempre cabe una), los usos que le queden a la veta y
+  el techo `GameConfig.process_batch_max` (20). Los trabajadores no cambian el número:
+  un lote de minado ocupa los mismos 2 todo el rato. Botones fijos en
+  `GameConfig.process_batch_sizes` ([1, 5]).
+- **Cancelar** devuelve la tasa de siempre (70 %, 40 % con la Tormenta en marcha) sobre
+  **todo lo pagado y aún no entregado** (vueltas pendientes × coste de una). Una sola
+  tasa, un solo número en el botón.
+- **La Tormenta** se lleva el lote entero (`get_queue_at_risk` cuenta todas las vueltas
+  pendientes): esconder recursos en un lote largo no salva nada.
+- **Guardado:** cada entrada de `active_processes` lleva `count`, `total` y `workers`.
+  Una entrada de antes sin `count` es una vuelta; sin `workers`, un `mine_*` ocupa
+  `mining_workers`. `load_save_data` asigna, no suma (idempotente); `reset()` vacía sin
+  devolver nada.
+
+### El Núcleo, taller de todo (2026-10-14)
+
+El Núcleo ofrece, además de sus tres procesos propios, **todos los procesos de los
+talleres** (tablones, lingotes, vigas, combustible y las demás recetas de Aserradero,
+Mina de oro, Fundición y Refinería) y **el minado a mano de cada yacimiento** (oro,
+madera, hierro, petróleo) sin gastar ninguna veta (`GameConfig.get_core_extra_processes`,
+`ProcessManager.get_processes_for("nucleo")`).
+
+- **Cuándo sale cada uno:** en cuanto **todos** sus recursos y materiales están
+  desbloqueados (por era, o el material al terminar el primero de su edificio:
+  `ProgressionManager._unlock_material_of`). Es el mismo filtro de siempre
+  (`ProcessActionsPanel._process_has_locked_resource`); no hace falta que el edificio
+  siga en pie.
+- **Rinde lo mismo, tarda 1,5 veces más** (`GameConfig.core_process_time_mult`). Por
+  qué: el Núcleo es para salir de un apuro o arrancar, no para sustituir al taller. Con
+  el mismo tiempo, el Aserradero o la Fundición sobrarían; más lento, el edificio propio
+  sigue valiendo la pena, y además deja libre el Núcleo, que solo hace **una cosa a la
+  vez** (un lote cada vez, como cualquier edificio).
+- **Minar a mano desde el Núcleo** ocupa `mining_workers` (2) trabajadores libres
+  mientras dura (`ProcessManager.process_blocker` → `MINE_NEEDS_WORKERS`), no necesita
+  carretera hasta ninguna veta y no gasta usos. Su id es `core_` + el de la veta
+  (`core_mine_gold`) para que `MapGenerator` no le descuente usos a nada; avisa con
+  `mining_started` / `mining_completed` para que PopulationManager cuente los obreros.
+- La sonda de línea (`tools/line_probe_player.gd`) sigue usando `GameConfig.get_processes_for`
+  y no juega estas recetas del Núcleo: el balance medido no las incluye.
+
 ## Production that waits to be collected (2026-10-04)
 
 **Every producer keeps what it makes** until the player collects it with one tap on

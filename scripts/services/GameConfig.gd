@@ -345,6 +345,59 @@ var mining_data := {
 ## minar no es gratis, se quitan a un edificio o se esperan.
 var mining_workers := 2
 
+# ── Lotes y el Nucleo como taller de todo (2026-10-14, partidas de Bryan) ──
+#
+# Lotes: un proceso o un minado se puede pedir varias veces de un toque (x1, x5
+# o MAX). Se paga todo al arrancar y se hacen una vuelta tras otra en el mismo
+# sitio; cada vuelta entrega lo suyo al terminar. Cancelar devuelve la tasa de
+# siempre sobre todo lo pagado que aun no se entrego, y la Tormenta se lleva el
+# lote entero, como se llevaba una sola vuelta.
+
+## Botones fijos de lote ademas de MAX.
+var process_batch_sizes := [1, 5]
+## Techo de MAX: aun con el almacen lleno de madera, un lote no pasa de aqui
+## (20 vueltas de 30 s son 10 minutos: mas ya es dejarlo olvidado).
+var process_batch_max := 20
+
+## El Nucleo hace lo de todos los talleres y saca a mano lo de cada yacimiento,
+## en cuanto el recurso o material de ese proceso esta desbloqueado. Rinde lo
+## mismo pero tarda esto mas: asi el Nucleo saca de un apuro y el edificio
+## propio sigue valiendo la pena (y deja el Nucleo libre para otra cosa).
+var core_process_time_mult := 1.5
+## El minado a mano desde el Nucleo lleva este prefijo en su id ("core_mine_gold"),
+## para no confundirlo con el de una veta (MapGenerator gasta un uso por cada
+## "mine_*" que termina en un yacimiento; el Nucleo no tiene usos).
+const CORE_MINING_PREFIX := "core_"
+
+## Lo que el Nucleo ofrece ademas de sus procesos propios: los de cada taller
+## (grupo "workshop") y el minado a mano de cada yacimiento (grupo "hand"), con
+## la duracion ya escalada y multiplicada por `core_process_time_mult`. Sin
+## filtrar por desbloqueo: eso lo decide quien lo ensena (ProcessActionsPanel).
+func get_core_extra_processes() -> Array:
+	var result: Array = []
+	for building_id in building_processes:
+		if building_id == "nucleo":
+			continue
+		for proc in building_processes[building_id]:
+			var copy: Dictionary = proc.duplicate(true)
+			copy["duration"] = get_duration(float(proc["duration"]) * core_process_time_mult)
+			copy["core_group"] = "workshop"
+			copy["from"] = building_id
+			result.append(copy)
+	for deposit_id in mining_data:
+		var mine: Dictionary = mining_data[deposit_id]
+		result.append({
+			"id": CORE_MINING_PREFIX + String(mine["id"]),
+			"name": mine["name"],
+			"duration": get_duration(float(mine["duration"]) * core_process_time_mult),
+			"cost": {},
+			"produces": (mine["produces"] as Dictionary).duplicate(),
+			"workers": mining_workers,
+			"core_group": "hand",
+			"from": deposit_id,
+		})
+	return result
+
 # ── Deposit Config ──
 
 var deposit_max_uses := {

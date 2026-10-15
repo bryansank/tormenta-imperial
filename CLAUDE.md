@@ -146,7 +146,7 @@ Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
 
 Created at runtime, not in either .tscn:
   PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, three folios in plain language
-  QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks, once per game after the prologue
+  QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks; no longer opens by itself (2026-10-14), texts in AYUDA
   WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: workers and citizens walking the roads (view only, docs/04)
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker, created by GameManager.request_new_game()
@@ -241,7 +241,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
-| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only | - |
+| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only: its own, every unlocked workshop recipe and hand mining, 1.5x slower | - |
 | House | 2x2 | 50/0/0/30 | 0 | +6 workers (room in houses; 9 / 12 at levels 2 / 3) | 1 |
 | Sawmill | 2x2 | 80/0/0/50 | 2 | 6 wood/12s; makes planks | 1 |
 | Farm | 2x2 | 40/0/0/30 | 2 | Food by crop: 20 / 125 / 600 per 1 / 5 / 20 min; anywhere with a road; max 6 | 1 |
@@ -298,9 +298,25 @@ row; `Objectives.make_step_for()` turns a missing material into a `"make"` step.
 Refinery (era 3) needs Foundry + Barracks (`building_prerequisites`).
 
 **Quick guide:** `scripts/ui/QuickGuide.gd`, one screen with four blocks (resources,
-extraction, buildings and roads, progress), opened by TutorialPanel once per game
-after the prologue (help id `quick_guide`); the same texts are `guide_qg_*` in the
-AYUDA index.
+extraction, buildings and roads, progress). Since 2026-10-14 it **no longer opens by
+itself** after the prologue (the owner found the "Cómo funciona Tormenta Imperial"
+window too much at the start); the same texts are `guide_qg_*` in the AYUDA index. A
+`quick_guide` id in an old save's `helps_seen` loads and changes nothing.
+
+**Batches and the Núcleo as every workshop (2026-10-14):** every process and hand
+mining can be ordered ×1 / ×5 / MÁX from its card (`scripts/ui/ProcessCard.gd`, built by
+`ProcessActionsPanel`): paid up front, run one cycle after another in the same place
+(`ProcessManager.start_process(node, proc, count)` / `start_mining(node, dep, count)`;
+entry fields `count`, `total`, `workers`, saved in `active_processes`, old entries load
+as one cycle). MÁX = `ProcessManager.max_batch()`: resources, free shared storage, the
+deposit's uses left, cap `process_batch_max` (20). Cancel refunds the usual rate on
+everything paid and not delivered; the Storm takes the whole batch. The Núcleo also
+offers every workshop recipe and hand mining of each deposit type
+(`GameConfig.get_core_extra_processes()`, through `ProcessManager.get_processes_for("nucleo")`)
+as soon as all their resources/materials are unlocked, with the same output and
+`core_process_time_mult` (1.5x) the time, so the dedicated building stays worth it;
+hand mining there holds `mining_workers`, needs no road and spends no deposit use (id
+`core_mine_*`). Detail: docs/02 "Lotes" and "El Núcleo, taller de todo".
 
 ### Road network (2026-09-28)
 
@@ -854,7 +870,7 @@ tormenta-imperial/
 |   |   +-- ColonyIdentityPanel.gd, ColonyByline.gd  # Country name + flag editor; flag + name line on reports
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
-|   |   +-- OnScreenControls.gd, ProcessActionsPanel.gd, ProgressPanel.gd, ResourceHUD.gd, VictoryScreen.gd
+|   |   +-- OnScreenControls.gd, ProcessActionsPanel.gd (+ ProcessCard.gd), ProgressPanel.gd, ResourceHUD.gd, VictoryScreen.gd
 |   +-- view2d/                      # The 2D view (docs/18): same services, flat world
 |       +-- ViewRouter.gd, ViewMode.gd, View2D.gd  # Scene routing, the view preference, world<->pixel maths
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
