@@ -136,6 +136,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
   +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, country name, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel)
+  +-- SkirmishButton (CanvasLayer 10) -- ESCARAMUZAS next to CONSTRUIR once a Barracks stands, red dot when there is a reason to go out (2026-10-14)
   +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back; adds the GameSpeedButton sibling (x1 / x2, layer 10)
   +-- TitleMenu (CanvasLayer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal
 
@@ -535,7 +536,8 @@ Every mutating method in `scripts/combat/` returns an `Array` of event dicts; a
 service drains it onto the `EventBus`; the UI only reads and calls.
 
 - **Pure models** (`scripts/combat/`): `CombatUnit`, `CombatRules`, `Encounter`,
-  `CombatAI`, `AutoResolver`, `Expedition`, `ExpeditionGenerator`, `FinalAudit`.
+  `CombatAI`, `AutoResolver`, `Expedition`, `ExpeditionGenerator`, `FinalAudit`,
+  `SortieBoard` (the sortie board, 2026-10-14).
   No nodes, no timers, no global `randf()` — every one is headless-testable.
 - **Services:** `CombatManager` owns the `Encounter` and the `Expedition`;
   `ProgressionManager` owns the `FinalAudit`.
@@ -608,6 +610,26 @@ map / draft / final report in `BattleScreen` (`select_node()`, `apply_draft()`,
 locked out of the garrison, and a run in flight is saved and reopens its map on load
 (`expedition_resumed`). `start_skirmish()` is no longer called from `scripts/` (only
 tests use it); the dev-only test fight goes through `dev_start_encounter()`.
+
+**Sorties (2026-10-14, branch `feat/escaramuzas`, docs/15 §4b, untested):** after the
+first sortie, a board of offers (`SortieBoard`, owned by CombatManager, save key
+`sorties`) holds one **raid** (1 fight: raiders → spare parts + settlers, or the Regency
+outpost → spare parts + a Tithe discount through `StormManager.add_tithe_discount()` when
+that function exists) and, from era 2, one **short expedition** (3 fights, 30 % heal
+between them, boss pays parts, settlers and a blueprint). The whole map is rolled from
+the offer, shown in `SkirmishPanel` before launching with loot and Favorable / Igualada /
+Difícil; `launch_sortie()` launches it. Exclusive loot: `ResourceManager.Type.PARTS`
+(material outside the bag; level 3 of producers asks for it, `upgrade_parts_cost`),
+settlers (population up to housing), blueprints (`combat_blueprint_buildings`, hook
+`CombatManager.blueprint_locked()` — PlacementRules still has to call it). The enemy
+**routs** below `combat_retreat_ratio` (30 %) on column boards, never on defence;
+"**resolver solo**" (`auto_resolve_current()`) only on raids and the Tithe with double
+strength. HUD button `SkirmishButton` (slot `skirmish_button`, red dot from
+`CombatManager.sortie_reason()`); ¿QUÉ HACER? shows the same reason as a second line
+(`Objectives.sortie_step()`; `next_step()` unchanged). Tunables: `combat_raid_*`,
+`combat_expedition_*`, `combat_loot_*`, `combat_sortie_*`, `combat_retreat_ratio`,
+`combat_auto_resolve_ratio`, `combat_odds_*`. The old 6-8 node expedition
+(`launch_expedition()`) is untouched.
 
 **Towers:** each standing tower cuts storm damage by 15% (cap 60%,
 `storm_tower_mitigation*`) and fields one artillery crew on defensive boards — Tithe
@@ -742,7 +764,7 @@ and Settings closes; accepted). With a board open it does not reload
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight), `storm`, `tutorial`, `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `storm`, `tutorial`, `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition

@@ -195,6 +195,10 @@ Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
 | `expedition_ended` | `result: int, rewards: Dictionary, casualties: Dictionary` | CombatManager | BattleScreen, SkirmishPanel, ArmyPanel, NotificationPanel, AudioManager |
 | `expedition_resumed` | `expedition_id: int` | CombatManager | BattleScreen, SkirmishPanel, ArmyPanel |
 | `defense_auto_resolved` | `victory: bool, rounds: int, summary: Dictionary` | CombatManager | WarReportScreen |
+| `sortie_offers_changed` | — | CombatManager | SkirmishButton, SkirmishPanel |
+| `sortie_loot_gained` | `loot: Dictionary` | CombatManager | (sin oyentes: el parte lo lee de `get_last_result()`) |
+| `blueprint_unlocked` | `building_id: String` | CombatManager | (para el candado de planos de las ramas de edificios) |
+| `enemy_routed` | — | CombatManager | BattleScreen |
 
 `result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
 

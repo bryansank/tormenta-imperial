@@ -46,6 +46,22 @@ own resource — the **first** process of its list in `GameConfig.building_proce
   missing material into a "make" step (`Objectives.make_step_for()`).
 - Unlocked by `ProgressionManager._unlock_material_of()` on `construction_completed`.
 
+### Repuestos (2026-10-14, rama `feat/escaramuzas`)
+
+Un quinto material, `PARTS` (`parts`), al final del enum para no mover números. Como los
+otros cuatro va fuera de la bolsa y el Diezmo no lo toca, pero **ningún edificio lo
+fabrica**: solo se trae de las escaramuzas (incursiones y expediciones cortas,
+`docs/15-combat.md` §4b). Se desbloquea al traer los primeros (`CombatManager._apply_loot`).
+
+- **Quién los pide:** el nivel 3 de los productores (`upgrade_parts_cost` {3: 3} sobre
+  `upgrade_parts_buildings`: aserradero, mina, fundición, refinería, granja), sumado en
+  `GameConfig.get_upgrade_cost()`. El Cuartel General sigue con su tabla propia.
+- ¿QUÉ HACER? no propone una mejora que pida repuestos que no hay
+  (`Objectives._producer_step`); la línea "Sal de escaramuza" lo explica
+  (`Objectives.sortie_step`, motivo `SORTIE_WHY_PARTS`).
+- Colonos (habitantes al momento, hasta llenar las casas) y planos (abren edificios) son
+  el resto del botín exclusivo: ver `docs/15-combat.md` §4b.
+
 ## Resource Flow
 
 ```
