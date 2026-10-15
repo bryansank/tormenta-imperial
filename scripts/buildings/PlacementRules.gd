@@ -76,6 +76,8 @@ static func prerequisite_names(building_id: String) -> String:
 static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector2i, map_gen: Node, ignore_building: Node = null) -> Dictionary:
 	if not on_land(cell, size):
 		return {"ok": false, "reason": "water", "deposit": null}
+	if needs_shore(building_id) and not touches_shore(cell, size):
+		return {"ok": false, "reason": SHORE_REASON, "deposit": null}
 	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
 	var deposit: Node = null
 	if not rule.is_empty():
@@ -105,6 +107,36 @@ static func on_land(cell: Vector2i, size: Vector2i) -> bool:
 		if not GridManager.is_land_cell(c):
 			return false
 	return true
+
+# ── Costa (feat/decoraciones-remates) ─────────────────────────────────
+
+## Lo que solo se planta en la costa: las palmeras. Motivo del veredicto y su
+## aviso (LBL_NEEDS_SHORE), el mismo en 3D y en 2D.
+const SHORE_ONLY := ["palm_trees"]
+const SHORE_REASON := "shore"
+const NEIGHBORS8 := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]
+
+static func needs_shore(building_id: String) -> bool:
+	return building_id in SHORE_ONLY
+
+## ¿Es `cell` tierra pegada al agua (contando diagonales)? La misma franja que
+## MapGenerator.is_shore_cell() con map_shore_band = 1: el agua de dentro de la
+## rejilla y la de fuera (todo lo que no es celda de tierra).
+static func is_coast_cell(cell: Vector2i) -> bool:
+	if not GridManager.is_land_cell(cell):
+		return false
+	for d in NEIGHBORS8:
+		if not GridManager.is_land_cell(cell + d):
+			return true
+	return false
+
+## ¿Toca la huella la costa? Basta una de sus celdas pegada al agua.
+static func touches_shore(cell: Vector2i, size: Vector2i) -> bool:
+	for c in GridManager.cells_for(cell, size):
+		if is_coast_cell(c):
+			return true
+	return false
 
 ## Quita el yacimiento sobre el que se planta un edificio que lo consume (la
 ## Refineria). Solo tras pasar todas las comprobaciones.

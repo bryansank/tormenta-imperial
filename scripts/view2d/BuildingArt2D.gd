@@ -1026,6 +1026,12 @@ static func _headquarters(ci: CanvasItem, r: Rect2) -> void:
 	_block(ci, Rect2(mb - Vector2(m * 0.05, m * 0.05), Vector2(m * 0.1, m * 0.1)), m * 0.03, STONE.darkened(0.12), CONCRETE_DARK)
 	_dot(ci, mb, m * 0.022, IRON)
 
+## Los dibujos que traen mastil para la bandera del pais (como el FlagAnchor de
+## las recetas 3D): el Nucleo, el Cuartel General, el mastil y el letrero de la
+## colonia. Building2D les cuelga ColonyFlag2D.
+static func has_flag_mount(id: String) -> bool:
+	return id in ["nucleo", "headquarters", "flagpole", "colony_sign"]
+
 ## Donde nace el mastil del Cuartel General: la esquina delantera derecha de
 ## su tejado (marco local: delante es +y).
 static func _hq_mast_base(top: Rect2, m: float) -> Vector2:
@@ -1038,7 +1044,7 @@ static func _hq_mast_base(top: Rect2, m: float) -> Vector2:
 ## asi que la bandera cuelga justo de lo alto de la linterna del Nucleo o del
 ## mastil del Cuartel General.
 static func flag_mount(id: String, size: Vector2, inset: float, steps: int, level: int = 1) -> Dictionary:
-	if id != "nucleo" and id != "headquarters":
+	if not has_flag_mount(id):
 		return {}
 	_set_view(steps)
 	var r := grown_rect(Rect2(-size * 0.5, size).grow(-INSET - inset), level)
@@ -1046,7 +1052,17 @@ static func flag_mount(id: String, size: Vector2, inset: float, steps: int, leve
 	var base := Vector2.ZERO
 	var height := 0.0
 	var flag_w := 0.0
-	if id == "nucleo":
+	if id == "flagpole":
+		var fp := _flagpole_mast(r, m)
+		base = fp[0]
+		height = fp[1]
+		flag_w = m * 0.36
+	elif id == "colony_sign":
+		var cs := _colony_sign_mast(r, m)
+		base = cs[0]
+		height = cs[1]
+		flag_w = m * 0.24
+	elif id == "nucleo":
 		base = _nucleo_geom(r)["lantern_top"]
 		height = m * 0.3
 		flag_w = m * 0.34
@@ -2570,17 +2586,6 @@ static func _deco_pad(ci: CanvasItem, r: Rect2, kind: String) -> void:
 	ci.draw_rect(r, fill.darkened(0.1))
 	ci.draw_rect(r.grow(-2.5), fill)
 
-## Bandera de serie de la colonia (laton, marfil, carmesi) colgada de `tip`.
-static func _deco_flag(ci: CanvasItem, tip: Vector2, w: float, h: float) -> void:
-	var right := -_left()
-	var cols := [BRASS, CREAM, IMPERIAL_RED]
-	var frame := PackedVector2Array([tip - _down - right, tip + right * (w + 1.0) - _down,
-		tip + right * (w + 1.0) + _down * (h + 1.0), tip + _down * (h + 1.0) - right])
-	ci.draw_colored_polygon(frame, OUTLINE)
-	for i in 3:
-		var a := tip + _down * h * float(i) / 3.0
-		ci.draw_colored_polygon(PackedVector2Array([a, a + right * w, a + right * w + _down * h / 3.0, a + _down * h / 3.0]), cols[i])
-
 ## Farola: peana, fuste alto de hierro y dos faroles encendidos.
 static func _lamp_post(ci: CanvasItem, r: Rect2) -> void:
 	var m := minf(r.size.x, r.size.y)
@@ -2653,8 +2658,8 @@ static func _flower_planter(ci: CanvasItem, r: Rect2) -> void:
 		for k in 3:
 			_dot(ci, p - _down * pr * 0.25 + Vector2.from_angle(TAU * k / 3.0 + i) * pr * 0.5, maxf(1.2, pr * 0.22), cols[(i + k) % cols.size()])
 
-## Letrero de la colonia: dos postes, el tablero con marco de laton y la
-## bandera de la colonia en su mastil.
+## Letrero de la colonia: dos postes, el tablero con marco de laton y su
+## mastil; la bandera del pais la pone ColonyFlag2D (flag_mount).
 static func _colony_sign(ci: CanvasItem, r: Rect2) -> void:
 	var m := minf(r.size.x, r.size.y)
 	_deco_pad(ci, r, "grass")
@@ -2666,8 +2671,14 @@ static func _colony_sign(ci: CanvasItem, r: Rect2) -> void:
 	ci.draw_colored_polygon(PackedVector2Array([a.lerp(b, 0.08) + _down * 2.0, b.lerp(a, 0.08) + _down * 2.0,
 		b.lerp(a, 0.08) + _down * (m * 0.16 - 2.0), a.lerp(b, 0.08) + _down * (m * 0.16 - 2.0)]), CREAM)
 	ci.draw_line(a.lerp(b, 0.25) + _down * m * 0.08, b.lerp(a, 0.25) + _down * m * 0.08, IRON, 1.5)
-	var tip := _mast(ci, c - side * 1.6 + _down * m * 0.02, m * 0.5, IRON, 1.8)
-	_deco_flag(ci, tip, m * 0.22, m * 0.15)
+	var mast := _colony_sign_mast(r, m)
+	_mast(ci, mast[0], mast[1], IRON, 1.8)
+
+## [base, alto] del mastil del letrero (lo comparten su dibujo y flag_mount).
+static func _colony_sign_mast(r: Rect2, m: float) -> Array:
+	var c := r.get_center() + _down * m * 0.18
+	var side := _left() * m * 0.22
+	return [c - side * 1.6 + _down * m * 0.02, m * 0.5]
 
 ## Carro de heno: carro de madera con dos ruedas, el heno amontonado encima y
 ## dos pacas al lado.
@@ -2706,16 +2717,21 @@ static func _bonfire(ci: CanvasItem, r: Rect2) -> void:
 		ci.draw_line(lc - _left() * m * 0.2, lc + _left() * m * 0.2, OUTLINE, m * 0.09 + 2.0)
 		ci.draw_line(lc - _left() * m * 0.2, lc + _left() * m * 0.2, LIGHT_WOOD, m * 0.09)
 
-## Mastil con bandera: peana de dos escalones y el mastil alto con la bandera.
+## Mastil con bandera: peana de dos escalones y el mastil alto; la bandera
+## del pais la pone ColonyFlag2D (flag_mount).
 static func _flagpole(ci: CanvasItem, r: Rect2) -> void:
 	var m := minf(r.size.x, r.size.y)
 	_deco_pad(ci, r, "slabs")
-	var base := r.get_center() + _down * m * 0.2
+	var mast := _flagpole_mast(r, m)
+	var base: Vector2 = mast[0]
 	_block(ci, Rect2(base - Vector2(m, m) * 0.17, Vector2(m, m) * 0.34), m * 0.05, STONE.lightened(0.1), CONCRETE_DARK)
 	_block(ci, Rect2(base - Vector2(m, m) * 0.1, Vector2(m, m) * 0.2), m * 0.05, CREAM, STONE)
-	var tip := _mast(ci, base, m * 0.72, IRON, 2.5)
+	var tip := _mast(ci, base, mast[1], IRON, 2.5)
 	_disc(ci, tip, 2.2, BRASS, OUTLINE, 1.0)
-	_deco_flag(ci, tip + _down * 2.0, m * 0.36, m * 0.24)
+
+## [base, alto] del mastil (lo comparten su dibujo y flag_mount).
+static func _flagpole_mast(r: Rect2, m: float) -> Array:
+	return [r.get_center() + _down * m * 0.2, m * 0.72]
 
 ## Palmeras: corro de arena y dos palmeras con las hojas abiertas.
 static func _palm_trees(ci: CanvasItem, r: Rect2) -> void:

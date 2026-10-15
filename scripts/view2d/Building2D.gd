@@ -109,8 +109,9 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	# La calzada no cambia sola (ni obra, ni vida, ni nivel): sin _process (lo
 	# apaga _ready), se repinta cuando la rejilla cambia a su alrededor o al
 	# seleccionarla.
-	# La bandera del pais sobre el Nucleo y el Cuartel General.
-	if ColonyFlag2D.flies_over(data):
+	# La bandera del pais sobre el Nucleo, el Cuartel General y los dibujos con
+	# mastil (el mastil y el letrero de la colonia: BuildingArt2D.has_flag_mount).
+	if ColonyFlag2D.flies_over(data) or Art.has_flag_mount(data.id):
 		_flag = ColonyFlag2D.new()
 		add_child(_flag)
 		_flag.setup(base_size_px(), self)
@@ -218,8 +219,8 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 ## La bandera cuelga del mastil del propio dibujo (linterna del Nucleo, esquina
-## del tejado del Cuartel General): se recoloca solo cuando cambia la firma
-## (giro, nivel), nunca por frame.
+## del tejado del Cuartel General, lo alto del mastil o del letrero): se
+## recoloca solo cuando cambia la firma (giro, nivel), nunca por frame.
 func _sync_flag() -> void:
 	if _flag == null:
 		return

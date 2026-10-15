@@ -30,6 +30,8 @@ const COLLECT_ICON_RADIUS_PX := 48.0
 const Lot := preload("res://scripts/buildings/BuildingLot.gd")
 ## Todas las calzadas en un MultiMesh por mascara de vecinos (docs/26 §6.2).
 const RoadBatch := preload("res://scripts/buildings/RoadBatch3D.gd")
+## Las decoraciones pequenas en un MultiMesh por tipo (DecorBatch3D).
+const DecorBatch := preload("res://scripts/buildings/DecorBatch3D.gd")
 const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 ## Salto y polvo de obra terminada (V1).
 const Fx := preload("res://scripts/buildings/BuildingFx.gd")
@@ -70,6 +72,8 @@ var _spot_highlight: MultiMeshInstance3D = null
 var _look_timer := 0.0
 ## Las calzadas del mapa, dibujadas en lote (RoadBatch3D).
 var _road_batch: Node3D = null
+## Las decoraciones pequenas del mapa, dibujadas en lote (DecorBatch3D).
+var _decor_batch: Node3D = null
 ## El rotulo con el nombre del edificio seleccionado (se crea al seleccionarlo).
 var _shown_label: Label3D = null
 
@@ -79,6 +83,8 @@ func _ready() -> void:
 	add_child(_buildings_container)
 	_road_batch = RoadBatch.new()
 	add_child(_road_batch)
+	_decor_batch = DecorBatch.new()
+	add_child(_decor_batch)
 	# Los trabajadores que andan del Nucleo a su edificio: fuera del contenedor
 	# de edificios, que es lo que se guarda.
 	var walkers_layer := Node3D.new()
@@ -523,6 +529,8 @@ func _try_place(cell: Vector2i) -> void:
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return
 	# Tope, requisitos, obreros y coste, en ese orden (PlacementRules).
 	var blocked := Rules.purchase_block_detail(_current_data)
@@ -619,6 +627,8 @@ func _try_move(cell: Vector2i) -> void:
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return
 	# Llevado a donde no llega la red: su carretera se tiende (y se paga) igual
 	# que al colocarlo.
@@ -813,6 +823,10 @@ func _update_road_connections(_cell: Vector2i = Vector2i.ZERO) -> void:
 func get_road_batch() -> Node3D:
 	return _road_batch
 
+## El lote de decoraciones pequenas (sondas y pruebas).
+func get_decor_batch() -> Node3D:
+	return _decor_batch
+
 # ── Create actual building mesh ──
 
 func _create_building_mesh(data: BuildingData) -> Node3D:
@@ -827,6 +841,10 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	if data.model_scene:
 		var model_instance := data.instantiate_model()
 		root.add_child(model_instance)
+	elif _decor_batch != null and DecorBatch.handles(data.id):
+		# Decoracion pequena: su modelo mide y se mueve como siempre, pero la
+		# dibuja el lote de su tipo (un MultiMesh), no el mismo.
+		root.add_child(_decor_batch.make_proxy(data.id))
 	else:
 		# Try dieselpunk procedural mesh first
 		var dieselpunk := DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
@@ -882,12 +900,14 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		var lot: Node3D = Lot.new()
 		root.add_child(lot)
 		lot.setup(root, data)
-	# La bandera del pais ondea sobre el Nucleo y el Cuartel General. Va la
-	# ultima: el cartel de estado se midio sin ella.
-	if ColonyFlag3D.flies_over(data):
+	# La bandera del pais ondea sobre el Nucleo, el Cuartel General y todo
+	# modelo que traiga mastil (FlagAnchor: el mastil y el letrero de la
+	# colonia). Va la ultima: el cartel de estado se midio sin ella.
+	if ColonyFlag3D.flies_over(data) or ColonyFlag3D.find_anchor(root) != null:
 		var flag: Node3D = ColonyFlag3D.new()
 		root.add_child(flag)
-		flag.setup(Vector2(data.grid_size) * GridManager.cell_size, top, root, not data.is_core)
+		flag.setup(Vector2(data.grid_size) * GridManager.cell_size, top, root,
+			not data.is_core and not data.is_decoration, data.is_decoration)
 
 	return root
 
@@ -1071,6 +1091,8 @@ func assist_explain(origin: Vector2i) -> void:
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 	elif verdict["reason"] == "road":
 		_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+	elif verdict["reason"] == Rules.SHORE_REASON:
+		_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 
 func assist_feedback(text: String) -> void:
 	_show_feedback(text)
