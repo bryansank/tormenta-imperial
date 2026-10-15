@@ -4,7 +4,7 @@ extends CanvasLayer
 ## Ajustes en los dos y "Menu principal" solo en uno. Ahora hay un boton
 ## "☰ MENU" en la esquina superior derecha que abre una tarjeta con dos grupos:
 ##
-##   COLONIA  Que hacer · Progreso · Colonia (rango) · Ejercito ·
+##   COLONIA  Que hacer · Progreso · Colonia (rango) · Encargos · Ejercito ·
 ##            Escaramuzas · Sandbox        (solo lo que ya esta disponible)
 ##   PARTIDA  Reanudar · Guardar | Partidas · Ajustes · Musica · Ayuda ·
 ##            Historia | Informar fallo · Menu principal · Guardar y salir
@@ -44,6 +44,8 @@ const COLONY_ENTRIES := [
 	["progress", "BTN_PROGRESS", "ProgressPanel"],
 	# Rango del gobernador: rango, XP, bandera y color de la colonia.
 	["colony", "BTN_COLONY_RANK", "RankPanel"],
+	# El tablon de encargos (feat/encargos). No en Sandbox.
+	["contracts", "BTN_CONTRACTS", "ContractPanel"],
 	# Mercado y Tecnologia salen del menu (2026-09-28): se abren tocando su
 	# edificio (el Mercado y el Laboratorio, BuildingInfoPanel.SCREENS).
 	["army", "BTN_ARMY", "ArmyPanel"],
@@ -464,6 +466,8 @@ static func is_colony_entry_available(id: String) -> bool:
 			return ArmyManager.barracks_count() > 0
 		"sandbox":
 			return GameMode.sandbox_tools()
+		"contracts":
+			return GameMode.contracts_enabled()
 	return true
 
 func _sync_music() -> void:

@@ -32,6 +32,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/SandboxPanel.tscn" id="modos_sandbox"]
 [ext_resource type="Script" path="res://scripts/map/WorldLook.gd" id="world_look"]
 [ext_resource type="PackedScene" path="res://scenes/ui/RankPanel.tscn" id="rango_gobernador"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ContractPanel.tscn" id="encargos"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.32, 0.56, 0.86, 1)
@@ -170,6 +171,8 @@ script = ExtResource("7")
 [node name="SandboxPanel" parent="." instance=ExtResource("modos_sandbox")]
 
 [node name="RankPanel" parent="." instance=ExtResource("rango_gobernador")]
+
+[node name="ContractPanel" parent="." instance=ExtResource("encargos")]
 
 [node name="PauseMenu" parent="." instance=ExtResource("27")]
 
