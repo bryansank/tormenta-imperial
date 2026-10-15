@@ -41,7 +41,10 @@ const CELL := 2.0
 
 ## Los 17 que se hornean (la calzada no: su malla depende de los vecinos).
 const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", "laboratory",
-	"foundry", "barracks", "refinery", "tower", "headquarters", "garden", "fountain", "statue", "farm"]
+	"foundry", "barracks", "refinery", "tower", "headquarters", "garden", "fountain", "statue", "farm",
+	# Edificios utiles de la 1.1 (feat/edificios-utiles-1). Hasta hornearlos, el
+	# juego usa su version procedural (scripts/buildings/UtilityToys.gd).
+	"windmill", "silo", "tavern", "carpentry", "well", "lighthouse", "fuel_depot"]
 
 ## Huella y patio de lo que no tiene .tres en esta rama (la granja llega en otra).
 const EXTRA := {"farm": {"grid": Vector2i(2, 2), "yard": 0.1}}

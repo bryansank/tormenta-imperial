@@ -16,6 +16,10 @@ const PACKS := {
 	"kk": "res://assets/models/cc0/kaykit_medieval_hexagon/",
 	"kn": "res://assets/models/cc0/kenney_city_kit_industrial/",
 	"kc": "res://assets/models/cc0/kaykit_city_builder_bits/",
+	# Kenney Fantasy Town y Pirate (feat/edificios-utiles-1): solo las piezas que
+	# usan las recetas (aspas del Molino, farol, torre del Faro, bandera, barril).
+	"ft": "res://assets/models/cc0/kenney_fantasy_town_kit/",
+	"pir": "res://assets/models/cc0/kenney_pirate_kit/",
 }
 
 ## nombre ("kk:barrel") -> {"v", "n", "slot", "d", "aabb"} (triangulos sueltos).
