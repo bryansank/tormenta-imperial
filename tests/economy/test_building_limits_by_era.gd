@@ -168,6 +168,6 @@ func test_the_limit_is_derived_not_saved() -> void:
 
 func test_the_rank_toast_does_not_announce_slots_of_uncapped_buildings() -> void:
 	# El rango 13 daba +2 estatuas y +2 fuentes: sin tope, no se anuncian.
-	var RankPanelScript := load("res://scripts/ui/RankPanel.gd")
+	var RankPanelScript = load("res://scripts/ui/RankPanel.gd")
 	var lines: Array = RankPanelScript.reward_lines({"limit": {"statue": 2, "fountain": 2, "house": 2}})
 	assert_int(lines.size()).is_equal(1)

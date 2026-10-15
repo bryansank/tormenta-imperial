@@ -696,12 +696,13 @@ static func _limit_tooltip_of(info: Dictionary) -> String:
 
 ## Rellena `row` con el icono de edificio y limit_text(); la esconde sin tope.
 ## No rehace nada si el texto no cambio (se llama en cada refresco de costes).
-static func fill_limit_row(row: HBoxContainer, building_id: String, size: String) -> void:
+static func fill_limit_row(row: HBoxContainer, building_id: String, font_size: String) -> void:
 	var info := limit_info(building_id)
 	var text := _limit_text_of(info)
 	var full := bool(info.get("full", false))
 	row.visible = text != ""
-	if row.get_meta("limit_text", "") == text and row.get_meta("limit_full", false) == full 			and row.get_child_count() > 0:
+	var same: bool = row.get_meta("limit_text", "") == text and row.get_meta("limit_full", false) == full
+	if same and row.get_child_count() > 0:
 		return
 	row.set_meta("limit_text", text)
 	row.set_meta("limit_full", full)
@@ -720,7 +721,7 @@ static func fill_limit_row(row: HBoxContainer, building_id: String, size: String
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.draw.connect(func(): draw_building_glyph(icon, Rect2(Vector2.ZERO, icon.custom_minimum_size), color))
 	row.add_child(icon)
-	var label := UITheme.make_label(text, size, color)
+	var label := UITheme.make_label(text, font_size, color)
 	label.name = "LimitLabel"
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(label)

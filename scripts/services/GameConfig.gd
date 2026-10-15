@@ -1630,7 +1630,7 @@ func next_building_limit(building_id: String) -> Dictionary:
 ## La era en curso, o 1 sin ProgressionManager (pruebas sin arbol, arranque).
 func current_era() -> int:
 	var pm := get_node_or_null("/root/ProgressionManager")
-	return int(pm.current_era) if pm != null else 1
+	return int(pm.get("current_era")) if pm != null else 1
 
 func max_era() -> int:
 	return base_storage_cap_by_era.size()
