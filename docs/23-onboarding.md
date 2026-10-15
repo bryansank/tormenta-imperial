@@ -87,8 +87,15 @@ siempre el completo; las variantes de los modos apartados siguen en el código.
 
 ### Guía rápida (`scripts/ui/QuickGuide.gd`)
 
-Al cerrar el prólogo, **una vez por partida** (ayuda vista `quick_guide`) y antes de la
-primera marca del tutorial, sale una pantalla con cuatro bloques: **recursos** (qué hay,
+**Ya no sale sola (14-10-2026, partidas de Bryan):** la ventana "Cómo funciona Tormenta
+Imperial" sobraba al empezar, así que `TutorialPanel._on_prologue_closed()` ya no la
+abre; tras el prólogo va directo la primera marca del tutorial. Sus cuatro bloques
+siguen en el índice de AYUDA (`guide_qg_*`) y el nodo existe (`TutorialPanel.open_quick_guide()`)
+por si se quiere volver a ofrecer. Un `quick_guide` en `helps_seen` de una partida vieja
+se carga y no cambia nada. Lo que sigue describe la pantalla.
+
+Antes salía al cerrar el prólogo, **una vez por partida** (ayuda vista `quick_guide`) y
+antes de la primera marca del tutorial: una pantalla con cuatro bloques: **recursos** (qué hay,
 cuándo llega cada uno, el almacén y el taller), **extraer** (a mano se agota; con su
 edificio, no), **edificios** (trabajadores, viviendas y carretera hasta el Núcleo) y
 **progreso** (eras, árbol tecnológico y la Tormenta). Capa 33, hija de `TutorialPanel`,
@@ -306,7 +313,7 @@ artillerías), `HELP_B_STORM` (la Tormenta ya no se presenta al empezar: es una 
 
 | Suite | Qué fija |
 |---|---|
-| `tests/tutorial/test_quick_guide.gd` | la guía rápida se abre sin pausar y avisa al cerrarse, sus cuatro bloques en ES y EN, y los mismos bloques en el índice de AYUDA |
+| `tests/tutorial/test_quick_guide.gd` | la guía rápida se abre sin pausar y avisa al cerrarse, sus cuatro bloques en ES y EN, los mismos bloques en el índice de AYUDA, y que cerrar el prólogo ya no la abre |
 | `tests/tutorial/test_prologue_screen.gd` | 4 folios, Atrás/Siguiente/Saltar, Siguiente×2 + Atrás = folio 2, Atrás apagado en el primero, deslizar, máquina de escribir, pausa, variantes, textos ES/EN, estilo propio; la hoja final (última, Empezar, el plan en palabras llanas ES/EN sin botones, teclado y deslizar) |
 | `tests/tutorial/test_guide_steps.gd` | `derive_step`, recorrido entero, cancelar, saltar (API interna), fuera de orden, isla hecha, repetir, reanudar al cargar, guardado y basura |
 | `tests/tutorial/test_guide_never_stuck.gd` | sin "Saltar" (solo dev), repetir no salta, terminar un repaso, guardados saltados; un test por caso de atasco (§2.1); la granja y recoger entre aserradero y casa (§2.3) |
