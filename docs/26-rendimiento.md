@@ -58,8 +58,8 @@ cifras de abajo son la propuesta. Se razonan debajo de la tabla.
 
 | Paquete | Hoy (docs/19) | Objetivo | Cómo |
 |---|---|---|---|
-| `.exe` de Windows | 120,6 MB (104 MB de plantilla mono) · zip 48,9 MB | ≤ 90 MB · zip ≤ 40 MB | plantilla **estándar** (no .NET) en release, texturas VRAM |
-| APK Android | 38,9 MB (debug, arm64) | ≤ 30 MB (release, arm64) · AAB ≤ 30 MB | plantilla release, sin assets duplicados (§5.6) |
+| `.exe` de Windows | 120,6 MB (104 MB de plantilla mono) · zip 48,9 MB. El 2026-10-14: **122,7 MB** (109 de plantilla release) · zip 48,4 MB | ≤ 90 MB · zip ≤ 40 MB | plantilla **compilada a medida** (optimizada para tamaño, con perfil de clases); la estándar no ahorra (docs/19 §13.4). Zip en `.7z`: 36,6 MB |
+| APK Android | 38,9 MB (debug, arm64). El 2026-10-14: 41,8 MB debug · **39,9 MB release** | ≤ 30 MB (release, arm64) · AAB ≤ 30 MB | plantilla release compilada a medida con Gradle (docs/19 §13.4) |
 
 Por qué estas cifras:
 
@@ -75,9 +75,12 @@ Por qué estas cifras:
 - **VRAM**: las integradas no tienen memoria propia, la reservan de la RAM. 256 MB es
   lo que Windows suele dar a una HD 520 sin tocar la BIOS. Hoy el juego usa unos
   200-300 MB (§4), así que hay que recortar las texturas sin comprimir (§5.6).
-- **Tamaño**: el 85 % del `.exe` es la plantilla del motor (docs/19 §2). El juego en
-  sí son unos 10 MB. La plantilla estándar sin mono y en release ahorra 20-30 MB. En
-  Android lo que más pesa es `libgodot_android.so`, y en release baja a ~25 MB.
+- **Tamaño**: el 89 % del `.exe` es la plantilla del motor (docs/19 §13). El juego en
+  sí son 13 MB. Medido el 2026-10-14, la plantilla estándar pesa lo mismo que la mono
+  (−0,25 MB) y la release de Windows pesa **más** que la de depuración (109 frente a
+  103 MB): con plantillas oficiales no se llega a 90 MB. El camino es una plantilla
+  compilada para ocupar poco (docs/19 §13.4). En Android lo que más pesa es
+  `libgodot_android.so`: 24 MB comprimido en release.
 
 ---
 
@@ -458,7 +461,7 @@ todas** en CPU: la colonia grande en 2D va a 14-18 fps en este PC (§4).
 | `project.godot` `[rendering]` | No fija `rendering_device/fallback_to_opengl3`: conviene dejarlo explícito para los móviles sin Vulkan | Bajo (seguridad) |
 | `assets/textures/metal_plate_{diff,nor_gl,rough}_1k.jpg` | Importadas **sin compresión VRAM** (`compress/mode=0`) y **sin mipmaps**. Se cargan desde script (`DieselpunkBuildingFactory.gd:12`), así que `detect_3d` no llega a convertirlas: unos 12 MB de VRAM sin comprimir, con aliasing y fallos de caché a distancia | Medio (VRAM en integradas y móvil) |
 | `assets/` | 16 MB en total: modelos 6,2 MB (21 GLB, el mayor `nucleo.glb` con 390 KB), audio 4 MB, texturas 2,7 MB, fuentes 1,9 MB, marca 0,8 MB. Pocos y pequeños | Bajo |
-| Plantilla de export | La mono de Windows pesa 104 de los 120 MB del `.exe` (docs/19 §2) | El mayor ahorro de tamaño: plantilla estándar |
+| Plantilla de export | La de Windows release pesa 109 de los 123 MB del `.exe` (docs/19 §13); la estándar, 109,16 frente a 109,41 la mono | El mayor ahorro de tamaño: plantilla compilada a medida, no la estándar |
 | `ResourceLoader` | Los `load()` en caliente (`PlacementRules.gd:46`, `HelpTargets.gd:130`) van a la caché, pero cada uno paga `exists`, formato de ruta y el bloqueo de la caché | Bajo por sí solo, multiplicado en §5.4 y §5.5 |
 | `_process` siempre activos | `MonumentalCamera.gd:61` hace `look_at` cada fotograma aunque no se mueva; `WorldLook.gd:45` crea un diccionario de estado por fotograma; `InputService.gd:90` hace 10 `is_key_pressed` | Bajo (0,01-0,03 ms cada uno) |
 
@@ -491,7 +494,7 @@ mismo escenario, semilla y calidad, y la máquina en reposo.
 | 8 | **Ceniza de los edificios con material compartido**: 4-5 niveles cuantizados en caché en vez de un `StandardMaterial3D` nuevo por cambio de vida | `services/BuildingHealth.gd:146-156` | Evita la explosión de materiales únicos y de draw calls tras cada Tormenta | Bajo | Tormenta / servicios |
 | 9 | **Interfaz que actualiza en vez de recrear**: ConstructionMenu con un refresco por fotograma como mucho y fichas reutilizadas; el registro de NotificationPanel solo se reconstruye al abrirlo; TutorialPanel a 4 Hz con el destino en caché; ObjectivePanel solo si cambia el paso; tweens con `kill()` | `ui/ConstructionMenu.gd:739`, `ui/NotificationPanel.gd:192`, `ui/TutorialPanel.gd:261`, `ui/HelpTargets.gd:120`, `ui/ObjectivePanel.gd:148`, `ui/ResourceHUD.gd:433`, `ui/UITheme.gd:895` | Quita trabajo O(n) por señal en las pantallas más usadas; más visible en tablet y durante el tutorial | Bajo | Interfaz |
 | 10 | **Texturas y shaders para GPU flojas**: las tres `metal_plate_*_1k.jpg` con compresión VRAM y mipmaps (o a 512 px); el agua a 2 octavas en Mobile/Compatibility; la hierba horneada a textura al generar la isla; `GridOverlay` apagado por defecto en tablet y móvil; shaders de humo y obra como `.gdshader` precargados y calentados al cargar | `assets/textures/*.import`, `map/water_border.gdshader`, `map/grass_ground.gdshader`, `scenes/main/Main.tscn:121`, `buildings/BuildingFx.gd:205`, `SiteFx.gd:101` | −10 MB de VRAM, menos fill-rate en móvil (el agua y la hierba cubren casi toda la pantalla), sin tirón la primera vez que sale humo | Bajo (el agente de mundo ya tiene una "isla sencilla") | Arte / mundo |
-| 11 | **Export más ligero**: plantilla estándar (no mono) y release | `export_presets.cfg`, docs/19 §2 | `.exe` de 120 a ~90 MB; APK de 39 a ~30 MB | Bajo (probado en docs/19 que el proyecto no usa C#) | Exportar |
+| 11 | **Export más ligero**: ~~plantilla estándar (no mono) y release~~ (medido: la estándar pesa lo mismo) → plantilla compilada a medida, y fuera del export lo que el juego no carga | `export_presets.cfg`, docs/19 §13 | `.exe` de 120 a ≤ 90 MB y APK a ≤ 30 MB solo con la plantilla a medida (sin medir); las exclusiones dan −2 MB | Bajo-medio (la plantilla a medida hay que probarla entera) | Exportar |
 | 12 | **Badges 3D por despachador**: no crear el `Label3D` de estado en carreteras ni decoraciones; un único receptor de `production_tick` / `workers_changed` en BuildingPlacer que refresca solo el badge afectado | `buildings/BuildingStatusBadge.gd:79-92` | −300 `Label3D` en `grande` (hay 439) y de O(n²) a O(n) por ronda de producción | Bajo | Arte / edificios |
 
 **Hecho en `perf/servicios` (2026-10-14, sin medir todavía):**
@@ -510,6 +513,20 @@ mismo escenario, semilla y calidad, y la máquina en reposo.
   `count_by_id()` recorren sin copiar; los servicios los usan. `get_all_buildings()`
   sigue copiando (UI, herramientas y tests no cambian).
 - **8**: `BuildingHealth` usa 8 escalones de ceniza con un material compartido cada uno.
+
+**11, en parte, en `perf/paquete` (2026-10-14, medido, docs/19 §13):**
+
+- Fuera del export, en los tres presets, `assets/models/cc0/*` y seis assets que solo
+  usan las herramientas (`metal_plate_diff_1k.jpg`, `banner.png`, los SVG de la marca,
+  `Rajdhani-Medium.ttf`): **−1,97 MB**. `.exe` 124,6 → 122,7 MB (zip 50,3 → 48,4);
+  APK release 41,9 → 39,9 MB. `tests/build/test_export_guards.gd` falla si el juego
+  vuelve a usar alguno.
+- La plantilla estándar **no** ahorra (−0,25 MB, medido sobre el `.tpz` oficial), y el
+  audio no se puede bajar desde la importación (ya es OGG en flujo). Lo que falta para
+  el presupuesto es la **plantilla compilada a medida**, que tiene que compilar el
+  dueño: pasos en docs/19 §13.4. Pendiente también decidir si el zip pasa a `.7z`
+  (36,6 MB) y si se recodifica la música (~1,5 MB).
+- La **12** (badges 3D por despachador) no es de esta rama: sigue pendiente.
 
 Las dos primeras son las que mueven la aguja en la medida de hoy: el juego está
 **limitado por la CPU que prepara el render** (draw calls) en 3D y **por los scripts**

@@ -16,7 +16,7 @@ Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11 (RTX 3060, Vulkan).
 |---|---|
 | Preset | `Windows Desktop` en `export_presets.cfg` (versionado, sin secretos) |
 | Salida | `build/windows/TormentaImperial.exe` (un solo fichero, PCK embebido) |
-| Tamaño | 119,7 MB el .exe (104 MB son la plantilla del motor, ~10 MB el juego); 48 MB en .zip. El 2026-10-14: **123,4 MB** (109 de plantilla release, 14 de juego) y 49,7 MB en .zip (§13) |
+| Tamaño | 119,7 MB el .exe (104 MB son la plantilla del motor, ~10 MB el juego); 48 MB en .zip. El 2026-10-14: **122,7 MB** (109 de plantilla release, 13 de juego) y 48,4 MB en .zip (§13) |
 | Contenido del PCK | 335 ficheros: escenas, scripts compilados, modelos, audio, texturas, fuentes |
 | Tiempo de export | ~34 s |
 | Arranque | la ventana aparece en ~1,3 s; partida nueva con tiempos reales |
@@ -380,7 +380,7 @@ Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11.
 |---|---|
 | Preset | `Android` en `export_presets.cfg` (sin secretos); `Android QA (emulador)` para el emulador (11.8) |
 | Salida | `build/android/TormentaImperial-debug.apk` |
-| Tamaño | 38,9 MB el APK (73 MB son `libgodot_android.so` sin comprimir; ~10 MB el juego). El 2026-10-14: 42,5 MB en depuración y **40,7 MB en release** (§13) |
+| Tamaño | 38,9 MB el APK (73 MB son `libgodot_android.so` sin comprimir; ~10 MB el juego). El 2026-10-14: 41,8 MB en depuración y **39,9 MB en release** (§13) |
 | Paquete | `com.bryankey.tormentaimperial`, versionCode `900`, versionName `0.9.0` |
 | SDK | minSdk 24 (Android 7), targetSdk 36 |
 | ABI | `arm64-v8a` (todas las tabletas y teléfonos de los últimos años) |
@@ -751,28 +751,29 @@ APK firmado con la clave de release obliga a desinstalar el anterior una vez.
 El dueño quiere que el juego "vaya en una papa" también en descarga y en
 almacenamiento. El presupuesto está en `docs/26-rendimiento.md` §2: **.exe ≤ 90 MB y
 zip ≤ 40 MB; APK ≤ 30 MB**. Medido el 2026-10-14 con Godot 4.7-stable mono, en la rama
-`perf/paquete`.
+`perf/paquete` al día con `integracion/arte-v1` (ya con las texturas `metal_plate` en
+compresión VRAM de `perf/render-3d` y las decoraciones de `feat/decoraciones-1`).
 
 ### 13.1 Qué pesa
 
-Casi todo es el motor. El juego en sí (el PCK) son 14 MB:
+Casi todo es el motor. El juego en sí (el PCK) son 13 MB:
 
 | Pieza | Tamaño | Qué es |
 |---|---|---|
 | Plantilla Windows release (mono) | 109,4 MB | el ejecutable del motor |
 | `libgodot_android.so` release | 71,4 MB (24,1 MB comprimido en el APK) | el motor en Android, arm64 |
-| PCK del juego | 16,0 MB → **14,0 MB** sin comprimir (13,9 → 11,9 MB en zip) | todo lo de abajo |
+| PCK del juego | 15,3 MB → **13,3 MB** sin comprimir (12,6 → 10,6 MB en zip) | todo lo de abajo |
 
-Dentro del PCK, antes de este cambio (713 ficheros):
+Dentro del PCK, antes de este cambio (752 ficheros):
 
 | Qué | MB | Notas |
 |---|---|---|
 | Audio | 6,47 | 42 OGG Vorbis: 5 músicas (4,8 MB en disco, estéreo a 96-160 kbps), 3 ambientes (0,9 MB, estéreo a 22 kHz) y 34 SFX (0,5 MB) |
-| Texturas | 4,31 | las tres `metal_plate_*_1k.jpg` (3,17 MB, sin compresión VRAM), la marca (1,05 MB), los iconos de la interfaz (~0,1 MB) |
-| Escenas y recursos convertidos (`.godot/exported`) | 2,17 | en binario y sin comprimir dentro del PCK; en zip se quedan en 0,32 |
-| Scripts compilados | 1,44 | 304 `.gdc` |
+| Texturas | 2,80 | `metal_plate_diff_1k.jpg` (1,14 MB, sin uso), las otras dos `metal_plate` ya en S3TC (0,52 MB), la marca (1,05 MB), los iconos de la interfaz (~0,1 MB) |
+| Escenas y recursos convertidos (`.godot/exported`) | 2,73 | en binario y sin comprimir dentro del PCK; en zip se quedan en 0,38 |
+| Scripts compilados | 1,58 | 319 `.gdc` |
 | Fuentes | 1,06 | 6 TTF (ya con `compress=true`) |
-| Modelos (`assets/models/toy`) | 0,36 | mallas horneadas |
+| Modelos (`assets/models/toy`) | 0,44 | mallas horneadas |
 | `logo.png` sin importar | 0,15 | la pantalla de arranque lo lee en crudo (`boot_splash/image`) |
 
 Lo que **no** viaja, y está bien que no viaje: `assets/models/cc0/` (cada pack lleva
@@ -837,9 +838,9 @@ Conclusiones:
 - **Release frente a depuración**: en Windows la release es **más grande** (109 frente
   a 103 MB; el .exe de depuración de este juego pesa 117,3 MB). No se reparte en
   depuración: lleva las comprobaciones y el depurador remoto. En Android la release sí
-  es menor: 40,7 MB frente a 42,5.
-- Con plantillas oficiales el .exe no baja de **~123 MB** (109 + 14) ni el APK de
-  **~40 MB** (24 de motor comprimido + 14 de juego + 2 de Java). El presupuesto solo se
+  es menor: 39,9 MB frente a 41,8.
+- Con plantillas oficiales el .exe no baja de **~122 MB** (109 + 13) ni el APK de
+  **~40 MB** (24 de motor comprimido + 13 de juego + 2 de Java). El presupuesto solo se
   alcanza con una **plantilla compilada a medida**: optimizada para tamaño, con LTO y
   sin las clases y los módulos que el juego no usa. La documentación oficial de Godot
   ("Optimizing a build for size") da del orden de la mitad de tamaño; **no está
@@ -906,12 +907,12 @@ dispositivo.
 
 ### 13.5 El zip: con 7z bajaría de 40 MB
 
-`tools/package_release` hace zips con deflate. El mismo .exe de 123,4 MB:
+`tools/package_release` hace zips con deflate. El mismo .exe de 122,7 MB:
 
 | Formato | Tamaño |
 |---|---|
-| `.zip` (deflate, nivel máximo) | 49,7 MB |
-| `.7z` / xz (LZMA, nivel 9) | **37,9 MB** |
+| `.zip` (deflate, nivel máximo) | 48,4 MB |
+| `.7z` / xz (LZMA, nivel 9) | **36,6 MB** |
 
 Windows 11 abre los `.7z` desde el Explorador desde la versión 23H2; Windows 10 necesita
 7-Zip. No se ha cambiado el script: es decisión del dueño (complica la vida a quien
@@ -921,15 +922,14 @@ tenga Windows 10). Con una plantilla a medida (§13.4) el .zip normal ya cabría
 
 | Paquete | Antes | Después | Presupuesto |
 |---|---|---|---|
-| PCK (`--export-pack`, zip) | 13,9 MB, 713 ficheros | 11,9 MB, 701 ficheros | — |
-| `.exe` release | 125,4 MB | **123,4 MB** | ≤ 90 MB |
-| `.exe` en .zip | 51,6 MB | **49,7 MB** | ≤ 40 MB |
-| `.exe` en .7z | 39,8 MB | 37,9 MB | ≤ 40 MB |
-| APK depuración | 44,5 MB | 42,5 MB | — |
-| APK release (arm64) | 42,6 MB | **40,7 MB** | ≤ 30 MB |
+| PCK (`--export-pack`, zip) | 12,6 MB, 752 ficheros | 10,6 MB, 740 ficheros | — |
+| `.exe` release | 124,6 MB | **122,7 MB** | ≤ 90 MB |
+| `.exe` en .zip | 50,3 MB | **48,4 MB** | ≤ 40 MB |
+| `.exe` en .7z | 38,4 MB | 36,6 MB | ≤ 40 MB |
+| APK depuración | 43,7 MB | 41,8 MB | — |
+| APK release (arm64) | 41,9 MB | **39,9 MB** | ≤ 30 MB |
 
 El "antes" ya era mayor que lo medido el 2026-09-27 (119,7 MB y 38,9 MB) porque el
-juego ha crecido: combate 3D, ambientes, modelos horneados. Para llegar al
-presupuesto falta la plantilla a medida (§13.4); el resto de palancas (audio
-recodificado, texturas de `metal_plate` con compresión VRAM, que son del agente de
-render) suman 2-4 MB como mucho.
+juego ha crecido: combate 3D, ambientes, modelos horneados, decoraciones. Para llegar
+al presupuesto falta la plantilla a medida (§13.4); el resto de palancas (audio
+recodificado, §13.3) suman 2 MB como mucho.
