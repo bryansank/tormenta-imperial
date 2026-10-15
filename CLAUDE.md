@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET. The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a 60-74 x 60-74 grid rolled per game, the sea inside the grid, 3-6 deposits of each type), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop is complete (economy with workshop materials, population, market and laboratory as buildings, tech tree, army training, audio). Turn-based PVE combat is live: an 8x8 tactical board, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, and the Final Audit — in Campaña HQ level 3 no longer wins, it summons a 3-5 wave siege you have to survive. Around that core: four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done and what is left.
+**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET, version **1.0.0** in progress (`project.godot` `config/version`; the 1.0 is assembled on the `integracion/arte-v1` branch). The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a grid rolled per game, 60-74 cells a side, with the sea inside the grid and 3-6 deposits of each type on land), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop: five resources in one shared pool (food included, grown on Farms and eaten by the people), four workshop materials, production that waits in each building until it is collected with a tap, manual processes in batches (the Núcleo can run every workshop recipe, slower), population and morale, market and laboratory as buildings, tech tree, army training. Turn-based PVE combat: an 8x8 board shown by default as a "front" view (both sides face to face, no grid in sight; the 3D 8x8 board and a flat 2D grid are the alternatives), rock-paper-scissors type advantage, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, and the Final Audit — in Campaña HQ level 3 summons a 3-5 wave siege you have to survive. Around that core: a "toy diorama" look (buildings and units baked from CC0 pieces into one vertex-coloured mesh each; a building "pops" when it finishes and collected goods fly to the HUD), 27 building types (10 of them new cheap decorations, with no cap), building limits that rise with the era, a day/night cycle, ambient sound for day, night and Storm, up to five saved games, x1/x2 game speed, graphics quality down to "Mínima" with an FPS cap, four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done, what is left and the redesign in progress.
 
 Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~1850 tests in 141 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~2070 tests (`func test_`) in 158 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -62,19 +62,19 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-28 autoloads in `project.godot`: the 27 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, and `RankManager` goes after `DeviceProfile` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText` and `Objectives` are static helpers (a `class_name` or a `preload`), not autoloads.
+28 autoloads in `project.godot`: the 27 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, and `RankManager` goes after `DeviceProfile` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 119 signals in ~30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 126 signals in 30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
-| 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 4 resources (gold/steel/oil/wood) + unlock system |
+| 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
 | 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave of up to 5 saved games (`SaveSlots`, `save_path()`, `open_saves_list()`), new game (`request_new_game()` → mode picker, never deletes), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
-| 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining) |
-| 9 | `ProductionManager` | `scripts/services/ProductionManager.gd` | Passive production, construction, upgrades |
+| 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining), in batches of ×1 / ×5 / MÁX |
+| 9 | `ProductionManager` | `scripts/services/ProductionManager.gd` | Passive production that waits in each building until collected, Farm crops, spoilage (Gobernador), construction, upgrades |
 | 10 | `ProgressionManager` | `scripts/services/ProgressionManager.gd` | Era system (3 eras), 9 milestones, **and the Final Audit** (owns the `FinalAudit` model and publishes it) |
 | 11 | `MarketManager` | `scripts/services/MarketManager.gd` | Buy/sell resources with floating prices |
 | 12 | `PopulationManager` | `scripts/services/PopulationManager.gd` | Population, workers, morale, consumption |
@@ -83,14 +83,14 @@ holds a service's state of its own.
 | 15 | `RandomEventManager` | `scripts/services/RandomEventManager.gd` | Random events (storms, plagues, festivals...) |
 | 16 | `BuildingHealth` | `scripts/services/BuildingHealth.gd` | Building damage, ruined state that halts output, proportional repair |
 | 17 | `StormManager` | `scripts/services/StormManager.gd` | Drives the Imperial Storm cycle (`scripts/storm/StormCycle.gd`), storm damage and the Tithe |
-| 18 | `DayClock` | `scripts/services/DayClock.gd` | Day/night clock: ticks the pure `scripts/storm/DayCycle.gd` (dawn, day, dusk, night; 16 min, night 3 min), emits `day_phase_changed`, answers `is_night()` / `light_weight()`; the hour travels in the save (`day`). Visual only today (docs/21 §12) |
+| 18 | `DayClock` | `scripts/services/DayClock.gd` | Day/night clock: ticks the pure `scripts/storm/DayCycle.gd` (dawn, day, dusk, night; 16 min, night 3 min), emits `day_phase_changed`, answers `is_night()` / `light_weight()`; the hour travels in the save (`day`). No game rule reads it yet: it drives the light (StormSky), people going home at night (WorkerWalkers) and the night ambience (AudioManager) — docs/21 §12 |
 | 19 | `StormSky` | `scripts/map/StormSky.gd` | Paints the `WorldEnvironment`, sun and island: the time of day from `DayClock` (refreshed every few seconds) with the storm's ash blended on top; also the shared window-glow material |
 | 20 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
 | 21 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
 | 22 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
 | 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built), the guided first fights on the board (combat lessons, docs/23 §2.4) and which tips/helps were seen; state saved with the game (docs/23) |
 | 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
-| 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
+| 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambience (day, night and Storm loops), runtime buses |
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
 | 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`, `queue_colony_for_new_game()`). See `docs/06-progression-victory.md` §Governor rank |
 
@@ -107,12 +107,12 @@ into that list.
 
 ```
 Main (Node3D, ViewRouter view_mode="3d")
-  +-- MonumentalCamera (Camera3D) -- orthographic 45deg RTS camera
+  +-- MonumentalCamera (Camera3D) -- orthographic RTS camera; a new game starts closer (distance 24) and the view tilts from -52 to -38 degrees as it zooms in (derived from the distance, nothing saved)
   +-- DirectionalLight
-  +-- WorldEnvironment
+  +-- WorldEnvironment (WorldLook.gd) -- sky, tonemapping; WorldLook only decides what costs GPU per quality (SSAO, glow, shadow cascades, MSAA, 3D resolution, simple island)
   +-- IslandGenerator (Node3D) -- procedural island mesh: the irregular coast of the land mask (`IslandShape.coast_polygon`: grass, cliff, sand and foam along it; the sea shades from a distance texture); an old square-island save keeps the rounded square that covers the grid. Rebuilds on `grid_resized`
-  +-- GridOverlay (MeshInstance3D) -- faint cell grid (Settings toggle), fitted to GridManager at runtime, drawn on land only (a land-mask texture in the shader)
-  +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist
+  +-- GridOverlay (MeshInstance3D) -- faint cell grid (Settings toggle, off by default: it shows while placing), fitted to GridManager at runtime, drawn on land only (a land-mask texture in the shader)
+  +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist; every road drawn by one RoadBatch3D child (a MultiMesh per neighbour mask, at most 16 draw calls)
   +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" follows the device profile (tablet/phone yes, PC no)
   +-- ResourceHUD (CanvasLayer 10) -- top-left card: one row of [icon] number chips (resources, free workers, morale once the Storm is armed; names and meaning in tooltips, a tap unfolds them) + shared storage bar with used/cap + materials row (once one is unlocked)
   +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), on land only, none on the Núcleo sidewalk or the shore band (land next to the water), each with room and a road path for its extractor; `shore_cells()` is the hook for future sea/shore resources
@@ -128,7 +128,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
   +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close; building guide; instances HelpIndexPanel
   +-- SkirmishPanel (CanvasLayer 11) -- commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" (Final Audit)
-  +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
+  +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn, in its "front" or "board" view; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
   +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator (colour + icon, no countdown)
   +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI, also over the combat board (combat lessons); instances PrologueScreen
   +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit
@@ -150,7 +150,8 @@ Created at runtime, not in either .tscn:
   QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks; no longer opens by itself (2026-10-14), texts in AYUDA
   WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: workers and citizens walking the roads (view only, docs/04)
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
-  NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker, created by GameManager.request_new_game()
+  NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker (step 1) and the country name + flag (step 2), created by GameManager.request_new_game()
+  ColonyIdentityPanel (layer 41, scripts/ui/ColonyIdentityPanel.gd) -- the country name + flag editor: open("new") from NewGameDialog, open("edit") from RankPanel's COLONIA card
   SavesPanel (layer 40, scripts/ui/SavesPanel.gd) -- PARTIDAS, the saved-games list, created by GameManager.open_saves_list()
   LayoutEditor (layer 35, scripts/ui/LayoutEditor.gd) -- EDITAR DISPOSICIÓN (Settings), created by UILayoutManager
 ```
@@ -188,7 +189,17 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | 3 | Petroleum | + Oil | Build first Refinery |
 
 - Starting resources: 300 gold, 200 wood, 80 food
-- Deposits visible from start but locked until era unlocks the resource
+- **The island (2026-10-12), docs/02 "The irregular island":** the grid is rolled per game
+  (width and height apart, 60-74, even) and only part of it is land: an irregular coast
+  with 2-4 bays and 1-3 capes from `IslandShape` and `GameConfig.island_coast`
+  (1550-2300 land cells, about the old 40x40-48x48 all-land map; 3 cells of sea on the
+  grid edge; land guaranteed around the Núcleo). Water cells are never free
+  (`GridManager.is_land_cell()`). The coast parameters are copied into each new game's
+  save, so retuning them only changes new islands; an old save without them keeps its
+  square all-land island.
+- Deposits visible from start but locked until era unlocks the resource. In 3D each
+  deposit is one baked toy mesh (forest, gold vein, iron, oil well) that changes with its
+  depletion stage (`DepositMesh.gd`); the 2D view bakes the same idea (docs/02)
 - Storage: **one shared pool for the five resources** (food included), not a cap per resource. Base scales
   by era (600 / 800 / 1000) + 500 per warehouse (max 5 in every era: the warehouse cap does not rise, see below).
   Era 1 is 600 so the opening fits: 580 starting resources, plus sawmill + gold mine (330).
@@ -242,7 +253,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
-| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only: its own, every unlocked workshop recipe and hand mining, 1.5x slower | - |
+| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only: its own, every unlocked workshop recipe and hand mining, 1.5x slower. Never damaged; a tall monument (8.9 m, own flag mast) on the same 3x3 | - |
 | House | 2x2 | 50/0/0/30 | 0 | +6 workers (room in houses; 9 / 12 at levels 2 / 3) | 1 |
 | Sawmill | 2x2 | 80/0/0/50 | 2 | 6 wood/12s; makes planks | 1 |
 | Farm | 2x2 | 40/0/0/30 | 2 | Food by crop: 20 / 125 / 600 per 1 / 5 / 20 min; anywhere with a road; max 6 | 1 |
@@ -299,8 +310,20 @@ the Laboratory before research and does not suggest trading without a Market.
 producers (x1.6 / x2.5), houses (room x1.5 / x2), the warehouse (+250 per level),
 decorations with morale (x1.5 / x2) and the HQ (its level 3 summons the Audit). The
 Barracks, Tower, Road and Núcleo offer no upgrade. The panel lists what the next level
-gives with real numbers (`upgrade_effect_lines()`), and in 3D the building grows and
-carries a II / III plate.
+gives with real numbers (`upgrade_effect_lines()`), and in 3D the same model grows a
+little around its lot centre and carries a brass trim per level (`LevelTrim.gd`: a
+crown at II, plus a short mast with a pennant at III).
+
+**Decorations by rank:** see the rank paragraph below and the decorations row above;
+the road is never locked.
+
+**Finishing and collecting feel (2026-10-14, `feat/salto-y-camara`):** a finished
+building jumps 1.0 → 1.12 → 1.0 in 0.3 s with a one-shot puff of 8 dust motes
+(`BuildingFx.bounce` / `dust_burst_3d` / `dust_burst_2d`, a Tween, no `_process`; only
+the jump in Minimal quality); collect icons pop in and bob only while there is
+something to collect, and on collecting the icon and its "+N" fly to their HUD chip
+(`FloatingText.fly_to_hud`). The baked models carry a dark contact edge at the foot of
+the walls (`LotMesh.contact_edge`).
 
 ### Materials (2026-09-28)
 
@@ -342,9 +365,9 @@ hand mining there holds `mining_workers`, needs no road and spends no deposit us
 
 ### Road network (2026-09-28)
 
-- **Every building is at least 2x2**, except the road (1x1). GLBs made for 1x1 are
-  scaled up with `BuildingData.model_scale`; `BuildingData.instantiate_model()` is the
-  only way to spawn one.
+- **Every building is at least 2x2**, except the road (1x1). The baked models already
+  fit their plot (`model_scale` / `model_stretch` stay at 1; they were for the old
+  GLBs); `BuildingData.instantiate_model()` is the only way to spawn one.
 - **Everything touches a road joined to the Núcleo.** `PlacementRules.is_connected_spot()`
   is part of `evaluate_placement()` (reason `"road"`, feedback `LBL_NEEDS_ROAD`); a new
   road must touch the network or the Núcleo. No Núcleo on the grid (hand-built test
@@ -498,8 +521,11 @@ names like "Liga de Vaporia" in ES/EN, a short ES/EN word filter in
 `draw_spec()` for lists). Rank 1 opens 5 patterns, 4 emblems and 6 colours; the
 showier ones come by rank (`rank_rewards`). Picked in the editor
 `scripts/ui/ColonyIdentityPanel.gd` (`open("new"|"edit")`, signals `confirmed` /
-`cancelled`), opened from ☰ MENÚ → COLONIA (RankPanel) and meant for the New Game step
-(`RankManager.queue_colony_for_new_game()` before the reset). Flies on the Nucleo and
+`cancelled`), opened from ☰ MENÚ → COLONIA (RankPanel) and as step 2 of the New Game
+dialog (`NewGameDialog.chosen_identity` → `GameManager.start_new_game(mode, tier, identity)`,
+which applies it with `RankManager.set_colony()` right after `RankManager.reset()`,
+`_apply_pending_identity()`; `RankManager.queue_colony_for_new_game()` exists but no
+script calls it today). Flies on the Nucleo and
 the HQ (`ColonyFlag3D`: small plane + vertex-shader wave, off in low quality; hangs
 from the model's `FlagAnchor` marker when it has one; `ColonyFlag2D`), signs the war
 reports, the audit defeat, the victory and the board header (`ColonyByline`), and its
@@ -740,11 +766,19 @@ ramps up gradually instead of punishing the first minutes.
 ### Audio
 
 - **AudioManager** creates Music/SFX/Ambient buses at runtime and auto-plays from
-  ~26 EventBus signals (era music crossfade, build/trade/event SFX, combat, the Final
-  Audit, etc.).
-- Assets: 4 music tracks + 16 SFX in `assets/audio/{music,sfx}/` (`ambient/` holds only
-  a `.gitkeep`). The 9 combat keys are aliases onto existing SFX and the `combat` theme
-  borrows `era_3_petroleum`. Missing files are skipped silently — audio never crashes the game.
+  EventBus signals (era music crossfade, build/trade/event SFX, combat, the Storm and
+  the Tithe, the Final Audit, rank, collecting, UI clicks and toggles).
+- Assets: **5 music tracks** (three eras, victory and an own `combat` theme, CC0),
+  **34 SFX** and **3 ambient loops** in `assets/audio/{music,sfx,ambient}/`. **No aliases
+  any more**: every key in `SFX_MANIFEST` has its own clip (combat, Storm, Tithe, rank,
+  collect / harvest included). Gains per clip in `SFX_GAIN_DB`. Missing files are
+  skipped silently — audio never crashes the game. Sources and licences:
+  `assets/audio/MANIFEST.md`, `assets/CREDITS.md` and `THIRD-PARTY-NOTICES.md`.
+- **Ambience:** `day` (waves + birds), `night` (crickets + soft waves) and `storm`
+  (wind + distant thunder), 40 s OGG loops made by synthesis with
+  `tools/gen_ambient_audio.gd` (own work). One plays at a time and they cross-fade
+  (`AMBIENT_FADE_SECONDS` 4) following the Storm phase and `DayClock`
+  (`day_phase_changed`); the Storm wins over the night.
 - Music can be switched off (`GameConfig.audio_music_enabled`, `set_music_enabled()` /
   `toggle_music()`, emits `music_toggled`); `play_music()` is the single guard.
 - API: `play_sfx(key)`, `play_music_for_era(era)`, `set_*_volume(linear)`.
@@ -757,8 +791,8 @@ runs in its `_ready()` (before AudioManager applies volumes); anything that chan
 preference calls `GameConfig.save_user_settings()`. Currently stored:
 - `[audio]`: `master` / `music` / `sfx` / `ambient` volumes (sliders in SettingsPanel)
   and `music_enabled`;
-- `[ui]`: `grid_visible` (map grid toggle; GridOverlayControl applies it, BuildingPlacer
-  restores it after placement), `helper_visible` (help callouts, on by default),
+- `[ui]`: `grid_visible` (map grid toggle, off by default; GridOverlayControl applies it, BuildingPlacer
+  restores it after placement, never in Minimal quality), `helper_visible` (help callouts, on by default),
   `touch_controls` (`auto` / `always` / `never`; "auto" follows the device profile:
   tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
   `touch_controls_opacity`, `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
@@ -767,7 +801,9 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   `unlimited`: the FPS cap, 30 while paused and 10 without focus; "auto" is 30 on a
   PC in Minimal) — docs/21 §10; `graphics_quality` (`auto` / `high` / `low` /
   `minimal`) plus `quality_detected` / `quality_detected_reason` (the first-launch
-  detection, once) — docs/21 §12, docs/26 §7;
+  detection, once) — docs/21 §12, docs/26 §7; `combat_view` (`front` / `board`: how
+  the 3D combat board is shown, docs/15 §3 "Las dos vistas");
+- `[partidas]`: `activa` — which saved game is the active one (`GameConfig.saves_active_slot`);
 - `user://renderer_override.cfg` (not settings.cfg): written only when a PC picks
   Minimal quality; `project.godot` names it in
   `application/config/project_settings_override`, so the next launch runs the
@@ -805,6 +841,38 @@ and Settings closes; accepted). With a board open it does not reload
   (version, OS, GPU/renderer, profile, quality, view, locale, mode/tier, era, speed,
   last 40 log lines) to the clipboard. `BugReport.sanitize()` turns home-dir paths
   into `~` and the colony name into `<colonia>`.
+
+### Performance — full doc: `docs/26-rendimiento.md`
+
+Owner's priority since 2026-10-12: the game has to run "on a potato". Budget: 60 fps on
+a mid PC, 30 fps on an old integrated GPU and on a cheap Android tablet (docs/26 §2).
+Every new effect, mesh, sound or `_process` has to justify its cost.
+
+- **Measure:** `tools/perf_probe.gd` (six seeded scenarios, CSV/JSON in `reports/perf/`,
+  private user dir). The numbers in docs/26 §4 were taken **before** the optimisations
+  below; nothing has been re-measured since.
+- **Quality and FPS:** `GameConfig.ui_graphics_quality` `auto` / `high` / `low` /
+  `minimal`. `WorldLook.settings_for()` decides the 3D cost (SSAO only in Forward+,
+  glow, shadow cascades, MSAA, 3D resolution 0.7 on PC / 0.6 on mobile in Minimal, the
+  simple island); `GraphicsQuality.apply_runtime()` the rest (smoke/sparks hidden, site
+  pennants still, no always-on grid, walkers capped at `life_figure_cap_minimal`).
+  Minimal on a PC writes `user://renderer_override.cfg` so the next launch runs the
+  Mobile renderer. First launch with `auto` runs a detection (GPU name patterns, RAM,
+  threads, then a few measured seconds behind the title menu). FPS cap per profile
+  (`fps_cap`), 30 while paused, 10 without focus.
+- **Done (2026-10-12/14):** roads in one `RoadBatch3D` (≤ 16 draw calls); building
+  name labels created only when selected and no status badge on what does not work;
+  shared materials for flags, lots, level trims and the 8 ash steps of a damaged
+  building (`BuildingHealth`); deposits as one baked mesh each (`DepositMesh.gd`);
+  baked 2D art (`ArtCache2D`) and no `_process` on 2D roads; auto-road placement in one
+  batch (`placement_batch_started` / `placement_batch_finished`: one save and one
+  recount per route); cached road network and Núcleo per `GridManager.map_version()`;
+  panels that update instead of rebuilding (ConstructionMenu, TutorialPanel,
+  ObjectivePanel, ResourceHUD, ArmyPanel, TechTreePanel); the 3D map is switched off
+  (`disable_3d`) while the 3D combat board covers it.
+- **Rules for new work:** one baked mesh per building or decoration with the shared
+  `ToyPalette` materials; animation by shader (`TIME`), not `_process`; no real lights
+  (night glow is emission); area effects computed on build/demolish, never per frame.
 
 ### Save/Load System
 
@@ -849,19 +917,19 @@ and Settings closes; accepted). With a board open it does not reload
 
 ```
 tormenta-imperial/
-+-- project.godot                    # Engine config, 28 autoloads (27 game + BeckettRuntime)
++-- project.godot                    # Engine config (version 1.0.0), 28 autoloads (27 game + BeckettRuntime), renderer override hook
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
 +-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
 +-- readme.md                        # Game overview (Spanish, public)
-+-- docs/                            # Per-system deep docs 01-24 (INDEX.md); media/ = screenshots
++-- docs/                            # Per-system deep docs 01-26 (INDEX.md); media/ = screenshots
 +-- specs/001-combate-pve/           # Spec, plan and tasks for the combat pillar
 +-- .specify/memory/constitution.md  # Non-negotiable project rules (Spec-Driven Development)
 +-- qa/maestro/                      # Maestro flows for the Android tablet emulator (QA APK, coordinates + screenshots)
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 141 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 158 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ support/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
@@ -871,7 +939,7 @@ tormenta-imperial/
 |   +-- buildings/BuildingPlacer.tscn
 |   +-- combat/Board3D.tscn          # The 3D combat diorama (camera, sun, terrain, marks, units, fx)
 |   +-- ui/                          # One .tscn per panel (26), incl. PrologueScreen and HelpIndexPanel
-+-- scripts/                         # 127 .gd files, ~48k lines
++-- scripts/                         # 155 .gd files, ~61k lines
 |   +-- buildings/
 |   |   +-- BuildingData.gd          # Resource class for building definitions (get_display_name())
 |   |   +-- BuildingPlacer.gd        # 3D placement/move/demolish + mesh spawning
@@ -883,8 +951,13 @@ tormenta-imperial/
 |   |   +-- BuildingLookVisual.gd    # Applies it in 3D (child "LookVisual"); BuildingPlacer syncs it with one map-wide clock
 |   |   +-- BuildingFx.gd            # Generated smoke/dust/glow/sparks sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D
 |   |   +-- SiteFx.gd                # Construction-site animation by shader (crane swing, hook, pennant), 3D and 2D
-|   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes (fallback when there is no GLB)
+|   |   +-- DieselpunkBuildingFactory.gd  # Procedural 3D meshes: decorations via DecorMesh and the road meshes (fallback when there is no model_scene)
 |   |   +-- LotPlan.gd, BuildingLot.gd, LotMesh.gd  # The lot: rule (both views), 3D node, one-mesh builder
+|   |   +-- ToyPalette.gd, ToyTones.gd # The shared toy palette and its two map-wide materials (solid, glow)
+|   |   +-- RoadBatch3D.gd           # Every 3D road as a MultiMesh per neighbour mask
+|   |   +-- LevelTrim.gd             # Brass trim of an upgraded building (II / III)
+|   |   +-- FarmCrops3D.gd, StockIcon3D.gd, SiteMesh.gd  # The Farm's beds (toy_crops shader), collect icon, construction-site mesh
+|   |   +-- DecorMesh.gd             # The 10 cheap decorations: one shared mesh per type (baked if present, procedural otherwise)
 |   +-- camera/MonumentalCamera.gd   # Orthographic 45deg RTS camera
 |   +-- combat/                      # PURE models: no nodes, no signals, no global RNG
 |   |   +-- CombatUnit.gd            # One unit: hp, position, draft bonuses, morale mods
@@ -902,10 +975,13 @@ tormenta-imperial/
 |   |   +-- CombatFx3D.gd, BoardTerrain3D.gd, BoardLayout3D.gd, UnitModels3D.gd, board_marks.gdshader
 |   |   +-- FrontOrders.gd           # Front view orders (approach cell, reachable targets, AVANZAR) -> the same move/attack calls
 |   +-- grid/
-|   |   +-- GridManager.gd           # Cell grid (size per game, saved); the island covers every cell
+|   |   +-- GridManager.gd           # Cell grid (size per game, saved), land mask, map_version()
 |   |   +-- GridOverlayControl.gd    # Applies the grid toggle to the 3D overlay
 |   +-- map/
-|   |   +-- IslandGenerator.gd       # Procedural island mesh
+|   |   +-- IslandGenerator.gd       # Procedural island mesh (coast, cliff, sand, foam, sea)
+|   |   +-- IslandShape.gd           # Pure: the land mask and coast polygon from the seed and `island_coast`
+|   |   +-- WorldLook.gd             # WorldEnvironment script: what each graphics quality costs
+|   |   +-- DepositMesh.gd           # Deposits as one baked toy mesh per type, size, variant and depletion stage
 |   |   +-- MapGenerator.gd          # Random deposits: 3-6 per type, room and a road path for each extractor
 |   |   +-- WorkerWalkers.gd         # Workers and citizens walking the road network (view only, 3D and 2D)
 |   |   +-- WalkerActor.gd, WalkerFigures3D.gd  # One figure's data; the 3D MultiMesh drawer (2D: view2d/WalkerFigures2D.gd)
@@ -917,10 +993,11 @@ tormenta-imperial/
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
 |   |   +-- GraphicsQuality.gd       # Static (preload): set_quality(), what Minimal turns off outside WorldLook, renderer override, detection rules
+|   |   +-- SaveSlots.gd             # Static (preload): user://partidas/, the index, up to 5 games
 |   |   +-- ColonyIdentity.gd        # Static: country flag pieces by rank, random names/flags, word filter
 |   |   +-- FloatingText.gd          # Static utility: animated 3D text labels
 |   |   +-- ErrorLog.gd, BugReport.gd  # Local error log (Logger, rotated) and the "Informar de un fallo" text
-|   +-- ui/                          # 45 scripts: one per panel, plus
+|   +-- ui/                          # 50 scripts: one per panel, plus
 |   |   +-- UITheme.gd               # Static dieselpunk theme: tokens, fonts, styleboxes, unit icons
 |   |   +-- UILayoutConfig.gd        # Screen slots, panel->slot map, conflicts
 |   |   +-- HudRegistry.gd, LayoutEditor.gd        # Hideable/movable HUD elements, the layout editor
@@ -934,16 +1011,20 @@ tormenta-imperial/
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
 |   |   +-- OnScreenControls.gd, ProcessActionsPanel.gd (+ ProcessCard.gd), ProgressPanel.gd, ResourceHUD.gd, VictoryScreen.gd
+|   |   +-- HarvestSection.gd, SavesPanel.gd, GameSpeedButton.gd, TextKit.gd  # RECOGER, PARTIDAS list, x1/x2, icon+number rows
 |   +-- view2d/                      # The 2D view (docs/18): same services, flat world
 |       +-- ViewRouter.gd, ViewMode.gd, View2D.gd  # Scene routing, the view preference, world<->pixel maths
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
+|       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
 +-- data/buildings/                  # 27 .tres building definitions
 +-- assets/
-|   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
+|   +-- audio/{music,sfx,ambient}/   # 5 tracks, 34 SFX, 3 ambient loops (see MANIFEST.md)
+|   +-- models/toy/                  # Baked toy buildings (<id>.tscn + <id>_mesh.res, toy_solid / toy_glow materials)
 |   +-- models/toy/units/            # Baked combat toys (<id>_player / <id>_regency, boss_mark, crew_nest)
-|   +-- models/buildings/<id>/       # GLB models (11 of the 17 buildings use one; sawmill's is kept, unused)
+|   +-- models/cc0/                  # CC0 source pieces (KayKit, Kenney) the bakers read; each pack has a .gdignore, so Godot never imports or exports it
+|   +-- models/buildings/<id>/       # The old GLBs: unused, excluded from the export
 |   +-- textures/                    # metal_plate PBR maps; ui/ 9-patch sprites, ui/icons/, ui/units/ (silhouettes)
 |   +-- fonts/, branding/            # Fonts with their licences; logo, banner, key art
 +-- tools/
@@ -954,7 +1035,9 @@ tormenta-imperial/
     +-- look_probe.gd, look_probe_runner.gd  # Screenshots of every building look (construction phases, ruin, active) and a site row per phase, 3D and 2D
     +-- life_probe.gd, life_probe_runner.gd  # Seeded town: street life in 3D/2D, the empty Ash, CPU cost with 60+ figures
     +-- render_brand.gd, render_branding.gd, render_catalog.gd, showcase_shots.gd  # Branding and screenshots
-    +-- build_toy_models.gd, toy_recipes/  # Bakes the toy buildings; `-- --units` the combat toys (toy_recipes/units/)
+    +-- build_toy_models.gd, toy_kit.gd, toy_recipes/  # Bakes the toy buildings; `-- --units` the combat toys (toy_recipes/units/)
+    +-- gen_ambient_audio.gd         # Synthesises the three ambient loops
+    +-- perf_probe.gd, perf_probe_runner.gd  # The performance probe (docs/26)
     +-- unit_toy_probe.gd            # Photo of the baked unit toys in a row (-s, docs/media/dev/unit_toys.png)
     +-- *_probe.gd                   # Dev probes, see below
     +-- ui_audit.gd, ui_tour.gd      # Screenshot every panel
@@ -983,19 +1066,26 @@ Probes come in two shapes, and **every one of them runs with a private user dir*
 Note: unit and tech definitions live as inline dictionaries in `GameConfig.gd`
 (`unit_types`, `tech_definitions`), NOT as .tres files.
 
-Building 3D meshes come from **two** sources. `BuildingPlacer._create_building_mesh()`
-prefers a building's `model_scene` (a GLB under `assets/models/buildings/<id>/`) and
-falls back to `DieselpunkBuildingFactory` when it is unset:
+Building 3D meshes: `BuildingPlacer._create_building_mesh()` instantiates a building's
+`model_scene` when it has one and falls back to `DieselpunkBuildingFactory` when it is
+unset:
 
 | Source | Buildings |
 |---|---|
-| GLB (`model_scene`) | `barracks`, `foundry`, `fountain`, `garden`, `gold_mine`, `headquarters`, `house`, `refinery`, `statue`, `tower`, `warehouse` (11) |
-| Procedural (`DieselpunkBuildingFactory`) | `nucleo`, `road` (connectivity-aware), `market`, `laboratory`, `sawmill` (5) |
+| Baked toy model (`model_scene` = `assets/models/toy/<id>.tscn`) | `nucleo`, `house`, `sawmill`, `farm`, `gold_mine`, `warehouse`, `market`, `laboratory`, `foundry`, `barracks`, `refinery`, `tower`, `headquarters`, `garden`, `fountain`, `statue` (16). The Farm adds its beds as a separate mesh (`Crops`, `FarmCrops3D`) animated by the shared `toy_crops.gdshader` |
+| `DecorMesh` (through `DieselpunkBuildingFactory.create()`) | the 10 cheap decorations: one shared mesh per type, baked `assets/models/toy/<id>_mesh.res` when it exists, procedural (LotMesh boxes, cylinders, balls) until then — none is baked yet |
+| `RoadBatch3D` | `road`: the node carries no mesh; the batch draws every tile with `DieselpunkBuildingFactory.road_mesh()` per neighbour mask |
 
-The Market and the Laboratory have no model yet; the Farm is now the baked toy model with its growing beds (`FarmCrops3D`, docs/03). The sawmill went procedural on
-2026-10-04 (an open shed with the big saw in view, docs/03); its old GLB stays in
-`assets/models/buildings/sawmill/`, unused. GLBs made for 1x1 or 2x1 fill their 2x2
-plot through `model_scale` / `model_stretch`.
+The toy models are baked offline by `tools/build_toy_models.gd` from the recipes in
+`tools/toy_recipes/<id>.gd`: CC0 pieces (KayKit, Kenney, `assets/models/cc0/`, source
+only) recoloured to the shared `ToyPalette` plus own pieces, merged by `LotMesh` into one
+vertex-coloured mesh with a solid and (if something glows) a glow surface; the whole
+map shares two materials (`toy_solid.tres`, `toy_glow.tres`, plus `toy_crops.tres` for
+the Farm's beds). Each model is baked to the rectangle its lot leaves
+(`LotPlan.model_rect`), centre at the origin, base at y = 0, facing +Z, and may carry a
+`FxAnchor` (smoke) or `FlagAnchor` (colony flag) marker. The game only loads what is
+baked. The old GLBs stay in `assets/models/buildings/`, unused and excluded from the
+export. Full detail: docs/03 "Modelos: maqueta de juguete".
 
 Every building but the road sits on its **lot** (child `Lot`,
 `scripts/buildings/BuildingLot.gd`): ground, contact shadow, trim, props and, where the
@@ -1032,7 +1122,7 @@ the same in 2D. The model is shrunk in plan to leave the yard free
 2. Add its cap: a row in `GameConfig.building_limits_by_era` if it rises with the era, or in `GameConfig.building_limits` if fixed. A decoration (`is_decoration`) needs neither: it has no cap
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any), and a row in `GameConfig.building_deposit_rules` if it must touch a deposit
-5. Give it a look in both views: a GLB in `model_scene` (or a case in `DieselpunkBuildingFactory`) for 3D, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it); and a row in `GameConfig.construction_style` so its construction site has its own materials, fence, tarp and phase-2 silhouette (docs/03, "Obra por edificio y por instancia"; without one it uses `construction_style_default`). Give it a lot in `GameConfig.building_lot_style` (ground, trim, yard, props and a `signature` if the model lacks an exaggerated element) — docs/03 "Parcela y atrezo"
+5. Give it a look in both views: a baked toy model for 3D (a recipe in `tools/toy_recipes/<id>.gd`, baked with `tools/build_toy_models.gd -- --only=<id>` into `assets/models/toy/<id>.tscn`, set as `model_scene`; only CC0 or own pieces, and new CC0 packs listed in `THIRD-PARTY-NOTICES.md`) or, failing that, a case in `DieselpunkBuildingFactory`, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it); and a row in `GameConfig.construction_style` so its construction site has its own materials, fence, tarp and phase-2 silhouette (docs/03, "Obra por edificio y por instancia"; without one it uses `construction_style_default`). Give it a lot in `GameConfig.building_lot_style` (ground, trim, yard, props and a `signature` if the model lacks an exaggerated element) — docs/03 "Parcela y atrezo"
 6. Add translations in `Tr.gd` (both ES and EN), including `BLD_<ID>_NAME` and `BLD_<ID>_DESC`. UI shows buildings through `BuildingData.get_display_name()` / `get_description()`, never the raw `.tres` fields
 7. Building auto-appears in ConstructionMenu (loads all .tres from data/buildings/)
 
@@ -1125,7 +1215,7 @@ All balance values live in `GameConfig.gd`:
 ### Shared Utilities
 
 - **FloatingText** (`scripts/services/FloatingText.gd`): Static class for spawning animated 3D text labels. Use `FloatingText.spawn()` for custom text or `FloatingText.spawn_resource()` for resource gain/loss display (`spawn_on()` / `spawn_resource_on()` work on any node, 2D included; the 2D view draws them with `FloatingText2D`). Colors come from `GameConfig.resource_colors`.
-- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and ConstructionMenu previews **as the fallback when a building has no `model_scene` GLB** — today that is `nucleo`, `road`, `market`, `laboratory`, `sawmill` and `farm`.
+- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and ConstructionMenu previews **as the fallback when a building has no `model_scene`** — today only the 10 cheap decorations, which it hands to `DecorMesh` — and by `RoadBatch3D` for the road meshes (`road_mesh()`).
 - **UITheme** (`scripts/ui/UITheme.gd`): Static theme — call its factories for any new UI instead of hand-styling controls.
 
 ### Dev Mode
@@ -1156,7 +1246,7 @@ full guide in `docs/19-exportar.md`:
 All three share one `exclude_filter`: `tests/`, `tools/`, `docs/`, `specs/`,
 `reports/`, `addons/gdUnit4`, `addons/beckett`, `.claude/`, `.specify/`, `.beckett/`,
 `.cursor/`, `.vscode/`, `.mcp.json`, `secret.json`, `.env*`, `override.cfg`,
-`estrategia/`, `ui_tour/`, `build/` and `*.md`. `tests/build/test_export_guards.gd`
+`estrategia/`, `ui_tour/`, `build/`, `assets/models/buildings/` and `*.md`. `tests/build/test_export_guards.gd`
 checks the exclusions, the Beckett gate, `dev_mode` and that no signing secret is in
 a preset. The `BeckettRuntime`
 autoload points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime
@@ -1174,22 +1264,33 @@ testers, `tools/package_release.sh` (or `.ps1`) zips the exported `.exe` / APK w
 Full roadmap, what is done and the backlog: `docs/13-roadmap.md`.
 Combat detail, including a verified list of gaps: `docs/15-combat.md` §10.
 
-Everything the old list held as missing has landed: the expedition UI (map, draft,
-final report), the after-action report for the blind defence (`WarReportScreen`),
-unit silhouettes on the board, the 2D view, game modes, the configurable UI, touch
-placement, the prologue/tutorial/help index, and the Windows and Android exports.
-What is still not there:
+**In progress for the 1.0 (2026-10-14): phase 1 of the loop redesign.** After playing,
+the owner found the loop hard to follow, skirmishes optional, long and random, the
+units unexplained and the building limits too tight. Already landed from phase 1:
+limits by era and uncapped decorations (`feat/topes-por-era`), the ten cheap
+decorations (`feat/decoraciones-1`, their CC0 bakes still pending) and the finishing
+"pop", rewarding collect and closer start camera (`feat/salto-y-camara`). Still to
+come (do not document as shipped until it lands): a visible ESCARAMUZAS button and
+¿QUÉ HACER? asking to go out when there is a reason; short expeditions (a 1-fight raid,
+a 3-fight expedition) with map, enemies and loot shown before launching, and loot only
+found outside (blueprints, spare parts, settlers, a cheaper Tithe); the enemy
+withdrawing when it is lost (not in the siege) and "resolve alone" only with double
+strength; a guided first fight and unit cards with damage previews and enemy reach.
+
+Still not there:
 
 - **Cloud save wiring:** `CloudSaveManager` exists but needs credentials (the export
   excludes `.env`, so they would have to come from `user://` or the build) and a UI
-- **Missions/contracts:** timed delivery challenges for rewards
+- **Missions/contracts:** timed delivery challenges for rewards (later phase of the
+  redesign, docs/13)
 - **Tower behaviour beyond the boards:** towers mitigate storm damage and field crews
   on defensive boards; they have no attack of their own on the base map
-- **Dedicated combat audio and an ambient track** (today aliases and an empty `ambient/`)
+- **Gameplay at night:** the day/night cycle is light, walkers and sound only
+- **Re-measuring:** the balance line (docs/22) predates roads, materials, food and the
+  irregular island, and the performance numbers (docs/26 §4) predate the
+  optimisations; both need a new probe run
 - **Open balance decisions** listed in `docs/22-linea-jugable.md` §7 and
-  `docs/13-roadmap.md` (a "resolve alone" Tithe, the era-3 storage squeeze; the era-1
-  trial storm and the hand-mining cut landed 2026-10-04, but the Núcleo/sawmill
-  processes still reach the Foundry by minute 4.6-4.9 for a player who chains them)
+  `docs/13-roadmap.md`
 - **Distribution:** Windows code signing (SmartScreen), Android release keystore, AAB
   and store listing
 - **Out of scope for v1:** PvP and co-op

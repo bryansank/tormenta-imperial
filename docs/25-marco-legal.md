@@ -107,7 +107,7 @@ mecánicas y lore.
     volvió" o "Expedición perdida".
 - **Recompensas por bajas.** Hoy no las hay: el botín viene del nodo, no de cuántas
   unidades caen. Mantenerlo así.
-- **Sonidos de combate.** Cuando haya audio de combate propio (hoy son alias), evitar
+- **Sonidos de combate.** Ya hay audio de combate propio (desde el 2026-10-12, sin alias): mantener la regla de evitar
   gritos o sonidos de dolor.
 - **Ejército con nombres o uniformes reales.** No usar insignias, banderas ni rangos de
   fuerzas armadas existentes.

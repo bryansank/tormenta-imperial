@@ -10,6 +10,11 @@ esta sonda como árbitro antes y después.
 > `integracion/arte-v1` con las ramas de arte de ese día. Las cifras de §4 son de
 > **este** PC. Sirven para comparar escenarios y calidades entre sí, no como
 > promesa para otro equipo.
+>
+> **Al día (2026-10-14):** varias optimizaciones de §6 ya están hechas (la 2D horneada,
+> las calzadas en lote, la interfaz que actualiza, la calidad Mínima...). El resumen y
+> las cifras de §1 y §4 son de **antes** y no se han vuelto a medir: "la 2D es la más
+> cara" ya no vale (ver §6).
 
 ---
 
@@ -475,8 +480,11 @@ aparecen en el tutorial y en las ayudas (§5.5). En el editor se suma el
 
 Por orden de ganancia esperada frente a riesgo. La columna "Zona" dice qué agente o
 qué parte del código lo toca, para repartirlo después de integrar. **Ninguna está
-hecha** en la rama de medida; desde entonces están hechas la **3** y la **7**
-(rama `perf/calidad-minima`, 2026-10-14, ver §7.6). Cada una se valida con la sonda antes y después, con el
+hecha** en la rama de medida. Desde entonces (todo en `integracion/arte-v1`,
+2026-10-12/14) están hechas la **1** (`feat/2d-maqueta`), la **2**, la **12** y parte de
+la **10** (`perf/render-3d`), la **3** y la **7** (`perf/calidad-minima`, §7.6), la **4**,
+la **5** y la **8** (`perf/servicios`) y la **9** (`perf/interfaz`); detalle debajo de la
+tabla. **Ninguna se ha vuelto a medir con esta sonda**: las cifras de §4 son de antes. Cada una se valida con la sonda antes y después, con el
 mismo escenario, semilla y calidad, y la máquina en reposo.
 
 | # | Qué | Dónde | Ganancia esperada | Riesgo | Zona |
@@ -493,6 +501,42 @@ mismo escenario, semilla y calidad, y la máquina en reposo.
 | 10 | **Texturas y shaders para GPU flojas**: las tres `metal_plate_*_1k.jpg` con compresión VRAM y mipmaps (o a 512 px); el agua a 2 octavas en Mobile/Compatibility; la hierba horneada a textura al generar la isla; `GridOverlay` apagado por defecto en tablet y móvil; shaders de humo y obra como `.gdshader` precargados y calentados al cargar | `assets/textures/*.import`, `map/water_border.gdshader`, `map/grass_ground.gdshader`, `scenes/main/Main.tscn:121`, `buildings/BuildingFx.gd:205`, `SiteFx.gd:101` | −10 MB de VRAM, menos fill-rate en móvil (el agua y la hierba cubren casi toda la pantalla), sin tirón la primera vez que sale humo | Bajo (el agente de mundo ya tiene una "isla sencilla") | Arte / mundo |
 | 11 | **Export más ligero**: plantilla estándar (no mono) y release | `export_presets.cfg`, docs/19 §2 | `.exe` de 120 a ~90 MB; APK de 39 a ~30 MB | Bajo (probado en docs/19 que el proyecto no usa C#) | Exportar |
 | 12 | **Badges 3D por despachador**: no crear el `Label3D` de estado en carreteras ni decoraciones; un único receptor de `production_tick` / `workers_changed` en BuildingPlacer que refresca solo el badge afectado | `buildings/BuildingStatusBadge.gd:79-92` | −300 `Label3D` en `grande` (hay 439) y de O(n²) a O(n) por ronda de producción | Bajo | Arte / edificios |
+
+**Hecho en `feat/2d-maqueta` (2026-10-12), punto 1:** `ArtCache2D` hornea cada dibujo
+una vez en un SubViewport pequeño y el edificio pasa a ser un rectángulo con textura;
+las calzadas no tienen `_process` (ni badge) y se repintan cuando cambia la rejilla a su
+alrededor; los demás edificios miran su firma cada `Building2D.CHECK_FRAMES` (10)
+fotogramas, repartidos; los badges releen cada 0,5 s y solo se recolocan si cambia el
+zoom. Medido con `tools/view2d_probe.gd -- --perf` (no con esta sonda): de ~83 ms a
+~7 ms por fotograma en un mapa de 482 piezas. Detalle en
+[18-vista-2d.md](18-vista-2d.md), "Rendimiento: la 2D tiene que ir en una papa".
+
+**Hecho en `perf/render-3d` (2026-10-14, sin medir todavía), puntos 2, 12 y parte del 10:**
+
+- **2**: las calzadas 3D van en `RoadBatch3D` (`scripts/buildings/RoadBatch3D.gd`): un
+  MultiMesh por máscara de vecinos (16 como mucho), malla en caché
+  (`DieselpunkBuildingFactory.road_mesh()`) y material común de `ToyPalette`, sin sombra
+  proyectada. El nodo de cada calzada ya no lleva malla, badge ni rótulo; el reparto se
+  rehace una vez por fotograma. `_metal()` en caché y remaches sin sombra.
+- **12**: el rótulo `NameLabel` nace solo al seleccionar (`ensure_name_label`) y no hay
+  badge en lo que no trabaja (casas, decoración, calzadas).
+- **10** (parte): las texturas `metal_plate` rough/normal con compresión VRAM, mipmaps y
+  512 px; `BuildingFx` comparte 2 shaders 3D y un QuadMesh por medida, y humo, polvo,
+  chispas, farol, grúa y banderín se calientan al cargar. El suelo de las parcelas usa
+  `lot_ground.gdshader` (una textura por tipo de suelo). `ColonyFlag3D` con materiales de
+  bandera y mástil compartidos; `StockIcon3D` sin `_process` cuando no se ve.
+- El punto **6** quedó sin objeto: el Núcleo, el Mercado y el Laboratorio ya no son
+  procedurales, son modelos horneados de una malla (docs/03, "Modelos: maqueta de
+  juguete").
+
+**Hecho en `perf/interfaz` (2026-10-14, sin medir todavía), punto 9:** ConstructionMenu
+solo recrea la rejilla si cambia qué tarjetas hay o su bloqueo (si no, repinta los
+costes), y con la lista cerrada no hace nada; TutorialPanel busca destino, texto y lo que
+falta a 4 Hz; HelpTargets pide la tarjeta por id; `TextKit.fill_cost_row` no rehace una
+fila igual; ResourceHUD refresca una vez por fotograma y mata el tween anterior;
+`UITheme.flash_label` sin tweens apilados; ObjectivePanel reutiliza filas y solo corre
+abierto; ArmyPanel y TechTreePanel repintan solo abiertos y una vez por fotograma;
+RankPanel junta la XP del mismo fotograma.
 
 **Hecho en `perf/servicios` (2026-10-14, sin medir todavía):**
 
@@ -682,12 +726,13 @@ juego con ellos, y el `.exe` se abre con doble clic. Detalle en §7.6.
 - **`project.godot`** (§6, punto 7): `msaa_3d.mobile=0`, `scaling_3d/scale.mobile=0.75`,
   `rendering_device/fallback_to_opengl3=true` y `config/project_settings_override`.
   El tope de FPS ya estaba (`perf/tope-fps`).
+- **Rejilla tras construir**: hecho después en `perf/render-3d` (commit `399eabc`):
+  `BuildingPlacer.gd` y `BuildingPlacer2D.gd` restauran la rejilla con
+  `GraphicsQuality.grid_always_visible()`, así que en Mínima no vuelve a pintarse.
 - **No hecho**: la "red de seguridad en partida" (opcional en §7.2); los topes de
   caminantes por perfil (16 / 12 / 8 en la tabla de §7.1: hoy uno solo, 12); la
-  niebla solo con peso > 0 (`StormSky`); y en `BuildingPlacer.gd` (3D, de otro
-  agente) la rejilla se restaura con la preferencia tras construir, sin mirar la
-  calidad (una línea: usar `GraphicsQuality.grid_always_visible()`). Sin medir
-  todavía con la sonda la Mínima de verdad.
+  niebla solo con peso > 0 (`StormSky`). Sin medir todavía con la sonda la Mínima de
+  verdad.
 
 ---
 
