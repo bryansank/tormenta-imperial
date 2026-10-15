@@ -137,7 +137,7 @@ the defensive boards — the Tithe and each Final Audit wave — outside the dep
 #### Decoraciones baratas (feat/decoraciones-1, 2026-10-14)
 
 Las diez primeras del catalogo del doc 21 §6.4 (fila 1.7 del plan): sumideros
-baratos de oro y madera, **sin tope** (`building_limits` = -1, decision D1 = B) y
+baratos de oro y madera, **sin tope** (como toda decoracion, `GameConfig.is_uncapped_building()`; decision D1 = B) y
 abiertas por rango segun §6.5. Todas 2x2 (en el doc eran 1x1: el mapa no tiene
 huellas menores de 2x2 salvo la calzada), con su parcela de 0,25 casillas de patio
 y una o dos piezas de atrezo.
