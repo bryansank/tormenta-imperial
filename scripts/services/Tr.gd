@@ -1255,6 +1255,51 @@ const _STRINGS := {
 		"LBL_CORE_WORKSHOPS": "Como en los talleres · tarda más",
 		"LBL_CORE_BY_HAND": "Sacar a mano · tarda más",
 		"LBL_CORE_FROM": "Lo mismo que en: %s. Aquí tarda más.",
+		# ── Ayudas de las novedades (2026-10-14, HelpCatalog) ──
+		"HELP_T_SAVES": "Tus partidas",
+		"HELP_B_SAVES": "La partida se guarda sola. Puedes tener hasta 5.
+Están en ☰ MENÚ → PARTIDA → PARTIDAS y en el menú principal: CARGAR o BORRAR.
+Con 5, borra una para empezar otra.",
+		"HELP_T_SPEED": "Velocidad x1 / x2",
+		"HELP_B_SPEED": "x2: todo va el doble de rápido, también las peleas. Púlsalo otra vez (o la tecla F) para volver a x1.",
+		"HELP_B_SPEED_TOUCH": "x2: todo va el doble de rápido, también las peleas. Tócalo otra vez para volver a x1.",
+		"HELP_T_RANK": "Rango de gobernador",
+		"HELP_B_RANK": "Casi todo da XP: construir +15, mejorar +25, ganar una pelea +40, aguantar una Tormenta +30 o más, un hito +100.
+Con XP subes de rango (hay 18). Cada rango abre algo: decoraciones, más edificios, piezas de bandera o un poco más de producción y almacén.",
+		"HELP_T_FLAG": "Tu bandera y tu país",
+		"HELP_B_FLAG": "Tu bandera ondea en el Núcleo. Cámbiala cuando quieras: ☰ MENÚ → COLONIA → Colonia → BANDERA Y NOMBRE.
+Elige fondo, emblema, colores y nombre. Al subir de rango se abren piezas nuevas; las cerradas llevan candado.",
+		"HELP_T_BUG": "Informar de un fallo",
+		"HELP_B_BUG": "¿Algo falla? ☰ MENÚ → PARTIDA → Informar fallo copia los datos de tu partida. Pégalos (Ctrl+V) en un mensaje a quien te pasó el juego y cuenta qué hacías. No se envía nada solo.",
+		"HELP_B_BUG_TOUCH": "¿Algo falla? ☰ MENÚ → PARTIDA → Informar fallo copia los datos de tu partida. Pégalos en un mensaje (mantén pulsado → Pegar) y cuenta qué hacías. No se envía nada solo.",
+		"HELP_T_NIGHT": "Día y noche",
+		"HELP_B_NIGHT": "Solo cambia la luz: de día y de noche todo produce igual.
+De noche casi toda tu gente se recoge en casa y las calles se vacían. Un día entero dura unos 16 minutos.",
+		"HELP_T_FARM": "La Granja",
+		"HELP_B_FARM": "Tu gente come 1 de comida por ciclo. Haz clic en la Granja para elegir el cultivo:
+Lechugas: +20 en 1 min.
+Patatas: +125 en 5 min.
+Trigo: +600 en 20 min.
+Cambiar de cultivo empieza de cero.",
+		"HELP_B_FARM_TOUCH": "Tu gente come 1 de comida por ciclo. Toca la Granja para elegir el cultivo:
+Lechugas: +20 en 1 min.
+Patatas: +125 en 5 min.
+Trigo: +600 en 20 min.
+Cambiar de cultivo empieza de cero.",
+		"HELP_T_COLLECT": "Recoger",
+		"HELP_B_COLLECT": "Los edificios guardan lo que producen. Cuando salga el icono encima, haz clic en él o pulsa RECOGER en su ficha.
+Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edificio.",
+		"HELP_B_COLLECT_TOUCH": "Los edificios guardan lo que producen. Cuando salga el icono encima, tócalo o toca RECOGER en su ficha.
+Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edificio.",
+		"HELP_T_ISLAND": "La isla",
+		"HELP_B_ISLAND": "La costa es irregular y cambia en cada partida. Solo se construye en tierra: si una casilla del edificio cae en el agua, no se puede. Busca un hueco más adentro.",
+		# Topes por era (feat/topes-por-era): "3/6 · era 2: 9" en CONSTRUIR.
+		"FMT_LIMIT_COUNT": "%d/%d",
+		"FMT_LIMIT_NEXT_ERA": "era %d: %d",
+		"FMT_LIMIT_TIP": "Tienes %d. Tope en esta era: %d.",
+		"FMT_LIMIT_TIP_NEXT": "En la era %d el tope sube a %d.",
+		"LBL_LIMIT_TIP_MAX": "Es el tope más alto.",
+		"LBL_LIMIT_UNIQUE": "Único",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -2466,6 +2511,50 @@ const _STRINGS := {
 		"LBL_CORE_WORKSHOPS": "Like the workshops · takes longer",
 		"LBL_CORE_BY_HAND": "Dig by hand · takes longer",
 		"LBL_CORE_FROM": "Same as at: %s. Takes longer here.",
+		# ── Help for the new features (2026-10-14, HelpCatalog) ──
+		"HELP_T_SAVES": "Your games",
+		"HELP_B_SAVES": "Your game saves itself. You can keep up to 5.
+Find them in ☰ MENU → GAME → SAVES and in the main menu: LOAD or DELETE.
+With 5, delete one to start another.",
+		"HELP_T_SPEED": "Speed x1 / x2",
+		"HELP_B_SPEED": "x2: everything runs twice as fast, fights too. Press it again (or the F key) to go back to x1.",
+		"HELP_B_SPEED_TOUCH": "x2: everything runs twice as fast, fights too. Tap it again to go back to x1.",
+		"HELP_T_RANK": "Governor rank",
+		"HELP_B_RANK": "Almost everything gives XP: building +15, upgrading +25, winning a fight +40, weathering a Storm +30 or more, a milestone +100.
+XP raises your rank (there are 18). Each rank opens something: decorations, more buildings, flag pieces or a little more production and storage.",
+		"HELP_T_FLAG": "Your flag and country",
+		"HELP_B_FLAG": "Your flag flies over the Core. Change it any time: ☰ MENU → COLONY → Colony → FLAG AND NAME.
+Pick background, emblem, colours and name. Ranking up opens new pieces; locked ones show a padlock.",
+		"HELP_T_BUG": "Report a bug",
+		"HELP_B_BUG": "Something wrong? ☰ MENU → GAME → Report bug copies your game's data. Paste it (Ctrl+V) in a message to whoever gave you the game and say what you were doing. Nothing is sent on its own.",
+		"HELP_B_BUG_TOUCH": "Something wrong? ☰ MENU → GAME → Report bug copies your game's data. Paste it in a message (press and hold → Paste) and say what you were doing. Nothing is sent on its own.",
+		"HELP_T_NIGHT": "Day and night",
+		"HELP_B_NIGHT": "Only the light changes: everything produces the same by day and by night.
+At night most of your people go home and the streets empty. A whole day lasts about 16 minutes.",
+		"HELP_T_FARM": "The Farm",
+		"HELP_B_FARM": "Your people eat 1 food per cycle. Click the Farm to pick the crop:
+Lettuce: +20 in 1 min.
+Potatoes: +125 in 5 min.
+Wheat: +600 in 20 min.
+Changing crop starts from zero.",
+		"HELP_B_FARM_TOUCH": "Your people eat 1 food per cycle. Tap the Farm to pick the crop:
+Lettuce: +20 in 1 min.
+Potatoes: +125 in 5 min.
+Wheat: +600 in 20 min.
+Changing crop starts from zero.",
+		"HELP_T_COLLECT": "Collect",
+		"HELP_B_COLLECT": "Buildings keep what they make. When the icon shows above one, click it or press COLLECT on its card.
+When full, the building stops. What does not fit in your storage stays in the building.",
+		"HELP_B_COLLECT_TOUCH": "Buildings keep what they make. When the icon shows above one, tap it or tap COLLECT on its card.
+When full, the building stops. What does not fit in your storage stays in the building.",
+		"HELP_T_ISLAND": "The island",
+		"HELP_B_ISLAND": "The coast is irregular and changes every game. You can only build on land: if any cell of the building is on water, it will not go. Look for a spot further inland.",
+		"FMT_LIMIT_COUNT": "%d/%d",
+		"FMT_LIMIT_NEXT_ERA": "era %d: %d",
+		"FMT_LIMIT_TIP": "You have %d. Limit in this era: %d.",
+		"FMT_LIMIT_TIP_NEXT": "In era %d the limit rises to %d.",
+		"LBL_LIMIT_TIP_MAX": "This is the highest limit.",
+		"LBL_LIMIT_UNIQUE": "Unique",
 	},
 }
 
