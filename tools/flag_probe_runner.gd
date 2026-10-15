@@ -152,10 +152,6 @@ func _gallery() -> void:
 	sheet.save_png(ProjectSettings.globalize_path("%s/gallery.png" % OUT_DIR))
 
 func _close_intro(main: Node) -> void:
-	var offline: Variant = GameManager.get("_offline_canvas")
-	if offline != null and is_instance_valid(offline):
-		(offline as Node).queue_free()
-		GameManager.set("_offline_canvas", null)
 	var tut: Node = main.get_node_or_null("TutorialPanel")
 	if tut and tut.has_method("is_intro_open") and tut.call("is_intro_open"):
 		tut.call("_close")

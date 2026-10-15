@@ -10,10 +10,10 @@ extends CanvasLayer
 ##           o Gobernador (el complejo). Gobernador sale con candado y la
 ##           condicion hasta que el perfil lo abre (GameMode.governor_unlocked;
 ##           en dev_mode, siempre abierto).
-##   Paso 2  nombre y bandera, solo si existe ColonyIdentityPanel.gd (rama de
-##           bandera y pais): se abre con open("new") y su `confirmed(name,
-##           spec)` sigue (queda en `chosen_identity`); su `cancelled` vuelve al
-##           paso 1. Sin ese script no hay paso 2.
+##   Paso 2  nombre y bandera (ColonyIdentityPanel): se abre con open("new") y
+##           su `confirmed(name, spec)` sigue (queda en `chosen_identity`, que
+##           GameManager.start_new_game pone tras el reset); su `cancelled`
+##           vuelve al paso 1.
 ##
 ## Ya no hay paso de "se borrara tu partida" (2026-10-12): una partida nueva va
 ## a su propio archivo y no borra ninguna. Emite `confirmed` con `chosen_mode`
@@ -29,8 +29,8 @@ signal canceled
 
 const LAYER := 40
 const MAX_WIDTH := 1000.0
-## El paso de nombre y bandera (rama de bandera y pais). Si no existe, no hay paso.
-const IDENTITY_PANEL_PATH := "res://scripts/ui/ColonyIdentityPanel.gd"
+## El paso de nombre y bandera.
+const IdentityPanel := preload("res://scripts/ui/ColonyIdentityPanel.gd")
 const CARD_MIN_H := 150.0
 const WIDE := 900.0
 const MEDIUM := 520.0
@@ -39,7 +39,7 @@ const MEDIUM := 520.0
 var chosen_mode: int = GameMode.DEFAULT
 ## El nivel elegido (GameMode.Tier). Solo cuenta si el modo admite niveles.
 var chosen_tier: int = GameMode.TIER_DEFAULT
-## Nombre y bandera del paso 2 ({"name", "spec"}), o {} sin ese paso.
+## Nombre y bandera del paso 2 ({"name", "spec"}), o {} si no se paso por el.
 var chosen_identity: Dictionary = {}
 
 var _current_mode: int = GameMode.DEFAULT
@@ -320,32 +320,19 @@ func _show_pick() -> void:
 	_relayout()
 	(_cards.get(chosen_mode, _start_btn) as Control).grab_focus.call_deferred()
 
-## EMPEZAR: con el paso de nombre y bandera, se abre; sin el, se sigue ya.
+## EMPEZAR: abre el paso de nombre y bandera.
 func _on_start() -> void:
-	if not _open_identity():
-		confirm()
+	_open_identity()
 
-## Abre ColonyIdentityPanel si existe. Devuelve si lo abrio.
-func _open_identity() -> bool:
-	if not ResourceLoader.exists(IDENTITY_PANEL_PATH):
-		return false
-	var script: Variant = load(IDENTITY_PANEL_PATH)
-	if not (script is GDScript) or not (script as GDScript).can_instantiate():
-		return false
-	var panel: Object = (script as GDScript).new()
-	if not (panel is Node):
-		return false
-	_identity = panel as Node
-	if _identity.has_signal("confirmed"):
-		_identity.connect("confirmed", _on_identity_confirmed)
-	if _identity.has_signal("cancelled"):
-		_identity.connect("cancelled", _show_pick)
-	_identity.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(_identity)
+func _open_identity() -> void:
+	var panel = IdentityPanel.new()
+	_identity = panel
+	panel.confirmed.connect(_on_identity_confirmed)
+	panel.cancelled.connect(_show_pick)
+	panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(panel)
 	_card.visible = false
-	if _identity.has_method("open"):
-		_identity.call("open", "new")
-	return true
+	panel.open("new")
 
 func _on_identity_confirmed(colony_name: Variant = "", spec: Variant = {}) -> void:
 	chosen_identity = {"name": str(colony_name), "spec": (spec as Dictionary).duplicate(true) if spec is Dictionary else {}}

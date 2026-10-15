@@ -557,20 +557,11 @@ func _help_panel() -> Node:
 		return p
 	return null
 
-## Vuelve a contar el lore. La intro es modal y vive en TutorialPanel; se abre
-## con el juego todavia en pausa y, al cerrarla, se vuelve a este menu.
-##
-## Con el prologo propio del frente de ayudas (TutorialManager.show_prologue),
-## el menu se cierra antes: el prologo espera a que no haya pausa ni menu.
+## Vuelve a contar el lore (TutorialManager.show_prologue). El menu se cierra
+## antes: el prologo espera a que no haya pausa ni menu.
 func _on_story() -> void:
-	if TutorialManager.has_method("show_prologue"):
-		resume()
-		TutorialManager.call("show_prologue")
-		return
-	var tutorial: Node = _find_sibling("TutorialPanel")
-	if tutorial != null:
-		_open_sub(tutorial)
-	TutorialManager.show_intro()
+	resume()
+	TutorialManager.show_prologue()
 
 ## Guarda y cede el sitio al menu principal. La pausa cambia de manos en la misma
 ## llamada: se suelta aqui y el menu principal la vuelve a tomar como suya, para

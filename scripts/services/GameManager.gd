@@ -50,8 +50,10 @@ var _chosen_new := false
 ## El jugador borro la partida que esta en memoria: ya no se escribe (se
 ## resucitaria) hasta abrir otra.
 var _active_deleted := false
-## Nombre y bandera elegidos en "Nueva partida" (paso de identidad, rama de
-## bandera y pais), para aplicarlos cuando la partida nueva arranque.
+## Nombre y bandera elegidos en "Nueva partida" (el paso de identidad), para
+## ponerlos cuando la partida nueva arranque (_new_game, tras RankManager.reset()).
+## Es el unico camino: clear_save() tambien llama a reset() antes de recargar, asi
+## que lo elegido no puede vivir en RankManager hasta _new_game.
 var _pending_identity: Dictionary = {}
 ## La partida termino (Supervivencia perdida) y su guardado ya se escribio
 ## marcado: desde aqui es de solo lectura. Lo levanta cualquier partida nueva.
@@ -817,25 +819,23 @@ func start_new_game(mode: int, tier: int = GameMode.TIER_DEFAULT, identity: Dict
 	_set_active_slot(SaveSlots.next_id())
 	clear_save_and_reload_from({})
 
-## Nombre y bandera de "Nueva partida", cuando la rama de bandera y pais los
-## trae (RankManager.set_colony). Va tras RankManager.reset().
+## Nombre y bandera de "Nueva partida" (RankManager.set_colony, con rango 1
+## recien puesto). Va tras RankManager.reset(), que ya puso uno al azar: si lo
+## elegido no pasa la validacion, se queda el de al azar.
 func _apply_pending_identity() -> void:
 	if _pending_identity.is_empty():
 		return
 	var identity: Dictionary = _pending_identity
 	_pending_identity = {}
-	if RankManager.has_method("set_colony"):
-		RankManager.call("set_colony", String(identity.get("name", "")), identity.get("spec", {}))
+	var spec: Variant = identity.get("spec", {})
+	RankManager.set_colony(String(identity.get("name", "")), spec if spec is Dictionary else {})
 
 ## El resumen de la partida para el indice. Nombre y bandera salen de
-## RankManager cuando ya los tiene (rama de bandera y pais).
+## RankManager (los de la partida en memoria).
 func _summary_for_index(data: Dictionary) -> Dictionary:
 	var summary: Dictionary = SaveSlots.summary_of(data, active_slot())
-	if RankManager.has_method("get_colony_name"):
-		summary["colony_name"] = String(RankManager.call("get_colony_name"))
-	if RankManager.has_method("get_flag_spec"):
-		var spec: Variant = RankManager.call("get_flag_spec")
-		summary["flag_spec"] = spec if spec is Dictionary else {}
+	summary["colony_name"] = RankManager.get_colony_name()
+	summary["flag_spec"] = RankManager.get_flag_spec()
 	summary["sealed"] = GameMode.is_run_over()
 	return summary
 

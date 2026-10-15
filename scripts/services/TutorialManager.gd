@@ -222,7 +222,7 @@ func show_prologue() -> void:
 	_prologue_pending = false
 	EventBus.tutorial_intro_requested.emit()
 
-## Nombre antiguo de show_prologue(), para quien ya lo llamaba (PauseMenu).
+## Nombre antiguo de show_prologue(), para quien ya lo llamaba (pruebas, sondas).
 func show_intro() -> void:
 	show_prologue()
 

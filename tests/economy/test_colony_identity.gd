@@ -102,22 +102,23 @@ func test_a_saved_name_that_does_not_pass_is_replaced() -> void:
 	assert_str(RankManager.get_colony_name()).is_not_equal("Puerto Mierda")
 	assert_bool(ColonyIdentity.is_name_allowed(RankManager.get_colony_name())).is_true()
 
-func test_reset_uses_the_country_queued_by_the_new_game_step() -> void:
+## El paso de Nueva partida: GameManager pone lo elegido con set_colony() justo
+## tras el reset() de la partida nueva (rango 1). La siguiente vuelve al azar.
+func test_the_new_game_step_sets_the_country_right_after_reset() -> void:
 	var spec := _spec("halves_h", "hammer", ["crimson", "soot", "ivory"])
-	assert_bool(RankManager.queue_colony_for_new_game("Comuna de Hollinar", spec)).is_true()
-	assert_bool(RankManager.has_queued_colony()).is_true()
 	RankManager.reset()
+	assert_bool(RankManager.set_colony("Comuna de Hollinar", spec)).is_true()
 	assert_str(RankManager.get_colony_name()).is_equal("Comuna de Hollinar")
 	assert_str(String(RankManager.get_flag_spec()["pattern"])).is_equal("halves_h")
-	assert_bool(RankManager.has_queued_colony()).is_false()
-	# Lo encolado se usa una vez: la siguiente partida vuelve a ser al azar.
 	RankManager.reset()
 	assert_str(RankManager.get_colony_name()).is_not_equal("Comuna de Hollinar")
 
-func test_the_queue_only_takes_rank_one_pieces_and_clean_names() -> void:
-	assert_bool(RankManager.queue_colony_for_new_game("Liga de Vaporia", _spec("checks", "gear", ["brass", "ivory", "soot"]))).is_false()
-	assert_bool(RankManager.queue_colony_for_new_game("puta", GameConfig.COLONY_DEFAULT_SPEC)).is_false()
-	assert_bool(RankManager.has_queued_colony()).is_false()
+func test_after_reset_only_rank_one_pieces_and_clean_names_pass() -> void:
+	RankManager.reset()
+	var before := RankManager.get_colony_name()
+	assert_bool(RankManager.set_colony("Liga de Vaporia", _spec("checks", "gear", ["brass", "ivory", "soot"]))).is_false()
+	assert_bool(RankManager.set_colony("puta", GameConfig.COLONY_DEFAULT_SPEC)).is_false()
+	assert_str(RankManager.get_colony_name()).is_equal(before)
 
 # ── Desbloqueo por rango ─────────────────────────────────────────────
 
