@@ -189,7 +189,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 - Starting resources: 300 gold, 200 wood, 80 food
 - Deposits visible from start but locked until era unlocks the resource
 - Storage: **one shared pool for the five resources** (food included), not a cap per resource. Base scales
-  by era (600 / 800 / 1000) + 500 per warehouse (max 5, see `GameConfig.building_limits`).
+  by era (600 / 800 / 1000) + 500 per warehouse (max 5 in every era: the warehouse cap does not rise, see below).
   Era 1 is 600 so the opening fits: 580 starting resources, plus sawmill + gold mine (330).
   Era 3 ceiling without techs = 1000 + 5x500 = **3500**, exactly the price of the HQ
   level 3 upgrade. On top of that, `GameConfig.tech_storage_bonus` adds the storage
@@ -237,7 +237,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (17 total, `data/buildings/*.tres`)
+### Buildings (27 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -258,8 +258,26 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Garden | 2x2 | 30/0/0/20 | 0 | +5 morale | deco |
 | Fountain | 2x2 | 60/20/0/10 | 0 | +7 morale | deco |
 | Statue | 2x2 | 120/40/0/0 + 3 ingots | 0 | +10 morale | deco |
+| 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
+
+**Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
+`avenue_tree`, `flower_planter`, `colony_sign`, `hay_cart`, `bonfire`, `flagpole`,
+`palm_trees` (doc 21 §6.4 of the private context). One shared mesh per type from
+`scripts/buildings/DecorMesh.gd` (baked `assets/models/toy/<id>_mesh.res` when it
+exists, procedural until then), returned by `DieselpunkBuildingFactory.create()`;
+2D in `BuildingArt2D`. Table, pieces and what is pending: `docs/03-buildings.md`.
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
+
+**Building caps rise with the era (2026-10-14, Bryan's D1).** `GameConfig.building_limits_by_era`
+holds `[era 1, era 2, era 3]` (≈ ×1.5 / ×2: house 10/15/20, farm 6/9/12, sawmill 5/8/10,
+gold mine 4/6/8, foundry 3/5/6, refinery 2/3/4, barracks 3/4/5); era 1 is the old cap.
+Warehouse stays 5 (keeps 1000 + 5×500 = 3500 = HQ L3) and tower stays 6 (4 already
+reach the 60 % mitigation cap); Market, Laboratory and HQ stay 1. **Decorations have no
+cap** (any `BuildingData.is_decoration`, no table entry needed). The only reader is
+`GameConfig.get_building_limit(id)`: era in progress + `rank_limit_bonus`; -1 in
+Sandbox. Nothing new is saved (derived from era and rank). CONSTRUIR shows
+"3/6 · era 2: 9" on each card and refreshes on `era_advanced`. Detail: docs/03.
 
 **Farm (2026-10-04):** the crop is picked in its panel (CULTIVO, `GameConfig.farm_crops`:
 `crop_short` 1 min / 20, `crop_medium` 5 min / 125, `crop_long` 20 min / 600 — longer
@@ -465,7 +483,7 @@ build 15, upgrade 25, production cycle 1, process/mining 5, trade 5, unit 10, fi
 40, expedition won 80, storm 30 + 10/severity, milestone 100) and **derives** the rank
 from it (`rank_xp_thresholds`, 18 ranks, step `100 + 60*(n-1)`, ~9860 XP for the last;
 not yet measured with the line probe). Titles `RANK_TITLE_<n>` (Colono, Capataz … Cónsul
-… Archigobernador). `rank_rewards` gives decorations (Garden 2, Fountain 5, Statue 8),
+… Archigobernador). `rank_rewards` gives decorations (Garden, Flower pots, Hay cart 2; Bonfire 3; Fountain, Flagpole 5; Statue 8; Palm trees 13),
 extra building slots (`rank_limit_bonus`), small bonuses (`rank_production_bonus`
 +7 % and `rank_storage_bonus` +8 % at rank 18, **assigned**, never added, so loading
 twice is safe) and flag pieces (`patterns`, `emblems`, `colors`).
@@ -899,7 +917,7 @@ tormenta-imperial/
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
-+-- data/buildings/                  # 17 .tres building definitions
++-- data/buildings/                  # 27 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 4 tracks + 16 SFX (see MANIFEST.md); ambient/ empty
 |   +-- models/toy/units/            # Baked combat toys (<id>_player / <id>_regency, boss_mark, crew_nest)
@@ -989,7 +1007,7 @@ the same in 2D. The model is shrunk in plan to leave the yard free
 1. Create `data/buildings/my_building.tres` with BuildingData fields (at least 2x2: only the
    road is 1x1; materials go in `cost_materials`). It will need a road to the Núcleo like
    everything else
-2. Add limit in `GameConfig.building_limits`
+2. Add its cap: a row in `GameConfig.building_limits_by_era` if it rises with the era, or in `GameConfig.building_limits` if fixed. A decoration (`is_decoration`) needs neither: it has no cap
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any), and a row in `GameConfig.building_deposit_rules` if it must touch a deposit
 5. Give it a look in both views: a GLB in `model_scene` (or a case in `DieselpunkBuildingFactory`) for 3D, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it); and a row in `GameConfig.construction_style` so its construction site has its own materials, fence, tarp and phase-2 silhouette (docs/03, "Obra por edificio y por instancia"; without one it uses `construction_style_default`). Give it a lot in `GameConfig.building_lot_style` (ground, trim, yard, props and a `signature` if the model lacks an exaggerated element) — docs/03 "Parcela y atrezo"
