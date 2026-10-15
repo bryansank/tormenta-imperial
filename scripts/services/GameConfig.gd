@@ -592,8 +592,11 @@ var ui_panel_opacity := 1.0
 ## Calidad grafica del mapa 3D (WorldLook, docs/21 §12): "high" pone SSAO (solo
 ## Forward+), glow y sombras con cuatro cortes; "low" los quita y deja una sombra
 ## de un corte. "auto" es "low" con el renderizador Mobile o Compatibility
-## (Android, el APK de QA) y "high" en Forward+ (PC).
-const GRAPHICS_QUALITY_MODES := ["auto", "high", "low"]
+## (Android, el APK de QA) y "high" en Forward+ (PC). "minimal" es para "una
+## papa" (docs/26 §7): sin sombras, MSAA, humo ni rejilla, menos caminantes, 3D
+## a menor resolucion, 30 fps en PC y, en PC, el renderizador Mobile desde el
+## siguiente arranque (GraphicsQuality).
+const GRAPHICS_QUALITY_MODES := ["auto", "high", "low", "minimal"]
 var ui_graphics_quality := "auto"
 ## Vista del combate (docs/15 §3, "Las dos vistas"): "front" (por defecto) los
 ## dos bandos cara a cara, sin casillas a la vista; "board" el tablero 8x8 en 3D.
@@ -601,6 +604,10 @@ var ui_graphics_quality := "auto"
 ## dos vistas mueven el mismo Encounter y una pelea da lo mismo en las dos.
 const COMBAT_VIEWS := ["front", "board"]
 var ui_combat_view := "front"
+## Deteccion del primer arranque (DeviceProfile, docs/26 §7.2): si ya se hizo
+## (no se repite sola) y por que decidio lo que decidio (para depurar).
+var quality_detected := false
+var quality_detected_reason := ""
 ## Ids de HudRegistry que el jugador oculto.
 var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
@@ -616,6 +623,43 @@ var ui_fps_cap := "auto"
 ## agua). Nunca por encima del tope elegido. Docs/21 §10.
 var fps_background := 10
 var fps_paused := 30
+## Tope "auto" en PC con la calidad Minima (en tablet y movil ya es 30).
+var fps_minimal_pc := 30
+
+# ── Deteccion de la calidad en el primer arranque (docs/26 §7.2) ──
+# Solo con la calidad en "auto" y sin quality_detected en settings.cfg. Paso 1:
+# senales estaticas; paso 2: medir unos segundos detras del menu de titulo.
+
+## Nombres de GPU flojas (expresiones regulares, sin distinguir mayusculas).
+## Ampliable sin tocar codigo cuando un probador diga "en mi equipo va mal".
+var quality_weak_gpu_patterns: Array = [
+	r"Intel\(R\) HD Graphics( [2-6]\d\d\b|$| Family)",
+	r"\bUHD Graphics 6\d\d\b",
+	r"\bHD Graphics [45]\d\d\b",
+	r"\bRadeon R[2-7]\b",
+	r"\bRadeon\(TM\) Vega [368] ",
+	r"\bMali-T",
+	r"\bMali-G(31|51|52|57)\b",
+	r"\bAdreno \(TM\) ([345]\d\d|61[023])\b",
+	r"PowerVR",
+	r"\bGE8\d\d\d\b",
+]
+## RAM del sistema (MB) a partir de la cual el equipo es flojo. 4600 y no 4096:
+## un equipo de 4 GB declara algo menos (la integrada se queda una parte).
+var quality_weak_ram_mb := 4600
+## Hilos de CPU a partir de los cuales es flojo (2 nucleos / 4 hilos).
+var quality_weak_threads := 4
+## Un movil (perfil "phone") con esta RAM o menos va en Minima.
+var quality_phone_ram_mb := 6600
+## Paso 2: espera a que se asiente la carga y luego mide (segundos reales).
+var quality_detect_warmup := 2.0
+var quality_detect_seconds := 3.0
+## Mediana o p95 del fotograma por encima de esto (ms) -> Minima; mediana
+## por encima de quality_detect_low_ms midiendo en Alta -> Baja (nunca por debajo
+## de 1,1 fotogramas del refresco de la pantalla: con vsync no se mide menos).
+var quality_detect_median_ms := 25.0
+var quality_detect_p95_ms := 33.0
+var quality_detect_low_ms := 16.7
 
 # ── Perfil del jugador (settings.cfg [perfil]) ──
 # Del jugador en este dispositivo, NO de la partida: sobrevive a "Nueva partida"
@@ -699,6 +743,8 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	ui_graphics_quality = quality if quality in GRAPHICS_QUALITY_MODES else "auto"
 	var cview := str(cf.get_value("interfaz", "combat_view", ui_combat_view))
 	ui_combat_view = cview if cview in COMBAT_VIEWS else "front"
+	quality_detected = bool(cf.get_value("interfaz", "quality_detected", quality_detected))
+	quality_detected_reason = str(cf.get_value("interfaz", "quality_detected_reason", quality_detected_reason))
 	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
 	ui_hud_hidden = []
 	if hidden is Array:
@@ -748,6 +794,8 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
 	cf.set_value("interfaz", "graphics_quality", ui_graphics_quality)
 	cf.set_value("interfaz", "combat_view", ui_combat_view)
+	cf.set_value("interfaz", "quality_detected", quality_detected)
+	cf.set_value("interfaz", "quality_detected_reason", quality_detected_reason)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("interfaz", "fps_cap", ui_fps_cap)
@@ -1987,7 +2035,8 @@ var life_figure_cap := {"pc": 72, "tablet": 44, "phone": 26}
 ## calidad "Minima" (equipos muy modestos); WorkerWalkers.figure_cap() se queda
 ## con el menor de los dos. 0 = nadie por la calle.
 var life_figure_cap_quality := -1
-## El tope que usaria el preset "Minima" (aun sin preset que lo aplique).
+## El tope de la calidad "Minima" (GraphicsQuality.apply_runtime lo pone en
+## life_figure_cap_quality).
 var life_figure_cap_minimal := 12
 ## Celdas por segundo andando, y cuanto apuran el paso en el Aviso de Tormenta.
 var life_walk_speed := 1.5

@@ -91,7 +91,7 @@ holds a service's state of its own.
 | 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built) and which tips/helps were seen; state saved with the game (docs/23) |
 | 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambient, runtime buses |
-| 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size). See `docs/21-interfaz-y-dispositivos.md` |
+| 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
 | 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`, `queue_colony_for_new_game()`). See `docs/06-progression-victory.md` §Governor rank |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
@@ -685,7 +685,15 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   `touch_controls_opacity`, `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
 - `[interfaz]`: device profile, UI scale, text size, palette, high contrast, panel
   opacity, hidden HUD elements, moved layout, `fps_cap` (`auto` / `30`…`120` /
-  `unlimited`: the FPS cap, 30 while paused and 10 without focus) — docs/21 §10;
+  `unlimited`: the FPS cap, 30 while paused and 10 without focus; "auto" is 30 on a
+  PC in Minimal) — docs/21 §10; `graphics_quality` (`auto` / `high` / `low` /
+  `minimal`) plus `quality_detected` / `quality_detected_reason` (the first-launch
+  detection, once) — docs/21 §12, docs/26 §7;
+- `user://renderer_override.cfg` (not settings.cfg): written only when a PC picks
+  Minimal quality; `project.godot` names it in
+  `application/config/project_settings_override`, so the next launch runs the
+  Mobile renderer. Any other quality deletes it. Only `GraphicsQuality.set_quality()`
+  touches it;
 - `[perfil]`: `runs_finished`, `campaigns_won` — the player profile that unlocks
   Gobernador (docs/20 §1b). Of the player on this device, never of the run.
 
@@ -829,6 +837,7 @@ tormenta-imperial/
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
+|   |   +-- GraphicsQuality.gd       # Static (preload): set_quality(), what Minimal turns off outside WorldLook, renderer override, detection rules
 |   |   +-- ColonyIdentity.gd        # Static: country flag pieces by rank, random names/flags, word filter
 |   |   +-- FloatingText.gd          # Static utility: animated 3D text labels
 |   |   +-- ErrorLog.gd, BugReport.gd  # Local error log (Logger, rotated) and the "Informar de un fallo" text

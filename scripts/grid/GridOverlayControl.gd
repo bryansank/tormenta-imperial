@@ -11,10 +11,12 @@ extends MeshInstance3D
 ## Extra half-width around the grid so the outermost lines are drawn whole
 ## instead of being cut in half by the plane's edge.
 const EDGE_PAD := 0.2
+## En calidad Minima la rejilla "siempre visible" no se pinta (docs/26 §7.1).
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 
 func _ready() -> void:
 	fit_to_grid()
-	visible = GameConfig.ui_grid_visible
+	visible = GraphicsQuality.grid_always_visible()
 	EventBus.grid_overlay_toggled.connect(_on_grid_overlay_toggled)
 	EventBus.grid_resized.connect(_on_grid_resized)
 
