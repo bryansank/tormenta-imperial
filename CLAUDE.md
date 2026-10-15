@@ -92,7 +92,7 @@ holds a service's state of its own.
 | 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambience (day, night and Storm loops), runtime buses |
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
-| 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`, `queue_colony_for_new_game()`). See `docs/06-progression-victory.md` §Governor rank |
+| 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`). See `docs/06-progression-victory.md` §Governor rank |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -521,11 +521,9 @@ names like "Liga de Vaporia" in ES/EN, a short ES/EN word filter in
 `draw_spec()` for lists). Rank 1 opens 5 patterns, 4 emblems and 6 colours; the
 showier ones come by rank (`rank_rewards`). Picked in the editor
 `scripts/ui/ColonyIdentityPanel.gd` (`open("new"|"edit")`, signals `confirmed` /
-`cancelled`), opened from ☰ MENÚ → COLONIA (RankPanel) and as step 2 of the New Game
-dialog (`NewGameDialog.chosen_identity` → `GameManager.start_new_game(mode, tier, identity)`,
-which applies it with `RankManager.set_colony()` right after `RankManager.reset()`,
-`_apply_pending_identity()`; `RankManager.queue_colony_for_new_game()` exists but no
-script calls it today). Flies on the Nucleo and
+`cancelled`), opened from ☰ MENÚ → COLONIA (RankPanel) and as the New Game step (NewGameDialog →
+`GameManager.start_new_game(mode, tier, identity)`; `_new_game()` applies it with
+`RankManager.set_colony()` right after `RankManager.reset()`). Flies on the Nucleo and
 the HQ (`ColonyFlag3D`: small plane + vertex-shader wave, off in low quality; hangs
 from the model's `FlagAnchor` marker when it has one; `ColonyFlag2D`), signs the war
 reports, the audit defeat, the victory and the board header (`ColonyByline`), and its

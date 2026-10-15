@@ -278,8 +278,7 @@ func apply_scale() -> void:
 	_factor = factor
 	root.content_scale_factor = factor
 	# Cambiar la escala no siempre avisa size_changed: se recoloca a mano.
-	if UILayoutManager.has_method("refresh_viewport"):
-		UILayoutManager.refresh_viewport()
+	UILayoutManager.refresh_viewport()
 	scale_applied.emit(factor)
 
 func current_factor() -> float:

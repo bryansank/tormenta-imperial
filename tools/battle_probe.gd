@@ -325,10 +325,6 @@ func _quiet_onboarding() -> void:
 		for n in get_tree().get_nodes_in_group(group):
 			if n.has_method("is_open") and n.is_open():
 				n.close()
-	var offline: Variant = GameManager.get("_offline_canvas")
-	if offline != null and is_instance_valid(offline):
-		(offline as Node).queue_free()
-		GameManager.set("_offline_canvas", null)
 	get_tree().paused = false
 
 func _snapshot() -> Dictionary:
