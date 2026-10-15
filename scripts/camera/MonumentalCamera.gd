@@ -8,6 +8,13 @@ extends Camera3D
 ## aplana y la isla se lee como un diorama visto desde arriba, no como una
 ## foto gran angular. Las distancias crecen en proporcion para encuadrar lo
 ## mismo que antes (fov 60 a 20 unidades ~ fov 40 a 32).
+##
+## Inicio de maqueta (V3, rediseno 2026-10-14): una partida nueva arranca mas
+## cerca (default_distance) y, al acercarse, la camara se tumba un poco
+## (pitch_near_angle): de cerca se ven los costados de los edificios, la
+## maqueta, y no un plano. La inclinacion sale de la distancia, asi que no hay
+## nada nuevo que guardar: de pitch_flat_distance para afuera la vista es la de
+## siempre (pitch_angle), y una partida cargada vuelve a su distancia guardada.
 
 @export var move_speed: float = 30.0
 @export var zoom_speed: float = 3.0
@@ -16,10 +23,16 @@ extends Camera3D
 @export var rotate_lerp_speed: float = 10.0    # how fast yaw eases to its target
 @export var min_distance: float = 12.0
 @export var max_distance: float = 95.0
+## Inclinacion de lejos (la de siempre): desde pitch_flat_distance hacia fuera.
 @export var pitch_angle: float = -52.0
+## Inclinacion en min_distance: mas tumbada, para ver la maqueta de lado.
+@export var pitch_near_angle: float = -38.0
+## A partir de esta distancia la inclinacion ya es pitch_angle.
+@export var pitch_flat_distance: float = 32.0
 @export var lens_fov: float = 40.0
-## Distancia con la que arranca una partida (y la de una partida sin camara).
-@export var default_distance: float = 32.0
+## Distancia con la que arranca una partida nueva (y la de una partida sin
+## camara guardada). Mas cerca que antes (32): se ve el Nucleo y su calle.
+@export var default_distance: float = 24.0
 
 @export var boundary_min: Vector2 = Vector2(-40, -40)
 @export var boundary_max: Vector2 = Vector2(40, 40)
@@ -27,8 +40,8 @@ extends Camera3D
 var _ground_target: Vector2 = Vector2.ZERO
 var _yaw: float = 0.0
 var _target_yaw: float = 0.0
-var _distance: float = 32.0
-var _target_distance: float = 32.0
+var _distance: float = 24.0
+var _target_distance: float = 24.0
 
 func _ready() -> void:
 	projection = Camera3D.PROJECTION_PERSPECTIVE
@@ -65,8 +78,15 @@ func _process(delta: float) -> void:
 	_clamp_to_boundaries()
 	_update_transform()
 
+## La inclinacion para una distancia: pitch_near_angle en min_distance, que se
+## endereza hasta pitch_angle en pitch_flat_distance y se queda ahi.
+func pitch_for(distance: float) -> float:
+	var span := maxf(0.001, pitch_flat_distance - min_distance)
+	var t := clampf((pitch_flat_distance - distance) / span, 0.0, 1.0)
+	return lerpf(pitch_angle, pitch_near_angle, t)
+
 func _update_transform() -> void:
-	var pitch_rad := deg_to_rad(pitch_angle)
+	var pitch_rad := deg_to_rad(pitch_for(_distance))
 	var yaw_rad := deg_to_rad(_yaw)
 
 	# Spherical to cartesian offset from ground target
