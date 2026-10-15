@@ -836,7 +836,12 @@ Forward+ alta ≈ 85 fps, baja ≈ 88, mínima ≈ 139; Mobile ≈ 135 / 138 / 1
 
 ### Informar de un fallo
 
-**☰ MENÚ → PARTIDA → Informar de un fallo** (tras AYUDA) copia al portapapeles
+**☰ MENÚ → PARTIDA → Informar fallo** (en la fila de Historia, tras AYUDA; el
+nombre largo va en su tooltip) copia al portapapeles
 el informe de `scripts/services/BugReport.gd` y lo dice bajo los grupos, como
 Guardar: "Copiado. Pégalo en un mensaje." Nada sale del equipo. Qué lleva, dónde
 está el registro y cómo se limpian las rutas: docs/19 §7.
+
+PARTIDA lleva dos filas de dos botones (Guardar | PARTIDAS, Historia | Informar
+fallo, con letra de cuerpo): con diez botones en columna, en una tablet de 720 px
+de alto "Guardar y salir" quedaba tras el scroll; con ocho filas cabe entero.

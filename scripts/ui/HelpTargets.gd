@@ -93,12 +93,16 @@ static func card_or_build(tree: SceneTree, building_id: String) -> Control:
 		scroll_into_view(card)
 	return card
 
-## Desplaza el ScrollContainer que contiene a `c` hasta que se vea entero.
+## Desplaza el ScrollContainer que contiene a `c` hasta que se vea entero. Si ya
+## se ve no toca el scroll: el tutorial lo pregunta varias veces por segundo y no
+## debe pelear con el dedo que arrastra la lista.
 static func scroll_into_view(c: Control) -> void:
 	var p := c.get_parent()
 	while p != null:
 		if p is ScrollContainer:
-			(p as ScrollContainer).ensure_control_visible(c)
+			var sc := p as ScrollContainer
+			if not sc.get_global_rect().encloses(c.get_global_rect()):
+				sc.ensure_control_visible(c)
 			return
 		p = p.get_parent()
 
@@ -124,6 +128,12 @@ static func building_card(tree: SceneTree, building_id: String) -> Control:
 	var menu := _scene_node(tree, "ConstructionMenu")
 	if menu == null:
 		return null
+	# Lo directo: ConstructionMenu guarda sus tarjetas por id. Recorrer todo el
+	# arbol del menu buscando etiquetas queda para quien no lo tenga.
+	if menu.has_method("card_for"):
+		var card: Control = menu.card_for(building_id)
+		if card != null and is_instance_valid(card) and card.is_visible_in_tree():
+			return card
 	var display := ""
 	var path := "res://data/buildings/%s.tres" % building_id
 	if ResourceLoader.exists(path):

@@ -19,13 +19,25 @@ extends Node
 ##
 ## Solo actua la lista mas interior bajo el puntero que de verdad pueda
 ## desplazarse: una lista que cabe entera deja pasar todo.
+##
+## Mientras dura el arrastre, el contenido de la lista no recibe raton
+## (mouse_behavior_recursive): los botones por los que pasa el dedo no se
+## pulsan, no se activan ni se quedan resaltados. Al soltar se devuelve.
+## El control bajo el dedo se busca por posicion (TouchTooltip.control_at)
+## cuando el "hover" del motor no esta ahi: con el dedo no hay movimiento antes
+## de tocar y el hover es el del toque anterior, asi que la lista no tomaba el
+## gesto y el boton de debajo se quedaba con todo.
 
 const DRAG_THRESHOLD := 10.0
 const WHEEL_STEP := 64.0
 ## Donde se manda el "soltar" de un arrastre: fuera de cualquier control.
 const FAR_AWAY := Vector2(-100000, -100000)
 
+const TouchTooltipScript := preload("res://scripts/ui/TouchTooltip.gd")
+
 var _scroll: ScrollContainer
+## Contenido apagado durante el arrastre: control -> su mouse_behavior_recursive.
+var _muted: Dictionary = {}
 var _press_pos := Vector2.INF
 var _start_scroll := Vector2i.ZERO
 var _dragging := false
@@ -61,7 +73,17 @@ func can_scroll() -> bool:
 func _owns_pointer(pos: Vector2 = Vector2.INF) -> bool:
 	if _scroll == null or not _scroll.is_visible_in_tree():
 		return false
+	# Fuera de la lista no hay nada que decidir (y asi la busqueda de abajo
+	# solo la hacen las listas que estan bajo el dedo).
+	if pos != Vector2.INF and not _scroll.get_global_rect().has_point(pos):
+		return false
 	var hovered := get_viewport().gui_get_hovered_control()
+	# Con el dedo el hover es el del toque anterior (no hay movimiento antes de
+	# tocar): si no cae donde se toca, se busca el control de verdad.
+	if pos != Vector2.INF and (hovered == null or not hovered.get_global_rect().has_point(pos)):
+		var hit := _control_at(pos)
+		if hit != null:
+			hovered = hit
 	if hovered == null:
 		# Sin control bajo el puntero conocido (el motor aun no lo calculo, o sin
 		# ventana): basta con que el punto caiga dentro de la lista.
@@ -99,6 +121,8 @@ func _on_button(e: InputEventMouseButton) -> void:
 	if e.button_index != MOUSE_BUTTON_LEFT:
 		return
 	if e.pressed:
+		# Un arrastre anterior cuyo soltar no llego (ventana que pierde el foco).
+		_unmute()
 		_dragging = false
 		_press_pos = Vector2.INF
 		if can_scroll() and _owns_pointer(e.position):
@@ -112,6 +136,7 @@ func _on_button(e: InputEventMouseButton) -> void:
 		# El boton de debajo ya recibio su soltar-fuera al empezar el arrastre
 		# (_cancel_press): este soltar de verdad no le llega.
 		get_viewport().set_input_as_handled()
+	_unmute()
 	_dragging = false
 	_press_pos = Vector2.INF
 
@@ -126,6 +151,7 @@ func _on_motion(e: InputEventMouseMotion) -> void:
 	if not _dragging:
 		_dragging = true
 		_cancel_press()
+		_mute()
 	var room := _room()
 	if room.y > 0.5:
 		_scroll.scroll_vertical = _start_scroll.y - int(delta.y)
@@ -142,6 +168,43 @@ static func attach(scroll) -> void:
 	var ds: Node = (load("res://scripts/ui/DragScroll.gd") as GDScript).new()
 	ds.name = "DragScroll"
 	scroll.add_child(ds, false, Node.INTERNAL_MODE_BACK)
+
+## El control bajo `pos`, buscado una vez por fotograma y punto aunque haya
+## varias listas anidadas preguntando (recorre las capas de la interfaz).
+static var _hit_frame := -1
+static var _hit_pos := Vector2.INF
+static var _hit: Control = null
+func _control_at(pos: Vector2) -> Control:
+	var frame := Engine.get_process_frames()
+	if frame != _hit_frame or pos != _hit_pos or (_hit != null and not is_instance_valid(_hit)):
+		_hit_frame = frame
+		_hit_pos = pos
+		_hit = TouchTooltipScript.control_at(get_tree(), pos)
+	return _hit
+
+## Apaga el raton en el contenido de la lista mientras se arrastra: nada de
+## dentro se pulsa, se activa ni se resalta al pasar el dedo por encima.
+func _mute() -> void:
+	for c in _scroll.get_children():
+		if c is Control and "mouse_behavior_recursive" in c and not _muted.has(c):
+			_muted[c] = c.get("mouse_behavior_recursive")
+			c.set("mouse_behavior_recursive", Control.MOUSE_BEHAVIOR_DISABLED)
+
+func _unmute() -> void:
+	for c in _muted:
+		if is_instance_valid(c):
+			c.set("mouse_behavior_recursive", _muted[c])
+	_muted.clear()
+
+func _exit_tree() -> void:
+	_unmute()
+
+func _notification(what: int) -> void:
+	# Si la ventana pierde el foco a mitad de arrastre, el soltar no llega.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and _dragging:
+		_unmute()
+		_dragging = false
+		_press_pos = Vector2.INF
 
 ## Le dice a la interfaz que el boton se solto FUERA de todo control: el boton
 ## que recibio la pulsacion la da por cancelada y no se queda hundido.

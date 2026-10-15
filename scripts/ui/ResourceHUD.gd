@@ -392,7 +392,17 @@ func _refresh() -> void:
 	_mat_row.visible = any_material
 	_fit_row()
 
+## Llega una senal por recurso (cuatro en un tick de consumo, una por coste al
+## construir): se repinta una vez, al final del fotograma (docs/26 §6.9).
+var _refresh_queued := false
 func _on_resource_changed(_resource_type: String, _new_amount: int, _delta: int) -> void:
+	if _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
 	_refresh()
 
 func _on_resource_unlocked(resource_name: String) -> void:
@@ -412,7 +422,12 @@ func _on_resource_unlocked(resource_name: String) -> void:
 	# Destello al desbloquear: el jugador acaba de abrir una era y la fila
 	# cambia de forma; sin aviso, el recurso nuevo aparece sin mas.
 	chip.modulate = Color(2.5, 2.0, 0.5, 0.0)
+	if chip.has_meta("unlock_tween"):
+		var old: Tween = chip.get_meta("unlock_tween")
+		if old != null and old.is_valid():
+			old.kill()
 	var tween := create_tween()
+	chip.set_meta("unlock_tween", tween)
 	tween.tween_property(chip, "modulate", Color(1.5, 1.3, 0.8, 1.0), 0.4)
 	tween.tween_property(chip, "modulate", Color.WHITE, 1.0)
 	_refresh()
@@ -430,11 +445,16 @@ func _on_insufficient(resource_type: String, required: int, available: int) -> v
 
 ## Desborde: la barra ya esta roja por _refresh; un parpadeo marca el momento
 ## exacto en que algo se ha perdido, que es lo que el jugador no veia.
+## Con la bolsa llena llega en cada produccion: un parpadeo a la vez (antes se
+## apilaban tweens que se pisaban la misma propiedad).
+var _overflow_tween: Tween = null
 func _on_overflow(_resource_type: String, _lost: int, _cap: int) -> void:
 	_refresh()
-	var tween := create_tween()
-	tween.tween_property(_pool_bar, "modulate", Color(1.6, 1.2, 1.2, 1.0), 0.15)
-	tween.tween_property(_pool_bar, "modulate", Color.WHITE, 0.5)
+	if _overflow_tween != null and _overflow_tween.is_valid():
+		_overflow_tween.kill()
+	_overflow_tween = create_tween()
+	_overflow_tween.tween_property(_pool_bar, "modulate", Color(1.6, 1.2, 1.2, 1.0), 0.15)
+	_overflow_tween.tween_property(_pool_bar, "modulate", Color.WHITE, 0.5)
 
 func _type_of(resource_name: String) -> int:
 	var idx := _resource_ids.find(resource_name)

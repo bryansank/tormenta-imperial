@@ -65,19 +65,21 @@ func _ready() -> void:
 	_load_buildings()
 	_setup_ui()
 	_generate_thumbnails()
-	EventBus.resource_unlocked.connect(func(_r): _refresh_grid())
+	EventBus.resource_unlocked.connect(func(_r): _request_grid_refresh())
 	# Subir de rango quita candados; cargar otra partida puede ponerlos.
 	EventBus.governor_rank_up.connect(func(_r, _w):
-		_refresh_grid()
+		_request_grid_refresh()
 		_refresh_block())
-	EventBus.game_load_completed.connect(_refresh_grid)
-	EventBus.game_new_started.connect(_refresh_grid)
+	EventBus.game_load_completed.connect(_request_grid_refresh)
+	EventBus.game_new_started.connect(_request_grid_refresh)
 	# Con la lista abierta, el coste en rojo o no y el aviso siguen a lo que hay.
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	# CONSTRUIR es la accion principal: siempre a la vista, no escondida tras el
 	# menu (bug 9/11: solo salia al desplegar el antiguo ☰).
 	_build_btn.visible = true
 	UIManager.register_panel(self, "ConstructionMenu.modal")
+	# El giro de la maqueta solo hace falta con la lista abierta.
+	set_process(false)
 
 func _process(delta: float) -> void:
 	if _preview_model and _is_open and _selected_data:
@@ -378,10 +380,12 @@ func _open() -> void:
 	_backdrop.visible = true
 	_refresh_grid()
 	_refresh_block()
+	set_process(true)
 	UIManager.open_panel(self)
 
 func _close() -> void:
 	_is_open = false
+	set_process(false)
 	_modal.visible = false
 	_backdrop.visible = false
 	UIManager.close_panel(self)
@@ -438,15 +442,58 @@ func _fit_columns() -> void:
 	if _grid_scroll != null and _grid_container != null:
 		_grid_container.columns = columns_for(_grid_scroll.size.x)
 
+## Tarjetas de la rejilla por id de edificio (HelpTargets las busca asi).
+var _cards: Dictionary = {}
+## Lo que decide como es cada tarjeta: [id, bloqueada, bloqueada por rango, con
+## miniatura]. Si no cambia, la rejilla no se recrea: solo se repintan costes.
+var _grid_sig: Array = []
+
+## La tarjeta de `building_id` en la rejilla, o null. Para el tutorial.
+func card_for(building_id: String) -> Control:
+	var card: Control = _cards.get(building_id)
+	return card if card != null and is_instance_valid(card) else null
+
+## Una senal pide rehacer la rejilla: con la lista cerrada no se hace nada
+## (_open la pone al dia), abierta se hace una vez al final del fotograma.
+var _grid_refresh_queued := false
+func _request_grid_refresh() -> void:
+	if not _is_open or _grid_refresh_queued:
+		return
+	_grid_refresh_queued = true
+	_flush_grid_refresh.call_deferred()
+
+func _flush_grid_refresh() -> void:
+	_grid_refresh_queued = false
+	if _is_open:
+		_refresh_grid()
+
+func _grid_signature(filtered: Array) -> Array:
+	var sig: Array = []
+	for data in filtered:
+		var rank_locked := not Rules.check_rank(data.id)
+		sig.append([data.id, rank_locked or _has_locked_resource_cost(data), rank_locked,
+			_thumb_cache.has(data.id)])
+	return sig
+
+## Rehace las tarjetas solo si cambia cuales hay o si alguna se bloquea o se
+## desbloquea; si no, deja las que hay y pone al dia su coste (docs/26 §6.9).
 func _refresh_grid() -> void:
+	var filtered := _get_filtered_buildings()
+	var sig := _grid_signature(filtered)
+	if sig == _grid_sig and _cards.size() == filtered.size() and _grid_container.get_child_count() == filtered.size():
+		_update_card_costs()
+		_mark_selected_card()
+		return
+	_grid_sig = sig
 	for child in _grid_container.get_children():
 		child.queue_free()
 	_card_styles.clear()
+	_cards.clear()
 
-	var filtered := _get_filtered_buildings()
 	for data in filtered:
 		var card := _create_grid_card(data)
 		_grid_container.add_child(card)
+		_cards[data.id] = card
 	_mark_selected_card()
 
 func _create_grid_card(data: BuildingData) -> PanelContainer:
@@ -736,11 +783,27 @@ static func extras_parts(data: BuildingData) -> Array:
 		extras.append(Tr.t("LBL_REQUIRES") % Rules.prerequisite_names(data.id))
 	return extras
 
+## Cambian los recursos (llega una senal por recurso, a veces varias en el mismo
+## fotograma): se repinta una sola vez, al final del fotograma.
+var _costs_queued := false
 func _on_resources_changed() -> void:
-	if not _is_open:
+	if not _is_open or _costs_queued:
 		return
-	_refresh_block()
+	_costs_queued = true
+	_flush_costs.call_deferred()
+
+func _flush_costs() -> void:
+	_costs_queued = false
+	if _is_open:
+		_refresh_block()
+		_update_card_costs()
+
+## El coste de cada tarjeta desbloqueada, con lo que falta en rojo. TextKit no
+## rehace la fila si no cambio nada.
+func _update_card_costs() -> void:
 	for card in _grid_container.get_children():
+		if card.is_queued_for_deletion():
+			continue
 		var row := card.find_child("CardCost", true, false) as HFlowContainer
 		var id := String(card.get_meta("building_id", ""))
 		if row == null or not _card_styles.has(id) or bool(_card_styles[id].get("locked", false)):
@@ -808,8 +871,10 @@ func _generate_thumbnails() -> void:
 		await _render_thumbnail(viewport, camera, data)
 
 	viewport.queue_free()
-	# Refresh grid now that thumbnails are ready
-	_refresh_grid()
+	# Las miniaturas que no llegaron a tiempo a su tarjeta: la firma de la
+	# rejilla cambia y la proxima vez que se abra (o ya, si esta abierta) se
+	# rehace con ellas.
+	_request_grid_refresh()
 
 func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingData) -> void:
 	var model: Node3D = null

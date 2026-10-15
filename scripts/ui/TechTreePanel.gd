@@ -75,10 +75,27 @@ func _ready() -> void:
 	_refresh_tech_states()
 	_fit_scroll()
 	UIManager.register_panel(self, "TechTreePanel.modal")
-	EventBus.notification_posted.connect(func(_m, _c, _col): _refresh_tech_states())
+	EventBus.notification_posted.connect(func(_m, _c, _col): _request_refresh())
 	# El motivo "faltan recursos" cambia con la bolsa: con el panel abierto se
 	# vuelve a escribir en cuanto entra o sale algo.
-	EventBus.resource_changed.connect(func(_t, _a, _d): if _is_open: _refresh_tech_states())
+	EventBus.resource_changed.connect(func(_t, _a, _d): _request_refresh())
+	# La barra de investigacion solo se mueve con el panel abierto.
+	set_process(false)
+
+## Cada aviso y cada recurso que se mueve pedian repintar las 15 tarjetas (con
+## estilos nuevos), tambien con el panel cerrado. Ahora: solo abierto (al
+## abrirlo se repinta igual) y una vez por fotograma como mucho.
+var _refresh_queued := false
+func _request_refresh() -> void:
+	if not _is_open or _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
+	if _is_open:
+		_refresh_tech_states()
 
 func _process(_delta: float) -> void:
 	if _is_open and TechTreeManager.is_researching():
@@ -478,6 +495,7 @@ func _toggle_panel() -> void:
 	_is_open = not _is_open
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
+	set_process(_is_open)
 	if _is_open:
 		_refresh_tech_states()
 		UIManager.open_panel(self)
