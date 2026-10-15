@@ -260,6 +260,7 @@ func try_place(cell: Vector2i) -> Node:
 			_reject_for_deposit(_current_data.id)
 		elif verdict["reason"] == "water":
 			_show_feedback(Tr.t("LBL_ON_WATER"))
+			TutorialManager.offer_tip("island")
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
@@ -346,6 +347,7 @@ func try_move(cell: Vector2i) -> bool:
 			_reject_for_deposit(_current_data.id)
 		elif verdict["reason"] == "water":
 			_show_feedback(Tr.t("LBL_ON_WATER"))
+			TutorialManager.offer_tip("island")
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
@@ -596,6 +598,7 @@ func assist_explain(origin: Vector2i) -> void:
 		_reject_for_deposit(_current_data.id)
 	elif verdict["reason"] == "water":
 		_show_feedback(Tr.t("LBL_ON_WATER"))
+		TutorialManager.offer_tip("island")
 	elif verdict["reason"] == "occupied":
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 	elif verdict["reason"] == "road":
