@@ -746,6 +746,24 @@ juego con ellos, y el `.exe` se abre con doble clic. Detalle en §7.6.
 - **Rejilla tras construir**: hecho después en `perf/render-3d` (commit `399eabc`):
   `BuildingPlacer.gd` y `BuildingPlacer2D.gd` restauran la rejilla con
   `GraphicsQuality.grid_always_visible()`, así que en Mínima no vuelve a pintarse.
+- **Arreglo de la medida (2026-10-16, rama `fix/deteccion-calidad`)**: el .exe
+  1.0.0 puso Mínima en una RTX 3060 Laptop con una "mediana 33.3 ms": medía un
+  tope, no la GPU. La medida usaba el `delta` de `_process`, que con el vsync
+  encendido (nadie lo quitaba) el suavizado de delta del motor redondea a periodos
+  enteros del refresco. Ahora, mientras calienta y mide, `DeviceProfile` quita
+  el tope **y el vsync** en cada fotograma (`apply_fps()` lo respeta), mide con
+  `Time.get_ticks_usec()` y al acabar restaura los dos. Una medida con la mediana a
+  ±1 ms de 1000/30, 1000/60, el refresco o su mitad, o con p10-p90 por debajo de
+  0,3 ms, se descarta y la calidad se queda en "auto"
+  (`GraphicsQuality.measure_rejection`, umbrales `quality_detect_known_caps`,
+  `quality_detect_cap_tolerance_ms`, `quality_detect_flat_ms`). El registro lleva
+  la medida bruta (fps medio, percentiles, refresco, tope y vsync vistos).
+  **Reparación**: `[interfaz] quality_detect_version` (2 = esta regla); al
+  arrancar, una detección de versión anterior decidida por la medida (motivo
+  `medida ...`) que dejó Mínima, o Baja con la mediana en un tope, vuelve a
+  "auto", borra `renderer_override.cfg` y se detecta de nuevo (en el siguiente
+  arranque si venía en Mobile). Una calidad elegida en Ajustes guarda el motivo
+  `manual: <calidad>` y no se toca nunca.
 - **No hecho**: la "red de seguridad en partida" (opcional en §7.2); los topes de
   caminantes por perfil (16 / 12 / 8 en la tabla de §7.1: hoy uno solo, 12); la
   niebla solo con peso > 0 (`StormSky`). Sin medir todavía con la sonda la Mínima de
