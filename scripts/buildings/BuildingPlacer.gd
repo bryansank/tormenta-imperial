@@ -70,6 +70,11 @@ var _spot_highlight: MultiMeshInstance3D = null
 ## Un solo reloj para releer el aspecto de TODOS los edificios (paso de fase,
 ## humo encendido/apagado). Las senales repintan al momento.
 var _look_timer := 0.0
+## Ultima camara con la que se ajustaron los badges (BuildingStatusBadge.
+## fit_to_camera): se reajustan solo cuando la camara se mueve o cambia de lente.
+var _badge_cam_xform := Transform3D()
+var _badge_cam_fov := -1.0
+var _badge_count := -1
 ## Las calzadas del mapa, dibujadas en lote (RoadBatch3D).
 var _road_batch: Node3D = null
 ## Las decoraciones pequenas del mapa, dibujadas en lote (DecorBatch3D).
@@ -255,6 +260,7 @@ func _handle_left_drag(event: InputEventMouseMotion) -> void:
 
 func _process(delta: float) -> void:
 	_tick_looks(delta)
+	_fit_badges()
 	_tick_block_flash(delta)
 	if _state == State.IDLE:
 		return
@@ -270,6 +276,26 @@ func _tick_looks(delta: float) -> void:
 		var look := building.get_node_or_null("LookVisual")
 		if look:
 			look.sync()
+
+## Los badges de estado no crecen sin limite al acercar la camara (ni se
+## quedan pegados a la lente): BuildingStatusBadge.fit_to_camera. Solo trabaja
+## si la camara o el numero de edificios cambio desde la ultima vez.
+func _fit_badges() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var xf := cam.global_transform
+	var n := _buildings_container.get_child_count()
+	if xf.is_equal_approx(_badge_cam_xform) and is_equal_approx(cam.fov, _badge_cam_fov) 			and n == _badge_count:
+		return
+	_badge_cam_xform = xf
+	_badge_cam_fov = cam.fov
+	_badge_count = n
+	var inv := xf.affine_inverse()
+	for building in _buildings_container.get_children():
+		var badge := building.get_node_or_null("StatusBadge")
+		if badge != null and badge.has_method("fit_to_camera"):
+			badge.fit_to_camera(cam, inv)
 
 func _on_upgrade_look(node: Node, _level: int) -> void:
 	sync_look(node)

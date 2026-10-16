@@ -29,6 +29,15 @@ const HEIGHT_MARGIN := 1.0
 ## Tamano del pictograma del obrero (textura 32 px x pixel_size).
 const ICON_TEXTURE_SIZE := 32
 const ICON_PIXEL_SIZE := 0.026
+## Tope de tamano en pantalla: una linea del badge no pasa de esta fraccion del
+## alto de la vista (con la lente de diseno, fov 60 a 20 unidades, era ~0,022).
+## De cerca (camara de inicio, cupula alta del Nucleo) el Label3D crecia sin
+## limite hasta tapar el HUD (captura de Bryan, 14-10). Es una fraccion de la
+## vista, no pixeles: vale igual a cualquier resolucion.
+const MAX_SCREEN_LINE := 0.026
+## Mas cerca de la camara que esto (profundidad, unidades) el badge se esconde:
+## pegado a la lente no se lee y solo estorba.
+const HIDE_DEPTH := 6.0
 
 ## Colores por razon del Zzz.
 const COLOR_IDLE := Color(0.78, 0.86, 1.0, 0.95)        # duerme: azul palido
@@ -45,6 +54,9 @@ var _reason: String = ""
 ## ProcessManager.is_busy() en refresh() para cubrir la carga de partida.
 var _busy: bool = false
 var _icon: Sprite3D = null
+## Lo que pide el estado (_apply) y si la camara lo esconde (fit_to_camera).
+var _want_visible := false
+var _too_close := false
 
 static var _worker_texture: Texture2D = null
 
@@ -75,6 +87,10 @@ func setup(building: Node3D, data: BuildingData, top_y: float) -> void:
 		_icon.visible = false
 		add_child(_icon)
 	refresh()
+	if is_inside_tree():
+		var cam := get_viewport().get_camera_3d()
+		if cam != null:
+			fit_to_camera(cam, cam.global_transform.affine_inverse())
 
 func _ready() -> void:
 	var bus := EventBus
@@ -247,20 +263,44 @@ func _apply(status: int, reason: String) -> void:
 	_reason = reason
 	match status:
 		Status.NONE:
-			visible = false
+			_want_visible = false
 		Status.IDLE:
 			# En obras ya lo dice el rotulo de la obra, con su porcentaje, lo que
 			# falta y su barra (ProductionManager): dos carteles se pisaban.
-			visible = reason != "construction"
+			_want_visible = reason != "construction"
 			text = "%s\n%s" % [Tr.t("LBL_STATUS_IDLE"), reason_text(reason)]
 			modulate = color_for_reason(reason)
 			if _icon:
 				_icon.visible = false
 		Status.WORKING:
-			visible = true
+			_want_visible = true
 			text = ""
 			if _icon:
 				_icon.visible = true
+	visible = _want_visible and not _too_close
+
+# ── Tamano en pantalla ────────────────────────────────────────────────
+
+## Escala del badge para que una linea no pase de MAX_SCREEN_LINE de la vista.
+## `depth`: distancia del badge a la camara a lo largo de su eje; `view_h`: alto
+## del mundo que cubre la vista a esa profundidad. 0 = esconder (pegado a la
+## camara). Nunca agranda: de lejos se encoge como siempre. Pura, para tests.
+static func camera_scale(depth: float, view_h: float) -> float:
+	if depth < HIDE_DEPTH:
+		return 0.0
+	var line_world := FONT_SIZE * PIXEL_SIZE
+	return clampf(MAX_SCREEN_LINE * view_h / line_world, 0.0, 1.0)
+
+## Aplica camera_scale con la camara `cam` (`cam_inv`: su transform invertido,
+## calculado una vez por BuildingPlacer para todos los badges).
+func fit_to_camera(cam: Camera3D, cam_inv: Transform3D) -> void:
+	var depth: float = -(cam_inv * global_position).z
+	var view_h: float = cam.size if cam.projection == Camera3D.PROJECTION_ORTHOGONAL 		else 2.0 * maxf(depth, 0.0) * tan(deg_to_rad(cam.fov) * 0.5)
+	var s := camera_scale(depth, view_h)
+	_too_close = s <= 0.0
+	if not _too_close:
+		scale = Vector3.ONE * s
+	visible = _want_visible and not _too_close
 
 # ── Geometria ─────────────────────────────────────────────────────────
 

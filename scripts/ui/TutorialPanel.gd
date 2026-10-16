@@ -415,13 +415,7 @@ func _layout_step() -> void:
 	# Medir la tarjeta (reset_size + tamano minimo) solo si cambia su texto, su
 	# ancho o los botones; cada fotograma era trabajo de maquetado para nada.
 	var key := "%s|%s|%d|%s|%s" % [_badge.text, text, int(w), _ok_btn.visible, _end_replay_btn.visible]
-	if key != _card_key:
-		_card_key = key
-		_card.custom_minimum_size = Vector2(w, 0)
-		_card.size = Vector2(w, 0)
-		_card.reset_size()
-		_card_h = _card.get_combined_minimum_size().y
-	var ch: float = _card_h
+	var ch: float = _fit_card(w, key)
 	var focus := Rect2()
 	if has_rect:
 		focus = rect
@@ -457,6 +451,25 @@ func _layout_step() -> void:
 			var edge := _edge_point(c, dir, vp, 60.0)
 			_arrow.visible = true
 			_arrow.point_at(edge, dir)
+
+## Ajusta la tarjeta a `w` de ancho y al alto de su texto, y devuelve ese alto.
+## Solo se re-maqueta si cambia `key` (texto, ancho, botones) o si el tamano
+## minimo ya no es el alto que tiene: la etiqueta con autowrap se mide primero
+## sin ancho (una palabra por linea, una tarjeta de arriba abajo, captura de
+## Bryan 14-10) y encoge un fotograma despues, cuando el VBox le da su ancho.
+## Medir solo al cambiar el texto se quedaba con esa primera medida para
+## siempre. get_combined_minimum_size() va cacheado: comprobarlo cada
+## fotograma no cuesta.
+func _fit_card(w: float, key: String) -> float:
+	var min_h: float = _card.get_combined_minimum_size().y
+	if key != _card_key or absf(_card.size.x - w) > 0.5 or absf(_card.size.y - min_h) > 0.5:
+		_card_key = key
+		_card.custom_minimum_size = Vector2(w, 0)
+		_card.size = Vector2(w, 0)
+		_card.reset_size()
+		min_h = _card.get_combined_minimum_size().y
+	_card_h = min_h
+	return min_h
 
 func _card_already_picked(building_id: String) -> bool:
 	var scene := get_tree().current_scene
@@ -643,12 +656,7 @@ func _layout_combat(delta: float) -> void:
 
 	var w: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
 	var key := "%s|%s|%d|%s|%s|%s" % [_badge.text, _text.text, int(w), _combat_ok_btn.visible, _combat_skip_btn.visible, _circle.visible]
-	if key != _card_key:
-		_card_key = key
-		_card.custom_minimum_size = Vector2(w, 0)
-		_card.size = Vector2(w, 0)
-		_card.reset_size()
-		_card_h = _card.get_combined_minimum_size().y
+	_fit_card(w, key)
 	var focus := Rect2()
 	if has_rect:
 		focus = rect
