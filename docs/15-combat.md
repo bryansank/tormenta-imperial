@@ -1066,10 +1066,9 @@ disappears; duplicating the rows here is how this section went stale the last
 time. What follows is only what a reader of *this* document needs on top of them.
 
 - **`expedition_resumed`** is connected as a typed `.connect` in `BattleScreen`,
-  `SkirmishPanel` and `ArmyPanel`. The one string-form connection left is
-  `AudioManager._connect_optional()` for `final_audit_summoned` and
-  `storm_halted_forever`, guarded by `EventBus.has_signal()`: when auditing
-  listeners, grep the **signal name** too, not only the `.connect` form.
+  `SkirmishPanel` and `ArmyPanel`. `final_audit_summoned` and
+  `storm_halted_forever` are connected typed in `AudioManager` (the old
+  string-form `_connect_optional()` is gone).
 - `result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
 - `summary` on `defense_auto_resolved` is `CombatManager.get_last_result()`, and
   that signal is the **only** one that fight emits — no `encounter_*` accompanies

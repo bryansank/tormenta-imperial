@@ -7,12 +7,13 @@ consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
 
-Three patterns count as a connection, and all three are included here:
+Two patterns count as a connection, and both are included here:
 
 - `EventBus.<signal>.connect(...)` — the normal case.
 - `var bus := EventBus` then `bus.<signal>.connect(...)` — `BuildingStatusBadge`.
-- `EventBus.connect("<signal>", ...)` — only `AudioManager._connect_optional()`, for
-  the two Final Audit signals it guards with `has_signal()`.
+
+(The old string form, `AudioManager._connect_optional()`, is gone: every signal it
+guarded exists, and AudioManager connects them typed.)
 
 Rows marked *(no emitter)* or *(no listener)* are declared but not wired on that
 side. That is recorded on purpose: see [Orphan signals](#orphan-signals) for the
@@ -306,8 +307,7 @@ rebuilt. In Supervivencia there is no resummon: `run_ended` follows and the save
 sealed (see [Game modes](#game-modes)).
 
 `storm_halted_forever` stops the Storm for good, and nothing else has permission to
-stop the cycle. AudioManager wires both optional rows through `_connect_optional()`,
-which is guarded by `EventBus.has_signal()`.
+stop the cycle. AudioManager connects both with a typed `.connect`.
 
 ## Random Events
 
