@@ -682,6 +682,12 @@ var ui_combat_view := "front"
 ## (no se repite sola) y por que decidio lo que decidio (para depurar).
 var quality_detected := false
 var quality_detected_reason := ""
+## Version de la regla de deteccion con la que se decidio (settings.cfg
+## [interfaz] quality_detect_version; sin la clave, 0 = la del 1.0.0). La 2 mide
+## sin tope ni vsync y descarta las medidas pegadas a un tope; DeviceProfile
+## repara una sola vez lo que decidio una version anterior con una medida mala.
+const QUALITY_DETECT_VERSION := 2
+var quality_detect_version := 0
 ## Ids de HudRegistry que el jugador oculto.
 var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
@@ -734,6 +740,15 @@ var quality_detect_seconds := 3.0
 var quality_detect_median_ms := 25.0
 var quality_detect_p95_ms := 33.0
 var quality_detect_low_ms := 16.7
+## Una medida que no mide la GPU sino un tope: si la mediana cae a menos de
+## quality_detect_cap_tolerance_ms de 1000/N (N en quality_detect_known_caps, el
+## refresco de la pantalla o su mitad), o si la distancia entre los percentiles
+## 10 y 90 no llega a quality_detect_flat_ms (fotogramas clavados), no vale: se
+## descarta y la calidad se queda en "auto". Nunca baja a Minima por eso (el
+## 1.0.0 midio 33,3 ms en una RTX 3060: el tope de 30, no el equipo).
+var quality_detect_known_caps: Array = [30, 60]
+var quality_detect_cap_tolerance_ms := 1.0
+var quality_detect_flat_ms := 0.3
 
 # ── Perfil del jugador (settings.cfg [perfil]) ──
 # Del jugador en este dispositivo, NO de la partida: sobrevive a "Nueva partida"
@@ -819,6 +834,7 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	ui_combat_view = cview if cview in COMBAT_VIEWS else "front"
 	quality_detected = bool(cf.get_value("interfaz", "quality_detected", quality_detected))
 	quality_detected_reason = str(cf.get_value("interfaz", "quality_detected_reason", quality_detected_reason))
+	quality_detect_version = int(cf.get_value("interfaz", "quality_detect_version", 0))
 	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
 	ui_hud_hidden = []
 	if hidden is Array:
@@ -870,6 +886,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "combat_view", ui_combat_view)
 	cf.set_value("interfaz", "quality_detected", quality_detected)
 	cf.set_value("interfaz", "quality_detected_reason", quality_detected_reason)
+	cf.set_value("interfaz", "quality_detect_version", quality_detect_version)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("interfaz", "fps_cap", ui_fps_cap)
