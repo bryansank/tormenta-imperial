@@ -10,8 +10,8 @@ extends CanvasLayer
 ## "new"   el paso de Nueva partida: sale con un nombre y una bandera al azar ya
 ##         puestos y piezas de rango 1 (con el que empieza toda partida).
 ##         "Saltar" acepta lo que habia al abrir. NO toca RankManager: quien lo
-##         abre decide (RankManager.queue_colony_for_new_game() antes de empezar,
-##         o set_colony() despues).
+##         abre decide (NewGameDialog lo pasa a GameManager.start_new_game(),
+##         que llama a set_colony() tras RankManager.reset()).
 ## "edit"  ☰ MENU > COLONIA: parte del pais de esta partida, con las piezas del
 ##         rango de ahora. Lo engancha RankPanel, que llama a set_colony().
 ##
