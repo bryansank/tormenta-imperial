@@ -63,6 +63,78 @@ What `hq_max` does depends on the game mode ([20-modos-de-juego.md](20-modos-de-
 "Keep playing" leaves a sandbox: the Storm is halted for good and the WHAT TO DO? panel
 (`Objectives.next_step()`) says so.
 
+## Orden de la Regencia (2026-10-14, 1.1)
+
+The goal of every calm (doc 21 §2.2 of the private context; Bryan's D5 = A). It does not
+change the Tithe formula (`get_tithe_ratio`, `get_tithe_debt`, the escort): it only
+discounts the debt that formula gives, and shows it in advance.
+
+**State** lives in the pure `StormCycle` and travels in the `storm` save section:
+
+| Key | What | Old save |
+|---|---|---|
+| `tithe_discounts` | `source → fraction` (`"entrega"`, `"expedicion"`…) | `{}` |
+| `order` | `{"res", "amount", "done"}`, the Regency delivery of this calm | `{}`, rolled on load |
+| `calm_total` | length of this calm when it began (barometer fill) | the calm left |
+| `barometer_offset` | random shift of the barometer centre, seconds | `0` |
+
+`settle_tithe()` empties `tithe_discounts` and `order` (paid or repelled); a false alarm
+keeps them (the Tithe has not come). `from_dict()` **assigns**, never adds, so loading
+twice is safe. `StormManager.reset()` builds a new cycle, so the three new-game paths of
+`GameManager` already clear it (no new line there). The Order and the barometer draw
+from their own `RandomNumberGenerator` (`_order_rng`, seed + 1): rolling an order never
+moves the storm clock under a fixed seed.
+
+**Rules.**
+- The order is rolled when the clock arms (Foundry) and after every Tithe
+  (`StormManager._ensure_order(fresh)`), among the **unlocked materials**; with none,
+  wood or gold. Amount: `storm_order_delivery_base[res] × min(1 + growth × storms_survived,
+  growth_max)`. Delivering pays it and adds `storm_order_delivery_pct` (0.15) as source
+  `"entrega"`.
+- Discounts add up per source and in total, capped by `storm_order_discount_max` (0.5).
+  `StormManager._collect_tithe()` applies `cycle.discounted(debt)` (rounded up) to the
+  whole debt — share and Minimum Quota — before collecting. The lost Final Audit
+  (`_on_final_audit_lost`) collects **without** discounts.
+- Barometer (`StormCycle.barometer()`): only in CALM, with the real clock running. Margin
+  ±`storm_barometer_margin` (60 s, through `get_duration()`) around `seconds_left +
+  barometer_offset`, with `|offset| ≤ storm_barometer_jitter × margin` (0.5): the real
+  time to the Warning is always inside `[low, high]` minutes, never at a known place.
+  `low = 0` reads "< high min".
+- The card's Tithe preview uses the severity the colony **earned** (`cycle.severity`),
+  not the effective one: what a false alarm deferred stays hidden, as before.
+
+**Public API (for any branch that adds a discount).**
+
+```gdscript
+# Additive and capped; lasts until the next Tithe. Returns the total discount, or -1.0
+# if nothing was written (clock not armed, mode without Tithe, Assessors at the door).
+StormManager.add_tithe_discount(source: String, pct: float, notify := true) -> float
+StormManager.get_tithe_discount() -> float
+StormManager.get_discount_from(source: String) -> float
+```
+
+The 1.0 sorties (`feat/escaramuzas`, now in `integracion/arte-v1`) wire it: beating the
+Regency outpost raid (the "campamento", only with the clock armed) pays `tithe_pct` loot
+(`GameConfig.sortie_tithe_discount_pct()` = `storm_order_expedition_pct`), and
+`CombatManager._apply_loot()` calls `StormManager.add_tithe_discount("expedicion", pct / 100)`.
+So `GameConfig.storm_order_expedition_way` is `true` and the card shows the third way
+("Echar su campamento (MISIONES) → −10 %").
+Contracts (doc 21 §2.3) would use their own source name (`"contrato"`).
+
+**UI.** `StormHUD` shows the barometer in calm and the Order card on tap (it opens by
+itself on a fresh order, `storm_order_changed(true)`). `Objectives.calm_goal()` gives the
+second line of ¿QUÉ HACER? ("Antes de la Tormenta: entrega …"); it is **not** part of
+`next_step()`, so `tools/line_probe.gd` does not follow it.
+
+**Tunables (new keys only):** `storm_order_discount_max`, `storm_order_delivery_pct`,
+`storm_order_expedition_pct`, `storm_order_expedition_way`, `storm_order_delivery_base`,
+`storm_order_delivery_growth`, `storm_order_delivery_growth_max`, `storm_order_towers_goal`,
+`storm_barometer_margin`, `storm_barometer_jitter`. No existing `storm_*`, `combat_*` or
+`final_audit_*` value changed. Not measured with the line probe yet: a delivered order every
+calm takes 15 % off every Tithe.
+
+Tests: `tests/storm/test_regency_order.gd`, `tests/storm/test_storm_hud.gd`.
+
 ## Governor rank (rango del gobernador)
 
 A third axis next to eras and milestones: **XP inside the run**. `RankManager`
