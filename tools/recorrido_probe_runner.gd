@@ -21,6 +21,8 @@ var _settings_snap: Dictionary
 var _args: PackedStringArray
 var _n := 0
 var _road_node: Node = null
+## Ya se enseno el paso "consigue lo que falta" (una vez por recorrido).
+var _need_shown := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -207,7 +209,22 @@ func _play_guide(main: Node) -> void:
 					await _shot("tut_demolish_confirmar")
 					info.call("_confirm_demolish")
 			_:
-				if step.begins_with("open_") or step in ["rotate", "road_open"]:
+				# Una vez, sin oro ni madera ante la Mina: el paso "consigue lo que
+				# falta" (docs/23 §2.7) tiene que salir y volver solo al rellenar.
+				if step == "open_gold_mine" and not _need_shown:
+					_need_shown = true
+					ResourceManager.set_amounts({"gold": 0, "wood": 0, "food": 40})
+					await _seconds(1.5)
+					print("recorrido_probe: sin recursos paso=", TutorialManager.current_step())
+					await _shot("tut_need_sin_recursos")
+					_top_up()
+					await _seconds(1.5)
+					print("recorrido_probe: rellenado paso=", TutorialManager.current_step())
+					continue
+				if step.begins_with("need_"):
+					# _top_up() ya lo relleno: en un segundo vuelve al paso de construir.
+					await _seconds(1.2)
+				elif step.begins_with("open_") or step in ["rotate", "road_open"]:
 					cm.call("_open")
 				elif step.begins_with("pick_") or step in ["rotate_pick", "road_pick"]:
 					var id: String = TutorialManager.step_building(step)

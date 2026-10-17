@@ -1171,8 +1171,48 @@ static func _line_entry_done(entry: Dictionary) -> bool:
 			return _train_progress(entry) >= int(entry["count"])
 	return false
 
+## Como conseguir `res` (un recurso o un material del taller), en una linea
+## para el jugador, o "". La usan el tutorial (TutorialManager.step_how) y
+## ¿QUE HACER? (describe), para que nunca se diga "te falta" sin decir como
+## (2026-10-17, fix/tutorial-materiales).
+static func how_to_get(res: String) -> String:
+	if ResourceManager.is_material_name(res):
+		var source: String = GameConfig.get_material_source(res)
+		var src: BuildingData = Rules.load_building_data(source) if source != "" else null
+		var src_name: String = src.get_display_name() if src != null else source
+		if source != "" and Rules.count_building(source) > 0:
+			var proc_name: String = Tr.t(String(material_recipe(res).get("name", "")))
+			return Tr.ti("GUIDE_HOW_MAKE") % [Tr.res_cap(res), src_name, proc_name]
+		if source != "":
+			return Tr.t("GUIDE_HOW_MAKE_FIRST") % [Tr.res_cap(res), src_name]
+		return ""
+	if not ResourceManager.is_unlocked_by_name(res):
+		return Tr.t("LBL_NEEDS_UNLOCK_ONE") % [Tr.res_cap(res), Tr.t("UNLOCK_HINT_" + res.to_upper())]
+	if res == "wood":
+		return Tr.ti("GUIDE_HOW_WOOD") if Rules.count_building("sawmill") > 0 else Tr.ti("GUIDE_HOW_WOOD_HAND")
+	if res == "gold":
+		return Tr.ti("GUIDE_HOW_GOLD_MINE") if Rules.count_building("gold_mine") > 0 else Tr.ti("GUIDE_HOW_GOLD_HAND")
+	var producer: String = String(PRODUCER_OF.get(res, ""))
+	if producer == "":
+		return ""
+	var pdata: BuildingData = Rules.load_building_data(producer)
+	var pname: String = pdata.get_display_name() if pdata != null else producer
+	if Rules.count_building(producer) > 0:
+		return Tr.ti("GUIDE_HOW_COLLECT") % [Tr.res_name(res), pname]
+	return Tr.t("GUIDE_HOW_BUILD_PRODUCER") % [Tr.res_name(res), pname]
+
+## Una linea de how_to_get() por cada cosa de `missing` (nombre -> cantidad),
+## sin repetir.
+static func how_lines(missing: Dictionary) -> Array:
+	var out: Array = []
+	for res in missing:
+		var line: String = how_to_get(String(res))
+		if line != "" and not line in out:
+			out.append(line)
+	return out
+
 ## {"title", "why", "blocker"} ya traducidos. `blocker` vacio si el paso se puede
-## dar ahora mismo.
+## dar ahora mismo; si no, lo que falta y como conseguirlo.
 static func describe(step: Dictionary) -> Dictionary:
 	var kind: String = String(step.get("kind", ""))
 	var title := ""
@@ -1226,7 +1266,16 @@ static func describe(step: Dictionary) -> Dictionary:
 	# Sin Diezmo el cuartel no es para la guarnicion: es lo que pide el Cuartel General.
 	elif why == "OBJ_WHY_BARRACKS" and not GameMode.tithe_enabled():
 		why = "OBJ_WHY_BARRACKS_BUILDER"
-	return {"title": title, "why": Tr.t(why), "blocker": blocker(step)}
+	# Lo que falta y COMO conseguirlo (2026-10-17, fix/tutorial-materiales): no
+	# basta con "Te falta: 6 tablones"; debajo, una linea por cosa que falta.
+	var block_text: String = blocker(step)
+	if kind == "build" and block_text != "":
+		var data: BuildingData = Rules.load_building_data(String(step["id"]))
+		if data != null:
+			var how: Array = how_lines(Rules.missing_cost(data))
+			if not how.is_empty():
+				block_text += "\n" + "\n".join(how)
+	return {"title": title, "why": Tr.t(why), "blocker": block_text}
 
 ## Por que no se puede dar el paso ahora, o "" si se puede.
 static func blocker(step: Dictionary) -> String:
@@ -1236,10 +1285,10 @@ static func blocker(step: Dictionary) -> String:
 			var data: BuildingData = Rules.load_building_data(String(step["id"]))
 			if data == null:
 				return ""
-			var block: String = Rules.purchase_block_message(data)
-			if block == Tr.t("LBL_NOT_ENOUGH_RESOURCES"):
-				return Tr.t("OBJ_MISSING") % Tr.amount_list(missing_for(step))
-			return block
+			# Todo lo que lo impide, una cosa por linea (2026-10-17): antes salia
+			# solo lo primero ("Sin trabajadores disponibles") y lo que faltaba de
+			# recursos o del taller quedaba escondido detras.
+			return "\n".join(Rules.block_reasons(data))
 		"upgrade":
 			var node: Node = upgrade_node(step)
 			if node != null and ProductionManager.is_constructing(node):
