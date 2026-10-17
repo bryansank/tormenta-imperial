@@ -288,6 +288,10 @@ func test_the_guide_walks_the_whole_opening() -> void:
 
 func test_cancelling_the_placement_goes_back_one_step() -> void:
 	_start()
+	# Las dos tarjetas de leer van primero (tutorial de 12 pasos, 2026-10-16).
+	TutorialManager.confirm_step("goal")
+	TutorialManager.confirm_step("core")
+	assert_str(TutorialManager.current_step()).is_equal("open_build")
 	EventBus.building_selected_for_placement.emit(SAWMILL)
 	assert_str(TutorialManager.current_step()).is_equal("place_sawmill")
 	EventBus.building_placement_cancelled.emit()

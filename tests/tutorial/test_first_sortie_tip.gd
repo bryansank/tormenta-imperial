@@ -8,10 +8,15 @@ extends GdUnitTestSuite
 const HelpCatalog := preload("res://scripts/ui/HelpCatalog.gd")
 
 var _saved: Dictionary = {}
+var _rank_saved: Dictionary = {}
 var _tips: Array = []
 
 func before_test() -> void:
 	_saved = TutorialManager.get_save_data()
+	# Ganar una expedicion da XP de rango: se aparta para no dejar un rango
+	# subido (y sus bonos) a las suites que vienen detras.
+	_rank_saved = RankManager.get_save_data()
+	RankManager.reset()
 	TutorialManager.reset()
 	_tips.clear()
 	EventBus.tutorial_tip_requested.connect(_collect)
@@ -19,6 +24,8 @@ func before_test() -> void:
 func after_test() -> void:
 	EventBus.tutorial_tip_requested.disconnect(_collect)
 	TutorialManager.load_save_data(_saved)
+	RankManager.reset()
+	RankManager.load_save_data(_rank_saved)
 
 func _collect(tip_id: String, _title: String, _body: String) -> void:
 	_tips.append(tip_id)
@@ -33,7 +40,10 @@ func test_the_first_unit_points_at_the_skirmish_once_and_before_upkeep() -> void
 func test_it_is_not_offered_once_the_first_sortie_is_won() -> void:
 	EventBus.expedition_ended.emit(Expedition.RESULT_WON, {}, {})
 	EventBus.unit_trained.emit("infantry")
-	assert_array(_tips).contains_exactly(["upkeep"])
+	# La victoria tambien sube el rango y trae sus propios consejos (rango,
+	# bandera): aqui solo cuenta que el de la escaramuza ya no sale.
+	assert_array(_tips).not_contains(["first_sortie"])
+	assert_array(_tips).contains(["upkeep"])
 
 func test_the_tip_points_at_the_menu_button_in_the_army_section() -> void:
 	assert_bool(HelpCatalog.has("first_sortie")).is_true()

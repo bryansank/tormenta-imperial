@@ -52,8 +52,12 @@ func test_the_basics_come_one_at_a_time_after_the_tutorial() -> void:
 		return
 	_queue_basics(helper)
 	assert_int(helper.visible_help_count()).is_equal(1)
-	assert_str(helper.current_help()).is_equal("callout_objective")
+	# Al terminar el tutorial TutorialManager ofrece el consejo de las partidas
+	# (feat/ayudas-novedades, 2026-10-14) y los consejos van siempre delante;
+	# detras, los globos basicos en su orden, el primero ¿QUE HACER?.
+	assert_str(helper.current_help()).is_equal("saves")
 	assert_array(helper.queued_ids()).is_not_empty()
+	assert_str(String(helper.queued_ids()[0])).is_equal("callout_objective")
 
 func test_closing_one_marks_it_seen_and_the_next_waits_a_breath() -> void:
 	var helper := _helper()
