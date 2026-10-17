@@ -251,7 +251,11 @@ func _apply(status: int, reason: String) -> void:
 		Status.IDLE:
 			# En obras ya lo dice el rotulo de la obra, con su porcentaje, lo que
 			# falta y su barra (ProductionManager): dos carteles se pisaban.
-			visible = reason != "construction"
+			# "idle" (sin produccion ni dotacion y sin proceso en marcha) es el
+			# Nucleo en reposo, su estado normal: el cartel salia en toda partida
+			# nueva, enorme con la camara de inicio y pegado al HUD (revision
+			# visual 2026-10-16). Sigue el estado; solo no se pinta.
+			visible = reason != "construction" and reason != "idle"
 			text = "%s\n%s" % [Tr.t("LBL_STATUS_IDLE"), reason_text(reason)]
 			modulate = color_for_reason(reason)
 			if _icon:
