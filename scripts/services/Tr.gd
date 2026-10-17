@@ -1080,7 +1080,7 @@ const _STRINGS := {
 		"OBJ_WHY_SLOW_STEEL": "El acero llega demasiado despacio para lo siguiente: otra fundición lo acorta.",
 		"OBJ_WHY_SLOW_OIL": "El petróleo llega demasiado despacio para lo siguiente: otra refinería lo acorta.",
 		"OBJ_WHY_SURPLUS_RESEARCH": "Lo siguiente aún tarda y te sobra con qué: investiga esto mientras ahorras. Es permanente.",
-		"OBJ_WHY_SURPLUS_UPGRADE": "La bolsa está casi llena y lo siguiente aún tarda: gasta lo que te sobra en subir este edificio. Rinde más y hace sitio.",
+		"OBJ_WHY_SURPLUS_UPGRADE": "Bolsa casi llena: sube este edificio con lo que sobra. Rinde más y hace sitio.",
 		"OBJ_DO_REPAIR": "Repara: %s",
 		"OBJ_DO_SANDBOX_BUILT": "Obra terminada. La isla es tuya",
 		"OBJ_WHY_SANDBOX_BUILT": "El Cuartel General está completo. Sigue construyendo, mejora edificios o investiga a tu ritmo.",
@@ -1343,8 +1343,8 @@ const _STRINGS := {
 Están en ☰ MENÚ → PARTIDA → PARTIDAS y en el menú principal: CARGAR o BORRAR.
 Con 5, borra una para empezar otra.",
 		"HELP_T_SPEED": "Velocidad x1 / x2",
-		"HELP_B_SPEED": "x2: todo va el doble de rápido, también las peleas. Púlsalo otra vez (o la tecla F) para volver a x1.",
-		"HELP_B_SPEED_TOUCH": "x2: todo va el doble de rápido, también las peleas. Tócalo otra vez para volver a x1.",
+		"HELP_B_SPEED": "x2: todo va al doble, peleas incluidas. Púlsalo otra vez (o F) para volver.",
+		"HELP_B_SPEED_TOUCH": "x2: todo va al doble, también las peleas. Tócalo otra vez para volver.",
 		"HELP_T_RANK": "Rango de gobernador",
 		"HELP_B_RANK": "Casi todo da XP: construir +15, mejorar +25, ganar una pelea +40, aguantar una Tormenta +30 o más, un logro +100.
 Con XP subes de rango (hay 18). Cada rango abre algo: decoraciones, más edificios, piezas de bandera o un poco más de producción y almacén.",
@@ -2551,8 +2551,8 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"OBJ_WHY_SLOW_WOOD": "Wood comes in too slowly for the next step: another sawmill shortens it.",
 		"OBJ_WHY_SLOW_STEEL": "Steel comes in too slowly for the next step: another foundry shortens it.",
 		"OBJ_WHY_SLOW_OIL": "Oil comes in too slowly for the next step: another refinery shortens it.",
-		"OBJ_WHY_SURPLUS_RESEARCH": "The next step is still a while off and you have spare: research this while you save. It is permanent.",
-		"OBJ_WHY_SURPLUS_UPGRADE": "Your storage is nearly full and the next step is still a while off: spend what you have spare on upgrading this building. It produces more and frees up room.",
+		"OBJ_WHY_SURPLUS_RESEARCH": "Next step is a while off and you have spare: research this now. It's permanent.",
+		"OBJ_WHY_SURPLUS_UPGRADE": "Storage nearly full: upgrade this building with your spare. It produces more and frees room.",
 		"OBJ_DO_REPAIR": "Repair: %s",
 		"OBJ_DO_SANDBOX_BUILT": "The work is done. The island is yours",
 		"OBJ_WHY_SANDBOX_BUILT": "The Headquarters is complete. Keep building, upgrading or researching at your own pace.",
@@ -2815,8 +2815,8 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 Find them in ☰ MENU → GAME → SAVES and in the main menu: LOAD or DELETE.
 With 5, delete one to start another.",
 		"HELP_T_SPEED": "Speed x1 / x2",
-		"HELP_B_SPEED": "x2: everything runs twice as fast, fights too. Press it again (or the F key) to go back to x1.",
-		"HELP_B_SPEED_TOUCH": "x2: everything runs twice as fast, fights too. Tap it again to go back to x1.",
+		"HELP_B_SPEED": "x2: everything runs twice as fast, fights too. Press again (or F) for x1.",
+		"HELP_B_SPEED_TOUCH": "x2: everything runs twice as fast, fights too. Tap again to go back.",
 		"HELP_T_RANK": "Governor rank",
 		"HELP_B_RANK": "Almost everything gives XP: building +15, upgrading +25, winning a fight +40, weathering a Storm +30 or more, a achievement +100.
 XP raises your rank (there are 18). Each rank opens something: decorations, more buildings, flag pieces or a little more production and storage.",
