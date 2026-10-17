@@ -64,15 +64,15 @@ static func normalized(data: Variant) -> Dictionary:
 	if not (data is Dictionary):
 		return out
 	var d: Dictionary = data
-	var reg_name := ColonyIdentity.clean_name(String(d.get("name", "")))
+	var reg_name := ColonyIdentity.clean_name(str(d.get("name", "")))
 	if not reg_name.is_empty() and not ColonyIdentity.is_name_allowed(reg_name):
 		reg_name = ""
 	out["name"] = reg_name
-	var color_id := String(d.get("color", ""))
+	var color_id := str(d.get("color", ""))
 	out["color"] = color_id if GameConfig.colony_colors.has(color_id) else ""
-	var emblem := String(d.get("emblem", ""))
+	var emblem := str(d.get("emblem", ""))
 	out["emblem"] = emblem if emblem in GameConfig.COLONY_EMBLEMS else ""
-	var paint := String(d.get("paint", "plain"))
+	var paint := str(d.get("paint", "plain"))
 	out["paint"] = paint if paint in GameConfig.REGIMENT_PAINTS else "plain"
 	out["wins"] = maxi(0, int(d.get("wins", 0)))
 	return out
