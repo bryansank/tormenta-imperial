@@ -13,6 +13,8 @@ var _now_blocker: Label
 var _calm_goal: Label
 ## "Sal de escaramuza: ..." (Objectives.sortie_step), solo cuando hay motivo.
 var _sortie_line: Label
+## Encargos: "Entrega el encargo: Los vecinos" cuando uno ya se puede entregar.
+var _now_contract: Label
 var _route_box: VBoxContainer
 var _refresh_left := 0.0
 
@@ -129,6 +131,11 @@ func _setup_ui() -> void:
 	_sortie_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_sortie_line.visible = false
 	content.add_child(_sortie_line)
+	_now_contract = UITheme.make_label("", "body", UITheme.POSITIVE)
+	_now_contract.name = "ContractStep"
+	_now_contract.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_now_contract.visible = false
+	content.add_child(_now_contract)
 
 	# ── EL CAMINO: la linea entera, con lo hecho marcado ──
 	content.add_child(UITheme.make_separator())
@@ -189,6 +196,11 @@ func refresh() -> void:
 		var sortie_text: Dictionary = Objectives.describe(sortie)
 		_sortie_line.text = "%s\n%s" % [String(sortie_text["title"]), String(sortie_text["why"])]
 		_sortie_line.visible = true
+	var contract: Dictionary = Objectives.contract_step()
+	_now_contract.visible = not contract.is_empty()
+	if not contract.is_empty():
+		var ctext: Dictionary = Objectives.describe(contract)
+		_now_contract.text = "%s\n%s" % [String(ctext["title"]), String(ctext["why"])]
 	_paint_route()
 
 ## La linea de Objectives.LINE, una fila por paso: hecho, el de ahora, o por hacer.

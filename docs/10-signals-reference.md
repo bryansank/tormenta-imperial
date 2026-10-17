@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**127 signals** in 30 categories (counted on 2026-10-16, after the skirmishes and `regiment_changed`), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**132 signals** in 30 categories (counted on 2026-10-16: the 126 of 1.0, `regiment_changed` and the 5 of [Encargos](#encargos)), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -408,6 +408,25 @@ from it ([06-progression-victory.md](06-progression-victory.md) §Governor rank)
 | `governor_xp_changed` | `xp: int, rank: int, gained: int` (`gained` 0 on load) | RankManager | RankPanel |
 | `governor_rank_up` | `rank: int, rewards: Dictionary` (merged `rank_rewards` of every rank crossed) | RankManager | RankPanel, ConstructionMenu, AudioManager |
 | `colony_identity_changed` | `colony_name: String, flag_spec: Dictionary` (ColonyFlag recipe: `pattern`, `emblem`, `colors` [field 1, field 2, emblem]) | RankManager (`set_colony()`, load) | RankPanel, ColonyFlag3D, ColonyFlag2D, ColonyByline (war reports, audit defeat, victory, board header) |
+
+## Encargos
+
+Los emite solo `ContractManager`, que publica lo que devuelve el modelo puro
+`ContractBoard` ([27-encargos.md](27-encargos.md)). `source` es `"regency"`,
+`"neighbors"` o `"smuggler"`; `contract` es el encargo entero (`id`, `source`,
+`template`, `ask`, `reward`, `seconds_total`, `seconds_left`).
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `contract_offered` | `source: String, contract: Dictionary` | ContractManager | *(no listener: el panel escucha `contract_board_changed`)* |
+| `contract_delivered` | `source: String, contract: Dictionary, reward: Dictionary` (ya pagado) | ContractManager (`deliver()`) | AudioManager (`milestone`) |
+| `contract_expired` | `source: String, contract: Dictionary, reputation: int` | ContractManager | *(no listener)* |
+| `contract_discarded` | `source: String, contract: Dictionary` | ContractManager (`discard()`) | *(no listener)* |
+| `contract_board_changed` | — | ContractManager (cualquier evento, `load_save_data()`, `reset()`) | ContractPanel |
+
+Los avisos al jugador van por `notification_posted` (nuevo encargo, cumplido, se
+acabo el plazo); la XP de rango (`contract_rank_xp`) la suma ContractManager con
+`RankManager.add_xp()`.
 
 ## Orphan signals
 
