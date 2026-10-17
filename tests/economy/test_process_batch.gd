@@ -157,6 +157,9 @@ func test_the_core_offers_every_workshop_and_hand_mining() -> void:
 	for proc in ProcessManager.get_processes_for("nucleo"):
 		ids.append(String(proc["id"]))
 	for building_id in GameConfig.building_processes:
+		# La Carpinteria repite al Aserradero: el Nucleo no la ofrece (core_skip_workshops).
+		if building_id in GameConfig.core_skip_workshops:
+			continue
 		for proc in GameConfig.building_processes[building_id]:
 			assert_array(ids).contains([String(proc["id"])])
 	for deposit_id in GameConfig.mining_data:
