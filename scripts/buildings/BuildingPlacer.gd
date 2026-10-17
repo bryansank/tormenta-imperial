@@ -123,6 +123,11 @@ func _ready() -> void:
 			EventBus.building_ruined, EventBus.building_repaired]:
 		(sig as Signal).connect(sync_look)
 	EventBus.building_upgrade_started.connect(_on_upgrade_look)
+	# Un golpe puede cambiar la etapa de dano (leve, grave): se repinta ya.
+	EventBus.building_damaged.connect(func(node: Node, _h: int, _m: int) -> void: sync_look(node))
+	# Reparado: vuelve a sano con el mismo salto que una obra terminada.
+	# Despues de sync_look (conectado arriba): el modelo ya esta derecho.
+	EventBus.building_repaired.connect(_on_repaired)
 	EventBus.building_upgrade_completed.connect(_on_upgrade_look)
 	# Obra terminada: salto y polvo (V1). Despues de sync_look: el modelo ya se ve.
 	EventBus.construction_completed.connect(_on_construction_done)
@@ -307,6 +312,14 @@ func _on_upgrade_look(node: Node, _level: int) -> void:
 ## un poco de polvo al pie (8 motas, un CPUParticles3D que se borra solo). En
 ## calidad Minima, solo el salto. Ni calzadas ni nada sin modelo.
 func _on_construction_done(node: Node) -> void:
+	_bounce_building(node)
+
+## Reparado (docs/03, "Etapas de dano"): el mismo salto y el mismo polvo.
+func _on_repaired(node: Node) -> void:
+	_bounce_building(node)
+
+## El salto de juguete y el polvo al pie (obra terminada, reparacion).
+func _bounce_building(node: Node) -> void:
 	if node == null or not is_instance_valid(node) or not (node is Node3D) or not node.is_inside_tree():
 		return
 	var info := GridManager.get_building_info(node)

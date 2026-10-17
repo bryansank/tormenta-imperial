@@ -429,6 +429,53 @@ la ruina sobre la actividad.
 - Todo es original y generado por el proyecto (mallas procedurales, dibujo en
   codigo, hojas de sprite generadas): ningun asset externo.
 
+### Etapas de dano (2026-10-16)
+
+Entre sano y ruina el dano se ve por etapas, no solo como la capa de ceniza de
+`BuildingHealth` (que sigue encima, por escalones). La etapa sale de la
+proporcion de vida con `BuildingLook.damage_stage()` y los umbrales de
+`GameConfig.damage_stage_thresholds` (`[0.75, 0.4]`); `derive()` la devuelve en
+la clave `"damage"`. Va **encima** del aspecto: un edificio grave puede seguir
+trabajando y echa su humo ademas del negro. Solo se ve en pie (quieto o
+trabajando); la obra y el andamio de mejora la tapan. Es solo aspecto: el dano,
+la reparacion y su coste no cambian.
+
+| Etapa | Vida | 3D | 2D |
+|---|---|---|---|
+| **Sano** | ≥ 75 % | el modelo (un rasguno: solo la capa de ceniza) | el dibujo; por debajo del 100 %, un velo de ceniza y la barra de vida |
+| **Leve** | < 75 % | grietas en zigzag en la fachada y un costado, tejas y cascotes caidos al pie, una tabla suelta apoyada en la pared; el modelo ladeado `damage_tilt[0]` (0,025 rad) | velo de ceniza, grietas, huecos de tejas que faltan, tejas caidas al pie, tabla suelta; el cuerpo ladeado (cizalla) |
+| **Grave** | < 40 % | lo anterior y mas, chapa colgando de un costado, viga partida que asoma del tejado, tizne y cascotes, brasas; **humo negro** y **chispas** animados; ladeado `damage_tilt[1]` (0,05 rad) y hundido `damage_sink_ratio[1]` (5 %) | lo anterior y mas, tizne, chapa suelta torcida, viga partida con ascuas, cascotes; humo negro y chispas animados; mas ladeado y algo aplastado |
+| **Ruina** | 0 | la de siempre (ver la tabla de aspectos) | la de siempre |
+
+- **3D**: `SiteMesh.damage_overlay(etapa, caja, variante)` (raiz
+  `DamageOverlay<etapa>`, hijo de `LookVisual`). Todo lo quieto es **una malla
+  cacheada** por etapa, variante (3, de la semilla de la celda) y caja del
+  modelo (`SiteMesh.damage_mesh`): diez casas tocadas comparten dos o tres
+  mallas, con los materiales de la paleta (`LotMesh`/`ToyTones`). Las piezas se
+  colocan alrededor de la caja medida del modelo (`BuildingLookVisual._model_box`,
+  una vez por cambio de etapa); la viga nace dentro del modelo para tocarlo
+  siempre. El humo (`smoke`, variante `ruin`) y las chispas son quads de
+  `BuildingFx` con su material compartido. El ladeo usa la misma postura
+  guardada que la ruina (`look_base_pos/rot`), asi que reparar o mejorar lo
+  devuelve exacto.
+- **2D**: `Building2D` no usa la parcela horneada entera mientras esta herido:
+  pinta la parcela derecha y el cuerpo (de la cache por tipo) con
+  `BuildingArt2D.damage_lean()`; las marcas (`draw_damage_marks`) se hornean en
+  `ArtCache2D` con clave `dmg|etapa|variante|huella|tamano`. Humo y chispas,
+  sprites de `BuildingFx` creados la primera vez (`DamageFx`).
+- **Mismo lado en las dos vistas**: variante y lado salen de
+  `BuildingLook.seed_of()` (celda de origen).
+- **Calidad Minima**: solo la malla y el dibujo; humo y chispas estan en el
+  grupo `building_fx_anim` y no se ven.
+- **Nada por frame**: la 3D cambia la etapa con `building_damaged` (repinta
+  ya) y el reloj comun de aspectos; la 2D, con su firma de repintado.
+- **Reparado**: vuelve a sano con el salto de juguete y el polvo de la obra
+  terminada (`BuildingPlacer._bounce_building`, `BuildingPlacer2D`).
+- No hay andamio de reparacion: reparar es instantaneo (no hay un estado
+  "reparandose" que pintar).
+- Sonda: `tools/look_probe.gd` saca en `look_probe_3d.png` leve y grave del
+  cuartel, la casa, la fundicion trabajando y el almacen.
+
 ## Parcela y atrezo (guia de estilo, 2026-10-04)
 
 Cada edificio vive en su **parcela** (regla 1 de la guia de estilo de edificios):

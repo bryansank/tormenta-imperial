@@ -71,7 +71,7 @@ func test_loading_during_the_ash_paints_the_ash_at_once() -> void:
 	var scene := _scene()
 	_load_phase(StormCycle.Phase.ASH)
 	EventBus.game_load_completed.emit()
-	assert_float(_env.fog_density).is_equal_approx(StormSky.MAX_FOG * StormSky.WEIGHT_ASH, 0.0001)
+	assert_float(_env.fog_density).is_equal_approx(StormSky.MAX_FOG * StormSky.ash_weight(), 0.0001)
 	assert_float(_sun_of(scene).light_energy).is_less(2.0)
 
 func test_after_a_reload_the_sky_follows_the_new_scene_and_comes_back_clean() -> void:
@@ -105,9 +105,13 @@ func test_syncing_twice_in_the_same_storm_does_not_lose_the_clean_sky() -> void:
 func test_every_phase_has_its_weight() -> void:
 	assert_float(StormSky.weight_for(StormCycle.Phase.CALM, 3)).is_equal(0.0)
 	assert_float(StormSky.weight_for(StormCycle.Phase.TITHE, 3)).is_equal(0.0)
-	assert_float(StormSky.weight_for(StormCycle.Phase.WARNING, 3)).is_equal(StormSky.WEIGHT_WARNING)
-	assert_float(StormSky.weight_for(StormCycle.Phase.ASH, 3)).is_equal(StormSky.WEIGHT_ASH)
-	assert_float(StormSky.weight_for(StormCycle.Phase.STORM, 1)).is_greater_equal(0.6)
+	assert_float(StormSky.weight_for(StormCycle.Phase.WARNING, 3)).is_equal(StormSky.warning_weight())
+	assert_float(StormSky.weight_for(StormCycle.Phase.ASH, 3)).is_equal(StormSky.ash_weight())
+	# Fuera del golpe la Tormenta se queda en el tono de fondo; el golpe dice la severidad.
+	assert_float(StormSky.weight_for(StormCycle.Phase.STORM, 1)).is_equal(StormSky.linger_weight())
+	assert_float(StormSky.punch_weight(1)).is_greater_equal(0.6)
+	assert_float(StormSky.punch_weight(99)).is_equal(1.0)
+	assert_float(StormSky.linger_weight()).is_less(StormSky.punch_weight(1))
 
 ## La espuma de la isla, con su shader de verdad, colgada de la escena.
 func _add_foam(scene: Node) -> ShaderMaterial:
@@ -125,8 +129,8 @@ func test_the_island_darkens_with_the_sky_and_comes_back_clean() -> void:
 	var foam := _add_foam(scene)
 	_load_phase(StormCycle.Phase.ASH)
 	EventBus.game_load_completed.emit()
-	assert_float(float(foam.get_shader_parameter("storm_weight"))).is_equal_approx(StormSky.WEIGHT_ASH, 0.0001)
-	assert_float(StormSky.get_island_weight()).is_equal_approx(StormSky.WEIGHT_ASH, 0.0001)
+	assert_float(float(foam.get_shader_parameter("storm_weight"))).is_equal_approx(StormSky.ash_weight(), 0.0001)
+	assert_float(StormSky.get_island_weight()).is_equal_approx(StormSky.ash_weight(), 0.0001)
 	_load_phase(StormCycle.Phase.CALM)
 	EventBus.game_load_completed.emit()
 	assert_float(float(foam.get_shader_parameter("storm_weight"))).is_equal(0.0)
@@ -168,7 +172,7 @@ func test_at_night_the_sky_is_blue_and_the_storm_still_rules() -> void:
 	var day_ash := _env.background_color
 	# Con ceniza la noche se nota menos que sin ella.
 	assert_float(absf(night_ash.b - day_ash.b)).is_less(absf(night_bg.b - Color(0.5, 0.6, 0.7).b))
-	assert_float(_env.fog_density).is_equal_approx(StormSky.MAX_FOG * StormSky.WEIGHT_ASH, 0.0001)
+	assert_float(_env.fog_density).is_equal_approx(StormSky.MAX_FOG * StormSky.ash_weight(), 0.0001)
 
 func test_windows_glow_more_at_night_than_by_day() -> void:
 	_scene()

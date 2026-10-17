@@ -128,9 +128,11 @@ func test_zoom_requests_are_clamped_like_the_3d_camera() -> void:
 
 func test_the_storm_darkens_in_the_same_three_steps_as_the_3d_sky() -> void:
 	assert_float(StormTint.target_weight(StormCycleScript.Phase.CALM, 3, false)).is_equal(0.0)
-	assert_float(StormTint.target_weight(StormCycleScript.Phase.WARNING, 3, false)).is_equal(0.35)
-	assert_float(StormTint.target_weight(StormCycleScript.Phase.ASH, 3, false)).is_equal(0.7)
-	assert_float(StormTint.target_weight(StormCycleScript.Phase.STORM, 1, false)).is_greater_equal(0.6)
-	assert_float(StormTint.target_weight(StormCycleScript.Phase.STORM, 99, false)).is_equal(1.0)
+	assert_float(StormTint.target_weight(StormCycleScript.Phase.WARNING, 3, false)).is_equal(GameConfig.storm_visual_warning)
+	assert_float(StormTint.target_weight(StormCycleScript.Phase.ASH, 3, false)).is_equal(GameConfig.storm_visual_ash)
+	# Fuera del golpe, el tono de fondo; el golpe (punch_weight) dice la severidad.
+	assert_float(StormTint.target_weight(StormCycleScript.Phase.STORM, 1, false)).is_equal(GameConfig.storm_visual_linger)
+	assert_float(StormTint.punch_weight(1)).is_greater_equal(0.6)
+	assert_float(StormTint.punch_weight(99)).is_equal(1.0)
 	# Ganada la Auditoria Final: despejado para siempre.
 	assert_float(StormTint.target_weight(StormCycleScript.Phase.STORM, 5, true)).is_equal(0.0)

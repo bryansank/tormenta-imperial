@@ -66,6 +66,8 @@ func _ready() -> void:
 	EventBus.building_rotate_requested.connect(_on_rotate_requested)
 	# Obra terminada: salto y polvo (V1); lo recogido vuela a la bolsa (V2).
 	EventBus.construction_completed.connect(_on_construction_done)
+	# Reparado: vuelve a sano con el mismo salto (docs/03, "Etapas de dano").
+	EventBus.building_repaired.connect(_on_construction_done)
 	EventBus.production_collected.connect(_on_production_collected)
 	GameManager.register_placer(self)
 	_assist = Assist.new()
@@ -73,7 +75,7 @@ func _ready() -> void:
 	_assist.setup(self)
 	add_child(_assist)
 
-## Obra terminada (V1): el edificio entero da el salto (crece desde el centro de
+## Obra terminada (V1) o reparacion: el edificio entero da el salto (crece desde el centro de
 ## su huella, que es su origen) con un Tween que muere con el, y suelta 8 motas
 ## de polvo desde el borde. En calidad Minima, solo el salto.
 func _on_construction_done(node: Node) -> void:
