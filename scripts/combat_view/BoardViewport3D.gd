@@ -58,12 +58,19 @@ func _gui_input(event: InputEvent) -> void:
 			if mb.pressed:
 				_pressed = true
 				_press_pos = mb.position
+				# Con el dedo, en el frente, la pieza que se pisa es el foco mientras
+				# se mantiene: su etiqueta de objetivo (dano previsto, buen/mal
+				# objetivo) se lee antes de soltar. En el tablero no cambia nada.
+				if not _hover_enabled and board.is_front():
+					board.set_hover(board.pick_cell(_to_viewport(mb.position)))
 			elif _pressed:
 				_pressed = false
 				if mb.position.distance_to(_press_pos) <= TAP_SLOP:
 					var cell: Vector2i = board.pick_cell(_to_viewport(mb.position))
 					if cell.x >= 0:
 						cell_pressed.emit(cell)
+				if not _hover_enabled:
+					board.set_hover(Vector2i(-1, -1))
 			accept_event()
 		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 			board.zoom_by(0.95)
