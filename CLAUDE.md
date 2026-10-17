@@ -250,7 +250,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (27 total, `data/buildings/*.tres`)
+### Buildings (34 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -271,7 +271,19 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Garden | 2x2 | 30/0/0/20 | 0 | +5 morale | deco |
 | Fountain | 2x2 | 60/20/0/10 | 0 | +7 morale | deco |
 | Statue | 2x2 | 120/40/0/0 + 3 ingots | 0 | +10 morale | deco |
+| Windmill (1.1) | 2x2 | 70/0/0/50 | 1 | Farms within 4 cells +20 %; needs a Farm; rank 3 | 1 |
+| Silo (1.1) | 2x2 | 60/0/0/40 | 0 | +300 food outside the shared bag; slows spoilage in Gobernador; needs a Farm | 1 |
+| Tavern (1.1) | 2x2 | 90/0/0/60 | 2 | 6 food + 4 gold per consumption tick: +2 morale, +1 growth (houses within 4) | 1 |
+| Carpentry (1.1) | 2x2 | 70/0/0/60 | 2 | Own processes: planks and furniture; needs a Sawmill | 1 |
+| Well (1.1) | 2x2 | 40/0/0/30 | 0 | −20 % storm damage within 3 cells, +15 % health after the storm; rank 2 | 1 |
+| Lighthouse (1.1) | 2x2 | 180/0/0/120 + 6 planks | 1 | Storm Warning +20 s; max 1 | 1-2 |
+| Fuel depot (1.1) | 2x2 | 200/80/0/80 + 4 beams | 1 | +500 oil outside the shared bag; needs a Refinery | 3 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
+
+The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
+`scripts/buildings/UtilityEffects.gd` (on build/demolish, never per frame), look in
+`scripts/buildings/UtilityToys.gd` (one procedural toy mesh per type until its bake
+exists) and `BuildingArt2D._utility`. Full table: `docs/03-buildings.md`.
 
 **Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
 `avenue_tree`, `flower_planter`, `colony_sign`, `hay_cart`, `bonfire`, `flagpole`,
@@ -1017,7 +1029,7 @@ tormenta-imperial/
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
 |       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
-+-- data/buildings/                  # 27 .tres building definitions
++-- data/buildings/                  # 34 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 5 tracks, 34 SFX, 3 ambient loops (see MANIFEST.md)
 |   +-- models/toy/                  # Baked toy buildings (<id>.tscn + <id>_mesh.res, toy_solid / toy_glow materials)

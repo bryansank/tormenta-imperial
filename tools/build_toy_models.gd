@@ -46,6 +46,9 @@ const CELL := 2.0
 ## Los que se hornean (la calzada no: su malla depende de los vecinos).
 const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", "laboratory",
 	"foundry", "barracks", "refinery", "tower", "headquarters", "garden", "fountain", "statue", "farm",
+	# Edificios utiles de la 1.1 (feat/edificios-utiles-1). Hasta hornearlos, el
+	# juego usa su version procedural (scripts/buildings/UtilityToys.gd).
+	"windmill", "silo", "tavern", "carpentry", "well", "lighthouse", "fuel_depot",
 	# Las diez decoraciones baratas (feat/decoraciones-1); en el juego las carga
 	# DecorMesh (<id>_mesh.res) y, sin hornear, usa su version procedural.
 	"lamp_post", "park_bench", "hedge", "avenue_tree", "flower_planter",

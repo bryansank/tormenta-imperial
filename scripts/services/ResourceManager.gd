@@ -142,17 +142,48 @@ func refresh_warehouse_levels() -> void:
 	_warehouse_level_extra = preload("res://scripts/buildings/PlacementRules.gd").warehouse_level_storage()
 
 ## Everything stored, across all four resources: this is what competes for the cap.
+## Lo que cabe en una bolsa aparte (Silo: comida; Deposito de combustible:
+## petroleo) no cuenta: solo lo que la desborda.
 func get_total_stored() -> int:
 	var total := 0
 	for type in _resources:
 		if is_material(type):
 			continue
-		total += int(_resources[type])
+		total += maxi(0, int(_resources[type]) - get_side_storage(type))
 	return total
 
 ## Room left in the shared pool. Never negative, even right after a cap drop.
 func get_free_space() -> int:
 	return maxi(0, get_storage_cap() - get_total_stored())
+
+# ── Bolsas aparte (edificios utiles de la 1.1) ──
+## Tipo -> cuanto guardan, fuera de la bolsa compartida, los Silos (comida) y
+## los Depositos de combustible (petroleo) en pie. Derivado de los edificios
+## (UtilityEffects.refresh), no se guarda.
+var _side_storage: Dictionary = {}
+
+func set_side_storage(caps: Dictionary) -> void:
+	var clean := {}
+	for type in caps:
+		if int(caps[type]) > 0:
+			clean[type] = int(caps[type])
+	if clean == _side_storage:
+		return
+	_side_storage = clean
+	# El HUD repinta la bolsa: el hueco libre acaba de cambiar.
+	for type in [Type.FOOD, Type.OIL]:
+		EventBus.resource_changed.emit(_names[type], _resources[type], 0)
+
+func get_side_storage(type: int) -> int:
+	return int(_side_storage.get(type, 0))
+
+## Hueco para `type`: lo libre de la bolsa compartida mas lo que le quede de su
+## bolsa aparte.
+func get_free_space_for(type: int) -> int:
+	if is_material(type):
+		return 1 << 30
+	var side := get_side_storage(type)
+	return get_free_space() + maxi(0, side - int(_resources.get(type, 0)))
 
 func is_storage_full() -> bool:
 	return get_free_space() <= 0
@@ -207,7 +238,7 @@ func add(type: Type, amount: int) -> int:
 		return _resources[type]
 	# One pool: what comes in competes with everything already inside, not with a
 	# per-resource ceiling. Los materiales van al taller, fuera de la bolsa.
-	var stored: int = amount if is_material(type) else mini(amount, get_free_space())
+	var stored: int = amount if is_material(type) else mini(amount, get_free_space_for(type))
 	var lost := amount - stored
 	_resources[type] = current + stored
 	# Emitted even when stored is 0 so the HUD repaints the counter red on a full bag.
@@ -223,7 +254,7 @@ func add(type: Type, amount: int) -> int:
 func add_fitting(type: Type, amount: int) -> int:
 	if amount <= 0:
 		return 0
-	var stored: int = amount if is_material(type) else mini(amount, get_free_space())
+	var stored: int = amount if is_material(type) else mini(amount, get_free_space_for(type))
 	if stored > 0:
 		add(type, stored)
 	return amount - stored
@@ -306,6 +337,7 @@ func reset() -> void:
 			_unlocked[type] = true
 	_warehouse_count = 0
 	_warehouse_level_extra = 0
+	_side_storage = {}
 	_era = 3 if GameMode.all_unlocked() else 1
 	_overflow_warned = false
 	for type in _resources:
@@ -334,6 +366,9 @@ func set_amounts(data: Dictionary) -> void:
 ## player's entire oil and leave their gold untouched. Proportional keeps the shape
 ## of what they built. Returns true if anything was actually taken.
 func clamp_to_storage() -> bool:
+	# Silos y Depositos ya estan en el mapa: su bolsa aparte cuenta antes de
+	# recortar (si no, una carga con 900 de petroleo y un Deposito perdia 500).
+	preload("res://scripts/buildings/UtilityEffects.gd").refresh()
 	var cap := get_storage_cap()
 	var total := get_total_stored()
 	if total <= cap:

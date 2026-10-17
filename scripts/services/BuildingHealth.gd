@@ -135,6 +135,23 @@ func repair(node: Node) -> bool:
 	EventBus.building_repaired.emit(node)
 	return true
 
+## Cura `amount` sin cobrar (el Pozo tras la Tormenta, 1.1). No levanta una
+## ruina: eso es la reparacion pagada. Devuelve lo curado de verdad. No emite
+## building_damaged (el parte del asedio lo cuenta como golpe); solo
+## building_repaired si queda entero.
+func heal(node: Node, amount: int) -> int:
+	if node == null or not is_instance_valid(node) or amount <= 0 or is_ruined(node):
+		return 0
+	var before := get_health(node)
+	var after: int = mini(get_max_health(node), before + amount)
+	if after == before:
+		return 0
+	node.set_meta("health", after)
+	_apply_visual(node)
+	if after >= get_max_health(node):
+		EventBus.building_repaired.emit(node)
+	return after - before
+
 # ── Aspecto ──────────────────────────────────────────────────────────
 
 ## Un edificio herido se cubre de ceniza; en ruinas queda casi negro. Sin esto el

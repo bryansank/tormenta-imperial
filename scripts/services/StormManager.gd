@@ -301,6 +301,7 @@ func _publish(events: Array) -> void:
 				_apply_storm_tick(int(event["phase"]))
 				EventBus.storm_tick.emit(int(event["phase"]), float(event["left"]))
 			"storm_ended":
+				_well_repairs()
 				EventBus.storm_ended.emit(int(event["severity"]))
 				EventBus.notification_posted.emit(
 					Tr.t("STORM_ENDED"), "info", UITheme.TEXT_DIM)
@@ -364,8 +365,30 @@ func _damage_buildings(severity: int) -> void:
 				return
 			var amount: int = GameConfig.get_storm_damage(
 				severity, BuildingHealth.get_max_health(node), towers)
+			# Un Pozo cerca (meta de UtilityEffects) quita parte del golpe.
+			var cover: float = float(node.get_meta("well_cover", 0.0))
+			if cover > 0.0:
+				amount = maxi(1, int(round(float(amount) * (1.0 - cover))))
 			BuildingHealth.damage_building(node, amount)
 			hits -= 1
+
+## Pasada la Tormenta, los Pozos (1.1) remiendan un poco lo que tienen cerca:
+## cada edificio herido, no en ruinas, con `well_cover` recupera
+## `well_repair_ratio` de su salud. Gratis: es el agua a mano, no la obra.
+func _well_repairs() -> int:
+	var healed := 0
+	for info in GridManager.buildings_view():
+		var node: Node = info.get("node")
+		if node == null or not is_instance_valid(node):
+			continue
+		if float(node.get_meta("well_cover", 0.0)) <= 0.0:
+			continue
+		if BuildingHealth.is_ruined(node) or not BuildingHealth.is_damaged(node):
+			continue
+		var amount := maxi(1, int(round(float(BuildingHealth.get_max_health(node)) * GameConfig.well_repair_ratio)))
+		if BuildingHealth.heal(node, amount) > 0:
+			healed += 1
+	return healed
 
 ## Los escalones de objetivos, del más prioritario al menos, ya filtrados de todo
 ## lo intocable. Público porque es la regla que hay que poder auditar sin
