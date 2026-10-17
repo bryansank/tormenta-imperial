@@ -172,3 +172,27 @@ func test_seed_of_reads_the_grid_cell_and_survives_re_registering() -> void:
 	assert_bool(GridManager.place_building(cell, data, b)).is_true()
 	assert_int(LookRule.seed_of(b, data)).is_equal(seed_a)
 	GridManager.remove_building(b)
+
+# ── Etapas de dano (docs/03, "Etapas de dano") ───────────────────────
+
+func test_damage_stages_follow_the_health_ratio() -> void:
+	var t := [0.75, 0.4]
+	assert_int(LookRule.damage_stage(1.0, false, t)).is_equal(LookRule.DAMAGE_NONE)
+	assert_int(LookRule.damage_stage(0.75, false, t)).is_equal(LookRule.DAMAGE_NONE)
+	assert_int(LookRule.damage_stage(0.74, false, t)).is_equal(LookRule.DAMAGE_LIGHT)
+	assert_int(LookRule.damage_stage(0.4, false, t)).is_equal(LookRule.DAMAGE_LIGHT)
+	assert_int(LookRule.damage_stage(0.39, false, t)).is_equal(LookRule.DAMAGE_HEAVY)
+	assert_int(LookRule.damage_stage(0.0, false, t)).is_equal(LookRule.DAMAGE_RUIN)
+	assert_int(LookRule.damage_stage(0.5, true, t)).is_equal(LookRule.DAMAGE_RUIN)
+
+func test_damage_rides_on_top_of_idle_and_working() -> void:
+	assert_int(LookRule.derive(_facts({"health_ratio": 0.3}))["damage"]).is_equal(LookRule.DAMAGE_HEAVY)
+	var v := LookRule.derive(_facts({"health_ratio": 0.6, "working": true}))
+	assert_int(v["look"]).is_equal(LookRule.Look.ACTIVE)
+	assert_int(v["damage"]).is_equal(LookRule.DAMAGE_LIGHT)
+	assert_int(LookRule.derive(_facts())["damage"]).is_equal(LookRule.DAMAGE_NONE)
+
+func test_construction_and_upgrade_hide_the_damage() -> void:
+	assert_int(LookRule.derive(_facts({"under_construction": true, "health_ratio": 0.3}))["damage"]).is_equal(LookRule.DAMAGE_NONE)
+	assert_int(LookRule.derive(_facts({"under_construction": true, "upgrade": true, "health_ratio": 0.3}))["damage"]).is_equal(LookRule.DAMAGE_NONE)
+	assert_int(LookRule.derive(_facts({"ruined": true}))["damage"]).is_equal(LookRule.DAMAGE_RUIN)

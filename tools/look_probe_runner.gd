@@ -73,6 +73,13 @@ func _cases_3d() -> Array:
 		["Humo", "foundry", {"look": L.ACTIVE, "phase": 0}],
 		["Serrin", "sawmill", {"look": L.ACTIVE, "phase": 0}],
 		["Luz", "warehouse", {"look": L.ACTIVE, "phase": 0}],
+		# Etapas de dano (docs/03, "Etapas de dano"): leve y grave, quieto y trabajando.
+		["Leve", "barracks", {"look": L.IDLE, "phase": 0, "damage": LookRule.DAMAGE_LIGHT}],
+		["Grave", "barracks", {"look": L.IDLE, "phase": 0, "damage": LookRule.DAMAGE_HEAVY}],
+		["Leve", "house", {"look": L.IDLE, "phase": 0, "damage": LookRule.DAMAGE_LIGHT}],
+		["Grave", "house", {"look": L.IDLE, "phase": 0, "damage": LookRule.DAMAGE_HEAVY}],
+		["Grave+humo", "foundry", {"look": L.ACTIVE, "phase": 0, "damage": LookRule.DAMAGE_HEAVY}],
+		["Grave", "warehouse", {"look": L.IDLE, "phase": 0, "damage": LookRule.DAMAGE_HEAVY}],
 	]
 
 func _data(id: String) -> BuildingData:

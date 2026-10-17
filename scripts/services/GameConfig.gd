@@ -1426,6 +1426,37 @@ var building_active_fx := {
 var ruin_sink_ratio := 0.38
 var ruin_tilt := 0.07
 
+## Etapas visibles de dano entre sano y ruina (docs/03, "Etapas de dano"):
+## por debajo de la primera proporcion de vida el edificio esta LEVE (grietas,
+## tejas caidas, una tabla suelta), por debajo de la segunda GRAVE (chapa
+## colgando, viga rota, humo negro y chispas). La ruina sigue siendo vida 0.
+## Solo aspecto: ni el dano ni la reparacion cambian por esto.
+var damage_stage_thresholds := [0.75, 0.4]
+## Cuanto se ladea (radianes) y se hunde (fraccion de su altura) el modelo en
+## cada etapa: [leve, grave]. La ruina usa ruin_tilt / ruin_sink_ratio.
+var damage_tilt := [0.025, 0.05]
+var damage_sink_ratio := [0.0, 0.05]
+
+## La Tormenta a la vista (docs/21 §12), SOLO aspecto: las duraciones y los
+## efectos de cada fase son los storm_* de mas abajo y no cambian por esto.
+## Antes el cielo se quedaba oscuro todo el Aviso, la Ceniza y la Tormenta
+## (2-3 minutos); ahora la llegada de la Tormenta es un GOLPE corto y marcado
+## (oscuridad, rafaga de viento con ceniza) y el resto del tiempo el cielo
+## queda apenas tenido. El HUD de la Tormenta sigue diciendo la fase.
+## Cuanto dura el golpe en pleno (s, reales: no los acelera dev_mode), cuanto
+## tarda en cerrarse y cuanto en abrirse hasta el tono de fondo.
+var storm_visual_punch := 6.0
+var storm_visual_punch_in := 0.7
+var storm_visual_punch_out := 3.0
+## El tono de fondo (peso de ceniza, 0-1) de cada fase fuera del golpe: el
+## Aviso y la Ceniza apenas tinen; tras el golpe la Tormenta y el Diezmo se
+## quedan en `storm_visual_linger`.
+var storm_visual_warning := 0.12
+var storm_visual_ash := 0.2
+var storm_visual_linger := 0.22
+## Motas de ceniza de la rafaga del golpe por perfil de dispositivo.
+var storm_visual_gust_amount := {"pc": 160, "tablet": 110, "phone": 70}
+
 # ── Parcela y atrezo de cada edificio (docs/03, "Parcela y atrezo") ──
 ## Cada edificio vive en su parcela (guia de estilo, regla 1): suelo propio que
 ## cubre la huella entera y atrezo en el patio que queda entre el modelo y el

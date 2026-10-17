@@ -162,21 +162,47 @@ static func side_normal(side: int) -> Vector2:
 		3: return Vector2(-1, 0)
 	return Vector2(0, 1)
 
-## Regla: hechos -> {"look": Look, "phase": int}.
+## Etapas de dano (docs/03, "Etapas de dano"): sano, leve, grave y ruina. Van
+## ENCIMA del aspecto (un edificio grave puede seguir trabajando y echar su humo
+## ademas del negro); la ruina es ademas su propio aspecto (Look.RUIN).
+const DAMAGE_NONE := 0
+const DAMAGE_LIGHT := 1
+const DAMAGE_HEAVY := 2
+const DAMAGE_RUIN := 3
+
+## Etapa de dano para una proporcion de vida 0..1, con los umbrales de
+## GameConfig.damage_stage_thresholds ([leve, grave]: por debajo de cada uno).
+static func damage_stage(ratio: float, ruined: bool = false, thresholds: Array = []) -> int:
+	if ruined or ratio <= 0.0:
+		return DAMAGE_RUIN
+	if thresholds.is_empty():
+		thresholds = GameConfig.damage_stage_thresholds
+	var stage := DAMAGE_NONE
+	if thresholds.size() > 0 and ratio < float(thresholds[0]):
+		stage = DAMAGE_LIGHT
+	if thresholds.size() > 1 and ratio < float(thresholds[1]):
+		stage = DAMAGE_HEAVY
+	return stage
+
+## Regla: hechos -> {"look": Look, "phase": int, "damage": etapa}.
 ## Hechos: "under_construction", "upgrade" (la obra es una mejora), "progress"
-## (0..1), "ruined", "working" (el badge dice trabajando), "fx" (tiene efecto).
+## (0..1), "ruined", "working" (el badge dice trabajando), "fx" (tiene efecto),
+## "health_ratio" (0..1, sin la clave 1).
 ## Orden: la obra manda (una torre a medio levantar no es una ruina aunque la
-## tormenta la tocara), luego la ruina, luego la actividad.
+## tormenta la tocara), luego la ruina, luego la actividad. El dano leve o
+## grave solo se ve en pie (quieto o trabajando): la obra y el andamio de
+## mejora lo tapan.
 static func derive(facts: Dictionary) -> Dictionary:
 	if bool(facts.get("under_construction", false)):
 		if bool(facts.get("upgrade", false)):
-			return {"look": Look.UPGRADE, "phase": PHASE_FRAME}
-		return {"look": Look.CONSTRUCTION, "phase": phase_for(float(facts.get("progress", 0.0)))}
+			return {"look": Look.UPGRADE, "phase": PHASE_FRAME, "damage": DAMAGE_NONE}
+		return {"look": Look.CONSTRUCTION, "phase": phase_for(float(facts.get("progress", 0.0))), "damage": DAMAGE_NONE}
 	if bool(facts.get("ruined", false)):
-		return {"look": Look.RUIN, "phase": 0}
+		return {"look": Look.RUIN, "phase": 0, "damage": DAMAGE_RUIN}
+	var damage := damage_stage(float(facts.get("health_ratio", 1.0)))
 	if bool(facts.get("working", false)) and String(facts.get("fx", "")) != "":
-		return {"look": Look.ACTIVE, "phase": 0}
-	return {"look": Look.IDLE, "phase": 0}
+		return {"look": Look.ACTIVE, "phase": 0, "damage": damage}
+	return {"look": Look.IDLE, "phase": 0, "damage": damage}
 
 ## Los hechos de un edificio real (3D o 2D: los dos llevan las mismas metas y
 ## un hijo "StatusBadge" con get_status()).
@@ -191,6 +217,7 @@ static func facts_of(node: Node, data: BuildingData) -> Dictionary:
 		"upgrade": building and ProductionManager.get_upgrade_target(node) > 0,
 		"progress": ProductionManager.get_construction_progress(node) if building else 1.0,
 		"ruined": BuildingHealth.is_ruined(node),
+		"health_ratio": BuildingHealth.get_health_ratio(node),
 		"working": working,
 		"fx": fx_kind(data.id) if data else "",
 	}

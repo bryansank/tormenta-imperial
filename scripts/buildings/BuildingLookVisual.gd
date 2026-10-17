@@ -18,6 +18,10 @@ extends Node3D
 ## - Ruina: el modelo se hunde y se ladea (encima ya lleva el hollin de
 ##   BuildingHealth), rodeado de escombros y con humo negro animado.
 ## - Trabajando: humo, serrin o luz animados por shader (BuildingFx).
+## - Dano leve o grave (en pie, quieto o trabajando): grietas, tejas caidas,
+##   tabla suelta; en grave ademas chapa colgando, viga partida, humo negro y
+##   chispas (SiteMesh.damage_overlay, una malla cacheada por etapa) y el
+##   modelo algo ladeado (GameConfig.damage_tilt / damage_sink_ratio).
 ## Todo lo que cuelga de aqui esta en el grupo "building_fx": ni el hollin de
 ## BuildingHealth ni la medida de la cima (BuildingStatusBadge) lo cuentan.
 
@@ -36,6 +40,9 @@ var _seed := 0
 var _site: Node3D = null
 var _ruin: Node3D = null
 var _active: Node3D = null
+## Etapa de dano a la vista (BuildingLook.DAMAGE_*) y su malla, o null.
+var _damage := 0
+var _damage_node: Node3D = null
 
 ## `top_y`: la cima medida del modelo (BuildingStatusBadge.measure_top).
 func setup(building: Node3D, data: BuildingData, top_y: float, cell_size: float = -1.0) -> void:
@@ -59,14 +66,24 @@ func get_look() -> int:
 func get_phase() -> int:
 	return _phase
 
+func get_damage() -> int:
+	return _damage
+
+func get_damage_node() -> Node3D:
+	return _damage_node
+
 ## Aplica un veredicto de BuildingLook.derive(). Si no cambia, no toca nada.
 func apply(verdict: Dictionary) -> void:
 	var look := int(verdict.get("look", LookRule.Look.IDLE))
 	var phase := int(verdict.get("phase", 0))
+	# El dano leve o grave solo se ve en pie: la obra, el andamio y la ruina lo tapan.
+	var damage := int(verdict.get("damage", 0))
+	if look != LookRule.Look.IDLE and look != LookRule.Look.ACTIVE:
+		damage = LookRule.DAMAGE_NONE
 	# La obra de esta instancia: estilo de su tipo + semilla de su celda. Si la
 	# semilla cambia (se registro en la rejilla, o se movio), se rehace.
 	var seed_val := LookRule.seed_of(_building, _data) if look == LookRule.Look.CONSTRUCTION else 0
-	if look == _look and phase == _phase and seed_val == _seed:
+	if look == _look and phase == _phase and seed_val == _seed and damage == _damage:
 		return
 	_look = look
 	_phase = phase
@@ -74,6 +91,7 @@ func apply(verdict: Dictionary) -> void:
 	_clear_site()
 	if look != LookRule.Look.RUIN:
 		_leave_ruin()
+	_set_damage(damage)
 	if _model != null:
 		_model.visible = look != LookRule.Look.CONSTRUCTION
 	match look:
@@ -124,24 +142,98 @@ func _enter_ruin() -> void:
 		smoke.position = Vector3(0.0, _top * (1.0 - GameConfig.ruin_sink_ratio) + 0.6, 0.0)
 		_ruin.add_child(smoke)
 		add_child(_ruin)
-	if _model != null and not _model.has_meta("look_base_pos"):
-		_model.set_meta("look_base_pos", _model.position)
-		_model.set_meta("look_base_rot", _model.rotation)
-		_model.position.y -= _top * GameConfig.ruin_sink_ratio
-		_model.rotation.z += GameConfig.ruin_tilt
-		_model.rotation.x -= GameConfig.ruin_tilt * 0.5
+	_pose_model(GameConfig.ruin_sink_ratio, GameConfig.ruin_tilt, 1.0)
 
 func _leave_ruin() -> void:
-	if _ruin != null:
-		# Sin script ni senales: se libera en el acto, sin esperar al fin de frame.
-		remove_child(_ruin)
-		_ruin.free()
-		_ruin = null
-	if _model != null and _model.has_meta("look_base_pos"):
+	if _ruin == null:
+		# No estaba en ruinas: la postura (si la hay) es la del dano, no se toca.
+		return
+	# Sin script ni senales: se libera en el acto, sin esperar al fin de frame.
+	remove_child(_ruin)
+	_ruin.free()
+	_ruin = null
+	_pose_model(0.0, 0.0, 1.0)
+
+## Hunde el modelo `sink` (fraccion de su altura) y lo ladea `tilt` radianes
+## hacia `side` (1 o -1). Siempre desde la postura original, que se guarda en
+## el propio modelo ("look_base_pos/rot") para devolverla; 0 y 0 la devuelve.
+## Mientras la lleva, apply_level_visual no le mueve la posicion.
+func _pose_model(sink: float, tilt: float, side: float) -> void:
+	if _model == null:
+		return
+	if _model.has_meta("look_base_pos"):
 		_model.position = _model.get_meta("look_base_pos")
 		_model.rotation = _model.get_meta("look_base_rot")
 		_model.remove_meta("look_base_pos")
 		_model.remove_meta("look_base_rot")
+	if is_zero_approx(sink) and is_zero_approx(tilt):
+		return
+	_model.set_meta("look_base_pos", _model.position)
+	_model.set_meta("look_base_rot", _model.rotation)
+	_model.position.y -= _top * sink
+	_model.rotation.z += tilt * side
+	_model.rotation.x -= tilt * 0.5
+
+# ── Dano leve y grave ────────────────────────────────────────────────
+
+## Pone la etapa de dano `stage` (0 quita la que hubiera): la malla de su etapa
+## (cacheada en SiteMesh por etapa, variante y caja del modelo) y el ladeo.
+## Solo se llama cuando cambia el aspecto, nunca por frame.
+func _set_damage(stage: int) -> void:
+	if stage == _damage and (stage == LookRule.DAMAGE_NONE or _damage_node != null):
+		return
+	if _damage_node != null:
+		remove_child(_damage_node)
+		_damage_node.free()
+		_damage_node = null
+	var had := _damage
+	_damage = stage
+	if stage == LookRule.DAMAGE_NONE:
+		if had != LookRule.DAMAGE_NONE:
+			_pose_model(0.0, 0.0, 1.0)
+		return
+	# La caja se mide con el modelo derecho (sin el ladeo de la etapa anterior).
+	_pose_model(0.0, 0.0, 1.0)
+	var variant := LookRule.seed_of(_building, _data) % Site.DAMAGE_VARIANTS
+	_damage_node = Site.damage_overlay(stage, _model_box(), variant)
+	if _damage_node != null:
+		add_child(_damage_node)
+	var i := clampi(stage - 1, 0, 1)
+	var side := 1.0 if variant % 2 == 0 else -1.0
+	_pose_model(float(_pick(GameConfig.damage_sink_ratio, i)), float(_pick(GameConfig.damage_tilt, i)), side)
+
+static func _pick(values: Array, i: int) -> float:
+	if values.is_empty():
+		return 0.0
+	return float(values[clampi(i, 0, values.size() - 1)])
+
+## La caja del modelo en el marco del edificio (todas sus mallas). Sin modelo,
+## la huella con la altura medida.
+func _model_box() -> AABB:
+	var box := AABB()
+	var found := false
+	if _model != null:
+		for mi in _model.find_children("*", "MeshInstance3D", true, false):
+			var mesh_i := mi as MeshInstance3D
+			if mesh_i.mesh == null:
+				continue
+			var b: AABB = _to_building(mesh_i) * mesh_i.get_aabb()
+			box = b if not found else box.merge(b)
+			found = true
+	if not found:
+		var d := Vector2(_data.grid_size) * _cell * 0.8 if _data else Vector2(1.6, 1.6)
+		box = AABB(Vector3(-d.x * 0.5, 0.0, -d.y * 0.5), Vector3(d.x, _top, d.y))
+	return box
+
+## La transformacion de `node` en el marco del edificio (sin depender del arbol).
+func _to_building(node: Node) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var n: Node = node
+	while n != null and n != _building:
+		if n is Node3D:
+			xf = (n as Node3D).transform * xf
+		n = n.get_parent()
+	return xf
 
 ## Humo / serrin desde la cima, o un farol encendido en el tejado. Se crea la
 ## primera vez que el edificio trabaja; luego solo se enciende y apaga.

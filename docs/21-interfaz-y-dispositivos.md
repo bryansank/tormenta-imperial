@@ -671,10 +671,31 @@ cambio.
 
 ### Lo que oscurece la Tormenta (`StormSky`)
 
-Un peso por fase: Aviso 0,35, Ceniza 0,7, Tormenta entre 0,6 y 1 según la
-severidad (solo ahora se ve la severidad: el Aviso no adelanta la factura).
-Funde en 3 s al cerrarse y en 5 s al abrirse; ganada la Auditoría Final aclara
-de golpe y para siempre.
+**La Tormenta, corta a la vista (2026-10-16).** Antes el cielo se quedaba
+oscuro todo el Aviso, la Ceniza y la Tormenta (2-3 minutos) y no aportaba nada.
+Ahora es un **golpe** corto y marcado al llegar, y el resto del tiempo un tono
+apenas teñido. Solo cambia el aspecto: la mecánica y las duraciones de las
+fases (`storm_*` de `GameConfig`, `StormCycle`) son las mismas, y el HUD de la
+Tormenta (`StormHUD`) sigue diciendo la fase. Los valores están en
+`GameConfig.storm_visual_*`:
+
+| Momento | Peso de ceniza |
+|---|---|
+| Aviso | `storm_visual_warning` (0,12), funde en 3 s |
+| Ceniza | `storm_visual_ash` (0,2), funde en 3 s |
+| **Golpe** (`storm_started`) | la severidad, entre 0,6 y 1 (`StormSky.punch_weight`): se cierra en `storm_visual_punch_in` (0,7 s), aguanta hasta `storm_visual_punch` (6 s) y se abre en `storm_visual_punch_out` (3 s) |
+| Resto de la Tormenta (y Diezmo en 2D) | `storm_visual_linger` (0,22) |
+| Calma | 0, funde en 5 s |
+
+- **Ráfaga**: durante el golpe la ceniza cruza la pantalla empujada por el
+  viento. En 3D, un `CPUParticles3D` colgado de la cámara (`StormGust`, la mota
+  y el material del polvo de obra de `BuildingFx`: ningún shader nuevo) que se
+  borra solo; en 2D, el `CPUParticles2D` de `StormTint2D`, que solo emite en el
+  golpe. Motas por perfil en `storm_visual_gust_amount`. En calidad Mínima no
+  hay ráfaga; el golpe de oscuridad sí.
+- **Cargar a media Tormenta** no repite el golpe: se pinta el tono de fondo.
+- Fuera del golpe la severidad no se ve (el Aviso no adelanta la factura).
+  Ganada la Auditoría Final aclara de golpe y para siempre.
 
 - **Cielo**: color de fondo, los cuatro colores del `ProceduralSkyMaterial`
   hacia ceniza, luz ambiental hacia ceniza clara y al 30 % de energía, sol al
@@ -695,7 +716,7 @@ de golpe y para siempre.
   crearlos, así que no nace limpia a media tormenta. Sin cielo (vista 2D) el
   peso se guarda igual.
 - **Coste**: solo se tocan uniforms y propiedades del entorno durante los
-  fundidos (3-5 s por fase); nada de materiales ni mallas nuevas.
+  fundidos (3-5 s por fase, el golpe unos 10 s); nada de materiales ni mallas nuevas (la ráfaga reusa la mota del polvo de obra).
 
 ### Día y noche (2026-10-12)
 

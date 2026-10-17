@@ -46,6 +46,9 @@ func test_ruin_and_damage_draw() -> void:
 		func(ci): Art.draw_ruin(ci, Vector2(96, 96), 9, 3),
 		func(ci): Art.draw_damage(ci, Vector2(64, 64), 0.0, true, 5, 2),
 		func(ci): Art.draw_damage(ci, Vector2(64, 64), 0.5, false, 5, 2),
+		func(ci): Art.draw_damage(ci, Vector2(64, 64), 0.2, false, 5, 2),
+		func(ci): Art.draw_damage(ci, Vector2(64, 64), 0.9, false, 5, 2),
+		func(ci): Art.draw_damage_marks(ci, Vector2(96, 96), LookRule.DAMAGE_HEAVY, 4, 3),
 	])
 	assert_int(_drawn).is_greater(0)
 
