@@ -10,7 +10,10 @@ extends GdUnitTestSuite
 
 const Placer := preload("res://scripts/buildings/BuildingPlacer.gd")
 const MapGen := preload("res://scripts/map/MapGenerator.gd")
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 const BACKUP_PATH := "user://save_game.load_ui.bak"
 const PARTY := {"infantry": 2, "artillery": 1}
 const SEED := 424242

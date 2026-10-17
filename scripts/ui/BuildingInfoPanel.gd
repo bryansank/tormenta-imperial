@@ -49,6 +49,8 @@ var _confirm_container: VBoxContainer
 var _confirm_label: Label
 
 var _process_panel: ProcessActionsPanel
+## PARA RECOGER y, en la Granja, CULTIVO (2026-10-04).
+var _harvest: VBoxContainer = null
 var _selected_node: Node = null
 var _selected_data: BuildingData = null
 var _selected_deposit_id: String = ""
@@ -81,6 +83,8 @@ func _process(_delta: float) -> void:
 		return
 	_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
 	_update_construction()
+	if _harvest != null and not _is_deposit:
+		_harvest.refresh()
 
 # ── UI Construction ──
 
@@ -141,6 +145,10 @@ func _build_ui() -> void:
 	_production_container.add_child(_production_box)
 	_vbox.add_child(_production_container)
 
+	_harvest = preload("res://scripts/ui/HarvestSection.gd").new()
+	_harvest.visible = false
+	_vbox.add_child(_harvest)
+
 	# Deposit uses ("12 usos restantes" y, debajo, a mano o con su edificio)
 	_deposit_uses_label = UITheme.make_label("", "body", UITheme.WARNING)
 	_deposit_uses_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -185,6 +193,9 @@ func _build_ui() -> void:
 	_repair_container.add_child(_repair_cost_row)
 	_repair_btn = Button.new()
 	_repair_btn.text = Tr.t("BTN_REPAIR")
+	# Grupos para que el tutorial los senale (HelpTargets: info_repair, info_move,
+	# info_demolish, info_demolish_confirm).
+	_repair_btn.add_to_group("hud_info_repair")
 	UITheme.style_button(_repair_btn, UITheme.WARNING.darkened(0.2))
 	_repair_btn.pressed.connect(_on_repair)
 	_repair_container.add_child(_repair_btn)
@@ -215,6 +226,7 @@ func _build_ui() -> void:
 	_move_container.add_theme_constant_override("separation", 4)
 	_move_btn = Button.new()
 	_move_btn.text = Tr.t("BTN_MOVE")
+	_move_btn.add_to_group("hud_info_move")
 	_move_btn.tooltip_text = Tr.t("LBL_MOVE_HINT")
 	_move_btn.icon = UITheme.icon_texture("move")
 	_move_btn.add_theme_constant_override("h_separation", 10)
@@ -275,6 +287,7 @@ func _build_ui() -> void:
 	_actions_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	_demolish_btn = Button.new()
 	_demolish_btn.text = Tr.t("BTN_DEMOLISH")
+	_demolish_btn.add_to_group("hud_info_demolish")
 	UITheme.style_button(_demolish_btn, UITheme.DANGER)
 	_demolish_btn.pressed.connect(_on_demolish)
 	_actions_box.add_child(_demolish_btn)
@@ -293,6 +306,7 @@ func _build_ui() -> void:
 	confirm_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	var yes_btn := Button.new()
 	yes_btn.text = Tr.t("BTN_CONFIRM")
+	yes_btn.add_to_group("hud_info_demolish_confirm")
 	UITheme.style_button(yes_btn, UITheme.DANGER)
 	yes_btn.pressed.connect(_confirm_demolish)
 	var no_btn := Button.new()
@@ -372,6 +386,7 @@ func _show_building_panel() -> void:
 		_production_container.visible = false
 
 	_deposit_uses_label.visible = false
+	_harvest.show_for(_selected_node, _selected_data)
 	_refresh_workers_toggle()
 	_refresh_open_button()
 
@@ -433,6 +448,7 @@ func _show_deposit_panel() -> void:
 	_title_label.tooltip_text = Tr.t("LBL_NATURAL_RESOURCE")
 	_level_label.visible = false
 	_production_container.visible = false
+	_harvest.visible = false
 	_construction_container.visible = false
 	_name_container.visible = false
 	_upgrade_container.visible = false
@@ -656,7 +672,10 @@ static func level_line(data: BuildingData, level: int) -> String:
 static func production_amounts(data: BuildingData, level: int) -> Dictionary:
 	var mult := GameConfig.get_production_multiplier(level)
 	var out := {}
-	for pair in [["gold", data.produces_gold], ["steel", data.produces_steel], ["oil", data.produces_oil], ["wood", data.produces_wood]]:
+	# La Granja rinde lo que diga su cultivo, que lo ensena su seccion.
+	if data.id == ProductionManager.FARM_ID:
+		return out
+	for pair in [["gold", data.produces_gold], ["steel", data.produces_steel], ["oil", data.produces_oil], ["wood", data.produces_wood], ["food", data.produces_food]]:
 		if int(pair[1]) > 0:
 			out[pair[0]] = int(int(pair[1]) * mult)
 	return out

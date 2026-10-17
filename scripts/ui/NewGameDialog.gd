@@ -1,7 +1,6 @@
 extends CanvasLayer
-## "Nueva partida": el selector de modo y, si hay algo que perder, la
-## confirmacion. Sustituye al ConfirmationDialog con el tema por defecto de
-## Godot (en el emulador de Android salia gris y diminuto).
+## "Nueva partida": el selector de modo. Sustituye al ConfirmationDialog con el
+## tema por defecto de Godot (en el emulador de Android salia gris y diminuto).
 ##
 ##   Paso 1  una tarjeta por modo ofrecido (GameMode.OFFERED: hoy solo la
 ##           Campana; las de los modos apartados se crean pero no se ven), con
@@ -11,10 +10,14 @@ extends CanvasLayer
 ##           o Gobernador (el complejo). Gobernador sale con candado y la
 ##           condicion hasta que el perfil lo abre (GameMode.governor_unlocked;
 ##           en dev_mode, siempre abierto).
-##   Paso 2  solo con `ask_confirm`: "se borrara la partida actual (modo X)".
+##   Paso 2  nombre y bandera (ColonyIdentityPanel): se abre con open("new") y
+##           su `confirmed(name, spec)` sigue (queda en `chosen_identity`, que
+##           GameManager.start_new_game pone tras el reset); su `cancelled`
+##           vuelve al paso 1.
 ##
-## No borra nada por su cuenta: emite `confirmed` con `chosen_mode` puesto, o
-## `canceled`, y quien lo abrio (GameManager.request_new_game) decide. Lo crea
+## Ya no hay paso de "se borrara tu partida" (2026-10-12): una partida nueva va
+## a su propio archivo y no borra ninguna. Emite `confirmed` con `chosen_mode`
+## puesto, o `canceled`, y quien lo abrio (GameManager.request_new_game) decide. Lo crea
 ## GameManager y cuelga de el, asi que sobrevive a la recarga de escena y
 ## funciona igual en la vista 3D y en la 2D.
 ##
@@ -26,8 +29,8 @@ signal canceled
 
 const LAYER := 40
 const MAX_WIDTH := 1000.0
-## La confirmacion es una frase y dos botones: no necesita la tarjeta ancha.
-const CONFIRM_WIDTH := 600.0
+## El paso de nombre y bandera.
+const IdentityPanel := preload("res://scripts/ui/ColonyIdentityPanel.gd")
 const CARD_MIN_H := 150.0
 const WIDE := 900.0
 const MEDIUM := 520.0
@@ -36,18 +39,19 @@ const MEDIUM := 520.0
 var chosen_mode: int = GameMode.DEFAULT
 ## El nivel elegido (GameMode.Tier). Solo cuenta si el modo admite niveles.
 var chosen_tier: int = GameMode.TIER_DEFAULT
+## Nombre y bandera del paso 2 ({"name", "spec"}), o {} si no se paso por el.
+var chosen_identity: Dictionary = {}
 
-var _ask_confirm := true
 var _current_mode: int = GameMode.DEFAULT
+## El paso de nombre y bandera abierto encima, si lo hay.
+var _identity: Node = null
 
 var _root: Control
 var _card: PanelContainer
 var _pick_box: VBoxContainer
-var _confirm_box: VBoxContainer
 var _grid: GridContainer
 var _scroll: ScrollContainer
 var _goal_label: Label
-var _confirm_label: Label
 var _start_btn: Button
 var _cards: Dictionary = {}   ## mode -> Button
 var _current_tier: int = GameMode.TIER_DEFAULT
@@ -57,9 +61,9 @@ var _tier_lock_label: Label
 
 const TIER_CARD_MIN_H := 84.0
 
-## Antes de add_child. `current_mode` es el de la partida que se perderia.
-func setup(ask_confirm: bool, current_mode: int, current_tier: int = GameMode.TIER_DEFAULT) -> void:
-	_ask_confirm = ask_confirm
+## Antes de add_child. `current_mode` es el de la partida en curso: se ofrece el
+## mismo de entrada.
+func setup(current_mode: int, current_tier: int = GameMode.TIER_DEFAULT) -> void:
 	_current_mode = current_mode
 	_current_tier = current_tier
 	# Se repite el nivel de la partida que se deja, si sigue abierto.
@@ -77,6 +81,14 @@ func _ready() -> void:
 	_show_pick()
 	get_viewport().size_changed.connect(_relayout)
 	_relayout()
+	# Con un solo modo ofrecido y el nivel Gobernador aun cerrado no hay nada
+	# que elegir: se va directo a nombre y bandera (ronda de pruebas 1.0).
+	if skips_pick():
+		_on_start()
+
+## No hay nada que elegir en el paso 1: un solo modo y un solo nivel abierto.
+func skips_pick() -> bool:
+	return GameMode.OFFERED.size() <= 1 and is_governor_locked()
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -142,19 +154,6 @@ func _setup_ui() -> void:
 	row.add_child(ModalKit.make_menu_button(Tr.t("BTN_CANCEL"), UITheme.BTN, cancel))
 	_start_btn = ModalKit.make_menu_button(Tr.t("BTN_MODE_START"), UITheme.POSITIVE, _on_start)
 	row.add_child(_start_btn)
-
-	# ── Paso 2: confirmar que se borra ──
-	_confirm_box = VBoxContainer.new()
-	_confirm_box.add_theme_constant_override("separation", 12)
-	column.add_child(_confirm_box)
-	_confirm_box.add_child(ModalKit.make_text(Tr.t("BTN_NEW_GAME"), "title", UITheme.DANGER))
-	_confirm_label = ModalKit.make_text("", "body", UITheme.TEXT)
-	_confirm_box.add_child(_confirm_label)
-	var confirm_row := HBoxContainer.new()
-	confirm_row.add_theme_constant_override("separation", 12)
-	_confirm_box.add_child(confirm_row)
-	confirm_row.add_child(ModalKit.make_menu_button(Tr.t("BTN_MODE_BACK"), UITheme.BTN, _show_pick))
-	confirm_row.add_child(ModalKit.make_menu_button(Tr.t("BTN_MODE_WIPE_START"), UITheme.DANGER, confirm))
 
 ## Una tarjeta: boton alto, con nombre, etiqueta de dificultad y una linea.
 func _make_mode_card(mode: int) -> Button:
@@ -280,10 +279,7 @@ func _relayout() -> void:
 	if _card == null:
 		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var confirming: bool = _confirm_box != null and _confirm_box.visible
-	ModalKit.fit_center(_card, CONFIRM_WIDTH if confirming else MAX_WIDTH, vp)
-	if confirming:
-		return
+	ModalKit.fit_center(_card, MAX_WIDTH, vp)
 	var shown: int = maxi(1, GameMode.OFFERED.size())
 	_grid.columns = mini(columns_for(_card.custom_minimum_size.x), shown)
 	# Lo que no quepa en alto se desplaza: el resto de la tarjeta (titulo,
@@ -326,24 +322,40 @@ func is_governor_locked() -> bool:
 	return (_tier_cards[GameMode.Tier.GOVERNOR] as Button).disabled
 
 func _show_pick() -> void:
+	_close_identity()
+	_card.visible = true
 	_pick_box.visible = true
-	_confirm_box.visible = false
 	_relayout()
 	(_cards.get(chosen_mode, _start_btn) as Control).grab_focus.call_deferred()
 
-func is_confirming() -> bool:
-	return _confirm_box.visible
-
+## EMPEZAR: abre el paso de nombre y bandera.
 func _on_start() -> void:
-	if not _ask_confirm:
-		confirm()
-		return
-	_confirm_label.text = Tr.t("CONFIRM_NEW_GAME_MODE") % [
-		GameMode.display_name_with_tier(_current_mode, _current_tier),
-		GameMode.display_name_with_tier(chosen_mode, effective_tier())]
-	_pick_box.visible = false
-	_confirm_box.visible = true
-	_relayout()
+	_open_identity()
+
+func _open_identity() -> void:
+	var panel = IdentityPanel.new()
+	_identity = panel
+	panel.confirmed.connect(_on_identity_confirmed)
+	# Sin paso 1 (skips_pick), volver atras es cerrar el dialogo.
+	panel.cancelled.connect(func(): cancel() if skips_pick() else _show_pick())
+	panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(panel)
+	_card.visible = false
+	panel.open("new")
+
+func _on_identity_confirmed(colony_name: Variant = "", spec: Variant = {}) -> void:
+	chosen_identity = {"name": str(colony_name), "spec": (spec as Dictionary).duplicate(true) if spec is Dictionary else {}}
+	_close_identity()
+	confirm()
+
+func _close_identity() -> void:
+	if _identity != null and is_instance_valid(_identity):
+		_identity.queue_free()
+	_identity = null
+
+## El paso de nombre y bandera esta abierto.
+func is_naming() -> bool:
+	return _identity != null and is_instance_valid(_identity)
 
 ## Elige y sigue. Publicos para las pruebas y para quien quiera saltarse la UI.
 func pick(mode: int) -> void:
@@ -363,7 +375,7 @@ func mode_card(mode: int) -> Button:
 ## menu principal (en la escena) se come el ESC antes que cualquier autoload.
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		if is_confirming():
+		if is_naming() and not skips_pick():
 			_show_pick()
 		else:
 			cancel()

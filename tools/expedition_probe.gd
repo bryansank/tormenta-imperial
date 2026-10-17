@@ -818,7 +818,7 @@ func _boss_index(run: Expedition) -> int:
 	return -1
 
 func _read_saved_expedition() -> Dictionary:
-	var file := FileAccess.open(GameManager.SAVE_PATH, FileAccess.READ)
+	var file := FileAccess.open(GameManager.save_path(), FileAccess.READ)
 	if file == null:
 		return {}
 	var json := JSON.new()

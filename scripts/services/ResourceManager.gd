@@ -18,9 +18,18 @@ extends Node
 ## Nucleo. La bolsa esta cuadrada al numero exacto de la mejora final del Cuartel
 ## General (3500 sin tecnologias); si los materiales contaran, ya no cabria. El
 ## Diezmo tampoco se los lleva: cobra lo que hay en el almacen.
-enum Type { GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL }
+##
+## La COMIDA (2026-10-04) va la ultima, por lo mismo: no mover los numeros. Es un
+## recurso de la bolsa (cuenta en el tope compartido, como el oro) y existe desde
+## el principio: la gente come comida en vez de madera y oro (PopulationManager).
+##
+## Los REPUESTOS (2026-10-14) van detras de todo, por lo mismo. Son un material
+## (fuera de la bolsa, el Diezmo no los toca) que ningun edificio fabrica: solo
+## se traen de las escaramuzas (doc 21 §3.1). Se desbloquean al traer los
+## primeros (CombatManager).
+enum Type { GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD, PARTS }
 
-const MATERIALS := [Type.PLANKS, Type.INGOTS, Type.BEAMS, Type.FUEL]
+const MATERIALS := [Type.PLANKS, Type.INGOTS, Type.BEAMS, Type.FUEL, Type.PARTS]
 
 var _resources: Dictionary = {
 	Type.GOLD: 300,
@@ -31,6 +40,8 @@ var _resources: Dictionary = {
 	Type.INGOTS: 0,
 	Type.BEAMS: 0,
 	Type.FUEL: 0,
+	Type.FOOD: 80,
+	Type.PARTS: 0,
 }
 
 var _names: Dictionary = {
@@ -42,6 +53,8 @@ var _names: Dictionary = {
 	Type.INGOTS: "ingots",
 	Type.BEAMS: "beams",
 	Type.FUEL: "fuel",
+	Type.FOOD: "food",
+	Type.PARTS: "parts",
 }
 
 var _unlocked: Dictionary = {
@@ -53,6 +66,8 @@ var _unlocked: Dictionary = {
 	Type.INGOTS: false,
 	Type.BEAMS: false,
 	Type.FUEL: false,
+	Type.FOOD: true,
+	Type.PARTS: false,
 }
 
 var _warehouse_count := 0
@@ -201,6 +216,18 @@ func add(type: Type, amount: int) -> int:
 		_report_overflow(type, lost)
 	return _resources[type]
 
+## Mete en la bolsa lo que quepa de `amount` y devuelve lo que NO cupo, sin
+## tirarlo ni avisar de desbordamiento: quien llama se queda con el resto (lo
+## recogido de un edificio vuelve al edificio). Decision 2026-10-04: con la bolsa
+## llena la produccion se para, no se tira.
+func add_fitting(type: Type, amount: int) -> int:
+	if amount <= 0:
+		return 0
+	var stored: int = amount if is_material(type) else mini(amount, get_free_space())
+	if stored > 0:
+		add(type, stored)
+	return amount - stored
+
 func _report_overflow(type: Type, lost: int) -> void:
 	EventBus.storage_overflow.emit(_names[type], lost, get_storage_cap())
 	if _overflow_warned:
@@ -262,12 +289,14 @@ func reset() -> void:
 		Type.STEEL: cfg.get("steel", 0),
 		Type.OIL: cfg.get("oil", 0),
 		Type.WOOD: cfg.get("wood", 200),
+		Type.FOOD: cfg.get("food", 0),
 	}
 	_unlocked = {
 		Type.GOLD: true,
 		Type.STEEL: false,
 		Type.OIL: false,
 		Type.WOOD: true,
+		Type.FOOD: true,
 	}
 	for m in MATERIALS:
 		_resources[m] = int(cfg.get(_names[m], 0))

@@ -58,7 +58,7 @@ func _snapshot_resources() -> Dictionary:
 	return out
 
 func _given_stores(gold: int, steel: int, oil: int, wood: int) -> void:
-	ResourceManager.set_amounts({"gold": gold, "steel": steel, "oil": oil, "wood": wood})
+	ResourceManager.set_amounts({"gold": gold, "steel": steel, "oil": oil, "wood": wood, "food": 0})
 
 ## Primero el techo y después la gente: `PopulationManager` recorta la población
 ## al aforo, así que sin casas plantadas cualquier cifra se hunde hasta el suelo.
@@ -306,7 +306,7 @@ func test_the_first_visit_takes_only_its_share() -> void:
 		int(400.0 * GameConfig.get_tithe_ratio(1)))
 	_given_population(12)
 	_given_storms_survived(0)
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0})
 	var taken: Dictionary = StormManager._collect_tithe(1)
 	assert_dict(taken).override_failure_message(
 		"la primera visita embargo o se llevo gente: %s" % str(taken)).is_empty()

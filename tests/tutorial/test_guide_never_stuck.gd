@@ -7,6 +7,7 @@ extends GdUnitTestSuite
 
 const SAWMILL := preload("res://data/buildings/sawmill.tres")
 const HOUSE := preload("res://data/buildings/house.tres")
+const FARM := preload("res://data/buildings/farm.tres")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 
 ## Un generador de mapa de mentira: dice que yacimientos hay y si alguno esta al
@@ -74,6 +75,13 @@ func _place(data: BuildingData, cell: Vector2i, built: bool = true) -> Node:
 func _start() -> void:
 	TutorialManager.intro_seen = true
 	TutorialManager.start_guide(false)
+	_read()
+
+## Las dos tarjetas de leer del principio (la meta y el Nucleo) y los tres
+## manejos (girar, mover, derribar), 2026-10-16: aqui se prueba lo demas.
+func _read() -> void:
+	for fact in ["goal_seen", "core_seen", "rotated", "moved", "road_placed", "demolished"]:
+		TutorialManager.note_guide_fact(fact)
 
 func _words(text: String) -> int:
 	return text.strip_edges().split(" ", false).size()
@@ -119,13 +127,14 @@ func test_no_reachable_forest_skips_the_sawmill() -> void:
 	assert_bool(TutorialManager.has_reachable_deposit(SAWMILL, _map)).is_false()
 	assert_str(TutorialManager.goal_impossible_reason("sawmill")).is_equal("deposit")
 	_start()
-	assert_str(TutorialManager.current_step()).is_equal("open_house")
-	assert_array(TutorialManager.blocked_goals()).contains_exactly(["sawmill"])
+	# Sin aserradero tampoco hay que recoger: el siguiente es la Granja.
+	assert_str(TutorialManager.current_step()).is_equal("open_farm")
+	assert_array(TutorialManager.blocked_goals()).contains_exactly(["sawmill", "collect"])
 
 func test_no_forest_at_all_skips_the_sawmill() -> void:
 	_map.deposits = [{"id": "gold_vein", "cell_x": 5, "cell_y": 5, "size_x": 2, "size_y": 2}]
 	_start()
-	assert_str(TutorialManager.current_step()).is_equal("open_house")
+	assert_str(TutorialManager.current_step()).is_equal("open_farm")
 
 func test_a_map_not_drawn_yet_skips_nothing() -> void:
 	# Sin yacimientos sorteados aun, el mapa no esta listo: no se salta a ciegas.
@@ -140,7 +149,7 @@ func test_a_forest_lost_mid_guide_moves_on_by_itself() -> void:
 	assert_str(TutorialManager.current_step()).is_equal("open_build")
 	_map.reachable = false
 	TutorialManager._process(TutorialManager.GUIDE_CHECK_SECONDS + 0.1)
-	assert_str(TutorialManager.current_step()).is_equal("open_house")
+	assert_str(TutorialManager.current_step()).is_equal("open_farm")
 	# Y si vuelve a haber sitio, el paso sale otra vez de lo que hay.
 	_map.reachable = true
 	TutorialManager._process(TutorialManager.GUIDE_CHECK_SECONDS + 0.1)
@@ -152,8 +161,9 @@ func test_the_building_limit_reached_skips_that_goal() -> void:
 		_place(SAWMILL, Vector2i(0, i * 3))
 	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
 	TutorialManager.replay_guide()
+	_read()
 	assert_str(TutorialManager.goal_impossible_reason("sawmill")).is_equal("limit")
-	assert_str(TutorialManager.current_step()).is_equal("open_house")
+	assert_str(TutorialManager.current_step()).is_equal("open_farm")
 
 func test_a_step_already_done_before_getting_there_is_not_asked() -> void:
 	# La casa primero: el tutorial pide el aserradero y despues ya no pide la casa.
@@ -165,12 +175,21 @@ func test_a_step_already_done_before_getting_there_is_not_asked() -> void:
 	assert_str(TutorialManager.current_step()).is_equal("wait_sawmill")
 	saw.remove_meta("under_construction")
 	EventBus.construction_completed.emit(saw)
-	assert_str(TutorialManager.current_step()).is_equal("done")
+	# Recoger y la Granja siguen; la casa ya estaba.
+	assert_str(TutorialManager.current_step()).is_equal("collect")
+	TutorialManager.note_guide_fact("collected")
+	assert_str(TutorialManager.current_step()).is_equal("open_farm")
+	_place(FARM, Vector2i(10, 2))
+	EventBus.building_placed.emit(FARM, Vector2i(10, 2))
+	# La casa ya estaba. En este mapa de mentira no hay veta de oro: la Mina se
+	# pasa de largo, y el Mercado (que la pide) tambien. Sigue el Almacen.
+	assert_str(TutorialManager.current_step()).is_equal("open_warehouse")
+	assert_array(TutorialManager.blocked_goals()).contains_exactly(["gold_mine", "market"])
 
-func test_a_sawmill_built_before_the_guide_starts_goes_to_the_house() -> void:
+func test_a_sawmill_built_before_the_guide_starts_asks_to_collect() -> void:
 	_place(SAWMILL, Vector2i(2, 2))
 	_start()
-	assert_str(TutorialManager.current_step()).is_equal("open_house")
+	assert_str(TutorialManager.current_step()).is_equal("collect")
 
 func test_short_of_resources_says_what_is_missing_in_eight_words_or_less() -> void:
 	ResourceManager.set_amounts({"gold": 10, "wood": 0})
@@ -249,26 +268,153 @@ func test_every_goal_step_is_a_known_step() -> void:
 		for k in g["steps"]:
 			assert_bool(TutorialManager.GUIDE_STEPS.has(String(g["steps"][k]))).is_true()
 
-func test_a_farm_and_a_collect_goal_slot_in_without_rewriting() -> void:
-	# Lo que hara feat/comida-granja-recoger: dos metas mas en la lista.
-	var goals: Array = TutorialManager.GUIDE_GOALS.duplicate(true)
-	goals.append({"goal": "farm", "kind": "build", "building": "farm",
-		"steps": {"open": "open_farm", "pick": "pick_farm", "place": "place_farm", "wait": "wait_farm"}})
-	goals.append({"goal": "collect", "kind": "fact", "fact": "collected", "step": "collect_output"})
-	var f := {"sawmills": 1, "sawmills_built": 1, "houses": 1}
-	assert_str(TutorialManager.derive_step(f, goals)).is_equal("open_farm")
-	f["menu_open"] = true
-	assert_str(TutorialManager.derive_step(f, goals)).is_equal("pick_farm")
-	f["placing"] = "farm"
-	assert_str(TutorialManager.derive_step(f, goals)).is_equal("place_farm")
-	f["farms"] = 1
-	assert_str(TutorialManager.derive_step(f, goals)).is_equal("wait_farm")
-	f["farms_built"] = 1
-	assert_str(TutorialManager.derive_step(f, goals)).is_equal("collect_output")
+func test_the_collect_and_farm_goals_sit_between_sawmill_and_house() -> void:
+	# feat/comida-granja-recoger metio sus dos metas en el hueco de la lista. Lo
+	# de despues de la casa (2026-10-16) se da por hecho aqui.
+	var f := {"goal_seen": true, "core_seen": true, "rotated": true, "moved": true, "road_placed": true,
+		"demolished": true, "sawmills": 1, "sawmills_built": 1, "houses": 1,
+		"gold_mines": 1, "markets": 1, "warehouses": 1, "laboratorys": 1}
+	assert_str(TutorialManager.derive_step(f)).is_equal("collect")
 	f["collected"] = true
-	assert_str(TutorialManager.derive_step(f, goals)).is_equal("done")
+	assert_str(TutorialManager.derive_step(f)).is_equal("open_farm")
+	f["menu_open"] = true
+	assert_str(TutorialManager.derive_step(f)).is_equal("pick_farm")
+	f["placing"] = "farm"
+	assert_str(TutorialManager.derive_step(f)).is_equal("place_farm")
+	f["farms"] = 1
+	assert_str(TutorialManager.derive_step(f)).is_equal("done")
 	# Y una meta imposible se pasa de largo igual.
-	assert_str(TutorialManager.derive_step({"sawmills": 1, "sawmills_built": 1, "houses": 1, "skip": ["farm"]}, goals)).is_equal("collect_output")
+	var skipped := f.duplicate()
+	skipped.erase("farms")
+	skipped["skip"] = ["farm"]
+	assert_str(TutorialManager.derive_step(skipped)).is_equal("done")
+	# Una meta mas sigue entrando en la lista sin reescribir derive_step.
+	var goals: Array = TutorialManager.GUIDE_GOALS.duplicate(true)
+	goals.append({"goal": "extra", "kind": "fact", "fact": "extra_fact", "step": "collect"})
+	assert_str(TutorialManager.derive_step(f, goals)).is_equal("collect")
+	f["extra_fact"] = true
+	assert_str(TutorialManager.derive_step(f, goals)).is_equal("done")
+
+# ── Tutorial claro (2026-10-16) ──────────────────────────────────────
+
+func test_a_reading_card_only_moves_on_with_its_own_button() -> void:
+	TutorialManager.intro_seen = true
+	TutorialManager.start_guide(false)
+	assert_str(TutorialManager.current_step()).is_equal("goal")
+	assert_bool(TutorialManager.step_has_ok("goal")).is_true()
+	# El boton de otro paso no adelanta nada.
+	TutorialManager.confirm_step("core")
+	assert_str(TutorialManager.current_step()).is_equal("goal")
+	TutorialManager.confirm_step("goal")
+	assert_str(TutorialManager.current_step()).is_equal("core")
+	assert_str(TutorialManager.step_target("core")).is_equal("core")
+	TutorialManager.confirm_step("core")
+	assert_str(TutorialManager.current_step()).is_equal("open_build")
+
+func test_an_old_island_with_sawmill_and_house_still_skips_the_new_goals() -> void:
+	# Partida vieja sin la marca: aserradero y casa. No se le piden la meta ni
+	# los edificios que entraron despues en el tutorial.
+	_place(SAWMILL, Vector2i(2, 2))
+	_place(HOUSE, Vector2i(6, 6))
+	TutorialManager.intro_seen = true
+	TutorialManager.start_guide(false)
+	assert_str(TutorialManager.guide_state).is_equal(TutorialManager.GUIDE_DONE)
+
+func test_every_starting_building_shows_its_numbers() -> void:
+	# "Iconos y cifras antes que frases": cada edificio del principio que da o
+	# pide algo tiene su fila de cifras, sacada de sus datos.
+	for b in ["nucleo", "sawmill", "farm", "house", "gold_mine", "market", "warehouse", "laboratory"]:
+		assert_array(TutorialManager.building_facts(b)).override_failure_message(b).is_not_empty()
+	var saw: Array = TutorialManager.building_facts("sawmill")
+	assert_str(String(saw[0]["icon"])).is_equal("wood")
+	assert_str(String(saw[0]["text"])).contains(str(SAWMILL.produces_wood))
+	var house: Array = TutorialManager.building_facts("house")
+	assert_str(String(house[0]["text"])).contains(str(HOUSE.population_capacity))
+	var wh: Array = TutorialManager.building_facts("warehouse")
+	var texts := ""
+	for f in wh:
+		texts += String(f["text"]) + " "
+	assert_str(texts).contains(str(GameConfig.warehouse_storage_bonus))
+	assert_array(TutorialManager.building_facts("")).is_empty()
+
+func test_every_build_step_names_what_its_building_is_for() -> void:
+	# La frase de "para que sirve" va en el paso de abrir CONSTRUIR de cada
+	# edificio, en los dos idiomas y con su variante de dedo.
+	var saved := Tr.get_locale()
+	for loc in ["es", "en"]:
+		Tr.set_locale(loc)
+		for key in ["GUIDE_OPEN_BUILD", "GUIDE_OPEN_FARM", "GUIDE_OPEN_HOUSE", "GUIDE_OPEN_GOLD_MINE",
+				"GUIDE_OPEN_MARKET", "GUIDE_OPEN_WAREHOUSE", "GUIDE_OPEN_LABORATORY"]:
+			assert_str(Tr.t(key)).is_not_equal(key)
+			assert_str(Tr.t(key + "_TOUCH")).is_not_equal(key + "_TOUCH")
+			assert_str(Tr.t(key + "_TOUCH")).is_not_equal(Tr.t(key))
+		for key in ["GUIDE_GOAL", "GUIDE_CORE", "GUIDE_WAIT_SAWMILL", "GUIDE_DONE"]:
+			assert_str(Tr.t(key)).is_not_equal(key)
+		# La meta, al empezar y al terminar: las 3 eras y el nivel 3.
+		for key in ["GUIDE_GOAL", "GUIDE_DONE", "HELP_B_GOAL"]:
+			assert_str(Tr.t(key)).contains("3")
+	Tr.set_locale(saved)
+
+func test_short_of_resources_also_says_how_to_get_them() -> void:
+	ResourceManager.set_amounts({"gold": 0, "wood": 0})
+	var how := TutorialManager.step_how("open_build")
+	assert_str(how).contains(Tr.ti("GUIDE_HOW_WOOD"))
+	assert_str(how).contains(Tr.ti("GUIDE_HOW_GOLD_HAND"))
+	ResourceManager.set_amounts({"gold": 300, "wood": 200})
+	assert_str(TutorialManager.step_how("open_build")).is_empty()
+	assert_str(TutorialManager.step_how("done")).is_empty()
+
+func test_short_of_workers_with_room_in_the_houses_says_to_wait() -> void:
+	PopulationManager._population = 1
+	PopulationManager._max_population = 11
+	assert_str(TutorialManager.step_how("pick_gold_mine")).is_equal(Tr.t("GUIDE_HOW_WORKERS_WAIT"))
+
+# ── La leccion de reparar (2026-10-16) ───────────────────────────────
+
+func test_the_first_damage_teaches_repairing_once() -> void:
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	TutorialManager.intro_seen = true
+	var saw := _place(SAWMILL, Vector2i(2, 2))
+	saw.set_meta("health", 50)
+	EventBus.building_damaged.emit(saw, 50, 100)
+	assert_str(TutorialManager.current_step()).is_equal(TutorialManager.REPAIR_STEP)
+	assert_bool(TutorialManager.is_coach_active()).is_true()
+	assert_bool(TutorialManager.step_has_ok(TutorialManager.REPAIR_STEP)).is_true()
+	assert_object(TutorialManager.repair_target()).is_same(saw)
+	# Entendido la cierra, y no vuelve a salir.
+	TutorialManager.confirm_step(TutorialManager.REPAIR_STEP)
+	assert_str(TutorialManager.current_step()).is_equal("")
+	assert_bool(TutorialManager.repair_lesson_done).is_true()
+	EventBus.building_damaged.emit(saw, 40, 100)
+	assert_str(TutorialManager.current_step()).is_equal("")
+	# Va en la partida, y reset() la olvida.
+	var data := TutorialManager.get_save_data()
+	TutorialManager.reset()
+	assert_bool(TutorialManager.repair_lesson_done).is_false()
+	TutorialManager.load_save_data(data)
+	assert_bool(TutorialManager.repair_lesson_done).is_true()
+
+func test_repairing_also_closes_the_repair_lesson() -> void:
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	var saw := _place(SAWMILL, Vector2i(2, 2))
+	saw.set_meta("health", 50)
+	EventBus.building_damaged.emit(saw, 50, 100)
+	saw.set_meta("health", 100)
+	EventBus.building_repaired.emit(saw)
+	assert_str(TutorialManager.current_step()).is_equal("")
+	assert_bool(TutorialManager.repair_lesson_done).is_true()
+
+func test_the_repair_lesson_waits_for_the_guided_tutorial() -> void:
+	_start()
+	var saw := _place(SAWMILL, Vector2i(2, 2))
+	saw.set_meta("health", 50)
+	EventBus.building_damaged.emit(saw, 50, 100)
+	assert_str(TutorialManager.current_step()).is_not_equal(TutorialManager.REPAIR_STEP)
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	EventBus.tutorial_guide_finished.emit(false)
+	await await_idle_frame()
+	assert_str(TutorialManager.current_step()).is_equal(TutorialManager.REPAIR_STEP)
+	TutorialManager.confirm_step(TutorialManager.REPAIR_STEP)
 
 func test_a_fact_travels_in_the_save_and_reset_forgets_it() -> void:
 	TutorialManager.note_guide_fact("collected")

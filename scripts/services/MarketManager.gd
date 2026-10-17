@@ -14,6 +14,7 @@ var _price_mods: Dictionary = {
 	"wood": 1.0,
 	"steel": 1.0,
 	"oil": 1.0,
+	"food": 1.0,
 }
 
 var _tick_timer := 0.0
@@ -25,6 +26,8 @@ func _ready() -> void:
 	EventBus.tithe_resolved.connect(_on_tithe_resolved)
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	if _after_tithe_left > 0.0:
 		_after_tithe_left = maxf(0.0, _after_tithe_left - delta)
 	# Market not available until Phase 2 (Economy)
@@ -191,11 +194,15 @@ func get_save_data() -> Dictionary:
 	return {"price_mods": _price_mods.duplicate(), "after_tithe_left": _after_tithe_left}
 
 func load_save_data(data: Dictionary) -> void:
-	if data.has("price_mods"):
-		_price_mods = data["price_mods"]
+	# Se parte de los de serie: un guardado de antes de la comida no trae su
+	# precio y la comida tiene que seguir en el mercado.
+	_price_mods = {"wood": 1.0, "steel": 1.0, "oil": 1.0, "food": 1.0}
+	if data.has("price_mods") and data["price_mods"] is Dictionary:
+		for res in data["price_mods"]:
+			_price_mods[res] = float(data["price_mods"][res])
 	_after_tithe_left = maxf(0.0, float(data.get("after_tithe_left", 0.0)))
 
 func reset() -> void:
-	_price_mods = {"wood": 1.0, "steel": 1.0, "oil": 1.0}
+	_price_mods = {"wood": 1.0, "steel": 1.0, "oil": 1.0, "food": 1.0}
 	_tick_timer = 0.0
 	_after_tithe_left = 0.0

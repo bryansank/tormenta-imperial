@@ -21,7 +21,12 @@ func test_each_unit_row_keeps_cost_count_power_and_wage() -> void:
 		var cost_row: Control = row.get_child(0)
 		var shown := TextKit.row_amounts(cost_row)
 		for res in def.get("cost", {}):
-			assert_str(String(shown[res])).is_equal(str(int(def["cost"][res])))
+			# Los materiales del taller no tienen icono: llevan su nombre detras
+			# (TextKit.cost_row; el blindado pide vigas desde balance/huecos).
+			var want := str(int(def["cost"][res]))
+			if TextKit.res_icon(String(res)) == null:
+				want += " " + Tr.res_name(String(res))
+			assert_str(String(shown[res])).is_equal(want)
 		var power_text := Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0))
 		var has_power := false
 		for child in row.get_children():

@@ -11,10 +11,12 @@ extends MeshInstance3D
 ## Extra half-width around the grid so the outermost lines are drawn whole
 ## instead of being cut in half by the plane's edge.
 const EDGE_PAD := 0.2
+## En calidad Minima la rejilla "siempre visible" no se pinta (docs/26 §7.1).
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 
 func _ready() -> void:
 	fit_to_grid()
-	visible = GameConfig.ui_grid_visible
+	visible = GraphicsQuality.grid_always_visible()
 	EventBus.grid_overlay_toggled.connect(_on_grid_overlay_toggled)
 	EventBus.grid_resized.connect(_on_grid_resized)
 
@@ -38,6 +40,23 @@ func fit_to_grid() -> void:
 	if mat is ShaderMaterial:
 		(mat as ShaderMaterial).set_shader_parameter("grid_origin", Vector2(origin.x, origin.z))
 		(mat as ShaderMaterial).set_shader_parameter("cell_size", GridManager.cell_size)
+		# Solo sobre tierra (isla irregular): la mascara de GridManager, un texel
+		# por celda. Se hace una vez por partida (grid_resized), nada por frame.
+		var mask := GridManager.get_land_mask()
+		var use_mask := not mask.is_empty()
+		(mat as ShaderMaterial).set_shader_parameter("use_land_mask", use_mask)
+		(mat as ShaderMaterial).set_shader_parameter("grid_cells", Vector2(GridManager.grid_width, GridManager.grid_height))
+		if use_mask:
+			(mat as ShaderMaterial).set_shader_parameter("land_mask", land_mask_texture(mask))
+
+## La mascara de tierra como textura (L8: 255 tierra, 0 agua), fila a fila.
+static func land_mask_texture(mask: PackedByteArray) -> ImageTexture:
+	var bytes := PackedByteArray()
+	bytes.resize(mask.size())
+	for i in range(mask.size()):
+		bytes[i] = 255 if mask[i] == 1 else 0
+	var img := Image.create_from_data(GridManager.grid_width, GridManager.grid_height, false, Image.FORMAT_L8, bytes)
+	return ImageTexture.create_from_image(img)
 
 ## World-space size of the overlay plane (for tests and debugging).
 func get_plane_size() -> Vector2:

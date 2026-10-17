@@ -41,9 +41,16 @@ var event_interval_max_dev := 60.0
 
 # ── Starting Resources ──
 
+## 2026-10-12 (docs/22 §11): 30 de oro mas y 20 de madera menos. La madera
+## sobraba (la sonda la vendia en el minuto 5) y el oro era lo que frenaba la
+## Fundicion. 330 + 180 + 80 = 590 deja hueco en la bolsa de 600 de la era 1, y
+## Supervivencia (x0.75: 135 de madera) sigue pagando aserradero + mina (130).
 var starting_resources := {
-	"gold": 300,
-	"wood": 200,
+	"gold": 330,
+	"wood": 180,
+	# Comida para los primeros minutos, hasta que la primera Granja rinda
+	# (2026-10-04). 580 en total: cabe en la bolsa de 600 de la era 1.
+	"food": 80,
 }
 
 # ── Upgrade System ──
@@ -76,12 +83,30 @@ var upgrade_base_duration := 15.0
 
 # ── HQ Upgrade Override (capstone building, much more expensive) ──
 
+## 2026-10-12 (docs/22 §11, Campaña de 4-6 h): el nivel 2 pide 3.000 de bolsa
+## (antes 2.000) y los dos piden muchos mas materiales del taller (antes 15/10/15
+## y 25/20/25). Los materiales van fuera de la bolsa, asi que alargan la era 3 con
+## trabajo (vigas, lingotes y combustible que fabricar cada 25-30 s, y fundiciones
+## y refinerias de mas que levantar) sin tocar el invariante 3.500 = bolsa maxima
+## del nivel 3.
 var hq_upgrade_costs := {
-	2: {"gold": 800, "steel": 500, "oil": 300, "wood": 400, "beams": 15, "ingots": 10, "fuel": 15},
-	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700, "beams": 25, "ingots": 20, "fuel": 25},
+	# 2026-10-14: el doble de materiales otra vez (antes 100/70/100 y
+	# 200/140/200). Con los lotes y el Nucleo haciendo las recetas de todos, el
+	# taller va mucho mas rapido y la campana habia bajado a ~3 h 35 (docs/22 §11).
+	# 2026-10-16: vigas 350 y 700 (antes 200 y 400). Con ¿QUE HACER? llenando las
+	# esperas y las casas que ahora pide, la campana bajaba a ~4 h 10 y cuatro
+	# partidas de diez se quedaban por debajo de las 4 h. Las vigas, y no el
+	# combustible ni los lingotes, porque eran las que menos esperas dejaban
+	# (hay hasta 6 fundiciones y el acero sobra en la era 3) (docs/22 §11).
+	2: {"gold": 1300, "steel": 900, "oil": 500, "wood": 300, "beams": 350, "ingots": 140, "fuel": 200},
+	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700, "beams": 700, "ingots": 280, "fuel": 400},
 }
 
 # ── Building Limits (max per type, -1 = unlimited) ──
+# Topes de la ERA 1 y de lo que no sube con la era. Los que suben estan en
+# `building_limits_by_era` (seccion "Building Limit Helpers"); las decoraciones
+# (BuildingData.is_decoration) no tienen tope aunque salgan aqui. Se lee siempre
+# con get_building_limit(id), nunca a mano.
 
 var building_limits := {
 	"sawmill": 5,
@@ -101,6 +126,7 @@ var building_limits := {
 	"statue": 5,
 	"fountain": 5,
 	"road": -1,
+	"farm": 6,
 }
 
 # ── Building Prerequisites (must have at least 1 of each listed) ──
@@ -112,7 +138,9 @@ var building_prerequisites := {
 	"foundry": ["sawmill", "gold_mine", "house", "warehouse"],
 	"market": ["gold_mine"],
 	"laboratory": ["house"],
-	"refinery": ["foundry", "barracks"],
+	# Y el Laboratorio (2026-10-12): la era 2 trae una obra mas y el arbol abierto
+	# antes del petroleo, que es cuando se piden las tecnologias de almacen.
+	"refinery": ["foundry", "barracks", "laboratory"],
 	"barracks": ["foundry", "sawmill"],
 	"tower": ["barracks"],
 	"headquarters": ["barracks", "refinery"],
@@ -252,6 +280,74 @@ func get_material_of(building_id: String) -> String:
 			return m
 	return ""
 
+# ══════════════════════════════════════════════════════════════════════
+# ── Comida, Granja y produccion que se recoge (2026-10-04) ──
+# ══════════════════════════════════════════════════════════════════════
+# Decisiones de Bryan (tormenta-imperial-contexto/17): la gente come COMIDA en
+# vez de madera y oro; la Granja la cultiva eligiendo cultivo por duracion; y
+# TODO lo que producen los edificios se queda en el edificio hasta que el
+# jugador lo recoge con un toque. Lleno, el edificio se para. Detalle y cifras
+# en docs/02-economy.md y docs/03-buildings.md.
+
+## Comida que come cada habitante en cada tic de consumo (30 s; 60 s en las
+## fases tempranas). La tecnologia de consumo la rebaja como antes.
+var food_per_pop := 1
+
+## Cultivos de la Granja, del mas corto al mas largo. El corto rinde poco y da
+## comida enseguida; el largo rinde mas por minuto pero hay que esperarlo. El
+## cultivo elegido se repite solo mientras quepa en la Granja. Duracion en
+## segundos de juego (dev_mode la acorta con get_duration). Por minuto, a moral
+## 50 y nivel 1: 20 / 25 / 30 de comida.
+var farm_crops := [
+	{"id": "crop_short", "name": "CROP_SHORT", "duration": 60.0, "food": 20},
+	{"id": "crop_medium", "name": "CROP_MEDIUM", "duration": 300.0, "food": 125},
+	{"id": "crop_long", "name": "CROP_LONG", "duration": 1200.0, "food": 600},
+]
+## El que se planta solo al terminar la obra: el corto, para que una Granja nueva
+## de de comer en el primer minuto.
+var farm_default_crop := "crop_short"
+
+## Lo que cabe en cada edificio antes de pararse, a nivel 1 (se multiplica por
+## el de produccion del nivel: un nivel 2 llena igual de rapido, no antes).
+## Unos 6 minutos de su produccion: algo que recoger cada pocos minutos. La
+## Granja guarda una cosecha larga entera (600) con margen para la moral alta.
+var building_stock_caps := {
+	"sawmill": 180,
+	"gold_mine": 240,
+	"foundry": 120,
+	"refinery": 80,
+	"headquarters": 180,
+	"farm": 800,
+}
+var building_stock_cap_default := 150
+
+## Lo acumulado sin recoger aguanta esto (segundos de juego); pasado, se echa a
+## perder la mitad (`spoil_ratio`) y vuelve a contar. Solo en Gobernador
+## (GameMode.spoilage_enabled(), regla `spoilage` de game_tier_rules).
+var spoil_after_seconds := 7200.0
+var spoil_ratio := 0.5
+
+## Comida con la que carga un guardado de antes de la comida: sin ella la gente
+## pasaria hambre nada mas abrir la partida.
+var legacy_save_food := 120
+
+## Tope de lo acumulado en un edificio de este tipo a este nivel.
+func get_stock_cap(building_id: String, level: int = 1) -> int:
+	var base: int = int(building_stock_caps.get(building_id, building_stock_cap_default))
+	return int(round(float(base) * get_production_multiplier(level)))
+
+## El cultivo por id, o {} si no existe.
+func get_crop(crop_id: String) -> Dictionary:
+	for crop in farm_crops:
+		if String(crop["id"]) == crop_id:
+			return crop
+	return {}
+
+## Duracion de un cultivo ya escalada (dev_mode la acorta).
+func get_crop_duration(crop_id: String) -> float:
+	var crop := get_crop(crop_id)
+	return get_duration(float(crop.get("duration", 60.0))) if not crop.is_empty() else 0.0
+
 # ── Mining Data ──
 
 ## Era 1 de 8-12 minutos (decision de Bryan, 2026-10-04). Con 20 de oro cada
@@ -272,6 +368,59 @@ var mining_data := {
 ## Trabajadores que ocupa sacar una veta a mano mientras dura (2026-09-28):
 ## minar no es gratis, se quitan a un edificio o se esperan.
 var mining_workers := 2
+
+# ── Lotes y el Nucleo como taller de todo (2026-10-14, partidas de Bryan) ──
+#
+# Lotes: un proceso o un minado se puede pedir varias veces de un toque (x1, x5
+# o MAX). Se paga todo al arrancar y se hacen una vuelta tras otra en el mismo
+# sitio; cada vuelta entrega lo suyo al terminar. Cancelar devuelve la tasa de
+# siempre sobre todo lo pagado que aun no se entrego, y la Tormenta se lleva el
+# lote entero, como se llevaba una sola vuelta.
+
+## Botones fijos de lote ademas de MAX.
+var process_batch_sizes := [1, 5]
+## Techo de MAX: aun con el almacen lleno de madera, un lote no pasa de aqui
+## (20 vueltas de 30 s son 10 minutos: mas ya es dejarlo olvidado).
+var process_batch_max := 20
+
+## El Nucleo hace lo de todos los talleres y saca a mano lo de cada yacimiento,
+## en cuanto el recurso o material de ese proceso esta desbloqueado. Rinde lo
+## mismo pero tarda esto mas: asi el Nucleo saca de un apuro y el edificio
+## propio sigue valiendo la pena (y deja el Nucleo libre para otra cosa).
+var core_process_time_mult := 1.5
+## El minado a mano desde el Nucleo lleva este prefijo en su id ("core_mine_gold"),
+## para no confundirlo con el de una veta (MapGenerator gasta un uso por cada
+## "mine_*" que termina en un yacimiento; el Nucleo no tiene usos).
+const CORE_MINING_PREFIX := "core_"
+
+## Lo que el Nucleo ofrece ademas de sus procesos propios: los de cada taller
+## (grupo "workshop") y el minado a mano de cada yacimiento (grupo "hand"), con
+## la duracion ya escalada y multiplicada por `core_process_time_mult`. Sin
+## filtrar por desbloqueo: eso lo decide quien lo ensena (ProcessActionsPanel).
+func get_core_extra_processes() -> Array:
+	var result: Array = []
+	for building_id in building_processes:
+		if building_id == "nucleo":
+			continue
+		for proc in building_processes[building_id]:
+			var copy: Dictionary = proc.duplicate(true)
+			copy["duration"] = get_duration(float(proc["duration"]) * core_process_time_mult)
+			copy["core_group"] = "workshop"
+			copy["from"] = building_id
+			result.append(copy)
+	for deposit_id in mining_data:
+		var mine: Dictionary = mining_data[deposit_id]
+		result.append({
+			"id": CORE_MINING_PREFIX + String(mine["id"]),
+			"name": mine["name"],
+			"duration": get_duration(float(mine["duration"]) * core_process_time_mult),
+			"cost": {},
+			"produces": (mine["produces"] as Dictionary).duplicate(),
+			"workers": mining_workers,
+			"core_group": "hand",
+			"from": deposit_id,
+		})
+	return result
 
 # ── Deposit Config ──
 
@@ -301,11 +450,56 @@ var deposit_core_gap := 2
 var map_shore_band := 1
 
 # ── Map Size ──
-## Lado de la rejilla, en celdas, que sortea cada partida nueva (ancho y alto por
-## separado, siempre pares para que el Nucleo quede en el centro del mundo). Se
-## guarda con la partida (clave "grid"); un guardado sin ella es de 40x40.
-var grid_size_min := 40
-var grid_size_max := 48
+## Ancho y alto de la rejilla, en celdas, que sortea cada partida nueva (por
+## separado, siempre pares para que el Nucleo quede en el centro del mundo; la
+## isla no sale siempre cuadrada). Se guardan con la partida (clave "grid"); un
+## guardado sin ella es de 40x40. Con la isla irregular (2026-10-12) la rejilla
+## es mas grande que la de antes (40-48) porque el mar entra en ella: la tierra
+## la fija island_coast (land_min..land_max), no el tamano de la rejilla.
+var grid_width_min := 60
+var grid_width_max := 74
+var grid_height_min := 60
+var grid_height_max := 74
+
+## La costa de la isla irregular (scripts/map/IslandShape.gd, docs/02 "Mapa
+## aleatorio"). Mismas claves y valores que IslandShape.DEFAULTS (un test lo
+## comprueba). Se copian al guardado de cada partida nueva: cambiarlos aqui solo
+## afecta a las islas nuevas.
+##  edge_water: celdas de mar en el borde de la rejilla
+##  core_size / core_margin: el Nucleo y la tierra garantizada alrededor de su acera
+##  fraction_min/max: parte de la rejilla util (sin el borde) que es tierra
+##  land_min/max: celdas de tierra (la de antes era 1600-2304, toda construible)
+##  power_min/max: superelipse (2 elipse, 3 casi cuadrada)
+##  harmonic_amp: lobulos grandes; noise_amp / noise_freq: costa menuda
+##  bays_* / capes_*: cuantas bahias y cabos, y de que tamano (en radios de isla)
+##  close_radius: entrantes mas estrechos que unas 2x celdas se rellenan
+##  open_radius: lenguas de tierra mas finas que unas 2x celdas se quitan
+var island_coast := {
+	"edge_water": 3,
+	"core_size": 3,
+	"core_margin": 3,
+	"fraction_min": 0.46,
+	"fraction_max": 0.58,
+	"land_min": 1550,
+	"land_max": 2300,
+	"power_min": 2.0,
+	"power_max": 3.0,
+	"harmonic_amp": 0.30,
+	"noise_amp": 0.30,
+	"noise_freq": 0.05,
+	"bays_min": 2,
+	"bays_max": 4,
+	"bay_size_min": 0.20,
+	"bay_size_max": 0.36,
+	"capes_min": 1,
+	"capes_max": 3,
+	"cape_length_min": 1.00,
+	"cape_length_max": 1.25,
+	"cape_width_min": 0.08,
+	"cape_width_max": 0.14,
+	"close_radius": 2.5,
+	"open_radius": 1.5,
+}
 
 # ── Deposit Sizes (random range per type: min_w, max_w, min_h, max_h) ──
 var deposit_sizes := {
@@ -335,6 +529,9 @@ var resource_colors := {
 	"ingots": Color(1.0, 0.72, 0.25),
 	"beams": Color(0.55, 0.62, 0.72),
 	"fuel": Color(0.85, 0.38, 0.2),
+	"food": Color(0.55, 0.8, 0.3),
+	## Repuestos (2026-10-14): solo se consiguen fuera, en escaramuzas (doc 21 §3.1).
+	"parts": Color(0.66, 0.72, 0.6),
 }
 
 # ── Audio ──
@@ -421,9 +618,12 @@ var ui_touch_controls_opacity := 0.45
 const USER_SETTINGS_PATH := "user://settings.cfg"
 
 ## Whether the map cell grid overlay is shown permanently (toggle in Settings).
-## On by default (A10): the owner wants to see the cells at all times, faintly;
-## the alpha lives in the GridOverlay material in Main.tscn.
-var ui_grid_visible := true
+## Off by default (arte, 2026-10-05: "el suelo con la rejilla blanca parece un
+## prototipo"): the grid shows only while placing or moving a building
+## (BuildingPlacer forces it on), very faint; the alpha lives in the GridOverlay
+## material in Main.tscn. Saved as [ui] grid_always: the old key grid_visible
+## was written as true by every install, so it is ignored and dropped on save.
+var ui_grid_visible := false
 
 ## Whether the on-screen helper callouts are shown ("?" button). On by default
 ## so new players get guidance; the choice persists once toggled.
@@ -468,6 +668,31 @@ var ui_text_size := "auto"
 var ui_palette := "default"
 var ui_high_contrast := false
 var ui_panel_opacity := 1.0
+## Calidad grafica del mapa 3D (WorldLook, docs/21 §12): "high" pone SSAO (solo
+## Forward+), glow y sombras con cuatro cortes; "low" los quita y deja una sombra
+## de un corte. "auto" es "low" con el renderizador Mobile o Compatibility
+## (Android, el APK de QA) y "high" en Forward+ (PC). "minimal" es para "una
+## papa" (docs/26 §7): sin sombras, MSAA, humo ni rejilla, menos caminantes, 3D
+## a menor resolucion, 30 fps en PC y, en PC, el renderizador Mobile desde el
+## siguiente arranque (GraphicsQuality).
+const GRAPHICS_QUALITY_MODES := ["auto", "high", "low", "minimal"]
+var ui_graphics_quality := "auto"
+## Vista del combate (docs/15 §3, "Las dos vistas"): "front" (por defecto) los
+## dos bandos cara a cara, sin casillas a la vista; "board" el tablero 8x8 en 3D.
+## Preferencia del dispositivo ([interfaz] combat_view), nunca de la partida: las
+## dos vistas mueven el mismo Encounter y una pelea da lo mismo en las dos.
+const COMBAT_VIEWS := ["front", "board"]
+var ui_combat_view := "front"
+## Deteccion del primer arranque (DeviceProfile, docs/26 §7.2): si ya se hizo
+## (no se repite sola) y por que decidio lo que decidio (para depurar).
+var quality_detected := false
+var quality_detected_reason := ""
+## Version de la regla de deteccion con la que se decidio (settings.cfg
+## [interfaz] quality_detect_version; sin la clave, 0 = la del 1.0.0). La 2 mide
+## sin tope ni vsync y descarta las medidas pegadas a un tope; DeviceProfile
+## repara una sola vez lo que decidio una version anterior con una medida mala.
+const QUALITY_DETECT_VERSION := 2
+var quality_detect_version := 0
 ## Ids de HudRegistry que el jugador oculto.
 var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
@@ -483,6 +708,52 @@ var ui_fps_cap := "auto"
 ## agua). Nunca por encima del tope elegido. Docs/21 §10.
 var fps_background := 10
 var fps_paused := 30
+## Tope "auto" en PC con la calidad Minima (en tablet y movil ya es 30).
+var fps_minimal_pc := 30
+
+# ── Deteccion de la calidad en el primer arranque (docs/26 §7.2) ──
+# Solo con la calidad en "auto" y sin quality_detected en settings.cfg. Paso 1:
+# senales estaticas; paso 2: medir unos segundos detras del menu de titulo.
+
+## Nombres de GPU flojas (expresiones regulares, sin distinguir mayusculas).
+## Ampliable sin tocar codigo cuando un probador diga "en mi equipo va mal".
+var quality_weak_gpu_patterns: Array = [
+	r"Intel\(R\) HD Graphics( [2-6]\d\d\b|$| Family)",
+	r"\bUHD Graphics 6\d\d\b",
+	r"\bHD Graphics [45]\d\d\b",
+	r"\bRadeon R[2-7]\b",
+	r"\bRadeon\(TM\) Vega [368] ",
+	r"\bMali-T",
+	r"\bMali-G(31|51|52|57)\b",
+	r"\bAdreno \(TM\) ([345]\d\d|61[023])\b",
+	r"PowerVR",
+	r"\bGE8\d\d\d\b",
+]
+## RAM del sistema (MB) a partir de la cual el equipo es flojo. 4600 y no 4096:
+## un equipo de 4 GB declara algo menos (la integrada se queda una parte).
+var quality_weak_ram_mb := 4600
+## Hilos de CPU a partir de los cuales es flojo (2 nucleos / 4 hilos).
+var quality_weak_threads := 4
+## Un movil (perfil "phone") con esta RAM o menos va en Minima.
+var quality_phone_ram_mb := 6600
+## Paso 2: espera a que se asiente la carga y luego mide (segundos reales).
+var quality_detect_warmup := 2.0
+var quality_detect_seconds := 3.0
+## Mediana o p95 del fotograma por encima de esto (ms) -> Minima; mediana
+## por encima de quality_detect_low_ms midiendo en Alta -> Baja (nunca por debajo
+## de 1,1 fotogramas del refresco de la pantalla: con vsync no se mide menos).
+var quality_detect_median_ms := 25.0
+var quality_detect_p95_ms := 33.0
+var quality_detect_low_ms := 16.7
+## Una medida que no mide la GPU sino un tope: si la mediana cae a menos de
+## quality_detect_cap_tolerance_ms de 1000/N (N en quality_detect_known_caps, el
+## refresco de la pantalla o su mitad), o si la distancia entre los percentiles
+## 10 y 90 no llega a quality_detect_flat_ms (fotogramas clavados), no vale: se
+## descarta y la calidad se queda en "auto". Nunca baja a Minima por eso (el
+## 1.0.0 midio 33,3 ms en una RTX 3060: el tope de 30, no el equipo).
+var quality_detect_known_caps: Array = [30, 60]
+var quality_detect_cap_tolerance_ms := 1.0
+var quality_detect_flat_ms := 0.3
 
 # ── Perfil del jugador (settings.cfg [perfil]) ──
 # Del jugador en este dispositivo, NO de la partida: sobrevive a "Nueva partida"
@@ -494,7 +765,15 @@ var profile_runs_finished := 0
 ## Campanas ganadas (Auditoria Final superada).
 var profile_campaigns_won := 0
 
+## La partida activa (settings.cfg [partidas] activa): la ultima que se jugo en
+## este dispositivo, la que abre "Continuar". Es preferencia del dispositivo, no
+## estado de juego. 0 = ninguna todavia (GameManager elige al arrancar).
+var saves_active_slot := 0
+
 func _ready() -> void:
+	# El registro local de errores va lo primero: asi recoge tambien lo que pase
+	# al cargar los ajustes (docs/19 §7). Nunca sale del equipo.
+	ErrorLog.install(self)
 	# Una línea en el log: quien reporte un fallo con el .exe dirá en qué modo jugaba.
 	print("[GameConfig] version %s, dev_mode=%s" % [ProjectSettings.get_setting("application/config/version", "?"), dev_mode])
 	load_user_settings()
@@ -520,7 +799,7 @@ func load_user_settings() -> void:
 	audio_sfx_volume = clampf(float(cf.get_value("audio", "sfx", audio_sfx_volume)), 0.0, 1.0)
 	audio_ambient_volume = clampf(float(cf.get_value("audio", "ambient", audio_ambient_volume)), 0.0, 1.0)
 	audio_music_enabled = bool(cf.get_value("audio", "music_enabled", audio_music_enabled))
-	ui_grid_visible = bool(cf.get_value("ui", "grid_visible", ui_grid_visible))
+	ui_grid_visible = bool(cf.get_value("ui", "grid_always", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
 	var view := String(cf.get_value("ui", "view_mode", ui_view_mode))
@@ -554,6 +833,13 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	ui_high_contrast = bool(cf.get_value("interfaz", "high_contrast", ui_high_contrast))
 	ui_panel_opacity = clampf(float(cf.get_value("interfaz", "panel_opacity", ui_panel_opacity)),
 		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
+	var quality := str(cf.get_value("interfaz", "graphics_quality", ui_graphics_quality))
+	ui_graphics_quality = quality if quality in GRAPHICS_QUALITY_MODES else "auto"
+	var cview := str(cf.get_value("interfaz", "combat_view", ui_combat_view))
+	ui_combat_view = cview if cview in COMBAT_VIEWS else "front"
+	quality_detected = bool(cf.get_value("interfaz", "quality_detected", quality_detected))
+	quality_detected_reason = str(cf.get_value("interfaz", "quality_detected_reason", quality_detected_reason))
+	quality_detect_version = int(cf.get_value("interfaz", "quality_detect_version", 0))
 	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
 	ui_hud_hidden = []
 	if hidden is Array:
@@ -574,6 +860,7 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	ui_fps_cap = fps if fps in FPS_CAP_MODES else "auto"
 	profile_runs_finished = maxi(0, int(cf.get_value("perfil", "runs_finished", profile_runs_finished)))
 	profile_campaigns_won = maxi(0, int(cf.get_value("perfil", "campaigns_won", profile_campaigns_won)))
+	saves_active_slot = maxi(0, int(cf.get_value("partidas", "activa", saves_active_slot)))
 
 func save_user_settings() -> void:
 	var cf := ConfigFile.new()
@@ -583,7 +870,9 @@ func save_user_settings() -> void:
 	cf.set_value("audio", "sfx", audio_sfx_volume)
 	cf.set_value("audio", "ambient", audio_ambient_volume)
 	cf.set_value("audio", "music_enabled", audio_music_enabled)
-	cf.set_value("ui", "grid_visible", ui_grid_visible)
+	cf.set_value("ui", "grid_always", ui_grid_visible)
+	if cf.has_section_key("ui", "grid_visible"):
+		cf.erase_section_key("ui", "grid_visible")
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
 	cf.set_value("ui", "view_mode", ui_view_mode)
@@ -598,12 +887,27 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "palette", ui_palette)
 	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
+	cf.set_value("interfaz", "graphics_quality", ui_graphics_quality)
+	cf.set_value("interfaz", "combat_view", ui_combat_view)
+	cf.set_value("interfaz", "quality_detected", quality_detected)
+	cf.set_value("interfaz", "quality_detected_reason", quality_detected_reason)
+	cf.set_value("interfaz", "quality_detect_version", quality_detect_version)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("interfaz", "fps_cap", ui_fps_cap)
 	cf.set_value("perfil", "runs_finished", profile_runs_finished)
 	cf.set_value("perfil", "campaigns_won", profile_campaigns_won)
+	cf.set_value("partidas", "activa", saves_active_slot)
 	cf.save(USER_SETTINGS_PATH)
+
+## Elige la vista del combate ("front" / "board"), la guarda en settings.cfg y
+## devuelve si cambio. Un valor desconocido no hace nada.
+func set_combat_view(view: String) -> bool:
+	if not view in COMBAT_VIEWS or view == ui_combat_view:
+		return false
+	ui_combat_view = view
+	save_user_settings()
+	return true
 
 ## El perfil ya abre Gobernador: una partida terminada o una Campana ganada.
 ## (En dev_mode se ofrece siempre; eso lo decide GameMode.governor_unlocked().)
@@ -768,6 +1072,8 @@ var market_base_prices := {
 	"wood": 3,
 	"steel": 8,
 	"oil": 12,
+	# Barata: comprar comida tiene que ser el remedio inmediato del hambre.
+	"food": 2,
 }
 
 var market_spread := 0.3
@@ -788,11 +1094,13 @@ var market_mean_reversion := 0.05
 ##   after_tithe  Tras el Diezmo: la Regencia ha sacado oro de la isla y lo que
 ##                queda vale menos: todo cuesta mas oro (y se vende por mas).
 ##   calm         Calma: vuelta a la media.
+## La comida sube ANTES del Diezmo: en el Aviso todos hacen acopio y en la
+## Tormenta las granjas rinden el 15 %; quien compra en la calma ahorra.
 var market_calendar := {
 	"calm": {},
-	"warning": {"wood": 0.30},
-	"storm": {"steel": -0.25},
-	"after_tithe": {"wood": 0.15, "steel": 0.15, "oil": 0.15},
+	"warning": {"wood": 0.30, "food": 0.25},
+	"storm": {"steel": -0.25, "food": 0.40},
+	"after_tithe": {"wood": 0.15, "steel": 0.15, "oil": 0.15, "food": 0.15},
 }
 ## Cuanto se acerca el precio a su objetivo del calendario en cada tick (0..1).
 ## Con 0.35 y ticks de 15 s, un Aviso de 45 s ya lleva la madera a ~+22 %.
@@ -932,46 +1240,78 @@ func rank_title_key(rank: int) -> String:
 ##   limit       id -> huecos extra sobre building_limits
 ##   production  fraccion sumada al multiplicador de produccion (0.01 = +1 %)
 ##   storage     fraccion sobre el tope de la bolsa (0.02 = +2 %)
-##   flags       banderas de la colonia que se pueden elegir
-##   colors      colores de la colonia que se pueden elegir
+##   patterns    fondos de la bandera que se pueden elegir (COLONY_PATTERNS)
+##   emblems     emblemas de la bandera (COLONY_EMBLEMS)
+##   colors      colores de la bandera (colony_colors)
 ## No toca los edificios basicos ni sus eras (la linea jugable sigue igual): el
 ## rango abre decoraciones, huecos extra y cosmeticos. Un edificio nuevo y
 ## opcional entra aqui con `buildings`.
 var rank_rewards := {
-	1: {"flags": ["plain", "band"], "colors": ["brass", "crimson"]},
-	2: {"buildings": ["garden"]},
-	3: {"production": 0.01, "flags": ["cross"]},
-	4: {"storage": 0.02, "colors": ["steel"]},
-	5: {"buildings": ["fountain"]},
-	6: {"production": 0.01, "flags": ["diagonal"]},
-	7: {"colors": ["moss"]},
+	1: {"patterns": ["plain", "bands_h", "bands_v", "halves_h", "cross"],
+		"emblems": ["none", "gear", "anchor", "wheat", "hammer"],
+		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"]},
+	2: {"buildings": ["garden", "flower_planter", "hay_cart"], "emblems": ["tower"]},
+	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"], "buildings": ["bonfire"]},
+	4: {"storage": 0.02, "emblems": ["star"]},
+	5: {"buildings": ["fountain", "flagpole"]},
+	6: {"production": 0.01, "patterns": ["diagonal", "saltire"]},
+	7: {"colors": ["copper", "red"]},
 	8: {"buildings": ["statue"], "storage": 0.02},
-	9: {"production": 0.01, "flags": ["gear"]},
+	9: {"production": 0.01, "patterns": ["quartered"], "emblems": ["wrench"]},
 	10: {"limit": {"house": 2}},
-	11: {"colors": ["soot"]},
-	12: {"production": 0.01, "storage": 0.02, "flags": ["chevron"]},
-	13: {"limit": {"statue": 2, "fountain": 2}},
-	14: {"colors": ["copper"]},
-	15: {"production": 0.01},
-	16: {"storage": 0.02, "limit": {"tower": 1}},
-	17: {"limit": {"house": 2}},
-	18: {"production": 0.02},
+	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
+	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
+	13: {"buildings": ["palm_trees"], "emblems": ["ship"]},
+	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
+	15: {"production": 0.01, "patterns": ["stripes"]},
+	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
+	17: {"limit": {"house": 2}, "patterns": ["waves"]},
+	18: {"production": 0.02, "patterns": ["checks"], "emblems": ["airship"]},
 }
 
-## Banderas de la colonia, en orden de la galeria. Las dibuja ColonyFlag.
-const COLONY_FLAGS := ["plain", "band", "cross", "diagonal", "gear", "chevron"]
-## Colores de la colonia: el principal de la bandera y del Nucleo.
+# ── Bandera y nombre del pais (ColonyFlag, ColonyIdentity, RankManager) ──
+# La bandera es una receta de piezas: un fondo (dibujo con uno o dos colores),
+# un emblema encima y tres colores [fondo 1, fondo 2, emblema]. Todo se dibuja
+# por codigo en scripts/ui/ColonyFlag.gd; nada viene de otro juego ni imita
+# simbolos reales de estados, partidos o ideologias. Lo que abre cada rango esta
+# en rank_rewards (patterns / emblems / colors).
+
+## Fondos, en orden de la galeria.
+const COLONY_PATTERNS := ["plain", "bands_h", "bands_v", "halves_h", "cross", "border",
+	"diagonal", "saltire", "quartered", "canton", "hoist_triangle", "stripes", "waves", "checks"]
+## Emblemas, en orden de la galeria. "none" = sin emblema.
+const COLONY_EMBLEMS := ["none", "gear", "anchor", "wheat", "hammer", "tower", "star",
+	"wrench", "wheel", "ship", "cogs", "sun", "airship"]
+## Colores de la bandera. Los seis primeros son los de siempre de la colonia; el
+## resto sale de la paleta de la maqueta (ToyPalette): marfil = CREAM, cielo =
+## SKY, rojo = RED, hierba = GREEN, pizarra = SLATE, teja = TERRACOTTA, oro = BRASS.
 var colony_colors := {
+	"ivory": Color8(242, 222, 180),
 	"brass": Color(0.80, 0.62, 0.25),
 	"crimson": Color(0.68, 0.14, 0.14),
 	"steel": Color(0.30, 0.45, 0.62),
 	"moss": Color(0.33, 0.50, 0.24),
 	"soot": Color(0.18, 0.18, 0.20),
+	"sky": Color8(78, 160, 204),
 	"copper": Color(0.72, 0.40, 0.20),
+	"red": Color8(220, 50, 38),
+	"grass": Color8(108, 172, 62),
+	"slate": Color8(96, 98, 110),
+	"terracotta": Color8(210, 92, 58),
+	"gold": Color8(232, 172, 58),
 }
-const COLONY_COLOR_ORDER := ["brass", "crimson", "steel", "moss", "soot", "copper"]
-const COLONY_DEFAULT_FLAG := "band"
-const COLONY_DEFAULT_COLOR := "brass"
+const COLONY_COLOR_ORDER := ["ivory", "brass", "crimson", "steel", "moss", "soot", "sky",
+	"copper", "red", "grass", "slate", "terracotta", "gold"]
+## La bandera de serie (la de una partida sin nada que elegir).
+const COLONY_DEFAULT_SPEC := {"pattern": "bands_h", "emblem": "gear", "colors": ["brass", "ivory", "crimson"]}
+## Largo maximo del nombre del pais ("Republica de Puerto Hierro" cabe justo).
+const COLONY_NAME_MAX := 26
+## Las seis banderas de antes (guardados con "rank": {"flag", "color"}),
+## traducidas a piezas al cargar: [fondo, emblema].
+const COLONY_LEGACY_FLAGS := {
+	"plain": ["plain", "none"], "band": ["bands_h", "none"], "cross": ["cross", "none"],
+	"diagonal": ["diagonal", "none"], "gear": ["plain", "gear"], "chevron": ["hoist_triangle", "none"],
+}
 
 ## Bonos del rango, aplicados en tiempo de ejecucion por RankManager (asigna el
 ## total del rango actual; nunca suma sobre lo que habia).
@@ -1040,6 +1380,27 @@ var construction_style := {
 		"frame": "basin", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 	"statue": {"piles": ["stone", "stone", "sacks"], "fence": "canvas", "tarp": Color(0.58, 0.54, 0.46),
 		"frame": "plinth", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.77, 0.59, 0.16)},
+	# Decoraciones baratas (feat/decoraciones-1): obras pequenas y rapidas.
+	"lamp_post": {"piles": ["rivets", "stone", "planks"], "fence": "planks", "tarp": Color(0.36, 0.34, 0.40),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.93, 0.78, 0.32)},
+	"park_bench": {"piles": ["planks", "rivets", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.20, 0.42, 0.62)},
+	"hedge": {"piles": ["soil", "sacks", "soil"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"avenue_tree": {"piles": ["soil", "stone", "sacks"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"flower_planter": {"piles": ["soil", "bricks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.40, 0.30),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.85, 0.35, 0.55)},
+	"colony_sign": {"piles": ["planks", "logs", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "mast", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.72, 0.13, 0.10)},
+	"hay_cart": {"piles": ["sacks", "planks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.55, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.93, 0.78, 0.32)},
+	"bonfire": {"piles": ["logs", "stone", "logs"], "fence": "dark_planks", "tarp": Color(0.48, 0.34, 0.20),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.90, 0.55, 0.12)},
+	"flagpole": {"piles": ["beams", "stone", "rivets"], "fence": "canvas", "tarp": Color(0.55, 0.12, 0.10),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.72, 0.13, 0.10)},
+	"palm_trees": {"piles": ["soil", "sacks", "gravel"], "fence": "planks", "tarp": Color(0.70, 0.62, 0.42),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 }
 ## La animacion de la obra (grua, polea, banderin): velocidad base de giro de
 ## la grua (rad/s de la fase del vaiven) y cuanto se abre el vaiven (rad). Cada
@@ -1069,6 +1430,164 @@ var building_active_fx := {
 ## radianes: con el hollin y los escombros, se distingue de lejos.
 var ruin_sink_ratio := 0.38
 var ruin_tilt := 0.07
+
+## Etapas visibles de dano entre sano y ruina (docs/03, "Etapas de dano"):
+## por debajo de la primera proporcion de vida el edificio esta LEVE (grietas,
+## tejas caidas, una tabla suelta), por debajo de la segunda GRAVE (chapa
+## colgando, viga rota, humo negro y chispas). La ruina sigue siendo vida 0.
+## Solo aspecto: ni el dano ni la reparacion cambian por esto.
+var damage_stage_thresholds := [0.75, 0.4]
+## Cuanto se ladea (radianes) y se hunde (fraccion de su altura) el modelo en
+## cada etapa: [leve, grave]. La ruina usa ruin_tilt / ruin_sink_ratio.
+var damage_tilt := [0.025, 0.05]
+var damage_sink_ratio := [0.0, 0.05]
+
+## La Tormenta a la vista (docs/21 §12), SOLO aspecto: las duraciones y los
+## efectos de cada fase son los storm_* de mas abajo y no cambian por esto.
+## Antes el cielo se quedaba oscuro todo el Aviso, la Ceniza y la Tormenta
+## (2-3 minutos); ahora la llegada de la Tormenta es un GOLPE corto y marcado
+## (oscuridad, rafaga de viento con ceniza) y el resto del tiempo el cielo
+## queda apenas tenido. El HUD de la Tormenta sigue diciendo la fase.
+## Cuanto dura el golpe en pleno (s, reales: no los acelera dev_mode), cuanto
+## tarda en cerrarse y cuanto en abrirse hasta el tono de fondo.
+var storm_visual_punch := 6.0
+var storm_visual_punch_in := 0.7
+var storm_visual_punch_out := 3.0
+## El tono de fondo (peso de ceniza, 0-1) de cada fase fuera del golpe: el
+## Aviso y la Ceniza apenas tinen; tras el golpe la Tormenta y el Diezmo se
+## quedan en `storm_visual_linger`.
+var storm_visual_warning := 0.12
+var storm_visual_ash := 0.2
+var storm_visual_linger := 0.22
+## Motas de ceniza de la rafaga del golpe por perfil de dispositivo.
+var storm_visual_gust_amount := {"pc": 160, "tablet": 110, "phone": 70}
+
+# ── Parcela y atrezo de cada edificio (docs/03, "Parcela y atrezo") ──
+## Cada edificio vive en su parcela (guia de estilo, regla 1): suelo propio que
+## cubre la huella entera y atrezo en el patio que queda entre el modelo y el
+## borde. Las dos vistas leen esta misma tabla (LotPlan), asi que dicen lo mismo.
+##
+## - "ground": "slabs" (losas), "dirt" (tierra batida), "plate" (chapa
+##   remachada) o "grass" (hierba con bordillo).
+## - "trim": lo que corre por el borde que no da a calzada: "fence" (valla baja),
+##   "curb" (bordillo), "rail" (barandilla de hierro), "sandbags" (sacos
+##   terreros) o "pipes" (tuberia con valvulas).
+## - "yard": ancho del patio, en casillas. El modelo se encoge (solo en planta,
+##   nunca en altura) para dejarlo libre; nunca se agranda.
+## - "props": el atrezo que se reparte por el patio. El primero sale siempre;
+##   el resto se elige con la semilla de la instancia (celda + id).
+## - "count": cuantas piezas [min, max]. "accent": la familia del color saturado.
+## - "signature": el elemento exagerado que el modelo GLB no trae (regla 3), en
+##   la esquina "corner" del patio ("NE", "SW"...; "N" = las dos de atras): la
+##   chimenea de la Fundicion, la grua del Almacen, la antena del Laboratorio,
+##   el emblema del Cuartel General... Esa esquina no lleva atrezo. "ROOF":
+##   encima del tejado, apoyado en la altura medida del modelo.
+## - "keep_clear": esquinas sin atrezo por otra cosa (la del Nucleo y la del
+##   Cuartel General son las del mastil con la bandera del pais, ColonyFlag3D/2D).
+## Sin entrada (la calzada), sin parcela.
+var building_lot_style := {
+	"sawmill": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "industrial",
+		"props": ["logs", "planks", "logs", "crate", "barrel", "lamp"], "count": [5, 7]},
+	"gold_mine": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "industrial",
+		"props": ["cart", "ore", "crate", "barrel", "lamp"], "count": [4, 6],
+		"signature": "ore_heap", "corner": "SW"},
+	"foundry": {"ground": "plate", "trim": "rail", "yard": 0.3, "accent": "industrial",
+		"props": ["ingots", "coal", "ingots", "barrel", "crate", "drums"], "count": [4, 6],
+		"signature": "chimney", "corner": "NE"},
+	"refinery": {"ground": "plate", "trim": "pipes", "yard": 0.3, "accent": "industrial",
+		"props": ["drums", "valve", "drums", "barrel", "crate"], "count": [4, 6],
+		"signature": "manifold", "corner": "SE"},
+	"warehouse": {"ground": "slabs", "trim": "curb", "yard": 0.3, "accent": "civic",
+		"props": ["crate", "pallet", "crate", "sacks", "barrel", "crate"], "count": [5, 7],
+		"signature": "crane", "corner": "NE"},
+	"market": {"ground": "slabs", "trim": "curb", "yard": 0.28, "accent": "civic",
+		"props": ["goods", "sacks", "goods", "barrel", "planter", "crate"], "count": [5, 7]},
+	"laboratory": {"ground": "slabs", "trim": "rail", "yard": 0.28, "accent": "civic",
+		"props": ["gas", "crate", "gas", "lamp", "planter"], "count": [4, 6],
+		"signature": "antenna", "corner": "NW"},
+	"barracks": {"ground": "dirt", "trim": "sandbags", "yard": 0.3, "accent": "military",
+		"props": ["dummy", "target", "ammo", "dummy", "sacks"], "count": [4, 6],
+		"signature": "flag", "corner": "NE"},
+	"tower": {"ground": "plate", "trim": "sandbags", "yard": 0.3, "accent": "military",
+		"props": ["ammo", "sacks", "ammo", "lamp", "barrel"], "count": [4, 6],
+		"signature": "cannon", "corner": "SE"},
+	"headquarters": {"ground": "slabs", "trim": "rail", "yard": 0.28, "accent": "military",
+		"props": ["flag", "lamp", "planter", "ammo"], "count": [3, 5],
+		"signature": "emblem", "corner": "ROOF", "keep_clear": ["NE"]},
+	# La Granja (rama comida): tierra batida, valla baja y sacos de la cosecha. El
+	# patio es mas estrecho que el de los demas: el campo es el edificio.
+	"farm": {"ground": "dirt", "trim": "fence", "yard": 0.25, "accent": "residential",
+		"props": ["sacks", "barrel", "sacks", "crate", "sacks"], "count": [3, 5]},
+	"house": {"ground": "grass", "trim": "fence", "yard": 0.3, "accent": "residential",
+		"props": ["clothesline", "planter", "bench", "barrel", "planter"], "count": [3, 5]},
+	"nucleo": {"ground": "slabs", "trim": "curb", "yard": 0.15, "accent": "civic",
+		"props": ["lamp", "planter", "bench", "lamp", "planter"], "count": [6, 9],
+		"keep_clear": ["NE"]},
+	"garden": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential",
+		"props": ["bench", "lamp", "planter"], "count": [3, 5]},
+	"fountain": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic",
+		"props": ["bench", "lamp", "planter", "bench"], "count": [3, 5]},
+	"statue": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic",
+		"props": ["lamp", "planter", "bench"], "count": [3, 5]},
+	# Decoraciones baratas (feat/decoraciones-1): suelo, bordillo y una o dos
+	# piezas de atrezo como mucho (la decoracion ya es atrezo, y cada pieza de
+	# mas cuesta en la tablet).
+	"lamp_post": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "bench"], "count": [1, 2]},
+	"park_bench": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hedge": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["planter", "bench"], "count": [1, 2]},
+	"avenue_tree": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "planter"], "count": [1, 2]},
+	"flower_planter": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "lamp"], "count": [1, 2]},
+	"colony_sign": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hay_cart": {"ground": "dirt", "trim": "fence", "yard": 0.25, "accent": "residential", "props": ["sacks", "barrel"], "count": [1, 2]},
+	"bonfire": {"ground": "dirt", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["logs", "barrel"], "count": [1, 2]},
+	"flagpole": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["lamp", "planter"], "count": [1, 2]},
+	"palm_trees": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["barrel", "crate"], "count": [1, 2]},
+}
+## El acento saturado de cada familia (guia, regla 4): rojo valvula en lo
+## industrial, amarillo senal en lo militar, laton en lo civico, verde en lo
+## residencial.
+var building_lot_accents := {
+	"industrial": Color(0.80, 0.16, 0.10),
+	"military": Color(0.95, 0.74, 0.12),
+	"civic": Color(0.82, 0.63, 0.20),
+	"residential": Color(0.30, 0.60, 0.22),
+}
+
+# ── Velocidad del juego (x1 / x2) ──
+# Un multiplicador que leen los servicios que tickean la simulacion, y NO
+# Engine.time_scale: time_scale tambien acelera los tweens de la interfaz, la
+# camara, los avisos, el autoguardado (que cuenta segundos reales) y el reloj
+# del tutorial, y cada uno pediria su excepcion en archivos de otros. Aqui la
+# interfaz va a su ritmo sin tocar nada y la simulacion pasa por sim_delta().
+# Es estado del dispositivo, no de la partida: no viaja en save_game.json y al
+# abrir el juego siempre es x1 (no se escribe en settings.cfg: seria un valor
+# que nadie lee). Lo que si se guarda es el boton (oculto/movido, HudRegistry).
+const GAME_SPEEDS := [1.0, 2.0]
+var game_speed := 1.0
+
+## Pone la velocidad (solo valores de GAME_SPEEDS) y avisa por EventBus.
+func set_game_speed(speed: float) -> void:
+	var next := speed if speed in GAME_SPEEDS else 1.0
+	if is_equal_approx(next, game_speed):
+		return
+	game_speed = next
+	EventBus.game_speed_changed.emit(game_speed)
+
+## x1 <-> x2 (el boton del HUD y la tecla F).
+func toggle_game_speed() -> void:
+	var i := GAME_SPEEDS.find(game_speed)
+	set_game_speed(GAME_SPEEDS[(i + 1) % GAME_SPEEDS.size()])
+
+## El delta de simulacion de este fotograma: lo que tickean produccion,
+## construccion, procesos, Tormenta, dia y noche, ejercito, eventos...
+func sim_delta(delta: float) -> float:
+	return delta * game_speed
+
+## Una pausa o animacion del tablero de combate, acortada con x2. Para el
+## turno enemigo (get_combat_ai_step_delay) y las animaciones de la vista de
+## combate, que la leen de aqui y escuchan EventBus.game_speed_changed.
+func combat_pace(seconds: float) -> float:
+	return seconds / maxf(game_speed, 0.01)
 
 # ── Duration Helpers ──
 
@@ -1114,7 +1633,19 @@ func get_upgrade_cost(data: BuildingData, to_level: int) -> Dictionary:
 	var base: Dictionary = data.get_cost()
 	for type in base:
 		cost[type] = int(base[type] * mult)
+	# Repuestos: solo salen de las escaramuzas (doc 21 §3.1). Los pide el nivel 3
+	# de los productores, para que salir sea una necesidad y no un extra.
+	var parts: int = upgrade_parts_needed(data.id, to_level)
+	if parts > 0:
+		cost[ResourceManager.Type.PARTS] = parts
 	return cost
+
+## Repuestos que pide subir `building_id` a `to_level` (0 = ninguno). Tabla en
+## `upgrade_parts_cost` / `upgrade_parts_buildings` (seccion de escaramuzas).
+func upgrade_parts_needed(building_id: String, to_level: int) -> int:
+	if not building_id in upgrade_parts_buildings:
+		return 0
+	return int(upgrade_parts_cost.get(to_level, 0))
 
 func get_production_multiplier(level: int) -> float:
 	if level < 1 or level > max_building_level:
@@ -1145,14 +1676,97 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 
 # ── Building Limit Helpers ──
 
+## Topes que suben con la era (decision D1 de Bryan, 14-10-2026; docs/03 §Topes).
+## [era 1, era 2, era 3]. La era 1 es el tope de siempre (`building_limits`): una
+## partida guardada nunca queda por encima de su tope. Regla general ≈ ×1,5 en la
+## era 2 y ×2 en la era 3, con tres excepciones que no suben:
+##   warehouse 5  la bolsa de la era 3 sin tecnologias es 1000 + 5×500 = 3500, el
+##                precio justo del CG nivel 3 (hq_upgrade_costs[3] sin materiales).
+##                Con 7 almacenes serian 4500 (5500 con las tecnologias) y el CG 3
+##                dejaria de pedir la bolsa llena. La bolsa ya crece por era sola
+##                (base_storage_cap_by_era 600/800/1000) y por nivel de almacen.
+##   tower 6      4 torres ya dan el 60 % de mitigacion (storm_tower_mitigation_max)
+##                y solo 2 salen al tablero (storm_tower_garrison_max): mas torres
+##                no darian nada. El rango sigue dando +1 (rango 16).
+##   unicos 1     Mercado, Laboratorio y Cuartel General (no estan en esta tabla).
+## El Cuartel sube menos (3/4/5): cada uno es un hueco de entrenamiento y +8 de
+## capacidad; con 5 ya caben 43 unidades y el mantenimiento en oro es el freno.
+## Un id que no esta aqui usa `building_limits` en todas las eras.
+var building_limits_by_era := {
+	"sawmill": [5, 8, 10],
+	"gold_mine": [4, 6, 8],
+	"foundry": [3, 5, 6],
+	"refinery": [2, 3, 4],
+	"house": [10, 15, 20],
+	"farm": [6, 9, 12],
+	"barracks": [3, 4, 5],
+	"warehouse": [5, 5, 5],
+	"tower": [6, 6, 6],
+}
+
+## El tope de `building_id` AHORA: la era en curso (ProgressionManager), mas los
+## huecos del rango. -1 = sin tope. Es el unico sitio que deben leer las reglas
+## de colocar, CONSTRUIR, ¿QUE HACER? y el tutorial. Nada de esto se guarda: sale
+## de la era y del rango, que ya van en el save.
 func get_building_limit(building_id: String) -> int:
+	return get_building_limit_for_era(building_id, current_era())
+
+## El tope de `building_id` en la era `era` (1..3, se acota), con el rango encima.
+## Sandbox: -1 siempre (docs/20). Decoraciones: -1 siempre (las limita el terreno).
+func get_building_limit_for_era(building_id: String, era: int) -> int:
 	if GameMode.all_unlocked():
 		return -1  # Sandbox: sin tope por tipo (ver docs/20-modos-de-juego.md).
-	var limit: int = building_limits.get(building_id, -1)
+	if is_uncapped_building(building_id):
+		return -1
+	var limit := base_building_limit(building_id, era)
 	if limit < 0:
 		return limit
 	# Huecos extra que da el rango del gobernador (RankManager los asigna).
 	return limit + int(rank_limit_bonus.get(building_id, 0))
+
+## El tope de la tabla en `era`, sin rango ni modo. -1 = sin tope.
+func base_building_limit(building_id: String, era: int) -> int:
+	if building_limits_by_era.has(building_id):
+		var row: Array = building_limits_by_era[building_id]
+		if not row.is_empty():
+			return int(row[clampi(era, 1, row.size()) - 1])
+	return int(building_limits.get(building_id, -1))
+
+## La proxima era en la que sube el tope de `building_id` y a cuanto (con el
+## rango), o {} si ya no sube. Para "3/6 · era 2: 9" en CONSTRUIR.
+func next_building_limit(building_id: String) -> Dictionary:
+	var era := current_era()
+	var now := get_building_limit_for_era(building_id, era)
+	if now < 0:
+		return {}
+	for e in range(era + 1, max_era() + 1):
+		var later := get_building_limit_for_era(building_id, e)
+		if later > now:
+			return {"era": e, "limit": later}
+	return {}
+
+## La era en curso, o 1 sin ProgressionManager (pruebas sin arbol, arranque).
+func current_era() -> int:
+	var pm := get_node_or_null("/root/ProgressionManager")
+	return int(pm.get("current_era")) if pm != null else 1
+
+func max_era() -> int:
+	return base_storage_cap_by_era.size()
+
+## Sin tope por tipo: las decoraciones (BuildingData.is_decoration, carreteras
+## incluidas). Se mira el .tres y no una lista, para que una decoracion nueva no
+## necesite entrada en ninguna tabla. Se recuerda por id.
+var _uncapped_cache: Dictionary = {}
+func is_uncapped_building(building_id: String) -> bool:
+	if _uncapped_cache.has(building_id):
+		return bool(_uncapped_cache[building_id])
+	var path := "res://data/buildings/%s.tres" % building_id
+	var data: BuildingData = null
+	if ResourceLoader.exists(path):
+		data = load(path) as BuildingData
+	var uncapped := data != null and data.is_decoration
+	_uncapped_cache[building_id] = uncapped
+	return uncapped
 
 func get_prerequisites(building_id: String) -> Array:
 	if GameMode.all_unlocked():
@@ -1181,8 +1795,10 @@ var unit_types := {
 		"name": "UNIT_ARTILLERY",
 		"tier": 2,
 		"era": 2,
-		"cost": {"gold": 80, "steel": 30},
-		"train_time": 35.0,
+		# 2026-10-12: 120/50 y 45 s (antes 80/30 y 35 s). La guarnicion de la era 2
+		# pesa algo mas (docs/22 §11).
+		"cost": {"gold": 120, "steel": 50},
+		"train_time": 45.0,
 		"upkeep_gold": 2,
 		"power": 28,
 	},
@@ -1190,8 +1806,13 @@ var unit_types := {
 		"name": "UNIT_VEHICLE",
 		"tier": 3,
 		"era": 3,
-		"cost": {"gold": 140, "steel": 60, "oil": 30},
-		"train_time": 55.0,
+		# 2026-10-12: 400/180/90 y 100 s (antes 140/60/30 y 55 s). Los seis
+		# blindados del asedio son el ultimo gran esfuerzo de la era 3, no un tramite.
+		# 2026-10-16: 300/130/60 + 8 vigas. Lo mismo en recursos (las 8 vigas son
+		# 40 de acero y 20 de madera en la Fundicion), pero la espera de 400 de oro
+		# se parte en dos decisiones: fabricar vigas y entrenar (docs/22 §11).
+		"cost": {"gold": 300, "steel": 130, "oil": 60, "beams": 8},
+		"train_time": 100.0,
 		"upkeep_gold": 4,
 		"power": 65,
 	},
@@ -1241,10 +1862,38 @@ var combat_ai_step_delay := 0.45
 ## relacion que hace que la artilleria pegue y el vehiculo aguante, y ademas la
 ## IA de objetivos esta fijada sobre esos numeros en `tests/combat/test_combat_ai.gd`.
 ## Medido en `tools/balance_probe.gd`; tablas en `docs/16-balance-combate.md`.
+##
+## `domain` es el medio por el que se mueve la unidad: "land" (tierra) para las
+## tres de hoy. Ninguna regla lo lee todavia; existe para que las unidades de
+## mar y aire (y, muy a futuro, espacio) entren sin cambiar el formato: el
+## modelo puro lo expone (`CombatUnit.domain()`) y la vista 3D coloca la unidad
+## segun el (docs/15 §11). Una entrada sin `domain` es de tierra.
 var combat_unit_stats := {
-	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5},
-	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3},
-	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4},
+	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5, "domain": "land"},
+	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3, "domain": "land"},
+	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4, "domain": "land"},
+}
+
+## Ventajas por tipo (piedra-papel-tijera, 2026-10-12, docs/15 §3 "Ventaja por
+## tipo"). El circulo de tierra:
+##   artilleria > vehiculo : el obus de alto explosivo raja la chapa remachada
+##                           que las balas solo rayan;
+##   vehiculo > infanteria : el blindado diesel arrolla la linea de fusiles;
+##   infanteria > artilleria: la escuadra asalta la pieza a la bayoneta, donde el
+##                           canon no puede bajar el tubo (su alcance minimo).
+## `beats[a]` = los tipos a los que `a` pega con ventaja. La desventaja no se
+## escribe: es el reves (si b esta en beats[a], b pega a "a" con desventaja).
+## El multiplicador va sobre el dano neto (atk - def), con suelo de 1, en
+## CombatRules.damage(): lo usan igual el jugador, la IA y AutoResolver. Mar y
+## aire entran anadiendo su fila aqui (docs/15 §11), sin tocar codigo.
+var combat_type_advantage := {
+	"beats": {
+		"artillery": ["vehicle"],
+		"vehicle": ["infantry"],
+		"infantry": ["artillery"],
+	},
+	"advantage": 1.5,
+	"disadvantage": 0.75,
 }
 
 ## Enemy scaling: deeper nodes and later eras field tougher rosters.
@@ -1330,11 +1979,98 @@ var combat_morale_attack_range := Vector2(0.60, 1.40)
 var combat_morale_on_victory := 8.0
 var combat_morale_per_casualty := 3.0
 
+# ── Salidas: incursiones, expediciones cortas y botin exclusivo (doc 21 §3) ──
+# 2026-10-14, rama feat/escaramuzas. Todo en claves NUEVAS: los combat_map_* y
+# combat_reward_base de siempre siguen valiendo para la expedicion antigua (las
+# partidas guardadas a medias, los tests y las sondas que lanzan con semilla).
+
+## Cada cuanto se revisa el tablon de salidas (segundos reales). Barato: mira
+## dos relojes y, si toca, sortea una oferta.
+var combat_sortie_refresh_interval := 2.0
+## Segundos de juego entre terminar una incursion (o una expedicion) y que
+## aparezca la siguiente. Pasan por get_duration() (dev_mode los acorta). Una
+## calma dura 360-600 s: hay una incursion por calma, mas o menos.
+var combat_raid_cooldown := 240.0
+var combat_expedition_cooldown := 480.0
+## La expedicion de 3 combates aparece desde esta era (la incursion, con el
+## primer Cuartel y la primera escaramuza ganada).
+var combat_expedition_min_era := 2
+## La incursion es un solo combate, un poco mas duro que la apertura de una
+## expedicion (profundidad 1 en la curva de enemy_pressure).
+var combat_raid_depth := 1
+## Expedicion corta (D3 = A): apertura -> elegir 1 de 2 -> jefe = 3 combates.
+## Mismo generador que la de siempre, con otros rangos.
+var combat_expedition_depth := Vector2i(1, 1)
+var combat_expedition_branching := Vector2i(2, 2)
+## El jefe de la expedicion corta lleva esta infanteria de escolta menos.
+var combat_expedition_boss_escort_cut := 1
+## Vida que recupera la columna al pasar al siguiente combate de una expedicion
+## corta (fraccion de la vida maxima de cada superviviente). La antigua no cura.
+var combat_expedition_heal_between := 0.30
+## El oro y la madera de las salidas nuevas: la mitad de la curva de siempre. Lo
+## que de verdad paga una salida es el botin exclusivo de abajo.
+var combat_sortie_reward_mult := 0.5
+
+## Botin exclusivo (D2 = A). Repuestos: material nuevo, fuera de la bolsa.
+## Colonos: habitantes al momento (hasta llenar las casas). Rebaja del Diezmo:
+## un % menos en el proximo Diezmo (avanzadilla). Planos: abren edificios.
+## Incursion de saqueadores: repuestos y colonos (rango min-max, sorteado al
+## aparecer y visible antes de salir).
+var combat_loot_raid_parts := Vector2i(1, 2)
+var combat_loot_raid_colonists := Vector2i(2, 4)
+## Incursion contra la avanzadilla de la Regencia (solo con la Tormenta armada y
+## Diezmo en el modo): repuestos y una rebaja del proximo Diezmo. Se va con el
+## Diezmo. La rebaja la aplica StormManager.add_tithe_discount() (rama
+## feat/orden-regencia, doc 21 §2.2) con su storm_order_expedition_pct si existe;
+## si no, con esta fraccion. Sin esa funcion (base sin la Orden) no rebaja nada:
+## solo se anota y se ensena.
+var combat_loot_outpost_parts := Vector2i(1, 1)
+var combat_loot_outpost_tithe_pct := 0.10
+
+## La rebaja del Diezmo que da echar la avanzadilla: la de la Orden de la
+## Regencia si esa rama esta (storm_order_expedition_pct), si no la nuestra.
+func sortie_tithe_discount_pct() -> float:
+	if "storm_order_expedition_pct" in self:
+		return float(get("storm_order_expedition_pct"))
+	return combat_loot_outpost_tithe_pct
+## Expedicion: repuestos por cada combate de paso; el jefe da mas, colonos y,
+## si queda alguno por conseguir, un plano.
+var combat_loot_expedition_node_parts := 2
+var combat_loot_expedition_boss_parts := 4
+var combat_loot_expedition_boss_colonists := 3
+
+## Planos: edificios que solo se construyen con su plano (doc 21 §6.3). La lista
+## puede empezar corta: un id solo se ofrece como botin cuando su
+## data/buildings/<id>.tres existe, asi que las ramas que traigan esos edificios
+## los activan sin tocar nada aqui. El candado lo pone quien construye
+## (CombatManager.blueprint_locked(); PlacementRules tiene que llamarlo, como
+## check_rank()).
+var combat_blueprint_buildings := ["infirmary", "military_forge", "scrapyard", "diesel_plant"]
+
+## Repuestos que pide una mejora: nivel -> cantidad, solo para los edificios de
+## la lista (los productores). El Cuartel General tiene su propia tabla.
+var upgrade_parts_cost := {3: 3}
+var upgrade_parts_buildings := ["sawmill", "gold_mine", "foundry", "refinery", "farm"]
+
+## Retirada enemiga (D7 = B): en expediciones e incursiones, cuando a los
+## enemigos les queda menos de esta fraccion de la vida con la que empezaron, se
+## retiran y el combate se gana. Nunca en el Diezmo ni en el asedio.
+var combat_retreat_ratio := 0.30
+## "Resolver solo" (D6 = A): solo en incursiones y en el Diezmo, y solo cuando
+## tu fuerza es al menos esta vez la del enemigo (CombatRules.side_strength).
+var combat_auto_resolve_ratio := 2.0
+## La etiqueta de la seleccion de tropa: Favorable desde esta proporcion,
+## Dificil por debajo de la otra, Igualada entre medias.
+var combat_odds_favorable := 1.25
+var combat_odds_hard := 0.85
+
 func get_combat_stats(unit_id: String) -> Dictionary:
 	return combat_unit_stats.get(unit_id, {})
 
 func get_combat_ai_step_delay() -> float:
-	return combat_ai_step_delay if not dev_mode else combat_ai_step_delay * 0.5
+	var base := combat_ai_step_delay if not dev_mode else combat_ai_step_delay * 0.5
+	# x2 tambien acelera el turno enemigo (combat_pace).
+	return combat_pace(base)
 
 # ══════════════════════════════════════════════════════════════════════
 # ── The Imperial Storm ──
@@ -1615,7 +2351,12 @@ var storm_tower_garrison_unit := "artillery"
 ## Dotaciones por torre en pie, y su tope. El tope existe por lo mismo que el de
 ## la mitigación: una fila de torres no puede convertir el Diezmo en un trámite.
 var storm_tower_garrison_per_tower := 1
-var storm_tower_garrison_max := 2
+## Tope 4 desde 2026-10-12: el asedio del final pide preparacion, y cada torre de
+## mas manda su dotacion cuando la guarnicion ya ha caido (el tablero solo deja
+## sitio a 8 - guarnicion viva). Con 6 blindados y 2 torres el asedio se gana el
+## 45 %; con 4 torres, el 82 % (docs/17). Objectives pide estas torres antes del
+## Cuartel General nivel 3.
+var storm_tower_garrison_max := 4
 ## Lo que pierde una torre cuando cae su dotacion en un tablero (Diezmo o
 ## Auditoria), como fraccion de su vida maxima. Queda dañada, nunca en ruinas:
 ## sigue en pie, pero hay que repararla (CombatManager.damage_towers_for_lost_crews).
@@ -1645,6 +2386,13 @@ var life_people_per_figure := 2
 ## figura de mas cuesta una matriz por fotograma, no una llamada de dibujo:
 ## el tope es por la CPU del movil, no por la GPU.
 var life_figure_cap := {"pc": 72, "tablet": 44, "phone": 26}
+## Tope de calidad encima del del perfil (-1: ninguno). Lo pondra el preset de
+## calidad "Minima" (equipos muy modestos); WorkerWalkers.figure_cap() se queda
+## con el menor de los dos. 0 = nadie por la calle.
+var life_figure_cap_quality := -1
+## El tope de la calidad "Minima" (GraphicsQuality.apply_runtime lo pone en
+## life_figure_cap_quality).
+var life_figure_cap_minimal := 12
 ## Celdas por segundo andando, y cuanto apuran el paso en el Aviso de Tormenta.
 var life_walk_speed := 1.5
 var life_hurry_multiplier := 1.8
@@ -1656,9 +2404,36 @@ var life_stay_home := Vector2(4.0, 12.0)
 var life_stay_market := Vector2(4.0, 8.0)
 var life_pause_decoration := Vector2(3.0, 6.0)
 var life_pause_stroll := Vector2(1.0, 2.5)
-## Gancho del dia y la noche (aun no existe): la fraccion de gente que sale de
-## noche. WorkerWalkers.set_presence() la aplica cuando alguien se la pida.
-var life_night_presence := 0.4
+## La noche en la calle (DayClock; solo vista): la fraccion de figuras que
+## quedan de noche cerrada y, de esas, la parte de ciudadanos (el resto son
+## obreros: faroleros, vigilantes). Con 80 habitantes y 6 obreros, unas 4-5
+## figuras. El paso al anochecer y al amanecer es a saltos de
+## `life_night_step` cada `life_night_step_seconds` segundos reales.
+var life_night_presence := 0.3
+var life_night_citizen_share := 0.15
+var life_night_step := 0.1
+var life_night_step_seconds := 3.0
+
+# ── Dia y noche (docs/21 §12) ──
+#
+# Solo visual hoy: el reloj (scripts/storm/DayCycle.gd, lo mueve DayClock) cambia
+# la luz del mapa y nada mas. Un ciclo dura la suma de las cuatro fases: 16 min
+# reales, con la noche corta (3 min) para que nunca se haga larga a oscuras. En
+# dev_mode se comprime como todo (get_duration).
+
+## Apagado = siempre de dia (la luz de Main.tscn tal cual) y el reloj quieto.
+var day_cycle_enabled := true
+var day_cycle_dawn := 90.0
+var day_cycle_day := 600.0
+var day_cycle_dusk := 90.0
+var day_cycle_night := 180.0
+## Cada cuantos segundos reales se repinta la luz del dia. Nada se recalcula por
+## frame: entre dos repintados el cambio es de un 1-2 %, invisible.
+var day_cycle_refresh := 2.0
+
+func get_day_cycle_durations() -> Array:
+	return [get_duration(day_cycle_dawn), get_duration(day_cycle_day),
+		get_duration(day_cycle_dusk), get_duration(day_cycle_night)]
 
 # ── Storage Helpers ──
 
@@ -1827,7 +2602,8 @@ func get_storm_loss_refund(cost: Dictionary) -> Dictionary:
 
 ## Cuantas oleadas trae el asedio (minimo, maximo). Sale de la semilla, no de una
 ## eleccion del jugador: convocar es apostar sin saber cuanto dura la noche.
-var final_audit_waves := Vector2i(3, 5)
+## 4-5 desde 2026-10-12 (antes 3-5): un final mas exigente (docs/17, "2026-10-12").
+var final_audit_waves := Vector2i(4, 5)
 
 ## Cuerpos de la primera oleada, y cuantos suma cada oleada siguiente. El techo
 ## real lo pone `combat_deploy_cap`: el tablero sigue siendo el mismo de siempre.
@@ -1861,7 +2637,10 @@ var final_audit_scale_per_era := 0.05
 ## `FinalAudit._compose()`); esto es lo que se le suma encima. Un 5% parece poco
 ## y no lo es: es lo que separa un asedio de 5 oleadas ganable el 44% de las
 ## veces de uno que no se gana nunca.
-var final_audit_last_wave_multiplier := 1.05
+## 1.10 desde 2026-10-12 (antes 1.05), con 4-5 oleadas: seis blindados y cuatro
+## torres ganan el 82 %, como antes con 3-5 oleadas y dos torres; cinco blindados,
+## el 45 %; dos torres, el 45 %; las mixtas, nunca.
+var final_audit_last_wave_multiplier := 1.10
 
 ## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
 ## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
@@ -1940,7 +2719,7 @@ var game_mode_rules := {
 		"infinite_resources": true,
 		"all_unlocked": true,
 		"sandbox_tools": true,
-		"starting_resources": {"gold": 20000, "steel": 20000, "oil": 20000, "wood": 20000},
+		"starting_resources": {"gold": 20000, "steel": 20000, "oil": 20000, "wood": 20000, "food": 20000},
 		"hidden_tips": ["final_audit"],
 	},
 }
@@ -1948,8 +2727,8 @@ var game_mode_rules := {
 ## Niveles de la Campana (GameMode.Tier): "colonist" es el juego de siempre y
 ## manda en todo lo que "governor" no diga. Gobernador se desbloquea por perfil
 ## (governor_unlocked_by_profile) y es fijo para la partida. docs/20.
-##   spoilage                lo acumulado sin recoger se estropea (lo implementa
-##                           feat/comida-granja-recoger; aqui solo se enciende)
+##   spoilage                lo acumulado sin recoger 2 h se echa a perder a medias
+##                           (ProductionManager, spoil_after_seconds / spoil_ratio)
 ##   market_dynamic          calendario de la Tormenta + spread y tendencia visibles
 ##   combat_hard             enciende los tres multiplicadores de abajo
 ##   expedition_enemy_mult   escala (vida y ataque) de los enemigos de expedicion
@@ -1972,7 +2751,9 @@ var game_tier_rules := {
 		"combat_hard": true,
 		"expedition_enemy_mult": 1.05,
 		"tithe_force_mult": 1.34,
-		"audit_enemy_mult": 1.06,
+		# 1.05 desde 2026-10-12 (antes 1.06): con el asedio de 4-5 oleadas, x1.06
+		# dejaba la guarnicion maxima en el 49 %; x1.05 la deja en el 64 % (>= 60 %).
+		"audit_enemy_mult": 1.05,
 	},
 }
 

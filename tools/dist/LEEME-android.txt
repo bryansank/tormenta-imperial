@@ -1,56 +1,73 @@
-TORMENTA IMPERIAL {{VERSION}} — Android (versión de prueba)
+TORMENTA IMPERIAL {{VERSION}} — Android
 ==================================================================
 
-Gracias por probar el juego. Esta es una build para testers: puede tener
-fallos, y tu opinión es justo lo que hace falta. Está pensado sobre todo para
-tableta en horizontal; en teléfono funciona, pero la interfaz va más justa.
+Gracias por descargar el juego. Es gratis y lo hace una sola persona. Es
+una versión en desarrollo: puede tener fallos, y tu opinión ayuda mucho.
+Está pensado sobre todo para tableta en horizontal; en teléfono funciona,
+pero la interfaz va más justa.
+
+(English version below.)
 
 
 QUÉ NECESITAS
 -------------
-- Android 7 o superior, con procesador de 64 bits (ARM64, lo normal en
-  cualquier móvil o tableta de los últimos años) y Vulkan.
+- Android 7 o superior.
+- Procesador de 64 bits (ARM64, lo normal en móviles y tabletas de los
+  últimos años) con Vulkan.
 - Unos 150 MB libres.
 
 
-CÓMO INSTALARLO (sideload, fuera de Google Play)
-------------------------------------------------
+CÓMO INSTALARLO
+---------------
 El juego no está en Google Play: se instala a mano desde el archivo .apk.
+Es seguro y se puede deshacer.
 
-1. Copia el archivo TormentaImperial-...apk de este zip al móvil o tableta
-   (por cable, Google Drive, Telegram, lo que te venga mejor).
+1. Copia el archivo TormentaImperial-{{VERSION}}.apk de este zip a la tableta
+   o al móvil (por cable, Google Drive, Telegram, lo que te venga mejor), o
+   descárgalo directamente desde el propio dispositivo.
 2. Ábrelo desde el gestor de archivos o desde la notificación de descarga.
 3. Android avisará de que esa app no puede instalar aplicaciones de "orígenes
-   desconocidos" (o "fuentes desconocidas"). Pulsa "Ajustes" y activa
-   "Permitir de esta fuente" para la app con la que abriste el APK (Archivos,
-   Chrome, Drive...). Vuelve atrás y pulsa "Instalar".
-4. Si aparece Google Play Protect diciendo que no reconoce la app, pulsa
-   "Más detalles" -> "Instalar de todas formas". Pasa porque el APK no viene
-   de la tienda, no porque tenga nada raro.
+   desconocidos" (o "fuentes desconocidas"). Pulsa "Ajustes", activa
+   "Permitir de esta fuente" solo para la app con la que abriste el APK
+   (Archivos, Chrome, Drive...), vuelve atrás y pulsa "Instalar".
+4. Si Google Play Protect dice que no reconoce la app, pulsa "Más detalles"
+   -> "Instalar de todas formas". Sale porque el APK no viene de la tienda.
 
 Cuando termines puedes volver a desactivar ese permiso. El juego no pide
-ningún permiso (ni internet, ni cámara, ni archivos).
+ningún permiso: ni internet, ni cámara, ni archivos.
 
-Para actualizar a una versión nueva, instala el APK nuevo encima: la partida
-se conserva. Si Android dice que el paquete "entra en conflicto" con el
-existente, desinstala el anterior primero (ojo: eso borra la partida).
+Para actualizar, instala el APK nuevo encima: la partida se conserva. Si
+Android dice que el paquete "entra en conflicto" con el que ya tienes,
+desinstala el anterior primero (ojo: eso borra la partida).
 
 
 DÓNDE SE GUARDA LA PARTIDA
 --------------------------
-Dentro de la propia app, en su almacenamiento interno. No hay que hacer nada.
-Desinstalar el juego borra la partida. Para empezar de cero: Ajustes ->
-Nueva partida.
+Dentro de la propia app; no hay que hacer nada. El juego guarda solo, cada
+poco y al salir. Nada sale del dispositivo.
+
+Para empezar de cero: ☰ MENÚ -> Menú principal -> Nueva partida.
+
+
+CÓMO DESINSTALAR
+----------------
+Mantén pulsado el icono de Tormenta Imperial -> "Desinstalar" (o Ajustes ->
+Aplicaciones -> Tormenta Imperial -> Desinstalar). Desinstalar borra también
+la partida.
 
 
 CONTROLES
 ---------
-   Mover la cámara     arrastrar un dedo
+   Mover la cámara     arrastrar un dedo por el suelo
    Zoom                pellizcar con dos dedos
-   Rotar la cámara     botones en pantalla
-   Todo lo demás       tocar botones y edificios
+   Girar la cámara     girar dos dedos, o los botones en pantalla
+   Construir           CONSTRUIR (abajo, en el centro), elige el edificio,
+                       toca el sitio y luego toca el edificio fantasma o ✓
+   Menú y pausa        ☰ MENÚ (arriba a la derecha) o el botón atrás
 
-El botón "?" enseña ayudas sobre la propia pantalla.
+¿Perdido? En ☰ MENÚ, ¿QUÉ HACER? te dice siempre el paso siguiente y
+AYUDA tiene todas las explicaciones. El idioma (español o inglés) se cambia
+en Ajustes.
 
 
 CÓMO REPORTAR UN FALLO
@@ -59,34 +76,89 @@ Abre un issue en:
 
    https://github.com/bryansank/tormenta-imperial/issues
 
-o díselo directamente a quien te pasó el juego. Cuenta qué hacías, qué
+o escríbele a quien te pasó el juego. En ☰ MENÚ → PARTIDA, "Informar
+fallo" copia los datos que hacen falta: pégalos en el mensaje. Cuenta qué hacías, qué
 esperabas y qué pasó, qué dispositivo usas (marca y modelo) y la versión
 ({{VERSION}}). Una captura de pantalla ayuda mucho.
 
 
-LICENCIA
---------
-Tormenta Imperial © 2026 Bryan Key. Esta copia es para que la pruebes tú: no
-la redistribuyas ni la subas a ningún sitio. Términos completos en LICENSE.txt.
-El motor (Godot), sus librerías Android, las fuentes y el audio son de
-terceros y conservan sus licencias: ver THIRD-PARTY-NOTICES.md,
-GODOT-COPYRIGHT.txt y licenses/fonts/.
+LICENCIA Y CRÉDITOS
+-------------------
+Tormenta Imperial © 2026 Bryan Key. Todos los derechos reservados.
+
+Puedes jugarlo gratis todo lo que quieras y compartir el enlace a la página
+oficial. Lo que no está permitido es volver a subir este archivo (o una
+versión modificada) a otra página o tienda. Términos completos en
+LICENSE.txt.
+
+Hecho con el motor Godot (MIT) y sus librerías de Android (Apache 2.0).
+Música: Dark Sci-Fi Audio Pack de SRG774 (OpenGameArt, CC0). Efectos de
+sonido: Kenney (CC0). Textura de metal: Poly Haven (CC0). Fuentes: Special
+Elite (Apache 2.0), Caveat, Black Ops One y Rajdhani (SIL Open Font
+License). Cada componente conserva su licencia: ver THIRD-PARTY-NOTICES.md,
+GODOT-COPYRIGHT.txt y la carpeta licenses/fonts/.
 
 
 ==================================================================
-ENGLISH (short version)
+ENGLISH
 ==================================================================
-Tormenta Imperial {{VERSION}}, a test build for Android 7+ (64-bit ARM, Vulkan).
-Designed for landscape tablets first.
+Thanks for downloading the game. It is free and made by one person. This is
+a work-in-progress build: it may have bugs, and your feedback helps a lot.
+It is designed first for landscape tablets; it works on phones, but the
+interface is tighter there.
 
-- Install (sideload): copy the .apk to the device and open it. When Android
-  blocks apps from "unknown sources", tap Settings, enable "Allow from this
-  source" for the app you opened it with, go back and tap Install. If Play
-  Protect warns about an unrecognised app, choose "More details" -> "Install
-  anyway". The game requests no permissions.
-- Saves: inside the app's private storage. Uninstalling deletes the save.
-- Controls: drag one finger to pan, pinch to zoom, on-screen buttons to rotate.
-- Bugs: https://github.com/bryansank/tormenta-imperial/issues (what you did,
-  what happened, device model and the version).
-- Licence: for your own testing only; please do not redistribute. See LICENSE.txt
-  and THIRD-PARTY-NOTICES.md.
+WHAT YOU NEED
+- Android 7 or later, a 64-bit (ARM64) device with Vulkan, about 150 MB free.
+
+HOW TO INSTALL
+The game is not on Google Play: you install the .apk file by hand.
+1. Copy TormentaImperial-{{VERSION}}.apk to the device, or download it there.
+2. Open it from the file manager or the download notification.
+3. Android will say that app cannot install apps from "unknown sources".
+   Tap Settings, turn on "Allow from this source" only for the app you
+   opened the APK with, go back and tap Install.
+4. If Google Play Protect says it does not recognise the app, tap
+   "More details" -> "Install anyway". It shows because the APK does not
+   come from the store.
+You can turn that permission off again afterwards. The game asks for no
+permissions at all (no internet, camera or files).
+To update, install the new APK over the old one: your save is kept. If
+Android says the package "conflicts" with the installed one, uninstall the
+old one first (that deletes your save).
+
+WHERE YOUR GAME IS SAVED
+Inside the app; nothing to do. It saves on its own, often and when you
+leave. Nothing leaves the device. To start over: ☰ MENU -> Main menu ->
+New game.
+
+HOW TO UNINSTALL
+Long-press the Tormenta Imperial icon -> Uninstall (or Settings -> Apps).
+Uninstalling also deletes your save.
+
+CONTROLS
+   Move the camera     drag one finger on the ground
+   Zoom                pinch with two fingers
+   Rotate the camera   twist two fingers, or the on-screen buttons
+   Build               BUILD (bottom centre), pick a building, tap the spot,
+                       then tap the ghost building or ✓
+   Menu and pause      ☰ MENU (top right) or the back button
+In ☰ MENU, WHAT TO DO? always shows the next step and HELP has every
+explanation. Language (Spanish or English) is in Settings.
+
+REPORTING A BUG
+https://github.com/bryansank/tormenta-imperial/issues or a message to whoever
+sent you the game. ☰ MENU → GAME, "Report bug" copies the details: paste
+them in. Say what you did, what happened, your device model and the
+version ({{VERSION}}). A screenshot helps a lot.
+
+LICENCE AND CREDITS
+Tormenta Imperial © 2026 Bryan Key. All rights reserved. You may play it for
+free as much as you like and share the link to the official page. You may
+not re-upload this file (or a modified version) to another site or store.
+Full terms in LICENSE.txt.
+Made with the Godot engine (MIT) and its Android libraries (Apache 2.0).
+Music: Dark Sci-Fi Audio Pack by SRG774 (OpenGameArt, CC0). Sound effects:
+Kenney (CC0). Metal texture: Poly Haven (CC0). Fonts: Special Elite
+(Apache 2.0), Caveat, Black Ops One and Rajdhani (SIL Open Font License).
+Each keeps its own licence: see THIRD-PARTY-NOTICES.md, GODOT-COPYRIGHT.txt
+and licenses/fonts/.

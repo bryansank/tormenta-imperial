@@ -11,10 +11,13 @@ extends Node
 
 const StormCycleScript := preload("res://scripts/storm/StormCycle.gd")
 ## El orden en que se vacía la bolsa. El oro primero porque es lo que duele
-## anotar, y la madera al final porque es lo que permite reconstruir.
+## anotar, y la madera al final porque es lo que permite reconstruir. La comida
+## (2026-10-04) va en la bolsa y cuenta para el porcentaje, asi que tambien se
+## cobra, la ultima de todas: es lo que se quita a la mesa de la gente.
 const _TITHE_ORDER: Array = [
 	ResourceManager.Type.GOLD, ResourceManager.Type.STEEL,
 	ResourceManager.Type.OIL, ResourceManager.Type.WOOD,
+	ResourceManager.Type.FOOD,
 ]
 
 var _cycle: StormCycle = null
@@ -56,6 +59,8 @@ func _ready() -> void:
 	_check_arming()
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	# _process no corre con el arbol en pausa: llegar aqui es que el jugador ya
 	# solto el menu que tapaba la partida.
 	if _resume_when_running:
@@ -381,7 +386,7 @@ func damage_priority(severity: int) -> Array:
 	var economy: Array = []
 	var last_standing: Dictionary = _last_standing_essentials()
 
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
@@ -409,7 +414,7 @@ func damage_priority(severity: int) -> Array:
 ## uno, porque entonces perder uno no cierra ninguna puerta.
 func _last_standing_essentials() -> Dictionary:
 	var standing: Dictionary = {}
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		if not data.id in GameConfig.storm_essential_buildings:
 			continue
@@ -426,7 +431,7 @@ func _last_standing_essentials() -> Dictionary:
 ## justo lo que obliga a repararlas antes de la siguiente.
 func _standing_towers() -> int:
 	var count := 0
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		if data == null or data.id != GameConfig.storm_tower_building_id:
 			continue
@@ -614,7 +619,7 @@ func _take_in_seizures(debt: int, taken: Dictionary) -> int:
 func _seizable_buildings() -> Array:
 	var luxury: Array = []
 	var military: Array = []
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		var node: Node = info["node"]
 		if node == null or not is_instance_valid(node) or BuildingHealth.is_ruined(node):
@@ -665,7 +670,7 @@ func _settle(repelled: bool = false) -> void:
 ## what decides how hard the next storm hits.
 func _industrial_footprint() -> int:
 	var count := 0
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		if data.produces_gold > 0 or data.produces_steel > 0 \
 				or data.produces_oil > 0 or data.produces_wood > 0:

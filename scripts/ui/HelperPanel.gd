@@ -131,9 +131,17 @@ func _ready() -> void:
 	EventBus.tutorial_tip_requested.connect(_on_tip_requested)
 	EventBus.help_reopen_requested.connect(show_help)
 	EventBus.tutorial_guide_finished.connect(_on_guide_finished)
+	# Una leccion suelta del tutorial (reparar) que sale con un globo ya en
+	# pantalla lo aparta: antes se pisaban las dos tarjetas (ronda de pruebas 1.0).
+	EventBus.tutorial_step_changed.connect(func(_s): _pump.call_deferred())
+	# Durante una pelea las ayudas de la colonia esperan (docs/15 §3): al abrir
+	# el tablero la que este en pantalla se aparta y vuelve al cerrar el parte.
+	EventBus.encounter_started.connect(func(_i, _b): _refresh_callouts())
+	EventBus.encounter_closed.connect(_refresh_callouts)
 	_update_skirmish_callout()
 	_refresh_tips()
 	_refresh_callouts()
+	_setup_news()
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -342,10 +350,17 @@ func _on_game_started() -> void:
 			enqueue(id)
 
 ## ¿Puede salir esta ayuda ahora mismo?
+## Ayudas que son del combate y SI salen con el tablero abierto.
+const COMBAT_HELP_IDS := ["encounter"]
+
 func _can_show(item: Dictionary) -> bool:
 	var id := String(item["id"])
 	var forced := bool(item["forced"])
 	if get_tree().paused or _guide_open:
+		return false
+	# Con un tablero de combate abierto (pelea o su parte) solo pasan las ayudas
+	# del propio combate; el resto espera a EventBus.encounter_closed.
+	if CombatManager.is_board_open() and not id in COMBAT_HELP_IDS:
 		return false
 	# Con el indice de AYUDA abierto se esta eligiendo que leer: nada encima.
 	if _index != null and _index.has_method("is_open") and _index.call("is_open"):
@@ -353,7 +368,8 @@ func _can_show(item: Dictionary) -> bool:
 	if not forced:
 		if not GameConfig.ui_helper_visible:
 			return false
-		if TutorialManager.is_guide_active():
+		# Tampoco con una leccion suelta del tutorial en pantalla (reparar).
+		if TutorialManager.is_coach_active():
 			return false
 	var k := HelpCatalog.kind(id)
 	if k == "callout":
@@ -585,7 +601,7 @@ func _meta_line(data: BuildingData) -> String:
 		parts.append("%s: %d" % [Tr.t("LBL_GUIDE_WORKERS"), data.workers_required])
 
 	var produces: Array[String] = []
-	for pair in [[data.produces_gold, "gold"], [data.produces_steel, "steel"], [data.produces_oil, "oil"], [data.produces_wood, "wood"]]:
+	for pair in [[data.produces_gold, "gold"], [data.produces_steel, "steel"], [data.produces_oil, "oil"], [data.produces_wood, "wood"], [data.produces_food, "food"]]:
 		if pair[0] > 0:
 			produces.append("%d %s" % [pair[0], Tr.res_name(pair[1])])
 	if not produces.is_empty():
@@ -620,7 +636,7 @@ func _refresh_callouts() -> void:
 ## Something more important is on screen: an open window, the pause or title
 ## menu (the tree is paused), or the Storm.
 func is_quiet() -> bool:
-	return _storm_silenced or UIManager.is_any_window_open() or get_tree().paused
+	return _storm_silenced or UIManager.is_any_window_open() or get_tree().paused 		or CombatManager.is_board_open()
 
 func _on_storm_phase_changed(phase: int, _left: float) -> void:
 	if phase == StormCycle.Phase.CALM:
@@ -698,3 +714,24 @@ func _toggle_guide() -> void:
 
 ## Vigia de la pausa: el arbol en pausa no llama al _process de HelperPanel.
 const _PauseWatcher := preload("res://scripts/ui/PauseWatcher.gd")
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Novedades (2026-10-14, docs/23 §3) ──
+# ══════════════════════════════════════════════════════════════════════
+
+## Globos de las novedades que salen detras de los basicos (prioridad 0: los
+## ultimos de la cola), al terminar el tutorial o al cargar con el ya hecho.
+const NEWS_AFTER_GUIDE := ["callout_speed"]
+
+func _setup_news() -> void:
+	EventBus.tutorial_guide_finished.connect(func(_skipped): _enqueue_news())
+	EventBus.game_new_started.connect(_on_news_game_started)
+	EventBus.game_load_completed.connect(_on_news_game_started)
+
+func _enqueue_news() -> void:
+	for id in NEWS_AFTER_GUIDE:
+		enqueue(id)
+
+func _on_news_game_started() -> void:
+	if TutorialManager.guide_state in [TutorialManager.GUIDE_DONE, TutorialManager.GUIDE_SKIPPED]:
+		_enqueue_news()

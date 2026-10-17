@@ -36,8 +36,17 @@ static func _ensure_textures() -> void:
 	_tex_rough = _load_tex(TEX_METAL_ROUGH)
 	_tex_normal = _load_tex(TEX_METAL_NORMAL)
 
+## Un material por (color, metalico, rugosidad) para todo el mapa (docs/26
+## §6, punto 6): antes cada pieza creaba el suyo y el motor no podia agrupar.
+## Nadie modifica el material devuelto; quien necesite uno propio, que lo duplique.
+static var _metal_cache: Dictionary = {}
+
 static func _metal(color: Color, metallic: float = 0.7, roughness: float = 0.45) -> StandardMaterial3D:
+	var key := "%s|%.3f|%.3f" % [color.to_html(), metallic, roughness]
+	if _metal_cache.has(key):
+		return _metal_cache[key]
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	_metal_cache[key] = mat
 	mat.albedo_color = color
 	mat.metallic = metallic
 	mat.roughness = roughness
@@ -157,7 +166,9 @@ static func _add_rivets(parent: Node3D, start: Vector3, end: Vector3, count: int
 	for i in range(count):
 		var t: float = float(i) / float(count - 1) if count > 1 else 0.5
 		var pos: Vector3 = start.lerp(end, t)
-		_add_sphere(parent, pos, radius, mat)
+		# Un remache no da sombra que se vea: fuera de los pases de sombra.
+		var rivet := _add_sphere(parent, pos, radius, mat, 8)
+		rivet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 # Horizontal pipe between two points
 static func _add_pipe(parent: Node3D, from: Vector3, to: Vector3, radius: float, mat: StandardMaterial3D) -> void:
@@ -195,6 +206,11 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 		"fountain": return _build_fountain(sx, sz)
 		"statue": return _build_statue(sx, sz)
 		"road": return _build_road(sx, sz, 0)
+	# Las diez decoraciones baratas (feat/decoraciones-1): una malla de la
+	# paleta compartida por tipo, horneada si existe (DecorMesh).
+	var decor := preload("res://scripts/buildings/DecorMesh.gd")
+	if decor.handles(building_id):
+		return decor.instantiate(building_id)
 	return null
 
 ## Create a road mesh with neighbor connectivity.
@@ -729,59 +745,182 @@ static func _build_refinery(sx: float, sz: float) -> Node3D:
 
 
 # ════════════════════════════════════════════════════════════════
-# SAWMILL — Timber frame, saw blade, log pile, conveyor
+# SAWMILL — Cobertizo ABIERTO (2026-10-04, guia de estilo): tejado de una
+# sola agua sobre postes que solo cubre la mitad de atras, cerchas al aire
+# delante y ninguna pared en el frente. Desde la camara de 45 grados se ve
+# lo que hace: la sierra circular GRANDE (el elemento exagerado, un 30 %
+# mas de lo realista), el tronco en la mesa, el tablon recien cortado, la
+# pila de tablones, la de troncos y la maquina de vapor que mueve la correa.
+# El serrin de "trabajando" sale de la sierra (Marker3D "FxAnchor").
 # ════════════════════════════════════════════════════════════════
+
+static var _cached_mats: Dictionary = {}
+
+## Material con mapas de chapa, compartido por nombre (los edificios
+## procedurales nuevos no crean uno por pieza).
+static func _shared_metal(key: String, color: Color, metallic: float, roughness: float) -> StandardMaterial3D:
+	if not _cached_mats.has(key):
+		_cached_mats[key] = _metal(color, metallic, roughness)
+	return _cached_mats[key]
+
+static func _shared_emissive(key: String, color: Color, energy: float) -> StandardMaterial3D:
+	if not _cached_mats.has(key):
+		_cached_mats[key] = _emissive(color, energy)
+	return _cached_mats[key]
+
+## _group(): al final del archivo (crea un Node3D con nombre colgado de otro).
+
 static func _build_sawmill(sx: float, sz: float) -> Node3D:
 	var root: Node3D = Node3D.new()
-	var mat_wood: StandardMaterial3D = _metal(COL_DARK_WOOD, 0.1, 0.85)
-	var mat_iron: StandardMaterial3D = _metal(COL_DARK_IRON, 0.8, 0.4)
-	var mat_brass: StandardMaterial3D = _metal(COL_BRASS, 0.9, 0.3)
-	var mat_light_wood: StandardMaterial3D = _metal(Color(0.55, 0.40, 0.22), 0.1, 0.8)
+	root.name = "SawmillOpen"
+	var wood := _shared_metal("saw_wood", Color(0.50, 0.34, 0.18), 0.05, 0.85)
+	var dark_wood := _shared_metal("saw_dark_wood", COL_DARK_WOOD, 0.05, 0.9)
+	var light_wood := _shared_metal("saw_light_wood", Color(0.74, 0.57, 0.34), 0.05, 0.8)
+	var bark := _shared_metal("saw_bark", Color(0.36, 0.24, 0.13), 0.05, 0.95)
+	var iron := _shared_metal("saw_iron", COL_DARK_IRON, 0.8, 0.4)
+	var roof_mat := _shared_metal("saw_roof", Color(0.42, 0.30, 0.22), 0.6, 0.55)
+	# Acero claro y poco metalico: muy metalico refleja el cielo y se ve negro.
+	var steel := _shared_metal("saw_steel", Color(0.86, 0.88, 0.9), 0.35, 0.3)
+	var red := _shared_metal("saw_red", Color(0.80, 0.16, 0.10), 0.3, 0.5)
+	var brass := _shared_metal("saw_brass", COL_BRASS, 0.9, 0.3)
+	var fire := _shared_emissive("saw_fire", COL_FIRE, 2.2)
+	var hw := minf(sx, 3.2) * 0.5
+	var hd := minf(sz, 3.2) * 0.5
+	var floor_y := 0.14
 
-	# Main timber frame structure — open shed
-	# Four corner posts
-	_add_box(root, Vector3(-sx * 0.4, 0.7, -sz * 0.35), Vector3(0.12, 1.4, 0.12), mat_wood)
-	_add_box(root, Vector3(sx * 0.4, 0.7, -sz * 0.35), Vector3(0.12, 1.4, 0.12), mat_wood)
-	_add_box(root, Vector3(-sx * 0.4, 0.7, sz * 0.35), Vector3(0.12, 1.4, 0.12), mat_wood)
-	_add_box(root, Vector3(sx * 0.4, 0.7, sz * 0.35), Vector3(0.12, 1.4, 0.12), mat_wood)
-	# Corrugated metal roof
-	_add_box(root, Vector3(0, 1.5, 0), Vector3(sx * 0.95, 0.06, sz * 0.85), mat_iron)
-	_add_prism(root, Vector3(0, 1.7, 0), Vector3(sx * 0.95, 0.35, sz * 0.85), mat_iron)
+	# ── Suelo de tablas ──
+	var floor_g := _group(root, "Floor")
+	_add_box(floor_g, Vector3(0, floor_y * 0.5, 0), Vector3(hw * 2.0, floor_y, hd * 2.0), wood)
+	for i in 7:
+		var z := lerpf(-hd + 0.2, hd - 0.2, float(i) / 6.0)
+		_add_box(floor_g, Vector3(0, floor_y + 0.005, z), Vector3(hw * 2.0, 0.01, 0.025), dark_wood)
 
-	# Saw blade (large torus in the center, vertical)
-	var blade: MeshInstance3D = _add_torus(root, Vector3(0, 0.8, 0), 0.15, 0.35, mat_iron, 8, 16)
-	blade.rotation.z = PI / 2.0
-	# Blade axle
-	_add_cylinder(root, Vector3(0, 0.8, 0), 0.04, sz * 0.5, mat_brass)
+	# ── Cobertizo: postes, media cubierta atras, cerchas al aire delante ──
+	var shed := _group(root, "Shed")
+	var back_z := -hd + 0.1
+	var mid_z := -0.15
+	var front_z := hd - 0.15
+	var roof_low := 1.85
+	var roof_high := 2.35
+	var posts := _group(shed, "Posts")
+	for x in [-hw + 0.08, 0.0, hw - 0.08]:
+		_add_box(posts, Vector3(x, (floor_y + roof_low) * 0.5, back_z), Vector3(0.14, roof_low - floor_y, 0.14), dark_wood)
+		_add_box(posts, Vector3(x, (floor_y + roof_high) * 0.5, mid_z), Vector3(0.14, roof_high - floor_y, 0.14), dark_wood)
+	for x in [-hw + 0.08, hw - 0.08]:
+		_add_box(posts, Vector3(x, (floor_y + roof_high) * 0.5, front_z), Vector3(0.14, roof_high - floor_y, 0.14), dark_wood)
+	# Media cubierta de chapa, de una sola agua, solo sobre la mitad de atras.
+	var roof := MeshInstance3D.new()
+	roof.name = "Roof"
+	var roof_box := BoxMesh.new()
+	var run := mid_z - back_z + 0.3
+	var rise := roof_high - roof_low
+	roof_box.size = Vector3(hw * 2.0 + 0.2, 0.07, sqrt(run * run + rise * rise))
+	roof.mesh = roof_box
+	roof.set_surface_override_material(0, roof_mat)
+	roof.position = Vector3(0, (roof_low + roof_high) * 0.5 + 0.06, (back_z + mid_z) * 0.5 + 0.05)
+	roof.rotation.x = -atan2(rise, run)
+	shed.add_child(roof)
+	# Ondas de la chapa
+	for i in 6:
+		var x := lerpf(-hw, hw, (float(i) + 0.5) / 6.0)
+		var rib := _add_box(shed, Vector3(x, roof.position.y + 0.05, roof.position.z), Vector3(0.05, 0.04, roof_box.size.z), roof_mat)
+		rib.rotation.x = roof.rotation.x
+	# Cerchas al aire sobre la sierra: vigas, sin cubierta, dejan ver dentro.
+	var rafters := _group(shed, "Rafters")
+	_add_box(rafters, Vector3(0, roof_high, front_z), Vector3(hw * 2.0, 0.12, 0.12), dark_wood)
+	_add_box(rafters, Vector3(0, roof_high, mid_z), Vector3(hw * 2.0, 0.12, 0.12), dark_wood)
+	for x in [-hw + 0.08, -hw * 0.33, hw * 0.33, hw - 0.08]:
+		_add_box(rafters, Vector3(x, roof_high + 0.02, (mid_z + front_z) * 0.5), Vector3(0.09, 0.09, front_z - mid_z), wood)
+	# Pared de atras y media pared en el lado izquierdo (solo detras): el
+	# frente, abierto.
+	var back_wall := _add_box(shed, Vector3(0, (floor_y + roof_low) * 0.5, back_z - 0.02), Vector3(hw * 2.0, roof_low - floor_y, 0.08), wood)
+	back_wall.name = "BackWall"
+	var side_wall := _add_box(shed, Vector3(-hw + 0.02, (floor_y + roof_low) * 0.5, (back_z + mid_z) * 0.5), Vector3(0.08, roof_low - floor_y, mid_z - back_z), wood)
+	side_wall.name = "SideWall"
+	for i in 5:
+		var y := floor_y + 0.3 + 0.3 * i
+		_add_box(shed, Vector3(0, y, back_z + 0.03), Vector3(hw * 2.0, 0.02, 0.02), dark_wood)
 
-	# Conveyor table (flat platform for logs)
-	_add_box(root, Vector3(-sx * 0.15, 0.55, 0), Vector3(sx * 0.35, 0.06, sz * 0.4), mat_iron)
-	_add_box(root, Vector3(sx * 0.15, 0.55, 0), Vector3(sx * 0.35, 0.06, sz * 0.4), mat_iron)
+	# ── La sierra: mesa larga, tronco, tablon cortado y la hoja grande ──
+	var saw := _group(root, "Saw")
+	var table_z := 0.42
+	var table_y := 0.78
+	var table := _add_box(saw, Vector3(0, table_y, table_z), Vector3(hw * 1.7, 0.1, 0.62), iron)
+	table.name = "SawTable"
+	for x in [-hw * 0.75, hw * 0.75]:
+		for dz in [-0.24, 0.24]:
+			_add_box(saw, Vector3(x, (floor_y + table_y) * 0.5, table_z + dz), Vector3(0.08, table_y - floor_y, 0.08), iron)
+	# Franja roja de aviso a los dos lados de la hoja
+	_add_box(saw, Vector3(0, table_y + 0.055, table_z + 0.27), Vector3(0.9, 0.012, 0.05), red)
+	_add_box(saw, Vector3(0, table_y + 0.055, table_z - 0.27), Vector3(0.9, 0.012, 0.05), red)
+	# Tronco entrando por la izquierda
+	var log_r := 0.22
+	var log_node := _add_cylinder(saw, Vector3(-hw * 0.42, table_y + 0.05 + log_r, table_z), log_r, hw * 0.75, bark, 10)
+	log_node.rotation.z = PI / 2.0
+	log_node.name = "Log"
+	var end_cap := _add_cylinder(saw, Vector3(-hw * 0.42 - hw * 0.375 - 0.005, table_y + 0.05 + log_r, table_z), log_r * 0.85, 0.02, light_wood, 10)
+	end_cap.rotation.z = PI / 2.0
+	# Tablon recien cortado saliendo por la derecha
+	var plank := _add_box(saw, Vector3(hw * 0.45, table_y + 0.09, table_z), Vector3(hw * 0.7, 0.07, 0.36), light_wood)
+	plank.name = "CutPlank"
+	# La hoja: un disco vertical de frente a la camara, con dientes y buje rojo.
+	var blade_r := 0.88
+	var blade_c := Vector3(0.0, table_y + 0.16, table_z)
+	var blade := _group(saw, "SawBlade")
+	blade.position = blade_c
+	var disc := _add_cylinder(blade, Vector3.ZERO, blade_r, 0.035, steel, 28)
+	disc.rotation.x = PI / 2.0
+	var inner := _add_cylinder(blade, Vector3(0, 0, 0.02), blade_r * 0.62, 0.01, _shared_metal("saw_steel_dark", Color(0.62, 0.64, 0.68), 0.35, 0.35), 24)
+	inner.rotation.x = PI / 2.0
+	for i in 22:
+		var a := TAU * float(i) / 22.0
+		var tooth := _add_box(blade, Vector3(cos(a), sin(a), 0) * (blade_r + 0.05), Vector3(0.13, 0.09, 0.045), steel)
+		tooth.rotation.z = a + 0.5
+	var hub := _add_cylinder(blade, Vector3.ZERO, 0.24, 0.12, red, 12)
+	hub.rotation.x = PI / 2.0
+	var cap := _add_cylinder(blade, Vector3(0, 0, 0.07), 0.06, 0.02, brass, 8)
+	cap.rotation.x = PI / 2.0
+	# Eje, polea y correa hasta la maquina de vapor del fondo
+	var axle := _add_cylinder(saw, blade_c + Vector3(0, 0, -0.45), 0.05, 0.9, iron, 8)
+	axle.rotation.x = PI / 2.0
+	var pulley := _add_cylinder(saw, blade_c + Vector3(0, 0, -0.75), 0.22, 0.1, brass, 12)
+	pulley.rotation.x = PI / 2.0
+	var engine := _group(root, "SteamEngine")
+	var eng_c := Vector3(hw * 0.5, floor_y, back_z + 0.55)
+	var boiler := _add_cylinder(engine, eng_c + Vector3(0, 0.42, 0), 0.32, 0.9, iron, 12)
+	boiler.rotation.z = PI / 2.0
+	_add_box(engine, eng_c + Vector3(-0.55, 0.3, 0), Vector3(0.3, 0.6, 0.5), iron)
+	_add_box(engine, eng_c + Vector3(-0.55, 0.25, 0.26), Vector3(0.16, 0.14, 0.02), fire)
+	var belt_from := blade_c + Vector3(0, 0, -0.75)
+	var belt_to := eng_c + Vector3(-0.3, 0.42, 0)
+	var belt := _add_box(engine, (belt_from + belt_to) * 0.5, Vector3(0.05, 0.04, belt_from.distance_to(belt_to)), dark_wood)
+	belt.name = "Belt"
+	belt.transform = Transform3D(Basis.looking_at(belt_to - belt_from, Vector3.UP), (belt_from + belt_to) * 0.5)
+	var chimney := _add_cylinder(engine, eng_c + Vector3(0.25, 1.55, 0), 0.09, 2.2, iron, 8)
+	chimney.name = "Chimney"
+	_add_cylinder(engine, eng_c + Vector3(0.25, 2.66, 0), 0.13, 0.06, red, 8)
 
-	# Log on the conveyor (horizontal cylinder)
-	var log: MeshInstance3D = _add_cylinder(root, Vector3(-sx * 0.2, 0.65, 0), 0.1, sx * 0.3, mat_light_wood)
-	log.rotation.z = PI / 2.0
+	# ── Pilas: tablones bajo techo (izquierda) y troncos delante ──
+	var planks := _group(root, "PlankStack")
+	for layer in 5:
+		for j in 4:
+			var col := light_wood if (layer + j) % 2 == 0 else wood
+			_add_box(planks, Vector3(-hw * 0.5 + (j - 1.5) * 0.24, floor_y + 0.05 + 0.1 * layer, back_z + 0.6), Vector3(0.22, 0.09, 0.95), col)
+	var logs := _group(root, "LogPile")
+	var lp := Vector3(-hw * 0.45, floor_y, front_z - 0.05)
+	for k in 3:
+		var l := _add_cylinder(logs, lp + Vector3(0, 0.15, -0.22 + 0.15 * k), 0.15, 1.1, bark, 8)
+		l.rotation.z = PI / 2.0
+	for k in 2:
+		var l := _add_cylinder(logs, lp + Vector3(0, 0.41, -0.15 + 0.15 * k), 0.15, 1.1, bark, 8)
+		l.rotation.z = PI / 2.0
+	# Serrin bajo la hoja
+	_add_cone(saw, Vector3(0.1, floor_y + 0.1, table_z + 0.55), 0.35, 0.05, 0.2, light_wood, 8)
 
-	# Log pile (stacked logs on one side)
-	for i in range(3):
-		var l: MeshInstance3D = _add_cylinder(root, Vector3(sx * 0.35, 0.12 + i * 0.18, -sz * 0.15 + i * 0.02), 0.08, sz * 0.4, mat_light_wood)
-		l.rotation.x = PI / 2.0
-	# Second row
-	for i in range(2):
-		var l: MeshInstance3D = _add_cylinder(root, Vector3(sx * 0.35, 0.48 + i * 0.18, -sz * 0.1), 0.08, sz * 0.3, mat_light_wood)
-		l.rotation.x = PI / 2.0
-
-	# Belt/gear mechanism
-	_add_torus(root, Vector3(-sx * 0.35, 0.8, -sz * 0.3), 0.06, 0.14, mat_brass, 6)
-	# Drive belt (thin box connecting)
-	_add_box(root, Vector3(-sx * 0.18, 0.8, -sz * 0.3), Vector3(sx * 0.35, 0.02, 0.04), mat_iron)
-
-	# Wood chips / sawdust pile
-	_add_sphere(root, Vector3(sx * 0.1, 0.08, sz * 0.3), 0.15, _metal(Color(0.6, 0.45, 0.25), 0.0, 0.95))
-
-	# Smokestack (small steam engine)
-	_add_cylinder(root, Vector3(-sx * 0.38, 1.9, -sz * 0.25), 0.07, 0.5, mat_iron)
-
+	var anchor := Marker3D.new()
+	anchor.name = "FxAnchor"
+	anchor.position = blade_c + Vector3(0, blade_r * 0.7, 0.1)
+	root.add_child(anchor)
 	return root
 
 
@@ -856,7 +995,11 @@ static func _build_market(sx: float, sz: float) -> Node3D:
 		for cx in [-1, 1]:
 			for cz in [-1, 1]:
 				_add_box(root, Vector3(x + cx * sx * 0.1, 0.75, z + cz * sz * 0.12), Vector3(0.05, 1.1, 0.05), mat_iron)
-		_add_prism(root, Vector3(x, 1.35, z), Vector3(sx * 0.28, 0.3, sz * 0.32), awnings[i])
+		_add_prism(root, Vector3(x, 1.4, z), Vector3(sx * 0.34, 0.42, sz * 0.4), awnings[i])
+		# Mercancia en el mostrador: la funcion se ve desde fuera.
+		var goods := [Color(0.85, 0.2, 0.12), Color(0.95, 0.78, 0.2), Color(0.35, 0.62, 0.22)]
+		for g in 3:
+			_add_sphere(root, Vector3(x + (g - 1) * sx * 0.06, 0.8, z + sz * 0.09), 0.09, _shared_metal("market_goods_%d" % g, goods[g], 0.0, 0.7), 8)
 	# Balanza de laton en el centro
 	_add_box(root, Vector3(0, 0.6, sz * 0.38), Vector3(0.06, 0.9, 0.06), mat_brass)
 	_add_box(root, Vector3(0, 1.05, sz * 0.38), Vector3(sx * 0.3, 0.04, 0.04), mat_brass)
@@ -873,9 +1016,15 @@ static func _build_laboratory(sx: float, sz: float) -> Node3D:
 	var mat_glass := _emissive(Color(0.35, 0.8, 0.95), 0.9)
 	_add_box(root, Vector3(0, 0.8, 0), Vector3(sx * 0.8, 1.6, sz * 0.75), mat_stone)
 	_add_box(root, Vector3(0, 1.62, 0), Vector3(sx * 0.84, 0.08, sz * 0.79), mat_iron)
-	_add_box(root, Vector3(0, 2.05, 0), Vector3(sx * 0.4, 0.8, sz * 0.4), mat_glass)
-	_add_box(root, Vector3(sx * 0.3, 2.6, -sz * 0.25), Vector3(0.06, 1.6, 0.06), mat_iron)
-	_add_box(root, Vector3(sx * 0.3, 3.4, -sz * 0.25), Vector3(0.4, 0.05, 0.05), mat_copper)
+	# Cupula de cristal con luz azulada (la funcion se ve desde fuera); la antena
+	# grande, la exagerada, va en el patio (BuildingLot, "antenna").
+	_add_cylinder(root, Vector3(0, 1.75, 0), sx * 0.27, 0.18, mat_iron, 20)
+	_add_sphere(root, Vector3(0, 1.84, 0), sx * 0.25, mat_glass, 20)
+	_add_torus(root, Vector3(0, 1.86, 0), sx * 0.24, sx * 0.28, _metal(COL_BRASS, 0.9, 0.3), 20, 8)
+	for i in 4:
+		var a := TAU * float(i) / 4.0 + PI * 0.25
+		var rib := _add_box(root, Vector3(cos(a) * sx * 0.12, 2.0, sin(a) * sx * 0.12), Vector3(0.05, sx * 0.4, 0.05), mat_iron)
+		rib.rotation = Vector3(sin(a) * 0.9, 0, -cos(a) * 0.9)
 	for i in 3:
 		_add_box(root, Vector3(-sx * 0.42, 0.4 + 0.4 * i, sz * (-0.2 + 0.2 * i)), Vector3(0.08, 0.08, sz * 0.5), mat_copper)
 	_add_box(root, Vector3(0, 0.5, sz * 0.38), Vector3(sx * 0.25, 1.0, 0.04), mat_iron)
@@ -1146,677 +1295,101 @@ static func _build_statue(sx: float, sz: float) -> Node3D:
 ## neighbors bitmask: NORTH=1 (Z-), EAST=2 (X+), SOUTH=4 (Z+), WEST=8 (X-)
 static func _build_road(sx: float, sz: float, neighbors: int = 0) -> Node3D:
 	var root: Node3D = Node3D.new()
-	var mat_pave := _metal(Color(0.34, 0.32, 0.29), 0.2, 0.85)
-	var mat_curb := _metal(Color(0.62, 0.58, 0.52), 0.1, 0.8)
-	var mat_line := _metal(Color(0.85, 0.72, 0.3), 0.1, 0.7)
+	var mi := MeshInstance3D.new()
+	mi.name = "RoadMesh"
+	mi.mesh = road_mesh(sx, sz, neighbors)
+	root.add_child(mi)
+	return root
 
+## La calzada de la maqueta (color por vertice, los dos materiales de
+## ToyPalette): firme de pizarra clara con juntas de adoquin, bordillo grueso
+## de piedra crema en cada lado que no sigue la calle (con tacos alternos, como
+## piezas de juguete) y la linea central de laton en los tramos rectos. Una sola
+## malla, cacheada por medida y vecinos: 16 variantes para todo el mapa.
+static func road_mesh(sx: float, sz: float, neighbors: int = 0) -> ArrayMesh:
+	var key := "%.2f,%.2f,%d" % [sx, sz, neighbors]
+	if _road_meshes.has(key):
+		return _road_meshes[key]
+	var mb = _LotMesh.new()
+	var pave := _Tone.of("pave")
+	var joint := _Tone.of("pave_dark")
+	var curb := _Tone.of("curb")
+	var curb_alt := _Tone.of("curb_dark")
 	var has_n := (neighbors & 1) != 0
 	var has_e := (neighbors & 2) != 0
 	var has_s := (neighbors & 4) != 0
 	var has_w := (neighbors & 8) != 0
 
-	# Pavimento de la celda entera: con el vecino, un solo firme.
-	_add_box(root, Vector3(0, 0.025, 0), Vector3(sx, 0.05, sz), mat_pave)
+	# Firme de la celda entera: con el vecino, un solo firme.
+	var pave_h := 0.06
+	mb.box(Vector3(0, pave_h * 0.5, 0), Vector3(sx, pave_h, sz), pave)
+	# Juntas de adoquin (cuatro por lado), apenas por encima del firme.
+	for i in range(1, 4):
+		var t := -0.5 + 0.25 * i
+		mb.box(Vector3(t * sx, pave_h + 0.002, 0), Vector3(0.03, 0.004, sz), joint)
+		mb.box(Vector3(0, pave_h + 0.002, t * sz), Vector3(sx, 0.004, 0.03), joint)
 
-	# Acera (bordillo claro y algo alto) en cada lado que no sigue la calle.
-	var curb_w: float = sx * 0.16
-	var curb_h := 0.1
-	if not has_n:
-		_add_box(root, Vector3(0, curb_h * 0.5, -sz * 0.5 + curb_w * 0.5), Vector3(sx, curb_h, curb_w), mat_curb)
-	if not has_s:
-		_add_box(root, Vector3(0, curb_h * 0.5, sz * 0.5 - curb_w * 0.5), Vector3(sx, curb_h, curb_w), mat_curb)
-	if not has_e:
-		_add_box(root, Vector3(sx * 0.5 - curb_w * 0.5, curb_h * 0.5, 0), Vector3(curb_w, curb_h, sz), mat_curb)
-	if not has_w:
-		_add_box(root, Vector3(-sx * 0.5 + curb_w * 0.5, curb_h * 0.5, 0), Vector3(curb_w, curb_h, sz), mat_curb)
+	# Bordillo (acera) en cada lado que no sigue la calle.
+	var curb_w: float = sx * 0.17
+	var curb_h := 0.14
+	var blocks := 4
+	var sides := [[not has_n, Vector3(0, 0, -1)], [not has_s, Vector3(0, 0, 1)],
+		[not has_e, Vector3(1, 0, 0)], [not has_w, Vector3(-1, 0, 0)]]
+	for side in sides:
+		if not bool(side[0]):
+			continue
+		var nrm: Vector3 = side[1]
+		var along_x := absf(nrm.z) > 0.5
+		var length := sx if along_x else sz
+		var off := (sz if along_x else sx) * 0.5 - curb_w * 0.5
+		for b in blocks:
+			var t := -length * 0.5 + length * (float(b) + 0.5) / float(blocks)
+			var c := nrm * off + (Vector3(t, 0, 0) if along_x else Vector3(0, 0, t))
+			var size := Vector3(length / blocks - 0.02, curb_h, curb_w) if along_x else Vector3(curb_w, curb_h, length / blocks - 0.02)
+			mb.box(c + Vector3(0, curb_h * 0.5, 0), size, curb if b % 2 == 0 else curb_alt)
 
 	# Linea central en los tramos rectos; de borde a borde, para que se una.
+	var line := _Tone.of("line")
 	if has_n and has_s and not has_e and not has_w:
-		_add_box(root, Vector3(0, 0.052, 0), Vector3(0.05, 0.01, sz), mat_line)
+		for k in 2:
+			mb.box(Vector3(0, pave_h + 0.006, (-0.25 + 0.5 * k) * sz), Vector3(0.08, 0.012, sz * 0.3), line)
 	elif has_e and has_w and not has_n and not has_s:
-		_add_box(root, Vector3(0, 0.052, 0), Vector3(sx, 0.01, 0.05), mat_line)
+		for k in 2:
+			mb.box(Vector3((-0.25 + 0.5 * k) * sx, pave_h + 0.006, 0), Vector3(sx * 0.3, 0.012, 0.08), line)
 
-	return root
+	var mesh: ArrayMesh = mb.commit()
+	_road_meshes[key] = mesh
+	return mesh
+
+const _LotMesh := preload("res://scripts/buildings/LotMesh.gd")
+const _Tone := preload("res://scripts/buildings/ToyTones.gd")
+static var _road_meshes: Dictionary = {}
 
 
 # ════════════════════════════════════════════════════════════════
-# OBRA Y RUINA (docs/03, "Aspecto en el mapa" y "Obra por edificio")
-# Tres fases de obra, las mismas para todos: valla con materiales ->
-# solar con cimientos -> estructura a medio levantar. La huella decide
-# el tamano y cuantas piezas; el ESTILO del edificio (BuildingLook.
-# site_style) que materiales, que valla, que lona y que silueta; y la
-# SEMILLA de la instancia (BuildingLook.site_layout) donde va cada cosa.
-# Piezas low-poly (cilindros de 6 lados) y materiales cacheados.
+# OBRA, ANDAMIO Y RUINA: viven en SiteMesh.gd (en la paleta de la maqueta).
+# Aqui solo quedan las entradas de siempre, para quien las llame por la
+# fabrica (pruebas, sondas).
 # ════════════════════════════════════════════════════════════════
 
-const _LookRule := preload("res://scripts/buildings/BuildingLook.gd")
-const _SiteFx := preload("res://scripts/buildings/SiteFx.gd")
-const _Fx := preload("res://scripts/buildings/BuildingFx.gd")
+const _Site := preload("res://scripts/buildings/SiteMesh.gd")
 
-static var _site_mats: Dictionary = {}
-static var _site_meshes: Dictionary = {}
-
-## Material de obra cacheado por nombre (sin mapas de chapa: son piezas
-## pequenas y lejanas, y asi se agrupan mejor en Mobile).
-static func _site_mat(key: String) -> StandardMaterial3D:
-	if _site_mats.has(key):
-		return _site_mats[key]
-	var colors := {
-		"dirt": Color(0.36, 0.27, 0.18), "wood": Color(0.55, 0.40, 0.22),
-		"dark_wood": COL_DARK_WOOD, "steel": COL_GUNMETAL, "brick": Color(0.55, 0.25, 0.17),
-		"concrete": Color(0.58, 0.56, 0.52), "concrete_dark": COL_CONCRETE,
-		"rebar": COL_RUST, "hazard": Color(0.95, 0.72, 0.1), "char": Color(0.07, 0.06, 0.055),
-		"scorch": Color(0.1, 0.085, 0.07), "rubble": Color(0.3, 0.28, 0.26),
-		"stone": Color(0.64, 0.61, 0.55), "stone_dark": Color(0.47, 0.45, 0.41),
-		"sack": Color(0.78, 0.68, 0.48), "sandbag": Color(0.62, 0.57, 0.40),
-		"sawdust": Color(0.86, 0.74, 0.52), "gravel": Color(0.50, 0.48, 0.45),
-		"soil": Color(0.24, 0.17, 0.11), "sheet": Color(0.44, 0.46, 0.48),
-		"crate": Color(0.47, 0.32, 0.16), "log": Color(0.42, 0.28, 0.15),
-		"drum": Color(0.22, 0.30, 0.25), "copper": COL_COPPER, "leaf": Color(0.26, 0.5, 0.18),
-	}
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = colors.get(key, COL_CONCRETE)
-	mat.roughness = 0.9
-	mat.metallic = 0.5 if key in ["steel", "rebar", "hazard", "sheet", "copper", "drum"] else 0.0
-	_site_mats[key] = mat
-	return mat
-
-## Material de obra de un color suelto (lonas, la grua de cada estilo).
-static func _site_color_mat(color: Color) -> StandardMaterial3D:
-	var key := "#" + color.to_html()
-	if _site_mats.has(key):
-		return _site_mats[key]
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = 0.85
-	_site_mats[key] = mat
-	return mat
-
-static func _foot_dims(footprint: Vector2i, cell_size: float) -> Vector2:
-	return Vector2(footprint.x * cell_size * 0.9, footprint.y * cell_size * 0.9)
-
-## Fase de obra `phase` (0, 1, 2) para una parcela de `footprint` celdas, con el
-## estilo de `building_id` ("" = el de por defecto) y la disposicion de la
-## semilla `seed_val` (BuildingLook.seed_of). Misma entrada, misma obra.
-## Raiz "ConstructionPhase<N>" con un grupo por fase: "Fence" y "Piles" (0),
-## "Foundation" (1), "Frame" y "Scaffold" (2). Null si la fase no existe.
+## Fase de obra `phase` (0, 1, 2) para una parcela de `footprint` celdas (ver
+## SiteMesh.construction_phase).
 static func create_construction_phase(footprint: Vector2i, phase: int, cell_size: float, building_id: String = "", seed_val: int = 0) -> Node3D:
-	if phase < 0 or phase > 2:
-		return null
-	var d := _foot_dims(footprint, cell_size)
-	var n := clampi(maxi(footprint.x, footprint.y), 1, 3)
-	var style := _LookRule.site_style(building_id)
-	var layout := _LookRule.site_layout(seed_val, style, n)
-	var root := Node3D.new()
-	root.name = "ConstructionPhase%d" % phase
-	root.set_meta("site_seed", seed_val)
-	root.set_meta("site_frame", String(style["frame"]))
-	match phase:
-		0: _phase_fence(root, d.x, d.y, n, style, layout)
-		1: _phase_foundation(root, d.x, d.y, n, style, layout)
-		2: _phase_frame(root, d.x, d.y, n, style, layout)
-	return root
+	return _Site.construction_phase(footprint, phase, cell_size, building_id, seed_val)
 
+## Andamio de mejora (ver SiteMesh.scaffold).
+static func create_scaffold(footprint: Vector2i, cell_size: float, height: float) -> Node3D:
+	return _Site.scaffold(footprint, cell_size, height)
+
+## Escombros de una ruina (ver SiteMesh.ruin_overlay).
+static func create_ruin_overlay(footprint: Vector2i, cell_size: float, seed_val: int = 0) -> Node3D:
+	return _Site.ruin_overlay(footprint, cell_size, seed_val)
+
+## Un Node3D con nombre colgado de otro (lo usan los edificios procedurales).
 static func _group(root: Node3D, group_name: String) -> Node3D:
 	var g := Node3D.new()
 	g.name = group_name
 	root.add_child(g)
 	return g
-
-## De fracciones de la huella (marco sin girar) a la parcela 3D.
-static func _at(frac: Vector2, sx: float, sz: float, y: float = 0.0) -> Vector3:
-	return Vector3(frac.x * sx, y, frac.y * sz)
-
-## Fase 0: tierra removida, valla con su puerta (en el lado que diga la
-## semilla) y las pilas del estilo, una lona sobre alguna y algo de desorden.
-static func _phase_fence(root: Node3D, sx: float, sz: float, n: int, style: Dictionary, layout: Dictionary) -> void:
-	_add_box(root, Vector3(0, 0.02, 0), Vector3(sx, 0.04, sz), _site_mat("dirt"))
-	var fence := _group(root, "Fence")
-	var kind := String(style["fence"])
-	var post_mat := _site_mat({"dark_planks": "dark_wood", "sheet": "steel"}.get(kind, "wood"))
-	var rail_mat: StandardMaterial3D
-	match kind:
-		"dark_planks": rail_mat = _site_mat("dark_wood")
-		"sheet": rail_mat = _site_mat("sheet")
-		"canvas": rail_mat = _site_color_mat(style["tarp"])
-		_: rail_mat = _site_mat("wood")
-	var post_h := 0.75
-	var gate := int(layout["gate_side"])
-	var step := float(layout["post_step"])
-	for side in 4:
-		var nrm := _LookRule.side_normal(side)
-		var along := Vector2(-nrm.y, nrm.x)
-		var length := sx if nrm.x == 0.0 else sz
-		var half := (sz if nrm.x == 0.0 else sx) * 0.5
-		var mid := nrm * half
-		var yaw := 0.0 if nrm.x == 0.0 else PI * 0.5
-		var posts := maxi(2, int(length / step) + 1)
-		for i in posts:
-			var t := lerpf(-length * 0.5, length * 0.5, float(i) / float(posts - 1))
-			if side == gate and absf(t) < length * 0.18:
-				continue
-			var p := mid + along * t
-			_add_cylinder(fence, Vector3(p.x, post_h * 0.5, p.y), 0.05, post_h, post_mat, 6)
-		var segs := [[0.0, length]]
-		if side == gate:
-			var seg := length * 0.32
-			segs = [[-(length * 0.5 - seg * 0.5), seg], [length * 0.5 - seg * 0.5, seg]]
-		for s in segs:
-			var c: Vector2 = mid + along * float(s[0])
-			if kind == "sheet" or kind == "canvas":
-				var panel := _add_box(fence, Vector3(c.x, 0.37, c.y), Vector3(float(s[1]), 0.58, 0.04), rail_mat)
-				panel.rotation.y = yaw
-			else:
-				for h in [0.3, 0.62]:
-					var rail := _add_box(fence, Vector3(c.x, h, c.y), Vector3(float(s[1]), 0.08, 0.05), rail_mat)
-					rail.rotation.y = yaw
-	# Cinta de peligro sobre la puerta y el banderin en uno de sus postes.
-	var gn := _LookRule.side_normal(gate)
-	var glen := sx if gn.x == 0.0 else sz
-	var ghalf := (sz if gn.x == 0.0 else sx) * 0.5
-	var tape := _add_box(fence, Vector3(gn.x * ghalf, post_h, gn.y * ghalf), Vector3(glen * 0.36, 0.06, 0.06), _site_mat("hazard"))
-	tape.rotation.y = 0.0 if gn.x == 0.0 else PI * 0.5
-	var flag_at := gn * ghalf + Vector2(-gn.y, gn.x) * glen * 0.2 * float(layout["flag_post"])
-	_add_flag(fence, Vector3(flag_at.x, 0, flag_at.y), 1.15, style["flag"])
-	# Las pilas del estilo, donde diga la semilla.
-	var piles := _group(root, "Piles")
-	var list: Array = layout["piles"]
-	for k in list.size():
-		var p: Dictionary = list[k]
-		var holder := _group(piles, "Pile_" + String(p["kind"]))
-		holder.position = _at(p["pos"], sx, sz)
-		holder.rotation.y = float(p["yaw"])
-		holder.scale = Vector3.ONE * float(p["scale"])
-		_pile(holder, String(p["kind"]), n)
-		if k == int(layout["tarp_pile"]):
-			var tarp := _add_box(holder, Vector3(0.12, 0.36, 0.0), Vector3(0.75, 0.04, 0.6), _site_color_mat(style["tarp"]))
-			tarp.rotation.z = 0.25
-	_clutter(piles, sx, sz, layout)
-	_add_site_fx(root, _SiteFx.fx_for(style, 0), _at(layout["fx_spot"], sx, sz, 0.35), 1.1 + 0.2 * n)
-
-## Una pila de material, centrada en el origen de `h` (ya girada y escalada).
-static func _pile(h: Node3D, kind: String, n: int) -> void:
-	match kind:
-		"planks":
-			var wood := _site_mat("wood")
-			for layer in 3:
-				for j in 3:
-					var b := _add_box(h, Vector3.ZERO, Vector3(0.9 + 0.15 * n, 0.09, 0.14), wood)
-					var off := (j - 1) * 0.18
-					if layer % 2 == 1:
-						b.rotation.y = PI * 0.5
-						b.position = Vector3(off, 0.05 + layer * 0.1, 0.0)
-					else:
-						b.position = Vector3(0.0, 0.05 + layer * 0.1, off)
-		"beams":
-			var steel := _site_mat("steel")
-			for j in 3:
-				var y := 0.07 + (0.13 if j == 2 else 0.0)
-				var z := (-0.1 + 0.2 * (j % 2)) if j < 2 else 0.0
-				_add_box(h, Vector3(0, y, z), Vector3(1.0 + 0.2 * n, 0.12, 0.12), steel)
-		"bricks":
-			_add_box(h, Vector3(0, 0.04, 0), Vector3(0.66, 0.08, 0.5), _site_mat("wood"))
-			_add_box(h, Vector3(0, 0.3, 0), Vector3(0.6, 0.44, 0.45), _site_mat("brick"))
-		"logs":
-			var log_mat := _site_mat("log")
-			var rows := [[-0.21, 0.0, 0.21], [-0.105, 0.105], [0.0]]
-			for r in rows.size():
-				for z in rows[r]:
-					var c := _add_cylinder(h, Vector3(0, 0.11 + r * 0.18, float(z)), 0.1, 1.0 + 0.15 * n, log_mat, 6)
-					c.rotation.z = PI * 0.5
-		"sawdust":
-			_add_cone(h, Vector3(0, 0.14, 0), 0.42, 0.06, 0.28, _site_mat("sawdust"), 8)
-		"gravel":
-			_add_cone(h, Vector3(0, 0.17, 0), 0.45, 0.05, 0.34, _site_mat("gravel"), 8)
-		"soil":
-			_add_cone(h, Vector3(0, 0.13, 0), 0.42, 0.08, 0.26, _site_mat("soil"), 8)
-		"rivets":
-			_add_box(h, Vector3(0.2, 0.13, 0), Vector3(0.3, 0.26, 0.3), _site_mat("crate"))
-			for j in 3:
-				_add_cylinder(h, Vector3(-0.2 + 0.05 * j, 0.11, -0.18 + 0.18 * j), 0.09, 0.22, _site_mat("rebar"), 6)
-		"pipes":
-			var pipe_mat := _site_mat("copper")
-			var rows := [[-0.16, 0.0, 0.16], [-0.08, 0.08]]
-			for r in rows.size():
-				for z in rows[r]:
-					var c := _add_cylinder(h, Vector3(0, 0.07 + r * 0.13, float(z)), 0.07, 1.1 + 0.15 * n, pipe_mat, 6)
-					c.rotation.z = PI * 0.5
-		"drums":
-			var drum := _site_mat("drum")
-			for o in [Vector2(-0.15, -0.14), Vector2(0.14, -0.12), Vector2(0.0, 0.14)]:
-				_add_cylinder(h, Vector3(o.x, 0.18, o.y), 0.13, 0.36, drum, 8)
-			var lying := _add_cylinder(h, Vector3(0.32, 0.13, 0.2), 0.13, 0.36, drum, 8)
-			lying.rotation.x = PI * 0.5
-		"sacks", "sandbags":
-			var sack := _site_mat("sack" if kind == "sacks" else "sandbag")
-			var per := 3 if kind == "sacks" else 4
-			for layer in 2:
-				for j in per - layer:
-					var s := _add_sphere(h, Vector3((j - (per - layer - 1) * 0.5) * 0.24, 0.08 + layer * 0.13, 0.0), 0.14, sack, 8)
-					s.scale = Vector3(1.0, 0.55, 0.75)
-		"stone":
-			var stone := _site_mat("stone")
-			var dark := _site_mat("stone_dark")
-			var blocks := [[Vector3(-0.2, 0.13, -0.1), Vector3(0.38, 0.26, 0.3)], [Vector3(0.2, 0.11, 0.08), Vector3(0.34, 0.22, 0.34)],
-				[Vector3(-0.05, 0.36, 0.0), Vector3(0.3, 0.22, 0.26)]]
-			for b in blocks.size():
-				var m := _add_box(h, blocks[b][0], blocks[b][1], stone if b % 2 == 0 else dark)
-				m.rotation.y = 0.2 * b
-		"crates":
-			var crate := _site_mat("crate")
-			_add_box(h, Vector3(-0.17, 0.15, 0), Vector3(0.3, 0.3, 0.3), crate)
-			_add_box(h, Vector3(0.17, 0.15, 0.03), Vector3(0.3, 0.3, 0.3), crate)
-			var top := _add_box(h, Vector3(0.0, 0.43, 0.0), Vector3(0.27, 0.26, 0.27), crate)
-			top.rotation.y = 0.4
-		_:
-			_add_box(h, Vector3(0, 0.15, 0), Vector3(0.5, 0.3, 0.4), _site_mat("concrete_dark"))
-
-## El pequeno desorden de la semilla: un bidon, una caja, un cono sueltos.
-static func _clutter(parent: Node3D, sx: float, sz: float, layout: Dictionary) -> void:
-	for c in layout["clutter"]:
-		var p := _at(c["pos"], sx, sz)
-		match String(c["kind"]):
-			"barrel": _add_cylinder(parent, p + Vector3(0, 0.12, 0), 0.09, 0.24, _site_mat("drum"), 6)
-			"crate": _add_box(parent, p + Vector3(0, 0.11, 0), Vector3(0.22, 0.22, 0.22), _site_mat("crate"))
-			_: _add_cone(parent, p + Vector3(0, 0.15, 0), 0.09, 0.02, 0.3, _site_mat("hazard"), 6)
-
-## Fase 1: solar despejado con la losa (de piedra en los edificios de piedra),
-## zapatas, esperas de ferralla (o estacas de madera), conos en dos esquinas de
-## la semilla y lo que sobro de la primera pila en otra.
-static func _phase_foundation(root: Node3D, sx: float, sz: float, n: int, style: Dictionary, layout: Dictionary) -> void:
-	_foundation_slab(root, sx, sz, style)
-	var g := _group(root, "Foundation")
-	var slab_h := 0.22
-	var dark := _site_mat("stone_dark" if style["frame_mat"] == "stone" else "concrete_dark")
-	var wood := String(style["frame_mat"]) == "wood"
-	for p in _frame_points(sx * 0.8, sz * 0.8, n, String(style["frame"])):
-		_add_box(g, Vector3(p.x, slab_h + 0.02, p.y), Vector3(0.36, 0.05, 0.36), dark)
-		if wood:
-			_add_box(g, Vector3(p.x, slab_h + 0.25, p.y), Vector3(0.09, 0.5, 0.09), _site_mat("dark_wood"))
-		else:
-			for o in [Vector2(-0.08, -0.08), Vector2(0.08, 0.08)]:
-				_add_cylinder(g, Vector3(p.x + o.x, slab_h + 0.3, p.y + o.y), 0.025, 0.6, _site_mat("rebar"), 6)
-	_foundation_hint(g, sx, sz, slab_h, style, layout)
-	var hazard := _site_mat("hazard")
-	for s in layout["cone_corners"]:
-		_add_cone(g, Vector3(s.x * sx * 0.47, 0.18, s.y * sz * 0.47), 0.1, 0.02, 0.36, hazard, 6)
-	var left: Vector2 = layout["leftover_corner"]
-	var piles: Array = layout["piles"]
-	if not piles.is_empty():
-		var holder := _group(g, "Leftover")
-		holder.position = Vector3(left.x * sx * 0.36, slab_h, left.y * sz * 0.36)
-		holder.rotation.y = float(piles[0]["yaw"])
-		holder.scale = Vector3.ONE * 0.7
-		_pile(holder, String(piles[0]["kind"]), n)
-	var cc: Vector2 = layout["cone_corners"][1]
-	_add_flag(g, Vector3(cc.x * sx * 0.4, slab_h, cc.y * sz * 0.4), 0.95, style["flag"])
-	_add_site_fx(root, _SiteFx.fx_for(style, 1), _at(layout["fx_spot"], sx, sz, slab_h + 0.4), 1.0 + 0.2 * n)
-
-## Lo que ya asoma en los cimientos de cada silueta: la base redonda de la
-## chimenea, los anillos de los depositos o la cupula, la zapata de la torre,
-## el primer escalon del pedestal, los bancales, las durmientes de madera...
-static func _foundation_hint(g: Node3D, sx: float, sz: float, y: float, style: Dictionary, layout: Dictionary) -> void:
-	var cc: Vector2 = layout["crane_corner"]
-	var dark := _site_mat("concrete_dark")
-	match String(style["frame"]):
-		"chimney":
-			_add_cylinder(g, Vector3(-cc.x * sx * 0.26, y + 0.08, -cc.y * sz * 0.26), 0.36, 0.16, _site_mat("brick"), 8)
-		"tanks":
-			for side in [-1.0, 1.0]:
-				_add_cylinder(g, Vector3(side * sx * 0.22, y + 0.05, 0), minf(sx, sz) * 0.2, 0.1, dark, 12)
-		"dome", "basin":
-			var r := minf(sx, sz) * 0.38
-			_add_torus(g, Vector3(0, y + 0.05, 0), r - 0.1, r + 0.08, _site_mat("stone" if style["frame_mat"] == "stone" else "concrete_dark"), 20, 4)
-		"tower":
-			_add_box(g, Vector3(0, y + 0.08, 0), Vector3(sx * 0.6, 0.16, sz * 0.6), dark)
-		"plinth":
-			_add_box(g, Vector3(0, y + 0.12, 0), Vector3(sx * 0.8, 0.24, sz * 0.8), _site_mat("stone"))
-		"low":
-			for zs in [-1.0, 1.0]:
-				_add_box(g, Vector3(0, y + 0.06, zs * sz * 0.18), Vector3(sx * 0.6, 0.12, sz * 0.18), _site_mat("soil"))
-		"headframe":
-			for zs in [-1.0, 1.0]:
-				for xs in [-1.0, 1.0]:
-					_add_box(g, Vector3(xs * sx * 0.35, y + 0.08, zs * sz * 0.18), Vector3(0.4, 0.16, 0.4), dark)
-		"gable", "hall":
-			var sill := _site_mat("dark_wood" if style["frame_mat"] == "wood" else "steel")
-			_add_box(g, Vector3(0, y + 0.06, -sz * 0.4), Vector3(sx * 0.82, 0.1, 0.12), sill)
-			_add_box(g, Vector3(0, y + 0.06, sz * 0.4), Vector3(sx * 0.82, 0.1, 0.12), sill)
-			_add_box(g, Vector3(-sx * 0.4, y + 0.06, 0), Vector3(0.12, 0.1, sz * 0.82), sill)
-			_add_box(g, Vector3(sx * 0.4, y + 0.06, 0), Vector3(0.12, 0.1, sz * 0.82), sill)
-		"mast":
-			_add_cylinder(g, Vector3(0, y + 0.1, 0), 0.25, 0.2, dark, 8)
-
-## Fase 2: losa, la estructura con la silueta del edificio (grupo "Frame"),
-## andamio en el lado de la semilla y, desde 2x2, grua en la esquina de la
-## semilla, girando. Banderin en lo alto y chispas o polvo.
-static func _phase_frame(root: Node3D, sx: float, sz: float, n: int, style: Dictionary, layout: Dictionary) -> void:
-	_foundation_slab(root, sx, sz, style)
-	var h := 1.3 + 0.45 * n
-	var frame := _group(root, "Frame")
-	var top := _frame_shape(frame, sx, sz, n, h, style, layout)
-	_add_scaffold_side(_group(root, "Scaffold"), sx, sz, h, int(layout["scaffold_side"]))
-	var cc: Vector2 = layout["crane_corner"]
-	if n >= 2:
-		var yaw := atan2(-cc.y, cc.x) + (float(layout["crane_yaw"]) / TAU - 0.5) * 1.2
-		_add_crane(root, Vector3(cc.x * sx * 0.42, 0, cc.y * sz * 0.42), maxf(h, top) + 1.2, sx * 0.7, yaw, style["crane"])
-	if String(style["frame"]) != "mast":
-		var fc := -cc
-		_add_flag(frame, Vector3(fc.x * sx * 0.4, 0.22, fc.y * sz * 0.4), h + 0.7, style["flag"])
-	var fx := _SiteFx.fx_for(style, 2)
-	_add_site_fx(root, fx, _at(layout["fx_spot"], sx, sz, (0.22 + h * 0.6) if fx == "sparks" else 0.5), 1.0 + 0.25 * n)
-
-static func _foundation_slab(root: Node3D, sx: float, sz: float, style: Dictionary = {}) -> void:
-	_add_box(root, Vector3(0, 0.02, 0), Vector3(sx, 0.04, sz), _site_mat("dirt"))
-	var slab := "stone" if style.get("frame_mat", "") == "stone" else "concrete"
-	_add_box(root, Vector3(0, 0.11, 0), Vector3(sx * 0.86, 0.22, sz * 0.86), _site_mat(slab))
-
-## Puntos de pilar: esquinas para la clase 1, rejilla 3x3 para la 2 y 4x4 para la 3.
-static func _grid_points(w: float, d: float, n: int) -> Array:
-	var per := n + 1
-	var pts: Array = []
-	for i in per:
-		for j in per:
-			pts.append(Vector2(lerpf(-w * 0.5, w * 0.5, float(i) / float(per - 1)), lerpf(-d * 0.5, d * 0.5, float(j) / float(per - 1))))
-	return pts
-
-## Los apoyos de cada silueta: en rejilla, o en anillo para las redondas
-## (cupula, depositos, pilon).
-static func _frame_points(w: float, d: float, n: int, shape: String) -> Array:
-	if shape in ["dome", "basin", "tanks"]:
-		var pts: Array = []
-		var count := 4 + 2 * n
-		for k in count:
-			var a := TAU * k / count
-			pts.append(Vector2(cos(a) * w * 0.48, sin(a) * d * 0.48))
-		return pts
-	return _grid_points(w, d, n)
-
-## Una barra entre dos puntos (pilar inclinado, cabio, riostra).
-static func _strut(parent: Node3D, a: Vector3, b: Vector3, thick: float, mat: StandardMaterial3D) -> MeshInstance3D:
-	var mid := (a + b) * 0.5
-	var length := a.distance_to(b)
-	var mi := _add_box(parent, mid, Vector3(thick, length, thick), mat)
-	var dir := (b - a).normalized()
-	if absf(dir.dot(Vector3.UP)) < 0.999:
-		var axis := Vector3.UP.cross(dir).normalized()
-		mi.basis = Basis(axis, Vector3.UP.angle_to(dir))
-	return mi
-
-## La silueta de la fase 2, que insinua el edificio terminado. Devuelve la
-## altura de su punto mas alto (para que la grua quede por encima).
-static func _frame_shape(f: Node3D, sx: float, sz: float, n: int, h: float, style: Dictionary, layout: Dictionary) -> float:
-	var shape := String(style["frame"])
-	var mat := _site_mat({"wood": "wood", "stone": "stone"}.get(String(style["frame_mat"]), "steel"))
-	var steel := _site_mat("steel")
-	var base := 0.22
-	var top := base + h
-	var cc: Vector2 = layout["crane_corner"]
-	match shape:
-		"chimney":
-			_pillars(f, sx, sz, n, h * 0.8, mat, true)
-			var c := Vector3(-cc.x * sx * 0.26, 0, -cc.y * sz * 0.26)
-			var ch := h * 1.9
-			_add_cylinder(f, c + Vector3(0, base + ch * 0.5, 0), 0.3, ch, _site_mat("brick"), 8)
-			for y in [0.45, 0.8]:
-				_add_torus(f, c + Vector3(0, base + ch * y, 0), 0.28, 0.36, steel, 8, 4)
-			top = base + ch
-		"gable", "hall":
-			var hall := shape == "hall"
-			_pillars(f, sx, sz, n, h, mat, false)
-			var roof := sz * (0.2 if hall else 0.36)
-			var count := n + 2
-			for i in count:
-				var x := lerpf(-sx * 0.4, sx * 0.4, float(i) / float(count - 1))
-				var apex := Vector3(x, base + h + roof, 0)
-				_strut(f, Vector3(x, base + h, sz * 0.42), apex, 0.08, mat)
-				_strut(f, Vector3(x, base + h, -sz * 0.42), apex, 0.08, mat)
-				if hall:
-					_add_box(f, Vector3(x, base + h, 0), Vector3(0.07, 0.07, sz * 0.84), mat)
-			_add_box(f, Vector3(0, base + h + roof, 0), Vector3(sx * 0.84, 0.09, 0.09), mat)
-			top = base + h + roof
-		"tower":
-			var th := h * 1.75
-			var w := 0.3
-			var feet := [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]
-			for k in 4:
-				var a: Vector2 = feet[k]
-				var b: Vector2 = feet[(k + 1) % 4]
-				_strut(f, Vector3(a.x * sx * w, base, a.y * sz * w), Vector3(a.x * sx * w * 0.6, base + th, a.y * sz * w * 0.6), 0.14, mat)
-				# Riostra en aspa por cara: la celosia de una torre.
-				_strut(f, Vector3(a.x * sx * w, base, a.y * sz * w), Vector3(b.x * sx * w * 0.8, base + th * 0.5, b.y * sz * w * 0.8), 0.06, mat)
-			for lv in [0.5, 1.0]:
-				var s := lerpf(1.0, 0.6, lv)
-				_add_box(f, Vector3(0, base + th * lv, 0), Vector3(sx * w * 2.0 * s + 0.15, 0.08, sz * w * 2.0 * s + 0.15), mat)
-			top = base + th
-		"tanks":
-			var r := minf(sx, sz) * 0.2
-			for side in [-1.0, 1.0]:
-				var c := Vector3(side * sx * 0.22, 0, 0)
-				for y in [0.3, 0.65, 0.95]:
-					_add_torus(f, c + Vector3(0, base + h * y, 0), r - 0.04, r + 0.03, mat, 12, 4)
-				for k in 6:
-					var a := TAU * k / 6.0
-					_add_box(f, c + Vector3(cos(a) * r, base + h * 0.5, sin(a) * r), Vector3(0.06, h, 0.06), mat)
-			# Uno ya medio chapado y una tuberia que los une.
-			_add_cylinder(f, Vector3(sx * 0.22, base + h * 0.2, 0), r, h * 0.4, _site_mat("sheet"), 10)
-			var pipe := _add_cylinder(f, Vector3(0, base + h * 0.35, sz * 0.12), 0.06, sx * 0.44, _site_mat("copper"), 6)
-			pipe.rotation.z = PI * 0.5
-		"dome":
-			var R := minf(sx, sz) * 0.4
-			var ring_h := h * 0.55
-			for p in _frame_points(sx * 0.8, sz * 0.8, n, shape):
-				_add_box(f, Vector3(p.x, base + ring_h * 0.5, p.y), Vector3(0.14, ring_h, 0.14), mat)
-			_add_torus(f, Vector3(0, base + ring_h, 0), R - 0.05, R + 0.05, mat, 16, 4)
-			# Nervios de la cupula: cuartos de arco, tres tramos cada uno.
-			for k in 6:
-				var rib := _group(f, "Rib%d" % k)
-				rib.rotation.y = TAU * k / 6.0
-				var prev := Vector3(R, base + ring_h, 0)
-				for s in range(1, 4):
-					var phi := PI * 0.5 * s / 3.0
-					var next := Vector3(R * cos(phi), base + ring_h + R * 0.9 * sin(phi), 0)
-					_strut(rib, prev, next, 0.07, mat)
-					prev = next
-			top = base + ring_h + R * 0.9
-		"plinth":
-			var stone := _site_mat("stone")
-			for i in 3:
-				var s := 0.8 - 0.18 * i
-				_add_box(f, Vector3(0, base + 0.12 + 0.24 * i, 0), Vector3(sx * s, 0.24, sz * s), stone if i % 2 == 0 else _site_mat("stone_dark"))
-			# La figura, aun tapada con la lona, y los pies de un andamio de madera.
-			var fig_h := h * 0.9
-			_add_box(f, Vector3(0, base + 0.72 + fig_h * 0.5, 0), Vector3(0.45, fig_h, 0.4), _site_color_mat(style["tarp"]))
-			_add_sphere(f, Vector3(0, base + 0.72 + fig_h + 0.12, 0), 0.2, _site_color_mat(style["tarp"]), 8)
-			for s in _LookRule.CORNERS:
-				_add_cylinder(f, Vector3(s.x * sx * 0.3, base + h * 0.6, s.y * sz * 0.3), 0.035, h * 1.2, _site_mat("dark_wood"), 6)
-			top = base + 0.72 + fig_h + 0.3
-		"basin":
-			var stone := _site_mat("stone")
-			var count := 10 + 2 * n
-			for k in count:
-				if k % 5 == 4:
-					continue   # huecos: el pilon aun no esta cerrado
-				var a := TAU * k / count
-				var blk := _add_box(f, Vector3(cos(a) * sx * 0.38, base + 0.18, sin(a) * sz * 0.38), Vector3(0.36, 0.36, 0.22), stone)
-				blk.rotation.y = -a + PI * 0.5
-			_add_cylinder(f, Vector3(0, base + 0.5, 0), 0.08, 1.0, _site_mat("copper"), 6)
-			# Cabria de tres patas sobre el centro, para subir la pila.
-			var apex := Vector3(0, base + h * 1.1, 0)
-			for k in 3:
-				var a := TAU * k / 3.0 + 0.3
-				_strut(f, Vector3(cos(a) * sx * 0.32, base, sin(a) * sz * 0.32), apex, 0.07, _site_mat("dark_wood"))
-			top = apex.y
-		"headframe":
-			_pillars(f, sx, sz, 1, h * 0.45, mat, true)
-			var apex_h := h * 1.7
-			for zs in [-1.0, 1.0]:
-				for xs in [-1.0, 1.0]:
-					_strut(f, Vector3(xs * sx * 0.35, base, zs * sz * 0.18), Vector3(0, base + apex_h, zs * sz * 0.1), 0.1, mat)
-			var wheel := _add_torus(f, Vector3(0, base + apex_h + 0.25, 0), 0.26, 0.34, steel, 12, 4)
-			wheel.rotation.x = PI * 0.5
-			top = base + apex_h + 0.6
-		"low":
-			# Pergola de madera y bancales: lo que sera el jardin.
-			for s in _LookRule.CORNERS:
-				_add_box(f, Vector3(s.x * sx * 0.32, base + h * 0.4, s.y * sz * 0.32), Vector3(0.1, h * 0.8, 0.1), mat)
-			for i in 4:
-				var x := lerpf(-sx * 0.32, sx * 0.32, float(i) / 3.0)
-				_add_box(f, Vector3(x, base + h * 0.8, 0), Vector3(0.06, 0.06, sz * 0.7), mat)
-			for zs in [-1.0, 1.0]:
-				_add_box(f, Vector3(0, base + h * 0.8, zs * sz * 0.32), Vector3(sx * 0.7, 0.08, 0.08), mat)
-				_add_box(f, Vector3(0, base + 0.08, zs * sz * 0.18), Vector3(sx * 0.6, 0.12, sz * 0.18), _site_mat("soil"))
-			top = base + h * 0.8
-		"mast":
-			_pillars(f, sx, sz, n, h, mat, true)
-			var mh := h * 2.2
-			_add_cylinder(f, Vector3(0, base + mh * 0.5, 0), 0.07, mh, steel, 6)
-			_add_flag(f, Vector3(0, base + mh - 0.7, 0), 0.7, style["flag"])
-			top = base + mh
-		_:
-			_pillars(f, sx, sz, n, h, mat, true)
-	return top
-
-## Pilares en rejilla, medio forjado detras y (si `ring`) vigas de coronacion.
-static func _pillars(f: Node3D, sx: float, sz: float, n: int, h: float, mat: StandardMaterial3D, ring: bool) -> void:
-	var base := 0.22
-	for p in _grid_points(sx * 0.8, sz * 0.8, n):
-		_add_box(f, Vector3(p.x, base + h * 0.5, p.y), Vector3(0.18, h, 0.18), mat)
-	_add_box(f, Vector3(0, base + h * 0.5, -sz * 0.2), Vector3(sx * 0.82, 0.12, sz * 0.42), _site_mat("concrete"))
-	if not ring:
-		return
-	var top := base + h
-	_add_box(f, Vector3(0, top, -sz * 0.4), Vector3(sx * 0.82, 0.12, 0.12), mat)
-	_add_box(f, Vector3(0, top, sz * 0.4), Vector3(sx * 0.82, 0.12, 0.12), mat)
-	_add_box(f, Vector3(-sx * 0.4, top, 0), Vector3(0.12, 0.12, sz * 0.82), mat)
-	_add_box(f, Vector3(sx * 0.4, top, 0), Vector3(0.12, 0.12, sz * 0.82), mat)
-
-## Andamio en el lado `side` (0 delante +Z, 1 +X, 2 detras, 3 -X): pies
-## derechos y plataformas de tabla.
-static func _add_scaffold_side(root: Node3D, sx: float, sz: float, h: float, side: int = 0) -> void:
-	var wood := _site_mat("wood")
-	var pole := _site_mat("dark_wood")
-	var nrm := _LookRule.side_normal(side)
-	var length := sx if nrm.x == 0.0 else sz
-	var off := (sz if nrm.x == 0.0 else sx) * 0.5
-	var along := Vector2(-nrm.y, nrm.x)
-	for i in 3:
-		var p := nrm * off + along * lerpf(-length * 0.42, length * 0.42, float(i) / 2.0)
-		_add_cylinder(root, Vector3(p.x, h * 0.5 + 0.1, p.y), 0.035, h + 0.2, pole, 6)
-	var level := 0.7
-	while level < h:
-		var plank := _add_box(root, Vector3(nrm.x * off, level, nrm.y * off), Vector3(length * 0.86, 0.05, 0.28), wood)
-		plank.rotation.y = 0.0 if nrm.x == 0.0 else PI * 0.5
-		level += 0.75
-
-## Malla de varias cajas fundidas en una, con el origen en el eje de la grua
-## (las gira el shader). Cacheada por medidas.
-static func _merged_boxes(key: String, parts: Array) -> ArrayMesh:
-	if _site_meshes.has(key):
-		return _site_meshes[key]
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for p in parts:
-		var box := BoxMesh.new()
-		box.size = p[1]
-		st.append_from(box, 0, Transform3D(Basis.IDENTITY, p[0]))
-	var mesh := st.commit()
-	_site_meshes[key] = mesh
-	return mesh
-
-static func _shader_mesh(parent: Node3D, node_name: String, mesh: Mesh, mat: Material, pos: Vector3, yaw: float) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.name = node_name
-	mi.mesh = mesh
-	mi.material_override = mat
-	mi.position = pos
-	mi.rotation.y = yaw
-	parent.add_child(mi)
-	return mi
-
-## Grua: mastil fijo y, en lo alto, pluma + contrapeso + cable con gancho
-## (tres mallas con el origen en el eje) que gira el shader de SiteFx, cada
-## grua a su ritmo; el gancho sube y baja. `yaw`: hacia donde apunta en reposo.
-static func _add_crane(root: Node3D, base: Vector3, height: float, jib: float, yaw: float = 0.0, color: Color = Color(0.95, 0.72, 0.1)) -> void:
-	_add_box(root, base + Vector3(0, height * 0.5, 0), Vector3(0.16, height, 0.16), _site_color_mat(color))
-	_add_box(root, base + Vector3(0, height - 0.25, 0), Vector3(0.3, 0.3, 0.3), _site_mat("concrete_dark"))
-	var pivot := base + Vector3(0, height, 0)
-	var k := "%.2f" % jib
-	var arm := _merged_boxes("jib:" + k, [[Vector3(-jib * 0.4, 0, 0), Vector3(jib, 0.1, 0.1)],
-		[Vector3(-jib * 0.75, -0.06, 0), Vector3(0.16, 0.08, 0.14)]])
-	_shader_mesh(root, "CraneJib", arm, _SiteFx.crane_material_3d(color), pivot, yaw)
-	var weight := _merged_boxes("weight:" + k, [[Vector3(jib * 0.18, -0.12, 0), Vector3(0.3, 0.24, 0.24)]])
-	_shader_mesh(root, "CraneWeight", weight, _SiteFx.crane_material_3d(COL_CONCRETE), pivot, yaw)
-	var hook := _merged_boxes("hook:" + k, [[Vector3(-jib * 0.75, -0.5, 0), Vector3(0.025, 1.0, 0.025)],
-		[Vector3(-jib * 0.75, -1.02, 0), Vector3(0.14, 0.12, 0.14)]])
-	_shader_mesh(root, "CraneHook", hook, _SiteFx.crane_material_3d(COL_DARK_IRON, 0.55), pivot, yaw)
-
-## Banderin en su palo: el palo es fijo y la tela la ondea el shader de SiteFx.
-static func _add_flag(parent: Node3D, foot: Vector3, pole_h: float, color: Color) -> void:
-	_add_cylinder(parent, foot + Vector3(0, pole_h * 0.5, 0), 0.025, pole_h, _site_mat("dark_wood"), 6)
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.42, 0.24)
-	quad.subdivide_width = 4
-	quad.center_offset = Vector3(0.21, 0, 0)
-	var mi := _shader_mesh(parent, "SiteFlag", quad, _SiteFx.flag_material_3d(color), foot + Vector3(0.02, pole_h - 0.14, 0), 0.0)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-
-## Chispas o polvo de obra (hoja animada de BuildingFx). "" = nada.
-static func _add_site_fx(root: Node3D, kind: String, pos: Vector3, size: float) -> void:
-	if kind == "":
-		return
-	var q := _Fx.quad_3d(kind, size, "site" if kind == "dust" else "")
-	q.name = "SiteFx_" + kind
-	q.position = pos + Vector3(0, size * 0.3, 0)
-	root.add_child(q)
-
-## Andamio alrededor de un edificio que se esta MEJORANDO: el edificio sigue a
-## la vista y el andamio dice que hay obra. Raiz "UpgradeScaffold".
-static func create_scaffold(footprint: Vector2i, cell_size: float, height: float) -> Node3D:
-	var d := _foot_dims(footprint, cell_size)
-	var root := Node3D.new()
-	root.name = "UpgradeScaffold"
-	var h := maxf(1.0, height)
-	var pole := _site_mat("dark_wood")
-	var wood := _site_mat("wood")
-	for s in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1), Vector2(0, 1), Vector2(0, -1)]:
-		_add_cylinder(root, Vector3(s.x * d.x * 0.52, h * 0.5, s.y * d.y * 0.52), 0.035, h, pole, 6)
-	var level := 0.8
-	while level < h:
-		_add_box(root, Vector3(0, level, d.y * 0.52), Vector3(d.x * 1.04, 0.05, 0.22), wood)
-		_add_box(root, Vector3(0, level, -d.y * 0.52), Vector3(d.x * 1.04, 0.05, 0.22), wood)
-		level += 0.9
-	_add_box(root, Vector3(0, h * 0.5, d.y * 0.53), Vector3(d.x, 0.07, 0.03), _site_mat("hazard"))
-	return root
-
-## Escombros de una ruina, alrededor del modelo hundido y tiznado: suelo
-## quemado, montones de cascote, un muro roto y vigas carbonizadas al aire.
-## Determinista por `seed_val`: la misma ruina se ve igual tras cargar.
-## Raiz "RuinOverlay".
-static func create_ruin_overlay(footprint: Vector2i, cell_size: float, seed_val: int = 0) -> Node3D:
-	var d := _foot_dims(footprint, cell_size)
-	var n := clampi(maxi(footprint.x, footprint.y), 1, 3)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_val
-	var root := Node3D.new()
-	root.name = "RuinOverlay"
-	_add_box(root, Vector3(0, 0.015, 0), Vector3(d.x * 1.05, 0.03, d.y * 1.05), _site_mat("scorch"))
-	var rubble := _site_mat("rubble")
-	var dark := _site_mat("concrete_dark")
-	for k in 3 + n * 2:
-		var p := Vector3(rng.randf_range(-0.45, 0.45) * d.x, 0.0, rng.randf_range(-0.45, 0.45) * d.y)
-		var s := Vector3(rng.randf_range(0.25, 0.6), rng.randf_range(0.12, 0.35), rng.randf_range(0.25, 0.6)) * (0.8 + 0.2 * n)
-		var b := _add_box(root, p + Vector3(0, s.y * 0.4, 0), s, rubble if k % 2 == 0 else dark)
-		b.rotation = Vector3(rng.randf_range(-0.3, 0.3), rng.randf() * TAU, rng.randf_range(-0.3, 0.3))
-	# Muro roto: tres trozos de altura decreciente en el lado de atras.
-	var wall_h := [1.1, 0.7, 0.35]
-	for i in 3:
-		var w := d.x * 0.26
-		var hh: float = float(wall_h[i]) * (0.8 + 0.25 * n)
-		_add_box(root, Vector3(-d.x * 0.33 + i * w, hh * 0.5, -d.y * 0.45), Vector3(w * 0.92, hh, 0.16), dark)
-	# Vigas carbonizadas clavadas en angulo: la silueta que se lee de lejos.
-	var char_mat := _site_mat("char")
-	for k in 2 + n:
-		var beam := _add_box(root, Vector3(rng.randf_range(-0.3, 0.3) * d.x, 0.6, rng.randf_range(-0.3, 0.3) * d.y), Vector3(0.12, 1.4 + 0.3 * n, 0.12), char_mat)
-		beam.rotation = Vector3(rng.randf_range(0.4, 0.9) * (1.0 if k % 2 == 0 else -1.0), rng.randf() * TAU, rng.randf_range(-0.3, 0.3))
-	return root

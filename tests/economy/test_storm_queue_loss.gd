@@ -25,6 +25,8 @@ func before_test() -> void:
 	_saved_resources = _resource_snapshot()
 	_saved_army = ArmyManager.get_save_data()
 	ArmyManager.reset()
+	# La comida de la bolsa (2026-10-04) le quitaria sitio al reembolso.
+	ResourceManager.set_amounts({"food": 0})
 	_notices.clear()
 	EventBus.notification_posted.connect(_on_notification)
 	# Se entra y se sale de la tormenta en cada prueba, asi que el cielo tiene

@@ -61,6 +61,9 @@ func before_test() -> void:
 	StormManager.reset()
 	ResourceManager.set_era(1)
 	ResourceManager.set_warehouse_count(0)
+	# Comida de sobra para unos ciclos (2026-10-04): lo que dejo la suite anterior
+	# no puede convertir cada paso en "compra comida".
+	ResourceManager.set_amounts({"food": 400})
 	# La colonia nueva de verdad trae su Nucleo (+5 de aforo): sin el no habria ni
 	# los obreros del primer aserradero.
 	_build("nucleo")
@@ -179,6 +182,11 @@ func _take(step: Dictionary) -> void:
 			TechTreeManager._apply_tech_bonus(TechTreeManager.get_tech(String(step["id"])))
 		"sell":
 			MarketManager.sell(String(step["id"]), int(step["amount"]))
+		"buy":
+			# Comprar comida con el oro que sobra (paso de hambre, 2026-10-12). El
+			# paso no tiene coste propio (step_cost), asi que _give ya vacio la
+			# bolsa: entra lo comprado, que es lo que hace pasar pagina.
+			ResourceManager.add(ResourceManager.name_to_type(String(step["id"])), int(step["amount"]))
 		"sortie":
 			# Sale y la gana: lo que cuenta aqui es que el panel pase pagina.
 			assert_bool(bool(CombatManager.can_launch({String(step["id"]): 1})["ok"])).is_true()
@@ -209,6 +217,10 @@ func _assert_readable(step: Dictionary, where: String) -> void:
 func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 	# Partida nueva de verdad: la primera escaramuza esta por hacer.
 	TutorialManager.first_sortie_done = false
+	# La bolsa de una partida nueva (con la comida de salida, 2026-10-04).
+	var start := {"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0}
+	start.merge(GameConfig.starting_resources, true)
+	ResourceManager.set_amounts(start)
 	var visited: Array = []
 	var guard := 0
 	while not ProgressionManager.is_final_audit_pending():
@@ -230,7 +242,9 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 			ProgressionManager.summon_final_audit()
 
 	# El orden de la linea, en la secuencia visitada (con lo que haya en medio).
-	var expected: Array = ["build:sawmill", "build:gold_mine", "build:house", "build:sawmill",
+	# La Granja ocupa dos obreros: la primera casa puede llegar antes que la mina,
+	# como paso de apoyo, asi que aqui no se exige su sitio (2026-10-04).
+	var expected: Array = ["build:sawmill", "build:farm", "build:gold_mine", "build:market",
 		"build:warehouse", "build:foundry", "build:barracks", "train:artillery", "sortie:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
 		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]
@@ -262,11 +276,13 @@ func test_a_ruined_producer_is_repaired_before_anything_else() -> void:
 ## La mejora que no cabe en la bolsa no se pide a ciegas: primero el almacen.
 func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
-	for id in ["sawmill", "gold_mine", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
 			"refinery", "tower", "tower", "headquarters"]:
 		_build(id)
 	for i in range(Objectives.GARRISON_UNITS):
 		_add_unit("artillery")
+	# Comida para unos ciclos: sin ella el paso seria comprarla (2026-10-04).
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 400})
 	# Era 3 con un almacen: 1000 + 500 = 1500, y la mejora a nivel 2 cuesta 2000.
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("build")
@@ -278,7 +294,7 @@ func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 ## Una base de era 3 que ya produce de todo y con la bolsa sana: lo que se
 ## prueba despues es el asedio, no la economia.
 func _a_running_base() -> void:
-	for id in ["sawmill", "gold_mine", "house", "foundry", "barracks", "refinery"]:
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "foundry", "barracks", "refinery"]:
 		_build(id)
 	ResourceManager.set_amounts({"gold": 400, "wood": 100, "steel": 200, "oil": 100})
 
@@ -298,6 +314,11 @@ func test_a_summoned_siege_with_a_full_garrison_says_let_them_come() -> void:
 
 func test_a_summoned_siege_short_of_armour_asks_for_vehicles_first() -> void:
 	_summon_with({"vehicle": 2})
+	# El blindado pide 8 vigas desde balance/huecos: aqui estan, o el paso seria
+	# hacerlas (make, que tambien sirve al blindado). Y sin madera de sobra: con
+	# la gente al tope el panel gastaria lo que sobra en otra casa
+	# (house_room_step), que es otro caso.
+	ResourceManager.set_amounts({"wood": 0, "beams": 40})
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("train")
 	assert_str(String(step["id"])).is_equal("vehicle")
@@ -310,6 +331,8 @@ func test_after_a_lost_siege_the_panel_rebuilds_then_resummons() -> void:
 	ProgressionManager.final_audit.begin({"infantry": 3})
 	ProgressionManager.final_audit.lose()
 	ArmyManager.reset()
+	# Las vigas del blindado (balance/huecos), como en el caso de arriba.
+	ResourceManager.set_amounts({"wood": 0, "beams": 40})
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("rebuild")
 	assert_str(String(step["id"])).is_equal("vehicle")
@@ -319,6 +342,43 @@ func test_after_a_lost_siege_the_panel_rebuilds_then_resummons() -> void:
 	step = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("resummon")
 	_assert_readable(step, "reconvocar")
+
+## La espera muerta de la era 3 (docs/22 §11): bolsa casi llena, el paso espera
+## acero que llega despacio y sobra oro y madera que el paso no pide. El panel no
+## dice "espera": gasta lo que sobra en subir la Fundicion, sin tocar lo del paso.
+func test_a_full_bag_waiting_on_a_slow_resource_upgrades_its_producer_with_the_surplus() -> void:
+	_a_running_base()
+	ResourceManager.set_warehouse_count(3)
+	# Las vigas del blindado (balance/huecos) ya hechas: lo que falta es solo el
+	# acero lento. Un material que falta no tiene productor que subir (sale del
+	# taller, paso "make").
+	ResourceManager.set_amounts({"beams": 40})
+	var target := {"kind": "train", "id": "vehicle", "count": Objectives.SIEGE_VEHICLES}
+	var upgrade := {"kind": "upgrade", "id": "foundry", "level": 2, "pick": "lowest"}
+	var need: Dictionary = Objectives.step_cost(target)
+	var up: Dictionary = Objectives.step_cost(upgrade)
+	# La mejora de la Fundicion no pide acero (si lo pidiera, no habria sobrante).
+	assert_int(int(up.get(ResourceManager.Type.STEEL, 0))).is_equal(0)
+	var gold: int = int(need.get(ResourceManager.Type.GOLD, 0)) + int(up.get(ResourceManager.Type.GOLD, 0))
+	var oil: int = int(need.get(ResourceManager.Type.OIL, 0)) + int(up.get(ResourceManager.Type.OIL, 0))
+	var cap: int = ResourceManager.get_storage_cap()
+	var wood: int = int(float(cap) * 0.85) - gold - oil
+	assert_int(wood).is_greater_equal(int(up.get(ResourceManager.Type.WOOD, 0)))
+	ResourceManager.set_amounts({"gold": gold, "wood": wood, "steel": 0, "oil": oil, "food": 0})
+	# Acero a 0,1 por segundo: los 180 del blindado tardan media hora.
+	var net := {"gold": 5.0, "wood": 5.0, "steel": 0.1, "oil": 5.0, "food": 5.0}
+	var step: Dictionary = Objectives._surplus_upgrade_step(target, net)
+	assert_str(String(step.get("kind", ""))).is_equal("upgrade")
+	assert_str(String(step.get("id", ""))).is_equal("foundry")
+	assert_str(String(step.get("why", ""))).is_equal("OBJ_WHY_SURPLUS_UPGRADE")
+	_assert_readable(step, "mejora con lo que sobra")
+	# Sin oro de sobra, la mejora retrasaria el paso: no se pide.
+	ResourceManager.set_amounts({"gold": int(need.get(ResourceManager.Type.GOLD, 0)), "wood": wood,
+		"steel": 0, "oil": oil, "food": 0})
+	assert_bool(Objectives._surplus_upgrade_step(target, net).is_empty()).is_true()
+	# Con la bolsa holgada manda el productor nuevo de siempre, no esta mejora.
+	ResourceManager.set_amounts({"gold": gold, "wood": 0, "steel": 0, "oil": oil, "food": 0})
+	assert_bool(Objectives._surplus_upgrade_step(target, net).is_empty()).is_true()
 
 ## Ganada la partida y pulsado "Seguir jugando", el panel no vuelve a pedir el
 ## Cuartel General ni el asedio: la isla es del jugador.
@@ -361,7 +421,7 @@ func _panel_says(node: Node, text: String) -> bool:
 ## jugador cuadrando los cuatro recursos al centimo.
 func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
-	for id in ["sawmill", "gold_mine", "gold_mine", "gold_mine", "house", "house", "house", "house", "house", "sawmill",
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "gold_mine", "gold_mine", "house", "house", "house", "house", "house", "sawmill",
 			"warehouse", "warehouse", "warehouse", "warehouse", "warehouse", "foundry", "barracks",
 			"refinery", "tower", "tower", "headquarters"]:
 		_build(id)
@@ -372,8 +432,13 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	# se vigila es que antes de la mejora final aparezca la tecnologia de almacen.
 	var research: Array = []
 	var step: Dictionary = {}
-	for i in range(30):
+	var seen: Array = []
+	# Con la bolsa a cero tras cada paso (_give) el acero va lento y el panel pide
+	# antes fundiciones, refinerias y sus mejoras hasta los topes por era: el
+	# camino es largo, no un bucle (60 vueltas se quedaban cortas desde el 14-10).
+	for i in range(250):
 		step = Objectives.next_step()
+		seen.append("%s:%s" % [step.get("kind", ""), step.get("id", "")])
 		if String(step["kind"]) == "upgrade" and int(step.get("level", 0)) == 3:
 			break
 		_assert_readable(step, "antes de la mejora final")
@@ -384,8 +449,8 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	assert_array(research).override_failure_message(
 		"la mejora final se pidio sin pasar por las tecnologias de almacen").is_not_empty()
 	assert_str(String(research[0])).is_equal("log_1")
-	assert_str(String(step["kind"])).is_equal("upgrade")
-	assert_int(int(step["level"])).is_equal(3)
+	assert_str(String(step["kind"])).override_failure_message(str(seen)).is_equal("upgrade")
+	assert_int(int(step.get("level", 0))).override_failure_message(str(seen) + str(step)).is_equal(3)
 	# Y con la holgura, la mejora ya no es el 100% de la bolsa.
 	assert_int(Objectives._cost_total(Objectives.step_cost(step))).is_less(ResourceManager.get_storage_cap())
 
@@ -399,7 +464,7 @@ func test_the_builder_skips_the_army_and_the_sandbox_has_no_goal() -> void:
 	var saved_result: String = GameMode.run_result
 	GameMode.begin_run(GameMode.Mode.BUILDER)
 	var visited: Array = []
-	for i in range(80):
+	for i in range(160):
 		var step: Dictionary = Objectives.next_step()
 		if String(step["kind"]) == "sandbox":
 			break
@@ -431,7 +496,7 @@ func test_the_builder_skips_the_army_and_the_sandbox_has_no_goal() -> void:
 
 ## Una base de era 1 con el cuartel en pie, sin tropa.
 func _a_base_with_barracks() -> void:
-	for id in ["sawmill", "gold_mine", "house", "sawmill", "warehouse", "foundry", "barracks"]:
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "sawmill", "warehouse", "foundry", "barracks"]:
 		_build(id)
 	ResourceManager.set_amounts({"gold": 300, "wood": 200, "steel": 50})
 
@@ -498,3 +563,30 @@ func test_with_the_first_sortie_done_the_flow_is_unchanged() -> void:
 	for row in Objectives.route():
 		if String(row["text"]) == Tr.t("OBJ_ROUTE_FIRST_SORTIE"):
 			assert_bool(bool(row["done"])).is_true()
+
+# ── Requisitos y torres del asedio (2026-10-12) ──────────────────────
+
+## Un paso cuyo edificio pide otro en pie antes (building_prerequisites) no se
+## propone a ciegas: primero el requisito, y el requisito del requisito.
+func test_a_step_with_missing_prerequisites_asks_for_them_first() -> void:
+	var step: Dictionary = Objectives.prerequisite_step({"kind": "build", "id": "refinery"})
+	# Sin nada en pie: Refineria -> Fundicion -> Aserradero.
+	assert_str(String(step.get("id", ""))).is_equal("sawmill")
+	assert_str(String(step.get("why", ""))).is_equal("OBJ_WHY_PREREQUISITE")
+	_assert_readable(step, "requisito")
+
+func test_a_step_with_its_prerequisites_standing_is_left_alone() -> void:
+	for id in ["sawmill", "gold_mine", "house", "warehouse", "foundry", "barracks"]:
+		_build(id)
+	var saved: Array = GameConfig.building_prerequisites["refinery"].duplicate()
+	GameConfig.building_prerequisites["refinery"] = ["foundry", "barracks"]
+	assert_bool(Objectives.prerequisite_step({"kind": "build", "id": "refinery"}).is_empty()).is_true()
+	GameConfig.building_prerequisites["refinery"] = saved
+
+## La linea pide para el asedio tantas torres como dotaciones caben a la vez.
+func test_the_siege_towers_follow_the_crew_cap() -> void:
+	var entry := {"kind": "build", "id": "tower", "count_from": "audit_towers"}
+	var saved: int = GameConfig.storm_tower_garrison_max
+	GameConfig.storm_tower_garrison_max = 4
+	assert_int(Objectives.entry_count(entry)).is_equal(4)
+	GameConfig.storm_tower_garrison_max = saved

@@ -91,7 +91,10 @@ const Parking := preload("res://tests/save/save_parking.gd")
 func before(do_skip := Parking.in_player_dir(), skip_reason := "Carpeta de usuario del jugador: lanza los tests con tools/run_tests.sh") -> void:
 	pass
 
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 const BACKUP_PATH := "user://save_game.full_campaign.bak"
 
 ## Los yacimientos, en celdas fijas y lejos del Nucleo (3x3 en el centro de una
@@ -286,7 +289,12 @@ func _open_new_colony() -> void:
 	).is_false()
 
 	# El mapa que sortea la partida nueva se cambia por uno fijo: mismos
-	# yacimientos, mismas celdas, mismo recorrido todas las veces.
+	# yacimientos, mismas celdas, mismo recorrido todas las veces. Y en una isla
+	# cuadrada, toda tierra (la de los guardados de antes): la isla irregular
+	# pondria mar bajo las celdas fijas de DEPOSITS. Lo que aqui se mide es la
+	# economia, no la costa (esa la cubren tests/map/test_island_shape.gd).
+	GridManager.load_save_data({"width": GridManager.grid_width, "height": GridManager.grid_height,
+		"island_seed": GridManager.island_seed})
 	_map.clear_all_deposits()
 	for entry in DEPOSITS:
 		_map.spawn_deposit(String(entry[0]), entry[1] as Vector2i, -1, DEPOSIT_SIZE)
@@ -390,7 +398,9 @@ func _resource_amounts() -> Dictionary:
 ## dinero: fabricarlos es un proceso de su edificio, probado aparte.
 func _bankroll(gold: int = 4000, wood: int = 4000, steel: int = 2000, oil: int = 2000) -> void:
 	ResourceManager.set_amounts({"gold": gold, "wood": wood, "steel": steel, "oil": oil,
-		"planks": 200, "ingots": 200, "beams": 200, "fuel": 200})
+		# Lo que piden juntos el CG nivel 2 y el 3 (balance/huecos: 350+700 vigas,
+		# 140+280 lingotes, 200+400 de combustible), con margen.
+		"planks": 2000, "ingots": 2000, "beams": 2000, "fuel": 2000})
 
 func _count(building_id: String) -> int:
 	var total := 0
@@ -591,6 +601,8 @@ func _industrialise() -> void:
 	_build("barracks")
 	_build("tower")
 	_build("tower")
+	# La Refineria pide el Laboratorio en pie (2026-10-12, docs/22 §11).
+	_build("laboratory")
 	_build("refinery")
 	_bankroll()
 
@@ -682,7 +694,9 @@ func test_each_era_opens_because_of_the_building_the_design_says() -> void:
 	# Cuartel + 2 Torres es el hito del Comandante.
 	assert_bool(ProgressionManager.is_milestone_completed("military_ready")).is_true()
 
-	# ── La Refineria abre la Era 3 ──
+	# ── La Refineria abre la Era 3 (con el Laboratorio en pie, que la pide) ──
+	_build("laboratory")
+	assert_int(ProgressionManager.current_era).is_equal(2)
 	var refinery: Node3D = _place("refinery")
 	assert_int(ProgressionManager.current_era).override_failure_message(
 		"la era avanzo al COLOCAR la Refineria, no al terminarla").is_equal(2)
@@ -894,10 +908,12 @@ func _first_node_of(building_id: String) -> Node3D:
 	return null
 
 ## Lo que un edificio rinde en un ciclo de produccion, ahora mismo.
+## Lo producido se queda en el edificio hasta recogerlo (2026-10-04): se mide
+## ahi, con la mina vaciada antes para que el tope no la tenga parada.
 func _one_production_tick(node: Node3D) -> int:
-	var before: int = ResourceManager.get_amount(ResourceManager.Type.GOLD)
+	ProductionManager._stock.erase(node)
 	ProductionManager._tick_production(GameConfig.get_production_interval(1.0) + 1.0)
-	return ResourceManager.get_amount(ResourceManager.Type.GOLD) - before
+	return int(ProductionManager.get_stock(node).get("gold", 0))
 
 # ══════════════════════════════════════════════════════════════════════
 # 4. Ejercito y expedicion
@@ -914,7 +930,7 @@ func test_an_expedition_comes_home_with_its_survivors_and_its_loot_once() -> voi
 
 	# Almacen vacio y con sitio de sobra: asi el botin que llega se puede comparar
 	# al centimo con lo que la expedicion dice haber ganado.
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0})
 	var stores_before: Dictionary = _resource_amounts()
 
 	assert_bool(CombatManager.launch_expedition(party, EXPEDITION_SEED)).override_failure_message(
@@ -1098,6 +1114,11 @@ func test_the_capstone_summons_the_audit_and_surviving_it_wins_the_game() -> voi
 func test_the_siege_is_hard_but_winnable_with_a_full_garrison() -> void:
 	_open_the_frontier()
 	_industrialise()
+	# Bien preparada es tambien con las cuatro dotaciones de torre que deja salir
+	# storm_tower_garrison_max (balance 2026-10-14, docs/17): con 4-5 oleadas y la
+	# ventaja por tipo, 6 blindados ganan el 86 % con cuatro torres y el 45 % con dos.
+	_build("tower")
+	_build("tower")
 	var won := 0
 	for i in range(SIEGE_SAMPLES):
 		# Guarnicion entera y sana en cada intento: lo que se mide es el asedio,
@@ -1458,9 +1479,10 @@ func test_an_unreadable_save_is_backed_up_and_the_player_is_told() -> void:
 	EventBus.notification_posted.disconnect(probe)
 
 	var backups: Array = []
-	for name in DirAccess.get_files_at("user://"):
-		if name.begins_with("save_game.corrupt-"):
-			backups.append("user://" + name)
+	# La copia va junto a la partida: user://partidas/partida_<id>.corrupt-<fecha>.json
+	for name in DirAccess.get_files_at("user://partidas"):
+		if name.begins_with("partida_%d.corrupt-" % GameManager.active_slot()):
+			backups.append("user://partidas/" + name)
 	assert_array(backups).override_failure_message(
 		"el guardado ilegible se piso sin dejar copia").is_not_empty()
 	var kept: bool = false
@@ -1472,7 +1494,7 @@ func test_an_unreadable_save_is_backed_up_and_the_player_is_told() -> void:
 	assert_bool(kept).is_true()
 	var mentioned: bool = false
 	for msg in told:
-		if String(msg).contains("save_game.corrupt-"):
+		if String(msg).contains(".corrupt-"):
 			mentioned = true
 	assert_bool(mentioned).override_failure_message(
 		"no se aviso al jugador de la copia").is_true()

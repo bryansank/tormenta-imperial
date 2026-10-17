@@ -25,17 +25,38 @@ const MUSIC_MANIFEST := {
 	"era_2": "era_2_industrial",
 	"era_3": "era_3_petroleum",
 	"victory": "victory",
-	# Combat theme. No dedicated track yet: the Era 3 piece is the densest of the
-	# four, so it doubles as the battle theme. Drop a `combat.ogg` and repoint this.
-	"combat": "era_3_petroleum",
+	# Tema de combate propio: "Battle Theme A" de cynicmusic (CC0, OpenGameArt).
+	"combat": "combat",
 }
 
 ## Music key the combat theme is stored under; encounters cross-fade to it.
 const MUSIC_COMBAT_KEY := "combat"
 
+## Tres bucles cortos (40 s, OGG en streaming); suena uno, y dos solo mientras
+## se funden. `day` = olas + pajaros; `night` = grillos + olas suaves, sin
+## pajaros; `storm` = viento + truenos lejanos (los pajaros callan con la
+## Tormenta). Generados por sintesis con tools/gen_ambient_audio.gd (obra propia).
 const AMBIENT_MANIFEST := {
-	"base": "base_ambient",
+	"day": "day",
+	"night": "night",
+	"storm": "storm",
 }
+const AMBIENT_DAY := "day"
+const AMBIENT_NIGHT := "night"
+const AMBIENT_STORM := "storm"
+## Ganancia de cada bucle (dB): el ambiente es una cama, va por debajo de todo.
+const AMBIENT_GAIN_DB := {
+	"day": -4.0,
+	"night": -5.0,
+	"storm": -3.0,
+}
+const AMBIENT_FADE_SECONDS := 4.0
+const AMBIENT_SILENT_DB := -50.0
+
+## Ningun efecto con meta de este nombre suena al pulsarse (boton con sonido propio).
+const UI_SILENT_META := "no_click_sfx"
+## Tras un tablero ganado ya ha sonado la fanfarria: el Diezmo repelido no la pisa.
+const TITHE_AFTER_VICTORY_MSEC := 2500
 
 const SFX_MANIFEST := {
 	"build_place": "build_place",
@@ -52,35 +73,61 @@ const SFX_MANIFEST := {
 	"process_done": "process_done",
 	"mining_done": "mining_done",
 	"unit_ready": "unit_ready",
-	"ui_click": "ui_click",
+	"ui_click": "ui_click",               # cualquier boton (enganche automatico)
+	"ui_toggle": "ui_toggle",             # interruptores, casillas y pestanas
 	"insufficient": "insufficient",
-	# ── Combat (T042) ── every key below reuses a clip that already ships; the
-	# ideal replacement for each one is listed in assets/audio/MANIFEST.md.
-	"combat_start": "event_danger",       # encounter_started: alarm, the fight is on
-	"combat_hit": "build_place",          # unit_attacked: heavy metallic thunk
-	"combat_unit_lost": "demolish",       # unit_died: collapse / debris
-	"combat_victory": "milestone",        # encounter_ended(true): fanfare stamp
-	"combat_defeat": "insufficient",      # encounter_ended(false) / lost expedition
-	"expedition_start": "unit_ready",     # expedition_started: military whistle
-	"expedition_return": "era_up",        # expedition_ended(victory): brass sting
-	"audit_summoned": "event_danger",     # final_audit_summoned: the bell tolls
-	"storm_halted": "unlock",             # storm_halted_forever: the sky clears
-	# Rango del gobernador: alias del toque de laton de la era (solo coincide
-	# con el al cambiar de era, y la subida suele llegar con una obra o un ciclo).
-	"rank_up": "era_up",                  # governor_rank_up: a promotion sting
+	# ── Combate: cada clave tiene su clip (ver assets/audio/MANIFEST.md) ──
+	"combat_start": "combat_start",       # encounter_started: golpe de tambor
+	"combat_hit": "combat_hit",           # unit_attacked: impacto metalico
+	"combat_unit_lost": "combat_unit_lost",  # unit_died: estallido sordo
+	"combat_victory": "combat_victory",   # encounter_ended(true): saxo que sube
+	"combat_defeat": "combat_defeat",     # encounter_ended(false) / expedicion perdida
+	"expedition_start": "expedition_start",  # expedition_started: redoble corto
+	"expedition_return": "expedition_return",  # expedition_ended(victoria)
+	"audit_summoned": "audit_summoned",   # final_audit_summoned: campana grave
+	"storm_halted": "storm_halted",       # storm_halted_forever: acorde claro
+	"rank_up": "rank_up",                 # governor_rank_up: toque de ascenso
+	# ── La Tormenta ──
+	"storm_warning": "storm_warning",     # fase Aviso: sirena lejana (sintesis)
+	"storm_thunder": "storm_thunder",     # fase Tormenta: trueno (sintesis)
+	"tithe_demanded": "tithe_demanded",   # fase Diezmo: campana
+	"tithe_collected": "tithe_collected", # tithe_resolved: se lo llevaron (monedas)
+	"tithe_repelled": "tithe_repelled",   # tithe_resolved: no se llevaron nada
+	# ── Comida (rama comida-granja-recoger; solo si la senal existe) ──
+	"collect": "collect",                 # production_collected: recoger produccion
+	"harvest": "harvest",                 # production_collected con comida: cosecha
 }
 
-## Ganancia por clip (dB), por NOMBRE DE FICHERO: las claves de combate reusan
-## clips y se llevan su misma ganancia. Los efectos vienen masterizados casi a
+## Ganancia por clip (dB), por NOMBRE DE FICHERO: una clave que reuse el clip de
+## otra se lleva su misma ganancia. Los efectos vienen masterizados casi a
 ## 0 dBFS (era_up pasa de 0 y recorta) y sonaban ~15 dB por encima de la musica
 ## (diagnostico de jugabilidad, bug 4: el volumen inicial era demasiado alto). Se atenuan aqui en vez de
-## reescribir los ficheros: ui_click suena en cada boton y va el mas bajo.
+## reescribir los ficheros: los clics suenan en cada boton y van los mas bajos.
+## Los jingles de saxo vienen ~9 dB por debajo de los de acero: bajan menos.
 const SFX_GAIN_DB := {
 	"era_up": -11.0,
-	"ui_click": -10.0,
+	"ui_click": -13.0,
+	"ui_toggle": -15.0,
 	"build_place": -8.0,
 	"event_danger": -8.0,
 	"milestone": -8.0,
+	"combat_start": -9.0,
+	"combat_hit": -13.0,
+	"combat_unit_lost": -14.0,
+	"combat_victory": -4.0,
+	"combat_defeat": -4.0,
+	"expedition_start": -9.0,
+	"expedition_return": -4.0,
+	"audit_summoned": -6.0,
+	"storm_halted": -9.0,
+	"rank_up": -10.0,
+	"storm_warning": -9.0,
+	"storm_thunder": -8.0,
+	"tithe_demanded": -7.0,
+	"tithe_collected": -3.0,
+	"tithe_repelled": -9.0,
+	"collect": -3.0,
+	"harvest": -12.0,
 }
 ## Lo que no esta en SFX_GAIN_DB: todos los efectos se bajan algo.
 const SFX_DEFAULT_GAIN_DB := -6.0
@@ -95,7 +142,12 @@ var _sfx_players: Array[AudioStreamPlayer] = []
 var _sfx_next: int = 0
 var _sfx_last_msec: Dictionary = {}    # key → Time.get_ticks_msec() of its last play
 var _music_players: Array[AudioStreamPlayer] = []  # [0]=active, [1]=fading — swapped on change
-var _ambient_player: AudioStreamPlayer
+var _ambient_players: Dictionary = {}  # ambient key → AudioStreamPlayer
+var _ambient_tweens: Dictionary = {}   # ambient key → Tween del fundido en curso
+var _ambient_key: String = ""          # el bucle que deberia sonar ("" = ninguno)
+var _storm_phase: int = -1             # ultima fase de la Tormenta oida (-1 = ninguna)
+var _night: bool = false               # DayClock: es de noche (fase NIGHT)
+var _hooked_buttons: Dictionary = {}   # instance_id → true: botones ya enganchados
 var _current_music_key: String = ""
 var _music_before_combat: String = ""  # what was playing when the first encounter opened
 var _combat_session: int = 0           # bumps per encounter_started; guards the deferred restore
@@ -109,9 +161,11 @@ func _ready() -> void:
 	_build_players()
 	_load_manifest(MUSIC_MANIFEST, MUSIC_DIR)
 	_load_manifest(AMBIENT_MANIFEST, AMBIENT_DIR)
+	_make_ambient_loop()
 	_load_manifest(SFX_MANIFEST, SFX_DIR)
 	_apply_volumes()
 	_connect_events()
+	_hook_ui_sounds()
 
 # ── Setup ─────────────────────────────────────────────────────────────
 
@@ -138,10 +192,13 @@ func _build_players() -> void:
 		add_child(m)
 		_music_players.append(m)
 
-	_ambient_player = AudioStreamPlayer.new()
-	_ambient_player.bus = BUS_AMBIENT
-	_ambient_player.finished.connect(_on_ambient_finished)
-	add_child(_ambient_player)
+	for key in AMBIENT_MANIFEST:
+		var a := AudioStreamPlayer.new()
+		a.bus = BUS_AMBIENT
+		a.volume_db = AMBIENT_SILENT_DB
+		a.finished.connect(_on_ambient_finished.bind(String(key)))
+		add_child(a)
+		_ambient_players[key] = a
 
 func _load_manifest(manifest: Dictionary, dir: String) -> void:
 	for key in manifest:
@@ -153,6 +210,20 @@ func _load_manifest(manifest: Dictionary, dir: String) -> void:
 				if stream is AudioStream:
 					_streams[key] = stream
 				break
+
+## Los bucles de ambiente se marcan en bucle aqui, sin depender de como los
+## importe el editor (el reinicio en `finished` queda de red por si acaso).
+func _make_ambient_loop() -> void:
+	for key in AMBIENT_MANIFEST:
+		var stream: AudioStream = _streams.get(key)
+		if stream == null:
+			continue
+		if stream is AudioStreamWAV:
+			var wav := stream as AudioStreamWAV
+			wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			wav.loop_end = wav.data.size() / (4 if wav.stereo else 2)
+		elif "loop" in stream:
+			stream.set("loop", true)
 
 # ── Volume control (public — wire to a settings UI later) ─────────────
 
@@ -310,14 +381,57 @@ func play_music(key: String) -> void:
 func play_music_for_era(era: int) -> void:
 	play_music("era_%d" % clampi(era, 1, 3))
 
+## Arranca el ambiente que toca segun la fase de la Tormenta (dia o tormenta).
 func start_ambient() -> void:
-	if _ambient_player.playing:
-		return
-	var stream: AudioStream = _streams.get("base")
-	if stream == null:
-		return
-	_ambient_player.stream = stream
-	_ambient_player.play()
+	set_ambient(_ambient_for_phase(_storm_phase, _night))
+
+## Funde el ambiente hacia `key` ("day", "storm" o "" para silencio). Solo hay
+## dos reproductores y solo los dos suenan durante el fundido. Si falta el
+## fichero de `key`, el otro se apaga igual y no suena nada (sin error).
+func set_ambient(key: String) -> void:
+	var same := key == _ambient_key
+	_ambient_key = key
+	for k in _ambient_players:
+		var p: AudioStreamPlayer = _ambient_players[k]
+		if k == key:
+			var stream: AudioStream = _streams.get(k)
+			if stream == null:
+				continue
+			if same and p.playing:
+				continue
+			if not p.playing:
+				p.stream = stream
+				p.volume_db = AMBIENT_SILENT_DB
+				p.play()
+			_fade_ambient(String(k), float(AMBIENT_GAIN_DB.get(k, -4.0)), false)
+		elif p.playing:
+			_fade_ambient(String(k), AMBIENT_SILENT_DB, true)
+
+## The ambience loop wanted right now ("" = none). For tests and probes.
+func get_ambient_key() -> String:
+	return _ambient_key
+
+func _fade_ambient(key: String, target_db: float, stop_after: bool) -> void:
+	var p: AudioStreamPlayer = _ambient_players[key]
+	var old: Tween = _ambient_tweens.get(key)
+	if old != null and old.is_valid():
+		old.kill()
+	var tw := create_tween()
+	tw.tween_property(p, "volume_db", target_db, AMBIENT_FADE_SECONDS)
+	if stop_after:
+		tw.tween_callback(func() -> void:
+			if _ambient_key != key:
+				p.stop())
+	_ambient_tweens[key] = tw
+
+## Que bucle toca. La Tormenta manda sobre todo: la ceniza trae el viento y no
+## se va hasta que vuelve la calma (el Aviso aun no cuenta). Sin Tormenta, de
+## noche los grillos; el resto del dia (alba y ocaso incluidos), olas y pajaros.
+func _ambient_for_phase(phase: int, night: bool = false) -> String:
+	if phase == StormCycle.Phase.ASH or phase == StormCycle.Phase.STORM \
+			or phase == StormCycle.Phase.TITHE:
+		return AMBIENT_STORM
+	return AMBIENT_NIGHT if night else AMBIENT_DAY
 
 func stop_music() -> void:
 	_current_music_key = ""
@@ -338,9 +452,11 @@ func _exit_tree() -> void:
 	for p in _sfx_players:
 		p.stop()
 		p.stream = null
-	if _ambient_player != null:
-		_ambient_player.stop()
-		_ambient_player.stream = null
+	_ambient_key = ""
+	for k in _ambient_players:
+		var a: AudioStreamPlayer = _ambient_players[k]
+		a.stop()
+		a.stream = null
 	_streams.clear()
 
 # ── Loop keep-alive (in case the imported clip isn't flagged as looping) ──
@@ -350,9 +466,10 @@ func _on_music_finished(player: AudioStreamPlayer) -> void:
 	if player == _music_players[0] and not _current_music_key.is_empty() and GameConfig.audio_music_enabled:
 		player.play()
 
-func _on_ambient_finished() -> void:
-	if _ambient_player.stream != null:
-		_ambient_player.play()
+func _on_ambient_finished(key: String) -> void:
+	var p: AudioStreamPlayer = _ambient_players[key]
+	if key == _ambient_key and p.stream != null:
+		p.play()
 
 # ── EventBus wiring ───────────────────────────────────────────────────
 
@@ -381,19 +498,16 @@ func _connect_events() -> void:
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
 	EventBus.governor_rank_up.connect(_on_rank_up)
-	# Final Audit. These signals arrive with the Storm's final chapter; until that
-	# branch lands they may not exist, so they are wired only when present.
-	_connect_optional("final_audit_summoned", _on_final_audit_summoned)
-	_connect_optional("storm_halted_forever", _on_storm_halted_forever)
-
-## Connects to an EventBus signal that may not be declared yet. Handlers take
-## optional arguments so they accept whatever arity the signal ends up having.
-func _connect_optional(signal_name: String, handler: Callable) -> void:
-	if not EventBus.has_signal(signal_name):
-		return
-	if EventBus.is_connected(signal_name, handler):
-		return
-	EventBus.connect(signal_name, handler)
+	# Final Audit.
+	EventBus.final_audit_summoned.connect(_on_final_audit_summoned)
+	EventBus.storm_halted_forever.connect(_on_storm_halted_forever)
+	# La Tormenta: el ambiente sigue a la fase y cada cambio relevante suena.
+	EventBus.storm_phase_changed.connect(_on_storm_phase_changed)
+	# Dia y noche (DayClock): de noche cambia el ambiente, nada mas.
+	EventBus.day_phase_changed.connect(_on_day_phase_changed)
+	EventBus.tithe_resolved.connect(_on_tithe_resolved)
+	# Recoger produccion (y la cosecha de la Granja).
+	EventBus.production_collected.connect(_on_production_collected)
 
 func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
 	play_sfx("build_place")
@@ -441,6 +555,10 @@ func _on_insufficient(_res: String, _required: int, _available: int) -> void:
 	play_sfx("insufficient")
 
 func _on_game_started() -> void:
+	# La fase se lee del servicio: una partida guardada en plena Tormenta vuelve
+	# con viento, y una nueva empieza de dia. Sin sonido de cambio de fase.
+	_storm_phase = _current_storm_phase()
+	_night = _current_is_night()
 	start_ambient()
 	# Default to Era 1 music; era_advanced switches tracks as the player progresses.
 	if _current_music_key.is_empty():
@@ -487,6 +605,119 @@ func _on_final_audit_summoned(_a = null, _b = null, _c = null) -> void:
 
 func _on_storm_halted_forever(_a = null, _b = null, _c = null) -> void:
 	play_sfx("storm_halted")
+
+# ── La Tormenta ──────────────────────────────────────────────────────
+
+## De noche segun DayClock (con el ciclo apagado, siempre de dia).
+func _current_is_night() -> bool:
+	return DayClock.is_night()
+
+## Al cambiar la fase del dia solo se elige otro bucle; si la Tormenta esta
+## encima, sigue mandando ella. Sin sonido propio.
+func _on_day_phase_changed(phase = 0, _hour = 0.0) -> void:
+	_night = int(phase) == DayCycle.Phase.NIGHT
+	if not _ambient_key.is_empty():
+		set_ambient(_ambient_for_phase(_storm_phase, _night))
+
+func _current_storm_phase() -> int:
+	return StormManager.get_phase()
+
+## Ambiente al dia con la fase, y un sonido por cada cambio que importa: el
+## Aviso (sirena lejana), la Tormenta encima (trueno) y el Diezmo (campana). La
+## ceniza no suena aparte: la anuncia el viento que entra. Repetir la fase en la
+## que ya se esta (p. ej. CALM tras parar la Tormenta para siempre) no suena.
+func _on_storm_phase_changed(phase: int = 0, _seconds_left: float = 0.0) -> void:
+	var previous := _storm_phase
+	_storm_phase = phase
+	if not _ambient_key.is_empty():
+		set_ambient(_ambient_for_phase(phase, _night))
+	if phase == previous:
+		return
+	match phase:
+		StormCycle.Phase.WARNING:
+			play_sfx("storm_warning")
+		StormCycle.Phase.STORM:
+			play_sfx("storm_thunder")
+		StormCycle.Phase.TITHE:
+			play_sfx("tithe_demanded")
+
+## `paid` es true cuando NO se llevaron nada (repelido, o un modo sin Diezmo) y
+## false cuando cobraron (`taken` dice que). Tras un tablero ganado la fanfarria
+## de victoria ya ha sonado: el repelido no se le pone encima.
+func _on_tithe_resolved(paid = true, taken = {}) -> void:
+	var got: Dictionary = taken if taken is Dictionary else {}
+	if not bool(paid) or not got.is_empty():
+		play_sfx("tithe_collected")
+		return
+	if _played_within("combat_victory", TITHE_AFTER_VICTORY_MSEC):
+		return
+	play_sfx("tithe_repelled")
+
+## True si `key` sono hace menos de `msec`.
+func _played_within(key: String, msec: int) -> bool:
+	if not _sfx_last_msec.has(key):
+		return false
+	return Time.get_ticks_msec() - int(_sfx_last_msec[key]) < msec
+
+# ── Recoger y cosechar ───────────────────────────────────────────────
+
+## Recoger lo de un edificio; si lo recogido es comida, es la cosecha de la
+## Granja. "Recoger todo" emite una vez por edificio en el mismo frame: el
+## limite de rafaga deja un solo sonido.
+func _on_production_collected(_node = null, collected = null, _c = null) -> void:
+	var got: Dictionary = collected if collected is Dictionary else {}
+	play_sfx("harvest" if got.has("food") else "collect")
+
+# ── UI: clic en todos los botones, sin tocar cada panel ──────────────
+
+## Engancha cada BaseButton (y cada TabBar) que entre al arbol, y los que ya
+## esten. Un boton con la meta UI_SILENT_META no suena.
+func _hook_ui_sounds() -> void:
+	get_tree().node_added.connect(_on_node_added_for_ui)
+	_hook_tree.call_deferred(get_tree().root)
+
+func _hook_tree(node: Node) -> void:
+	_on_node_added_for_ui(node)
+	for child in node.get_children(true):
+		_hook_tree(child)
+
+func _on_node_added_for_ui(node: Node) -> void:
+	if not (node is BaseButton or node is TabBar):
+		return
+	var id := node.get_instance_id()
+	if _hooked_buttons.has(id):
+		return
+	# Un boton que sale y vuelve a entrar (reparentado) conserva su conexion: por
+	# eso se recuerda por id y no se vuelve a enganchar.
+	if _hooked_buttons.size() > 4096:
+		_prune_hooked_buttons()
+	_hooked_buttons[id] = true
+	if node is TabBar:
+		(node as TabBar).tab_clicked.connect(_on_ui_tab_clicked.bind(node))
+	else:
+		(node as BaseButton).pressed.connect(_on_ui_button_pressed.bind(node))
+
+## Olvida los botones ya liberados (los id no se reutilizan).
+func _prune_hooked_buttons() -> void:
+	for id in _hooked_buttons.keys():
+		if not is_instance_id_valid(int(id)):
+			_hooked_buttons.erase(id)
+
+## Interruptores y casillas suenan distinto (mas bajo) que un boton normal.
+func ui_sound_for(btn: BaseButton) -> String:
+	if btn.toggle_mode or btn is CheckBox or btn is CheckButton:
+		return "ui_toggle"
+	return "ui_click"
+
+func _on_ui_button_pressed(btn: BaseButton) -> void:
+	if not is_instance_valid(btn) or btn.has_meta(UI_SILENT_META):
+		return
+	play_sfx(ui_sound_for(btn))
+
+func _on_ui_tab_clicked(_tab: int, bar: TabBar) -> void:
+	if not is_instance_valid(bar) or bar.has_meta(UI_SILENT_META):
+		return
+	play_sfx("ui_toggle")
 
 ## Leaves the combat theme for whatever should be playing now. Only acts while
 ## the combat theme is actually on: if victory (or a future storm theme) took

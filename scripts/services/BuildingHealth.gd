@@ -143,17 +143,41 @@ func repair(node: Node) -> bool:
 ## Se hace con `material_overlay` en vez de tocar el albedo: los edificios son
 ## modelos GLB con sus propios materiales, y sobrescribirlos les borraría la
 ## textura. La capa se pinta encima y se quita poniéndola a null.
+##
+## La capa es compartida (docs/26 §6 punto 8): antes cada golpe creaba un
+## `StandardMaterial3D` nuevo, y tras una Tormenta habia un material unico por
+## edificio herido (el motor no puede agruparlos). Ahora la ceniza va en
+## `ASH_LEVELS` escalones, cada uno un solo material para toda la isla. El
+## escalon se redondea hacia arriba: un rasguño sigue viendose, y la ruina es el
+## mismo casi negro (0,75 de opacidad) de siempre.
+const ASH_LEVELS := 8
+const ASH_MAX_ALPHA := 0.75
+static var _ash_materials: Array = []
+
 func _apply_visual(node: Node) -> void:
 	var ratio: float = get_health_ratio(node)
 	var overlay: StandardMaterial3D = null
 	if ratio < 1.0:
-		overlay = StandardMaterial3D.new()
-		overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		# Cuanto menos vida, más ceniza encima.
-		overlay.albedo_color = Color(0.10, 0.09, 0.08, (1.0 - ratio) * 0.75)
+		overlay = ash_material(ratio)
 	for mesh in _meshes_of(node):
-		mesh.material_overlay = overlay
+		if mesh.material_overlay != overlay:
+			mesh.material_overlay = overlay
+
+## La capa de ceniza para una proporcion de vida (< 1), de la cache.
+static func ash_material(ratio: float) -> StandardMaterial3D:
+	if _ash_materials.is_empty():
+		for i in range(ASH_LEVELS + 1):
+			_ash_materials.append(null)
+	var level: int = clampi(ceili((1.0 - clampf(ratio, 0.0, 1.0)) * ASH_LEVELS - 0.0001), 1, ASH_LEVELS)
+	var mat: StandardMaterial3D = _ash_materials[level]
+	if mat == null:
+		mat = StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		# Cuanto menos vida, más ceniza encima.
+		mat.albedo_color = Color(0.10, 0.09, 0.08, float(level) / ASH_LEVELS * ASH_MAX_ALPHA)
+		_ash_materials[level] = mat
+	return mat
 
 func _meshes_of(node: Node) -> Array:
 	var found: Array = []

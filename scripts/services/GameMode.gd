@@ -250,7 +250,8 @@ static func _tier_num(name: String) -> float:
 	return float(v) if v != null else 1.0
 
 ## Lo acumulado en un edificio sin recoger se estropea con el tiempo. La
-## mecanica la pone feat/comida-granja-recoger; aqui solo la regla.
+## mecanica es la de ProductionManager (GameConfig.spoil_after_seconds, solo
+## Gobernador: GameConfig.game_tier_rules).
 static func spoilage_enabled() -> bool:
 	return bool(tier_rule("spoilage"))
 

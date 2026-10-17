@@ -31,6 +31,11 @@ var _is_open := false
 var _log_entries: Array = []
 var _log_vbox: VBoxContainer
 var _toast_container: VBoxContainer
+## Avisos retenidos mientras hay un tablero de combate abierto (2026-10-14):
+## [mensaje, color]. Van al registro al momento, pero en pantalla salen cuando
+## se cierra el tablero (EventBus.encounter_closed): en plena pelea un aviso de
+## la colonia distrae y, ademas, se pierde antes de que se pueda leer.
+var _held: Array = []
 
 func _ready() -> void:
 	layer = 11
@@ -47,6 +52,9 @@ func _ready() -> void:
 	# vuelve al mapa sin saber que se trajo ni a quien dejo por el camino.
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
+	EventBus.encounter_closed.connect(release_held)
+	# Otra partida: lo retenido era de la anterior.
+	EventBus.game_load_completed.connect(func(): _held.clear())
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -105,7 +113,36 @@ func _on_notification(message: String, category: String, color: Color) -> void:
 	# rutina ("Camino construido", "Poblacion crecio") va solo al registro.
 	if not shows_toast(category):
 		return
+	# Los del propio combate (salida y vuelta de la columna) si salen.
+	if holds_toasts() and category != "combat":
+		_held.append([message, color])
+		return
 	_show_toast(message, color)
+
+## Con un tablero abierto (pelea o parte de la pelea) los avisos esperan.
+static func holds_toasts() -> bool:
+	return CombatManager.is_board_open()
+
+func held_count() -> int:
+	return _held.size()
+
+## Saca lo retenido: los ultimos que caben y, si habia mas, uno que dice
+## cuantos quedan en el registro. Si otro tablero se abrio en la misma llamada
+## (la oleada siguiente del asedio), sigue esperando.
+func release_held() -> void:
+	if _held.is_empty() or holds_toasts():
+		return
+	var cap := MAX_TOASTS_NARROW if UILayoutManager.is_narrow() else MAX_TOASTS
+	var items: Array = _held.duplicate()
+	_held.clear()
+	var extra := 0
+	if items.size() > cap:
+		extra = items.size() - (cap - 1)
+		items = items.slice(items.size() - (cap - 1)) if cap > 1 else []
+	for item in items:
+		_show_toast(String(item[0]), item[1])
+	if extra > 0:
+		_show_toast(Tr.t("MSG_HELD_NOTICES") % extra, UITheme.INFO)
 
 func _on_expedition_started(_expedition_id: int, node_count: int) -> void:
 	_on_notification(Tr.t("MSG_EXPEDITION_STARTED") % node_count, "combat", UITheme.ACCENT)
@@ -197,9 +234,11 @@ func _refresh_log() -> void:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		_log_vbox.add_child(label)
 
-## Que categorias salen en pantalla ademas de ir al registro.
+## Que categorias salen en pantalla ademas de ir al registro. "combat" es la
+## salida y la vuelta de la columna (_on_expedition_started/_ended): pasa fuera
+## de la base y, sin su aviso, el jugador no sabe que se trajo ni a quien perdio.
 static func shows_toast(category: String) -> bool:
-	return category in ["warning", "danger", "notice"]
+	return category in ["warning", "danger", "notice", "combat"]
 
 ## El registro, abierto desde el menu.
 func open_log() -> void:

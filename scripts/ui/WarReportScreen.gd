@@ -17,6 +17,7 @@ extends CanvasLayer
 ## el asedio (los Tasadores no cobran, ya lo dice un aviso) y cuando es el Diezmo
 ## maximo de un asedio perdido, que ya cuenta AuditDefeatScreen.
 
+const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const TextKit := preload("res://scripts/ui/TextKit.gd")
 
 const LAYER := 19
@@ -56,6 +57,8 @@ func _setup_ui() -> void:
 	_root.add_child(_card)
 	var column: VBoxContainer = _card.get_child(0)
 
+	# El pais que firma el parte: bandera y nombre, encima (no alarga el titulo).
+	column.add_child(ColonyByline.new())
 	_kicker = ModalKit.make_text("", "small", UITheme.TEXT_DIM)
 	column.add_child(_kicker)
 	_title = ModalKit.make_text("", "title", UITheme.ACCENT)

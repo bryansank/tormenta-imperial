@@ -28,6 +28,7 @@ func _initialize() -> void:
 	_draw_icon("wood", _paint_log)
 	_draw_icon("steel", _paint_ingot)
 	_draw_icon("oil", _paint_drop)
+	_draw_icon("food", _paint_wheat)
 	_draw_icon("workers", _paint_worker)
 	_draw_icon("morale", _paint_heart)
 	_draw_icon("move", _paint_move_arrows)
@@ -150,6 +151,33 @@ func _paint_drop() -> void:
 	_poly(PackedVector2Array([Vector2(0.25, 0.58), Vector2(0.5, 0.12), Vector2(0.75, 0.58)]), body)
 	_ellipse(Vector2(0.40, 0.62), 0.07, 0.11, Color(0.85, 0.82, 0.92, 0.85))
 
+## Comida (2026-10-04): una espiga de trigo. Forma alargada y vertical, con los
+## granos en dos filas y una hoja verde: no se confunde con la moneda redonda,
+## el tronco tumbado, el lingote ni la gota.
+func _paint_wheat() -> void:
+	var grain := Color(0.93, 0.76, 0.30)
+	var grain_dark := Color(0.62, 0.44, 0.12)
+	var stalk := Color(0.55, 0.62, 0.22)
+	var leaf := Color(0.38, 0.62, 0.20)
+	var leaf_dark := Color(0.22, 0.40, 0.12)
+	# tallo
+	_poly(PackedVector2Array([Vector2(0.47, 0.42), Vector2(0.53, 0.42), Vector2(0.55, 0.94), Vector2(0.49, 0.94)]), stalk)
+	# hoja
+	_poly(PackedVector2Array([Vector2(0.52, 0.80), Vector2(0.84, 0.58), Vector2(0.80, 0.66), Vector2(0.54, 0.86)]), leaf_dark)
+	_poly(PackedVector2Array([Vector2(0.53, 0.79), Vector2(0.80, 0.60), Vector2(0.54, 0.83)]), leaf)
+	# granos: dos filas en zigzag, de abajo arriba, mas pequenos hacia la punta
+	for i in 5:
+		var y := 0.50 - float(i) * 0.085
+		var r := 0.085 - float(i) * 0.008
+		_ellipse(Vector2(0.40, y), r * 1.05, r * 1.45, grain_dark)
+		_ellipse(Vector2(0.40, y), r * 0.8, r * 1.2, grain)
+		_ellipse(Vector2(0.60, y - 0.04), r * 1.05, r * 1.45, grain_dark)
+		_ellipse(Vector2(0.60, y - 0.04), r * 0.8, r * 1.2, grain)
+	# grano de la punta y bigotes
+	_ellipse(Vector2(0.50, 0.10), 0.06, 0.08, grain_dark)
+	_ellipse(Vector2(0.50, 0.10), 0.045, 0.065, grain)
+	_poly(PackedVector2Array([Vector2(0.30, 0.10), Vector2(0.32, 0.09), Vector2(0.40, 0.30), Vector2(0.38, 0.31)]), grain_dark)
+	_poly(PackedVector2Array([Vector2(0.70, 0.06), Vector2(0.72, 0.07), Vector2(0.62, 0.26), Vector2(0.60, 0.25)]), grain_dark)
 ## Obrero: busto con casco de laton y mono azul acero. Es el icono de los
 ## obreros libres en la fila de recursos (ResourceHUD); forma de persona, no de
 ## recurso, para que no se confunda con ninguno de los cuatro.

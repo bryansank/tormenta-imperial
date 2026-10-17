@@ -9,6 +9,8 @@ var _is_open := false
 var _now_title: Label
 var _now_why: Label
 var _now_blocker: Label
+## "Sal de escaramuza: ..." (Objectives.sortie_step), solo cuando hay motivo.
+var _sortie_line: Label
 var _route_box: VBoxContainer
 var _refresh_left := 0.0
 
@@ -27,6 +29,8 @@ func _ready() -> void:
 	_setup_ui()
 	EventBus.objective_panel_toggled.connect(toggle)
 	UIManager.register_panel(self, "ObjectivePanel")
+	# El reloj de refresco solo corre con el panel abierto.
+	set_process(false)
 
 func _setup_ui() -> void:
 	# Root control holds the always-present sidebar button; the modal itself
@@ -112,6 +116,13 @@ func _setup_ui() -> void:
 	_now_blocker = UITheme.make_label("", "body", UITheme.WARNING)
 	_now_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_now_blocker)
+	# Segunda linea (doc 21 §2.4 y §3.6): salir de escaramuza cuando hay motivo.
+	# Va aparte del paso de la linea: no lo sustituye, lo acompana.
+	_sortie_line = UITheme.make_label("", "body", UITheme.CAT_MILITARY.lightened(0.25))
+	_sortie_line.name = "SortieLine"
+	_sortie_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_sortie_line.visible = false
+	content.add_child(_sortie_line)
 
 	# ── EL CAMINO: la linea entera, con lo hecho marcado ──
 	content.add_child(UITheme.make_separator())
@@ -136,6 +147,7 @@ func toggle() -> void:
 		refresh_mode()
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
+	set_process(_is_open)
 	if _is_open:
 		refresh()
 		UIManager.open_panel(self)
@@ -161,18 +173,37 @@ func refresh() -> void:
 	_now_why.text = String(text["why"])
 	_now_blocker.text = String(text["blocker"])
 	_now_blocker.visible = String(text["blocker"]) != ""
+	var sortie: Dictionary = Objectives.sortie_step()
+	if sortie.is_empty():
+		_sortie_line.visible = false
+	else:
+		var sortie_text: Dictionary = Objectives.describe(sortie)
+		_sortie_line.text = "%s\n%s" % [String(sortie_text["title"]), String(sortie_text["why"])]
+		_sortie_line.visible = true
 	_paint_route()
 
 ## La linea de Objectives.LINE, una fila por paso: hecho, el de ahora, o por hacer.
+## Se refresca cada segundo con el panel abierto: las etiquetas que ya hay se
+## reescriben (antes se tiraban y se creaban todas cada vez).
 func _paint_route() -> void:
-	for child in _route_box.get_children():
-		child.queue_free()
-	for row in Objectives.route():
+	var rows: Array = Objectives.route()
+	var labels := _route_box.get_children()
+	for i in rows.size():
+		var row: Dictionary = rows[i]
 		var mark: String = "✔ " if bool(row["done"]) else ("▶ " if bool(row["current"]) else "· ")
 		var color: Color = UITheme.TEXT_DIM if bool(row["done"]) else (UITheme.ACCENT if bool(row["current"]) else UITheme.TEXT)
-		var label := UITheme.make_label(mark + String(row["text"]), "small", color)
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_route_box.add_child(label)
+		var text := mark + String(row["text"])
+		if i < labels.size():
+			var label := labels[i] as Label
+			label.text = text
+			UITheme.set_label_color(label, color)
+		else:
+			var label := UITheme.make_label(text, "small", color)
+			label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_route_box.add_child(label)
+	for i in range(rows.size(), labels.size()):
+		_route_box.remove_child(labels[i])
+		labels[i].queue_free()
 
 func get_now_text() -> Dictionary:
 	return {"title": _now_title.text, "why": _now_why.text, "blocker": _now_blocker.text}

@@ -1,7 +1,8 @@
 extends Node
-## Dev tool: captura la intro del tutorial y un consejo contextual tal y como
-## los ve el jugador, para comprobar a ojo que el texto cabe, se lee y no se
-## sale del panel. Los tests dicen que la logica va; esto dice que se ve.
+## Dev tool: captura el prologo (PrologueScreen, dentro de TutorialPanel) y un
+## consejo contextual (la tarjeta de HelperPanel) tal y como los ve el jugador,
+## para comprobar a ojo que el texto cabe, se lee y no se sale del panel. Los
+## tests dicen que la logica va; esto dice que se ve.
 ##
 ## Uso: borrar user://save_game.json, registrar temporalmente como autoload y
 ## arrancar el juego CON ventana (no headless).
@@ -20,8 +21,9 @@ func _ready() -> void:
 func _run() -> void:
 	var main := get_tree().current_scene
 	var panel: Node = main.get_node_or_null("TutorialPanel") if main != null else null
-	if panel == null:
-		print("[tutorial] ERROR: no hay TutorialPanel en la escena")
+	var helper: Node = main.get_node_or_null("HelperPanel") if main != null else null
+	if panel == null or helper == null:
+		print("[tutorial] ERROR: falta TutorialPanel o HelperPanel en la escena")
 		get_tree().quit()
 		return
 
@@ -29,20 +31,13 @@ func _run() -> void:
 		panel.is_intro_open(), TutorialManager.intro_seen])
 	if not panel.is_intro_open():
 		# Partida ya vista: se fuerza para poder mirarla igual.
-		TutorialManager.show_intro()
+		TutorialManager.show_prologue()
 		await get_tree().process_frame
 
-	await _shot("tutorial_01_intro_p1")
-	panel._next_page()
-	panel._next_page()
-	await _shot("tutorial_02_intro_p3")
-	# La pagina mas larga del lore y la primera de "como se juega".
-	panel.go_to_page(3)
-	await _shot("tutorial_03_intro_p4")
-	panel.go_to_page(6)
-	await _shot("tutorial_04_play_p7")
-	panel.go_to_page(panel.page_count() - 1)
-	await _shot("tutorial_05_play_last")
+	# Un folio por captura (hoy son tres).
+	for page in panel.page_count():
+		panel.go_to_page(page)
+		await _shot("tutorial_%02d_prologue_p%d" % [page + 1, page + 1])
 
 	panel._close()
 	await get_tree().process_frame
@@ -52,9 +47,9 @@ func _run() -> void:
 	EventBus.storm_incoming.emit(30.0)
 	await get_tree().create_timer(0.4).timeout
 	print("[tutorial] consejo en pantalla = %s, vistos = %s" % [
-		panel.is_tip_showing(), TutorialManager.tips_seen])
+		helper.is_tip_showing(), TutorialManager.tips_seen])
 	await _shot("tutorial_06_tip_aviso")
-	panel._dismiss_tip()
+	_dismiss_tip(helper)
 
 	# Y el consejo largo, para ver que tambien cabe.
 	EventBus.tithe_demanded.emit(1)
@@ -62,12 +57,20 @@ func _run() -> void:
 	await _shot("tutorial_07_tip_diezmo")
 
 	# Y el mismo consejo otra vez: no debe salir.
-	panel._dismiss_tip()
+	_dismiss_tip(helper)
 	EventBus.storm_incoming.emit(30.0)
 	await get_tree().process_frame
-	print("[tutorial] repetido el aviso: consejo en pantalla = %s (debe ser false)" % panel.is_tip_showing())
+	print("[tutorial] repetido el aviso: consejo en pantalla = %s (debe ser false)" % helper.is_tip_showing())
 
 	get_tree().quit()
+
+## Cierra la ayuda que este a la vista como si el jugador tocara la ✕, y quita
+## el respiro entre ayudas para que la siguiente salga ya.
+func _dismiss_tip(helper: Node) -> void:
+	var box: PanelContainer = helper.current_box()
+	if box != null:
+		box.finish("closed")
+	helper.skip_gap()
 
 func _shot(file_name: String) -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))

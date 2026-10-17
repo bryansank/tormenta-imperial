@@ -15,6 +15,10 @@ func _ready() -> void:
 	UIManager.register_panel(self, "ProgressPanel.modal")
 	EventBus.milestone_completed.connect(_on_milestone_completed)
 	EventBus.era_advanced.connect(_on_era_advanced)
+	# Hitos y eras que llegan en plena pelea esperan al cierre del tablero.
+	EventBus.encounter_closed.connect(func():
+		if not _toast_busy:
+			_next_toast())
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -124,6 +128,10 @@ func _show_era_toast(era: int) -> void:
 ## lejos de la columna central (Tormenta y objetivo).
 const TOAST_TOP_RATIO := 0.30
 const TOAST_HOLD := 2.2
+## Espera antes de mostrar el logro: llega en el mismo instante que el
+## "¡Construcción completa!" que sube del edificio, y la placa lo tapaba (ronda
+## de pruebas 1.0). Asi primero se lee la obra y luego el logro.
+const TOAST_LEAD := 1.3
 var _toast_queue: Array = []
 var _toast_busy := false
 
@@ -137,7 +145,9 @@ func pending_toasts() -> int:
 	return _toast_queue.size() + (1 if _toast_busy else 0)
 
 func _next_toast() -> void:
-	if _toast_queue.is_empty():
+	# Con un tablero de combate abierto la placa quedaria debajo (capa 11 < 18)
+	# y se gastaria sin verse: la cola espera a EventBus.encounter_closed.
+	if _toast_queue.is_empty() or CombatManager.is_board_open():
 		_toast_busy = false
 		return
 	_toast_busy = true
@@ -158,6 +168,7 @@ func _next_toast() -> void:
 	plate.modulate.a = 0.0
 	add_child(plate)
 	var tween := create_tween()
+	tween.tween_interval(TOAST_LEAD)
 	tween.tween_property(plate, "offset_top", top, 0.35).set_ease(Tween.EASE_OUT)
 	tween.parallel().tween_property(plate, "modulate:a", 1.0, 0.25)
 	tween.tween_interval(TOAST_HOLD)

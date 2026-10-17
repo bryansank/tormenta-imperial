@@ -13,7 +13,10 @@ const MarketPanelScript := preload("res://scripts/ui/MarketPanel.gd")
 const Generator := preload("res://scripts/combat/ExpeditionGenerator.gd")
 const FinalAuditScript := preload("res://scripts/combat/FinalAudit.gd")
 
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 
 var _parked: Dictionary = {}
 var _dev_mode: bool = true
@@ -43,7 +46,7 @@ func after_test() -> void:
 
 func _dialog(current_mode: int = GameMode.Mode.CAMPAIGN, current_tier: int = GameMode.TIER_DEFAULT) -> CanvasLayer:
 	var dialog: CanvasLayer = auto_free(DialogScript.new())
-	dialog.setup(false, current_mode, current_tier)
+	dialog.setup(current_mode, current_tier)
 	add_child(dialog)
 	return dialog
 
@@ -261,7 +264,11 @@ func test_the_storm_calendar_is_a_fixed_pattern() -> void:
 	assert_str(M.season_for(StormCycle.Phase.CALM, true)).is_equal("after_tithe")
 	assert_float(float(GameConfig.market_calendar["warning"]["wood"])).is_greater(0.0)
 	assert_float(float(GameConfig.market_calendar["storm"]["steel"])).is_less(0.0)
-	for res in ["wood", "steel", "oil"]:
+	# La comida sube antes del Diezmo (Aviso y Tormenta), como el resto.
+	assert_float(float(GameConfig.market_calendar["warning"]["food"])).is_greater(0.0)
+	assert_float(float(GameConfig.market_calendar["storm"]["food"])).is_greater(
+		float(GameConfig.market_calendar["warning"]["food"]))
+	for res in ["wood", "steel", "oil", "food"]:
 		assert_float(float(GameConfig.market_calendar["after_tithe"][res])).is_greater(0.0)
 	assert_bool((GameConfig.market_calendar["calm"] as Dictionary).is_empty()).is_true()
 

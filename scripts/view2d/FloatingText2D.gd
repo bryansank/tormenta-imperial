@@ -25,11 +25,14 @@ static func spawn(anchor: Node2D, text: String, color: Color, offset: float = 0.
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.z_index = 60
 	label.z_as_relative = false
-	parent.add_child(label)
-	label.reset_size()
+	# El punto de salida se mide ya: el ancla puede irse antes del final del frame.
 	var start: Vector2 = anchor.global_position + Vector2(offset * View2D.PX_PER_UNIT * 2.0 + randf_range(-4.0, 4.0), -18.0)
-	label.position = start - Vector2(label.size.x * 0.5, label.size.y)
-	var tween := label.create_tween()
-	tween.tween_property(label, "position:y", label.position.y - RISE_PX, DURATION).set_ease(Tween.EASE_OUT)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, DURATION).set_delay(0.4)
-	tween.tween_callback(label.queue_free)
+	# Colgarla puede esperar al final del frame si la escena aun se monta
+	# (FloatingText.attach); el tamano y el tween se calculan ya dentro del arbol.
+	FloatingText.attach(parent, label, func() -> void:
+		label.reset_size()
+		label.position = start - Vector2(label.size.x * 0.5, label.size.y)
+		var tween := label.create_tween()
+		tween.tween_property(label, "position:y", label.position.y - RISE_PX, DURATION).set_ease(Tween.EASE_OUT)
+		tween.parallel().tween_property(label, "modulate:a", 0.0, DURATION).set_delay(0.4)
+		tween.tween_callback(label.queue_free))

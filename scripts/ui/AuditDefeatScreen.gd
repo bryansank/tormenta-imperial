@@ -11,6 +11,7 @@ extends CanvasLayer
 ## `_ready`, asi que aqui no se supone nada: se apunta todo lo que llega en el
 ## mismo frame y el parte se monta diferido, cuando ya ha llegado todo.
 
+const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const LAYER := 20
 const CARD_WIDTH := 540.0
 
@@ -58,6 +59,7 @@ func _setup_ui() -> void:
 	_root.add_child(_card)
 	var column: VBoxContainer = _card.get_child(0)
 
+	column.add_child(ColonyByline.new())
 	column.add_child(ModalKit.make_text(Tr.t("AUDIT_TITLE"), "section", UITheme.TEXT_DIM))
 	var title := ModalKit.make_text(Tr.t("LBL_AUDIT_DEFEAT_TITLE"), "title", UITheme.DANGER)
 	title.add_theme_font_size_override("font_size", 32)
@@ -223,7 +225,7 @@ func is_run_over_variant() -> bool:
 	return visible and GameMode.is_run_over()
 
 func _on_new_game() -> void:
-	GameManager.request_new_game(false)
+	GameManager.request_new_game()
 
 func _on_quit() -> void:
 	get_tree().quit()

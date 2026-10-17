@@ -36,6 +36,13 @@ signal building_selected_for_placement(building_data: Resource)
 signal building_placement_cancelled()  # ESC, right-click or the on-screen CANCEL; BuildingPlacer._cancel listens
 @warning_ignore("unused_signal")
 signal building_placed(building_data: Resource, cell: Vector2i)
+## Una tanda de building_placed del mismo gesto (los tramos del auto-road,
+## PlacementRules.pave_route). Quien hace trabajo caro por building_placed
+## (guardar, recontar) lo aplaza hasta `placement_batch_finished` y lo hace una vez.
+@warning_ignore("unused_signal")
+signal placement_batch_started()
+@warning_ignore("unused_signal")
+signal placement_batch_finished(count: int)
 @warning_ignore("unused_signal")
 signal building_moved(from_cell: Vector2i, to_cell: Vector2i)
 @warning_ignore("unused_signal")
@@ -177,6 +184,13 @@ signal unit_defended(unit_uid: int)
 signal unit_died(unit_uid: int, side: int)
 @warning_ignore("unused_signal")
 signal encounter_ended(victory: bool, turns_used: int)
+## El tablero se cerro (CombatManager.end_encounter): el parte ya se leyo. Lo
+## que esperaba a que terminara la pelea (los avisos de la colonia retenidos)
+## sale ahora, salvo que otro tablero se haya abierto en la misma llamada (la
+## oleada siguiente del asedio): por eso quien escucha vuelve a mirar
+## CombatManager.is_board_open().
+@warning_ignore("unused_signal")
+signal encounter_closed()
 @warning_ignore("unused_signal")
 signal draft_offered(options: Array)
 @warning_ignore("unused_signal")
@@ -187,6 +201,21 @@ signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary
 ## actual. El tablero no se guarda (D6), asi que aqui nunca hay encuentro abierto.
 @warning_ignore("unused_signal")
 signal expedition_resumed(expedition_id: int)
+## Salidas (doc 21 §3, 2026-10-14). El tablon cambio: oferta nueva, lanzada,
+## vuelta, vista, o la rebaja del Diezmo se gano o se gasto. El boton
+## ESCARAMUZAS repinta su punto rojo con esto.
+@warning_ignore("unused_signal")
+signal sortie_offers_changed()
+## Lo que la columna trajo de fuera al volver: "parts", "colonists",
+## "tithe_pct", "blueprints" (Array). Ya aplicado a la colonia.
+@warning_ignore("unused_signal")
+signal sortie_loot_gained(loot: Dictionary)
+## Un plano nuevo: el edificio `building_id` ya se puede construir.
+@warning_ignore("unused_signal")
+signal blueprint_unlocked(building_id: String)
+## El enemigo se retiro con poca vida y el combate se gano (D7 = B).
+@warning_ignore("unused_signal")
+signal enemy_routed()
 
 # ── Building Health ──
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
@@ -197,6 +226,14 @@ signal building_damaged(building_node: Node, health: int, max_health: int)
 signal building_ruined(building_node: Node)
 @warning_ignore("unused_signal")
 signal building_repaired(building_node: Node)
+
+# ── Day and night ──
+## Emitted only by DayClock when the day clock enters a phase. `phase` follows
+## DayCycle.Phase (DAWN, DAY, DUSK, NIGHT); `hour` is the time of day, 0-1.
+## Not emitted on load or new game: a consumer re-derives from
+## `DayClock.get_phase()` on `game_load_completed` / `game_new_started`.
+@warning_ignore("unused_signal")
+signal day_phase_changed(phase: int, hour: float)
 
 # ── Imperial Storm ──
 ## Emitted only by StormManager. The storm is dispatched on a schedule, not rolled
@@ -281,6 +318,15 @@ signal objective_panel_toggled()
 signal sidebar_toggled(visible: bool)
 @warning_ignore("unused_signal")
 signal grid_overlay_toggled(visible: bool)
+## La calidad grafica del mapa cambio en Ajustes ("auto", "high", "low");
+## WorldLook la aplica al entorno y al sol de la escena 3D.
+@warning_ignore("unused_signal")
+signal graphics_quality_changed(quality: String)
+## La velocidad del juego cambio (1.0 o 2.0; GameConfig.set_game_speed). La
+## simulacion la lee en GameConfig.sim_delta(); la vista de combate, para
+## acortar sus animaciones con GameConfig.combat_pace().
+@warning_ignore("unused_signal")
+signal game_speed_changed(speed: float)
 
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
@@ -352,10 +398,12 @@ signal governor_xp_changed(xp: int, rank: int, gained: int)
 ## rango alcanzado en este salto (un hito gordo puede saltar dos).
 @warning_ignore("unused_signal")
 signal governor_rank_up(rank: int, rewards: Dictionary)
-## El jugador eligio otra bandera o color (☰ MENU > COLONIA). El Nucleo y las
-## fichas propias del tablero se repintan al oirla.
+## El pais cambio de nombre o de bandera (☰ MENU > COLONIA, el paso de Nueva
+## partida o una carga). `flag_spec` es la receta de ColonyFlag:
+## {"pattern", "emblem", "colors": [fondo 1, fondo 2, emblema]}. Los mastiles
+## del Nucleo y del Cuartel General, la insignia y los partes se repintan al oirla.
 @warning_ignore("unused_signal")
-signal colony_cosmetics_changed(flag_id: String, color_id: String)
+signal colony_identity_changed(colony_name: String, flag_spec: Dictionary)
 
 # ── prologo-ayudas ──
 ## El tutorial guiado cambio de paso (TutorialManager.GUIDE_STEPS). "" = ninguno
@@ -370,3 +418,24 @@ signal tutorial_guide_finished(skipped: bool)
 ## de HelpCatalog. HelperPanel la ensena ya, senalando su control.
 @warning_ignore("unused_signal")
 signal help_reopen_requested(help_id: String)
+## El combate guiado cambio de paso (TutorialManager.COMBAT_STEPS: "c_select",
+## "c_move"...). "" = ninguna marca en el tablero. Lo pinta TutorialPanel.
+@warning_ignore("unused_signal")
+signal combat_lesson_step_changed(step_id: String)
+
+# ── comida-granja-recoger (2026-10-04) ──
+## Cambio lo acumulado en un edificio (produjo, se recogio, se echo a perder).
+## `stock` es recurso -> cantidad. Lo escuchan el icono flotante y el badge.
+@warning_ignore("unused_signal")
+signal building_stock_changed(node: Node, stock: Dictionary)
+## El jugador recogio lo de un edificio. `collected` es lo que entro en la bolsa;
+## lo que no cupo se queda en el edificio.
+@warning_ignore("unused_signal")
+signal production_collected(node: Node, collected: Dictionary)
+## Lo acumulado paso demasiado tiempo sin recoger y se perdio una parte
+## (solo con GameMode.spoilage_enabled()).
+@warning_ignore("unused_signal")
+signal stock_spoiled(node: Node, lost: Dictionary)
+## Se planto (o cambio) el cultivo de una Granja.
+@warning_ignore("unused_signal")
+signal crop_planted(node: Node, crop_id: String)

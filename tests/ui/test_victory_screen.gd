@@ -1,14 +1,13 @@
 extends GdUnitTestSuite
-## La pantalla de victoria: "Nueva partida" pide confirmacion como en Ajustes
-## (antes borraba la partida al primer clic), y nunca se abre encima del parte
-## de progreso offline, que comparte con ella la capa 20.
+## La pantalla de victoria: "Nueva partida" abre el selector de modo (antes
+## borraba la partida al primer clic; hoy ya no borra nada, crea otra) y la
+## pantalla se abre en el acto (el parte offline ya no existe).
 
 const NewGameDialogScript := preload("res://scripts/ui/NewGameDialog.gd")
 
 const STATS := {"time_played": 3700.0, "buildings_built": 30, "trades_completed": 12, "milestones": 9}
 
 func after_test() -> void:
-	GameManager._offline_canvas = null
 	for child in GameManager.get_children():
 		if child.get_script() == NewGameDialogScript:
 			child.queue_free()
@@ -34,25 +33,14 @@ func _find_button(node: Node, text: String) -> Button:
 			return hit
 	return null
 
-func test_new_game_asks_before_wiping_the_save() -> void:
+func test_new_game_opens_the_mode_picker() -> void:
 	var screen := _screen()
 	screen._on_victory_achieved(STATS)
 	var btn := _find_button(screen, Tr.t("BTN_NEW_GAME"))
 	assert_object(btn).is_not_null()
 	btn.pressed.emit()
-	# Solo el dialogo: nada se ha borrado todavia.
+	# Solo el selector: nada se ha creado ni borrado todavia.
 	assert_int(_dialogs().size()).is_equal(1)
-
-func test_it_waits_for_the_offline_report_to_close() -> void:
-	var fake: CanvasLayer = auto_free(CanvasLayer.new())
-	add_child(fake)
-	GameManager._offline_canvas = fake
-	var screen := _screen()
-	screen._on_victory_achieved(STATS)
-	assert_bool(screen.is_showing()).is_false()
-	GameManager._offline_canvas = null
-	GameManager.offline_report_closed.emit()
-	assert_bool(screen.is_showing()).is_true()
 
 ## El tiempo jugado es el de partida, no la hora de la pared desde que se creo:
 ## una campana de tres horas repartida en una semana no son siete dias jugados.
@@ -107,7 +95,7 @@ func _has_label(node: Node, text: String) -> bool:
 			return true
 	return false
 
-func test_without_an_offline_report_it_opens_at_once() -> void:
+func test_it_opens_at_once() -> void:
 	var screen := _screen()
 	screen._on_victory_achieved(STATS)
 	assert_bool(screen.is_showing()).is_true()

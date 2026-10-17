@@ -25,7 +25,10 @@ uniform vec4 albedo : source_color = vec4(0.95, 0.72, 0.1, 1.0);
 uniform float swing = 0.7;
 uniform float speed = 0.45;
 uniform float bob = 0.0;
+uniform bool vc_srgb = false;
+varying vec3 v_col;
 void vertex() {
+	v_col = COLOR.rgb;
 	float h = fract(sin(dot(MODEL_MATRIX[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
 	float t = TIME * speed * (0.7 + 0.6 * fract(h * 7.13)) + h * 6.2831;
 	if (bob > 0.0 && VERTEX.y < -0.05) {
@@ -37,24 +40,37 @@ void vertex() {
 	NORMAL.xz = r * NORMAL.xz;
 }
 void fragment() {
-	ALBEDO = albedo.rgb;
-	ROUGHNESS = 0.75;
-	METALLIC = 0.35;
+	// Color por vertice (las piezas son de la maqueta, ToyPalette), leido
+	// igual que el material solido de la paleta.
+	vec3 c = v_col;
+	if (vc_srgb) {
+		c = mix(pow((c + vec3(0.055)) * (1.0 / 1.055), vec3(2.4)), c * (1.0 / 12.92), lessThan(c, vec3(0.04045)));
+	}
+	ALBEDO = albedo.rgb * c;
+	ROUGHNESS = 0.82;
 }
 """
 
 const _FLAG_3D := """
 shader_type spatial;
 render_mode cull_disabled;
-uniform vec4 albedo : source_color = vec4(0.72, 0.13, 0.1, 1.0);
+// Sin source_color: el color es de ToyPalette y se lee como el color por
+// vertice del material solido de la paleta (vc_srgb dice como).
+uniform vec4 albedo = vec4(0.86, 0.2, 0.15, 1.0);
+uniform bool vc_srgb = false;
+uniform float wave = 1.0;
 void vertex() {
 	float h = fract(sin(dot(MODEL_MATRIX[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
 	float w = clamp(UV.x, 0.0, 1.0);
-	VERTEX.z += sin(TIME * (4.0 + 2.0 * h) - UV.x * 5.0 + h * 6.2831) * 0.07 * w;
+	VERTEX.z += sin(TIME * (4.0 + 2.0 * h) - UV.x * 5.0 + h * 6.2831) * 0.07 * w * wave;
 }
 void fragment() {
-	ALBEDO = albedo.rgb;
-	ROUGHNESS = 0.9;
+	vec3 c = albedo.rgb;
+	if (vc_srgb) {
+		c = mix(pow((c + vec3(0.055)) * (1.0 / 1.055), vec3(2.4)), c * (1.0 / 12.92), lessThan(c, vec3(0.04045)));
+	}
+	ALBEDO = c;
+	ROUGHNESS = 0.82;
 }
 """
 
@@ -75,15 +91,29 @@ void vertex() {
 
 const _FLAG_2D := """
 shader_type canvas_item;
+uniform float wave = 1.0;
 void vertex() {
 	float h = fract(sin(dot(MODEL_MATRIX[3].xy, vec2(12.9898, 78.233))) * 43758.5453);
 	float w = clamp(VERTEX.x / 10.0, 0.0, 1.0);
-	VERTEX.y += sin(TIME * (4.0 + 2.0 * h) - VERTEX.x * 0.6 + h * 6.2831) * 1.6 * w;
+	VERTEX.y += sin(TIME * (4.0 + 2.0 * h) - VERTEX.x * 0.6 + h * 6.2831) * 1.6 * w * wave;
 }
 """
 
+const Tone := preload("res://scripts/buildings/ToyTones.gd")
+
 static var _shaders: Dictionary = {}
 static var _mats: Dictionary = {}
+## Si ondean los banderines de obra (en calidad Minima, quietos). Lo pone
+## GraphicsQuality.apply_runtime() con set_flags_wave().
+static var _flags_wave := true
+
+## Enciende o apaga el ondeo de todos los banderines, los ya creados incluidos
+## (un material compartido por color: unos pocos set_shader_parameter).
+static func set_flags_wave(on: bool) -> void:
+	_flags_wave = on
+	for key in _mats:
+		if String(key).begins_with("flag"):
+			(_mats[key] as ShaderMaterial).set_shader_parameter("wave", 1.0 if on else 0.0)
 
 static func _shader(key: String, code: String) -> Shader:
 	if not _shaders.has(key):
@@ -93,7 +123,9 @@ static func _shader(key: String, code: String) -> Shader:
 	return _shaders[key]
 
 ## Material de las piezas que giran con la grua (3D). `bob` > 0: ademas sube y
-## baja lo que cuelga por debajo del eje (el gancho). Uno por color y bob.
+## baja lo que cuelga por debajo del eje (el gancho). Uno por color y bob. Las
+## piezas traen su color por vertice (ToyPalette); `color` lo multiplica
+## (blanco = tal cual, lo que usa la obra de la maqueta).
 static func crane_material_3d(color: Color, bob: float = 0.0) -> ShaderMaterial:
 	var key := "crane3d:%s:%.2f" % [color.to_html(), bob]
 	if _mats.has(key):
@@ -104,6 +136,7 @@ static func crane_material_3d(color: Color, bob: float = 0.0) -> ShaderMaterial:
 	mat.set_shader_parameter("swing", GameConfig.construction_crane_swing)
 	mat.set_shader_parameter("speed", GameConfig.construction_crane_speed)
 	mat.set_shader_parameter("bob", bob)
+	mat.set_shader_parameter("vc_srgb", Tone.vertex_color_is_srgb())
 	_mats[key] = mat
 	return mat
 
@@ -114,6 +147,8 @@ static func flag_material_3d(color: Color) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = _shader("flag3d", _FLAG_3D)
 	mat.set_shader_parameter("albedo", color)
+	mat.set_shader_parameter("wave", 1.0 if _flags_wave else 0.0)
+	mat.set_shader_parameter("vc_srgb", Tone.vertex_color_is_srgb())
 	_mats[key] = mat
 	return mat
 
@@ -136,8 +171,25 @@ static func flag_material_2d() -> ShaderMaterial:
 		return _mats["flag2d"]
 	var mat := ShaderMaterial.new()
 	mat.shader = _shader("flag2d", _FLAG_2D)
+	mat.set_shader_parameter("wave", 1.0 if _flags_wave else 0.0)
 	_mats["flag2d"] = mat
 	return mat
+
+## Calienta los dos shaders 3D de la obra (grua y banderin): un quad diminuto
+## de cada uno colgado de `parent`, dibujado una vez en la carga. Asi la
+## primera obra de la partida no tironea compilando. Devuelve los quads.
+static func warm_up(parent: Node3D) -> Array:
+	var out: Array = []
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.01, 0.01)
+	for mat in [crane_material_3d(Color.WHITE, 0.0), flag_material_3d(Color.WHITE)]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		parent.add_child(mi)
+		out.append(mi)
+	return out
 
 ## El efecto de obra de un estilo en una fase: "sparks" (solo con estructura o
 ## ferralla: fases 1 y 2), "dust" (en todas) o "".

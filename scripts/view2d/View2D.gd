@@ -20,7 +20,9 @@ const PX_PER_UNIT := 16.0
 ## Distancia de camara 3D <-> zoom de Camera2D. La partida guarda "distance"
 ## (MonumentalCamera); la vista 2D la traduce con zoom = ZOOM_K / distance para
 ## que la misma partida abra con un encuadre parecido en las dos vistas.
-const ZOOM_K := 36.0
+## 57.6 = 36 x 1.6: la camara 3D de maqueta (fov 40) se aleja 1.6 veces mas
+## para encuadrar lo mismo que la de fov 60 (docs/21 §12).
+const ZOOM_K := 57.6
 
 static func cell_px() -> float:
 	return GridManager.cell_size * PX_PER_UNIT

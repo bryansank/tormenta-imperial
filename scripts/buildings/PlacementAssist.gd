@@ -282,12 +282,18 @@ func _comfortably_on_screen(origin: Vector2i) -> bool:
 ## Origenes donde `building_id` con huella `size` pasa el veredicto junto a su
 ## yacimiento. [] si el edificio no tiene regla de yacimiento.
 static func valid_spots(building_id: String, size: Vector2i, map_gen: Node, ignore: Node = null) -> Array:
+	if Rules.needs_shore(building_id):
+		return shore_spots(building_id, size, map_gen, ignore)
 	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
 	if rule.is_empty() or map_gen == null or not map_gen.has_method("get_all_deposits"):
 		return []
 	var reach := int(rule["reach"])
 	var seen := {}
 	var out: Array = []
+	# Cientos de veredictos seguidos sobre el mismo mapa: la red, el Nucleo y las
+	# rutas salen de la cache de PlacementRules, y los sitios sin camino posible
+	# se descartan sin un BFS por la rejilla libre cada uno (docs/26 §6.5).
+	Rules.prepare_route_queries()
 	for dep in map_gen.get_all_deposits():
 		if String(dep["id"]) != String(rule["deposit"]):
 			continue
@@ -305,6 +311,29 @@ static func valid_spots(building_id: String, size: Vector2i, map_gen: Node, igno
 					out.append(origin)
 	return out
 
+## Origenes validos de lo que solo va en la costa (las palmeras): las huellas
+## que tocan una celda de tierra pegada al agua y pasan el veredicto. Se
+## recorre la franja una vez (al empezar a colocar y tras cada colocada), no por
+## frame.
+static func shore_spots(building_id: String, size: Vector2i, map_gen: Node, ignore: Node = null) -> Array:
+	var seen := {}
+	var out: Array = []
+	Rules.prepare_route_queries()
+	for y in range(GridManager.grid_height):
+		for x in range(GridManager.grid_width):
+			var c := Vector2i(x, y)
+			if not Rules.is_coast_cell(c):
+				continue
+			for ox in range(c.x - size.x + 1, c.x + 1):
+				for oy in range(c.y - size.y + 1, c.y + 1):
+					var origin := Vector2i(ox, oy)
+					if seen.has(origin) or not GridManager.is_valid_cell(origin):
+						continue
+					seen[origin] = true
+					if Rules.evaluate_placement(building_id, origin, size, map_gen, ignore)["ok"]:
+						out.append(origin)
+	return out
+
 ## Casillas cubiertas por alguna huella valida: lo que se pinta de verde.
 static func spot_cells(origins: Array, size: Vector2i) -> Array:
 	var seen := {}
@@ -318,6 +347,8 @@ static func spot_cells(origins: Array, size: Vector2i) -> Array:
 ## `GameConfig.building_deposit_rules`): una sola redaccion en la ficha, en el
 ## aviso al tocar y en el aviso con raton, para que nunca se contradigan.
 static func rule_text(building_id: String) -> String:
+	if Rules.needs_shore(building_id):
+		return Tr.t("LBL_NEEDS_SHORE")
 	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
 	if rule.is_empty():
 		return ""
@@ -328,9 +359,14 @@ static func rule_text(building_id: String) -> String:
 func _build_confirm() -> void:
 	_layer = CanvasLayer.new()
 	_layer.name = "PlacementConfirm"
-	# Por encima del HUD y de los globos de ayuda (hasta 15), por debajo de los
-	# modales (tutorial 17, avisos 19).
-	_layer.layer = 16
+	# Debajo de toda la interfaz que se abre (bug de Bryan, 2026-10-14): en la 16
+	# se pintaba encima de los menus y paneles, que UIManager apila de la 12 hacia
+	# arriba. En la 11 (la base de UIManager) queda por encima del mapa y de la
+	# barra del HUD (10), y por debajo de cualquier ventana abierta, de los globos
+	# de ayuda, del tutorial (19) y del menu de la partida (30). Con la misma capa
+	# que algun panel suelto (11) dibuja antes que el, porque el colocador va antes
+	# que la interfaz en la escena.
+	_layer.layer = 11
 	add_child(_layer)
 	_confirm = Button.new()
 	_confirm.name = "ConfirmPlacement"

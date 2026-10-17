@@ -2,7 +2,9 @@
 
 Cómo sacar de este proyecto un `TormentaImperial.exe` que otra persona pueda
 descargar y jugar, qué viaja dentro, qué se queda fuera y qué falta para publicarlo.
-Android (tableta primero) está en la sección 11.
+Android (tableta primero) está en la sección 11; la lista de comprobación de una
+publicación (GitHub Releases y enlaces directos), en la 12; qué pesa el paquete y cómo
+adelgazarlo, en la 13.
 
 Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11 (RTX 3060, Vulkan).
 
@@ -14,7 +16,7 @@ Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11 (RTX 3060, Vulkan).
 |---|---|
 | Preset | `Windows Desktop` en `export_presets.cfg` (versionado, sin secretos) |
 | Salida | `build/windows/TormentaImperial.exe` (un solo fichero, PCK embebido) |
-| Tamaño | 119,7 MB el .exe (104 MB son la plantilla del motor, ~10 MB el juego); 48 MB en .zip |
+| Tamaño | 119,7 MB el .exe (104 MB son la plantilla del motor, ~10 MB el juego); 48 MB en .zip. El 2026-10-14: **122,7 MB** (109 de plantilla release, 13 de juego) y 48,4 MB en .zip (§13) |
 | Contenido del PCK | 335 ficheros: escenas, scripts compilados, modelos, audio, texturas, fuentes |
 | Tiempo de export | ~34 s |
 | Arranque | la ventana aparece en ~1,3 s; partida nueva con tiempos reales |
@@ -58,7 +60,14 @@ Aun así, la recomendación a medio plazo es el **editor estándar 4.7-stable** 
 
 - es lo que corresponde a un proyecto 100 % GDScript (ver "Key Rule" en `CLAUDE.md`);
 - es el único que exporta a **Web** (el .NET de Godot 4 no exporta a HTML5);
-- sus plantillas son algo más ligeras y no arrastran el runtime de mono.
+- no deja en el logcat de Android la línea de `System.Security.Cryptography` (§11.2).
+
+Lo que **no** trae es un paquete más pequeño. Medido el 2026-10-14 sobre las plantillas
+oficiales 4.7-stable: la estándar de Windows release pesa 109,16 MB y la mono 109,41
+(−0,25 MB); la de Android release, 104,69 frente a 105,04. El runtime de .NET no va
+dentro de la plantilla: solo se añade, en una carpeta aparte, cuando el proyecto tiene
+C#, y este no lo tiene. Lo que sí adelgaza el .exe es una plantilla **compilada para
+ocupar poco** (§13.4).
 
 El cambio es solo de binario: el proyecto abre igual en los dos. Si se hace, hay
 que instalar también `Godot_v4.7-stable_export_templates.tpz` (carpeta `4.7.stable`).
@@ -129,13 +138,23 @@ de 256 px en `application/icon`.
 tests/*, tools/*, docs/*, specs/*, reports/*,
 addons/gdUnit4/*, addons/beckett/*,
 .claude/*, .specify/*, .beckett/*, .cursor/*, .vscode/*,
-.mcp.json, secret.json, .env*, build/*, *.md
+.mcp.json, secret.json, .env*, override.cfg, estrategia/*, ui_tour/*, build/*, *.md,
+assets/models/buildings/*, assets/models/cc0/*,
+assets/textures/metal_plate_diff_1k.jpg, assets/branding/banner.png,
+assets/branding/*.svg, assets/fonts/Rajdhani-Medium.ttf
 ```
+
+Las siete últimas son assets que siguen en el repo pero que el juego no carga: los
+GLB viejos de los edificios (el juego usa `assets/models/toy/`), las piezas fuente CC0
+de `assets/models/cc0/` (solo las usa el horneado; cada pack lleva `.gdignore` y Godot
+ni los importa, pero la exclusión cubre un pack nuevo que llegue sin él) y lo que solo
+usan las herramientas de `tools/` (§13.2).
 
 Ojo con `.mcp.json`: Godot lo trata como recurso JSON y, sin esta línea, **se metía en
 el PCK con el token local de Beckett**. Si alguien añade más ficheros locales con
 credenciales en la raíz, hay que añadirlos aquí. `tests/build/test_export_guards.gd`
-falla si desaparece cualquiera de estas exclusiones.
+falla si desaparece cualquiera de estas exclusiones, y también si un script, una escena
+o un `.tres` del juego empieza a usar uno de los assets excluidos por no usarse.
 
 Los scripts de `addons/*` que tenían `class_name` siguen listados en
 `.godot/global_script_class_cache.cfg`, pero como nada del juego los usa no dan error.
@@ -184,8 +203,82 @@ El exportado usa un directorio de usuario propio, distinto del editor:
 Así las partidas de prueba (con tiempos de dev) y las reales no se pisan. Lo hacen
 dos overrides con el feature tag `template` en `project.godot`
 (`config/use_custom_user_dir.template`, `config/custom_user_dir_name.template`).
-Ahí viven `save_game.json`, `settings.cfg` y `logs/godot.log`, que es lo primero que
-hay que pedir a quien reporte un fallo.
+Ahí viven las partidas (`partidas/`), `settings.cfg` y `logs/`.
+
+### El registro de errores (`logs/registro.txt`)
+
+Lo primero que hay que pedir a quien reporte un fallo, y casi nunca hace falta
+buscarlo: **☰ MENÚ → PARTIDA → Informar de un fallo** copia al portapapeles un
+bloque corto (versión, sistema, vídeo, perfil, calidad, vista, idioma, modo/nivel,
+era, velocidad y las últimas 40 líneas del registro) listo para pegar en WhatsApp o
+en un issue. No se envía nada: el juego no usa la red para esto.
+
+| Plataforma | Dónde está |
+|---|---|
+| Windows (exportado) | `%APPDATA%\TormentaImperial\logs\registro.txt` |
+| Windows (editor) | `%APPDATA%\Godot\app_userdata\Tormenta Imperial\logs\registro.txt` |
+| Android | almacenamiento interno de la app: `/data/user/0/com.bryankey.tormentaimperial/files/logs/registro.txt`. Sin root solo se lee desde el propio juego (el botón) o, con el APK de depuración, `adb shell run-as com.bryankey.tormentaimperial cat files/logs/registro.txt` |
+
+- **Quién lo escribe:** `scripts/services/ErrorLog.gd`, un `Logger` propio que
+  `GameConfig._ready()` engancha con `OS.add_logger()`. Recibe lo mismo que la
+  consola: `print`, `push_error` / `push_warning`, errores de script (con el archivo
+  y la línea del script cuando hay pila) y del motor.
+- **Por qué uno propio y no solo `debug/file_logging`:** el log de archivo de Godot
+  viene apagado en Android, no tiene tope por archivo (una sesión que repite un error
+  lo hace crecer sin fin) y el juego no puede leer sus últimas líneas al día. El de
+  Godot se deja como viene (`logs/godot*.log` en PC); el informe no lo necesita.
+- **Tope:** 200 KB por archivo y dos rotaciones (`registro.1.txt`,
+  `registro.2.txt`): ~600 KB como mucho.
+- **Rendimiento:** nada por fotograma. Las líneas van a memoria y se escriben en
+  bloque cada 3 s (un `Timer`), al cerrar y al pasar a segundo plano. Una línea
+  repetida seguida se cuenta (`(x27)`), no se repite; con más de 600 líneas sin
+  escribir se tiran las más viejas y se anota cuántas.
+- **Al abrir** se recuperan en memoria las últimas líneas de la sesión anterior: si
+  el juego se cerró de golpe, el informe del arranque siguiente las incluye.
+- **Sin datos personales** (`scripts/services/BugReport.gd`): las rutas de la
+  carpeta del usuario (`C:\Users\<nombre>`, `/home/<nombre>`, `/Users/<nombre>`)
+  pasan a `~`, y el nombre de la colonia (el del país del jugador) a `<colonia>`.
+  Tests: `tests/support/test_bug_report.gd`.
+
+### Una sola copia abierta (`instancia.lock`)
+
+Dos juegos abiertos sobre la misma carpeta se pisan la partida (los dos
+autoguardan; gana el último que escribe). Por eso el exportado de escritorio no
+deja abrir una segunda copia (`scripts/services/InstanceGuard.gd`, lo llama
+`GameManager._ready()` antes de cargar nada):
+
+- Al arrancar se lee `user://instancia.lock` (en el exportado de Windows,
+  `%APPDATA%\TormentaImperial\instancia.lock`): JSON con `pid`, `version`
+  (`application/config/version`), `exe` y `time`. Se mira si ese PID sigue vivo y
+  es el juego con `tasklist /FI "PID eq <pid>" /FO CSV /NH` (nombre del ejecutable
+  igual al del bloqueo; en Linux/macOS, `ps -p`). Un bloqueo de un proceso muerto
+  (un cierre a lo bruto) o de un PID que ahora es otro programa se ignora y se
+  reescribe.
+- **Misma versión abierta:** aviso «Tormenta Imperial ya está abierto», se intenta
+  traer al frente la otra ventana (`WScript.Shell.AppActivate(pid)` con PowerShell;
+  si Windows no deja robar el foco, solo parpadea en la barra de tareas) y esta se
+  cierra sola a los 4 s o con Cerrar. No carga ni escribe nada.
+- **Otra versión abierta:** pregunta «Está abierta la versión X. ¿Cerrarla y abrir
+  esta (Y)?». SÍ: `OS.kill(pid)`, se espera hasta 5 s a que muera, se toma el
+  bloqueo y arranca la partida (lo que la otra no hubiera guardado se pierde; es
+  un cierre a lo bruto). NO: sale sin tocar nada.
+- **Versiones sin bloqueo** (las de antes de esto) y **dos copias lanzadas a la vez**
+  (doble clic impaciente): si no hay bloqueo vivo pero hay otros procesos con el
+  mismo nombre de ejecutable, se reclama el bloqueo y se vuelve a mirar tres veces
+  cada 3 s (pantalla «Comprobando si hay otra copia abierta...»). Si la otra era
+  una gemela, una de las dos ve el bloqueo de la otra, avisa y sale, y la otra
+  arranca. Si las copias sueltas siguen, se pregunta como con otra versión
+  («Está abierta la versión anterior»). Una copia de otra versión con **otro
+  nombre de ejecutable** y sin bloqueo no se detecta.
+- El bloqueo se borra al salir (cerrar la ventana, `NOTIFICATION_WM_CLOSE_REQUEST`,
+  o Salir del menú: `GameManager._exit_tree()`), y solo si es de este proceso.
+- **No se aplica** en el editor (F5, tests, sondas), sin ventana (`--headless`), con
+  `-- --no-title` o `-- --multi`, ni en móvil o web: cada worktree tiene su carpeta de
+  usuario y los agentes abren varios Godot a la vez. **Android** ya da una sola
+  instancia por app (el `launchMode` de la actividad de Godot no abre una segunda: tocar el icono con el
+  juego abierto lo trae al frente), así que no hace falta.
+- Tests de la parte pura (decidir según bloqueo, PID vivo y versión; leer el
+  bloqueo y la salida de `tasklist`): `tests/save/test_instance_guard.gd`.
 
 ---
 
@@ -216,7 +309,7 @@ Deja un zip por plataforma, cada uno con una carpeta dentro:
 | Fichero | Windows (`TormentaImperial-<versión>-windows.zip`) | Android (`TormentaImperial-<versión>-android.zip`) |
 |---|---|---|
 | Binario | `TormentaImperial.exe` | `TormentaImperial-<versión>.apk` |
-| `LEEME.txt` | cómo abrirlo, SmartScreen, dónde se guarda (`%APPDATA%\TormentaImperial`), controles, cómo reportar fallos; resumen en inglés | sideload, "orígenes desconocidos", Play Protect, partida, controles táctiles, fallos; resumen en inglés |
+| `LEEME.txt` | requisitos, cómo abrirlo, SmartScreen, dónde se guarda (`%APPDATA%\TormentaImperial`), cómo desinstalar, controles, cómo reportar fallos, licencia y créditos; entero en español y en inglés | requisitos, sideload con "orígenes desconocidos", Play Protect, actualizar, partida, desinstalar, controles táctiles, fallos, licencia y créditos; entero en español y en inglés |
 | `LICENSE.txt` | `LICENSE` del repo (PolyForm Strict 1.0.0 + derechos reservados) | igual |
 | `THIRD-PARTY-NOTICES.md` | todo lo de terceros que viaja, con MIT, Apache 2.0 y OFL completas | igual |
 | `GODOT-COPYRIGHT.txt` | los 101 componentes del motor (FreeType, HarfBuzz, Jolt...) con sus licencias completas | igual |
@@ -267,12 +360,14 @@ hash de `THIRD-PARTY-NOTICES.md` §1:
 
 ### Dónde publicar
 
-1. **Testers:** el zip tal cual, por el canal que sea. La licencia no deja que ellos
-   lo redistribuyan, y el LEEME lo dice.
-2. **itch.io:** crear el proyecto como "Downloadable", subir el zip marcado como
-   Windows (y el de Android como Android). Para publicar versiones sin la web, `butler`:
-   `butler push TormentaImperial-0.9.0-windows.zip usuario/tormenta-imperial:windows --userversion 0.9.0`.
-3. GitHub Releases también vale (adjuntar el zip a un tag), nunca dentro del repo.
+1. **Testers:** el zip tal cual, por el canal que sea. La licencia no deja que nadie
+   lo vuelva a subir a otra página, y el LEEME lo dice.
+2. **GitHub Releases:** adjuntar los zips a un tag, nunca dentro del repo. Es el sitio
+   de referencia: enlace fijo, historial de versiones y sumas de control.
+3. **Enlace directo** (Drive, WhatsApp, una web propia): el mismo zip de la release,
+   nunca uno distinto. Decidido el 2026-10-12: **sin itch.io ni tiendas** por ahora.
+
+El paso a paso de una publicación está en §12.
 
 ### SmartScreen y el aviso de "editor desconocido"
 
@@ -280,7 +375,7 @@ El .exe **no está firmado**. En la primera ejecución Windows enseña "Windows 
 su PC"; el jugador tiene que pulsar *Más información → Ejecutar de todas formas*.
 Algunos antivirus marcan de más los ejecutables de Godot sin firma. Opciones:
 
-- decirlo en la página de descarga (lo habitual en itch.io para indies);
+- decirlo en la página de descarga y en el LEEME (lo habitual en juegos indie);
 - firmar con un certificado de firma de código (OV o EV; EV quita el aviso antes)
   y activar `codesign/enable` en el preset con `signtool`;
 - la reputación de SmartScreen también crece sola con descargas.
@@ -325,7 +420,7 @@ Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11.
 |---|---|
 | Preset | `Android` en `export_presets.cfg` (sin secretos); `Android QA (emulador)` para el emulador (11.8) |
 | Salida | `build/android/TormentaImperial-debug.apk` |
-| Tamaño | 38,9 MB el APK (73 MB son `libgodot_android.so` sin comprimir; ~10 MB el juego) |
+| Tamaño | 38,9 MB el APK (73 MB son `libgodot_android.so` sin comprimir; ~10 MB el juego). El 2026-10-14: 41,8 MB en depuración y **39,9 MB en release** (§13) |
 | Paquete | `com.bryankey.tormentaimperial`, versionCode `900`, versionName `0.9.0` |
 | SDK | minSdk 24 (Android 7), targetSdk 36 |
 | ABI | `arm64-v8a` (todas las tabletas y teléfonos de los últimos años) |
@@ -546,3 +641,335 @@ Compatibility (OpenGL ES 3) en equipos sin Vulkan fiable.
   táctiles, colocación táctil, textos por dispositivo) ya está hecha
   ([21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md)); falta probarla en
   una tableta física.
+
+---
+
+## 12. Publicar una versión: lista de comprobación
+
+Para cada versión que se reparte por GitHub Releases o enlace directo. El juego se publica
+gratis; si algún día se cobra, antes hay que resolver `docs/25-marco-legal.md` §7.
+
+### 12.1 Antes de exportar
+
+- [ ] **Textos y comunicación revisados contra `docs/25-marco-legal.md`** (§3 y §4,
+      y la búsqueda de verbos de §10 en `Tr.gd`). Las notas de versión y la página de
+      la tienda también pasan por ahí.
+- [ ] **Versión en un solo sitio:** `config/version` en `project.godot` (por ejemplo
+      `1.0.0`). De ahí salen la versión del .exe (*Propiedades → Detalles*), el
+      `versionName` del APK, la primera línea del log y el nombre de los zips.
+- [ ] **`version/code` en los dos presets de Android** (`Android` y `Android QA
+      (emulador)`), con la regla de §11.6: `mayor*10000 + menor*100 + parche`
+      (0.9.0 → 900, 1.0.0 → 10000). Tiene que crecer siempre: Android no instala
+      encima un APK con un número menor.
+- [ ] Copia limpia del repo en la versión exacta (un worktree en el commit que se
+      publica) y `override.cfg` temporal con carpeta de usuario propia (§3).
+- [ ] `--import` y **tests en verde** por el envoltorio (`tools/run_tests.sh`).
+
+### 12.2 Exportar los dos
+
+```bash
+mkdir -p build/windows build/android
+"$GODOT" --headless --path . --export-release "Windows Desktop" build/windows/TormentaImperial.exe
+adb start-server   # evita que el export de Android se quede colgado (§11.5)
+# Con el keystore de release cargado en el entorno (12.5):
+"$GODOT" --headless --path . --export-release "Android" build/android/TormentaImperial.apk
+# Sin keystore de release (solo para testers): --export-debug ... TormentaImperial-debug.apk
+```
+
+- [ ] La primera línea de `logs/godot.log` del exportado dice `dev_mode=false` y la
+      versión correcta.
+
+### 12.3 Empaquetar
+
+```bash
+bash tools/package_release.sh --apk build/android/TormentaImperial.apk
+# (sin --apk toma el de depuración, build/android/TormentaImperial-debug.apk)
+```
+
+- [ ] Salen `dist/TormentaImperial-<versión>-windows.zip` y `-android.zip`, cada uno
+      con su `LEEME.txt`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.md`,
+      `GODOT-COPYRIGHT.txt` y `licenses/fonts/`. Si falta una licencia, el script no
+      crea el zip (§8).
+- [ ] Opcional: una suma de comprobación para quien quiera verificar la descarga:
+      `sha256sum dist/*.zip > dist/SHA256SUMS.txt`.
+
+### 12.4 Probar el zip en limpio
+
+Se prueba **el zip**, no la carpeta `build/`: es lo que recibe el jugador.
+
+- [ ] **Windows:** descomprimir en una carpeta nueva. Para ver la primera partida de
+      un jugador nuevo, renombrar antes `%APPDATA%\TormentaImperial` (no borrarlo) y
+      devolverle el nombre al terminar. Comprobar: el aviso de SmartScreen y *Más
+      información → Ejecutar de todas formas*, el prólogo y el tutorial, unos minutos
+      de partida, cerrar y volver a abrir con la partida guardada, F11 y el cambio
+      de idioma.
+- [ ] **Android:** instalar el APK del zip en una tableta real por sideload (no por
+      `adb`), siguiendo el `LEEME.txt` tal cual. Comprobar: arranque, controles
+      táctiles, colocar un edificio, salir y volver con la partida guardada. Con una
+      versión nueva, instalarla **encima** de la anterior y ver que la partida sigue.
+- [ ] Leer los dos `LEEME.txt` del zip: versión correcta y nada desfasado.
+
+### 12.5 El keystore de release de Android
+
+Un APK de depuración se firma con una clave genérica que cambia de una máquina a otra,
+y Android no instala encima una versión firmada con otra clave: el jugador tendría que
+desinstalar antes (y perder la partida). Por eso, **antes de la primera versión pública
+del APK** conviene firmar ya con la clave de release, y no cambiarla nunca. Es la misma
+clave que pedirá Google Play (§11.10).
+
+1. **Crear la clave una vez** con el `keytool` del JDK 17, en una carpeta fuera del
+   repositorio (comando en §11.4). `keytool` pide la contraseña por teclado: no se
+   escribe en el comando.
+2. **Guardarla con copia:** el `.keystore` y su contraseña en un gestor de
+   contraseñas, más una copia offline. Sin ella no hay actualizaciones con la misma
+   identidad.
+3. **No tocar `export_presets.cfg`:** los campos `keystore/release*` se quedan vacíos
+   (`tests/build/test_export_guards.gd` falla si no). Godot los lee del entorno al
+   exportar:
+
+   | Variable | Qué lleva |
+   |---|---|
+   | `GODOT_ANDROID_KEYSTORE_RELEASE_PATH` | la ruta al `.keystore` |
+   | `GODOT_ANDROID_KEYSTORE_RELEASE_USER` | el alias de la clave |
+   | `GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD` | la contraseña |
+
+4. **Cargarlas solo en la sesión que exporta**, sin que la contraseña quede en el
+   historial ni en ningún fichero:
+
+   ```powershell
+   $env:GODOT_ANDROID_KEYSTORE_RELEASE_PATH = "<ruta al .keystore>"
+   $env:GODOT_ANDROID_KEYSTORE_RELEASE_USER = "<alias>"
+   $p = Read-Host "Contraseña del keystore" -AsSecureString
+   $env:GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+       [Runtime.InteropServices.Marshal]::SecureStringToBSTR($p))
+   & $GODOT --headless --path . --export-release "Android" build/android/TormentaImperial.apk
+   Remove-Item Env:GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
+   ```
+
+   ```bash
+   export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="<ruta al .keystore>"
+   export GODOT_ANDROID_KEYSTORE_RELEASE_USER="<alias>"
+   read -rsp "Contraseña del keystore: " GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD; echo
+   export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
+   "$GODOT" --headless --path . --export-release "Android" build/android/TormentaImperial.apk
+   unset GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
+   ```
+
+   Nunca en un `.env` dentro del repo, en un script versionado ni en las variables
+   permanentes del sistema.
+5. **Comprobar la firma** con `apksigner` (en `build-tools\35.0.1`):
+   `apksigner verify --print-certs build/android/TormentaImperial.apk`. Tiene que
+   salir tu certificado, no `CN=Android Debug`.
+
+Si ya se repartió un APK de depuración, avisarlo en las notas de versión: el primer
+APK firmado con la clave de release obliga a desinstalar el anterior una vez.
+
+### 12.6 Subir
+
+- [ ] **GitHub Releases:** crear el tag `v<versión>` en el commit exportado y una
+      release con los dos zips (y `SHA256SUMS.txt` si se hizo). Los binarios van
+      adjuntos a la release, nunca dentro del repositorio.
+- [ ] En la release, el aviso de SmartScreen y el de "orígenes desconocidos".
+- [ ] Probar la descarga desde la página publicada (otra cuenta o una ventana
+      privada) y abrir el zip descargado.
+- [ ] Si se reparte por enlace directo, que apunte al mismo zip de la release.
+
+### 12.7 Notas de versión
+
+- [ ] Unas notas cortas por versión: qué hay de nuevo, qué se arregló, problemas
+      conocidos y requisitos. En la release de GitHub, en español y en
+      inglés.
+- [ ] Mismo criterio que la página (`docs/25-marco-legal.md` §4): el juego es de
+      gestión y estrategia; el combate se cuenta como defensa, nunca como gancho.
+- [ ] No anunciar lo que no está: nada de nube, PvP ni multijugador mientras no exista.
+- [ ] Al terminar: borrar `override.cfg` y el worktree de publicación.
+
+---
+
+## 13. Tamaño del paquete
+
+El dueño quiere que el juego "vaya en una papa" también en descarga y en
+almacenamiento. El presupuesto está en `docs/26-rendimiento.md` §2: **.exe ≤ 90 MB y
+zip ≤ 40 MB; APK ≤ 30 MB**. Medido el 2026-10-14 con Godot 4.7-stable mono, en la rama
+`perf/paquete` al día con `integracion/arte-v1` (ya con las texturas `metal_plate` en
+compresión VRAM de `perf/render-3d` y las decoraciones de `feat/decoraciones-1`).
+
+### 13.1 Qué pesa
+
+Casi todo es el motor. El juego en sí (el PCK) son 13 MB:
+
+| Pieza | Tamaño | Qué es |
+|---|---|---|
+| Plantilla Windows release (mono) | 109,4 MB | el ejecutable del motor |
+| `libgodot_android.so` release | 71,4 MB (24,1 MB comprimido en el APK) | el motor en Android, arm64 |
+| PCK del juego | 15,3 MB → **13,3 MB** sin comprimir (12,6 → 10,6 MB en zip) | todo lo de abajo |
+
+Dentro del PCK, antes de este cambio (752 ficheros):
+
+| Qué | MB | Notas |
+|---|---|---|
+| Audio | 6,47 | 42 OGG Vorbis: 5 músicas (4,8 MB en disco, estéreo a 96-160 kbps), 3 ambientes (0,9 MB, estéreo a 22 kHz) y 34 SFX (0,5 MB) |
+| Texturas | 2,80 | `metal_plate_diff_1k.jpg` (1,14 MB, sin uso), las otras dos `metal_plate` ya en S3TC (0,52 MB), la marca (1,05 MB), los iconos de la interfaz (~0,1 MB) |
+| Escenas y recursos convertidos (`.godot/exported`) | 2,73 | en binario y sin comprimir dentro del PCK; en zip se quedan en 0,38 |
+| Scripts compilados | 1,58 | 319 `.gdc` |
+| Fuentes | 1,06 | 6 TTF (ya con `compress=true`) |
+| Modelos (`assets/models/toy`) | 0,44 | mallas horneadas |
+| `logo.png` sin importar | 0,15 | la pantalla de arranque lo lee en crudo (`boot_splash/image`) |
+
+Lo que **no** viaja, y está bien que no viaje: `assets/models/cc0/` (cada pack lleva
+`.gdignore`, y desde esta rama además está en el `exclude_filter`), los GLB viejos de `assets/models/buildings/`, las capturas
+(`docs/media/` va dentro de `docs/*`) y todo `tools/`, `tests/`, `qa/` (sus `.yaml` y
+`.py` no son recursos de Godot).
+
+### 13.2 Lo que se quitó: assets que el juego no carga
+
+Se comprobó con grep sobre `scripts/`, `scenes/`, `data/`, `assets/` y
+`project.godot`, por ruta `res://` y por `uid://`, y repasando las cargas dinámicas
+(`UITheme` carga las fuentes por constante; `AudioManager` carga el audio por un
+manifiesto de nombres, y los 42 OGG están en él). Seis ficheros solo los usan las
+herramientas de `tools/`:
+
+| Fichero | En el PCK | Quién lo usa |
+|---|---|---|
+| `assets/textures/metal_plate_diff_1k.jpg` | 1,14 MB | `tools/gen_ui_textures.gd` (fabrica las placas de la interfaz) |
+| `assets/branding/keyart.svg` | 0,25 MB | `tools/render_branding.gd` |
+| `assets/fonts/Rajdhani-Medium.ttf` | 0,20 MB | `tools/render_brand.gd`, `tools/render_branding.gd` |
+| `assets/branding/banner.png` | 0,16 MB | nadie: es una salida de `tools/render_brand.gd` |
+| `assets/branding/banner.svg`, `logo.svg` | 0,21 MB | `tools/render_brand.gd` |
+
+Siguen en el repo; solo se excluyen del export, en los tres presets (§4). Son
+**−1,97 MB** en el .exe y en el APK. `tests/build/test_export_guards.gd`
+(`test_unused_assets_are_not_loaded_by_the_game`) falla si alguno vuelve a usarse en
+el juego: entonces hay que quitarlo de su lista y del `exclude_filter`.
+
+`keyart.png` y `logo.png` sí los usa el juego (`TitleMenu`, la pantalla de arranque).
+Las otras dos `metal_plate_*` las carga `DieselpunkBuildingFactory`.
+
+### 13.3 Audio: nada que ganar en la importación
+
+Todo el audio ya es **OGG Vorbis**, sin un solo WAV, y Godot 4 importa el OGG siempre
+como flujo comprimido (`oggvorbisstr`) que se decodifica al sonar: no hay opción de
+"streaming" que activar ni de compresión que bajar. El importador de OGG no tiene
+calidad, frecuencia ni paso a mono. Los bucles los marca `AudioManager` por código
+(`_make_ambient_loop()` y el *keep-alive*), así que el `loop=false` de los `.import`
+no importa.
+
+Lo único que bajaría el audio es **recodificarlo**, y eso es regenerar los sonidos
+(decisión del dueño, no hecha): las cuatro músicas de era a 96 kbps (hoy tres van a
+160) ahorrarían del orden de 1,5 MB, y los tres ambientes en mono unos 0,4 MB.
+
+### 13.4 La plantilla: el único camino a ≤ 90 MB y ≤ 30 MB
+
+Medido sobre las plantillas oficiales de 4.7-stable (la estándar se midió leyendo el
+índice del `.tpz` publicado, sin descargarlo):
+
+| Plantilla | Mono (la instalada) | Estándar |
+|---|---|---|
+| `windows_release_x86_64.exe` | 109,41 MB | 109,16 MB |
+| `windows_debug_x86_64.exe` | 103,30 MB | 103,06 MB |
+| `android_release.apk` | 105,04 MB | 104,69 MB |
+| `android_debug.apk` | 127,57 MB | 127,13 MB |
+
+Conclusiones:
+
+- **Estándar frente a mono no cambia nada** (−0,25 MB). `docs/26` §6.11 contaba con
+  pasar de 120 a ~90 MB así; no es cierto en 4.7. El cambio de editor sigue siendo
+  buena idea por otras razones (§2), pero no por el tamaño.
+- **Release frente a depuración**: en Windows la release es **más grande** (109 frente
+  a 103 MB; el .exe de depuración de este juego pesa 117,3 MB). No se reparte en
+  depuración: lleva las comprobaciones y el depurador remoto. En Android la release sí
+  es menor: 39,9 MB frente a 41,8.
+- Con plantillas oficiales el .exe no baja de **~122 MB** (109 + 13) ni el APK de
+  **~40 MB** (24 de motor comprimido + 13 de juego + 2 de Java). El presupuesto solo se
+  alcanza con una **plantilla compilada a medida**: optimizada para tamaño, con LTO y
+  sin las clases y los módulos que el juego no usa. La documentación oficial de Godot
+  ("Optimizing a build for size") da del orden de la mitad de tamaño; **no está
+  medido aquí**, hay que compilarla y medirla.
+
+#### Compilar la plantilla de Windows (lo hace el dueño, una vez por versión de Godot)
+
+Hace falta instalar herramientas; ningún agente lo ha hecho. Todo es gratis y oficial:
+
+1. **Herramientas**:
+   - Python 3.8 o más (`python.org`) y SCons: `python -m pip install scons`.
+   - Visual Studio 2022 **Build Tools** (`visualstudio.microsoft.com/downloads`, "Build
+     Tools for Visual Studio"), con la carga "Desarrollo para el escritorio con C++".
+   - Git.
+2. **El código del motor, en la versión exacta del editor** (fuera de este repo, por
+   ejemplo en `C:\src`):
+   ```powershell
+   git clone --depth 1 --branch 4.7-stable https://github.com/godotengine/godot.git C:\src\godot-4.7
+   ```
+3. **El perfil de compilación del juego.** En el editor: *Proyecto → Herramientas* →
+   la ventana de configuración de compilación del motor (*Engine Compilation
+   Configuration Editor*) → **Detectar desde el proyecto** (*Detect from Project*) →
+   revisar la lista → guardar como `tormenta.gdbuild` fuera del proyecto (por ejemplo en
+   `C:\src`). El detector lee escenas, recursos y scripts; una clase que el juego solo
+   crea con `ClassDB.instantiate("...")` o por un nombre en una cadena se le puede
+   escapar. Si al probar el exportado algo falla con "clase no encontrada", se marca a
+   mano en esa ventana y se vuelve a compilar. Sin perfil también vale (solo los
+   ajustes del paso 4): ahorra menos, pero no hay nada que revisar.
+4. **Compilar** (desde "x64 Native Tools Command Prompt for VS 2022", 20-60 min):
+   ```powershell
+   cd C:\src\godot-4.7
+   scons platform=windows target=template_release arch=x86_64 production=yes `
+     optimize=size lto=full debug_symbols=no build_profile=C:\src\tormenta.gdbuild
+   ```
+   Sale `bin\godot.windows.template_release.x86_64.exe`. Se puede añadir `deprecated=no`
+   para ahorrar algo más, pero entonces cualquier API marcada como obsoleta que use el
+   juego deja de existir: probarlo antes.
+5. **Usarla en el preset sin romper el export que ya funciona.** Copiar el binario a
+   `build/plantillas/` del proyecto (git-ignorado, no viaja) y, en *Exportar… →
+   Windows Desktop → Opciones → Plantilla personalizada → Release*, escribir la ruta
+   **relativa**:
+   ```
+   build/plantillas/godot.windows.template_release.x86_64.exe
+   ```
+   Comprobado el 2026-10-14: Godot resuelve la ruta relativa contra la carpeta del
+   proyecto, y si el fichero no está el export se niega (no sale un .exe a medias).
+   `test_custom_templates_are_empty_or_relative_inside_build` falla con una ruta
+   absoluta, que filtraría la máquina y rompería el export en cualquier otra. Ojo: con
+   la ruta puesta y sin el fichero, nadie más puede exportar; mientras la plantilla no
+   esté probada, mejor no subir ese cambio del preset (dejar el campo vacío vuelve a
+   la plantilla oficial).
+6. **Probar el exportado entero** (§12.4): partida nueva, vista 2D y 3D, combate,
+   tormenta, guardar y cargar, idioma. Si algo falta, volver al paso 3.
+
+#### Android
+
+El mismo perfil sirve, pero el camino es más largo: compilar
+`scons platform=android target=template_release arch=arm64 production=yes optimize=size lto=full build_profile=...`,
+generar con Gradle la plantilla (`platform\android\java\gradlew generateGodotTemplates`)
+y exportar con `gradle_build/use_gradle_build=true`, que pide el NDK r28b y CMake de
+§11.3. Ver "Compiling for Android" en la documentación oficial. Con Gradle se puede
+sacar además el **AAB** de Google Play, que entrega solo lo que necesita cada
+dispositivo.
+
+### 13.5 El zip: con 7z bajaría de 40 MB
+
+`tools/package_release` hace zips con deflate. El mismo .exe de 122,7 MB:
+
+| Formato | Tamaño |
+|---|---|
+| `.zip` (deflate, nivel máximo) | 48,4 MB |
+| `.7z` / xz (LZMA, nivel 9) | **36,6 MB** |
+
+Windows 11 abre los `.7z` desde el Explorador desde la versión 23H2; Windows 10 necesita
+7-Zip. No se ha cambiado el script: es decisión del dueño (complica la vida a quien
+tenga Windows 10). Con una plantilla a medida (§13.4) el .zip normal ya cabría.
+
+### 13.6 Antes y después de esta rama
+
+| Paquete | Antes | Después | Presupuesto |
+|---|---|---|---|
+| PCK (`--export-pack`, zip) | 12,6 MB, 752 ficheros | 10,6 MB, 740 ficheros | — |
+| `.exe` release | 124,6 MB | **122,7 MB** | ≤ 90 MB |
+| `.exe` en .zip | 50,3 MB | **48,4 MB** | ≤ 40 MB |
+| `.exe` en .7z | 38,4 MB | 36,6 MB | ≤ 40 MB |
+| APK depuración | 43,7 MB | 41,8 MB | — |
+| APK release (arm64) | 41,9 MB | **39,9 MB** | ≤ 30 MB |
+
+El "antes" ya era mayor que lo medido el 2026-09-27 (119,7 MB y 38,9 MB) porque el
+juego ha crecido: combate 3D, ambientes, modelos horneados, decoraciones. Para llegar
+al presupuesto falta la plantilla a medida (§13.4); el resto de palancas (audio
+recodificado, §13.3) suman 2 MB como mucho.

@@ -30,6 +30,10 @@ const ELEMENTS := {
 	"SandboxPanel": {"label": "HUD_SANDBOX", "hideable": true, "movable": true, "mode": "holder"},
 	## La insignia del rango del gobernador (bandera, numero y barra de XP).
 	"RankPanel": {"label": "HUD_RANK", "hideable": true, "movable": true, "mode": "holder"},
+	## El boton de velocidad x1 / x2 (GameSpeedButton, docs/21 §13).
+	"GameSpeedButton": {"label": "HUD_GAME_SPEED", "hideable": true, "movable": true, "mode": "holder"},
+	## El boton ESCARAMUZAS junto a CONSTRUIR (SkirmishButton, doc 21 §3.6).
+	"SkirmishButton": {"label": "HUD_SKIRMISH_BUTTON", "hideable": true, "movable": true, "mode": "holder"},
 }
 
 ## Orden en Ajustes y en el editor.
@@ -37,6 +41,7 @@ const ORDER := [
 	"ResourceHUD",
 	"StormHUD", "NotificationPanel.toasts",
 	"HelperPanel.callouts", "BattleScreen.turn", "SandboxPanel", "RankPanel",
+	"GameSpeedButton", "SkirmishButton",
 	"NotificationPanel.log", "ConstructionMenu.button", "BuildingInfoPanel",
 ]
 

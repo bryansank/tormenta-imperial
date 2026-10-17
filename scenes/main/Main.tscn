@@ -30,18 +30,51 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/PauseMenu.tscn" id="27"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TitleMenu.tscn" id="28"]
 [ext_resource type="PackedScene" path="res://scenes/ui/SandboxPanel.tscn" id="modos_sandbox"]
+[ext_resource type="Script" path="res://scripts/map/WorldLook.gd" id="world_look"]
 [ext_resource type="PackedScene" path="res://scenes/ui/RankPanel.tscn" id="rango_gobernador"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SkirmishButton.tscn" id="boton_escaramuzas"]
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.32, 0.56, 0.86, 1)
+sky_horizon_color = Color(0.9, 0.82, 0.68, 1)
+sky_curve = 0.12
+ground_bottom_color = Color(0.2, 0.36, 0.48, 1)
+ground_horizon_color = Color(0.86, 0.8, 0.68, 1)
+ground_curve = 0.06
+sun_angle_max = 18.0
+sun_curve = 0.08
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+process_mode = 2
+radiance_size = 1
 
 [sub_resource type="Environment" id="env"]
-background_mode = 1
+background_mode = 2
 background_color = Color(0.45, 0.65, 0.85, 1)
-ambient_light_source = 2
-ambient_light_color = Color(0.65, 0.7, 0.8, 1)
-ambient_light_energy = 0.5
-tonemap_mode = 2
-ssao_enabled = true
-ssao_radius = 2.0
-ssao_intensity = 1.0
+sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_color = Color(1, 0.9, 0.76, 1)
+ambient_light_sky_contribution = 0.7
+ambient_light_energy = 0.85
+tonemap_mode = 3
+tonemap_exposure = 1.05
+tonemap_white = 6.0
+ssao_enabled = false
+ssao_radius = 1.2
+ssao_intensity = 1.6
+ssao_power = 1.4
+ssao_detail = 0.6
+ssao_light_affect = 0.1
+glow_enabled = true
+glow_intensity = 0.35
+glow_strength = 0.9
+glow_bloom = 0.02
+glow_blend_mode = 1
+glow_hdr_threshold = 1.1
+adjustment_enabled = true
+adjustment_contrast = 1.06
+adjustment_saturation = 1.2
 
 [sub_resource type="PlaneMesh" id="grid_mesh"]
 size = Vector2(80.4, 80.4)
@@ -49,7 +82,7 @@ size = Vector2(80.4, 80.4)
 [sub_resource type="ShaderMaterial" id="grid_material"]
 render_priority = 1
 shader = ExtResource("2")
-shader_parameter/grid_color = Color(0.85, 0.85, 0.75, 0.09)
+shader_parameter/grid_color = Color(0.95, 0.95, 0.85, 0.06)
 shader_parameter/cell_size = 2.0
 shader_parameter/line_width = 0.02
 shader_parameter/fade_distance = 90.0
@@ -67,15 +100,19 @@ far = 200.0
 script = ExtResource("1")
 
 [node name="DirectionalLight" type="DirectionalLight3D" parent="." unique_id=637042798]
-transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 20, 0)
-light_color = Color(1, 0.97, 0.9, 1)
-light_energy = 0.8
+transform = Transform3D(-0.642788, 0, 0.766044, 0.492404, 0.766044, 0.413176, -0.586824, 0.642788, -0.492404, 0, 20, 0)
+light_color = Color(1, 0.93, 0.8, 1)
+light_energy = 1.35
 shadow_enabled = true
 shadow_bias = 0.03
-shadow_blur = 2.0
+shadow_normal_bias = 1.2
+shadow_blur = 0.6
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 70.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1722522396]
 environment = SubResource("env")
+script = ExtResource("world_look")
 
 [node name="IslandGenerator" type="Node3D" parent="."]
 script = ExtResource("11")
@@ -134,6 +171,8 @@ script = ExtResource("7")
 [node name="SandboxPanel" parent="." instance=ExtResource("modos_sandbox")]
 
 [node name="RankPanel" parent="." instance=ExtResource("rango_gobernador")]
+
+[node name="SkirmishButton" parent="." instance=ExtResource("boton_escaramuzas")]
 
 [node name="PauseMenu" parent="." instance=ExtResource("27")]
 

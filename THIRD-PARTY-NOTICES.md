@@ -178,16 +178,25 @@ distributed unmodified. Source: Google Fonts.
 
 ## 4. Audio (`assets/audio/`)
 
-All music and sound effects are **CC0 1.0** (public-domain dedication, no
-conditions). Credited anyway; per-clip detail in [`assets/CREDITS.md`](assets/CREDITS.md).
+All third-party music and sound effects are **CC0 1.0** (public-domain dedication,
+no conditions). Credited anyway; per-clip detail in [`assets/CREDITS.md`](assets/CREDITS.md)
+and [`assets/audio/MANIFEST.md`](assets/audio/MANIFEST.md). Each Kenney pack's own
+licence text ships in `licenses/CC0-KENNEY-*.txt`.
 
 | Clips | Source | Licence |
 |---|---|---|
 | `music/era_1_frontier`, `era_2_industrial`, `era_3_petroleum`, `victory` | [Dark Sci-Fi Audio Pack](https://opengameart.org/content/dark-sci-fi-audio-pack) by SRG774 (OpenGameArt) | CC0 1.0 |
-| `sfx/build_place`, `demolish`, `process_done`, `mining_done` | [Kenney — Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 1.0 |
-| `sfx/build_complete`, `unlock`, `event_positive`, `event_danger`, `insufficient`, `ui_click` | [Kenney — Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 1.0 |
-| `sfx/upgrade_complete`, `era_up`, `milestone` | [Kenney — Music Jingles](https://kenney.nl/assets/music-jingles) | CC0 1.0 |
-| `sfx/trade_buy`, `trade_sell`, `unit_ready` | [Kenney — RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 1.0 |
+| `music/combat` | [Battle Theme A](https://opengameart.org/content/battle-theme-a) by cynicmusic (OpenGameArt), re-encoded to OGG at -4.5 dB | CC0 1.0 |
+| `sfx/build_place`, `demolish`, `process_done`, `mining_done`, `combat_hit`, `audit_summoned`, `tithe_demanded` | [Kenney — Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 1.0 (`licenses/CC0-KENNEY-IMPACT-SOUNDS.txt`) |
+| `sfx/build_complete`, `unlock`, `event_positive`, `event_danger`, `insufficient`, `ui_click` | [Kenney — Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 1.0 (`licenses/CC0-KENNEY-INTERFACE-SOUNDS.txt`) |
+| `sfx/upgrade_complete`, `era_up`, `milestone`, `combat_start`, `combat_victory`, `combat_defeat`, `expedition_start`, `expedition_return`, `storm_halted`, `tithe_repelled`, `rank_up` | [Kenney — Music Jingles](https://kenney.nl/assets/music-jingles) | CC0 1.0 (`licenses/CC0-KENNEY-MUSIC-JINGLES.txt`) |
+| `sfx/trade_buy`, `trade_sell`, `unit_ready`, `tithe_collected`, `collect`, `harvest` | [Kenney — RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 1.0 (`licenses/CC0-KENNEY-RPG-AUDIO.txt`) |
+| `sfx/combat_unit_lost` | [Kenney — Sci-Fi Sounds](https://kenney.nl/assets/sci-fi-sounds) | CC0 1.0 (`licenses/CC0-KENNEY-SCI-FI-SOUNDS.txt`) |
+| `sfx/ui_toggle` | [Kenney — UI Audio](https://kenney.nl/assets/ui-audio) | CC0 1.0 (`licenses/CC0-KENNEY-UI-AUDIO.txt`) |
+
+`ambient/day`, `ambient/night`, `ambient/storm`, `sfx/storm_warning` and `sfx/storm_thunder` are not
+third-party: they are synthesised from filtered noise and oscillators by
+`tools/gen_ambient_audio.gd` and are original content of the game (section 6).
 
 ## 5. Textures (`assets/textures/`)
 
@@ -196,13 +205,30 @@ conditions). Credited anyway; per-clip detail in [`assets/CREDITS.md`](assets/CR
 | `metal_plate_diff_1k`, `metal_plate_nor_gl_1k`, `metal_plate_rough_1k` | [Poly Haven — Metal Plate](https://polyhaven.com/a/metal_plate) | CC0 1.0 |
 | `ui/panel_metal`, `ui/panel_inset_metal`, `ui/button_metal` | Derived from the Poly Haven texture above by `tools/gen_ui_textures.gd` | CC0 1.0 (source); the derived sprites are part of the game's art |
 
+### 3D model pieces (`assets/models/cc0/`)
+
+The "toy" building and decoration models in `assets/models/toy/` are baked by
+`tools/build_toy_models.gd` from the pieces below, recoloured to the game's palette.
+The source folders carry a `.gdignore` and are not exported; only the baked meshes ship.
+
+| Pieces | Source | Licence |
+|---|---|---|
+| `kaykit_city_builder_bits/` | [KayKit — City Builder Bits](https://kaylousberg.itch.io/city-builder-bits) (Kay Lousberg) | CC0 1.0 (`licenses/CC0-KAYKIT-CITY-BUILDER-BITS.txt`) |
+| `kaykit_medieval_hexagon/` | [KayKit — Medieval Hexagon Pack](https://kaylousberg.itch.io/kaykit-medieval-hexagon) (Kay Lousberg) | CC0 1.0 (`licenses/CC0-KAYKIT-MEDIEVAL-HEXAGON.txt`) |
+| `kenney_city_kit_industrial/` | [Kenney — City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial) | CC0 1.0 (`licenses/CC0-KENNEY-CITY-KIT-INDUSTRIAL.txt`) |
+| `kenney_fantasy_town_kit/` (`lantern`, `hedge`, `hedge-large`, `tree-high-round`) | [Kenney — Fantasy Town Kit](https://kenney.nl/assets/fantasy-town-kit) | CC0 1.0 (`licenses/CC0-KENNEY-FANTASY-TOWN-KIT.txt`) |
+| `kenney_survival_kit/` (`signpost`, `campfire-stand`, `resource-wood`) | [Kenney — Survival Kit](https://kenney.nl/assets/survival-kit) | CC0 1.0 (`licenses/CC0-KENNEY-SURVIVAL-KIT.txt`) |
+| `kenney_pirate_kit/` (`flag-high`, `palm-straight`, `patch-sand`) | [Kenney — Pirate Kit](https://kenney.nl/assets/pirate-kit) | CC0 1.0 (`licenses/CC0-KENNEY-PIRATE-KIT.txt`) |
+
 ## 6. Original content (not third-party)
 
 Made for this game by its author and covered by `LICENSE` (all rights reserved):
 the building 3D models in `assets/models/` (built in Blender with the scripts in
 `tools/`), the resource and unit icons in `assets/textures/ui/icons/` and
 `assets/textures/ui/units/` (drawn by `tools/gen_resource_icons.gd` and
-`tools/gen_unit_icons.gd`), the logo, banner, key art and app icon
+`tools/gen_unit_icons.gd`), the synthesised ambience and storm sounds
+(`assets/audio/ambient/day`, `night`, `storm`, `sfx/storm_warning`, `storm_thunder`, made by
+`tools/gen_ambient_audio.gd`), the logo, banner, key art and app icon
 (`assets/branding/`, `icon.svg`), and all game text.
 
 ## 7. Development tools (not shipped)

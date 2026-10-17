@@ -2,28 +2,28 @@ extends CanvasLayer
 ## El rango del gobernador en pantalla. Tres piezas, ninguna con estado propio
 ## (todo se lee de RankManager):
 ##
-##   Insignia   arriba a la derecha, junto al ☰ MENU: la bandera de la colonia,
-##              el numero de rango, el titulo y una barra fina de XP. Tocarla
-##              abre la tarjeta. Slot propio "rank_badge" en UILayoutConfig y
+##   Insignia   arriba a la derecha, junto al ☰ MENU: la bandera del pais, el
+##              numero de rango, el nombre del pais y una barra fina de XP (el
+##              titulo del rango, en el tooltip y en la tarjeta). Tocarla abre
+##              la tarjeta. Slot propio "rank_badge" en UILayoutConfig y
 ##              registrada en HudRegistry (se oculta y se mueve).
 ##   Aviso      al subir de rango: "▲ 5 · Alcalde" y lo desbloqueado, corto, bajo
 ##              la insignia. Suena "rank_up" (AudioManager, no aqui).
-##   Tarjeta    ☰ MENU > COLONIA: rango y XP, y la galeria de banderas y colores
-##              (lo bloqueado, con candado y "Rango N").
+##   Tarjeta    ☰ MENU > COLONIA: el pais (bandera y nombre), rango y XP, y el
+##              boton BANDERA Y NOMBRE, que abre el editor (ColonyIdentityPanel)
+##              con las piezas del rango (lo bloqueado, con candado y "Rango N").
 
 const LAYER := 11
 const BADGE_W := 196.0
 const BADGE_W_NARROW := 118.0
 const FLAG_SMALL := Vector2(36, 24)
 const FLAG_BIG := Vector2(84, 56)
-const FLAG_PICK := Vector2(54, 36)
-const SWATCH := Vector2(44, 44)
 const TOAST_HOLD := 3.5
 const CARD_W := 520.0
 
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
-const ConstructionMenuScript := preload("res://scripts/ui/ConstructionMenu.gd")
+const IdentityPanel := preload("res://scripts/ui/ColonyIdentityPanel.gd")
 
 var _root: Control
 var _dock: Control
@@ -34,6 +34,9 @@ var _badge_title: Label
 var _badge_bar: ProgressBar
 var _toast: PanelContainer = null
 var _toast_tween: Tween = null
+## Ascenso que llego con un tablero de combate abierto (la XP de ganar una pelea
+## lo provoca a menudo): [rango, recompensas]. Sale al cerrarse el tablero.
+var _held_rank: Array = []
 
 var _backdrop: ColorRect
 var _card: PanelContainer
@@ -42,17 +45,18 @@ var _card_rank: Label
 var _card_bar: ProgressBar
 var _card_xp: Label
 var _card_next: Label
-var _flag_row: HFlowContainer
-var _color_row: HFlowContainer
+var _card_name: Label
+var _editor: CanvasLayer = null
 var _is_open := false
 
 func _ready() -> void:
 	layer = LAYER
 	_setup_ui()
 	UIManager.register_panel(self, "RankPanel.modal")
-	EventBus.governor_xp_changed.connect(func(_x, _r, _g): refresh())
+	EventBus.governor_xp_changed.connect(_on_xp_changed)
 	EventBus.governor_rank_up.connect(_on_rank_up)
-	EventBus.colony_cosmetics_changed.connect(func(_f, _c): refresh())
+	EventBus.encounter_closed.connect(_release_held_rank)
+	EventBus.colony_identity_changed.connect(func(_n, _s): refresh())
 	EventBus.game_load_completed.connect(refresh)
 	EventBus.game_new_started.connect(refresh)
 	get_viewport().size_changed.connect(_relayout)
@@ -115,8 +119,9 @@ func _setup_ui() -> void:
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(column)
 	_badge_title = UITheme.make_label("", "small", UITheme.TEXT)
-	_badge_title.name = "RankTitle"
+	_badge_title.name = "ColonyName"
 	_badge_title.clip_text = true
+	_badge_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_badge_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(_badge_title)
 	_badge_bar = _make_thin_bar(5)
@@ -147,7 +152,12 @@ func _setup_ui() -> void:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.alignment = BoxContainer.ALIGNMENT_CENTER
 	head.add_child(info)
-	_card_rank = UITheme.make_label("", "section", UITheme.ACCENT)
+	_card_name = UITheme.make_label("", "section", UITheme.TEXT_BRIGHT)
+	_card_name.name = "ColonyName"
+	_card_name.clip_text = true
+	_card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	info.add_child(_card_name)
+	_card_rank = UITheme.make_label("", "body", UITheme.ACCENT)
 	info.add_child(_card_rank)
 	_card_bar = _make_thin_bar(8)
 	info.add_child(_card_bar)
@@ -158,17 +168,9 @@ func _setup_ui() -> void:
 	_card_next.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_card_next)
 
-	col.add_child(UITheme.section_header(Tr.t("LBL_COLONY_FLAG")))
-	_flag_row = HFlowContainer.new()
-	_flag_row.add_theme_constant_override("h_separation", 8)
-	_flag_row.add_theme_constant_override("v_separation", 8)
-	col.add_child(_flag_row)
-
-	col.add_child(UITheme.section_header(Tr.t("LBL_COLONY_COLOR")))
-	_color_row = HFlowContainer.new()
-	_color_row.add_theme_constant_override("h_separation", 8)
-	_color_row.add_theme_constant_override("v_separation", 8)
-	col.add_child(_color_row)
+	var edit := ModalKit.make_menu_button(Tr.t("BTN_COLONY_EDIT"), UITheme.ACCENT_DIM, open_editor)
+	edit.name = "EditColony"
+	col.add_child(edit)
 	_relayout()
 
 func _make_flag_rect(px: Vector2) -> TextureRect:
@@ -204,13 +206,32 @@ func _relayout() -> void:
 
 # ── Refresco ──
 
+## Cada ciclo de produccion da 1 XP: con muchos edificios llegan varias en el
+## mismo fotograma. Si el rango no cambia, se repinta una vez al final del
+## fotograma; si cambia, ya.
+var _refresh_queued := false
+func _on_xp_changed(_xp: int, rank: int, _gained: int) -> void:
+	if _badge_rank != null and _badge_rank.text != str(rank):
+		refresh()
+		return
+	if _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
+	refresh()
+
 func refresh() -> void:
 	var rank: int = RankManager.get_rank()
 	var flag_tex := ColonyFlag.current_texture()
 	var title := Tr.t(RankManager.get_title_key())
 	_badge_flag.texture = flag_tex
 	_badge_rank.text = str(rank)
-	_badge_title.text = title
+	_badge_title.text = RankManager.get_colony_name()
+	_badge.tooltip_text = "%s · %s
+%s" % [RankManager.get_colony_name(), title, Tr.t("LBL_RANK_BADGE_TIP")]
 	_badge_bar.value = RankManager.get_rank_progress()
 	if _is_open:
 		_refresh_card()
@@ -218,6 +239,7 @@ func refresh() -> void:
 func _refresh_card() -> void:
 	var rank: int = RankManager.get_rank()
 	_card_flag.texture = ColonyFlag.current_texture()
+	_card_name.text = RankManager.get_colony_name()
 	_card_rank.text = Tr.t("FMT_RANK_TITLE") % [rank, Tr.t(RankManager.get_title_key())]
 	_card_bar.value = RankManager.get_rank_progress()
 	if RankManager.is_max_rank():
@@ -228,77 +250,22 @@ func _refresh_card() -> void:
 		var lines := reward_lines(RankManager.rewards_between(rank, rank + 1))
 		_card_next.text = Tr.t("FMT_RANK_NEXT") % [rank + 1, ", ".join(lines)] if not lines.is_empty() else ""
 	_card_next.visible = _card_next.text != ""
-	_build_flag_buttons()
-	_build_color_buttons()
 	_relayout.call_deferred()
 
-func _build_flag_buttons() -> void:
-	for child in _flag_row.get_children():
-		child.queue_free()
-	for flag_id in GameConfig.COLONY_FLAGS:
-		var unlocked: bool = RankManager.is_flag_unlocked(flag_id)
-		var btn := _make_pick_button(flag_id == RankManager.get_flag(), unlocked)
-		btn.name = "Flag_" + flag_id
-		var box := VBoxContainer.new()
-		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.alignment = BoxContainer.ALIGNMENT_CENTER
-		box.set_anchors_preset(Control.PRESET_FULL_RECT)
-		btn.add_child(box)
-		var pic := _make_flag_rect(FLAG_PICK)
-		pic.texture = ColonyFlag.texture(flag_id, RankManager.get_color())
-		pic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		if not unlocked:
-			pic.modulate = Color(0.45, 0.45, 0.45)
-		box.add_child(pic)
-		if not unlocked:
-			box.add_child(ConstructionMenuScript.make_rank_lock_row(RankManager.flag_rank(flag_id)))
-		btn.custom_minimum_size = Vector2(FLAG_PICK.x + 30, FLAG_PICK.y + (34 if not unlocked else 16))
-		btn.pressed.connect(func(): RankManager.set_flag(flag_id))
-		_flag_row.add_child(btn)
+# ── El editor del pais (ColonyIdentityPanel, modo "edit") ──
 
-func _build_color_buttons() -> void:
-	for child in _color_row.get_children():
-		child.queue_free()
-	for color_id in GameConfig.COLONY_COLOR_ORDER:
-		var unlocked: bool = RankManager.is_color_unlocked(color_id)
-		var btn := _make_pick_button(color_id == RankManager.get_color_id(), unlocked)
-		btn.name = "Color_" + color_id
-		btn.tooltip_text = Tr.t("COLONY_COLOR_" + color_id.to_upper())
-		var swatch := ColorRect.new()
-		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		swatch.color = GameConfig.colony_colors[color_id]
-		if not unlocked:
-			swatch.color = swatch.color.darkened(0.5)
-		swatch.set_anchors_preset(Control.PRESET_FULL_RECT)
-		swatch.offset_left = 6
-		swatch.offset_top = 6
-		swatch.offset_right = -6
-		swatch.offset_bottom = -6
-		btn.add_child(swatch)
-		btn.custom_minimum_size = SWATCH
-		if not unlocked:
-			var lock := UITheme.make_label(str(RankManager.color_rank(color_id)), "small", UITheme.WARNING)
-			lock.name = "RankLockLabel"
-			lock.set_anchors_preset(Control.PRESET_CENTER)
-			lock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			btn.add_child(lock)
-		btn.pressed.connect(func(): RankManager.set_color(color_id))
-		_color_row.add_child(btn)
+## Abre el editor sobre la tarjeta. LISTO aplica en RankManager.set_colony().
+func open_editor() -> void:
+	if _editor != null and is_instance_valid(_editor):
+		return
+	_editor = IdentityPanel.new()
+	add_child(_editor)
+	_editor.confirmed.connect(func(colony_name: String, spec: Dictionary):
+		RankManager.set_colony(colony_name, spec))
+	_editor.open("edit")
 
-func _make_pick_button(selected: bool, unlocked: bool) -> Button:
-	var btn := Button.new()
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.disabled = not unlocked
-	var st := StyleBoxFlat.new()
-	st.bg_color = UITheme.CARD_BG if unlocked else UITheme.BTN_DISABLED
-	st.set_corner_radius_all(4)
-	st.border_color = UITheme.ACCENT if selected else UITheme.ACCENT_DIM
-	st.set_border_width_all(3 if selected else 1)
-	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-		btn.add_theme_stylebox_override(state, st)
-	btn.set_meta("selected", selected)
-	return btn
+func editor() -> CanvasLayer:
+	return _editor if _editor != null and is_instance_valid(_editor) else null
 
 # ── Lo ganado, en pocas palabras ──
 
@@ -310,14 +277,20 @@ static func reward_lines(rewards: Dictionary) -> Array:
 		out.append(data.get_display_name() if data != null else String(id))
 	var limits: Dictionary = rewards.get("limit", {})
 	for id in limits:
+		# Huecos de algo sin tope (las decoraciones desde los topes por era) no
+		# dan nada: no se anuncian.
+		if GameConfig.is_uncapped_building(String(id)):
+			continue
 		var data := Rules.load_building_data(String(id))
 		out.append(Tr.t("FMT_RANK_REWARD_SLOTS") % [int(limits[id]), data.get_display_name() if data != null else String(id)])
 	if float(rewards.get("production", 0.0)) > 0.0:
 		out.append(Tr.t("FMT_RANK_REWARD_PRODUCTION") % roundi(float(rewards["production"]) * 100.0))
 	if float(rewards.get("storage", 0.0)) > 0.0:
 		out.append(Tr.t("FMT_RANK_REWARD_STORAGE") % roundi(float(rewards["storage"]) * 100.0))
-	if not rewards.get("flags", []).is_empty():
-		out.append(Tr.t("LBL_RANK_REWARD_FLAG"))
+	if not rewards.get("patterns", []).is_empty():
+		out.append(Tr.t("LBL_RANK_REWARD_PATTERN"))
+	if not rewards.get("emblems", []).is_empty():
+		out.append(Tr.t("LBL_RANK_REWARD_EMBLEM"))
 	if not rewards.get("colors", []).is_empty():
 		out.append(Tr.t("LBL_RANK_REWARD_COLOR"))
 	return out
@@ -326,7 +299,21 @@ static func reward_lines(rewards: Dictionary) -> Array:
 
 func _on_rank_up(rank: int, rewards: Dictionary) -> void:
 	refresh()
+	if CombatManager.is_board_open():
+		# El ultimo manda: dos ascensos en una pelea dicen el rango final.
+		_held_rank = [rank, rewards]
+		return
 	show_rank_toast(rank, rewards)
+
+func held_rank() -> int:
+	return int(_held_rank[0]) if not _held_rank.is_empty() else 0
+
+func _release_held_rank() -> void:
+	if _held_rank.is_empty() or CombatManager.is_board_open():
+		return
+	var item: Array = _held_rank
+	_held_rank = []
+	show_rank_toast(int(item[0]), item[1])
 
 func show_rank_toast(rank: int, rewards: Dictionary) -> void:
 	if _toast != null and is_instance_valid(_toast):

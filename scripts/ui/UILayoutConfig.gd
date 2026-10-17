@@ -67,6 +67,17 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
+	## El boton de velocidad x1 / x2 (GameSpeedButton): bajo la Tormenta, y en
+	## calma (la Tormenta oculta) en su sitio, arriba en el centro.
+	"speed_button": {
+		"anchor": Rect2(0.5, 0, 0.5, 0),
+		"margin": {"left": 0, "top": 8, "right": 0, "bottom": 0},
+		"max_size": Vector2(64, 0),
+		"grow_h": Control.GROW_DIRECTION_BOTH,
+		"grow_v": Control.GROW_DIRECTION_END,
+		"stack_after": "StormHUD",
+		"gap": 6,
+	},
 	## Columna derecha: botones del menu lateral -> panel de edificio.
 	"sidebar_buttons": {
 		"anchor": Rect2(1, 0, 1, 0),
@@ -112,6 +123,15 @@ const SLOTS := {
 		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 20},
 		"max_size": Vector2(250, 0),
 		"grow_h": Control.GROW_DIRECTION_BOTH,
+		"grow_v": Control.GROW_DIRECTION_BEGIN,
+	},
+	## El boton ESCARAMUZAS (SkirmishButton), a la derecha de CONSTRUIR en la
+	## misma franja de abajo: media anchura de CONSTRUIR (240 / 2) + 12 de hueco.
+	"skirmish_button": {
+		"anchor": Rect2(0.5, 1, 0.5, 1),
+		"margin": {"left": 132, "top": 0, "right": 0, "bottom": 20},
+		"max_size": Vector2(176, 0),
+		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_BEGIN,
 	},
 	"bottom_controls": {
@@ -216,6 +236,9 @@ const PAUSE_RESERVE := 0.0
 ## izquierda llena hasta media pantalla, los avisos suben desde abajo a la
 ## izquierda y la tapaban. Pasan al centro, encima de CONSTRUIR.
 const COLUMN_NARROW_SLOTS := {
+	## La Tormenta baja a la izquierda: la velocidad se queda arriba en el centro,
+	## sin apilarse tras ella (cae en mitad de la columna izquierda).
+	"speed_button": {"stack_after": ""},
 	"toast_area": {
 		"anchor": Rect2(0.5, 1, 0.5, 1),
 		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 84},
@@ -241,11 +264,25 @@ const NARROW_SLOTS := {
 	"toast_area": {
 		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 256},
 	},
+	## ESCARAMUZAS no cabe a la derecha de CONSTRUIR en 400 px: va centrado justo
+	## encima (196 + 64 de CONSTRUIR + 8 de hueco), por debajo de los avisos.
+	"skirmish_button": {
+		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 268},
+		"grow_h": Control.GROW_DIRECTION_BOTH,
+	},
 	## La insignia del rango, bajo el boton ☰ MENU (10 + 48 + 6): a su izquierda
 	## chocaria con la columna de recursos.
 	"rank_badge": {
 		"margin": {"left": 0, "top": 64, "right": 10, "bottom": 0},
 		"max_size": Vector2(120, 0),
+	},
+	## La velocidad, bajo la insignia del rango (el centro de arriba choca con
+	## los recursos en 400 px).
+	"speed_button": {
+		"anchor": Rect2(1, 0, 1, 0),
+		"margin": {"left": 0, "top": 118, "right": 10, "bottom": 0},
+		"grow_h": Control.GROW_DIRECTION_BEGIN,
+		"stack_after": "RankPanel",
 	},
 	## El globo del menu ☰ (con la guia de edificios) es el unico que cabe en
 	## una pantalla estrecha: HelperPanel oculta los demas (NARROW_TIPS).
@@ -311,7 +348,9 @@ const PANEL_SLOTS := {
 	"OnScreenControls":           "bottom_controls",
 	"SandboxPanel":               "sandbox_tab",
 	"RankPanel":                  "rank_badge",
+	"GameSpeedButton":            "speed_button",
 	"RankPanel.modal":            "center_modal",
+	"SkirmishButton":             "skirmish_button",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)

@@ -89,7 +89,7 @@ func _check_building_milestones(building_id: String) -> void:
 func _check_military_milestone() -> void:
 	var barracks_count := 0
 	var tower_count := 0
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		if data.id == "barracks":
 			barracks_count += 1
@@ -253,9 +253,7 @@ func _audit_seed() -> int:
 	return randi()
 
 func _read_morale() -> float:
-	if PopulationManager.has_method("get_morale"):
-		return float(PopulationManager.get_morale())
-	return 50.0
+	return float(PopulationManager.get_morale())
 
 # ── Victory ──
 

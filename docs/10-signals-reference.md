@@ -2,17 +2,18 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**111 signals**, in the order they are declared in `EventBus.gd`. Emitters and
+**126 signals** in 30 categories (counted on 2026-10-14, after the skirmishes), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
 
-Three patterns count as a connection, and all three are included here:
+Two patterns count as a connection, and both are included here:
 
 - `EventBus.<signal>.connect(...)` — the normal case.
 - `var bus := EventBus` then `bus.<signal>.connect(...)` — `BuildingStatusBadge`.
-- `EventBus.connect("<signal>", ...)` — only `AudioManager._connect_optional()`, for
-  the two Final Audit signals it guards with `has_signal()`.
+
+(The old string form, `AudioManager._connect_optional()`, is gone: every signal it
+guarded exists, and AudioManager connects them typed.)
 
 Rows marked *(no emitter)* or *(no listener)* are declared but not wired on that
 side. That is recorded on purpose: see [Orphan signals](#orphan-signals) for the
@@ -52,6 +53,8 @@ fit. The player is warned once per game, via a TutorialManager tip, and
 | `building_selected_for_placement` | `building_data: Resource` | ConstructionMenu | BuildingPlacer, BuildingInfoPanel, OnScreenControls, TutorialManager, HelperPanel, BuildingPlacer2D |
 | `building_placement_cancelled` | — | BuildingPlacer, OnScreenControls, PauseMenu, BuildingPlacer2D | BuildingPlacer, OnScreenControls, TutorialManager, HelperPanel, BuildingPlacer2D |
 | `building_placed` | `building_data: Resource, cell: Vector2i` | BuildingPlacer, BuildingPlacer2D | ProductionManager, GameManager, ProgressionManager, ArmyPanel, SkirmishPanel, HelperPanel, OnScreenControls, AudioManager, TutorialManager |
+| `placement_batch_started` | — | PlacementRules.pave_route (antes de los tramos del auto-road) | GameManager, PopulationManager (aplazan guardado y recuento) |
+| `placement_batch_finished` | `count: int` | PlacementRules.pave_route (tras el ultimo tramo) | GameManager (un guardado), PopulationManager (un recuento) |
 | `building_moved` | `from_cell: Vector2i, to_cell: Vector2i` | BuildingPlacer, BuildingPlacer2D | GameManager, TutorialManager, HelperPanel, OnScreenControls |
 | `building_removed` | `cell: Vector2i` | *(no emitter)* | *(no listener)* |
 
@@ -91,6 +94,18 @@ what the UI promised before confirming, and what was actually paid back.
 | Signal | Params | Emitted By | Consumed By |
 |--------|--------|------------|-------------|
 | `production_tick` | `building_node: Node` | ProductionManager | BuildingStatusBadge |
+
+### Food, Farm and collecting (`comida-granja-recoger` block)
+
+All emitted by `ProductionManager`: production waits in each building until it is
+collected ([02-economy.md](02-economy.md)).
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `building_stock_changed` | `node: Node, stock: Dictionary` (resource -> amount waiting) | ProductionManager | BuildingStatusBadge, StockIcon3D, StockIcon2D, TutorialManager |
+| `production_collected` | `node: Node, collected: Dictionary` (what entered the bag; the rest stays in the building) | ProductionManager | BuildingPlacer, BuildingPlacer2D (the icon and "+N" fly to the HUD), AudioManager (`collect` / `harvest`), TutorialManager |
+| `stock_spoiled` | `node: Node, lost: Dictionary` (only with `GameMode.spoilage_enabled()`) | ProductionManager | *(no listener)* |
+| `crop_planted` | `node: Node, crop_id: String` | ProductionManager | GameManager (autosave trigger) |
 
 ## Upgrades
 
@@ -193,6 +208,11 @@ Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
 | `expedition_ended` | `result: int, rewards: Dictionary, casualties: Dictionary` | CombatManager | BattleScreen, SkirmishPanel, ArmyPanel, NotificationPanel, AudioManager |
 | `expedition_resumed` | `expedition_id: int` | CombatManager | BattleScreen, SkirmishPanel, ArmyPanel |
 | `defense_auto_resolved` | `victory: bool, rounds: int, summary: Dictionary` | CombatManager | WarReportScreen |
+| `sortie_offers_changed` | — | CombatManager | SkirmishButton, SkirmishPanel |
+| `sortie_loot_gained` | `loot: Dictionary` | CombatManager | (sin oyentes: el parte lo lee de `get_last_result()`) |
+| `blueprint_unlocked` | `building_id: String` | CombatManager | (para el candado de planos de las ramas de edificios) |
+| `enemy_routed` | — | CombatManager | BattleScreen |
+| `encounter_closed` | — (end of `CombatManager.end_encounter()`: the report was read) | CombatManager | NotificationPanel, ProgressPanel, RankPanel, HelperPanel (release the notices held during the fight; they re-check `is_board_open()`, the next siege wave may have opened another board) |
 
 `result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
 
@@ -247,6 +267,21 @@ A warning that comes to nothing emits `storm_false_alarm(deferred)`, and `deferr
 is the severity the next real storm inherits: postponed, not forgiven.
 `taken` on `tithe_resolved` is resource → amount.
 
+## Day and night
+
+Emitted only by `DayClock` (docs/21 §12). `phase` follows `DayCycle.Phase`
+(`DAWN`, `DAY`, `DUSK`, `NIGHT`); `hour` is the time of day, 0-1.
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `day_phase_changed` | `phase: int, hour: float` | DayClock | StormSky |
+
+It fires when the clock **enters** a phase, never on load or on a new game: a
+consumer re-derives from `DayClock.get_phase()` on `game_load_completed` /
+`game_new_started`. StormSky repaints on it (otherwise every
+`day_cycle_refresh` s). Visual only today; a future rule (night production, the
+walkers' `set_presence()`, a night ambient track) would hang from it.
+
 ## The Final Audit
 
 Emitted only by `ProgressionManager`. HQ level 3 no longer wins the game: it
@@ -272,8 +307,7 @@ rebuilt. In Supervivencia there is no resummon: `run_ended` follows and the save
 sealed (see [Game modes](#game-modes)).
 
 `storm_halted_forever` stops the Storm for good, and nothing else has permission to
-stop the cycle. AudioManager wires both optional rows through `_connect_optional()`,
-which is guarded by `EventBus.has_signal()`.
+stop the cycle. AudioManager connects both with a typed `.connect`.
 
 ## Random Events
 
@@ -304,11 +338,13 @@ refresh its tech states on any message.
 | `sidebar_toggled` | `visible: bool` | PlacementAssist | ArmyPanel, HelperPanel, MarketPanel, ObjectivePanel, ProgressPanel, SettingsPanel, SkirmishPanel, TechTreePanel, PlacementAssist, UILayoutManager |
 | `grid_overlay_toggled` | `visible: bool` | SettingsPanel | GridOverlayControl, GridOverlay2D |
 | `fullscreen_changed` | `enabled: bool` | GameConfig | SettingsPanel |
+| `game_speed_changed` | `speed: float` | GameConfig (`set_game_speed`) | GameSpeedButton; the combat view (shortens its animations with `combat_pace`) |
 | `touch_controls_changed` | `enabled: bool` (resolved: "auto" already checked against the device) | GameConfig, DeviceProfile | OnScreenControls, ResourceHUD, HelperPanel |
 | `touch_controls_opacity_changed` | `opacity: float` | GameConfig | OnScreenControls |
 | `helper_visibility_changed` | `visible: bool` | HudRegistry | HelperPanel, SettingsPanel |
 | `music_toggled` | `enabled: bool` | AudioManager | SettingsPanel, PauseMenu |
 | `locale_changed` | `locale: String` | GameConfig (`set_locale()`) | GameManager (saves and reloads the scene keeping the game) |
+| `graphics_quality_changed` | `quality: String` (`auto` / `high` / `low` / `minimal`) | GraphicsQuality (`set_quality()`) | WorldLook, DeviceProfile, ColonyFlag3D |
 
 The ☰ sidebar is gone (the single MENÚ replaced it, see
 [08-ui-systems.md](08-ui-systems.md)), so `sidebar_toggled` no longer opens
@@ -339,6 +375,7 @@ scene. Full detail of the prologue, the guided tutorial and the help callouts:
 | `tutorial_step_changed` | `step_id: String` (`""` = no step on screen) | TutorialManager | TutorialPanel |
 | `tutorial_guide_finished` | `skipped: bool` | TutorialManager | TutorialPanel, HelperPanel |
 | `help_reopen_requested` | `help_id: String` (a `HelpCatalog` id) | TutorialManager | HelperPanel |
+| `combat_lesson_step_changed` | `step_id: String` (a `TutorialManager.COMBAT_STEPS` id, `""` = none) | TutorialManager | TutorialPanel, BattleScreen |
 
 The tip text arrives already translated so the panel does not have to know what it
 is about. `tutorial_intro_closed` is what marks the prologue as seen, whether it was
@@ -364,7 +401,7 @@ from it ([06-progression-victory.md](06-progression-victory.md) §Governor rank)
 |--------|--------|------------|-------------|
 | `governor_xp_changed` | `xp: int, rank: int, gained: int` (`gained` 0 on load) | RankManager | RankPanel |
 | `governor_rank_up` | `rank: int, rewards: Dictionary` (merged `rank_rewards` of every rank crossed) | RankManager | RankPanel, ConstructionMenu, AudioManager |
-| `colony_cosmetics_changed` | `flag_id: String, color_id: String` | RankManager | RankPanel, ColonyFlag3D, ColonyFlag2D |
+| `colony_identity_changed` | `colony_name: String, flag_spec: Dictionary` (ColonyFlag recipe: `pattern`, `emblem`, `colors` [field 1, field 2, emblem]) | RankManager (`set_colony()`, load) | RankPanel, ColonyFlag3D, ColonyFlag2D, ColonyByline (war reports, audit defeat, victory, board header) |
 
 ## Orphan signals
 
@@ -372,7 +409,7 @@ Declared in `EventBus.gd` but not wired on one or both sides. Most are suppresse
 with `@warning_ignore("unused_signal")`, so the editor will not flag them; this
 list is the only record.
 
-**9 of the 111 signals** have a gap on one side or the other.
+**Of the 126 signals, at least 10** have a gap on one side or the other.
 
 ### Neither emitted nor consumed (3)
 
@@ -396,7 +433,7 @@ Wiring that will start working the day something fires it.
 `BuildingPlacer`, `BuildingPlacer2D`, `OnScreenControls` and `PauseMenu` (the menu
 cancels a placement before it opens).
 
-### Emitted, but no listener in `scripts/` (5)
+### Emitted, but no listener in `scripts/` (6)
 
 | Signal | Emitter | Note |
 |--------|---------|------|
@@ -405,6 +442,7 @@ cancels a placement before it opens).
 | `unit_training_cancelled` | ArmyManager | Same |
 | `random_event_ended` | RandomEventManager | Timed effects expire inside the manager; nothing reacts to the end |
 | `sandbox_invoked` | StormManager, ProgressionManager | Informative only; nothing listens yet |
+| `stock_spoiled` | ProductionManager | Only `tests/economy/test_food_farm_collect.gd` listens; the badge and icon see the loss through `building_stock_changed` |
 
 `consumption_failed` (now read by TutorialManager) and `building_damaged` (now read
 by AuditDefeatScreen) used to be on this list.

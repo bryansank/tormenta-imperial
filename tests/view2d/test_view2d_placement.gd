@@ -14,7 +14,10 @@ const MapGen2D := preload("res://scripts/view2d/MapGenerator2D.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 ## Aparca la partida del jugador sin perder nunca una copia varada.
 const SaveParking := preload("res://tests/save/save_parking.gd")
 const BACKUP_PATH := "user://save_game.view2d_placement.bak"
@@ -37,6 +40,9 @@ func before_test() -> void:
 	_resources = ResourceManager.get_all().duplicate()
 	_warehouses = ResourceManager.get_warehouse_count()
 	GridManager.clear_all()
+	# Celdas fijas: la rejilla cuadrada de siempre, toda tierra (otra suite pudo
+	# dejar una isla irregular, con agua donde estos casos colocan).
+	GridManager.reset_size()
 	GameManager._started = false
 	GameManager.hold_start()
 	_map = MapGen2D.new()
@@ -179,10 +185,14 @@ func test_a_click_on_free_ground_buys_and_places_the_building() -> void:
 ## Las decoraciones (y los caminos) si se ponen en serie.
 func test_a_decoration_keeps_the_next_one_in_hand() -> void:
 	_rich()
+	# El jardin se desbloquea con el rango 2 (rank_rewards): sin rango, candado.
+	var saved_rank: Dictionary = RankManager.get_save_data()
+	RankManager.load_save_data({"xp": 100000})
 	EventBus.building_selected_for_placement.emit(_data("garden"))
 	assert_object(_placer.try_place(Vector2i(6, 6))).is_not_null()
 	assert_bool(_placer.is_idle()).is_false()
 	assert_object(_placer.try_place(Vector2i(8, 6))).is_not_null()
+	RankManager.load_save_data(saved_rank)
 
 func test_only_series_buildings_keep_placing() -> void:
 	assert_bool(Rules.keeps_placing(_data("garden"))).is_true()

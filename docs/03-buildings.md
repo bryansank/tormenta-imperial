@@ -15,14 +15,14 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | `cost_gold/steel/oil/wood` | int | Construction cost |
 | `cost_materials` | Dictionary | Workshop materials it also asks for (`planks`, `ingots`, `beams`, `fuel`) |
 | `build_time` | float | Seconds to construct (0 = instant) |
-| `produces_gold/steel/oil/wood` | int | Passive production per cycle |
+| `produces_gold/steel/oil/wood/food` | int | Passive production per cycle (the Farm's comes from its crop) |
 | `production_interval` | float | Seconds between production cycles |
 | `workers_required` | int | Workers needed to operate |
 | `population_capacity` | int | Housing capacity (houses only) |
 | `morale_bonus` | int | Passive morale bonus (decorations) |
 | `mesh_height` | float | Visual height for procedural mesh |
 | `mesh_color` | Color | Visual color |
-| `model_scene` | PackedScene | GLB model (12 of 16 buildings; `nucleo`, `road`, `market` and `laboratory` fall back to `DieselpunkBuildingFactory`) |
+| `model_scene` | PackedScene | The baked "maqueta" model, `assets/models/toy/<id>.tscn` (16 of 17; the road stays procedural, its mesh depends on its neighbours. The Farm's model carries its growing beds as a child mesh, see "The Farm"). See "Modelos: maqueta de juguete". `model_scale` / `model_stretch` stay at 1 (they were for the old GLBs) |
 | `model_scale` / `model_stretch` | float / Vector3 | Scale a GLB made for 1x1 or 2x1 up to its 2x2 plot; spawn models only through `instantiate_model()` |
 | `repeat_placement` | bool | Keep the same building in hand after placing it (decorations and roads do anyway; the rest place one and leave placement mode) |
 | `max_health` | int | HP for storm and siege damage (`BuildingHealth`) |
@@ -37,6 +37,7 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 |----|------|------|--------------|---------|------------|----------|----------|
 | `nucleo` | Núcleo | 3x3 | Free | 0 | instant | — (manual processes, +5 worker room) | — |
 | `sawmill` | Aserradero | 2x2 | 80/0/0/50 | 2 | 5s | 6 wood (+ planks by hand) | 12s |
+| `farm` | Granja | 2x2 | 40/0/0/30 | 2 | 5s | food, by crop (below) | the crop's |
 | `gold_mine` | Mina de Oro | 2x2 | 120/0/0/80 | 3 | 8s | 8 gold (+ ingots by hand) | 12s |
 | `foundry` | Fundición | 2x2 | 200/0/0/120 | 3 | 12s | 5 steel (+ beams by hand) | 15s |
 | `refinery` | Refinería | 2x2 | 300/150/0/100 + 6 beams | 4 | 18s | 4 oil (+ fuel by hand) | 18s |
@@ -45,6 +46,54 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 Materials (planks, ingots, beams, fuel) are made with the first manual process of
 each extractor and live outside the shared pool: see
 [02-economy.md](02-economy.md) "4 Workshop Materials".
+
+Everything a producer makes **waits in the building** until it is collected with one
+tap (on the building or on its floating icon), up to a cap; full, it stops. See
+[02-economy.md](02-economy.md) "Production that waits to be collected".
+
+### The Farm (2026-10-04)
+
+Era 1, 2x2, **anywhere with a road** (no deposit rule), cheap (40 gold + 30 wood), 2
+workers, limit 6. The player picks a **crop by duration** in its panel (CULTIVO), and
+the crop repeats by itself while it fits in the Farm (`GameConfig.farm_crops`):
+
+| Crop | Duration | Food | Food per minute |
+|---|---|---|---|
+| Lechugas (`crop_short`, the default) | 1 min | 20 | 20 |
+| Patatas (`crop_medium`) | 5 min | 125 | 25 |
+| Trigo (`crop_long`) | 20 min | 600 | 30 |
+
+Short gives little and soon; long gives more per minute but you wait for it. Changing
+crop starts over (what was growing is lost); choosing the same one does nothing. A
+Farm without workers, in ruins or without a road does not grow. Its yield takes the
+level, tech and morale multipliers like any producer. It holds 800 food at level 1.
+
+It is not a manual process (`ProcessManager`): a process is one-shot, delivers to the
+bag, keeps the building "busy" and is lost to the Storm. A crop is the Farm's own
+production cycle (`ProductionManager.get_cycle_seconds()` / `base_cycle_production()`),
+so it accumulates and stops like every producer, survives the Storm and runs offline.
+
+**Look.** 3D (2026-10-14): the baked toy model `assets/models/toy/farm.tscn`
+(recipe `tools/toy_recipes/farm.gd`: lattice windpump, plank shed with green roof,
+hay bales, trough, fence) and, as a child `MeshInstance3D` "Crops", **the beds as a
+separate mesh** (`farm_crops_mesh.res`, built by `tools/toy_crops.gd`). That one mesh
+holds the three crops (lettuce rosettes, potato bushes with a flower, wheat tufts with
+an ear) and the windpump rotor, all drawn with ONE shared material
+(`toy_crops.tres` / `toy_crops.gdshader`). `FarmCrops3D` reads the services every
+0.25 s and only sets the **per-instance** shader parameters that changed: `growth`
+(`get_cycle_progress`; 1 when the harvest waits and the farm stopped), `crop` (index in
+`farm_crops`: the other two crops fold into their base), `ripe` (`has_stock`: full
+height, ripe colour and a soft pulse of the albedo — no glow, so it does not shine at
+night), `wind` (more in the ash and the Storm) and `rotor_angle` (every frame, only
+while the farm works). Sprout pale green → leaf → ripe colour per crop (lettuce heart
+light green, potato flowers cream and leaves olive, wheat gold). Lit like the rest of
+the toy (night and Storm darken it with the scene light). Cost: two draw calls for the
+building (solid + glow) plus one for the beds; ~980 + 2,200 triangles (only a third of
+the crops is ever rasterised). Without the shader (the placement ghost overrides the
+material) the beds show lettuces and the rotor, never the three crops on top of each
+other. 2D:
+`BuildingArt2D._farm()` — the same field with plants that grow and ripen
+(`opts.growth`, `opts.ripe`).
 
 ### Support Buildings
 
@@ -58,15 +107,17 @@ each extractor and live outside the shared pool: see
 **Market and Laboratory (2026-09-28).** Trading and research used to be entries of
 ☰ MENÚ → COLONIA; now each opens by tapping its building
 (`BuildingInfoPanel.SCREENS`), and the button is disabled while the building has no
-road. One of each (`building_limits`). ¿QUÉ HACER? asks for the Laboratory before any
+road. One of each (`GameConfig.get_building_limit()`, in every era). ¿QUÉ HACER? asks for the Laboratory before any
 research and does not suggest buying or selling without a Market. Both are
-procedural (`DieselpunkBuildingFactory`, `BuildingArt2D`): no GLB yet.
+procedural (`DieselpunkBuildingFactory`, `BuildingArt2D`): no GLB yet. The
+Laboratory has a glass dome and its lattice antenna in the yard; the Market,
+big striped awnings with goods on the counters (see "Parcela y atrezo").
 
 ### Military Buildings
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Prereqs |
 |----|------|------|--------------|---------|------------|---------|
-| `barracks` | Cuartel | 2x2 | 250/100/0/80 + 10 planks | 3 | 15s | foundry + sawmill |
+| `barracks` | Cuartel | 2x2 | 150/60/0/80 + 20 planks | 3 | 15s | foundry + sawmill |
 | `tower` | Torre | 2x2 | 150/60/20/30 + 4 beams | 1 | 8s | barracks |
 
 The Barracks trains units (`ArmyManager`, one training slot per Barracks). Each
@@ -82,6 +133,62 @@ the defensive boards — the Tithe and each Final Audit wave — outside the dep
 | `garden` | Jardín | 2x2 | 30/0/0/20 | 2s | +5 |
 | `fountain` | Fuente | 2x2 | 60/20/0/10 | 4s | +7 |
 | `statue` | Estatua | 2x2 | 120/40/0/0 + 3 ingots | 6s | +10 |
+
+#### Decoraciones baratas (feat/decoraciones-1, 2026-10-14)
+
+Las diez primeras del catalogo del doc 21 §6.4 (fila 1.7 del plan): sumideros
+baratos de oro y madera, **sin tope** (como toda decoracion, `GameConfig.is_uncapped_building()`; decision D1 = B) y
+abiertas por rango segun §6.5. Todas 2x2 (en el doc eran 1x1: el mapa no tiene
+huellas menores de 2x2 salvo la calzada), con su parcela de 0,25 casillas de patio
+y una o dos piezas de atrezo.
+
+| ID | Nombre | Coste G/S/O/W | Obra | Moral | Rango | Piezas del horneado |
+|----|--------|---------------|------|-------|-------|---------------------|
+| `lamp_post` | Farola | 20/0/0/5 | 1,5 s | +2 | libre | `kc:streetlight`, `ft:lantern` (luces a GLOW) |
+| `park_bench` | Banco | 10/0/0/10 | 1 s | +1 | libre | `kc:bench` x2, `kc:bush` |
+| `hedge` | Seto | 10/0/0/15 | 1,5 s | +1 | libre | `ft:hedge-large` x2, `ft:hedge` x2 estirados |
+| `avenue_tree` | Arbol de paseo | 15/0/0/20 | 2 s | +2 | libre | `ft:tree-high-round` |
+| `flower_planter` | Macetero | 20/0/0/10 | 1,5 s | +2 | 2 | `kc:bush` x3 + flores propias |
+| `colony_sign` | Letrero de la colonia | 25/0/0/15 | 2 s | +2 | libre | `sur:signpost`, `kc:bush` + mastil propio (FlagAnchor) |
+| `hay_cart` | Carro de heno | 20/0/0/25 | 2 s | +2 | 2 | carro y pacas propios + `kk:sack` |
+| `bonfire` | Hoguera | 15/0/0/30 | 1,5 s | +2 | 3 | `sur:campfire-stand`, `sur:resource-wood` x2 + llama propia |
+| `flagpole` | Mastil con bandera | 40/0/0/20 | 2,5 s | +3 | 5 | `pir:flag-high` sin su tela (FlagAnchor) |
+| `palm_trees` | Palmeras | 20/0/0/15 | 2 s | +2 | 13 | `pir:palm-straight` + arena y palmera propias; **solo en la costa** |
+
+- **3D:** `scripts/buildings/DecorMesh.gd` da UNA malla por tipo, compartida por
+  todas las instancias, con los dos materiales de `ToyPalette` (sin texturas, sin
+  `_process`, brillo de farol y hoguera en la superficie sin luz). Carga la
+  horneada (`assets/models/toy/<id>_mesh.res`) si existe y, si no, una version
+  procedural con las mismas proporciones; `DieselpunkBuildingFactory.create()`
+  la devuelve para estos ids. Recetas del horneado en
+  `tools/toy_recipes/<id>.gd` (ayuda `_decor.gd`); el horneador avisa si una pasa
+  de 600 triangulos.
+  Horneadas las diez (feat/decoraciones-remates), todas por debajo de 600 con el
+  borde de contacto (V8) incluido: el carro, el seto y las palmeras se
+  recortaron para caber.
+- **2D:** `BuildingArt2D._lamp_post()` ... `_palm_trees()`, con su suelo propio.
+- **Lote (MultiMesh por tipo):** en 3D las diez las dibuja `DecorBatch3D` (hijo de
+  `BuildingPlacer`, como `RoadBatch3D`): un `MultiMeshInstance3D` por tipo con la
+  malla compartida. El edificio sigue siendo su nodo de siempre (rejilla,
+  seleccion, mover, obra, ruina, nivel, guardado); su modelo es un
+  `DecorProxy3D`, el `MeshInstance3D` con la malla para medir y encajar, pero
+  con capas 0 y sin sombra. El proxy avisa al lote al moverse o esconderse y el
+  lote rehace el tipo una vez al final del frame (si solo se movio, reescribe su
+  transformacion). Sin sombra las menudas (alto < 1,5 m: banco, seto, carro,
+  hoguera). La vista previa de CONSTRUIR y el fantasma siguen usando
+  `DecorMesh.instantiate()`.
+- **Bandera del pais:** `BuildingPlacer` cuelga `ColonyFlag3D` de cualquier
+  edificio cuyo modelo traiga `FlagAnchor` (ademas del Nucleo y el CG). El mastil
+  y el letrero lo traen: horneado, leido del `SceneState` de `<id>.tscn` por
+  `DecorMesh.flag_anchor()`; sin hornear, `DecorMesh.PROCEDURAL_FLAG`. En las
+  decoraciones la bandera va pequena (`ColonyFlag3D.SMALL_SCALE`) y ninguna tela
+  se hornea. En 2D, `BuildingArt2D.has_flag_mount()` / `flag_mount()` dan lo alto
+  del mastil de los dos dibujos y `Building2D` les pone `ColonyFlag2D`.
+- **Palmeras solo en la costa:** `PlacementRules.needs_shore()` / `touches_shore()`:
+  alguna celda de la huella es tierra pegada al agua (vecinas en 8 direcciones,
+  la franja de `MapGenerator.is_shore_cell()` con banda 1). Motivo `"shore"`,
+  aviso `LBL_NEEDS_SHORE`; `PlacementAssist.shore_spots()` pinta en verde los
+  sitios validos y la ficha de CONSTRUIR lo dice (`rule_text`).
 
 The road is still a decoration in data, but it is the backbone of the map: see "Road
 network" below.
@@ -149,29 +256,61 @@ veta"). See [04-population-morale.md](04-population-morale.md).
 
 `BuildingStatusBadge.reason_text()` (3D) and `StatusBadge2D` (2D): "en obras", "en
 ruinas", "sin trabajadores", "sin trabajadores (retirados)", "sin carretera", "sin
-veta". While under construction the label above the building gives the percentage
-and the time left ("En obras 61% · faltan 16 s") with a progress bar.
+veta", "lleno: recógelo" (full of what it produced: it stopped until collected). While
+under construction the label above the building gives the percentage and the time left
+("En obras 61% · faltan 16 s") with a progress bar.
 
 ## Building Limits
 
-Defined in `GameConfig.building_limits`:
+**Los topes suben con la era (2026-10-14, decisión D1 de Bryan, rama
+`feat/topes-por-era`).** Antes eran fijos y bajos (doc 21 §1.5 del contexto privado:
+"hay demasiados recursos para pocos edificios"). Ahora:
 
-| Building | Max |
-|----------|-----|
-| house | 10 |
-| sawmill | 5 |
-| gold_mine | 4 |
-| foundry | 3 |
-| refinery | 2 |
-| warehouse | 5 |
-| market | 1 |
-| laboratory | 1 |
-| barracks | 3 |
-| tower | 6 |
-| headquarters | 1 |
-| statue | 5 |
-| fountain | 5 |
-| garden, road | unlimited |
+- `GameConfig.building_limits_by_era` guarda `[era 1, era 2, era 3]` por edificio. La
+  era 1 es el tope de siempre, así que una partida guardada nunca queda por encima de su
+  tope. Regla general ≈ ×1,5 en la era 2 y ×2 en la era 3.
+- `GameConfig.building_limits` queda como tabla de lo que **no** sube con la era (y
+  como la era 1). Un id que no está en la tabla por era usa esta en todas las eras.
+- **Un solo lector:** `GameConfig.get_building_limit(id)` = tope de la era en curso
+  (`ProgressionManager.current_era`) + huecos del rango (`rank_limit_bonus`). Lo usan
+  `PlacementRules.check_building_limit()` (colocar en 3D, 2D y táctil, el detalle de
+  CONSTRUIR, `purchase_block_message()`), `Objectives` y el tutorial. Para otra era:
+  `get_building_limit_for_era(id, era)`; sin rango ni modo: `base_building_limit(id, era)`;
+  la siguiente subida: `next_building_limit(id)` → `{"era", "limit"}` o `{}`.
+- **Decoraciones sin tope:** todo `BuildingData` con `is_decoration` (jardín, fuente,
+  estatua, carretera y las decoraciones nuevas) da -1 aunque tenga entrada en
+  `building_limits`. Se mira el `.tres` (`GameConfig.is_uncapped_building()`, recordado
+  por id), así que una decoración nueva no necesita entrada en ninguna tabla. Las limita
+  el terreno y el precio. Los huecos de rango sobre una decoración no hacen nada y el
+  aviso de rango ya no los anuncia (`RankPanel.reward_lines()`; afecta al rango 13).
+- **Sandbox:** sin topes en ninguna era (`GameMode.all_unlocked()`).
+- **Nada se guarda:** el tope sale de la era (`progression.current_era`) y del rango
+  (`rank.xp`), que ya van en el save. Una partida vieja carga con los topes de su era.
+
+| Edificio | Era 1 | Era 2 | Era 3 | Por qué |
+|----------|------:|------:|------:|---------|
+| house | 10 | 15 | 20 | ×1,5 / ×2. Más gente = más consumo de comida, oro y madera: se paga sola |
+| farm | 6 | 9 | 12 | ×1,5 / ×2, acompaña a las casas |
+| sawmill | 5 | 8 | 10 | ×1,5 / ×2; lo limita también el número de bosques (3-6) |
+| gold_mine | 4 | 6 | 8 | ×1,5 / ×2; lo limitan las vetas (3-6) |
+| foundry | 3 | 5 | 6 | ×1,5 / ×2; lo limitan las vetas de hierro |
+| refinery | 2 | 3 | 4 | ×1,5 / ×2; además consume su pozo (3-6 por mapa) |
+| barracks | 3 | 4 | 5 | Sube menos: cada uno es un hueco de entrenamiento y +8 de capacidad (con 5, 43 unidades); el freno es el mantenimiento en oro |
+| warehouse | 5 | 5 | 5 | **No sube.** Bolsa de la era 3 sin técnicas: 1000 + 5×500 = 3500 = CG nivel 3 (1500 + 800 + 500 + 700; los materiales van aparte). Con 7 almacenes serían 4500 (5500 con las técnicas) y el CG 3 dejaría de pedir la bolsa llena. La bolsa ya crece sola por era (600/800/1000) y por nivel de almacén (+250 por nivel) |
+| tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y solo 2 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
+| market, laboratory, headquarters | 1 | 1 | 1 | Únicos |
+| garden, fountain, statue, road y las diez decoraciones baratas (`lamp_post` … `palm_trees`) | — | — | — | Sin tope |
+
+Los huecos del rango van encima: casas +2 en los rangos 10 y 17 (era 3: 24), torre +1 en
+el 16.
+
+**CONSTRUIR** lo enseña en cada tarjeta y en el detalle: una casita dibujada y
+"3/6 · era 2: 9" (cuántos hay / tope de esta era · la era que lo sube y a cuánto), en
+ámbar cuando está lleno; el tooltip lo dice en frase. Se pone al día al subir de era
+(`EventBus.era_advanced`) y al colocar. El recuento se recuerda mientras no cambia
+`GridManager.map_version()` (`ConstructionMenu._count_of()`): el refresco de costes llega
+con cada recurso que cambia y contar recorre todos los edificios, carreteras incluidas.
+Cuando se alcanza, el aviso sigue siendo `LBL_LIMIT_REACHED` ("Límite alcanzado (6/6)").
 
 ## Deposit Rules
 
@@ -290,6 +429,204 @@ la ruina sobre la actividad.
 - Todo es original y generado por el proyecto (mallas procedurales, dibujo en
   codigo, hojas de sprite generadas): ningun asset externo.
 
+### Etapas de dano (2026-10-16)
+
+Entre sano y ruina el dano se ve por etapas, no solo como la capa de ceniza de
+`BuildingHealth` (que sigue encima, por escalones). La etapa sale de la
+proporcion de vida con `BuildingLook.damage_stage()` y los umbrales de
+`GameConfig.damage_stage_thresholds` (`[0.75, 0.4]`); `derive()` la devuelve en
+la clave `"damage"`. Va **encima** del aspecto: un edificio grave puede seguir
+trabajando y echa su humo ademas del negro. Solo se ve en pie (quieto o
+trabajando); la obra y el andamio de mejora la tapan. Es solo aspecto: el dano,
+la reparacion y su coste no cambian.
+
+| Etapa | Vida | 3D | 2D |
+|---|---|---|---|
+| **Sano** | ≥ 75 % | el modelo (un rasguno: solo la capa de ceniza) | el dibujo; por debajo del 100 %, un velo de ceniza y la barra de vida |
+| **Leve** | < 75 % | grietas en zigzag en la fachada y un costado, tejas y cascotes caidos al pie, una tabla suelta apoyada en la pared; el modelo ladeado `damage_tilt[0]` (0,025 rad) | velo de ceniza, grietas, huecos de tejas que faltan, tejas caidas al pie, tabla suelta; el cuerpo ladeado (cizalla) |
+| **Grave** | < 40 % | lo anterior y mas, chapa colgando de un costado, viga partida que asoma del tejado, tizne y cascotes, brasas; **humo negro** y **chispas** animados; ladeado `damage_tilt[1]` (0,05 rad) y hundido `damage_sink_ratio[1]` (5 %) | lo anterior y mas, tizne, chapa suelta torcida, viga partida con ascuas, cascotes; humo negro y chispas animados; mas ladeado y algo aplastado |
+| **Ruina** | 0 | la de siempre (ver la tabla de aspectos) | la de siempre |
+
+- **3D**: `SiteMesh.damage_overlay(etapa, caja, variante)` (raiz
+  `DamageOverlay<etapa>`, hijo de `LookVisual`). Todo lo quieto es **una malla
+  cacheada** por etapa, variante (3, de la semilla de la celda) y caja del
+  modelo (`SiteMesh.damage_mesh`): diez casas tocadas comparten dos o tres
+  mallas, con los materiales de la paleta (`LotMesh`/`ToyTones`). Las piezas se
+  colocan alrededor de la caja medida del modelo (`BuildingLookVisual._model_box`,
+  una vez por cambio de etapa); la viga nace dentro del modelo para tocarlo
+  siempre. El humo (`smoke`, variante `ruin`) y las chispas son quads de
+  `BuildingFx` con su material compartido. El ladeo usa la misma postura
+  guardada que la ruina (`look_base_pos/rot`), asi que reparar o mejorar lo
+  devuelve exacto.
+- **2D**: `Building2D` no usa la parcela horneada entera mientras esta herido:
+  pinta la parcela derecha y el cuerpo (de la cache por tipo) con
+  `BuildingArt2D.damage_lean()`; las marcas (`draw_damage_marks`) se hornean en
+  `ArtCache2D` con clave `dmg|etapa|variante|huella|tamano`. Humo y chispas,
+  sprites de `BuildingFx` creados la primera vez (`DamageFx`).
+- **Mismo lado en las dos vistas**: variante y lado salen de
+  `BuildingLook.seed_of()` (celda de origen).
+- **Calidad Minima**: solo la malla y el dibujo; humo y chispas estan en el
+  grupo `building_fx_anim` y no se ven.
+- **Nada por frame**: la 3D cambia la etapa con `building_damaged` (repinta
+  ya) y el reloj comun de aspectos; la 2D, con su firma de repintado.
+- **Reparado**: vuelve a sano con el salto de juguete y el polvo de la obra
+  terminada (`BuildingPlacer._bounce_building`, `BuildingPlacer2D`).
+- No hay andamio de reparacion: reparar es instantaneo (no hay un estado
+  "reparandose" que pintar).
+- Sonda: `tools/look_probe.gd` saca en `look_probe_3d.png` leve y grave del
+  cuartel, la casa, la fundicion trabajando y el almacen.
+
+## Parcela y atrezo (guia de estilo, 2026-10-04)
+
+Cada edificio vive en su **parcela** (regla 1 de la guia de estilo de edificios):
+un suelo propio que cubre la huella entera, un borde oscuro fino que la separa de
+la isla, el **remate** de los lados que no dan a calzada y **atrezo** en el
+**patio** que queda entre el modelo y el borde. Lo que hace el edificio se ve
+desde fuera (regla 2) y cada uno lleva **un elemento exagerado** que le da
+silueta en miniatura (regla 3). La calzada no lleva parcela: ya es suelo.
+
+**La regla es una, compartida por las dos vistas**: `scripts/buildings/LotPlan.gd`
+(pura y estatica) decide, en casillas y en el marco local del edificio, que suelo
+lleva, que remate, donde va cada pieza de atrezo y donde el elemento exagerado.
+La tabla es `GameConfig.building_lot_style`; los acentos, `building_lot_accents`
+(rojo valvula en lo industrial, amarillo senal en lo militar, laton en lo civico,
+verde en lo residencial).
+
+| Edificio | Suelo | Remate | Atrezo del patio | Elemento exagerado |
+|---|---|---|---|---|
+| Aserradero | tierra batida | valla baja | troncos, tablones, cajas, barril, farola | la **sierra** del cobertizo abierto (en el modelo) |
+| Granja | tierra batida | valla baja | sacos de la cosecha, barril, cajas (patio de 0,25: el campo es el edificio) | el **molino** de aspas y el campo que crece y se dora (en el modelo) |
+| Mina de oro | tierra batida | valla baja | vagoneta en sus railes, mineral, cajas, barril, farola | **monton de mineral** con pepitas y pico (esquina SO) |
+| Fundicion | chapa remachada | barandilla | lingotes (uno al rojo), carbon, barril, bidones | **chimenea** alta de ladrillo, banda roja y boca encendida, con su tiro (NE) |
+| Refineria | chapa remachada | tuberia con valvulas | bidones, valvula, barril, cajas | **colector** de tuberias con la gran rueda de valvula roja (SE) |
+| Almacen | losas | bordillo | cajas, palets, sacos, barril | **grua** amarilla cuya pluma pasa por encima del tejado con una caja colgando sobre la entrada (NE) |
+| Mercado | losas | bordillo | puestos de fruta, sacos, barril, maceta | toldos grandes con mercancia (en el modelo) |
+| Laboratorio | losas | barandilla | botellas de gas, cajas, farola, maceta | **antena** de celosia con luz azulada (NO) y cupula de cristal en el modelo |
+| Cuartel | tierra batida | sacos terreros | munecos de practica, diana, cajas de municion | **mastil** con la bandera amarilla y negra (NE) |
+| Torre | chapa remachada | sacos terreros | municion, sacos, farola, barril | **canon** en su nido de sacos (SE) |
+| Cuartel General | losas | barandilla | banderas, farola, maceta, municion | **emblema de la Regencia** (rueda dentada de laton con el rayo de la Tormenta) sobre el tejado |
+| Vivienda | hierba | valla baja | tendedero, macetas, banco, barril | — |
+| Nucleo | losas | bordillo | farolas, macetas, bancos | — (ya es monumental) |
+| Jardin / Fuente / Estatua | hierba / losas / losas | bordillo | banco, farola, maceta | — |
+
+- **Variacion por instancia**: la semilla es `LotPlan.seed_for(celda, id)`, que
+  es la misma de la obra (`BuildingLook.site_seed(id, celda)`, ver "Obra por
+  edificio y por instancia"): la parcela a medio preparar y la obra que va
+  encima salen de la misma tirada. Dos aserraderos no tienen el mismo atrezo;
+  el mismo, tras guardar y cargar, si. Nada de esto va al guardado.
+- **Las puertas quedan libres**: la vida de la ciudad (los obreros que andan)
+  entra por el lado que da a la calzada, y ahi la parcela no pone ni remate ni
+  atrezo.
+- **No pisa nada**: cada pieza cabe entera en el patio (ni toca el rectangulo
+  del modelo ni sale de la parcela, asi que nunca pisa una calzada vecina), los
+  lados que dan a calzada quedan libres (son la entrada) y la esquina del
+  elemento exagerado no lleva atrezo.
+- **El modelo se encoge en planta** para dejar el patio libre:
+  `BuildingLot.fit_model()` lo escala en X/Z (nunca en altura, nunca lo agranda)
+  y lo centra dentro de `LotPlan.model_rect()`. Lo usan el edificio del mapa y
+  el fantasma de colocar, asi que miden lo mismo.
+- **Obra**: la parcela esta a medio preparar: suelo de tierra, jalones con
+  banderola en las esquinas, un palet de losas esperando y el remate puesto lado
+  a lado (tantos lados como fases pasadas). Sin sombra ni elemento exagerado.
+  Convive con la fase de obra de la huella, que va encima.
+- **Ruina**: el suelo se quema, el atrezo se vuelca (lo alto se parte, para no
+  salirse del patio), un quinto desaparece, el remate pierde tramos y el
+  elemento exagerado queda en un munon quemado.
+- **Lectura** (regla 5): bajo el modelo, una **sombra de contacto** con el filo
+  mas oscuro donde lo toca (AO de contacto); alrededor de la parcela, un **borde
+  oscuro fino**. Las farolas y las bocas encendidas van sin sombreado: siguen
+  leyendose con la Tormenta (`StormSky`) y con el tinte de ceniza de la 2D.
+
+**3D** (`scripts/buildings/BuildingLot.gd`, hijo `Lot` de cada edificio salvo la
+calzada, en el grupo `building_fx`): `Ground` (un plano con la textura de su
+suelo, generada en codigo y cacheada por suelo y huella), `ContactShadow` (un
+plano con un unico material para todo el mapa) y `Props` (el borde, el remate,
+el atrezo y el elemento exagerado en **una sola malla** con color por vertice,
+`LotMesh.gd`, con dos materiales compartidos: con luz y sin luz). Son tres
+o cuatro llamadas de dibujo por parcela (la malla del atrezo lleva una segunda
+superficie si hay algo encendido), unos 1.500 triangulos de media, y **nada por
+frame**: la parcela se monta una vez en unos 6 ms de GDScript (medido en PC) y
+se reconstruye solo cuando cambia algo que la parcela ve (su celda o las calzadas de al lado, por las
+senales `building_placed` / `building_demolished` / `building_moved` /
+`game_load_completed`; la obra y la ruina, por `BuildingLookVisual.apply()`).
+Lo que va por encima del modelo (la grua, el emblema) se mide con su AABB real y,
+el emblema, con la altura del tejado en el centro (`BuildingLot.roof_height()`).
+
+**2D**: `BuildingArt2D.draw_lot_ground()` / `draw_lot_shadow()` /
+`draw_lot_props()` con el mismo plan; `Building2D` dibuja el edificio dentro de
+su rectangulo (opcion `inset` de `draw_building`) y la obra, el dano y la ruina
+sobre el, no sobre la parcela (docs/18).
+
+**El Aserradero abierto (2026-10-04; desde el 2026-10-12 es el modelo horneado `assets/models/toy/sawmill.tscn`, con la misma idea).** Paso a procedural
+(`DieselpunkBuildingFactory._build_sawmill`; su GLB sigue en
+`assets/models/buildings/sawmill/` pero `sawmill.tres` ya no lo usa): un
+cobertizo con media cubierta de chapa de una sola agua atras, cerchas al aire
+delante y **ningun muro en el frente**, para que desde la camara se vea la sierra
+grande (el elemento exagerado, buje rojo), el tronco en la mesa, el tablon
+recien cortado, la pila de tablones, la de troncos y la maquina de vapor con su
+correa. El serrin de "trabajando" sale de la hoja: el modelo trae un `Marker3D`
+`FxAnchor` y `BuildingLookVisual` pone ahi el efecto (cualquier modelo puede
+traer el suyo). En 2D, el mismo cobertizo visto desde arriba, con la sierra
+dominando el dibujo y el icono.
+
+Capturas: `tools/look_probe.gd` (con `override.cfg` propio) deja ademas
+`look_probe_style_3d.png`, `look_probe_style_storm_3d.png`,
+`look_probe_style_2d.png`, `look_probe_style_storm_2d.png`,
+`look_probe_style_close_3d.png` y `look_probe_sawmill_3d.png` en `docs/media/dev/`.
+
+## Modelos: maqueta de juguete (2026-10-12)
+
+Los edificios 3D son **modelos horneados**: una sola malla con color por
+vertice y, como mucho, dos superficies con los dos materiales que comparte todo
+el mapa (`assets/models/toy/toy_solid.tres` con luz, `toy_glow.tres` sin luz para
+ventanas, brasas y faroles). Nada de materiales por instancia ni luces propias:
+lo que pide el renderizador Mobile en una tablet barata. Entre 650 y 2.700
+triangulos por edificio (el horneador los imprime).
+
+- **Horneado**: `godot --headless --path . -s tools/build_toy_models.gd`
+  (`-- --only=house,farm` para unos pocos, `-- --dump=all` para ver las piezas
+  CC0 con su tamano y su reparto de paleta). Cada edificio tiene su receta en
+  `tools/toy_recipes/<id>.gd`; las piezas propias (tejados, ventanas, chimeneas,
+  tuberias, valvulas, depositos, toldos, troncos, sacos) estan en
+  `tools/toy_recipes/_parts.gd` y las CC0 se cargan con `tools/toy_kit.gd`.
+- **Salida**: `assets/models/toy/<id>.tscn` (raiz = un `MeshInstance3D`) con su
+  malla en `<id>_mesh.res`, y un `Marker3D` `FxAnchor` en los que echan humo o
+  serrin (`GameConfig.building_active_fx`): la sierra, la chimenea del horno, la
+  antorcha de la columna...
+- **A la medida**: cada modelo sale ya del tamano del rectangulo que le deja su
+  parcela (`LotPlan.model_rect`), centrado, base en y = 0 y frente hacia +Z; lo
+  que una receta deje salirse se encoge en planta al hornear, asi que
+  `BuildingLot.fit_model()` no tiene que escalar. La granja tambien: a 3,0 m,
+  el rectangulo de su parcela (`building_lot_style["farm"]`, patio 0,25), con los
+  bancales en su malla aparte (ver "The Farm").
+- **Color**: la paleta (`ToyPalette`) esta escrita en sRGB y el horneado la pasa
+  a lineal (los materiales leen el color por vertice como lineal, igual que el
+  atrezo de `BuildingLot`); ademas oscurece lo que toca el suelo (AO de contacto).
+- **Estilo** (guia de estilo de edificios): la funcion se ve desde fuera, un
+  elemento exagerado por modelo que complementa el de la parcela (la sierra del
+  Aserradero, la rueda del castillete, el portalon del Almacen, la sombrilla del
+  Mercado, la cupula del Laboratorio, la boca del horno de la Fundicion, el galon
+  del Cuartel, la columna de la Refineria, el canon largo con aros y franja de laton de la Torre, la torre del
+  Cuartel General con el emblema de la Regencia en la fachada, la cupula y el manometro del Nucleo, el surtidor de la
+  Fuente, la rueda dentada de la Estatua, el molino de la Granja) y un acento
+  por familia.
+- **FlagAnchor**: un `Marker3D` donde se cuelga la bandera del pais. En el
+  Cuartel General, en lo alto de su mastil (esquina delantera derecha del
+  tejado); en el Nucleo, en lo alto del mastil de la colonia (`ColonyFlag3D`,
+  que no es del modelo: el horneado lo coloca con la misma cima que mide
+  `BuildingPlacer`, `max(mesh_height, malla) + 2,4`). El modelo no dibuja bandera.
+- **Madera** (2026-10-12): la casilla WOOD de `ToyPalette` es un marron natural
+  (140, 100, 70), no naranja; la siguen las piezas CC0, el atrezo y la obra
+  (`ToyTones`).
+- Los GLB viejos siguen en `assets/models/buildings/`, sin uso y fuera del exportado.
+- **Unidades de combate**: la misma herramienta hornea las piezas de juguete del
+  tablero 3D con `-- --units` (recetas en `tools/toy_recipes/units/`, salida en
+  `assets/models/toy/units/`): ver docs/15 §3, "El tablero 3D".
+- Capturas: `godot --path . -s tools/toy_probe.gd` (con `override.cfg` propio)
+  deja `toy_probe_all.png` (distancia de arranque), `toy_probe_close_<n>.png`,
+  `toy_probe_storm.png` y, con `-- --near=9 --ids=...`, `toy_probe_near.png`;
+  `-- --pieces=kk:barrel,...` fotografia piezas CC0 sueltas.
+
 ### Obra por edificio y por instancia
 
 Dos casas en obras una al lado de otra no se ven iguales, y la obra de una
@@ -355,21 +692,36 @@ unisono. Velocidad y apertura base: `GameConfig.construction_crane_speed` /
 y sin uniforms por instancia (que el renderizador Compatibility del APK de QA
 no tiene).
 
-**Coste**: una obra son unas 25-45 mallas low-poly (medido: casa 41/31/34 por fase, fundicion
-30/39/32, nucleo 3x3 46/41/45) con materiales cacheados, y solo mientras dura la obra; la
-animacion son 3 mallas de grua + 1 banderin + 1 quad de efecto, en GPU. En
-2D, la obra se dibuja una vez por cambio de firma (fase, progreso, semilla) y
-lo que se mueve son 4-6 nodos con shader.
+**Coste** (2026-10-12, maqueta): todo lo quieto de una obra (suelo, valla,
+pilas, losa, estructura, andamio, mastil de la grua, palos de los banderines)
+es **una sola malla** con color por vertice (`scripts/buildings/SiteMesh.gd`,
+sobre `LotMesh`) y los dos materiales compartidos de `ToyPalette`, igual que el
+andamio de mejora y los escombros de la ruina. Lo animado son la pluma, el
+contrapeso y el gancho de la grua (mallas cacheadas por largo y color), un quad
+de banderin compartido y el quad del efecto: shaders con `TIME`, sin crear ni
+destruir nodos. Montar una obra cuesta ~4 ms de GDScript y solo pasa al cambiar
+de fase. Que grupos y pilas lleva cada obra queda en metas de la raiz
+(`site_groups`, `site_piles`). Ninguna luz propia.
+
+**Tonos** (`scripts/buildings/ToyTones.gd`): obra, ruina, atrezo de las
+parcelas, calzada y figuritas piden su color por papel (`Tone.of("wood")`,
+`"brick"`, `"pave"`...); cada papel es una casilla de `ToyPalette` aclarada u
+oscurecida. Los colores sueltos de `GameConfig` (acentos de parcela, lonas,
+banderines, gruas) pasan por `Tone.snap()`, la misma regla del horneado. Los
+shaders propios (grua, banderin, figuritas) leen el color igual que el material
+solido de la paleta (`vertex_color_is_srgb`).
 
 ## Key Files
 
 - `scripts/buildings/BuildingData.gd` — Resource class definition
-- `data/buildings/*.tres` — 16 building data files
+- `data/buildings/*.tres` — 17 building data files
 - `scripts/buildings/PlacementRules.gd` — placement, road network, auto-road, upgrade effects
 - `scripts/map/WorkerWalkers.gd` — the walking workers
 - `scripts/services/GameConfig.gd` — limits, prerequisites, processes
 - `scripts/services/ProductionManager.gd` — construction + passive production
 - `scripts/buildings/BuildingLook.gd` — rule: construction phase / upgrade / ruin / active / idle (both views)
 - `scripts/buildings/BuildingLookVisual.gd` — applies it in 3D; `scripts/buildings/BuildingFx.gd` — animated sprite sheets + shaders
+- `scripts/buildings/LotPlan.gd` — rule: lot ground, trim, props and exaggerated element (both views); `scripts/buildings/BuildingLot.gd` — the 3D lot; `scripts/buildings/LotMesh.gd` — one vertex-coloured mesh per lot
+- `scripts/buildings/SiteMesh.gd` — 3D construction phases, upgrade scaffold and ruin in the toy palette (one static mesh each); `scripts/buildings/ToyTones.gd` — palette-derived tones for everything around the buildings
 - `scripts/buildings/SiteFx.gd` — construction-site animation shaders (crane, hook, pennant) for both views; site style/layout in `BuildingLook.gd`
 - `scenes/buildings/BuildingPlacer.tscn` — placement/move/demolish logic

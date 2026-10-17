@@ -8,6 +8,22 @@ var _constructing: Dictionary = {}
 # Production tracking: Node -> {timer: float, data: BuildingData}
 var _producing: Dictionary = {}
 
+# ── Produccion que se recoge (2026-10-04) ──
+# Lo que produce un edificio se queda EN el edificio hasta que el jugador lo
+# recoge con un toque (collect). Hay un tope por edificio (GameConfig.
+# get_stock_cap): lleno, el edificio se para hasta que se recoja. Al recoger,
+# lo que no cabe en la bolsa se queda dentro: nada se tira.
+const FARM_ID := "farm"
+## Node -> {"res": {recurso: int}, "age": float}. `age` son los segundos que
+## lleva lo acumulado sin recoger (para echarse a perder, si el modo lo pide).
+var _stock: Dictionary = {}
+## Node -> id del cultivo de esa Granja. Sin entrada, el de serie.
+var _crops: Dictionary = {}
+## Aviso de "bolsa llena, queda en el edificio": uno cada tanto, no uno por toque.
+var _full_bag_notice_cooldown := 0.0
+## Lo que se echo a perder en la ultima progresion offline (para el parte).
+var last_offline_spoiled: Dictionary = {}
+
 
 func _ready() -> void:
 	EventBus.building_placed.connect(_on_building_placed)
@@ -18,6 +34,12 @@ func _on_building_placed(data: Resource, cell: Vector2i) -> void:
 	var building_data := data as BuildingData
 	var node := GridManager.get_building_at(cell)
 	if not node:
+		return
+	# Ya registrado (en obras, en mejora o produciendo): un building_placed
+	# repetido no puede volver a ponerlo en obras. Antes pisaba la entrada, y una
+	# mejora en curso se convertia en una obra normal que al terminar no subia de
+	# nivel (bug 7: "los edificios pierden su nivel").
+	if _constructing.has(node) or _producing.has(node):
 		return
 	var build_time := GameConfig.get_build_time(building_data.build_time)
 	if build_time > 0.0:
@@ -56,6 +78,10 @@ func register_building(node: Node, data: BuildingData, construction_remaining :=
 func reset() -> void:
 	_constructing.clear()
 	_producing.clear()
+	_stock.clear()
+	_crops.clear()
+	last_offline_spoiled = {}
+	_full_bag_notice_cooldown = 0.0
 
 func _register_producer(node: Node, data: BuildingData) -> void:
 	if data.is_producer():
@@ -64,6 +90,8 @@ func _register_producer(node: Node, data: BuildingData) -> void:
 func unregister(node: Node) -> void:
 	_constructing.erase(node)
 	_producing.erase(node)
+	_stock.erase(node)
+	_crops.erase(node)
 
 # ── Construction ──
 
@@ -146,20 +174,41 @@ func _apply_construction_visual(node: Node) -> void:
 ## El nivel se ve (2026-09-28): el modelo crece un 8% por nivel y lleva una
 ## placa "II" / "III" encima. Antes solo crecia la malla procedural; los GLB
 ## (casi todos) no cambiaban. En 2D lo pinta el propio edificio (galones).
+##
+## Siempre el MISMO modelo (2026-10-14): el que conoce el aspecto del edificio
+## (LookVisual.get_model()), y si no hay aspecto, el primer hijo que no sea
+## rotulo, barra, placa ni del grupo "building_fx" (parcela, obra, andamio,
+## icono). Crece sin moverse de su sitio en planta y lleva un remate de laton
+## por nivel (LevelTrim), horneado una vez por medida.
 static func apply_level_visual(node: Node, level: int) -> void:
 	if not (node is Node3D):
 		return
-	var model: Node = null
-	for child in node.get_children():
-		if child is Node3D and not (child is Label3D) and not (child is Sprite3D) \
-				and child.name != "ConstructionBar" and child.name != "LevelPlate":
-			model = child
-			break
+	var model: Node3D = null
+	var look := node.get_node_or_null("LookVisual")
+	if look != null and look.has_method("get_model"):
+		model = look.get_model() as Node3D
+	if model == null:
+		for child in node.get_children():
+			if child is Node3D and not (child is Label3D) and not (child is Sprite3D) \
+					and not child.is_in_group("building_fx") \
+					and child.name != "ConstructionBar" and child.name != "LevelPlate" \
+					and child.name != "LookVisual" and child.name != "ColonyFlag":
+				model = child
+				break
 	if model != null:
 		if not model.has_meta("base_scale"):
-			model.set_meta("base_scale", (model as Node3D).scale)
+			model.set_meta("base_scale", model.scale)
+			model.set_meta("base_pos", model.position)
 		var base: Vector3 = model.get_meta("base_scale")
-		(model as Node3D).scale = base * (1.0 + 0.08 * float(maxi(0, level - 1)))
+		var f := 1.0 + 0.08 * float(maxi(0, level - 1))
+		model.scale = base * f
+		# Crecer alrededor del centro de la parcela, no del origen del modelo: el
+		# desplazamiento de encaje (fit_model) crece con el, la base sigue en y = 0.
+		if not model.has_meta("look_base_pos"):
+			var p0: Vector3 = model.get_meta("base_pos", model.position)
+			model.position = Vector3(p0.x * f, p0.y, p0.z * f)
+		var trim: Script = load("res://scripts/buildings/LevelTrim.gd")
+		trim.call("apply", model, level)
 	var plate := node.get_node_or_null("LevelPlate") as Label3D
 	if level <= 1:
 		if plate != null:
@@ -256,7 +305,8 @@ func _complete_construction(stale_or_node) -> void:
 		return
 	var node: Node = stale_or_node
 	var is_upgrade: bool = constr_info.get("is_upgrade", false)
-	var new_level: int = constr_info.get("new_level", 1)
+	# Una mejora nunca baja el nivel: como mucho lo deja donde estaba.
+	var new_level: int = maxi(int(constr_info.get("new_level", 1)), int(node.get_meta("level", 1)))
 	node.remove_meta("under_construction")
 	# Restore mesh opacity
 	var mesh_inst := node.get_child(0)
@@ -292,8 +342,14 @@ func _complete_construction(stale_or_node) -> void:
 # ── Production ──
 
 func _process(delta: float) -> void:
-	_tick_construction(delta)
-	_tick_production(delta)
+	# x2: construccion, produccion y caducidad al doble (GameConfig.sim_delta).
+	# El enfriamiento del aviso de saco lleno es de la interfaz: segundos reales.
+	var sim := GameConfig.sim_delta(delta)
+	_tick_construction(sim)
+	_tick_production(sim)
+	_tick_spoilage(sim)
+	if _full_bag_notice_cooldown > 0.0:
+		_full_bag_notice_cooldown -= delta
 
 func _tick_construction(delta: float) -> void:
 	var completed: Array = []
@@ -322,9 +378,17 @@ func _tick_production(delta: float) -> void:
 		# Sin carretera hasta el Nucleo no produce (PopulationManager pone la meta).
 		if not bool(node.get_meta("connected", true)):
 			continue
-		_producing[node]["timer"] += delta
+		# Lleno: parado hasta que se recoja. El reloj no avanza (no se adelanta
+		# trabajo que no tiene donde ir).
+		if is_full(node):
+			continue
 		var data: BuildingData = _producing[node]["data"]
-		var interval := GameConfig.get_production_interval(data.production_interval)
+		# Una granja sin obreros o en ruinas no crece: el cultivo espera. Los
+		# demas edificios ya se quedaban sin rendir en ese caso.
+		if data.id == FARM_ID and not can_work(node, data):
+			continue
+		_producing[node]["timer"] += delta
+		var interval := get_cycle_seconds(node, data)
 		if interval > 0.0 and _producing[node]["timer"] >= interval:
 			_producing[node]["timer"] -= interval
 			_award_production(node, data)
@@ -335,13 +399,9 @@ func _award_production(node: Node, data: BuildingData) -> void:
 	var produced := get_cycle_yield(node, data)
 	if produced.is_empty():
 		return
-	var offset := 0.0
-	for res_name in produced:
-		var amount: int = produced[res_name]
-		ResourceManager.add(_res_to_type(res_name), amount)
-		# spawn_resource_on: vale para un edificio 3D y para uno 2D.
-		FloatingText.spawn_resource_on(node, amount, res_name, offset)
-		offset += 0.3
+	# A la reserva del edificio, no a la bolsa: se recoge con un toque. El texto
+	# flotante sale al recoger, que es cuando entra de verdad.
+	_add_to_stock(node, produced)
 	EventBus.production_tick.emit(node)
 
 ## Lo que rinde un edificio en UN ciclo ahora mismo (recurso -> cantidad). Es la
@@ -368,18 +428,320 @@ func get_cycle_yield(node: Node, data: BuildingData, include_events := true) -> 
 	if include_events:
 		mult *= GameConfig.get_event_production_multiplier()
 	var produced := {}
-	if data.produces_gold > 0:
-		produced["gold"] = int(data.produces_gold * mult)
-	if data.produces_steel > 0:
-		produced["steel"] = int(data.produces_steel * mult)
-	if data.produces_oil > 0:
-		produced["oil"] = int(data.produces_oil * mult)
-	if data.produces_wood > 0:
-		produced["wood"] = int(data.produces_wood * mult)
+	var base := base_cycle_production(node, data)
+	for res_name in base:
+		produced[res_name] = int(float(base[res_name]) * mult)
 	return produced
+
+## Lo que rinde un ciclo antes de multiplicadores (recurso -> cantidad). En la
+## Granja depende del cultivo; en los demas, del .tres.
+func base_cycle_production(node: Node, data: BuildingData) -> Dictionary:
+	if data.id == FARM_ID:
+		var crop: Dictionary = GameConfig.get_crop(get_crop(node))
+		return {"food": int(crop.get("food", data.produces_food))}
+	return data.get_production()
+
+## Segundos de un ciclo de este edificio ya escalados: el cultivo en la Granja,
+## el intervalo del .tres en los demas.
+func get_cycle_seconds(node: Node, data: BuildingData) -> float:
+	if data.id == FARM_ID:
+		return GameConfig.get_crop_duration(get_crop(node))
+	return GameConfig.get_production_interval(data.production_interval)
+
+## Lo que lleva hecho el ciclo en curso (0..1). 0 si no produce.
+func get_cycle_progress(node: Node) -> float:
+	if not _producing.has(node):
+		return 0.0
+	var data: BuildingData = _producing[node]["data"]
+	var interval := get_cycle_seconds(node, data)
+	if interval <= 0.0:
+		return 0.0
+	return clampf(float(_producing[node]["timer"]) / interval, 0.0, 1.0)
+
+## Segundos que faltan para el ciclo en curso (lo que le queda al cultivo).
+func get_cycle_remaining(node: Node) -> float:
+	if not _producing.has(node):
+		return 0.0
+	var data: BuildingData = _producing[node]["data"]
+	return maxf(0.0, get_cycle_seconds(node, data) - float(_producing[node]["timer"]))
+
+## Puede trabajar ahora mismo: en pie, con carretera y con sus obreros.
+func can_work(node: Node, data: BuildingData) -> bool:
+	if node.has_meta("under_construction") or BuildingHealth.is_ruined(node):
+		return false
+	if not bool(node.get_meta("connected", true)):
+		return false
+	return data.workers_required <= 0 or PopulationManager.is_building_staffed(node)
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Cultivos de la Granja ──
+# ══════════════════════════════════════════════════════════════════════
+
+## El cultivo de esta Granja (el de serie si nunca se eligio).
+func get_crop(node: Node) -> String:
+	var crop_id := String(_crops.get(node, GameConfig.farm_default_crop))
+	return crop_id if not GameConfig.get_crop(crop_id).is_empty() else GameConfig.farm_default_crop
+
+## Planta `crop_id` en la Granja. Cambiar de cultivo empieza de cero (lo que
+## estaba creciendo se pierde); elegir el mismo no hace nada. Devuelve si cambio.
+func plant_crop(node: Node, crop_id: String) -> bool:
+	if node == null or not is_instance_valid(node) or GameConfig.get_crop(crop_id).is_empty():
+		return false
+	if get_crop(node) == crop_id:
+		return false
+	_crops[node] = crop_id
+	if _producing.has(node):
+		_producing[node]["timer"] = 0.0
+	EventBus.crop_planted.emit(node, crop_id)
+	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Lo acumulado y recoger ──
+# ══════════════════════════════════════════════════════════════════════
+
+## Lo que hay acumulado en el edificio (recurso -> cantidad). Copia.
+func get_stock(node: Node) -> Dictionary:
+	if not _stock.has(node):
+		return {}
+	return (_stock[node]["res"] as Dictionary).duplicate()
+
+func get_stock_total(node: Node) -> int:
+	var total := 0
+	if _stock.has(node):
+		for res_name in _stock[node]["res"]:
+			total += int(_stock[node]["res"][res_name])
+	return total
+
+func has_stock(node: Node) -> bool:
+	return get_stock_total(node) > 0
+
+## Segundos que lleva lo acumulado sin recoger.
+func get_stock_age(node: Node) -> float:
+	return float(_stock[node]["age"]) if _stock.has(node) else 0.0
+
+## Lo que cabe en el edificio a su nivel. 0 si no es un productor.
+func get_stock_cap(node: Node) -> int:
+	if node == null or not is_instance_valid(node):
+		return 0
+	var data: BuildingData = _data_of(node)
+	if data == null or not data.is_producer():
+		return 0
+	return GameConfig.get_stock_cap(data.id, int(node.get_meta("level", 1)))
+
+## Lleno: el edificio se para hasta que se recoja.
+func is_full(node: Node) -> bool:
+	var cap := get_stock_cap(node)
+	return cap > 0 and get_stock_total(node) >= cap
+
+func _data_of(node: Node) -> BuildingData:
+	if _producing.has(node):
+		return _producing[node]["data"]
+	var info := GridManager.get_building_info(node)
+	return info["data"] if not info.is_empty() else null
+
+## Mete `produced` en el edificio, sin pasar del tope. Devuelve lo que entro.
+func _add_to_stock(node: Node, produced: Dictionary) -> Dictionary:
+	var room: int = maxi(0, get_stock_cap(node) - get_stock_total(node))
+	if room <= 0:
+		return {}
+	if not _stock.has(node):
+		_stock[node] = {"res": {}, "age": 0.0}
+	var added := {}
+	for res_name in produced:
+		var amount: int = mini(int(produced[res_name]), room)
+		if amount <= 0:
+			continue
+		_stock[node]["res"][res_name] = int(_stock[node]["res"].get(res_name, 0)) + amount
+		added[res_name] = amount
+		room -= amount
+	if (_stock[node]["res"] as Dictionary).is_empty():
+		_stock.erase(node)
+	_stock_changed(node)
+	return added
+
+## Lo que no cupo en la bolsa al terminar un proceso del taller del edificio se
+## queda dentro en vez de perderse (2026-10-04). Sin tope: ya estaba hecho.
+func keep_in_building(node: Node, leftover: Dictionary) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if GridManager.get_building_info(node).is_empty() and not _producing.has(node):
+		return
+	var any := false
+	for res_name in leftover:
+		if int(leftover[res_name]) <= 0:
+			continue
+		if not _stock.has(node):
+			_stock[node] = {"res": {}, "age": 0.0}
+		_stock[node]["res"][res_name] = int(_stock[node]["res"].get(res_name, 0)) + int(leftover[res_name])
+		any = true
+	if any:
+		_stock_changed(node)
+
+## Recoge lo de un edificio: a la bolsa lo que quepa (repartido en proporcion);
+## lo demas se queda dentro. Devuelve lo que entro en la bolsa.
+func collect(node: Node) -> Dictionary:
+	if node == null or not is_instance_valid(node) or not has_stock(node):
+		return {}
+	var held: Dictionary = _stock[node]["res"]
+	var fitted: Dictionary = ResourceManager.fit_into_storage(held)
+	var offset := 0.0
+	for res_name in fitted:
+		var amount: int = int(fitted[res_name])
+		if amount <= 0:
+			continue
+		ResourceManager.add(_res_to_type(res_name), amount)
+		held[res_name] = int(held[res_name]) - amount
+		# spawn_resource_on: vale para un edificio 3D y para uno 2D.
+		FloatingText.spawn_resource_on(node, amount, res_name, offset)
+		offset += 0.3
+	for res_name in held.keys():
+		if int(held[res_name]) <= 0:
+			held.erase(res_name)
+	# Recoger es volver: lo que se queda dentro (bolsa llena) empieza a contar de nuevo.
+	if held.is_empty():
+		_stock.erase(node)
+	else:
+		_stock[node]["age"] = 0.0
+		if _full_bag_notice_cooldown <= 0.0:
+			_full_bag_notice_cooldown = 20.0
+			EventBus.notification_posted.emit(Tr.t("NOTIF_COLLECT_BAG_FULL"), "warning", Color(0.9, 0.6, 0.2))
+	if not fitted.is_empty():
+		EventBus.production_collected.emit(node, fitted)
+	_stock_changed(node)
+	return fitted
+
+## Recoge todos los edificios. Devuelve el total que entro en la bolsa.
+func collect_all() -> Dictionary:
+	var total := {}
+	for node in _stock.keys():
+		if not is_instance_valid(node):
+			_stock.erase(node)
+			continue
+		var got := collect(node)
+		for res_name in got:
+			total[res_name] = int(total.get(res_name, 0)) + int(got[res_name])
+	return total
+
+## Todo lo que espera a ser recogido, sumado (recurso -> cantidad).
+func get_all_stock() -> Dictionary:
+	var total := {}
+	for node in _stock:
+		if not is_instance_valid(node):
+			continue
+		for res_name in _stock[node]["res"]:
+			total[res_name] = int(total.get(res_name, 0)) + int(_stock[node]["res"][res_name])
+	return total
+
+func _stock_changed(node: Node) -> void:
+	if is_instance_valid(node):
+		EventBus.building_stock_changed.emit(node, get_stock(node))
+
+# ── Se echa a perder (solo si el modo lo pide) ──
+
+func _tick_spoilage(delta: float) -> void:
+	if _stock.is_empty():
+		return
+	var spoil := GameMode.spoilage_enabled()
+	for node in _stock.keys():
+		if not is_instance_valid(node):
+			_stock.erase(node)
+			continue
+		_stock[node]["age"] = float(_stock[node]["age"]) + delta
+		if spoil and float(_stock[node]["age"]) >= GameConfig.spoil_after_seconds:
+			_spoil(node, 1)
+
+## Pierde `spoil_ratio` de lo acumulado `times` veces seguidas y vuelve a contar.
+## Devuelve lo perdido.
+func _spoil(node: Node, times: int) -> Dictionary:
+	if not _stock.has(node) or times <= 0:
+		return {}
+	var held: Dictionary = _stock[node]["res"]
+	var keep: float = pow(1.0 - GameConfig.spoil_ratio, times)
+	var lost := {}
+	for res_name in held.keys():
+		var before: int = int(held[res_name])
+		var after: int = int(floor(float(before) * keep))
+		if before - after > 0:
+			lost[res_name] = before - after
+		if after <= 0:
+			held.erase(res_name)
+		else:
+			held[res_name] = after
+	if held.is_empty():
+		_stock.erase(node)
+	else:
+		_stock[node]["age"] = 0.0
+	if not lost.is_empty():
+		EventBus.stock_spoiled.emit(node, lost)
+		_stock_changed(node)
+	return lost
+
+# ── Guardar / cargar ──
+
+## Lo acumulado, el cultivo y el reloj de cada productor, por celda de origen.
+func get_save_data() -> Array:
+	var out: Array = []
+	var nodes: Dictionary = {}
+	for node in _stock:
+		nodes[node] = true
+	for node in _crops:
+		nodes[node] = true
+	for node in _producing:
+		if float(_producing[node]["timer"]) > 0.0:
+			nodes[node] = true
+	for node in nodes:
+		if not is_instance_valid(node):
+			continue
+		var info := GridManager.get_building_info(node)
+		if info.is_empty():
+			continue
+		var origin: Vector2i = info["origin_cell"]
+		var entry := {"cell_x": origin.x, "cell_y": origin.y}
+		if _stock.has(node):
+			entry["stock"] = (_stock[node]["res"] as Dictionary).duplicate()
+			entry["age"] = float(_stock[node]["age"])
+		if _crops.has(node):
+			entry["crop"] = String(_crops[node])
+		if _producing.has(node):
+			entry["timer"] = float(_producing[node]["timer"])
+		out.append(entry)
+	return out
+
+## Idempotente: pisa lo que haya, no suma. Una entrada cuyo edificio ya no esta
+## se ignora; un guardado sin la clave no trae nada que restaurar.
+func load_save_data(entries: Array) -> void:
+	_stock.clear()
+	_crops.clear()
+	for entry in entries:
+		if not (entry is Dictionary):
+			continue
+		var node := GridManager.get_building_at(Vector2i(int(entry.get("cell_x", -1)), int(entry.get("cell_y", -1))))
+		if node == null or not is_instance_valid(node) or GridManager.get_building_info(node).is_empty():
+			continue
+		var crop_id := String(entry.get("crop", ""))
+		if crop_id != "" and not GameConfig.get_crop(crop_id).is_empty():
+			_crops[node] = crop_id
+		var raw: Variant = entry.get("stock", {})
+		if raw is Dictionary and not (raw as Dictionary).is_empty():
+			var res := {}
+			for res_name in raw:
+				if ResourceManager.name_to_type(String(res_name)) != -1 and int(raw[res_name]) > 0:
+					res[String(res_name)] = int(raw[res_name])
+			if not res.is_empty():
+				_stock[node] = {"res": res, "age": maxf(0.0, float(entry.get("age", 0.0)))}
+		if _producing.has(node):
+			_producing[node]["timer"] = maxf(0.0, float(entry.get("timer", 0.0)))
+	for node in _stock:
+		_stock_changed(node)
 
 ## Start upgrade on a building (reuses construction system)
 func start_upgrade(node: Node, data: BuildingData, new_level: int) -> void:
+	# Ya en obras (o en mejora): un segundo toque no cobra otra vez ni reinicia
+	# la obra. Y nunca se "mejora" a un nivel que no es mas alto.
+	if node == null or not is_instance_valid(node) or _constructing.has(node):
+		return
+	if new_level <= int(node.get_meta("level", 1)) or new_level > GameConfig.max_building_level:
+		return
 	var cost := GameConfig.get_upgrade_cost(data, new_level)
 	if not ResourceManager.can_afford(cost):
 		return
@@ -403,15 +765,24 @@ func start_upgrade(node: Node, data: BuildingData, new_level: int) -> void:
 # docs/09-save-system.md. Cada edificio rinde lo que diga get_cycle_yield(), la
 # misma formula que en vivo, asi que una ruina o un edificio sin obreros tampoco
 # produce estando fuera.
+#
+# Desde 2026-10-04 lo producido fuera se queda EN LOS EDIFICIOS, con su tope,
+# como en vivo: al volver hay que recogerlo. Lo que come la gente sale de la
+# comida que se cultivo fuera, nunca de la bolsa (nadie vuelve mas pobre de lo
+# que se fue). Si el modo lo pide, lo acumulado se echa a perder igual que en vivo.
+#
+# Devuelve lo que se acumulo en los edificios estando fuera (recurso -> cantidad),
+# ya descontado lo que se comio y lo que se echo a perder. Lo perdido queda en
+# `last_offline_spoiled`.
 
 func apply_offline_progression(elapsed: float) -> Dictionary:
+	last_offline_spoiled = {}
 	# Reloj atrasado, NaN o infinito: no ha pasado nada que se pueda cobrar.
 	if is_nan(elapsed) or elapsed <= 0.0:
 		return {}
 	# Un salto hacia delante sospechoso (reloj adelantado, anos de ausencia) se
 	# queda en el tope de 8 h, igual que una ausencia real larga.
 	elapsed = minf(elapsed, GameConfig.max_offline_seconds)
-	var earnings := {}
 
 	var existing_producers: Array = _producing.keys().duplicate()
 
@@ -441,54 +812,98 @@ func apply_offline_progression(elapsed: float) -> Dictionary:
 			continue
 		finished.append({"node": node, "data": _producing[node]["data"], "seconds": elapsed})
 
+	# Lo que habia antes de irse envejece todo el rato que se estuvo fuera.
+	var aged_before: Dictionary = {}
+	for node in _stock:
+		aged_before[node] = true
+
+	var added_total := {}
+	var food_added: Dictionary = {}  # Node -> comida que entro estando fuera
 	for entry in finished:
 		var node: Node = entry["node"]
 		if not is_instance_valid(node):
 			continue
 		var data: BuildingData = entry["data"]
-		if not data.is_producer():
+		if not data.is_producer() or not _producing.has(node):
 			continue
-		var interval := GameConfig.get_production_interval(data.production_interval)
+		var interval := get_cycle_seconds(node, data)
 		if interval <= 0.0:
 			continue
-		var cycles := int(float(entry["seconds"]) / interval)
+		if data.id == FARM_ID and not can_work(node, data):
+			continue
+		var clock: float = float(_producing[node]["timer"]) + float(entry["seconds"])
+		var cycles := int(clock / interval)
+		_producing[node]["timer"] = clock - float(cycles) * interval
 		if cycles <= 0:
 			continue
 		var per_cycle := get_cycle_yield(node, data, false)
+		var produced := {}
 		for res_name in per_cycle:
-			earnings[res_name] = int(earnings.get(res_name, 0)) + int(per_cycle[res_name]) * cycles
+			produced[res_name] = int(per_cycle[res_name]) * cycles
+		var added := _add_to_stock(node, produced)
+		# Lleno estando fuera: parado, el ciclo no sigue corriendo.
+		if is_full(node):
+			_producing[node]["timer"] = 0.0
+		for res_name in added:
+			added_total[res_name] = int(added_total.get(res_name, 0)) + int(added[res_name])
+		if added.has("food"):
+			food_added[node] = int(added["food"])
+		if not aged_before.has(node) and _stock.has(node):
+			# Lo nuevo empezo a acumularse con el primer ciclo, no al irse.
+			_stock[node]["age"] = maxf(0.0, float(entry["seconds"]) - interval)
 
-	# Population consumption while offline is capped to what was PRODUCED offline.
-	# Being away can eat into your offline gains, but never into the stockpile you
-	# left with — the player must never return poorer than when they closed the game.
+	# La gente come de lo que se cultivo fuera, nunca de la bolsa.
 	var pop := PopulationManager.get_population()
-	if pop > 0:
+	if pop > 0 and not food_added.is_empty():
 		var cons_interval := GameConfig.get_duration(GameConfig.consumption_interval)
 		if cons_interval > 0.0:
 			var cons_ticks := int(elapsed / cons_interval)
-			var reduction := GameConfig.tech_consumption_reduction
-			var cons_mult := maxf(0.1, 1.0 - reduction)
-			var demand := int(pop * cons_ticks * cons_mult)
-			earnings["gold"] = maxi(0, earnings.get("gold", 0) - demand)
-			earnings["wood"] = maxi(0, earnings.get("wood", 0) - demand)
+			var cons_mult := maxf(0.1, 1.0 - GameConfig.tech_consumption_reduction)
+			var demand := int(float(pop * cons_ticks * GameConfig.food_per_pop) * cons_mult)
+			for node in food_added:
+				if demand <= 0:
+					break
+				var eat: int = mini(demand, int(food_added[node]))
+				eat = mini(eat, int(_stock[node]["res"].get("food", 0)) if _stock.has(node) else 0)
+				if eat <= 0:
+					continue
+				_stock[node]["res"]["food"] = int(_stock[node]["res"]["food"]) - eat
+				if int(_stock[node]["res"]["food"]) <= 0:
+					_stock[node]["res"].erase("food")
+				if (_stock[node]["res"] as Dictionary).is_empty():
+					_stock.erase(node)
+				added_total["food"] = int(added_total.get("food", 0)) - eat
+				demand -= eat
+				_stock_changed(node)
 
-	for res_name in earnings:
-		var type = _res_to_type(res_name)
-		if type == -1:
-			continue
-		var net: int = earnings[res_name]
-		var before := ResourceManager.get_amount(type)
-		if net > 0:
-			ResourceManager.add(type, net)
-		elif net < 0:
-			# Never spend more than is available — offline losses can't go below 0.
-			ResourceManager.spend(type, mini(absi(net), before))
-		# Report the ACTUAL applied change (capped by storage cap / available stock),
-		# not the raw theoretical net, so the offline summary never shows a resource
-		# dropping below what the player actually had.
-		earnings[res_name] = ResourceManager.get_amount(type) - before
+	# Echarse a perder, si el modo lo pide: cuantas veces paso el plazo.
+	if GameMode.spoilage_enabled():
+		for node in _stock.keys():
+			if not is_instance_valid(node):
+				continue
+			var age: float = float(_stock[node]["age"])
+			if aged_before.has(node):
+				age += elapsed
+			var periods := int(age / GameConfig.spoil_after_seconds)
+			if periods <= 0:
+				_stock[node]["age"] = age
+				continue
+			var rest: float = age - float(periods) * GameConfig.spoil_after_seconds
+			var lost := _spoil(node, periods)
+			if _stock.has(node):
+				_stock[node]["age"] = rest
+			for res_name in lost:
+				last_offline_spoiled[res_name] = int(last_offline_spoiled.get(res_name, 0)) + int(lost[res_name])
+				added_total[res_name] = int(added_total.get(res_name, 0)) - int(lost[res_name])
+	else:
+		for node in aged_before:
+			if _stock.has(node):
+				_stock[node]["age"] = float(_stock[node]["age"]) + elapsed
 
-	return earnings
+	for res_name in added_total.keys():
+		if int(added_total[res_name]) == 0:
+			added_total.erase(res_name)
+	return added_total
 
 func _res_to_type(res_name: String) -> int:
 	return ResourceManager.name_to_type(res_name)

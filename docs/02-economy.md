@@ -4,14 +4,22 @@
 
 The economy is era-gated: resources unlock progressively as the player advances. Gold is the universal currency. All balance lives in `GameConfig.gd`.
 
-## 4 Resources
+## 5 Resources
 
 | Resource | Key | Role | Starting | Unlock |
 |----------|-----|------|----------|--------|
-| Gold | `gold` | Currency, wages, trading | 300 | Era 1 (always) |
-| Wood | `wood` | Basic construction, heating | 200 | Era 1 (always) |
+| Gold | `gold` | Currency, troop wages, trading | 300 | Era 1 (always) |
+| Wood | `wood` | Basic construction | 200 | Era 1 (always) |
+| Food | `food` | What people eat (2026-10-04) | 80 | Era 1 (always) |
 | Steel | `steel` | Advanced construction | 0 | Era 2 (build Foundry) |
 | Oil | `oil` | Late-game construction | 0 | Era 3 (build Refinery) |
+
+**Food (2026-10-04).** `ResourceManager.Type.FOOD`, appended after the materials so no
+number moves. It is a **pool** resource (it counts against the shared cap, the Tithe
+takes it last) and it is grown at the **Farm** (docs/03). Buy and sell it at the
+Market (base price 2, the cheapest: buying food is the immediate fix for hunger). A
+save from before food loads with `GameConfig.legacy_save_food` (120) so nobody starves
+on load.
 
 ## 4 Workshop Materials (2026-09-28)
 
@@ -30,7 +38,7 @@ own resource — the **first** process of its list in `GameConfig.building_proce
 - **Outside the shared pool:** they live in the Núcleo's workshop (`ResourceManager.is_material()`;
   `get_total_stored()` skips them). The pool is tuned to the exact HQ L3 price, so they
   cannot count against it. The Tithe does not take them either.
-- **Who asks for them** (`BuildingData.cost_materials`): Barracks 10 planks, Tower 4
+- **Who asks for them** (`BuildingData.cost_materials`): Barracks 20 planks, Tower 4
   beams, Refinery 6 beams, Statue 3 ingots, HQ 20 beams + 10 ingots + 10 fuel, and the
   HQ upgrades (`hq_upgrade_costs`: L2 15 beams + 10 ingots + 15 fuel, L3 25 beams + 20
   ingots + 25 fuel).
@@ -38,15 +46,32 @@ own resource — the **first** process of its list in `GameConfig.building_proce
   missing material into a "make" step (`Objectives.make_step_for()`).
 - Unlocked by `ProgressionManager._unlock_material_of()` on `construction_completed`.
 
+### Repuestos (2026-10-14, rama `feat/escaramuzas`)
+
+Un quinto material, `PARTS` (`parts`), al final del enum para no mover números. Como los
+otros cuatro va fuera de la bolsa y el Diezmo no lo toca, pero **ningún edificio lo
+fabrica**: solo se trae de las escaramuzas (incursiones y expediciones cortas,
+`docs/15-combat.md` §4b). Se desbloquea al traer los primeros (`CombatManager._apply_loot`).
+
+- **Quién los pide:** el nivel 3 de los productores (`upgrade_parts_cost` {3: 3} sobre
+  `upgrade_parts_buildings`: aserradero, mina, fundición, refinería, granja), sumado en
+  `GameConfig.get_upgrade_cost()`. El Cuartel General sigue con su tabla propia.
+- ¿QUÉ HACER? no propone una mejora que pida repuestos que no hay
+  (`Objectives._producer_step`); la línea "Sal de escaramuza" lo explica
+  (`Objectives.sortie_step`, motivo `SORTIE_WHY_PARTS`).
+- Colonos (habitantes al momento, hasta llenar las casas) y planos (abren edificios) son
+  el resto del botín exclusivo: ver `docs/15-combat.md` §4b.
+
 ## Resource Flow
 
 ```
-Deposits (finite, by hand)    Buildings (infinite, slow)
+Deposits (finite, by hand)    Buildings (infinite, slow) -- wait in the building
   gold_vein -> 20 gold (12s)    Sawmill -> 6 wood/12s
   forest -> 20 wood (8s)        Gold Mine -> 8 gold/12s
   iron_deposit -> 15 steel (18s) Foundry -> 5 steel/15s
   oil_well -> 10 oil (22s)      Refinery -> 4 oil/18s
   (GameConfig.mining_data)      HQ -> 10 gold/20s
+                                Farm -> 20 / 125 / 600 food per 1 / 5 / 20 min crop
                                 (Nucleo: no passive output, manual processes only)
 
 Manual Processes (active, ~1.5x margin)
@@ -69,19 +94,107 @@ it up.
 A Sawmill, Gold Mine or Foundry whose deposit was mined out by hand **stops**: it
 needs its vein alive next to it (`PlacementRules.has_its_deposit()`, badge "sin veta").
 
+### Lotes: ×1 / ×5 / MÁX (2026-10-14, partidas de Bryan)
+
+Cada proceso y cada minado a mano se puede pedir varias veces de un toque. Regla:
+
+- **Se paga todo al arrancar** (`ProcessManager.start_process(node, proc, count)` /
+  `start_mining(node, deposit, count)`); si no alcanza para todas, no arranca ninguna.
+- **Una vuelta tras otra en el mismo sitio.** Una sola entrada por edificio o veta con
+  `count` (vueltas que faltan, la de ahora incluida) y `total`. Cada vuelta entrega lo
+  suyo al terminar y emite su `process_completed` / `mining_completed` (XP, sonido y la
+  veta gasta un uso por vuelta). Se eligió esto y no "un proceso multiplicado" porque
+  así el reparto, la bolsa llena (lo que no cabe espera en el edificio), el gasto de
+  usos de la veta y las señales siguen igual que con una vuelta.
+- **MÁX** (`ProcessManager.max_batch`) = lo que dejan los recursos para pagarlo todo,
+  el hueco de la bolsa compartida (lo que entra de más menos lo que se paga por vuelta;
+  los materiales no ocupan bolsa; siempre cabe una), los usos que le queden a la veta y
+  el techo `GameConfig.process_batch_max` (20). Los trabajadores no cambian el número:
+  un lote de minado ocupa los mismos 2 todo el rato. Botones fijos en
+  `GameConfig.process_batch_sizes` ([1, 5]).
+- **Cancelar** devuelve la tasa de siempre (70 %, 40 % con la Tormenta en marcha) sobre
+  **todo lo pagado y aún no entregado** (vueltas pendientes × coste de una). Una sola
+  tasa, un solo número en el botón.
+- **La Tormenta** se lleva el lote entero (`get_queue_at_risk` cuenta todas las vueltas
+  pendientes): esconder recursos en un lote largo no salva nada.
+- **Guardado:** cada entrada de `active_processes` lleva `count`, `total` y `workers`.
+  Una entrada de antes sin `count` es una vuelta; sin `workers`, un `mine_*` ocupa
+  `mining_workers`. `load_save_data` asigna, no suma (idempotente); `reset()` vacía sin
+  devolver nada.
+
+### El Núcleo, taller de todo (2026-10-14)
+
+El Núcleo ofrece, además de sus tres procesos propios, **todos los procesos de los
+talleres** (tablones, lingotes, vigas, combustible y las demás recetas de Aserradero,
+Mina de oro, Fundición y Refinería) y **el minado a mano de cada yacimiento** (oro,
+madera, hierro, petróleo) sin gastar ninguna veta (`GameConfig.get_core_extra_processes`,
+`ProcessManager.get_processes_for("nucleo")`).
+
+- **Cuándo sale cada uno:** en cuanto **todos** sus recursos y materiales están
+  desbloqueados (por era, o el material al terminar el primero de su edificio:
+  `ProgressionManager._unlock_material_of`). Es el mismo filtro de siempre
+  (`ProcessActionsPanel._process_has_locked_resource`); no hace falta que el edificio
+  siga en pie.
+- **Rinde lo mismo, tarda 1,5 veces más** (`GameConfig.core_process_time_mult`). Por
+  qué: el Núcleo es para salir de un apuro o arrancar, no para sustituir al taller. Con
+  el mismo tiempo, el Aserradero o la Fundición sobrarían; más lento, el edificio propio
+  sigue valiendo la pena, y además deja libre el Núcleo, que solo hace **una cosa a la
+  vez** (un lote cada vez, como cualquier edificio).
+- **Minar a mano desde el Núcleo** ocupa `mining_workers` (2) trabajadores libres
+  mientras dura (`ProcessManager.process_blocker` → `MINE_NEEDS_WORKERS`), no necesita
+  carretera hasta ninguna veta y no gasta usos. Su id es `core_` + el de la veta
+  (`core_mine_gold`) para que `MapGenerator` no le descuente usos a nada; avisa con
+  `mining_started` / `mining_completed` para que PopulationManager cuente los obreros.
+- La sonda de línea (`tools/line_probe_player.gd`) sigue usando `GameConfig.get_processes_for`
+  y no juega estas recetas del Núcleo: el balance medido no las incluye.
+
+## Production that waits to be collected (2026-10-04)
+
+**Every producer keeps what it makes** until the player collects it with one tap on
+the building or on the floating icon above it (`StockIcon3D` / `StockIcon2D`, PC and
+touch, 3D and 2D; also the RECOGER button in its panel). `ProductionManager` holds the
+stock per building (`_stock`), and the cap is `GameConfig.get_stock_cap(id, level)`:
+about six minutes of base production, multiplied by the level's production multiplier.
+
+| Building | Holds at level 1 | ≈ minutes of its base output |
+|---|---|---|
+| Sawmill | 180 wood | 6 |
+| Gold Mine | 240 gold | 6 |
+| Foundry | 120 steel | 6 |
+| Refinery | 80 oil | 6 |
+| HQ | 180 gold | 6 |
+| Farm | 800 food | one long crop with room for high morale |
+
+- **Full, it stops.** The production clock does not run and the badge says "lleno:
+  recógelo" (`BuildingStatusBadge` reason `full`; the smoke goes out).
+- **Collecting** puts in the bag what fits (`ResourceManager.fit_into_storage`, split in
+  proportion) and **leaves the rest in the building**: nothing is thrown away. This is
+  Bryan's "bag full = stop production, do not throw it away". A workshop process whose
+  output does not fit leaves the rest in its building too (`keep_in_building`); hand
+  mining a deposit still loses what does not fit (a deposit has nowhere to keep it).
+- **It goes bad** (`spoil_after_seconds` 7200 = 2 h, `spoil_ratio` 0.5): after 2 h
+  uncollected, half is lost and the clock starts again. **Only when
+  `GameMode.spoilage_enabled()`** (rule `spoilage`, false in every mode today; the
+  Governor mode turns it on). Collecting resets the clock.
+- **Offline**, production accumulates in the buildings with their caps (docs/09).
+- Signals: `building_stock_changed`, `production_collected`, `stock_spoiled`,
+  `crop_planted`. Saved under `stockpiles` (docs/09).
+
 ## Storage
 
-One **shared pool** for all four resources (not a cap per resource):
+One **shared pool** for the five resources (not a cap per resource):
 
 - Base cap by era: 600 / 800 / 1000 (`base_storage_cap_by_era`)
-- Each warehouse: +500 (`warehouse_storage_bonus`), max 5; each level above 1 adds
+- Each warehouse: +500 (`warehouse_storage_bonus`), max 5 in every era (los demás topes
+  suben con la era, este no: docs/03 §Building Limits); each level above 1 adds
   +250 more (`warehouse_level_bonus`, `ResourceManager.refresh_warehouse_levels()`)
 - Tech: Logistics 2 +300, Industrial 2 +200, Logistics 5 +500 (`tech_storage_bonus`)
 - Era 3 with five warehouses: 1000 + 5×500 = **3500**, exactly the HQ level 3 upgrade;
   with the three storage techs (+1000) the ceiling is **4500** (`GameConfig.get_storage_cap()`)
 - Sandbox ignores the cap (`sandbox_storage_cap`) and refills resources to `sandbox_resource_floor`
-- What does not fit is lost — gold and wood for food included. In era 3 steel and oil
-  fill the pool on their own; see `docs/22-linea-jugable.md` §3.1 (A4, A5)
+- Production no longer overflows: it waits in the buildings and stops when they are
+  full. What still overflows (and is lost, with the one-time warning) is what enters
+  the bag directly: hand mining, market purchases, loot, refunds, events
 
 ## Where extractors can go
 
@@ -92,28 +205,143 @@ building, they also need a road joined to the Núcleo (docs/03 "Road network").
 
 ## The random map (2026-09-28)
 
-- **Grid:** each new game rolls its width and height between `grid_size_min` (40) and
-  `grid_size_max` (48), even sides, centred on the world origin. Saved in the `grid` key
-  with the island seed; a save without it is 40x40.
+- **Grid:** each new game rolls its width and its height separately between
+  `grid_width_min/max` and `grid_height_min/max` (60-74 since the irregular island),
+  even sides, centred on the world origin. Saved in the `grid` key with the island
+  seed; a save without it is 40x40.
+- **Irregular island (2026-10-12):** the sea comes into the grid. The land is a mask
+  derived from the island seed (`scripts/map/IslandShape.gd`, pure and static, no
+  global RNG): same seed, same island. See "The irregular island" below.
 - **Deposits:** each type (forest, gold vein, iron, oil well) rolls its own count
   between `deposit_per_type_min` (3) and `deposit_per_type_max` (6), so no island comes
   without oil or forest. Sizes from `deposit_sizes` (2-3 cells a side, forests 2-4).
 - None lands on the Núcleo or its sidewalk (`deposit_core_gap` = 2 free cells,
-  `deposit_center_exclusion` = 6) nor on the outer shore band (`map_shore_band` = 1,
-  kept for future sea and shore resources: `MapGenerator.shore_cells()`).
+  `deposit_center_exclusion` = 6) nor on the shore band (`map_shore_band` = 1: the
+  land cells within one cell, diagonals included, of the water; on an old square
+  island that is the outer ring). It is kept for future sea and shore resources:
+  `MapGenerator.shore_cells()`. Deposits are only rolled on land.
 - Every deposit leaves room for its extractor and a free path to the Núcleo's
   sidewalk; a final pass removes and re-rolls any that ended boxed in.
-- The island shape (margin, corners, waviness) also comes from the seed, in 3D and 2D.
+- The island shape also comes from the seed, in 3D and 2D.
+
+## Yacimientos en el mapa (aspecto, 2026-10-14)
+
+Los cuatro yacimientos son miniaturas de la maqueta, como los edificios: la paleta
+comun (`ToyPalette`), color por vertice y los dos materiales compartidos. Todo es
+pieza propia (cajas, cilindros, conos y bolas de `LotMesh`), sin modelos ajenos.
+Las reglas (tamanos, alcance, usos, guardado) no cambian.
+
+| Yacimiento | Suelo | Lo que se ve | Lo exagerado | Al minarlo |
+|---|---|---|---|---|
+| Bosque | verde oscuro con reborde | pinos de tres pisos, alguna copa redonda (una de cada ocho de otono), matas, setas, pila de troncos | el pino de atras, un 35 % mas alto | los arboles pasan a tocones |
+| Veta de oro | cascajo arenoso | peñas claras, pepitas, pico clavado, estaca con banderin rojo | racimo de cristales de oro sobre la peña madre; pepitas y destellos sin luz | se van cristales y pepitas |
+| Hierro | grava oscura con manchas de oxido | crestas de pizarra y roca roja con bandas de oxido, monton de mineral rojizo | dos agujas que se inclinan una contra otra | las crestas bajan a tocones, el monton mengua |
+| Petroleo | tierra parda | balsa negra con reborde de brea, reflejo, burbujas, juncos, dos bidones rojos | torreta de prospeccion de cuatro patas con polea roja, cubo y banderin | la balsa encoge y se secan los charcos |
+
+- **3D:** `scripts/map/DepositMesh.gd` (pura, sin nodos). Cada yacimiento es UN
+  `MeshInstance3D` ("Look"): una llamada de dibujo (dos en el oro, por lo que brilla).
+  La malla mide su huella, no se estira. Sale de una cache por tipo, tamano,
+  variante (4, de la semilla de la celda) y **etapa** de agotamiento
+  (`stage_of(usos, max)`: 4 entero ... 1 el ultimo uso). `MapGenerator` la pone al
+  crear el yacimiento y la cambia en `_refresh_deposit_look()` solo cuando la etapa
+  cambia al minarlo. Nada por fotograma. Coste por yacimiento: ~1-3,5 mil
+  triangulos (el bosque de 4x4 es el mayor; tope en las pruebas: 4000).
+- **2D:** `BuildingArt2D.draw_deposit(ci, id, size, variante, etapa)` con el mismo
+  vocabulario (suelo irregular, volumen hacia abajo, luz por la izquierda). `Deposit2D`
+  lo hornea en `ArtCache2D` (clave tipo/tamano/variante/etapa) y ya no tiene `_process`
+  por fotograma: solo mientras esta seleccionado; el atenuado de "bloqueado" llega por
+  `resource_unlocked`. `MapGenerator2D._refresh_deposit_look()` le pone la etapa.
+- La etapa sale de los usos, que ya se guardan: un save viejo carga igual y el
+  yacimiento aparece con su etapa.
+- Sonda: `tools/deposito_probe.gd` (capturas 3D de dia, Tormenta y noche, 2D de dia
+  y Tormenta, coste por yacimiento) a `docs/media/dev/dep_<tag>_*.png`.
+- Pruebas: `tests/map/test_deposit_mesh.gd`, `tests/view2d/test_deposit2d_look.gd`.
+
+## The irregular island (2026-10-12)
+
+Owner decision: the map is not a square any more. Bays, capes and peninsulas, with
+the water inside the grid, and a different island every game.
+
+**How the coast is made** (`IslandShape.build_mask`, parameters in
+`GameConfig.island_coast`):
+
+1. A field per cell: a superellipse (`power_min/max`, 2 = ellipse, 3 = nearly
+   square) whose radius changes with the angle (harmonics of 2 to 6 lobes,
+   `harmonic_amp`), fractal noise for the small coast (`noise_amp`, `noise_freq`),
+   2-4 bays that bite the edge and 1-3 capes that stick out of it. Near the grid's
+   sea border the field slopes down, so the coast never flattens against it.
+2. The threshold is a quantile: exactly the target number of land cells stays land.
+   The target is `fraction_min..max` (0.46-0.58) of the usable grid, clamped to
+   `land_min..land_max` (1550-2300 cells; the old square was 1600-2304, all of it
+   buildable, so the land is the same size within the ±25 % the owner asked for).
+3. Morphological clean-up: a closing (`close_radius` 2.5: inlets narrower than about
+   5 cells are filled, where the sand of both shores would overlap) and an opening
+   (`open_radius` 1.5: every land cell sits in a 3x3 block of land, so no one-cell
+   spits). Only the landmass that touches the Núcleo stays; lakes are filled. One
+   island, no holes (no lagoon for now).
+4. The Núcleo, its sidewalk and `core_margin` (3) cells around it are always land;
+   the outer `edge_water` (3) cells of the grid are always sea.
+
+The mask is about 150-250 ms per game and is never saved: the save keeps width,
+height, seed, `"shape": 2` and the `"coast"` parameters used (so retuning
+`island_coast` does not move the coast under an old game's buildings). A save
+without `"shape"` is the old square island: every cell is land, exactly as before.
+Changing the algorithm itself means a new shape version, keeping version 2 as is.
+
+**What respects the water:** `GridManager.is_land_cell()`; `is_cell_free()` and
+`can_place()` refuse water, so obstacles, buildings, roads and the auto-road
+(`road_route`) never go there. `PlacementRules.evaluate_placement()` answers
+`"water"` first (`LBL_ON_WATER`, "Ahí hay agua: construye en tierra."); touch
+placement only offers spots on land; both cameras pan within the land's bounding
+rectangle (`GridManager.land_world_rect()`); the grid overlay is drawn on land only
+(3D: a one-texel-per-cell mask in the shader; 2D: only the cell sides that touch
+land, the coast line a little brighter).
+
+**The view:** the grass outline is the mask's contour
+(`IslandShape.coast_polygon`): marching squares on the cell corners, two Chaikin
+passes, ten relaxation steps that never come closer than 0.2 cells to land, and an
+outward-only wobble. Every land cell is fully on grass (a test checks every corner);
+grass shows at most about one cell beyond the land. 3D: the outline triangulated
+(grass), a cliff skirt, a sand ring and a foam ring grown along its normals, and the
+sea shades shallow water from a small distance texture. 2D: the same outline,
+grown with `Geometry2D.offset_polygon`. Around a thousand outline points and a few
+thousand triangles, built once per game.
+
+**Land check (10 seeds, `tools/isla_check.gd`):** the same map a new game makes
+(grid, island, Núcleo with its sidewalk, deposits). "Buildable" is free land after
+the Núcleo, its sidewalk and the deposits; "enclosed" are free cells with no walk
+to the sidewalk.
+
+| Seed | Grid | Land | Buildable | Gold | Iron | Oil | Forest | Workable | Enclosed | Coast points |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 62x60 | 1609 | 1457 | 3 | 4 | 5 | 6 | yes | 0 | 832 |
+| 7 | 66x62 | 1624 | 1440 | 4 | 6 | 4 | 6 | yes | 0 | 880 |
+| 42 | 62x68 | 1740 | 1601 | 6 | 4 | 3 | 4 | yes | 0 | 896 |
+| 99 | 64x64 | 1802 | 1645 | 5 | 3 | 6 | 3 | yes | 0 | 856 |
+| 314 | 62x72 | 2026 | 1868 | 5 | 6 | 5 | 4 | yes | 0 | 968 |
+| 2718 | 68x70 | 1968 | 1827 | 4 | 5 | 3 | 5 | yes | 0 | 1024 |
+| 4242 | 64x64 | 1841 | 1675 | 6 | 4 | 5 | 6 | yes | 0 | 880 |
+| 9001 | 66x66 | 1935 | 1784 | 3 | 5 | 6 | 5 | yes | 0 | 976 |
+| 12345 | 68x66 | 1889 | 1770 | 3 | 3 | 4 | 3 | yes | 0 | 880 |
+| 55555 | 74x64 | 2093 | 1926 | 5 | 3 | 5 | 6 | yes | 0 | 1072 |
+
+Buildable 1440-1926 cells (mean about 1700). The old square island had 1600-2304
+cells minus its deposits, about 1450-2150: the same size, within the ±25 %.
+
+Every island has 3-6 deposits of each type, every one workable (room for its
+extractor and a road to the network), and no free cell is cut off from the
+Núcleo. The 4-6 h balance line (`tools/line_probe.gd`) is another branch's job.
 
 ## Consumption (Population Drain)
 
-Each population unit consumes per tick (30s):
-- 1 wood (heating/shelter)
-- 1 gold (wages)
+Since 2026-10-04 people eat **food**, not wood and gold. Each population unit eats
+`GameConfig.food_per_pop` (1) food per tick (30 s; 60 s in the first two phases),
+reduced by the consumption tech. Gold is still paid to the troops (army upkeep).
 
-If resources run out:
+If food runs out:
 - Morale drops -8 per failed tick
 - Partial payment is still deducted
+- After two unpaid ticks people starve (docs/04)
 
 ## Production Modifiers
 
@@ -136,7 +364,8 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
 ## Economy Balance Design
 
 ### Early Game (Era 1)
-- Player has 300g + 200w; roads cost 1 gold per tile and are laid automatically
+- Player has 300g + 200w + 80 food; roads cost 1 gold per tile and are laid automatically
+- Farm: 40g + 30w, 2 workers, anywhere with a road (the second step of the line)
 - House: 50g + 30w (first priority for workers)
 - Sawmill: 80g + 50w (wood engine)
 - Gold Mine: 120g + 80w (gold engine)
@@ -145,7 +374,7 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
   and a Warehouse standing
 
 ### Mid Game (Era 2)
-- Steel enables: Barracks (250g+100s+80w + 10 planks), Refinery (300g+150s+100w + 6
+- Steel enables: Barracks (150g+60s+80w + 20 planks), Refinery (300g+150s+100w + 6
   beams; needs Foundry + Barracks)
 - Market becomes important for converting surplus
 
@@ -157,6 +386,16 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
   Audit in Campaña and Supervivencia (surviving it is the victory), wins directly in
   Constructor (docs/06, docs/20). The materials are outside the pool, so the 3,500 =
   3,500 invariant still holds
+
+### Topes que suben con la era (2026-10-14)
+- Los topes de edificios suben con la era (`GameConfig.building_limits_by_era`, ≈ ×1,5
+  en la era 2 y ×2 en la era 3; tabla y porqués en docs/03 §Building Limits). Más
+  extractores y casas en las eras 2-3 dan más con qué llenar la bolsa: la bolsa no
+  cambia, el tope de almacenes se queda en 5 para que siga valiendo 3.500 = 3.500, y lo
+  que no cabe espera en los edificios (§Production that waits to be collected).
+- Las decoraciones no tienen tope: son el sitio donde gastar lo que sobra (moral).
+- Para medir con `tools/line_probe.gd`: lo tirado por bolsa llena, el minuto del CG 3 y
+  cuántos extractores levanta de verdad el jugador de la sonda en cada era.
 
 ## Key Files
 

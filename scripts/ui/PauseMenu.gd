@@ -6,8 +6,9 @@ extends CanvasLayer
 ##
 ##   COLONIA  Que hacer · Progreso · Colonia (rango) · Ejercito ·
 ##            Escaramuzas · Sandbox        (solo lo que ya esta disponible)
-##   PARTIDA  Reanudar · Guardar · Ajustes · Musica · Ayuda · Historia ·
-##            Menu principal · Guardar y salir
+##   PARTIDA  Reanudar · Guardar | Partidas · Ajustes · Musica · Ayuda ·
+##            Historia | Informar fallo · Menu principal · Guardar y salir
+##            (los "|" comparten fila: asi cabe entero en 720 px de alto)
 ##
 ## - Con el menu abierto la partida esta en pausa de verdad (`get_tree().paused`).
 ##   Todo lo que no marque PROCESS_MODE_ALWAYS se para; este menu y la musica no.
@@ -35,6 +36,7 @@ const CHROME_H := 150.0
 ## El boton del menu: esquina superior derecha, con palabra y no solo icono.
 const MENU_BTN_MARGIN := 10.0
 const MENU_BTN_MIN_W := 118.0
+const GameSpeedButtonScript := preload("res://scripts/ui/GameSpeedButton.gd")
 
 ## Entradas de COLONIA: [id, clave Tr, nodo hermano].
 const COLONY_ENTRIES := [
@@ -85,6 +87,7 @@ func _ready() -> void:
 	EventBus.tutorial_intro_closed.connect(_on_intro_closed)
 	EventBus.music_toggled.connect(func(_on): _sync_music())
 	get_viewport().size_changed.connect(_relayout)
+	_add_speed_button()
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -168,7 +171,8 @@ func _setup_ui() -> void:
 	for entry in COLONY_ENTRIES:
 		var id: String = entry[0]
 		var sibling: String = entry[2]
-		var btn := ModalKit.make_menu_button(Tr.t(entry[1]), UITheme.BTN, func(): open_colony_panel(sibling))
+		# Todo el menu en mayusculas, como sus entradas grandes (ronda 1.0).
+		var btn := ModalKit.make_menu_button(Tr.t(entry[1]).to_upper(), UITheme.BTN, func(): open_colony_panel(sibling))
 		btn.name = "Colony_" + id
 		colony.add_child(btn)
 		_colony_buttons[id] = btn
@@ -176,11 +180,19 @@ func _setup_ui() -> void:
 	# ── PARTIDA ──
 	var game := _make_group("GameGroup", Tr.t("LBL_MENU_GROUP_GAME"), Tr.t("LBL_PAUSE_SUBTITLE"))
 	_resume_btn = _add_game_button(game, "Resume", Tr.t("BTN_RESUME"), UITheme.POSITIVE, resume)
-	_add_game_button(game, "Save", Tr.t("BTN_SAVE_GAME"), UITheme.BTN, save)
+	# Guardar y PARTIDAS, Historia e Informar fallo van de dos en dos: en una
+	# tablet de 720 px de alto el grupo entero cabe sin scroll y "Guardar y
+	# salir" queda a la vista (antes caia tras el desplazamiento).
+	var save_row := _make_pair_row(game)
+	_add_game_button(save_row, "Save", Tr.t("BTN_SAVE_GAME"), UITheme.BTN, save, true)
+	_add_game_button(save_row, "Saves", Tr.t("BTN_SAVES"), UITheme.BTN, _on_saves, true)
 	_add_game_button(game, "Settings", Tr.t("BTN_SETTINGS"), UITheme.BTN, _on_settings)
 	_music_btn = _add_game_button(game, "Music", "", UITheme.BTN, AudioManager.toggle_music)
 	_help_btn = _add_game_button(game, "Help", Tr.t("BTN_HELP"), UITheme.INFO, _on_help)
-	_add_game_button(game, "Story", Tr.t("BTN_STORY"), UITheme.BTN, _on_story)
+	var story_row := _make_pair_row(game)
+	_add_game_button(story_row, "Story", Tr.t("BTN_STORY"), UITheme.BTN, _on_story, true)
+	var report := _add_game_button(story_row, "Report", Tr.t("BTN_REPORT_BUG"), UITheme.BTN, report_bug, true)
+	report.tooltip_text = Tr.t("BTN_REPORT_BUG_HINT")
 	_add_game_button(game, "MainMenu", Tr.t("BTN_MAIN_MENU"), UITheme.BTN, _on_main_menu)
 	_add_game_button(game, "Quit", Tr.t("BTN_SAVE_QUIT"), UITheme.DANGER, _on_quit)
 
@@ -190,6 +202,17 @@ func _setup_ui() -> void:
 
 	_sync_music()
 	_relayout()
+
+## El boton x1 / x2 del HUD (docs/21 §13). Lo pone este menu y no las escenas:
+## las dos vistas lo tienen. Va de HERMANO (no de hijo): es HUD de la partida,
+## se para con la pausa y no es parte de este menu.
+func _add_speed_button() -> void:
+	var parent := get_parent()
+	if parent == null or parent.get_node_or_null("GameSpeedButton") != null:
+		return
+	var speed := GameSpeedButtonScript.new()
+	speed.name = "GameSpeedButton"
+	parent.add_child.call_deferred(speed)
 
 func _make_group(node_name: String, title: String, hint: String) -> VBoxContainer:
 	var box := VBoxContainer.new()
@@ -209,11 +232,29 @@ func _make_group(node_name: String, title: String, hint: String) -> VBoxContaine
 	_groups.add_child(box)
 	return box
 
-func _add_game_button(group: VBoxContainer, id: String, text: String, color: Color, cb: Callable) -> Button:
-	var btn := ModalKit.make_menu_button(text, color, cb)
+## `half`: el boton comparte fila con otro (_make_pair_row) y va con letra de
+## cuerpo para que su palabra quepa en media columna.
+func _add_game_button(group: Container, id: String, text: String, color: Color, cb: Callable,
+		half := false) -> Button:
+	var btn := ModalKit.make_menu_button(text.to_upper(), color, cb)
 	btn.name = "Game_" + id
+	if half:
+		UITheme.style_button(btn, color, UITheme.FONT_BODY)
+		btn.clip_text = true
+		btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		btn.custom_minimum_size.x = 0.0
+		if btn.tooltip_text == "":
+			btn.tooltip_text = text
 	group.add_child(btn)
 	return btn
+
+## Una fila de dos botones a partes iguales dentro de un grupo del menu.
+func _make_pair_row(group: VBoxContainer) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", int(group.get_theme_constant("separation")))
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group.add_child(row)
+	return row
 
 func _relayout() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
@@ -470,10 +511,26 @@ func save() -> void:
 	_status.visible = true
 	EventBus.notification_posted.emit(Tr.t(key), "warning" if deferred else "success", color)
 
+## INFORMAR DE UN FALLO: copia el informe (BugReport) al portapapeles y lo dice
+## aqui mismo, como Guardar. No envia nada: el jugador lo pega donde quiera.
+func report_bug() -> void:
+	BugReport.copy_to_clipboard()
+	# La primera vez, al volver al juego, la ayuda dice donde pegarlo.
+	TutorialManager.offer_tip("bug_report")
+	_status.text = Tr.t("MSG_REPORT_COPIED")
+	_status.add_theme_color_override("font_color", UITheme.POSITIVE)
+	_status.visible = true
+
 ## Guarda si hay partida en marcha. Sin escena de juego (pruebas) no hay nada.
 func _save_now() -> void:
 	if GameManager.is_started():
 		GameManager.save_game()
+
+## PARTIDAS: la misma lista que el menu principal (SavesPanel, encima de este
+## menu). Antes se guarda, para que la partida en curso salga al dia.
+func _on_saves() -> void:
+	_save_now()
+	GameManager.open_saves_list()
 
 func _on_settings() -> void:
 	var settings: Node = _find_sibling("SettingsPanel")
@@ -501,20 +558,11 @@ func _help_panel() -> Node:
 		return p
 	return null
 
-## Vuelve a contar el lore. La intro es modal y vive en TutorialPanel; se abre
-## con el juego todavia en pausa y, al cerrarla, se vuelve a este menu.
-##
-## Con el prologo propio del frente de ayudas (TutorialManager.show_prologue),
-## el menu se cierra antes: el prologo espera a que no haya pausa ni menu.
+## Vuelve a contar el lore (TutorialManager.show_prologue). El menu se cierra
+## antes: el prologo espera a que no haya pausa ni menu.
 func _on_story() -> void:
-	if TutorialManager.has_method("show_prologue"):
-		resume()
-		TutorialManager.call("show_prologue")
-		return
-	var tutorial: Node = _find_sibling("TutorialPanel")
-	if tutorial != null:
-		_open_sub(tutorial)
-	TutorialManager.show_intro()
+	resume()
+	TutorialManager.show_prologue()
 
 ## Guarda y cede el sitio al menu principal. La pausa cambia de manos en la misma
 ## llamada: se suelta aqui y el menu principal la vuelve a tomar como suya, para

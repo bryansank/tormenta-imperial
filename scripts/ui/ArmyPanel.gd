@@ -6,6 +6,7 @@ extends CanvasLayer
 ## su coste en iconos; de donde salen los topes y el sueldo, en tooltips.
 
 const TextKit := preload("res://scripts/ui/TextKit.gd")
+const UnitCardScript := preload("res://scripts/ui/UnitCard.gd")
 
 var _panel: PanelContainer
 var _backdrop: ColorRect
@@ -19,15 +20,17 @@ var _slots_label: Label
 var _units_vbox: VBoxContainer
 var _training_vbox: VBoxContainer
 var _training_bars: Array = []  # ProgressBar refs, index-aligned with ArmyManager.get_training()
+## Las fichas abiertas (boton FICHA): unit_id -> true. Se mantienen al rehacer.
+var _cards_open: Dictionary = {}
 
 
 func _ready() -> void:
 	layer = 11
 	_setup_ui()
 	UIManager.register_panel(self, "ArmyPanel.modal")
-	EventBus.army_changed.connect(_refresh)
+	EventBus.army_changed.connect(_request_refresh)
 	EventBus.era_advanced.connect(_on_era_advanced)
-	EventBus.resource_unlocked.connect(func(_r): _refresh())
+	EventBus.resource_unlocked.connect(_request_refresh)
 	EventBus.building_placed.connect(func(_d, _c): _on_base_changed())
 	EventBus.building_demolished.connect(func(_n, _c): _on_base_changed())
 	EventBus.game_load_completed.connect(_on_base_changed)
@@ -35,12 +38,28 @@ func _ready() -> void:
 	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 	# Lo que esta fuera sigue contando en el ejercito pero no se puede entrenar
 	# ni mandar a ningun otro sitio: el panel tiene que decirlo.
-	EventBus.expedition_started.connect(func(_id, _nodes): _refresh())
-	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _refresh())
+	EventBus.expedition_started.connect(func(_id, _nodes): _request_refresh())
+	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _request_refresh())
 	EventBus.expedition_resumed.connect(_on_expedition_resumed)
 	_update_button_visibility()
 	# Por si la partida se cargo antes de que este panel escuchara.
 	_on_base_changed.call_deferred()
+	# Las barras de entrenamiento solo se mueven con el panel abierto.
+	set_process(false)
+
+## Las senales del ejercito rehacen las filas solo con el panel abierto (al
+## abrirlo se rehacen de todos modos), y una vez por fotograma como mucho.
+var _refresh_queued := false
+func _request_refresh(_arg = null) -> void:
+	if not _is_open or _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
+	if _is_open:
+		_refresh()
 
 func _process(_delta: float) -> void:
 	if not _is_open:
@@ -146,7 +165,7 @@ func _units_on_expedition() -> Dictionary:
 	return CombatManager.get_units_on_expedition()
 
 func _on_expedition_resumed(_expedition_id: int) -> void:
-	_refresh()
+	_request_refresh()
 
 func _rebuild_units() -> void:
 	for child in _units_vbox.get_children():
@@ -207,7 +226,27 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	stats.add_child(upkeep_row)
 	info.add_child(stats)
 
-	# Right: train button
+	# La ficha de la unidad (docs/15 §3, "Ensenar el combate"): la misma que en el
+	# tablero, sin vida actual. Se abre y se cierra en la propia fila.
+	if _cards_open.has(unit_id):
+		var unit_card = UnitCardScript.new()
+		unit_card.setup(unit_id, null, false)
+		info.add_child(unit_card)
+
+	# Right: ficha + train button
+	var buttons := VBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 4)
+	row.add_child(buttons)
+	var card_btn := Button.new()
+	card_btn.name = "CardButton"
+	card_btn.text = Tr.t("BTN_UNIT_CARD_HIDE") if _cards_open.has(unit_id) else Tr.t("BTN_UNIT_CARD")
+	card_btn.tooltip_text = Tr.t("LBL_UNIT_CARD_TIP")
+	card_btn.custom_minimum_size = Vector2(96, 36)
+	UITheme.style_button(card_btn, UITheme.BTN, UITheme.FONT_SMALL)
+	card_btn.pressed.connect(func():
+		toggle_unit_card(unit_id)
+	)
+	buttons.add_child(card_btn)
 	var check := ArmyManager.can_train(unit_id)
 	# Por que no se puede entrenar, a la vista: antes solo iba en el tooltip, y
 	# en movil no hay raton que se pose encima para leerlo.
@@ -227,9 +266,20 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 		if ArmyManager.train(unit_id):
 			_refresh()
 	)
-	row.add_child(train_btn)
+	buttons.add_child(train_btn)
 
 	return card
+
+## Abre o cierra la ficha de `unit_id` en su fila.
+func toggle_unit_card(unit_id: String) -> void:
+	if _cards_open.has(unit_id):
+		_cards_open.erase(unit_id)
+	else:
+		_cards_open[unit_id] = true
+	_rebuild_units()
+
+func is_unit_card_open(unit_id: String) -> bool:
+	return _cards_open.has(unit_id)
 
 func _rebuild_training() -> void:
 	for child in _training_vbox.get_children():
@@ -301,7 +351,7 @@ func _missing(cost: Dictionary) -> Dictionary:
 # ── Visibility / open-close ──
 
 func _on_era_advanced(_new_era: int) -> void:
-	_refresh()
+	_request_refresh()
 	_update_button_visibility()
 
 func _on_base_changed(_arg = null) -> void:
@@ -324,6 +374,7 @@ func _toggle_panel() -> void:
 	_is_open = not _is_open
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
+	set_process(_is_open)
 	if _is_open:
 		_refresh()
 		UIManager.open_panel(self)
