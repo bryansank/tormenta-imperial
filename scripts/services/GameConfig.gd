@@ -2347,6 +2347,46 @@ func get_storm_duration() -> float:
 func get_storm_tick_interval() -> float:
 	return get_duration(storm_tick_interval)
 
+# ── La Orden de la Regencia y el barometro (doc 21 §2.2, D5 = A) ──
+# Claves NUEVAS. No tocan ninguna storm_* de antes: la curva del Diezmo, la
+# escolta y el daño siguen donde estaban, y la rama de balance es su duena.
+
+## Tope de la rebaja total del proximo Diezmo, sumando todas las fuentes. Con
+## 0,5 el Diezmo nunca baja de la mitad: prepararse ayuda, no lo borra.
+var storm_order_discount_max := 0.5
+## Lo que rebaja entregar el encargo de la Regencia.
+var storm_order_delivery_pct := 0.15
+## Lo que rebaja ganar una escaramuza durante la calma. Lo aplica la rama de
+## escaramuzas llamando a StormManager.add_tithe_discount("expedicion", esto).
+var storm_order_expedition_pct := 0.10
+## La tarjeta ensena la via de la mision solo con esto puesto. Encendido desde
+## que la 1.0 la conecta: echar el campamento de la Regencia (incursion outpost)
+## llama a StormManager.add_tithe_discount("expedicion", ...) en CombatManager._apply_loot.
+var storm_order_expedition_way := true
+## El encargo de la Regencia: cuanto pide de cada cosa (materiales primero; la
+## madera y el oro solo si aun no hay ningun material). Se sortea uno por calma.
+var storm_order_delivery_base := {
+	"planks": 10, "ingots": 6, "beams": 6, "fuel": 8,
+	"wood": 80, "gold": 60,
+}
+## Cuanto crece el encargo por tormenta pasada (0,2 = un 20 % mas cada una), y su
+## tope como multiplicador.
+var storm_order_delivery_growth := 0.2
+var storm_order_delivery_growth_max := 2.0
+## Las torres que pide la tercera via ("ten 2 torres en pie"). Solo es la meta que
+## se ensena: lo que protegen sigue siendo get_storm_mitigation().
+var storm_order_towers_goal := 2
+
+## El barometro de la calma: muestra "entre X e Y min" hasta el Aviso, nunca el
+## minuto exacto. El margen es +- esto (segundos de partida) alrededor de un
+## centro movido al azar hasta `storm_barometer_jitter` veces el margen. El
+## momento de verdad cae siempre dentro.
+var storm_barometer_margin := 60.0
+var storm_barometer_jitter := 0.5
+
+func get_storm_barometer_margin() -> float:
+	return get_duration(storm_barometer_margin)
+
 # ══════════════════════════════════════════════════════════════════════
 # ── Las torres en el tablero del Diezmo ──
 # ══════════════════════════════════════════════════════════════════════

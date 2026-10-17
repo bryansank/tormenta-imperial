@@ -9,6 +9,8 @@ var _is_open := false
 var _now_title: Label
 var _now_why: Label
 var _now_blocker: Label
+## La meta de la calma (Orden de la Regencia), debajo del paso. Oculta si no toca.
+var _calm_goal: Label
 ## "Sal de escaramuza: ..." (Objectives.sortie_step), solo cuando hay motivo.
 var _sortie_line: Label
 var _route_box: VBoxContainer
@@ -116,6 +118,10 @@ func _setup_ui() -> void:
 	_now_blocker = UITheme.make_label("", "body", UITheme.WARNING)
 	_now_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_now_blocker)
+	_calm_goal = UITheme.make_label("", "body", UITheme.WARNING)
+	_calm_goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_calm_goal.visible = false
+	content.add_child(_calm_goal)
 	# Segunda linea (doc 21 §2.4 y §3.6): salir de escaramuza cuando hay motivo.
 	# Va aparte del paso de la linea: no lo sustituye, lo acompana.
 	_sortie_line = UITheme.make_label("", "body", UITheme.CAT_MILITARY.lightened(0.25))
@@ -173,6 +179,9 @@ func refresh() -> void:
 	_now_why.text = String(text["why"])
 	_now_blocker.text = String(text["blocker"])
 	_now_blocker.visible = String(text["blocker"]) != ""
+	var goal: Dictionary = Objectives.calm_goal()
+	_calm_goal.text = String(goal.get("text", ""))
+	_calm_goal.visible = not goal.is_empty()
 	var sortie: Dictionary = Objectives.sortie_step()
 	if sortie.is_empty():
 		_sortie_line.visible = false

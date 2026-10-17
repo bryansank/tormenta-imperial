@@ -270,6 +270,12 @@ signal storm_ended(severity: int)
 signal tithe_demanded(severity: int)
 @warning_ignore("unused_signal")
 signal tithe_resolved(paid: bool, taken: Dictionary)
+## La Orden de la Regencia cambio: encargo nuevo, entregado, o una rebaja del
+## Diezmo apuntada (StormManager.add_tithe_discount). `fresh` es true solo cuando
+## sale una Orden nueva (al armarse el reloj y tras cada Diezmo): el HUD abre la
+## tarjeta. Emitida solo por StormManager.
+@warning_ignore("unused_signal")
+signal storm_order_changed(fresh: bool)
 ## La guarnicion peleo sola: el Diezmo cayo con el tablero ocupado por una
 ## expedicion y la defensa se resolvio a ciegas (AutoResolver). `summary` es
 ## CombatManager.get_last_result(). Emitida solo por CombatManager, y es la UNICA

@@ -261,12 +261,17 @@ follow `StormCycle.Phase`.
 | `storm_ended` | `severity: int` | StormManager | ProcessManager, ArmyManager, StormHUD, StormSky |
 | `tithe_demanded` | `severity: int` | StormManager | TutorialManager |
 | `tithe_resolved` | `paid: bool, taken: Dictionary` | StormManager | StormHUD, HelperPanel, WarReportScreen, AuditDefeatScreen |
+| `storm_order_changed` | `fresh: bool` | StormManager | StormHUD |
 
 `storm_incoming` carries no severity on purpose — the warning window says the ash
 is on the horizon, and the size of the bill is only announced with `storm_started`.
 A warning that comes to nothing emits `storm_false_alarm(deferred)`, and `deferred`
 is the severity the next real storm inherits: postponed, not forgiven.
 `taken` on `tithe_resolved` is resource → amount.
+`storm_order_changed` fires when the Regency Order changes (new order, delivered, a
+discount added through `StormManager.add_tithe_discount()`); `fresh` is true only for a
+new order (clock armed, or after a Tithe), and the HUD opens its card then
+(docs/06 §Orden de la Regencia).
 
 ## Day and night
 
