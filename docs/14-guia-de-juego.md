@@ -201,7 +201,7 @@ mientras quepa en la Granja. Cambiarlo empieza de cero.
 
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
-| <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 250 oro · 100 acero · 80 madera · 10 tablones | 3 | Entrena unidades. Cada cuartel es una plaza de entrenamiento en paralelo |
+| <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 150 oro · 60 acero · 80 madera · 20 tablones | 3 | Entrena unidades. Cada cuartel es una plaza de entrenamiento en paralelo |
 | <img src="media/guia/tower.png" width="110"> | **Torre** | 2×2 | 150 oro · 60 acero · 20 petróleo · 30 madera · 4 vigas | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
 | <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera · 20 vigas · 10 lingotes · 10 combustible | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca la Auditoría Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
 
@@ -524,7 +524,7 @@ comer está en ruinas) te pide eso antes.
 7. **Fundición**, pegada a un hierro — solo se puede con Aserradero, Mina de oro,
    Vivienda y Almacén en pie. Entras en la era 2, se desbloquea el acero **y se
    arma la Tormenta**: la primera llega unos diez minutos después.
-8. **Cuartel** (fabrica antes 10 tablones en el Aserradero) y **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
+8. **Cuartel** (fabrica antes 20 tablones en el Aserradero) y **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
    infantes solos pierden incluso el Diezmo más pequeño.
 9. **Refinería, encima de un pozo** (pide Cuartel y 6 vigas de la Fundición) — era 3,
    petróleo.

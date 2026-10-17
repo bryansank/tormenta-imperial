@@ -117,7 +117,7 @@ big striped awnings with goods on the counters (see "Parcela y atrezo").
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Prereqs |
 |----|------|------|--------------|---------|------------|---------|
-| `barracks` | Cuartel | 2x2 | 250/100/0/80 + 10 planks | 3 | 15s | foundry + sawmill |
+| `barracks` | Cuartel | 2x2 | 150/60/0/80 + 20 planks | 3 | 15s | foundry + sawmill |
 | `tower` | Torre | 2x2 | 150/60/20/30 + 4 beams | 1 | 8s | barracks |
 
 The Barracks trains units (`ArmyManager`, one training slot per Barracks). Each

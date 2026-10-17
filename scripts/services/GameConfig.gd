@@ -1755,7 +1755,10 @@ var unit_types := {
 		"era": 3,
 		# 2026-10-12: 400/180/90 y 100 s (antes 140/60/30 y 55 s). Los seis
 		# blindados del asedio son el ultimo gran esfuerzo de la era 3, no un tramite.
-		"cost": {"gold": 400, "steel": 180, "oil": 90},
+		# 2026-10-16: 300/130/60 + 8 vigas. Lo mismo en recursos (las 8 vigas son
+		# 40 de acero y 20 de madera en la Fundicion), pero la espera de 400 de oro
+		# se parte en dos decisiones: fabricar vigas y entrenar (docs/22 §11).
+		"cost": {"gold": 300, "steel": 130, "oil": 60, "beams": 8},
 		"train_time": 100.0,
 		"upkeep_gold": 4,
 		"power": 65,
