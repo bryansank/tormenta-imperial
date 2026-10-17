@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "carpentry"
+display_name = "Carpintería"
+description = "Hace tablones sin ocupar el aserradero."
+grid_size = Vector2i(2, 2)
+cost_gold = 70
+cost_steel = 0
+cost_oil = 0
+cost_wood = 60
+cost_materials = {}
+build_time = 5.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+mesh_height = 2.0
+mesh_color = Color(0.55, 0.4, 0.27, 1)
+workers_required = 2
+max_health = 130

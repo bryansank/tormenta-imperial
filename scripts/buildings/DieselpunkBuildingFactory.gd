@@ -206,6 +206,10 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 		"fountain": return _build_fountain(sx, sz)
 		"statue": return _build_statue(sx, sz)
 		"road": return _build_road(sx, sz, 0)
+	# Los edificios utiles de la 1.1: una malla de maqueta compartida (o su
+	# modelo horneado en cuanto exista). Ver UtilityToys.
+	if _Utility.handles(building_id):
+		return _Utility.create(building_id)
 	# Las diez decoraciones baratas (feat/decoraciones-1): una malla de la
 	# paleta compartida por tipo, horneada si existe (DecorMesh).
 	var decor := preload("res://scripts/buildings/DecorMesh.gd")
@@ -1373,6 +1377,7 @@ static var _road_meshes: Dictionary = {}
 # ════════════════════════════════════════════════════════════════
 
 const _Site := preload("res://scripts/buildings/SiteMesh.gd")
+const _Utility := preload("res://scripts/buildings/UtilityToys.gd")
 
 ## Fase de obra `phase` (0, 1, 2) para una parcela de `footprint` celdas (ver
 ## SiteMesh.construction_phase).

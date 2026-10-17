@@ -128,6 +128,9 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"garden": _garden(ci, r)
 		"fountain": _fountain(ci, r)
 		"statue": _statue(ci, r)
+		# Edificios utiles de la 1.1 (dibujos al final del archivo).
+		"windmill", "silo", "tavern", "carpentry", "well", "lighthouse", "fuel_depot":
+			_utility(ci, id, r)
 		"lamp_post": _lamp_post(ci, r)
 		"park_bench": _park_bench(ci, r)
 		"hedge": _hedge(ci, r)
@@ -1915,6 +1918,12 @@ static func fx_anchors(id: String) -> Array:
 		"laboratory": return [Vector2(0.5, 0.4)]
 		# La chimenea de la caldera izquierda (la "fx" de la receta 3D).
 		"nucleo": return [Vector2(0.16, 0.04)]
+		# Edificios utiles de la 1.1: chimenea de la Taberna, banco de la
+		# Carpinteria, fanal del Faro, boca de carga del Deposito.
+		"tavern": return [Vector2(0.24, 0.12)]
+		"carpentry": return [Vector2(0.4, 0.4)]
+		"lighthouse": return [Vector2(0.42, 0.1)]
+		"fuel_depot": return [Vector2(0.84, 0.82)]
 	return [Vector2(0.5, 0.45)]
 
 # ── Parcela y atrezo (docs/03, "Parcela y atrezo") ────────────────────
@@ -2683,6 +2692,196 @@ static func _dep_points(rng: RandomNumberGenerator, r: Rect2, spacing: float, ma
 		out[i] = out[j]
 		out[j] = t
 	return out
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Edificios utiles de la 1.1 (feat/edificios-utiles-1, doc 21 §6.3) ──
+# ══════════════════════════════════════════════════════════════════════
+# El mismo vocabulario que la 3D (scripts/buildings/UtilityToys.gd): cada uno
+# con su elemento exagerado (las aspas, los silos, el letrero, el caballete de
+# tablones, la bomba de laton, el fanal, el gran tanque).
+
+static func _utility(ci: CanvasItem, id: String, r: Rect2) -> void:
+	match id:
+		"windmill": _windmill(ci, r)
+		"silo": _silo(ci, r)
+		"tavern": _tavern(ci, r)
+		"carpentry": _carpentry(ci, r)
+		"well": _well(ci, r)
+		"lighthouse": _lighthouse(ci, r)
+		"fuel_depot": _fuel_depot(ci, r)
+
+## Molino: torre encalada con caperuza de madera y las aspas ENORMES en X;
+## cobertizo del grano y sacos.
+static func _windmill(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	var shed := Rect2(r.position + r.size * Vector2(0.62, 0.6), r.size * Vector2(0.34, 0.34))
+	_gable(ci, shed, m * 0.08, TILE_RED, LIGHT_WOOD, true)
+	for k in 3:
+		_shaded_disc(ci, r.position + r.size * Vector2(0.14 + k * 0.09, 0.86 - (k % 2) * 0.05), m * 0.05, CREAM.darkened(0.12))
+	var base := r.position + r.size * Vector2(0.42, 0.62)
+	var h := m * 0.42
+	var top := base - _down * h
+	_cyl(ci, top, m * 0.17, h, CREAM.darkened(0.04), CREAM.darkened(0.16))
+	_disc(ci, top, m * 0.15, WOOD, OUTLINE, 1.2)
+	_dot(ci, top + (_left() - _down) * m * 0.03, m * 0.06, LIGHT_WOOD)
+	# Aspas: cuatro brazos con su tela, en X sobre la caperuza
+	var hub := top - _down * m * 0.04
+	for k in 4:
+		var a := PI * 0.25 + float(k) * PI * 0.5
+		var dir := Vector2(cos(a), sin(a))
+		var tip := hub + dir * m * 0.44
+		ci.draw_line(hub, tip, OUTLINE, 3.5)
+		ci.draw_line(hub, tip, DARK_WOOD, 2.0)
+		var side := Vector2(-dir.y, dir.x) * m * 0.07
+		var p0 := hub + dir * m * 0.14
+		_poly(ci, PackedVector2Array([p0, tip, tip + side, p0 + side]), CREAM, OUTLINE, 1.0)
+	_disc(ci, hub, m * 0.045, BRASS, OUTLINE, 1.0)
+
+## Silo: dos silos altos de chapa con aros de laton y caperuza de teja; tolva
+## a la caseta de carga.
+static func _silo(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	var shed := Rect2(r.position + r.size * Vector2(0.52, 0.66), r.size * Vector2(0.4, 0.3))
+	_gable(ci, shed, m * 0.08, SLATE, LIGHT_WOOD, true)
+	var tops := [r.position + r.size * Vector2(0.3, 0.18), r.position + r.size * Vector2(0.7, 0.24)]
+	var hs := [m * 0.42, m * 0.34]
+	var rads := [m * 0.18, m * 0.15]
+	for i in 2:
+		var c: Vector2 = tops[i]
+		var h: float = hs[i]
+		var rad: float = rads[i]
+		_cyl(ci, c, rad, h, SLATE.lightened(0.2), SLATE.lightened(0.05))
+		for t in [0.25, 0.6]:
+			_cyl_band(ci, c, rad, h, t, 1.5, BRASS)
+		_disc(ci, c, rad * 0.9, TILE_RED, OUTLINE, 1.0)
+		_dot(ci, c, rad * 0.25, TILE_RED_DARK)
+	var a: Vector2 = tops[1] + _down * float(hs[1]) * 0.7
+	var b := shed.get_center()
+	ci.draw_line(a, b, OUTLINE, 5.0)
+	ci.draw_line(a, b, BRASS, 3.0)
+	for k in 2:
+		_shaded_disc(ci, r.position + r.size * Vector2(0.14 + k * 0.12, 0.85), m * 0.05, CREAM.darkened(0.12))
+
+## Taberna: casa de dos plantas con tejado de teja, ventanas encendidas,
+## chimenea y el GRAN letrero de laton con la jarra; barriles delante.
+static func _tavern(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	var body := Rect2(r.position + r.size * Vector2(0.04, 0.0), r.size * Vector2(0.92, 0.72))
+	var top := _gable(ci, body, m * 0.26, TILE_RED, CREAM, true)
+	_wall_marks(ci, _wall, 4, GLOW, 0.45, DARK_WOOD)
+	var ch := Rect2(r.position + r.size * Vector2(0.18, 0.04), Vector2(m * 0.14, m * 0.14))
+	var ct := _block(ci, ch, m * 0.07, TILE_RED_DARK, TILE_RED_DARK.darkened(0.25))
+	ci.draw_rect(ct.grow(-ct.size.x * 0.22), OIL_BLACK)
+	# El letrero exagerado colgado de su brazo, con la jarra
+	var arm := top.position + top.size * Vector2(0.08, 1.0) + _down * m * 0.1
+	var sign_c := arm + _down * m * 0.12
+	ci.draw_line(arm, sign_c, OUTLINE, 2.5)
+	var sr := Rect2(sign_c - Vector2(m * 0.11, m * 0.08), Vector2(m * 0.22, m * 0.16))
+	_plate(ci, sr, BRASS, OUTLINE, 1.2)
+	var mug := Rect2(sr.get_center() - Vector2(m * 0.035, m * 0.045), Vector2(m * 0.07, m * 0.09))
+	ci.draw_rect(mug, CREAM)
+	ci.draw_rect(mug, OUTLINE, false, 1.0)
+	for k in 2:
+		_shaded_disc(ci, r.position + r.size * Vector2(0.62 + k * 0.13, 0.88), m * 0.06, WOOD)
+	ci.draw_rect(Rect2(r.position + r.size * Vector2(0.3, 0.85), r.size * Vector2(0.22, 0.05)), LIGHT_WOOD)
+
+## Carpinteria: cobertizo abierto de chapa sobre suelo de tablas, banco con
+## tablon, y el caballete de tablones de pie (lo exagerado).
+static func _carpentry(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, LIGHT_WOOD.darkened(0.08))
+	for i in range(1, 7):
+		var y := r.position.y + r.size.y * i / 7.0
+		ci.draw_line(Vector2(r.position.x + 1, y), Vector2(r.end.x - 1, y), WOOD, 1.0)
+	var roof := Rect2(r.position, r.size * Vector2(1.0, 0.48))
+	var top := _block(ci, roof, m * 0.14, SLATE.lightened(0.12), DARK_WOOD)
+	for i in range(1, 6):
+		var x := top.position.x + top.size.x * i / 6.0
+		ci.draw_line(Vector2(x, top.position.y + 1), Vector2(x, top.end.y - 1), SLATE.lightened(0.3), 1.0)
+	var bench := Rect2(r.position + r.size * Vector2(0.14, 0.58), r.size * Vector2(0.4, 0.14))
+	_block(ci, bench, m * 0.05, LIGHT_WOOD, DARK_WOOD)
+	ci.draw_rect(Rect2(bench.position + bench.size * Vector2(0.65, 0.2), bench.size * Vector2(0.25, 0.5)), RED)
+	# El caballete de tablones (exagerado), de pie a la derecha
+	var base := r.position + r.size * Vector2(0.76, 0.9)
+	for k in 5:
+		var off := _left() * m * (0.12 - k * 0.06)
+		var tip := base + off - _down * m * (0.62 - (k % 2) * 0.06)
+		ci.draw_line(base + off, tip, OUTLINE, 5.0)
+		ci.draw_line(base + off, tip, LIGHT_WOOD.lightened(0.05 * (k % 3)), 3.2)
+	ci.draw_line(base + _left() * m * 0.16, base - _left() * m * 0.16, DARK_WOOD, 3.0)
+
+## Pozo: plaza de losas, brocal de piedra con el agua, tejadillo, la bomba de
+## laton con su volante rojo (lo exagerado) y los cubos contra el fuego.
+static func _well(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	_plate(ci, r, CONCRETE, CONCRETE_DARK, 1.0)
+	var wc := r.position + r.size * Vector2(0.42, 0.46)
+	_cyl(ci, wc, m * 0.22, m * 0.08, STONE.lightened(0.08), STONE.darkened(0.12))
+	_dot(ci, wc, m * 0.15, WATER.darkened(0.3))
+	_dot(ci, wc + Vector2(-1, -1) * m * 0.04, m * 0.05, WATER)
+	var roof := Rect2(wc - Vector2(m * 0.26, m * 0.18) - _down * m * 0.2, Vector2(m * 0.52, m * 0.2))
+	_gable(ci, roof, m * 0.04, TILE_RED, DARK_WOOD, true)
+	var pump := r.position + r.size * Vector2(0.8, 0.62)
+	_cyl(ci, pump - _down * m * 0.2, m * 0.07, m * 0.2, BRASS_LIGHT, BRASS)
+	var wheel := pump - _down * m * 0.12 + _left() * m * 0.1
+	ci.draw_arc(wheel, m * 0.08, 0.0, TAU, 12, OUTLINE, 3.0)
+	ci.draw_arc(wheel, m * 0.08, 0.0, TAU, 12, RED, 1.8)
+	for k in 3:
+		_disc(ci, r.position + r.size * Vector2(0.14 + k * 0.1, 0.88), m * 0.04, RED, OUTLINE, 1.0)
+
+## Faro: torre alta encalada con franjas rojas, galeria, el fanal encendido
+## con su halo (lo exagerado) y caperuza roja; caseta del vigia.
+static func _lighthouse(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	_plate(ci, r, SLATE.lightened(0.18), OUTLINE, 1.0)
+	_rivets(ci, r, BRASS, 3.0)
+	var hut := Rect2(r.position + r.size * Vector2(0.6, 0.62), r.size * Vector2(0.34, 0.3))
+	_gable(ci, hut, m * 0.07, SLATE, STONE, true)
+	var base := r.position + r.size * Vector2(0.42, 0.7)
+	var h := m * 0.6
+	var top := base - _down * h
+	_cyl(ci, top, m * 0.15, h, CREAM, CREAM.darkened(0.14))
+	for t in [0.3, 0.65]:
+		_cyl_band(ci, top, m * 0.15, h, t, 3.0, RED)
+	_dot(ci, top, m * 0.3, Color(GLOW, 0.22))
+	_disc(ci, top, m * 0.19, IRON, OUTLINE, 1.0)
+	_disc(ci, top, m * 0.12, GLOW, OUTLINE, 1.0)
+	_dot(ci, top, m * 0.06, FIRE_CORE)
+	_disc(ci, top - _down * m * 0.05, m * 0.08, RED, OUTLINE, 1.0)
+	_dot(ci, top - _down * m * 0.07, m * 0.025, BRASS_LIGHT)
+
+## Deposito de combustible: suelo de chapa, el GRAN tanque con su franja de
+## peligro, uno pequeno, colector con valvulas rojas y bidones.
+static func _fuel_depot(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	_plate(ci, r, SLATE.darkened(0.05), OUTLINE, 1.0)
+	_rivets(ci, r, BRASS, 3.0)
+	var big := r.position + r.size * Vector2(0.36, 0.22)
+	var small := r.position + r.size * Vector2(0.78, 0.26)
+	var mouth := r.position + r.size * Vector2(0.84, 0.82)
+	for pair in [[big + _down * m * 0.3, mouth], [small + _down * m * 0.18, mouth]]:
+		ci.draw_line(pair[0], pair[1], OUTLINE, 5.0)
+		ci.draw_line(pair[0], pair[1], STEEL, 3.0)
+	for p in [(big + mouth) * 0.5 + _down * m * 0.12, (small + mouth) * 0.5]:
+		ci.draw_arc(p, 3.2, 0.0, TAU, 10, OUTLINE, 2.5)
+		ci.draw_arc(p, 3.2, 0.0, TAU, 10, RED, 1.5)
+	_cyl(ci, big, m * 0.26, m * 0.3, CREAM, CREAM.darkened(0.12))
+	_cyl_band(ci, big, m * 0.26, m * 0.3, 0.45, 3.0, HAZARD)
+	_cyl_band(ci, big, m * 0.26, m * 0.3, 0.15, 1.5, RED)
+	ci.draw_arc(big, m * 0.14, 0.0, TAU, 16, STONE, 1.0)
+	_cyl(ci, small, m * 0.14, m * 0.18, STEEL, SLATE.lightened(0.1))
+	_cyl_band(ci, small, m * 0.14, m * 0.18, 0.4, 1.5, BRASS)
+	var box := Rect2(mouth - Vector2(m * 0.07, m * 0.07), Vector2(m * 0.14, m * 0.14))
+	ci.draw_rect(box.grow(1.0), OUTLINE)
+	ci.draw_rect(box, RED)
+	_dot(ci, mouth, m * 0.025, GLOW)
+	for k in 3:
+		_shaded_disc(ci, r.position + r.size * Vector2(0.12 + k * 0.11, 0.86), m * 0.05, RED.darkened(0.1))
 
 # ── Decoraciones baratas (feat/decoraciones-1, doc 21 §6.4) ───────────
 # Las mismas diez que DecorMesh en 3D, con el mismo vocabulario: un suelo que
