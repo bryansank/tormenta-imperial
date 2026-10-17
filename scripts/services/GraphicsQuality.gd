@@ -176,13 +176,15 @@ static func gpu_name_is_weak(adapter_name: String) -> bool:
 ## de la pantalla (con vsync la medida no baja de 1000/refresco: un monitor de 50
 ## Hz da 20 ms aunque sobre equipo, y eso no es "flojo"). "minimal", "low" o ""
 ## (se queda como esta).
+## Una medida pegada a un tope (measure_rejection) no decide nunca: "".
 static func measure_verdict(frame_ms: Array, measured_quality: String, refresh_hz: float = 60.0) -> String:
 	if frame_ms.size() < 10:
 		return ""
-	var sorted := frame_ms.duplicate()
-	sorted.sort()
-	var median := float(sorted[sorted.size() / 2])
-	var p95 := float(sorted[mini(sorted.size() - 1, int(sorted.size() * 0.95))])
+	if measure_rejection(frame_ms, refresh_hz) != "":
+		return ""
+	var stats := measure_stats(frame_ms)
+	var median := float(stats["median"])
+	var p95 := float(stats["p95"])
 	if median > float(GameConfig.quality_detect_median_ms) or p95 > float(GameConfig.quality_detect_p95_ms):
 		return "minimal"
 	var low_ms := float(GameConfig.quality_detect_low_ms)
@@ -191,3 +193,84 @@ static func measure_verdict(frame_ms: Array, measured_quality: String, refresh_h
 	if measured_quality == "high" and median > low_ms:
 		return "low"
 	return ""
+
+## Mediana, p10, p90, p95 (ms) y fps medios de una medida. Puro.
+static func measure_stats(frame_ms: Array) -> Dictionary:
+	var out := {"frames": frame_ms.size(), "median": 0.0, "p10": 0.0, "p90": 0.0,
+		"p95": 0.0, "mean_fps": 0.0}
+	if frame_ms.is_empty():
+		return out
+	var sorted := frame_ms.duplicate()
+	sorted.sort()
+	var n := sorted.size()
+	var total := 0.0
+	for ms in sorted:
+		total += float(ms)
+	out["median"] = float(sorted[n / 2])
+	out["p10"] = float(sorted[mini(n - 1, int(n * 0.10))])
+	out["p90"] = float(sorted[mini(n - 1, int(n * 0.90))])
+	out["p95"] = float(sorted[mini(n - 1, int(n * 0.95))])
+	out["mean_fps"] = 1000.0 * n / total if total > 0.0 else 0.0
+	return out
+
+## Los tiempos de fotograma (ms) de los topes y refrescos conocidos: 1000/N de
+## GameConfig.quality_detect_known_caps y, con refresco conocido, un periodo y
+## dos (el vsync a medio ritmo). Puro.
+static func known_cap_ms(refresh_hz: float) -> Array:
+	var out: Array = []
+	for fps in GameConfig.quality_detect_known_caps:
+		if float(fps) > 0.0:
+			out.append(1000.0 / float(fps))
+	if refresh_hz > 0.0:
+		out.append(1000.0 / refresh_hz)
+		out.append(2000.0 / refresh_hz)
+	return out
+
+## Si una mediana cae a +-quality_detect_cap_tolerance_ms de un tope conocido.
+static func median_on_a_cap(median_ms: float, refresh_hz: float) -> bool:
+	var tol := float(GameConfig.quality_detect_cap_tolerance_ms)
+	for cap_ms in known_cap_ms(refresh_hz):
+		if absf(median_ms - float(cap_ms)) <= tol:
+			return true
+	return false
+
+## Por que una medida no vale ("" si vale): la mediana pegada a un tope o a un
+## refresco conocido, o fotogramas clavados (p90 - p10 casi cero). Esa medida
+## mide un tope de fotogramas o el vsync, no la GPU. Puro.
+static func measure_rejection(frame_ms: Array, refresh_hz: float) -> String:
+	if frame_ms.size() < 10:
+		return "pocos fotogramas (%d)" % frame_ms.size()
+	var stats := measure_stats(frame_ms)
+	var median := float(stats["median"])
+	if median_on_a_cap(median, refresh_hz):
+		return "mediana %.1f ms en un tope o refresco" % median
+	var spread := float(stats["p90"]) - float(stats["p10"])
+	if spread < float(GameConfig.quality_detect_flat_ms):
+		return "fotogramas clavados (p10-p90 %.2f ms)" % spread
+	return ""
+
+## La mediana (ms) que guarda un quality_detected_reason de medida
+## ("medida high: mediana 33.3 ms, 90 fotogramas"), o -1 si no la lleva. Puro.
+static func reason_median_ms(reason: String) -> float:
+	var re := RegEx.new()
+	re.compile(r"mediana ([0-9]+(?:\.[0-9]+)?) ms")
+	var m := re.search(reason)
+	return float(m.get_string(1)) if m != null else -1.0
+
+## Si hay que repetir una deteccion ya guardada (una vez, al arrancar). Solo la
+## de una version anterior de la regla (GameConfig.QUALITY_DETECT_VERSION) y solo
+## si decidio la medida del paso 2 (el motivo empieza por "medida "; el paso 1 da
+## "gpu=...", "ram_mb=..." y una eleccion a mano en Ajustes da "manual: ..."):
+##   - la medida estaba en un tope (mediana ~33,3 o ~16,7 ms) y la calidad es
+##     Minima o Baja;
+##   - o la calidad es Minima: el paso 1 no la pedia, la puso la medida vieja.
+## Una Minima elegida a mano no se toca. Puro.
+static func detection_needs_repair(quality: String, detected: bool, reason: String, version: int) -> bool:
+	if not detected or version >= int(GameConfig.QUALITY_DETECT_VERSION):
+		return false
+	if not reason.begins_with("medida "):
+		return false
+	if quality == "minimal":
+		return true
+	var median := reason_median_ms(reason)
+	return quality == "low" and median > 0.0 and median_on_a_cap(median, 0.0)

@@ -12,14 +12,8 @@ const COMBAT_SIGNALS := [
 	"encounter_started", "unit_attacked", "unit_died", "encounter_ended",
 	"expedition_started", "expedition_ended",
 ]
-## Wired only once the Storm's final chapter declares them on the EventBus.
+## The Final Audit's signals (they used to be optional; now always declared).
 const OPTIONAL_SIGNALS := ["final_audit_summoned", "storm_halted_forever"]
-## Cada senal opcional con SU manejador: reconectar una con el manejador de la
-## otra si que anade una conexion, y eso no prueba idempotencia, prueba otra cosa.
-const OPTIONAL_HANDLERS := {
-	"final_audit_summoned": "_on_final_audit_summoned",
-	"storm_halted_forever": "_on_storm_halted_forever",
-}
 
 var _saved_last_msec: Dictionary = {}
 var _saved_before_combat: String = ""
@@ -64,16 +58,6 @@ func test_final_audit_signals_are_wired_as_soon_as_they_exist() -> void:
 			assert_bool(_audio_listens_to(signal_name)) \
 				.override_failure_message("EventBus.%s exists but AudioManager ignores it" % signal_name) \
 				.is_true()
-
-func test_optional_wiring_is_idempotent() -> void:
-	# Calling the optional hook twice must not double-connect anything.
-	for signal_name in OPTIONAL_SIGNALS:
-		if not EventBus.has_signal(signal_name):
-			continue
-		var handler: Callable = Callable(AudioManager, String(OPTIONAL_HANDLERS[signal_name]))
-		var before: int = EventBus.get_signal_connection_list(signal_name).size()
-		AudioManager._connect_optional(signal_name, handler)
-		assert_int(EventBus.get_signal_connection_list(signal_name).size()).is_equal(before)
 
 # ── Manifest: every key points at a real file ────────────────────────
 

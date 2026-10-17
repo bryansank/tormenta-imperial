@@ -40,6 +40,9 @@ const BoardTerrain := preload("res://scripts/combat_view/BoardTerrain3D.gd")
 const WorldLook := preload("res://scripts/map/WorldLook.gd")
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
 const Orders := preload("res://scripts/combat_view/FrontOrders.gd")
+## Para las lineas del botin exclusivo (las mismas palabras que la seleccion).
+const SkirmishPanelScript := preload("res://scripts/ui/SkirmishPanel.gd")
+const UnitCardScript := preload("res://scripts/ui/UnitCard.gd")
 
 const PLAYER := 0
 const ENEMY := 1
@@ -76,6 +79,26 @@ var _cell_icons: Array = []         ## TextureRect alineado con _cells
 ## que el bando se lea sin depender del verde y el rojo (daltonismo, sol en la
 ## pantalla del movil).
 var _cell_marks: Array = []
+## Etiqueta de vista previa alineada con _cells: "-18" sobre un objetivo, "✕"
+## sobre un enemigo demasiado cerca para la artilleria (tablero 2D).
+var _cell_previews: Array = []
+
+# ── Ensenar el combate (2026-10-14, docs/15 §3 "Ensenar el combate") ──
+
+## "VER ALCANCE ENEMIGO": tine las casillas a las que el enemigo llega y dispara
+## en su turno. Del jugador, no de la partida: no se guarda.
+var _threat_btn: Button
+var _show_threat := false
+## Lo calculado en el ultimo refresco (una vez por evento, nunca por fotograma).
+var _ov_threat: Dictionary = {}     ## cell -> true
+var _ov_no_fire: Dictionary = {}    ## cell -> true
+var _ov_fire: Dictionary = {}       ## cell -> true (leccion de artilleria)
+var _ov_previews: Dictionary = {}   ## uid -> texto encima de la pieza
+var _threat_key := ""
+var _threat_cache: Array = []
+## La ficha abierta (UnitCard) y de quien es.
+var _unit_card = null                ## UnitCard (PanelContainer)
+var _unit_card_uid := -1
 
 var _title_label: Label
 var _round_label: Label
@@ -85,6 +108,9 @@ var _defend_btn: Button
 var _wait_btn: Button
 var _end_btn: Button
 var _abandon_board_btn: Button
+## RESOLVER SOLO (doc 21 §3.4, D6 = A): en el Diezmo y en incursiones, con la
+## fuerza doble. Lo decide CombatManager.can_auto_resolve().
+var _auto_btn: Button
 var _result_panel: PanelContainer
 var _result_title: Label
 var _result_detail: Label
@@ -108,6 +134,8 @@ var _board_spacer: Control
 var _actions_row: Container
 var _speed_btn: Button
 var _view_btn: Button
+var _header_margin: MarginContainer
+const PauseMenuScript := preload("res://scripts/ui/PauseMenu.gd")
 var _advance_btn: Button
 ## Forzada por pruebas y sondas ("front" / "board"); "" = GameConfig.ui_combat_view.
 var _forced_view := ""
@@ -171,6 +199,8 @@ func _ready() -> void:
 	# quitar de en medio con una tecla. El fondo a pantalla completa es lo que
 	# la hace modal.
 	layer = 18
+	# TutorialPanel busca aqui a donde senalar en el combate guiado (coach_anchor).
+	add_to_group("battle_screen")
 	_setup_ui()
 	visible = false
 
@@ -188,6 +218,8 @@ func _ready() -> void:
 	EventBus.draft_applied.connect(_on_draft_applied)
 	EventBus.game_load_completed.connect(_on_game_load_completed)
 	EventBus.expedition_resumed.connect(_on_expedition_resumed)
+	# El combate guiado enciende capas (alcance enemigo, zona de tiro): repintar.
+	EventBus.combat_lesson_step_changed.connect(func(_step): _refresh())
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	# Red de seguridad: si la carga ocurrio antes de que este panel escuchara,
 	# expedition_resumed y draft_offered se perdieron. Se le pregunta al servicio.
@@ -268,7 +300,15 @@ func _build_board_view() -> void:
 	_view_btn.pressed.connect(toggle_combat_view)
 	_view_btn.visible = false
 	header.add_child(_view_btn)
-	column.add_child(header)
+	# Hueco a los dos lados para el boton ☰ MENU, que flota arriba a la derecha
+	# por encima del tablero: en tablet la fila llegaba hasta el y el boton
+	# Tablero/Frente quedaba debajo. A los dos lados para que siga centrada.
+	_header_margin = MarginContainer.new()
+	_header_margin.name = "BoardHeaderMargin"
+	_header_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_header_margin.add_child(header)
+	column.add_child(_header_margin)
+	_fit_header()
 	HudRegistry.register("BattleScreen.turn", _turn_label)
 
 	# Franja de iniciativa: la ronda entera, en el orden en que va a pasar (FR-006).
@@ -310,6 +350,11 @@ func _build_board_view() -> void:
 	_advance_btn.name = "AdvanceButton"
 	_advance_btn.visible = false
 	actions.add_child(_advance_btn)
+	# VER ALCANCE ENEMIGO (docs/15 §3, "Ensenar el combate"): conmuta, no actua.
+	_threat_btn = _make_action(Tr.t("BTN_SHOW_THREAT"), func(): toggle_threat())
+	_threat_btn.name = "ThreatButton"
+	_threat_btn.tooltip_text = Tr.ti("LBL_THREAT_TIP")
+	actions.add_child(_threat_btn)
 	actions.add_child(_defend_btn)
 	actions.add_child(_wait_btn)
 	actions.add_child(_end_btn)
@@ -319,6 +364,11 @@ func _build_board_view() -> void:
 	UITheme.style_button(_abandon_board_btn, UITheme.DANGER.darkened(0.25), UITheme.FONT_BUTTON)
 	_abandon_board_btn.visible = false
 	actions.add_child(_abandon_board_btn)
+	_auto_btn = _make_action(Tr.t("BTN_AUTO_RESOLVE"), func(): _act_auto_resolve())
+	_auto_btn.name = "AutoResolveButton"
+	_auto_btn.tooltip_text = Tr.t("HINT_AUTO_RESOLVE")
+	_auto_btn.visible = false
+	actions.add_child(_auto_btn)
 	column.add_child(actions)
 	_actions_row = actions
 
@@ -515,6 +565,7 @@ func _build_grid() -> void:
 	_cell_bars.clear()
 	_cell_icons.clear()
 	_cell_marks.clear()
+	_cell_previews.clear()
 
 	_grid.columns = _board.x
 	for y in range(_board.y):
@@ -568,6 +619,20 @@ func _build_grid() -> void:
 			cell.add_child(mark)
 			_cell_marks.append(mark)
 
+			# Dano previsto ("-18") o "✕" encima de la pieza: con el dedo no hay
+			# tooltip, asi que se escribe en la casilla.
+			var preview := Label.new()
+			preview.set_anchors_preset(Control.PRESET_TOP_WIDE)
+			preview.offset_top = -2
+			preview.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			preview.add_theme_font_size_override("font_size", maxi(11, _cell_size / 4))
+			preview.add_theme_color_override("font_outline_color", UITheme.OUTLINE_COLOR)
+			preview.add_theme_constant_override("outline_size", 4)
+			preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			preview.visible = false
+			cell.add_child(preview)
+			_cell_previews.append(preview)
+
 ## Mantiene el tablero dentro de la ventana de un movil sin dejar que las celdas
 ## bajen de un tamano tocable (quickstart E9).
 func _recalculate_cell_size() -> void:
@@ -582,7 +647,19 @@ func _recalculate_node_size() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	_node_size = int(clampf(minf(vp.x * 0.14, vp.y * 0.12), float(UITheme.MIN_BTN_H), 64.0))
 
+## Reserva a cada lado de la cabecera el ancho del boton ☰ MENU (el de
+## PauseMenu: palabra entera, o solo el icono en pantallas estrechas).
+func _fit_header() -> void:
+	if _header_margin == null:
+		return
+	var narrow: bool = get_viewport().get_visible_rect().size.x < UILayoutConfig.NARROW_WIDTH
+	var btn_w: float = UITheme.MIN_BTN_H if narrow else PauseMenuScript.MENU_BTN_MIN_W
+	var reserve := int(btn_w + 2.0 * PauseMenuScript.MENU_BTN_MARGIN)
+	_header_margin.add_theme_constant_override("margin_left", reserve)
+	_header_margin.add_theme_constant_override("margin_right", reserve)
+
 func _on_viewport_resized() -> void:
+	_fit_header()
 	if _view == View.BOARD and _uses_3d():
 		_queue_margin_update()
 		_refresh()
@@ -668,6 +745,12 @@ func _show_expedition_report(result: int, rewards: Dictionary, casualties: Dicti
 		lines.append(Tr.t("LBL_NO_CASUALTIES"))
 	else:
 		lines.append("%s: %s" % [Tr.t("LBL_CASUALTIES"), _unit_list(casualties)])
+	# Lo que solo se consigue fuera (repuestos, colonos, planos, rebaja del
+	# Diezmo), ya aplicado a la colonia: lo deja CombatManager en el parte.
+	var last: Dictionary = CombatManager.get_last_result()
+	if bool(last.get("expedition", false)):
+		for text in SkirmishPanelScript.loot_lines(last.get("loot", {})):
+			lines.append(String(text))
 	_report_detail.text = "\n".join(lines)
 
 	_report_panel.visible = true
@@ -856,6 +939,11 @@ func _refresh_map() -> void:
 		var fightable: bool = i == current and _run.needs_fight()
 
 		btn.text = Tr.t("LBL_BOSS") if is_boss else str(_roster_size(node))
+		# Un soldado junto al numero: dice que son enemigos (ronda de pruebas 1.0).
+		btn.icon = null if is_boss else UITheme.unit_icon("infantry", 24)
+		btn.add_theme_constant_override("icon_max_width", 22)
+		btn.add_theme_color_override("icon_normal_color", UITheme.unit_icon_tint(false))
+		btn.add_theme_color_override("icon_disabled_color", UITheme.TEXT_DIM)
 		btn.disabled = not (reachable or fightable)
 		btn.tooltip_text = _node_tooltip(node, i == current, cleared, reachable)
 		if fightable:
@@ -1156,6 +1244,7 @@ func _on_encounter_ended(victory: bool, turns_used: int) -> void:
 	_after_board_animations(_show_encounter_result.bind(victory, turns_used))
 
 func _show_encounter_result(victory: bool, turns_used: int) -> void:
+	close_unit_card()
 	_refresh()
 	_result_title.text = Tr.t("LBL_VICTORY") if victory else Tr.t("LBL_DEFEAT")
 	_result_title.add_theme_color_override("font_color", UITheme.POSITIVE if victory else UITheme.DANGER)
@@ -1189,6 +1278,17 @@ func _result_text(turns_used: int) -> String:
 	var morale_delta: int = int(result.get("morale_delta", 0))
 	if morale_delta != 0:
 		lines.append(Tr.t("LBL_MORALE_DELTA") % morale_delta)
+
+	# Salidas (doc 21 §3): como acabo, lo exclusivo del nodo y la cura al seguir.
+	if bool(result.get("routed", false)):
+		lines.insert(0, Tr.t("LBL_ENEMY_ROUTED"))
+	if bool(result.get("auto_resolved", false)):
+		lines.insert(0, Tr.t("LBL_AUTO_RESOLVED"))
+	for text in SkirmishPanelScript.loot_lines(result.get("loot", {})):
+		lines.append(String(text))
+	var healed: float = float(result.get("healed_pct", 0.0))
+	if healed > 0.0:
+		lines.append(Tr.t("LBL_HEALED_BETWEEN") % roundi(healed * 100.0))
 	return "\n".join(lines)
 
 func _resource_list(amounts: Dictionary) -> String:
@@ -1209,6 +1309,8 @@ func _unit_list(counts: Dictionary) -> String:
 func _refresh() -> void:
 	if not _board_open:
 		return
+	_compute_overlays()
+	_refresh_unit_card()
 	if _uses_3d():
 		_refresh_header()
 		_refresh_board3d()
@@ -1223,7 +1325,10 @@ func _refresh() -> void:
 	_refresh_actions()
 
 func _refresh_header() -> void:
-	_round_label.text = Tr.t("LBL_ROUND") % [CombatManager.get_round(), CombatManager.get_turn_limit()]
+	# Al agotar el tope el contador ya ha pasado a la ronda siguiente: la
+	# cabecera decia "Ronda 21 / 20" detras del parte de derrota.
+	var limit := CombatManager.get_turn_limit()
+	_round_label.text = Tr.t("LBL_ROUND") % [mini(CombatManager.get_round(), limit), limit]
 	var active := CombatManager.get_active_unit()
 	if active == null:
 		_turn_label.text = ""
@@ -1253,6 +1358,8 @@ func _refresh_cells() -> void:
 			_style_cell(cell, bar, icon, coords, unit, active, moves, targets, boss)
 			if index < _cell_marks.size():
 				_paint_side_mark(_cell_marks[index], unit)
+			if index < _cell_previews.size():
+				_paint_cell_preview(_cell_previews[index], unit, targets)
 
 func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vector2i,
 		unit: CombatUnit, active: CombatUnit, moves: Array, targets: Array,
@@ -1268,9 +1375,19 @@ func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vect
 		icon.texture = null
 		icon.visible = false
 		bar.visible = false
+		if _ov_no_fire.has(coords):
+			# Demasiado cerca para la artilleria: ✕ en la casilla.
+			cell.text = "✕"
+			text_color = UITheme.DANGER.lightened(0.3)
 		if moves.has(coords):
 			background = UITheme.BOARD_MOVE
-			border = UITheme.INFO
+			border = UITheme.WARNING if _ov_threat.has(coords) else UITheme.INFO
+			if _ov_threat.has(coords):
+				border_width = 2
+		elif _ov_fire.has(coords):
+			background = UITheme.DANGER.darkened(0.45)
+		elif _ov_threat.has(coords):
+			background = UITheme.WARNING.darkened(0.5)
 	else:
 		is_boss = boss >= 0 and unit.uid == boss
 		text_color = _paint_unit_face(cell, icon, unit)
@@ -1476,6 +1593,9 @@ func _refresh_actions() -> void:
 	# Una defensa en pleno campaña no es de la columna: abandonar desde ella no
 	# retira a nadie de ese tablero, asi que el boton no se ofrece.
 	_abandon_board_btn.visible = has_expedition() and not CombatManager.is_defending()
+	# RESOLVER SOLO solo se ve cuando vale (incursion o Diezmo, fuerza doble).
+	_auto_btn.visible = CombatManager.can_auto_resolve()
+	_auto_btn.disabled = not (CombatManager.is_player_turn() and not _board_busy())
 
 func _set_actions_enabled(enabled: bool) -> void:
 	_defend_btn.disabled = not enabled
@@ -1497,7 +1617,7 @@ func _on_cell_pressed(coords: Vector2i) -> void:
 		return
 	var occupant := CombatManager.get_unit_at(coords)
 	if not CombatManager.is_player_turn():
-		_inspect_3d(occupant)
+		_show_unit(occupant)
 		return
 	var active := CombatManager.get_active_unit()
 	if active == null or active.side != PLAYER:
@@ -1507,13 +1627,17 @@ func _on_cell_pressed(coords: Vector2i) -> void:
 		if CombatManager.get_valid_targets(active.uid).has(occupant.uid):
 			CombatManager.attack(active.uid, occupant.uid)
 		elif not (is_front_view() and order_attack(active.uid, occupant.uid)):
-			_inspect_3d(occupant)
+			_show_unit(occupant)
 		return
 	if occupant != null:
-		# Tocar una pieza propia dice quien es (con el dedo no hay tooltip).
-		_inspect_3d(occupant)
+		# Tocar una pieza propia dice quien es (con el dedo no hay tooltip): su
+		# ficha. Es el paso 1 del combate guiado.
+		_show_unit(occupant)
+		if occupant.side == PLAYER:
+			TutorialManager.note_combat_fact("selected")
 		return
 	if occupant == null and CombatManager.get_valid_moves(active.uid).has(coords):
+		close_unit_card()
 		CombatManager.move_unit(active.uid, coords)
 
 ## El frente: "acercate y dispara". Si el objetivo no esta a tiro pero se le
@@ -1539,6 +1663,13 @@ func _act_advance() -> void:
 	var cell: Vector2i = Orders.advance_cell(CombatManager.get_encounter(), active.uid)
 	if cell != Orders.NO_CELL:
 		CombatManager.move_unit(active.uid, cell)
+
+## Juega el resto del tablero de un tiron con la IA (AutoResolver). El parte
+## sale como siempre, con "Resuelto solo".
+func _act_auto_resolve() -> void:
+	if _board_busy() or not CombatManager.is_player_turn():
+		return
+	CombatManager.auto_resolve_current()
 
 func _act_defend() -> void:
 	var active := CombatManager.get_active_unit()
@@ -1586,6 +1717,7 @@ func _open_board() -> void:
 ## Cerrar el parte de un encuentro no es cerrar la expedicion: si queda mapa por
 ## delante, se vuelve a el; si hay draft pendiente, se ofrece antes.
 func _close_board() -> void:
+	close_unit_card()
 	_board_open = false
 	_board_view.visible = false
 	_result_panel.visible = false
@@ -1805,14 +1937,14 @@ func _refresh_board3d() -> void:
 	var active := CombatManager.get_active_unit()
 	if active == null:
 		b.clear_marks()
+		b.set_overlays([], [])
 		return
+	b.set_overlays(_ov_threat.keys(), _ov_no_fire.keys(), _ov_fire.keys())
 	if CombatManager.is_player_turn():
 		# En el frente el aro rojo va en todo enemigo al que se llega este turno,
 		# moviendose o no (tocarlo acerca y dispara); en el tablero, solo a tiro.
-		var targets: Array = CombatManager.get_valid_targets(active.uid)
-		if is_front_view():
-			targets = Orders.reachable_targets(CombatManager.get_encounter(), active.uid)
-		b.show_state(active.uid, CombatManager.get_valid_moves(active.uid), targets, target_hints(active, targets))
+		var targets: Array = _player_targets(active)
+		b.show_state(active.uid, CombatManager.get_valid_moves(active.uid), targets, target_hints(active, targets), _ov_previews)
 	else:
 		b.show_state(active.uid, [], [])
 
@@ -1848,7 +1980,12 @@ func _inspect_3d(unit: CombatUnit) -> void:
 
 func _board3d_tooltip(cell: Vector2i) -> String:
 	var unit := CombatManager.get_unit_at(cell)
-	return chip_tooltip(unit) if unit != null else ""
+	if unit == null:
+		return ""
+	# Con raton, el dano previsto tambien al pasar por encima.
+	if _ov_previews.has(unit.uid):
+		return "%s\n%s" % [chip_tooltip(unit), _ov_previews[unit.uid]]
+	return chip_tooltip(unit)
 
 func _on_board3d_idle() -> void:
 	_refresh()
@@ -1882,3 +2019,265 @@ func _exit_tree() -> void:
 	if _world_paused and get_viewport() != null:
 		get_viewport().disable_3d = false
 		_world_paused = false
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Ensenar el combate (2026-10-14, docs/15 §3, docs/23 §2.4) ──
+# ══════════════════════════════════════════════════════════════════════
+# Vistas previas (dano al apuntar, alcance enemigo, ✕ del alcance minimo), la
+# ficha de unidad y a donde senala el combate guiado. Todo se calcula en
+# _refresh(), que corre por evento del combate, nunca por fotograma. Las
+# cuentas son de CombatRules (puras); aqui solo se pintan.
+
+## A quien puede atacar ahora la unidad activa: en el frente, todo enemigo al
+## que llega moviendose (tocarlo acerca y dispara); en el tablero, solo a tiro.
+func _player_targets(active: CombatUnit) -> Array:
+	if is_front_view():
+		return Orders.reachable_targets(CombatManager.get_encounter(), active.uid)
+	return CombatManager.get_valid_targets(active.uid)
+
+func _compute_overlays() -> void:
+	_ov_threat = {}
+	_ov_no_fire = {}
+	_ov_fire = {}
+	_ov_previews = {}
+	var encounter: Encounter = CombatManager.get_encounter()
+	var active := CombatManager.get_active_unit()
+	if encounter == null or active == null:
+		return
+	if threat_visible():
+		for cell in _threat_cells(encounter):
+			_ov_threat[cell] = true
+	if not CombatManager.is_player_turn() or active.side != PLAYER:
+		return
+	for cell in Rules.min_range_cells(active, _board):
+		_ov_no_fire[cell] = true
+	if TutorialManager.combat_step() == "c_art_range":
+		for cell in Rules.fire_cells_from(active, active.position, _board):
+			_ov_fire[cell] = true
+	_ov_previews = target_previews(active, _player_targets(active))
+
+## Las casillas a las que llega el enemigo, recalculadas solo si algo se movio
+## o murio (la clave son las posiciones de los vivos).
+func _threat_cells(encounter: Encounter) -> Array:
+	var parts: PackedStringArray = []
+	for u in encounter.units:
+		if u.is_alive():
+			parts.append("%d:%d,%d" % [u.uid, u.position.x, u.position.y])
+	var key := "|".join(parts)
+	if key != _threat_key:
+		_threat_key = key
+		_threat_cache = Rules.threat_cells(encounter.units, ENEMY, _board)
+	return _threat_cache
+
+## Se ve el alcance enemigo: lo pidio el jugador o lo ensena el combate guiado.
+func threat_visible() -> bool:
+	return _show_threat or TutorialManager.combat_step() == "c_enemy_turn"
+
+func toggle_threat() -> void:
+	_show_threat = not _show_threat
+	_style_threat_button()
+	_refresh()
+
+func threat_button() -> Button:
+	return _threat_btn
+
+func _style_threat_button() -> void:
+	if _threat_btn == null:
+		return
+	_threat_btn.text = Tr.t("BTN_HIDE_THREAT") if _show_threat else Tr.t("BTN_SHOW_THREAT")
+	UITheme.style_button(_threat_btn, UITheme.WARNING.darkened(0.35) if _show_threat else UITheme.BTN, UITheme.FONT_BUTTON)
+
+## Lo que se escribe encima de cada pieza: el dano previsto sobre los objetivos
+## ("-18 de 75", o "-75 ¡Cae!") y "✕ Muy cerca" sobre el enemigo pegado a una
+## artilleria. uid -> texto. Publica para las pruebas.
+func target_previews(attacker: CombatUnit, targets: Array) -> Dictionary:
+	var out := {}
+	for uid in targets:
+		var t := CombatManager.get_unit(int(uid))
+		if t == null:
+			continue
+		out[int(uid)] = preview_text(Rules.preview_damage(attacker, t))
+	if attacker.min_range() > 1:
+		for u in CombatManager.get_units():
+			if u.side == attacker.side or not u.is_alive() or out.has(u.uid):
+				continue
+			if Rules.manhattan(attacker.position, u.position) < attacker.min_range():
+				out[u.uid] = Tr.t("LBL_PREVIEW_TOO_CLOSE")
+	return out
+
+static func preview_text(p: Dictionary) -> String:
+	if bool(p.get("kills", false)):
+		return Tr.t("LBL_PREVIEW_KILL") % int(p.get("damage", 0))
+	return Tr.t("LBL_PREVIEW_DAMAGE") % [int(p.get("damage", 0)), int(p.get("hp", 0))]
+
+## La vista previa en una casilla del tablero 2D.
+func _paint_cell_preview(label: Label, unit: CombatUnit, targets: Array) -> void:
+	if unit == null or not _ov_previews.has(unit.uid):
+		label.visible = false
+		return
+	label.text = String(_ov_previews[unit.uid])
+	var col: Color = UITheme.TEXT_BRIGHT if targets.has(unit.uid) else UITheme.DANGER.lightened(0.35)
+	label.add_theme_color_override("font_color", col)
+	label.visible = true
+
+## La vista previa escrita en la casilla `coords` del tablero 2D (pruebas).
+func board_cell_preview(coords: Vector2i) -> String:
+	var index: int = _cell_index(coords)
+	if index < 0 or index >= _cell_previews.size():
+		return ""
+	var l: Label = _cell_previews[index]
+	return l.text if l.visible else ""
+
+func overlay_threat_cells() -> Array:
+	return _ov_threat.keys()
+
+func overlay_no_fire_cells() -> Array:
+	return _ov_no_fire.keys()
+
+func overlay_previews() -> Dictionary:
+	return _ov_previews.duplicate()
+
+# ── Ficha de unidad ──────────────────────────────────────────────────
+
+## Tocar una pieza: su nombre encima (3D) y su ficha a la izquierda.
+func _show_unit(unit: CombatUnit) -> void:
+	if unit == null:
+		return
+	_inspect_3d(unit)
+	open_unit_card(unit)
+
+func open_unit_card(unit: CombatUnit) -> void:
+	if unit == null:
+		return
+	if _unit_card == null:
+		_unit_card = UnitCardScript.new()
+		_unit_card.name = "BoardUnitCard"
+		_root.add_child(_unit_card)
+		_unit_card.closed.connect(close_unit_card)
+		# A la izquierda, centrada en alto: no tapa los botones de abajo ni la
+		# cabecera, y el pulgar derecho sigue libre para el tablero.
+		_unit_card.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_unit_card_uid = unit.uid
+	_unit_card.setup(unit.unit_id, unit, true)
+	_unit_card.visible = true
+	_place_unit_card()
+
+## A la izquierda y centrada en alto, medida con su contenido de ahora: anclada
+## al centro crecia hacia arriba al rehacerse y se salia por arriba, encima de
+## la bandera y el nombre del pais (tableta, ronda de pruebas 1.0).
+func _place_unit_card() -> void:
+	if _unit_card == null:
+		return
+	_unit_card.reset_size()
+	var area: Vector2 = _root.size if _root.size.y > 0.0 else get_viewport().get_visible_rect().size
+	var h: float = _unit_card.get_combined_minimum_size().y
+	var top := 96.0
+	var y := clampf((area.y - h) * 0.5, top, maxf(top, area.y - h - 96.0))
+	_unit_card.position = Vector2(UITheme.MARGIN, y)
+
+func close_unit_card() -> void:
+	_unit_card_uid = -1
+	if _unit_card != null:
+		_unit_card.visible = false
+
+func unit_card() -> PanelContainer:
+	return _unit_card if _unit_card != null and _unit_card.visible else null
+
+## La ficha abierta sigue a su unidad (vida, mejoras); si cayo, se cierra.
+func _refresh_unit_card() -> void:
+	if _unit_card == null or not _unit_card.visible:
+		return
+	var u := CombatManager.get_unit(_unit_card_uid)
+	if u == null or not u.is_alive():
+		close_unit_card()
+		return
+	_unit_card.setup(u.unit_id, u, true)
+	_place_unit_card()
+
+# ── A donde senala el combate guiado (TutorialPanel) ─────────────────
+
+## El sitio en pantalla (coordenadas globales del lienzo) de `target`, uno de
+## los de TutorialManager.COMBAT_STEPS: {"rect": Rect2} para un boton o una
+## casilla 2D, {"point": Vector2} para una pieza o casilla 3D, {"busy": true}
+## mientras la maqueta anima (la marca espera a que se vea lo que paso) o {}.
+func coach_anchor(target: String) -> Dictionary:
+	if not _board_open or not visible:
+		return {}
+	match target:
+		"":
+			return {}
+		"end_turn_button":
+			return _control_anchor(_end_btn)
+		"defend_button":
+			return _control_anchor(_defend_btn)
+		"threat_button":
+			return _control_anchor(_threat_btn)
+	if _board_busy():
+		return {"busy": true}
+	var active := CombatManager.get_active_unit()
+	if active == null:
+		return {}
+	match target:
+		"active_unit":
+			return _unit_anchor(active)
+		"target_unit":
+			var uid := coach_target_uid(active)
+			return _unit_anchor(CombatManager.get_unit(uid)) if uid >= 0 else {}
+		"move_cell":
+			var cell := coach_move_cell(active)
+			return _cell_anchor(cell) if cell.x >= 0 else {}
+	return {}
+
+## El objetivo que senala el paso "Ataca": el de ventaja si lo hay, si no el
+## mas tocado. -1 si no hay ninguno.
+func coach_target_uid(active: CombatUnit) -> int:
+	var best := -1
+	var best_score := -INF
+	for uid in _player_targets(active):
+		var t := CombatManager.get_unit(int(uid))
+		if t == null:
+			continue
+		var score: float = float(Rules.type_matchup(active.unit_id, t.unit_id)) * 1000.0 - float(t.hp)
+		if score > best_score:
+			best_score = score
+			best = int(uid)
+	return best
+
+## La casilla que senala el paso "Muevete": la de las alcanzables que mas cerca
+## queda del enemigo mas cercano (la que acerca a la pelea).
+func coach_move_cell(active: CombatUnit) -> Vector2i:
+	var moves: Array = CombatManager.get_valid_moves(active.uid)
+	var best := Vector2i(-1, -1)
+	var best_d := 1 << 30
+	for cell in moves:
+		for u in CombatManager.get_units():
+			if u.side == active.side or not u.is_alive():
+				continue
+			var d: int = Rules.manhattan(cell, u.position)
+			if d < best_d:
+				best_d = d
+				best = cell
+	return best
+
+func _control_anchor(c: Control) -> Dictionary:
+	if c == null or not c.is_visible_in_tree():
+		return {}
+	return {"rect": c.get_global_rect()}
+
+func _unit_anchor(unit: CombatUnit) -> Dictionary:
+	if unit == null or not unit.is_alive():
+		return {}
+	if _uses_3d():
+		return {"point": _board3d_to_canvas(_board3d.board.unit_screen(unit.uid))}
+	var cell := board_cell(unit.position)
+	return {"rect": cell.get_global_rect()} if cell != null else {}
+
+func _cell_anchor(coords: Vector2i) -> Dictionary:
+	if _uses_3d():
+		return {"point": _board3d_to_canvas(_board3d.board.cell_screen(coords))}
+	var cell := board_cell(coords)
+	return {"rect": cell.get_global_rect()} if cell != null else {}
+
+## Un punto del SubViewport de la maqueta, en el lienzo de la pantalla.
+func _board3d_to_canvas(p: Vector2) -> Vector2:
+	return _board3d.get_global_transform() * _board3d.to_local_point(p)

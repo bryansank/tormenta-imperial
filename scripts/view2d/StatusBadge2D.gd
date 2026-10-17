@@ -63,7 +63,9 @@ func _apply(status: int, reason: String) -> void:
 		return
 	_status = status
 	_reason = reason
-	visible = status != Badge3D.Status.NONE
+	# "idle" es el Nucleo en reposo, su estado normal: como en 3D, no se pinta
+	# (un "Zzz parado" fijo en el edificio principal parecia una averia).
+	visible = status != Badge3D.Status.NONE and not (status == Badge3D.Status.IDLE and reason == "idle")
 	queue_redraw()
 
 func _process(delta: float) -> void:

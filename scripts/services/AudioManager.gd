@@ -498,26 +498,16 @@ func _connect_events() -> void:
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
 	EventBus.governor_rank_up.connect(_on_rank_up)
-	# Final Audit. These signals arrive with the Storm's final chapter; until that
-	# branch lands they may not exist, so they are wired only when present.
-	_connect_optional("final_audit_summoned", _on_final_audit_summoned)
-	_connect_optional("storm_halted_forever", _on_storm_halted_forever)
+	# Final Audit.
+	EventBus.final_audit_summoned.connect(_on_final_audit_summoned)
+	EventBus.storm_halted_forever.connect(_on_storm_halted_forever)
 	# La Tormenta: el ambiente sigue a la fase y cada cambio relevante suena.
-	_connect_optional("storm_phase_changed", _on_storm_phase_changed)
+	EventBus.storm_phase_changed.connect(_on_storm_phase_changed)
 	# Dia y noche (DayClock): de noche cambia el ambiente, nada mas.
-	_connect_optional("day_phase_changed", _on_day_phase_changed)
-	_connect_optional("tithe_resolved", _on_tithe_resolved)
-	# Comida (rama comida-granja-recoger): solo si esa rama ya esta dentro.
-	_connect_optional("production_collected", _on_production_collected)
-
-## Connects to an EventBus signal that may not be declared yet. Handlers take
-## optional arguments so they accept whatever arity the signal ends up having.
-func _connect_optional(signal_name: String, handler: Callable) -> void:
-	if not EventBus.has_signal(signal_name):
-		return
-	if EventBus.is_connected(signal_name, handler):
-		return
-	EventBus.connect(signal_name, handler)
+	EventBus.day_phase_changed.connect(_on_day_phase_changed)
+	EventBus.tithe_resolved.connect(_on_tithe_resolved)
+	# Recoger produccion (y la cosecha de la Granja).
+	EventBus.production_collected.connect(_on_production_collected)
 
 func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
 	play_sfx("build_place")
@@ -618,12 +608,9 @@ func _on_storm_halted_forever(_a = null, _b = null, _c = null) -> void:
 
 # ── La Tormenta ──────────────────────────────────────────────────────
 
-## De noche segun DayClock (sin DayClock, o con el ciclo apagado, siempre de dia).
+## De noche segun DayClock (con el ciclo apagado, siempre de dia).
 func _current_is_night() -> bool:
-	var dc: Node = get_node_or_null("/root/DayClock")
-	if dc != null and dc.has_method("is_night"):
-		return bool(dc.is_night())
-	return false
+	return DayClock.is_night()
 
 ## Al cambiar la fase del dia solo se elige otro bucle; si la Tormenta esta
 ## encima, sigue mandando ella. Sin sonido propio.
@@ -633,10 +620,7 @@ func _on_day_phase_changed(phase = 0, _hour = 0.0) -> void:
 		set_ambient(_ambient_for_phase(_storm_phase, _night))
 
 func _current_storm_phase() -> int:
-	var sm: Node = get_node_or_null("/root/StormManager")
-	if sm != null and sm.has_method("get_phase"):
-		return int(sm.get_phase())
-	return StormCycle.Phase.CALM
+	return StormManager.get_phase()
 
 ## Ambiente al dia con la fase, y un sonido por cada cambio que importa: el
 ## Aviso (sirena lejana), la Tormenta encima (trueno) y el Diezmo (campana). La
@@ -675,7 +659,7 @@ func _played_within(key: String, msec: int) -> bool:
 		return false
 	return Time.get_ticks_msec() - int(_sfx_last_msec[key]) < msec
 
-# ── Comida (llega con la rama comida-granja-recoger) ─────────────────
+# ── Recoger y cosechar ───────────────────────────────────────────────
 
 ## Recoger lo de un edificio; si lo recogido es comida, es la cosecha de la
 ## Granja. "Recoger todo" emite una vez por edificio en el mismo frame: el

@@ -142,6 +142,26 @@ Los dos casos de guardia viven en `tests/integration/test_full_campaign.gd`:
 `test_the_siege_is_hard_but_winnable_with_a_full_garrison` y
 `test_the_smallest_garrison_that_can_resummon_does_not_win`.
 
+## 2026-10-12: un final que pide preparación
+
+Decisión de Bryan: la Auditoría pide más ejército y más preparación. Valores:
+`final_audit_waves` 3-5 → **4-5**, `final_audit_last_wave_multiplier` 1,05 →
+**1,10**, `storm_tower_garrison_max` 2 → **4** (con la guarnición mermada caben
+más dotaciones: el tablero deja 8 − vivos), Gobernador ×1,06 → **×1,05**. 200
+semillas, era 3, moral 100:
+
+| Guarnición | 4 torres | 2 torres | 4 torres, moral 75 | Gobernador ×1,05 (4 torres) |
+|---|---|---|---|---|
+| 3 infantería | 0 % | 0 % | — | — |
+| 4 vehículos | 33,5 % | 0 % | 0 % | 10,5 % |
+| 5 vehículos | 45 % | 34 % | 26,5 % | 45 % |
+| mixtas | 0 % | 0 % | 0 % | 0 % |
+| **6 vehículos** | **82,5 %** | **45 %** | **43 %** | **64 %** |
+
+La guarnición máxima bien preparada gana como antes (82 %); sin las torres o con
+la moral a medias, una de cada dos. Con moral 50, nunca. Gobernador ≥ 60 %.
+`tools/siege_probe.gd` acepta `--crews=N`.
+
 ---
 
 ## Ventaja por tipo (2026-10-13, rama `feat/combate-3d`)
@@ -184,3 +204,23 @@ y subir `final_audit_artillery_share` de 3 a 4. Devuelve la guarnicion maxima al
 ~82 % de antes (83 %) sin tocar la escala de las oleadas, y deja intacta la
 mixta. 5 no da mas. Hay que medirlo junto a lo que endurezca el final la rama
 `balance/campana-4-6h`: los dos cambios tocan el mismo asedio.
+
+## Las dos cosas juntas (2026-10-14): 4-5 oleadas, 4 dotaciones y ventaja por tipo
+
+Con la ventaja por tipo fusionada y los valores del 2026-10-12 (4-5 oleadas,
+última ×1,10, hasta 4 dotaciones), 200 semillas, era 3:
+
+| Guarnición | canón 1/3, 4 torres | 1/3, 2 torres | 1/3, moral 75 | 1/3, Gobernador | canón 1/4, 4 torres | 1/4, 2 torres | 1/4, moral 75 | 1/4, Gobernador |
+|---|---|---|---|---|---|---|---|---|
+| 3 vehículos | 0 % | 0 % | 0 % | 0 % | 13,5 % | 0 % | 0 % | 0 % |
+| 4 vehículos | 33,5 % | 0 % | 0 % | 19 % | 45 % | 0 % | 19 % | 32 % |
+| 5 vehículos | 69 % | 6,5 % | 19 % | 41 % | 86 % | 28,5 % | 38,5 % | 62,5 % |
+| mixtas | 0 % | 0 % | 0 % | 0 % | 0 % | 0 % | 0 % | 0 % |
+| **6 vehículos** | **86 %** | **45 %** | **40,5 %** | **75,5 %** | **97,5 %** | **71,5 %** | **71,5 %** | **92 %** |
+
+**Decisión: `final_audit_artillery_share` se queda en 3.** La propuesta de 4
+compensaba la ventaja por tipo sobre el asedio de 3-5 oleadas; sobre el de 4-5
+oleadas el final se volvería un trámite (97,5 % con 6 blindados, 86 % con 5,
+71,5 % sin las torres). Con 3, la guarnición máxima bien preparada gana el 86 %
+(como el 82 % de siempre), sin las torres o con la moral a 75 una de cada dos o
+menos, y Gobernador el 75,5 % (≥ 60 %).

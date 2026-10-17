@@ -1,7 +1,9 @@
 extends Node3D
-## El mastil con la bandera del pais (vista 3D), sobre el Nucleo y sobre el
-## Cuartel General. Lo cuelga BuildingPlacer y se repinta solo al oir
-## colony_identity_changed: ningun servicio sabe que existe.
+## El mastil con la bandera del pais (vista 3D), sobre el Nucleo, el Cuartel
+## General y cualquier edificio cuyo modelo traiga un FlagAnchor (el mastil y
+## el letrero de la colonia, feat/decoraciones-remates). Lo cuelga
+## BuildingPlacer y se repinta solo al oir colony_identity_changed: ningun
+## servicio sabe que existe.
 ##
 ## Barato a proposito ("debe ir en una papa"): la bandera es un plano de 6x1
 ## tramos con la textura de ColonyFlag (generada una vez por receta, cacheada) y
@@ -14,7 +16,7 @@ extends Node3D
 ## "FlagAnchor" (lo alto de su mastil, contrato con los modelos toy), la
 ## bandera se cuelga de ahi y este nodo no pone mastil propio. Sin marcador, el
 ## mastil propio en la esquina trasera derecha (reserva). En el Cuartel General
-## la bandera va grande (`big`).
+## la bandera va grande (`big`); en las decoraciones, pequena (`small`).
 
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const WorldLook := preload("res://scripts/map/WorldLook.gd")
@@ -23,8 +25,9 @@ const WorldLook := preload("res://scripts/map/WorldLook.gd")
 const POLE_EXTRA := 2.4
 const FLAG_W := 2.1
 const WAVE_AMPLITUDE := 0.16
-## Escala de la bandera grande (Cuartel General).
+## Escala de la bandera grande (Cuartel General) y de la pequena (decoraciones).
 const BIG_SCALE := 1.6
+const SMALL_SCALE := 0.6
 const ANCHOR_NAME := "FlagAnchor"
 
 const SHADER_CODE := """
@@ -49,6 +52,20 @@ void fragment() {
 static var _shader: Shader = null
 static var _flag_mat: ShaderMaterial = null
 static var _pole_mat: StandardMaterial3D = null
+## Un plano por medida de bandera para todo el mapa (ancho -> PlaneMesh): con
+## decenas de mastiles, decenas de mallas iguales eran memoria para nada.
+static var _quads := {}
+
+static func flag_quad(flag_w: float, flag_h: float) -> PlaneMesh:
+	var key := snappedf(flag_w, 0.001)
+	if not _quads.has(key):
+		var quad := PlaneMesh.new()
+		quad.size = Vector2(flag_w, flag_h)
+		quad.orientation = PlaneMesh.FACE_Z
+		quad.subdivide_width = 5
+		quad.subdivide_depth = 0
+		_quads[key] = quad
+	return _quads[key]
 
 static func flag_material() -> ShaderMaterial:
 	if _flag_mat == null:
@@ -77,11 +94,12 @@ var _anchored := false
 
 ## `footprint` en unidades de mundo (ancho, fondo); `top` = alto del edificio.
 ## `building` = el nodo del edificio (para esconderse mientras esta en obra).
-func setup(footprint: Vector2, top: float, building: Node = null, big: bool = false) -> void:
+## `big`: la del Cuartel General; `small`: la de una decoracion (mastil, letrero).
+func setup(footprint: Vector2, top: float, building: Node = null, big: bool = false, small: bool = false) -> void:
 	name = "ColonyFlag"
 	_owner_node = building
 	var height := top + POLE_EXTRA
-	var flag_w := FLAG_W * (BIG_SCALE if big else 1.0)
+	var flag_w := FLAG_W * (BIG_SCALE if big else (SMALL_SCALE if small else 1.0))
 	var flag_h := flag_w * float(ColonyFlag.H) / float(ColonyFlag.W)
 	var anchor: Variant = find_anchor(building, self)
 	_anchored = anchor != null
@@ -120,14 +138,9 @@ func setup(footprint: Vector2, top: float, building: Node = null, big: bool = fa
 	knob.visible = not _anchored
 	add_child(knob)
 
-	var quad := PlaneMesh.new()
-	quad.size = Vector2(flag_w, flag_h)
-	quad.orientation = PlaneMesh.FACE_Z
-	quad.subdivide_width = 5
-	quad.subdivide_depth = 0
 	_flag = MeshInstance3D.new()
 	_flag.name = "Flag"
-	_flag.mesh = quad
+	_flag.mesh = flag_quad(flag_w, flag_h)
 	_flag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Un material para todas las banderas: la textura y el ondeo son los mismos.
 	_material = flag_material()
@@ -145,6 +158,10 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(func(_b): _sync_visible.call_deferred())
 	EventBus.construction_started.connect(func(_b): _sync_visible.call_deferred())
 	EventBus.game_load_completed.connect(func(): _sync_visible.call_deferred())
+	# En ruinas el mastil se viene abajo con el modelo: la bandera no se queda
+	# sola en el aire (ronda de pruebas 1.0).
+	EventBus.building_ruined.connect(func(_b): _sync_visible.call_deferred())
+	EventBus.building_repaired.connect(func(_b): _sync_visible.call_deferred())
 
 func refresh() -> void:
 	if _material != null:
@@ -162,6 +179,8 @@ func _sync_visible() -> void:
 		visible = not is_hidden_by_works(_owner_node)
 
 static func is_hidden_by_works(building: Node) -> bool:
+	if BuildingHealth.is_ruined(building):
+		return true
 	return building.has_meta("under_construction") and ProductionManager.get_upgrade_target(building) == 0
 
 ## El punto "FlagAnchor" del modelo del edificio, en el espacio del edificio, o

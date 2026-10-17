@@ -234,9 +234,11 @@ func _refresh_log() -> void:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		_log_vbox.add_child(label)
 
-## Que categorias salen en pantalla ademas de ir al registro.
+## Que categorias salen en pantalla ademas de ir al registro. "combat" es la
+## salida y la vuelta de la columna (_on_expedition_started/_ended): pasa fuera
+## de la base y, sin su aviso, el jugador no sabe que se trajo ni a quien perdio.
 static func shows_toast(category: String) -> bool:
-	return category in ["warning", "danger", "notice"]
+	return category in ["warning", "danger", "notice", "combat"]
 
 ## El registro, abierto desde el menu.
 func open_log() -> void:

@@ -82,7 +82,7 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 
 ### RankPanel (`scripts/ui/RankPanel.gd`) — governor rank
 - **Badge:** top-right, left of "☰ MENÚ" (own slot `rank_badge` in `UILayoutConfig`; under the menu button on a narrow screen, without the title). The colony flag, the rank number, the title and a thin XP bar. Registered in `HudRegistry` as `RankPanel` (hideable and movable). Tapping it opens the card
-- **Rank-up toast:** "▲ 5 · Alcalde" and one short line per reward ("Fuente", "+1 % producción", "bandera nueva"), under the badge, ~4 s. Sound `rank_up` (AudioManager, alias of `era_up`)
+- **Rank-up toast:** "▲ 5 · Alcalde" and one short line per reward ("Fuente", "+1 % producción", "bandera nueva"), under the badge, ~4 s. Sound `rank_up` (AudioManager, its own clip `rank_up.ogg` since 2026-10-12; no longer an alias of `era_up`)
 - **COLONIA card** (☰ MENÚ → COLONIA → Colonia, `RankPanel.modal` in `center_modal`): rank and XP, what the next rank brings, and the flag and colour galleries; what is not earned yet is disabled with a padlock and the rank
 - **Layer:** 11. Reads everything from `RankManager`; holds no state. Docs: [06-progression-victory.md](06-progression-victory.md) §Governor rank
 

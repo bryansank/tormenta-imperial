@@ -798,3 +798,155 @@ static func ruin_overlay(footprint: Vector2i, cell_size: float, seed_val: int = 
 		mb.ball(e + Vector3(rng.randf_range(-0.15, 0.15), 0.0, rng.randf_range(-0.15, 0.15)), 0.09, _t("ember"), Vector3(1.0, 0.5, 1.0), true)
 	_mesh_node(root, "Rubble", mb)
 	return root
+
+# ── Dano: leve y grave ───────────────────────────────────────────────
+
+## Mallas de dano ya hechas: "etapa|variante|caja" -> ArrayMesh. Los edificios
+## del mismo tipo y nivel tienen la misma caja, asi que diez casas tocadas son
+## dos o tres mallas para todo el mapa.
+static var _damage_meshes: Dictionary = {}
+
+## Cuantas disposiciones distintas hay por etapa (sale de la semilla del
+## edificio): dos casas tocadas no pierden las mismas tejas.
+const DAMAGE_VARIANTS := 3
+
+## Lo que se ve en un edificio herido que sigue en pie (docs/03, "Etapas de
+## dano"), alrededor de su modelo (`box`: la caja del modelo en el marco del
+## edificio, BuildingLookVisual la mide una vez). Raiz "DamageOverlay<etapa>"
+## con una malla ("Damage", cacheada por etapa, variante y caja) y, en grave,
+## humo negro y chispas (hojas de BuildingFx, compartidas; en calidad Minima no
+## se ven). El modelo ladeado lo pone BuildingLookVisual.
+## - Leve: grietas en la fachada, tejas y cascotes caidos al pie, una tabla
+##   suelta apoyada en la pared.
+## - Grave: todo lo anterior y mas, una chapa colgando de un costado, una viga
+##   partida que asoma del tejado, tizne en el suelo; humo negro y chispas.
+static func damage_overlay(stage: int, box: AABB, variant: int = 0, heights: PackedFloat32Array = PackedFloat32Array()) -> Node3D:
+	if stage < LookRule.DAMAGE_LIGHT or stage > LookRule.DAMAGE_HEAVY:
+		return null
+	var root := Node3D.new()
+	root.name = "DamageOverlay%d" % stage
+	var mi := MeshInstance3D.new()
+	mi.name = "Damage"
+	mi.mesh = damage_mesh(stage, box, variant, heights)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mi)
+	if stage == LookRule.DAMAGE_HEAVY:
+		var top := box.end.y
+		var w := maxf(box.size.x, box.size.z)
+		var smoke := Fx.quad_3d("smoke", 1.0 + 0.35 * w, "ruin")
+		smoke.name = "DamageSmoke"
+		smoke.position = Vector3(box.get_center().x, top + 0.45 + 0.12 * w, box.get_center().z)
+		root.add_child(smoke)
+		var side := 1.0 if posmod(variant, 2) == 0 else -1.0
+		var sparks := Fx.quad_3d("sparks", 0.7)
+		sparks.name = "DamageSparks"
+		var spark_x := box.get_center().x + side * box.size.x * 0.32
+		sparks.position = Vector3(spark_x, height_at(heights, box, spark_x, box.end.z) * 0.72, box.end.z + 0.08)
+		root.add_child(sparks)
+	return root
+
+## La malla de una etapa para una caja, de la cache.
+static func damage_mesh(stage: int, box: AABB, variant: int = 0, heights: PackedFloat32Array = PackedFloat32Array()) -> ArrayMesh:
+	var v := posmod(variant, DAMAGE_VARIANTS)
+	var key := "%d|%d|%.1f,%.1f,%.1f|%.1f,%.1f,%.1f" % [stage, v,
+		box.position.x, box.position.y, box.position.z, box.size.x, box.size.y, box.size.z]
+	for h in heights:
+		key += ",%.1f" % h
+	if _damage_meshes.has(key):
+		return _damage_meshes[key]
+	var mb = _new_mb()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7919 * (v + 1) + 31 * stage
+	_damage_light(mb, box, v, rng, stage == LookRule.DAMAGE_HEAVY, heights)
+	if stage == LookRule.DAMAGE_HEAVY:
+		_damage_heavy(mb, box, v, rng, heights)
+	var mesh: ArrayMesh = mb.commit()
+	_damage_meshes[key] = mesh
+	return mesh
+
+## Grietas, tejas caidas y una tabla suelta. `more`: la version grave (mas de todo).
+static func _damage_light(mb, b: AABB, v: int, rng: RandomNumberGenerator, more: bool, heights: PackedFloat32Array = PackedFloat32Array()) -> void:
+	var c := b.get_center()
+	var top := maxf(0.4, b.end.y)
+	var front := b.end.z
+	var side := 1.0 if v % 2 == 0 else -1.0
+	var side_x := b.end.x if side > 0.0 else b.position.x
+	# Grietas en zigzag: en la fachada (+Z, la que mira a la camara de inicio) y
+	# en un costado. En la mitad baja de la pared, donde el modelo es pared y no
+	# chimenea ni tejado.
+	var cracks := 3 if more else 2
+	for k in cracks:
+		var on_side := k == cracks - 1
+		var start := Vector3(c.x + rng.randf_range(-0.35, 0.35) * b.size.x, 0.0, front + 0.02)
+		if on_side:
+			start = Vector3(side_x + side * 0.02, 0.0, c.z + rng.randf_range(-0.3, 0.3) * b.size.z)
+		# A la altura de la pared que hay ahi, no de la chimenea mas alta.
+		var wall := maxf(0.4, height_at(heights, b, start.x, start.z))
+		start.y = wall * rng.randf_range(0.45, 0.6)
+		var p := start
+		for j in 4:
+			var step := Vector3(rng.randf_range(-0.12, 0.12), -wall * 0.09, 0.0)
+			if on_side:
+				step = Vector3(0.0, -wall * 0.09, rng.randf_range(-0.12, 0.12))
+			mb.beam(p, p + step, 0.045 if more else 0.035, _t("char"))
+			p += step
+	# Tejas y cascotes caidos al pie de la fachada.
+	mb.burnt = 0.2 if more else 0.0
+	for k in (8 if more else 5):
+		var pos := Vector3(c.x + rng.randf_range(-0.45, 0.45) * b.size.x, 0.03, front + rng.randf_range(0.08, 0.45))
+		var size := Vector3(rng.randf_range(0.14, 0.24), 0.05, rng.randf_range(0.1, 0.16))
+		var col := _t("terracotta") if k % 3 != 2 else _t("rubble")
+		_box(mb, pos, size, col, Vector3(rng.randf_range(-0.25, 0.25), rng.randf() * TAU, rng.randf_range(-0.2, 0.2)))
+	mb.burnt = 0.0
+	# Una tabla suelta, apoyada contra la pared.
+	var foot_x := c.x - side * b.size.x * rng.randf_range(0.18, 0.32)
+	var lean := minf(top, maxf(0.4, height_at(heights, b, foot_x, front)))
+	mb.beam(Vector3(foot_x, 0.03, front + 0.5), Vector3(foot_x + side * 0.12, lean * 0.42, front + 0.04), 0.09, _t("wood_light"))
+
+## Lo que anade la etapa grave: chapa colgando, viga partida, mas escombro y tizne.
+static func _damage_heavy(mb, b: AABB, v: int, rng: RandomNumberGenerator, heights: PackedFloat32Array = PackedFloat32Array()) -> void:
+	var c := b.get_center()
+	var top := maxf(0.4, b.end.y)
+	var side := 1.0 if v % 2 == 0 else -1.0
+	var side_x := b.end.x if side > 0.0 else b.position.x
+	# Tizne en el suelo, delante y al costado.
+	mb.flat(Vector3(c.x, 0.02, b.end.z + 0.25), Vector2(b.size.x * 0.8, 0.5), _t("scorch"))
+	mb.flat(Vector3(side_x + side * 0.25, 0.021, c.z), Vector2(0.5, b.size.z * 0.6), _t("scorch"))
+	# Chapa colgando de una esquina del costado, ladeada y oxidada.
+	# Cuelga de la pared de ese costado, a su altura (un costado bajo junto a
+	# una chimenea alta dejaba la chapa en el aire).
+	var sheet_z := c.z + rng.randf_range(-0.15, 0.15) * b.size.z
+	var wall := maxf(0.4, height_at(heights, b, side_x - side * 0.1, sheet_z))
+	var sheet_pos := Vector3(side_x + side * 0.05, wall * 0.62, sheet_z)
+	_box(mb, sheet_pos, Vector3(0.05, wall * 0.34, minf(0.8, b.size.z * 0.4)), _t("sheet"), Vector3(side * 0.5, 0.0, side * 0.12))
+	_box(mb, sheet_pos + Vector3(side * 0.03, -wall * 0.05, 0.0), Vector3(0.02, wall * 0.12, minf(0.5, b.size.z * 0.25)), _t("rust"), Vector3(side * 0.5, 0.0, side * 0.12))
+	# Viga partida que asoma del tejado (nace dentro del modelo: siempre toca).
+	mb.burnt = 0.5
+	# Nace dentro de lo que hay en ese punto del tejado y sube un poco hacia fuera.
+	var root_x := c.x + side * b.size.x * 0.15
+	var root_z := c.z - b.size.z * 0.1
+	var roof := maxf(0.4, height_at(heights, b, root_x, root_z))
+	var root_p := Vector3(root_x, roof * 0.82, root_z)
+	var tip := Vector3(c.x + side * b.size.x * 0.62, roof * 1.08, c.z + b.size.z * 0.18)
+	mb.beam(root_p, tip, 0.13, _t("wood_dark"))
+	_box(mb, tip + Vector3(side * 0.04, 0.02, 0.0), Vector3(0.16, 0.08, 0.16), _t("wood"), Vector3(0.4, 0.3, 0.5))
+	# Cascote grande al pie del costado.
+	for k in 3:
+		var p := Vector3(side_x + side * rng.randf_range(0.15, 0.45), 0.0, c.z + rng.randf_range(-0.4, 0.4) * b.size.z)
+		var s := Vector3(rng.randf_range(0.2, 0.36), rng.randf_range(0.1, 0.22), rng.randf_range(0.2, 0.34))
+		_box(mb, p + Vector3(0, s.y * 0.4, 0), s, _t("stone") if k % 2 == 0 else _t("brick"), Vector3(rng.randf_range(-0.3, 0.3), rng.randf() * TAU, 0.0))
+	mb.burnt = 0.0
+	# Unas brasas al pie de la viga caida (brillo: se leen con la Tormenta encima).
+	mb.ball(Vector3(side_x + side * 0.3, 0.05, c.z), 0.08, _t("ember"), Vector3(1.0, 0.5, 1.0), true)
+
+## La altura del modelo en (x, z), de la rejilla de alturas que mide
+## BuildingLookVisual (HEIGHT_GRID x HEIGHT_GRID celdas sobre la caja). Sin
+## rejilla, la cima de la caja (lo de antes).
+const HEIGHT_GRID := 4
+static func height_at(heights: PackedFloat32Array, b: AABB, x: float, z: float) -> float:
+	if heights.size() != HEIGHT_GRID * HEIGHT_GRID or b.size.x <= 0.0 or b.size.z <= 0.0:
+		return maxf(0.4, b.end.y)
+	var i := clampi(int((x - b.position.x) / b.size.x * HEIGHT_GRID), 0, HEIGHT_GRID - 1)
+	var j := clampi(int((z - b.position.z) / b.size.z * HEIGHT_GRID), 0, HEIGHT_GRID - 1)
+	var h := heights[j * HEIGHT_GRID + i]
+	return h if h > 0.0 else maxf(0.4, b.end.y) * 0.5

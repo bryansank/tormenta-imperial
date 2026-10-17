@@ -14,8 +14,11 @@ func before_test() -> void:
 	_saved_helper = GameConfig.ui_helper_visible
 	GameConfig.ui_helper_visible = true
 	_saved_tutorial = TutorialManager.get_save_data()
-	# Tutorial hecho, nada visto todavia.
-	TutorialManager.load_save_data({"intro_seen": true, "guide_state": "done"})
+	# Tutorial hecho, nada visto todavia salvo el consejo de las partidas, que
+	# TutorialManager ofrece al terminar el tutorial (feat/ayudas-novedades) y,
+	# como consejo, iria delante de los globos y saldria aun con ventanas
+	# abiertas. Su caso es test_the_saves_tip_goes_ahead_of_the_callouts.
+	TutorialManager.load_save_data({"intro_seen": true, "guide_state": "done", "tips_seen": ["saves"]})
 
 func after_test() -> void:
 	GameConfig.ui_helper_visible = _saved_helper
@@ -54,6 +57,17 @@ func test_the_basics_come_one_at_a_time_after_the_tutorial() -> void:
 	assert_int(helper.visible_help_count()).is_equal(1)
 	assert_str(helper.current_help()).is_equal("callout_objective")
 	assert_array(helper.queued_ids()).is_not_empty()
+
+func test_the_saves_tip_goes_ahead_of_the_callouts() -> void:
+	TutorialManager.load_save_data({"intro_seen": true, "guide_state": "done"})
+	var helper := _helper()
+	await await_idle_frame()
+	if not _clear_stack():
+		return
+	_queue_basics(helper)
+	# Los consejos van siempre delante; detras, los globos en su orden.
+	assert_str(helper.current_help()).is_equal("saves")
+	assert_str(String(helper.queued_ids()[0])).is_equal("callout_objective")
 
 func test_closing_one_marks_it_seen_and_the_next_waits_a_breath() -> void:
 	var helper := _helper()

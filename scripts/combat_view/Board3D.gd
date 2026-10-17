@@ -27,7 +27,9 @@ const Terrain := preload("res://scripts/combat_view/BoardTerrain3D.gd")
 const UnitToy := preload("res://scripts/combat_view/UnitToy3D.gd")
 const MARKS_SHADER := preload("res://scripts/combat_view/board_marks.gdshader")
 
-enum Mark { NONE, MOVE, TARGET, ACTIVE, HOVER }
+## THREAT..FIRE: las vistas previas (ensenar el combate, 2026-10-14). Van al
+## final para no mover los valores de las de antes.
+enum Mark { NONE, MOVE, TARGET, ACTIVE, HOVER, THREAT, MOVE_THREAT, NO_FIRE, FIRE }
 
 ## Tiempos base (segundos). La cola los acorta si se acumula trabajo.
 const MOVE_STEP := 0.14
@@ -96,6 +98,11 @@ var _seed := 1
 
 var _mark_of: Dictionary = {}     ## cell -> Mark
 var _hover := Vector2i(-1, -1)
+## Las etiquetas de objetivo de show_state: uid -> [ventaja, linea previa, bloqueado].
+## En el tablero salen todas; en el frente, solo la de la unidad en foco.
+var _hint_data: Dictionary = {}
+## En el frente: la unidad bajo el puntero o el dedo (-1 ninguna).
+var _focus_uid := -1
 
 var _fit_dist := 30.0
 var _zoom := 1.0
@@ -113,6 +120,8 @@ func _ready() -> void:
 	_build_environment()
 	_build_marks_mesh()
 	get_viewport().size_changed.connect(_fit)
+	# Otra pantalla, otra proyeccion: las placas del frente se recolocan.
+	get_viewport().size_changed.connect(_layout_plates)
 
 # ── Montaje ──────────────────────────────────────────────────────────
 
@@ -135,6 +144,14 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 	_toys.clear()
 	_cell_of.clear()
 	_mark_of.clear()
+	_hint_data.clear()
+	_focus_uid = -1
+	_plate_active_uid = -1
+	_threat.clear()
+	_no_fire.clear()
+	_fire.clear()
+	for l in _cross_labels:
+		l.visible = false
 	_active_uid = -1
 
 	_scene = String(opts.get("scene", Terrain.SCENE_LAND))
@@ -186,6 +203,10 @@ func set_style(style: String) -> void:
 	_layout_marks()
 	_fit()
 	_start_sway()
+	if not is_front():
+		_focus_uid = -1
+	_apply_hints()
+	_layout_plates()
 
 func style() -> String:
 	return _style
@@ -286,6 +307,7 @@ func _pump() -> void:
 			return
 	_pumping = false
 	_reconcile()
+	_layout_plates()
 	idle.emit()
 
 ## Si hay cola, todo va mas deprisa: la vista nunca se queda muy atras del modelo.
@@ -416,6 +438,9 @@ func _play_turn(uid: int) -> void:
 	if toy == null:
 		return
 	toy.set_spent(false)
+	# Las etiquetas de objetivo eran del turno anterior: el foco no las revive.
+	_hint_data.clear()
+	_plate_active_uid = uid
 	for other in _toys:
 		_toys[other].set_targeted(false)
 		_toys[other].set_active(other == uid)
@@ -480,12 +505,19 @@ func mark_at(cell: Vector2i) -> int:
 
 ## Lo que el jugador puede hacer ahora: su unidad, a donde llega, a quien pega.
 ## `hints`: uid -> ventaja de tipo del atacante contra ese objetivo (+1 / -1).
-func show_state(active_uid: int, moves: Array, targets: Array, hints: Dictionary = {}) -> void:
+## `previews`: uid -> la linea de encima de la pieza (dano previsto en los
+## objetivos; "✕ Muy cerca" en los que no se pueden atacar), BattleScreen.
+func show_state(active_uid: int, moves: Array, targets: Array, hints: Dictionary = {}, previews: Dictionary = {}) -> void:
+	_hint_data.clear()
 	for uid in _toys:
 		_toys[uid].set_targeted(targets.has(uid))
-		if targets.has(uid):
-			_toys[uid].set_target_hint(int(hints.get(uid, 0)))
+		if targets.has(uid) or previews.has(uid):
+			_hint_data[uid] = [int(hints.get(uid, 0)) if targets.has(uid) else 0,
+				String(previews.get(uid, "")), not targets.has(uid)]
 		_toys[uid].set_active(uid == active_uid)
+	_plate_active_uid = active_uid
+	_apply_hints()
+	_layout_plates()
 	_mark_of.clear()
 	for cell in moves:
 		_mark_of[cell] = Mark.MOVE
@@ -507,11 +539,208 @@ func show_state(active_uid: int, moves: Array, targets: Array, hints: Dictionary
 func clear_marks() -> void:
 	for uid in _toys:
 		_toys[uid].set_targeted(false)
+	_hint_data.clear()
 	_mark_of.clear()
 	_paint_marks()
+	_layout_plates()
+
+# -- Etiquetas de objetivo y placas del frente (2026-10-16) -------------
+
+## Placas del frente: cuanto pueden subir para no pisarse (en altos de su
+## propia placa) y el aire que dejan entre una y otra (fraccion de ese alto).
+## Todo relativo a la placa proyectada: vale igual en PC que en tablet.
+const PLATE_LIFT_CAP := 1.0
+const PLATE_SPACING := 0.08
+
+## La unidad que show_state dio como activa (su placa va entera en el frente).
+var _plate_active_uid := -1
+
+## La etiqueta de objetivo ("-18 de 75", "¡Buen objetivo!"). En el tablero, en
+## cada objetivo, como siempre. En el frente las piezas van juntas y las
+## etiquetas se pisaban: solo la lleva la unidad en foco (bajo el puntero o el
+## dedo), en la capa de encima de las placas.
+func _apply_hints() -> void:
+	var front := is_front()
+	for uid in _toys:
+		var d = _hint_data.get(uid)
+		if d == null or (front and uid != _focus_uid):
+			_toys[uid].set_target_hint(0)
+		else:
+			_toys[uid].set_target_hint(int(d[0]), String(d[1]), bool(d[2]))
+
+## La unidad en foco del frente; si cambia, rehace etiquetas y placas.
+func _set_focus(uid: int) -> void:
+	if uid == _focus_uid:
+		return
+	_focus_uid = uid
+	_apply_hints()
+	_layout_plates()
+
+func focus_uid() -> int:
+	return _focus_uid
+
+## La unidad viva que la vista tiene en una casilla, o -1.
+func _uid_at(cell: Vector2i) -> int:
+	if cell.x < 0:
+		return -1
+	for uid in _cell_of:
+		if _cell_of[uid] == cell and _toys.has(uid) and _toys[uid].alive:
+			return uid
+	return -1
+
+## Coloca las placas para que no se pisen. En el tablero 8x8, como siempre
+## (enteras y en su sitio). En el frente: la activa y la del foco van enteras,
+## fijas y en la capa de arriba (la del foco cuenta tambien su etiqueta); las
+## demas, compactas y, de abajo arriba de la pantalla, subidas lo justo para no
+## tocar a ninguna ya colocada. Si tuviera que subir mas de PLATE_LIFT_CAP, se
+## apaga en su sitio. Se mide en pixeles de la camara de verdad, sin tamanos por
+## resolucion. Se llama por evento (estado, foco, cola vacia, cambio de vista),
+## nunca por fotograma, y no con la cola animando (al vaciarse se recoloca).
+func _layout_plates() -> void:
+	var front := is_front()
+	if front and is_busy():
+		return
+	for uid in _toys:
+		if _toys[uid].alive:
+			_toys[uid].set_plate_layout(front, front and (uid == _focus_uid or uid == _plate_active_uid))
+	if not front or _camera == null or not _camera.is_inside_tree():
+		return
+	var placed: Array = []
+	var rest: Array = []
+	for uid in _toys:
+		var t = _toys[uid]
+		if not t.alive or not t.visible:
+			continue
+		var r := _plate_rect(t, uid == _focus_uid)
+		if r.size.y <= 0.0:
+			continue
+		if uid == _focus_uid or uid == _plate_active_uid:
+			placed.append(r)
+		else:
+			rest.append({"toy": t, "rect": r})
+	# De abajo arriba: las de delante se quedan y las de detras suben.
+	rest.sort_custom(func(a, b): return a["rect"].end.y > b["rect"].end.y)
+	for it in rest:
+		var t = it["toy"]
+		var r: Rect2 = it["rect"]
+		var parts: Array = t.plate_parts()
+		var ppm := _pixels_per_meter_up(parts[0][0])
+		var lift := 0.0
+		var fits := false
+		for _i in 8:
+			var moved := Rect2(r.position - Vector2(0, lift), r.size)
+			var hit := _overlap(moved, placed)
+			if hit.size.y <= 0.0:
+				fits = true
+				placed.append(moved)
+				break
+			lift += moved.end.y - hit.position.y + r.size.y * PLATE_SPACING
+			if lift > r.size.y * PLATE_LIFT_CAP:
+				break
+		if fits and ppm > 0.0:
+			t.set_plate_layout(true, false, lift / ppm, false)
+		else:
+			t.set_plate_layout(true, false, 0.0, true)
+
+## El rectangulo de pantalla que ocupa la placa de una pieza (sin subir), con su
+## etiqueta si `with_hint`. Rect2() si queda detras de la camara.
+func _plate_rect(t, with_hint: bool) -> Rect2:
+	var right: Vector3 = _camera.global_basis.x
+	var up: Vector3 = _camera.global_basis.y
+	var out := Rect2()
+	var first := true
+	for part in t.plate_parts(with_hint):
+		var c: Vector3 = part[0]
+		var half: Vector2 = part[1]
+		if _camera.is_position_behind(c):
+			return Rect2()
+		var a := _camera.unproject_position(c - right * half.x + up * half.y)
+		var b := _camera.unproject_position(c + right * half.x - up * half.y)
+		var r := Rect2(Vector2(minf(a.x, b.x), minf(a.y, b.y)), (b - a).abs())
+		out = r if first else out.merge(r)
+		first = false
+	return out
+
+## Cuantos pixeles sube en pantalla un metro de altura en ese punto.
+func _pixels_per_meter_up(p: Vector3) -> float:
+	if _camera.is_position_behind(p) or _camera.is_position_behind(p + Vector3.UP):
+		return 0.0
+	return _camera.unproject_position(p).y - _camera.unproject_position(p + Vector3.UP).y
+
+static func _overlap(r: Rect2, others: Array) -> Rect2:
+	for o in others:
+		if r.intersects(o):
+			return o
+	return Rect2()
+
+# ── Vistas previas: peligro, alcance minimo, zona de tiro ────────────
+
+var _threat: Dictionary = {}     ## cell -> true: a donde llega el enemigo
+var _no_fire: Dictionary = {}    ## cell -> true: demasiado cerca para disparar
+var _fire: Dictionary = {}       ## cell -> true: zona de tiro (leccion de artilleria)
+var _cross_labels: Array = []    ## Label3D "✕", reutilizadas
+
+## Capas que se pintan por debajo de las marcas de turno. Se llaman una vez por
+## refresco de BattleScreen (eventos), nunca por fotograma. Las mismas en las dos
+## vistas: en el frente salen como manchas en el suelo.
+func set_overlays(threat: Array, no_fire: Array, fire: Array = []) -> void:
+	_threat.clear()
+	_no_fire.clear()
+	_fire.clear()
+	for c in threat:
+		_threat[c] = true
+	for c in no_fire:
+		_no_fire[c] = true
+	for c in fire:
+		_fire[c] = true
+	_place_crosses()
+	_paint_marks()
+
+func overlay_threat() -> Array:
+	return _threat.keys()
+
+func overlay_no_fire() -> Array:
+	return _no_fire.keys()
+
+## La ✕ encima de cada casilla demasiado cercana: como mucho cuatro (alcance
+## minimo 2), creadas la primera vez y reutilizadas.
+func _place_crosses() -> void:
+	var cells: Array = _no_fire.keys()
+	while _cross_labels.size() < cells.size():
+		var l := Label3D.new()
+		l.name = "NoFireCross%d" % _cross_labels.size()
+		l.text = "✕"
+		l.font_size = 64
+		l.pixel_size = 0.012
+		l.outline_size = 10
+		l.modulate = UITheme.DANGER.lightened(0.3)
+		l.outline_modulate = Color(0.06, 0.05, 0.04)
+		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		l.no_depth_test = true
+		l.render_priority = 6
+		var font := UITheme.heavy_font()
+		if font != null:
+			l.font = font
+		add_child(l)
+		_cross_labels.append(l)
+	for i in _cross_labels.size():
+		var l: Label3D = _cross_labels[i]
+		l.visible = i < cells.size()
+		if l.visible:
+			l.position = _world_of(cells[i]) + Vector3(0, 0.35, 0)
+
+func no_fire_cross_count() -> int:
+	var n := 0
+	for l in _cross_labels:
+		if l.visible:
+			n += 1
+	return n
 
 func set_hover(cell: Vector2i) -> void:
 	if is_front():
+		# En el frente no se marca la casilla: la pieza bajo el puntero o el dedo
+		# pasa a ser el foco (su etiqueta de objetivo y su placa entera).
+		_set_focus(_uid_at(cell))
 		cell = Vector2i(-1, -1)
 	if cell == _hover:
 		return
@@ -534,6 +763,14 @@ func _mark_color(mark: int) -> Color:
 			return Color(UITheme.ACCENT.lightened(0.2), 1.0)
 		Mark.HOVER:
 			return Color(1, 1, 1, 0.55)
+		Mark.THREAT:
+			return Color(UITheme.WARNING, 0.75)
+		Mark.MOVE_THREAT:
+			return Color(UITheme.INFO.lerp(UITheme.WARNING, 0.5).lightened(0.2), 1.0)
+		Mark.NO_FIRE:
+			return Color(UITheme.DANGER.darkened(0.2), 0.8)
+		Mark.FIRE:
+			return Color(UITheme.DANGER.lightened(0.45), 0.7)
 	return Color(0, 0, 0, 0)
 
 func _build_marks_mesh() -> void:
@@ -613,10 +850,26 @@ func _paint_marks() -> void:
 	for y in board.y:
 		for x in board.x:
 			var cell := Vector2i(x, y)
-			var mark: int = int(_mark_of.get(cell, Mark.NONE))
+			var mark: int = overlay_mark(int(_mark_of.get(cell, Mark.NONE)), cell)
 			if mark == Mark.NONE and cell == _hover:
 				mark = Mark.HOVER
 			mm.set_instance_custom_data(y * board.x + x, _mark_color(mark))
+
+## La marca de turno de una casilla con las capas de vista previa debajo: lo que
+## se puede hacer (mover, atacar, el activo) manda; una casilla a la que se puede
+## ir pero donde llega el enemigo se pinta mezclada.
+func overlay_mark(mark: int, cell: Vector2i) -> int:
+	if mark == Mark.MOVE and _threat.has(cell):
+		return Mark.MOVE_THREAT
+	if mark != Mark.NONE:
+		return mark
+	if _no_fire.has(cell):
+		return Mark.NO_FIRE
+	if _fire.has(cell):
+		return Mark.FIRE
+	if _threat.has(cell):
+		return Mark.THREAT
+	return Mark.NONE
 
 # ── Toque y raton ────────────────────────────────────────────────────
 
@@ -676,6 +929,7 @@ func inspect(uid: int, text: String) -> void:
 func zoom_by(factor: float) -> void:
 	_zoom = clampf(_zoom * factor, ZOOM_MIN, ZOOM_MAX)
 	_apply_camera()
+	_layout_plates()
 
 func _apply_camera() -> void:
 	var dist := _fit_dist * _zoom * _punch

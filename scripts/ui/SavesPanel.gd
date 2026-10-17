@@ -23,8 +23,8 @@ const MAX_WIDTH := 760.0
 ## Por debajo de este ancho de tarjeta los botones van debajo de los datos.
 const NARROW := 560.0
 const FLAG_SIZE := Vector2(42, 28)
-## Donde puede estar el dibujante de banderas de la rama de bandera y pais.
-const FLAG_SCRIPTS := ["res://scripts/ui/ColonyFlag.gd", "res://scripts/services/ColonyFlag.gd"]
+## El dibujante de banderas.
+const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const DragScroll := preload("res://scripts/ui/DragScroll.gd")
 
 var _make_room := false
@@ -210,8 +210,8 @@ func _badge(text: String, color: Color, node_name: String) -> Label:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	return label
 
-## La bandera de la partida: la de la rama de bandera y pais si ya existe
-## (ColonyFlag.draw_spec), o un recuadro del color de la colonia.
+## La bandera de la partida (ColonyFlag.draw_spec), o un recuadro del color de
+## la colonia si el guardado no trae receta (partidas de antes).
 func _make_flag(entry: Dictionary) -> Control:
 	var flag := Control.new()
 	flag.name = "Flag"
@@ -219,30 +219,17 @@ func _make_flag(entry: Dictionary) -> Control:
 	flag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	flag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var spec: Variant = entry.get("flag_spec", {})
-	var drawer: GDScript = _flag_drawer()
 	var color_id := String(entry.get("color", String(GameConfig.COLONY_DEFAULT_SPEC["colors"][0])))
 	var fill: Color = GameConfig.colony_colors.get(color_id,
 		GameConfig.colony_colors[String(GameConfig.COLONY_DEFAULT_SPEC["colors"][0])])
 	flag.draw.connect(func():
 		var rect := Rect2(Vector2.ZERO, FLAG_SIZE)
-		if drawer != null and spec is Dictionary and not (spec as Dictionary).is_empty():
-			drawer.call("draw_spec", flag, rect, spec)
+		if spec is Dictionary and not (spec as Dictionary).is_empty():
+			ColonyFlag.draw_spec(flag, rect, spec)
 		else:
 			flag.draw_rect(rect, fill)
 		flag.draw_rect(rect, UITheme.TEXT_DIM, false, 1.0))
 	return flag
-
-static func _flag_drawer() -> GDScript:
-	for path in FLAG_SCRIPTS:
-		if not ResourceLoader.exists(path):
-			continue
-		var script: Variant = load(path)
-		if not (script is GDScript):
-			continue
-		for m in (script as GDScript).get_script_method_list():
-			if String(m.get("name", "")) == "draw_spec":
-				return script
-	return null
 
 # ── Textos ───────────────────────────────────────────────────────────
 

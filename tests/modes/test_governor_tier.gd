@@ -264,7 +264,11 @@ func test_the_storm_calendar_is_a_fixed_pattern() -> void:
 	assert_str(M.season_for(StormCycle.Phase.CALM, true)).is_equal("after_tithe")
 	assert_float(float(GameConfig.market_calendar["warning"]["wood"])).is_greater(0.0)
 	assert_float(float(GameConfig.market_calendar["storm"]["steel"])).is_less(0.0)
-	for res in ["wood", "steel", "oil"]:
+	# La comida sube antes del Diezmo (Aviso y Tormenta), como el resto.
+	assert_float(float(GameConfig.market_calendar["warning"]["food"])).is_greater(0.0)
+	assert_float(float(GameConfig.market_calendar["storm"]["food"])).is_greater(
+		float(GameConfig.market_calendar["warning"]["food"]))
+	for res in ["wood", "steel", "oil", "food"]:
 		assert_float(float(GameConfig.market_calendar["after_tithe"][res])).is_greater(0.0)
 	assert_bool((GameConfig.market_calendar["calm"] as Dictionary).is_empty()).is_true()
 

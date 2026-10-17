@@ -37,6 +37,17 @@ var _map_btn: Button
 ## unit_id -> how many the player has picked for this run.
 var _selection: Dictionary = {}
 
+## El tablon de salidas (doc 21 §3.3-3.5, 2026-10-14): las ofertas a la vista y,
+## de la elegida, el mapa entero, los enemigos, el botin y "Favorable/Dificil"
+## ANTES de lanzar. Va dentro del mismo scroll que las unidades.
+var _sortie_box: VBoxContainer
+var _auto_btn: Button
+## id de la oferta elegida en el tablon (-1 = la primera que haya).
+var _selected_offer: int = -1
+const ODDS_KEYS := {"favorable": "ODDS_FAVORABLE", "even": "ODDS_EVEN", "hard": "ODDS_HARD"}
+const ICON_PX := 24
+const BuildingRules := preload("res://scripts/buildings/PlacementRules.gd")
+
 func _ready() -> void:
 	layer = 11
 	_setup_ui()
@@ -60,6 +71,9 @@ func _ready() -> void:
 	EventBus.final_audit_started.connect(func(_w): _refresh())
 	EventBus.final_audit_lost.connect(func(_w): _refresh())
 	EventBus.storm_halted_forever.connect(_refresh)
+	# El tablon cambia solo (oferta nueva, rebaja gastada): con el panel abierto
+	# se repinta.
+	EventBus.sortie_offers_changed.connect(func(): if _is_open: _refresh())
 	# Por si la partida se cargo antes de que este panel escuchara.
 	_on_expedition_changed.call_deferred()
 	_update_button_visibility()
@@ -111,15 +125,27 @@ func _setup_ui() -> void:
 	vbox.add_child(UITheme.make_separator())
 
 	_units_scroll = ScrollContainer.new()
-	_units_scroll.custom_minimum_size = Vector2(0, 240)
+	_units_scroll.custom_minimum_size = Vector2(0, 300)
 	_units_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_units_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.add_child(_units_scroll)
 
+	# Un solo scroll: arriba a donde se sale (y lo que hay alli), debajo con quien.
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 10)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_units_scroll.add_child(body)
+
+	_sortie_box = VBoxContainer.new()
+	_sortie_box.name = "SortieBoard"
+	_sortie_box.add_theme_constant_override("separation", 6)
+	_sortie_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(_sortie_box)
+
 	_units_vbox = VBoxContainer.new()
 	_units_vbox.add_theme_constant_override("separation", 6)
 	_units_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_units_scroll.add_child(_units_vbox)
+	body.add_child(_units_vbox)
 
 	_empty_label = UITheme.make_label(Tr.t("MSG_NO_UNITS"), "small", UITheme.TEXT_DIM)
 	_empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -158,6 +184,17 @@ func _setup_ui() -> void:
 	UITheme.style_button(_launch_btn, UITheme.CAT_MILITARY.darkened(0.15), UITheme.FONT_BUTTON)
 	_launch_btn.pressed.connect(_on_launch_pressed)
 	vbox.add_child(_launch_btn)
+
+	# RESOLVER SOLO (D6 = A): solo en incursiones y solo si la columna dobla al
+	# enemigo. Apagado con el motivo en el tooltip cuando no llega.
+	_auto_btn = Button.new()
+	_auto_btn.name = "AutoResolveButton"
+	_auto_btn.text = Tr.t("BTN_AUTO_RESOLVE")
+	_auto_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
+	UITheme.style_button(_auto_btn, UITheme.BTN, UITheme.FONT_BUTTON)
+	_auto_btn.pressed.connect(_on_auto_pressed)
+	_auto_btn.visible = false
+	vbox.add_child(_auto_btn)
 
 	# Un boton apagado sin motivo es un bug a ojos del jugador. El motivo va
 	# debajo, escrito, siempre que `can_launch` diga que no.
@@ -220,6 +257,7 @@ func _refresh() -> void:
 		_units_scroll.visible = false
 		_empty_label.visible = false
 		_launch_btn.visible = false
+		_auto_btn.visible = false
 		_reason_label.visible = false
 		_campaign_box.visible = true
 		_refresh_campaign()
@@ -233,10 +271,20 @@ func _refresh() -> void:
 	_empty_label.visible = available.is_empty()
 
 	var check: Dictionary = evaluate_launch(_party())
-	_launch_btn.disabled = not bool(check.get("ok", false))
+	var ok: bool = bool(check.get("ok", false))
 	var reason: String = String(check.get("reason", ""))
+	# Las reglas del manager van primero; despues, que haya a donde salir.
+	var offer: Dictionary = current_offer()
+	if ok and offer.is_empty():
+		ok = false
+		reason = "LBL_SORTIE_NONE"
+	_launch_btn.disabled = not ok
 	_reason_label.text = _reason_text(reason)
 	_reason_label.visible = _launch_btn.disabled and reason != ""
+
+	var preview: Dictionary = {} if offer.is_empty() else CombatManager.sortie_preview(offer, _party())
+	_rebuild_sorties(offer, preview)
+	_refresh_auto_button(offer, preview, ok)
 
 	_rebuild_units(available)
 
@@ -263,6 +311,12 @@ func _unit_list(counts: Dictionary) -> String:
 func _reason_text(reason: String) -> String:
 	if reason == "":
 		return ""
+	# Nadie elegido con tropas en casa: "sin unidades en casa" mentia (ronda de
+	# pruebas 1.0). Se dice que hacer.
+	if reason == "MSG_NO_UNITS":
+		for unit_id in CombatManager.get_deployable_units():
+			if int(CombatManager.get_deployable_units()[unit_id]) > 0:
+				return Tr.t("MSG_PICK_UNITS")
 	var translated: String = Tr.t(reason)
 	if translated != reason:
 		return translated
@@ -352,9 +406,13 @@ func _make_unit_row(unit_id: String, owned: int) -> PanelContainer:
 	info.add_child(title_row)
 
 	# The combat stats, not the economic ones: this is a tactical decision.
-	var line := "HP %d   ATK %d   DEF %d   MOV %d   ALC %d-%d" % [
+	# Palabras y no siglas (HP, ATK...): el juego es para chavales (ronda 1.0).
+	var r_min := int(stats.get("min_range", 1))
+	var r_max := int(stats.get("range", 1))
+	var reach := str(r_max) if r_min == r_max else "%d-%d" % [r_min, r_max]
+	var line := Tr.t("FMT_UNIT_STATS_LINE") % [
 		int(stats.get("hp", 0)), int(stats.get("atk", 0)), int(stats.get("def", 0)),
-		int(stats.get("move", 0)), int(stats.get("min_range", 1)), int(stats.get("range", 1)),
+		int(stats.get("move", 0)), reach,
 	]
 	var stats_label := UITheme.make_label(line, "small", UITheme.TEXT_DIM)
 	stats_label.name = "CombatStats"
@@ -467,9 +525,32 @@ func _on_launch_pressed() -> void:
 		_refresh()
 		return
 	# Hasta ganar la primera, cada salida es la escaramuza facil de un solo nodo
-	# (docs/15-combat.md §4).
-	CombatManager.launch_expedition(party, 0, CombatManager.is_first_sortie_due())
+	# (docs/15-combat.md §4). Despues, la oferta elegida del tablon.
+	if CombatManager.is_first_sortie_due():
+		CombatManager.launch_expedition(party, 0, true)
+		_close()
+		return
+	var offer: Dictionary = current_offer()
+	if offer.is_empty() or not CombatManager.launch_sortie(int(offer.get("id", 0)), party):
+		EventBus.notification_posted.emit(Tr.t("MSG_SORTIE_GONE"), "warning", UITheme.WARNING)
+		_refresh()
+		return
 	_close()
+
+## RESOLVER SOLO: la incursion elegida se lanza y se juega de un tiron.
+func _on_auto_pressed() -> void:
+	var party: Dictionary = _party()
+	var offer: Dictionary = current_offer()
+	if offer.is_empty() or not bool(evaluate_launch(party).get("ok", false)):
+		_refresh()
+		return
+	if not bool(CombatManager.sortie_preview(offer, party).get("can_auto", false)):
+		_refresh()
+		return
+	if CombatManager.launch_sortie(int(offer.get("id", 0)), party, true):
+		_close()
+	else:
+		_refresh()
 
 ## Vuelve al mapa de la campana en curso sin tocar nada de su estado.
 func _on_view_map_pressed() -> void:
@@ -532,9 +613,220 @@ func _open() -> void:
 	_backdrop.visible = true
 	_refresh()
 	UIManager.open_panel(self)
+	# Mirar el tablon apaga el punto rojo de "salida nueva".
+	CombatManager.mark_sorties_seen()
+
+## Lo abre el boton ESCARAMUZAS del HUD (y ☰ MENU). Si ya esta abierto, no lo cierra.
+func open() -> void:
+	if not _is_open:
+		_open()
+
+func is_open() -> bool:
+	return _is_open
 
 func _close() -> void:
 	_is_open = false
 	_panel.visible = false
 	_backdrop.visible = false
 	UIManager.close_panel(self)
+
+# ── El tablon de salidas (doc 21 §3.3-3.5) ───────────────────────────
+
+## La oferta elegida: la primera escaramuza mientras toque ({"kind": "first"}),
+## si no la del tablon que el jugador marco (o la primera que haya). {} si no
+## hay ninguna.
+func current_offer() -> Dictionary:
+	if CombatManager.is_first_sortie_due():
+		return {"kind": "first", "era": ProgressionManager.current_era}
+	var offers: Array = CombatManager.get_sortie_offers()
+	if offers.is_empty():
+		return {}
+	for offer in offers:
+		if int(offer.get("id", 0)) == _selected_offer:
+			return offer
+	_selected_offer = int(offers[0].get("id", 0))
+	return offers[0]
+
+func select_offer(offer_id: int) -> void:
+	_selected_offer = offer_id
+	_refresh()
+
+func _rebuild_sorties(offer: Dictionary, preview: Dictionary) -> void:
+	for child in _sortie_box.get_children():
+		child.queue_free()
+	# La rebaja del Diezmo ya ganada, para que se vea que sirvio.
+	var cut: int = CombatManager.get_tithe_cut_pct()
+	if cut > 0:
+		_sortie_box.add_child(UITheme.make_label(Tr.t("LOOT_TITHE_CUT") % cut, "small", UITheme.POSITIVE))
+	if not CombatManager.is_first_sortie_due():
+		var offers: Array = CombatManager.get_sortie_offers()
+		if offers.is_empty():
+			var none := UITheme.make_label(Tr.t("LBL_SORTIE_NONE"), "small", UITheme.TEXT_DIM)
+			none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_sortie_box.add_child(none)
+			return
+		_sortie_box.add_child(UITheme.section_header(Tr.t("LBL_SORTIE_PICK")))
+		var row := HFlowContainer.new()
+		row.add_theme_constant_override("h_separation", 8)
+		row.add_theme_constant_override("v_separation", 6)
+		_sortie_box.add_child(row)
+		for entry in offers:
+			row.add_child(_make_offer_button(entry, int(entry.get("id", 0)) == int(offer.get("id", -1))))
+	if not preview.is_empty():
+		_sortie_box.add_child(_make_detail(offer, preview))
+
+## Un boton por oferta: nombre y tipo. La elegida, con el color militar.
+func _make_offer_button(offer: Dictionary, selected: bool) -> Button:
+	var btn := Button.new()
+	var offer_name: String = Tr.t(ExpeditionGenerator.offer_name_key(offer))
+	var fights: int = ExpeditionGenerator.fights_on_path(CombatManager.offer_map(offer))
+	btn.text = "%s\n%s" % [offer_name, _kind_text(offer, fights)]
+	btn.custom_minimum_size = Vector2(UITheme.touch_px(200.0), UITheme.MIN_BTN_H + 16)
+	btn.toggle_mode = true
+	btn.button_pressed = selected
+	UITheme.style_button(btn, UITheme.CAT_MILITARY.darkened(0.15) if selected else UITheme.BTN, UITheme.FONT_SMALL)
+	var offer_id: int = int(offer.get("id", 0))
+	btn.pressed.connect(func(): select_offer(offer_id))
+	return btn
+
+func _kind_text(offer: Dictionary, fights: int) -> String:
+	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_EXPEDITION:
+		return Tr.t("SORTIE_KIND_EXPEDITION") % fights
+	return Tr.t("SORTIE_KIND_RAID")
+
+## La ficha de la salida elegida: nombre, mapa con los enemigos de cada combate,
+## botin y la cuenta de fuerzas con su etiqueta. Iconos y numeros delante.
+func _make_detail(offer: Dictionary, preview: Dictionary) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.name = "SortieDetail"
+	var style := StyleBoxFlat.new()
+	style.bg_color = UITheme.CARD_BG
+	style.set_corner_radius_all(UITheme.CORNER)
+	style.set_content_margin_all(10)
+	style.border_width_left = 5
+	style.border_color = UITheme.CAT_MILITARY
+	card.add_theme_stylebox_override("panel", style)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	card.add_child(box)
+
+	var title := UITheme.make_label("%s · %s" % [Tr.t(String(preview.get("name_key", ""))),
+		_kind_text(offer, int(preview.get("fights", 1)))], "section", UITheme.TEXT_BRIGHT)
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(title)
+
+	# El mapa entero, por capas: lo que hay en cada combate.
+	var map: Array = preview.get("map", [])
+	var layers: Array = preview.get("layers", [])
+	for i in range(layers.size()):
+		var line := HFlowContainer.new()
+		line.add_theme_constant_override("h_separation", 6)
+		var is_boss_layer: bool = false
+		for index in layers[i]:
+			if bool(map[int(index)].get("is_boss", false)):
+				is_boss_layer = true
+		var label_text: String = Tr.t("LBL_SORTIE_BOSS") if is_boss_layer else Tr.t("LBL_SORTIE_FIGHT_N") % (i + 1)
+		line.add_child(UITheme.make_label(label_text + ":", "small", UITheme.ACCENT))
+		var first := true
+		for index in layers[i]:
+			if not first:
+				line.add_child(UITheme.make_label(Tr.t("LBL_SORTIE_OR"), "small", UITheme.TEXT_DIM))
+			first = false
+			_add_roster_icons(line, map[int(index)].get("enemy_roster", {}))
+		box.add_child(line)
+
+	# El botin: lo exclusivo primero, despues oro y madera.
+	var loot_row := HFlowContainer.new()
+	loot_row.name = "SortieLoot"
+	loot_row.add_theme_constant_override("h_separation", 10)
+	loot_row.add_child(UITheme.make_label(Tr.t("LBL_SORTIE_LOOT") + ":", "small", UITheme.ACCENT))
+	for text in loot_lines(preview.get("loot", {})):
+		loot_row.add_child(UITheme.make_label(String(text), "small", UITheme.POSITIVE))
+	var rewards: Dictionary = preview.get("rewards", {})
+	for res_name in rewards:
+		var chip := HBoxContainer.new()
+		chip.add_theme_constant_override("separation", 3)
+		chip.add_child(UITheme.make_icon(String(res_name), ICON_PX))
+		chip.add_child(UITheme.make_label("+%d" % int(rewards[res_name]), "small", UITheme.resource_color(String(res_name))))
+		loot_row.add_child(chip)
+	box.add_child(loot_row)
+
+	# Fuerzas y etiqueta (doc 21 §3.5).
+	var odds_row := HFlowContainer.new()
+	odds_row.add_theme_constant_override("h_separation", 10)
+	# Sin nadie elegido no se dice "Dificil" en rojo: asusta y no es verdad
+	# todavia (ronda de pruebas 1.0). Se dice que hacer.
+	if roundi(float(preview.get("player_power", 0.0))) <= 0:
+		var pick := UITheme.make_label(Tr.t("ODDS_PICK_FIRST"), "small", UITheme.TEXT_DIM)
+		pick.name = "OddsLabel"
+		odds_row.add_child(pick)
+		box.add_child(odds_row)
+		return card
+	odds_row.add_child(UITheme.make_label(Tr.t("LBL_SORTIE_STRENGTH") % [
+		roundi(float(preview.get("player_power", 0.0))), roundi(float(preview.get("enemy_power", 0.0)))],
+		"small", UITheme.TEXT))
+	var odds: String = String(preview.get("odds", "even"))
+	var odds_label := UITheme.make_label(Tr.t(String(ODDS_KEYS.get(odds, "ODDS_EVEN"))), "section", _odds_color(odds))
+	odds_label.name = "OddsLabel"
+	odds_row.add_child(odds_label)
+	box.add_child(odds_row)
+	return card
+
+## Las lineas del botin exclusivo, ya traducidas ("+3 repuestos", "Plano: ...").
+## Publico y estatico: el parte de BattleScreen dice lo mismo con las mismas palabras.
+static func loot_lines(loot: Dictionary) -> Array:
+	var lines: Array = []
+	if int(loot.get("parts", 0)) > 0:
+		lines.append(Tr.t("LOOT_PARTS") % int(loot["parts"]))
+	if int(loot.get("colonists", 0)) > 0:
+		lines.append(Tr.t("LOOT_COLONISTS") % int(loot["colonists"]))
+	if int(loot.get("tithe_pct", 0)) > 0:
+		lines.append(Tr.t("LOOT_TITHE_CUT") % int(loot["tithe_pct"]))
+	for id in loot.get("blueprints", []):
+		var data: BuildingData = BuildingRules.load_building_data(String(id))
+		lines.append(Tr.t("LOOT_BLUEPRINT") % (data.get_display_name() if data != null else String(id)))
+	# El botin de un solo nodo lleva el plano suelto ("blueprint").
+	var single: Variant = loot.get("blueprint", "")
+	if single is String and String(single) != "":
+		var single_data: BuildingData = BuildingRules.load_building_data(String(single))
+		lines.append(Tr.t("LOOT_BLUEPRINT") % (single_data.get_display_name() if single_data != null else String(single)))
+	if int(loot.get("colonists_no_room", 0)) > 0:
+		lines.append(Tr.t("LOOT_COLONISTS_NO_ROOM") % int(loot["colonists_no_room"]))
+	return lines
+
+func _add_roster_icons(line: Container, roster: Dictionary) -> void:
+	for unit_id in GameConfig.get_unit_ids():
+		var count: int = int(roster.get(unit_id, 0))
+		if count <= 0:
+			continue
+		var chip := HBoxContainer.new()
+		chip.add_theme_constant_override("separation", 2)
+		var icon := TextureRect.new()
+		icon.texture = UITheme.unit_icon(String(unit_id), ICON_PX)
+		icon.custom_minimum_size = Vector2(ICON_PX, ICON_PX)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.modulate = UITheme.unit_icon_tint(false)
+		icon.tooltip_text = Tr.t(String(GameConfig.get_unit_def(String(unit_id)).get("name", unit_id)))
+		icon.mouse_filter = Control.MOUSE_FILTER_PASS
+		chip.add_child(icon)
+		chip.add_child(UITheme.make_label("x%d" % count, "small", UITheme.TEXT))
+		line.add_child(chip)
+
+func _odds_color(odds: String) -> Color:
+	match odds:
+		"favorable":
+			return UITheme.POSITIVE
+		"hard":
+			return UITheme.DANGER
+	return UITheme.WARNING
+
+## RESOLVER SOLO solo en incursiones; encendido si la columna dobla al enemigo.
+func _refresh_auto_button(offer: Dictionary, preview: Dictionary, launch_ok: bool) -> void:
+	var is_raid: bool = String(offer.get("kind", "")) == ExpeditionGenerator.KIND_RAID
+	_auto_btn.visible = is_raid
+	if not is_raid:
+		return
+	var can: bool = bool(preview.get("can_auto", false))
+	_auto_btn.disabled = not (launch_ok and can)
+	_auto_btn.tooltip_text = Tr.t("HINT_AUTO_RESOLVE") if can else Tr.t("HINT_AUTO_RESOLVE_LOCKED")
