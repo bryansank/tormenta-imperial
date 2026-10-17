@@ -169,7 +169,10 @@ func test_at_night_the_sky_is_blue_and_the_storm_still_rules() -> void:
 	_load_phase(StormCycle.Phase.ASH)
 	StormSky.sync_to_storm()
 	var night_ash := _env.background_color
-	assert_float(float(foam.get_shader_parameter("night_weight"))).is_less(0.5)
+	# La Ceniza ya solo tine un poco (storm_visual_ash 0,2, feat/danos-y-tormenta-
+	# corta): la noche baja en esa medida, no a la mitad. Lo oscuro es del golpe.
+	assert_float(float(foam.get_shader_parameter("night_weight"))).is_equal_approx(1.0 - StormSky.ash_weight(), 0.0001)
+	assert_float(float(foam.get_shader_parameter("night_weight"))).is_less(1.0)
 	DayClock.set_hour(c.day_start() + 0.01)
 	StormSky.sync_to_storm()
 	var day_ash := _env.background_color
