@@ -12,7 +12,7 @@ extends RefCounted
 ##
 ## Un paso es un Dictionary:
 ##   kind  "build" | "upgrade" | "train" | "repair" | "sell" | "buy" | "research" | "siege" | "resummon"
-##         | "rebuild" | "sandbox" | "sortie"
+##         | "rebuild" | "sandbox" | "sortie" | "contract"
 ##         ("sortie_offer" solo sale de sortie_step(), la segunda linea del panel)
 ##   id    edificio o unidad
 ##   level nivel al que sube una mejora
@@ -373,6 +373,18 @@ static func sortie_step() -> Dictionary:
 	if reason == "" or reason == "SORTIE_WHY_FIRST":
 		return {}
 	return {"kind": "sortie_offer", "why": reason}
+
+## Paso aparte, que no entra en next_step() (la linea y su sonda no cambian):
+## "Entrega el encargo de los vecinos" cuando uno del tablon ya se puede
+## entregar. {} si no hay ninguno o el modo no tiene encargos. ¿QUE HACER? lo
+## ensena debajo del paso principal.
+static func contract_step() -> Dictionary:
+	if not GameMode.contracts_enabled():
+		return {}
+	var source: String = ContractManager.first_deliverable()
+	if source.is_empty():
+		return {}
+	return {"kind": "contract", "id": source, "why": "OBJ_WHY_CONTRACT"}
 
 ## La columna que se propone para la primera escaramuza: una unidad de casa, la
 ## del primer tipo que haya (infanteria antes que canones). Vacio si no hay nadie.
@@ -1207,6 +1219,8 @@ static func describe(step: Dictionary) -> Dictionary:
 			title = Tr.t("OBJ_DO_FIRST_SORTIE")
 		"sortie_offer":
 			title = Tr.t("OBJ_DO_SORTIE")
+		"contract":
+			title = Tr.t("OBJ_DO_CONTRACT") % Tr.t("CONTRACT_SRC_" + String(step.get("id", "")).to_upper())
 		"resummon":
 			title = Tr.t("OBJ_DO_RESUMMON")
 		_:
@@ -1298,3 +1312,28 @@ static func blocker(step: Dictionary) -> String:
 			var reason: String = CombatManager.final_audit_block_reason()
 			return Tr.t(reason) if reason != "" else ""
 	return ""
+
+# ══════════════════════════════════════════════════════════════════════
+# La meta de la calma (doc 21 §2.4)
+# ══════════════════════════════════════════════════════════════════════
+
+## La segunda linea de ¿QUE HACER?: lo que pide la Orden de la Regencia antes de
+## la proxima Tormenta, o {} si no toca (sin reloj, sin Diezmo en el modo, ya
+## entregado o con los Tasadores en la puerta). Va aparte de next_step() a
+## proposito: no es un paso de la linea, y la sonda de la linea no la sigue.
+##   {"kind": "order", "id": recurso, "amount": n, "pct": rebaja en %, "text": traducido}
+static func calm_goal() -> Dictionary:
+	if not StormManager.order_visible():
+		return {}
+	if StormManager.get_phase() == StormCycle.Phase.TITHE:
+		return {}
+	var order: Dictionary = StormManager.get_order()
+	if order.is_empty() or bool(order.get("done", false)):
+		return {}
+	var res: String = String(order["res"])
+	var amount: int = int(order["amount"])
+	var pct: int = roundi(GameConfig.storm_order_delivery_pct * 100.0)
+	return {
+		"kind": "order", "id": res, "amount": amount, "pct": pct,
+		"text": Tr.t("OBJ_CALM_GOAL") % [amount, Tr.res_name(res), pct],
+	}

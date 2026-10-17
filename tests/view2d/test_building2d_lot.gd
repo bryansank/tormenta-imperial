@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## La parcela en la vista 2D (docs/18, "Como se pinta un edificio"): el mismo
-## plan que la 3D (LotPlan) dibujado por BuildingArt2D. Los 17 edificios se
+## plan que la 3D (LotPlan) dibujado por BuildingArt2D. Los 24 edificios se
 ## pintan sin error en pie, en obra y en ruina, y el edificio deja libre su patio.
 
 const Building2D := preload("res://scripts/view2d/Building2D.gd")

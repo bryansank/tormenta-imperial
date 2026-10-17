@@ -9,8 +9,12 @@ var _is_open := false
 var _now_title: Label
 var _now_why: Label
 var _now_blocker: Label
+## La meta de la calma (Orden de la Regencia), debajo del paso. Oculta si no toca.
+var _calm_goal: Label
 ## "Sal de escaramuza: ..." (Objectives.sortie_step), solo cuando hay motivo.
 var _sortie_line: Label
+## Encargos: "Entrega el encargo: Los vecinos" cuando uno ya se puede entregar.
+var _now_contract: Label
 var _route_box: VBoxContainer
 var _refresh_left := 0.0
 
@@ -116,6 +120,10 @@ func _setup_ui() -> void:
 	_now_blocker = UITheme.make_label("", "body", UITheme.WARNING)
 	_now_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_now_blocker)
+	_calm_goal = UITheme.make_label("", "body", UITheme.WARNING)
+	_calm_goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_calm_goal.visible = false
+	content.add_child(_calm_goal)
 	# Segunda linea (doc 21 §2.4 y §3.6): salir de escaramuza cuando hay motivo.
 	# Va aparte del paso de la linea: no lo sustituye, lo acompana.
 	_sortie_line = UITheme.make_label("", "body", UITheme.CAT_MILITARY.lightened(0.25))
@@ -123,6 +131,11 @@ func _setup_ui() -> void:
 	_sortie_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_sortie_line.visible = false
 	content.add_child(_sortie_line)
+	_now_contract = UITheme.make_label("", "body", UITheme.POSITIVE)
+	_now_contract.name = "ContractStep"
+	_now_contract.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_now_contract.visible = false
+	content.add_child(_now_contract)
 
 	# ── EL CAMINO: la linea entera, con lo hecho marcado ──
 	content.add_child(UITheme.make_separator())
@@ -173,6 +186,9 @@ func refresh() -> void:
 	_now_why.text = String(text["why"])
 	_now_blocker.text = String(text["blocker"])
 	_now_blocker.visible = String(text["blocker"]) != ""
+	var goal: Dictionary = Objectives.calm_goal()
+	_calm_goal.text = String(goal.get("text", ""))
+	_calm_goal.visible = not goal.is_empty()
 	var sortie: Dictionary = Objectives.sortie_step()
 	if sortie.is_empty():
 		_sortie_line.visible = false
@@ -180,6 +196,11 @@ func refresh() -> void:
 		var sortie_text: Dictionary = Objectives.describe(sortie)
 		_sortie_line.text = "%s\n%s" % [String(sortie_text["title"]), String(sortie_text["why"])]
 		_sortie_line.visible = true
+	var contract: Dictionary = Objectives.contract_step()
+	_now_contract.visible = not contract.is_empty()
+	if not contract.is_empty():
+		var ctext: Dictionary = Objectives.describe(contract)
+		_now_contract.text = "%s\n%s" % [String(ctext["title"]), String(ctext["why"])]
 	_paint_route()
 
 ## La linea de Objectives.LINE, una fila por paso: hecho, el de ahora, o por hacer.

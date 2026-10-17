@@ -35,12 +35,20 @@ func test_the_phase_name_comes_from_the_translations() -> void:
 	assert_str(hud._label.text).is_equal(Tr.t("STORM_PHASE_ASH"))
 	assert_str(hud._label.text).is_not_equal("STORM_PHASE_ASH")
 
-func test_the_calm_shows_nothing_at_all() -> void:
-	# En calma no hay nada que indicar. Un banner permanente que dice "tranquilo"
-	# se convierte en mobiliario y deja de leerse cuando por fin cambia.
+func test_the_calm_shows_nothing_before_the_clock_is_armed() -> void:
+	# Antes de la Fundicion la calma no ensena nada. Desde que el reloj esta
+	# armado ensena el barometro (doc 21, D5 = A): test_regency_order lo cubre.
 	var hud := _hud()
 	await await_idle_frame()
+	if StormManager.is_armed():
+		return   # partida ya avanzada en este proceso; nada que comprobar
 	assert_bool(hud._should_show(StormCycle.Phase.CALM)).is_false()
+
+func test_the_barometer_shows_a_range_never_a_single_number() -> void:
+	# "3–5 min" o "< 2 min": siempre un margen, nunca el minuto exacto.
+	assert_str(load("res://scripts/ui/StormHUD.gd").barometer_text({"fill": 0.3, "low": 3, "high": 5})) 		.is_equal(Tr.t("STORM_BAROMETER") % [3, 5])
+	assert_str(load("res://scripts/ui/StormHUD.gd").barometer_text({"fill": 0.9, "low": 0, "high": 2})) 		.is_equal(Tr.t("STORM_BAROMETER_SOON") % 2)
+	assert_str(load("res://scripts/ui/StormHUD.gd").barometer_text({})).is_empty()
 
 func test_nothing_shows_before_the_clock_is_armed() -> void:
 	var hud := _hud()

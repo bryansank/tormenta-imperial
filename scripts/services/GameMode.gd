@@ -189,6 +189,10 @@ static func offline_enabled() -> bool:
 static func random_events_enabled() -> bool:
 	return _flag("random_events")
 
+## El tablon de encargos (ContractManager). Sandbox no lo tiene.
+static func contracts_enabled() -> bool:
+	return _flag("contracts")
+
 ## Los eventos de categoria "danger" (tormenta menor, plaga, bandidos...).
 static func danger_events_enabled() -> bool:
 	return _flag("danger_events")

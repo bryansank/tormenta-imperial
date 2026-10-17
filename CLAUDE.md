@@ -63,7 +63,7 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-28 autoloads in `project.godot`: the 27 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, and `RankManager` goes after `DeviceProfile` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
+29 autoloads in `project.godot`: the 28 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager` and `ContractManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
@@ -94,6 +94,7 @@ holds a service's state of its own.
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambience (day, night and Storm loops), runtime buses |
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
 | 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`). See `docs/06-progression-victory.md` §Governor rank |
+| 28 | `ContractManager` | `scripts/services/ContractManager.gd` | The contract board (ENCARGOS): ticks the pure `scripts/economy/ContractBoard.gd` (3 slots: Regency, neighbours, smuggler), charges what is asked and pays the reward (resources, morale, colonists if `PopulationManager.add_colonists` exists, Tithe discount through `StormManager.add_tithe_discount` if it exists, else gold), emits `contract_*`; saved as `contracts`; off in Sandbox (`GameMode.contracts_enabled()`). See `docs/27-encargos.md` |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -130,7 +131,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close; building guide; instances HelpIndexPanel
   +-- SkirmishPanel (CanvasLayer 11) -- commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" (Final Audit)
   +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn, in its "front" or "board" view; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
-  +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator (colour + icon, no countdown)
+  +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator (colour + icon, no countdown); in calm the barometer ("3–5 min", a shifted margin, never the exact minute) and, on tap, the Regency Order card (docs/06 §Orden de la Regencia)
   +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI, also over the combat board (combat lessons); instances PrologueScreen
   +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
@@ -138,13 +139,14 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
   +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, country name, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel)
   +-- SkirmishButton (CanvasLayer 10) -- MISIONES (the old ESCARAMUZAS) next to CONSTRUIR once a Barracks stands, red dot when there is a reason to go out (2026-10-14)
+  +-- ContractPanel (CanvasLayer 11) -- ENCARGOS: one card per source (clock, what they want with the missing part in red, the reward in icons, ENTREGAR / No, gracias), opened from ☰ MENÚ → COLONIA (docs/27)
   +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back; adds the GameSpeedButton sibling (x1 / x2, layer 10)
   +-- TitleMenu (CanvasLayer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal
 
 Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
   +-- Camera2D (Camera2DController) / StormTint (CanvasModulate, StormTint2D) / Island (Island2D)
   +-- GridOverlay (GridOverlay2D) / BuildingPlacer (BuildingPlacer2D) / MapGenerator (MapGenerator2D)
-  +-- OnScreenControls ... TitleMenu -- the same 24 UI nodes as above
+  +-- OnScreenControls ... TitleMenu -- the same 25 UI nodes as above
 
 Created at runtime, not in either .tscn:
   PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, three folios in plain language
@@ -250,7 +252,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (27 total, `data/buildings/*.tres`)
+### Buildings (34 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -271,7 +273,19 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Garden | 2x2 | 30/0/0/20 | 0 | +5 morale | deco |
 | Fountain | 2x2 | 60/20/0/10 | 0 | +7 morale | deco |
 | Statue | 2x2 | 120/40/0/0 + 3 ingots | 0 | +10 morale | deco |
+| Windmill (1.1) | 2x2 | 70/0/0/50 | 1 | Farms within 4 cells +20 %; needs a Farm; rank 3 | 1 |
+| Silo (1.1) | 2x2 | 60/0/0/40 | 0 | +300 food outside the shared bag; slows spoilage in Gobernador; needs a Farm | 1 |
+| Tavern (1.1) | 2x2 | 90/0/0/60 | 2 | 6 food + 4 gold per consumption tick: +2 morale, +1 growth (houses within 4) | 1 |
+| Carpentry (1.1) | 2x2 | 70/0/0/60 | 2 | Own processes: planks and furniture; needs a Sawmill | 1 |
+| Well (1.1) | 2x2 | 40/0/0/30 | 0 | −20 % storm damage within 3 cells, +15 % health after the storm; rank 2 | 1 |
+| Lighthouse (1.1) | 2x2 | 180/0/0/120 + 6 planks | 1 | Storm Warning +20 s; max 1 | 1-2 |
+| Fuel depot (1.1) | 2x2 | 200/80/0/80 + 4 beams | 1 | +500 oil outside the shared bag; needs a Refinery | 3 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
+
+The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
+`scripts/buildings/UtilityEffects.gd` (on build/demolish, never per frame), look in
+`scripts/buildings/UtilityToys.gd` (one procedural toy mesh per type until its bake
+exists) and `BuildingArt2D._utility`. Full table: `docs/03-buildings.md`.
 
 **Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
 `avenue_tree`, `flower_planter`, `colony_sign`, `hay_cart`, `bonfire`, `flagpole`,
@@ -511,7 +525,8 @@ not yet measured with the line probe). Titles `RANK_TITLE_<n>` (Colono, Capataz 
 … Archigobernador). `rank_rewards` gives decorations (Garden, Flower pots, Hay cart 2; Bonfire 3; Fountain, Flagpole 5; Statue 8; Palm trees 13),
 extra building slots (`rank_limit_bonus`), small bonuses (`rank_production_bonus`
 +7 % and `rank_storage_bonus` +8 % at rank 18, **assigned**, never added, so loading
-twice is safe) and flag pieces (`patterns`, `emblems`, `colors`).
+twice is safe), flag pieces (`patterns`, `emblems`, `colors`) and the regiment's
+paint schemes (`paints`: plain 1, stripes 3, spots 6, desert 9, snow 12, parade 15).
 
 **The player's country (2026-10-12):** a name (max `COLONY_NAME_MAX` = 26, "Al azar"
 names like "Liga de Vaporia" in ES/EN, a short ES/EN word filter in
@@ -534,6 +549,23 @@ CONSTRUIR card shows a padlock and "Rango N". UI: `RankPanel` (badge in slot
 `rank_badge`, rank-up toast with SFX `rank_up`, the COLONIA card). Saved as `"rank": {"xp", "colony": {"name", "flag"}}`;
 a save without it is rank 1 with a country rolled from `GridManager.island_seed`; an old
 `"flag"`/`"color"` pair is translated to pieces. Sandbox has every rank unlock open.
+
+### Contracts (ENCARGOS) — full doc: `docs/27-encargos.md`
+
+A board of 3 timed delivery contracts, one slot per source (doc 21 §2.3 of the
+private context): **the Regency** (era 2+, asks steel/beams/ingots, later oil/fuel;
+pays a discount on the next Tithe), **the neighbours** (era 1, wood/food/gold/planks;
+pay morale, colonists once that exists), **the smuggler** (era 1, wood and workshop
+materials; pays gold or scarce resources). Rewards are fixed when the contract
+appears. Colono: missing one costs nothing; Gobernador: missing or refusing lowers
+that source's reputation and cuts its next rewards. Pure model
+`scripts/economy/ContractBoard.gd` (returns events, own RNG, no `class_name`),
+service `ContractManager` (last autoload), panel `ContractPanel` from ☰ MENÚ →
+COLONIA. ¿QUÉ HACER? shows a deliverable contract as an extra line
+(`Objectives.contract_step()`, outside `next_step()` so the line probe is unchanged).
+Tunables `contract_*` at the end of `GameConfig`; mode rule `"contracts"` (off in
+Sandbox). Saved as `"contracts"`; a save without it gets a fresh board. Values not
+yet measured with `line_probe`.
 
 ### Game Modes — full doc: `docs/20-modos-de-juego.md`
 
@@ -590,6 +622,20 @@ fixed for the run; saves without `tier` load as Colono.
 - The Ejército and Misiones (old Escaramuzas) entries of ☰ MENÚ → COLONIA only appear once a Barracks exists.
 - Combat stats for these three unit types are separate, in
   `GameConfig.combat_unit_stats` — see `docs/15-combat.md` §8.
+- **The regiment (cosmetic only, 2026-10-14, `docs/15-combat.md` §12):** name, colour
+  and emblem (the flag pieces open by rank; "" = same as the flag), a paint scheme
+  (`GameConfig.REGIMENT_PAINTS`, opened by rank with the `paints` key of
+  `rank_rewards`) and stars at 10/25/50 fights won (`regiment_star_wins`). Saved by
+  `ArmyManager` as `"regiment"` inside `"army"` (old saves = default, cleared in
+  `reset()`, idempotent load that does **not** clamp by rank: the army loads before the
+  rank, so `get_regiment_look()` resolves locked pieces when drawing). Edited in the
+  REGIMIENTO card at the top of the Cuartel list (`scripts/ui/RegimentCard.gd`);
+  pure helpers and cached badge/paint textures in `scripts/ui/RegimentLook.gd`.
+  Shown on our pieces in both 3D combat views (paint on the `team` surface through
+  `scripts/combat_view/regiment_paint.gdshader`, one shared material per colour and
+  paint; a badge sprite with emblem and stars beside the HP plate, one shared texture)
+  and as the colour of our round mark on the 2D board (brass ring with stars).
+  Nothing in `scripts/combat/` reads it. Signal `regiment_changed`.
 
 ### Combat (PVE) — full doc: `docs/15-combat.md`
 
@@ -888,7 +934,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `storm`, `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -972,6 +1018,7 @@ tormenta-imperial/
 |   |   +-- BoardViewport3D.gd       # SubViewportContainer: own world, tap/click -> cell, wheel/pinch zoom, tooltip
 |   |   +-- UnitToy3D.gd             # One toy piece: model, HP bar, rings, tweened animations
 |   |   +-- CombatFx3D.gd, BoardTerrain3D.gd, BoardLayout3D.gd, UnitModels3D.gd, board_marks.gdshader
+|   |   +-- regiment_paint.gdshader  # The regiment's paint on our pieces' team surface (cosmetic)
 |   |   +-- FrontOrders.gd           # Front view orders (approach cell, reachable targets, AVANZAR) -> the same move/attack calls
 |   +-- grid/
 |   |   +-- GridManager.gd           # Cell grid (size per game, saved), land mask, map_version()
@@ -986,8 +1033,9 @@ tormenta-imperial/
 |   |   +-- WalkerActor.gd, WalkerFigures3D.gd  # One figure's data; the 3D MultiMesh drawer (2D: view2d/WalkerFigures2D.gd)
 |   |   +-- StormSky.gd              # Autoload: sky/light of the time of day and the storm
 |   +-- storm/StormCycle.gd          # PURE model: the storm's phase clock
+|   +-- economy/ContractBoard.gd     # PURE model: the contract board (3 slots, clocks, rewards, reputation)
 |   +-- storm/DayCycle.gd            # PURE model: the day/night clock (DayClock ticks it)
-|   +-- services/                    # The 27 game autoloads (table above) + BeckettGate.gd
+|   +-- services/                    # The 28 game autoloads (table above) + BeckettGate.gd
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
@@ -1006,6 +1054,7 @@ tormenta-imperial/
 |   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd, TouchTooltip.gd
 |   |   +-- HelperPanel.gd, HelpCallout.gd, HelpCatalog.gd, HelpTargets.gd, HelpIndexPanel.gd
 |   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the flag drawn from pieces
+|   |   +-- RegimentCard.gd, RegimentLook.gd  # The REGIMIENTO card in the Cuartel; regiment look, badge and paint helpers (cosmetic)
 |   |   +-- ColonyIdentityPanel.gd, ColonyByline.gd  # Country name + flag editor; flag + name line on reports
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
@@ -1017,7 +1066,7 @@ tormenta-imperial/
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
 |       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
-+-- data/buildings/                  # 27 .tres building definitions
++-- data/buildings/                  # 34 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 5 tracks, 34 SFX, 3 ambient loops (see MANIFEST.md)
 |   +-- models/toy/                  # Baked toy buildings (<id>.tscn + <id>_mesh.res, toy_solid / toy_glow materials)
@@ -1201,6 +1250,7 @@ All balance values live in `GameConfig.gd`:
 - `unit_types` / `army_base_capacity` / `army_capacity_per_barracks` / `army_upkeep_interval` - army
 - `tech_definitions` + `tech_*` bonuses - tech tree
 - `rank_xp_sources` / `rank_xp_thresholds` / `rank_rewards` / `colony_colors` / `COLONY_PATTERNS` / `COLONY_EMBLEMS` - governor rank (XP, curve, unlocks, bonuses, flag pieces)
+- `REGIMENT_PAINTS` / `regiment_star_wins` - the regiment's paints and stars (cosmetic only)
 - `audio_*_volume` / `audio_music_fade` / `audio_sfx_voices` - audio
 - `phase_triggers` / `early_*` - onboarding phase pacing
 - `combat_*` - board, deploy cap, unit combat stats, enemy/risk scaling, map shape,
@@ -1215,6 +1265,7 @@ All balance values live in `GameConfig.gd`:
 - `deposit_per_type_min/max` / `deposit_core_gap` / `map_shore_band` / `deposit_sizes` - the random map's deposits
 - `grid_width_min/max` / `grid_height_min/max` - the grid rolled per game (even, saved in the `grid` key)
 - `island_coast` - the irregular coast (`scripts/map/IslandShape.gd`, docs/02 "The irregular island"): land area, lobes, noise, bays, capes, clean-up radii, sea border and the land kept around the Núcleo. Copied into each new game's save: retuning it only changes new islands
+- `contract_*` - the contract board: source eras, first delays, cooldown, era scaling, reputation, Tithe fallback gold, rank XP, templates (docs/27)
 - `game_mode_rules` / `sandbox_*` - per-mode rules and multipliers on top of the base
   values (modes apply factors; the balance line changes the base values — docs/20, docs/22)
 - `population_floor` / `population_regrow_floor` - the ruin floor
@@ -1289,8 +1340,6 @@ Still not there:
 
 - **Cloud save wiring:** `CloudSaveManager` exists but needs credentials (the export
   excludes `.env`, so they would have to come from `user://` or the build) and a UI
-- **Missions/contracts:** timed delivery challenges for rewards (later phase of the
-  redesign, docs/13)
 - **Tower behaviour beyond the boards:** towers mitigate storm damage and field crews
   on defensive boards; they have no attack of their own on the base map
 - **Gameplay at night:** the day/night cycle is light, walkers and sound only

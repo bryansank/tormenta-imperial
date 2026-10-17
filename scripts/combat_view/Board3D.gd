@@ -89,6 +89,9 @@ var _gen := 0
 var _active_uid := -1
 var _simple := false
 var _team_color := Color(0.8, 0.62, 0.25)
+## El aspecto del regimiento (RegimentLook.resolve) para nuestras piezas; vacio
+## = sin insignia ni pintura. Solo cosmetico.
+var _regiment: Dictionary = {}
 var _boss_uid := -1
 ## El escenario de la maqueta (BoardTerrain3D.SCENES): solo decorado.
 var _scene := "land"
@@ -126,7 +129,8 @@ func _ready() -> void:
 # ── Montaje ──────────────────────────────────────────────────────────
 
 ## Monta la pelea que acaba de abrirse. `opts`: team_color (colonia), boss_uid,
-## crew_uids (Dictionary uid -> true), seed, simple (calidad sencilla).
+## crew_uids (Dictionary uid -> true), seed, simple (calidad sencilla),
+## regiment (aspecto del regimiento: pintura, insignia y estrellas de las nuestras).
 func setup(encounter, opts: Dictionary = {}) -> void:
 	_gen += 1
 	_queue.clear()
@@ -135,6 +139,7 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 	board = encounter.board_size
 	_team_color = opts.get("team_color", _team_color)
 	_boss_uid = int(opts.get("boss_uid", -1))
+	_regiment = opts.get("regiment", {})
 	_simple = bool(opts.get("simple", _simple))
 	var crews: Dictionary = opts.get("crew_uids", {})
 	_fx.simple = _simple
@@ -171,6 +176,7 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 			"hp": unit.hp, "max_hp": unit.max_hp, "domain": unit.domain(),
 			"boss": unit.uid == _boss_uid, "crew": crews.has(unit.uid),
 			"team_color": _team_color,
+			"regiment": _regiment if unit.side == PLAYER else {},
 		})
 		toy.position = _world_of(unit.position)
 		# Cada bando mira al otro: los nuestros al fondo, la Regencia hacia aca.

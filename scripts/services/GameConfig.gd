@@ -127,6 +127,15 @@ var building_limits := {
 	"fountain": 5,
 	"road": -1,
 	"farm": 6,
+	# Edificios utiles de la 1.1: el tope de era 1 (lo que sube con la era esta
+	# en building_limits_by_era, y la prueba exige que la era 1 coincida).
+	"windmill": 2,
+	"silo": 2,
+	"tavern": 1,
+	"carpentry": 1,
+	"well": 3,
+	"lighthouse": 1,
+	"fuel_depot": 2,
 }
 
 # ── Building Prerequisites (must have at least 1 of each listed) ──
@@ -144,6 +153,14 @@ var building_prerequisites := {
 	"barracks": ["foundry", "sawmill"],
 	"tower": ["barracks"],
 	"headquarters": ["barracks", "refinery"],
+	# Edificios utiles de la 1.1: cada uno pide lo que mejora o de lo que vive.
+	"windmill": ["farm"],
+	"silo": ["farm"],
+	"tavern": ["house", "farm"],
+	"carpentry": ["sawmill"],
+	"well": ["house"],
+	"lighthouse": ["warehouse"],
+	"fuel_depot": ["refinery"],
 }
 
 # ── Deposit Placement Rules (extractor next to its deposit) ──
@@ -253,6 +270,14 @@ var building_processes := {
 		 "cost": {"oil": 15}, "produces": {"oil": 25}},
 		{"id": "chemical_processing", "name": "PROC_CHEMICAL_PROCESSING", "duration": 50.0,
 		 "cost": {"oil": 20, "steel": 10}, "produces": {"oil": 18, "gold": 25}},
+	],
+	# Carpinteria (1.1): tablones sin ocupar el Aserradero, algo mas deprisa, y
+	# muebles que se venden por oro. El Nucleo no los repite (core_skip_workshops).
+	"carpentry": [
+		{"id": "carpentry_planks", "name": "PROC_CARPENTRY_PLANKS", "duration": 15.0,
+		 "cost": {"wood": 20}, "produces": {"planks": 5}},
+		{"id": "carpentry_furniture", "name": "PROC_CARPENTRY_FURNITURE", "duration": 35.0,
+		 "cost": {"wood": 15, "planks": 2}, "produces": {"gold": 30}},
 	],
 }
 
@@ -400,7 +425,7 @@ const CORE_MINING_PREFIX := "core_"
 func get_core_extra_processes() -> Array:
 	var result: Array = []
 	for building_id in building_processes:
-		if building_id == "nucleo":
+		if building_id == "nucleo" or building_id in core_skip_workshops:
 			continue
 		for proc in building_processes[building_id]:
 			var copy: Dictionary = proc.duplicate(true)
@@ -1243,27 +1268,29 @@ func rank_title_key(rank: int) -> String:
 ##   patterns    fondos de la bandera que se pueden elegir (COLONY_PATTERNS)
 ##   emblems     emblemas de la bandera (COLONY_EMBLEMS)
 ##   colors      colores de la bandera (colony_colors)
+##   paints      pinturas del regimiento (REGIMENT_PAINTS; solo cosmetico)
 ## No toca los edificios basicos ni sus eras (la linea jugable sigue igual): el
 ## rango abre decoraciones, huecos extra y cosmeticos. Un edificio nuevo y
 ## opcional entra aqui con `buildings`.
 var rank_rewards := {
 	1: {"patterns": ["plain", "bands_h", "bands_v", "halves_h", "cross"],
 		"emblems": ["none", "gear", "anchor", "wheat", "hammer"],
-		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"]},
-	2: {"buildings": ["garden", "flower_planter", "hay_cart"], "emblems": ["tower"]},
-	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"], "buildings": ["bonfire"]},
+		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"],
+		"paints": ["plain"]},
+	2: {"buildings": ["garden", "flower_planter", "hay_cart", "well"], "emblems": ["tower"]},
+	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"], "buildings": ["bonfire", "windmill"], "paints": ["stripes"]},
 	4: {"storage": 0.02, "emblems": ["star"]},
 	5: {"buildings": ["fountain", "flagpole"]},
-	6: {"production": 0.01, "patterns": ["diagonal", "saltire"]},
+	6: {"production": 0.01, "patterns": ["diagonal", "saltire"], "paints": ["spots"]},
 	7: {"colors": ["copper", "red"]},
 	8: {"buildings": ["statue"], "storage": 0.02},
-	9: {"production": 0.01, "patterns": ["quartered"], "emblems": ["wrench"]},
+	9: {"production": 0.01, "patterns": ["quartered"], "emblems": ["wrench"], "paints": ["desert"]},
 	10: {"limit": {"house": 2}},
 	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
-	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
+	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"], "paints": ["snow"]},
 	13: {"buildings": ["palm_trees"], "emblems": ["ship"]},
 	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
-	15: {"production": 0.01, "patterns": ["stripes"]},
+	15: {"production": 0.01, "patterns": ["stripes"], "paints": ["parade"]},
 	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
 	17: {"limit": {"house": 2}, "patterns": ["waves"]},
 	18: {"production": 0.02, "patterns": ["checks"], "emblems": ["airship"]},
@@ -1312,6 +1339,18 @@ const COLONY_LEGACY_FLAGS := {
 	"plain": ["plain", "none"], "band": ["bands_h", "none"], "cross": ["cross", "none"],
 	"diagonal": ["diagonal", "none"], "gear": ["plain", "gear"], "chevron": ["hoist_triangle", "none"],
 }
+
+# ── Regimiento (solo cosmetico: ArmyManager guarda "regiment", RegimentLook lo
+# pinta; docs/15 §12) ──
+# El ejercito del jugador lleva nombre, color, emblema y pintura, y gana
+# estrellas por combates ganados. Nada de esto cambia una sola cifra del combate.
+# Color y emblema salen de las piezas de la bandera (colony_colors /
+# COLONY_EMBLEMS, abiertas por rango); las pinturas, de rank_rewards "paints".
+
+## Pinturas, en orden de la galeria. "plain" = liso (el de siempre).
+const REGIMENT_PAINTS := ["plain", "stripes", "spots", "desert", "snow", "parade"]
+## Combates ganados para cada estrella (1, 2 y 3 estrellas).
+var regiment_star_wins := [10, 25, 50]
 
 ## Bonos del rango, aplicados en tiempo de ejecucion por RankManager (asigna el
 ## total del rango actual; nunca suma sobre lo que habia).
@@ -1380,6 +1419,21 @@ var construction_style := {
 		"frame": "basin", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 	"statue": {"piles": ["stone", "stone", "sacks"], "fence": "canvas", "tarp": Color(0.58, 0.54, 0.46),
 		"frame": "plinth", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.77, 0.59, 0.16)},
+	# Edificios utiles de la 1.1 (feat/edificios-utiles-1).
+	"windmill": {"piles": ["stone", "planks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.55, 0.40),
+		"frame": "tower", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"silo": {"piles": ["rivets", "sacks", "planks"], "fence": "sheet", "tarp": Color(0.36, 0.40, 0.46),
+		"frame": "tanks", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.30, 0.60, 0.22)},
+	"tavern": {"piles": ["bricks", "planks", "drums"], "fence": "planks", "tarp": Color(0.66, 0.42, 0.20),
+		"frame": "gable", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.82, 0.63, 0.20)},
+	"carpentry": {"piles": ["logs", "planks", "sawdust"], "fence": "dark_planks", "tarp": Color(0.46, 0.38, 0.24),
+		"frame": "hall", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.80, 0.16, 0.10)},
+	"well": {"piles": ["stone", "gravel", "pipes"], "fence": "planks", "tarp": Color(0.30, 0.45, 0.58),
+		"frame": "basin", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
+	"lighthouse": {"piles": ["stone", "beams", "sandbags"], "fence": "canvas", "tarp": Color(0.55, 0.12, 0.10),
+		"frame": "tower", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.95, 0.74, 0.12)},
+	"fuel_depot": {"piles": ["drums", "pipes", "rivets"], "fence": "sheet", "tarp": Color(0.18, 0.18, 0.20),
+		"frame": "tanks", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.95, 0.85, 0.20)},
 	# Decoraciones baratas (feat/decoraciones-1): obras pequenas y rapidas.
 	"lamp_post": {"piles": ["rivets", "stone", "planks"], "fence": "planks", "tarp": Color(0.36, 0.34, 0.40),
 		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.93, 0.78, 0.32)},
@@ -1425,6 +1479,7 @@ var building_active_fx := {
 	"nucleo": "smoke", "gold_mine": "smoke", "foundry": "smoke", "refinery": "smoke",
 	"headquarters": "smoke", "barracks": "smoke", "sawmill": "dust",
 	"warehouse": "glow", "market": "glow", "laboratory": "glow", "tower": "glow",
+	"tavern": "smoke", "carpentry": "dust", "lighthouse": "glow", "fuel_depot": "glow",
 }
 ## Una ruina se hunde esta fraccion de su altura en el suelo y se inclina estos
 ## radianes: con el hollin y los escombros, se distingue de lejos.
@@ -1529,6 +1584,22 @@ var building_lot_style := {
 		"props": ["bench", "lamp", "planter", "bench"], "count": [3, 5]},
 	"statue": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic",
 		"props": ["lamp", "planter", "bench"], "count": [3, 5]},
+	# Edificios utiles de la 1.1 (feat/edificios-utiles-1). Patio 0,3 como los
+	# demas: el modelo (UtilityToys / su horneado) mide 2,8 x 2,8 m.
+	"windmill": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "residential",
+		"props": ["sacks", "cart", "sacks", "barrel", "crate"], "count": [3, 5]},
+	"silo": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "residential",
+		"props": ["sacks", "crate", "sacks", "barrel"], "count": [3, 5]},
+	"tavern": {"ground": "slabs", "trim": "curb", "yard": 0.3, "accent": "civic",
+		"props": ["bench", "barrel", "lamp", "planter", "barrel"], "count": [4, 6]},
+	"carpentry": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "industrial",
+		"props": ["planks", "logs", "planks", "crate", "lamp"], "count": [4, 6]},
+	"well": {"ground": "slabs", "trim": "curb", "yard": 0.3, "accent": "civic",
+		"props": ["planter", "bench", "lamp", "barrel"], "count": [3, 5]},
+	"lighthouse": {"ground": "plate", "trim": "sandbags", "yard": 0.3, "accent": "military",
+		"props": ["lamp", "ammo", "sacks", "barrel"], "count": [3, 5]},
+	"fuel_depot": {"ground": "plate", "trim": "pipes", "yard": 0.3, "accent": "industrial",
+		"props": ["drums", "valve", "drums", "barrel", "crate"], "count": [4, 6]},
 	# Decoraciones baratas (feat/decoraciones-1): suelo, bordillo y una o dos
 	# piezas de atrezo como mucho (la decoracion ya es atrezo, y cada pieza de
 	# mas cuesta en la tablet).
@@ -1702,6 +1773,16 @@ var building_limits_by_era := {
 	"barracks": [3, 4, 5],
 	"warehouse": [5, 5, 5],
 	"tower": [6, 6, 6],
+	# Edificios utiles de la 1.1 (feat/edificios-utiles-1, doc 21 §6.3). El Faro
+	# es unico; el Deposito de combustible no se levanta antes de la Refineria
+	# (prerrequisito), asi que sus topes de era 1-2 no se ven.
+	"windmill": [2, 3, 4],
+	"silo": [2, 4, 5],
+	"tavern": [1, 2, 3],
+	"carpentry": [1, 2, 2],
+	"well": [3, 5, 6],
+	"lighthouse": [1, 1, 1],
+	"fuel_depot": [2, 2, 3],
 }
 
 ## El tope de `building_id` AHORA: la era en curso (ProgressionManager), mas los
@@ -2322,7 +2403,8 @@ func get_storm_severity_bonus() -> int:
 	return GameMode.storm_severity_bonus()
 
 func get_storm_warning() -> float:
-	return get_duration(storm_warning)
+	# El Faro alarga el Aviso (storm_warning_bonus, lo pone UtilityEffects).
+	return get_duration(storm_warning + storm_warning_bonus)
 
 func get_storm_ash_duration() -> float:
 	return get_duration(storm_ash_duration)
@@ -2332,6 +2414,46 @@ func get_storm_duration() -> float:
 
 func get_storm_tick_interval() -> float:
 	return get_duration(storm_tick_interval)
+
+# ── La Orden de la Regencia y el barometro (doc 21 §2.2, D5 = A) ──
+# Claves NUEVAS. No tocan ninguna storm_* de antes: la curva del Diezmo, la
+# escolta y el daño siguen donde estaban, y la rama de balance es su duena.
+
+## Tope de la rebaja total del proximo Diezmo, sumando todas las fuentes. Con
+## 0,5 el Diezmo nunca baja de la mitad: prepararse ayuda, no lo borra.
+var storm_order_discount_max := 0.5
+## Lo que rebaja entregar el encargo de la Regencia.
+var storm_order_delivery_pct := 0.15
+## Lo que rebaja ganar una escaramuza durante la calma. Lo aplica la rama de
+## escaramuzas llamando a StormManager.add_tithe_discount("expedicion", esto).
+var storm_order_expedition_pct := 0.10
+## La tarjeta ensena la via de la mision solo con esto puesto. Encendido desde
+## que la 1.0 la conecta: echar el campamento de la Regencia (incursion outpost)
+## llama a StormManager.add_tithe_discount("expedicion", ...) en CombatManager._apply_loot.
+var storm_order_expedition_way := true
+## El encargo de la Regencia: cuanto pide de cada cosa (materiales primero; la
+## madera y el oro solo si aun no hay ningun material). Se sortea uno por calma.
+var storm_order_delivery_base := {
+	"planks": 10, "ingots": 6, "beams": 6, "fuel": 8,
+	"wood": 80, "gold": 60,
+}
+## Cuanto crece el encargo por tormenta pasada (0,2 = un 20 % mas cada una), y su
+## tope como multiplicador.
+var storm_order_delivery_growth := 0.2
+var storm_order_delivery_growth_max := 2.0
+## Las torres que pide la tercera via ("ten 2 torres en pie"). Solo es la meta que
+## se ensena: lo que protegen sigue siendo get_storm_mitigation().
+var storm_order_towers_goal := 2
+
+## El barometro de la calma: muestra "entre X e Y min" hasta el Aviso, nunca el
+## minuto exacto. El margen es +- esto (segundos de partida) alrededor de un
+## centro movido al azar hasta `storm_barometer_jitter` veces el margen. El
+## momento de verdad cae siempre dentro.
+var storm_barometer_margin := 60.0
+var storm_barometer_jitter := 0.5
+
+func get_storm_barometer_margin() -> float:
+	return get_duration(storm_barometer_margin)
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Las torres en el tablero del Diezmo ──
@@ -2685,6 +2807,8 @@ var game_mode_rules := {
 		"starting_resources_mult": 1.0,
 		"starting_resources": {},
 		"hidden_tips": [],
+		# El tablon de encargos (ContractManager, feat/encargos).
+		"contracts": true,
 	},
 	# Relajado: sin Tormenta, sin Diezmo, sin asedio. Los eventos buenos siguen;
 	# los danos (tormenta menor, accidente, plaga, bandidos) no salen.
@@ -2719,6 +2843,8 @@ var game_mode_rules := {
 		"infinite_resources": true,
 		"all_unlocked": true,
 		"sandbox_tools": true,
+		# Con recursos infinitos un encargo no pide nada: sin tablon.
+		"contracts": false,
 		"starting_resources": {"gold": 20000, "steel": 20000, "oil": 20000, "wood": 20000, "food": 20000},
 		"hidden_tips": ["final_audit"],
 	},
@@ -2761,3 +2887,124 @@ var game_tier_rules := {
 ## se rellena hasta este suelo cada vez que se gasta.
 var sandbox_storage_cap := 1000000
 var sandbox_resource_floor := 20000
+
+# ── Encargos (feat/encargos, doc 21 §2.3 y doc 14 §P3) ──
+## Tablon de 3 encargos, uno por fuente. Modelo: scripts/economy/ContractBoard.gd;
+## servicio: ContractManager. Valores sin medir con la sonda de linea.
+
+## La era desde la que encarga cada fuente. La Regencia llega con el acero
+## (Fundicion, era 2), que es cuando se arma el reloj de la Tormenta.
+var contract_source_era := {"regency": 2, "neighbors": 1, "smuggler": 1}
+## Segundos de juego (con get_duration) hasta el primer encargo de cada fuente,
+## contados desde que la fuente se abre.
+var contract_first_delay := {"regency": 45.0, "neighbors": 90.0, "smuggler": 360.0}
+## Espera tras entregar, dejar pasar o rechazar un encargo.
+var contract_cooldown := 120.0
+## Si ninguna plantilla cabe aun (falta desbloquear lo que piden), se vuelve a
+## mirar tras esta espera.
+var contract_retry_delay := 30.0
+## Cada era por encima de la de la plantilla, lo pedido y lo pagado en recursos
+## crece este tanto (era +1 = x1,5; +2 = x2). Moral, colonos y rebaja no crecen.
+var contract_era_step := 0.5
+## Reputacion (solo Gobernador): suelo, y cuanto recorta cada punto los premios
+## del siguiente encargo de esa fuente (-3 x 0,15 = premios al 55 %).
+var contract_reputation_min := -3
+var contract_reputation_step := 0.15
+## La Regencia sin Diezmo (Constructor) o sin StormManager.add_tithe_discount
+## paga esto en oro (por la escala de era) en vez de la rebaja.
+var contract_tithe_fallback_gold := 150
+## XP de rango por encargo cumplido (doc 21 §2.5).
+var contract_rank_xp := 20
+## Plantillas por fuente. `era` = era minima y de referencia para la escala;
+## `ask` = lo que piden (recurso -> cantidad); `minutes` = plazo; `reward`:
+##   gold/wood/steel/oil/food/... -> a la bolsa (o al taller)
+##   morale          -> PopulationManager.adjust_morale
+##   colonists       -> PopulationManager.add_colonists (solo si existe)
+##   tithe_discount  -> % de rebaja del proximo Diezmo (StormManager.add_tithe_discount)
+var contract_templates := {
+	# Los vecinos: piden lo de casa y pagan en moral y gente.
+	"neighbors": [
+		{"id": "nb_wood", "era": 1, "ask": {"wood": 60}, "minutes": 4.0, "reward": {"morale": 8}},
+		{"id": "nb_food", "era": 1, "ask": {"food": 40}, "minutes": 4.0, "reward": {"morale": 6, "gold": 30}},
+		{"id": "nb_gold", "era": 1, "ask": {"gold": 80}, "minutes": 3.0, "reward": {"morale": 10}},
+		{"id": "nb_planks", "era": 1, "ask": {"planks": 6}, "minutes": 5.0, "reward": {"morale": 12}},
+		{"id": "nb_planks_people", "era": 1, "ask": {"planks": 8}, "minutes": 5.0, "reward": {"colonists": 3}},
+		{"id": "nb_food_people", "era": 1, "ask": {"food": 60}, "minutes": 5.0, "reward": {"colonists": 2}},
+	],
+	# El contrabandista del puerto: pide materiales y paga en oro o en lo que
+	# aun escasea.
+	"smuggler": [
+		{"id": "sm_wood", "era": 1, "ask": {"wood": 60}, "minutes": 4.0, "reward": {"gold": 140}},
+		{"id": "sm_planks", "era": 1, "ask": {"planks": 10}, "minutes": 5.0, "reward": {"gold": 150}},
+		{"id": "sm_ingots", "era": 1, "ask": {"ingots": 6}, "minutes": 5.0, "reward": {"gold": 170}},
+		{"id": "sm_steel_for_wood", "era": 2, "ask": {"wood": 100}, "minutes": 5.0, "reward": {"steel": 40}},
+		{"id": "sm_beams", "era": 2, "ask": {"beams": 8}, "minutes": 6.0, "reward": {"gold": 300}},
+		{"id": "sm_oil_for_steel", "era": 2, "ask": {"steel": 60}, "minutes": 6.0, "reward": {"oil": 40}},
+		{"id": "sm_fuel", "era": 3, "ask": {"fuel": 10}, "minutes": 6.0, "reward": {"gold": 320}},
+	],
+	# La Regencia: pide acero y lo que sale de el. Cumplir rebaja el proximo Diezmo.
+	"regency": [
+		{"id": "rg_steel", "era": 2, "ask": {"steel": 80}, "minutes": 5.0, "reward": {"tithe_discount": 10}},
+		{"id": "rg_beams", "era": 2, "ask": {"beams": 10}, "minutes": 6.0, "reward": {"tithe_discount": 10}},
+		{"id": "rg_ingots", "era": 2, "ask": {"ingots": 8}, "minutes": 6.0, "reward": {"tithe_discount": 10}},
+		{"id": "rg_oil", "era": 3, "ask": {"oil": 60}, "minutes": 6.0, "reward": {"tithe_discount": 10}},
+		{"id": "rg_fuel", "era": 3, "ask": {"fuel": 10}, "minutes": 7.0, "reward": {"tithe_discount": 15}},
+	],
+}
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Edificios utiles de la 1.1 (feat/edificios-utiles-1, doc 21 §6.3) ──
+# ══════════════════════════════════════════════════════════════════════
+# Molino, Silo, Taberna, Carpinteria, Pozo, Faro y Deposito de combustible.
+# Sus areas de efecto se calculan al construir, terminar, demoler, arruinar o
+# reparar (UtilityEffects.refresh, nunca por frame) y quedan como meta en los
+# edificios, igual que `connected` y `staffed`. Nada de esto viaja en el save:
+# sale de los edificios, que ya van en el.
+# Las distancias son en casillas, de borde a borde de las huellas (Chebyshev).
+
+## Molino: las Granjas a esta distancia rinden +`windmill_farm_bonus`. Dos
+## molinos no suman: una Granja cuenta el mejor (uno).
+var windmill_radius := 4
+var windmill_farm_bonus := 0.2
+
+## Silo: comida que guarda cada uno fuera de la bolsa compartida.
+var silo_food_storage := 300
+## Silo en Gobernador (estropeado activo): con al menos uno en pie, lo cosechado
+## en una Granja tarda esto mas en echarse a perder.
+var silo_spoil_delay_mult := 1.5
+
+## Deposito de combustible: petroleo que guarda cada uno fuera de la bolsa.
+var fuel_depot_oil_storage := 500
+
+## Taberna: en cada tic de consumo, cada Taberna con obreros y con una casa a
+## `tavern_radius` gasta esto; si puede pagarlo, sube la moral y, en el tic de
+## crecimiento, nace `tavern_growth_bonus` mas (hasta el tope de casas).
+var tavern_radius := 4
+var tavern_food_cost := 6
+var tavern_gold_cost := 4
+var tavern_morale := 2
+var tavern_growth_bonus := 1
+
+## Pozo: los edificios a `well_radius` reciben este tanto menos de dano de la
+## Tormenta (no se suma entre pozos), y al acabar la Tormenta recuperan esta
+## fraccion de su salud (los que no estan en ruinas).
+var well_radius := 3
+var well_storm_reduction := 0.2
+var well_repair_ratio := 0.15
+
+## Faro: segundos que alarga el Aviso de la Tormenta (uno basta: es unico).
+var lighthouse_warning_bonus := 20.0
+## Lo que alarga el Aviso ahora mismo (runtime, lo pone UtilityEffects).
+var storm_warning_bonus := 0.0
+## Multiplicador del tiempo hasta estropearse lo cosechado en Granjas (runtime).
+var food_spoil_delay_mult := 1.0
+
+## Talleres cuyas recetas NO repite el Nucleo (get_core_extra_processes): la
+## Carpinteria hace lo mismo que el Aserradero, el Nucleo ya lo ofrece por el.
+var core_skip_workshops := ["carpentry"]
+
+## Lo que tarda en estropearse lo acumulado en un edificio de este tipo.
+func spoil_after_for(building_id: String) -> float:
+	if building_id == "farm":
+		return spoil_after_seconds * maxf(1.0, food_spoil_delay_mult)
+	return spoil_after_seconds

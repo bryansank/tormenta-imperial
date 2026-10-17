@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**126 signals** in 30 categories (counted on 2026-10-14, after the skirmishes), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**132 signals** in 30 categories (counted on 2026-10-16: the 126 of 1.0, `regiment_changed` and the 5 of [Encargos](#encargos)), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -184,6 +184,7 @@ died, `population` what is left afterwards (never below the floor).
 | `army_upkeep_unpaid` | `gold_short: int` | ArmyManager | ArmyPanel, TutorialManager |
 | `unit_training_cancelled` | `unit_id: String, refunded: Dictionary` | ArmyManager | *(no listener)* |
 | `army_deserted` | `unit_id: String, count: int` | ArmyManager | PopulationManager |
+| `regiment_changed` | — | ArmyManager | RegimentCard (Cuartel) |
 
 `army_upkeep_unpaid` is the warning; `army_deserted` is the bill — sustained
 unpaid upkeep loses the most expensive unit first.
@@ -260,12 +261,17 @@ follow `StormCycle.Phase`.
 | `storm_ended` | `severity: int` | StormManager | ProcessManager, ArmyManager, StormHUD, StormSky |
 | `tithe_demanded` | `severity: int` | StormManager | TutorialManager |
 | `tithe_resolved` | `paid: bool, taken: Dictionary` | StormManager | StormHUD, HelperPanel, WarReportScreen, AuditDefeatScreen |
+| `storm_order_changed` | `fresh: bool` | StormManager | StormHUD |
 
 `storm_incoming` carries no severity on purpose — the warning window says the ash
 is on the horizon, and the size of the bill is only announced with `storm_started`.
 A warning that comes to nothing emits `storm_false_alarm(deferred)`, and `deferred`
 is the severity the next real storm inherits: postponed, not forgiven.
 `taken` on `tithe_resolved` is resource → amount.
+`storm_order_changed` fires when the Regency Order changes (new order, delivered, a
+discount added through `StormManager.add_tithe_discount()`); `fresh` is true only for a
+new order (clock armed, or after a Tithe), and the HUD opens its card then
+(docs/06 §Orden de la Regencia).
 
 ## Day and night
 
@@ -403,13 +409,32 @@ from it ([06-progression-victory.md](06-progression-victory.md) §Governor rank)
 | `governor_rank_up` | `rank: int, rewards: Dictionary` (merged `rank_rewards` of every rank crossed) | RankManager | RankPanel, ConstructionMenu, AudioManager |
 | `colony_identity_changed` | `colony_name: String, flag_spec: Dictionary` (ColonyFlag recipe: `pattern`, `emblem`, `colors` [field 1, field 2, emblem]) | RankManager (`set_colony()`, load) | RankPanel, ColonyFlag3D, ColonyFlag2D, ColonyByline (war reports, audit defeat, victory, board header) |
 
+## Encargos
+
+Los emite solo `ContractManager`, que publica lo que devuelve el modelo puro
+`ContractBoard` ([27-encargos.md](27-encargos.md)). `source` es `"regency"`,
+`"neighbors"` o `"smuggler"`; `contract` es el encargo entero (`id`, `source`,
+`template`, `ask`, `reward`, `seconds_total`, `seconds_left`).
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `contract_offered` | `source: String, contract: Dictionary` | ContractManager | *(no listener: el panel escucha `contract_board_changed`)* |
+| `contract_delivered` | `source: String, contract: Dictionary, reward: Dictionary` (ya pagado) | ContractManager (`deliver()`) | AudioManager (`milestone`) |
+| `contract_expired` | `source: String, contract: Dictionary, reputation: int` | ContractManager | *(no listener)* |
+| `contract_discarded` | `source: String, contract: Dictionary` | ContractManager (`discard()`) | *(no listener)* |
+| `contract_board_changed` | — | ContractManager (cualquier evento, `load_save_data()`, `reset()`) | ContractPanel |
+
+Los avisos al jugador van por `notification_posted` (nuevo encargo, cumplido, se
+acabo el plazo); la XP de rango (`contract_rank_xp`) la suma ContractManager con
+`RankManager.add_xp()`.
+
 ## Orphan signals
 
 Declared in `EventBus.gd` but not wired on one or both sides. Most are suppressed
 with `@warning_ignore("unused_signal")`, so the editor will not flag them; this
 list is the only record.
 
-**Of the 126 signals, at least 10** have a gap on one side or the other.
+**Of the 127 signals, at least 10** have a gap on one side or the other.
 
 ### Neither emitted nor consumed (3)
 

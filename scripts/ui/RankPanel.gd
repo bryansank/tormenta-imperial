@@ -293,6 +293,8 @@ static func reward_lines(rewards: Dictionary) -> Array:
 		out.append(Tr.t("LBL_RANK_REWARD_EMBLEM"))
 	if not rewards.get("colors", []).is_empty():
 		out.append(Tr.t("LBL_RANK_REWARD_COLOR"))
+	if not rewards.get("paints", []).is_empty():
+		out.append(Tr.t("LBL_RANK_REWARD_PAINT"))
 	return out
 
 # ── Aviso de ascenso ──

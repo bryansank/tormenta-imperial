@@ -162,6 +162,10 @@ signal unit_training_cancelled(unit_id: String, refunded: Dictionary)
 ## Desercion: al ejercito sin paga se le va la tropa, la mas cara primero.
 @warning_ignore("unused_signal")
 signal army_deserted(unit_id: String, count: int)
+## El regimiento cambio de nombre, color, emblema o pintura, o gano una
+## estrella. Solo cosmetico (ArmyManager.get_regiment_look()).
+@warning_ignore("unused_signal")
+signal regiment_changed()
 
 # ── Combat ──
 ## Emitted only by CombatManager. `side`: 0 = player, 1 = enemy.
@@ -266,6 +270,12 @@ signal storm_ended(severity: int)
 signal tithe_demanded(severity: int)
 @warning_ignore("unused_signal")
 signal tithe_resolved(paid: bool, taken: Dictionary)
+## La Orden de la Regencia cambio: encargo nuevo, entregado, o una rebaja del
+## Diezmo apuntada (StormManager.add_tithe_discount). `fresh` es true solo cuando
+## sale una Orden nueva (al armarse el reloj y tras cada Diezmo): el HUD abre la
+## tarjeta. Emitida solo por StormManager.
+@warning_ignore("unused_signal")
+signal storm_order_changed(fresh: bool)
 ## La guarnicion peleo sola: el Diezmo cayo con el tablero ocupado por una
 ## expedicion y la defensa se resolvio a ciegas (AutoResolver). `summary` es
 ## CombatManager.get_last_result(). Emitida solo por CombatManager, y es la UNICA
@@ -439,3 +449,25 @@ signal stock_spoiled(node: Node, lost: Dictionary)
 ## Se planto (o cambio) el cultivo de una Granja.
 @warning_ignore("unused_signal")
 signal crop_planted(node: Node, crop_id: String)
+
+# ── Encargos (feat/encargos) ──
+## ContractManager publica lo que devuelve el modelo puro ContractBoard. `source`
+## es "regency", "neighbors" o "smuggler"; `contract` es el encargo entero
+## ({id, source, template, ask, reward, seconds_total, seconds_left}).
+## Llego un encargo nuevo al tablon.
+@warning_ignore("unused_signal")
+signal contract_offered(source: String, contract: Dictionary)
+## Se entrego: lo pedido ya salio de la bolsa y `reward` ya se pago.
+@warning_ignore("unused_signal")
+signal contract_delivered(source: String, contract: Dictionary, reward: Dictionary)
+## Se acabo el plazo sin entregarlo. En Colono no castiga; en Gobernador baja
+## la reputacion con quien lo pidio (`reputation`, 0 a contract_reputation_min).
+@warning_ignore("unused_signal")
+signal contract_expired(source: String, contract: Dictionary, reputation: int)
+## El jugador lo rechazo ("No, gracias").
+@warning_ignore("unused_signal")
+signal contract_discarded(source: String, contract: Dictionary)
+## Algo cambio en el tablon (cualquiera de las de arriba, o una carga/reset).
+## El panel se repinta con esta.
+@warning_ignore("unused_signal")
+signal contract_board_changed()

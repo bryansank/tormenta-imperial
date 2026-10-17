@@ -139,6 +139,8 @@ func _check_arming() -> void:
 		return
 	if ProgressionManager.current_phase >= GameConfig.storm_arm_phase:
 		_armed = true
+		# La primera Orden sale con el reloj: desde la Fundicion hay a quien pedirle.
+		_ensure_order(true)
 
 ## Hay tormenta en marcha (cualquier fase que no sea la calma). Es la mitad de
 ## StormManager de la deuda de GameConfig: la tabla de balance no debe
@@ -167,7 +169,8 @@ func _on_halted_forever() -> void:
 func _on_final_audit_lost(_wave: int) -> void:
 	var worst: int = GameConfig.storm_severity_max
 	_damage_buildings(worst)
-	var taken: Dictionary = _collect_tithe(worst)
+	# Sin rebajas: esto no es la visita de la Orden, es el castigo del asedio.
+	var taken: Dictionary = _collect_tithe(worst, false)
 	EventBus.tithe_resolved.emit(false, taken)
 
 func _on_phase_advanced(_phase: int) -> void:
@@ -301,6 +304,7 @@ func _publish(events: Array) -> void:
 				_apply_storm_tick(int(event["phase"]))
 				EventBus.storm_tick.emit(int(event["phase"]), float(event["left"]))
 			"storm_ended":
+				_well_repairs()
 				EventBus.storm_ended.emit(int(event["severity"]))
 				EventBus.notification_posted.emit(
 					Tr.t("STORM_ENDED"), "info", UITheme.TEXT_DIM)
@@ -364,8 +368,30 @@ func _damage_buildings(severity: int) -> void:
 				return
 			var amount: int = GameConfig.get_storm_damage(
 				severity, BuildingHealth.get_max_health(node), towers)
+			# Un Pozo cerca (meta de UtilityEffects) quita parte del golpe.
+			var cover: float = float(node.get_meta("well_cover", 0.0))
+			if cover > 0.0:
+				amount = maxi(1, int(round(float(amount) * (1.0 - cover))))
 			BuildingHealth.damage_building(node, amount)
 			hits -= 1
+
+## Pasada la Tormenta, los Pozos (1.1) remiendan un poco lo que tienen cerca:
+## cada edificio herido, no en ruinas, con `well_cover` recupera
+## `well_repair_ratio` de su salud. Gratis: es el agua a mano, no la obra.
+func _well_repairs() -> int:
+	var healed := 0
+	for info in GridManager.buildings_view():
+		var node: Node = info.get("node")
+		if node == null or not is_instance_valid(node):
+			continue
+		if float(node.get_meta("well_cover", 0.0)) <= 0.0:
+			continue
+		if BuildingHealth.is_ruined(node) or not BuildingHealth.is_damaged(node):
+			continue
+		var amount := maxi(1, int(round(float(BuildingHealth.get_max_health(node)) * GameConfig.well_repair_ratio)))
+		if BuildingHealth.heal(node, amount) > 0:
+			healed += 1
+	return healed
 
 ## Los escalones de objetivos, del más prioritario al menos, ya filtrados de todo
 ## lo intocable. Público porque es la regla que hay que poder auditar sin
@@ -552,11 +578,15 @@ func _pay_tithe(severity: int) -> void:
 ## la gente es lo que hace que el Diezmo se lea como una tasación y no como un
 ## saqueo: los Tasadores embargan bienes, y solo cuando no quedan bienes anotan
 ## personas.
-func _collect_tithe(severity: int) -> Dictionary:
+func _collect_tithe(severity: int, apply_discount: bool = true) -> Dictionary:
 	var taken: Dictionary = {}
 	var debt: int = GameConfig.get_tithe_debt(
 		severity, ProgressionManager.current_era, ResourceManager.get_total_stored(),
 		storms_survived() == 0)
+	# Las rebajas de la Orden (entrega, escaramuza...) recortan la deuda entera,
+	# porcentaje y Cuota Minima juntos, antes de empezar a cobrar.
+	if apply_discount and _cycle != null:
+		debt = _cycle.discounted(debt)
 
 	debt -= _take_from_stores(debt, taken)
 	if debt <= 0:
@@ -665,6 +695,8 @@ func _settle(repelled: bool = false) -> void:
 		return
 	_morale_debt = 0.0
 	_publish(_cycle.settle_tithe(_industrial_footprint(), ProgressionManager.current_era, repelled))
+	# settle_tithe() ya tiro la Orden vieja: la de la calma que empieza.
+	_ensure_order(true)
 
 ## How much smoke the base makes. This is what the Regency actually measures, and
 ## what decides how hard the next storm hits.
@@ -721,6 +753,10 @@ func load_save_data(data: Dictionary) -> void:
 		else:
 			_on_trial_phase(_trial.phase)
 	_tithe_to_resume = not _halted and _cycle.is_collecting()
+	# Un guardado de antes de la Orden llega sin encargo: se sortea uno sin abrir
+	# la tarjeta (no es una calma nueva, es la de siempre que ahora se ve).
+	_ensure_order(false)
+	EventBus.storm_order_changed.emit(false)
 
 ## El Diezmo que la carga trajo pendiente se reclama cuando la escena ya escucha,
 ## y diferido para ir detras de cualquier otro oyente de game_load_completed (la
@@ -762,6 +798,135 @@ func reset() -> void:
 	_trial = null
 	_trial_done = false
 	GameConfig.event_production_multiplier = 1.0
+
+# ── La Orden de la Regencia (doc 21 §2.2; docs/06 §Orden de la Regencia) ──
+#
+# Cada calma, la Regencia dice lo que se llevara en la proxima visita y como
+# pagar menos. El estado (rebajas, encargo, barometro) vive en StormCycle y viaja
+# en el guardado `storm`; aqui solo se decide quien puede verlo y se cobra.
+
+## Hay Orden que ensenar: reloj armado, con Diezmo en este modo y sin parar.
+func order_visible() -> bool:
+	return is_armed() and not _on_demand and GameMode.tithe_enabled() \
+		and not _halted and _cycle != null
+
+## API PUBLICA para cualquier fuente de rebaja (la rama de escaramuzas la usa al
+## ganar una salida: `add_tithe_discount("expedicion", GameConfig.storm_order_expedition_pct)`).
+## Aditiva y con tope (`storm_order_discount_max`); dura hasta el proximo Diezmo.
+## `source` es un nombre corto y estable ("entrega", "expedicion", "contrato"...).
+## Avisa al jugador y emite `storm_order_changed`. Devuelve la rebaja total, o
+## -1.0 si no se apunto (sin Orden activa o con los Tasadores ya en la puerta).
+func add_tithe_discount(source: String, pct: float, notify: bool = true) -> float:
+	if not order_visible() or pct <= 0.0 or _cycle.is_collecting():
+		return -1.0
+	var before: float = _cycle.tithe_discount()
+	var total: float = _cycle.add_tithe_discount(source, pct)
+	if notify and total > before:
+		EventBus.notification_posted.emit(
+			Tr.t("STORM_ORDER_DISCOUNT") % [roundi((total - before) * 100.0), roundi(total * 100.0)],
+			"notice", UITheme.POSITIVE)
+	EventBus.storm_order_changed.emit(false)
+	return total
+
+## La rebaja total del proximo Diezmo (0..tope).
+func get_tithe_discount() -> float:
+	return _cycle.tithe_discount() if _cycle != null else 0.0
+
+## Lo que una fuente concreta ya ha rebajado en esta calma.
+func get_discount_from(source: String) -> float:
+	return _cycle.discount_from(source) if _cycle != null else 0.0
+
+## El encargo de esta calma ({"res", "amount", "done"}), copia. Vacio si no hay.
+func get_order() -> Dictionary:
+	return _cycle.order.duplicate() if _cycle != null else {}
+
+## Se puede entregar ya: hay encargo abierto, no estan cobrando y alcanza.
+func can_deliver_order() -> bool:
+	if not order_visible() or not _cycle.has_open_order() or _cycle.is_collecting():
+		return false
+	var type: int = ResourceManager.name_to_type(String(_cycle.order["res"]))
+	return type >= 0 and ResourceManager.get_amount(type) >= int(_cycle.order["amount"])
+
+## Paga el encargo y apunta su rebaja. true si se entrego.
+func deliver_order() -> bool:
+	if not can_deliver_order():
+		return false
+	var res: String = String(_cycle.order["res"])
+	var amount: int = int(_cycle.order["amount"])
+	if not ResourceManager.spend(ResourceManager.name_to_type(res), amount):
+		return false
+	var before: float = _cycle.tithe_discount()
+	_cycle.complete_order()
+	EventBus.notification_posted.emit(
+		Tr.t("STORM_ORDER_DELIVERED") % [amount, Tr.res_name(res),
+			roundi((_cycle.tithe_discount() - before) * 100.0)],
+		"notice", UITheme.POSITIVE)
+	EventBus.storm_order_changed.emit(false)
+	GameManager.request_save()
+	return true
+
+## El barometro de la calma ({"fill", "low", "high"}), o vacio si no toca: fuera
+## de la calma, sin reloj, con la Tormenta parada o en un modo sin ella.
+func get_barometer() -> Dictionary:
+	if _halted or _cycle == null or _on_demand or not (_armed and GameMode.storm_enabled()):
+		return {}
+	return _cycle.barometer()
+
+## Lo que pedira el proximo Diezmo, para la tarjeta. Con la severidad que la
+## colonia se ha ganado (`_cycle.severity`), NO con la efectiva: lo que dejo
+## pendiente una falsa alarma sigue sin decirse (puede llevarse algo mas).
+##   ratio / ratio_after   fraccion de lo guardado, antes y despues de rebajas
+##   floor / floor_after   la Cuota Minima (0 en la primera visita)
+##   escort                cuantos Tasadores bajan
+##   discount              la rebaja total
+func tithe_preview() -> Dictionary:
+	if _cycle == null:
+		return {}
+	var sev: int = clampi(_cycle.severity, 1, GameConfig.storm_severity_max)
+	var discount: float = _cycle.tithe_discount()
+	var ratio: float = GameConfig.get_tithe_ratio(sev) * GameMode.tithe_mult()
+	var floor_debt: int = GameConfig.get_tithe_debt(
+		sev, ProgressionManager.current_era, 0, storms_survived() == 0)
+	var escort: int = 0
+	for count in assessor_roster(sev).values():
+		escort += int(count)
+	return {
+		"ratio": ratio,
+		"ratio_after": ratio * (1.0 - discount),
+		"floor": floor_debt,
+		"floor_after": _cycle.discounted(floor_debt),
+		"escort": escort,
+		"discount": discount,
+	}
+
+## Las torres en pie y lo que quitan del daño, para la tercera via de la tarjeta.
+func tower_status() -> Dictionary:
+	var towers: int = _standing_towers()
+	return {
+		"standing": towers,
+		"goal": maxi(1, GameConfig.storm_order_towers_goal),
+		"mitigation": GameConfig.get_storm_mitigation(towers),
+		"goal_mitigation": GameConfig.get_storm_mitigation(maxi(1, GameConfig.storm_order_towers_goal)),
+	}
+
+## Sortea el encargo si falta. Pide materiales que la colonia ya sabe hacer; si
+## no hay ninguno, madera u oro. No pisa un encargo que ya existe (idempotente:
+## cargar dos veces no cambia la Orden).
+func _ensure_order(fresh: bool) -> void:
+	if not order_visible() or _cycle.is_collecting() or not _cycle.order.is_empty():
+		return
+	_cycle.roll_order(_order_candidates())
+	if not _cycle.order.is_empty():
+		EventBus.storm_order_changed.emit(fresh)
+
+func _order_candidates() -> Array:
+	var out: Array = []
+	for type in ResourceManager.MATERIALS:
+		if ResourceManager.is_unlocked(type):
+			out.append(ResourceManager.get_type_name(type))
+	if out.is_empty():
+		out = ["wood", "gold"]
+	return out
 
 # ── modos-de-juego ──
 
