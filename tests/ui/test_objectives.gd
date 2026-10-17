@@ -182,6 +182,11 @@ func _take(step: Dictionary) -> void:
 			TechTreeManager._apply_tech_bonus(TechTreeManager.get_tech(String(step["id"])))
 		"sell":
 			MarketManager.sell(String(step["id"]), int(step["amount"]))
+		"buy":
+			# Comprar comida con el oro que sobra (paso de hambre, 2026-10-12). El
+			# paso no tiene coste propio (step_cost), asi que _give ya vacio la
+			# bolsa: entra lo comprado, que es lo que hace pasar pagina.
+			ResourceManager.add(ResourceManager.name_to_type(String(step["id"])), int(step["amount"]))
 		"sortie":
 			# Sale y la gana: lo que cuenta aqui es que el panel pase pagina.
 			assert_bool(bool(CombatManager.can_launch({String(step["id"]): 1})["ok"])).is_true()
@@ -309,6 +314,11 @@ func test_a_summoned_siege_with_a_full_garrison_says_let_them_come() -> void:
 
 func test_a_summoned_siege_short_of_armour_asks_for_vehicles_first() -> void:
 	_summon_with({"vehicle": 2})
+	# El blindado pide 8 vigas desde balance/huecos: aqui estan, o el paso seria
+	# hacerlas (make, que tambien sirve al blindado). Y sin madera de sobra: con
+	# la gente al tope el panel gastaria lo que sobra en otra casa
+	# (house_room_step), que es otro caso.
+	ResourceManager.set_amounts({"wood": 0, "beams": 40})
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("train")
 	assert_str(String(step["id"])).is_equal("vehicle")
@@ -321,6 +331,8 @@ func test_after_a_lost_siege_the_panel_rebuilds_then_resummons() -> void:
 	ProgressionManager.final_audit.begin({"infantry": 3})
 	ProgressionManager.final_audit.lose()
 	ArmyManager.reset()
+	# Las vigas del blindado (balance/huecos), como en el caso de arriba.
+	ResourceManager.set_amounts({"wood": 0, "beams": 40})
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("rebuild")
 	assert_str(String(step["id"])).is_equal("vehicle")
@@ -337,6 +349,10 @@ func test_after_a_lost_siege_the_panel_rebuilds_then_resummons() -> void:
 func test_a_full_bag_waiting_on_a_slow_resource_upgrades_its_producer_with_the_surplus() -> void:
 	_a_running_base()
 	ResourceManager.set_warehouse_count(3)
+	# Las vigas del blindado (balance/huecos) ya hechas: lo que falta es solo el
+	# acero lento. Un material que falta no tiene productor que subir (sale del
+	# taller, paso "make").
+	ResourceManager.set_amounts({"beams": 40})
 	var target := {"kind": "train", "id": "vehicle", "count": Objectives.SIEGE_VEHICLES}
 	var upgrade := {"kind": "upgrade", "id": "foundry", "level": 2, "pick": "lowest"}
 	var need: Dictionary = Objectives.step_cost(target)
@@ -417,7 +433,10 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	var research: Array = []
 	var step: Dictionary = {}
 	var seen: Array = []
-	for i in range(60):
+	# Con la bolsa a cero tras cada paso (_give) el acero va lento y el panel pide
+	# antes fundiciones, refinerias y sus mejoras hasta los topes por era: el
+	# camino es largo, no un bucle (60 vueltas se quedaban cortas desde el 14-10).
+	for i in range(250):
 		step = Objectives.next_step()
 		seen.append("%s:%s" % [step.get("kind", ""), step.get("id", "")])
 		if String(step["kind"]) == "upgrade" and int(step.get("level", 0)) == 3:
@@ -431,7 +450,7 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 		"la mejora final se pidio sin pasar por las tecnologias de almacen").is_not_empty()
 	assert_str(String(research[0])).is_equal("log_1")
 	assert_str(String(step["kind"])).override_failure_message(str(seen)).is_equal("upgrade")
-	assert_int(int(step.get("level", 0))).is_equal(3)
+	assert_int(int(step.get("level", 0))).override_failure_message(str(seen) + str(step)).is_equal(3)
 	# Y con la holgura, la mejora ya no es el 100% de la bolsa.
 	assert_int(Objectives._cost_total(Objectives.step_cost(step))).is_less(ResourceManager.get_storage_cap())
 

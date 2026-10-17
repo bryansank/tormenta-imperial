@@ -253,7 +253,7 @@ static func _colony_sign(mk) -> void:
 	mk.box(Vector3(0, 1.0, 0.1), Vector3(1.55, 0.5, 0.04), C(S.CREAM))
 	mk.box(Vector3(0, 1.0, 0.13), Vector3(1.1, 0.1, 0.02), C(S.IRON))
 	mk.cyl(Vector3(0.7, 1.35, 0), 0.04, 0.9, C(S.IRON, 0.05), 4)
-	mk.ball(Vector3(-0.5, 0.18, 0.45), 0.24, C(S.GREEN, -0.05))
+	mk.ball(Vector3(-0.5, 0.24, 0.45), 0.24, C(S.GREEN, -0.05))
 
 ## Carro de heno: carro de madera con sus dos ruedas, el heno amontonado
 ## (lo exagerado), dos pacas y un saco al lado.
@@ -271,7 +271,7 @@ static func _hay_cart(mk, sack := true) -> void:
 	hay_bale(mk, Vector3(0.45, 0, -0.95), Vector3(0.8, 0.4, 0.5), 10.0)
 	hay_bale(mk, Vector3(0.95, 0, 0.75), Vector3(0.8, 0.4, 0.5), -25.0)
 	if sack:
-		mk.ball(Vector3(-0.9, 0.22, 0.85), 0.25, C(S.CREAM, -0.12), Vector3(0.9, 1.0, 0.8))
+		mk.ball(Vector3(-0.9, 0.25, 0.85), 0.25, C(S.CREAM, -0.12), Vector3(0.9, 1.0, 0.8))
 
 ## Hoguera: corro de piedras, troncos en tienda y la llama encendida (lo
 ## exagerado, brilla de noche sin luz real), con dos troncos para sentarse.

@@ -264,7 +264,8 @@ func test_front_plates_are_compact_except_the_focus_and_the_board_keeps_them() -
 	board.set_style(BoardScript.STYLE_BOARD)
 	for uid in [gun.uid, tank.uid, foot.uid]:
 		assert_float(board.toy(uid).plate_scale()).is_equal(1.0)
-		assert_float(board.toy(uid).plate_lift()).is_equal(0.0)
+		# Resta de dos alturas en coma flotante: cero con su ruido.
+		assert_float(board.toy(uid).plate_lift()).is_equal_approx(0.0, 0.0001)
 		assert_bool(board.toy(uid).is_plate_dimmed()).is_false()
 	# Y en el tablero vuelven las etiquetas en todos los objetivos.
 	board.show_state(gun.uid, [], targets, screen.target_hints(gun, targets))

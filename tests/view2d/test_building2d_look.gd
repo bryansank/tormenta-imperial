@@ -13,6 +13,7 @@ var _canvas: Node2D = null
 var _calls: Array = []
 
 func after_test() -> void:
+	ProductionManager.set_process(true)
 	if is_instance_valid(_canvas):
 		_canvas.queue_free()
 	_canvas = null
@@ -160,6 +161,10 @@ func _spawn_building(id: String, done: float) -> Node2D:
 	add_child(b)
 	var total := GameConfig.get_build_time(maxf(1.0, data.build_time))
 	ProductionManager.register_building(b, data, total * (1.0 - done))
+	# En modo dev la obra dura 2 s: con el 10 % que queda, los fotogramas de
+	# _settle() la podian terminar (segun lo rapido que fuera la maquina). El
+	# reloj de la obra se para; after_test() lo vuelve a poner.
+	ProductionManager.set_process(false)
 	return b
 
 func test_a_site_in_frame_phase_animates_crane_and_flag() -> void:

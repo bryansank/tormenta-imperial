@@ -75,6 +75,9 @@ const SURPLUS_TECH_PATH := ["ind_1", "mil_1", "log_1", "ind_2", "mil_2", "log_2"
 const ROOMY_BAG := 0.75
 ## Por encima de esta fraccion, si al paso le falta oro o madera, se vende.
 const CROWDED_BAG := 0.9
+## Lo que se vende de una vez con la bolsa clavada (_unclog_step): el oro que
+## entra paga la compra de lo que falta (_sell_step compra lotes de MIN_SALE).
+const PINNED_SALE := 300
 ## Lo minimo que merece la pena vender, y lo que no se vende nunca de madera
 ## (varios ciclos de comida).
 const MIN_SALE := 20
@@ -89,6 +92,11 @@ const MIN_NET_PER_SECOND := 0.05
 const SLOW_RESOURCE_SECONDS := 240.0
 ## Bolsa casi llena: por encima de esta fraccion se pide otro almacen.
 const FULL_BAG := 0.9
+## Si lo que falta para el paso tarda mas que esto, el panel ofrece algo util
+## pagado con lo que sobra (_while_saving_step) en vez de "espera" (2026-10-16).
+const WAIT_FILL_SECONDS := 90.0
+## Por debajo de esta moral, mientras se ahorra, se pide una decoracion.
+const DECORATE_BELOW_MORALE := 80
 
 const PRODUCER_OF := {
 	"food": "farm",
@@ -173,6 +181,21 @@ static func _support_or(target: Dictionary) -> Dictionary:
 		var trade: Dictionary = _sell_step(make)
 		if not trade.is_empty():
 			return trade
+		# Al taller le falta su receta y tarda en llegar (la madera de los
+		# tablones al entrar en la era 2, el petroleo del combustible en la 3):
+		# lo mismo que con cualquier paso que espera, otro productor de lo que
+		# frena o algo util con lo que sobra (2026-10-16, docs/22 §11). Sin esto
+		# el panel repetia "Fabrica tablones" durante 5-9 min sin poder darse.
+		if not missing_for(make).is_empty():
+			# La espera es la de todas las vueltas que pide el paso (los 100 de
+			# combustible del CG nv2 son 300 de petroleo), no la de una sola.
+			var whole: Dictionary = make.duplicate()
+			whole["runs"] = runs_for(make)
+			var help: Dictionary = _support_step(whole, target)
+			if not help.is_empty() and String(help.get("kind", "")) != "sell" \
+					and _workers_step(help).is_empty() \
+					and _workers_for(help) <= PopulationManager.get_free_workers():
+				return help
 		return make
 	var support: Dictionary = _support_step(target)
 	if support.is_empty():
@@ -240,14 +263,41 @@ static func _unclog_step(target: Dictionary) -> Dictionary:
 		if excess > best_excess:
 			best = res
 			best_excess = excess
-	if best == "":
-		return {}
 	# Lo que se vende vuelve como oro, que tambien ocupa bolsa: con la bolsa a
 	# rebosar, vender de golpe un quinto de la bolsa tiraba el oro que no cabia
 	# (hasta 8.000 de oro perdidos por partida, tools/line_probe.gd 2026-10-12).
 	# Se vende solo lo que cabe; si no cabe ni un poco, no se vende (la gente
 	# come y hace sitio en unos ciclos).
-	var amount: int = _sale_that_fits(best, mini(best_excess, maxi(MIN_SALE, cap / 5)))
+	var amount: int = _sale_that_fits(best, mini(best_excess, maxi(MIN_SALE, cap / 5))) if best != "" else 0
+	# La bolsa clavada (2026-10-16): ni un hueco libre, al paso no le falta oro
+	# y lo que falta espera fuera. Vender sin que quepa el oro es perder parte
+	# del precio, pero el oro de mas paga en el siguiente vistazo la compra de
+	# lo que falta, y comprar si hace sitio. Sin esto la sonda se quedaba hasta
+	# dos horas con la bolsa llena de acero mirando el petroleo del CG nv2.
+	var gold_spare: int = ResourceManager.get_amount(ResourceManager.Type.GOLD) \
+		- int(cost.get(ResourceManager.Type.GOLD, 0)) - _army_upkeep() * 2
+	if amount <= 0 and ResourceManager.get_free_space() < MIN_SALE \
+			and not missing_for(target).has("gold") and gold_spare < PINNED_SALE:
+		# Lo mas barato que sobre: cada unidad vendida pierde (precio - 1) de oro.
+		var cheap := ""
+		var cheap_price: int = 1 << 20
+		for res in ["food", "wood", "steel", "oil"]:
+			if not ResourceManager.is_unlocked_by_name(res):
+				continue
+			var res_keep: int = int(keep.get(res, 0))
+			# La comida de mucha gente es lo que clava la bolsa del final (101
+			# personas, 600 de comida y 4.104 de 4.104 ante el CG nv3): con la
+			# bolsa clavada se guardan tres ciclos, no ocho.
+			if res == "food":
+				res_keep = res_keep - PopulationManager.food_due() * 5
+			var spare: int = ResourceManager.get_amount(ResourceManager.name_to_type(res)) - res_keep
+			var price: int = MarketManager.get_sell_price(res)
+			if spare >= MIN_SALE and price < cheap_price:
+				cheap = res
+				cheap_price = price
+				amount = mini(spare, PINNED_SALE)
+		if cheap != "":
+			best = cheap
 	if amount <= 0:
 		return {}
 	return {"kind": "sell", "id": best, "amount": amount, "why": "OBJ_WHY_SELL"}
@@ -278,6 +328,11 @@ static func material_recipe(material: String) -> Dictionary:
 		if (proc.get("produces", {}) as Dictionary).has(material):
 			return proc
 	return {}
+
+## Cuantas vueltas del taller hacen falta para el `amount` de un paso "make".
+static func runs_for(step: Dictionary) -> int:
+	var per_run: int = int((material_recipe(String(step["id"])).get("produces", {}) as Dictionary).get(String(step["id"]), 1))
+	return maxi(1, int(ceil(float(int(step.get("amount", 1))) / float(maxi(1, per_run)))))
 
 ## Una casa, si `step` pide obreros que no hay ni van a nacer. {} si no hace falta.
 static func _workers_step(step: Dictionary) -> Dictionary:
@@ -401,7 +456,7 @@ static func _train_progress(entry: Dictionary) -> int:
 ##   2. el paso pide obreros que no hay y no va a haber: una casa;
 ##   3. el paso no cabe en la bolsa, o la bolsa esta a rebosar: un almacen;
 ##   4. lo que falta tarda demasiado en llegar: otro productor de ese recurso.
-static func _support_step(target: Dictionary) -> Dictionary:
+static func _support_step(target: Dictionary, outer: Dictionary = {}) -> Dictionary:
 	# 0. Lo que da de comer esta en ruinas: repararlo antes que levantar otro.
 	var ruined: Node = _ruined_producer()
 	if ruined != null:
@@ -431,6 +486,13 @@ static func _support_step(target: Dictionary) -> Dictionary:
 	var house: Dictionary = _workers_step(target)
 	if not house.is_empty():
 		return house
+	# La gente al tope y comida de sobra: otra vivienda, pagada con lo que el
+	# paso no pide. Va antes que esperar, este como este la bolsa: si no, las
+	# casas solo salian cuando un paso pedia obreros y ninguna partida pasaba
+	# de 13 de las 20 que deja la era 3 (2026-10-16, docs/22 §11).
+	var more_room: Dictionary = house_room_step(target, outer)
+	if not more_room.is_empty() and String(target.get("id", "")) != "house":
+		return more_room
 
 	var cost_total: int = _cost_total(step_cost(target))
 	var cap: int = ResourceManager.get_storage_cap()
@@ -465,11 +527,21 @@ static func _support_step(target: Dictionary) -> Dictionary:
 	var sell: Dictionary = _sell_step(target)
 	if not sell.is_empty():
 		return sell
+	# La bolsa a rebosar, al paso le falta algo y ni vender cabe (el oro de la
+	# venta no entra): lo que sobra se pasa al taller, que no ocupa bolsa. Sin
+	# esto una partida se quedo dos horas ante el CG nv3 con la bolsa llena de
+	# madera y petroleo y sin sitio para el oro que faltaba (2026-10-16).
+	var room: Dictionary = _make_room_step(target, outer)
+	if not room.is_empty():
+		return room
 
 	# Un productor mas solo si hay sitio para lo que va a producir: con la bolsa
 	# casi llena, otra fundicion es mas acero que se tira.
+	# La receta del taller (outer no vacio) espera un recurso que el paso gasta
+	# entero: otro productor no se tira aunque la bolsa vaya llena (el petroleo
+	# de los 400 de combustible del CG nv3, 2026-10-16).
 	var slow: String = _slowest_missing(target, net) \
-		if ResourceManager.get_total_stored() < int(float(cap) * ROOMY_BAG) else ""
+		if not outer.is_empty() or ResourceManager.get_total_stored() < int(float(cap) * ROOMY_BAG) else ""
 	if slow != "":
 		var more: Dictionary = _producer_step(slow, "OBJ_WHY_SLOW_%s" % slow.to_upper())
 		if not more.is_empty() and String(more["id"]) != String(target.get("id", "")):
@@ -480,48 +552,181 @@ static func _support_step(target: Dictionary) -> Dictionary:
 	# (lo que el paso no pide) se gasta en subir de nivel el productor de lo que
 	# frena: rinde mas, hace sitio en la bolsa y no retrasa el paso ni una unidad.
 	if slow == "":
-		var surplus: Dictionary = _surplus_upgrade_step(target, net)
+		var surplus: Dictionary = _surplus_upgrade_step(target, net, false, outer)
 		if not surplus.is_empty():
 			return surplus
-		var study: Dictionary = _surplus_research_step(target)
+		var study: Dictionary = _surplus_research_step(target, false, outer)
 		if not study.is_empty():
 			return study
+	# Mientras se ahorra, este como este la bolsa (2026-10-16): si lo que falta
+	# tarda, el panel no dice "espera" sino algo util pagado solo con lo que
+	# sobra. Era la mayoria de los huecos de mas de 3 min sin decidir nada: el
+	# blindado, los tablones del Cuartel y el combustible (docs/22 §11).
+	return _while_saving_step(target, net, outer)
+
+## Lo que se puede hacer mientras el paso espera recursos que tardan mas de
+## WAIT_FILL_SECONDS: subir el productor de lo que frena, investigar o una
+## decoracion si la moral flojea (la vivienda va antes, en _support_step). Todo pagado con lo que sobra: nada de esto retrasa el paso ni una
+## unidad (se guarda lo que cuestan el paso y `outer`, y dos sueldos de la tropa).
+## {} si el paso no espera, la espera es corta o no sobra para nada.
+static func _while_saving_step(target: Dictionary, net: Dictionary, outer: Dictionary = {}) -> Dictionary:
+	if _wait_seconds(target, net) < WAIT_FILL_SECONDS:
+		return {}
+	# Con la bolsa a rebosar el oro que sobra es lo que compra lo que falta
+	# (_sell_step): gastarlo aqui dejaba la bolsa clavada, llena de lo que el
+	# paso no pide y sin oro para comprar lo que si (2026-10-16).
+	if ResourceManager.get_total_stored() >= int(float(ResourceManager.get_storage_cap()) * CROWDED_BAG):
+		return {}
+	var surplus: Dictionary = _surplus_upgrade_step(target, net, true, outer)
+	if not surplus.is_empty():
+		return surplus
+	var study: Dictionary = _surplus_research_step(target, true, outer)
+	if not study.is_empty():
+		return study
+	return _decoration_step(target, outer)
+
+## Cuanto tarda en llegar lo que le falta al paso (lo mas lento), en segundos.
+## 0 si no le falta nada; INF si algo no llega nunca. Los materiales no cuentan:
+## los hace el taller (make_step_for).
+static func _wait_seconds(step: Dictionary, net: Dictionary) -> float:
+	var worst := 0.0
+	var missing: Dictionary = missing_for(step)
+	for res in missing:
+		if ResourceManager.is_material_name(String(res)):
+			continue
+		var rate: float = float(net.get(res, 0.0))
+		worst = maxf(worst, INF if rate <= 0.0 else float(missing[res]) / rate)
+	return worst
+
+## "Construye otra vivienda" cuando la gente esta al tope y la comida aguanta a
+## los que vendran (2026-10-16): hasta aqui solo se pedian casas cuando faltaban
+## obreros para un paso, y ninguna partida pasaba de 11 de las 20 que deja la
+## era 3. Pagada con lo que sobra. {} si hay aforo libre, la comida no llega, no
+## cabe otra (tope) o no sobra.
+static func house_room_step(target: Dictionary = {}, outer: Dictionary = {}) -> Dictionary:
+	if ProgressionManager.current_phase < GameConfig.Phase.SURVIVAL:
+		return {}
+	if PopulationManager.get_population() < PopulationManager.get_max_population():
+		return {}
+	var data: BuildingData = Rules.load_building_data("house")
+	if data == null:
+		return {}
+	# La comida tiene que dar para los que llegan: el saldo de ahora menos lo que
+	# comerian, y cuatro ciclos en el granero.
+	var newcomers: float = float(data.population_capacity * GameConfig.food_per_pop) \
+		* maxf(0.1, 1.0 - GameConfig.tech_consumption_reduction) / GameConfig.consumption_interval
+	if float(net_rates()["food"]) - newcomers < MIN_NET_PER_SECOND:
+		return {}
+	if ResourceManager.get_amount(ResourceManager.Type.FOOD) < PopulationManager.food_due() * 4:
+		return {}
+	var step: Dictionary = _build_step("house", "OBJ_WHY_HOUSE_ROOM")
+	if step.is_empty() or not _paid_with_surplus(step, target, outer):
+		return {}
+	return step
+
+## Una decoracion cuando la moral flojea (la moral pesa en la produccion y en el
+## asedio, docs/17): la mas barata que el rango abre y se paga con lo que sobra.
+static func _decoration_step(target: Dictionary, outer: Dictionary = {}) -> Dictionary:
+	if PopulationManager.get_morale() >= DECORATE_BELOW_MORALE:
+		return {}
+	for deco_id in ["garden", "fountain"]:
+		if not Rules.check_rank(deco_id):
+			continue
+		var step: Dictionary = _build_step(deco_id, "OBJ_WHY_DECORATE")
+		if not step.is_empty() and _paid_with_surplus(step, target, outer):
+			return step
 	return {}
+
+## Lo que hay que guardar para el paso (y para el paso de fuera, si el paso es
+## su receta de taller): lo mayor de los dos por recurso, y dos sueldos de tropa.
+static func _keep_for(target: Dictionary, outer: Dictionary = {}) -> Dictionary:
+	var keep: Dictionary = step_cost(target).duplicate()
+	if not outer.is_empty():
+		var more: Dictionary = step_cost(outer)
+		for type in more:
+			keep[type] = maxi(int(keep.get(type, 0)), int(more[type]))
+	keep[ResourceManager.Type.GOLD] = int(keep.get(ResourceManager.Type.GOLD, 0)) + _army_upkeep() * 2
+	return keep
+
+## Las recetas que sacan de la bolsa lo que sobra: material -> recurso que gasta.
+const ROOM_RECIPES := {"fuel": "oil", "planks": "wood", "beams": "steel", "ingots": "gold"}
+
+## "Fabrica combustible con el petroleo que sobra" cuando la bolsa esta a rebosar
+## y lo que le falta al paso no puede entrar. {} si hay sitio, al paso no le
+## falta nada de la bolsa o no sobra para ninguna receta.
+static func _make_room_step(target: Dictionary, outer: Dictionary = {}) -> Dictionary:
+	var cap: int = ResourceManager.get_storage_cap()
+	if ResourceManager.get_total_stored() < int(float(cap) * CROWDED_BAG):
+		return {}
+	var short := false
+	for res in missing_for(target):
+		if not ResourceManager.is_material_name(String(res)):
+			short = true
+	if not short:
+		return {}
+	var keep: Dictionary = _keep_for(target, outer)
+	var best: Dictionary = {}
+	var best_excess := 0
+	for material in ROOM_RECIPES:
+		var source: String = GameConfig.get_material_source(material)
+		if source == "" or Rules.count_building(source) < 1:
+			continue
+		var recipe: Dictionary = material_recipe(material)
+		var cost: Dictionary = recipe.get("cost", {})
+		if cost.is_empty():
+			continue
+		# Cuantas vueltas se pagan enteras con lo que sobra.
+		var runs: int = GameConfig.process_batch_max
+		for res_name in cost:
+			var type: int = ResourceManager.name_to_type(String(res_name))
+			var spare: int = ResourceManager.get_amount(type) - int(keep.get(type, 0))
+			runs = mini(runs, spare / maxi(1, int(cost[res_name])))
+		if runs < 1:
+			continue
+		var main_type: int = ResourceManager.name_to_type(String(ROOM_RECIPES[material]))
+		var excess: int = ResourceManager.get_amount(main_type) - int(keep.get(main_type, 0))
+		if excess > best_excess:
+			best_excess = excess
+			var per_run: int = int((recipe.get("produces", {}) as Dictionary).get(material, 1))
+			best = {"kind": "make", "id": material, "building": source, "amount": per_run * runs,
+				"why": "OBJ_WHY_MAKE_ROOM"}
+	return best
+
+## ¿Se paga `step` sin tocar lo que el paso necesita?
+static func _paid_with_surplus(step: Dictionary, target: Dictionary, outer: Dictionary = {}) -> bool:
+	var keep: Dictionary = _keep_for(target, outer)
+	var cost: Dictionary = step_cost(step)
+	for type in cost:
+		if ResourceManager.get_amount(type) - int(keep.get(type, 0)) < int(cost[type]):
+			return false
+	return true
 
 ## Mientras se ahorra con la bolsa casi llena: investigar con lo que sobra (lo
 ## que el paso no pide). Produccion primero, luego moral (pesa en el asedio,
 ## docs/17) y logistica. {} si no hay Laboratorio, ya se investiga algo, el paso
 ## no espera nada o no sobra para ninguna.
-static func _surplus_research_step(target: Dictionary) -> Dictionary:
+static func _surplus_research_step(target: Dictionary, any_bag: bool = false, outer: Dictionary = {}) -> Dictionary:
 	if Rules.count_building("laboratory") == 0 or TechTreeManager.is_researching():
 		return {}
-	if ResourceManager.get_total_stored() < int(float(ResourceManager.get_storage_cap()) * ROOMY_BAG):
+	if not any_bag and ResourceManager.get_total_stored() < int(float(ResourceManager.get_storage_cap()) * ROOMY_BAG):
 		return {}
 	if missing_for(target).is_empty():
 		return {}
-	var keep: Dictionary = step_cost(target).duplicate()
-	keep[ResourceManager.Type.GOLD] = int(keep.get(ResourceManager.Type.GOLD, 0)) + _army_upkeep() * 2
 	for tech_id in SURPLUS_TECH_PATH:
 		if TechTreeManager.is_researched(tech_id):
 			continue
 		if not TechTreeManager.get_missing_prerequisites(tech_id).is_empty():
 			continue
 		var step := {"kind": "research", "id": tech_id, "why": "OBJ_WHY_SURPLUS_RESEARCH"}
-		var cost: Dictionary = step_cost(step)
-		var ok := true
-		for type in cost:
-			if ResourceManager.get_amount(type) - int(keep.get(type, 0)) < int(cost[type]):
-				ok = false
-				break
-		if ok:
+		if _paid_with_surplus(step, target, outer):
 			return step
 	return {}
 
 ## Subir de nivel el productor del recurso que frena el paso, pagado solo con lo
 ## que sobra: cada recurso de la mejora sale de lo que hay por encima de lo que
 ## el paso cuesta. {} si nada frena, no hay productor que subir o no sobra.
-static func _surplus_upgrade_step(target: Dictionary, net: Dictionary) -> Dictionary:
-	if ResourceManager.get_total_stored() < int(float(ResourceManager.get_storage_cap()) * ROOMY_BAG):
+static func _surplus_upgrade_step(target: Dictionary, net: Dictionary, any_bag: bool = false, outer: Dictionary = {}) -> Dictionary:
+	if not any_bag and ResourceManager.get_total_stored() < int(float(ResourceManager.get_storage_cap()) * ROOMY_BAG):
 		return {}
 	var slow: String = _slowest_missing(target, net)
 	if slow == "":
@@ -537,14 +742,8 @@ static func _surplus_upgrade_step(target: Dictionary, net: Dictionary) -> Dictio
 		return {}
 	var step := {"kind": "upgrade", "id": building_id, "level": level + 1, "pick": "lowest",
 		"why": "OBJ_WHY_SURPLUS_UPGRADE"}
-	var keep: Dictionary = step_cost(target).duplicate()
-	# Y dos sueldos de la tropa, como en las compras (_sell_step).
-	keep[ResourceManager.Type.GOLD] = int(keep.get(ResourceManager.Type.GOLD, 0)) + _army_upkeep() * 2
-	var cost: Dictionary = step_cost(step)
-	for type in cost:
-		if ResourceManager.get_amount(type) - int(keep.get(type, 0)) < int(cost[type]):
-			return {}
-	return step
+	# Se guarda lo del paso y dos sueldos de la tropa, como en las compras.
+	return step if _paid_with_surplus(step, target, outer) else {}
 
 # ══════════════════════════════════════════════════════════════════════
 # Cuentas
@@ -612,8 +811,9 @@ static func step_cost(step: Dictionary) -> Dictionary:
 			return cost
 		"make":
 			var cost: Dictionary = {}
+			var runs: int = maxi(1, int(step.get("runs", 1)))
 			for res_name in material_recipe(String(step["id"])).get("cost", {}):
-				cost[ResourceManager.name_to_type(res_name)] = int(material_recipe(String(step["id"]))["cost"][res_name])
+				cost[ResourceManager.name_to_type(res_name)] = int(material_recipe(String(step["id"]))["cost"][res_name]) * runs
 			return cost
 		"train", "rebuild":
 			var cost: Dictionary = {}
@@ -743,7 +943,11 @@ static func _sell_step(target: Dictionary) -> Dictionary:
 		if fit > best_excess:
 			best = res
 			best_excess = fit
-	if best == "" or best_excess <= 0:
+	# Una venta de menos de MIN_SALE no saca a nadie de la bolsa llena: la
+	# sonda vendia 7 de comida cada 30 s durante minutos sin avanzar
+	# (2026-10-16). Entonces manda _make_room_step o lo que se hace mientras se
+	# ahorra, que si gastan.
+	if best == "" or best_excess < MIN_SALE:
 		return {}
 	return {"kind": "sell", "id": best, "amount": best_excess, "why": "OBJ_WHY_SELL"}
 
