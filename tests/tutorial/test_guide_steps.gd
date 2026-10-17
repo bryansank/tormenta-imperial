@@ -18,12 +18,15 @@ const ROAD := preload("res://data/buildings/road.tres")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 
 var _saved: Dictionary = {}
+const Plenty := preload("res://tests/tutorial/plenty.gd")
+var _plenty := Plenty.new()
 var _steps: Array = []
 var _finished: Array = []
 var _nodes: Array = []
 
 func before_test() -> void:
 	_saved = TutorialManager.get_save_data()
+	_plenty.park()
 	TutorialManager.reset()
 	GridManager.clear_all()
 	_steps.clear()
@@ -40,6 +43,7 @@ func after_test() -> void:
 		if is_instance_valid(n):
 			n.free()
 	TutorialManager.load_save_data(_saved)
+	_plenty.restore()
 
 func _on_step(step: String) -> void:
 	_steps.append(step)

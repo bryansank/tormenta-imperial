@@ -224,6 +224,7 @@ Sin botón de saltar, ningún paso puede quedarse pidiendo algo imposible. Cada 
 | Faltan recursos | Debajo del paso, "Te falta: 70 oro \| 50 madera" (`step_hint` con `OBJ_MISSING`, ≤ 8 palabras: el aserradero y la casa solo cuestan oro y madera) | `short_of_resources`, `the_panel_shows_the_missing_line` |
 | Faltan trabajadores | "Faltan trabajadores: construye antes una Casa." (`GUIDE_NEED_WORKERS`); la casa no pide trabajadores. Si ya hay sitio libre en las casas, debajo: "Llegan solos a tus casas, uno cada poco. Espera un momento." (`GUIDE_HOW_WORKERS_WAIT`) | `short_of_workers`, `short_of_workers_with_room_in_the_houses_says_to_wait` |
 | Cómo conseguir lo que falta (2026-10-16) | Debajo de "Te falta", una línea por recurso: madera → el icono del Aserradero; oro → el icono de la Mina, o sacarlo a mano de una veta si aún no hay Mina (`step_how`, `GUIDE_HOW_*`) | `short_of_resources_also_says_how_to_get_them` |
+| No llega para el edificio que toca (2026-10-17) | El paso deja de ser "Toca CONSTRUIR" y pasa a **consigue lo que falta** (`need_<edificio>`, §2.7): dice todo lo que falta y cómo conseguirlo, señala dónde, y vuelve solo al paso de construir | `test_short_of_resources_the_guide_waits_and_comes_back_by_itself` y siguientes |
 | El aserradero no produce (sin trabajadores, retirado, sin carretera) | En "recoger": "Tu Aserradero está parado: tócalo y mira por qué." (`GUIDE_HOW_STOPPED`) | — |
 | Táctil | Todos los pasos tienen texto con el dedo; lo que falta se dice igual | `touch_steps_all_resolve` |
 | Vista 2D | El bosque se busca en el generador registrado (`GameManager.map_generator()`, también `MapGenerator2D`) y su punto sin Camera3D | `the_2d_view_finds_the_forest_too` |
@@ -363,6 +364,42 @@ otra rama (`feat/danos-y-tormenta-corta`): aquí solo se explica.
 - En AYUDA: **Daños y reparar** (`guide_repair`, categoría Tormenta, oculta en
   Constructor). Y en Primeros pasos: **Girar**, **Mover** y **Derribar**
   (`guide_rotate`, `guide_move`, `guide_demolish`), con su variante de dedo.
+
+### 2.7 Consigue lo que falta (2026-10-17, rama `fix/tutorial-materiales`)
+
+Bug de la 1.0 (partida de Bryan): tras la Casa, el tutorial pedía un edificio detrás
+de otro (Mina, Mercado, Almacén, Laboratorio) sin esperar a que llegara para
+pagarlos. La marca seguía en CONSTRUIR, el botón del detalle salía apagado y lo que
+faltaba era una línea pequeña debajo; con pocos trabajadores ni eso: `step_hint`
+decía solo "construye antes una Casa" (ya hecha) y se callaba los recursos.
+
+**Causa:** `derive_step` no miraba si se podía pagar el edificio de la meta; el paso
+de abrir/elegir salía igual. **Arreglo:**
+
+- `guide_facts()` añade `short`: los edificios de las metas que ahora no se pueden
+  pagar (`TutorialManager.short_goals()` / `can_pay_now()`: trabajadores libres y todo
+  el coste, materiales del taller incluidos; tope, requisitos y rango no, eso lo pasa
+  de largo `goal_impossible_reason`).
+- `derive_step`: si el edificio de la meta está en `short` y no se lleva en la mano, el
+  paso es `need_<edificio>` (`GUIDE_NEED`: "Mina de oro: aún no puedes construirlo.
+  Primero consigue lo que falta:"). También en girar (la Casa) y en el tramo de
+  carretera. Cada segundo se vuelve a mirar: al tenerlo todo, vuelve solo a "Toca
+  CONSTRUIR".
+- Debajo, **todo** lo que falta (`step_hint`: trabajadores en una línea, recursos y
+  materiales en otra) y **cómo conseguir cada cosa** (`step_how`, que usa
+  `Objectives.how_to_get`): madera (del Aserradero, o a mano en un bosque), oro (de la
+  Mina, o a mano en una veta), comida/acero/petróleo (de su edificio, o construirlo),
+  materiales ("Tablones: toca tu Aserradero y pulsa «Serrar tablones»", o
+  "constrúyelo antes"), trabajadores (esperar si hay sitio, si no otra Casa).
+- La marca señala dónde (`need_target`): el productor de lo primero que falta (o su
+  obra), el bosque o la veta si aún no hay productor, CONSTRUIR si hace falta otra Casa.
+
+Fuera del tutorial: **¿QUÉ HACER?** dice todo lo que impide la obra
+(`Objectives.blocker` usa `PlacementRules.block_reasons`, no solo lo primero) y debajo
+cómo conseguirlo (`describe`). Al colocar, el **fantasma** sale rojo si no llega para
+pagarlo (3D y 2D), y con el dedo, al apuntar a un sitio válido sin poder pagarlo, el
+aviso dice qué falta (`PlacementAssist.move_to`). CONSTRUIR ya lo decía (coste en
+rojo, `block_reasons_short` junto al botón). Balance sin tocar.
 
 ---
 

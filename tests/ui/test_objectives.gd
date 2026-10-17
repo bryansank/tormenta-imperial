@@ -590,3 +590,45 @@ func test_the_siege_towers_follow_the_crew_cap() -> void:
 	GameConfig.storm_tower_garrison_max = 4
 	assert_int(Objectives.entry_count(entry)).is_equal(4)
 	GameConfig.storm_tower_garrison_max = saved
+
+# ── Lo que falta, y como conseguirlo (2026-10-17, fix/tutorial-materiales) ──
+
+func test_the_build_blocker_lists_everything_missing_not_just_the_first_thing() -> void:
+	# Sin trabajadores libres y sin oro: antes solo salia "Sin trabajadores
+	# disponibles" y lo que faltaba de recursos quedaba escondido.
+	PopulationManager._population = 0
+	PopulationManager._used_workers = 0
+	ResourceManager.set_amounts({"gold": 0, "wood": 0})
+	var block: String = Objectives.blocker({"kind": "build", "id": "market"})
+	assert_str(block).contains(Tr.t("LBL_NEEDS_WORKERS") % [1, PopulationManager.get_free_workers()])
+	assert_str(block).contains(Tr.t("OBJ_MISSING") % Tr.amount_list(Rules.missing_cost(Rules.load_building_data("market"))))
+
+func test_a_missing_workshop_material_says_where_to_make_it() -> void:
+	_build("sawmill")
+	ResourceManager.unlock(ResourceManager.name_to_type("planks"))
+	ResourceManager.set_amounts({"planks": 0})
+	var how: String = Objectives.how_to_get("planks")
+	assert_str(how).contains(Tr.res_cap("planks"))
+	assert_str(how).contains(Tr.t("PROC_MAKE_PLANKS"))
+	assert_str(how).contains(Rules.load_building_data("sawmill").get_display_name())
+
+func test_a_material_without_its_workshop_says_to_build_it_first() -> void:
+	assert_int(Rules.count_building("foundry")).is_equal(0)
+	var how: String = Objectives.how_to_get("beams")
+	var foundry: String = Rules.load_building_data("foundry").get_display_name()
+	assert_str(how).is_equal(Tr.t("GUIDE_HOW_MAKE_FIRST") % [Tr.res_cap("beams"), foundry])
+
+func test_every_resource_and_material_has_a_way_to_get_it() -> void:
+	for res in ["wood", "gold", "food", "planks", "ingots", "beams", "fuel"]:
+		assert_str(Objectives.how_to_get(res)).override_failure_message(
+			"sin como conseguir %s" % res).is_not_empty()
+
+func test_the_panel_says_what_is_missing_and_how_to_get_it() -> void:
+	_build("sawmill")
+	ResourceManager.unlock(ResourceManager.name_to_type("planks"))
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "planks": 0})
+	var text: Dictionary = Objectives.describe({"kind": "build", "id": "barracks", "why": "OBJ_WHY_BARRACKS"})
+	var block: String = String(text["blocker"])
+	assert_str(block).contains(Tr.res_name("planks"))
+	assert_str(block).contains(Tr.t("PROC_MAKE_PLANKS"))
+	assert_str(block).contains(Tr.ti("GUIDE_HOW_WOOD"))

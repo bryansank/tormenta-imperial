@@ -30,6 +30,7 @@ const GUIDE_SKIPPED := "skipped"
 
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const TextKitScript := preload("res://scripts/ui/TextKit.gd")
+const Objectives := preload("res://scripts/services/Objectives.gd")
 
 ## Las METAS del tutorial guiado, en orden. Cada meta es algo que el jugador
 ## tiene que tener en la isla; el paso que toca sale de la primera meta sin
@@ -135,7 +136,22 @@ const GUIDE_STEPS := {
 	"pick_laboratory":  {"n": 12, "text": "GUIDE_PICK_LABORATORY", "target": "card:laboratory", "building": "laboratory"},
 	"place_laboratory": {"n": 12, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "laboratory"},
 	"done":             {"n": 12, "text": "GUIDE_DONE",            "target": "objective"},
+	# Consigue lo que falta (2026-10-17, fix/tutorial-materiales): el paso de un
+	# edificio que aun no se puede pagar (recursos, material del taller o
+	# trabajadores). En vez de "Toca CONSTRUIR" con el boton apagado, dice que
+	# falta y como conseguirlo, y senala donde (need_target). Al tenerlo todo,
+	# vuelve solo al paso de construir. `need`: el texto lleva el nombre.
+	"need_sawmill":     {"n": 3,  "text": "GUIDE_NEED", "target": "", "building": "sawmill", "need": true},
+	"need_farm":        {"n": 5,  "text": "GUIDE_NEED", "target": "", "building": "farm", "need": true},
+	"need_house":       {"n": 6,  "text": "GUIDE_NEED", "target": "", "building": "house", "need": true},
+	"need_road":        {"n": 8,  "text": "GUIDE_NEED", "target": "", "building": "road", "need": true},
+	"need_gold_mine":   {"n": 9,  "text": "GUIDE_NEED", "target": "", "building": "gold_mine", "need": true},
+	"need_market":      {"n": 10, "text": "GUIDE_NEED", "target": "", "building": "market", "need": true},
+	"need_warehouse":   {"n": 11, "text": "GUIDE_NEED", "target": "", "building": "warehouse", "need": true},
+	"need_laboratory":  {"n": 12, "text": "GUIDE_NEED", "target": "", "building": "laboratory", "need": true},
 }
+## Prefijo de los pasos "consigue lo que falta": "need_" + id del edificio.
+const NEED_PREFIX := "need_"
 ## El mayor `n` de GUIDE_STEPS (una prueba lo comprueba: al insertar pasos, se sube).
 const GUIDE_TOTAL := 12
 
@@ -476,12 +492,15 @@ func is_coach_active() -> bool:
 ## jugador ni que cargue a medias; el paso sale de lo que hay.
 ##
 ## Hechos: `<edificio>s` (en pie o en obra), `<edificio>s_built` (obra acabada),
-## una clave por cada meta "fact", `menu_open`, `placing` (el id en la mano) y
-## `skip` (metas imposibles en esta isla, que se pasan de largo).
+## una clave por cada meta "fact", `menu_open`, `placing` (el id en la mano),
+## `skip` (metas imposibles en esta isla, que se pasan de largo) y `short` (los
+## edificios de las metas que aun no se pueden pagar: el paso es entonces
+## "consigue lo que falta", need_<id>, y no "Toca CONSTRUIR").
 static func derive_step(f: Dictionary, goals: Array = GUIDE_GOALS) -> String:
 	var placing := String(f.get("placing", ""))
 	var menu := bool(f.get("menu_open", false))
 	var skip: Array = f["skip"] if f.get("skip") is Array else []
+	var short: Array = f["short"] if f.get("short") is Array else []
 	for g in goals:
 		if String(g["goal"]) in skip:
 			continue
@@ -490,6 +509,10 @@ static func derive_step(f: Dictionary, goals: Array = GUIDE_GOALS) -> String:
 				var want := String(g.get("placing", ""))
 				if g.has("placing_step") and placing != "" and (want == "*" or want == placing):
 					return String(g["placing_step"])
+				# Una meta que se cumple eligiendo un edificio en CONSTRUIR (girar
+				# la Casa, poner un tramo): sin poder pagarlo, antes conseguirlo.
+				if g.has("menu_step") and String(g.get("building", "")) in short:
+					return NEED_PREFIX + String(g["building"])
 				if g.has("menu_step") and menu:
 					return String(g["menu_step"])
 				return String(g["step"])
@@ -499,6 +522,10 @@ static func derive_step(f: Dictionary, goals: Array = GUIDE_GOALS) -> String:
 		if int(f.get(b + "s", 0)) <= 0:
 			if placing == b:
 				return String(steps["place"])
+			# Sin poder pagarlo no se pide abrir CONSTRUIR: el boton estaria
+			# apagado y el tutorial no diria nada util (bug de la 1.0, 2026-10-17).
+			if b in short:
+				return NEED_PREFIX + b
 			return String(steps["pick"]) if menu else String(steps["open"])
 		if steps.has("wait") and int(f.get(b + "s_built", 0)) <= 0:
 			return String(steps["wait"])
@@ -511,6 +538,7 @@ func guide_facts() -> Dictionary:
 		"menu_open": _menu_open,
 		"placing": _placing_id,
 		"skip": _blocked_goals.duplicate(),
+		"short": short_goals(),
 	}
 	for key in now:
 		f[key] = int(now[key]) - int(guide_baseline.get(key, 0))
@@ -530,6 +558,71 @@ func note_guide_fact(fact: String) -> void:
 	if guide_state == GUIDE_ACTIVE:
 		_update_blocked_goals()
 	_refresh_guide()
+
+## Los edificios de las metas que se eligen en CONSTRUIR (las "build" y las
+## "fact" con `menu_step`) y que ahora no se pueden pagar (can_pay_now).
+static func short_goals() -> Array:
+	var out: Array = []
+	for g in GUIDE_GOALS:
+		var b := String(g.get("building", ""))
+		if b == "" or b in out:
+			continue
+		if String(g.get("kind", "build")) == "fact" and not g.has("menu_step"):
+			continue
+		if not can_pay_now(b):
+			out.append(b)
+	return out
+
+## Se puede pagar `building_id` ahora: trabajadores libres y todo su coste
+## (recursos y materiales del taller). El tope, los requisitos y el rango no
+## cuentan: eso lo pasa de largo goal_impossible_reason().
+static func can_pay_now(building_id: String) -> bool:
+	var data := Rules.load_building_data(building_id)
+	if data == null:
+		return true
+	return workers_short(data) <= 0 and Rules.missing_cost(data).is_empty()
+
+## Cuantos trabajadores libres le faltan a `data` (0 si ninguno).
+static func workers_short(data: BuildingData) -> int:
+	if data == null or data.workers_required <= 0:
+		return 0
+	return maxi(0, data.workers_required - PopulationManager.get_free_workers())
+
+## Que senalar en un paso need_<id>: donde se consigue lo primero que falta.
+## Un recurso, su productor (o el bosque / la veta a mano); un material, el
+## edificio que lo fabrica; trabajadores sin sitio en las casas, CONSTRUIR (otra
+## Casa). "" si no hay nada que senalar (esperar a que llegue la gente).
+static func need_target(building_id: String) -> String:
+	var data := Rules.load_building_data(building_id)
+	if data == null:
+		return ""
+	for res in Rules.missing_cost(data):
+		var t := _target_for_resource(String(res))
+		if t != "":
+			return t
+	if workers_short(data) > 0 \
+			and PopulationManager.get_population() >= PopulationManager.get_max_population():
+		return "build_button"
+	return ""
+
+static func _target_for_resource(res: String) -> String:
+	var source := ""
+	if ResourceManager.is_material_name(res):
+		source = GameConfig.get_material_source(res)
+	elif not ResourceManager.is_unlocked_by_name(res):
+		return ""
+	else:
+		source = String(Objectives.PRODUCER_OF.get(res, ""))
+	if source == "":
+		return ""
+	if Rules.count_building(source) > 0:
+		# Terminado, o su obra si aun se esta levantando.
+		return "built:%s|building:%s" % [source, source]
+	if res == "wood":
+		return "forest"
+	if res == "gold":
+		return "deposit:gold_vein"
+	return "build_button"
 
 ## Los edificios que cuentan las metas "build".
 static func _goal_buildings() -> Array:
@@ -669,8 +762,10 @@ static func has_reachable_deposit(data: BuildingData, map_gen: Node) -> bool:
 						return true
 	return false
 
-## Lo que le falta al jugador para el paso de ahora, en una linea corta, o "".
-## Solo en los pasos de construir (abrir, elegir, colocar): obreros o recursos.
+## Lo que le falta al jugador para el paso de ahora, o "": una linea corta por
+## cosa (trabajadores; recursos y materiales del taller juntos). Solo en los
+## pasos de construir (abrir, elegir, colocar, conseguir). Antes, con pocos
+## trabajadores, se callaba lo que faltaba de recursos (2026-10-17).
 static func step_hint(step_id: String) -> String:
 	var b := building_for_step(step_id)
 	if b == "":
@@ -678,12 +773,14 @@ static func step_hint(step_id: String) -> String:
 	var data := Rules.load_building_data(b)
 	if data == null:
 		return ""
-	if data.workers_required > 0 and PopulationManager.get_free_workers() < data.workers_required:
-		return Tr.t("GUIDE_NEED_WORKERS")
+	var lines: Array = []
+	var hands := workers_short(data)
+	if hands > 0:
+		lines.append(Tr.t("GUIDE_NEED_WORKERS") % hands)
 	var short := Rules.missing_cost(data)
 	if not short.is_empty():
-		return Tr.t("OBJ_MISSING") % Tr.amount_list(short)
-	return ""
+		lines.append(Tr.t("OBJ_MISSING") % Tr.amount_list(short))
+	return "\n".join(lines)
 
 ## COMO conseguir lo que falta para el paso de ahora, en una linea, o "". Va
 ## debajo de step_hint(): ese dice QUE falta; este, que hacer para tenerlo, para
@@ -708,22 +805,24 @@ static func step_how(step_id: String) -> String:
 	var data := Rules.load_building_data(b)
 	if data == null:
 		return ""
-	if data.workers_required > 0 and PopulationManager.get_free_workers() < data.workers_required:
+	var lines: Array = []
+	if workers_short(data) > 0:
 		# Con sitio libre en las casas, la gente llega sola; sin sitio, otra Casa.
 		if PopulationManager.get_population() < PopulationManager.get_max_population():
-			return Tr.t("GUIDE_HOW_WORKERS_WAIT")
-		return ""
-	var short := Rules.missing_cost(data)
-	var lines: Array = []
-	if short.has("wood"):
-		lines.append(Tr.ti("GUIDE_HOW_WOOD"))
-	if short.has("gold"):
-		lines.append(Tr.ti("GUIDE_HOW_GOLD_MINE") if Rules.count_building("gold_mine") > 0 \
-			else Tr.ti("GUIDE_HOW_GOLD_HAND"))
+			lines.append(Tr.t("GUIDE_HOW_WORKERS_WAIT"))
+		else:
+			lines.append(Tr.ti("GUIDE_HOW_WORKERS_HOUSE"))
+	# Una linea por recurso o material que falta (Objectives.how_to_get, la
+	# misma que usa ¿QUE HACER?): madera, oro, comida, acero, petroleo y los
+	# materiales del taller (tablones, lingotes, vigas, combustible).
+	lines.append_array(Objectives.how_lines(Rules.missing_cost(data)))
 	return "\n".join(lines)
 
 ## El edificio de un paso de construir (abrir, elegir o colocar), o "".
 static func building_for_step(step_id: String) -> String:
+	var e: Dictionary = GUIDE_STEPS.get(step_id, {})
+	if bool(e.get("need", false)):
+		return String(e["building"])
 	for g in GUIDE_GOALS:
 		if String(g.get("kind", "build")) == "fact":
 			if g.has("building") and step_id in [String(g["step"]), String(g.get("menu_step", "")),
@@ -752,7 +851,13 @@ static func _step_def(step_id: String) -> Dictionary:
 
 static func step_text(step_id: String) -> String:
 	var e: Dictionary = _step_def(step_id)
-	return Tr.ti(String(e.get("text", ""))) if not e.is_empty() else ""
+	if e.is_empty():
+		return ""
+	var text := Tr.ti(String(e.get("text", "")))
+	if bool(e.get("need", false)):
+		var data := Rules.load_building_data(String(e["building"]))
+		text = text % (data.get_display_name() if data != null else String(e["building"]))
+	return text
 
 ## Lleva algo en la mano para colocar (el paso de derribar pide antes soltarlo).
 func is_placing() -> bool:
@@ -762,7 +867,10 @@ static func step_number(step_id: String) -> int:
 	return int(GUIDE_STEPS.get(step_id, {}).get("n", 0))
 
 static func step_target(step_id: String) -> String:
-	return String(_step_def(step_id).get("target", ""))
+	var e: Dictionary = _step_def(step_id)
+	if bool(e.get("need", false)):
+		return need_target(String(e["building"]))
+	return String(e.get("target", ""))
 
 ## El paso es una tarjeta de leer (la meta, el Nucleo, reparar), con boton.
 static func step_has_ok(step_id: String) -> bool:

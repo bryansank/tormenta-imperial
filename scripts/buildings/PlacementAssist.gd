@@ -203,6 +203,13 @@ func move_to(origin: Vector2i, explain: bool) -> void:
 	_placer.assist_move_ghost(origin)
 	if explain and not is_valid(origin):
 		_placer.assist_explain(origin)
+	elif explain and _placer.assist_moving_node() == null:
+		# El sitio vale pero no llega para pagarlo: se dice ya, al apuntar, y no
+		# solo al tocar el ✓ (2026-10-17).
+		var data := Rules.load_building_data(_placer.assist_building_id())
+		var block: String = Rules.purchase_block_detail(data) if data != null else ""
+		if block != "":
+			_placer.assist_feedback(block)
 	_update_confirm()
 
 func confirm() -> void:
