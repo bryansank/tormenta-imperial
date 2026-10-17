@@ -18,6 +18,19 @@ var _unpaid_ticks := 0
 ## StormManager, para que este servicio no dependa de aquel.
 var _ash_overhead: bool = false
 
+const RegimentLook := preload("res://scripts/ui/RegimentLook.gd")
+const ColonyIdentity := preload("res://scripts/services/ColonyIdentity.gd")
+const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
+
+## El regimiento: nombre, color, emblema, pintura y combates ganados. SOLO
+## COSMETICO (docs/15 §12): nada del combate lo lee. Viaja en el guardado
+## dentro de "army" como "regiment"; lo que se pinta es get_regiment_look().
+var _regiment: Dictionary = RegimentLook.defaults()
+## El aspecto ya resuelto, rehecho solo cuando cambia el regimiento, el rango,
+## el modo o la bandera (`_look_key`): el tablero 2D lo pide por casilla.
+var _look_cache: Dictionary = {}
+var _look_key := ""
+
 var _type_map := {
 	"gold": ResourceManager.Type.GOLD,
 	"steel": ResourceManager.Type.STEEL,
@@ -38,6 +51,9 @@ func _ready() -> void:
 	# ceniza encima recarga creyendo que no pasa nada y pierde la cola sin haber
 	# visto un solo aviso en esa sesion.
 	EventBus.game_load_completed.connect(_resync_storm_phase)
+	# Las estrellas: combates ganados, como cuenta la XP del rango.
+	EventBus.encounter_ended.connect(_on_encounter_ended)
+	EventBus.defense_auto_resolved.connect(func(victory, _r, _s): _on_encounter_ended(victory, 0))
 
 func _resync_storm_phase() -> void:
 	_ash_overhead = StormManager.is_ashfall() and not StormManager.is_trial_running()
@@ -47,6 +63,62 @@ func _process(delta: float) -> void:
 	delta = GameConfig.sim_delta(delta)
 	_advance_training(delta)
 	_advance_upkeep(delta)
+
+# ── Regimiento (cosmetico) ──
+
+## Lo guardado, en copia.
+func get_regiment() -> Dictionary:
+	return _regiment.duplicate()
+
+## Lo que se pinta: nombre para ensenar, color, emblema, pintura y estrellas,
+## con las piezas que el rango no abre cambiadas por las de la bandera.
+func get_regiment_look() -> Dictionary:
+	var flag := RankManager.get_flag_spec()
+	var key := "%d|%s|%s" % [RankManager.get_rank(), str(GameMode.all_unlocked()), ColonyFlag.spec_key(flag)]
+	if _look_cache.is_empty() or key != _look_key:
+		_look_cache = RegimentLook.resolve(_regiment, RankManager.get_rank(), GameMode.all_unlocked(), flag)
+		_look_key = key
+	return _look_cache.duplicate()
+
+## Cambia nombre, color, emblema y pintura. "" en nombre = el de serie; "" en
+## color o emblema = los de la bandera. Falla (false, sin tocar nada) si el
+## nombre no pasa el filtro del pais o alguna pieza no esta abierta por rango.
+## Avisa y guarda solo si algo cambio. No toca las victorias.
+func set_regiment(reg_name: String, color_id: String, emblem: String, paint: String) -> bool:
+	var rank := RankManager.get_rank()
+	var all := GameMode.all_unlocked()
+	var clean := ColonyIdentity.clean_name(reg_name)
+	if not clean.is_empty() and not ColonyIdentity.is_name_allowed(clean):
+		return false
+	if color_id != "" and not RegimentLook.is_open("colors", color_id, rank, all):
+		return false
+	if emblem != "" and not RegimentLook.is_open("emblems", emblem, rank, all):
+		return false
+	if not RegimentLook.is_paint_open(paint, rank, all):
+		return false
+	var next := RegimentLook.normalized({"name": clean, "color": color_id, "emblem": emblem,
+		"paint": paint, "wins": _regiment.get("wins", 0)})
+	if next == _regiment:
+		return true
+	_regiment = next
+	_invalidate_look()
+	EventBus.regiment_changed.emit()
+	GameManager.request_save()
+	return true
+
+func _on_encounter_ended(victory: bool, _turns: int) -> void:
+	if victory:
+		_record_regiment_win()
+
+func _record_regiment_win() -> void:
+	var before := RegimentLook.stars_for(int(_regiment.get("wins", 0)))
+	_regiment["wins"] = int(_regiment.get("wins", 0)) + 1
+	_invalidate_look()
+	if RegimentLook.stars_for(int(_regiment["wins"])) != before:
+		EventBus.regiment_changed.emit()
+
+func _invalidate_look() -> void:
+	_look_cache = {}
 
 # ── Queries ──
 
@@ -389,6 +461,7 @@ func get_save_data() -> Dictionary:
 		"training": _training.duplicate(true),
 		"upkeep_accum": _upkeep_accum,
 		"unpaid_ticks": _unpaid_ticks,
+		"regiment": _regiment.duplicate(),
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -406,13 +479,21 @@ func load_save_data(data: Dictionary) -> void:
 	_upkeep_accum = float(data.get("upkeep_accum", 0.0))
 	# Un guardado anterior a la desercion no trae contador: empieza a cero.
 	_unpaid_ticks = int(data.get("unpaid_ticks", 0))
+	# Sin "regiment" (guardado viejo): el de serie. Se deriva de lo guardado,
+	# no se suma: cargar dos veces da lo mismo. Las piezas no se recortan aqui
+	# (el rango carga despues): lo hace get_regiment_look() al pintar.
+	_regiment = RegimentLook.normalized(data.get("regiment", {}))
+	_invalidate_look()
 	EventBus.army_changed.emit()
+	EventBus.regiment_changed.emit()
 
 func reset() -> void:
 	_units.clear()
 	_training.clear()
 	_upkeep_accum = 0.0
 	_unpaid_ticks = 0
+	_regiment = RegimentLook.defaults()
+	_invalidate_look()
 	# Partida nueva: el cielo tambien empieza limpio.
 	_ash_overhead = false
 	EventBus.army_changed.emit()

@@ -162,6 +162,10 @@ signal unit_training_cancelled(unit_id: String, refunded: Dictionary)
 ## Desercion: al ejercito sin paga se le va la tropa, la mas cara primero.
 @warning_ignore("unused_signal")
 signal army_deserted(unit_id: String, count: int)
+## El regimiento cambio de nombre, color, emblema o pintura, o gano una
+## estrella. Solo cosmetico (ArmyManager.get_regiment_look()).
+@warning_ignore("unused_signal")
+signal regiment_changed()
 
 # ── Combat ──
 ## Emitted only by CombatManager. `side`: 0 = player, 1 = enemy.
