@@ -398,9 +398,9 @@ func _resource_amounts() -> Dictionary:
 ## dinero: fabricarlos es un proceso de su edificio, probado aparte.
 func _bankroll(gold: int = 4000, wood: int = 4000, steel: int = 2000, oil: int = 2000) -> void:
 	ResourceManager.set_amounts({"gold": gold, "wood": wood, "steel": steel, "oil": oil,
-		# Lo que pida la obra mas cara del taller (el CG nivel 3, 2026-10-12:
-		# 200 vigas, 140 lingotes, 200 de combustible), con margen.
-		"planks": 400, "ingots": 400, "beams": 400, "fuel": 400})
+		# Lo que piden juntos el CG nivel 2 y el 3 (2026-10-14: 200+400 vigas,
+		# 140+280 lingotes, 200+400 de combustible), con margen.
+		"planks": 1000, "ingots": 1000, "beams": 1000, "fuel": 1000})
 
 func _count(building_id: String) -> int:
 	var total := 0
