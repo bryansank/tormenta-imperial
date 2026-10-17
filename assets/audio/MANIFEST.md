@@ -14,8 +14,8 @@ replace a clip: just drop the file with the right name.
 
 The manifest keys live in `scripts/services/AudioManager.gd` (`MUSIC_MANIFEST`,
 `AMBIENT_MANIFEST`, `SFX_MANIFEST`). To add a new sound, add a key there and a
-matching `EventBus` hook in `_connect_events()`. A signal that may not exist yet is
-connected with `_connect_optional()` (guarded by `EventBus.has_signal`).
+matching `EventBus` hook in `_connect_events()` (a typed `.connect`: the signal has
+to exist in `EventBus.gd`).
 
 ### Peso y equipos flojos
 
@@ -147,8 +147,7 @@ y suena igual.
 
 ### Comida (rama `feat/comida-granja-recoger`)
 
-Conectadas con `_connect_optional`: hasta que esa rama entre, la senal no existe y
-no pasa nada.
+Conectadas con `.connect` tipado en `_connect_events()` (la rama ya entro).
 
 | Key / file | When it plays | EventBus trigger | Source | Size |
 |-----------|---------------|------------------|--------|------|

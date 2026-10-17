@@ -171,7 +171,8 @@ func _setup_ui() -> void:
 	for entry in COLONY_ENTRIES:
 		var id: String = entry[0]
 		var sibling: String = entry[2]
-		var btn := ModalKit.make_menu_button(Tr.t(entry[1]), UITheme.BTN, func(): open_colony_panel(sibling))
+		# Todo el menu en mayusculas, como sus entradas grandes (ronda 1.0).
+		var btn := ModalKit.make_menu_button(Tr.t(entry[1]).to_upper(), UITheme.BTN, func(): open_colony_panel(sibling))
 		btn.name = "Colony_" + id
 		colony.add_child(btn)
 		_colony_buttons[id] = btn
@@ -235,7 +236,7 @@ func _make_group(node_name: String, title: String, hint: String) -> VBoxContaine
 ## cuerpo para que su palabra quepa en media columna.
 func _add_game_button(group: Container, id: String, text: String, color: Color, cb: Callable,
 		half := false) -> Button:
-	var btn := ModalKit.make_menu_button(text, color, cb)
+	var btn := ModalKit.make_menu_button(text.to_upper(), color, cb)
 	btn.name = "Game_" + id
 	if half:
 		UITheme.style_button(btn, color, UITheme.FONT_BODY)
@@ -557,20 +558,11 @@ func _help_panel() -> Node:
 		return p
 	return null
 
-## Vuelve a contar el lore. La intro es modal y vive en TutorialPanel; se abre
-## con el juego todavia en pausa y, al cerrarla, se vuelve a este menu.
-##
-## Con el prologo propio del frente de ayudas (TutorialManager.show_prologue),
-## el menu se cierra antes: el prologo espera a que no haya pausa ni menu.
+## Vuelve a contar el lore (TutorialManager.show_prologue). El menu se cierra
+## antes: el prologo espera a que no haya pausa ni menu.
 func _on_story() -> void:
-	if TutorialManager.has_method("show_prologue"):
-		resume()
-		TutorialManager.call("show_prologue")
-		return
-	var tutorial: Node = _find_sibling("TutorialPanel")
-	if tutorial != null:
-		_open_sub(tutorial)
-	TutorialManager.show_intro()
+	resume()
+	TutorialManager.show_prologue()
 
 ## Guarda y cede el sitio al menu principal. La pausa cambia de manos en la misma
 ## llamada: se suelta aqui y el menu principal la vuelve a tomar como suya, para

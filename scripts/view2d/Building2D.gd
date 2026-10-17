@@ -45,10 +45,12 @@ var _signature: Array = []
 var _pulse := 0.0
 var _name_label: Label = null
 ## Veredicto de LookRule.derive() del ultimo repintado.
-var _look: Dictionary = {"look": LookRule.Look.IDLE, "phase": 0}
+var _look: Dictionary = {"look": LookRule.Look.IDLE, "phase": 0, "damage": 0}
 ## Humo/luz de "trabajando" (creado la primera vez) y humo negro de la ruina.
 var _active_fx: Node2D = null
 var _ruin_fx: Node2D = null
+## Humo negro y chispas del dano grave (creados la primera vez, docs/03).
+var _damage_fx: Node2D = null
 ## Plan de la parcela (LotPlan.plan) y lo que lo decidio: [origen, lados de
 ## calzada locales, estado, fase]. Se rehace solo si eso cambia; las calzadas
 ## vecinas se releen cuando una senal de la rejilla avisa (_lot_dirty).
@@ -109,8 +111,9 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	# La calzada no cambia sola (ni obra, ni vida, ni nivel): sin _process (lo
 	# apaga _ready), se repinta cuando la rejilla cambia a su alrededor o al
 	# seleccionarla.
-	# La bandera del pais sobre el Nucleo y el Cuartel General.
-	if ColonyFlag2D.flies_over(data):
+	# La bandera del pais sobre el Nucleo, el Cuartel General y los dibujos con
+	# mastil (el mastil y el letrero de la colonia: BuildingArt2D.has_flag_mount).
+	if ColonyFlag2D.flies_over(data) or Art.has_flag_mount(data.id):
 		_flag = ColonyFlag2D.new()
 		add_child(_flag)
 		_flag.setup(base_size_px(), self)
@@ -218,8 +221,8 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 ## La bandera cuelga del mastil del propio dibujo (linterna del Nucleo, esquina
-## del tejado del Cuartel General): se recoloca solo cuando cambia la firma
-## (giro, nivel), nunca por frame.
+## del tejado del Cuartel General, lo alto del mastil o del letrero): se
+## recoloca solo cuando cambia la firma (giro, nivel), nunca por frame.
 func _sync_flag() -> void:
 	if _flag == null:
 		return
@@ -262,6 +265,17 @@ func get_active_fx() -> Node2D:
 
 func get_ruin_fx() -> Node2D:
 	return _ruin_fx
+
+func get_damage_fx() -> Node2D:
+	return _damage_fx
+
+## La etapa de dano a la vista (BuildingLook.DAMAGE_*): leve y grave solo en
+## pie (quieto o trabajando); la obra, el andamio y la ruina la tapan.
+func damage_stage() -> int:
+	var look := int(_look["look"])
+	if look != LookRule.Look.IDLE and look != LookRule.Look.ACTIVE:
+		return LookRule.DAMAGE_NONE
+	return int(_look.get("damage", LookRule.DAMAGE_NONE))
 
 func get_site_fx() -> Node2D:
 	return _site_fx
@@ -364,7 +378,30 @@ func _apply_fx() -> void:
 		add_child(_ruin_fx)
 	if _ruin_fx:
 		_ruin_fx.visible = look == LookRule.Look.RUIN
+	# Dano grave: humo negro mas fino que el de la ruina y chispas en un costado.
+	var heavy := damage_stage() == LookRule.DAMAGE_HEAVY
+	if heavy and _damage_fx == null:
+		_damage_fx = _make_damage_fx()
+	if _damage_fx:
+		_damage_fx.visible = heavy
 	_apply_site_fx()
+
+func _make_damage_fx() -> Node2D:
+	var holder := Node2D.new()
+	holder.name = "DamageFx"
+	holder.z_index = 6
+	var fp := footprint_px()
+	var m := minf(fp.x, fp.y)
+	var smoke := Fx.sprite_2d("smoke", m * 0.55, "ruin")
+	smoke.position = Vector2(0, -fp.y * 0.25)
+	holder.add_child(smoke)
+	var variant := posmod(LookRule.seed_of(self, data), Art.DAMAGE_VARIANTS)
+	var side := 1.0 if variant % 2 == 0 else -1.0
+	var sparks := Fx.sprite_2d("sparks", m * 0.3)
+	sparks.position = Vector2(-side * fp.x * 0.25, -fp.y * 0.1)
+	holder.add_child(sparks)
+	add_child(holder)
+	return holder
 
 func _make_active_fx() -> Node2D:
 	var kind := LookRule.fx_kind(data.id)
@@ -473,6 +510,16 @@ func _draw_body(size: Vector2, inset: float, mask: int, level: int, steps: int) 
 	if is_farm:
 		Art.draw_farm_crops(self, size, inset, 0.6 if ghost else _crop_growth(), not ghost and ProductionManager.has_stock(self))
 
+## Las marcas de dano de una etapa: de la cache horneada (una textura por
+## etapa, tamano, variante y clase de huella) o a mano mientras tanto.
+func _draw_damage_marks(size: Vector2, stage: int, variant: int, n: int) -> void:
+	var key := "dmg|%d|%d|%d|%d|%d" % [stage, variant, n, int(size.x * 4.0), int(size.y * 4.0)]
+	var tex := ArtCache.fetch(key, size, func(ci: CanvasItem) -> void: Art.draw_damage_marks(ci, size, stage, variant, n), self)
+	if tex != null:
+		draw_texture_rect(tex, ArtCache.rect_for(size), false)
+	else:
+		Art.draw_damage_marks(self, size, stage, variant, n)
+
 func _draw() -> void:
 	if data == null:
 		return
@@ -500,9 +547,14 @@ func _draw() -> void:
 	var inset := yard_px()
 	var inner := size - Vector2.ONE * inset * 2.0
 	var has_lot := not ghost and not _lot_plan.is_empty()
-	# En pie (quieto, trabajando o mejorando): la parcela entera horneada.
+	# En pie (quieto, trabajando o mejorando): la parcela entera horneada. Herido
+	# (leve o grave) no: el cuerpo se ladea encima de su parcela derecha.
 	var standing := look != LookRule.Look.CONSTRUCTION and look != LookRule.Look.RUIN
-	var whole := has_lot and standing and _instance_texture(size, inset, level, steps)
+	var dmg := damage_stage() if not ghost else LookRule.DAMAGE_NONE
+	# La variante y el lado, los mismos que en 3D (semilla de la celda de origen).
+	var dmg_variant := posmod(LookRule.seed_of(self, data), Art.DAMAGE_VARIANTS) if dmg != LookRule.DAMAGE_NONE else 0
+	var lean := Art.damage_lean(dmg, size, 1.0 if dmg_variant % 2 == 0 else -1.0)
+	var whole := has_lot and standing and dmg == LookRule.DAMAGE_NONE and _instance_texture(size, inset, level, steps)
 	if whole:
 		draw_texture_rect(_inst_tex, ArtCache.rect_for(size, ArtCache.INSTANCE_MARGIN), false)
 		if data.id == ProductionManager.FARM_ID:
@@ -520,7 +572,11 @@ func _draw() -> void:
 		if has_lot:
 			var grown := inner * Art.level_scale(level)
 			Art.draw_lot_shadow(self, Rect2(-grown * 0.5, grown).grow(-Art.INSET))
+		if dmg != LookRule.DAMAGE_NONE:
+			# El ladeo va en pantalla (siempre hacia el mismo lado gire como gire).
+			draw_set_transform_matrix(lean * Transform2D(angle, Vector2.ZERO))
 		_draw_body(size, inset, mask, level, steps)
+		draw_set_transform(Vector2.ZERO, angle, Vector2.ONE)
 	if has_lot:
 		Art.draw_lot_props(self, _lot_plan, size)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -533,8 +589,17 @@ func _draw() -> void:
 		Art.draw_construction(self, fp_inner, ProductionManager.get_construction_progress(self))
 	var ratio := BuildingHealth.get_health_ratio(self)
 	var ruined := BuildingHealth.is_ruined(self)
-	if ratio < 1.0 or ruined:
+	if dmg != LookRule.DAMAGE_NONE:
+		# Leve o grave: las marcas de su etapa, horneadas una vez por etapa,
+		# tamano y variante (ArtCache2D), ladeadas con el edificio.
+		draw_set_transform_matrix(lean)
+		_draw_damage_marks(fp_inner, dmg, dmg_variant, n)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		Art.draw_health_bar(self, fp_inner, ratio)
+	elif ruined or (ratio < 1.0 and look != LookRule.Look.CONSTRUCTION and look != LookRule.Look.UPGRADE):
 		Art.draw_damage(self, fp_inner, ratio, ruined, hash(name), n)
+	elif ratio < 1.0:
+		Art.draw_health_bar(self, fp_inner, ratio)
 	# La placa II / III (la Label3D de la 3D), sin girar.
 	if level > 1:
 		Art.draw_level_plate(self, fp2, level)

@@ -30,6 +30,8 @@ const COLLECT_ICON_RADIUS_PX := 48.0
 const Lot := preload("res://scripts/buildings/BuildingLot.gd")
 ## Todas las calzadas en un MultiMesh por mascara de vecinos (docs/26 §6.2).
 const RoadBatch := preload("res://scripts/buildings/RoadBatch3D.gd")
+## Las decoraciones pequenas en un MultiMesh por tipo (DecorBatch3D).
+const DecorBatch := preload("res://scripts/buildings/DecorBatch3D.gd")
 const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 ## Salto y polvo de obra terminada (V1).
 const Fx := preload("res://scripts/buildings/BuildingFx.gd")
@@ -68,8 +70,15 @@ var _spot_highlight: MultiMeshInstance3D = null
 ## Un solo reloj para releer el aspecto de TODOS los edificios (paso de fase,
 ## humo encendido/apagado). Las senales repintan al momento.
 var _look_timer := 0.0
+## Ultima camara con la que se ajustaron los badges (BuildingStatusBadge.
+## fit_to_camera): se reajustan solo cuando la camara se mueve o cambia de lente.
+var _badge_cam_xform := Transform3D()
+var _badge_cam_fov := -1.0
+var _badge_count := -1
 ## Las calzadas del mapa, dibujadas en lote (RoadBatch3D).
 var _road_batch: Node3D = null
+## Las decoraciones pequenas del mapa, dibujadas en lote (DecorBatch3D).
+var _decor_batch: Node3D = null
 ## El rotulo con el nombre del edificio seleccionado (se crea al seleccionarlo).
 var _shown_label: Label3D = null
 
@@ -79,6 +88,8 @@ func _ready() -> void:
 	add_child(_buildings_container)
 	_road_batch = RoadBatch.new()
 	add_child(_road_batch)
+	_decor_batch = DecorBatch.new()
+	add_child(_decor_batch)
 	# Los trabajadores que andan del Nucleo a su edificio: fuera del contenedor
 	# de edificios, que es lo que se guarda.
 	var walkers_layer := Node3D.new()
@@ -112,6 +123,11 @@ func _ready() -> void:
 			EventBus.building_ruined, EventBus.building_repaired]:
 		(sig as Signal).connect(sync_look)
 	EventBus.building_upgrade_started.connect(_on_upgrade_look)
+	# Un golpe puede cambiar la etapa de dano (leve, grave): se repinta ya.
+	EventBus.building_damaged.connect(func(node: Node, _h: int, _m: int) -> void: sync_look(node))
+	# Reparado: vuelve a sano con el mismo salto que una obra terminada.
+	# Despues de sync_look (conectado arriba): el modelo ya esta derecho.
+	EventBus.building_repaired.connect(_on_repaired)
 	EventBus.building_upgrade_completed.connect(_on_upgrade_look)
 	# Obra terminada: salto y polvo (V1). Despues de sync_look: el modelo ya se ve.
 	EventBus.construction_completed.connect(_on_construction_done)
@@ -182,7 +198,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R and _state != State.IDLE:
-			_rotate_building()
+			# Por la senal, como el boton ↻ de la pantalla: asi el tutorial ve
+			# el giro con teclado y con el dedo (_on_rotate_requested gira).
+			EventBus.building_rotate_requested.emit()
 			get_viewport().set_input_as_handled()
 
 ## Left mouse button: in IDLE it either drags the camera (if the pointer moves
@@ -249,6 +267,7 @@ func _handle_left_drag(event: InputEventMouseMotion) -> void:
 
 func _process(delta: float) -> void:
 	_tick_looks(delta)
+	_fit_badges()
 	_tick_block_flash(delta)
 	if _state == State.IDLE:
 		return
@@ -265,6 +284,26 @@ func _tick_looks(delta: float) -> void:
 		if look:
 			look.sync()
 
+## Los badges de estado no crecen sin limite al acercar la camara (ni se
+## quedan pegados a la lente): BuildingStatusBadge.fit_to_camera. Solo trabaja
+## si la camara o el numero de edificios cambio desde la ultima vez.
+func _fit_badges() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var xf := cam.global_transform
+	var n := _buildings_container.get_child_count()
+	if xf.is_equal_approx(_badge_cam_xform) and is_equal_approx(cam.fov, _badge_cam_fov) 			and n == _badge_count:
+		return
+	_badge_cam_xform = xf
+	_badge_cam_fov = cam.fov
+	_badge_count = n
+	var inv := xf.affine_inverse()
+	for building in _buildings_container.get_children():
+		var badge := building.get_node_or_null("StatusBadge")
+		if badge != null and badge.has_method("fit_to_camera"):
+			badge.fit_to_camera(cam, inv)
+
 func _on_upgrade_look(node: Node, _level: int) -> void:
 	sync_look(node)
 
@@ -273,6 +312,14 @@ func _on_upgrade_look(node: Node, _level: int) -> void:
 ## un poco de polvo al pie (8 motas, un CPUParticles3D que se borra solo). En
 ## calidad Minima, solo el salto. Ni calzadas ni nada sin modelo.
 func _on_construction_done(node: Node) -> void:
+	_bounce_building(node)
+
+## Reparado (docs/03, "Etapas de dano"): el mismo salto y el mismo polvo.
+func _on_repaired(node: Node) -> void:
+	_bounce_building(node)
+
+## El salto de juguete y el polvo al pie (obra terminada, reparacion).
+func _bounce_building(node: Node) -> void:
 	if node == null or not is_instance_valid(node) or not (node is Node3D) or not node.is_inside_tree():
 		return
 	var info := GridManager.get_building_info(node)
@@ -282,7 +329,7 @@ func _on_construction_done(node: Node) -> void:
 	var look := node.get_node_or_null("LookVisual")
 	var model: Node3D = look.get_model() as Node3D if look != null and look.has_method("get_model") else null
 	if model != null and is_instance_valid(model):
-		var old: Tween = node.get_meta("_bounce_tween", null)
+		var old: Tween = node.get_meta("_bounce_tween") if node.has_meta("_bounce_tween") else null
 		if old != null and old.is_valid():
 			old.kill()
 			model.scale = node.get_meta("_bounce_scale", model.scale)
@@ -523,6 +570,8 @@ func _try_place(cell: Vector2i) -> void:
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return
 	# Tope, requisitos, obreros y coste, en ese orden (PlacementRules).
 	var blocked := Rules.purchase_block_detail(_current_data)
@@ -619,6 +668,8 @@ func _try_move(cell: Vector2i) -> void:
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return
 	# Llevado a donde no llega la red: su carretera se tiende (y se paga) igual
 	# que al colocarlo.
@@ -813,6 +864,10 @@ func _update_road_connections(_cell: Vector2i = Vector2i.ZERO) -> void:
 func get_road_batch() -> Node3D:
 	return _road_batch
 
+## El lote de decoraciones pequenas (sondas y pruebas).
+func get_decor_batch() -> Node3D:
+	return _decor_batch
+
 # ── Create actual building mesh ──
 
 func _create_building_mesh(data: BuildingData) -> Node3D:
@@ -827,6 +882,10 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 	if data.model_scene:
 		var model_instance := data.instantiate_model()
 		root.add_child(model_instance)
+	elif _decor_batch != null and DecorBatch.handles(data.id):
+		# Decoracion pequena: su modelo mide y se mueve como siempre, pero la
+		# dibuja el lote de su tipo (un MultiMesh), no el mismo.
+		root.add_child(_decor_batch.make_proxy(data.id))
 	else:
 		# Try dieselpunk procedural mesh first
 		var dieselpunk := DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
@@ -882,12 +941,14 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		var lot: Node3D = Lot.new()
 		root.add_child(lot)
 		lot.setup(root, data)
-	# La bandera del pais ondea sobre el Nucleo y el Cuartel General. Va la
-	# ultima: el cartel de estado se midio sin ella.
-	if ColonyFlag3D.flies_over(data):
+	# La bandera del pais ondea sobre el Nucleo, el Cuartel General y todo
+	# modelo que traiga mastil (FlagAnchor: el mastil y el letrero de la
+	# colonia). Va la ultima: el cartel de estado se midio sin ella.
+	if ColonyFlag3D.flies_over(data) or ColonyFlag3D.find_anchor(root) != null:
 		var flag: Node3D = ColonyFlag3D.new()
 		root.add_child(flag)
-		flag.setup(Vector2(data.grid_size) * GridManager.cell_size, top, root, not data.is_core)
+		flag.setup(Vector2(data.grid_size) * GridManager.cell_size, top, root,
+			not data.is_core and not data.is_decoration, data.is_decoration)
 
 	return root
 
@@ -1071,6 +1132,8 @@ func assist_explain(origin: Vector2i) -> void:
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 	elif verdict["reason"] == "road":
 		_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+	elif verdict["reason"] == Rules.SHORE_REASON:
+		_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 
 func assist_feedback(text: String) -> void:
 	_show_feedback(text)

@@ -193,6 +193,9 @@ func _build_ui() -> void:
 	_repair_container.add_child(_repair_cost_row)
 	_repair_btn = Button.new()
 	_repair_btn.text = Tr.t("BTN_REPAIR")
+	# Grupos para que el tutorial los senale (HelpTargets: info_repair, info_move,
+	# info_demolish, info_demolish_confirm).
+	_repair_btn.add_to_group("hud_info_repair")
 	UITheme.style_button(_repair_btn, UITheme.WARNING.darkened(0.2))
 	_repair_btn.pressed.connect(_on_repair)
 	_repair_container.add_child(_repair_btn)
@@ -223,6 +226,7 @@ func _build_ui() -> void:
 	_move_container.add_theme_constant_override("separation", 4)
 	_move_btn = Button.new()
 	_move_btn.text = Tr.t("BTN_MOVE")
+	_move_btn.add_to_group("hud_info_move")
 	_move_btn.tooltip_text = Tr.t("LBL_MOVE_HINT")
 	_move_btn.icon = UITheme.icon_texture("move")
 	_move_btn.add_theme_constant_override("h_separation", 10)
@@ -283,6 +287,7 @@ func _build_ui() -> void:
 	_actions_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	_demolish_btn = Button.new()
 	_demolish_btn.text = Tr.t("BTN_DEMOLISH")
+	_demolish_btn.add_to_group("hud_info_demolish")
 	UITheme.style_button(_demolish_btn, UITheme.DANGER)
 	_demolish_btn.pressed.connect(_on_demolish)
 	_actions_box.add_child(_demolish_btn)
@@ -301,6 +306,7 @@ func _build_ui() -> void:
 	confirm_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	var yes_btn := Button.new()
 	yes_btn.text = Tr.t("BTN_CONFIRM")
+	yes_btn.add_to_group("hud_info_demolish_confirm")
 	UITheme.style_button(yes_btn, UITheme.DANGER)
 	yes_btn.pressed.connect(_confirm_demolish)
 	var no_btn := Button.new()

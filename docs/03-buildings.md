@@ -145,7 +145,7 @@ picks the bake without touching the `.tres`. 2D: `BuildingArt2D._utility`.
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Prereqs |
 |----|------|------|--------------|---------|------------|---------|
-| `barracks` | Cuartel | 2x2 | 250/100/0/80 + 10 planks | 3 | 15s | foundry + sawmill |
+| `barracks` | Cuartel | 2x2 | 150/60/0/80 + 20 planks | 3 | 15s | foundry + sawmill |
 | `tower` | Torre | 2x2 | 150/60/20/30 + 4 beams | 1 | 8s | barracks |
 
 The Barracks trains units (`ArmyManager`, one training slot per Barracks). Each
@@ -172,16 +172,16 @@ y una o dos piezas de atrezo.
 
 | ID | Nombre | Coste G/S/O/W | Obra | Moral | Rango | Piezas del horneado |
 |----|--------|---------------|------|-------|-------|---------------------|
-| `lamp_post` | Farola | 20/0/0/5 | 1,5 s | +2 | libre | `kc:streetlight`, `ft:lantern` |
+| `lamp_post` | Farola | 20/0/0/5 | 1,5 s | +2 | libre | `kc:streetlight`, `ft:lantern` (luces a GLOW) |
 | `park_bench` | Banco | 10/0/0/10 | 1 s | +1 | libre | `kc:bench` x2, `kc:bush` |
-| `hedge` | Seto | 10/0/0/15 | 1,5 s | +1 | libre | `ft:hedge-large` x2, `ft:hedge` x4 |
+| `hedge` | Seto | 10/0/0/15 | 1,5 s | +1 | libre | `ft:hedge-large` x2, `ft:hedge` x2 estirados |
 | `avenue_tree` | Arbol de paseo | 15/0/0/20 | 2 s | +2 | libre | `ft:tree-high-round` |
 | `flower_planter` | Macetero | 20/0/0/10 | 1,5 s | +2 | 2 | `kc:bush` x3 + flores propias |
-| `colony_sign` | Letrero de la colonia | 25/0/0/15 | 2 s | +2 | libre | `sur:signpost`, `kc:bush` + bandera propia |
-| `hay_cart` | Carro de heno | 20/0/0/25 | 2 s | +2 | 2 | `kk:wheelbarrow`, `kk:sack` + pacas propias |
+| `colony_sign` | Letrero de la colonia | 25/0/0/15 | 2 s | +2 | libre | `sur:signpost`, `kc:bush` + mastil propio (FlagAnchor) |
+| `hay_cart` | Carro de heno | 20/0/0/25 | 2 s | +2 | 2 | carro y pacas propios + `kk:sack` |
 | `bonfire` | Hoguera | 15/0/0/30 | 1,5 s | +2 | 3 | `sur:campfire-stand`, `sur:resource-wood` x2 + llama propia |
-| `flagpole` | Mastil con bandera | 40/0/0/20 | 2,5 s | +3 | 5 | `pir:flag-high` |
-| `palm_trees` | Palmeras | 20/0/0/15 | 2 s | +2 | 13 | `pir:patch-sand`, `pir:palm-straight` + palmera propia |
+| `flagpole` | Mastil con bandera | 40/0/0/20 | 2,5 s | +3 | 5 | `pir:flag-high` sin su tela (FlagAnchor) |
+| `palm_trees` | Palmeras | 20/0/0/15 | 2 s | +2 | 13 | `pir:palm-straight` + arena y palmera propias; **solo en la costa** |
 
 - **3D:** `scripts/buildings/DecorMesh.gd` da UNA malla por tipo, compartida por
   todas las instancias, con los dos materiales de `ToyPalette` (sin texturas, sin
@@ -191,11 +191,32 @@ y una o dos piezas de atrezo.
   la devuelve para estos ids. Recetas del horneado en
   `tools/toy_recipes/<id>.gd` (ayuda `_decor.gd`); el horneador avisa si una pasa
   de 600 triangulos.
+  Horneadas las diez (feat/decoraciones-remates), todas por debajo de 600 con el
+  borde de contacto (V8) incluido: el carro, el seto y las palmeras se
+  recortaron para caber.
 - **2D:** `BuildingArt2D._lamp_post()` ... `_palm_trees()`, con su suelo propio.
-- **Pendiente:** la bandera del pais en el mastil y el letrero (las recetas dejan
-  `FlagAnchor`, pero `ColonyFlag3D` solo se cuelga en el Nucleo y el CG), las
-  palmeras solo en la costa, y las 1x1 en MultiMesh por tipo (doc 21 §6.6).
-  Hasta el horneado se ve la version procedural.
+- **Lote (MultiMesh por tipo):** en 3D las diez las dibuja `DecorBatch3D` (hijo de
+  `BuildingPlacer`, como `RoadBatch3D`): un `MultiMeshInstance3D` por tipo con la
+  malla compartida. El edificio sigue siendo su nodo de siempre (rejilla,
+  seleccion, mover, obra, ruina, nivel, guardado); su modelo es un
+  `DecorProxy3D`, el `MeshInstance3D` con la malla para medir y encajar, pero
+  con capas 0 y sin sombra. El proxy avisa al lote al moverse o esconderse y el
+  lote rehace el tipo una vez al final del frame (si solo se movio, reescribe su
+  transformacion). Sin sombra las menudas (alto < 1,5 m: banco, seto, carro,
+  hoguera). La vista previa de CONSTRUIR y el fantasma siguen usando
+  `DecorMesh.instantiate()`.
+- **Bandera del pais:** `BuildingPlacer` cuelga `ColonyFlag3D` de cualquier
+  edificio cuyo modelo traiga `FlagAnchor` (ademas del Nucleo y el CG). El mastil
+  y el letrero lo traen: horneado, leido del `SceneState` de `<id>.tscn` por
+  `DecorMesh.flag_anchor()`; sin hornear, `DecorMesh.PROCEDURAL_FLAG`. En las
+  decoraciones la bandera va pequena (`ColonyFlag3D.SMALL_SCALE`) y ninguna tela
+  se hornea. En 2D, `BuildingArt2D.has_flag_mount()` / `flag_mount()` dan lo alto
+  del mastil de los dos dibujos y `Building2D` les pone `ColonyFlag2D`.
+- **Palmeras solo en la costa:** `PlacementRules.needs_shore()` / `touches_shore()`:
+  alguna celda de la huella es tierra pegada al agua (vecinas en 8 direcciones,
+  la franja de `MapGenerator.is_shore_cell()` con banda 1). Motivo `"shore"`,
+  aviso `LBL_NEEDS_SHORE`; `PlacementAssist.shore_spots()` pinta en verde los
+  sitios validos y la ficha de CONSTRUIR lo dice (`rule_text`).
 
 The road is still a decoration in data, but it is the backbone of the map: see "Road
 network" below.
@@ -435,6 +456,53 @@ la ruina sobre la actividad.
   refineria, DOS casas, estatua y torre.
 - Todo es original y generado por el proyecto (mallas procedurales, dibujo en
   codigo, hojas de sprite generadas): ningun asset externo.
+
+### Etapas de dano (2026-10-16)
+
+Entre sano y ruina el dano se ve por etapas, no solo como la capa de ceniza de
+`BuildingHealth` (que sigue encima, por escalones). La etapa sale de la
+proporcion de vida con `BuildingLook.damage_stage()` y los umbrales de
+`GameConfig.damage_stage_thresholds` (`[0.75, 0.4]`); `derive()` la devuelve en
+la clave `"damage"`. Va **encima** del aspecto: un edificio grave puede seguir
+trabajando y echa su humo ademas del negro. Solo se ve en pie (quieto o
+trabajando); la obra y el andamio de mejora la tapan. Es solo aspecto: el dano,
+la reparacion y su coste no cambian.
+
+| Etapa | Vida | 3D | 2D |
+|---|---|---|---|
+| **Sano** | ≥ 75 % | el modelo (un rasguno: solo la capa de ceniza) | el dibujo; por debajo del 100 %, un velo de ceniza y la barra de vida |
+| **Leve** | < 75 % | grietas en zigzag en la fachada y un costado, tejas y cascotes caidos al pie, una tabla suelta apoyada en la pared; el modelo ladeado `damage_tilt[0]` (0,025 rad) | velo de ceniza, grietas, huecos de tejas que faltan, tejas caidas al pie, tabla suelta; el cuerpo ladeado (cizalla) |
+| **Grave** | < 40 % | lo anterior y mas, chapa colgando de un costado, viga partida que asoma del tejado, tizne y cascotes, brasas; **humo negro** y **chispas** animados; ladeado `damage_tilt[1]` (0,05 rad) y hundido `damage_sink_ratio[1]` (5 %) | lo anterior y mas, tizne, chapa suelta torcida, viga partida con ascuas, cascotes; humo negro y chispas animados; mas ladeado y algo aplastado |
+| **Ruina** | 0 | la de siempre (ver la tabla de aspectos) | la de siempre |
+
+- **3D**: `SiteMesh.damage_overlay(etapa, caja, variante)` (raiz
+  `DamageOverlay<etapa>`, hijo de `LookVisual`). Todo lo quieto es **una malla
+  cacheada** por etapa, variante (3, de la semilla de la celda) y caja del
+  modelo (`SiteMesh.damage_mesh`): diez casas tocadas comparten dos o tres
+  mallas, con los materiales de la paleta (`LotMesh`/`ToyTones`). Las piezas se
+  colocan alrededor de la caja medida del modelo (`BuildingLookVisual._model_box`,
+  una vez por cambio de etapa); la viga nace dentro del modelo para tocarlo
+  siempre. El humo (`smoke`, variante `ruin`) y las chispas son quads de
+  `BuildingFx` con su material compartido. El ladeo usa la misma postura
+  guardada que la ruina (`look_base_pos/rot`), asi que reparar o mejorar lo
+  devuelve exacto.
+- **2D**: `Building2D` no usa la parcela horneada entera mientras esta herido:
+  pinta la parcela derecha y el cuerpo (de la cache por tipo) con
+  `BuildingArt2D.damage_lean()`; las marcas (`draw_damage_marks`) se hornean en
+  `ArtCache2D` con clave `dmg|etapa|variante|huella|tamano`. Humo y chispas,
+  sprites de `BuildingFx` creados la primera vez (`DamageFx`).
+- **Mismo lado en las dos vistas**: variante y lado salen de
+  `BuildingLook.seed_of()` (celda de origen).
+- **Calidad Minima**: solo la malla y el dibujo; humo y chispas estan en el
+  grupo `building_fx_anim` y no se ven.
+- **Nada por frame**: la 3D cambia la etapa con `building_damaged` (repinta
+  ya) y el reloj comun de aspectos; la 2D, con su firma de repintado.
+- **Reparado**: vuelve a sano con el salto de juguete y el polvo de la obra
+  terminada (`BuildingPlacer._bounce_building`, `BuildingPlacer2D`).
+- No hay andamio de reparacion: reparar es instantaneo (no hay un estado
+  "reparandose" que pintar).
+- Sonda: `tools/look_probe.gd` saca en `look_probe_3d.png` leve y grave del
+  cuartel, la casa, la fundicion trabajando y el almacen.
 
 ## Parcela y atrezo (guia de estilo, 2026-10-04)
 

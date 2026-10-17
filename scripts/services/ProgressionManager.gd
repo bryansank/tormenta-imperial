@@ -253,9 +253,7 @@ func _audit_seed() -> int:
 	return randi()
 
 func _read_morale() -> float:
-	if PopulationManager.has_method("get_morale"):
-		return float(PopulationManager.get_morale())
-	return 50.0
+	return float(PopulationManager.get_morale())
 
 # ── Victory ──
 

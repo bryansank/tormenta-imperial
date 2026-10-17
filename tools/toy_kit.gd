@@ -186,6 +186,25 @@ func add(mk, name: String, xf: Transform3D, opts := {}) -> void:
 func aabb(name: String) -> AABB:
 	return piece(name)["aabb"]
 
+## La caja de los vertices de la pieza que caen en la casilla `slot` (sin la
+## transformacion de colocarla). Sirve para saber, p. ej., donde acaba el palo
+## de un mastil cuando la tela se quita con "skip". AABB vacia si no hay ninguno.
+func slot_aabb(name: String, slot: int) -> AABB:
+	var p := piece(name)
+	var v: PackedVector3Array = p["v"]
+	var slots: PackedByteArray = p["slot"]
+	var box := AABB()
+	var first := true
+	for i in v.size():
+		if int(slots[i]) != slot:
+			continue
+		if first:
+			box = AABB(v[i], Vector3.ZERO)
+			first = false
+		else:
+			box = box.expand(v[i])
+	return box
+
 ## La transformacion que deja la pieza apoyada en `pos` (su base en pos.y,
 ## centrada en planta), girada `rot_deg` y escalada: `size` es el lado mayor en
 ## planta que se quiere (o `scale` directo si size <= 0). `stretch` estira por eje.

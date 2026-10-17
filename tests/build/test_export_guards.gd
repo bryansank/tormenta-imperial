@@ -10,6 +10,8 @@ extends GdUnitTestSuite
 ##      excluye lo mismo, no lleva secretos y no altera el preset real.
 ##   6. Las licencias que viajan con el binario existen: LICENSE,
 ##      THIRD-PARTY-NOTICES.md, licenses/GODOT-COPYRIGHT.txt y la de cada fuente.
+##   7. Los assets que el export deja fuera por no usarse (UNUSED_ASSETS) siguen
+##      sin usarse en el juego (docs/19 §13).
 
 const PRESETS_PATH := "res://export_presets.cfg"
 const GATE_PATH := "res://scripts/services/BeckettGate.gd"
@@ -28,7 +30,34 @@ const MUST_EXCLUDE := [
 	# Los GLB viejos de los edificios: se quedan en el repo, pero el juego ya
 	# usa los modelos horneados de assets/models/toy/ (docs/03).
 	"assets/models/buildings/*",
+	# Las piezas fuente CC0 que solo usa el horneado (tools/). Cada pack lleva
+	# .gdignore y Godot no las importa, pero un pack nuevo sin él viajaría entero.
+	"assets/models/cc0/*",
+	# Assets que solo usan las herramientas (UNUSED_ASSETS, abajo).
+	"assets/textures/metal_plate_diff_1k.jpg",
+	"assets/branding/banner.png",
+	"assets/branding/*.svg",
+	"assets/fonts/Rajdhani-Medium.ttf",
 ]
+
+## Los ficheros que cubren esas cuatro últimas exclusiones. Siguen en el repo porque
+## los usan las herramientas (tools/gen_ui_textures, tools/render_brand,
+## tools/render_branding), pero ningún script, escena ni .tres del juego los carga:
+## fuera del paquete son ~2 MB menos (docs/19 §13). Si el juego empieza a usar
+## alguno, test_unused_assets_are_not_loaded_by_the_game falla: hay que quitarlo de
+## aquí, de MUST_EXCLUDE y del exclude_filter de los tres presets.
+const UNUSED_ASSETS := [
+	"res://assets/textures/metal_plate_diff_1k.jpg",
+	"res://assets/branding/banner.png",
+	"res://assets/branding/banner.svg",
+	"res://assets/branding/keyart.svg",
+	"res://assets/branding/logo.svg",
+	"res://assets/fonts/Rajdhani-Medium.ttf",
+]
+
+## Dónde puede haber una referencia del juego a un asset (ruta res:// o uid://).
+const GAME_DIRS := ["res://scripts", "res://scenes", "res://data", "res://assets"]
+const GAME_EXTENSIONS := ["gd", "tscn", "tres", "gdshader", "cfg"]
 
 
 func test_dev_mode_is_on_in_the_editor_binary() -> void:
@@ -72,6 +101,68 @@ func test_windows_preset_ships_one_relative_exe() -> void:
 	assert_bool(export_path.is_relative_path()).is_true()
 	assert_bool(export_path.begins_with("build/")).is_true()
 	assert_bool(bool(cf.get_value("preset.0.options", "binary_format/embed_pck", false))).is_true()
+
+
+## Una plantilla propia (la compilada para ocupar menos, docs/19 §13.4) se nombra
+## con una ruta relativa dentro de build/, que no se versiona: una absoluta
+## filtraría la máquina de quien exporta y rompería el export en cualquier otra.
+func test_custom_templates_are_empty_or_relative_inside_build() -> void:
+	var cf := ConfigFile.new()
+	assert_int(cf.load(PRESETS_PATH)).is_equal(OK)
+	for section in cf.get_sections():
+		if not section.ends_with(".options"):
+			continue
+		for key in ["custom_template/debug", "custom_template/release"]:
+			var path := str(cf.get_value(section, key, ""))
+			if path.is_empty():
+				continue
+			assert_bool(path.is_relative_path() and path.begins_with("build/")) \
+				.override_failure_message("%s %s: ruta relativa dentro de build/, no %s" % [section, key, path]) \
+				.is_true()
+
+
+## Lo que se excluye por no usarse tiene que seguir sin usarse: si un script, una
+## escena o un .tres del juego (o project.godot) lo nombra por ruta o por uid, el
+## exportado lo buscaría y no lo encontraría.
+func test_unused_assets_are_not_loaded_by_the_game() -> void:
+	var sources: Array[String] = ["res://project.godot"]
+	for dir in GAME_DIRS:
+		_collect_sources(dir, sources)
+	assert_int(sources.size()).is_greater(50)
+	var texts := {}
+	for path in sources:
+		texts[path] = FileAccess.get_file_as_string(path)
+	for asset in UNUSED_ASSETS:
+		assert_bool(FileAccess.file_exists(asset)) \
+			.override_failure_message("%s ya no existe: quitarlo de UNUSED_ASSETS y del exclude_filter" % asset).is_true()
+		var needles: Array[String] = [asset, asset.trim_prefix("res://")]
+		var uid := _uid_of(asset)
+		if not uid.is_empty():
+			needles.append(uid)
+		for path in texts:
+			for needle in needles:
+				assert_bool(str(texts[path]).contains(needle)) \
+					.override_failure_message("%s usa %s, que el export deja fuera (UNUSED_ASSETS)" % [path, asset]) \
+					.is_false()
+
+
+func _collect_sources(dir: String, out: Array[String]) -> void:
+	if FileAccess.file_exists(dir.path_join(".gdignore")):
+		return
+	for f in DirAccess.get_files_at(dir):
+		if GAME_EXTENSIONS.has(f.get_extension()):
+			out.append(dir.path_join(f))
+	for sub in DirAccess.get_directories_at(dir):
+		if not sub.begins_with("."):
+			_collect_sources(dir.path_join(sub), out)
+
+
+## El uid:// que el importador guardó en el .import del asset ("" si no hay).
+func _uid_of(asset: String) -> String:
+	var cf := ConfigFile.new()
+	if cf.load(asset + ".import") != OK:
+		return ""
+	return str(cf.get_value("remap", "uid", ""))
 
 
 # --- Android ------------------------------------------------------------------

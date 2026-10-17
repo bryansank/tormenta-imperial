@@ -201,6 +201,21 @@ signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary
 ## actual. El tablero no se guarda (D6), asi que aqui nunca hay encuentro abierto.
 @warning_ignore("unused_signal")
 signal expedition_resumed(expedition_id: int)
+## Salidas (doc 21 §3, 2026-10-14). El tablon cambio: oferta nueva, lanzada,
+## vuelta, vista, o la rebaja del Diezmo se gano o se gasto. El boton
+## ESCARAMUZAS repinta su punto rojo con esto.
+@warning_ignore("unused_signal")
+signal sortie_offers_changed()
+## Lo que la columna trajo de fuera al volver: "parts", "colonists",
+## "tithe_pct", "blueprints" (Array). Ya aplicado a la colonia.
+@warning_ignore("unused_signal")
+signal sortie_loot_gained(loot: Dictionary)
+## Un plano nuevo: el edificio `building_id` ya se puede construir.
+@warning_ignore("unused_signal")
+signal blueprint_unlocked(building_id: String)
+## El enemigo se retiro con poca vida y el combate se gano (D7 = B).
+@warning_ignore("unused_signal")
+signal enemy_routed()
 
 # ── Building Health ──
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
@@ -403,6 +418,10 @@ signal tutorial_guide_finished(skipped: bool)
 ## de HelpCatalog. HelperPanel la ensena ya, senalando su control.
 @warning_ignore("unused_signal")
 signal help_reopen_requested(help_id: String)
+## El combate guiado cambio de paso (TutorialManager.COMBAT_STEPS: "c_select",
+## "c_move"...). "" = ninguna marca en el tablero. Lo pinta TutorialPanel.
+@warning_ignore("unused_signal")
+signal combat_lesson_step_changed(step_id: String)
 
 # ── comida-granja-recoger (2026-10-04) ──
 ## Cambio lo acumulado en un edificio (produjo, se recogio, se echo a perder).

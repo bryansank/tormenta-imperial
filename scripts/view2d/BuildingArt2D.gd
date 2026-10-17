@@ -1029,6 +1029,12 @@ static func _headquarters(ci: CanvasItem, r: Rect2) -> void:
 	_block(ci, Rect2(mb - Vector2(m * 0.05, m * 0.05), Vector2(m * 0.1, m * 0.1)), m * 0.03, STONE.darkened(0.12), CONCRETE_DARK)
 	_dot(ci, mb, m * 0.022, IRON)
 
+## Los dibujos que traen mastil para la bandera del pais (como el FlagAnchor de
+## las recetas 3D): el Nucleo, el Cuartel General, el mastil y el letrero de la
+## colonia. Building2D les cuelga ColonyFlag2D.
+static func has_flag_mount(id: String) -> bool:
+	return id in ["nucleo", "headquarters", "flagpole", "colony_sign"]
+
 ## Donde nace el mastil del Cuartel General: la esquina delantera derecha de
 ## su tejado (marco local: delante es +y).
 static func _hq_mast_base(top: Rect2, m: float) -> Vector2:
@@ -1041,7 +1047,7 @@ static func _hq_mast_base(top: Rect2, m: float) -> Vector2:
 ## asi que la bandera cuelga justo de lo alto de la linterna del Nucleo o del
 ## mastil del Cuartel General.
 static func flag_mount(id: String, size: Vector2, inset: float, steps: int, level: int = 1) -> Dictionary:
-	if id != "nucleo" and id != "headquarters":
+	if not has_flag_mount(id):
 		return {}
 	_set_view(steps)
 	var r := grown_rect(Rect2(-size * 0.5, size).grow(-INSET - inset), level)
@@ -1049,7 +1055,17 @@ static func flag_mount(id: String, size: Vector2, inset: float, steps: int, leve
 	var base := Vector2.ZERO
 	var height := 0.0
 	var flag_w := 0.0
-	if id == "nucleo":
+	if id == "flagpole":
+		var fp := _flagpole_mast(r, m)
+		base = fp[0]
+		height = fp[1]
+		flag_w = m * 0.36
+	elif id == "colony_sign":
+		var cs := _colony_sign_mast(r, m)
+		base = cs[0]
+		height = cs[1]
+		flag_w = m * 0.24
+	elif id == "nucleo":
 		base = _nucleo_geom(r)["lantern_top"]
 		height = m * 0.3
 		flag_w = m * 0.34
@@ -1223,23 +1239,136 @@ static func _perimeter_point(r: Rect2, t: float) -> Vector2:
 	t -= r.size.x
 	return Vector2(r.position.x, r.end.y - t)
 
-## Dano: ceniza encima en proporcion a lo perdido (como la capa 3D); en ruinas,
-## el dibujo de ruina (draw_ruin). Mas una barra de vida si esta tocado.
-## `n`: clase de huella (1, 2, 3), para el tamano de los escombros de la ruina.
+## Dano: en ruinas, ceniza y el dibujo de ruina (draw_ruin); herido, las marcas
+## de su etapa (draw_damage_marks: leve o grave, docs/03 "Etapas de dano") o,
+## por encima del umbral leve, solo un velo de ceniza. Mas la barra de vida.
+## `n`: clase de huella (1, 2, 3), para el tamano de los escombros. Building2D
+## no lo usa tal cual: hornea las marcas por etapa (ArtCache2D) y las ladea con
+## el edificio; esto es el dibujo entero a mano (pruebas, sondas).
 static func draw_damage(ci: CanvasItem, size: Vector2, ratio: float, ruined: bool, seed_val: int, n: int = 2) -> void:
 	var r := Rect2(-size * 0.5, size).grow(-INSET)
 	if ratio >= 1.0 and not ruined:
 		return
-	ci.draw_rect(r, Color(0.10, 0.09, 0.08, (1.0 - ratio) * 0.75))
+	var stage := LookRule.damage_stage(ratio, ruined)
 	if ruined:
+		ci.draw_rect(r, Color(0.10, 0.09, 0.08, 0.75))
 		# La ruina tiene dibujo propio (muro roto, cascotes, vigas); el humo
 		# negro lo anima Building2D con la hoja de BuildingFx.
 		draw_ruin(ci, size, seed_val, n)
-	# Barra de vida
+	elif stage == LookRule.DAMAGE_NONE:
+		draw_scratch(ci, size, ratio)
+	else:
+		draw_damage_marks(ci, size, stage, seed_val, n)
+	draw_health_bar(ci, size, ratio)
+
+## Un rasguno (vida por encima del umbral leve): solo un velo de ceniza, como
+## la capa de BuildingHealth en 3D.
+static func draw_scratch(ci: CanvasItem, size: Vector2, ratio: float) -> void:
+	var r := Rect2(-size * 0.5, size).grow(-INSET)
+	ci.draw_rect(r, Color(0.10, 0.09, 0.08, (1.0 - clampf(ratio, 0.0, 1.0)) * 0.5))
+
+## La barra de vida de un edificio herido (arriba de la huella).
+static func draw_health_bar(ci: CanvasItem, size: Vector2, ratio: float) -> void:
+	var r := Rect2(-size * 0.5, size).grow(-INSET)
 	var bar := Rect2(Vector2(r.position.x + 3, r.position.y + 3), Vector2(r.size.x - 6, 4))
 	ci.draw_rect(bar.grow(1), OUTLINE)
 	var col := RED if ratio < 0.34 else (BRASS if ratio < 0.67 else GREEN)
 	ci.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(ratio, 0.0, 1.0), bar.size.y)), col)
+
+## Las marcas de una etapa de dano (1 leve, 2 grave) sobre el dibujo del
+## edificio, en pantalla (sin girar). Lo mismo que la 3D visto desde arriba:
+## - Leve: velo de ceniza, grietas en el tejado, huecos de tejas que faltan,
+##   tejas caidas al pie y una tabla suelta que asoma por un lado.
+## - Grave: velo mas oscuro, mas grietas y huecos, tizne, una chapa suelta
+##   torcida, una viga partida con ascuas y cascotes al pie. El humo negro y
+##   las chispas los anima Building2D (hojas de BuildingFx).
+## Determinista por `seed_val` (solo cuenta seed_val % DAMAGE_VARIANTS: asi se
+## hornea una textura por etapa, tamano y variante).
+static func draw_damage_marks(ci: CanvasItem, size: Vector2, stage: int, seed_val: int, n: int = 2) -> void:
+	if stage < LookRule.DAMAGE_LIGHT or stage > LookRule.DAMAGE_HEAVY:
+		return
+	var heavy := stage == LookRule.DAMAGE_HEAVY
+	var r := Rect2(-size * 0.5, size).grow(-INSET)
+	var rng := RandomNumberGenerator.new()
+	var variant := posmod(seed_val, DAMAGE_VARIANTS)
+	rng.seed = 7919 * (variant + 1) + 31 * stage
+	var side := 1.0 if variant % 2 == 0 else -1.0
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r, Color(0.10, 0.09, 0.08, 0.32 if heavy else 0.14))
+	# Tizne (grave): manchas que se salen un poco del tejado.
+	if heavy:
+		for k in range(2 + n):
+			var p := r.position + Vector2(rng.randf_range(0.15, 0.85) * r.size.x, rng.randf_range(0.15, 0.85) * r.size.y)
+			_dot(ci, p, rng.randf_range(4.0, 7.0) * (0.8 + 0.2 * n), Color(0.03, 0.03, 0.03, 0.45))
+	# Huecos de tejas que faltan: rectangulos oscuros con el borde claro de la
+	# teja rota, en la mitad de arriba (el tejado).
+	for k in range(5 if heavy else 3):
+		var c := r.position + Vector2(rng.randf_range(0.15, 0.85) * r.size.x, rng.randf_range(0.12, 0.6) * r.size.y)
+		var hs := Vector2(rng.randf_range(0.05, 0.09), rng.randf_range(0.04, 0.07)) * m
+		var hole := Rect2(c - hs, hs * 2.0)
+		ci.draw_rect(hole, Color(0.06, 0.05, 0.05, 0.92))
+		ci.draw_line(hole.position, Vector2(hole.end.x, hole.position.y), TILE_RED_DARK.lightened(0.2), 1.0)
+	# Grietas en zigzag (negras con un filo claro: se leen sobre cualquier tejado).
+	for k in range(4 if heavy else 2):
+		var p := r.position + Vector2(rng.randf_range(0.15, 0.85) * r.size.x, rng.randf_range(0.15, 0.7) * r.size.y)
+		var crack := PackedVector2Array([p])
+		var dir := Vector2.from_angle(rng.randf() * TAU)
+		for j in range(4 if heavy else 3):
+			p += (dir * m * 0.09).rotated(rng.randf_range(-0.7, 0.7))
+			crack.append(p)
+		ci.draw_polyline(crack, Color(0.02, 0.02, 0.02, 0.95), 2.0 if heavy else 1.5)
+		ci.draw_polyline(crack, Color(1, 1, 1, 0.18), 0.6)
+	# Tejas caidas al pie (abajo en pantalla: delante del edificio).
+	for k in range(6 if heavy else 4):
+		var c := Vector2(r.position.x + rng.randf_range(0.1, 0.9) * r.size.x, r.end.y + rng.randf_range(-0.02, 0.1) * m)
+		var t := Vector2.from_angle(rng.randf() * TAU) * m * 0.045
+		var pts := PackedVector2Array([c - t - t.orthogonal() * 0.6, c + t - t.orthogonal() * 0.6, c + t + t.orthogonal() * 0.6, c - t + t.orthogonal() * 0.6])
+		_poly(ci, pts, TERRACOTTA if k % 3 != 2 else CONCRETE_DARK, OUTLINE, 1.0)
+	# Una tabla suelta que asoma por un costado, torcida.
+	var plank_c := Vector2(r.get_center().x + side * r.size.x * 0.5, r.position.y + r.size.y * rng.randf_range(0.55, 0.75))
+	var along := Vector2(side, 0.45).normalized() * m * 0.2
+	var across := along.orthogonal().normalized() * 2.2
+	_poly(ci, PackedVector2Array([plank_c - along - across, plank_c + along - across, plank_c + along + across, plank_c - along + across]), LIGHT_WOOD, OUTLINE, 1.0)
+	if not heavy:
+		return
+	# Chapa suelta, torcida, en una esquina de arriba.
+	var sc := Vector2(r.get_center().x - side * r.size.x * 0.3, r.position.y + r.size.y * 0.22)
+	var sa := Vector2.from_angle(side * 0.5) * m * 0.14
+	var sb := sa.orthogonal() * 0.7
+	_poly(ci, PackedVector2Array([sc - sa - sb, sc + sa - sb, sc + sa + sb, sc - sa + sb]), STEEL, OUTLINE, 1.0)
+	ci.draw_line(sc - sa * 0.6, sc + sa * 0.6, RUST, 1.5)
+	# Viga partida que cruza el tejado y sale por un lado, con ascuas en la punta.
+	var b0 := r.get_center() + Vector2(-side * r.size.x * 0.1, -r.size.y * 0.08)
+	var b1 := r.get_center() + Vector2(side * r.size.x * 0.62, -r.size.y * 0.3)
+	ci.draw_line(b0, b1, OUTLINE, 5.0)
+	ci.draw_line(b0, b1, Color(0.2, 0.13, 0.09), 3.0)
+	_dot(ci, b1, 1.8, FIRE)
+	# Cascotes al pie del costado.
+	for k in range(3 + n):
+		var c := Vector2(r.get_center().x + side * r.size.x * rng.randf_range(0.42, 0.58), r.position.y + rng.randf_range(0.4, 0.95) * r.size.y)
+		var rad := rng.randf_range(2.0, 3.8)
+		var pts := PackedVector2Array()
+		for s in 5:
+			var a := TAU * s / 5.0 + rng.randf_range(-0.3, 0.3)
+			pts.append(c + Vector2(cos(a), sin(a)) * rad * rng.randf_range(0.7, 1.1))
+		_poly(ci, pts, CONCRETE if k % 2 == 0 else CONCRETE_DARK.lightened(0.1), OUTLINE, 1.0)
+
+## Disposiciones de dano distintas (la misma cuenta que la 3D, SiteMesh).
+const DAMAGE_VARIANTS := 3
+
+## El ladeo de un edificio herido en 2D: un poco de cizalla y de hundimiento
+## (vista de maqueta: lo que se inclina se lee como torcido), hacia `side`.
+## Leve y grave; sano, la identidad.
+static func damage_lean(stage: int, size: Vector2, side: float) -> Transform2D:
+	if stage < LookRule.DAMAGE_LIGHT or stage > LookRule.DAMAGE_HEAVY:
+		return Transform2D.IDENTITY
+	var i := stage - 1
+	var tilts: Array = GameConfig.damage_tilt
+	var tilt := float(tilts[clampi(i, 0, tilts.size() - 1)]) if not tilts.is_empty() else 0.0
+	# Cizalla de 2 a 3 veces la inclinacion 3D: vista desde arriba se nota menos.
+	var skew := tilt * 2.6 * side
+	var squash := 0.03 * float(stage)
+	return Transform2D(0.0, Vector2(1.0, 1.0 - squash), skew, Vector2(0.0, size.y * squash * 0.5))
 
 ## Borde de seleccion en laton.
 static func draw_selection(ci: CanvasItem, size: Vector2, pulse: float) -> void:
@@ -2769,17 +2898,6 @@ static func _deco_pad(ci: CanvasItem, r: Rect2, kind: String) -> void:
 	ci.draw_rect(r, fill.darkened(0.1))
 	ci.draw_rect(r.grow(-2.5), fill)
 
-## Bandera de serie de la colonia (laton, marfil, carmesi) colgada de `tip`.
-static func _deco_flag(ci: CanvasItem, tip: Vector2, w: float, h: float) -> void:
-	var right := -_left()
-	var cols := [BRASS, CREAM, IMPERIAL_RED]
-	var frame := PackedVector2Array([tip - _down - right, tip + right * (w + 1.0) - _down,
-		tip + right * (w + 1.0) + _down * (h + 1.0), tip + _down * (h + 1.0) - right])
-	ci.draw_colored_polygon(frame, OUTLINE)
-	for i in 3:
-		var a := tip + _down * h * float(i) / 3.0
-		ci.draw_colored_polygon(PackedVector2Array([a, a + right * w, a + right * w + _down * h / 3.0, a + _down * h / 3.0]), cols[i])
-
 ## Farola: peana, fuste alto de hierro y dos faroles encendidos.
 static func _lamp_post(ci: CanvasItem, r: Rect2) -> void:
 	var m := minf(r.size.x, r.size.y)
@@ -2852,8 +2970,8 @@ static func _flower_planter(ci: CanvasItem, r: Rect2) -> void:
 		for k in 3:
 			_dot(ci, p - _down * pr * 0.25 + Vector2.from_angle(TAU * k / 3.0 + i) * pr * 0.5, maxf(1.2, pr * 0.22), cols[(i + k) % cols.size()])
 
-## Letrero de la colonia: dos postes, el tablero con marco de laton y la
-## bandera de la colonia en su mastil.
+## Letrero de la colonia: dos postes, el tablero con marco de laton y su
+## mastil; la bandera del pais la pone ColonyFlag2D (flag_mount).
 static func _colony_sign(ci: CanvasItem, r: Rect2) -> void:
 	var m := minf(r.size.x, r.size.y)
 	_deco_pad(ci, r, "grass")
@@ -2865,8 +2983,14 @@ static func _colony_sign(ci: CanvasItem, r: Rect2) -> void:
 	ci.draw_colored_polygon(PackedVector2Array([a.lerp(b, 0.08) + _down * 2.0, b.lerp(a, 0.08) + _down * 2.0,
 		b.lerp(a, 0.08) + _down * (m * 0.16 - 2.0), a.lerp(b, 0.08) + _down * (m * 0.16 - 2.0)]), CREAM)
 	ci.draw_line(a.lerp(b, 0.25) + _down * m * 0.08, b.lerp(a, 0.25) + _down * m * 0.08, IRON, 1.5)
-	var tip := _mast(ci, c - side * 1.6 + _down * m * 0.02, m * 0.5, IRON, 1.8)
-	_deco_flag(ci, tip, m * 0.22, m * 0.15)
+	var mast := _colony_sign_mast(r, m)
+	_mast(ci, mast[0], mast[1], IRON, 1.8)
+
+## [base, alto] del mastil del letrero (lo comparten su dibujo y flag_mount).
+static func _colony_sign_mast(r: Rect2, m: float) -> Array:
+	var c := r.get_center() + _down * m * 0.18
+	var side := _left() * m * 0.22
+	return [c - side * 1.6 + _down * m * 0.02, m * 0.5]
 
 ## Carro de heno: carro de madera con dos ruedas, el heno amontonado encima y
 ## dos pacas al lado.
@@ -2905,16 +3029,21 @@ static func _bonfire(ci: CanvasItem, r: Rect2) -> void:
 		ci.draw_line(lc - _left() * m * 0.2, lc + _left() * m * 0.2, OUTLINE, m * 0.09 + 2.0)
 		ci.draw_line(lc - _left() * m * 0.2, lc + _left() * m * 0.2, LIGHT_WOOD, m * 0.09)
 
-## Mastil con bandera: peana de dos escalones y el mastil alto con la bandera.
+## Mastil con bandera: peana de dos escalones y el mastil alto; la bandera
+## del pais la pone ColonyFlag2D (flag_mount).
 static func _flagpole(ci: CanvasItem, r: Rect2) -> void:
 	var m := minf(r.size.x, r.size.y)
 	_deco_pad(ci, r, "slabs")
-	var base := r.get_center() + _down * m * 0.2
+	var mast := _flagpole_mast(r, m)
+	var base: Vector2 = mast[0]
 	_block(ci, Rect2(base - Vector2(m, m) * 0.17, Vector2(m, m) * 0.34), m * 0.05, STONE.lightened(0.1), CONCRETE_DARK)
 	_block(ci, Rect2(base - Vector2(m, m) * 0.1, Vector2(m, m) * 0.2), m * 0.05, CREAM, STONE)
-	var tip := _mast(ci, base, m * 0.72, IRON, 2.5)
+	var tip := _mast(ci, base, mast[1], IRON, 2.5)
 	_disc(ci, tip, 2.2, BRASS, OUTLINE, 1.0)
-	_deco_flag(ci, tip + _down * 2.0, m * 0.36, m * 0.24)
+
+## [base, alto] del mastil (lo comparten su dibujo y flag_mount).
+static func _flagpole_mast(r: Rect2, m: float) -> Array:
+	return [r.get_center() + _down * m * 0.2, m * 0.72]
 
 ## Palmeras: corro de arena y dos palmeras con las hojas abiertas.
 static func _palm_trees(ci: CanvasItem, r: Rect2) -> void:

@@ -32,12 +32,22 @@ var back_row_uids: Dictionary = {}
 var index: int = 0
 var state: int = State.DEPLOYING
 var deploy_zones: Dictionary = {}    ## side -> Array[Vector2i]
+## Retirada enemiga (doc 21 §3.4, D7 = B): en expediciones e incursiones el
+## enemigo se retira cuando le queda menos de `rout_ratio` de la vida con la que
+## empezo, y el combate se gana sin rematar. Apagado por defecto: el Diezmo y el
+## asedio se pelean hasta el final. No toca la formula de dano.
+var enemy_can_rout: bool = false
+var rout_ratio: float = 0.0
+## Vida total del enemigo al empezar (la base de la retirada).
+var enemy_start_hp: int = 0
+## El combate acabo porque el enemigo se retiro.
+var routed: bool = false
 
 # ── Construction ─────────────────────────────────────────────────────
 
 ## `units` arrive already built (CombatUnit instances) so the expedition can hand
 ## over survivors carrying their damage from the previous node (FR-011).
-static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: bool = false, p_back_row: Array = []) -> Encounter:
+static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: bool = false, p_back_row: Array = [], p_can_rout: bool = false) -> Encounter:
 	var e := Encounter.new()
 	e.units = p_units
 	e.index = p_index
@@ -47,6 +57,11 @@ static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: 
 		e.back_row_uids[int(uid)] = true
 	e.board_size = GameConfig.combat_board_size
 	e.turn_limit = GameConfig.combat_turn_limit
+	# Una defensa nunca se retira: es el Diezmo o el asedio (D7 = B).
+	e.enemy_can_rout = p_can_rout and not p_is_defense
+	e.rout_ratio = GameConfig.combat_retreat_ratio
+	for unit in Rules.living_units(p_units, ENEMY):
+		e.enemy_start_hp += unit.hp
 	e._build_deploy_zones()
 	e._deploy()
 	return e
@@ -214,7 +229,22 @@ func _check_resolution() -> Array:
 		return _finish(true, State.WON)
 	if living(PLAYER).is_empty():
 		return _finish(false, State.LOST)
+	if should_rout():
+		routed = true
+		var events: Array = [{"e": "enemy_routed", "survivors": living(ENEMY).size()}]
+		state = State.WON
+		events.append({"e": "encounter_ended", "victory": true, "rounds": round_number, "routed": true})
+		return events
 	return []
+
+## El enemigo esta perdido y se va: le queda menos de `rout_ratio` de su vida
+## inicial. Solo donde se permite (expedicion e incursion).
+func should_rout() -> bool:
+	if not enemy_can_rout or rout_ratio <= 0.0 or enemy_start_hp <= 0:
+		return false
+	if living(ENEMY).is_empty():
+		return false
+	return Rules.hp_fraction(units, ENEMY, enemy_start_hp) < rout_ratio
 
 ## Time is up: the side with more total HP takes it, a tie is a player loss.
 ## Stalling is a losing strategy on purpose (FR-015).

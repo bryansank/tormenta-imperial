@@ -1,6 +1,6 @@
 extends RefCounted
 ## Ayudas de las recetas de las decoraciones baratas (feat/decoraciones-1).
-## Las piezas propias (flores, pacas, llama, bandera) estan en
+## Las piezas propias (flores, pacas, llama) estan en
 ## scripts/buildings/DecorMesh.gd, que tambien hace la version procedural que se
 ## ve en el juego hasta que se hornea.
 

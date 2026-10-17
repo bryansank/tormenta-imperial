@@ -31,6 +31,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/TitleMenu.tscn" id="31"]
 [ext_resource type="PackedScene" path="res://scenes/ui/SandboxPanel.tscn" id="modos_sandbox"]
 [ext_resource type="PackedScene" path="res://scenes/ui/RankPanel.tscn" id="rango_gobernador"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SkirmishButton.tscn" id="boton_escaramuzas"]
 
 [node name="Main2D" type="Node2D"]
 script = ExtResource("1")
@@ -97,6 +98,8 @@ script = ExtResource("7")
 [node name="SandboxPanel" parent="." instance=ExtResource("modos_sandbox")]
 
 [node name="RankPanel" parent="." instance=ExtResource("rango_gobernador")]
+
+[node name="SkirmishButton" parent="." instance=ExtResource("boton_escaramuzas")]
 
 [node name="PauseMenu" parent="." instance=ExtResource("30")]
 

@@ -65,12 +65,31 @@ func test_a_step_shows_its_line_and_number() -> void:
 	await await_idle_frame()
 	_start_guide()
 	await await_idle_frame()
-	assert_str(panel.current_step()).is_equal("open_build")
+	# Primero la meta (2026-10-16): paso 1, con su boton.
+	assert_str(panel.current_step()).is_equal("goal")
 	assert_bool(panel.is_coach_visible()).is_true()
 	assert_str(panel.coach_text()).is_not_empty()
 	var badge: Label = panel.find_child("Badge", true, false)
 	assert_str(badge.text).contains("1")
 	assert_str(badge.text).contains(str(TutorialManager.GUIDE_TOTAL))
+
+func test_the_reading_cards_move_on_with_their_button_and_show_numbers() -> void:
+	var panel := _panel()
+	await await_idle_frame()
+	_start_guide()
+	await await_idle_frame()
+	var ok: Button = panel.find_child("GuideOk", true, false)
+	assert_bool(ok.visible).is_true()
+	assert_str(ok.text).is_equal(Tr.t("BTN_GUIDE_GOAL_OK"))
+	ok.pressed.emit()
+	await await_idle_frame()
+	assert_str(panel.current_step()).is_equal("core")
+	ok.pressed.emit()
+	await await_idle_frame()
+	assert_str(panel.current_step()).is_equal("open_build")
+	assert_bool(ok.visible).is_false()
+	# Las cifras del aserradero, con iconos: lo que corta y cada cuanto.
+	assert_str(panel.facts_text()).contains(str(load("res://data/buildings/sawmill.tres").produces_wood))
 
 func test_the_veil_never_eats_a_touch() -> void:
 	# Fuera de orden tiene que poder tocarse todo: solo la tarjeta para el dedo.

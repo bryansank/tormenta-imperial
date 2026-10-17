@@ -1,5 +1,6 @@
 extends Node2D
-## La bandera del pais en la vista 2D, sobre el Nucleo y el Cuartel General.
+## La bandera del pais en la vista 2D, sobre el Nucleo, el Cuartel General y
+## los dibujos con mastil (el mastil y el letrero de la colonia).
 ## Se dibuja con la textura cacheada de ColonyFlag y solo se repinta al oir
 ## colony_identity_changed o cuando su edificio cambia de giro o de nivel
 ## (`set_mount`): nada por frame. En el Cuartel General no se ve mientras esta
@@ -49,6 +50,10 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(func(_b): _sync_visible.call_deferred())
 	EventBus.construction_started.connect(func(_b): _sync_visible.call_deferred())
 	EventBus.game_load_completed.connect(func(): _sync_visible.call_deferred())
+	# En ruinas el mastil se viene abajo con el modelo: la bandera no se queda
+	# sola en el aire (ronda de pruebas 1.0).
+	EventBus.building_ruined.connect(func(_b): _sync_visible.call_deferred())
+	EventBus.building_repaired.connect(func(_b): _sync_visible.call_deferred())
 
 func _sync_visible() -> void:
 	if _owner_node != null and is_instance_valid(_owner_node):

@@ -38,13 +38,29 @@ own resource — the **first** process of its list in `GameConfig.building_proce
 - **Outside the shared pool:** they live in the Núcleo's workshop (`ResourceManager.is_material()`;
   `get_total_stored()` skips them). The pool is tuned to the exact HQ L3 price, so they
   cannot count against it. The Tithe does not take them either.
-- **Who asks for them** (`BuildingData.cost_materials`): Barracks 10 planks, Tower 4
+- **Who asks for them** (`BuildingData.cost_materials`): Barracks 20 planks, Tower 4
   beams, Refinery 6 beams, Statue 3 ingots, HQ 20 beams + 10 ingots + 10 fuel, and the
   HQ upgrades (`hq_upgrade_costs`: L2 15 beams + 10 ingots + 15 fuel, L3 25 beams + 20
   ingots + 25 fuel).
 - The HUD shows them in a **TALLER** row once one is unlocked; ¿QUÉ HACER? turns a
   missing material into a "make" step (`Objectives.make_step_for()`).
 - Unlocked by `ProgressionManager._unlock_material_of()` on `construction_completed`.
+
+### Repuestos (2026-10-14, rama `feat/escaramuzas`)
+
+Un quinto material, `PARTS` (`parts`), al final del enum para no mover números. Como los
+otros cuatro va fuera de la bolsa y el Diezmo no lo toca, pero **ningún edificio lo
+fabrica**: solo se trae de las escaramuzas (incursiones y expediciones cortas,
+`docs/15-combat.md` §4b). Se desbloquea al traer los primeros (`CombatManager._apply_loot`).
+
+- **Quién los pide:** el nivel 3 de los productores (`upgrade_parts_cost` {3: 3} sobre
+  `upgrade_parts_buildings`: aserradero, mina, fundición, refinería, granja), sumado en
+  `GameConfig.get_upgrade_cost()`. El Cuartel General sigue con su tabla propia.
+- ¿QUÉ HACER? no propone una mejora que pida repuestos que no hay
+  (`Objectives._producer_step`); la línea "Sal de escaramuza" lo explica
+  (`Objectives.sortie_step`, motivo `SORTIE_WHY_PARTS`).
+- Colonos (habitantes al momento, hasta llenar las casas) y planos (abren edificios) son
+  el resto del botín exclusivo: ver `docs/15-combat.md` §4b.
 
 ## Resource Flow
 
@@ -358,7 +374,7 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
   and a Warehouse standing
 
 ### Mid Game (Era 2)
-- Steel enables: Barracks (250g+100s+80w + 10 planks), Refinery (300g+150s+100w + 6
+- Steel enables: Barracks (150g+60s+80w + 20 planks), Refinery (300g+150s+100w + 6
   beams; needs Foundry + Barracks)
 - Market becomes important for converting surplus
 

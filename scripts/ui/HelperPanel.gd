@@ -131,6 +131,9 @@ func _ready() -> void:
 	EventBus.tutorial_tip_requested.connect(_on_tip_requested)
 	EventBus.help_reopen_requested.connect(show_help)
 	EventBus.tutorial_guide_finished.connect(_on_guide_finished)
+	# Una leccion suelta del tutorial (reparar) que sale con un globo ya en
+	# pantalla lo aparta: antes se pisaban las dos tarjetas (ronda de pruebas 1.0).
+	EventBus.tutorial_step_changed.connect(func(_s): _pump.call_deferred())
 	# Durante una pelea las ayudas de la colonia esperan (docs/15 §3): al abrir
 	# el tablero la que este en pantalla se aparta y vuelve al cerrar el parte.
 	EventBus.encounter_started.connect(func(_i, _b): _refresh_callouts())
@@ -365,7 +368,8 @@ func _can_show(item: Dictionary) -> bool:
 	if not forced:
 		if not GameConfig.ui_helper_visible:
 			return false
-		if TutorialManager.is_guide_active():
+		# Tampoco con una leccion suelta del tutorial en pantalla (reparar).
+		if TutorialManager.is_coach_active():
 			return false
 	var k := HelpCatalog.kind(id)
 	if k == "callout":

@@ -66,6 +66,8 @@ func _ready() -> void:
 	EventBus.building_rotate_requested.connect(_on_rotate_requested)
 	# Obra terminada: salto y polvo (V1); lo recogido vuela a la bolsa (V2).
 	EventBus.construction_completed.connect(_on_construction_done)
+	# Reparado: vuelve a sano con el mismo salto (docs/03, "Etapas de dano").
+	EventBus.building_repaired.connect(_on_construction_done)
 	EventBus.production_collected.connect(_on_production_collected)
 	GameManager.register_placer(self)
 	_assist = Assist.new()
@@ -73,7 +75,7 @@ func _ready() -> void:
 	_assist.setup(self)
 	add_child(_assist)
 
-## Obra terminada (V1): el edificio entero da el salto (crece desde el centro de
+## Obra terminada (V1) o reparacion: el edificio entero da el salto (crece desde el centro de
 ## su huella, que es su origen) con un Tween que muere con el, y suelta 8 motas
 ## de polvo desde el borde. En calidad Minima, solo el salto.
 func _on_construction_done(node: Node) -> void:
@@ -83,7 +85,7 @@ func _on_construction_done(node: Node) -> void:
 	if data == null or data.id == "road":
 		return
 	var b := node as Node2D
-	var old: Tween = b.get_meta("_bounce_tween", null)
+	var old: Tween = b.get_meta("_bounce_tween") if b.has_meta("_bounce_tween") else null
 	if old != null and old.is_valid():
 		old.kill()
 	b.scale = Vector2.ONE
@@ -150,7 +152,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R and _state != State.IDLE:
-			_rotate_building()
+			# Por la senal, como el boton ↻ de la pantalla: asi el tutorial ve
+			# el giro con teclado y con el dedo (_on_rotate_requested gira).
+			EventBus.building_rotate_requested.emit()
 			get_viewport().set_input_as_handled()
 
 ## Igual que en 3D: con el raton se coloca al pulsar; con el dedo, al levantarlo
@@ -303,6 +307,8 @@ func try_place(cell: Vector2i) -> Node:
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return null
 	var blocked := Rules.purchase_block_detail(_current_data)
 	if blocked != "":
@@ -390,6 +396,8 @@ func try_move(cell: Vector2i) -> bool:
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return false
 	# Llevado a donde no llega la red: su carretera se tiende (y se paga) igual
 	# que al colocarlo.
@@ -641,6 +649,8 @@ func assist_explain(origin: Vector2i) -> void:
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 	elif verdict["reason"] == "road":
 		_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+	elif verdict["reason"] == Rules.SHORE_REASON:
+		_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 
 func assist_feedback(text: String) -> void:
 	_show_feedback(text)
