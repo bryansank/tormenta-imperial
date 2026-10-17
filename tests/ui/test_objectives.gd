@@ -182,6 +182,11 @@ func _take(step: Dictionary) -> void:
 			TechTreeManager._apply_tech_bonus(TechTreeManager.get_tech(String(step["id"])))
 		"sell":
 			MarketManager.sell(String(step["id"]), int(step["amount"]))
+		"buy":
+			# Comprar comida con el oro que sobra (paso de hambre, 2026-10-12). El
+			# paso no tiene coste propio (step_cost), asi que _give ya vacio la
+			# bolsa: entra lo comprado, que es lo que hace pasar pagina.
+			ResourceManager.add(ResourceManager.name_to_type(String(step["id"])), int(step["amount"]))
 		"sortie":
 			# Sale y la gana: lo que cuenta aqui es que el panel pase pagina.
 			assert_bool(bool(CombatManager.can_launch({String(step["id"]): 1})["ok"])).is_true()
@@ -431,7 +436,7 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 		"la mejora final se pidio sin pasar por las tecnologias de almacen").is_not_empty()
 	assert_str(String(research[0])).is_equal("log_1")
 	assert_str(String(step["kind"])).override_failure_message(str(seen)).is_equal("upgrade")
-	assert_int(int(step.get("level", 0))).is_equal(3)
+	assert_int(int(step.get("level", 0))).override_failure_message(str(seen) + str(step)).is_equal(3)
 	# Y con la holgura, la mejora ya no es el 100% de la bolsa.
 	assert_int(Objectives._cost_total(Objectives.step_cost(step))).is_less(ResourceManager.get_storage_cap())
 
