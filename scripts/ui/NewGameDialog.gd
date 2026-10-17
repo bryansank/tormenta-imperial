@@ -81,6 +81,14 @@ func _ready() -> void:
 	_show_pick()
 	get_viewport().size_changed.connect(_relayout)
 	_relayout()
+	# Con un solo modo ofrecido y el nivel Gobernador aun cerrado no hay nada
+	# que elegir: se va directo a nombre y bandera (ronda de pruebas 1.0).
+	if skips_pick():
+		_on_start()
+
+## No hay nada que elegir en el paso 1: un solo modo y un solo nivel abierto.
+func skips_pick() -> bool:
+	return GameMode.OFFERED.size() <= 1 and is_governor_locked()
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -328,7 +336,8 @@ func _open_identity() -> void:
 	var panel = IdentityPanel.new()
 	_identity = panel
 	panel.confirmed.connect(_on_identity_confirmed)
-	panel.cancelled.connect(_show_pick)
+	# Sin paso 1 (skips_pick), volver atras es cerrar el dialogo.
+	panel.cancelled.connect(func(): cancel() if skips_pick() else _show_pick())
 	panel.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(panel)
 	_card.visible = false
@@ -366,7 +375,7 @@ func mode_card(mode: int) -> Button:
 ## menu principal (en la escena) se come el ESC antes que cualquier autoload.
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		if is_naming():
+		if is_naming() and not skips_pick():
 			_show_pick()
 		else:
 			cancel()

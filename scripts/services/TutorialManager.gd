@@ -754,6 +754,10 @@ static func step_text(step_id: String) -> String:
 	var e: Dictionary = _step_def(step_id)
 	return Tr.ti(String(e.get("text", ""))) if not e.is_empty() else ""
 
+## Lleva algo en la mano para colocar (el paso de derribar pide antes soltarlo).
+func is_placing() -> bool:
+	return _placing_id != ""
+
 static func step_number(step_id: String) -> int:
 	return int(GUIDE_STEPS.get(step_id, {}).get("n", 0))
 

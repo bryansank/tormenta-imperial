@@ -406,9 +406,13 @@ func _make_unit_row(unit_id: String, owned: int) -> PanelContainer:
 	info.add_child(title_row)
 
 	# The combat stats, not the economic ones: this is a tactical decision.
-	var line := "HP %d   ATK %d   DEF %d   MOV %d   ALC %d-%d" % [
+	# Palabras y no siglas (HP, ATK...): el juego es para chavales (ronda 1.0).
+	var r_min := int(stats.get("min_range", 1))
+	var r_max := int(stats.get("range", 1))
+	var reach := str(r_max) if r_min == r_max else "%d-%d" % [r_min, r_max]
+	var line := Tr.t("FMT_UNIT_STATS_LINE") % [
 		int(stats.get("hp", 0)), int(stats.get("atk", 0)), int(stats.get("def", 0)),
-		int(stats.get("move", 0)), int(stats.get("min_range", 1)), int(stats.get("range", 1)),
+		int(stats.get("move", 0)), reach,
 	]
 	var stats_label := UITheme.make_label(line, "small", UITheme.TEXT_DIM)
 	stats_label.name = "CombatStats"
@@ -750,6 +754,14 @@ func _make_detail(offer: Dictionary, preview: Dictionary) -> PanelContainer:
 	# Fuerzas y etiqueta (doc 21 §3.5).
 	var odds_row := HFlowContainer.new()
 	odds_row.add_theme_constant_override("h_separation", 10)
+	# Sin nadie elegido no se dice "Dificil" en rojo: asusta y no es verdad
+	# todavia (ronda de pruebas 1.0). Se dice que hacer.
+	if roundi(float(preview.get("player_power", 0.0))) <= 0:
+		var pick := UITheme.make_label(Tr.t("ODDS_PICK_FIRST"), "small", UITheme.TEXT_DIM)
+		pick.name = "OddsLabel"
+		odds_row.add_child(pick)
+		box.add_child(odds_row)
+		return card
 	odds_row.add_child(UITheme.make_label(Tr.t("LBL_SORTIE_STRENGTH") % [
 		roundi(float(preview.get("player_power", 0.0))), roundi(float(preview.get("enemy_power", 0.0)))],
 		"small", UITheme.TEXT))

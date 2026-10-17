@@ -424,6 +424,9 @@ func _resolve_step() -> void:
 	_res_picked = _res_card_id != "" and _card_already_picked(_res_card_id)
 	if _res_picked:
 		text = Tr.ti("GUIDE_PRESS_BUILD")
+	# "Deja de colocar" solo si aun lleva la carretera en la mano (ronda 1.0).
+	if _step == "demolish" and TutorialManager.is_placing():
+		text = Tr.ti("GUIDE_DEMOLISH_STOP") + " " + text
 	_res_text = text
 	_res_control = null
 	_res_cell = Vector2i(-1, -1)
@@ -517,7 +520,7 @@ func _layout_step() -> void:
 	# Colocando con el dedo, el fantasma y su ✓ CONSTRUIR AQUI (#34) tampoco se
 	# tapan: la tarjeta se aparta de los dos juntos.
 	focus = with_confirm(focus, _confirm_rect())
-	_card.position = card_position(vp, Vector2(w, ch), focus)
+	_card.position = card_position(vp, Vector2(w, ch), focus, _step in TutorialManager.INFO_PANEL_STEPS and has_rect)
 
 	# Flecha y aro.
 	_ring.visible = false
@@ -596,25 +599,43 @@ static func with_confirm(focus: Rect2, confirm: Rect2) -> Rect2:
 ## Donde va la tarjeta de `size` para senalar `focus`: debajo, a ARROW_GAP, si
 ## cabe; si no, encima; y centrada en horizontal sobre el foco, sin salirse. Sin
 ## foco, abajo al centro (por encima de CONSTRUIR). Publica para las pruebas.
-static func card_position(vp: Vector2, size: Vector2, focus: Rect2) -> Vector2:
+static func card_position(vp: Vector2, size: Vector2, focus: Rect2, prefer_side: bool = false) -> Vector2:
 	if focus.size == Vector2.ZERO:
 		return Vector2((vp.x - size.x) * 0.5, vp.y - size.y - 110.0)
 	var x := clampf(focus.get_center().x - size.x * 0.5, EDGE, vp.x - size.x - EDGE)
-	var below := focus.end.y + ARROW_GAP
-	if below + size.y <= vp.y - EDGE:
-		return Vector2(x, below)
-	var above := focus.position.y - ARROW_GAP - size.y
-	# Encima taparia el HUD de arriba (el boton REPARAR de la ficha, abajo a la
-	# derecha: la tarjeta tapaba ☰ MENÚ y el nombre del edificio): al lado.
-	if above < TOP_HUD:
-		var side_y := clampf(focus.get_center().y - size.y * 0.5, TOP_HUD, maxf(TOP_HUD, vp.y - size.y - EDGE))
-		var left := focus.position.x - ARROW_GAP - size.x
-		if left >= EDGE:
-			return Vector2(left, side_y)
-		var right := focus.end.x + ARROW_GAP
-		if right + size.x <= vp.x - EDGE:
-			return Vector2(right, side_y)
-	return Vector2(x, clampf(above, EDGE, maxf(EDGE, vp.y - size.y - EDGE)))
+	var side_y := clampf(focus.get_center().y - size.y * 0.5, TOP_HUD, maxf(TOP_HUD, vp.y - size.y - EDGE))
+	var left := Vector2(focus.position.x - ARROW_GAP - size.x, side_y)
+	var right := Vector2(focus.end.x + ARROW_GAP, side_y)
+	var below := Vector2(x, focus.end.y + ARROW_GAP)
+	var above := Vector2(x, focus.position.y - ARROW_GAP - size.y)
+	# Encima, pegada a la franja del HUD si hace falta (nunca sobre ella: tapaba
+	# el nombre del pais y ☰ MENÚ, ronda de pruebas 1.0).
+	var above_hud := Vector2(x, maxf(above.y, TOP_HUD))
+	# Orden de preferencia: debajo, encima, a un lado. En una ficha (mover,
+	# derribar, reparar: `prefer_side`) primero al lado: debajo, la flecha caia
+	# sobre el boton siguiente (MOVER señalaba Demoler).
+	var order: Array = [below, above, left, right]
+	if prefer_side:
+		order = [left, right, below, above]
+	var screen := Rect2(Vector2(EDGE, EDGE), vp - Vector2(EDGE, EDGE) * 2.0)
+	for p in order:
+		var r := Rect2(p, size)
+		if screen.encloses(r) and r.position.y >= (TOP_HUD if p != below else EDGE):
+			return p
+	# Nada cabe entero: encima sin pisar el HUD si no tapa lo señalado; si no,
+	# donde menos lo tape.
+	if not Rect2(above_hud, size).intersects(focus) and above_hud.y + size.y <= vp.y - EDGE:
+		return above_hud
+	var best := Vector2(x, clampf(above.y, EDGE, maxf(EDGE, vp.y - size.y - EDGE)))
+	var best_area := INF
+	for p in [above_hud, below, left, right]:
+		var c := Vector2(clampf(p.x, EDGE, maxf(EDGE, vp.x - size.x - EDGE)), clampf(p.y, EDGE, maxf(EDGE, vp.y - size.y - EDGE)))
+		var inter := Rect2(c, size).intersection(focus)
+		var area := inter.get_area() if Rect2(c, size).intersects(focus) else 0.0
+		if area < best_area:
+			best_area = area
+			best = c
+	return best
 
 func _place_dim(vp: Vector2, hole: Rect2) -> void:
 	if hole.size == Vector2.ZERO:

@@ -939,6 +939,11 @@ func _refresh_map() -> void:
 		var fightable: bool = i == current and _run.needs_fight()
 
 		btn.text = Tr.t("LBL_BOSS") if is_boss else str(_roster_size(node))
+		# Un soldado junto al numero: dice que son enemigos (ronda de pruebas 1.0).
+		btn.icon = null if is_boss else UITheme.unit_icon("infantry", 24)
+		btn.add_theme_constant_override("icon_max_width", 22)
+		btn.add_theme_color_override("icon_normal_color", UITheme.unit_icon_tint(false))
+		btn.add_theme_color_override("icon_disabled_color", UITheme.TEXT_DIM)
 		btn.disabled = not (reachable or fightable)
 		btn.tooltip_text = _node_tooltip(node, i == current, cleared, reachable)
 		if fightable:

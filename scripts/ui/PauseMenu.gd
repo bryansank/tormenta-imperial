@@ -171,7 +171,8 @@ func _setup_ui() -> void:
 	for entry in COLONY_ENTRIES:
 		var id: String = entry[0]
 		var sibling: String = entry[2]
-		var btn := ModalKit.make_menu_button(Tr.t(entry[1]), UITheme.BTN, func(): open_colony_panel(sibling))
+		# Todo el menu en mayusculas, como sus entradas grandes (ronda 1.0).
+		var btn := ModalKit.make_menu_button(Tr.t(entry[1]).to_upper(), UITheme.BTN, func(): open_colony_panel(sibling))
 		btn.name = "Colony_" + id
 		colony.add_child(btn)
 		_colony_buttons[id] = btn
@@ -235,7 +236,7 @@ func _make_group(node_name: String, title: String, hint: String) -> VBoxContaine
 ## cuerpo para que su palabra quepa en media columna.
 func _add_game_button(group: Container, id: String, text: String, color: Color, cb: Callable,
 		half := false) -> Button:
-	var btn := ModalKit.make_menu_button(text, color, cb)
+	var btn := ModalKit.make_menu_button(text.to_upper(), color, cb)
 	btn.name = "Game_" + id
 	if half:
 		UITheme.style_button(btn, color, UITheme.FONT_BODY)
