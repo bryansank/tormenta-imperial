@@ -144,7 +144,10 @@ func test_without_a_sky_the_island_weight_is_still_kept() -> void:
 	_scenes.append(bare)
 	_load_phase(StormCycle.Phase.STORM)
 	StormSky.sync_to_storm()
-	assert_float(StormSky.get_island_weight()).is_greater_equal(0.6)
+	# Cargar a media Tormenta no repite el golpe (feat/danos-y-tormenta-corta):
+	# la isla nace con el tono de fondo, no en blanco.
+	assert_float(StormSky.get_island_weight()).is_equal_approx(StormSky.linger_weight(), 0.0001)
+	assert_float(StormSky.get_island_weight()).is_greater(0.0)
 	StormSky.restore_now()
 	assert_float(StormSky.get_island_weight()).is_equal(0.0)
 
