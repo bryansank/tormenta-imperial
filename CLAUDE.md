@@ -263,7 +263,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Market | 2x2 | 100/0/0/60 | 1 | Opens the market (ABRIR MERCADO); needs a Gold Mine; max 1 | 1 |
 | Laboratory | 2x2 | 150/0/0/100 | 2 | Opens the tech tree (INVESTIGAR); needs a House; max 1 | 1 |
 | Foundry | 2x2 | 200/0/0/120 | 3 | 5 steel/15s; makes beams | 1->2 |
-| Barracks | 2x2 | 250/100/0/80 + 10 planks | 3 | Trains units (ArmyManager) | 2 |
+| Barracks | 2x2 | 150/60/0/80 + 20 planks | 3 | Trains units (ArmyManager) | 2 |
 | Refinery | 2x2 | 300/150/0/100 + 6 beams | 4 | 4 oil/18s; makes fuel | 2->3 |
 | Tower | 2x2 | 150/60/20/30 + 4 beams | 1 | Storm mitigation + an artillery crew on defensive boards (only while operational) | 2-3 |
 | HQ (capstone) | 2x2 | 500/300/200/200 + 20 beams, 10 ingots, 10 fuel | 5 | 10 gold/20s | 3 |
@@ -576,8 +576,8 @@ fixed for the run; saves without `tier` load as Colono.
 | Unit | Era | Cost | Train | Upkeep | Power |
 |------|-----|------|-------|--------|-------|
 | Infantry | 1 | 40g + 20w | 20s | 1 gold | 10 |
-| Artillery | 2 | 80g + 30s | 35s | 2 gold | 28 |
-| Vehicle | 3 | 140g + 60s + 30o | 55s | 4 gold | 65 |
+| Artillery | 2 | 120g + 50s | 45s | 2 gold | 28 |
+| Vehicle | 3 | 300g + 130s + 60o + 8 beams | 100s | 4 gold | 65 |
 
 - **Upkeep:** every 30s, gold-only. If short, drains remaining gold to 0 and emits
   `army_upkeep_unpaid`. Sustained non-payment **deserts** units, the most expensive

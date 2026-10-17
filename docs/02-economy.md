@@ -38,7 +38,7 @@ own resource — the **first** process of its list in `GameConfig.building_proce
 - **Outside the shared pool:** they live in the Núcleo's workshop (`ResourceManager.is_material()`;
   `get_total_stored()` skips them). The pool is tuned to the exact HQ L3 price, so they
   cannot count against it. The Tithe does not take them either.
-- **Who asks for them** (`BuildingData.cost_materials`): Barracks 10 planks, Tower 4
+- **Who asks for them** (`BuildingData.cost_materials`): Barracks 20 planks, Tower 4
   beams, Refinery 6 beams, Statue 3 ingots, HQ 20 beams + 10 ingots + 10 fuel, and the
   HQ upgrades (`hq_upgrade_costs`: L2 15 beams + 10 ingots + 15 fuel, L3 25 beams + 20
   ingots + 25 fuel).
@@ -374,7 +374,7 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
   and a Warehouse standing
 
 ### Mid Game (Era 2)
-- Steel enables: Barracks (250g+100s+80w + 10 planks), Refinery (300g+150s+100w + 6
+- Steel enables: Barracks (150g+60s+80w + 20 planks), Refinery (300g+150s+100w + 6
   beams; needs Foundry + Barracks)
 - Market becomes important for converting surplus
 
