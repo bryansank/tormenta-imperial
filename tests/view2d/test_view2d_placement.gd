@@ -145,6 +145,9 @@ func test_the_ghost_is_red_outside_the_grid() -> void:
 	assert_bool(bool(_placer.get_ghost().get("ghost_valid"))).is_false()
 
 func test_the_ghost_obeys_the_deposit_rule() -> void:
+	# El fantasma tambien sale rojo si no llega para pagarlo (obreros incluidos).
+	var plenty = preload("res://tests/tutorial/plenty.gd").new()
+	plenty.park()
 	# Aserradero 2x1: rojo lejos del bosque, verde pegado a el.
 	_map.spawn_deposit("forest", Vector2i(20, 20), -1, Vector2i(2, 2))
 	EventBus.building_selected_for_placement.emit(_data("sawmill"))
@@ -152,8 +155,12 @@ func test_the_ghost_obeys_the_deposit_rule() -> void:
 	assert_bool(bool(_placer.get_ghost().get("ghost_valid"))).is_false()
 	_placer.update_ghost(Vector2i(22, 20))
 	assert_bool(bool(_placer.get_ghost().get("ghost_valid"))).is_true()
+	plenty.restore()
 
 func test_rotating_while_placing_changes_the_verdict_footprint() -> void:
+	# El fantasma tambien sale rojo si no llega para pagarlo (obreros incluidos).
+	var plenty = preload("res://tests/tutorial/plenty.gd").new()
+	plenty.park()
 	# Hueco de 1 de ancho entre dos casas (de 2x2): un aserradero de 2x1 hecho
 	# a mano (todos son cuadrados desde el 2026-09-28) no cabe tumbado, si cabe
 	# de pie (girado).
@@ -168,6 +175,7 @@ func test_rotating_while_placing_changes_the_verdict_footprint() -> void:
 	EventBus.building_rotate_requested.emit()
 	_placer.update_ghost(Vector2i(30, 12))
 	assert_bool(bool(_placer.get_ghost().get("ghost_valid"))).is_true()
+	plenty.restore()
 
 # ── Compra real ───────────────────────────────────────────────────────
 
