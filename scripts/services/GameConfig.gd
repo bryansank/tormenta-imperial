@@ -41,9 +41,13 @@ var event_interval_max_dev := 60.0
 
 # ── Starting Resources ──
 
+## 2026-10-12 (docs/22 §11): 30 de oro mas y 20 de madera menos. La madera
+## sobraba (la sonda la vendia en el minuto 5) y el oro era lo que frenaba la
+## Fundicion. 330 + 180 + 80 = 590 deja hueco en la bolsa de 600 de la era 1, y
+## Supervivencia (x0.75: 135 de madera) sigue pagando aserradero + mina (130).
 var starting_resources := {
-	"gold": 300,
-	"wood": 200,
+	"gold": 330,
+	"wood": 180,
 	# Comida para los primeros minutos, hasta que la primera Granja rinda
 	# (2026-10-04). 580 en total: cabe en la bolsa de 600 de la era 1.
 	"food": 80,
@@ -79,12 +83,30 @@ var upgrade_base_duration := 15.0
 
 # ── HQ Upgrade Override (capstone building, much more expensive) ──
 
+## 2026-10-12 (docs/22 §11, Campaña de 4-6 h): el nivel 2 pide 3.000 de bolsa
+## (antes 2.000) y los dos piden muchos mas materiales del taller (antes 15/10/15
+## y 25/20/25). Los materiales van fuera de la bolsa, asi que alargan la era 3 con
+## trabajo (vigas, lingotes y combustible que fabricar cada 25-30 s, y fundiciones
+## y refinerias de mas que levantar) sin tocar el invariante 3.500 = bolsa maxima
+## del nivel 3.
 var hq_upgrade_costs := {
-	2: {"gold": 800, "steel": 500, "oil": 300, "wood": 400, "beams": 15, "ingots": 10, "fuel": 15},
-	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700, "beams": 25, "ingots": 20, "fuel": 25},
+	# 2026-10-14: el doble de materiales otra vez (antes 100/70/100 y
+	# 200/140/200). Con los lotes y el Nucleo haciendo las recetas de todos, el
+	# taller va mucho mas rapido y la campana habia bajado a ~3 h 35 (docs/22 §11).
+	# 2026-10-16: vigas 350 y 700 (antes 200 y 400). Con ¿QUE HACER? llenando las
+	# esperas y las casas que ahora pide, la campana bajaba a ~4 h 10 y cuatro
+	# partidas de diez se quedaban por debajo de las 4 h. Las vigas, y no el
+	# combustible ni los lingotes, porque eran las que menos esperas dejaban
+	# (hay hasta 6 fundiciones y el acero sobra en la era 3) (docs/22 §11).
+	2: {"gold": 1300, "steel": 900, "oil": 500, "wood": 300, "beams": 350, "ingots": 140, "fuel": 200},
+	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700, "beams": 700, "ingots": 280, "fuel": 400},
 }
 
 # ── Building Limits (max per type, -1 = unlimited) ──
+# Topes de la ERA 1 y de lo que no sube con la era. Los que suben estan en
+# `building_limits_by_era` (seccion "Building Limit Helpers"); las decoraciones
+# (BuildingData.is_decoration) no tienen tope aunque salgan aqui. Se lee siempre
+# con get_building_limit(id), nunca a mano.
 
 var building_limits := {
 	"sawmill": 5,
@@ -116,7 +138,9 @@ var building_prerequisites := {
 	"foundry": ["sawmill", "gold_mine", "house", "warehouse"],
 	"market": ["gold_mine"],
 	"laboratory": ["house"],
-	"refinery": ["foundry", "barracks"],
+	# Y el Laboratorio (2026-10-12): la era 2 trae una obra mas y el arbol abierto
+	# antes del petroleo, que es cuando se piden las tecnologias de almacen.
+	"refinery": ["foundry", "barracks", "laboratory"],
 	"barracks": ["foundry", "sawmill"],
 	"tower": ["barracks"],
 	"headquarters": ["barracks", "refinery"],
@@ -506,6 +530,8 @@ var resource_colors := {
 	"beams": Color(0.55, 0.62, 0.72),
 	"fuel": Color(0.85, 0.38, 0.2),
 	"food": Color(0.55, 0.8, 0.3),
+	## Repuestos (2026-10-14): solo se consiguen fuera, en escaramuzas (doc 21 §3.1).
+	"parts": Color(0.66, 0.72, 0.6),
 }
 
 # ── Audio ──
@@ -661,6 +687,12 @@ var ui_combat_view := "front"
 ## (no se repite sola) y por que decidio lo que decidio (para depurar).
 var quality_detected := false
 var quality_detected_reason := ""
+## Version de la regla de deteccion con la que se decidio (settings.cfg
+## [interfaz] quality_detect_version; sin la clave, 0 = la del 1.0.0). La 2 mide
+## sin tope ni vsync y descarta las medidas pegadas a un tope; DeviceProfile
+## repara una sola vez lo que decidio una version anterior con una medida mala.
+const QUALITY_DETECT_VERSION := 2
+var quality_detect_version := 0
 ## Ids de HudRegistry que el jugador oculto.
 var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
@@ -713,6 +745,15 @@ var quality_detect_seconds := 3.0
 var quality_detect_median_ms := 25.0
 var quality_detect_p95_ms := 33.0
 var quality_detect_low_ms := 16.7
+## Una medida que no mide la GPU sino un tope: si la mediana cae a menos de
+## quality_detect_cap_tolerance_ms de 1000/N (N en quality_detect_known_caps, el
+## refresco de la pantalla o su mitad), o si la distancia entre los percentiles
+## 10 y 90 no llega a quality_detect_flat_ms (fotogramas clavados), no vale: se
+## descarta y la calidad se queda en "auto". Nunca baja a Minima por eso (el
+## 1.0.0 midio 33,3 ms en una RTX 3060: el tope de 30, no el equipo).
+var quality_detect_known_caps: Array = [30, 60]
+var quality_detect_cap_tolerance_ms := 1.0
+var quality_detect_flat_ms := 0.3
 
 # ── Perfil del jugador (settings.cfg [perfil]) ──
 # Del jugador en este dispositivo, NO de la partida: sobrevive a "Nueva partida"
@@ -798,6 +839,7 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	ui_combat_view = cview if cview in COMBAT_VIEWS else "front"
 	quality_detected = bool(cf.get_value("interfaz", "quality_detected", quality_detected))
 	quality_detected_reason = str(cf.get_value("interfaz", "quality_detected_reason", quality_detected_reason))
+	quality_detect_version = int(cf.get_value("interfaz", "quality_detect_version", 0))
 	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
 	ui_hud_hidden = []
 	if hidden is Array:
@@ -849,6 +891,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "combat_view", ui_combat_view)
 	cf.set_value("interfaz", "quality_detected", quality_detected)
 	cf.set_value("interfaz", "quality_detected_reason", quality_detected_reason)
+	cf.set_value("interfaz", "quality_detect_version", quality_detect_version)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("interfaz", "fps_cap", ui_fps_cap)
@@ -1051,11 +1094,13 @@ var market_mean_reversion := 0.05
 ##   after_tithe  Tras el Diezmo: la Regencia ha sacado oro de la isla y lo que
 ##                queda vale menos: todo cuesta mas oro (y se vende por mas).
 ##   calm         Calma: vuelta a la media.
+## La comida sube ANTES del Diezmo: en el Aviso todos hacen acopio y en la
+## Tormenta las granjas rinden el 15 %; quien compra en la calma ahorra.
 var market_calendar := {
 	"calm": {},
-	"warning": {"wood": 0.30},
-	"storm": {"steel": -0.25},
-	"after_tithe": {"wood": 0.15, "steel": 0.15, "oil": 0.15},
+	"warning": {"wood": 0.30, "food": 0.25},
+	"storm": {"steel": -0.25, "food": 0.40},
+	"after_tithe": {"wood": 0.15, "steel": 0.15, "oil": 0.15, "food": 0.15},
 }
 ## Cuanto se acerca el precio a su objetivo del calendario en cada tick (0..1).
 ## Con 0.35 y ticks de 15 s, un Aviso de 45 s ya lleva la madera a ~+22 %.
@@ -1205,10 +1250,10 @@ var rank_rewards := {
 	1: {"patterns": ["plain", "bands_h", "bands_v", "halves_h", "cross"],
 		"emblems": ["none", "gear", "anchor", "wheat", "hammer"],
 		"colors": ["ivory", "brass", "crimson", "steel", "moss", "soot"]},
-	2: {"buildings": ["garden"], "emblems": ["tower"]},
-	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"]},
+	2: {"buildings": ["garden", "flower_planter", "hay_cart"], "emblems": ["tower"]},
+	3: {"production": 0.01, "patterns": ["border"], "colors": ["sky"], "buildings": ["bonfire"]},
 	4: {"storage": 0.02, "emblems": ["star"]},
-	5: {"buildings": ["fountain"]},
+	5: {"buildings": ["fountain", "flagpole"]},
 	6: {"production": 0.01, "patterns": ["diagonal", "saltire"]},
 	7: {"colors": ["copper", "red"]},
 	8: {"buildings": ["statue"], "storage": 0.02},
@@ -1216,7 +1261,7 @@ var rank_rewards := {
 	10: {"limit": {"house": 2}},
 	11: {"colors": ["grass", "slate"], "emblems": ["wheel"]},
 	12: {"production": 0.01, "storage": 0.02, "patterns": ["canton", "hoist_triangle"]},
-	13: {"limit": {"statue": 2, "fountain": 2}, "emblems": ["ship"]},
+	13: {"buildings": ["palm_trees"], "emblems": ["ship"]},
 	14: {"colors": ["terracotta", "gold"], "emblems": ["cogs"]},
 	15: {"production": 0.01, "patterns": ["stripes"]},
 	16: {"storage": 0.02, "limit": {"tower": 1}, "emblems": ["sun"]},
@@ -1335,6 +1380,27 @@ var construction_style := {
 		"frame": "basin", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 	"statue": {"piles": ["stone", "stone", "sacks"], "fence": "canvas", "tarp": Color(0.58, 0.54, 0.46),
 		"frame": "plinth", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.77, 0.59, 0.16)},
+	# Decoraciones baratas (feat/decoraciones-1): obras pequenas y rapidas.
+	"lamp_post": {"piles": ["rivets", "stone", "planks"], "fence": "planks", "tarp": Color(0.36, 0.34, 0.40),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.93, 0.78, 0.32)},
+	"park_bench": {"piles": ["planks", "rivets", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.20, 0.42, 0.62)},
+	"hedge": {"piles": ["soil", "sacks", "soil"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"avenue_tree": {"piles": ["soil", "stone", "sacks"], "fence": "planks", "tarp": Color(0.36, 0.46, 0.24),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.30, 0.60, 0.22)},
+	"flower_planter": {"piles": ["soil", "bricks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.40, 0.30),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.85, 0.35, 0.55)},
+	"colony_sign": {"piles": ["planks", "logs", "planks"], "fence": "planks", "tarp": Color(0.52, 0.42, 0.30),
+		"frame": "mast", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.72, 0.13, 0.10)},
+	"hay_cart": {"piles": ["sacks", "planks", "sacks"], "fence": "planks", "tarp": Color(0.62, 0.55, 0.30),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.93, 0.78, 0.32)},
+	"bonfire": {"piles": ["logs", "stone", "logs"], "fence": "dark_planks", "tarp": Color(0.48, 0.34, 0.20),
+		"frame": "low", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.90, 0.55, 0.12)},
+	"flagpole": {"piles": ["beams", "stone", "rivets"], "fence": "canvas", "tarp": Color(0.55, 0.12, 0.10),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.72, 0.13, 0.10)},
+	"palm_trees": {"piles": ["soil", "sacks", "gravel"], "fence": "planks", "tarp": Color(0.70, 0.62, 0.42),
+		"frame": "low", "frame_mat": "wood", "site_fx": "dust", "flag": Color(0.25, 0.55, 0.78)},
 }
 ## La animacion de la obra (grua, polea, banderin): velocidad base de giro de
 ## la grua (rad/s de la fase del vaiven) y cuanto se abre el vaiven (rad). Cada
@@ -1364,6 +1430,37 @@ var building_active_fx := {
 ## radianes: con el hollin y los escombros, se distingue de lejos.
 var ruin_sink_ratio := 0.38
 var ruin_tilt := 0.07
+
+## Etapas visibles de dano entre sano y ruina (docs/03, "Etapas de dano"):
+## por debajo de la primera proporcion de vida el edificio esta LEVE (grietas,
+## tejas caidas, una tabla suelta), por debajo de la segunda GRAVE (chapa
+## colgando, viga rota, humo negro y chispas). La ruina sigue siendo vida 0.
+## Solo aspecto: ni el dano ni la reparacion cambian por esto.
+var damage_stage_thresholds := [0.75, 0.4]
+## Cuanto se ladea (radianes) y se hunde (fraccion de su altura) el modelo en
+## cada etapa: [leve, grave]. La ruina usa ruin_tilt / ruin_sink_ratio.
+var damage_tilt := [0.025, 0.05]
+var damage_sink_ratio := [0.0, 0.05]
+
+## La Tormenta a la vista (docs/21 §12), SOLO aspecto: las duraciones y los
+## efectos de cada fase son los storm_* de mas abajo y no cambian por esto.
+## Antes el cielo se quedaba oscuro todo el Aviso, la Ceniza y la Tormenta
+## (2-3 minutos); ahora la llegada de la Tormenta es un GOLPE corto y marcado
+## (oscuridad, rafaga de viento con ceniza) y el resto del tiempo el cielo
+## queda apenas tenido. El HUD de la Tormenta sigue diciendo la fase.
+## Cuanto dura el golpe en pleno (s, reales: no los acelera dev_mode), cuanto
+## tarda en cerrarse y cuanto en abrirse hasta el tono de fondo.
+var storm_visual_punch := 6.0
+var storm_visual_punch_in := 0.7
+var storm_visual_punch_out := 3.0
+## El tono de fondo (peso de ceniza, 0-1) de cada fase fuera del golpe: el
+## Aviso y la Ceniza apenas tinen; tras el golpe la Tormenta y el Diezmo se
+## quedan en `storm_visual_linger`.
+var storm_visual_warning := 0.12
+var storm_visual_ash := 0.2
+var storm_visual_linger := 0.22
+## Motas de ceniza de la rafaga del golpe por perfil de dispositivo.
+var storm_visual_gust_amount := {"pc": 160, "tablet": 110, "phone": 70}
 
 # ── Parcela y atrezo de cada edificio (docs/03, "Parcela y atrezo") ──
 ## Cada edificio vive en su parcela (guia de estilo, regla 1): suelo propio que
@@ -1432,6 +1529,19 @@ var building_lot_style := {
 		"props": ["bench", "lamp", "planter", "bench"], "count": [3, 5]},
 	"statue": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic",
 		"props": ["lamp", "planter", "bench"], "count": [3, 5]},
+	# Decoraciones baratas (feat/decoraciones-1): suelo, bordillo y una o dos
+	# piezas de atrezo como mucho (la decoracion ya es atrezo, y cada pieza de
+	# mas cuesta en la tablet).
+	"lamp_post": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "bench"], "count": [1, 2]},
+	"park_bench": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hedge": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["planter", "bench"], "count": [1, 2]},
+	"avenue_tree": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "planter"], "count": [1, 2]},
+	"flower_planter": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["bench", "lamp"], "count": [1, 2]},
+	"colony_sign": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["planter", "lamp"], "count": [1, 2]},
+	"hay_cart": {"ground": "dirt", "trim": "fence", "yard": 0.25, "accent": "residential", "props": ["sacks", "barrel"], "count": [1, 2]},
+	"bonfire": {"ground": "dirt", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["logs", "barrel"], "count": [1, 2]},
+	"flagpole": {"ground": "slabs", "trim": "curb", "yard": 0.25, "accent": "civic", "props": ["lamp", "planter"], "count": [1, 2]},
+	"palm_trees": {"ground": "grass", "trim": "curb", "yard": 0.25, "accent": "residential", "props": ["barrel", "crate"], "count": [1, 2]},
 }
 ## El acento saturado de cada familia (guia, regla 4): rojo valvula en lo
 ## industrial, amarillo senal en lo militar, laton en lo civico, verde en lo
@@ -1523,7 +1633,19 @@ func get_upgrade_cost(data: BuildingData, to_level: int) -> Dictionary:
 	var base: Dictionary = data.get_cost()
 	for type in base:
 		cost[type] = int(base[type] * mult)
+	# Repuestos: solo salen de las escaramuzas (doc 21 §3.1). Los pide el nivel 3
+	# de los productores, para que salir sea una necesidad y no un extra.
+	var parts: int = upgrade_parts_needed(data.id, to_level)
+	if parts > 0:
+		cost[ResourceManager.Type.PARTS] = parts
 	return cost
+
+## Repuestos que pide subir `building_id` a `to_level` (0 = ninguno). Tabla en
+## `upgrade_parts_cost` / `upgrade_parts_buildings` (seccion de escaramuzas).
+func upgrade_parts_needed(building_id: String, to_level: int) -> int:
+	if not building_id in upgrade_parts_buildings:
+		return 0
+	return int(upgrade_parts_cost.get(to_level, 0))
 
 func get_production_multiplier(level: int) -> float:
 	if level < 1 or level > max_building_level:
@@ -1554,14 +1676,97 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 
 # ── Building Limit Helpers ──
 
+## Topes que suben con la era (decision D1 de Bryan, 14-10-2026; docs/03 §Topes).
+## [era 1, era 2, era 3]. La era 1 es el tope de siempre (`building_limits`): una
+## partida guardada nunca queda por encima de su tope. Regla general ≈ ×1,5 en la
+## era 2 y ×2 en la era 3, con tres excepciones que no suben:
+##   warehouse 5  la bolsa de la era 3 sin tecnologias es 1000 + 5×500 = 3500, el
+##                precio justo del CG nivel 3 (hq_upgrade_costs[3] sin materiales).
+##                Con 7 almacenes serian 4500 (5500 con las tecnologias) y el CG 3
+##                dejaria de pedir la bolsa llena. La bolsa ya crece por era sola
+##                (base_storage_cap_by_era 600/800/1000) y por nivel de almacen.
+##   tower 6      4 torres ya dan el 60 % de mitigacion (storm_tower_mitigation_max)
+##                y solo 2 salen al tablero (storm_tower_garrison_max): mas torres
+##                no darian nada. El rango sigue dando +1 (rango 16).
+##   unicos 1     Mercado, Laboratorio y Cuartel General (no estan en esta tabla).
+## El Cuartel sube menos (3/4/5): cada uno es un hueco de entrenamiento y +8 de
+## capacidad; con 5 ya caben 43 unidades y el mantenimiento en oro es el freno.
+## Un id que no esta aqui usa `building_limits` en todas las eras.
+var building_limits_by_era := {
+	"sawmill": [5, 8, 10],
+	"gold_mine": [4, 6, 8],
+	"foundry": [3, 5, 6],
+	"refinery": [2, 3, 4],
+	"house": [10, 15, 20],
+	"farm": [6, 9, 12],
+	"barracks": [3, 4, 5],
+	"warehouse": [5, 5, 5],
+	"tower": [6, 6, 6],
+}
+
+## El tope de `building_id` AHORA: la era en curso (ProgressionManager), mas los
+## huecos del rango. -1 = sin tope. Es el unico sitio que deben leer las reglas
+## de colocar, CONSTRUIR, ¿QUE HACER? y el tutorial. Nada de esto se guarda: sale
+## de la era y del rango, que ya van en el save.
 func get_building_limit(building_id: String) -> int:
+	return get_building_limit_for_era(building_id, current_era())
+
+## El tope de `building_id` en la era `era` (1..3, se acota), con el rango encima.
+## Sandbox: -1 siempre (docs/20). Decoraciones: -1 siempre (las limita el terreno).
+func get_building_limit_for_era(building_id: String, era: int) -> int:
 	if GameMode.all_unlocked():
 		return -1  # Sandbox: sin tope por tipo (ver docs/20-modos-de-juego.md).
-	var limit: int = building_limits.get(building_id, -1)
+	if is_uncapped_building(building_id):
+		return -1
+	var limit := base_building_limit(building_id, era)
 	if limit < 0:
 		return limit
 	# Huecos extra que da el rango del gobernador (RankManager los asigna).
 	return limit + int(rank_limit_bonus.get(building_id, 0))
+
+## El tope de la tabla en `era`, sin rango ni modo. -1 = sin tope.
+func base_building_limit(building_id: String, era: int) -> int:
+	if building_limits_by_era.has(building_id):
+		var row: Array = building_limits_by_era[building_id]
+		if not row.is_empty():
+			return int(row[clampi(era, 1, row.size()) - 1])
+	return int(building_limits.get(building_id, -1))
+
+## La proxima era en la que sube el tope de `building_id` y a cuanto (con el
+## rango), o {} si ya no sube. Para "3/6 · era 2: 9" en CONSTRUIR.
+func next_building_limit(building_id: String) -> Dictionary:
+	var era := current_era()
+	var now := get_building_limit_for_era(building_id, era)
+	if now < 0:
+		return {}
+	for e in range(era + 1, max_era() + 1):
+		var later := get_building_limit_for_era(building_id, e)
+		if later > now:
+			return {"era": e, "limit": later}
+	return {}
+
+## La era en curso, o 1 sin ProgressionManager (pruebas sin arbol, arranque).
+func current_era() -> int:
+	var pm := get_node_or_null("/root/ProgressionManager")
+	return int(pm.get("current_era")) if pm != null else 1
+
+func max_era() -> int:
+	return base_storage_cap_by_era.size()
+
+## Sin tope por tipo: las decoraciones (BuildingData.is_decoration, carreteras
+## incluidas). Se mira el .tres y no una lista, para que una decoracion nueva no
+## necesite entrada en ninguna tabla. Se recuerda por id.
+var _uncapped_cache: Dictionary = {}
+func is_uncapped_building(building_id: String) -> bool:
+	if _uncapped_cache.has(building_id):
+		return bool(_uncapped_cache[building_id])
+	var path := "res://data/buildings/%s.tres" % building_id
+	var data: BuildingData = null
+	if ResourceLoader.exists(path):
+		data = load(path) as BuildingData
+	var uncapped := data != null and data.is_decoration
+	_uncapped_cache[building_id] = uncapped
+	return uncapped
 
 func get_prerequisites(building_id: String) -> Array:
 	if GameMode.all_unlocked():
@@ -1590,8 +1795,10 @@ var unit_types := {
 		"name": "UNIT_ARTILLERY",
 		"tier": 2,
 		"era": 2,
-		"cost": {"gold": 80, "steel": 30},
-		"train_time": 35.0,
+		# 2026-10-12: 120/50 y 45 s (antes 80/30 y 35 s). La guarnicion de la era 2
+		# pesa algo mas (docs/22 §11).
+		"cost": {"gold": 120, "steel": 50},
+		"train_time": 45.0,
 		"upkeep_gold": 2,
 		"power": 28,
 	},
@@ -1599,8 +1806,13 @@ var unit_types := {
 		"name": "UNIT_VEHICLE",
 		"tier": 3,
 		"era": 3,
-		"cost": {"gold": 140, "steel": 60, "oil": 30},
-		"train_time": 55.0,
+		# 2026-10-12: 400/180/90 y 100 s (antes 140/60/30 y 55 s). Los seis
+		# blindados del asedio son el ultimo gran esfuerzo de la era 3, no un tramite.
+		# 2026-10-16: 300/130/60 + 8 vigas. Lo mismo en recursos (las 8 vigas son
+		# 40 de acero y 20 de madera en la Fundicion), pero la espera de 400 de oro
+		# se parte en dos decisiones: fabricar vigas y entrenar (docs/22 §11).
+		"cost": {"gold": 300, "steel": 130, "oil": 60, "beams": 8},
+		"train_time": 100.0,
 		"upkeep_gold": 4,
 		"power": 65,
 	},
@@ -1766,6 +1978,91 @@ var combat_morale_initiative_bonus := 2
 var combat_morale_attack_range := Vector2(0.60, 1.40)
 var combat_morale_on_victory := 8.0
 var combat_morale_per_casualty := 3.0
+
+# ── Salidas: incursiones, expediciones cortas y botin exclusivo (doc 21 §3) ──
+# 2026-10-14, rama feat/escaramuzas. Todo en claves NUEVAS: los combat_map_* y
+# combat_reward_base de siempre siguen valiendo para la expedicion antigua (las
+# partidas guardadas a medias, los tests y las sondas que lanzan con semilla).
+
+## Cada cuanto se revisa el tablon de salidas (segundos reales). Barato: mira
+## dos relojes y, si toca, sortea una oferta.
+var combat_sortie_refresh_interval := 2.0
+## Segundos de juego entre terminar una incursion (o una expedicion) y que
+## aparezca la siguiente. Pasan por get_duration() (dev_mode los acorta). Una
+## calma dura 360-600 s: hay una incursion por calma, mas o menos.
+var combat_raid_cooldown := 240.0
+var combat_expedition_cooldown := 480.0
+## La expedicion de 3 combates aparece desde esta era (la incursion, con el
+## primer Cuartel y la primera escaramuza ganada).
+var combat_expedition_min_era := 2
+## La incursion es un solo combate, un poco mas duro que la apertura de una
+## expedicion (profundidad 1 en la curva de enemy_pressure).
+var combat_raid_depth := 1
+## Expedicion corta (D3 = A): apertura -> elegir 1 de 2 -> jefe = 3 combates.
+## Mismo generador que la de siempre, con otros rangos.
+var combat_expedition_depth := Vector2i(1, 1)
+var combat_expedition_branching := Vector2i(2, 2)
+## El jefe de la expedicion corta lleva esta infanteria de escolta menos.
+var combat_expedition_boss_escort_cut := 1
+## Vida que recupera la columna al pasar al siguiente combate de una expedicion
+## corta (fraccion de la vida maxima de cada superviviente). La antigua no cura.
+var combat_expedition_heal_between := 0.30
+## El oro y la madera de las salidas nuevas: la mitad de la curva de siempre. Lo
+## que de verdad paga una salida es el botin exclusivo de abajo.
+var combat_sortie_reward_mult := 0.5
+
+## Botin exclusivo (D2 = A). Repuestos: material nuevo, fuera de la bolsa.
+## Colonos: habitantes al momento (hasta llenar las casas). Rebaja del Diezmo:
+## un % menos en el proximo Diezmo (avanzadilla). Planos: abren edificios.
+## Incursion de saqueadores: repuestos y colonos (rango min-max, sorteado al
+## aparecer y visible antes de salir).
+var combat_loot_raid_parts := Vector2i(1, 2)
+var combat_loot_raid_colonists := Vector2i(2, 4)
+## Incursion contra la avanzadilla de la Regencia (solo con la Tormenta armada y
+## Diezmo en el modo): repuestos y una rebaja del proximo Diezmo. Se va con el
+## Diezmo. La rebaja la aplica StormManager.add_tithe_discount() (rama
+## feat/orden-regencia, doc 21 §2.2) con su storm_order_expedition_pct si existe;
+## si no, con esta fraccion. Sin esa funcion (base sin la Orden) no rebaja nada:
+## solo se anota y se ensena.
+var combat_loot_outpost_parts := Vector2i(1, 1)
+var combat_loot_outpost_tithe_pct := 0.10
+
+## La rebaja del Diezmo que da echar la avanzadilla: la de la Orden de la
+## Regencia si esa rama esta (storm_order_expedition_pct), si no la nuestra.
+func sortie_tithe_discount_pct() -> float:
+	if "storm_order_expedition_pct" in self:
+		return float(get("storm_order_expedition_pct"))
+	return combat_loot_outpost_tithe_pct
+## Expedicion: repuestos por cada combate de paso; el jefe da mas, colonos y,
+## si queda alguno por conseguir, un plano.
+var combat_loot_expedition_node_parts := 2
+var combat_loot_expedition_boss_parts := 4
+var combat_loot_expedition_boss_colonists := 3
+
+## Planos: edificios que solo se construyen con su plano (doc 21 §6.3). La lista
+## puede empezar corta: un id solo se ofrece como botin cuando su
+## data/buildings/<id>.tres existe, asi que las ramas que traigan esos edificios
+## los activan sin tocar nada aqui. El candado lo pone quien construye
+## (CombatManager.blueprint_locked(); PlacementRules tiene que llamarlo, como
+## check_rank()).
+var combat_blueprint_buildings := ["infirmary", "military_forge", "scrapyard", "diesel_plant"]
+
+## Repuestos que pide una mejora: nivel -> cantidad, solo para los edificios de
+## la lista (los productores). El Cuartel General tiene su propia tabla.
+var upgrade_parts_cost := {3: 3}
+var upgrade_parts_buildings := ["sawmill", "gold_mine", "foundry", "refinery", "farm"]
+
+## Retirada enemiga (D7 = B): en expediciones e incursiones, cuando a los
+## enemigos les queda menos de esta fraccion de la vida con la que empezaron, se
+## retiran y el combate se gana. Nunca en el Diezmo ni en el asedio.
+var combat_retreat_ratio := 0.30
+## "Resolver solo" (D6 = A): solo en incursiones y en el Diezmo, y solo cuando
+## tu fuerza es al menos esta vez la del enemigo (CombatRules.side_strength).
+var combat_auto_resolve_ratio := 2.0
+## La etiqueta de la seleccion de tropa: Favorable desde esta proporcion,
+## Dificil por debajo de la otra, Igualada entre medias.
+var combat_odds_favorable := 1.25
+var combat_odds_hard := 0.85
 
 func get_combat_stats(unit_id: String) -> Dictionary:
 	return combat_unit_stats.get(unit_id, {})
@@ -2054,7 +2351,12 @@ var storm_tower_garrison_unit := "artillery"
 ## Dotaciones por torre en pie, y su tope. El tope existe por lo mismo que el de
 ## la mitigación: una fila de torres no puede convertir el Diezmo en un trámite.
 var storm_tower_garrison_per_tower := 1
-var storm_tower_garrison_max := 2
+## Tope 4 desde 2026-10-12: el asedio del final pide preparacion, y cada torre de
+## mas manda su dotacion cuando la guarnicion ya ha caido (el tablero solo deja
+## sitio a 8 - guarnicion viva). Con 6 blindados y 2 torres el asedio se gana el
+## 45 %; con 4 torres, el 82 % (docs/17). Objectives pide estas torres antes del
+## Cuartel General nivel 3.
+var storm_tower_garrison_max := 4
 ## Lo que pierde una torre cuando cae su dotacion en un tablero (Diezmo o
 ## Auditoria), como fraccion de su vida maxima. Queda dañada, nunca en ruinas:
 ## sigue en pie, pero hay que repararla (CombatManager.damage_towers_for_lost_crews).
@@ -2300,7 +2602,8 @@ func get_storm_loss_refund(cost: Dictionary) -> Dictionary:
 
 ## Cuantas oleadas trae el asedio (minimo, maximo). Sale de la semilla, no de una
 ## eleccion del jugador: convocar es apostar sin saber cuanto dura la noche.
-var final_audit_waves := Vector2i(3, 5)
+## 4-5 desde 2026-10-12 (antes 3-5): un final mas exigente (docs/17, "2026-10-12").
+var final_audit_waves := Vector2i(4, 5)
 
 ## Cuerpos de la primera oleada, y cuantos suma cada oleada siguiente. El techo
 ## real lo pone `combat_deploy_cap`: el tablero sigue siendo el mismo de siempre.
@@ -2334,7 +2637,10 @@ var final_audit_scale_per_era := 0.05
 ## `FinalAudit._compose()`); esto es lo que se le suma encima. Un 5% parece poco
 ## y no lo es: es lo que separa un asedio de 5 oleadas ganable el 44% de las
 ## veces de uno que no se gana nunca.
-var final_audit_last_wave_multiplier := 1.05
+## 1.10 desde 2026-10-12 (antes 1.05), con 4-5 oleadas: seis blindados y cuatro
+## torres ganan el 82 %, como antes con 3-5 oleadas y dos torres; cinco blindados,
+## el 45 %; dos torres, el 45 %; las mixtas, nunca.
+var final_audit_last_wave_multiplier := 1.10
 
 ## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
 ## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
@@ -2449,7 +2755,9 @@ var game_tier_rules := {
 		"combat_hard": true,
 		"expedition_enemy_mult": 1.05,
 		"tithe_force_mult": 1.34,
-		"audit_enemy_mult": 1.06,
+		# 1.05 desde 2026-10-12 (antes 1.06): con el asedio de 4-5 oleadas, x1.06
+		# dejaba la guarnicion maxima en el 49 %; x1.05 la deja en el 64 % (>= 60 %).
+		"audit_enemy_mult": 1.05,
 	},
 }
 

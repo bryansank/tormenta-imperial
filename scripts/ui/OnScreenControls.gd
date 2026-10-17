@@ -205,6 +205,8 @@ func _setup_ui() -> void:
 
 	# Building rotate button (visible only during placement)
 	_rotate_building_btn = _styled_button("R ↻")
+	# El tutorial lo senala al ensenar a girar (HelpTargets "rotate_button").
+	_rotate_building_btn.add_to_group("hud_rotate_building")
 	_rotate_building_btn.custom_minimum_size = Vector2(108, 50)
 	_rotate_building_btn.tooltip_text = Tr.ti("LBL_ROTATE_BUILDING")
 	_add_hold(_rotate_building_btn, func(): EventBus.building_rotate_requested.emit(),

@@ -9,6 +9,8 @@ var _is_open := false
 var _now_title: Label
 var _now_why: Label
 var _now_blocker: Label
+## "Sal de escaramuza: ..." (Objectives.sortie_step), solo cuando hay motivo.
+var _sortie_line: Label
 ## Encargos: "Entrega el encargo: Los vecinos" cuando uno ya se puede entregar.
 var _now_contract: Label
 var _route_box: VBoxContainer
@@ -116,6 +118,13 @@ func _setup_ui() -> void:
 	_now_blocker = UITheme.make_label("", "body", UITheme.WARNING)
 	_now_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_now_blocker)
+	# Segunda linea (doc 21 §2.4 y §3.6): salir de escaramuza cuando hay motivo.
+	# Va aparte del paso de la linea: no lo sustituye, lo acompana.
+	_sortie_line = UITheme.make_label("", "body", UITheme.CAT_MILITARY.lightened(0.25))
+	_sortie_line.name = "SortieLine"
+	_sortie_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_sortie_line.visible = false
+	content.add_child(_sortie_line)
 	_now_contract = UITheme.make_label("", "body", UITheme.POSITIVE)
 	_now_contract.name = "ContractStep"
 	_now_contract.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -171,6 +180,13 @@ func refresh() -> void:
 	_now_why.text = String(text["why"])
 	_now_blocker.text = String(text["blocker"])
 	_now_blocker.visible = String(text["blocker"]) != ""
+	var sortie: Dictionary = Objectives.sortie_step()
+	if sortie.is_empty():
+		_sortie_line.visible = false
+	else:
+		var sortie_text: Dictionary = Objectives.describe(sortie)
+		_sortie_line.text = "%s\n%s" % [String(sortie_text["title"]), String(sortie_text["why"])]
+		_sortie_line.visible = true
 	var contract: Dictionary = Objectives.contract_step()
 	_now_contract.visible = not contract.is_empty()
 	if not contract.is_empty():

@@ -126,6 +126,13 @@ func _build() -> void:
 	tools.add_child(_tool_button("BTN_STORY", func():
 		close()
 		TutorialManager.show_prologue()))
+	# El combate guiado otra vez en la proxima pelea (docs/23 §2.4).
+	var combat_replay := _tool_button("BTN_CGUIDE_REPLAY", func():
+		close()
+		TutorialManager.replay_combat_lessons()
+		EventBus.notification_posted.emit(Tr.t("MSG_CGUIDE_REPLAY"), "notice", UITheme.INFO))
+	combat_replay.name = "CombatGuideReplay"
+	tools.add_child(combat_replay)
 
 	col.add_child(UITheme.make_separator())
 	var hint := UITheme.make_label(Tr.ti("LBL_HELP_INDEX_HINT"), "small", UITheme.TEXT_DIM)

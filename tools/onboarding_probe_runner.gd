@@ -121,6 +121,11 @@ func _run() -> void:
 	print("onboarding_probe: guia=", TutorialManager.guide_state, " paso=", TutorialManager.current_step())
 	await _frames(20)
 	await _shot("guide_1")
+	# Las tarjetas de leer del principio (la meta y el Nucleo): su boton.
+	for i in 2:
+		TutorialManager.confirm_step(TutorialManager.current_step())
+		await _frames(20)
+		await _shot("guide_read_%d" % (i + 1))
 	# Abrir CONSTRUIR: si no esta a la vista, primero el ☰ (como el jugador).
 	var build: Control = HelpTargetsRef.control(get_tree(), "build_button")
 	if build == null:
@@ -152,10 +157,6 @@ func _run() -> void:
 	await _frames(20)
 
 	# ── Ayudas: un globo con ✕ y reloj ──
-	# El jugador cierra la columna ☰ (la abrio para llegar a CONSTRUIR).
-	var market: Node = main.get_node_or_null("MarketPanel")
-	if market != null and bool(market.get("_sidebar_visible")):
-		market.call("_toggle_sidebar")
 	await _frames(5)
 	var helper: Node = main.get_node("HelperPanel")
 	helper.call("skip_gap")

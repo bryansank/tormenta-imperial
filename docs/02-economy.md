@@ -38,13 +38,29 @@ own resource — the **first** process of its list in `GameConfig.building_proce
 - **Outside the shared pool:** they live in the Núcleo's workshop (`ResourceManager.is_material()`;
   `get_total_stored()` skips them). The pool is tuned to the exact HQ L3 price, so they
   cannot count against it. The Tithe does not take them either.
-- **Who asks for them** (`BuildingData.cost_materials`): Barracks 10 planks, Tower 4
+- **Who asks for them** (`BuildingData.cost_materials`): Barracks 20 planks, Tower 4
   beams, Refinery 6 beams, Statue 3 ingots, HQ 20 beams + 10 ingots + 10 fuel, and the
   HQ upgrades (`hq_upgrade_costs`: L2 15 beams + 10 ingots + 15 fuel, L3 25 beams + 20
   ingots + 25 fuel).
 - The HUD shows them in a **TALLER** row once one is unlocked; ¿QUÉ HACER? turns a
   missing material into a "make" step (`Objectives.make_step_for()`).
 - Unlocked by `ProgressionManager._unlock_material_of()` on `construction_completed`.
+
+### Repuestos (2026-10-14, rama `feat/escaramuzas`)
+
+Un quinto material, `PARTS` (`parts`), al final del enum para no mover números. Como los
+otros cuatro va fuera de la bolsa y el Diezmo no lo toca, pero **ningún edificio lo
+fabrica**: solo se trae de las escaramuzas (incursiones y expediciones cortas,
+`docs/15-combat.md` §4b). Se desbloquea al traer los primeros (`CombatManager._apply_loot`).
+
+- **Quién los pide:** el nivel 3 de los productores (`upgrade_parts_cost` {3: 3} sobre
+  `upgrade_parts_buildings`: aserradero, mina, fundición, refinería, granja), sumado en
+  `GameConfig.get_upgrade_cost()`. El Cuartel General sigue con su tabla propia.
+- ¿QUÉ HACER? no propone una mejora que pida repuestos que no hay
+  (`Objectives._producer_step`); la línea "Sal de escaramuza" lo explica
+  (`Objectives.sortie_step`, motivo `SORTIE_WHY_PARTS`).
+- Colonos (habitantes al momento, hasta llenar las casas) y planos (abren edificios) son
+  el resto del botín exclusivo: ver `docs/15-combat.md` §4b.
 
 ## Resource Flow
 
@@ -169,7 +185,8 @@ about six minutes of base production, multiplied by the level's production multi
 One **shared pool** for the five resources (not a cap per resource):
 
 - Base cap by era: 600 / 800 / 1000 (`base_storage_cap_by_era`)
-- Each warehouse: +500 (`warehouse_storage_bonus`), max 5; each level above 1 adds
+- Each warehouse: +500 (`warehouse_storage_bonus`), max 5 in every era (los demás topes
+  suben con la era, este no: docs/03 §Building Limits); each level above 1 adds
   +250 more (`warehouse_level_bonus`, `ResourceManager.refresh_warehouse_levels()`)
 - Tech: Logistics 2 +300, Industrial 2 +200, Logistics 5 +500 (`tech_storage_bonus`)
 - Era 3 with five warehouses: 1000 + 5×500 = **3500**, exactly the HQ level 3 upgrade;
@@ -357,7 +374,7 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
   and a Warehouse standing
 
 ### Mid Game (Era 2)
-- Steel enables: Barracks (250g+100s+80w + 10 planks), Refinery (300g+150s+100w + 6
+- Steel enables: Barracks (150g+60s+80w + 20 planks), Refinery (300g+150s+100w + 6
   beams; needs Foundry + Barracks)
 - Market becomes important for converting surplus
 
@@ -369,6 +386,16 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
   Audit in Campaña and Supervivencia (surviving it is the victory), wins directly in
   Constructor (docs/06, docs/20). The materials are outside the pool, so the 3,500 =
   3,500 invariant still holds
+
+### Topes que suben con la era (2026-10-14)
+- Los topes de edificios suben con la era (`GameConfig.building_limits_by_era`, ≈ ×1,5
+  en la era 2 y ×2 en la era 3; tabla y porqués en docs/03 §Building Limits). Más
+  extractores y casas en las eras 2-3 dan más con qué llenar la bolsa: la bolsa no
+  cambia, el tope de almacenes se queda en 5 para que siga valiendo 3.500 = 3.500, y lo
+  que no cabe espera en los edificios (§Production that waits to be collected).
+- Las decoraciones no tienen tope: son el sitio donde gastar lo que sobra (moral).
+- Para medir con `tools/line_probe.gd`: lo tirado por bolsa llena, el minuto del CG 3 y
+  cuántos extractores levanta de verdad el jugador de la sonda en cada era.
 
 ## Key Files
 

@@ -198,6 +198,80 @@ func test_tapping_an_enemy_in_front_closes_in_and_attacks() -> void:
 	assert_int(target.hp).is_less(hp_before)
 	assert_bool(active.has_acted).is_true()
 
+# -- Placas y etiquetas de objetivo en el frente (2026-10-16) -----------
+
+## Abre una artilleria nuestra contra un blindado (buen objetivo) y una
+## infanteria (malo) en la vista pedida; devuelve [screen, board, gun, tank, foot].
+func _open_matchup(view: String) -> Array:
+	var screen := _screen(view)
+	var units: Array = [CombatUnit.create(601, "artillery", Encounter.PLAYER)]
+	CombatManager.start_encounter_with_units(units, {"vehicle": 1, "infantry": 1})
+	var board = screen.board3d().board
+	await _until_player_ready(screen)
+	var tank: CombatUnit = null
+	var foot: CombatUnit = null
+	for u in CombatManager.get_units():
+		if u.unit_id == "vehicle":
+			tank = u
+		elif u.unit_id == "infantry":
+			foot = u
+	return [screen, board, CombatManager.get_unit(601), tank, foot]
+
+## En el frente las piezas van juntas: la etiqueta de objetivo solo sale sobre
+## el enemigo bajo el puntero o el dedo, nunca en todos a la vez.
+func test_front_shows_the_target_label_only_on_the_focused_enemy() -> void:
+	var opened: Array = await _open_matchup("front")
+	var screen = opened[0]
+	var board = opened[1]
+	var gun: CombatUnit = opened[2]
+	var tank: CombatUnit = opened[3]
+	var foot: CombatUnit = opened[4]
+	var targets: Array = [tank.uid, foot.uid]
+	board.show_state(gun.uid, [], targets, screen.target_hints(gun, targets), {tank.uid: "-18 de 75", foot.uid: "-6 de 100"})
+	assert_str(board.toy(tank.uid).target_hint_text()).is_empty()
+	assert_str(board.toy(foot.uid).target_hint_text()).is_empty()
+	# Los aros y la mira siguen en todos.
+	assert_bool(board.toy(tank.uid).is_targeted()).is_true()
+	assert_bool(board.toy(foot.uid).is_targeted()).is_true()
+	board.set_hover(board.shown_cell(tank.uid))
+	assert_int(board.focus_uid()).is_equal(tank.uid)
+	assert_str(board.toy(tank.uid).target_hint_text()).contains(Tr.t("LBL_GOOD_TARGET"))
+	assert_str(board.toy(tank.uid).target_hint_text()).contains("-18 de 75")
+	assert_str(board.toy(foot.uid).target_hint_text()).is_empty()
+	board.set_hover(board.shown_cell(foot.uid))
+	assert_str(board.toy(tank.uid).target_hint_text()).is_empty()
+	assert_str(board.toy(foot.uid).target_hint_text()).contains(Tr.t("LBL_BAD_TARGET"))
+	board.set_hover(Vector2i(-1, -1))
+	assert_int(board.focus_uid()).is_equal(-1)
+	assert_str(board.toy(foot.uid).target_hint_text()).is_empty()
+
+## En el frente la placa del foco y la de la unidad activa van enteras; las
+## demas, compactas. En el tablero 8x8 todas enteras, sin subir ni apagarse.
+func test_front_plates_are_compact_except_the_focus_and_the_board_keeps_them() -> void:
+	var opened: Array = await _open_matchup("front")
+	var screen = opened[0]
+	var board = opened[1]
+	var gun: CombatUnit = opened[2]
+	var tank: CombatUnit = opened[3]
+	var foot: CombatUnit = opened[4]
+	var targets: Array = [tank.uid, foot.uid]
+	board.show_state(gun.uid, [], targets, screen.target_hints(gun, targets))
+	assert_float(board.toy(gun.uid).plate_scale()).is_equal(1.0)
+	assert_float(board.toy(tank.uid).plate_scale()).is_less(1.0)
+	board.set_hover(board.shown_cell(tank.uid))
+	assert_float(board.toy(tank.uid).plate_scale()).is_equal(1.0)
+	assert_float(board.toy(foot.uid).plate_scale()).is_less(1.0)
+	board.set_style(BoardScript.STYLE_BOARD)
+	for uid in [gun.uid, tank.uid, foot.uid]:
+		assert_float(board.toy(uid).plate_scale()).is_equal(1.0)
+		# Resta de dos alturas en coma flotante: cero con su ruido.
+		assert_float(board.toy(uid).plate_lift()).is_equal_approx(0.0, 0.0001)
+		assert_bool(board.toy(uid).is_plate_dimmed()).is_false()
+	# Y en el tablero vuelven las etiquetas en todos los objetivos.
+	board.show_state(gun.uid, [], targets, screen.target_hints(gun, targets))
+	assert_str(board.toy(tank.uid).target_hint_text()).is_equal(Tr.t("LBL_GOOD_TARGET"))
+	assert_str(board.toy(foot.uid).target_hint_text()).is_equal(Tr.t("LBL_BAD_TARGET"))
+
 # ── La misma pelea en las dos vistas ─────────────────────────────────
 
 ## Juega una pelea entera con una politica fija y devuelve el resultado. En el

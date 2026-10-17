@@ -22,9 +22,14 @@ extends Node
 ## La COMIDA (2026-10-04) va la ultima, por lo mismo: no mover los numeros. Es un
 ## recurso de la bolsa (cuenta en el tope compartido, como el oro) y existe desde
 ## el principio: la gente come comida en vez de madera y oro (PopulationManager).
-enum Type { GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD }
+##
+## Los REPUESTOS (2026-10-14) van detras de todo, por lo mismo. Son un material
+## (fuera de la bolsa, el Diezmo no los toca) que ningun edificio fabrica: solo
+## se traen de las escaramuzas (doc 21 §3.1). Se desbloquean al traer los
+## primeros (CombatManager).
+enum Type { GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD, PARTS }
 
-const MATERIALS := [Type.PLANKS, Type.INGOTS, Type.BEAMS, Type.FUEL]
+const MATERIALS := [Type.PLANKS, Type.INGOTS, Type.BEAMS, Type.FUEL, Type.PARTS]
 
 var _resources: Dictionary = {
 	Type.GOLD: 300,
@@ -36,6 +41,7 @@ var _resources: Dictionary = {
 	Type.BEAMS: 0,
 	Type.FUEL: 0,
 	Type.FOOD: 80,
+	Type.PARTS: 0,
 }
 
 var _names: Dictionary = {
@@ -48,6 +54,7 @@ var _names: Dictionary = {
 	Type.BEAMS: "beams",
 	Type.FUEL: "fuel",
 	Type.FOOD: "food",
+	Type.PARTS: "parts",
 }
 
 var _unlocked: Dictionary = {
@@ -60,6 +67,7 @@ var _unlocked: Dictionary = {
 	Type.BEAMS: false,
 	Type.FUEL: false,
 	Type.FOOD: true,
+	Type.PARTS: false,
 }
 
 var _warehouse_count := 0

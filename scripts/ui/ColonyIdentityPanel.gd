@@ -10,8 +10,8 @@ extends CanvasLayer
 ## "new"   el paso de Nueva partida: sale con un nombre y una bandera al azar ya
 ##         puestos y piezas de rango 1 (con el que empieza toda partida).
 ##         "Saltar" acepta lo que habia al abrir. NO toca RankManager: quien lo
-##         abre decide (RankManager.queue_colony_for_new_game() antes de empezar,
-##         o set_colony() despues).
+##         abre decide (NewGameDialog lo pasa a GameManager.start_new_game(),
+##         que llama a set_colony() tras RankManager.reset()).
 ## "edit"  ☰ MENU > COLONIA: parte del pais de esta partida, con las piezas del
 ##         rango de ahora. Lo engancha RankPanel, que llama a set_colony().
 ##
@@ -222,7 +222,7 @@ func _build() -> void:
 	_preview.stretch_mode = TextureRect.STRETCH_SCALE
 	_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left.add_child(_preview)
-	var flag_dice := _make_button(Tr.t("BTN_IDENTITY_RANDOM"), UITheme.BTN, randomize_flag)
+	var flag_dice := _make_button(Tr.t("BTN_IDENTITY_RANDOM_FLAG"), UITheme.BTN, randomize_flag)
 	flag_dice.name = "RandomFlag"
 	left.add_child(flag_dice)
 
@@ -248,7 +248,7 @@ func _build() -> void:
 	var name_row := HBoxContainer.new()
 	name_row.add_theme_constant_override("separation", 10)
 	right.add_child(name_row)
-	var name_dice := _make_button(Tr.t("BTN_IDENTITY_RANDOM"), UITheme.BTN, randomize_name)
+	var name_dice := _make_button(Tr.t("BTN_IDENTITY_RANDOM_NAME"), UITheme.BTN, randomize_name)
 	name_dice.name = "RandomName"
 	name_row.add_child(name_dice)
 	_name_error = UITheme.make_label(Tr.t("LBL_IDENTITY_NAME_BAD"), "body", UITheme.WARNING)

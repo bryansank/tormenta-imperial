@@ -107,10 +107,10 @@ Acero · 18 Archigobernador (keys `RANK_TITLE_<n>`, ES and EN).
 | Rank | Reward |
 |---|---|
 | 1 | flag basics: patterns `plain`, `bands_h`, `bands_v`, `halves_h`, `cross`; emblems `none`, `gear`, `anchor`, `wheat`, `hammer`; colours ivory, brass, crimson, steel, moss, soot |
-| 2 | Garden (decoration); emblem `tower` |
-| 3 | +1 % production; pattern `border`; colour sky |
+| 2 | Garden, Flower planter, Hay cart (decorations); emblem `tower` |
+| 3 | +1 % production; pattern `border`; colour sky; Bonfire |
 | 4 | +2 % storage; emblem `star` |
-| 5 | Fountain |
+| 5 | Fountain, Flagpole |
 | 6 | +1 % production; patterns `diagonal`, `saltire` |
 | 7 | colours copper, red |
 | 8 | Statue; +2 % storage |
@@ -118,7 +118,7 @@ Acero · 18 Archigobernador (keys `RANK_TITLE_<n>`, ES and EN).
 | 10 | +2 houses (limit) |
 | 11 | colours grass, slate; emblem `wheel` |
 | 12 | +1 % production, +2 % storage; patterns `canton`, `hoist_triangle` |
-| 13 | +2 statues, +2 fountains (limit); emblem `ship` |
+| 13 | Palm trees (decoration); emblem `ship` (the old +2 statues/fountains did nothing once decorations had no cap) |
 | 14 | colours terracotta, gold; emblem `cogs` |
 | 15 | +1 % production; pattern `stripes` |
 | 16 | +2 % storage; +1 tower (limit); emblem `sun` |
@@ -170,15 +170,17 @@ pure helpers in `scripts/services/ColonyIdentity.gd`, drawing in `scripts/ui/Col
   "Prueba otro nombre".
 - **API:** `RankManager.get_colony_name()`, `get_flag_spec()`, `set_colony(name, spec) -> bool`
   (false if the name fails or a piece is locked; emits `colony_identity_changed` and
-  saves only on change), `queue_colony_for_new_game(name, spec) -> bool` (validated at
-  rank 1, consumed by the next `reset()`), `is_piece_unlocked(kind, id)`,
+  saves only on change), `is_piece_unlocked(kind, id)`,
   `is_spec_unlocked(spec)`, `piece_rank(kind, id)`. `get_color()` / `get_color_id()` =
   the first colour (our board tokens). Drawing: `ColonyFlag.texture(spec)` (96x64),
   `small_texture(spec)` (48x32), `draw_spec(canvas_item, rect, spec)` — all cached per
   recipe, nothing per frame.
 - **When:** the New Game step (`ColonyIdentityPanel.open("new")`, preset with a random
-  name and flag, rank-1 pieces, "Saltar" accepts the preset) — wired by NewGameDialog —
-  and later ☰ MENÚ → COLONIA → BANDERA Y NOMBRE (`open("edit")`, RankPanel applies it with
+  name and flag, rank-1 pieces, "Saltar" accepts the preset) — wired by NewGameDialog,
+  whose `chosen_identity` goes to `GameManager.start_new_game(mode, tier, identity)`;
+  `_new_game()` applies it with `set_colony()` right after `RankManager.reset()` (the
+  only path: `clear_save()` also resets before the reload, so the choice cannot wait
+  inside RankManager) — and later ☰ MENÚ → COLONIA → BANDERA Y NOMBRE (`open("edit")`, RankPanel applies it with
   `set_colony()`).
 - **Where it shows:** the Nucleo and HQ masts (`ColonyFlag3D`: a 6-segment plane with
   the cached texture and a vertex-shader wave, no wave in low graphics quality, big on

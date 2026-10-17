@@ -10,10 +10,10 @@ extends CanvasLayer
 ##           o Gobernador (el complejo). Gobernador sale con candado y la
 ##           condicion hasta que el perfil lo abre (GameMode.governor_unlocked;
 ##           en dev_mode, siempre abierto).
-##   Paso 2  nombre y bandera, solo si existe ColonyIdentityPanel.gd (rama de
-##           bandera y pais): se abre con open("new") y su `confirmed(name,
-##           spec)` sigue (queda en `chosen_identity`); su `cancelled` vuelve al
-##           paso 1. Sin ese script no hay paso 2.
+##   Paso 2  nombre y bandera (ColonyIdentityPanel): se abre con open("new") y
+##           su `confirmed(name, spec)` sigue (queda en `chosen_identity`, que
+##           GameManager.start_new_game pone tras el reset); su `cancelled`
+##           vuelve al paso 1.
 ##
 ## Ya no hay paso de "se borrara tu partida" (2026-10-12): una partida nueva va
 ## a su propio archivo y no borra ninguna. Emite `confirmed` con `chosen_mode`
@@ -29,8 +29,8 @@ signal canceled
 
 const LAYER := 40
 const MAX_WIDTH := 1000.0
-## El paso de nombre y bandera (rama de bandera y pais). Si no existe, no hay paso.
-const IDENTITY_PANEL_PATH := "res://scripts/ui/ColonyIdentityPanel.gd"
+## El paso de nombre y bandera.
+const IdentityPanel := preload("res://scripts/ui/ColonyIdentityPanel.gd")
 const CARD_MIN_H := 150.0
 const WIDE := 900.0
 const MEDIUM := 520.0
@@ -39,7 +39,7 @@ const MEDIUM := 520.0
 var chosen_mode: int = GameMode.DEFAULT
 ## El nivel elegido (GameMode.Tier). Solo cuenta si el modo admite niveles.
 var chosen_tier: int = GameMode.TIER_DEFAULT
-## Nombre y bandera del paso 2 ({"name", "spec"}), o {} sin ese paso.
+## Nombre y bandera del paso 2 ({"name", "spec"}), o {} si no se paso por el.
 var chosen_identity: Dictionary = {}
 
 var _current_mode: int = GameMode.DEFAULT
@@ -81,6 +81,14 @@ func _ready() -> void:
 	_show_pick()
 	get_viewport().size_changed.connect(_relayout)
 	_relayout()
+	# Con un solo modo ofrecido y el nivel Gobernador aun cerrado no hay nada
+	# que elegir: se va directo a nombre y bandera (ronda de pruebas 1.0).
+	if skips_pick():
+		_on_start()
+
+## No hay nada que elegir en el paso 1: un solo modo y un solo nivel abierto.
+func skips_pick() -> bool:
+	return GameMode.OFFERED.size() <= 1 and is_governor_locked()
 
 # ── Construccion ─────────────────────────────────────────────────────
 
@@ -320,32 +328,20 @@ func _show_pick() -> void:
 	_relayout()
 	(_cards.get(chosen_mode, _start_btn) as Control).grab_focus.call_deferred()
 
-## EMPEZAR: con el paso de nombre y bandera, se abre; sin el, se sigue ya.
+## EMPEZAR: abre el paso de nombre y bandera.
 func _on_start() -> void:
-	if not _open_identity():
-		confirm()
+	_open_identity()
 
-## Abre ColonyIdentityPanel si existe. Devuelve si lo abrio.
-func _open_identity() -> bool:
-	if not ResourceLoader.exists(IDENTITY_PANEL_PATH):
-		return false
-	var script: Variant = load(IDENTITY_PANEL_PATH)
-	if not (script is GDScript) or not (script as GDScript).can_instantiate():
-		return false
-	var panel: Object = (script as GDScript).new()
-	if not (panel is Node):
-		return false
-	_identity = panel as Node
-	if _identity.has_signal("confirmed"):
-		_identity.connect("confirmed", _on_identity_confirmed)
-	if _identity.has_signal("cancelled"):
-		_identity.connect("cancelled", _show_pick)
-	_identity.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(_identity)
+func _open_identity() -> void:
+	var panel = IdentityPanel.new()
+	_identity = panel
+	panel.confirmed.connect(_on_identity_confirmed)
+	# Sin paso 1 (skips_pick), volver atras es cerrar el dialogo.
+	panel.cancelled.connect(func(): cancel() if skips_pick() else _show_pick())
+	panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(panel)
 	_card.visible = false
-	if _identity.has_method("open"):
-		_identity.call("open", "new")
-	return true
+	panel.open("new")
 
 func _on_identity_confirmed(colony_name: Variant = "", spec: Variant = {}) -> void:
 	chosen_identity = {"name": str(colony_name), "spec": (spec as Dictionary).duplicate(true) if spec is Dictionary else {}}
@@ -379,7 +375,7 @@ func mode_card(mode: int) -> Button:
 ## menu principal (en la escena) se come el ESC antes que cualquier autoload.
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		if is_naming():
+		if is_naming() and not skips_pick():
 			_show_pick()
 		else:
 			cancel()

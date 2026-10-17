@@ -26,9 +26,6 @@ var _rank := 1
 ## partida (son de esta colonia, no del dispositivo).
 var _colony_name := ""
 var _flag_spec: Dictionary = GameConfig.COLONY_DEFAULT_SPEC.duplicate(true)
-## Lo que eligio el jugador en el paso de Nueva partida, para la partida que va
-## a empezar: reset() lo consume (queue_colony_for_new_game).
-var _queued: Dictionary = {}
 
 func _ready() -> void:
 	EventBus.construction_completed.connect(_on_construction_completed)
@@ -233,20 +230,6 @@ func set_colony(colony_name: String, spec: Dictionary) -> bool:
 	GameManager.request_save()
 	return true
 
-## Para el paso de Nueva partida: guarda nombre y bandera para la partida que va
-## a empezar (la de ahora no cambia). El reset() de la partida nueva los pone.
-## Se valida con rango 1, que es con el que empieza toda partida.
-func queue_colony_for_new_game(colony_name: String, spec: Dictionary) -> bool:
-	var clean := ColonyIdentity.clean_name(colony_name)
-	if not ColonyIdentity.is_name_allowed(clean) or not ColonyIdentity.is_spec_open(spec, 1):
-		_queued = {}
-		return false
-	_queued = {"name": clean, "flag": ColonyFlag.fix_spec(spec, ColonyIdentity.open_pieces("colors", 1))}
-	return true
-
-func has_queued_colony() -> bool:
-	return not _queued.is_empty()
-
 # ── Guardado ──
 
 func get_save_data() -> Dictionary:
@@ -288,20 +271,16 @@ func load_save_data(data: Dictionary) -> void:
 	EventBus.colony_identity_changed.emit(_colony_name, get_flag_spec())
 
 ## Tira el rango de la partida anterior. Sin avisos: una partida nueva no
-## anuncia lo que perdio. El pais nuevo es el que se eligio en el paso de Nueva
-## partida (queue_colony_for_new_game) o, si se salto o no hubo paso, uno al
-## azar (con su propio generador: no mueve el RNG global que sortea el mapa).
+## anuncia lo que perdio. El pais nuevo sale al azar (con su propio generador:
+## no mueve el RNG global que sortea el mapa); el que se eligio en el paso de
+## Nueva partida lo pone despues GameManager (_apply_pending_identity, con
+## set_colony).
 func reset() -> void:
 	_xp = 0
 	_rank = 1
 	_apply_bonuses()
-	if not _queued.is_empty():
-		_colony_name = String(_queued["name"])
-		_flag_spec = (_queued["flag"] as Dictionary).duplicate(true)
-		_queued = {}
-	else:
-		var rng := RandomNumberGenerator.new()
-		rng.randomize()
-		var seed_value := rng.randi()
-		_colony_name = ColonyIdentity.random_name(seed_value, Tr.get_locale())
-		_flag_spec = ColonyIdentity.random_spec(seed_value, 1)
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var seed_value := rng.randi()
+	_colony_name = ColonyIdentity.random_name(seed_value, Tr.get_locale())
+	_flag_spec = ColonyIdentity.random_spec(seed_value, 1)

@@ -136,7 +136,6 @@ func _camera(target: Vector2, zoom: float) -> void:
 	cam.set_state(st)
 
 func _close_overlays() -> void:
-	GameManager._close_offline_report()
 	for panel_name in ["TutorialPanel", "HelperPanel", "TitleMenu"]:
 		var p: Node = get_tree().current_scene.get_node_or_null(panel_name)
 		if p and p is CanvasLayer:

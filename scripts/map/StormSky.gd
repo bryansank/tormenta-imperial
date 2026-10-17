@@ -30,7 +30,16 @@ extends Node
 ## parametro del material de ventanas y faroles (`ToyPalette.glow_material()`,
 ## uno para todo el mapa): de noche brillan mas, de dia menos.
 
-## Cuánto tarda el cielo en cerrarse y en volver a abrirse.
+## La Tormenta corta a la vista (2026-10-16, docs/21 §12): el Aviso y la
+## Ceniza apenas tinen el cielo; al llegar la Tormenta hay un GOLPE corto y
+## marcado (se cierra en `storm_visual_punch_in` s, aguanta `storm_visual_punch`
+## s con una rafaga de viento y ceniza y se abre en `storm_visual_punch_out` s)
+## y despues el cielo se queda en un tono de fondo apenas tenido
+## (`storm_visual_linger`) hasta que pasa. Antes se quedaba oscuro los dos o
+## tres minutos enteros y no aportaba nada. Solo aspecto: la mecanica y las
+## duraciones de las fases (storm_* de GameConfig, StormCycle) no cambian.
+
+## Cuánto tarda el cielo en cerrarse y en volver a abrirse fuera del golpe.
 const FADE_IN := 3.0
 const FADE_OUT := 5.0
 
@@ -52,15 +61,21 @@ const SKY_KEYS := {
 	"ground_bottom_color": Color(0.16, 0.15, 0.14),
 }
 
-## El cielo se cierra en tres pasos, uno por fase, y ninguno depende de la
-## severidad hasta que la tormenta ya esta encima: si el Aviso oscureciera en
-## proporcion al golpe que viene, el jugador leeria la factura antes de tiempo y
-## la decision de prepararse dejaria de tener riesgo.
-const WEIGHT_WARNING := 0.35
-const WEIGHT_ASH := 0.7
+## El tono de cada fase sale de GameConfig (storm_visual_*) y ninguno depende
+## de la severidad hasta que la tormenta ya esta encima: si el Aviso oscureciera
+## en proporcion al golpe que viene, el jugador leeria la factura antes de
+## tiempo y la decision de prepararse dejaria de tener riesgo. Solo el golpe
+## (punch_weight) dice la severidad.
+
+## La rafaga del golpe en 3D: motas de ceniza que cruzan la vista empujadas por
+## el viento. Cuelga de la camara (cubre siempre lo que se ve) y se borra sola.
+const GUST_COLOR := Color(0.5, 0.43, 0.37, 0.9)
+const GUST_DISTANCE := 14.0
 
 const IslandGen := preload("res://scripts/map/IslandGenerator.gd")
 const Palette := preload("res://scripts/buildings/ToyPalette.gd")
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
+const Fx := preload("res://scripts/buildings/BuildingFx.gd")
 
 # ── La luz del dia (multiplicadores y tonos sobre los valores limpios) ──
 
@@ -102,6 +117,8 @@ const GLOW_STORM := 1.4
 var _env: Environment = null
 var _sun: DirectionalLight3D = null
 var _tween: Tween = null
+## La rafaga de ceniza del golpe en curso (3D), o null.
+var _gust: CPUParticles3D = null
 
 ## Los valores originales, para poder devolverlos tal cual.
 var _clear: Dictionary = {}
@@ -258,22 +275,89 @@ func _night_for(storm_w: float) -> float:
 
 # ── Transiciones ─────────────────────────────────────────────────────
 
-## Se oscurece desde el Aviso, no desde el impacto: el cielo cerrándose **es**
-## el aviso. Para cuando el texto aparece, el jugador ya lo ha notado.
+## Se tine desde el Aviso, no desde el impacto: el cielo cambiando **es** el
+## aviso. Pero solo un poco: lo oscuro se guarda para el golpe.
 func _on_incoming(_seconds: float) -> void:
-	_close_to(WEIGHT_WARNING)
+	_close_to(warning_weight())
 
-## Cae ceniza: el cielo se cierra mas, pero todavia no del todo. El salto entre
-## una fase y la siguiente es lo que le dice al jugador que esto va a peor sin
-## necesidad de un solo numero en pantalla.
+## Cae ceniza: un punto mas de tinte, todavia lejos de la oscuridad.
 func _on_ash() -> void:
-	_close_to(WEIGHT_ASH)
+	_close_to(ash_weight())
 
-## Ya encima, y solo ahora la severidad se ve. El suelo es alto a proposito:
-## incluso la tormenta mas floja tiene que oscurecer lo bastante como para que
-## se note sin leer nada.
+## Ya encima: el golpe. Se cierra de prisa hasta el peso de la severidad (el
+## unico momento en que se ve), aguanta unos segundos con la rafaga de ceniza
+## y se abre al tono de fondo para el resto de la Tormenta.
 func _on_storm(severity: int) -> void:
-	_close_to(weight_for(StormCycle.Phase.STORM, severity))
+	_punch(punch_weight(severity))
+	_spawn_gust()
+
+## El golpe: cerrar en punch_in, aguantar, abrir hasta el tono de fondo en
+## punch_out. Un solo tween de tres pasos; fuera de el, nada por frame.
+func _punch(peak: float) -> void:
+	var linger := linger_weight()
+	if not _resolve():
+		_paint_island(linger)
+		_paint_night(_night_for(linger))
+		_paint_glow(linger)
+		return
+	_day = _day_values()
+	_start_tween()
+	var punch_in := maxf(0.05, GameConfig.storm_visual_punch_in)
+	var hold := maxf(0.0, GameConfig.storm_visual_punch - punch_in)
+	_tween.tween_method(_apply_weight, _island_weight, peak, punch_in)
+	_tween.tween_interval(hold)
+	_tween.tween_method(_apply_weight, peak, linger, maxf(0.05, GameConfig.storm_visual_punch_out))
+
+## La rafaga de ceniza del golpe, colgada de la camara 3D: emite lo que dura
+## el golpe y se borra al caer la ultima mota. En calidad Minima, nada (el
+## golpe de oscuridad se ve igual). Reusa la mota y el material del polvo de
+## obra (BuildingFx.burst_mesh_3d): ningun shader nuevo que compilar.
+func _spawn_gust() -> void:
+	if not GraphicsQuality.fx_enabled():
+		return
+	var tree := get_tree()
+	if tree == null or tree.root == null:
+		return
+	var cam := tree.root.get_viewport().get_camera_3d()
+	if cam == null or not cam.is_inside_tree():
+		return
+	_drop_gust()
+	var p := CPUParticles3D.new()
+	p.name = "StormGust"
+	p.mesh = Fx.burst_mesh_3d()
+	p.amount = int(GameConfig.storm_visual_gust_amount.get(DeviceProfile.current(), 160))
+	p.lifetime = 1.6
+	p.preprocess = 0.4
+	p.local_coords = true
+	p.position = Vector3(0.0, 0.0, -GUST_DISTANCE)
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(GUST_DISTANCE * 1.1, GUST_DISTANCE * 0.65, GUST_DISTANCE * 0.3)
+	# El viento: de izquierda a derecha de la pantalla, cayendo un poco.
+	p.direction = Vector3(1.0, -0.25, 0.0)
+	p.spread = 12.0
+	p.initial_velocity_min = 9.0
+	p.initial_velocity_max = 15.0
+	p.gravity = Vector3(0.0, -2.0, 0.0)
+	p.scale_amount_min = 0.12
+	p.scale_amount_max = 0.3
+	p.color = GUST_COLOR
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	cam.add_child(p)
+	p.emitting = true
+	_gust = p
+	var linger := p.lifetime + 0.2
+	tree.create_timer(maxf(0.1, GameConfig.storm_visual_punch)).timeout.connect(func() -> void:
+		if is_instance_valid(p):
+			p.emitting = false
+			tree.create_timer(linger).timeout.connect(func() -> void:
+				if is_instance_valid(p):
+					p.queue_free()))
+
+## Quita la rafaga en curso (cargar partida, reset, Auditoria ganada).
+func _drop_gust() -> void:
+	if _gust != null and is_instance_valid(_gust):
+		_gust.queue_free()
+	_gust = null
 
 ## El Aviso no era nada. El cielo se despeja sin mas explicacion: el jugador se
 ## entera de que era falsa alarma mirando por la ventana, no leyendo un aviso.
@@ -317,16 +401,32 @@ func _forget_scene() -> void:
 	_sun = null
 	_day = {}
 
-## Lo que pesa la ceniza en cada fase. Publico para poder auditarlo sin cielo.
-static func weight_for(phase: int, severity: int) -> float:
+## El tono de fondo de cada fase (sin golpe). Publico para poder auditarlo sin
+## cielo. En la Tormenta, el de despues del golpe. El Diezmo en 3D llega con
+## `storm_ended` (el cielo ya se esta abriendo), asi que aqui es 0.
+static func weight_for(phase: int, _severity: int = 0) -> float:
 	match phase:
 		StormCycle.Phase.WARNING:
-			return WEIGHT_WARNING
+			return warning_weight()
 		StormCycle.Phase.ASH:
-			return WEIGHT_ASH
+			return ash_weight()
 		StormCycle.Phase.STORM:
-			return clampf(float(severity) / float(maxi(1, GameConfig.storm_severity_max)), 0.6, 1.0)
+			return linger_weight()
 	return 0.0
+
+static func warning_weight() -> float:
+	return clampf(GameConfig.storm_visual_warning, 0.0, 1.0)
+
+static func ash_weight() -> float:
+	return clampf(GameConfig.storm_visual_ash, 0.0, 1.0)
+
+static func linger_weight() -> float:
+	return clampf(GameConfig.storm_visual_linger, 0.0, 1.0)
+
+## Lo oscuro del golpe: la severidad, con un suelo alto a proposito (incluso la
+## tormenta mas floja tiene que notarse sin leer nada).
+static func punch_weight(severity: int) -> float:
+	return clampf(float(severity) / float(maxi(1, GameConfig.storm_severity_max)), 0.6, 1.0)
 
 ## Pinta al instante el cielo de la fase actual. Sin esto, cargar con la ceniza
 ## cayendo mostraba cielo limpio, y cargar en calma tras una partida oscura
@@ -334,6 +434,8 @@ static func weight_for(phase: int, severity: int) -> float:
 func sync_to_storm() -> void:
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
+	# Cargar a media Tormenta no repite el golpe: se pinta el tono de fondo.
+	_drop_gust()
 	var weight: float = 0.0
 	if not StormManager.is_halted():
 		weight = weight_for(StormManager.get_phase(), StormManager.get_severity())
@@ -467,6 +569,7 @@ func _sky_material() -> ProceduralSkyMaterial:
 ## Tampoco toca la hora del dia: esa es de DayClock y de su propio reset().
 func reset() -> void:
 	_forget_scene()
+	_drop_gust()
 	_clear = {}
 	_clear_env = null
 	_clear_sun_id = 0
@@ -478,6 +581,7 @@ func reset() -> void:
 func restore_now() -> void:
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
+	_drop_gust()
 	if not _resolve():
 		_paint_island(0.0)
 		_paint_night(_night_for(0.0))

@@ -367,6 +367,9 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 func set_graphics_quality(quality: String) -> void:
 	if not quality in GameConfig.GRAPHICS_QUALITY_MODES:
 		return
+	# Elegida a mano: el motivo lo dice, y la reparacion de detecciones malas
+	# (DeviceProfile._repair_bad_detection) no la toca nunca. set_quality guarda.
+	GameConfig.quality_detected_reason = "manual: " + quality
 	var restart := GraphicsQuality.set_quality(quality)
 	_refresh_fps_auto_label()
 	if restart:
