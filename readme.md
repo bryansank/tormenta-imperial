@@ -21,7 +21,7 @@
 
 Llegas a una isla generada proceduralmente (cada una con su costa, sus bahías y cabos, sus bosques y sus vetas) con un núcleo, 300 de oro, 200 de madera y 80 de comida. A partir de ahí, todo lo que tengas lo habrás construido: granjas, aserraderos que muerden el bosque, minas, una fundición que enciende la era del acero, una refinería que abre la del petróleo. Todo se une al núcleo por carretera, y tus trabajadores van andando por ella. Tu gente trabaja, come y **tiene moral** — y la moral decide si tu imperio produce o se para.
 
-Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán —o no— a ella. Porque la Tormenta Imperial vuelve: apaga el cielo, rompe lo que construiste y manda a los Tasadores a cobrar el Diezmo. Ese cobro se pelea en un tablero de 8x8 con lo que tengas en casa.
+Cuando entrenes un ejército, esas tropas saldrán de tu economía y volverán —o no— a ella. Porque la Tormenta Imperial vuelve: apaga el cielo, rompe lo que construiste y manda a los Cobradores a cobrar el Impuesto. Ese cobro se pelea en un tablero de 8x8 con lo que tengas en casa.
 
 > *"Sobre el barro de la historia, construiremos monumentos de acero."*
 
@@ -68,8 +68,8 @@ Cada zip trae un `LEEME.txt` (en español e inglés) con la instalación, los co
 4. **Progresa** por tres eras: Frontera → Industrial → Petróleo. Cada una desbloquea un recurso y con él media docena de decisiones nuevas.
 5. **Investiga** en el Laboratorio quince tecnologías en tres ramas, con bonificaciones permanentes.
 6. **Entrena un ejército** en el Cuartel — y págale el mantenimiento, todos los turnos, en oro.
-7. **Sobrevive** a la Tormenta Imperial: ceniza, edificios en ruinas y el Diezmo, que se paga o se pelea.
-8. **Aguanta la Auditoría Final.** En la Campaña, subir el Cuartel General al nivel 3 no gana la partida: convoca a la Regencia. De 3 a 5 oleadas seguidas contra la guarnición que tengas en casa, sin reentrenar entre medias. Sobrevivirlas para la Tormenta para siempre — y eso sí es ganar.
+7. **Sobrevive** a la Tormenta Imperial: ceniza, edificios en ruinas y el Impuesto, que se paga o se pelea.
+8. **Aguanta el Ataque Final.** En la Campaña, subir el Cuartel General al nivel 3 no gana la partida: convoca a la Regencia. De 3 a 5 oleadas seguidas contra la guarnición que tengas en casa, sin reentrenar entre medias. Sobrevivirlas para la Tormenta para siempre — y eso sí es ganar.
 
 ## Lo que lo hace distinto
 
@@ -79,22 +79,22 @@ Ningún otro juego del género cruza esas dos mitades. Esa es la apuesta.
 
 ## Estado
 
-La **versión 1.0 está en preparación**. El **juego se puede jugar de principio a fin**: economía con comida y materiales, recoger la producción, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline, la Tormenta y su Diezmo, el combate y la Auditoría Final. Alrededor: el rango del gobernador y un **país propio** (nombre y bandera hecha por piezas), **día y noche**, sonido y ambiente, **hasta cinco partidas guardadas**, velocidad x1 / x2, **cuatro modos** (Campaña, Constructor, Supervivencia y Sandbox; hoy la partida nueva solo ofrece la Campaña y los otros tres están apartados), una **vista 2D** además de la 3D, una **interfaz configurable** por dispositivo (PC, tableta, móvil) con juego táctil, una **calidad gráfica "Mínima"** para equipos flojos, un **prólogo, un tutorial guiado y un índice de ayudas**, y exportados para **Windows y Android**.
+La **versión 1.0 está en preparación**. El **juego se puede jugar de principio a fin**: economía con comida y materiales, recoger la producción, población y moral, mercado, árbol tecnológico, ejército, eventos aleatorios, progresión offline, la Tormenta y su Impuesto, el combate y el Ataque Final. Alrededor: el rango del gobernador y un **país propio** (nombre y bandera hecha por piezas), **día y noche**, sonido y ambiente, **hasta cinco partidas guardadas**, velocidad x1 / x2, **cuatro modos** (Campaña, Constructor, Supervivencia y Sandbox; hoy la partida nueva solo ofrece la Campaña y los otros tres están apartados), una **vista 2D** además de la 3D, una **interfaz configurable** por dispositivo (PC, tableta, móvil) con juego táctil, una **calidad gráfica "Mínima"** para equipos flojos, un **prólogo, un tutorial guiado y un índice de ayudas**, y exportados para **Windows y Android**.
 
-Lo que aún no está: la campaña se midió entera con tiempos reales (diez de diez partidas simuladas ganadas, de 2 h 18 min a 4 h) **antes** de las carreteras, los materiales, la comida y la isla irregular, así que falta volver a medirla; el rendimiento tampoco se ha vuelto a medir tras las optimizaciones; y nadie ha jugado aún una partida entera en una tableta real. Antes de publicar entra una primera tanda de cambios al ciclo de juego, después de jugarlo. Ya están los topes de edificios que suben con la era, diez decoraciones baratas y sin tope, y un edificio que "salta" al terminarse. Faltan las escaramuzas más cortas, visibles y que den cosas que la colonia no tiene, y un primer combate guiado. Está en curso; el detalle, en [`docs/13-roadmap.md`](docs/13-roadmap.md).
+Lo que aún no está: la campaña se midió entera con tiempos reales (diez de diez partidas simuladas ganadas, de 2 h 18 min a 4 h) **antes** de las carreteras, los materiales, la comida y la isla irregular, así que falta volver a medirla; el rendimiento tampoco se ha vuelto a medir tras las optimizaciones; y nadie ha jugado aún una partida entera en una tableta real. Antes de publicar entra una primera tanda de cambios al ciclo de juego, después de jugarlo. Ya están los topes de edificios que suben con la era, diez decoraciones baratas y sin tope, y un edificio que "salta" al terminarse. Faltan las misiones más cortas, visibles y que den cosas que la colonia no tiene, y un primer combate guiado. Está en curso; el detalle, en [`docs/13-roadmap.md`](docs/13-roadmap.md).
 
-El **combate PVE por turnos está en el juego**: un tablero de 8x8, orden de iniciativa, mover/atacar/defender/esperar, IA enemiga, ventaja por tipo de unidad, el Diezmo peleado en vez de pagado, y la Auditoría Final que cierra la partida. En 3D se ve como una maqueta: por defecto los dos bandos frente a frente sin casillas a la vista, o el tablero 8x8 si lo prefieres en Ajustes. Todo el modelo vive en `scripts/combat/` como objetos puros, sin nodos ni señales, y se prueba en headless con gdUnit4.
+El **combate PVE por turnos está en el juego**: un tablero de 8x8, orden de iniciativa, mover/atacar/defender/esperar, IA enemiga, ventaja por tipo de unidad, el Impuesto peleado en vez de pagado, y el Ataque Final que cierra la partida. En 3D se ve como una maqueta: por defecto los dos bandos frente a frente sin casillas a la vista, o el tablero 8x8 si lo prefieres en Ajustes. Todo el modelo vive en `scripts/combat/` como objetos puros, sin nodos ni señales, y se prueba en headless con gdUnit4.
 
 | Pieza | Estado |
 |---|---|
 | Tablero táctico, turnos, IA enemiga (`Encounter`, `CombatAI`, `BattleScreen`) | ✅ en el juego |
 | Vista de frente y tablero 3D con piezas de juguete del color de tu país | ✅ en el juego |
 | Ventaja por tipo: artillería > blindado > infantería > artillería | ✅ en el juego |
-| El Diezmo se pelea: guarnición y dotaciones de torre en el tablero | ✅ en el juego |
+| El Impuesto se pelea: guarnición y dotaciones de torre en el tablero | ✅ en el juego |
 | Defensa auto-resuelta cuando el tablero ya está ocupado (`AutoResolver`) | ✅ en el juego |
-| Auditoría Final: oleadas encadenadas, atrición, perder sin Game Over, reconvocar | ✅ en el juego |
+| Ataque Final: oleadas encadenadas, atrición, perder sin Game Over, reconvocar | ✅ en el juego |
 | Expedición roguelike: mapa por semilla, atrición, muerte permanente, draft | ✅ en el juego; se acortará en la 1.0 (incursión de 1 combate y expedición de 3) |
-| Partes de guerra: defensa a ciegas, Diezmo cobrado o repelido, oleadas del asedio | ✅ en el juego |
+| Partes de guerra: defensa a ciegas, Impuesto cobrado o repelido, oleadas del asedio | ✅ en el juego |
 | Enseñar el combate: primer combate guiado, fichas de unidad, daño previsto | 🚧 en curso |
 
 Detalle técnico en [`docs/15-combat.md`](docs/15-combat.md); especificación en [`specs/001-combate-pve/`](specs/001-combate-pve/).

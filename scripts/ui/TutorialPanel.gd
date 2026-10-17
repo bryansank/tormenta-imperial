@@ -7,9 +7,12 @@ extends CanvasLayer
 ##   - un velo que oscurece la pantalla menos el control del que se habla (el
 ##     boton CONSTRUIR, la tarjeta del Aserradero...), con un marco de laton;
 ##   - una flecha que lo senala;
-##   - una tarjeta con UNA linea: que hacer ahora, y debajo lo que falta si algo
-##     lo impide (obreros, recursos). Sin "Saltar tutorial" (2026-10-04); solo
-##     el repaso pedido desde AYUDA tiene "Terminar repaso".
+##   - una tarjeta con UNA linea: que hacer ahora, las cifras del edificio con
+##     iconos (TutorialManager.building_facts) y debajo lo que falta si algo lo
+##     impide (trabajadores, recursos) y como conseguirlo (step_how). Sin
+##     "Saltar tutorial" (2026-10-04) ni forma de cerrarla; solo el repaso pedido
+##     desde AYUDA tiene "Terminar repaso". Las tarjetas de leer (la meta, el
+##     Nucleo) se cumplen con su boton (2026-10-16).
 ## El velo no se come nada (MOUSE_FILTER_IGNORE): el jugador puede tocar lo que
 ## quiera, tambien fuera de orden. El paso no avanza con "Siguiente": avanza
 ## cuando TutorialManager ve que se hizo (derive_step), asi que da igual el
@@ -31,8 +34,8 @@ const COACH_LAYER := 19
 const HOLE_PAD := 8.0
 const CARD_WIDTH := 460.0
 const EDGE := 16.0
-## Segundos del "listo" final antes de cerrarse solo.
-const DONE_SECONDS := 10.0
+## Segundos del "listo" final antes de cerrarse solo (lleva la meta: se lee).
+const DONE_SECONDS := 25.0
 ## Hueco entre lo senalado y la tarjeta: ahi va la flecha.
 const ARROW_GAP := 56.0
 
@@ -45,6 +48,9 @@ var _ring: Control
 var _card: PanelContainer
 var _badge: Label
 var _text: Label
+## Las cifras del edificio del paso, con iconos (building_facts).
+var _facts: HBoxContainer
+var _facts_for := "-"
 var _end_replay_btn: Button
 var _ok_btn: Button
 var _step := ""
@@ -61,6 +67,7 @@ const RESOLVE_SECONDS := 0.25
 var _resolve_left := 0.0
 var _res_text := ""
 var _res_hint := ""
+var _res_how := ""
 var _res_control: Control = null
 var _res_cell := Vector2i(-1, -1)
 var _res_cell_size := Vector2i.ONE
@@ -76,11 +83,7 @@ var _card_h := 0.0
 ## lo que se ensena es el tablero entero.
 var _cstep := ""
 var _circle: Control
-var _combat_skip_btn: Button
 var _combat_ok_btn: Button
-## El circulo de ventajas se cierra solo pasado este tiempo (segundos).
-const CIRCLE_SECONDS := 15.0
-var _circle_left := 0.0
 
 func _ready() -> void:
 	layer = COACH_LAYER
@@ -211,6 +214,13 @@ func _build_coach() -> void:
 	_text.name = "Instruction"
 	_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_text)
+	# Las cifras del edificio: [madera] +6 cada 12 s  [trabajadores] 2 trabajan.
+	_facts = HBoxContainer.new()
+	_facts.name = "Facts"
+	_facts.add_theme_constant_override("separation", 14)
+	_facts.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_facts.visible = false
+	col.add_child(_facts)
 	# El circulo de ventajas: solo en el paso 7 del combate guiado.
 	_circle = TypeCircleScript.new()
 	_circle.name = "TypeCircle"
@@ -239,19 +249,10 @@ func _build_coach() -> void:
 	_ok_btn.custom_minimum_size = Vector2(140, UITheme.MIN_BTN_H)
 	_ok_btn.focus_mode = Control.FOCUS_NONE
 	UITheme.style_button(_ok_btn, UITheme.ACCENT.darkened(0.2), UITheme.FONT_BUTTON)
-	_ok_btn.pressed.connect(func(): TutorialManager.finish_guide())
+	_ok_btn.pressed.connect(_on_ok_pressed)
 	_ok_btn.visible = false
 	row.add_child(_ok_btn)
-	# Combate guiado: "Saltar" (pasos 4-7) y "Entendido" (el circulo).
-	_combat_skip_btn = Button.new()
-	_combat_skip_btn.name = "CombatSkip"
-	_combat_skip_btn.text = Tr.t("BTN_CGUIDE_SKIP")
-	_combat_skip_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
-	_combat_skip_btn.focus_mode = Control.FOCUS_NONE
-	UITheme.style_button(_combat_skip_btn, UITheme.BTN, UITheme.FONT_SMALL)
-	_combat_skip_btn.pressed.connect(func(): TutorialManager.skip_combat_lessons())
-	_combat_skip_btn.visible = false
-	row.add_child(_combat_skip_btn)
+	# Combate guiado: solo "Entendido" (el circulo). Sin "Saltar" (2026-10-16).
 	_combat_ok_btn = Button.new()
 	_combat_ok_btn.name = "CombatOk"
 	_combat_ok_btn.text = Tr.t("BTN_CGUIDE_OK")
@@ -261,6 +262,14 @@ func _build_coach() -> void:
 	_combat_ok_btn.pressed.connect(func(): TutorialManager.close_combat_step(_cstep))
 	_combat_ok_btn.visible = false
 	row.add_child(_combat_ok_btn)
+
+## El boton de la tarjeta: en el "listo" final cierra el tutorial; en una
+## tarjeta de leer (la meta, el Nucleo) la da por leida y sigue.
+func _on_ok_pressed() -> void:
+	if _step == "done":
+		TutorialManager.finish_guide()
+	else:
+		TutorialManager.confirm_step(_step)
 
 func _on_step_changed(step_id: String) -> void:
 	_step = step_id
@@ -273,8 +282,13 @@ func _on_step_changed(step_id: String) -> void:
 	if step_id == "":
 		_coach.visible = false
 	_done_left = DONE_SECONDS if step_id == "done" else 0.0
-	_ok_btn.visible = step_id == "done"
+	var reading: bool = TutorialManager.step_has_ok(step_id)
+	_ok_btn.visible = step_id == "done" or reading
+	_ok_btn.text = TutorialManager.step_ok_text(step_id) if reading else Tr.t("BTN_GUIDE_OK")
 	_end_replay_btn.visible = step_id != "done" and TutorialManager.is_replay()
+	# El paso de reparar ensena lo que cuesta reparar (no un edificio de datos).
+	_render_facts("__repair__" if step_id == TutorialManager.REPAIR_STEP \
+		else TutorialManager.step_building(step_id))
 	_render_text()
 
 func _render_text() -> void:
@@ -282,9 +296,47 @@ func _render_text() -> void:
 	if _step == "" or _cstep != "":
 		return
 	var n := TutorialManager.step_number(_step)
-	_badge.text = Tr.t("LBL_GUIDE_DONE_BADGE") if _step == "done" \
-		else Tr.t("LBL_GUIDE_STEP") % [n, TutorialManager.GUIDE_TOTAL]
+	if _step == "done":
+		_badge.text = Tr.t("LBL_GUIDE_DONE_BADGE")
+	elif _step == "goal":
+		_badge.text = Tr.t("LBL_GUIDE_GOAL_BADGE") % [n, TutorialManager.GUIDE_TOTAL]
+	elif _step == TutorialManager.REPAIR_STEP:
+		_badge.text = Tr.t("LBL_GUIDE_REPAIR_BADGE")
+	else:
+		_badge.text = Tr.t("LBL_GUIDE_STEP") % [n, TutorialManager.GUIDE_TOTAL]
 	_text.text = TutorialManager.step_text(_step)
+
+## Pinta la fila de cifras con iconos de `building_id` ("" la esconde). Solo
+## rehace los nodos si cambia el edificio.
+func _render_facts(building_id: String) -> void:
+	if building_id == _facts_for:
+		return
+	_facts_for = building_id
+	for c in _facts.get_children():
+		_facts.remove_child(c)
+		c.queue_free()
+	var facts: Array = TutorialManager.repair_facts() if _step == TutorialManager.REPAIR_STEP \
+		else TutorialManager.building_facts(building_id)
+	for f in facts:
+		var chip := HBoxContainer.new()
+		chip.add_theme_constant_override("separation", 4)
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if String(f["icon"]) != "":
+			chip.add_child(UITheme.make_icon(String(f["icon"]), 24))
+		var l := UITheme.make_label(String(f["text"]), "small", UITheme.TEXT_BRIGHT)
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chip.add_child(l)
+		_facts.add_child(chip)
+	_facts.visible = not facts.is_empty()
+
+## Las cifras en pantalla, como texto (pruebas).
+func facts_text() -> String:
+	var parts: Array = []
+	for chip in _facts.get_children():
+		for c in chip.get_children():
+			if c is Label:
+				parts.append((c as Label).text)
+	return "  ".join(parts)
 
 func current_step() -> String:
 	return _step
@@ -306,7 +358,7 @@ func highlight_rect() -> Rect2:
 ## Algo mas importante esta en pantalla: el prologo, la pausa o el menu
 ## principal (el arbol en pausa), o una pelea.
 func _should_hide() -> bool:
-	if _step == "" or not TutorialManager.is_guide_active():
+	if _step == "" or not TutorialManager.is_coach_active():
 		return true
 	if is_intro_open() or get_tree().paused:
 		return true
@@ -314,9 +366,17 @@ func _should_hide() -> bool:
 		return true
 	# Otra ventana encima (Tecnologia, Mercado...): la marca del tutorial no la
 	# tapa. CONSTRUIR si deja verla: los pasos del tutorial ocurren ahi dentro.
+	# La ficha del edificio tambien, en los pasos que ocurren en ella (mover,
+	# derribar, reparar: 2026-10-16).
 	for w in UIManager.open_windows():
-		if is_instance_valid(w) and String(w.name) != "ConstructionMenu":
-			return true
+		if not is_instance_valid(w):
+			continue
+		var wname := String(w.name)
+		if wname == "ConstructionMenu":
+			continue
+		if wname == "BuildingInfoPanel" and _step in TutorialManager.INFO_PANEL_STEPS:
+			continue
+		return true
 	if CombatManager.is_board_open():
 		return true
 	return false
@@ -366,19 +426,45 @@ func _resolve_step() -> void:
 	_res_cell = Vector2i(-1, -1)
 	# CONSTRUIR es un boton grande siempre visible abajo (menu unico, #31): el
 	# paso 1 lo senala a el directamente (grupo hud_build_button).
+	# "a|b": el primero que se encuentre (el boton MOVER de la ficha si esta
+	# abierta; si no, la casa en el mapa).
 	var site := {}
-	if target == "forest":
-		site = _forest_cell(vp)
-	elif target.begins_with("building:"):
-		site = _building_cell(target.substr(9))
-	elif target != "":
-		_res_control = HelpTargets.control(get_tree(), target)
+	for t in target.split("|", false):
+		site = _target_site(vp, t)
+		if not site.is_empty():
+			break
+		if not (t in ["forest", "core", "practice_road", "damaged"] or t.begins_with("deposit:") \
+				or t.begins_with("building:") or t.begins_with("built:")):
+			_res_control = HelpTargets.control(get_tree(), t)
+			if _res_control != null:
+				break
 	if not site.is_empty():
 		_res_cell = site["cell"]
 		_res_cell_size = site["size"]
-	# Lo que falta para este paso (obreros, recursos): el tutorial no se salta, asi
-	# que tiene que decir por que no se puede seguir.
+	# Lo que falta para este paso (trabajadores, recursos) y como conseguirlo: el
+	# tutorial no se salta, asi que tiene que decir por que no se puede seguir y
+	# que hacer.
 	_res_hint = TutorialManager.step_hint(_step)
+	_res_how = TutorialManager.step_how(_step)
+
+## Una celda del mapa que senalar para `t`, o {} si `t` no es de celda (o no hay).
+func _target_site(vp: Vector2, t: String) -> Dictionary:
+	if t == "forest":
+		return _deposit_cell(vp, "forest")
+	if t.begins_with("deposit:"):
+		return _deposit_cell(vp, t.substr(8))
+	if t == "core":
+		return _core_cell()
+	if t.begins_with("building:"):
+		return _building_cell(t.substr(9))
+	if t.begins_with("built:"):
+		return _built_cell(t.substr(6))
+	if t == "practice_road":
+		var c: Vector2i = TutorialManager.practice_road_cell
+		return {} if c.x < 0 else {"cell": c, "size": Vector2i.ONE}
+	if t == "damaged":
+		return _node_cell(TutorialManager.repair_target())
+	return {}
 
 ## Coloca velo, marco, flecha y tarjeta para el paso actual. Se repite cada
 ## frame: los controles se mueven (la lista de CONSTRUIR se abre, la camara se
@@ -397,6 +483,8 @@ func _layout_step() -> void:
 		text += "\n" + Tr.ti("GUIDE_MOVE_CAMERA")
 	if _res_hint != "":
 		text += "\n" + _res_hint
+	if _res_how != "":
+		text += "\n" + _res_how
 	if _text.text != text:
 		_text.text = text
 
@@ -414,14 +502,8 @@ func _layout_step() -> void:
 	var w: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
 	# Medir la tarjeta (reset_size + tamano minimo) solo si cambia su texto, su
 	# ancho o los botones; cada fotograma era trabajo de maquetado para nada.
-	var key := "%s|%s|%d|%s|%s" % [_badge.text, text, int(w), _ok_btn.visible, _end_replay_btn.visible]
-	if key != _card_key:
-		_card_key = key
-		_card.custom_minimum_size = Vector2(w, 0)
-		_card.size = Vector2(w, 0)
-		_card.reset_size()
-		_card_h = _card.get_combined_minimum_size().y
-	var ch: float = _card_h
+	var key := "%s|%s|%d|%s|%s|%s" % [_badge.text, text, int(w), _ok_btn.visible, _end_replay_btn.visible, _facts_for]
+	var ch: float = _fit_card(w, key)
 	var focus := Rect2()
 	if has_rect:
 		focus = rect
@@ -457,6 +539,25 @@ func _layout_step() -> void:
 			var edge := _edge_point(c, dir, vp, 60.0)
 			_arrow.visible = true
 			_arrow.point_at(edge, dir)
+
+## Ajusta la tarjeta a `w` de ancho y al alto de su texto, y devuelve ese alto.
+## Solo se re-maqueta si cambia `key` (texto, ancho, botones) o si el tamano
+## minimo ya no es el alto que tiene: la etiqueta con autowrap se mide primero
+## sin ancho (una palabra por linea, una tarjeta de arriba abajo, captura de
+## Bryan 14-10) y encoge un fotograma despues, cuando el VBox le da su ancho.
+## Medir solo al cambiar el texto se quedaba con esa primera medida para
+## siempre. get_combined_minimum_size() va cacheado: comprobarlo cada
+## fotograma no cuesta.
+func _fit_card(w: float, key: String) -> float:
+	var min_h: float = _card.get_combined_minimum_size().y
+	if key != _card_key or absf(_card.size.x - w) > 0.5 or absf(_card.size.y - min_h) > 0.5:
+		_card_key = key
+		_card.custom_minimum_size = Vector2(w, 0)
+		_card.size = Vector2(w, 0)
+		_card.reset_size()
+		min_h = _card.get_combined_minimum_size().y
+	_card_h = min_h
+	return min_h
 
 func _card_already_picked(building_id: String) -> bool:
 	var scene := get_tree().current_scene
@@ -519,9 +620,14 @@ func _edge_point(c: Vector2, dir: Vector2, vp: Vector2, margin: float) -> Vector
 	var ty: float = INF if absf(dir.y) < 0.001 else half.y / absf(dir.y)
 	return c + dir * minf(tx, ty)
 
-## El bosque que toca senalar: el mas cercano al centro de la pantalla, o al
-## Nucleo si ninguno se ve, como {"cell", "size"}. {} si no hay mapa (pruebas).
+## El bosque que toca senalar (ver _deposit_cell). Nombre de siempre.
 func _forest_cell(vp: Vector2) -> Dictionary:
+	return _deposit_cell(vp, "forest")
+
+## El yacimiento `deposit_id` ("forest", "gold_vein") que toca senalar: el mas
+## cercano al centro de la pantalla, o al Nucleo si ninguno se ve, como
+## {"cell", "size"}. {} si no hay mapa (pruebas).
+func _deposit_cell(vp: Vector2, deposit_id: String) -> Dictionary:
 	# El registrado en GameManager vale en 3D y en 2D (MapGenerator2D hereda);
 	# el de la escena, por si aun no se registro.
 	var gen: Node = GameManager.map_generator()
@@ -533,7 +639,7 @@ func _forest_cell(vp: Vector2) -> Dictionary:
 	var best_d := INF
 	var center := vp * 0.5
 	for dep in gen.get_all_deposits():
-		if String(dep.get("id", "")) != "forest":
+		if String(dep.get("id", "")) != deposit_id:
 			continue
 		var cell := Vector2i(int(dep["cell_x"]), int(dep["cell_y"]))
 		var sz := Vector2i(int(dep.get("size_x", 2)), int(dep.get("size_y", 2)))
@@ -549,6 +655,35 @@ func _forest_cell(vp: Vector2) -> Dictionary:
 func _forest_point(vp: Vector2) -> Dictionary:
 	var f := _forest_cell(vp)
 	return {} if f.is_empty() else HelpTargets.cell_screen_point(get_viewport(), f["cell"], f["size"])
+
+## El Nucleo, como {"cell", "size"}, o {} (escenas de prueba sin Nucleo).
+func _core_cell() -> Dictionary:
+	for info in GridManager.get_all_buildings():
+		var data: Resource = info.get("data")
+		if data != null and bool(data.get("is_core")):
+			return {"cell": info.get("origin_cell", Vector2i.ZERO), "size": data.get("grid_size")}
+	return {}
+
+## Un `building_id` ya terminado (el primero), como {"cell", "size"}, o {}.
+func _built_cell(building_id: String) -> Dictionary:
+	for info in GridManager.get_all_buildings():
+		var data: Resource = info.get("data")
+		if data == null or String(data.get("id")) != building_id:
+			continue
+		var node: Node = info.get("node")
+		if node != null and node.has_meta("under_construction"):
+			continue
+		return {"cell": info.get("origin_cell", Vector2i.ZERO), "size": data.get("grid_size")}
+	return {}
+
+## La celda de un edificio concreto, como {"cell", "size"}, o {}.
+func _node_cell(node: Node) -> Dictionary:
+	if node == null or not is_instance_valid(node):
+		return {}
+	var info := GridManager.get_building_info(node)
+	if info.is_empty() or info.get("data") == null:
+		return {}
+	return {"cell": info.get("origin_cell", Vector2i.ZERO), "size": info["data"].get("grid_size")}
 
 ## La obra de `building_id`, como {"cell", "size"}, o {}.
 func _building_cell(building_id: String) -> Dictionary:
@@ -576,14 +711,14 @@ func _scene_node(node_name: String) -> Node:
 
 func _on_combat_step_changed(step_id: String) -> void:
 	_cstep = step_id
-	_circle_left = CIRCLE_SECONDS
 	var combat := step_id != ""
 	_circle.visible = combat and TutorialManager.combat_step_has_circle(step_id)
 	_combat_ok_btn.visible = combat and TutorialManager.combat_step_has_ok(step_id)
-	_combat_skip_btn.visible = combat and TutorialManager.combat_step_skippable(step_id)
 	if combat:
 		_ok_btn.visible = false
 		_end_replay_btn.visible = false
+		_facts.visible = false
+		_facts_for = "-"
 		_badge.text = Tr.t("LBL_CGUIDE_STEP") % [TutorialManager.combat_step_number(step_id), TutorialManager.COMBAT_TOTAL]
 		_text.text = TutorialManager.combat_step_text(step_id)
 		set_process(true)
@@ -596,9 +731,6 @@ func _on_combat_step_changed(step_id: String) -> void:
 ## El paso de combate en pantalla (pruebas).
 func combat_step() -> String:
 	return _cstep
-
-func combat_skip_button() -> Button:
-	return _combat_skip_btn
 
 func combat_ok_button() -> Button:
 	return _combat_ok_btn
@@ -622,11 +754,7 @@ func _layout_combat(delta: float) -> void:
 		return
 	_coach.visible = true
 	_pulse += delta
-	if _circle.visible:
-		_circle_left -= delta
-		if _circle_left <= 0.0:
-			TutorialManager.close_combat_step(_cstep)
-			return
+	# El circulo ya no se cierra solo (2026-10-16): se cierra con "Entendido".
 	for r in _dim:
 		r.visible = false
 	var vp: Vector2 = get_viewport().get_visible_rect().size
@@ -642,13 +770,8 @@ func _layout_combat(delta: float) -> void:
 		_frame.modulate.a = 0.65 + 0.35 * sin(_pulse * 4.0)
 
 	var w: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
-	var key := "%s|%s|%d|%s|%s|%s" % [_badge.text, _text.text, int(w), _combat_ok_btn.visible, _combat_skip_btn.visible, _circle.visible]
-	if key != _card_key:
-		_card_key = key
-		_card.custom_minimum_size = Vector2(w, 0)
-		_card.size = Vector2(w, 0)
-		_card.reset_size()
-		_card_h = _card.get_combined_minimum_size().y
+	var key := "%s|%s|%d|%s|%s" % [_badge.text, _text.text, int(w), _combat_ok_btn.visible, _circle.visible]
+	_fit_card(w, key)
 	var focus := Rect2()
 	if has_rect:
 		focus = rect

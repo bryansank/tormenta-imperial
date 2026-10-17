@@ -407,6 +407,20 @@ efectos, placas y aros son los mismos.
   etiqueta de ventaja, asi que en el frente solo se iluminan los sitios.
 - **Piezas mayores**: x1,3 en el frente (`FRONT_UNIT_SCALE`,
   `UnitToy3D.set_view_scale`).
+- **Placas y etiquetas que no se pisan** (2026-10-16). Con las piezas x1,3 y
+  juntas, las placas de vida y las etiquetas de objetivo ("-18 de 75",
+  "¡Buen objetivo!") de todos los enemigos a tiro se montaban unas sobre otras.
+  En el frente: la etiqueta de objetivo sale **solo en la unidad en foco** (la
+  que esta bajo el puntero; con el dedo, la que se pisa mientras se mantiene),
+  con el pie encima de su chapa y en la capa mas alta (`HINT_PRIO`); aros y
+  mira siguen en todos. Las placas de la unidad activa y la del foco van
+  enteras y por encima (`PRIO_FOCUS`); las demas, compactas
+  (`UnitToy3D.PLATE_COMPACT`) y `Board3D._layout_plates` las sube, de abajo
+  arriba de la pantalla, lo justo para no tocar a ninguna ya colocada (medido
+  con la camara, no por resolucion); si tendria que subir mas de un alto de
+  placa, se apaga en su sitio. Se recoloca por evento (estado, foco, cola
+  vacia, cambio de vista), nunca por fotograma. En el tablero 8x8 nada de esto:
+  todas las etiquetas y placas como antes.
 - **La linea entre bandos** (`BoardTerrain3D._divider`), a ras de suelo y con
   huecos, segun el escenario: un arroyo con piedras de paso en campo abierto, la
   linea de la marea en la playa, un seto bajo a trozos en la linde del bosque.
@@ -1066,10 +1080,9 @@ disappears; duplicating the rows here is how this section went stale the last
 time. What follows is only what a reader of *this* document needs on top of them.
 
 - **`expedition_resumed`** is connected as a typed `.connect` in `BattleScreen`,
-  `SkirmishPanel` and `ArmyPanel`. The one string-form connection left is
-  `AudioManager._connect_optional()` for `final_audit_summoned` and
-  `storm_halted_forever`, guarded by `EventBus.has_signal()`: when auditing
-  listeners, grep the **signal name** too, not only the `.connect` form.
+  `SkirmishPanel` and `ArmyPanel`. `final_audit_summoned` and
+  `storm_halted_forever` are connected typed in `AudioManager` (the old
+  string-form `_connect_optional()` is gone).
 - `result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
 - `summary` on `defense_auto_resolved` is `CombatManager.get_last_result()`, and
   that signal is the **only** one that fight emits — no `encounter_*` accompanies

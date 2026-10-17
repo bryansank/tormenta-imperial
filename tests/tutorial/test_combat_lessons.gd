@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## El combate guiado (docs/23 §2.4): que leccion toca, que paso sale de cada
-## situacion (derive_combat_step, pura), que "Saltar" solo exista del paso 4 en
-## adelante y que lo dado se guarde, se cargue sin duplicar y se olvide con reset().
+## situacion (derive_combat_step, pura), que ningun paso tenga "Saltar" (2026-10-16)
+## y que lo dado se guarde, se cargue sin duplicar y se olvide con reset().
 
 var _saved: Dictionary = {}
 
@@ -71,11 +71,34 @@ func test_artillery_lesson() -> void:
 
 # ── Pasos ────────────────────────────────────────────────────────────
 
-func test_no_skip_in_the_first_three_steps() -> void:
-	for id in ["c_select", "c_move", "c_attack", "c_attack_far"]:
-		assert_bool(TutorialManager.combat_step_skippable(id)).is_false()
-	for id in ["c_enemy_turn", "c_defend", "c_art_range", "c_type_circle"]:
-		assert_bool(TutorialManager.combat_step_skippable(id)).is_true()
+## Ningun paso del combate guiado se salta (2026-10-16; los 1-3 desde el 04-10).
+func test_no_step_can_be_skipped() -> void:
+	for id in TutorialManager.COMBAT_STEPS:
+		assert_bool(TutorialManager.combat_step_skippable(id)).override_failure_message(id).is_false()
+	# Solo el circulo (que se lee) tiene boton, y es "Entendido".
+	assert_bool(TutorialManager.combat_step_has_ok("c_type_circle")).is_true()
+
+func test_skip_lessons_is_an_internal_api_that_does_nothing_outside_dev_mode() -> void:
+	var dev := GameConfig.dev_mode
+	TutorialManager._lesson = "basics"
+	GameConfig.dev_mode = false
+	TutorialManager.skip_combat_lessons()
+	var still := TutorialManager.combat_lesson()
+	GameConfig.dev_mode = dev
+	TutorialManager._clear_combat_lesson(false)
+	assert_str(still).is_equal("basics")
+	assert_array(TutorialManager.combat_lessons_done).is_empty()
+
+func test_leaving_a_fight_before_attacking_does_not_spend_the_basics() -> void:
+	# Abandonar o perder sin haber atacado: la leccion vuelve en la proxima pelea.
+	TutorialManager._lesson = "basics"
+	TutorialManager._lesson_facts = {"selected": true}
+	TutorialManager._on_lesson_encounter_ended(false, 1)
+	assert_array(TutorialManager.combat_lessons_done).is_empty()
+	TutorialManager._lesson = "basics"
+	TutorialManager._lesson_facts = {"attacked": true}
+	TutorialManager._on_lesson_encounter_ended(true, 2)
+	assert_array(TutorialManager.combat_lessons_done).contains_exactly(["basics"])
 
 func test_every_step_has_text_in_both_languages() -> void:
 	var locale := Tr.get_locale()

@@ -61,8 +61,14 @@ var _thumb_rects: Dictionary = {}  # building_id -> TextureRect
 
 const CATEGORIES := ["all", "production", "support", "military", "decoration"]
 
+## Capa en reposo (lista cerrada): bajo cualquier ventana de UIManager, que
+## apila desde la 12. Antes era 12 fija y empataba con la primera ventana
+## abierta (AYUDA, Ejercito...): el boton CONSTRUIR se pintaba encima de ella.
+## Con la lista abierta la capa la pone UIManager, como a las demas.
+const REST_LAYER := 11
+
 func _ready() -> void:
-	layer = 12
+	layer = REST_LAYER
 	_is_2d = get_viewport().get_camera_3d() == null and get_viewport().get_camera_2d() != null
 	_load_buildings()
 	_setup_ui()
@@ -401,6 +407,7 @@ func _close() -> void:
 	_modal.visible = false
 	_backdrop.visible = false
 	UIManager.close_panel(self)
+	layer = REST_LAYER
 
 func _toggle_panel() -> void:
 	if _is_open:

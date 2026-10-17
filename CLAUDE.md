@@ -31,7 +31,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 4. Touch: one finger grabs the terrain, two-finger pinch to zoom and twist to rotate (3D only); tap to aim a building, tap the ghost / ✓ to build (docs/21 §9)
 5. A fresh game: ☰ MENÚ → Menú principal → Nueva partida (mode picker; today it only offers Campaña). It never deletes the current game: it goes to a new slot (up to 5, see "Save/Load System"). Deleting `user://partidas/` starts from scratch
 6. **2D view:** Settings → Map view, or `godot --path . -- --view=2d`. Same services, UI and save; only the world view differs (`scenes/main/Main2D.tscn`, `scripts/view2d/`). See `docs/18-vista-2d.md`
-7. **User args** (after `--`): `--view=2d|3d`, `--no-title` (skip the title menu, used by probes), `--dev` / `--no-dev` (force `dev_mode`, see "Dev Mode")
+7. **User args** (after `--`): `--view=2d|3d`, `--no-title` (skip the title menu, used by probes), `--multi` (allow a second copy, see 9), `--dev` / `--no-dev` (force `dev_mode`, see "Dev Mode")
 8. **Your save lives in the editor's user dir** (`%APPDATA%\Godot\app_userdata\Tormenta Imperial`). Anything that plays or writes saves outside a normal play session (probes, experiments, a second agent) needs a git-ignored `override.cfg` at the project root with its own dir, deleted afterwards:
    ```ini
    [application]
@@ -39,6 +39,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
    config/custom_user_dir_name="TI_something"
    ```
    On Windows that dir is `%APPDATA%\TI_something`. Tests get this automatically from `tools/run_tests.sh`
+9. **One copy at a time (exports only):** an exported desktop build refuses a second copy over the same user dir (`scripts/services/InstanceGuard.gd`, called from `GameManager._ready()` before anything loads). It keeps `user://instancia.lock` (PID, version, exe, time) and checks the PID with `tasklist`: same version open → short notice and quit; another version open → asks to close it (`OS.kill`) and carry on. Not applied in the editor, headless, with `-- --no-title` / `-- --multi`, or on Android/web (Android is single-instance already). Detail in `docs/19-exportar.md` §7
 
 ---
 
@@ -88,7 +89,7 @@ holds a service's state of its own.
 | 20 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
 | 21 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
 | 22 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
-| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built), the guided first fights on the board (combat lessons, docs/23 §2.4) and which tips/helps were seen; state saved with the game (docs/23) |
+| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built; it opens and closes with the game's goal, explains every starting building with its numbers and teaches rotate/move/demolish; it cannot be skipped or closed, docs/23 §2.5), a one-off repair lesson the first time a building is damaged (docs/23 §2.6), the guided first fights on the board (combat lessons, docs/23 §2.4, no Skip either) and which tips/helps were seen; state saved with the game (docs/23) |
 | 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambience (day, night and Storm loops), runtime buses |
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
@@ -136,7 +137,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
   +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, country name, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel)
-  +-- SkirmishButton (CanvasLayer 10) -- ESCARAMUZAS next to CONSTRUIR once a Barracks stands, red dot when there is a reason to go out (2026-10-14)
+  +-- SkirmishButton (CanvasLayer 10) -- MISIONES (the old ESCARAMUZAS) next to CONSTRUIR once a Barracks stands, red dot when there is a reason to go out (2026-10-14)
   +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back; adds the GameSpeedButton sibling (x1 / x2, layer 10)
   +-- TitleMenu (CanvasLayer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal
 
@@ -586,7 +587,7 @@ fixed for the run; saves without `tier` load as Colono.
   (`remove_units()`), so Power never lies while a column is out.
 - EventBus signals: `unit_training_started`, `unit_trained`, `army_changed`,
   `army_upkeep_unpaid`, `unit_training_cancelled`, `army_deserted`.
-- The Ejército and Escaramuzas entries of ☰ MENÚ → COLONIA only appear once a Barracks exists.
+- The Ejército and Misiones (old Escaramuzas) entries of ☰ MENÚ → COLONIA only appear once a Barracks exists.
 - Combat stats for these three unit types are separate, in
   `GameConfig.combat_unit_stats` — see `docs/15-combat.md` §8.
 
@@ -1105,6 +1106,15 @@ the same in 2D. The model is shrunk in plan to leave the yard free
 | Signals | `snake_case` | `camera_pan_requested` |
 | Resources | `snake_case.tres` | `gold_mine.tres` |
 | Translation keys | `UPPER_SNAKE` | `LBL_MORALE`, `EVENT_STORM` |
+
+### Player-facing words (2026-10-16)
+
+The game is for 10-15 year olds. Every text the player reads follows the vocabulary
+table in `docs/23-onboarding.md` §7: Cobradores / Collectors (not Tasadores), Impuesto /
+Tax (not Diezmo), Ataque Final / Final Assault (not Auditoría), Olvidados / Forgotten,
+Misiones / Missions (not Escaramuzas), Casa, Almacén, Tanque, tropas en casa (not
+guarnición), cañoneros (not dotación). Code identifiers (`tithe`, `audit`, `garrison`,
+`skirmish`) keep their names; only the values in `Tr.gd` changed.
 
 ### Key Rule: GDScript first (decided 2026-09-12)
 

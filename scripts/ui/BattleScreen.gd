@@ -134,6 +134,8 @@ var _board_spacer: Control
 var _actions_row: Container
 var _speed_btn: Button
 var _view_btn: Button
+var _header_margin: MarginContainer
+const PauseMenuScript := preload("res://scripts/ui/PauseMenu.gd")
 var _advance_btn: Button
 ## Forzada por pruebas y sondas ("front" / "board"); "" = GameConfig.ui_combat_view.
 var _forced_view := ""
@@ -298,7 +300,15 @@ func _build_board_view() -> void:
 	_view_btn.pressed.connect(toggle_combat_view)
 	_view_btn.visible = false
 	header.add_child(_view_btn)
-	column.add_child(header)
+	# Hueco a los dos lados para el boton ☰ MENU, que flota arriba a la derecha
+	# por encima del tablero: en tablet la fila llegaba hasta el y el boton
+	# Tablero/Frente quedaba debajo. A los dos lados para que siga centrada.
+	_header_margin = MarginContainer.new()
+	_header_margin.name = "BoardHeaderMargin"
+	_header_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_header_margin.add_child(header)
+	column.add_child(_header_margin)
+	_fit_header()
 	HudRegistry.register("BattleScreen.turn", _turn_label)
 
 	# Franja de iniciativa: la ronda entera, en el orden en que va a pasar (FR-006).
@@ -637,7 +647,19 @@ func _recalculate_node_size() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	_node_size = int(clampf(minf(vp.x * 0.14, vp.y * 0.12), float(UITheme.MIN_BTN_H), 64.0))
 
+## Reserva a cada lado de la cabecera el ancho del boton ☰ MENU (el de
+## PauseMenu: palabra entera, o solo el icono en pantallas estrechas).
+func _fit_header() -> void:
+	if _header_margin == null:
+		return
+	var narrow: bool = get_viewport().get_visible_rect().size.x < UILayoutConfig.NARROW_WIDTH
+	var btn_w: float = UITheme.MIN_BTN_H if narrow else PauseMenuScript.MENU_BTN_MIN_W
+	var reserve := int(btn_w + 2.0 * PauseMenuScript.MENU_BTN_MARGIN)
+	_header_margin.add_theme_constant_override("margin_left", reserve)
+	_header_margin.add_theme_constant_override("margin_right", reserve)
+
 func _on_viewport_resized() -> void:
+	_fit_header()
 	if _view == View.BOARD and _uses_3d():
 		_queue_margin_update()
 		_refresh()
@@ -1298,7 +1320,10 @@ func _refresh() -> void:
 	_refresh_actions()
 
 func _refresh_header() -> void:
-	_round_label.text = Tr.t("LBL_ROUND") % [CombatManager.get_round(), CombatManager.get_turn_limit()]
+	# Al agotar el tope el contador ya ha pasado a la ronda siguiente: la
+	# cabecera decia "Ronda 21 / 20" detras del parte de derrota.
+	var limit := CombatManager.get_turn_limit()
+	_round_label.text = Tr.t("LBL_ROUND") % [mini(CombatManager.get_round(), limit), limit]
 	var active := CombatManager.get_active_unit()
 	if active == null:
 		_turn_label.text = ""

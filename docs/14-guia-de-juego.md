@@ -20,7 +20,7 @@ no le llega.
 El bucle es: **produce recursos → gasta en edificios → desbloquea la siguiente era
 → repite**, con un ejército que entrena, sale de expedición y defiende la base.
 
-**Ganar es sobrevivir a la Auditoría Final.** Subir el Cuartel General a nivel 3 no
+**Ganar es aguantar el Ataque Final.** Subir el Cuartel General a nivel 3 no
 es el final: es lo que **convoca** a la Regencia a venir a mirar. La partida se gana
 aguantando ese asedio, y ganarla detiene la Tormenta para siempre. Está explicado en
 la [sección 11](#11-el-camino-a-la-victoria).
@@ -70,7 +70,7 @@ hasta que su recurso esté desbloqueado**.
 
 Además de los cuatro recursos hay cuatro **materiales**, que fabrica a mano cada
 edificio especializado con su recurso. Se guardan en el taller del Núcleo, **fuera de
-la bolsa compartida** (no ocupan sitio y el Diezmo no se los lleva), y salen en la
+la bolsa compartida** (no ocupan sitio y el Impuesto no se los lleva), y salen en la
 fila TALLER, debajo de los recursos.
 
 | Material | Lo fabrica | Receta | Lo piden |
@@ -148,7 +148,7 @@ ocupan 2×2** salvo el Núcleo (3×3) y la carretera (1×1).
 > de rehacer.
 
 **Topes.** Cada tipo tiene un máximo, y los de producir y vivir **suben con la era**
-(era 1 / era 2 / era 3): Vivienda 10 / 15 / 20, Granja 6 / 9 / 12, Aserradero 5 / 8 / 10,
+(era 1 / era 2 / era 3): Casa 10 / 15 / 20, Granja 6 / 9 / 12, Aserradero 5 / 8 / 10,
 Mina de oro 4 / 6 / 8, Fundición 3 / 5 / 6, Refinería 2 / 3 / 4, Cuartel 3 / 4 / 5. El
 Almacén se queda en 5 y la Torre en 6; Mercado, Laboratorio y Cuartel General, uno.
 Algunos rangos dan huecos de más. **Las decoraciones no tienen tope**: solo el terreno
@@ -192,10 +192,10 @@ mientras quepa en la Granja. Cambiarlo empieza de cero.
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
 | <img src="media/guia/nucleo.png" width="110"> | **Núcleo** | 3×3 | — | 0 | Tu punto de partida. Sitio para 5 trabajadores. No se puede demoler |
-| <img src="media/guia/house.png" width="110"> | **Vivienda** | 2×2 | 50 oro · 30 madera | 0 | Sitio para 6 trabajadores (9 y 12 mejorada). Máximo 10 / 15 / 20 según la era |
+| <img src="media/guia/house.png" width="110"> | **Casa** | 2×2 | 50 oro · 30 madera | 0 | Sitio para 6 trabajadores (9 y 12 mejorada). Máximo 10 / 15 / 20 según la era |
 | <img src="media/guia/warehouse.png" width="110"> | **Almacén** | 2×2 | 60 oro · 40 madera | 1 | +500 a la bolsa compartida (+250 por nivel mejorado). Máximo 5 |
 | | **Mercado** | 2×2 | 100 oro · 60 madera | 1 | Abre la Bolsa Imperial: tócalo y pulsa **ABRIR MERCADO**. Pide una Mina de oro. Solo uno |
-| | **Laboratorio** | 2×2 | 150 oro · 100 madera | 2 | Abre el árbol tecnológico: tócalo y pulsa **INVESTIGAR**. Pide una Vivienda. Solo uno |
+| | **Laboratorio** | 2×2 | 150 oro · 100 madera | 2 | Abre el árbol tecnológico: tócalo y pulsa **INVESTIGAR**. Pide una Casa. Solo uno |
 
 ### Militares
 
@@ -203,7 +203,7 @@ mientras quepa en la Granja. Cambiarlo empieza de cero.
 |---|---|---|---|---|---|
 | <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 150 oro · 60 acero · 80 madera · 20 tablones | 3 | Entrena unidades. Cada cuartel es una plaza de entrenamiento en paralelo |
 | <img src="media/guia/tower.png" width="110"> | **Torre** | 2×2 | 150 oro · 60 acero · 20 petróleo · 30 madera · 4 vigas | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
-| <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera · 20 vigas · 10 lingotes · 10 combustible | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca la Auditoría Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
+| <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera · 20 vigas · 10 lingotes · 10 combustible | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca el Ataque Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
 
 ### Decoraciones (suben la moral)
 
@@ -237,8 +237,8 @@ ayudan a una base que sí puede.
 | Edificio | Requiere tener |
 |---|---|
 | Mercado | Mina de oro |
-| Laboratorio | Vivienda |
-| Fundición (era 2) | Aserradero + Mina de oro + Vivienda + Almacén |
+| Laboratorio | Casa |
+| Fundición (era 2) | Aserradero + Mina de oro + Casa + Almacén |
 | Cuartel | Fundición + Aserradero |
 | Refinería (era 3) | Fundición + Cuartel |
 | Torre | Cuartel |
@@ -251,7 +251,7 @@ todo lo que falta.
 ### Límites
 
 Aserradero 5 · Mina de oro 4 · Fundición 3 · Refinería 2 · Almacén 5 · Mercado 1 ·
-Laboratorio 1 · Granja 6 · Cuartel 3 · Torre 6 · Vivienda 10 · Estatua 5 · Fuente 5 · **Cuartel
+Laboratorio 1 · Granja 6 · Cuartel 3 · Torre 6 · Casa 10 · Estatua 5 · Fuente 5 · **Cuartel
 General 1** · Jardín y carretera sin límite.
 
 ### Mejorar
@@ -321,7 +321,7 @@ entre ×0,5 y ×2,5 del precio base.
 
 15 tecnologías en 3 ramas (Industrial, Militar y Logística), 5 niveles cada una en
 línea: para la tercera necesitas la segunda. **Se investiga en el Laboratorio:**
-constrúyelo (pide una Vivienda), tócalo y pulsa **INVESTIGAR**. El panel explica qué da
+constrúyelo (pide una Casa), tócalo y pulsa **INVESTIGAR**. El panel explica qué da
 cada rama y cada tecnología, con sus números.
 
 Cuestan **recursos** y tiempo, y **solo puedes investigar una a la vez**. Los bonos
@@ -374,9 +374,9 @@ Reglas que hay que saber:
 > **La moral de tu ciudad se captura al empezar la batalla y no cambia durante ella.**
 > Sales a pelear con el ánimo que tenía tu pueblo al despedirte.
 
-### Las expediciones (escaramuzas)
+### Las expediciones (misiones)
 
-Desde el botón **Escaramuzas** eliges qué unidades salen y las mandas fuera de la
+Desde el botón **Misiones** eliges qué unidades salen y las mandas fuera de la
 isla. Eso no es una batalla: es una **campaña de varios combates encadenados** de la
 que no se vuelve hasta el final.
 
@@ -407,12 +407,12 @@ la vida solo se recupera al volver a casa.
 > así que una victoria muy cara puede dejar al pueblo peor que antes de salir.
 
 **Lo que se queda en casa defiende.** Las unidades que están fuera **no cuentan como
-guarnición**. Si la tormenta trae el **Diezmo** mientras tu columna está de campaña,
+guarnición**. Si la tormenta trae el **Impuesto** mientras tu columna está de campaña,
 lo defiende únicamente quien se quedó, más las dotaciones de las torres en pie. Si no
 se quedó nadie, no hay defensa. Ese es el verdadero coste de salir: **decidir cuánto
 ejército te atreves a dejar fuera de casa.**
 
-> Si el Diezmo cae mientras estás en el tablero de la expedición, la defensa **se
+> Si el Impuesto cae mientras estás en el tablero de la expedición, la defensa **se
 > resuelve sola**, sin tablero, y te llega solo el aviso con el resultado. El juego no
 > te quita la partida de las manos para meterte en otra.
 
@@ -426,7 +426,7 @@ nodo donde estabas**. El tablero de un combate a medias no se guarda.
 
 ---
 
-## 10. La Tormenta y el Diezmo
+## 10. La Tormenta y el Impuesto
 
 La Tormenta es el reloj de la partida. **Se arma con la primera Fundición** (la era 1
 es tranquila: todavía no sales en el libro) y la primera llega **unos diez minutos
@@ -438,7 +438,7 @@ pantalla: lo que sí es siempre igual es el procedimiento.
 | **Aviso** | 45 s | Ceniza en el horizonte. **No cuesta nada**: es la ventana para gastar, reparar y traer a la tropa a casa. Uno de cada cuatro avisos se disuelve en nada, pero la siguiente llega con **+1 de severidad** |
 | **Ceniza** | 60 s | Producción **a la mitad** y la moral empieza a sangrar |
 | **Tormenta** | 60 s | Producción **al 15%**, la moral sangra el triple y **se rompen edificios**. Los procesos y entrenamientos que sigan en curso se pierden |
-| **Diezmo** | lo que dure la pelea | Llegan los Tasadores a cobrar |
+| **Impuesto** | lo que dure la pelea | Llegan los Cobradores a cobrar |
 
 **La severidad** (1 a 5, no se ve) sube con la era y con lo que produces: 1, +1 por era
 por encima de la primera, +1 por cada 6 edificios productores, y +1 si hubo una falsa
@@ -450,7 +450,7 @@ los edificios de producción solo a partir de severidad 4, y **nunca el último 
 ni la última mina en pie**. Cada torre en pie resta un 15% al daño (tope 60%). Un
 edificio a cero queda **en ruinas**: no produce hasta que lo repares (clic → REPARAR).
 
-### El Diezmo
+### El Impuesto
 
 Lo pelea en el tablero **quien esté en casa**: tu guarnición (hasta 6) más **una
 dotación de artillería por torre en pie** (tope 2). Si ganas, **no se llevan nada**.
@@ -462,7 +462,7 @@ si aún falta, se llevan obreros. Nunca el Núcleo ni el último habitante. La p
 visita es un alta en el libro: solo su porcentaje.
 
 **La escolta** son 3 unidades más una por punto de severidad por encima de 1 (dos tercios
-infantería, un tercio artillería), y crece un 15% **por cada Diezmo que les echas** (tope:
+infantería, un tercio artillería), y crece un 15% **por cada Impuesto que les echas** (tope:
 el tablero, 6). Pagar no la engorda; echarlos sí.
 
 **Qué guarnición gana** (medido con la IA a los dos lados, moral 50, que es peor de lo que
@@ -475,7 +475,7 @@ juega una persona):
 | 3 infantes + 3 artillerías | gana siempre | gana siempre |
 | 3 blindados | gana hasta severidad 3 | gana siempre |
 
-Tras unos cuantos Diezmos echados la escolta llega al tope (4 infantes y 2 cañones) sea
+Tras unos cuantos Impuestos echados la escolta llega al tope (4 infantes y 2 cañones) sea
 cual sea la severidad: cuenta como la columna de severidad 4-5 de la tabla.
 
 > ⚠️ **Tres infantes solos pierden incluso contra la escolta más pequeña.** La guarnición
@@ -497,7 +497,7 @@ Nueve hitos. El último **no** es ganar: es que te convoquen a la prueba final.
 | 6 | Mercader | Completar 10 operaciones de mercado |
 | 7 | Comandante | Tener 1 Cuartel y 2 Torres |
 | 8 | General | Construir el Cuartel General |
-| 9 | **Auditoría Final** | **Subir el Cuartel General a nivel 3** → convoca a la Regencia. Ganar es **sobrevivirla**, ver abajo |
+| 9 | **Ataque Final** | **Subir el Cuartel General a nivel 3** → convoca a la Regencia. Ganar es **aguantarlo**, ver abajo |
 
 Subir el Cuartel General cuesta aparte:
 
@@ -522,17 +522,17 @@ comer está en ruinas) te pide eso antes.
 5. **Segundo aserradero** — la madera lo paga casi todo.
 6. **Almacén** — ⚠️ ojo, lee la nota de la sección 12 antes de ponerlo.
 7. **Fundición**, pegada a un hierro — solo se puede con Aserradero, Mina de oro,
-   Vivienda y Almacén en pie. Entras en la era 2, se desbloquea el acero **y se
+   Casa y Almacén en pie. Entras en la era 2, se desbloquea el acero **y se
    arma la Tormenta**: la primera llega unos diez minutos después.
 8. **Cuartel** (fabrica antes 20 tablones en el Aserradero) y **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
-   infantes solos pierden incluso el Diezmo más pequeño.
+   infantes solos pierden incluso el Impuesto más pequeño.
 9. **Refinería, encima de un pozo** (pide Cuartel y 6 vigas de la Fundición) — era 3,
    petróleo.
 10. **Dos Torres** — cierran el hito Comandante, mitigan la Tormenta y bajan dotaciones al
-   tablero del Diezmo.
+   tablero del Impuesto.
 11. **Cuartel General** — y a partir de aquí acumulas para las dos subidas.
 12. **HQ nivel 2**, y **seis blindados** en casa.
-13. **HQ nivel 3** — con esto **convocas la Auditoría Final**. Cuesta 3.500, exactamente
+13. **HQ nivel 3** — con esto **convocas el Ataque Final**. Cuesta 3.500, exactamente
     la bolsa máxima sin tecnología: levanta el Laboratorio e investiga Logística 1-2 e
     Industria 1-2 (+500) para
     tener holgura, o tendrás que cuadrar los cuatro recursos al céntimo mientras tu
@@ -543,7 +543,7 @@ Por el camino, un **Mercado** y **10 operaciones** en él en cualquier momento, 
 **materiales** que pida cada paso (¿QUÉ HACER? te dice cuál fabricar). Recuerda que
 todo necesita carretera hasta el Núcleo: deja pasos libres.
 
-### La Auditoría Final
+### El Ataque Final
 
 Subir el Cuartel General a nivel 3 **no gana la partida**. Convoca a la Regencia: el
 Imperio manda a sus auditores a comprobar en persona si lo que has construido merece
@@ -551,10 +551,10 @@ seguir en pie. **Ganar es sobrevivir a esa visita.**
 
 **Qué es.** Un asedio de **3 a 5 oleadas seguidas** contra tu base. No son batallas
 sueltas: son una sola noche partida en asaltos. Cuando lo convocas, todavía no baja
-nadie — el asedio empieza **cuando tú pulsas el botón** en el panel de Escaramuzas.
+nadie — el asedio empieza **cuando tú pulsas el botón** en el panel de Misiones.
 Ese margen es para que llegues preparado.
 
-**Cómo se afronta.** Tres cosas que conviene saber antes de convocarla:
+**Cómo se afronta.** Tres cosas que conviene saber antes de llamarlo:
 
 1. **No hay refuerzos.** En cuanto empieza el asedio **no se entrena ni se reemplaza
    nada**. Peleas todas las oleadas con el ejército que tuvieras en ese momento.
@@ -574,23 +574,23 @@ dureza de cada uno.
 > nadie deserte, sube la moral (que te da iniciativa y daño) y **trae a todo el mundo
 > de vuelta de las expediciones**: quien esté de campaña no defiende.
 
-**Si la pierdes no se acaba la partida** (en Campaña). No es un game over: sale el parte del asedio perdido. Te cobran el
-Diezmo más caro posible y la ciudad queda hecha trizas, pero sigues jugando: cuando
-vuelvas a tener **3 unidades en pie** puedes **volver a convocar** la Auditoría. Cada
+**Si lo pierdes no se acaba la partida** (en Campaña). No es un game over: sale el parte del asedio perdido. Te cobran el
+Impuesto más caro posible y la ciudad queda hecha trizas, pero sigues jugando: cuando
+vuelvas a tener **3 unidades en pie** puedes **volver a llamar** al Ataque Final. Cada
 convocatoria es una noche distinta — el asedio se sortea de nuevo, así que recargar
 la partida no sirve para buscar uno más fácil.
 
 **Si la ganas, se acabó la Tormenta.** Sobrevivir a la última oleada **detiene el
 ciclo de la tormenta para siempre**: el cielo se despeja, dejan de caer cenizas y no
-vuelve a haber Diezmo. Primero se calla el mundo y después sale la pantalla de
+vuelve a haber Impuesto. Primero se calla el mundo y después sale la pantalla de
 victoria. Esa es la Victoria Imperial.
 
 > **Esto es la Campaña**, el único modo que ofrece hoy la Nueva partida. En los otros
 > modos (apartados, pero vivos en el código y en las partidas viejas) cambia el final
 > ([20-modos-de-juego.md](20-modos-de-juego.md)): en **Constructor** no hay Tormenta
-> ni asedio y el Cuartel General a nivel 3 gana directamente; en **Supervivencia** la
-> Auditoría solo se puede intentar una vez y perderla **sí** acaba la partida; en
-> **Sandbox** no hay victoria y la Tormenta y la Auditoría solo vienen si las invocas
+> ni asedio y el Cuartel General a nivel 3 gana directamente; en **Supervivencia**
+> el Ataque Final solo se puede intentar una vez y perderlo **sí** acaba la partida; en
+> **Sandbox** no hay victoria y la Tormenta y el Ataque Final solo vienen si los llamas
 > desde la pestaña SANDBOX.
 
 ---
