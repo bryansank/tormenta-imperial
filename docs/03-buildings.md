@@ -355,8 +355,16 @@ Refinery era 3, so neither goes up without the base of the previous era standing
   producers, houses, the warehouse, decorations with morale and the HQ (its level 3
   summons the Final Audit). The Barracks, Tower, Road and Núcleo have no upgrade button.
 - The panel lists what the next level gives, with real numbers
-  (`PlacementRules.upgrade_effect_lines()`); in 3D the building grows and carries a
-  II / III plate
+  (`PlacementRules.upgrade_effect_lines()`). The level shows on the model itself
+  (2026-10-17, `LevelTrim` + `ProductionManager.apply_level_visual`): the same model
+  grows (x1.04 / x1.08 in plan, x1.12 / x1.24 in height), is lifted onto a stone plinth
+  with a brass band (two steps at III) and gains brick chimneys with brass bands at its
+  back corners (one at II; two at III, the big one with a lit lamp). Decorations get
+  brass lamps at the corners instead (two at II, four at III). One cached mesh per
+  level and size, no shadow, no extra nodes or `_process`. There is no floating
+  "II / III" plate any more, nor the old brass ring with a red pennant (it floated over
+  tall models like a box with a flag). 2D draws the same (`BuildingArt2D._level_plinth`
+  / `_level_trim`) inside the baked drawing, plus brass chevrons with no box
 - HQ has special override costs, materials included (see economy doc)
 
 ## Manual Processes

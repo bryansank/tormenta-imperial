@@ -311,9 +311,12 @@ the Laboratory before research and does not suggest trading without a Market.
 producers (x1.6 / x2.5), houses (room x1.5 / x2), the warehouse (+250 per level),
 decorations with morale (x1.5 / x2) and the HQ (its level 3 summons the Audit). The
 Barracks, Tower, Road and Núcleo offer no upgrade. The panel lists what the next level
-gives with real numbers (`upgrade_effect_lines()`), and in 3D the same model grows a
-little around its lot centre and carries a brass trim per level (`LevelTrim.gd`: a
-crown at II, plus a short mast with a pennant at III).
+gives with real numbers (`upgrade_effect_lines()`). The level shows on the model, with
+no floating plate (2026-10-17): in 3D the same model grows (mostly upwards,
+`LevelTrim.level_scale`), stands on a stone plinth with a brass band and gains brick
+chimneys at its back corners (one at II, two at III with a lit lamp; decorations get
+corner lamps instead), all in one cached `LevelTrim` mesh hung from the model; in 2D
+the same pieces are baked into the drawing, plus small brass chevrons with no box.
 
 **Decorations by rank:** see the rank paragraph below and the decorations row above;
 the road is never locked.
@@ -954,7 +957,7 @@ tormenta-imperial/
 |   |   +-- LotPlan.gd, BuildingLot.gd, LotMesh.gd  # The lot: rule (both views), 3D node, one-mesh builder
 |   |   +-- ToyPalette.gd, ToyTones.gd # The shared toy palette and its two map-wide materials (solid, glow)
 |   |   +-- RoadBatch3D.gd           # Every 3D road as a MultiMesh per neighbour mask
-|   |   +-- LevelTrim.gd             # Brass trim of an upgraded building (II / III)
+|   |   +-- LevelTrim.gd             # Level pieces of an upgraded building: plinth, chimneys / lamps (II / III)
 |   |   +-- FarmCrops3D.gd, StockIcon3D.gd, SiteMesh.gd  # The Farm's beds (toy_crops shader), collect icon, construction-site mesh
 |   |   +-- DecorMesh.gd             # The 10 cheap decorations: one shared mesh per type (baked if present, procedural otherwise)
 |   +-- camera/MonumentalCamera.gd   # Orthographic 45deg RTS camera

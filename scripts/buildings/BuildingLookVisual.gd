@@ -104,7 +104,11 @@ func apply(verdict: Dictionary) -> void:
 		LookRule.Look.CONSTRUCTION:
 			_site = Site.construction_phase(_data.grid_size, phase, _cell, _data.id, seed_val)
 		LookRule.Look.UPGRADE:
-			_site = Site.scaffold(_data.grid_size, _cell, _top + 0.3)
+			# Ya mejorado, el modelo es mas alto (LevelTrim): el andamio lo rodea entero.
+			var up_top := _top
+			if _model != null:
+				up_top = maxf(_top, _model_box().end.y)
+			_site = Site.scaffold(_data.grid_size, _cell, up_top + 0.3)
 		LookRule.Look.RUIN:
 			_enter_ruin()
 	if _site != null:
@@ -131,6 +135,9 @@ func get_active() -> Node3D:
 
 func get_model() -> Node3D:
 	return _model
+
+func get_data() -> BuildingData:
+	return _data
 
 func _clear_site() -> void:
 	if _site != null:
@@ -228,7 +235,8 @@ func _model_box() -> AABB:
 			meshes.push_front(_model)
 		for mi in meshes:
 			var mesh_i := mi as MeshInstance3D
-			if mesh_i.mesh == null:
+			# Las piezas de nivel (LevelTrim) cuelgan del modelo pero no son el.
+			if mesh_i.mesh == null or mesh_i.is_in_group("building_fx"):
 				continue
 			var b: AABB = _to_building(mesh_i) * mesh_i.get_aabb()
 			box = b if not found else box.merge(b)
@@ -254,7 +262,7 @@ func _height_grid(box: AABB) -> PackedFloat32Array:
 		meshes.push_front(_model)
 	for mi in meshes:
 		var mesh_i := mi as MeshInstance3D
-		if mesh_i.mesh == null:
+		if mesh_i.mesh == null or mesh_i.is_in_group("building_fx"):
 			continue
 		var xf := _to_building(mesh_i)
 		for v in mesh_i.mesh.get_faces():

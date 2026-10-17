@@ -287,13 +287,15 @@ docs/21 §9).
   al abrir la escena.
 - **La tormenta** tine el mapa con `CanvasModulate` (la interfaz no se tine) y
   deja caer ceniza desde la fase de Ceniza; no hay niebla por profundidad.
-- **El nivel** (2026-10-14, como la 3D): el MISMO dibujo un 8 % mayor por nivel
-  (`BuildingArt2D.level_scale` / `grown_rect`), con el remate de laton de
-  `LevelTrim` visto desde arriba (`_level_trim`: corona de cuatro remates
-  unidos por un fleje en el II; ademas, mastil corto con banderin rojo en el
-  III) dentro del horneado, que ya va por nivel. La placa II / III
-  (`draw_level_plate`) va sin girar en la esquina de arriba-izquierda de la
-  huella, con las barras del numero romano (sin fuente). Humo, sombra de la
+- **El nivel** (2026-10-17, como la 3D): el MISMO dibujo un 8 % mayor por nivel
+  (`BuildingArt2D.level_scale` / `grown_rect`), con sombra mas larga, sobre un
+  zocalo de piedra con fleje de laton (`_level_plinth`, dos escalones en el III)
+  y con las piezas de `LevelTrim` vistas desde arriba (`_level_trim`): chimeneas
+  de ladrillo con bandas de laton atras a la derecha (y otra a la izquierda en
+  el III, con farol); en las decoraciones, farolas en las esquinas. Todo dentro
+  del horneado, que ya va por nivel. La marca de nivel (`draw_level_plate`) son
+  galones de laton sin caja (dos o tres), sin girar, en la esquina de
+  abajo-izquierda de la huella. Ya no hay aro de laton con banderin rojo. Humo, sombra de la
   parcela, obra de mejora y dano siguen al dibujo crecido.
 - **El nombre del edificio** aparece al seleccionarlo, debajo de la huella.
 

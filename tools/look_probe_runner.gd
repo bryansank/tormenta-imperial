@@ -28,6 +28,14 @@ func _ready() -> void:
 	var only_2d := OS.get_cmdline_user_args().has("--only-2d")
 	# `-- --danos`: solo las etapas de dano (sano, leve, grave, ruina) de los
 	# edificios grandes, de frente y girados, para ver piezas que flotan.
+	# `-- --niveles`: los edificios mejorables a nivel 1, 2 y 3, en 3D y en 2D
+	# (look_probe_niveles_3d.png, look_probe_niveles_2d.png).
+	if OS.get_cmdline_user_args().has("--niveles"):
+		if not only_2d:
+			await _shoot_levels_3d()
+		await _shoot_levels_2d()
+		get_tree().quit()
+		return
 	if OS.get_cmdline_user_args().has("--danos"):
 		for id in ["refinery", "foundry", "tower", "barracks", "headquarters", "gold_mine", "sawmill", "farm", "house", "warehouse", "market", "laboratory"]:
 			await _shoot_damage_3d(id, 0.0, "look_probe_danos_%s.png" % id)
@@ -657,5 +665,75 @@ func _shoot_damage_3d(one_id: String, yaw: float, file_name: String) -> void:
 	cam.make_current()
 	await _settle()
 	await _save(file_name)
+	_world.queue_free()
+	await get_tree().process_frame
+
+# ── Niveles: el mismo edificio a nivel 1, 2 y 3 ──────────────────────
+
+const LEVEL_IDS := ["house", "sawmill", "gold_mine", "warehouse", "foundry", "refinery", "headquarters", "garden", "statue"]
+
+func _shoot_levels_3d() -> void:
+	var cam := _style_world(false)
+	var placer: Node3D = Placer.new()
+	var groups := 3
+	for i in LEVEL_IDS.size():
+		var id: String = LEVEL_IDS[i]
+		for lv in 3:
+			var col := (i % groups) * 3 + lv
+			var pos := Vector3((col - 4.0) * 5.4 + float(i % groups - 1) * 1.6, 0, (i / groups) * 7.0 - 7.0)
+			var root := _style_building(placer, id, pos)
+			root.set_meta("level", lv + 1)
+			ProductionManager.apply_level_visual(root, lv + 1)
+			_style_label(root, "%s %s" % [_data(id).get_display_name(), ["I", "II", "III"][lv]], 3.0)
+	placer.free()
+	cam.position = Vector3(0, 30, 26)
+	cam.rotation_degrees = Vector3(-50, 0, 0)
+	cam.fov = 48
+	await _settle()
+	await _save("look_probe_niveles_3d.png")
+	_world.queue_free()
+	await get_tree().process_frame
+
+func _shoot_levels_2d() -> void:
+	_world = Node2D.new()
+	add_child(_world)
+	var bg := ColorRect.new()
+	bg.color = Color(0.42, 0.62, 0.26)
+	bg.size = Vector2(4000, 4000)
+	bg.position = Vector2(-2000, -2000)
+	bg.z_index = -10
+	_world.add_child(bg)
+	var cam := Camera2D.new()
+	cam.zoom = Vector2(1.6, 1.6)
+	_world.add_child(cam)
+	cam.make_current()
+	var cell := View2D.cell_px()
+	var groups := 3
+	var step := cell * 2.5
+	for i in LEVEL_IDS.size():
+		var id: String = LEVEL_IDS[i]
+		var data := _data(id)
+		for lv in 3:
+			var col := (i % groups) * 3 + lv
+			var b: Node2D = Building2D.new()
+			b.setup(data)
+			b.set_meta("level", lv + 1)
+			b.position = Vector2((col - 4.0) * step + float(i % groups - 1) * cell * 0.8, (i / groups - 1.0) * step * 1.15)
+			_world.add_child(b)
+			b.set("_lot_origin", Vector2i(col * 3, 9 + i))
+			b.set("_lot_dirty", false)
+			var badge := b.get_node_or_null("StatusBadge")
+			if badge:
+				badge.process_mode = Node.PROCESS_MODE_DISABLED
+				badge.visible = false
+			var label := Label.new()
+			label.text = "%s %s" % [data.get_display_name(), ["I", "II", "III"][lv]]
+			label.position = Vector2(-cell, cell * 1.05)
+			label.add_theme_font_size_override("font_size", 11)
+			label.add_theme_color_override("font_outline_color", Color.BLACK)
+			label.add_theme_constant_override("outline_size", 4)
+			b.add_child(label)
+	await _settle()
+	await _save("look_probe_niveles_2d.png")
 	_world.queue_free()
 	await get_tree().process_frame

@@ -11,6 +11,9 @@ extends SceneTree
 ## fila por fase, varios edificios y dos casas) a look_probe_obras_3d.png,
 ## look_probe_obras_3d_b.png (un instante despues: la grua se ha movido) y
 ## look_probe_obras_2d.png (git-ignored).
+##
+## `-- --niveles`: solo los edificios mejorables a nivel I, II y III, en 3D y 2D
+## (look_probe_niveles_3d.png, look_probe_niveles_2d.png).
 
 func _initialize() -> void:
 	root.add_child.call_deferred(load("res://tools/look_probe_runner.gd").new())
