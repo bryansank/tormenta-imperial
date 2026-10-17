@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**126 signals** in 30 categories (counted on 2026-10-14, after the skirmishes), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**127 signals** in 30 categories (counted on 2026-10-16, after the skirmishes and `regiment_changed`), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -184,6 +184,7 @@ died, `population` what is left afterwards (never below the floor).
 | `army_upkeep_unpaid` | `gold_short: int` | ArmyManager | ArmyPanel, TutorialManager |
 | `unit_training_cancelled` | `unit_id: String, refunded: Dictionary` | ArmyManager | *(no listener)* |
 | `army_deserted` | `unit_id: String, count: int` | ArmyManager | PopulationManager |
+| `regiment_changed` | — | ArmyManager | RegimentCard (Cuartel) |
 
 `army_upkeep_unpaid` is the warning; `army_deserted` is the bill — sustained
 unpaid upkeep loses the most expensive unit first.
@@ -409,7 +410,7 @@ Declared in `EventBus.gd` but not wired on one or both sides. Most are suppresse
 with `@warning_ignore("unused_signal")`, so the editor will not flag them; this
 list is the only record.
 
-**Of the 126 signals, at least 10** have a gap on one side or the other.
+**Of the 127 signals, at least 10** have a gap on one side or the other.
 
 ### Neither emitted nor consumed (3)
 

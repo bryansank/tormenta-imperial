@@ -106,21 +106,21 @@ Acero · 18 Archigobernador (keys `RANK_TITLE_<n>`, ES and EN).
 
 | Rank | Reward |
 |---|---|
-| 1 | flag basics: patterns `plain`, `bands_h`, `bands_v`, `halves_h`, `cross`; emblems `none`, `gear`, `anchor`, `wheat`, `hammer`; colours ivory, brass, crimson, steel, moss, soot |
+| 1 | flag basics: patterns `plain`, `bands_h`, `bands_v`, `halves_h`, `cross`; emblems `none`, `gear`, `anchor`, `wheat`, `hammer`; colours ivory, brass, crimson, steel, moss, soot; regiment paint `plain` |
 | 2 | Garden, Flower planter, Hay cart (decorations); emblem `tower` |
-| 3 | +1 % production; pattern `border`; colour sky; Bonfire |
+| 3 | +1 % production; pattern `border`; colour sky; Bonfire; regiment paint `stripes` |
 | 4 | +2 % storage; emblem `star` |
 | 5 | Fountain, Flagpole |
-| 6 | +1 % production; patterns `diagonal`, `saltire` |
+| 6 | +1 % production; patterns `diagonal`, `saltire`; regiment paint `spots` |
 | 7 | colours copper, red |
 | 8 | Statue; +2 % storage |
-| 9 | +1 % production; pattern `quartered`; emblem `wrench` |
+| 9 | +1 % production; pattern `quartered`; emblem `wrench`; regiment paint `desert` |
 | 10 | +2 houses (limit) |
 | 11 | colours grass, slate; emblem `wheel` |
-| 12 | +1 % production, +2 % storage; patterns `canton`, `hoist_triangle` |
+| 12 | +1 % production, +2 % storage; patterns `canton`, `hoist_triangle`; regiment paint `snow` |
 | 13 | Palm trees (decoration); emblem `ship` (the old +2 statues/fountains did nothing once decorations had no cap) |
 | 14 | colours terracotta, gold; emblem `cogs` |
-| 15 | +1 % production; pattern `stripes` |
+| 15 | +1 % production; pattern `stripes`; regiment paint `parade` |
 | 16 | +2 % storage; +1 tower (limit); emblem `sun` |
 | 17 | +2 houses (limit); pattern `waves` |
 | 18 | +2 % production; pattern `checks`; emblem `airship` |
@@ -129,6 +129,12 @@ Totals at rank 18: +7 % production, +8 % storage. The basic buildings keep their
 unlocks (the playable line in docs/22 does not move): the rank only opens
 decorations, extra slots and cosmetics. A new optional building goes into the table
 with `"buildings": [id]`. Sandbox has every rank unlock open.
+
+- **Regiment (cosmetic only, docs/15 §12):** the `paints` key opens the regiment's
+  paint schemes (plain, stripes, spots, desert, snow, parade). The regiment's colour
+  and emblem reuse the flag pieces (`colors` / `emblems`) already open. The rank-up
+  toast says "pintura nueva para el regimiento". Locks resolve through
+  `ColonyIdentity.piece_rank("paints", id)`, like the flag pieces.
 
 - **Bonuses** are written into `GameConfig.rank_production_bonus` (added to the
   production multiplier next to the tech bonus), `rank_storage_bonus` (a fraction on
