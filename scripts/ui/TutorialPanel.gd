@@ -622,14 +622,14 @@ func _place_dim(vp: Vector2, hole: Rect2) -> void:
 		for r in _dim:
 			r.visible = false
 		return
-	# Los bordes, en pixeles enteros de la pantalla: con el lienzo escalado, dos
-	# rectangulos que se tocan en una coordenada fraccionaria dejaban una raya
-	# clara de un pixel a lo ancho de toda la pantalla (ronda de pruebas 1.0).
-	var px := maxf(get_viewport().get_final_transform().get_scale().y, 0.01)
-	var top := roundf(clampf(hole.position.y, 0.0, vp.y) * px) / px
-	var bottom := roundf(clampf(hole.end.y, 0.0, vp.y) * px) / px
-	var left := roundf(clampf(hole.position.x, 0.0, vp.x) * px) / px
-	var right := roundf(clampf(hole.end.x, 0.0, vp.x) * px) / px
+	# Los bordes, en unidades enteras del lienzo: los controles se pegan a la
+	# rejilla al colocarse (snap_controls_to_pixels) pero su tamano no, y con
+	# bordes fraccionarios dos rectangulos que se tocan dejaban una raya de un
+	# pixel a lo ancho de toda la pantalla (ronda de pruebas 1.0).
+	var top := roundf(clampf(hole.position.y, 0.0, vp.y))
+	var bottom := roundf(clampf(hole.end.y, 0.0, vp.y))
+	var left := roundf(clampf(hole.position.x, 0.0, vp.x))
+	var right := roundf(clampf(hole.end.x, 0.0, vp.x))
 	var rects := [
 		Rect2(0, 0, vp.x, top),
 		Rect2(0, bottom, vp.x, vp.y - bottom),

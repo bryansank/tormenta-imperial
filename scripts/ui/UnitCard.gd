@@ -34,7 +34,10 @@ func setup(unit_id: String, unit = null, closable := false) -> void:
 	name = "UnitCard"
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.CAT_MILITARY, 2, true))
+	# Fuera del arbol ya: con queue_free solo, la ficha vieja y la nueva sumaban
+	# su alto un fotograma y el panel crecia sin encoger (ronda de pruebas 1.0).
 	for child in get_children():
+		remove_child(child)
 		child.queue_free()
 	_build()
 

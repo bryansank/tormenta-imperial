@@ -739,9 +739,50 @@ static func make_check_button(text: String, pressed: bool, on_toggled: Callable)
 	cb.add_theme_color_override("font_pressed_color", readable(TEXT_BRIGHT))
 	cb.add_theme_constant_override("outline_size", outline_for(FONT_BODY))
 	cb.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
+	cb.add_theme_icon_override("unchecked", switch_icon(false))
+	cb.add_theme_icon_override("checked", switch_icon(true))
+	cb.add_theme_icon_override("unchecked_disabled", switch_icon(false, true))
+	cb.add_theme_icon_override("checked_disabled", switch_icon(true, true))
 	if on_toggled.is_valid():
 		cb.toggled.connect(on_toggled)
 	return cb
+
+## Un interruptor dibujado: carril redondeado con borde claro y bolita; verde
+## y a la derecha encendido, gris y a la izquierda apagado. Se hace una vez por
+## estado y paleta (cache).
+static var _switch_cache := {}
+static func switch_icon(on: bool, disabled: bool = false) -> Texture2D:
+	var key := "%s|%s|%s|%s" % [on, disabled, POSITIVE.to_html(), TEXT_DIM.to_html()]
+	if _switch_cache.has(key):
+		return _switch_cache[key]
+	var w := 48
+	var h := 26
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var track: Color = POSITIVE if on else BG_DARK.lightened(0.12)
+	var rim: Color = POSITIVE.lightened(0.25) if on else TEXT_DIM
+	var knob: Color = Color(0.97, 0.95, 0.88) if on else TEXT_DIM.lightened(0.2)
+	if disabled:
+		track.a = 0.45
+		rim.a = 0.45
+		knob.a = 0.45
+	var r := h * 0.5
+	for y in h:
+		for x in w:
+			var cx := clampf(float(x) + 0.5, r, float(w) - r)
+			var d := Vector2(float(x) + 0.5 - cx, float(y) + 0.5 - r).length()
+			if d <= r - 2.0:
+				img.set_pixel(x, y, track)
+			elif d <= r:
+				img.set_pixel(x, y, rim)
+	var kx := float(w) - r if on else r
+	for y in h:
+		for x in w:
+			if Vector2(float(x) + 0.5 - kx, float(y) + 0.5 - r).length() <= r - 4.0:
+				img.set_pixel(x, y, knob)
+	var tex := ImageTexture.create_from_image(img)
+	_switch_cache[key] = tex
+	return tex
 
 static func make_backdrop() -> ColorRect:
 	var rect := ColorRect.new()
@@ -1138,6 +1179,12 @@ static func build_global_theme() -> Theme:
 		t.set_color("font_outline_color", cb, OUTLINE_COLOR)
 		t.set_constant("outline_size", cb, outline_for(FONT_BODY))
 		t.set_font_size("font_size", cb, FONT_BODY)
+	# El interruptor apagado de serie es un punto gris sobre fondo oscuro: no se
+	# veia que alli hubiera algo que pulsar (ronda de pruebas 1.0).
+	t.set_icon("unchecked", "CheckButton", switch_icon(false))
+	t.set_icon("checked", "CheckButton", switch_icon(true))
+	t.set_icon("unchecked_disabled", "CheckButton", switch_icon(false, true))
+	t.set_icon("checked_disabled", "CheckButton", switch_icon(true, true))
 
 	# ── LineEdit ──
 	t.set_stylebox("normal", "LineEdit", _flat(BG_DARK, ACCENT_DIM, 1, CORNER, 6))

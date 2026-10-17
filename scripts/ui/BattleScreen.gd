@@ -2151,12 +2151,24 @@ func open_unit_card(unit: CombatUnit) -> void:
 		_unit_card.closed.connect(close_unit_card)
 		# A la izquierda, centrada en alto: no tapa los botones de abajo ni la
 		# cabecera, y el pulgar derecho sigue libre para el tablero.
-		_unit_card.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-		_unit_card.grow_vertical = Control.GROW_DIRECTION_BOTH
-		_unit_card.offset_left = UITheme.MARGIN
+		_unit_card.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_unit_card_uid = unit.uid
 	_unit_card.setup(unit.unit_id, unit, true)
 	_unit_card.visible = true
+	_place_unit_card()
+
+## A la izquierda y centrada en alto, medida con su contenido de ahora: anclada
+## al centro crecia hacia arriba al rehacerse y se salia por arriba, encima de
+## la bandera y el nombre del pais (tableta, ronda de pruebas 1.0).
+func _place_unit_card() -> void:
+	if _unit_card == null:
+		return
+	_unit_card.reset_size()
+	var area: Vector2 = _root.size if _root.size.y > 0.0 else get_viewport().get_visible_rect().size
+	var h: float = _unit_card.get_combined_minimum_size().y
+	var top := 96.0
+	var y := clampf((area.y - h) * 0.5, top, maxf(top, area.y - h - 96.0))
+	_unit_card.position = Vector2(UITheme.MARGIN, y)
 
 func close_unit_card() -> void:
 	_unit_card_uid = -1
@@ -2175,6 +2187,7 @@ func _refresh_unit_card() -> void:
 		close_unit_card()
 		return
 	_unit_card.setup(u.unit_id, u, true)
+	_place_unit_card()
 
 # ── A donde senala el combate guiado (TutorialPanel) ─────────────────
 
