@@ -50,6 +50,22 @@ const ENTRIES := {
 		"title": "HELP_T_MENUS", "body": "HELP_B_MENUS", "target": "menu_button"},
 	"callout_skirmish": {"kind": "callout", "cat": CAT_ARMY, "basic": false,
 		"title": "HELP_T_SKIRMISH", "body": "LBL_HELP_SKIRMISH", "target": ""},
+	# ── La meta y los edificios del principio (2026-10-16, rama feat/tutorial-claro):
+	# lo mismo que dicen la primera y la ultima tarjeta del tutorial y sus pasos ──
+	"guide_goal": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_GOAL", "body": "HELP_B_GOAL", "target": "objective"},
+	"guide_start_buildings": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_START_BUILDINGS", "body": "HELP_B_START_BUILDINGS", "target": "build_button"},
+	# Girar, mover y derribar (lo que ensena el tutorial en sus pasos 6-8) y los
+	# danos (la leccion de reparar). La de reparar solo donde hay Tormenta.
+	"guide_rotate": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_ROTATE", "body": "HELP_B_ROTATE", "target": "build_button"},
+	"guide_move": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_MOVE", "body": "HELP_B_MOVE", "target": ""},
+	"guide_demolish": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_DEMOLISH", "body": "HELP_B_DEMOLISH", "target": ""},
+	"guide_repair": {"kind": "guide", "cat": CAT_STORM, "basic": true,
+		"title": "HELP_T_REPAIR", "body": "HELP_B_REPAIR", "target": "", "needs": "storm_started"},
 	# ── Guia rapida (2026-09-28): los cuatro bloques de la pantalla del inicio ──
 	"guide_qg_resources": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "QG_RESOURCES_T", "body": "QG_RESOURCES_B", "target": "resources"},

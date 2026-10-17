@@ -62,6 +62,19 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 			return HudRegistry.control_of("GameSpeedButton")
 		"rank_badge":
 			return HudRegistry.control_of("RankPanel")
+		# Tutorial claro (2026-10-16): girar, mover, derribar y reparar. Los
+		# botones de la ficha del edificio y el ↻ de la pantalla (solo se ve en
+		# tablet y movil, y solo colocando: en PC no hay nada que senalar, es R).
+		"info_move":
+			return _first_in_group(tree, "hud_info_move")
+		"info_demolish":
+			return _first_in_group(tree, "hud_info_demolish")
+		"info_demolish_confirm":
+			return _first_in_group(tree, "hud_info_demolish_confirm")
+		"info_repair":
+			return _first_in_group(tree, "hud_info_repair")
+		"rotate_button":
+			return _first_in_group(tree, "hud_rotate_building")
 	if target_name.begins_with("card:"):
 		return card_or_build(tree, target_name.substr(5))
 	return null

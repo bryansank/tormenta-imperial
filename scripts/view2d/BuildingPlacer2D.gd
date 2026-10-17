@@ -150,7 +150,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R and _state != State.IDLE:
-			_rotate_building()
+			# Por la senal, como el boton ↻ de la pantalla: asi el tutorial ve
+			# el giro con teclado y con el dedo (_on_rotate_requested gira).
+			EventBus.building_rotate_requested.emit()
 			get_viewport().set_input_as_handled()
 
 ## Igual que en 3D: con el raton se coloca al pulsar; con el dedo, al levantarlo

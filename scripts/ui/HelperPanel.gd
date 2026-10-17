@@ -365,7 +365,8 @@ func _can_show(item: Dictionary) -> bool:
 	if not forced:
 		if not GameConfig.ui_helper_visible:
 			return false
-		if TutorialManager.is_guide_active():
+		# Tampoco con una leccion suelta del tutorial en pantalla (reparar).
+		if TutorialManager.is_coach_active():
 			return false
 	var k := HelpCatalog.kind(id)
 	if k == "callout":

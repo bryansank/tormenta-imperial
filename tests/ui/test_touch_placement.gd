@@ -369,10 +369,14 @@ func test_placing_closes_the_game_menu() -> void:
 func _check_guide_advances_with_confirm(view: String) -> void:
 	var saved := {"state": TutorialManager.guide_state, "base": TutorialManager.guide_baseline,
 		"step": TutorialManager._step, "menu": TutorialManager._menu_open,
-		"placing": TutorialManager._placing_id, "intro": TutorialManager.intro_seen}
+		"placing": TutorialManager._placing_id, "intro": TutorialManager.intro_seen,
+		"flags": TutorialManager.guide_flags.duplicate()}
 	_setup(view)
 	TutorialManager.intro_seen = true
 	TutorialManager.start_guide(false)
+	# Las dos tarjetas de leer del principio (la meta y el Nucleo, 2026-10-16).
+	TutorialManager.note_guide_fact("goal_seen")
+	TutorialManager.note_guide_fact("core_seen")
 	_start()
 	var step_placing := TutorialManager.current_step()
 	var hl = _placer.get_spot_highlight()
@@ -387,6 +391,7 @@ func _check_guide_advances_with_confirm(view: String) -> void:
 	TutorialManager._menu_open = saved["menu"]
 	TutorialManager._placing_id = saved["placing"]
 	TutorialManager.intro_seen = saved["intro"]
+	TutorialManager.guide_flags = saved["flags"]
 	assert_str(step_placing).is_equal("place_sawmill")
 	assert_bool(highlighted).is_true()
 	assert_bool(confirm_shown).is_true()
