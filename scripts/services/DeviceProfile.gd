@@ -18,6 +18,8 @@ extends Node
 ##     minimo en apaisado; la escala lo encoge (UI mas grande) o lo agranda.
 ##     En vertical el lienzo se lleva a PORTRAIT_WIDTH de ancho para que el
 ##     movil use la disposicion estrecha (UILayoutConfig.NARROW_SLOTS).
+##   - Engine.max_fps: el tope de fotogramas (fps_for, puro). El del perfil o el
+##     elegido en Ajustes; menos con el juego en pausa y aun menos sin foco.
 ## Los paneles se construyen una vez: lo que cambia tokens de UITheme (texto,
 ## paleta, contraste, opacidad) se ve tras rebuild_ui(), que recarga la escena
 ## conservando la partida. La escala se aplica al momento.
@@ -50,18 +52,24 @@ const MIN_LOGICAL_HEIGHT := 540.0
 const MIN_LOGICAL_WIDTH_PORTRAIT := 400.0
 
 ## Valores de cada perfil. `touch_controls` es lo que resuelve el "auto" de
-## Controles en pantalla; `input` elige los textos de ayuda (Tr.ti).
+## Controles en pantalla; `input` elige los textos de ayuda (Tr.ti); `fps` es el
+## tope de fotogramas en "auto": un juego de gestion no gana nada por encima de 60,
+## y en tablet y movil 30 estables gastan la mitad de bateria y no se calientan
+## (las baratas bajan el reloj con el calor y entonces tironean). Docs/26 §7.4.
 const DEFAULTS := {
 	PC: {"ui_scale": 1.0, "text_size": "normal", "touch_target": 44,
-		"touch_controls": false, "layout": "standard", "input": "mouse"},
+		"touch_controls": false, "layout": "standard", "input": "mouse", "fps": 60},
 	TABLET: {"ui_scale": 1.15, "text_size": "normal", "touch_target": 48,
-		"touch_controls": true, "layout": "standard", "input": "touch"},
+		"touch_controls": true, "layout": "standard", "input": "touch", "fps": 30},
 	PHONE: {"ui_scale": 1.3, "text_size": "large", "touch_target": 52,
-		"touch_controls": true, "layout": "compact", "input": "touch"},
+		"touch_controls": true, "layout": "compact", "input": "touch", "fps": 30},
 }
 
 var _detected := PC
 var _factor := 1.0
+## Lo que decide el tope de fotogramas ademas de la preferencia.
+var _focused := true
+var _paused := false
 ## Pestana de Ajustes que hay que reabrir tras una reconstruccion (-1: ninguna).
 ## Estatica: sobrevive a la recarga de escena, que es justo cuando hace falta.
 static var reopen_settings_tab := -1
@@ -70,6 +78,8 @@ func _ready() -> void:
 	_detected = detect_from(_os_features(), _screen_px(), _screen_dpi())
 	print("[DeviceProfile] detectado=%s, activo=%s" % [_detected, current()])
 	get_tree().root.size_changed.connect(_on_window_resized)
+	# Sigue corriendo en pausa: es justo cuando tiene que bajar los fotogramas.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	apply_all()
 
 # ── Deteccion (pura) ──────────────────────────────────────────────────
@@ -143,6 +153,7 @@ func set_profile_override(mode: String) -> void:
 	GameConfig.ui_device_profile = mode
 	GameConfig.save_user_settings()
 	apply_scale()
+	apply_fps()
 	profile_changed.emit(current())
 	EventBus.touch_controls_changed.emit(GameConfig.touch_controls_enabled())
 
@@ -213,6 +224,7 @@ func _window_size() -> Vector2:
 func apply_all() -> void:
 	apply_theme()
 	apply_scale()
+	apply_fps()
 
 ## Tokens de UITheme y tema global de la raiz. Los paneles ya construidos no
 ## cambian: para eso rebuild_ui().
@@ -248,6 +260,72 @@ func current_factor() -> float:
 func _on_window_resized() -> void:
 	# Girar la tablet o pasar a pantalla completa cambia la proporcion.
 	apply_scale.call_deferred()
+
+# ── Tope de fotogramas ────────────────────────────────────────────────
+
+## Tope de fotogramas para una preferencia y un estado. Puro. 0 = sin tope
+## (lo marca el vsync). `profile_fps` es el del perfil, para "auto". En pausa
+## baja a GameConfig.fps_paused y sin foco a fps_background, nunca por encima de
+## lo elegido (con 30 elegido, la pausa se queda en 30, no sube).
+static func fps_for(mode: String, profile_fps: int, focused: bool, paused: bool) -> int:
+	var cap := 0
+	if mode == "auto":
+		cap = profile_fps
+	elif mode != "unlimited" and mode.is_valid_int():
+		cap = int(mode)
+	# Los dos a la vez: en pausa y sin foco manda el menor de los dos.
+	if paused:
+		cap = _min_cap(cap, GameConfig.fps_paused)
+	if not focused:
+		cap = _min_cap(cap, GameConfig.fps_background)
+	return cap
+
+## El menor de dos topes, donde 0 es "sin tope" (infinito).
+static func _min_cap(a: int, b: int) -> int:
+	if a <= 0:
+		return b
+	if b <= 0:
+		return a
+	return mini(a, b)
+
+## El tope que vale ahora mismo, con el foco y la pausa de este momento.
+func effective_fps_cap() -> int:
+	return fps_for(GameConfig.ui_fps_cap, int(defaults()["fps"]), _focused, _paused)
+
+## Lo aplica. En headless no: los tests esperan fotogramas y un tope los haria
+## lentos, y las sondas sin ventana miden sin el.
+func apply_fps() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var cap := effective_fps_cap()
+	if Engine.max_fps != cap:
+		Engine.max_fps = cap
+
+func set_fps_cap(mode: String) -> void:
+	if not mode in GameConfig.FPS_CAP_MODES:
+		mode = "auto"
+	GameConfig.ui_fps_cap = mode
+	GameConfig.save_user_settings()
+	apply_fps()
+
+## La pausa no avisa por ninguna senal (la ponen PauseMenu, TitleMenu y
+## PrologueScreen a mano): se mira aqui, un booleano por fotograma.
+func _process(_delta: float) -> void:
+	var paused := get_tree().paused
+	if paused != _paused:
+		_paused = paused
+		apply_fps()
+
+## La de aplicacion y no la de ventana: esto es un autoload (ver InputService).
+## Minimizar en Windows tambien quita el foco.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			_focused = false
+			apply_fps()
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			_focused = true
+			apply_fps()
 
 ## Reconstruye la interfaz con los tokens nuevos conservando la partida (la misma
 ## recarga que el cambio de idioma). Devuelve false si ahora no se puede (sin

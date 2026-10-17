@@ -100,6 +100,79 @@ func test_an_explicit_scale_and_text_size_win_over_the_profile() -> void:
 	assert_float(DeviceProfile.effective_ui_scale()).is_equal_approx(0.9, 0.001)
 	assert_str(DeviceProfile.effective_text_size()).is_equal("xlarge")
 
+# ── Tope de fotogramas (docs/21 §10) ─────────────────────────────────
+
+func test_auto_takes_the_cap_of_each_profile() -> void:
+	GameConfig.ui_fps_cap = "auto"
+	var caps := []
+	for prof in ["pc", "tablet", "phone"]:
+		GameConfig.ui_device_profile = prof
+		caps.append(DeviceProfile.effective_fps_cap())
+	assert_array(caps).is_equal([60, 30, 30])
+
+func test_an_explicit_number_wins_over_the_profile() -> void:
+	assert_int(DeviceProfile.fps_for("45", 30, true, false)).is_equal(45)
+	assert_int(DeviceProfile.fps_for("120", 60, true, false)).is_equal(120)
+	GameConfig.ui_device_profile = "tablet"
+	GameConfig.ui_fps_cap = "90"
+	assert_int(DeviceProfile.effective_fps_cap()).is_equal(90)
+
+func test_unlimited_means_no_cap() -> void:
+	assert_int(DeviceProfile.fps_for("unlimited", 60, true, false)).is_equal(0)
+
+func test_without_focus_it_drops_to_the_background_cap() -> void:
+	assert_int(DeviceProfile.fps_for("auto", 60, false, false)).is_equal(GameConfig.fps_background)
+	assert_int(DeviceProfile.fps_for("auto", 60, false, true)).is_equal(GameConfig.fps_background)
+	assert_int(GameConfig.fps_background).is_equal(10)
+
+func test_paused_it_drops_to_the_pause_cap() -> void:
+	assert_int(DeviceProfile.fps_for("auto", 60, true, true)).is_equal(GameConfig.fps_paused)
+	assert_int(DeviceProfile.fps_for("120", 60, true, true)).is_equal(30)
+
+func test_a_chosen_cap_below_the_pause_cap_stays_below() -> void:
+	# Con 30 elegido (o el 30 de la tablet) la pausa no lo sube.
+	assert_int(DeviceProfile.fps_for("30", 60, true, true)).is_equal(30)
+	assert_int(DeviceProfile.fps_for("auto", 30, true, true)).is_equal(30)
+	GameConfig.fps_paused = 45
+	assert_int(DeviceProfile.fps_for("30", 60, true, true)).is_equal(30)
+	GameConfig.fps_paused = 30
+
+func test_paused_and_without_focus_the_lower_of_both_wins() -> void:
+	assert_int(DeviceProfile.fps_for("auto", 60, false, true)).is_equal(10)
+	# Aunque alguien suba el de segundo plano por encima del de pausa.
+	GameConfig.fps_background = 1000
+	assert_int(DeviceProfile.fps_for("auto", 60, false, true)).is_equal(30)
+	assert_int(DeviceProfile.fps_for("auto", 60, false, false)).is_equal(60)
+	GameConfig.fps_background = 10
+
+func test_unlimited_still_drops_in_pause_and_in_the_background() -> void:
+	assert_int(DeviceProfile.fps_for("unlimited", 60, false, false)).is_equal(10)
+	assert_int(DeviceProfile.fps_for("unlimited", 60, true, true)).is_equal(30)
+
+func test_an_unknown_fps_mode_falls_back_to_auto() -> void:
+	var cf := ConfigFile.new()
+	cf.load(GameConfig.USER_SETTINGS_PATH)
+	cf.set_value("interfaz", "fps_cap", "999")
+	cf.save(GameConfig.USER_SETTINGS_PATH)
+	GameConfig.ui_fps_cap = "45"
+	GameConfig.load_user_settings()
+	assert_str(GameConfig.ui_fps_cap).is_equal("auto")
+
+func test_the_fps_cap_survives_a_save_and_a_load() -> void:
+	DeviceProfile.set_fps_cap("45")
+	GameConfig.ui_fps_cap = "auto"
+	GameConfig.load_user_settings()
+	assert_str(GameConfig.ui_fps_cap).is_equal("45")
+	# Lo que no esta en la lista no se guarda como tal.
+	DeviceProfile.set_fps_cap("1000")
+	assert_str(GameConfig.ui_fps_cap).is_equal("auto")
+
+func test_headless_never_caps_the_frames() -> void:
+	# Los tests van en headless: un tope los haria lentos.
+	GameConfig.ui_fps_cap = "30"
+	DeviceProfile.apply_fps()
+	assert_int(Engine.max_fps).is_equal(0)
+
 # ── Escala del lienzo: sin bandas negras en ninguna proporcion ──────
 
 func _logical(window: Vector2, ui_scale: float) -> Vector2:
