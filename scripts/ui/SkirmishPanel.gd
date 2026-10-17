@@ -311,6 +311,12 @@ func _unit_list(counts: Dictionary) -> String:
 func _reason_text(reason: String) -> String:
 	if reason == "":
 		return ""
+	# Nadie elegido con tropas en casa: "sin unidades en casa" mentia (ronda de
+	# pruebas 1.0). Se dice que hacer.
+	if reason == "MSG_NO_UNITS":
+		for unit_id in CombatManager.get_deployable_units():
+			if int(CombatManager.get_deployable_units()[unit_id]) > 0:
+				return Tr.t("MSG_PICK_UNITS")
 	var translated: String = Tr.t(reason)
 	if translated != reason:
 		return translated

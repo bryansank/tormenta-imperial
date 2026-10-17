@@ -134,7 +134,7 @@ const _STRINGS := {
 		"FMT_UPGRADING_ETA": "Mejorando %d%% · faltan %s",
 		"FMT_CONSTRUCTION_COMPLETE": "¡Construcción completa!",
 		"FMT_DURATION": "Duración: %ds",
-		"FMT_DEMOLISH_CONFIRM": "¿Demoler %s?\nReembolso: %d%%",
+		"FMT_DEMOLISH_CONFIRM": "¿Demoler %s?\nRecuperas el %d%% de lo que costó",
 		"LBL_DEPOSIT_USES": "%d usos restantes",
 		"LBL_DEPOSIT_DEPLETED": "¡Recurso agotado!",
 
@@ -413,7 +413,7 @@ const _STRINGS := {
 
 		# Cancelacion (Tasa de Corrupcion), hambruna y desercion
 		"FMT_CANCEL_REFUND": "Cancelar (vuelven %s)",
-		"LBL_CANCEL_NO_REFUND": "Cancelar — sin reembolso",
+		"LBL_CANCEL_NO_REFUND": "Cancelar — no recuperas nada",
 		"LBL_CANCEL_RATE": "Al cancelar solo vuelve el %d%%",
 		"LBL_CANCEL_RATE_STORM": "Tormenta: solo vuelve el %d%%",
 		"FMT_DEMOLISH_IN_PROGRESS": "Hay algo en curso: devuelve %s",
@@ -513,6 +513,7 @@ const _STRINGS := {
 		"LBL_MORALE_COMBAT": "Moral %d: rapidez %+d, ataque x%.2f",
 		"LBL_UNIT_IN_EXPEDITION": "En campaña",
 		"MSG_NO_UNITS": "Sin unidades en casa",
+		"MSG_PICK_UNITS": "Elige quién sale con el botón +",
 		"MSG_DEPLOY_CAP_EXCEEDED": "Salen demasiadas unidades.",
 		"MSG_UNITS_UNAVAILABLE": "No tienes tantas unidades disponibles.",
 		"MSG_EXPEDITION_ACTIVE": "Ya hay una expedición en marcha.",
@@ -1992,6 +1993,7 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"LBL_MORALE_COMBAT": "Morale %d: speed %+d, attack x%.2f",
 		"LBL_UNIT_IN_EXPEDITION": "On campaign",
 		"MSG_NO_UNITS": "No units at home",
+		"MSG_PICK_UNITS": "Pick who goes with the + button",
 		"MSG_DEPLOY_CAP_EXCEEDED": "Too many units going out.",
 		"MSG_UNITS_UNAVAILABLE": "You do not have that many units available.",
 		"MSG_EXPEDITION_ACTIVE": "An expedition is already under way.",

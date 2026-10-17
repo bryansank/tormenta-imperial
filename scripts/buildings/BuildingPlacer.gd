@@ -329,7 +329,7 @@ func _bounce_building(node: Node) -> void:
 	var look := node.get_node_or_null("LookVisual")
 	var model: Node3D = look.get_model() as Node3D if look != null and look.has_method("get_model") else null
 	if model != null and is_instance_valid(model):
-		var old: Tween = node.get_meta("_bounce_tween", null)
+		var old: Tween = node.get_meta("_bounce_tween") if node.has_meta("_bounce_tween") else null
 		if old != null and old.is_valid():
 			old.kill()
 			model.scale = node.get_meta("_bounce_scale", model.scale)

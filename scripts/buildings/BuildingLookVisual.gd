@@ -53,6 +53,12 @@ func setup(building: Node3D, data: BuildingData, top_y: float, cell_size: float 
 	_top = maxf(0.5, top_y)
 	_cell = cell_size if cell_size > 0.0 else GridManager.cell_size
 	_model = _find_model()
+	# La cima de las mallas de verdad: `top_y` llega con el mesh_height del .tres,
+	# que en los modelos de juguete (mas bajos) dejaba el farol y las piezas de
+	# dano flotando muy por encima del tejado (ronda de pruebas 1.0).
+	var real := _model_box()
+	if _model != null and real.size.y > 0.0 and real.end.y > 0.5 and real.end.y < _top:
+		_top = real.end.y
 
 ## Relee los hechos del edificio y aplica el aspecto que toca.
 func sync() -> void:
@@ -195,7 +201,8 @@ func _set_damage(stage: int) -> void:
 	# La caja se mide con el modelo derecho (sin el ladeo de la etapa anterior).
 	_pose_model(0.0, 0.0, 1.0)
 	var variant := LookRule.seed_of(_building, _data) % Site.DAMAGE_VARIANTS
-	_damage_node = Site.damage_overlay(stage, _model_box(), variant)
+	var box := _model_box()
+	_damage_node = Site.damage_overlay(stage, box, variant, _height_grid(box))
 	if _damage_node != null:
 		add_child(_damage_node)
 	var i := clampi(stage - 1, 0, 1)
@@ -213,7 +220,13 @@ func _model_box() -> AABB:
 	var box := AABB()
 	var found := false
 	if _model != null:
-		for mi in _model.find_children("*", "MeshInstance3D", true, false):
+		# El modelo de juguete es el propio MeshInstance3D (find_children no lo
+		# incluye): sin el, la caja salia de la medida de reserva y las piezas de
+		# dano grave flotaban.
+		var meshes: Array = _model.find_children("*", "MeshInstance3D", true, false)
+		if _model is MeshInstance3D:
+			meshes.push_front(_model)
+		for mi in meshes:
 			var mesh_i := mi as MeshInstance3D
 			if mesh_i.mesh == null:
 				continue
@@ -224,6 +237,32 @@ func _model_box() -> AABB:
 		var d := Vector2(_data.grid_size) * _cell * 0.8 if _data else Vector2(1.6, 1.6)
 		box = AABB(Vector3(-d.x * 0.5, 0.0, -d.y * 0.5), Vector3(d.x, _top, d.y))
 	return box
+
+## La altura de las mallas del modelo en una rejilla sobre `box` (la cima de
+## los vertices de cada celda), para que las piezas de dano se apoyen en lo que
+## hay debajo y no en la chimenea mas alta. Se mide al cambiar la etapa de dano,
+## nunca por frame. Vacia si no hay modelo.
+func _height_grid(box: AABB) -> PackedFloat32Array:
+	var n: int = Site.HEIGHT_GRID
+	var out := PackedFloat32Array()
+	if _model == null or box.size.x <= 0.0 or box.size.z <= 0.0:
+		return out
+	out.resize(n * n)
+	out.fill(0.0)
+	var meshes: Array = _model.find_children("*", "MeshInstance3D", true, false)
+	if _model is MeshInstance3D:
+		meshes.push_front(_model)
+	for mi in meshes:
+		var mesh_i := mi as MeshInstance3D
+		if mesh_i.mesh == null:
+			continue
+		var xf := _to_building(mesh_i)
+		for v in mesh_i.mesh.get_faces():
+			var p: Vector3 = xf * v
+			var i := clampi(int((p.x - box.position.x) / box.size.x * n), 0, n - 1)
+			var j := clampi(int((p.z - box.position.z) / box.size.z * n), 0, n - 1)
+			out[j * n + i] = maxf(out[j * n + i], p.y)
+	return out
 
 ## La transformacion de `node` en el marco del edificio (sin depender del arbol).
 func _to_building(node: Node) -> Transform3D:

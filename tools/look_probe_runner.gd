@@ -26,6 +26,14 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	# `-- --only-2d`: solo las capturas 2D (mas rapido al iterar el arte 2D).
 	var only_2d := OS.get_cmdline_user_args().has("--only-2d")
+	# `-- --danos`: solo las etapas de dano (sano, leve, grave, ruina) de los
+	# edificios grandes, de frente y girados, para ver piezas que flotan.
+	if OS.get_cmdline_user_args().has("--danos"):
+		for id in ["refinery", "foundry", "tower", "barracks", "headquarters", "gold_mine", "sawmill", "farm", "house", "warehouse", "market", "laboratory"]:
+			await _shoot_damage_3d(id, 0.0, "look_probe_danos_%s.png" % id)
+			await _shoot_damage_3d(id, 150.0, "look_probe_danos_%s_girado.png" % id)
+		get_tree().quit()
+		return
 	if not only_2d:
 		await _shoot_3d()
 	await _shoot_2d()
@@ -574,5 +582,80 @@ func _shoot_close_3d() -> void:
 	cam.fov = 50
 	await _settle()
 	await _save("look_probe_style_close_3d.png")
+	_world.queue_free()
+	await get_tree().process_frame
+
+## Las etapas de dano de los edificios con mas piezas: una fila por edificio,
+## una columna por etapa. `yaw`: giro de la camara alrededor de la fila.
+func _shoot_damage_3d(one_id: String, yaw: float, file_name: String) -> void:
+	var L := LookRule.Look
+	var ids := [one_id]
+	var stages := [
+		["Sano", {"look": L.IDLE, "phase": 0}],
+		["Leve", {"look": L.IDLE, "phase": 0, "damage": LookRule.DAMAGE_LIGHT}],
+		["Grave", {"look": L.ACTIVE, "phase": 0, "damage": LookRule.DAMAGE_HEAVY}],
+		["Ruina", {"look": L.RUIN, "phase": 0}],
+	]
+	_world = Node3D.new()
+	add_child(_world)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_COLOR
+	env.environment.background_color = Color(0.32, 0.4, 0.46)
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.75, 0.75, 0.8)
+	env.environment.ambient_light_energy = 0.6
+	_world.add_child(env)
+	var sun := DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-50, 35, 0)
+	sun.shadow_enabled = true
+	_world.add_child(sun)
+	var ground := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(200, 200)
+	ground.mesh = plane
+	var gmat := StandardMaterial3D.new()
+	gmat.albedo_color = Color(0.3, 0.42, 0.22)
+	ground.material_override = gmat
+	_world.add_child(ground)
+	var placer: Node3D = Placer.new()
+	for r in ids.size():
+		for c in stages.size():
+			var data := _data(String(ids[r]))
+			var root: Node3D = placer._create_building_mesh(data)
+			var badge := root.get_node_or_null("StatusBadge")
+			if badge:
+				root.remove_child(badge)
+				badge.free()
+			root.position = Vector3((c - 1.5) * 6.0, 0, 0)
+			_world.add_child(root)
+			var st: Dictionary = stages[c][1]
+			var look_node := root.get_node_or_null("LookVisual")
+			if look_node:
+				look_node.apply(st)
+			if st["look"] == L.RUIN:
+				root.set_meta("health", 0)
+				BuildingHealth.refresh_visual(root)
+			var label := Label3D.new()
+			label.text = "%s %s" % [String(ids[r]), String(stages[c][0])]
+			label.font_size = 48
+			label.pixel_size = 0.012
+			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			label.outline_size = 10
+			label.position = Vector3(0, -0.2, 2.8)
+			label.no_depth_test = true
+			root.add_child(label)
+	placer.free()
+	var pivot := Node3D.new()
+	pivot.rotation_degrees = Vector3(0, yaw, 0)
+	_world.add_child(pivot)
+	var cam := Camera3D.new()
+	cam.position = Vector3(0, 12, 12)
+	cam.rotation_degrees = Vector3(-42, 0, 0)
+	cam.fov = 55
+	pivot.add_child(cam)
+	cam.make_current()
+	await _settle()
+	await _save(file_name)
 	_world.queue_free()
 	await get_tree().process_frame

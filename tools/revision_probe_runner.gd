@@ -20,6 +20,7 @@ const SaveParking := preload("res://tests/save/save_parking.gd")
 const SettingsParking := preload("res://tests/save/settings_parking.gd")
 const ArteRunner := preload("res://tools/arte_probe_runner.gd")
 const StormCycleScript := preload("res://scripts/storm/StormCycle.gd")
+const SaveSlotsRef := preload("res://scripts/services/SaveSlots.gd")
 const BACKUP_PATH := "user://save_game.revision_probe.bak"
 const OUT_DIR := "res://docs/media/dev/revision"
 
@@ -52,7 +53,10 @@ func _run() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(GameManager.save_path()))
 	_settings_snap = SettingsParking.park()
 	GameConfig.dev_mode = false
-	GameConfig.ui_view_mode = "3d"
+	GameConfig.ui_view_mode = "2d" if _arg("view") == "2d" else "3d"
+	if _arg("quality") != "":
+		GameConfig.ui_graphics_quality = _arg("quality")
+		EventBus.graphics_quality_changed.emit(GameConfig.ui_graphics_quality)
 	GameConfig.ui_device_profile = _arg("profile", "auto")
 	GameConfig.ui_scale_pct = 0
 	GameConfig.ui_text_size = "auto"
@@ -63,12 +67,12 @@ func _run() -> void:
 	DeviceProfile.apply_all()
 	await _frames(5)
 	var win := DisplayServer.window_get_size()
-	_tag = "3d_%s_%dx%d%s" % [DeviceProfile.current(), win.x, win.y,
+	_tag = "%s_%s_%dx%d%s" % [_arg("view", "3d"), DeviceProfile.current(), win.x, win.y,
 		("_" + _arg("tag")) if _arg("tag") != "" else ""]
 
 	# ── Colonia temprana: partida nueva ──────────────────────────────────
 	GameManager.title_dismissed = true
-	get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
+	get_tree().change_scene_to_file("res://scenes/main/Main2D.tscn" if _arg("view") == "2d" else "res://scenes/main/Main.tscn")
 	await _frames(60)
 	_quiet()
 	await _seconds(3.0)
@@ -96,7 +100,10 @@ func _run() -> void:
 	var seeder: Node = ArteRunner.new()
 	seeder._write_seeded_save()
 	seeder.free()
-	get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
+	# Con partidas (docs/09) la partida en memoria se guardaba encima de la
+	# sembrada al cambiar de escena: se carga con la recarga del propio juego.
+	GameManager.clear_save_and_reload_from(SaveSlotsRef.read(GameManager.active_slot()),
+		"res://scenes/main/Main2D.tscn" if _arg("view") == "2d" else "res://scenes/main/Main.tscn")
 	await _frames(60)
 	_quiet()
 	await _seconds(6.0)
@@ -231,6 +238,8 @@ func _hours() -> Dictionary:
 func _camera(target: Vector2, zoom: float) -> void:
 	var cam: Node = get_tree().current_scene.get_node_or_null("MonumentalCamera")
 	if cam == null:
+		cam = get_tree().current_scene.get_node_or_null("Camera2D")
+	if cam == null or not cam.has_method("set_state"):
 		return
 	var st: Dictionary = cam.get_state()
 	st["target_x"] = target.x
@@ -238,7 +247,7 @@ func _camera(target: Vector2, zoom: float) -> void:
 	if zoom >= 0.0:
 		st["distance"] = lerpf(cam.min_distance, cam.max_distance, zoom)
 	else:
-		st["distance"] = float(cam.get("default_distance"))
+		st["distance"] = float(cam.get("default_distance")) if cam.get("default_distance") != null else 32.0
 	cam.set_state(st)
 
 func _frames(n: int) -> void:

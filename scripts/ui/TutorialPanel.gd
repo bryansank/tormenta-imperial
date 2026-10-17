@@ -38,6 +38,9 @@ const EDGE := 16.0
 const DONE_SECONDS := 25.0
 ## Hueco entre lo senalado y la tarjeta: ahi va la flecha.
 const ARROW_GAP := 56.0
+## La franja de arriba con el HUD (recursos, rango, ☰ MENÚ): una tarjeta que
+## solo cabe encima de su objetivo metiendose ahi se pone a su lado.
+const TOP_HUD := 72.0
 
 var _prologue: CanvasLayer
 var _coach: Control
@@ -507,7 +510,9 @@ func _layout_step() -> void:
 	var focus := Rect2()
 	if has_rect:
 		focus = rect
-	elif not point.is_empty():
+	elif not point.is_empty() and bool(point.get("ok", true)):
+		# Fuera de pantalla no hay foco: la tarjeta va a su sitio de siempre y
+		# la flecha del borde senala hacia alli (antes se iba por debajo).
 		focus = Rect2(point["point"] - Vector2(40, 40), Vector2(80, 80))
 	# Colocando con el dedo, el fantasma y su ✓ CONSTRUIR AQUI (#34) tampoco se
 	# tapan: la tarjeta se aparta de los dos juntos.
@@ -521,8 +526,16 @@ func _layout_step() -> void:
 		var above := _card.position.y < rect.position.y
 		var tip := Vector2(rect.get_center().x, rect.position.y - 4.0) if above \
 			else Vector2(rect.get_center().x, rect.end.y + 4.0)
+		var dir := Vector2.DOWN if above else Vector2.UP
+		# La tarjeta al lado (card_position, junto al HUD de arriba): flecha de lado.
+		if _card.position.x + _card.size.x <= rect.position.x:
+			tip = Vector2(rect.position.x - 4.0, rect.get_center().y)
+			dir = Vector2.RIGHT
+		elif _card.position.x >= rect.end.x:
+			tip = Vector2(rect.end.x + 4.0, rect.get_center().y)
+			dir = Vector2.LEFT
 		_arrow.visible = true
-		_arrow.point_at(tip, Vector2.DOWN if above else Vector2.UP)
+		_arrow.point_at(tip, dir)
 	elif not point.is_empty():
 		var p: Vector2 = point["point"]
 		if bool(point.get("ok", true)):
@@ -591,7 +604,17 @@ static func card_position(vp: Vector2, size: Vector2, focus: Rect2) -> Vector2:
 	if below + size.y <= vp.y - EDGE:
 		return Vector2(x, below)
 	var above := focus.position.y - ARROW_GAP - size.y
-	return Vector2(x, maxf(EDGE, above))
+	# Encima taparia el HUD de arriba (el boton REPARAR de la ficha, abajo a la
+	# derecha: la tarjeta tapaba ☰ MENÚ y el nombre del edificio): al lado.
+	if above < TOP_HUD:
+		var side_y := clampf(focus.get_center().y - size.y * 0.5, TOP_HUD, maxf(TOP_HUD, vp.y - size.y - EDGE))
+		var left := focus.position.x - ARROW_GAP - size.x
+		if left >= EDGE:
+			return Vector2(left, side_y)
+		var right := focus.end.x + ARROW_GAP
+		if right + size.x <= vp.x - EDGE:
+			return Vector2(right, side_y)
+	return Vector2(x, clampf(above, EDGE, maxf(EDGE, vp.y - size.y - EDGE)))
 
 func _place_dim(vp: Vector2, hole: Rect2) -> void:
 	if hole.size == Vector2.ZERO:
@@ -599,10 +622,14 @@ func _place_dim(vp: Vector2, hole: Rect2) -> void:
 		for r in _dim:
 			r.visible = false
 		return
-	var top := clampf(hole.position.y, 0.0, vp.y)
-	var bottom := clampf(hole.end.y, 0.0, vp.y)
-	var left := clampf(hole.position.x, 0.0, vp.x)
-	var right := clampf(hole.end.x, 0.0, vp.x)
+	# Los bordes, en pixeles enteros de la pantalla: con el lienzo escalado, dos
+	# rectangulos que se tocan en una coordenada fraccionaria dejaban una raya
+	# clara de un pixel a lo ancho de toda la pantalla (ronda de pruebas 1.0).
+	var px := maxf(get_viewport().get_final_transform().get_scale().y, 0.01)
+	var top := roundf(clampf(hole.position.y, 0.0, vp.y) * px) / px
+	var bottom := roundf(clampf(hole.end.y, 0.0, vp.y) * px) / px
+	var left := roundf(clampf(hole.position.x, 0.0, vp.x) * px) / px
+	var right := roundf(clampf(hole.end.x, 0.0, vp.x) * px) / px
 	var rects := [
 		Rect2(0, 0, vp.x, top),
 		Rect2(0, bottom, vp.x, vp.y - bottom),
@@ -785,8 +812,16 @@ func _layout_combat(delta: float) -> void:
 		var above := _card.position.y < rect.position.y
 		var tip := Vector2(rect.get_center().x, rect.position.y - 4.0) if above \
 			else Vector2(rect.get_center().x, rect.end.y + 4.0)
+		var dir := Vector2.DOWN if above else Vector2.UP
+		# La tarjeta al lado (card_position, junto al HUD de arriba): flecha de lado.
+		if _card.position.x + _card.size.x <= rect.position.x:
+			tip = Vector2(rect.position.x - 4.0, rect.get_center().y)
+			dir = Vector2.RIGHT
+		elif _card.position.x >= rect.end.x:
+			tip = Vector2(rect.end.x + 4.0, rect.get_center().y)
+			dir = Vector2.LEFT
 		_arrow.visible = true
-		_arrow.point_at(tip, Vector2.DOWN if above else Vector2.UP)
+		_arrow.point_at(tip, dir)
 	elif has_point:
 		var pt: Vector2 = anchor["point"]
 		_ring.visible = true

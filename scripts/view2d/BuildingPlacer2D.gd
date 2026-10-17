@@ -85,7 +85,7 @@ func _on_construction_done(node: Node) -> void:
 	if data == null or data.id == "road":
 		return
 	var b := node as Node2D
-	var old: Tween = b.get_meta("_bounce_tween", null)
+	var old: Tween = b.get_meta("_bounce_tween") if b.has_meta("_bounce_tween") else null
 	if old != null and old.is_valid():
 		old.kill()
 	b.scale = Vector2.ONE

@@ -13,10 +13,13 @@ static func spawn(scene_tree: SceneTree, world_pos: Vector3, text: String, color
 		return
 	var label := Label3D.new()
 	label.text = text
-	label.font_size = 20
+	# Del tamano del rotulo de obras (BuildingStatusBadge): a 20 px y 0.005 no se
+	# leia desde la camara de siempre (ronda de pruebas 1.0).
+	label.font_size = 36
+	label.pixel_size = 0.0125
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
-	label.outline_size = 3
+	label.outline_size = 8
 	label.modulate = color
 	var start_pos := world_pos + Vector3(randf_range(-0.3, 0.3), 2.5, randf_range(-0.3, 0.3))
 	# La posicion global y el tween solo existen dentro del arbol: se ponen al
@@ -172,7 +175,7 @@ static func _fly_one(layer: CanvasLayer, from_px: Vector2, target: Control, res_
 static func _pop(target: Control) -> void:
 	if target == null or not is_instance_valid(target):
 		return
-	var old: Tween = target.get_meta("_pop_tween", null)
+	var old: Tween = target.get_meta("_pop_tween") if target.has_meta("_pop_tween") else null
 	if old != null and old.is_valid():
 		old.kill()
 	target.pivot_offset = target.size * 0.5

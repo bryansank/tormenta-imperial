@@ -158,6 +158,10 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(func(_b): _sync_visible.call_deferred())
 	EventBus.construction_started.connect(func(_b): _sync_visible.call_deferred())
 	EventBus.game_load_completed.connect(func(): _sync_visible.call_deferred())
+	# En ruinas el mastil se viene abajo con el modelo: la bandera no se queda
+	# sola en el aire (ronda de pruebas 1.0).
+	EventBus.building_ruined.connect(func(_b): _sync_visible.call_deferred())
+	EventBus.building_repaired.connect(func(_b): _sync_visible.call_deferred())
 
 func refresh() -> void:
 	if _material != null:
@@ -175,6 +179,8 @@ func _sync_visible() -> void:
 		visible = not is_hidden_by_works(_owner_node)
 
 static func is_hidden_by_works(building: Node) -> bool:
+	if BuildingHealth.is_ruined(building):
+		return true
 	return building.has_meta("under_construction") and ProductionManager.get_upgrade_target(building) == 0
 
 ## El punto "FlagAnchor" del modelo del edificio, en el espacio del edificio, o

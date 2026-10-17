@@ -50,6 +50,10 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(func(_b): _sync_visible.call_deferred())
 	EventBus.construction_started.connect(func(_b): _sync_visible.call_deferred())
 	EventBus.game_load_completed.connect(func(): _sync_visible.call_deferred())
+	# En ruinas el mastil se viene abajo con el modelo: la bandera no se queda
+	# sola en el aire (ronda de pruebas 1.0).
+	EventBus.building_ruined.connect(func(_b): _sync_visible.call_deferred())
+	EventBus.building_repaired.connect(func(_b): _sync_visible.call_deferred())
 
 func _sync_visible() -> void:
 	if _owner_node != null and is_instance_valid(_owner_node):
