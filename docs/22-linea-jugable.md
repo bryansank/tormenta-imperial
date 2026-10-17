@@ -454,7 +454,7 @@ proceso. La sonda se niega a correr sin carpeta de usuario propia.
 
 ---
 
-## 11. Campaña de 4-6 horas (2026-10-12 y 2026-10-14)
+## 11. Campaña de 4-6 horas (2026-10-12, 2026-10-14 y 2026-10-16)
 
 Decisión de Bryan: una Campaña en Colono dura 4-6 h, la era 1 se queda en 8-12
 min, las eras 2 y 3 traen más construcción y el final pide más ejército y más
@@ -599,3 +599,93 @@ Valores movidos este día y por qué:
 - Riesgo de la sonda: 20 Godot en paralelo comparten carpeta de usuario. En 1 de
   60 corridas la partida arrancó rota (hitos vacíos, Fundición en el minuto 2) y
   se descartó.
+
+### 2026-10-16: los huecos sin decidir (rama `balance/huecos`)
+
+Meta de Bryan: algo que decidir cada 2-3 minutos. Con la medida del 14-10 quedaban
+3-15 esperas de más de 3 min por partida, casi todas esperando recursos que ¿QUÉ
+HACER? no llenaba (el blindado, los tablones del Cuartel al entrar en la era 2, el
+combustible), y nadie pasaba de 13 casas.
+
+**Cómo se midió.** `line_probe`, `--no-dev`, semillas 1-10, sobre
+`integracion/arte-v1` con el tutorial nuevo fusionado. Cinco Godot a la vez, cada uno
+con su carpeta de usuario y su copia del proyecto (dos semillas por proceso). El
+jugador de la sonda levanta además el **Laboratorio que pide el tutorial** antes de
+la Fundición (`--tutorial=0` lo quita). "Antes" es esa misma integración sin los
+cambios de esta rama, medida igual.
+
+> **Ruido de la sonda.** La misma semilla da resultados distintos según cuántos
+> Godot corren a la vez (la sonda avanza con DT fijo, pero cede un fotograma cada
+> 300 s y lo que va con reloj real se mueve): una semilla sola con `--log=1` puede
+> acabar 90 min antes o después que en el lote. Compare lotes medidos con la misma
+> carga, nunca una corrida suelta contra una tabla.
+
+| Semilla | Antes: era 2 | CG nv3 | victoria | huecos >3 min | mayor | casas | Después: era 2 | CG nv3 | victoria | huecos >3 min | mayor | casas / gente |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 14,9 | 287 | **315** | 8 | 9,0 | 12 | 14,9 | 273 | **292** | 5 | 9,2 | 22 / 137 |
+| 2 | 15,2 | 297 | **316** | 10 | 7,8 | 12 | 15,2 | 228 | **253** | 2 | 5,4 | 11 / 71 |
+| 3 | 17,2 | 243 | **271** | 7 | 5,5 | 9 | 17,2 | 224 | **245** | 3 | 4,4 | 11 / 71 |
+| 4 | 15,2 | 294 | **315** | 9 | 5,5 | 8 | 15,2 | 261 | **289** | 6 | 6,6 | 19 / 119 |
+| 5 | 15,2 | 242 | **269** | 4 | 5,7 | 8 | 15,2 | 226 | **251** | 4 | 10,0 | 16 / 101 |
+| 6 | 16,2 | 244 | **271** | 7 | 5,6 | 11 | 16,2 | 309 | **334** | 4 | 3,2 | 23 / 143 |
+| 7 | 16,2 | 262 | **282** | 4 | 6,4 | 8 | 16,2 | 263 | **284** | 3 | 5,9 | 24 / 149 |
+| 8 | 15,2 | 285 | **312** | 6 | 4,9 | 9 | 15,2 | 234 | **259** | 2 | 4,7 | 22 / 137 |
+| 9 | 15,2 | 277 | **347** | 8 | 4,9 | 10 | 15,2 | 224 | **251** | 1 | 3,0 | 11 / 71 |
+| 10 | 13,2 | 260 | **280** | 7 | 4,4 | 9 | 13,2 | 252 | **279** | 4 | 7,4 | 24 / 149 |
+
+- **Duración**: antes 269-347 min, mediana 297 (4 h 57); después **245-334, mediana
+  269 (4 h 29)**. Las diez entre 4 y 6 h, 10 de 10 victorias, todas al primer asedio
+  (antes una necesitó dos). Todos los Diezmos echados salvo uno.
+- **Huecos de más de 3 min sin decidir nada**: antes 4-10 por partida (70 en diez);
+  después **1-6 (34)**. El mayor, 4,4-9,0 antes y 3,0-10,0 después (una espera de 10
+  min en la semilla 5, con la bolsa clavada antes del CG nv3).
+- **Dónde quedan**: fabricar combustible (8 de los 34), una Mina de oro en la era 1-2
+  (6), vender madera con la bolsa llena (4) y el Laboratorio del tutorial (3). Los del
+  blindado bajan de 18 a 1 y los de las casas de 10 a 0. Los de los tablones al entrar
+  en la era 2 (9 de 10 partidas el 14-10, y antes del tutorial nuevo) se fueron con el
+  Cuartel nuevo: 0 en la medida intermedia sin tutorial, 1 en esta.
+- **Casas**: antes 8-12 al final; después **11-24** (el tope de la era 3 es 20, más
+  lo que da el rango), con 71-149 personas.
+- **Era 1** (el minuto de la era 2): 13,2-17,2 min, igual antes y después. **Ya no
+  está en 8-12**: el tutorial nuevo pide Mina, Mercado, Almacén y Laboratorio antes de
+  la Fundición, y el Laboratorio (150 oro, 100 madera) son ~3 min más que la línea de
+  ¿QUÉ HACER? sola (10,2-13,2 el 14-10). No se tocó: es una decisión del tutorial.
+- **Lo que se pierde vendiendo con la bolsa llena** (oro que no cabe): antes 0-464 por
+  partida; después **1.200-7.800**. Es el precio de no quedarse clavado: sin vender así,
+  dos partidas de diez se quedaban horas (una sin acabar) ante el CG nv3 con 4.104 de
+  4.104, el oro justo y la bolsa llena de madera, acero o comida.
+- **El asedio**: `siege_probe --seeds=200 --towers=4` sigue en **86 %** con seis
+  blindados (69 % con cinco); `final_audit_artillery_share` sigue en 3. El blindado
+  cambia de precio, no de fuerza.
+
+Valores movidos y por qué:
+
+| Valor | Antes | Después | Por qué |
+|---|---|---|---|
+| `unit_types.vehicle.cost` | 400 oro / 180 acero / 90 petróleo | **300 / 130 / 60 + 8 vigas** | casi lo mismo en recursos (8 vigas = 40 acero y 20 madera), pero la espera de 400 de oro se parte en dos decisiones: fabricar vigas y entrenar. Huecos del blindado: 18 → 1 |
+| `barracks.tres` | 250 oro / 100 acero / 80 madera + 10 tablones | **150 / 60 / 80 + 20 tablones** | al entrar en la era 2 la Fundición deja el oro a 25: el Cuartel eran 5 min sin nada que hacer. Ahora el oro y el acero llegan en ~3 min y los tablones son una decisión más |
+| `hq_upgrade_costs` (vigas) | 200 y 400 | **350 y 700** | con las esperas llenas y más casas la campaña bajaba a ~4 h 10 (cuatro de diez por debajo de 4 h). Las vigas porque eran las que menos esperas dejaban (hasta 6 fundiciones; el acero sobra en la era 3) |
+| `Objectives._while_saving_step` | — | nuevo | si lo que falta tarda más de `WAIT_FILL_SECONDS` (90 s) y la bolsa no está a rebosar: subir el productor de lo que frena, investigar o un adorno si la moral baja de 80. Todo pagado con lo que el paso no pide |
+| `Objectives.house_room_step` | — | nuevo | la gente al tope, comida para los seis que vienen y cuatro ciclos en el granero: otra casa, pagada con lo que sobra. Va antes de esperar |
+| `Objectives._support_or` (taller) | "Fabrica X" aunque faltara la receta | si a la receta le falta algo, lo mismo que con cualquier paso: otro productor o algo útil | la espera es la de todas las vueltas (los 200 de combustible del CG nv2 son 600 de petróleo), no la de una |
+| `Objectives._make_room_step` | — | nuevo | bolsa a rebosar y lo que falta no entra: pasar lo que sobra al taller (combustible, tablones, vigas, lingotes), que no ocupa bolsa |
+| `Objectives._unclog_step` | solo vendía lo que cabía | con la bolsa clavada, vende lo más barato que sobre aunque el oro no quepa entero (`PINNED_SALE` 300), y de la comida guarda tres ciclos en vez de ocho | sin esto, bolsa clavada hasta el final (ver arriba) |
+| `Objectives._sell_step` | vendía desde 5 unidades | **desde `MIN_SALE` (20)** | vendía 7 de comida cada 30 s durante minutos sin avanzar |
+| `tools/line_probe_player.gd` | — | levanta el Laboratorio del tutorial en la era 1 (`--tutorial=0` no) | medir la era 1 del jugador que sigue el tutorial |
+
+`OBJ_WHY_SURPLUS_*` se acortaron a menos de 16 palabras (`test_every_why_fits_in_a_short_sentence`)
+y hay tres textos nuevos: `OBJ_WHY_HOUSE_ROOM`, `OBJ_WHY_DECORATE`, `OBJ_WHY_MAKE_ROOM`.
+
+**Falta**:
+
+- La era 1 con el tutorial está en 13-17 min. Para volver a 8-12 haría falta abaratar
+  el Laboratorio o sacarlo del tutorial; no se tocó aquí.
+- Combustible: sigue siendo la espera que más se repite (400 de combustible = 1.200 de
+  petróleo para el CG nv3).
+- El oro que se pierde vendiendo con la bolsa clavada (hasta 7.800). La raíz es que la
+  bolsa máxima (3.500 + tecnologías) es casi el precio del CG nv3 y la comida de 100
+  personas también ocupa bolsa.
+- Los tests no se corrieron en esta rama (encargo: sondas sí, tests no). Los que más
+  pueden notarlo: `tests/ui/test_objectives.gd` (un paso de casa puede salir antes que
+  el que esperaban si la gente está al tope) y los que miran el coste del Cuartel o del
+  blindado.
