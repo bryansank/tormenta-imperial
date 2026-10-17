@@ -20,6 +20,8 @@ extends SceneTree
 ##   --hours=N       tope de horas de juego por partida (8)
 ##   --active=1      el jugador tambien exprime los procesos manuales
 ##   --log=1         imprime cada accion del jugador
+##   --tutorial=0    no levanta el Laboratorio de la era 1 que pide el tutorial
+##                   guiado (por defecto si, como el jugador que lo sigue)
 ##
 ## El jugador vive en tools/line_probe_player.gd: este script de arranque no puede
 ## nombrar autoloads (se compila antes de que existan), aquel si.

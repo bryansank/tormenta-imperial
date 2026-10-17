@@ -93,8 +93,13 @@ var hq_upgrade_costs := {
 	# 2026-10-14: el doble de materiales otra vez (antes 100/70/100 y
 	# 200/140/200). Con los lotes y el Nucleo haciendo las recetas de todos, el
 	# taller va mucho mas rapido y la campana habia bajado a ~3 h 35 (docs/22 §11).
-	2: {"gold": 1300, "steel": 900, "oil": 500, "wood": 300, "beams": 200, "ingots": 140, "fuel": 200},
-	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700, "beams": 400, "ingots": 280, "fuel": 400},
+	# 2026-10-16: vigas 350 y 700 (antes 200 y 400). Con ¿QUE HACER? llenando las
+	# esperas y las casas que ahora pide, la campana bajaba a ~4 h 10 y cuatro
+	# partidas de diez se quedaban por debajo de las 4 h. Las vigas, y no el
+	# combustible ni los lingotes, porque eran las que menos esperas dejaban
+	# (hay hasta 6 fundiciones y el acero sobra en la era 3) (docs/22 §11).
+	2: {"gold": 1300, "steel": 900, "oil": 500, "wood": 300, "beams": 350, "ingots": 140, "fuel": 200},
+	3: {"gold": 1500, "steel": 800, "oil": 500, "wood": 700, "beams": 700, "ingots": 280, "fuel": 400},
 }
 
 # ── Building Limits (max per type, -1 = unlimited) ──

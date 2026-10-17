@@ -263,14 +263,12 @@ static func _unclog_step(target: Dictionary) -> Dictionary:
 		if excess > best_excess:
 			best = res
 			best_excess = excess
-	if best == "":
-		return {}
 	# Lo que se vende vuelve como oro, que tambien ocupa bolsa: con la bolsa a
 	# rebosar, vender de golpe un quinto de la bolsa tiraba el oro que no cabia
 	# (hasta 8.000 de oro perdidos por partida, tools/line_probe.gd 2026-10-12).
 	# Se vende solo lo que cabe; si no cabe ni un poco, no se vende (la gente
 	# come y hace sitio en unos ciclos).
-	var amount: int = _sale_that_fits(best, mini(best_excess, maxi(MIN_SALE, cap / 5)))
+	var amount: int = _sale_that_fits(best, mini(best_excess, maxi(MIN_SALE, cap / 5))) if best != "" else 0
 	# La bolsa clavada (2026-10-16): ni un hueco libre, al paso no le falta oro
 	# y lo que falta espera fuera. Vender sin que quepa el oro es perder parte
 	# del precio, pero el oro de mas paga en el siguiente vistazo la compra de
@@ -283,10 +281,16 @@ static func _unclog_step(target: Dictionary) -> Dictionary:
 		# Lo mas barato que sobre: cada unidad vendida pierde (precio - 1) de oro.
 		var cheap := ""
 		var cheap_price: int = 1 << 20
-		for res in ["wood", "steel", "oil"]:
+		for res in ["food", "wood", "steel", "oil"]:
 			if not ResourceManager.is_unlocked_by_name(res):
 				continue
-			var spare: int = ResourceManager.get_amount(ResourceManager.name_to_type(res)) - int(keep.get(res, 0))
+			var res_keep: int = int(keep.get(res, 0))
+			# La comida de mucha gente es lo que clava la bolsa del final (101
+			# personas, 600 de comida y 4.104 de 4.104 ante el CG nv3): con la
+			# bolsa clavada se guardan tres ciclos, no ocho.
+			if res == "food":
+				res_keep = res_keep - PopulationManager.food_due() * 5
+			var spare: int = ResourceManager.get_amount(ResourceManager.name_to_type(res)) - res_keep
 			var price: int = MarketManager.get_sell_price(res)
 			if spare >= MIN_SALE and price < cheap_price:
 				cheap = res
