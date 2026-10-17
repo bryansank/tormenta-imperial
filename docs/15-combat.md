@@ -407,6 +407,20 @@ efectos, placas y aros son los mismos.
   etiqueta de ventaja, asi que en el frente solo se iluminan los sitios.
 - **Piezas mayores**: x1,3 en el frente (`FRONT_UNIT_SCALE`,
   `UnitToy3D.set_view_scale`).
+- **Placas y etiquetas que no se pisan** (2026-10-16). Con las piezas x1,3 y
+  juntas, las placas de vida y las etiquetas de objetivo ("-18 de 75",
+  "¡Buen objetivo!") de todos los enemigos a tiro se montaban unas sobre otras.
+  En el frente: la etiqueta de objetivo sale **solo en la unidad en foco** (la
+  que esta bajo el puntero; con el dedo, la que se pisa mientras se mantiene),
+  con el pie encima de su chapa y en la capa mas alta (`HINT_PRIO`); aros y
+  mira siguen en todos. Las placas de la unidad activa y la del foco van
+  enteras y por encima (`PRIO_FOCUS`); las demas, compactas
+  (`UnitToy3D.PLATE_COMPACT`) y `Board3D._layout_plates` las sube, de abajo
+  arriba de la pantalla, lo justo para no tocar a ninguna ya colocada (medido
+  con la camara, no por resolucion); si tendria que subir mas de un alto de
+  placa, se apaga en su sitio. Se recoloca por evento (estado, foco, cola
+  vacia, cambio de vista), nunca por fotograma. En el tablero 8x8 nada de esto:
+  todas las etiquetas y placas como antes.
 - **La linea entre bandos** (`BoardTerrain3D._divider`), a ras de suelo y con
   huecos, segun el escenario: un arroyo con piedras de paso en campo abierto, la
   linea de la marea en la playa, un seto bajo a trozos en la linde del bosque.
@@ -455,6 +469,47 @@ losetas con sus matas), las marcas son la misma `MultiMesh` de 64 instancias con
 camara mas baja ensena mas suelo, que es un plano sin luz extra; la sombra
 sigue el mismo reglaje por calidad. **Sin medir todavia** con
 `battle_probe --fps` (pendiente del pase final, ver docs/26).
+
+### Enseñar el combate (2026-10-14, rama `feat/ensenar-combate`)
+
+Diseño: `tormenta-imperial-contexto/21_REDISENO_CICLO_Y_CONTENIDO.md` §4.1-4.3. Tres
+piezas, las mismas en las dos vistas 3D (frente y tablero) y en el tablero 2D. Todo lo
+que se calcula sale de `CombatRules` (puro) y se recalcula en `BattleScreen._refresh()`,
+que corre **por evento** del combate, nunca por fotograma.
+
+**Vistas previas (`CombatRules`, solo funciones nuevas):**
+
+| Función | Qué da | Dónde se ve |
+|---|---|---|
+| `preview_damage(attacker, target)` | `{damage, hp, max_hp, hp_after, kills, matchup, mult}`; usa `damage()`, así que la ventaja por tipo, la guardia y la moral ya van dentro. No toca a nadie | encima de cada objetivo: "-18 de 75" o "-75 ¡Cae!" (`LBL_PREVIEW_*`), junto a "¡Buen objetivo!" en la misma etiqueta 3D (`UnitToy3D.set_target_hint(matchup, preview, blocked)`); en 2D una etiqueta por casilla (`BattleScreen.board_cell_preview()`); con ratón, también en el tooltip |
+| `threat_cells(units, side, board)` | toda casilla a la que alguna unidad viva de `side` llega y dispara en su próximo turno (su movimiento entero + su alcance) | botón **Ver alcance enemigo** (`BattleScreen.toggle_threat()`, del jugador, no se guarda): casillas naranjas (`Board3D.Mark.THREAT`; las azules que además están en peligro, `MOVE_THREAT`); en el frente salen como manchas. Se cachea por posiciones de los vivos |
+| `min_range_cells(unit, board)` | las casillas dentro del alcance mínimo (la artillería: las cuatro de al lado) | una ✕ (`Label3D`, como mucho cuatro, reutilizadas) y casilla roja oscura (`NO_FIRE`); el enemigo que está ahí dice "✕ Muy cerca" en rojo |
+| `fire_cells_from(unit, from, board)` | las casillas entre alcance mínimo y máximo | solo en el paso 6 del combate guiado (`FIRE`, rojo claro) |
+
+`Board3D.set_overlays(threat, no_fire, fire)` pinta esas capas por debajo de las marcas
+de turno (`overlay_mark()`: mover/atacar/activo mandan). Los valores nuevos de `Mark`
+van al final del enum.
+
+**Ficha de unidad (`scripts/ui/UnitCard.gd`):** vida, ataque, defensa, movimiento,
+alcance (con "Dispara de 2 a 3 casillas" y "No dispara a quien tiene al lado" en la
+artillería), fuerte contra / débil contra con la silueta y el multiplicador (×1,5 /
+×0,75), y una frase (`UNIT_<ID>_CARD_TIP`). Iconos dibujados (`StatGlyph`), sin emojis
+(la fuente no los garantiza). Números de `combat_unit_stats` y `combat_type_advantage`,
+o de la unidad viva (mejoras, moral). Se abre al **tocar una pieza** (propia, o enemiga
+que no se puede atacar) en cualquier vista — sigue a su unidad y se cierra si cae — y
+con el botón **FICHA** de cada fila del Cuartel (`ArmyPanel.toggle_unit_card()`). La
+selección de tropa (`SkirmishPanel`) aún no la lleva: es de la rama de escaramuzas.
+
+**Combate guiado:** `TutorialManager` (docs/23 §2.4) decide el paso;
+`BattleScreen.coach_anchor(target)` dice dónde está lo señalado en pantalla (una pieza o
+una casilla 3D como punto, en 2D o un botón como rectángulo, `{"busy": true}` mientras la
+maqueta anima); `TutorialPanel` pinta la tarjeta, la flecha y el aro en la capa 19,
+encima del tablero. Tocar una pieza propia cuenta como el paso 1
+(`TutorialManager.note_combat_fact("selected")`). Durante el paso 4 se ve el alcance
+enemigo aunque el botón esté apagado (`BattleScreen.threat_visible()`).
+
+**Simulacro (§4.4 del diseño): no hecho.** Pide un edificio nuevo y un `is_practice` en
+`CombatManager`, que es de la rama de escaramuzas: queda para cuando esa rama entre.
 
 ### Turn flow
 
@@ -710,6 +765,116 @@ the player can reach a new era while a run is paused.
 
 ---
 
+## 4b. Salidas cortas, botín exclusivo, retirada y "resolver solo" (2026-10-14)
+
+Rama `feat/escaramuzas`, doc de contexto 21 §3 y §8 filas 1.1-1.3, decisiones de Bryan
+D2 = A, D3 = A, D6 = A, D7 = B. **Sin probar todavía** (pase final único).
+
+### El tablón (`SortieBoard`, modelo puro)
+
+`scripts/combat/SortieBoard.gd` guarda las ofertas a la vista, cuándo llega la
+siguiente, los planos conseguidos y el apunte de la rebaja del Diezmo. No emite ni
+sortea: `CombatManager` le da el reloj (`ProgressionManager.get_played_seconds()`) y las
+semillas (`refresh_sorties()`, un `Timer` de `combat_sortie_refresh_interval` = 2 s,
+pausable). Una oferta es `{id, kind, flavor, seed, era, blueprint, seen}` y **con ella se
+rehace el mapa entero** (`ExpeditionGenerator.sortie_map()`), así que el jugador lo ve
+antes de salir y el guardado solo lleva la oferta.
+
+| Tipo | Combates | Cuándo aparece | Botín exclusivo |
+|---|---|---|---|
+| Incursión: saqueadores | 1 (profundidad `combat_raid_depth` 1) | Con Cuartel y la primera escaramuza ganada; una a la vez; `combat_raid_cooldown` 240 s de juego tras gastarla | Repuestos 1-2, colonos 2-4 |
+| Incursión: avanzadilla de la Regencia | 1 (riesgo 1) | Alterna con los saqueadores mientras la Tormenta está armada y el modo tiene Diezmo; se va con el Diezmo | Repuestos 1 y rebaja del Diezmo (`sortie_tithe_discount_pct`, 10 %) |
+| Expedición corta | 3: apertura → 1 de 2 → jefe (`combat_expedition_depth` (1,1), `branching` (2,2)) | Desde la era `combat_expedition_min_era` 2; `combat_expedition_cooldown` 480 s | 2 repuestos por combate de paso; jefe: 4 repuestos, 3 colonos y un plano si queda alguno |
+
+- Oro y madera de las salidas nuevas: la mitad de la curva de siempre
+  (`combat_sortie_reward_mult` 0.5), fijados en el nodo al sortear.
+- El jefe de la expedición corta lleva `combat_expedition_boss_escort_cut` (1) infante
+  menos.
+- **Cura entre combates:** la expedición corta cura `combat_expedition_heal_between`
+  (30 %) a cada superviviente herido al pasar al siguiente (`Expedition.mark_cleared`,
+  evento `party_healed`). La expedición antigua sigue sin curar.
+- Lanzada, la oferta sale del tablón y su tipo no vuelve a salir hasta que la columna
+  vuelve. Si no ganó **ningún** combate, la misma oferta vuelve (se puede reintentar); con
+  algún combate ganado se da por gastada (si no, abandonar tras el primero y relanzar
+  sería repetir botín).
+- La primera escaramuza (§4) no cambia: mientras toca, el panel solo ofrece esa.
+- La expedición de siempre (`launch_expedition()`, 6-8 combates) sigue intacta para los
+  guardados a medias, los tests y las sondas con semilla: `Expedition.kind` vacío.
+
+### Botín exclusivo (D2 = A)
+
+Se acumula en `Expedition.loot` nodo a nodo y se liquida al volver
+(`CombatManager._apply_loot`), igual que el oro: lo de los nodos ganados llega aunque se
+abandone.
+
+- **Repuestos** (`ResourceManager.Type.PARTS`, material fuera de la bolsa, ver
+  `docs/02-economy.md`): los pide el nivel 3 de los productores.
+- **Colonos:** `PopulationManager.remove_population(-n)` hasta llenar las casas; los que
+  no caben se van y el parte lo dice.
+- **Planos:** `combat_blueprint_buildings` (Enfermería, Herrería, Chatarrería, Central
+  diésel). Un id solo se ofrece cuando su `data/buildings/<id>.tres` existe, así que hoy
+  no sale ninguno: lo activan las ramas que traigan esos edificios. Gancho:
+  `CombatManager.blueprint_locked(id)` / `has_blueprint(id)`; **PlacementRules tiene que
+  llamarlo** (un `check_blueprint()` como `check_rank()`) y ConstructionMenu poner el
+  candado — no se tocó aquí. Señal `blueprint_unlocked`.
+- **Rebaja del Diezmo:** la avanzadilla echada llama, si existe,
+  `StormManager.add_tithe_discount("expedicion", pct)` (rama `feat/orden-regencia`). Sin
+  esa función (la base de hoy) la rebaja solo se anota y se enseña: no hay un segundo
+  mecanismo de rebaja.
+
+### Antes de salir (`SkirmishPanel`)
+
+Arriba del selector de tropa: las ofertas (botón por oferta) y la ficha de la elegida
+con el mapa por capas (iconos de unidad y número por combate), el botín (lo exclusivo y
+oro/madera con su icono) y "Tu fuerza X · enemigo Y" con **Favorable / Igualada /
+Difícil** (`CombatRules.odds_label`: ≥ 1.25 favorable, < 0.85 difícil). La fuerza es
+`CombatRules.side_strength()` (poder × vida / vida base: cuenta heridas y escala); antes
+de lanzar, `roster_power()` de la columna contra el nodo más duro del mapa.
+
+### Botón ESCARAMUZAS y ¿QUÉ HACER? (1.1)
+
+`SkirmishButton` (CanvasLayer 10, en Main y Main2D, slot `skirmish_button` a la derecha
+de CONSTRUIR; en móvil encima), visible con un Cuartel, registrado en `HudRegistry`.
+Punto rojo cuando `CombatManager.sortie_reason()` no está vacío: la primera escaramuza,
+la avanzadilla antes del Diezmo, repuestos que faltan para una mejora, o una oferta nueva
+sin mirar (abrir el panel la marca vista). ¿QUÉ HACER? enseña la misma razón como
+segunda línea (`Objectives.sortie_step()`); `next_step()` no cambia, así que la sonda de
+línea sigue igual.
+
+### Retirada enemiga (D7 = B)
+
+`Encounter.create(..., p_can_rout)`: en los tableros de la columna (expedición,
+incursión, primera escaramuza) el enemigo se retira cuando le queda menos de
+`combat_retreat_ratio` (30 %) de la vida con la que empezó: eventos `enemy_routed` +
+`encounter_ended {victory: true, routed: true}`, estado `WON`. **Nunca en defensa**
+(Diezmo ni asedio): `create()` lo apaga si `is_defense`. La fórmula de daño no cambia.
+
+### "Resolver solo" (D6 = A)
+
+`CombatManager.can_auto_resolve()`: tablero activo, no oleada del asedio, incursión o
+Diezmo, y tu fuerza ≥ `combat_auto_resolve_ratio` (2.0) × la enemiga.
+`auto_resolve_current()` juega el mismo `Encounter` con `AutoResolver` y solo publica
+muertes y final; el parte dice "Resuelto solo". Botón en la cabecera de acciones de
+`BattleScreen` y, para incursiones, en `SkirmishPanel` antes de salir
+(`launch_sortie(id, party, true)`).
+
+### Guardado
+
+Clave nueva **`sorties`** (`CombatManager.get_sorties_save_data()` /
+`load_sorties_save_data()`, `SortieBoard.to_dict/from_dict`): ofertas, relojes (−1 =
+esperando a la columna), planos, apunte de la rebaja, contadores. `CombatManager.reset()`
+crea un tablón vacío (ya se llama en los tres sitios de `GameManager`). La clave
+`expedition` gana `kind`, `offer` y `loot`; sin ellas es la expedición antigua. Un
+guardado sin `sorties` carga con el tablón vacío y las ofertas salen en el siguiente tic.
+
+### Qué medir en el pase final
+
+- `tools/balance_probe.gd`: incursión ≤ 3 min, nodo de expedición corta ≤ 4 min, Diezmo
+  ≤ 4 min; tasa de victoria de la incursión con 3-5 unidades de era 2.
+- `tools/siege_probe.gd`: el asedio no cambia (sin retirada), debe seguir en su 82 %.
+- `tools/line_probe.gd`: sigue ganando sin salir (los repuestos solo frenan mejoras de
+  nivel 3 que la línea no pide); enseñar a su jugador a lanzar incursiones es otra rama.
+
 ## 5. The auto-resolved defence
 
 When the Tithe lands while the player is already on a board,
@@ -915,10 +1080,9 @@ disappears; duplicating the rows here is how this section went stale the last
 time. What follows is only what a reader of *this* document needs on top of them.
 
 - **`expedition_resumed`** is connected as a typed `.connect` in `BattleScreen`,
-  `SkirmishPanel` and `ArmyPanel`. The one string-form connection left is
-  `AudioManager._connect_optional()` for `final_audit_summoned` and
-  `storm_halted_forever`, guarded by `EventBus.has_signal()`: when auditing
-  listeners, grep the **signal name** too, not only the `.connect` form.
+  `SkirmishPanel` and `ArmyPanel`. `final_audit_summoned` and
+  `storm_halted_forever` are connected typed in `AudioManager` (the old
+  string-form `_connect_optional()` is gone).
 - `result` on `expedition_ended`: 0 = victory, 1 = defeat, 2 = abandoned.
 - `summary` on `defense_auto_resolved` is `CombatManager.get_last_result()`, and
   that signal is the **only** one that fight emits — no `encounter_*` accompanies
@@ -1073,6 +1237,9 @@ GODOT=godot tools/run_tests.sh -a tests/combat
 | `tests/ui/test_battle_board_icons.gd` | Unit silhouettes on the cell and on the initiative strip, side tint, the dimming of a unit that already acted, the boss frame and who wears it, the fallback to the name's initial when the PNG is missing, and the cell still fitting a 400x720 screen |
 | `tests/ui/test_helper_skirmish_callout.gd` | The Escaramuzas callout appears with the Barracks and only once |
 | `tests/combat/test_combat_integrity.gd` | The ledger across boards and saves: no walking past an unfought node, the siege ledger balanced through a mid-wave save (garrison and tower crews), the garrison mustered at the gate and reconciled before every wave, abandoning leaving a Tithe board alone, one enemy loop per board, a busy board queuing a wave instead of losing it, board units never counted at home, and the seeded skirmish roster |
+| `tests/combat/test_combat_previews.gd` | *(sin correr aún, 2026-10-14)* `preview_damage` = el golpe de verdad y no toca a nadie, "cae", la guardia; la ✕ de la artillería (centro y esquina), la infantería sin ✕, la zona de tiro; el alcance enemigo (mover + pegar, ni muertos ni el otro bando, no mueve a nadie) |
+| `tests/ui/test_unit_card.gd` | *(sin correr aún)* fuerte/débil del círculo, números de `GameConfig`, vida de la unidad viva, el alcance mínimo en la ficha, la ficha se monta con su ✕, "×1,5" / "×1.5", el círculo con tres flechas, las seis guías de combate en AYUDA |
+| `tests/ui/test_combat_teaching.gd` | *(sin correr aún)* la primera pelea empieza la lección y señala a la unidad, la tarjeta del tablero no sale encima, tocar tu pieza abre la ficha y pasa el paso 1, el daño previsto, Ver alcance enemigo, la ✕ de la artillería |
 
 `test_board_handoff.gd`, `test_expedition_ui.gd` and `test_battle_board_icons.gd`
 touch the real autoloads and private members on purpose: what they are watching —

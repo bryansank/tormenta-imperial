@@ -30,7 +30,7 @@ func test_the_menu_entry_copies_and_says_so() -> void:
 	root.add_child(menu)
 	var btn: Button = menu.entry("Game_Report")
 	assert_object(btn).is_not_null()
-	assert_str(btn.text).is_equal(Tr.t("BTN_REPORT_BUG"))
+	assert_str(btn.text).is_equal(Tr.t("BTN_REPORT_BUG").to_upper())
 	menu.report_bug()
 	assert_str(menu._status.text).is_equal(Tr.t("MSG_REPORT_COPIED"))
 	root.free()

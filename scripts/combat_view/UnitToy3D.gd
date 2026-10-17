@@ -60,6 +60,9 @@ var _active_ring: MeshInstance3D
 var _badge: Sprite3D
 var _ring_pulse: Tween
 var _muzzle_local := Vector3(0, 0.6, 0.8)
+var _spent_alpha := 1.0
+var _plate_dim := false
+var _bar_base_y := 0.0
 var _top := 1.1
 var _bob: Tween
 
@@ -73,6 +76,25 @@ static var _crosshair_tex: Texture2D = null
 const PLATE_PX := Vector2i(104, 52)
 const PLATE_PIXEL := 0.0135
 const PLATE_GAP := 0.48
+
+## Las placas del frente (2026-10-16). Alli las piezas van x1,3 y mas juntas, y
+## las placas se pisaban. Board3D las ordena (`_layout_plates`): la de la unidad
+## en foco (la activa y la que esta bajo el puntero o el dedo) va entera y por
+## encima; las demas, compactas y subidas lo justo para no solaparse; si ni
+## subiendo caben, se apagan. En el tablero 8x8 nada de esto se aplica.
+const PLATE_COMPACT := 0.72
+const PLATE_DIM_ALPHA := 0.3
+## La caja de la placa en coordenadas de la barra (sin escalar): la barra fina
+## (medio ancho y medio alto) y la chapa encima.
+const BAR_HALF := Vector2(0.76, 0.15)
+const PLATE_HALF := Vector2(0.71, 0.36)
+## La etiqueta de objetivo en el frente: su pie justo encima de la chapa.
+const HINT_FRONT_GAP := 0.1
+## Capas de dibujo (render_priority): placa normal, placa en foco y, por encima
+## de todas, la etiqueta de objetivo.
+const PRIO_NORMAL := [0, 1, 5, 6]
+const PRIO_FOCUS := [7, 8, 9, 10]
+const HINT_PRIO := 12
 static var _shadow_mat: Material = null
 
 ## `info`: uid, unit_id, side, hp, max_hp, domain, boss, crew, team_color,
@@ -148,7 +170,8 @@ func setup(info: Dictionary) -> void:
 func _build_bar() -> void:
 	_bar = Node3D.new()
 	_bar.name = "HealthBar"
-	_bar.position.y = _top + BAR_GAP
+	_bar_base_y = _top + BAR_GAP
+	_bar.position.y = _bar_base_y
 	_lift.add_child(_bar)
 	_bar_bg = _bar_sprite(0)
 	_bar_bg.modulate = Color(0.06, 0.05, 0.05, 0.85)
@@ -205,9 +228,9 @@ func _build_bar() -> void:
 	_hint.outline_modulate = Color(0.06, 0.05, 0.04)
 	_hint.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_hint.no_depth_test = true
-	_hint.render_priority = 7
-	_hint.outline_render_priority = 6
-	_hint.position.y = _top + BAR_GAP + PLATE_GAP + 0.55
+	_hint.render_priority = HINT_PRIO
+	_hint.outline_render_priority = HINT_PRIO - 1
+	_hint.position.y = _hint_board_y()
 	_hint.visible = false
 	if font != null:
 		_hint.font = font
@@ -302,13 +325,83 @@ func bar_ratio() -> float:
 func set_spent(spent: bool) -> void:
 	if _bar_fill == null:
 		return
-	var a := SPENT_ALPHA if spent else 1.0
-	_bar_fill.modulate.a = a
-	_bar_bg.modulate.a = 0.85 * a
-	_plate.modulate.a = 0.55 + 0.45 * a
-	_plate_label.modulate.a = 0.55 + 0.45 * a
+	_spent_alpha = SPENT_ALPHA if spent else 1.0
+	_apply_plate_alpha()
+
+func _apply_plate_alpha() -> void:
+	var a := _spent_alpha
+	var dim := PLATE_DIM_ALPHA if _plate_dim else 1.0
+	_bar_fill.modulate.a = a * dim
+	_bar_bg.modulate.a = 0.85 * a * dim
+	_plate.modulate.a = (0.55 + 0.45 * a) * dim
+	_plate_label.modulate.a = (0.55 + 0.45 * a) * dim
 	if _badge != null:
-		_badge.modulate.a = 0.55 + 0.45 * a
+		_badge.modulate.a = (0.55 + 0.45 * a) * dim
+
+# ── Placas del frente ────────────────────────────────────────────────
+
+## Donde va la etiqueta de objetivo en el tablero 8x8 (la de siempre).
+func _hint_board_y() -> float:
+	return _top + BAR_GAP + PLATE_GAP + 0.55
+
+## Como se pinta la placa. `front` false: la del tablero 8x8, tal cual. En el
+## frente: `focus` entera y en la capa de arriba; si no, compacta. `lift_world`:
+## metros (del mundo) que sube sobre su sitio para no pisar a otra; `dim`: no
+## cupo ni subiendo y se apaga. Se llama por evento (Board3D), nunca por fotograma.
+func set_plate_layout(front: bool, focus := false, lift_world := 0.0, dim := false) -> void:
+	if _bar == null:
+		return
+	var s := 1.0 if (not front or focus) else PLATE_COMPACT
+	_bar.scale = Vector3.ONE * s
+	var ls := maxf(0.001, _lift.scale.y)
+	_bar.position.y = _bar_base_y + (lift_world / ls if front else 0.0)
+	var prio: Array = PRIO_FOCUS if (front and focus) else PRIO_NORMAL
+	_bar_bg.render_priority = prio[0]
+	_bar_fill.render_priority = prio[1]
+	_plate.render_priority = prio[2]
+	_plate_label.render_priority = prio[3]
+	if _badge != null:
+		_badge.render_priority = prio[2]
+	if front:
+		# El pie de la etiqueta sobre la chapa y creciendo hacia arriba: no tapa
+		# su propia placa aunque lleve dos lineas.
+		_hint.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		_hint.position.y = _bar.position.y + (PLATE_GAP + PLATE_HALF.y + HINT_FRONT_GAP) * s
+	else:
+		_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_hint.position.y = _hint_board_y()
+	_plate_dim = front and dim
+	_apply_plate_alpha()
+
+func plate_lift() -> float:
+	return (_bar.position.y - _bar_base_y) * _lift.scale.y if _bar != null else 0.0
+
+func plate_scale() -> float:
+	return _bar.scale.y if _bar != null else 1.0
+
+func is_plate_dimmed() -> bool:
+	return _plate_dim
+
+## Las piezas de la placa en el mundo, sin la subida: [centro, medio tamano en
+## metros] de la barra, la chapa y (si `with_hint` y se ve) la etiqueta. Board3D
+## las proyecta para saber que rectangulo ocupa en pantalla.
+func plate_parts(with_hint := false) -> Array:
+	var k := _lift.scale.y * _bar.scale.y
+	var base := _lift.global_position + Vector3(0, _bar_base_y * _lift.scale.y, 0)
+	var parts: Array = [
+		[base, BAR_HALF * k],
+		[base + Vector3(0, PLATE_GAP * k, 0), PLATE_HALF * k],
+	]
+	if with_hint and _hint.visible and _hint.text != "":
+		var lines := _hint.text.split(char(10))
+		var chars := 0
+		for l in lines:
+			chars = maxi(chars, l.length())
+		var em := float(_hint.font_size) * _hint.pixel_size * _lift.scale.y
+		var half := Vector2(chars * em * 0.25, lines.size() * em * 0.6)
+		var foot := (PLATE_GAP + PLATE_HALF.y + HINT_FRONT_GAP) * k
+		parts.append([base + Vector3(0, foot + half.y, 0), half])
+	return parts
 
 func set_defending(on: bool, animate := true) -> void:
 	if _guard.visible == on:
@@ -344,16 +437,29 @@ func is_targeted() -> bool:
 
 ## La etiqueta de ventaja de tipo: +1 buen objetivo, -1 mal objetivo, 0 nada
 ## (CombatRules.type_matchup del atacante contra esta unidad).
-func set_target_hint(matchup: int) -> void:
+##
+## `preview` (ensenar el combate, 2026-10-14): una linea encima, el dano previsto
+## ("−18 de 75") o, si no es objetivo, por que no ("✕ Muy cerca"). Va en la
+## MISMA etiqueta, para no sumar otra por pieza. `blocked`: la linea es un
+## "no puedes" y va en rojo.
+func set_target_hint(matchup: int, preview := "", blocked := false) -> void:
 	if _hint == null:
 		return
-	_hint.visible = matchup != 0 and alive
+	var parts: PackedStringArray = []
+	if preview != "":
+		parts.append(preview)
 	if matchup > 0:
-		_hint.text = Tr.t("LBL_GOOD_TARGET")
+		parts.append(Tr.t("LBL_GOOD_TARGET"))
 		_hint.modulate = UITheme.POSITIVE.lightened(0.35)
 	elif matchup < 0:
-		_hint.text = Tr.t("LBL_BAD_TARGET")
+		parts.append(Tr.t("LBL_BAD_TARGET"))
 		_hint.modulate = UITheme.WARNING.lightened(0.2)
+	else:
+		_hint.modulate = UITheme.TEXT_BRIGHT
+	if blocked:
+		_hint.modulate = UITheme.DANGER.lightened(0.35)
+	_hint.text = "\n".join(parts)
+	_hint.visible = not parts.is_empty() and alive
 
 func target_hint_text() -> String:
 	return _hint.text if _hint != null and _hint.visible else ""
@@ -407,7 +513,7 @@ func chest_world() -> Vector3:
 
 func top_world() -> Vector3:
 	# Por encima de la placa: el numero de dano no la tapa.
-	return _lift.global_position + Vector3(0, (_top + BAR_GAP + PLATE_GAP + 0.55) * _lift.scale.y, 0)
+	return _lift.global_position + Vector3(0, (_bar.position.y + (PLATE_GAP + 0.55) * _bar.scale.y) * _lift.scale.y, 0)
 
 func ground_world() -> Vector3:
 	return global_position

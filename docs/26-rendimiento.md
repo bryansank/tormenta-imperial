@@ -10,6 +10,11 @@ esta sonda como árbitro antes y después.
 > `integracion/arte-v1` con las ramas de arte de ese día. Las cifras de §4 son de
 > **este** PC. Sirven para comparar escenarios y calidades entre sí, no como
 > promesa para otro equipo.
+>
+> **Al día (2026-10-14):** varias optimizaciones de §6 ya están hechas (la 2D horneada,
+> las calzadas en lote, la interfaz que actualiza, la calidad Mínima...). El resumen y
+> las cifras de §1 y §4 son de **antes** y no se han vuelto a medir: "la 2D es la más
+> cara" ya no vale (ver §6).
 
 ---
 
@@ -58,8 +63,8 @@ cifras de abajo son la propuesta. Se razonan debajo de la tabla.
 
 | Paquete | Hoy (docs/19) | Objetivo | Cómo |
 |---|---|---|---|
-| `.exe` de Windows | 120,6 MB (104 MB de plantilla mono) · zip 48,9 MB | ≤ 90 MB · zip ≤ 40 MB | plantilla **estándar** (no .NET) en release, texturas VRAM |
-| APK Android | 38,9 MB (debug, arm64) | ≤ 30 MB (release, arm64) · AAB ≤ 30 MB | plantilla release, sin assets duplicados (§5.6) |
+| `.exe` de Windows | 120,6 MB (104 MB de plantilla mono) · zip 48,9 MB. El 2026-10-14: **122,7 MB** (109 de plantilla release) · zip 48,4 MB | ≤ 90 MB · zip ≤ 40 MB | plantilla **compilada a medida** (optimizada para tamaño, con perfil de clases); la estándar no ahorra (docs/19 §13.4). Zip en `.7z`: 36,6 MB |
+| APK Android | 38,9 MB (debug, arm64). El 2026-10-14: 41,8 MB debug · **39,9 MB release** | ≤ 30 MB (release, arm64) · AAB ≤ 30 MB | plantilla release compilada a medida con Gradle (docs/19 §13.4) |
 
 Por qué estas cifras:
 
@@ -75,9 +80,12 @@ Por qué estas cifras:
 - **VRAM**: las integradas no tienen memoria propia, la reservan de la RAM. 256 MB es
   lo que Windows suele dar a una HD 520 sin tocar la BIOS. Hoy el juego usa unos
   200-300 MB (§4), así que hay que recortar las texturas sin comprimir (§5.6).
-- **Tamaño**: el 85 % del `.exe` es la plantilla del motor (docs/19 §2). El juego en
-  sí son unos 10 MB. La plantilla estándar sin mono y en release ahorra 20-30 MB. En
-  Android lo que más pesa es `libgodot_android.so`, y en release baja a ~25 MB.
+- **Tamaño**: el 89 % del `.exe` es la plantilla del motor (docs/19 §13). El juego en
+  sí son 13 MB. Medido el 2026-10-14, la plantilla estándar pesa lo mismo que la mono
+  (−0,25 MB) y la release de Windows pesa **más** que la de depuración (109 frente a
+  103 MB): con plantillas oficiales no se llega a 90 MB. El camino es una plantilla
+  compilada para ocupar poco (docs/19 §13.4). En Android lo que más pesa es
+  `libgodot_android.so`: 24 MB comprimido en release.
 
 ---
 
@@ -458,7 +466,7 @@ todas** en CPU: la colonia grande en 2D va a 14-18 fps en este PC (§4).
 | `project.godot` `[rendering]` | No fija `rendering_device/fallback_to_opengl3`: conviene dejarlo explícito para los móviles sin Vulkan | Bajo (seguridad) |
 | `assets/textures/metal_plate_{diff,nor_gl,rough}_1k.jpg` | Importadas **sin compresión VRAM** (`compress/mode=0`) y **sin mipmaps**. Se cargan desde script (`DieselpunkBuildingFactory.gd:12`), así que `detect_3d` no llega a convertirlas: unos 12 MB de VRAM sin comprimir, con aliasing y fallos de caché a distancia | Medio (VRAM en integradas y móvil) |
 | `assets/` | 16 MB en total: modelos 6,2 MB (21 GLB, el mayor `nucleo.glb` con 390 KB), audio 4 MB, texturas 2,7 MB, fuentes 1,9 MB, marca 0,8 MB. Pocos y pequeños | Bajo |
-| Plantilla de export | La mono de Windows pesa 104 de los 120 MB del `.exe` (docs/19 §2) | El mayor ahorro de tamaño: plantilla estándar |
+| Plantilla de export | La de Windows release pesa 109 de los 123 MB del `.exe` (docs/19 §13); la estándar, 109,16 frente a 109,41 la mono | El mayor ahorro de tamaño: plantilla compilada a medida, no la estándar |
 | `ResourceLoader` | Los `load()` en caliente (`PlacementRules.gd:46`, `HelpTargets.gd:130`) van a la caché, pero cada uno paga `exists`, formato de ruta y el bloqueo de la caché | Bajo por sí solo, multiplicado en §5.4 y §5.5 |
 | `_process` siempre activos | `MonumentalCamera.gd:61` hace `look_at` cada fotograma aunque no se mueva; `WorldLook.gd:45` crea un diccionario de estado por fotograma; `InputService.gd:90` hace 10 `is_key_pressed` | Bajo (0,01-0,03 ms cada uno) |
 
@@ -475,8 +483,11 @@ aparecen en el tutorial y en las ayudas (§5.5). En el editor se suma el
 
 Por orden de ganancia esperada frente a riesgo. La columna "Zona" dice qué agente o
 qué parte del código lo toca, para repartirlo después de integrar. **Ninguna está
-hecha** en la rama de medida; desde entonces están hechas la **3** y la **7**
-(rama `perf/calidad-minima`, 2026-10-14, ver §7.6). Cada una se valida con la sonda antes y después, con el
+hecha** en la rama de medida. Desde entonces (todo en `integracion/arte-v1`,
+2026-10-12/14) están hechas la **1** (`feat/2d-maqueta`), la **2**, la **12** y parte de
+la **10** (`perf/render-3d`), la **3** y la **7** (`perf/calidad-minima`, §7.6), la **4**,
+la **5** y la **8** (`perf/servicios`) y la **9** (`perf/interfaz`); detalle debajo de la
+tabla. **Ninguna se ha vuelto a medir con esta sonda**: las cifras de §4 son de antes. Cada una se valida con la sonda antes y después, con el
 mismo escenario, semilla y calidad, y la máquina en reposo.
 
 | # | Qué | Dónde | Ganancia esperada | Riesgo | Zona |
@@ -491,8 +502,44 @@ mismo escenario, semilla y calidad, y la máquina en reposo.
 | 8 | **Ceniza de los edificios con material compartido**: 4-5 niveles cuantizados en caché en vez de un `StandardMaterial3D` nuevo por cambio de vida | `services/BuildingHealth.gd:146-156` | Evita la explosión de materiales únicos y de draw calls tras cada Tormenta | Bajo | Tormenta / servicios |
 | 9 | **Interfaz que actualiza en vez de recrear**: ConstructionMenu con un refresco por fotograma como mucho y fichas reutilizadas; el registro de NotificationPanel solo se reconstruye al abrirlo; TutorialPanel a 4 Hz con el destino en caché; ObjectivePanel solo si cambia el paso; tweens con `kill()` | `ui/ConstructionMenu.gd:739`, `ui/NotificationPanel.gd:192`, `ui/TutorialPanel.gd:261`, `ui/HelpTargets.gd:120`, `ui/ObjectivePanel.gd:148`, `ui/ResourceHUD.gd:433`, `ui/UITheme.gd:895` | Quita trabajo O(n) por señal en las pantallas más usadas; más visible en tablet y durante el tutorial | Bajo | Interfaz |
 | 10 | **Texturas y shaders para GPU flojas**: las tres `metal_plate_*_1k.jpg` con compresión VRAM y mipmaps (o a 512 px); el agua a 2 octavas en Mobile/Compatibility; la hierba horneada a textura al generar la isla; `GridOverlay` apagado por defecto en tablet y móvil; shaders de humo y obra como `.gdshader` precargados y calentados al cargar | `assets/textures/*.import`, `map/water_border.gdshader`, `map/grass_ground.gdshader`, `scenes/main/Main.tscn:121`, `buildings/BuildingFx.gd:205`, `SiteFx.gd:101` | −10 MB de VRAM, menos fill-rate en móvil (el agua y la hierba cubren casi toda la pantalla), sin tirón la primera vez que sale humo | Bajo (el agente de mundo ya tiene una "isla sencilla") | Arte / mundo |
-| 11 | **Export más ligero**: plantilla estándar (no mono) y release | `export_presets.cfg`, docs/19 §2 | `.exe` de 120 a ~90 MB; APK de 39 a ~30 MB | Bajo (probado en docs/19 que el proyecto no usa C#) | Exportar |
+| 11 | **Export más ligero**: ~~plantilla estándar (no mono) y release~~ (medido: la estándar pesa lo mismo) → plantilla compilada a medida, y fuera del export lo que el juego no carga | `export_presets.cfg`, docs/19 §13 | `.exe` de 120 a ≤ 90 MB y APK a ≤ 30 MB solo con la plantilla a medida (sin medir); las exclusiones dan −2 MB | Bajo-medio (la plantilla a medida hay que probarla entera) | Exportar |
 | 12 | **Badges 3D por despachador**: no crear el `Label3D` de estado en carreteras ni decoraciones; un único receptor de `production_tick` / `workers_changed` en BuildingPlacer que refresca solo el badge afectado | `buildings/BuildingStatusBadge.gd:79-92` | −300 `Label3D` en `grande` (hay 439) y de O(n²) a O(n) por ronda de producción | Bajo | Arte / edificios |
+
+**Hecho en `feat/2d-maqueta` (2026-10-12), punto 1:** `ArtCache2D` hornea cada dibujo
+una vez en un SubViewport pequeño y el edificio pasa a ser un rectángulo con textura;
+las calzadas no tienen `_process` (ni badge) y se repintan cuando cambia la rejilla a su
+alrededor; los demás edificios miran su firma cada `Building2D.CHECK_FRAMES` (10)
+fotogramas, repartidos; los badges releen cada 0,5 s y solo se recolocan si cambia el
+zoom. Medido con `tools/view2d_probe.gd -- --perf` (no con esta sonda): de ~83 ms a
+~7 ms por fotograma en un mapa de 482 piezas. Detalle en
+[18-vista-2d.md](18-vista-2d.md), "Rendimiento: la 2D tiene que ir en una papa".
+
+**Hecho en `perf/render-3d` (2026-10-14, sin medir todavía), puntos 2, 12 y parte del 10:**
+
+- **2**: las calzadas 3D van en `RoadBatch3D` (`scripts/buildings/RoadBatch3D.gd`): un
+  MultiMesh por máscara de vecinos (16 como mucho), malla en caché
+  (`DieselpunkBuildingFactory.road_mesh()`) y material común de `ToyPalette`, sin sombra
+  proyectada. El nodo de cada calzada ya no lleva malla, badge ni rótulo; el reparto se
+  rehace una vez por fotograma. `_metal()` en caché y remaches sin sombra.
+- **12**: el rótulo `NameLabel` nace solo al seleccionar (`ensure_name_label`) y no hay
+  badge en lo que no trabaja (casas, decoración, calzadas).
+- **10** (parte): las texturas `metal_plate` rough/normal con compresión VRAM, mipmaps y
+  512 px; `BuildingFx` comparte 2 shaders 3D y un QuadMesh por medida, y humo, polvo,
+  chispas, farol, grúa y banderín se calientan al cargar. El suelo de las parcelas usa
+  `lot_ground.gdshader` (una textura por tipo de suelo). `ColonyFlag3D` con materiales de
+  bandera y mástil compartidos; `StockIcon3D` sin `_process` cuando no se ve.
+- El punto **6** quedó sin objeto: el Núcleo, el Mercado y el Laboratorio ya no son
+  procedurales, son modelos horneados de una malla (docs/03, "Modelos: maqueta de
+  juguete").
+
+**Hecho en `perf/interfaz` (2026-10-14, sin medir todavía), punto 9:** ConstructionMenu
+solo recrea la rejilla si cambia qué tarjetas hay o su bloqueo (si no, repinta los
+costes), y con la lista cerrada no hace nada; TutorialPanel busca destino, texto y lo que
+falta a 4 Hz; HelpTargets pide la tarjeta por id; `TextKit.fill_cost_row` no rehace una
+fila igual; ResourceHUD refresca una vez por fotograma y mata el tween anterior;
+`UITheme.flash_label` sin tweens apilados; ObjectivePanel reutiliza filas y solo corre
+abierto; ArmyPanel y TechTreePanel repintan solo abiertos y una vez por fotograma;
+RankPanel junta la XP del mismo fotograma.
 
 **Hecho en `perf/servicios` (2026-10-14, sin medir todavía):**
 
@@ -510,6 +557,20 @@ mismo escenario, semilla y calidad, y la máquina en reposo.
   `count_by_id()` recorren sin copiar; los servicios los usan. `get_all_buildings()`
   sigue copiando (UI, herramientas y tests no cambian).
 - **8**: `BuildingHealth` usa 8 escalones de ceniza con un material compartido cada uno.
+
+**11, en parte, en `perf/paquete` (2026-10-14, medido, docs/19 §13):**
+
+- Fuera del export, en los tres presets, `assets/models/cc0/*` y seis assets que solo
+  usan las herramientas (`metal_plate_diff_1k.jpg`, `banner.png`, los SVG de la marca,
+  `Rajdhani-Medium.ttf`): **−1,97 MB**. `.exe` 124,6 → 122,7 MB (zip 50,3 → 48,4);
+  APK release 41,9 → 39,9 MB. `tests/build/test_export_guards.gd` falla si el juego
+  vuelve a usar alguno.
+- La plantilla estándar **no** ahorra (−0,25 MB, medido sobre el `.tpz` oficial), y el
+  audio no se puede bajar desde la importación (ya es OGG en flujo). Lo que falta para
+  el presupuesto es la **plantilla compilada a medida**, que tiene que compilar el
+  dueño: pasos en docs/19 §13.4. Pendiente también decidir si el zip pasa a `.7z`
+  (36,6 MB) y si se recodifica la música (~1,5 MB).
+- La **12** (badges 3D por despachador) no es de esta rama: sigue pendiente.
 
 Las dos primeras son las que mueven la aguja en la medida de hoy: el juego está
 **limitado por la CPU que prepara el render** (draw calls) en 3D y **por los scripts**
@@ -682,12 +743,31 @@ juego con ellos, y el `.exe` se abre con doble clic. Detalle en §7.6.
 - **`project.godot`** (§6, punto 7): `msaa_3d.mobile=0`, `scaling_3d/scale.mobile=0.75`,
   `rendering_device/fallback_to_opengl3=true` y `config/project_settings_override`.
   El tope de FPS ya estaba (`perf/tope-fps`).
+- **Rejilla tras construir**: hecho después en `perf/render-3d` (commit `399eabc`):
+  `BuildingPlacer.gd` y `BuildingPlacer2D.gd` restauran la rejilla con
+  `GraphicsQuality.grid_always_visible()`, así que en Mínima no vuelve a pintarse.
+- **Arreglo de la medida (2026-10-16, rama `fix/deteccion-calidad`)**: el .exe
+  1.0.0 puso Mínima en una RTX 3060 Laptop con una "mediana 33.3 ms": medía un
+  tope, no la GPU. La medida usaba el `delta` de `_process`, que con el vsync
+  encendido (nadie lo quitaba) el suavizado de delta del motor redondea a periodos
+  enteros del refresco. Ahora, mientras calienta y mide, `DeviceProfile` quita
+  el tope **y el vsync** en cada fotograma (`apply_fps()` lo respeta), mide con
+  `Time.get_ticks_usec()` y al acabar restaura los dos. Una medida con la mediana a
+  ±1 ms de 1000/30, 1000/60, el refresco o su mitad, o con p10-p90 por debajo de
+  0,3 ms, se descarta y la calidad se queda en "auto"
+  (`GraphicsQuality.measure_rejection`, umbrales `quality_detect_known_caps`,
+  `quality_detect_cap_tolerance_ms`, `quality_detect_flat_ms`). El registro lleva
+  la medida bruta (fps medio, percentiles, refresco, tope y vsync vistos).
+  **Reparación**: `[interfaz] quality_detect_version` (2 = esta regla); al
+  arrancar, una detección de versión anterior decidida por la medida (motivo
+  `medida ...`) que dejó Mínima, o Baja con la mediana en un tope, vuelve a
+  "auto", borra `renderer_override.cfg` y se detecta de nuevo (en el siguiente
+  arranque si venía en Mobile). Una calidad elegida en Ajustes guarda el motivo
+  `manual: <calidad>` y no se toca nunca.
 - **No hecho**: la "red de seguridad en partida" (opcional en §7.2); los topes de
   caminantes por perfil (16 / 12 / 8 en la tabla de §7.1: hoy uno solo, 12); la
-  niebla solo con peso > 0 (`StormSky`); y en `BuildingPlacer.gd` (3D, de otro
-  agente) la rejilla se restaura con la preferencia tras construir, sin mirar la
-  calidad (una línea: usar `GraphicsQuality.grid_always_visible()`). Sin medir
-  todavía con la sonda la Mínima de verdad.
+  niebla solo con peso > 0 (`StormSky`). Sin medir todavía con la sonda la Mínima de
+  verdad.
 
 ---
 

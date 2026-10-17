@@ -7,6 +7,16 @@ extends Node
 const SaveSlots := preload("res://scripts/services/SaveSlots.gd")
 const NewGameDialogScript := preload("res://scripts/ui/NewGameDialog.gd")
 const SavesPanelScript := preload("res://scripts/ui/SavesPanel.gd")
+## Una sola copia del juego abierta (InstanceGuard, docs/19 §"Una sola copia").
+const InstanceGuard := preload("res://scripts/services/InstanceGuard.gd")
+const InstanceDialogScript := preload("res://scripts/ui/InstanceDialog.gd")
+## Cuanto se espera a que muera la otra copia tras OS.kill (pasos de 0,25 s).
+const INSTANCE_KILL_WAIT_STEPS := 20
+## Copias sueltas sin bloqueo (ver _settle_strays): cuantas veces se vuelve a
+## mirar y cada cuanto. Tiene que pasar del cierre solo del aviso de la gemela
+## (InstanceDialog.AUTO_CLOSE) con margen.
+const INSTANCE_SETTLE_ROUNDS := 3
+const INSTANCE_SETTLE_WAIT := 3.0
 ## Cuantas partidas caben en la lista.
 const MAX_SAVES := SaveSlots.MAX_SLOTS
 ## Version del formato del guardado. La 2 (2026-09-28) trae edificios de 2x2 y
@@ -50,12 +60,19 @@ var _chosen_new := false
 ## El jugador borro la partida que esta en memoria: ya no se escribe (se
 ## resucitaria) hasta abrir otra.
 var _active_deleted := false
-## Nombre y bandera elegidos en "Nueva partida" (paso de identidad, rama de
-## bandera y pais), para aplicarlos cuando la partida nueva arranque.
+## Nombre y bandera elegidos en "Nueva partida" (el paso de identidad), para
+## ponerlos cuando la partida nueva arranque (_new_game, tras RankManager.reset()).
+## Es el unico camino: clear_save() tambien llama a reset() antes de recargar, asi
+## que lo elegido no puede vivir en RankManager hasta _new_game.
 var _pending_identity: Dictionary = {}
 ## La partida termino (Supervivencia perdida) y su guardado ya se escribio
 ## marcado: desde aqui es de solo lectura. Lo levanta cualquier partida nueva.
 var _run_sealed := false
+## Hay otra copia del juego abierta y se esta preguntando (o avisando): no se
+## arranca partida hasta que se resuelva. Lo levanta _check_single_instance().
+var _instance_hold := false
+## Los PID que se cierran si el jugador dice SI.
+var _instance_targets: Array = []
 
 # ── Autosave ──
 ## Hay algo sin escribir. Se escribe al vencer el debounce, y si en ese momento
@@ -114,6 +131,9 @@ func _ready() -> void:
 	# es lo que desbloquea Gobernador en el selector.
 	EventBus.victory_achieved.connect(_on_victory_for_profile)
 	EventBus.final_audit_lost.connect(_on_audit_lost_for_profile)
+	# Antes de que la escena registre su placer: si hay otra copia viva, la
+	# partida no se carga hasta que el jugador decida.
+	_check_single_instance()
 
 ## Pide un guardado. No escribe en el acto: espera `autosave_debounce` para que
 ## una rafaga de eventos del mismo instante acabe en un solo guardado.
@@ -167,9 +187,123 @@ func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_WM_CLOSE_REQUEST:
 			_save_now_if_safe()
+			InstanceGuard.release()
 		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
 			if OS.has_feature("mobile"):
 				_save_now_if_safe()
+
+## Salir por cualquier camino (get_tree().quit() del menu incluido) suelta el
+## bloqueo de una sola copia, si es de este proceso.
+func _exit_tree() -> void:
+	InstanceGuard.release()
+
+# ── Una sola copia abierta ───────────────────────────────────────────
+
+## Mira si ya hay otra copia del juego viva (InstanceGuard). Sin ninguna, se toma
+## el bloqueo y se sigue como siempre. Con una, se retiene el arranque y se avisa
+## (misma version) o se pregunta (otra version). En el editor, sin ventana, con
+## --no-title / --multi y en movil no se mira nada.
+func _check_single_instance() -> void:
+	if not InstanceGuard.applies_here():
+		return
+	var my_pid: int = OS.get_process_id()
+	var lock: Dictionary = InstanceGuard.read_lock()
+	var alive: bool = _lock_is_other_alive(lock)
+	var strays: Array = [] if alive else InstanceGuard.stray_pids()
+	var action: int = InstanceGuard.decide(lock, alive, strays, my_pid, InstanceGuard.my_version())
+	if action == InstanceGuard.Action.RUN:
+		InstanceGuard.write_lock()
+		return
+	_instance_hold = true
+	if alive:
+		_open_instance_dialog.call_deferred(action, lock, true, [])
+		return
+	# Solo copias sueltas, sin bloqueo vivo: o es una version de antes del
+	# bloqueo, o es una gemela lanzada a la vez (doble clic impaciente) que aun no
+	# ha llegado aqui. Se reclama el bloqueo y se espera a que se aclare.
+	InstanceGuard.write_lock()
+	_settle_strays.call_deferred()
+
+## Si el bloqueo es de otro proceso del juego que sigue vivo.
+func _lock_is_other_alive(lock: Dictionary) -> bool:
+	var pid: int = int(lock.get("pid", 0))
+	return pid > 0 and pid != OS.get_process_id() and InstanceGuard.is_game_alive(pid, str(lock.get("exe", "")))
+
+## Copias sueltas al arrancar. Con el bloqueo ya reclamado, se mira cada
+## INSTANCE_SETTLE_WAIT segundos: si otra copia nueva se quedo el bloqueo despues,
+## manda el (esta es la que sobra); si las sueltas se van (la gemela vio el bloqueo,
+## aviso y salio), se arranca; si siguen tras todas las vueltas, son una version
+## antigua y se pregunta.
+func _settle_strays() -> void:
+	var dialog: Node = _open_instance_dialog(InstanceDialogScript.CHECKING, {}, false, [])
+	var my_pid: int = OS.get_process_id()
+	var strays: Array = []
+	for _round in INSTANCE_SETTLE_ROUNDS:
+		await get_tree().create_timer(INSTANCE_SETTLE_WAIT, true).timeout
+		var lock: Dictionary = InstanceGuard.read_lock()
+		if _lock_is_other_alive(lock):
+			_present_instance(dialog, InstanceGuard.decide(lock, true, [], my_pid, InstanceGuard.my_version()), lock, true, [])
+			return
+		if int(lock.get("pid", 0)) != my_pid:
+			InstanceGuard.write_lock()
+		strays = InstanceGuard.stray_pids()
+		if strays.is_empty():
+			_release_instance_hold(dialog)
+			return
+	_present_instance(dialog, InstanceGuard.Action.OTHER_VERSION, {}, false, strays)
+
+func _open_instance_dialog(action: int, lock: Dictionary, alive: bool, strays: Array) -> Node:
+	var dialog: Node = InstanceDialogScript.new()
+	dialog.setup(InstanceDialogScript.CHECKING, "", InstanceGuard.my_version())
+	dialog.declined.connect(_quit_for_instance)
+	dialog.accepted.connect(_on_close_other_instance.bind(dialog))
+	add_child(dialog)
+	if action != InstanceDialogScript.CHECKING:
+		_present_instance(dialog, action, lock, alive, strays)
+	return dialog
+
+## Pone en el dialogo el aviso (misma version) o la pregunta (otra version).
+func _present_instance(dialog: Node, action: int, lock: Dictionary, alive: bool, strays: Array) -> void:
+	var my_pid: int = OS.get_process_id()
+	_instance_targets = InstanceGuard.targets(lock, alive, strays, my_pid)
+	var other_version: String = str(lock.get("version", "")) if alive else ""
+	print("[GameManager] otra copia abierta (pid %s, version '%s'): %s" % [_instance_targets, other_version,
+		"aviso" if action == InstanceGuard.Action.ALREADY_OPEN else "pregunta"])
+	if action == InstanceGuard.Action.ALREADY_OPEN and not _instance_targets.is_empty():
+		InstanceGuard.focus_window(int(_instance_targets[0]))
+	dialog.show_action(action, other_version)
+
+## SI: se cierran las otras copias, se espera a que mueran y se arranca esta.
+func _on_close_other_instance(dialog: Node) -> void:
+	dialog.show_waiting()
+	var exe: String = InstanceGuard.my_exe()
+	var targets: Array = _instance_targets.duplicate()
+	for pid in targets:
+		OS.kill(int(pid))
+	for _step in INSTANCE_KILL_WAIT_STEPS:
+		await get_tree().create_timer(0.25, true).timeout
+		var any_alive := false
+		for pid in targets:
+			if InstanceGuard.is_game_alive(int(pid), exe):
+				any_alive = true
+				break
+		if not any_alive:
+			InstanceGuard.write_lock()
+			_release_instance_hold(dialog)
+			return
+	dialog.show_failed()
+
+func _release_instance_hold(dialog: Node) -> void:
+	if is_instance_valid(dialog):
+		dialog.queue_free()
+	_instance_targets = []
+	_instance_hold = false
+	_try_start()
+
+## NO, o el aviso de "ya esta abierto": se sale sin cargar nada ni tocar el
+## bloqueo de la otra.
+func _quit_for_instance() -> void:
+	get_tree().quit()
 
 func _save_now_if_safe() -> void:
 	if not _started or not _can_write() or not CombatManager.is_save_safe():
@@ -340,7 +474,7 @@ func switch_to_scene(scene_path: String) -> void:
 func _try_start() -> void:
 	if _placer == null or _map_gen == null:
 		return
-	if _started or _hold_start:
+	if _started or _hold_start or _instance_hold:
 		return
 	_started = true
 	# El placer y el mapa se registran desde su propio _ready, y en Main.tscn hay
@@ -590,6 +724,11 @@ func _load_game() -> void:
 	if data.has("expedition"):
 		CombatManager.load_save_data(data["expedition"])
 
+	# El tablon de salidas, los planos y la rebaja del Diezmo (doc 21 §3). Sin la
+	# clave, tablon vacio: las ofertas salen solas en unos segundos.
+	var sorties_data: Variant = data.get("sorties", {})
+	CombatManager.load_sorties_save_data(sorties_data if sorties_data is Dictionary else {})
+
 	# Restore the storm clock. Same rule: no key means a save from before the
 	# storm existed, and the cycle simply starts fresh.
 	if data.has("storm"):
@@ -744,6 +883,7 @@ func _write_save() -> void:
 	# Army
 	data["army"] = ArmyManager.get_save_data()
 	data["expedition"] = CombatManager.get_save_data()
+	data["sorties"] = CombatManager.get_sorties_save_data()
 	data["storm"] = StormManager.get_save_data()
 	data["day"] = DayClock.get_save_data()
 	data["tutorial"] = TutorialManager.get_save_data()
@@ -817,25 +957,23 @@ func start_new_game(mode: int, tier: int = GameMode.TIER_DEFAULT, identity: Dict
 	_set_active_slot(SaveSlots.next_id())
 	clear_save_and_reload_from({})
 
-## Nombre y bandera de "Nueva partida", cuando la rama de bandera y pais los
-## trae (RankManager.set_colony). Va tras RankManager.reset().
+## Nombre y bandera de "Nueva partida" (RankManager.set_colony, con rango 1
+## recien puesto). Va tras RankManager.reset(), que ya puso uno al azar: si lo
+## elegido no pasa la validacion, se queda el de al azar.
 func _apply_pending_identity() -> void:
 	if _pending_identity.is_empty():
 		return
 	var identity: Dictionary = _pending_identity
 	_pending_identity = {}
-	if RankManager.has_method("set_colony"):
-		RankManager.call("set_colony", String(identity.get("name", "")), identity.get("spec", {}))
+	var spec: Variant = identity.get("spec", {})
+	RankManager.set_colony(String(identity.get("name", "")), spec if spec is Dictionary else {})
 
 ## El resumen de la partida para el indice. Nombre y bandera salen de
-## RankManager cuando ya los tiene (rama de bandera y pais).
+## RankManager (los de la partida en memoria).
 func _summary_for_index(data: Dictionary) -> Dictionary:
 	var summary: Dictionary = SaveSlots.summary_of(data, active_slot())
-	if RankManager.has_method("get_colony_name"):
-		summary["colony_name"] = String(RankManager.call("get_colony_name"))
-	if RankManager.has_method("get_flag_spec"):
-		var spec: Variant = RankManager.call("get_flag_spec")
-		summary["flag_spec"] = spec if spec is Dictionary else {}
+	summary["colony_name"] = RankManager.get_colony_name()
+	summary["flag_spec"] = RankManager.get_flag_spec()
 	summary["sealed"] = GameMode.is_run_over()
 	return summary
 

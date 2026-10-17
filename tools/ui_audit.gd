@@ -90,20 +90,6 @@ func _run() -> void:
 			helper._refresh_callouts()
 		helper.visible = false
 
-	# Menu ☰ desplegado con el panel de edificio abierto: el panel tiene que
-	# nacer debajo del ultimo boton, no detras de ellos.
-	var market: Node = main.get_node_or_null("MarketPanel")
-	var info: Node = main.get_node_or_null("BuildingInfoPanel")
-	if market != null and market.has_method("_toggle_sidebar"):
-		market._toggle_sidebar()
-		var info_modal: Variant = info.get("_panel") if info != null else null
-		if info_modal is CanvasItem:
-			info_modal.visible = true
-		await _shot("menu")
-		if info_modal is CanvasItem:
-			info_modal.visible = false
-		market._toggle_sidebar()
-
 	for p in PANELS:
 		var host: Node = main.get_node_or_null(String(p["node"]))
 		if host == null:

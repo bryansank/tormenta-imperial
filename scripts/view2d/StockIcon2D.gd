@@ -4,15 +4,27 @@ extends Node2D
 ## encima del edificio, contraescalada para leerse a cualquier zoom y subiendo y
 ## bajando. Lleno, late en rojo. BuildingPlacer2D lo busca por su nombre,
 ## "StockIcon", para recoger con un toque.
+##
+## Rebote de premio (V2, rediseno 2026-10-14): al aparecer salta de pequeno a su
+## tamano y luego bota cada HOP_PERIOD s en vez de mecerse. Sigue en _process
+## porque el contraescalado depende del zoom, pero solo mientras se ve.
 
 const ICON_PX := 26.0
 const DISC_R := 19.0
+## El bote: cada HOP_PERIOD s sube HOP_PX en HOP_TIME s y cae; al aparecer
+## crece en APPEAR_TIME s.
+const HOP_PERIOD := 1.3
+const HOP_TIME := 0.4
+const HOP_PX := 9.0
+const APPEAR_TIME := 0.3
 
 var _building: Node2D = null
 var _full := false
 var _total := 0
 var _res := ""
 var _tex: Texture2D = null
+## Cuando aparecio (ms), para el salto de entrada.
+var _shown_at := 0
 
 func setup(building: Node2D) -> void:
 	_building = building
@@ -41,7 +53,11 @@ func refresh() -> void:
 		if int(stock[res_name]) > top_amount:
 			top_amount = int(stock[res_name])
 			top_res = String(res_name)
+	var was_visible := visible
 	visible = _total > 0
+	set_process(visible)
+	if visible and not was_visible:
+		_shown_at = Time.get_ticks_msec()
 	_full = visible and ProductionManager.is_full(_building)
 	if top_res != "" and top_res != _res:
 		_res = top_res
@@ -54,9 +70,17 @@ func _process(_delta: float) -> void:
 	var inv: float = _building.label_scale(self) if _building.has_method("label_scale") else 1.0
 	var t := Time.get_ticks_msec() * 0.001
 	var pulse := 1.0 + (0.12 * (0.5 + 0.5 * sin(t * 7.0)) if _full else 0.0)
+	var a := float(Time.get_ticks_msec() - _shown_at) * 0.001 / APPEAR_TIME
+	if a < 1.0:
+		pulse *= lerpf(0.3, 1.0, a) + 0.25 * sin(PI * a)
+	var hop := 0.0
+	if not _full:
+		var p := fmod(t, HOP_PERIOD)
+		if p < HOP_TIME:
+			hop = sin(p / HOP_TIME * PI)
 	scale = Vector2(inv, inv) * pulse
 	var fp: Vector2 = _building.footprint_px() if _building.has_method("footprint_px") else Vector2(32, 32)
-	position = Vector2(0, -fp.y * 0.5 - 18.0 * inv + sin(t * 3.0) * 4.0 * inv)
+	position = Vector2(0, -fp.y * 0.5 - 18.0 * inv - hop * HOP_PX * inv)
 
 func _draw() -> void:
 	if _total <= 0:

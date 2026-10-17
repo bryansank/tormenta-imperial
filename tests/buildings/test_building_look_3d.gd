@@ -9,6 +9,7 @@ const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
 const Fx := preload("res://scripts/buildings/BuildingFx.gd")
 const Badge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
 const Placer := preload("res://scripts/buildings/BuildingPlacer.gd")
+const Site := preload("res://scripts/buildings/SiteMesh.gd")
 
 const Palette := preload("res://scripts/buildings/ToyPalette.gd")
 
@@ -185,6 +186,28 @@ func test_ruin_sinks_the_model_and_repair_restores_it() -> void:
 	assert_vector(model.position).is_equal(Vector3.ZERO)
 	assert_vector(model.rotation).is_equal(Vector3.ZERO)
 	assert_object(look.get_ruin()).is_null()
+
+func test_damage_stages_lean_the_model_and_repair_straightens_it() -> void:
+	var parts := _building("barracks")
+	var model: Node3D = parts[1]
+	var look = parts[2]
+	look.apply({"look": LookRule.Look.IDLE, "phase": 0, "damage": LookRule.DAMAGE_LIGHT})
+	assert_str(String(look.get_damage_node().name)).is_equal("DamageOverlay1")
+	assert_float(absf(model.rotation.z)).is_greater(0.01)
+	# Grave: otra malla, con humo y chispas; trabajar no la quita.
+	look.apply({"look": LookRule.Look.ACTIVE, "phase": 0, "damage": LookRule.DAMAGE_HEAVY})
+	assert_str(String(look.get_damage_node().name)).is_equal("DamageOverlay2")
+	assert_object(look.get_damage_node().find_child("DamageSmoke", true, false)).is_not_null()
+	look.apply({"look": LookRule.Look.IDLE, "phase": 0, "damage": LookRule.DAMAGE_NONE})
+	assert_object(look.get_damage_node()).is_null()
+	assert_vector(model.position).is_equal(Vector3.ZERO)
+	assert_vector(model.rotation).is_equal(Vector3.ZERO)
+
+func test_the_damage_mesh_is_cached_per_stage_and_box() -> void:
+	var box := AABB(Vector3(-1.5, 0, -1.5), Vector3(3, 3, 3))
+	var a = Site.damage_mesh(LookRule.DAMAGE_LIGHT, box, 0)
+	assert_object(Site.damage_mesh(LookRule.DAMAGE_LIGHT, box, 0)).is_same(a)
+	assert_object(Site.damage_mesh(LookRule.DAMAGE_HEAVY, box, 0)).is_not_same(a)
 
 func test_working_shows_the_effect_and_stopping_hides_it() -> void:
 	var parts := _building("foundry")

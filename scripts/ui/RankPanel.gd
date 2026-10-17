@@ -277,6 +277,10 @@ static func reward_lines(rewards: Dictionary) -> Array:
 		out.append(data.get_display_name() if data != null else String(id))
 	var limits: Dictionary = rewards.get("limit", {})
 	for id in limits:
+		# Huecos de algo sin tope (las decoraciones desde los topes por era) no
+		# dan nada: no se anuncian.
+		if GameConfig.is_uncapped_building(String(id)):
+			continue
 		var data := Rules.load_building_data(String(id))
 		out.append(Tr.t("FMT_RANK_REWARD_SLOTS") % [int(limits[id]), data.get_display_name() if data != null else String(id)])
 	if float(rewards.get("production", 0.0)) > 0.0:

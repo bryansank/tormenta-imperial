@@ -7,6 +7,7 @@ extends CanvasLayer
 
 const TextKit := preload("res://scripts/ui/TextKit.gd")
 const RegimentCard := preload("res://scripts/ui/RegimentCard.gd")
+const UnitCardScript := preload("res://scripts/ui/UnitCard.gd")
 
 var _panel: PanelContainer
 var _backdrop: ColorRect
@@ -20,6 +21,8 @@ var _slots_label: Label
 var _units_vbox: VBoxContainer
 var _training_vbox: VBoxContainer
 var _training_bars: Array = []  # ProgressBar refs, index-aligned with ArmyManager.get_training()
+## Las fichas abiertas (boton FICHA): unit_id -> true. Se mantienen al rehacer.
+var _cards_open: Dictionary = {}
 
 
 func _ready() -> void:
@@ -232,7 +235,27 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	stats.add_child(upkeep_row)
 	info.add_child(stats)
 
-	# Right: train button
+	# La ficha de la unidad (docs/15 §3, "Ensenar el combate"): la misma que en el
+	# tablero, sin vida actual. Se abre y se cierra en la propia fila.
+	if _cards_open.has(unit_id):
+		var unit_card = UnitCardScript.new()
+		unit_card.setup(unit_id, null, false)
+		info.add_child(unit_card)
+
+	# Right: ficha + train button
+	var buttons := VBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 4)
+	row.add_child(buttons)
+	var card_btn := Button.new()
+	card_btn.name = "CardButton"
+	card_btn.text = Tr.t("BTN_UNIT_CARD_HIDE") if _cards_open.has(unit_id) else Tr.t("BTN_UNIT_CARD")
+	card_btn.tooltip_text = Tr.t("LBL_UNIT_CARD_TIP")
+	card_btn.custom_minimum_size = Vector2(96, 36)
+	UITheme.style_button(card_btn, UITheme.BTN, UITheme.FONT_SMALL)
+	card_btn.pressed.connect(func():
+		toggle_unit_card(unit_id)
+	)
+	buttons.add_child(card_btn)
 	var check := ArmyManager.can_train(unit_id)
 	# Por que no se puede entrenar, a la vista: antes solo iba en el tooltip, y
 	# en movil no hay raton que se pose encima para leerlo.
@@ -252,9 +275,20 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 		if ArmyManager.train(unit_id):
 			_refresh()
 	)
-	row.add_child(train_btn)
+	buttons.add_child(train_btn)
 
 	return card
+
+## Abre o cierra la ficha de `unit_id` en su fila.
+func toggle_unit_card(unit_id: String) -> void:
+	if _cards_open.has(unit_id):
+		_cards_open.erase(unit_id)
+	else:
+		_cards_open[unit_id] = true
+	_rebuild_units()
+
+func is_unit_card_open(unit_id: String) -> bool:
+	return _cards_open.has(unit_id)
 
 func _rebuild_training() -> void:
 	for child in _training_vbox.get_children():
