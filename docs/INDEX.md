@@ -37,6 +37,7 @@ signals, tests and scripts are kept up to date in `CLAUDE.md`.
 | 24 | [Paleta](24-paleta.md) | The ten UI colours in `UITheme` (name, hex, use, where not to use them), what is derived from them, categories and tech branches, what stays out of the palette (world, resources, sides) |
 | 25 | [Marco legal](25-marco-legal.md) | Venezuelan law that touches the game (the 2009 war-videogame ban, copyright and trademark at SAPI, third-party licences, personal data, selling), the content and communication rules that follow from it, the review checklist and what is pending before publishing |
 | 26 | [Rendimiento](26-rendimiento.md) | Performance budget (60 fps mid PC, 30 fps on an old integrated GPU and low-end Android, RAM/VRAM/.exe/APK), the reproducible probe (`tools/perf_probe.gd`: six seeded scenarios, CSV/JSON in `reports/perf/`), the measurements of 2026-10-12 per renderer and quality, the static audit with file:line, the prioritised optimisation list and what is done, the "Mínima" quality, first-launch detection and the FPS cap |
+| 27 | [Encargos](27-encargos.md) | El tablón de 3 encargos (Regencia, vecinos, contrabandista): modelo puro `ContractBoard`, `ContractManager`, panel ENCARGOS, plantillas y premios, rebaja del Diezmo, reputación en Gobernador, guardado `contracts`, reglas por modo |
 
 ## Quick Reference
 
@@ -60,5 +61,5 @@ Campaña (the only mode the New Game dialog offers; the other three still load),
 and 2D, on PC and on an Android tablet build. In progress: phase 1 of the loop
 redesign: building limits by era, ten cheap decorations, the finishing "pop" and the
 camera have landed; visible and shorter skirmishes and teaching the combat are still to
-come. Not implemented: cloud save wiring,
-missions/contracts and store distribution. PvP and co-op are out of scope.
+come. Contracts are in (the ENCARGOS board, [27](27-encargos.md)). Not implemented:
+cloud save wiring and store distribution. PvP and co-op are out of scope.

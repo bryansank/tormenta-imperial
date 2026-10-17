@@ -59,6 +59,7 @@ AudioManager="*res://scripts/services/AudioManager.gd"
 BeckettRuntime="*res://scripts/services/BeckettGate.gd"
 DeviceProfile="*res://scripts/services/DeviceProfile.gd"
 RankManager="*res://scripts/services/RankManager.gd"
+ContractManager="*res://scripts/services/ContractManager.gd"
 
 [beckett]
 

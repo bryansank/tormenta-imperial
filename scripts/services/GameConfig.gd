@@ -2685,6 +2685,8 @@ var game_mode_rules := {
 		"starting_resources_mult": 1.0,
 		"starting_resources": {},
 		"hidden_tips": [],
+		# El tablon de encargos (ContractManager, feat/encargos).
+		"contracts": true,
 	},
 	# Relajado: sin Tormenta, sin Diezmo, sin asedio. Los eventos buenos siguen;
 	# los danos (tormenta menor, accidente, plaga, bandidos) no salen.
@@ -2719,6 +2721,8 @@ var game_mode_rules := {
 		"infinite_resources": true,
 		"all_unlocked": true,
 		"sandbox_tools": true,
+		# Con recursos infinitos un encargo no pide nada: sin tablon.
+		"contracts": false,
 		"starting_resources": {"gold": 20000, "steel": 20000, "oil": 20000, "wood": 20000, "food": 20000},
 		"hidden_tips": ["final_audit"],
 	},
@@ -2761,3 +2765,67 @@ var game_tier_rules := {
 ## se rellena hasta este suelo cada vez que se gasta.
 var sandbox_storage_cap := 1000000
 var sandbox_resource_floor := 20000
+
+# ── Encargos (feat/encargos, doc 21 §2.3 y doc 14 §P3) ──
+## Tablon de 3 encargos, uno por fuente. Modelo: scripts/economy/ContractBoard.gd;
+## servicio: ContractManager. Valores sin medir con la sonda de linea.
+
+## La era desde la que encarga cada fuente. La Regencia llega con el acero
+## (Fundicion, era 2), que es cuando se arma el reloj de la Tormenta.
+var contract_source_era := {"regency": 2, "neighbors": 1, "smuggler": 1}
+## Segundos de juego (con get_duration) hasta el primer encargo de cada fuente,
+## contados desde que la fuente se abre.
+var contract_first_delay := {"regency": 45.0, "neighbors": 90.0, "smuggler": 360.0}
+## Espera tras entregar, dejar pasar o rechazar un encargo.
+var contract_cooldown := 120.0
+## Si ninguna plantilla cabe aun (falta desbloquear lo que piden), se vuelve a
+## mirar tras esta espera.
+var contract_retry_delay := 30.0
+## Cada era por encima de la de la plantilla, lo pedido y lo pagado en recursos
+## crece este tanto (era +1 = x1,5; +2 = x2). Moral, colonos y rebaja no crecen.
+var contract_era_step := 0.5
+## Reputacion (solo Gobernador): suelo, y cuanto recorta cada punto los premios
+## del siguiente encargo de esa fuente (-3 x 0,15 = premios al 55 %).
+var contract_reputation_min := -3
+var contract_reputation_step := 0.15
+## La Regencia sin Diezmo (Constructor) o sin StormManager.add_tithe_discount
+## paga esto en oro (por la escala de era) en vez de la rebaja.
+var contract_tithe_fallback_gold := 150
+## XP de rango por encargo cumplido (doc 21 §2.5).
+var contract_rank_xp := 20
+## Plantillas por fuente. `era` = era minima y de referencia para la escala;
+## `ask` = lo que piden (recurso -> cantidad); `minutes` = plazo; `reward`:
+##   gold/wood/steel/oil/food/... -> a la bolsa (o al taller)
+##   morale          -> PopulationManager.adjust_morale
+##   colonists       -> PopulationManager.add_colonists (solo si existe)
+##   tithe_discount  -> % de rebaja del proximo Diezmo (StormManager.add_tithe_discount)
+var contract_templates := {
+	# Los vecinos: piden lo de casa y pagan en moral y gente.
+	"neighbors": [
+		{"id": "nb_wood", "era": 1, "ask": {"wood": 60}, "minutes": 4.0, "reward": {"morale": 8}},
+		{"id": "nb_food", "era": 1, "ask": {"food": 40}, "minutes": 4.0, "reward": {"morale": 6, "gold": 30}},
+		{"id": "nb_gold", "era": 1, "ask": {"gold": 80}, "minutes": 3.0, "reward": {"morale": 10}},
+		{"id": "nb_planks", "era": 1, "ask": {"planks": 6}, "minutes": 5.0, "reward": {"morale": 12}},
+		{"id": "nb_planks_people", "era": 1, "ask": {"planks": 8}, "minutes": 5.0, "reward": {"colonists": 3}},
+		{"id": "nb_food_people", "era": 1, "ask": {"food": 60}, "minutes": 5.0, "reward": {"colonists": 2}},
+	],
+	# El contrabandista del puerto: pide materiales y paga en oro o en lo que
+	# aun escasea.
+	"smuggler": [
+		{"id": "sm_wood", "era": 1, "ask": {"wood": 60}, "minutes": 4.0, "reward": {"gold": 140}},
+		{"id": "sm_planks", "era": 1, "ask": {"planks": 10}, "minutes": 5.0, "reward": {"gold": 150}},
+		{"id": "sm_ingots", "era": 1, "ask": {"ingots": 6}, "minutes": 5.0, "reward": {"gold": 170}},
+		{"id": "sm_steel_for_wood", "era": 2, "ask": {"wood": 100}, "minutes": 5.0, "reward": {"steel": 40}},
+		{"id": "sm_beams", "era": 2, "ask": {"beams": 8}, "minutes": 6.0, "reward": {"gold": 300}},
+		{"id": "sm_oil_for_steel", "era": 2, "ask": {"steel": 60}, "minutes": 6.0, "reward": {"oil": 40}},
+		{"id": "sm_fuel", "era": 3, "ask": {"fuel": 10}, "minutes": 6.0, "reward": {"gold": 320}},
+	],
+	# La Regencia: pide acero y lo que sale de el. Cumplir rebaja el proximo Diezmo.
+	"regency": [
+		{"id": "rg_steel", "era": 2, "ask": {"steel": 80}, "minutes": 5.0, "reward": {"tithe_discount": 10}},
+		{"id": "rg_beams", "era": 2, "ask": {"beams": 10}, "minutes": 6.0, "reward": {"tithe_discount": 10}},
+		{"id": "rg_ingots", "era": 2, "ask": {"ingots": 8}, "minutes": 6.0, "reward": {"tithe_discount": 10}},
+		{"id": "rg_oil", "era": 3, "ask": {"oil": 60}, "minutes": 6.0, "reward": {"tithe_discount": 10}},
+		{"id": "rg_fuel", "era": 3, "ask": {"fuel": 10}, "minutes": 7.0, "reward": {"tithe_discount": 15}},
+	],
+}

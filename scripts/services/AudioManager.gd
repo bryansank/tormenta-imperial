@@ -508,6 +508,11 @@ func _connect_events() -> void:
 	EventBus.tithe_resolved.connect(_on_tithe_resolved)
 	# Recoger produccion (y la cosecha de la Granja).
 	EventBus.production_collected.connect(_on_production_collected)
+	# Encargos (feat/encargos): entregar uno suena como un hito pequeno.
+	EventBus.contract_delivered.connect(_on_contract_delivered)
+
+func _on_contract_delivered(_source = null, _contract = null, _reward = null) -> void:
+	play_sfx("milestone")
 
 func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
 	play_sfx("build_place")
