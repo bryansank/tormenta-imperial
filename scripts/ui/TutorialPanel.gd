@@ -41,6 +41,10 @@ const ARROW_GAP := 56.0
 ## La franja de arriba con el HUD (recursos, rango, ☰ MENÚ): una tarjeta que
 ## solo cabe encima de su objetivo metiendose ahi se pone a su lado.
 const TOP_HUD := 72.0
+## Lineas de texto como mucho en la tarjeta (sin el rotulo), compose_card_text.
+const CARD_MAX_LINES := 5
+## Hueco entre la tarjeta del combate guiado y los avisos que aparta.
+const AVOID_GAP := 12.0
 
 var _prologue: CanvasLayer
 var _coach: Control
@@ -71,6 +75,8 @@ var _resolve_left := 0.0
 var _res_text := ""
 var _res_hint := ""
 var _res_how := ""
+## Solo falta otra Casa (TutorialManager.needs_house_only): sin hint ni how.
+var _res_house_only := false
 var _res_control: Control = null
 var _res_cell := Vector2i(-1, -1)
 var _res_cell_size := Vector2i.ONE
@@ -294,8 +300,14 @@ func _on_step_changed(step_id: String) -> void:
 	_ok_btn.text = TutorialManager.step_ok_text(step_id) if reading else Tr.t("BTN_GUIDE_OK")
 	_end_replay_btn.visible = step_id != "done" and TutorialManager.is_replay()
 	# El paso de reparar ensena lo que cuesta reparar (no un edificio de datos).
-	_render_facts("__repair__" if step_id == TutorialManager.REPAIR_STEP \
-		else TutorialManager.step_building(step_id))
+	# En "consigue lo que falta" no van las cifras del edificio: la tarjeta habla
+	# de lo que falta y asi no pasa de unas cinco lineas (feat/hud-y-tutorial).
+	var facts_for := TutorialManager.step_building(step_id)
+	if step_id == TutorialManager.REPAIR_STEP:
+		facts_for = "__repair__"
+	elif TutorialManager.is_need_step(step_id):
+		facts_for = ""
+	_render_facts(facts_for)
 	_render_text()
 
 func _render_text() -> void:
@@ -456,6 +468,8 @@ func _resolve_step() -> void:
 	# que hacer.
 	_res_hint = TutorialManager.step_hint(_step)
 	_res_how = TutorialManager.step_how(_step)
+	_res_house_only = TutorialManager.is_need_step(_step) \
+		and TutorialManager.needs_house_only(TutorialManager.building_for_step(_step))
 
 ## Una celda del mapa que senalar para `t`, o {} si `t` no es de celda (o no hay).
 func _target_site(vp: Vector2, t: String) -> Dictionary:
@@ -489,12 +503,14 @@ func _layout_step() -> void:
 		point = HelpTargets.cell_screen_point(get_viewport(), _res_cell, _res_cell_size)
 	elif _res_control != null and is_instance_valid(_res_control) and _res_control.is_visible_in_tree():
 		rect = _res_control.get_global_rect()
-	if not point.is_empty() and not bool(point.get("ok", true)):
-		text += "\n" + Tr.ti("GUIDE_MOVE_CAMERA")
-	if _res_hint != "":
-		text += "\n" + _res_hint
-	if _res_how != "":
-		text += "\n" + _res_how
+	var camera := not point.is_empty() and not bool(point.get("ok", true))
+	var hint := _res_hint
+	var how := _res_how
+	# Solo falta otra Casa: la frase del paso ya lo dice todo (GUIDE_NEED_HOUSE).
+	if _res_house_only:
+		hint = ""
+		how = ""
+	text = compose_card_text(text, hint, how, camera)
 	if _text.text != text:
 		_text.text = text
 
@@ -559,6 +575,23 @@ func _layout_step() -> void:
 			var edge := _edge_point(c, dir, vp, 60.0)
 			_arrow.visible = true
 			_arrow.point_at(edge, dir)
+
+## El texto de la tarjeta: la frase del paso, lo que falta (hint), como
+## conseguirlo (how) y, si lo senalado no se ve, "arrastra el mapa hacia la
+## flecha" AL FINAL (antes salia en medio, ronda 1.0). Como mucho
+## CARD_MAX_LINES lineas (sin contar el rotulo PASO N DE M): las de "como
+## conseguirlo" que no quepan se quedan fuera (siempre queda al menos una).
+## Publica y pura para las pruebas.
+static func compose_card_text(main: String, hint: String, how: String, camera: bool) -> String:
+	var lines: Array = [main]
+	lines.append_array(hint.split("\n", false))
+	var how_lines: PackedStringArray = how.split("\n", false)
+	if not how_lines.is_empty():
+		var room := CARD_MAX_LINES - lines.size() - (1 if camera else 0)
+		lines.append_array(Array(how_lines).slice(0, maxi(1, room)))
+	if camera:
+		lines.append(Tr.ti("GUIDE_MOVE_CAMERA"))
+	return "\n".join(lines)
 
 ## Ajusta la tarjeta a `w` de ancho y al alto de su texto, y devuelve ese alto.
 ## Solo se re-maqueta si cambia `key` (texto, ancho, botones) o si el tamano
@@ -829,7 +862,8 @@ func _layout_combat(delta: float) -> void:
 		focus = rect
 	elif has_point:
 		focus = Rect2(Vector2(anchor["point"]) - Vector2(40, 40), Vector2(80, 80))
-	_card.position = combat_card_position(vp, Vector2(w, _card_h), focus)
+	_card.position = clear_of(combat_card_position(vp, Vector2(w, _card_h), focus),
+		Vector2(w, _card_h), _combat_avoid_rects(bs), vp, focus)
 
 	_ring.visible = false
 	_arrow.visible = false
@@ -855,6 +889,59 @@ func _layout_combat(delta: float) -> void:
 		_ring.position = pt - _ring.size * 0.5
 		_arrow.visible = true
 		_arrow.point_at(pt - Vector2(0, 44), Vector2.DOWN)
+
+## Lo que la tarjeta del combate guiado no debe tapar, a la izquierda del
+## tablero: los avisos (NotificationPanel, capa 19 como esta) y la ficha de la
+## unidad tocada (BattleScreen). Solo si se ven y tienen algo dentro.
+func _combat_avoid_rects(bs: Node) -> Array:
+	var out: Array = []
+	var toasts := HudRegistry.control_of("NotificationPanel.toasts")
+	if toasts != null and toasts.is_visible_in_tree():
+		for t in toasts.get_children():
+			if t is Control and (t as Control).visible and not t.is_queued_for_deletion():
+				out.append(toasts.get_global_rect())
+				break
+	if bs != null and bs.has_method("unit_card"):
+		var uc: Control = bs.unit_card()
+		if uc != null and uc.is_visible_in_tree():
+			out.append(uc.get_global_rect())
+	return out
+
+## `pos` movida para que la tarjeta de `size` no pise ninguno de `avoid`: a su
+## derecha (los avisos y la ficha van a la izquierda), encima o debajo; la
+## primera que cabe en pantalla sin tapar `focus` ni otro aviso. Si ninguna
+## cabe, se queda donde estaba (lo senalado manda). Publica para las pruebas.
+static func clear_of(pos: Vector2, size: Vector2, avoid: Array, vp: Vector2, focus: Rect2) -> Vector2:
+	var grown: Array = []
+	for r in avoid:
+		if (r as Rect2).size.x > 1.0 and (r as Rect2).size.y > 1.0:
+			grown.append((r as Rect2).grow(AVOID_GAP))
+	var screen := Rect2(Vector2(EDGE, EDGE), vp - Vector2(EDGE, EDGE) * 2.0)
+	var fits := func(p: Vector2) -> bool:
+		var card := Rect2(p, size)
+		if not screen.encloses(card):
+			return false
+		if focus.size != Vector2.ZERO and card.intersects(focus):
+			return false
+		for g in grown:
+			if card.intersects(g):
+				return false
+		return true
+	var card_now := Rect2(pos, size)
+	var hit := false
+	for g in grown:
+		if card_now.intersects(g):
+			hit = true
+			break
+	if not hit:
+		return pos
+	for g in grown:
+		var r: Rect2 = g
+		for p in [Vector2(r.end.x, pos.y), Vector2(pos.x, r.position.y - size.y), Vector2(pos.x, r.end.y),
+				Vector2(r.end.x, clampf(pos.y, EDGE, maxf(EDGE, vp.y - size.y - EDGE)))]:
+			if fits.call(p):
+				return p
+	return pos
 
 ## Donde va la tarjeta en el combate: junto a lo senalado como en la colonia;
 ## sin nada que senalar (el circulo), arriba al centro, lejos de los botones de

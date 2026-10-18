@@ -7,8 +7,10 @@ extends PanelContainer
 ##   [corazon] 100  [espada] 8  [escudo] 2
 ##   [pies] Mueve 3   [diana] Ataca a 1 casilla
 ##   [✕] No dispara a quien tiene al lado           (solo artilleria)
-##   [▲] Fuerte contra: [silueta] Artilleria ×1,5
-##   [▼] Debil contra:  [silueta] Blindado   ×0,75
+##   [▲] Fuerte contra: [silueta] Artilleria
+##       (pega 1,5 veces más)
+##   [▼] Debil contra:  [silueta] Blindado
+##       (pega más flojo)
 ##   "Barata y rapida. Asalta los canones antes de que disparen."
 ##
 ## Nada se escribe a mano: los numeros salen de GameConfig.combat_unit_stats y
@@ -198,10 +200,10 @@ func _build() -> void:
 	var dis := float(GameConfig.combat_type_advantage.get("disadvantage", 1.0))
 	var strong := strong_against(_unit_id)
 	if not strong.is_empty():
-		col.add_child(_matchup_row("good", Tr.t("LBL_CARD_STRONG"), strong, mult_text(adv), UITheme.POSITIVE))
+		col.add_child(_matchup_row("good", Tr.t("LBL_CARD_STRONG"), strong, mult_words(true, adv), UITheme.POSITIVE))
 	var weak := weak_against(_unit_id)
 	if not weak.is_empty():
-		col.add_child(_matchup_row("bad", Tr.t("LBL_CARD_WEAK"), weak, mult_text(dis), UITheme.WARNING))
+		col.add_child(_matchup_row("bad", Tr.t("LBL_CARD_WEAK"), weak, mult_words(false, dis), UITheme.WARNING))
 
 	# Una frase, la ultima.
 	var tip_key := "UNIT_%s_CARD_TIP" % _unit_id.to_upper()
@@ -230,10 +232,22 @@ func _stat(kind: String, text: String, tip: String, color: Color = UITheme.TEXT)
 		box.mouse_filter = Control.MOUSE_FILTER_PASS
 	return box
 
-func _matchup_row(kind: String, lead: String, ids: Array, mult: String, color: Color) -> HFlowContainer:
+## Lo que significa la ventaja, en palabras y no "×1,5" suelto en otra linea
+## (ronda 1.0, mejora 14): "(pega 1,5 veces más)" / "(pega más flojo)".
+static func mult_words(strong: bool, mult: float) -> String:
+	if not strong:
+		return Tr.t("LBL_CARD_WEAK_MULT")
+	return Tr.t("LBL_CARD_STRONG_MULT") % mult_text(mult).trim_prefix("×")
+
+## Fuerte / debil contra: [▲] Fuerte contra: [silueta] Artilleria, y debajo, en
+## su propia linea, que significa (mult_words).
+func _matchup_row(kind: String, lead: String, ids: Array, mult: String, color: Color) -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.name = "Matchup_" + kind
+	box.add_theme_constant_override("separation", 0)
 	var row := HFlowContainer.new()
-	row.name = "Matchup_" + kind
 	row.add_theme_constant_override("h_separation", 6)
+	box.add_child(row)
 	var g := StatGlyph.new()
 	g.kind = kind
 	g.custom_minimum_size = Vector2(GLYPH_PX, GLYPH_PX)
@@ -248,8 +262,12 @@ func _matchup_row(kind: String, lead: String, ids: Array, mult: String, color: C
 		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(ic)
 		row.add_child(UITheme.make_label(unit_name(String(id)), "body", UITheme.TEXT_BRIGHT))
-	row.add_child(UITheme.make_label(mult, "body", color))
-	return row
+	var words := UITheme.make_label(mult, "small", color)
+	words.name = "MatchupWords"
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.custom_minimum_size.x = 180
+	box.add_child(words)
+	return box
 
 ## Un icono pequeno dibujado: corazon (vida), espada (ataque), escudo (defensa),
 ## diana (alcance), ✕ (no dispara de cerca), flecha arriba / abajo (fuerte /

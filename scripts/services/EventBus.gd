@@ -355,6 +355,11 @@ signal touch_controls_changed(enabled: bool)
 ## La opacidad de los controles en pantalla cambio (Ajustes → Controles).
 @warning_ignore("unused_signal")
 signal touch_controls_opacity_changed(opacity: float)
+## Los nombres junto a los iconos del HUD se encendieron o apagaron (Ajustes >
+## Interfaz, o el "auto" que se apaga pasada la primera hora). Lleva el estado
+## ya resuelto (GameConfig.hud_words_enabled()).
+@warning_ignore("unused_signal")
+signal hud_words_changed(shown: bool)
 
 ## Los globos de ayuda se encendieron o apagaron (AYUDA del menu ☰ o Ajustes >
 ## Interfaz). GameConfig.ui_helper_visible ya tiene el valor nuevo.

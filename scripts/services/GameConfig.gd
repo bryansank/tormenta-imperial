@@ -732,6 +732,16 @@ var quality_detected_reason := ""
 ## repara una sola vez lo que decidio una version anterior con una medida mala.
 const QUALITY_DETECT_VERSION := 2
 var quality_detect_version := 0
+## Nombres junto a los iconos del HUD ("Oro 300", feat/hud-y-tutorial): con siete
+## numeros seguidos un chaval no sabe cual es la moral ni la comida (ronda 1.0,
+## mejora 4). "auto" los pone en tableta y movil siempre y, en PC, mientras el
+## jugador es nuevo: en sus primeras partidas (hud_words_new_runs acabadas) y solo
+## la primera hora jugada de cada una. "always" y "never" fuerzan.
+## settings.cfg [interfaz] hud_words; nunca en la partida.
+const HUD_WORDS_MODES := ["auto", "always", "never"]
+var ui_hud_words := "auto"
+var hud_words_new_runs := 2
+var hud_words_first_seconds := 3600.0
 ## Ids de HudRegistry que el jugador oculto.
 var ui_hud_hidden: Array = []
 ## Disposicion movida a mano: {"<perfil>|<aspecto>": {panel_id: [dx, dy]}}.
@@ -879,6 +889,8 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	quality_detected = bool(cf.get_value("interfaz", "quality_detected", quality_detected))
 	quality_detected_reason = str(cf.get_value("interfaz", "quality_detected_reason", quality_detected_reason))
 	quality_detect_version = int(cf.get_value("interfaz", "quality_detect_version", 0))
+	var words := str(cf.get_value("interfaz", "hud_words", ui_hud_words))
+	ui_hud_words = words if words in HUD_WORDS_MODES else "auto"
 	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
 	ui_hud_hidden = []
 	if hidden is Array:
@@ -931,6 +943,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "quality_detected", quality_detected)
 	cf.set_value("interfaz", "quality_detected_reason", quality_detected_reason)
 	cf.set_value("interfaz", "quality_detect_version", quality_detect_version)
+	cf.set_value("interfaz", "hud_words", ui_hud_words)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("interfaz", "fps_cap", ui_fps_cap)
@@ -1022,6 +1035,44 @@ func set_touch_controls(mode: String) -> void:
 	ui_touch_controls = mode
 	save_user_settings()
 	EventBus.touch_controls_changed.emit(touch_controls_enabled())
+
+# ── Nombres junto a los iconos del HUD (feat/hud-y-tutorial) ──
+
+## Si el HUD lleva ahora la palabra bajo cada icono, resolviendo el "auto".
+## `played_seconds` < 0: lo jugado en esta partida (ProgressionManager). Pura
+## con los dos ultimos argumentos, para las pruebas.
+func hud_words_enabled(played_seconds: float = -1.0, touch_profile: int = -1) -> bool:
+	match ui_hud_words:
+		"always":
+			return true
+		"never":
+			return false
+	var touch := _touch_profile() if touch_profile < 0 else touch_profile == 1
+	if touch:
+		return true
+	if profile_runs_finished >= hud_words_new_runs:
+		return false
+	if played_seconds < 0.0:
+		var pm := get_node_or_null("/root/ProgressionManager")
+		played_seconds = float(pm.get_played_seconds()) if pm != null else 0.0
+	return played_seconds < hud_words_first_seconds
+
+## Las palabras dependen ahora del reloj de la partida ("auto" en PC con un
+## jugador nuevo): el HUD mira una vez por minuto si ya paso la primera hora.
+func hud_words_timed() -> bool:
+	return ui_hud_words == "auto" and not _touch_profile() \
+		and profile_runs_finished < hud_words_new_runs
+
+## Cambia el modo ("auto" / "always" / "never"), lo guarda y anuncia el estado
+## resuelto: el HUD pone o quita las palabras sin recargar.
+func set_hud_words(mode: String) -> void:
+	if not mode in HUD_WORDS_MODES:
+		mode = "auto"
+	if ui_hud_words == mode:
+		return
+	ui_hud_words = mode
+	save_user_settings()
+	EventBus.hud_words_changed.emit(hud_words_enabled())
 
 ## Cambia la opacidad de los controles en pantalla y la anuncia (OnScreenControls
 ## la aplica al momento). `persist` = false mientras se arrastra el deslizador.

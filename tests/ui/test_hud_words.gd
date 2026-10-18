@@ -42,11 +42,16 @@ func test_the_storage_bar_explains_itself_without_a_fixed_title() -> void:
 	var legend: Label = hud.find_child("StorageLegend", true, false)
 	assert_bool(legend.is_visible_in_tree()).is_true()
 
-## Iconos y numeros: ningun nombre escrito al lado en la fila de fichas.
+## Con "Nombres junto a los iconos" en Nunca: solo iconos y numeros en la fila.
+## (Con Siempre, o en "auto" para un jugador nuevo, van las palabras debajo:
+## tests/ui/test_hud_y_tutorial.gd.)
 func test_the_chip_row_has_no_words() -> void:
+	var saved := GameConfig.ui_hud_words
+	GameConfig.ui_hud_words = "never"
 	var hud: CanvasLayer = auto_free(load("res://scenes/ui/ResourceHUD.tscn").instantiate())
 	add_child(hud)
 	var row: Control = hud.find_child("ChipsRow", true, false)
+	GameConfig.ui_hud_words = saved
 	for node in row.find_children("*", "Label", true, false):
 		var text := (node as Label).text
 		if (node as Label).is_visible_in_tree() and text != "":

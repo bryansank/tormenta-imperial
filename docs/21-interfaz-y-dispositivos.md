@@ -83,7 +83,7 @@ en tablet y con letra grande) y su **Restablecer esta pestaña** (menos Juego):
 | Pestaña | Qué hay |
 |---|---|
 | **Audio** | Volumen general, música sí/no (también en ☰ MENÚ → PARTIDA), música, efectos. De serie bajos: general 80 %, música 35 %, efectos 50 % (`GameConfig.AUDIO_DEFAULTS`), con curva perceptual |
-| **Interfaz** | Perfil de dispositivo, escala, tamaño de texto · Vista 3D/2D, rejilla, pantalla completa · Elementos en pantalla (un interruptor por elemento) · Editar / Restablecer disposición |
+| **Interfaz** | Perfil de dispositivo, escala, tamaño de texto · Vista 3D/2D, rejilla, pantalla completa · Nombres junto a los iconos (Automático / Siempre / Nunca, §8) · Elementos en pantalla (un interruptor por elemento) · Editar / Restablecer disposición |
 | **Controles** | Controles en pantalla (Automático / Siempre / Nunca), su opacidad (20–100 %, de serie 55 %, `GameConfig.ui_touch_controls_opacity`) y el resumen de controles en ratón o en dedo |
 | **Accesibilidad** | Paleta de colores, alto contraste, opacidad de paneles, vista previa |
 | **Juego** | Idioma, Nueva partida |
@@ -277,6 +277,20 @@ estado de población, que lleva su propia rama):
   leyenda de colores de la barra, obreros, moral). La tarjeta de estado
   (Trabajadores / En su puesto / Moral) ya no existe. El Zzz sigue con su
   motivo. Detalle en docs/08 (ResourceHUD).
+- **Nombres bajo los iconos** (2026-10-18, rama `feat/hud-y-tutorial`, ronda 1.0
+  mejora 4): cada ficha va en una celda con su palabra debajo ("Oro", "Madera",
+  "Comida", "Acero", "Petróleo", "Trabajadores", "Moral"). Ajustes > Interfaz >
+  **Nombres junto a los iconos**: Automático / Siempre / Nunca
+  (`GameConfig.ui_hud_words`, settings.cfg `[interfaz] hud_words`, nunca en la
+  partida). Automático (`GameConfig.hud_words_enabled()`): tableta y móvil siempre;
+  en PC, mientras `profile_runs_finished < hud_words_new_runs` (2) y en la primera
+  hora jugada de la partida (`hud_words_first_seconds`, 3600). El HUD mira una vez
+  por minuto si ya pasó la hora (un `Timer`, solo en ese caso; nada de `_process`).
+  Con palabras la fila no pasa de `ResourceHUD.WORDS_ROW_MAX` (380 px) y se parte
+  en dos filas: cabe en 1280x720 sin empujar la columna central, y en un móvil se
+  parte antes del ☰. Señal: `EventBus.hud_words_changed`.
+- **Ajustes > Audio** ya no dice "Música" dos veces: "Música encendida" (el
+  interruptor) y "Volumen de la música" (ronda 1.0, mejora 13).
 - **Sonda**: `tools/menu_probe.gd` captura título, Ajustes sobre el título, el
   HUD en era 1 y 3, el menú y cada pestaña de Ajustes, y el tablero, en
   `docs/media/dev/menu/`.

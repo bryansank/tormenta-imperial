@@ -900,8 +900,31 @@ static func step_text(step_id: String) -> String:
 	var text := Tr.ti(String(e.get("text", "")))
 	if bool(e.get("need", false)):
 		var data := Rules.load_building_data(String(e["building"]))
-		text = text % (data.get_display_name() if data != null else String(e["building"]))
+		var shown_name: String = data.get_display_name() if data != null else String(e["building"])
+		# Solo faltan manos y las casas estan llenas (el Laboratorio, casi
+		# siempre: el Cuartel temprano se llevo el trabajador que sobraba). En vez
+		# de "aun no puedes construirlo" + lista, una frase que lo cuenta como el
+		# paso natural que es: primero otra Casa (feat/hud-y-tutorial).
+		if needs_house_only(String(e["building"])):
+			var house := Rules.load_building_data("house")
+			var room: int = house.population_capacity if house != null else 0
+			return Tr.ti("GUIDE_NEED_HOUSE") % [shown_name, room]
+		text = text % shown_name
 	return text
+
+## A `building_id` solo le faltan trabajadores (los recursos ya estan) y en las
+## casas no cabe nadie mas: lo unico que lo arregla es otra Casa.
+static func needs_house_only(building_id: String) -> bool:
+	var data := Rules.load_building_data(building_id)
+	if data == null or workers_short(data) <= 0:
+		return false
+	if not Rules.missing_cost(data).is_empty():
+		return false
+	return PopulationManager.get_population() >= PopulationManager.get_max_population()
+
+## Es un paso "consigue lo que falta" (need_<id>).
+static func is_need_step(step_id: String) -> bool:
+	return bool(GUIDE_STEPS.get(step_id, {}).get("need", false))
 
 ## Lleva algo en la mano para colocar (el paso de derribar pide antes soltarlo).
 func is_placing() -> bool:

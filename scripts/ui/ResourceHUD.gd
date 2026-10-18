@@ -24,6 +24,14 @@ extends CanvasLayer
 ##
 ## Los iconos (moneda, tronco, lingote, gota, obrero, corazon) los genera
 ## tools/gen_resource_icons.gd; los estilos salen todos de UITheme.
+##
+## Nombres bajo los iconos (feat/hud-y-tutorial, ronda 1.0 mejora 4): cada ficha
+## va en una celda con su palabra debajo ("Oro", "Trabajadores", "Moral"). Se
+## ven segun GameConfig.hud_words_enabled() (Ajustes > Interfaz > Nombres junto
+## a los iconos: en "auto", tableta y movil siempre; PC, la primera hora de las
+## primeras partidas). Con palabras la fila no pasa de WORDS_ROW_MAX y se parte
+## en dos filas (cabe en 1280x720 y en un movil). Sin palabras, la celda es solo
+## la ficha: nada cambia respecto a antes.
 
 ## Umbrales de color de la moral (los mismos que tenia la tarjeta vieja).
 const MORALE_DANGER := 30
@@ -35,6 +43,12 @@ const MENU_GAP := 6.0
 const CARD_MARGINS := 20.0
 ## Alto del LIMPIAR de desarrollo en escritorio (con el dedo, MIN_BTN_H).
 const DEV_BTN_PX := 28.0
+## Ancho maximo de la fila con palabras: cinco recursos en la primera fila y
+## trabajadores y moral en la segunda; la columna central no se desplaza.
+const WORDS_ROW_MAX := 380.0
+## Cada cuanto se mira si el "auto" ya paso la primera hora (segundos reales).
+## Una comprobacion por minuto: nada de _process.
+const WORDS_CHECK_SECONDS := 60.0
 
 var _panel: PanelContainer
 var _chips: Dictionary = {}       # Type -> HBoxContainer (UITheme.make_resource_chip)
@@ -56,6 +70,11 @@ var _morale_detail: Label
 var _mat_row: HBoxContainer
 var _mat_labels: Dictionary = {}  # Type -> Label
 var _is_expanded := false
+## Nombres bajo los iconos: ficha -> su celda (VBox) y su palabra (Label).
+var _cells: Dictionary = {}
+var _words: Dictionary = {}
+var _words_on := false
+var _words_timer: Timer = null
 
 ## En orden de era: lo primero que ve un jugador nuevo es oro y madera.
 var _resource_ids := ["gold", "wood", "food", "steel", "oil"]
@@ -88,6 +107,12 @@ func _ready() -> void:
 	EventBus.storm_halted_forever.connect(func(): _refresh_people.call_deferred())
 	EventBus.game_load_completed.connect(func(): _refresh_people.call_deferred())
 	EventBus.game_new_started.connect(func(): _refresh_people.call_deferred())
+	# Nombres bajo los iconos: al cambiar el ajuste, el perfil (tableta/PC) o la
+	# partida (la "primera hora" es de cada partida).
+	EventBus.hud_words_changed.connect(func(_on): apply_words())
+	EventBus.touch_controls_changed.connect(func(_on): apply_words())
+	EventBus.game_load_completed.connect(func(): apply_words.call_deferred())
+	EventBus.game_new_started.connect(func(): apply_words.call_deferred())
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -118,17 +143,17 @@ func _setup_ui() -> void:
 	for i in range(_resource_ids.size()):
 		var type: ResourceManager.Type = _resource_types[i]
 		var chip := UITheme.make_resource_chip(_resource_ids[i])
-		chip.visible = ResourceManager.is_unlocked(type)
 		# Cada numero dice que es (bug 11): nombre al pasar el raton y, con el
 		# dedo, un toque despliega la fila con nombres.
 		chip.name = "Chip_" + _resource_ids[i]
 		chip.mouse_filter = Control.MOUSE_FILTER_STOP
 		chip.gui_input.connect(_on_tap_expand)
-		chips_row.add_child(chip)
+		_add_cell(chip, _resource_ids[i], Tr.res_cap(_resource_ids[i]), chips_row)
+		_set_chip_shown(chip, ResourceManager.is_unlocked(type))
 		_chips[type] = chip
 
-	_workers_chip = _make_people_chip("workers", chips_row)
-	_morale_chip = _make_people_chip("morale", chips_row)
+	_workers_chip = _make_people_chip("workers", Tr.t("HUD_WORD_WORKERS"), chips_row)
+	_morale_chip = _make_people_chip("morale", Tr.t("HUD_WORD_MORALE"), chips_row)
 
 	# Dev-only shortcut to wipe the save. Players use Settings > New game instead.
 	if GameConfig.dev_mode:
@@ -222,8 +247,74 @@ func _setup_ui() -> void:
 	_refresh()
 	_refresh_people()
 	_size_for_touch()
+	apply_words()
 	get_viewport().size_changed.connect(_fit_row.call_deferred)
 	_fit_row.call_deferred()
+
+## Mete `chip` en una celda con su palabra debajo (oculta hasta apply_words).
+func _add_cell(chip: HBoxContainer, word_id: String, word: String, row: Container) -> void:
+	var cell := VBoxContainer.new()
+	cell.name = "Cell_" + word_id
+	cell.add_theme_constant_override("separation", 0)
+	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(chip)
+	var lbl := UITheme.make_label(word, "small", UITheme.TEXT_DIM)
+	lbl.name = "Word_" + word_id
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Tocar la palabra hace lo mismo que tocar la ficha: desplegar el detalle.
+	lbl.mouse_filter = Control.MOUSE_FILTER_STOP
+	lbl.tooltip_text = word
+	lbl.gui_input.connect(_on_tap_expand)
+	lbl.visible = false
+	cell.add_child(lbl)
+	row.add_child(cell)
+	_cells[chip] = cell
+	_words[chip] = lbl
+
+## Ensena u oculta una ficha con su celda (la palabra va con ella).
+func _set_chip_shown(chip: HBoxContainer, on: bool) -> void:
+	chip.visible = on
+	var cell: Control = _cells.get(chip)
+	if cell != null:
+		cell.visible = on
+
+## Pone o quita las palabras bajo los iconos segun el ajuste (y el "auto").
+## Publica: la llaman las senales y las pruebas.
+func apply_words() -> void:
+	if _chips_row == null:
+		return
+	var on := GameConfig.hud_words_enabled()
+	_words_on = on
+	for chip in _words:
+		(_words[chip] as Label).visible = on
+	# El "auto" de PC se apaga solo pasada la primera hora: un vistazo por minuto
+	# mientras siga encendido por eso. Con "siempre", "nunca" o en tableta, nada.
+	_watch_words(on and GameConfig.hud_words_timed())
+	_fit_row()
+
+func _watch_words(on: bool) -> void:
+	if not on:
+		if _words_timer != null:
+			_words_timer.stop()
+		return
+	if _words_timer == null:
+		_words_timer = Timer.new()
+		_words_timer.name = "WordsTimer"
+		_words_timer.wait_time = WORDS_CHECK_SECONDS
+		_words_timer.timeout.connect(func():
+			if GameConfig.hud_words_enabled() != _words_on:
+				apply_words())
+		add_child(_words_timer)
+	if _words_timer.is_stopped() and _words_timer.is_inside_tree():
+		_words_timer.start()
+
+## Si las palabras estan a la vista ahora (pruebas).
+func words_shown() -> bool:
+	return _words_on
+
+## La palabra bajo una ficha (pruebas), o null.
+func word_of(chip: HBoxContainer) -> Label:
+	return _words.get(chip) as Label
 
 ## Las fichas se tocan: con el dedo no bajan de MIN_BTN_H de alto (el ancho
 ## lo da el numero; forzarlo ensanchaba la fila y empujaba la columna central).
@@ -248,7 +339,12 @@ func _fit_row() -> void:
 			shown += 1
 	# +1: sin holgura, un redondeo parte la fila aunque quepa.
 	natural += float(maxi(0, shown - 1) * ROW_SEPARATION) + 1.0
-	_chips_row.custom_minimum_size.x = minf(natural, _room_before_menu())
+	var room := _room_before_menu()
+	# Con palabras la fila es mas ancha: no pasa de WORDS_ROW_MAX y se parte en
+	# dos filas, para no empujar la columna central (1280x720) ni el ☰ (movil).
+	if _words_on:
+		room = minf(room, WORDS_ROW_MAX)
+	_chips_row.custom_minimum_size.x = minf(natural, room)
 
 ## Ancho util de la fila hasta el boton ☰ (o sin limite si no hay boton o no
 ## esta en la misma franja de arriba).
@@ -269,12 +365,12 @@ func tap_targets() -> Array:
 	return _chips.values() + [_workers_chip, _morale_chip]
 
 ## Ficha de obreros o de moral: la misma forma que la de un recurso.
-func _make_people_chip(icon_id: String, row: Container) -> HBoxContainer:
+func _make_people_chip(icon_id: String, word: String, row: Container) -> HBoxContainer:
 	var chip := UITheme.make_resource_chip(icon_id)
 	chip.name = "Chip_" + icon_id
 	chip.mouse_filter = Control.MOUSE_FILTER_STOP
 	chip.gui_input.connect(_on_tap_expand)
-	row.add_child(chip)
+	_add_cell(chip, icon_id, word, row)
 	return chip
 
 func _make_detail_label(node_name: String) -> Label:
@@ -342,7 +438,7 @@ func _refresh_people() -> void:
 	_workers_detail.text = tip
 
 	var shown := morale_visible()
-	_morale_chip.visible = shown
+	_set_chip_shown(_morale_chip, shown)
 	_morale_detail.visible = shown
 	var morale := PopulationManager.get_morale()
 	var m_amount := UITheme.chip_amount(_morale_chip)
@@ -416,7 +512,7 @@ func _on_resource_unlocked(resource_name: String) -> void:
 	if type < 0 or not _chips.has(type):
 		return
 	var chip: HBoxContainer = _chips[type]
-	chip.visible = true
+	_set_chip_shown(chip, true)
 	if _exp_rows.has(type):
 		_exp_rows[type].visible = true
 	# Destello al desbloquear: el jugador acaba de abrir una era y la fila

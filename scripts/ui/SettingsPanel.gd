@@ -330,6 +330,16 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 
 	body.add_child(UITheme.make_separator())
 	body.add_child(UITheme.section_header(Tr.t("LBL_SECTION_HUD")))
+	# Nombres bajo los iconos de recursos (feat/hud-y-tutorial): se ve al momento.
+	var words_modes: Array = GameConfig.HUD_WORDS_MODES
+	var words_row := UITheme.make_option_row(Tr.t("LBL_HUD_WORDS"),
+		[Tr.t("OPT_HUD_WORDS_AUTO"), Tr.t("OPT_HUD_WORDS_ALWAYS"), Tr.t("OPT_HUD_WORDS_NEVER")],
+		maxi(0, words_modes.find(GameConfig.ui_hud_words)), func(idx: int):
+			GameConfig.set_hud_words(words_modes[idx]))
+	words_row.name = "HudWordsRow"
+	words_row.tooltip_text = Tr.t("LBL_HUD_WORDS_HINT")
+	body.add_child(words_row)
+	body.add_child(_make_hint(Tr.t("LBL_HUD_WORDS_HINT")))
 	body.add_child(_make_hint(Tr.t("LBL_HUD_HINT")))
 	for id in HudRegistry.hideable_ids():
 		var check := UITheme.make_check_button(Tr.t(HudRegistry.label_key(id)), not HudRegistry.is_hidden(id),
@@ -427,6 +437,10 @@ func reset_interface() -> void:
 	if combat_row != null:
 		(combat_row.get_child(1) as OptionButton).selected = 0
 	GameConfig.ui_fps_cap = "auto"
+	GameConfig.set_hud_words("auto")
+	var words_row := find_child("HudWordsRow", true, false)
+	if words_row != null:
+		(words_row.get_child(1) as OptionButton).selected = 0
 	HudRegistry.show_all()
 	UILayoutManager.reset_user_layout()
 	GameConfig.save_user_settings()
