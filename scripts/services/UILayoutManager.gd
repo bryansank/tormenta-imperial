@@ -44,6 +44,10 @@ func _ready() -> void:
 	# Apply the global UI theme so built-in controls stop looking "default".
 	get_tree().root.theme = UITheme.build_global_theme()
 	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
+	# Los controles en pantalla crecen o aparecen: lo que va encima de ellos
+	# (avisos, globos; en vertical, CONSTRUIR) sube lo que ellos suben.
+	EventBus.touch_controls_size_changed.connect(func(_s): refresh_viewport.call_deferred())
+	EventBus.touch_controls_changed.connect(func(_on): refresh_viewport.call_deferred())
 
 ## Recoloca todo contra el lienzo actual. DeviceProfile lo llama al cambiar la
 ## escala de interfaz (content_scale_factor no siempre avisa size_changed).
@@ -130,11 +134,27 @@ func get_slot(slot_name: String) -> Dictionary:
 		if slot_name in UILayoutConfig.COLUMN_SLOTS:
 			override = UILayoutConfig.NARROW_SLOTS.get(slot_name, {})
 		override = UILayoutConfig.COLUMN_NARROW_SLOTS.get(slot_name, override)
-	if override.is_empty():
-		return base
-	var merged := base.duplicate()
-	merged.merge(override, true)
+	var merged := base
+	if not override.is_empty():
+		merged = base.duplicate()
+		merged.merge(override, true)
+	var lift := touch_controls_lift()
+	if lift > 0.0 and UILayoutConfig.sits_above_touch_controls(slot_name, merged, is_narrow()):
+		merged = merged.duplicate(true)
+		merged["margin"]["bottom"] = float(merged["margin"]["bottom"]) + lift
 	return merged
+
+## Escala de los controles en pantalla que cabe en este lienzo (la de Ajustes,
+## recortada por UILayoutConfig.touch_controls_fit). OnScreenControls y este
+## manager leen la misma: los botones y lo que va encima de ellos crecen a la par.
+func touch_controls_scale() -> float:
+	return UILayoutConfig.touch_controls_fit(GameConfig.touch_controls_scale(), _viewport_size)
+
+## Lo que suben los slots de encima de los controles; 0 sin controles en pantalla.
+func touch_controls_lift() -> float:
+	if not GameConfig.touch_controls_enabled():
+		return 0.0
+	return UILayoutConfig.touch_controls_lift(touch_controls_scale())
 
 func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_expanded = is_visible

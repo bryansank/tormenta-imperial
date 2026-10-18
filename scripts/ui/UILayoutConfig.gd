@@ -297,6 +297,51 @@ const NARROW_SLOTS := {
 	},
 }
 
+## ── Controles en pantalla (OnScreenControls) a su tamano (docs/21 §9) ──
+## Huella de serie (100 %): la cruceta son 3 botones de 48 con 4 de hueco
+## (152 x 152); la columna derecha, colocando, mide ~130 de ancho (CANCELAR) y
+## 48 + 50 + 50 + 48 de botones con 3 huecos de 12 (232 de alto). 20 de margen.
+const TOUCH_DPAD_SIDE := 152.0
+const TOUCH_RIGHT_COLUMN_W := 130.0
+const TOUCH_RIGHT_COLUMN_H := 232.0
+const TOUCH_CONTROLS_MARGIN := 20.0
+## Lo que se deja libre arriba para el boton ☰ MENU y la insignia del rango.
+const TOUCH_TOP_RESERVE := 130.0
+## Nunca por debajo de "Pequeno": mas chicos ya no se aciertan con el dedo.
+const TOUCH_SCALE_FLOOR := 0.85
+
+## Escala que de verdad cabe en un lienzo `vp` (puro): la pedida, salvo que la
+## cruceta y la columna derecha no quepan lado a lado (movil en vertical, 400 de
+## ancho) o la columna no quepa de alto bajo el menu. Asi nada se sale.
+static func touch_controls_fit(requested: float, vp: Vector2) -> float:
+	var s := requested
+	if vp.x > 0.0:
+		var w_room := vp.x - TOUCH_CONTROLS_MARGIN * 2.0 - 16.0
+		s = minf(s, w_room / (TOUCH_DPAD_SIDE + TOUCH_RIGHT_COLUMN_W))
+	if vp.y > 0.0:
+		var h_room := vp.y - TOUCH_CONTROLS_MARGIN * 2.0 - TOUCH_TOP_RESERVE
+		s = minf(s, h_room / TOUCH_RIGHT_COLUMN_H)
+	return maxf(s, TOUCH_SCALE_FLOOR)
+
+## Cuanto suben los slots que van encima de los controles (avisos, globos de la
+## camara y del zoom; en pantalla estrecha tambien CONSTRUIR y ESCARAMUZAS)
+## cuando los controles crecen por encima del 100 %. Puro.
+static func touch_controls_lift(scale: float) -> float:
+	return maxf(0.0, (scale - 1.0) * TOUCH_DPAD_SIDE)
+
+## Si un slot va encima de los controles en pantalla: anclado abajo y, fuera de
+## la pantalla estrecha, en una esquina (lo del centro abajo, CONSTRUIR y lo que
+## se le apila, queda entre la cruceta y el zoom y no se toca).
+static func sits_above_touch_controls(slot_name: String, slot: Dictionary, narrow: bool) -> bool:
+	if slot_name == "bottom_controls" or not slot.has("anchor"):
+		return false
+	var a: Rect2 = slot["anchor"]
+	if not is_equal_approx(a.position.y, 1.0):
+		return false
+	if narrow:
+		return true
+	return is_equal_approx(a.position.x, 0.0) or is_equal_approx(a.position.x, 1.0)
+
 ## Globos que siguen en pantalla estrecha. Seis globos en 400 px se tapan entre
 ## si y tapan el mapa; el de ☰ lleva a AYUDA y a la guia, y la intro del
 ## tutorial ya explica lo demas.
