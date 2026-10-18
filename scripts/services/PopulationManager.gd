@@ -313,6 +313,13 @@ func _restaff() -> void:
 		return
 	_recalculate_all()
 
+## Recuento publico: lo pide ProductionManager cuando cambia la belleza de un
+## barrio (sitios y moral de las casas bonitas, feat/edificios-defensa-vida).
+func recalculate() -> void:
+	if GridManager.get_all_buildings().is_empty():
+		return
+	_recalculate_all()
+
 func _recalculate_all() -> void:
 	var old_max := _max_population
 	var old_workers := _used_workers
@@ -362,6 +369,11 @@ func _recalculate_all() -> void:
 		_max_population += int(data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, lvl)) \
 			if not data.is_core else data.population_capacity
 		_morale_bonus += int(data.morale_bonus * GameConfig.level_mult(GameConfig.upgrade_morale_multiplier, lvl))
+		# Belleza del barrio (feat/edificios-defensa-vida): una casa bonita o
+		# elegante da sitio y moral de mas. Las metas las pone DefenseLifeEffects.
+		if node != null and is_instance_valid(node) and data.id == "house":
+			_max_population += int(node.get_meta("beauty_room", 0))
+			_morale_bonus += int(node.get_meta("beauty_morale", 0))
 		# Los trabajadores retirados por el jugador (o sin veta) no se asignan:
 		# quedan libres para otro edificio.
 		var off: bool = node != null and is_instance_valid(node) and bool(node.get_meta("workers_off", false))

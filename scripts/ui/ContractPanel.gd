@@ -157,7 +157,8 @@ func refresh() -> void:
 		child.queue_free()
 	_clocks.clear()
 	_waits.clear()
-	for source in BoardScript.SOURCES:
+	# Las tres fuentes y, con Telegrafo, el hilo (ContractManager.slot_ids).
+	for source in ContractManager.slot_ids():
 		_list.add_child(_make_card(source))
 	_footer.text = Tr.t("LBL_CONTRACT_HARD") if GameMode.is_governor() else Tr.t("LBL_CONTRACT_EASY")
 	_update_clocks()
@@ -181,6 +182,8 @@ func _source_color(source: String) -> Color:
 			return UITheme.DANGER
 		"neighbors":
 			return UITheme.POSITIVE
+		"telegraph":
+			return UITheme.INFO
 	return UITheme.ACCENT
 
 func _make_card(source: String) -> PanelContainer:
@@ -203,14 +206,19 @@ func _make_card(source: String) -> PanelContainer:
 	# Quien lo pide (y, en Gobernador, cuanto paga ahora) · reloj.
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 10)
-	var who := UITheme.make_label(Tr.t(ContractManager.source_name_key(source)), "section", color)
+	var who_text: String = Tr.t(ContractManager.source_name_key(source))
+	# El hilo del Telegrafo dice de quien es el encargo que trae.
+	var origin: String = ContractManager.origin_of(source)
+	if origin != source:
+		who_text += " · " + Tr.t(ContractManager.source_name_key(origin))
+	var who := UITheme.make_label(who_text, "section", color)
 	who.mouse_filter = Control.MOUSE_FILTER_PASS
 	who.tooltip_text = Tr.t(ContractManager.source_name_key(source) + "_TIP")
 	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(who)
-	var rep: int = ContractManager.get_reputation(source)
+	var rep: int = ContractManager.get_reputation(origin)
 	if GameMode.is_governor() and rep < 0:
-		var pays := UITheme.make_label(Tr.t("LBL_CONTRACT_PAYS") % roundi(ContractManager.get_board().reward_mult(source) * 100.0),
+		var pays := UITheme.make_label(Tr.t("LBL_CONTRACT_PAYS") % roundi(ContractManager.get_board().reward_mult(origin) * 100.0),
 			"small", UITheme.WARNING)
 		pays.name = "Pays"
 		pays.mouse_filter = Control.MOUSE_FILTER_PASS

@@ -122,6 +122,9 @@ func test_only_the_road_stays_1x1() -> void:
 		var d: BuildingData = load("res://data/buildings/" + f)
 		if d.id == "road":
 			assert_that(d.grid_size).is_equal(Vector2i.ONE)
+		elif d.id == "bastion":
+			# El tramo de muro (feat/edificios-defensa-vida): 2x1, la otra excepcion.
+			assert_that(d.grid_size).is_equal(Vector2i(2, 1))
 		else:
 			assert_bool(d.grid_size.x >= 2 and d.grid_size.y >= 2).override_failure_message(
 				"%s es de %s" % [d.id, d.grid_size]).is_true()

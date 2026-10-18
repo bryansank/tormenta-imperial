@@ -68,7 +68,8 @@ static func _context(encounter: Encounter, unit: CombatUnit, enemies: Array) -> 
 	var worth: Dictionary = {}
 	var lethal: Dictionary = {}
 	for enemy in enemies:
-		var dealt: int = Rules.damage(unit, enemy)
+		# Con la cobertura del Bastion de su casilla (0 en casi todos los tableros).
+		var dealt: int = encounter.damage_between(unit, enemy)
 		lethal[enemy.uid] = dealt >= enemy.hp
 		worth[enemy.uid] = shot_worth(unit, enemy, allies)
 	return {"worth": worth, "lethal": lethal, "focus": null}

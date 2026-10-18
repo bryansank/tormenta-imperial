@@ -1,5 +1,6 @@
 extends Node
 const UtilityEffects := preload("res://scripts/buildings/UtilityEffects.gd")
+const DefenseLifeEffects := preload("res://scripts/buildings/DefenseLifeEffects.gd")
 ## Manages passive resource production from buildings and construction timers.
 ## Buildings with build_time > 0 go through construction before producing.
 ## Spawns floating text when resources are awarded.
@@ -37,6 +38,11 @@ func _ready() -> void:
 	EventBus.building_ruined.connect(_mark_areas_dirty.unbind(1))
 	EventBus.building_repaired.connect(_mark_areas_dirty.unbind(1))
 	EventBus.game_load_completed.connect(_mark_areas_dirty)
+	# Defensa y vida (feat/edificios-defensa-vida): mejorar una decoracion sube
+	# su belleza y mejorar una casa cambia su modelo (los adornos se recolocan);
+	# la Chatarreria y el Telegrafo solo cuentan con obreros.
+	EventBus.building_upgrade_completed.connect(_mark_areas_dirty.unbind(2))
+	EventBus.workers_changed.connect(_mark_areas_dirty.unbind(2))
 
 ## Las areas de efecto de los edificios utiles (UtilityEffects): un solo
 ## recuento al final del frame, aunque se coloquen veinte tramos de carretera.
@@ -51,6 +57,11 @@ func _mark_areas_dirty() -> void:
 func _refresh_areas() -> void:
 	_areas_dirty = false
 	UtilityEffects.refresh()
+	var defense: Dictionary = DefenseLifeEffects.refresh()
+	if bool(defense.get("beauty_changed", false)):
+		# Sitios y moral de las casas bonitas: los suma el recuento de la gente.
+		PopulationManager.recalculate()
+		EventBus.beauty_changed.emit()
 
 # ── Registration ──
 
@@ -107,6 +118,7 @@ func reset() -> void:
 	last_offline_spoiled = {}
 	_full_bag_notice_cooldown = 0.0
 	UtilityEffects.clear()
+	DefenseLifeEffects.clear()
 
 func _register_producer(node: Node, data: BuildingData) -> void:
 	if data.is_producer():

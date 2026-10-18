@@ -108,6 +108,9 @@ func repair_cost(node: Node) -> Dictionary:
 	if missing <= 0.0:
 		return {}
 	var factor: float = missing * GameConfig.storm_repair_cost_ratio
+	# Brigada de una Chatarreria cerca (DefenseLifeEffects, meta "scrap_cover"):
+	# la reparacion sale mas barata.
+	factor *= 1.0 - clampf(float(node.get_meta("scrap_cover", 0.0)), 0.0, 0.9)
 	var cost: Dictionary = {}
 	var full: Dictionary = data.get_cost()
 	for type in full:
@@ -151,6 +154,20 @@ func heal(node: Node, amount: int) -> int:
 	if after >= get_max_health(node):
 		EventBus.building_repaired.emit(node)
 	return after - before
+
+## Levanta una ruina hasta `ratio` de su salud, sin cobrar: la brigada de la
+## Chatarreria tras la Tormenta (feat/edificios-defensa-vida). Vuelve a
+## funcionar herido; terminar de repararlo sigue siendo la reparacion pagada.
+## Emite building_repaired (deja de estar en ruinas: produccion, carteles y
+## areas se rehacen con esa senal). false si no estaba en ruinas.
+func lift_ruin(node: Node, ratio: float) -> bool:
+	if node == null or not is_instance_valid(node) or not is_ruined(node) or is_immune(node):
+		return false
+	var amount: int = maxi(1, roundi(float(get_max_health(node)) * clampf(ratio, 0.01, 1.0)))
+	node.set_meta("health", mini(get_max_health(node), amount))
+	_apply_visual(node)
+	EventBus.building_repaired.emit(node)
+	return true
 
 # ── Aspecto ──────────────────────────────────────────────────────────
 

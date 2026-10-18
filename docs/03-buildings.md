@@ -141,6 +141,48 @@ still takes from the raw amount. Looks: one procedural mesh per type
 -- --only=windmill,...` bakes `assets/models/toy/<id>.tscn`; then `UtilityToys.create`
 picks the bake without touching the `.tres`. 2D: `BuildingArt2D._utility`.
 
+### Defensa y vida (1.2, `feat/edificios-defensa-vida`)
+
+Doc 21 §6.3 n.º 11, 12 and 18, and §6.4 (D9 = A). Content of 1.2. Their areas
+are computed by `scripts/buildings/DefenseLifeEffects.gd`, called by
+`ProductionManager._refresh_areas()` right after `UtilityEffects` (grouped and
+deferred) when something is placed, moved, demolished, finished, ruined,
+repaired or upgraded, when the staffing changes (`workers_changed`) and on load —
+never per frame. Results are building metas (`bastion_cover`, `scrap_cover`,
+`beauty`, `beauty_level`, `beauty_room`, `beauty_morale`) and three runtime values
+(`GameConfig.defense_cover_cells`, `contract_extra_slots`,
+`contract_duration_mult`), cleared by `DefenseLifeEffects.clear()` from
+`ProductionManager.reset()` (the three new-game paths). Nothing new goes in the
+save except the telegraph's contract slot, inside `"contracts"`. All tunables in
+the `GameConfig` block "Defensa y vida"; their table rows (caps, prereqs, site,
+lot, active fx) are added by `_register_defense_life_buildings()`.
+
+| ID | Name | Size | Cost G/S/O/W + mat. | Workers | Build | Caps (era 1/2/3) | Prereqs | Effect |
+|----|------|------|------|---|---|---|---|---|
+| `bastion` | Bastión | **2x1** | 60/25/0/30 | 0 | 6s | 6/10/14 | foundry + barracks | Buildings within `bastion_radius` (3) **behind** the wall (towards the island centre, `land_bounds()`; flush with the wall also counts) take −`bastion_storm_reduction` (30 %) storm damage; multiplies with the Well (0.7 × 0.8). On defensive boards (Tithe and siege) puts 1 cover cell per `bastion_per_cover_cell` (3) standing bastions, up to `bastion_board_cover_max` (2), in the player's back row: +`bastion_cover_defense` (2) defence for a surface unit standing on it (docs/15 §3, "Cobertura del Bastión") |
+| `scrapyard` | Chatarrería | 2x2 | 160/40/0/90 + 6 planks | 2 | 14s | 1/2/2 | foundry | While staffed: repairs within `scrapyard_radius` (4) cost −`scrapyard_repair_discount` (40 %) (`BuildingHealth.repair_cost`). When a Storm ends (`StormManager._scrap_salvage`), each ruin in its area gives `scrapyard_steel_per_ruin` (12) steel, one part per `scrapyard_ruins_per_part` (2) ruins (max `scrapyard_parts_max` 3 per scrapyard and storm), and the crews lift `scrapyard_brigade_lifts` (1) ruin to `scrapyard_brigade_lift_ratio` (35 %) health, free (`BuildingHealth.lift_ruin`, emits `building_repaired`). Blueprint building (`combat_blueprint_buildings`) |
+| `telegraph` | Telégrafo | 2x2 | 200/60/0/80 + 4 beams | 1 | 12s | 1/1/1 | foundry + warehouse | While staffed: +`telegraph_extra_contracts` (1) slot on the contract board (`ContractBoard.WIRE`, "El telégrafo": orders from any open source, stored with `from`; reputation and scale are that source's) and new orders last +`telegraph_duration_bonus` (50 %) (`ctx.duration_mult` in `ContractBoard.build_contract`) |
+
+**Neighbourhood beauty (D9 = A).** Every standing decoration gives its beauty
+(`GameConfig.beauty_values`; unlisted decorations `max(1, morale / 2)`; the road
+none; upgraded ones ×`upgrade_morale_multiplier`) to every connected, standing
+house within `beauty_radius` (3). A house with ≥ 10 points is **pretty** (level 2:
++1 room, +2 morale points); ≥ 25 **elegant** (level 3: +2 room, +4 morale points)
+(`beauty_levels`, `beauty_room`, `beauty_morale`; `PopulationManager._recalculate_all`
+adds them; `ProductionManager` asks for a recount and emits
+`EventBus.beauty_changed` when a level changes). Looks: in 3D `BeautyTrim.gd`
+(child of the house model, like `LevelTrim`: window boxes with flowers, hedges and
+flowers at the door; elegant adds ivy, two lit lamps and bunting; one cached mesh
+per level and size); in 2D `BuildingArt2D.draw_beauty()` from `Building2D` (the
+level is in its signature). The info panel says the points and the next threshold
+(`DefenseLifeEffects.info_line`).
+
+Looks: one procedural mesh per type (`DefenseToys.gd`) until baked — the bakes
+are in `assets/models/toy/` (`build_toy_models.gd -- --only=bastion,scrapyard,telegraph`:
+1492 / 1208 / 1288 tri); `DefenseToys.create` picks them without touching the
+`.tres`. 2D: `BuildingArt2D._bastion/_scrapyard/_telegraph`. The bastion lot has
+a 0.08 yard and no props.
+
 ### Muelle de pesca (1.1, `feat/muelle-pesca`)
 
 Doc 21 §6.3 n.º 7 del contexto privado (allí era 2 y coste medio; Bryan lo pidió de

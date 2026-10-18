@@ -17,6 +17,9 @@ func test_every_building_definition_loads() -> void:
 	# 1.2: Enfermeria, Herreria militar y Campo de tiro (feat/edificios-militares).
 	for id in ["shipyard", "aerodrome", "fishing_dock", "infirmary", "smithy", "firing_range"]:
 		assert_bool(ids.has(id)).is_true()
+	# Defensa y vida (feat/edificios-defensa-vida).
+	for id in ["bastion", "scrapyard", "telegraph"]:
+		assert_bool(ids.has(id)).is_true()
 
 
 func test_exported_names_are_found_once() -> void:

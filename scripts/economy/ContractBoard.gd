@@ -28,6 +28,13 @@ extends RefCounted
 ##   reputation          true en Gobernador
 
 const SOURCES := ["regency", "neighbors", "smuggler"]
+## El hilo del Telegrafo (feat/edificios-defensa-vida): un hueco de mas que se
+## abre con un Telegrafo en pie (`ctx.extra_slots` > 0). Le llegan encargos de
+## cualquier fuente abierta; el encargo guarda de quien es en `from` (su
+## reputacion y su escala son las de esa fuente).
+const WIRE := "telegraph"
+## Todos los huecos del tablon, en orden: las tres fuentes y el hilo.
+const ALL_SLOTS := ["regency", "neighbors", "smuggler", "telegraph"]
 const SAVE_VERSION := 1
 
 ## source -> encargo ({} si el hueco espera). Un encargo:
@@ -51,9 +58,10 @@ var _rng := RandomNumberGenerator.new()
 static func create(rng_seed: int = -1) -> RefCounted:
 	var board = load("res://scripts/economy/ContractBoard.gd").new()
 	board.seed_rng(rng_seed)
-	for source in SOURCES:
+	for source in ALL_SLOTS:
 		board.slots[source] = {}
-		board.cooldowns[source] = GameConfig.get_duration(float(GameConfig.contract_first_delay.get(source, 60.0)))
+		var first: float = GameConfig.telegraph_first_delay if source == WIRE else float(GameConfig.contract_first_delay.get(source, 60.0))
+		board.cooldowns[source] = GameConfig.get_duration(first)
 		board.reputation[source] = 0
 		board.last_template[source] = ""
 	return board
@@ -75,7 +83,7 @@ func has_contract(source: String) -> bool:
 ## Los encargos a la vista, en el orden del tablon.
 func active_contracts() -> Array:
 	var out: Array = []
-	for source in SOURCES:
+	for source in ALL_SLOTS:
 		if has_contract(source):
 			out.append(slots[source])
 	return out
@@ -83,6 +91,23 @@ func active_contracts() -> Array:
 ## La fuente ya encarga en esta era.
 static func source_open(source: String, era: int) -> bool:
 	return era >= int(GameConfig.contract_source_era.get(source, 1))
+
+## El hueco `slot` saca encargos ahora: una fuente, en su era; el hilo del
+## Telegrafo, con un Telegrafo en pie (`ctx.extra_slots` > 0) y alguna fuente
+## abierta. Un encargo ya a la vista sigue su plazo aunque el hueco se cierre.
+static func slot_open(slot: String, era: int, ctx: Dictionary = {}) -> bool:
+	if slot == WIRE:
+		if int(ctx.get("extra_slots", 0)) <= 0:
+			return false
+		for source in SOURCES:
+			if source_open(source, era):
+				return true
+		return false
+	return source_open(slot, era)
+
+## De quien es el encargo de un hueco (la fuente real; en el hilo, `from`).
+static func origin_of(contract: Dictionary, slot: String) -> String:
+	return String(contract.get("from", slot))
 
 ## Lo que multiplica los premios de esa fuente por su reputacion (1.0 = entero).
 func reward_mult(source: String) -> float:
@@ -106,7 +131,7 @@ func advance(delta: float, ctx: Dictionary) -> Array:
 	if delta <= 0.0:
 		return events
 	var era: int = int(ctx.get("era", 1))
-	for source in SOURCES:
+	for source in ALL_SLOTS:
 		var contract: Dictionary = slots.get(source, {})
 		if not contract.is_empty():
 			contract["seconds_left"] = float(contract["seconds_left"]) - delta
@@ -114,7 +139,7 @@ func advance(delta: float, ctx: Dictionary) -> Array:
 				contract["seconds_left"] = 0.0
 				events.append_array(_close(source, "expired", ctx))
 			continue
-		if not source_open(source, era):
+		if not slot_open(source, era, ctx):
 			continue
 		cooldowns[source] = float(cooldowns.get(source, 0.0)) - delta
 		if float(cooldowns[source]) > 0.0:
@@ -148,23 +173,26 @@ func _close(source: String, kind: String, ctx: Dictionary) -> Array:
 	var contract: Dictionary = slots[source]
 	slots[source] = {}
 	cooldowns[source] = GameConfig.get_duration(GameConfig.contract_cooldown)
-	var rep_before: int = int(reputation.get(source, 0))
+	# La reputacion es de quien lo pidio: en el hilo del Telegrafo, `from`.
+	var who: String = origin_of(contract, source)
+	var rep_before: int = int(reputation.get(who, 0))
 	if kind == "delivered":
 		delivered_total += 1
 		if bool(ctx.get("reputation", false)):
-			reputation[source] = mini(0, rep_before + 1)
+			reputation[who] = mini(0, rep_before + 1)
 	else:
 		if kind == "expired":
 			failed_total += 1
 		if bool(ctx.get("reputation", false)):
-			reputation[source] = maxi(GameConfig.contract_reputation_min, rep_before - 1)
+			reputation[who] = maxi(GameConfig.contract_reputation_min, rep_before - 1)
 	return [{
 		"type": kind,
 		"source": source,
+		"from": who,
 		"contract": contract,
 		"reward": (contract.get("reward", {}) as Dictionary).duplicate() if kind == "delivered" else {},
-		"reputation": int(reputation.get(source, 0)),
-		"reputation_changed": int(reputation.get(source, 0)) != rep_before,
+		"reputation": int(reputation.get(who, 0)),
+		"reputation_changed": int(reputation.get(who, 0)) != rep_before,
 	}]
 
 # ── Sorteo ───────────────────────────────────────────────────────────
@@ -172,6 +200,8 @@ func _close(source: String, kind: String, ctx: Dictionary) -> Array:
 ## Un encargo nuevo de `source` para este contexto, o {} si ninguna plantilla
 ## cabe. No lo pone en el tablon (eso lo hace `advance`).
 func roll(source: String, ctx: Dictionary) -> Dictionary:
+	if source == WIRE:
+		return _roll_wire(ctx)
 	var pool: Array = fitting_templates(source, ctx)
 	if pool.is_empty():
 		return {}
@@ -182,6 +212,29 @@ func roll(source: String, ctx: Dictionary) -> Dictionary:
 	var template: Dictionary = pool[_rng.randi_range(0, pool.size() - 1)]
 	last_template[source] = String(template.get("id", ""))
 	return build_contract(source, template, ctx)
+
+## Un encargo por el hilo del Telegrafo: de una fuente abierta al azar que tenga
+## alguna plantilla que quepa, sin repetir la ultima plantilla del hilo. El
+## encargo es de esa fuente (`from`) pero vive en el hueco del hilo.
+func _roll_wire(ctx: Dictionary) -> Dictionary:
+	var era: int = int(ctx.get("era", 1))
+	var origins: Array = []
+	for s in SOURCES:
+		if source_open(s, era) and not fitting_templates(s, ctx).is_empty():
+			origins.append(s)
+	if origins.is_empty():
+		return {}
+	var origin: String = origins[_rng.randi_range(0, origins.size() - 1)]
+	var pool: Array = fitting_templates(origin, ctx)
+	if pool.size() > 1:
+		var last: String = String(last_template.get(WIRE, ""))
+		pool = pool.filter(func(t): return String(t.get("id", "")) != last)
+	var template: Dictionary = pool[_rng.randi_range(0, pool.size() - 1)]
+	last_template[WIRE] = String(template.get("id", ""))
+	var contract: Dictionary = build_contract(origin, template, ctx)
+	contract["source"] = WIRE
+	contract["from"] = origin
+	return contract
 
 ## Las plantillas de `source` que se pueden pedir ahora: su era llego, todo lo
 ## que piden y lo que pagan en recursos esta desbloqueado, y si pagan colonos
@@ -229,6 +282,8 @@ func build_contract(source: String, template: Dictionary, ctx: Dictionary) -> Di
 		reward.erase("tithe_discount")
 		reward["gold"] = int(reward.get("gold", 0)) + maxi(1, roundi(GameConfig.contract_tithe_fallback_gold * scale * mult))
 	var seconds: float = GameConfig.get_duration(float(template.get("minutes", 5.0)) * 60.0)
+	# Con un Telegrafo en pie, los plazos nuevos duran mas (ctx.duration_mult).
+	seconds *= maxf(1.0, float(ctx.get("duration_mult", 1.0)))
 	var contract := {
 		"id": _next_id,
 		"source": source,
@@ -274,7 +329,9 @@ static func from_dict(data: Dictionary) -> RefCounted:
 	var saved_cd: Variant = data.get("cooldowns", {})
 	var saved_rep: Variant = data.get("reputation", {})
 	var saved_last: Variant = data.get("last_template", {})
-	for source in SOURCES:
+	# Todos los huecos, el hilo del Telegrafo incluido (un guardado de antes no
+	# lo trae: se queda como recien creado).
+	for source in ALL_SLOTS:
 		if saved_slots is Dictionary:
 			var c: Variant = saved_slots.get(source, {})
 			if c is Dictionary and _valid_contract(c):
@@ -303,7 +360,7 @@ static func _clean_contract(c: Dictionary, source: String) -> Dictionary:
 	for kind in c["reward"]:
 		reward[String(kind)] = maxi(1, int(c["reward"][kind]))
 	var total: float = float(c["seconds_total"])
-	return {
+	var out := {
 		"id": int(c.get("id", 0)),
 		"source": source,
 		"template": String(c.get("template", "")),
@@ -312,3 +369,8 @@ static func _clean_contract(c: Dictionary, source: String) -> Dictionary:
 		"seconds_total": total,
 		"seconds_left": clampf(float(c.get("seconds_left", total)), 0.0, total),
 	}
+	# El hilo del Telegrafo guarda de quien es el encargo.
+	if source == WIRE:
+		var origin: String = String(c.get("from", ""))
+		out["from"] = origin if origin in SOURCES else "neighbors"
+	return out

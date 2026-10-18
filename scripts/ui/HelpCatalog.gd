@@ -151,6 +151,16 @@ const ENTRIES := {
 		"title": "HELP_T_SMITHY", "body": "HELP_B_SMITHY", "target": ""},
 	"firing_range": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
 		"title": "HELP_T_FIRING_RANGE", "body": "HELP_B_FIRING_RANGE", "target": ""},
+	# Defensa y vida (feat/edificios-defensa-vida): salen al terminar el primero
+	# de cada uno; la belleza, con la primera casa bonita.
+	"bastion": {"kind": "tip", "cat": CAT_STORM, "basic": true,
+		"title": "HELP_T_BASTION", "body": "HELP_B_BASTION", "target": ""},
+	"scrapyard": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_SCRAPYARD", "body": "HELP_B_SCRAPYARD", "target": ""},
+	"telegraph": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_TELEGRAPH", "body": "HELP_B_TELEGRAPH", "target": ""},
+	"beauty": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_BEAUTY", "body": "HELP_B_BEAUTY", "target": ""},
 	# ── Ensenar el combate (2026-10-14, rama feat/ensenar-combate, docs/23 §2.4) ──
 	# Guias basicas: siempre en el indice. Lo mismo que cuentan las marcas del
 	# combate guiado y la ficha de unidad, para leerlo con calma.

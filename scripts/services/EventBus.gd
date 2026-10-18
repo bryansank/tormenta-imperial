@@ -528,3 +528,13 @@ signal doctrine_changed(doctrine_id: String)
 ## primera vez y `reward` (por nombre de recurso) ya se pago.
 @warning_ignore("unused_signal")
 signal practice_lesson_completed(lesson_id: String, first_time: bool, reward: Dictionary)
+# ── Defensa y vida (feat/edificios-defensa-vida) ──
+## La belleza de algun barrio cambio (DefenseLifeEffects.refresh): una casa subio
+## o bajo de nivel. La 3D repone los adornos de las casas (BeautyTrim); la 2D lo
+## lee de la meta `beauty_level` en su firma.
+@warning_ignore("unused_signal")
+signal beauty_changed()
+## Tras la Tormenta, las brigadas de la Chatarreria despejaron ruinas: `steel`
+## de acero, `parts` repuestos y `lifted` edificios levantados.
+@warning_ignore("unused_signal")
+signal scrap_salvaged(steel: int, parts: int, lifted: int)

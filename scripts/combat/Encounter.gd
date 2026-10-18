@@ -57,6 +57,11 @@ var reserve: Array = []
 var is_practice: bool = false
 ## La leccion (GameConfig.firing_range_lessons[].id) que se practica.
 var practice_lesson: String = ""
+## Cobertura (Bastion, feat/edificios-defensa-vida): casilla -> defensa de mas
+## para quien este encima (solo de superficie: un avion no se esconde detras de
+## un parapeto). Vacio = sin cobertura, el tablero de siempre. Solo la ponen los
+## tableros de defensa (Impuesto y asedio) con algun Bastion en pie.
+var cover: Dictionary = {}
 
 # ── Construction ─────────────────────────────────────────────────────
 
@@ -85,6 +90,31 @@ static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: 
 	for unit in Rules.living_units(e.units, ENEMY):
 		e.enemy_start_hp += unit.hp
 	return e
+
+## Pone `cells` como casillas de cobertura con `bonus` de defensa cada una.
+## Se llama tras create(); no mueve a nadie (el despliegue ya esta hecho y las
+## dotaciones de torre suelen quedar encima, en la fila de atras).
+func set_cover(cells: Array, bonus: int) -> void:
+	cover.clear()
+	if bonus <= 0:
+		return
+	for c in cells:
+		cover[c as Vector2i] = bonus
+
+## La defensa de mas que da la casilla `cell` (0 sin cobertura).
+func cover_at(cell: Vector2i) -> int:
+	return int(cover.get(cell, 0))
+
+## La defensa de mas de `unit` donde esta ahora: la de su casilla si es de
+## superficie, 0 si vuela o no esta en el tablero.
+func cover_for(unit: CombatUnit) -> int:
+	if unit == null or cover.is_empty() or unit.position.x < 0 or unit.layer() == "air":
+		return 0
+	return cover_at(unit.position)
+
+## El dano que haria `attacker` a `target` en este tablero (cobertura incluida).
+func damage_between(attacker: CombatUnit, target: CombatUnit) -> int:
+	return Rules.damage(attacker, target, cover_for(target))
 
 ## ¿Hay agua en este tablero?
 func has_water() -> bool:
@@ -389,7 +419,7 @@ func attack(uid: int, target_uid: int) -> Array:
 		return []
 	var attacker := get_unit(uid)
 	var target := get_unit(target_uid)
-	var dealt: int = Rules.damage(attacker, target)
+	var dealt: int = damage_between(attacker, target)
 	target.take_damage(dealt)
 	attacker.has_acted = true
 	var events: Array = [{"e": "unit_attacked", "attacker": uid, "target": target_uid, "damage": dealt}]

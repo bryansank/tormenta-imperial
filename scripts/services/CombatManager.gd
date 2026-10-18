@@ -300,6 +300,7 @@ func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -
 	_morale_snapshot = board_snapshot
 
 	var encounter: Encounter = EncounterScript.create(units, 0, false, true, crew_uids.keys(), false, home_terrain(units))
+	apply_home_cover(encounter)
 	var outcome: Dictionary = AutoResolverScript.resolve(encounter)
 	var victory: bool = bool(outcome["victory"])
 	var rounds: int = int(outcome["rounds"])
@@ -551,11 +552,28 @@ func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: 
 	_encounter.is_practice = _pending_practice != ""
 	_encounter.practice_lesson = _pending_practice
 	_pending_practice = ""
+	if is_defense:
+		apply_home_cover(_encounter)
 	_board_generation += 1
 	_enemy_turn_running = false
 	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())
+
+## La cobertura del Bastion en un tablero de defensa (Impuesto y asedio,
+## feat/edificios-defensa-vida): las casillas que dice
+## GameConfig.defense_cover_cells (DefenseLifeEffects, al construir/derribar),
+## en la fila de atras del jugador, con `bastion_cover_defense` de defensa de
+## mas. Sin bastiones en pie no hace nada: el tablero de siempre.
+func apply_home_cover(encounter: Encounter) -> void:
+	if encounter == null or not encounter.is_defense:
+		return
+	var count: int = GameConfig.defense_cover_cells
+	if count <= 0:
+		return
+	var row: int = encounter.board_size.y - 1
+	encounter.set_cover(Rules.cover_cells(encounter.board_size, encounter.terrain, count, row),
+		GameConfig.bastion_cover_defense)
 
 ## El tablero de casa (Diezmo, Ataque Final, escaramuza de pruebas). Decision de
 ## aire y mar (2026-10-17): tiene agua SOLO si en el bando del jugador hay algun

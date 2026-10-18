@@ -59,7 +59,10 @@ const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", 
 	# Muelle de pesca (feat/muelle-pesca).
 	"fishing_dock",
 	# Edificios militares de la 1.2 (feat/edificios-militares).
-	"infirmary", "smithy", "firing_range"]
+	"infirmary", "smithy", "firing_range",
+	# Bastion, Chatarreria y Telegrafo (feat/edificios-defensa-vida); sin
+	# hornear, el juego usa su version procedural (DefenseToys.gd).
+	"bastion", "scrapyard", "telegraph"]
 
 ## Presupuesto de triangulos de una decoracion 2x2 (doc 21 §6.6).
 const DECOR_TRI_BUDGET := 600
