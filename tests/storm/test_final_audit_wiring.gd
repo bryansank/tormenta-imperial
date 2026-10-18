@@ -250,7 +250,7 @@ func test_the_gate_reads_the_town_morale_when_it_opens() -> void:
 	assert_bool(ProgressionManager.begin_final_audit()).is_true()
 	assert_float(ProgressionManager.final_audit.morale_snapshot).is_equal(25.0)
 	for unit in ProgressionManager.final_audit.living_garrison():
-		assert_float(unit.morale_attack_mod).is_equal(CombatRules.morale_attack_mod(25.0))
+		assert_float(unit.morale_attack_mod).is_equal(CombatRules.siege_morale_attack_mod(25.0))
 	CombatManager.reset()
 	CombatManager.end_encounter()
 	ProgressionManager.final_audit = null
