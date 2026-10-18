@@ -141,6 +141,9 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"bonfire": _bonfire(ci, r)
 		"flagpole": _flagpole(ci, r)
 		"palm_trees": _palm_trees(ci, r)
+		# Mar y aire (1.1, feat/aire-mar-vista; dibujos al final del archivo).
+		"shipyard": _shipyard(ci, r)
+		"aerodrome": _aerodrome(ci, r)
 		_:
 			_block(ci, r, minf(r.size.x, r.size.y) * 0.16, STONE, CONCRETE_DARK)
 	if level > 1:
@@ -3062,3 +3065,146 @@ static func _palm_trees(ci: CanvasItem, r: Rect2) -> void:
 			var side := Vector2(-d.y, d.x) * leaf * 0.22
 			_poly(ci, PackedVector2Array([crown, tip + side, tip + d * 2.0, tip - side]), GREEN.darkened(0.04 * (i % 2)), OUTLINE, 1.0)
 		_dot(ci, crown, 2.2, DARK_WOOD)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Mar y aire (1.1, feat/aire-mar-vista) ──
+# ══════════════════════════════════════════════════════════════════════
+# Los mismos edificios que sus maquetas 3D (tools/toy_recipes/shipyard.gd y
+# aerodrome.gd), en el marco local del edificio: el lado de delante (+y local,
+# abajo en pantalla sin girar) es el del agua en el Astillero y el de la pista
+# en el Aerodromo. Cada uno con su elemento exagerado: la grua de portico y el
+# mastil con el dirigible.
+
+## Astillero: tierra atras con la nave del taller y su chimenea; delante la
+## darsena (agua entre dos muelles) con la grada, el casco a medio hacer y la
+## GRUA de portico amarilla cruzando por encima.
+static func _shipyard(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	var land := Rect2(r.position, Vector2(r.size.x, r.size.y * 0.46))
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(land, CONCRETE_DARK)
+	var quay := r.size.x * 0.13
+	var dock := Rect2(Vector2(r.position.x, land.end.y), Vector2(r.size.x, r.end.y - land.end.y))
+	for left in [true, false]:
+		var q := Rect2(Vector2(dock.position.x if left else dock.end.x - quay, dock.position.y), Vector2(quay, dock.size.y))
+		_plate(ci, q, CONCRETE, OUTLINE, 1.0)
+		_dot(ci, q.get_center() + Vector2((quay * 0.2) * (1.0 if left else -1.0), -dock.size.y * 0.2), m * 0.025, IRON)
+	var water := Rect2(dock.position + Vector2(quay, 0), Vector2(dock.size.x - quay * 2.0, dock.size.y))
+	ci.draw_rect(water, WATER.darkened(0.12))
+	for k in 3:
+		var y := water.position.y + water.size.y * (0.3 + 0.25 * k)
+		var x0 := water.position.x + water.size.x * (0.12 + 0.2 * float(k % 2))
+		ci.draw_line(Vector2(x0, y), Vector2(x0 + water.size.x * 0.26, y), WATER.lightened(0.3), 1.2)
+	# La grada y el casco a medio hacer (proa hacia el agua)
+	var slip := Rect2(Vector2(r.get_center().x - m * 0.17, land.end.y - m * 0.1), Vector2(m * 0.34, water.end.y - land.end.y + m * 0.06))
+	ci.draw_rect(slip, LIGHT_WOOD.darkened(0.15))
+	for k in 6:
+		var y := slip.position.y + slip.size.y * (float(k) + 0.5) / 6.0
+		ci.draw_line(Vector2(slip.position.x, y), Vector2(slip.end.x, y), DARK_WOOD, 1.0)
+	var cx := slip.get_center().x
+	var y0 := slip.position.y + m * 0.04
+	var y1 := slip.end.y - m * 0.04
+	var hw := m * 0.12
+	var hull := PackedVector2Array([Vector2(cx - hw, y0), Vector2(cx + hw, y0), Vector2(cx + hw, y1 - hw * 1.4),
+		Vector2(cx, y1), Vector2(cx - hw, y1 - hw * 1.4)])
+	_poly(ci, hull, GUNMETAL, OUTLINE, 1.2)
+	ci.draw_line(Vector2(cx, y0), Vector2(cx, y1), TILE_RED, 2.0)
+	for k in 5:
+		var y := y0 + (y1 - y0) * (float(k) + 0.5) / 6.0
+		ci.draw_line(Vector2(cx - hw * 0.9, y), Vector2(cx + hw * 0.9, y), LIGHT_WOOD, 1.2)
+	# La nave del taller y su chimenea, atras a la izquierda
+	var shed := Rect2(r.position + Vector2(r.size.x * 0.04, r.size.y * 0.04), Vector2(r.size.x * 0.4, r.size.y * 0.3))
+	_gable(ci, shed, m * 0.1, SLATE, CREAM.darkened(0.08), true)
+	_wall_marks(ci, _wall, 2, GLOW, 0.35, DARK_WOOD)
+	var ch := r.position + Vector2(r.size.x * 0.1, r.size.y * 0.08)
+	_cyl(ci, ch - _down * m * 0.14, m * 0.045, m * 0.14, SLATE.darkened(0.2), SLATE.darkened(0.3))
+	_cyl_band(ci, ch - _down * m * 0.14, m * 0.045, m * 0.14, 0.3, 1.5, IMPERIAL_RED)
+	# Chapa y tablones, atras a la derecha
+	var sheets := Rect2(r.position + r.size * Vector2(0.66, 0.08), r.size * Vector2(0.26, 0.12))
+	ci.draw_rect(sheets, STEEL)
+	ci.draw_rect(sheets, OUTLINE, false, 1.0)
+	var planks := Rect2(r.position + r.size * Vector2(0.66, 0.26), r.size * Vector2(0.26, 0.1))
+	ci.draw_rect(planks, LIGHT_WOOD)
+	ci.draw_rect(planks, OUTLINE, false, 1.0)
+	# La grua de portico (lo exagerado): las patas sobre los muelles y la viga
+	# amarilla cruzando la darsena, con el carro y el gancho
+	var gy := dock.position.y + dock.size.y * 0.42
+	var beam := Rect2(Vector2(r.position.x + quay * 0.2, gy - m * 0.05), Vector2(r.size.x - quay * 0.4, m * 0.1))
+	ci.draw_rect(Rect2(beam.position + _shade * m * 0.12, beam.size), Color(SHADOW, 0.35))
+	ci.draw_rect(beam.grow(1.0), OUTLINE)
+	ci.draw_rect(beam, BRASS)
+	ci.draw_line(beam.position + Vector2(1, 1), Vector2(beam.end.x - 1, beam.position.y + 1), BRASS_LIGHT, 1.5)
+	for left in [true, false]:
+		var leg := Rect2(Vector2(dock.position.x + quay * 0.15 if left else dock.end.x - quay * 0.85, gy - m * 0.09), Vector2(quay * 0.7, m * 0.18))
+		_hazard_strip(ci, leg)
+		ci.draw_rect(leg, OUTLINE, false, 1.0)
+	var trolley := Rect2(Vector2(r.get_center().x + m * 0.01, gy - m * 0.06), Vector2(m * 0.1, m * 0.12))
+	ci.draw_rect(trolley, GUNMETAL)
+	ci.draw_rect(trolley, OUTLINE, false, 1.0)
+	_dot(ci, trolley.get_center() + Vector2(0, m * 0.1), m * 0.025, IMPERIAL_RED)
+
+## Aerodromo: hierba con la pista delante (asfalto, rayas y balizas), el hangar
+## de media cana atras a la izquierda con el portalon abierto, y atras a la
+## derecha el MASTIL de amarre con el dirigible y la manga de viento.
+static func _aerodrome(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, OLIVE_DARK)
+	# La pista
+	var strip := Rect2(Vector2(r.position.x, r.end.y - r.size.y * 0.3), Vector2(r.size.x, r.size.y * 0.24))
+	ci.draw_rect(strip, OIL_BLACK.lightened(0.18))
+	ci.draw_line(strip.position, Vector2(strip.end.x, strip.position.y), OIL_BLACK.lightened(0.35), 1.0)
+	for k in 5:
+		var x := strip.position.x + strip.size.x * (0.08 + 0.21 * k)
+		ci.draw_rect(Rect2(Vector2(x, strip.get_center().y - 1.0), Vector2(strip.size.x * 0.09, 2.0)), CREAM)
+	for p in [strip.position + Vector2(3, 3), Vector2(strip.end.x - 3, strip.position.y + 3),
+			Vector2(strip.position.x + 3, strip.end.y - 3), strip.end - Vector2(3, 3)]:
+		_dot(ci, p, 1.8, GLOW)
+	# El hangar de media cana (las costillas de la chapa) y su portalon
+	var hg := Rect2(r.position + r.size * Vector2(0.04, 0.05), r.size * Vector2(0.44, 0.52))
+	ci.draw_rect(Rect2(hg.position + _shade * m * 0.08, hg.size), SHADOW)
+	ci.draw_rect(hg.grow(1.0), OUTLINE)
+	ci.draw_rect(hg, STEEL)
+	ci.draw_rect(Rect2(hg.position, Vector2(hg.size.x * 0.3, hg.size.y)), STEEL.lightened(0.15))
+	ci.draw_rect(Rect2(Vector2(hg.end.x - hg.size.x * 0.25, hg.position.y), Vector2(hg.size.x * 0.25, hg.size.y)), GUNMETAL)
+	for k in range(1, 5):
+		var y := hg.position.y + hg.size.y * float(k) / 5.0
+		ci.draw_line(Vector2(hg.position.x, y), Vector2(hg.end.x, y), GUNMETAL.darkened(0.2), 1.2)
+	var door := Rect2(Vector2(hg.position.x + hg.size.x * 0.15, hg.end.y - m * 0.05), Vector2(hg.size.x * 0.7, m * 0.06))
+	ci.draw_rect(door, OIL_BLACK)
+	_hazard_strip(ci, Rect2(Vector2(door.position.x, door.position.y - 3.0), Vector2(door.size.x, 3.0)))
+	# Bidones junto al hangar
+	for k in 3:
+		_shaded_disc(ci, r.position + r.size * Vector2(0.56 + k * 0.08, 0.6), m * 0.035, IMPERIAL_RED if k != 1 else OLIVE)
+	# La manga de viento
+	var sock_base := r.position + r.size * Vector2(0.9, 0.55)
+	var sock_tip := _mast(ci, sock_base, m * 0.2, IRON, 1.5)
+	_poly(ci, PackedVector2Array([sock_tip, sock_tip + Vector2(-m * 0.14, m * 0.02), sock_tip + Vector2(-m * 0.12, m * 0.06)]), IMPERIAL_RED, OUTLINE, 1.0)
+	# El mastil de amarre (lo exagerado): celosia de laton y el faro arriba
+	var mb := r.position + r.size * Vector2(0.78, 0.26)
+	var tip := _mast(ci, mb, m * 0.38, BRASS_DARK, 3.0)
+	for t in [0.33, 0.66]:
+		var p: Vector2 = mb.lerp(tip, t)
+		ci.draw_line(p - _left() * m * 0.04, p + _left() * m * 0.04, BRASS_DARK, 1.5)
+	_dot(ci, tip, m * 0.03, GLOW)
+	# El dirigible amarrado de la proa, flotando hacia el centro de la parcela
+	var c := tip + Vector2(-m * 0.24, m * 0.08)
+	var rx := m * 0.2
+	var ry := m * 0.085
+	var shadow := PackedVector2Array()
+	var body := PackedVector2Array()
+	for i in 16:
+		var a := TAU * float(i) / 16.0
+		var q := Vector2(cos(a) * rx, sin(a) * ry)
+		body.append(c + q)
+		shadow.append(c + q + _shade * m * 0.22)
+	ci.draw_colored_polygon(shadow, Color(SHADOW, 0.3))
+	_poly(ci, body, CREAM, OUTLINE, 1.3)
+	ci.draw_line(c + Vector2(-rx * 0.6, -ry * 0.55), c + Vector2(rx * 0.4, -ry * 0.75), CREAM.lightened(0.4), 1.5)
+	for f in [-0.35, 0.25]:
+		var x: float = c.x + rx * f
+		var h: float = ry * sqrt(maxf(0.0, 1.0 - f * f)) * 0.95
+		ci.draw_line(Vector2(x, c.y - h), Vector2(x, c.y + h), IMPERIAL_RED, 2.5)
+	_poly(ci, PackedVector2Array([c + Vector2(-rx * 0.85, 0), c + Vector2(-rx * 1.15, -ry * 0.9), c + Vector2(-rx * 1.15, ry * 0.9)]), IMPERIAL_RED, OUTLINE, 1.0)
+	ci.draw_line(c + Vector2(rx, 0), tip, IRON, 1.2)
