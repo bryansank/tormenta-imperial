@@ -749,3 +749,31 @@ semillas en la tabla del 16-10 (§11, con otra carga: compárese con cuidado).
 - El tutorial pide el Laboratorio (2 trabajadores) con 1 libre: el Cuartel se lleva el
   que sobraba, así que el paso 13 siempre dice "Haz otra Casa" antes. No se atasca, pero
   es un paso más.
+
+### Medido en la 1.1 (2026-10-17, merge de la 1.0 en `integracion/v1.1-aire-mar`)
+
+`line_probe`, `--no-dev`, semillas 1-3, un solo Godot. "Antes" es la misma sonda sobre
+`integracion/v1.1-aire-mar` justo antes del merge (bca7cb5: aire, mar, Muelle de pesca y
+edificios útiles, sin el Cuartel temprano ni el Impuesto de juguete), corrida el mismo día
+con la misma carga.
+
+| Semilla | Cuartel | 1.er soldado | 1.ª misión | Impuesto de juguete | era 2 (antes) | era 3 (antes) | CG nv3 (antes) | victoria (antes) | huecos >3 min sin decidir (antes) | mayor (antes) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 0,4 | 2,3 | 3,0 | repelido en el 8,6 (1 en casa) | **17,8** (14,9) | 35 (49) | 231 (307) | **250** (334) | 4 (8) | 4,9 (11,8) |
+| 2 | 0,4 | 2,3 | 3,0 | repelido en el 8,6 (1 en casa) | **18,8** (15,2) | 35 (33) | 344 (247) | **363** (266) | 11 (3) | 10,7 (5,7) |
+| 3 | 0,4 | 2,3 | 3,0 | repelido en el 8,6 (1 en casa) | **16,8** (17,2) | 33 (38) | 176 (237) | **202** (256) | 2 (5) | 5,3 (6,4) |
+
+- **No se atasca**: las tres ganan al primer asedio (13/13, 19/19 y 11/11 Diezmos
+  repelidos). El Cuartel temprano sale en el minuto 0,4, el soldado en el 2,3, la primera
+  misión en el 3,0, y el Impuesto de juguete se repele siempre. La era 1 queda igual que
+  en la 1.0 (16,8-18,8 min, +1,5 a +3,6 sobre la 1.1 sin Cuartel temprano).
+- **Campaña: 202-363 min** (antes 256-334; media 272 frente a 285). La semilla 2 pasa
+  de 6 h: 82 min esperando el CG nivel 2 con la bolsa llena 108 min (vigas y combustible
+  del taller); las semillas 1 y 3 acortan. Con tres semillas es ruido; mirar con diez.
+- **El jugador de la sonda no usa la 1.1**: no levanta Muelle, Astillero, Aeródromo ni
+  edificios útiles (la línea no los pide; el Muelle solo sale como apoyo de comida cuando
+  no cabe otra Granja, y la sonda nunca llegó ahí: 6-9 Granjas). Así que estas cifras
+  dicen que el Cuartel temprano no rompe la 1.1, no cuánto ayudan el Muelle o la flota.
+- Pendiente: que `line_probe_player` sepa colocar el Muelle (orilla + banco de peces) y
+  el Astillero (costa), y medir con diez semillas.
+

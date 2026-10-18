@@ -391,7 +391,7 @@ after the first Sawmill (`Objectives.LINE`, `needs: tithe`), then the Farm, one 
 and the first mission; the guided tutorial has a Barracks step (5 of 13) right after
 collecting the wood. Artillery/Tank keep their era (`ArmyManager.is_unlocked`), and the
 ARMY panel says what unlocks them (`LBL_ARMY_LOCKED_ERA_*`). The Tower now also needs
-the Foundry. Not yet measured with `line_probe` (docs/22 §12).
+the Foundry. Measured with `line_probe` on 1.0 and on 1.1 (docs/22 §12): no stall, era 1 16.8-18.8 min.
 
 **Quick guide:** `scripts/ui/QuickGuide.gd`, one screen with four blocks (resources,
 extraction, buildings and roads, progress). Since 2026-10-14 it **no longer opens by
