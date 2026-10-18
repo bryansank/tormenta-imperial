@@ -844,13 +844,50 @@ Además de lo de siempre, cada semilla imprime dos líneas `1.1 …` y, al final
 La tabla de la línea de siempre se imprime igual en los dos modos: comparar era 2, era 3,
 CG nv3, victoria, huecos y bolsa llena columna a columna.
 
-### Medido
+### Medido (2026-10-18, ronda de pruebas de la 1.1, rama `prueba/v11-linea`)
 
-Pendiente de la ronda final de pruebas (2026-10-18: primero se implementa, se prueba al
-final). Rellenar aquí las dos tablas (normal y `--extras=1`, semillas 1-5) y lo que se vea
-roto o desequilibrado.
+`line_probe`, `--no-dev`, semillas 1-5, tope 8 h, un solo Godot, sobre
+`integracion/v1.1-aire-mar` (aa04fad) con los arreglos de esta ronda (§14 "Medido").
+Las dos tandas con campañas (lo de siempre desde §14). Minutos de juego.
 
-## 14. Las tres campañas (2026-10-18, rama `feat/tres-campanas`, sin medir)
+**Jugador de la línea** (sin `--extras`):
+
+| Semilla | era 1 | era 3 en | CG nv2 | CG nv3 | Tierra completa | Mar | Aire | Ataque Final | victoria | huecos >3 min sin decidir (mayor) | bolsa llena |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 17,8 | 37 | 117 | 295 | 247 | 4/5 | 0/5 | — | **no (8 h)** | 9 (14,0) | 127 |
+| 2 | 18,8 | 41 | 136 | 367 | 240 | 447 | 4/5 | — | **no** | 8 (13,2) | 102 |
+| 3 | 19,8 | 40 | 153 | 394 | 403 | 470 | 2/5 | — | **no** | 9 (12,4) | 103 |
+| 4 | 17,8 | 37 | 131 | 325 | 289 | 427 | 4/5 | — | **no** | 3 (11,9) | 114 |
+| 5 | 16,8 | 39 | 122 | 233 | 216 | 327 | 4/5 | — | **no** | 13 (14,9) | 140 |
+
+**Jugador completo** (`--extras=1`):
+
+| Semilla | era 1 | era 3 en | CG nv3 | Tierra | Mar | Aire | Ataque Final | victoria | huecos >3 min (mayor) | Astillero / Aeródromo | flota entrenada |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 20,8 | 43 | 306 | 314 | 376 | 458 | 470, 5/5 oleadas, GANADO | **498** (8 h 18) | 4 (7,4) | 31 / 71 | 63 |
+| 2 | 22,8 | 47 | 344 | 295 | 409 | 448 | 449, 5/5, GANADO | **476** (7 h 56) | 10 (9,2) | 66 / 143 | 53 |
+| 3 | 21,8 | 43 | 270 | 295 | 339 | 377 | 400, 4/4, GANADO | **423** (7 h 03) | 4 (4,0) | 70 / 86 | 68 |
+| 4 | 20,8 | 44 | 275 | 255 | 336 | 4/5 | — | **no (8 h)** | 7 (4,3) | 68 / 84 | 96 |
+| 5 | 21,8 | 47 | 313 | 285 | 381 | 3/5 | — | **no (8 h)** | 13 (11,1) | 41 / 76 | 64 |
+
+Primer edificio de la 1.1 con el jugador completo: Muelle en el minuto 7 (las cinco),
+Pozo 24-43, Silo 45-88, Carpintería 43-159, Faro 111-156, Depósito 111-170; Taberna en
+dos de cinco y Molino en una (sin hueco: 220-350 intentos, las Granjas quedan en 1-4
+porque el Muelle da la comida: 47-71 mil de comida en la partida). **Misiones de costa:
+0** en todas: las mixtas están apagadas (`combat_mixed_missions_enabled = false`), así
+que esa parte del jugador completo ya no hace nada.
+
+Lectura:
+
+- **Ninguna partida de la línea gana en 8 h, y el jugador completo gana 3 de 5 en
+  7 h-8 h 20.** El objetivo era 4-6 h. Detalle de por qué, en §14 "Medido".
+- **Era 1:** la línea 16,8-19,8 min (como en §12). El jugador completo 20,8-22,8: el
+  Muelle (minuto 7), el Pozo y la flota de la era 2 le cuestan 3-4 min.
+- **Huecos sin decidir:** 3-13 de más de 3 min por partida, el mayor 4-15 min, casi
+  todos con el CG nv3 hecho y el panel en "la misión del Mar/Aire" (la tropa descansa o
+  se está reponiendo). Antes del CG nv3 no hay atascos.
+
+## 14. Las tres campañas (2026-10-18, rama `feat/tres-campanas`; medido al final)
 
 El Ataque Final pide ahora el CG nivel 3 **y** las campañas de Tierra (5 + jefe),
 Mar (4 + jefe) y Aire (4 + jefe): 16 misiones y 30 combates
@@ -881,3 +918,70 @@ el Zepelín con solo cazas); que la espera tras el CG nv3 no sea "jugar las tres
 campañas de golpe". Palancas, por orden: `campaign_defs` (misiones y combates),
 `campaign_level_step`, `campaign_boss_extra_scale` / `campaign_boss_heavies`,
 `campaign_mission_cooldown`.
+
+### Medido (2026-10-18, ronda de pruebas de la 1.1, rama `prueba/v11-linea`)
+
+Las tablas por semilla (línea y jugador completo) están en §13 "Medido". Aquí, lo que
+se encontró en las campañas, lo que se arregló y lo que queda de balance.
+
+**Primera tanda, antes de arreglar nada** (aa04fad tal cual, semilla 1): 8 h sin CG
+nv3. El jugador de la sonda salía a la misión 1 de Tierra con **2 cuerpos** (la mitad de
+la guarnición se quedaba en casa y la vista previa decía "fuerza 56 contra 34") y perdía
+una y otra vez: 33-42 derrotas, 134-143 bajas en la partida, el CG nv2 en el minuto
+325-438 por estar reponiendo tropa. Con `--campaigns=0` (campañas solo tras el CG nv3)
+la misma semilla llegaba al CG nv3 en el 237, pero luego Mar y Aire no cabían en las 8 h.
+
+**Arreglos** (sin tocar una cifra de balance):
+
+| Fallo | Dónde | Arreglo |
+|---|---|---|
+| Columna de 2 a la misión 1 de Tierra, derrota tras derrota | `tools/line_probe_player.gd` (jugador) | columna **mezclada** (tierra y mar, un poco de cada tipo; aire, solo cazas: el dirigible propio estorba, docs/15 §13), al menos 3 cuerpos; cada derrota en la misma misión pide uno más y un 25 % más de fuerza. Con la línea pidiéndola (tras el CG nv3) sale con la columna **llena** (6), entrenando antes lo que falte, o con lo que haya si el tope de tropa no deja |
+| Tras el CG nv3 el oro se quedaba en las minas: el paso "misión" no cuesta nada, la recogida con la bolsa >75 % solo cogía oro por debajo de 200, y la bolsa se llenaba de comida y acero (oro clavado en 320 durante horas, 50-120 min en "la misión del Mar") | `tools/line_probe_player.gd` (jugador) | con el CG nv3 hecho, el oro se recoge hasta 1500 |
+| Muelle "urgente" en el minuto 0,1 con el oro de la salida: en 2 de 5 semillas la Casa (50) y la Mina (120) no se pagaban nunca (oro 42, bolsa llena, los 5 obreros ocupados) | `tools/line_probe_player.gd` (jugador completo) | ningún extra antes de la primera Mina de oro |
+| **¿QUÉ HACER? se quedaba en "la misión del Mar" mientras su tropa descansaba**, y el Aeródromo no se pedía hasta acabar el Mar (Aeródromo en el minuto 441-477, con el Mar hecho en el 440-477) | `scripts/services/Objectives.gd` (`campaign_gate_step`, juego) | si la campaña que toca no se puede lanzar ya y solo espera, el paso es preparar otra que falte (su edificio o su tropa). Ahora el Aeródromo sale 16-21 min después del Astillero. Test: `tests/ui/test_campaign_gate_prep.gd` |
+
+**Problemas de balance que quedan** (no se tocaron: son cifras; el balance de combate
+lo lleva otra rama):
+
+1. **La campaña no cabe en 4-6 h.** Jugador de la línea: 0 de 5 gana en 8 h (Mar
+   completo en 4 de 5, Aire 0-4 de 5). Jugador completo, que levanta Astillero (31-70)
+   y Aeródromo (71-143) en cuanto ¿QUÉ HACER? los propone en la segunda línea: 3 de 5
+   ganan, en 7 h 03 - 8 h 18, y las otras dos se quedan en el Aire (3-4 de 5). Del CG
+   nv3 a la victoria pasan 132-192 min: las campañas de Mar y Aire se juegan casi
+   enteras después del CG nv3.
+2. **El CG nv3 llega más tarde que sin campañas:** 233-394 min con la línea (antes de
+   las campañas, §12: 176-344). La Tierra se juega durante la construcción (completa en
+   el 216-403) y sus bajas y su reposición se comen oro de la era 3.
+3. **El Diezmo se come la tropa de las campañas.** Se repelen casi todos los Diezmos (23-28
+   de 23-28 por partida), pero con una escolta que ha crecido mucho: la guarnición que defiende (barcos
+   y aviones incluidos) cae casi entera. Ejemplo, línea, semilla 5: Diezmo del minuto
+   337, repelido, 5 blindados, 1 acorazado y 2 cazas muertos; 365, 389 y 455: cazas de
+   4-5 a 2. Cada ciclo de Tormenta (~16 min) hay que reponer la columna antes de la
+   siguiente misión. Palancas: el crecimiento de la escolta del Diezmo, o que las
+   unidades de mar y aire no defiendan el Diezmo.
+4. **El oro se acaba en cada Tormenta.** Con la producción parada en la fase de
+   Tormenta, el sueldo y la comida dejan el oro a 0 casi en cada ciclo de la era 3
+   (deserciones: 10-33 la línea, 13-45 el completo). Los 6 blindados que pide la línea
+   para el asedio (`OBJ_WHY_ARMOUR`, tras el CG nv2) cobran 24 oro / 30 s y esperan
+   2-3 h a que acaben las campañas. Palanca no numérica a valorar: pedir esos blindados
+   cuando el Ataque Final ya se puede convocar, no antes del CG nv3.
+5. **El Aire es el cuello de botella.** Con 6 cazas la vista previa da 240 contra
+   244-253 en las misiones 1-3: se ganan, pero perdiendo 2-3 cazas (200 oro cada uno).
+   En las dos partidas del completo que no ganan, el Aire se queda en 3-4 de 5.
+6. **¿QUÉ HACER? pide 3 de tropa por campaña** (`campaign_suggested_party = 3`) y la
+   columna que gana es de 6 (docs/15 §13: 3 cazas pierden el 100 % de la misión 1 del
+   Aire; 3 infantes, la 2 de Tierra). Un jugador que hace caso al panel pierde la
+   primera vez.
+7. **La vista previa engaña con columnas pequeñas:** "fuerza 56 contra 34" (2 cañones)
+   perdía siempre la misión 1 de Tierra. La comparación por potencia no ve que 2
+   cuerpos contra 3 pierden por número.
+
+**Ruido:** la misma semilla no repite partida entre corridas (semilla 1: Tierra
+completa en el 247 en una y 5 de 6 en el 464 en otra, con el mismo jugador). Algo de la
+partida no sale de la semilla (las campañas o las ofertas). Con 5 semillas, los
+minutos son orientativos; las conclusiones de arriba se repiten en todas.
+
+Repetir (con `override.cfg` propio):
+
+    godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5 --log=1
+    godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5 --extras=1 --log=1

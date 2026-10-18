@@ -167,7 +167,7 @@ func _play_seed(map_seed: int) -> Dictionary:
 		"coast_lost": 0, "coast_abandoned": 0, "coast_skipped": 0, "coast_pending": false,
 		# Tres campanas: minuto de cada mision ganada por medio, intentos fallidos.
 		"campaign_won": {"land": [], "sea": [], "air": []}, "campaign_setbacks": 0,
-		"campaign_done": {},
+		"campaign_done": {}, "camp_losses": {},
 	}
 	_extras_accum = 0.0
 	_last_coast = -INF
@@ -493,35 +493,99 @@ func _campaign_mission() -> bool:
 ## casa (hasta el tope del tablero). En tierra deja en casa la mitad de la
 ## guarnicion salvo que la linea la pida (`forced`, tras el CG nv3). Sin
 ## `forced`, solo si la fuerza no es menor que la del enemigo.
+## La columna (ronda de la 1.1, 2026-10-18): antes iba lo mas fuerte por
+## potencia y, en tierra, solo la mitad de la guarnicion; con 4 en casa salian 2
+## canones a la mision 1 y perdian siempre (42 derrotas y 143 bajas en la semilla
+## 1, el CG nv2 se fue al minuto 438). Ahora, como haria una persona que mira la
+## ficha de la mision (docs/15 §13 "Medido"): columna MEZCLADA (tierra y mar un
+## poco de cada tipo; aire solo cazas, el dirigible propio estorba), al menos
+## `CAMPAIGN_MIN_PARTY` cuerpos, y cada derrota en la misma mision pide uno mas y
+## un 25 % mas de fuerza (o, con la linea pidiendola, entrenar antes de volver).
+const CAMPAIGN_MIN_PARTY := 3
+const CAMPAIGN_MIX := {
+	"land": ["vehicle", "artillery", "infantry"],
+	"sea": ["dreadnought", "gunboat", "torpedo_boat"],
+	"air": ["fighter"],
+}
+
 func _launch_campaign(domain: String, forced: bool) -> bool:
 	if CombatManager.campaign_lock_reason(domain) != "":
 		return false
 	var home: Dictionary = CombatManager.campaign_units_home(domain)
-	var ids: Array = home.keys()
-	ids.sort_custom(func(a, b) -> bool:
-		return int(GameConfig.get_unit_def(a).get("power", 0)) > int(GameConfig.get_unit_def(b).get("power", 0)))
 	var total := 0
-	for unit_id in ids:
+	for unit_id in home:
 		total += int(home[unit_id])
-	var room: int = GameConfig.combat_deploy_cap
+	var losses: int = int((_r["camp_losses"] as Dictionary).get(domain, 0))
+	var cap: int = GameConfig.combat_deploy_cap
+	var room: int = cap
 	if domain == "land" and not forced:
-		room = mini(room, maxi(1, total - maxi(HOME_LAND_MIN, int(ceil(total / 2.0)))))
-	var party: Dictionary = {}
-	for unit_id in ids:
-		var n: int = mini(int(home[unit_id]), room)
-		if n > 0:
-			party[unit_id] = n
-			room -= n
-	if party.is_empty():
-		return false
+		room = mini(room, total - maxi(HOME_LAND_MIN, int(floor(total / 3.0))))
+	var party: Dictionary = _campaign_party(domain, home, room)
+	var size: int = CombatManager.roster_size(party)
+	# Con la linea pidiendola (tras el CG nv3) se sale con la columna llena, la
+	# "bien formada" de docs/15 §13: con 4 se perdia la mitad de las veces y cada
+	# derrota costaba un ciclo de Tormenta en reponer.
+	var want: int = cap if forced else mini(cap, CAMPAIGN_MIN_PARTY + losses)
+	if size < want:
+		# La linea la pide y no hay columna: se entrena antes de salir. Si no se
+		# puede entrenar mas (tope de tropa), se sale con lo que hay (3 o mas).
+		if not forced:
+			return false
+		if _train_for_campaign(domain) or size < CAMPAIGN_MIN_PARTY:
+			return false
+	var preview: Dictionary = CombatManager.sortie_preview(CombatManager.campaign_offer(domain), party)
 	if not forced:
-		var preview: Dictionary = CombatManager.sortie_preview(CombatManager.campaign_offer(domain), party)
-		if float(preview.get("player_power", 0.0)) < float(preview.get("enemy_power", 0.0)):
+		var ratio: float = 1.0 + 0.25 * float(mini(losses, 4))
+		if float(preview.get("player_power", 0.0)) < float(preview.get("enemy_power", 0.0)) * ratio:
 			return false
 	if CombatManager.launch_campaign_mission(domain, party):
-		_act("campaign %s m%d %s" % [domain, CombatManager.campaign_won(domain) + 1, str(party)], true)
+		_act("campaign %s m%d %s (fuerza %.0f contra %.0f)" % [domain, CombatManager.campaign_won(domain) + 1,
+			str(party), float(preview.get("player_power", 0.0)), float(preview.get("enemy_power", 0.0))], true)
 		return true
 	return false
+
+## Reparte `room` plazas por turnos entre los tipos de CAMPAIGN_MIX que hay en casa
+## (del mas pesado al mas ligero); en aire, si no hay cazas, lo que haya.
+func _campaign_party(domain: String, home: Dictionary, room: int) -> Dictionary:
+	var order: Array = []
+	for unit_id in CAMPAIGN_MIX.get(domain, []):
+		if int(home.get(unit_id, 0)) > 0:
+			order.append(unit_id)
+	if order.is_empty():
+		order = home.keys()
+	var left: Dictionary = {}
+	for unit_id in order:
+		left[unit_id] = int(home.get(unit_id, 0))
+	var party: Dictionary = {}
+	var placed := true
+	while room > 0 and placed:
+		placed = false
+		for unit_id in order:
+			if room <= 0:
+				break
+			if int(left[unit_id]) > 0:
+				left[unit_id] = int(left[unit_id]) - 1
+				party[unit_id] = int(party.get(unit_id, 0)) + 1
+				room -= 1
+				placed = true
+	return party
+
+## Entrena para la columna de `domain` el tipo de CAMPAIGN_MIX que menos hay
+## (y que se pueda entrenar ya). Devuelve false si no hay manera (sin tipo o con
+## el tope de tropa lleno): entonces se sale con lo que hay.
+func _train_for_campaign(domain: String) -> bool:
+	var best: String = ""
+	for unit_id in CAMPAIGN_MIX.get(domain, []):
+		if not ArmyManager.is_unlocked(String(unit_id)):
+			continue
+		if best == "" or ArmyManager.get_count(String(unit_id)) < ArmyManager.get_count(best):
+			best = String(unit_id)
+	if best == "":
+		return false
+	if String(ArmyManager.can_train(best).get("reason", "")) == "LBL_ARMY_AT_CAP":
+		return false
+	_try_train(best)
+	return true
 
 ## Una columna que volvio (o una expedicion que pide elegir camino) no se queda
 ## colgada: sin esto el asedio esperaria para siempre a "la columna fuera".
@@ -777,7 +841,12 @@ func _collect() -> void:
 				wanted[String(input)] = true
 		if ResourceManager.get_amount(ResourceManager.Type.FOOD) < PopulationManager.food_due() * 12:
 			wanted["food"] = true
-		if ResourceManager.get_amount(ResourceManager.Type.GOLD) < 200:
+		# Tras el CG nv3 el paso es una campana (sin coste propio): sin esto el oro
+		# se quedaba en las minas, paradas por llenas, la bolsa se llenaba de
+		# comida y acero y no habia con que entrenar la columna (ronda 1.1: el oro
+		# clavado en 320 durante horas, 50-120 min esperando "la mision del Mar").
+		var gold_floor: int = 1500 if ProgressionManager.is_milestone_completed("hq_max") else 200
+		if ResourceManager.get_amount(ResourceManager.Type.GOLD) < gold_floor:
 			wanted["gold"] = true
 		for node in ProductionManager._stock.keys():
 			if not is_instance_valid(node):
@@ -1010,6 +1079,13 @@ func _extras_on() -> bool:
 ## Una decision de extras por vistazo (las prioridades, de arriba abajo).
 func _extras(step: Dictionary) -> void:
 	if CombatManager.is_board_open():
+		return
+	# La apertura es la del tutorial: nada de extras hasta la primera Mina de oro.
+	# Ronda 1.1 (2026-10-18): el Muelle "urgente" en el minuto 0,1 se llevaba el
+	# oro de la salida; en dos semillas de cinco la Casa (50 oro) y la Mina (120)
+	# quedaban sin pagar para siempre (oro 42, bolsa llena de madera y comida, los
+	# 5 obreros ocupados: ni minar a mano). En las otras, era 1 de 22-23 min.
+	if Rules.count_building("gold_mine") == 0:
 		return
 	if _coast_mission():
 		return
@@ -1547,12 +1623,18 @@ func _connect_probes() -> void:
 			_r["sortie_at"] = _clock)
 	# Tres campanas: cuando se gana cada mision y cuando se completa cada campana.
 	EventBus.campaign_mission_won.connect(func(domain: String, _m: int, _boss: bool) -> void:
-		(_r["campaign_won"][domain] as Array).append(_clock))
+		(_r["campaign_won"][domain] as Array).append(_clock)
+		(_r["camp_losses"] as Dictionary)[domain] = 0)
 	EventBus.campaign_completed.connect(func(domain: String) -> void:
 		_r["campaign_done"][domain] = _clock)
 	EventBus.expedition_ended.connect(func(result: int, _rw: Dictionary, _c: Dictionary) -> void:
-		if result != Expedition.RESULT_WON and not CombatManager.get_last_result().get("campaign_domain", "").is_empty():
-			_r["campaign_setbacks"] = int(_r["campaign_setbacks"]) + 1)
+		var lost_domain: String = String(CombatManager.get_last_result().get("campaign_domain", ""))
+		if result != Expedition.RESULT_WON and not lost_domain.is_empty():
+			_r["campaign_setbacks"] = int(_r["campaign_setbacks"]) + 1
+			var losses: Dictionary = _r["camp_losses"]
+			losses[lost_domain] = int(losses.get(lost_domain, 0)) + 1
+			if bool(options.get("log", false)):
+				print("  %6.1f min  x campana %s perdida (%d seguidas)" % [_clock / 60.0, lost_domain, int(losses[lost_domain])]))
 	EventBus.trial_tithe_resolved.connect(func(repelled: bool, taken: Dictionary) -> void:
 		_r["trial_tithe"] = {"t": _clock, "repelled": repelled, "taken": taken.duplicate(),
 			"home": CombatManager.roster_size(CombatManager.get_garrison())})
