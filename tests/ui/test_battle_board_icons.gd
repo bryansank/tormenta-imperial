@@ -296,3 +296,26 @@ func test_the_cell_still_fits_on_a_phone_screen() -> void:
 			assert_float(icon.position.y + icon.size.y).is_less_equal(bar.position.y + 0.5)
 			assert_float(icon.position.x + icon.size.x).is_less_equal(cell.size.x + 0.5)
 			assert_float(bar.position.y + bar.size.y).is_less_equal(cell.size.y + 0.5)
+
+# ── Aire encima (1.1) ────────────────────────────────────────────────
+
+func test_a_plane_over_a_soldier_still_shows_in_the_2d_cell() -> void:
+	# La casilla pinta al soldado (get_unit_at); el avion de encima, con su
+	# silueta pequena arriba. Sin ella desaparecia del tablero 2D.
+	var foot := _unit("infantry", Encounter.PLAYER, 901)
+	var plane := _unit("fighter", Encounter.PLAYER, 902)
+	CombatManager.start_encounter_with_units([foot, plane], {"infantry": 1}, false, 0, false)
+	var enc = CombatManager.get_encounter()
+	var p: CombatUnit = enc.get_unit(902)
+	var f: CombatUnit = enc.get_unit(901)
+	# Se pone el avion encima del soldado a mano: lo que se mira es el dibujo.
+	p.position = f.position
+	var screen := _board()
+	screen._refresh_cells()
+	var mark: TextureRect = screen.board_air_mark(f.position)
+	assert_object(mark).is_not_null()
+	assert_bool(mark.visible).is_true()
+	assert_object(mark.texture).is_not_null()
+	# Y en una casilla sin avion encima no hay marca a la vista.
+	var empty: TextureRect = screen.board_air_mark(Vector2i(0, 0))
+	assert_bool(empty == null or not empty.visible).is_true()

@@ -190,6 +190,13 @@ func _fill_row(pending: Array, row: int, taken: Dictionary, domain: String = Com
 		var cell := Vector2i(x, row)
 		if not taken.has(cell) and Rules.can_stand(domain, terrain_at(cell)):
 			free.append(cell)
+	# Los barcos forman en el agua: la orilla (arena) solo si en el agua de esa
+	# fila no caben todos. Centrar entre agua y orilla dejaba un acorazado varado
+	# en la playa al empezar (ronda visual de la 1.1).
+	if domain == CombatUnit.DOMAIN_SEA:
+		var water: Array = free.filter(func(c): return terrain_at(c) == Rules.TERRAIN_WATER)
+		if water.size() >= pending.size():
+			free = water
 	var count: int = mini(pending.size(), free.size())
 	if count <= 0:
 		return

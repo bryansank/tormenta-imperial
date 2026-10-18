@@ -21,7 +21,8 @@ extends Node
 ## --tag=<nombre> (prefijo de las capturas), --quality=high|low|minimal,
 ## --scene=land|beach|forest (escenario de la maqueta), --x2, --fps,
 ## --view=front|board (vista de la maqueta 3D; por defecto la preferencia, que
-## de serie es la frontal). No toca settings.cfg.
+## de serie es la frontal), --coast (aire y mar: tablero de costa con agua, barcos
+## y aviones de los dos bandos). No toca settings.cfg.
 ##
 ## Hermano de tools/showcase_shots.gd y tools/ui_tour.gd.
 
@@ -36,6 +37,8 @@ var _style := "3d"
 var _scene := ""
 ## Vista forzada de la maqueta (front / board) o "" para la preferencia.
 var _view := ""
+## Aire y mar: el tablero de muestra con agua, barcos y aviones (--coast).
+var _coast := false
 var _screen: Node = null
 var _deaths := 0
 var _shot_attack := false
@@ -57,6 +60,8 @@ func _ready() -> void:
 			_scene = a.substr(8)
 		elif a.begins_with("--view="):
 			_view = a.substr(7)
+		elif a == "--coast":
+			_coast = true
 		elif a == "--x2":
 			GameConfig.set_game_speed(2.0)
 		elif a.begins_with("--profile="):
@@ -113,6 +118,14 @@ func _run() -> void:
 	await _shot("01_deploy", 0.0)
 	await _until_idle()
 	await _shot("02_board")
+	if _coast and _board() != null:
+		# Desde arriba, para comprobar que cada pieza esta en su casilla de agua
+		# o de tierra (la vista frontal engana con el angulo).
+		var cam: Camera3D = _board()._camera
+		var saved := cam.global_transform
+		cam.global_transform = Transform3D(Basis.looking_at(Vector3.DOWN, Vector3.FORWARD), Vector3(0, 48, 0))
+		await _shot("02t_topdown", 0.3)
+		cam.global_transform = saved
 
 	# 3. Una unidad que se mueve: la ruta casilla a casilla, con saltitos.
 	await _until_player_turn()
@@ -180,6 +193,9 @@ func _hints_board() -> void:
 	await _shot("08_hints", 0.5)
 
 func _open_showcase_board() -> void:
+	if _coast:
+		_open_coast_board()
+		return
 	var units: Array = []
 	var uid := 900
 	for id in ["infantry", "infantry", "artillery", "vehicle", "artillery"]:
@@ -187,6 +203,17 @@ func _open_showcase_board() -> void:
 		units.append(CombatUnit.create(uid, id, Encounter.PLAYER))
 	# La ultima es la dotacion de la torre (retaguardia, nido de sacos).
 	CombatManager.start_encounter_with_units(units, {"infantry": 3, "artillery": 1, "vehicle": 1}, true, 2, true, [uid], 1.0)
+
+## Costa: con barcos propios el tablero de casa tiene agua (home_terrain). Los
+## dos bandos con tierra, mar y aire; la ultima es la dotacion de la torre.
+func _open_coast_board() -> void:
+	var units: Array = []
+	var uid := 900
+	for id in ["infantry", "vehicle", "torpedo_boat", "gunboat", "fighter", "bomber", "artillery"]:
+		uid += 1
+		units.append(CombatUnit.create(uid, id, Encounter.PLAYER))
+	CombatManager.start_encounter_with_units(units,
+		{"infantry": 2, "gunboat": 1, "dreadnought": 1, "fighter": 1, "airship": 1}, true, 2, true, [uid], 1.0)
 
 func _on_board_event(ev: Dictionary) -> void:
 	match String(ev.get("e", "")):
@@ -351,6 +378,8 @@ func _seed() -> void:
 	PopulationManager._max_population = 32
 	PopulationManager._morale = 84
 	ArmyManager._units = {"infantry": 6, "artillery": 3, "vehicle": 2}
+	if _coast:
+		ArmyManager._units.merge({"torpedo_boat": 2, "gunboat": 1, "fighter": 2, "bomber": 1})
 	EventBus.army_changed.emit()
 	EventBus.sidebar_toggled.emit(true)
 

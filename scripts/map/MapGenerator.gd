@@ -382,7 +382,44 @@ func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, 
 		GridManager.place_obstacle(cell, root, dep_size)
 
 	_deposit_cells.append({ "id": deposit_id, "cell_x": cell.x, "cell_y": cell.y, "size_x": dep_size.x, "size_y": dep_size.y, "node": root })
+	if is_sea_deposit(deposit_id):
+		_queue_sand_holes()
 	return root
+
+# ── La arena no tapa los bancos (1.1) ─────────────────────────────────
+# Los bancos de peces van en la primera franja de agua (el muelle tiene que
+# tocarlos desde la orilla), justo donde la playa 3D de IslandGenerator baja
+# desde el cesped hasta el mar: la arena los tapaba casi enteros. La isla abre
+# un hueco en la arena sobre cada banco (island_sand.gdshader, `holes`). Se
+# avisa una vez por fotograma como mucho, solo cuando cambian los bancos.
+
+var _sand_holes_queued := false
+
+func _queue_sand_holes() -> void:
+	if _sand_holes_queued or not is_inside_tree():
+		return
+	_sand_holes_queued = true
+	_push_sand_holes.call_deferred()
+
+## Los rectangulos (mundo XZ: centro y semiejes) de los yacimientos de mar.
+func sea_deposit_rects() -> Array:
+	var rects: Array = []
+	for entry in _deposit_cells:
+		if not is_sea_deposit(String(entry["id"])):
+			continue
+		var size := Vector2i(int(entry.get("size_x", 2)), int(entry.get("size_y", 2)))
+		var c := GridManager.building_center(Vector2i(int(entry["cell_x"]), int(entry["cell_y"])), size)
+		var half := Vector2(size) * GridManager.cell_size * 0.5
+		rects.append(Vector4(c.x, c.z, half.x, half.y))
+	return rects
+
+func _push_sand_holes() -> void:
+	_sand_holes_queued = false
+	if not is_inside_tree() or get_tree().current_scene == null:
+		return
+	var island := get_tree().current_scene.get_node_or_null("IslandGenerator")
+	if island != null and island.has_method("set_sand_holes"):
+		island.set_sand_holes(sea_deposit_rects())
 
 # ── Ganchos de vista ──────────────────────────────────────────────────
 # Todo lo que es dibujo pasa por estos cinco metodos. La vista 2D
@@ -517,6 +554,7 @@ func clear_all_deposits() -> void:
 		if is_instance_valid(entry["node"]):
 			entry["node"].queue_free()
 	_deposit_cells.clear()
+	_queue_sand_holes()
 
 # ── Deposit reach (placement rules) ──
 
@@ -599,6 +637,8 @@ func remove_deposit(node: Node) -> void:
 			break
 	if cell != Vector2i(-1, -1):
 		GridManager.remove_obstacle(cell, dep_size)
+	if is_sea_deposit(deposit_id):
+		_queue_sand_holes()
 	node.queue_free()
 
 ## Una celda al azar donde cabe un yacimiento de `dep_size`: dentro de la

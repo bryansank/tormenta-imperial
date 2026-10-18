@@ -148,6 +148,9 @@ func test_ships_deploy_on_water_and_soldiers_on_land() -> void:
 		var kind: String = Rules.terrain_at(t, unit.position)
 		assert_bool(Rules.can_stand(unit.domain(), kind)).override_failure_message(
 			"%s en %s (%s)" % [unit.unit_id, unit.position, kind]).is_true()
+		# Con sitio en el agua, ningun barco empieza varado en la orilla.
+		if unit.domain() == "sea":
+			assert_str(kind).override_failure_message("%s en %s" % [unit.unit_id, unit.position]).is_equal("water")
 	assert_array(e.reserve).is_empty()
 
 func test_a_ship_on_a_board_without_water_stays_in_reserve() -> void:

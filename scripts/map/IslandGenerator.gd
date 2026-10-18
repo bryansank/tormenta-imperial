@@ -63,6 +63,11 @@ const IslandShape := preload("res://scripts/map/IslandShape.gd")
 ## Isla irregular: el contorno de la hierba (antihorario, mundo XZ) y sus
 ## normales hacia fuera. Vacios con la isla cuadrada de antes.
 var _coast := PackedVector2Array()
+## Huecos en la arena sobre los bancos de peces (MapGenerator.sea_deposit_rects:
+## centro XZ y semiejes). Se guardan para volver a ponerlos si la isla se rehace.
+const MAX_SAND_HOLES := 8
+var _sand_holes: Array = []
+var _shore_material: ShaderMaterial = null
 var _coast_normals := PackedVector2Array()
 
 ## Celdas de mar alrededor de la rejilla en la textura de distancia del agua.
@@ -271,7 +276,9 @@ func _generate_island() -> void:
 	var shore_node := MeshInstance3D.new()
 	shore_node.name = "Shore"
 	shore_node.mesh = _build_ring_mesh(0.0, BEACH_TOP_Y, shore_width, BEACH_BOTTOM_Y)
-	shore_node.set_surface_override_material(0, _shader_material("island_sand", {"water_y": WATER_Y}))
+	_shore_material = _shader_material("island_sand", {"water_y": WATER_Y})
+	shore_node.set_surface_override_material(0, _shore_material)
+	_apply_sand_holes()
 	main.add_child(shore_node)
 
 	# El canto de la maqueta: del borde del cesped hacia abajo.
@@ -493,6 +500,27 @@ func _build_skirt_mesh(y_top: float, y_bottom: float) -> ArrayMesh:
 ## Tormenta que tenga StormSky ahora, asi que rehacer la isla a media tormenta
 ## (grid_resized, recarga) no la devuelve limpia. Luego StormSky los funde.
 ## Lo mismo con `night_weight`: una isla rehecha de noche nace de noche.
+## La arena se abre sobre estos rectangulos (los bancos de peces): sin ellos la
+## playa, que baja del cesped al mar por encima de la primera franja de agua,
+## tapaba los bancos. Uniformes, nada por fotograma.
+func set_sand_holes(rects: Array) -> void:
+	_sand_holes = rects.slice(0, MAX_SAND_HOLES)
+	_apply_sand_holes()
+
+func get_sand_holes() -> Array:
+	return _sand_holes.duplicate()
+
+func _apply_sand_holes() -> void:
+	if _shore_material == null:
+		return
+	var packed := PackedVector4Array()
+	for r in _sand_holes:
+		packed.append(r as Vector4)
+	while packed.size() < MAX_SAND_HOLES:
+		packed.append(Vector4.ZERO)
+	_shore_material.set_shader_parameter("holes", packed)
+	_shore_material.set_shader_parameter("hole_count", _sand_holes.size())
+
 func _shader_material(shader_name: String, params: Dictionary) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://scripts/map/%s.gdshader" % shader_name) as Shader

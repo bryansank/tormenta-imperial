@@ -176,3 +176,27 @@ func test_texts_exist_in_both_languages() -> void:
 		for key in ["DEP_FISH_SHOAL", "DEP_SHORT_FISH_SHOAL", "DEP_HINT_FISH_SHOAL", "LBL_DEPOSIT_ENDLESS"]:
 			assert_str(Tr.t(key)).override_failure_message(key).is_not_equal(key)
 	Tr.set_locale(before)
+
+# ── La arena no los tapa (ronda visual de la 1.1) ─────────────────────
+
+func test_each_school_opens_a_hole_in_the_3d_sand() -> void:
+	# La playa 3D baja del cesped por encima de la primera franja de agua, justo
+	# donde viven los bancos: la isla abre un hueco en la arena sobre cada uno.
+	_new_map(SEEDS[0])
+	var rects: Array = _map.sea_deposit_rects()
+	assert_int(rects.size()).is_equal(_shoals().size())
+	for i in rects.size():
+		var d: Dictionary = _shoals()[i]
+		var r: Vector4 = rects[i]
+		var c := GridManager.building_center(Vector2i(d["cell_x"], d["cell_y"]), Vector2i(d["size_x"], d["size_y"]))
+		assert_vector(Vector2(r.x, r.y)).is_equal_approx(Vector2(c.x, c.z), Vector2(0.001, 0.001))
+		assert_float(r.z).is_equal_approx(float(d["size_x"]) * GridManager.cell_size * 0.5, 0.001)
+	var island: Node3D = auto_free(load("res://scripts/map/IslandGenerator.gd").new())
+	island.set_sand_holes(rects)
+	assert_int(island.get_sand_holes().size()).is_equal(rects.size())
+	# Nunca mas de los que caben en el shader.
+	var many: Array = []
+	for i in 12:
+		many.append(Vector4(i, 0, 1, 1))
+	island.set_sand_holes(many)
+	assert_int(island.get_sand_holes().size()).is_equal(island.MAX_SAND_HOLES)

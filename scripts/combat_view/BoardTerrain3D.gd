@@ -74,7 +74,7 @@ static func build(board: Vector2i, seed_value: int, simple := false, scene := SC
 		_edges(mk, board, ext, rng, simple, scene)
 		match scene:
 			SCENE_BEACH:
-				_beach(mk, ext, w, d, rng, simple)
+				_beach(mk, ext, w, d, rng, simple, board, terrain)
 			SCENE_FOREST:
 				_forest(mk, ext, rng, simple)
 		_far_trees(mk, ext, rng, simple, scene)
@@ -94,7 +94,7 @@ static func build(board: Vector2i, seed_value: int, simple := false, scene := SC
 	_edges(mk, board, ext, rng, simple, scene)
 	match scene:
 		SCENE_BEACH:
-			_beach(mk, ext, w, d, rng, simple)
+			_beach(mk, ext, w, d, rng, simple, board, terrain)
 		SCENE_FOREST:
 			_forest(mk, ext, rng, simple)
 	return mk.commit()
@@ -307,11 +307,20 @@ static func _tree(mk, base: Vector3, s: float) -> void:
 
 ## Playa: arena en el borde del fondo y el mar detras, con lanchas de la
 ## Regencia varadas y un embarcadero de tablas.
-static func _beach(mk, ext: Vector2, w: float, d: float, rng: RandomNumberGenerator, simple: bool) -> void:
+static func _beach(mk, ext: Vector2, w: float, d: float, rng: RandomNumberGenerator, simple: bool, board := Vector2i(8, 8), terrain: Dictionary = {}) -> void:
 	var hz := ext.y * 0.5
 	var sand := C(S.CREAM, -0.12)
 	# Arena sobre el borde del fondo (encima del cesped de la peana).
 	mk.flat(Vector3(0, -0.1, -hz - MARGIN * 0.5 - 0.04), Vector2(w, MARGIN + 0.08), sand)
+	# Costa (aire y mar): las columnas de agua del tablero siguen por el borde
+	# hasta el mar del fondo. Sin esto una franja de arena las cerraba y los
+	# barcos de la fila 0 parecian varados en la playa (ronda visual de la 1.1).
+	for x in board.x:
+		if not Layout.is_water(terrain, Vector2i(x, 0)):
+			continue
+		var cx := Layout.cell_to_world(Vector2i(x, 0), board).x
+		mk.flat(Vector3(cx, -0.095, -hz - MARGIN * 0.5 - 0.04), Vector2(Layout.CELL + 0.02, MARGIN + 0.1),
+			C(S.SKY, WATER_COLOR_D))
 	# El mar: una lamina grande al fondo, sobre la mesa, y la espuma en la orilla.
 	var shore := -d * 0.5
 	mk.flat(Vector3(0, -0.24, shore - 40.0), Vector2(w * 8.0, 80.0), C(S.SKY, -0.18))

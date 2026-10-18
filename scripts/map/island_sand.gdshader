@@ -13,6 +13,10 @@ uniform vec4 wet_color : source_color = vec4(0.62, 0.53, 0.40, 1.0);
 uniform float contact_width : hint_range(0.0, 0.5) = 0.14;
 uniform float contact_dark : hint_range(0.0, 1.0) = 0.38;
 uniform float water_y = -0.5;
+// Huecos sobre los bancos de peces (IslandGenerator.set_sand_holes): centro XZ
+// y semiejes. La arena no se pinta encima de ellos y se ve el agua y el banco.
+uniform vec4 holes[8];
+uniform int hole_count = 0;
 
 varying vec3 world_pos;
 
@@ -34,6 +38,12 @@ float noise(vec2 p) {
 
 void fragment() {
 	vec2 uv = world_pos.xz;
+	for (int i = 0; i < hole_count; i++) {
+		vec2 q = abs(uv - holes[i].xy) - (holes[i].zw - vec2(0.7));
+		if (length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) < 0.7) {
+			discard;
+		}
+	}
 	float n = noise(uv * 0.4) * 0.6 + noise(uv * 1.7) * 0.4;
 	vec3 col = mix(sand_color.rgb, sand_dark.rgb, smoothstep(0.35, 0.75, n));
 	if (!simple) {

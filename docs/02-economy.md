@@ -260,6 +260,17 @@ explota el **Muelle de pesca** (docs/03).
   de contacto, una malla en caché por tamaño y variante. 2D en
   `BuildingArt2D._dep_fish_shoal()`, horneado en `ArtCache2D` como los demás. Sin
   etapas: nunca se agota.
+- **La arena no los tapa (ronda visual de la 1.1):** los bancos viven en la primera
+  franja de agua (el muelle tiene que tocarlos desde la orilla), justo donde la playa 3D
+  de `IslandGenerator` baja del césped al mar, y la arena los tapaba casi enteros. La
+  isla abre un hueco en la arena sobre cada banco: `MapGenerator.sea_deposit_rects()`
+  (centro XZ y semiejes) → `IslandGenerator.set_sand_holes()` → uniformes `holes` /
+  `hole_count` de `island_sand.gdshader` (hasta 8, rectángulo redondeado, `discard`). Se
+  avisa diferido y solo cuando cambian los bancos (sortear, quitar, limpiar), nunca por
+  fotograma; si la isla se rehace (`grid_resized`) vuelve a poner los huecos. Se ve el
+  agua y el banco, como una cala. En 2D el banco se pinta encima de la arena y no hacía
+  falta. Lo fija `tests/map/test_fish_shoals.gd`; capturas con
+  `godot --path . -s tools/costa_probe.gd -- --no-title --no-dev --mar` (docs/03).
 
 ## Yacimientos en el mapa (aspecto, 2026-10-14)
 

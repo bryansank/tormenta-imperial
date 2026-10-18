@@ -1362,6 +1362,7 @@ func _refresh_cells() -> void:
 			var coords := Vector2i(x, y)
 			var unit := CombatManager.get_unit_at(coords)
 			_style_cell(cell, bar, icon, coords, unit, active, moves, targets, boss)
+			_paint_air_overhead(cell, coords, unit)
 			if index < _cell_marks.size():
 				_paint_side_mark(_cell_marks[index], unit)
 			if index < _cell_previews.size():
@@ -1432,6 +1433,42 @@ func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vect
 		cell.add_theme_stylebox_override(state, style)
 	cell.add_theme_color_override("font_color", text_color)
 	cell.add_theme_color_override("font_hover_color", text_color)
+
+## Aire y mar: un avion encima de una unidad de superficie no tiene casilla
+## propia en 2D (la casilla pinta la de superficie, get_unit_at). Sin marca, el
+## avion desaparecia. Su silueta pequena arriba en el centro, con el tinte de su
+## bando, dice "aqui arriba vuela uno" (ronda visual de la 1.1). La etiqueta se
+## crea la primera vez que hace falta y luego solo se muestra u oculta.
+func board_air_mark(coords: Vector2i) -> TextureRect:
+	var index: int = coords.y * _board.x + coords.x
+	if index < 0 or index >= _cells.size():
+		return null
+	return _cells[index].get_node_or_null("AirOverhead") as TextureRect
+
+func _paint_air_overhead(cell: Button, coords: Vector2i, shown: CombatUnit) -> void:
+	var flier: CombatUnit = null
+	if shown != null and shown.layer() != "air":
+		var enc = CombatManager.get_encounter()
+		if enc != null:
+			flier = enc.get_unit_at_layer(coords, "air")
+	var mark: TextureRect = cell.get_node_or_null("AirOverhead") as TextureRect
+	if flier == null:
+		if mark != null:
+			mark.visible = false
+		return
+	if mark == null:
+		mark = TextureRect.new()
+		mark.name = "AirOverhead"
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cell.add_child(mark)
+	var side := float(_cell_size) * 0.42
+	mark.size = Vector2(side, side)
+	mark.position = Vector2((float(_cell_size) - side) * 0.5, -side * 0.35)
+	mark.texture = UITheme.unit_icon(flier.unit_id, int(side))
+	mark.modulate = UITheme.unit_face_color(flier.side == PLAYER, flier.has_acted).lightened(0.15)
+	mark.visible = true
 
 ## La cara de una unidad: la silueta de su tipo, tenida con el color de su bando
 ## y apagada si ya gasto el turno. Si el PNG no esta en disco se vuelve a la
