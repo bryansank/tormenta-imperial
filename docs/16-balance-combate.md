@@ -666,3 +666,56 @@ Repetir (autoload temporal `BalanceProbe`, ver la cabecera de la sonda):
 
     godot --headless --path . -- --only=coast --no-dev
 
+
+### La IA nueva y el reequilibrio de lanchas y bombarderos (1.1, sin medir aún)
+
+**Qué cambió** (decisión de Bryan, `integracion/v1.1-aire-mar`):
+
+- **IA** (docs/15 §8 "La IA"): el objetivo ya no se elige por el `power` sino por
+  el valor del golpe, `CombatAI.shot_worth` = (daño / vida que le queda) ×
+  amenaza del objetivo para los nuestros ^ `combat_ai_threat_weight` (1,0). Sin
+  tiro, la unidad va al rival de más valor descontado por turnos de camino. Vale
+  para los dos bandos, también en tierra pura.
+- **Lancha torpedera**: vida 90 → **120**, defensa 1 → **2**, alcance 1 → **2**
+  (alcanza la orilla y la primera fila de tierra desde el agua). Coste igual.
+- **Bombardero**: ataque 18 → **14**, vida 110 → **95**, oro 260 → **300**.
+
+Daños netos que cambian (sin moral ni cartas):
+
+| Ataca -> recibe | Antes | Ahora |
+|---|---|---|
+| bombardero -> tanque | 20 | 14 (9 ×1,5) |
+| bombardero -> artillería | 26 | 20 (13 ×1,5) |
+| bombardero -> cañonera | 23 | 17 (11 ×1,5) |
+| bombardero -> acorazado | 18 | 12 (8 ×1,5) |
+| bombardero -> infantería | 16 | 12 |
+| infantería -> lancha | 7 | 6 |
+| artillería -> lancha | 13 | 12 |
+| cañonera -> lancha | 17 (11 ×1,5) | 15 (10 ×1,5) |
+
+**Antes** (lo que hay que batir; tabla "Medido" de arriba, IA vieja): lanchas 5 %
+(era 2, 2 tierra + 2 lanchas) y 0 % (era 3, 2 tanques + 2 lanchas);
+bombarderos 100 % con 0,3-0,4 bajas.
+
+**Ronda final — qué medir y con qué objetivo** (`tools/balance_probe.gd`, autoload
+temporal, `override.cfg` propio; `--only=coast`, que ya trae las filas de 4 de un
+tipo + 2 de tierra y las de acorazados y dirigibles del jugador):
+
+    godot --headless --path . -- --only=coast --no-dev
+    godot --headless --path . -- --only=coast --no-dev --threat_w=0   # sensibilidad de la IA
+
+1. **Costa por unidad**: en su terreno típico (Puerto de su era, "2 tierra + 4 X" /
+   "2 tanques + 4 X"), **ninguna < 30 % ni > 90 %**; mirar también las filas 2+2.
+   Si la lancha sigue baja: vida 120 → 140 o ataque 15 → 17. Si el bombardero
+   sigue > 90 %: vida 95 → 85 o que la cañonera le pegue a 2 (`targets`).
+   Ningún combate de costa > 20 rondas.
+2. **Tierra pura** (IA nueva frente a la vieja): las filas "tierra(ref)" de la
+   costa (salida tierra adentro, era 2 y 3) y `--only=expeditions` (eras 1-3,
+   plantillas 3/4/6). Que no se desplomen ni se disparen respecto a §6.2 y a la
+   tabla "Medido" (era 2 ref. 100 %, era 3 ref. 90 %). Si cambian mucho, tocar
+   `combat_ai_threat_weight` (0 / 0,5 / 1), no las estadísticas de tierra.
+3. La rebaja de misiones de costa de la ronda anterior (un barco por combate, sin
+   acorazado enemigo) se mantiene salvo que la IA nueva lo cambie.
+
+Para medir la IA vieja como "antes" en tierra pura: `git show e00f696:scripts/combat/CombatAI.gd`
+sobre una copia temporal (sin commitear) y la misma sonda.

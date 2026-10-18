@@ -116,8 +116,7 @@ func test_the_expedition_hands_its_node_terrain_to_the_board() -> void:
 # ── El Ataque Final ──────────────────────────────────────────────────
 
 func test_the_last_wave_of_an_era_three_siege_brings_airships() -> void:
-	# De serie el asedio sale sin dirigibles (0, docs/17 "Aire y mar": medido, la
-	# IA se queda enganchada en el). Se fuerza 1 para fijar como entran.
+	# Se fuerza 1 para fijar como entran, valga lo que valga la serie.
 	var saved: int = GameConfig.final_audit_airships_last_wave
 	GameConfig.final_audit_airships_last_wave = 1
 	for seed_value in [3, 77, 501, 4242]:
@@ -133,12 +132,16 @@ func test_the_last_wave_of_an_era_three_siege_brings_airships() -> void:
 			assert_int(bodies).is_less_equal(GameConfig.combat_deploy_cap)
 	GameConfig.final_audit_airships_last_wave = saved
 
-func test_the_default_siege_brings_no_airship() -> void:
-	# Lo medido en docs/17: con dirigible la guarnicion de referencia no gana.
-	assert_int(GameConfig.final_audit_airships_last_wave).is_equal(0)
+func test_the_default_siege_brings_one_airship_to_the_last_wave() -> void:
+	# 1.1: con la IA que pesa el dano real (CombatAI.shot_worth) el dirigible
+	# vuelve a la ultima oleada (docs/17 "La IA nueva"); solo a la ultima.
+	assert_int(GameConfig.final_audit_airships_last_wave).is_equal(1)
+	assert_int(GameConfig.final_audit_air_escort_fighters).is_equal(1)
 	var audit: FinalAudit = AuditScript.create(4242, {"vehicle": 6}, 3)
-	for wave in audit.waves:
-		assert_int(int(wave["roster"].get("airship", 0))).is_equal(0)
+	var last: int = audit.wave_count() - 1
+	assert_int(int(audit.wave_at(last)["roster"].get("airship", 0))).is_equal(1)
+	for i in range(last):
+		assert_int(int(audit.wave_at(i)["roster"].get("airship", 0))).is_equal(0)
 
 func test_no_airships_before_era_three() -> void:
 	var audit: FinalAudit = AuditScript.create(4242, {"vehicle": 6}, 2)
@@ -146,8 +149,7 @@ func test_no_airships_before_era_three() -> void:
 		assert_int(int(wave["roster"].get("airship", 0))).is_equal(0)
 
 func test_fighters_escort_the_last_wave_only_if_you_have_planes() -> void:
-	# De serie la escolta va a 0 (docs/17 "Aire y mar"); se fuerza 1 para fijar
-	# como entra.
+	# Se fuerza 1 para fijar como entra, valga lo que valga la serie.
 	var saved: int = GameConfig.final_audit_air_escort_fighters
 	GameConfig.final_audit_air_escort_fighters = 1
 	var ground: FinalAudit = AuditScript.create(4242, {"vehicle": 6}, 3)

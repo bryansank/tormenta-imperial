@@ -630,11 +630,11 @@ that, closing a board mid-think and opening another left two enemy loops driving
 the new one.
 
 `CombatAI` is deliberately simple: score every reachable cell (a cell that lets
-the unit shoot this turn is worth `SCORE_CAN_ATTACK` = 1000 more than any amount
-of walking), move there, focus the lowest-HP target in range, break ties toward
-the higher-`power` unit, and entrench (`defend`) when nothing is reachable. It
-takes `rival_side(unit.side)`, so the same AI drives the enemy on the board and
-either side under `AutoResolver`.
+the unit shoot this turn beats any amount of walking), move there, hit the target
+where the blow is worth most (a kill first, then `shot_worth`), and entrench
+(`defend`) when nothing is reachable. It takes `rival_side(unit.side)`, so the
+same AI drives the enemy on the board and either side under `AutoResolver`.
+How a target is valued (1.1): see §8 "La IA".
 
 ### `is_board_open()` is not `is_in_encounter()`
 
@@ -1189,6 +1189,7 @@ All of it in `scripts/services/GameConfig.gd`. No magic numbers anywhere in
 | `combat_deploy_cap` | `6` | Max units per side (also caps garrisons and generated rosters) | Higher = longer, busier fights and more that can die at once. It is also the ceiling every roster generator clamps to, so raising it makes the whole game heavier at once |
 | `combat_turn_limit` | `20` | Rounds before the HP tiebreak | Lower punishes slow, defensive play harder (a tie is a player loss); higher lets attrition decide instead of the clock |
 | `combat_ai_step_delay` | `0.45` s | Pause between enemy actions | Lower is snappier and harder to read; 0 makes the enemy round vanish in a frame. Halved automatically in dev mode |
+| `combat_ai_threat_weight` | `1.0` | Peso de la amenaza del objetivo en el valor de un golpe (`CombatAI.shot_worth`, ver "La IA" abajo) | 0 = solo la parte de la vida que se lleva el golpe (la ventaja por tipo va dentro del dano); 1 = la amenaza pesa tanto como el dano. Subirlo hace que todos vayan antes a por lo que mas pega |
 | `combat_unit_stats` | see below | `hp`/`atk`/`def`/`move`/`range`/`min_range`/`initiative` per unit type | The single most sensitive dial in the pillar. `min_range` is what makes positioning matter — set artillery's to 1 and the board flattens into a brawl |
 | `combat_enemy_scale_per_depth` | `0.15` | Pressure added per map layer | Higher makes a deep run steepen fast; it drives both roster size and HP/ATK |
 | `combat_enemy_scale_per_era` | `0.25` | Pressure added per era past 1 | Higher keeps late-era fights dangerous; it also scales encounter loot (`encounter_rewards`), so raising it is not purely a tax |
@@ -1218,11 +1219,11 @@ Default `combat_unit_stats` (los HP son los de `GameConfig`: x3,3 sobre los
 | `infantry` | 100 | 8 | 2 | 3 | 1 | 1 | 5 | `land` |
 | `artillery` | 75 | 14 | 1 | 1 | 3 | 2 | 3 | `land` |
 | `vehicle` | 200 | 12 | 5 | 4 | 1 | 1 | 4 | `land` |
-| `torpedo_boat` | 90 | 15 | 1 | 4 | 1 | 1 | 6 | `sea` |
+| `torpedo_boat` | 120 | 15 | 2 | 4 | 2 | 1 | 6 | `sea` (1.1: antes 90 / def 1 / alcance 1) |
 | `gunboat` | 140 | 12 | 3 | 3 | 3 | 1 | 4 | `sea` |
 | `dreadnought` | 280 | 16 | 6 | 2 | 4 | 2 | 2 | `sea` |
 | `fighter` | 90 | 12 | 2 | 5 | 1 | 1 | 7 | `air` |
-| `bomber` | 110 | 18 | 1 | 4 | 1 | 1 | 3 | `air` (no ataca al aire) |
+| `bomber` | 95 | 14 | 1 | 4 | 1 | 1 | 3 | `air` (no ataca al aire; 1.1: antes 110 / atk 18) |
 | `airship` | 260 | 10 | 4 | 2 | 2 | 1 | 2 | `air` |
 
 `domain` decide por donde anda la unidad, a quien pega y en que capa ocupa la
@@ -1230,6 +1231,50 @@ casilla: ver [§11](#11-dominios-mar-aire-y-espacio). Las claves nuevas de
 `combat_*` (`combat_domain_moves`, `combat_domain_targets`, `combat_coast_*`,
 `combat_coastal_*`, `combat_loot_coastal_parts`, `combat_home_coast_seed`) estan
 explicadas alli.
+
+### La IA (1.1, `integracion/v1.1-aire-mar`)
+
+`CombatAI` elige objetivo por el **dano que hace de verdad**, no por el `power` de
+GameConfig (lo que cuesta una unidad). Para cada rival calcula una vez por turno:
+
+- `lethal`: el golpe (CombatRules.damage, con ventaja por tipo y guardia) le
+  quita toda la vida. Rematar sigue mandando sobre todo lo demas.
+- `shot_worth(unit, enemy, allies)` = (dano del golpe / vida que le queda) x
+  `threat_of(enemy, allies)` ^ `combat_ai_threat_weight`. La **amenaza** es el
+  mayor dano que ese rival haria de un golpe a uno de los nuestros a los que puede
+  pegar por dominio (0 si no puede pegar a ninguno: un bombardero para una
+  escuadrilla de cazas). La parte de la vida, y no el dano a secas, castiga lo que
+  "apenas se daña": 8 a un dirigible de 350 valen mucho menos que 8 a un canon de 100.
+- **Foco** (`_focus_target`): si no hay tiro este turno, la unidad camina hacia el
+  rival de mas `shot_worth / (1 + turnos para tenerlo a tiro)`, no hacia el mas
+  cercano. Perseguir lo que esta lejos o lo que no se puede alcanzar sale caro.
+
+Orden entre los que estan a tiro: rematable, valor del golpe, menos HP, mas
+cerca, uid menor (determinista). Una casilla con tiro sigue valiendo mas que
+cualquier avance.
+
+Por que (docs/17 "Aire y mar"): con el `power`, los blindados de la guarnicion
+perseguian al dirigible de la Regencia (poder 55) arañandole 7 por golpe mientras
+los canones (28), que les ganan por tipo, los rompian: 13,5 % de victorias.
+
+Probado y **descartado**: dejar de contar como "de tiro" una casilla cuyo mejor
+golpe valia menos de una fraccion del foco (un "tiro pobre"). Con 40 semillas y 6
+blindados bajaba el asedio sin aire del ~100 % al 60-80 % y con dirigible al
+2-47 %: las unidades perdian turnos caminando. Sondeo corto del peso de la
+amenaza (40 semillas, 6 blindados, 4 torres; sin tiro pobre):
+
+| `combat_ai_threat_weight` | Sin dirigible | Con dirigible y escolta |
+|---|---|---|
+| 0 | 100 % | 80 % |
+| 0,5 | 97,5 % | 80 % |
+| **1 (serie)** | **100 %** | **87,5 %** |
+
+Con 100 semillas, peso 1, sin dirigible: 4 blindados 52 % (antes 33,5 %), 5
+blindados 78 % (69 %), 6 blindados 100 % (86 %), mixta 2+2+2 31 % (0 %). Las
+cifras definitivas salen de la ronda final (docs/16 y docs/17, "Ronda final").
+Tests: `tests/combat/test_combat_ai.gd` (valor del golpe, amenaza 0, blindado
+contra canon y dirigible, foco) y `tests/combat/test_type_advantage.gd` (la
+ventaja por tipo con peso 0; con peso 1, el blindado rompe el canon).
 
 Morale is captured once and frozen for the whole expedition or siege: at launch for
 an expedition (`_morale_snapshot`), when the gate opens ("QUE BAJEN",
@@ -1409,11 +1454,11 @@ modelo, la colonia, los textos y los tests. El espacio sigue siendo una idea.
 
 | Unidad | Dominio | Edificio | Era | Coste | Sueldo | Poder | Papel |
 |---|---|---|---|---|---|---|---|
-| Lancha torpedera `torpedo_boat` | mar | Astillero | 2 | 100 oro, 40 acero, 40 madera | 2 | 24 | Rapida y fragil; sus torpedos hunden al Acorazado |
+| Lancha torpedera `torpedo_boat` | mar | Astillero | 2 | 100 oro, 40 acero, 40 madera | 2 | 24 | Rapida; torpedos a 2 casillas (alcanza la orilla desde el agua); hunde al Acorazado |
 | Canonera `gunboat` | mar | Astillero | 2 | 130 oro, 60 acero, 6 tablones | 2 | 30 | Alcance 3; barre la playa (infanteria), caza lanchas y derriba cazas |
 | Acorazado `dreadnought` | mar | Astillero | 3 | 320 oro, 160 acero, 60 petroleo, 10 vigas | 5 | 75 | Mucha vida, alcance 4 (minimo 2), lento |
 | Caza `fighter` | aire | Aerodromo | 3 | 200 oro, 60 acero, 6 combustible | 3 | 40 | El mas rapido; gana a bombardero y dirigible |
-| Bombardero `bomber` | aire | Aerodromo | 3 | 260 oro, 90 acero, 40 petroleo, 8 combustible | 4 | 50 | Ataque 18 contra tierra y barcos; no puede atacar al aire |
+| Bombardero `bomber` | aire | Aerodromo | 3 | 300 oro, 90 acero, 40 petroleo, 8 combustible | 4 | 50 | Ataque 14 contra tierra y barcos; no puede atacar al aire |
 | Dirigible `airship` | aire | Aerodromo | 3 | 280 oro, 60 acero, 60 petroleo, 10 combustible | 4 | 55 | 260 de vida, alcance 2, lento; la Regencia lo trae al asedio |
 
 Estadisticas de combate en el §8. Ningun precio esta medido con `line_probe`.
@@ -1524,11 +1569,12 @@ despliegue es identico al de antes (`test_air_sea_rules.gd` lo compara).
 
 El codigo deja que la ultima oleada, desde la era 3, traiga dirigibles en el
 hueco de un canon y, si tu guarnicion tiene aviones, cazas de escolta
-(`FinalAudit.air_escort`, va en el guardado). **Medido, los dos van APAGADOS**
-(`final_audit_airships_last_wave` = 0, `final_audit_air_escort_fighters` = 0): con
-un dirigible la guarnicion de referencia bajaba del 86 % al 13,5 % (la IA se
-engancha en el), y la escolta hacia que tener cazas restara. Cifras y por que:
-[17](17-balance-asedio.md), "Aire y mar".
+(`FinalAudit.air_escort`, va en el guardado). Estuvieron apagados (con la IA
+vieja la guarnicion de referencia bajaba del 86 % al 13,5 %); **en la 1.1 van
+ENCENDIDOS otra vez** (`final_audit_airships_last_wave` = 1,
+`final_audit_air_escort_fighters` = 1) con la IA que pesa el dano real (§8 "La
+IA"): sondeo corto, 87,5 %. Cifras y lo que falta medir:
+[17](17-balance-asedio.md), "Aire y mar" y "La IA nueva".
 
 ### La colonia
 

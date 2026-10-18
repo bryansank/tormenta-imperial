@@ -15,6 +15,9 @@ extends Node
 ## Aire y mar: `-- --only=coast` mide solo las misiones de costa (expedicion
 ## al Puerto e incursion pirata, con agua en el tablero) con plantillas de solo
 ## tierra frente a otras con barcos o aviones (docs/16, "Aire y mar").
+## IA (docs/15 §8 "La IA"): `-- --threat_w=F` pisa `combat_ai_threat_weight`;
+## `-- --coast-seeds=N`
+## baja las ofertas por fila de costa.
 ## Nivel Gobernador (enemigos de expedicion `expedition_enemy_mult` veces mas
 ## fuertes):  godot --headless --path . -- --tier=governor
 ##
@@ -120,6 +123,10 @@ func _run() -> void:
 			if m.size() == 2:
 				GameConfig.combat_type_advantage["advantage"] = float(m[0])
 				GameConfig.combat_type_advantage["disadvantage"] = float(m[1])
+		elif a.begins_with("--threat_w="):
+			GameConfig.combat_ai_threat_weight = float(a.trim_prefix("--threat_w="))
+		elif a.begins_with("--coast-seeds="):
+			_coast_seeds = maxi(1, int(a.trim_prefix("--coast-seeds=")))
 		elif a.begins_with("--expedition_mult="):
 			GameConfig.game_tier_rules["governor"]["expedition_enemy_mult"] = float(a.trim_prefix("--expedition_mult="))
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN, tier)
@@ -154,6 +161,7 @@ func _print_config() -> void:
 		GameConfig.combat_ai_step_delay, str(GameConfig.combat_map_depth),
 		GameConfig.combat_draft_options,
 	])
+	print("  ai_threat_weight=%.2f" % GameConfig.combat_ai_threat_weight)
 	for unit_id in ["infantry", "artillery", "vehicle"]:
 		print("  %-10s %s" % [unit_id, str(GameConfig.combat_unit_stats.get(unit_id, {}))])
 
@@ -587,6 +595,9 @@ const COAST_PARTIES := {
 		{"label": "4 tierra", "counts": {"infantry": 2, "artillery": 2}},
 		{"label": "2 tierra + 2 lanchas", "counts": {"infantry": 1, "artillery": 1, "torpedo_boat": 2}},
 		{"label": "2 tierra + 2 canoneras", "counts": {"infantry": 1, "artillery": 1, "gunboat": 2}},
+		# 1.1, reequilibrio: 4 de un tipo + 2 de tierra de apoyo (docs/16 "Aire y mar").
+		{"label": "2 tierra + 4 lanchas", "counts": {"infantry": 1, "artillery": 1, "torpedo_boat": 4}},
+		{"label": "2 tierra + 4 canoneras", "counts": {"infantry": 1, "artillery": 1, "gunboat": 4}},
 	],
 	3: [
 		{"label": "4 tierra", "counts": {"infantry": 1, "artillery": 1, "vehicle": 2}},
@@ -595,9 +606,16 @@ const COAST_PARTIES := {
 		{"label": "2 tanques + 2 bombarderos", "counts": {"vehicle": 2, "bomber": 2}},
 		{"label": "2 tanques + 2 cazas", "counts": {"vehicle": 2, "fighter": 2}},
 		{"label": "2 tanq + 2 caz + 2 bomb", "counts": {"vehicle": 2, "fighter": 2, "bomber": 2}},
+		{"label": "2 tanques + 4 lanchas", "counts": {"vehicle": 2, "torpedo_boat": 4}},
+		{"label": "2 tanques + 4 canoneras", "counts": {"vehicle": 2, "gunboat": 4}},
+		{"label": "2 tanques + 4 acorazados", "counts": {"vehicle": 2, "dreadnought": 4}},
+		{"label": "2 tanques + 4 cazas", "counts": {"vehicle": 2, "fighter": 4}},
+		{"label": "2 tanques + 4 bombarderos", "counts": {"vehicle": 2, "bomber": 4}},
+		{"label": "2 tanques + 4 dirigibles", "counts": {"vehicle": 2, "airship": 4}},
 	],
 }
 const COAST_SEEDS := 120
+var _coast_seeds: int = COAST_SEEDS
 
 ## Las ofertas de costa de una era: expediciones al Puerto (3 combates) e
 ## incursiones piratas (1), sacadas de semillas seguidas que pasen el filtro.
@@ -617,11 +635,11 @@ func _sweep_coast() -> void:
 	print("era  tipo         plantilla                 n    gana   bajas  rondas  max  >20r  min   nodos")
 	for era in [2, 3]:
 		for kind in [Generator.KIND_EXPEDITION, Generator.KIND_RAID]:
-			var offers: Array = _coast_offers(kind, era, COAST_SEEDS)
+			var offers: Array = _coast_offers(kind, era, _coast_seeds)
 			# Referencia: la misma salida tierra adentro (sin agua) con la plantilla
 			# de solo tierra. Lo que cambia la costa se lee contra esta fila.
 			var inland: Dictionary = COAST_PARTIES[era][0]
-			var ref := _measure_coast(_coast_offers(kind, era, COAST_SEEDS, false), inland["counts"])
+			var ref := _measure_coast(_coast_offers(kind, era, _coast_seeds, false), inland["counts"])
 			print("%-4d %-12s %-25s %-4d %-6s %-6.2f %-7.1f %-4d %-5s %-5.1f %.2f" % [
 				era, "tierra(ref)", inland["label"], ref["n"],
 				"%.0f%%" % (100.0 * ref["win_rate"]), ref["casualties_mean"], ref["rounds_mean"],

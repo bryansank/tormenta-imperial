@@ -91,10 +91,13 @@ func test_without_the_circle_damage_is_attack_minus_defense() -> void:
 
 # ── La IA ────────────────────────────────────────────────────────────
 
-func test_the_ai_prefers_the_good_target_over_the_valuable_one() -> void:
-	# Un blindado enemigo con dos rivales al lado: infanteria (poder 10, su buen
-	# objetivo) y artilleria (poder 28, su mal objetivo). Sin el circulo mordia al
-	# canon por valor; con el, arrolla a la infanteria.
+func test_the_ai_counts_the_type_edge_in_the_damage_it_does() -> void:
+	# Un blindado enemigo con dos rivales al lado: infanteria (su buen objetivo) y
+	# artilleria (su mal objetivo). Mirando solo el dano (peso de la amenaza 0),
+	# la ventaja por tipo decide: 15 de 100 a la infanteria pesa mas que 8 de 75
+	# al canon. Sin el circulo, el canon (11 de 75) vuelve a ser el mejor golpe.
+	var saved_w: float = GameConfig.combat_ai_threat_weight
+	GameConfig.combat_ai_threat_weight = 0.0
 	var tank := _unit("vehicle", ENEMY)
 	var foot := _unit("infantry", PLAYER)
 	var gun := _unit("artillery", PLAYER)
@@ -108,6 +111,26 @@ func test_the_ai_prefers_the_good_target_over_the_valuable_one() -> void:
 	GameConfig.combat_type_advantage["beats"] = {}
 	plan = AIScript.plan_turn(e, tank.uid)
 	assert_int(plan[plan.size() - 1]["target"]).is_equal(gun.uid)
+	GameConfig.combat_ai_threat_weight = saved_w
+
+func test_with_threat_the_ai_breaks_the_gun_that_counters_it() -> void:
+	# El mismo tablero con la amenaza pesando (la serie, 1.1): el canon le hace 14
+	# al blindado y la infanteria 2, asi que el blindado va a por el canon aunque
+	# le pegue con desventaja. Es lo que impide que la guarnicion se deje romper
+	# por los canones del asedio (docs/15 §8 "La IA").
+	var saved_w: float = GameConfig.combat_ai_threat_weight
+	GameConfig.combat_ai_threat_weight = 1.0
+	var tank := _unit("vehicle", ENEMY)
+	var foot := _unit("infantry", PLAYER)
+	var gun := _unit("artillery", PLAYER)
+	var e: Encounter = EncounterScript.create([foot, gun, tank], 0, false)
+	e.start()
+	tank.position = Vector2i(4, 4)
+	foot.position = Vector2i(3, 4)
+	gun.position = Vector2i(5, 4)
+	var plan: Array = AIScript.plan_turn(e, tank.uid)
+	assert_int(plan[plan.size() - 1]["target"]).is_equal(gun.uid)
+	GameConfig.combat_ai_threat_weight = saved_w
 
 func test_a_kill_still_comes_before_the_type_edge() -> void:
 	# Rematar sigue mandando: un canon casi muerto cae antes que la infanteria.

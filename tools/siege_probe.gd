@@ -28,6 +28,8 @@ extends SceneTree
 ##   --escort=N       pisa `final_audit_air_escort_fighters`
 ##   --airship_hp=N   pisa la vida del dirigible; --land_air=N el alcance de
 ##                    tierra y mar contra el aire (combat_domain_targets)
+##   --threat_w=F    pisa `combat_ai_threat_weight` (IA: peso de la amenaza)
+##   --only=a,b       varias configuraciones separadas por comas
 ##   --adv=off        sin ventaja por tipo (combat_type_advantage), para medir
 ##                    el "antes"; --adv=1.5,0.75 pisa los dos multiplicadores
 ##
@@ -108,7 +110,7 @@ func _initialize() -> void:
 	print("%-18s %7s  %11s %7s %11s %8s %8s" % [
 		"guarnicion", "gana%", "oleadas", "vivos", "vivos|gana", "rondas", "minutos"])
 	for config in CONFIGS:
-		if _only != "" and String(config["label"]) != _only:
+		if _only != "" and not _only.split(",").has(String(config["label"])):
 			continue
 		_run_config(config)
 	_clock.free()
@@ -255,6 +257,7 @@ func _apply_overrides() -> void:
 			"airships": _cfg.final_audit_airships_last_wave = int(value)
 			"escort": _cfg.final_audit_air_escort_fighters = int(value)
 			"airship_hp": _cfg.combat_unit_stats["airship"]["hp"] = int(value)
+			"threat_w": _cfg.combat_ai_threat_weight = float(value)
 			"land_air": 
 				_cfg.combat_domain_targets["land"]["air"] = int(value)
 				_cfg.combat_domain_targets["sea"]["air"] = int(value)

@@ -316,3 +316,56 @@ Repetir:
     godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --airships=1 --escort=1
     godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --tier=governor
 
+
+## La IA nueva (1.1, `integracion/v1.1-aire-mar`): dirigible y escolta ENCENDIDOS
+
+Decisión de Bryan: arreglar la IA y volver a encender el dirigible de la última
+oleada (`final_audit_airships_last_wave` = **1**) y la escolta de cazas si tienes
+aviones (`final_audit_air_escort_fighters` = **1**). La IA ya no elige por `power`
+sino por el valor del golpe (`CombatAI.shot_worth`: parte de la vida que se lleva
+× amenaza del objetivo; docs/15 §8 "La IA"): los blindados rompen los cañones y no
+persiguen al dirigible.
+
+**Sondeo corto** (antes de la ronda final, `tools/siege_probe.gd`, era 3, moral
+100, 4 torres; `--threat_w=N` pisa el peso):
+
+| Guarnición | IA vieja (200 sem.) | IA nueva, sin dirigible | IA nueva, con dirigible y escolta |
+|---|---|---|---|
+| 4 vehículos | 33,5 % | 52 % (100 sem.) | — |
+| 5 vehículos | 69 % | 78 % (100 sem.) | — |
+| mixta 2+2+2 | 0 % | 31 % (100 sem.) | — |
+| **6 vehículos (referencia)** | **86 %** | **100 %** (100 sem.) | **87,5 %** (40 sem.; antes 13,5 %) |
+
+Con peso 0 (solo daño relativo) salía casi igual: 100 % / 80 %. El "tiro pobre"
+(docs/15 §8) se probó y se quitó: bajaba el asedio 15-30 puntos.
+
+Lectura provisional: la IA nueva hace a la guarnición de blindados bastante más
+fuerte en tierra (dejaba de pegarle a la infantería mientras los cañones la
+rompían), y el dirigible devuelve la referencia a la franja pedida. Como el
+asedio real es siempre de era 3, **el dirigible va siempre**: la cifra que
+cuenta es la de la columna derecha.
+
+**Ronda final — qué medir y con qué objetivo** (200 semillas, `override.cfg`
+propio):
+
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --airships=0 --escort=0
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=2
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --morale=75
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --tier=governor
+
+- **6 vehículos, 4 torres, con dirigible y escolta (la serie): 75-85 %.** Si
+  sale por encima, `final_audit_last_wave_multiplier` 1,10 → 1,15 (no las
+  estadísticas de tierra); si sale por debajo, el peso de la IA o la vida del
+  dirigible de la Regencia.
+- 6 veh + 2 cazas no debe quedar por debajo de 6 vehículos solos (la escolta no
+  puede castigar tener Aeródromo; si lo hace, escolta a 0).
+- Sin torres (2) o con moral 75: claramente por debajo (antes ~45 %);
+  Gobernador ≥ 60 %.
+- Tierra pura (`--airships=0 --escort=0`): documentar la subida frente a la IA
+  vieja; si se dispara más allá del ~100 % en 5 vehículos, revisar
+  `combat_ai_threat_weight`.
+- Los casos de guardia de `tests/integration/test_full_campaign.gd`
+  (`test_the_siege_is_hard_but_winnable_with_a_full_garrison`,
+  `test_the_smallest_garrison_that_can_resummon_does_not_win`) se revisan con la
+  suite: la IA nueva puede moverlos.

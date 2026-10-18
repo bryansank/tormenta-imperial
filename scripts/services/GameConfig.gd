@@ -1981,7 +1981,9 @@ var unit_types := {
 		"tier": 3,
 		"era": 3,
 		"building": "aerodrome",
-		"cost": {"gold": 260, "steel": 90, "oil": 40, "fuel": 8},
+		# 1.1, reequilibrio (docs/16 "Aire y mar"): 300 de oro (antes 260). Con ataque
+		# 18 ganaba el 100 % de las misiones de costa con 0,3 bajas.
+		"cost": {"gold": 300, "steel": 90, "oil": 40, "fuel": 8},
 		"train_time": 80.0,
 		"upkeep_gold": 4,
 		"power": 50,
@@ -2068,6 +2070,14 @@ var combat_turn_limit := 20
 ## Seconds between enemy AI actions, so the player can follow what happened.
 var combat_ai_step_delay := 0.45
 
+## La IA del combate (CombatAI, docs/15 §8 "La IA", 1.1). Los dos bandos y
+## AutoResolver la usan igual.
+## Valor de un golpe = (parte de la vida del rival que se lleva) x (amenaza del
+## rival para los nuestros) ^ `combat_ai_threat_weight`. 0 = solo la parte de la
+## vida (el dano relativo, con la ventaja por tipo dentro); 1 = la amenaza pesa
+## tanto como el dano.
+var combat_ai_threat_weight := 1.0
+
 ## Per-unit combat stats, parallel to `unit_types`. `min_range` keeps artillery
 ## from firing at adjacent targets, which is what makes positioning matter.
 ##
@@ -2101,11 +2111,19 @@ var combat_unit_stats := {
 	#   Dirigible: mucha vida y lento; apoyo desde arriba a 2 casillas.
 	# `targets` corrige combat_domain_targets para esa unidad: dominio -> alcance
 	# maximo (0 = no puede, -1 = su alcance normal).
-	"torpedo_boat": {"hp": 90, "atk": 15, "def": 1, "move": 4, "range": 1, "min_range": 1, "initiative": 6, "domain": "sea"},
+	# 1.1, reequilibrio (docs/16 "Aire y mar"): la lancha ganaba el 5 % (era 2) y el
+	# 0 % (era 3) de las misiones de costa: con alcance 1 desde el agua apenas
+	# llegaba a nadie y caia de cuatro golpes. Vida 90 -> 120, defensa 1 -> 2,
+	# alcance 1 -> 2 (los torpedos corren: alcanza la orilla y la primera fila de
+	# tierra desde el agua). El acorazado sigue siendo su presa (x1,5).
+	"torpedo_boat": {"hp": 120, "atk": 15, "def": 2, "move": 4, "range": 2, "min_range": 1, "initiative": 6, "domain": "sea"},
 	"gunboat":      {"hp": 140, "atk": 12, "def": 3, "move": 3, "range": 3, "min_range": 1, "initiative": 4, "domain": "sea"},
 	"dreadnought":  {"hp": 280, "atk": 16, "def": 6, "move": 2, "range": 4, "min_range": 2, "initiative": 2, "domain": "sea"},
 	"fighter":      {"hp": 90, "atk": 12, "def": 2, "move": 5, "range": 1, "min_range": 1, "initiative": 7, "domain": "air"},
-	"bomber":       {"hp": 110, "atk": 18, "def": 1, "move": 4, "range": 1, "min_range": 1, "initiative": 3, "domain": "air",
+	# 1.1, reequilibrio: el bombardero arrasaba (100 % en costa, 0,3 bajas). Ataque
+	# 18 -> 14 y vida 110 -> 95: sigue rompiendo lo pesado (x1,5) pero un caza o
+	# dos infantes lo bajan antes.
+	"bomber":       {"hp": 95, "atk": 14, "def": 1, "move": 4, "range": 1, "min_range": 1, "initiative": 3, "domain": "air",
 		"targets": {"air": 0}},
 	"airship":      {"hp": 260, "atk": 10, "def": 4, "move": 2, "range": 2, "min_range": 1, "initiative": 2, "domain": "air"},
 }
@@ -3022,17 +3040,18 @@ var final_audit_extra_gun_chance := 0.35
 ## solo vida: la IA de los dos bandos lo prefiere como objetivo (mas `power` que
 ## el canon y sin desventaja de tipo) y los blindados se pasan la ultima oleada
 ## arañandole 7 puntos por golpe mientras los canones los rompen; con vida 100
-## sigue en el 77 %, y con 2 cazas propios en el 25 %. Hasta que la IA aprenda a
-## no perseguirlo, el asedio sale SIN dirigibles (0). El codigo se queda: volver
-## a 1 es una linea.
+## sigue en el 77 %, y con 2 cazas propios en el 25 %.
 ##
-## La escolta de cazas, tambien medida: 6 blindados + 2 cazas propios ganan el
-## 45 % con escolta y el 86 % sin ella (lo mismo que sin aviones). Castigaba
-## tener Aerodromo sin dar nada a cambio: fuera (0) mientras no haya dirigible
-## que escoltar.
+## 1.1 (decision de Bryan): la IA ya elige por el dano que hace de verdad
+## (CombatAI.shot_worth: parte de la vida que se lleva x amenaza del objetivo), no
+## por el `power`, asi que los blindados van a por los canones y no persiguen al
+## dirigible. ENCENDIDOS otra vez: 1 dirigible y, si tienes aviones, 1 caza de
+## escolta. Sondeo corto con la IA nueva (40 semillas, 6 blindados, 4 torres):
+## 87,5 % con dirigible y escolta (antes 13,5 %). Objetivo 75-85 %: se confirma
+## en la ronda final de medidas (docs/17 "La IA nueva").
 var final_audit_air_min_era := 3
-var final_audit_airships_last_wave := 0
-var final_audit_air_escort_fighters := 0
+var final_audit_airships_last_wave := 1
+var final_audit_air_escort_fighters := 1
 
 ## Unidades vivas en casa que hacen falta para volver a convocar tras perder.
 ## Perder no acaba la partida, pero tampoco se rifa la victoria: hay que
