@@ -196,21 +196,21 @@ Acero · 18 Archigobernador (keys `RANK_TITLE_<n>`, ES and EN).
 | 1 | flag basics: patterns `plain`, `bands_h`, `bands_v`, `halves_h`, `cross`; emblems `none`, `gear`, `anchor`, `wheat`, `hammer`; colours ivory, brass, crimson, steel, moss, soot; regiment paint `plain` |
 | 2 | Garden, Flower planter, Hay cart (decorations); emblem `tower` |
 | 3 | +1 % production; pattern `border`; colour sky; Bonfire; regiment paint `stripes` |
-| 4 | +2 % storage; emblem `star` |
-| 5 | Fountain, Flagpole |
-| 6 | +1 % production; patterns `diagonal`, `saltire`; regiment paint `spots` |
-| 7 | colours copper, red |
-| 8 | Statue; +2 % storage |
-| 9 | +1 % production; pattern `quartered`; emblem `wrench`; regiment paint `desert` |
-| 10 | +2 houses (limit) |
-| 11 | colours grass, slate; emblem `wheel` |
-| 12 | +1 % production, +2 % storage; patterns `canton`, `hoist_triangle`; regiment paint `snow` |
-| 13 | Palm trees (decoration); emblem `ship` (the old +2 statues/fountains did nothing once decorations had no cap) |
-| 14 | colours terracotta, gold; emblem `cogs` |
+| 4 | +2 % storage; emblem `star`; Flower stall, Community garden |
+| 5 | Fountain, Flagpole, Small fountain |
+| 6 | +1 % production; patterns `diagonal`, `saltire`; regiment paint `spots`; Entrance arch, Bandstand |
+| 7 | colours copper, red; Beached boat (coast), Gear garden |
+| 8 | Statue; +2 % storage; Fair stage |
+| 9 | +1 % production; pattern `quartered`; emblem `wrench`; regiment paint `desert`; Fair tent |
+| 10 | +2 houses (limit); Pond with bridge, Water mill |
+| 11 | colours grass, slate; emblem `wheel`; Container mural |
+| 12 | +1 % production, +2 % storage; patterns `canton`, `hoist_triangle`; regiment paint `snow`; Clock tower |
+| 13 | Palm trees, Wreck monument (decorations, coast); emblem `ship` (the old +2 statues/fountains did nothing once decorations had no cap) |
+| 14 | colours terracotta, gold; emblem `cogs`; Moored airship |
 | 15 | +1 % production; pattern `stripes`; regiment paint `parade` |
 | 16 | +2 % storage; +1 tower (limit); emblem `sun` |
 | 17 | +2 houses (limit); pattern `waves` |
-| 18 | +2 % production; pattern `checks`; emblem `airship` |
+| 18 | +2 % production; pattern `checks`; emblem `airship`; Governor's plaza (3x3) |
 
 Totals at rank 18: +7 % production, +8 % storage. The basic buildings keep their era
 unlocks (the playable line in docs/22 does not move): the rank only opens
@@ -229,6 +229,11 @@ with `"buildings": [id]`. Sandbox has every rank unlock open.
   `RankManager` **assigns** the total of the current rank, never adds: loading twice
   gives the same bonuses. Note: production is truncated with `int()` per cycle, so a
   +1-3 % bonus only shows on bigger yields (upgraded buildings, techs).
+The new decoration rows are not written inside `rank_rewards`: `GameConfig._register_decorations_traffic()`
+adds them from `decor_rank_unlocks` (feat/decoraciones-y-trafico). Two decorations open by a deed, not a
+rank: the Museum cannon after 1 refused Tax and the Storm column after 5 (`decor_deed_unlocks`, read from
+`StormManager.tithes_repelled()`); the card says "Impuestos rechazados: 0/1" instead of "Rango N".
+
 - **Locks:** `PlacementRules.check_rank()` blocks the purchase ("Necesitas rango N");
   CONSTRUIR draws a padlock and "Rango N" on the card.
 - **The country (name and flag):** see "The player's country" below.
