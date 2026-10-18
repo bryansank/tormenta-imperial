@@ -122,3 +122,29 @@ func test_a_report_waits_for_the_board_to_close() -> void:
 	var shown_after: bool = screen.try_show_next()
 	assert_bool(shown_over_board).is_false()
 	assert_bool(shown_after).is_true()
+
+# ── Impuesto de prueba (cuartel temprano, 2026-10-17) ────────────────
+
+func test_the_practice_tax_report_says_what_was_taken_and_why() -> void:
+	var screen := _screen()
+	EventBus.trial_tithe_resolved.emit(false, {"gold": 12, "wood": 8})
+	assert_int(screen.pending_count()).is_equal(1)
+	assert_bool(screen.try_show_next()).is_true()
+	assert_int(screen.current_kind()).is_equal(2)  # Kind.TRIAL
+	assert_str(screen.title_text()).is_equal(Tr.t("LBL_REPORT_TITHE_TAKEN"))
+	assert_str(screen.stamp_text()).is_equal(Tr.t("LBL_STAMP_COLLECTED"))
+	assert_str(screen.body_text()).contains("12 " + Tr.res_name("gold"))
+	# El porque: con un Cuartel y soldados en casa no se lo habrian llevado.
+	assert_str(screen.body_text()).contains(Tr.t("LBL_REPORT_TRIAL_LOST"))
+
+func test_the_practice_tax_repelled_gets_its_stamp() -> void:
+	var text := "\n".join(_script().trial_lines(true, {}))
+	assert_str(text).contains(Tr.t("LBL_REPORT_TRIAL_WON"))
+	assert_str(text).contains(Tr.t("LBL_REPORT_TRIAL_NEXT"))
+	var screen := _screen()
+	EventBus.trial_tithe_resolved.emit(true, {})
+	screen.try_show_next()
+	assert_str(screen.stamp_text()).is_equal(Tr.t("LBL_STAMP_REPELLED"))
+	for key in ["LBL_REPORT_TRIAL_KICKER", "LBL_REPORT_TRIAL_WON", "LBL_REPORT_TRIAL_LOST", "LBL_REPORT_TRIAL_NEXT"]:
+		for loc in ["es", "en"]:
+			assert_bool(Tr._STRINGS[loc].has(key)).override_failure_message("%s/%s" % [loc, key]).is_true()

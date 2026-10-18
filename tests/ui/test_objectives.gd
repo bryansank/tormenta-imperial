@@ -244,8 +244,12 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 	# El orden de la linea, en la secuencia visitada (con lo que haya en medio).
 	# La Granja ocupa dos obreros: la primera casa puede llegar antes que la mina,
 	# como paso de apoyo, asi que aqui no se exige su sitio (2026-10-04).
-	var expected: Array = ["build:sawmill", "build:farm", "build:gold_mine", "build:market",
-		"build:warehouse", "build:foundry", "build:barracks", "train:artillery", "sortie:artillery", "train:artillery",
+	# Cuartel temprano (2026-10-17): el Cuartel justo detras del aserradero, un
+	# soldado y su primera mision antes de la mina; la guarnicion de la era 2
+	# empieza ya por la artilleria.
+	var expected: Array = ["build:sawmill", "build:barracks", "build:farm", "train:infantry", "sortie:infantry",
+		"build:gold_mine", "build:market",
+		"build:warehouse", "build:foundry", "train:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
 		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]
 	var cursor := 0
@@ -261,6 +265,30 @@ func test_a_new_colony_is_told_to_build_a_sawmill() -> void:
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("build")
 	assert_str(String(step["id"])).is_equal("sawmill")
+
+## Cuartel temprano (2026-10-17): en la linea, el Cuartel va justo detras del
+## aserradero, despues la Granja y un soldado, y solo entonces la Mina.
+func test_the_early_line_is_sawmill_barracks_farm_soldier_then_mine() -> void:
+	var saved_mode: int = GameMode.current
+	GameMode.current = GameMode.Mode.CAMPAIGN
+	_build("sawmill")
+	assert_str(String(Objectives._first_open_line_step()["id"])).is_equal("barracks")
+	_build("barracks")
+	assert_str(String(Objectives._first_open_line_step()["id"])).is_equal("farm")
+	_build("farm")
+	var soldier: Dictionary = Objectives._first_open_line_step()
+	assert_str(String(soldier["kind"])).is_equal("train")
+	assert_str(String(soldier["id"])).is_equal("infantry")
+	_assert_readable(soldier, "primer soldado")
+	_add_unit("infantry")
+	assert_str(String(Objectives._first_open_line_step()["id"])).is_equal("gold_mine")
+	# El Cuartel no sale dos veces en EL CAMINO.
+	var barracks_rows := 0
+	for row in Objectives.route():
+		if String(row["text"]) == Rules.load_building_data("barracks").get_display_name():
+			barracks_rows += 1
+	assert_int(barracks_rows).is_equal(1)
+	GameMode.current = saved_mode
 
 ## Lo que da de comer en ruinas va antes que levantar otro igual.
 func test_a_ruined_producer_is_repaired_before_anything_else() -> void:
@@ -522,7 +550,16 @@ func test_first_sortie_is_asked_as_soon_as_the_first_unit_stands() -> void:
 			sortie_at = i
 	assert_int(sortie_at).is_greater(0)
 	assert_bool(bool(rows[sortie_at]["current"])).is_true()
-	assert_str(String(rows[sortie_at + 1]["text"])).contains(Tr.t(String(GameConfig.get_unit_def("infantry")["name"])))
+	# Con el Cuartel temprano (2026-10-17) la mision va DETRAS del primer soldado:
+	# sin soldado no hay mision.
+	assert_str(String(rows[sortie_at - 1]["text"])).contains(Tr.t(String(GameConfig.get_unit_def("infantry")["name"])))
+	assert_bool(bool(rows[sortie_at - 1]["done"])).is_true()
+	# Y sale una sola vez en EL CAMINO.
+	var sorties := 0
+	for row in rows:
+		if String(row["text"]) == Tr.t("OBJ_ROUTE_FIRST_SORTIE"):
+			sorties += 1
+	assert_int(sorties).is_equal(1)
 
 ## Ganada la primera, el panel vuelve a la linea: la guarnicion de cinco.
 func test_first_sortie_goes_away_once_won() -> void:

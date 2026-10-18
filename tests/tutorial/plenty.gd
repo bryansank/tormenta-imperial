@@ -17,7 +17,8 @@ func park() -> void:
 	for type in all:
 		_res[ResourceManager.get_type_name(type)] = all[type]
 	_pop = PopulationManager.get_save_data()
-	ResourceManager.set_amounts({"gold": 5000, "wood": 5000, "food": 500})
+	# Y los tablones del Cuartel (cuartel temprano, 2026-10-17).
+	ResourceManager.set_amounts({"gold": 5000, "wood": 5000, "food": 500, "planks": 50})
 	PopulationManager._population = 40
 	PopulationManager._max_population = 40
 	PopulationManager._used_workers = 0
