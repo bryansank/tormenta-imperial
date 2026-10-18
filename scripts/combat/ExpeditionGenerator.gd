@@ -521,27 +521,37 @@ static func make_coastal(map: Array, seed_value: int, era: int) -> void:
 			node["loot"] = loot
 
 ## Los barcos de un roster de costa. Sin azar: el mismo roster da los mismos
-## barcos. Cada barco ocupa el sitio de un infante (nunca deja la linea vacia ni
-## pasa del tope del tablero):
+## barcos. UN barco por combate, y ocupa el sitio de un cuerpo (un infante si
+## hay mas de uno; si no, un canon): el combate de costa tiene los mismos cuerpos
+## que el de tierra, nunca mas.
 ##   era 2: una lancha torpedera (canonera si el roster ya es grande o es jefe);
-##   era 3: una canonera, y el jefe ademas un acorazado.
+##   era 3: una canonera (tambien el jefe).
 ## En era 1 no hay barcos (no los hay en el juego hasta el Astillero).
+##
+## Medido (2026-10-17, docs/16 "Aire y mar", tools/balance_probe.gd
+## --only=coast): con "se suma si no hay infante de sobra" y canonera +
+## acorazado en el jefe de era 3, el jefe del Puerto ganaba siempre (1 % con 4
+## de tierra en era 2; 0 % en era 3 incluso con 2 canoneras, 2 lanchas o 2
+## cazas: solo los bombarderos lo tumbaban). El jefe ya lleva la escolta
+## recortada (combat_expedition_boss_escort_cut) y los barcos se la devolvian.
+## El acorazado enemigo, aun entrando por el tanque del jefe, seguia en 0 %: se
+## queda fuera de las salidas (lo sigue teniendo el jugador).
 static func add_ships(roster: Dictionary, era: int, is_boss: bool) -> Dictionary:
 	var result: Dictionary = roster.duplicate()
-	var ships: Array = []
+	var ship: String = ""
 	if era >= 3:
-		ships.append("gunboat")
-		if is_boss and _is_available("dreadnought", era):
-			ships.append("dreadnought")
+		ship = "gunboat"
 	elif era >= 2:
-		ships.append("gunboat" if is_boss or roster_size(roster) >= 4 else "torpedo_boat")
-	for ship in ships:
-		if not _is_available(String(ship), era):
-			continue
-		# El barco entra por un infante si hay mas de uno; si no, se suma.
-		if int(result.get("infantry", 0)) > 1:
-			result["infantry"] = int(result["infantry"]) - 1
-		result[ship] = int(result.get(ship, 0)) + 1
+		ship = "gunboat" if is_boss or roster_size(roster) >= 4 else "torpedo_boat"
+	if ship == "" or not _is_available(ship, era):
+		return _trim_to_cap(result)
+	if int(result.get("infantry", 0)) > 1:
+		result["infantry"] = int(result["infantry"]) - 1
+	elif int(result.get("artillery", 0)) > 0:
+		result["artillery"] = int(result["artillery"]) - 1
+		if int(result["artillery"]) == 0:
+			result.erase("artillery")
+	result[ship] = int(result.get(ship, 0)) + 1
 	return _trim_to_cap(result)
 
 ## ¿Tiene agua el tablero de este nodo?

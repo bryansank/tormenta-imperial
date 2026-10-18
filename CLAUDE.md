@@ -648,8 +648,13 @@ fixed for the run; saves without `tier` load as Colono.
   advantage table has a sea circle and air/sea crosses. Water exists only on coast
   missions (the Dock expedition and some bandit raids, era 2+, with enemy ships) and
   at home when your garrison has ships (`CombatManager.home_terrain()`); ships cannot
-  launch to a mission without water. The Final Audit's closing wave brings airships
-  (era 3) and fighter escorts if you have planes. Unmeasured: docs/16, docs/17.
+  launch to a mission without water. Each coastal fight brings ONE enemy ship in a
+  body's slot (era 2 torpedo boat/gunboat, era 3 gunboat; no enemy dreadnought). The
+  Final Audit's airships and fighter escort are coded but OFF
+  (`final_audit_airships_last_wave` = 0, `final_audit_air_escort_fighters` = 0):
+  measured, they broke the siege (docs/17 "Aire y mar"). Numbers: docs/16, docs/17.
+  The Shipyard ghost turns itself to face the nearest water (`PlacementRules.FACES_WATER`)
+  and the 2D view draws `rotation_steps` with the 3D convention (`Building2D.view_steps()`).
 
 - **Upkeep:** every 30s, gold-only. If short, drains remaining gold to 0 and emits
   `army_upkeep_unpaid`. Sustained non-payment **deserts** units, the most expensive

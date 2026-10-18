@@ -12,6 +12,9 @@ extends Node
 ## Quitar la linea al terminar (la sonda cierra el juego sola).
 ## Ventaja por tipo: `-- --adv=off` mide sin ella (el "antes");
 ## `-- --adv=1.5,0.75` pisa sus dos multiplicadores.
+## Aire y mar: `-- --only=coast` mide solo las misiones de costa (expedicion
+## al Puerto e incursion pirata, con agua en el tablero) con plantillas de solo
+## tierra frente a otras con barcos o aviones (docs/16, "Aire y mar").
 ## Nivel Gobernador (enemigos de expedicion `expedition_enemy_mult` veces mas
 ## fuertes):  godot --headless --path . -- --tier=governor
 ##
@@ -99,6 +102,7 @@ func _running_a_tool_script() -> bool:
 func _run() -> void:
 	var tier: int = GameMode.TIER_DEFAULT
 	var only_expeditions := false
+	var only_coast := false
 	for arg in OS.get_cmdline_user_args():
 		var a := String(arg)
 		if a.begins_with("--tier="):
@@ -107,6 +111,8 @@ func _run() -> void:
 			_exp_seeds = maxi(1, int(a.trim_prefix("--exp-seeds=")))
 		elif a == "--only=expeditions":
 			only_expeditions = true
+		elif a == "--only=coast":
+			only_coast = true
 		elif a == "--adv=off":
 			GameConfig.combat_type_advantage["beats"] = {}
 		elif a.begins_with("--adv="):
@@ -123,6 +129,10 @@ func _run() -> void:
 		SEEDS, GameMode.tier_key_of(GameMode.tier), GameMode.expedition_enemy_mult()])
 	print("==============================================================")
 	_print_config()
+	if only_coast:
+		_sweep_coast()
+		print("")
+		return
 	if not only_expeditions:
 		_sweep_encounters()
 	_sweep_expeditions()
@@ -469,6 +479,10 @@ func _party_counts(rng: RandomNumberGenerator, era: int, size: int) -> Dictionar
 		if era >= int(GameConfig.get_unit_def(unit_id).get("era", 1)):
 			available.append(String(unit_id))
 	available.sort()
+	# Solo tierra: la plantilla de referencia es la de siempre (los barcos y los
+	# aviones se miden aparte, en _sweep_coast). Sin este filtro, la era 2 y 3
+	# sortearian barcos para tableros sin agua, que se quedan en la reserva.
+	available = available.filter(func(id): return GameConfig.get_unit_domain(String(id)) == "land")
 	var counts: Dictionary = {"infantry": 1}
 	for i in range(size - 1):
 		var pick: String = String(available[rng.randi_range(0, available.size() - 1)])
@@ -564,3 +578,107 @@ func _avg(cells: Array, key: String) -> float:
 	for cell in cells:
 		total += float(cell[key])
 	return total / float(cells.size())
+
+# ── Costa (aire y mar, docs/15 §11) ──────────────────────────────────
+
+## Plantillas de costa: la misma talla (4) con solo tierra y con barcos o aviones.
+const COAST_PARTIES := {
+	2: [
+		{"label": "4 tierra", "counts": {"infantry": 2, "artillery": 2}},
+		{"label": "2 tierra + 2 lanchas", "counts": {"infantry": 1, "artillery": 1, "torpedo_boat": 2}},
+		{"label": "2 tierra + 2 canoneras", "counts": {"infantry": 1, "artillery": 1, "gunboat": 2}},
+	],
+	3: [
+		{"label": "4 tierra", "counts": {"infantry": 1, "artillery": 1, "vehicle": 2}},
+		{"label": "2 tanques + 2 canoneras", "counts": {"vehicle": 2, "gunboat": 2}},
+		{"label": "2 tanques + 2 lanchas", "counts": {"vehicle": 2, "torpedo_boat": 2}},
+		{"label": "2 tanques + 2 bombarderos", "counts": {"vehicle": 2, "bomber": 2}},
+		{"label": "2 tanques + 2 cazas", "counts": {"vehicle": 2, "fighter": 2}},
+		{"label": "2 tanq + 2 caz + 2 bomb", "counts": {"vehicle": 2, "fighter": 2, "bomber": 2}},
+	],
+}
+const COAST_SEEDS := 120
+
+## Las ofertas de costa de una era: expediciones al Puerto (3 combates) e
+## incursiones piratas (1), sacadas de semillas seguidas que pasen el filtro.
+func _coast_offers(kind: String, era: int, wanted: int, coastal := true) -> Array:
+	var offers: Array = []
+	var s := 1
+	while offers.size() < wanted and s < wanted * 400:
+		var offer := {"id": s, "kind": kind, "flavor": Generator.FLAVOR_BANDITS, "seed": SEED_BASE + s, "era": era, "blueprint": ""}
+		if Generator.offer_is_coastal(offer) == coastal:
+			offers.append(offer)
+		s += 1
+	return offers
+
+func _sweep_coast() -> void:
+	print("")
+	print("-- MISIONES DE COSTA (agua en el tablero, barcos enemigos; jugador 'jugado') --")
+	print("era  tipo         plantilla                 n    gana   bajas  rondas  max  >20r  min   nodos")
+	for era in [2, 3]:
+		for kind in [Generator.KIND_EXPEDITION, Generator.KIND_RAID]:
+			var offers: Array = _coast_offers(kind, era, COAST_SEEDS)
+			# Referencia: la misma salida tierra adentro (sin agua) con la plantilla
+			# de solo tierra. Lo que cambia la costa se lee contra esta fila.
+			var inland: Dictionary = COAST_PARTIES[era][0]
+			var ref := _measure_coast(_coast_offers(kind, era, COAST_SEEDS, false), inland["counts"])
+			print("%-4d %-12s %-25s %-4d %-6s %-6.2f %-7.1f %-4d %-5s %-5.1f %.2f" % [
+				era, "tierra(ref)", inland["label"], ref["n"],
+				"%.0f%%" % (100.0 * ref["win_rate"]), ref["casualties_mean"], ref["rounds_mean"],
+				ref["rounds_max"], "%.0f%%" % (100.0 * ref["long_rate"]), ref["minutes_mean"], ref["nodes_mean"]])
+			for party in COAST_PARTIES[era]:
+				var row := _measure_coast(offers, party["counts"])
+				print("%-4d %-12s %-25s %-4d %-6s %-6.2f %-7.1f %-4d %-5s %-5.1f %.2f" % [
+					era, "puerto" if kind == Generator.KIND_EXPEDITION else "piratas", party["label"], row["n"],
+					"%.0f%%" % (100.0 * row["win_rate"]), row["casualties_mean"], row["rounds_mean"],
+					row["rounds_max"], "%.0f%%" % (100.0 * row["long_rate"]), row["minutes_mean"], row["nodes_mean"]])
+
+## Juega cada oferta entera con un jugador sensato (cartas y salidas como en
+## _measure_expeditions con `played`), cada combate sobre el terreno de su nodo.
+func _measure_coast(offers: Array, counts: Dictionary) -> Dictionary:
+	var wins := 0
+	var casualties := 0.0
+	var rounds_sum := 0.0
+	var fights := 0
+	var rounds_max := 0
+	var long_fights := 0
+	var minutes := 0.0
+	var nodes := 0.0
+	for offer in offers:
+		var run: Expedition = Expedition.create_sortie(int(offer["id"]), offer, counts, MORALE)
+		while run.is_active():
+			var units: Array = run.build_encounter_units()
+			var node: Dictionary = run.current_node_data()
+			var encounter: Encounter = Encounter.create(units, run.current_node, bool(node.get("is_boss", false)),
+				false, [], true, run.current_terrain(GameConfig.combat_board_size))
+			var result: Dictionary = AutoResolver.resolve(encounter)
+			var r: int = int(result["rounds"])
+			fights += 1
+			rounds_sum += float(r)
+			rounds_max = maxi(rounds_max, r)
+			if r > 20:
+				long_fights += 1
+			minutes += _minutes(_timing_of(result["events"], units), PLAYER_SECONDS_PER_TURN)
+			encounter.release_survivors()
+			if not bool(result["victory"]):
+				run.mark_defeated()
+				break
+			run.mark_cleared()
+			if not run.is_active():
+				break
+			var options: Array = run.draft_options()
+			if not options.is_empty():
+				run.apply_draft(options[_choose_draft(options, run.living_party())])
+			var exits: Array = run.current_exits()
+			if exits.is_empty():
+				break
+			run.select_node(_choose_exit(run, exits))
+		if run.state == Expedition.State.COMPLETED:
+			wins += 1
+		casualties += float(run.casualties().size())
+		nodes += float(run.nodes_cleared())
+	var n := float(maxi(1, offers.size()))
+	return {"n": offers.size(), "win_rate": float(wins) / n, "casualties_mean": casualties / n,
+		"rounds_mean": rounds_sum / float(maxi(1, fights)), "rounds_max": rounds_max,
+		"long_rate": float(long_fights) / float(maxi(1, fights)), "minutes_mean": minutes / n,
+		"nodes_mean": nodes / n}

@@ -572,7 +572,7 @@ integrar.
 
 ---
 
-## Aire y mar (2026-10-17, rama `feat/aire-mar-reglas`) — SIN MEDIR
+## Aire y mar (2026-10-17, rama `feat/aire-mar-reglas`) — medido en la ronda de la 1.1
 
 Seis unidades nuevas (estadisticas en docs/15 §8, reglas en §11). Se eligieron a
 ojo sobre la escala de las tres de tierra: la vida de los barcos y del dirigible
@@ -596,10 +596,73 @@ Lo que no se toco: las tres unidades de tierra, el circulo de tierra, la escala
 del enemigo y los tableros sin agua (identicos a antes: lo fija
 `tests/combat/test_air_sea_rules.gd`).
 
-**Pendiente (ronda final):** la sonda (`tools/balance_probe.gd`) no compone aun
+**Pendiente (ronda final) — hecho, ver "Medido" abajo:** la sonda (`tools/balance_probe.gd`) no compone aun
 columnas con barcos o aviones ni tableros de costa. Medir antes de dar por buenos
 los numeros: (1) expedicion al Puerto en era 2 con 4 de tierra y con 2 de tierra
 + 2 lanchas/canoneras; (2) era 3 con 2 cazas + 2 bombarderos + 2 tanques contra
 el jefe con acorazado; (3) que ningun encuentro de costa pase de las 20 rondas
 (el dirigible y el acorazado son esponjas). Las palancas: la vida de
 `dreadnought` y `airship`, y `combat_coastal_raid_chance`.
+
+### Medido: misiones de costa (ronda de la 1.1, `integracion/v1.1-aire-mar`)
+
+`tools/balance_probe.gd -- --only=coast` juega ofertas de costa enteras (la
+expedición al Puerto, 3 combates, y las incursiones piratas, 1) con el jugador
+"jugado" (cartas y salidas como `_measure_expeditions`), cada combate sobre el
+terreno de su nodo, y una fila de referencia con la misma salida tierra adentro.
+120 ofertas por fila, plantillas de 4 (6 la última):
+
+**Antes** (lo de la rama: los barcos se sumaban si no sobraba un infante; el jefe
+de era 3 traía cañonera **y** acorazado):
+
+| Era | Salida | Plantilla | Gana | Nodos |
+|---|---|---|---|---|
+| 2 | tierra adentro (ref.) | 2 inf + 2 art | 100 % | 3,00 |
+| 2 | Puerto | 2 inf + 2 art | **1 %** | 2,01 |
+| 2 | Puerto | 2 tierra + 2 cañoneras | 67 % | 2,67 |
+| 3 | tierra adentro (ref.) | inf + art + 2 tanques | 90 % | 2,90 |
+| 3 | Puerto | inf + art + 2 tanques | **0 %** | 1,99 |
+| 3 | Puerto | 2 tanques + 2 cañoneras / + 2 lanchas / + 2 cazas | **0 % / 0 % / 0 %** | 2,00 |
+| 3 | Puerto | 2 tanques + 2 bombarderos | 100 % | 3,00 |
+
+Siempre caían en el jefe (nodos = 2): el jefe ya lleva la escolta recortada
+(`combat_expedition_boss_escort_cut`) y los barcos se la devolvían con creces; el
+acorazado enemigo (280 de vida × el jefe, alcance 4, gana al tanque y a la
+cañonera) solo caía ante bombarderos. Probado: el acorazado entrando por el
+tanque del jefe seguía en 0 % sin bombarderos.
+
+**Después** (`ExpeditionGenerator.add_ships`: UN barco por combate, en el sitio de
+un cuerpo —un infante si sobra, si no un cañón—; era 3, cañonera también el jefe;
+sin acorazado enemigo en las salidas):
+
+| Era | Salida | Plantilla | Gana | Bajas | Rondas (máx) | >20 r | Min |
+|---|---|---|---|---|---|---|---|
+| 2 | Puerto | 2 inf + 2 art | 83 % | 2,71 | 6,3 (15) | 0 % | 5,9 |
+| 2 | Puerto | 2 tierra + 2 lanchas | 5 % | 3,95 | 6,4 (15) | 0 % | 5,5 |
+| 2 | Puerto | 2 tierra + 2 cañoneras | 99 % | 1,00 | 5,0 (11) | 0 % | 5,4 |
+| 2 | piratas | las tres | 100 % | 0 | 4-5 | 0 % | 1,5-1,7 |
+| 3 | Puerto | inf + art + 2 tanques | 47 % | 3,25 | 9,5 (19) | 0 % | 7,9 |
+| 3 | Puerto | 2 tanques + 2 cañoneras | 70 % | 1,96 | 7,3 (18) | 0 % | 7,3 |
+| 3 | Puerto | 2 tanques + 2 lanchas | 0 % | 3,90 | 8,7 (20) | 0 % | 5,9 |
+| 3 | Puerto | 2 tanques + 2 bombarderos | 100 % | 0,40 | 5,0 (8) | 0 % | 5,3 |
+| 3 | Puerto | 2 tanques + 2 cazas | 82 % | 1,73 | 8,1 (20) | 0 % | 7,9 |
+| 3 | Puerto | 2 tanq + 2 cazas + 2 bomb | 100 % | 0,28 | 3,9 (6) | 0 % | 6,3 |
+| 3 | piratas | todas | 100 % | 0-1 | 3-8 | 0 % | 1,7-2,6 |
+
+Lectura: el Puerto pide flota (con cañoneras o aviones gana más que con solo
+tierra) sin cerrarse a quien no la tiene; ningún combate de costa pasa de 20
+rondas (el miedo era el acorazado y el dirigible como esponjas). Las **lanchas**
+salen mal en las dos eras: 90 de vida y defensa 1, su único papel es el
+acorazado, que ya no sale en las salidas; queda **pendiente** darles algo (o
+dejar que el Puerto de era 3 traiga un acorazado cuando la IA no se ceba con los
+objetivos duros, ver docs/17 "Aire y mar"). Los **bombarderos** pasan por encima
+de todo en la costa (100 % con 0,3-0,4 bajas): a vigilar cuando se mida la
+campaña entera.
+
+Tests: `tests/combat/test_air_sea_missions.gd` (un barco por combate, en el
+sitio de un cuerpo; jefe con cañonera; sin acorazado enemigo).
+
+Repetir (autoload temporal `BalanceProbe`, ver la cabecera de la sonda):
+
+    godot --headless --path . -- --only=coast --no-dev
+

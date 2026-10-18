@@ -24,6 +24,10 @@ extends SceneTree
 ##   --tier=governor  juega el asedio en nivel Gobernador (GameMode.Tier)
 ##   --audit_mult=F   pisa `game_tier_rules.governor.audit_enemy_mult`
 ##   --detail=1       desglose por longitud de asedio (3, 4 y 5 oleadas)
+##   --airships=N     pisa `final_audit_airships_last_wave` (0 = el asedio de antes)
+##   --escort=N       pisa `final_audit_air_escort_fighters`
+##   --airship_hp=N   pisa la vida del dirigible; --land_air=N el alcance de
+##                    tierra y mar contra el aire (combat_domain_targets)
 ##   --adv=off        sin ventaja por tipo (combat_type_advantage), para medir
 ##                    el "antes"; --adv=1.5,0.75 pisa los dos multiplicadores
 ##
@@ -59,6 +63,11 @@ const CONFIGS := [
 	{"label": "mixta 3+2+1", "roster": {"infantry": 3, "artillery": 2, "vehicle": 1}},
 	{"label": "mixta 2+2+2", "roster": {"infantry": 2, "artillery": 2, "vehicle": 2}},
 	{"label": "MAX 6 vehiculos", "roster": {"vehicle": 6}},
+	# Aire y mar (docs/17, "Aire y mar"): con aviones la Regencia trae escolta de
+	# cazas; con barcos el tablero de casa tiene agua (CombatManager.home_terrain).
+	{"label": "6 veh + 2 cazas", "roster": {"vehicle": 6, "fighter": 2}},
+	{"label": "4 veh + 2 cazas", "roster": {"vehicle": 4, "fighter": 2}},
+	{"label": "4 veh + 2 canoneras", "roster": {"vehicle": 4, "gunboat": 2}},
 ]
 
 var _cfg: Node = null
@@ -188,7 +197,13 @@ func _play(seed_value: int, roster: Dictionary) -> Dictionary:
 		var units: Array = defenders.duplicate()
 		units.append_array(crews)
 		units.append_array(audit.build_enemy_units())
-		var encounter = EncounterScript.create(units, 0, false, true, crew_uids)
+		# El agua de casa, como CombatManager.home_terrain(): solo con barcos propios.
+		var terrain: Dictionary = {}
+		for unit in defenders:
+			if unit.domain() == "sea":
+				terrain = Rules.coastal_terrain(_cfg.combat_board_size, _cfg.combat_home_coast_seed)
+				break
+		var encounter = EncounterScript.create(units, 0, false, true, crew_uids, false, terrain)
 		var outcome: Dictionary = AutoResolverScript.resolve(encounter)
 		rounds += int(outcome["rounds"])
 		minutes += float(_clock._minutes(_clock._timing_of(outcome["events"], units), 5.0))
@@ -237,6 +252,12 @@ func _apply_overrides() -> void:
 			"chance": _cfg.final_audit_extra_gun_chance = float(value)
 			"audit_mult": _cfg.game_tier_rules["governor"]["audit_enemy_mult"] = float(value)
 			"crews": _cfg.storm_tower_garrison_max = int(value)
+			"airships": _cfg.final_audit_airships_last_wave = int(value)
+			"escort": _cfg.final_audit_air_escort_fighters = int(value)
+			"airship_hp": _cfg.combat_unit_stats["airship"]["hp"] = int(value)
+			"land_air": 
+				_cfg.combat_domain_targets["land"]["air"] = int(value)
+				_cfg.combat_domain_targets["sea"]["air"] = int(value)
 			"adv":
 				if value == "off":
 					_cfg.combat_type_advantage["beats"] = {}

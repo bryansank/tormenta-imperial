@@ -225,7 +225,7 @@ oleadas el final se volvería un trámite (97,5 % con 6 blindados, 86 % con 5,
 (como el 82 % de siempre), sin las torres o con la moral a 75 una de cada dos o
 menos, y Gobernador el 75,5 % (≥ 60 %).
 
-## Aire y mar (2026-10-17, rama `feat/aire-mar-reglas`) — SIN MEDIR
+## Aire y mar (2026-10-17, rama `feat/aire-mar-reglas`) — medido el mismo día: APAGADO
 
 Decisión de Bryan: la Regencia trae **dirigibles a la última oleada**. Lo que
 cambia en `FinalAudit._compose()` (solo la última oleada; las anteriores salen
@@ -251,7 +251,7 @@ En casa el tablero del asedio solo tiene agua si en la guarnición hay barcos
 (`CombatManager.home_terrain()`), así que la guarnición de referencia (6
 blindados) sigue peleando en tierra: lo único que le cambia es el dirigible.
 
-**Pendiente (ronda final):** repetir la tabla de arriba con
+**Pendiente (ronda final) — hecho, ver "Medido" abajo:** repetir la tabla de arriba con
 `godot --headless --path . -s tools/siege_probe.gd -- --seeds=200` (con su
 `override.cfg`) y mirar sobre todo la columna de 6 blindados con 4 torres (era
 86 %) y Gobernador (75,5 %). Si baja más de 5 puntos, las palancas son, por
@@ -259,3 +259,60 @@ orden: `final_audit_airships_last_wave` a 0 en Colono, o el dirigible enemigo co
 menos vida (otra fila en `combat_unit_stats` solo para la Regencia). La sonda
 tampoco sabe aún componer guarniciones con barcos o aviones: añadir filas
 "4 blindados + 2 cazas" y "4 blindados + 2 cañoneras" cuando se mida.
+
+### Medido (ronda de la 1.1, `integracion/v1.1-aire-mar`)
+
+`tools/siege_probe.gd` ya compone guarniciones con aviones y barcos (filas
+"6 veh + 2 cazas", "4 veh + 2 cazas", "4 veh + 2 canoneras"; con barcos el
+tablero de casa tiene agua, como `CombatManager.home_terrain()`) y pisa los
+valores nuevos: `--airships=N`, `--escort=N`, `--airship_hp=N`, `--land_air=N`.
+200 semillas, era 3, moral 100, 4 torres:
+
+| Guarnición | Con dirigible y escolta (lo de la rama) | Sin dirigible ni escolta (lo que queda) | Gobernador, sin |
+|---|---|---|---|
+| 4 vehículos | 0 % | 33,5 % | 19 % |
+| 5 vehículos | 0 % | 69 % | 41 % |
+| **6 vehículos (referencia)** | **13,5 %** | **86 %** | **75,5 %** |
+| 6 veh + 2 cazas | 17 % | 82,5 % (45 % con escolta y sin dirigible) | 46 %* |
+| 4 veh + 2 cazas | 0 % | 45 % | — |
+| 4 veh + 2 cañoneras (agua en casa) | — | 59 % | 29,5 % |
+
+\* Gobernador medido aún con la escolta encendida.
+
+Lo que se probó para salvar el dirigible (60 semillas, 6 vehículos):
+
+| Variante | Gana |
+|---|---|
+| Sin dirigible (`--airships=0`) | 90 % |
+| Dirigible de serie (260 de vida, ×1,34 en la última oleada = 349) | 13,5 % |
+| Vida 180 / 140 / 100 | 48 % / 63 % / 77 % |
+| Tierra y mar le pegan a 2 casillas (`--land_air=2`) | 75 % |
+| Dirigible de serie, guarnición con 2 cazas | 25 % |
+
+**Por qué se hunde** (lo enseña una traza de la última oleada): no es solo la
+vida. `CombatAI._target_quality` elige, a igual "lo mato o no" y a igual ventaja,
+el rival de más `power`: el dirigible (55) va antes que el cañón (28). Los
+blindados se pasan la oleada arañándole 7 puntos por golpe (solo a 1 casilla)
+mientras los cañones, que les ganan por tipo, los rompen; o se agota el reloj de
+20 rondas con el dirigible vivo. Con vida 100 sigue 13 puntos por debajo, y con
+dos cazas propios (el antiaéreo) en el 25 %.
+
+**Decisión (valores, documentada):** `final_audit_airships_last_wave` = **0**.
+El código del dirigible se queda (volver es una línea), pero no se enciende hasta
+que la IA pese el daño que hace de verdad antes que el `power` del objetivo, o
+la Regencia tenga su propio dirigible más frágil. Y `final_audit_air_escort_fighters`
+= **0**: sin dirigible que escoltar, la escolta solo castigaba tener Aerodromo
+(6 vehículos + 2 cazas: 45 % con escolta frente al 86 % sin aviones). Sin ella, los
+cazas en casa no restan (82,5 %, dentro del ruido de 86 %) y con 4 vehículos suman
+(45 % frente a 33,5 %). Los barcos en casa suman también: 4 vehículos + 2 cañoneras
+ganan el 59 % (frente al 33,5 % de 4 vehículos).
+
+Los tests (`tests/combat/test_air_sea_missions.gd`) fuerzan 1 para seguir fijando
+cómo entran el dirigible y la escolta, y uno nuevo fija que de serie no entran.
+
+Repetir:
+
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --airships=1 --escort=1
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --tier=governor
+

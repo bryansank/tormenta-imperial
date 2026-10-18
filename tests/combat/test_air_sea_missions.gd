@@ -62,13 +62,26 @@ func test_every_node_of_a_coastal_map_has_water_and_ships() -> void:
 			# Siempre queda algo en tierra que pelear en la playa.
 			assert_int(Generator.roster_size(roster) - _ships_in(roster)).is_greater_equal(1)
 
-func test_era_three_boss_brings_a_dreadnought_and_era_two_does_not() -> void:
-	var map3: Array = Generator.sortie_map(_dock_offer(3))
-	var boss3: Dictionary = map3[Generator.boss_index(map3)]
-	assert_int(int(boss3["enemy_roster"].get("dreadnought", 0))).is_greater(0)
-	var map2: Array = Generator.sortie_map(_dock_offer(2))
-	for node in map2:
-		assert_int(int(node["enemy_roster"].get("dreadnought", 0))).is_equal(0)
+func test_the_coastal_boss_brings_a_gunboat_and_no_dreadnought() -> void:
+	# Medido (docs/16 "Aire y mar"): con acorazado el jefe del Puerto de era 3
+	# no se ganaba ni con flota. Una canonera, y en el sitio de un cuerpo.
+	for era in [2, 3]:
+		var map: Array = Generator.sortie_map(_dock_offer(era))
+		var boss: Dictionary = map[Generator.boss_index(map)]
+		assert_int(int(boss["enemy_roster"].get("gunboat", 0))).is_equal(1)
+		for node in map:
+			assert_int(int(node["enemy_roster"].get("dreadnought", 0))).is_equal(0)
+			assert_int(_ships_in(node["enemy_roster"])).is_equal(1)
+
+func test_a_ship_takes_a_body_slot_and_never_adds_one() -> void:
+	for roster in [{"infantry": 3, "artillery": 1}, {"infantry": 1, "artillery": 2}, {"infantry": 1, "vehicle": 1}]:
+		for era in [2, 3]:
+			for boss in [false, true]:
+				var out: Dictionary = Generator.add_ships(roster, era, boss)
+				var before: int = Generator.roster_size(roster)
+				var expected: int = before if int(roster.get("infantry", 0)) > 1 or int(roster.get("artillery", 0)) > 0 else before + 1
+				assert_int(Generator.roster_size(out)).is_equal(mini(expected, GameConfig.combat_deploy_cap))
+				assert_int(_ships_in(out)).is_equal(1)
 
 func test_the_same_offer_is_the_same_coast() -> void:
 	var a: Array = Generator.sortie_map(_dock_offer(3, 25))
@@ -103,6 +116,10 @@ func test_the_expedition_hands_its_node_terrain_to_the_board() -> void:
 # ── El Ataque Final ──────────────────────────────────────────────────
 
 func test_the_last_wave_of_an_era_three_siege_brings_airships() -> void:
+	# De serie el asedio sale sin dirigibles (0, docs/17 "Aire y mar": medido, la
+	# IA se queda enganchada en el). Se fuerza 1 para fijar como entran.
+	var saved: int = GameConfig.final_audit_airships_last_wave
+	GameConfig.final_audit_airships_last_wave = 1
 	for seed_value in [3, 77, 501, 4242]:
 		var audit: FinalAudit = AuditScript.create(seed_value, {"vehicle": 6}, 3)
 		var last: int = audit.wave_count() - 1
@@ -114,6 +131,14 @@ func test_the_last_wave_of_an_era_three_siege_brings_airships() -> void:
 			for count in wave["roster"].values():
 				bodies += int(count)
 			assert_int(bodies).is_less_equal(GameConfig.combat_deploy_cap)
+	GameConfig.final_audit_airships_last_wave = saved
+
+func test_the_default_siege_brings_no_airship() -> void:
+	# Lo medido en docs/17: con dirigible la guarnicion de referencia no gana.
+	assert_int(GameConfig.final_audit_airships_last_wave).is_equal(0)
+	var audit: FinalAudit = AuditScript.create(4242, {"vehicle": 6}, 3)
+	for wave in audit.waves:
+		assert_int(int(wave["roster"].get("airship", 0))).is_equal(0)
 
 func test_no_airships_before_era_three() -> void:
 	var audit: FinalAudit = AuditScript.create(4242, {"vehicle": 6}, 2)
@@ -121,6 +146,10 @@ func test_no_airships_before_era_three() -> void:
 		assert_int(int(wave["roster"].get("airship", 0))).is_equal(0)
 
 func test_fighters_escort_the_last_wave_only_if_you_have_planes() -> void:
+	# De serie la escolta va a 0 (docs/17 "Aire y mar"); se fuerza 1 para fijar
+	# como entra.
+	var saved: int = GameConfig.final_audit_air_escort_fighters
+	GameConfig.final_audit_air_escort_fighters = 1
 	var ground: FinalAudit = AuditScript.create(4242, {"vehicle": 6}, 3)
 	assert_bool(ground.air_escort).is_false()
 	var last: int = ground.wave_count() - 1
@@ -128,12 +157,16 @@ func test_fighters_escort_the_last_wave_only_if_you_have_planes() -> void:
 	var flying: FinalAudit = AuditScript.create(4242, {"vehicle": 4, "fighter": 2}, 3)
 	assert_bool(flying.air_escort).is_true()
 	assert_int(int(flying.wave_at(flying.wave_count() - 1)["roster"].get("fighter", 0))).is_greater(0)
+	GameConfig.final_audit_air_escort_fighters = saved
 
 func test_the_escort_follows_who_is_home_when_the_gate_opens() -> void:
+	var saved: int = GameConfig.final_audit_air_escort_fighters
+	GameConfig.final_audit_air_escort_fighters = 1
 	var audit: FinalAudit = AuditScript.create(4242, {"vehicle": 6}, 3)
 	audit.begin({"vehicle": 4, "fighter": 2}, 60.0)
 	assert_bool(audit.air_escort).is_true()
 	assert_int(int(audit.wave_at(audit.wave_count() - 1)["roster"].get("fighter", 0))).is_greater(0)
+	GameConfig.final_audit_air_escort_fighters = saved
 
 func test_the_escort_survives_a_save() -> void:
 	var audit: FinalAudit = AuditScript.create(4242, {"vehicle": 4, "fighter": 2}, 3)

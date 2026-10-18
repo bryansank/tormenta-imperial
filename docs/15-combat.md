@@ -1326,9 +1326,9 @@ GODOT=godot tools/run_tests.sh -a tests/combat
 | `tests/ui/test_unit_card.gd` | *(sin correr aún)* fuerte/débil del círculo, números de `GameConfig`, vida de la unidad viva, el alcance mínimo en la ficha, la ficha se monta con su ✕, "×1,5" / "×1.5", el círculo con tres flechas, las seis guías de combate en AYUDA |
 | `tests/ui/test_combat_teaching.gd` | *(sin correr aún)* la primera pelea empieza la lección y señala a la unidad, la tarjeta del tablero no sale encima, tocar tu pieza abre la ficha y pasa el paso 1, el daño previsto, Ver alcance enemigo, la ✕ de la artillería |
 
-| `tests/combat/test_air_sea_rules.gd` | *(sin correr aún, 2026-10-17)* Aire y mar: el terreno de costa (determinista, columnas de agua y orilla), quien pisa que, las dos capas (avion encima de soldado), quien pega a quien (soldado a 1, artilleria nunca, bombardero no al aire), despliegue por dominio y reserva, la tabla de ventajas sin parejas en los dos sentidos, la IA solo se planta donde su dominio pisa, AutoResolver reproducible en la costa, y que un tablero de tierra despliega igual que antes |
-| `tests/combat/test_air_sea_missions.gd` | *(sin correr aún)* Que oferta es de costa, nodos con agua y barcos segun la era, la misma oferta = la misma costa, el repuesto de mas, los mapas de tierra intactos, y los dirigibles y la escolta de cazas del Ataque Final (y su guardado) |
-| `tests/economy/test_air_sea_army.gd` | *(sin correr aún)* Cada unidad en su edificio, huecos por edificio, capacidad, guardado viejo, los dos edificios y la costa, los barcos solo a misiones con agua, el agua en casa solo con barcos, textos ES/EN |
+| `tests/combat/test_air_sea_rules.gd` | *(corridos, ronda de la 1.1)* Aire y mar: el terreno de costa (determinista, columnas de agua y orilla), quien pisa que, las dos capas (avion encima de soldado), quien pega a quien (soldado a 1, artilleria nunca, bombardero no al aire), despliegue por dominio y reserva, la tabla de ventajas sin parejas en los dos sentidos, la IA solo se planta donde su dominio pisa, AutoResolver reproducible en la costa, y que un tablero de tierra despliega igual que antes |
+| `tests/combat/test_air_sea_missions.gd` | *(corridos)* Que oferta es de costa, nodos con agua y UN barco por combate en el sitio de un cuerpo (sin acorazado enemigo), la misma oferta = la misma costa, el repuesto de mas, los mapas de tierra intactos, y los dirigibles y la escolta de cazas del Ataque Final (apagados de serie; forzados a 1 para fijar como entran, y su guardado) |
+| `tests/economy/test_air_sea_army.gd` | *(corridos)* Cada unidad en su edificio, huecos por edificio, capacidad, guardado viejo, los dos edificios y la costa, los barcos solo a misiones con agua, el agua en casa solo con barcos, textos ES/EN |
 
 `test_board_handoff.gd`, `test_expedition_ui.gd` and `test_battle_board_icons.gd`
 touch the real autoloads and private members on purpose: what they are watching —
@@ -1500,9 +1500,11 @@ despliegue es identico al de antes (`test_air_sea_rules.gd` lo compara).
   `COAST_SEED_STRIDE`, no mueve nada de lo de antes); la avanzadilla de la
   Regencia y la primera escaramuza, nunca. `make_coastal(map, seed, era)` marca
   cada nodo (`coastal`, `terrain_seed`), pone **barcos enemigos**
-  (`add_ships`: era 2 una lancha, o canonera si el roster es grande o es jefe;
-  era 3 una canonera y el jefe ademas un acorazado; cada barco en el sitio de un
-  infante, nunca deja la tierra vacia) y da `combat_loot_coastal_parts` (1)
+  (`add_ships`: UN barco por combate, en el sitio de un cuerpo —un infante si
+  sobra, si no un canon—, nunca deja la tierra vacia: era 2 una lancha, o canonera
+  si el roster es grande o es jefe; era 3 una canonera, tambien el jefe. Sin
+  acorazado enemigo: medido, el jefe del Puerto no se ganaba ni con flota, docs/16
+  "Aire y mar") y da `combat_loot_coastal_parts` (1)
   repuesto de mas en el ultimo combate. `sortie_preview()` lleva `"coastal"` y la
   seleccion de tropa lo dice antes de salir.
 - **En casa** (Impuesto, Ataque Final, escaramuza de pruebas):
@@ -1520,10 +1522,13 @@ despliegue es identico al de antes (`test_air_sea_rules.gd` lo compara).
 
 ### El Ataque Final
 
-La ultima oleada, desde la era 3, trae dirigibles en el hueco de un canon y, si
-tu guarnicion tiene aviones, cazas de escolta (`FinalAudit.air_escort`, va en el
-guardado). Detalle y lo que falta medir: [17](17-balance-asedio.md), "Aire y
-mar".
+El codigo deja que la ultima oleada, desde la era 3, traiga dirigibles en el
+hueco de un canon y, si tu guarnicion tiene aviones, cazas de escolta
+(`FinalAudit.air_escort`, va en el guardado). **Medido, los dos van APAGADOS**
+(`final_audit_airships_last_wave` = 0, `final_audit_air_escort_fighters` = 0): con
+un dirigible la guarnicion de referencia bajaba del 86 % al 13,5 % (la IA se
+engancha en el), y la escolta hacia que tener cazas restara. Cifras y por que:
+[17](17-balance-asedio.md), "Aire y mar".
 
 ### La colonia
 
@@ -1542,9 +1547,21 @@ mar".
 
 ### Pendiente
 
-- Medir con `balance_probe` / `siege_probe` (no saben aun componer flotas).
-- `BattleScreen` (2D): tocar una casilla con avion encima de un soldado
-  selecciona al soldado (`get_unit_at`); para elegir capa hara falta un gesto.
+- Medido (ronda de la 1.1): `balance_probe -- --only=coast` y `siege_probe` ya
+  componen flotas y aviones; cifras en docs/16 y docs/17, "Aire y mar".
+- **La IA y los objetivos duros:** `CombatAI._target_quality` prefiere el rival
+  de mas `power` a igual ventaja, asi que los blindados persiguen un dirigible
+  (260 de vida, solo a 1 casilla) mientras los canones los rompen. Es lo que
+  hunde el asedio con dirigible; antes de volver a encenderlo, la IA tiene que
+  pesar el dano que hace de verdad (o el dirigible de la Regencia, otra fila).
+- `BattleScreen` (2D): el avion encima de un soldado ya se ve (silueta pequena
+  arriba, `board_air_mark`), pero tocar la casilla selecciona al soldado
+  (`get_unit_at`); para elegir capa hara falta un gesto.
+- Los barcos forman en el agua: `Encounter._fill_row` deja la orilla (arena) para
+  cuando el agua de la fila no basta. Antes centraba entre agua y orilla y un
+  acorazado empezaba varado en la playa.
+- Tablero 3D con escenario de playa: las columnas de agua siguen por el borde del
+  fondo hasta el mar (`BoardTerrain3D._beach`), no las corta la arena.
 
 ### La vista
 

@@ -2987,11 +2987,24 @@ var final_audit_extra_gun_chance := 0.35
 ## (si no hay canon, el de un infante): menos golpe de golpe, mas vida que
 ## tumbar, y solo se le pega a 1 casilla o con aviones. Si el jugador tiene
 ## aviones en su guarnicion al abrir la puerta, la ultima oleada trae ademas
-## cazas de escolta (cada uno en el hueco de un infante). SIN MEDIR con
-## tools/siege_probe.gd: ver docs/17, "Aire y mar".
+## cazas de escolta (cada uno en el hueco de un infante).
+##
+## MEDIDO (2026-10-17, docs/17 "Aire y mar"): con 1 dirigible la guarnicion de
+## referencia (6 blindados, 4 torres) baja del 86 % al 13,5 %. El dirigible no es
+## solo vida: la IA de los dos bandos lo prefiere como objetivo (mas `power` que
+## el canon y sin desventaja de tipo) y los blindados se pasan la ultima oleada
+## arañandole 7 puntos por golpe mientras los canones los rompen; con vida 100
+## sigue en el 77 %, y con 2 cazas propios en el 25 %. Hasta que la IA aprenda a
+## no perseguirlo, el asedio sale SIN dirigibles (0). El codigo se queda: volver
+## a 1 es una linea.
+##
+## La escolta de cazas, tambien medida: 6 blindados + 2 cazas propios ganan el
+## 45 % con escolta y el 86 % sin ella (lo mismo que sin aviones). Castigaba
+## tener Aerodromo sin dar nada a cambio: fuera (0) mientras no haya dirigible
+## que escoltar.
 var final_audit_air_min_era := 3
-var final_audit_airships_last_wave := 1
-var final_audit_air_escort_fighters := 1
+var final_audit_airships_last_wave := 0
+var final_audit_air_escort_fighters := 0
 
 ## Unidades vivas en casa que hacen falta para volver a convocar tras perder.
 ## Perder no acaba la partida, pero tampoco se rifa la victoria: hay que
