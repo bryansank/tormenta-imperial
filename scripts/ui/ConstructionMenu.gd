@@ -372,12 +372,15 @@ func _setup_ui() -> void:
 	_detail_panel.add_child(_detail_limit)
 
 	# Por que no se puede (tope o era), en frase y no solo con la tarjeta apagada.
+	# Fuera del scroll, junto al boton (ronda 1.0: dentro quedaba bajo el borde a
+	# 1280x720 y solo se veia MEJORAR UNO, sin saber por que).
 	_detail_explain = UITheme.make_label("", "body", UITheme.WARNING)
 	_detail_explain.name = "DetailExplain"
 	_detail_explain.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_detail_explain.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_detail_explain.mouse_filter = Control.MOUSE_FILTER_PASS
 	_detail_explain.visible = false
-	_detail_panel.add_child(_detail_explain)
+	detail_column.add_child(_detail_explain)
 
 	# Lo que impide construir, a la vista junto al boton (fuera del scroll).
 	_detail_block = UITheme.make_label("", "body", UITheme.DANGER)

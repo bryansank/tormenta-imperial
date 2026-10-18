@@ -135,6 +135,9 @@ func _ready() -> void:
 	# Una leccion suelta del tutorial (reparar) que sale con un globo ya en
 	# pantalla lo aparta: antes se pisaban las dos tarjetas (ronda de pruebas 1.0).
 	EventBus.tutorial_step_changed.connect(func(_s): _pump.call_deferred())
+	# CONSTRUIR abierto aparta los consejos; al cerrarlo vuelven.
+	UIManager.window_opened.connect(func(_w): _pump.call_deferred())
+	UIManager.window_closed.connect(func(_w): _pump.call_deferred())
 	# Durante una pelea las ayudas de la colonia esperan (docs/15 §3): al abrir
 	# el tablero la que este en pantalla se aparta y vuelve al cerrar el parte.
 	EventBus.encounter_started.connect(func(_i, _b): _refresh_callouts())
@@ -387,7 +390,18 @@ func _can_show(item: Dictionary) -> bool:
 	# el dedo (taparian la columna de CANCELAR).
 	if _placing and GameConfig.touch_controls_enabled() and not forced:
 		return false
+	# Ni con CONSTRUIR abierto: la tarjeta tapaba la ficha del edificio (la frase
+	# del tope y MEJORAR UNO) a 1280x720. Vuelve al cerrarlo (ronda 1.0).
+	if not forced and _build_menu_open():
+		return false
 	return true
+
+## La lista de CONSTRUIR esta abierta (en la pila de UIManager).
+func _build_menu_open() -> bool:
+	for w in UIManager.open_windows():
+		if is_instance_valid(w) and String(w.name) == "ConstructionMenu":
+			return true
+	return false
 
 ## El globo tiene sentido ahora: el de ESCARAMUZAS solo con su boton a la vista,
 ## el de zoom solo con los botones tactiles, y ninguno de camara colocando con
