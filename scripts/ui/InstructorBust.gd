@@ -287,6 +287,22 @@ static func dock_rect(vp: Vector2, card: Rect2, base: Vector2, avoid: Array = []
 				return {"rect": r, "facing": int(t[1])}
 	return {}
 
+## Cuanto se corre a la derecha una tarjeta centrada en horizontal (ancho `tw`,
+## empieza en `card_top`) para no pisar `block` (la Tormenta con la orden de la
+## Regencia, cuando baja a la columna izquierda en tablet 4:3 y movil). 0 si no
+## estorba; nunca saca la tarjeta de la pantalla (si no cabe, lo que quepa).
+## La usan la tarjeta de consejo y la del tutorial (ronda visual de la 1.1).
+static func centered_card_shift(vp: Vector2, tw: float, block: Rect2, card_top: float) -> float:
+	if block.size.x < 1.0 or block.end.y <= card_top:
+		return 0.0
+	var left := vp.x * 0.5 - tw * 0.5
+	if block.end.x <= left or block.position.x > vp.x * 0.5:
+		return 0.0
+	var room := (vp.x - EDGE) - (vp.x * 0.5 + tw * 0.5)
+	if room <= 0.0:
+		return 0.0
+	return minf(block.end.x + EDGE - left, room)
+
 static func _fits(r: Rect2, screen: Rect2, min_y: float, avoid: Array) -> bool:
 	if not screen.encloses(r) or r.position.y < min_y:
 		return false

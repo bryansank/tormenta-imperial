@@ -200,8 +200,17 @@ func _relayout() -> void:
 		_card.anchor_right = 0.0
 		_card.offset_left = 56.0
 		_card.offset_right = 56.0 + width
-		_card.offset_top = -60.0
-		_card.offset_bottom = -60.0
+		# Sin salirse por arriba: en un telefono apaisado (lienzo de ~550 px de alto,
+		# botones tactiles) la tarjeta subida 60 px cortaba "MENU PRINCIPAL" (ronda
+		# visual de la 1.1).
+		var lift := title_card_lift(vp.y, _card.get_combined_minimum_size().y)
+		_card.offset_top = -lift
+		_card.offset_bottom = -lift
+
+## Cuanto sube la tarjeta sobre el centro (horizontal): 60 px, o lo que quepa
+## sin que su borde de arriba baje de ModalKit.EDGE.
+static func title_card_lift(vp_h: float, card_h: float) -> float:
+	return clampf((vp_h - card_h) * 0.5 - ModalKit.EDGE, 0.0, 60.0)
 
 # ── Abrir / cerrar ───────────────────────────────────────────────────
 

@@ -82,6 +82,7 @@ func test_milestone_and_era_toasts_queue_up() -> void:
 	progress._show_toast("uno", UITheme.ACCENT)
 	progress._show_toast("dos", UITheme.INFO)
 	progress._show_toast("tres", UITheme.INFO)
-	var on_screen := progress.find_children("MilestoneToast*", "PanelContainer", false, false).size()
+	# La placa vive en la capa ToastLayer, hija del panel.
+	var on_screen := progress.find_children("MilestoneToast*", "PanelContainer", true, false).size()
 	assert_int(on_screen).is_equal(1)
 	assert_int(progress.pending_toasts()).is_equal(3)

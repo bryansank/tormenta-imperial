@@ -53,6 +53,10 @@ func _ready() -> void:
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
 	EventBus.encounter_closed.connect(release_held)
+	# Los que ya estaban en pantalla al abrirse el tablero se quitan (siguen en el
+	# registro): en un movil caen en medio y tapaban la unidad que senala el
+	# combate guiado (ronda visual de la 1.1).
+	EventBus.encounter_started.connect(func(_i, _b): clear_toasts())
 	# Otra partida: lo retenido era de la anterior.
 	EventBus.game_load_completed.connect(func(): _held.clear())
 
@@ -118,6 +122,13 @@ func _on_notification(message: String, category: String, color: Color) -> void:
 		_held.append([message, color])
 		return
 	_show_toast(message, color)
+
+## Quita de la pantalla los avisos que haya (no del registro).
+func clear_toasts() -> void:
+	if _toast_container == null:
+		return
+	for child in _toast_container.get_children():
+		child.queue_free()
 
 ## Con un tablero abierto (pelea o parte de la pelea) los avisos esperan.
 static func holds_toasts() -> bool:

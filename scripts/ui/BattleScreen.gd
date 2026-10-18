@@ -996,7 +996,8 @@ func _refresh_map() -> void:
 
 		btn.text = Tr.t("LBL_BOSS") if is_boss else str(_roster_size(node))
 		# Un soldado junto al numero: dice que son enemigos (ronda de pruebas 1.0).
-		btn.icon = null if is_boss else UITheme.unit_icon("infantry", 24)
+		# En mar y aire, el barco o el avion que mas trae (ronda de pruebas 1.1).
+		btn.icon = null if is_boss else UITheme.unit_icon(node_lead_unit(node), 24)
 		btn.add_theme_constant_override("icon_max_width", 22)
 		btn.add_theme_color_override("icon_normal_color", UITheme.unit_icon_tint(false))
 		btn.add_theme_color_override("icon_disabled_color", UITheme.TEXT_DIM)
@@ -1111,6 +1112,18 @@ func map_hint_text() -> String:
 			parts.append(Tr.t("LBL_BOSS"))
 		return "%s. %s" % [" - ".join(parts), Tr.t("LBL_NODE_TAP_AGAIN")]
 	return Tr.t("LBL_NODE_PICK_TOUCH") if _touch_mode else Tr.t("LBL_NODE_PICK_MOUSE")
+
+## La unidad que mas trae el enemigo en ese nodo (la del icono del mapa); un
+## soldado si no trae a nadie.
+static func node_lead_unit(node: Dictionary) -> String:
+	var best := "infantry"
+	var most := 0
+	var roster: Dictionary = node.get("enemy_roster", {})
+	for id in roster:
+		if int(roster[id]) > most:
+			most = int(roster[id])
+			best = String(id)
+	return best
 
 func _roster_size(node: Dictionary) -> int:
 	var total: int = 0
@@ -1422,6 +1435,16 @@ func _refresh_cells() -> void:
 			if index < _cell_previews.size():
 				_paint_cell_preview(_cell_previews[index], unit, targets)
 
+## Tierra con agua al lado (en cruz): un islote del mar abierto. En la costa
+## la tierra toca la orilla, no el agua, asi que no cuenta.
+static func is_islet(terrain: Dictionary, cell: Vector2i) -> bool:
+	if terrain.is_empty() or BoardLayout.cell_kind(terrain, cell) != BoardLayout.TERRAIN_LAND:
+		return false
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if terrain.has(cell + d) and BoardLayout.cell_kind(terrain, cell + d) == BoardLayout.TERRAIN_WATER:
+			return true
+	return false
+
 func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vector2i,
 		unit: CombatUnit, active: CombatUnit, moves: Array, targets: Array,
 		boss: int = -1) -> void:
@@ -1442,6 +1465,13 @@ func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vect
 				border = UITheme.INFO.darkened(0.2)
 			BoardLayout.TERRAIN_SHORE:
 				background = UITheme.BOARD_SHORE
+			_:
+				# Un islote del mar abierto (tierra que toca agua sin orilla): roca,
+				# no una casilla vacia casi negra (ronda visual de la 1.1).
+				if is_islet(_terrain_now, coords):
+					background = UITheme.BOARD_SHORE.darkened(0.1)
+					border = UITheme.BOARD_SHORE.lightened(0.3)
+					border_width = 2
 		if _ov_no_fire.has(coords):
 			# Demasiado cerca para la artilleria: ✕ en la casilla.
 			cell.text = "✕"

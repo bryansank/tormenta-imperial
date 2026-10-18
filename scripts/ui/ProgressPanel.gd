@@ -163,10 +163,10 @@ func _next_toast() -> void:
 	plate.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	plate.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	var vp_h: float = get_viewport().get_visible_rect().size.y if is_inside_tree() else 720.0
-	var top := vp_h * TOAST_TOP_RATIO
+	var top := toast_top(vp_h)
 	plate.offset_top = top + 20.0
 	plate.modulate.a = 0.0
-	add_child(plate)
+	_toast_parent().add_child(plate)
 	var tween := create_tween()
 	tween.tween_interval(TOAST_LEAD)
 	tween.tween_property(plate, "offset_top", top, 0.35).set_ease(Tween.EASE_OUT)
@@ -176,6 +176,38 @@ func _next_toast() -> void:
 	tween.tween_callback(func():
 		plate.queue_free()
 		_next_toast())
+
+## La placa va en una capa propia por encima de la Tormenta (16) y por debajo
+## del tablero (18): en un telefono la orden de la Regencia baja por la columna
+## izquierda hasta media pantalla y la tapaba (ronda visual de la 1.1).
+const TOAST_LAYER := 17
+var _toast_layer: CanvasLayer
+
+func _toast_parent() -> Node:
+	if _toast_layer == null:
+		_toast_layer = CanvasLayer.new()
+		_toast_layer.name = "ToastLayer"
+		add_child(_toast_layer)
+	# Con una ventana abierta (Ajustes, MISIONES...) la placa va debajo, como
+	# siempre: encima tapaba lo que se esta leyendo.
+	_toast_layer.layer = layer if UIManager.is_any_window_open() else TOAST_LAYER
+	return _toast_layer
+
+## Donde va la placa: a un tercio de pantalla, o bajo la columna central de
+## arriba si esta baja mas (la tarjeta de la orden de la Regencia abierta, con
+## el x1 debajo, la tapaba a 1280x720: ronda visual de la 1.1).
+func toast_top(vp_h: float) -> float:
+	var top := vp_h * TOAST_TOP_RATIO
+	var mid_x: float = get_viewport().get_visible_rect().size.x * 0.5 if is_inside_tree() else 640.0
+	for id in ["StormHUD", "GameSpeedButton"]:
+		var c: Control = HudRegistry.control_of(id)
+		if c == null or not is_instance_valid(c) or not c.is_visible_in_tree():
+			continue
+		var r := c.get_global_rect()
+		# Solo si sigue arriba en el centro (movido con el editor, no estorba).
+		if r.position.y < vp_h * 0.3 and r.position.x < mid_x + 160.0 and r.end.x > mid_x - 160.0:
+			top = maxf(top, r.end.y + 10.0)
+	return minf(top, vp_h * 0.6)
 
 func _toggle_panel() -> void:
 	_is_open = not _is_open
