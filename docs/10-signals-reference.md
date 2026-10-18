@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**140 signals** in 30 categories (counted on 2026-10-18, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**166 signals** in 35 categories (counted on 2026-10-18, integration of 1.2 on `integracion/v1.2`: the 140 of 1.1 plus `core_upgrade_started` and `core_level_changed` (Núcleo y planos), the 6 of the coastal threats, the 3 of the military buildings, the 2 of Defensa y vida, the 7 of the economy buildings and the 6 of Volverse el Imperio; the decorations and traffic branch adds none. Before, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -253,7 +253,7 @@ Optional loot only: marks on the shore that leave on their own, doing no harm.
 | `threat_clicked` | `threat_id: int` | BuildingPlacer, BuildingPlacer2D | ThreatCard |
 
 ThreatManager also emits `sortie_offers_changed` on every change, so MISIONES, its
-red dot and ¿QUÉ HACER? repaint without new connections. 146 signals with these six.
+red dot and ¿QUÉ HACER? repaint without new connections.
 
 ## Building Health
 
@@ -455,7 +455,7 @@ acabo el plazo); la XP de rango (`contract_rank_xp`) la suma ContractManager con
 ## Edificios militares
 
 Rama `feat/edificios-militares` (1.2): la Herreria (doctrinas) y el Campo de tiro
-(simulacro). Tres señales nuevas (143 con las 140 de arriba). Las emite solo
+(simulacro). Tres señales nuevas. Las emite solo
 `ArmyManager`. La Enfermeria no tiene señal propia: su efecto va en el parte del
 combate (`CombatManager.get_last_result()["recovered"]`).
 

@@ -131,7 +131,7 @@ func test_the_port_goes_on_the_coast_facing_the_water() -> void:
 	assert_bool(Rules.needs_shore("diesel_plant")).is_false()
 
 func test_the_diesel_plant_is_a_mission_blueprint() -> void:
-	assert_bool("diesel_plant" in GameConfig.combat_blueprint_buildings).is_true()
+	assert_bool("diesel_plant" in GameConfig.blueprint_required).is_true()
 
 # ── Mallas ────────────────────────────────────────────────────────────
 
@@ -241,7 +241,7 @@ func test_the_plan_pool_never_holds_a_mission_blueprint() -> void:
 	var pool: Array = EconomyManager.plan_pool()
 	assert_bool(pool.is_empty()).is_false()
 	for id in pool:
-		assert_bool(id in GameConfig.combat_blueprint_buildings).is_false()
+		assert_bool(id in GameConfig.blueprint_required).is_false()
 		assert_int(RankManager.building_rank(String(id))).is_greater(RankManager.get_rank())
 
 # ── Casa de cambio ────────────────────────────────────────────────────

@@ -117,7 +117,7 @@ func _process(delta: float) -> void:
 	if _military != null and not _is_deposit:
 		_military.refresh()
 	if _economy_label != null and _economy_label.visible:
-		_economy_tick -= _delta
+		_economy_tick -= delta
 		if _economy_tick <= 0.0:
 			_economy_tick = ECONOMY_TICK
 			_refresh_economy()

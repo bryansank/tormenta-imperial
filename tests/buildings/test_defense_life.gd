@@ -70,8 +70,8 @@ func test_every_one_has_names_and_help_in_both_languages() -> void:
 
 func test_every_one_has_cap_lot_site_and_prerequisite() -> void:
 	for id in IDS:
-		assert_bool(GameConfig.building_limits_by_era.has(id)).override_failure_message(id).is_true()
-		assert_int(int(GameConfig.building_limits[id])).is_equal(int(GameConfig.building_limits_by_era[id][0]))
+		assert_bool(GameConfig.core_level_limits.has(id)).override_failure_message(id).is_true()
+		assert_int(int(GameConfig.building_limits[id])).is_equal(int(GameConfig.core_level_limits[id][0]))
 		assert_bool(GameConfig.building_lot_style.has(id)).override_failure_message(id).is_true()
 		assert_bool(GameConfig.construction_style.has(id)).override_failure_message(id).is_true()
 		# Los tres son de la era 2: piden la Fundicion.

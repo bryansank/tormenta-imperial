@@ -195,7 +195,7 @@ static func ship_config() -> Dictionary:
 
 ## Planos menores que el barco puede vender: edificios que abre el RANGO por
 ## encima del de ahora, que aun no se compraron y que existen. Nunca uno de
-## los que piden plano de mision (combat_blueprint_buildings).
+## los que piden plano de mision (GameConfig.blueprint_required).
 func plan_pool() -> Array:
 	var out: Array = []
 	if GameMode.all_unlocked():
@@ -208,7 +208,7 @@ func plan_pool() -> Array:
 			var building_id := String(id)
 			if building_id in out or _plans.has(building_id):
 				continue
-			if building_id in GameConfig.combat_blueprint_buildings:
+			if building_id in GameConfig.blueprint_required:
 				continue
 			if not ResourceLoader.exists("res://data/buildings/%s.tres" % building_id):
 				continue

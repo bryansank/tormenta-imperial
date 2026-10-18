@@ -919,12 +919,12 @@ abandone.
   `docs/02-economy.md`): los pide el nivel 3 de los productores.
 - **Colonos:** `PopulationManager.remove_population(-n)` hasta llenar las casas; los que
   no caben se van y el parte lo dice.
-- **Planos:** `combat_blueprint_buildings` (Enfermería, Herrería, Chatarrería, Central
-  diésel). Un id solo se ofrece cuando su `data/buildings/<id>.tres` existe, así que hoy
-  no sale ninguno: lo activan las ramas que traigan esos edificios. Gancho:
-  `CombatManager.blueprint_locked(id)` / `has_blueprint(id)`; **PlacementRules tiene que
-  llamarlo** (un `check_blueprint()` como `check_rank()`) y ConstructionMenu poner el
-  candado — no se tocó aquí. Señal `blueprint_unlocked`.
+- **Planos:** desde la 1.2 la lista es `GameConfig.blueprint_required` y la misión de
+  cada uno `blueprint_sources` (Enfermería, Herrería, Chatarrería, Casa de cambio,
+  Central diésel; antes `combat_blueprint_buildings`). Un id solo se ofrece cuando su
+  `data/buildings/<id>.tres` existe. Gancho: `CombatManager.blueprint_locked(id)` /
+  `has_blueprint(id)`, que lee `PlacementRules.check_blueprint()` (candado "Plano" en
+  CONSTRUIR). Ver docs/03 §"Núcleo y planos". Señal `blueprint_unlocked`.
 - **Rebaja del Diezmo:** la avanzadilla echada llama, si existe,
   `StormManager.add_tithe_discount("expedicion", pct)` (rama `feat/orden-regencia`). Sin
   esa función (la base de hoy) la rebaja solo se anota y se enseña: no hay un segundo

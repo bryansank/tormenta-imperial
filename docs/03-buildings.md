@@ -154,8 +154,12 @@ never per frame. Results are building metas (`bastion_cover`, `scrap_cover`,
 `contract_duration_mult`), cleared by `DefenseLifeEffects.clear()` from
 `ProductionManager.reset()` (the three new-game paths). Nothing new goes in the
 save except the telegraph's contract slot, inside `"contracts"`. All tunables in
-the `GameConfig` block "Defensa y vida"; their table rows (caps, prereqs, site,
-lot, active fx) are added by `_register_defense_life_buildings()`.
+the `GameConfig` block "Defensa y vida"; their table rows (prereqs, site, lot,
+active fx) are added by `_register_defense_life_buildings()`. **Caps and Núcleo
+(`integracion/v1.2`):** the three open with Núcleo 3 (`core_level_unlocks`), the
+Chatarrería also needs its blueprint (`blueprint_required`), and their caps are
+`core_level_limits` rows (N1-N5): bastion 6/6/10/14/14, scrapyard 1/1/2/2/2,
+telegraph 1 (the era rows below, passed through the bridge `[e1, e1, e2, e3, e3]`).
 
 | ID | Name | Size | Cost G/S/O/W + mat. | Workers | Build | Caps (era 1/2/3) | Prereqs | Effect |
 |----|------|------|------|---|---|---|---|---|
@@ -251,10 +255,9 @@ Todos 2x2, con carretera como todo, 2 obreros cada uno, sin mejora (no producen:
 | `exchange` | Casa de cambio | 350/120/0/100 + 8 lingotes, 4 vigas | 2 | 12 s | 1 | Mercado + Fundición (era 2) | −10 puntos de spread en el Mercado (30 % → 20 %, suelo 8 %); en Gobernador, 1 % de interés por minuto sobre el oro guardado (tope 20) |
 | `diesel_plant` | Central diésel | 320/160/80/60 + 6 vigas, 4 combustible | 2 | 14 s | 2 | Refinería (era 3) | Quema 1 combustible cada 45 s; los aserraderos, minas de oro, fundiciones y refinerías a ≤ 5 casillas rinden +15 % (no se suma entre Centrales) |
 
-**Nivel de Núcleo y plano (propuesta, lo cablea la rama del Núcleo y los planos):**
-Puerto, Núcleo 3; Casa de cambio, Núcleo 3 + plano; Central diésel, Núcleo 4 + plano
-(la Central ya está en `combat_blueprint_buildings`). Esta rama no toca
-`core_level_unlocks` ni `blueprint_required`.
+**Nivel de Núcleo y plano (cableado en `integracion/v1.2`):** Puerto, Núcleo 3; Casa
+de cambio, Núcleo 3 + plano; Central diésel, Núcleo 4 + plano (`core_level_unlocks`,
+`blueprint_required`). Los topes siguen fijos en `building_limits` (1, 1 y 2).
 
 **Quién lleva qué.**
 - `EconomyManager` (autoload, el último): el reloj del barco (modelo puro
@@ -385,10 +388,10 @@ se cobran en plena pelea) ni a las dotaciones de torre (no son ejército). El
 simulacro no se abre con otro tablero abierto, con la columna fuera ni durante el
 asedio (`CombatManager.practice_block_reason()`).
 
-**Nivel del Núcleo y planos** (los pone `feat/nucleo-y-planos`, no esta rama):
-propuesta Núcleo 3 para los tres; **plano** para la Enfermería y la Herrería, el
-Campo de tiro sin plano. Ojo: `GameConfig.combat_blueprint_buildings` aún dice
-`military_forge` (nombre provisional de la Herrería); el id real es `smithy`.
+**Nivel del Núcleo y planos** (cableado en `integracion/v1.2`): Núcleo 3 para los
+tres (`core_level_unlocks`); **plano** para la Enfermería y la Herrería
+(`blueprint_required`), el Campo de tiro sin plano. Topes: únicos a todos los niveles
+(`core_level_limits`, `[1, 1, 1, 1, 1]`).
 
 **Ficha.** `scripts/ui/MilitarySection.gd` (dentro de `BuildingInfoPanel`, como
 `HarvestSection`): la Enfermería cuenta sus tres efectos con cifras; la Herrería

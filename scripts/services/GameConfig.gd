@@ -3714,6 +3714,19 @@ var core_level_limits := {
 	"lighthouse": [1, 1, 1, 1, 1],
 	"fuel_depot": [2, 2, 2, 3, 3],
 	"fishing_dock": [3, 3, 4, 6, 6],
+	# Edificios de la 1.2 (integracion/v1.2): los que suben con el Nucleo. Su
+	# primera cifra es la de building_limits (la ponen sus _register_*()).
+	# Militares (feat/edificios-militares): unicos a todos los niveles.
+	"infirmary": [1, 1, 1, 1, 1],
+	"smithy": [1, 1, 1, 1, 1],
+	"firing_range": [1, 1, 1, 1, 1],
+	# Defensa y vida (feat/edificios-defensa-vida): sus filas por era de la rama
+	# ([6, 10, 14] y [1, 2, 2]) pasadas por el puente [e1, e1, e2, e3, e3].
+	"bastion": [6, 6, 10, 14, 14],
+	"scrapyard": [1, 1, 2, 2, 2],
+	"telegraph": [1, 1, 1, 1, 1],
+	# Economia (feat/edificios-economia): sin fila, topes fijos en
+	# building_limits (Puerto 1, Casa de cambio 1, Centrales 2).
 }
 
 ## CONTRATO: id -> nivel minimo del Nucleo para poder construirlo (1 = desde el
@@ -3729,6 +3742,17 @@ var core_level_unlocks := {
 	"lighthouse": 2,
 	"fishing_dock": 2,
 	"fuel_depot": 4,
+	# Edificios de la 1.2 (integracion/v1.2, lo propuesto en doc 21 §6.3 y por
+	# cada rama). Los que ademas piden plano estan en blueprint_required.
+	"firing_range": 3,
+	"telegraph": 3,
+	"bastion": 3,
+	"trade_port": 3,
+	"infirmary": 3,
+	"smithy": 3,
+	"scrapyard": 3,
+	"exchange": 3,
+	"diesel_plant": 4,
 }
 
 ## Lo que pide cada nivel ANTES de poder pagarlo (coherente con las eras):
@@ -3838,6 +3862,8 @@ func blueprints_for_mission(domain: String, mission_index: int) -> Array:
 			out.append(String(id))
 	out.sort()
 	return out
+
+# ══════════════════════════════════════════════════════════════════════
 # ── Edificios militares (feat/edificios-militares, doc 21 §6.3 n.º 8-10) ──
 # ══════════════════════════════════════════════════════════════════════
 # Enfermeria (infirmary), Herreria militar (smithy) y Campo de tiro
@@ -3926,9 +3952,9 @@ var combat_active_doctrine := ""
 var _military_buildings_registered := _register_military_buildings()
 
 func _register_military_buildings() -> bool:
+	# Topes: unicos (su fila del Nucleo, [1, 1, 1, 1, 1], esta en core_level_limits).
 	for id in MILITARY_SUPPORT_BUILDINGS:
 		building_limits[id] = 1
-		building_limits_by_era[id] = [1, 1, 1]
 	# Los tres viven del Cuartel; la Enfermeria y la Herreria piden ademas
 	# acero (la Fundicion). El Campo de tiro tambien lo paga en acero.
 	building_prerequisites[INFIRMARY_ID] = ["barracks", "foundry"]
@@ -3965,6 +3991,8 @@ func get_practice_lesson(lesson_id: String) -> Dictionary:
 		if String(lesson.get("id", "")) == lesson_id:
 			return lesson
 	return {}
+
+# ══════════════════════════════════════════════════════════════════════
 # ── Defensa y vida (feat/edificios-defensa-vida, doc 21 §6.3 n.º 11, 12, 18 y §6.4) ──
 # ══════════════════════════════════════════════════════════════════════
 # Bastion (tramo de muro 2x1), Chatarreria, Telegrafo y la belleza del barrio.
@@ -3997,8 +4025,8 @@ var bastion_storm_reduction := 0.3
 var bastion_per_cover_cell := 3
 var bastion_board_cover_max := 2
 var bastion_cover_defense := 2
-## Topes por era (sin bastiones antes del acero: la era 1 no se ve).
-var bastion_limits_by_era := [6, 10, 14]
+## Topes: por nivel del Nucleo, en core_level_limits (bloque "Nucleo y planos";
+## lo abre el Nucleo 3).
 
 ## Chatarreria (con obreros y en pie): sus brigadas reparan mas barato lo que
 ## esta a `scrapyard_radius` (descuento sobre el precio de la reparacion; no se
@@ -4014,7 +4042,7 @@ var scrapyard_ruins_per_part := 2
 var scrapyard_parts_max := 3
 var scrapyard_brigade_lifts := 1
 var scrapyard_brigade_lift_ratio := 0.35
-var scrapyard_limits_by_era := [1, 2, 2]
+# Topes: por nivel del Nucleo, en core_level_limits (lo abre el Nucleo 3 y pide plano).
 
 ## Telegrafo (unico, en pie): un hueco mas en el tablon de encargos (el hilo del
 ## telegrafo: le llegan encargos de cualquier fuente abierta) y los plazos de los
@@ -4089,13 +4117,10 @@ func bastion_cover_cells_for(bastions: int) -> int:
 var _defense_life_registered := _register_defense_life_buildings()
 
 func _register_defense_life_buildings() -> bool:
-	# Topes (la era 1 coincide con building_limits, como pide la prueba de topes).
-	building_limits[BASTION_ID] = int(bastion_limits_by_era[0])
-	building_limits_by_era[BASTION_ID] = bastion_limits_by_era.duplicate()
-	building_limits[SCRAPYARD_ID] = int(scrapyard_limits_by_era[0])
-	building_limits_by_era[SCRAPYARD_ID] = scrapyard_limits_by_era.duplicate()
-	building_limits[TELEGRAPH_ID] = 1
-	building_limits_by_era[TELEGRAPH_ID] = [1, 1, 1]
+	# Topes: la fila del Nucleo esta en core_level_limits; su N1 es el de
+	# building_limits, como pide la prueba de topes.
+	for id in [BASTION_ID, SCRAPYARD_ID, TELEGRAPH_ID]:
+		building_limits[id] = int(core_level_limits[id][0])
 	# Prerrequisitos: los tres son de la era 2 (piden acero). El Bastion, ademas,
 	# el Cuartel (quien lo defiende); el Telegrafo, el Almacen (de donde salen
 	# los encargos); la Chatarreria, solo la Fundicion (alli funde lo que recoge).
@@ -4125,6 +4150,9 @@ func _register_defense_life_buildings() -> bool:
 	# parpadea (su lampara de senales).
 	building_active_fx[SCRAPYARD_ID] = "dust"
 	building_active_fx[TELEGRAPH_ID] = "glow"
+	return true
+
+# ══════════════════════════════════════════════════════════════════════
 # ── Economia (feat/edificios-economia, doc 21 §6.3 n.º 13, 14 y 16) ──
 # ══════════════════════════════════════════════════════════════════════
 # Puerto comercial (el barco del contrabandista, doc 14 §P4), Casa de cambio
@@ -4138,10 +4166,9 @@ func _register_defense_life_buildings() -> bool:
 # obra, parcela, efecto) las anade _register_economy_buildings() al crear
 # GameConfig: este bloque vive solo y no choca con otras ramas.
 #
-# Lo que NO esta aqui (lo lleva la rama del Nucleo y los planos): en que nivel
-# del Nucleo se abre cada uno y si pide plano. Propuesta de esta rama: Puerto
-# Nucleo 3; Casa de cambio Nucleo 3 + plano; Central diesel Nucleo 4 + plano
-# (la Central ya esta en combat_blueprint_buildings).
+# Lo que NO esta aqui: en que nivel del Nucleo se abre cada uno y si pide plano
+# (core_level_unlocks y blueprint_required, bloque "Nucleo y planos"): Puerto
+# Nucleo 3; Casa de cambio Nucleo 3 + plano; Central diesel Nucleo 4 + plano.
 
 const TRADE_PORT_ID := "trade_port"
 const EXCHANGE_ID := "exchange"
@@ -4174,7 +4201,7 @@ var smuggler_parts_amount := [2, 4]
 var smuggler_parts_price := 60
 ## Planos menores: los de edificios que abre el RANGO (decoraciones y utiles,
 ## rank_rewards) por encima del rango de ahora. Nunca un plano obligatorio (los
-## de combat_blueprint_buildings salen solo de las misiones). Oro por rango.
+## de blueprint_required salen solo de las misiones). Oro por rango.
 var smuggler_plan_price_per_rank := 40
 var smuggler_plan_price_min := 120
 ## Materiales: [min, max] y oro por unidad (un poco por encima de lo que cuesta
@@ -4259,6 +4286,8 @@ func _register_economy_buildings() -> bool:
 	building_active_fx[EXCHANGE_ID] = "glow"
 	building_active_fx[DIESEL_PLANT_ID] = "smoke"
 	return true
+
+# ══════════════════════════════════════════════════════════════════════
 # Decoraciones y trafico (feat/decoraciones-y-trafico, doc 21 §6.4-6.5 y §7 V5)
 # ══════════════════════════════════════════════════════════════════════
 # Las dieciocho decoraciones que faltaban del catalogo y los camiones de la red
@@ -4396,6 +4425,8 @@ func _register_decorations_traffic() -> bool:
 		building_lot_style[id] = {"ground": l[0], "trim": l[1], "yard": 0.25, "accent": l[2],
 			"props": l[3], "count": [1, 2]}
 	return true
+
+# ══════════════════════════════════════════════════════════════════════
 # ── Amenazas de costa (feat/amenazas-costa) ──────────────────────────
 #
 # Marcas en la orilla que dan SOLO BOTIN OPCIONAL (decision de Bryan,
@@ -4467,6 +4498,8 @@ var threat_wreck_workers := 2
 var threat_wreck_explore_seconds := 60.0
 ## Rango por explorar un pecio (atacar ya da la XP de un combate ganado).
 var threat_wreck_rank_xp := 20
+
+# ══════════════════════════════════════════════════════════════════════
 # ── Volverse el Imperio (feat/volverse-imperio, docs/06 §Volverse el Imperio) ──
 # ══════════════════════════════════════════════════════════════════════
 # Tras GANAR el Ataque Final la partida sigue en la misma isla: la Tormenta para

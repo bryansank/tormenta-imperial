@@ -97,7 +97,7 @@ func test_the_three_buildings_load_with_their_model() -> void:
 func test_they_are_unique_and_need_barracks_and_foundry() -> void:
 	for id in IDS:
 		assert_int(int(GameConfig.building_limits[id])).is_equal(1)
-		assert_array(GameConfig.building_limits_by_era[id]).is_equal([1, 1, 1])
+		assert_array(GameConfig.core_level_limits[id]).is_equal([1, 1, 1, 1, 1])
 		var reqs: Array = GameConfig.get_prerequisites(id)
 		assert_bool(reqs.has("barracks")).is_true()
 		assert_bool(reqs.has("foundry")).is_true()

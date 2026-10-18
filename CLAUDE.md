@@ -63,13 +63,13 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-30 autoloads in `project.godot`: the 29 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager`, `ContractManager` and `EconomyManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
+32 autoloads in `project.godot`: the 31 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager`, `ContractManager`, `EconomyManager`, `ThreatManager` and `EmpireManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 142 signals in 30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 166 signals in 35 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
@@ -262,7 +262,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (55 total, `data/buildings/*.tres`)
+### Buildings (64 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -365,9 +365,9 @@ picked by `EconomyToys.create()` without `model_scene`), 2D in `BuildingArt2D`; 
 ship is `scripts/map/SmugglerShip3D.gd` (one shared ~320-tri mesh, Tweens, no
 `_process`) and `scripts/view2d/SmugglerShip2D.gd`, children of the placers; tapping it
 (`EconomyManager.ship_hit`) or VER EL BARCO on the port opens `scripts/ui/SmugglerPanel.gd`
-(created on demand, not in the scenes). **Proposed (wired by the Núcleo/blueprints
-branch, not here):** port Núcleo 3; exchange Núcleo 3 + blueprint; diesel plant Núcleo 4
-+ blueprint (already in `combat_blueprint_buildings`). Detail: docs/03 "Economía de la
+(created on demand, not in the scenes). **Wired on `integracion/v1.2`:** port Núcleo 3;
+exchange Núcleo 3 + blueprint; diesel plant Núcleo 4 + blueprint (`core_level_unlocks`,
+`blueprint_required`). Detail: docs/03 "Economía de la
 1.2", docs/02, docs/05 "Casa de cambio".
 
 **Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
@@ -400,7 +400,11 @@ the end of GameConfig (not written inside the tables). Detail: docs/03.
 old era 1, N3 ≈ era 2, N4 ≈ era 3. Every era gate (Foundry, Refinery, Market,
 Laboratory, HQ, five warehouses) fits with Núcleo 1-2, so the line never waits for it.
 `core_level_unlocks` opens buildings by level (silo, tavern, carpentry, lighthouse,
-fishing dock 2; fuel depot 4). **Barracks, Shipyard and Aerodrome have no cap**
+fishing dock 2; firing range, telegraph, bastion, trade port, infirmary, smithy,
+scrapyard, exchange 3; fuel depot, diesel plant 4). The 1.2 buildings with a cap that
+rises carry their row in `core_level_limits` (bastion 6/6/10/14/14, scrapyard
+1/1/2/2/2, the three military ones and the telegraph 1 everywhere); the economy ones
+keep fixed caps in `building_limits` (port 1, exchange 1, diesel plants 2). **Barracks, Shipyard and Aerodrome have no cap**
 (`-1`); the brake is on the army instead (see Army & Units). **Decorations have no
 cap** (any `BuildingData.is_decoration`). The only reader is
 `GameConfig.get_building_limit(id)`: Núcleo level + `rank_limit_bonus`; -1 in Sandbox.
@@ -1252,7 +1256,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
 
 ```
 tormenta-imperial/
-+-- project.godot                    # Engine config (version 1.0.0), 30 autoloads (29 game + BeckettRuntime), renderer override hook
++-- project.godot                    # Engine config (version 1.0.0), 32 autoloads (31 game + BeckettRuntime), renderer override hook
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
 +-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
@@ -1329,7 +1333,7 @@ tormenta-imperial/
 |   +-- economy/SmugglerShip.gd      # PURE model: the smuggler's ship of the Trade port (clock, 3 offers, own RNG; 1.2)
 |   +-- empire/                      # PURE models of Volverse el Imperio: Archipelago.gd (islands, progress, tribute) and ConquestGenerator.gd (conquest missions)
 |   +-- storm/DayCycle.gd            # PURE model: the day/night clock (DayClock ticks it)
-|   +-- services/                    # The 29 game autoloads (table above) + BeckettGate.gd
+|   +-- services/                    # The 31 game autoloads (table above) + BeckettGate.gd
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
@@ -1361,7 +1365,7 @@ tormenta-imperial/
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
 |       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
-+-- data/buildings/                  # 55 .tres building definitions
++-- data/buildings/                  # 64 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 5 tracks, 47 SFX, 4 ambient loops (see MANIFEST.md)
 |   +-- models/toy/                  # Baked toy buildings (<id>.tscn + <id>_mesh.res, toy_solid / toy_glow materials)
@@ -1464,7 +1468,7 @@ guarnición), cañoneros (not dotación). Code identifiers (`tithe`, `audit`, `g
 
 ### Key Rule: GDScript first (decided 2026-09-12)
 
-- **GDScript for everything**, combat included. The whole project (29 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
+- **GDScript for everything**, combat included. The whole project (31 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
 - The old plan put unit AI, combat math and pathfinding in C# **for performance**. That argument does not apply at the agreed combat scale: an 8x8 board with 4–6 units per side. GDScript is orders of magnitude more than enough.
 - **Migrate later, only on evidence**: if a profiled module proves too slow, port that module to C#. Do not create the .NET project speculatively.
 
