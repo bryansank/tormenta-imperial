@@ -464,7 +464,7 @@ static func is_colony_entry_available(id: String) -> bool:
 		"market":
 			return ProgressionManager.current_phase >= GameConfig.Phase.ECONOMY
 		"army", "skirmish":
-			return ArmyManager.barracks_count() > 0
+			return ArmyManager.has_military_building()
 		"sandbox":
 			return GameMode.sandbox_tools()
 		"contracts":

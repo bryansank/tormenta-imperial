@@ -93,9 +93,16 @@ static func _cell_key(unit: CombatUnit, cell: Vector2i, enemies: Array) -> Array
 		key.append_array(_target_quality(unit, target))
 		return key
 
+	# Aire y mar: solo cuentan los rivales a los que esta unidad puede pegar
+	# alguna vez (una lancha no persigue aviones). Si no puede pegar a ninguno,
+	# todas las casillas valen lo mismo y se queda donde esta.
 	var nearest: int = 9999
 	for enemy in enemies:
-		nearest = mini(nearest, Rules.manhattan(cell, enemy.position))
+		if Rules.max_reach(unit, enemy) <= 0:
+			continue
+		nearest = mini(nearest, Rules.strike_distance(unit, cell, enemy))
+	if nearest == 9999:
+		return [1, 0, 0, 0, 0]
 	return [1, absi(nearest - unit.min_range()), 0, 0, 0]
 
 # ── Eleccion de objetivo (T038) ────────────────────────
@@ -118,9 +125,11 @@ static func _pick_target(unit: CombatUnit, from: Vector2i, enemies: Array) -> Co
 	var best: CombatUnit = null
 	var best_key: Array = []
 	for enemy in enemies:
-		var dist: int = Rules.manhattan(from, enemy.position)
-		if dist < unit.min_range() or dist > unit.attack_range():
+		# Aire y mar: el alcance contra ese dominio (CombatRules.can_hit_from). Entre
+		# tierra y tierra es el min_range/range de siempre.
+		if not Rules.can_hit_from(unit, from, enemy):
 			continue
+		var dist: int = Rules.strike_distance(unit, from, enemy)
 		var key: Array = _target_quality(unit, enemy)
 		key.append(dist)
 		key.append(enemy.uid)

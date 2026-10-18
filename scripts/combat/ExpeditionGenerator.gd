@@ -222,11 +222,17 @@ static func boss_roster(rng: RandomNumberGenerator, depth: int, era: int) -> Dic
 	return _trim_to_cap(roster)
 
 ## Heaviest unit type the given era unlocks, by tier.
-static func top_tier_unit(era: int) -> String:
+##
+## Aire y mar: solo de `domain` (tierra por defecto). El jefe de siempre lleva un
+## tanque, no un acorazado: los barcos enemigos solo salen en nodos de costa
+## (add_ships), donde hay agua para ellos.
+static func top_tier_unit(era: int, domain: String = "land") -> String:
 	var best: String = ""
 	var best_tier: int = -1
 	for unit_id in GameConfig.get_unit_ids():
 		if not _is_available(unit_id, era):
+			continue
+		if GameConfig.get_unit_domain(String(unit_id)) != domain:
 			continue
 		var tier: int = int(GameConfig.get_unit_def(unit_id).get("tier", 0))
 		if tier > best_tier:
@@ -240,7 +246,7 @@ static func _is_available(unit_id: String, era: int) -> bool:
 ## Sheds the cheapest bodies first until the roster fits on the board.
 static func _trim_to_cap(roster: Dictionary) -> Dictionary:
 	var cap: int = maxi(1, GameConfig.combat_deploy_cap)
-	var order: Array = ["infantry", "artillery", "vehicle"]
+	var order: Array = ["infantry", "artillery", "torpedo_boat", "gunboat", "vehicle", "dreadnought"]
 	while roster_size(roster) > cap:
 		var removed := false
 		for unit_id in order:
@@ -459,15 +465,102 @@ const FLAVOR_OUTPOST := "outpost"
 const EXPEDITION_NAMES := ["SORTIE_DEST_DOCK", "SORTIE_DEST_FACTORY", "SORTIE_DEST_MINE", "SORTIE_DEST_BRIDGE", "SORTIE_DEST_DEPOT"]
 
 ## El mapa de una oferta. Vacio si la oferta no es de un tipo conocido.
+##
+## Aire y mar: si la oferta es de costa (offer_is_coastal), todos sus nodos
+## llevan agua en el tablero y barcos enemigos segun la era (make_coastal).
 static func sortie_map(offer: Dictionary) -> Array:
 	var seed_value: int = int(offer.get("seed", 1))
 	var era: int = maxi(1, int(offer.get("era", 1)))
+	var map: Array = []
 	match String(offer.get("kind", "")):
 		KIND_RAID:
-			return raid_map(seed_value, era, String(offer.get("flavor", FLAVOR_BANDITS)))
+			map = raid_map(seed_value, era, String(offer.get("flavor", FLAVOR_BANDITS)))
 		KIND_EXPEDITION:
-			return short_expedition_map(seed_value, era, String(offer.get("blueprint", "")))
-	return []
+			map = short_expedition_map(seed_value, era, String(offer.get("blueprint", "")))
+	if not map.is_empty() and offer_is_coastal(offer):
+		make_coastal(map, seed_value, era)
+	return map
+
+# ── Costa: agua en el tablero y barcos enemigos (aire y mar, docs/15 §11) ──
+
+## Un flujo de azar propio para decidir la costa: no mueve ni el mapa, ni los
+## enemigos, ni el botin de las ofertas de siempre (y al reves).
+const COAST_SEED_STRIDE := 15485863
+
+## ¿Es de costa esta oferta? Desde `combat_coastal_min_era`: la expedicion al
+## Puerto (SORTIE_DEST_DOCK) siempre; las incursiones de saqueadores, a veces
+## (piratas, `combat_coastal_raid_chance`). La avanzadilla de la Regencia y la
+## primera escaramuza, nunca. Se decide solo con la oferta: se ve antes de salir
+## y se reconstruye igual al cargar.
+static func offer_is_coastal(offer: Dictionary) -> bool:
+	if int(offer.get("era", 1)) < GameConfig.combat_coastal_min_era:
+		return false
+	match String(offer.get("kind", "")):
+		KIND_EXPEDITION:
+			return offer_name_key(offer) == "SORTIE_DEST_DOCK"
+		KIND_RAID:
+			if String(offer.get("flavor", FLAVOR_BANDITS)) != FLAVOR_BANDITS:
+				return false
+			var rng := make_rng(int(offer.get("seed", 1)) + COAST_SEED_STRIDE)
+			return rng.randf() < GameConfig.combat_coastal_raid_chance
+	return false
+
+## Convierte un mapa en uno de costa: cada nodo con `coastal`, su `terrain_seed`
+## (el tablero se genera con CombatRules.coastal_terrain), barcos en el roster
+## enemigo y un repuesto de mas en el ultimo combate. Muta `map`.
+static func make_coastal(map: Array, seed_value: int, era: int) -> void:
+	var last: int = boss_index(map)
+	for node in map:
+		var index: int = int(node.get("index", 0))
+		node["coastal"] = true
+		node["terrain_seed"] = seed_value + COAST_SEED_STRIDE * (index + 1)
+		node["enemy_roster"] = add_ships(node.get("enemy_roster", {}), era, bool(node.get("is_boss", false)))
+		if index == last and GameConfig.combat_loot_coastal_parts > 0:
+			var loot: Dictionary = node.get("loot", {})
+			loot["parts"] = int(loot.get("parts", 0)) + GameConfig.combat_loot_coastal_parts
+			node["loot"] = loot
+
+## Los barcos de un roster de costa. Sin azar: el mismo roster da los mismos
+## barcos. Cada barco ocupa el sitio de un infante (nunca deja la linea vacia ni
+## pasa del tope del tablero):
+##   era 2: una lancha torpedera (canonera si el roster ya es grande o es jefe);
+##   era 3: una canonera, y el jefe ademas un acorazado.
+## En era 1 no hay barcos (no los hay en el juego hasta el Astillero).
+static func add_ships(roster: Dictionary, era: int, is_boss: bool) -> Dictionary:
+	var result: Dictionary = roster.duplicate()
+	var ships: Array = []
+	if era >= 3:
+		ships.append("gunboat")
+		if is_boss and _is_available("dreadnought", era):
+			ships.append("dreadnought")
+	elif era >= 2:
+		ships.append("gunboat" if is_boss or roster_size(roster) >= 4 else "torpedo_boat")
+	for ship in ships:
+		if not _is_available(String(ship), era):
+			continue
+		# El barco entra por un infante si hay mas de uno; si no, se suma.
+		if int(result.get("infantry", 0)) > 1:
+			result["infantry"] = int(result["infantry"]) - 1
+		result[ship] = int(result.get(ship, 0)) + 1
+	return _trim_to_cap(result)
+
+## ¿Tiene agua el tablero de este nodo?
+static func node_is_coastal(node: Dictionary) -> bool:
+	return bool(node.get("coastal", false))
+
+## El terreno del tablero de un nodo: el de costa si lo es, {} (todo tierra) si no.
+static func node_terrain(node: Dictionary, board: Vector2i) -> Dictionary:
+	if not node_is_coastal(node):
+		return {}
+	return Rules.coastal_terrain(board, int(node.get("terrain_seed", 0)))
+
+## ¿Algun nodo del mapa es de costa? (La seleccion de tropa lo ensena antes de
+## salir y deja llevar barcos.)
+static func map_has_water(map: Array) -> bool:
+	for node in map:
+		if node_is_coastal(node):
+			return true
+	return false
 
 ## La clave de Tr con el nombre de la oferta.
 static func offer_name_key(offer: Dictionary) -> String:

@@ -110,9 +110,10 @@ static func on_land(cell: Vector2i, size: Vector2i) -> bool:
 
 # ── Costa (feat/decoraciones-remates) ─────────────────────────────────
 
-## Lo que solo se planta en la costa: las palmeras. Motivo del veredicto y su
-## aviso (LBL_NEEDS_SHORE), el mismo en 3D y en 2D.
-const SHORE_ONLY := ["palm_trees"]
+## Lo que solo se planta en la costa: las palmeras y el Astillero (aire y mar:
+## los barcos salen al agua). Motivo del veredicto y su aviso (LBL_NEEDS_SHORE),
+## el mismo en 3D y en 2D.
+const SHORE_ONLY := ["palm_trees", "shipyard"]
 const SHORE_REASON := "shore"
 const NEIGHBORS8 := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]

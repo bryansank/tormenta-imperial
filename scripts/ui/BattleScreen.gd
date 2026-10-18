@@ -2071,7 +2071,8 @@ func _threat_cells(encounter: Encounter) -> Array:
 	var key := "|".join(parts)
 	if key != _threat_key:
 		_threat_key = key
-		_threat_cache = Rules.threat_cells(encounter.units, ENEMY, _board)
+		# Aire y mar: con el terreno del tablero (los barcos no andan por tierra).
+		_threat_cache = Rules.threat_cells(encounter.units, ENEMY, _board, encounter.terrain)
 	return _threat_cache
 
 ## Se ve el alcance enemigo: lo pidio el jugador o lo ensena el combate guiado.

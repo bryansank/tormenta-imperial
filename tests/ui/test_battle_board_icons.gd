@@ -73,7 +73,10 @@ func test_every_unit_type_has_its_icon_on_disk() -> void:
 			"falta el icono de %s en %s" % [unit_id, path]).is_true()
 
 func test_the_three_unit_types_of_the_game_are_the_three_that_have_an_icon() -> void:
-	assert_array(GameConfig.get_unit_ids()).contains_exactly_in_any_order(UNIT_IDS)
+	# Aire y mar (feat/aire-mar-reglas): las de tierra siguen siendo estas tres;
+	# los iconos de barcos y aviones los trae la rama de vista
+	# (feat/aire-mar-vista), y el caso de arriba los pide en disco.
+	assert_array(GameConfig.get_unit_ids_in_domain("land")).contains_exactly_in_any_order(UNIT_IDS)
 	for unit_id in UNIT_IDS:
 		assert_object(UITheme.unit_icon(unit_id)).override_failure_message(
 			"el icono de %s no esta importado" % unit_id).is_not_null()

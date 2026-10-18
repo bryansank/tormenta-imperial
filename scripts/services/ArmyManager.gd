@@ -147,23 +147,57 @@ func get_power() -> int:
 
 ## Number of Barracks currently placed (queried from the scene's BuildingPlacer).
 func barracks_count() -> int:
+	return building_count("barracks")
+
+## Cuantos edificios `building_id` hay en el mapa (BuildingPlacer de la escena).
+## Lo usan el Cuartel, el Astillero y el Aerodromo (aire y mar).
+func building_count(building_id: String) -> int:
 	var scene := get_tree().current_scene
 	if scene:
 		var placer := scene.get_node_or_null("BuildingPlacer")
 		if placer and placer.has_method("count_building"):
-			return placer.count_building("barracks")
+			return placer.count_building(building_id)
 	return 0
 
+## Hay al menos un edificio que entrena tropa (Cuartel, Astillero o Aerodromo):
+## con el se ensenan el panel del ejercito y las escaramuzas.
+func has_military_building() -> bool:
+	for building_id in GameConfig.MILITARY_BUILDINGS:
+		if building_count(String(building_id)) > 0:
+			return true
+	return false
+
+## Edificio militar -> cuantos hay.
+func military_building_counts() -> Dictionary:
+	var counts: Dictionary = {}
+	for building_id in GameConfig.MILITARY_BUILDINGS:
+		counts[String(building_id)] = building_count(String(building_id))
+	return counts
+
 func get_capacity() -> int:
-	return GameConfig.get_army_capacity(barracks_count())
+	return GameConfig.get_army_capacity_for(military_building_counts())
 
 ## Units owned + units currently training (both occupy capacity).
 func get_used_capacity() -> int:
 	return get_total_units() + _training.size()
 
-## Parallel training slots = one per Barracks.
-func max_slots() -> int:
-	return barracks_count()
+## Parallel training slots = one per military building. Con `building_id`, solo
+## los de ese edificio (cada Astillero entrena barcos, no soldados).
+func max_slots(building_id: String = "") -> int:
+	if building_id != "":
+		return building_count(building_id)
+	var total := 0
+	for id in GameConfig.MILITARY_BUILDINGS:
+		total += building_count(String(id))
+	return total
+
+## Cuantas unidades se entrenan ahora mismo en los edificios `building_id`.
+func training_in(building_id: String) -> int:
+	var busy := 0
+	for entry in _training:
+		if GameConfig.get_unit_building(str(entry.get("id", ""))) == building_id:
+			busy += 1
+	return busy
 
 func is_unlocked(unit_id: String) -> bool:
 	var def := GameConfig.get_unit_def(unit_id)
@@ -171,16 +205,30 @@ func is_unlocked(unit_id: String) -> bool:
 		return false
 	return ProgressionManager.current_era >= int(def.get("era", 1))
 
+## La clave de Tr de "Necesitas un <edificio>" para entrenar `unit_id`.
+static func need_building_key(unit_id: String) -> String:
+	match GameConfig.get_unit_building(unit_id):
+		"shipyard":
+			return "LBL_ARMY_NEED_SHIPYARD"
+		"aerodrome":
+			return "LBL_ARMY_NEED_AERODROME"
+	return "LBL_ARMY_NEED_BARRACKS"
+
 ## Returns {ok: bool, reason: String}. `reason` is a translation key when not ok.
+##
+## Aire y mar: cada unidad se entrena en SU edificio (unit_types[...]["building"])
+## y ocupa un hueco de los de ese edificio; la capacidad es una sola para todo el
+## ejercito (GameConfig.get_army_capacity_for).
 func can_train(unit_id: String) -> Dictionary:
 	var def := GameConfig.get_unit_def(unit_id)
 	if def.is_empty():
 		return {"ok": false, "reason": "LBL_ARMY_NO_UNIT"}
-	if barracks_count() <= 0:
-		return {"ok": false, "reason": "LBL_ARMY_NEED_BARRACKS"}
+	var building_id: String = GameConfig.get_unit_building(unit_id)
+	if building_count(building_id) <= 0:
+		return {"ok": false, "reason": need_building_key(unit_id)}
 	if not is_unlocked(unit_id):
 		return {"ok": false, "reason": "LBL_ARMY_LOCKED"}
-	if _training.size() >= max_slots():
+	if training_in(building_id) >= max_slots(building_id):
 		return {"ok": false, "reason": "LBL_ARMY_SLOTS_FULL"}
 	if get_used_capacity() >= get_capacity():
 		return {"ok": false, "reason": "LBL_ARMY_AT_CAP"}

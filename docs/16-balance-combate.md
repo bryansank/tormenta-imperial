@@ -569,3 +569,37 @@ plantilla 3: 42 % -> 32 %; plantilla 4: 73 % -> 75 %). Ninguna celda pasa a
 trivial ni a imposible. Las tablas completas salen con
 `-- --only=expeditions` y `-- --adv=off`; cuadrarlas con la rama de balance al
 integrar.
+
+---
+
+## Aire y mar (2026-10-17, rama `feat/aire-mar-reglas`) — SIN MEDIR
+
+Seis unidades nuevas (estadisticas en docs/15 §8, reglas en §11). Se eligieron a
+ojo sobre la escala de las tres de tierra: la vida de los barcos y del dirigible
+alarga los encuentros de costa unas rondas, y los cruces tienen el mismo ×1,5 /
+×0,75. Danos netos de los emparejamientos que mas pesan (sin moral ni cartas):
+
+| Ataca -> recibe | Dano | Por que |
+|---|---|---|
+| caza -> bombardero | 17 (11 ×1,5) | el caza es el antiaereo |
+| caza -> dirigible | 12 (8 ×1,5) | 260 de vida: hacen falta varios cazas o tiempo |
+| bombardero -> tanque | 20 (13 ×1,5) | lo pesado cae ante las bombas |
+| bombardero -> acorazado | 18 (12 ×1,5) | |
+| lancha -> acorazado | 14 (9 ×1,5) | el acorazado tiene 280 de vida |
+| acorazado -> canonera | 20 (13 ×1,5) | |
+| canonera -> infanteria | 15 (10 ×1,5) | a 3 casillas desde el agua |
+| dirigible -> infanteria | 12 (8 ×1,5) | |
+| infanteria -> dirigible | 4 | solo a 1 casilla |
+| tanque -> dirigible | 8 | solo a 1 casilla |
+
+Lo que no se toco: las tres unidades de tierra, el circulo de tierra, la escala
+del enemigo y los tableros sin agua (identicos a antes: lo fija
+`tests/combat/test_air_sea_rules.gd`).
+
+**Pendiente (ronda final):** la sonda (`tools/balance_probe.gd`) no compone aun
+columnas con barcos o aviones ni tableros de costa. Medir antes de dar por buenos
+los numeros: (1) expedicion al Puerto en era 2 con 4 de tierra y con 2 de tierra
++ 2 lanchas/canoneras; (2) era 3 con 2 cazas + 2 bombarderos + 2 tanques contra
+el jefe con acorazado; (3) que ningun encuentro de costa pase de las 20 rondas
+(el dirigible y el acorazado son esponjas). Las palancas: la vida de
+`dreadnought` y `airship`, y `combat_coastal_raid_chance`.

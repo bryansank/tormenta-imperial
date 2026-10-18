@@ -224,3 +224,38 @@ oleadas el final se volvería un trámite (97,5 % con 6 blindados, 86 % con 5,
 71,5 % sin las torres). Con 3, la guarnición máxima bien preparada gana el 86 %
 (como el 82 % de siempre), sin las torres o con la moral a 75 una de cada dos o
 menos, y Gobernador el 75,5 % (≥ 60 %).
+
+## Aire y mar (2026-10-17, rama `feat/aire-mar-reglas`) — SIN MEDIR
+
+Decisión de Bryan: la Regencia trae **dirigibles a la última oleada**. Lo que
+cambia en `FinalAudit._compose()` (solo la última oleada; las anteriores salen
+igual, con la misma moneda al aire):
+
+- Desde la era `final_audit_air_min_era` (3), `final_audit_airships_last_wave`
+  (1) dirigible **en el hueco de un cañón** (si no hay cañón, en el de un
+  infante; la línea nunca se queda vacía). No añade cuerpos: el tope de 6 sigue.
+- Si en la guarnición hay **aviones** cuando se convoca (o cuando se abre la
+  puerta, si aún no había empezado), `final_audit_air_escort_fighters` (1) **caza
+  de escolta** en el hueco de un infante. Se guarda (`air_escort` en el
+  `to_dict()`; un guardado viejo no lo trae = sin escolta).
+
+Por qué en el hueco del cañón: el dirigible (260 de vida, ataque 10, defensa 4,
+alcance 2) pega menos de golpe que el cañón de la última oleada pero cuesta mucho
+más tumbarlo, y **solo se le puede pegar a 1 casilla** (infantería y tanques) o con
+aviones: la artillería y las dotaciones de torre no le llegan (no hay artillería
+antiaérea, el caza es el antiaéreo). Cambiar un cañón por un dirigible quita
+golpe y pone aguante: la intención es que el total quede parecido, pero **no está
+medido**.
+
+En casa el tablero del asedio solo tiene agua si en la guarnición hay barcos
+(`CombatManager.home_terrain()`), así que la guarnición de referencia (6
+blindados) sigue peleando en tierra: lo único que le cambia es el dirigible.
+
+**Pendiente (ronda final):** repetir la tabla de arriba con
+`godot --headless --path . -s tools/siege_probe.gd -- --seeds=200` (con su
+`override.cfg`) y mirar sobre todo la columna de 6 blindados con 4 torres (era
+86 %) y Gobernador (75,5 %). Si baja más de 5 puntos, las palancas son, por
+orden: `final_audit_airships_last_wave` a 0 en Colono, o el dirigible enemigo con
+menos vida (otra fila en `combat_unit_stats` solo para la Regencia). La sonda
+tampoco sabe aún componer guarniciones con barcos o aviones: añadir filas
+"4 blindados + 2 cazas" y "4 blindados + 2 cañoneras" cuando se mida.

@@ -238,6 +238,16 @@ func build_enemy_units() -> Array:
 			units.append(CombatUnitScript.create(next_uid(), String(unit_id), ENEMY, scale))
 	return units
 
+## El terreno del tablero del nodo actual (aire y mar, docs/15 §11): agua si el
+## nodo es de costa, {} (todo tierra) si no. Sale de la semilla del nodo, que a
+## su vez sale de la oferta: no se guarda nada nuevo.
+func current_terrain(board: Vector2i) -> Dictionary:
+	return Generator.node_terrain(current_node_data(), board)
+
+## ¿Tiene agua algun combate de esta salida?
+func has_water() -> bool:
+	return Generator.map_has_water(map)
+
 ## Everyone who marches onto the next board: the survivors as they are, wounds
 ## and draft bonuses included, plus the node's garrison.
 func build_encounter_units() -> Array:

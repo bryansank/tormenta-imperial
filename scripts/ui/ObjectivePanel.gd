@@ -15,6 +15,8 @@ var _calm_goal: Label
 var _sortie_line: Label
 ## Encargos: "Entrega el encargo: Los vecinos" cuando uno ya se puede entregar.
 var _now_contract: Label
+## Aire y mar: el Astillero o el Aerodromo cuando tocan (Objectives.fleet_step).
+var _fleet_line: Label
 var _route_box: VBoxContainer
 var _refresh_left := 0.0
 
@@ -136,6 +138,12 @@ func _setup_ui() -> void:
 	_now_contract.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_now_contract.visible = false
 	content.add_child(_now_contract)
+	# Aire y mar: "Construye un Astillero / un Aerodromo" como idea aparte.
+	_fleet_line = UITheme.make_label("", "body", UITheme.INFO)
+	_fleet_line.name = "FleetStep"
+	_fleet_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_fleet_line.visible = false
+	content.add_child(_fleet_line)
 
 	# ── EL CAMINO: la linea entera, con lo hecho marcado ──
 	content.add_child(UITheme.make_separator())
@@ -201,6 +209,14 @@ func refresh() -> void:
 	if not contract.is_empty():
 		var ctext: Dictionary = Objectives.describe(contract)
 		_now_contract.text = "%s\n%s" % [String(ctext["title"]), String(ctext["why"])]
+	var fleet: Dictionary = Objectives.fleet_step()
+	# No repite el paso principal (si la linea ya pide eso mismo, sobra).
+	if not fleet.is_empty() and String(fleet.get("id", "")) == String(step.get("id", "")):
+		fleet = {}
+	_fleet_line.visible = not fleet.is_empty()
+	if not fleet.is_empty():
+		var ftext: Dictionary = Objectives.describe(fleet)
+		_fleet_line.text = "%s\n%s" % [String(ftext["title"]), String(ftext["why"])]
 	_paint_route()
 
 ## La linea de Objectives.LINE, una fila por paso: hecho, el de ahora, o por hacer.

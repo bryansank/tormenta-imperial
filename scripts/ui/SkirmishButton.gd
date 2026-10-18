@@ -86,7 +86,7 @@ func _setup_ui() -> void:
 func refresh() -> void:
 	if _dock == null:
 		return
-	var shown: bool = ArmyManager.barracks_count() > 0
+	var shown: bool = ArmyManager.has_military_building()
 	_dock.visible = shown
 	if not shown:
 		_dot.visible = false

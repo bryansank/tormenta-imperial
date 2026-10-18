@@ -10,21 +10,28 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	custom_minimum_size = Vector2(240, 176)
 
-## Los tipos del circulo, en el orden de `beats`.
-static func circle_ids() -> Array:
+## Los tipos del circulo, en el orden de `beats`. Aire y mar (2026-10-17): cada
+## medio tiene su circulo; por defecto el de tierra, que es el que ensena el
+## combate guiado. Los cruces entre medios no salen aqui (estan en la ficha de
+## cada unidad y en la ayuda "Aire y mar").
+static func circle_ids(domain: String = "land") -> Array:
 	var beats: Dictionary = GameConfig.combat_type_advantage.get("beats", {})
 	var out: Array = []
 	for id in beats:
-		out.append(String(id))
+		if GameConfig.get_unit_domain(String(id)) == domain:
+			out.append(String(id))
 	return out
 
-## Las flechas: [ganador, perdedor] por cada pareja de `beats`.
-static func arrows() -> Array:
+## Las flechas: [ganador, perdedor] por cada pareja de `beats` dentro del medio.
+static func arrows(domain: String = "land") -> Array:
 	var beats: Dictionary = GameConfig.combat_type_advantage.get("beats", {})
 	var out: Array = []
 	for a in beats:
+		if GameConfig.get_unit_domain(String(a)) != domain:
+			continue
 		for b in beats[a]:
-			out.append([String(a), String(b)])
+			if GameConfig.get_unit_domain(String(b)) == domain:
+				out.append([String(a), String(b)])
 	return out
 
 func _points(ids: Array) -> Dictionary:

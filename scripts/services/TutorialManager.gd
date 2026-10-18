@@ -196,6 +196,8 @@ const TIPS := {
 	"overflow":       {"title": "TUT_TIP_OVERFLOW_TITLE", "body": "TUT_TIP_OVERFLOW_BODY"},
 	"encounter":      {"title": "TUT_TIP_BOARD_TITLE",    "body": "TUT_TIP_BOARD_BODY"},
 	"barracks":       {"title": "TUT_TIP_BARRACKS_TITLE", "body": "HELP_TIP_BARRACKS_BODY"},
+	# Aire y mar (feat/aire-mar-reglas): al levantar el Astillero o el Aerodromo.
+	"air_sea":        {"title": "HELP_T_AIR_SEA",         "body": "HELP_B_AIR_SEA"},
 	"market":         {"title": "TUT_TIP_MARKET_TITLE",   "body": "TUT_TIP_MARKET_BODY"},
 	"tech_tree":      {"title": "TUT_TIP_TECH_TITLE",     "body": "TUT_TIP_TECH_BODY"},
 	"expedition_map": {"title": "TUT_TIP_MAP_TITLE",      "body": "TUT_TIP_MAP_BODY"},
@@ -880,6 +882,10 @@ var _batch_depth := 0
 func _on_building_placed(data: Resource, cell: Vector2i) -> void:
 	if data != null and String(data.get("id")) == "barracks":
 		offer_tip("barracks")
+	# Aire y mar: el primer Astillero o Aerodromo explica los medios y quien gana
+	# a quien entre ellos.
+	if data != null and String(data.get("id")) in ["shipyard", "aerodrome"]:
+		offer_tip("air_sea")
 	# El tramo de carretera para practicar el derribo: puesto a mano, con la
 	# carretera en la mano (no un tramo de la carretera automatica de otro
 	# edificio), en su paso.

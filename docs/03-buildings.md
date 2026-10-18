@@ -147,6 +147,20 @@ picks the bake without touching the `.tres`. 2D: `BuildingArt2D._utility`.
 |----|------|------|--------------|---------|------------|---------|
 | `barracks` | Cuartel | 2x2 | 150/60/0/80 + 20 planks | 3 | 15s | foundry + sawmill |
 | `tower` | Torre | 2x2 | 150/60/20/30 + 4 beams | 1 | 8s | barracks |
+| `shipyard` | Astillero | 2x2 | 220/80/0/120 + 10 planks, 4 beams | 3 | 16s | foundry; **must touch the coast** |
+| `aerodrome` | Aerodromo | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | 20s | refinery |
+
+**Air and sea (2026-10-17, `feat/aire-mar-reglas`).** The Shipyard trains the
+ships (torpedo boat, gunboat, dreadnought) and the Aerodrome the planes (fighter,
+bomber, airship): each military building has one training slot per building, only
+for its own units (`unit_types[...]["building"]`), and adds to the army capacity
+(`army_capacity_per_building`: Barracks 8, Shipyard 4, Aerodrome 4). The Shipyard
+is in `PlacementRules.SHORE_ONLY`, like the palm trees: one cell of its footprint
+has to touch the water (`LBL_NEEDS_SHORE`). Limits 1/1/2 per era
+(`building_limits_by_era`), `construction_style` and `building_lot_style` rows of
+their own; no `model_scene` yet (procedural fallback until `feat/aire-mar-vista`
+brings the models). The army panel and the skirmishes open with any of the three
+(`ArmyManager.has_military_building()`). Rules and units: [15-combat.md](15-combat.md) §11.
 
 The Barracks trains units (`ArmyManager`, one training slot per Barracks). Each
 operational Tower cuts storm damage by 15% (cap 60%) and puts one artillery crew on

@@ -289,7 +289,7 @@ func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -
 	units.append_array(_build_side(enemy_roster, Encounter.ENEMY, scale))
 	_morale_snapshot = board_snapshot
 
-	var encounter: Encounter = EncounterScript.create(units, 0, false, true, crew_uids.keys())
+	var encounter: Encounter = EncounterScript.create(units, 0, false, true, crew_uids.keys(), false, home_terrain(units))
 	var outcome: Dictionary = AutoResolverScript.resolve(encounter)
 	var victory: bool = bool(outcome["victory"])
 	var rounds: int = int(outcome["rounds"])
@@ -481,7 +481,11 @@ func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encount
 
 ## Único sitio donde se abre un tablero: recibe ambos bandos ya montados, fija
 ## quién no cuenta como ejército y arranca.
-func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array, can_rout: bool = false) -> void:
+##
+## `terrain` (aire y mar, docs/15 §11): el de la expedicion lo da su nodo; para
+## el resto (Diezmo, asedio, escaramuza) null = el de casa (home_terrain): agua
+## solo si en el bando del jugador hay barcos.
+func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array, can_rout: bool = false, terrain: Variant = null) -> void:
 	_reserve_uids(units)
 	_auto_resolving = false
 	_tower_crew_uids.clear()
@@ -494,12 +498,25 @@ func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: 
 	# contacto. Es la misma lista que ya se usa para no contarlas como bajas.
 	# La retirada enemiga solo en los tableros de la columna (D7 = B): quien abre
 	# un nodo de expedicion o incursion la pide; el Diezmo y el asedio, no.
-	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids, can_rout)
+	var board_terrain: Dictionary = home_terrain(units) if terrain == null else (terrain as Dictionary)
+	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids, can_rout, board_terrain)
 	_board_generation += 1
 	_enemy_turn_running = false
 	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())
+
+## El tablero de casa (Diezmo, Ataque Final, escaramuza de pruebas). Decision de
+## aire y mar (2026-10-17): tiene agua SOLO si en el bando del jugador hay algun
+## barco — tu flota guarda la costa y el combate se da en la playa. Sin barcos
+## es todo tierra, como siempre, y el equilibrio del Diezmo y del asedio de las
+## partidas sin flota no cambia ni una casilla. La costa de casa es siempre la
+## misma (combat_home_coast_seed). Los aviones no necesitan agua.
+func home_terrain(units: Array) -> Dictionary:
+	for unit in units:
+		if unit.side == Encounter.PLAYER and unit.domain() == CombatUnit.DOMAIN_SEA:
+			return Rules.coastal_terrain(GameConfig.combat_board_size, GameConfig.combat_home_coast_seed)
+	return {}
 
 ## Empuja el contador por encima de cualquier uid que ya exista en `units`, para
 ## que todo lo que se fabrique despues (dotaciones, enemigo) no repita ninguno.
@@ -974,6 +991,30 @@ func can_launch(party: Dictionary) -> Dictionary:
 			return {"ok": false, "reason": "MSG_UNITS_UNAVAILABLE"}
 	return {"ok": true, "reason": ""}
 
+## Lo mismo que can_launch(), sabiendo ademas a donde va la columna (aire y mar):
+## los barcos solo salen a una mision con agua (de costa). `offer` vacio o
+## {"kind": "first"} = la primera escaramuza, que es en tierra.
+func can_launch_to(party: Dictionary, offer: Dictionary) -> Dictionary:
+	var check: Dictionary = can_launch(party)
+	if not bool(check.get("ok", false)):
+		return check
+	if party_has_ships(party) and not offer_has_water(offer):
+		return {"ok": false, "reason": "MSG_SHIPS_NEED_WATER"}
+	return check
+
+## ¿Lleva barcos esta columna (unit_id -> cuantos)?
+static func party_has_ships(party: Dictionary) -> bool:
+	for unit_id in party:
+		if int(party[unit_id]) > 0 and GameConfig.get_unit_domain(String(unit_id)) == CombatUnit.DOMAIN_SEA:
+			return true
+	return false
+
+## ¿Tiene agua alguno de los combates de esta oferta del tablon?
+func offer_has_water(offer: Dictionary) -> bool:
+	if offer.is_empty() or String(offer.get("kind", "")) == "first":
+		return false
+	return ExpeditionGeneratorScript.map_has_water(offer_map(offer))
+
 ## Saca la columna. Crea la expedicion con una semilla nueva (o la dada, para
 ## reproducir una partida) y la moral que la base tiene ahora mismo, avisa y
 ## abre el tablero del nodo 0. Las unidades NO se descuentan de ArmyManager:
@@ -985,6 +1026,9 @@ func can_launch(party: Dictionary) -> Dictionary:
 ## esperan los tests y las sondas que lanzan con semilla.
 func launch_expedition(party: Dictionary, seed_value: int = 0, first_sortie: bool = false) -> bool:
 	if not bool(can_launch(party).get("ok", false)):
+		return false
+	# La expedicion de siempre y la primera escaramuza son en tierra: sin barcos.
+	if party_has_ships(party):
 		return false
 	var committed: Dictionary = {}
 	for unit_id in party:
@@ -1040,9 +1084,11 @@ func enter_current_node() -> bool:
 		# Un tablero ya resuelto que la UI aun no cerro.
 		end_encounter()
 	_morale_snapshot = _expedition.morale_snapshot
+	# El terreno del nodo: agua si es de costa (aire y mar), todo tierra si no.
 	_open_board(
 		_expedition.build_encounter_units(), bool(node.get("is_boss", false)),
-		int(node.get("index", _expedition.current_node)), false, [], true
+		int(node.get("index", _expedition.current_node)), false, [], true,
+		_expedition.current_terrain(GameConfig.combat_board_size)
 	)
 	return true
 
@@ -1274,6 +1320,8 @@ func sortie_preview(offer: Dictionary, party: Dictionary) -> Dictionary:
 		"enemy_power": enemy,
 		"player_power": mine,
 		"odds": Rules.odds_label(mine, enemy),
+		# Aire y mar: hay agua en el tablero (se pueden llevar barcos; vienen barcos).
+		"coastal": ExpeditionGeneratorScript.map_has_water(map),
 		# Pre-lanzamiento: la incursion se puede resolver sola si la columna dobla
 		# al enemigo. La expedicion y la primera escaramuza, no.
 		"can_auto": String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_RAID \
@@ -1288,6 +1336,9 @@ func launch_sortie(offer_id: int, party: Dictionary, auto_resolve: bool = false)
 	if not bool(can_launch(party).get("ok", false)):
 		return false
 	if _sorties.get_offer(offer_id).is_empty():
+		return false
+	# Aire y mar: barcos solo a una mision con agua.
+	if not bool(can_launch_to(party, _sorties.get_offer(offer_id)).get("ok", false)):
 		return false
 	var committed: Dictionary = {}
 	for unit_id in party:
@@ -1375,7 +1426,7 @@ func sortie_reason() -> String:
 		return ""
 	if ProgressionManager.is_final_audit_pending() or ProgressionManager.is_final_audit_active():
 		return ""
-	if ArmyManager.barracks_count() <= 0 or get_deployable_units().is_empty():
+	if not ArmyManager.has_military_building() or get_deployable_units().is_empty():
 		return ""
 	if is_first_sortie_due():
 		return "SORTIE_WHY_FIRST"
@@ -1407,7 +1458,7 @@ func refresh_sorties() -> void:
 	_publish_sortie_events(_sorties.refresh(_now(), _sortie_context(), _new_seed()))
 
 func _sortie_context() -> Dictionary:
-	var open: bool = ArmyManager.barracks_count() > 0 and TutorialManager.is_first_sortie_done() \
+	var open: bool = ArmyManager.has_military_building() and TutorialManager.is_first_sortie_done() \
 		and not GameMode.is_run_over() and not StormManager.is_halted()
 	var era: int = ProgressionManager.current_era
 	return {

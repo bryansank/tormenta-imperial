@@ -36,9 +36,10 @@ static func approach_cell(encounter: Encounter, uid: int, target_uid: int) -> Ve
 	var best := NO_CELL
 	var best_key: Array = []
 	for cell in encounter.valid_moves(uid):
-		var dist: int = Rules.manhattan(cell, target.position)
-		if dist < unit.min_range() or dist > unit.attack_range():
+		# Aire y mar: el alcance contra el dominio del objetivo (CombatRules).
+		if not Rules.can_hit_from(unit, cell, target):
 			continue
+		var dist: int = Rules.strike_distance(unit, cell, target)
 		var key: Array = [Rules.manhattan(unit.position, cell), -dist, cell.y, cell.x]
 		if best == NO_CELL or _precedes(key, best_key):
 			best = cell

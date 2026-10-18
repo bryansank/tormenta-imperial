@@ -8,6 +8,8 @@ extends CanvasLayer
 const TextKit := preload("res://scripts/ui/TextKit.gd")
 const RegimentCard := preload("res://scripts/ui/RegimentCard.gd")
 const UnitCardScript := preload("res://scripts/ui/UnitCard.gd")
+const NewGameDialogScript := preload("res://scripts/ui/NewGameDialog.gd")
+const PlacementRulesScript := preload("res://scripts/buildings/PlacementRules.gd")
 
 var _panel: PanelContainer
 var _backdrop: ColorRect
@@ -118,7 +120,9 @@ func _setup_ui() -> void:
 	# "Tropa 5/11" y "En cola 1/1"; de donde sale cada tope, en el tooltip.
 	_capacity_label = UITheme.make_label("", "body", UITheme.TEXT)
 	_capacity_label.mouse_filter = Control.MOUSE_FILTER_PASS
-	_capacity_label.tooltip_text = Tr.t("LBL_ARMY_CAPACITY_HINT") % [GameConfig.army_base_capacity, GameConfig.army_capacity_per_barracks]
+	_capacity_label.tooltip_text = Tr.t("LBL_ARMY_CAPACITY_HINT") % [GameConfig.army_base_capacity, GameConfig.army_capacity_per_barracks] \
+		+ "\n" + Tr.t("LBL_ARMY_CAPACITY_FLEET_HINT") % [int(GameConfig.army_capacity_per_building.get("shipyard", 0)),
+			int(GameConfig.army_capacity_per_building.get("aerodrome", 0))]
 	_slots_label = UITheme.make_label("", "body", UITheme.TEXT_DIM)
 	_slots_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	_slots_label.tooltip_text = Tr.t("LBL_ARMY_SLOTS_HINT")
@@ -176,15 +180,52 @@ func _units_on_expedition() -> Dictionary:
 func _on_expedition_resumed(_expedition_id: int) -> void:
 	_request_refresh()
 
+## Aire y mar (2026-10-17): la lista va por medios, TIERRA (Cuartel), MAR
+## (Astillero) y AIRE (Aerodromo), cada uno con su cabecera. Sin el edificio, la
+## cabecera lleva un candado y dice que construir; las filas siguen ahi (se ve
+## lo que vendra) con el motivo en rojo.
 func _rebuild_units() -> void:
 	for child in _units_vbox.get_children():
 		child.queue_free()
-	for unit_id in GameConfig.get_unit_ids():
-		_units_vbox.add_child(_make_unit_row(unit_id))
+	for building_id in GameConfig.MILITARY_BUILDINGS:
+		var domain: String = String(GameConfig.MILITARY_BUILDING_DOMAIN.get(building_id, "land"))
+		var ids: Array = []
+		for unit_id in GameConfig.get_unit_ids():
+			if GameConfig.get_unit_building(String(unit_id)) == building_id:
+				ids.append(String(unit_id))
+		if ids.is_empty():
+			continue
+		_units_vbox.add_child(_make_domain_header(String(building_id), domain))
+		for unit_id in ids:
+			_units_vbox.add_child(_make_unit_row(unit_id))
+
+## "MAR · Astillero 1 · en cola 0/1", o con candado "MAR · Necesitas un Astillero".
+func _make_domain_header(building_id: String, domain: String) -> Control:
+	var row := HBoxContainer.new()
+	row.name = "Domain_" + domain
+	row.add_theme_constant_override("separation", 6)
+	var count: int = ArmyManager.building_count(building_id)
+	if count <= 0:
+		row.add_child(NewGameDialogScript.make_lock_icon())
+	var title := UITheme.make_label(Tr.t("LBL_DOMAIN_" + domain.to_upper()), "section", UITheme.ACCENT if count > 0 else UITheme.TEXT_DIM)
+	row.add_child(title)
+	var data: BuildingData = PlacementRulesScript.load_building_data(building_id)
+	var building_name: String = data.get_display_name() if data != null else building_id
+	var detail := ""
+	if count > 0:
+		detail = Tr.t("LBL_DOMAIN_SLOTS") % [building_name, count, ArmyManager.training_in(building_id), ArmyManager.max_slots(building_id)]
+	else:
+		detail = Tr.t("LBL_DOMAIN_NEEDS") % building_name
+	var info := UITheme.make_label(detail, "small", UITheme.TEXT_DIM if count > 0 else UITheme.WARNING)
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(info)
+	return row
 
 func _make_unit_row(unit_id: String) -> PanelContainer:
 	var def := GameConfig.get_unit_def(unit_id)
-	var unlocked := ArmyManager.is_unlocked(unit_id)
+	var unlocked := ArmyManager.is_unlocked(unit_id) \
+		and ArmyManager.building_count(GameConfig.get_unit_building(unit_id)) > 0
 
 	var card := PanelContainer.new()
 	var style := StyleBoxFlat.new()
@@ -370,7 +411,7 @@ func _on_base_changed(_arg = null) -> void:
 
 func _update_button_visibility() -> void:
 	# Army button appears in the sidebar once a Barracks exists.
-	_army_btn.visible = _sidebar_visible and ArmyManager.barracks_count() > 0
+	_army_btn.visible = _sidebar_visible and ArmyManager.has_military_building()
 
 func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_visible = is_visible

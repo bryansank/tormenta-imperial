@@ -339,7 +339,13 @@ func _units_on_expedition() -> Dictionary:
 ## segunda copia de las reglas viviendo aqui acabaria discrepando de la suya, y
 ## entonces el boton mentiria justo cuando mas claro tiene que hablar.
 func evaluate_launch(party: Dictionary) -> Dictionary:
-	return CombatManager.can_launch(party)
+	# Aire y mar: con la salida elegida delante, para que los barcos sin agua
+	# digan por que no salen.
+	return CombatManager.can_launch_to(party, current_offer())
+
+## ¿Hay agua en la salida elegida? (Solo entonces se pueden llevar barcos.)
+func _offer_has_water() -> bool:
+	return CombatManager.offer_has_water(current_offer())
 
 func _party() -> Dictionary:
 	var party: Dictionary = {}
@@ -351,8 +357,12 @@ func _party() -> Dictionary:
 ## Drops picks the player no longer owns (units lost, disbanded or spent).
 func _prune_selection() -> void:
 	var available: Dictionary = CombatManager.get_deployable_units()
+	var water: bool = _offer_has_water()
 	for unit_id in _selection.keys():
 		var owned: int = int(available.get(unit_id, 0))
+		# Sin agua en la salida elegida, los barcos se quedan en el puerto.
+		if not water and GameConfig.get_unit_domain(String(unit_id)) == CombatUnit.DOMAIN_SEA:
+			owned = 0
 		_selection[unit_id] = mini(int(_selection[unit_id]), owned)
 
 func _committed() -> int:
@@ -369,14 +379,33 @@ func _current_morale() -> float:
 		return float(PopulationManager.get_morale())
 	return 50.0
 
+## Aire y mar: las filas van por medio (Tierra, Mar, Aire), con su cabecera solo
+## si hay alguien de ese medio en casa. Los barcos, si la salida elegida no
+## tiene agua, salen con el motivo y sin poder elegirse.
 func _rebuild_units(available: Dictionary) -> void:
 	for child in _units_vbox.get_children():
 		child.queue_free()
-	for unit_id in GameConfig.get_unit_ids():
-		if int(available.get(unit_id, 0)) > 0:
-			_units_vbox.add_child(_make_unit_row(unit_id, int(available[unit_id])))
+	var water: bool = _offer_has_water()
+	for domain in ["land", "sea", "air"]:
+		var ids: Array = []
+		for unit_id in GameConfig.get_unit_ids_in_domain(domain):
+			if int(available.get(unit_id, 0)) > 0:
+				ids.append(unit_id)
+		if ids.is_empty():
+			continue
+		var header := UITheme.make_label(Tr.t("LBL_DOMAIN_" + domain.to_upper()), "section", UITheme.ACCENT)
+		header.name = "DomainHeader_" + domain
+		_units_vbox.add_child(header)
+		var blocked: bool = domain == CombatUnit.DOMAIN_SEA and not water
+		if blocked:
+			var why := UITheme.make_label(Tr.t("LBL_SHIPS_NEED_WATER"), "small", UITheme.WARNING)
+			why.name = "ShipsNeedWater"
+			why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_units_vbox.add_child(why)
+		for unit_id in ids:
+			_units_vbox.add_child(_make_unit_row(unit_id, int(available[unit_id]), blocked))
 
-func _make_unit_row(unit_id: String, owned: int) -> PanelContainer:
+func _make_unit_row(unit_id: String, owned: int, blocked: bool = false) -> PanelContainer:
 	var def := GameConfig.get_unit_def(unit_id)
 	var stats := GameConfig.get_combat_stats(unit_id)
 	var picked: int = int(_selection.get(unit_id, 0))
@@ -439,7 +468,9 @@ func _make_unit_row(unit_id: String, owned: int) -> PanelContainer:
 	plus.text = "+"
 	plus.custom_minimum_size = Vector2(44, 44)
 	UITheme.style_button(plus, UITheme.BTN, UITheme.FONT_SECTION)
-	plus.disabled = picked >= owned or _committed() >= GameConfig.combat_deploy_cap
+	plus.disabled = blocked or picked >= owned or _committed() >= GameConfig.combat_deploy_cap
+	if blocked:
+		plus.tooltip_text = Tr.t("LBL_SHIPS_NEED_WATER")
 	plus.pressed.connect(func(): _adjust(unit_id, 1))
 	row.add_child(plus)
 
@@ -447,6 +478,8 @@ func _make_unit_row(unit_id: String, owned: int) -> PanelContainer:
 
 func _adjust(unit_id: String, delta: int) -> void:
 	var owned: int = int(CombatManager.get_deployable_units().get(unit_id, 0))
+	if delta > 0 and GameConfig.get_unit_domain(unit_id) == CombatUnit.DOMAIN_SEA and not _offer_has_water():
+		return
 	var picked: int = int(_selection.get(unit_id, 0))
 	var next: int = clampi(picked + delta, 0, owned)
 	if delta > 0 and _committed() >= GameConfig.combat_deploy_cap:
@@ -595,7 +628,7 @@ func _on_expedition_resumed(_expedition_id: int) -> void:
 
 func _update_button_visibility() -> void:
 	# Skirmishes unlock with the Barracks, same gate as the army itself.
-	_skirmish_btn.visible = _sidebar_visible and ArmyManager.barracks_count() > 0
+	_skirmish_btn.visible = _sidebar_visible and ArmyManager.has_military_building()
 
 func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_visible = is_visible
@@ -714,6 +747,14 @@ func _make_detail(offer: Dictionary, preview: Dictionary) -> PanelContainer:
 		_kind_text(offer, int(preview.get("fights", 1)))], "section", UITheme.TEXT_BRIGHT)
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(title)
+
+	# Aire y mar: una salida de costa se dice antes de salir (hay agua, vienen
+	# barcos y puedes llevar los tuyos).
+	if bool(preview.get("coastal", false)):
+		var coast := UITheme.make_label(Tr.t("LBL_SORTIE_COASTAL"), "small", UITheme.INFO)
+		coast.name = "SortieCoastal"
+		coast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(coast)
 
 	# El mapa entero, por capas: lo que hay en cada combate.
 	var map: Array = preview.get("map", [])

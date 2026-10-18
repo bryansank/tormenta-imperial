@@ -678,7 +678,7 @@ func _refresh_tips() -> void:
 	_pump()
 
 func _skirmish_gate() -> bool:
-	return _sidebar_visible and ArmyManager.barracks_count() > 0 and not UILayoutManager.is_narrow()
+	return _sidebar_visible and ArmyManager.has_military_building() and not UILayoutManager.is_narrow()
 
 ## El globo de ESCARAMUZAS sale (una vez) cuando aparece su boton: hay Cuartel y
 ## la columna ☰ esta abierta.

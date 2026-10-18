@@ -136,6 +136,9 @@ var building_limits := {
 	"well": 3,
 	"lighthouse": 1,
 	"fuel_depot": 2,
+	# Aire y mar (feat/aire-mar-reglas): el Astillero y el Aerodromo.
+	"shipyard": 1,
+	"aerodrome": 1,
 }
 
 # ── Building Prerequisites (must have at least 1 of each listed) ──
@@ -161,6 +164,11 @@ var building_prerequisites := {
 	"well": ["house"],
 	"lighthouse": ["warehouse"],
 	"fuel_depot": ["refinery"],
+	# Aire y mar (feat/aire-mar-reglas): barcos con acero (era 2), aviones con
+	# combustible (era 3). El Astillero ademas tiene que tocar la costa
+	# (PlacementRules.SHORE_ONLY).
+	"shipyard": ["foundry"],
+	"aerodrome": ["refinery"],
 }
 
 # ── Deposit Placement Rules (extractor next to its deposit) ──
@@ -1434,6 +1442,13 @@ var construction_style := {
 		"frame": "tower", "frame_mat": "stone", "site_fx": "dust", "flag": Color(0.95, 0.74, 0.12)},
 	"fuel_depot": {"piles": ["drums", "pipes", "rivets"], "fence": "sheet", "tarp": Color(0.18, 0.18, 0.20),
 		"frame": "tanks", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.95, 0.85, 0.20)},
+	# Aire y mar (feat/aire-mar-reglas): grada de madera y chapa junto al agua;
+	# hangar de chapa con mastil para el dirigible.
+	"shipyard": {"piles": ["beams", "planks", "rivets"], "fence": "dark_planks", "tarp": Color(0.22, 0.32, 0.42),
+		"frame": "hall", "frame_mat": "wood", "site_fx": "sparks", "flag": Color(0.20, 0.42, 0.62),
+		"crane": Color(0.42, 0.45, 0.24)},
+	"aerodrome": {"piles": ["drums", "beams", "rivets"], "fence": "sheet", "tarp": Color(0.36, 0.40, 0.46),
+		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.95, 0.74, 0.12)},
 	# Decoraciones baratas (feat/decoraciones-1): obras pequenas y rapidas.
 	"lamp_post": {"piles": ["rivets", "stone", "planks"], "fence": "planks", "tarp": Color(0.36, 0.34, 0.40),
 		"frame": "mast", "frame_mat": "steel", "site_fx": "sparks", "flag": Color(0.93, 0.78, 0.32)},
@@ -1480,6 +1495,7 @@ var building_active_fx := {
 	"headquarters": "smoke", "barracks": "smoke", "sawmill": "dust",
 	"warehouse": "glow", "market": "glow", "laboratory": "glow", "tower": "glow",
 	"tavern": "smoke", "carpentry": "dust", "lighthouse": "glow", "fuel_depot": "glow",
+	"shipyard": "smoke", "aerodrome": "glow",
 }
 ## Una ruina se hunde esta fraccion de su altura en el suelo y se inclina estos
 ## radianes: con el hollin y los escombros, se distingue de lejos.
@@ -1600,6 +1616,11 @@ var building_lot_style := {
 		"props": ["lamp", "ammo", "sacks", "barrel"], "count": [3, 5]},
 	"fuel_depot": {"ground": "plate", "trim": "pipes", "yard": 0.3, "accent": "industrial",
 		"props": ["drums", "valve", "drums", "barrel", "crate"], "count": [4, 6]},
+	# Aire y mar (feat/aire-mar-reglas): militares los dos.
+	"shipyard": {"ground": "plate", "trim": "rail", "yard": 0.3, "accent": "military",
+		"props": ["crate", "barrel", "planks", "ammo", "lamp"], "count": [4, 6]},
+	"aerodrome": {"ground": "slabs", "trim": "sandbags", "yard": 0.3, "accent": "military",
+		"props": ["drums", "ammo", "lamp", "crate", "barrel"], "count": [4, 6]},
 	# Decoraciones baratas (feat/decoraciones-1): suelo, bordillo y una o dos
 	# piezas de atrezo como mucho (la decoracion ya es atrezo, y cada pieza de
 	# mas cuesta en la tablet).
@@ -1783,6 +1804,10 @@ var building_limits_by_era := {
 	"well": [3, 5, 6],
 	"lighthouse": [1, 1, 1],
 	"fuel_depot": [2, 2, 3],
+	# Aire y mar: uno de cada hasta la era 3 (cada uno es un hueco de
+	# entrenamiento y +4 de capacidad, army_capacity_per_building).
+	"shipyard": [1, 1, 2],
+	"aerodrome": [1, 1, 2],
 }
 
 ## El tope de `building_id` AHORA: la era en curso (ProgressionManager), mas los
@@ -1897,12 +1922,90 @@ var unit_types := {
 		"upkeep_gold": 4,
 		"power": 65,
 	},
+	# ── Aire y mar (feat/aire-mar-reglas, docs/15 §11) ──
+	# `building` = donde se entrena (ArmyManager): barracks / shipyard / aerodrome.
+	# Las de tierra no lo llevan escrito: sin clave es "barracks". El dominio de
+	# cada una (land / sea / air) esta en combat_unit_stats, no aqui.
+	# Los barcos salen del Astillero (era 2, junto al agua); los aviones y el
+	# dirigible, del Aerodromo (era 3). Los precios estan a la altura de la
+	# artilleria y del tanque: un barco de era 2 cuesta como un canon, el
+	# Acorazado y los aviones como un tanque (sin medir con line_probe, docs/22).
+	"torpedo_boat": {
+		"name": "UNIT_TORPEDO_BOAT",
+		"tier": 2,
+		"era": 2,
+		"building": "shipyard",
+		"cost": {"gold": 100, "steel": 40, "wood": 40},
+		"train_time": 40.0,
+		"upkeep_gold": 2,
+		"power": 24,
+	},
+	"gunboat": {
+		"name": "UNIT_GUNBOAT",
+		"tier": 2,
+		"era": 2,
+		"building": "shipyard",
+		"cost": {"gold": 130, "steel": 60, "planks": 6},
+		"train_time": 50.0,
+		"upkeep_gold": 2,
+		"power": 30,
+	},
+	"dreadnought": {
+		"name": "UNIT_DREADNOUGHT",
+		"tier": 3,
+		"era": 3,
+		"building": "shipyard",
+		"cost": {"gold": 320, "steel": 160, "oil": 60, "beams": 10},
+		"train_time": 110.0,
+		"upkeep_gold": 5,
+		"power": 75,
+	},
+	"fighter": {
+		"name": "UNIT_FIGHTER",
+		"tier": 3,
+		"era": 3,
+		"building": "aerodrome",
+		"cost": {"gold": 200, "steel": 60, "fuel": 6},
+		"train_time": 60.0,
+		"upkeep_gold": 3,
+		"power": 40,
+	},
+	"bomber": {
+		"name": "UNIT_BOMBER",
+		"tier": 3,
+		"era": 3,
+		"building": "aerodrome",
+		"cost": {"gold": 260, "steel": 90, "oil": 40, "fuel": 8},
+		"train_time": 80.0,
+		"upkeep_gold": 4,
+		"power": 50,
+	},
+	"airship": {
+		"name": "UNIT_AIRSHIP",
+		"tier": 3,
+		"era": 3,
+		"building": "aerodrome",
+		"cost": {"gold": 280, "steel": 60, "oil": 60, "fuel": 10},
+		"train_time": 90.0,
+		"upkeep_gold": 4,
+		"power": 55,
+	},
 }
+
+## Los tres edificios que entrenan tropa, en el orden en que la ensena el panel
+## del ejercito (Tierra, Mar, Aire). Cada uno abre un hueco de entrenamiento por
+## edificio, solo para SUS unidades (unit_types[...]["building"]).
+const MILITARY_BUILDINGS := ["barracks", "shipyard", "aerodrome"]
+## El dominio que entrena cada edificio militar (para agrupar el panel).
+const MILITARY_BUILDING_DOMAIN := {"barracks": "land", "shipyard": "sea", "aerodrome": "air"}
 
 ## Army capacity: you may hold a few units even with no barracks; each barracks
 ## raises the ceiling. Bigger base = larger, stronger army.
 var army_base_capacity := 3
 var army_capacity_per_barracks := 8
+## Lo que suma a la capacidad cada Astillero y cada Aerodromo (aire y mar,
+## 2026-10-17). Menos que un Cuartel: son flotas pequenas y caras de mantener.
+var army_capacity_per_building := {"barracks": 8, "shipyard": 4, "aerodrome": 4}
 ## Seconds between upkeep deductions (scaled by dev_mode like other durations).
 var army_upkeep_interval := 30.0
 
@@ -1914,6 +2017,33 @@ func get_unit_ids() -> Array:
 
 func get_army_capacity(barracks_count: int) -> int:
 	return army_base_capacity + army_capacity_per_barracks * maxi(0, barracks_count)
+
+## La capacidad con todos los edificios militares: `counts` = id -> cuantos hay
+## (barracks / shipyard / aerodrome). El Cuartel sigue leyendo
+## army_capacity_per_barracks, para que quien lo afine no tenga que tocar dos sitios.
+func get_army_capacity_for(counts: Dictionary) -> int:
+	var total: int = get_army_capacity(int(counts.get("barracks", 0)))
+	for building_id in counts:
+		if String(building_id) == "barracks":
+			continue
+		total += int(army_capacity_per_building.get(building_id, 0)) * maxi(0, int(counts[building_id]))
+	return total
+
+## Donde se entrena `unit_id`: "barracks" si su fila no dice otra cosa.
+func get_unit_building(unit_id: String) -> String:
+	return String(get_unit_def(unit_id).get("building", "barracks"))
+
+## El dominio de `unit_id` (land / sea / air), de combat_unit_stats.
+func get_unit_domain(unit_id: String) -> String:
+	return String(get_combat_stats(unit_id).get("domain", "land"))
+
+## Las unidades de un dominio, en el orden de unit_types.
+func get_unit_ids_in_domain(domain: String) -> Array:
+	var out: Array = []
+	for unit_id in unit_types:
+		if get_unit_domain(String(unit_id)) == domain:
+			out.append(String(unit_id))
+	return out
 
 func get_army_upkeep_interval() -> float:
 	return get_duration(army_upkeep_interval)
@@ -1953,7 +2083,71 @@ var combat_unit_stats := {
 	"infantry":  {"hp": 100, "atk": 8,  "def": 2, "move": 3, "range": 1, "min_range": 1, "initiative": 5, "domain": "land"},
 	"artillery": {"hp": 75, "atk": 14, "def": 1, "move": 1, "range": 3, "min_range": 2, "initiative": 3, "domain": "land"},
 	"vehicle":   {"hp": 200, "atk": 12, "def": 5, "move": 4, "range": 1, "min_range": 1, "initiative": 4, "domain": "land"},
+	# ── Aire y mar (feat/aire-mar-reglas, docs/15 §11) ──
+	# Mar: solo en casillas de agua o de orilla (combat_domain_moves).
+	#   Lancha torpedera: rapida y fragil; sus torpedos rompen al Acorazado.
+	#   Canonera: alcance medio, castiga la costa (infanteria) y caza lanchas.
+	#   Acorazado: mucha vida, el que mas lejos dispara, lento; no a bocajarro.
+	# Aire: vuela sobre todo (tierra, agua y orilla) y comparte casilla con las de
+	# superficie (otra capa, ver CombatRules.layer_of).
+	#   Caza: el mas rapido; el que derriba bombarderos y dirigibles.
+	#   Bombardero: gran dano a tierra y barcos; sus bombas no tocan a otro avion.
+	#   Dirigible: mucha vida y lento; apoyo desde arriba a 2 casillas.
+	# `targets` corrige combat_domain_targets para esa unidad: dominio -> alcance
+	# maximo (0 = no puede, -1 = su alcance normal).
+	"torpedo_boat": {"hp": 90, "atk": 15, "def": 1, "move": 4, "range": 1, "min_range": 1, "initiative": 6, "domain": "sea"},
+	"gunboat":      {"hp": 140, "atk": 12, "def": 3, "move": 3, "range": 3, "min_range": 1, "initiative": 4, "domain": "sea"},
+	"dreadnought":  {"hp": 280, "atk": 16, "def": 6, "move": 2, "range": 4, "min_range": 2, "initiative": 2, "domain": "sea"},
+	"fighter":      {"hp": 90, "atk": 12, "def": 2, "move": 5, "range": 1, "min_range": 1, "initiative": 7, "domain": "air"},
+	"bomber":       {"hp": 110, "atk": 18, "def": 1, "move": 4, "range": 1, "min_range": 1, "initiative": 3, "domain": "air",
+		"targets": {"air": 0}},
+	"airship":      {"hp": 260, "atk": 10, "def": 4, "move": 2, "range": 2, "min_range": 1, "initiative": 2, "domain": "air"},
 }
+
+## Quien puede pisar que (docs/15 §11). Cada dominio, las casillas en las que se
+## planta y por las que pasa: "land" (tierra), "water" (agua), "shore" (orilla,
+## de los dos). Un tablero sin terreno es todo tierra, asi que los barcos no
+## despliegan en el (Encounter los deja en reserva) y todo lo de antes sigue igual.
+var combat_domain_moves := {
+	"land": ["land", "shore"],
+	"sea": ["water", "shore"],
+	"air": ["land", "water", "shore"],
+}
+
+## Quien puede pegar a quien (docs/15 §11): atacante (dominio) -> objetivo
+## (dominio) -> alcance maximo. -1 = el alcance normal de la unidad; 0 = no
+## puede; N = como mucho a N casillas. La fila `targets` de combat_unit_stats
+## corrige esto para una unidad concreta (el bombardero no toca aviones).
+##   * Tierra y mar al aire, solo a 1 casilla: fusiles y ametralladoras contra
+##     lo que pasa por encima. Con el alcance minimo 2, la artilleria (y las
+##     dotaciones de torre) NO pueden: no hay artilleria antiaerea, el caza es
+##     el antiaereo.
+##   * El aire, a todo con su alcance.
+##   * Los barcos pegan a tierra con su alcance normal, desde el agua o la
+##     orilla (es donde estan siempre).
+## Una unidad de otra capa (aire contra superficie) justo encima o debajo esta a
+## distancia 1, no 0: se pueden pegar (CombatRules.strike_distance).
+var combat_domain_targets := {
+	"land": {"land": -1, "sea": -1, "air": 1},
+	"sea": {"land": -1, "sea": -1, "air": 1},
+	"air": {"land": -1, "sea": -1, "air": -1},
+}
+
+## Los combates de costa (aire y mar, docs/15 §11). Un tablero de costa lleva
+## `combat_coast_water_columns` columnas de agua en un lado (izquierda o
+## derecha, por semilla) y una columna de orilla junto a ellas.
+var combat_coast_water_columns := 2
+## Desde que era hay salidas de costa (los barcos salen en la era 2).
+var combat_coastal_min_era := 2
+## La probabilidad de que una incursion de saqueadores sea de costa (piratas).
+## Las expediciones al Puerto (SORTIE_DEST_DOCK) lo son siempre.
+var combat_coastal_raid_chance := 0.35
+## Repuestos de mas que da el ultimo combate de una salida de costa (botin).
+var combat_loot_coastal_parts := 1
+## Semilla del tablero de costa en casa: el Diezmo y el Ataque Final tienen agua
+## solo si en tu guarnicion hay barcos (si no, siguen siendo todo tierra, como
+## antes). Fija: la costa de tu isla no se mueve entre una visita y otra.
+var combat_home_coast_seed := 7
 
 ## Ventajas por tipo (piedra-papel-tijera, 2026-10-12, docs/15 §3 "Ventaja por
 ## tipo"). El circulo de tierra:
@@ -1965,13 +2159,30 @@ var combat_unit_stats := {
 ## `beats[a]` = los tipos a los que `a` pega con ventaja. La desventaja no se
 ## escribe: es el reves (si b esta en beats[a], b pega a "a" con desventaja).
 ## El multiplicador va sobre el dano neto (atk - def), con suelo de 1, en
-## CombatRules.damage(): lo usan igual el jugador, la IA y AutoResolver. Mar y
-## aire entran anadiendo su fila aqui (docs/15 §11), sin tocar codigo.
+## CombatRules.damage(): lo usan igual el jugador, la IA y AutoResolver.
+##
+## Aire y mar (2026-10-17, docs/15 §11), al estilo de Empires & Allies: un
+## circulo dentro de cada medio y unos pocos cruces.
+##   Mar:   lancha > acorazado (torpedos al casco grande) > canonera (la
+##          supera en canones) > lancha (fuego rapido contra lo pequeno).
+##   Aire:  caza > bombardero y caza > dirigible (lo derriba). Al caza le gana
+##          la canonera (sus canones antiaereos).
+##   Cruces: el bombardero rompe lo pesado (tanque, artilleria, canonera,
+##          acorazado); la artilleria de costa gana a la canonera; la canonera
+##          barre la infanteria de la playa; el dirigible castiga a la
+##          infanteria y a la lancha desde arriba; el acorazado gana al tanque.
+## Ninguna pareja va en los dos sentidos (lo comprueba test_air_sea_rules.gd).
 var combat_type_advantage := {
 	"beats": {
-		"artillery": ["vehicle"],
+		"artillery": ["vehicle", "gunboat"],
 		"vehicle": ["infantry"],
 		"infantry": ["artillery"],
+		"torpedo_boat": ["dreadnought"],
+		"dreadnought": ["gunboat", "vehicle"],
+		"gunboat": ["torpedo_boat", "infantry", "fighter"],
+		"fighter": ["bomber", "airship"],
+		"bomber": ["vehicle", "artillery", "gunboat", "dreadnought"],
+		"airship": ["infantry", "torpedo_boat"],
 	},
 	"advantage": 1.5,
 	"disadvantage": 0.75,
@@ -2771,6 +2982,16 @@ var final_audit_artillery_share := 3
 var final_audit_armour_wave := 2
 ## La unica moneda al aire del asedio: a veces, un canon de mas.
 var final_audit_extra_gun_chance := 0.35
+## Aire y mar (feat/aire-mar-reglas, 2026-10-17): la Regencia trae dirigibles a
+## la ULTIMA oleada desde esta era. Cada dirigible ocupa el hueco de un canon
+## (si no hay canon, el de un infante): menos golpe de golpe, mas vida que
+## tumbar, y solo se le pega a 1 casilla o con aviones. Si el jugador tiene
+## aviones en su guarnicion al abrir la puerta, la ultima oleada trae ademas
+## cazas de escolta (cada uno en el hueco de un infante). SIN MEDIR con
+## tools/siege_probe.gd: ver docs/17, "Aire y mar".
+var final_audit_air_min_era := 3
+var final_audit_airships_last_wave := 1
+var final_audit_air_escort_fighters := 1
 
 ## Unidades vivas en casa que hacen falta para volver a convocar tras perder.
 ## Perder no acaba la partida, pero tampoco se rifa la victoria: hay que

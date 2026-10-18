@@ -1146,8 +1146,18 @@ Default `combat_unit_stats` (los HP son los de `GameConfig`: x3,3 sobre los
 | `infantry` | 100 | 8 | 2 | 3 | 1 | 1 | 5 | `land` |
 | `artillery` | 75 | 14 | 1 | 1 | 3 | 2 | 3 | `land` |
 | `vehicle` | 200 | 12 | 5 | 4 | 1 | 1 | 4 | `land` |
+| `torpedo_boat` | 90 | 15 | 1 | 4 | 1 | 1 | 6 | `sea` |
+| `gunboat` | 140 | 12 | 3 | 3 | 3 | 1 | 4 | `sea` |
+| `dreadnought` | 280 | 16 | 6 | 2 | 4 | 2 | 2 | `sea` |
+| `fighter` | 90 | 12 | 2 | 5 | 1 | 1 | 7 | `air` |
+| `bomber` | 110 | 18 | 1 | 4 | 1 | 1 | 3 | `air` (no ataca al aire) |
+| `airship` | 260 | 10 | 4 | 2 | 2 | 1 | 2 | `air` |
 
-`domain` no lo lee ninguna regla: ver [§11](#11-dominios-mar-aire-y-espacio).
+`domain` decide por donde anda la unidad, a quien pega y en que capa ocupa la
+casilla: ver [§11](#11-dominios-mar-aire-y-espacio). Las claves nuevas de
+`combat_*` (`combat_domain_moves`, `combat_domain_targets`, `combat_coast_*`,
+`combat_coastal_*`, `combat_loot_coastal_parts`, `combat_home_coast_seed`) estan
+explicadas alli.
 
 Morale is captured once and frozen for the whole expedition or siege: at launch for
 an expedition (`_morale_snapshot`), when the gate opens ("QUE BAJEN",
@@ -1168,6 +1178,9 @@ had when the column marched out or the gate opened.
 | `final_audit_armour_wave` | `2` | First wave that can field a vehicle | |
 | `final_audit_extra_gun_chance` | `0.35` | The siege's one coin flip | Set to 0 and every siege of the same era looks identical |
 | `final_audit_resummon_min_units` | `3` | Living units needed to call the Regency back after a loss | The price of losing: rebuild this much before trying again |
+| `final_audit_air_min_era` | `3` | From this era the closing wave brings airships (§11) | |
+| `final_audit_airships_last_wave` | `1` | Airships in the closing wave, each in a gun's slot | 0 turns the air out of the siege. Unmeasured: docs/17 |
+| `final_audit_air_escort_fighters` | `1` | Enemy fighters in the closing wave when your garrison has planes | |
 
 ### Gobernador: the same rules, a harder enemy
 
@@ -1241,6 +1254,10 @@ GODOT=godot tools/run_tests.sh -a tests/combat
 | `tests/ui/test_unit_card.gd` | *(sin correr aún)* fuerte/débil del círculo, números de `GameConfig`, vida de la unidad viva, el alcance mínimo en la ficha, la ficha se monta con su ✕, "×1,5" / "×1.5", el círculo con tres flechas, las seis guías de combate en AYUDA |
 | `tests/ui/test_combat_teaching.gd` | *(sin correr aún)* la primera pelea empieza la lección y señala a la unidad, la tarjeta del tablero no sale encima, tocar tu pieza abre la ficha y pasa el paso 1, el daño previsto, Ver alcance enemigo, la ✕ de la artillería |
 
+| `tests/combat/test_air_sea_rules.gd` | *(sin correr aún, 2026-10-17)* Aire y mar: el terreno de costa (determinista, columnas de agua y orilla), quien pisa que, las dos capas (avion encima de soldado), quien pega a quien (soldado a 1, artilleria nunca, bombardero no al aire), despliegue por dominio y reserva, la tabla de ventajas sin parejas en los dos sentidos, la IA solo se planta donde su dominio pisa, AutoResolver reproducible en la costa, y que un tablero de tierra despliega igual que antes |
+| `tests/combat/test_air_sea_missions.gd` | *(sin correr aún)* Que oferta es de costa, nodos con agua y barcos segun la era, la misma oferta = la misma costa, el repuesto de mas, los mapas de tierra intactos, y los dirigibles y la escolta de cazas del Ataque Final (y su guardado) |
+| `tests/economy/test_air_sea_army.gd` | *(sin correr aún)* Cada unidad en su edificio, huecos por edificio, capacidad, guardado viejo, los dos edificios y la costa, los barcos solo a misiones con agua, el agua en casa solo con barcos, textos ES/EN |
+
 `test_board_handoff.gd`, `test_expedition_ui.gd` and `test_battle_board_icons.gd`
 touch the real autoloads and private members on purpose: what they are watching —
 the handover between boards and the actual drawing — has no seam that can be
@@ -1310,46 +1327,154 @@ the removal of the `has_method()` / `has_signal()` scaffolding.
 
 ## 11. Dominios: mar, aire (y espacio)
 
-El dueno quiere, mas adelante, unidades de **mar** y de **aire** (y, muy a
-futuro, de espacio). Nada de eso esta implementado; lo que hay es el hueco para
-que entren sin cambiar formatos.
+**Hecho (2026-10-17, rama `feat/aire-mar-reglas`, 1.1).** Seis unidades nuevas,
+dos edificios, agua en algunos tableros, barcos enemigos en las misiones de costa
+y dirigibles de la Regencia en la ultima oleada del Ataque Final. La vista
+(modelos, iconos, agua pintada) va en `feat/aire-mar-vista`; esta rama es el
+modelo, la colonia, los textos y los tests. El espacio sigue siendo una idea.
 
-**Hoy (2026-10-12).** Cada fila de `GameConfig.combat_unit_stats` lleva
-`"domain": "land"`. El modelo puro lo conserva y lo expone sin que ninguna regla
-lo mire: `CombatUnit.domain()` lo lee de la fila (una fila sin la clave, o un
-tipo desconocido, es `CombatUnit.DOMAIN_LAND`). No se guarda en la partida: sale
-del tipo de unidad, como el resto de estadisticas. La vista 3D coloca cada pieza
-segun su dominio (`BoardLayout3D.DOMAIN_HEIGHT`): tierra en el suelo; mar en la
-lamina de agua, algo por debajo; aire a 1,7 m con sombra en el suelo; espacio
-por encima. Las que no son de tierra se mecen en reposo (`DOMAIN_BOBS`).
-`tests/ui/test_battle_board_3d.gd` fija que las tres de hoy son de tierra y que
-quitar o poner el campo no cambia ni dano, ni alcance, ni iniciativa.
+### Las unidades
 
-**Diseno para cuando llegue** (propuesta, por decidir con el dueno):
+| Unidad | Dominio | Edificio | Era | Coste | Sueldo | Poder | Papel |
+|---|---|---|---|---|---|---|---|
+| Lancha torpedera `torpedo_boat` | mar | Astillero | 2 | 100 oro, 40 acero, 40 madera | 2 | 24 | Rapida y fragil; sus torpedos hunden al Acorazado |
+| Canonera `gunboat` | mar | Astillero | 2 | 130 oro, 60 acero, 6 tablones | 2 | 30 | Alcance 3; barre la playa (infanteria), caza lanchas y derriba cazas |
+| Acorazado `dreadnought` | mar | Astillero | 3 | 320 oro, 160 acero, 60 petroleo, 10 vigas | 5 | 75 | Mucha vida, alcance 4 (minimo 2), lento |
+| Caza `fighter` | aire | Aerodromo | 3 | 200 oro, 60 acero, 6 combustible | 3 | 40 | El mas rapido; gana a bombardero y dirigible |
+| Bombardero `bomber` | aire | Aerodromo | 3 | 260 oro, 90 acero, 40 petroleo, 8 combustible | 4 | 50 | Ataque 18 contra tierra y barcos; no puede atacar al aire |
+| Dirigible `airship` | aire | Aerodromo | 3 | 280 oro, 60 acero, 60 petroleo, 10 combustible | 4 | 55 | 260 de vida, alcance 2, lento; la Regencia lo trae al asedio |
 
-1. **Casillas con medio.** El tablero gana un tipo por casilla (tierra, agua,
-   costa) generado por el encuentro; el terreno 3D pinta el agua con su lamina.
-   Es la unica pieza nueva del modelo: `Encounter` tendria `terrain[cell]`.
-2. **Quien puede pisar que.** Una tabla en `GameConfig` (p. ej.
-   `combat_domain_moves = {"land": ["land", "shore"], "sea": ["water", "shore"],
-   "air": ["land", "water", "shore"]}`) que lea `CombatRules` al calcular la BFS
-   de movimiento: hoy todas las casillas son tierra y todas las unidades son de
-   tierra, asi que la tabla no cambiaria ningun resultado actual.
-3. **Quien puede pegar a quien.** Otra tabla (`combat_domain_targets`): por
-   ejemplo, la infanteria no alcanza al aire, la artilleria antiaerea si. Se
-   comprobaria en `in_attack_range()` junto a `range` / `min_range`.
-4. **Ocupacion.** Una unidad de aire podria compartir casilla con una de tierra
-   (otra capa); eso toca `get_unit_at()` y el despliegue, y es la decision mas
-   cara: dejarla para el final.
-5. **La vista** ya sabe la altura; faltaria la pieza horneada (receta en
-   `tools/toy_recipes/units/<id>.gd`, mismo presupuesto) y, si se quiere, una
-   animacion de despegue en vez del saltito (`UnitToy3D.hop_along`).
-6. **La IA** (`CombatAI`) puntua casillas alcanzables: si la BFS ya respeta el
-   medio, la IA lo hereda sin cambios.
+Estadisticas de combate en el §8. Ningun precio esta medido con `line_probe`.
 
-Ninguno de estos pasos cambia el equilibrio de las tres unidades de tierra; los
-numeros de `docs/16` siguen valiendo mientras no se anada una unidad nueva.
+### El terreno
 
+`Encounter.terrain: Dictionary` (Vector2i -> `"land"` | `"water"` | `"shore"`;
+vacio = todo tierra) y `Encounter.has_water()`. El generador puro es
+`CombatRules.coastal_terrain(board, seed)`: `combat_coast_water_columns` (2)
+columnas de agua pegadas a un lado (izquierda o derecha, por la paridad de la
+semilla) y una columna de orilla; rellena las 64 casillas. El tablero no se
+guarda: basta la semilla (`terrain_seed` del nodo, o `combat_home_coast_seed` en
+casa).
+
+**Quien pisa que** (`GameConfig.combat_domain_moves`): tierra en `land` y
+`shore`; mar en `water` y `shore`; aire en todo. La BFS
+(`CombatRules.reachable_cells(origin, move, board, blocked, terrain, domain)`)
+solo entra y pasa por lo que el dominio pisa. Sin terreno y con unidades de
+tierra, sale la BFS de siempre.
+
+### Las dos capas
+
+Aire y superficie (tierra + mar) **comparten casilla**: un avion puede estar
+encima de un soldado o de un barco. `CombatUnit.layer()` (`"air"` /
+`"surface"`), `CombatRules.layer_of(domain)`, y
+`CombatRules.occupied_cells(units, ignore_uid, layer)` bloquea solo la propia
+capa. `Encounter.get_unit_at(cell)` devuelve la de superficie si la hay (si no, la
+de aire); `get_unit_at_layer(cell, layer)` y `get_units_at(cell)` para elegir.
+Entre capas la distancia de un golpe nunca baja de 1
+(`CombatRules.strike_distance`): el avion justo encima de un soldado esta "a 1
+casilla" y se pueden pegar los dos.
+
+### Quien pega a quien
+
+`GameConfig.combat_domain_targets[atacante][objetivo]` = alcance maximo (-1 su
+alcance, 0 no puede, N como mucho N), y la fila `targets` de una unidad lo
+corrige (el bombardero: `{"air": 0}`). `CombatRules.can_hit_from(attacker, from,
+target)` / `in_attack_range()` / `max_reach()` lo aplican; si el tope queda por
+debajo del alcance minimo, no le llega nunca.
+
+| Atacante -> objetivo | tierra | mar | aire |
+|---|---|---|---|
+| tierra | su alcance | su alcance | **solo a 1** (la artilleria y las dotaciones de torre: nunca) |
+| mar | su alcance | su alcance | **solo a 1** (el Acorazado: nunca, por su minimo 2) |
+| aire | su alcance | su alcance | su alcance (el bombardero: nunca) |
+
+No hay artilleria antiaerea: el caza es el antiaereo. Los barcos pegan a tierra
+desde el agua o la orilla, que es donde estan siempre.
+
+### Ventajas (×1,5 / ×0,75, `combat_type_advantage.beats`)
+
+| Gana a... | |
+|---|---|
+| artilleria | tanque, canonera |
+| tanque | infanteria |
+| infanteria | artilleria |
+| lancha torpedera | acorazado |
+| acorazado | canonera, tanque |
+| canonera | lancha torpedera, infanteria, caza |
+| caza | bombardero, dirigible |
+| bombardero | tanque, artilleria, canonera, acorazado |
+| dirigible | infanteria, lancha torpedera |
+
+El circulo de tierra no cambia (lo fija `test_type_advantage.gd`); ninguna
+pareja va en los dos sentidos (`test_air_sea_rules.gd`). `TypeCircle` (el paso 7
+del combate guiado) dibuja solo el circulo de tierra (`circle_ids(domain)`); la
+ficha de cada unidad (`UnitCard`) lista todos sus cruces.
+
+### Despliegue y reserva
+
+`Encounter._deploy()` forma cada dominio por su cuenta, solo en las casillas que
+pisa: primero el mar (agua y orilla), luego la tierra, luego el aire en su capa.
+Las mismas dos filas por bando y el mismo centrado. Quien no encuentra sitio (un
+barco en un tablero sin agua) pasa a `Encounter.reserve`: no esta en `units`, no
+pelea, no muere y no cuenta para la retirada. Con solo tierra y sin terreno, el
+despliegue es identico al de antes (`test_air_sea_rules.gd` lo compara).
+
+### Donde hay agua
+
+- **Misiones de costa** (`ExpeditionGenerator.offer_is_coastal(offer)`), desde la
+  era `combat_coastal_min_era` (2): la expedicion al Puerto
+  (`SORTIE_DEST_DOCK`) siempre; las incursiones de saqueadores con probabilidad
+  `combat_coastal_raid_chance` (0,35, "piratas", flujo de azar propio
+  `COAST_SEED_STRIDE`, no mueve nada de lo de antes); la avanzadilla de la
+  Regencia y la primera escaramuza, nunca. `make_coastal(map, seed, era)` marca
+  cada nodo (`coastal`, `terrain_seed`), pone **barcos enemigos**
+  (`add_ships`: era 2 una lancha, o canonera si el roster es grande o es jefe;
+  era 3 una canonera y el jefe ademas un acorazado; cada barco en el sitio de un
+  infante, nunca deja la tierra vacia) y da `combat_loot_coastal_parts` (1)
+  repuesto de mas en el ultimo combate. `sortie_preview()` lleva `"coastal"` y la
+  seleccion de tropa lo dice antes de salir.
+- **En casa** (Impuesto, Ataque Final, escaramuza de pruebas):
+  `CombatManager.home_terrain(units)` pone la costa de `combat_home_coast_seed`
+  **solo si en el bando del jugador hay barcos**: tu flota guarda la playa. Sin
+  barcos el tablero es todo tierra y el equilibrio de siempre no cambia. Los
+  barcos enemigos no traen el agua (los Tasadores son de tierra).
+- **Los barcos solo salen a misiones con agua**:
+  `CombatManager.can_launch_to(party, offer)` (`MSG_SHIPS_NEED_WATER`),
+  `launch_sortie()` y `launch_expedition()` (la de siempre y la primera
+  escaramuza son de tierra) lo comprueban; `SkirmishPanel` agrupa la tropa por
+  medio y deja los barcos sin poder elegirse cuando la salida no tiene agua. Si
+  no tienes barcos, la mision de costa se juega igual: tus soldados pelean en la
+  orilla y la artilleria alcanza a los barcos desde tierra.
+
+### El Ataque Final
+
+La ultima oleada, desde la era 3, trae dirigibles en el hueco de un canon y, si
+tu guarnicion tiene aviones, cazas de escolta (`FinalAudit.air_escort`, va en el
+guardado). Detalle y lo que falta medir: [17](17-balance-asedio.md), "Aire y
+mar".
+
+### La colonia
+
+- **Astillero** (`shipyard`, 2x2, era 2: pide Fundicion; tiene que tocar la costa,
+  `PlacementRules.SHORE_ONLY`) y **Aerodromo** (`aerodrome`, 2x2, era 3: pide
+  Refineria). Topes 1/1/2. Ver [03](03-buildings.md).
+- `ArmyManager`: cada unidad se entrena en su edificio
+  (`unit_types[...]["building"]`, sin clave = Cuartel), con un hueco por
+  edificio solo para las suyas (`max_slots(building)`, `training_in(building)`);
+  la capacidad suma `army_capacity_per_building` (Cuartel 8, Astillero 4,
+  Aerodromo 4). `has_military_building()` abre el panel del ejercito y las
+  escaramuzas. No hay estado nuevo en el guardado: un guardado viejo carga igual.
+- `ArmyPanel` agrupa TIERRA / MAR / AIRE con su edificio; sin el, candado y
+  "Construye: Astillero".
+- `get_garrison()` sigue llenando por poder: barcos y aviones tambien defienden.
+
+### Pendiente
+
+- Medir con `balance_probe` / `siege_probe` (no saben aun componer flotas).
+- La vista: agua en el tablero 8x8 y en el frente, piezas e iconos de las seis
+  unidades, modelos del Astillero y del Aerodromo (`feat/aire-mar-vista`).
+- `BattleScreen` (2D): tocar una casilla con avion encima de un soldado
+  selecciona al soldado (`get_unit_at`); para elegir capa hara falta un gesto.
 ## 12. El regimiento (solo cosmético)
 
 Fila 3.1 del rediseño (doc 21 §5.1, rama `feat/regimiento`, 2026-10-14). El

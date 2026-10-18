@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "shipyard"
+display_name = "Astillero"
+description = "Construye barcos de guerra. Tiene que tocar el agua."
+grid_size = Vector2i(2, 2)
+cost_gold = 220
+cost_steel = 80
+cost_oil = 0
+cost_wood = 120
+cost_materials = {"planks": 10, "beams": 4}
+build_time = 16.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+mesh_height = 2.2
+mesh_color = Color(0.3, 0.38, 0.45, 1)
+workers_required = 3
+max_health = 280

@@ -154,6 +154,13 @@ const ENTRIES := {
 		"title": "HELP_T_COMBAT_PREVIEWS", "body": "HELP_B_COMBAT_PREVIEWS", "target": ""},
 	"guide_combat_defend": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
 		"title": "HELP_T_COMBAT_DEFEND", "body": "HELP_B_COMBAT_DEFEND", "target": ""},
+	# ── Aire y mar (feat/aire-mar-reglas, docs/15 §11) ──
+	# El consejo sale al levantar el primer Astillero o Aerodromo; la guia de
+	# ventajas esta en el indice desde el principio, junto a "Quien gana a quien".
+	"air_sea": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
+		"title": "HELP_T_AIR_SEA", "body": "HELP_B_AIR_SEA", "target": ""},
+	"guide_air_sea_advantage": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_AIR_SEA_ADVANTAGE", "body": "HELP_B_AIR_SEA_ADVANTAGE", "target": ""},
 }
 
 ## Prioridad de los globos que salen solos: mayor sale antes. Los consejos van

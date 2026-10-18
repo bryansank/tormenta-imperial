@@ -252,7 +252,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (34 total, `data/buildings/*.tres`)
+### Buildings (36 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -280,6 +280,8 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Well (1.1) | 2x2 | 40/0/0/30 | 0 | −20 % storm damage within 3 cells, +15 % health after the storm; rank 2 | 1 |
 | Lighthouse (1.1) | 2x2 | 180/0/0/120 + 6 planks | 1 | Storm Warning +20 s; max 1 | 1-2 |
 | Fuel depot (1.1) | 2x2 | 200/80/0/80 + 4 beams | 1 | +500 oil outside the shared bag; needs a Refinery | 3 |
+| Shipyard (1.1) | 2x2 | 220/80/0/120 + 10 planks, 4 beams | 3 | Trains ships; must touch the coast; needs a Foundry; max 1/1/2 | 2 |
+| Aerodrome (1.1) | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | Trains planes and airships; needs a Refinery; max 1/1/2 | 3 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
 
 The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
@@ -600,16 +602,38 @@ fixed for the run; saves without `tier` load as Colono.
 
 ### Army & Units (management -> combat bridge)
 
-- **ArmyManager** trains units at Barracks. Parallel training slots = number of
-  Barracks (one unit per slot at a time, no queue). Cost paid up-front.
-- Capacity: `3 base + 8 per Barracks`. Owned units AND units in training count.
+- **ArmyManager** trains each unit at **its** building (`unit_types[...]["building"]`:
+  Barracks for land, Shipyard for sea, Aerodrome for air; no key = Barracks).
+  Parallel training slots = one per building, only for that building's units
+  (`max_slots(building)`, `training_in(building)`; one unit per slot, no queue). Cost
+  paid up-front. `has_military_building()` (any of the three) opens the army panel
+  and the skirmishes.
+- Capacity: `3 base + 8 per Barracks + 4 per Shipyard + 4 per Aerodrome`
+  (`army_capacity_per_building`, `GameConfig.get_army_capacity_for()`). Owned units
+  AND units in training count.
 - Units gated by era (`ProgressionManager.current_era >= unit.era`).
 
-| Unit | Era | Cost | Train | Upkeep | Power |
-|------|-----|------|-------|--------|-------|
-| Infantry | 1 | 40g + 20w | 20s | 1 gold | 10 |
-| Artillery | 2 | 120g + 50s | 45s | 2 gold | 28 |
-| Vehicle | 3 | 300g + 130s + 60o + 8 beams | 100s | 4 gold | 65 |
+| Unit | Domain | Building | Era | Cost | Train | Upkeep | Power |
+|------|--------|----------|-----|------|-------|--------|-------|
+| Infantry | land | Barracks | 1 | 40g + 20w | 20s | 1 gold | 10 |
+| Artillery | land | Barracks | 2 | 120g + 50s | 45s | 2 gold | 28 |
+| Vehicle | land | Barracks | 3 | 300g + 130s + 60o + 8 beams | 100s | 4 gold | 65 |
+| Torpedo boat | sea | Shipyard | 2 | 100g + 40s + 40w | 40s | 2 gold | 24 |
+| Gunboat | sea | Shipyard | 2 | 130g + 60s + 6 planks | 50s | 2 gold | 30 |
+| Dreadnought | sea | Shipyard | 3 | 320g + 160s + 60o + 10 beams | 110s | 5 gold | 75 |
+| Fighter | air | Aerodrome | 3 | 200g + 60s + 6 fuel | 60s | 3 gold | 40 |
+| Bomber | air | Aerodrome | 3 | 260g + 90s + 40o + 8 fuel | 80s | 4 gold | 50 |
+| Airship | air | Aerodrome | 3 | 280g + 60s + 60o + 10 fuel | 90s | 4 gold | 55 |
+
+- **Air and sea (1.1, `feat/aire-mar-reglas`, `docs/15-combat.md` §11):** ships only
+  move on water/shore and planes fly over everything (`combat_domain_moves`); air and
+  surface share a cell (two layers); land and sea hit planes only 1 square away and
+  artillery never (`combat_domain_targets`; the fighter is the anti-air); the
+  advantage table has a sea circle and air/sea crosses. Water exists only on coast
+  missions (the Dock expedition and some bandit raids, era 2+, with enemy ships) and
+  at home when your garrison has ships (`CombatManager.home_terrain()`); ships cannot
+  launch to a mission without water. The Final Audit's closing wave brings airships
+  (era 3) and fighter escorts if you have planes. Unmeasured: docs/16, docs/17.
 
 - **Upkeep:** every 30s, gold-only. If short, drains remaining gold to 0 and emits
   `army_upkeep_unpaid`. Sustained non-payment **deserts** units, the most expensive
@@ -619,8 +643,8 @@ fixed for the run; saves without `tier` load as Colono.
   (`remove_units()`), so Power never lies while a column is out.
 - EventBus signals: `unit_training_started`, `unit_trained`, `army_changed`,
   `army_upkeep_unpaid`, `unit_training_cancelled`, `army_deserted`.
-- The Ejército and Misiones (old Escaramuzas) entries of ☰ MENÚ → COLONIA only appear once a Barracks exists.
-- Combat stats for these three unit types are separate, in
+- The Ejército and Misiones (old Escaramuzas) entries of ☰ MENÚ → COLONIA only appear once a military building (Barracks, Shipyard or Aerodrome) exists.
+- Combat stats for these unit types are separate, in
   `GameConfig.combat_unit_stats` — see `docs/15-combat.md` §8.
 - **The regiment (cosmetic only, 2026-10-14, `docs/15-combat.md` §12):** name, colour
   and emblem (the flag pieces open by rank; "" = same as the flag), a paint scheme
@@ -1066,7 +1090,7 @@ tormenta-imperial/
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
 |       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
-+-- data/buildings/                  # 34 .tres building definitions
++-- data/buildings/                  # 36 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 5 tracks, 34 SFX, 3 ambient loops (see MANIFEST.md)
 |   +-- models/toy/                  # Baked toy buildings (<id>.tscn + <id>_mesh.res, toy_solid / toy_glow materials)

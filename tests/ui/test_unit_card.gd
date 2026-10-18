@@ -9,10 +9,16 @@ const CombatUnitScript := preload("res://scripts/combat/CombatUnit.gd")
 const HelpCatalog := preload("res://scripts/ui/HelpCatalog.gd")
 
 func test_strong_and_weak_follow_the_circle() -> void:
+	# Aire y mar (feat/aire-mar-reglas): la ficha lista tambien los cruces con
+	# barcos y aviones, asi que aqui se exige el circulo de tierra, no que sea lo
+	# unico (la canonera y el dirigible pegan fuerte a la infanteria, el
+	# bombardero a la artilleria; la artilleria gana tambien a la canonera).
 	assert_array(UnitCardScript.strong_against("infantry")).contains_exactly(["artillery"])
-	assert_array(UnitCardScript.weak_against("infantry")).contains_exactly(["vehicle"])
-	assert_array(UnitCardScript.strong_against("artillery")).contains_exactly(["vehicle"])
-	assert_array(UnitCardScript.weak_against("artillery")).contains_exactly(["infantry"])
+	assert_array(UnitCardScript.weak_against("infantry")).contains(["vehicle"])
+	assert_array(UnitCardScript.strong_against("artillery")).contains(["vehicle"])
+	assert_array(UnitCardScript.weak_against("artillery")).contains(["infantry"])
+	assert_array(UnitCardScript.weak_against("infantry")).contains(["gunboat", "airship"])
+	assert_array(UnitCardScript.strong_against("artillery")).contains(["gunboat"])
 
 func test_numbers_come_from_the_config() -> void:
 	for id in GameConfig.combat_unit_stats:

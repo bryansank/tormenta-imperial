@@ -42,17 +42,29 @@ var rout_ratio: float = 0.0
 var enemy_start_hp: int = 0
 ## El combate acabo porque el enemigo se retiro.
 var routed: bool = false
+## Aire y mar (docs/15 §11): el terreno de cada casilla, Vector2i -> "land" |
+## "water" | "shore". Vacio = todo tierra (todos los combates de antes). Lo
+## genera CombatRules.coastal_terrain() a partir de una semilla; el tablero no
+## se guarda, asi que basta con guardar esa semilla.
+var terrain: Dictionary = {}
+## Unidades que no cupieron en el tablero o no tienen donde plantarse (un barco
+## en un tablero sin agua). No pelean, no mueren, no cuentan: se quedan "en el
+## puerto". Normalmente vacio: quien compone los bandos ya evita mandarlas.
+var reserve: Array = []
 
 # ── Construction ─────────────────────────────────────────────────────
 
 ## `units` arrive already built (CombatUnit instances) so the expedition can hand
 ## over survivors carrying their damage from the previous node (FR-011).
-static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: bool = false, p_back_row: Array = [], p_can_rout: bool = false) -> Encounter:
+##
+## `p_terrain` (aire y mar): el terreno del tablero. Vacio = todo tierra.
+static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: bool = false, p_back_row: Array = [], p_can_rout: bool = false, p_terrain: Dictionary = {}) -> Encounter:
 	var e := Encounter.new()
 	e.units = p_units
 	e.index = p_index
 	e.is_boss = p_is_boss
 	e.is_defense = p_is_defense
+	e.terrain = p_terrain
 	for uid in p_back_row:
 		e.back_row_uids[int(uid)] = true
 	e.board_size = GameConfig.combat_board_size
@@ -60,11 +72,21 @@ static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: 
 	# Una defensa nunca se retira: es el Diezmo o el asedio (D7 = B).
 	e.enemy_can_rout = p_can_rout and not p_is_defense
 	e.rout_ratio = GameConfig.combat_retreat_ratio
-	for unit in Rules.living_units(p_units, ENEMY):
-		e.enemy_start_hp += unit.hp
 	e._build_deploy_zones()
 	e._deploy()
+	e._bench_undeployed()
+	# Despues de desplegar: lo que se quedo en reserva no cuenta para la retirada.
+	for unit in Rules.living_units(e.units, ENEMY):
+		e.enemy_start_hp += unit.hp
 	return e
+
+## ¿Hay agua en este tablero?
+func has_water() -> bool:
+	return Rules.has_water(terrain)
+
+## El terreno de una casilla ("land" si el tablero no dice nada).
+func terrain_at(cell: Vector2i) -> String:
+	return Rules.terrain_at(terrain, cell)
 
 ## Player holds the bottom two rows, the enemy the top two (FR-005). Keeping the
 ## sides apart is what gives the first rounds their approach phase.
@@ -89,35 +111,84 @@ func _build_deploy_zones() -> void:
 
 ## Fills the front row before the back one and centres each row, so a squad opens
 ## as a line facing the enemy instead of a zigzag across two rows.
+##
+## Aire y mar (docs/15 §11): cada dominio forma por su cuenta y solo en las
+## casillas que puede pisar. Primero el mar (que solo tiene el agua y la
+## orilla), luego la tierra, luego el aire, que va en su propia capa y puede
+## quedar encima de los demas. Con solo unidades de tierra y sin terreno, sale
+## exactamente el despliegue de siempre.
+const DEPLOY_ORDER := ["sea", "land", "air"]
+
 func _deploy() -> void:
+	# Todos empiezan fuera: quien no encuentre sitio se queda en reserva
+	# (_bench_undeployed), en vez de conservar una casilla de otro tablero.
+	for unit in Rules.living_units(units, PLAYER) + Rules.living_units(units, ENEMY):
+		unit.position = Vector2i(-1, -1)
 	for side in [PLAYER, ENEMY]:
 		var rows: Array = _rows_for(side)
-		var rear: Array = []
-		var line: Array = []
+		var rear: Dictionary = {}
+		var line: Dictionary = {}
 		for unit in Rules.living_units(units, side):
-			if back_row_uids.has(unit.uid):
-				rear.append(unit)
-			else:
-				line.append(unit)
+			var bucket: Dictionary = rear if back_row_uids.has(unit.uid) else line
+			var domain: String = unit.domain()
+			if not bucket.has(domain):
+				bucket[domain] = []
+			bucket[domain].append(unit)
 
-		var taken: Dictionary = {}
+		var taken_by_layer: Dictionary = {"surface": {}, "air": {}}
 		# La retaguardia coge la fila de atras ANTES de que forme la linea, porque
 		# el bando entero suele caber en la primera fila: si se repartiera por
 		# orden, nadie llegaria nunca atras.
-		if not rear.is_empty():
-			_fill_row(rear, int(rows[rows.size() - 1]), taken)
-		for row in rows:
-			if line.is_empty():
-				break
-			_fill_row(line, int(row), taken)
+		for domain in _deploy_domains(rear):
+			var group: Array = rear[domain]
+			_fill_row(group, int(rows[rows.size() - 1]), taken_by_layer[Rules.layer_of(domain)], domain)
+			# La retaguardia que no cupo atras forma con la linea.
+			if not group.is_empty():
+				if not line.has(domain):
+					line[domain] = []
+				line[domain] = group + line[domain]
+		for domain in _deploy_domains(line):
+			var pending: Array = line[domain]
+			for row in rows:
+				if pending.is_empty():
+					break
+				_fill_row(pending, int(row), taken_by_layer[Rules.layer_of(domain)], domain)
+
+## Los dominios presentes en `buckets`, en DEPLOY_ORDER (y cualquier otro al final).
+func _deploy_domains(buckets: Dictionary) -> Array:
+	var out: Array = []
+	for domain in DEPLOY_ORDER:
+		if buckets.has(domain):
+			out.append(domain)
+	for domain in buckets:
+		if not out.has(domain):
+			out.append(domain)
+	return out
+
+## Saca del tablero a los vivos que no encontraron sitio (Encounter.reserve). Solo
+## crea una lista nueva si hay alguno: si no, `units` sigue siendo la que entro.
+func _bench_undeployed() -> void:
+	var benched: Array = []
+	for unit in units:
+		if unit.is_alive() and unit.position.x < 0:
+			benched.append(unit)
+	if benched.is_empty():
+		return
+	reserve = benched
+	var kept: Array = []
+	for unit in units:
+		if not benched.has(unit):
+			kept.append(unit)
+	units = kept
 
 ## Centra en esa fila a los que quepan y los saca de `pending`. Respeta las
 ## celdas ya ocupadas, para que la linea no aplaste a la retaguardia al desbordar.
-func _fill_row(pending: Array, row: int, taken: Dictionary) -> void:
+## Solo usa las casillas que `domain` puede pisar (sin terreno, todas).
+func _fill_row(pending: Array, row: int, taken: Dictionary, domain: String = CombatUnit.DOMAIN_LAND) -> void:
 	var free: Array = []
 	for x in range(board_size.x):
 		var cell := Vector2i(x, row)
-		if not taken.has(cell):
+		if not taken.has(cell) and Rules.can_stand(domain, terrain_at(cell)):
 			free.append(cell)
 	var count: int = mini(pending.size(), free.size())
 	if count <= 0:
@@ -146,11 +217,33 @@ func get_unit(uid: int) -> CombatUnit:
 			return unit
 	return null
 
+## La unidad viva en esa casilla. Con aire y mar puede haber dos (un avion encima
+## de un soldado o de un barco): manda la de superficie, y si no hay, la de aire.
+## Para elegir capa, get_unit_at_layer(); para todas, get_units_at().
 func get_unit_at(cell: Vector2i) -> CombatUnit:
+	var flying: CombatUnit = null
 	for unit in units:
 		if unit.is_alive() and unit.position == cell:
+			if unit.layer() == "surface":
+				return unit
+			if flying == null:
+				flying = unit
+	return flying
+
+## La unidad viva de esa capa ("surface" / "air") en esa casilla, o null.
+func get_unit_at_layer(cell: Vector2i, layer: String) -> CombatUnit:
+	for unit in units:
+		if unit.is_alive() and unit.position == cell and unit.layer() == layer:
 			return unit
 	return null
+
+## Todas las unidades vivas de esa casilla (0, 1 o 2: una por capa).
+func get_units_at(cell: Vector2i) -> Array:
+	var out: Array = []
+	for unit in units:
+		if unit.is_alive() and unit.position == cell:
+			out.append(unit)
+	return out
 
 func active_unit() -> CombatUnit:
 	if turn_index < 0 or turn_index >= turn_order.size():
@@ -174,9 +267,17 @@ func valid_moves(uid: int) -> Array:
 	var unit := get_unit(uid)
 	if unit == null or not unit.is_alive() or unit.moved_this_turn or unit.has_acted:
 		return []
+	# Aire y mar: solo bloquea la propia capa y solo se pisa lo que el dominio
+	# permite. Sin terreno y todo de tierra, es la BFS de siempre.
 	return Rules.reachable_cells(
-		unit.position, unit.move_range(), board_size, Rules.occupied_cells(units, uid)
+		unit.position, unit.move_range(), board_size,
+		Rules.occupied_cells(units, uid, unit.layer()), terrain, unit.domain()
 	)
+
+## Lo que el bando `side` amenaza en su proximo turno (Ver alcance enemigo),
+## respetando el terreno de este tablero.
+func threat_cells(side: int) -> Array:
+	return Rules.threat_cells(units, side, board_size, terrain)
 
 func valid_targets(uid: int) -> Array:
 	var unit := get_unit(uid)

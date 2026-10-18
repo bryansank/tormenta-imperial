@@ -386,11 +386,40 @@ static func contract_step() -> Dictionary:
 		return {}
 	return {"kind": "contract", "id": source, "why": "OBJ_WHY_CONTRACT"}
 
+## Paso aparte, como contract_step() (aire y mar, 2026-10-17): "Construye un
+## Astillero" en la era 2 y "Construye un Aerodromo" en la era 3, cuando la linea
+## ya tiene en pie lo que pide cada uno y un Cuartel. No entra en next_step(): la
+## linea principal (y tools/line_probe.gd) no cambia; ¿QUE HACER? lo ensena
+## debajo, como una idea mas. {} si no toca: modo sin combate, asedio en marcha,
+## ya lo hay, falta su requisito o el tope no deja.
+static func fleet_step() -> Dictionary:
+	if not GameMode.tithe_enabled() and not GameMode.audit_enabled():
+		return {}
+	if ProgressionManager.is_final_audit_active():
+		return {}
+	if Rules.count_building("barracks") < 1:
+		return {}
+	for building_id in ["shipyard", "aerodrome"]:
+		if Rules.count_building(building_id) >= 1:
+			continue
+		var ready := true
+		for req_id in GameConfig.get_prerequisites(building_id):
+			if Rules.count_building(String(req_id)) < 1:
+				ready = false
+		if not ready or GameConfig.get_building_limit(building_id) == 0:
+			continue
+		return {"kind": "build", "id": building_id, "count": 1,
+			"why": "OBJ_WHY_SHIPYARD" if building_id == "shipyard" else "OBJ_WHY_AERODROME"}
+	return {}
+
 ## La columna que se propone para la primera escaramuza: una unidad de casa, la
 ## del primer tipo que haya (infanteria antes que canones). Vacio si no hay nadie.
 static func first_sortie_party() -> Dictionary:
 	var home: Dictionary = CombatManager.get_deployable_units()
 	for unit_id in GameConfig.get_unit_ids():
+		# La primera escaramuza es en tierra: un barco no puede ir (aire y mar).
+		if GameConfig.get_unit_domain(String(unit_id)) == "sea":
+			continue
 		if int(home.get(unit_id, 0)) > 0:
 			return {String(unit_id): 1}
 	return {}
