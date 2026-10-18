@@ -1729,11 +1729,14 @@ siempre el mismo mapa**, también al reintentar (la Regencia sigue en su sitio).
   capa, y al final un nodo solo (el jefe de la misión, `is_boss`). Con un combate, un
   nodo suelto.
 - Dureza: cada nodo cuenta como profundidad `mision × campaign_level_step (2) + su
-  capa` en la curva de siempre (`enemy_scale`, que ya lleva el ×1,05 de Gobernador).
+  capa` en la curva de siempre (`enemy_scale`, que ya lleva el ×1,05 de Gobernador),
+  por la cifra de su misión en `campaign_enemy_mult` (una fila por medio, calibrada
+  en la ronda final; ver "Medido").
 - **El jefe de campaña** (última misión, último nodo, `campaign_boss`): su escolta
-  del medio más `campaign_boss_heavies` (2) de lo más pesado que su medio tiene en la
-  era (tanque; acorazado en la era 3 o cañonera en la 2; dirigible), con la escala de
-  jefe × `campaign_boss_extra_scale` (1,10).
+  del medio más `campaign_boss_heavies` (1 por medio; eran 2) de lo más pesado que su
+  medio tiene en la era (tanque; acorazado en la era 3 o cañonera en la 2;
+  dirigible), con la escala de jefe × `campaign_boss_extra_scale` (por medio: tierra
+  0,93, mar 0,90, aire 0,78; era 1,10 para todos).
 - **Solo paga el último combate** de la misión (`campaign_final`): los de paso tienen
   `rewards` y `loot` vacíos. Así abandonar a medias y repetir no da botín dos veces.
   Paga: oro y madera de la curva × `campaign_reward_mult` (0,75), el recurso de su
@@ -1837,7 +1840,70 @@ incluido.
   `campaigns` al ganar la primera escaramuza, consejo/guía `final_gate` en la era 3 o
   al llegar el CG a nivel 3 sin campañas.
 
-### Duración (sin medir)
+### Medido (ronda final de la 1.1, 2026-10-18)
+
+`tools/balance_probe.gd -- --only=campaigns` (autoload temporal, headless): cada
+misión entera, con la cura entre combates y la primera carta del draft, AutoResolver
+con la IA a los dos lados (una persona juega mejor: es un suelo), moral 75, Colono,
+100 semillas de partida por fila, en la era mínima de cada misión.
+
+**Antes** (valores de la rama): las misiones de en medio salían al 100 % con
+cualquier columna de 6 y los tres jefes al **0 %** con cualquier plantilla (tierra
+2 art + 4 tanques 3 %, mar 3 cañoneras + 3 acorazados 0 %, aire 0 %): escala de jefe
+×1,15 × 1,10 sobre una profundidad de 10-12, más dos pesados. En aire, además, la
+plantilla mixta (cazas + dirigibles) perdía contra la de solo cazas: el caza gana al
+dirigible (ventaja por tipo) y el enemigo es sobre todo cazas, así que en el cielo
+**la columna bien formada es de cazas**; el dirigible propio es un tanque lento que
+alarga el combate.
+
+**Calibración** (`--camp-calib=1`, 30 semillas, ×0,60-2,60): el combate no tira
+dados y cada misión es un escalón (p. ej. tierra m4 con 3 inf + 3 art: ×1,30 95 %,
+×1,32 29 %). Se fijó una cifra por misión (`campaign_enemy_mult`), un pesado por
+jefe y la escala de jefe por medio.
+
+**Después** (100 semillas; "bien" = la columna de su era que se pide; la floja,
+para ver la pendiente):
+
+| Campaña | Misión (era, combates) | Bien formada | Gana | Otras |
+|---|---|---|---|---|
+| Tierra | m1 (1, 1) ×1,5 | 6 inf | 100 % | 3 inf 100 % |
+| | m2 (1, 1) ×1,7 | 6 inf | 100 % | 4 inf 100 %, 3 inf 0 % |
+| | m3 (2, 2) ×1,30 | 3 inf + 3 art | 97 % | 2 inf + 4 art 76 %, 4 inf 0 % |
+| | m4 (2, 2) ×1,31 | 3 inf + 3 art | 95 % | 2 inf + 4 art 22 % |
+| | m5 (2, 2) ×1,15 | 3 inf + 3 art | 77 % | 2 inf + 4 art 9 % |
+| | **Jefe: Coronel de Hierro** (3, 3) ×0,93 | 2 inf + 2 art + 2 tanques | **59 %** | 2 art + 4 tanques 100 %, ejército de era 2 0 % |
+| Mar | m1 (2, 1) ×1,6 | 3 lanchas + 3 cañoneras | 100 % | 4 lanchas 91 % |
+| | m2 (2, 2) ×1,30 | 3 lan + 3 cañ | 74 % | 6 cañoneras 100 %, 4 lanchas 0 % |
+| | m3 (2, 2) ×1,25 | 3 lan + 3 cañ | 74 % | 6 cañoneras 100 % |
+| | m4 (3, 2) ×1,17 | 2 lan + 2 cañ + 2 acorazados | 86 % | flota de era 2 10 %, con 2-3 acorazados 100 % |
+| | **Jefe: Leviatán** (3, 3) ×0,90 | 2 lan + 2 cañ + 2 acor | **53 %** | 4 cañ + 2 acor 99 %, flota de era 2 **0 %** |
+| Aire | m1 (3, 1) ×1,4 | 6 cazas | 100 % | 4 cazas + 2 dirigibles 48 %, 3 cazas 0 % |
+| | m2 (3, 2) ×1,03 | 6 cazas | 69 % | con dirigibles 0-4 % |
+| | m3 (3, 2) ×1,02 | 6 cazas | 81 % | con dirigibles 0-2 % |
+| | m4 (3, 2) ×0,97 | 6 cazas | 83 % | con dirigibles 0-3 % |
+| | **Jefe: Zepelín Almirante** (3, 3) ×0,78 | 6 cazas | **57 %** | 5 cazas + 1 dirigible 18 % |
+
+Lectura:
+
+- **Los dudosos.** El Leviatán con barcos de la era 2 no se gana (0 %): pide
+  acorazados, que es lo que dice su ficha (era 3). El Zepelín **solo con cazas** es
+  justo lo que lo gana (57 %); con dirigibles propios, no.
+- La primera misión de cada campaña se deja como **entrada** (100 % con una columna
+  digna; la segunda de tierra ya pide 4 infantes). Disputarla pediría enemigos a ×2.
+- Duración de tablero (la fórmula de la sonda, 5 s por turno del jugador): misiones
+  de un combate 2,5-5 min, de dos 5,5-8 min, jefes 8,5-10 min. Las tres campañas
+  ≈ 1,5-2 h de tablero, como se estimó.
+- Gobernador (×1,05 en todo) no se midió aparte: con estos escalones, puede tirar
+  una fila de "bien" del 95 % al ~30 % (tierra m4). Si molesta, la palanca es su
+  `expedition_enemy_mult` para campañas, no las filas.
+
+Repetir:
+
+    godot --headless --path .            # con BalanceProbe de autoload temporal
+      -- --only=campaigns --camp-seeds=100
+      -- --only=campaigns --camp-calib=1 --camp-seeds=30 --camp-only=land:3 --calib=1.29,1.32,0.01
+
+### Duración (estimación previa)
 
 Estimación para la ronda final: 30 combates de 3-4 min ≈ 1,5-2 h de tablero, con la
 base corriendo mientras tanto, y las misiones repartidas por era (tierra desde el

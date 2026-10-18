@@ -147,7 +147,9 @@ func test_the_default_siege_brings_one_airship_to_the_last_wave() -> void:
 	# 1.1: con la IA que pesa el dano real (CombatAI.shot_worth) el dirigible
 	# vuelve a la ultima oleada (docs/17 "La IA nueva"); solo a la ultima.
 	assert_int(GameConfig.final_audit_airships_last_wave).is_equal(1)
-	assert_int(GameConfig.final_audit_air_escort_fighters).is_equal(1)
+	# La escolta de cazas, apagada en la ronda final (castigaba tener Aerodromo,
+	# docs/17 "Ronda final"); los tests de abajo la encienden a mano.
+	assert_int(GameConfig.final_audit_air_escort_fighters).is_equal(0)
 	var audit: FinalAudit = AuditScript.create(4242, {"vehicle": 6}, 3)
 	var last: int = audit.wave_count() - 1
 	assert_int(int(audit.wave_at(last)["roster"].get("airship", 0))).is_equal(1)

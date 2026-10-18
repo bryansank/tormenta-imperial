@@ -667,7 +667,7 @@ Repetir (autoload temporal `BalanceProbe`, ver la cabecera de la sonda):
     godot --headless --path . -- --only=coast --no-dev
 
 
-### La IA nueva y el reequilibrio de lanchas y bombarderos (1.1, sin medir aún)
+### La IA nueva y el reequilibrio de lanchas y bombarderos (1.1; medido en la ronda final, abajo)
 
 **Qué cambió** (decisión de Bryan, `integracion/v1.1-aire-mar`):
 
@@ -719,3 +719,77 @@ tipo + 2 de tierra y las de acorazados y dirigibles del jugador):
 
 Para medir la IA vieja como "antes" en tierra pura: `git show e00f696:scripts/combat/CombatAI.gd`
 sobre una copia temporal (sin commitear) y la misma sonda.
+
+### Ronda final de la 1.1 (2026-10-18): IA nueva frente a la vieja, en tierra
+
+`tools/balance_probe.gd -- --exp-seeds=100` (autoload temporal, `override.cfg`
+propio). La IA vieja es `e00f696:scripts/combat/CombatAI.gd` puesta encima en una
+copia sin commitear (la elección por `power`); la nueva, la de la rama
+(`shot_worth`, peso 1,0). Mismos valores de combate en las dos.
+
+**Encuentros sueltos** (los ATAQUES RÁPIDOS son esto: un combate), media sobre
+profundidad 0-6 y riesgo, 200 semillas por celda:
+
+| Era / plantilla | Vieja: gana | Nueva: gana | Vieja: bajas | Nueva: bajas |
+|---|---|---|---|---|
+| era 1, 3 | 100 % | 100 % | 0,00 | 0,76 |
+| era 1, 4 | 100 % | 100 % | 0,00 | 0,76 |
+| era 1, 6 | 100 % | 100 % | 0,10 | 0,76 |
+| era 2, 3 | 64 % | 64 % | 1,28 | 1,74 |
+| era 2, 4 | 93 % | 96 % | 0,91 | 1,12 |
+| era 2, 6 | 100 % | 100 % | 0,31 | 0,47 |
+| era 3, 3 | 46 % | 37 % | 2,16 | 2,43 |
+| era 3, 4 | 85 % | 88 % | 1,23 | 1,79 |
+| era 3, 6 | 100 % | 100 % | 0,20 | 0,97 |
+
+Duración igual (2,7-4,1 min por combate). Lo que cambia es el precio: el enemigo
+ya no reparte golpes entre lo "caro" y remata al que tiene tocado, así que
+**cuesta más bajas** (en era 1, de 0 a 0,76 por combate, siempre ganando).
+
+**Expedición larga** (6-8 nodos sin curar; hoy solo la usan tests y sondas, el
+tablón la sustituyó por la Campaña de Tierra), jugador "jugado", 100 semillas:
+
+| Era / plantilla | Vieja | Nueva |
+|---|---|---|
+| era 1, 4 | 56 % | 12 % |
+| era 1, 6 | 100 % | 96 % |
+| era 2, 6 | 51 % | 47 % |
+| era 3, 6 | 2 % | 0 % |
+
+La atrición se nota donde se arrastra de nodo en nodo sin cura (era 1 con 4).
+
+**Asedio**, mismos valores de hoy (×1,14, dirigible, sin escolta, 4 torres, moral
+100): IA vieja 6 vehículos **13,5 %**, 6 veh + 2 cazas 13 %, 5 vehículos 0 %;
+IA nueva 82,5 % / 65 % / 40 % (docs/17 "Ronda final"). Ahí la vieja perseguía al
+dirigible con los blindados.
+
+**Decisión:** `combat_ai_threat_weight` se queda en **1,0** (0 y 2 dan peor
+asedio: 60 % y 68 %, docs/17). Los ataques rápidos ganan lo mismo con más bajas;
+la expedición larga ya no está en el tablón y las tres campañas están calibradas
+con la IA nueva (docs/15 §13 "Medido"). No se tocan estadísticas de tierra.
+
+### Ronda final: costa por unidad (misiones mixtas, hoy apagadas)
+
+`-- --only=coast --coast-seeds=60` (la sonda enciende `combat_mixed_missions_enabled`
+solo para medir: en el juego las misiones mixtas son futuro, docs/15 §13). IA nueva,
+lancha y bombardero reequilibrados:
+
+| Era | Destino | Plantilla | Gana | Bajas |
+|---|---|---|---|---|
+| 2 | Puerto | 4 tierra | 0 % | 3,98 |
+| 2 | Puerto | 2 tierra + 2 lanchas | 90 % (antes 5 %) | 2,08 |
+| 2 | Puerto | 2 tierra + 2 cañoneras | 100 % | 1,38 |
+| 2 | Puerto | 2 tierra + 4 lanchas / 4 cañoneras | 100 % / 100 % | 0,65 / 0,27 |
+| 3 | Puerto | 4 tierra | 17 % | 3,62 |
+| 3 | Puerto | 2 tanques + 2 lanchas | 12 % (antes 0 %) | 3,72 |
+| 3 | Puerto | 2 tanques + 2 cañoneras | 88 % | 1,67 |
+| 3 | Puerto | 2 tanques + 2 cazas | 62 % | 2,82 |
+| 3 | Puerto | 2 tanques + 2 bombarderos | 100 % | 0,80 |
+| 3 | Puerto | 2 tanques + 4 de cualquiera | 100 % | 0,12-2,78 |
+| 2-3 | Piratas (1 combate) | todas | 100 % | 0-1,8 |
+
+La lancha deja de ser inútil en la era 2; en la era 3 con solo dos, no. Con cuatro
+de un tipo todo pasa del 90 %, y el bombardero sigue al 100 % con menos de una baja.
+**No se toca**: estas misiones están apagadas, y cambiar estadísticas de barcos o
+aviones movería las tres campañas, ya calibradas. Cuando las mixtas vuelvan: el
+bombardero (vida 95 → 85, o que la cañonera le pegue a 2) y el Puerto con "4 X".

@@ -2602,7 +2602,7 @@ var campaign_level_step := 2
 ## El combate no tira dados: cada fila es un escalon, y entre dos cifras de la
 ## calibracion la tasa salta. Retocar de 0,02 en 0,02.
 var campaign_enemy_mult := {
-	"land": [1.5, 1.7, 1.30, 1.33, 1.15, 0.93],
+	"land": [1.5, 1.7, 1.30, 1.31, 1.15, 0.93],
 	"sea": [1.6, 1.30, 1.25, 1.17, 0.90],
 	"air": [1.4, 1.03, 1.02, 0.97, 0.78],
 }
@@ -3307,7 +3307,10 @@ var final_audit_scale_per_era := 0.05
 ## 1.10 desde 2026-10-12 (antes 1.05), con 4-5 oleadas: seis blindados y cuatro
 ## torres ganan el 82 %, como antes con 3-5 oleadas y dos torres; cinco blindados,
 ## el 45 %; dos torres, el 45 %; las mixtas, nunca.
-var final_audit_last_wave_multiplier := 1.10
+## 1.14 desde la ronda final de la 1.1 (2026-10-18, IA nueva + dirigible): con
+## 1.10 la referencia (6 blindados, 4 torres) ganaba el 90 %; 1.12-1.13 lo mismo
+## (88-90 %), 1.14 el 82,5 % y 1.15 se desploma al 57,5 % (docs/17 "Ronda final").
+var final_audit_last_wave_multiplier := 1.14
 
 ## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
 ## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
@@ -3339,7 +3342,10 @@ var final_audit_extra_gun_chance := 0.35
 ## en la ronda final de medidas (docs/17 "La IA nueva").
 var final_audit_air_min_era := 3
 var final_audit_airships_last_wave := 1
-var final_audit_air_escort_fighters := 1
+## 0 desde la ronda final (2026-10-18): con escolta, 6 blindados + 2 cazas ganaban
+## el 49,5 % frente al 82,5 % de 6 blindados solos (castigaba tener Aerodromo);
+## sin ella, el 65 %. El codigo se queda: volver es una cifra.
+var final_audit_air_escort_fighters := 0
 
 ## Unidades vivas en casa que hacen falta para volver a convocar tras perder.
 ## Perder no acaba la partida, pero tampoco se rifa la victoria: hay que
@@ -3454,7 +3460,11 @@ var game_tier_rules := {
 		"tithe_force_mult": 1.34,
 		# 1.05 desde 2026-10-12 (antes 1.06): con el asedio de 4-5 oleadas, x1.06
 		# dejaba la guarnicion maxima en el 49 %; x1.05 la deja en el 64 % (>= 60 %).
-		"audit_enemy_mult": 1.05,
+		# 1.005 desde la ronda final de la 1.1 (IA nueva, dirigible, ultima oleada
+		# x1.14): x1.05 daba el 23 %, x1.02 el 45 %, x1.01 el 57,5 % y x1.005 el
+		# 67,5 % (docs/17 "Ronda final"). El Gobernador se nota en las expediciones,
+		# las campanas y el Diezmo; en el asedio, casi nada.
+		"audit_enemy_mult": 1.005,
 	},
 }
 

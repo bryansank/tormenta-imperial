@@ -120,6 +120,9 @@ func _run() -> void:
 			only_expeditions = true
 		elif a == "--only=coast":
 			only_coast = true
+			# Las misiones mixtas estan apagadas en el juego (tres campanas, docs/15
+			# §13); la sonda las enciende para seguir midiendolas como futuro.
+			GameConfig.combat_mixed_missions_enabled = true
 		elif a == "--only=campaigns":
 			only_campaigns = true
 		elif a.begins_with("--camp-seeds="):

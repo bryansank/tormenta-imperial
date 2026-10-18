@@ -285,3 +285,21 @@ func test_the_texts_exist_in_both_languages() -> void:
 		for key in keys:
 			assert_str(Tr.t(String(key))).override_failure_message("%s sin %s" % [locale, key]).is_not_equal(String(key))
 	Tr.set_locale(saved)
+
+## Ronda final de la 1.1 (docs/15 §13 "Medido"): una escala por mision, el jefe
+## con un pesado y su propia escala, y el mapa la aplica.
+func test_each_mission_has_its_calibrated_scale() -> void:
+	for domain in GameConfig.CAMPAIGN_DOMAINS:
+		var row: Array = GameConfig.campaign_enemy_mult[domain]
+		assert_int(row.size()).is_equal(GameConfig.campaign_mission_count(domain))
+		for m in range(row.size()):
+			assert_float(ExpeditionGenerator.campaign_mission_mult(domain, m)).is_equal(float(row[m]))
+		assert_int(int(GameConfig.campaign_boss_heavies[domain])).is_equal(1)
+		assert_bool(GameConfig.campaign_boss_extra_scale.has(domain)).is_true()
+	# Una mision de en medio: su escala es la de la curva por su cifra.
+	var offer: Dictionary = ExpeditionGenerator.campaign_offer("sea", 1, 4242, 2)
+	var map: Array = ExpeditionGenerator.campaign_mission_map(offer)
+	var node: Dictionary = map[0]
+	var depth: int = 1 * GameConfig.campaign_level_step + int(node["depth"])
+	var base: float = ExpeditionGenerator.enemy_scale(depth, 2, int(node["risk"]), bool(node["is_boss"]))
+	assert_float(float(node["enemy_scale"])).is_equal_approx(base * float(GameConfig.campaign_enemy_mult["sea"][1]), 0.0001)

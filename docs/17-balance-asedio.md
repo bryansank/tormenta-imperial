@@ -369,3 +369,68 @@ propio):
   (`test_the_siege_is_hard_but_winnable_with_a_full_garrison`,
   `test_the_smallest_garrison_that_can_resummon_does_not_win`) se revisan con la
   suite: la IA nueva puede moverlos.
+
+## Ronda final de la 1.1 (2026-10-18): medido y ajustado
+
+`tools/siege_probe.gd`, 200 semillas por fila, era 3, `override.cfg` propio. IA
+nueva (`combat_ai_threat_weight` 1,0), dirigible en la última oleada.
+
+### La referencia y la palanca
+
+6 blindados, 4 torres, moral 100, Colono. `final_audit_last_wave_multiplier`
+(con escolta de cazas salvo donde se dice):
+
+| Última oleada | 6 vehículos | 6 veh + 2 cazas | 6 veh + 2 cazas sin escolta |
+|---|---|---|---|
+| ×1,10 (la rama) | 90,0 % | 79,5 % | — |
+| ×1,12 | 88,0 % | 79,5 % | — |
+| ×1,13 | 90,0 % | 49,5 % | — |
+| **×1,14** | **82,5 %** | 49,5 % | **65,0 %** |
+| ×1,15 | 57,5 % | 56,5 % | 46,5 % |
+
+El combate no tira dados: entre ×1,10 y ×1,13 apenas se mueve y de ×1,14 a ×1,15
+se desploma. **Decisión:** `final_audit_last_wave_multiplier` 1,10 → **1,14**
+(82,5 %, dentro de 75-85 %) y `final_audit_air_escort_fighters` 1 → **0**: con
+escolta, tener 2 cazas en casa bajaba del 82,5 % al 49,5 % (la escolta castigaba
+tener Aeródromo). Sin ella, 65 %: los cazas siguen restando algo (ocupan sitio de
+despliegue y no paran a los cañones), pero ya no por la escolta.
+
+### Con los valores nuevos (×1,14, sin escolta)
+
+| Guarnición | 4 torres, moral 100 | 2 torres | moral 75 | moral 90 | Gobernador ×1,05 | Gobernador ×1,005 | sin dirigible |
+|---|---|---|---|---|---|---|---|
+| 5 vehículos | 40,0 % | 0 % | 0 % | — | 6,5 % | 40,0 % | 61,0 % |
+| mixta 2+2+2 | 0 % | 0 % | 0 % | — | 0 % | — | 24,0 % |
+| **6 vehículos** | **82,5 %** | 25,5 % | **0 %** | 30,5 % | 23,0 % | **67,5 %** | 100 % |
+| 6 veh + 2 cazas | 65,0 % | 24,0 % | 0 % | — | 20,0 % | 58,5 % | 92,0 % |
+
+- **Dos torres:** 25,5 %, claramente por debajo (antes ~45 %).
+- **Moral 75: 0 %**, también con ×1,10 (0 %). Con moral 90, 30,5 %. La moral
+  (ataque ×0,6-1,4 y ±2 de iniciativa) es hoy la palanca más fuerte del asedio:
+  con la IA nueva los blindados rinden a moral 100 y caen a moral 75. **Abierto**
+  (para Bryan): o se asume que el asedio pide la moral alta (decoraciones,
+  Taberna, sueldos pagados) y se dice en su ayuda, o se suaviza
+  `combat_morale_attack_range` (0,60-1,40) solo para la guarnición de casa. La
+  sonda de la línea (otro agente) dirá con qué moral llega el jugador.
+- **Gobernador:** con `audit_enemy_mult` 1,05 la máxima ganaba el 23 % (×1,02
+  45 %, ×1,01 57,5 %). **Decisión:** **1,005** → 67,5 % (≥ 60 %). El Gobernador
+  sigue siendo más duro en expediciones (×1,05), campañas y Diezmo (×1,34); en
+  el asedio, casi nada.
+- **Sin dirigible** (`--airships=0`): 100 % la máxima, 61 % cinco blindados. El
+  dirigible es lo que deja la referencia en la franja.
+
+### Peso de la IA (`combat_ai_threat_weight`, ×1,14 sin escolta)
+
+| Peso | 6 vehículos | 6 veh + 2 cazas | 5 vehículos | mixta 2+2+2 |
+|---|---|---|---|---|
+| 0 (solo la parte de la vida) | 60,0 % | 56,5 % | 40,0 % | 0 % |
+| **1 (la serie)** | **82,5 %** | 65,0 % | 40,0 % | 0 % |
+| 2 | 68,0 % | 44,0 % | 25,5 % | 0 % |
+
+Se queda en 1.
+
+Repetir:
+
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --tier=governor
+    godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --morale=75
