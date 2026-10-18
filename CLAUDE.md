@@ -63,13 +63,13 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-29 autoloads in `project.godot`: the 28 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager` and `ContractManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
+30 autoloads in `project.godot`: the 29 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager`, `ContractManager` and `ThreatManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 138 signals in 30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 146 signals in 31 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
@@ -95,6 +95,7 @@ holds a service's state of its own.
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
 | 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`). See `docs/06-progression-victory.md` §Governor rank |
 | 28 | `ContractManager` | `scripts/services/ContractManager.gd` | The contract board (ENCARGOS): ticks the pure `scripts/economy/ContractBoard.gd` (3 slots: Regency, neighbours, smuggler), charges what is asked and pays the reward (resources, morale, colonists if `PopulationManager.add_colonists` exists, Tithe discount through `StormManager.add_tithe_discount` if it exists, else gold), emits `contract_*`; saved as `contracts`; off in Sandbox (`GameMode.contracts_enabled()`). See `docs/27-encargos.md` |
+| 29 | `ThreatManager` | `scripts/services/ThreatManager.gd` | Coastal threats (1.2, optional loot only): ticks the pure `scripts/combat/ThreatBoard.gd` on a 5 s Timer, finds free shore cells only when a mark is due, launches the 1-fight pure-domain raid through `CombatManager.launch_threat_offer()`, closes it on `expedition_ended`, sends workers to wrecks (`busy_workers()`, read by PopulationManager) and pays them; emits `threat_*`; saved as `threats`. See `docs/15-combat.md` §14 |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -727,7 +728,8 @@ service drains it onto the `EventBus`; the UI only reads and calls.
 
 - **Pure models** (`scripts/combat/`): `CombatUnit`, `CombatRules`, `Encounter`,
   `CombatAI`, `AutoResolver`, `Expedition`, `ExpeditionGenerator`, `FinalAudit`,
-  `SortieBoard` (the sortie board, 2026-10-14).
+  `SortieBoard` (the sortie board, 2026-10-14), `CampaignBook`, `ThreatBoard` (coastal
+  threats, 1.2).
   No nodes, no timers, no global `randf()` — every one is headless-testable.
 - **Services:** `CombatManager` owns the `Encounter` and the `Expedition`;
   `ProgressionManager` owns the `FinalAudit`.
@@ -841,6 +843,27 @@ strength. HUD button `SkirmishButton` (slot `skirmish_button`, red dot from
 `combat_expedition_*`, `combat_loot_*`, `combat_sortie_*`, `combat_retreat_ratio`,
 `combat_auto_resolve_ratio`, `combat_odds_*`. The old 6-8 node expedition
 (`launch_expedition()`) is untouched.
+
+**Coastal threats (1.2, branch `feat/amenazas-costa`, docs/15 §14, untested):**
+OPTIONAL LOOT ONLY (Bryan, 2026-10-18). Raiders (on the beach, or in a boat on the
+water once a Shipyard stands), the Regency vanguard (era 2+) and wrecks appear on the
+shore every 150-270 played seconds (at most 2 at once, from the first Barracks + first
+sortie won), are drawn on both maps (`ThreatMarks3D` under MapGenerator, one cached
+vertex-colour mesh per type; `ThreatMarks2D` under MapGenerator2D, one `_draw`; nothing
+per frame), last 240-360 s and **leave on their own, doing no harm**. Attacking one is a
+single **pure-domain** fight (land troops on the shore, ships only on the water; offer
+`{kind: "threat", threat_id, threat_type, seed, era, domain}`, map and loot rebuilt by
+`ExpeditionGenerator.threat_map/threat_rewards/threat_loot`); a wreck is explored with
+2 workers for 60 s, no fight. Loot: gold/wood (steel from the vanguard), spare parts
+and sometimes a workshop material (`_apply_loot` now handles `planks/ingots/beams/fuel`).
+Tapping a mark (both placers, only on a cell with no building/deposit) opens
+`ThreatCard` (child of SkirmishPanel): what it is, time left, enemies, odds, loot,
+¡AL ATAQUE! (opens MISIONES > ATAQUES RÁPIDOS with it picked: `SkirmishPanel.open_threat`)
+or EXPLORAR. Threats are listed in ATAQUES RÁPIDOS next to the sortie raids. One
+`notice` per new mark; leaving/clearing go to the log. ¿QUÉ HACER? only gets the second
+line (`THREAT_WHY_EASY`, last in `sortie_reason()`): an unseen mark with easy loot.
+Model `ThreatBoard` (pure), service `ThreatManager`, save key `threats`, tunables
+`threat_*` at the end of GameConfig, texts in Tr block "# Amenazas de costa".
 
 **Towers:** each standing tower cuts storm damage by 15% (cap 60%,
 `storm_tower_mitigation*`) and fields one artillery crew on defensive boards — Tithe
@@ -1047,7 +1070,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `threats` (ThreatManager: coastal threats, `ThreatBoard`; a save without it = empty shore), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition

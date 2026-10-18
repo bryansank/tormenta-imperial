@@ -1004,7 +1004,10 @@ func can_launch_to(party: Dictionary, offer: Dictionary) -> Dictionary:
 		return check
 	# Tres campanas: dominio puro. Solo tropa del medio de la campana, y de esa
 	# solo la que puede pegar a ese medio (el bombardero no va a la de aire).
-	if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN:
+	# Las amenazas de costa (feat/amenazas-costa), igual: tierra en la orilla,
+	# solo barcos si estan en el agua.
+	var offer_kind: String = String(offer.get("kind", ""))
+	if offer_kind == ExpeditionGeneratorScript.KIND_CAMPAIGN or offer_kind == ExpeditionGeneratorScript.KIND_THREAT:
 		var domain: String = String(offer.get("domain", "land"))
 		for unit_id in party:
 			if int(party[unit_id]) <= 0:
@@ -1248,7 +1251,9 @@ func _resolve_expedition(result: int) -> void:
 	# intentar otra vez) o deja paso a la siguiente tras el enfriamiento. Con un
 	# combate ganado ya se cobro botin: si volviera entera, abandonar tras el
 	# primero y relanzar seria repetir botin gratis.
-	if not _expedition.offer.is_empty() and not _expedition.is_campaign():
+	# Las amenazas de costa no son del tablon: las cierra ThreatManager al oir
+	# expedition_ended.
+	if not _expedition.offer.is_empty() and not _expedition.is_campaign() and not _expedition.is_threat():
 		var spent: bool = result == Expedition.RESULT_WON or int(summary.get("nodes_cleared", 0)) > 0
 		_publish_sortie_events(_sorties.finish(_expedition.offer, spent,
 			_now(), _sortie_cooldown(_expedition.kind)))
@@ -1352,8 +1357,11 @@ func sortie_preview(offer: Dictionary, party: Dictionary) -> Dictionary:
 		"coastal": ExpeditionGeneratorScript.map_has_water(map),
 		# Pre-lanzamiento: la incursion se puede resolver sola si la columna dobla
 		# al enemigo. La expedicion y la primera escaramuza, no.
-		"can_auto": String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_RAID \
+		"can_auto": String(offer.get("kind", "")) in [ExpeditionGeneratorScript.KIND_RAID, ExpeditionGeneratorScript.KIND_THREAT] \
 			and Rules.can_auto_resolve(mine, enemy),
+		# Amenazas de costa: de que tipo y en que medio (tierra / agua).
+		"threat_type": String(offer.get("threat_type", "")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_THREAT else "",
+		"threat_domain": String(offer.get("domain", "land")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_THREAT else "",
 		# Tres campanas: de que campana es y si es la del jefe.
 		"campaign_domain": String(offer.get("domain", "")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN else "",
 		"campaign_boss": String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN \
@@ -1383,6 +1391,33 @@ func launch_sortie(offer_id: int, party: Dictionary, auto_resolve: bool = false)
 	_clear_draft()
 	_expedition_followups = []
 	EventBus.sortie_offers_changed.emit()
+	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
+	enter_current_node()
+	if auto_resolve and can_auto_resolve():
+		auto_resolve_current()
+	return true
+
+## Saca la columna contra una amenaza de costa (feat/amenazas-costa). La oferta
+## la da ThreatManager (ThreatBoard.offer_for); aqui solo las comprobaciones de
+## siempre, el dominio puro (can_launch_to) y el tablero. La amenaza no es del
+## tablon: si la columna pierde, ThreatManager la deja en la orilla.
+func launch_threat_offer(offer: Dictionary, party: Dictionary, auto_resolve: bool = false) -> bool:
+	if String(offer.get("kind", "")) != ExpeditionGeneratorScript.KIND_THREAT:
+		return false
+	if not bool(can_launch_to(party, offer).get("ok", false)):
+		return false
+	var committed: Dictionary = {}
+	for unit_id in party:
+		if int(party[unit_id]) > 0:
+			committed[String(unit_id)] = int(party[unit_id])
+	var run: Expedition = ExpeditionScript.create_sortie(_next_expedition_id, offer, committed, _read_morale())
+	if run.map.is_empty():
+		return false
+	_expedition = run
+	_next_expedition_id += 1
+	_morale_snapshot = _expedition.morale_snapshot
+	_clear_draft()
+	_expedition_followups = []
 	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
 	enter_current_node()
 	if auto_resolve and can_auto_resolve():
@@ -1472,6 +1507,10 @@ func sortie_reason() -> String:
 	# Tres campanas: una mision nueva que se puede lanzar ya, con tropa de su medio.
 	if campaign_waiting_unseen() != "":
 		return "SORTIE_WHY_CAMPAIGN"
+	# Amenazas de costa (feat/amenazas-costa): como mucho una sugerencia, y solo
+	# con botin facil sin mirar (lo ultimo: nunca tapa la linea principal).
+	if ThreatManager.has_easy_unseen():
+		return "THREAT_WHY_EASY"
 	return ""
 
 ## Repuestos que pide la mejora mas barata que ya se podria hacer (un productor
@@ -1547,6 +1586,15 @@ func _apply_loot(raw: Dictionary) -> Dictionary:
 		ResourceManager.unlock(ResourceManager.Type.PARTS)
 		ResourceManager.add(ResourceManager.Type.PARTS, parts)
 		applied["parts"] = parts
+	# Amenazas de costa (feat/amenazas-costa): a veces un material de taller.
+	# Como los repuestos, fuera de la bolsa.
+	for material in GameConfig.THREAT_LOOT_MATERIALS:
+		var amount: int = int(raw.get(material, 0))
+		var material_type: int = ResourceManager.name_to_type(String(material))
+		if amount > 0 and material_type >= 0:
+			ResourceManager.unlock(material_type)
+			ResourceManager.add(material_type, amount)
+			applied[String(material)] = amount
 	var colonists: int = int(raw.get("colonists", 0))
 	if colonists > 0:
 		var room: int = maxi(0, PopulationManager.get_max_population() - PopulationManager.get_population())

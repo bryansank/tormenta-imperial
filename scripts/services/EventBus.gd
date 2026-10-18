@@ -234,6 +234,29 @@ signal campaign_completed(domain: String)
 @warning_ignore("unused_signal")
 signal enemy_routed()
 
+# ── Amenazas de costa (feat/amenazas-costa, docs/15 §14) ──
+## Solo botin opcional: aparecen, se van solas sin dano, y atacarlas o explorar
+## el pecio da botin. Las emite solo ThreatManager (salvo threat_clicked).
+## Las marcas cambiaron (aparecio, se fue, atacada, explorada, vista, cargada):
+## las marcas 3D/2D, la tarjeta y MISIONES repintan con esto.
+@warning_ignore("unused_signal")
+signal threats_changed()
+## Una marca nueva en la costa (`threat_type`: raiders / vanguard / wreck).
+@warning_ignore("unused_signal")
+signal threat_appeared(threat_id: int, threat_type: String, water: bool)
+## Echada: la columna gano su combate (el botin ya lo cobro CombatManager).
+@warning_ignore("unused_signal")
+signal threat_cleared(threat_id: int, threat_type: String)
+## Se fue sola, sin hacer nada (se le acabo el tiempo).
+@warning_ignore("unused_signal")
+signal threat_left(threat_id: int, threat_type: String)
+## Los trabajadores volvieron del pecio con esto (ya en la colonia).
+@warning_ignore("unused_signal")
+signal wreck_explored(threat_id: int, rewards: Dictionary, loot: Dictionary)
+## El jugador toco una marca en el mapa (la emiten los dos BuildingPlacer).
+@warning_ignore("unused_signal")
+signal threat_clicked(threat_id: int)
+
 # ── Building Health ──
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
 ## deja de producir hasta que se paga la reparacion; nunca se destruye solo.

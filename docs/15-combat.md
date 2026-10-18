@@ -1925,3 +1925,113 @@ pasa, recortar misiones (`campaign_defs`) o combates por misión.
   de su medio en su era mínima (sobre todo el Leviatán en era 2 y el Zepelín con solo
   cazas).
 - `tools/siege_probe.gd`: el asedio no cambia.
+
+## 14. Amenazas de costa: solo botín opcional (1.2, rama `feat/amenazas-costa`, sin probar)
+
+Decisión de Bryan (2026-10-18): las amenazas del doc 21 §3.2 se quedan en **botín
+opcional**. Nada de "crecen si se ignoran": aparecen en la orilla cada cierto tiempo,
+se ven en el mapa 3D y 2D, duran un rato y **se van solas sin hacer ningún daño**. Si
+las atacas (o exploras el pecio) te llevas su botín; si no, no pasa nada.
+
+### Los tres tipos
+
+| Amenaza | Desde | Dónde | Cómo se gana | Botín (era 1, +25 % por era) |
+|---|---|---|---|---|
+| **Saqueadores** | Cuartel + primera escaramuza ganada | Playa (tierra que toca el agua). Con Astillero, un 40 % llegan en bote al agua | 1 combate de dominio puro: tropa de tierra en la playa, **solo barcos** si están en el agua | 40-70 oro, 20-40 madera, 1-2 repuestos (+1 en el agua); 30 % un material |
+| **Avanzadilla de la Regencia** | Era 2 | Playa | 1 combate de tierra, un poco más duro (como la incursión del tablón) | 60-100 oro, 20-40 acero, 2-3 repuestos; 60 % un material |
+| **Pecio** | Igual que los saqueadores | Playa | **Sin combate**: 2 trabajadores lo exploran 60 s (dejan su puesto, como al minar a mano) | 30-60 madera, 15-35 oro, 0-2 repuestos; 50 % un material; +20 de rango |
+
+"Material raro" = un material de taller de la era (`threat_rare_by_era`: tablones y
+lingotes en la era 1, más vigas en la 2, lingotes/vigas/combustible en la 3), 2-4
+unidades, fuera de la bolsa como los repuestos. Todo el botín sale de la **semilla de
+la marca** (`ExpeditionGenerator.threat_rewards` / `threat_loot`): la tarjeta enseña
+exactamente lo que se cobra.
+
+### Frecuencia
+
+- La primera, 90 s jugados después de que se abran (`threat_first_delay`).
+- Después, una cada 150-270 s (`threat_spawn_interval`), **como mucho 2 a la vez**
+  (`threat_max_active`), separadas 6 casillas entre sí y de la acera del Núcleo.
+- Vida en la orilla: saqueadores 240 s, avanzadilla 300 s, pecio 360 s
+  (`threat_lifetime`). Atacada o explorándose no se va hasta que vuelve la columna o
+  los trabajadores.
+- Peso por era (`threat_weights`): era 1 saqueadores 70 / pecio 30; era 2 45/30/25;
+  era 3 40/35/25.
+- Se cierran con el asedio final convocado, la partida terminada o sin edificio militar.
+- Todos los tiempos son segundos **jugados** (pasan por `get_duration`: en `dev_mode`
+  ×0,2).
+
+### El combate
+
+Un solo nodo (`ExpeditionGenerator.threat_map`), como la incursión: oferta
+`{kind: "threat", threat_id, threat_type, seed, era, domain}`, el mapa se rehace de la
+oferta al cargar. Enemigos del mismo medio (`domain_roster`): infantería/artillería/
+blindado en tierra; lanchas y cañoneras sobre mar abierto (`terrain_kind: "sea"`) en
+el agua. Escala: saqueadores profundidad 0 ×0,9, avanzadilla profundidad 1 ×1,0
+(`threat_fight`). **Dominio puro**: `CombatManager.can_launch_to` trata la oferta de
+amenaza como la de campaña (`campaign_unit_block`). Se puede **resolver solo** con
+fuerza doble (`Expedition.is_raid()` incluye las amenazas). Ganar paga lo de siempre:
+el oro/madera del nodo, y repuestos/material por `_apply_loot` (que ahora entiende
+`planks/ingots/beams/fuel`); la XP del combate ganado la da `RankManager` como
+siempre. Perder o abandonar deja la amenaza en la orilla con lo que le quedaba.
+
+### El modelo y el servicio
+
+- `scripts/combat/ThreatBoard.gd` (puro, `class_name ThreatBoard`): amenazas
+  `{id, type, cell, water, seed, era, born, ends, state, explore_ends, seen}`,
+  `refresh(now, ctx, spots, seed)`, `engage`, `finish_engagement`, `start_explore`,
+  `threat_at(cell)`, `offer_for(threat)` (id = `OFFER_ID_BASE` + id). Devuelve eventos
+  (`appeared`, `left`, `cleared`, `explore_started`, `explored`, `changed`).
+- `ThreatManager` (autoload, el último): Timer de 5 s reales (sin `_process`); solo
+  recorre la rejilla buscando costa libre cuando toca una marca nueva
+  (`free_spots()`: tierra que toca agua, agua que toca tierra). Lanza con
+  `CombatManager.launch_threat_offer()` (marca la amenaza ANTES, por "resolver solo")
+  y la cierra al oír `expedition_ended`. Paga el pecio. `busy_workers()` lo descuenta
+  `PopulationManager` como el minado a mano.
+- Guardado: clave `threats`; `reset()` en los tres sitios de `GameManager`; carga
+  idempotente; sin clave = orilla vacía; un tipo desconocido se ignora. Una marca de
+  tierra sobre la que se construye se va sin botín.
+- Señales: `threats_changed`, `threat_appeared`, `threat_cleared`, `threat_left`,
+  `wreck_explored`, `threat_clicked` (ThreatManager además emite
+  `sortie_offers_changed` para que MISIONES y ¿QUÉ HACER? repinten).
+
+### La vista y la interfaz
+
+- **Marcas:** `scripts/map/ThreatMarks3D.gd` (hijo de `MapGenerator`) y
+  `scripts/view2d/ThreatMarks2D.gd` (hijo de `MapGenerator2D`). Arte propio de juguete:
+  bote con bandera pirata (varado con hoguera y cajas, o a flote), tienda con el
+  estandarte morado de la Regencia y sacos terreros, casco roto con cuadernas y mástil
+  partido. En 3D una malla por tipo con color por vértice (cache estática, material
+  compartido, sin sombras): una llamada de dibujo por marca. En 2D un solo `_draw`.
+  Nada por fotograma.
+- **Tocar la marca** (los dos `BuildingPlacer`, solo si no hay edificio o yacimiento en
+  esa casilla; radio 1): `ThreatCard` (hija de `SkirmishPanel`, capa 12): nombre, una
+  frase, "Se va en m:ss", enemigos, Favorable/Igualada/Difícil con lo mejor de casa,
+  botín, **¡AL ATAQUE!** (abre MISIONES > ATAQUES RÁPIDOS con ella elegida para escoger
+  tropa) o **EXPLORAR** (pecio), con el motivo escrito si no se puede, y "si no haces
+  nada, se va sola sin hacer daño".
+- **MISIONES > ATAQUES RÁPIDOS:** las amenazas de pelea salen junto a las incursiones
+  del tablón (misma ficha, "Amenaza · 1 combate en tierra/mar", dónde y cuánto le
+  queda); los pecios, como filas con EXPLORAR. La pestaña cuenta las dos cosas.
+- **Avisos:** una noticia (`notice`) al aparecer cada marca —como mucho una cada 2,5
+  min—; irse y echarla van al registro (`info` / `success`). Cuando entre `AlertQueue`
+  (1.0) lo agrupa como el resto.
+- **¿QUÉ HACER? / punto rojo:** solo la segunda línea, la última de
+  `CombatManager.sortie_reason()` (`THREAT_WHY_EASY`): una marca **sin mirar** con
+  botín fácil (pecio con trabajadores libres, o pelea Favorable con lo mejor de casa
+  de su medio). Se apaga al abrir su tarjeta o MISIONES. La línea principal no cambia.
+
+### Qué probar en la ronda final
+
+- `tests/combat/test_threat_board.gd`, `tests/combat/test_threat_fights.gd`,
+  `tests/combat/test_threat_manager.gd`, `tests/view2d/test_threat_marks.gd` (nuevos,
+  sin correr), y `test_sortie_board`, `test_short_sorties`, `test_three_campaigns`,
+  `tests/ui/test_campaigns_ui.gd`, `test_objectives`, `test_view_mode`.
+- Jugar en 3D y 2D: que la marca se vea en la playa y en el agua (altura del bote,
+  que no quede bajo la arena de `IslandGenerator`), que el toque la abra y no robe el
+  toque a un edificio vecino, la tarjeta en tablet (no tapar CONSTRUIR), el pecio con
+  los trabajadores fuera (el HUD de trabajadores baja y vuelve).
+- `tools/balance_probe.gd` (si se le enseña): saqueadores ganables con 2-3 de tierra
+  en era 1, avanzadilla con 3-4 en era 2, bote con 2 lanchas.
+- `tools/line_probe.gd`: la línea no cambia (la sonda no ataca amenazas); vigilar que
+  el botín de los pecios no adelante la era 1 (≈ 40-90 recursos cada 3-4 min).

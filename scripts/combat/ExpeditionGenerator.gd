@@ -480,6 +480,9 @@ static func sortie_map(offer: Dictionary) -> Array:
 		KIND_CAMPAIGN:
 			# Las tres campanas (feat/tres-campanas): dominio puro, nunca costa mixta.
 			return campaign_mission_map(offer)
+		KIND_THREAT:
+			# Amenazas de costa (feat/amenazas-costa): un combate de dominio puro.
+			return threat_map(offer)
 	if not map.is_empty() and offer_is_coastal(offer):
 		make_coastal(map, seed_value, era)
 	return map
@@ -589,6 +592,8 @@ static func map_has_water(map: Array) -> bool:
 
 ## La clave de Tr con el nombre de la oferta.
 static func offer_name_key(offer: Dictionary) -> String:
+	if String(offer.get("kind", "")) == KIND_THREAT:
+		return threat_name_key(String(offer.get("threat_type", THREAT_RAIDERS)), String(offer.get("domain", "land")))
 	if String(offer.get("kind", "")) == KIND_CAMPAIGN:
 		return campaign_mission_name_key(String(offer.get("domain", "land")), int(offer.get("mission", 0)))
 	if String(offer.get("kind", "")) == KIND_RAID:
@@ -972,6 +977,98 @@ static func map_campaign_domain(map: Array) -> String:
 		if domain != "":
 			return domain
 	return ""
+
+# ── Amenazas de costa (feat/amenazas-costa, docs/15 §14) ─────────────
+#
+# Botin opcional (decision de Bryan, 2026-10-18): marcas en la orilla que se van
+# solas sin hacer dano. Una amenaza atacable es una OFERTA como las del tablon,
+#   {id, kind: "threat", threat_id, threat_type, seed, era, domain}
+# y con ella se rehace su unico combate y su botin (se ve antes de salir y se
+# reconstruye igual al cargar). DOMINIO PURO: en tierra, tropa de tierra contra
+# tropa de tierra; en el agua, barcos contra barcos sobre mar abierto. El pecio
+# no se pelea: se explora con trabajadores, y su botin sale de las mismas
+# funciones (threat_rewards / threat_loot).
+
+const KIND_THREAT := "threat"
+const THREAT_RAIDERS := "raiders"
+const THREAT_VANGUARD := "vanguard"
+const THREAT_WRECK := "wreck"
+const THREAT_TYPES := [THREAT_RAIDERS, THREAT_VANGUARD, THREAT_WRECK]
+## Flujos propios de la semilla de la amenaza (como LOOT_SEED_STRIDE): el botin no
+## mueve al enemigo ni al reves.
+const THREAT_REWARD_STRIDE := 7368787
+const THREAT_LOOT_STRIDE := 9369319
+const THREAT_TERRAIN_STRIDE := 104717
+
+## Clave de Tr del nombre: THREAT_NAME_RAIDERS, _RAIDERS_SEA, _VANGUARD, _WRECK.
+static func threat_name_key(threat_type: String, domain: String = "land") -> String:
+	if threat_type == THREAT_RAIDERS and domain == "sea":
+		return "THREAT_NAME_RAIDERS_SEA"
+	return "THREAT_NAME_" + threat_type.to_upper()
+
+## ¿Se pelea esta amenaza? (El pecio se explora.)
+static func threat_is_fight(threat_type: String) -> bool:
+	return threat_type == THREAT_RAIDERS or threat_type == THREAT_VANGUARD
+
+## El unico combate de una amenaza. Vacio para el pecio (no se pelea).
+static func threat_map(offer: Dictionary) -> Array:
+	var threat_type: String = String(offer.get("threat_type", THREAT_RAIDERS))
+	if not threat_is_fight(threat_type):
+		return []
+	var seed_value: int = int(offer.get("seed", 1))
+	var era: int = maxi(1, int(offer.get("era", 1)))
+	var domain: String = String(offer.get("domain", "land"))
+	var fight: Dictionary = GameConfig.threat_fight.get(threat_type, {})
+	var rng := make_rng(seed_value)
+	var depth: int = maxi(0, int(fight.get("depth", 0)))
+	var risk: int = clampi(_roll_range(rng, fight.get("risk", Vector2i(0, 1))), 0, 2)
+	var nodes: Array = []
+	_add_node(nodes, depth, risk, false)
+	var node: Dictionary = nodes[0]
+	node["enemy_roster"] = domain_roster(rng, depth, era, risk, domain)
+	node["enemy_scale"] = enemy_scale(depth, era, risk) * float(fight.get("mult", 1.0))
+	if domain == "sea":
+		node["terrain_kind"] = TERRAIN_KIND_SEA
+		node["terrain_seed"] = seed_value + THREAT_TERRAIN_STRIDE
+	node["rewards"] = threat_rewards(offer)
+	node["loot"] = threat_loot(offer)
+	node["raid"] = true
+	node["threat"] = threat_type
+	return nodes
+
+## Oro, madera (y acero en la avanzadilla) de una amenaza, fijos por su semilla
+## y un poco mas por era (GameConfig.threat_rewards, threat_era_reward_step).
+static func threat_rewards(offer: Dictionary) -> Dictionary:
+	var threat_type: String = String(offer.get("threat_type", THREAT_RAIDERS))
+	var era: int = maxi(1, int(offer.get("era", 1)))
+	var rng := make_rng(int(offer.get("seed", 1)) + THREAT_REWARD_STRIDE)
+	var table: Dictionary = GameConfig.threat_rewards.get(threat_type, {})
+	var mult: float = 1.0 + GameConfig.threat_era_reward_step * float(era - 1)
+	var out: Dictionary = {}
+	for res_name in table:
+		var amount: int = roundi(float(_roll_range(rng, table[res_name])) * mult)
+		if amount > 0:
+			out[String(res_name)] = amount
+	return out
+
+## Lo que solo da una amenaza: repuestos y, a veces, un material de taller
+## ("planks", "ingots", "beams", "fuel") segun la era. Fijo por la semilla: la
+## tarjeta lo ensena antes de atacar o explorar.
+static func threat_loot(offer: Dictionary) -> Dictionary:
+	var threat_type: String = String(offer.get("threat_type", THREAT_RAIDERS))
+	var era: int = clampi(int(offer.get("era", 1)), 1, 3)
+	var rng := make_rng(int(offer.get("seed", 1)) + THREAT_LOOT_STRIDE)
+	var loot: Dictionary = {}
+	loot["parts"] = _roll_range(rng, GameConfig.threat_parts.get(threat_type, Vector2i.ZERO))
+	if String(offer.get("domain", "land")) == "sea":
+		loot["parts"] = int(loot["parts"]) + maxi(0, GameConfig.threat_sea_extra_parts)
+	var rare_roll: float = rng.randf()
+	if rare_roll < float(GameConfig.threat_rare_chance.get(threat_type, 0.0)):
+		var pool: Array = GameConfig.threat_rare_by_era.get(era, [])
+		if not pool.is_empty():
+			var material: String = String(pool[rng.randi_range(0, pool.size() - 1)])
+			loot[material] = int(loot.get(material, 0)) + _roll_range(rng, GameConfig.threat_rare_amount)
+	return _drop_zeros(loot)
 
 static func _roll_range(rng: RandomNumberGenerator, range_v: Vector2i) -> int:
 	return rng.randi_range(mini(range_v.x, range_v.y), maxi(range_v.x, range_v.y))

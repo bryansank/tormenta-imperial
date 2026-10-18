@@ -53,6 +53,7 @@ const ODDS_KEYS := {"favorable": "ODDS_FAVORABLE", "even": "ODDS_EVEN", "hard": 
 const ICON_PX := 24
 const BuildingRules := preload("res://scripts/buildings/PlacementRules.gd")
 const Objectives := preload("res://scripts/services/Objectives.gd")
+const ThreatCardScript := preload("res://scripts/ui/ThreatCard.gd")
 
 func _ready() -> void:
 	layer = 11
@@ -85,6 +86,9 @@ func _ready() -> void:
 	# Por si la partida se cargo antes de que este panel escuchara.
 	_on_expedition_changed.call_deferred()
 	_update_button_visibility()
+	# La tarjeta de las amenazas de costa (feat/amenazas-costa): sale al tocar
+	# una marca del mapa; su ¡AL ATAQUE! abre este panel (open_threat).
+	add_child(ThreatCardScript.new())
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -374,7 +378,7 @@ func _party() -> Dictionary:
 func _prune_selection() -> void:
 	var available: Dictionary = CombatManager.get_deployable_units()
 	var water: bool = _offer_has_water()
-	var domain: String = current_campaign()
+	var domain: String = pure_domain()
 	for unit_id in _selection.keys():
 		var owned: int = int(available.get(unit_id, 0))
 		# Tres campanas: lo que no es de su medio (o no le puede pegar) se queda.
@@ -406,7 +410,7 @@ func _rebuild_units(available: Dictionary) -> void:
 	for child in _units_vbox.get_children():
 		child.queue_free()
 	var water: bool = _offer_has_water()
-	var camp: String = current_campaign()
+	var camp: String = pure_domain()
 	for domain in ["land", "sea", "air"]:
 		# Tres campanas: dominio puro. Solo las filas del medio de la campana.
 		if camp != "" and domain != camp:
@@ -513,7 +517,7 @@ func _make_unit_row(unit_id: String, owned: int, blocked: bool = false, block_te
 
 func _adjust(unit_id: String, delta: int) -> void:
 	var owned: int = int(CombatManager.get_deployable_units().get(unit_id, 0))
-	var camp: String = current_campaign()
+	var camp: String = pure_domain()
 	if delta > 0 and camp != "" and CombatManager.campaign_unit_block(unit_id, camp) != "":
 		return
 	if delta > 0 and camp == "" and GameConfig.get_unit_domain(unit_id) == CombatUnit.DOMAIN_SEA and not _offer_has_water():
@@ -614,6 +618,15 @@ func _on_launch_pressed() -> void:
 			EventBus.notification_posted.emit(why, "warning", UITheme.WARNING)
 			_refresh()
 		return
+	# Amenazas de costa (feat/amenazas-costa): las lanza ThreatManager.
+	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_THREAT:
+		if ThreatManager.launch(int(offer.get("threat_id", 0)), party):
+			_close()
+		else:
+			var block: String = ThreatManager.attack_block_reason(int(offer.get("threat_id", 0)))
+			EventBus.notification_posted.emit(Tr.t(block if block != "" else "MSG_SORTIE_GONE"), "warning", UITheme.WARNING)
+			_refresh()
+		return
 	if offer.is_empty() or not CombatManager.launch_sortie(int(offer.get("id", 0)), party):
 		EventBus.notification_posted.emit(Tr.t("MSG_SORTIE_GONE"), "warning", UITheme.WARNING)
 		_refresh()
@@ -629,6 +642,12 @@ func _on_auto_pressed() -> void:
 		return
 	if not bool(CombatManager.sortie_preview(offer, party).get("can_auto", false)):
 		_refresh()
+		return
+	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_THREAT:
+		if ThreatManager.launch(int(offer.get("threat_id", 0)), party, true):
+			_close()
+		else:
+			_refresh()
 		return
 	if CombatManager.launch_sortie(int(offer.get("id", 0)), party, true):
 		_close()
@@ -698,10 +717,22 @@ func _open() -> void:
 	UIManager.open_panel(self)
 	# Mirar el tablon apaga el punto rojo de "salida nueva".
 	CombatManager.mark_sorties_seen()
+	# Y las amenazas de costa (su sugerencia de botin facil).
+	ThreatManager.mark_all_seen()
 
 ## Lo abre el boton ESCARAMUZAS del HUD (y ☰ MENU). Si ya esta abierto, no lo cierra.
 func open() -> void:
 	if not _is_open:
+		_open()
+
+## ¡AL ATAQUE! de la tarjeta de una amenaza de costa: ATAQUES RAPIDOS con ella
+## elegida, para escoger la tropa.
+func open_threat(threat_id: int) -> void:
+	_tab = TAB_RAIDS
+	_selected_offer = ThreatBoard.OFFER_ID_BASE + threat_id
+	if _is_open:
+		_refresh()
+	else:
 		_open()
 
 func is_open() -> bool:
@@ -725,7 +756,7 @@ func current_offer() -> Dictionary:
 	var domain: String = current_campaign()
 	if domain != "":
 		return CombatManager.campaign_offer(domain)
-	var offers: Array = CombatManager.get_sortie_offers()
+	var offers: Array = raid_offers()
 	if offers.is_empty():
 		return {}
 	for offer in offers:
@@ -737,6 +768,28 @@ func current_offer() -> Dictionary:
 func select_offer(offer_id: int) -> void:
 	_selected_offer = offer_id
 	_refresh()
+
+## Lo que hay en ATAQUES RAPIDOS para pelear: las incursiones del tablon y las
+## amenazas de costa libres (feat/amenazas-costa; su id va con
+## ThreatBoard.OFFER_ID_BASE para no chocar).
+func raid_offers() -> Array:
+	var offers: Array = CombatManager.get_sortie_offers()
+	offers.append_array(ThreatManager.get_attack_offers())
+	return offers
+
+## El medio de la tropa que puede salir a la salida elegida, o "" si vale
+## cualquiera: la campana de la pestana o la amenaza de costa elegida (tierra
+## en la orilla, mar si esta en el agua). Dominio puro en los dos casos.
+func pure_domain() -> String:
+	var camp: String = current_campaign()
+	if camp != "":
+		return camp
+	if CombatManager.is_first_sortie_due():
+		return ""
+	var offer: Dictionary = current_offer()
+	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_THREAT:
+		return String(offer.get("domain", "land"))
+	return ""
 
 func _rebuild_sorties(offer: Dictionary, preview: Dictionary) -> void:
 	for child in _sortie_box.get_children():
@@ -757,7 +810,10 @@ func _rebuild_sorties(offer: Dictionary, preview: Dictionary) -> void:
 				_sortie_box.add_child(_make_detail(offer, preview))
 			return
 	if not CombatManager.is_first_sortie_due():
-		var offers: Array = CombatManager.get_sortie_offers()
+		var offers: Array = raid_offers()
+		# Los pecios de la costa (feat/amenazas-costa) no se pelean: una fila con
+		# EXPLORAR, aparte de la lista de salidas.
+		_add_wreck_rows()
 		if offers.is_empty():
 			var none := UITheme.make_label(Tr.t("LBL_SORTIE_NONE"), "small", UITheme.TEXT_DIM)
 			none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -787,7 +843,40 @@ func _make_offer_button(offer: Dictionary, selected: bool) -> Button:
 	btn.pressed.connect(func(): select_offer(offer_id))
 	return btn
 
+## Una fila por pecio a la vista: nombre, cuanto le queda y EXPLORAR (con su
+## motivo si no se puede). Explorar no necesita tropa.
+func _add_wreck_rows() -> void:
+	for wreck in ThreatManager.get_wrecks():
+		var id: int = int(wreck.get("id", 0))
+		var row := HBoxContainer.new()
+		row.name = "WreckRow_%d" % id
+		row.add_theme_constant_override("separation", 8)
+		var left: int = ceili(ThreatManager.seconds_left(id))
+		var exploring: bool = String(wreck.get("state", "")) == ThreatBoard.STATE_EXPLORING
+		var key: String = "THREAT_EXPLORING_LEFT" if exploring else "THREAT_TIME_LEFT"
+		var info := UITheme.make_label("%s · %s" % [Tr.t("THREAT_NAME_WRECK"),
+			Tr.t(key).replace("{t}", "%d:%02d" % [left / 60, left % 60])], "small", UITheme.TEXT)
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(info)
+		var btn := Button.new()
+		btn.name = "WreckExplore"
+		btn.text = Tr.t("BTN_THREAT_EXPLORE")
+		btn.custom_minimum_size = Vector2(UITheme.touch_px(120.0), UITheme.MIN_BTN_H)
+		UITheme.style_button(btn, UITheme.POSITIVE.darkened(0.25), UITheme.FONT_SMALL)
+		var why: String = ThreatManager.explore_block_reason(id)
+		btn.disabled = why != ""
+		btn.tooltip_text = Tr.t(why) if why != "" else Tr.t("THREAT_EXPLORE_NEED") % [GameConfig.threat_wreck_workers,
+			ceili(GameConfig.get_duration(GameConfig.threat_wreck_explore_seconds))]
+		btn.pressed.connect(func():
+			ThreatManager.explore(id)
+			_refresh())
+		row.add_child(btn)
+		_sortie_box.add_child(row)
+
 func _kind_text(offer: Dictionary, fights: int) -> String:
+	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_THREAT:
+		return Tr.t("THREAT_KIND_SEA") if String(offer.get("domain", "land")) == "sea" else Tr.t("THREAT_KIND_LAND")
 	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_CAMPAIGN:
 		return Tr.t("CAMP_KIND_FIGHTS") % fights
 	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_EXPEDITION:
@@ -818,7 +907,19 @@ func _make_detail(offer: Dictionary, preview: Dictionary) -> PanelContainer:
 	# Aire y mar: una salida de costa se dice antes de salir (hay agua, vienen
 	# barcos y puedes llevar los tuyos).
 	var camp_domain: String = String(preview.get("campaign_domain", ""))
-	if camp_domain != "":
+	# Amenaza de costa (feat/amenazas-costa): donde esta, con quien se va y
+	# cuanto le queda antes de irse sola.
+	var threat_domain: String = String(preview.get("threat_domain", ""))
+	if threat_domain != "":
+		var where_t := UITheme.make_label(Tr.t("THREAT_WHERE_" + threat_domain.to_upper()), "small", UITheme.INFO)
+		where_t.name = "ThreatWhere"
+		where_t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(where_t)
+		var left: int = ceili(ThreatManager.seconds_left(int(offer.get("threat_id", 0))))
+		var time_t := UITheme.make_label(Tr.t("THREAT_TIME_LEFT").replace("{t}", "%d:%02d" % [left / 60, left % 60]), "small", UITheme.WARNING)
+		time_t.name = "ThreatTimeLeft"
+		box.add_child(time_t)
+	elif camp_domain != "":
 		var where := UITheme.make_label(Tr.t("CAMP_WHERE_" + camp_domain.to_upper()), "small", UITheme.INFO)
 		where.name = "CampaignWhere"
 		where.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -897,6 +998,10 @@ static func loot_lines(loot: Dictionary) -> Array:
 	var lines: Array = []
 	if int(loot.get("parts", 0)) > 0:
 		lines.append(Tr.t("LOOT_PARTS") % int(loot["parts"]))
+	# Amenazas de costa (feat/amenazas-costa): a veces un material de taller.
+	for material in GameConfig.THREAT_LOOT_MATERIALS:
+		if int(loot.get(material, 0)) > 0:
+			lines.append(Tr.t("LOOT_MATERIAL") % [int(loot[material]), Tr.res_name(String(material))])
 	if int(loot.get("colonists", 0)) > 0:
 		lines.append(Tr.t("LOOT_COLONISTS") % int(loot["colonists"]))
 	if int(loot.get("tithe_pct", 0)) > 0:
@@ -942,7 +1047,7 @@ func _odds_color(odds: String) -> Color:
 
 ## RESOLVER SOLO solo en incursiones; encendido si la columna dobla al enemigo.
 func _refresh_auto_button(offer: Dictionary, preview: Dictionary, launch_ok: bool) -> void:
-	var is_raid: bool = String(offer.get("kind", "")) == ExpeditionGenerator.KIND_RAID
+	var is_raid: bool = String(offer.get("kind", "")) in [ExpeditionGenerator.KIND_RAID, ExpeditionGenerator.KIND_THREAT]
 	_auto_btn.visible = is_raid
 	if not is_raid:
 		return
@@ -972,7 +1077,7 @@ func _default_tab() -> String:
 		var lock: String = CombatManager.campaign_lock_reason(String(domain))
 		if lock in ["", "CAMP_LOCK_REST", "CAMP_LOCK_ERA"]:
 			return String(domain)
-	if not CombatManager.get_sortie_offers().is_empty():
+	if not CombatManager.get_sortie_offers().is_empty() or not ThreatManager.get_threats().is_empty():
 		return TAB_RAIDS
 	return "land"
 
@@ -1016,7 +1121,8 @@ func _add_tabs() -> void:
 		else:
 			sub = "%d/%d" % [CombatManager.campaign_won(d), CombatManager.campaign_total(d)]
 		row.add_child(_make_tab_button("CampaignTab_" + d, "%s\n%s" % [Tr.t("LBL_DOMAIN_" + d.to_upper()), sub], d, current == d))
-	var raids: int = CombatManager.get_sortie_offers().size()
+	# Con las amenazas de costa (las de pelea y los pecios).
+	var raids: int = CombatManager.get_sortie_offers().size() + ThreatManager.get_threats().size()
 	row.add_child(_make_tab_button("CampaignTab_raids", "%s\n%d" % [Tr.t("CAMP_TAB_RAIDS"), raids], TAB_RAIDS, current == TAB_RAIDS))
 
 func _make_tab_button(node_name: String, text: String, tab: String, selected: bool) -> Button:
