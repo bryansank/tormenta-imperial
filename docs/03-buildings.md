@@ -198,10 +198,25 @@ ver [02-economy.md](02-economy.md) "Yacimientos de mar".
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Prereqs |
 |----|------|------|--------------|---------|------------|---------|
-| `barracks` | Cuartel | 2x2 | 150/60/0/80 + 20 planks | 3 | 15s | foundry + sawmill |
-| `tower` | Torre | 2x2 | 150/60/20/30 + 4 beams | 1 | 8s | barracks |
+| `barracks` | Cuartel | 2x2 | 120/0/0/80 + 10 planks | 1 | 15s | sawmill |
+| `tower` | Torre | 2x2 | 150/60/20/30 + 4 beams | 1 | 8s | barracks + foundry |
 | `shipyard` | Astillero | 2x2 | 220/80/0/120 + 10 planks, 4 beams | 3 | 16s | foundry; **must touch the coast** |
 | `aerodrome` | Aerodromo | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | 20s | refinery |
+
+**Cuartel temprano (2026-10-17, rama `feat/cuartel-temprano`, decisión de Bryan).**
+The Barracks is an **era 1** building now: 120 gold + 80 wood + 10 planks, no steel,
+one worker, and it only needs the Sawmill (its planks come from there). Before it
+cost 150/60/0/80 + 20 planks, three workers, and needed the Foundry, so it arrived
+around minute 10-14. Why early: after every Storm the Tax Collectors come down and
+only troops at home fight them; the era-1 trial storm now brings a toy Tax
+(`storm_trial_tithe_*`, docs/22 §12) so the Barracks matters by minute 5; and
+missions (loot, spare parts, blueprints) only exist with soldiers. In era 1 it trains
+**Infantry** only: Artillery waits for steel (era 2) and the Tank for oil (era 3)
+(`ArmyManager.is_unlocked`, by `unit_types[*].era`), and the ARMY panel says so on the
+greyed rows ("Necesita acero de la Fundición (era 2)", `LBL_ARMY_LOCKED_ERA_*`).
+One worker (not three) so that sawmill (2) + Barracks (1) + Farm (2) fit in the 5 people
+of the Núcleo without waiting for a House. Limit per era unchanged (3/4/5). The Tower
+now asks for the Foundry explicitly: before, the Barracks implied it.
 
 **Air and sea (2026-10-17, `feat/aire-mar-reglas`).** The Shipyard trains the
 ships (torpedo boat, gunboat, dreadnought) and the Aerodrome the planes (fighter,
@@ -393,7 +408,7 @@ under construction the label above the building gives the percentage and the tim
 | fishing_dock | 3 | 4 | 6 | Muelle de pesca (1.1): lo limitan también los bancos de peces (3-5) |
 | barracks | 3 | 4 | 5 | Sube menos: cada uno es un hueco de entrenamiento y +8 de capacidad (con 5, 43 unidades); el freno es el mantenimiento en oro |
 | warehouse | 5 | 5 | 5 | **No sube.** Bolsa de la era 3 sin técnicas: 1000 + 5×500 = 3500 = CG nivel 3 (1500 + 800 + 500 + 700; los materiales van aparte). Con 7 almacenes serían 4500 (5500 con las técnicas) y el CG 3 dejaría de pedir la bolsa llena. La bolsa ya crece sola por era (600/800/1000) y por nivel de almacén (+250 por nivel) |
-| tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y solo 2 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
+| tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y hasta 4 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
 | market, laboratory, headquarters | 1 | 1 | 1 | Únicos |
 | garden, fountain, statue, road y las diez decoraciones baratas (`lamp_post` … `palm_trees`) | — | — | — | Sin tope |
 
@@ -435,9 +450,9 @@ Refinery era 3, so neither goes up without the base of the previous era standing
 | foundry | sawmill + gold_mine + house + warehouse |
 | market | gold_mine |
 | laboratory | house |
-| refinery | foundry + barracks |
-| barracks | foundry + sawmill |
-| tower | barracks |
+| refinery | foundry + barracks + laboratory |
+| barracks | sawmill (2026-10-17: before, foundry + sawmill) |
+| tower | barracks + foundry |
 | headquarters | barracks + refinery |
 
 ## Upgrade System
@@ -452,8 +467,16 @@ Refinery era 3, so neither goes up without the base of the previous era standing
   producers, houses, the warehouse, decorations with morale and the HQ (its level 3
   summons the Final Audit). The Barracks, Tower, Road and Núcleo have no upgrade button.
 - The panel lists what the next level gives, with real numbers
-  (`PlacementRules.upgrade_effect_lines()`); in 3D the building grows and carries a
-  II / III plate
+  (`PlacementRules.upgrade_effect_lines()`). The level shows on the model itself
+  (2026-10-17, `LevelTrim` + `ProductionManager.apply_level_visual`): the same model
+  grows (x1.04 / x1.08 in plan, x1.12 / x1.24 in height), is lifted onto a stone plinth
+  with a brass band (two steps at III) and gains brick chimneys with brass bands at its
+  back corners (one at II; two at III, the big one with a lit lamp). Decorations get
+  brass lamps at the corners instead (two at II, four at III). One cached mesh per
+  level and size, no shadow, no extra nodes or `_process`. There is no floating
+  "II / III" plate any more, nor the old brass ring with a red pennant (it floated over
+  tall models like a box with a flag). 2D draws the same (`BuildingArt2D._level_plinth`
+  / `_level_trim`) inside the baked drawing, plus brass chevrons with no box
 - HQ has special override costs, materials included (see economy doc)
 
 ## Manual Processes

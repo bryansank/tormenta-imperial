@@ -485,7 +485,7 @@ func _instance_texture(size: Vector2, inset: float, level: int, steps: int) -> b
 		var plan := _lot_plan
 		var id := data.id
 		var inner := (size - Vector2.ONE * inset * 2.0) * Art.level_scale(level)
-		var opts := {"level": level, "shadow": true, "inset": inset, "rot": steps, "growth": -1.0}
+		var opts := {"level": level, "decor": data.is_decoration, "shadow": true, "inset": inset, "rot": steps, "growth": -1.0}
 		var painter := func(ci: CanvasItem) -> void:
 			Art.draw_lot_ground(ci, plan, size)
 			Art.draw_lot_shadow(ci, Rect2(-inner * 0.5, inner).grow(-Art.INSET))
@@ -506,7 +506,7 @@ func _draw_body(size: Vector2, inset: float, mask: int, level: int, steps: int) 
 	var rot := 0 if id == "road" else steps
 	var body := size - Vector2.ONE * inset * 2.0
 	var key := "%s|%d|%d|%d|%d|%d" % [id, rot, level, mask, int(body.x * 4.0), 0 if ghost else 1]
-	var bake := {"road_mask": mask, "level": level, "shadow": not ghost, "rot": rot}
+	var bake := {"road_mask": mask, "level": level, "decor": data.is_decoration, "shadow": not ghost, "rot": rot}
 	if is_farm:
 		bake["growth"] = -1.0
 	var tex := ArtCache.fetch(key, body, func(ci: CanvasItem) -> void: Art.draw_building(ci, id, body, bake), self)

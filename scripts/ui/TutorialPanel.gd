@@ -96,10 +96,8 @@ func _ready() -> void:
 	_prologue.name = "PrologueScreen"
 	add_child(_prologue)
 	_prologue.closed.connect(_on_prologue_closed)
-	_quick_guide = QuickGuideScript.new()
-	_quick_guide.name = "QuickGuide"
-	add_child(_quick_guide)
-	_quick_guide.closed.connect(func(): TutorialManager.mark_help_seen(QUICK_GUIDE_ID))
+	# La guia rapida se crea al pedirla (AYUDA > COMO FUNCIONA), no al arrancar:
+	# ya no sale sola y casi nadie la abre (feat/topes-mejoras-ayuda).
 	_build_coach()
 	EventBus.tutorial_intro_requested.connect(_open_intro)
 	EventBus.tutorial_step_changed.connect(_on_step_changed)
@@ -123,12 +121,18 @@ func _on_prologue_closed() -> void:
 	# bloques siguen en AYUDA (`guide_qg_*`). Un `quick_guide` visto en una
 	# partida vieja se carga igual y no cambia nada.
 
-## La guia rapida (Como funciona). Ya no se abre sola; queda para quien la pida.
+## La guia rapida (Como funciona). Ya no se abre sola; la abre el boton COMO
+## FUNCIONA del indice de AYUDA (HelpIndexPanel). Se crea la primera vez.
 func quick_guide() -> CanvasLayer:
+	if _quick_guide == null:
+		_quick_guide = QuickGuideScript.new()
+		_quick_guide.name = "QuickGuide"
+		add_child(_quick_guide)
+		_quick_guide.closed.connect(func(): TutorialManager.mark_help_seen(QUICK_GUIDE_ID))
 	return _quick_guide
 
 func open_quick_guide() -> void:
-	_quick_guide.open()
+	quick_guide().open()
 
 func prologue() -> CanvasLayer:
 	return _prologue

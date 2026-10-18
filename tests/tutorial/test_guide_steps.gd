@@ -10,6 +10,7 @@ extends GdUnitTestSuite
 const SAWMILL := preload("res://data/buildings/sawmill.tres")
 const HOUSE := preload("res://data/buildings/house.tres")
 const FARM := preload("res://data/buildings/farm.tres")
+const BARRACKS := preload("res://data/buildings/barracks.tres")
 const GOLD_MINE := preload("res://data/buildings/gold_mine.tres")
 const MARKET := preload("res://data/buildings/market.tres")
 const WAREHOUSE := preload("res://data/buildings/warehouse.tres")
@@ -18,12 +19,15 @@ const ROAD := preload("res://data/buildings/road.tres")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 
 var _saved: Dictionary = {}
+const Plenty := preload("res://tests/tutorial/plenty.gd")
+var _plenty := Plenty.new()
 var _steps: Array = []
 var _finished: Array = []
 var _nodes: Array = []
 
 func before_test() -> void:
 	_saved = TutorialManager.get_save_data()
+	_plenty.park()
 	TutorialManager.reset()
 	GridManager.clear_all()
 	_steps.clear()
@@ -40,6 +44,7 @@ func after_test() -> void:
 		if is_instance_valid(n):
 			n.free()
 	TutorialManager.load_save_data(_saved)
+	_plenty.restore()
 
 func _on_step(step: String) -> void:
 	_steps.append(step)
@@ -61,9 +66,10 @@ func _place(data: BuildingData, cell: Vector2i, built: bool = true) -> Node:
 ## Los hechos con las dos tarjetas de leer ya leidas (la meta y el Nucleo) y los
 ## tres manejos ya hechos (girar, mover, derribar; 2026-10-16), mas `extra`. Los
 ## manejos tienen su propia prueba.
+## El Cuartel (2026-10-17) tambien va hecho salvo en las pruebas que lo miran.
 func _f(extra: Dictionary = {}) -> Dictionary:
 	var f := {"goal_seen": true, "core_seen": true, "rotated": true, "moved": true,
-		"road_placed": true, "demolished": true}
+		"road_placed": true, "demolished": true, "barrackss": 1, "barrackss_built": 1}
 	f.merge(extra, true)
 	return f
 
@@ -170,6 +176,60 @@ func test_a_built_sawmill_asks_to_collect_then_for_a_farm() -> void:
 	f["menu_open"] = false
 	assert_str(TutorialManager.derive_step(f)).is_equal("open_house")
 
+## Cuartel temprano (2026-10-17): despues de recoger la madera, el Cuartel
+## (abrir, elegir, colocar y esperar la obra), y luego la Granja.
+func test_after_collecting_comes_the_barracks_then_the_farm() -> void:
+	var f := _f({"sawmills": 1, "sawmills_built": 1, "collected": true, "farms": 0})
+	f.erase("barrackss")
+	f.erase("barrackss_built")
+	assert_str(TutorialManager.derive_step(f)).is_equal("open_barracks")
+	f["menu_open"] = true
+	assert_str(TutorialManager.derive_step(f)).is_equal("pick_barracks")
+	f["placing"] = "barracks"
+	assert_str(TutorialManager.derive_step(f)).is_equal("place_barracks")
+	f["placing"] = ""
+	f["menu_open"] = false
+	f["barrackss"] = 1
+	assert_str(TutorialManager.derive_step(f)).is_equal("wait_barracks")
+	f["barrackss_built"] = 1
+	assert_str(TutorialManager.derive_step(f)).is_equal("open_farm")
+	# Sin poder pagarlo (los tablones): consigue lo que falta.
+	f["barrackss"] = 0
+	f["barrackss_built"] = 0
+	f["short"] = ["barracks"]
+	assert_str(TutorialManager.derive_step(f)).is_equal("need_barracks")
+	# Imposible en esta isla (sin aserradero, tope...): se pasa de largo.
+	f["short"] = []
+	f["skip"] = ["barracks"]
+	assert_str(TutorialManager.derive_step(f)).is_equal("open_farm")
+
+func test_the_barracks_step_numbers_and_texts() -> void:
+	assert_int(TutorialManager.GUIDE_TOTAL).is_equal(13)
+	for step in ["open_barracks", "pick_barracks", "place_barracks", "wait_barracks", "need_barracks"]:
+		assert_int(TutorialManager.step_number(step)).is_equal(5)
+	assert_int(TutorialManager.step_number("open_farm")).is_equal(6)
+	assert_int(TutorialManager.step_number("done")).is_equal(13)
+	assert_str(TutorialManager.step_target("pick_barracks")).is_equal("card:barracks")
+	assert_str(TutorialManager.step_target("wait_barracks")).is_equal("building:barracks")
+	var saved := Tr.get_locale()
+	for loc in ["es", "en"]:
+		Tr.set_locale(loc)
+		for key in ["GUIDE_OPEN_BARRACKS", "GUIDE_PICK_BARRACKS", "GUIDE_PLACE_BARRACKS"]:
+			assert_str(Tr.t(key)).is_not_equal(key)
+			assert_str(Tr.t(key + "_TOUCH")).is_not_equal(Tr.t(key))
+		assert_str(Tr.t("GUIDE_WAIT_BARRACKS")).is_not_equal("GUIDE_WAIT_BARRACKS")
+	Tr.set_locale(saved)
+	# Para que sirve, en una linea: los Cobradores; y donde se entrena, de verdad.
+	assert_str(Tr._STRINGS["es"]["GUIDE_OPEN_BARRACKS"]).contains("Cobradores")
+	assert_str(Tr._STRINGS["es"]["GUIDE_WAIT_BARRACKS"]).contains(Tr._STRINGS["es"]["BTN_ARMY"])
+	assert_str(Tr._STRINGS["es"]["GUIDE_WAIT_BARRACKS"]).contains(Tr._STRINGS["es"]["LBL_MENU_GROUP_COLONY"])
+	# Sus cifras: un trabajador y sitio para soldados.
+	var facts: Array = TutorialManager.building_facts("barracks")
+	var texts := ""
+	for fact in facts:
+		texts += String(fact["text"]) + " "
+	assert_str(texts).contains(str(GameConfig.army_capacity_per_barracks))
+
 func test_collecting_is_remembered_with_the_game() -> void:
 	_start()
 	EventBus.production_collected.emit(auto_free(Node.new()), {"wood": 1})
@@ -243,6 +303,13 @@ func test_the_guide_walks_the_whole_opening() -> void:
 	# Recoger lo que hizo el aserradero (2026-10-04).
 	assert_str(TutorialManager.current_step()).is_equal("collect")
 	EventBus.production_collected.emit(node, {"wood": 6})
+	# El Cuartel (2026-10-17): justo despues de la madera, con su obra.
+	assert_str(TutorialManager.current_step()).is_equal("open_barracks")
+	var barracks := _place(BARRACKS, Vector2i(2, 10), false)
+	EventBus.building_placed.emit(BARRACKS, Vector2i(2, 10))
+	assert_str(TutorialManager.current_step()).is_equal("wait_barracks")
+	barracks.remove_meta("under_construction")
+	EventBus.construction_completed.emit(barracks)
 	# La Granja: la gente come.
 	assert_str(TutorialManager.current_step()).is_equal("open_farm")
 	_place(FARM, Vector2i(10, 2))
@@ -283,12 +350,12 @@ func test_the_guide_walks_the_whole_opening() -> void:
 	assert_str(TutorialManager.guide_state).is_equal(TutorialManager.GUIDE_DONE)
 	assert_array(_finished).contains_exactly([false])
 	assert_array(_steps).contains(["goal", "core", "open_build", "pick_sawmill", "place_sawmill", "wait_sawmill",
-		"collect", "open_farm", "rotate", "rotate_now", "place_house", "move", "move_place", "road_open",
+		"collect", "open_barracks", "wait_barracks", "open_farm", "rotate", "rotate_now", "place_house", "move", "move_place", "road_open",
 		"road_place", "demolish", "open_gold_mine", "open_market", "open_warehouse", "open_laboratory", "done"])
 
 func test_cancelling_the_placement_goes_back_one_step() -> void:
 	_start()
-	# Las dos tarjetas de leer van primero (tutorial de 12 pasos, 2026-10-16).
+	# Las dos tarjetas de leer van primero (tutorial de 13 pasos desde 2026-10-17).
 	TutorialManager.confirm_step("goal")
 	TutorialManager.confirm_step("core")
 	assert_str(TutorialManager.current_step()).is_equal("open_build")

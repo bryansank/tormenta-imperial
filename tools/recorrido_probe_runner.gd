@@ -1,7 +1,7 @@
 extends Node
 ## Sonda del recorrido de una partida nueva, de principio a fin, como lo ve un
 ## jugador: menu principal, Nueva partida (modo), pais y bandera, prologo, guia
-## rapida, los 12 pasos del tutorial guiado JUGADOS (abre CONSTRUIR, elige la
+## rapida, los 13 pasos del tutorial guiado JUGADOS (abre CONSTRUIR, elige la
 ## tarjeta, coloca en un sitio valido, gira, mueve, derriba...) y, al acabar, la
 ## leccion de reparar con un edificio danado. Saca una captura antes de cada
 ## accion, con el numero de orden y el paso del tutorial en el nombre.
@@ -21,6 +21,9 @@ var _settings_snap: Dictionary
 var _args: PackedStringArray
 var _n := 0
 var _road_node: Node = null
+## Ya se enseno el paso "consigue lo que falta" (una vez por recorrido).
+var _need_shown := false
+var _need_planks_shown := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -88,6 +91,10 @@ func _run() -> void:
 			ident.call("confirm")
 	await _frames(90)
 
+	# La tormenta de prueba no sale sola a mitad del recorrido (el reloj corre en
+	# dev a x5): se lanza a mano al final, en _extras().
+	StormManager.set("_trial_done", true)
+
 	# ── Prologo y guia rapida ──
 	var main := get_tree().current_scene
 	var tut: Node = main.get_node("TutorialPanel")
@@ -126,9 +133,129 @@ func _run() -> void:
 		EventBus.building_clicked.emit(victim, _data_of(victim))
 		await _frames(20)
 		await _shot("reparar_ficha")
+		# Se repara, como pide la leccion: si no, su tarjeta tapa lo que sigue.
+		_top_up()
+		print("recorrido_probe: reparado=", BuildingHealth.repair(victim))
+		await _seconds(1.0)
 		EventBus.building_deselected.emit()
 		await _frames(5)
+		print("recorrido_probe: leccion tras reparar=", TutorialManager.get("_extra_step"))
+	# ── La 1.0: topes, mejoras, AYUDA, tormenta de prueba con su Impuesto ──
+	await _extras(main)
 	_finish()
+
+## Lo nuevo de la 1.0 (ronda de pruebas 2026-10-17): la tarjeta "Al maximo" con
+## MEJORAR UNO, la ficha "Nivel N de 3", las paginas nuevas de AYUDA, y la
+## tormenta de prueba con su Impuesto de juguete (peleado con un soldado en casa,
+## con el combate guiado, y pagado sin tropas).
+func _extras(main: Node) -> void:
+	var cm: Node = main.get_node("ConstructionMenu")
+	_top_up()
+	# Tope lleno: la Granja a 1 (la del tutorial) con un rango de mentira.
+	var saved_bonus: Dictionary = GameConfig.rank_limit_bonus.duplicate()
+	GameConfig.rank_limit_bonus["farm"] = 1 - GameConfig.base_building_limit("farm", 1)
+	cm.call("_open")
+	await _frames(15)
+	cm.call("_select_building", Rules.load_building_data("farm"))
+	await _frames(15)
+	await _shot("tope_al_maximo")
+	var up: Button = cm.find_child("DetailUpgradeOne", true, false) as Button
+	print("recorrido_probe: MEJORAR UNO visible=", up != null and up.visible)
+	if up != null and up.visible:
+		up.pressed.emit()
+		await _frames(30)
+		await _shot("tope_mejorar_uno_ficha")
+	else:
+		cm.call("_close")
+	EventBus.building_deselected.emit()
+	await _frames(5)
+	GameConfig.rank_limit_bonus = saved_bonus
+	# Ficha "Nivel 2 de 3".
+	var saw := _first("sawmill")
+	if saw != null:
+		saw.set_meta("level", 2)
+		EventBus.building_clicked.emit(saw, _data_of(saw))
+		await _frames(20)
+		await _shot("ficha_nivel_2_de_3")
+		EventBus.building_deselected.emit()
+		await _frames(5)
+	var bar := _first("barracks")
+	if bar != null:
+		EventBus.building_clicked.emit(bar, _data_of(bar))
+		await _frames(20)
+		await _shot("ficha_cuartel_sin_mejoras")
+		EventBus.building_deselected.emit()
+		await _frames(5)
+	# AYUDA: las paginas nuevas.
+	var idx: Node = get_tree().get_first_node_in_group("help_index")
+	if idx != null:
+		idx.call("open")
+		await _frames(20)
+		await _shot("ayuda_indice")
+		for id in ["guide_limits", "guide_upgrades", "guide_eras", "guide_workshop", "guide_towers"]:
+			idx.call("show_page", id)
+			await _frames(15)
+			await _shot("ayuda_" + id)
+		idx.call("close")
+		await _frames(10)
+	# Tormenta de prueba con un soldado en casa: Impuesto de juguete peleado.
+	ArmyManager.load_save_data({"units": {"infantry": 1}, "training": [], "upkeep_accum": 0.0})
+	var trial_ok: bool = StormManager.start_trial()
+	if not trial_ok and StormManager.get("_trial") == null:
+		# Ya paso sola durante el tutorial (el reloj de partida corre): otra vez.
+		StormManager.set("_trial_done", false)
+		trial_ok = StormManager.start_trial()
+	# O esta pasando ahora mismo (empezo sola mientras se miraba lo demas).
+	trial_ok = trial_ok or StormManager.get("_trial") != null
+	print("recorrido_probe: tormenta de prueba=", trial_ok)
+	if trial_ok:
+		var guard := 0
+		var last_phase := -1
+		while StormManager.get("_trial") != null and guard < 400:
+			guard += 1
+			StormManager._publish_trial(StormManager.get("_trial").advance(2.0))
+			var ph: int = int(StormManager.get("_trial").phase) if StormManager.get("_trial") != null else -1
+			if ph != last_phase:
+				last_phase = ph
+				await _frames(20)
+				await _shot("prueba_fase_%d" % ph)
+			if StormManager.is_trial_tithe_pending():
+				break
+		await _frames(30)
+		print("recorrido_probe: impuesto pendiente=", StormManager.is_trial_tithe_pending(),
+			" tablero=", CombatManager.is_board_open())
+		await _shot("prueba_impuesto_tablero")
+		await _seconds(1.5)
+		await _shot("prueba_combate_guiado")
+		if CombatManager.is_board_open():
+			# La sonda no juega el tablero: lo resuelve la IA (con el listón de
+			# "resolver solo" bajado solo para esto) y cierra el parte como el boton.
+			var ratio: float = GameConfig.combat_auto_resolve_ratio
+			GameConfig.combat_auto_resolve_ratio = 0.0
+			print("recorrido_probe: resolver solo=", CombatManager.auto_resolve_current())
+			GameConfig.combat_auto_resolve_ratio = ratio
+			await _seconds(4.0)
+			await _shot("prueba_impuesto_final_tablero")
+			var bs: Node = main.get_node_or_null("BattleScreen")
+			if bs != null and bs.has_method("_close_board"):
+				bs.call("_close_board")
+			else:
+				CombatManager.end_encounter()
+			await _frames(30)
+		await _shot("prueba_impuesto_parte")
+		var wr: Node = main.get_node_or_null("WarReportScreen")
+		if wr != null and wr.has_method("close_current"):
+			wr.call("close_current")
+			await _frames(15)
+	# Sin tropas: se llevan un poco de la bolsa.
+	ArmyManager.load_save_data({"units": {}, "training": [], "upkeep_accum": 0.0})
+	StormManager.begin_trial_tithe()
+	await _frames(30)
+	await _shot("prueba_impuesto_pagado_parte")
+	var wr2: Node = main.get_node_or_null("WarReportScreen")
+	if wr2 != null and wr2.has_method("close_current"):
+		wr2.call("close_current")
+		await _frames(10)
 
 ## Juega el tutorial hasta "done" (o 70 vueltas), una captura antes de cada accion.
 func _play_guide(main: Node) -> void:
@@ -158,7 +285,7 @@ func _play_guide(main: Node) -> void:
 				return
 			"goal", "core":
 				TutorialManager.confirm_step(step)
-			"wait_sawmill":
+			"wait_sawmill", "wait_barracks":
 				await _seconds(1.0)
 				_complete_all()
 			"collect":
@@ -207,7 +334,51 @@ func _play_guide(main: Node) -> void:
 					await _shot("tut_demolish_confirmar")
 					info.call("_confirm_demolish")
 			_:
-				if step.begins_with("open_") or step in ["rotate", "road_open"]:
+				# Una vez, sin oro ni madera ante la Mina: el paso "consigue lo que
+				# falta" (docs/23 §2.7) tiene que salir y volver solo al rellenar.
+				# Y el de los tablones del Cuartel (need_barracks): sin tablones.
+				if step == "open_barracks" and not _need_planks_shown:
+					_need_planks_shown = true
+					ResourceManager.set_amounts({"planks": 0})
+					await _seconds(1.5)
+					print("recorrido_probe: sin tablones paso=", TutorialManager.current_step())
+					await _shot("tut_need_barracks_tablones")
+					_top_up()
+					await _seconds(1.5)
+					continue
+				if step == "open_gold_mine" and not _need_shown:
+					_need_shown = true
+					ResourceManager.set_amounts({"gold": 0, "wood": 0, "food": 40})
+					await _seconds(1.5)
+					print("recorrido_probe: sin recursos paso=", TutorialManager.current_step())
+					await _shot("tut_need_sin_recursos")
+					_top_up()
+					await _seconds(1.5)
+					print("recorrido_probe: rellenado paso=", TutorialManager.current_step())
+					continue
+				if step.begins_with("need_"):
+					# Sin trabajadores (el Laboratorio tras el Cuartel temprano: 1 libre
+					# de 2) el paso dice "Haz otra Casa": se hace, como el jugador.
+					var need_data: BuildingData = Rules.load_building_data(TutorialManager.step_building(step))
+					if TutorialManager.workers_short(need_data) > 0:
+						await _shot("tut_" + step + "_trabajadores")
+						cm.call("_open")
+						cm.call("_select_building", Rules.load_building_data("house"))
+						cm.call("_on_build_pressed")
+						var hspot := _free_spot("house", null)
+						placer.call("assist_move_ghost", hspot)
+						await _frames(10)
+						placer.call("assist_confirm", hspot)
+						await _seconds(0.5)
+						_complete_all()
+						# Y la gente que llega a la Casa nueva (en partida, un ciclo).
+						PopulationManager._population += 4
+						PopulationManager._recalculate_all()
+						await _seconds(1.2)
+						continue
+					# _top_up() ya lo relleno: en un segundo vuelve al paso de construir.
+					await _seconds(1.2)
+				elif step.begins_with("open_") or step in ["rotate", "road_open"]:
 					cm.call("_open")
 				elif step.begins_with("pick_") or step in ["rotate_pick", "road_pick"]:
 					var id: String = TutorialManager.step_building(step)
@@ -233,7 +404,8 @@ func _play_guide(main: Node) -> void:
 
 ## Recursos y obreros de sobra para que el tutorial no se pare por coste.
 func _top_up() -> void:
-	ResourceManager.set_amounts({"gold": 320, "wood": 220, "food": 40})
+	# Los tablones del Cuartel (cuartel temprano, 2026-10-17) tambien.
+	ResourceManager.set_amounts({"gold": 320, "wood": 220, "food": 40, "planks": 20})
 	if PopulationManager.get_free_workers() < 4:
 		PopulationManager._population += 4
 		PopulationManager._max_population = maxi(PopulationManager._max_population, PopulationManager._population)

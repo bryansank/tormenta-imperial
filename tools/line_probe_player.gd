@@ -1011,6 +1011,21 @@ func _connect_probes() -> void:
 		_r["storms"].append({"t": _clock, "severity": sev, "ruined": 0,
 			"morale_before": PopulationManager.get_morale(), "towers": CombatManager.count_standing_towers(),
 			"stored": ResourceManager.get_total_stored()}))
+	# Cuartel temprano (2026-10-17): primer Cuartel en pie, primer soldado, primera
+	# mision ganada y el Impuesto de juguete de la tormenta de prueba.
+	EventBus.construction_completed.connect(func(node: Node) -> void:
+		var info: Dictionary = GridManager.get_building_info(node)
+		if not info.is_empty() and (info["data"] as BuildingData).id == "barracks" and not _r.has("barracks_at"):
+			_r["barracks_at"] = _clock)
+	EventBus.unit_trained.connect(func(_id: String) -> void:
+		if not _r.has("soldier_at"):
+			_r["soldier_at"] = _clock)
+	EventBus.expedition_ended.connect(func(result: int, _rw: Dictionary, _c: Dictionary) -> void:
+		if result == Expedition.RESULT_WON and not _r.has("sortie_at"):
+			_r["sortie_at"] = _clock)
+	EventBus.trial_tithe_resolved.connect(func(repelled: bool, taken: Dictionary) -> void:
+		_r["trial_tithe"] = {"t": _clock, "repelled": repelled, "taken": taken.duplicate(),
+			"home": CombatManager.roster_size(CombatManager.get_garrison())})
 	EventBus.storm_false_alarm.connect(func(_d: int) -> void: _r["false_alarms"] += 1)
 	EventBus.building_ruined.connect(func(_n: Node) -> void:
 		_r["ruined"] += 1
@@ -1125,6 +1140,12 @@ func _print_run(r: Dictionary) -> void:
 	print("era 1: era 2 en el minuto %.1f | tormenta de prueba en el %s" % [
 		float(r["milestones"].get("era_2", -60.0)) / 60.0,
 		"%.1f" % (float(r["trial_at"]) / 60.0) if r.has("trial_at") else "—"])
+	var tt: Dictionary = r.get("trial_tithe", {})
+	print("cuartel temprano: Cuartel en el minuto %s | 1.er soldado %s | 1.a mision ganada %s | impuesto de juguete %s" % [
+		_min1(r.get("barracks_at", -1.0)), _min1(r.get("soldier_at", -1.0)),
+		_min1(r.get("sortie_at", -1.0)),
+		("—" if tt.is_empty() else "%s en el %s con %d en casa, %s" % ["REPELIDO" if bool(tt["repelled"]) else "cobrado",
+			_min1(tt["t"]), int(tt["home"]), str(tt["taken"])])])
 	for st in r["storms"]:
 		var tithe: Dictionary = st.get("tithe", {})
 		print("  tormenta %5s sev %d torres %d ruinas %d moral %d->%s bolsa %d | diezmo %s %s" % [
@@ -1211,6 +1232,10 @@ func _era_len(r: Dictionary, era: int) -> float:
 	var end_t: float = float(r["victory_at"]) if float(r["victory_at"]) >= 0.0 else float(r["end"]["t"])
 	var starts := [0.0, float(m.get("era_2", end_t)), float(m.get("era_3", end_t)), end_t]
 	return (float(starts[era]) - float(starts[era - 1])) / 60.0
+
+func _min1(t) -> String:
+	var f: float = float(t)
+	return "—" if f < 0.0 else "%.1f" % (f / 60.0)
 
 func _mins(t) -> String:
 	var f: float = float(t)

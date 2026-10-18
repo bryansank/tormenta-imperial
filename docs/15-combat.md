@@ -1274,7 +1274,7 @@ becoming a wall (docs/16, "Gobernador").
 
 Tower crews are configured on the storm side, not here:
 `storm_tower_garrison_unit` (`artillery`), `storm_tower_garrison_per_tower` (1),
-`storm_tower_garrison_max` (2), and `GameConfig.get_tower_garrison()`, which caps
+`storm_tower_garrison_max` (4 since 2026-10-12), and `GameConfig.get_tower_garrison()`, which caps
 the crews so the defender's row never overflows `combat_board_size.x`.
 `storm_tower_crew_loss_damage` (0.4) is what a tower loses when its crew falls.
 

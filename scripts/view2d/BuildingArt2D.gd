@@ -109,8 +109,13 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 	# Mejorado: el MISMO dibujo, un 8 % mayor por nivel (como la 3D,
 	# ProductionManager.apply_level_visual), alrededor del centro.
 	r = grown_rect(r, level)
+	var decor := bool(opts.get("decor", false))
 	if bool(opts.get("shadow", true)):
-		_ground_shadow(ci, r, minf(r.size.x, r.size.y) * 0.22)
+		# Mejorado, mas alto: la sombra cae mas lejos (y abarca el zocalo).
+		var sh := minf(r.size.x, r.size.y) * 0.22 * (1.0 + 0.3 * float(maxi(0, level - 1)))
+		_ground_shadow(ci, plinth_rect(r, level), sh)
+	if level > 1:
+		_level_plinth(ci, r, level)
 	match id:
 		"nucleo": _nucleo(ci, r)
 		"house": _house(ci, r)
@@ -148,7 +153,7 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		_:
 			_block(ci, r, minf(r.size.x, r.size.y) * 0.16, STONE, CONCRETE_DARK)
 	if level > 1:
-		_level_trim(ci, r, level)
+		_level_trim(ci, r, level, decor)
 
 ## El cultivo de la Granja, encima de su dibujo horneado sin cultivo: crece
 ## (`growth` 0..1, brotes que se hacen matas y se doran) sin rehornear nada.
@@ -319,57 +324,83 @@ static func grown_rect(r: Rect2, level: int) -> Rect2:
 	var c := r.get_center()
 	return Rect2(c - r.size * f * 0.5, r.size * f)
 
-## El remate de laton de un edificio mejorado, como LevelTrim en 3D: en el II,
-## una corona (cuatro remates en las esquinas del tejado unidos por un fleje);
-## en el III, ademas, un mastil corto con un banderin rojo en el centro. Va
-## dentro del dibujo horneado (una textura por nivel en ArtCache2D).
-static func _level_trim(ci: CanvasItem, r: Rect2, level: int) -> void:
+## El zocalo de un edificio mejorado: `r` (el edificio) mas un margen por nivel.
+static func plinth_rect(r: Rect2, level: int) -> Rect2:
+	if level <= 1:
+		return r
+	return r.grow(2.0 + 1.5 * float(level - 1))
+
+## Lo que gana un edificio mejorado, como LevelTrim en 3D (2026-10-17): debajo,
+## un zocalo de piedra con fleje de laton (dos escalones en el III); encima, en
+## las esquinas de atras, chimeneas de ladrillo con bandas de laton (una en el
+## II, dos en el III, la mayor con su farol); en las decoraciones, farolas en
+## las esquinas en vez de chimeneas. Va dentro del dibujo horneado (una textura
+## por nivel en ArtCache2D): nada por frame. Antes era un aro de laton sobre el
+## tejado con un banderin rojo en el III (se leia como un recuadro y otra bandera).
+static func _level_plinth(ci: CanvasItem, r: Rect2, level: int) -> void:
+	var p := plinth_rect(r, level)
+	var wall_h := 2.0 + 1.5 * float(level - 1)
+	if level >= 3:
+		_block(ci, p, wall_h, CONCRETE, CONCRETE_DARK)
+		p = p.grow(-2.0)
+	_block(ci, p, wall_h * (0.6 if level >= 3 else 1.0), MARBLE.darkened(0.06), CONCRETE_DARK)
+	ci.draw_rect(p.grow(-0.5), BRASS_DARK, false, 1.2)
+
+static func _level_trim(ci: CanvasItem, r: Rect2, level: int, decor := false) -> void:
 	var c := r.get_center()
 	var m := minf(r.size.x, r.size.y)
-	var half := r.size * 0.36
-	var s := clampf(m * 0.07, 2.5, 5.5)
-	var corners: Array = []
-	for d in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-		corners.append(c + d * half)
-	# El fleje: un aro de laton que une las cuatro esquinas.
-	var ring := PackedVector2Array(corners)
-	ring.append(corners[0])
-	ci.draw_polyline(ring, OUTLINE, s * 0.6 + 1.5)
-	ci.draw_polyline(ring, BRASS_DARK, s * 0.6)
-	ci.draw_polyline(ring, BRASS_LIGHT, maxf(0.8, s * 0.18))
-	# Los remates de las esquinas: un dado de laton con su pomo dorado.
-	for p: Vector2 in corners:
-		_block(ci, Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), s * 0.45, BRASS, BRASS_DARK)
-		_dot(ci, p - _down * s * 0.35, s * 0.3, BRASS_LIGHT)
-	if level < 3:
+	var left := _left()
+	var ext_d := absf(_down.x) * r.size.x * 0.5 + absf(_down.y) * r.size.y * 0.5
+	var ext_l := absf(left.x) * r.size.x * 0.5 + absf(left.y) * r.size.y * 0.5
+	if decor:
+		# Farolas: las dos de delante en el II, las cuatro en el III.
+		var spots := [Vector2(1, 1), Vector2(1, -1)]
+		if level >= 3:
+			spots.append_array([Vector2(-1, 1), Vector2(-1, -1)])
+		var lh := 7.0 + 2.0 * float(level - 2)
+		for sp: Vector2 in spots:
+			var base := c + _down * sp.x * (ext_d + 1.0) + left * sp.y * (ext_l + 1.0)
+			var tip := _mast(ci, base, lh, IRON, 1.4)
+			_dot(ci, tip, 3.4, Color(GLOW, 0.35))
+			_dot(ci, tip, 2.0, GLOW)
+			_dot(ci, tip - _down * 1.6, 1.4, BRASS_LIGHT)
 		return
-	var h := clampf(m * 0.36, 10.0, 22.0)
-	_block(ci, Rect2(c - Vector2(s, s) * 0.7, Vector2(s, s) * 1.4), s * 0.5, IRON.lightened(0.15), IRON)
-	var tip := _mast(ci, c, h, IRON.lightened(0.2), 1.6)
-	# Banderin rojo hacia la derecha de la pantalla, colgando de la punta
-	# (_left() es, en el marco local, el lado +X de la pantalla).
-	var right := _left()
-	_poly(ci, PackedVector2Array([tip + _down * 1.0, tip + _down * h * 0.36, tip + right * h * 0.5 + _down * h * 0.18]), RED, OUTLINE, 1.0)
-	_dot(ci, tip - _down * 0.8, 1.6, BRASS_LIGHT)
+	var rad := clampf(m * 0.075, 2.5, 4.5)
+	var roof := clampf(m * 0.3, 8.0, 16.0)
+	# Atras a la derecha la mayor; en el III, otra atras a la izquierda.
+	# (_left() es, en el marco local, el lado +X de la pantalla: la derecha.)
+	var sides := [1.0]
+	if level >= 3:
+		sides.append(-1.0)
+	for i in sides.size():
+		var side: float = sides[i]
+		# La boca en lo alto de la huella (dentro del horneado); el cuerpo baja
+		# hacia la pantalla, como se ve una chimenea alta desde la camara.
+		var h := roof + 4.0 * float(level - 2) - 3.0 * float(i)
+		var top := c - _down * (ext_d - rad * 1.4) + left * side * (ext_l - rad * 1.3)
+		_cyl(ci, top, rad, h, TILE_RED, TILE_RED_DARK)
+		_cyl_band(ci, top, rad, h, 0.3, 1.4, BRASS)
+		_cyl_band(ci, top, rad, h, 0.6, 1.4, BRASS)
+		_dot(ci, top, rad * 0.55, OIL_BLACK)
+		if level >= 3 and i == 0:
+			_dot(ci, top + _down * h * 0.45, rad * 0.5, GLOW)
 
-## La placa "II" / "III" de un edificio mejorado, sin girar (quien la llama ya
-## quito el giro): latón con las barras del numero romano, en la esquina de
-## arriba-izquierda de la huella `fp` (la bandera del pais va a la derecha).
-## Pocas ordenes de dibujo y solo al repintar: sin texto ni fuente.
+## La marca de nivel de un edificio mejorado, sin girar (quien la llama ya
+## quito el giro): galones de laton (dos en el II, tres en el III) en la esquina
+## de abajo-izquierda de la huella `fp` (arriba van las chimeneas, a la derecha
+## la bandera del pais), sin caja de fondo. Pocas ordenes de dibujo y solo al
+## repintar.
 static func draw_level_plate(ci: CanvasItem, fp: Vector2, level: int) -> void:
 	if level <= 1:
 		return
 	var bars := clampi(level, 2, 3)
-	var size := Vector2(4.0 + 3.6 * bars, 10.0)
-	var pos := Vector2(-fp.x * 0.5 + 3.0, -fp.y * 0.5 - size.y * 0.35)
-	var rect := Rect2(pos, size)
-	ci.draw_rect(Rect2(rect.position + Vector2(1.5, 2.0), rect.size), Color(SHADOW, 0.5))
-	ci.draw_rect(rect.grow(1.0), OUTLINE)
-	ci.draw_rect(rect, BRASS)
-	ci.draw_line(rect.position + Vector2(0.5, 0.8), Vector2(rect.end.x - 0.5, rect.position.y + 0.8), BRASS_LIGHT, 1.2)
+	var w := 7.0
+	var x := -fp.x * 0.5 + 4.0 + w * 0.5
 	for i in bars:
-		var x := rect.position.x + 2.6 + 3.6 * float(i) + 0.9
-		ci.draw_line(Vector2(x, rect.position.y + 2.2), Vector2(x, rect.end.y - 2.2), IRON, 1.8)
+		var y := fp.y * 0.5 - 4.0 - 3.2 * float(i)
+		var pts := PackedVector2Array([Vector2(x - w * 0.5, y + 2.6), Vector2(x, y), Vector2(x + w * 0.5, y + 2.6)])
+		ci.draw_polyline(pts, OUTLINE, 3.6)
+		ci.draw_polyline(pts, BRASS, 2.0)
 
 ## Rayas amarillo/negro (lo militar) a lo largo de un rectangulo estrecho.
 static func _hazard_strip(ci: CanvasItem, r: Rect2) -> void:

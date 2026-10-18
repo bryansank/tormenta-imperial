@@ -1212,6 +1212,9 @@ func _encounter_title(index: int, is_boss: bool) -> String:
 		return "%s  %s" % [Tr.t("LBL_ENCOUNTER_N") % (index + 1), Tr.t("LBL_BOSS")]
 	if has_expedition():
 		return Tr.t("LBL_ENCOUNTER_N") % (index + 1)
+	# Un tablero de defensa (el Diezmo, el Impuesto de prueba) no es una mision.
+	if CombatManager.is_defending():
+		return Tr.t("LBL_DEFENSE_FIGHT")
 	return Tr.t("LBL_SKIRMISH_FIGHT")
 
 func _on_turn_started(side: int, uid: int) -> void:

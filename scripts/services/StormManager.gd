@@ -47,6 +47,16 @@ var _resume_when_running: bool = false
 ## prueba sale una vez por partida, tambien si se guarda y se carga en medio.
 var _trial: StormCycle = null
 var _trial_done: bool = false
+## El Impuesto de juguete de la prueba (2026-10-17, feat/cuartel-temprano) esta
+## pedido y sin resolver: los Cobradores de prueba bajaron y aun no se fueron (la
+## pelea en el tablero sigue, o la partida se guardo en medio). Viaja en el
+## guardado: al cargar se vuelve a pedir, como el Diezmo de verdad.
+var _trial_tithe_pending: bool = false
+## La pelea del tablero abierto es la de ese Impuesto de juguete. Transitorio: una
+## pelea no se guarda, y al cargar se vuelve a empezar desde la puerta.
+var _trial_tithe_defending: bool = false
+## Igual que _resume_when_running, para el Impuesto de juguete. Transitorio.
+var _trial_tithe_resume: bool = false
 
 func _ready() -> void:
 	_cycle = StormCycleScript.create()
@@ -54,6 +64,9 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(_check_arming)
 	EventBus.game_load_completed.connect(_on_game_load_completed)
 	EventBus.encounter_ended.connect(_on_encounter_ended)
+	# Red de seguridad del Impuesto de juguete: un tablero de su defensa que se
+	# cierra sin resultado (no deberia pasar) no lo deja pendiente para siempre.
+	EventBus.encounter_closed.connect(_on_encounter_closed)
 	EventBus.storm_halted_forever.connect(_on_halted_forever)
 	EventBus.final_audit_lost.connect(_on_final_audit_lost)
 	_check_arming()
@@ -66,6 +79,9 @@ func _process(delta: float) -> void:
 	if _resume_when_running:
 		_resume_when_running = false
 		_resume_tithe()
+	if _trial_tithe_resume:
+		_trial_tithe_resume = false
+		_resume_trial_tithe()
 	_tick_trial(delta)
 	if _halted or _cycle == null or not is_armed():
 		return
@@ -159,6 +175,9 @@ func _on_halted_forever() -> void:
 	_armed = false
 	_trial = null
 	_trial_done = true
+	_trial_tithe_pending = false
+	_trial_tithe_defending = false
+	_trial_tithe_resume = false
 	GameConfig.event_production_multiplier = 1.0
 	_cycle = StormCycleScript.create()
 	EventBus.storm_phase_changed.emit(StormCycle.Phase.CALM, 0.0)
@@ -239,6 +258,88 @@ func _publish_trial(events: Array) -> void:
 			"storm_ended":
 				EventBus.storm_ended.emit(int(event["severity"]))
 				EventBus.notification_posted.emit(Tr.t("STORM_TRIAL_ENDED"), "info", UITheme.TEXT_DIM)
+			"trial_tithe":
+				begin_trial_tithe()
+
+# ── El Impuesto de juguete (2026-10-17, feat/cuartel-temprano) ───────
+#
+# Al escampar la prueba bajan unos Cobradores de juguete. Con tropas en casa se
+# pelea en el tablero contra una escolta minima y debil (uno por soldado en
+# casa, hasta storm_trial_tithe_force_max): es la primera pelea de la partida si
+# aun no hubo mision, asi que el combate guiado (`basics`) sale solo. Sin tropas
+# se llevan un poco de la bolsa (storm_trial_tithe_pct, con tope) y el parte
+# explica que con un Cuartel y soldados no se lo habrian llevado. Nunca edificios,
+# trabajadores ni dano; no cuenta como Diezmo (ni escolta que crece, ni rebaja,
+# ni Mercado): por eso no pasa por tithe_resolved.
+
+## Los Cobradores de juguete para `home` unidades en casa. Pura, para las pruebas.
+static func trial_tithe_roster(home: int) -> Dictionary:
+	var force: int = clampi(home, 1, maxi(1, GameConfig.storm_trial_tithe_force_max))
+	return {GameConfig.storm_trial_tithe_unit: force}
+
+func is_trial_tithe_pending() -> bool:
+	return _trial_tithe_pending
+
+## Bajan los Cobradores de juguete. Publico para las pruebas; el juego lo llama al
+## escampar la tormenta de prueba (evento `trial_tithe`) y al cargar una partida
+## guardada con ellos en la puerta.
+func begin_trial_tithe() -> void:
+	if _halted or not GameMode.tithe_enabled():
+		_trial_tithe_pending = false
+		return
+	_trial_tithe_pending = true
+	_trial_tithe_defending = false
+	var garrison: Dictionary = CombatManager.get_garrison()
+	if garrison.is_empty():
+		_pay_trial_tithe()
+		return
+	var roster: Dictionary = trial_tithe_roster(CombatManager.roster_size(garrison))
+	var scale: float = GameConfig.storm_trial_tithe_enemy_scale
+	EventBus.notification_posted.emit(Tr.t("STORM_TRIAL_TITHE_DEFEND"), "notice", UITheme.ACCENT)
+	# Con un tablero ya abierto (una mision a medias) no se abre otro encima: las
+	# tropas de casa pelean solas, como con el Diezmo de verdad.
+	if CombatManager.is_board_open():
+		var outcome: Dictionary = CombatManager.auto_resolve_defense(roster, scale)
+		if bool(outcome.get("fought", false)) and bool(outcome.get("victory", false)):
+			_resolve_trial_tithe(true, {})
+		else:
+			_pay_trial_tithe()
+		return
+	_trial_tithe_defending = true
+	if not CombatManager.start_defense(roster, [], scale):
+		_trial_tithe_defending = false
+		_pay_trial_tithe()
+
+## Sin defensa (o perdida): se llevan un poco de la bolsa. Solo recursos.
+func _pay_trial_tithe() -> void:
+	var taken: Dictionary = {}
+	var debt: int = GameConfig.get_trial_tithe_debt(ResourceManager.get_total_stored())
+	_take_from_stores(debt, taken)
+	_resolve_trial_tithe(false, taken)
+
+func _resolve_trial_tithe(repelled: bool, taken: Dictionary) -> void:
+	_trial_tithe_pending = false
+	_trial_tithe_defending = false
+	if repelled:
+		EventBus.notification_posted.emit(Tr.t("STORM_TRIAL_TITHE_REPELLED"), "success", UITheme.POSITIVE)
+	else:
+		EventBus.notification_posted.emit(Tr.t("STORM_TRIAL_TITHE_PAID"), "notice", UITheme.WARNING)
+	EventBus.trial_tithe_resolved.emit(repelled, taken)
+	GameManager.request_save()
+
+func _on_encounter_closed() -> void:
+	if _trial_tithe_defending:
+		_pay_trial_tithe()
+
+## Al cargar con los Cobradores de juguete en la puerta: se vuelven a pedir con el
+## juego en marcha (el menu principal pausa encima de la partida cargada).
+func _resume_trial_tithe() -> void:
+	if not _trial_tithe_pending or _trial_tithe_defending:
+		return
+	if is_inside_tree() and get_tree().paused:
+		_trial_tithe_resume = true
+		return
+	begin_trial_tithe()
 
 ## Produccion de la prueba: un recorte suave en la Ceniza y en la Tormenta, y de
 ## vuelta a 1,0 al escampar. Al volver la calma la prueba se da por cerrada.
@@ -549,6 +650,14 @@ func assessor_roster(severity: int) -> Dictionary:
 
 ## Settles the collection once the board is done with it.
 func _on_encounter_ended(victory: bool, _turns: int) -> void:
+	# La defensa del Impuesto de juguete: ganada, se van sin nada; perdida (o
+	# abandonada), se llevan un poco, como si no hubiera habido tropas.
+	if _trial_tithe_defending and CombatManager.is_defending():
+		if victory:
+			_resolve_trial_tithe(true, {})
+		else:
+			_pay_trial_tithe()
+		return
 	if _cycle == null or not _cycle.is_collecting():
 		return
 	if not CombatManager.is_defending():
@@ -724,6 +833,7 @@ func get_save_data() -> Dictionary:
 	data["on_demand"] = _on_demand
 	data["trial_done"] = _trial_done
 	data["trial_storm"] = _trial.to_dict() if _trial != null else {}
+	data["trial_tithe_pending"] = _trial_tithe_pending
 	return data
 
 func load_save_data(data: Dictionary) -> void:
@@ -757,6 +867,13 @@ func load_save_data(data: Dictionary) -> void:
 	# la tarjeta (no es una calma nueva, es la de siempre que ahora se ve).
 	_ensure_order(false)
 	EventBus.storm_order_changed.emit(false)
+	# El Impuesto de juguete a medias (se guardo con los Cobradores de prueba en la
+	# puerta o en plena pelea): vuelve a pedirse al terminar la carga. Un guardado
+	# de antes no trae la clave: no hay nada pendiente.
+	var tt: Variant = data.get("trial_tithe_pending", false)
+	_trial_tithe_pending = tt is bool and tt and not _halted
+	_trial_tithe_defending = false
+	_trial_tithe_resume = false
 
 ## El Diezmo que la carga trajo pendiente se reclama cuando la escena ya escucha,
 ## y diferido para ir detras de cualquier otro oyente de game_load_completed (la
@@ -765,6 +882,8 @@ func load_save_data(data: Dictionary) -> void:
 func _on_game_load_completed() -> void:
 	if _tithe_to_resume:
 		_resume_tithe.call_deferred()
+	if _trial_tithe_pending:
+		_resume_trial_tithe.call_deferred()
 
 ## Se reclama por el mismo camino que en partida: defensa con la guarnicion que
 ## haya en casa, o cobro directo si no hay nadie. El tablero no se guarda, asi
@@ -797,6 +916,9 @@ func reset() -> void:
 	_resume_when_running = false
 	_trial = null
 	_trial_done = false
+	_trial_tithe_pending = false
+	_trial_tithe_defending = false
+	_trial_tithe_resume = false
 	GameConfig.event_production_multiplier = 1.0
 
 # ── La Orden de la Regencia (doc 21 §2.2; docs/06 §Orden de la Regencia) ──

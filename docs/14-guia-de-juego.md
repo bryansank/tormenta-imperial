@@ -208,7 +208,7 @@ Da algo menos que una Granja con trigo, pero no hay que esperar a que crezca nad
 
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
-| <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 150 oro · 60 acero · 80 madera · 20 tablones | 3 | Entrena unidades. Cada cuartel es una plaza de entrenamiento en paralelo |
+| <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 120 oro · 80 madera · 10 tablones | 1 | Entrena unidades, **desde la era 1** (sin acero; desde el 17-10-2026). En la era 1 solo Infantería; la Artillería llega con el acero y el Tanque con el petróleo. Cada cuartel es una plaza de entrenamiento en paralelo |
 | <img src="media/guia/tower.png" width="110"> | **Torre** | 2×2 | 150 oro · 60 acero · 20 petróleo · 30 madera · 4 vigas | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
 | <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera · 20 vigas · 10 lingotes · 10 combustible | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca el Ataque Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
 
@@ -246,9 +246,9 @@ ayudan a una base que sí puede.
 | Mercado | Mina de oro |
 | Laboratorio | Casa |
 | Fundición (era 2) | Aserradero + Mina de oro + Casa + Almacén |
-| Cuartel | Fundición + Aserradero |
-| Refinería (era 3) | Fundición + Cuartel |
-| Torre | Cuartel |
+| Cuartel | Aserradero (de ahí salen sus tablones) |
+| Refinería (era 3) | Fundición + Cuartel + Laboratorio |
+| Torre | Cuartel + Fundición |
 | Cuartel General | Cuartel + Refinería |
 
 No se sube de era sin la base de la anterior en pie. La lista de **CONSTRUIR** enseña
@@ -342,7 +342,11 @@ construcción más rápida.
 ## 9. El ejército y el combate
 
 El Cuartel entrena tres tipos de unidad. **Cada cuartel entrena una unidad a la vez**;
-si quieres dos en paralelo, necesitas dos cuarteles.
+si quieres dos en paralelo, necesitas dos cuarteles. El Cuartel se levanta **ya en la
+era 1** (justo después del primer Aserradero): entonces solo entrena Infantería. La
+Artillería se abre con el acero (Fundición, era 2) y el Tanque con el petróleo
+(Refinería, era 3); el panel EJÉRCITO (☰ MENÚ > COLONIA > EJÉRCITO) lo dice en cada fila
+apagada.
 
 | Unidad | Era | Coste | Tarda | Sueldo | Poder |
 |---|---|---|---|---|---|
@@ -449,6 +453,14 @@ pantalla: lo que sí es siempre igual es el procedimiento.
 | **Tormenta** | 60 s | Producción **al 15%**, la moral sangra el triple y **se rompen edificios**. Los procesos y entrenamientos que sigan en curso se pierden |
 | **Impuesto** | lo que dure la pelea | Llegan los Cobradores a cobrar |
 
+**La tormenta de prueba (era 1, hacia el minuto 5).** Antes de la primera de verdad pasa
+una suave, de ensayo: no rompe nada y apenas toca la moral. Al escampar bajan unos
+**Cobradores de prueba** (desde el 17-10-2026): si tienes soldados en casa, pelean en el
+tablero contra uno o dos Cobradores débiles (si es tu primera pelea, con el combate
+guiado); si no, se llevan un 10 % de lo que guardas (como mucho 40) y el parte te
+explica que con un Cuartel y soldados no se lo habrían llevado. Nunca edificios ni
+trabajadores.
+
 **La severidad** (1 a 5, no se ve) sube con la era y con lo que produces: 1, +1 por era
 por encima de la primera, +1 por cada 6 edificios productores, y +1 si hubo una falsa
 alarma antes. Cada punto de severidad cuesta **unos 12 puntos de moral** por tormenta:
@@ -552,15 +564,19 @@ imposible (no hay oro para comer, faltan obreros, no cabe en la bolsa, algo que 
 comer está en ruinas) te pide eso antes.
 
 1. **Aserradero**, pegado a un bosque — lo primero, siempre.
-2. **Granja**, donde quieras con carretera — tu gente come comida.
-3. **Mina de oro**, pegada a una veta.
-4. **Una casa** — necesitas gente para atender lo que construyas.
-5. **Segundo aserradero** — la madera lo paga casi todo.
-6. **Almacén** — ⚠️ ojo, lee la nota de la sección 12 antes de ponerlo.
-7. **Fundición**, pegada a un hierro — solo se puede con Aserradero, Mina de oro,
+2. **Cuartel** (fabrica antes 10 tablones en el Aserradero) — desde el 17-10-2026 va
+   aquí, "después de la madera": tras cada Tormenta bajan los Cobradores y solo pelean
+   las tropas que estén en casa, y la tormenta de prueba del minuto 5 ya trae unos.
+3. **Granja**, donde quieras con carretera — tu gente come comida.
+4. **Un soldado** (Infantería) y tu **primera misión** con él: un enemigo débil que paga
+   oro y madera. Al volver, se queda en casa para la tormenta de prueba.
+5. **Mina de oro**, pegada a una veta.
+6. **Una casa** — necesitas gente para atender lo que construyas.
+7. **Mercado** y **Almacén** — ⚠️ ojo, lee la nota de la sección 12 antes de ponerlo.
+8. **Fundición**, pegada a un hierro — solo se puede con Aserradero, Mina de oro,
    Casa y Almacén en pie. Entras en la era 2, se desbloquea el acero **y se
-   arma la Tormenta**: la primera llega unos diez minutos después.
-8. **Cuartel** (fabrica antes 20 tablones en el Aserradero) y **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
+   arma la Tormenta**: la primera llega unos diez minutos después. Luego, la
+   **guarnición**: cinco unidades en casa, dos de ellas artillería. Tres
    infantes solos pierden incluso el Impuesto más pequeño.
 9. **Refinería, encima de un pozo** (pide Cuartel y 6 vigas de la Fundición) — era 3,
    petróleo.

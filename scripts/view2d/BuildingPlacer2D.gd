@@ -242,6 +242,10 @@ func update_ghost(cell: Vector2i) -> void:
 	_ghost.position = View2D.footprint_center_px(cell, size)
 	var ignore: Node = _moving_building if _state == State.MOVING else null
 	var ok: bool = GridManager.is_valid_cell(cell) and bool(Rules.evaluate_placement(_current_data.id, cell, size, _map_generator(), ignore)["ok"])
+	# Sin poder pagarlo (recursos, material del taller, trabajadores) tambien
+	# rojo: el clic lo rechazaria y diria que falta (2026-10-17).
+	if ok and _state == State.PLACING and Rules.purchase_block_detail(_current_data) != "":
+		ok = false
 	_ghost.set("ghost_valid", ok)
 	_ghost.set_meta("rotation_steps", _rotation_steps)
 	_ghost.queue_redraw()

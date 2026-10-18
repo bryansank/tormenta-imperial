@@ -8,10 +8,13 @@ extends GdUnitTestSuite
 
 var _closed := 0
 var _saved: Dictionary = {}
+const Plenty := preload("res://tests/tutorial/plenty.gd")
+var _plenty := Plenty.new()
 
 func before_test() -> void:
 	_closed = 0
 	_saved = TutorialManager.get_save_data()
+	_plenty.park()
 	TutorialManager.reset()
 	EventBus.tutorial_intro_closed.connect(_count_closed)
 
@@ -19,6 +22,7 @@ func after_test() -> void:
 	EventBus.tutorial_intro_closed.disconnect(_count_closed)
 	get_tree().paused = false
 	TutorialManager.load_save_data(_saved)
+	_plenty.restore()
 
 func _count_closed() -> void:
 	_closed += 1

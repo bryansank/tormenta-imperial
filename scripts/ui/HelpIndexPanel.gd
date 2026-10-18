@@ -24,6 +24,16 @@ var _card: PanelContainer
 var _list: VBoxContainer
 var _auto_check: CheckButton
 var _open := false
+## Las paginas largas (HelpCatalog.is_page: topes, mejoras, eras, taller, torres)
+## se leen aqui mismo, en grande y sin reloj, con "Volver" a la lista
+## (feat/topes-mejoras-ayuda). Lo de arriba (interruptor, herramientas, lista)
+## va en _list_mode; la pagina, en _page_mode.
+var _list_mode: VBoxContainer
+var _page_mode: VBoxContainer
+var _page_title: Label
+var _page_body: Label
+var _page_scroll: ScrollContainer
+var _page_id := ""
 
 func _ready() -> void:
 	add_to_group("help_index")
@@ -39,6 +49,7 @@ func open() -> void:
 	visible = true
 	# Se abre tambien desde el menu de pausa o el principal, con el arbol parado.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_show_list()
 	_refresh()
 	_fit()
 	UIManager.open_panel(self)
@@ -103,6 +114,14 @@ func _build() -> void:
 	_card.add_child(col)
 	col.add_child(UITheme.make_panel_header(Tr.t("LBL_HELP_INDEX_TITLE"), close))
 
+	_list_mode = VBoxContainer.new()
+	_list_mode.name = "ListMode"
+	_list_mode.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_list_mode.add_theme_constant_override("separation", UITheme.SEPARATION)
+	col.add_child(_list_mode)
+	_build_page_mode(col)
+	col = _list_mode
+
 	_auto_check = UITheme.make_check_button(Tr.t("LBL_HELP_AUTO"), GameConfig.ui_helper_visible,
 		func(on: bool):
 			if helper != null and helper.has_method("set_auto_help"):
@@ -133,6 +152,15 @@ func _build() -> void:
 		EventBus.notification_posted.emit(Tr.t("MSG_CGUIDE_REPLAY"), "notice", UITheme.INFO))
 	combat_replay.name = "CombatGuideReplay"
 	tools.add_child(combat_replay)
+	# La guia rapida (cuatro bloques en una pantalla): ya no sale sola al empezar
+	# (14-10), pero aqui se puede volver a ver entera (feat/topes-mejoras-ayuda).
+	var quick := _tool_button("BTN_QUICK_GUIDE", func():
+		close()
+		var tp := get_tree().get_first_node_in_group("tutorial_panel")
+		if tp != null and tp.has_method("open_quick_guide"):
+			tp.open_quick_guide())
+	quick.name = "QuickGuideOpen"
+	tools.add_child(quick)
 
 	col.add_child(UITheme.make_separator())
 	var hint := UITheme.make_label(Tr.ti("LBL_HELP_INDEX_HINT"), "small", UITheme.TEXT_DIM)
@@ -176,12 +204,69 @@ func _entry(id: String) -> Button:
 	b.text = ("✓  " if seen else "•  ") + HelpCatalog.title(id)
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
-	b.tooltip_text = HelpCatalog.body(id)
+	b.tooltip_text = HelpCatalog.summary(id)
 	UITheme.style_card_button(b, UITheme.BTN.lightened(0.05), UITheme.INFO)
 	b.pressed.connect(func():
+		if HelpCatalog.is_page(id):
+			show_page(id)
+			return
 		close()
 		TutorialManager.reopen_help(id))
 	return b
+
+# ── Paginas largas ───────────────────────────────────────────────────
+
+func _build_page_mode(col: VBoxContainer) -> void:
+	_page_mode = VBoxContainer.new()
+	_page_mode.name = "PageMode"
+	_page_mode.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_page_mode.add_theme_constant_override("separation", UITheme.SEPARATION)
+	_page_mode.visible = false
+	col.add_child(_page_mode)
+	_page_title = UITheme.make_label("", "section", UITheme.ACCENT)
+	_page_title.name = "PageTitle"
+	_page_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_page_mode.add_child(_page_title)
+	_page_scroll = ScrollContainer.new()
+	_page_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_page_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_page_mode.add_child(_page_scroll)
+	_page_body = UITheme.make_label("", "body", UITheme.TEXT)
+	_page_body.name = "PageBody"
+	_page_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_page_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_page_scroll.add_child(_page_body)
+	var back := _tool_button("BTN_HELP_BACK", _show_list)
+	back.name = "PageBack"
+	_page_mode.add_child(back)
+
+## Abre una pagina larga dentro del indice y la marca como vista.
+func show_page(id: String) -> void:
+	if not HelpCatalog.has(id):
+		return
+	if not _open:
+		open()
+	_page_id = id
+	_page_title.text = HelpCatalog.title(id)
+	_page_body.text = HelpCatalog.body(id)
+	_page_scroll.scroll_vertical = 0
+	_list_mode.visible = false
+	_page_mode.visible = true
+	TutorialManager.mark_help_seen(id)
+
+func _show_list() -> void:
+	_page_id = ""
+	if _page_mode != null:
+		_page_mode.visible = false
+	if _list_mode != null:
+		_list_mode.visible = true
+
+## La pagina abierta ahora ("" en la lista). Para pruebas.
+func current_page() -> String:
+	return _page_id
+
+func page_text() -> String:
+	return _page_body.text if _page_body != null else ""
 
 func _fit() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size

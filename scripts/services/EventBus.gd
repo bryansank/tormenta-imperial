@@ -283,6 +283,13 @@ signal storm_order_changed(fresh: bool)
 ## el tablero abierto las tomaria como suyas.
 @warning_ignore("unused_signal")
 signal defense_auto_resolved(victory: bool, rounds: int, summary: Dictionary)
+## El Impuesto de juguete de la tormenta de prueba (era 1) quedo resuelto:
+## `repelled` si las tropas de casa echaron a los Cobradores; si no, `taken` es lo
+## que se llevaron de la bolsa (recursos por nombre). Solo StormManager. No es
+## `tithe_resolved`: el Mercado, las salidas y el sonido del Impuesto de verdad no
+## tienen que reaccionar a un ensayo. Lo pinta WarReportScreen.
+@warning_ignore("unused_signal")
+signal trial_tithe_resolved(repelled: bool, taken: Dictionary)
 
 # ── The Final Audit ──
 ## Emitidas solo por ProgressionManager. El Cuartel General a nivel 3 ya no gana

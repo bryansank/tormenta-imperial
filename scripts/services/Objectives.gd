@@ -25,9 +25,28 @@ const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 ## (docs/14-guia-de-juego.md, seccion 11).
 const LINE := [
 	{"kind": "build", "id": "sawmill", "count": 1, "why": "OBJ_WHY_SAWMILL"},
+	# Cuartel temprano (2026-10-17, feat/cuartel-temprano; decision de Bryan:
+	# "prioridad despues de la madera"). Va justo detras del aserradero, del que
+	# salen sus tablones, y ANTES de la Granja: la comida de salida (80) da para
+	# unos 16 minutos con 5 personas en las fases tempranas, y el Cuartel solo
+	# pide 1 trabajador, asi que aserradero (2) + Cuartel (1) + Granja (2) caben
+	# en los 5 del Nucleo sin esperar a una Casa. Solo donde hay Impuesto
+	# (`needs: tithe`): en Constructor el Cuartel llega por el Cuartel General.
+	# `eager`: si se puede pagar ya (con los tablones hechos), va antes que
+	# cualquier paso de apoyo. Sin esto la Granja (comida en negativo), una Casa
+	# (gente al tope) y la Mina se le colaban delante y el Cuartel salia el
+	# sexto (ronda de pruebas de la 1.0, 2026-10-17).
+	{"kind": "build", "id": "barracks", "count": 1, "needs": "tithe", "eager": true, "why": "OBJ_WHY_BARRACKS"},
 	# La gente come comida (2026-10-04): la Granja va justo despues del primer
-	# aserradero, antes de que se acabe la comida de salida.
+	# aserradero (y del Cuartel), antes de que se acabe la comida de salida.
 	{"kind": "build", "id": "farm", "count": 1, "why": "OBJ_WHY_FARM"},
+	# Un soldado antes de la tormenta de prueba (minuto 5): sale a la primera
+	# mision (first_sortie_step, un solo nodo facil con botin), vuelve, y echa a
+	# los Cobradores de juguete. Cuenta cualquier tropa ("any"); en la era 1 solo
+	# hay Infanteria. La fila de la primera mision va DETRAS de esta en EL CAMINO
+	# (`sortie_row`: sin soldado no hay mision).
+	{"kind": "train", "id": "infantry", "count": 1, "any": true, "needs": "tithe",
+		"sortie_row": "after", "why": "OBJ_WHY_FIRST_SOLDIERS"},
 	{"kind": "build", "id": "gold_mine", "count": 1, "why": "OBJ_WHY_GOLD_MINE"},
 	{"kind": "build", "id": "house", "count": 1, "why": "OBJ_WHY_HOUSE"},
 	# Antes un segundo aserradero "porque la gente come madera". Desde que come
@@ -36,7 +55,9 @@ const LINE := [
 	{"kind": "build", "id": "market", "count": 1, "why": "OBJ_WHY_MARKET"},
 	{"kind": "build", "id": "warehouse", "count": 1, "why": "OBJ_WHY_WAREHOUSE"},
 	{"kind": "build", "id": "foundry", "count": 1, "why": "OBJ_WHY_FOUNDRY"},
-	{"kind": "build", "id": "barracks", "count": 1, "why": "OBJ_WHY_BARRACKS"},
+	# El Cuartel ya esta desde la era 1 donde hay Impuesto; esta entrada queda
+	# para los modos sin el (`no_tithe`), y asi EL CAMINO no lo lista dos veces.
+	{"kind": "build", "id": "barracks", "count": 1, "needs": "no_tithe", "why": "OBJ_WHY_BARRACKS"},
 	# Guarnicion: cinco unidades en casa, de lo que sea, con dos canones. Tres
 	# infantes solos pierden el Diezmo YA en severidad 1 (2 infantes y 1 canon de
 	# escolta); tres infantes y dos canones lo ganan hasta severidad 3 sin torres y
@@ -173,6 +194,12 @@ static func _support_or(target: Dictionary) -> Dictionary:
 	var unclog: Dictionary = _unclog_step(target)
 	if not unclog.is_empty():
 		return unclog
+	# Lo que da de comer en ruinas, antes que el taller: el taller puede ser
+	# justo ese edificio (los tablones del Cuartel temprano salen del Aserradero,
+	# y uno en ruinas no los fabrica). Ronda de pruebas de la 1.0, 2026-10-17.
+	var repair: Dictionary = _repair_step()
+	if not repair.is_empty():
+		return repair
 	# Lo que el paso pide del taller va antes que cualquier otra cosa: sin
 	# fabricarlo, juntar oro no acerca al paso.
 	var make: Dictionary = make_step_for(target)
@@ -199,6 +226,13 @@ static func _support_or(target: Dictionary) -> Dictionary:
 					and _workers_for(help) <= PopulationManager.get_free_workers():
 				return help
 		return make
+	# Un paso `eager` de la linea (el Cuartel temprano) que ya se puede pagar y
+	# tiene obreros va tal cual: los apoyos son para cuando falta algo.
+	# Los tablones que ya salen del taller cuentan como hechos.
+	if bool(target.get("eager", false)) and _missing_once_made(target).is_empty() \
+			and _workers_for(target) <= PopulationManager.get_free_workers() \
+			and _food_market_step("food").is_empty():
+		return target
 	var support: Dictionary = _support_step(target)
 	if support.is_empty():
 		return target
@@ -319,9 +353,37 @@ static func make_step_for(target: Dictionary) -> Dictionary:
 		var source: String = GameConfig.get_material_source(String(res))
 		if source == "" or Rules.count_building(source) < 1:
 			continue
+		# Lo que ya se esta fabricando cuenta: sin esto el panel seguia diciendo
+		# "Fabrica tablones" con el lote en marcha y se pagaba dos veces (la
+		# sonda de linea gastaba 80 de madera en 20 tablones, ronda 1.0).
+		var still: int = int(missing[res]) - in_production(String(res))
+		if still <= 0:
+			continue
 		return {"kind": "make", "id": String(res), "building": source,
-			"amount": int(missing[res]), "why": "OBJ_WHY_MAKE"}
+			"amount": still, "why": "OBJ_WHY_MAKE"}
 	return {}
+
+## Lo que le falta a `step` contando lo que el taller ya esta fabricando.
+static func _missing_once_made(step: Dictionary) -> Dictionary:
+	var out: Dictionary = missing_for(step)
+	for res in out.keys():
+		if ResourceManager.is_material_name(String(res)) \
+				and int(out[res]) - in_production(String(res)) <= 0:
+			out.erase(res)
+	return out
+
+## Cuanto de `res` sale de los procesos en marcha (todas las vueltas que quedan).
+static func in_production(res: String) -> int:
+	var total := 0
+	for info in GridManager.buildings_view():
+		var node: Node = info.get("node")
+		if node == null or not is_instance_valid(node):
+			continue
+		var active: Dictionary = ProcessManager.get_active(node)
+		if active.is_empty():
+			continue
+		total += int((active.get("produces", {}) as Dictionary).get(res, 0)) * maxi(1, int(active.get("count", 1)))
+	return total
 
 ## La receta del taller que da `material` en su edificio, o {}.
 static func material_recipe(material: String) -> Dictionary:
@@ -480,6 +542,8 @@ static func _entry_applies(entry: Dictionary) -> bool:
 			return GameMode.storm_enabled()
 		"tithe":
 			return GameMode.tithe_enabled()
+		"no_tithe":
+			return not GameMode.tithe_enabled()
 		"audit":
 			return GameMode.audit_enabled()
 	return true
@@ -501,10 +565,9 @@ static func _train_progress(entry: Dictionary) -> int:
 ##   4. lo que falta tarda demasiado en llegar: otro productor de ese recurso.
 static func _support_step(target: Dictionary, outer: Dictionary = {}) -> Dictionary:
 	# 0. Lo que da de comer esta en ruinas: repararlo antes que levantar otro.
-	var ruined: Node = _ruined_producer()
-	if ruined != null:
-		return {"kind": "repair", "id": (GridManager.get_building_info(ruined)["data"] as BuildingData).id,
-			"why": "OBJ_WHY_REPAIR"}
+	var repair: Dictionary = _repair_step()
+	if not repair.is_empty():
+		return repair
 	var net: Dictionary = net_rates()
 	# Mientras la gente no come (Fundacion) no hay saldo que vigilar: la linea
 	# empieza por el aserradero, no por una mina que nadie necesita todavia.
@@ -1034,8 +1097,22 @@ static func _workers_for(step: Dictionary) -> int:
 ## Una casa solo ayuda si la gente que falta no esta ya de camino: si hay aforo
 ## libre, la poblacion crece sola y basta con esperar.
 static func _houses_would_help(workers_needed: int) -> bool:
-	var room: int = PopulationManager.get_max_population() - PopulationManager.get_population()
+	var room: int = PopulationManager.get_max_population() - PopulationManager.get_population() + _room_on_the_way()
 	return PopulationManager.get_free_workers() + room < workers_needed
+
+## El sitio de las casas que aun se estan levantando: la gente ya viene de camino.
+## Sin esto, con la primera Casa en obra el panel pedia otra igual (dos casas de
+## golpe en el minuto 4, y sin oro para la Mina: ronda de pruebas 1.0, line_probe).
+static func _room_on_the_way() -> int:
+	var room := 0
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info["data"]
+		if data.population_capacity <= 0 or data.is_core:
+			continue
+		var node: Node = info.get("node")
+		if node != null and ProductionManager.is_constructing(node):
+			room += data.population_capacity
+	return room
 
 ## Construir `building_id` si el tope, los requisitos y el mapa lo permiten.
 ## Vacio si no: un paso que el jugador no puede dar no se le propone.
@@ -1130,9 +1207,8 @@ static func upgrade_node(step: Dictionary) -> Node:
 
 ## Recurso que un edificio necesita desbloqueado para que tenga sentido pedirlo.
 static func _needs_unlocked(building_id: String) -> String:
+	# El Cuartel ya no pide acero (cuartel temprano, 2026-10-17): solo oro.
 	match building_id:
-		"barracks":
-			return "steel"
 		"tower", "headquarters":
 			return "oil"
 	return "gold"
@@ -1159,6 +1235,14 @@ static func _ruined_producer() -> Node:
 			return info["node"]
 	return null
 
+## "Repara el ..." si hay un productor en ruinas (fuera de la tormenta), o {}.
+static func _repair_step() -> Dictionary:
+	var ruined: Node = _ruined_producer()
+	if ruined == null:
+		return {}
+	return {"kind": "repair", "id": (GridManager.get_building_info(ruined)["data"] as BuildingData).id,
+		"why": "OBJ_WHY_REPAIR"}
+
 static func _first_building(building_id: String) -> Node:
 	for info in GridManager.buildings_view():
 		if (info["data"] as BuildingData).id == building_id:
@@ -1174,11 +1258,17 @@ static func _first_building(building_id: String) -> Node:
 static func route() -> Array:
 	var rows: Array = []
 	var current_found := false
+	var sortie_placed := false
 	for entry in LINE:
 		# La primera escaramuza va justo antes de la guarnicion: es lo primero que
 		# se hace con la tropa. Tambien sin Diezmo (Constructor), donde la
-		# guarnicion no es un paso pero pelear si.
-		if String(entry["kind"]) == "train" and bool(entry.get("any", false)):
+		# guarnicion no es un paso pero pelear si. Con el Cuartel temprano
+		# (2026-10-17) va detras del primer soldado (`sortie_row: after`), y una
+		# sola vez.
+		var sortie_before: bool = String(entry["kind"]) == "train" and bool(entry.get("any", false)) \
+			and String(entry.get("sortie_row", "")) != "after"
+		if not sortie_placed and sortie_before:
+			sortie_placed = true
 			var sortie_done: bool = TutorialManager.is_first_sortie_done()
 			var sortie_row := {"text": Tr.t("OBJ_ROUTE_FIRST_SORTIE"), "done": sortie_done, "current": false}
 			if not sortie_done and not current_found:
@@ -1187,6 +1277,7 @@ static func route() -> Array:
 			rows.append(sortie_row)
 		if not _entry_applies(entry):
 			continue
+		var sortie_after: bool = not sortie_placed and String(entry.get("sortie_row", "")) == "after"
 		var done: bool = _line_entry_done(entry)
 		var row := {"text": describe(entry)["title"], "done": done, "current": false}
 		# En EL CAMINO cada fila es un paso: "Construye:" delante de cada
@@ -1203,6 +1294,14 @@ static func route() -> Array:
 			row["current"] = true
 			current_found = true
 		rows.append(row)
+		if sortie_after:
+			sortie_placed = true
+			var first_done: bool = TutorialManager.is_first_sortie_done()
+			var first_row := {"text": Tr.t("OBJ_ROUTE_FIRST_SORTIE"), "done": first_done, "current": false}
+			if not first_done and not current_found:
+				first_row["current"] = true
+				current_found = true
+			rows.append(first_row)
 	if GameMode.audit_enabled():
 		var won: bool = StormManager.is_halted()
 		rows.append({"text": Tr.t("OBJ_ROUTE_FINAL"), "done": won, "current": not current_found and not won})
@@ -1221,8 +1320,48 @@ static func _line_entry_done(entry: Dictionary) -> bool:
 			return _train_progress(entry) >= int(entry["count"])
 	return false
 
+## Como conseguir `res` (un recurso o un material del taller), en una linea
+## para el jugador, o "". La usan el tutorial (TutorialManager.step_how) y
+## ¿QUE HACER? (describe), para que nunca se diga "te falta" sin decir como
+## (2026-10-17, fix/tutorial-materiales).
+static func how_to_get(res: String) -> String:
+	if ResourceManager.is_material_name(res):
+		var source: String = GameConfig.get_material_source(res)
+		var src: BuildingData = Rules.load_building_data(source) if source != "" else null
+		var src_name: String = src.get_display_name() if src != null else source
+		if source != "" and Rules.count_building(source) > 0:
+			var proc_name: String = Tr.t(String(material_recipe(res).get("name", "")))
+			return Tr.ti("GUIDE_HOW_MAKE") % [Tr.res_cap(res), src_name, proc_name]
+		if source != "":
+			return Tr.t("GUIDE_HOW_MAKE_FIRST") % [Tr.res_cap(res), src_name]
+		return ""
+	if not ResourceManager.is_unlocked_by_name(res):
+		return Tr.t("LBL_NEEDS_UNLOCK_ONE") % [Tr.res_cap(res), Tr.t("UNLOCK_HINT_" + res.to_upper())]
+	if res == "wood":
+		return Tr.ti("GUIDE_HOW_WOOD") if Rules.count_building("sawmill") > 0 else Tr.ti("GUIDE_HOW_WOOD_HAND")
+	if res == "gold":
+		return Tr.ti("GUIDE_HOW_GOLD_MINE") if Rules.count_building("gold_mine") > 0 else Tr.ti("GUIDE_HOW_GOLD_HAND")
+	var producer: String = String(PRODUCER_OF.get(res, ""))
+	if producer == "":
+		return ""
+	var pdata: BuildingData = Rules.load_building_data(producer)
+	var pname: String = pdata.get_display_name() if pdata != null else producer
+	if Rules.count_building(producer) > 0:
+		return Tr.ti("GUIDE_HOW_COLLECT") % [Tr.res_name(res), pname]
+	return Tr.t("GUIDE_HOW_BUILD_PRODUCER") % [Tr.res_name(res), pname]
+
+## Una linea de how_to_get() por cada cosa de `missing` (nombre -> cantidad),
+## sin repetir.
+static func how_lines(missing: Dictionary) -> Array:
+	var out: Array = []
+	for res in missing:
+		var line: String = how_to_get(String(res))
+		if line != "" and not line in out:
+			out.append(line)
+	return out
+
 ## {"title", "why", "blocker"} ya traducidos. `blocker` vacio si el paso se puede
-## dar ahora mismo.
+## dar ahora mismo; si no, lo que falta y como conseguirlo.
 static func describe(step: Dictionary) -> Dictionary:
 	var kind: String = String(step.get("kind", ""))
 	var title := ""
@@ -1278,7 +1417,16 @@ static func describe(step: Dictionary) -> Dictionary:
 	# Sin Diezmo el cuartel no es para la guarnicion: es lo que pide el Cuartel General.
 	elif why == "OBJ_WHY_BARRACKS" and not GameMode.tithe_enabled():
 		why = "OBJ_WHY_BARRACKS_BUILDER"
-	return {"title": title, "why": Tr.t(why), "blocker": blocker(step)}
+	# Lo que falta y COMO conseguirlo (2026-10-17, fix/tutorial-materiales): no
+	# basta con "Te falta: 6 tablones"; debajo, una linea por cosa que falta.
+	var block_text: String = blocker(step)
+	if kind == "build" and block_text != "":
+		var data: BuildingData = Rules.load_building_data(String(step["id"]))
+		if data != null:
+			var how: Array = how_lines(Rules.missing_cost(data))
+			if not how.is_empty():
+				block_text += "\n" + "\n".join(how)
+	return {"title": title, "why": Tr.t(why), "blocker": block_text}
 
 ## Por que no se puede dar el paso ahora, o "" si se puede.
 static func blocker(step: Dictionary) -> String:
@@ -1288,10 +1436,10 @@ static func blocker(step: Dictionary) -> String:
 			var data: BuildingData = Rules.load_building_data(String(step["id"]))
 			if data == null:
 				return ""
-			var block: String = Rules.purchase_block_message(data)
-			if block == Tr.t("LBL_NOT_ENOUGH_RESOURCES"):
-				return Tr.t("OBJ_MISSING") % Tr.amount_list(missing_for(step))
-			return block
+			# Todo lo que lo impide, una cosa por linea (2026-10-17): antes salia
+			# solo lo primero ("Sin trabajadores disponibles") y lo que faltaba de
+			# recursos o del taller quedaba escondido detras.
+			return "\n".join(Rules.block_reasons(data))
 		"upgrade":
 			var node: Node = upgrade_node(step)
 			if node != null and ProductionManager.is_constructing(node):

@@ -196,22 +196,27 @@ func _apply_construction_visual(node: Node) -> void:
 		bar.position.y = height + 0.9
 		node.add_child(bar)
 
-## El nivel se ve (2026-09-28): el modelo crece un 8% por nivel y lleva una
-## placa "II" / "III" encima. Antes solo crecia la malla procedural; los GLB
-## (casi todos) no cambiaban. En 2D lo pinta el propio edificio (galones).
+## El nivel se ve (2026-09-28; rehecho 2026-10-17): el MISMO modelo crece
+## (poco en planta, bastante en alto: LevelTrim.level_scale), se sube a un
+## zocalo de piedra con fleje de laton y gana chimeneas de ladrillo (farolas en
+## las decoraciones), todo en LevelTrim, horneado una vez por medida. Sin
+## placa "II" / "III" flotante: el nivel lo dice el modelo (y la ficha del
+## edificio). En 2D lo pinta el propio edificio (BuildingArt2D).
 ##
 ## Siempre el MISMO modelo (2026-10-14): el que conoce el aspecto del edificio
 ## (LookVisual.get_model()), y si no hay aspecto, el primer hijo que no sea
 ## rotulo, barra, placa ni del grupo "building_fx" (parcela, obra, andamio,
-## icono). Crece sin moverse de su sitio en planta y lleva un remate de laton
-## por nivel (LevelTrim), horneado una vez por medida.
+## icono). Crece sin moverse de su sitio en planta.
 static func apply_level_visual(node: Node, level: int) -> void:
 	if not (node is Node3D):
 		return
 	var model: Node3D = null
+	var decor := false
 	var look := node.get_node_or_null("LookVisual")
 	if look != null and look.has_method("get_model"):
 		model = look.get_model() as Node3D
+		if look.has_method("get_data") and look.get_data() != null:
+			decor = (look.get_data() as BuildingData).is_decoration
 	if model == null:
 		for child in node.get_children():
 			if child is Node3D and not (child is Label3D) and not (child is Sprite3D) \
@@ -220,42 +225,32 @@ static func apply_level_visual(node: Node, level: int) -> void:
 					and child.name != "LookVisual" and child.name != "ColonyFlag":
 				model = child
 				break
-	if model != null:
-		if not model.has_meta("base_scale"):
-			model.set_meta("base_scale", model.scale)
-			model.set_meta("base_pos", model.position)
-		var base: Vector3 = model.get_meta("base_scale")
-		var f := 1.0 + 0.08 * float(maxi(0, level - 1))
-		model.scale = base * f
-		# Crecer alrededor del centro de la parcela, no del origen del modelo: el
-		# desplazamiento de encaje (fit_model) crece con el, la base sigue en y = 0.
-		if not model.has_meta("look_base_pos"):
-			var p0: Vector3 = model.get_meta("base_pos", model.position)
-			model.position = Vector3(p0.x * f, p0.y, p0.z * f)
-		var trim: Script = load("res://scripts/buildings/LevelTrim.gd")
-		trim.call("apply", model, level)
-	var plate := node.get_node_or_null("LevelPlate") as Label3D
-	if level <= 1:
-		if plate != null:
-			plate.queue_free()
+	# La placa flotante de antes (Label3D "II"/"III"), si una partida vieja la trae.
+	var plate := node.get_node_or_null("LevelPlate")
+	if plate != null:
+		plate.queue_free()
+	if model == null:
 		return
-	if plate == null:
-		plate = Label3D.new()
-		plate.name = "LevelPlate"
-		plate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		plate.no_depth_test = true
-		plate.font_size = 44
-		plate.pixel_size = 0.012
-		plate.outline_size = 10
-		plate.outline_modulate = Color(0, 0, 0, 0.9)
-		plate.modulate = Color(1.0, 0.82, 0.3)
-		node.add_child(plate)
-	var height := 2.0
-	var info := GridManager.get_building_info(node)
-	if not info.is_empty():
-		height = maxf((info["data"] as BuildingData).mesh_height, BuildingStatusBadge.measure_top(node as Node3D))
-	plate.position.y = height + 0.4
-	plate.text = "II" if level == 2 else "III"
+	var trim: Script = load("res://scripts/buildings/LevelTrim.gd")
+	if not model.has_meta("base_scale"):
+		model.set_meta("base_scale", model.scale)
+		model.set_meta("base_pos", model.position)
+	var base: Vector3 = model.get_meta("base_scale")
+	var k: Vector3 = trim.call("level_scale", level)
+	model.scale = base * k
+	# Crecer alrededor del centro de la parcela, no del origen del modelo: el
+	# desplazamiento de encaje (fit_model) crece con el; la base sube al zocalo.
+	var p0: Vector3 = model.get_meta("base_pos", model.position)
+	var target := Vector3(p0.x * k.x, p0.y + float(trim.call("plinth_height", level)), p0.z * k.z)
+	if model.has_meta("look_base_pos"):
+		# Hundido o ladeado (dano, ruina): se mueve la postura guardada y lo que
+		# este desplazado se desplaza lo mismo, para que al reparar vuelva bien.
+		var was: Vector3 = model.get_meta("look_base_pos")
+		model.position += target - was
+		model.set_meta("look_base_pos", target)
+	else:
+		model.position = target
+	trim.call("apply", model, level, decor)
 
 ## "Construyendo 45 % · faltan 12 s" (o "Mejorando ..."): lo que dice el rotulo
 ## de la obra sobre el mapa, en 3D y en 2D.

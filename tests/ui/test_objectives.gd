@@ -244,8 +244,15 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 	# El orden de la linea, en la secuencia visitada (con lo que haya en medio).
 	# La Granja ocupa dos obreros: la primera casa puede llegar antes que la mina,
 	# como paso de apoyo, asi que aqui no se exige su sitio (2026-10-04).
-	var expected: Array = ["build:sawmill", "build:farm", "build:gold_mine", "build:market",
-		"build:warehouse", "build:foundry", "build:barracks", "train:artillery", "sortie:artillery", "train:artillery",
+	# Cuartel temprano (2026-10-17): el Cuartel, un soldado y su primera mision;
+	# la guarnicion de la era 2 empieza ya por la artilleria. Aqui la bolsa es
+	# siempre "justo lo del paso anterior", asi que el Cuartel nunca se puede
+	# pagar al decidir y los apoyos (Granja, Casa, Mina) le pasan delante: que
+	# va justo detras del aserradero con la bolsa de verdad lo vigila
+	# test_with_the_real_bag_the_barracks_comes_right_after_the_planks.
+	var expected: Array = ["build:sawmill", "build:barracks", "train:infantry", "sortie:infantry",
+		"build:market",
+		"build:warehouse", "build:foundry", "train:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
 		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]
 	var cursor := 0
@@ -261,6 +268,62 @@ func test_a_new_colony_is_told_to_build_a_sawmill() -> void:
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("build")
 	assert_str(String(step["id"])).is_equal("sawmill")
+
+## Cuartel temprano (2026-10-17): en la linea, el Cuartel va justo detras del
+## aserradero, despues la Granja y un soldado, y solo entonces la Mina.
+func test_the_early_line_is_sawmill_barracks_farm_soldier_then_mine() -> void:
+	var saved_mode: int = GameMode.current
+	GameMode.current = GameMode.Mode.CAMPAIGN
+	_build("sawmill")
+	assert_str(String(Objectives._first_open_line_step()["id"])).is_equal("barracks")
+	_build("barracks")
+	assert_str(String(Objectives._first_open_line_step()["id"])).is_equal("farm")
+	_build("farm")
+	var soldier: Dictionary = Objectives._first_open_line_step()
+	assert_str(String(soldier["kind"])).is_equal("train")
+	assert_str(String(soldier["id"])).is_equal("infantry")
+	_assert_readable(soldier, "primer soldado")
+	_add_unit("infantry")
+	assert_str(String(Objectives._first_open_line_step()["id"])).is_equal("gold_mine")
+	# El Cuartel no sale dos veces en EL CAMINO.
+	var barracks_rows := 0
+	for row in Objectives.route():
+		if String(row["text"]) == Rules.load_building_data("barracks").get_display_name():
+			barracks_rows += 1
+	assert_int(barracks_rows).is_equal(1)
+	GameMode.current = saved_mode
+
+## Con la bolsa de una partida nueva de verdad: aserradero, tablones y el
+## Cuartel, sin que la Granja, una Casa o la Mina se cuelen (los apoyos esperan
+## a que falte algo). Ronda de pruebas de la 1.0, 2026-10-17.
+func test_with_the_real_bag_the_barracks_comes_right_after_the_planks() -> void:
+	var saved_mode: int = GameMode.current
+	GameMode.current = GameMode.Mode.CAMPAIGN
+	TutorialManager.first_sortie_done = false
+	var bag := {"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0}
+	bag.merge(GameConfig.starting_resources, true)
+	ResourceManager.set_amounts(bag)
+	PopulationManager.load_save_data({"population": 5, "morale": 75})
+	var first: Dictionary = Objectives.next_step()
+	assert_str("%s:%s" % [first["kind"], first["id"]]).is_equal("build:sawmill")
+	ResourceManager.spend_cost(Objectives.step_cost(first))
+	_build("sawmill")
+	PopulationManager.load_save_data({"population": 5, "morale": 75})
+	var planks: Dictionary = Objectives.next_step()
+	assert_str("%s:%s" % [planks["kind"], planks["id"]]).is_equal("make:planks")
+	for i in runs_needed(planks):
+		var recipe: Dictionary = Objectives.material_recipe("planks")
+		var cost := {}
+		for res_name in recipe["cost"]:
+			cost[ResourceManager.name_to_type(String(res_name))] = int(recipe["cost"][res_name])
+		ResourceManager.spend_cost(cost)
+		ResourceManager.add(ResourceManager.Type.PLANKS, int(recipe["produces"]["planks"]))
+	var step: Dictionary = Objectives.next_step()
+	assert_str("%s:%s" % [step["kind"], step["id"]]).is_equal("build:barracks")
+	GameMode.current = saved_mode
+
+func runs_needed(step: Dictionary) -> int:
+	return Objectives.runs_for(step)
 
 ## Lo que da de comer en ruinas va antes que levantar otro igual.
 func test_a_ruined_producer_is_repaired_before_anything_else() -> void:
@@ -522,7 +585,16 @@ func test_first_sortie_is_asked_as_soon_as_the_first_unit_stands() -> void:
 			sortie_at = i
 	assert_int(sortie_at).is_greater(0)
 	assert_bool(bool(rows[sortie_at]["current"])).is_true()
-	assert_str(String(rows[sortie_at + 1]["text"])).contains(Tr.t(String(GameConfig.get_unit_def("infantry")["name"])))
+	# Con el Cuartel temprano (2026-10-17) la mision va DETRAS del primer soldado:
+	# sin soldado no hay mision.
+	assert_str(String(rows[sortie_at - 1]["text"])).contains(Tr.t(String(GameConfig.get_unit_def("infantry")["name"])))
+	assert_bool(bool(rows[sortie_at - 1]["done"])).is_true()
+	# Y sale una sola vez en EL CAMINO.
+	var sorties := 0
+	for row in rows:
+		if String(row["text"]) == Tr.t("OBJ_ROUTE_FIRST_SORTIE"):
+			sorties += 1
+	assert_int(sorties).is_equal(1)
 
 ## Ganada la primera, el panel vuelve a la linea: la guarnicion de cinco.
 func test_first_sortie_goes_away_once_won() -> void:
@@ -590,3 +662,45 @@ func test_the_siege_towers_follow_the_crew_cap() -> void:
 	GameConfig.storm_tower_garrison_max = 4
 	assert_int(Objectives.entry_count(entry)).is_equal(4)
 	GameConfig.storm_tower_garrison_max = saved
+
+# ── Lo que falta, y como conseguirlo (2026-10-17, fix/tutorial-materiales) ──
+
+func test_the_build_blocker_lists_everything_missing_not_just_the_first_thing() -> void:
+	# Sin trabajadores libres y sin oro: antes solo salia "Sin trabajadores
+	# disponibles" y lo que faltaba de recursos quedaba escondido.
+	PopulationManager._population = 0
+	PopulationManager._used_workers = 0
+	ResourceManager.set_amounts({"gold": 0, "wood": 0})
+	var block: String = Objectives.blocker({"kind": "build", "id": "market"})
+	assert_str(block).contains(Tr.t("LBL_NEEDS_WORKERS") % [1, PopulationManager.get_free_workers()])
+	assert_str(block).contains(Tr.t("OBJ_MISSING") % Tr.amount_list(Rules.missing_cost(Rules.load_building_data("market"))))
+
+func test_a_missing_workshop_material_says_where_to_make_it() -> void:
+	_build("sawmill")
+	ResourceManager.unlock(ResourceManager.name_to_type("planks"))
+	ResourceManager.set_amounts({"planks": 0})
+	var how: String = Objectives.how_to_get("planks")
+	assert_str(how).contains(Tr.res_cap("planks"))
+	assert_str(how).contains(Tr.t("PROC_MAKE_PLANKS"))
+	assert_str(how).contains(Rules.load_building_data("sawmill").get_display_name())
+
+func test_a_material_without_its_workshop_says_to_build_it_first() -> void:
+	assert_int(Rules.count_building("foundry")).is_equal(0)
+	var how: String = Objectives.how_to_get("beams")
+	var foundry: String = Rules.load_building_data("foundry").get_display_name()
+	assert_str(how).is_equal(Tr.t("GUIDE_HOW_MAKE_FIRST") % [Tr.res_cap("beams"), foundry])
+
+func test_every_resource_and_material_has_a_way_to_get_it() -> void:
+	for res in ["wood", "gold", "food", "planks", "ingots", "beams", "fuel"]:
+		assert_str(Objectives.how_to_get(res)).override_failure_message(
+			"sin como conseguir %s" % res).is_not_empty()
+
+func test_the_panel_says_what_is_missing_and_how_to_get_it() -> void:
+	_build("sawmill")
+	ResourceManager.unlock(ResourceManager.name_to_type("planks"))
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "planks": 0})
+	var text: Dictionary = Objectives.describe({"kind": "build", "id": "barracks", "why": "OBJ_WHY_BARRACKS"})
+	var block: String = String(text["blocker"])
+	assert_str(block).contains(Tr.res_name("planks"))
+	assert_str(block).contains(Tr.t("PROC_MAKE_PLANKS"))
+	assert_str(block).contains(Tr.ti("GUIDE_HOW_WOOD"))

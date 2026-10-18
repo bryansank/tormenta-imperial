@@ -689,3 +689,63 @@ y hay tres textos nuevos: `OBJ_WHY_HOUSE_ROOM`, `OBJ_WHY_DECORATE`, `OBJ_WHY_MAK
   pueden notarlo: `tests/ui/test_objectives.gd` (un paso de casa puede salir antes que
   el que esperaban si la gente está al tope) y los que miran el coste del Cuartel o del
   blindado.
+
+## 12. Cuartel temprano (2026-10-17, rama `feat/cuartel-temprano`)
+
+Decisión de Bryan ("prioridad después de la madera", opción A del informe 26 del
+contexto privado). La tabla de valores es de diseño; lo medido con la sonda de línea
+(3 semillas) está en "Medido", al final de la sección.
+
+| Valor | Antes | Después | Por qué |
+|---|---|---|---|
+| `barracks.tres` coste | 150 oro / 60 acero / 80 madera + 20 tablones | **120 / 0 / 80 + 10 tablones** | era 1 sin acero; los tablones (2 vueltas de 20 madera en el Aserradero) siguen siendo una decisión de taller |
+| `barracks.tres` trabajadores | 3 | **1** | aserradero (2) + Cuartel (1) + Granja (2) = los 5 del Núcleo: con 3, la Granja se quedaba sin gente hasta la primera Casa y el tutorial se torcía. Un Cuartel sin gente entrena igual (los trabajadores no le daban nada) |
+| `building_prerequisites.barracks` | Fundición + Aserradero | **Aserradero** | de ahí salen los tablones |
+| `building_prerequisites.tower` | Cuartel | **Cuartel + Fundición** | antes el Cuartel ya implicaba la Fundición; la Torre pide acero y vigas |
+| `building_limits_by_era.barracks` | 3 / 4 / 5 | sin cambio | 3 en la era 1 ya basta (cada uno es una plaza de entrenamiento) |
+| `Objectives.LINE` | aserradero, granja, mina, casa, mercado, almacén, fundición, **cuartel**, guarnición… | aserradero, **cuartel** (`needs: tithe`), granja, **1 soldado** (`any`, `needs: tithe`, fila de la primera misión detrás), mina, casa, mercado, almacén, fundición, guarnición… | el Cuartel va antes que la Granja porque la comida de salida (80) dura ~16 min con 5 personas en las fases tempranas y el Cuartel ya no le quita gente. En Constructor (sin Impuesto) el Cuartel sigue tras la Fundición (`needs: no_tithe`) |
+| Tormenta de prueba | sin Diezmo | **Impuesto de juguete** (`storm_trial_tithe_*`): con tropas en casa, defensa en el tablero contra 1-2 Cobradores de Infantería a escala 0,6 (combate guiado si es la primera pelea); sin tropas, 10 % de la bolsa con tope 40. Nunca edificios, trabajadores ni daño; no emite `tithe_resolved` (ni Mercado, ni rebaja, ni escolta que crece) sino `trial_tithe_resolved`, con su parte en `WarReportScreen` | que el Cuartel temprano se entienda antes de la Tormenta de verdad |
+
+**Coste extra en la era 1:** Cuartel 120 oro + 80 madera + 40 madera de tablones, y un
+soldado 40 oro + 20 madera (sueldo 1 oro / 30 s). Unos 160 oro y 140 madera más antes de
+la Fundición; la primera misión devuelve parte (oro y madera). A ojo, +1-2 min de era 1
+(de 13-17 a ~14-19 con el tutorial); el tope pedido por Bryan es "que no se alargue
+mucho".
+
+### Medido (2026-10-17, ronda de pruebas de la 1.0)
+
+`line_probe`, `--no-dev`, semillas 1-3, un solo Godot, sobre
+`integracion/1.0-cuartel-topes` con los arreglos de esta ronda. "Antes" son las mismas
+semillas en la tabla del 16-10 (§11, con otra carga: compárese con cuidado).
+
+| Semilla | Cuartel | 1.er soldado | 1.ª misión ganada | Impuesto de juguete | era 2 (antes) | era 3 | CG nv3 | victoria (antes) | huecos >3 min sin decidir | mayor |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 0,4 | 2,3 | 3,0 | repelido en el 8,6 (1 en casa) | **17,8** (14,9) | 35 | 187 | **214** (292) | 2 | 4,0 |
+| 2 | 0,4 | 2,3 | 3,0 | repelido en el 8,6 (1 en casa) | **18,8** (15,2) | 37 | 252 | **272** (253) | 2 | 4,6 |
+| 3 | 0,4 | 2,3 | 3,0 | repelido en el 8,6 (1 en casa) | **16,8** (17,2) | 35 | 207 | **234** (245) | 1 | 3,5 |
+
+- **Era 1: 16,8-18,8 min** (antes 14,9-17,2): +1,5 a +3,6 min, en el borde de "si pasa de
+  ~18 min" que se dejó como alarma. La tormenta de prueba llega en el 6,8 y el soldado ya
+  está en casa: el Impuesto de juguete se repele siempre (0 de bolsa perdido).
+- **Campaña: 214-272 min** (3 h 34 - 4 h 32), las tres ganadas al primer asedio. La
+  semilla 1 queda por debajo de 4 h; con tres semillas y otra carga no se puede separar
+  del ruido (ver el aviso de §11).
+- Las esperas sin decidir siguen cortas (1-2 huecos de más de 3 min, el mayor 4,6).
+
+**Arreglos de esta ronda** (en `Objectives.gd`; sin ellos la sonda se atascaba):
+
+| Fallo | Arreglo |
+|---|---|
+| El Cuartel salía el sexto: la Granja (comida en negativo), una Casa y la Mina se le colaban como pasos de apoyo | entrada `eager` en `LINE`: si se puede pagar ya (los tablones en el taller cuentan) y tiene obrero, va antes que los apoyos |
+| **Atasco de 8 h** en las tres semillas: dos Casas de golpe en el minuto 4 (la primera aún en obra no contaba como sitio), el oro de la Mina se iba en ellas y el sueldo del soldado dejaba el oro a 0 sin ningún productor | `_houses_would_help` cuenta el sitio de las casas en obra (`_room_on_the_way`) |
+| "Fabrica tablones" seguía con el lote en marcha y se pagaba dos veces (80 de madera por 20 tablones) | `make_step_for` resta lo que ya se fabrica (`in_production`) |
+| Con el Aserradero en ruinas se pedían tablones (que solo él hace) | reparar va antes que el taller en `_support_or` |
+
+**Falta**:
+
+- Diez semillas (con y sin `--tutorial=0`) para separar la era 1 y la duración del ruido.
+- Si la era 1 se confirma por encima de 18 min: abaratar el Cuartel a 100 oro o quitar el
+  soldado de la línea (la misión ya lo pide en cuanto hay uno).
+- El tutorial pide el Laboratorio (2 trabajadores) con 1 libre: el Cuartel se lleva el
+  que sobraba, así que el paso 13 siempre dice "Haz otra Casa" antes. No se atasca, pero
+  es un paso más.

@@ -43,8 +43,9 @@ var _first: bool = true
 ## (a storm called on demand is a storm that comes) and spent on that Warning.
 var forced: bool = false
 ## La tormenta de prueba de la era 1 (StormManager): recorre Aviso, Ceniza y
-## Tormenta igual que una de verdad, pero al pasar no bajan los Tasadores: vuelve
-## a la calma y se da por terminada (`finished`). Es otro ciclo, no este con una
+## Tormenta igual que una de verdad, pero al pasar no hay Diezmo de verdad (solo
+## el Impuesto de juguete, evento `trial_tithe`): vuelve a la calma y se da por
+## terminada (`finished`). Es otro ciclo, no este con una
 ## bandera puesta a medias: el reloj de verdad no se entera de que paso.
 var trial: bool = false
 ## La de prueba ya paso. Un ciclo terminado no vuelve a moverse.
@@ -262,8 +263,11 @@ func _enter_tithe() -> Array:
 		{"e": "tithe", "severity": hit},
 	]
 
-## La de prueba no cobra: escampa, vuelve la calma y no hay siguiente. Nada de
-## `storms_survived`: no se ha sobrevivido a nada que la Regencia anote.
+## La de prueba no cobra el Diezmo de verdad: escampa, bajan los Cobradores de
+## juguete (`trial_tithe`, que StormManager resuelve: pelea o un poco de la bolsa),
+## vuelve la calma y no hay siguiente. Nada de `storms_survived`: no se ha
+## sobrevivido a nada que la Regencia anote. El ciclo no espera al Impuesto de
+## juguete (no entra en TITHE): ese vive en StormManager y viaja en su guardado.
 func _end_trial() -> Array:
 	var hit: int = effective_severity()
 	phase = Phase.CALM
@@ -271,6 +275,7 @@ func _end_trial() -> Array:
 	finished = true
 	return [
 		{"e": "storm_ended", "severity": hit},
+		{"e": "trial_tithe", "severity": hit},
 		{"e": "phase", "phase": phase, "left": 0.0},
 	]
 

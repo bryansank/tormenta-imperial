@@ -464,6 +464,10 @@ func _set_preview_cell(cell: Vector2i) -> void:
 		# click would be refused, deposit rule included.
 		var ignore: Node = _moving_building if _state == State.MOVING else null
 		var can_place: bool = evaluate_placement(_current_data.id, cell, rotated_size, _map_generator(), ignore)["ok"]
+		# Sin poder pagarlo (recursos, material del taller, trabajadores) tambien
+		# rojo: el clic lo rechazaria y diria que falta (2026-10-17).
+		if can_place and _state == State.PLACING and Rules.purchase_block_detail(_current_data) != "":
+			can_place = false
 
 		# Update ghost material (green = valid, red = invalid)
 		if can_place != _last_preview_valid:

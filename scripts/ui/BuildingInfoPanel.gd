@@ -1,6 +1,7 @@
 extends CanvasLayer
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const TextKit := preload("res://scripts/ui/TextKit.gd")
+const HelpText := preload("res://scripts/ui/BuildingHelpText.gd")
 ## Panel that appears when selecting a building or deposit.
 ## Scrollable, styled, with upgrade, demolish confirm, level display.
 ##
@@ -27,6 +28,14 @@ var _upgrade_btn: Button
 ## Lo que da la mejora ("Mejora: 6 → 9 madera cada 12 s").
 var _upgrade_cost_label: Label
 var _upgrade_cost_row: HFlowContainer
+## Topes y mejoras (feat/topes-mejoras-ayuda): "Nivel 1 de 3" arriba de la
+## mejora, el aviso de repuestos, POR QUE el boton esta apagado y, en los que no
+## se mejoran, una linea que lo dice con su porque.
+var _upgrade_level_label: Label
+var _upgrade_parts_label: Label
+var _upgrade_why_label: Label
+var _no_upgrade_label: Label
+var _upgrade_refresh_queued := false
 var _repair_container: VBoxContainer
 var _repair_btn: Button
 var _repair_label: Label
@@ -71,6 +80,8 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(_on_construction_completed)
 	EventBus.workers_changed.connect(func(_u, _t): if _workers_btn != null and _panel.visible: _refresh_workers_toggle())
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
+	# El boton MEJORAR y su "por que" siguen a lo que hay (antes solo al abrir).
+	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	EventBus.building_selected_for_placement.connect(func(_d): _hide_panel())
 	EventBus.building_demolished.connect(func(_n, _c): _hide_panel())
 	EventBus.deposit_depleted.connect(func(n, _id): if n == _selected_node: _hide_panel())
@@ -205,18 +216,39 @@ func _build_ui() -> void:
 	# Upgrade section
 	_upgrade_container = VBoxContainer.new()
 	_upgrade_container.add_theme_constant_override("separation", 4)
+	_upgrade_level_label = UITheme.make_label("", "body", UITheme.INFO)
+	_upgrade_level_label.name = "UpgradeLevel"
+	_upgrade_container.add_child(_upgrade_level_label)
 	_upgrade_cost_label = UITheme.make_label("", "small", UITheme.TEXT_DIM)
 	_upgrade_cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_upgrade_container.add_child(_upgrade_cost_label)
 	_upgrade_cost_row = TextKit.cost_row({})
 	_upgrade_cost_row.name = "UpgradeCost"
 	_upgrade_container.add_child(_upgrade_cost_row)
+	# El nivel 3 de los que producen pide repuestos: se avisa antes de pulsar.
+	_upgrade_parts_label = UITheme.make_label("", "small", UITheme.WARNING)
+	_upgrade_parts_label.name = "UpgradeParts"
+	_upgrade_parts_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_upgrade_parts_label.visible = false
+	_upgrade_container.add_child(_upgrade_parts_label)
 	_upgrade_btn = Button.new()
 	_upgrade_btn.text = Tr.t("BTN_UPGRADE")
 	UITheme.style_button(_upgrade_btn, UITheme.INFO)
 	_upgrade_btn.pressed.connect(_on_upgrade)
 	_upgrade_container.add_child(_upgrade_btn)
+	# Con el boton apagado, por que: lo que falta y donde se consigue.
+	_upgrade_why_label = UITheme.make_label("", "small", UITheme.DANGER)
+	_upgrade_why_label.name = "UpgradeWhy"
+	_upgrade_why_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_upgrade_why_label.visible = false
+	_upgrade_container.add_child(_upgrade_why_label)
 	_vbox.add_child(_upgrade_container)
+	# Los que no se mejoran lo dicen, con su porque, en gris.
+	_no_upgrade_label = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_no_upgrade_label.name = "NoUpgrade"
+	_no_upgrade_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_no_upgrade_label.visible = false
+	_vbox.add_child(_no_upgrade_label)
 
 	# Mover, a la altura de Reparar y Mejorar (A13). El boton existia pero iba
 	# en una fila pequena al fondo, junto a Demoler, y el dueno no lo encontro.
@@ -400,33 +432,7 @@ func _show_building_panel() -> void:
 		_name_edit.text = custom_name
 
 	_refresh_repair()
-
-	# Upgrade section
-	var next_level := level + 1
-	var worth_it: bool = Rules.upgrade_does_something(_selected_data)
-	if not worth_it:
-		_upgrade_container.visible = false
-	elif next_level <= GameConfig.max_building_level and not is_building:
-		var cost := GameConfig.get_upgrade_cost(_selected_data, next_level)
-		_upgrade_btn.text = Tr.t("LBL_UPGRADE_TO") % [next_level]
-		_upgrade_btn.visible = true
-		# Que da la mejora, con sus numeros, y debajo lo que cuesta en iconos.
-		var effects: Array = Rules.upgrade_effect_lines(_selected_data, level)
-		_upgrade_cost_label.text = "\n".join(effects)
-		_upgrade_cost_label.visible = not effects.is_empty()
-		TextKit.fill_cost_row(_upgrade_cost_row, by_name(cost), missing_by_name(cost))
-		_upgrade_cost_row.visible = true
-		_upgrade_btn.disabled = not ResourceManager.can_afford(cost)
-		_upgrade_container.visible = true
-	else:
-		if level >= GameConfig.max_building_level:
-			_upgrade_cost_label.text = Tr.t("LBL_MAX_LEVEL")
-			_upgrade_cost_label.visible = true
-			_upgrade_cost_row.visible = false
-			_upgrade_btn.visible = false
-			_upgrade_container.visible = true
-		else:
-			_upgrade_container.visible = false
+	_refresh_upgrade()
 
 	_move_container.visible = not _selected_data.is_core and not is_building
 	_demolish_btn.visible = not _selected_data.is_core
@@ -436,6 +442,67 @@ func _show_building_panel() -> void:
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
 	UIManager.open_panel(self)
+
+## La seccion de mejora: "Nivel 1 de 3", que da el siguiente con sus numeros, lo
+## que cuesta, el aviso de repuestos y, con el boton apagado, por que. Un edificio
+## que no se mejora lo dice en una linea gris. En obras no se ensena nada.
+func _refresh_upgrade() -> void:
+	_upgrade_why_label.visible = false
+	_upgrade_parts_label.visible = false
+	_no_upgrade_label.visible = false
+	if _selected_node == null or not is_instance_valid(_selected_node) or _selected_data == null or _is_deposit:
+		_upgrade_container.visible = false
+		return
+	var level: int = _selected_node.get_meta("level", 1)
+	var next_level := level + 1
+	var top := GameConfig.max_building_level
+	var is_building := ProductionManager.is_constructing(_selected_node)
+	if not Rules.upgrade_does_something(_selected_data):
+		_upgrade_container.visible = false
+		var why := HelpText.no_upgrade_text(_selected_data)
+		_no_upgrade_label.text = why
+		_no_upgrade_label.visible = why != "" and not is_building
+		return
+	if is_building:
+		_upgrade_container.visible = false
+		return
+	_upgrade_level_label.text = HelpText.level_of_text(level)
+	_upgrade_container.visible = true
+	if next_level > top:
+		_upgrade_cost_label.text = Tr.t("TOPE_MAX_LEVEL")
+		_upgrade_cost_label.visible = true
+		_upgrade_cost_row.visible = false
+		_upgrade_btn.visible = false
+		return
+	var cost := GameConfig.get_upgrade_cost(_selected_data, next_level)
+	_upgrade_btn.text = Tr.t("LBL_UPGRADE_TO") % [next_level]
+	_upgrade_btn.visible = true
+	# Que da la mejora, con sus numeros, y debajo lo que cuesta en iconos.
+	var effects: Array = Rules.upgrade_effect_lines(_selected_data, level)
+	_upgrade_cost_label.text = "\n".join(effects)
+	_upgrade_cost_label.visible = not effects.is_empty()
+	TextKit.fill_cost_row(_upgrade_cost_row, by_name(cost), missing_by_name(cost))
+	_upgrade_cost_row.visible = true
+	var parts := HelpText.parts_note(_selected_data, next_level)
+	_upgrade_parts_label.text = parts
+	_upgrade_parts_label.visible = parts != ""
+	var blocks: Array = HelpText.upgrade_block_lines(_selected_data, _selected_node)
+	_upgrade_btn.disabled = not blocks.is_empty() or not ResourceManager.can_afford(cost)
+	_upgrade_why_label.text = "\n".join(blocks)
+	_upgrade_why_label.visible = not blocks.is_empty()
+
+## Cambian los recursos con la ficha abierta: la mejora se repinta una vez al
+## final del fotograma (llega una senal por recurso).
+func _on_resources_changed() -> void:
+	if _upgrade_refresh_queued or not _panel.visible or _is_deposit or _selected_data == null:
+		return
+	_upgrade_refresh_queued = true
+	_flush_upgrade_refresh.call_deferred()
+
+func _flush_upgrade_refresh() -> void:
+	_upgrade_refresh_queued = false
+	if _panel.visible and not _is_deposit and _selected_data != null:
+		_refresh_upgrade()
 
 func _show_deposit_panel() -> void:
 	_confirm_container.visible = false
@@ -452,6 +519,7 @@ func _show_deposit_panel() -> void:
 	_construction_container.visible = false
 	_name_container.visible = false
 	_upgrade_container.visible = false
+	_no_upgrade_label.visible = false
 	_move_container.visible = false
 	_demolish_btn.visible = false
 	_update_deposit_uses()

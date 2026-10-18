@@ -153,8 +153,14 @@ var building_prerequisites := {
 	# Y el Laboratorio (2026-10-12): la era 2 trae una obra mas y el arbol abierto
 	# antes del petroleo, que es cuando se piden las tecnologias de almacen.
 	"refinery": ["foundry", "barracks", "laboratory"],
-	"barracks": ["foundry", "sawmill"],
-	"tower": ["barracks"],
+	# Cuartel temprano (2026-10-17, feat/cuartel-temprano): de la era 1, sin
+	# acero (120 oro + 80 madera + 10 tablones). Solo pide el Aserradero, de donde
+	# salen los tablones: es la prioridad "despues de la madera" de Bryan. Entrena
+	# infanteria ya; artilleria y tanques siguen con su era (ArmyManager.is_unlocked).
+	"barracks": ["sawmill"],
+	# La Torre pide acero y vigas, que llegan con la Fundicion; antes el Cuartel
+	# ya implicaba la Fundicion. Ahora se dice: sin Fundicion no hay Torre.
+	"tower": ["barracks", "foundry"],
 	"headquarters": ["barracks", "refinery"],
 	# Edificios utiles de la 1.1: cada uno pide lo que mejora o de lo que vive.
 	"windmill": ["farm"],
@@ -2409,7 +2415,8 @@ var storm_first_severity := 1
 ## La tormenta de prueba de la era 1 (decision de Bryan, 2026-10-04). Sin ella la
 ## era 1 eran 8-10 minutos sin otra presion que el consumo, y la primera Tormenta
 ## llegaba de nuevas con los Tasadores detras. Esta es un ensayo: Aviso, Ceniza,
-## Tormenta y calma, con los consejos del Aviso, pero SIN Diezmo, sin romper
+## Tormenta y calma, con los consejos del Aviso, pero sin el Diezmo de verdad (solo
+## el Impuesto de juguete, storm_trial_tithe_*), sin romper
 ## edificios ni la cola y con un mordisco de moral pequeno. Una vez por partida, y
 ## no arma el reloj de verdad (ese sigue llegando con la Fundicion).
 ##
@@ -2425,8 +2432,29 @@ var storm_trial_production_multiplier := 0.75
 ## severidad 1 se lleva 3 puntos en vez de 12.
 var storm_trial_morale_factor := 0.25
 
+## El Impuesto de juguete de la tormenta de prueba (2026-10-17, feat/cuartel-temprano).
+## Al escampar bajan unos Cobradores de prueba: si hay tropas en casa, pelean en el
+## tablero (el combate guiado, si aun no se dio); si no, se llevan un poco de la
+## bolsa. Nunca edificios ni trabajadores, nunca dano. Asi el Cuartel temprano se
+## entiende antes de que llegue la Tormenta de verdad.
+##   force_max   cobradores, como mucho (uno por soldado en casa, de 1 a este tope)
+##   unit        de que son los cobradores
+##   enemy_scale lo debiles que vienen (vida y ataque), sobre 1,0
+##   pct / cap   sin defensa: esta parte de lo guardado, y nunca mas de `cap`
+var storm_trial_tithe_force_max := 2
+var storm_trial_tithe_unit := "infantry"
+var storm_trial_tithe_enemy_scale := 0.6
+var storm_trial_tithe_pct := 0.10
+var storm_trial_tithe_cap := 40
+
 func get_storm_trial_at() -> float:
 	return get_duration(storm_trial_at)
+
+## Lo que se llevan los Cobradores de prueba con `stored` en la bolsa: una parte
+## pequena y con tope. Pura, para las pruebas.
+func get_trial_tithe_debt(stored: int) -> int:
+	var share: int = int(float(maxi(0, stored)) * storm_trial_tithe_pct)
+	return clampi(share, 0, maxi(0, storm_trial_tithe_cap))
 
 ## One Warning in four turns out to be nothing. The player still paid to prepare,
 ## and the Regency loses nothing by crying wolf — which is the point.

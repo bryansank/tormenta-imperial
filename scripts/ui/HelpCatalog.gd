@@ -16,6 +16,8 @@ extends RefCounted
 ## Para anadir una: una entrada aqui, sus claves Tr (ES y EN) y, si es un
 ## consejo, su disparador en TutorialManager.
 
+const BuildingHelpText := preload("res://scripts/ui/BuildingHelpText.gd")
+
 const CAT_BASICS := "basics"
 const CAT_ECONOMY := "economy"
 const CAT_STORM := "storm"
@@ -164,6 +166,22 @@ const ENTRIES := {
 		"title": "HELP_T_AIR_SEA", "body": "HELP_B_AIR_SEA", "target": ""},
 	"guide_air_sea_advantage": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
 		"title": "HELP_T_AIR_SEA_ADVANTAGE", "body": "HELP_B_AIR_SEA_ADVANTAGE", "target": ""},
+	# ── Topes y mejoras (2026-10-17, rama feat/topes-mejoras-ayuda) ──
+	# Paginas con numeros: `dyn` = el cuerpo lo escribe BuildingHelpText leyendo
+	# GameConfig (topes por era, multiplicadores de mejora, repuestos, torres,
+	# recetas), no una clave fija; `body` es su resumen de una linea (el tooltip
+	# del indice, summary()). El indice las abre como pagina (sin reloj),
+	# porque son largas para la tarjeta de abajo.
+	"guide_limits": {"kind": "guide", "cat": CAT_BASICS, "basic": true, "dyn": true,
+		"title": "HELP_T_LIMITS", "body": "HELP_B_LIMITS", "target": "build_button"},
+	"guide_upgrades": {"kind": "guide", "cat": CAT_BASICS, "basic": true, "dyn": true,
+		"title": "HELP_T_UPGRADES", "body": "HELP_B_UPGRADES", "target": ""},
+	"guide_eras": {"kind": "guide", "cat": CAT_ECONOMY, "basic": true, "dyn": true,
+		"title": "HELP_T_ERAS", "body": "HELP_B_ERAS", "target": "objective"},
+	"guide_workshop": {"kind": "guide", "cat": CAT_ECONOMY, "basic": true, "dyn": true,
+		"title": "HELP_T_WORKSHOP", "body": "HELP_B_WORKSHOP", "target": ""},
+	"guide_towers": {"kind": "guide", "cat": CAT_STORM, "basic": true, "dyn": true,
+		"title": "HELP_T_TOWERS", "body": "HELP_B_TOWERS", "target": "", "needs": "storm_started"},
 }
 
 ## Prioridad de los globos que salen solos: mayor sale antes. Los consejos van
@@ -212,6 +230,20 @@ static func title(id: String) -> String:
 static func body(id: String) -> String:
 	if id == "callout_camera" and GameConfig.touch_controls_enabled():
 		return Tr.ti("LBL_HELP_CAMERA")
+	if is_page(id):
+		return BuildingHelpText.help_body(id)
+	var key := String(entry(id).get("body", ""))
+	return Tr.ti(key) if key != "" else ""
+
+## Una pagina con numeros vivos (`dyn`): el indice la lee en grande, sin reloj.
+static func is_page(id: String) -> bool:
+	return bool(entry(id).get("dyn", false))
+
+## El texto corto de una ayuda (su clave `body`): para el tooltip del indice. En
+## una pagina es su resumen; en las demas, lo mismo que body().
+static func summary(id: String) -> String:
+	if not is_page(id):
+		return body(id)
 	var key := String(entry(id).get("body", ""))
 	return Tr.ti(key) if key != "" else ""
 

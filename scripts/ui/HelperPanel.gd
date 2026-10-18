@@ -28,6 +28,7 @@ extends CanvasLayer
 
 const HelpCallout := preload("res://scripts/ui/HelpCallout.gd")
 const HelpCatalog := preload("res://scripts/ui/HelpCatalog.gd")
+const BuildingHelpText := preload("res://scripts/ui/BuildingHelpText.gd")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const HelpIndexScene := preload("res://scenes/ui/HelpIndexPanel.tscn")
 
@@ -134,6 +135,9 @@ func _ready() -> void:
 	# Una leccion suelta del tutorial (reparar) que sale con un globo ya en
 	# pantalla lo aparta: antes se pisaban las dos tarjetas (ronda de pruebas 1.0).
 	EventBus.tutorial_step_changed.connect(func(_s): _pump.call_deferred())
+	# CONSTRUIR abierto aparta los consejos; al cerrarlo vuelven.
+	UIManager.window_opened.connect(func(_w): _pump.call_deferred())
+	UIManager.window_closed.connect(func(_w): _pump.call_deferred())
 	# Durante una pelea las ayudas de la colonia esperan (docs/15 §3): al abrir
 	# el tablero la que este en pantalla se aparta y vuelve al cerrar el parte.
 	EventBus.encounter_started.connect(func(_i, _b): _refresh_callouts())
@@ -386,7 +390,18 @@ func _can_show(item: Dictionary) -> bool:
 	# el dedo (taparian la columna de CANCELAR).
 	if _placing and GameConfig.touch_controls_enabled() and not forced:
 		return false
+	# Ni con CONSTRUIR abierto: la tarjeta tapaba la ficha del edificio (la frase
+	# del tope y MEJORAR UNO) a 1280x720. Vuelve al cerrarlo (ronda 1.0).
+	if not forced and _build_menu_open():
+		return false
 	return true
+
+## La lista de CONSTRUIR esta abierta (en la pila de UIManager).
+func _build_menu_open() -> bool:
+	for w in UIManager.open_windows():
+		if is_instance_valid(w) and String(w.name) == "ConstructionMenu":
+			return true
+	return false
 
 ## El globo tiene sentido ahora: el de ESCARAMUZAS solo con su boton a la vista,
 ## el de zoom solo con los botones tactiles, y ninguno de camara colocando con
@@ -581,6 +596,14 @@ func _make_building_entry(data: BuildingData) -> VBoxContainer:
 	meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	entry.add_child(meta)
 
+	# Topes y mejoras (feat/topes-mejoras-ayuda): tope por era, era, lo que pide
+	# antes y si se mejora. "Tope: 5 · 8 · 10 (eras 1-3) · Era 1 · Antes: Casa ·
+	# Se mejora hasta el nivel 3".
+	var rules := UITheme.make_label(BuildingHelpText.guide_rules_line(data), "small", UITheme.INFO)
+	rules.name = "GuideRules"
+	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	entry.add_child(rules)
+
 	if not data.get_description().is_empty():
 		var desc := UITheme.make_label(data.get_description(), "small", UITheme.TEXT)
 		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -595,6 +618,10 @@ func _meta_line(data: BuildingData) -> String:
 	for pair in [[data.cost_gold, "gold"], [data.cost_steel, "steel"], [data.cost_oil, "oil"], [data.cost_wood, "wood"]]:
 		if pair[0] > 0:
 			costs.append("%d %s" % [pair[0], Tr.res_name(pair[1])])
+	# Los materiales del taller tambien son coste (antes no salian en la guia).
+	for mat in data.cost_materials:
+		if int(data.cost_materials[mat]) > 0:
+			costs.append("%d %s" % [int(data.cost_materials[mat]), Tr.res_name(String(mat))])
 	parts.append("%s: %s" % [Tr.t("LBL_GUIDE_COST"), ", ".join(costs) if not costs.is_empty() else Tr.t("LBL_FREE")])
 
 	if data.workers_required > 0:
