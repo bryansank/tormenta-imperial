@@ -52,7 +52,9 @@ const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", 
 	# Las diez decoraciones baratas (feat/decoraciones-1); en el juego las carga
 	# DecorMesh (<id>_mesh.res) y, sin hornear, usa su version procedural.
 	"lamp_post", "park_bench", "hedge", "avenue_tree", "flower_planter",
-	"colony_sign", "hay_cart", "bonfire", "flagpole", "palm_trees"]
+	"colony_sign", "hay_cart", "bonfire", "flagpole", "palm_trees",
+	# Muelle de pesca (feat/muelle-pesca).
+	"fishing_dock"]
 
 ## Presupuesto de triangulos de una decoracion 2x2 (doc 21 §6.6).
 const DECOR_TRI_BUDGET := 600

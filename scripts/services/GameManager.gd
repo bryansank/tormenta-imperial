@@ -677,6 +677,9 @@ func _load_game() -> void:
 			var dep: Node = _map_gen.spawn_deposit(entry["id"], Vector2i(entry["cell_x"], entry["cell_y"]), uses, dep_size)
 			if dep != null and bool(entry.get("access_ring", false)):
 				dep.set_meta("access_ring", true)
+		# Una partida de antes del Muelle de pesca no trae bancos de peces: se
+		# sortean ahora, con la semilla de su isla (feat/muelle-pesca).
+		_map_gen.ensure_shore_deposits()
 
 	# Restore camera
 	if data.has("camera") and _camera and _camera.has_method("set_state"):

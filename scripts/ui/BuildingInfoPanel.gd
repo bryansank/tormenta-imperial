@@ -532,6 +532,9 @@ func _update_deposit_uses() -> void:
 		var short := Tr.t("DEP_SHORT_" + key)
 		var hint := Tr.t("DEP_HINT_" + key)
 		_deposit_uses_label.text = Tr.t("LBL_DEPOSIT_USES") % [uses]
+		# Uno que no se agota (el banco de peces) no ensena usos: solo su frase.
+		if GameConfig.is_endless_deposit(_selected_deposit_id):
+			_deposit_uses_label.text = Tr.t("LBL_DEPOSIT_ENDLESS")
 		if short != "DEP_SHORT_" + key:
 			_deposit_uses_label.text += "\n" + short
 		_deposit_uses_label.tooltip_text = hint if hint != "DEP_HINT_" + key else ""

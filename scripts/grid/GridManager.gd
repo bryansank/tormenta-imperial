@@ -283,6 +283,21 @@ func place_obstacle(cell: Vector2i, node: Node, grid_size: Vector2i = Vector2i(1
 	_bump()
 	return true
 
+## Un yacimiento del mar (el banco de peces, feat/muelle-pesca) en celdas de
+## agua de la rejilla: se apunta en ellas para que un toque lo seleccione y para
+## que dos no se pisen. El agua sigue sin estar libre (is_cell_free mira la
+## tierra), asi que nada se construye encima. Falla si alguna celda es tierra,
+## esta fuera de la rejilla o ya tiene algo.
+func place_sea_obstacle(cell: Vector2i, node: Node, grid_size: Vector2i = Vector2i(1, 1)) -> bool:
+	var cells := _get_cells_for(cell, grid_size)
+	for c in cells:
+		if not is_water_cell(c) or _cell_to_building.has(c):
+			return false
+	for c in cells:
+		_cell_to_building[c] = node
+	_bump()
+	return true
+
 ## Remove an obstacle from one or more cells.
 func remove_obstacle(cell: Vector2i, grid_size: Vector2i = Vector2i(1, 1)) -> void:
 	var cells := _get_cells_for(cell, grid_size)

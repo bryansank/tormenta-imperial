@@ -35,7 +35,11 @@ const Y_POOL := 0.024
 const AO_HEIGHT := 0.22
 const AO_DARK := 0.24
 
-const IDS := ["forest", "gold_vein", "iron_deposit", "oil_well"]
+const IDS := ["forest", "gold_vein", "iron_deposit", "oil_well", "fish_shoal"]
+
+## La superficie del mar respecto al suelo de la isla (IslandGenerator.WATER_Y):
+## el banco de peces se dibuja ahi, no en y = 0.
+const SEA_Y := -0.5
 
 ## La etapa de un yacimiento con `uses` de `max_uses`: 4 entero, 1 el ultimo
 ## uso, 0 agotado (no se dibuja).
@@ -94,7 +98,11 @@ static func build(deposit_id: String, dep_size: Vector2i, seed_val: int, stage :
 		"gold_vein": _gold(mk, rng, w, d, f)
 		"iron_deposit": _iron(mk, rng, w, d, f)
 		"oil_well": _oil(mk, rng, w, d, f)
-	_contact_shade(mk)
+		"fish_shoal": _fish_shoal(mk, rng, w, d)
+	# El banco de peces flota en el agua (bajo y = 0): su sombra de contacto lo
+	# oscureceria entero.
+	if deposit_id != "fish_shoal":
+		_contact_shade(mk)
 	var mesh := mk.commit()
 	if mesh != null:
 		mesh.resource_name = "deposit_%s" % deposit_id
@@ -518,3 +526,53 @@ static func _contact_shade(mk) -> void:
 			continue
 		c[i] = c[i].darkened(AO_DARK * clampf(1.0 - y / AO_HEIGHT, 0.0, 1.0))
 	mk._sc = c
+
+# ── Banco de peces (feat/muelle-pesca) ────────────────────────────────
+# En el agua, no en tierra: todo a la altura del mar (SEA_Y). Una mancha de
+# agua honda con su orla clara (se lee como "aqui hay algo" desde lejos), lomos
+# y aletas de peces asomando, espuma, una boya roja y blanca y, lo exagerado, un
+# pez que salta en arco. Sin etapas: nunca se agota. Piezas de pocas caras (los
+# peces son rombos de cuatro lados, no bolas): ~400 triangulos en 2x2.
+
+static func _fish_shoal(mk, rng: RandomNumberGenerator, w: float, d: float) -> void:
+	var jitter := _jitter(rng, 16)
+	_superblob(mk, Vector3.ZERO, w * 0.5 - 0.12, d * 0.5 - 0.12, SEA_Y + 0.035, C(S.SKY, 0.32), jitter)
+	_superblob(mk, Vector3.ZERO, w * 0.5 - 0.3, d * 0.5 - 0.3, SEA_Y + 0.04, C(S.SKY, -0.42), jitter)
+	# Espuma: motas claras sueltas por la orla.
+	for k in 4:
+		var a := TAU * float(k) / 4.0 + rng.randf_range(-0.4, 0.4)
+		var p := Vector3(cos(a) * (w * 0.5 - 0.28), 0, sin(a) * (d * 0.5 - 0.28))
+		_blob(mk, rng, p, rng.randf_range(0.08, 0.14), rng.randf_range(0.05, 0.09), SEA_Y + 0.045, C(S.CREAM, 0.05))
+	# Lomos de peces asomando, en corro alrededor del centro.
+	var pts := _points(rng, w, d, 0.8, 0.55)
+	var n := mini(pts.size(), 3 + int(w * d / 8.0))
+	for i in n:
+		var p: Vector3 = pts[i]
+		_fish(mk, p + Vector3(0, SEA_Y + 0.03, 0), rng.randf() * TAU, 0.0, rng.randf_range(0.85, 1.15),
+			C(S.SLATE, rng.randf_range(0.12, 0.3)))
+	# El pez que salta (lo exagerado): fuera del agua, en arco, con su salpicadura.
+	var jump := Vector3(rng.randf_range(-0.2, 0.2) * w, SEA_Y, rng.randf_range(-0.1, 0.15) * d)
+	_fish(mk, jump + Vector3(0, 0.42, 0), rng.randf() * TAU, 0.5, 1.35, C(S.BRASS, 0.08))
+	_blob(mk, rng, jump, 0.24, 0.18, SEA_Y + 0.05, C(S.CREAM, 0.1))
+	for k in 3:
+		var a := TAU * float(k) / 3.0 + 0.4
+		mk.cyl(jump + Vector3(cos(a) * 0.18, 0.0, sin(a) * 0.14), 0.04, 0.12, C(S.CREAM, 0.1), 4, Vector3.UP, 0.0)
+	# La boya: dice "aqui se pesca".
+	var buoy := Vector3(w * 0.5 - 0.45, SEA_Y, -d * 0.5 + 0.45)
+	mk.cyl(buoy, 0.12, 0.16, C(S.RED, -0.05), 6)
+	mk.cyl(buoy + Vector3(0, 0.16, 0), 0.12, 0.08, C(S.CREAM), 6)
+	mk.cyl(buoy + Vector3(0, 0.24, 0), 0.02, 0.28, C(S.IRON, 0.1), 4)
+	mk.box(buoy + Vector3(0.06, 0.48, 0), Vector3(0.12, 0.08, 0.02), C(S.RED, 0.05))
+
+## Un pez de juguete: cuerpo en rombo de cuatro lados (de la cola al morro, a
+## lo largo de +X), cola en cono y aleta. `yaw` orienta el morro; `pitch` lo
+## inclina (el que salta). ~26 triangulos.
+static func _fish(mk, c: Vector3, yaw: float, pitch: float, s: float, col: Color) -> void:
+	var saved: Transform3D = mk.xf
+	mk.xf = saved * Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, pitch), c)
+	# Media pieza hacia el morro y media hacia la cola, unidas por el lomo.
+	mk.cyl(Vector3.ZERO, 0.09 * s, 0.14 * s, col, 4, Vector3.RIGHT, 0.02 * s)
+	mk.cyl(Vector3.ZERO, 0.09 * s, 0.12 * s, col.darkened(0.08), 4, Vector3.LEFT, 0.03 * s)
+	mk.cyl(Vector3(-0.11 * s, 0, 0), 0.08 * s, 0.1 * s, col.darkened(0.15), 4, Vector3.LEFT, 0.0)
+	mk.cyl(Vector3(0.0, 0.06 * s, 0), 0.04 * s, 0.08 * s, col.darkened(0.2), 3, Vector3.UP, 0.0)
+	mk.xf = saved

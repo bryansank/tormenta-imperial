@@ -1620,6 +1620,18 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"NOTIF_CONTRACT_LOST_REP": "Se acabó el plazo: %s. La próxima vez pagarán menos.",
 		"OBJ_DO_CONTRACT": "Entrega el encargo: %s",
 		"OBJ_WHY_CONTRACT": "Ya tienes lo que piden. Llévalo antes de que se acabe el tiempo: MENÚ > ENCARGOS.",
+		# Muelle de pesca (feat/muelle-pesca)
+		"BLD_FISHING_DOCK_NAME": "Muelle de pesca",
+		"BLD_FISHING_DOCK_DESC": "Pesca comida sin parar. Va en la orilla, pegado a un banco de peces.",
+		"DEP_FISH_SHOAL": "Banco de peces",
+		"DEP_SHORT_FISH_SHOAL": "Pon un Muelle de pesca en la orilla, pegado a él",
+		"DEP_HINT_FISH_SHOAL": "Aquí nadan muchos peces. Un Muelle de pesca en la orilla, tocándolo, saca comida de él. Los peces no se acaban nunca.",
+		"LBL_DEPOSIT_ENDLESS": "No se acaba nunca",
+		"LBL_NEEDS_FISH_NEAR": "Ponlo en la orilla, pegado a un banco de peces.",
+		"PROC_SMOKE_FISH": "Ahumar pescado",
+		"HELP_T_FISHING_DOCK": "El Muelle de pesca",
+		"HELP_B_FISHING_DOCK": "El Muelle pesca comida él solo, sin elegir cultivo. Recógela cuando se llene.\nVa en la orilla, pegado a un banco de peces: son las manchas azules con peces en el agua.\n¿Te sobra madera? Usa «Ahumar pescado»: quema madera y te da más comida.",
+		"OBJ_WHY_FISHING_DOCK": "Te falta comida y no caben más Granjas. Un Muelle de pesca en la orilla, junto a un banco de peces, pesca comida sin parar.",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -3195,6 +3207,18 @@ When full, the building stops. What does not fit in your storage stays in the bu
 		"NOTIF_CONTRACT_LOST_REP": "Time ran out: %s. They will pay less next time.",
 		"OBJ_DO_CONTRACT": "Deliver the contract: %s",
 		"OBJ_WHY_CONTRACT": "You already have what they want. Bring it before time runs out: MENU > CONTRACTS.",
+		# Muelle de pesca (feat/muelle-pesca)
+		"BLD_FISHING_DOCK_NAME": "Fishing dock",
+		"BLD_FISHING_DOCK_DESC": "Catches food nonstop. It goes on the shore, next to a school of fish.",
+		"DEP_FISH_SHOAL": "School of fish",
+		"DEP_SHORT_FISH_SHOAL": "Put a Fishing dock on the shore, touching it",
+		"DEP_HINT_FISH_SHOAL": "Lots of fish swim here. A Fishing dock on the shore, touching it, gets food from it. The fish never run out.",
+		"LBL_DEPOSIT_ENDLESS": "Never runs out",
+		"LBL_NEEDS_FISH_NEAR": "Put it on the shore, next to a school of fish.",
+		"PROC_SMOKE_FISH": "Smoke fish",
+		"HELP_T_FISHING_DOCK": "The Fishing dock",
+		"HELP_B_FISHING_DOCK": "The dock catches food on its own, no crop to pick. Collect it when it fills up.\nIt goes on the shore, next to a school of fish: the blue patches with fish in the water.\nToo much wood? Use «Smoke fish»: it burns wood and gives you more food.",
+		"OBJ_WHY_FISHING_DOCK": "You need food and there is no room for more Farms. A Fishing dock on the shore, next to a school of fish, catches food nonstop.",
 	},
 }
 

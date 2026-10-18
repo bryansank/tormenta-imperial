@@ -139,6 +139,9 @@ const ENTRIES := {
 		"title": "HELP_T_FARM", "body": "HELP_B_FARM", "target": ""},
 	"collect_full": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
 		"title": "HELP_T_COLLECT", "body": "HELP_B_COLLECT", "target": ""},
+	# Muelle de pesca (feat/muelle-pesca): sale al terminar el primero.
+	"fishing_dock": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_FISHING_DOCK", "body": "HELP_B_FISHING_DOCK", "target": ""},
 	# ── Ensenar el combate (2026-10-14, rama feat/ensenar-combate, docs/23 §2.4) ──
 	# Guias basicas: siempre en el indice. Lo mismo que cuentan las marcas del
 	# combate guiado y la ficha de unidad, para leerlo con calma.

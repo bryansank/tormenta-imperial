@@ -217,8 +217,8 @@ The source folders carry a `.gdignore` and are not exported; only the baked mesh
 | `kaykit_medieval_hexagon/` | [KayKit — Medieval Hexagon Pack](https://kaylousberg.itch.io/kaykit-medieval-hexagon) (Kay Lousberg) | CC0 1.0 (`licenses/CC0-KAYKIT-MEDIEVAL-HEXAGON.txt`) |
 | `kenney_city_kit_industrial/` | [Kenney — City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial) | CC0 1.0 (`licenses/CC0-KENNEY-CITY-KIT-INDUSTRIAL.txt`) |
 | `kenney_fantasy_town_kit/` (`lantern`, `hedge`, `hedge-large`, `tree-high-round`, `windmill`) | [Kenney — Fantasy Town Kit](https://kenney.nl/assets/fantasy-town-kit) | CC0 1.0 (`licenses/CC0-KENNEY-FANTASY-TOWN-KIT.txt`) |
-| `kenney_survival_kit/` (`signpost`, `campfire-stand`, `resource-wood`) | [Kenney — Survival Kit](https://kenney.nl/assets/survival-kit) | CC0 1.0 (`licenses/CC0-KENNEY-SURVIVAL-KIT.txt`) |
-| `kenney_pirate_kit/` (`flag-high`, `palm-straight`, `patch-sand`, `tower-complete-small`, `barrel`) | [Kenney — Pirate Kit](https://kenney.nl/assets/pirate-kit) | CC0 1.0 (`licenses/CC0-KENNEY-PIRATE-KIT.txt`) |
+| `kenney_survival_kit/` (`signpost`, `campfire-stand`, `resource-wood`, `bucket`) | [Kenney — Survival Kit](https://kenney.nl/assets/survival-kit) | CC0 1.0 (`licenses/CC0-KENNEY-SURVIVAL-KIT.txt`) |
+| `kenney_pirate_kit/` (`flag-high`, `palm-straight`, `patch-sand`, `tower-complete-small`, `barrel`, `boat-row-small`) | [Kenney — Pirate Kit](https://kenney.nl/assets/pirate-kit) | CC0 1.0 (`licenses/CC0-KENNEY-PIRATE-KIT.txt`) |
 
 ## 6. Original content (not third-party)
 
