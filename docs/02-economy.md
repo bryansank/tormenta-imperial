@@ -16,7 +16,8 @@ The economy is era-gated: resources unlock progressively as the player advances.
 
 **Food (2026-10-04).** `ResourceManager.Type.FOOD`, appended after the materials so no
 number moves. It is a **pool** resource (it counts against the shared cap, the Tithe
-takes it last) and it is grown at the **Farm** (docs/03). Buy and sell it at the
+takes it last) and it is grown at the **Farm** (docs/03) or, since 1.1, caught at the
+**Fishing dock** on the shore (docs/03, "Muelle de pesca"). Buy and sell it at the
 Market (base price 2, the cheapest: buying food is the immediate fix for hunger). A
 save from before food loads with `GameConfig.legacy_save_food` (120) so nobody starves
 on load.
@@ -199,7 +200,9 @@ One **shared pool** for the five resources (not a cap per resource):
 ## Where extractors can go
 
 Sawmill, Gold Mine and Foundry must touch a forest, a gold vein and an iron deposit
-(reach 1); the Refinery sits on an oil well and consumes it
+(reach 1); the Fishing dock (1.1) stands on the shore touching a school of fish
+(`fish_shoal`, reach 1, in the water: see "Yacimientos de mar" below); the Refinery
+sits on an oil well and consumes it
 (`GameConfig.building_deposit_rules`, applied by `PlacementRules`). Like every
 building, they also need a road joined to the Núcleo (docs/03 "Road network").
 
@@ -223,6 +226,40 @@ building, they also need a road joined to the Núcleo (docs/03 "Road network").
 - Every deposit leaves room for its extractor and a free path to the Núcleo's
   sidewalk; a final pass removes and re-rolls any that ended boxed in.
 - The island shape also comes from the seed, in 3D and 2D.
+
+### Yacimientos de mar: el banco de peces (1.1, `feat/muelle-pesca`)
+
+El primer recurso del mar, el gancho que dejó `MapGenerator.shore_cells()`. Lo
+explota el **Muelle de pesca** (docs/03).
+
+- **Dónde:** en celdas de **agua** de la rejilla (las de la isla irregular), 2x2 o 3x2,
+  todas agua, sin nada encima y tocando tierra (diagonal incluida). Nunca en la acera
+  del Núcleo ni a menos de `deposit_core_gap` de ella. Entre dos bancos quedan al menos
+  `spacing` (6) casillas. Cada uno deja hueco en la orilla para un muelle 2x2 con
+  camino a la red (`_deposit_is_workable`, la misma regla que los de tierra).
+- **Cuántos:** `GameConfig.sea_deposit_rolls["fish_shoal"]`: 3-5 por isla, un 35 % de
+  3 casillas de largo. `MapGenerator.SHORE_DEPOSIT_IDS` = `["fish_shoal"]`;
+  `_fill_sea_type()` los sortea al final de `generate_new_map()` con **su propio azar**
+  (semilla de la isla y del tipo), no con el global: el resto del mapa sale igual que
+  antes de haberlos, y la misma isla da siempre los mismos bancos.
+- **En la rejilla:** `GridManager.place_sea_obstacle()` los apunta en sus celdas de
+  agua (para que un toque los seleccione y dos no se pisen). El agua sigue sin estar
+  libre: nada se construye encima.
+- **No se agotan** (`GameConfig.endless_deposits`): sin minado a mano (no están en
+  `mining_data`), y el panel no enseña usos sino "No se acaba nunca" y su frase
+  (`DEP_SHORT_FISH_SHOAL`, `DEP_HINT_FISH_SHOAL`). `deposit_resource_required` = comida:
+  abierto desde el principio.
+- **Partidas viejas:** una partida de antes del muelle no trae bancos. Al cargarla,
+  `GameManager` llama a `MapGenerator.ensure_shore_deposits()`, que los sortea (con la
+  semilla de su isla) si no hay ninguno. En la isla cuadrada de antes de 2026-10-12 no
+  hay agua dentro de la rejilla: no sale ninguno y el muelle no se puede construir.
+- **Aspecto:** 3D en `DepositMesh._fish_shoal()` a la altura del mar
+  (`DepositMesh.SEA_Y` = `IslandGenerator.WATER_Y`, -0,5): mancha de agua honda con su
+  orla clara, lomos y aletas de peces asomando, espuma, una boya roja y blanca y, lo
+  exagerado, un pez que salta en arco con su salpicadura. ~400 triángulos (2x2), sin sombra
+  de contacto, una malla en caché por tamaño y variante. 2D en
+  `BuildingArt2D._dep_fish_shoal()`, horneado en `ArtCache2D` como los demás. Sin
+  etapas: nunca se agota.
 
 ## Yacimientos en el mapa (aspecto, 2026-10-14)
 

@@ -55,7 +55,9 @@ const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", 
 	"colony_sign", "hay_cart", "bonfire", "flagpole", "palm_trees",
 	# Astillero y Aerodromo (1.1, feat/aire-mar-vista). Sus .tres los pone la
 	# rama de reglas; hasta entonces su huella sale de EXTRA.
-	"shipyard", "aerodrome"]
+	"shipyard", "aerodrome",
+	# Muelle de pesca (feat/muelle-pesca).
+	"fishing_dock"]
 
 ## Presupuesto de triangulos de una decoracion 2x2 (doc 21 §6.6).
 const DECOR_TRI_BUDGET := 600

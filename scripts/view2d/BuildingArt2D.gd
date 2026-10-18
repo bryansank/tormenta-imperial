@@ -144,6 +144,7 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		# Mar y aire (1.1, feat/aire-mar-vista; dibujos al final del archivo).
 		"shipyard": _shipyard(ci, r)
 		"aerodrome": _aerodrome(ci, r)
+		"fishing_dock": _fishing_dock(ci, r)
 		_:
 			_block(ci, r, minf(r.size.x, r.size.y) * 0.16, STONE, CONCRETE_DARK)
 	if level > 1:
@@ -1927,6 +1928,8 @@ static func fx_anchors(id: String) -> Array:
 		"carpentry": return [Vector2(0.4, 0.4)]
 		"lighthouse": return [Vector2(0.42, 0.1)]
 		"fuel_depot": return [Vector2(0.84, 0.82)]
+		# Muelle de pesca: la chimenea del ahumadero.
+		"fishing_dock": return [Vector2(0.2, 0.08)]
 	return [Vector2(0.5, 0.45)]
 
 # ── Parcela y atrezo (docs/03, "Parcela y atrezo") ────────────────────
@@ -2320,6 +2323,7 @@ static func draw_deposit(ci: CanvasItem, deposit_id: String, size: Vector2, seed
 		"gold_vein": _dep_gold(ci, r, rng, f)
 		"iron_deposit": _dep_iron(ci, r, rng, f)
 		"oil_well": _dep_oil(ci, r, rng, f)
+		"fish_shoal": _dep_fish_shoal(ci, r, rng)
 		_:
 			ci.draw_rect(r, Color(0.5, 0.5, 0.5, 0.6))
 
@@ -3208,3 +3212,100 @@ static func _aerodrome(ci: CanvasItem, r: Rect2) -> void:
 		ci.draw_line(Vector2(x, c.y - h), Vector2(x, c.y + h), IMPERIAL_RED, 2.5)
 	_poly(ci, PackedVector2Array([c + Vector2(-rx * 0.85, 0), c + Vector2(-rx * 1.15, -ry * 0.9), c + Vector2(-rx * 1.15, ry * 0.9)]), IMPERIAL_RED, OUTLINE, 1.0)
 	ci.draw_line(c + Vector2(rx, 0), tip, IRON, 1.2)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Muelle de pesca (feat/muelle-pesca) ──
+# ══════════════════════════════════════════════════════════════════════
+# El mismo vocabulario que su receta 3D (tools/toy_recipes/fishing_dock.gd):
+# tarima de tablas, el ahumadero de tejado rojo con su chimenea, el tendedero
+# con peces colgados, la barca boca arriba con su franja roja y barriles.
+
+static func _fishing_dock(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	# La tarima: tablas claras con sus juntas y los pilotes de las esquinas.
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, LIGHT_WOOD.darkened(0.08))
+	var horizontal := absf(_down.y) > 0.5
+	for i in range(1, 7):
+		var t := float(i) / 7.0
+		if horizontal:
+			var y := r.position.y + r.size.y * t
+			ci.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, y), DARK_WOOD.lightened(0.1), 1.0)
+		else:
+			var x := r.position.x + r.size.x * t
+			ci.draw_line(Vector2(x, r.position.y), Vector2(x, r.end.y), DARK_WOOD.lightened(0.1), 1.0)
+	for p in [r.position, Vector2(r.end.x, r.position.y), Vector2(r.position.x, r.end.y), r.end]:
+		_disc(ci, (p as Vector2).lerp(r.get_center(), 0.06), m * 0.045, DARK_WOOD, OUTLINE, 1.0)
+	# El ahumadero (arriba a la izquierda) con su chimenea de piedra.
+	var hut := Rect2(r.position + r.size * Vector2(0.06, 0.08), r.size * Vector2(0.5, 0.42))
+	_gable(ci, hut, m * 0.12, TILE_RED, WOOD, true)
+	var chimney := r.position + r.size * Vector2(0.2, 0.08)
+	_cyl(ci, chimney - _down * m * 0.1, m * 0.05, m * 0.1, STONE, CONCRETE_DARK)
+	# El tendedero (arriba a la derecha): dos postes, la cuerda y tres peces.
+	var a := r.position + r.size * Vector2(0.64, 0.16)
+	var b := r.position + r.size * Vector2(0.92, 0.16)
+	var ta := _mast(ci, a, m * 0.2, DARK_WOOD, 2.0)
+	var tb := _mast(ci, b, m * 0.2, DARK_WOOD, 2.0)
+	ci.draw_line(ta, tb, OUTLINE, 1.5)
+	for k in 3:
+		var hang: Vector2 = ta.lerp(tb, 0.22 + 0.28 * float(k))
+		_fish_2d(ci, hang + _down * m * 0.06, m * 0.05, STEEL.lightened(0.1), _down)
+	# La barca boca arriba en la tarima (abajo): casco de madera, franja roja.
+	var boat := r.position + r.size * Vector2(0.42, 0.74)
+	var hull := PackedVector2Array()
+	for i in 16:
+		var ang := TAU * float(i) / 16.0
+		var k2 := 1.0 if cos(ang) > 0.0 else 0.82
+		hull.append(boat + Vector2(cos(ang) * r.size.x * 0.3 * k2, sin(ang) * r.size.y * 0.1))
+	_poly(ci, hull, WOOD, OUTLINE, 1.2)
+	ci.draw_line(boat - Vector2(r.size.x * 0.24, 0), boat + Vector2(r.size.x * 0.27, 0), RED, 2.0)
+	ci.draw_line(boat + Vector2(-r.size.x * 0.05, -r.size.y * 0.09), boat + Vector2(r.size.x * 0.12, r.size.y * 0.12), LIGHT_WOOD, 1.6)
+	# Barriles de pescado y una cesta con la pesca.
+	for p in [Vector2(0.82, 0.58), Vector2(0.9, 0.7)]:
+		_cyl(ci, r.position + r.size * (p as Vector2), m * 0.06, m * 0.07, DARK_WOOD.lightened(0.15), DARK_WOOD)
+	var basket := r.position + r.size * Vector2(0.8, 0.88)
+	_disc(ci, basket, m * 0.07, LIGHT_WOOD, OUTLINE, 1.0)
+	_fish_2d(ci, basket + Vector2(-m * 0.02, -m * 0.01), m * 0.035, STEEL, Vector2.RIGHT)
+	_fish_2d(ci, basket + Vector2(m * 0.02, m * 0.02), m * 0.035, BRASS_LIGHT, Vector2.LEFT)
+
+## Un pez de juguete visto desde arriba: cuerpo oval y cola en V hacia `dir`
+## (la cola va al lado contrario del morro).
+static func _fish_2d(ci: CanvasItem, c: Vector2, s: float, col: Color, dir: Vector2) -> void:
+	var d := dir.normalized()
+	var side := Vector2(-d.y, d.x)
+	var body := PackedVector2Array()
+	for i in 10:
+		var ang := TAU * float(i) / 10.0
+		body.append(c + d * cos(ang) * s * 1.4 + side * sin(ang) * s * 0.6)
+	var tail := c - d * s * 1.3
+	_poly(ci, PackedVector2Array([tail, tail - d * s * 0.7 + side * s * 0.6, tail - d * s * 0.7 - side * s * 0.6]), col.darkened(0.2), OUTLINE, 1.0)
+	_poly(ci, body, col, OUTLINE, 1.0)
+	_dot(ci, c + d * s * 0.8 + side * s * 0.15, maxf(0.8, s * 0.15), IRON)
+
+## El banco de peces en 2D: agua honda con su orla clara, lomos de peces en
+## corro, espuma, la boya roja y blanca y el pez que salta (lo exagerado).
+static func _dep_fish_shoal(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> void:
+	var c := r.get_center()
+	var m := minf(r.size.x, r.size.y)
+	_poly(ci, _dep_oval(c, r.size.x * 0.48, r.size.y * 0.46, rng), SKY.lightened(0.3), Color(OUTLINE, 0.35), 1.0)
+	ci.draw_colored_polygon(_dep_oval(c, r.size.x * 0.4, r.size.y * 0.38, rng), SKY.darkened(0.42))
+	for k in 7:
+		var ang := TAU * float(k) / 7.0 + rng.randf_range(-0.2, 0.2)
+		var p := c + Vector2(cos(ang) * r.size.x * 0.42, sin(ang) * r.size.y * 0.4)
+		ci.draw_colored_polygon(_dep_oval(p, rng.randf_range(2.0, 3.5), rng.randf_range(1.2, 2.2), rng), CREAM)
+	var n := 4 + int(r.size.x * r.size.y / (m * m))
+	for k in n:
+		var p := c + Vector2(rng.randf_range(-0.28, 0.28) * r.size.x, rng.randf_range(-0.26, 0.26) * r.size.y)
+		_fish_2d(ci, p, m * rng.randf_range(0.045, 0.06), STEEL.lightened(rng.randf_range(0.0, 0.2)), Vector2.from_angle(rng.randf() * TAU))
+	# El que salta: en arco por encima del agua, con su sombra y salpicadura.
+	var jump := c + Vector2(rng.randf_range(-0.15, 0.15) * r.size.x, rng.randf_range(0.0, 0.12) * r.size.y)
+	_dot(ci, jump, m * 0.08, Color(IRON, 0.25))
+	for k in 5:
+		var ang := TAU * float(k) / 5.0
+		_dot(ci, jump + Vector2(cos(ang), sin(ang) * 0.6) * m * 0.1, maxf(1.0, m * 0.018), CREAM)
+	_fish_2d(ci, jump + Vector2(0, -m * 0.16), m * 0.08, BRASS_LIGHT, Vector2(1, -0.5))
+	# La boya.
+	var buoy := r.position + r.size * Vector2(0.84, 0.18)
+	_cyl(ci, buoy, m * 0.05, m * 0.05, CREAM, RED)
+	_mast(ci, buoy, m * 0.12, IRON, 1.5)

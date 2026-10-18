@@ -173,6 +173,7 @@ siguiente ("3/6 · era 2: 9").
 |---|---|---|---|---|---|
 | <img src="media/guia/sawmill.png" width="110"> | **Aserradero** | 2×2 | 80 oro · 50 madera | 2 | 6 madera / 12s · fabrica tablones |
 | | **Granja** | 2×2 | 40 oro · 30 madera | 2 | Comida según el cultivo: Lechugas 20 en 1 min · Patatas 125 en 5 min · Trigo 600 en 20 min. En cualquier sitio con carretera |
+| | **Muelle de pesca** | 2×2 | 60 oro · 40 madera | 2 | 12 comida / 30s, sin elegir cultivo. En la orilla, pegado a un banco de peces. Máximo 3 / 4 / 6 según la era |
 | <img src="media/guia/gold_mine.png" width="110"> | **Mina de oro** | 2×2 | 120 oro · 80 madera | 3 | 8 oro / 12s · fabrica lingotes |
 | <img src="media/guia/foundry.png" width="110"> | **Fundición** | 2×2 | 200 oro · 120 madera | 3 | 5 acero / 15s · fabrica vigas |
 | <img src="media/guia/refinery.png" width="110"> | **Refinería** | 2×2 | 300 oro · 150 acero · 100 madera · 6 vigas | 4 | 4 petróleo / 18s · fabrica combustible |
@@ -183,6 +184,12 @@ la era 3.** Por eso ninguna de las dos cuesta el recurso que desbloquea.
 **La Granja** se elige en su panel (CULTIVO): el cultivo corto da poco y enseguida;
 el largo da más por minuto, pero hay que esperarlo. El cultivo se repite solo
 mientras quepa en la Granja. Cambiarlo empieza de cero.
+
+**El Muelle de pesca** saca comida del mar. En el agua, junto a la costa, hay **bancos
+de peces**: manchas azules con peces asomando y una boya. El muelle se pone en la
+orilla, tocando uno, y pesca solo, sin elegir cultivo. Los peces no se acaban nunca.
+Da algo menos que una Granja con trigo, pero no hay que esperar a que crezca nada.
+¿Te sobra madera? Su receta **Ahumar pescado** la convierte en comida.
 
 > ⚠️ **La Refinería solo se puede colocar encima de un pozo de petróleo.** Es el único
 > edificio con esa restricción. Si no encuentras un pozo en tu isla, no hay era 3.
@@ -251,7 +258,7 @@ todo lo que falta.
 ### Límites
 
 Aserradero 5 · Mina de oro 4 · Fundición 3 · Refinería 2 · Almacén 5 · Mercado 1 ·
-Laboratorio 1 · Granja 6 · Cuartel 3 · Torre 6 · Casa 10 · Estatua 5 · Fuente 5 · **Cuartel
+Laboratorio 1 · Granja 6 · Muelle de pesca 3 · Cuartel 3 · Torre 6 · Casa 10 · Estatua 5 · Fuente 5 · **Cuartel
 General 1** · Jardín y carretera sin límite.
 
 ### Mejorar
@@ -275,6 +282,7 @@ cuando te falta algo concreto.
 | Mina de oro | **Hacer lingotes** | 30 oro | 3 lingotes | 30s |
 | Fundición | **Hacer vigas** | 20 acero · 10 madera | 4 vigas | 30s |
 | Refinería | **Hacer combustible** | 15 petróleo | 5 combustible | 25s |
+| Muelle de pesca | **Ahumar pescado** | 15 madera | 25 comida | 45s |
 | Núcleo | Tablones (madera) | 20 madera | 35 madera | 30s |
 | Núcleo | Chapa de hierro | 20 acero | 30 acero | 45s |
 | Núcleo | **Tuberías** | 15 acero · 10 madera | **60 oro** | 60s |
@@ -294,7 +302,8 @@ cuando te falta algo concreto.
 ### Minar a mano
 
 También puedes tocar un yacimiento y **minarlo a mano**: 20 oro de una veta, 20 madera
-de un bosque, 15 acero del hierro o 10 petróleo de un pozo. Cada vez gasta uno de sus
+de un bosque, 15 acero del hierro o 10 petróleo de un pozo (los bancos de peces no se
+pescan a mano: para eso está el Muelle). Cada vez gasta uno de sus
 usos y, cuando se acaban, el yacimiento desaparece (y el edificio que lo explotaba se
 para). Mientras dura **ocupa 2 trabajadores**, y solo se puede si el yacimiento **toca
 una carretera unida al Núcleo**; la tarjeta te dice qué falta. Su edificio especializado,

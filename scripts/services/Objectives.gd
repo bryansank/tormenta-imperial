@@ -105,6 +105,8 @@ const PRODUCER_OF := {
 	"steel": "foundry",
 	"oil": "refinery",
 }
+## El apoyo de comida cuando no cabe otra Granja (feat/muelle-pesca).
+const FISHING_DOCK_ID := "fishing_dock"
 
 # ══════════════════════════════════════════════════════════════════════
 # El paso
@@ -1085,6 +1087,13 @@ static func _producer_step(res: String, why: String) -> Dictionary:
 	var more: Dictionary = _build_step(building_id, why)
 	if not more.is_empty():
 		return more
+	# Comida sin hueco para otra Granja (tope de la era): un Muelle de pesca en
+	# la orilla, si queda un banco de peces con sitio (feat/muelle-pesca). Solo
+	# como apoyo: la linea nunca lo pide.
+	if res == "food":
+		var dock: Dictionary = _build_step(FISHING_DOCK_ID, "OBJ_WHY_FISHING_DOCK")
+		if not dock.is_empty():
+			return dock
 	# Sin sitio o sin tope para otro: subir de nivel el que menos rinde. Un nivel 2
 	# rinde un 60% mas, y hasta aqui nada en el juego lo sugeria.
 	var lowest: Node = _lowest_level(building_id)

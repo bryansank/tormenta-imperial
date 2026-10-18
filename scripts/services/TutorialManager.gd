@@ -213,6 +213,7 @@ const TIPS := {
 	"night":          {"title": "HELP_T_NIGHT",     "body": "HELP_B_NIGHT"},
 	"farm":           {"title": "HELP_T_FARM",      "body": "HELP_B_FARM"},
 	"collect_full":   {"title": "HELP_T_COLLECT",   "body": "HELP_B_COLLECT"},
+	"fishing_dock":   {"title": "HELP_T_FISHING_DOCK", "body": "HELP_B_FISHING_DOCK"},
 	"island":         {"title": "HELP_T_ISLAND",    "body": "HELP_B_ISLAND"},
 }
 
@@ -1205,13 +1206,21 @@ func _on_news_day_phase(phase: int, _hour: float) -> void:
 	if phase == DayCycle.Phase.DUSK or phase == DayCycle.Phase.NIGHT:
 		offer_tip("night")
 
-## La primera Granja terminada: los cultivos y sus cifras.
+## La primera Granja terminada: los cultivos y sus cifras. El primer Muelle de
+## pesca: donde va y su proceso (feat/muelle-pesca).
 func _on_news_construction(node: Node) -> void:
-	if has_seen_tip("farm") or node == null:
+	if node == null:
 		return
 	var info := GridManager.get_building_info(node)
-	if not info.is_empty() and info["data"] != null and String(info["data"].id) == "farm":
-		offer_tip("farm")
+	if info.is_empty() or info["data"] == null:
+		return
+	match String(info["data"].id):
+		"farm":
+			if not has_seen_tip("farm"):
+				offer_tip("farm")
+		"fishing_dock":
+			if not has_seen_tip("fishing_dock"):
+				offer_tip("fishing_dock")
 
 ## Un edificio se lleno sin recoger: para hasta que se recoge.
 func _on_news_stock(node: Node, _stock: Dictionary) -> void:

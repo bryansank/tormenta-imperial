@@ -141,6 +141,59 @@ still takes from the raw amount. Looks: one procedural mesh per type
 -- --only=windmill,...` bakes `assets/models/toy/<id>.tscn`; then `UtilityToys.create`
 picks the bake without touching the `.tres`. 2D: `BuildingArt2D._utility`.
 
+### Muelle de pesca (1.1, `feat/muelle-pesca`)
+
+Doc 21 §6.3 n.º 7 del contexto privado (allí era 2 y coste medio; Bryan lo pidió de
+era 1 y barato). Comida desde el agua: el segundo productor de comida, sin cultivo que
+elegir. Todas sus cifras viven en `GameConfig`, bloque "Muelle de pesca" al final del
+archivo: `_register_fishing_dock()` añade sus filas a las tablas comunes al crear
+`GameConfig` (topes, regla de yacimiento, taller, obra, parcela, efecto), para que el
+bloque viva solo y no choque con otras ramas que tocan esas tablas.
+
+| ID | Nombre | Coste G/S/O/W | Obreros | Obra | Topes (era 1/2/3) | Produce | Regla |
+|----|--------|------|---|---|---|---|---|
+| `fishing_dock` | Muelle de pesca | 60/0/0/40 | 2 | 6 s | 3/4/6 (`fishing_dock_limits_by_era`) | 12 comida cada 30 s (24/min a moral 50, nivel 1) | En la orilla, tocando un **banco de peces** (alcance 1) |
+
+- **Dónde va.** Su regla de yacimiento (`building_deposit_rules["fishing_dock"]`:
+  `fish_shoal`, alcance 1, no lo consume, aviso `LBL_NEEDS_FISH_NEAR`) basta para
+  "debe tocar la costa": el banco vive en celdas de agua, y toda celda de tierra que lo
+  toca (diagonal incluida) es costa (`PlacementRules.is_coast_cell`). No está en
+  `PlacementRules.SHORE_ONLY` (las palmeras): así la colocación táctil busca sitios
+  alrededor de los bancos (`PlacementAssist.valid_spots`) y no por toda la costa. Lleva
+  carretera como todo, y el primero junto a un banco tiende el anillo de acceso gratis
+  como los demás extractores (solo los tramos de tierra unidos a la red).
+- **Comparado con la Granja** (20 / 25 / 30 de comida por minuto según el cultivo):
+  rinde algo menos que la Granja con cultivo largo, pero pesca sin parar, sin elegir ni
+  esperar cultivo, y el Molino no le afecta. Lo limitan su tope y los bancos (3-5 por
+  isla). Guarda `fishing_dock_stock_cap` (150, unos 6 minutos) antes de pararse. Mejora
+  como los productores (×1,6 / ×2,5; el nivel 3 pide repuestos, `upgrade_parts_buildings`).
+- **Ahumar pescado** (`building_processes["fishing_dock"]`, `PROC_SMOKE_FISH`): 15 de
+  madera → 25 de comida en 45 s. Una salida para la madera que sobra y atasca la bolsa
+  (en el Mercado, 45 de oro por 50): no es la vía rápida. Lo ahumado va derecho al
+  almacén, donde nunca se estropea. El Núcleo no lo repite (`core_skip_workshops`: no
+  toca el agua).
+- **Gobernador (estropeado activo):** el pescado fresco que espera en el muelle se
+  estropea en la mitad de tiempo (`fishing_dock_spoil_mult` 0,5 sobre
+  `spoil_after_seconds`, `GameConfig.fishing_dock_spoil_after()`). El Silo lo alarga
+  igual que a la Granja. Recogerlo a tiempo, o ahumar, es la respuesta.
+- **Aspecto 3D:** maqueta horneada `assets/models/toy/fishing_dock.tscn` (receta
+  `tools/toy_recipes/fishing_dock.gd`, ~1.330 triángulos): ahumadero de tablas con
+  tejado rojo y chimenea de piedra (humo de "trabajando", `building_active_fx`), la
+  pasarela de tablas sobre pilotes (lo exagerado), la barca `pir:boat-row-small`
+  varada, tendedero con peces propios, cubo `sur:bucket` y barril `pir:barrel`. Parcela
+  de tierra con valla y acento residencial; obra de tablas y troncos con lona azul.
+- **2D:** `BuildingArt2D._fishing_dock()` (tarima, ahumadero, tendedero, barca,
+  barriles); el humo sale de la chimenea (`fx_anchors`). El icono de CONSTRUIR es ese
+  mismo dibujo.
+- **Ayuda:** consejo `fishing_dock` (`HELP_T/B_FISHING_DOCK`, categoría economía) al
+  terminar el primero, y en el índice de AYUDA desde el principio. La guía de edificios
+  lo lista sola (lee todos los `.tres`). **¿QUÉ HACER?** solo lo propone como apoyo de
+  comida: cuando falta comida y no cabe otra Granja (`Objectives._producer_step`,
+  `OBJ_WHY_FISHING_DOCK`); la línea nunca lo pide.
+
+**El banco de peces** (`fish_shoal`, `DEP_FISH_SHOAL`) es el primer yacimiento de mar:
+ver [02-economy.md](02-economy.md) "Yacimientos de mar".
+
 ### Military Buildings
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Prereqs |
@@ -337,6 +390,7 @@ under construction the label above the building gives the percentage and the tim
 | gold_mine | 4 | 6 | 8 | ×1,5 / ×2; lo limitan las vetas (3-6) |
 | foundry | 3 | 5 | 6 | ×1,5 / ×2; lo limitan las vetas de hierro |
 | refinery | 2 | 3 | 4 | ×1,5 / ×2; además consume su pozo (3-6 por mapa) |
+| fishing_dock | 3 | 4 | 6 | Muelle de pesca (1.1): lo limitan también los bancos de peces (3-5) |
 | barracks | 3 | 4 | 5 | Sube menos: cada uno es un hueco de entrenamiento y +8 de capacidad (con 5, 43 unidades); el freno es el mantenimiento en oro |
 | warehouse | 5 | 5 | 5 | **No sube.** Bolsa de la era 3 sin técnicas: 1000 + 5×500 = 3500 = CG nivel 3 (1500 + 800 + 500 + 700; los materiales van aparte). Con 7 almacenes serían 4500 (5500 con las técnicas) y el CG 3 dejaría de pedir la bolsa llena. La bolsa ya crece sola por era (600/800/1000) y por nivel de almacén (+250 por nivel) |
 | tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y solo 2 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
@@ -365,6 +419,7 @@ Defined in `GameConfig.building_deposit_rules` and checked by
 | gold_mine | gold_vein | 1 | no |
 | foundry | iron_deposit | 1 | no |
 | refinery | oil_well | 0 (on top) | yes |
+| fishing_dock | fish_shoal (en el agua) | 1 | no (nunca se agota) |
 
 The three reach-1 extractors also need their deposit **alive**: if it is mined out by
 hand, they stop ("sin veta", `PlacementRules.has_its_deposit()`).

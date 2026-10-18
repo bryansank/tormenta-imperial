@@ -3226,6 +3226,86 @@ var core_skip_workshops := ["carpentry"]
 
 ## Lo que tarda en estropearse lo acumulado en un edificio de este tipo.
 func spoil_after_for(building_id: String) -> float:
+	if building_id == FISHING_DOCK_ID:
+		return fishing_dock_spoil_after()
 	if building_id == "farm":
 		return spoil_after_seconds * maxf(1.0, food_spoil_delay_mult)
 	return spoil_after_seconds
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Muelle de pesca (feat/muelle-pesca, doc 21 §6.3 n.º 7) ──
+# ══════════════════════════════════════════════════════════════════════
+# Comida desde el agua: un edificio de era 1 que se planta en la orilla, pegado a
+# un banco de peces (yacimiento de mar, MapGenerator.SHORE_DEPOSIT_IDS). Pesca
+# solo, sin elegir cultivo: menos por minuto que la Granja con su cultivo largo,
+# pero sin esperar ni replantar. Detalle y cifras: docs/03-buildings.md.
+#
+# Sus filas en las tablas comunes (topes, regla de yacimiento, taller, obra,
+# parcela...) no estan escritas dentro de cada tabla: las anade
+# _register_fishing_dock() al crear GameConfig, para que este bloque viva solo y
+# no choque con otras ramas que tocan las mismas tablas. Quien busque
+# "fishing_dock" en una tabla y no lo vea, lo tiene aqui.
+
+const FISHING_DOCK_ID := "fishing_dock"
+
+## Topes por era (como la Granja, menos: lo limita tambien cuantos bancos hay).
+var fishing_dock_limits_by_era := [3, 4, 6]
+## Lo que cabe en el muelle antes de pararse (unos 6 minutos de pesca).
+var fishing_dock_stock_cap := 150
+## Pescado fresco (solo Gobernador, con estropeado): aguanta esta fraccion de lo
+## que aguanta lo demas sin recoger. El Silo lo alarga igual que a la Granja.
+var fishing_dock_spoil_mult := 0.5
+
+## Bancos de peces por isla nueva: cuantos [min, max], separacion minima entre
+## dos (casillas de agua o tierra entre sus huellas) y probabilidad de que uno
+## salga de 3 casillas de largo. Por tipo de yacimiento de mar.
+var sea_deposit_rolls := {
+	"fish_shoal": {"min": 3, "max": 5, "spacing": 6, "long_chance": 0.35},
+}
+## Yacimientos que no se agotan nunca: el panel no ensena usos (solo su frase
+## DEP_SHORT_<ID>) y nada los gasta (no tienen minado a mano en mining_data).
+var endless_deposits := ["fish_shoal"]
+
+## Lo que tarda en estropearse lo que espera en un muelle.
+func fishing_dock_spoil_after() -> float:
+	return spoil_after_seconds * fishing_dock_spoil_mult * maxf(1.0, food_spoil_delay_mult)
+
+func is_endless_deposit(deposit_id: String) -> bool:
+	return deposit_id in endless_deposits
+
+## Se evalua al crear GameConfig, despues de todas las tablas de arriba.
+var _fishing_dock_registered := _register_fishing_dock()
+
+func _register_fishing_dock() -> bool:
+	var id := FISHING_DOCK_ID
+	building_limits[id] = int(fishing_dock_limits_by_era[0])
+	building_limits_by_era[id] = fishing_dock_limits_by_era.duplicate()
+	building_deposit_rules[id] = {"deposit": "fish_shoal", "reach": 1, "consumes": false,
+		"message": "LBL_NEEDS_FISH_NEAR"}
+	# Ahumar pescado: la madera que sobra (atasca la bolsa, docs/22) pasa a
+	# comida que va derecha al almacen, donde nunca se estropea. 15 de madera
+	# (45 de oro en el Mercado) por 25 de comida (50): un margen pequeno, es una
+	# salida para la madera, no la via rapida. El Nucleo no lo repite: no toca el agua.
+	building_processes[id] = [
+		{"id": "smoke_fish", "name": "PROC_SMOKE_FISH", "duration": 45.0,
+		 "cost": {"wood": 15}, "produces": {"food": 25}},
+	]
+	if not core_skip_workshops.has(id):
+		core_skip_workshops.append(id)
+	building_stock_caps[id] = fishing_dock_stock_cap
+	if not upgrade_parts_buildings.has(id):
+		upgrade_parts_buildings.append(id)
+	# El banco de peces: tamano (lo sortea MapGenerator._fill_sea_type), recurso
+	# que lo abre (la comida, desde el principio) y usos (no se gastan).
+	deposit_sizes["fish_shoal"] = {"min_w": 2, "max_w": 3, "min_h": 2, "max_h": 3}
+	deposit_resource_required["fish_shoal"] = "food"
+	deposit_max_uses["fish_shoal"] = 1
+	# Aspecto: obra de madera de barco y redes, parcela de tablas con su
+	# ahumadero (humo cuando trabaja).
+	construction_style[id] = {"piles": ["planks", "logs", "sacks"], "fence": "planks",
+		"tarp": Color(0.30, 0.45, 0.58), "frame": "gable", "frame_mat": "wood", "site_fx": "dust",
+		"flag": Color(0.25, 0.55, 0.78)}
+	building_lot_style[id] = {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "residential",
+		"props": ["barrel", "crate", "sacks", "barrel"], "count": [3, 5]}
+	building_active_fx[id] = "smoke"
+	return true
