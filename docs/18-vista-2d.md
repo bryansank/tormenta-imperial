@@ -297,6 +297,20 @@ docs/21 §9).
   parcela, obra de mejora y dano siguen al dibujo crecido.
 - **El nombre del edificio** aparece al seleccionarlo, debajo de la huella.
 
+## Mar y aire (1.1, rama `feat/aire-mar-vista`)
+
+- **Astillero y Aerodromo** se dibujan en `BuildingArt2D` (`_shipyard`,
+  `_aerodrome`), en el marco local del edificio como todos: delante (+y local)
+  la darsena del Astillero y la pista del Aerodromo, asi que giran con el
+  edificio. El icono de CONSTRUIR es el mismo dibujo (`BuildingIcon2D`).
+- **El tablero de combate 2D** pinta las casillas vacias de agua y de orilla con
+  sus tokens (`UITheme.BOARD_WATER`, `BOARD_SHORE`, derivados de la paleta: siguen
+  al daltonismo y al alto contraste); lo alcanzable manda sobre ellas.
+- **Siluetas**: las seis unidades nuevas tienen su PNG blanco tenible en
+  `assets/textures/ui/units/` (`tools/gen_unit_icons.gd`).
+- Coste: ninguno nuevo en el mapa (dos dibujos horneados en la cache como los
+  demas); en el tablero, el color de fondo de una casilla.
+
 ## Huecos conocidos
 
 - La escena 3D se instancia un frame antes de irse a la 2D cuando la preferencia

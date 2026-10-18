@@ -650,10 +650,44 @@ triangulos por edificio (el horneador los imprime).
 - **Unidades de combate**: la misma herramienta hornea las piezas de juguete del
   tablero 3D con `-- --units` (recetas en `tools/toy_recipes/units/`, salida en
   `assets/models/toy/units/`): ver docs/15 §3, "El tablero 3D".
+- **Astillero y Aerodromo** (1.1, `feat/aire-mar-vista`): ver "Astillero y
+  Aerodromo: la maqueta", abajo.
 - Capturas: `godot --path . -s tools/toy_probe.gd` (con `override.cfg` propio)
   deja `toy_probe_all.png` (distancia de arranque), `toy_probe_close_<n>.png`,
   `toy_probe_storm.png` y, con `-- --near=9 --ids=...`, `toy_probe_near.png`;
   `-- --pieces=kk:barrel,...` fotografia piezas CC0 sueltas.
+
+### Astillero y Aerodromo: la maqueta (1.1, rama `feat/aire-mar-vista`)
+
+Los dos edificios militares de mar y aire, 2x2. Sus reglas (`.tres`, coste,
+"toca la costa", que entrena cada uno) son de la rama de reglas; aqui solo su
+aspecto. Recetas propias, sin piezas CC0:
+
+| Edificio | Receta | Modelo | Triangulos | Lo exagerado |
+|---|---|---|---|---|
+| Astillero (`shipyard`) | `tools/toy_recipes/shipyard.gd` | `assets/models/toy/shipyard.tscn` | 1.328 | la grua de portico amarilla sobre la darsena |
+| Aerodromo (`aerodrome`) | `tools/toy_recipes/aerodrome.gd` | `assets/models/toy/aerodrome.tscn` | 1.315 | el mastil de amarre con el dirigible |
+
+- **Astillero**: la mitad de delante (+Z del modelo) es la darsena, agua entre
+  dos muelles de piedra con la grada y un casco a medio hacer (cuadernas, quilla
+  roja); atras, la nave del taller con su chimenea (de ahi el `FxAnchor`: humo),
+  chapa y tablones. Al colocarlo, ese lado de delante es el que debe dar al mar
+  (la regla de costa es de las reglas; el modelo solo la dibuja).
+- **Aerodromo**: la pista delante (asfalto, rayas y balizas encendidas), el
+  hangar de media cana con el portalon abierto atras a la izquierda, el mastil de
+  celosia con el dirigible amarrado atras a la derecha (`FxAnchor` en el faro de
+  su punta) y la manga de viento.
+- Su `.tres` debe llevar `model_scene` = `res://assets/models/toy/shipyard.tscn`
+  / `aerodrome.tscn`. Si un `.tres` no lo lleva, `DieselpunkBuildingFactory`
+  carga igual la maqueta horneada (`BAKED_ONLY`).
+- Mientras no exista su `.tres`, el horneador toma la huella de
+  `build_toy_models.EXTRA` (2x2, patio 0,3); con el `.tres`, manda el `.tres` y su
+  parcela.
+- 2D: `BuildingArt2D._shipyard` / `_aerodrome` (mapa, fantasma e icono del menu,
+  que es el mismo dibujo). En CONSTRUIR van en la categoria militar.
+- **Pendiente de pegar en `GameConfig`** al juntar con la rama de reglas (no se
+  toca aqui para no chocar): su fila de `construction_style`, de
+  `building_lot_style` y de `building_active_fx` (ver el informe de la rama).
 
 ### Obra por edificio y por instancia
 

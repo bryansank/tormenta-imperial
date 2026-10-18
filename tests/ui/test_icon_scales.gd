@@ -25,7 +25,8 @@ func test_every_resource_icon_exists_at_every_scale_with_its_size() -> void:
 			assert_int(tex.get_width()).is_equal(int(s))
 
 func test_every_unit_icon_exists_at_every_scale_with_its_size() -> void:
-	for id in ["infantry", "artillery", "vehicle"]:
+	for id in ["infantry", "artillery", "vehicle",
+			"torpedo_boat", "gunboat", "dreadnought", "fighter", "bomber", "airship"]:
 		for s in UITheme.ICON_SCALES:
 			var tex := UITheme.unit_icon(id, int(s))
 			assert_object(tex).is_not_null()

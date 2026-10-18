@@ -769,6 +769,27 @@ juego con ellos, y el `.exe` se abre con doble clic. Detalle en §7.6.
   niebla solo con peso > 0 (`StormSky`). Sin medir todavía con la sonda la Mínima de
   verdad.
 
+### 7.7 Mar y aire (1.1): coste a ojo por triángulos
+
+Sin medir con la sonda (va en la ronda final de pruebas); contado al hornear y
+con `UnitModels3D.tri_count`:
+
+| Qué | Triángulos | Llamadas de dibujo | Nota |
+|---|---|---|---|
+| Piezas de mar (jugador / Regencia) | 275-478 | 1-3 por pieza (sólido, brillo, bando) | Menos que la infantería (564). Espuma y estela dentro de la malla |
+| Piezas de aire | 356-486 | 1-3 por pieza + la sombra | La sombra es un `CylinderMesh` de 12 o 4 lados compartido (dos mallas, un material) |
+| Tablero 8x8 con dos columnas de agua y una de orilla | 3.270 (alta) / 1.786 (sencilla) | 1 (el terreno) | Sin agua: 3.236 / 1.754. +1 % |
+| Frente con el mismo terreno | 3.182 (alta) / 1.384 (sencilla) | 1 | Sin agua: 3.526 / 1.428 (el agua quita matas y craters) |
+| Astillero / Aerodromo (mapa) | 1.328 / 1.315 | 1-2 | Como un edificio útil de la 1.1 |
+
+- **Sin `_process`, sin luces, sin partículas.** El vaivén es el tween en bucle que
+  ya tenían las piezas que no son de tierra; en calidad baja y mínima no hay
+  vaivén. Despegar, deslizarse, hundirse y caer son tweens de un solo uso.
+- **Materiales**: ninguno nuevo en las piezas (los dos de la maqueta y el del bando,
+  uno por color); uno para todas las sombras de los aviones (el que ya existía).
+- **Mínima**: igual que la tierra (tablero, sin sombras del sol, 0,7 de
+  resolución); el agua es la misma malla del terreno, sin shader propio.
+
 ---
 
 ## 8. Límites de esta medida
