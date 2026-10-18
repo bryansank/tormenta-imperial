@@ -87,7 +87,8 @@ func get_buy_price(resource: String) -> int:
 	if base == 0:
 		return 0
 	var mod: float = _price_mods.get(resource, 1.0)
-	var spread: float = GameConfig.market_spread
+	# El de la partida menos el de la Casa de cambio (feat/edificios-economia).
+	var spread: float = GameConfig.effective_market_spread()
 	return maxi(1, int(ceil(base * mod * (1.0 + spread / 2.0))))
 
 func get_sell_price(resource: String) -> int:
@@ -95,7 +96,7 @@ func get_sell_price(resource: String) -> int:
 	if base == 0:
 		return 0
 	var mod: float = _price_mods.get(resource, 1.0)
-	var spread: float = GameConfig.market_spread
+	var spread: float = GameConfig.effective_market_spread()
 	return maxi(1, int(floor(base * mod * (1.0 - spread / 2.0))))
 
 ## Lo que se pierde comprando y revendiendo una unidad ahora mismo.

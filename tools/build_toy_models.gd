@@ -57,7 +57,10 @@ const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", 
 	# reglas) mandan en la huella, EXTRA solo cubre si faltaran.
 	"shipyard", "aerodrome",
 	# Muelle de pesca (feat/muelle-pesca).
-	"fishing_dock"]
+	"fishing_dock",
+	# Economia de la 1.2 (feat/edificios-economia). Hasta hornearlos, el juego
+	# usa su version procedural (scripts/buildings/EconomyToys.gd).
+	"trade_port", "exchange", "diesel_plant"]
 
 ## Presupuesto de triangulos de una decoracion 2x2 (doc 21 §6.6).
 const DECOR_TRI_BUDGET := 600

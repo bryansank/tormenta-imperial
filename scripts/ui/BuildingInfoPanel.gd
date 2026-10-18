@@ -60,6 +60,10 @@ var _confirm_label: Label
 var _process_panel: ProcessActionsPanel
 ## PARA RECOGER y, en la Granja, CULTIVO (2026-10-04).
 var _harvest: VBoxContainer = null
+## Economia (feat/edificios-economia): linea de estado y su reloj.
+var _economy_label: Label = null
+var _economy_tick := 0.0
+const ECONOMY_TICK := 0.5
 var _selected_node: Node = null
 var _selected_data: BuildingData = null
 var _selected_deposit_id: String = ""
@@ -96,6 +100,11 @@ func _process(_delta: float) -> void:
 	_update_construction()
 	if _harvest != null and not _is_deposit:
 		_harvest.refresh()
+	if _economy_label != null and _economy_label.visible:
+		_economy_tick -= _delta
+		if _economy_tick <= 0.0:
+			_economy_tick = ECONOMY_TICK
+			_refresh_economy()
 
 # ── UI Construction ──
 
@@ -140,6 +149,15 @@ func _build_ui() -> void:
 	_level_label = UITheme.make_label("", "body", UITheme.INFO)
 	_level_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_vbox.add_child(_level_label)
+
+	# Economia (feat/edificios-economia): el barco del Puerto, el spread y el
+	# interes de la Casa de cambio, el combustible de la Central. Una o dos
+	# lineas, repintadas a ritmo de reloj (no por fotograma).
+	_economy_label = UITheme.make_label("", "body", UITheme.TEXT)
+	_economy_label.name = "EconomyStatus"
+	_economy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_economy_label.visible = false
+	_vbox.add_child(_economy_label)
 
 	# Production info card
 	_production_container = PanelContainer.new()
@@ -421,6 +439,8 @@ func _show_building_panel() -> void:
 	_harvest.show_for(_selected_node, _selected_data)
 	_refresh_workers_toggle()
 	_refresh_open_button()
+	_economy_tick = 0.0
+	_refresh_economy()
 
 	var is_building := ProductionManager.is_constructing(_selected_node)
 	_construction_container.visible = is_building
@@ -536,7 +556,55 @@ func _show_deposit_panel() -> void:
 const SCREENS := {
 	"market": ["MarketPanel", "BTN_OPEN_MARKET"],
 	"laboratory": ["TechTreePanel", "BTN_OPEN_LAB"],
+	# El Puerto comercial (feat/edificios-economia): su panel no esta en la
+	# escena, se crea al pedirlo (SmugglerPanel.open_in).
+	"trade_port": ["SmugglerPanel", "BTN_OPEN_PORT"],
 }
+const SmugglerPanelScript := preload("res://scripts/ui/SmugglerPanel.gd")
+const UtilityEffectsScript := preload("res://scripts/buildings/UtilityEffects.gd")
+
+## La linea de estado de los edificios de economia; oculta en los demas.
+func _refresh_economy() -> void:
+	if _economy_label == null:
+		return
+	var text := ""
+	if _selected_data != null and not _is_deposit and is_instance_valid(_selected_node) \
+			and not ProductionManager.is_constructing(_selected_node):
+		text = economy_status(_selected_node, _selected_data)
+	_economy_label.text = text
+	_economy_label.visible = text != ""
+
+## Lo que dice la ficha de un Puerto, una Casa de cambio o una Central ("" en
+## los demas). Publico para los tests.
+static func economy_status(node: Node, data: BuildingData) -> String:
+	match data.id:
+		"trade_port":
+			if not EconomyManager.is_working(node):
+				return Tr.t("LBL_ECON_IDLE")
+			if EconomyManager.is_ship_docked():
+				return Tr.t("LBL_SMUGGLER_LEAVES") % TextKit.short_time(EconomyManager.ship_seconds_left())
+			var left: float = EconomyManager.seconds_until_ship()
+			if left <= 0.0:
+				return Tr.t("LBL_SMUGGLER_SOON")
+			return Tr.t("LBL_SMUGGLER_NEXT") % TextKit.short_time(left)
+		"exchange":
+			if not EconomyManager.is_working(node):
+				return Tr.t("LBL_ECON_IDLE")
+			var line: String = Tr.t("LBL_EXCHANGE_SPREAD") % [
+				roundi(GameConfig.market_spread * 100.0), roundi(GameConfig.effective_market_spread() * 100.0)]
+			if GameMode.is_governor():
+				line += "\n" + Tr.t("LBL_EXCHANGE_INTEREST") % [EconomyManager.interest_due(),
+					TextKit.short_time(GameConfig.get_duration(GameConfig.exchange_interest_interval))]
+			return line
+		"diesel_plant":
+			if not EconomyManager.is_working(node):
+				return Tr.t("LBL_ECON_IDLE")
+			if not EconomyManager.is_plant_running(node):
+				return Tr.t("LBL_DIESEL_NO_FUEL")
+			return Tr.t("LBL_DIESEL_RUNNING") % [UtilityEffectsScript.diesel_targets_of(node),
+				roundi(GameConfig.diesel_plant_bonus * 100.0), GameConfig.diesel_plant_fuel_cost,
+				TextKit.short_time(GameConfig.get_duration(GameConfig.diesel_plant_interval))]
+	return ""
 
 func _refresh_open_button() -> void:
 	var entry: Array = SCREENS.get(_selected_data.id if _selected_data != null and not _is_deposit else "", [])
@@ -549,6 +617,10 @@ func _refresh_open_button() -> void:
 func _on_open_screen() -> void:
 	var entry: Array = SCREENS.get(_selected_data.id if _selected_data != null else "", [])
 	if entry.is_empty():
+		return
+	if _selected_data.id == "trade_port":
+		_hide_panel()
+		SmugglerPanelScript.open_in(get_tree())
 		return
 	var scene := get_tree().current_scene
 	var panel: Node = scene.get_node_or_null(String(entry[0])) if scene != null else null

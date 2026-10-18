@@ -16,6 +16,9 @@ extends Node2D
 enum State { IDLE, PLACING, MOVING }
 
 const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
+## El barco del contrabandista y su panel (feat/edificios-economia).
+const SmugglerShip2D := preload("res://scripts/view2d/SmugglerShip2D.gd")
+const SmugglerPanelScript := preload("res://scripts/ui/SmugglerPanel.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
@@ -59,6 +62,7 @@ func _ready() -> void:
 	var walkers: Node = WorkerWalkers.new()
 	walkers.setup(walkers_layer, true)
 	add_child(walkers)
+	add_child(SmugglerShip2D.new())
 	EventBus.building_selected_for_placement.connect(_on_building_selected)
 	EventBus.building_placement_cancelled.connect(_cancel)
 	EventBus.request_move_building.connect(_on_move_requested)
@@ -212,6 +216,8 @@ func handle_click(screen_pos: Vector2) -> void:
 	var cell := screen_to_cell(screen_pos)
 	match _state:
 		State.IDLE:
+			if _try_open_ship(screen_pos):
+				return
 			if not _try_collect_icon(screen_pos):
 				_try_select(cell)
 		State.PLACING:
@@ -495,6 +501,17 @@ func _cancel() -> void:
 	_state = State.IDLE
 
 # ── Seleccion ─────────────────────────────────────────────────────────
+
+## Un toque sobre el barco del contrabandista atracado abre su panel
+## (feat/edificios-economia). Devuelve si lo toco.
+func _try_open_ship(screen_pos: Vector2) -> bool:
+	if not EconomyManager.is_ship_docked():
+		return false
+	var world := View2D.px_to_world(View2D.screen_to_px(get_viewport().get_canvas_transform(), screen_pos))
+	if not EconomyManager.ship_hit(world):
+		return false
+	SmugglerPanelScript.open_in(get_tree())
+	return true
 
 func _try_select(cell: Vector2i) -> void:
 	var node := GridManager.get_building_at(cell) if GridManager.is_valid_cell(cell) else null
