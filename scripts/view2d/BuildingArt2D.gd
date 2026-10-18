@@ -155,6 +155,9 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"bonfire": _bonfire(ci, r)
 		"flagpole": _flagpole(ci, r)
 		"palm_trees": _palm_trees(ci, r)
+		# Las dieciocho que faltaban (feat/decoraciones-y-trafico; dibujos al final).
+		"flower_stall", "community_garden", "small_fountain", "entrance_arch", "bandstand", "beached_boat", "gear_garden", "fair_stage", "fair_tent", "pond_bridge", "water_mill", "museum_cannon", "container_mural", "clock_tower", "wreck_monument", "storm_column", "moored_airship", "governor_plaza":
+			_decor2(ci, id, r)
 		# Mar y aire (1.1, feat/aire-mar-vista; dibujos al final del archivo).
 		"shipyard": _shipyard(ci, r)
 		"aerodrome": _aerodrome(ci, r)
@@ -3896,3 +3899,377 @@ static func draw_smuggler_ship(ci: CanvasItem, length: float) -> void:
 		ci.draw_rect(crate.grow(1.0), OUTLINE)
 		ci.draw_rect(crate, LIGHT_WOOD)
 	_dot(ci, Vector2(l * 0.72, 0), maxf(1.5, b * 0.12), GLOW)
+# ══════════════════════════════════════════════════════════════════════
+# ── Decoraciones y trafico (feat/decoraciones-y-trafico, doc 21 §6.4) ──
+# ══════════════════════════════════════════════════════════════════════
+# Las dieciocho que faltaban, las mismas que DecorMesh2 en 3D: el suelo de
+# _deco_pad y la pieza exagerada de cada una. Solo primitivas baratas (se
+# hornean en ArtCache2D); el icono de CONSTRUIR y el fantasma son este dibujo.
+
+static func _decor2(ci: CanvasItem, id: String, r: Rect2) -> void:
+	match id:
+		"flower_stall": _d2_flower_stall(ci, r)
+		"community_garden": _d2_community_garden(ci, r)
+		"small_fountain": _d2_small_fountain(ci, r)
+		"entrance_arch": _d2_entrance_arch(ci, r)
+		"bandstand": _d2_bandstand(ci, r)
+		"beached_boat": _d2_beached_boat(ci, r)
+		"gear_garden": _d2_gear_garden(ci, r)
+		"fair_stage": _d2_fair_stage(ci, r)
+		"fair_tent": _d2_fair_tent(ci, r)
+		"pond_bridge": _d2_pond_bridge(ci, r)
+		"water_mill": _d2_water_mill(ci, r)
+		"museum_cannon": _d2_museum_cannon(ci, r)
+		"container_mural": _d2_container_mural(ci, r)
+		"clock_tower": _d2_clock_tower(ci, r)
+		"wreck_monument": _d2_wreck_monument(ci, r)
+		"storm_column": _d2_storm_column(ci, r)
+		"moored_airship": _d2_moored_airship(ci, r)
+		"governor_plaza": _d2_governor_plaza(ci, r)
+
+## Un rectangulo de `size` (fraccion del lado menor) centrado en `c`.
+static func _d2_rect(c: Vector2, m: float, size: Vector2) -> Rect2:
+	var s := size * m
+	return Rect2(c - s * 0.5, s)
+
+## Cubitos de flores alrededor de `c`.
+static func _d2_flowers(ci: CanvasItem, c: Vector2, rad: float, count: int, seed_val: int) -> void:
+	var cols := [RED, BRASS_LIGHT, CREAM, TERRACOTTA]
+	for k in count:
+		_dot(ci, c + Vector2.from_angle(TAU * k / float(count) + seed_val) * rad, maxf(1.2, rad * 0.45), cols[(k + seed_val) % cols.size()])
+
+## Un engranaje visto de frente: disco con dientes y su eje.
+static func _d2_cog(ci: CanvasItem, c: Vector2, rad: float, col: Color, teeth := 8) -> void:
+	for i in teeth:
+		var d := Vector2.from_angle(TAU * i / float(teeth))
+		var side := Vector2(-d.y, d.x) * rad * 0.16
+		_poly(ci, PackedVector2Array([c + d * rad * 0.8 + side, c + d * rad * 1.08 + side, c + d * rad * 1.08 - side, c + d * rad * 0.8 - side]), col, OUTLINE, 1.0)
+	_disc(ci, c, rad * 0.86, col, OUTLINE, 1.25)
+	_dot(ci, c - (_left() - _down) * rad * 0.2, rad * 0.5, col.lightened(0.18))
+	_disc(ci, c, rad * 0.24, IRON, OUTLINE, 1.0)
+
+## Puesto de flores: mostrador de madera bajo un toldo a rayas verdes y crema,
+## cajas de flores y dos cubos delante.
+static func _d2_flower_stall(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center()
+	_block(ci, _d2_rect(c + _down * m * 0.04, m, Vector2(0.7, 0.26)), m * 0.08, LIGHT_WOOD, DARK_WOOD)
+	var aw := _d2_rect(c - _down * m * 0.14, m, Vector2(0.82, 0.36))
+	ci.draw_rect(aw.grow(1.0), OUTLINE)
+	for i in 5:
+		var strip := Rect2(aw.position + Vector2(aw.size.x * i / 5.0, 0), Vector2(aw.size.x / 5.0, aw.size.y))
+		ci.draw_rect(strip, GREEN if i % 2 == 0 else CREAM)
+	for k in 3:
+		_d2_flowers(ci, c + _left() * m * (0.22 - 0.22 * k) + _down * m * 0.04, m * 0.05, 4, k)
+	for s in [-1.0, 1.0]:
+		var b: Vector2 = c + _down * m * 0.32 + _left() * m * 0.24 * s
+		_cyl(ci, b, m * 0.06, m * 0.05, SLATE, GUNMETAL)
+		_d2_flowers(ci, b - _down * m * 0.02, m * 0.04, 3, int(s + 2))
+
+## Huerto vecinal: tierra, tres bancales con sus hileras y la valla baja.
+static func _d2_community_garden(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "dirt")
+	var c := r.get_center()
+	for row in 3:
+		var rc := c + Vector2(0, (row - 1) * m * 0.27)
+		var bed := _d2_rect(rc, m, Vector2(0.74, 0.16))
+		ci.draw_rect(bed.grow(1.0), OUTLINE)
+		ci.draw_rect(bed, DARK_WOOD)
+		for k in 5:
+			var p := bed.position + Vector2(bed.size.x * (k + 0.5) / 5.0, bed.size.y * 0.5)
+			_dot(ci, p, m * 0.045, IMPERIAL_RED if row == 1 else (LEAF if k % 2 == 0 else LEAF_DARK))
+	var f := r.grow(-m * 0.04)
+	for e in [[f.position, Vector2(f.end.x, f.position.y)], [f.position, Vector2(f.position.x, f.end.y)], [Vector2(f.end.x, f.position.y), f.end]]:
+		ci.draw_line(e[0], e[1], OUTLINE, 3.0)
+		ci.draw_line(e[0], e[1], LIGHT_WOOD, 1.8)
+
+## Fuente pequena: pila cuadrada de piedra con agua, la columnita y su taza.
+static func _d2_small_fountain(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center()
+	var top := _block(ci, _d2_rect(c, m, Vector2(0.76, 0.76)), m * 0.06, STONE.lightened(0.08), CONCRETE_DARK)
+	var water := top.grow(-m * 0.06)
+	ci.draw_rect(water, WATER)
+	ci.draw_rect(Rect2(water.position, Vector2(water.size.x, 2.0)), WATER.lightened(0.3))
+	_cyl(ci, c - _down * m * 0.06, m * 0.07, m * 0.12, CONCRETE, STONE)
+	_disc(ci, c - _down * m * 0.12, m * 0.13, WATER.lightened(0.15), OUTLINE, 1.0)
+	_dot(ci, c - _down * m * 0.14, m * 0.04, CREAM)
+
+## Arco de entrada: dos pilares, el dintel con la placa de laton y el
+## estandarte rojo colgando.
+static func _d2_entrance_arch(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center()
+	for s in [-1.0, 1.0]:
+		var p: Vector2 = c + _left() * m * 0.34 * s + _down * m * 0.12
+		_block(ci, _d2_rect(p, m, Vector2(0.17, 0.17)), m * 0.3, STONE.lightened(0.1), CONCRETE_DARK)
+		_shaded_disc(ci, p + _down * m * 0.2, m * 0.08, GREEN)
+	var lintel := _block(ci, _d2_rect(c - _down * m * 0.22, m, Vector2(0.9, 0.16)), m * 0.06, MARBLE, STONE)
+	ci.draw_rect(_d2_rect(lintel.get_center(), m, Vector2(0.3, 0.06)), BRASS)
+	var ban := _d2_rect(c - _down * m * 0.04, m, Vector2(0.18, 0.24))
+	ci.draw_rect(ban.grow(1.0), OUTLINE)
+	ci.draw_rect(ban, IMPERIAL_RED)
+	ci.draw_rect(Rect2(ban.position, Vector2(ban.size.x, 2.0)), BRASS)
+
+## Quiosco de musica: tarima redonda de piedra y el tejado en punta rojo con
+## su remate de laton.
+static func _d2_bandstand(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var c := r.get_center()
+	_cyl(ci, c, m * 0.42, m * 0.06, CONCRETE, CONCRETE_DARK)
+	for i in 6:
+		_dot(ci, c + Vector2.from_angle(TAU * i / 6.0 + 0.5) * m * 0.36, 2.0, IRON)
+	var roof := c - _down * m * 0.1
+	var pts := PackedVector2Array()
+	for i in 10:
+		pts.append(roof + Vector2.from_angle(TAU * i / 10.0) * m * 0.38)
+	_poly(ci, pts, IMPERIAL_RED, OUTLINE, 1.25)
+	for i in 5:
+		var d := Vector2.from_angle(TAU * i / 5.0 + 0.3)
+		ci.draw_line(roof, roof + d * m * 0.37, IMPERIAL_RED.darkened(0.2), 1.2)
+	_dot(ci, roof + (_left() - _down) * m * 0.1, m * 0.12, Color(1, 1, 1, 0.14))
+	_disc(ci, roof, m * 0.05, BRASS, OUTLINE, 1.0)
+
+## Bote varado: corro de arena, el bote de remos tumbado y un remo.
+static func _d2_beached_boat(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var c := r.get_center()
+	_disc(ci, c, m * 0.45, CREAM.darkened(0.06), CREAM.darkened(0.25), 1.5)
+	var d := Vector2(0.86, 0.5).normalized()
+	var side := Vector2(-d.y, d.x)
+	var hull := PackedVector2Array([c - d * m * 0.36, c - d * m * 0.2 + side * m * 0.14, c + d * m * 0.24 + side * m * 0.13,
+		c + d * m * 0.32, c + d * m * 0.24 - side * m * 0.13, c - d * m * 0.2 - side * m * 0.14])
+	_poly(ci, hull, WOOD, OUTLINE, 1.5)
+	var inner := PackedVector2Array()
+	for p in hull:
+		inner.append(c + (p - c) * 0.72)
+	ci.draw_colored_polygon(inner, DARK_WOOD)
+	for t in [-0.08, 0.1]:
+		ci.draw_line(c + d * m * t - side * m * 0.1, c + d * m * t + side * m * 0.1, LIGHT_WOOD, 2.0)
+	ci.draw_line(c + side * m * 0.28 - d * m * 0.2, c + side * m * 0.2 + d * m * 0.25, OUTLINE, 3.0)
+	ci.draw_line(c + side * m * 0.28 - d * m * 0.2, c + side * m * 0.2 + d * m * 0.25, LIGHT_WOOD, 1.8)
+
+## Jardin de engranajes: tres engranajes de laton engranados entre setos.
+static func _d2_gear_garden(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var c := r.get_center()
+	_block(ci, _d2_rect(c + _down * m * 0.08, m, Vector2(0.8, 0.18)), m * 0.05, CONCRETE, CONCRETE_DARK)
+	_d2_cog(ci, c + _left() * m * 0.17 - _down * m * 0.06, m * 0.22, BRASS, 10)
+	_d2_cog(ci, c - _left() * m * 0.2 + _down * m * 0.0, m * 0.15, BRASS_DARK, 8)
+	_d2_cog(ci, c - _left() * m * 0.18 - _down * m * 0.25, m * 0.09, TERRACOTTA, 6)
+	for s in [-1.0, 1.0]:
+		_block(ci, _d2_rect(c + _left() * m * 0.3 * s + _down * m * 0.34, m, Vector2(0.26, 0.13)), m * 0.05, GREEN.darkened(0.05), LEAF_DARK)
+
+## Escenario de feria: tarima de tablones, telon rojo al fondo y candilejas.
+static func _d2_fair_stage(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "dirt")
+	var c := r.get_center()
+	var top := _block(ci, _d2_rect(c + _down * m * 0.02, m, Vector2(0.86, 0.56)), m * 0.08, LIGHT_WOOD, DARK_WOOD)
+	for i in range(1, 5):
+		var x := top.position.x + top.size.x * i / 5.0
+		ci.draw_line(Vector2(x, top.position.y), Vector2(x, top.end.y), DARK_WOOD, 1.0)
+	_block(ci, _d2_rect(c - _down * m * 0.26, m, Vector2(0.8, 0.1)), m * 0.14, IMPERIAL_RED, IMPERIAL_RED.darkened(0.25))
+	for i in 5:
+		_dot(ci, top.position + Vector2(top.size.x * (i + 0.5) / 5.0, top.size.y - 3.0), 2.2, GLOW)
+
+## Carpa de feria: carpa redonda roja con el techo crema en gajos y su mastil
+## con gallardete.
+static func _d2_fair_tent(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var c := r.get_center()
+	_cyl(ci, c, m * 0.4, m * 0.1, CREAM, IMPERIAL_RED)
+	for i in 8:
+		var a := TAU * i / 8.0
+		var p1 := c + Vector2.from_angle(a) * m * 0.4
+		var p2 := c + Vector2.from_angle(a + TAU / 8.0) * m * 0.4
+		ci.draw_colored_polygon(PackedVector2Array([c, p1, p2]), IMPERIAL_RED if i % 2 == 0 else CREAM)
+	ci.draw_arc(c, m * 0.4, 0.0, TAU, 24, OUTLINE, 1.5)
+	var tip := _mast(ci, c, m * 0.18, IRON, 2.0)
+	_poly(ci, PackedVector2Array([tip, tip + _left() * -m * 0.16 + _down * m * 0.03, tip + _down * m * 0.07]), BRASS, OUTLINE, 1.0)
+
+## Estanque con puente: borde de piedra, agua con nenufares y el puentecito
+## de madera que lo cruza.
+static func _d2_pond_bridge(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var c := r.get_center()
+	_disc(ci, c, m * 0.44, STONE, OUTLINE, 1.5)
+	_disc(ci, c, m * 0.38, WATER, WATER.darkened(0.2), 1.0)
+	for p in [Vector2(-0.18, -0.2), Vector2(0.2, 0.22), Vector2(-0.12, 0.25)]:
+		_dot(ci, c + p * m, m * 0.05, LEAF)
+	var along := Vector2(absf(_down.y), absf(_down.x))
+	var across := Vector2(absf(_down.x), absf(_down.y))
+	var size := along * m * 0.94 + across * m * 0.16
+	_block(ci, Rect2(c - size * 0.5, size), m * 0.06, LIGHT_WOOD, DARK_WOOD)
+	for i in 6:
+		var t := -0.4 + 0.16 * i
+		ci.draw_line(c + along * m * t - across * m * 0.08, c + along * m * t + across * m * 0.08, DARK_WOOD, 1.0)
+
+## Molino de agua: casita de piedra con tejado de teja, el canal y la rueda.
+static func _d2_water_mill(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var c := r.get_center()
+	var canal := Rect2(Vector2(c.x + m * 0.18, r.position.y), Vector2(m * 0.24, r.size.y))
+	ci.draw_rect(canal.grow(1.0), OUTLINE)
+	ci.draw_rect(canal, WATER)
+	_gable(ci, _d2_rect(c - Vector2(m * 0.14, 0), m, Vector2(0.46, 0.5)), m * 0.14, TILE_RED, CONCRETE, true)
+	var hub := Vector2(canal.get_center().x, c.y)
+	_disc(ci, hub, m * 0.2, LIGHT_WOOD, OUTLINE, 1.5)
+	for i in 8:
+		var d := Vector2.from_angle(TAU * i / 8.0)
+		ci.draw_line(hub, hub + d * m * 0.2, DARK_WOOD, 2.0)
+	_disc(ci, hub, m * 0.05, IRON, OUTLINE, 1.0)
+
+## Canon de museo: peana de dos escalones con su placa y el canon en la cureña.
+static func _d2_museum_cannon(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center()
+	_block(ci, _d2_rect(c, m, Vector2(0.78, 0.6)), m * 0.05, STONE, CONCRETE_DARK)
+	var top := _block(ci, _d2_rect(c, m, Vector2(0.62, 0.44)), m * 0.05, CONCRETE, STONE)
+	ci.draw_rect(Rect2(Vector2(top.get_center().x - m * 0.1, top.end.y - 3.0), Vector2(m * 0.2, 3.0)), BRASS)
+	var muzzle := c - _down * m * 0.3
+	var breech := c + _down * m * 0.12
+	ci.draw_line(breech, muzzle, OUTLINE, m * 0.14 + 2.0)
+	ci.draw_line(breech, muzzle, IRON.lightened(0.2), m * 0.14)
+	_disc(ci, muzzle, m * 0.06, OIL_BLACK, OUTLINE, 1.0)
+	for s in [-1.0, 1.0]:
+		_disc(ci, c + _left() * m * 0.13 * s, m * 0.09, DARK_WOOD, OUTLINE, 1.25)
+	for p in [Vector2(-0.28, 0.2), Vector2(-0.21, 0.2), Vector2(-0.245, 0.14)]:
+		_disc(ci, c + p * m, m * 0.035, IRON, OUTLINE, 1.0)
+
+## Mural de contenedores: dos contenedores de colores y el panel pintado.
+static func _d2_container_mural(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center()
+	_block(ci, _d2_rect(c - _down * m * 0.18 - _left() * m * 0.03, m, Vector2(0.84, 0.32)), m * 0.12, IMPERIAL_RED, TILE_RED_DARK)
+	_block(ci, _d2_rect(c - _down * m * 0.26 + _left() * m * 0.05, m, Vector2(0.8, 0.28)), m * 0.12, SKY, SKY.darkened(0.25))
+	var panel := _d2_rect(c + _down * m * 0.2, m, Vector2(0.76, 0.2))
+	ci.draw_rect(panel.grow(1.0), OUTLINE)
+	var bands := [IMPERIAL_RED, BRASS, GREEN, SKY]
+	for i in 4:
+		ci.draw_rect(Rect2(panel.position + Vector2(panel.size.x * i / 4.0, 0), Vector2(panel.size.x / 4.0, panel.size.y)), bands[i])
+	_dot(ci, panel.get_center(), m * 0.06, CREAM)
+
+## Torre del reloj: base de piedra, el fuste y la esfera grande con sus agujas.
+static func _d2_clock_tower(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center() + _down * m * 0.12
+	_block(ci, _d2_rect(c, m, Vector2(0.56, 0.5)), m * 0.06, STONE, CONCRETE_DARK)
+	var top := _block(ci, _d2_rect(c - _down * m * 0.08, m, Vector2(0.4, 0.4)), m * 0.34, TILE_RED, MARBLE)
+	_wall_marks(ci, _wall, 1, DARK_WOOD, 0.4)
+	var face := top.get_center() + _down * m * 0.06
+	_disc(ci, face, m * 0.13, CREAM, OUTLINE, 1.5)
+	ci.draw_arc(face, m * 0.13, 0.0, TAU, 16, BRASS, 1.5)
+	ci.draw_line(face, face - _down * m * 0.09, OUTLINE, 1.6)
+	ci.draw_line(face, face - _left() * m * 0.06, OUTLINE, 1.6)
+	_dot(ci, top.get_center() - _down * m * 0.14, m * 0.035, BRASS)
+
+## Pecio monumento: arena, el casco roto con las cuadernas al aire y el mastil
+## partido.
+static func _d2_wreck_monument(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var c := r.get_center()
+	_disc(ci, c, m * 0.45, CREAM.darkened(0.1), CREAM.darkened(0.28), 1.5)
+	var d := Vector2(0.9, -0.42).normalized()
+	var side := Vector2(-d.y, d.x)
+	var hull := PackedVector2Array([c - d * m * 0.38, c - d * m * 0.15 + side * m * 0.18, c + d * m * 0.3 + side * m * 0.12,
+		c + d * m * 0.36, c + d * m * 0.2 - side * m * 0.12])
+	_poly(ci, hull, DARK_WOOD, OUTLINE, 1.5)
+	for i in 5:
+		var p := c + d * m * (-0.24 + 0.12 * i)
+		ci.draw_line(p - side * m * 0.15, p + side * m * 0.15, OUTLINE, 3.2)
+		ci.draw_line(p - side * m * 0.15, p + side * m * 0.15, WOOD, 2.0)
+	ci.draw_line(c - d * m * 0.05, c - d * m * 0.05 - _down * m * 0.3 + _left() * m * 0.12, OUTLINE, 4.5)
+	ci.draw_line(c - d * m * 0.05, c - d * m * 0.05 - _down * m * 0.3 + _left() * m * 0.12, WOOD, 3.0)
+	_block(ci, _d2_rect(c + Vector2(0.26, 0.26) * m, m, Vector2(0.16, 0.12)), m * 0.05, BRASS, DARK_WOOD)
+
+## Columna de la Tormenta: peana de escalones, la columna alta y el rayo
+## partido encima.
+static func _d2_storm_column(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center() + _down * m * 0.2
+	_block(ci, _d2_rect(c, m, Vector2(0.62, 0.42)), m * 0.04, STONE, CONCRETE_DARK)
+	_block(ci, _d2_rect(c, m, Vector2(0.4, 0.28)), m * 0.04, CONCRETE, STONE)
+	var top := c - _down * m * 0.5
+	ci.draw_line(c, top, OUTLINE, m * 0.16 + 2.0)
+	ci.draw_line(c, top, MARBLE, m * 0.16)
+	ci.draw_line(c + _left() * m * 0.04, top + _left() * m * 0.04, MARBLE.lightened(0.2), m * 0.04)
+	_disc(ci, top, m * 0.1, BRASS, OUTLINE, 1.25)
+	var b0 := top - _down * m * 0.1 - _left() * m * 0.06
+	var b1 := b0 - _down * m * 0.1 + _left() * m * 0.08
+	var b2 := b1 - _down * m * 0.12 - _left() * m * 0.06
+	for seg in [[b0, b1], [b1 - _down * 2.0, b2]]:
+		ci.draw_line(seg[0], seg[1], OUTLINE, 4.5)
+		ci.draw_line(seg[0], seg[1], BRASS_LIGHT, 3.0)
+	_dot(ci, b1, 2.4, GLOW)
+
+## Dirigible amarrado: el mastil de celosia y el dirigible crema con sus
+## aletas rojas, atado de la proa.
+static func _d2_moored_airship(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "grass")
+	var base := r.position + r.size * Vector2(0.22, 0.7)
+	_block(ci, _d2_rect(base, m, Vector2(0.18, 0.18)), m * 0.03, CONCRETE, STONE)
+	var tip := _mast(ci, base, m * 0.42, IRON, 3.0)
+	_disc(ci, tip, 2.5, BRASS, OUTLINE, 1.0)
+	var body := r.position + r.size * Vector2(0.6, 0.36)
+	var d := (body - tip).normalized()
+	var side := Vector2(-d.y, d.x)
+	ci.draw_line(tip, body - d * m * 0.3, IRON, 1.2)
+	var pts := PackedVector2Array()
+	for i in 16:
+		var a := TAU * i / 16.0
+		pts.append(body + d * cos(a) * m * 0.32 + side * sin(a) * m * 0.13)
+	var tail := body + d * m * 0.28
+	for s in [-1.0, 1.0]:
+		_poly(ci, PackedVector2Array([tail, tail + d * m * 0.1 + side * m * 0.12 * s, tail + d * m * 0.12]), IMPERIAL_RED, OUTLINE, 1.0)
+	_poly(ci, pts, CREAM, OUTLINE, 1.5)
+	ci.draw_line(body - d * m * 0.26, body + d * m * 0.26, Color(1, 1, 1, 0.35), 2.0)
+	ci.draw_line(body - d * m * 0.2 + side * m * 0.04, body + d * m * 0.2 + side * m * 0.04, IMPERIAL_RED, 1.5)
+	var gond := body + _down * m * 0.12
+	ci.draw_rect(Rect2(gond - Vector2(m * 0.08, m * 0.03), Vector2(m * 0.16, m * 0.06)).grow(1.0), OUTLINE)
+	ci.draw_rect(Rect2(gond - Vector2(m * 0.08, m * 0.03), Vector2(m * 0.16, m * 0.06)), WOOD)
+
+## Plaza del Gobernador (3x3): losas, la fuente redonda, la estatua de laton,
+## cuatro farolas y los parterres.
+static func _d2_governor_plaza(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	_deco_pad(ci, r, "slabs")
+	var c := r.get_center()
+	var inner := _d2_rect(c, m, Vector2(0.72, 0.72))
+	ci.draw_rect(inner, MARBLE.darkened(0.06))
+	for i in range(1, 6):
+		var t := float(i) / 6.0
+		ci.draw_line(Vector2(inner.position.x + inner.size.x * t, inner.position.y), Vector2(inner.position.x + inner.size.x * t, inner.end.y), CONCRETE, 1.0)
+		ci.draw_line(Vector2(inner.position.x, inner.position.y + inner.size.y * t), Vector2(inner.end.x, inner.position.y + inner.size.y * t), CONCRETE, 1.0)
+	_cyl(ci, c, m * 0.27, m * 0.04, STONE, CONCRETE_DARK)
+	_disc(ci, c, m * 0.23, WATER, WATER.darkened(0.2), 1.0)
+	_block(ci, _d2_rect(c, m, Vector2(0.12, 0.12)), m * 0.05, CONCRETE, STONE)
+	var head := c - _down * m * 0.12
+	ci.draw_line(c, head, OUTLINE, m * 0.07 + 2.0)
+	ci.draw_line(c, head, BRASS_DARK, m * 0.07)
+	_disc(ci, head, m * 0.035, BRASS, OUTLINE, 1.0)
+	ci.draw_line(head - _left() * m * 0.04, head + _left() * m * 0.04, OUTLINE, 2.5)
+	for sx in [-1.0, 1.0]:
+		for sy in [-1.0, 1.0]:
+			var p: Vector2 = c + Vector2(sx, sy) * m * 0.41
+			_disc(ci, p, m * 0.03, IRON, OUTLINE, 1.0)
+			_dot(ci, p - _down * m * 0.04, m * 0.035, GLOW)
+			var bed: Vector2 = c + Vector2(sx * 0.29, sy * 0.41) * m
+			_shaded_disc(ci, bed, m * 0.05, GREEN)
+			_d2_flowers(ci, bed, m * 0.03, 3, int(sx + sy + 3))

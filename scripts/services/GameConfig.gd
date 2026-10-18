@@ -4259,3 +4259,140 @@ func _register_economy_buildings() -> bool:
 	building_active_fx[EXCHANGE_ID] = "glow"
 	building_active_fx[DIESEL_PLANT_ID] = "smoke"
 	return true
+# Decoraciones y trafico (feat/decoraciones-y-trafico, doc 21 §6.4-6.5 y §7 V5)
+# ══════════════════════════════════════════════════════════════════════
+# Las dieciocho decoraciones que faltaban del catalogo y los camiones de la red
+# de carreteras. Como el Muelle de pesca, sus filas en las tablas comunes
+# (rank_rewards, construction_style, building_lot_style) no estan escritas
+# dentro de cada tabla: las anade _register_decorations_traffic() al crear
+# GameConfig, sin reescribir las filas que ya hay. Quien busque "clock_tower"
+# en rank_rewards y no lo vea, lo tiene aqui. Detalle: docs/03 y docs/04.
+
+## Rango que abre cada decoracion nueva (se anade a la lista `buildings` de su
+## fila de rank_rewards, doc 21 §6.5). Las que no estan aqui se abren por
+## hazana (decor_deed_unlocks).
+var decor_rank_unlocks := {
+	"flower_stall": 4, "community_garden": 4,
+	"small_fountain": 5,
+	"entrance_arch": 6, "bandstand": 6,
+	"beached_boat": 7, "gear_garden": 7,
+	"fair_stage": 8,
+	"fair_tent": 9,
+	"pond_bridge": 10, "water_mill": 10,
+	"container_mural": 11,
+	"clock_tower": 12,
+	# El pecio del doc 21 §3.2 aun no existe en esta rama: hasta que llegue, el
+	# Pecio monumento se abre con el rango del barco (13, junto a las palmeras).
+	"wreck_monument": 13,
+	"moored_airship": 14,
+	"governor_plaza": 18,
+}
+## Decoraciones que se abren por una hazana y no por rango: {id: {que: cuanto}}.
+## "tithes_repelled": Impuestos (Diezmos) rechazados en la partida
+## (StormManager.tithes_repelled()). Sandbox las tiene abiertas.
+var decor_deed_unlocks := {
+	"museum_cannon": {"tithes_repelled": 1},
+	"storm_column": {"tithes_repelled": 5},
+}
+## Las decoraciones nuevas que solo se plantan en la costa (PlacementRules.needs_shore).
+var decor_shore_only := ["beached_boat", "wreck_monument"]
+
+## ¿Se cumple la hazana que abre `building_id`? true si no tiene ninguna.
+func decor_deed_met(building_id: String, tithes_repelled: int) -> bool:
+	var deed: Dictionary = decor_deed_unlocks.get(building_id, {})
+	if deed.is_empty():
+		return true
+	return tithes_repelled >= int(deed.get("tithes_repelled", 0))
+
+# ── Trafico: camiones de los extractores al almacen (solo vista, docs/04) ──
+
+## Un camion por cada tantos extractores con dotacion.
+var traffic_sources_per_truck := 2
+## Tope de camiones a la vez por perfil de dispositivo. Como las figuras de la
+## gente, cada uno cuesta una matriz por fotograma (no una llamada de dibujo).
+var traffic_truck_cap := {"pc": 12, "tablet": 8, "phone": 5}
+## El tope en calidad Minima (0 = ningun camion).
+var traffic_truck_cap_minimal := 0
+## Donde descargan: los Almacenes (sin ninguno, el Nucleo).
+var traffic_depot_ids := ["warehouse"]
+## Celdas por segundo, y cuanto aprietan en el Aviso de Tormenta.
+var traffic_speed := 2.2
+var traffic_hurry_multiplier := 1.5
+## Distancia del centro de la calzada a su carril (en celdas; a la derecha).
+var traffic_lane_offset := 0.2
+## Cuanto se quedan dentro cargando en el extractor y descargando en el
+## almacen (segundos reales, min y max).
+var traffic_stay_load := Vector2(4.0, 9.0)
+var traffic_stay_unload := Vector2(2.0, 4.0)
+## Colores de la cabina (ToyTones): rojo valvula, azul marino, oliva y teja.
+var traffic_truck_paints := ["red", "navy", "olive", "terracotta"]
+
+## Se evalua al crear GameConfig, despues de todas las tablas de arriba.
+var _decorations_traffic_registered := _register_decorations_traffic()
+
+func _register_decorations_traffic() -> bool:
+	for id in decor_rank_unlocks:
+		var r := int(decor_rank_unlocks[id])
+		if not rank_rewards.has(r):
+			rank_rewards[r] = {}
+		var row: Dictionary = rank_rewards[r]
+		var list: Array = row.get("buildings", [])
+		if not list.has(id):
+			list.append(id)
+		row["buildings"] = list
+	# La obra de cada una (docs/03, "Obra por edificio").
+	var obra := {
+		"flower_stall": ["planks", "sacks", "planks", "planks", "low", "wood", Color(0.35, 0.6, 0.3)],
+		"community_garden": ["soil", "sacks", "planks", "planks", "low", "wood", Color(0.3, 0.6, 0.22)],
+		"small_fountain": ["stone", "gravel", "bricks", "planks", "basin", "stone", Color(0.25, 0.55, 0.78)],
+		"entrance_arch": ["stone", "bricks", "stone", "planks", "plinth", "stone", Color(0.82, 0.63, 0.2)],
+		"bandstand": ["planks", "rivets", "stone", "canvas", "dome", "steel", Color(0.72, 0.13, 0.1)],
+		"beached_boat": ["planks", "sacks", "gravel", "planks", "low", "wood", Color(0.25, 0.55, 0.78)],
+		"gear_garden": ["rivets", "pipes", "soil", "sheet", "plinth", "steel", Color(0.82, 0.63, 0.2)],
+		"fair_stage": ["planks", "crates", "planks", "canvas", "hall", "wood", Color(0.72, 0.13, 0.1)],
+		"fair_tent": ["sacks", "planks", "crates", "canvas", "dome", "wood", Color(0.93, 0.78, 0.32)],
+		"pond_bridge": ["stone", "soil", "planks", "planks", "basin", "wood", Color(0.25, 0.55, 0.78)],
+		"water_mill": ["stone", "planks", "logs", "planks", "gable", "wood", Color(0.25, 0.55, 0.78)],
+		"museum_cannon": ["stone", "rivets", "sandbags", "sheet", "plinth", "stone", Color(0.95, 0.74, 0.12)],
+		"container_mural": ["crates", "rivets", "drums", "sheet", "box", "steel", Color(0.80, 0.16, 0.1)],
+		"clock_tower": ["stone", "bricks", "beams", "canvas", "tower", "stone", Color(0.82, 0.63, 0.2)],
+		"wreck_monument": ["planks", "logs", "gravel", "planks", "low", "wood", Color(0.25, 0.55, 0.78)],
+		"storm_column": ["stone", "beams", "rivets", "sheet", "tower", "stone", Color(0.72, 0.13, 0.1)],
+		"moored_airship": ["beams", "pipes", "drums", "canvas", "mast", "steel", Color(0.93, 0.78, 0.32)],
+		"governor_plaza": ["stone", "bricks", "gravel", "sheet", "plinth", "stone", Color(0.82, 0.63, 0.2)],
+	}
+	for id in obra:
+		if construction_style.has(id):
+			continue
+		var o: Array = obra[id]
+		construction_style[id] = {"piles": [o[0], o[1], o[2]], "fence": o[3],
+			"tarp": (o[6] as Color).darkened(0.35), "frame": o[4], "frame_mat": o[5],
+			"site_fx": "sparks" if o[5] == "steel" else "dust", "flag": o[6]}
+	# La parcela: suelo, borde y atrezo (docs/03, "Parcela").
+	var lot := {
+		"flower_stall": ["slabs", "curb", "residential", ["planter", "bench"]],
+		"community_garden": ["dirt", "fence", "residential", ["sacks", "barrel"]],
+		"small_fountain": ["slabs", "curb", "civic", ["bench", "planter"]],
+		"entrance_arch": ["slabs", "curb", "civic", ["lamp", "planter"]],
+		"bandstand": ["grass", "curb", "civic", ["bench", "lamp"]],
+		"beached_boat": ["grass", "curb", "residential", ["barrel", "crate"]],
+		"gear_garden": ["grass", "curb", "industrial", ["planter", "lamp"]],
+		"fair_stage": ["dirt", "curb", "residential", ["barrel", "crate"]],
+		"fair_tent": ["grass", "curb", "residential", ["barrel", "bench"]],
+		"pond_bridge": ["grass", "curb", "residential", ["bench", "planter"]],
+		"water_mill": ["grass", "fence", "residential", ["sacks", "logs"]],
+		"museum_cannon": ["slabs", "curb", "military", ["planter", "lamp"]],
+		"container_mural": ["slabs", "curb", "industrial", ["crate", "barrel"]],
+		"clock_tower": ["slabs", "curb", "civic", ["bench", "lamp"]],
+		"wreck_monument": ["grass", "curb", "residential", ["barrel", "crate"]],
+		"storm_column": ["slabs", "curb", "civic", ["lamp", "planter"]],
+		"moored_airship": ["grass", "curb", "industrial", ["crate", "barrel"]],
+		"governor_plaza": ["slabs", "curb", "civic", ["bench", "planter", "lamp"]],
+	}
+	for id in lot:
+		if building_lot_style.has(id):
+			continue
+		var l: Array = lot[id]
+		building_lot_style[id] = {"ground": l[0], "trim": l[1], "yard": 0.25, "accent": l[2],
+			"props": l[3], "count": [1, 2]}
+	return true

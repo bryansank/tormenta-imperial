@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "clock_tower"
+display_name = "Torre del reloj"
+description = "Una torre con reloj en las cuatro caras. Toda la colonia va en hora."
+grid_size = Vector2i(2, 2)
+cost_gold = 200
+cost_steel = 60
+cost_oil = 0
+cost_wood = 80
+build_time = 8.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+workers_required = 0
+morale_bonus = 10
+mesh_height = 5
+mesh_color = Color(0.85, 0.78, 0.6, 1)
+max_health = 160
+is_decoration = true

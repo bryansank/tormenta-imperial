@@ -120,7 +120,8 @@ const NEIGHBORS8 := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]
 
 static func needs_shore(building_id: String) -> bool:
-	return building_id in SHORE_ONLY
+	# Mas las decoraciones de costa de feat/decoraciones-y-trafico (bote, pecio).
+	return building_id in SHORE_ONLY or building_id in GameConfig.decor_shore_only
 
 ## ¿Es `cell` tierra pegada al agua (contando diagonales)? La misma franja que
 ## MapGenerator.is_shore_cell() con map_shore_band = 1: el agua de dentro de la
@@ -234,10 +235,30 @@ static func check_building_limit(building_id: String) -> bool:
 ## El rango del gobernador abre decoraciones y edificios opcionales
 ## (GameConfig.rank_rewards). Sandbox lo tiene todo abierto.
 static func check_rank(building_id: String) -> bool:
-	return RankManager.is_building_unlocked(building_id)
+	return RankManager.is_building_unlocked(building_id) and check_deed(building_id)
+
+## Las decoraciones que se abren por hazana y no por rango (Canon de museo,
+## Columna de la Tormenta: Impuestos rechazados, GameConfig.decor_deed_unlocks).
+## Sandbox las tiene abiertas. Va con check_rank: el mismo candado.
+static func check_deed(building_id: String) -> bool:
+	if not GameConfig.decor_deed_unlocks.has(building_id) or GameMode.all_unlocked():
+		return true
+	return GameConfig.decor_deed_met(building_id, StormManager.tithes_repelled())
+
+## Lo que falta de la hazana, corto ("Impuestos rechazados: 0/1"), o "" si no
+## tiene o ya se cumple. Lo ensena la tarjeta de CONSTRUIR en vez de "Rango N".
+static func deed_lock_text(building_id: String) -> String:
+	if check_deed(building_id):
+		return ""
+	var need := int((GameConfig.decor_deed_unlocks[building_id] as Dictionary).get("tithes_repelled", 0))
+	return Tr.t("LBL_DEED_TITHES") % [mini(StormManager.tithes_repelled(), need), need]
 
 ## "Necesitas rango 5": lo que dice el detalle de CONSTRUIR y el aviso al colocar.
+## Si lo que falta es una hazana, la hazana.
 static func rank_lock_text(building_id: String) -> String:
+	var deed := deed_lock_text(building_id)
+	if deed != "":
+		return deed
 	return Tr.t("LBL_RANK_NEEDED") % RankManager.building_rank(building_id)
 
 ## El Nucleo abre edificios con su nivel (1.2, feat/nucleo-y-planos;

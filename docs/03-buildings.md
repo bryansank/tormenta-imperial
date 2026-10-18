@@ -474,6 +474,68 @@ y una o dos piezas de atrezo.
   aviso `LBL_NEEDS_SHORE`; `PlacementAssist.shore_spots()` pinta en verde los
   sitios validos y la ficha de CONSTRUIR lo dice (`rule_text`).
 
+#### Las dieciocho restantes (feat/decoraciones-y-trafico, 2026-10-18)
+
+El resto del catalogo del doc 21 §6.4 (fila 4.2 del plan), repartido por rango
+segun §6.5. Como las diez de arriba: decoraciones **sin tope**, 2x2 (la Plaza,
+3x3) con su parcela de 0,25 de patio, moral por `morale_bonus`, una malla
+compartida por tipo y dibujadas en lote por `DecorBatch3D`. Las de era 2 cuestan
+acero y las de era 3 petroleo, asi que la tarjeta de CONSTRUIR las bloquea hasta
+que se abre el recurso, como cualquier edificio.
+
+| ID | Nombre | Coste G/S/O/W | Obra | Moral | Se abre | Triangulos (horneada) | Piezas CC0 del horneado |
+|----|--------|---------------|------|-------|---------|-----------------------|-------------------------|
+| `flower_stall` | Puesto de flores | 60/0/0/30 | 3 s | +4 | rango 4 | 510 | todo propio (no hay flores CC0) |
+| `community_garden` | Huerto vecinal | 40/0/0/40 | 3 s | +4 | rango 4 | 416 | todo propio |
+| `small_fountain` | Fuente pequena | 40/10/0/0 | 3 s | +4 | rango 5 | 389 | `ft:fountain-square` |
+| `entrance_arch` | Arco de entrada | 80/20/0/20 | 4 s | +5 | rango 6 | 544 | `ft:pillar-stone` x2, `ft:banner-red` |
+| `bandstand` | Quiosco de musica | 100/20/0/60 | 5 s | +6 | rango 6 | 350 | `ft:roof-point` (a rojo) |
+| `beached_boat` | Bote varado | 40/0/0/40 | 2,5 s | +4 | rango 7 | 370 | `pir:boat-row-large`, `sur:rock-sand-a`; **solo costa** |
+| `gear_garden` | Jardin de engranajes | 90/40/0/10 | 4 s | +6 | rango 7 | 526 | `fac:cog-a`, `fac:cog-c` de pie, a laton |
+| `fair_stage` | Escenario de feria | 120/30/0/80 | 5 s | +7 | rango 8 | 406 | `ft:banner-green` x2 |
+| `fair_tent` | Carpa de feria | 90/20/0/60 | 4 s | +6 | rango 9 | 340 | `sur:tent-canvas` (a crema y rojo) |
+| `pond_bridge` | Estanque con puente | 110/20/0/50 | 5 s | +7 | rango 10 | 550 | todo propio (el puente de KayKit pasa de 604) |
+| `water_mill` | Molino de agua | 120/30/0/90 | 6 s | +7 | rango 10 | 596 | `kk:sack` x2 (la rueda de Fantasy Town pesa 600 sola) |
+| `museum_cannon` | Canon de museo | 80/40/0/0 | 4 s | +6 | **1 Impuesto rechazado** | 470 | `pir:cannon` |
+| `container_mural` | Mural de contenedores | 60/60/0/20 | 4 s | +6 | rango 11 | 340 | todo propio (dos contenedores CC0 no caben) |
+| `clock_tower` | Torre del reloj | 200/60/0/80 | 8 s | +10 | rango 12 | 368 | `ft:roof-high-point` |
+| `wreck_monument` | Pecio monumento | 120/20/0/100 | 6 s | +9 | rango 13 | 516 | todo propio (el pecio CC0 pasa de 2.282); **solo costa** |
+| `storm_column` | Columna de la Tormenta | 250/100/40/0 | 8 s | +12 | **5 Impuestos rechazados** | 236 | `ft:pillar-stone` |
+| `moored_airship` | Dirigible amarrado | 220/80/60/40 | 8 s | +11 | rango 14 | 442 | `pir:barrel` (no hay dirigible CC0) |
+| `governor_plaza` | Plaza del Gobernador (3x3) | 500/150/80/100 + 6 lingotes | 12 s | +18 | rango 18 | 916 | `ft:fountain-square` ampliada |
+
+- **Presupuesto:** <= 600 triangulos por decoracion 2x2 con el borde de contacto
+  (V8) incluido; la Plaza, 3x3, <= 1.500 (`build_toy_models.gd`,
+  `DECOR_BIG_TRI_BUDGET`). Cuatro recetas acabaron todo propias porque la pieza
+  CC0 no cabia con el borde de contacto.
+- **3D:** la version procedural esta en `scripts/buildings/DecorMesh2.gd` (la
+  sirve `DecorMesh`: `handles()`, `mesh_for()`, `build()`); `build(mk, id, cc0)`
+  con `cc0 = true` deja fuera la parte que la receta pone con su pieza CC0.
+  Recetas en `tools/toy_recipes/<id>.gd`; horneadas las dieciocho
+  (`assets/models/toy/<id>_mesh.res` y `.tscn`). Nada se anima: el molino y el
+  dirigible estan quietos (el doc 21 pedia giro y vaiven por shader; queda para
+  cuando el lote tenga un material animado).
+- **2D:** `BuildingArt2D._decor2()` reparte a `_d2_<id>()` (suelo de `_deco_pad`
+  y la pieza exagerada); el mismo dibujo es el icono y el fantasma.
+- **Rango:** las filas no estan escritas dentro de `GameConfig.rank_rewards`: las
+  anade `GameConfig._register_decorations_traffic()` (tabla
+  `decor_rank_unlocks`) a la lista `buildings` de cada rango, sin tocar lo que
+  ya habia. Igual la obra (`construction_style`) y la parcela
+  (`building_lot_style`).
+- **Hazanas:** el Canon de museo y la Columna se abren por Impuestos (Diezmos)
+  rechazados en la partida (`GameConfig.decor_deed_unlocks`,
+  `StormManager.tithes_repelled()`). `PlacementRules.check_rank()` incluye
+  `check_deed()`, asi que el candado es el mismo; la tarjeta de CONSTRUIR dice
+  "Impuestos rechazados: 0/1" (`deed_lock_text()`, `LBL_DEED_TITHES`) en vez de
+  "Rango N". Sandbox las tiene abiertas.
+- **Costa:** el Bote varado y el Pecio monumento piden la costa como las
+  palmeras (`GameConfig.decor_shore_only`, leido por
+  `PlacementRules.needs_shore()`). El Pecio se abre por rango 13 hasta que exista
+  el pecio de las amenazas de costa (doc 21 §3.2).
+- **Pendiente:** el "+comida minima" del Huerto vecinal y el "+moral en
+  festivales" del Escenario (doc 21 §6.4) no estan: hoy dan solo moral. La
+  belleza del barrio (casas bonitas) es de otra rama (`feat/belleza-barrio`).
+
 The road is still a decoration in data, but it is the backbone of the map: see "Road
 network" below.
 
@@ -600,7 +662,7 @@ planos" más abajo) y cada nivel sube el máximo de cada edificio:
 | fuel_depot | 2 | 2 | 2 | 3 | 3 | Lo abre el Núcleo 4 (y pide la Refinería) |
 | market, laboratory, headquarters | 1 | 1 | 1 | 1 | 1 | Únicos |
 | barracks, shipyard, aerodrome | — | — | — | — | — | **Sin tope** (2026-10-18): el freno está en el ejército, ver abajo |
-| garden, fountain, statue, road y las decoraciones | — | — | — | — | — | Sin tope |
+| garden, fountain, statue, road, las diez decoraciones baratas (`lamp_post` … `palm_trees`) y las dieciocho restantes (`flower_stall` … `governor_plaza`) | — | — | — | — | — | Sin tope |
 
 Los huecos del rango van encima: casas +2 en los rangos 10 y 17, torre +1 en el 16.
 

@@ -614,7 +614,7 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 
 	match lock:
 		"rank":
-			vbox.add_child(make_rank_lock_row(RankManager.building_rank(data.id)))
+			vbox.add_child(make_rank_lock_row(RankManager.building_rank(data.id), Rules.deed_lock_text(data.id)))
 		"core":
 			var core_row := make_lock_row(Tr.t("LBL_CORE_LOCK") % GameConfig.core_level_unlock(data.id), "CoreLock")
 			core_row.tooltip_text = Rules.core_lock_text(data.id)
@@ -708,7 +708,8 @@ static func make_lock_row(text: String, row_name: String) -> HBoxContainer:
 
 ## Candado dibujado + "Rango N". El candado se pinta (no es un emoji): la
 ## tipografia del juego no lo tiene y el respaldo del sistema no esta en todos.
-static func make_rank_lock_row(rank: int) -> HBoxContainer:
+## `text`: lo que se lee en vez de "Rango N" (una hazana: "Rechaza 1 Impuesto").
+static func make_rank_lock_row(rank: int, text: String = "") -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "RankLock"
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -719,7 +720,7 @@ static func make_rank_lock_row(rank: int) -> HBoxContainer:
 	lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lock.draw.connect(func(): draw_lock(lock, Rect2(Vector2.ZERO, lock.custom_minimum_size), UITheme.WARNING))
 	row.add_child(lock)
-	var label := UITheme.make_label(Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
+	var label := UITheme.make_label(text if text != "" else Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
 	label.name = "RankLockLabel"
 	row.add_child(label)
 	return row

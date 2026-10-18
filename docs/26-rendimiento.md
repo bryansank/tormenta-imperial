@@ -612,6 +612,7 @@ mínima 151**. Este diseño parte de esa calidad y le añade lo que no es del mu
 | Rejilla (`GridOverlay`) | encendida | encendida | **apagada por defecto** | Pase transparente casi a pantalla completa |
 | Humo, polvo, brillo | quads con shader | igual | **ocultos** (grupo `building_fx`) | Transparentes y con `TIME`; son adorno |
 | Caminantes | 72 PC / 44 tablet / 26 móvil, con sombra en PC | igual | **16 / 12 / 8**, sin sombra | 0,4-0,7 ms de CPU en la colonia grande, más su dibujo |
+| Camiones (§7.8) | 12 PC / 8 tablet / 5 móvil, con sombra en PC | igual | **ninguno** (`traffic_truck_cap_minimal` = 0) | Una matriz por camión y una llamada de dibujo para todos |
 | Tope de FPS | el del jugador (§7.4) | igual | **30** por defecto | Estable mejor que alto, y menos calor y batería |
 
 Lo de la tabla lo cubre `WorldLook` (sol, entorno, escalado) más tres interruptores
@@ -792,6 +793,32 @@ con `UnitModels3D.tri_count`:
   uno por color); uno para todas las sombras de los aviones (el que ya existía).
 - **Mínima**: igual que la tierra (tablero, sin sombras del sol, 0,7 de
   resolución); el agua es la misma malla del terreno, sin shader propio.
+
+### 7.8 Decoraciones restantes y tráfico (1.2): coste a ojo
+
+Rama `feat/decoraciones-y-trafico`. Sin medir con la sonda (va en la ronda final
+de pruebas); triángulos contados al hornear:
+
+| Qué | Triángulos | Llamadas de dibujo | Nota |
+|---|---|---|---|
+| 17 decoraciones 2x2 nuevas | 236-596 (media ~440) | 1 por **tipo** en el mapa (2 si brilla) | En `DecorBatch3D` como las diez de antes: cien relojes son una llamada. Sombra solo las de 1,5 m o más |
+| Plaza del Gobernador (3x3) | 916 | 1-2 por tipo | Presupuesto de edificio útil (1.500) |
+| Camión | ~400 | **1 para todos** (+ sombra en PC) | `TrafficFigures3D`: un MultiMesh, un material de shader |
+| Camiones en la calle | PC 12 / tableta 8 / móvil 5 | — | **0 en Mínima** (`traffic_truck_cap_minimal`) |
+
+- **CPU:** un solo `_process` para todos los camiones (`RoadTraffic`), apagado
+  cuando no hay ninguno; por fotograma, unas sumas y una matriz por camión en la
+  calle y una escritura del buffer. Con el tope de PC (12) es un sexto de los
+  caminantes (72, 0,4-0,7 ms en la colonia grande): del orden de 0,1 ms.
+  Rutas por BFS al salir, con caché; repaso solo con señales y cada 30 s.
+- **2D:** seis rectángulos por camión en un `_draw`, sin texturas; no se repinta
+  sin camiones en la calle.
+- **Decoraciones 2D:** primitivas en `BuildingArt2D`, horneadas en `ArtCache2D`
+  como las demás: nada por fotograma.
+- **Sin luces, sin `_process` nuevo en decoraciones, sin texturas nuevas:** el
+  molino y el dirigible están quietos (la animación por shader queda pendiente).
+- **Por medir:** la sonda con la colonia `grande` y 150 decoraciones de todos los
+  tipos (doc 21 §6.6), y `life_probe` con los camiones (`RoadTraffic.avg_frame_usec`).
 
 ---
 

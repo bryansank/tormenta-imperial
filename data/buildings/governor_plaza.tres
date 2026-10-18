@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "governor_plaza"
+display_name = "Plaza del Gobernador"
+description = "La plaza mayor: fuente, farolas y la estatua del Gobernador. La más grande."
+grid_size = Vector2i(3, 3)
+cost_gold = 500
+cost_steel = 150
+cost_oil = 80
+cost_wood = 100
+cost_materials = {"ingots": 6}
+build_time = 12.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+workers_required = 0
+morale_bonus = 18
+mesh_height = 2.9
+mesh_color = Color(0.8, 0.7, 0.45, 1)
+max_health = 300
+is_decoration = true
