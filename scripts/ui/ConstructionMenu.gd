@@ -5,6 +5,7 @@ extends CanvasLayer
 const PlacementAssistScript := preload("res://scripts/buildings/PlacementAssist.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const TextKit := preload("res://scripts/ui/TextKit.gd")
+const HelpText := preload("res://scripts/ui/BuildingHelpText.gd")
 
 var _root: Control
 var _backdrop: ColorRect
@@ -39,6 +40,11 @@ var _detail_limit: HBoxContainer
 var _detail_rule: Label
 ## Por que no se puede construir ahora ("Te falta: 20 Madera"), junto al boton.
 var _detail_block: Label
+## Topes y mejoras (feat/topes-mejoras-ayuda): la frase del tope lleno ("Máximo
+## 5 en esta era. En la era 2 podrás tener 8."), lo que trae una era aun no
+## alcanzada ("Llega en la era 2, con la Fundición") y el atajo "Mejorar uno".
+var _detail_explain: Label
+var _detail_upgrade_one: Button
 var _detail_build_btn: Button
 var _selected_data: BuildingData = null
 
@@ -365,6 +371,14 @@ func _setup_ui() -> void:
 	_detail_limit.visible = false
 	_detail_panel.add_child(_detail_limit)
 
+	# Por que no se puede (tope o era), en frase y no solo con la tarjeta apagada.
+	_detail_explain = UITheme.make_label("", "body", UITheme.WARNING)
+	_detail_explain.name = "DetailExplain"
+	_detail_explain.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail_explain.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_detail_explain.visible = false
+	_detail_panel.add_child(_detail_explain)
+
 	# Lo que impide construir, a la vista junto al boton (fuera del scroll).
 	_detail_block = UITheme.make_label("", "body", UITheme.DANGER)
 	_detail_block.name = "DetailBlock"
@@ -373,6 +387,18 @@ func _setup_ui() -> void:
 	_detail_block.mouse_filter = Control.MOUSE_FILTER_PASS
 	_detail_block.visible = false
 	detail_column.add_child(_detail_block)
+
+	# Con el tope lleno: lleva al de nivel mas bajo y abre su ficha para mejorarlo.
+	_detail_upgrade_one = Button.new()
+	_detail_upgrade_one.name = "DetailUpgradeOne"
+	_detail_upgrade_one.text = Tr.t("TOPE_BTN_UPGRADE_ONE")
+	_detail_upgrade_one.tooltip_text = Tr.t("TOPE_BTN_UPGRADE_ONE_TIP")
+	_detail_upgrade_one.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
+	_detail_upgrade_one.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UITheme.style_button(_detail_upgrade_one, UITheme.INFO, UITheme.FONT_BODY)
+	_detail_upgrade_one.pressed.connect(_on_upgrade_one)
+	_detail_upgrade_one.visible = false
+	detail_column.add_child(_detail_upgrade_one)
 
 	# Build button (outside the scroll, see DetailColumn above)
 	_detail_build_btn = Button.new()
@@ -598,6 +624,12 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	limit_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	fill_limit_row(limit_row, data.id, "small")
 	vbox.add_child(limit_row)
+	# Lleno: una palabra en la tarjeta ("Al máximo"); la frase entera, en el detalle.
+	var full_tag := UITheme.make_label(Tr.t("TOPE_CARD_FULL"), "small", UITheme.WARNING)
+	full_tag.name = "CardFull"
+	full_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	full_tag.visible = bool(limit_info(data.id).get("full", false))
+	vbox.add_child(full_tag)
 
 	# Interaction (A14): el hover solo RESALTA; la seleccion cambia solo con
 	# clic y queda bloqueada hasta el siguiente. Antes pasar el raton por otra
@@ -794,6 +826,8 @@ func _show_no_selection() -> void:
 	fill_limit_row(_detail_limit, "", "small")
 	_detail_rule.text = ""
 	_detail_block.visible = false
+	_detail_explain.visible = false
+	_detail_upgrade_one.visible = false
 	_detail_build_btn.visible = false
 	_clear_preview_model()
 
@@ -872,12 +906,66 @@ func _refresh_block() -> void:
 		return
 	# En corto junto al boton; entero (como se desbloquea cada cosa) en el tooltip.
 	var block := Rules.purchase_block_detail(_selected_data)
-	_detail_block.text = "\n".join(Rules.block_reasons_short(_selected_data))
+	var explain := explain_lines(_selected_data)
+	_detail_explain.text = "\n".join(explain)
+	_detail_explain.visible = not explain.is_empty()
+	var short := block_lines_without_explained(_selected_data, not explain.is_empty())
+	_detail_block.text = "\n".join(short)
 	_detail_block.tooltip_text = block
-	_detail_block.visible = block != ""
+	_detail_block.visible = not short.is_empty()
 	_detail_build_btn.disabled = block != ""
+	_detail_upgrade_one.visible = HelpText.is_full(_selected_data.id) \
+		and Rules.upgrade_does_something(_selected_data) \
+		and HelpText.lowest_upgradable(_selected_data.id) != null
 	fill_limit_row(_detail_limit, _selected_data.id, "body")
 	_refresh_cost()
+
+## Lo que se explica en frase sobre el boton: el tope lleno y que hacer, y lo
+## que llega con una era o se fabrica en otro sitio. Estatica para las pruebas.
+static func explain_lines(data: BuildingData) -> Array:
+	var out: Array = []
+	if data == null:
+		return out
+	var full := HelpText.limit_full_text(data.id)
+	if full != "":
+		out.append(full)
+		var advice := HelpText.limit_full_advice(data.id)
+		if advice != "":
+			out.append(advice)
+	out.append_array(HelpText.locked_lines(data))
+	return out
+
+## Las razones cortas de siempre, sin las que ya dice explain_lines() en frase
+## (el "Límite alcanzado (5/5)" y el "Bloqueado: acero").
+static func block_lines_without_explained(data: BuildingData, explained: bool) -> Array:
+	var lines: Array = Rules.block_reasons_short(data)
+	if not explained:
+		return lines
+	var limit_line := ""
+	if not Rules.check_building_limit(data.id):
+		limit_line = Tr.t("LBL_LIMIT_REACHED") % [Rules.count_building(data.id), GameConfig.get_building_limit(data.id)]
+	var unlock_head := Tr.t("LBL_NEEDS_UNLOCK").get_slice("%s", 0)
+	var era_said := not HelpText.locked_lines(data).is_empty()
+	var out: Array = []
+	for line in lines:
+		var l := String(line)
+		if l == limit_line:
+			continue
+		if era_said and unlock_head != "" and l.begins_with(unlock_head):
+			continue
+		out.append(l)
+	return out
+
+## "Mejorar uno": cierra la lista, lleva la camara al de nivel mas bajo y abre
+## su ficha (BuildingInfoPanel), donde esta MEJORAR con lo que da y lo que cuesta.
+func _on_upgrade_one() -> void:
+	if _selected_data == null:
+		return
+	var node := HelpText.lowest_upgradable(_selected_data.id)
+	if node == null:
+		return
+	_close()
+	HelpText.focus_and_select(get_viewport(), node)
 
 ## La fila del coste del elegido, con lo que falta en rojo. Gratis lo dice.
 func _refresh_cost() -> void:
@@ -942,6 +1030,9 @@ func _update_card_costs() -> void:
 		var limit_row := card.find_child("CardLimit", true, false) as HBoxContainer
 		if limit_row != null:
 			fill_limit_row(limit_row, id, "small")
+		var full_tag := card.find_child("CardFull", true, false) as Label
+		if full_tag != null:
+			full_tag.visible = bool(limit_info(id).get("full", false))
 		if row == null or not _card_styles.has(id) or bool(_card_styles[id].get("locked", false)):
 			continue
 		var data: BuildingData = _data_by_id(id)

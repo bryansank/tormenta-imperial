@@ -28,6 +28,7 @@ extends CanvasLayer
 
 const HelpCallout := preload("res://scripts/ui/HelpCallout.gd")
 const HelpCatalog := preload("res://scripts/ui/HelpCatalog.gd")
+const BuildingHelpText := preload("res://scripts/ui/BuildingHelpText.gd")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const HelpIndexScene := preload("res://scenes/ui/HelpIndexPanel.tscn")
 
@@ -581,6 +582,14 @@ func _make_building_entry(data: BuildingData) -> VBoxContainer:
 	meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	entry.add_child(meta)
 
+	# Topes y mejoras (feat/topes-mejoras-ayuda): tope por era, era, lo que pide
+	# antes y si se mejora. "Tope: 5 · 8 · 10 (eras 1-3) · Era 1 · Antes: Casa ·
+	# Se mejora hasta el nivel 3".
+	var rules := UITheme.make_label(BuildingHelpText.guide_rules_line(data), "small", UITheme.INFO)
+	rules.name = "GuideRules"
+	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	entry.add_child(rules)
+
 	if not data.get_description().is_empty():
 		var desc := UITheme.make_label(data.get_description(), "small", UITheme.TEXT)
 		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -595,6 +604,10 @@ func _meta_line(data: BuildingData) -> String:
 	for pair in [[data.cost_gold, "gold"], [data.cost_steel, "steel"], [data.cost_oil, "oil"], [data.cost_wood, "wood"]]:
 		if pair[0] > 0:
 			costs.append("%d %s" % [pair[0], Tr.res_name(pair[1])])
+	# Los materiales del taller tambien son coste (antes no salian en la guia).
+	for mat in data.cost_materials:
+		if int(data.cost_materials[mat]) > 0:
+			costs.append("%d %s" % [int(data.cost_materials[mat]), Tr.res_name(String(mat))])
 	parts.append("%s: %s" % [Tr.t("LBL_GUIDE_COST"), ", ".join(costs) if not costs.is_empty() else Tr.t("LBL_FREE")])
 
 	if data.workers_required > 0:

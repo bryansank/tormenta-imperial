@@ -15,6 +15,9 @@ var _route_box: VBoxContainer
 var _refresh_left := 0.0
 
 const Objectives := preload("res://scripts/services/Objectives.gd")
+## Cifras vivas en el porque ({HQ2_COST}, {HQ3_COST}: el coste real del Cuartel
+## General, leido de GameConfig; feat/topes-mejoras-ayuda).
+const HelpText := preload("res://scripts/ui/BuildingHelpText.gd")
 ## Cada cuanto se recalcula el paso con el panel abierto. Lo que cambia la
 ## respuesta (una obra que acaba, oro que entra) pasa todo el rato; un segundo es
 ## lo bastante vivo para leerlo y no cuesta nada.
@@ -170,7 +173,7 @@ func refresh() -> void:
 	var step: Dictionary = Objectives.next_step()
 	var text: Dictionary = Objectives.describe(step)
 	_now_title.text = String(text["title"])
-	_now_why.text = String(text["why"])
+	_now_why.text = HelpText.live_text(String(text["why"]))
 	_now_blocker.text = String(text["blocker"])
 	_now_blocker.visible = String(text["blocker"]) != ""
 	var sortie: Dictionary = Objectives.sortie_step()
