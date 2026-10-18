@@ -172,6 +172,9 @@ func _take(step: Dictionary) -> void:
 			_build(String(step["id"]))
 		"upgrade":
 			Objectives.upgrade_node(step).set_meta("level", int(step["level"]))
+		"core":
+			# Subir el Nucleo (1.2): la obra termina al instante, como el resto.
+			ProgressionManager.core_level = int(step["level"])
 		"train", "rebuild":
 			_add_unit(String(step["id"]))
 		"repair":

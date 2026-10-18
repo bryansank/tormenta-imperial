@@ -137,14 +137,14 @@ func test_the_crews_have_a_ceiling_of_their_own() -> void:
 	# Por lo mismo que la mitigacion lo tiene: una fila de torres no puede
 	# convertir el Diezmo en un tramite.
 	_given_army({"infantry": 1})
-	_given_towers(GameConfig.building_limits[GameConfig.storm_tower_building_id])
+	_given_towers(GameConfig.base_building_limit(GameConfig.storm_tower_building_id, GameConfig.core_level_max))
 	assert_int(_crew_count()).is_equal(GameConfig.storm_tower_garrison_max)
 
 # ── El tablero no se desborda ────────────────────────────────────────
 
 func test_the_defence_never_outgrows_a_rank() -> void:
 	_given_army({"infantry": 20})
-	_given_towers(GameConfig.building_limits[GameConfig.storm_tower_building_id])
+	_given_towers(GameConfig.base_building_limit(GameConfig.storm_tower_building_id, GameConfig.core_level_max))
 	var garrison := CombatManager.get_garrison()
 	assert_int(CombatManager.roster_size(garrison) + _crew_count()) \
 		.is_less_equal(GameConfig.combat_board_size.x)
@@ -158,7 +158,7 @@ func test_the_towers_yield_the_space_before_overflowing_it() -> void:
 
 func test_every_defender_gets_its_own_cell_in_the_player_rows() -> void:
 	_given_army({"infantry": GameConfig.combat_deploy_cap})
-	_given_towers(GameConfig.building_limits[GameConfig.storm_tower_building_id])
+	_given_towers(GameConfig.base_building_limit(GameConfig.storm_tower_building_id, GameConfig.core_level_max))
 	assert_bool(CombatManager.start_defense({"infantry": 2})).is_true()
 
 	var board: Vector2i = GameConfig.combat_board_size
@@ -171,7 +171,7 @@ func test_every_defender_gets_its_own_cell_in_the_player_rows() -> void:
 	# Con la guarnicion llena, las dotaciones son las que caben en la fila (desde
 	# 2026-10-12 el tope de dotaciones, 4, pasa de lo que deja una guarnicion de 6).
 	var crews: int = GameConfig.get_tower_garrison(
-		GameConfig.building_limits[GameConfig.storm_tower_building_id], GameConfig.combat_deploy_cap)
+		GameConfig.base_building_limit(GameConfig.storm_tower_building_id, GameConfig.core_level_max), GameConfig.combat_deploy_cap)
 	assert_int(taken.size()).is_equal(GameConfig.combat_deploy_cap + crews)
 
 # ── Quien puede plantarse ────────────────────────────────────────────

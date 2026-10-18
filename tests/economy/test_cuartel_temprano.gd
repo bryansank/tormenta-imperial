@@ -49,12 +49,12 @@ func test_it_only_needs_the_sawmill() -> void:
 	# La Refineria sigue pidiendo el Cuartel.
 	assert_array(GameConfig.get_prerequisites("refinery")).contains(["barracks"])
 
-func test_barracks_have_no_cap_in_any_era() -> void:
+func test_barracks_have_no_cap_at_any_core_level() -> void:
 	# Sin tope de Cuarteles (Bryan, 18-10-2026): el freno es el del ejercito.
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
-	for era in range(1, GameConfig.max_era() + 1):
-		assert_int(GameConfig.get_building_limit_for_era("barracks", era)).is_equal(-1)
-	assert_bool(GameConfig.building_limits_by_era.has("barracks")).is_false()
+	for lv in range(1, GameConfig.core_level_max + 1):
+		assert_int(GameConfig.get_building_limit_at("barracks", lv)).is_equal(-1)
+	assert_bool(GameConfig.core_level_limits.has("barracks")).is_false()
 	assert_dict(GameConfig.next_building_limit("barracks")).is_empty()
 
 # ── Las unidades ─────────────────────────────────────────────────────
