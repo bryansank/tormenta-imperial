@@ -18,6 +18,11 @@ extends RefCounted
 const Palette := preload("res://scripts/buildings/ToyPalette.gd")
 
 const DIR := "res://assets/models/toy/units/"
+## Las piezas de mar y aire de la 1.1 (docs/15 §11), por dominio. Solo para
+## pruebas y sondas: la vista lee el dominio de cada unidad con
+## CombatUnit.domain(), nunca de esta lista.
+const SEA_IDS := ["torpedo_boat", "gunboat", "dreadnought"]
+const AIR_IDS := ["fighter", "bomber", "airship"]
 const BOSS_MARK := DIR + "boss_mark.tscn"
 const CREW_NEST := DIR + "crew_nest.tscn"
 const TEAM_SURFACE := "team"

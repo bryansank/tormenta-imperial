@@ -52,14 +52,21 @@ const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", 
 	# Las diez decoraciones baratas (feat/decoraciones-1); en el juego las carga
 	# DecorMesh (<id>_mesh.res) y, sin hornear, usa su version procedural.
 	"lamp_post", "park_bench", "hedge", "avenue_tree", "flower_planter",
-	"colony_sign", "hay_cart", "bonfire", "flagpole", "palm_trees"]
+	"colony_sign", "hay_cart", "bonfire", "flagpole", "palm_trees",
+	# Astillero y Aerodromo (1.1, feat/aire-mar-vista). Sus .tres los pone la
+	# rama de reglas; hasta entonces su huella sale de EXTRA.
+	"shipyard", "aerodrome"]
 
 ## Presupuesto de triangulos de una decoracion 2x2 (doc 21 §6.6).
 const DECOR_TRI_BUDGET := 600
 
-## Huella y patio de lo que no tiene .tres ni parcela (hoy ninguno: la Granja
-## usa el rectangulo de su parcela, GameConfig.building_lot_style["farm"]).
-const EXTRA := {}
+## Huella y patio de lo que aun no tiene .tres (la Granja usa el rectangulo de
+## su parcela, GameConfig.building_lot_style["farm"]). Con su .tres, manda el
+## .tres y su parcela; EXTRA solo cubre el hueco hasta que llegue.
+const EXTRA := {
+	"shipyard": {"grid": Vector2i(2, 2), "yard": 0.3},
+	"aerodrome": {"grid": Vector2i(2, 2), "yard": 0.3},
+}
 
 ## La malla de los bancales de la Granja (tools/toy_crops.gd): su material
 ## compartido y el script que la mueve.
@@ -134,7 +141,7 @@ func _material(path: String, fresh: Material) -> Material:
 func _target(id: String) -> Dictionary:
 	var grid := Vector2i(2, 2)
 	var yard := 0.3
-	if EXTRA.has(id):
+	if EXTRA.has(id) and not ResourceLoader.exists("res://data/buildings/%s.tres" % id):
 		grid = EXTRA[id]["grid"]
 		yard = float(EXTRA[id]["yard"])
 	else:
@@ -309,7 +316,9 @@ func _finish_colors(mk) -> void:
 
 const UNIT_RECIPES := "res://tools/toy_recipes/units/"
 const UNIT_OUT := "res://assets/models/toy/units/"
-const UNIT_IDS := ["infantry", "artillery", "vehicle"]
+const UNIT_IDS := ["infantry", "artillery", "vehicle",
+	# Mar y aire (1.1, feat/aire-mar-vista): docs/15 §11.
+	"torpedo_boat", "gunboat", "dreadnought", "fighter", "bomber", "airship"]
 const UNIT_SIDES := ["player", "regency"]
 const UNIT_PROPS := ["boss_mark", "crew_nest"]
 const UNIT_FOOTPRINT := 1.7
