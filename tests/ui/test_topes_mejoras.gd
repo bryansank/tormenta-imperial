@@ -337,6 +337,11 @@ func test_the_pages_include_the_buildings_of_one_point_one() -> void:
 	var limits := HelpText.limits_page()
 	for id in ["shipyard", "aerodrome", "fishing_dock", "windmill", "lighthouse"]:
 		assert_str(limits).override_failure_message(id).contains(_data(id).get_display_name())
+	# Astillero y Aerodromo sin tope (2026-10-18): la pagina los nombra como tales.
+	for id in ["shipyard", "aerodrome"]:
+		for era in range(1, GameConfig.max_era() + 1):
+			assert_int(GameConfig.get_building_limit_for_era(id, era)).is_equal(-1)
+	assert_str(limits).contains(Tr.t("TOPE_PAGE_LIMITS_FREE_BUILDINGS").get_slice("%s", 0))
 	# El Muelle sube con la era: su fila sale con las tres cifras.
 	var row: Array = []
 	for era in range(1, GameConfig.max_era() + 1):

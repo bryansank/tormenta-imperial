@@ -287,8 +287,8 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Well (1.1) | 2x2 | 40/0/0/30 | 0 | −20 % storm damage within 3 cells, +15 % health after the storm; rank 2 | 1 |
 | Lighthouse (1.1) | 2x2 | 180/0/0/120 + 6 planks | 1 | Storm Warning +20 s; max 1 | 1-2 |
 | Fuel depot (1.1) | 2x2 | 200/80/0/80 + 4 beams | 1 | +500 oil outside the shared bag; needs a Refinery | 3 |
-| Shipyard (1.1) | 2x2 | 220/80/0/120 + 10 planks, 4 beams | 3 | Trains ships; must touch the coast; needs a Foundry; max 1/1/2 | 2 |
-| Aerodrome (1.1) | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | Trains planes and airships; needs a Refinery; max 1/1/2 | 3 |
+| Shipyard (1.1) | 2x2 | 220/80/0/120 + 10 planks, 4 beams | 3 | Trains ships; must touch the coast; needs a Foundry; no cap (2026-10-18) | 2 |
+| Aerodrome (1.1) | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | Trains planes and airships; needs a Refinery; no cap (2026-10-18) | 3 |
 | Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food/30s, no crop; on the shore touching a school of fish; caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
 
@@ -649,7 +649,8 @@ fixed for the run; saves without `tier` load as Colono.
   (`max_slots(building)`, `training_in(building)`; one unit per slot, no queue). Cost
   paid up-front. `has_military_building()` (any of the three) opens the army panel
   and the skirmishes.
-- Capacity: `3 base + 8 per Barracks + 4 per Shipyard + 4 per Aerodrome`
+- Capacity: `3 base + 8 per Barracks + 4 per Shipyard + 4 per Aerodrome` (Shipyard and
+  Aerodrome have no cap since 2026-10-18: price, workers and upkeep are the brake)
   (`army_capacity_per_building`, `GameConfig.get_army_capacity_for()`). Owned units
   AND units in training count.
 - Units gated by era (`ProgressionManager.current_era >= unit.era`).

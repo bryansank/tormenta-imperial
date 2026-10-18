@@ -100,8 +100,10 @@ func test_it_finishes_off_a_rival_it_can_kill_this_turn() -> void:
 	assert_int(plan[0]["target"]).is_equal(dying.uid)
 
 func test_the_target_guard_counts_before_calling_it_a_kill() -> void:
-	# El mismo tablero, pero la moribunda esta en guardia: la defensa se dobla,
-	# el dano ya no la mata y la IA vuelve a morder al vehiculo, que es lo caro.
+	# La moribunda esta en guardia: la defensa se dobla y el dano ya no la mata.
+	# El unico remate de verdad es el vehiculo, al que le quedan 3 de vida, y a
+	# ese va. (Hasta la 1.0 este test pedia "morder al vehiculo, que es lo caro";
+	# con la IA de la 1.1 lo caro no cuenta, cuenta el golpe: CombatAI.shot_worth.)
 	var enemy := _unit("infantry", ENEMY)
 	var armour := _unit("vehicle", PLAYER)
 	var dying := _unit("infantry", PLAYER)
@@ -110,13 +112,20 @@ func test_the_target_guard_counts_before_calling_it_a_kill() -> void:
 	armour.position = Vector2i(4, 5)
 	dying.position = Vector2i(3, 4)
 	dying.hp = 5
+	armour.hp = 3                                  # dano 8-5 = 3: cae
 	dying.defending = true                         # dano 8-4 = 4 < 5: sobrevive
 	# Sin ventaja por tipo: aqui se mira solo la guardia (con ella, la infanteria
 	# evitaria al vehiculo, que es su mal objetivo: ver test_type_advantage.gd).
 	var saved: Dictionary = GameConfig.combat_type_advantage["beats"]
 	GameConfig.combat_type_advantage["beats"] = {}
+	var enemies: Array = [armour, dying]
+	var guarded: Dictionary = AIScript._context(e, enemy, enemies)["lethal"]
 	var plan := AIScript.plan_turn(e, enemy.uid)
+	dying.defending = false
+	var open: Dictionary = AIScript._context(e, enemy, enemies)["lethal"]
 	GameConfig.combat_type_advantage["beats"] = saved
+	assert_bool(guarded[dying.uid]).is_false()
+	assert_bool(open[dying.uid]).is_true()
 	assert_int(plan[plan.size() - 1]["target"]).is_equal(armour.uid)
 
 func test_without_a_finishing_blow_it_bites_where_the_hit_counts_most() -> void:

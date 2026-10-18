@@ -324,6 +324,7 @@ static func limits_page() -> String:
 	var lines: Array = [Tr.t("TOPE_PAGE_LIMITS_INTRO"), ""]
 	var fixed: Array = []
 	var unique: Array = []
+	var free: Array = []
 	for data in _main_buildings():
 		var d: BuildingData = data
 		if d.id == Rules.ROAD_ID:
@@ -332,6 +333,10 @@ static func limits_page() -> String:
 		for era in range(1, GameConfig.max_era() + 1):
 			row.append(GameConfig.base_building_limit(d.id, era))
 		if int(row[0]) < 0:
+			# Sin maximo y sin ser decoracion (Astillero, Aerodromo): se nombran,
+			# para que nadie busque su tope.
+			if not GameConfig.is_uncapped_building(d.id):
+				free.append(d.get_display_name())
 			continue
 		if is_unique(d.id):
 			unique.append(d.get_display_name())
@@ -346,6 +351,8 @@ static func limits_page() -> String:
 		lines.append(Tr.t("TOPE_PAGE_LIMITS_FIXED") % ", ".join(fixed))
 	if not unique.is_empty():
 		lines.append(Tr.t("TOPE_PAGE_LIMITS_UNIQUE") % ", ".join(unique))
+	if not free.is_empty():
+		lines.append(Tr.t("TOPE_PAGE_LIMITS_FREE_BUILDINGS") % ", ".join(free))
 	lines.append(Tr.t("TOPE_PAGE_LIMITS_FREE"))
 	lines.append("")
 	lines.append(Tr.t("TOPE_PAGE_LIMITS_RANK"))

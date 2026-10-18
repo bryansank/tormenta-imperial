@@ -176,9 +176,13 @@ static func cove_polygon(center: Vector2, half: Vector2, sea_dir: Vector2, reach
 	var pts := PackedVector2Array()
 	var rx := half.x + cell * 0.3
 	var ry := half.y + cell * 0.3
+	# Superelipse (exponente 4) y no elipse: el banco es un rectangulo y una
+	# elipse que no crece hacia tierra deja sus esquinas en la arena.
 	for i in 16:
 		var a := TAU * float(i) / 16.0
-		var p := center + Vector2(cos(a) * rx, sin(a) * ry)
+		var c := cos(a)
+		var s := sin(a)
+		var p := center + Vector2(signf(c) * sqrt(absf(c)) * rx, signf(s) * sqrt(absf(s)) * ry)
 		pts.append(p)
 		pts.append(p + sea_dir * reach)
 	var hull := Geometry2D.convex_hull(pts)

@@ -136,9 +136,13 @@ var building_limits := {
 	"well": 3,
 	"lighthouse": 1,
 	"fuel_depot": 2,
-	# Aire y mar (feat/aire-mar-reglas): el Astillero y el Aerodromo.
-	"shipyard": 1,
-	"aerodrome": 1,
+	# Aire y mar (feat/aire-mar-reglas): el Astillero y el Aerodromo. SIN TOPE
+	# desde 2026-10-18 (decision de Bryan, ronda final de la 1.1). Cada uno da un
+	# hueco de entrenamiento y +4 de capacidad (army_capacity_per_building); los
+	# frenan su precio (planchas, vigas, combustible), sus 3 / 4 trabajadores, el
+	# sueldo de la tropa que permiten y el tope de despliegue del tablero (6).
+	"shipyard": -1,
+	"aerodrome": -1,
 }
 
 # ── Building Prerequisites (must have at least 1 of each listed) ──
@@ -1864,10 +1868,7 @@ var building_limits_by_era := {
 	"well": [3, 5, 6],
 	"lighthouse": [1, 1, 1],
 	"fuel_depot": [2, 2, 3],
-	# Aire y mar: uno de cada hasta la era 3 (cada uno es un hueco de
-	# entrenamiento y +4 de capacidad, army_capacity_per_building).
-	"shipyard": [1, 1, 2],
-	"aerodrome": [1, 1, 2],
+	# Aire y mar: sin tope desde 2026-10-18 (ver building_limits).
 }
 
 ## El tope de `building_id` AHORA: la era en curso (ProgressionManager), mas los
