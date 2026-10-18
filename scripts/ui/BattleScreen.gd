@@ -153,6 +153,9 @@ var _world_paused := false
 # ── Mapa ─────────────────────────────────────────────────────────────
 
 var _map_view: Control
+## Tres campanas (feat/tres-campanas): el fondo del mapa de una mision de mar
+## (agua) o de aire (cielo). Un rectangulo de color: nada que dibujar por fotograma.
+var _map_sky: ColorRect
 var _map_title: Label
 var _map_progress: Label
 var _map_bonuses: Label
@@ -424,6 +427,13 @@ func _build_map_view() -> void:
 	_map_view.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_map_view.visible = false
 	_root.add_child(_map_view)
+
+	_map_sky = ColorRect.new()
+	_map_sky.name = "MapSky"
+	_map_sky.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_map_sky.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_map_sky.visible = false
+	_map_view.add_child(_map_sky)
 
 	var column := VBoxContainer.new()
 	column.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -756,6 +766,18 @@ func _show_expedition_report(result: int, rewards: Dictionary, casualties: Dicti
 	if bool(last.get("expedition", false)):
 		for text in SkirmishPanelScript.loot_lines(last.get("loot", {})):
 			lines.append(String(text))
+		# Tres campanas: como queda la campana (el progreso se apunta justo
+		# despues de este parte, asi que se cuenta desde la mision jugada).
+		var domain: String = String(last.get("campaign_domain", ""))
+		if domain != "":
+			var camp_name: String = Tr.t("CAMP_NAME_" + domain.to_upper())
+			if result == 0:
+				lines.append(Tr.t("CAMP_REPORT_WON") % [camp_name, int(last.get("campaign_mission", 0)) + 1,
+					CombatManager.campaign_total(domain)])
+				if bool(last.get("campaign_boss", false)):
+					lines.append(Tr.t("CAMP_REPORT_BOSS") % camp_name)
+			else:
+				lines.append(Tr.t("CAMP_REPORT_RETRY"))
 	_report_detail.text = "\n".join(lines)
 
 	_report_panel.visible = true
@@ -847,6 +869,7 @@ func open_map(run = null) -> void:
 	_recalculate_node_size()
 	_armed_node = -1
 	_build_map()
+	_paint_map_domain()
 	_view = View.MAP
 	_board_open = false
 	_board_view.visible = false
@@ -855,6 +878,34 @@ func open_map(run = null) -> void:
 	_map_view.visible = true
 	visible = true
 	_sync_world_render()
+
+## Tres campanas: el titulo dice que campana y que mision es, y el fondo pinta
+## el agua (mar) o el cielo (aire). Fuera de campana, el mapa de siempre.
+func _paint_map_domain() -> void:
+	var domain: String = ""
+	var mission: int = -1
+	if _run != null and _run.has_method("campaign_domain"):
+		domain = _run.campaign_domain()
+		mission = _run.campaign_mission()
+	_map_title.text = Tr.t("LBL_EXPEDITION_MAP")
+	_map_sky.visible = false
+	if domain == "":
+		return
+	_map_title.text = "%s · %s" % [Tr.t("CAMP_NAME_" + domain.to_upper()),
+		Tr.t(ExpeditionGenerator.campaign_mission_name_key(domain, mission))]
+	match domain:
+		"sea":
+			_map_sky.color = Color(UITheme.BOARD_WATER, 0.55)
+			_map_sky.visible = true
+		"air":
+			_map_sky.color = Color(UITheme.INFO.lightened(0.15), 0.25)
+			_map_sky.visible = true
+
+## Que campana es el mapa abierto ("" si no es de campana). Para pruebas.
+func map_domain() -> String:
+	if _run == null or not _run.has_method("campaign_domain"):
+		return ""
+	return _run.campaign_domain()
 
 func _build_map() -> void:
 	for child in _map_canvas.get_children():

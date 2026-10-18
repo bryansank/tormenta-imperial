@@ -44,9 +44,15 @@ var _sortie_box: VBoxContainer
 var _auto_btn: Button
 ## id de la oferta elegida en el tablon (-1 = la primera que haya).
 var _selected_offer: int = -1
+## Tres campanas (feat/tres-campanas): la pestana elegida. "land" / "sea" /
+## "air" = esa campana; TAB_RAIDS = los ataques rapidos del tablon; "" = la que
+## toque (la primera campana con algo que hacer).
+const TAB_RAIDS := "raids"
+var _tab: String = ""
 const ODDS_KEYS := {"favorable": "ODDS_FAVORABLE", "even": "ODDS_EVEN", "hard": "ODDS_HARD"}
 const ICON_PX := 24
 const BuildingRules := preload("res://scripts/buildings/PlacementRules.gd")
+const Objectives := preload("res://scripts/services/Objectives.gd")
 
 func _ready() -> void:
 	layer = 11
@@ -74,6 +80,8 @@ func _ready() -> void:
 	# El tablon cambia solo (oferta nueva, rebaja gastada): con el panel abierto
 	# se repinta.
 	EventBus.sortie_offers_changed.connect(func(): if _is_open: _refresh())
+	# Las tres campanas: mision ganada, perdida, lista tras descansar.
+	EventBus.campaign_changed.connect(func(): if _is_open: _refresh())
 	# Por si la partida se cargo antes de que este panel escuchara.
 	_on_expedition_changed.call_deferred()
 	_update_button_visibility()
@@ -275,6 +283,14 @@ func _refresh() -> void:
 	var reason: String = String(check.get("reason", ""))
 	# Las reglas del manager van primero; despues, que haya a donde salir.
 	var offer: Dictionary = current_offer()
+	# Tres campanas: con una campana elegida, su candado manda (edificio, era,
+	# descanso, completa); sin oferta en ella, se dice por que.
+	var tab_domain: String = current_campaign()
+	if tab_domain != "":
+		var lock: String = CombatManager.campaign_lock_reason(tab_domain)
+		if lock != "" and (ok or lock in ["CAMP_DONE", "CAMP_LOCK_BUILDING", "CAMP_LOCK_ERA", "CAMP_LOCK_REST", "CAMP_LOCK_FIRST_SORTIE"]):
+			ok = false
+			reason = _campaign_lock_text(tab_domain)
 	if ok and offer.is_empty():
 		ok = false
 		reason = "LBL_SORTIE_NONE"
@@ -358,8 +374,12 @@ func _party() -> Dictionary:
 func _prune_selection() -> void:
 	var available: Dictionary = CombatManager.get_deployable_units()
 	var water: bool = _offer_has_water()
+	var domain: String = current_campaign()
 	for unit_id in _selection.keys():
 		var owned: int = int(available.get(unit_id, 0))
+		# Tres campanas: lo que no es de su medio (o no le puede pegar) se queda.
+		if domain != "" and CombatManager.campaign_unit_block(String(unit_id), domain) != "":
+			owned = 0
 		# Sin agua en la salida elegida, los barcos se quedan en el puerto.
 		if not water and GameConfig.get_unit_domain(String(unit_id)) == CombatUnit.DOMAIN_SEA:
 			owned = 0
@@ -386,26 +406,41 @@ func _rebuild_units(available: Dictionary) -> void:
 	for child in _units_vbox.get_children():
 		child.queue_free()
 	var water: bool = _offer_has_water()
+	var camp: String = current_campaign()
 	for domain in ["land", "sea", "air"]:
+		# Tres campanas: dominio puro. Solo las filas del medio de la campana.
+		if camp != "" and domain != camp:
+			continue
 		var ids: Array = []
 		for unit_id in GameConfig.get_unit_ids_in_domain(domain):
 			if int(available.get(unit_id, 0)) > 0:
 				ids.append(unit_id)
 		if ids.is_empty():
+			if camp != "":
+				var none := UITheme.make_label(Tr.t("CAMP_NO_UNITS_" + camp.to_upper()), "small", UITheme.WARNING)
+				none.name = "CampaignNoUnits"
+				none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				_units_vbox.add_child(none)
 			continue
 		var header := UITheme.make_label(Tr.t("LBL_DOMAIN_" + domain.to_upper()), "section", UITheme.ACCENT)
 		header.name = "DomainHeader_" + domain
 		_units_vbox.add_child(header)
-		var blocked: bool = domain == CombatUnit.DOMAIN_SEA and not water
+		var blocked: bool = domain == CombatUnit.DOMAIN_SEA and not water and camp == ""
 		if blocked:
 			var why := UITheme.make_label(Tr.t("LBL_SHIPS_NEED_WATER"), "small", UITheme.WARNING)
 			why.name = "ShipsNeedWater"
 			why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			_units_vbox.add_child(why)
 		for unit_id in ids:
-			_units_vbox.add_child(_make_unit_row(unit_id, int(available[unit_id]), blocked))
+			var unit_block: bool = blocked
+			if camp != "" and CombatManager.campaign_unit_block(String(unit_id), camp) != "":
+				unit_block = true
+			var block_text: String = ""
+			if unit_block and camp != "":
+				block_text = Tr.t(CombatManager.campaign_unit_block(String(unit_id), camp))
+			_units_vbox.add_child(_make_unit_row(unit_id, int(available[unit_id]), unit_block, block_text))
 
-func _make_unit_row(unit_id: String, owned: int, blocked: bool = false) -> PanelContainer:
+func _make_unit_row(unit_id: String, owned: int, blocked: bool = false, block_text: String = "") -> PanelContainer:
 	var def := GameConfig.get_unit_def(unit_id)
 	var stats := GameConfig.get_combat_stats(unit_id)
 	var picked: int = int(_selection.get(unit_id, 0))
@@ -470,7 +505,7 @@ func _make_unit_row(unit_id: String, owned: int, blocked: bool = false) -> Panel
 	UITheme.style_button(plus, UITheme.BTN, UITheme.FONT_SECTION)
 	plus.disabled = blocked or picked >= owned or _committed() >= GameConfig.combat_deploy_cap
 	if blocked:
-		plus.tooltip_text = Tr.t("LBL_SHIPS_NEED_WATER")
+		plus.tooltip_text = block_text if block_text != "" else Tr.t("LBL_SHIPS_NEED_WATER")
 	plus.pressed.connect(func(): _adjust(unit_id, 1))
 	row.add_child(plus)
 
@@ -478,7 +513,10 @@ func _make_unit_row(unit_id: String, owned: int, blocked: bool = false) -> Panel
 
 func _adjust(unit_id: String, delta: int) -> void:
 	var owned: int = int(CombatManager.get_deployable_units().get(unit_id, 0))
-	if delta > 0 and GameConfig.get_unit_domain(unit_id) == CombatUnit.DOMAIN_SEA and not _offer_has_water():
+	var camp: String = current_campaign()
+	if delta > 0 and camp != "" and CombatManager.campaign_unit_block(unit_id, camp) != "":
+		return
+	if delta > 0 and camp == "" and GameConfig.get_unit_domain(unit_id) == CombatUnit.DOMAIN_SEA and not _offer_has_water():
 		return
 	var picked: int = int(_selection.get(unit_id, 0))
 	var next: int = clampi(picked + delta, 0, owned)
@@ -564,6 +602,18 @@ func _on_launch_pressed() -> void:
 		_close()
 		return
 	var offer: Dictionary = current_offer()
+	# Tres campanas: la mision que toca de la pestana elegida.
+	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_CAMPAIGN:
+		if CombatManager.launch_campaign_mission(String(offer.get("domain", "")), party):
+			_close()
+		else:
+			# Nunca en silencio: el candado si lo hay, si no el motivo de la tropa.
+			var why: String = _campaign_lock_text(String(offer.get("domain", "")))
+			if why == "":
+				why = _reason_text(String(evaluate_launch(party).get("reason", "MSG_SORTIE_GONE")))
+			EventBus.notification_posted.emit(why, "warning", UITheme.WARNING)
+			_refresh()
+		return
 	if offer.is_empty() or not CombatManager.launch_sortie(int(offer.get("id", 0)), party):
 		EventBus.notification_posted.emit(Tr.t("MSG_SORTIE_GONE"), "warning", UITheme.WARNING)
 		_refresh()
@@ -671,6 +721,10 @@ func _close() -> void:
 func current_offer() -> Dictionary:
 	if CombatManager.is_first_sortie_due():
 		return {"kind": "first", "era": ProgressionManager.current_era}
+	# Tres campanas: la pestana de una campana ofrece su mision que toca.
+	var domain: String = current_campaign()
+	if domain != "":
+		return CombatManager.campaign_offer(domain)
 	var offers: Array = CombatManager.get_sortie_offers()
 	if offers.is_empty():
 		return {}
@@ -691,6 +745,17 @@ func _rebuild_sorties(offer: Dictionary, preview: Dictionary) -> void:
 	var cut: int = CombatManager.get_tithe_cut_pct()
 	if cut > 0:
 		_sortie_box.add_child(UITheme.make_label(Tr.t("LOOT_TITHE_CUT") % cut, "small", UITheme.POSITIVE))
+	# Tres campanas: lo que falta para el Ataque Final, las pestanas y la
+	# campana elegida. Mientras toca la primera escaramuza, nada de esto.
+	if not CombatManager.is_first_sortie_due():
+		_add_gate_line()
+		_add_tabs()
+		var domain: String = current_campaign()
+		if domain != "":
+			_add_campaign_header(domain)
+			if not preview.is_empty():
+				_sortie_box.add_child(_make_detail(offer, preview))
+			return
 	if not CombatManager.is_first_sortie_due():
 		var offers: Array = CombatManager.get_sortie_offers()
 		if offers.is_empty():
@@ -723,6 +788,8 @@ func _make_offer_button(offer: Dictionary, selected: bool) -> Button:
 	return btn
 
 func _kind_text(offer: Dictionary, fights: int) -> String:
+	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_CAMPAIGN:
+		return Tr.t("CAMP_KIND_FIGHTS") % fights
 	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_EXPEDITION:
 		return Tr.t("SORTIE_KIND_EXPEDITION") % fights
 	return Tr.t("SORTIE_KIND_RAID")
@@ -750,7 +817,18 @@ func _make_detail(offer: Dictionary, preview: Dictionary) -> PanelContainer:
 
 	# Aire y mar: una salida de costa se dice antes de salir (hay agua, vienen
 	# barcos y puedes llevar los tuyos).
-	if bool(preview.get("coastal", false)):
+	var camp_domain: String = String(preview.get("campaign_domain", ""))
+	if camp_domain != "":
+		var where := UITheme.make_label(Tr.t("CAMP_WHERE_" + camp_domain.to_upper()), "small", UITheme.INFO)
+		where.name = "CampaignWhere"
+		where.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(where)
+		if bool(preview.get("campaign_boss", false)):
+			var boss := UITheme.make_label(Tr.t("CAMP_BOSS_WARNING"), "small", UITheme.DANGER)
+			boss.name = "CampaignBoss"
+			boss.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			box.add_child(boss)
+	elif bool(preview.get("coastal", false)):
 		var coast := UITheme.make_label(Tr.t("LBL_SORTIE_COASTAL"), "small", UITheme.INFO)
 		coast.name = "SortieCoastal"
 		coast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -871,3 +949,121 @@ func _refresh_auto_button(offer: Dictionary, preview: Dictionary, launch_ok: boo
 	var can: bool = bool(preview.get("can_auto", false))
 	_auto_btn.disabled = not (launch_ok and can)
 	_auto_btn.tooltip_text = Tr.t("HINT_AUTO_RESOLVE") if can else Tr.t("HINT_AUTO_RESOLVE_LOCKED")
+
+# ── Las tres campanas: pestanas Tierra / Mar / Aire (feat/tres-campanas) ──
+
+## La campana de la pestana elegida ("land" / "sea" / "air"), o "" si la
+## pestana es la de ataques rapidos (o toca la primera escaramuza).
+func current_campaign() -> String:
+	if CombatManager.is_first_sortie_due():
+		return ""
+	if _tab == "":
+		_tab = _default_tab()
+	return _tab if _tab in GameConfig.CAMPAIGN_DOMAINS else ""
+
+## La pestana con la que se abre el panel: la campana con una mision nueva lista,
+## si no la primera que tenga su edificio y algo por hacer, si no los ataques
+## rapidos (si hay alguno), si no la de Tierra.
+func _default_tab() -> String:
+	var waiting: String = CombatManager.campaign_waiting_unseen()
+	if waiting != "":
+		return waiting
+	for domain in GameConfig.CAMPAIGN_DOMAINS:
+		var lock: String = CombatManager.campaign_lock_reason(String(domain))
+		if lock in ["", "CAMP_LOCK_REST", "CAMP_LOCK_ERA"]:
+			return String(domain)
+	if not CombatManager.get_sortie_offers().is_empty():
+		return TAB_RAIDS
+	return "land"
+
+## Cambia de pestana. Publico para la UI y las pruebas.
+func select_tab(tab: String) -> void:
+	_tab = tab
+	_refresh()
+
+func current_tab() -> String:
+	current_campaign()
+	return _tab
+
+## "Para llamar al Ataque Final: Campana de Mar 2/5, ..." arriba del todo,
+## mientras falte algo (y el modo tenga asedio).
+func _add_gate_line() -> void:
+	var text: String = ProgressionManager.final_audit_gate_text()
+	if text == "":
+		return
+	var gate := UITheme.make_label(text, "small", UITheme.WARNING)
+	gate.name = "AuditGateLine"
+	gate.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_sortie_box.add_child(gate)
+
+## Las cuatro pestanas: Tierra, Mar y Aire con su N/M (o "cerrada" sin su
+## edificio) y los ataques rapidos del tablon con cuantos hay.
+func _add_tabs() -> void:
+	var row := HFlowContainer.new()
+	row.name = "CampaignTabs"
+	row.add_theme_constant_override("h_separation", 6)
+	row.add_theme_constant_override("v_separation", 6)
+	_sortie_box.add_child(row)
+	var current: String = current_tab()
+	for domain in GameConfig.CAMPAIGN_DOMAINS:
+		var d: String = String(domain)
+		var sub: String = ""
+		var lock: String = CombatManager.campaign_lock_reason(d)
+		if lock == "CAMP_LOCK_BUILDING":
+			sub = Tr.t("CAMP_TAB_LOCKED")
+		elif CombatManager.is_campaign_complete(d):
+			sub = Tr.t("CAMP_TAB_DONE")
+		else:
+			sub = "%d/%d" % [CombatManager.campaign_won(d), CombatManager.campaign_total(d)]
+		row.add_child(_make_tab_button("CampaignTab_" + d, "%s\n%s" % [Tr.t("LBL_DOMAIN_" + d.to_upper()), sub], d, current == d))
+	var raids: int = CombatManager.get_sortie_offers().size()
+	row.add_child(_make_tab_button("CampaignTab_raids", "%s\n%d" % [Tr.t("CAMP_TAB_RAIDS"), raids], TAB_RAIDS, current == TAB_RAIDS))
+
+func _make_tab_button(node_name: String, text: String, tab: String, selected: bool) -> Button:
+	var btn := Button.new()
+	btn.name = node_name
+	btn.text = text
+	btn.toggle_mode = true
+	btn.button_pressed = selected
+	btn.custom_minimum_size = Vector2(UITheme.touch_px(96.0), UITheme.MIN_BTN_H + 12)
+	UITheme.style_button(btn, UITheme.CAT_MILITARY.darkened(0.15) if selected else UITheme.BTN, UITheme.FONT_SMALL)
+	btn.pressed.connect(func(): select_tab(tab))
+	return btn
+
+## La cabecera de la campana elegida: su nombre, la fila de misiones (hechas,
+## la que toca y el jefe al final) y, si no se puede salir, por que.
+func _add_campaign_header(domain: String) -> void:
+	var won: int = CombatManager.campaign_won(domain)
+	var total: int = CombatManager.campaign_total(domain)
+	var title := UITheme.make_label(Tr.t("CAMP_NAME_" + domain.to_upper()), "section", UITheme.ACCENT)
+	title.name = "CampaignTitle"
+	_sortie_box.add_child(title)
+	var pips: Array = []
+	for i in range(total):
+		var boss: bool = i == total - 1
+		if i < won:
+			pips.append("✔")
+		elif i == won:
+			pips.append("▶" if not boss else "☠")
+		else:
+			pips.append("☠" if boss else "·")
+	var track := UITheme.make_label("%s   %s" % [" ".join(pips), Tr.t("CAMP_PROGRESS") % [won, total]], "small", UITheme.TEXT)
+	track.name = "CampaignTrack"
+	_sortie_box.add_child(track)
+	var blurb := UITheme.make_label(Tr.t("CAMP_BLURB_" + domain.to_upper()), "small", UITheme.TEXT_DIM)
+	blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_sortie_box.add_child(blurb)
+	var lock: String = CombatManager.campaign_lock_reason(domain)
+	if lock != "":
+		var why := UITheme.make_label(_campaign_lock_text(domain), "small",
+			UITheme.POSITIVE if lock == "CAMP_DONE" else UITheme.WARNING)
+		why.name = "CampaignLock"
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_sortie_box.add_child(why)
+
+## El candado de una campana en palabras, con su cifra: "Construye un Astillero",
+## "Llega a la era 3", "La tropa descansa: 1:20".
+func _campaign_lock_text(domain: String) -> String:
+	var text: String = Objectives.campaign_lock_text(domain)
+	# Los motivos de can_launch (columna fuera, asedio...) ya vienen traducidos.
+	return text

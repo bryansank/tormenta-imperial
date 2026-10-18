@@ -16,6 +16,11 @@ extends Node
 ##   6. tropa: guarnicion para el Diezmo y, para el final, blindados;
 ##   7. mercado: vender lo que sobra para cerrar lo que falta (y las 10 operaciones);
 ##   8. el asedio cuando la guarnicion esta lista.
+##   9. las tres campanas (feat/tres-campanas): la mision que ¿QUE HACER? propone
+##      en su segunda linea (campaign_step), en calma y lejos del Aviso, con lo
+##      mas fuerte de su medio; y, con el CG a nivel 3, lo que pida la linea
+##      (edificio, tropa o mision) hasta tener las tres. `--campaigns=0` juega
+##      solo las que pida la linea (tras el CG nv3).
 ##
 ## Desde 2026-10-04 lo producido espera en los edificios: el jugador RECOGE
 ## (todo, cada `--collect=N` segundos, 60 por defecto, y en cuanto algo se
@@ -160,6 +165,9 @@ func _play_seed(map_seed: int) -> Dictionary:
 		"extra_first": {}, "extra_builds": {}, "extra_no_spot": {}, "extra_units": {},
 		"dock_food": 0, "dock_spoiled": 0, "coast_launched": 0, "coast_won": 0,
 		"coast_lost": 0, "coast_abandoned": 0, "coast_skipped": 0, "coast_pending": false,
+		# Tres campanas: minuto de cada mision ganada por medio, intentos fallidos.
+		"campaign_won": {"land": [], "sea": [], "air": []}, "campaign_setbacks": 0,
+		"campaign_done": {},
 	}
 	_extras_accum = 0.0
 	_last_coast = -INF
@@ -363,6 +371,8 @@ func _decide() -> void:
 	if _siege():
 		return
 	_tidy_expedition()
+	if _campaign_mission():
+		return
 	if _raid():
 		return
 	var step: Dictionary = Objectives.next_step()
@@ -397,6 +407,9 @@ func _decide() -> void:
 				_cover_with_market(Objectives.step_cost(step))
 		"make":
 			_try_make(step)
+		"campaign":
+			# Tres campanas: la linea la pide (CG nv3 hecho y faltan campanas).
+			_launch_campaign(String(step["id"]), true)
 		"sortie":
 			# La primera escaramuza: la columna que propone el panel. El tablero
 			# lo juega el bucle de arriba como cualquier otro.
@@ -458,6 +471,57 @@ func _raid() -> bool:
 			return true
 	return false
 
+## Tres campanas: la segunda linea de ¿QUE HACER? (Objectives.campaign_step)
+## propone una mision. El jugador razonable sale en calma, lejos del Aviso (la
+## columna fuera no defiende el Impuesto) y si su columna no es mas floja que el
+## enemigo mas duro de la mision.
+func _campaign_mission() -> bool:
+	if String(options.get("campaigns", "1")) == "0":
+		return false
+	var camp: Dictionary = Objectives.campaign_step()
+	if camp.is_empty():
+		return false
+	if StormManager.get_phase() != StormCycle.Phase.CALM:
+		return false
+	var cycle: StormCycle = StormManager.get_cycle()
+	if StormManager.is_armed() and cycle != null and float(cycle.seconds_left) < 300.0:
+		return false
+	return _launch_campaign(String(camp["id"]), false)
+
+## Lanza la mision que toca de `domain` con lo mas fuerte de su medio que haya en
+## casa (hasta el tope del tablero). En tierra deja en casa la mitad de la
+## guarnicion salvo que la linea la pida (`forced`, tras el CG nv3). Sin
+## `forced`, solo si la fuerza no es menor que la del enemigo.
+func _launch_campaign(domain: String, forced: bool) -> bool:
+	if CombatManager.campaign_lock_reason(domain) != "":
+		return false
+	var home: Dictionary = CombatManager.campaign_units_home(domain)
+	var ids: Array = home.keys()
+	ids.sort_custom(func(a, b) -> bool:
+		return int(GameConfig.get_unit_def(a).get("power", 0)) > int(GameConfig.get_unit_def(b).get("power", 0)))
+	var total := 0
+	for unit_id in ids:
+		total += int(home[unit_id])
+	var room: int = GameConfig.combat_deploy_cap
+	if domain == "land" and not forced:
+		room = mini(room, maxi(1, total - maxi(HOME_LAND_MIN, int(ceil(total / 2.0)))))
+	var party: Dictionary = {}
+	for unit_id in ids:
+		var n: int = mini(int(home[unit_id]), room)
+		if n > 0:
+			party[unit_id] = n
+			room -= n
+	if party.is_empty():
+		return false
+	if not forced:
+		var preview: Dictionary = CombatManager.sortie_preview(CombatManager.campaign_offer(domain), party)
+		if float(preview.get("player_power", 0.0)) < float(preview.get("enemy_power", 0.0)):
+			return false
+	if CombatManager.launch_campaign_mission(domain, party):
+		_act("campaign %s m%d %s" % [domain, CombatManager.campaign_won(domain) + 1, str(party)], true)
+		return true
+	return false
+
 ## Una columna que volvio (o una expedicion que pide elegir camino) no se queda
 ## colgada: sin esto el asedio esperaria para siempre a "la columna fuera".
 func _tidy_expedition() -> void:
@@ -465,7 +529,9 @@ func _tidy_expedition() -> void:
 		return
 	# El jugador completo elige la primera carta del draft y sigue la ruta (una
 	# mision de costa puede ser de varios combates); el normal abandona como antes.
-	if _extras_on() and CombatManager.has_pending_draft():
+	# Las misiones de campana son de varios combates: siempre la primera carta.
+	var run: Expedition = CombatManager.get_expedition()
+	if CombatManager.has_pending_draft() and (_extras_on() or (run != null and run.is_campaign())):
 		CombatManager.apply_draft(0)
 	for i in range(4):
 		if CombatManager.select_node(i):
@@ -1344,6 +1410,10 @@ func _print_extras_table(results: Array) -> void:
 
 func _spot_for(building_id: String, data: BuildingData) -> Dictionary:
 	var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
+	# Tres campanas: la linea pide el Astillero (Campana de Mar) tras el CG nv3.
+	# Va en la costa, como lo coloca el jugador completo (_extra_spot).
+	if building_id == "shipyard":
+		return _extra_spot(building_id, data)
 	if building_id == "refinery":
 		for dep in _map.get_all_deposits():
 			if dep["id"] != "oil_well":
@@ -1474,6 +1544,14 @@ func _connect_probes() -> void:
 	EventBus.expedition_ended.connect(func(result: int, _rw: Dictionary, _c: Dictionary) -> void:
 		if result == Expedition.RESULT_WON and not _r.has("sortie_at"):
 			_r["sortie_at"] = _clock)
+	# Tres campanas: cuando se gana cada mision y cuando se completa cada campana.
+	EventBus.campaign_mission_won.connect(func(domain: String, _m: int, _boss: bool) -> void:
+		(_r["campaign_won"][domain] as Array).append(_clock))
+	EventBus.campaign_completed.connect(func(domain: String) -> void:
+		_r["campaign_done"][domain] = _clock)
+	EventBus.expedition_ended.connect(func(result: int, _rw: Dictionary, _c: Dictionary) -> void:
+		if result != Expedition.RESULT_WON and not CombatManager.get_last_result().get("campaign_domain", "").is_empty():
+			_r["campaign_setbacks"] = int(_r["campaign_setbacks"]) + 1)
 	EventBus.trial_tithe_resolved.connect(func(repelled: bool, taken: Dictionary) -> void:
 		_r["trial_tithe"] = {"t": _clock, "repelled": repelled, "taken": taken.duplicate(),
 			"home": CombatManager.roster_size(CombatManager.get_garrison())})
@@ -1625,6 +1703,15 @@ func _print_run(r: Dictionary) -> void:
 	print("  sin ninguna decision: huecos>3min %d | el mas largo %.1f min | era1 %.1f min | era2 %.1f min | era3 %.1f min | intentos de asedio %d" % [
 		int(g["idle_count"]), float(g["idle_longest"]) / 60.0, _era_len(r, 1), _era_len(r, 2), _era_len(r, 3), r["sieges"].size()])
 	print("  incursiones %d | repuestos al final %d" % [int(r.get("raids", 0)), int(r.get("parts_end", 0))])
+	var camps := ""
+	for domain in ["land", "sea", "air"]:
+		var wins: Array = r["campaign_won"][domain]
+		var times: Array = []
+		for t in wins:
+			times.append(_mins(t))
+		camps += "%s %d/%d [%s] completa %s | " % [domain, wins.size(), GameConfig.campaign_mission_count(domain),
+			",".join(times), _mins(r["campaign_done"].get(domain, -1.0))]
+	print("  campanas: %sfallidas %d" % [camps, int(r["campaign_setbacks"])])
 	print("  CG nv2 en el minuto %s | CG nv3 (convocatoria) en el %s | casas %d | granjas %d | gente %d | comida %.0f/min" % [
 		_mins(r.get("hq2_at", -1.0)), _mins(r.get("hq3_at", -1.0)), int(r.get("houses", 0)), int(r.get("farms", 0)),
 		int(r["end"]["pop"]), float(r.get("food_per_min", 0.0))])
@@ -1651,8 +1738,8 @@ func _print_run(r: Dictionary) -> void:
 
 func _print_table(results: Array) -> void:
 	print("")
-	print("| semilla | era 2 | era 3 | CG | CG nv3 | asedio | victoria | era 1 | era 2 dura | era 3 dura | tormentas | diezmos repelidos | asedios | esperas>2min | hueco max | huecos>3min sin decidir | mayor sin decidir | bolsa llena | desbordado |")
-	print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	print("| semilla | era 2 | era 3 | CG | CG nv3 | tierra | mar | aire | asedio | victoria | era 1 | era 2 dura | era 3 dura | tormentas | diezmos repelidos | asedios | esperas>2min | hueco max | huecos>3min sin decidir | mayor sin decidir | bolsa llena | desbordado |")
+	print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for r in results:
 		var m: Dictionary = r["milestones"]
 		var repelled := 0
@@ -1661,9 +1748,11 @@ func _print_table(results: Array) -> void:
 				repelled += 1
 		var g: Dictionary = _gaps(r)
 		var siege_t: float = float(r["sieges"][0]["t"]) if not r["sieges"].is_empty() else -1.0
-		print("| %d | %s | %s | %s | %s | %s | %s | %.1f | %.0f | %.0f | %d | %d/%d | %d | %d (%.0f min) | %.1f min | %d | %.1f min | %.0f min | %d |" % [
+		print("| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s | %.1f | %.0f | %.0f | %d | %d/%d | %d | %d (%.0f min) | %.1f min | %d | %.1f min | %.0f min | %d |" % [
 			r["seed"], _mins(m.get("era_2", -1.0)), _mins(m.get("era_3", -1.0)),
 			_mins(m.get("hq_built", -1.0)), _mins(m.get("hq_max", -1.0)),
+			_mins(r["campaign_done"].get("land", -1.0)), _mins(r["campaign_done"].get("sea", -1.0)),
+			_mins(r["campaign_done"].get("air", -1.0)),
 			_mins(siege_t), _mins(r["victory_at"]), _era_len(r, 1), _era_len(r, 2), _era_len(r, 3),
 			r["storms"].size(), repelled, r["tithes"].size(), r["sieges"].size(),
 			g["count"], g["dead"] / 60.0, g["longest"] / 60.0, int(g["idle_count"]), float(g["idle_longest"]) / 60.0,

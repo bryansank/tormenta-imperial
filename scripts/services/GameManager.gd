@@ -733,6 +733,12 @@ func _load_game() -> void:
 	var sorties_data: Variant = data.get("sorties", {})
 	CombatManager.load_sorties_save_data(sorties_data if sorties_data is Dictionary else {})
 
+	# Las tres campanas (feat/tres-campanas). Sin la clave, ninguna empezada; un
+	# Ataque Final ya convocado o ganado en ese guardado sigue tal cual (va en
+	# "progression").
+	var campaigns_data: Variant = data.get("campaigns", {})
+	CombatManager.load_campaigns_save_data(campaigns_data if campaigns_data is Dictionary else {})
+
 	# Restore the storm clock. Same rule: no key means a save from before the
 	# storm existed, and the cycle simply starts fresh.
 	if data.has("storm"):
@@ -893,6 +899,7 @@ func _write_save() -> void:
 	data["army"] = ArmyManager.get_save_data()
 	data["expedition"] = CombatManager.get_save_data()
 	data["sorties"] = CombatManager.get_sorties_save_data()
+	data["campaigns"] = CombatManager.get_campaigns_save_data()
 	data["storm"] = StormManager.get_save_data()
 	data["day"] = DayClock.get_save_data()
 	data["tutorial"] = TutorialManager.get_save_data()

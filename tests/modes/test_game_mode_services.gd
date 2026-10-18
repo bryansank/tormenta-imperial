@@ -160,11 +160,41 @@ func test_builder_wins_on_the_capstone_without_a_siege() -> void:
 	assert_str(String(_victories[0].get("mode", ""))).is_equal("builder")
 
 func test_campaign_capstone_summons_the_audit_and_does_not_win() -> void:
+	# La regla de la 1.0 (sin la llave de las campanas): el CG nv3 convoca solo.
+	var saved: bool = GameConfig.final_audit_needs_campaigns
+	GameConfig.final_audit_needs_campaigns = false
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
 	ProgressionManager.reset()
 	ProgressionManager._complete_milestone("hq_max")
+	GameConfig.final_audit_needs_campaigns = saved
 	assert_object(ProgressionManager.final_audit).is_not_null()
 	assert_int(_victories.size()).is_equal(0)
+
+## Tres campanas (feat/tres-campanas): en Campana el CG nivel 3 no basta; el
+## Ataque Final llega cuando estan tambien las tres campanas, en cualquier orden.
+func test_campaign_capstone_waits_for_the_three_campaigns() -> void:
+	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
+	ProgressionManager.reset()
+	ProgressionManager._complete_milestone("hq_max")
+	assert_object(ProgressionManager.final_audit).is_null()
+	assert_int(_victories.size()).is_equal(0)
+	assert_str(ProgressionManager.final_audit_gate_text()).is_not_empty()
+	CombatManager.load_campaigns_save_data({"progress": {
+		"land": GameConfig.campaign_mission_count("land"),
+		"sea": GameConfig.campaign_mission_count("sea"),
+		"air": GameConfig.campaign_mission_count("air")}})
+	EventBus.campaign_completed.emit("air")
+	assert_object(ProgressionManager.final_audit).is_not_null()
+	assert_bool(ProgressionManager.is_final_audit_pending()).is_true()
+	assert_str(ProgressionManager.final_audit_gate_text()).is_empty()
+
+func test_survival_also_needs_the_campaigns_and_builder_does_not() -> void:
+	GameMode.begin_run(GameMode.Mode.SURVIVAL)
+	assert_bool(GameMode.audit_needs_campaigns()).is_true()
+	GameMode.begin_run(GameMode.Mode.BUILDER)
+	assert_bool(GameMode.audit_needs_campaigns()).is_false()
+	GameMode.begin_run(GameMode.Mode.SANDBOX)
+	assert_bool(GameMode.audit_needs_campaigns()).is_false()
 
 func test_sandbox_capstone_does_nothing() -> void:
 	GameMode.begin_run(GameMode.Mode.SANDBOX)

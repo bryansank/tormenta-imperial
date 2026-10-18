@@ -166,6 +166,17 @@ const ENTRIES := {
 		"title": "HELP_T_AIR_SEA", "body": "HELP_B_AIR_SEA", "target": ""},
 	"guide_air_sea_advantage": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
 		"title": "HELP_T_AIR_SEA_ADVANTAGE", "body": "HELP_B_AIR_SEA_ADVANTAGE", "target": ""},
+	# ── Tres campanas (feat/tres-campanas, docs/15 §13) ──
+	# La pagina "Las tres campanas" esta en el indice desde el principio; el
+	# consejo sale al ganar la primera escaramuza (se abre la de Tierra). "Que
+	# pide el Ataque Final" sale en la era 3 o al llegar el CG a nivel 3 sin las
+	# campanas; tambien esta en el indice (solo donde hay asedio).
+	"guide_campaigns": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_CAMPAIGNS", "body": "HELP_B_CAMPAIGNS", "target": ""},
+	"campaigns": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
+		"title": "HELP_T_CAMPAIGNS", "body": "HELP_B_CAMPAIGNS", "target": ""},
+	"final_gate": {"kind": "tip", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_FINAL_GATE", "body": "HELP_B_FINAL_GATE", "target": "", "needs": "final_audit"},
 	# ── Topes y mejoras (2026-10-17, rama feat/topes-mejoras-ayuda) ──
 	# Paginas con numeros: `dyn` = el cuerpo lo escribe BuildingHelpText leyendo
 	# GameConfig (topes por era, multiplicadores de mejora, repuestos, torres,

@@ -170,6 +170,8 @@ var _incoming: int = 0
 # Montaje y desmontaje
 # ══════════════════════════════════════════════════════════════════════
 
+var _saved_needs_campaigns := true
+
 func before_test() -> void:
 	_saved_resources = _resource_amounts()
 	_saved_era = ResourceManager.get_era()
@@ -201,12 +203,18 @@ func before_test() -> void:
 	GameConfig.dev_mode = true
 	GameConfig.dev_time_scale = 60.0
 	GameConfig.event_production_multiplier = 1.0
+	# Tres campanas (feat/tres-campanas): esta suite fija el camino de la 1.0, en
+	# el que el CG nivel 3 convoca el asedio solo. La llave nueva la prueban
+	# tests/combat/test_three_campaigns.gd y tests/modes/test_game_mode_services.gd.
+	_saved_needs_campaigns = GameConfig.final_audit_needs_campaigns
+	GameConfig.final_audit_needs_campaigns = false
 
 	_park_player_save()
 	_connect_probes()
 	_open_new_colony()
 
 func after_test() -> void:
+	GameConfig.final_audit_needs_campaigns = _saved_needs_campaigns
 	_close_colony()
 	_disconnect_probes()
 

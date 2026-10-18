@@ -38,6 +38,9 @@ func _ready() -> void:
 	EventBus.market_trade_completed.connect(_on_trade_completed)
 	EventBus.building_placed.connect(_on_building_placed)
 	EventBus.resource_changed.connect(_on_resource_changed)
+	# Tres campanas (feat/tres-campanas): completar una puede ser lo ultimo que
+	# faltaba para el Ataque Final (en el orden que sea).
+	EventBus.campaign_completed.connect(func(_domain): try_summon_final_audit())
 
 # ── Era System ──
 
@@ -63,9 +66,13 @@ func _complete_milestone(milestone_id: String) -> void:
 	_check_phase_advance(milestone_id)
 	# The capstone no longer wins: it calls the Regency down on you. Unless the
 	# mode says otherwise: Constructor wins right here, Sandbox does nothing.
+	# Tres campanas (feat/tres-campanas): en Campana y Supervivencia hacen falta
+	# ademas las campanas de Tierra, Mar y Aire completas; si faltan, el aviso
+	# dice cuales y el asedio espera a la ultima (try_summon_final_audit).
 	if milestone_id == "hq_max":
 		if GameMode.audit_enabled():
-			summon_final_audit()
+			if not try_summon_final_audit():
+				_announce_audit_waiting()
 		elif GameMode.capstone_wins():
 			_trigger_victory()
 
@@ -105,6 +112,73 @@ func _check_military_milestone() -> void:
 ##
 ## Everything here is thin on purpose: the rules live in FinalAudit, this service
 ## only drives it and republishes what it returns.
+
+## ── La condicion del Ataque Final (feat/tres-campanas) ──
+## Las dos llaves: el Cuartel General a nivel 3 (hito hq_max) y, donde el modo lo
+## pida (GameMode.audit_needs_campaigns), las tres campanas completas. Da igual
+## el orden: se mira al cumplirse cada una.
+
+## ¿Estan las dos llaves? (Sin contar si ya hay asedio.)
+func final_audit_ready() -> bool:
+	if not milestones_completed.has("hq_max"):
+		return false
+	if GameMode.audit_needs_campaigns() and not CombatManager.campaigns_all_complete():
+		return false
+	return true
+
+## Convoca el Ataque Final si toca por primera vez: el modo lo tiene, no hay ya
+## uno (convocado, en marcha, perdido o ganado: eso lo lleva su propio camino),
+## la Tormenta no esta parada y las dos llaves estan. true si lo convoco.
+func try_summon_final_audit() -> bool:
+	if not GameMode.audit_enabled() or final_audit != null or StormManager.is_halted():
+		return false
+	if not final_audit_ready():
+		return false
+	return summon_final_audit()
+
+## Lo que falta para el Ataque Final, una cosa por elemento y ya traducida
+## ("Cuartel General a nivel 3", "Campana de Mar 2/5", "Campana de Aire: sin
+## empezar"). Vacio si no falta nada o si el modo no tiene asedio.
+func final_audit_missing() -> Array:
+	var out: Array = []
+	if not GameMode.audit_enabled() or final_audit != null:
+		return out
+	if not milestones_completed.has("hq_max"):
+		out.append(Tr.t("AUDIT_NEEDS_HQ3"))
+	if GameMode.audit_needs_campaigns():
+		for domain in GameConfig.CAMPAIGN_DOMAINS:
+			if CombatManager.is_campaign_complete(String(domain)):
+				continue
+			out.append(campaign_status_text(String(domain)))
+	return out
+
+## "Para llamar al Ataque Final: ..." con lo que falta, o "" si no falta nada.
+func final_audit_gate_text() -> String:
+	var missing: Array = final_audit_missing()
+	if missing.is_empty():
+		return ""
+	return Tr.t("AUDIT_GATE_LINE") % ", ".join(missing)
+
+## Una campana en una linea: "Campana de Mar 2/5", "... sin empezar" o
+## "... completa".
+static func campaign_status_text(domain: String) -> String:
+	var title: String = Tr.t("CAMP_NAME_" + domain.to_upper())
+	var won: int = CombatManager.campaign_won(domain)
+	var total: int = CombatManager.campaign_total(domain)
+	if won >= total and total > 0:
+		return Tr.t("CAMP_STATUS_DONE") % title
+	if won <= 0:
+		return Tr.t("CAMP_STATUS_NOT_STARTED") % title
+	return Tr.t("CAMP_STATUS_PROGRESS") % [title, won, total]
+
+## El Cuartel General llego a nivel 3 pero faltan campanas: se dice cuales.
+func _announce_audit_waiting() -> void:
+	var text: String = final_audit_gate_text()
+	if text == "":
+		return
+	EventBus.notification_posted.emit(text, "warning", UITheme.WARNING)
+	if TutorialManager.has_method("offer_tip"):
+		TutorialManager.offer_tip("final_gate")
 
 ## Calls the audit down. Whatever is at home right now is what will stand for the
 ## whole siege — sending the army out just before the capstone lands is a real

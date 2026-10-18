@@ -12,7 +12,7 @@ extends RefCounted
 ##
 ## Un paso es un Dictionary:
 ##   kind  "build" | "upgrade" | "train" | "repair" | "sell" | "buy" | "research" | "siege" | "resummon"
-##         | "rebuild" | "sandbox" | "sortie" | "contract"
+##         | "rebuild" | "sandbox" | "sortie" | "contract" | "campaign"
 ##         ("sortie_offer" solo sale de sortie_step(), la segunda linea del panel)
 ##   id    edificio o unidad
 ##   level nivel al que sube una mejora
@@ -172,6 +172,15 @@ static func next_step() -> Dictionary:
 	var sortie: Dictionary = first_sortie_step()
 	if not sortie.is_empty():
 		return sortie
+
+	# ── Las tres campanas (feat/tres-campanas) ──
+	# El Cuartel General ya esta a nivel 3 y el Ataque Final espera a las
+	# campanas que faltan: lo siguiente es una de ellas (su edificio, su tropa o
+	# su mision). Antes del nivel 3 las campanas van en la segunda linea
+	# (campaign_step) y la linea principal no cambia.
+	var gate: Dictionary = campaign_gate_step()
+	if not gate.is_empty():
+		return _support_or(gate) if String(gate["kind"]) != "campaign" else gate
 
 	# ── La linea ──
 	var target: Dictionary = _first_open_line_step()
@@ -437,6 +446,86 @@ static func sortie_step() -> Dictionary:
 	if reason == "" or reason == "SORTIE_WHY_FIRST":
 		return {}
 	return {"kind": "sortie_offer", "why": reason}
+
+## ── Las tres campanas (feat/tres-campanas) ──
+
+## El paso de las campanas cuando el Ataque Final solo espera por ellas (el
+## Cuartel General ya esta a nivel 3). {} si no toca. Elige la campana que se
+## puede jugar ya (si no, la primera que falte) y pide, por orden, su edificio,
+## tropa de su medio o la mision.
+static func campaign_gate_step() -> Dictionary:
+	if not GameMode.audit_needs_campaigns() or ProgressionManager.final_audit != null:
+		return {}
+	if not ProgressionManager.is_milestone_completed("hq_max"):
+		return {}
+	if CombatManager.campaigns_all_complete():
+		return {}
+	var domain: String = ""
+	for d in GameConfig.CAMPAIGN_DOMAINS:
+		if CombatManager.is_campaign_complete(String(d)):
+			continue
+		if domain == "":
+			domain = String(d)
+		if CombatManager.campaign_lock_reason(String(d)) == "" and not CombatManager.campaign_units_home(String(d)).is_empty():
+			domain = String(d)
+			break
+	if domain == "":
+		return {}
+	return campaign_need_step(domain, "OBJ_WHY_CAMPAIGN_FOR_AUDIT")
+
+## Lo que pide una campana para poder jugar su mision: su edificio, tropa de su
+## medio, o la mision misma ({"kind": "campaign", "id": medio}).
+static func campaign_need_step(domain: String, why: String) -> Dictionary:
+	var building: String = CombatManager.campaign_building(domain)
+	if CombatManager.campaign_lock_reason(domain) == "CAMP_LOCK_BUILDING":
+		return {"kind": "build", "id": building, "count": 1, "why": "OBJ_WHY_CAMPAIGN_BUILDING"}
+	var home: int = CombatManager.roster_size(CombatManager.campaign_units_home(domain))
+	var wanted: int = maxi(1, GameConfig.campaign_suggested_party)
+	if home < wanted:
+		var unit_id: String = String(GameConfig.campaign_suggested_unit.get(domain, "infantry"))
+		if ArmyManager.is_unlocked(unit_id):
+			var away: int = int(CombatManager.get_units_away().get(unit_id, 0))
+			return _army_step(unit_id, _army_count(unit_id) - away + (wanted - home), "OBJ_WHY_CAMPAIGN_UNITS", "train")
+	return {"kind": "campaign", "id": domain, "why": why}
+
+## La segunda linea de ¿QUE HACER? (como sortie_step): la siguiente mision de
+## alguna campana que ya se puede jugar con la tropa que hay en casa. {} si no
+## hay ninguna, si la linea principal ya la pide o si hay columna fuera.
+static func campaign_step() -> Dictionary:
+	if not campaign_gate_step().is_empty():
+		return {}
+	for d in GameConfig.CAMPAIGN_DOMAINS:
+		var domain: String = String(d)
+		if CombatManager.campaign_lock_reason(domain) != "":
+			continue
+		if CombatManager.campaign_units_home(domain).is_empty():
+			continue
+		return {"kind": "campaign", "id": domain, "why": "OBJ_WHY_CAMPAIGN_NEXT"}
+	return {}
+
+## "Para llamar al Ataque Final: ...", o "" si no falta nada (o no hay asedio).
+static func final_gate_text() -> String:
+	return ProgressionManager.final_audit_gate_text()
+
+## El candado de una campana en palabras, con su cifra (lo mismo que dice el
+## panel de MISIONES): "Construye un Astillero", "Llega a la era 3",
+## "La tropa descansa: 1:20". "" si se puede salir.
+static func campaign_lock_text(domain: String) -> String:
+	var lock: String = CombatManager.campaign_lock_reason(domain)
+	match lock:
+		"":
+			return ""
+		"CAMP_DONE":
+			return Tr.t("CAMP_DONE") % Tr.t("CAMP_NAME_" + domain.to_upper())
+		"CAMP_LOCK_BUILDING":
+			var data: BuildingData = Rules.load_building_data(CombatManager.campaign_building(domain))
+			return Tr.t("CAMP_LOCK_BUILDING") % (data.get_display_name() if data != null else CombatManager.campaign_building(domain))
+		"CAMP_LOCK_ERA":
+			return Tr.t("CAMP_LOCK_ERA") % ExpeditionGenerator.campaign_mission_era(domain, CombatManager.campaign_won(domain))
+		"CAMP_LOCK_REST":
+			var left: int = ceili(CombatManager.campaign_rest_left(domain))
+			return Tr.t("CAMP_LOCK_REST") % [left / 60, left % 60]
+	return Tr.t(lock)
 
 ## Paso aparte, que no entra en next_step() (la linea y su sonda no cambian):
 ## "Entrega el encargo de los vecinos" cuando uno del tablon ya se puede
@@ -1302,6 +1391,15 @@ static func route() -> Array:
 				first_row["current"] = true
 				current_found = true
 			rows.append(first_row)
+	# Tres campanas: la otra llave del Ataque Final, en una fila.
+	if GameMode.audit_needs_campaigns():
+		var camps_done: bool = CombatManager.campaigns_all_complete() or ProgressionManager.final_audit != null
+		var camp_row := {"text": Tr.t("OBJ_ROUTE_CAMPAIGNS") % CombatManager.campaigns_completed_count(),
+			"done": camps_done, "current": false}
+		if not camps_done and not current_found and ProgressionManager.is_milestone_completed("hq_max"):
+			camp_row["current"] = true
+			current_found = true
+		rows.append(camp_row)
 	if GameMode.audit_enabled():
 		var won: bool = StormManager.is_halted()
 		rows.append({"text": Tr.t("OBJ_ROUTE_FINAL"), "done": won, "current": not current_found and not won})
@@ -1396,6 +1494,10 @@ static func describe(step: Dictionary) -> Dictionary:
 			title = Tr.t("OBJ_DO_FIRST_SORTIE")
 		"sortie_offer":
 			title = Tr.t("OBJ_DO_SORTIE")
+		"campaign":
+			var domain: String = String(step.get("id", "land"))
+			title = Tr.t("OBJ_DO_CAMPAIGN") % [Tr.t(ExpeditionGenerator.campaign_mission_name_key(domain,
+				maxi(0, CombatManager.campaign_won(domain)))), Tr.t("CAMP_NAME_" + domain.to_upper())]
 		"contract":
 			title = Tr.t("OBJ_DO_CONTRACT") % Tr.t("CONTRACT_SRC_" + String(step.get("id", "")).to_upper())
 		"resummon":
@@ -1492,6 +1594,14 @@ static func blocker(step: Dictionary) -> String:
 				return Tr.t("MSG_NO_UNITS")
 			var check: Dictionary = CombatManager.can_launch(party)
 			return "" if bool(check["ok"]) else Tr.t(String(check["reason"]))
+		"campaign":
+			var domain: String = String(step.get("id", "land"))
+			var lock_text: String = campaign_lock_text(domain)
+			if lock_text != "":
+				return lock_text
+			if CombatManager.campaign_units_home(domain).is_empty():
+				return Tr.t("CAMP_NO_UNITS_" + domain.to_upper())
+			return ""
 		"siege":
 			if ProgressionManager.is_final_audit_active():
 				return Tr.t("OBJ_SIEGE_UNDER_WAY")

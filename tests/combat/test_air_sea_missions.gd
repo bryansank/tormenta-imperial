@@ -11,6 +11,17 @@ const Rules := preload("res://scripts/combat/CombatRules.gd")
 
 const SHIPS := ["torpedo_boat", "gunboat", "dreadnought"]
 
+## Las misiones MIXTAS (costa: tierra y barcos) estan apagadas desde las tres
+## campanas (feat/tres-campanas); esta suite las fija, asi que las enciende.
+var _saved_mixed := false
+
+func before_test() -> void:
+	_saved_mixed = GameConfig.combat_mixed_missions_enabled
+	GameConfig.combat_mixed_missions_enabled = true
+
+func after_test() -> void:
+	GameConfig.combat_mixed_missions_enabled = _saved_mixed
+
 ## Una expedicion al Puerto: la semilla multiplo de 5 da SORTIE_DEST_DOCK.
 func _dock_offer(era: int, seed_value: int = 10) -> Dictionary:
 	return {"id": 1, "kind": Generator.KIND_EXPEDITION, "seed": seed_value, "era": era, "blueprint": ""}

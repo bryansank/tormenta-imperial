@@ -217,6 +217,19 @@ signal sortie_loot_gained(loot: Dictionary)
 ## Un plano nuevo: el edificio `building_id` ya se puede construir.
 @warning_ignore("unused_signal")
 signal blueprint_unlocked(building_id: String)
+## Tres campanas (feat/tres-campanas). Emitidas solo por CombatManager. El libro
+## de campanas cambio (mision ganada, perdida, vista, partida cargada): el panel
+## de MISIONES y el punto rojo repintan con esto.
+@warning_ignore("unused_signal")
+signal campaign_changed()
+## Una mision de campana ganada (`domain`: land / sea / air; `mission` desde 0;
+## `is_boss`: era la del jefe de campana). Ya cobrada.
+@warning_ignore("unused_signal")
+signal campaign_mission_won(domain: String, mission: int, is_boss: bool)
+## Una campana entera completa (su jefe derrotado). ProgressionManager mira si
+## con esto ya se puede llamar al Ataque Final.
+@warning_ignore("unused_signal")
+signal campaign_completed(domain: String)
 ## El enemigo se retiro con poca vida y el combate se gano (D7 = B).
 @warning_ignore("unused_signal")
 signal enemy_routed()

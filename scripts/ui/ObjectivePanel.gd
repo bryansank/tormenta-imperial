@@ -17,6 +17,10 @@ var _sortie_line: Label
 var _now_contract: Label
 ## Aire y mar: el Astillero o el Aerodromo cuando tocan (Objectives.fleet_step).
 var _fleet_line: Label
+## Tres campanas (feat/tres-campanas): la siguiente mision que ya se puede jugar
+## (Objectives.campaign_step) y lo que falta para el Ataque Final.
+var _campaign_line: Label
+var _gate_line: Label
 var _route_box: VBoxContainer
 var _refresh_left := 0.0
 
@@ -147,6 +151,16 @@ func _setup_ui() -> void:
 	_fleet_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_fleet_line.visible = false
 	content.add_child(_fleet_line)
+	_campaign_line = UITheme.make_label("", "body", UITheme.CAT_MILITARY.lightened(0.25))
+	_campaign_line.name = "CampaignStep"
+	_campaign_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_campaign_line.visible = false
+	content.add_child(_campaign_line)
+	_gate_line = UITheme.make_label("", "small", UITheme.WARNING)
+	_gate_line.name = "AuditGateLine"
+	_gate_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_gate_line.visible = false
+	content.add_child(_gate_line)
 
 	# ── EL CAMINO: la linea entera, con lo hecho marcado ──
 	content.add_child(UITheme.make_separator())
@@ -220,6 +234,16 @@ func refresh() -> void:
 	if not fleet.is_empty():
 		var ftext: Dictionary = Objectives.describe(fleet)
 		_fleet_line.text = "%s\n%s" % [String(ftext["title"]), String(ftext["why"])]
+	var camp: Dictionary = Objectives.campaign_step()
+	_campaign_line.visible = not camp.is_empty()
+	if not camp.is_empty():
+		var camp_text: Dictionary = Objectives.describe(camp)
+		_campaign_line.text = "%s\n%s" % [String(camp_text["title"]), String(camp_text["why"])]
+	# Lo que falta para el Ataque Final, desde la era 3 (cuando el Cuartel
+	# General ya se ve venir). Antes seria ruido.
+	var gate: String = Objectives.final_gate_text() if ProgressionManager.current_era >= 3 else ""
+	_gate_line.text = gate
+	_gate_line.visible = gate != ""
 	_paint_route()
 
 ## La linea de Objectives.LINE, una fila por paso: hecho, el de ahora, o por hacer.

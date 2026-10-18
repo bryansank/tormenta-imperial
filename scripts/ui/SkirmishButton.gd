@@ -29,6 +29,9 @@ func _ready() -> void:
 	EventBus.building_upgrade_completed.connect(func(_n, _l): refresh())
 	EventBus.game_load_completed.connect(refresh)
 	EventBus.sortie_offers_changed.connect(refresh)
+	# Tres campanas: mision nueva, ganada o lista tras el descanso; era nueva.
+	EventBus.campaign_changed.connect(refresh)
+	EventBus.era_advanced.connect(func(_e): refresh())
 	EventBus.expedition_started.connect(func(_id, _n): refresh())
 	EventBus.expedition_ended.connect(func(_r, _rw, _c): refresh())
 	EventBus.encounter_started.connect(func(_i, _b): refresh())

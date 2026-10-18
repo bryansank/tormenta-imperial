@@ -40,6 +40,8 @@ func _ready() -> void:
 	EventBus.expedition_ended.connect(_on_expedition_ended)
 	EventBus.storm_ended.connect(_on_storm_ended)
 	EventBus.milestone_completed.connect(func(_m): add_xp_from("milestone"))
+	# Tres campanas (feat/tres-campanas): cada mision ganada, y mas el jefe.
+	EventBus.campaign_mission_won.connect(func(_d, _m, boss): add_xp_from("campaign_boss" if boss else "campaign_mission"))
 	_apply_bonuses()
 	# Hasta la primera partida (o en escenas de prueba), un nombre ya puesto.
 	if _colony_name.is_empty():

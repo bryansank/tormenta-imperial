@@ -157,6 +157,36 @@ static func coastal_terrain(board: Vector2i, seed_value: int) -> Dictionary:
 			terrain[Vector2i(x, y)] = kind
 	return terrain
 
+## Mar abierto (Campana de Mar, feat/tres-campanas): todo el tablero es agua
+## salvo `combat_sea_islets` islotes de una casilla (tierra con su orilla no: un
+## islote es roca, los barcos lo rodean). Los islotes caen solo en las filas de en
+## medio (nunca en las dos de despliegue de cada bando) y nunca dos pegados. Puro
+## y determinista: la misma semilla, el mismo mar. Devuelve TODAS las casillas.
+static func open_sea_terrain(board: Vector2i, seed_value: int, islets: int = 3) -> Dictionary:
+	var terrain: Dictionary = {}
+	for y in range(board.y):
+		for x in range(board.x):
+			terrain[Vector2i(x, y)] = TERRAIN_WATER
+	if board.y < 6 or islets <= 0:
+		return terrain
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var placed: Array = []
+	var tries := 0
+	while placed.size() < islets and tries < 40:
+		tries += 1
+		var cell := Vector2i(rng.randi_range(0, board.x - 1), rng.randi_range(2, board.y - 3))
+		var clear := true
+		for other in placed:
+			if manhattan(cell, other) < 3:
+				clear = false
+				break
+		if not clear:
+			continue
+		placed.append(cell)
+		terrain[cell] = TERRAIN_LAND
+	return terrain
+
 ## Breadth-first flood fill over 4 directions. Occupied cells block movement and
 ## cannot be entered, so units cannot walk through each other.
 ##

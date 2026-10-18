@@ -1313,6 +1313,9 @@ var rank_xp_sources := {
 	"storm": 30,            # storm_ended: aguantar una tormenta...
 	"storm_per_severity": 10, # ...mas esto por punto de severidad
 	"milestone": 100,       # milestone_completed
+	# Tres campanas (feat/tres-campanas): una mision ganada, y el jefe de campana.
+	"campaign_mission": 60, # campaign_mission_won (no jefe)
+	"campaign_boss": 250,   # campaign_mission_won del jefe de campana
 }
 
 ## XP acumulada para ESTAR en cada rango (indice 0 = rango 1). 18 rangos.
@@ -2223,6 +2226,9 @@ var combat_loot_coastal_parts := 1
 ## solo si en tu guarnicion hay barcos (si no, siguen siendo todo tierra, como
 ## antes). Fija: la costa de tu isla no se mueve entre una visita y otra.
 var combat_home_coast_seed := 7
+## Mar abierto de la Campana de Mar (feat/tres-campanas): islotes de roca en las
+## filas de en medio (CombatRules.open_sea_terrain). Los barcos los rodean.
+var combat_sea_islets := 3
 
 ## Ventajas por tipo (piedra-papel-tijera, 2026-10-12, docs/15 §3 "Ventaja por
 ## tipo"). El circulo de tierra:
@@ -2413,6 +2419,100 @@ var combat_loot_expedition_boss_colonists := 3
 ## (CombatManager.blueprint_locked(); PlacementRules tiene que llamarlo, como
 ## check_rank()).
 var combat_blueprint_buildings := ["infirmary", "military_forge", "scrapyard", "diesel_plant"]
+
+# ── Tres campañas: Tierra, Mar y Aire (feat/tres-campanas, docs/15 §13) ──
+# Decision de Bryan (2026-10-18): tres cadenas de misiones APARTE, cada una de
+# un solo medio (en la de mar solo barcos y sobre agua; en la de aire solo
+# aviones), con un jefe al final. El Ataque Final pide las tres + el Cuartel
+# General a nivel 3. Sin medir con la sonda (ronda final).
+
+## Interruptor de las misiones MIXTAS (tierra y barcos en el mismo tablero: las
+## incursiones de piratas y la expedicion al Puerto). Son "futuro": apagadas, su
+## codigo sigue entero (ExpeditionGenerator.offer_is_coastal). Los tests que las
+## fijan lo encienden a mano.
+var combat_mixed_missions_enabled := false
+## La expedicion corta de tres combates del tablon pasa a ser la Campana de
+## Tierra: apagada, el tablon solo ofrece ataques rapidos (incursiones). Su
+## codigo sigue entero; los tests que la fijan la encienden.
+var combat_board_expeditions_enabled := false
+## El Ataque Final pide las tres campanas ademas del Cuartel General a nivel 3
+## (en los modos cuya regla `audit_needs_campaigns` lo diga). Apagado = como en
+## la 1.0: el CG nivel 3 lo convoca solo (tests antiguos que lo fijan).
+var final_audit_needs_campaigns := true
+
+## Las tres campanas, en el orden en que se ensenan. `building`: el edificio que
+## la abre (sin el, candado). `eras`: la era minima de cada mision; la ultima es
+## la del JEFE (la longitud es el numero de misiones, jefe incluido). `fights`:
+## combates de cada mision (el ultimo del mapa es su jefe de mision; en la del
+## jefe de campana, el jefe). `bonus_res`: el recurso de mas que paga cada mision
+## ganada (la de tierra, ninguno: paga colonos).
+## Tierra: 5 + jefe; Mar: 4 + jefe; Aire: 4 + jefe = 16 misiones, 30 combates.
+var campaign_defs := {
+	"land": {
+		"building": "barracks",
+		"eras": [1, 1, 2, 2, 2, 3],
+		"fights": [1, 1, 2, 2, 2, 3],
+		"bonus_res": "",
+	},
+	"sea": {
+		"building": "shipyard",
+		"eras": [2, 2, 2, 3, 3],
+		"fights": [1, 2, 2, 2, 3],
+		"bonus_res": "steel",
+	},
+	"air": {
+		"building": "aerodrome",
+		"eras": [3, 3, 3, 3, 3],
+		"fights": [1, 2, 2, 2, 3],
+		"bonus_res": "oil",
+	},
+}
+## El orden de las pestanas (y el que sigue ¿QUE HACER?).
+const CAMPAIGN_DOMAINS := ["land", "sea", "air"]
+## Cuanto pesa cada mision en la curva enemiga (enemy_pressure): mision N es
+## como un nodo de profundidad N * esto, mas su propia profundidad dentro del mapa.
+var campaign_level_step := 2
+## El jefe de campana: la escala de jefe de siempre por esto encima.
+var campaign_boss_extra_scale := 1.10
+## Cuantas unidades de su clase pesada lleva el jefe de campana ademas de su escolta.
+var campaign_boss_heavies := 2
+## Segundos de juego entre ganar una mision y que la siguiente de la MISMA
+## campana se pueda lanzar (la tropa descansa). Pasa por get_duration().
+var campaign_mission_cooldown := 150.0
+## Vida que recupera la columna entre dos combates de una mision.
+var campaign_heal_between := 0.30
+## Oro y madera: la curva de siempre por esto, todo en el ultimo combate de la
+## mision (los de paso no pagan: abandonar y repetir no da botin dos veces).
+var campaign_reward_mult := 0.75
+## Lo exclusivo de cada mision ganada: repuestos (por medio), colonos (solo
+## tierra), rebaja del proximo Impuesto en puntos de %, y el recurso de mas.
+var campaign_mission_parts := {"land": 1, "sea": 2, "air": 2}
+var campaign_mission_colonists := {"land": 2, "sea": 0, "air": 0}
+var campaign_mission_tithe_pct := 5
+var campaign_bonus_base := 30
+var campaign_bonus_per_mission := 15
+## El jefe de campana paga esto (y un plano si queda alguno por conseguir).
+var campaign_boss_parts := 5
+var campaign_boss_colonists := 4
+var campaign_boss_tithe_pct := 15
+## Que unidades valen en cada campana: las de su medio que puedan pegar a ese
+## medio. El bombardero no toca aviones (combat_domain_targets), asi que en la de
+## aire se queda en casa: alli no serviria de nada.
+func campaign_unit_allowed(domain: String, unit_id: String) -> bool:
+	if get_unit_domain(unit_id) != domain:
+		return false
+	var stats: Dictionary = get_combat_stats(unit_id)
+	var targets: Dictionary = stats.get("targets", {})
+	return int(targets.get(domain, -1)) != 0
+
+## Numero de misiones de una campana (jefe incluido).
+func campaign_mission_count(domain: String) -> int:
+	return (campaign_defs.get(domain, {}).get("eras", []) as Array).size()
+
+## La unidad que ¿QUE HACER? propone entrenar para una campana sin tropa en casa.
+var campaign_suggested_unit := {"land": "artillery", "sea": "gunboat", "air": "fighter"}
+## Cuantas de su medio pide ¿QUE HACER? antes de proponer la mision.
+var campaign_suggested_party := 3
 
 ## Repuestos que pide una mejora: nivel -> cantidad, solo para los edificios de
 ## la lista (los productores). El Cuartel General tiene su propia tabla.
@@ -3123,6 +3223,10 @@ var game_mode_rules := {
 		"storm_trial": true,
 		"tithe": true,
 		"audit_on_capstone": true,
+		# Tres campanas (feat/tres-campanas): el Ataque Final pide ademas las tres
+		# campanas (Tierra, Mar, Aire) completas. Supervivencia lo hereda: es la
+		# Campana mas dura. Constructor no tiene asedio; Sandbox lo convoca a mano.
+		"audit_needs_campaigns": true,
 		"capstone_wins": false,
 		"victory": true,
 		"resummon": true,
@@ -3149,6 +3253,7 @@ var game_mode_rules := {
 		"storm_trial": false,
 		"tithe": false,
 		"audit_on_capstone": false,
+		"audit_needs_campaigns": false,
 		"capstone_wins": true,
 		"danger_events": false,
 		"hidden_tips": ["storm_incoming", "storm_ash", "storm_started", "tithe", "ruined", "final_audit"],
@@ -3170,6 +3275,7 @@ var game_mode_rules := {
 		"storm": false,
 		"storm_trial": false,
 		"audit_on_capstone": false,
+		"audit_needs_campaigns": false,
 		"victory": false,
 		"random_events": false,
 		"infinite_resources": true,

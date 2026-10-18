@@ -130,7 +130,21 @@ static func create_sortie(p_id: int, p_offer: Dictionary, party_counts: Dictiona
 func heal_between_pct() -> float:
 	if kind == Generator.KIND_EXPEDITION:
 		return maxf(0.0, GameConfig.combat_expedition_heal_between)
+	if kind == Generator.KIND_CAMPAIGN:
+		return maxf(0.0, GameConfig.campaign_heal_between)
 	return 0.0
+
+## Es una mision de una de las tres campanas (feat/tres-campanas).
+func is_campaign() -> bool:
+	return kind == Generator.KIND_CAMPAIGN
+
+## El medio de la campana ("land" / "sea" / "air"), o "" si no es de campana.
+func campaign_domain() -> String:
+	return String(offer.get("domain", "")) if is_campaign() else ""
+
+## El numero de la mision (desde 0), o -1 si no es de campana.
+func campaign_mission() -> int:
+	return int(offer.get("mission", -1)) if is_campaign() else -1
 
 ## Es una incursion: un solo combate (lo que permite "resolver solo").
 func is_raid() -> bool:

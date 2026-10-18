@@ -234,6 +234,11 @@ const TIPS := {
 	"upkeep":         {"title": "TUT_TIP_UPKEEP_TITLE",   "body": "TUT_TIP_UPKEEP_BODY"},
 	"consumption":    {"title": "TUT_TIP_CONSUMPTION_TITLE", "body": "HELP_TIP_CONSUMPTION_BODY"},
 	"final_audit":    {"title": "TUT_TIP_AUDIT_TITLE",    "body": "HELP_TIP_AUDIT_BODY"},
+	# Tres campanas (feat/tres-campanas): al abrirse la de Tierra (primera
+	# escaramuza ganada) y lo que pide el Ataque Final (era 3, o el CG a nivel 3
+	# sin las campanas: ProgressionManager._announce_audit_waiting).
+	"campaigns":      {"title": "HELP_T_CAMPAIGNS",       "body": "HELP_B_CAMPAIGNS"},
+	"final_gate":     {"title": "HELP_T_FINAL_GATE",      "body": "HELP_B_FINAL_GATE"},
 	# ── Ayudas de las novedades (2026-10-14): disparadores en _connect_news() ──
 	"saves":          {"title": "HELP_T_SAVES",     "body": "HELP_B_SAVES"},
 	"rank":           {"title": "HELP_T_RANK",      "body": "HELP_B_RANK"},
@@ -282,6 +287,10 @@ func _ready() -> void:
 	EventBus.army_upkeep_unpaid.connect(_on_upkeep_unpaid)
 	EventBus.consumption_failed.connect(_on_consumption_failed)
 	EventBus.final_audit_summoned.connect(_on_final_audit_summoned)
+	# Tres campanas: en la era 3 se cuenta que pide el Ataque Final.
+	EventBus.era_advanced.connect(func(era: int):
+		if era >= 3 and GameMode.audit_needs_campaigns() and ProgressionManager.final_audit == null:
+			offer_tip("final_gate"))
 	UIManager.window_opened.connect(_on_window_opened)
 	UIManager.window_closed.connect(_on_window_closed)
 
@@ -1099,6 +1108,9 @@ func _on_expedition_started(_expedition_id: int, _node_count: int) -> void:
 func _on_expedition_ended(result: int, _rewards: Dictionary, _casualties: Dictionary) -> void:
 	if result == Expedition.RESULT_WON:
 		first_sortie_done = true
+		# Tres campanas: con la primera escaramuza ganada se abre la de Tierra.
+		if GameMode.tithe_enabled() or GameMode.audit_enabled():
+			offer_tip("campaigns")
 
 func is_first_sortie_done() -> bool:
 	return first_sortie_done

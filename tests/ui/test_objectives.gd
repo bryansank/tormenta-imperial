@@ -704,3 +704,40 @@ func test_the_panel_says_what_is_missing_and_how_to_get_it() -> void:
 	assert_str(block).contains(Tr.res_name("planks"))
 	assert_str(block).contains(Tr.t("PROC_MAKE_PLANKS"))
 	assert_str(block).contains(Tr.ti("GUIDE_HOW_WOOD"))
+
+# ── Tres campanas (feat/tres-campanas) ───────────────────────────────
+
+## Con el Cuartel General a nivel 3 y las campanas por hacer, el panel no se
+## queda en "mundo libre": pide la primera campana (aqui, sin Cuartel, su
+## edificio) y la ruta tiene su fila.
+func test_after_hq3_without_the_campaigns_the_panel_asks_for_them() -> void:
+	var saved_mode: int = GameMode.current
+	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
+	var saved_campaigns: Dictionary = CombatManager.get_campaigns_save_data()
+	CombatManager.load_campaigns_save_data({})
+	ProgressionManager.milestones_completed["hq_max"] = true
+	var gate: Dictionary = Objectives.campaign_gate_step()
+	assert_dict(gate).is_not_empty()
+	assert_str(String(gate["why"])).is_equal("OBJ_WHY_CAMPAIGN_BUILDING")
+	assert_str(String(gate["id"])).is_equal("barracks")
+	assert_str(String(Objectives.next_step()["kind"])).is_not_equal("sandbox")
+	var found := false
+	for row in Objectives.route():
+		if String(row["text"]) == Tr.t("OBJ_ROUTE_CAMPAIGNS") % 0:
+			found = true
+	assert_bool(found).is_true()
+	assert_str(Objectives.final_gate_text()).contains(Tr.t("CAMP_NAME_SEA"))
+	CombatManager.load_campaigns_save_data(saved_campaigns)
+	GameMode.current = saved_mode
+
+## Con las tres campanas hechas la puerta no pide nada mas que el CG nivel 3.
+func test_with_the_three_campaigns_done_only_the_hq_is_missing() -> void:
+	var saved_campaigns: Dictionary = CombatManager.get_campaigns_save_data()
+	CombatManager.load_campaigns_save_data({"progress": {
+		"land": GameConfig.campaign_mission_count("land"),
+		"sea": GameConfig.campaign_mission_count("sea"),
+		"air": GameConfig.campaign_mission_count("air")}})
+	var missing: Array = ProgressionManager.final_audit_missing()
+	assert_array(missing).contains_exactly([Tr.t("AUDIT_NEEDS_HQ3")])
+	assert_dict(Objectives.campaign_gate_step()).is_empty()
+	CombatManager.load_campaigns_save_data(saved_campaigns)

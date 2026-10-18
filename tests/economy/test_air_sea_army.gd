@@ -19,7 +19,13 @@ var _made_scene := false
 var _saved_army: Dictionary = {}
 var _saved_era := 1
 
+## Las misiones mixtas (costa) estan apagadas desde las tres campanas: la
+## comprobacion de "barcos solo con agua" las necesita encendidas.
+var _saved_mixed := false
+
 func before_test() -> void:
+	_saved_mixed = GameConfig.combat_mixed_missions_enabled
+	GameConfig.combat_mixed_missions_enabled = true
 	_saved_army = ArmyManager.get_save_data()
 	_saved_era = ProgressionManager.current_era
 	ArmyManager.reset()
@@ -44,6 +50,7 @@ func after_test() -> void:
 		_scene.free()
 	ProgressionManager.current_era = _saved_era
 	ArmyManager.load_save_data(_saved_army)
+	GameConfig.combat_mixed_missions_enabled = _saved_mixed
 
 # ── Donde se entrena cada una ────────────────────────────────────────
 

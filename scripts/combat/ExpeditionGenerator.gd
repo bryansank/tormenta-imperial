@@ -246,7 +246,7 @@ static func _is_available(unit_id: String, era: int) -> bool:
 ## Sheds the cheapest bodies first until the roster fits on the board.
 static func _trim_to_cap(roster: Dictionary) -> Dictionary:
 	var cap: int = maxi(1, GameConfig.combat_deploy_cap)
-	var order: Array = ["infantry", "artillery", "torpedo_boat", "gunboat", "vehicle", "dreadnought"]
+	var order: Array = ["infantry", "artillery", "torpedo_boat", "gunboat", "fighter", "vehicle", "dreadnought", "airship"]
 	while roster_size(roster) > cap:
 		var removed := false
 		for unit_id in order:
@@ -477,6 +477,9 @@ static func sortie_map(offer: Dictionary) -> Array:
 			map = raid_map(seed_value, era, String(offer.get("flavor", FLAVOR_BANDITS)))
 		KIND_EXPEDITION:
 			map = short_expedition_map(seed_value, era, String(offer.get("blueprint", "")))
+		KIND_CAMPAIGN:
+			# Las tres campanas (feat/tres-campanas): dominio puro, nunca costa mixta.
+			return campaign_mission_map(offer)
 	if not map.is_empty() and offer_is_coastal(offer):
 		make_coastal(map, seed_value, era)
 	return map
@@ -493,6 +496,10 @@ const COAST_SEED_STRIDE := 15485863
 ## primera escaramuza, nunca. Se decide solo con la oferta: se ve antes de salir
 ## y se reconstruye igual al cargar.
 static func offer_is_coastal(offer: Dictionary) -> bool:
+	# Las misiones MIXTAS (tierra y barcos en el mismo tablero) son futuro
+	# (feat/tres-campanas): con el interruptor apagado ninguna oferta es de costa.
+	if not GameConfig.combat_mixed_missions_enabled:
+		return false
 	if int(offer.get("era", 1)) < GameConfig.combat_coastal_min_era:
 		return false
 	match String(offer.get("kind", "")):
@@ -554,12 +561,20 @@ static func add_ships(roster: Dictionary, era: int, is_boss: bool) -> Dictionary
 	result[ship] = int(result.get(ship, 0)) + 1
 	return _trim_to_cap(result)
 
-## ¿Tiene agua el tablero de este nodo?
+## ¿Tiene agua el tablero de este nodo? (La costa mixta, o el mar abierto de la
+## Campana de Mar.)
 static func node_is_coastal(node: Dictionary) -> bool:
-	return bool(node.get("coastal", false))
+	return bool(node.get("coastal", false)) or String(node.get("terrain_kind", "")) == TERRAIN_KIND_SEA
 
-## El terreno del tablero de un nodo: el de costa si lo es, {} (todo tierra) si no.
+## El terreno del tablero de un nodo: el de costa si lo es, el mar abierto en la
+## Campana de Mar, una costa vista desde el cielo en la de Aire (los aviones
+## pisan todo: el agua de abajo es solo paisaje), {} (todo tierra) si no.
 static func node_terrain(node: Dictionary, board: Vector2i) -> Dictionary:
+	match String(node.get("terrain_kind", "")):
+		TERRAIN_KIND_SEA:
+			return Rules.open_sea_terrain(board, int(node.get("terrain_seed", 0)), GameConfig.combat_sea_islets)
+		TERRAIN_KIND_AIR:
+			return Rules.coastal_terrain(board, int(node.get("terrain_seed", 0)))
 	if not node_is_coastal(node):
 		return {}
 	return Rules.coastal_terrain(board, int(node.get("terrain_seed", 0)))
@@ -574,6 +589,8 @@ static func map_has_water(map: Array) -> bool:
 
 ## La clave de Tr con el nombre de la oferta.
 static func offer_name_key(offer: Dictionary) -> String:
+	if String(offer.get("kind", "")) == KIND_CAMPAIGN:
+		return campaign_mission_name_key(String(offer.get("domain", "land")), int(offer.get("mission", 0)))
 	if String(offer.get("kind", "")) == KIND_RAID:
 		return "SORTIE_NAME_OUTPOST" if String(offer.get("flavor", "")) == FLAVOR_OUTPOST else "SORTIE_NAME_BANDITS"
 	var seed_value: int = absi(int(offer.get("seed", 0)))
@@ -731,6 +748,217 @@ static func layers_of(map: Array) -> Array:
 	for depth in depths:
 		result.append(by_depth[depth])
 	return result
+
+# ── Las tres campanas: Tierra, Mar y Aire (feat/tres-campanas, docs/15 §13) ──
+#
+# Una mision de campana es una OFERTA como las del tablon, {kind: "campaign",
+# domain, mission, seed, era}, y con ella se rehace el mapa entero (se ve antes de
+# salir y se reconstruye igual al cargar). DOMINIO PURO: en la de tierra solo
+# tropa de tierra, en la de mar solo barcos sobre mar abierto, en la de aire solo
+# aviones; el enemigo es del mismo medio. La ultima mision de cada campana es la
+# del JEFE de campana. Solo el ultimo combate de cada mision paga: abandonar a
+# medias y repetir no da botin dos veces.
+
+const KIND_CAMPAIGN := "campaign"
+## Que tablero lleva el nodo (Expedition.current_terrain lo lee).
+const TERRAIN_KIND_SEA := "sea"
+const TERRAIN_KIND_AIR := "air"
+## Flujos propios de la semilla de cada mision (como DRAFT_SEED_STRIDE).
+const CAMPAIGN_SEED_STRIDE := 2750159
+const CAMPAIGN_DOMAIN_SALT := {"land": 0, "sea": 1000003, "air": 2000029}
+const CAMPAIGN_TERRAIN_STRIDE := 104723
+
+## La oferta de la mision `mission` de la campana `domain`. `base_seed` es la de
+## la partida (CampaignBook.seed_value): la misma partida, el mismo mapa.
+static func campaign_offer(domain: String, mission: int, base_seed: int, era: int) -> Dictionary:
+	return {
+		"id": -1,
+		"kind": KIND_CAMPAIGN,
+		"domain": domain,
+		"mission": mission,
+		"seed": campaign_seed(base_seed, domain, mission),
+		"era": maxi(maxi(1, era), campaign_mission_era(domain, mission)),
+		"blueprint": "",
+	}
+
+static func campaign_seed(base_seed: int, domain: String, mission: int) -> int:
+	var value: int = base_seed + int(CAMPAIGN_DOMAIN_SALT.get(domain, 0)) + CAMPAIGN_SEED_STRIDE * (mission + 1)
+	return value if value != 0 else 1
+
+## La era minima de una mision (GameConfig.campaign_defs[domain].eras).
+static func campaign_mission_era(domain: String, mission: int) -> int:
+	var eras: Array = GameConfig.campaign_defs.get(domain, {}).get("eras", [])
+	if eras.is_empty():
+		return 1
+	return int(eras[clampi(mission, 0, eras.size() - 1)])
+
+## Combates de una mision.
+static func campaign_mission_fights(domain: String, mission: int) -> int:
+	var fights: Array = GameConfig.campaign_defs.get(domain, {}).get("fights", [])
+	if fights.is_empty():
+		return 1
+	return maxi(1, int(fights[clampi(mission, 0, fights.size() - 1)]))
+
+static func campaign_is_boss_mission(domain: String, mission: int) -> bool:
+	return mission == GameConfig.campaign_mission_count(domain) - 1
+
+## Clave de Tr del nombre: CAMP_LAND_M1 ... y CAMP_LAND_BOSS para el jefe.
+static func campaign_mission_name_key(domain: String, mission: int) -> String:
+	if campaign_is_boss_mission(domain, mission):
+		return "CAMP_%s_BOSS" % domain.to_upper()
+	return "CAMP_%s_M%d" % [domain.to_upper(), mission + 1]
+
+## El mapa de una mision de campana: una cadena corta (apertura, 1 de 2 en medio
+## y el jefe de la mision al final); con un solo combate, un nodo suelto. Todos
+## los nodos del medio de la campana, su tablero y su enemigo.
+static func campaign_mission_map(offer: Dictionary) -> Array:
+	var domain: String = String(offer.get("domain", "land"))
+	var mission: int = maxi(0, int(offer.get("mission", 0)))
+	var seed_value: int = int(offer.get("seed", 1))
+	var era: int = maxi(1, int(offer.get("era", 1)))
+	var rng := make_rng(seed_value)
+	var fights: int = campaign_mission_fights(domain, mission)
+	var boss_mission: bool = campaign_is_boss_mission(domain, mission)
+	var level: int = mission * maxi(0, GameConfig.campaign_level_step)
+	var nodes: Array = _chain_map(rng, fights)
+	var last: int = nodes.size() - 1
+	for node in nodes:
+		var index: int = int(node["index"])
+		var depth: int = level + int(node["depth"])
+		var final: bool = index == last
+		var risk: int = int(node["risk"])
+		if final and boss_mission:
+			node["enemy_roster"] = campaign_boss_roster(rng, depth, era, domain)
+			node["enemy_scale"] = enemy_scale(depth, era, 2, true) * GameConfig.campaign_boss_extra_scale
+			node["campaign_boss"] = true
+		else:
+			node["enemy_roster"] = domain_roster(rng, depth, era, risk, domain)
+			node["enemy_scale"] = enemy_scale(depth, era, risk, bool(node["is_boss"]))
+		node["campaign_domain"] = domain
+		if domain == "sea":
+			node["terrain_kind"] = TERRAIN_KIND_SEA
+		elif domain == "air":
+			node["terrain_kind"] = TERRAIN_KIND_AIR
+		node["terrain_seed"] = seed_value + CAMPAIGN_TERRAIN_STRIDE * (index + 1)
+		if final:
+			node["campaign_final"] = true
+			node["rewards"] = campaign_rewards(domain, mission, era)
+			node["loot"] = campaign_loot(domain, mission, String(offer.get("blueprint", "")))
+		else:
+			# Los combates de paso no pagan: todo llega con el ultimo.
+			node["rewards"] = {}
+			node["loot"] = {}
+	return nodes
+
+## Una cadena de `fights` capas: la apertura sola, en medio 1 o 2 nodos por capa y
+## al final uno solo (el jefe de la mision, is_boss). Con un combate, un nodo sin
+## salidas que no es jefe (como la incursion: at_end() lo da por ultimo).
+static func _chain_map(rng: RandomNumberGenerator, fights: int) -> Array:
+	var nodes: Array = []
+	if fights <= 1:
+		_add_node(nodes, 0, rng.randi_range(0, 1), false)
+		return nodes
+	var layers: Array = [[_add_node(nodes, 0, 0, false)]]
+	for d in range(1, fights - 1):
+		var layer: Array = []
+		for i in range(rng.randi_range(1, 2)):
+			layer.append(_add_node(nodes, d, _roll_risk(rng), false))
+		layers.append(layer)
+	layers.append([_add_node(nodes, fights - 1, 2, true)])
+	for i in range(layers.size() - 1):
+		_link_layers(rng, nodes, layers[i], layers[i + 1], 1, 2)
+	return nodes
+
+## Los enemigos de un nodo de campana, del medio de la campana. Tierra: el roster
+## de siempre (infanteria, canones y blindados por era). Mar: lanchas en linea,
+## canoneras detras y un acorazado en los combates gordos de la era 3. Aire: cazas
+## y, detras, dirigibles. Mismo numero de cuerpos que la curva de siempre.
+static func domain_roster(rng: RandomNumberGenerator, depth: int, era: int, risk: int, domain: String) -> Dictionary:
+	if domain == "land":
+		return enemy_roster(rng, depth, era, risk)
+	var pressure: float = enemy_pressure(depth, era, risk)
+	var cap: int = maxi(1, GameConfig.combat_deploy_cap)
+	var slots: int = clampi(roundi(float(GameConfig.combat_enemy_base_slots) * pressure), 1, cap)
+	var roster: Dictionary = {}
+	if domain == "sea":
+		var heavy: int = 1 if era >= 3 and slots >= 4 else 0
+		var guns: int = slots / 2
+		if guns > 0 and rng.randf() < 0.35:
+			guns = mini(guns + 1, slots - heavy - 1) if slots - heavy > 1 else guns
+		var line: int = maxi(1, slots - guns - heavy)
+		guns = mini(guns, maxi(0, slots - line - heavy))
+		roster["torpedo_boat"] = line
+		if guns > 0:
+			roster["gunboat"] = guns
+		if heavy > 0:
+			roster["dreadnought"] = heavy
+	else:
+		var ships: int = slots / 3
+		if ships > 0 and rng.randf() < 0.35:
+			ships = mini(ships + 1, slots - 1)
+		roster["fighter"] = maxi(1, slots - ships)
+		if ships > 0:
+			roster["airship"] = ships
+	return _trim_to_cap(roster)
+
+## El jefe de campana: su escolta del medio y `campaign_boss_heavies` de lo mas
+## pesado que su medio tiene en la era (tanque, acorazado o dirigible; en la era 2
+## el de mar trae canoneras: el acorazado es de la era 3).
+static func campaign_boss_roster(rng: RandomNumberGenerator, depth: int, era: int, domain: String) -> Dictionary:
+	var roster: Dictionary = domain_roster(rng, depth, era, 1, domain)
+	var top: String = _domain_heavy(era, domain)
+	if top != "":
+		roster[top] = int(roster.get(top, 0)) + maxi(1, GameConfig.campaign_boss_heavies)
+	return _trim_to_cap(roster)
+
+## Lo mas pesado de un medio que la era deja sacar al enemigo. Para el aire es
+## siempre el dirigible (todo el aire es de la era 3); para la tierra y el mar,
+## top_tier_unit (el tanque o la artilleria; el acorazado o la canonera).
+static func _domain_heavy(era: int, domain: String) -> String:
+	if domain == "air":
+		return "airship"
+	var top: String = top_tier_unit(era, domain)
+	if domain == "sea" and top == "torpedo_boat":
+		return "gunboat"
+	return top
+
+## Oro y madera (la curva de siempre a la altura de la mision) y el recurso de
+## mas de su medio (acero en el mar, petroleo en el aire).
+static func campaign_rewards(domain: String, mission: int, era: int) -> Dictionary:
+	var level_node := {"depth": mission * maxi(0, GameConfig.campaign_level_step), "risk": 1,
+		"is_boss": campaign_is_boss_mission(domain, mission)}
+	var rewards: Dictionary = curve_rewards(level_node, era, GameConfig.campaign_reward_mult)
+	var bonus_res: String = String(GameConfig.campaign_defs.get(domain, {}).get("bonus_res", ""))
+	if bonus_res != "":
+		var amount: int = GameConfig.campaign_bonus_base + GameConfig.campaign_bonus_per_mission * mission
+		if campaign_is_boss_mission(domain, mission):
+			amount *= 2
+		rewards[bonus_res] = int(rewards.get(bonus_res, 0)) + amount
+	return rewards
+
+## Lo exclusivo de una mision ganada: repuestos, colonos (tierra) y la rebaja del
+## proximo Impuesto; el jefe, mas de todo y el plano si queda alguno.
+static func campaign_loot(domain: String, mission: int, blueprint: String = "") -> Dictionary:
+	var loot: Dictionary = {}
+	if campaign_is_boss_mission(domain, mission):
+		loot["parts"] = GameConfig.campaign_boss_parts
+		loot["colonists"] = GameConfig.campaign_boss_colonists
+		loot["tithe_pct"] = GameConfig.campaign_boss_tithe_pct
+		if blueprint != "":
+			loot["blueprint"] = blueprint
+	else:
+		loot["parts"] = int(GameConfig.campaign_mission_parts.get(domain, 0))
+		loot["colonists"] = int(GameConfig.campaign_mission_colonists.get(domain, 0))
+		loot["tithe_pct"] = GameConfig.campaign_mission_tithe_pct
+	return _drop_zeros(loot)
+
+## ¿Es este mapa una mision de campana? (El dominio lo lleva cada nodo.)
+static func map_campaign_domain(map: Array) -> String:
+	for node in map:
+		var domain: String = String(node.get("campaign_domain", ""))
+		if domain != "":
+			return domain
+	return ""
 
 static func _roll_range(rng: RandomNumberGenerator, range_v: Vector2i) -> int:
 	return rng.randi_range(mini(range_v.x, range_v.y), maxi(range_v.x, range_v.y))
