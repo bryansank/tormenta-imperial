@@ -244,11 +244,14 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 	# El orden de la linea, en la secuencia visitada (con lo que haya en medio).
 	# La Granja ocupa dos obreros: la primera casa puede llegar antes que la mina,
 	# como paso de apoyo, asi que aqui no se exige su sitio (2026-10-04).
-	# Cuartel temprano (2026-10-17): el Cuartel justo detras del aserradero, un
-	# soldado y su primera mision antes de la mina; la guarnicion de la era 2
-	# empieza ya por la artilleria.
-	var expected: Array = ["build:sawmill", "build:barracks", "build:farm", "train:infantry", "sortie:infantry",
-		"build:gold_mine", "build:market",
+	# Cuartel temprano (2026-10-17): el Cuartel, un soldado y su primera mision;
+	# la guarnicion de la era 2 empieza ya por la artilleria. Aqui la bolsa es
+	# siempre "justo lo del paso anterior", asi que el Cuartel nunca se puede
+	# pagar al decidir y los apoyos (Granja, Casa, Mina) le pasan delante: que
+	# va justo detras del aserradero con la bolsa de verdad lo vigila
+	# test_with_the_real_bag_the_barracks_comes_right_after_the_planks.
+	var expected: Array = ["build:sawmill", "build:barracks", "train:infantry", "sortie:infantry",
+		"build:market",
 		"build:warehouse", "build:foundry", "train:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
 		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]
@@ -289,6 +292,38 @@ func test_the_early_line_is_sawmill_barracks_farm_soldier_then_mine() -> void:
 			barracks_rows += 1
 	assert_int(barracks_rows).is_equal(1)
 	GameMode.current = saved_mode
+
+## Con la bolsa de una partida nueva de verdad: aserradero, tablones y el
+## Cuartel, sin que la Granja, una Casa o la Mina se cuelen (los apoyos esperan
+## a que falte algo). Ronda de pruebas de la 1.0, 2026-10-17.
+func test_with_the_real_bag_the_barracks_comes_right_after_the_planks() -> void:
+	var saved_mode: int = GameMode.current
+	GameMode.current = GameMode.Mode.CAMPAIGN
+	TutorialManager.first_sortie_done = false
+	var bag := {"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0}
+	bag.merge(GameConfig.starting_resources, true)
+	ResourceManager.set_amounts(bag)
+	PopulationManager.load_save_data({"population": 5, "morale": 75})
+	var first: Dictionary = Objectives.next_step()
+	assert_str("%s:%s" % [first["kind"], first["id"]]).is_equal("build:sawmill")
+	ResourceManager.spend_cost(Objectives.step_cost(first))
+	_build("sawmill")
+	PopulationManager.load_save_data({"population": 5, "morale": 75})
+	var planks: Dictionary = Objectives.next_step()
+	assert_str("%s:%s" % [planks["kind"], planks["id"]]).is_equal("make:planks")
+	for i in runs_needed(planks):
+		var recipe: Dictionary = Objectives.material_recipe("planks")
+		var cost := {}
+		for res_name in recipe["cost"]:
+			cost[ResourceManager.name_to_type(String(res_name))] = int(recipe["cost"][res_name])
+		ResourceManager.spend_cost(cost)
+		ResourceManager.add(ResourceManager.Type.PLANKS, int(recipe["produces"]["planks"]))
+	var step: Dictionary = Objectives.next_step()
+	assert_str("%s:%s" % [step["kind"], step["id"]]).is_equal("build:barracks")
+	GameMode.current = saved_mode
+
+func runs_needed(step: Dictionary) -> int:
+	return Objectives.runs_for(step)
 
 ## Lo que da de comer en ruinas va antes que levantar otro igual.
 func test_a_ruined_producer_is_repaired_before_anything_else() -> void:

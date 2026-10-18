@@ -40,6 +40,7 @@ func before_test() -> void:
 	GridManager.clear_all()
 	_nodes.clear()
 	_rows.clear()
+	_used.clear()
 
 func after_test() -> void:
 	GridManager.clear_all()
@@ -62,7 +63,12 @@ func _data(id: String) -> BuildingData:
 func _place(id: String, count: int, level: int = 1) -> Array:
 	var placed: Array = []
 	var data := _data(id)
-	for i in count:
+	# Seguido de lo que ya hay de ese tipo: una segunda llamada con el mismo id
+	# (otro nivel) no cae encima de la primera.
+	var first := int(_used.get(id, 0))
+	_used[id] = first + count
+	for k in count:
+		var i := first + k
 		var n := Node3D.new()
 		n.set_meta("level", level)
 		_nodes.append(n)
@@ -74,6 +80,7 @@ func _place(id: String, count: int, level: int = 1) -> Array:
 	return placed
 
 var _rows: Dictionary = {}
+var _used: Dictionary = {}
 func _row_for(id: String) -> int:
 	if not _rows.has(id):
 		_rows[id] = _rows.size()
@@ -137,7 +144,7 @@ func test_the_short_reasons_drop_what_the_sentence_already_says() -> void:
 func test_steel_not_yet_in_the_game_says_which_era_brings_it() -> void:
 	ResourceManager.set_unlock_state({"gold": true, "wood": true, "steel": false, "oil": false})
 	ResourceManager.set_amounts({"steel": 0, "oil": 0})
-	var lines: Array = HelpText.locked_lines(_data("barracks"))
+	var lines: Array = HelpText.locked_lines(_data("fountain"))
 	assert_array(lines).contains([Tr.t("TOPE_LOCK_ERA") % [2, _data("foundry").get_display_name()]])
 
 func test_oil_says_era_three_once() -> void:

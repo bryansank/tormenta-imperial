@@ -32,7 +32,11 @@ const LINE := [
 	# pide 1 trabajador, asi que aserradero (2) + Cuartel (1) + Granja (2) caben
 	# en los 5 del Nucleo sin esperar a una Casa. Solo donde hay Impuesto
 	# (`needs: tithe`): en Constructor el Cuartel llega por el Cuartel General.
-	{"kind": "build", "id": "barracks", "count": 1, "needs": "tithe", "why": "OBJ_WHY_BARRACKS"},
+	# `eager`: si se puede pagar ya (con los tablones hechos), va antes que
+	# cualquier paso de apoyo. Sin esto la Granja (comida en negativo), una Casa
+	# (gente al tope) y la Mina se le colaban delante y el Cuartel salia el
+	# sexto (ronda de pruebas de la 1.0, 2026-10-17).
+	{"kind": "build", "id": "barracks", "count": 1, "needs": "tithe", "eager": true, "why": "OBJ_WHY_BARRACKS"},
 	# La gente come comida (2026-10-04): la Granja va justo despues del primer
 	# aserradero (y del Cuartel), antes de que se acabe la comida de salida.
 	{"kind": "build", "id": "farm", "count": 1, "why": "OBJ_WHY_FARM"},
@@ -188,6 +192,12 @@ static func _support_or(target: Dictionary) -> Dictionary:
 	var unclog: Dictionary = _unclog_step(target)
 	if not unclog.is_empty():
 		return unclog
+	# Lo que da de comer en ruinas, antes que el taller: el taller puede ser
+	# justo ese edificio (los tablones del Cuartel temprano salen del Aserradero,
+	# y uno en ruinas no los fabrica). Ronda de pruebas de la 1.0, 2026-10-17.
+	var repair: Dictionary = _repair_step()
+	if not repair.is_empty():
+		return repair
 	# Lo que el paso pide del taller va antes que cualquier otra cosa: sin
 	# fabricarlo, juntar oro no acerca al paso.
 	var make: Dictionary = make_step_for(target)
@@ -214,6 +224,10 @@ static func _support_or(target: Dictionary) -> Dictionary:
 					and _workers_for(help) <= PopulationManager.get_free_workers():
 				return help
 		return make
+	# Un paso `eager` de la linea (el Cuartel temprano) que ya se puede pagar y
+	# tiene obreros va tal cual: los apoyos son para cuando falta algo.
+	if bool(target.get("eager", false)) and missing_for(target).is_empty() 			and _workers_for(target) <= PopulationManager.get_free_workers() 			and _food_market_step("food").is_empty():
+		return target
 	var support: Dictionary = _support_step(target)
 	if support.is_empty():
 		return target
@@ -477,10 +491,9 @@ static func _train_progress(entry: Dictionary) -> int:
 ##   4. lo que falta tarda demasiado en llegar: otro productor de ese recurso.
 static func _support_step(target: Dictionary, outer: Dictionary = {}) -> Dictionary:
 	# 0. Lo que da de comer esta en ruinas: repararlo antes que levantar otro.
-	var ruined: Node = _ruined_producer()
-	if ruined != null:
-		return {"kind": "repair", "id": (GridManager.get_building_info(ruined)["data"] as BuildingData).id,
-			"why": "OBJ_WHY_REPAIR"}
+	var repair: Dictionary = _repair_step()
+	if not repair.is_empty():
+		return repair
 	var net: Dictionary = net_rates()
 	# Mientras la gente no come (Fundacion) no hay saldo que vigilar: la linea
 	# empieza por el aserradero, no por una mina que nadie necesita todavia.
@@ -1126,6 +1139,14 @@ static func _ruined_producer() -> Node:
 		if data.is_producer() and BuildingHealth.is_ruined(info["node"]):
 			return info["node"]
 	return null
+
+## "Repara el ..." si hay un productor en ruinas (fuera de la tormenta), o {}.
+static func _repair_step() -> Dictionary:
+	var ruined: Node = _ruined_producer()
+	if ruined == null:
+		return {}
+	return {"kind": "repair", "id": (GridManager.get_building_info(ruined)["data"] as BuildingData).id,
+		"why": "OBJ_WHY_REPAIR"}
 
 static func _first_building(building_id: String) -> Node:
 	for info in GridManager.buildings_view():

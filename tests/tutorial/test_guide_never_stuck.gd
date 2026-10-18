@@ -204,8 +204,14 @@ func test_a_step_already_done_before_getting_there_is_not_asked() -> void:
 	assert_str(TutorialManager.current_step()).is_equal("collect")
 	TutorialManager.note_guide_fact("collected")
 	assert_str(TutorialManager.current_step()).is_equal("open_barracks")
-	_place(BARRACKS, Vector2i(2, 10))
+	# El Cuartel tiene paso de espera (wait_barracks): al ponerlo empieza su obra
+	# (ProductionManager la marca al oir building_placed) y hasta acabarla no se
+	# pide la Granja.
+	var barracks := _place(BARRACKS, Vector2i(2, 10), false)
 	EventBus.building_placed.emit(BARRACKS, Vector2i(2, 10))
+	assert_str(TutorialManager.current_step()).is_equal("wait_barracks")
+	barracks.remove_meta("under_construction")
+	EventBus.construction_completed.emit(barracks)
 	assert_str(TutorialManager.current_step()).is_equal("open_farm")
 	_place(FARM, Vector2i(10, 2))
 	EventBus.building_placed.emit(FARM, Vector2i(10, 2))
