@@ -592,6 +592,8 @@ func _connect_events() -> void:
 	# Final Audit.
 	EventBus.final_audit_summoned.connect(_on_final_audit_summoned)
 	EventBus.storm_halted_forever.connect(_on_storm_halted_forever)
+	# Volverse el Imperio: una isla tomada suena como un ascenso (sin sonido nuevo).
+	EventBus.island_conquered.connect(func(_i): play_sfx("rank_up"))
 	# La Tormenta: el ambiente sigue a la fase y cada cambio relevante suena.
 	EventBus.storm_phase_changed.connect(_on_storm_phase_changed)
 	# Dia y noche (DayClock): de noche cambia el ambiente, nada mas.

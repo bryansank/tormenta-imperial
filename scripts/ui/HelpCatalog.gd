@@ -177,6 +177,13 @@ const ENTRIES := {
 		"title": "HELP_T_CAMPAIGNS", "body": "HELP_B_CAMPAIGNS", "target": ""},
 	"final_gate": {"kind": "tip", "cat": CAT_ARMY, "basic": true,
 		"title": "HELP_T_FINAL_GATE", "body": "HELP_B_FINAL_GATE", "target": "", "needs": "final_audit"},
+	# ── Volverse el Imperio (feat/volverse-imperio, docs/06) ──
+	# La pagina "El archipielago" esta en el indice (solo donde hay asedio); el
+	# consejo sale al empezar la fase (EmpireManager, al ganar el Ataque Final).
+	"guide_empire": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_EMPIRE", "body": "HELP_B_EMPIRE", "target": "", "needs": "final_audit"},
+	"empire": {"kind": "tip", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_EMPIRE", "body": "HELP_B_EMPIRE", "target": "", "needs": "final_audit"},
 	# ── Topes y mejoras (2026-10-17, rama feat/topes-mejoras-ayuda) ──
 	# Paginas con numeros: `dyn` = el cuerpo lo escribe BuildingHelpText leyendo
 	# GameConfig (topes por era, multiplicadores de mejora, repuestos, torres,

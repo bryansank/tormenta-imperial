@@ -1004,7 +1004,8 @@ func can_launch_to(party: Dictionary, offer: Dictionary) -> Dictionary:
 		return check
 	# Tres campanas: dominio puro. Solo tropa del medio de la campana, y de esa
 	# solo la que puede pegar a ese medio (el bombardero no va a la de aire).
-	if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN:
+	# Volverse el Imperio: cada mision de conquista es de un solo medio, igual.
+	if String(offer.get("kind", "")) in [ExpeditionGeneratorScript.KIND_CAMPAIGN, ExpeditionGeneratorScript.KIND_CONQUEST]:
 		var domain: String = String(offer.get("domain", "land"))
 		for unit_id in party:
 			if int(party[unit_id]) <= 0:
@@ -1248,7 +1249,7 @@ func _resolve_expedition(result: int) -> void:
 	# intentar otra vez) o deja paso a la siguiente tras el enfriamiento. Con un
 	# combate ganado ya se cobro botin: si volviera entera, abandonar tras el
 	# primero y relanzar seria repetir botin gratis.
-	if not _expedition.offer.is_empty() and not _expedition.is_campaign():
+	if not _expedition.offer.is_empty() and not _expedition.is_campaign() and not _expedition.is_conquest():
 		var spent: bool = result == Expedition.RESULT_WON or int(summary.get("nodes_cleared", 0)) > 0
 		_publish_sortie_events(_sorties.finish(_expedition.offer, spent,
 			_now(), _sortie_cooldown(_expedition.kind)))
@@ -1291,6 +1292,11 @@ func _resolve_expedition(result: int) -> void:
 		_last_result["campaign_domain"] = campaign_domain
 		_last_result["campaign_mission"] = campaign_mission
 		_last_result["campaign_boss"] = ExpeditionGeneratorScript.campaign_is_boss_mission(campaign_domain, campaign_mission)
+	# Volverse el Imperio: de que isla y que mision volvia la columna. EmpireManager
+	# lo lee al oir expedition_ended y apunta el progreso (y la isla, si cae).
+	if _expedition.is_conquest():
+		_last_result["conquest_island"] = _expedition.conquest_island()
+		_last_result["conquest_mission"] = _expedition.conquest_mission()
 
 	_expedition = null
 	_clear_draft()
@@ -1355,7 +1361,11 @@ func sortie_preview(offer: Dictionary, party: Dictionary) -> Dictionary:
 		"can_auto": String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_RAID \
 			and Rules.can_auto_resolve(mine, enemy),
 		# Tres campanas: de que campana es y si es la del jefe.
-		"campaign_domain": String(offer.get("domain", "")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN else "",
+		# (Tambien el medio de una mision de conquista: la ficha dice donde es.)
+		"campaign_domain": String(offer.get("domain", "")) if String(offer.get("kind", "")) in \
+			[ExpeditionGeneratorScript.KIND_CAMPAIGN, ExpeditionGeneratorScript.KIND_CONQUEST] else "",
+		# Volverse el Imperio: la isla, y si esta mision es la que la toma.
+		"conquest_island": String(offer.get("island", "")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CONQUEST else "",
 		"campaign_boss": String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN \
 			and ExpeditionGeneratorScript.campaign_is_boss_mission(String(offer.get("domain", "")), int(offer.get("mission", 0))),
 	}
@@ -1705,6 +1715,31 @@ func launch_campaign_mission(domain: String, party: Dictionary) -> bool:
 	_clear_draft()
 	_expedition_followups = []
 	_publish_campaign_events(_campaigns.mark_all_seen())
+	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
+	enter_current_node()
+	return true
+
+## Volverse el Imperio (feat/volverse-imperio): saca la columna a una mision de
+## conquista. La oferta y su candado los da EmpireManager (quien llama); aqui
+## solo las reglas de siempre (can_launch_to: tropa en casa, tope, dominio puro).
+## Si la columna pierde o abandona, la mision sigue ahi con el mismo mapa.
+func launch_conquest_mission(offer: Dictionary, party: Dictionary) -> bool:
+	if String(offer.get("kind", "")) != ExpeditionGeneratorScript.KIND_CONQUEST:
+		return false
+	if not bool(can_launch_to(party, offer).get("ok", false)):
+		return false
+	var committed: Dictionary = {}
+	for unit_id in party:
+		if int(party[unit_id]) > 0:
+			committed[String(unit_id)] = int(party[unit_id])
+	_expedition = ExpeditionScript.create_sortie(_next_expedition_id, offer, committed, _read_morale())
+	if _expedition.map.is_empty():
+		_expedition = null
+		return false
+	_next_expedition_id += 1
+	_morale_snapshot = _expedition.morale_snapshot
+	_clear_draft()
+	_expedition_followups = []
 	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
 	enter_current_node()
 	return true

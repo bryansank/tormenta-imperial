@@ -480,6 +480,10 @@ static func sortie_map(offer: Dictionary) -> Array:
 		KIND_CAMPAIGN:
 			# Las tres campanas (feat/tres-campanas): dominio puro, nunca costa mixta.
 			return campaign_mission_map(offer)
+		KIND_CONQUEST:
+			# Volverse el Imperio (feat/volverse-imperio): una mision de conquista
+			# de una isla vecina, dominio puro como las campanas.
+			return _conquest().mission_map(offer)
 	if not map.is_empty() and offer_is_coastal(offer):
 		make_coastal(map, seed_value, era)
 	return map
@@ -589,6 +593,8 @@ static func map_has_water(map: Array) -> bool:
 
 ## La clave de Tr con el nombre de la oferta.
 static func offer_name_key(offer: Dictionary) -> String:
+	if String(offer.get("kind", "")) == KIND_CONQUEST:
+		return _conquest().mission_name_key(String(offer.get("island", "")), int(offer.get("mission", 0)))
 	if String(offer.get("kind", "")) == KIND_CAMPAIGN:
 		return campaign_mission_name_key(String(offer.get("domain", "land")), int(offer.get("mission", 0)))
 	if String(offer.get("kind", "")) == KIND_RAID:
@@ -760,6 +766,14 @@ static func layers_of(map: Array) -> Array:
 # medias y repetir no da botin dos veces.
 
 const KIND_CAMPAIGN := "campaign"
+## Volverse el Imperio (feat/volverse-imperio): mision de conquista de una isla
+## vecina. El mapa lo hace scripts/empire/ConquestGenerator.gd.
+const KIND_CONQUEST := "conquest"
+
+## Cargado al usarse (no preload): ConquestGenerator usa esta clase y asi no hay
+## ciclo de carga.
+static func _conquest() -> GDScript:
+	return load("res://scripts/empire/ConquestGenerator.gd")
 ## Que tablero lleva el nodo (Expedition.current_terrain lo lee).
 const TERRAIN_KIND_SEA := "sea"
 const TERRAIN_KIND_AIR := "air"

@@ -115,6 +115,10 @@ func _autosave_triggers() -> Array:
 		[EventBus.storm_phase_changed, 2],
 		[EventBus.production_collected, 2],
 		[EventBus.crop_planted, 2],
+		# Volverse el Imperio: una mision o una isla ganada, y cada cobro.
+		[EventBus.conquest_mission_won, 3],
+		[EventBus.empire_tribute_paid, 1],
+		[EventBus.empire_phase_started, 0],
 	]
 
 func _ready() -> void:
@@ -548,6 +552,8 @@ func _new_game() -> void:
 	ProductionManager.reset()
 	RankManager.reset()
 	ContractManager.reset()
+	# Volverse el Imperio (clave "empire"): partida nueva, archipielago sin tocar.
+	EmpireManager.reset()
 	_apply_pending_identity()
 	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
 	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
@@ -763,6 +769,12 @@ func _load_game() -> void:
 	var contracts_data: Variant = data.get("contracts", {})
 	ContractManager.load_save_data(contracts_data if contracts_data is Dictionary else {})
 
+	# Volverse el Imperio (feat/volverse-imperio). Sin la clave (partida anterior
+	# a la fase) nada empezado; si esa partida ya habia ganado el Ataque Final,
+	# la fase empieza al terminar la carga (EmpireManager, game_load_completed).
+	var empire_data: Variant = data.get("empire", {})
+	EmpireManager.load_save_data(empire_data if empire_data is Dictionary else {})
+
 	# La bolsa es una sola y su tope depende de la era, de los almacenes y del arbol
 	# tecnologico: hasta que los tres no estan restaurados no se sabe cuanto cabe. Por
 	# eso el recorte va aqui y no junto a los recursos. Una partida guardada cuando el
@@ -906,6 +918,7 @@ func _write_save() -> void:
 	data["game_mode"] = GameMode.get_save_data()
 	data["rank"] = RankManager.get_save_data()
 	data["contracts"] = ContractManager.get_save_data()
+	data["empire"] = EmpireManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -1019,6 +1032,8 @@ func clear_save() -> void:
 	ProductionManager.reset()
 	RankManager.reset()
 	ContractManager.reset()
+	# Volverse el Imperio (clave "empire"): partida nueva, archipielago sin tocar.
+	EmpireManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null
@@ -1065,6 +1080,8 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	ProductionManager.reset()
 	RankManager.reset()
 	ContractManager.reset()
+	# Volverse el Imperio (clave "empire"): partida nueva, archipielago sin tocar.
+	EmpireManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null

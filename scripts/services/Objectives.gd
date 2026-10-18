@@ -143,7 +143,15 @@ static func next_step() -> Dictionary:
 		return {"kind": "sandbox", "why": "OBJ_WHY_SANDBOX_BUILT"}
 
 	# ── Despues del final ──
+	# Volverse el Imperio (feat/volverse-imperio): ganado el Ataque Final, lo
+	# siguiente es la proxima conquista del archipielago (su edificio, tropa de
+	# su medio o la mision); con todas las islas tuyas, mundo libre.
 	if StormManager.is_halted():
+		var conquest: Dictionary = empire_step()
+		if not conquest.is_empty():
+			return _support_or(conquest) if String(conquest["kind"]) != "conquest" else conquest
+		if EmpireManager.is_active() and EmpireManager.all_conquered():
+			return {"kind": "sandbox", "why": "OBJ_WHY_EMPIRE_DONE"}
 		return {"kind": "sandbox", "why": "OBJ_WHY_SANDBOX"}
 
 	# ── El asedio ──
@@ -487,6 +495,28 @@ static func campaign_need_step(domain: String, why: String) -> Dictionary:
 			var away: int = int(CombatManager.get_units_away().get(unit_id, 0))
 			return _army_step(unit_id, _army_count(unit_id) - away + (wanted - home), "OBJ_WHY_CAMPAIGN_UNITS", "train")
 	return {"kind": "campaign", "id": domain, "why": why}
+
+## Volverse el Imperio (feat/volverse-imperio): la siguiente conquista. {} si
+## la fase no esta activa o no queda isla que atacar. Pide, por orden, el
+## edificio del medio de la mision que toca, tropa de ese medio, o la mision
+## ({"kind": "conquest", "id": isla}).
+static func empire_step() -> Dictionary:
+	if not EmpireManager.is_active():
+		return {}
+	var island: String = EmpireManager.next_target()
+	if island == "":
+		return {}
+	var domain: String = EmpireManager.next_domain(island)
+	if EmpireManager.lock_reason(island) == "CAMP_LOCK_BUILDING":
+		return {"kind": "build", "id": CombatManager.campaign_building(domain), "count": 1, "why": "OBJ_WHY_CONQUEST_BUILDING"}
+	var home: int = CombatManager.roster_size(EmpireManager.units_home(island))
+	var wanted: int = maxi(1, GameConfig.campaign_suggested_party)
+	if home < wanted and not CombatManager.has_active_expedition():
+		var unit_id: String = String(GameConfig.campaign_suggested_unit.get(domain, "infantry"))
+		if ArmyManager.is_unlocked(unit_id):
+			var away: int = int(CombatManager.get_units_away().get(unit_id, 0))
+			return _army_step(unit_id, _army_count(unit_id) - away + (wanted - home), "OBJ_WHY_CONQUEST_UNITS", "train")
+	return {"kind": "conquest", "id": island, "why": "OBJ_WHY_CONQUEST"}
 
 ## La segunda linea de ¿QUE HACER? (como sortie_step): la siguiente mision de
 ## alguna campana que ya se puede jugar con la tropa que hay en casa. {} si no
@@ -1500,6 +1530,10 @@ static func describe(step: Dictionary) -> Dictionary:
 				maxi(0, CombatManager.campaign_won(domain)))), Tr.t("CAMP_NAME_" + domain.to_upper())]
 		"contract":
 			title = Tr.t("OBJ_DO_CONTRACT") % Tr.t("CONTRACT_SRC_" + String(step.get("id", "")).to_upper())
+		"conquest":
+			var island: String = String(step.get("id", ""))
+			title = Tr.t("OBJ_DO_CONQUEST") % [Tr.t(ConquestGenerator.island_name_key(island)),
+				Tr.t(ConquestGenerator.mission_name_key(island, maxi(0, EmpireManager.next_mission(island))))]
 		"resummon":
 			title = Tr.t("OBJ_DO_RESUMMON")
 		_:
@@ -1510,6 +1544,8 @@ static func describe(step: Dictionary) -> Dictionary:
 					title = Tr.t("OBJ_DO_SANDBOX_MODE")
 				"OBJ_WHY_RUN_OVER":
 					title = Tr.t("LBL_RUN_OVER_TITLE")
+				"OBJ_WHY_EMPIRE_DONE":
+					title = Tr.t("OBJ_DO_EMPIRE_DONE")
 				_:
 					title = Tr.t("OBJ_DO_SANDBOX")
 	var why: String = String(step.get("why", ""))
@@ -1594,6 +1630,15 @@ static func blocker(step: Dictionary) -> String:
 				return Tr.t("MSG_NO_UNITS")
 			var check: Dictionary = CombatManager.can_launch(party)
 			return "" if bool(check["ok"]) else Tr.t(String(check["reason"]))
+		"conquest":
+			var island: String = String(step.get("id", ""))
+			var emp_lock: String = EmpireManager.lock_text(island)
+			if emp_lock != "":
+				return emp_lock
+			var emp_domain: String = EmpireManager.next_domain(island)
+			if emp_domain != "" and EmpireManager.units_home(island).is_empty():
+				return Tr.t("CAMP_NO_UNITS_" + emp_domain.to_upper())
+			return ""
 		"campaign":
 			var domain: String = String(step.get("id", "land"))
 			var lock_text: String = campaign_lock_text(domain)

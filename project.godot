@@ -60,6 +60,7 @@ BeckettRuntime="*res://scripts/services/BeckettGate.gd"
 DeviceProfile="*res://scripts/services/DeviceProfile.gd"
 RankManager="*res://scripts/services/RankManager.gd"
 ContractManager="*res://scripts/services/ContractManager.gd"
+EmpireManager="*res://scripts/services/EmpireManager.gd"
 
 [beckett]
 
