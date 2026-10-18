@@ -153,6 +153,8 @@ collected ([02-economy.md](02-economy.md)).
 |--------|--------|------------|-------------|
 | `resource_unlocked` | `resource_name: String` | ResourceManager | ResourceHUD, ConstructionMenu, MarketPanel, ArmyPanel, AudioManager |
 | `era_advanced` | `new_era: int` | ProgressionManager | ProgressPanel, ResourceManager, ArmyPanel, AudioManager |
+| `core_upgrade_started` | `to_level: int` | ProgressionManager (1.2, Núcleo con niveles) | BuildingInfoPanel, GameManager (autosave) |
+| `core_level_changed` | `level: int` | ProgressionManager (al terminar la obra y al cargar) | ConstructionMenu (topes y candados "Núcleo N") |
 | `milestone_completed` | `milestone_id: String` | ProgressionManager, TechTreeManager | ProgressPanel, NotificationPanel, AudioManager |
 | `phase_advanced` | `new_phase: int` | ProgressionManager | MarketPanel, NotificationPanel, StormManager |
 | `victory_achieved` | `stats: Dictionary` | ProgressionManager | VictoryScreen, AudioManager |
@@ -215,7 +217,7 @@ Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
 | `campaign_mission_won` | domain: String, mission: int, is_boss: bool | CombatManager | RankManager, line_probe_player |
 | `campaign_completed` | domain: String | CombatManager | ProgressionManager (`try_summon_final_audit`), line_probe_player |
 | `sortie_loot_gained` | `loot: Dictionary` | CombatManager | (sin oyentes: el parte lo lee de `get_last_result()`) |
-| `blueprint_unlocked` | `building_id: String` | CombatManager | (para el candado de planos de las ramas de edificios) |
+| `blueprint_unlocked` | `building_id: String` | CombatManager (`grant_blueprints`, botín, misión ganada) | ConstructionMenu (quita el candado "Plano"); aviso `NOTIF_BLUEPRINT_GAINED` |
 | `enemy_routed` | — | CombatManager | BattleScreen |
 | `encounter_closed` | — (end of `CombatManager.end_encounter()`: the report was read) | CombatManager | NotificationPanel, ProgressPanel, RankPanel, HelperPanel (release the notices held during the fight; they re-check `is_board_open()`, the next siege wave may have opened another board) |
 

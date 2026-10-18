@@ -255,18 +255,37 @@ No se sube de era sin la base de la anterior en pie. La lista de **CONSTRUIR** e
 el coste de cada tarjeta (en rojo si no te llega) y, si tocas una bloqueada, te dice
 todo lo que falta.
 
-### Límites
+### Límites: los sube el Núcleo (1.2)
 
-Aserradero 5 · Mina de oro 4 · Fundición 3 · Refinería 2 · Almacén 5 · Mercado 1 ·
-Laboratorio 1 · Granja 6 · Muelle de pesca 3 · Torre 6 · Casa 10 · Estatua 5 · Fuente 5 · **Cuartel
-General 1** · Cuartel, Astillero, Aeródromo, jardín y carretera sin límite.
+Cada edificio tiene un máximo, y **lo sube el Núcleo**. Tócalo y pulsa **SUBIR NÚCLEO**:
+tiene 5 niveles y cada uno deja tener más de cada cosa y abre edificios nuevos. Mientras
+sube, el Núcleo sigue trabajando.
+
+| Núcleo | Cuándo | Cuesta | Qué da (ejemplos) |
+|-------:|--------|--------|-------------------|
+| 1 | al empezar | — | Aserradero 4, Mina de oro 3, Casa 8, Granja 4, Almacén 3, Torre 2 |
+| 2 | con aserradero, mina, casa y almacén | 250 oro, 150 madera, 10 tablones | Aserradero 5, Casa 10, Almacén 5, Fundición 3; abre Silo, Taberna, Carpintería, Faro y Muelle de pesca |
+| 3 | en la era 2, con un Cuartel | 600 oro, 250 acero, 200 madera, 12 vigas | Aserradero 8, Casa 15, Fundición 5, Torre 6 |
+| 4 | en la era 3 | 1000 oro, 400 acero, 250 petróleo, 12 combustible y 6 repuestos | Aserradero 10, Casa 20, Refinería 4; abre el Depósito de combustible |
+| 5 | con el Cuartel General | lo grande (y 12 repuestos) | uno más de lo que produce, Casa 22 |
+
+Siempre uno: Mercado, Laboratorio, Cuartel General y Faro. Sin límite: Cuartel,
+Astillero, Aeródromo, decoraciones y carreteras. Cuando una tarjeta de CONSTRUIR dice
+**Al máximo**, debajo te dice a qué nivel subir el Núcleo para tener más; y ¿QUÉ HACER?
+te lo pide cuando un límite te frena.
+
+**Planos.** Los edificios avanzados de la 1.2 (Enfermería, Herrería, Chatarrería, Casa
+de cambio, Central diésel) no se construyen sin su **plano**, y el plano se gana en una
+misión de campaña: Enfermería en la misión 3 de Tierra, Herrería en la 5 de Tierra,
+Chatarrería en la 2 de Mar, Casa de cambio en la 3 de Mar y Central diésel en la 2 de
+Aire. La misión lo enseña antes de salir; en CONSTRUIR llevan un candado "Plano".
 
 ### Mejorar
 
 Solo se puede mejorar lo que gana algo al subir: los que producen (×1,6 y ×2,5), la
 vivienda (más sitio), el almacén (+250), las decoraciones (más moral) y el Cuartel
-General. El Cuartel, la Torre, la carretera y el Núcleo no tienen mejora. El panel te
-dice con números qué da el siguiente nivel.
+General. El Cuartel, la Torre y la carretera no tienen mejora; el Núcleo tiene sus
+propios 5 niveles (arriba). El panel te dice con números qué da el siguiente nivel.
 
 ---
 

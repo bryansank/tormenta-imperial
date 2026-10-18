@@ -881,3 +881,34 @@ el Zepelín con solo cazas); que la espera tras el CG nv3 no sea "jugar las tres
 campañas de golpe". Palancas, por orden: `campaign_defs` (misiones y combates),
 `campaign_level_step`, `campaign_boss_extra_scale` / `campaign_boss_heavies`,
 `campaign_mission_cooldown`.
+
+## 15. El Núcleo con niveles y los planos (1.2, rama `feat/nucleo-y-planos`, sin medir)
+
+El Núcleo sube de 1 a 5 y **sustituye a los topes por era** (tabla y contrato en
+[03-buildings.md](03-buildings.md) §"Núcleo y planos"). La línea principal
+(`Objectives.LINE`) **no cambia**: con el Núcleo 1 caben la Fundición, la Refinería, el
+Mercado, el Laboratorio, el CG y 2 torres, y con el Núcleo 2 los 5 almacenes del CG
+nivel 3, así que ningún paso de era espera al Núcleo. Lo que cambia es el ritmo de
+**cuántos** productores y casas hay: el Núcleo 1 deja 4 aserraderos, 3 minas, 8 casas y
+4 granjas (la era 1 de la 1.1 dejaba 5 / 4 / 10 / 6).
+
+¿QUÉ HACER? pide subir el Núcleo (`{"kind": "core"}`, `Objectives.core_step_for_limit`)
+cuando un tope frena un paso: un productor de lo que falta sin hueco
+(`_producer_step`, antes de mejorar el de nivel más bajo), las casas al tope
+(`house_room_step`) o una entrada de la línea. Solo si el Núcleo puede apuntar al
+siguiente nivel (sin obra, no al máximo, requisitos cumplidos). El jugador de la sonda
+lo da (`ProgressionManager.start_core_upgrade()`, el Mercado si falta algo).
+
+**Qué mirar en la ronda de la 1.2** (diez semillas, `--no-dev`):
+
+- que la era 1 no se alargue por el N1 más corto (sobre todo comida: 4 granjas y el
+  Muelle cerrado hasta el N2); si se alarga, subir el N1 de `farm` / `sawmill` o bajar
+  el coste del N2;
+- en qué minuto llega cada nivel y cuántos repuestos hay al pedir el N4 (6) y el N5
+  (12): si el N4 se queda esperando repuestos mucho tiempo, bajar `core_level_costs[4]`
+  o subir `campaign_mission_parts`;
+- que la victoria siga en 4-6 h.
+
+Palancas: `core_level_limits`, `core_level_costs`, `core_level_durations`,
+`core_level_requirements`, `core_level_unlocks`. Los planos (`blueprint_sources`) solo
+abren edificios opcionales: no tocan la línea.
