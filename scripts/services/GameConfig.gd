@@ -708,6 +708,11 @@ var ui_touch_controls := "auto"
 ## Idioma de la interfaz ("es" / "en"). Vive en settings.cfg y no en la partida:
 ## es del dispositivo, sobrevive a "partida nueva" y se aplica antes de pintar nada.
 var ui_locale := "es"
+## Orientacion de la pantalla en movil (rediseno 2026-10, docs/28 §4): el
+## juego se disena y se juega en horizontal; vertical es una opcion de Ajustes
+## que solo tiene que funcionar. Del dispositivo: vive en settings.cfg.
+const ORIENTATIONS := ["landscape", "portrait"]
+var ui_orientation := "landscape"
 
 # ── interfaz-dispositivos (docs/21-interfaz-y-dispositivos.md) ──
 # Todo del dispositivo, en settings.cfg [interfaz]: una tablet y un PC del mismo
@@ -888,6 +893,9 @@ func load_user_settings() -> void:
 		ui_locale = locale
 	Tr.set_locale(ui_locale)
 	_load_interface_settings(cf)
+	var orient := String(cf.get_value("ui", "orientation", ui_orientation))
+	ui_orientation = orient if orient in ORIENTATIONS else "landscape"
+	apply_orientation()
 
 ## [interfaz]: cada valor se valida; uno desconocido vuelve al de serie en vez
 ## de dejar la interfaz en un estado que nadie eligio.
@@ -956,6 +964,7 @@ func save_user_settings() -> void:
 	if cf.has_section_key("ui", "touch_opacity"):
 		cf.erase_section_key("ui", "touch_opacity")
 	cf.set_value("ui", "locale", ui_locale)
+	cf.set_value("ui", "orientation", ui_orientation)
 	cf.set_value("interfaz", "device_profile", ui_device_profile)
 	cf.set_value("interfaz", "ui_scale_pct", ui_scale_pct)
 	cf.set_value("interfaz", "text_size", ui_text_size)
@@ -1049,6 +1058,25 @@ func notice_real_touch() -> void:
 
 func real_touch_seen() -> bool:
 	return _real_touch_seen
+
+## Cambia la orientacion, la guarda y la aplica (solo en movil: en PC la
+## ventana manda).
+func set_orientation(orient: String) -> void:
+	if not orient in ORIENTATIONS:
+		orient = "landscape"
+	if ui_orientation == orient:
+		return
+	ui_orientation = orient
+	save_user_settings()
+	apply_orientation()
+
+## Gira la pantalla en Android/iOS: horizontal o vertical, siguiendo el sensor
+## dentro de esa orientacion. En escritorio no hace nada.
+func apply_orientation() -> void:
+	if not (OS.has_feature("android") or OS.has_feature("ios") or OS.has_feature("mobile")):
+		return
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_PORTRAIT
+		if ui_orientation == "portrait" else DisplayServer.SCREEN_SENSOR_LANDSCAPE)
 
 ## Cambia el modo, lo guarda y anuncia el estado resuelto para que los controles
 ## aparezcan o desaparezcan sin reiniciar.

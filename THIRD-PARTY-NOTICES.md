@@ -171,10 +171,21 @@ repository and inside every release zip (folder `licenses/fonts/`).
 | Caveat | © 2014 The Caveat Project Authors | SIL Open Font License 1.1 ([Appendix C](#appendix-c--sil-open-font-license-11)) | `assets/fonts/OFL-Caveat.txt` |
 | Black Ops One | © 2022 The Black-Ops Project Authors | SIL Open Font License 1.1 | `assets/fonts/OFL-BlackOpsOne.txt` |
 | Rajdhani (Medium, SemiBold, Bold) | © 2014 Indian Type Foundry | SIL Open Font License 1.1 | `assets/fonts/OFL-Rajdhani.txt` |
+| Baloo 2 (variable) | © 2019 The Baloo 2 Project Authors | SIL Open Font License 1.1 | `assets/fonts/baloo_2/OFL.txt` |
+| Nunito Sans (variable) | © 2016 The Nunito Sans Project Authors | SIL Open Font License 1.1 | `assets/fonts/nunito_sans/OFL.txt` |
+| Lilita One | © 2011 Juan Montoreano, Reserved Font Name "Lilita" | SIL Open Font License 1.1 | `assets/fonts/lilita_one/OFL.txt` |
+| Nunito (variable) | © 2014 The Nunito Project Authors | SIL Open Font License 1.1 | `assets/fonts/nunito/OFL.txt` |
+| Fredoka (variable) | © 2016 The Fredoka Project Authors | SIL Open Font License 1.1 | `assets/fonts/fredoka/OFL.txt` |
+| Inter (variable) | © 2020 The Inter Project Authors | SIL Open Font License 1.1 | `assets/fonts/inter/OFL.txt` |
 
 The OFL permits embedding these fonts in this game. The font files themselves
-remain under the OFL and may not be sold on their own. All four fonts are
-distributed unmodified. Source: Google Fonts.
+remain under the OFL and may not be sold on their own. All fonts are
+distributed unmodified. Source: Google Fonts (`github.com/google/fonts`, `ofl/`).
+
+The six fonts in subfolders come from the interface redesign (2026-10,
+`docs/28-guia-ui.md`): Baloo 2 + Nunito Sans is the chosen pair; Lilita One,
+Nunito, Fredoka and Inter were the other two candidate pairs and are to be
+removed from `assets/fonts/` (and from this table) when the redesign lands.
 
 ## 4. Audio (`assets/audio/`)
 
