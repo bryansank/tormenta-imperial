@@ -57,7 +57,12 @@ static func C(slot: int, d := 0.0) -> Color:
 ## borde, pero el suelo es un CAMPO seguido que llega al horizonte, sin losetas
 ## ni juntas: no se ve ninguna casilla. Y menos cajas que el tablero (un plano
 ## para el campo en vez de 64 losetas), asi que no cuesta mas.
-static func build(board: Vector2i, seed_value: int, simple := false, scene := SCENE_LAND, front := false) -> ArrayMesh:
+##
+## `terrain` (mar y aire, 1.1): casilla -> "land" / "water" / "shore"
+## (BoardLayout3D.terrain_of; vacio = todo tierra). El agua es la misma lamina
+## de mar de la playa, mas baja que las losetas y con espuma donde toca tierra;
+## la orilla, arena. Todo dentro de la misma malla: ni una llamada de dibujo mas.
+static func build(board: Vector2i, seed_value: int, simple := false, scene := SCENE_LAND, front := false, terrain: Dictionary = {}) -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var mk := MeshKit.new()
@@ -65,7 +70,7 @@ static func build(board: Vector2i, seed_value: int, simple := false, scene := SC
 	var w := ext.x + MARGIN * 2.0
 	var d := ext.y + MARGIN * 2.0
 	if front:
-		_field(mk, board, ext, rng, simple, scene)
+		_field(mk, board, ext, rng, simple, scene, terrain)
 		_edges(mk, board, ext, rng, simple, scene)
 		match scene:
 			SCENE_BEACH:
@@ -73,7 +78,7 @@ static func build(board: Vector2i, seed_value: int, simple := false, scene := SC
 			SCENE_FOREST:
 				_forest(mk, ext, rng, simple)
 		_far_trees(mk, ext, rng, simple, scene)
-		_divider(mk, ext, rng, simple, scene)
+		_divider(mk, ext, rng, simple, scene, board, terrain)
 		return mk.commit()
 
 	# La mesa de guerra: madera oscura, muy grande, para que la maqueta no flote.
@@ -85,7 +90,7 @@ static func build(board: Vector2i, seed_value: int, simple := false, scene := SC
 	# Zocalo oscuro bajo las casillas: entre loseta y loseta se ve la junta.
 	mk.box(Vector3(0, -0.13, 0), Vector3(ext.x + 0.16, 0.05, ext.y + 0.16), C(S.IRON, 0.1))
 
-	_tiles(mk, board, rng, simple)
+	_tiles(mk, board, rng, simple, terrain)
 	_edges(mk, board, ext, rng, simple, scene)
 	match scene:
 		SCENE_BEACH:
@@ -94,7 +99,7 @@ static func build(board: Vector2i, seed_value: int, simple := false, scene := SC
 			_forest(mk, ext, rng, simple)
 	return mk.commit()
 
-static func _tiles(mk, board: Vector2i, rng: RandomNumberGenerator, simple: bool) -> void:
+static func _tiles(mk, board: Vector2i, rng: RandomNumberGenerator, simple: bool, terrain: Dictionary = {}) -> void:
 	var size := Layout.CELL - TILE_GAP
 	# Craters: dos o tres en la tierra de nadie (filas centrales).
 	var craters := {}
@@ -111,6 +116,17 @@ static func _tiles(mk, board: Vector2i, rng: RandomNumberGenerator, simple: bool
 				# Tierra batida: parda y apagada, que no compita con las marcas.
 				col = C(S.STONE, -0.12 if not dark else -0.2).lerp(C(S.WOOD, 0.0), 0.35)
 			col = col.darkened(rng.randf() * 0.04)
+			var kind := Layout.cell_kind(terrain, cell)
+			if kind == Layout.TERRAIN_WATER:
+				_water_tile(mk, board, cell, c, simple, terrain)
+				continue
+			if kind == Layout.TERRAIN_SHORE:
+				# Arena de la orilla, a dos tonos como la hierba.
+				col = C(S.CREAM, -0.12 if not dark else -0.18).darkened(rng.randf() * 0.03)
+				mk.box(c + Vector3(0, -TILE_H * 0.5, 0), Vector3(size, TILE_H, size), col)
+				if not simple and (x + y * 3) % 4 == 0:
+					mk.box(c + Vector3(0.55, 0.03, -0.5), Vector3(0.16, 0.06, 0.12), C(S.STONE, -0.02))
+				continue
 			mk.box(c + Vector3(0, -TILE_H * 0.5, 0), Vector3(size, TILE_H, size), col)
 			if craters.has(cell):
 				# Mancha de tierra quemada con un labio de terrones: pintada en el
@@ -130,10 +146,55 @@ static func _tiles(mk, board: Vector2i, rng: RandomNumberGenerator, simple: bool
 				else:
 					mk.box(c + corner + Vector3(0, 0.03, 0), Vector3(0.14, 0.06, 0.11), C(S.STONE, -0.05))
 
+## Una casilla de mar del tablero: la lamina de agua de la playa (sin junta:
+## el agua de dos casillas vecinas se lee seguida), algo mas baja que las
+## losetas, una onda clara y espuma en los lados que tocan tierra u orilla.
+## Puro y sin rng (la onda sale de la casilla): no cambia el resto del terreno.
+const WATER_COLOR_D := -0.18
+static func _water_tile(mk, board: Vector2i, cell: Vector2i, c: Vector3, simple: bool, terrain: Dictionary) -> void:
+	var top := Layout.WATER_TOP
+	mk.box(c + Vector3(0, top - 0.05, 0), Vector3(Layout.CELL, 0.1, Layout.CELL), C(S.SKY, WATER_COLOR_D - 0.03 * float((cell.x + cell.y) % 2)))
+	if not simple:
+		var off := float((cell.x * 7 + cell.y * 3) % 5) * 0.22 - 0.44
+		mk.flat(c + Vector3(off, top + 0.004, off * 0.6), Vector2(0.62, 0.07), C(S.SKY, 0.08))
+	_foam_edges(mk, board, cell, c, top + 0.012, terrain, false)
+
+## Espuma en los lados de una casilla de agua que dan a tierra u orilla.
+## `flat_only`: tiras planas (la vista frontal) en vez de bordillos.
+static func _foam_edges(mk, board: Vector2i, cell: Vector2i, c: Vector3, y: float, terrain: Dictionary, flat_only: bool) -> void:
+	var half := Layout.CELL * 0.5
+	for d in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+		var n: Vector2i = cell + d
+		if n.x < 0 or n.y < 0 or n.x >= board.x or n.y >= board.y:
+			continue
+		if Layout.is_water(terrain, n):
+			continue
+		var along_x: bool = d.y != 0
+		var p := c + Vector3(float(d.x) * (half - 0.07), y, float(d.y) * (half - 0.07))
+		var sz := Vector2(Layout.CELL, 0.14) if along_x else Vector2(0.14, Layout.CELL)
+		if flat_only:
+			mk.flat(p, sz, C(S.CREAM, 0.1))
+		else:
+			mk.box(p, Vector3(sz.x, 0.03, sz.y), C(S.CREAM, 0.1))
+
+## El agua y la arena del frente: manchas algo mayores que la casilla (sin
+## juntas) encima del campo; el barco flota en ellas igual que en el tablero.
+static func _front_water(mk, board: Vector2i, terrain: Dictionary, y0: float) -> void:
+	for pass_kind in [Layout.TERRAIN_SHORE, Layout.TERRAIN_WATER]:
+		for cell in terrain:
+			if String(terrain[cell]) != pass_kind:
+				continue
+			var c := Layout.cell_to_world(cell, board)
+			if pass_kind == Layout.TERRAIN_SHORE:
+				mk.flat(c + Vector3(0, y0 + 0.016, 0), Vector2(Layout.CELL + 0.5, Layout.CELL + 0.5), C(S.CREAM, -0.14))
+			else:
+				mk.flat(c + Vector3(0, y0 + 0.02, 0), Vector2(Layout.CELL + 0.3, Layout.CELL + 0.3), C(S.SKY, WATER_COLOR_D + 0.02))
+				_foam_edges(mk, board, cell, c, y0 + 0.024, terrain, true)
+
 ## El campo de la vista frontal: hierba seguida hasta el horizonte, la tierra
 ## de nadie batida en medio (una franja parda de bordes irregulares) y craters
 ## donde caigan, no en el centro de ninguna casilla.
-static func _field(mk, board: Vector2i, ext: Vector2, rng: RandomNumberGenerator, simple: bool, scene := SCENE_LAND) -> void:
+static func _field(mk, board: Vector2i, ext: Vector2, rng: RandomNumberGenerator, simple: bool, scene := SCENE_LAND, terrain: Dictionary = {}) -> void:
 	var y0 := -0.11
 	# El campo grande y, encima, el del frente (un poco mas claro): sin peana ni
 	# mesa, el suelo sigue hasta perderse. En la playa el campo acaba en la
@@ -158,13 +219,19 @@ static func _field(mk, board: Vector2i, ext: Vector2, rng: RandomNumberGenerator
 	# Craters sueltos en la tierra de nadie y alguno mas cerca de cada bando.
 	for i in (3 if simple else 6):
 		var c := Vector3(rng.randf_range(-hx + 0.6, hx - 0.6), y0 + 0.012, rng.randf_range(-ext.y * 0.3, ext.y * 0.3))
-		mk.cyl(c, rng.randf_range(0.5, 0.75), 0.02, C(S.WOOD, -0.25), 9)
+		var cr := rng.randf_range(0.5, 0.75)
+		if _wet(terrain, c, board):
+			continue
+		mk.cyl(c, cr, 0.02, C(S.WOOD, -0.25), 9)
 		mk.cyl(c, 0.32, 0.025, C(S.IRON, 0.05), 7)
+	_front_water(mk, board, terrain, y0)
 	if simple:
 		return
 	# Matas sueltas por el campo, a voleo (no en rejilla).
 	for i in 26:
 		var p := Vector3(rng.randf_range(-hx - 1.0, hx + 1.0), y0, rng.randf_range(-ext.y * 0.5 - 1.0, ext.y * 0.5 + 1.0))
+		if _wet(terrain, p, board):
+			continue
 		mk.box(p + Vector3(0, 0.05, 0), Vector3(0.09, 0.1, 0.09), C(S.GREEN, 0.04))
 		mk.box(p + Vector3(0.1, 0.04, 0.05), Vector3(0.07, 0.08, 0.07), C(S.GREEN, -0.02))
 
@@ -305,13 +372,23 @@ static func _forest(mk, ext: Vector2, rng: RandomNumberGenerator, simple: bool) 
 ## linde del bosque. Va a ras de suelo y con huecos: se cruza como cualquier
 ## casilla (las reglas no tienen obstaculos y el decorado no debe insinuarlos).
 ## Corre a lo largo de X por el medio del tablero (entre la fila 3 y la 4).
-static func _divider(mk, ext: Vector2, rng: RandomNumberGenerator, simple: bool, scene: String) -> void:
+## Si un punto del suelo cae en agua u orilla (ahi no van craters ni divisoria).
+static func _wet(terrain: Dictionary, p: Vector3, board: Vector2i) -> bool:
+	if terrain.is_empty():
+		return false
+	var cell := Layout.world_to_cell(p, board)
+	return cell.x >= 0 and Layout.cell_kind(terrain, cell) != Layout.TERRAIN_LAND
+
+static func _divider(mk, ext: Vector2, rng: RandomNumberGenerator, simple: bool, scene: String, board := Vector2i(8, 8), terrain: Dictionary = {}) -> void:
 	var hx := ext.x * 0.5
 	var y0 := -0.11
 	var x := -hx - 2.5
 	while x < hx + 2.5:
 		var seg := rng.randf_range(1.2, 2.2)
 		var z := rng.randf_range(-0.25, 0.25)
+		if _wet(terrain, Vector3(x + seg * 0.5, 0, z), board):
+			x += seg
+			continue
 		match scene:
 			SCENE_BEACH:
 				# Arena mojada y una raya de espuma.

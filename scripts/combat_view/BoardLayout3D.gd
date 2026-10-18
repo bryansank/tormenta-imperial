@@ -100,3 +100,56 @@ static func yaw_towards(a: Vector3, b: Vector3) -> float:
 ## Cuantas casillas separan dos puntos (Manhattan), para elegir la animacion.
 static func cell_distance(a: Vector2i, b: Vector2i) -> int:
 	return absi(a.x - b.x) + absi(a.y - b.y)
+
+# ── El terreno del tablero (mar y aire, 1.1) ─────────────────────────
+#
+# Las reglas (rama de reglas) dan `Encounter.terrain`: casilla -> "land",
+# "water" o "shore"; vacio = todo tierra. La vista solo lo PINTA: que casillas
+# se pueden pisar lo sigue diciendo el modelo (valid_moves). Se lee de forma
+# defensiva (`get`), asi esta vista funciona igual con un Encounter sin terreno.
+
+const TERRAIN_LAND := "land"
+const TERRAIN_WATER := "water"
+const TERRAIN_SHORE := "shore"
+## La lamina de agua de una casilla de mar queda por debajo del suelo de las
+## losetas (y = 0): los barcos flotan en ella (DOMAIN_HEIGHT["sea"]).
+const WATER_TOP := -0.07
+
+## El terreno de un encuentro (copia), o {} si no tiene.
+static func terrain_of(encounter) -> Dictionary:
+	if encounter == null:
+		return {}
+	var t = encounter.get("terrain")
+	return (t as Dictionary).duplicate() if t is Dictionary else {}
+
+static func cell_kind(terrain: Dictionary, cell: Vector2i) -> String:
+	return String(terrain.get(cell, TERRAIN_LAND))
+
+static func is_water(terrain: Dictionary, cell: Vector2i) -> bool:
+	return cell_kind(terrain, cell) == TERRAIN_WATER
+
+static func has_water(terrain: Dictionary) -> bool:
+	for c in terrain:
+		if String(terrain[c]) == TERRAIN_WATER:
+			return true
+	return false
+
+## Altura del suelo de una casilla en la vista: la lamina de agua en el mar,
+## el suelo de siempre en tierra y en la orilla.
+static func ground_y(terrain: Dictionary, cell: Vector2i) -> float:
+	return WATER_TOP if is_water(terrain, cell) else 0.0
+
+## Lo que una pieza no puede cruzar al DIBUJAR su ruta: un barco no pasa por
+## tierra (solo agua y orilla). Las de tierra y aire no tienen nada que evitar
+## aqui (el aire vuela derecho, ver UnitToy3D.fly_along). Las reglas ya
+## decidieron a donde llega; esto solo hace que el dibujo no corte por la playa.
+static func route_blocked(terrain: Dictionary, domain: String, board: Vector2i) -> Dictionary:
+	var out := {}
+	if domain != "sea" or not has_water(terrain):
+		return out
+	for y in board.y:
+		for x in board.x:
+			var c := Vector2i(x, y)
+			if cell_kind(terrain, c) == TERRAIN_LAND:
+				out[c] = true
+	return out

@@ -98,7 +98,8 @@ const HINT_PRIO := 12
 static var _shadow_mat: Material = null
 
 ## `info`: uid, unit_id, side, hp, max_hp, domain, boss, crew, team_color,
-## regiment (aspecto del regimiento, RegimentLook.resolve; vacio = sin nada).
+## regiment (aspecto del regimiento, RegimentLook.resolve; vacio = sin nada),
+## calm (calidad sencilla: los barcos y aviones no se mecen en reposo).
 func setup(info: Dictionary) -> void:
 	uid = int(info.get("uid", -1))
 	unit_id = String(info.get("unit_id", ""))
@@ -144,8 +145,11 @@ func setup(info: Dictionary) -> void:
 		if nest != null:
 			nest.name = "CrewNest"
 			add_child(nest)
-	if domain != "land":
+	# Aire: sombra en el suelo (sin ella no se sabe en que casilla esta). Mar: la
+	# peana de espuma ya va en el modelo (no hay sombra sobre el agua).
+	if is_airborne():
 		_add_ground_shadow()
+	if Layout.domain_bobs(domain) and not bool(info.get("calm", false)):
 		_start_bob()
 
 	_guard = MeshInstance3D.new()
@@ -520,6 +524,18 @@ func ground_world() -> Vector3:
 
 # ── Animaciones (todas devuelven el Tween: quien llama decide si espera) ─
 
+## El movimiento segun el dominio (docs/15 §11): tierra a saltitos, mar
+## deslizandose por el agua, aire despegando, volando derecho y aterrizando.
+func move_along(points: Array, step_time: float) -> Tween:
+	if is_airborne():
+		return fly_along(points, step_time)
+	if domain == "sea":
+		return sail_along(points, step_time)
+	return hop_along(points, step_time)
+
+func is_airborne() -> bool:
+	return domain == "air" or domain == "space"
+
 ## Saltitos de juguete por la ruta, un salto por casilla, mirando a donde va.
 func hop_along(points: Array, step_time: float) -> Tween:
 	var tw := create_tween()
@@ -533,6 +549,47 @@ func hop_along(points: Array, step_time: float) -> Tween:
 		tw.tween_method(func(t: float): _hop_step(a, b, t), 0.0, 1.0, step_time)
 		prev = b
 	tw.tween_callback(func(): _body.position.y = 0.0)
+	return tw
+
+## Mar: la pieza se desliza casilla a casilla sin saltar, escorando un poco
+## por el camino (el casco se nota en el agua). El vaiven sigue en _lift.
+func sail_along(points: Array, step_time: float) -> Tween:
+	var tw := create_tween()
+	var prev: Vector3 = position
+	for p in points:
+		var a: Vector3 = prev
+		var b: Vector3 = p
+		if a.distance_to(b) < 0.01:
+			continue
+		tw.tween_callback(func(): _face_now(b))
+		tw.tween_method(func(t: float): _sail_step(a, b, t), 0.0, 1.0, step_time * 1.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		prev = b
+	tw.tween_callback(func(): _body.rotation = Vector3.ZERO)
+	return tw
+
+func _sail_step(a: Vector3, b: Vector3, t: float) -> void:
+	position = a.lerp(b, t)
+	_body.rotation.z = sin(PI * t) * 0.06
+	_body.rotation.x = -sin(PI * t) * 0.05
+
+## Aire: despega (sube un poco mas y se inclina hacia delante), vuela en linea
+## recta hasta el final de la ruta (no rodea a nadie: va por encima) y aterriza
+## en su altura de vuelo. Un solo tween.
+const FLY_CLIMB := 0.55
+func fly_along(points: Array, step_time: float) -> Tween:
+	var tw := create_tween()
+	if points.is_empty():
+		tw.tween_interval(0.01)
+		return tw
+	var a: Vector3 = position
+	var b: Vector3 = points[points.size() - 1]
+	var cells := maxf(1.0, a.distance_to(b) / Layout.CELL)
+	tw.tween_callback(func(): _face_now(b))
+	tw.tween_property(_body, "position:y", FLY_CLIMB, step_time * 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(_body, "rotation:x", 0.14, step_time * 1.2)
+	tw.tween_property(self, "position", b, step_time * (0.6 + 0.55 * cells)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(_body, "position:y", 0.0, step_time * 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.parallel().tween_property(_body, "rotation:x", 0.0, step_time * 1.2)
 	return tw
 
 func _hop_step(a: Vector3, b: Vector3, t: float) -> void:
@@ -606,6 +663,10 @@ func die(time := 0.5) -> Tween:
 	set_active(false)
 	if _bob != null:
 		_bob.kill()
+	if domain == "sea":
+		return _sink(time)
+	if is_airborne():
+		return _crash(time)
 	var tw := create_tween()
 	tw.tween_property(_body, "rotation:z", deg_to_rad(88.0) * (1.0 if uid % 2 == 0 else -1.0), time * 0.45) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -615,25 +676,41 @@ func die(time := 0.5) -> Tween:
 	tw.tween_callback(func(): visible = false)
 	return tw
 
+## El barco se hunde: levanta la proa y baja despacio bajo la lamina de agua.
+func _sink(time: float) -> Tween:
+	var tw := create_tween()
+	tw.tween_property(_body, "rotation:x", -0.5, time * 0.4).set_trans(Tween.TRANS_SINE)
+	tw.parallel().tween_property(_body, "rotation:z", 0.2 * (1.0 if uid % 2 == 0 else -1.0), time * 0.4)
+	tw.tween_property(_body, "position:y", -1.4, time * 0.8).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func(): visible = false)
+	return tw
+
+## El avion cae en barrena hasta el suelo (la sombra lo espera) y se apaga.
+func _crash(time: float) -> Tween:
+	var drop := -_lift.position.y
+	var tw := create_tween()
+	tw.tween_property(_body, "rotation:x", 0.9, time * 0.3).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(_body, "rotation:y", TAU * 0.75, time * 0.7)
+	tw.parallel().tween_property(_body, "position:y", drop, time * 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func(): visible = false)
+	return tw
+
 ## Sin animar: la unidad ya no esta (reconciliacion con el modelo).
 func remove_now() -> void:
 	alive = false
 	visible = false
 
-# ── Dominios futuros ─────────────────────────────────────────────────
+# ── Mar y aire ───────────────────────────────────────────────────────
 
-## Sombra en el suelo de lo que no apoya (aire) o flota (mar): sin ella, una
-## pieza en el aire no se sabe en que casilla esta.
+## Sombra en el suelo de lo que vuela: sin ella, una pieza en el aire no se
+## sabe en que casilla esta. Redonda los nuestros y en rombo la Regencia, como
+## las peanas de tierra (el bando se lee por la forma). Dos mallas para todo el
+## tablero y un material.
+static var _shadow_meshes: Dictionary = {}
 func _add_ground_shadow() -> void:
 	var mi := MeshInstance3D.new()
 	mi.name = "GroundShadow"
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.7
-	cyl.bottom_radius = 0.7
-	cyl.height = 0.02
-	cyl.radial_segments = 12
-	cyl.rings = 1
-	mi.mesh = cyl
+	mi.mesh = shadow_mesh(side)
 	if _shadow_mat == null:
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -645,11 +722,36 @@ func _add_ground_shadow() -> void:
 	mi.position.y = 0.03
 	add_child(mi)
 
+## La malla de la sombra de un bando: 12 lados (redonda) o 4 (rombo).
+static func shadow_mesh(side_: int) -> Mesh:
+	var sides := 4 if side_ != 0 else 12
+	if not _shadow_meshes.has(sides):
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.7 if sides == 12 else 0.85
+		cyl.bottom_radius = cyl.top_radius
+		cyl.height = 0.02
+		cyl.radial_segments = sides
+		cyl.rings = 1
+		_shadow_meshes[sides] = cyl
+	return _shadow_meshes[sides]
+
+## El vaiven en reposo: un solo tween en bucle por pieza (ningun `_process`).
+## El barco sube y baja poco y despacio con las olas; el avion, algo mas. La
+## fase sale del uid, asi dos barcos juntos no se mecen a la vez. En calidad
+## sencilla no hay vaiven (`calm`).
+const BOB := {"sea": [0.05, 1.6], "air": [0.12, 1.1], "space": [0.1, 1.8]}
 func _start_bob() -> void:
+	var cfg: Array = BOB.get(domain, [0.12, 1.1])
+	var amp: float = cfg[0]
+	var period: float = cfg[1]
 	_bob = create_tween().set_loops()
 	var h := _lift.position.y
-	_bob.tween_property(_lift, "position:y", h + 0.12, 1.1).set_trans(Tween.TRANS_SINE)
-	_bob.tween_property(_lift, "position:y", h, 1.1).set_trans(Tween.TRANS_SINE)
+	_bob.tween_interval(0.13 * float(posmod(uid, 7)) + 0.01)
+	_bob.tween_property(_lift, "position:y", h + amp, period).set_trans(Tween.TRANS_SINE)
+	_bob.tween_property(_lift, "position:y", h, period).set_trans(Tween.TRANS_SINE)
+
+func is_bobbing() -> bool:
+	return _bob != null and _bob.is_valid()
 
 # ── Recursos compartidos ─────────────────────────────────────────────
 

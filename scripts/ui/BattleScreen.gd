@@ -37,6 +37,7 @@ const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
 const Board3DView := preload("res://scripts/combat_view/BoardViewport3D.gd")
 const BoardTerrain := preload("res://scripts/combat_view/BoardTerrain3D.gd")
+const BoardLayout := preload("res://scripts/combat_view/BoardLayout3D.gd")
 const WorldLook := preload("res://scripts/map/WorldLook.gd")
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
 const Orders := preload("res://scripts/combat_view/FrontOrders.gd")
@@ -127,6 +128,10 @@ var _board_style := "2d"
 var _forced_style := ""
 ## Escenario forzado de la maqueta (sondas): "" = el de la semilla.
 var _forced_scene := ""
+## El terreno del encuentro abierto (mar y aire, 1.1): casilla -> "land" /
+## "water" / "shore", vacio = todo tierra. Se lee al refrescar las casillas y
+## solo pinta el fondo de las vacias: que se puede pisar lo dicen las reglas.
+var _terrain_now: Dictionary = {}
 var _board3d = null                 ## BoardViewport3D, creado la primera vez
 var _board_column: VBoxContainer
 var _grid_center: HBoxContainer
@@ -1346,6 +1351,7 @@ func _refresh_cells() -> void:
 		targets = CombatManager.get_valid_targets(active.uid)
 
 	var boss: int = boss_uid()
+	_terrain_now = BoardLayout.terrain_of(CombatManager.get_encounter())
 
 	for y in range(_board.y):
 		for x in range(_board.x):
@@ -1375,6 +1381,12 @@ func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vect
 		icon.texture = null
 		icon.visible = false
 		bar.visible = false
+		match BoardLayout.cell_kind(_terrain_now, coords):
+			BoardLayout.TERRAIN_WATER:
+				background = UITheme.BOARD_WATER
+				border = UITheme.INFO.darkened(0.2)
+			BoardLayout.TERRAIN_SHORE:
+				background = UITheme.BOARD_SHORE
 		if _ov_no_fire.has(coords):
 			# Demasiado cerca para la artilleria: ✕ en la casilla.
 			cell.text = "✕"
@@ -1897,7 +1909,7 @@ func _open_board_3d(index: int) -> void:
 		return
 	var seed_value: int = index * 7919 + encounter.units.size() * 31 + (1 if encounter.is_defense else 0)
 	_board3d.board.setup(encounter, {
-		"scene": _forced_scene if _forced_scene != "" else BoardTerrain.pick_scene(seed_value, encounter.is_defense),
+		"scene": _forced_scene if _forced_scene != "" else board_scene_for(encounter, seed_value),
 		"team_color": ArmyManager.get_regiment_look()["color"],
 		"regiment": ArmyManager.get_regiment_look(),
 		"boss_uid": boss_uid(),
@@ -1906,6 +1918,13 @@ func _open_board_3d(index: int) -> void:
 		"style": combat_view(),
 	})
 	_queue_margin_update()
+
+## El decorado de la maqueta: con agua en el tablero, la playa (el mar de su
+## fondo sigue al de las casillas); si no, el de siempre por semilla.
+static func board_scene_for(encounter, seed_value: int) -> String:
+	if BoardLayout.has_water(BoardLayout.terrain_of(encounter)):
+		return BoardTerrain.SCENE_BEACH
+	return BoardTerrain.pick_scene(seed_value, encounter.is_defense if encounter != null else false)
 
 func _show_board_2d() -> void:
 	if _board3d != null:
