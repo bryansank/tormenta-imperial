@@ -149,10 +149,10 @@ ocupan 2×2** salvo el Núcleo (3×3) y la carretera (1×1).
 
 **Topes.** Cada tipo tiene un máximo, y los de producir y vivir **suben con la era**
 (era 1 / era 2 / era 3): Casa 10 / 15 / 20, Granja 6 / 9 / 12, Aserradero 5 / 8 / 10,
-Mina de oro 4 / 6 / 8, Fundición 3 / 5 / 6, Refinería 2 / 3 / 4, Cuartel 3 / 4 / 5. El
+Mina de oro 4 / 6 / 8, Fundición 3 / 5 / 6, Refinería 2 / 3 / 4. El
 Almacén se queda en 5 y la Torre en 6; Mercado, Laboratorio y Cuartel General, uno.
-Algunos rangos dan huecos de más. **Las decoraciones no tienen tope**: solo el terreno
-y el precio. En CONSTRUIR cada tarjeta dice cuántos llevas y cuánto sube en la era
+Algunos rangos dan huecos de más. **Las decoraciones y el Cuartel no tienen tope**: solo
+el terreno y el precio (el ejército sí tiene techo, ver sección 9). En CONSTRUIR cada tarjeta dice cuántos llevas y cuánto sube en la era
 siguiente ("3/6 · era 2: 9").
 
 ### Carreteras: todo se une al Núcleo
@@ -201,7 +201,7 @@ mientras quepa en la Granja. Cambiarlo empieza de cero.
 
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
-| <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 120 oro · 80 madera · 10 tablones | 1 | Entrena unidades, **desde la era 1** (sin acero; desde el 17-10-2026). En la era 1 solo Infantería; la Artillería llega con el acero y el Tanque con el petróleo. Cada cuartel es una plaza de entrenamiento en paralelo |
+| <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 120 oro · 80 madera · 10 tablones | 1 | Entrena unidades, **desde la era 1** (sin acero; desde el 17-10-2026). En la era 1 solo Infantería; la Artillería llega con el acero y el Tanque con el petróleo. Cada cuartel es una plaza de entrenamiento en paralelo (hasta 5). **Sin tope**: levanta los que quieras; cada uno lleva la bandera de tu país |
 | <img src="media/guia/tower.png" width="110"> | **Torre** | 2×2 | 150 oro · 60 acero · 20 petróleo · 30 madera · 4 vigas | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
 | <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera · 20 vigas · 10 lingotes · 10 combustible | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca el Ataque Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
 
@@ -251,8 +251,8 @@ todo lo que falta.
 ### Límites
 
 Aserradero 5 · Mina de oro 4 · Fundición 3 · Refinería 2 · Almacén 5 · Mercado 1 ·
-Laboratorio 1 · Granja 6 · Cuartel 3 · Torre 6 · Casa 10 · Estatua 5 · Fuente 5 · **Cuartel
-General 1** · Jardín y carretera sin límite.
+Laboratorio 1 · Granja 6 · Torre 6 · Casa 10 · Estatua 5 · Fuente 5 · **Cuartel
+General 1** · Cuartel, jardín y carretera sin límite.
 
 ### Mejorar
 
@@ -333,7 +333,10 @@ construcción más rápida.
 ## 9. El ejército y el combate
 
 El Cuartel entrena tres tipos de unidad. **Cada cuartel entrena una unidad a la vez**;
-si quieres dos en paralelo, necesitas dos cuarteles. El Cuartel se levanta **ya en la
+si quieres dos en paralelo, necesitas dos cuarteles (hasta **5 a la vez**: un sexto
+cuartel ya no entrena más rápido). Puedes levantar **tantos cuarteles como quieras**
+(desde el 18-10-2026 no tienen tope), y cada uno lleva en el tejado la bandera de tu
+país. El Cuartel se levanta **ya en la
 era 1** (justo después del primer Aserradero): entonces solo entrena Infantería. La
 Artillería se abre con el acero (Fundición, era 2) y el Tanque con el petróleo
 (Refinería, era 3); el panel EJÉRCITO (☰ MENÚ > COLONIA > EJÉRCITO) lo dice en cada fila
@@ -345,8 +348,11 @@ apagada.
 | **Artillería** | 2 | 80 oro · 30 acero | 35s | 2 oro | 28 |
 | **Vehículo** | 3 | 140 oro · 60 acero · 30 petróleo | 55s | 4 oro | 65 |
 
-**Capacidad del ejército: 3 + 8 por cada cuartel.** Las unidades entrenándose también
-ocupan plaza.
+**Capacidad del ejército: 3 + 8 por cada uno de los 3 primeros cuarteles, +4 por cada
+cuartel más, hasta un máximo de 43** (se llega con 7 cuarteles: 3, 11, 19, 27, 31, 35,
+39, 43). Las unidades entrenándose también ocupan plaza. El techo es el de antes, cuando
+solo cabían 5 cuarteles: más cuarteles no inflan el ejército, pero reparten la defensa y
+sirven de repuesto si uno cae en ruinas.
 
 > ⚠️ **El sueldo se cobra cada 30 segundos, solo en oro.** Si no te llega, te vacía el
 > oro que tengas y te avisa. Y si el impago se mantiene, **la tropa deserta**: se va

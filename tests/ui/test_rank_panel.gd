@@ -151,7 +151,7 @@ func test_the_3d_flag_hangs_from_the_model_flag_anchor_when_there_is_one() -> vo
 	model.add_child(marker)
 	var flag: Node3D = ColonyFlag3D.new()
 	building.add_child(flag)
-	flag.setup(Vector2(4, 4), 3.0, building, true)
+	flag.setup(Vector2(4, 4), 3.0, building, ColonyFlag3D.BARRACKS_SCALE)
 	assert_bool(flag.is_anchored()).is_true()
 	assert_vector(flag.position).is_equal_approx(Vector3(1.0, 5.0, -0.5), Vector3.ONE * 0.001)
 	assert_bool((flag.get_node("Pole") as Node3D).visible).is_false()

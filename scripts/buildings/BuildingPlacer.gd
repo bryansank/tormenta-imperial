@@ -945,14 +945,15 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		var lot: Node3D = Lot.new()
 		root.add_child(lot)
 		lot.setup(root, data)
-	# La bandera del pais ondea sobre el Nucleo, el Cuartel General y todo
-	# modelo que traiga mastil (FlagAnchor: el mastil y el letrero de la
-	# colonia). Va la ultima: el cartel de estado se midio sin ella.
+	# La bandera del pais ondea sobre el Nucleo, los Cuarteles y todo modelo
+	# que traiga mastil (FlagAnchor: el mastil y el letrero de la colonia). El
+	# Cuartel General ya no (2026-10-18). Va la ultima: el cartel de estado se
+	# midio sin ella.
 	if ColonyFlag3D.flies_over(data) or ColonyFlag3D.find_anchor(root) != null:
 		var flag: Node3D = ColonyFlag3D.new()
 		root.add_child(flag)
 		flag.setup(Vector2(data.grid_size) * GridManager.cell_size, top, root,
-			not data.is_core and not data.is_decoration, data.is_decoration)
+			ColonyFlag3D.scale_for(data))
 
 	return root
 

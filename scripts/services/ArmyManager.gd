@@ -4,7 +4,9 @@ extends Node
 ## and contribute to Military Power. Combat (planned) will consume this army.
 ##
 ## Training model: one unit trains per Barracks at a time (parallel slots =
-## barracks count). Army size is capped by GameConfig.get_army_capacity().
+## barracks count, up to GameConfig.army_training_slots_max). Army size is
+## capped by GameConfig.get_army_capacity() (diminishing per barracks, with a
+## ceiling: the Barracks has no building cap since 2026-10-18).
 
 var _units: Dictionary = {}   # unit_id (String) -> count (int)
 var _training: Array = []     # [{id: String, remaining: float, duration: float}]
@@ -89,9 +91,9 @@ func get_capacity() -> int:
 func get_used_capacity() -> int:
 	return get_total_units() + _training.size()
 
-## Parallel training slots = one per Barracks.
+## Parallel training slots = one per Barracks, up to the ceiling.
 func max_slots() -> int:
-	return barracks_count()
+	return GameConfig.get_army_training_slots(barracks_count())
 
 func is_unlocked(unit_id: String) -> bool:
 	var def := GameConfig.get_unit_def(unit_id)

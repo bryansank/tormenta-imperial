@@ -961,7 +961,10 @@ static func building_facts(building_id: String) -> Array:
 		out.append({"icon": "", "text": Tr.t("GUIDE_FACT_STORAGE") % GameConfig.warehouse_storage_bonus})
 	if building_id == "barracks":
 		# Cuartel temprano (2026-10-17): sitio para soldados.
-		out.append({"icon": "", "text": Tr.t("GUIDE_FACT_ARMY") % GameConfig.army_capacity_per_barracks})
+		# Lo que suma el PROXIMO: +8 los primeros, menos despues, nada en el techo.
+		var gain := GameConfig.army_capacity_gain(ArmyManager.barracks_count())
+		if gain > 0:
+			out.append({"icon": "", "text": Tr.t("GUIDE_FACT_ARMY") % gain})
 	return out
 
 # ══════════════════════════════════════════════════════════════════════
