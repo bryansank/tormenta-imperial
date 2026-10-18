@@ -6,7 +6,8 @@ extends Node
 ##                Una vez por partida, DESPUES de soltar el menu principal.
 ##   2. TUTORIAL  pasos guiados sobre la interfaz de verdad (TutorialPanel):
 ##                la meta -> el Nucleo -> "Pulsa CONSTRUIR" -> "Elige el
-##                Aserradero" -> "Junto a un bosque" -> ... -> el Laboratorio ->
+##                Aserradero" -> "Junto a un bosque" -> recoger -> el Cuartel
+##                (2026-10-17) -> ... -> el Laboratorio ->
 ##                la meta otra vez. Avanza cuando el jugador HACE la cosa, no
 ##                cuando pulsa "Siguiente". No se salta ni se cierra (2026-10-04,
 ##                y el combate guiado desde 2026-10-16); a cambio, ningun paso
@@ -68,6 +69,12 @@ const GUIDE_GOALS := [
 	{"goal": "sawmill", "kind": "build", "building": "sawmill",
 		"steps": {"open": "open_build", "pick": "pick_sawmill", "place": "place_sawmill", "wait": "wait_sawmill"}},
 	{"goal": "collect", "kind": "fact", "fact": "collected", "step": "collect", "needs": "sawmill"},
+	# Cuartel temprano (2026-10-17, feat/cuartel-temprano): "solo anadir el
+	# Cuartel", justo despues de la madera. Sus tablones salen del Aserradero (el
+	# paso need_barracks dice "toca tu Aserradero y pulsa Serrar tablones"); sin
+	# Aserradero (bosque imposible) su requisito falla y se pasa de largo (prereq).
+	{"goal": "barracks", "kind": "build", "building": "barracks",
+		"steps": {"open": "open_barracks", "pick": "pick_barracks", "place": "place_barracks", "wait": "wait_barracks"}},
 	{"goal": "farm", "kind": "build", "building": "farm",
 		"steps": {"open": "open_farm", "pick": "pick_farm", "place": "place_farm"}},
 	{"goal": "rotate", "kind": "fact", "fact": "rotated", "step": "rotate", "menu_step": "rotate_pick",
@@ -94,7 +101,7 @@ const GUIDE_GOALS := [
 const LEGACY_GOALS := ["sawmill", "house"]
 
 ## Los pasos, con lo que ve el jugador. `n` es el numero de "PASO n DE
-## GUIDE_TOTAL": un paso por edificio (abrir, elegir y colocar la casa son el 6).
+## GUIDE_TOTAL": un paso por edificio (abrir, elegir y colocar la casa son el 7).
 ## `ok`: tarjeta de leer, con un boton (esa clave de Tr) que cumple su `fact`.
 ## `building`: el edificio cuyas cifras salen con iconos en la tarjeta.
 const GUIDE_STEPS := {
@@ -105,55 +112,61 @@ const GUIDE_STEPS := {
 	"place_sawmill":    {"n": 3,  "text": "GUIDE_PLACE_SAWMILL",   "target": "forest", "building": "sawmill"},
 	"wait_sawmill":     {"n": 3,  "text": "GUIDE_WAIT_SAWMILL",    "target": "building:sawmill"},
 	"collect":          {"n": 4,  "text": "GUIDE_COLLECT",         "target": "building:sawmill"},
-	"open_farm":        {"n": 5,  "text": "GUIDE_OPEN_FARM",       "target": "build_button", "building": "farm"},
-	"pick_farm":        {"n": 5,  "text": "GUIDE_PICK_FARM",       "target": "card:farm", "building": "farm"},
-	"place_farm":       {"n": 5,  "text": "GUIDE_PLACE_FARM",      "target": "", "building": "farm"},
+	# El Cuartel (2026-10-17): abrir, elegir, colocar y esperar la obra.
+	"open_barracks":    {"n": 5,  "text": "GUIDE_OPEN_BARRACKS",   "target": "build_button", "building": "barracks"},
+	"pick_barracks":    {"n": 5,  "text": "GUIDE_PICK_BARRACKS",   "target": "card:barracks", "building": "barracks"},
+	"place_barracks":   {"n": 5,  "text": "GUIDE_PLACE_BARRACKS",  "target": "", "building": "barracks"},
+	"wait_barracks":    {"n": 5,  "text": "GUIDE_WAIT_BARRACKS",   "target": "building:barracks", "building": "barracks"},
+	"open_farm":        {"n": 6,  "text": "GUIDE_OPEN_FARM",       "target": "build_button", "building": "farm"},
+	"pick_farm":        {"n": 6,  "text": "GUIDE_PICK_FARM",       "target": "card:farm", "building": "farm"},
+	"place_farm":       {"n": 6,  "text": "GUIDE_PLACE_FARM",      "target": "", "building": "farm"},
 	# Girar: con la Casa en la mano, antes de colocarla.
-	"rotate":           {"n": 6,  "text": "GUIDE_ROTATE",          "target": "build_button", "building": "house"},
-	"rotate_pick":      {"n": 6,  "text": "GUIDE_ROTATE_PICK",     "target": "card:house", "building": "house"},
-	"rotate_now":       {"n": 6,  "text": "GUIDE_ROTATE_NOW",      "target": "rotate_button", "building": "house"},
-	"open_house":       {"n": 6,  "text": "GUIDE_OPEN_HOUSE",      "target": "build_button", "building": "house"},
-	"pick_house":       {"n": 6,  "text": "GUIDE_PICK_HOUSE",      "target": "card:house", "building": "house"},
-	"place_house":      {"n": 6,  "text": "GUIDE_PLACE_HOUSE",     "target": "", "building": "house"},
+	"rotate":           {"n": 7,  "text": "GUIDE_ROTATE",          "target": "build_button", "building": "house"},
+	"rotate_pick":      {"n": 7,  "text": "GUIDE_ROTATE_PICK",     "target": "card:house", "building": "house"},
+	"rotate_now":       {"n": 7,  "text": "GUIDE_ROTATE_NOW",      "target": "rotate_button", "building": "house"},
+	"open_house":       {"n": 7,  "text": "GUIDE_OPEN_HOUSE",      "target": "build_button", "building": "house"},
+	"pick_house":       {"n": 7,  "text": "GUIDE_PICK_HOUSE",      "target": "card:house", "building": "house"},
+	"place_house":      {"n": 7,  "text": "GUIDE_PLACE_HOUSE",     "target": "", "building": "house"},
 	# Mover: la ficha de un edificio, MOVER, y otro sitio. Gratis.
-	"move":             {"n": 7,  "text": "GUIDE_MOVE",            "target": "info_move|built:house"},
-	"move_place":       {"n": 7,  "text": "GUIDE_MOVE_PLACE",      "target": ""},
+	"move":             {"n": 8,  "text": "GUIDE_MOVE",            "target": "info_move|built:house"},
+	"move_place":       {"n": 8,  "text": "GUIDE_MOVE_PLACE",      "target": ""},
 	# Derribar: un tramo de carretera puesto para eso, y DEMOLER en su ficha.
-	"road_open":        {"n": 8,  "text": "GUIDE_ROAD_OPEN",       "target": "build_button", "building": "road"},
-	"road_pick":        {"n": 8,  "text": "GUIDE_ROAD_PICK",       "target": "card:road", "building": "road"},
-	"road_place":       {"n": 8,  "text": "GUIDE_ROAD_PLACE",      "target": "", "building": "road"},
-	"demolish":         {"n": 8,  "text": "GUIDE_DEMOLISH",        "target": "info_demolish_confirm|info_demolish|practice_road"},
-	"open_gold_mine":   {"n": 9,  "text": "GUIDE_OPEN_GOLD_MINE",  "target": "build_button", "building": "gold_mine"},
-	"pick_gold_mine":   {"n": 9,  "text": "GUIDE_PICK_GOLD_MINE",  "target": "card:gold_mine", "building": "gold_mine"},
-	"place_gold_mine":  {"n": 9,  "text": "GUIDE_PLACE_GOLD_MINE", "target": "deposit:gold_vein", "building": "gold_mine"},
-	"open_market":      {"n": 10, "text": "GUIDE_OPEN_MARKET",     "target": "build_button", "building": "market"},
-	"pick_market":      {"n": 10, "text": "GUIDE_PICK_MARKET",     "target": "card:market", "building": "market"},
-	"place_market":     {"n": 10, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "market"},
-	"open_warehouse":   {"n": 11, "text": "GUIDE_OPEN_WAREHOUSE",  "target": "build_button", "building": "warehouse"},
-	"pick_warehouse":   {"n": 11, "text": "GUIDE_PICK_WAREHOUSE",  "target": "card:warehouse", "building": "warehouse"},
-	"place_warehouse":  {"n": 11, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "warehouse"},
-	"open_laboratory":  {"n": 12, "text": "GUIDE_OPEN_LABORATORY", "target": "build_button", "building": "laboratory"},
-	"pick_laboratory":  {"n": 12, "text": "GUIDE_PICK_LABORATORY", "target": "card:laboratory", "building": "laboratory"},
-	"place_laboratory": {"n": 12, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "laboratory"},
-	"done":             {"n": 12, "text": "GUIDE_DONE",            "target": "objective"},
+	"road_open":        {"n": 9,  "text": "GUIDE_ROAD_OPEN",       "target": "build_button", "building": "road"},
+	"road_pick":        {"n": 9,  "text": "GUIDE_ROAD_PICK",       "target": "card:road", "building": "road"},
+	"road_place":       {"n": 9,  "text": "GUIDE_ROAD_PLACE",      "target": "", "building": "road"},
+	"demolish":         {"n": 9,  "text": "GUIDE_DEMOLISH",        "target": "info_demolish_confirm|info_demolish|practice_road"},
+	"open_gold_mine":   {"n": 10, "text": "GUIDE_OPEN_GOLD_MINE",  "target": "build_button", "building": "gold_mine"},
+	"pick_gold_mine":   {"n": 10, "text": "GUIDE_PICK_GOLD_MINE",  "target": "card:gold_mine", "building": "gold_mine"},
+	"place_gold_mine":  {"n": 10, "text": "GUIDE_PLACE_GOLD_MINE", "target": "deposit:gold_vein", "building": "gold_mine"},
+	"open_market":      {"n": 11, "text": "GUIDE_OPEN_MARKET",     "target": "build_button", "building": "market"},
+	"pick_market":      {"n": 11, "text": "GUIDE_PICK_MARKET",     "target": "card:market", "building": "market"},
+	"place_market":     {"n": 11, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "market"},
+	"open_warehouse":   {"n": 12, "text": "GUIDE_OPEN_WAREHOUSE",  "target": "build_button", "building": "warehouse"},
+	"pick_warehouse":   {"n": 12, "text": "GUIDE_PICK_WAREHOUSE",  "target": "card:warehouse", "building": "warehouse"},
+	"place_warehouse":  {"n": 12, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "warehouse"},
+	"open_laboratory":  {"n": 13, "text": "GUIDE_OPEN_LABORATORY", "target": "build_button", "building": "laboratory"},
+	"pick_laboratory":  {"n": 13, "text": "GUIDE_PICK_LABORATORY", "target": "card:laboratory", "building": "laboratory"},
+	"place_laboratory": {"n": 13, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "laboratory"},
+	"done":             {"n": 13, "text": "GUIDE_DONE",            "target": "objective"},
 	# Consigue lo que falta (2026-10-17, fix/tutorial-materiales): el paso de un
 	# edificio que aun no se puede pagar (recursos, material del taller o
 	# trabajadores). En vez de "Toca CONSTRUIR" con el boton apagado, dice que
 	# falta y como conseguirlo, y senala donde (need_target). Al tenerlo todo,
 	# vuelve solo al paso de construir. `need`: el texto lleva el nombre.
 	"need_sawmill":     {"n": 3,  "text": "GUIDE_NEED", "target": "", "building": "sawmill", "need": true},
-	"need_farm":        {"n": 5,  "text": "GUIDE_NEED", "target": "", "building": "farm", "need": true},
-	"need_house":       {"n": 6,  "text": "GUIDE_NEED", "target": "", "building": "house", "need": true},
-	"need_road":        {"n": 8,  "text": "GUIDE_NEED", "target": "", "building": "road", "need": true},
-	"need_gold_mine":   {"n": 9,  "text": "GUIDE_NEED", "target": "", "building": "gold_mine", "need": true},
-	"need_market":      {"n": 10, "text": "GUIDE_NEED", "target": "", "building": "market", "need": true},
-	"need_warehouse":   {"n": 11, "text": "GUIDE_NEED", "target": "", "building": "warehouse", "need": true},
-	"need_laboratory":  {"n": 12, "text": "GUIDE_NEED", "target": "", "building": "laboratory", "need": true},
+	"need_barracks":    {"n": 5,  "text": "GUIDE_NEED", "target": "", "building": "barracks", "need": true},
+	"need_farm":        {"n": 6,  "text": "GUIDE_NEED", "target": "", "building": "farm", "need": true},
+	"need_house":       {"n": 7,  "text": "GUIDE_NEED", "target": "", "building": "house", "need": true},
+	"need_road":        {"n": 9,  "text": "GUIDE_NEED", "target": "", "building": "road", "need": true},
+	"need_gold_mine":   {"n": 10, "text": "GUIDE_NEED", "target": "", "building": "gold_mine", "need": true},
+	"need_market":      {"n": 11, "text": "GUIDE_NEED", "target": "", "building": "market", "need": true},
+	"need_warehouse":   {"n": 12, "text": "GUIDE_NEED", "target": "", "building": "warehouse", "need": true},
+	"need_laboratory":  {"n": 13, "text": "GUIDE_NEED", "target": "", "building": "laboratory", "need": true},
 }
 ## Prefijo de los pasos "consigue lo que falta": "need_" + id del edificio.
 const NEED_PREFIX := "need_"
 ## El mayor `n` de GUIDE_STEPS (una prueba lo comprueba: al insertar pasos, se sube).
-const GUIDE_TOTAL := 12
+const GUIDE_TOTAL := 13
 
 ## Los pasos en los que el tutorial deja ver la ficha de un edificio
 ## (BuildingInfoPanel) sin esconderse: lo que ensenan ocurre dentro de ella.
@@ -697,11 +710,39 @@ func _update_blocked_goals() -> void:
 			if g["steps"].has("wait") and int(now[b + "s_built"]) - int(guide_baseline.get(b + "s_built", 0)) <= 0:
 				break
 			continue
-		if goal_impossible_reason(b) != "":
+		var why := goal_impossible_reason(b)
+		if why != "":
 			blocked.append(goal)
+			_notice_skipped(goal, b, why)
 			continue
 		break
 	_blocked_goals = blocked
+
+## Las metas que el tutorial ya dijo que se saltaba en esta sesion. Transitorio:
+## al cargar se puede volver a decir una vez, que no molesta.
+var _skip_noticed: Array = []
+
+## Una meta de edificio se pasa de largo: se dice una vez y en una linea por que,
+## para que el jugador no vea saltar el tutorial sin entenderlo (2026-10-17). En
+## un repaso no: ahi el tope o el requisito son cosa del repaso, no del jugador.
+func _notice_skipped(goal: String, building_id: String, why: String) -> void:
+	if goal in _skip_noticed or guide_state != GUIDE_ACTIVE or is_replay():
+		return
+	_skip_noticed.append(goal)
+	var key := String(SKIP_NOTICE_KEYS.get(why, ""))
+	if key == "":
+		return
+	var data := Rules.load_building_data(building_id)
+	var bname: String = data.get_display_name() if data != null else building_id
+	EventBus.notification_posted.emit(Tr.t(key) % bname, "notice", UITheme.ACCENT)
+
+## Por que se salta una meta -> la frase que lo dice (con el nombre del edificio).
+const SKIP_NOTICE_KEYS := {
+	"deposit": "GUIDE_SKIP_DEPOSIT",
+	"limit": "GUIDE_SKIP_LIMIT",
+	"prereq": "GUIDE_SKIP_PREREQ",
+	"rank": "GUIDE_SKIP_RANK",
+}
 
 ## Las metas que el tutorial pasa de largo ahora mismo (para pruebas y sondas).
 func blocked_goals() -> Array:
@@ -918,6 +959,9 @@ static func building_facts(building_id: String) -> Array:
 		out.append({"icon": "workers", "text": Tr.t("GUIDE_FACT_WORKERS") % data.workers_required})
 	if building_id == "warehouse":
 		out.append({"icon": "", "text": Tr.t("GUIDE_FACT_STORAGE") % GameConfig.warehouse_storage_bonus})
+	if building_id == "barracks":
+		# Cuartel temprano (2026-10-17): sitio para soldados.
+		out.append({"icon": "", "text": Tr.t("GUIDE_FACT_ARMY") % GameConfig.army_capacity_per_barracks})
 	return out
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1257,6 +1301,7 @@ func load_save_data(data: Dictionary) -> void:
 	_repair_pending = false
 	practice_road_cell = Vector2i(-1, -1)
 	_blocked_goals = []
+	_skip_noticed = []
 	_step = ""
 	_prologue_pending = false
 
@@ -1278,6 +1323,7 @@ func reset() -> void:
 	_repair_pending = false
 	practice_road_cell = Vector2i(-1, -1)
 	_blocked_goals = []
+	_skip_noticed = []
 	_last_check = 0.0
 	_prologue_pending = false
 	_step = ""

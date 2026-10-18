@@ -251,7 +251,7 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	# Por que no se puede entrenar, a la vista: antes solo iba en el tooltip, y
 	# en movil no hay raton que se pose encima para leerlo.
 	if not check["ok"] and check["reason"] != "":
-		var why := UITheme.make_label(Tr.t(check["reason"]), "small", UITheme.WARNING)
+		var why := UITheme.make_label(blocked_text(unit_id, String(check["reason"])), "small", UITheme.WARNING)
 		why.name = "BlockedReason"
 		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info.add_child(why)
@@ -261,7 +261,7 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	UITheme.style_button(train_btn, UITheme.CAT_MILITARY.darkened(0.15) if check["ok"] else UITheme.BTN, UITheme.FONT_BODY)
 	train_btn.disabled = not check["ok"]
 	if not check["ok"] and check["reason"] != "":
-		train_btn.tooltip_text = Tr.t(check["reason"])
+		train_btn.tooltip_text = blocked_text(unit_id, String(check["reason"]))
 	train_btn.pressed.connect(func():
 		if ArmyManager.train(unit_id):
 			_refresh()
@@ -269,6 +269,18 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	buttons.add_child(train_btn)
 
 	return card
+
+## Por que no se puede entrenar `unit_id`, en palabras. Una unidad de otra era
+## dice cual y que la abre (cuartel temprano, 2026-10-17: con el Cuartel en la
+## era 1 la Artilleria y el Tanque salen apagados desde el principio, y
+## "era superior" no le decia a nadie que hacer). Sin estado, para las pruebas.
+static func blocked_text(unit_id: String, reason: String) -> String:
+	if reason == "LBL_ARMY_LOCKED":
+		var era: int = int(GameConfig.get_unit_def(unit_id).get("era", 1))
+		var key := "LBL_ARMY_LOCKED_ERA_%d" % era
+		if Tr.t(key) != key:
+			return Tr.t(key)
+	return Tr.t(reason)
 
 ## Abre o cierra la ficha de `unit_id` en su fila.
 func toggle_unit_card(unit_id: String) -> void:

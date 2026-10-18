@@ -25,9 +25,24 @@ const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 ## (docs/14-guia-de-juego.md, seccion 11).
 const LINE := [
 	{"kind": "build", "id": "sawmill", "count": 1, "why": "OBJ_WHY_SAWMILL"},
+	# Cuartel temprano (2026-10-17, feat/cuartel-temprano; decision de Bryan:
+	# "prioridad despues de la madera"). Va justo detras del aserradero, del que
+	# salen sus tablones, y ANTES de la Granja: la comida de salida (80) da para
+	# unos 16 minutos con 5 personas en las fases tempranas, y el Cuartel solo
+	# pide 1 trabajador, asi que aserradero (2) + Cuartel (1) + Granja (2) caben
+	# en los 5 del Nucleo sin esperar a una Casa. Solo donde hay Impuesto
+	# (`needs: tithe`): en Constructor el Cuartel llega por el Cuartel General.
+	{"kind": "build", "id": "barracks", "count": 1, "needs": "tithe", "why": "OBJ_WHY_BARRACKS"},
 	# La gente come comida (2026-10-04): la Granja va justo despues del primer
-	# aserradero, antes de que se acabe la comida de salida.
+	# aserradero (y del Cuartel), antes de que se acabe la comida de salida.
 	{"kind": "build", "id": "farm", "count": 1, "why": "OBJ_WHY_FARM"},
+	# Un soldado antes de la tormenta de prueba (minuto 5): sale a la primera
+	# mision (first_sortie_step, un solo nodo facil con botin), vuelve, y echa a
+	# los Cobradores de juguete. Cuenta cualquier tropa ("any"); en la era 1 solo
+	# hay Infanteria. La fila de la primera mision va DETRAS de esta en EL CAMINO
+	# (`sortie_row`: sin soldado no hay mision).
+	{"kind": "train", "id": "infantry", "count": 1, "any": true, "needs": "tithe",
+		"sortie_row": "after", "why": "OBJ_WHY_FIRST_SOLDIERS"},
 	{"kind": "build", "id": "gold_mine", "count": 1, "why": "OBJ_WHY_GOLD_MINE"},
 	{"kind": "build", "id": "house", "count": 1, "why": "OBJ_WHY_HOUSE"},
 	# Antes un segundo aserradero "porque la gente come madera". Desde que come
@@ -36,7 +51,9 @@ const LINE := [
 	{"kind": "build", "id": "market", "count": 1, "why": "OBJ_WHY_MARKET"},
 	{"kind": "build", "id": "warehouse", "count": 1, "why": "OBJ_WHY_WAREHOUSE"},
 	{"kind": "build", "id": "foundry", "count": 1, "why": "OBJ_WHY_FOUNDRY"},
-	{"kind": "build", "id": "barracks", "count": 1, "why": "OBJ_WHY_BARRACKS"},
+	# El Cuartel ya esta desde la era 1 donde hay Impuesto; esta entrada queda
+	# para los modos sin el (`no_tithe`), y asi EL CAMINO no lo lista dos veces.
+	{"kind": "build", "id": "barracks", "count": 1, "needs": "no_tithe", "why": "OBJ_WHY_BARRACKS"},
 	# Guarnicion: cinco unidades en casa, de lo que sea, con dos canones. Tres
 	# infantes solos pierden el Diezmo YA en severidad 1 (2 infantes y 1 canon de
 	# escolta); tres infantes y dos canones lo ganan hasta severidad 3 sin torres y
@@ -437,6 +454,8 @@ static func _entry_applies(entry: Dictionary) -> bool:
 			return GameMode.storm_enabled()
 		"tithe":
 			return GameMode.tithe_enabled()
+		"no_tithe":
+			return not GameMode.tithe_enabled()
 		"audit":
 			return GameMode.audit_enabled()
 	return true
@@ -1080,9 +1099,8 @@ static func upgrade_node(step: Dictionary) -> Node:
 
 ## Recurso que un edificio necesita desbloqueado para que tenga sentido pedirlo.
 static func _needs_unlocked(building_id: String) -> String:
+	# El Cuartel ya no pide acero (cuartel temprano, 2026-10-17): solo oro.
 	match building_id:
-		"barracks":
-			return "steel"
 		"tower", "headquarters":
 			return "oil"
 	return "gold"
@@ -1124,11 +1142,17 @@ static func _first_building(building_id: String) -> Node:
 static func route() -> Array:
 	var rows: Array = []
 	var current_found := false
+	var sortie_placed := false
 	for entry in LINE:
 		# La primera escaramuza va justo antes de la guarnicion: es lo primero que
 		# se hace con la tropa. Tambien sin Diezmo (Constructor), donde la
-		# guarnicion no es un paso pero pelear si.
-		if String(entry["kind"]) == "train" and bool(entry.get("any", false)):
+		# guarnicion no es un paso pero pelear si. Con el Cuartel temprano
+		# (2026-10-17) va detras del primer soldado (`sortie_row: after`), y una
+		# sola vez.
+		var sortie_before: bool = String(entry["kind"]) == "train" and bool(entry.get("any", false)) \
+			and String(entry.get("sortie_row", "")) != "after"
+		if not sortie_placed and sortie_before:
+			sortie_placed = true
 			var sortie_done: bool = TutorialManager.is_first_sortie_done()
 			var sortie_row := {"text": Tr.t("OBJ_ROUTE_FIRST_SORTIE"), "done": sortie_done, "current": false}
 			if not sortie_done and not current_found:
@@ -1137,6 +1161,7 @@ static func route() -> Array:
 			rows.append(sortie_row)
 		if not _entry_applies(entry):
 			continue
+		var sortie_after: bool = not sortie_placed and String(entry.get("sortie_row", "")) == "after"
 		var done: bool = _line_entry_done(entry)
 		var row := {"text": describe(entry)["title"], "done": done, "current": false}
 		# En EL CAMINO cada fila es un paso: "Construye:" delante de cada
@@ -1153,6 +1178,14 @@ static func route() -> Array:
 			row["current"] = true
 			current_found = true
 		rows.append(row)
+		if sortie_after:
+			sortie_placed = true
+			var first_done: bool = TutorialManager.is_first_sortie_done()
+			var first_row := {"text": Tr.t("OBJ_ROUTE_FIRST_SORTIE"), "done": first_done, "current": false}
+			if not first_done and not current_found:
+				first_row["current"] = true
+				current_found = true
+			rows.append(first_row)
 	if GameMode.audit_enabled():
 		var won: bool = StormManager.is_halted()
 		rows.append({"text": Tr.t("OBJ_ROUTE_FINAL"), "done": won, "current": not current_found and not won})

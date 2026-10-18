@@ -8,6 +8,10 @@ extends CanvasLayer
 ##     con su sello — COBRADO o REPELIDO. Lee el diccionario `taken` tal cual:
 ##     recursos por nombre, `buildings` embargados, `workers` reclutados.
 ##
+##   * **Parte del Impuesto de prueba** (`trial_tithe_resolved`, 2026-10-17): la
+##     tormenta de prueba de la era 1 trae unos Cobradores de juguete. Echados, o
+##     lo poco que se llevaron, y por que: sin soldados en casa no hay quien pelee.
+##
 ## Los partes esperan en cola y salen de uno en uno: una defensa perdida trae su
 ## Diezmo detras, y dos tarjetas a la vez no se leen ninguna. Tampoco salen con
 ## un tablero abierto (`CombatManager.is_board_open()`): un parte no interrumpe
@@ -23,7 +27,7 @@ const TextKit := preload("res://scripts/ui/TextKit.gd")
 const LAYER := 19
 const CARD_WIDTH := 500.0
 
-enum Kind { DEFENSE, TITHE }
+enum Kind { DEFENSE, TITHE, TRIAL }
 
 var _root: Control
 var _card: PanelContainer
@@ -43,6 +47,7 @@ func _ready() -> void:
 	visible = false
 	EventBus.defense_auto_resolved.connect(_on_defense_auto_resolved)
 	EventBus.tithe_resolved.connect(_on_tithe_resolved)
+	EventBus.trial_tithe_resolved.connect(_on_trial_tithe_resolved)
 	EventBus.final_audit_lost.connect(func(_w): _audit_lost_frame = Engine.get_process_frames())
 	get_viewport().size_changed.connect(_relayout)
 
@@ -86,6 +91,10 @@ func _on_tithe_resolved(repelled: bool, taken: Dictionary) -> void:
 		return
 	_enqueue_tithe.call_deferred(repelled, taken.duplicate(), Engine.get_process_frames())
 
+## El Impuesto de juguete de la tormenta de prueba (cuartel temprano).
+func _on_trial_tithe_resolved(repelled: bool, taken: Dictionary) -> void:
+	_queue.append({"kind": Kind.TRIAL, "repelled": repelled, "taken": taken.duplicate()})
+
 ## Diferido: `final_audit_lost` puede llegar despues del Diezmo en la misma
 ## cadena. Si llego en este frame, el Diezmo es el del asedio y lo cuenta el
 ## parte de derrota.
@@ -110,6 +119,8 @@ func try_show_next() -> bool:
 	match int(_current.get("kind", Kind.TITHE)):
 		Kind.DEFENSE:
 			_paint_defense(_current)
+		Kind.TRIAL:
+			_paint_trial(_current)
 		_:
 			_paint_tithe(_current)
 	_relayout()
@@ -167,6 +178,38 @@ func _paint_tithe(report: Dictionary) -> void:
 		UITheme.POSITIVE.lightened(0.2) if repelled else UITheme.DANGER.lightened(0.25)
 	)
 	_body.text = "\n".join(tithe_lines(repelled, report.get("taken", {})))
+
+## El parte del Impuesto de prueba: echados o lo poco que se llevaron, y la
+## leccion (soldados en casa = nadie se lleva nada).
+func _paint_trial(report: Dictionary) -> void:
+	var repelled: bool = bool(report.get("repelled", false))
+	_kicker.text = Tr.t("LBL_REPORT_TRIAL_KICKER")
+	_title.text = Tr.t("LBL_REPORT_TITHE_REPELLED") if repelled else Tr.t("LBL_REPORT_TITHE_TAKEN")
+	UITheme.set_label_color(_title, UITheme.POSITIVE if repelled else UITheme.WARNING)
+	_set_stamp(
+		Tr.t("LBL_STAMP_REPELLED") if repelled else Tr.t("LBL_STAMP_COLLECTED"),
+		UITheme.POSITIVE.lightened(0.2) if repelled else UITheme.WARNING.lightened(0.2)
+	)
+	_body.text = "\n".join(trial_lines(repelled, report.get("taken", {})))
+
+## Las lineas del parte del Impuesto de prueba. Sin estado, para las pruebas.
+static func trial_lines(repelled: bool, taken: Dictionary) -> Array:
+	var lines: Array = []
+	if repelled:
+		lines.append(Tr.t("LBL_TITHE_NOTHING_TAKEN"))
+		lines.append(Tr.t("LBL_REPORT_TRIAL_WON"))
+	else:
+		var resources: Dictionary = {}
+		for key in taken:
+			if key in ["gold", "wood", "steel", "oil", "food"] and int(taken[key]) > 0:
+				resources[key] = int(taken[key])
+		if resources.is_empty():
+			lines.append(Tr.t("LBL_TITHE_NOTHING"))
+		else:
+			lines.append(Tr.t("LBL_TITHE_TOOK") % TextKit.cost_text(resources))
+		lines.append(Tr.t("LBL_REPORT_TRIAL_LOST"))
+	lines.append(Tr.t("LBL_REPORT_TRIAL_NEXT"))
+	return lines
 
 ## Las lineas del parte de una defensa a ciegas. Sin estado, para las pruebas.
 static func defense_lines(_victory: bool, rounds: int, summary: Dictionary) -> Array:

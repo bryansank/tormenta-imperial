@@ -160,7 +160,7 @@ func _play_guide(main: Node) -> void:
 				return
 			"goal", "core":
 				TutorialManager.confirm_step(step)
-			"wait_sawmill":
+			"wait_sawmill", "wait_barracks":
 				await _seconds(1.0)
 				_complete_all()
 			"collect":
@@ -250,7 +250,8 @@ func _play_guide(main: Node) -> void:
 
 ## Recursos y obreros de sobra para que el tutorial no se pare por coste.
 func _top_up() -> void:
-	ResourceManager.set_amounts({"gold": 320, "wood": 220, "food": 40})
+	# Los tablones del Cuartel (cuartel temprano, 2026-10-17) tambien.
+	ResourceManager.set_amounts({"gold": 320, "wood": 220, "food": 40, "planks": 20})
 	if PopulationManager.get_free_workers() < 4:
 		PopulationManager._population += 4
 		PopulationManager._max_population = maxi(PopulationManager._max_population, PopulationManager._population)
