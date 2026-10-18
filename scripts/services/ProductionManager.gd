@@ -163,7 +163,7 @@ func _apply_construction_visual(node: Node) -> void:
 	if node.has_method("apply_construction_visual"):
 		node.apply_construction_visual()
 		return
-	var mesh_inst := node.get_child(0)
+	var mesh_inst: Node = node.get_child(0) if node.get_child_count() > 0 else null
 	if mesh_inst is MeshInstance3D:
 		var mat: StandardMaterial3D = mesh_inst.get_surface_override_material(0)
 		if mat:
@@ -329,7 +329,7 @@ func _complete_construction(stale_or_node) -> void:
 	var new_level: int = maxi(int(constr_info.get("new_level", 1)), int(node.get_meta("level", 1)))
 	node.remove_meta("under_construction")
 	# Restore mesh opacity
-	var mesh_inst := node.get_child(0)
+	var mesh_inst: Node = node.get_child(0) if node.get_child_count() > 0 else null
 	if mesh_inst is MeshInstance3D:
 		var mat: StandardMaterial3D = mesh_inst.get_surface_override_material(0)
 		if mat:
