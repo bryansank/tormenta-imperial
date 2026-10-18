@@ -13,8 +13,9 @@ extends SceneTree
 ## cada pasada da los mismos sonidos.
 ##
 ##   ambient/day      40 s, estereo, bucle: olas suaves + pajaros
-##   ambient/storm    40 s, estereo, bucle: viento con rachas + truenos lejanos
+##   ambient/storm    40 s, estereo, bucle: viento con rachas + lluvia + truenos lejanos
 ##   ambient/night    40 s, estereo, bucle: grillos + olas suaves, sin pajaros
+##   ambient/coast    40 s, estereo, bucle: orilla del tablero (resaca, brisa, gaviotas)
 ##   sfx/storm_warning  ~5 s, mono: sirena lejana con eco
 ##   sfx/storm_thunder  ~5.5 s, mono: chasquido y retumbo
 
@@ -25,9 +26,13 @@ const XFADE_SECONDS := 3.0
 const SEED := 20261012
 
 var _rng := RandomNumberGenerator.new()
+## La lluvia de la Tormenta tira de su propio generador: asi el viento, los truenos
+## y los demas bucles salen identicos a los de antes de anadirla.
+var _rain_rng := RandomNumberGenerator.new()
 
 func _init() -> void:
 	_rng.seed = SEED
+	_rain_rng.seed = SEED + 7
 	var out := "res://build/audio_gen/"
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--out="):
@@ -41,6 +46,8 @@ func _init() -> void:
 	_write(out + "storm_thunder.wav", [_thunder_sfx()])
 	# La noche va la ultima: asi la semilla sigue dando los mismos cuatro de antes.
 	_write(out + "night.wav", _night())
+	# La costa del tablero, despues de todo lo anterior (misma razon).
+	_write(out + "coast.wav", _coast())
 	print("gen_ambient_audio: escritos en ", ProjectSettings.globalize_path(out))
 	quit()
 
@@ -327,8 +334,98 @@ func _storm() -> Array:
 			right[idx] = right[idx] + rumble[i] * amp * 0.85
 	chans[0] = left
 	chans[1] = right
+	_add_rain(chans, n, gust)
 	_normalize(chans, 0.55)
 	return _seamless(chans)
+
+## Lluvia: un siseo agudo que sube con las rachas y gotas sueltas que golpean
+## cerca (chasquidos muy cortos repartidos en estereo). Va con `_rain_rng`.
+func _add_rain(chans: Array, n: int, gust: PackedFloat32Array) -> void:
+	var m := 0.0
+	for c: PackedFloat32Array in chans:
+		for i in range(0, n, 16):
+			m = maxf(m, absf(c[i]))
+	# Por debajo del viento: lo agudo se oye mucho aunque lleve poca energia.
+	var level := maxf(m, 0.05) * 0.09
+	for ci in range(chans.size()):
+		var c: PackedFloat32Array = chans[ci]
+		var hiss := Biquad.new()
+		hiss.set_bandpass(3800.0, 0.5, RATE)
+		var hiss2 := Biquad.new()
+		hiss2.set_bandpass(1900.0, 0.7, RATE)
+		var lag := int((0.4 if ci == 1 else 0.0) * RATE)
+		for i in range(n):
+			var g := gust[(i - lag + n) % n]
+			var w := _rain_rng.randf_range(-1.0, 1.0)
+			c[i] = c[i] + (hiss.tick(w) * 1.1 + hiss2.tick(w) * 0.5) * level * (0.6 + 0.4 * g)
+		# Gotas: ~25 por segundo en cada canal.
+		var drops := int(float(n) / RATE * 25.0)
+		for _d in range(drops):
+			var at := _rain_rng.randi_range(0, n - 200)
+			var amp := _rain_rng.randf_range(0.3, 1.0) * level * 1.6
+			var f := _rain_rng.randf_range(2500.0, 5500.0)
+			for k in range(120):
+				var s := float(k) / RATE
+				c[at + k] = c[at + k] + sin(TAU * f * s) * exp(-s / 0.0015) * amp
+		chans[ci] = c
+
+# ── Costa del tablero: resaca mas viva, gaviotas y brisa ─────────────
+
+## Lo que suena en un tablero cuando la Tormenta no esta encima: la orilla de la
+## isla (olas que rompen mas cerca que en el dia), alguna gaviota y brisa.
+func _coast() -> Array:
+	var n := int((LOOP_SECONDS + XFADE_SECONDS) * RATE)
+	var chans := _waves(n, 1700.0)
+	var breeze := _smooth_random(n, 2.0, 5.0)
+	for ci in range(chans.size()):
+		var c: PackedFloat32Array = chans[ci]
+		var bp := Biquad.new()
+		var pink := Pink.new()
+		for i in range(n):
+			if i % 32 == 0:
+				bp.set_bandpass(450.0 + 250.0 * breeze[i], 2.0, RATE)
+			c[i] = c[i] + bp.tick(pink.tick(_white())) * (0.15 + 0.35 * breeze[i])
+		chans[ci] = c
+	_add_gulls(chans, n)
+	_normalize(chans, 0.5)
+	return _seamless(chans)
+
+## Gaviotas: llamadas nasales que caen de tono ("kiau"), de dos a cuatro seguidas,
+## cada una en su sitio del estereo; pocas, para que no canse.
+func _add_gulls(chans: Array, n: int) -> void:
+	var left: PackedFloat32Array = chans[0]
+	var right: PackedFloat32Array = chans[1]
+	var t := _rng.randf_range(1.5, 4.0)
+	var total := float(n) / RATE
+	while t < total - 2.0:
+		var base := _rng.randf_range(1300.0, 1800.0)
+		var calls := _rng.randi_range(2, 4)
+		var amp := _rng.randf_range(0.05, 0.11) * (0.5 if _rng.randf() < 0.4 else 1.0)
+		var pan := _rng.randf_range(0.1, 0.9)
+		var gl := sqrt(1.0 - pan)
+		var gr := sqrt(pan)
+		var c := t
+		for _k in range(calls):
+			var d := _rng.randf_range(0.22, 0.4)
+			var start := int(c * RATE)
+			var length := int(d * RATE)
+			var phase := 0.0
+			for i in range(length):
+				var idx := start + i
+				if idx >= n:
+					break
+				var s := float(i) / length
+				var f := base * lerpf(1.15, 0.7, pow(s, 0.7))
+				phase += TAU * f / RATE
+				# Nasal: fundamental con armonicos fuertes y un poco de aspereza.
+				var v := sin(phase) + 0.6 * sin(2.0 * phase) + 0.35 * sin(3.0 * phase)
+				v *= pow(sin(PI * minf(1.0, s * 1.15)), 1.5) * amp
+				left[idx] = left[idx] + v * gl
+				right[idx] = right[idx] + v * gr
+			c += d + _rng.randf_range(0.08, 0.2)
+		t = c + _rng.randf_range(4.0, 9.0)
+	chans[0] = left
+	chans[1] = right
 
 ## Retumbo: ruido marron muy filtrado con varios golpes que decaen.
 func _rumble(seconds: float, cutoff: float) -> PackedFloat32Array:

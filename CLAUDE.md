@@ -877,16 +877,24 @@ ramps up gradually instead of punishing the first minutes.
   EventBus signals (era music crossfade, build/trade/event SFX, combat, the Storm and
   the Tithe, the Final Audit, rank, collecting, UI clicks and toggles).
 - Assets: **5 music tracks** (three eras, victory and an own `combat` theme, CC0),
-  **34 SFX** and **3 ambient loops** in `assets/audio/{music,sfx,ambient}/`. **No aliases
+  **47 SFX** and **4 ambient loops** in `assets/audio/{music,sfx,ambient}/`. **No aliases
   any more**: every key in `SFX_MANIFEST` has its own clip (combat, Storm, Tithe, rank,
   collect / harvest included). Gains per clip in `SFX_GAIN_DB`. Missing files are
   skipped silently — audio never crashes the game. Sources and licences:
   `assets/audio/MANIFEST.md`, `assets/CREDITS.md` and `THIRD-PARTY-NOTICES.md`.
-- **Ambience:** `day` (waves + birds), `night` (crickets + soft waves) and `storm`
-  (wind + distant thunder), 40 s OGG loops made by synthesis with
+- **Combat by unit type (1.1):** on `unit_attacked` / `unit_moved` / `unit_died` the
+  unit is read from `CombatManager.get_unit(uid)` and its `unit_id` / `domain()` pick
+  the clip (`ATTACK_SFX`, `MOVE_SFX`, `DEATH_SFX_BY_DOMAIN`, `IMPACT_SFX_BY_DOMAIN`):
+  rifle, cannon, tank, propeller planes, airship, ship horn, torpedo, splash, sinking,
+  crash. 13 mono 22 kHz OGG clips (140 KB) synthesised by `tools/gen_combat_audio.gd`.
+  Infantry and artillery move silently; `combat_hit` is the fallback.
+- **Ambience:** `day` (waves + birds), `night` (crickets + soft waves), `storm`
+  (wind + rain + distant thunder) and `coast` (the board's shore: surf, breeze, gulls,
+  while a board is open), 40 s OGG loops made by synthesis with
   `tools/gen_ambient_audio.gd` (own work). One plays at a time and they cross-fade
-  (`AMBIENT_FADE_SECONDS` 4) following the Storm phase and `DayClock`
-  (`day_phase_changed`); the Storm wins over the night.
+  (`AMBIENT_FADE_SECONDS` 4) following the Storm phase, `DayClock`
+  (`day_phase_changed`) and the board (`encounter_started` / `encounter_closed`);
+  Storm > board > night > day.
 - Music can be switched off (`GameConfig.audio_music_enabled`, `set_music_enabled()` /
   `toggle_music()`, emits `music_toggled`); `play_music()` is the single guard.
 - API: `play_sfx(key)`, `play_music_for_era(era)`, `set_*_volume(linear)`.
@@ -1131,7 +1139,7 @@ tormenta-imperial/
 |       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
 +-- data/buildings/                  # 36 .tres building definitions
 +-- assets/
-|   +-- audio/{music,sfx,ambient}/   # 5 tracks, 34 SFX, 3 ambient loops (see MANIFEST.md)
+|   +-- audio/{music,sfx,ambient}/   # 5 tracks, 47 SFX, 4 ambient loops (see MANIFEST.md)
 |   +-- models/toy/                  # Baked toy buildings (<id>.tscn + <id>_mesh.res, toy_solid / toy_glow materials)
 |   +-- models/toy/units/            # Baked combat toys (<id>_player / <id>_regency, boss_mark, crew_nest)
 |   +-- models/cc0/                  # CC0 source pieces (KayKit, Kenney) the bakers read; each pack has a .gdignore, so Godot never imports or exports it
@@ -1147,7 +1155,8 @@ tormenta-imperial/
     +-- life_probe.gd, life_probe_runner.gd  # Seeded town: street life in 3D/2D, the empty Ash, CPU cost with 60+ figures
     +-- render_brand.gd, render_branding.gd, render_catalog.gd, showcase_shots.gd  # Branding and screenshots
     +-- build_toy_models.gd, toy_kit.gd, toy_recipes/  # Bakes the toy buildings; `-- --units` the combat toys (toy_recipes/units/)
-    +-- gen_ambient_audio.gd         # Synthesises the three ambient loops
+    +-- gen_ambient_audio.gd         # Synthesises the four ambient loops (+ storm siren and thunder)
+    +-- gen_combat_audio.gd          # Synthesises the 13 combat sounds by unit type (mono OGG source WAVs)
     +-- perf_probe.gd, perf_probe_runner.gd  # The performance probe (docs/26)
     +-- unit_toy_probe.gd            # Photo of the baked unit toys in a row (-s, docs/media/dev/unit_toys.png)
     +-- *_probe.gd                   # Dev probes, see below

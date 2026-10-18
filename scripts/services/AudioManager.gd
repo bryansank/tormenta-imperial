@@ -32,23 +32,29 @@ const MUSIC_MANIFEST := {
 ## Music key the combat theme is stored under; encounters cross-fade to it.
 const MUSIC_COMBAT_KEY := "combat"
 
-## Tres bucles cortos (40 s, OGG en streaming); suena uno, y dos solo mientras
+## Cuatro bucles cortos (40 s, OGG en streaming); suena uno, y dos solo mientras
 ## se funden. `day` = olas + pajaros; `night` = grillos + olas suaves, sin
-## pajaros; `storm` = viento + truenos lejanos (los pajaros callan con la
-## Tormenta). Generados por sintesis con tools/gen_ambient_audio.gd (obra propia).
+## pajaros; `storm` = viento + lluvia + truenos lejanos (los pajaros callan con la
+## Tormenta); `coast` = la orilla del tablero (resaca mas cerca, brisa, gaviotas)
+## mientras hay un tablero abierto. Generados por sintesis con
+## tools/gen_ambient_audio.gd (obra propia).
 const AMBIENT_MANIFEST := {
 	"day": "day",
 	"night": "night",
 	"storm": "storm",
+	"coast": "coast",
 }
 const AMBIENT_DAY := "day"
 const AMBIENT_NIGHT := "night"
 const AMBIENT_STORM := "storm"
+const AMBIENT_COAST := "coast"
 ## Ganancia de cada bucle (dB): el ambiente es una cama, va por debajo de todo.
 const AMBIENT_GAIN_DB := {
 	"day": -4.0,
 	"night": -5.0,
 	"storm": -3.0,
+	# Bajo los disparos: en el tablero mandan los efectos.
+	"coast": -7.0,
 }
 const AMBIENT_FADE_SECONDS := 4.0
 const AMBIENT_SILENT_DB := -50.0
@@ -87,6 +93,22 @@ const SFX_MANIFEST := {
 	"audit_summoned": "audit_summoned",   # final_audit_summoned: campana grave
 	"storm_halted": "storm_halted",       # storm_halted_forever: acorde claro
 	"rank_up": "rank_up",                 # governor_rank_up: toque de ascenso
+	# ── Combate por tipo de unidad (sintesis propia, tools/gen_combat_audio.gd) ──
+	# Quien suena lo eligen ATTACK_SFX / MOVE_SFX / DEATH_SFX_BY_DOMAIN segun la
+	# unidad del tablero; `combat_hit` y `combat_unit_lost` quedan de reserva.
+	"shot_rifle": "shot_rifle",           # ataca la infanteria
+	"shot_cannon": "shot_cannon",         # artilleria, canonera, acorazado
+	"tank_fire": "tank_fire",             # ataca el blindado
+	"tank_engine": "tank_engine",         # el blindado se mueve
+	"plane_prop": "plane_prop",           # caza o bombardero se mueven
+	"plane_strafe": "plane_strafe",       # ataca el caza
+	"bomb_drop": "bomb_drop",             # bombardero y dirigible atacan
+	"airship_drone": "airship_drone",     # el dirigible se mueve
+	"ship_horn": "ship_horn",             # un barco se mueve
+	"torpedo": "torpedo",                 # ataca la lancha torpedera
+	"splash": "splash",                   # le dan a un barco
+	"unit_sunk": "unit_sunk",             # cae un barco
+	"unit_downed": "unit_downed",         # cae un aparato
 	# ── La Tormenta ──
 	"storm_warning": "storm_warning",     # fase Aviso: sirena lejana (sintesis)
 	"storm_thunder": "storm_thunder",     # fase Tormenta: trueno (sintesis)
@@ -121,6 +143,21 @@ const SFX_GAIN_DB := {
 	"audit_summoned": -6.0,
 	"storm_halted": -9.0,
 	"rank_up": -10.0,
+	# Los sintetizados vienen a -3 dBFS de pico. Los de movimiento, mas bajos:
+	# suenan en casi cada turno.
+	"shot_rifle": -12.0,
+	"shot_cannon": -10.0,
+	"tank_fire": -10.0,
+	"tank_engine": -16.0,
+	"plane_prop": -15.0,
+	"plane_strafe": -12.0,
+	"bomb_drop": -10.0,
+	"airship_drone": -17.0,
+	"ship_horn": -16.0,
+	"torpedo": -10.0,
+	"splash": -14.0,
+	"unit_sunk": -11.0,
+	"unit_downed": -11.0,
 	"storm_warning": -9.0,
 	"storm_thunder": -8.0,
 	"tithe_demanded": -7.0,
@@ -131,6 +168,48 @@ const SFX_GAIN_DB := {
 }
 ## Lo que no esta en SFX_GAIN_DB: todos los efectos se bajan algo.
 const SFX_DEFAULT_GAIN_DB := -6.0
+
+## Disparo de cada tipo de unidad (CombatUnit.unit_id). Un tipo que no este aqui
+## suena por su dominio (ATTACK_SFX_BY_DOMAIN) y, si tampoco, con `combat_hit`.
+const ATTACK_SFX := {
+	"infantry": "shot_rifle",
+	"artillery": "shot_cannon",
+	"vehicle": "tank_fire",
+	"torpedo_boat": "torpedo",
+	"gunboat": "shot_cannon",
+	"dreadnought": "shot_cannon",
+	"fighter": "plane_strafe",
+	"bomber": "bomb_drop",
+	"airship": "bomb_drop",
+}
+const ATTACK_SFX_BY_DOMAIN := {
+	"land": "combat_hit",
+	"sea": "shot_cannon",
+	"air": "plane_strafe",
+}
+## Movimiento: solo lo que lleva motor. La infanteria y la artilleria se mueven
+## en silencio (a pie no merece un sonido por turno).
+const MOVE_SFX := {
+	"vehicle": "tank_engine",
+	"fighter": "plane_prop",
+	"bomber": "plane_prop",
+	"airship": "airship_drone",
+}
+const MOVE_SFX_BY_DOMAIN := {
+	"sea": "ship_horn",
+	"air": "plane_prop",
+}
+## Caida segun el medio: un barco se hunde, un aparato se estrella; en tierra,
+## el estallido de siempre.
+const DEATH_SFX_BY_DOMAIN := {
+	"land": "combat_unit_lost",
+	"sea": "unit_sunk",
+	"air": "unit_downed",
+}
+## Lo que suena ademas del disparo segun a quien le dan (solo al agua).
+const IMPACT_SFX_BY_DOMAIN := {
+	"sea": "splash",
+}
 
 ## Same clip requested twice inside this window plays once. An AI turn can land
 ## several `unit_attacked` in a burst; stacking the identical hit only gets
@@ -147,6 +226,7 @@ var _ambient_tweens: Dictionary = {}   # ambient key → Tween del fundido en cu
 var _ambient_key: String = ""          # el bucle que deberia sonar ("" = ninguno)
 var _storm_phase: int = -1             # ultima fase de la Tormenta oida (-1 = ninguna)
 var _night: bool = false               # DayClock: es de noche (fase NIGHT)
+var _board_open: bool = false          # hay un tablero de combate abierto (ambiente de costa)
 var _hooked_buttons: Dictionary = {}   # instance_id → true: botones ya enganchados
 var _current_music_key: String = ""
 var _music_before_combat: String = ""  # what was playing when the first encounter opened
@@ -383,7 +463,12 @@ func play_music_for_era(era: int) -> void:
 
 ## Arranca el ambiente que toca segun la fase de la Tormenta (dia o tormenta).
 func start_ambient() -> void:
-	set_ambient(_ambient_for_phase(_storm_phase, _night))
+	set_ambient(_ambient_for_phase(_storm_phase, _night, _board_open))
+
+## Vuelve a elegir el bucle con lo que se sabe ahora (si ya sonaba alguno).
+func _refresh_ambient() -> void:
+	if not _ambient_key.is_empty():
+		set_ambient(_ambient_for_phase(_storm_phase, _night, _board_open))
 
 ## Funde el ambiente hacia `key` ("day", "storm" o "" para silencio). Solo hay
 ## dos reproductores y solo los dos suenan durante el fundido. Si falta el
@@ -425,12 +510,16 @@ func _fade_ambient(key: String, target_db: float, stop_after: bool) -> void:
 	_ambient_tweens[key] = tw
 
 ## Que bucle toca. La Tormenta manda sobre todo: la ceniza trae el viento y no
-## se va hasta que vuelve la calma (el Aviso aun no cuenta). Sin Tormenta, de
-## noche los grillos; el resto del dia (alba y ocaso incluidos), olas y pajaros.
-func _ambient_for_phase(phase: int, night: bool = false) -> String:
+## se va hasta que vuelve la calma (el Aviso aun no cuenta), haya tablero o no
+## (la defensa del Diezmo se pelea bajo la lluvia). Sin Tormenta, con un tablero
+## abierto, la costa; si no, de noche los grillos y el resto del dia (alba y
+## ocaso incluidos), olas y pajaros.
+func _ambient_for_phase(phase: int, night: bool = false, board: bool = false) -> String:
 	if phase == StormCycle.Phase.ASH or phase == StormCycle.Phase.STORM \
 			or phase == StormCycle.Phase.TITHE:
 		return AMBIENT_STORM
+	if board:
+		return AMBIENT_COAST
 	return AMBIENT_NIGHT if night else AMBIENT_DAY
 
 func stop_music() -> void:
@@ -493,8 +582,10 @@ func _connect_events() -> void:
 	# Combat (T042)
 	EventBus.encounter_started.connect(_on_encounter_started)
 	EventBus.unit_attacked.connect(_on_unit_attacked)
+	EventBus.unit_moved.connect(_on_unit_moved)
 	EventBus.unit_died.connect(_on_unit_died)
 	EventBus.encounter_ended.connect(_on_encounter_ended)
+	EventBus.encounter_closed.connect(_on_encounter_closed)
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
 	EventBus.governor_rank_up.connect(_on_rank_up)
@@ -564,6 +655,7 @@ func _on_game_started() -> void:
 	# con viento, y una nueva empieza de dia. Sin sonido de cambio de fase.
 	_storm_phase = _current_storm_phase()
 	_night = _current_is_night()
+	_board_open = CombatManager.is_board_open()
 	start_ambient()
 	# Default to Era 1 music; era_advanced switches tracks as the player progresses.
 	if _current_music_key.is_empty():
@@ -577,12 +669,63 @@ func _on_encounter_started(_index: int, _is_boss: bool) -> void:
 	if _current_music_key != MUSIC_COMBAT_KEY:
 		_music_before_combat = _current_music_key
 	play_music(MUSIC_COMBAT_KEY)
+	_board_open = true
+	_refresh_ambient()
 
-func _on_unit_attacked(_attacker_uid: int, _target_uid: int, _damage: int) -> void:
-	play_sfx("combat_hit")
+## Cerrado el tablero vuelve el ambiente de la isla, salvo que se haya abierto
+## otro detras (la oleada siguiente del asedio): se pregunta a CombatManager.
+func _on_encounter_closed() -> void:
+	_board_open = CombatManager.is_board_open()
+	_refresh_ambient()
 
-func _on_unit_died(_unit_uid: int, _side: int) -> void:
-	play_sfx("combat_unit_lost")
+## El disparo segun quien ataca, y el agua si le dan a un barco. Las unidades se
+## leen del tablero abierto; si no se encuentran (una pelea resuelta a ciegas),
+## suena el golpe de siempre.
+func _on_unit_attacked(attacker_uid: int, target_uid: int, _damage: int) -> void:
+	var attacker := _board_unit(attacker_uid)
+	if attacker == null:
+		play_sfx("combat_hit")
+	else:
+		play_sfx(attack_sfx_for(attacker.unit_id, attacker.domain()))
+	var target := _board_unit(target_uid)
+	if target != null:
+		var impact := impact_sfx_for(target.domain())
+		if not impact.is_empty():
+			play_sfx(impact)
+
+func _on_unit_moved(unit_uid: int, _from: Vector2i, _to: Vector2i) -> void:
+	var unit := _board_unit(unit_uid)
+	if unit == null:
+		return
+	var key := move_sfx_for(unit.unit_id, unit.domain())
+	if not key.is_empty():
+		play_sfx(key)
+
+func _on_unit_died(unit_uid: int, _side: int) -> void:
+	var unit := _board_unit(unit_uid)
+	play_sfx(death_sfx_for(unit.domain() if unit != null else "land"))
+
+func _board_unit(uid: int) -> CombatUnit:
+	return CombatManager.get_unit(uid)
+
+## Clave del disparo de un tipo de unidad. Puro: se prueba sin tablero.
+func attack_sfx_for(unit_id: String, domain: String) -> String:
+	if ATTACK_SFX.has(unit_id):
+		return String(ATTACK_SFX[unit_id])
+	return String(ATTACK_SFX_BY_DOMAIN.get(domain, "combat_hit"))
+
+## Clave del movimiento ("" = se mueve sin sonido).
+func move_sfx_for(unit_id: String, domain: String) -> String:
+	if MOVE_SFX.has(unit_id):
+		return String(MOVE_SFX[unit_id])
+	return String(MOVE_SFX_BY_DOMAIN.get(domain, ""))
+
+func death_sfx_for(domain: String) -> String:
+	return String(DEATH_SFX_BY_DOMAIN.get(domain, "combat_unit_lost"))
+
+## Lo que suena encima del disparo segun el medio del blanco ("" = nada).
+func impact_sfx_for(domain: String) -> String:
+	return String(IMPACT_SFX_BY_DOMAIN.get(domain, ""))
 
 func _on_encounter_ended(victory: bool, _turns_used: int) -> void:
 	play_sfx("combat_victory" if victory else "combat_defeat")
@@ -621,8 +764,7 @@ func _current_is_night() -> bool:
 ## encima, sigue mandando ella. Sin sonido propio.
 func _on_day_phase_changed(phase = 0, _hour = 0.0) -> void:
 	_night = int(phase) == DayCycle.Phase.NIGHT
-	if not _ambient_key.is_empty():
-		set_ambient(_ambient_for_phase(_storm_phase, _night))
+	_refresh_ambient()
 
 func _current_storm_phase() -> int:
 	return StormManager.get_phase()
@@ -634,8 +776,7 @@ func _current_storm_phase() -> int:
 func _on_storm_phase_changed(phase: int = 0, _seconds_left: float = 0.0) -> void:
 	var previous := _storm_phase
 	_storm_phase = phase
-	if not _ambient_key.is_empty():
-		set_ambient(_ambient_for_phase(phase, _night))
+	_refresh_ambient()
 	if phase == previous:
 		return
 	match phase:

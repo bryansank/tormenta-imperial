@@ -393,7 +393,10 @@ son relativas a `scripts/` salvo que se diga otra cosa.
   `map/WorldLook.gd:69-79`.
 - **El audio es OGG Vorbis**, sin WAV: 4 músicas (3,8 MB) y 16 SFX, que se decodifican
   al sonar. Los carga todos al arrancar (`services/AudioManager.gd:146`), pero en
-  comprimido no es caro.
+  comprimido no es caro. *(1.1: ya son 5 pistas, 47 SFX y 4 bucles de ambiente,
+  6,4 MB en total; los 13 efectos de combate por unidad son mono a 22 kHz, 140 KB
+  entre todos. Elegir el clip cuesta una búsqueda en un diccionario por evento; no
+  hay `_process` nuevo y solo suena un bucle de ambiente, dos durante el fundido.)*
 - **Física**: no hay cuerpos ni áreas. Los raycasts del ratón son matemáticos. Su
   coste medido es casi nulo (pico de física < 0,3 ms).
 - **Autoloads**: 12 tienen `_process`, y todos son temporizadores O(1) u O(activos).
