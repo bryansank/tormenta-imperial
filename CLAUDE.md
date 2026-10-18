@@ -825,7 +825,9 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
   `touch_controls_opacity`, `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
 - `[interfaz]`: device profile, UI scale, text size, palette, high contrast, panel
-  opacity, hidden HUD elements, moved layout, `fps_cap` (`auto` / `30`…`120` /
+  opacity, hidden HUD elements, moved layout, `touch_controls_size` (size of the
+  on-screen controls: `auto` = the profile's, PC 100 % / tablet 115 % / phone
+  130 %, or `small` … `xlarge`; docs/21 §9), `fps_cap` (`auto` / `30`…`120` /
   `unlimited`: the FPS cap, 30 while paused and 10 without focus; "auto" is 30 on a
   PC in Minimal) — docs/21 §10; `graphics_quality` (`auto` / `high` / `low` /
   `minimal`) plus `quality_detected` / `quality_detected_reason` (the first-launch

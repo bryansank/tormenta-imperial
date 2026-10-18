@@ -58,6 +58,8 @@ func setup(placer: Node) -> void:
 
 func _ready() -> void:
 	_build_confirm()
+	# El ✓ crece con Ajustes → Controles → Tamano de los controles, como la cruceta.
+	EventBus.touch_controls_size_changed.connect(func(_s): _size_confirm())
 
 # ── Empezar y terminar ────────────────────────────────────────────────
 
@@ -66,6 +68,8 @@ func begin() -> void:
 	_finger = -1
 	_grab = false
 	touch_aim = _touch_mode()
+	# El modo tactil puede haber cambiado desde que se construyo (touch_px).
+	_size_confirm()
 	# Empezar a colocar despeja el mapa: el MENÚ unico (#31) se cierra si estaba
 	# abierto, y la columna lateral que quede (si alguna vista la usa) tambien.
 	if _sidebar_open:
@@ -379,14 +383,26 @@ func _build_confirm() -> void:
 	_confirm.name = "ConfirmPlacement"
 	# El tutorial guiado lo busca para no taparlo con su tarjeta.
 	_confirm.add_to_group("placement_confirm")
-	_confirm.custom_minimum_size = Vector2(UITheme.touch_px(56.0), UITheme.touch_px(52.0))
 	UITheme.style_button(_confirm, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_BODY)
+	_size_confirm()
 	_confirm.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 	_confirm.pressed.connect(func():
 		_confirm_press_ms = Time.get_ticks_msec()
 		confirm())
 	_confirm.visible = false
 	_layer.add_child(_confirm)
+
+## Lado y letra del ✓: los de dedo (UITheme.touch_px) por la escala de los
+## controles en pantalla que cabe en el lienzo (la misma que la cruceta).
+func _size_confirm() -> void:
+	if _confirm == null:
+		return
+	var lm := get_node_or_null("/root/UILayoutManager")
+	var k: float = lm.touch_controls_scale() if lm != null else GameConfig.touch_controls_scale()
+	_confirm.custom_minimum_size = Vector2(UITheme.touch_px(56.0), UITheme.touch_px(52.0)) * k
+	_confirm.add_theme_font_size_override("font_size", roundi(float(UITheme.FONT_BODY) * k))
+	if _confirm.visible:
+		_position_confirm()
 
 func confirm_button() -> Button:
 	return _confirm

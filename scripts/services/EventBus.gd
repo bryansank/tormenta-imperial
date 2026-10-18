@@ -345,6 +345,10 @@ signal touch_controls_changed(enabled: bool)
 ## La opacidad de los controles en pantalla cambio (Ajustes → Controles).
 @warning_ignore("unused_signal")
 signal touch_controls_opacity_changed(opacity: float)
+## El tamano de los controles en pantalla cambio (Ajustes → Controles, o el
+## perfil de dispositivo en "auto"). Lleva la escala RESUELTA (1.0 = 100 %).
+@warning_ignore("unused_signal")
+signal touch_controls_size_changed(scale: float)
 
 ## Los globos de ayuda se encendieron o apagaron (AYUDA del menu ☰ o Ajustes >
 ## Interfaz). GameConfig.ui_helper_visible ya tiene el valor nuevo.

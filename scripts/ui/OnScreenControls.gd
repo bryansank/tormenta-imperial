@@ -20,6 +20,10 @@ extends CanvasLayer
 ##   tocar y siguen solos tras GameConfig.hold_repeat_delay_sec (bug 5).
 ## - Semitransparentes: cada boton va a GameConfig.ui_touch_controls_opacity y se
 ##   ve entero mientras se pulsa (bug 7).
+## - Tamano (feat/controles-moviles): cada boton, hueco y letra se multiplica por
+##   la escala de Ajustes → Controles → Tamano de los controles ("auto" = la del
+##   perfil: PC 100 %, tablet 115 %, movil 130 %), recortada para que quepa en el
+##   lienzo (UILayoutManager.touch_controls_scale). Se aplica al momento.
 
 ## Degrees the camera snaps per rotate-button press.
 const ROTATE_STEP_DEGREES := 45.0
@@ -33,6 +37,8 @@ const HOLD_ZOOM_PER_SEC := 5.0
 
 var _pan_direction: Vector2 = Vector2.ZERO
 var _rotate_building_btn: Button = null
+## El hueco vacio del centro de la cruceta (crece con ella).
+var _dpad_centre: Control = null
 var _cancel_placement_btn: Button = null
 ## Every button of the layer, for the opacity.
 var _buttons: Array[Button] = []
@@ -40,6 +46,10 @@ var _buttons: Array[Button] = []
 ## "interval": seconds (0 = every frame), "repeat": Callable(delta)}.
 var _holds: Dictionary = {}
 var _opacity: float = 0.45
+## Escala aplicada ahora mismo (1.0 = 100 %).
+var _scale: float = 1.0
+## Contenedores cuyo hueco crece con la escala: Control -> hueco de serie.
+var _gaps: Dictionary = {}
 
 func _ready() -> void:
 	layer = 10
@@ -55,6 +65,11 @@ func _ready() -> void:
 	EventBus.touch_controls_changed.connect(_apply_visibility)
 	set_opacity(GameConfig.ui_touch_controls_opacity)
 	EventBus.touch_controls_opacity_changed.connect(set_opacity)
+	# Tamano: al cambiarlo en Ajustes, al cambiar el perfil y al cambiar el lienzo
+	# (girar, escala de interfaz), que es cuando cambia lo que cabe.
+	apply_size()
+	EventBus.touch_controls_size_changed.connect(func(_s): apply_size())
+	UILayoutManager.layout_changed.connect(apply_size)
 
 ## Hides the whole layer. A held D-pad button is released too, so the camera
 ## does not keep drifting after the controls vanish under the finger.
@@ -136,6 +151,54 @@ func current_opacity() -> float:
 func get_buttons() -> Array[Button]:
 	return _buttons
 
+# ── Tamano ────────────────────────────────────────────────────────────
+
+## Vuelve a medir todo con la escala que cabe ahora (UILayoutManager la recorta
+## al lienzo; sin el, la de Ajustes tal cual).
+func apply_size() -> void:
+	var lm := get_node_or_null("/root/UILayoutManager")
+	var s: float = lm.touch_controls_scale() if lm != null else GameConfig.touch_controls_scale()
+	set_controls_scale(s)
+
+## Cada boton a su tamano de serie por `s`, y su letra; los huecos tambien.
+func set_controls_scale(s: float) -> void:
+	_scale = s
+	for node in _sized_nodes():
+		var c := node as Control
+		c.custom_minimum_size = (c.get_meta("base_min") as Vector2) * s
+		if c.has_meta("base_font"):
+			c.add_theme_font_size_override("font_size", roundi(float(c.get_meta("base_font")) * s))
+	for box in _gaps.keys():
+		if is_instance_valid(box):
+			var gap := roundi(float(_gaps[box]) * s)
+			if box is GridContainer:
+				(box as GridContainer).add_theme_constant_override("h_separation", gap)
+				(box as GridContainer).add_theme_constant_override("v_separation", gap)
+			else:
+				(box as Control).add_theme_constant_override("separation", gap)
+
+func get_controls_scale() -> float:
+	return _scale
+
+func _sized_nodes() -> Array:
+	var out: Array = []
+	for btn in _buttons:
+		if is_instance_valid(btn) and btn.has_meta("base_min"):
+			out.append(btn)
+	if _dpad_centre != null and is_instance_valid(_dpad_centre):
+		out.append(_dpad_centre)
+	return out
+
+## Recuerda el tamano y la letra de serie de un control (los de 100 %).
+func _remember_base(c: Control, font_size: int) -> void:
+	c.set_meta("base_min", c.custom_minimum_size)
+	if font_size > 0:
+		c.set_meta("base_font", font_size)
+
+## Hueco de serie de un contenedor, para escalarlo.
+func _remember_gap(box: Control, gap: int) -> void:
+	_gaps[box] = gap
+
 func _register(btn: Button) -> void:
 	_buttons.append(btn)
 	btn.modulate.a = _opacity
@@ -193,6 +256,7 @@ func _setup_ui() -> void:
 	# Right side: rotate + zoom stacked
 	var right_vbox := VBoxContainer.new()
 	right_vbox.add_theme_constant_override("separation", 12)
+	_remember_gap(right_vbox, 12)
 	right_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Pegada abajo: al colocar crece hacia arriba solo lo que ocupan sus botones.
 	right_vbox.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -208,6 +272,7 @@ func _setup_ui() -> void:
 	# El tutorial lo senala al ensenar a girar (HelpTargets "rotate_button").
 	_rotate_building_btn.add_to_group("hud_rotate_building")
 	_rotate_building_btn.custom_minimum_size = Vector2(108, 50)
+	_remember_base(_rotate_building_btn, UITheme.FONT_SECTION)
 	_rotate_building_btn.tooltip_text = Tr.ti("LBL_ROTATE_BUILDING")
 	_add_hold(_rotate_building_btn, func(): EventBus.building_rotate_requested.emit(),
 		func(_d: float): EventBus.building_rotate_requested.emit(), BUILDING_ROTATE_REPEAT_SEC)
@@ -221,6 +286,8 @@ func _setup_ui() -> void:
 	_cancel_placement_btn.custom_minimum_size = Vector2(108, 50)
 	_cancel_placement_btn.tooltip_text = Tr.ti("LBL_CANCEL_PLACEMENT_TIP")
 	UITheme.style_button(_cancel_placement_btn, UITheme.DANGER, UITheme.FONT_BODY)
+	# style_button sube el alto al lado tactil del perfil: ese es el de serie.
+	_remember_base(_cancel_placement_btn, UITheme.FONT_BODY)
 	_cancel_placement_btn.pressed.connect(_on_cancel_placement)
 	_register(_cancel_placement_btn)
 	_cancel_placement_btn.visible = false
@@ -233,6 +300,9 @@ func _create_dpad() -> GridContainer:
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grid.add_theme_constant_override("h_separation", 4)
+	grid.add_theme_constant_override("v_separation", 4)
+	_remember_gap(grid, 4)
 
 	# 8 directions: NW, N, NE, W, center, E, SW, S, SE
 	var labels := ["\u2196", "\u2191", "\u2197",
@@ -245,9 +315,11 @@ func _create_dpad() -> GridContainer:
 	for i in range(9):
 		if labels[i] == "":
 			var empty := Control.new()
-			empty.custom_minimum_size = Vector2(50, 50)
+			empty.custom_minimum_size = Vector2(48, 48)
 			# El centro de la cruceta no es un boton: el dedo pasa al mapa.
 			empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			empty.set_meta("base_min", empty.custom_minimum_size)
+			_dpad_centre = empty
 			grid.add_child(empty)
 		else:
 			var btn := _create_pad_button(labels[i], dirs[i])
@@ -265,6 +337,7 @@ func _create_pad_button(label: String, direction: Vector2) -> Button:
 func _create_rotate_buttons() -> HBoxContainer:
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
+	_remember_gap(hbox, 8)
 
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -287,6 +360,7 @@ func _create_rotate_buttons() -> HBoxContainer:
 func _create_zoom_buttons() -> HBoxContainer:
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
+	_remember_gap(hbox, 8)
 
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -339,6 +413,7 @@ func _styled_button(label: String) -> Button:
 	btn.add_theme_stylebox_override("pressed", p)
 
 	btn.add_theme_font_size_override("font_size", UITheme.FONT_SECTION)
+	_remember_base(btn, UITheme.FONT_SECTION)
 	UITheme.set_label_color(btn, UITheme.TEXT_DIM)
 	btn.add_theme_color_override("font_hover_color", UITheme.TEXT)
 	btn.add_theme_color_override("font_pressed_color", UITheme.TEXT_BRIGHT)

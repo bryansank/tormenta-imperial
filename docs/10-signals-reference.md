@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**127 signals** in 30 categories (counted on 2026-10-14, after the skirmishes; +1 `trial_tithe_resolved` on 2026-10-17), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**128 signals** in 30 categories (counted on 2026-10-14, after the skirmishes; +1 `trial_tithe_resolved` on 2026-10-17, +1 `touch_controls_size_changed` on 2026-10-18), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -342,6 +342,7 @@ refresh its tech states on any message.
 | `game_speed_changed` | `speed: float` | GameConfig (`set_game_speed`) | GameSpeedButton; the combat view (shortens its animations with `combat_pace`) |
 | `touch_controls_changed` | `enabled: bool` (resolved: "auto" already checked against the device) | GameConfig, DeviceProfile | OnScreenControls, ResourceHUD, HelperPanel |
 | `touch_controls_opacity_changed` | `opacity: float` | GameConfig | OnScreenControls |
+| `touch_controls_size_changed` | `scale: float` (resolved: "auto" already the profile's size) | GameConfig, DeviceProfile | OnScreenControls, PlacementAssist, UILayoutManager |
 | `helper_visibility_changed` | `visible: bool` | HudRegistry | HelperPanel, SettingsPanel |
 | `music_toggled` | `enabled: bool` | AudioManager | SettingsPanel, PauseMenu |
 | `locale_changed` | `locale: String` | GameConfig (`set_locale()`) | GameManager (saves and reloads the scene keeping the game) |
