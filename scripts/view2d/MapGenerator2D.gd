@@ -34,5 +34,16 @@ func _refresh_deposit_look(root: Node) -> void:
 	root.set("stage", stage)
 	(root as Node2D).queue_redraw()
 
+## La arena no tapa los bancos, tambien en 2D (feat/vista2d-y-prologo): la isla
+## 2D se llama "Island" (no "IslandGenerator") y abre una cala en su arena sobre
+## cada banco (Island2D.set_sand_holes, mismos rectangulos de mundo).
+func _push_sand_holes() -> void:
+	_sand_holes_queued = false
+	if not is_inside_tree() or get_tree().current_scene == null:
+		return
+	var island := get_tree().current_scene.get_node_or_null("Island")
+	if island != null and island.has_method("set_sand_holes"):
+		island.set_sand_holes(sea_deposit_rects())
+
 func _show_depleted_text(node: Node) -> void:
 	FloatingText2D.spawn(node as Node2D, Tr.t("LBL_DEPOSIT_DEPLETED"), Color(0.8, 0.3, 0.2))

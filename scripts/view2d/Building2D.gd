@@ -168,6 +168,10 @@ func set_selected(value: bool) -> void:
 		_name_label.text = _label_text()
 	if data != null and data.id == "road":
 		set_process(value)
+	# El badge compacto ensena su texto entero solo con el edificio seleccionado.
+	var badge := get_node_or_null("StatusBadge")
+	if badge != null and badge.has_method("set_expanded"):
+		badge.set_expanded(value)
 	queue_redraw()
 
 func is_selected() -> bool:

@@ -48,6 +48,12 @@ const SWIPE_MIN := 70.0
 const SHEET_MAX := Vector2(860, 640)
 const FOOTER_H := 64.0
 const EDGE := 16.0
+## La lamina (PrologueEngraving, 2026-10-18): al lado del texto si el folio es
+## ancho, encima si es estrecho, y fuera si no cabe (ver layout_for).
+const ART_SIDE_MIN_W := 600.0
+const ART_TOP_MIN_H := 330.0
+## Lo que el sello de lacre ocupa al pie de la columna de la lamina.
+const SEAL_ROOM := 96.0
 
 var _variant := "full"
 var _pages: Array = []
@@ -64,6 +70,10 @@ var _frame: Panel
 var _title: Label
 var _folio: Label
 var _scroll: ScrollContainer
+var _content: BoxContainer
+var _art_col: VBoxContainer
+var _art: Control
+var _seal_room: Control
 var _body: Label
 var _note: Label
 var _seal: Control
@@ -166,6 +176,20 @@ func body_text() -> String:
 func title_text() -> String:
 	return _title.text
 
+## La lamina del folio (PrologueEngraving). Publico para las pruebas.
+func art() -> Control:
+	return _art
+
+## Donde va la lamina en un folio de `sheet` px: "side" (columna a la derecha
+## del texto, `art` = su ancho), "top" (franja encima, `art` = su alto) o
+## "none" (no cabe: solo texto). Pura, para las pruebas.
+static func layout_for(sheet: Vector2) -> Dictionary:
+	if sheet.x >= ART_SIDE_MIN_W:
+		return {"mode": "side", "art": clampf(sheet.x * 0.36, 170.0, 320.0)}
+	if sheet.y >= ART_TOP_MIN_H:
+		return {"mode": "top", "art": clampf(sheet.y * 0.28, 90.0, 150.0)}
+	return {"mode": "none", "art": 0.0}
+
 # ── Construccion ─────────────────────────────────────────────────────
 
 func _build() -> void:
@@ -254,20 +278,50 @@ func _build() -> void:
 	_folio.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	title_row.add_child(_folio)
 
+	# Texto y lamina: lado a lado en un folio ancho, la lamina encima en uno
+	# estrecho (BoxContainer.vertical, lo decide _relayout con layout_for).
+	_content = BoxContainer.new()
+	_content.name = "Content"
+	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content.add_theme_constant_override("separation", 18)
+	_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(_content)
+
 	_scroll = ScrollContainer.new()
 	# El prologo pasa folio deslizando: su texto no se arrastra (DragScroll).
 	_scroll.set_meta("no_drag_scroll", true)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
-	col.add_child(_scroll)
+	_content.add_child(_scroll)
+
+	# La lamina del folio: un grabado a tinta (PrologueEngraving), con hueco
+	# debajo para el sello de lacre cuando va al lado del texto.
+	_art_col = VBoxContainer.new()
+	_art_col.name = "ArtColumn"
+	_art_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_art_col.add_theme_constant_override("separation", 0)
+	_content.add_child(_art_col)
+	_art = preload("res://scripts/ui/PrologueEngraving.gd").new()
+	_art.name = "Art"
+	_art.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_art_col.add_child(_art)
+	_seal_room = Control.new()
+	_seal_room.name = "SealRoom"
+	_seal_room.custom_minimum_size = Vector2(0, SEAL_ROOM)
+	_seal_room.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_art_col.add_child(_seal_room)
 	var body_col := VBoxContainer.new()
 	body_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body_col.add_theme_constant_override("separation", 14)
 	body_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_scroll.add_child(body_col)
 
-	_body = _ink_label("", 21, UITheme.INK)
+	# 22 (antes 21): con la lamina al lado el folio ya no queda vacio y la
+	# letra se lee mejor en tableta.
+	_body = _ink_label("", 22, UITheme.INK)
 	_body.name = "Body"
 	_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -419,15 +473,19 @@ func _render(typewriter: bool) -> void:
 	_next_btn.text = (Tr.t("BTN_PROLOGUE_START") if last else Tr.t("BTN_PROLOGUE_NEXT")) + "  ▶"
 	_hint.text = Tr.ti("PRO_HINT")
 	_paint_dots()
+	_art.call("set_folio", id)
 	_place_stamp(id)
 	_stop_typing()
 	if typewriter:
 		_body.visible_ratio = 0.0
 		_note.modulate.a = 0.0
 		_stamp.modulate.a = 0.0
+		_art.modulate.a = 0.0
 		var secs: float = minf(TYPE_MAX_SEC, float(_body.text.length()) / TYPE_CPS)
 		_typing = create_tween()
-		_typing.tween_property(_body, "visible_ratio", 1.0, secs)
+		# La lamina aparece mientras se escribe el texto, como tinta que seca.
+		_typing.tween_property(_art, "modulate:a", 1.0, minf(0.6, secs))
+		_typing.parallel().tween_property(_body, "visible_ratio", 1.0, secs)
 		_typing.tween_property(_note, "modulate:a", 1.0, 0.35)
 		if _stamp.visible:
 			_stamp.scale = Vector2(1.6, 1.6)
@@ -441,6 +499,7 @@ func _finish_typing() -> void:
 	_stop_typing()
 	_body.visible_ratio = 1.0
 	_note.modulate.a = 1.0
+	_art.modulate.a = 1.0
 	_stamp.scale = Vector2.ONE
 	_stamp.modulate.a = 0.85
 
@@ -456,12 +515,28 @@ func _place_stamp(id: String) -> void:
 	_stamp_label.text = Tr.t("PRO_%s_STAMP" % id)
 	_stamp.reset_size()
 	var sz := _stamp.get_combined_minimum_size()
-	# En el blanco de abajo, a la izquierda del sello, torcido como un golpe de
-	# tampon. Nunca encima del texto: el texto ocupa la mitad alta del folio.
 	_stamp.size = sz
 	_stamp.pivot_offset = sz * 0.5
 	_stamp.rotation_degrees = -9.0
-	_stamp.position = Vector2(_sheet.size.x - sz.x - 150.0, _sheet.size.y - sz.y - 52.0)
+	_stamp.position = stamp_position(_sheet.size, sz, Rect2())
+	# Con la lamina a la vista, el tampon va encima de su parte de abajo (un
+	# golpe sobre el grabado): se mira cuando los contenedores ya colocaron.
+	_place_stamp_on_art.call_deferred()
+
+## Donde cae el tampon de `stamp` px en un folio de `sheet` px. Con lamina
+## (`art`, en coordenadas del folio) y sitio, sobre su parte de abajo,
+## centrado; si no, en el blanco de abajo a la izquierda del sello, torcido
+## como un golpe de tampon y nunca encima del texto. Pura, para las pruebas.
+static func stamp_position(sheet: Vector2, stamp: Vector2, art: Rect2) -> Vector2:
+	if art.size.x > stamp.x * 0.8 and art.size.y > stamp.y * 2.0:
+		return Vector2(art.position.x + (art.size.x - stamp.x) * 0.5, art.end.y - stamp.y - art.size.y * 0.12)
+	return Vector2(sheet.x - stamp.x - 150.0, sheet.y - stamp.y - 52.0)
+
+func _place_stamp_on_art() -> void:
+	if _stamp == null or not _stamp.visible or _art == null or not _art.is_visible_in_tree():
+		return
+	var r := Rect2(_art.global_position - _sheet.global_position, _art.size)
+	_stamp.position = stamp_position(_sheet.size, _stamp.size, r)
 
 func _relayout() -> void:
 	if _sheet == null:
@@ -471,6 +546,7 @@ func _relayout() -> void:
 	var h: float = minf(SHEET_MAX.y, vp.y - FOOTER_H - EDGE * 3.0)
 	_sheet.position = Vector2((vp.x - w) * 0.5, maxf(EDGE, (vp.y - FOOTER_H - h) * 0.5 - EDGE * 0.5))
 	_sheet.size = Vector2(w, h)
+	_layout_art(Vector2(w, h))
 	var footer: Control = _root.get_node("Footer")
 	footer.offset_left = (vp.x - w) * 0.5
 	footer.offset_right = -(vp.x - w) * 0.5
@@ -478,6 +554,26 @@ func _relayout() -> void:
 	footer.offset_bottom = -EDGE * 0.5
 	if _open and not _pages.is_empty():
 		_place_stamp(_pages[_page])
+
+## Coloca la lamina segun layout_for: al lado (con hueco para el sello), encima
+## o fuera. El texto conserva su scroll por si no cabe.
+func _layout_art(sheet: Vector2) -> void:
+	var lay := layout_for(sheet)
+	match String(lay["mode"]):
+		"side":
+			_art_col.visible = true
+			_content.vertical = false
+			_content.move_child(_art_col, 1)
+			_art_col.custom_minimum_size = Vector2(float(lay["art"]), 0)
+			_seal_room.visible = true
+		"top":
+			_art_col.visible = true
+			_content.vertical = true
+			_content.move_child(_art_col, 0)
+			_art_col.custom_minimum_size = Vector2(0, float(lay["art"]))
+			_seal_room.visible = false
+		_:
+			_art_col.visible = false
 
 # ── Entrada ──────────────────────────────────────────────────────────
 

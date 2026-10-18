@@ -429,7 +429,7 @@ func _ui(on: bool) -> void:
 	if not on:
 		_ui_was.clear()
 		for c in get_tree().root.find_children("*", "CanvasLayer", true, false):
-			if c.name != "AshLayer":
+			if not c.name in ["AshLayer", "LightsLayer"]:
 				_ui_was[c] = (c as CanvasLayer).visible
 				(c as CanvasLayer).visible = false
 		return
