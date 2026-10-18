@@ -117,7 +117,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist; every road drawn by one RoadBatch3D child (a MultiMesh per neighbour mask, at most 16 draw calls)
   +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" follows the device profile (tablet/phone yes, PC no)
   +-- ResourceHUD (CanvasLayer 10) -- top-left card: one row of [icon] number chips (resources, free workers, morale once the Storm is armed; names and meaning in tooltips, a tap unfolds them) + shared storage bar with used/cap + materials row (once one is unlocked)
-  +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), on land only, none on the Núcleo sidewalk or the shore band (land next to the water), each with room and a road path for its extractor; `shore_cells()` is the hook for future sea/shore resources
+  +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), on land only, none on the Núcleo sidewalk or the shore band (land next to the water), each with room and a road path for its extractor; then 3-5 schools of fish in the water next to the coast (`SHORE_DEPOSIT_IDS`, for the Fishing dock); `shore_cells()` is the hook for more sea/shore resources
   +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + building list
   +-- BuildingInfoPanel (CanvasLayer 10) -- right panel: selected building / deposit info; RETIRAR / PONER TRABAJADORES; ABRIR MERCADO / INVESTIGAR on the Market / Laboratory (`SCREENS`)
   +-- MarketPanel (CanvasLayer 11) -- buy/sell UI, opened from a Market building (not from the menu)
@@ -248,11 +248,11 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 |----------|------|----------|--------|
 | Gold | Universal currency, troop wages | 300 | Era 1 |
 | Wood | Construction | 200 | Era 1 |
-| Food | What people eat (Farm, Market); in the pool; `Type.FOOD` after the materials | 80 | Era 1 |
+| Food | What people eat (Farm, Fishing dock, Market); in the pool; `Type.FOOD` after the materials | 80 | Era 1 |
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (34 total, `data/buildings/*.tres`)
+### Buildings (35 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -280,12 +280,28 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Well (1.1) | 2x2 | 40/0/0/30 | 0 | −20 % storm damage within 3 cells, +15 % health after the storm; rank 2 | 1 |
 | Lighthouse (1.1) | 2x2 | 180/0/0/120 + 6 planks | 1 | Storm Warning +20 s; max 1 | 1-2 |
 | Fuel depot (1.1) | 2x2 | 200/80/0/80 + 4 beams | 1 | +500 oil outside the shared bag; needs a Refinery | 3 |
+| Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food/30s, no crop; on the shore touching a school of fish; caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
 
 The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
 `scripts/buildings/UtilityEffects.gd` (on build/demolish, never per frame), look in
 `scripts/buildings/UtilityToys.gd` (one procedural toy mesh per type until its bake
 exists) and `BuildingArt2D._utility`. Full table: `docs/03-buildings.md`.
+
+**Fishing dock (feat/muelle-pesca, doc 21 §6.3 n.º 7):** `fishing_dock`, era 1, the
+second food producer. Its deposit rule (`fish_shoal`, reach 1) puts it on the shore:
+the **school of fish** is the first sea deposit (`MapGenerator.SHORE_DEPOSIT_IDS`), 3-5
+per island in water cells touching land (`GameConfig.sea_deposit_rolls`, own RNG seeded
+by the island; `GridManager.place_sea_obstacle`), never runs out
+(`GameConfig.endless_deposits`, no hand mining). Old saves get their shoals on load
+(`MapGenerator.ensure_shore_deposits()`). In Gobernador its fresh fish spoils in half
+the time (`fishing_dock_spoil_mult`). All its numbers live in the GameConfig block
+"Muelle de pesca" at the end of the file: `_register_fishing_dock()` adds its rows
+to the shared tables (limits, deposit rule, processes, stock cap, styles) when
+GameConfig is created. Baked toy model `assets/models/toy/fishing_dock.tscn`; 2D
+`BuildingArt2D._fishing_dock` / `_dep_fish_shoal`; 3D shoal `DepositMesh._fish_shoal`.
+¿QUÉ HACER? only offers it as food support when no Farm fits. Detail: docs/02
+"Yacimientos de mar", docs/03 "Muelle de pesca".
 
 **Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
 `avenue_tree`, `flower_planter`, `colony_sign`, `hay_cart`, `bonfire`, `flagpole`,
@@ -1120,7 +1136,7 @@ unset:
 
 | Source | Buildings |
 |---|---|
-| Baked toy model (`model_scene` = `assets/models/toy/<id>.tscn`) | `nucleo`, `house`, `sawmill`, `farm`, `gold_mine`, `warehouse`, `market`, `laboratory`, `foundry`, `barracks`, `refinery`, `tower`, `headquarters`, `garden`, `fountain`, `statue` (16). The Farm adds its beds as a separate mesh (`Crops`, `FarmCrops3D`) animated by the shared `toy_crops.gdshader` |
+| Baked toy model (`model_scene` = `assets/models/toy/<id>.tscn`) | `nucleo`, `house`, `sawmill`, `farm`, `gold_mine`, `warehouse`, `market`, `laboratory`, `foundry`, `barracks`, `refinery`, `tower`, `headquarters`, `garden`, `fountain`, `statue`, `fishing_dock` (17). The Farm adds its beds as a separate mesh (`Crops`, `FarmCrops3D`) animated by the shared `toy_crops.gdshader` |
 | `DecorMesh` (through `DieselpunkBuildingFactory.create()`) | the 10 cheap decorations: one shared mesh per type, baked `assets/models/toy/<id>_mesh.res` when it exists, procedural (LotMesh boxes, cylinders, balls) until then — none is baked yet |
 | `RoadBatch3D` | `road`: the node carries no mesh; the batch draws every tile with `DieselpunkBuildingFactory.road_mesh()` per neighbour mask |
 
