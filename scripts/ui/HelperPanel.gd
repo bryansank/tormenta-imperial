@@ -31,6 +31,7 @@ const HelpCatalog := preload("res://scripts/ui/HelpCatalog.gd")
 const BuildingHelpText := preload("res://scripts/ui/BuildingHelpText.gd")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const HelpIndexScene := preload("res://scenes/ui/HelpIndexPanel.tscn")
+const InstructorBust := preload("res://scripts/ui/InstructorBust.gd")
 
 ## Node name of the Skirmish callout, so tests and tools can find it.
 const SKIRMISH_CALLOUT_NAME := "SkirmishCallout"
@@ -83,6 +84,10 @@ var _tip_layer: CanvasLayer
 var _tip_card: PanelContainer
 var _pointer: Panel
 var _index: CanvasLayer
+## El instructor junto a la tarjeta de consejo (no junto a los globos, que son
+## pequenos y van pegados a su control): la Capitana para lo basico y la
+## economia, el Sargento para la Tormenta y el ejercito (feat/instructores).
+var _tip_bust: Control
 
 ## Cola: {id, prio, seq, forced}. `_current` es la que esta en pantalla.
 var _queue: Array[Dictionary] = []
@@ -267,6 +272,13 @@ func _setup_ui() -> void:
 	_tip_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_tip_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	tip_root.add_child(_tip_card)
+	_tip_bust = InstructorBust.new()
+	_tip_bust.name = "TipInstructor"
+	_tip_bust.visible = false
+	tip_root.add_child(_tip_bust)
+	_tip_card.item_rect_changed.connect(_place_tip_bust)
+	_tip_card.visibility_changed.connect(_place_tip_bust)
+	EventBus.instructors_visibility_changed.connect(func(_on): _place_tip_bust())
 
 	# El indice de AYUDA, en su propia capa (la pone UIManager al abrirse).
 	_index = HelpIndexScene.instantiate()
@@ -469,12 +481,42 @@ func _show(item: Dictionary) -> void:
 		return
 	box.setup(id, HelpCatalog.title(id), HelpCatalog.body(id))
 	box.start()
+	if box == _tip_card:
+		_speak_tip(id)
 	# Entra con un fundido corto: llama la vista sin interrumpir.
 	box.modulate.a = 0.0
 	create_tween().tween_property(box, "modulate:a", 1.0, 0.25)
 	_current = item.duplicate()
 	_current["box"] = box
 	_refresh_callouts()
+
+## El instructor de la tarjeta de consejo: quien segun la categoria, su cara,
+## y el texto escrito poco a poco mientras mueve la boca.
+func _speak_tip(id: String) -> void:
+	var cat := HelpCatalog.category(id)
+	_tip_bust.show_as(InstructorBust.who_for_category(cat), InstructorBust.expression_for_category(cat), _tip_bust.facing)
+	_tip_bust.visible = GameConfig.ui_instructors_visible
+	_tip_bust.speak(_tip_card.call("body_label"))
+	_place_tip_bust.call_deferred()
+
+## Pega el busto a la tarjeta de consejo (a su izquierda si cabe), sin tapar el
+## control que senala el marco azul; si no cabe, se oculta.
+func _place_tip_bust() -> void:
+	if _tip_bust == null:
+		return
+	if not _tip_card.visible or not GameConfig.ui_instructors_visible:
+		_tip_bust.visible = false
+		return
+	var avoid: Array = []
+	if not _current.is_empty():
+		var target := HelpCatalog.target(String(_current["id"]))
+		if target != "":
+			avoid.append(HelpTargets.rect(get_tree(), target))
+	_tip_bust.dock_to(get_viewport().get_visible_rect().size, _tip_card.get_global_rect(), avoid)
+
+## El busto de la tarjeta de consejo (pruebas).
+func tip_instructor() -> Control:
+	return _tip_bust
 
 func _suspend_current() -> void:
 	if _current.is_empty():

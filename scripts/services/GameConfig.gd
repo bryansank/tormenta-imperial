@@ -668,6 +668,12 @@ var ui_grid_visible := false
 ## so new players get guidance; the choice persists once toggled.
 var ui_helper_visible := true
 
+## Los instructores (feat/instructores, docs/23 §9): el busto de la
+## Capitana Remache y del Sargento Bombarda junto a las tarjetas del tutorial,
+## los consejos y los partes de guerra. Ajustes > Interfaz los oculta; es del
+## dispositivo ([ui] instructors_visible en settings.cfg), nunca del save.
+var ui_instructors_visible := true
+
 ## Whether the game runs in exclusive fullscreen. Toggled with F11 or from the
 ## Settings panel; persists in user://settings.cfg like the rest of preferences.
 var ui_fullscreen := false
@@ -850,6 +856,7 @@ func load_user_settings() -> void:
 	audio_music_enabled = bool(cf.get_value("audio", "music_enabled", audio_music_enabled))
 	ui_grid_visible = bool(cf.get_value("ui", "grid_always", ui_grid_visible))
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
+	ui_instructors_visible = bool(cf.get_value("ui", "instructors_visible", ui_instructors_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
 	var view := String(cf.get_value("ui", "view_mode", ui_view_mode))
 	ui_view_mode = view if view in ["3d", "2d"] else ui_view_mode
@@ -925,6 +932,7 @@ func save_user_settings() -> void:
 	if cf.has_section_key("ui", "grid_visible"):
 		cf.erase_section_key("ui", "grid_visible")
 	cf.set_value("ui", "helper_visible", ui_helper_visible)
+	cf.set_value("ui", "instructors_visible", ui_instructors_visible)
 	cf.set_value("ui", "fullscreen", ui_fullscreen)
 	cf.set_value("ui", "view_mode", ui_view_mode)
 	cf.set_value("ui", "touch_controls", ui_touch_controls)

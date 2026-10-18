@@ -352,6 +352,7 @@ refresh its tech states on any message.
 | `touch_controls_changed` | `enabled: bool` (resolved: "auto" already checked against the device) | GameConfig, DeviceProfile | OnScreenControls, ResourceHUD, HelperPanel |
 | `touch_controls_opacity_changed` | `opacity: float` | GameConfig | OnScreenControls |
 | `helper_visibility_changed` | `visible: bool` | HudRegistry | HelperPanel, SettingsPanel |
+| `instructors_visibility_changed` | `visible: bool` | HudRegistry | TutorialPanel, HelperPanel, WarReportScreen, SettingsPanel (docs/23 §9) |
 | `music_toggled` | `enabled: bool` | AudioManager | SettingsPanel, PauseMenu |
 | `locale_changed` | `locale: String` | GameConfig (`set_locale()`) | GameManager (saves and reloads the scene keeping the game) |
 | `graphics_quality_changed` | `quality: String` (`auto` / `high` / `low` / `minimal`) | GraphicsQuality (`set_quality()`) | WorldLook, DeviceProfile, ColonyFlag3D |

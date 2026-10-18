@@ -34,13 +34,16 @@ const ELEMENTS := {
 	"GameSpeedButton": {"label": "HUD_GAME_SPEED", "hideable": true, "movable": true, "mode": "holder"},
 	## El boton ESCARAMUZAS junto a CONSTRUIR (SkirmishButton, doc 21 §3.6).
 	"SkirmishButton": {"label": "HUD_SKIRMISH_BUTTON", "hideable": true, "movable": true, "mode": "holder"},
+	## Los instructores: el busto junto a la tarjeta del tutorial, los consejos y
+	## los partes (feat/instructores). Es una bandera de GameConfig, como la ayuda.
+	"Instructors": {"label": "HUD_INSTRUCTORS", "hideable": true, "movable": false, "mode": "instructors"},
 }
 
 ## Orden en Ajustes y en el editor.
 const ORDER := [
 	"ResourceHUD",
 	"StormHUD", "NotificationPanel.toasts",
-	"HelperPanel.callouts", "BattleScreen.turn", "SandboxPanel", "RankPanel",
+	"HelperPanel.callouts", "Instructors", "BattleScreen.turn", "SandboxPanel", "RankPanel",
 	"GameSpeedButton", "SkirmishButton",
 	"NotificationPanel.log", "ConstructionMenu.button", "BuildingInfoPanel",
 ]
@@ -116,6 +119,8 @@ static func holder_of(id: String) -> Control:
 static func is_hidden(id: String) -> bool:
 	if String(ELEMENTS.get(id, {}).get("mode", "")) == "helper":
 		return not GameConfig.ui_helper_visible
+	if String(ELEMENTS.get(id, {}).get("mode", "")) == "instructors":
+		return not GameConfig.ui_instructors_visible
 	return id in GameConfig.ui_hud_hidden
 
 ## Oculta o muestra un elemento, lo guarda y lo aplica al momento.
@@ -127,6 +132,12 @@ static func set_hidden(id: String, hidden: bool, persist: bool = true) -> void:
 		if persist:
 			GameConfig.save_user_settings()
 		EventBus.helper_visibility_changed.emit(not hidden)
+		return
+	if String(ELEMENTS[id]["mode"]) == "instructors":
+		GameConfig.ui_instructors_visible = not hidden
+		if persist:
+			GameConfig.save_user_settings()
+		EventBus.instructors_visibility_changed.emit(not hidden)
 		return
 	var list: Array = GameConfig.ui_hud_hidden
 	if hidden and not id in list:
@@ -141,8 +152,10 @@ static func set_hidden(id: String, hidden: bool, persist: bool = true) -> void:
 static func show_all() -> void:
 	GameConfig.ui_hud_hidden.clear()
 	GameConfig.ui_helper_visible = true
+	GameConfig.ui_instructors_visible = true
 	GameConfig.save_user_settings()
 	EventBus.helper_visibility_changed.emit(true)
+	EventBus.instructors_visibility_changed.emit(true)
 	for id in ELEMENTS:
 		_apply(id)
 

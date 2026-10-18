@@ -140,6 +140,10 @@ func close_button() -> Button:
 func body_text() -> String:
 	return _body.text
 
+## La etiqueta del texto: el instructor la escribe poco a poco (InstructorBust.speak).
+func body_label() -> Label:
+	return _body
+
 ## Avanza el reloj a mano. Lo usa _process y lo usan las pruebas.
 func tick(delta: float) -> void:
 	if not _running:

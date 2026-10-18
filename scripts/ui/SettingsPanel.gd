@@ -156,6 +156,7 @@ func _setup_ui() -> void:
 	_fit_scroll()
 	UILayoutManager.layout_changed.connect(_fit_scroll)
 	EventBus.helper_visibility_changed.connect(func(_v): _sync_hud_checks())
+	EventBus.instructors_visibility_changed.connect(func(_v): _sync_hud_checks())
 
 ## Una pestana: un scroll con su columna. Devuelve la columna.
 func _add_tab(title_key: String) -> VBoxContainer:

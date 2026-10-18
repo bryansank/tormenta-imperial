@@ -25,6 +25,7 @@ const PrologueScene := preload("res://scenes/ui/PrologueScreen.tscn")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const CoachArrow := preload("res://scripts/ui/CoachArrow.gd")
 const TypeCircleScript := preload("res://scripts/ui/TypeCircle.gd")
+const InstructorBust := preload("res://scripts/ui/InstructorBust.gd")
 
 ## Encima de las ventanas de UIManager (12+) y del texto de colocar (15), para
 ## poder senalar una tarjeta dentro de la lista de CONSTRUIR. El tablero (18) lo
@@ -93,6 +94,11 @@ var _card_h := 0.0
 var _cstep := ""
 var _circle: Control
 var _combat_ok_btn: Button
+## El instructor que habla (feat/instructores, docs/23 §9): la Capitana
+## Remache en la colonia, el Sargento Bombarda en el combate guiado. Pegado a
+## la tarjeta (InstructorBust.dock_to); se encoge o se oculta si no cabe sin
+## tapar lo senalado.
+var _bust: Control
 
 func _ready() -> void:
 	layer = COACH_LAYER
@@ -109,6 +115,9 @@ func _ready() -> void:
 	EventBus.tutorial_step_changed.connect(_on_step_changed)
 	EventBus.tutorial_guide_finished.connect(func(_skipped): _on_step_changed(""))
 	EventBus.combat_lesson_step_changed.connect(_on_combat_step_changed)
+	EventBus.instructors_visibility_changed.connect(func(on: bool):
+		if not on:
+			_bust.visible = false)
 	# Si el tutorial ya estaba en marcha (cambio de vista 3D/2D recarga la escena),
 	# se recoge el paso actual.
 	_on_step_changed.call_deferred(TutorialManager.current_step())
@@ -276,6 +285,11 @@ func _build_coach() -> void:
 	_combat_ok_btn.visible = false
 	row.add_child(_combat_ok_btn)
 
+	_bust = InstructorBust.new()
+	_bust.name = "Instructor"
+	_bust.visible = GameConfig.ui_instructors_visible
+	_coach.add_child(_bust)
+
 ## El boton de la tarjeta: en el "listo" final cierra el tutorial; en una
 ## tarjeta de leer (la meta, el Nucleo) la da por leida y sigue.
 func _on_ok_pressed() -> void:
@@ -309,6 +323,10 @@ func _on_step_changed(step_id: String) -> void:
 		facts_for = ""
 	_render_facts(facts_for)
 	_render_text()
+	# La Capitana lo dice: su cara del paso y la boca mientras se escribe.
+	if step_id != "" and _cstep == "":
+		_bust.show_as(InstructorBust.COLONY, InstructorBust.expression_for_step(step_id), _bust.facing)
+		_bust.speak(_text)
 
 func _render_text() -> void:
 	# Con una marca de combate en pantalla, la tarjeta es suya.
@@ -541,6 +559,7 @@ func _layout_step() -> void:
 	# tapan: la tarjeta se aparta de los dos juntos.
 	focus = with_confirm(focus, _confirm_rect())
 	_card.position = card_position(vp, Vector2(w, ch), focus, _step in TutorialManager.INFO_PANEL_STEPS and has_rect)
+	_bust.dock_to(vp, Rect2(_card.position, Vector2(w, ch)), [focus], TOP_HUD)
 
 	# Flecha y aro.
 	_ring.visible = false
@@ -806,6 +825,9 @@ func _on_combat_step_changed(step_id: String) -> void:
 		_facts_for = "-"
 		_badge.text = Tr.t("LBL_CGUIDE_STEP") % [TutorialManager.combat_step_number(step_id), TutorialManager.COMBAT_TOTAL]
 		_text.text = TutorialManager.combat_step_text(step_id)
+		# El Sargento Bombarda lleva el combate guiado.
+		_bust.show_as(InstructorBust.COMBAT, InstructorBust.expression_for_combat_step(step_id), _bust.facing)
+		_bust.speak(_text)
 		set_process(true)
 	else:
 		_coach.visible = false
@@ -822,6 +844,10 @@ func combat_ok_button() -> Button:
 
 func type_circle() -> Control:
 	return _circle
+
+## El busto del instructor (pruebas).
+func instructor() -> Control:
+	return _bust
 
 ## La tarjeta, la flecha y el aro sobre el tablero. Cada fotograma solo pregunta
 ## a BattleScreen donde esta lo que se senala (sigue a la camara y a la pieza).
@@ -862,8 +888,11 @@ func _layout_combat(delta: float) -> void:
 		focus = rect
 	elif has_point:
 		focus = Rect2(Vector2(anchor["point"]) - Vector2(40, 40), Vector2(80, 80))
+	var avoid := _combat_avoid_rects(bs)
 	_card.position = clear_of(combat_card_position(vp, Vector2(w, _card_h), focus),
-		Vector2(w, _card_h), _combat_avoid_rects(bs), vp, focus)
+		Vector2(w, _card_h), avoid, vp, focus)
+	avoid.append(focus)
+	_bust.dock_to(vp, Rect2(_card.position, Vector2(w, _card_h)), avoid)
 
 	_ring.visible = false
 	_arrow.visible = false

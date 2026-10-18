@@ -13,6 +13,10 @@ Tres piezas, tres estilos, y ninguna se parece a otra:
 | **Tutorial** | Qué tocar, sobre la interfaz de verdad | Latón sobre metal, flecha y velo | `TutorialPanel` (capa 19) |
 | **Ayudas** | Globos y consejos, de uno en uno | Azul acero, con ✕ y barra de tiempo | `HelperPanel` (14 y 19) + `HelpIndexPanel` |
 
+Junto al tutorial, la tarjeta de consejo y los partes de guerra habla un **instructor**
+(§9): la Capitana Ada Remache en la colonia y el Sargento Mayor Casimiro Bombarda en el
+combate, un busto dibujado por código que se pega a la tarjeta.
+
 El estado va **en la partida** (`TutorialManager.get_save_data`): una partida nueva es
 un jugador que no sabe nada otra vez. `reset()` se llama en los tres sitios de
 `GameManager` que empiezan partida (`_new_game`, `clear_save`,
@@ -760,3 +764,110 @@ Textos en `Tr.gd`, bloque "# Tres campañas (feat/tres-campanas)", ES y EN, para
   misión llega en la era 3", "La tropa descansa. Lista en 1:20"), y la tropa que no
   vale sale apagada con su motivo ("No puede atacar a los enemigos de esta campaña").
 - El tutorial guiado no cambia: termina antes de que las campañas importen.
+
+## 9. Los instructores (2026-10-18, rama `feat/instructores`)
+
+Bryan pidió un personaje de guerra caricaturesco que explique el tutorial, para que
+se sienta más vivo. Son **dos, fijos**: una mujer para la colonia y un hombre para
+el combate. Siempre el mismo para lo mismo: así el jugador aprende quién le habla de
+qué.
+
+| | Capitana **Ada Remache** | Sargento Mayor **Casimiro Bombarda** |
+|---|---|---|
+| Rango | Capitana de Ingenieros | Sargento Mayor |
+| En inglés | Capt. Ada Rivet | Sgt. Casimir Bombard |
+| Explica | La colonia: tutorial guiado de construcción, consejos de lo básico y de economía/edificios | El combate: combate guiado, consejos de Tormenta, Impuesto, ejército y misiones, y los partes de guerra |
+| Aspecto | Trenza pelirroja con lazo rojo, gorra de faena con gafas de aviador encima, pecas, mancha de grasa en la mejilla, lápiz detrás de la oreja, guerrera oliva con botones de latón y una llave inglesa en el bolsillo | Casco remachado con estrella de latón y barboquejo, bigote de manillar con las puntas enroscadas, cejas de cepillo, nariz de patata colorada, mandíbula cuadrada, guerrera gris acero con insignias rojas y dos medallas |
+| En una línea | Lo arregla todo con una llave inglesa y una lista, y cree que una carretera bien puesta vale más que un cañón. | Grita como un cañón y se emociona como un niño; a los Cobradores de la Regencia les tiene una manía que no se le quita ni con té. |
+
+Humor ligero, nunca cruel: se ríen de los Cobradores y de sí mismos, no del jugador.
+Una derrota la comentan con ánimo y con la pista de qué hacer ("con más soldados en
+casa...").
+
+### Dónde salen
+
+- **Tutorial guiado** (`TutorialPanel`): la Capitana junto a la tarjeta de latón. Cara
+  por paso (`InstructorBust.expression_for_step`): saluda en la meta, señala en los
+  pasos de tocar, contenta al esperar una obra, recoger o terminar, preocupada en
+  "consigue lo que falta" y en la lección de reparar, enfadada (de broma) al derribar,
+  sorprendida al girar.
+- **Combate guiado** (misma tarjeta, sobre el tablero): el Sargento. Saluda al elegir
+  la unidad, enfadado al atacar y defender, preocupado en el turno enemigo,
+  sorprendido ante el círculo de ventajas, señala en el resto.
+- **Tarjeta de consejo** (`HelperPanel`, la de abajo al centro): quien habla sale de la
+  categoría de `HelpCatalog`: Tormenta y ejército → Sargento; lo básico y la economía
+  → Capitana (`who_for_category`, `expression_for_category`). Los globos pequeños
+  pegados a un control del HUD **no** llevan busto: no hay sitio y taparían el HUD;
+  si un globo no cabe y sale en la tarjeta de abajo, entonces sí.
+- **Partes de guerra** (`WarReportScreen`): el Sargento comenta cada parte con una
+  frase, debajo de las cifras y firmada ("— Sargento Mayor Casimiro Bombarda"). Seis
+  casos (defensa ganada/perdida, Impuesto rechazado/cobrado, Impuesto de prueba
+  rechazado/cobrado), **tres frases cada uno**, que se turnan empezando en un sitio al
+  azar (`WarReportScreen.QUOTE_CASES`, `quote_key`). Cara: saluda tras una defensa
+  ganada, contento si echa a los Cobradores, enfadado si se llevan algo, preocupado en
+  el de prueba.
+
+Textos en `Tr.gd`, bloque "# Instructores (feat/instructores)", ES y EN:
+`INSTR_COLONY_*`, `INSTR_COMBAT_*` (nombre, rango, nombre corto de la placa, lema),
+`INSTR_SIGNED`, `INSTR_QUOTE_<CASO>_<1-3>` y `HUD_INSTRUCTORS`.
+
+### Cómo se dibujan (`scripts/ui/InstructorBust.gd`)
+
+Arte propio, dibujado por código como las láminas del prólogo (`PrologueEngraving`):
+sin imágenes, escala sin pixelarse y no pesa en el APK. Nada de Empires & Allies ni
+de otros juegos.
+
+- Un **busto de medio cuerpo** dentro de un marco: fondo de superficie con un sol de
+  latón detrás de la cabeza, la figura y una placa con el nombre corto ("Cap.
+  Remache", "Sgto. Bombarda").
+- **Seis expresiones** (`EXPRESSIONS`): `happy` (ojos de arco y pulgar arriba),
+  `point` (señala la tarjeta con el índice), `worried` (cejas hacia arriba y gota de
+  sudor), `angry` (cejas hacia abajo, párpado bajado y el puño en alto), `salute`
+  (la mano en la visera) y `surprised` (ojos redondos, boca en O y rayas de sorpresa).
+- **Boca que se mueve** mientras se escribe el texto: `speak(label)` escribe la
+  etiqueta poco a poco (`visible_ratio` con un Tween, 60 letras/s, entre 0,5 y 2,4 s)
+  con `VC_CHARS_AFTER_SHAPING`, para que la tarjeta no cambie de tamaño mientras se
+  escribe. Mientras tanto un `Timer` de 0,11 s abre y cierra la boca.
+- **Mira hacia la tarjeta**: a su izquierda mira a la derecha; a su derecha, se dibuja
+  en espejo (`facing`).
+- **Marco con UITheme**: borde de latón (Capitana) o de peligro aclarado (Sargento),
+  más grueso en alto contraste, fondo y placa con los tokens. La figura usa su propia
+  tinta, como las láminas del prólogo: es ilustración, no da información por color, así
+  que no cambia con las paletas de daltonismo.
+
+### Coste
+
+- El cuerpo se pinta **solo** al cambiar de quién, de cara, de tamaño o de lado; Godot
+  guarda las órdenes de dibujo. No hay `_process`.
+- La boca es un nodo hijo aparte (`Mouth`): lo único que se repinta mientras habla,
+  unas 10 veces por segundo durante como mucho 2,4 s. El `Timer` se para al callarse.
+- Colocarlo (`dock_to`) son unas cuantas cuentas con `Rect2` en el `_process` que el
+  tutorial ya tenía; en la tarjeta de consejo solo al moverse la tarjeta
+  (`item_rect_changed`).
+
+### Que no tape lo que se enseña (`InstructorBust.dock_rect`, pura)
+
+El busto va **pegado a la tarjeta**: a su izquierda (alineado abajo) o, si no cabe, a
+su derecha; si tampoco, asomando encima de la tarjeta, en una esquina. Prueba tres
+tamaños (100 %, 80 %, 62 %) y si en ninguno cabe **se oculta**. Nunca sale de la
+pantalla, nunca entra en la franja del HUD de arriba en el tutorial, y nunca pisa lo
+que se evita: lo que el tutorial señala (con el ✓ de colocar), los avisos y la ficha de
+unidad en el combate, y el control que señala el marco azul de un consejo. En un
+teléfono (lienzo de menos de 900 × 560) parte del tamaño pequeño (88 × 110 en vez de
+112 × 140).
+
+### Ajuste
+
+Ajustes > Interfaz > "Instructores (Remache y Bombarda)": la lista de elementos del HUD
+que se ocultan (`HudRegistry`, id `Instructors`, modo `instructors`). Se guarda en
+`settings.cfg` (`[ui] instructors_visible`, `GameConfig.ui_instructors_visible`),
+nunca en la partida, y emite `EventBus.instructors_visibility_changed`. Apagados, los
+textos salen enteros de golpe y los partes no llevan la frase del Sargento.
+
+### Pruebas
+
+`tests/ui/test_instructors.gd`: colocación (izquierda, derecha en espejo, sin tapar lo
+señalado, teléfono, oculto si no cabe), caras de todos los pasos y consejos, todas las
+caras de los dos se dibujan, hablar escribe y mueve la boca, apagado no escribe, textos
+en los dos idiomas, las frases se turnan, el parte lleva su frase y el ajuste está en la
+lista de Interfaz.
