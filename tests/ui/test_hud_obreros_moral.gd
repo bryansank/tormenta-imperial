@@ -81,8 +81,11 @@ func test_the_workers_icon_shows_the_free_workers_and_follows_the_signal() -> vo
 	var chip: HBoxContainer = hud.workers_chip()
 	assert_object(chip).is_not_null()
 	assert_str(String(chip.name)).is_equal("Chip_workers")
-	# En la misma fila que los recursos.
-	assert_object(chip.get_parent()).is_same(hud.find_child("Chip_gold", true, false).get_parent())
+	# En la misma fila que los recursos (cada ficha en su celda con su palabra,
+	# feat/hud-y-tutorial).
+	var row: Node = hud.find_child("ChipsRow", true, false)
+	assert_bool(row.is_ancestor_of(chip)).is_true()
+	assert_object(chip.get_parent().get_parent()).is_same(hud.find_child("Chip_gold", true, false).get_parent().get_parent())
 	_people(12, 18, 9)
 	assert_str(UITheme.chip_amount(chip).text).is_equal("3")
 	_people(12, 18, 4)

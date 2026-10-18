@@ -356,7 +356,7 @@ const _STRINGS := {
 		"LBL_SETTINGS_TITLE": "AJUSTES",
 		"LBL_SETTINGS_AUDIO": "AUDIO",
 		"LBL_VOL_MASTER": "Volumen general",
-		"LBL_VOL_MUSIC": "Música",
+		"LBL_VOL_MUSIC": "Volumen de la música",
 		"LBL_VOL_SFX": "Efectos de sonido",
 		"LBL_SETTINGS_UI": "INTERFAZ",
 		"LBL_SHOW_GRID": "Cuadrícula siempre visible (si no, solo al construir)",
@@ -758,7 +758,7 @@ const _STRINGS := {
 		"LBL_CELL_OCCUPIED": "Esa casilla está ocupada.",
 		"LBL_ON_WATER": "Ahí hay agua: construye en tierra.",
 		"LBL_NEEDS_SHORE": "Solo en la costa: pégalo al agua.",
-		"LBL_MUSIC_ENABLED": "Música",
+		"LBL_MUSIC_ENABLED": "Música encendida",
 		"BTN_MUSIC_ON": "MÚSICA: SÍ",
 		"BTN_MUSIC_OFF": "MÚSICA: NO",
 		# ── vista-2d ──
@@ -1522,7 +1522,7 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"GUIDE_HOW_STOPPED": "Tu Aserradero está parado: tócalo y mira por qué.",
 		# Consigue lo que falta (2026-10-17, fix/tutorial-materiales): el paso del
 		# tutorial cuando aun no llega para el edificio, y como conseguir cada cosa.
-		"GUIDE_NEED": "%s: aún no puedes construirlo. Primero consigue lo que falta:",
+		"GUIDE_NEED": "%s: antes consigue lo que falta:",
 		# Cuartel temprano (feat/cuartel-temprano)
 		"GUIDE_OPEN_BARRACKS": "El Cuartel entrena soldados: con soldados en casa, los Cobradores del Impuesto no se llevan nada. Haz clic en CONSTRUIR.",
 		"GUIDE_OPEN_BARRACKS_TOUCH": "El Cuartel entrena soldados: con soldados en casa, los Cobradores del Impuesto no se llevan nada. Toca CONSTRUIR.",
@@ -1790,6 +1790,19 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"TOPE_GUIDE_NO_UPGRADE": "No se mejora",
 		"BTN_QUICK_GUIDE": "CÓMO FUNCIONA",
 		"BTN_HELP_BACK": "← VOLVER",
+		# HUD y tutorial (feat/hud-y-tutorial)
+		"HUD_WORD_WORKERS": "Trabajadores",
+		"HUD_WORD_MORALE": "Moral",
+		"LBL_HUD_WORDS": "Nombres junto a los iconos",
+		"OPT_HUD_WORDS_AUTO": "Automático",
+		"OPT_HUD_WORDS_ALWAYS": "Siempre",
+		"OPT_HUD_WORDS_NEVER": "Nunca",
+		"LBL_HUD_WORDS_HINT": "Pone «Oro», «Madera», «Moral»… bajo cada icono de arriba. Automático: siempre en tableta y móvil; en PC, la primera hora de tus primeras partidas.",
+		"GUIDE_NEED_HOUSE": "%s: le faltan trabajadores y tus casas ya están llenas. Primero haz otra Casa: trae %d más.",
+		"LBL_SAVES_FULL_ROOM": "No caben más. Borra una para empezar otra.",
+		"BTN_SAVE_CONTINUE": "SEGUIR",
+		"LBL_CARD_STRONG_MULT": "(pega %s veces más fuerte)",
+		"LBL_CARD_WEAK_MULT": "(pega más flojo)",
 	},
 	"en": {
 		"BTN_BUILD": "BUILD",
@@ -2109,7 +2122,7 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"LBL_SETTINGS_TITLE": "SETTINGS",
 		"LBL_SETTINGS_AUDIO": "AUDIO",
 		"LBL_VOL_MASTER": "Master volume",
-		"LBL_VOL_MUSIC": "Music",
+		"LBL_VOL_MUSIC": "Music volume",
 		"LBL_VOL_SFX": "Sound effects",
 		"LBL_SETTINGS_UI": "INTERFACE",
 		"LBL_SHOW_GRID": "Grid always visible (otherwise only while building)",
@@ -2508,7 +2521,7 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"LBL_CELL_OCCUPIED": "That spot is taken.",
 		"LBL_ON_WATER": "That's water: build on land.",
 		"LBL_NEEDS_SHORE": "Coast only: put it next to the water.",
-		"LBL_MUSIC_ENABLED": "Music",
+		"LBL_MUSIC_ENABLED": "Music on",
 		"BTN_MUSIC_ON": "MUSIC: ON",
 		"BTN_MUSIC_OFF": "MUSIC: OFF",
 		# ── vista-2d ──
@@ -3265,7 +3278,7 @@ When full, the building stops. What does not fit in your storage stays in the bu
 		"GUIDE_HOW_GOLD_HAND": "More gold: click a gold vein and dig it by hand.",
 		"GUIDE_HOW_GOLD_HAND_TOUCH": "More gold: tap a gold vein and dig it by hand.",
 		"GUIDE_HOW_STOPPED": "Your Sawmill has stopped: tap it to see why.",
-		"GUIDE_NEED": "%s: you can't build it yet. First get what is missing:",
+		"GUIDE_NEED": "%s: first get what is missing:",
 		# Cuartel temprano (feat/cuartel-temprano)
 		"GUIDE_OPEN_BARRACKS": "The Barracks trains soldiers: with soldiers at home, the Tax Collectors take nothing. Click BUILD.",
 		"GUIDE_OPEN_BARRACKS_TOUCH": "The Barracks trains soldiers: with soldiers at home, the Tax Collectors take nothing. Tap BUILD.",
@@ -3529,6 +3542,19 @@ When full, the building stops. What does not fit in your storage stays in the bu
 		"TOPE_GUIDE_NO_UPGRADE": "No upgrades",
 		"BTN_QUICK_GUIDE": "HOW IT WORKS",
 		"BTN_HELP_BACK": "← BACK",
+		# HUD y tutorial (feat/hud-y-tutorial)
+		"HUD_WORD_WORKERS": "Workers",
+		"HUD_WORD_MORALE": "Morale",
+		"LBL_HUD_WORDS": "Names next to the icons",
+		"OPT_HUD_WORDS_AUTO": "Automatic",
+		"OPT_HUD_WORDS_ALWAYS": "Always",
+		"OPT_HUD_WORDS_NEVER": "Never",
+		"LBL_HUD_WORDS_HINT": "Puts «Gold», «Wood», «Morale»… under each icon at the top. Automatic: always on tablet and phone; on PC, the first hour of your first games.",
+		"GUIDE_NEED_HOUSE": "%s: it is short of workers and your houses are full. First build another House: it brings %d more.",
+		"LBL_SAVES_FULL_ROOM": "No more room. Delete one to start another.",
+		"BTN_SAVE_CONTINUE": "CONTINUE",
+		"LBL_CARD_STRONG_MULT": "(hits %s times harder)",
+		"LBL_CARD_WEAK_MULT": "(hits softer)",
 	},
 }
 

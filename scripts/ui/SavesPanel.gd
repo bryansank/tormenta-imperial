@@ -121,7 +121,8 @@ func refresh() -> void:
 		child.queue_free()
 	var saves: Array = GameManager.list_saves()
 	_count_label.text = "%d/%d" % [saves.size(), GameManager.MAX_SAVES]
-	_full_label.text = Tr.t("LBL_SAVES_FULL") % [saves.size(), GameManager.MAX_SAVES]
+	# La cifra ya va arriba (Count): aqui solo que hacer (ronda 1.0, "5/5" dos veces).
+	_full_label.text = Tr.t("LBL_SAVES_FULL_ROOM")
 	_full_label.visible = _make_room
 	if saves.is_empty():
 		_list.add_child(ModalKit.make_text(Tr.t("LBL_SAVES_EMPTY"), "body", UITheme.TEXT_DIM))
@@ -186,7 +187,10 @@ func _make_row(entry: Dictionary) -> PanelContainer:
 		buttons.add_child(_button("No", Tr.t("BTN_SAVE_DELETE_NO"), UITheme.BTN, _ask_delete.bind(0)))
 		buttons.add_child(_button("Yes", Tr.t("BTN_SAVE_DELETE_YES"), UITheme.DANGER, delete_save.bind(id)))
 	else:
-		var load_btn := _button("Load", Tr.t("BTN_SAVE_LOAD"), UITheme.POSITIVE, load_save.bind(id))
+		# La que ya estas jugando dice SEGUIR, no CARGAR (ronda 1.0): abrirla
+		# guarda antes y vuelve al mismo punto (GameManager.load_slot).
+		var load_text := Tr.t("BTN_SAVE_CONTINUE") if active else Tr.t("BTN_SAVE_LOAD")
+		var load_btn := _button("Load", load_text, UITheme.POSITIVE, load_save.bind(id))
 		# Terminada: se ve, no se sigue. Con la lista para hacer sitio, solo borrar.
 		load_btn.disabled = sealed or _make_room
 		load_btn.visible = not _make_room

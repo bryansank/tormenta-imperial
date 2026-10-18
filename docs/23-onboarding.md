@@ -413,6 +413,29 @@ rojo, `block_reasons_short` junto al botón). Balance sin tocar.
 
 ---
 
+**Tarjeta compacta y la otra Casa (2026-10-18, rama `feat/hud-y-tutorial`):**
+
+- `GUIDE_NEED` es más corta ("Mina de oro: antes consigue lo que falta:").
+- La tarjeta se compone con `TutorialPanel.compose_card_text()`: la frase, lo que
+  falta, cómo conseguirlo y, si lo señalado no se ve, "arrastra el mapa hacia la
+  flecha" **al final** (antes salía en medio). Como mucho `CARD_MAX_LINES` (5) líneas
+  sin contar el rótulo; las de "cómo conseguirlo" que no caben se quedan fuera
+  (siempre queda una). En los pasos `need_*` no salen las cifras del edificio.
+- **Solo falta otra Casa** (`TutorialManager.needs_house_only()`: recursos pagados,
+  faltan trabajadores y las casas están llenas). Con el Cuartel temprano pasa casi
+  siempre en el Laboratorio (5 + 6 de sitio = 11; aserradero 2 + cuartel 1 + granja 2
+  + mina 3 + mercado 1 + almacén 1 = 10; el Laboratorio pide 2). En vez de "antes
+  consigue lo que falta" + lista, el paso dice una frase natural, `GUIDE_NEED_HOUSE`:
+  "Laboratorio: le faltan trabajadores y tus casas ya están llenas. Primero haz otra
+  Casa: trae 6 más." Sin `step_hint`/`step_how` debajo (lo repetirían). La marca sigue
+  en CONSTRUIR y, al acabar la Casa, el paso vuelve solo al Laboratorio: no se atasca.
+- **Combate guiado:** la tarjeta se aparta de los avisos de abajo a la izquierda
+  (`NotificationPanel.toasts`, capa 19 sobre el tablero) y de la ficha de la unidad
+  tocada (`BattleScreen.unit_card()`): `TutorialPanel.clear_of()` la pone a su
+  derecha, encima o debajo, sin tapar lo señalado; si nada cabe, se queda.
+
+---
+
 ### 2.8 El Cuartel temprano (2026-10-17, rama `feat/cuartel-temprano`)
 
 Decisión de Bryan: el Cuartel pasa a la era 1 (120 oro + 80 madera + 10 tablones, sin
