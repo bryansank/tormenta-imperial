@@ -90,9 +90,16 @@ siempre el completo; las variantes de los modos apartados siguen en el código.
 **Ya no sale sola (14-10-2026, partidas de Bryan):** la ventana "Cómo funciona Tormenta
 Imperial" sobraba al empezar, así que `TutorialPanel._on_prologue_closed()` ya no la
 abre; tras el prólogo va directo la primera marca del tutorial. Sus cuatro bloques
-siguen en el índice de AYUDA (`guide_qg_*`) y el nodo existe (`TutorialPanel.open_quick_guide()`)
-por si se quiere volver a ofrecer. Un `quick_guide` en `helps_seen` de una partida vieja
-se carga y no cambia nada. Lo que sigue describe la pantalla.
+siguen en el índice de AYUDA (`guide_qg_*`). Un `quick_guide` en `helps_seen` de una
+partida vieja se carga y no cambia nada. Lo que sigue describe la pantalla.
+
+**Reactivada desde AYUDA (17-10-2026, rama `feat/topes-mejoras-ayuda`):** no era código
+muerto del todo (nadie la abría, pero sus textos son la mejor chuleta de una pantalla), así
+que en vez de quitarla la abre el botón **CÓMO FUNCIONA** del índice de AYUDA
+(`HelpIndexPanel`, nodo `QuickGuideOpen`, busca el grupo `tutorial_panel` y llama a
+`open_quick_guide()`). Ya no se construye al arrancar: `TutorialPanel.quick_guide()` la crea
+la primera vez que se pide (menos nodos en cada partida). Al cerrarla se marca vista
+`quick_guide`, como antes.
 
 Antes salía al cerrar el prólogo, **una vez por partida** (ayuda vista `quick_guide`) y
 antes de la primera marca del tutorial: una pantalla con cuatro bloques: **recursos** (qué hay,
@@ -484,7 +491,21 @@ están en la ficha de unidad, que los lee de `GameConfig`).
 - Grupo **`help_index`**, método **`open()`**: el menú ☰ único lo abre con
   `get_tree().get_first_node_in_group("help_index").open()`. Lo crea `HelperPanel`.
 - Arriba: el interruptor "Mostrar ayudas en pantalla", GUÍA DE EDIFICIOS, Repetir
-  tutorial, Historia.
+  tutorial, Historia, Repetir combate guiado y **CÓMO FUNCIONA** (la guía rápida).
+- **Páginas con números (17-10-2026, rama `feat/topes-mejoras-ayuda`):** cinco guías básicas
+  con `"dyn": true` en `HelpCatalog`: **Topes de edificios** (`guide_limits`), **Mejorar
+  edificios** (`guide_upgrades`), **Las eras** (`guide_eras`), **Taller: fabricar
+  materiales** (`guide_workshop`) y **Torres** (`guide_towers`, solo donde hay Tormenta).
+  Su texto lo escribe `BuildingHelpText.help_body(id)` leyendo `GameConfig` (topes por era,
+  multiplicadores, repuestos, coste del Cuartel General, mitigación y dotaciones de las
+  torres, recetas del taller, requisitos), así que no se queda viejo cuando cambia el
+  balance. Su clave `body` (`HELP_B_LIMITS`…) es el resumen de una línea del tooltip
+  (`HelpCatalog.summary()`). Tocar una **no** la manda a la tarjeta de abajo (con reloj de
+  12 s no da tiempo a leerla): se lee dentro del índice, en grande y con scroll
+  (`HelpIndexPanel.show_page()`), con **← VOLVER** a la lista; se marca vista.
+- **GUÍA DE EDIFICIOS** (`HelperPanel`): cada edificio lleva una segunda línea con su tope
+  por era, la era en que se puede construir, lo que pide antes y si se mejora
+  (`BuildingHelpText.guide_rules_line()`); el coste incluye ya los materiales.
 - Debajo, por categoría (Primeros pasos · Economía · Tormenta y Impuesto · Ejército y
   combate): las básicas siempre, y el resto en cuanto se han visto (✓). Respeta el modo:
   en Constructor no hay nada de Tormenta.
@@ -533,6 +554,7 @@ artillerías), `HELP_B_STORM` (la Tormenta ya no se presenta al empezar: es una 
 | `tests/ui/test_helper_skirmish_callout.gd` | el globo de MISIONES sigue a su botón y sale una vez |
 | `tests/tutorial/test_first_sortie_tip.gd` | el consejo `first_sortie` sale con la primera unidad (antes que el sueldo) y una vez, señala ☰ MENÚ, textos ES/EN con `_TOUCH`; la marca `first_sortie_done` solo con una victoria, guardado idempotente, `reset()` y guardados viejos |
 | `tests/ui/test_help_index.gd` | grupo `help_index`, lista básicas y vistas, modo Constructor, reabrir |
+| `tests/ui/test_topes_mejoras.gd` | *(17-10-2026, sin correr aún)* la frase del tope lleno (sube con la era, único, máximo), consejo de mejorar, MEJORAR UNO elige el de nivel más bajo, lo que llega con una era, la ficha (nivel N de 3, sin mejora con porqué, repuestos, por qué está apagado, no cabe en el almacén), `{HQ2_COST}`, las cinco páginas en ES/EN sin huecos, la página dentro del índice, CÓMO FUNCIONA, la guía de edificios y los textos de la bolsa con la comida |
 | `tests/tutorial/test_combat_lessons.gd` | *(sin correr aún, 2026-10-14 y 2026-10-16)* qué lección toca, cada paso de `derive_combat_step`, ningún paso con Saltar, `skip_combat_lessons()` solo en dev, abandonar antes de atacar no gasta lo básico, textos ES/EN, números hasta `COMBAT_TOTAL`, guardado idempotente, `reset()`, guardados viejos, repetir |
 | `tests/ui/test_combat_teaching.gd` | *(sin correr aún)* el combate guiado en la pantalla de verdad (tablero 2D): empieza solo, señala a la unidad, tocar tu pieza abre la ficha y pasa el paso 1, la tarjeta `encounter` no sale encima |
 | `tests/ui/test_title_prologue_order.gd` | menú principal abierto → sin prólogo; Ajustes desde el menú arriba y sin nada encima; soltar → prólogo encima de todo; la pausa también lo retiene |

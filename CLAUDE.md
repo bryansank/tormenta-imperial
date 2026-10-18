@@ -148,7 +148,7 @@ Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
 
 Created at runtime, not in either .tscn:
   PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, three folios in plain language
-  QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks; no longer opens by itself (2026-10-14), texts in AYUDA
+  QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel, created on first use: one screen with four blocks; no longer opens by itself (2026-10-14), opened from AYUDA → CÓMO FUNCIONA (2026-10-17), texts also in AYUDA
   WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: workers and citizens walking the roads (view only, docs/04)
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker (step 1) and the country name + flag (step 2), created by GameManager.request_new_game()
@@ -344,13 +344,30 @@ ingots + fuel, Statue ingots) and `hq_upgrade_costs`. The HUD shows them in a ma
 row; `Objectives.make_step_for()` turns a missing material into a `"make"` step.
 
 **Era gates:** Foundry (era 2) needs Sawmill + Gold Mine + House + Warehouse;
-Refinery (era 3) needs Foundry + Barracks (`building_prerequisites`).
+Refinery (era 3) needs Foundry + Barracks + Laboratory (`building_prerequisites`).
 
 **Quick guide:** `scripts/ui/QuickGuide.gd`, one screen with four blocks (resources,
 extraction, buildings and roads, progress). Since 2026-10-14 it **no longer opens by
 itself** after the prologue (the owner found the "Cómo funciona Tormenta Imperial"
-window too much at the start); the same texts are `guide_qg_*` in the AYUDA index. A
-`quick_guide` id in an old save's `helps_seen` loads and changes nothing.
+window too much at the start); the same texts are `guide_qg_*` in the AYUDA index, and
+the index has a **CÓMO FUNCIONA** button that opens the whole screen again
+(2026-10-17, `feat/topes-mejoras-ayuda`; `TutorialPanel.quick_guide()` now creates it on
+first use, not at start). A `quick_guide` id in an old save's `helps_seen` loads and
+changes nothing.
+
+**Limits and upgrades explained (2026-10-17, `feat/topes-mejoras-ayuda`):** the caps are
+explained, not raised. `scripts/ui/BuildingHelpText.gd` (static, preload) writes every
+sentence from `GameConfig` and the `.tres`: a full CONSTRUIR card says "Al máximo" and the
+detail says why ("Máximo 5 en esta era. En la era 2 podrás tener 8." / "Solo puede haber
+uno." / "Ya tienes el máximo") plus **MEJORAR UNO** (camera to the lowest-level one of
+that type and its panel); a cost still locked by era says "Llega en la era 2, con la
+Fundición". The building panel shows "Nivel N de 3", why a building has no upgrades,
+why MEJORAR is off (what is missing and where it comes from, storage too small,
+spare parts from MISIONES) and refreshes on `resource_changed`. AYUDA has five pages
+with live numbers (`HelpCatalog` entries with `"dyn": true`: limits, upgrades, eras,
+workshop, towers), read in place inside the index without a timer. ¿QUÉ HACER?'s
+`OBJ_WHY_HQ_2/3` carry `{HQ2_COST}` / `{HQ3_COST}`, filled by `BuildingHelpText.live_text()`
+in `ObjectivePanel`. Detail: docs/03 §Building Limits and §Upgrade, docs/23 §3.
 
 **Batches and the Núcleo as every workshop (2026-10-14):** every process and hand
 mining can be ordered ×1 / ×5 / MÁX from its card (`scripts/ui/ProcessCard.gd`, built by
@@ -698,7 +715,7 @@ strength. HUD button `SkirmishButton` (slot `skirmish_button`, red dot from
 
 **Towers:** each standing tower cuts storm damage by 15% (cap 60%,
 `storm_tower_mitigation*`) and fields one artillery crew on defensive boards — Tithe
-and Final Audit — outside the deploy cap, in the back row (max 2,
+and Final Audit — outside the deploy cap, in the back row (max 4,
 `storm_tower_garrison_*`); crews lost during a siege are not replaced. Only while
 operational (not ruined, not under construction). A crew that falls on any defensive
 board leaves its tower **damaged** (`storm_tower_crew_loss_damage`, 40% of max health,

@@ -202,7 +202,7 @@ mientras quepa en la Granja. Cambiarlo empieza de cero.
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
 | <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 150 oro · 60 acero · 80 madera · 20 tablones | 3 | Entrena unidades. Cada cuartel es una plaza de entrenamiento en paralelo |
-| <img src="media/guia/tower.png" width="110"> | **Torre** | 2×2 | 150 oro · 60 acero · 20 petróleo · 30 madera · 4 vigas | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
+| <img src="media/guia/tower.png" width="110"> | **Torre** | 2×2 | 150 oro · 60 acero · 20 petróleo · 30 madera · 4 vigas | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 4 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
 | <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera · 20 vigas · 10 lingotes · 10 combustible | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca el Ataque Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
 
 ### Decoraciones (suben la moral)
@@ -240,7 +240,7 @@ ayudan a una base que sí puede.
 | Laboratorio | Casa |
 | Fundición (era 2) | Aserradero + Mina de oro + Casa + Almacén |
 | Cuartel | Fundición + Aserradero |
-| Refinería (era 3) | Fundición + Cuartel |
+| Refinería (era 3) | Fundición + Cuartel + Laboratorio |
 | Torre | Cuartel |
 | Cuartel General | Cuartel + Refinería |
 
@@ -250,16 +250,33 @@ todo lo que falta.
 
 ### Límites
 
-Aserradero 5 · Mina de oro 4 · Fundición 3 · Refinería 2 · Almacén 5 · Mercado 1 ·
-Laboratorio 1 · Granja 6 · Cuartel 3 · Torre 6 · Casa 10 · Estatua 5 · Fuente 5 · **Cuartel
-General 1** · Jardín y carretera sin límite.
+Los topes **suben con la era** (era 1 · era 2 · era 3): Casa 10 · 15 · 20, Granja 6 · 9 · 12,
+Aserradero 5 · 8 · 10, Mina de oro 4 · 6 · 8, Fundición 3 · 5 · 6, Refinería 2 · 3 · 4,
+Cuartel 3 · 4 · 5. Siempre igual: Almacén 5 y Torre 6. Solo uno: Mercado, Laboratorio y
+Cuartel General. **Las decoraciones y la carretera no tienen tope** (la Estatua y la
+Fuente tampoco, desde octubre). Algunos rangos dan huecos de más.
+
+Cuando llegas al tope, la tarjeta de CONSTRUIR pone **"Al máximo"** y, al tocarla, te dice
+por qué ("Máximo 5 en esta era. En la era 2 podrás tener 8.", "Solo puede haber uno.",
+"Ya tienes el máximo") y te ofrece **MEJORAR UNO**: te lleva al de nivel más bajo y abre
+su ficha. Si un edificio pide algo que aún no tienes, también lo dice: "Llega en la era
+2, con la Fundición". La página **AYUDA → Topes de edificios** tiene la tabla entera.
 
 ### Mejorar
 
-Solo se puede mejorar lo que gana algo al subir: los que producen (×1,6 y ×2,5), la
-vivienda (más sitio), el almacén (+250), las decoraciones (más moral) y el Cuartel
-General. El Cuartel, la Torre, la carretera y el Núcleo no tienen mejora. El panel te
-dice con números qué da el siguiente nivel.
+Hay **tres niveles**. Solo se puede mejorar lo que gana algo al subir: los que producen
+(×1,6 y ×2,5), la vivienda (sitio para 6 → 9 → 12), el almacén (+250 por nivel), las
+decoraciones (moral ×1,5 y ×2) y el Cuartel General. Cuesta ×1,8 el precio del edificio
+para el nivel 2 y ×3 para el 3; **el nivel 3 de los que producen pide además 3
+repuestos**, que solo se traen de las MISIONES. El nivel 3 del Cuartel General llama al
+Ataque Final.
+
+El Cuartel, la Torre, el Mercado, el Laboratorio, la carretera y el Núcleo no tienen
+mejora, y su ficha lo dice con el porqué ("para entrenar más a la vez, construye otro
+Cuartel"). En los que sí, la ficha pone **"Nivel 1 de 3"**, qué da el siguiente con
+números y, si el botón está apagado, **por qué**: lo que falta y dónde se consigue, o que
+no cabe en el almacén. Todo esto está también en **AYUDA → Mejorar edificios**, con
+**Las eras**, **Taller: fabricar materiales** y **Torres**.
 
 ---
 
@@ -453,7 +470,7 @@ edificio a cero queda **en ruinas**: no produce hasta que lo repares (clic → R
 ### El Impuesto
 
 Lo pelea en el tablero **quien esté en casa**: tu guarnición (hasta 6) más **una
-dotación de artillería por torre en pie** (tope 2). Si ganas, **no se llevan nada**.
+dotación de artillería por torre en pie** (tope 4). Si ganas, **no se llevan nada**.
 
 Si pierdes, o no hay nadie, se llevan **un porcentaje de lo almacenado** (del 17% al 37%
 según la severidad). Desde la **segunda** visita hay además una **cuota mínima**: si lo

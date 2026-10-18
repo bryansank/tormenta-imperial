@@ -123,7 +123,7 @@ big striped awnings with goods on the counters (see "Parcela y atrezo").
 The Barracks trains units (`ArmyManager`, one training slot per Barracks). Each
 operational Tower cuts storm damage by 15% (cap 60%) and puts one artillery crew on
 the defensive boards — the Tithe and each Final Audit wave — outside the deploy cap
-(max 2). See [15-combat.md](15-combat.md).
+(max 4, `storm_tower_garrison_max`). See [15-combat.md](15-combat.md).
 
 ### Decorations (morale only)
 
@@ -297,7 +297,7 @@ under construction the label above the building gives the percentage and the tim
 | refinery | 2 | 3 | 4 | ×1,5 / ×2; además consume su pozo (3-6 por mapa) |
 | barracks | 3 | 4 | 5 | Sube menos: cada uno es un hueco de entrenamiento y +8 de capacidad (con 5, 43 unidades); el freno es el mantenimiento en oro |
 | warehouse | 5 | 5 | 5 | **No sube.** Bolsa de la era 3 sin técnicas: 1000 + 5×500 = 3500 = CG nivel 3 (1500 + 800 + 500 + 700; los materiales van aparte). Con 7 almacenes serían 4500 (5500 con las técnicas) y el CG 3 dejaría de pedir la bolsa llena. La bolsa ya crece sola por era (600/800/1000) y por nivel de almacén (+250 por nivel) |
-| tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y solo 2 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
+| tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y como mucho 4 dotaciones salen al tablero (`storm_tower_garrison_max`, 4 desde el 12-10; el comentario de `building_limits_by_era` en GameConfig aún dice 2). El rango 16 sigue dando +1 |
 | market, laboratory, headquarters | 1 | 1 | 1 | Únicos |
 | garden, fountain, statue, road y las diez decoraciones baratas (`lamp_post` … `palm_trees`) | — | — | — | Sin tope |
 
@@ -310,7 +310,31 @@ el 16.
 (`EventBus.era_advanced`) y al colocar. El recuento se recuerda mientras no cambia
 `GridManager.map_version()` (`ConstructionMenu._count_of()`): el refresco de costes llega
 con cada recurso que cambia y contar recorre todos los edificios, carreteras incluidas.
-Cuando se alcanza, el aviso sigue siendo `LBL_LIMIT_REACHED` ("Límite alcanzado (6/6)").
+Cuando se alcanza, el aviso al colocar sigue siendo `LBL_LIMIT_REACHED` ("Límite alcanzado (6/6)").
+
+**Explicarlos (2026-10-17, rama `feat/topes-mejoras-ayuda`, decisión de Bryan: los topes
+se explican, no se suben).** Todo sale de `scripts/ui/BuildingHelpText.gd`, sin números a
+mano:
+
+- **Tarjeta llena:** debajo de "5/5", "Al máximo" (`TOPE_CARD_FULL`, ámbar). En el detalle,
+  en vez de solo apagarse, una frase (`DetailExplain`, `limit_full_text()`):
+  "Máximo 5 en esta era. En la era 2 podrás tener 8." (`TOPE_FULL_NEXT_ERA`), "Solo puede
+  haber uno, y ya lo tienes." (únicos en todas las eras, `is_unique()`) o "Ya tienes el
+  máximo: 5." (no sube más), y si se mejora: "Para sacar más, mejora los que tienes." o
+  "Todos están ya al nivel máximo.". El "Límite alcanzado (5/5)" rojo se quita de la
+  línea corta (`ConstructionMenu.block_lines_without_explained()`) para no decirlo dos veces.
+- **MEJORAR UNO** (`DetailUpgradeOne`): con el tope lleno, si el tipo se mejora y queda
+  alguno por subir. Cierra la lista, lleva la cámara al de nivel más bajo
+  (`lowest_upgradable()`: terminado, sin obras, por debajo del 3) y emite
+  `building_clicked`, así se abre su ficha con MEJORAR (`focus_and_select()`, 3D con
+  `MonumentalCamera.get_state/set_state`, 2D con `Camera2DController.look_at_world`).
+- **Lo que llega con una era:** "Llega en la era 2, con la Fundición." (acero) / "era 3,
+  con la Refinería" (petróleo), "Pide tablones. Se fabrican en: Aserradero." y "Pide
+  repuestos: se traen de las MISIONES." (`locked_lines()`). Sustituye al "Bloqueado: acero"
+  corto; el tooltip sigue siendo `block_reasons()` entero.
+- **Rendimiento:** la etiqueta de la tarjeta usa el recuento recordado
+  (`limit_info()`/`_count_of()`); las frases y `lowest_upgradable()` solo se calculan para
+  el edificio elegido, en el refresco que ya existía (una vez por fotograma como mucho).
 
 ## Deposit Rules
 
@@ -338,7 +362,7 @@ Refinery era 3, so neither goes up without the base of the previous era standing
 | foundry | sawmill + gold_mine + house + warehouse |
 | market | gold_mine |
 | laboratory | house |
-| refinery | foundry + barracks |
+| refinery | foundry + barracks + laboratory |
 | barracks | foundry + sawmill |
 | tower | barracks |
 | headquarters | barracks + refinery |
@@ -366,6 +390,29 @@ Refinery era 3, so neither goes up without the base of the previous era standing
   tall models like a box with a flag). 2D draws the same (`BuildingArt2D._level_plinth`
   / `_level_trim`) inside the baked drawing, plus brass chevrons with no box
 - HQ has special override costs, materials included (see economy doc)
+
+**Explicarlas en la ficha (2026-10-17, rama `feat/topes-mejoras-ayuda`).**
+`BuildingInfoPanel._refresh_upgrade()` (y `BuildingHelpText`):
+
+- **"Nivel 1 de 3"** encima de la mejora (`UpgradeLevel`, `TOPE_LEVEL_OF`); al 3, "Nivel
+  máximo: ya da todo lo que puede.".
+- **Los que no se mejoran lo dicen** en gris con su porqué (`NoUpgrade`,
+  `no_upgrade_text()`): Cuartel "para entrenar más a la vez, construye otro Cuartel",
+  Torre "para proteger más, construye otra Torre", Mercado y Laboratorio "uno basta…",
+  carretera, Núcleo; cualquier otro, `TOPE_NO_UPGRADE_WHY_DEFAULT`. Clave
+  `TOPE_NO_UPGRADE_WHY_<ID>` si un edificio nuevo quiere su frase.
+- **Aviso de repuestos** antes de pulsar (`UpgradeParts`, `parts_note()`): "El nivel 3 pide
+  3 repuestos. Solo se traen de las MISIONES." (lee `get_upgrade_cost()`).
+- **Por qué MEJORAR está apagado** (`UpgradeWhy`, `upgrade_block_lines()`): no cabe en el
+  almacén (lo que pide la bolsa contra `get_storage_cap()`, el caso del CG nivel 3), "Te
+  falta: …" y debajo dónde se consigue cada cosa (repuestos de MISIONES, materiales en su
+  edificio, acero/petróleo con su era).
+- Se repinta con `EventBus.resource_changed` (una vez por fotograma, diferido): antes el
+  botón solo se ponía al día al abrir la ficha.
+- **AYUDA → "Mejorar edificios"**: niveles, ×1,6 / ×2,5, casas 6 → 9 → 12, almacén +250,
+  decoraciones ×1,5 / ×2, coste ×1,8 / ×3, repuestos del nivel 3, el coste del CG (2 y 3) y
+  que su nivel 3 llama al Ataque Final, y la lista de los que no se mejoran. Todo leído de
+  `GameConfig` (`BuildingHelpText.upgrades_page()`).
 
 ## Manual Processes
 
