@@ -75,6 +75,13 @@ var _details: Node2D = null
 var _coast_px := PackedVector2Array()
 var _ring_cache := {}
 var _check := 0
+## Bancos de peces (1.1): sus rectangulos de mundo (Vector4: centro x, z y
+## semiejes), las calas que abren en la arena (px de mapa) y los anillos de
+## orilla ya recortados por ellas (expand -> Array de poligonos), calculados una
+## vez por cambio. Ver set_sand_holes.
+var _hole_rects: Array = []
+var _coves: Array = []
+var _cut_cache := {}
 
 func _ready() -> void:
 	z_index = -20
@@ -112,8 +119,91 @@ func _rebuild() -> void:
 	_grass_pts = polygon_px(0.0)
 	_grass_bounds = _bounds(_grass_pts)
 	_grass_tex = _make_grass_texture(_grass_bounds)
+	_rebuild_coves()
 	_scatter_details()
 	queue_redraw()
+
+# ── Calas sobre los bancos de peces (feat/vista2d-y-prologo) ─────────
+# Los bancos van en la primera franja de agua, pegados a la tierra, y la playa
+# 2D (SHORE_WIDTH, mas de dos casillas) los tapaba: parecian charcos sobre la
+# arena. Como la 3D (island_sand.gdshader, `holes`), la isla abre una cala: la
+# espuma y la arena se recortan con un poligono que cubre el banco y sale hacia
+# el mar, asi que la orilla se estrecha justo ahi y el banco queda en el agua.
+# Se calcula una vez por cambio (bancos o forma); _draw solo pinta lo guardado.
+
+## MapGenerator2D._push_sand_holes: los rectangulos de mundo de los bancos.
+func set_sand_holes(rects: Array) -> void:
+	if rects == _hole_rects:
+		return
+	_hole_rects = rects.duplicate()
+	_rebuild_coves()
+	queue_redraw()
+
+## Las calas en px de mapa (una por banco). Publico para las pruebas.
+func coves() -> Array:
+	return _coves
+
+func _rebuild_coves() -> void:
+	_coves.clear()
+	_cut_cache.clear()
+	if _grass_pts.is_empty():
+		return
+	for r in _hole_rects:
+		var v: Vector4 = r
+		var center := Vector2(v.x, v.y) * View2D.PX_PER_UNIT
+		var half := Vector2(v.z, v.w) * View2D.PX_PER_UNIT
+		_coves.append(cove_polygon(center, half, _sea_dir(center, half), (SHORE_WIDTH + 2.0) * View2D.PX_PER_UNIT, View2D.cell_px()))
+
+## Hacia donde queda el mar desde un banco: lejos de las casillas de tierra que
+## lo rodean (o, si no se sabe, lejos del centro de la isla).
+func _sea_dir(center: Vector2, half: Vector2) -> Vector2:
+	var cell := View2D.cell_px()
+	var dir := Vector2.ZERO
+	for d in [Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP]:
+		var reach: Vector2 = half + Vector2.ONE * cell * 0.5
+		var across := Vector2(-d.y, d.x)
+		for t in [-0.6, 0.0, 0.6]:
+			var p: Vector2 = center + d * reach + across * half * float(t)
+			if GridManager.is_land_cell(View2D.px_to_cell(p)):
+				dir -= d
+	if dir.length() < 0.01:
+		dir = center - _grass_bounds.get_center()
+	return dir.normalized() if dir.length() > 0.01 else Vector2.DOWN
+
+## La cala de un banco: el ovalo que lo cubre (con un poco de margen) unido a
+## ese mismo ovalo llevado `reach` px hacia el mar. Pura, para las pruebas.
+static func cove_polygon(center: Vector2, half: Vector2, sea_dir: Vector2, reach: float, cell: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var rx := half.x + cell * 0.3
+	var ry := half.y + cell * 0.3
+	for i in 16:
+		var a := TAU * float(i) / 16.0
+		var p := center + Vector2(cos(a) * rx, sin(a) * ry)
+		pts.append(p)
+		pts.append(p + sea_dir * reach)
+	var hull := Geometry2D.convex_hull(pts)
+	if hull.size() > 1 and hull[0] == hull[hull.size() - 1]:
+		hull.remove_at(hull.size() - 1)
+	return hull
+
+## Un anillo de orilla (`expand`) con las calas recortadas. Si un recorte no da
+## un solo poligono limpio (una cala que no llega al mar), ese anillo se pinta
+## entero: mejor charco que agujero.
+func _shore_ring(expand: float) -> Array:
+	if _cut_cache.has(expand):
+		return _cut_cache[expand]
+	var polys: Array = [polygon_px(expand)]
+	for cove in _coves:
+		var next: Array = []
+		for p in polys:
+			var cut := Geometry2D.clip_polygons(p, cove)
+			if cut.size() == 1:
+				next.append(cut[0])
+			else:
+				next.append(p)
+		polys = next
+	_cut_cache[expand] = polys
+	return polys
 
 ## Borde de la isla en pixeles de mapa, crecido `expand` unidades de mundo.
 func polygon_px(expand: float) -> PackedVector2Array:
@@ -266,11 +356,19 @@ func _draw() -> void:
 	draw_colored_polygon(polygon_px(SHORE_WIDTH + 14.0), WATER_DEEP.lerp(WATER, 0.5))
 	draw_colored_polygon(polygon_px(SHORE_WIDTH + 8.0), WATER)
 	draw_colored_polygon(polygon_px(SHORE_WIDTH + 3.0), WATER_SHALLOW)
-	# Espuma, arena mojada, arena
-	draw_colored_polygon(polygon_px(SHORE_WIDTH + 1.0), FOAM)
+	# Espuma, arena mojada, arena (con las calas de los bancos recortadas)
+	for p in _shore_ring(SHORE_WIDTH + 1.0):
+		draw_colored_polygon(p, FOAM)
 	draw_polyline(_closed(polygon_px(SHORE_WIDTH + 1.7)), Color(FOAM, 0.4), 2.0, true)
-	draw_colored_polygon(polygon_px(SHORE_WIDTH), SAND_WET)
-	draw_colored_polygon(polygon_px(SHORE_WIDTH - 0.8), SAND)
+	for p in _shore_ring(SHORE_WIDTH):
+		draw_colored_polygon(p, SAND_WET)
+	for p in _shore_ring(SHORE_WIDTH - 0.8):
+		draw_colored_polygon(p, SAND)
+	# La orilla nueva de cada cala: una linea de espuma donde corta la arena.
+	var sand_outer := polygon_px(SHORE_WIDTH + 1.0)
+	for cove in _coves:
+		for seg in Geometry2D.intersect_polyline_with_polygon(_closed(cove), sand_outer):
+			draw_polyline(seg, Color(FOAM, 0.75), 2.5, true)
 	# El canto de la maqueta: el cesped desplazado hacia abajo, en tierra, con
 	# su franja oscura al pie.
 	var cliff := PackedVector2Array()

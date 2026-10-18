@@ -121,4 +121,7 @@ func test_the_2d_tint_is_white_by_day_and_blue_but_readable_at_night() -> void:
 	assert_that(StormTint.day_tint(1.0, 0.0)).is_equal(Color.WHITE)
 	var night: Color = StormTint.day_tint(0.0, 0.0)
 	assert_float(night.b).is_greater(night.r)
-	assert_float(night.get_luminance()).is_greater(0.6)
+	# Mas honda desde feat/vista2d-y-prologo (la noche 2D casi no se notaba): las
+	# luces de la colonia (NightLights2D) la hacen legible; el mapa no se apaga.
+	assert_float(night.get_luminance()).is_greater(0.45)
+	assert_float(night.get_luminance()).is_less(0.6)

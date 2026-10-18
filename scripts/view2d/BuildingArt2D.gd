@@ -3314,21 +3314,45 @@ static func _fish_2d(ci: CanvasItem, c: Vector2, s: float, col: Color, dir: Vect
 	_poly(ci, body, col, OUTLINE, 1.0)
 	_dot(ci, c + d * s * 0.8 + side * s * 0.15, maxf(0.8, s * 0.15), IRON)
 
-## El banco de peces en 2D: agua honda con su orla clara, lomos de peces en
-## corro, espuma, la boya roja y blanca y el pez que salta (lo exagerado).
+## El banco de peces en 2D (repasado en feat/vista2d-y-prologo): antes era un
+## ovalo claro con borde y el centro oscuro, y sobre la arena parecia un charco.
+## Ahora no tiene borde: es agua (la isla abre una cala en la arena encima,
+## Island2D.set_sand_holes) con una mancha honda difusa, ondas en corro, las
+## sombras de los peces bajo el agua, unos pocos lomos que asoman con su
+## estela, el pez que salta (lo exagerado) y la boya roja y blanca.
 static func _dep_fish_shoal(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator) -> void:
 	var c := r.get_center()
 	var m := minf(r.size.x, r.size.y)
-	_poly(ci, _dep_oval(c, r.size.x * 0.48, r.size.y * 0.46, rng), SKY.lightened(0.3), Color(OUTLINE, 0.35), 1.0)
-	ci.draw_colored_polygon(_dep_oval(c, r.size.x * 0.4, r.size.y * 0.38, rng), SKY.darkened(0.42))
-	for k in 7:
-		var ang := TAU * float(k) / 7.0 + rng.randf_range(-0.2, 0.2)
-		var p := c + Vector2(cos(ang) * r.size.x * 0.42, sin(ang) * r.size.y * 0.4)
-		ci.draw_colored_polygon(_dep_oval(p, rng.randf_range(2.0, 3.5), rng.randf_range(1.2, 2.2), rng), CREAM)
-	var n := 4 + int(r.size.x * r.size.y / (m * m))
+	# Lo hondo: tres capas cada vez mas pequenas y opacas, sin contorno.
+	for i in 3:
+		var t := float(i) / 2.0
+		ci.draw_colored_polygon(_dep_oval(c, r.size.x * (0.48 - 0.12 * t), r.size.y * (0.44 - 0.11 * t), rng), Color(SKY.darkened(0.45), 0.18 + 0.12 * t))
+	# Ondas: arcos claros alrededor del corro (el agua se mueve donde hay peces).
+	for k in 3:
+		var rr := m * (0.22 + 0.11 * float(k))
+		var a0 := rng.randf() * TAU
+		for j in 3:
+			var from := a0 + TAU * float(j) / 3.0
+			var arc := PackedVector2Array()
+			for s in 7:
+				var a := from + 1.3 * float(s) / 6.0
+				arc.append(c + Vector2(cos(a) * rr * (r.size.x / m), sin(a) * rr * 0.75 * (r.size.y / m)))
+			ci.draw_polyline(arc, Color(CREAM, 0.55 - 0.13 * float(k)), maxf(1.0, m * 0.018))
+	# Las sombras de los peces, bajo el agua, nadando en corro.
+	var n := 6 + int(r.size.x * r.size.y / (m * m))
 	for k in n:
-		var p := c + Vector2(rng.randf_range(-0.28, 0.28) * r.size.x, rng.randf_range(-0.26, 0.26) * r.size.y)
-		_fish_2d(ci, p, m * rng.randf_range(0.045, 0.06), STEEL.lightened(rng.randf_range(0.0, 0.2)), Vector2.from_angle(rng.randf() * TAU))
+		var ang := TAU * float(k) / float(n) + rng.randf_range(-0.25, 0.25)
+		var rad := rng.randf_range(0.12, 0.3)
+		var p := c + Vector2(cos(ang) * r.size.x * rad, sin(ang) * r.size.y * rad * 0.9)
+		var heading := Vector2.from_angle(ang + PI * 0.5)
+		_fish_shadow(ci, p, m * rng.randf_range(0.04, 0.055), heading)
+	# Tres lomos que asoman, con su estela de espuma.
+	for k in 3:
+		var ang := TAU * float(k) / 3.0 + rng.randf()
+		var p := c + Vector2(cos(ang) * r.size.x * 0.2, sin(ang) * r.size.y * 0.18)
+		var heading := Vector2.from_angle(ang + PI * 0.5)
+		ci.draw_polyline(PackedVector2Array([p - heading * m * 0.06, p - heading * m * 0.13 + Vector2(-heading.y, heading.x) * m * 0.02, p - heading * m * 0.2]), Color(CREAM, 0.7), maxf(1.0, m * 0.02))
+		_fish_2d(ci, p, m * 0.05, STEEL.lightened(rng.randf_range(0.05, 0.25)), heading)
 	# El que salta: en arco por encima del agua, con su sombra y salpicadura.
 	var jump := c + Vector2(rng.randf_range(-0.15, 0.15) * r.size.x, rng.randf_range(0.0, 0.12) * r.size.y)
 	_dot(ci, jump, m * 0.08, Color(IRON, 0.25))
@@ -3336,7 +3360,22 @@ static func _dep_fish_shoal(ci: CanvasItem, r: Rect2, rng: RandomNumberGenerator
 		var ang := TAU * float(k) / 5.0
 		_dot(ci, jump + Vector2(cos(ang), sin(ang) * 0.6) * m * 0.1, maxf(1.0, m * 0.018), CREAM)
 	_fish_2d(ci, jump + Vector2(0, -m * 0.16), m * 0.08, BRASS_LIGHT, Vector2(1, -0.5))
-	# La boya.
+	# La boya, con su onda.
 	var buoy := r.position + r.size * Vector2(0.84, 0.18)
+	_dot(ci, buoy + Vector2(0, m * 0.02), m * 0.075, Color(CREAM, 0.35))
 	_cyl(ci, buoy, m * 0.05, m * 0.05, CREAM, RED)
 	_mast(ci, buoy, m * 0.12, IRON, 1.5)
+
+## La sombra de un pez bajo el agua: el mismo cuerpo que _fish_2d, oscuro y
+## translucido, sin contorno.
+static func _fish_shadow(ci: CanvasItem, c: Vector2, s: float, dir: Vector2) -> void:
+	var d := dir.normalized()
+	var side := Vector2(-d.y, d.x)
+	var body := PackedVector2Array()
+	for i in 8:
+		var ang := TAU * float(i) / 8.0
+		body.append(c + d * cos(ang) * s * 1.4 + side * sin(ang) * s * 0.55)
+	var col := Color(SKY.darkened(0.7), 0.55)
+	ci.draw_colored_polygon(body, col)
+	var tail := c - d * s * 1.3
+	ci.draw_colored_polygon(PackedVector2Array([tail, tail - d * s * 0.7 + side * s * 0.55, tail - d * s * 0.7 - side * s * 0.55]), col)

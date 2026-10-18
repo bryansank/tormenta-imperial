@@ -285,8 +285,10 @@ docs/21 §9).
   es la misma en las dos vistas y al cargar. Solo una partida vieja de isla
   cuadrada sin semilla (`island_seed` = -1, escenas de test) sortea su ondulacion
   al abrir la escena.
-- **La tormenta** tine el mapa con `CanvasModulate` (la interfaz no se tine) y
-  deja caer ceniza desde la fase de Ceniza; no hay niebla por profundidad.
+- **La tormenta** tine el mapa con `CanvasModulate` (la interfaz no se tine),
+  con suelos propios mas oscuros que la 3D, vineta y ceniza que cae desde la
+  fase de Ceniza; de noche se encienden ventanas y farolas (ver "Noche,
+  Tormenta, carteles y bancos"). No hay niebla por profundidad.
 - **El nivel** (2026-10-17, como la 3D): el MISMO dibujo un 8 % mayor por nivel
   (`BuildingArt2D.level_scale` / `grown_rect`), con sombra mas larga, sobre un
   zocalo de piedra con fleje de laton (`_level_plinth`, dos escalones en el III)
@@ -323,6 +325,73 @@ docs/21 §9).
   arriba en el centro, con el tinte de su bando (`BattleScreen._paint_air_overhead`,
   `board_air_mark(cell)`). Antes desaparecia del tablero 2D. Elegir la capa con el
   dedo sigue pendiente (docs/15 §11).
+
+## Noche, Tormenta, carteles y bancos (1.1, rama `feat/vista2d-y-prologo`)
+
+La ronda de la 1.0 (`tormenta-imperial-contexto/25_RONDA_PRUEBAS_1.0.md`, mejora
+11 y revision visual) vio tres cosas flojas en 2D. Lo que se hizo:
+
+**La noche y la Tormenta se notan** (`StormTint2D`, `NightLights2D`):
+
+- **Suelos propios de la 2D** (`StormTint2D.VIEW_FLOOR`, `view_target()`): con
+  los pesos de la 3D (0.12 - 0.22 fuera del golpe) el mapa solo se calentaba.
+  En 2D el Aviso pide al menos 0.3 (calido), la Ceniza 0.48 (empieza a apagar)
+  y la Tormenta y el Diezmo 0.6 (ceniza de verdad, aun legible: luminancia
+  ~0.7). El golpe sube a `max(punch_weight, 0.8)` para seguir notandose.
+  `target_weight()` no cambia: es el de la 3D y sus pruebas.
+- **Noche mas honda**: `NIGHT_TINT` (0.42, 0.5, 0.86), antes (0.56, 0.64, 0.92).
+- **Luces de la colonia** (`scripts/view2d/NightLights2D.gd`): ventanas
+  encendidas (1 a 3 por edificio en pie, en sitios fijos de su huella) y una
+  farola cada `LAMP_EVERY` (4) calzadas, por hash de la celda. Van en su
+  `CanvasLayer` "LightsLayer" (capa 1, `follow_viewport_enabled`): el
+  `CanvasModulate` no la tine, asi que con el mapa azul las luces siguen
+  calidas, en mezcla aditiva. Se encienden de noche y con la Tormenta apagando
+  (`StormTint2D.lights_for(light, weight)`). Sin `_process`: StormTint2D le pasa
+  la intensidad (`set_intensity`, solo `modulate`); de dia esta oculta (coste
+  cero); la lista se rehace solo si cambia `GridManager.map_version()` o llega
+  una ruina, reparacion, obra acabada o carga, y solo con las luces a la vista.
+  Una textura de brillo compartida, tope `MAX_POINTS` (360).
+- **Vineta** (en "AshLayer", ahora capa 2): un `TextureRect` con un degradado
+  radial generado una vez; azul de noche, sepia con Tormenta
+  (`vignette_for`). Solo cambia su `modulate`.
+- **Ceniza que cae despacio** ("AshDrift") en la Ceniza y la Tormenta, ademas
+  de la rafaga del golpe: 60 / 40 / 24 motas (PC / tableta / movil,
+  `DRIFT_AMOUNT`). Su rectangulo solo se recoloca al encender o al cambiar la
+  ventana.
+- Con calidad Minima (`GraphicsQuality.fx_enabled()` falso) queda solo el tinte.
+
+**Los carteles de estado ya no se pisan** (`StatusBadge2D`): el cartel "Zzz sin
+trabajadores" salia hacia la izquierda desde la esquina y tapaba al vecino.
+Ahora, en reposo, es una **ficha compacta**: "Zzz" en el color del motivo y un
+pictograma (obrero tachado, calzada tachada, mineral tachado, llama, caja llena,
+pausa; `draw_reason_glyph`), con la esquina de arriba a la derecha **dentro** de
+la huella. Nunca pasa del 90 % del ancho de su huella (`chip_scale`: si al
+alejarse no cabe, encoge), asi que dos vecinos parados no se tocan. **El texto
+entero sale solo con el edificio seleccionado** (`Building2D.set_selected` →
+`set_expanded`, sin mirar cada fotograma) y en su ficha, como siempre. En obras
+no se pinta (lo dice el rotulo de la obra), igual que en 3D.
+
+**Los bancos de peces estan en el agua** (`Island2D`, `BuildingArt2D`):
+
+- La playa 2D (`SHORE_WIDTH` 4.5 unidades, mas de dos casillas) tapaba la
+  primera franja de agua, que es donde viven los bancos. Como la 3D
+  (`island_sand.gdshader`, `holes`), **la isla abre una cala**:
+  `MapGenerator2D._push_sand_holes()` (la isla 2D se llama "Island") pasa los
+  rectangulos de `sea_deposit_rects()` a `Island2D.set_sand_holes()`, que
+  recorta la espuma y la arena (`Geometry2D.clip_polygons`) con un poligono que
+  cubre el banco y sale hacia el mar (`cove_polygon`: el ovalo del banco unido
+  al mismo ovalo llevado mar adentro; el lado del mar sale de las casillas de
+  tierra que lo rodean, `_sea_dir`). La orilla se estrecha justo ahi, con una
+  linea de espuma donde corta la arena. Se calcula al cambiar los bancos o la
+  forma; `_draw` solo pinta lo guardado. Si un recorte no diera un solo
+  poligono limpio, ese anillo se pinta entero (mejor charco que agujero).
+- **El banco** (`_dep_fish_shoal`) ya no es un ovalo con borde: agua honda
+  difusa sin contorno, ondas en corro, sombras de peces bajo el agua
+  (`_fish_shadow`), tres lomos que asoman con su estela, el pez que salta y la
+  boya.
+
+Coste: ninguno por fotograma salvo dos asignaciones en StormTint2D (que ya
+corria) y las motas de ceniza lenta mientras hay Ceniza o Tormenta.
 
 ## Huecos conocidos
 
@@ -380,7 +449,11 @@ docs/21 §9).
   banderin de la obra, con su semilla); `test_view2d_save_compat.gd` comprueba
   que una obra conserva su semilla al guardar en 3D, cargar en 2D y volver;
   `test_building2d_lot.gd`: los 16 edificios con su parcela en pie, en obra y
-  en ruina.
+  en ruina. De la 1.1 (`feat/vista2d-y-prologo`): `test_view2d_mood.gd`
+  (suelos de tinte, luces, vineta, ceniza lenta, capas), `test_status_badge_compact.gd`
+  (la ficha nunca sale de su huella, se expande al seleccionar, pictogramas) y
+  `test_fish_shoal_2d.gd` (la cala cubre el banco y llega al mar, la arena se
+  abre y se cierra, el banco se dibuja).
 - `tools/look_probe.gd`: captura de todos los aspectos en 3D y 2D, y de las
   obras (una fila por fase, varios edificios y dos casas)
   (docs/03, "Aspecto en el mapa"), y la fila "estilo": los 16 en su parcela,
