@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "exchange"
+display_name = "Casa de cambio"
+description = "El Mercado te cobra menos al comprar y vender. En Gobernador, el oro guardado da un poco de interés."
+grid_size = Vector2i(2, 2)
+cost_gold = 350
+cost_steel = 120
+cost_oil = 0
+cost_wood = 100
+cost_materials = {"ingots": 8, "beams": 4}
+build_time = 12.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+mesh_height = 2.2
+mesh_color = Color(0.8, 0.65, 0.3, 1)
+workers_required = 2
+max_health = 220

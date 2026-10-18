@@ -248,6 +248,10 @@ const TIPS := {
 	"farm":           {"title": "HELP_T_FARM",      "body": "HELP_B_FARM"},
 	"collect_full":   {"title": "HELP_T_COLLECT",   "body": "HELP_B_COLLECT"},
 	"fishing_dock":   {"title": "HELP_T_FISHING_DOCK", "body": "HELP_B_FISHING_DOCK"},
+	# Economia (feat/edificios-economia): al terminar el primero de cada uno.
+	"trade_port":     {"title": "HELP_T_TRADE_PORT",   "body": "HELP_B_TRADE_PORT"},
+	"exchange":       {"title": "HELP_T_EXCHANGE",     "body": "HELP_B_EXCHANGE"},
+	"diesel_plant":   {"title": "HELP_T_DIESEL_PLANT", "body": "HELP_B_DIESEL_PLANT"},
 	# Edificios militares (feat/edificios-militares).
 	"infirmary":      {"title": "HELP_T_INFIRMARY", "body": "HELP_B_INFIRMARY"},
 	"smithy":         {"title": "HELP_T_SMITHY", "body": "HELP_B_SMITHY"},
@@ -1430,6 +1434,10 @@ func _on_news_construction(node: Node) -> void:
 		"fishing_dock":
 			if not has_seen_tip("fishing_dock"):
 				offer_tip("fishing_dock")
+		"trade_port", "exchange", "diesel_plant":
+			var tip_id := String(info["data"].id)
+			if not has_seen_tip(tip_id):
+				offer_tip(tip_id)
 		# Edificios militares (feat/edificios-militares): el primero de cada uno.
 		"infirmary", "smithy", "firing_range":
 			var tip_id := String(info["data"].id)

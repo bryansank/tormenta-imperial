@@ -175,7 +175,12 @@ static func building_rank(building_id: String) -> int:
 func is_building_unlocked(building_id: String) -> bool:
 	if GameMode.all_unlocked():
 		return true
-	return building_rank(building_id) <= _rank
+	if building_rank(building_id) <= _rank:
+		return true
+	# Un plano menor comprado al contrabandista lo abre antes de tiempo
+	# (feat/edificios-economia, EconomyManager.grant_plan).
+	var economy := get_node_or_null("/root/EconomyManager")
+	return economy != null and economy.has_plan(building_id)
 
 ## El rango que abre una pieza de la bandera ("patterns", "emblems", "colors").
 static func piece_rank(kind: String, id: String) -> int:

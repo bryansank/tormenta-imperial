@@ -63,6 +63,12 @@ func _refresh_areas() -> void:
 		PopulationManager.recalculate()
 		EventBus.beauty_changed.emit()
 
+## Pide el recuento de areas (agrupado y diferido). Lo usa EconomyManager
+## cuando cambian los obreros: una Central, un Puerto o una Casa de cambio sin
+## gente deja de trabajar.
+func request_area_refresh() -> void:
+	_mark_areas_dirty()
+
 # ── Registration ──
 
 func _on_building_placed(data: Resource, cell: Vector2i) -> void:
@@ -470,6 +476,9 @@ func get_cycle_yield(node: Node, data: BuildingData, include_events := true) -> 
 	# tech bonus would mix a passing squall with permanent research.
 	if include_events:
 		mult *= GameConfig.get_event_production_multiplier()
+		# Central diesel cerca (industriales, meta de UtilityEffects). Va con lo
+		# pasajero: offline no se quema combustible, asi que tampoco se cobra.
+		mult *= 1.0 + float(node.get_meta(UtilityEffects.DIESEL_META, 0.0))
 	var produced := {}
 	var base := base_cycle_production(node, data)
 	for res_name in base:

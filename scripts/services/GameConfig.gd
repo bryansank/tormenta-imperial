@@ -4125,4 +4125,137 @@ func _register_defense_life_buildings() -> bool:
 	# parpadea (su lampara de senales).
 	building_active_fx[SCRAPYARD_ID] = "dust"
 	building_active_fx[TELEGRAPH_ID] = "glow"
+# ── Economia (feat/edificios-economia, doc 21 §6.3 n.º 13, 14 y 16) ──
+# ══════════════════════════════════════════════════════════════════════
+# Puerto comercial (el barco del contrabandista, doc 14 §P4), Casa de cambio
+# (Mercado mas barato; interes en Gobernador) y Central diesel (gasta
+# combustible, +15 % a los industriales de alrededor). El reloj del barco, el
+# combustible de las Centrales y el interes los lleva EconomyManager; las areas
+# y el "esta en marcha" de cada uno, UtilityEffects.refresh (al construir,
+# terminar, demoler, arruinar, reparar o cambiar los obreros: nunca por frame).
+#
+# Como el Muelle de pesca, sus filas en las tablas comunes (topes, requisitos,
+# obra, parcela, efecto) las anade _register_economy_buildings() al crear
+# GameConfig: este bloque vive solo y no choca con otras ramas.
+#
+# Lo que NO esta aqui (lo lleva la rama del Nucleo y los planos): en que nivel
+# del Nucleo se abre cada uno y si pide plano. Propuesta de esta rama: Puerto
+# Nucleo 3; Casa de cambio Nucleo 3 + plano; Central diesel Nucleo 4 + plano
+# (la Central ya esta en combat_blueprint_buildings).
+
+const TRADE_PORT_ID := "trade_port"
+const EXCHANGE_ID := "exchange"
+const DIESEL_PLANT_ID := "diesel_plant"
+
+## Topes fijos: el Puerto y la Casa de cambio son unicos; Centrales, dos.
+var economy_building_limits := {"trade_port": 1, "exchange": 1, "diesel_plant": 2}
+## Requisitos: los dos de comercio piden el Mercado (y la Fundicion, que es la
+## era 2: el acero de su obra); la Central, la Refineria (de ahi el combustible).
+var economy_building_prerequisites := {
+	"trade_port": ["market", "foundry"],
+	"exchange": ["market", "foundry"],
+	"diesel_plant": ["refinery"],
+}
+
+# ── Puerto comercial: el barco del contrabandista ──
+## Espera entre dos barcos (segundos de juego, pasan por get_duration): un
+## sorteo entre min y max. El primero llega antes, para que se vea pronto.
+var smuggler_interval_min := 360.0
+var smuggler_interval_max := 600.0
+var smuggler_first_wait := 75.0
+## Lo que se queda atracado. Si llega la Ceniza, zarpa antes.
+var smuggler_dock_seconds := 90.0
+## Ofertas por barco (una de cada hueco: exclusiva, material, recursos).
+var smuggler_offer_count := 3
+## Lo que se mueve en cada clase de oferta.
+## Repuestos: [min, max] y oro por repuesto (caros: lo normal es traerlos de
+## las misiones, doc 21 D2).
+var smuggler_parts_amount := [2, 4]
+var smuggler_parts_price := 60
+## Planos menores: los de edificios que abre el RANGO (decoraciones y utiles,
+## rank_rewards) por encima del rango de ahora. Nunca un plano obligatorio (los
+## de combat_blueprint_buildings salen solo de las misiones). Oro por rango.
+var smuggler_plan_price_per_rank := 40
+var smuggler_plan_price_min := 120
+## Materiales: [min, max] y oro por unidad (un poco por encima de lo que cuesta
+## hacerlos: 20 madera -> 5 tablones = 12 de oro el tablon; vigas ~48; combustible ~36).
+var smuggler_material_offers := {
+	"planks": {"amount": [8, 14], "price": 13},
+	"ingots": {"amount": [4, 8], "price": 12},
+	"beams": {"amount": [4, 8], "price": 52},
+	"fuel": {"amount": [4, 8], "price": 40},
+}
+## Recursos: vende por debajo del Mercado (fraccion del precio de compra de
+## ahora) o compra lo que te sobra por encima (multiplo del precio de venta).
+var smuggler_resource_amount := [40, 80]
+var smuggler_sell_discount := 0.75
+var smuggler_buy_premium := 1.6
+## Probabilidad de que el tercer hueco sea "te compro" en vez de "te vendo".
+var smuggler_buy_chance := 0.5
+## Probabilidad de que el hueco exclusivo sea un plano (si queda alguno).
+var smuggler_plan_chance := 0.45
+## XP de rango por cada compra o venta al barco.
+var smuggler_rank_xp := 5
+
+# ── Casa de cambio ──
+## Lo que baja el spread del Mercado con una Casa en marcha (0,30 -> 0,20), y
+## el suelo que nunca cruza (con las tecnologias de Logistica tambien).
+var exchange_spread_cut := 0.1
+var exchange_spread_floor := 0.08
+## Gobernador: interes sobre el oro guardado, cada `exchange_interest_interval`
+## segundos de juego, con tope por pago.
+var exchange_interest_interval := 60.0
+var exchange_interest_rate := 0.01
+var exchange_interest_cap := 20
+## Lo que baja el spread ahora mismo (runtime, lo pone UtilityEffects).
+var market_spread_cut := 0.0
+
+## El spread que usa el Mercado: el de la partida (tecnologias incluidas)
+## menos el de la Casa de cambio, sin bajar del suelo.
+func effective_market_spread() -> float:
+	if market_spread_cut <= 0.0:
+		return market_spread
+	return maxf(minf(market_spread, exchange_spread_floor), market_spread - market_spread_cut)
+
+# ── Central diesel ──
+## Los industriales a esta distancia (casillas de borde a borde) rinden
+## +`diesel_plant_bonus`. Dos Centrales no suman: cada edificio cuenta una.
+var diesel_plant_radius := 5
+var diesel_plant_bonus := 0.15
+var diesel_plant_targets := ["sawmill", "gold_mine", "foundry", "refinery"]
+## Combustible que quema cada Central con obreros cada `diesel_plant_interval`
+## segundos de juego. Sin combustible se para (y no da nada) hasta el siguiente.
+var diesel_plant_fuel_cost := 1
+var diesel_plant_interval := 45.0
+
+## Se evalua al crear GameConfig, despues de todas las tablas de arriba.
+var _economy_registered := _register_economy_buildings()
+
+func _register_economy_buildings() -> bool:
+	for id in economy_building_limits:
+		building_limits[id] = int(economy_building_limits[id])
+	for id in economy_building_prerequisites:
+		building_prerequisites[id] = (economy_building_prerequisites[id] as Array).duplicate()
+	# Obra: madera de muelle y cajas (Puerto), piedra y laton (Casa de cambio),
+	# chapa y tuberias con chispas (Central).
+	construction_style[TRADE_PORT_ID] = {"piles": ["crates", "planks", "sacks"], "fence": "dark_planks",
+		"tarp": Color(0.26, 0.38, 0.50), "frame": "hall", "frame_mat": "wood", "site_fx": "dust",
+		"flag": Color(0.95, 0.74, 0.12), "crane": Color(0.95, 0.72, 0.10)}
+	construction_style[EXCHANGE_ID] = {"piles": ["stone", "bricks", "rivets"], "fence": "canvas",
+		"tarp": Color(0.55, 0.42, 0.20), "frame": "plinth", "frame_mat": "stone", "site_fx": "dust",
+		"flag": Color(0.77, 0.59, 0.16)}
+	construction_style[DIESEL_PLANT_ID] = {"piles": ["pipes", "drums", "rivets"], "fence": "sheet",
+		"tarp": Color(0.20, 0.20, 0.22), "frame": "chimney", "frame_mat": "steel", "site_fx": "sparks",
+		"flag": Color(0.95, 0.45, 0.08)}
+	# Parcela: tablones y cajas en el muelle; losas y faroles en la Casa;
+	# chapa y bidones en la Central.
+	building_lot_style[TRADE_PORT_ID] = {"ground": "plate", "trim": "rail", "yard": 0.3, "accent": "civic",
+		"props": ["crate", "barrel", "goods", "crate", "sacks"], "count": [4, 6]}
+	building_lot_style[EXCHANGE_ID] = {"ground": "slabs", "trim": "curb", "yard": 0.3, "accent": "civic",
+		"props": ["lamp", "planter", "bench", "lamp"], "count": [3, 5]}
+	building_lot_style[DIESEL_PLANT_ID] = {"ground": "plate", "trim": "pipes", "yard": 0.3, "accent": "industrial",
+		"props": ["drums", "valve", "drums", "barrel", "crate"], "count": [4, 6]}
+	building_active_fx[TRADE_PORT_ID] = "glow"
+	building_active_fx[EXCHANGE_ID] = "glow"
+	building_active_fx[DIESEL_PLANT_ID] = "smoke"
 	return true

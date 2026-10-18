@@ -538,3 +538,30 @@ signal beauty_changed()
 ## de acero, `parts` repuestos y `lifted` edificios levantados.
 @warning_ignore("unused_signal")
 signal scrap_salvaged(steel: int, parts: int, lifted: int)
+# ── Economia (feat/edificios-economia) ──
+## EconomyManager publica el barco del contrabandista (Puerto comercial), el
+## combustible de las Centrales diesel y el interes de la Casa de cambio.
+## Atraco el barco del contrabandista junto al Puerto. `offers`: las ofertas
+## (ver scripts/economy/SmugglerShip.gd); `port`: el nodo del Puerto.
+@warning_ignore("unused_signal")
+signal smuggler_ship_arrived(offers: Array, port: Node)
+## El barco zarpo. `reason`: "time", "storm" (llego la Ceniza) o "no_port".
+@warning_ignore("unused_signal")
+signal smuggler_ship_departed(reason: String)
+## Se cerro un trato con el barco (la oferta `index`, ya cobrada y pagada).
+@warning_ignore("unused_signal")
+signal smuggler_offer_taken(index: int, offer: Dictionary)
+## Se compro un plano menor al barco: `building_id` ya se puede construir
+## aunque el rango aun no llegue.
+@warning_ignore("unused_signal")
+signal building_plan_bought(building_id: String)
+## Una Central diesel se quedo sin combustible (`running` false) o volvio a
+## arrancar (true).
+@warning_ignore("unused_signal")
+signal diesel_plant_fuel_changed(node: Node, running: bool)
+## La Casa de cambio pago interes (solo Gobernador).
+@warning_ignore("unused_signal")
+signal exchange_interest_paid(amount: int)
+## Algo de lo de arriba cambio (el panel del Puerto y la ficha se repintan).
+@warning_ignore("unused_signal")
+signal economy_changed()

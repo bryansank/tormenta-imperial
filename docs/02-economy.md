@@ -447,6 +447,28 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
 - Para medir con `tools/line_probe.gd`: lo tirado por bolsa llena, el minuto del CG 3 y
   cuántos extractores levanta de verdad el jugador de la sonda en cada era.
 
+### Sumideros y atajos de la 1.2: Puerto, Casa de cambio y Central diésel (`feat/edificios-economia`)
+
+Tres edificios para que el oro y el combustible que sobran en las eras 2-3 tengan a
+dónde ir (doc 21 §6.2 del contexto privado). Detalle de cada uno en docs/03 "Economía
+de la 1.2"; cifras en el bloque "Economia" al final de `GameConfig.gd`.
+
+- **Puerto comercial → el barco del contrabandista.** Un sumidero de oro con fecha de
+  caducidad: cada 6-10 min, 90 s para aprovechar tres ofertas (repuestos, un plano
+  menor de rango, material de taller ya hecho, recursos baratos o la compra de lo que
+  sobra). Premia guardar algo de oro (doc 14 §P4). Los repuestos salen caros (60 de oro)
+  para que las misiones sigan siendo su fuente normal (D2).
+- **Casa de cambio → Mercado más barato.** El spread baja 10 puntos (30 % → 20 %, suelo
+  8 % con las tecnologías de Logística); en Gobernador, además, 1 % del oro guardado
+  cada minuto de juego, con tope de 20 por pago (no se dispara con la bolsa llena).
+- **Central diésel → combustible a producción.** 1 combustible cada 45 s (≈ 3 de
+  petróleo: ≈ 36 de oro por 45 s) por +15 % a los industriales a ≤ 5 casillas. Con 3-4
+  extractores alrededor sale a cuenta; con uno, no. No cuenta offline.
+- Ninguno toca la bolsa compartida ni el tope de 3.500 del CG 3.
+- **Para medir con `tools/line_probe.gd`** (la sonda no los juega aún): cuánto oro se
+  va al barco por partida, si la Casa adelanta el CG 3 en Gobernador y si la Central
+  compensa su combustible con 2-3 industriales cerca.
+
 ## Key Files
 
 - `scripts/services/ResourceManager.gd` — resource tracking + unlock system

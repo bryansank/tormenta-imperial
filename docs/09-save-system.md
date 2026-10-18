@@ -148,6 +148,17 @@ just sets the hour (idempotent). A save without it starts in full daylight. Rese
 of GameManager. Not to be confused with `StormSky.reset()`, which is never called on a
 new game (docs/21 §12).
 
+`economy` (1.2, `feat/edificios-economia`): `EconomyManager.get_save_data()` —
+`{"ship": {...}, "plans": [String], "diesel_left": float, "interest_left": float}`.
+`ship` is the smuggler's ship (`scripts/economy/SmugglerShip.gd`: `wait_left`,
+`docked_left`, `offers`, `visits`, `pending`, `rng_seed`, `rng_state`), so a ship
+docked at save time is still there, with the same offers, after loading; `plans` are
+the minor blueprints bought from it (they open rank buildings early). Loading
+replaces everything (idempotent). A save without the key is a fresh ship, no plans and
+clocks not started. Reset by `EconomyManager.reset()`, called from the three new-game
+paths of GameManager. Whether a Diesel plant is running and the Exchange spread cut
+are not saved: `UtilityEffects.refresh()` derives them on load.
+
 `game_mode` (docs/20-modos-de-juego.md) is read **first** on load. A save without
 it is a Campaign in progress. `"result": "defeat"` marks a lost Survival run: the
 save is kept but sealed (GameManager never writes it again), and Survival skips the

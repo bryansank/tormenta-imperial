@@ -215,6 +215,11 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 	var defense := preload("res://scripts/buildings/DefenseToys.gd")
 	if defense.handles(building_id):
 		return defense.create(building_id)
+	# Economia de la 1.2 (feat/edificios-economia): Puerto comercial, Casa de
+	# cambio y Central diesel, igual que los utiles. Ver EconomyToys.
+	var economy := preload("res://scripts/buildings/EconomyToys.gd")
+	if economy.handles(building_id):
+		return economy.create(building_id)
 	# Las diez decoraciones baratas (feat/decoraciones-1): una malla de la
 	# paleta compartida por tipo, horneada si existe (DecorMesh).
 	var decor := preload("res://scripts/buildings/DecorMesh.gd")

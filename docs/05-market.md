@@ -84,6 +84,31 @@ dibujada (triángulo rojo arriba = sube, verde abajo = baja, barra = estable; no
 un carácter porque las fuentes no garantizan ▲▼ en Android). Se refresca con el
 tick del mercado, con cada cambio de fase de la Tormenta y con el Diezmo.
 
+## Casa de cambio (1.2, `feat/edificios-economia`)
+
+Con una **Casa de cambio** que trabaja (en pie, con carretera y sus 2 obreros) el
+spread baja `exchange_spread_cut` (0,10): de 30 % a 20 %. El Mercado lo lee siempre
+por `GameConfig.effective_market_spread()` = `market_spread − market_spread_cut`, sin
+bajar de `exchange_spread_floor` (0,08). `market_spread` sigue siendo el de la partida
+(lo bajan las tecnologías de Logística, `TechTreeManager`); `market_spread_cut` es de
+runtime y lo pone `UtilityEffects.refresh()` (no se guarda: sale de los edificios).
+
+En **Gobernador**, la Casa paga además interés: cada `exchange_interest_interval`
+(60 s de juego) el 1 % del oro guardado, con tope `exchange_interest_cap` (20)
+(`EconomyManager.pay_interest`). La ficha de la Casa dice el spread de antes y de
+ahora y, en Gobernador, cuánto paga.
+
+El **barco del contrabandista** del Puerto comercial no pasa por el Mercado pero lee sus
+precios al atracar: vende al 75 % del precio de compra y compra a 1,6 × el de venta
+(docs/03 "Economía de la 1.2").
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `exchange_spread_cut` | 0.1 | Lo que baja el spread con una Casa de cambio |
+| `exchange_spread_floor` | 0.08 | Suelo del spread con la Casa |
+| `exchange_interest_interval` / `_rate` / `_cap` | 60 s / 1 % / 20 | Interés en Gobernador |
+| `market_spread_cut` | 0.0 | Runtime: el recorte de ahora |
+
 ## Configuration (GameConfig.gd)
 
 | Variable | Default | Purpose |

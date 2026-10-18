@@ -62,7 +62,10 @@ const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", 
 	"infirmary", "smithy", "firing_range",
 	# Bastion, Chatarreria y Telegrafo (feat/edificios-defensa-vida); sin
 	# hornear, el juego usa su version procedural (DefenseToys.gd).
-	"bastion", "scrapyard", "telegraph"]
+	"bastion", "scrapyard", "telegraph",
+	# Economia de la 1.2 (feat/edificios-economia). Hasta hornearlos, el juego
+	# usa su version procedural (scripts/buildings/EconomyToys.gd).
+	"trade_port", "exchange", "diesel_plant"]
 
 ## Presupuesto de triangulos de una decoracion 2x2 (doc 21 §6.6).
 const DECOR_TRI_BUDGET := 600

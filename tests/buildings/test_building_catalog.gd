@@ -20,6 +20,9 @@ func test_every_building_definition_loads() -> void:
 	# Defensa y vida (feat/edificios-defensa-vida).
 	for id in ["bastion", "scrapyard", "telegraph"]:
 		assert_bool(ids.has(id)).is_true()
+	# 1.2: economia (Puerto comercial, Casa de cambio, Central diesel).
+	for id in ["trade_port", "exchange", "diesel_plant"]:
+		assert_bool(ids.has(id)).is_true()
 
 
 func test_exported_names_are_found_once() -> void:

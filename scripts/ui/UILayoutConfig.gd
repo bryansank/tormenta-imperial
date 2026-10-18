@@ -397,6 +397,7 @@ const PANEL_SLOTS := {
 	"RankPanel.modal":            "center_modal",
 	"SkirmishButton":             "skirmish_button",
 	"ContractPanel.modal":        "center_modal",
+	"SmugglerPanel.modal":       "center_modal",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)
@@ -407,6 +408,7 @@ const PANEL_SIZES := {
 	"ProgressPanel.modal":     Vector2(470, 0),
 	"ArmyPanel.modal":         Vector2(620, 0),
 	"ContractPanel.modal":     Vector2(620, 0),
+	"SmugglerPanel.modal":     Vector2(600, 0),
 	"SkirmishPanel.modal":     Vector2(640, 0),
 	## 1000: tres ramas y, a su derecha, la ficha de la tecnologia elegida.
 	"TechTreePanel.modal":     Vector2(1000, 0),
