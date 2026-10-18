@@ -82,6 +82,54 @@ static var BOARD_SHORE: Color
 
 static func _static_init() -> void:
 	_apply_tokens(resolve_tokens("default", false, 1.0))
+	# Ajuste de desarrollo: `godot --path . -- --ui-style=cartoon
+	# --ui-font=baloo_nunitosans --ui-surface=light` (docs/28-guia-ui.md §11).
+	var style_arg := ""
+	var font_arg := ""
+	var surface_arg := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--ui-style="):
+			style_arg = a.substr(11)
+		elif a.begins_with("--ui-font="):
+			font_arg = a.substr(10)
+		elif a.begins_with("--ui-surface="):
+			surface_arg = a.substr(13)
+	if style_arg != "" or STYLE_DEFAULT != "classic":
+		use_style(style_arg if style_arg != "" else STYLE_DEFAULT, surface_arg, font_arg)
+
+
+# ══════════════════════════════════════
+# ESTILO: clasico (laton sobre metal) o maqueta (docs/28-guia-ui.md)
+# ══════════════════════════════════════
+# "cartoon" es la variante del rediseno 2026-10: paneles redondeados de
+# juguete, colores vivos, letra redonda (CartoonTheme). Se activa con
+# use_style(); los tokens de abajo se reescriben para que los paneles que aun
+# no se rehicieron la sigan a grandes rasgos. De serie, "classic": nada cambia.
+
+const STYLES := ["classic", "cartoon"]
+## El estilo con el que arranca el juego. Fase 1 del rediseno: "classic"
+## hasta que Bryan apruebe las maquetas.
+const STYLE_DEFAULT := "classic"
+static var STYLE := "classic"
+
+## Cambia de estilo (y, en "cartoon", la superficie y la pareja de fuentes;
+## "" deja la que habia). Reaplica los tokens con las preferencias actuales.
+static func use_style(style: String, surface: String = "", combo: String = "") -> void:
+	STYLE = style if style in STYLES else "classic"
+	if surface in CartoonTheme.SURFACES:
+		CartoonTheme.surface = surface
+	if CartoonTheme.COMBOS.has(combo):
+		CartoonTheme.combo = combo
+	_switch_cache.clear()
+	_knob_cache.clear()
+	var ts := "normal"
+	for k in TEXT_SCALES:
+		if is_equal_approx(float(TEXT_SCALES[k]), text_scale):
+			ts = k
+	configure(palette, high_contrast, panel_opacity, ts, MIN_BTN_H, SETTINGS_ROW_H)
+
+static func is_cartoon() -> bool:
+	return STYLE == "cartoon"
 
 
 # ══════════════════════════════════════
@@ -181,7 +229,10 @@ static func configure(p_palette: String = "default", p_high_contrast: bool = fal
 	high_contrast = p_high_contrast
 	panel_opacity = clampf(p_opacity, OPACITY_MIN, OPACITY_MAX)
 	text_scale = float(TEXT_SCALES.get(p_text_size, 1.0))
-	_apply_tokens(resolve_tokens(palette, high_contrast, panel_opacity))
+	var tokens := resolve_tokens(palette, high_contrast, panel_opacity)
+	if is_cartoon():
+		tokens = CartoonTheme.legacy_tokens(tokens)
+	_apply_tokens(tokens)
 	MIN_CONTRAST = 7.0 if high_contrast else 4.5
 	FONT_TITLE = scaled_font(_FONT_BASE["title"], text_scale)
 	FONT_SECTION = scaled_font(_FONT_BASE["section"], text_scale)
@@ -334,19 +385,27 @@ static func _load_font(path: String) -> FontFile:
 	_font_cache[path] = f
 	return f
 
-static func body_font() -> FontFile:
+static func body_font() -> Font:
+	if is_cartoon():
+		return CartoonTheme.body_font()
 	return _load_font(FONT_BODY_PATH)
 
-static func heavy_font() -> FontFile:
+static func heavy_font() -> Font:
+	if is_cartoon():
+		return CartoonTheme.body_font()
 	return _load_font(FONT_HEAVY_PATH)
 
 ## Rajdhani Bold: cabeceras de seccion y botones.
-static func bold_font() -> FontFile:
+static func bold_font() -> Font:
+	if is_cartoon():
+		return CartoonTheme.title_font()
 	return _load_font(FONT_BOLD_PATH)
 
 ## Display font for titles, with Rajdhani as fallback so accented/ñ glyphs
 ## missing from the stencil face still render.
-static func title_font() -> FontFile:
+static func title_font() -> Font:
+	if is_cartoon():
+		return CartoonTheme.title_font()
 	var f := _load_font(FONT_TITLE_PATH)
 	if f and f.fallbacks.is_empty():
 		var b := body_font()
@@ -396,16 +455,21 @@ static func contrast_ratio(a: Color, b: Color) -> float:
 ## Devuelve `color` aclarado lo justo para cumplir `min_ratio` sobre `bg`.
 ## Conserva el tono: solo interpola hacia blanco.
 static func readable(color: Color, bg: Color = UI_BG_REFERENCE, min_ratio: float = MIN_CONTRAST) -> Color:
+	# En el estilo maqueta el fondo de referencia es el de las ventanas, y si es
+	# claro el texto se corrige oscureciendo, no aclarando.
+	if is_cartoon() and bg == UI_BG_REFERENCE:
+		bg = CartoonTheme.c("window", "BG")
 	if contrast_ratio(color, bg) >= min_ratio:
 		return color
+	var to_dark := _relative_luminance(bg) > 0.4
 	var t := 0.05
 	while t <= 0.95:
-		var candidate := color.lightened(t)
+		var candidate := color.darkened(t) if to_dark else color.lightened(t)
 		if contrast_ratio(candidate, bg) >= min_ratio:
 			candidate.a = color.a
 			return candidate
 		t += 0.05
-	return Color(1.0, 1.0, 1.0, color.a)
+	return Color(0.0, 0.0, 0.0, color.a) if to_dark else Color(1.0, 1.0, 1.0, color.a)
 
 ## Pinta una etiqueta ya creada respetando el contraste minimo y el contorno.
 ## Usar esto en vez de add_theme_color_override("font_color", ...) a mano.
@@ -535,6 +599,8 @@ static func mark_boss(style: StyleBoxFlat) -> void:
 # ══════════════════════════════════════
 
 static func make_panel_style(border: bool = true) -> StyleBox:
+	if is_cartoon():
+		return CartoonTheme.window_style() if border else CartoonTheme.card_style()
 	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(1, 1, 1))
 	if tex != null:
 		return tex
@@ -562,6 +628,8 @@ static func make_hud_style() -> StyleBoxFlat:
 
 ## Military tactical panel con decoraciones de esquinas
 static func make_war_table_style() -> StyleBox:
+	if is_cartoon():
+		return CartoonTheme.window_style()
 	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(1.06, 1.02, 0.92))
 	if tex != null:
 		return tex
@@ -594,6 +662,16 @@ static func _apply_button_text(btn: Button, font_size: int) -> void:
 
 static func style_button(btn: Button, bg: Color = BTN, font_size: int = FONT_BUTTON) -> void:
 	btn.custom_minimum_size.y = maxi(int(btn.custom_minimum_size.y), MIN_BTN_H)
+	if is_cartoon():
+		CartoonTheme._btn_states(btn, bg, int(btn.custom_minimum_size.y * 0.5), 14, "window")
+		_apply_button_text(btn, font_size)
+		var tc := CartoonTheme.on_fill(bg)
+		btn.add_theme_color_override("font_color", tc["color"])
+		btn.add_theme_color_override("font_hover_color", tc["color"])
+		btn.add_theme_color_override("font_pressed_color", tc["color"])
+		btn.add_theme_constant_override("outline_size", outline_for(font_size) if tc["outline"] else 0)
+		btn.add_theme_color_override("font_outline_color", CartoonTheme.INK)
+		return
 
 	# Baked metal button, tinted toward `bg`'s hue; falls back to flat if art missing.
 	btn.add_theme_stylebox_override("normal", _button_style(_metal_tint(bg, 1.0), bg, ACCENT_DIM, 3))
@@ -896,6 +974,8 @@ static func slider_knob_icon(side: int, hot: bool) -> Texture2D:
 ## Tarjeta del HUD. `left_bar` pinta el borde izquierdo mas grueso: marca los
 ## paneles de estado (poblacion) frente a los de aviso (objetivo, tutorial).
 static func make_hud_card_style(border: Color = ACCENT, border_width: int = 2, left_bar: bool = false) -> StyleBoxFlat:
+	if is_cartoon():
+		return CartoonTheme.hud_style(border)
 	var s := StyleBoxFlat.new()
 	s.bg_color = HUD_BG
 	s.set_corner_radius_all(4)
@@ -1121,6 +1201,8 @@ static func settings_popup_separation() -> int:
 
 ## Tactical command panel con bordes gruesos militares y glow
 static func make_command_panel_style() -> StyleBox:
+	if is_cartoon():
+		return CartoonTheme.window_style()
 	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(0.82, 0.82, 0.82))
 	if tex != null:
 		return tex
@@ -1173,6 +1255,9 @@ static func _metal_tint(base: Color, boost: float) -> Color:
 
 ## Textured brass button for one state, with a flat fallback if art is missing.
 static func _button_style(modulate: Color, fb_bg: Color, fb_border: Color, fb_bw: int) -> StyleBox:
+	if is_cartoon():
+		return CartoonTheme.box(fb_bg, CartoonTheme.INK if CartoonTheme.kind("window") == "light" else fb_border,
+			CartoonTheme.BORDER, 18, 10, 0, CartoonTheme.LIP)
 	var tex := _tex_box(TEX_BUTTON, 12, 10, modulate)
 	if tex != null:
 		return tex
@@ -1314,8 +1399,12 @@ static func build_global_theme() -> Theme:
 		t.set_constant("v_separation", "PopupMenu", settings_popup_separation())
 
 	# ── Tooltip ──
-	t.set_stylebox("panel", "TooltipPanel", _flat(Color(BG_DARK, 0.97), ACCENT, 1, CORNER, 8))
-	t.set_color("font_color", "TooltipLabel", readable(TEXT_BRIGHT))
+	if is_cartoon():
+		t.set_stylebox("panel", "TooltipPanel", CartoonTheme.tooltip_style())
+		t.set_color("font_color", "TooltipLabel", Color("fff5e1"))
+	else:
+		t.set_stylebox("panel", "TooltipPanel", _flat(Color(BG_DARK, 0.97), ACCENT, 1, CORNER, 8))
+		t.set_color("font_color", "TooltipLabel", readable(TEXT_BRIGHT))
 	t.set_font_size("font_size", "TooltipLabel", FONT_BODY)
 
 	# ── Pestanas (Ajustes) ──

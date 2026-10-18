@@ -38,6 +38,7 @@ signals, tests and scripts are kept up to date in `CLAUDE.md`.
 | 25 | [Marco legal](25-marco-legal.md) | Venezuelan law that touches the game (the 2009 war-videogame ban, copyright and trademark at SAPI, third-party licences, personal data, selling), the content and communication rules that follow from it, the review checklist and what is pending before publishing |
 | 26 | [Rendimiento](26-rendimiento.md) | Performance budget (60 fps mid PC, 30 fps on an old integrated GPU and low-end Android, RAM/VRAM/.exe/APK), the reproducible probe (`tools/perf_probe.gd`: six seeded scenarios, CSV/JSON in `reports/perf/`), the measurements of 2026-10-12 per renderer and quality, the static audit with file:line, the prioritised optimisation list and what is done, the "Mínima" quality, first-launch detection and the FPS cap |
 | 27 | [Encargos](27-encargos.md) | El tablón de 3 encargos (Regencia, vecinos, contrabandista): modelo puro `ContractBoard`, `ContractManager`, panel ENCARGOS, plantillas y premios, rebaja del Diezmo, reputación en Gobernador, guardado `contracts`, reglas por modo |
+| 28 | [Guía de estilo de la interfaz](28-guia-ui.md) | Rediseño 2026-10 (fase 1): estilo "maqueta" (`CartoonTheme`, `UITheme.use_style("cartoon")`), Baloo 2 + Nunito Sans, fondo mixto, paleta viva, tamaños por nivel con teléfono primero (640x360), botones por intención, ventanas, pestañas, iconos dibujados (`CartoonIcon`), reglas de texto con antes/después, avisos, HUD mínimo, orientación, sonda de maquetas `tools/ui_mockup_probe.gd` |
 
 ## Quick Reference
 

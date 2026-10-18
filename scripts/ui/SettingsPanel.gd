@@ -289,6 +289,15 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 	text_row.name = "TextSizeRow"
 	body.add_child(text_row)
 
+	# Horizontal siempre por defecto; vertical, solo si se elige (docs/28 §4).
+	var orients: Array = GameConfig.ORIENTATIONS
+	var orient_row := UITheme.make_option_row(Tr.t("LBL_ORIENTATION"),
+		[Tr.t("OPT_ORIENT_LANDSCAPE"), Tr.t("OPT_ORIENT_PORTRAIT")],
+		maxi(0, orients.find(GameConfig.ui_orientation)), func(idx: int):
+			GameConfig.set_orientation(orients[idx]))
+	orient_row.name = "OrientationRow"
+	body.add_child(orient_row)
+
 	body.add_child(UITheme.make_separator())
 	body.add_child(UITheme.section_header(Tr.t("LBL_SECTION_VIEW")))
 	body.add_child(_make_view_mode_row())
