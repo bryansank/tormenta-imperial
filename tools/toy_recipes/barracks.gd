@@ -2,7 +2,10 @@ extends RefCounted
 ## Cuartel (militar, acento amarillo y negro): nave de piedra con tejado de
 ## chapa, franja de peligro y patio de practicas con diana, armero y sacos.
 ## Exagerado: el porton con su marco a franjas y el galon amarillo encima, mas
-## alto que el alero. El mastil con la bandera lo pone la parcela (NE).
+## alto que el alero. Encima de la cumbrera, un mastil corto con su peana: de
+## su punta (FlagAnchor) cuelga ColonyFlag3D la bandera del pais, mediana y
+## hacia +X, sobre el propio tejado para no tapar a los vecinos (2026-10-18:
+## la bandera del pais va en el Nucleo y en los Cuarteles, no en el CG).
 const P := preload("res://tools/toy_recipes/_parts.gd")
 const S := P.S
 
@@ -38,9 +41,16 @@ func build(mk, kit, ctx: Dictionary) -> Dictionary:
 		var y := sh.y + 0.1 - k * 0.2
 		mk.beam(Vector3(-0.22, y - 0.08, sh.z + 0.05), Vector3(0.0, y + 0.08, sh.z + 0.05), 0.08, yellow)
 		mk.beam(Vector3(0.0, y + 0.08, sh.z + 0.05), Vector3(0.22, y - 0.08, sh.z + 0.05), 0.08, yellow)
+	# Mastil corto sobre la cumbrera, al lado contrario de la chimenea: la peana
+	# a caballo del caballete y el palo. La bandera cuelga hacia +X (hacia el
+	# centro del tejado), asi que no sale de la huella.
+	var ridge := c + Vector3(-0.35, 1.09 + 0.6, 0)
+	mk.box(ridge + Vector3(0, -0.02, 0), Vector3(0.24, 0.12, 0.3), P.C(S.STONE, -0.2))
+	mk.cyl(ridge + Vector3(0, 0.04, 0), 0.045, 1.24, P.iron(0.15), 6, Vector3.UP, 0.035)
+	mk.ball(ridge + Vector3(0, 1.31, 0), 0.07, P.C(S.BRASS, 0.08))
 	# Patio de practicas
 	P.sandbag_wall(mk, Vector3(-1.3, 0, 0.55), Vector3(-0.55, 0, 0.55), 2)
 	kit.put(mk, "kk:target", Vector3(0.9, 0, 0.75), 0.5, 0.0, {"noglow": true, "map": {S.TERRACOTTA: S.BRASS, S.CREAM: S.CREAM}})
 	kit.put(mk, "kk:weaponrack", Vector3(-0.9, 0, 0.95), 0.45, 0.0, {"noglow": true})
 	kit.put(mk, "kk:crate_long_A", Vector3(0.2, 0, 0.95), 0.5, 0.0, {"noglow": true, "map": {S.TERRACOTTA: S.SLATE, S.BRASS: S.BRASS}})
-	return {"fx": mouth}
+	return {"fx": mouth, "flag": ridge + Vector3(0, 1.24, 0)}

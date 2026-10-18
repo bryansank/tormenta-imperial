@@ -945,7 +945,9 @@ static func _foundry(ci: CanvasItem, r: Rect2) -> void:
 	_dot(ci, a, m * 0.04, FIRE.darkened(0.2))
 
 ## Cuartel: barracon de piedra con tejado de chapa, la franja amarillo/negro
-## de lo militar, la estrella de laton y la bandera grande (lo exagerado).
+## de lo militar y la estrella de laton. Encima, la peana del mastil corto: el
+## palo y la bandera del pais los pinta ColonyFlag2D (`flag_mount`, como la
+## receta 3D con su FlagAnchor), 2026-10-18.
 static func _barracks(ci: CanvasItem, r: Rect2) -> void:
 	var m := minf(r.size.x, r.size.y)
 	var body := Rect2(r.position + Vector2(0, r.size.y * 0.12), Vector2(r.size.x, r.size.y * 0.76))
@@ -955,16 +957,10 @@ static func _barracks(ci: CanvasItem, r: Rect2) -> void:
 	var c := top.get_center()
 	_hazard_strip(ci, Rect2(Vector2(top.position.x + 2, c.y - 1.5), Vector2(top.size.x - 4, 3)))
 	_star(ci, c + Vector2(-top.size.x * 0.24, -top.size.y * 0.22), m * 0.11, BRASS_LIGHT)
-	# La bandera: mastil alto y pano rojo con la estrella
-	var base := Vector2(r.position.x + r.size.x * 0.8, r.position.y + r.size.y * 0.26)
-	var tip := _mast(ci, base, m * 0.42, IRON, 1.8)
-	var side := _left() * -1.0
-	var fw := m * 0.34
-	var fh := m * 0.22
-	var flag := PackedVector2Array([tip, tip + side * fw, tip + side * fw + _down * fh, tip + _down * fh])
-	_poly(ci, flag, RED, OUTLINE, 1.0)
-	_star(ci, tip + side * fw * 0.5 + _down * fh * 0.5, fh * 0.32, BRASS_LIGHT)
-	_disc(ci, tip, 1.6, BRASS, OUTLINE, 1.0)
+	# La peana del mastil (el palo y la bandera, ColonyFlag2D)
+	var mb := _barracks_mast_base(r)
+	_block(ci, Rect2(mb - Vector2(m * 0.04, m * 0.04), Vector2(m * 0.08, m * 0.08)), m * 0.025, STONE.darkened(0.12), CONCRETE_DARK)
+	_dot(ci, mb, m * 0.018, IRON)
 	# Estufa del barracon (de ahi sale el humo de "trabajando")
 	var stove: Vector2 = r.position + r.size * (fx_anchors("barracks")[0] as Vector2)
 	_cyl(ci, stove, m * 0.06, m * 0.1, OIL_BLACK, SLATE)
@@ -1047,33 +1043,30 @@ static func _headquarters(ci: CanvasItem, r: Rect2) -> void:
 		ci.draw_rect(Rect2(p - s * 0.5, s).grow(0.8), OUTLINE)
 		ci.draw_rect(Rect2(p - s * 0.5, s), RED)
 		_dot(ci, p, minf(s.x, s.y) * 0.25, BRASS_LIGHT)
-	# El torreon con el emblema
+	# El torreon con el emblema (sin mastil ni bandera del pais desde
+	# 2026-10-18: la bandera va en el Nucleo y en los Cuarteles).
 	var e := top.get_center() - _down * m * 0.02
 	_cyl(ci, e, m * 0.22, m * 0.1, BRASS_DARK, CREAM.darkened(0.08))
 	_emblem_2d(ci, e, m * 0.19, BRASS_LIGHT, false)
-	# La peana del mastil alto en la esquina delantera derecha del tejado (como
-	# la receta 3D); el palo y la bandera del pais los pinta ColonyFlag2D.
-	var mb := _hq_mast_base(top, m)
-	_block(ci, Rect2(mb - Vector2(m * 0.05, m * 0.05), Vector2(m * 0.1, m * 0.1)), m * 0.03, STONE.darkened(0.12), CONCRETE_DARK)
-	_dot(ci, mb, m * 0.022, IRON)
 
 ## Los dibujos que traen mastil para la bandera del pais (como el FlagAnchor de
-## las recetas 3D): el Nucleo, el Cuartel General, el mastil y el letrero de la
+## las recetas 3D): el Nucleo, el Cuartel, el mastil y el letrero de la
 ## colonia. Building2D les cuelga ColonyFlag2D.
 static func has_flag_mount(id: String) -> bool:
-	return id in ["nucleo", "headquarters", "flagpole", "colony_sign"]
+	return id in ["nucleo", "barracks", "flagpole", "colony_sign"]
 
-## Donde nace el mastil del Cuartel General: la esquina delantera derecha de
-## su tejado (marco local: delante es +y).
-static func _hq_mast_base(top: Rect2, m: float) -> Vector2:
-	return Vector2(top.end.x - m * 0.08, top.end.y - m * 0.08)
+## Donde nace el mastil corto del Cuartel: sobre el tejado, a la derecha de la
+## estrella y lejos del borde, para que la bandera (que cuelga hacia la
+## derecha) no se salga de su casilla ni tape al vecino.
+static func _barracks_mast_base(r: Rect2) -> Vector2:
+	return Vector2(r.position.x + r.size.x * 0.6, r.position.y + r.size.y * 0.3)
 
 ## El mastil de la bandera del pais de un edificio, en el marco del NODO (sin
 ## girar: ya con el giro `steps` aplicado): {"base", "height", "flag_w"}, o {}
 ## si su dibujo no trae mastil (ColonyFlag2D pone entonces el suyo de reserva).
 ## Usa las mismas medidas que el dibujo (huella `size`, patio `inset`, nivel),
 ## asi que la bandera cuelga justo de lo alto de la linterna del Nucleo o del
-## mastil del Cuartel General.
+## mastil del Cuartel.
 static func flag_mount(id: String, size: Vector2, inset: float, steps: int, level: int = 1) -> Dictionary:
 	if not has_flag_mount(id):
 		return {}
@@ -1098,10 +1091,11 @@ static func flag_mount(id: String, size: Vector2, inset: float, steps: int, leve
 		height = m * 0.3
 		flag_w = m * 0.34
 	else:
-		var hall := r.grow(-m * 0.08)
-		base = _hq_mast_base(_split(hall, m * 0.2)[0], m)
-		height = m * 0.62
-		flag_w = m * 0.5
+		# El Cuartel: mastil corto y bandera mediana (la del Cuartel General de
+		# antes, m * 0.62 y m * 0.5, se veia enorme).
+		base = _barracks_mast_base(r)
+		height = m * 0.36
+		flag_w = m * 0.3
 	return {"base": base.rotated(float(steps) * PI * 0.5), "height": height, "flag_w": flag_w}
 
 ## Jardin: seto alrededor, cesped claro con un sendero, parterres de flores y

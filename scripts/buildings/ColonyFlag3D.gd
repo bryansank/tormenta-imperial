@@ -1,22 +1,28 @@
 extends Node3D
-## El mastil con la bandera del pais (vista 3D), sobre el Nucleo, el Cuartel
-## General y cualquier edificio cuyo modelo traiga un FlagAnchor (el mastil y
-## el letrero de la colonia, feat/decoraciones-remates). Lo cuelga
+## El mastil con la bandera del pais (vista 3D), sobre el Nucleo, los Cuarteles
+## y cualquier edificio cuyo modelo traiga un FlagAnchor (el mastil y el letrero
+## de la colonia, feat/decoraciones-remates). El Cuartel General ya no la lleva
+## (Bryan, 2026-10-18: solo Nucleo y Cuarteles). Lo cuelga
 ## BuildingPlacer y se repinta solo al oir colony_identity_changed: ningun
 ## servicio sabe que existe.
 ##
 ## Barato a proposito ("debe ir en una papa"): la bandera es un plano de 6x1
 ## tramos con la textura de ColonyFlag (generada una vez por receta, cacheada) y
 ## el ondeo lo hace el shader de vertice con TIME, sin nada por frame en GDScript.
-## Con la calidad grafica baja (WorldLook) no ondea.
+## Con la calidad grafica baja (WorldLook) no ondea. Los Cuarteles no tienen
+## tope: con muchos, todas las banderas comparten el plano, el material, el
+## shader y las mallas del palo y el pomo (cache estatica), y ninguna tiene
+## _process; solo escuchan senales del EventBus.
 ##
-## En el Cuartel General no se ve mientras esta en obra.
+## En obra o en ruinas no se ve; vuelve al terminar o al reparar.
 ##
 ## Mastil del modelo: si el modelo horneado del edificio trae un Marker3D
 ## "FlagAnchor" (lo alto de su mastil, contrato con los modelos toy), la
 ## bandera se cuelga de ahi y este nodo no pone mastil propio. Sin marcador, el
-## mastil propio en la esquina trasera derecha (reserva). En el Cuartel General
-## la bandera va grande (`big`); en las decoraciones, pequena (`small`).
+## mastil propio en la esquina trasera derecha (reserva). El tamano lo da
+## `scale_for(data)`: normal en el Nucleo, mediana en el Cuartel (cuelga del
+## mastil corto de su tejado, receta tools/toy_recipes/barracks.gd) y pequena en
+## las decoraciones.
 
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const WorldLook := preload("res://scripts/map/WorldLook.gd")
@@ -25,8 +31,10 @@ const WorldLook := preload("res://scripts/map/WorldLook.gd")
 const POLE_EXTRA := 2.4
 const FLAG_W := 2.1
 const WAVE_AMPLITUDE := 0.16
-## Escala de la bandera grande (Cuartel General) y de la pequena (decoraciones).
-const BIG_SCALE := 1.6
+## Escala de la bandera del Cuartel (mediana: su mastil es corto y no debe
+## tapar a los vecinos; la grande del Cuartel General, 1.6, se veia enorme) y
+## de la pequena (decoraciones).
+const BARRACKS_SCALE := 0.62
 const SMALL_SCALE := 0.6
 const ANCHOR_NAME := "FlagAnchor"
 
@@ -52,6 +60,9 @@ void fragment() {
 static var _shader: Shader = null
 static var _flag_mat: ShaderMaterial = null
 static var _pole_mat: StandardMaterial3D = null
+## Mallas del palo (por alto) y del pomo, compartidas por todo el mapa.
+static var _poles := {}
+static var _knob_mesh: SphereMesh = null
 ## Un plano por medida de bandera para todo el mapa (ancho -> PlaneMesh): con
 ## decenas de mastiles, decenas de mallas iguales eran memoria para nada.
 static var _quads := {}
@@ -87,19 +98,51 @@ static func pole_material() -> StandardMaterial3D:
 static func flies_over(data: BuildingData) -> bool:
 	return ColonyFlag.flies_over(data)
 
+## El tamano de la bandera para `data`: 1.0 en el Nucleo, BARRACKS_SCALE en el
+## Cuartel y SMALL_SCALE en las decoraciones.
+static func scale_for(data: BuildingData) -> float:
+	if data == null or data.is_core:
+		return 1.0
+	if data.is_decoration:
+		return SMALL_SCALE
+	return BARRACKS_SCALE
+
+## El palo, uno por alto para todo el mapa. Un cilindro de altura 0 deja
+## normales nulas ("Vector3 cannot be normalized" al cargar): minimo 0.05.
+static func pole_mesh(height: float) -> CylinderMesh:
+	var h := maxf(snappedf(height, 0.01), 0.05)
+	if not _poles.has(h):
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.06
+		cyl.bottom_radius = 0.09
+		cyl.height = h
+		cyl.radial_segments = 8
+		cyl.rings = 1
+		_poles[h] = cyl
+	return _poles[h]
+
+static func knob_mesh() -> SphereMesh:
+	if _knob_mesh == null:
+		_knob_mesh = SphereMesh.new()
+		_knob_mesh.radius = 0.11
+		_knob_mesh.height = 0.22
+		_knob_mesh.radial_segments = 8
+		_knob_mesh.rings = 4
+	return _knob_mesh
+
 var _flag: MeshInstance3D = null
 var _material: ShaderMaterial = null
 var _owner_node: Node = null
 var _anchored := false
 
 ## `footprint` en unidades de mundo (ancho, fondo); `top` = alto del edificio.
-## `building` = el nodo del edificio (para esconderse mientras esta en obra).
-## `big`: la del Cuartel General; `small`: la de una decoracion (mastil, letrero).
-func setup(footprint: Vector2, top: float, building: Node = null, big: bool = false, small: bool = false) -> void:
+## `building` = el nodo del edificio (para esconderse en obra o en ruinas).
+## `flag_scale`: el tamano de la bandera (`scale_for(data)`).
+func setup(footprint: Vector2, top: float, building: Node = null, flag_scale: float = 1.0) -> void:
 	name = "ColonyFlag"
 	_owner_node = building
 	var height := top + POLE_EXTRA
-	var flag_w := FLAG_W * (BIG_SCALE if big else (SMALL_SCALE if small else 1.0))
+	var flag_w := FLAG_W * flag_scale
 	var flag_h := flag_w * float(ColonyFlag.H) / float(ColonyFlag.W)
 	var anchor: Variant = find_anchor(building, self)
 	_anchored = anchor != null
@@ -111,15 +154,8 @@ func setup(footprint: Vector2, top: float, building: Node = null, big: bool = fa
 		height = 0.0
 	var pole := MeshInstance3D.new()
 	pole.name = "Pole"
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.06
-	cyl.bottom_radius = 0.09
-	# Colgada del FlagAnchor del modelo el palo propio no se ve, pero un cilindro
-	# de altura 0 deja normales nulas ("Vector3 cannot be normalized" al cargar).
-	cyl.height = maxf(height, 0.05)
-	cyl.radial_segments = 8
-	cyl.rings = 1
-	pole.mesh = cyl
+	# Colgada del FlagAnchor del modelo el palo propio no se ve (malla minima).
+	pole.mesh = pole_mesh(height)
 	var mat := pole_material()
 	pole.material_override = mat
 	pole.position.y = height * 0.5
@@ -127,12 +163,7 @@ func setup(footprint: Vector2, top: float, building: Node = null, big: bool = fa
 	add_child(pole)
 	var knob := MeshInstance3D.new()
 	knob.name = "Knob"
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.11
-	sphere.height = 0.22
-	sphere.radial_segments = 8
-	sphere.rings = 4
-	knob.mesh = sphere
+	knob.mesh = knob_mesh()
 	knob.material_override = mat
 	knob.position.y = height + 0.05
 	knob.visible = not _anchored
@@ -173,7 +204,8 @@ func _apply_quality() -> void:
 	var q := WorldLook.effective_quality(GameConfig.ui_graphics_quality, RenderingServer.get_current_rendering_method())
 	_material.set_shader_parameter("wave", WAVE_AMPLITUDE if q == "high" else 0.0)
 
-## En obra no ondea nada: la bandera sale al terminar (una mejora no la quita).
+## En obra o en ruinas no se ve: sale al terminar o al reparar (una mejora no
+## la quita).
 func _sync_visible() -> void:
 	if _owner_node != null and is_instance_valid(_owner_node):
 		visible = not is_hidden_by_works(_owner_node)

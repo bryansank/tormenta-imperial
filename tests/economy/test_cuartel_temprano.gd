@@ -49,11 +49,13 @@ func test_it_only_needs_the_sawmill() -> void:
 	# La Refineria sigue pidiendo el Cuartel.
 	assert_array(GameConfig.get_prerequisites("refinery")).contains(["barracks"])
 
-func test_era_one_already_allows_some_barracks() -> void:
+func test_barracks_have_no_cap_in_any_era() -> void:
+	# Sin tope de Cuarteles (Bryan, 18-10-2026): el freno es el del ejercito.
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
-	assert_int(GameConfig.get_building_limit_for_era("barracks", 1)).is_greater(0)
-	assert_int(GameConfig.get_building_limit_for_era("barracks", 1)).is_equal(
-		int(GameConfig.building_limits_by_era["barracks"][0]))
+	for era in range(1, GameConfig.max_era() + 1):
+		assert_int(GameConfig.get_building_limit_for_era("barracks", era)).is_equal(-1)
+	assert_bool(GameConfig.building_limits_by_era.has("barracks")).is_false()
+	assert_dict(GameConfig.next_building_limit("barracks")).is_empty()
 
 # ── Las unidades ─────────────────────────────────────────────────────
 
@@ -138,3 +140,35 @@ func test_why_the_barracks_is_wanted_early_is_said_plainly() -> void:
 		assert_str(Tr._STRINGS[loc]["TUT_TIP_BARRACKS_BODY"]).contains(Tr._STRINGS[loc]["BTN_ARMY"])
 		# Ya no dice "infanteria (era 1)" como si el Cuartel fuera de la era 2.
 		assert_str(tip.to_lower()).not_contains("(era 1)")
+
+# ── El freno del ejercito sin tope de Cuarteles (2026-10-18) ─────────
+
+func test_army_capacity_grows_less_after_the_first_barracks_and_has_a_ceiling() -> void:
+	var full := GameConfig.army_full_capacity_barracks
+	# Los primeros, +8 cada uno, como siempre.
+	assert_int(GameConfig.get_army_capacity(0)).is_equal(GameConfig.army_base_capacity)
+	assert_int(GameConfig.get_army_capacity(full)).is_equal(
+		GameConfig.army_base_capacity + GameConfig.army_capacity_per_barracks * full)
+	# Los siguientes, menos.
+	assert_int(GameConfig.army_capacity_gain(full)).is_equal(GameConfig.army_capacity_per_extra_barracks)
+	assert_int(GameConfig.army_capacity_per_extra_barracks).is_less(GameConfig.army_capacity_per_barracks)
+	# Y un techo que no se pasa con ningun numero de cuarteles.
+	for n in [10, 25, 100]:
+		assert_int(GameConfig.get_army_capacity(n)).is_equal(GameConfig.army_capacity_max)
+	assert_int(GameConfig.army_capacity_gain(100)).is_equal(0)
+	# Nunca menos de lo que daban 5 cuarteles con el tope de antes (3/4/5).
+	assert_int(GameConfig.army_capacity_max).is_greater_equal(GameConfig.get_army_capacity(5))
+
+func test_training_slots_are_one_per_barracks_up_to_a_ceiling() -> void:
+	assert_int(GameConfig.get_army_training_slots(0)).is_equal(0)
+	assert_int(GameConfig.get_army_training_slots(2)).is_equal(2)
+	assert_int(GameConfig.get_army_training_slots(50)).is_equal(GameConfig.army_training_slots_max)
+
+func test_the_army_tooltips_say_the_ceilings() -> void:
+	for loc in ["es", "en"]:
+		var cap: String = Tr._STRINGS[loc]["LBL_ARMY_CAPACITY_HINT"] % [GameConfig.army_base_capacity,
+			GameConfig.army_capacity_per_barracks, GameConfig.army_full_capacity_barracks,
+			GameConfig.army_capacity_per_extra_barracks, GameConfig.army_capacity_max]
+		assert_str(cap).contains(str(GameConfig.army_capacity_max))
+		var slots: String = Tr._STRINGS[loc]["LBL_ARMY_SLOTS_HINT"] % GameConfig.army_training_slots_max
+		assert_str(slots).contains(str(GameConfig.army_training_slots_max))

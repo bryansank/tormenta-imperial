@@ -170,25 +170,28 @@ func test_the_building_limit_reached_skips_that_goal() -> void:
 	assert_str(TutorialManager.goal_impossible_reason("sawmill")).is_equal("limit")
 	# Sin aserradero nuevo no hay que recoger; el Cuartel si se puede (2026-10-17).
 	assert_str(TutorialManager.current_step()).is_equal("open_barracks")
-	# Puestos los tres Cuarteles del tope de la era 1, la meta queda cumplida y no
-	# se puede pedir otro: sigue la Granja.
-	for i in GameConfig.get_building_limit("barracks"):
-		_place(BARRACKS, Vector2i(4, i * 3))
+	# El Cuartel no tiene tope (2026-10-18): nunca se salta por "limit". Puesto
+	# uno, la meta queda cumplida y sigue la Granja.
+	assert_int(GameConfig.get_building_limit("barracks")).is_equal(-1)
+	assert_str(TutorialManager.goal_impossible_reason("barracks")).is_equal("")
+	_place(BARRACKS, Vector2i(4, 0))
 	TutorialManager._process(TutorialManager.GUIDE_CHECK_SECONDS + 0.1)
-	assert_str(TutorialManager.goal_impossible_reason("barracks")).is_equal("limit")
 	assert_str(TutorialManager.current_step()).is_equal("open_farm")
 
-func test_a_replay_with_the_barracks_at_its_limit_skips_it() -> void:
-	# Un repaso con los aserraderos y los Cuarteles al tope: no se pide ninguno.
+func test_a_replay_with_many_barracks_still_asks_for_one() -> void:
+	# Un repaso con los aserraderos al tope y varios Cuarteles: el Aserradero se
+	# salta (tope), el Cuartel no (no tiene tope desde 2026-10-18), asi que el
+	# repaso lo pide.
 	for i in GameConfig.get_building_limit("sawmill"):
 		_place(SAWMILL, Vector2i(0, i * 3))
-	for i in GameConfig.get_building_limit("barracks"):
+	for i in 4:
 		_place(BARRACKS, Vector2i(4, i * 3))
 	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
 	TutorialManager.replay_guide()
 	_read()
-	assert_array(TutorialManager.blocked_goals()).contains(["sawmill", "barracks"])
-	assert_str(TutorialManager.current_step()).is_equal("open_farm")
+	assert_array(TutorialManager.blocked_goals()).contains(["sawmill"])
+	assert_array(TutorialManager.blocked_goals()).not_contains(["barracks"])
+	assert_str(TutorialManager.current_step()).is_equal("open_barracks")
 
 func test_a_step_already_done_before_getting_there_is_not_asked() -> void:
 	# La casa primero: el tutorial pide el aserradero y despues ya no pide la casa.

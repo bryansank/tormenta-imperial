@@ -8,6 +8,8 @@ const Lot := preload("res://scripts/buildings/BuildingLot.gd")
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
 const Placer := preload("res://scripts/buildings/BuildingPlacer.gd")
 const Badge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
+const ColonyFlag3D := preload("res://scripts/buildings/ColonyFlag3D.gd")
+const BuildingArt2D := preload("res://scripts/view2d/BuildingArt2D.gd")
 
 const CELL := 2.0
 
@@ -208,13 +210,46 @@ func test_models_fit_inside_their_rect() -> void:
 			.override_failure_message("%s: el modelo se sale de su rectangulo" % id).is_true()
 
 func test_each_productive_building_has_its_exaggerated_element() -> void:
-	for id in ["gold_mine", "foundry", "refinery", "warehouse", "laboratory", "barracks", "tower", "headquarters"]:
+	# El Cuartel ya no tiene remate de parcela (2026-10-18): su mastil alto con
+	# la bandera amarilla dejo sitio a la bandera del pais en su tejado.
+	for id in ["gold_mine", "foundry", "refinery", "warehouse", "laboratory", "tower", "headquarters"]:
 		assert_str(String(Plan.signature_of(id).get("kind", ""))).override_failure_message(id).is_not_empty()
 	# Y es distinto en cada uno: silueta propia.
 	var kinds := {}
-	for id in ["gold_mine", "foundry", "refinery", "warehouse", "laboratory", "barracks", "tower", "headquarters"]:
+	for id in ["gold_mine", "foundry", "refinery", "warehouse", "laboratory", "tower", "headquarters"]:
 		kinds[String(Plan.signature_of(id)["kind"])] = true
-	assert_int(kinds.size()).is_equal(8)
+	assert_int(kinds.size()).is_equal(7)
+	assert_bool(Plan.signature_of("barracks").is_empty()).is_true()
+
+func test_the_country_flag_flies_on_the_core_and_the_barracks_only() -> void:
+	# Bryan, 2026-10-18: la bandera del pais, solo en el Nucleo y los Cuarteles.
+	assert_bool(ColonyFlag3D.flies_over(_data("nucleo"))).is_true()
+	assert_bool(ColonyFlag3D.flies_over(_data("barracks"))).is_true()
+	assert_bool(ColonyFlag3D.flies_over(_data("headquarters"))).is_false()
+	# Ni mastil en el modelo del CG ni banderas en su parcela.
+	var hq: Node3D = _building("headquarters")[0]
+	assert_object(ColonyFlag3D.find_anchor(hq)).is_null()
+	assert_array(Plan.style_of("headquarters").get("props", [])).not_contains(["flag"])
+	assert_bool(BuildingArt2D.has_flag_mount("headquarters")).is_false()
+	assert_bool(BuildingArt2D.has_flag_mount("barracks")).is_true()
+
+func test_the_barracks_flag_hangs_from_a_short_mast_on_its_roof() -> void:
+	var parts := _building("barracks")
+	var root: Node3D = parts[0]
+	var lot = parts[1]
+	var anchor: Variant = ColonyFlag3D.find_anchor(root)
+	assert_object(anchor).is_not_null()
+	var at: Vector3 = anchor
+	# Por encima del caballete de la nave (1.69 en la receta), pero corto: nada
+	# del estandarte enorme del CG (su mastil acababa a 4.1).
+	assert_float(at.y).is_greater(2.2)
+	assert_float(at.y).is_less(3.4)
+	assert_float(lot.get_model_top()).is_less(3.6)
+	# La bandera (mediana, hacia +X) no sale de la huella del Cuartel.
+	var flag_w := ColonyFlag3D.FLAG_W * ColonyFlag3D.scale_for(_data("barracks"))
+	var half := float(_data("barracks").grid_size.x) * CELL * 0.5
+	assert_float(at.x + flag_w + 0.06).is_less_equal(half)
+	assert_float(ColonyFlag3D.scale_for(_data("barracks"))).is_less(1.0)
 
 func test_signature_corner_keeps_no_props() -> void:
 	for id in _lot_ids():
@@ -231,8 +266,8 @@ func test_signature_corner_keeps_no_props() -> void:
 					assert_float((p["pos"] as Vector2).distance_to(c)).is_greater(yard * 1.1)
 
 func test_tall_signatures_rise_above_the_model() -> void:
-	# La chimenea, la grua, la antena y la bandera se ven por encima del edificio.
-	for id in ["foundry", "warehouse", "laboratory", "barracks"]:
+	# La chimenea, la grua y la antena se ven por encima del edificio.
+	for id in ["foundry", "warehouse", "laboratory"]:
 		var parts := _building(id)
 		var lot = parts[1]
 		var top: float = lot.get_model_top()

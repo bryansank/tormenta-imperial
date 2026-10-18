@@ -387,7 +387,9 @@ func _seed_large(storm: bool) -> Dictionary:
 		var lim: int = int(GameConfig.building_limits[id])
 		if id in ["sawmill", "gold_mine", "foundry", "road"]:
 			continue
-		if lim < 0:
+		if id == "barracks":
+			lim = 5  # sin tope desde 2026-10-18: los cinco del tope de antes
+		elif lim < 0:
 			lim = 15  # jardines: sin limite, quince
 		for i in lim:
 			slots.append(id)
