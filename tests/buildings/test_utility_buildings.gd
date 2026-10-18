@@ -59,15 +59,15 @@ func test_every_one_has_names_in_both_languages() -> void:
 
 func test_every_one_has_cap_lot_site_and_prerequisite() -> void:
 	for id in IDS:
-		assert_bool(GameConfig.building_limits_by_era.has(id)).override_failure_message(id).is_true()
+		assert_bool(GameConfig.core_level_limits.has(id)).override_failure_message(id).is_true()
 		assert_bool(GameConfig.building_limits.has(id)).override_failure_message(id).is_true()
 		assert_bool(GameConfig.building_lot_style.has(id)).override_failure_message(id).is_true()
 		assert_bool(GameConfig.construction_style.has(id)).override_failure_message(id).is_true()
 		assert_bool(GameConfig.building_prerequisites.has(id)).override_failure_message(id).is_true()
 
 func test_the_lighthouse_is_unique() -> void:
-	for era in [1, 2, 3]:
-		assert_int(GameConfig.base_building_limit("lighthouse", era)).is_equal(1)
+	for lv in range(1, GameConfig.core_level_max + 1):
+		assert_int(GameConfig.base_building_limit("lighthouse", lv)).is_equal(1)
 
 func test_well_and_windmill_open_with_the_rank() -> void:
 	assert_int(RankManager.building_rank("well")).is_equal(2)

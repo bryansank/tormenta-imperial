@@ -773,6 +773,12 @@ func goal_impossible_reason(building_id: String) -> String:
 	# esperando en el tutorial (hoy ninguno de los del principio lo esta).
 	if not Rules.check_rank(building_id):
 		return "rank"
+	# Cerrado por el nivel del Nucleo o sin plano (1.2): tampoco se arregla
+	# esperando en el tutorial.
+	if not Rules.check_core_level(building_id):
+		return "core"
+	if not Rules.check_blueprint(building_id):
+		return "blueprint"
 	if not Rules.check_building_limit(building_id):
 		return "limit"
 	if not Rules.check_prerequisites(building_id):

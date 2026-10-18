@@ -212,11 +212,13 @@ static func apply_level_visual(node: Node, level: int) -> void:
 		return
 	var model: Node3D = null
 	var decor := false
+	var core := false
 	var look := node.get_node_or_null("LookVisual")
 	if look != null and look.has_method("get_model"):
 		model = look.get_model() as Node3D
 		if look.has_method("get_data") and look.get_data() != null:
 			decor = (look.get_data() as BuildingData).is_decoration
+			core = (look.get_data() as BuildingData).is_core
 	if model == null:
 		for child in node.get_children():
 			if child is Node3D and not (child is Label3D) and not (child is Sprite3D) \
@@ -231,10 +233,17 @@ static func apply_level_visual(node: Node, level: int) -> void:
 		plate.queue_free()
 	if model == null:
 		return
-	var trim: Script = load("res://scripts/buildings/LevelTrim.gd")
 	if not model.has_meta("base_scale"):
 		model.set_meta("base_scale", model.scale)
 		model.set_meta("base_pos", model.position)
+	# El Nucleo sube hasta el 5 y no lleva zocalo ni chimeneas: sus piezas por
+	# nivel son las de CoreTrim (1.2, feat/nucleo-y-planos).
+	if core:
+		var core_trim: Script = load("res://scripts/buildings/CoreTrim.gd")
+		model.scale = (model.get_meta("base_scale") as Vector3) * (core_trim.call("level_scale", level) as Vector3)
+		core_trim.call("apply", model, level)
+		return
+	var trim: Script = load("res://scripts/buildings/LevelTrim.gd")
 	var base: Vector3 = model.get_meta("base_scale")
 	var k: Vector3 = trim.call("level_scale", level)
 	model.scale = base * k

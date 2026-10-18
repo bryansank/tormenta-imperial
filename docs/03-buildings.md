@@ -373,48 +373,63 @@ under construction the label above the building gives the percentage and the tim
 
 ## Building Limits
 
-**Los topes suben con la era (2026-10-14, decisión D1 de Bryan, rama
-`feat/topes-por-era`).** Antes eran fijos y bajos (doc 21 §1.5 del contexto privado:
-"hay demasiados recursos para pocos edificios"). Ahora:
+**Los topes los sube el Núcleo (1.2, 2026-10-18, decisión de Bryan, rama
+`feat/nucleo-y-planos`).** Sustituye a los topes por era de la 1.1 (rama
+`feat/topes-por-era`, D1 del 14-10). El Núcleo tiene niveles 1-5 (ver "Núcleo y
+planos" más abajo) y cada nivel sube el máximo de cada edificio:
 
-- `GameConfig.building_limits_by_era` guarda `[era 1, era 2, era 3]` por edificio. La
-  era 1 es el tope de siempre, así que una partida guardada nunca queda por encima de su
-  tope. Regla general ≈ ×1,5 en la era 2 y ×2 en la era 3.
-- `GameConfig.building_limits` queda como tabla de lo que **no** sube con la era (y
-  como la era 1). Un id que no está en la tabla por era usa esta en todas las eras.
-- **Un solo lector:** `GameConfig.get_building_limit(id)` = tope de la era en curso
-  (`ProgressionManager.current_era`) + huecos del rango (`rank_limit_bonus`). Lo usan
-  `PlacementRules.check_building_limit()` (colocar en 3D, 2D y táctil, el detalle de
-  CONSTRUIR, `purchase_block_message()`), `Objectives` y el tutorial. Para otra era:
-  `get_building_limit_for_era(id, era)`; sin rango ni modo: `base_building_limit(id, era)`;
-  la siguiente subida: `next_building_limit(id)` → `{"era", "limit"}` o `{}`.
+- `GameConfig.core_level_limits` guarda `[N1, N2, N3, N4, N5]` por edificio. La primera
+  cifra es la de `GameConfig.building_limits` (la prueba lo exige). Regla: N2 ≈ los topes
+  de la era 1 de la 1.1, N3 ≈ los de la era 2, N4 ≈ los de la era 3 y N5 uno más en lo
+  que produce; el N1 es algo más corto (el Núcleo es la meta larga de cada era).
+- `GameConfig.building_limits` queda como tabla de lo que **no** sube (únicos, sin tope)
+  y como el N1. Un id que no está en `core_level_limits` usa esta en todos los niveles.
+- **Puente para otras ramas:** `building_limits_by_era` queda vacía. Si una rama que aún
+  no conoce el Núcleo mete ahí una fila `[e1, e2, e3]`, se lee como
+  `[e1, e1, e2, e3, e3]` (`GameConfig.CORE_LEVEL_ERA_BRIDGE`) hasta que el integrador la
+  pase a `core_level_limits`.
+- **Un solo lector:** `GameConfig.get_building_limit(id)` = tope con el nivel del Núcleo
+  de ahora (`ProgressionManager.core_level`, `GameConfig.current_core_level()`) + huecos
+  del rango (`rank_limit_bonus`). Lo usan `PlacementRules.check_building_limit()`
+  (colocar en 3D, 2D y táctil, el detalle de CONSTRUIR, `purchase_block_message()`),
+  `Objectives` y el tutorial. Para otro nivel: `get_building_limit_at(id, nivel)`; sin
+  rango ni modo: `base_building_limit(id, nivel)`; la siguiente subida:
+  `next_building_limit(id)` → `{"core_level", "limit"}` o `{}`.
+- La era ya **no** mueve los topes: sigue abriendo recursos (Fundición → acero, Refinería
+  → petróleo) y es requisito de los niveles del Núcleo.
 - **Decoraciones sin tope:** todo `BuildingData` con `is_decoration` (jardín, fuente,
   estatua, carretera y las decoraciones nuevas) da -1 aunque tenga entrada en
   `building_limits`. Se mira el `.tres` (`GameConfig.is_uncapped_building()`, recordado
   por id), así que una decoración nueva no necesita entrada en ninguna tabla. Las limita
   el terreno y el precio. Los huecos de rango sobre una decoración no hacen nada y el
   aviso de rango ya no los anuncia (`RankPanel.reward_lines()`; afecta al rango 13).
-- **Sandbox:** sin topes en ninguna era (`GameMode.all_unlocked()`).
-- **Nada se guarda:** el tope sale de la era (`progression.current_era`) y del rango
-  (`rank.xp`), que ya van en el save. Una partida vieja carga con los topes de su era.
+- **Sandbox:** sin topes y con el Núcleo al máximo (`GameMode.all_unlocked()`).
+- **Nada nuevo se guarda para el tope:** sale del nivel del Núcleo (`progression.core`) y
+  del rango (`rank.xp`). Una partida vieja deriva su nivel del Núcleo (ver abajo).
 
-| Edificio | Era 1 | Era 2 | Era 3 | Por qué |
-|----------|------:|------:|------:|---------|
-| house | 10 | 15 | 20 | ×1,5 / ×2. Más gente = más consumo de comida, oro y madera: se paga sola |
-| farm | 6 | 9 | 12 | ×1,5 / ×2, acompaña a las casas |
-| sawmill | 5 | 8 | 10 | ×1,5 / ×2; lo limita también el número de bosques (3-6) |
-| gold_mine | 4 | 6 | 8 | ×1,5 / ×2; lo limitan las vetas (3-6) |
-| foundry | 3 | 5 | 6 | ×1,5 / ×2; lo limitan las vetas de hierro |
-| refinery | 2 | 3 | 4 | ×1,5 / ×2; además consume su pozo (3-6 por mapa) |
-| fishing_dock | 3 | 4 | 6 | Muelle de pesca (1.1): lo limitan también los bancos de peces (3-5) |
-| warehouse | 5 | 5 | 5 | **No sube.** Bolsa de la era 3 sin técnicas: 1000 + 5×500 = 3500 = CG nivel 3 (1500 + 800 + 500 + 700; los materiales van aparte). Con 7 almacenes serían 4500 (5500 con las técnicas) y el CG 3 dejaría de pedir la bolsa llena. La bolsa ya crece sola por era (600/800/1000) y por nivel de almacén (+250 por nivel) |
-| tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y hasta 4 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
-| market, laboratory, headquarters | 1 | 1 | 1 | Únicos |
-| barracks | — | — | — | **Sin tope** desde 2026-10-18 (antes 3/4/5): el freno está en el ejército, ver abajo |
-| garden, fountain, statue, road y las diez decoraciones baratas (`lamp_post` … `palm_trees`) | — | — | — | Sin tope |
+| Edificio | N1 | N2 | N3 | N4 | N5 | Por qué |
+|----------|---:|---:|---:|---:|---:|---------|
+| house | 8 | 10 | 15 | 20 | 22 | Más gente = más consumo de comida, oro y madera: se paga sola |
+| farm | 4 | 6 | 9 | 12 | 13 | Acompaña a las casas |
+| sawmill | 4 | 5 | 8 | 10 | 11 | Lo limita también el número de bosques (3-6) |
+| gold_mine | 3 | 4 | 6 | 8 | 9 | Lo limitan las vetas (3-6) |
+| foundry | 1 | 3 | 5 | 6 | 7 | 1 con el N1: la Fundición (puerta de la era 2) nunca espera al Núcleo |
+| refinery | 1 | 2 | 3 | 4 | 5 | Ídem con la era 3; además consume su pozo |
+| fishing_dock | 3 | 3 | 4 | 6 | 6 | Lo abre el Núcleo 2; lo limitan también los bancos de peces |
+| warehouse | 3 | 5 | 5 | 5 | 5 | **No pasa de 5.** Bolsa de la era 3 sin técnicas: 1000 + 5×500 = 3500 = CG nivel 3. Se llega a 5 con el Núcleo 2 (lo que dejaba la era 1): el CG nunca espera al Núcleo |
+| tower | 2 | 4 | 6 | 6 | 6 | 2 con el N1 (hito Comandante). No pasa de 6: 4 torres ya dan el 60 % de mitigación. El rango 16 sigue dando +1 |
+| windmill | 1 | 2 | 3 | 4 | 4 | |
+| silo | 2 | 2 | 4 | 5 | 5 | Lo abre el Núcleo 2 |
+| tavern | 1 | 1 | 2 | 3 | 3 | Lo abre el Núcleo 2 |
+| carpentry | 1 | 1 | 2 | 2 | 2 | Lo abre el Núcleo 2 |
+| well | 2 | 3 | 5 | 6 | 6 | |
+| lighthouse | 1 | 1 | 1 | 1 | 1 | Único; lo abre el Núcleo 2 |
+| fuel_depot | 2 | 2 | 2 | 3 | 3 | Lo abre el Núcleo 4 (y pide la Refinería) |
+| market, laboratory, headquarters | 1 | 1 | 1 | 1 | 1 | Únicos |
+| barracks, shipyard, aerodrome | — | — | — | — | — | **Sin tope** (2026-10-18): el freno está en el ejército, ver abajo |
+| garden, fountain, statue, road y las decoraciones | — | — | — | — | — | Sin tope |
 
-Los huecos del rango van encima: casas +2 en los rangos 10 y 17 (era 3: 24), torre +1 en
-el 16.
+Los huecos del rango van encima: casas +2 en los rangos 10 y 17, torre +1 en el 16.
 
 **Cuartel sin tope (2026-10-18, decisión de Bryan, rama `fix/bandera-y-topes-militares`).**
 `building_limits["barracks"] = -1` y el Cuartel sale de `building_limits_by_era`: se
@@ -443,12 +458,137 @@ el freno de fondo. Cada Cuartel lleva la bandera del país (ver "FlagAnchor"), a
 con muchos todas comparten malla, material y shader (`ColonyFlag3D`), sin `_process`.
 
 **CONSTRUIR** lo enseña en cada tarjeta y en el detalle: una casita dibujada y
-"3/6 · era 2: 9" (cuántos hay / tope de esta era · la era que lo sube y a cuánto), en
-ámbar cuando está lleno; el tooltip lo dice en frase. Se pone al día al subir de era
-(`EventBus.era_advanced`) y al colocar. El recuento se recuerda mientras no cambia
+"3/4 · Núcleo 2: 5" (cuántos hay / tope con tu Núcleo · el nivel del Núcleo que lo sube y
+a cuánto), en ámbar cuando está lleno; el tooltip lo dice en frase. Se pone al día al
+subir el Núcleo (`EventBus.core_level_changed`), al subir de era y al colocar. El recuento se recuerda mientras no cambia
 `GridManager.map_version()` (`ConstructionMenu._count_of()`): el refresco de costes llega
 con cada recurso que cambia y contar recorre todos los edificios, carreteras incluidas.
 Cuando se alcanza, el aviso sigue siendo `LBL_LIMIT_REACHED` ("Límite alcanzado (6/6)").
+
+## Núcleo y planos (1.2, rama `feat/nucleo-y-planos`)
+
+Decisión de Bryan (18-10-2026; doc 21 §6.1 y §3.1 del contexto privado): el Núcleo tiene
+**niveles 1-5** y sustituye a los topes por era; los edificios avanzados piden además un
+**plano** que se gana en las campañas. Sin medir con la sonda: la ronda de pruebas de la
+1.2 lo calibra.
+
+### El Núcleo con niveles
+
+- **Estado:** `ProgressionManager.core_level` (1..`GameConfig.core_level_max` = 5) y la
+  obra en curso (`_core_upgrade` = `{"to", "remaining", "duration"}`). Se guarda en
+  `progression.core` = `{"level", "upgrade"}`; `reset()` lo tira (nivel 1, sin obra; en
+  Sandbox, el 5). La obra corre con el reloj de partida (`_process`, solo con
+  `GameManager.is_started()`) y también fuera del juego (`apply_offline_core`, tras
+  `ProductionManager.apply_offline_progression`). **El Núcleo sigue funcionando
+  mientras sube** (no pasa por `ProductionManager.start_upgrade`: ni aforo, ni procesos,
+  ni red de carreteras se paran).
+- **Reglas y textos:** `scripts/services/CoreLevel.gd` (estático, sin estado, como
+  `PlacementRules`): `missing_requirements(n)`, `block_lines()`, `can_start()`,
+  `can_aim()`, `gains_lines(n)` ("Aserradero: hasta 5 (ahora 4)", "Abre: Taberna…"),
+  `raises_limit(id)`, `derive_level()`.
+- **Subir:** `ProgressionManager.start_core_upgrade()` comprueba `CoreLevel.block_lines()`
+  (máximo, obra en curso, requisitos, bolsa y coste), cobra y emite
+  `EventBus.core_upgrade_started(to)`. Al terminar: `core_level` sube, el nodo del Núcleo
+  recibe `meta level`, se emite `core_level_changed(level)` y además
+  `building_upgrade_completed(nodo_del_núcleo, level)`, así la ficha, el sonido, la XP de
+  rango ("upgrade") y el guardado lo tratan como una mejora más. Aviso
+  `NOTIF_CORE_LEVEL_UP` (+ lo que abre).
+
+| Nivel | Pide antes (`core_level_requirements`) | Cuesta (`core_level_costs`) | Obra (`core_level_durations`) | Abre (`core_level_unlocks`) |
+|------:|----------------------------------------|-----------------------------|------:|------|
+| 2 | era 1 + Aserradero, Mina de oro, Casa, Almacén (lo mismo que la Fundición) | 250 oro, 150 madera, 10 tablones | 60 s | Silo, Taberna, Carpintería, Faro, Muelle de pesca |
+| 3 | era 2 + Cuartel | 600 oro, 250 acero, 200 madera, 12 vigas | 120 s | — (de momento) |
+| 4 | era 3 | 1000 oro, 400 acero, 250 petróleo, 12 combustible, **6 repuestos** | 180 s | Depósito de combustible |
+| 5 | era 3 + Cuartel General | 1500 oro, 700 acero, 500 petróleo, 300 madera, 20 vigas, 20 combustible, **12 repuestos** | 240 s | — |
+
+La parte de la bolsa cabe siempre en la bolsa de su era con los almacenes del nivel
+anterior (N2 400 de 2100, N3 1050, N4 1650, N5 3000 de 3500). Los repuestos del N4 y N5
+solo se traen de fuera: el Núcleo alto es un motivo para salir. El paso de era nunca
+espera al Núcleo (Fundición, Refinería, Mercado, Laboratorio y CG caben con el N1; 5
+almacenes con el N2), así que la línea jugable y el tutorial no cambian de orden.
+
+- **Partidas viejas:** sin `progression.core`, `CoreLevel.derive_level()` da el nivel más
+  alto cuyos requisitos (era y edificios, sin coste) ya se cumplen, **hasta el 4**: era 1
+  sin la base = 1, con la base de la era 1 = 2, era 2 con Cuartel = 3, era 3 = 4 (los
+  topes de la era 3 de antes). El 5 hay que ganarlo.
+- **CONSTRUIR:** "3/4 · Núcleo 2: 5" en cada tarjeta (`FMT_LIMIT_NEXT_CORE`); llena,
+  "Al máximo" y debajo "Sube el Núcleo a 2" (`ConstructionMenu.card_full_text`); el
+  detalle dice "Máximo 4 con tu Núcleo. Sube el Núcleo a nivel 2 para tener 5."
+  (`TOPE_FULL_NEXT_CORE`). Un edificio que abre el Núcleo lleva candado "Núcleo N" y el
+  detalle "Sube el Núcleo a nivel N para construirlo." (`PlacementRules.check_core_level`,
+  `core_lock_text`). Se repinta con `EventBus.core_level_changed`.
+- **Ficha del Núcleo** (`BuildingInfoPanel._refresh_core_upgrade`): "Nivel 2 de 5", lo
+  que da el siguiente (topes que suben y lo que abre), coste en iconos, aviso de
+  repuestos, botón SUBIR NÚCLEO A NIVEL N y, apagado, por qué (requisitos, bolsa, lo que
+  falta y dónde se consigue). En obras: "Subiendo a nivel 3: 45 % · faltan 1:10 min"
+  (repinta cada 0,5 s, solo con la ficha del Núcleo abierta).
+- **¿QUÉ HACER?:** paso nuevo `{"kind": "core", "id": "nucleo", "level": N}`
+  (`Objectives.core_step_for_limit`): sale cuando un tope frena (productor sin hueco,
+  casas al tope, una entrada de la línea) y el Núcleo puede apuntar al siguiente nivel
+  (no está en obras ni al máximo y se cumple lo que pide). `tools/line_probe_player.gd`
+  lo da (`ProgressionManager.start_core_upgrade()`, el Mercado si falta algo).
+- **AYUDA:** página nueva *El Núcleo y los planos* (`guide_core`,
+  `BuildingHelpText.core_page()`, con las cifras de GameConfig) y *Topes de edificios*
+  con una cifra por nivel del Núcleo y la lista de lo que abre cada nivel.
+- **El modelo crece:** en 3D, `scripts/buildings/CoreTrim.gd` (la receta de juguete del
+  Núcleo por niveles, encima del modelo horneado `tools/toy_recipes/nucleo.gd`): N2
+  farolas y losa delante, N3 alas bajas de ladrillo con ventanas encendidas, N4
+  torreones con cupulín de latón y farolas detrás, N5 obeliscos con punta dorada en las
+  esquinas; el modelo gana un 4 % de alto por nivel. Una malla cacheada por nivel y
+  medida, sin sombra ni nodos ni `_process` (como `LevelTrim`, que el Núcleo no usa: ni
+  zócalo ni chimeneas). Lo alto sigue siendo el mástil de la bandera. En 2D,
+  `BuildingArt2D._nucleo_level()` dibuja lo mismo dentro del horneado; el Núcleo no
+  crece en 2D (`BuildingArt2D.growth_level`) y lleva un galón por nivel por encima del 1.
+
+### Planos
+
+- **Contrato:** `GameConfig.blueprint_required` (ids que piden plano) y
+  `GameConfig.blueprint_sources[id] = {"domain": "land"|"sea"|"air", "mission": N}` (N
+  desde 1). Sustituye a `combat_blueprint_buildings`.
+- **Mecanismo genérico:** los planos ganados viven en el tablón
+  (`SortieBoard.blueprints`, clave `sorties` del guardado). `CombatManager.grant_blueprints(ids)`
+  es la puerta para cualquier fuente (campañas hoy; el contrabandista del Puerto u otra,
+  mañana); `has_blueprint(id)` / `blueprint_locked(id)` lo consultan.
+- **Candado:** `PlacementRules.check_blueprint(id)` (en `purchase_block_message`,
+  `block_reasons` y `lock_kind`, después del rango y del Núcleo). CONSTRUIR pone candado
+  "Plano" y el detalle "Plano: gánalo en la Campaña de Tierra (misión 3)."
+  (`blueprint_lock_text`). Sandbox no pide planos.
+- **Cómo se gana:** la oferta de la misión lleva su plano (`CombatManager.campaign_offer`
+  → `campaign_mission_blueprint`) si aún no se tiene y su `.tres` existe; viaja en el
+  botín del último combate (`ExpeditionGenerator.campaign_loot`, ya en cualquier misión,
+  no solo el jefe). Además, ganar la misión lo da aunque no viajara en el botín
+  (`_publish_campaign_events`), y al cargar una partida se dan, sin aviso, los de las
+  misiones ya ganadas (`_sync_campaign_blueprints`, idempotente). Aviso
+  `NOTIF_BLUEPRINT_GAINED`.
+- **Tablón:** las expediciones del tablón solo ofrecen planos que no salen de ninguna
+  campaña (`_next_blueprint`).
+
+| Plano | Edificio (rama que lo trae) | Misión | Era |
+|-------|-----------------------------|--------|----:|
+| `infirmary` | Enfermería | Campaña de Tierra, misión 3 "La mina tomada" | 2 |
+| `smithy` | Herrería | Campaña de Tierra, misión 5 "La fábrica cercada" | 2 |
+| `scrapyard` | Chatarrería | Campaña de Mar, misión 2 "El faro apagado" | 2 |
+| `exchange` | Casa de cambio | Campaña de Mar, misión 3 "La flota del estrecho" | 2 |
+| `diesel_plant` | Central diésel | Campaña de Aire, misión 2 "El dirigible espía" | 3 |
+
+Todo compila y funciona aunque esos `.tres` aún no existan: sin `.tres` no hay tarjeta
+en CONSTRUIR ni plano en la oferta, pero ganar la misión lo apunta igual.
+
+### Para el integrador de la 1.2 (contrato)
+
+Un edificio nuevo de otra rama entra así, **sin tocar código**:
+
+1. Su tope: una fila `"id": [N1, N2, N3, N4, N5]` en `GameConfig.core_level_limits` y
+   `"id": N1` en `building_limits` (o solo `building_limits` si no sube; `-1` sin tope).
+   Si la rama trae una fila en `building_limits_by_era`, funciona por el puente, pero
+   conviene pasarla.
+2. Si lo abre el Núcleo: `"id": N` en `GameConfig.core_level_unlocks` (nivel mínimo).
+   Sugeridos por el doc 21 §6.3: Campo de tiro 3, Telégrafo 3, Bastión 3, Puerto
+   comercial 3, Taller de blindados 4 (con los ids que hayan elegido sus ramas).
+3. Si pide plano: el id en `GameConfig.blueprint_required` y su misión en
+   `blueprint_sources` (los cinco de arriba ya están).
+4. Nada más: CONSTRUIR, el aviso al colocar, ¿QUÉ HACER?, el tutorial, la guía de
+   edificios y las páginas de AYUDA lo leen de esas tablas.
 
 ## Deposit Rules
 
@@ -492,7 +632,9 @@ Refinery era 3, so neither goes up without the base of the previous era standing
   (`warehouse_level_bonus`)
 - **Only what gains something offers an upgrade** (`PlacementRules.upgrade_does_something()`):
   producers, houses, the warehouse, decorations with morale and the HQ (its level 3
-  summons the Final Audit). The Barracks, Tower, Road and Núcleo have no upgrade button.
+  summons the Final Audit). The Barracks, Tower and Road have no upgrade button. The
+  Núcleo has its own levels 1-5 (1.2), with their own button, costs and look: see
+  "Núcleo y planos".
 - The panel lists what the next level gives, with real numbers
   (`PlacementRules.upgrade_effect_lines()`). The level shows on the model itself
   (2026-10-17, `LevelTrim` + `ProductionManager.apply_level_visual`): the same model
@@ -933,6 +1075,8 @@ solido de la paleta (`vertex_color_is_srgb`).
 - `scripts/buildings/PlacementRules.gd` — placement, road network, auto-road, upgrade effects
 - `scripts/map/WorkerWalkers.gd` — the walking workers
 - `scripts/services/GameConfig.gd` — limits, prerequisites, processes
+- `scripts/services/CoreLevel.gd` — the Núcleo levels 1-5: requirements, costs, what each level gives (texts); state in `ProgressionManager.core_level`
+- `scripts/buildings/CoreTrim.gd` — the Núcleo's 3D pieces per level (2D: `BuildingArt2D._nucleo_level`)
 - `scripts/services/ProductionManager.gd` — construction + passive production
 - `scripts/buildings/BuildingLook.gd` — rule: construction phase / upgrade / ruin / active / idle (both views)
 - `scripts/buildings/BuildingLookVisual.gd` — applies it in 3D; `scripts/buildings/BuildingFx.gd` — animated sprite sheets + shaders

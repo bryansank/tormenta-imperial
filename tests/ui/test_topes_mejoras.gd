@@ -20,6 +20,7 @@ var _unlocks := {}
 var _nodes: Array = []
 var _mode := 0
 var _era := 1
+var _core := 1
 var _rank_bonus: Dictionary = {}
 var _locale := "es"
 var _tutorial: Dictionary = {}
@@ -29,6 +30,9 @@ func before_test() -> void:
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
 	_era = ProgressionManager.current_era
 	ProgressionManager.current_era = 1
+	# Los topes van con el Nucleo (1.2): estos casos empiezan con el Nucleo 1.
+	_core = ProgressionManager.core_level
+	ProgressionManager.core_level = 1
 	_rank_bonus = GameConfig.rank_limit_bonus.duplicate()
 	GameConfig.rank_limit_bonus = {}
 	_amounts = {}
@@ -52,6 +56,7 @@ func after_test() -> void:
 	ResourceManager.set_unlock_state(_unlocks)
 	GameConfig.rank_limit_bonus = _rank_bonus
 	ProgressionManager.current_era = _era
+	ProgressionManager.core_level = _core
 	GameMode.current = _mode
 	Tr.set_locale(_locale)
 	TutorialManager.load_save_data(_tutorial)
@@ -93,13 +98,16 @@ func test_nothing_is_said_while_there_is_room() -> void:
 	assert_str(HelpText.limit_full_text("sawmill")).is_empty()
 	assert_array(Menu.explain_lines(_data("sawmill"))).is_empty()
 
-func test_a_full_card_says_the_cap_and_the_next_era() -> void:
+func test_a_full_card_says_the_cap_and_the_next_core_level() -> void:
 	_place("sawmill", GameConfig.get_building_limit("sawmill"))
 	var next := GameConfig.next_building_limit("sawmill")
-	assert_str(HelpText.limit_full_text("sawmill")).is_equal(Tr.t("TOPE_FULL_NEXT_ERA") % [
-		GameConfig.get_building_limit("sawmill"), int(next["era"]), int(next["limit"])])
+	assert_str(HelpText.limit_full_text("sawmill")).is_equal(Tr.t("TOPE_FULL_NEXT_CORE") % [
+		GameConfig.get_building_limit("sawmill"), int(next["core_level"]), int(next["limit"])])
+	assert_str(Menu.card_full_text("sawmill")).contains(Tr.t("TOPE_CARD_FULL_CORE") % int(next["core_level"]))
 
 func test_a_cap_that_does_not_rise_says_you_have_the_most() -> void:
+	# Desde el Nucleo 2 el almacen ya no sube (5: el precio del CG nivel 3).
+	ProgressionManager.core_level = 2
 	_place("warehouse", GameConfig.get_building_limit("warehouse"))
 	assert_str(HelpText.limit_full_text("warehouse")).is_equal(
 		Tr.t("TOPE_FULL_MAX") % GameConfig.get_building_limit("warehouse"))
@@ -267,8 +275,8 @@ func test_every_page_is_in_the_catalog_and_written_in_both_languages() -> void:
 func test_the_limits_page_reads_the_table() -> void:
 	var body := HelpText.limits_page()
 	var row: Array = []
-	for era in range(1, GameConfig.max_era() + 1):
-		row.append(str(GameConfig.base_building_limit("sawmill", era)))
+	for lv in range(1, GameConfig.core_level_max + 1):
+		row.append(str(GameConfig.base_building_limit("sawmill", lv)))
 	assert_str(body).contains(" · ".join(row))
 	assert_str(body).contains(_data("market").get_display_name())
 
@@ -339,13 +347,13 @@ func test_the_pages_include_the_buildings_of_one_point_one() -> void:
 		assert_str(limits).override_failure_message(id).contains(_data(id).get_display_name())
 	# Astillero y Aerodromo sin tope (2026-10-18): la pagina los nombra como tales.
 	for id in ["shipyard", "aerodrome"]:
-		for era in range(1, GameConfig.max_era() + 1):
-			assert_int(GameConfig.get_building_limit_for_era(id, era)).is_equal(-1)
+		for lv in range(1, GameConfig.core_level_max + 1):
+			assert_int(GameConfig.get_building_limit_at(id, lv)).is_equal(-1)
 	assert_str(limits).contains(Tr.t("TOPE_PAGE_LIMITS_FREE_BUILDINGS").get_slice("%s", 0))
-	# El Muelle sube con la era: su fila sale con las tres cifras.
+	# El Muelle sube con el Nucleo: su fila sale con las cinco cifras.
 	var row: Array = []
-	for era in range(1, GameConfig.max_era() + 1):
-		row.append(str(GameConfig.base_building_limit("fishing_dock", era)))
+	for lv in range(1, GameConfig.core_level_max + 1):
+		row.append(str(GameConfig.base_building_limit("fishing_dock", lv)))
 	assert_str(limits).contains("%s: %s" % [_data("fishing_dock").get_display_name(), " · ".join(row)])
 	# El Astillero y el Aerodromo no se mejoran, y la ficha dice por que.
 	var upg := HelpText.upgrades_page()

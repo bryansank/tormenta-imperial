@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET, version **1.0.0** in progress (`project.godot` `config/version`; the 1.0 is assembled on the `integracion/arte-v1` branch). The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a grid rolled per game, 60-74 cells a side, with the sea inside the grid and 3-6 deposits of each type on land), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop: five resources in one shared pool (food included, grown on Farms and eaten by the people), four workshop materials, production that waits in each building until it is collected with a tap, manual processes in batches (the Núcleo can run every workshop recipe, slower), population and morale, market and laboratory as buildings, tech tree, army training. Turn-based PVE combat: an 8x8 board shown by default as a "front" view (both sides face to face, no grid in sight; the 3D 8x8 board and a flat 2D grid are the alternatives), rock-paper-scissors type advantage, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, three separate mission campaigns (Land, Sea, Air: each a chain of missions in a single domain with a boss at the end), and the Final Audit — in Campaña it needs HQ level 3 **and** the three campaigns complete, then summons a 3-5 wave siege you have to survive. Around that core: a "toy diorama" look (buildings and units baked from CC0 pieces into one vertex-coloured mesh each; a building "pops" when it finishes and collected goods fly to the HUD), 27 building types (10 of them new cheap decorations, with no cap), building limits that rise with the era, a day/night cycle, ambient sound for day, night and Storm, up to five saved games, x1/x2 game speed, graphics quality down to "Mínima" with an FPS cap, four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done, what is left and the redesign in progress.
+**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET, version **1.0.0** in progress (`project.godot` `config/version`; the 1.0 is assembled on the `integracion/arte-v1` branch). The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a grid rolled per game, 60-74 cells a side, with the sea inside the grid and 3-6 deposits of each type on land), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop: five resources in one shared pool (food included, grown on Farms and eaten by the people), four workshop materials, production that waits in each building until it is collected with a tap, manual processes in batches (the Núcleo can run every workshop recipe, slower), population and morale, market and laboratory as buildings, tech tree, army training. Turn-based PVE combat: an 8x8 board shown by default as a "front" view (both sides face to face, no grid in sight; the 3D 8x8 board and a flat 2D grid are the alternatives), rock-paper-scissors type advantage, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, three separate mission campaigns (Land, Sea, Air: each a chain of missions in a single domain with a boss at the end), and the Final Audit — in Campaña it needs HQ level 3 **and** the three campaigns complete, then summons a 3-5 wave siege you have to survive. Around that core: a "toy diorama" look (buildings and units baked from CC0 pieces into one vertex-coloured mesh each; a building "pops" when it finishes and collected goods fly to the HUD), 27 building types (10 of them new cheap decorations, with no cap), building limits raised by levelling up the Núcleo (1-5, since 1.2) and advanced buildings opened by blueprints won in the campaigns, a day/night cycle, ambient sound for day, night and Storm, up to five saved games, x1/x2 game speed, graphics quality down to "Mínima" with an FPS cap, four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done, what is left and the redesign in progress.
 
 Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
@@ -69,14 +69,14 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 138 signals in 30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 142 signals in 30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
 | 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave of up to 5 saved games (`SaveSlots`, `save_path()`, `open_saves_list()`), new game (`request_new_game()` → mode picker, never deletes), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
 | 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining), in batches of ×1 / ×5 / MÁX |
 | 9 | `ProductionManager` | `scripts/services/ProductionManager.gd` | Passive production that waits in each building until collected, Farm crops, spoilage (Gobernador), construction, upgrades |
-| 10 | `ProgressionManager` | `scripts/services/ProgressionManager.gd` | Era system (3 eras), 9 milestones, **and the Final Audit** (owns the `FinalAudit` model and publishes it) |
+| 10 | `ProgressionManager` | `scripts/services/ProgressionManager.gd` | Era system (3 eras), 9 milestones, the Núcleo level 1-5 and its work (1.2), **and the Final Audit** (owns the `FinalAudit` model and publishes it) |
 | 11 | `MarketManager` | `scripts/services/MarketManager.gd` | Buy/sell resources with floating prices |
 | 12 | `PopulationManager` | `scripts/services/PopulationManager.gd` | Population, workers, morale, consumption |
 | 13 | `ArmyManager` | `scripts/services/ArmyManager.gd` | Unit training at Barracks, upkeep, desertion, Military Power |
@@ -204,7 +204,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
   deposit is one baked toy mesh (forest, gold vein, iron, oil well) that changes with its
   depletion stage (`DepositMesh.gd`); the 2D view bakes the same idea (docs/02)
 - Storage: **one shared pool for the five resources** (food included), not a cap per resource. Base scales
-  by era (600 / 800 / 1000) + 500 per warehouse (max 5 in every era: the warehouse cap does not rise, see below).
+  by era (600 / 800 / 1000) + 500 per warehouse (max 5: reached with Núcleo 2 and never above, see below).
   Era 1 is 600 so the opening fits: 580 starting resources, plus sawmill + gold mine (330).
   Era 3 ceiling without techs = 1000 + 5x500 = **3500**, exactly the price of the HQ
   level 3 upgrade. On top of that, `GameConfig.tech_storage_bonus` adds the storage
@@ -263,7 +263,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
-| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only: its own, every unlocked workshop recipe and hand mining, 1.5x slower. Never damaged; a tall monument (8.9 m, own flag mast) on the same 3x3 | - |
+| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only: its own, every unlocked workshop recipe and hand mining, 1.5x slower. Never damaged; a tall monument (8.9 m, own flag mast) on the same 3x3. **Levels 1-5** (1.2): each raises the building caps and opens buildings | - |
 | House | 2x2 | 50/0/0/30 | 0 | +6 workers (room in houses; 9 / 12 at levels 2 / 3) | 1 |
 | Sawmill | 2x2 | 80/0/0/50 | 2 | 6 wood/12s; makes planks | 1 |
 | Farm | 2x2 | 40/0/0/30 | 2 | Food by crop: 20 / 125 / 600 per 1 / 5 / 20 min; anywhere with a road; max 6 | 1 |
@@ -321,17 +321,44 @@ exists, procedural until then), returned by `DieselpunkBuildingFactory.create()`
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
 
-**Building caps rise with the era (2026-10-14, Bryan's D1).** `GameConfig.building_limits_by_era`
-holds `[era 1, era 2, era 3]` (≈ ×1.5 / ×2: house 10/15/20, farm 6/9/12, sawmill 5/8/10,
-gold mine 4/6/8, foundry 3/5/6, refinery 2/3/4); era 1 is the old cap. **The Barracks
-has no cap since 2026-10-18** (`building_limits["barracks"] = -1`, not in the era
-table); the brake is on the army instead (see Army & Units).
-Warehouse stays 5 (keeps 1000 + 5×500 = 3500 = HQ L3) and tower stays 6 (4 already
-reach the 60 % mitigation cap); Market, Laboratory and HQ stay 1. **Decorations have no
-cap** (any `BuildingData.is_decoration`, no table entry needed). The only reader is
-`GameConfig.get_building_limit(id)`: era in progress + `rank_limit_bonus`; -1 in
-Sandbox. Nothing new is saved (derived from era and rank). CONSTRUIR shows
-"3/6 · era 2: 9" on each card and refreshes on `era_advanced`. Detail: docs/03.
+**Building caps rise with the Núcleo level (1.2, 2026-10-18, branch
+`feat/nucleo-y-planos`; replaces the per-era caps of 1.1).** The Núcleo has levels 1-5;
+`GameConfig.core_level_limits` holds `[N1..N5]` (house 8/10/15/20/22, farm
+4/6/9/12/13, sawmill 4/5/8/10/11, gold mine 3/4/6/8/9, foundry 1/3/5/6/7, refinery
+1/2/3/4/5, warehouse 3/5/5/5/5, tower 2/4/6/6/6); N1 equals `building_limits`, N2 ≈ the
+old era 1, N3 ≈ era 2, N4 ≈ era 3. Every era gate (Foundry, Refinery, Market,
+Laboratory, HQ, five warehouses) fits with Núcleo 1-2, so the line never waits for it.
+`core_level_unlocks` opens buildings by level (silo, tavern, carpentry, lighthouse,
+fishing dock 2; fuel depot 4). **Barracks, Shipyard and Aerodrome have no cap**
+(`-1`); the brake is on the army instead (see Army & Units). **Decorations have no
+cap** (any `BuildingData.is_decoration`). The only reader is
+`GameConfig.get_building_limit(id)`: Núcleo level + `rank_limit_bonus`; -1 in Sandbox.
+`building_limits_by_era` is now an empty bridge: an era row from another branch reads
+as `[e1, e1, e2, e3, e3]`.
+
+**The Núcleo levels (1.2):** state in `ProgressionManager.core_level` + the work in
+progress (saved in `progression.core`; old saves derive a level from era and buildings,
+up to 4; `reset()` throws it away). Requirements (`core_level_requirements`: N2 the era
+1 base, N3 era 2 + Barracks, N4 era 3, N5 era 3 + HQ), costs with materials and, N4-N5,
+spare parts (`core_level_costs`), work time (`core_level_durations`). Rules and texts in
+`scripts/services/CoreLevel.gd` (static); `ProgressionManager.start_core_upgrade()`
+charges and starts; the Núcleo keeps working while it goes up; on finishing,
+`EventBus.core_level_changed` and `building_upgrade_completed` on the Núcleo node. Its
+panel shows "Nivel N de 5", what the next level gives and SUBIR NÚCLEO; CONSTRUIR shows
+"3/4 · Núcleo 2: 5", a padlock "Núcleo N" on what it opens, and a full card says "Sube
+el Núcleo a N"; ¿QUÉ HACER? asks for it (`{"kind": "core"}`) when a cap stops a step.
+The model grows: `scripts/buildings/CoreTrim.gd` (3D pieces per level, one cached
+mesh) and `BuildingArt2D._nucleo_level()`. Detail: docs/03 "Núcleo y planos".
+
+**Blueprints (1.2):** `GameConfig.blueprint_required` (infirmary, smithy, diesel_plant,
+scrapyard, exchange — buildings brought by other 1.2 branches) cannot be built without
+their blueprint; `blueprint_sources` says which campaign mission gives each one (Land 3
+and 5, Sea 2 and 3, Air 2). Generic store: `SortieBoard.blueprints` (save key
+`sorties`), `CombatManager.grant_blueprints()`; the padlock is
+`PlacementRules.check_blueprint()` ("Plano: gánalo en la Campaña de Tierra (misión
+3)"). Winning the mission grants it; loading a save grants those of missions already
+won. **Contract for the 1.2 branches:** `core_level_unlocks` and `blueprint_required`
+(docs/03).
 
 **Farm (2026-10-04):** the crop is picked in its panel (CULTIVO, `GameConfig.farm_crops`:
 `crop_short` 1 min / 20, `crop_medium` 5 min / 125, `crop_long` 20 min / 600 — longer
@@ -351,7 +378,7 @@ the Laboratory before research and does not suggest trading without a Market.
 **Upgrades** only exist where they give something (`PlacementRules.upgrade_does_something()`):
 producers (x1.6 / x2.5), houses (room x1.5 / x2), the warehouse (+250 per level),
 decorations with morale (x1.5 / x2) and the HQ (its level 3 summons the Audit). The
-Barracks, Tower, Road and Núcleo offer no upgrade. The panel lists what the next level
+Barracks, Tower and Road offer no upgrade; the Núcleo has its own levels 1-5 (above). The panel lists what the next level
 gives with real numbers (`upgrade_effect_lines()`). The level shows on the model, with
 no floating plate (2026-10-17): in 3D the same model grows (mostly upwards,
 `LevelTrim.level_scale`), stands on a stone plinth with a brass band and gains brick
@@ -812,8 +839,8 @@ over a coast. Model `CampaignBook` (pure, owned by CombatManager, save key
 `{kind: "campaign", domain, mission, seed, era}` rebuilt by
 `ExpeditionGenerator.campaign_mission_map()`; `CombatManager.launch_campaign_mission()`,
 `campaign_lock_reason()`, `campaign_offer()`. Only the last fight pays (gold/wood,
-steel at sea, oil in the air, parts, settlers on land, a Tithe cut; the boss more and a
-blueprint if any); 150 s rest between missions; XP `campaign_mission` 60 / `campaign_boss`
+steel at sea, oil in the air, parts, settlers on land, a Tithe cut; the boss more; the
+mission listed in `blueprint_sources` also its blueprint); 150 s rest between missions; XP `campaign_mission` 60 / `campaign_boss`
 250. UI: tabs TIERRA / MAR / AIRE / ATAQUES RÁPIDOS in SkirmishPanel (padlock + reason,
 N/M, boss), the mission map painted sea or sky, `Objectives.campaign_step()` (second
 line) and `campaign_gate_step()` (main step once HQ 3 is done). The short 3-fight
@@ -831,8 +858,9 @@ between them, boss pays parts, settlers and a blueprint). The whole map is rolle
 the offer, shown in `SkirmishPanel` before launching with loot and Favorable / Igualada /
 Difícil; `launch_sortie()` launches it. Exclusive loot: `ResourceManager.Type.PARTS`
 (material outside the bag; level 3 of producers asks for it, `upgrade_parts_cost`),
-settlers (population up to housing), blueprints (`combat_blueprint_buildings`, hook
-`CombatManager.blueprint_locked()` — PlacementRules still has to call it). The enemy
+settlers (population up to housing), blueprints (only those with no campaign source:
+`blueprint_required` minus `blueprint_sources`; the padlock is
+`PlacementRules.check_blueprint()`). The enemy
 **routs** below `combat_retreat_ratio` (30 %) on column boards, never on defence;
 "**resolver solo**" (`auto_resolve_current()`) only on raids and the Tithe with double
 strength. HUD button `SkirmishButton` (slot `skirmish_button`, red dot from
@@ -1047,7 +1075,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, the `final_audit` and `core`: the Núcleo level and its work), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -1291,7 +1319,7 @@ guarnición), cañoneros (not dotación). Code identifiers (`tithe`, `audit`, `g
 1. Create `data/buildings/my_building.tres` with BuildingData fields (at least 2x2: only the
    road is 1x1; materials go in `cost_materials`). It will need a road to the Núcleo like
    everything else
-2. Add its cap: a row in `GameConfig.building_limits_by_era` if it rises with the era, or in `GameConfig.building_limits` if fixed. A decoration (`is_decoration`) needs neither: it has no cap
+2. Add its cap: a row `[N1..N5]` in `GameConfig.core_level_limits` if it rises with the Núcleo (and N1 in `building_limits`), or only `GameConfig.building_limits` if fixed. A decoration (`is_decoration`) needs neither: it has no cap. If the Núcleo opens it, `core_level_unlocks[id] = N`; if it needs a blueprint, add it to `blueprint_required` and its mission to `blueprint_sources`
 3. Add prerequisites in `GameConfig.building_prerequisites` (if any)
 4. Add processes in `GameConfig.building_processes` (if any), and a row in `GameConfig.building_deposit_rules` if it must touch a deposit
 5. Give it a look in both views: a baked toy model for 3D (a recipe in `tools/toy_recipes/<id>.gd`, baked with `tools/build_toy_models.gd -- --only=<id>` into `assets/models/toy/<id>.tscn`, set as `model_scene`; only CC0 or own pieces, and new CC0 packs listed in `THIRD-PARTY-NOTICES.md`) or, failing that, a case in `DieselpunkBuildingFactory`, and a drawing in `scripts/view2d/BuildingArt2D.gd` for 2D (map, ghost and menu icon share it); and a row in `GameConfig.construction_style` so its construction site has its own materials, fence, tarp and phase-2 silhouette (docs/03, "Obra por edificio y por instancia"; without one it uses `construction_style_default`). Give it a lot in `GameConfig.building_lot_style` (ground, trim, yard, props and a `signature` if the model lacks an exaggerated element) — docs/03 "Parcela y atrezo"
@@ -1365,6 +1393,8 @@ All balance values live in `GameConfig.gd`:
 - `unit_types` / `army_base_capacity` / `army_capacity_per_barracks` / `army_upkeep_interval` - army
 - `tech_definitions` + `tech_*` bonuses - tech tree
 - `rank_xp_sources` / `rank_xp_thresholds` / `rank_rewards` / `colony_colors` / `COLONY_PATTERNS` / `COLONY_EMBLEMS` - governor rank (XP, curve, unlocks, bonuses, flag pieces)
+- `core_level_limits` / `core_level_unlocks` / `core_level_requirements` / `core_level_costs` / `core_level_durations` - the Núcleo levels 1-5 (caps, what each opens, what each asks, docs/03)
+- `blueprint_required` / `blueprint_sources` - buildings that need a blueprint and the campaign mission that gives it
 - `REGIMENT_PAINTS` / `regiment_star_wins` - the regiment's paints and stars (cosmetic only)
 - `audio_*_volume` / `audio_music_fade` / `audio_sfx_voices` - audio
 - `phase_triggers` / `early_*` - onboarding phase pacing

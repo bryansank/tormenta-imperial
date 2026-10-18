@@ -238,6 +238,52 @@ static func check_rank(building_id: String) -> bool:
 static func rank_lock_text(building_id: String) -> String:
 	return Tr.t("LBL_RANK_NEEDED") % RankManager.building_rank(building_id)
 
+## El Nucleo abre edificios con su nivel (1.2, feat/nucleo-y-planos;
+## GameConfig.core_level_unlocks). Sandbox lo tiene todo abierto.
+static func check_core_level(building_id: String) -> bool:
+	return GameConfig.current_core_level() >= GameConfig.core_level_unlock(building_id)
+
+## "Sube el Núcleo a nivel 2 para construirlo."
+static func core_lock_text(building_id: String) -> String:
+	return Tr.t("LBL_CORE_NEEDED") % GameConfig.core_level_unlock(building_id)
+
+## Los edificios avanzados piden su PLANO, que se gana en las campanas (1.2;
+## GameConfig.blueprint_required / blueprint_sources). Sandbox: abiertos.
+static func check_blueprint(building_id: String) -> bool:
+	if not GameConfig.needs_blueprint(building_id):
+		return true
+	return CombatManager.has_blueprint(building_id)
+
+## "Plano: gánalo en la Campaña de Tierra (misión 3)." o, sin mision que lo
+## de, "Necesitas su plano."
+static func blueprint_lock_text(building_id: String) -> String:
+	var src := GameConfig.blueprint_source(building_id)
+	if src.is_empty():
+		return Tr.t("LBL_BLUEPRINT_NEEDED_ANY")
+	return Tr.t("LBL_BLUEPRINT_NEEDED") % [Tr.t("CAMP_NAME_" + String(src["domain"]).to_upper()), int(src["mission"])]
+
+## El candado que lleva `building_id` en CONSTRUIR: "rank", "core", "blueprint"
+## o "" si ninguno. En ese orden: lo que antes se arregla.
+static func lock_kind(building_id: String) -> String:
+	if not check_rank(building_id):
+		return "rank"
+	if not check_core_level(building_id):
+		return "core"
+	if not check_blueprint(building_id):
+		return "blueprint"
+	return ""
+
+## La frase del candado de `building_id` ("" si no lleva).
+static func lock_text(building_id: String) -> String:
+	match lock_kind(building_id):
+		"rank":
+			return rank_lock_text(building_id)
+		"core":
+			return core_lock_text(building_id)
+		"blueprint":
+			return blueprint_lock_text(building_id)
+	return ""
+
 static func check_prerequisites(building_id: String) -> bool:
 	for req_id in GameConfig.get_prerequisites(building_id):
 		if count_building(req_id) < 1:
@@ -255,8 +301,8 @@ static func keeps_placing(data: BuildingData) -> bool:
 ## "" si nada lo impide. En el mismo orden en que lo comprobaba BuildingPlacer:
 ## tope, requisitos, obreros y coste. No cobra nada.
 static func purchase_block_message(data: BuildingData) -> String:
-	if not check_rank(data.id):
-		return rank_lock_text(data.id)
+	if lock_kind(data.id) != "":
+		return lock_text(data.id)
 	if not check_building_limit(data.id):
 		return Tr.t("LBL_LIMIT_REACHED") % [count_building(data.id), GameConfig.get_building_limit(data.id)]
 	if not check_prerequisites(data.id):
@@ -301,10 +347,10 @@ static func purchase_block_detail(data: BuildingData) -> String:
 ## Lo que impide construir `data` ahora, en frases para el jugador. [] si nada.
 static func block_reasons(data: BuildingData) -> Array:
 	var out: Array = []
-	# Bloqueado por rango: es lo primero y lo unico que importa, el resto llega
-	# despues de subir.
-	if not check_rank(data.id):
-		out.append(rank_lock_text(data.id))
+	# Bloqueado por rango, por el nivel del Nucleo o sin plano: es lo primero y
+	# lo unico que importa, el resto llega despues.
+	if lock_kind(data.id) != "":
+		out.append(lock_text(data.id))
 		return out
 	# Lo que falta de un recurso aun bloqueado se explica como "llega con...":
 	# "te faltan 100 de acero" sin acero en el juego no dice que hacer. Si ya lo
@@ -333,6 +379,9 @@ static func block_reasons(data: BuildingData) -> Array:
 ## falta separado por comas.
 static func block_reasons_short(data: BuildingData) -> Array:
 	var out: Array = []
+	if lock_kind(data.id) != "":
+		out.append(lock_text(data.id))
+		return out
 	var locked: Array = []
 	var short := missing_cost(data)
 	for res_id in short.keys():

@@ -185,6 +185,9 @@ const ENTRIES := {
 	# porque son largas para la tarjeta de abajo.
 	"guide_limits": {"kind": "guide", "cat": CAT_BASICS, "basic": true, "dyn": true,
 		"title": "HELP_T_LIMITS", "body": "HELP_B_LIMITS", "target": "build_button"},
+	# El Nucleo con niveles y los planos (1.2, feat/nucleo-y-planos).
+	"guide_core": {"kind": "guide", "cat": CAT_BASICS, "basic": true, "dyn": true,
+		"title": "HELP_T_CORE", "body": "HELP_B_CORE", "target": ""},
 	"guide_upgrades": {"kind": "guide", "cat": CAT_BASICS, "basic": true, "dyn": true,
 		"title": "HELP_T_UPGRADES", "body": "HELP_B_UPGRADES", "target": ""},
 	"guide_eras": {"kind": "guide", "cat": CAT_ECONOMY, "basic": true, "dyn": true,

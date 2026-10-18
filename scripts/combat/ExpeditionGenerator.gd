@@ -950,20 +950,22 @@ static func campaign_rewards(domain: String, mission: int, era: int) -> Dictiona
 	return rewards
 
 ## Lo exclusivo de una mision ganada: repuestos, colonos (tierra) y la rebaja del
-## proximo Impuesto; el jefe, mas de todo y el plano si queda alguno.
+## proximo Impuesto; el jefe, mas de todo. El plano, en la mision que lo da
+## (GameConfig.blueprint_sources, 1.2): la oferta lo trae y aqui se pone.
 static func campaign_loot(domain: String, mission: int, blueprint: String = "") -> Dictionary:
 	var loot: Dictionary = {}
 	if campaign_is_boss_mission(domain, mission):
 		loot["parts"] = GameConfig.campaign_boss_parts
 		loot["colonists"] = GameConfig.campaign_boss_colonists
 		loot["tithe_pct"] = GameConfig.campaign_boss_tithe_pct
-		if blueprint != "":
-			loot["blueprint"] = blueprint
 	else:
 		loot["parts"] = int(GameConfig.campaign_mission_parts.get(domain, 0))
 		loot["colonists"] = int(GameConfig.campaign_mission_colonists.get(domain, 0))
 		loot["tithe_pct"] = GameConfig.campaign_mission_tithe_pct
-	return _drop_zeros(loot)
+	loot = _drop_zeros(loot)
+	if blueprint != "":
+		loot["blueprint"] = blueprint
+	return loot
 
 ## ¿Es este mapa una mision de campana? (El dominio lo lleva cada nodo.)
 static func map_campaign_domain(map: Array) -> String:

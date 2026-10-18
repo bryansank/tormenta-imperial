@@ -17,6 +17,38 @@
 5. Deposits of that resource type become mineable
 6. Market adds the new resource for trading
 
+Since 1.2 the era **no longer raises the building limits**: the Núcleo does (next
+section). The era still unlocks resources and is a requirement of the Núcleo levels.
+
+## The Núcleo levels 1-5 (1.2, `feat/nucleo-y-planos`)
+
+A fourth axis next to eras, milestones and rank (decided by Bryan 2026-10-18; doc 21
+§6.1 of the private context): the Núcleo goes from level 1 to 5 and **replaces the
+per-era limits**. Each level raises the limit of each building
+(`GameConfig.core_level_limits`) and unlocks some new ones (`core_level_unlocks`). It
+is the long goal of each era and a big, visible resource sink. Full table and contract
+in `docs/03-buildings.md` §"Núcleo y planos".
+
+| Level | Era it fits | Needs before | Cost (bag + materials) | Parts |
+|------:|-------------|--------------|------------------------|------:|
+| 1 | start | — | — | — |
+| 2 | late era 1 | sawmill, gold mine, house, warehouse | 250 gold, 150 wood, 10 planks | — |
+| 3 | era 2 | era 2 + barracks | 600 gold, 250 steel, 200 wood, 12 beams | — |
+| 4 | era 3 | era 3 | 1000 gold, 400 steel, 250 oil, 12 fuel | 6 |
+| 5 | late era 3 | era 3 + headquarters | 1500 gold, 700 steel, 500 oil, 300 wood, 20 beams, 20 fuel | 12 |
+
+- State in `ProgressionManager` (`core_level`, the work in progress), saved in
+  `progression.core`; old saves derive a level from era and buildings (up to 4).
+- `start_core_upgrade()` charges and starts the work (60-240 s, `get_duration`); the
+  Núcleo keeps working meanwhile. Finishing emits `core_level_changed` and
+  `building_upgrade_completed` on the Núcleo node (rank XP "upgrade", sound, panel).
+- **Not on the main line:** the era gates (Foundry, Refinery, HQ, five warehouses) all
+  fit with Núcleo 1-2, so the campaign never waits for it. WHAT TO DO? asks for it when
+  a limit stops a step (`{"kind": "core"}`). Levels 4-5 need parts, which only come
+  from sorties and campaigns.
+- Blueprints (won in the campaigns) gate the advanced buildings of 1.2: see docs/03 and
+  `docs/15-combat.md` §13.
+
 ## 9 Milestones
 
 | ID | Display Name | Condition | Era |
@@ -311,7 +343,8 @@ Final Audit           -> 138-239 min   3-5 waves; median victory 3 h 11 min
 
 ## Key Files
 
-- `scripts/services/ProgressionManager.gd` — era tracking, milestones, victory
+- `scripts/services/ProgressionManager.gd` — era tracking, milestones, victory, the Núcleo level and its work
+- `scripts/services/CoreLevel.gd` — the Núcleo levels: requirements, costs, gains, texts
 - `scripts/services/GameConfig.gd` — `era_names`, `milestone_definitions`, `hq_upgrade_costs`
 - `scripts/ui/ProgressPanel.gd` — milestone UI with checklist
 - `scripts/ui/VictoryScreen.gd` — victory overlay

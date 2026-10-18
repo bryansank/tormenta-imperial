@@ -71,11 +71,13 @@ func test_it_yields_less_per_minute_than_a_long_farm_crop() -> void:
 	assert_float(per_min).is_greater(float(short["food"]) * 60.0 / float(short["duration"]))
 	assert_float(per_min).is_less(float(long["food"]) * 60.0 / float(long["duration"]))
 
-func test_caps_rise_with_the_era_and_era_one_matches_the_flat_table() -> void:
-	assert_array(GameConfig.building_limits_by_era[ID]).is_equal([3, 4, 6])
+func test_caps_rise_with_the_core_and_level_one_matches_the_flat_table() -> void:
+	# 1.2 (feat/nucleo-y-planos): los topes van con el Nucleo, y lo abre el 2.
+	assert_array(GameConfig.core_level_limits[ID]).is_equal([3, 3, 4, 6, 6])
 	assert_int(int(GameConfig.building_limits[ID])).is_equal(3)
-	for era in [1, 2, 3]:
-		assert_int(GameConfig.base_building_limit(ID, era)).is_equal([3, 4, 6][era - 1])
+	for lv in range(1, GameConfig.core_level_max + 1):
+		assert_int(GameConfig.base_building_limit(ID, lv)).is_equal([3, 3, 4, 6, 6][lv - 1])
+	assert_int(GameConfig.core_level_unlock(ID)).is_equal(2)
 
 func test_it_has_lot_site_fx_and_stock_cap() -> void:
 	assert_bool(GameConfig.building_lot_style.has(ID)).is_true()

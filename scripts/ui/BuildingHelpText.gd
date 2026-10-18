@@ -22,27 +22,28 @@ const ERA_NAME_KEYS := {1: "ERA_FRONTIER", 2: "ERA_INDUSTRIAL", 3: "ERA_PETROLEU
 
 ## Las paginas de AYUDA que se escriben con numeros de GameConfig
 ## (HelpCatalog: entradas con "dyn").
-const PAGES := ["guide_limits", "guide_upgrades", "guide_eras", "guide_towers", "guide_workshop"]
+const PAGES := ["guide_limits", "guide_core", "guide_upgrades", "guide_eras", "guide_towers", "guide_workshop"]
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Topes ──
 # ══════════════════════════════════════════════════════════════════════
 
-## Uno y solo uno en todas las eras (Mercado, Laboratorio, Cuartel General).
+## Uno y solo uno con cualquier nivel del Nucleo (Mercado, Laboratorio, Cuartel
+## General, Faro).
 static func is_unique(building_id: String) -> bool:
-	for era in range(1, GameConfig.max_era() + 1):
-		if GameConfig.base_building_limit(building_id, era) != 1:
+	for lv in range(1, GameConfig.core_level_max + 1):
+		if GameConfig.base_building_limit(building_id, lv) != 1:
 			return false
 	return true
 
-## Ya hay tantos como permite el tope de ahora (era + rango). Sin tope, false.
+## Ya hay tantos como permite el tope de ahora (Nucleo + rango). Sin tope, false.
 static func is_full(building_id: String) -> bool:
 	var limit := GameConfig.get_building_limit(building_id)
 	return limit >= 0 and Rules.count_building(building_id) >= limit
 
 ## La frase de la tarjeta llena, o "" si aun caben mas:
 ##   "Solo puede haber uno."                                  (unicos)
-##   "Máximo 5 en esta era. En la era 2 podrás tener 8."      (sube con la era)
+##   "Máximo 5 con tu Núcleo. Sube el Núcleo a nivel 3 para tener 8." (sube)
 ##   "Ya tienes el máximo: 6."                                (ya no sube)
 static func limit_full_text(building_id: String) -> String:
 	if not is_full(building_id):
@@ -52,7 +53,7 @@ static func limit_full_text(building_id: String) -> String:
 		return Tr.t("TOPE_FULL_UNIQUE")
 	var next := GameConfig.next_building_limit(building_id)
 	if not next.is_empty():
-		return Tr.t("TOPE_FULL_NEXT_ERA") % [limit, int(next["era"]), int(next["limit"])]
+		return Tr.t("TOPE_FULL_NEXT_CORE") % [limit, int(next["core_level"]), int(next["limit"])]
 	return Tr.t("TOPE_FULL_MAX") % limit
 
 ## Lo que se puede hacer con la tarjeta llena: mejorar los que hay (si se
@@ -309,6 +310,8 @@ static func help_body(id: String) -> String:
 	match id:
 		"guide_limits":
 			return limits_page()
+		"guide_core":
+			return core_page()
 		"guide_upgrades":
 			return upgrades_page()
 		"guide_eras":
@@ -319,9 +322,10 @@ static func help_body(id: String) -> String:
 			return workshop_page()
 	return ""
 
-## Topes de edificios: la tabla de GameConfig en palabras.
+## Topes de edificios: la tabla de GameConfig en palabras, una cifra por nivel
+## del Nucleo (1.2: el Nucleo sustituye a los topes por era).
 static func limits_page() -> String:
-	var lines: Array = [Tr.t("TOPE_PAGE_LIMITS_INTRO"), ""]
+	var lines: Array = [Tr.t("TOPE_PAGE_LIMITS_INTRO") % GameConfig.core_level_max, ""]
 	var fixed: Array = []
 	var unique: Array = []
 	var free: Array = []
@@ -330,8 +334,8 @@ static func limits_page() -> String:
 		if d.id == Rules.ROAD_ID:
 			continue
 		var row: Array = []
-		for era in range(1, GameConfig.max_era() + 1):
-			row.append(GameConfig.base_building_limit(d.id, era))
+		for lv in range(1, GameConfig.core_level_max + 1):
+			row.append(GameConfig.base_building_limit(d.id, lv))
 		if int(row[0]) < 0:
 			# Sin maximo y sin ser decoracion (Astillero, Aerodromo): se nombran,
 			# para que nadie busque su tope.
@@ -354,6 +358,13 @@ static func limits_page() -> String:
 	if not free.is_empty():
 		lines.append(Tr.t("TOPE_PAGE_LIMITS_FREE_BUILDINGS") % ", ".join(free))
 	lines.append(Tr.t("TOPE_PAGE_LIMITS_FREE"))
+	var opens: Array = []
+	for lv in range(2, GameConfig.core_level_max + 1):
+		for id in GameConfig.core_unlocks_at(lv):
+			if Rules.load_building_data(String(id)) != null:
+				opens.append("%s (%d)" % [_building_name(String(id)), lv])
+	if not opens.is_empty():
+		lines.append(Tr.t("TOPE_PAGE_LIMITS_CORE_OPENS") % ", ".join(opens))
 	lines.append("")
 	lines.append(Tr.t("TOPE_PAGE_LIMITS_RANK"))
 	lines.append(Tr.t("TOPE_PAGE_LIMITS_FULL"))
@@ -527,21 +538,77 @@ static func guide_rules_line(data: BuildingData) -> String:
 	else:
 		var row: Array = []
 		var texts: Array = []
-		for era in range(1, GameConfig.max_era() + 1):
-			var v := GameConfig.base_building_limit(data.id, era)
+		for lv in range(1, GameConfig.core_level_max + 1):
+			var v := GameConfig.base_building_limit(data.id, lv)
 			row.append(v)
 			texts.append(str(v))
 		if row.min() == row.max():
 			parts.append(Tr.t("TOPE_GUIDE_LIMIT_FIXED") % int(row[0]))
 		else:
-			parts.append(Tr.t("TOPE_GUIDE_LIMIT_ERAS") % " · ".join(texts))
+			parts.append(Tr.t("TOPE_GUIDE_LIMIT_CORE") % " · ".join(texts))
+	if not data.is_core and GameConfig.core_level_unlock(data.id) > 1:
+		parts.append(Tr.t("LBL_CORE_LOCK") % GameConfig.core_level_unlock(data.id))
+	if GameConfig.needs_blueprint(data.id):
+		parts.append(Rules.blueprint_lock_text(data.id).trim_suffix("."))
 	if not data.is_core and not data.is_decoration:
 		parts.append(Tr.t("TOPE_GUIDE_ERA") % build_era(data))
 	var reqs := Rules.prerequisite_names(data.id) if not GameConfig.get_prerequisites(data.id).is_empty() else ""
 	if reqs != "":
 		parts.append(Tr.t("TOPE_GUIDE_NEEDS") % reqs)
-	if Rules.upgrade_does_something(data):
+	if data.is_core:
+		# El Nucleo sube hasta el 5 (1.2): su propia cuenta de niveles.
+		parts.append(Tr.t("TOPE_GUIDE_UPGRADES") % GameConfig.core_level_max)
+	elif Rules.upgrade_does_something(data):
 		parts.append(Tr.t("TOPE_GUIDE_UPGRADES") % GameConfig.max_building_level)
 	elif data.id != Rules.ROAD_ID:
 		parts.append(Tr.t("TOPE_GUIDE_NO_UPGRADE"))
 	return " · ".join(parts)
+
+# ══════════════════════════════════════════════════════════════════════
+# ── El Nucleo y los planos (1.2, feat/nucleo-y-planos) ──
+# ══════════════════════════════════════════════════════════════════════
+
+## La pagina del Nucleo: que es subirlo, que pide, cuesta y abre cada nivel, y
+## de que mision sale cada plano. Todo leido de GameConfig.
+static func core_page() -> String:
+	var top := GameConfig.core_level_max
+	var lines: Array = [Tr.t("TOPE_PAGE_CORE_INTRO") % top, ""]
+	for lv in range(2, top + 1):
+		lines.append("%s %d" % [Tr.t("TOPE_PAGE_CORE_LEVEL"), lv])
+		var req: Dictionary = GameConfig.core_level_requirements.get(lv, {})
+		var needs: Array = []
+		var era := int(req.get("era", 1))
+		if era > 1:
+			needs.append(Tr.t("TOPE_PAGE_CORE_ERA") % [era, Tr.t(String(ERA_NAME_KEYS.get(era, "")))])
+		for id in req.get("buildings", []):
+			needs.append(_building_name(String(id)))
+		if not needs.is_empty():
+			lines.append(Tr.t("TOPE_PAGE_CORE_NEEDS") % ", ".join(needs))
+		var cost_parts: Array = []
+		var raw: Dictionary = GameConfig.core_level_costs.get(lv, {})
+		for rid in raw:
+			cost_parts.append("%s %s" % [_num(int(raw[rid])), Tr.res_name(String(rid))])
+		if not cost_parts.is_empty():
+			lines.append(Tr.t("TOPE_PAGE_CORE_COST") % ", ".join(cost_parts))
+		var opened: Array = []
+		for id in GameConfig.core_unlocks_at(lv):
+			if Rules.load_building_data(String(id)) != null:
+				opened.append(_building_name(String(id)))
+		if not opened.is_empty():
+			lines.append(Tr.t("TOPE_PAGE_CORE_OPENS") % ", ".join(opened))
+		lines.append("")
+	lines.append(Tr.t("TOPE_PAGE_CORE_WORKS"))
+	var bps: Array = []
+	for id in GameConfig.blueprint_required:
+		var src := GameConfig.blueprint_source(String(id))
+		if src.is_empty() or Rules.load_building_data(String(id)) == null:
+			continue
+		bps.append(Tr.t("TOPE_PAGE_CORE_BLUEPRINT_ROW") % [_building_name(String(id)),
+			Tr.t("CAMP_NAME_" + String(src["domain"]).to_upper()), int(src["mission"])])
+	lines.append("")
+	lines.append(Tr.t("TOPE_PAGE_CORE_BLUEPRINTS"))
+	if bps.is_empty():
+		lines.append(Tr.t("TOPE_PAGE_CORE_BLUEPRINTS_NONE"))
+	else:
+		lines.append_array(bps)
+	return "\n".join(lines)

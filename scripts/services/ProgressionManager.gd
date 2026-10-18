@@ -8,6 +8,7 @@ extends Node
 ## FinalAudit itself never emits (constitution, principles I and IV).
 
 const FinalAuditScript := preload("res://scripts/combat/FinalAudit.gd")
+const CoreLevel := preload("res://scripts/services/CoreLevel.gd")
 
 var current_era := 1
 var current_phase: int = GameConfig.Phase.FOUNDATION
@@ -23,10 +24,21 @@ var _start_time := 0.0
 ## pared menos la de creacion, asi que una partida de tres horas repartida en una
 ## semana ponia "7 dias jugados". Viaja en el guardado.
 var _played_seconds := 0.0
+## Nivel del Nucleo (1.2, feat/nucleo-y-planos): 1..GameConfig.core_level_max.
+## Sustituye a los topes por era (GameConfig.get_building_limit lo lee). Viaja
+## en el guardado ("progression" -> "core"); una partida anterior lo deriva de
+## su era y sus edificios (CoreLevel.derive_level).
+var core_level := 1
+## La obra para subir el Nucleo: {"to", "remaining", "duration"} o {} si no hay.
+## Corre con el juego en marcha (como el reloj de partida) y sigue fuera del
+## juego (apply_offline_core). El Nucleo trabaja igual mientras sube.
+var _core_upgrade: Dictionary = {}
 
 func _process(delta: float) -> void:
 	if GameManager.is_started():
 		_played_seconds += delta
+		if not _core_upgrade.is_empty():
+			_tick_core_upgrade(delta)
 
 func get_played_seconds() -> float:
 	return _played_seconds
@@ -41,6 +53,9 @@ func _ready() -> void:
 	# Tres campanas (feat/tres-campanas): completar una puede ser lo ultimo que
 	# faltaba para el Ataque Final (en el orden que sea).
 	EventBus.campaign_completed.connect(func(_domain): try_summon_final_audit())
+	# Partida nueva: el Nucleo recien puesto lleva el nivel de esta partida
+	# (Sandbox arranca al maximo).
+	EventBus.game_new_started.connect(func(): _sync_core_node())
 
 # ── Era System ──
 
@@ -402,6 +417,7 @@ func get_save_data() -> Dictionary:
 		"start_time": _start_time,
 		"played_seconds": _played_seconds,
 		"final_audit": final_audit.to_dict() if final_audit != null else {},
+		"core": {"level": core_level, "upgrade": _core_upgrade.duplicate()},
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -424,6 +440,7 @@ func load_save_data(data: Dictionary) -> void:
 	# Recalculate phase from milestones if not saved (backwards compat)
 	if not data.has("current_phase"):
 		_recalculate_phase()
+	_load_core(data.get("core", null))
 
 func _recalculate_phase() -> void:
 	current_phase = GameConfig.Phase.FOUNDATION
@@ -442,6 +459,10 @@ func reset() -> void:
 	_stats = {"buildings_built": 0, "resources_gathered": 0, "trades_completed": 0}
 	_start_time = Time.get_unix_time_from_system()
 	_played_seconds = 0.0
+	# Tira la obra del Nucleo, no la liquida ni la devuelve (CLAUDE.md, "Adding
+	# Persistent State"). Sandbox: todo abierto, el Nucleo al maximo.
+	core_level = GameConfig.core_level_max if GameMode.all_unlocked() else 1
+	_core_upgrade = {}
 
 # ── Helpers ──
 
@@ -477,3 +498,113 @@ func invoke_final_audit() -> bool:
 	EventBus.sandbox_invoked.emit("audit")
 	EventBus.notification_posted.emit(Tr.t("MSG_SANDBOX_AUDIT_AWAITING"), "warning", UITheme.WARNING)
 	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Nucleo con niveles (1.2, feat/nucleo-y-planos) ──
+# ══════════════════════════════════════════════════════════════════════
+
+func is_core_upgrading() -> bool:
+	return not _core_upgrade.is_empty()
+
+## El nivel al que sube la obra en curso, o 0 si no hay.
+func core_upgrade_target() -> int:
+	return int(_core_upgrade.get("to", 0))
+
+func core_upgrade_remaining() -> float:
+	return maxf(0.0, float(_core_upgrade.get("remaining", 0.0)))
+
+## 0..1 de la obra en curso (1 sin obra).
+func core_upgrade_progress() -> float:
+	if _core_upgrade.is_empty():
+		return 1.0
+	var dur: float = float(_core_upgrade.get("duration", 0.0))
+	if dur <= 0.0:
+		return 1.0
+	return clampf(1.0 - core_upgrade_remaining() / dur, 0.0, 1.0)
+
+## Empieza a subir el Nucleo al siguiente nivel: comprueba lo mismo que dice la
+## ficha (CoreLevel.block_lines), cobra y arranca la obra. false si no se puede
+## (y no cobra nada).
+func start_core_upgrade() -> bool:
+	if not CoreLevel.can_start():
+		return false
+	var to := core_level + 1
+	if not ResourceManager.spend_cost(GameConfig.get_core_upgrade_cost(to)):
+		return false
+	var dur := GameConfig.get_core_upgrade_duration(to)
+	_core_upgrade = {"to": to, "remaining": dur, "duration": dur}
+	EventBus.core_upgrade_started.emit(to)
+	var node := core_node()
+	if node != null:
+		FloatingText.spawn_on(node, Tr.t("CORE_FLOAT_STARTED"), Color(0.3, 0.8, 1.0))
+	if dur <= 0.0:
+		_finish_core_upgrade()
+	return true
+
+func _tick_core_upgrade(delta: float) -> void:
+	_core_upgrade["remaining"] = core_upgrade_remaining() - delta
+	if float(_core_upgrade["remaining"]) <= 0.0:
+		_finish_core_upgrade()
+
+## Lo que paso fuera del juego cuenta para la obra del Nucleo, como para las
+## obras de los edificios (ProductionManager.apply_offline_progression).
+func apply_offline_core(elapsed: float) -> void:
+	if _core_upgrade.is_empty() or is_nan(elapsed) or elapsed <= 0.0:
+		return
+	_tick_core_upgrade(minf(elapsed, GameConfig.max_offline_seconds))
+
+func _finish_core_upgrade() -> void:
+	var to: int = core_upgrade_target()
+	_core_upgrade = {}
+	core_level = clampi(maxi(core_level, to), 1, GameConfig.core_level_max)
+	var node := _sync_core_node()
+	EventBus.core_level_changed.emit(core_level)
+	if node != null:
+		FloatingText.spawn_on(node, Tr.t("LBL_UPGRADE_COMPLETE"), Color(0.3, 0.8, 1.0))
+		# La ficha, el sonido, el rango (XP de mejora) y el guardado ya escuchan
+		# esto: el Nucleo sube como cualquier mejora.
+		EventBus.building_upgrade_completed.emit(node, core_level)
+	var text := Tr.t("NOTIF_CORE_LEVEL_UP") % core_level
+	var opened := CoreLevel.opened_names(core_level)
+	if opened != "":
+		text += " " + Tr.t("NOTIF_CORE_OPENS") % opened
+	EventBus.notification_posted.emit(text, "info", Color(0.3, 0.8, 1.0))
+
+## El nodo del Nucleo en la rejilla, o null (pruebas sin escena).
+func core_node() -> Node:
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info.get("data")
+		if data != null and data.is_core:
+			return info.get("node")
+	return null
+
+## Pone el nivel en el nodo del Nucleo (meta "level", la que leen la ficha y la
+## vista 2D) y su aspecto 3D (las piezas de cada nivel, CoreTrim). Devuelve el nodo.
+func _sync_core_node() -> Node:
+	var node := core_node()
+	if node == null or not is_instance_valid(node):
+		return null
+	node.set_meta("level", core_level)
+	ProductionManager.apply_level_visual(node, core_level)
+	if node is CanvasItem:
+		(node as CanvasItem).queue_redraw()
+	return node
+
+## Carga idempotente: lo guardado sustituye a todo. Sin la clave (partida
+## anterior a los niveles del Nucleo) se deriva de la era y los edificios, que
+## ya estan cargados (GameManager restaura los edificios antes que esto).
+func _load_core(raw: Variant) -> void:
+	_core_upgrade = {}
+	if raw is Dictionary and (raw as Dictionary).has("level"):
+		var core: Dictionary = raw
+		core_level = clampi(int(core.get("level", 1)), 1, GameConfig.core_level_max)
+		var up: Variant = core.get("upgrade", {})
+		if up is Dictionary and int((up as Dictionary).get("to", 0)) > core_level:
+			var to: int = mini(int(up["to"]), GameConfig.core_level_max)
+			var dur: float = maxf(0.0, float(up.get("duration", 0.0)))
+			_core_upgrade = {"to": to, "duration": dur,
+				"remaining": clampf(float(up.get("remaining", 0.0)), 0.0, dur)}
+	else:
+		core_level = GameConfig.core_level_max if GameMode.all_unlocked() else CoreLevel.derive_level()
+	_sync_core_node()
+	EventBus.core_level_changed.emit(core_level)
