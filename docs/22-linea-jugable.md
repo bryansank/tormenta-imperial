@@ -777,3 +777,75 @@ con la misma carga.
 - Pendiente: que `line_probe_player` sepa colocar el Muelle (orilla + banco de peces) y
   el Astillero (costa), y medir con diez semillas.
 
+
+## 13. Medido con extras de la 1.1 (rama `feat/sonda-costa`)
+
+La línea (§1-§12) la juega un jugador que sigue ¿QUÉ HACER?, y ¿QUÉ HACER? no pide nada de
+la 1.1: ni Muelle de pesca (solo como apoyo de comida cuando no cabe otra Granja), ni
+edificios útiles, ni Astillero o Aeródromo (salen en la segunda línea, `fleet_step()`), ni
+barcos o aviones. Para saber cómo rinden en una partida, la sonda tiene un **jugador
+completo**: `--extras=1` (o `--player=completo`). Sin la opción la sonda juega exactamente
+como antes (el código nuevo no corre), así que las dos tandas se comparan.
+
+### Qué hace el jugador completo
+
+Sigue la línea igual (el mismo paso de ¿QUÉ HACER? en cada vistazo) y, después, **una**
+acción de extras por vistazo, por este orden:
+
+1. **Misión de costa** cada 6 min como mucho: una oferta del tablón con agua
+   (`CombatManager.offer_has_water`), en calma, a más de 5 min del siguiente Aviso y sin
+   asedio convocado. Columna: barcos y aviones al frente, más la tierra que sobre de la
+   guarnición (en casa quedan al menos 2 de tierra y la mitad). Solo si la columna no es
+   más floja que el enemigo más duro (`sortie_preview`), con "resolver solo" si el juego
+   lo deja; si la oferta es de varios combates, elige la primera carta del draft y sigue.
+2. **Muelle de pesca** junto a un banco de peces (la regla del juego, `buildable_spots_near`):
+   ya, aunque cueste, si la comida por delante baja de 8 min; si no, hasta dos mientras sea
+   barato.
+3. **Astillero / Aeródromo** cuando los propone `Objectives.fleet_step()` (era 2 / era 3),
+   en calma. El Astillero en una casilla de costa, girado hacia el agua con
+   `Rules.steps_facing_water` (el mismo giro que el fantasma del juego).
+4. **Edificios útiles**, cada 20 s, uno a la vez: Molino con dos o más Granjas a su radio
+   (uno por cada dos Granjas, hasta dos); Silo y Depósito de combustible si la bolsa pasa
+   del 80 % y hay comida (>150) o petróleo (>200) que sacar de ella; Taberna a radio de dos
+   casas con más de 10 min de comida por delante; Pozo (junto a la producción) y Faro (en la
+   costa si cabe) cuando la Tormenta de verdad está armada; Carpintería desde la era 2.
+5. **Flota**: era 2, una Cañonera y una Lancha; era 3, dos Cañoneras, una Lancha, dos Cazas y
+   un Bombardero. En calma, sin pasar del tope de tropa (`ArmyManager.can_train`). Los
+   materiales que pida (tablones, vigas, combustible) se fabrican antes en su taller.
+
+Nada de trampas: cada obra pasa por rango, tope, requisitos, obreros y coste (lo mismo que
+`purchase_block_message`), el hueco por `evaluate_placement`, la carretera se paga a 1 oro
+el tramo y se coloca con `_try_place` como un clic. Para no retrasar la línea, un extra
+solo se paga si el paso principal sigue pudiéndose pagar después, o si no pasa del 25 % de
+lo que hay de cada recurso (salvo el Muelle con hambre), y siempre con el colchón de la
+tropa.
+
+### Cómo lanzarlo
+
+Con un `override.cfg` de carpeta propia (por ejemplo `TI_sonda_costa`, ver §10), headless:
+
+```
+godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5
+godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5 --extras=1
+```
+
+Además de lo de siempre, cada semilla imprime dos líneas `1.1 …` y, al final, una tabla
+"extras" con:
+
+- minuto en que se termina el **primer** edificio de cada tipo nuevo (Muelle, Molino, Silo,
+  Taberna, Carpintería, Pozo, Faro, Depósito, Astillero, Aeródromo);
+- **comida recogida del Muelle** (y la que se estropeó en él);
+- flota entrenada por tipo;
+- **misiones de costa** lanzadas / ganadas / perdidas / abandonadas, y las descartadas por
+  columna floja;
+- duración de era 1, 2 y 3, minuto de la victoria y **huecos > 3 min sin decidir**;
+- "sin hueco": cuántas veces un extra no encontró sitio (pista de mapa o regla rota).
+
+La tabla de la línea de siempre se imprime igual en los dos modos: comparar era 2, era 3,
+CG nv3, victoria, huecos y bolsa llena columna a columna.
+
+### Medido
+
+Pendiente de la ronda final de pruebas (2026-10-18: primero se implementa, se prueba al
+final). Rellenar aquí las dos tablas (normal y `--extras=1`, semillas 1-5) y lo que se vea
+roto o desequilibrado.
