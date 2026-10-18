@@ -76,12 +76,17 @@ func test_build_is_always_on_screen() -> void:
 	assert_float(btn.custom_minimum_size.y).is_greater_equal(56.0)
 	assert_float(btn.custom_minimum_size.x).is_greater_equal(200.0)
 
+## Hitos y eras ya no pintan placa propia: van a la columna de avisos como
+## "achievement" (NotificationPanel, 2026-10-18) y alli hacen cola.
 func test_milestone_and_era_toasts_queue_up() -> void:
 	var progress: CanvasLayer = auto_free(load("res://scenes/ui/ProgressPanel.tscn").instantiate())
 	add_child(progress)
+	var notes: CanvasLayer = auto_free(load("res://scenes/ui/NotificationPanel.tscn").instantiate())
+	add_child(notes)
+	await await_idle_frame()
 	progress._show_toast("uno", UITheme.ACCENT)
 	progress._show_toast("dos", UITheme.INFO)
 	progress._show_toast("tres", UITheme.INFO)
-	var on_screen := progress.find_children("MilestoneToast*", "PanelContainer", false, false).size()
-	assert_int(on_screen).is_equal(1)
-	assert_int(progress.pending_toasts()).is_equal(3)
+	assert_int(progress.find_children("MilestoneToast*", "PanelContainer", true, false).size()).is_equal(0)
+	assert_int(notes.shown_toasts().size()).is_less_equal(notes.MAX_TOASTS)
+	assert_int(notes.shown_toasts().size() + notes.held_count()).is_equal(3)

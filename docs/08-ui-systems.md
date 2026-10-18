@@ -47,7 +47,7 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 ### ProgressPanel (`scripts/ui/ProgressPanel.gd`)
 - **Position:** Center overlay, opened from ☰ MENÚ → COLONIA → Progreso
 - **Shows:** Current era, progress bar, 9 milestones with [X]/[ ] checkmarks
-- **Behavior:** Updates checkmarks on milestone completion. Milestone and era toasts go through a queue: one plate at a time at 30 % of the screen height, away from the centre column (they used to stack on top of each other and of the objective).
+- **Behavior:** Updates checkmarks on milestone completion. Milestone and era notices are alerts of category `achievement` in NotificationPanel's single column since 2026-10-18 (they used to be a plate of their own at 30 % of the screen height; docs/21 §14).
 - **Layer:** 11
 
 ### VictoryScreen (`scripts/ui/VictoryScreen.gd`)
@@ -82,7 +82,7 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 
 ### RankPanel (`scripts/ui/RankPanel.gd`) — governor rank
 - **Badge:** top-right, left of "☰ MENÚ" (own slot `rank_badge` in `UILayoutConfig`; under the menu button on a narrow screen, without the title). The colony flag, the rank number, the title and a thin XP bar. Registered in `HudRegistry` as `RankPanel` (hideable and movable). Tapping it opens the card
-- **Rank-up toast:** "▲ 5 · Alcalde" and one short line per reward ("Fuente", "+1 % producción", "bandera nueva"), under the badge, ~4 s. Sound `rank_up` (AudioManager, its own clip `rank_up.ogg` since 2026-10-12; no longer an alias of `era_up`)
+- **Rank-up notice:** one sentence, "▲ 5 · Alcalde: + Fuente, + 1 % producción" (`rank_up_text`), sent as an `achievement` alert to NotificationPanel's column (2026-10-18; it used to be a card under the badge). Sound `rank_up` (AudioManager, its own clip `rank_up.ogg` since 2026-10-12; no longer an alias of `era_up`)
 - **COLONIA card** (☰ MENÚ → COLONIA → Colonia, `RankPanel.modal` in `center_modal`): rank and XP, what the next rank brings, and the flag and colour galleries; what is not earned yet is disabled with a padlock and the rank
 - **Layer:** 11. Reads everything from `RankManager`; holds no state. Docs: [06-progression-victory.md](06-progression-victory.md) §Governor rank
 
@@ -93,9 +93,9 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - All built with `ModalKit` (`scripts/ui/ModalKit.gd`), which only places UITheme pieces
 
 ### NotificationPanel (`scripts/ui/NotificationPanel.gd`)
-- **Position:** bottom-left toasts, left side log panel (under the resources)
+- **Position:** the alert column top-left under the resources (slot `toast_area`, stacked after the hidden log), left side log panel (under the resources)
 - **Shows:** toast notifications and the scrollable activity log. The old status card under the resources ("Trabajadores: 26 de 32", "En su puesto…", "Moral 72 %…") was removed in 2026-10: workers and morale are chips of the ResourceHUD row. What was urgent in it already arrives as a toast from `PopulationManager` (no wood, no gold, low morale, starvation). The objective strip at the top centre ("Avanza hacia la Victoria Imperial. Construye el Cuartel General y mejóralo.") was removed on 2026-10-05: it was a per-phase sentence that repeated, less precisely, what ¿QUÉ HACER? says (`Objectives.next_step()`), which is now the only place for the next step. Its slot (`top_center`), its HUD entry and the help tip under it (`tip_center`) went with it; an old `settings.cfg` that hides or moves it loads without it (`HudRegistry.RETIRED`), and the helps that pointed at it (`callout_objective`, the guide's last step, the PROGRESO block) point at ¿QUÉ HACER?: its ☰ MENÚ entry when the menu is open, the ☰ MENÚ button otherwise (`HelpTargets.objective_entry`).
-- **Behavior:** Listens to `EventBus.notification_posted`. Only `warning`, `danger` and `notice` become toasts (`shows_toast()`); routine news ("Camino construido", the population grew) goes to the log only. Toasts auto-fade after 4 seconds, at most 3 at a time (1 on a narrow screen), and drop under the CONSTRUIR window while it is open. The log stores the last 50 entries and opens from ☰ MENÚ → COLONIA → Registro (`open_log()`); the old REGISTRO DE AVISOS button on the HUD is gone. Colours come from `UITheme.notice_color(category)`.
+- **Behavior:** Listens to `EventBus.notification_posted`. Only `warning`, `danger`, `notice`, `combat` and `achievement` become alerts (`shows_toast()`); routine news ("Camino construido", the population grew) goes to the log only. Alerts (docs/21 §14): at most 2 at a time (1 on a phone), the rest queued in `AlertQueue` with repeats grouped ("×3"), icon + one sentence + ✕, gone after 5 s (danger 7 s) with no animation; while a window, the board or the tutorial card is over them they wait and only one danger shows, small. The log stores the last 50 entries and opens from ☰ MENÚ → COLONIA → Registro (`open_log()`); the old REGISTRO DE AVISOS button on the HUD is gone. Colours come from `UITheme.notice_color(category)`.
 - **Layer:** 11
 
 ### Status badge (`scripts/buildings/BuildingStatusBadge.gd`, `scripts/view2d/StatusBadge2D.gd`)

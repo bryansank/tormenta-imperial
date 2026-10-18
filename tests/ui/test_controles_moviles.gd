@@ -127,8 +127,10 @@ func test_what_sits_over_the_controls_moves_up_with_them() -> void:
 	assert_float(UILayoutConfig.touch_controls_lift(0.85)).is_equal(0.0)
 	assert_float(UILayoutConfig.touch_controls_lift(1.5)).is_greater(0.0)
 	var slots: Dictionary = UILayoutConfig.SLOTS
-	# Apaisado: avisos y globos de las esquinas de abajo suben; CONSTRUIR (centro) no.
-	assert_bool(UILayoutConfig.sits_above_touch_controls("toast_area", slots["toast_area"], false)).is_true()
+	# Apaisado: los globos de las esquinas de abajo suben; CONSTRUIR (centro) no.
+	# Los avisos ya no viven abajo (columna izquierda, 2026-10-18): no suben,
+	# NotificationPanel.capacity() deja uno si no caben dos sobre la cruceta.
+	assert_bool(UILayoutConfig.sits_above_touch_controls("toast_area", slots["toast_area"], false)).is_false()
 	assert_bool(UILayoutConfig.sits_above_touch_controls("tip_above_dpad", slots["tip_above_dpad"], false)).is_true()
 	assert_bool(UILayoutConfig.sits_above_touch_controls("tip_bottom_right", slots["tip_bottom_right"], false)).is_true()
 	assert_bool(UILayoutConfig.sits_above_touch_controls("bottom_center", slots["bottom_center"], false)).is_false()
@@ -150,12 +152,12 @@ func test_lift_applies_with_touch_controls_on() -> void:
 	GameConfig.ui_touch_controls_size = "xlarge"
 	var lift: float = UILayoutManager.touch_controls_lift()
 	assert_float(lift).is_greater(0.0)
-	var toast: Dictionary = UILayoutManager.get_slot("toast_area")
-	if not UILayoutManager.is_column_narrow():
-		assert_float(float(toast["margin"]["bottom"])).is_equal(
-			float(UILayoutConfig.SLOTS["toast_area"]["margin"]["bottom"]) + lift)
+	# El globo de la camara, encima de la cruceta (los avisos ya no viven abajo).
+	var tip: Dictionary = UILayoutManager.get_slot("tip_above_dpad")
+	assert_float(float(tip["margin"]["bottom"])).is_equal(
+		float(UILayoutConfig.SLOTS["tip_above_dpad"]["margin"]["bottom"]) + lift)
 	# La constante del slot no se toca (get_slot devuelve una copia).
-	assert_int(int(UILayoutConfig.SLOTS["toast_area"]["margin"]["bottom"])).is_equal(200)
+	assert_int(int(UILayoutConfig.SLOTS["tip_above_dpad"]["margin"]["bottom"])).is_equal(200)
 
 # ── Ajustes en tablet y movil ──
 

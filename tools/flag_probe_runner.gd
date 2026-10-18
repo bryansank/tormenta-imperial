@@ -1,9 +1,12 @@
 extends Node
 ## Sonda de la bandera y el nombre del pais. Arranca una partida NUEVA en la
-## vista pedida, pone un Cuartel General junto al Nucleo y captura:
+## vista pedida, pone junto al Nucleo un Cuartel General (sin bandera) y dos
+## Cuarteles (con ella): uno derecho y otro girado 90 grados entre vecinos
+## (Casa, Aserradero, Almacen), y captura:
 ##
 ##   hud              la insignia con el nombre
-##   map              los mastiles del Nucleo y del Cuartel General
+##   map              los mastiles del Nucleo y de los Cuarteles; el CG sin mastil
+##   barracks         de cerca, los dos Cuarteles (derecho y girado con vecinos)
 ##   card             la tarjeta COLONIA de ☰ MENU
 ##   editor_patterns / editor_emblems / editor_colors   el editor (ColonyIdentityPanel)
 ##   editor_new       el paso de Nueva partida (rango 1, con "Saltar")
@@ -24,6 +27,7 @@ const OUT_DIR := "res://docs/media/dev/flag"
 var _tag := ""
 var _settings_snap: Dictionary
 var _args: PackedStringArray
+var _barracks_cell := Vector2i.ZERO
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -50,6 +54,7 @@ func _run() -> void:
 	GameConfig.dev_mode = false
 	GameConfig.ui_device_profile = _arg("profile", "auto")
 	GameConfig.ui_hud_hidden = []
+	GameConfig.ui_helper_visible = false  # sin globos de ayuda tapando el mapa
 	GameConfig.ui_layout = {}
 	DeviceProfile.apply_all()
 	await _frames(5)
@@ -78,11 +83,30 @@ func _run() -> void:
 	var hq_cell := center + Vector2i(3, -4)
 	var hq_node: Node = placer.place_building_at(hq, hq_cell)
 	print("flag_probe: hq=", hq_node)
+	# Dos Cuarteles: uno derecho y otro girado 90 grados entre vecinos, en un
+	# hueco libre de 6x6 (el mapa sale distinto cada partida).
+	var bar: BuildingData = load("res://data/buildings/barracks.tres")
+	var spot := _free_block(center, Vector2i(6, 6), [hq_cell])
+	var b1: Node = placer.place_building_at(bar, _free_block(center, Vector2i(2, 2), [hq_cell, spot]))
+	var b2: Node = placer.place_building_at(bar, spot + Vector2i(2, 2), 1)
+	for n in [["house", Vector2i(0, 2)], ["sawmill", Vector2i(4, 2)],
+			["warehouse", Vector2i(2, 4)], ["house", Vector2i(2, 0)]]:
+		placer.place_building_at(load("res://data/buildings/%s.tres" % n[0]), spot + n[1])
+	_barracks_cell = spot + Vector2i(3, 3)
+	print("flag_probe: barracks=", b1, " ", b2, " spot=", spot)
 	await _frames(20)
 	await _shot("hud")
-	_focus(main, center + Vector2i(3, -2), view2d)
+	_focus(main, center + Vector2i(0, -1), view2d)
 	await _frames(40)
 	await _shot("map")
+	_focus(main, _barracks_cell, view2d, 18.0)
+	await _frames(40)
+	await _shot("barracks")
+	_focus(main, _barracks_cell, view2d, 18.0, 135.0)
+	await _frames(40)
+	await _shot("barracks_yaw")
+	_focus(main, center + Vector2i(3, -2), view2d)
+	await _frames(20)
 
 	var panel: Node = main.get_node("RankPanel")
 	panel.open()
@@ -122,13 +146,30 @@ func _run() -> void:
 	await _shot("report")
 	_finish()
 
-func _focus(main: Node, cell: Vector2i, view2d: bool) -> void:
-	if view2d:
-		return  # La vista 2D ya arranca centrada en el Nucleo.
+## El hueco libre de `size` mas cercano a `center` (busca en anillos) que no
+## pise ninguna de las esquinas de `avoid` (2 celdas de margen alrededor).
+func _free_block(center: Vector2i, size: Vector2i, avoid: Array) -> Vector2i:
+	for r in range(3, 16):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var c := center + Vector2i(dx, dy)
+				var clash := false
+				for a in avoid:
+					if Rect2i(c - Vector2i(2, 2), size + Vector2i(4, 4)).intersects(Rect2i(a, Vector2i(6, 6))):
+						clash = true
+				if not clash and GridManager.can_place(c, size):
+					return c
+	return center + Vector2i(-6, 3)
+
+## yaw en grados (como MonumentalCamera).
+func _focus(main: Node, cell: Vector2i, view2d: bool, distance: float = 34.0, yaw: float = 0.0) -> void:
 	var world := GridManager.cell_to_world(cell)
-	var cam3: Node = main.get_node_or_null("MonumentalCamera")
+	# Las dos camaras guardan el estado en el mismo formato (mundo x/z, yaw, distancia).
+	var cam3: Node = main.get_node_or_null("Camera2D" if view2d else "MonumentalCamera")
 	if cam3 != null:
-		cam3.set_state({"target_x": world.x, "target_y": world.z, "yaw": 0.0, "distance": 34.0})
+		cam3.set_state({"target_x": world.x, "target_y": world.z, "yaw": yaw, "distance": distance})
 
 ## Todas las piezas en una lamina: cada fondo, cada emblema y unas al azar.
 func _gallery() -> void:
@@ -158,6 +199,12 @@ func _close_intro(main: Node) -> void:
 	for g in get_tree().get_nodes_in_group("quick_guide"):
 		if g.has_method("close"):
 			g.call("close")
+	# Sin la tarjeta del tutorial guiado, que tapa el centro del mapa
+	# (skip_guide solo vale en dev_mode).
+	var dev := GameConfig.dev_mode
+	GameConfig.dev_mode = true
+	TutorialManager.skip_guide()
+	GameConfig.dev_mode = dev
 
 func _frames(n: int) -> void:
 	for i in range(n):

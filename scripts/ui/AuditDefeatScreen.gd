@@ -39,6 +39,8 @@ var _lost_frame: int = -1
 
 func _ready() -> void:
 	layer = LAYER
+	# Mientras se ve, los avisos esperan (NotificationPanel.is_busy).
+	add_to_group("modal_screen")
 	_setup_ui()
 	visible = false
 	EventBus.final_audit_lost.connect(_on_final_audit_lost)

@@ -18,7 +18,6 @@ const BADGE_W := 196.0
 const BADGE_W_NARROW := 118.0
 const FLAG_SMALL := Vector2(36, 24)
 const FLAG_BIG := Vector2(84, 56)
-const TOAST_HOLD := 3.5
 const CARD_W := 520.0
 
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
@@ -32,11 +31,6 @@ var _badge_flag: TextureRect
 var _badge_rank: Label
 var _badge_title: Label
 var _badge_bar: ProgressBar
-var _toast: PanelContainer = null
-var _toast_tween: Tween = null
-## Ascenso que llego con un tablero de combate abierto (la XP de ganar una pelea
-## lo provoca a menudo): [rango, recompensas]. Sale al cerrarse el tablero.
-var _held_rank: Array = []
 
 var _backdrop: ColorRect
 var _card: PanelContainer
@@ -55,7 +49,6 @@ func _ready() -> void:
 	UIManager.register_panel(self, "RankPanel.modal")
 	EventBus.governor_xp_changed.connect(_on_xp_changed)
 	EventBus.governor_rank_up.connect(_on_rank_up)
-	EventBus.encounter_closed.connect(_release_held_rank)
 	EventBus.colony_identity_changed.connect(func(_n, _s): refresh())
 	EventBus.game_load_completed.connect(refresh)
 	EventBus.game_new_started.connect(refresh)
@@ -299,70 +292,22 @@ static func reward_lines(rewards: Dictionary) -> Array:
 
 # ── Aviso de ascenso ──
 
+## El ascenso va a la columna de avisos (NotificationPanel, "achievement",
+## 2026-10-18) en una frase: "▲ 3 · Maestro de obras: + Jardin, + Bandera
+## nueva". Alli espera si hay una ventana o el tablero abiertos.
 func _on_rank_up(rank: int, rewards: Dictionary) -> void:
 	refresh()
-	if CombatManager.is_board_open():
-		# El ultimo manda: dos ascensos en una pelea dicen el rango final.
-		_held_rank = [rank, rewards]
-		return
 	show_rank_toast(rank, rewards)
 
-func held_rank() -> int:
-	return int(_held_rank[0]) if not _held_rank.is_empty() else 0
-
-func _release_held_rank() -> void:
-	if _held_rank.is_empty() or CombatManager.is_board_open():
-		return
-	var item: Array = _held_rank
-	_held_rank = []
-	show_rank_toast(int(item[0]), item[1])
-
 func show_rank_toast(rank: int, rewards: Dictionary) -> void:
-	if _toast != null and is_instance_valid(_toast):
-		_toast.queue_free()
-	if _toast_tween != null and _toast_tween.is_valid():
-		_toast_tween.kill()
-	_toast = PanelContainer.new()
-	_toast.name = "RankToast"
-	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_toast.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2, true))
-	var col := VBoxContainer.new()
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 2)
-	_toast.add_child(col)
-	var head := UITheme.make_label(Tr.t("FMT_RANK_UP") % [rank, Tr.t(GameConfig.rank_title_key(rank))], "section", UITheme.ACCENT)
-	head.name = "RankToastTitle"
-	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(head)
-	for line in reward_lines(rewards):
-		var l := UITheme.make_label("+ " + String(line), "small", UITheme.POSITIVE)
-		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.add_child(l)
-	_root.add_child(_toast)
-	_place_toast.call_deferred()
-	_toast.modulate.a = 0.0
-	_toast_tween = create_tween()
-	_toast_tween.tween_property(_toast, "modulate:a", 1.0, 0.25)
-	_toast_tween.tween_interval(TOAST_HOLD)
-	_toast_tween.tween_property(_toast, "modulate:a", 0.0, 0.5)
-	var toast := _toast
-	_toast_tween.tween_callback(func():
-		if is_instance_valid(toast):
-			toast.queue_free())
+	EventBus.notification_posted.emit(rank_up_text(rank, rewards), "achievement", UITheme.ACCENT)
 
-## Bajo la insignia, alineado a su borde derecho y dentro de la pantalla.
-func _place_toast() -> void:
-	if _toast == null or not is_instance_valid(_toast) or _dock == null:
-		return
-	_toast.reset_size()
-	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var badge := _dock.get_global_rect()
-	var x := clampf(badge.end.x - _toast.size.x, 8.0, maxf(8.0, vp.x - _toast.size.x - 8.0))
-	var y := clampf(badge.end.y + 6.0, 8.0, maxf(8.0, vp.y - _toast.size.y - 8.0))
-	_toast.position = Vector2(x, y)
-
-func toast() -> PanelContainer:
-	return _toast if _toast != null and is_instance_valid(_toast) else null
+static func rank_up_text(rank: int, rewards: Dictionary) -> String:
+	var text := Tr.t("FMT_RANK_UP") % [rank, Tr.t(GameConfig.rank_title_key(rank))]
+	var lines := reward_lines(rewards)
+	if not lines.is_empty():
+		text += ": " + ", ".join(lines.map(func(l): return "+ " + String(l)))
+	return text
 
 # ── Abrir y cerrar (☰ MENU > COLONIA, o tocar la insignia) ──
 

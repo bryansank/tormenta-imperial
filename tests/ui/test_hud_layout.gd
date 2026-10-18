@@ -290,14 +290,14 @@ func test_a_help_tip_follows_the_panel_it_explains() -> void:
 func test_toasts_are_capped_so_they_do_not_climb_over_the_column() -> void:
 	var panel: CanvasLayer = auto_free(load("res://scenes/ui/NotificationPanel.tscn").instantiate())
 	add_child(panel)
+	await await_idle_frame()
 	for i in 6:
-		panel._show_toast("aviso %d" % i, UITheme.INFO)
-	var alive: Array = panel._toast_container.get_children().filter(func(c): return not c.is_queued_for_deletion())
-	assert_int(alive.size()).is_equal(panel.MAX_TOASTS)
+		EventBus.notification_posted.emit("aviso %d" % i, "warning", UITheme.WARNING)
+	assert_int(panel.shown_toasts().size()).is_less_equal(panel.capacity())
+	assert_int(panel.capacity()).is_less_equal(panel.MAX_TOASTS)
 	UILayoutManager._viewport_size = Vector2(400, 720)
-	panel._show_toast("uno mas", UITheme.INFO)
-	alive = panel._toast_container.get_children().filter(func(c): return not c.is_queued_for_deletion())
-	assert_int(alive.size()).is_equal(panel.MAX_TOASTS_NARROW)
+	EventBus.notification_posted.emit("uno mas", "warning", UITheme.WARNING)
+	assert_int(panel.shown_toasts().size()).is_equal(panel.MAX_TOASTS_NARROW)
 
 ## Era 3 / Sandbox: los cuatro recursos y el LIMPIAR de desarrollo ensanchan la
 ## barra por encima de sus 300 px. La pausa va a la derecha del ancho REAL y la
@@ -333,9 +333,15 @@ func test_four_resources_push_the_pause_and_the_center_column_aside(width: float
 		assert_bool(_rect(c).intersects(res_rect)).override_failure_message("%s centro=%s" % [tag, _rect(c)]).is_false()
 		assert_bool(_rect(c).intersects(_rect(status))).override_failure_message("%s centro=%s" % [tag, _rect(c)]).is_false()
 
-func test_on_a_4_3_tablet_toasts_leave_the_left_column() -> void:
+## Desde 2026-10-18 los avisos son UNA columna arriba a la izquierda, tras el
+## registro: en una tablet 4:3 (columna bajada) quedan bajo la Tormenta, en la
+## misma columna, en vez de saltar al centro encima de CONSTRUIR.
+func test_on_a_4_3_tablet_toasts_stay_in_the_left_column_under_the_storm() -> void:
 	UILayoutManager._viewport_size = Vector2(960, 720)
 	var slot := UILayoutManager.get_slot("toast_area")
-	assert_float((slot["anchor"] as Rect2).position.x).is_equal(0.5)
+	assert_float((slot["anchor"] as Rect2).position.x).is_equal(0.0)
+	assert_float((slot["anchor"] as Rect2).position.y).is_equal(0.0)
+	assert_str(String(slot["stack_after"])).is_equal("NotificationPanel.log")
+	assert_str(String(UILayoutManager.get_slot("left_panel")["stack_after"])).is_equal("StormHUD")
 	UILayoutManager._viewport_size = Vector2(1280, 720)
 	assert_float((UILayoutManager.get_slot("toast_area")["anchor"] as Rect2).position.x).is_equal(0.0)

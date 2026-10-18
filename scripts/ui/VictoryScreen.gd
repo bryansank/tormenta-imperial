@@ -7,6 +7,8 @@ var _backdrop: ColorRect
 
 func _ready() -> void:
 	layer = 20
+	# Mientras se ve, los avisos esperan (NotificationPanel.is_busy).
+	add_to_group("modal_screen")
 	EventBus.victory_achieved.connect(_on_victory_achieved)
 
 func _on_victory_achieved(stats: Dictionary) -> void:

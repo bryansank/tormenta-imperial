@@ -222,6 +222,8 @@ func _build_coach() -> void:
 
 	_card = PanelContainer.new()
 	_card.name = "CoachCard"
+	# Los avisos (NotificationPanel) esperan si la tarjeta cae sobre su columna.
+	_card.add_to_group("alert_blocker")
 	_card.mouse_filter = Control.MOUSE_FILTER_STOP
 	_card.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2, true))
 	_coach.add_child(_card)
