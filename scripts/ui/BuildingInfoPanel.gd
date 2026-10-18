@@ -402,6 +402,11 @@ func _show_building_panel() -> void:
 	# "Nv 1 · 2 trabajadores · +5 moral"
 	var level: int = _selected_node.get_meta("level", 1)
 	_level_label.text = level_line(_selected_data, level)
+	# Defensa y vida: belleza de la casa, lo que cubre un Bastion, la brigada de
+	# la Chatarreria, el Telegrafo (metas de DefenseLifeEffects, sin recalcular).
+	var effect: String = preload("res://scripts/buildings/DefenseLifeEffects.gd").info_line(_selected_node, _selected_data)
+	if not effect.is_empty():
+		_level_label.text += "\n" + effect
 	_level_label.visible = true
 
 	# Production info (with level multiplier): "+6 [madera] cada 12 s"

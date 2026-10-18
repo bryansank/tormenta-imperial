@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "bastion"
+display_name = "Bastión"
+description = "Tramo de muro: frena la Tormenta a lo que hay detrás."
+grid_size = Vector2i(2, 1)
+cost_gold = 60
+cost_steel = 25
+cost_oil = 0
+cost_wood = 30
+cost_materials = {}
+build_time = 6.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+mesh_height = 1.2
+mesh_color = Color(0.62, 0.58, 0.5, 1)
+workers_required = 0
+max_health = 320

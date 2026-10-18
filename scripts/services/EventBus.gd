@@ -506,3 +506,14 @@ signal contract_discarded(source: String, contract: Dictionary)
 ## El panel se repinta con esta.
 @warning_ignore("unused_signal")
 signal contract_board_changed()
+
+# ── Defensa y vida (feat/edificios-defensa-vida) ──
+## La belleza de algun barrio cambio (DefenseLifeEffects.refresh): una casa subio
+## o bajo de nivel. La 3D repone los adornos de las casas (BeautyTrim); la 2D lo
+## lee de la meta `beauty_level` en su firma.
+@warning_ignore("unused_signal")
+signal beauty_changed()
+## Tras la Tormenta, las brigadas de la Chatarreria despejaron ruinas: `steel`
+## de acero, `parts` repuestos y `lifted` edificios levantados.
+@warning_ignore("unused_signal")
+signal scrap_salvaged(steel: int, parts: int, lifted: int)

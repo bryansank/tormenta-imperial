@@ -150,6 +150,10 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"shipyard": _shipyard(ci, r)
 		"aerodrome": _aerodrome(ci, r)
 		"fishing_dock": _fishing_dock(ci, r)
+		# Defensa y vida (feat/edificios-defensa-vida; dibujos al final del archivo).
+		"bastion": _bastion(ci, r)
+		"scrapyard": _scrapyard(ci, r)
+		"telegraph": _telegraph(ci, r)
 		_:
 			_block(ci, r, minf(r.size.x, r.size.y) * 0.16, STONE, CONCRETE_DARK)
 	if level > 1:
@@ -1955,6 +1959,9 @@ static func fx_anchors(id: String) -> Array:
 		"fuel_depot": return [Vector2(0.84, 0.82)]
 		# Muelle de pesca: la chimenea del ahumadero.
 		"fishing_dock": return [Vector2(0.2, 0.08)]
+		# Defensa y vida: el monton de chatarra y la lampara del mastil.
+		"scrapyard": return [Vector2(0.42, 0.72)]
+		"telegraph": return [Vector2(0.8, 0.12)]
 	return [Vector2(0.5, 0.45)]
 
 # ── Parcela y atrezo (docs/03, "Parcela y atrezo") ────────────────────
@@ -3373,3 +3380,164 @@ static func _fish_shadow(ci: CanvasItem, c: Vector2, s: float, dir: Vector2) -> 
 	ci.draw_colored_polygon(body, col)
 	var tail := c - d * s * 1.3
 	ci.draw_colored_polygon(PackedVector2Array([tail, tail - d * s * 0.7 + side * s * 0.55, tail - d * s * 0.7 - side * s * 0.55]), col)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Defensa y vida (feat/edificios-defensa-vida, doc 21 §6.3 y §6.4) ──
+# ══════════════════════════════════════════════════════════════════════
+# El mismo vocabulario que la 3D (scripts/buildings/DefenseToys.gd y
+# BeautyTrim.gd): el Bastion con sus almenas gordas, la Chatarreria con su
+# electroiman, el Telegrafo con su mastil de celosia y la lampara roja.
+
+## Bastion (2x1): zarpa de tierra, el muro de sillares con su fleje de laton,
+## cinco almenas, sacos al pie del lado de fuera y la franja de peligro.
+static func _bastion(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, SITE_DIRT.darkened(0.1))
+	var wall := r.grow(-m * 0.08)
+	var top := _block(ci, wall, m * 0.32, STONE.lightened(0.04), STONE.darkened(0.18))
+	# Juntas de los sillares en el tejado del muro.
+	var horizontal := absf(_down.y) > 0.5
+	var length := top.size.x if horizontal else top.size.y
+	var n := 6
+	for i in range(1, n):
+		var t := length * float(i) / float(n)
+		if horizontal:
+			ci.draw_line(Vector2(top.position.x + t, top.position.y), Vector2(top.position.x + t, top.end.y), STONE.darkened(0.25), 1.0)
+		else:
+			ci.draw_line(Vector2(top.position.x, top.position.y + t), Vector2(top.end.x, top.position.y + t), STONE.darkened(0.25), 1.0)
+	# Fleje de laton en la pared.
+	_edge(ci, _wall, -_down, BRASS, 1.6)
+	# Almenas: cinco bloques gordos sobre el camino de ronda.
+	for i in 5:
+		var t := (float(i) + 0.5) / 5.0
+		var c := top.get_center()
+		var along := Vector2(1, 0) if horizontal else Vector2(0, 1)
+		var p := c + along * (t - 0.5) * length * 0.9
+		var s := Vector2(m * 0.22, m * 0.22)
+		_block(ci, Rect2(p - s * 0.5, s), m * 0.08, STONE.lightened(0.1), STONE.darkened(0.1))
+	# Sacos terreros al pie, del lado de la pantalla.
+	var along2 := Vector2(1, 0) if horizontal else Vector2(0, 1)
+	for i in 6:
+		var t := (float(i) + 0.5) / 6.0
+		var p := r.get_center() + along2 * (t - 0.5) * length + _down * (m * 0.42)
+		_disc(ci, p, m * 0.09, SITE_SANDBAG, OUTLINE, 1.0)
+	# Franja de peligro amarilla y negra en una punta.
+	var tip := r.get_center() - along2 * length * 0.42 + _down * m * 0.15
+	_dot(ci, tip, m * 0.06, HAZARD)
+	_dot(ci, tip + along2 * m * 0.12, m * 0.06, OIL_BLACK)
+	_dot(ci, tip + along2 * m * 0.24, m * 0.06, HAZARD)
+
+## Chatarreria: patio de grava, cobertizo de chapa, montones de chatarra
+## oxidada, el contenedor rojo y la grua con el electroiman ENORME.
+static func _scrapyard(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	_plate(ci, r, SITE_GRAVEL, OUTLINE, 1.0)
+	var shed := Rect2(r.position + r.size * Vector2(0.06, 0.06), r.size * Vector2(0.48, 0.36))
+	_block(ci, shed, m * 0.12, TILE_RED_DARK, STEEL)
+	_wall_marks(ci, _wall, 4, GUNMETAL, 0.3)
+	var box := Rect2(r.position + r.size * Vector2(0.7, 0.5), r.size * Vector2(0.24, 0.42))
+	_block(ci, box, m * 0.12, RED, RED.darkened(0.3))
+	# Montones de chatarra (planchas sueltas, oxido y gris).
+	var heap := r.position + r.size * Vector2(0.38, 0.72)
+	var bits := [Vector2(-0.12, 0.0), Vector2(0.02, -0.04), Vector2(0.12, 0.03), Vector2(-0.03, 0.08), Vector2(0.08, 0.1)]
+	for i in bits.size():
+		var p: Vector2 = heap + (bits[i] as Vector2) * m
+		var s := Vector2(m * (0.16 - 0.015 * i), m * 0.1)
+		var col := RUST if i % 2 == 0 else GUNMETAL
+		ci.draw_rect(Rect2(p - s * 0.5, s).grow(1.0), OUTLINE)
+		ci.draw_rect(Rect2(p - s * 0.5, s), col)
+	ci.draw_arc(heap + Vector2(-0.18, -0.08) * m, m * 0.07, 0.0, TAU, 10, OUTLINE, 3.0)
+	ci.draw_arc(heap + Vector2(-0.18, -0.08) * m, m * 0.07, 0.0, TAU, 10, RED, 1.8)
+	# La grua: mastil de laton, pluma y el electroiman colgando.
+	var base := r.position + r.size * Vector2(0.84, 0.2)
+	var tipg := _mast(ci, base, m * 0.5, BRASS, 3.0)
+	var jib := tipg + _left() * -m * 0.32 + _down * m * 0.1
+	ci.draw_line(tipg, jib, OUTLINE, 4.5)
+	ci.draw_line(tipg, jib, BRASS, 3.0)
+	ci.draw_line(jib, jib + _down * m * 0.18, IRON, 1.2)
+	_disc(ci, jib + _down * m * 0.2, m * 0.09, IRON, OUTLINE, 1.2)
+	_dot(ci, jib + _down * m * 0.2, m * 0.035, RED)
+
+## Telegrafo: acera de losas, la oficina de ladrillo con tejado de pizarra y su
+## rotulo de laton, y el mastil de celosia ALTO con la lampara roja encendida y
+## los hilos que bajan a la oficina.
+static func _telegraph(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	_plate(ci, r, CONCRETE, CONCRETE_DARK, 1.0)
+	var office := Rect2(r.position + r.size * Vector2(0.08, 0.36), r.size * Vector2(0.58, 0.52))
+	_gable(ci, office, m * 0.14, SLATE, TILE_RED, true)
+	_wall_marks(ci, _wall, 2, Color(GLOW, 0.9), 0.35)
+	# Rotulo de laton.
+	var plate_r := Rect2(office.get_center() + _down * m * 0.05 - Vector2(m * 0.16, m * 0.03), Vector2(m * 0.32, m * 0.06))
+	ci.draw_rect(plate_r.grow(1.0), OUTLINE)
+	ci.draw_rect(plate_r, BRASS)
+	# El mastil de celosia: dos largueros y travesanos, la bola y la lampara.
+	var base := r.position + r.size * Vector2(0.8, 0.5)
+	var h := m * 0.7
+	var tip := base - _down * h
+	var side := _left() * m * 0.05
+	for s in [-1.0, 1.0]:
+		ci.draw_line(base + side * s, tip, OUTLINE, 3.0)
+		ci.draw_line(base + side * s, tip, STEEL, 1.6)
+	for k in 5:
+		var t := float(k + 1) / 6.0
+		var p := base.lerp(tip, t)
+		var w := side * (1.0 - t)
+		ci.draw_line(p - w, p + w, STEEL, 1.2)
+	# Cruceta con aisladores.
+	var arm := base.lerp(tip, 0.78)
+	ci.draw_line(arm - _left() * m * 0.12, arm + _left() * m * 0.12, DARK_WOOD, 2.0)
+	for k in 3:
+		_dot(ci, arm + _left() * m * (-0.1 + 0.1 * k), 1.6, MARBLE)
+	# Los hilos a la oficina.
+	var hook := office.get_center() - _down * m * 0.12
+	ci.draw_line(arm, hook, Color(OIL_BLACK, 0.8), 1.0)
+	ci.draw_line(arm + _left() * m * 0.1, hook + _left() * m * 0.05, Color(OIL_BLACK, 0.8), 1.0)
+	# La lampara roja de senales (encendida) y la bola de laton.
+	_dot(ci, tip, m * 0.11, Color(RED, 0.25))
+	_disc(ci, tip, m * 0.05, RED.lightened(0.15), OUTLINE, 1.0)
+	_dot(ci, tip - _down * m * 0.06, m * 0.03, BRASS_LIGHT)
+
+## La belleza de una casa (feat/edificios-defensa-vida, como BeautyTrim en 3D),
+## sin girar (quien la llama ya quito el giro), sobre la huella `fp`: nivel 2,
+## jardineras de flores y setos en las esquinas de abajo; nivel 3, ademas, dos
+## farolas encendidas y una guirnalda de banderines arriba. Pocas ordenes de
+## dibujo y solo al repintar (la firma del edificio lleva el nivel).
+static func draw_beauty(ci: CanvasItem, fp: Vector2, level: int) -> void:
+	if level <= 1:
+		return
+	var hx := fp.x * 0.5 - 5.0
+	var y := fp.y * 0.5 - 5.0
+	# Setos en las dos esquinas de abajo.
+	for sx in [-1.0, 1.0]:
+		var c := Vector2(sx * (hx - 3.0), y - 1.0)
+		ci.draw_rect(Rect2(c - Vector2(5, 3.5), Vector2(10, 7)).grow(1.0), OUTLINE)
+		ci.draw_rect(Rect2(c - Vector2(5, 3.5), Vector2(10, 7)), LEAF_DARK)
+		ci.draw_rect(Rect2(c - Vector2(4, 3.5), Vector2(8, 2)), LEAF)
+	# Flores en fila entre los setos.
+	var n := 5
+	for i in n:
+		var x := -hx * 0.5 + float(i) * hx / float(n - 1)
+		var col := IMPERIAL_RED if i % 2 == 0 else MARBLE
+		_dot(ci, Vector2(x, y), 2.6, OUTLINE)
+		_dot(ci, Vector2(x, y), 1.8, col)
+	if level < 3:
+		return
+	# Farolas encendidas junto a los setos.
+	for sx in [-1.0, 1.0]:
+		var b := Vector2(sx * (hx - 12.0), y + 1.0)
+		ci.draw_line(b, b - Vector2(0, 9), OUTLINE, 2.6)
+		ci.draw_line(b, b - Vector2(0, 9), IRON, 1.4)
+		_dot(ci, b - Vector2(0, 10), 3.6, Color(GLOW, 0.35))
+		_dot(ci, b - Vector2(0, 10), 2.0, GLOW)
+	# Guirnalda de banderines en lo alto de la huella.
+	var gy := -fp.y * 0.5 + 6.0
+	ci.draw_line(Vector2(-hx * 0.8, gy), Vector2(hx * 0.8, gy), Color(OIL_BLACK, 0.7), 1.0)
+	for i in 6:
+		var x := -hx * 0.7 + float(i) * hx * 1.4 / 5.0
+		var col := BRASS if i % 2 == 0 else IMPERIAL_RED
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(x - 2.5, gy), Vector2(x + 2.5, gy), Vector2(x, gy + 4.0)]), col)

@@ -115,9 +115,9 @@ func _load_buildings() -> void:
 func _get_category(data: BuildingData) -> String:
 	if data.is_decoration:
 		return "decoration"
-	if data.id in ["house", "warehouse", "silo", "fuel_depot", "tavern", "well", "lighthouse"]:
+	if data.id in ["house", "warehouse", "silo", "fuel_depot", "tavern", "well", "lighthouse", "scrapyard", "telegraph"]:
 		return "support"
-	if data.id in ["barracks", "tower", "shipyard", "aerodrome"]:
+	if data.id in ["barracks", "tower", "shipyard", "aerodrome", "bastion"]:
 		return "military"
 	return "production"
 

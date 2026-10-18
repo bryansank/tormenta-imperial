@@ -132,6 +132,9 @@ var _forced_scene := ""
 ## "water" / "shore", vacio = todo tierra. Se lee al refrescar las casillas y
 ## solo pinta el fondo de las vacias: que se puede pisar lo dicen las reglas.
 var _terrain_now: Dictionary = {}
+## La cobertura del Bastion (Encounter.cover, feat/edificios-defensa-vida):
+## casilla -> defensa de mas. Vacio casi siempre; solo en el Impuesto y el asedio.
+var _cover_now: Dictionary = {}
 var _board3d = null                 ## BoardViewport3D, creado la primera vez
 var _board_column: VBoxContainer
 var _grid_center: HBoxContainer
@@ -1406,6 +1409,8 @@ func _refresh_cells() -> void:
 
 	var boss: int = boss_uid()
 	_terrain_now = BoardLayout.terrain_of(CombatManager.get_encounter())
+	var enc_now = CombatManager.get_encounter()
+	_cover_now = (enc_now.cover as Dictionary).duplicate() if enc_now != null and enc_now.get("cover") is Dictionary else {}
 
 	for y in range(_board.y):
 		for x in range(_board.x):
@@ -1442,6 +1447,14 @@ func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vect
 				border = UITheme.INFO.darkened(0.2)
 			BoardLayout.TERRAIN_SHORE:
 				background = UITheme.BOARD_SHORE
+		# Parapeto del Bastion: casilla de sacos (borde de laton); quien se
+		# ponga encima defiende mas. Se dice en el tooltip.
+		cell.tooltip_text = ""
+		if _cover_now.has(coords):
+			background = UITheme.BOARD_SHORE.lerp(UITheme.ACCENT_DIM, 0.5)
+			border = UITheme.ACCENT
+			border_width = 2
+			cell.tooltip_text = Tr.t("LBL_COVER_CELL_TIP") % int(_cover_now[coords])
 		if _ov_no_fire.has(coords):
 			# Demasiado cerca para la artilleria: ✕ en la casilla.
 			cell.text = "✕"
@@ -1463,6 +1476,10 @@ func _style_cell(cell: Button, bar: ProgressBar, icon: TextureRect, coords: Vect
 		_style_health_bar(bar, unit)
 		background = UITheme.POSITIVE.darkened(0.45) if unit.side == PLAYER else UITheme.DANGER.darkened(0.35)
 		border = UITheme.POSITIVE if unit.side == PLAYER else UITheme.DANGER
+		if _cover_now.has(coords) and unit.layer() != "air":
+			# A cubierto tras el parapeto: borde de laton (lo de abajo manda).
+			border = UITheme.ACCENT
+			border_width = 2
 		if targets.has(unit.uid):
 			background = UITheme.BOARD_TARGET
 			border = UITheme.WARNING
@@ -2212,7 +2229,10 @@ func target_previews(attacker: CombatUnit, targets: Array) -> Dictionary:
 		var t := CombatManager.get_unit(int(uid))
 		if t == null:
 			continue
-		out[int(uid)] = preview_text(Rules.preview_damage(attacker, t))
+		# Con la cobertura del Bastion de su casilla (0 casi siempre).
+		var enc = CombatManager.get_encounter()
+		var cov: int = enc.cover_for(t) if enc != null and enc.has_method("cover_for") else 0
+		out[int(uid)] = preview_text(Rules.preview_damage(attacker, t, cov))
 	if attacker.min_range() > 1:
 		for u in CombatManager.get_units():
 			if u.side == attacker.side or not u.is_alive() or out.has(u.uid):

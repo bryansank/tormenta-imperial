@@ -122,6 +122,14 @@ static func terrain_of(encounter) -> Dictionary:
 	var t = encounter.get("terrain")
 	return (t as Dictionary).duplicate() if t is Dictionary else {}
 
+## Las casillas de cobertura del Bastion de un encuentro (Encounter.cover), o []
+## si no tiene. Solo se pintan: la defensa de mas la suma el modelo.
+static func cover_of(encounter) -> Array:
+	if encounter == null:
+		return []
+	var c = encounter.get("cover")
+	return (c as Dictionary).keys() if c is Dictionary else []
+
 static func cell_kind(terrain: Dictionary, cell: Vector2i) -> String:
 	return String(terrain.get(cell, TERRAIN_LAND))
 

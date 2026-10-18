@@ -248,6 +248,11 @@ const TIPS := {
 	"farm":           {"title": "HELP_T_FARM",      "body": "HELP_B_FARM"},
 	"collect_full":   {"title": "HELP_T_COLLECT",   "body": "HELP_B_COLLECT"},
 	"fishing_dock":   {"title": "HELP_T_FISHING_DOCK", "body": "HELP_B_FISHING_DOCK"},
+	# Defensa y vida (feat/edificios-defensa-vida).
+	"bastion":        {"title": "HELP_T_BASTION",   "body": "HELP_B_BASTION"},
+	"scrapyard":      {"title": "HELP_T_SCRAPYARD", "body": "HELP_B_SCRAPYARD"},
+	"telegraph":      {"title": "HELP_T_TELEGRAPH", "body": "HELP_B_TELEGRAPH"},
+	"beauty":         {"title": "HELP_T_BEAUTY",    "body": "HELP_B_BEAUTY"},
 	"island":         {"title": "HELP_T_ISLAND",    "body": "HELP_B_ISLAND"},
 }
 
@@ -1387,6 +1392,8 @@ func _connect_news() -> void:
 	EventBus.day_phase_changed.connect(_on_news_day_phase)
 	EventBus.construction_completed.connect(_on_news_construction)
 	EventBus.building_stock_changed.connect(_on_news_stock)
+	# La primera casa bonita (feat/edificios-defensa-vida).
+	EventBus.beauty_changed.connect(_on_news_beauty)
 
 ## El primer ascenso: que da la XP y, detras, que la bandera tiene piezas nuevas.
 func _on_news_rank_up(_rank: int, _rewards: Dictionary) -> void:
@@ -1413,6 +1420,20 @@ func _on_news_construction(node: Node) -> void:
 		"fishing_dock":
 			if not has_seen_tip("fishing_dock"):
 				offer_tip("fishing_dock")
+		"bastion", "scrapyard", "telegraph":
+			var tip_id := String(info["data"].id)
+			if not has_seen_tip(tip_id):
+				offer_tip(tip_id)
+
+## La primera casa bonita o elegante: que es la belleza y como se sube.
+func _on_news_beauty() -> void:
+	if has_seen_tip("beauty"):
+		return
+	for info in GridManager.buildings_view():
+		var node: Node = info.get("node")
+		if node != null and is_instance_valid(node) and int(node.get_meta("beauty_level", 1)) >= 2:
+			offer_tip("beauty")
+			return
 
 ## Un edificio se lleno sin recoger: para hasta que se recoge.
 func _on_news_stock(node: Node, _stock: Dictionary) -> void:

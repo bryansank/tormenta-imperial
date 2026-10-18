@@ -136,6 +136,12 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(_on_construction_done)
 	# Lo recogido vuela a la bolsa del HUD (V2).
 	EventBus.production_collected.connect(_on_production_collected)
+	# Belleza del barrio (feat/edificios-defensa-vida): los adornos de las casas
+	# bonitas y elegantes (BeautyTrim). Tambien tras mejorar o terminar una casa:
+	# su modelo cambia de escala o aparece.
+	EventBus.beauty_changed.connect(_sync_beauty)
+	EventBus.building_upgrade_completed.connect(func(_n: Node, _l: int) -> void: _sync_beauty.call_deferred())
+	EventBus.construction_completed.connect(func(_n: Node) -> void: _sync_beauty.call_deferred())
 	GameManager.register_placer(self)
 	_assist = Assist.new()
 	_assist.name = "PlacementAssist"
@@ -318,6 +324,18 @@ func _on_construction_done(node: Node) -> void:
 	_bounce_building(node)
 
 ## Reparado (docs/03, "Etapas de dano"): el mismo salto y el mismo polvo.
+## Pone a cada casa los adornos de su nivel de belleza (meta `beauty_level` de
+## DefenseLifeEffects). Solo al cambiar la belleza o el modelo, nunca por frame;
+## la malla de cada nivel y medida es una sola para todo el mapa.
+func _sync_beauty() -> void:
+	var trim: Script = preload("res://scripts/buildings/BeautyTrim.gd")
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info.get("data")
+		var node: Node = info.get("node")
+		if data == null or data.id != "house" or node == null or not is_instance_valid(node):
+			continue
+		trim.call("apply", node, maxi(1, int(node.get_meta("beauty_level", 1))))
+
 func _on_repaired(node: Node) -> void:
 	_bounce_building(node)
 

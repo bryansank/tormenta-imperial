@@ -256,7 +256,9 @@ func _current_signature() -> Array:
 	_site_seed = LookRule.seed_of(self, data) if int(_look["look"]) == LookRule.Look.CONSTRUCTION else 0
 	return [constructing, progress, int(get_meta("level", 1)), int(get_meta("health", data.max_health)),
 		BuildingHealth.is_ruined(self), mask, view_steps(), String(get_meta("custom_name", "")),
-		Tr.get_locale(), int(_look["look"]), int(_look["phase"]), _site_seed, _crop_signature()]
+		Tr.get_locale(), int(_look["look"]), int(_look["phase"]), _site_seed, _crop_signature(),
+		# Belleza del barrio (casas bonitas y elegantes, DefenseLifeEffects).
+		int(get_meta("beauty_level", 1))]
 
 ## La Granja repinta su cultivo al crecer (en decimos) y al madurar.
 func _crop_signature() -> int:
@@ -616,5 +618,8 @@ func _draw() -> void:
 	# La placa II / III (la Label3D de la 3D), sin girar.
 	if level > 1:
 		Art.draw_level_plate(self, fp2, level)
+	# La belleza de la casa (feat/edificios-defensa-vida), sin girar; en pie.
+	if data.id == "house" and standing and not ruined:
+		Art.draw_beauty(self, fp2, int(get_meta("beauty_level", 1)))
 	if _selected:
 		Art.draw_selection(self, fp2, _pulse)
