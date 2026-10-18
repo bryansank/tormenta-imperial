@@ -50,7 +50,7 @@ Status legend: ✅ done · 🚧 in progress · ⬜ planned · 💤 backlog / nic
 - ✅ Save/load with autosave, up to five saved games, fight checkpoints, corrupt-save
   backup and silent offline progression — [09-save-system.md](09-save-system.md)
 - ✅ Audio: `AudioManager` (runtime buses, signal-driven, music on/off) with 5 music
-  tracks, 34 SFX and 3 ambient loops, no aliases left
+  tracks, 47 SFX and 4 ambient loops, no aliases left; combat sounds by unit type (land, sea, air) and a coast loop on the board (1.1)
 - ✅ i18n ES/EN with a language selector (reload keeping the game)
 
 ### Milestones
@@ -156,7 +156,7 @@ end to end from the UI.
 | **Skirmish panel, map view, draft modal, final report** | ✅ | `SkirmishPanel` calls `CombatManager.launch_expedition(party)`; `BattleScreen` builds the map, the draft modal and the report on top of the board. `tests/ui/test_expedition_ui.gd` |
 | Listeners for the expedition signals | ✅ | `draft_offered` / `draft_applied` → BattleScreen; `expedition_node_selected` → BattleScreen, SkirmishPanel; `expedition_resumed` → BattleScreen, SkirmishPanel, ArmyPanel. A campaign in flight reopens its map on load |
 | **Unit silhouettes on the 2D board** and baked toy units on the 3D one | ✅ | `assets/textures/ui/units/*.png` from `tools/gen_unit_icons.gd`, `UITheme.unit_icon()`; `assets/models/toy/units/` |
-| Combat audio | ✅ | `AudioManager` on the combat and Final Audit signals, `tests/audio/test_audio_combat.gd`; every key has its own clip and the combat theme is its own track |
+| Combat audio | ✅ | `AudioManager` on the combat and Final Audit signals, `tests/audio/test_audio_combat.gd`; every key has its own clip and the combat theme is its own track; 1.1: shots, engines, planes, ships, torpedo, sinking and crash by unit type (`tools/gen_combat_audio.gd`, `tests/audio/test_audio_units_ambient.gd`) |
 | Helper callout for Escaramuzas | ✅ | `HelperPanel` `SkirmishCallout`, `tests/ui/test_helper_skirmish_callout.gd` |
 | End-to-end probe | ✅ | `tools/expedition_probe.gd` |
 

@@ -194,9 +194,15 @@ licence text ships in `licenses/CC0-KENNEY-*.txt`.
 | `sfx/combat_unit_lost` | [Kenney — Sci-Fi Sounds](https://kenney.nl/assets/sci-fi-sounds) | CC0 1.0 (`licenses/CC0-KENNEY-SCI-FI-SOUNDS.txt`) |
 | `sfx/ui_toggle` | [Kenney — UI Audio](https://kenney.nl/assets/ui-audio) | CC0 1.0 (`licenses/CC0-KENNEY-UI-AUDIO.txt`) |
 
-`ambient/day`, `ambient/night`, `ambient/storm`, `sfx/storm_warning` and `sfx/storm_thunder` are not
-third-party: they are synthesised from filtered noise and oscillators by
-`tools/gen_ambient_audio.gd` and are original content of the game (section 6).
+`ambient/day`, `ambient/night`, `ambient/storm`, `ambient/coast`, `sfx/storm_warning` and
+`sfx/storm_thunder` are not third-party: they are synthesised from filtered noise and
+oscillators by `tools/gen_ambient_audio.gd` and are original content of the game
+(section 6). The same goes for the combat sounds by unit type (`sfx/shot_rifle`,
+`shot_cannon`, `tank_fire`, `tank_engine`, `plane_prop`, `plane_strafe`, `bomb_drop`,
+`airship_drone`, `ship_horn`, `torpedo`, `splash`, `unit_sunk`, `unit_downed`),
+synthesised by `tools/gen_combat_audio.gd` with no third-party samples. The OGG files
+were encoded with libsndfile (LGPL-2.1, used only as an external tool at development
+time; nothing of it ships with the game).
 
 ## 5. Textures (`assets/textures/`)
 
@@ -227,8 +233,9 @@ the building 3D models in `assets/models/` (built in Blender with the scripts in
 `tools/`), the resource and unit icons in `assets/textures/ui/icons/` and
 `assets/textures/ui/units/` (drawn by `tools/gen_resource_icons.gd` and
 `tools/gen_unit_icons.gd`), the synthesised ambience and storm sounds
-(`assets/audio/ambient/day`, `night`, `storm`, `sfx/storm_warning`, `storm_thunder`, made by
-`tools/gen_ambient_audio.gd`), the logo, banner, key art and app icon
+(`assets/audio/ambient/day`, `night`, `storm`, `coast`, `sfx/storm_warning`, `storm_thunder`, made by
+`tools/gen_ambient_audio.gd`), the combat sounds by unit type (the thirteen clips listed in
+section 4, made by `tools/gen_combat_audio.gd`), the logo, banner, key art and app icon
 (`assets/branding/`, `icon.svg`), and all game text.
 
 ## 7. Development tools (not shipped)
