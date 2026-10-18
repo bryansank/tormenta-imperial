@@ -434,6 +434,26 @@ Los avisos al jugador van por `notification_posted` (nuevo encargo, cumplido, se
 acabo el plazo); la XP de rango (`contract_rank_xp`) la suma ContractManager con
 `RankManager.add_xp()`.
 
+## Economía (1.2)
+
+Los emite solo `EconomyManager` (`feat/edificios-economia`): el barco del
+contrabandista del Puerto comercial, el combustible de las Centrales diésel y el
+interés de la Casa de cambio. Ver docs/03 "Economía de la 1.2".
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `smuggler_ship_arrived` | `offers: Array, port: Node` | EconomyManager (atraca) | SmugglerShip3D, SmugglerShip2D |
+| `smuggler_ship_departed` | `reason: String` (`time`, `storm`, `no_port`) | EconomyManager | SmugglerShip3D, SmugglerShip2D |
+| `smuggler_offer_taken` | `index: int, offer: Dictionary` (ya cobrado y pagado) | EconomyManager (`take_offer()`) | *(no listener)* |
+| `building_plan_bought` | `building_id: String` | EconomyManager (`grant_plan()`) | *(no listener: `RankManager.is_building_unlocked()` pregunta `has_plan()`)* |
+| `diesel_plant_fuel_changed` | `node: Node, running: bool` | EconomyManager (`burn_fuel()`) | *(no listener)* |
+| `exchange_interest_paid` | `amount: int` | EconomyManager (`pay_interest()`, Gobernador) | *(no listener)* |
+| `economy_changed` | — | EconomyManager (cualquiera de las de arriba, `load_save_data()`, `reset()`) | SmugglerPanel |
+
+Los avisos van por `notification_posted` (barco atracado, barco que zarpa por la
+Ceniza, Central sin combustible). EconomyManager escucha `workers_changed` para pedir el
+recuento de áreas (`ProductionManager.request_area_refresh()`).
+
 ## Orphan signals
 
 Declared in `EventBus.gd` but not wired on one or both sides. Most are suppressed

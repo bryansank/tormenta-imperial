@@ -204,6 +204,18 @@ Da algo menos que una Granja con trigo, pero no hay que esperar a que crezca nad
 | | **Mercado** | 2×2 | 100 oro · 60 madera | 1 | Abre la Bolsa Imperial: tócalo y pulsa **ABRIR MERCADO**. Pide una Mina de oro. Solo uno |
 | | **Laboratorio** | 2×2 | 150 oro · 100 madera | 2 | Abre el árbol tecnológico: tócalo y pulsa **INVESTIGAR**. Pide una Casa. Solo uno |
 
+### Comercio y combustible (1.2)
+
+| | Edificio | Tamaño | Coste | Gente | Qué hace |
+|---|---|---|---|---|---|
+| | **Puerto comercial** | 2×2 | 300 oro · 100 acero · 160 madera · 12 tablones · 6 vigas | 2 | Va **en la costa** y se gira solo hacia el agua. Cada 6-10 minutos llega el **barco del contrabandista** y se queda 90 segundos con tres ofertas: repuestos o un plano, material de taller y un trato de recursos (te vende barato o te compra caro). Tócalo, o pulsa **VER EL BARCO** en el Puerto. Con Ceniza o Tormenta no viene. Pide Mercado y Fundición. Solo uno |
+| | **Casa de cambio** | 2×2 | 350 oro · 120 acero · 100 madera · 8 lingotes · 4 vigas | 2 | El Mercado se queda menos al comprar y vender (pierdes un 20 % en vez de un 30 %). En Gobernador, cada minuto te da el 1 % del oro guardado (hasta 20). Pide Mercado y Fundición. Solo una |
+| | **Central diésel** | 2×2 | 320 oro · 160 acero · 80 petróleo · 60 madera · 6 vigas · 4 combustible | 2 | Quema 1 de combustible cada 45 s y hace que los aserraderos, minas, fundiciones y refinerías a 5 casillas rindan **+15 %**. Sin combustible se para. Pide Refinería. Máximo 2 |
+
+> **Los planos del barco.** El contrabandista a veces vende el plano de un edificio que
+> se abre con el rango (palmeras, estatua, fuente...): comprado, puedes construirlo ya.
+> Nunca vende los planos que solo se ganan en las misiones.
+
 ### Militares
 
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
@@ -321,6 +333,10 @@ Los precios flotan. Base: madera 3, acero 8, petróleo 12 oro por unidad, con un
 **30% de diferencia entre lo que pagas al comprar y lo que cobras al vender**.
 Comprar sube el precio, vender lo baja, y con el tiempo vuelve a su sitio. Se mueve
 entre ×0,5 y ×2,5 del precio base.
+
+Con una **Casa de cambio** (1.2) esa diferencia baja al 20 %. Y el **Puerto comercial**
+trae cada pocos minutos al contrabandista, que vende más barato que el Mercado o te
+compra lo que sobra más caro (§5, "Comercio y combustible").
 
 **Hacer 10 operaciones desbloquea el hito Mercader.**
 
