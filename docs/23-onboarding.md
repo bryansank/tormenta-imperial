@@ -29,7 +29,7 @@ por su título. El texto va a máquina; debajo, a mano y en tinta azul
 (`UITheme.hand_font()`), una nota de los Olvidados (`PRO_<n>_NOTE`). El primer folio
 lleva el tampón **FIRMADO** y el tercero **VIVOS** (la hoja final no lleva tampón); cada folio, el sello de lacre con
 "NADA SE PIERDE" (`RegenciaSeal.gd`, dibujado, sin imagen). El papel y la mesa son ruido
-generado (`UITheme.parchment_texture`).
+generado (`UITheme.parchment_texture`). Cada folio lleva su lámina de grabado (`PrologueEngraving.gd`, ver abajo).
 
 | Folio | Título | Qué cuenta |
 |---|---|---|
@@ -52,6 +52,38 @@ Los textos son `PRO_1_*` … `PRO_4_*` en `Tr.gd`. La hoja final, tal cual:
  El agente
 `.claude/agents/escritor-lore.md` es el que escribe lore y tutoriales con esta guía de
 estilo.
+
+### Una lámina por folio (2026-10-18, rama `feat/vista2d-y-prologo`)
+
+La ronda de la 1.0 vio el folio con **dos tercios del papel vacíos** (mejora 8). Cada
+folio lleva ahora un **grabado a tinta** (`scripts/ui/PrologueEngraving.gd`), dibujado
+en código como el sello de lacre: contornos de tinta, rellenos de trazos paralelos
+recortados contra cada forma (`Geometry2D.intersect_polyline_with_polygon`), sombras
+de trazo cruzado, una plancha con doble filete y **un solo acento rojo de lacre** por
+lámina. Sin imágenes: escala sin pixelarse en PC, tableta y teléfono, y no cuesta nada
+mientras no cambia (sin `_process`; se pinta al cambiar de folio o de tamaño).
+
+| Folio | Lámina |
+|---|---|
+| 1 La firma del Emperador | medallón con el busto coronado y la cinta de luto; el decreto firmado, el lacre y la pluma en el tintero |
+| 2 La Tormenta | nubes de ceniza, ceniza que cae sobre las casas (una con el tejado roto) y el dirigible de los Cobradores con su bandera |
+| 3 Quiénes somos | la isla con la nave y las chimeneas humeando, los nuestros en la orilla y, en el horizonte, el barco de los que se fueron |
+| 4 Desde cero | el Núcleo a medio levantar con su andamio y la bandera, los árboles, el sol detrás, el montón de ladrillos y el martillo |
+| B En trámite (Constructor) | el vigía con su catalejo sobre la roca, el libro de cuentas y el humo lejano de la isla |
+
+**Maquetación** (`PrologueScreen.layout_for(sheet)`, pura):
+
+- Folio ancho (≥ 600 px, PC, tableta y teléfono en horizontal): **la lámina a la
+  derecha del texto**, del 36 % del ancho (170-320 px), con hueco abajo para el sello
+  de lacre.
+- Folio estrecho y alto (≥ 330 px): la lámina **encima** del texto, en una franja de
+  90-150 px.
+- Estrecho y bajo: solo texto (con su scroll, como antes).
+- El texto pasa de 21 a 22 px. La lámina aparece con la máquina de escribir (fundido
+  de 0,6 s) y Siguiente la completa como al texto.
+- **El tampón** (FIRMADO, VIVOS, EN TRÁMITE) cae ahora **sobre la parte de abajo de la
+  lámina**, como un golpe sobre el grabado (`stamp_position`); si la lámina no está o
+  es pequeña, en su sitio de siempre.
 
 - **El prólogo sí se salta** (`Saltar historia`, Esc): es lore, no tutorial.
 - **Pie:** `Saltar historia` · puntos de página · `◀ Atrás` · `Siguiente ▶` (`Empezar`
@@ -582,7 +614,7 @@ artillerías), `HELP_B_STORM` (la Tormenta ya no se presenta al empezar: es una 
 | Suite | Qué fija |
 |---|---|
 | `tests/tutorial/test_quick_guide.gd` | la guía rápida se abre sin pausar y avisa al cerrarse, sus cuatro bloques en ES y EN, los mismos bloques en el índice de AYUDA, y que cerrar el prólogo ya no la abre |
-| `tests/tutorial/test_prologue_screen.gd` | 4 folios, Atrás/Siguiente/Saltar, Siguiente×2 + Atrás = folio 2, Atrás apagado en el primero, deslizar, máquina de escribir, pausa, variantes, textos ES/EN, estilo propio; la hoja final (última, Empezar, el plan en palabras llanas ES/EN sin botones, teclado y deslizar) |
+| `tests/tutorial/test_prologue_screen.gd` | 4 folios, Atrás/Siguiente/Saltar, Siguiente×2 + Atrás = folio 2, Atrás apagado en el primero, deslizar, máquina de escribir, pausa, variantes, textos ES/EN, estilo propio; la hoja final (última, Empezar, el plan en palabras llanas ES/EN sin botones, teclado y deslizar); la lámina de cada folio (todas las variantes la tienen, sigue al folio, se dibuja a tamaño PC, tableta y teléfono, `layout_for` al lado / encima / fuera, el tampón sobre la lámina) |
 | `tests/tutorial/test_guide_steps.gd` | *(2026-10-16, sin correr aún: la meta y el Núcleo, girar/mover/derribar, los edificios del principio)* `derive_step`, recorrido entero, cancelar, saltar (API interna), fuera de orden, isla hecha, repetir, reanudar al cargar, guardado y basura |
 | `tests/tutorial/test_guide_never_stuck.gd` | *(2026-10-16, sin correr aún: tarjetas de leer, cifras con iconos, "cómo conseguirlo", sin veta de oro, partida vieja, la lección de reparar)* sin "Saltar" (solo dev), repetir no salta, terminar un repaso, guardados saltados; un test por caso de atasco (§2.1); la granja y recoger entre aserradero y casa (§2.3) |
 | `tests/tutorial/test_tutorial_panel.gd` | *(2026-10-16: el botón de las tarjetas de leer y la fila de cifras)* prólogo alojado, paso con texto y número, el velo no se come toques, sin botón de saltar, "Terminar repaso" solo en un repaso, esconderse en pausa y con el prólogo, la tarjeta no tapa lo señalado |
