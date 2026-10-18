@@ -461,6 +461,7 @@ static func campaign_gate_step() -> Dictionary:
 	if CombatManager.campaigns_all_complete():
 		return {}
 	var domain: String = ""
+	var playable := false
 	for d in GameConfig.CAMPAIGN_DOMAINS:
 		if CombatManager.is_campaign_complete(String(d)):
 			continue
@@ -468,10 +469,24 @@ static func campaign_gate_step() -> Dictionary:
 			domain = String(d)
 		if CombatManager.campaign_lock_reason(String(d)) == "" and not CombatManager.campaign_units_home(String(d)).is_empty():
 			domain = String(d)
+			playable = true
 			break
 	if domain == "":
 		return {}
-	return campaign_need_step(domain, "OBJ_WHY_CAMPAIGN_FOR_AUDIT")
+	var step: Dictionary = campaign_need_step(domain, "OBJ_WHY_CAMPAIGN_FOR_AUDIT")
+	# Ronda de la 1.1 (2026-10-18): mientras la campana que toca solo espera (la
+	# tropa descansa, la columna esta fuera), lo siguiente es preparar otra que
+	# falte: su edificio o su tropa. Antes el panel se quedaba en "la mision del
+	# Mar" durante el descanso y el Aerodromo no se pedia hasta acabar el Mar
+	# (sonda de linea: Aerodromo en el minuto 441, con el Mar hecho en el 440).
+	if not playable and String(step.get("kind", "")) == "campaign":
+		for d in GameConfig.CAMPAIGN_DOMAINS:
+			if String(d) == domain or CombatManager.is_campaign_complete(String(d)):
+				continue
+			var prep: Dictionary = campaign_need_step(String(d), "OBJ_WHY_CAMPAIGN_FOR_AUDIT")
+			if String(prep.get("kind", "")) != "campaign":
+				return prep
+	return step
 
 ## Lo que pide una campana para poder jugar su mision: su edificio, tropa de su
 ## medio, o la mision misma ({"kind": "campaign", "id": medio}).
