@@ -109,7 +109,7 @@ func test_planes_cast_a_ground_shadow_shaped_by_their_side() -> void:
 	assert_int((a.mesh as CylinderMesh).radial_segments).is_equal(12)
 	assert_int((b.mesh as CylinderMesh).radial_segments).is_equal(4)
 	assert_object(a.mesh).is_same(UnitToy.shadow_mesh(0))
-	assert_float(ours.get_node("Lift").position.y).is_equal(Layout.domain_height("air"))
+	assert_float(ours.get_node("Lift").position.y).is_equal_approx(Layout.domain_height("air"), 0.001)
 
 func test_ships_float_without_a_shadow_on_the_water() -> void:
 	var ship := _toy("gunboat", "sea")

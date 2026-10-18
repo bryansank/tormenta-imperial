@@ -210,10 +210,14 @@ func after_test() -> void:
 	_close_colony()
 	_disconnect_probes()
 
-	GameManager._placer = _saved_placer
-	GameManager._map_gen = _saved_map_gen
+	# Lo que dejo registrado otra suite puede estar ya liberado (un MapGenerator
+	# de auto_free): se devuelve solo lo vivo, o la asignacion tipada revienta y
+	# el resto de after_test no corre (dev_time_scale se quedaria en 60 y la
+	# Tormenta de las suites siguientes duraria una hora).
+	GameManager._placer = _saved_placer if is_instance_valid(_saved_placer) else null
+	GameManager._map_gen = _saved_map_gen if is_instance_valid(_saved_map_gen) else null
 	GameManager._started = _saved_started
-	GameManager._camera = _saved_camera
+	GameManager._camera = _saved_camera if is_instance_valid(_saved_camera) else null
 	GameManager._warehouse_count = 0
 
 	CombatManager.reset()

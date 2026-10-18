@@ -51,9 +51,9 @@ func test_every_type_beats_one_and_loses_to_one() -> void:
 		assert_int(Rules.type_matchup(a, a)).is_equal(0)
 
 func test_unknown_types_have_no_edge() -> void:
-	# Mar y aire entran anadiendo su fila; hasta entonces, neutros.
-	assert_int(Rules.type_matchup("gunboat", "infantry")).is_equal(0)
-	assert_float(Rules.type_multiplier("gunboat", "vehicle")).is_equal(1.0)
+	# Un tipo sin fila en la tabla es neutro (mar y aire ya tienen la suya).
+	assert_int(Rules.type_matchup("no_such_unit", "infantry")).is_equal(0)
+	assert_float(Rules.type_multiplier("no_such_unit", "vehicle")).is_equal(1.0)
 
 # ── Multiplicadores ──────────────────────────────────────────────────
 

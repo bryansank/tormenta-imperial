@@ -25,7 +25,9 @@ func test_a_raid_is_one_fight_with_exclusive_loot() -> void:
 	assert_int(map.size()).is_equal(1)
 	assert_int(Generator.fights_on_path(map)).is_equal(1)
 	var loot: Dictionary = map[0]["loot"]
-	assert_int(int(loot.get("parts", 0))).is_between(GameConfig.combat_loot_raid_parts.x, GameConfig.combat_loot_raid_parts.y)
+	# Una incursion de piratas (costa, aire y mar) trae un repuesto de mas.
+	var extra: int = GameConfig.combat_loot_coastal_parts if Generator.offer_is_coastal(_raid()) else 0
+	assert_int(int(loot.get("parts", 0))).is_between(GameConfig.combat_loot_raid_parts.x + extra, GameConfig.combat_loot_raid_parts.y + extra)
 	assert_int(int(loot.get("colonists", 0))).is_between(GameConfig.combat_loot_raid_colonists.x, GameConfig.combat_loot_raid_colonists.y)
 
 func test_the_outpost_pays_a_tithe_discount() -> void:
