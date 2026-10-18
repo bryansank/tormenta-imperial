@@ -503,12 +503,6 @@ static func _gesture(ci: CanvasItem, b: Rect2, e: String, cloth: Color, skin: Co
 static func _draw_ada(ci: CanvasItem, b: Rect2, e: String) -> void:
 	var h := b.size.y
 	var ow := maxf(1.0, h * 0.012)
-	# La trenza por detras, cayendo por el hombro.
-	for i in 6:
-		var t := float(i) / 5.0
-		var c := _p(b, 0.30 - 0.05 * t, 0.42 + 0.30 * t)
-		var seg := _ell(c, h * (0.05 - 0.008 * t), h * 0.042, 14)
-		_shape(ci, seg, HAIR_ADA.darkened(0.08 * float(i % 2)), ow * 0.8)
 	_torso(ci, b, SKIN_ADA, UNIFORM_ADA, ow)
 	# Botones de laton, a dos filas, y la llave inglesa en el bolsillo.
 	for v in [0.80, 0.90]:
@@ -516,6 +510,16 @@ static func _draw_ada(ci: CanvasItem, b: Rect2, e: String) -> void:
 			ci.draw_circle(_p(b, u, v), h * 0.013, UITheme.ACCENT)
 	_shape(ci, _poly(b, [0.66, 0.78, 0.68, 0.70, 0.71, 0.70, 0.70, 0.79]), Color(0.70, 0.72, 0.74), ow * 0.7)
 	ci.draw_arc(_p(b, 0.695, 0.69), h * 0.022, PI, TAU, 8, INK, ow * 0.9, true)
+	# La trenza, por delante del hombro (la cabeza tapa su arranque).
+	for i in 6:
+		var t := float(i) / 5.0
+		var c := _p(b, 0.30 - 0.05 * t, 0.42 + 0.30 * t)
+		var seg := _ell(c, h * (0.05 - 0.008 * t), h * 0.042, 14)
+		_shape(ci, seg, HAIR_ADA.darkened(0.08 * float(i % 2)), ow * 0.8)
+	# El lazo rojo al final de la trenza.
+	var knot := _p(b, 0.25, 0.75)
+	for side in [-1.0, 1.0]:
+		_shape(ci, PackedVector2Array([knot, knot + Vector2(side * h * 0.05, -h * 0.025), knot + Vector2(side * h * 0.05, h * 0.025)]), RIBBON, ow * 0.7)
 	# La cabeza: redonda, con barbilla suave.
 	var head := _ell(_p(b, 0.5, 0.40), h * 0.17, h * 0.19, 30)
 	_shape(ci, head, SKIN_ADA, ow)
