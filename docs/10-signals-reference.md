@@ -239,6 +239,22 @@ and shows the after-action report; `StormManager` still reads the return value o
 
 Full design: [15-combat.md](15-combat.md).
 
+### Coastal threats (`feat/amenazas-costa`, 1.2, docs/15 §14)
+
+Optional loot only: marks on the shore that leave on their own, doing no harm.
+
+| Signal | Args | Emitter | Listeners |
+|---|---|---|---|
+| `threats_changed` | — | ThreatManager | ThreatMarks3D, ThreatMarks2D, ThreatCard, PopulationManager (workers at a wreck) |
+| `threat_appeared` | `threat_id: int, threat_type: String, water: bool` | ThreatManager | (no listener: the notice goes through `notification_posted`) |
+| `threat_cleared` | `threat_id: int, threat_type: String` | ThreatManager | (no listener) |
+| `threat_left` | `threat_id: int, threat_type: String` | ThreatManager | (no listener) |
+| `wreck_explored` | `threat_id: int, rewards: Dictionary, loot: Dictionary` | ThreatManager | (no listener: already paid) |
+| `threat_clicked` | `threat_id: int` | BuildingPlacer, BuildingPlacer2D | ThreatCard |
+
+ThreatManager also emits `sortie_offers_changed` on every change, so MISIONES, its
+red dot and ¿QUÉ HACER? repaint without new connections. 146 signals with these six.
+
 ## Building Health
 
 Emitted only by `BuildingHealth`. A ruined building stays where it is and stops

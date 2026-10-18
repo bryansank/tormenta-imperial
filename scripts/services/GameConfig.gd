@@ -4396,3 +4396,74 @@ func _register_decorations_traffic() -> bool:
 		building_lot_style[id] = {"ground": l[0], "trim": l[1], "yard": 0.25, "accent": l[2],
 			"props": l[3], "count": [1, 2]}
 	return true
+# ── Amenazas de costa (feat/amenazas-costa) ──────────────────────────
+#
+# Marcas en la orilla que dan SOLO BOTIN OPCIONAL (decision de Bryan,
+# 2026-10-18): saqueadores (en la playa o, con Astillero, en un bote en el
+# agua), la avanzadilla de la Regencia (desde la era 2) y un pecio. Aparecen
+# cada cierto tiempo, duran un rato y SE VAN SOLAS sin hacer ningun dano.
+# Atacarlas (un combate de dominio puro) o explorar el pecio con trabajadores
+# da botin. Modelo puro: scripts/combat/ThreatBoard.gd; servicio:
+# ThreatManager; combate y botin: ExpeditionGenerator.threat_*; docs/15 §14.
+# Todos los tiempos son segundos JUGADOS (pasan por get_duration).
+
+## Interruptor general.
+var threats_enabled := true
+## Cada cuanto mira el servicio si toca algo (segundos reales; barato).
+var threat_check_interval := 5.0
+## La primera marca, este rato despues de que se abran (Cuartel + primera
+## escaramuza ganada).
+var threat_first_delay := 90.0
+## Entre una marca y la siguiente (al azar dentro del rango). Con 2 a la vez como
+## mucho y ~4 min de vida, hay casi siempre una a la vista sin llenar la costa.
+var threat_spawn_interval := Vector2(150.0, 270.0)
+## Cuantas a la vez como mucho.
+var threat_max_active := 2
+## Cuanto duran en la orilla si nadie las toca.
+var threat_lifetime := {"raiders": 240.0, "vanguard": 300.0, "wreck": 360.0}
+## Peso de cada tipo por era. La avanzadilla de la Regencia, desde la era 2.
+var threat_weights := {
+	1: {"raiders": 70, "wreck": 30},
+	2: {"raiders": 45, "vanguard": 30, "wreck": 25},
+	3: {"raiders": 40, "vanguard": 35, "wreck": 25},
+}
+## Probabilidad de que los saqueadores lleguen en bote (al agua) cuando hay un
+## Astillero: entonces solo se les ataca con barcos (dominio puro).
+var threat_sea_chance := 0.4
+## Casillas (Chebyshev) entre dos marcas, y de una marca a la acera del Nucleo.
+var threat_spacing := 6
+var threat_core_gap := 6
+## El combate: profundidad y riesgo en la curva de enemy_pressure, y escala de
+## los enemigos encima. Los saqueadores son un poco mas faciles que la incursion
+## del tablon (profundidad 0 frente a 1); la avanzadilla, como ella.
+var threat_fight := {
+	"raiders": {"depth": 0, "risk": Vector2i(0, 1), "mult": 0.9},
+	"vanguard": {"depth": 1, "risk": Vector2i(1, 1), "mult": 1.0},
+}
+## Botin fijo y a la vista (sorteado con la semilla de la marca), +25 % por era.
+var threat_rewards := {
+	"raiders": {"gold": Vector2i(40, 70), "wood": Vector2i(20, 40)},
+	"vanguard": {"gold": Vector2i(60, 100), "steel": Vector2i(20, 40)},
+	"wreck": {"wood": Vector2i(30, 60), "gold": Vector2i(15, 35)},
+}
+var threat_era_reward_step := 0.25
+## Repuestos (material fuera de la bolsa) por tipo; uno mas si la pelea es en el agua.
+var threat_parts := {"raiders": Vector2i(1, 2), "vanguard": Vector2i(2, 3), "wreck": Vector2i(0, 2)}
+var threat_sea_extra_parts := 1
+## A veces un material de taller ("material raro"), de los que da la era.
+var threat_rare_chance := {"raiders": 0.3, "vanguard": 0.6, "wreck": 0.5}
+var threat_rare_by_era := {
+	1: ["planks", "ingots"],
+	2: ["planks", "ingots", "beams"],
+	3: ["ingots", "beams", "fuel"],
+}
+var threat_rare_amount := Vector2i(2, 4)
+## Las claves de material que puede llevar un botin (CombatManager._apply_loot,
+## SkirmishPanel.loot_lines).
+const THREAT_LOOT_MATERIALS := ["planks", "ingots", "beams", "fuel"]
+## El pecio: cuantos trabajadores salen a explorarlo y cuanto tardan (los
+## trabajadores dejan su puesto mientras tanto, como al minar a mano).
+var threat_wreck_workers := 2
+var threat_wreck_explore_seconds := 60.0
+## Rango por explorar un pecio (atacar ya da la XP de un combate ganado).
+var threat_wreck_rank_xp := 20

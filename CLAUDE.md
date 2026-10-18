@@ -96,6 +96,7 @@ holds a service's state of its own.
 | 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`). See `docs/06-progression-victory.md` §Governor rank |
 | 28 | `ContractManager` | `scripts/services/ContractManager.gd` | The contract board (ENCARGOS): ticks the pure `scripts/economy/ContractBoard.gd` (3 slots: Regency, neighbours, smuggler), charges what is asked and pays the reward (resources, morale, colonists if `PopulationManager.add_colonists` exists, Tithe discount through `StormManager.add_tithe_discount` if it exists, else gold), emits `contract_*`; saved as `contracts`; off in Sandbox (`GameMode.contracts_enabled()`). See `docs/27-encargos.md` |
 | 29 | `EconomyManager` | `scripts/services/EconomyManager.gd` | The 1.2 economy buildings (`feat/edificios-economia`): the smuggler's ship of the Trade port (pure `scripts/economy/SmugglerShip.gd`: clock, 3 offers, deals through `take_offer()`), minor blueprints bought from it (`has_plan()`, read by `RankManager.is_building_unlocked`), the Diesel plants' fuel (`burn_fuel()`) and the Exchange's Governor interest; emits `smuggler_*`, `diesel_plant_fuel_changed`, `exchange_interest_paid`, `economy_changed`; saved as `economy`. See `docs/03-buildings.md` "Economía de la 1.2" |
+| 30 | `ThreatManager` | `scripts/services/ThreatManager.gd` | Coastal threats (1.2, optional loot only): ticks the pure `scripts/combat/ThreatBoard.gd` on a 5 s Timer, finds free shore cells only when a mark is due, launches the 1-fight pure-domain raid through `CombatManager.launch_threat_offer()`, closes it on `expedition_ended`, sends workers to wrecks (`busy_workers()`, read by PopulationManager) and pays them; emits `threat_*`; saved as `threats`. See `docs/15-combat.md` §14 |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -832,7 +833,8 @@ service drains it onto the `EventBus`; the UI only reads and calls.
 
 - **Pure models** (`scripts/combat/`): `CombatUnit`, `CombatRules`, `Encounter`,
   `CombatAI`, `AutoResolver`, `Expedition`, `ExpeditionGenerator`, `FinalAudit`,
-  `SortieBoard` (the sortie board, 2026-10-14).
+  `SortieBoard` (the sortie board, 2026-10-14), `CampaignBook`, `ThreatBoard` (coastal
+  threats, 1.2).
   No nodes, no timers, no global `randf()` — every one is headless-testable.
 - **Services:** `CombatManager` owns the `Encounter` and the `Expedition`;
   `ProgressionManager` owns the `FinalAudit`.
@@ -947,6 +949,27 @@ strength. HUD button `SkirmishButton` (slot `skirmish_button`, red dot from
 `combat_expedition_*`, `combat_loot_*`, `combat_sortie_*`, `combat_retreat_ratio`,
 `combat_auto_resolve_ratio`, `combat_odds_*`. The old 6-8 node expedition
 (`launch_expedition()`) is untouched.
+
+**Coastal threats (1.2, branch `feat/amenazas-costa`, docs/15 §14, untested):**
+OPTIONAL LOOT ONLY (Bryan, 2026-10-18). Raiders (on the beach, or in a boat on the
+water once a Shipyard stands), the Regency vanguard (era 2+) and wrecks appear on the
+shore every 150-270 played seconds (at most 2 at once, from the first Barracks + first
+sortie won), are drawn on both maps (`ThreatMarks3D` under MapGenerator, one cached
+vertex-colour mesh per type; `ThreatMarks2D` under MapGenerator2D, one `_draw`; nothing
+per frame), last 240-360 s and **leave on their own, doing no harm**. Attacking one is a
+single **pure-domain** fight (land troops on the shore, ships only on the water; offer
+`{kind: "threat", threat_id, threat_type, seed, era, domain}`, map and loot rebuilt by
+`ExpeditionGenerator.threat_map/threat_rewards/threat_loot`); a wreck is explored with
+2 workers for 60 s, no fight. Loot: gold/wood (steel from the vanguard), spare parts
+and sometimes a workshop material (`_apply_loot` now handles `planks/ingots/beams/fuel`).
+Tapping a mark (both placers, only on a cell with no building/deposit) opens
+`ThreatCard` (child of SkirmishPanel): what it is, time left, enemies, odds, loot,
+¡AL ATAQUE! (opens MISIONES > ATAQUES RÁPIDOS with it picked: `SkirmishPanel.open_threat`)
+or EXPLORAR. Threats are listed in ATAQUES RÁPIDOS next to the sortie raids. One
+`notice` per new mark; leaving/clearing go to the log. ¿QUÉ HACER? only gets the second
+line (`THREAT_WHY_EASY`, last in `sortie_reason()`): an unseen mark with easy loot.
+Model `ThreatBoard` (pure), service `ThreatManager`, save key `threats`, tunables
+`threat_*` at the end of GameConfig, texts in Tr block "# Amenazas de costa".
 
 **Towers:** each standing tower cuts storm damage by 15% (cap 60%,
 `storm_tower_mitigation*`) and fields one artillery crew on defensive boards — Tithe
@@ -1184,8 +1207,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, the `final_audit` and `core`: the Núcleo level and its work), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `economy` (EconomyManager: the smuggler's ship with its offers and dice, bought blueprints, fuel and interest clocks), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, the `final_audit` and `core`: the Núcleo level and its work), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `economy` (EconomyManager: the smuggler's ship with its offers and dice, bought blueprints, fuel and interest clocks), `threats` (ThreatManager: coastal threats, `ThreatBoard`; a save without it = empty shore), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition

@@ -26,6 +26,12 @@ func _ready() -> void:
 	_deposits_container.name = "Deposits"
 	add_child(_deposits_container)
 	EventBus.mining_completed.connect(_on_mining_completed)
+	# Las marcas de las amenazas de costa (feat/amenazas-costa): solo vista,
+	# las lee de ThreatManager.
+	var marks := _make_threat_marks()
+	if marks != null:
+		marks.name = "ThreatMarks"
+		add_child(marks)
 	GameManager.register_map_generator(self)
 
 func _roll_deposit_size(deposit_id: String) -> Vector2i:
@@ -430,6 +436,10 @@ func _push_sand_holes() -> void:
 ## Contenedor de los yacimientos.
 func _make_container() -> Node:
 	return Node3D.new()
+
+## Las marcas de las amenazas de costa (feat/amenazas-costa).
+func _make_threat_marks() -> Node:
+	return preload("res://scripts/map/ThreatMarks3D.gd").new()
 
 ## El nodo visible de un yacimiento (sin posicionar). La malla ("Look", una
 ## sola MeshInstance3D con la maqueta de DepositMesh) la pone

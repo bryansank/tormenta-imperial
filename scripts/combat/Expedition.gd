@@ -169,8 +169,13 @@ func campaign_mission() -> int:
 	return int(offer.get("mission", -1)) if is_campaign() else -1
 
 ## Es una incursion: un solo combate (lo que permite "resolver solo").
+## Las amenazas de costa (feat/amenazas-costa) tambien: un combate, botin fijo.
 func is_raid() -> bool:
-	return kind == Generator.KIND_RAID
+	return kind == Generator.KIND_RAID or kind == Generator.KIND_THREAT
+
+## Es el ataque a una amenaza de costa (feat/amenazas-costa).
+func is_threat() -> bool:
+	return kind == Generator.KIND_THREAT
 
 func next_uid() -> int:
 	var uid: int = _next_uid

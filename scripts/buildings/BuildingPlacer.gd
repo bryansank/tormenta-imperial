@@ -547,6 +547,12 @@ func _try_select_building(screen_pos: Vector2) -> void:
 	var cell := GridManager.world_to_cell(hit as Vector3)
 	var node := GridManager.get_building_at(cell)
 	if node == null:
+		# Una marca de amenaza en la costa (feat/amenazas-costa): su tarjeta.
+		var threat_id: int = ThreatManager.threat_at_cell(cell)
+		if threat_id > 0:
+			EventBus.building_deselected.emit()
+			EventBus.threat_clicked.emit(threat_id)
+			return
 		EventBus.building_deselected.emit()
 		return
 	# Check if it's a building (has info) or a deposit (has metadata)
