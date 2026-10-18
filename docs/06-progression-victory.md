@@ -44,13 +44,28 @@ What `hq_max` does depends on the game mode ([20-modos-de-juego.md](20-modos-de-
 
 | Mode | HQ level 3 | Victory |
 |------|-----------|---------|
-| Campaña | `summon_final_audit()`: 3-5 defensive waves ([15-combat.md](15-combat.md) §6), entered with "QUE BAJEN" | Surviving the last wave. Losing is not a game over: the siege can be resummoned once 3 units stand |
-| Supervivencia | Same siege, but only one (`resummon: false`) | Surviving it. Losing it ends the run (`run_ended`) and seals the save |
+| Campaña | One of the two keys: with the three campaigns complete too, `summon_final_audit()`: 3-5 defensive waves ([15-combat.md](15-combat.md) §6), entered with "QUE BAJEN" | Surviving the last wave. Losing is not a game over: the siege can be resummoned once 3 units stand |
+| Supervivencia | Same two keys, same siege, but only one (`resummon: false`) | Surviving it. Losing it ends the run (`run_ended`) and seals the save |
 | Constructor | No siege (`audit_on_capstone: false`) | `_trigger_victory()` right away (`capstone_wins: true`) |
 | Sandbox | Nothing (the siege is summoned only from the SANDBOX tab) | None (`victory: false`) |
 
 `_complete_milestone("hq_max")` asks `GameMode.audit_enabled()` first and
-`GameMode.capstone_wins()` second. In the siege modes, surviving the last wave emits
+`GameMode.capstone_wins()` second.
+
+**The two keys of the Final Audit (2026-10-18, `feat/tres-campanas`,
+[15-combat.md](15-combat.md) §13).** In Campaña and Supervivencia the siege needs HQ
+level 3 **and** the three mission campaigns complete (Land: Barracks, 5 missions +
+boss; Sea: Shipyard, 4 + boss; Air: Aerodrome, 4 + boss), in any order.
+`ProgressionManager.try_summon_final_audit()` runs on `hq_max` and on every
+`campaign_completed`; `final_audit_ready()` / `final_audit_missing()` /
+`final_audit_gate_text()` say what is missing ("Para llamar al Ataque Final falta:
+Campaña de Mar 2/5, Campaña de Aire sin empezar"). If HQ 3 lands first, a warning
+toast says it and the `final_gate` tip explains it; ¿QUÉ HACER? turns to the
+campaigns (`Objectives.campaign_gate_step()`). Rule `audit_needs_campaigns`
+(`GameMode.audit_needs_campaigns()`), global switch
+`GameConfig.final_audit_needs_campaigns`. An old save with the Audit already
+summoned, lost or won keeps it; one without the `campaigns` key starts with none.
+Each mission won gives rank XP (`campaign_mission` 60, `campaign_boss` 250). In the siege modes, surviving the last wave emits
 `storm_halted_forever` and only then `_trigger_victory()`:
 
 1. Stats: `time_played` (**played seconds**, `ProgressionManager._played_seconds`,

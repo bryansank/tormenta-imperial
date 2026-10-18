@@ -211,6 +211,9 @@ Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
 | `defense_auto_resolved` | `victory: bool, rounds: int, summary: Dictionary` | CombatManager | WarReportScreen |
 | `trial_tithe_resolved` | `repelled: bool, taken: Dictionary` | StormManager (the toy Tax of the era-1 trial storm) | WarReportScreen |
 | `sortie_offers_changed` | — | CombatManager | SkirmishButton, SkirmishPanel |
+| `campaign_changed` | — | CombatManager | SkirmishButton, SkirmishPanel |
+| `campaign_mission_won` | domain: String, mission: int, is_boss: bool | CombatManager | RankManager, line_probe_player |
+| `campaign_completed` | domain: String | CombatManager | ProgressionManager (`try_summon_final_audit`), line_probe_player |
 | `sortie_loot_gained` | `loot: Dictionary` | CombatManager | (sin oyentes: el parte lo lee de `get_last_result()`) |
 | `blueprint_unlocked` | `building_id: String` | CombatManager | (para el candado de planos de las ramas de edificios) |
 | `enemy_routed` | — | CombatManager | BattleScreen |

@@ -738,3 +738,25 @@ está y dudas, pregúntate si la usaría un chaval de 12 años hablando con un a
 busca la que usaría él. Los textos antiguos que ya no se ven en el juego
 (`TUT_INTRO_*`, `TUT_PLAY_1/3/4_BODY`, `LBL_OBJ_STEP_*`) se pasaron por la tabla de forma
 automática, sin reescribirlos a mano.
+
+## 8. Las tres campañas (2026-10-18, rama `feat/tres-campanas`)
+
+Textos en `Tr.gd`, bloque "# Tres campañas (feat/tres-campanas)", ES y EN, para
+10-15 años: frases cortas, sin siglas.
+
+- **Guía básica "Las tres campañas"** (`guide_campaigns`, categoría ejército,
+  siempre en el índice de AYUDA): qué es cada campaña, con qué edificio se abre, que
+  cada misión ganada trae botín y rebaja el Impuesto, que perder no la borra y que las
+  tres (más el CG nivel 3) abren el Ataque Final.
+- **Consejo `campaigns`**: sale al ganar la primera escaramuza (se abre la de
+  Tierra). Mismo texto que la guía.
+- **Consejo y guía `final_gate`** ("Qué pide el Ataque Final"): sale al llegar a la
+  era 3 o cuando el CG llega a nivel 3 sin las campañas (con el aviso "Para llamar al
+  Ataque Final falta: ..."). Escondido donde no hay asedio (`needs: final_audit`).
+- Textos de antes que decían "el CG a nivel 3 llama al Ataque Final", corregidos:
+  `TUT_TIP_AUDIT_BODY`, `HELP_TIP_AUDIT_BODY`, `MODE_CAMPAIGN_DESC`, `OBJ_WHY_HQ_3`,
+  `HELP_B_GOAL`.
+- En MISIONES cada candado dice qué hacer ("Cerrada. Construye: Astillero", "Esta
+  misión llega en la era 3", "La tropa descansa. Lista en 1:20"), y la tropa que no
+  vale sale apagada con su motivo ("No puede atacar a los enemigos de esta campaña").
+- El tutorial guiado no cambia: termina antes de que las campañas importen.

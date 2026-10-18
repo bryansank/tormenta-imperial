@@ -24,6 +24,8 @@ piece is specified but not wired, it says so.
 9. [Testing](#9-testing)
 10. [Known gaps](#10-known-gaps)
 11. [Dominios: mar, aire (y espacio)](#11-dominios-mar-aire-y-espacio)
+12. [El regimiento (solo cosmético)](#12-el-regimiento-solo-cosmético)
+13. [Las tres campañas: Tierra, Mar y Aire](#13-las-tres-campañas-tierra-mar-y-aire-2026-10-18-rama-feattres-campanas)
 
 ---
 
@@ -987,7 +989,10 @@ endgame.
 
 In Campaña and Supervivencia HQ level 3 no longer wins the game.
 `ProgressionManager._complete_milestone()` catches the `hq_max` milestone and, when
-`GameMode.audit_enabled()`, calls `summon_final_audit()`. Constructor wins right there
+`GameMode.audit_enabled()`, calls `try_summon_final_audit()`. **Since
+`feat/tres-campanas` (§13) the siege has two keys**: HQ level 3 and the three
+campaigns (Land, Sea, Air) complete, in any order; the summons happens when the last
+one turns, and until then the game says what is missing. Constructor wins right there
 (`GameMode.capstone_wins()`), Sandbox summons the siege only from its SANDBOX tab, and
 Supervivencia allows no resummon: a lost siege emits `run_ended`
 ([20-modos-de-juego.md](20-modos-de-juego.md)).
@@ -1538,7 +1543,9 @@ despliegue es identico al de antes (`test_air_sea_rules.gd` lo compara).
 
 ### Donde hay agua
 
-- **Misiones de costa** (`ExpeditionGenerator.offer_is_coastal(offer)`), desde la
+- **Misiones de costa** — **apagadas desde las tres campañas** (§13: son misiones
+  MIXTAS, "futuro"; `combat_mixed_missions_enabled = false`, el código sigue)
+  (`ExpeditionGenerator.offer_is_coastal(offer)`), desde la
   era `combat_coastal_min_era` (2): la expedicion al Puerto
   (`SORTIE_DEST_DOCK`) siempre; las incursiones de saqueadores con probabilidad
   `combat_coastal_raid_chance` (0,35, "piratas", flujo de azar propio
@@ -1663,3 +1670,192 @@ sus fuentes).
   la insignia y las muestras de pintura se generan una vez por aspecto.
 - **Pendiente (doc 21 §5.1):** cascos y chapas (piezas sueltas por planos raros),
   "por tipo de unidad" en vez de por regimiento entero, coste en oro de pinturas.
+
+## 13. Las tres campañas: Tierra, Mar y Aire (2026-10-18, rama `feat/tres-campanas`)
+
+Decisión de Bryan para la 1.1. **Sin probar todavía** (los tests están escritos y
+sin correr; las sondas, en la ronda final).
+
+### Qué son
+
+Tres cadenas de misiones **aparte**, cada una en su medio y con un **jefe** al
+final. Completarlas es una de las dos llaves del Ataque Final (la otra, el Cuartel
+General a nivel 3; §6 y "La condición del Ataque Final", abajo).
+
+| Campaña | Se abre con | Misiones | Combates por misión | Era mínima por misión | Paga además |
+|---|---|---|---|---|---|
+| **Tierra** | Cuartel (era 1) | 5 + jefe = 6 | 1, 1, 2, 2, 2, **3** | 1, 1, 2, 2, 2, **3** | colonos (2; el jefe 4) |
+| **Mar** | Astillero (era 2) | 4 + jefe = 5 | 1, 2, 2, 2, **3** | 2, 2, 2, 3, **3** | acero (30 + 15 por misión; el jefe ×2) |
+| **Aire** | Aeródromo (era 3) | 4 + jefe = 5 | 1, 2, 2, 2, **3** | 3, 3, 3, 3, **3** | petróleo (ídem) |
+
+16 misiones y 30 combates en total. Todo en `GameConfig.campaign_defs` (orden de las
+pestañas: `CAMPAIGN_DOMAINS`).
+
+**Nombres** (claves `CAMP_<MEDIO>_M<n>` y `CAMP_<MEDIO>_BOSS`): Tierra — El puesto de
+los saqueadores, El puente de madera, La mina tomada, Los cañones de la colina, La
+fábrica cercada, **Jefe: el Coronel de Hierro**. Mar — Lanchas en la niebla, El faro
+apagado, La flota del estrecho, El puerto bloqueado, **Jefe: el Leviatán**. Aire —
+Cazas sobre las nubes, El dirigible espía, La tormenta de hélices, El nido de cazas,
+**Jefe: el Zepelín Almirante**.
+
+### Dominio puro
+
+- **Tu bando:** solo unidades del medio de la campaña que puedan pegar a ese medio
+  (`GameConfig.campaign_unit_allowed()`). El **bombardero no va a la de Aire**: no
+  puede atacar aviones (`targets: {"air": 0}`), así que allí no serviría de nada; es
+  para la defensa de casa. `CombatManager.campaign_unit_block()` da el motivo
+  (`CAMP_UNIT_WRONG_DOMAIN` / `CAMP_UNIT_CANT_HIT`) y `can_launch_to()` lo aplica.
+- **El enemigo:** del mismo medio (`ExpeditionGenerator.domain_roster()`). Tierra: el
+  roster de siempre (infantería, cañones y tanques por era). Mar: lanchas en línea,
+  cañoneras detrás y, en la era 3 con 4+ cuerpos, un acorazado. Aire: cazas y, detrás,
+  dirigibles. Mismo número de cuerpos que la curva de siempre (`enemy_pressure`).
+- **El tablero:** Tierra, todo tierra. Mar, **mar abierto**
+  (`CombatRules.open_sea_terrain`): todo agua salvo `combat_sea_islets` (3) islotes de
+  roca de una casilla en las filas de en medio, nunca pegados, que los barcos rodean.
+  Aire, una costa vista desde el cielo (`coastal_terrain`): los aviones pisan todo, el
+  agua de abajo es paisaje. El nodo lleva `terrain_kind` y `terrain_seed`
+  (`ExpeditionGenerator.node_terrain`).
+
+### Cada misión
+
+Una misión es una **oferta** como las del tablón:
+`{kind: "campaign", domain, mission, seed, era, blueprint}`; con ella
+`ExpeditionGenerator.campaign_mission_map()` rehace el mapa entero (se ve antes de
+salir, se reconstruye igual al cargar). La semilla sale de la de la partida
+(`CampaignBook.seed_value`) mezclada con el medio y el número: **la misma misión es
+siempre el mismo mapa**, también al reintentar (la Regencia sigue en su sitio).
+
+- Forma: una cadena corta (`_chain_map`): apertura sola, en medio 1 o 2 nodos por
+  capa, y al final un nodo solo (el jefe de la misión, `is_boss`). Con un combate, un
+  nodo suelto.
+- Dureza: cada nodo cuenta como profundidad `mision × campaign_level_step (2) + su
+  capa` en la curva de siempre (`enemy_scale`, que ya lleva el ×1,05 de Gobernador).
+- **El jefe de campaña** (última misión, último nodo, `campaign_boss`): su escolta
+  del medio más `campaign_boss_heavies` (2) de lo más pesado que su medio tiene en la
+  era (tanque; acorazado en la era 3 o cañonera en la 2; dirigible), con la escala de
+  jefe × `campaign_boss_extra_scale` (1,10).
+- **Solo paga el último combate** de la misión (`campaign_final`): los de paso tienen
+  `rewards` y `loot` vacíos. Así abandonar a medias y repetir no da botín dos veces.
+  Paga: oro y madera de la curva × `campaign_reward_mult` (0,75), el recurso de su
+  medio, `campaign_mission_parts` repuestos (tierra 1, mar 2, aire 2), colonos en
+  tierra, y `campaign_mission_tithe_pct` (5) puntos de rebaja del próximo Impuesto
+  (vía `StormManager.add_tithe_discount`, como la avanzadilla). El jefe:
+  `campaign_boss_parts` (5), `campaign_boss_colonists` (4), `campaign_boss_tithe_pct`
+  (15) y el plano que quede (`_next_blueprint()`, hoy ninguno).
+- Rango: `rank_xp_sources.campaign_mission` 60 y `campaign_boss` 250 (sobre los 40
+  por combate ganado y los 80 por expedición).
+- Entre combates la columna se cura `campaign_heal_between` (30 %), como la
+  expedición corta. Retirada enemiga, sí (es tablero de la columna). Resolver solo, no.
+- Descanso: tras ganar una misión, la siguiente de esa campaña espera
+  `campaign_mission_cooldown` (150 s de juego, `get_duration`).
+
+### El modelo y el servicio
+
+- `scripts/combat/CampaignBook.gd` (puro): `progress` (misiones ganadas por medio),
+  `next_at` (descanso), `seen` (punto rojo), `setbacks`, `seed_value`. `finish(domain,
+  mission, won, now, cooldown)` solo avanza si se ganó **la misión que tocaba**; emite
+  `campaign_mission_won`, `campaign_completed`, `campaigns_all_completed`,
+  `campaign_changed`. `to_dict` / `from_dict` idempotente; un número fuera de rango se
+  recorta.
+- `CombatManager` lo posee (`_campaigns`): `campaign_offer(domain)`,
+  `campaign_lock_reason(domain)` (por orden: `CAMP_DONE`, fin de partida,
+  `CAMP_LOCK_BUILDING`, `CAMP_LOCK_FIRST_SORTIE`, `CAMP_LOCK_ERA`, `CAMP_LOCK_REST`, y
+  los de siempre: columna fuera, tablero abierto, asedio convocado),
+  `launch_campaign_mission(domain, party)`, `campaign_units_home(domain)`,
+  `campaigns_all_complete()`. Al volver la columna, `_resolve_expedition()` liquida
+  como siempre (botín, bajas, moral) y, **después** de `expedition_ended`, apunta el
+  progreso. El tablón no se toca con una misión de campaña.
+- Señales nuevas (`EventBus`): `campaign_changed()`, `campaign_mission_won(domain,
+  mission, is_boss)`, `campaign_completed(domain)`.
+- El reloj del tablón (`refresh_sorties`, cada 2 s) avisa cuando una campaña termina
+  su descanso (`_check_campaign_rest`): dos restas por tic.
+
+### Qué pasó con las salidas de antes
+
+- **La primera escaramuza** sigue igual: es el tutorial del combate y la llave de
+  todo (las campañas piden haberla ganado, `CAMP_LOCK_FIRST_SORTIE`).
+- **La expedición corta** de tres combates del tablón **es ahora la Campaña de
+  Tierra**: `combat_board_expeditions_enabled = false` la apaga; su código y sus
+  tests siguen.
+- **Las incursiones** (un combate, saqueadores o avanzadilla) se quedan como
+  **ATAQUES RÁPIDOS**: repetibles, para repuestos, colonos y la rebaja del Impuesto.
+- **Las misiones mixtas** (costa: tierra y barcos en el mismo tablero; los piratas y
+  el Puerto) son **futuro**: `combat_mixed_missions_enabled = false` hace que
+  `offer_is_coastal()` diga siempre que no. Su código sigue; los tests que las fijan
+  (`test_air_sea_missions.gd`, `test_air_sea_army.gd`) encienden el interruptor.
+- La expedición antigua de 6-8 nodos (`launch_expedition()` con semilla) sigue para
+  tests y sondas.
+
+### La condición del Ataque Final
+
+Dos llaves, en el orden que sea: **el Cuartel General a nivel 3** (hito `hq_max`) y
+**las tres campañas completas**. `ProgressionManager.try_summon_final_audit()` mira
+las dos al cumplirse el hito y con cada `campaign_completed`; si falta algo, el aviso
+lo dice ("Para llamar al Ataque Final falta: Campaña de Mar 2/5, Campaña de Aire sin
+empezar", `final_audit_gate_text()`), y el consejo `final_gate` lo explica.
+
+| Modo | Llaves |
+|---|---|
+| Campaña (Colono y Gobernador) | CG nv3 + tres campañas |
+| Supervivencia | CG nv3 + tres campañas (es la Campaña más dura; sigue con un solo asedio) |
+| Constructor | sin asedio: gana con el CG nv3, como antes |
+| Sandbox | se convoca a mano desde su pestaña, como antes |
+
+Regla `audit_needs_campaigns` en `game_mode_rules`, consulta
+`GameMode.audit_needs_campaigns()`, y el interruptor global
+`GameConfig.final_audit_needs_campaigns` (lo apagan los tests que fijan el camino de
+la 1.0, p. ej. `tests/integration/test_full_campaign.gd`). **Guardados viejos**: sin
+la clave `campaigns`, ninguna empezada; un Ataque Final ya convocado, en marcha,
+perdido o ganado sigue tal cual (vive en `progression.final_audit` y `try_summon` no
+convoca si ya hay uno). `migrate_legacy_capstone()` (guardados de antes del asedio) no
+cambia: respeta el CG nv3 que ya tenían.
+
+Gobernador: los enemigos de campaña salen con `expedition_enemy_mult` (1,05), jefe
+incluido.
+
+### La interfaz
+
+- **MISIONES** (`SkirmishPanel`): arriba, lo que falta para el Ataque Final; debajo,
+  las pestañas **TIERRA / MAR / AIRE / ATAQUES RÁPIDOS** (cada campaña con su N/M,
+  "cerrada" sin su edificio o "completa"). La pestaña de una campaña enseña su nombre,
+  la fila de misiones (✔ hechas, ▶ la que toca, ☠ el jefe), una frase de qué es, el
+  candado con su motivo y su cifra ("Cerrada. Construye: Astillero", "Esta misión
+  llega en la era 3", "La tropa descansa. Lista en 1:20") y la ficha de la misión
+  (mapa, enemigos, botín, fuerzas). La selección de tropa solo enseña las filas de su
+  medio, con lo que no vale apagado y su motivo.
+- **El mapa de la misión** (`BattleScreen`): el título dice campaña y misión, y el
+  fondo es agua (mar) o cielo (aire): un `ColorRect` con tokens de `UITheme`, nada por
+  fotograma. El parte final dice "Misión 3 de 5 ganada" o "La misión sigue ahí".
+- **¿QUÉ HACER?**: segunda línea `Objectives.campaign_step()` (la siguiente misión
+  que ya se puede jugar con tropa de su medio); con el CG a nivel 3 y campañas por
+  hacer, `campaign_gate_step()` pasa a ser el paso principal (su edificio, tropa de su
+  medio o la misión) en vez de "mundo libre"; la línea de lo que falta para el Ataque
+  Final desde la era 3; EL CAMINO lleva la fila "Las tres campañas (N de 3)".
+- **Punto rojo** del botón MISIONES: `SORTIE_WHY_CAMPAIGN` cuando hay una misión
+  nueva sin mirar que ya se puede lanzar con tropa en casa.
+- **Ayuda**: guía "Las tres campañas" (`guide_campaigns`, básica), consejo
+  `campaigns` al ganar la primera escaramuza, consejo/guía `final_gate` en la era 3 o
+  al llegar el CG a nivel 3 sin campañas.
+
+### Duración (sin medir)
+
+Estimación para la ronda final: 30 combates de 3-4 min ≈ 1,5-2 h de tablero, con la
+base corriendo mientras tanto, y las misiones repartidas por era (tierra desde el
+minuto ~5, mar desde ~18, aire desde ~35). Con la línea de hoy en 3,5-6 h, el
+objetivo de 4-6 h pide que el jugador haga campañas **mientras** prepara el CG nv3,
+no después. Medir con `line_probe` (el jugador ya las juega, §"Qué medir") y, si se
+pasa, recortar misiones (`campaign_defs`) o combates por misión.
+
+### Qué medir en la ronda final
+
+- `tools/run_tests.sh -a tests/combat/test_three_campaigns.gd`,
+  `tests/ui/test_campaigns_ui.gd`, `tests/ui/test_objectives.gd`,
+  `tests/modes/test_game_mode_services.gd`, y la suite entera (los tests de costa y
+  de la campaña de la 1.0 encienden/apagan sus interruptores).
+- `tools/line_probe.gd -- --no-dev --seeds=1,2,3` (el jugador juega las campañas en
+  calma y, tras el CG nv3, lo que pida la línea; `--campaigns=0` solo lo segundo):
+  minuto en que se completa cada campaña, misiones fallidas, victoria en 4-6 h.
+- `tools/balance_probe.gd`: tasa de victoria de cada misión y jefe con 3-6 unidades
+  de su medio en su era mínima (sobre todo el Leviatán en era 2 y el Zepelín con solo
+  cazas).
+- `tools/siege_probe.gd`: el asedio no cambia.

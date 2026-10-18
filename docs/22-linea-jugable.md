@@ -849,3 +849,35 @@ CG nv3, victoria, huecos y bolsa llena columna a columna.
 Pendiente de la ronda final de pruebas (2026-10-18: primero se implementa, se prueba al
 final). Rellenar aquí las dos tablas (normal y `--extras=1`, semillas 1-5) y lo que se vea
 roto o desequilibrado.
+
+## 14. Las tres campañas (2026-10-18, rama `feat/tres-campanas`, sin medir)
+
+El Ataque Final pide ahora el CG nivel 3 **y** las campañas de Tierra (5 + jefe),
+Mar (4 + jefe) y Aire (4 + jefe): 16 misiones y 30 combates
+([15-combat.md](15-combat.md) §13). La línea principal (`Objectives.LINE`) **no
+cambia**: las campañas van en la segunda línea de ¿QUÉ HACER?
+(`Objectives.campaign_step()`) mientras se construye, y solo pasan a ser el paso
+principal cuando el CG ya está a nivel 3 y falta alguna (`campaign_gate_step()`:
+su edificio, tropa de su medio —3 por defecto, `campaign_suggested_party`— o la
+misión). EL CAMINO lleva la fila "Las tres campañas (N de 3)" antes del Ataque Final.
+
+**El jugador de la sonda** (`tools/line_probe_player.gd`) las juega:
+
+- en calma y a más de 5 min del Aviso, la misión que propone `campaign_step()`, con
+  lo más fuerte de su medio (en tierra deja la mitad de la guarnición en casa), solo
+  si su fuerza no es menor que la del enemigo más duro de la misión;
+- con el CG a nivel 3, lo que pida la línea (Astillero en la costa, tropa, misión),
+  aunque la fuerza no llegue;
+- elige siempre la primera carta del draft entre combates;
+- `--campaigns=0` juega solo lo segundo.
+
+Imprime por semilla el minuto de cada misión ganada, cuándo se completa cada campaña
+y las fallidas; la tabla gana las columnas **tierra / mar / aire**.
+
+**Qué mirar en la ronda final** (diez semillas, `--no-dev`): que la victoria siga en
+4-6 h (la estimación es 1,5-2 h de tablero repartidas por las tres eras, con la base
+corriendo); que ninguna campaña se atasque (el Leviatán con solo barcos de la era 2,
+el Zepelín con solo cazas); que la espera tras el CG nv3 no sea "jugar las tres
+campañas de golpe". Palancas, por orden: `campaign_defs` (misiones y combates),
+`campaign_level_step`, `campaign_boss_extra_scale` / `campaign_boss_heavies`,
+`campaign_mission_cooldown`.
