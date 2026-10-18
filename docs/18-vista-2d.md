@@ -310,6 +310,17 @@ docs/21 §9).
   `assets/textures/ui/units/` (`tools/gen_unit_icons.gd`).
 - Coste: ninguno nuevo en el mapa (dos dibujos horneados en la cache como los
   demas); en el tablero, el color de fondo de una casilla.
+- **El giro es el de la 3D** (ronda de la 1.1): `rotation_steps` se guarda con el
+  convenio de la vista 3D y `Building2D.view_steps()` lo dibuja cambiado de signo
+  (el giro de un Node2D va en el sentido del reloj; el de la 3D, al reves visto
+  desde arriba). Antes, un edificio girado 90° salia mirando al lado contrario en
+  cada vista: la darsena del Astillero, hacia tierra. La huella solo depende de la
+  paridad y no cambia; el boton de girar sigue dando cuartos de vuelta.
+- **Un avion encima de una unidad** (ronda de la 1.1): la casilla pinta la de
+  superficie (`get_unit_at`); el avion de encima sale como una silueta pequena
+  arriba en el centro, con el tinte de su bando (`BattleScreen._paint_air_overhead`,
+  `board_air_mark(cell)`). Antes desaparecia del tablero 2D. Elegir la capa con el
+  dedo sigue pendiente (docs/15 §11).
 
 ## Huecos conocidos
 

@@ -742,6 +742,26 @@ aspecto. Recetas propias, sin piezas CC0:
   roja); atras, la nave del taller con su chimenea (de ahi el `FxAnchor`: humo),
   chapa y tablones. Al colocarlo, ese lado de delante es el que debe dar al mar
   (la regla de costa es de las reglas; el modelo solo la dibuja).
+- **Se orienta solo al agua (ronda de la 1.1):** al colocar un Astillero, el
+  fantasma se gira para que la darsena mire al agua mas cercana
+  (`PlacementRules.FACES_WATER`, `water_side()` por anillos hasta
+  `FACE_WATER_REACH` = 4 celdas, `steps_facing_water()`). Lo hacen los dos
+  colocadores y la colocacion tactil (`PlacementAssist` mueve el fantasma por el
+  mismo `_set_preview_cell` / `update_ghost`), y tambien el clic que planta. Solo
+  cuando el fantasma cambia de celda (unas decenas de consultas a
+  `GridManager.is_land_cell`), nada por fotograma. Si el jugador lo gira a mano
+  (R, boton de girar), deja de girarse solo hasta el proximo edificio; al MOVER se
+  respeta el giro que ya tenia. Test: `tests/buildings/test_shipyard_faces_water.gd`.
+- **Un solo giro para las dos vistas:** `rotation_steps` (el guardado) va con el
+  convenio de la vista 3D (un paso lleva el delante, +Z, hacia +X). La 2D giraba
+  al reves con el mismo numero (el giro de un Node2D va en el sentido del reloj):
+  un Astillero girado en 3D salia con la darsena hacia tierra en 2D.
+  `Building2D.view_steps()` dibuja con los pasos cambiados de signo; asi el mismo
+  guardado mira al mismo lado del mundo en las dos vistas (docs/18).
+- **Captura de puerto:** `godot --path . -s tools/costa_probe.gd -- --no-title
+  --no-dev --islands=2 --mar` (con `override.cfg` propio) planta un Muelle junto a
+  un banco, un Astillero en la costa (girado con la regla) y un Aerodromo, y los
+  fotografia de cerca en 3D y 2D (`docs/media/dev/costa_<n>_mar_*.png`).
 - **Aerodromo**: la pista delante (asfalto, rayas y balizas encendidas), el
   hangar de media cana con el portalon abierto atras a la izquierda, el mastil de
   celosia con el dirigible amarrado atras a la derecha (`FxAnchor` en el faro de

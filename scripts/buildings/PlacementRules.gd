@@ -139,6 +139,70 @@ static func touches_shore(cell: Vector2i, size: Vector2i) -> bool:
 			return true
 	return false
 
+## Lo que se orienta solo al agua al colocarlo: el Astillero tiene la darsena en
+## su lado de delante (+Z del modelo 3D, +y local del dibujo 2D). El fantasma se
+## gira para que mire al agua mas cercana; el jugador aun puede girarlo a mano
+## (entonces deja de girarse solo hasta el proximo edificio).
+const FACES_WATER := ["shipyard"]
+## Hasta cuantas celdas fuera de la huella se busca el agua.
+const FACE_WATER_REACH := 4
+## Lados del mundo en orden de giro: N (-y), E (+x), S (+y), O (-x).
+const SIDE_OFFSETS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+
+static func faces_water(building_id: String) -> bool:
+	return building_id in FACES_WATER
+
+## El lado del mundo (0 N, 1 E, 2 S, 3 O) con el agua mas cercana a la huella, o
+## -1 si no hay agua a FACE_WATER_REACH celdas. Por anillos: gana el lado que ve
+## agua a menos distancia; a igual distancia, el que ve mas celdas de agua (y a
+## igualdad, S, E, N, O). Unas decenas de consultas, y solo cuando el fantasma
+## cambia de celda: nada por fotograma.
+static func water_side(origin: Vector2i, size: Vector2i) -> int:
+	for d in range(1, FACE_WATER_REACH + 1):
+		var best := -1
+		var best_count := 0
+		for side in [2, 1, 0, 3]:
+			var count := 0
+			for c in _side_strip(origin, size, side, d):
+				if not GridManager.is_land_cell(c):
+					count += 1
+			if count > best_count:
+				best = side
+				best_count = count
+		if best >= 0:
+			return best
+	return -1
+
+## Las celdas a distancia `d` del lado `side` de la huella, una celda mas ancha
+## por cada punta (las diagonales cuentan como de ese lado).
+static func _side_strip(origin: Vector2i, size: Vector2i, side: int, d: int) -> Array:
+	var cells: Array = []
+	match side:
+		0, 2:
+			var y: int = origin.y - d if side == 0 else origin.y + size.y - 1 + d
+			for x in range(origin.x - 1, origin.x + size.x + 1):
+				cells.append(Vector2i(x, y))
+		_:
+			var x: int = origin.x + size.x - 1 + d if side == 1 else origin.x - d
+			for y in range(origin.y - 1, origin.y + size.y + 1):
+				cells.append(Vector2i(x, y))
+	return cells
+
+## Cuartos de vuelta para que el lado de delante del edificio mire al lado del
+## mundo `side`. `clockwise` = false es el convenio de `rotation_steps` (el de la
+## vista 3D, el que se guarda: los dos colocadores lo usan); true, el del giro de
+## un Node2D, que es el que Building2D.view_steps() dibuja.
+static func steps_to_face(side: int, clockwise: bool) -> int:
+	return posmod(side - 2, 4) if clockwise else posmod(2 - side, 4)
+
+## El giro que pone la darsena de `building_id` mirando al agua mas cercana
+## desde `origin`, o -1 si no se orienta solo o no hay agua cerca.
+static func steps_facing_water(building_id: String, origin: Vector2i, size: Vector2i, clockwise: bool) -> int:
+	if not faces_water(building_id):
+		return -1
+	var side := water_side(origin, size)
+	return -1 if side < 0 else steps_to_face(side, clockwise)
+
 ## Quita el yacimiento sobre el que se planta un edificio que lo consume (la
 ## Refineria). Solo tras pasar todas las comprobaciones.
 static func consume_deposit_if_required(building_id: String, verdict: Dictionary, map_gen: Node) -> void:

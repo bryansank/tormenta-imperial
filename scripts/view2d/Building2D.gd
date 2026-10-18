@@ -147,7 +147,7 @@ func _update_lot() -> void:
 	if _lot_dirty:
 		_lot_dirty = false
 		var info := GridManager.get_building_info(self)
-		var steps := int(get_meta("rotation_steps", 0))
+		var steps := view_steps()
 		if not info.is_empty():
 			_lot_origin = info["origin_cell"]
 			var world := LotPlan.road_sides_of(_lot_origin, (info["data"] as BuildingData).grid_size)
@@ -172,6 +172,15 @@ func set_selected(value: bool) -> void:
 
 func is_selected() -> bool:
 	return _selected
+
+## El giro con que se DIBUJA en 2D. El guardado lleva `rotation_steps` con el
+## convenio de la vista 3D (giro positivo sobre +Y: el delante, +Z, va hacia +X
+## con un paso); en 2D el giro positivo de un Node2D va en el sentido del reloj,
+## al reves. Dibujando con los pasos cambiados de signo, un edificio mira al
+## mismo lado del mundo en las dos vistas (la darsena del Astillero al agua,
+## colocado en la vista que sea). La huella solo depende de la paridad: igual.
+func view_steps() -> int:
+	return posmod(-int(get_meta("rotation_steps", 0)), 4)
 
 ## Huella sin girar, en pixeles.
 func base_size_px() -> Vector2:
@@ -227,7 +236,7 @@ func _sync_flag() -> void:
 	if _flag == null:
 		return
 	_flag.set_mount(Art.flag_mount(data.id, base_size_px(), yard_px(),
-		int(get_meta("rotation_steps", 0)), int(get_meta("level", 1))))
+		view_steps(), int(get_meta("level", 1))))
 
 func _current_signature() -> Array:
 	var constructing := has_meta("under_construction")
@@ -242,7 +251,7 @@ func _current_signature() -> Array:
 	_look = LookRule.derive(LookRule.facts_of(self, data))
 	_site_seed = LookRule.seed_of(self, data) if int(_look["look"]) == LookRule.Look.CONSTRUCTION else 0
 	return [constructing, progress, int(get_meta("level", 1)), int(get_meta("health", data.max_health)),
-		BuildingHealth.is_ruined(self), mask, int(get_meta("rotation_steps", 0)), String(get_meta("custom_name", "")),
+		BuildingHealth.is_ruined(self), mask, view_steps(), String(get_meta("custom_name", "")),
 		Tr.get_locale(), int(_look["look"]), int(_look["phase"]), _site_seed, _crop_signature()]
 
 ## La Granja repinta su cultivo al crecer (en decimos) y al madurar.
@@ -290,7 +299,7 @@ func _apply_site_fx() -> void:
 	var look := int(_look["look"])
 	var key := ""
 	if look == LookRule.Look.CONSTRUCTION:
-		key = "%d:%d:%d" % [int(_look["phase"]), _site_seed, int(get_meta("rotation_steps", 0))]
+		key = "%d:%d:%d" % [int(_look["phase"]), _site_seed, view_steps()]
 	if key == _site_key:
 		return
 	_site_key = key
@@ -307,7 +316,7 @@ func _make_site_fx(phase: int) -> Node2D:
 	var holder := Node2D.new()
 	holder.name = "SiteFx"
 	holder.z_index = 5
-	holder.rotation = float(int(get_meta("rotation_steps", 0))) * PI * 0.5
+	holder.rotation = float(view_steps()) * PI * 0.5
 	var n := LookRule.footprint_class(data.grid_size)
 	var style := LookRule.site_style(data.id)
 	var layout := LookRule.site_layout(_site_seed, style, n)
@@ -424,7 +433,7 @@ func _place_fx(holder: Node2D) -> void:
 	# Las bocas estan en el dibujo del edificio, que deja libre el patio (y
 	# crece con el nivel, como el dibujo).
 	var size := (base_size_px() - Vector2.ONE * yard_px() * 2.0) * Art.level_scale(int(get_meta("level", 1)))
-	var angle := float(int(get_meta("rotation_steps", 0))) * PI * 0.5
+	var angle := float(view_steps()) * PI * 0.5
 	for sprite in holder.get_children():
 		var anchor: Vector2 = sprite.get_meta("anchor", Vector2(0.5, 0.5))
 		var local := (anchor - Vector2(0.5, 0.5)) * size
@@ -523,7 +532,7 @@ func _draw_damage_marks(size: Vector2, stage: int, variant: int, n: int) -> void
 func _draw() -> void:
 	if data == null:
 		return
-	var steps: int = get_meta("rotation_steps", 0)
+	var steps: int = view_steps()
 	var size := base_size_px()
 	var mask := 0
 	if data.id == "road" and not ghost:

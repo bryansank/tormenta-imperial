@@ -57,6 +57,9 @@ var _moving_building: Node3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
 var _grid_overlay: MeshInstance3D = null
 var _rotation_steps: int = 0  # 0=0°, 1=90°, 2=180°, 3=270°
+## El Astillero se gira solo hacia el agua hasta que el jugador lo gira a mano
+## (PlacementRules.FACES_WATER).
+var _auto_face := true
 var _ghost_valid: StandardMaterial3D
 var _ghost_invalid: StandardMaterial3D
 var _last_preview_valid := true
@@ -400,7 +403,21 @@ func _rebuild_preview() -> void:
 
 func _on_rotate_requested() -> void:
 	if _state != State.IDLE:
+		_auto_face = false
 		_rotate_building()
+
+## Gira el fantasma para que la darsena mire al agua mas cercana a `cell`. Solo al
+## colocar (al mover se respeta el giro que ya tenia) y mientras el jugador no lo
+## haya girado a mano. Se llama cuando el fantasma cambia de celda, no por fotograma.
+func _auto_face_water(cell: Vector2i) -> void:
+	if _state != State.PLACING or not _auto_face or _current_data == null:
+		return
+	var steps := Rules.steps_facing_water(_current_data.id, cell, _get_rotated_size(), false)
+	if steps < 0 or steps == _rotation_steps:
+		return
+	_rotation_steps = steps
+	if _preview_node:
+		_preview_node.rotation.y = _get_rotation_angle()
 
 ## Load original (unrotated) BuildingData from the .tres file by ID.
 func _load_original_data(building_id: String) -> BuildingData:
@@ -436,6 +453,7 @@ func _set_preview_cell(cell: Vector2i) -> void:
 	if cell == _hover_cell:
 		return
 	_hover_cell = cell
+	_auto_face_water(cell)
 
 	if _preview_node and _current_data:
 		var rotated_size := _get_rotated_size()
@@ -458,6 +476,7 @@ func _on_building_selected(data: Resource) -> void:
 	_cancel()
 	_current_data = data as BuildingData
 	_rotation_steps = 0
+	_auto_face = true
 	_state = State.PLACING
 	_create_preview()
 	_assist.begin()
@@ -556,6 +575,7 @@ func _on_demolish_requested(building: Node) -> void:
 	EventBus.building_demolished.emit(building, cell)
 
 func _try_place(cell: Vector2i) -> void:
+	_auto_face_water(cell)
 	var rotated_size := _get_rotated_size()
 	var map_gen := _map_generator()
 	var verdict := evaluate_placement(_current_data.id, cell, rotated_size, map_gen)

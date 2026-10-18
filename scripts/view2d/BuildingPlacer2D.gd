@@ -28,6 +28,9 @@ const Fx := preload("res://scripts/buildings/BuildingFx.gd")
 var _state: State = State.IDLE
 var _current_data: BuildingData = null
 var _rotation_steps := 0
+## El Astillero se gira solo hacia el agua hasta que el jugador lo gira a mano
+## (PlacementRules.FACES_WATER).
+var _auto_face := true
 var _moving_building: Node2D = null
 var _ghost: Node2D = null
 var _hover_cell := Vector2i(-99999, -99999)
@@ -234,6 +237,7 @@ func _process(delta: float) -> void:
 func update_ghost(cell: Vector2i) -> void:
 	if _ghost == null or _current_data == null:
 		return
+	_auto_face_water(cell)
 	var size := Rules.rotated_size(_current_data, _rotation_steps)
 	_ghost.position = View2D.footprint_center_px(cell, size)
 	var ignore: Node = _moving_building if _state == State.MOVING else null
@@ -273,7 +277,24 @@ func _rotate_building() -> void:
 
 func _on_rotate_requested() -> void:
 	if _state != State.IDLE:
+		_auto_face = false
 		_rotate_building()
+
+## Gira el fantasma para que la darsena mire al agua mas cercana a `cell`. Solo al
+## colocar (al mover se respeta el giro que ya tenia) y mientras el jugador no lo
+## haya girado a mano. Se llama cuando el fantasma cambia de celda, no por fotograma.
+## Los pasos van con el convenio de la vista 3D (el guardado es uno solo): el
+## dibujo 2D los invierte al pintar (Building2D.view_steps()).
+func _auto_face_water(cell: Vector2i) -> void:
+	if _state != State.PLACING or not _auto_face or _current_data == null:
+		return
+	var steps := Rules.steps_facing_water(_current_data.id, cell, Rules.rotated_size(_current_data, _rotation_steps), false)
+	if steps < 0 or steps == _rotation_steps:
+		return
+	_rotation_steps = steps
+	if _ghost:
+		_ghost.set_meta("rotation_steps", _rotation_steps)
+		_ghost.queue_redraw()
 
 func _show_grid_overlay(forced: bool) -> void:
 	var scene := get_tree().current_scene if is_inside_tree() else null
@@ -287,6 +308,7 @@ func _on_building_selected(data: Resource) -> void:
 	_cancel()
 	_current_data = data as BuildingData
 	_rotation_steps = 0
+	_auto_face = true
 	_state = State.PLACING
 	_create_ghost()
 
@@ -294,6 +316,7 @@ func _on_building_selected(data: Resource) -> void:
 func try_place(cell: Vector2i) -> Node:
 	if _current_data == null:
 		return null
+	_auto_face_water(cell)
 	var size := Rules.rotated_size(_current_data, _rotation_steps)
 	var map_gen := _map_generator()
 	var verdict := Rules.evaluate_placement(_current_data.id, cell, size, map_gen)
