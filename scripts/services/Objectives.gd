@@ -226,7 +226,10 @@ static func _support_or(target: Dictionary) -> Dictionary:
 		return make
 	# Un paso `eager` de la linea (el Cuartel temprano) que ya se puede pagar y
 	# tiene obreros va tal cual: los apoyos son para cuando falta algo.
-	if bool(target.get("eager", false)) and missing_for(target).is_empty() 			and _workers_for(target) <= PopulationManager.get_free_workers() 			and _food_market_step("food").is_empty():
+	# Los tablones que ya salen del taller cuentan como hechos.
+	if bool(target.get("eager", false)) and _missing_once_made(target).is_empty() \
+			and _workers_for(target) <= PopulationManager.get_free_workers() \
+			and _food_market_step("food").is_empty():
 		return target
 	var support: Dictionary = _support_step(target)
 	if support.is_empty():
@@ -348,9 +351,37 @@ static func make_step_for(target: Dictionary) -> Dictionary:
 		var source: String = GameConfig.get_material_source(String(res))
 		if source == "" or Rules.count_building(source) < 1:
 			continue
+		# Lo que ya se esta fabricando cuenta: sin esto el panel seguia diciendo
+		# "Fabrica tablones" con el lote en marcha y se pagaba dos veces (la
+		# sonda de linea gastaba 80 de madera en 20 tablones, ronda 1.0).
+		var still: int = int(missing[res]) - in_production(String(res))
+		if still <= 0:
+			continue
 		return {"kind": "make", "id": String(res), "building": source,
-			"amount": int(missing[res]), "why": "OBJ_WHY_MAKE"}
+			"amount": still, "why": "OBJ_WHY_MAKE"}
 	return {}
+
+## Lo que le falta a `step` contando lo que el taller ya esta fabricando.
+static func _missing_once_made(step: Dictionary) -> Dictionary:
+	var out: Dictionary = missing_for(step)
+	for res in out.keys():
+		if ResourceManager.is_material_name(String(res)) \
+				and int(out[res]) - in_production(String(res)) <= 0:
+			out.erase(res)
+	return out
+
+## Cuanto de `res` sale de los procesos en marcha (todas las vueltas que quedan).
+static func in_production(res: String) -> int:
+	var total := 0
+	for info in GridManager.buildings_view():
+		var node: Node = info.get("node")
+		if node == null or not is_instance_valid(node):
+			continue
+		var active: Dictionary = ProcessManager.get_active(node)
+		if active.is_empty():
+			continue
+		total += int((active.get("produces", {}) as Dictionary).get(res, 0)) * maxi(1, int(active.get("count", 1)))
+	return total
 
 ## La receta del taller que da `material` en su edificio, o {}.
 static func material_recipe(material: String) -> Dictionary:
@@ -1023,8 +1054,22 @@ static func _workers_for(step: Dictionary) -> int:
 ## Una casa solo ayuda si la gente que falta no esta ya de camino: si hay aforo
 ## libre, la poblacion crece sola y basta con esperar.
 static func _houses_would_help(workers_needed: int) -> bool:
-	var room: int = PopulationManager.get_max_population() - PopulationManager.get_population()
+	var room: int = PopulationManager.get_max_population() - PopulationManager.get_population() + _room_on_the_way()
 	return PopulationManager.get_free_workers() + room < workers_needed
+
+## El sitio de las casas que aun se estan levantando: la gente ya viene de camino.
+## Sin esto, con la primera Casa en obra el panel pedia otra igual (dos casas de
+## golpe en el minuto 4, y sin oro para la Mina: ronda de pruebas 1.0, line_probe).
+static func _room_on_the_way() -> int:
+	var room := 0
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info["data"]
+		if data.population_capacity <= 0 or data.is_core:
+			continue
+		var node: Node = info.get("node")
+		if node != null and ProductionManager.is_constructing(node):
+			room += data.population_capacity
+	return room
 
 ## Construir `building_id` si el tope, los requisitos y el mapa lo permiten.
 ## Vacio si no: un paso que el jugador no puede dar no se le propone.
