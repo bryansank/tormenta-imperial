@@ -16,6 +16,10 @@ extends Node
 ##   --tag=nombre      sufijo de los archivos
 ##   --dev             dev_mode (boton LIMPIAR en la barra de recursos)
 ##   --only-hud        solo la captura del HUD
+##   --controls-size=small|normal|large|xlarge   tamano de los controles en pantalla
+##   --no-help         sin globos de ayuda ni tarjetas del tutorial
+##   --placing         tras el HUD, una captura colocando una Casa (✓, R, CANCELAR)
+##   --settings-tabs=1,2,3   pestanas de Ajustes que capturar (por defecto 1,3)
 ##
 ## Las capturas van a docs/media/dev/interfaz/ (ignorada por git). Correla
 ## SIEMPRE con una carpeta de datos aparte (override.cfg temporal con
@@ -66,7 +70,8 @@ func _run() -> void:
 	GameConfig.ui_panel_opacity = float(_arg("opacity", "1.0"))
 	GameConfig.ui_hud_hidden = []
 	GameConfig.ui_layout = {}
-	GameConfig.ui_helper_visible = true
+	GameConfig.ui_helper_visible = _arg("no-help") != "true"
+	GameConfig.ui_touch_controls_size = _arg("controls-size", "auto")
 	if _arg("edited") == "true":
 		GameConfig.ui_layout[DeviceProfile.layout_key()] = {
 			"StormHUD": [0, 520],
@@ -86,11 +91,31 @@ func _run() -> void:
 	get_tree().change_scene_to_file(scene)
 	await _frames(60)
 	var main := get_tree().current_scene
+	# El menu principal sale al arrancar y tapa todo: se cierra como "Continuar".
+	var title: Node = main.get_node_or_null("TitleMenu")
+	if title != null and title.has_method("is_open") and title.is_open():
+		title.close_menu()
+		await _frames(10)
 	_seed_state()
 	await _frames(20)
 	_close_intro(main)
+	if _arg("no-help") == "true":
+		# Ni tutorial guiado ni sus lecciones (REPARAR...): el HUD a la vista.
+		var dev := GameConfig.dev_mode
+		GameConfig.dev_mode = true
+		TutorialManager.skip_guide()
+		GameConfig.dev_mode = dev
+		var tut: CanvasLayer = main.get_node_or_null("TutorialPanel")
+		if tut != null:
+			tut.visible = false
 	await _frames(10)
 	await _shot("hud")
+	if _arg("placing") == "true":
+		EventBus.building_selected_for_placement.emit(load("res://data/buildings/house.tres"))
+		await _frames(20)
+		await _shot("placing")
+		EventBus.building_placement_cancelled.emit()
+		await _frames(10)
 	if _arg("only-hud") == "true":
 		_finish()
 		return
@@ -109,10 +134,19 @@ func _run() -> void:
 	var settings: Node = main.get_node_or_null("SettingsPanel")
 	if settings:
 		settings.call("toggle")
-		for tab in [1, 3]:
+		var tabs: Array = []
+		for t in _arg("settings-tabs", "1,3").split(","):
+			tabs.append(int(t))
+		for tab in tabs:
 			settings.call("select_tab", tab)
 			await _frames(8)
 			await _shot("settings_tab%d" % tab)
+			# Y el final de la pestana (lo que no cabe a la primera).
+			var scrolls: Array = settings.get("_scrolls")
+			if tab < scrolls.size():
+				(scrolls[tab] as ScrollContainer).scroll_vertical = 100000
+				await _frames(6)
+				await _shot("settings_tab%d_end" % tab)
 		settings.set("_needs_rebuild", false)
 		settings.call("toggle")
 		await _frames(5)

@@ -37,6 +37,9 @@ const HOLD_ZOOM_PER_SEC := 5.0
 
 var _pan_direction: Vector2 = Vector2.ZERO
 var _rotate_building_btn: Button = null
+## La fila de girar la camara, y si esta vista la lleva (la 2D no).
+var _camera_rotate_box: Control = null
+var _camera_rotate_allowed := false
 ## El hueco vacio del centro de la cruceta (crece con ella).
 var _dpad_centre: Control = null
 var _cancel_placement_btn: Button = null
@@ -80,9 +83,16 @@ func _apply_visibility(enabled: bool) -> void:
 		_holds.clear()
 
 ## The placement pair (rotate building + cancel) comes and goes together.
+## En pantalla estrecha (movil en vertical) la columna derecha, al colocar,
+## subia por encima de la cruceta y su fila de girar la camara quedaba debajo de
+## CONSTRUIR: mientras se coloca esa fila se esconde (la camara se sigue girando
+## con dos dedos) y vuelve al terminar.
 func _set_placing(placing: bool) -> void:
 	_rotate_building_btn.visible = placing
 	_cancel_placement_btn.visible = placing
+	if _camera_rotate_box != null:
+		var narrow: bool = UILayoutManager.is_narrow()
+		_camera_rotate_box.visible = _camera_rotate_allowed and not (placing and narrow)
 
 func is_placing_shown() -> bool:
 	return _cancel_placement_btn.visible
@@ -265,7 +275,9 @@ func _setup_ui() -> void:
 	var rotate_box := _create_rotate_buttons()
 	right_vbox.add_child(rotate_box)
 	# La vista 2D (docs/18-vista-2d.md) no gira la camara: sin Camera3D, fuera.
-	rotate_box.visible = get_viewport().get_camera_3d() != null
+	_camera_rotate_allowed = get_viewport().get_camera_3d() != null
+	rotate_box.visible = _camera_rotate_allowed
+	_camera_rotate_box = rotate_box
 
 	# Building rotate button (visible only during placement)
 	_rotate_building_btn = _styled_button("R ↻")

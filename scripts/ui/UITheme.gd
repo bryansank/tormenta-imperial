@@ -737,6 +737,8 @@ static func make_check_button(text: String, pressed: bool, on_toggled: Callable)
 	cb.text = text
 	cb.button_pressed = pressed
 	cb.custom_minimum_size.y = SETTINGS_ROW_H
+	# Un texto largo envuelve en vez de ensanchar el panel (movil en vertical).
+	cb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var hf := heavy_font()
 	if hf:
 		cb.add_theme_font_override("font", hf)
@@ -1102,8 +1104,33 @@ static func make_option_row(label_text: String, options: Array, selected: int, o
 	picker.selected = clampi(selected, 0, maxi(options.size() - 1, 0))
 	if on_selected.is_valid():
 		picker.item_selected.connect(on_selected)
+	# En un lienzo estrecho (movil en vertical) el texto largo del desplegable
+	# ("Automatico (solo tablet y movil)") se comia la fila y la etiqueta, que
+	# envuelve, quedaba de una letra por linea. El desplegable no pasa del 55 %
+	# de su fila; lo que no quepa se corta con "…" (en horizontal cabe entero).
+	picker.clip_text = true
+	picker.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.resized.connect(func(): _fit_option_picker(row, picker))
 	row.add_child(picker)
 	return row
+
+## Ancho del desplegable de make_option_row: el de su opcion mas larga (letra,
+## flecha y margenes), sin pasar del 55 % de la fila ni bajar de 120.
+static func _fit_option_picker(row: Control, picker: OptionButton) -> void:
+	if not is_instance_valid(picker) or row.size.x <= 0.0:
+		return
+	var font := picker.get_theme_font("font")
+	var fs := picker.get_theme_font_size("font_size")
+	var widest := 0.0
+	for i in picker.item_count:
+		widest = maxf(widest, font.get_string_size(picker.get_item_text(i), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+	var arrow := picker.get_theme_icon("arrow")
+	var sb := picker.get_theme_stylebox("normal")
+	var natural := widest + (float(arrow.get_width()) if arrow != null else 16.0) 		+ (sb.get_minimum_size().x if sb != null else 16.0) + 12.0
+	var w := clampf(natural, 120.0, maxf(120.0, row.size.x * 0.55))
+	w = maxf(w, 180.0) if row.size.x * 0.55 >= 180.0 else w
+	if not is_equal_approx(picker.custom_minimum_size.x, w):
+		picker.custom_minimum_size.x = w
 
 ## Hueco entre filas de un desplegable para que cada fila mida SETTINGS_ROW_H
 ## (la fila es la letra mas este hueco).

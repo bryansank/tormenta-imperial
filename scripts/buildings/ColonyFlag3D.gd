@@ -193,6 +193,8 @@ func _ready() -> void:
 	# sola en el aire (ronda de pruebas 1.0).
 	EventBus.building_ruined.connect(func(_b): _sync_visible.call_deferred())
 	EventBus.building_repaired.connect(func(_b): _sync_visible.call_deferred())
+	# Mover un edificio puede girarlo: la bandera vuelve a mirar al viento.
+	EventBus.building_moved.connect(func(_f, _t): _face_wind.call_deferred())
 
 func refresh() -> void:
 	if _material != null:
@@ -209,6 +211,15 @@ func _apply_quality() -> void:
 func _sync_visible() -> void:
 	if _owner_node != null and is_instance_valid(_owner_node):
 		visible = not is_hidden_by_works(_owner_node)
+	_face_wind()
+
+## Todas las banderas ondean hacia el mismo lado (+X del mundo), giren o no sus
+## edificios: un Cuartel girado 90 grados la ponia de canto a la camara y uno a
+## 180 la mostraba del reves. El nodo gira sobre su origen (el pie del mastil o
+## el FlagAnchor), asi que el palo no se mueve.
+func _face_wind() -> void:
+	if is_inside_tree():
+		global_rotation.y = 0.0
 
 static func is_hidden_by_works(building: Node) -> bool:
 	if BuildingHealth.is_ruined(building):

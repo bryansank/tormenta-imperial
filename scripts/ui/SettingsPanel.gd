@@ -366,8 +366,11 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 	body.add_child(UITheme.make_separator())
 	body.add_child(UITheme.section_header(Tr.t("LBL_SECTION_LAYOUT")))
 	body.add_child(_make_hint(Tr.ti("LBL_LAYOUT_HINT")))
-	var layout_row := HBoxContainer.new()
-	layout_row.add_theme_constant_override("separation", 8)
+	# HFlow: en un movil en vertical los dos botones no caben en una fila y
+	# ensanchaban todo el panel fuera de la pantalla; asi el segundo baja.
+	var layout_row := HFlowContainer.new()
+	layout_row.add_theme_constant_override("h_separation", 8)
+	layout_row.add_theme_constant_override("v_separation", 8)
 	var edit_btn := Button.new()
 	edit_btn.name = "EditLayoutButton"
 	edit_btn.text = Tr.t("BTN_EDIT_LAYOUT")
@@ -608,8 +611,10 @@ func _refresh_preview() -> void:
 	var fs := UITheme.scaled_font(UITheme._FONT_BASE["body"],
 		float(UITheme.TEXT_SCALES.get(_pending_text_size(), 1.0)))
 	var min_ratio := 7.0 if GameConfig.ui_high_contrast else 4.5
-	var row1 := HBoxContainer.new()
-	row1.add_theme_constant_override("separation", 14)
+	# HFlow: en un movil en vertical las cuatro muestras bajan de fila en vez
+	# de ensanchar el panel fuera de la pantalla.
+	var row1 := HFlowContainer.new()
+	row1.add_theme_constant_override("h_separation", 14)
 	col.add_child(row1)
 	for pair in [["POSITIVE", "LBL_PREVIEW_ALLY"], ["DANGER", "LBL_PREVIEW_ENEMY"], ["WARNING", "LBL_PREVIEW_WARNING"], ["INFO", "LBL_PREVIEW_INFO"]]:
 		var l := Label.new()
