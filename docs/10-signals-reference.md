@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**126 signals** in 30 categories (counted on 2026-10-14, after the skirmishes), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**127 signals** in 30 categories (counted on 2026-10-14, after the skirmishes; +1 `trial_tithe_resolved` on 2026-10-17), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -208,6 +208,7 @@ Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
 | `expedition_ended` | `result: int, rewards: Dictionary, casualties: Dictionary` | CombatManager | BattleScreen, SkirmishPanel, ArmyPanel, NotificationPanel, AudioManager |
 | `expedition_resumed` | `expedition_id: int` | CombatManager | BattleScreen, SkirmishPanel, ArmyPanel |
 | `defense_auto_resolved` | `victory: bool, rounds: int, summary: Dictionary` | CombatManager | WarReportScreen |
+| `trial_tithe_resolved` | `repelled: bool, taken: Dictionary` | StormManager (the toy Tax of the era-1 trial storm) | WarReportScreen |
 | `sortie_offers_changed` | — | CombatManager | SkirmishButton, SkirmishPanel |
 | `sortie_loot_gained` | `loot: Dictionary` | CombatManager | (sin oyentes: el parte lo lee de `get_last_result()`) |
 | `blueprint_unlocked` | `building_id: String` | CombatManager | (para el candado de planos de las ramas de edificios) |

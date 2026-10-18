@@ -689,3 +689,37 @@ y hay tres textos nuevos: `OBJ_WHY_HOUSE_ROOM`, `OBJ_WHY_DECORATE`, `OBJ_WHY_MAK
   pueden notarlo: `tests/ui/test_objectives.gd` (un paso de casa puede salir antes que
   el que esperaban si la gente está al tope) y los que miran el coste del Cuartel o del
   blindado.
+
+## 12. Cuartel temprano (2026-10-17, rama `feat/cuartel-temprano`)
+
+Decisión de Bryan ("prioridad después de la madera", opción A del informe 26 del
+contexto privado). **Sin medir**: los números de esta sección son de diseño; hay que
+pasar la sonda de línea antes de dar la era 1 por buena (ver "Falta").
+
+| Valor | Antes | Después | Por qué |
+|---|---|---|---|
+| `barracks.tres` coste | 150 oro / 60 acero / 80 madera + 20 tablones | **120 / 0 / 80 + 10 tablones** | era 1 sin acero; los tablones (2 vueltas de 20 madera en el Aserradero) siguen siendo una decisión de taller |
+| `barracks.tres` trabajadores | 3 | **1** | aserradero (2) + Cuartel (1) + Granja (2) = los 5 del Núcleo: con 3, la Granja se quedaba sin gente hasta la primera Casa y el tutorial se torcía. Un Cuartel sin gente entrena igual (los trabajadores no le daban nada) |
+| `building_prerequisites.barracks` | Fundición + Aserradero | **Aserradero** | de ahí salen los tablones |
+| `building_prerequisites.tower` | Cuartel | **Cuartel + Fundición** | antes el Cuartel ya implicaba la Fundición; la Torre pide acero y vigas |
+| `building_limits_by_era.barracks` | 3 / 4 / 5 | sin cambio | 3 en la era 1 ya basta (cada uno es una plaza de entrenamiento) |
+| `Objectives.LINE` | aserradero, granja, mina, casa, mercado, almacén, fundición, **cuartel**, guarnición… | aserradero, **cuartel** (`needs: tithe`), granja, **1 soldado** (`any`, `needs: tithe`, fila de la primera misión detrás), mina, casa, mercado, almacén, fundición, guarnición… | el Cuartel va antes que la Granja porque la comida de salida (80) dura ~16 min con 5 personas en las fases tempranas y el Cuartel ya no le quita gente. En Constructor (sin Impuesto) el Cuartel sigue tras la Fundición (`needs: no_tithe`) |
+| Tormenta de prueba | sin Diezmo | **Impuesto de juguete** (`storm_trial_tithe_*`): con tropas en casa, defensa en el tablero contra 1-2 Cobradores de Infantería a escala 0,6 (combate guiado si es la primera pelea); sin tropas, 10 % de la bolsa con tope 40. Nunca edificios, trabajadores ni daño; no emite `tithe_resolved` (ni Mercado, ni rebaja, ni escolta que crece) sino `trial_tithe_resolved`, con su parte en `WarReportScreen` | que el Cuartel temprano se entienda antes de la Tormenta de verdad |
+
+**Coste extra en la era 1:** Cuartel 120 oro + 80 madera + 40 madera de tablones, y un
+soldado 40 oro + 20 madera (sueldo 1 oro / 30 s). Unos 160 oro y 140 madera más antes de
+la Fundición; la primera misión devuelve parte (oro y madera). A ojo, +1-2 min de era 1
+(de 13-17 a ~14-19 con el tutorial); el tope pedido por Bryan es "que no se alargue
+mucho".
+
+**Falta (ronda de pruebas):**
+
+- `line_probe` (`-- --no-dev --seeds=1,2,3,4,5,6,7,8,9,10`, con y sin `--tutorial=0`):
+  minuto de la Fundición, minuto del primer Cuartel, si el soldado está en casa en la
+  tormenta de prueba y cuánto se lleva el Impuesto de juguete cuando no.
+- `tools/line_probe_player.gd` ya resuelve cualquier tablero abierto (el del Diezmo de
+  verdad): con un soldado en casa en el minuto 5 se abrirá el de la defensa de prueba.
+  Mirar que lo resuelve igual y que el Impuesto de juguete queda saldado
+  (`StormManager.is_trial_tithe_pending()` en falso).
+- Si la era 1 pasa de ~18 min: abaratar el Cuartel a 100 oro o quitar el soldado de la
+  línea (la misión ya lo pide en cuanto hay uno).

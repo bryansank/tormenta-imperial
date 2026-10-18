@@ -69,7 +69,7 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 126 signals in 30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 127 signals in 30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
@@ -234,11 +234,18 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
   unchanged). Era 1 measures 8.6-10.2 min with the default probe player (docs/22 §5.5).
 - **Trial storm (era 1):** around minute 5 of play (`storm_trial_at` = 300 s of played
   time, through `get_duration()`), a scripted gentle storm runs Warning → Ash → Storm →
-  calm with the usual tips, but **no Tithe**, no building or queue damage, production
+  calm with the usual tips, but **no real Tithe**, no building or queue damage, production
   at 75% and a quarter of the morale bite. Once per game (saved as `trial_done` /
   `trial_storm` in the storm save), on its own `StormCycle` (`create_trial()`), so it
   never arms the real clock (that still comes with the Foundry); skipped if the
   Foundry comes first, and off in Constructor/Sandbox (`GameMode.storm_trial_enabled()`).
+  **Toy Tax (2026-10-17):** when it clears, practice Collectors come down
+  (`storm_trial_tithe_*`): with troops at home, a defence board against 1-2 weak
+  infantry (scale 0.6; the guided combat lesson if it is the first fight); with nobody
+  home, 10 % of the bag (cap 40), never buildings, workers or damage. It is not the
+  Tithe: it emits `trial_tithe_resolved` (its own report in `WarReportScreen`), not
+  `tithe_resolved`. `trial_tithe_pending` travels in the storm save and is re-asked on
+  load (docs/22 §12).
 
 ### Resources
 
@@ -263,7 +270,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Market | 2x2 | 100/0/0/60 | 1 | Opens the market (ABRIR MERCADO); needs a Gold Mine; max 1 | 1 |
 | Laboratory | 2x2 | 150/0/0/100 | 2 | Opens the tech tree (INVESTIGAR); needs a House; max 1 | 1 |
 | Foundry | 2x2 | 200/0/0/120 | 3 | 5 steel/15s; makes beams | 1->2 |
-| Barracks | 2x2 | 150/60/0/80 + 20 planks | 3 | Trains units (ArmyManager) | 2 |
+| Barracks | 2x2 | 120/0/0/80 + 10 planks | 1 | Trains units (ArmyManager); era 1 = infantry only | 1 |
 | Refinery | 2x2 | 300/150/0/100 + 6 beams | 4 | 4 oil/18s; makes fuel | 2->3 |
 | Tower | 2x2 | 150/60/20/30 + 4 beams | 1 | Storm mitigation + an artillery crew on defensive boards (only while operational) | 2-3 |
 | HQ (capstone) | 2x2 | 500/300/200/200 + 20 beams, 10 ingots, 10 fuel | 5 | 10 gold/20s | 3 |
@@ -344,7 +351,15 @@ ingots + fuel, Statue ingots) and `hq_upgrade_costs`. The HUD shows them in a ma
 row; `Objectives.make_step_for()` turns a missing material into a `"make"` step.
 
 **Era gates:** Foundry (era 2) needs Sawmill + Gold Mine + House + Warehouse;
-Refinery (era 3) needs Foundry + Barracks (`building_prerequisites`).
+Refinery (era 3) needs Foundry + Barracks + Laboratory (`building_prerequisites`).
+
+**Early Barracks (2026-10-17, `feat/cuartel-temprano`):** the Barracks is era 1, no
+steel, one worker, and needs only the Sawmill (its planks). ¿QUÉ HACER? asks for it right
+after the first Sawmill (`Objectives.LINE`, `needs: tithe`), then the Farm, one soldier
+and the first mission; the guided tutorial has a Barracks step (5 of 13) right after
+collecting the wood. Artillery/Tank keep their era (`ArmyManager.is_unlocked`), and the
+ARMY panel says what unlocks them (`LBL_ARMY_LOCKED_ERA_*`). The Tower now also needs
+the Foundry. Not yet measured with `line_probe` (docs/22 §12).
 
 **Quick guide:** `scripts/ui/QuickGuide.gd`, one screen with four blocks (resources,
 extraction, buildings and roads, progress). Since 2026-10-14 it **no longer opens by

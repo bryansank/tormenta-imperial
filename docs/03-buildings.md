@@ -117,8 +117,23 @@ big striped awnings with goods on the counters (see "Parcela y atrezo").
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Prereqs |
 |----|------|------|--------------|---------|------------|---------|
-| `barracks` | Cuartel | 2x2 | 150/60/0/80 + 20 planks | 3 | 15s | foundry + sawmill |
-| `tower` | Torre | 2x2 | 150/60/20/30 + 4 beams | 1 | 8s | barracks |
+| `barracks` | Cuartel | 2x2 | 120/0/0/80 + 10 planks | 1 | 15s | sawmill |
+| `tower` | Torre | 2x2 | 150/60/20/30 + 4 beams | 1 | 8s | barracks + foundry |
+
+**Cuartel temprano (2026-10-17, rama `feat/cuartel-temprano`, decisión de Bryan).**
+The Barracks is an **era 1** building now: 120 gold + 80 wood + 10 planks, no steel,
+one worker, and it only needs the Sawmill (its planks come from there). Before it
+cost 150/60/0/80 + 20 planks, three workers, and needed the Foundry, so it arrived
+around minute 10-14. Why early: after every Storm the Tax Collectors come down and
+only troops at home fight them; the era-1 trial storm now brings a toy Tax
+(`storm_trial_tithe_*`, docs/22 §12) so the Barracks matters by minute 5; and
+missions (loot, spare parts, blueprints) only exist with soldiers. In era 1 it trains
+**Infantry** only: Artillery waits for steel (era 2) and the Tank for oil (era 3)
+(`ArmyManager.is_unlocked`, by `unit_types[*].era`), and the ARMY panel says so on the
+greyed rows ("Necesita acero de la Fundición (era 2)", `LBL_ARMY_LOCKED_ERA_*`).
+One worker (not three) so that sawmill (2) + Barracks (1) + Farm (2) fit in the 5 people
+of the Núcleo without waiting for a House. Limit per era unchanged (3/4/5). The Tower
+now asks for the Foundry explicitly: before, the Barracks implied it.
 
 The Barracks trains units (`ArmyManager`, one training slot per Barracks). Each
 operational Tower cuts storm damage by 15% (cap 60%) and puts one artillery crew on
@@ -338,9 +353,9 @@ Refinery era 3, so neither goes up without the base of the previous era standing
 | foundry | sawmill + gold_mine + house + warehouse |
 | market | gold_mine |
 | laboratory | house |
-| refinery | foundry + barracks |
-| barracks | foundry + sawmill |
-| tower | barracks |
+| refinery | foundry + barracks + laboratory |
+| barracks | sawmill (2026-10-17: before, foundry + sawmill) |
+| tower | barracks + foundry |
 | headquarters | barracks + refinery |
 
 ## Upgrade System

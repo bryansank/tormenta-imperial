@@ -112,7 +112,7 @@ Coach marks sobre la interfaz real. Cada paso:
 - **oscurece** la pantalla menos el control del que habla, con un marco de latón que
   late (el velo es `MOUSE_FILTER_IGNORE`: se puede tocar todo, también fuera de orden);
 - **señala** con una flecha;
-- pone **una línea** de lo que hay que hacer, con "TUTORIAL · PASO n DE 12"; debajo,
+- pone **una línea** de lo que hay que hacer, con "TUTORIAL · PASO n DE 13"; debajo,
   **las cifras del edificio con iconos** (`TutorialManager.building_facts()`: "[madera]
   +6 cada 12 s · [trabajadores] 2 trabajan", sacadas de `BuildingData` y `GameConfig`);
   y debajo **lo que falta** si algo lo impide (`step_hint`) y **cómo conseguirlo**
@@ -131,7 +131,7 @@ nada (si no, sería la forma de saltarlo). Todos los caminos revisados, en §2.5
 **Tutorial claro (2026-10-16).** Empieza y acaba con **la meta de la partida**, y explica
 **cada edificio del principio** en el momento en que se construye, con una frase de
 para qué sirve (palabras de 12 años) y sus cifras con iconos, y enseña a **girar, mover y
-derribar** un edificio. Doce pasos:
+derribar** un edificio. Trece pasos (doce hasta el 17-10-2026, cuando entró el Cuartel, §2.8):
 
 | # | Paso (`GUIDE_STEPS`) | Señala | Avanza cuando | Qué explica |
 |---|---|---|---|---|
@@ -139,19 +139,20 @@ derribar** un edificio. Doce pasos:
 | 2 | `core` (tarjeta de leer) | un aro sobre el Núcleo | botón **Entendido** (hecho `core_seen`) | **Núcleo**: el corazón de la isla; todo va unido a él por carretera. Cifras: +5 viven aquí |
 | 3 | `open_build` / `pick_sawmill` / `place_sawmill` / `wait_sawmill` | CONSTRUIR, la tarjeta, el bosque más cercano, la obra | se abre la lista, se elige, se coloca, acaba la obra | **Aserradero**: corta madera; casi todo se construye con ella. En la espera, **la carretera**: llega sola desde el Núcleo y sin ella un edificio no trabaja |
 | 4 | `collect` | el aserradero | se recoge algo (`note_guide_fact("collected")`) | recoger lo producido |
-| 5 | `open_farm` / `pick_farm` / `place_farm` | CONSTRUIR, la tarjeta de la Granja | se coloca una granja | **Granja**: comida; tu gente come cada poco |
-| 6 | `rotate` / `rotate_pick` / `rotate_now`, y luego `place_house` | CONSTRUIR, la tarjeta de la Casa, y con la Casa en la mano el botón **R ↻** de la pantalla (tablet y móvil; en PC no hay botón: es la tecla R) | **gira** el edificio en la mano (`building_rotate_requested`, hecho `rotated`) y después se coloca la casa | **Girar**: R en PC, R ↻ con el dedo; un cuarto de vuelta cada vez. **Casa**: aquí vive tu gente, +6 trabajadores |
-| 7 | `move` / `move_place` | MOVER en la ficha si está abierta (`info_move`); si no, la Casa en el mapa (`built:house`) | se mueve cualquier edificio (`building_moved`, hecho `moved`) | **Mover**: gratis, conserva el nivel |
-| 8 | `road_open` / `road_pick` / `road_place`, y `demolish` | CONSTRUIR, la tarjeta de la Carretera; después Confirmar, DEMOLER o el tramo puesto (`info_demolish_confirm\|info_demolish\|practice_road`) | se pone a mano un tramo de carretera (1 oro, hecho `road_placed`) y se derriba algo (`building_demolished`, hecho `demolished`) | **Derribar**: devuelve la mitad de lo que costó; el Núcleo y la carretera que une edificios no se quitan. Se practica con 1 oro: no se pierde nada importante |
-| 9 | `open_gold_mine` / `pick_gold_mine` / `place_gold_mine` | CONSTRUIR, la tarjeta, la veta de oro más cercana (`deposit:gold_vein`) | se coloca una mina | **Mina de oro**: oro de una veta; paga edificios y soldados |
-| 10 | `open_market` / `pick_market` / `place_market` | CONSTRUIR, la tarjeta del Mercado | se coloca un mercado | **Mercado**: vende lo que sobra, compra lo que falta |
-| 11 | `open_warehouse` / `pick_warehouse` / `place_warehouse` | CONSTRUIR, la tarjeta del Almacén | se coloca un almacén | **Almacén**: más sitio; lo que no cabe se pierde. Cifras: +500 de almacén |
-| 12 | `open_laboratory` / `pick_laboratory` / `place_laboratory` | CONSTRUIR, la tarjeta del Laboratorio | se coloca un laboratorio | **Laboratorio**: mejoras para siempre (más producción, más sitio, obras más rápidas) |
+| 5 | `open_barracks` / `pick_barracks` / `place_barracks` / `wait_barracks` | CONSTRUIR, la tarjeta del Cuartel, la obra | se coloca un cuartel y acaba la obra | **Cuartel** (2026-10-17): entrena soldados; con soldados en casa, los Cobradores del Impuesto no se llevan nada. En la espera: dónde se entrena (☰ MENÚ > COLONIA > EJÉRCITO). Si faltan los tablones, `need_barracks` señala el Aserradero ("Serrar tablones"). Cifras: 1 trabaja, +8 soldados |
+| 6 | `open_farm` / `pick_farm` / `place_farm` | CONSTRUIR, la tarjeta de la Granja | se coloca una granja | **Granja**: comida; tu gente come cada poco |
+| 7 | `rotate` / `rotate_pick` / `rotate_now`, y luego `place_house` | CONSTRUIR, la tarjeta de la Casa, y con la Casa en la mano el botón **R ↻** de la pantalla (tablet y móvil; en PC no hay botón: es la tecla R) | **gira** el edificio en la mano (`building_rotate_requested`, hecho `rotated`) y después se coloca la casa | **Girar**: R en PC, R ↻ con el dedo; un cuarto de vuelta cada vez. **Casa**: aquí vive tu gente, +6 trabajadores |
+| 8 | `move` / `move_place` | MOVER en la ficha si está abierta (`info_move`); si no, la Casa en el mapa (`built:house`) | se mueve cualquier edificio (`building_moved`, hecho `moved`) | **Mover**: gratis, conserva el nivel |
+| 9 | `road_open` / `road_pick` / `road_place`, y `demolish` | CONSTRUIR, la tarjeta de la Carretera; después Confirmar, DEMOLER o el tramo puesto (`info_demolish_confirm\|info_demolish\|practice_road`) | se pone a mano un tramo de carretera (1 oro, hecho `road_placed`) y se derriba algo (`building_demolished`, hecho `demolished`) | **Derribar**: devuelve la mitad de lo que costó; el Núcleo y la carretera que une edificios no se quitan. Se practica con 1 oro: no se pierde nada importante |
+| 10 | `open_gold_mine` / `pick_gold_mine` / `place_gold_mine` | CONSTRUIR, la tarjeta, la veta de oro más cercana (`deposit:gold_vein`) | se coloca una mina | **Mina de oro**: oro de una veta; paga edificios y soldados |
+| 11 | `open_market` / `pick_market` / `place_market` | CONSTRUIR, la tarjeta del Mercado | se coloca un mercado | **Mercado**: vende lo que sobra, compra lo que falta |
+| 12 | `open_warehouse` / `pick_warehouse` / `place_warehouse` | CONSTRUIR, la tarjeta del Almacén | se coloca un almacén | **Almacén**: más sitio; lo que no cabe se pierde. Cifras: +500 de almacén |
+| 13 | `open_laboratory` / `pick_laboratory` / `place_laboratory` | CONSTRUIR, la tarjeta del Laboratorio | se coloca un laboratorio | **Laboratorio**: mejoras para siempre (más producción, más sitio, obras más rápidas) |
 | — | `done` | ¿QUÉ HACER? | "Entendido" o 25 s | **La meta otra vez**, en una línea, y que ¿QUÉ HACER? dice el paso siguiente |
 
 El orden de los edificios sigue la línea de ¿QUÉ HACER? (`Objectives.LINE`: aserradero,
-granja, mina, casa, mercado, almacén); la casa va antes de la mina porque la mina pide 3
-trabajadores y el Núcleo solo da sitio a 5. El Laboratorio va el último: no está en la
+cuartel, granja, mina, casa, mercado, almacén); la casa va antes de la mina porque la mina pide 3
+trabajadores y el Núcleo solo da sitio a 5 (aserradero 2 + cuartel 1 + granja 2). El Laboratorio va el último: no está en la
 línea, pero la Refinería lo pide (`building_prerequisites`).
 
 Las claves: `GUIDE_GOAL`, `GUIDE_CORE`, `GUIDE_OPEN_<EDIFICIO>` (la frase de para qué
@@ -218,7 +219,9 @@ Sin botón de saltar, ningún paso puede quedarse pidiendo algo imposible. Cada 
 |---|---|---|
 | Sin bosque al que llegar (agotado, tapado, sin carretera posible) | La meta del aserradero se pasa de largo (`has_reachable_deposit`, en los dos giros) y pide la casa. Si vuelve a haber sitio, la vuelve a pedir | `no_reachable_forest`, `no_forest_at_all`, `a_forest_lost_mid_guide` |
 | Mapa aún sin sortear | No se salta nada a ciegas | `a_map_not_drawn_yet` |
-| Tope de edificios (un repaso con los 5 aserraderos; el Mercado y el Laboratorio, únicos) | Se pasa de largo (`goal_impossible_reason` = `limit`; también `prereq` y `rank`) | `the_building_limit_reached` |
+| Tope de edificios (un repaso con los 5 aserraderos; el Mercado y el Laboratorio, únicos; los 3 Cuarteles de la era 1) | Se pasa de largo (`goal_impossible_reason` = `limit`; también `prereq` y `rank`) | `the_building_limit_reached`, `a_replay_with_the_barracks_at_its_limit_skips_it` |
+| Sin Aserradero (bosque imposible) | El Cuartel lo pide (`prereq`): se pasa de largo también | `no_reachable_forest` |
+| Una meta se pasa de largo (2026-10-17) | Un aviso de una línea, una vez, dice por qué y que el tutorial sigue (`GUIDE_SKIP_DEPOSIT/LIMIT/PREREQ/RANK`, `TutorialManager._notice_skipped`); en un repaso no | `a_skipped_goal_says_why_once` |
 | Sin veta de oro al alcance | La Mina se pasa de largo, y el Mercado (que la pide) también: sigue el Almacén | `a_step_already_done` |
 | Paso ya cumplido antes de llegar | El paso sale de lo construido: no lo pide | `a_step_already_done`, `a_sawmill_built_before` |
 | Faltan recursos | Debajo del paso, "Te falta: 70 oro \| 50 madera" (`step_hint` con `OBJ_MISSING`, ≤ 8 palabras: el aserradero y la casa solo cuestan oro y madera) | `short_of_resources`, `the_panel_shows_the_missing_line` |
@@ -402,6 +405,40 @@ aviso dice qué falta (`PlacementAssist.move_to`). CONSTRUIR ya lo decía (coste
 rojo, `block_reasons_short` junto al botón). Balance sin tocar.
 
 ---
+
+### 2.8 El Cuartel temprano (2026-10-17, rama `feat/cuartel-temprano`)
+
+Decisión de Bryan: el Cuartel pasa a la era 1 (120 oro + 80 madera + 10 tablones, sin
+acero, solo pide el Aserradero; docs/03) y el tutorial **solo añade el Cuartel**: un
+paso (el 5) justo después de recoger la madera, con abrir, elegir, colocar y esperar la
+obra, y su `need_barracks` (los tablones se sierran en el Aserradero: el paso de
+"consigue lo que falta" ya lo sabía decir). `GUIDE_TOTAL` pasa a 13. Los demás pasos
+siguen igual. Si no hay Aserradero posible (sin bosque), el Cuartel se pasa de largo por
+su requisito.
+
+**Que nadie se quede perdido con un salto.** Hasta ahora una meta imposible (`limit`,
+`rank`, `prereq`, `deposit`) se pasaba de largo en silencio. Ahora sale una vez un aviso
+de una línea: "Aserradero: no queda sitio junto a su bosque o su veta. El tutorial
+sigue." (en un repaso no, ahí el tope es cosa del repaso).
+
+**La tormenta de prueba trae un Impuesto de juguete** (docs/22 §12): al escampar bajan
+unos Cobradores de prueba. Con soldados en casa se pelea en el tablero contra uno o dos
+débiles; como suele ser la primera pelea con tablero de la partida (o la primera tras
+la primera misión), la lección `basics` del combate guiado sale sola si aún no se dio.
+Sin soldados se llevan un 10 % de la bolsa (tope 40) y el parte (`WarReportScreen`,
+"IMPUESTO DE PRUEBA") explica que con un Cuartel y soldados no se lo habrían llevado.
+Antes, el aviso de la prueba (`STORM_TRIAL_INCOMING`) ya dice "si tienes soldados en
+casa, pelean", y el consejo del Cuartel (`HELP_TIP_BARRACKS_BODY`) explica por qué se
+quiere pronto y dónde se entrena de verdad (☰ MENÚ > COLONIA > EJÉRCITO). Guardado:
+`trial_tithe_pending` en la clave `storm`; si se guarda con los Cobradores de prueba en
+la puerta, al cargar vuelven a pedirse. `StormManager.reset()` lo limpia (ya se llama en
+los tres sitios de `GameManager`).
+
+Pruebas: `tests/tutorial/test_guide_steps.gd` (`after_collecting_comes_the_barracks_then_the_farm`,
+`the_barracks_step_numbers_and_texts`, el recorrido entero), `tests/tutorial/test_guide_never_stuck.gd`
+(tablones que faltan, avisos de salto), `tests/storm/test_storm_trial.gd` (Impuesto de
+juguete), `tests/ui/test_war_reports.gd` (su parte) y `tests/economy/test_cuartel_temprano.gd`.
+Sin correr aún (se corren en la ronda final).
 
 ## 3. Ayudas (`HelperPanel`, `HelpCallout`, `HelpCatalog`)
 
