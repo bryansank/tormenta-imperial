@@ -108,7 +108,146 @@ Each mission won gives rank XP (`campaign_mission` 60, `campaign_boss` 250). In 
    line, "Keep playing" / "New game"
 
 "Keep playing" leaves a sandbox: the Storm is halted for good and the WHAT TO DO? panel
-(`Objectives.next_step()`) says so.
+(`Objectives.next_step()`) says so. **Since `feat/volverse-imperio` (below) that is only
+true in modes without the empire phase**: in Campaña and Supervivencia the victory
+screen says "Ahora el Imperio eres tú" and opens the archipelago.
+
+## Volverse el Imperio (1.2, rama `feat/volverse-imperio`, sin medir)
+
+Decisión de Bryan (2026-10-18): tras **ganar** el Ataque Final la partida no se
+acaba ni se queda en "mundo libre". Es una **fase nueva en la misma isla**: la
+Tormenta para para siempre y ahora eres tú quien cobra el Impuesto a las **islas
+vecinas**. Es el final que ya contaba el lore (`03_LORE.md` §8): *"No has roto el
+sistema. Te has quedado con él. Ahora firmas tú."*
+
+### Qué ve el jugador
+
+1. **La victoria** (`VictoryScreen`): título "AHORA EL IMPERIO ERES TÚ", subtítulo
+   ("…las islas vecinas te pagarán a ti, si las conquistas"), las cifras de siempre,
+   la coda "Ahora firmas tú." y un botón grande **VER EL ARCHIPIÉLAGO** (además de
+   CONTINUAR y NUEVA PARTIDA). Constructor y Sandbox siguen como antes.
+2. **El archipiélago** (`ArchipelagoPanel`, ☰ MENÚ → COLONIA → ARCHIPIÉLAGO, o el
+   botón de la victoria, o MISIONES → IMPERIO → VER EL ARCHIPIÉLAGO): un mapa dibujado
+   (mar, rutas punteadas, tu isla en el centro con tu bandera y seis vecinas con su
+   escudo; al conquistar una, **ondea tu bandera** en ella), arriba el Sargento
+   Bombarda (la primera vez cuenta de qué va; luego señala el siguiente objetivo; al
+   final avisa "que no se nos suba a la cabeza: así empezó la Regencia"), cuántas
+   islas son tuyas, tu título imperial, el tributo por cobro y la cuenta atrás. Al
+   tocar una isla: escudo, nombre, dificultad (★), una frase, su cadena de misiones
+   (✔ hechas, ▶ la que toca, ☠ el jefe, con medio y combates), lo que pagará, su
+   premio único, el candado si lo hay y **PREPARAR EL ASALTO**.
+3. **El asalto**: PREPARAR EL ASALTO abre MISIONES en la pestaña **IMPERIO** con esa
+   isla. Allí se eligen la isla (botones con N/M), se ve la ficha de la misión (mapa,
+   enemigos, botín, fuerzas) y se elige la tropa, **solo del medio de la misión** (como
+   las tres campañas: `CombatManager.campaign_unit_block()`). El mapa de la misión en
+   `BattleScreen` dice "Isla · Misión" y pinta el agua o el cielo; el parte final dice
+   "Misión 2 de 3 ganada" y "¡Isla de las Gaviotas es tuya!".
+4. **¿QUÉ HACER?** propone la siguiente conquista (`Objectives.empire_step()`): su
+   edificio si falta (Astillero/Aeródromo), tropa de su medio si no hay, o "Conquista
+   Isla Brasa: Limpiar el cielo". Con todas las islas tuyas: "Todo el archipiélago es
+   tuyo" y seguir mejorando la isla.
+5. **La isla propia sigue creciendo**: rangos hasta el 18 (cada misión de conquista da
+   80 XP y cada isla 300), decoraciones, edificios, tecnologías.
+
+### Las islas (`GameConfig.empire_islands`)
+
+| Isla | Nivel | Necesita | Misiones (medio, combates) | Tributo por cobro | Premio único |
+|---|---|---|---|---|---|
+| Isla de las Gaviotas | ★ | 0 | Romper el bloqueo (mar, 1) → El desembarco (tierra, 1) | 80 madera, 40 comida | Palmeras sin esperar al rango 13 |
+| Isla Brasa | ★ | 0 | Limpiar el cielo (aire, 1) → El desembarco (tierra, 1) | 70 oro, 30 madera | Colores de bandera Oro y Teja |
+| Puerto Niebla | ★★ | 1 | Bloqueo (mar, 1) → Tomar el puerto (mar, 2) → Desembarco (tierra, 2) | 45 acero, 40 oro, 4 tablones | Emblema Barco y fondo Olas |
+| Picos del Viento | ★★ | 1 | Limpiar el cielo (aire, 1) → Los hangares (aire, 2) → Asaltar el fuerte (tierra, 2) | 35 petróleo, 40 oro, 3 combustible | Emblema Dirigible |
+| Isla de Hierro | ★★★ | 3 | Tomar el puerto (mar, 2) → Los hangares (aire, 2) → Asaltar el fuerte (tierra, 2) | 70 acero, 3 vigas, 2 lingotes | Estatua sin esperar al rango 8 y fondo Cuadros |
+| Ciudadela de Ceniza | ★★★ | 5 | Los hangares (aire, 2) → Tomar el puerto (mar, 2) → **Jefe: el Gran Tasador** (tierra, 3) | 120 oro, 40 petróleo, 3 combustible | Título "Señor del Archipiélago" |
+
+Lógica de dominio: el mar o el aire primero (romper el bloqueo, limpiar el cielo) y
+la tierra al final (**el desembarco**: la isla se toma pisándola). La Ciudadela es el
+último fuerte de la Regencia, donde guardan el libro del Impuesto.
+
+**Títulos imperiales** (`empire_titles`, por islas conquistadas): 1 → Protector de
+Ultramar, 3 → Virrey de las Islas, 6 → Señor del Archipiélago. Se ven junto al título
+del rango en la insignia y en la tarjeta COLONIA (`RankPanel`).
+
+**Premios**: una isla conquistada abre su decoración antes de su rango
+(`RankManager.is_building_unlocked` → `EmpireManager.unlocks_building`) y sus piezas
+de bandera (`ColonyIdentity.is_piece_open` → `empire_grants`). Si el rango ya las
+había abierto, el premio no da nada nuevo (queda el título y el tributo).
+
+### Combates
+
+Cada misión es una oferta `{kind: "conquest", island, mission, domain, seed, era}`
+(`ConquestGenerator.offer`) y su mapa sale entero de ella (`mission_map`, también al
+cargar): la cadena corta de las campañas (`ExpeditionGenerator._chain_map`), **dominio
+puro** (mar abierto con islotes, aviones sobre la costa, o tierra), era mínima 3
+(`empire_min_era`). Dureza: profundidad `empire_tier_enemy[nivel].depth + misión +
+capa` en la curva enemiga de siempre (con el ×1,05 de Gobernador), por
+`empire_tier_enemy[nivel].mult`; el jefe de la Ciudadela usa el roster de jefe de
+campaña (`campaign_boss_roster`) y `empire_boss_extra_scale`. Entre combates la
+columna se cura `empire_heal_between` (30 %). **Solo paga el último combate** de cada
+misión (oro y madera de la curva × `empire_reward_mult`, y `empire_mission_parts`
+repuestos; el doble en la que toma la isla). Tras ganar una misión, la siguiente de
+esa isla espera `empire_mission_cooldown` (120 s, `get_duration`).
+
+**Sin medir.** Las cifras son una primera propuesta (niveles 4/6/8 de profundidad,
+×1,0). Medir en la ronda final con `tools/balance_probe.gd` igual que las campañas
+(docs/15 §13 "Medido") y retocar `empire_tier_enemy`.
+
+### Tributo
+
+Cada `empire_tribute_interval` (180 s de juego, `get_duration`) las islas
+conquistadas pagan juntas (`Archipelago.tribute_per_cycle()`), a la bolsa
+(`ResourceManager.add`; los materiales van al taller). El primer cobro llega un
+intervalo después de la primera isla. Una pausa larga no amontona cobros: uno por tic
+como mucho. Sin progresión offline (el reloj son segundos jugados). Aviso al registro
+("Tributo de las islas: +80 madera, +40 comida").
+
+### Por modo
+
+Regla `empire_phase` (`GameMode.empire_enabled()` = victoria + asedio + regla):
+
+| Modo | Fase |
+|---|---|
+| Campaña (Colono y Gobernador) | Sí |
+| Supervivencia | Sí (si ganas su único asedio) |
+| Constructor | No: gana con el CG nv3, sin asedio que ganar |
+| Sandbox | No: no hay victoria |
+
+### Cómo está hecho
+
+- **Modelo puro** `scripts/empire/Archipelago.gd` (estado: semilla, `started`,
+  misiones ganadas por isla, descansos, conquistas, reloj y totales del tributo,
+  `intro_seen`; `finish()`, `tick()`, `start()` devuelven eventos) y
+  `scripts/empire/ConquestGenerator.gd` (estático: oferta, mapa, botín).
+- **Servicio** `EmpireManager` (autoload, el último): `is_active()` (modo + Ataque
+  Final ganado), `lock_reason()` / `lock_text()` (`EMP_LOCK_PHASE`, `EMP_DONE`,
+  `EMP_LOCK_NEEDS`, `CAMP_LOCK_BUILDING`, `EMP_LOCK_REST` y los de siempre),
+  `launch_conquest(isla, tropa)` → `CombatManager.launch_conquest_mission(oferta,
+  tropa)`. Al volver la columna, `CombatManager._resolve_expedition()` deja
+  `conquest_island` / `conquest_mission` en el parte y EmpireManager, al oír
+  `expedition_ended`, apunta el progreso. Un Timer de 1 s (se para con la pausa) cobra
+  el tributo; nada por fotograma.
+- **Señales**: `empire_phase_started`, `empire_changed`, `conquest_mission_won`,
+  `island_conquered`, `archipelago_conquered`, `empire_tribute_paid`
+  ([10-signals-reference.md](10-signals-reference.md)).
+- **Guardado**: clave `"empire"` (`get_save_data` / `load_save_data` idempotente,
+  `reset()` en `_new_game()`, `clear_save()` y `clear_save_and_reload_from()`).
+  **Un guardado viejo con la victoria ya conseguida** (Ataque Final `WON` en
+  `progression.final_audit`, sin clave `empire`) entra en la fase al terminar la carga
+  (`game_load_completed` → `_maybe_start()`), con el aviso y el consejo.
+- **ArchipelagoPanel** lo monta `VictoryScreen` como hermano al arrancar (las dos
+  vistas tienen VictoryScreen), así ☰ MENÚ lo encuentra por nombre sin tocar
+  `Main.tscn` ni `Main2D.tscn`. Se construye la primera vez que se abre; el mapa es un
+  `_draw` que se repinta solo al cambiar algo.
+- **Ayuda**: guía "El archipiélago" (`guide_empire`) y consejo `empire` al empezar la
+  fase. Sonido: `island_conquered` toca el `rank_up` (sin sonido nuevo).
+
+### Lo que queda (anotado)
+
+- Medir la dureza de las seis islas y el tributo con la línea (¿descuadra la bolsa?).
+- El "giro amargo" del lore (si cobras demasiado, tus islas te ven como tú veías a la
+  Regencia) es solo una frase del Sargento: no hay rebeliones.
+- Las islas no se ven desde la vista de la isla (3D/2D): solo en el mapa.
+- Multijugador asíncrono ("imperios de ultramar", doc de contexto 10 §3.3): fuera.
 
 ## Orden de la Regencia (2026-10-14, 1.1)
 

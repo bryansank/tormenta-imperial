@@ -588,3 +588,25 @@ signal exchange_interest_paid(amount: int)
 ## Algo de lo de arriba cambio (el panel del Puerto y la ficha se repintan).
 @warning_ignore("unused_signal")
 signal economy_changed()
+# ── Volverse el Imperio (feat/volverse-imperio, docs/06) ──
+## Empieza la fase: se gano el Ataque Final (o se cargo una partida ya ganada) y
+## el reloj del tributo se pone en marcha. Una vez por partida.
+@warning_ignore("unused_signal")
+signal empire_phase_started()
+## Algo cambio en el archipielago (mision, isla, tributo, carga). Los paneles se
+## repintan con esta.
+@warning_ignore("unused_signal")
+signal empire_changed()
+## Se gano la mision `mission` (desde 0) de `island_id`. `conquered`: era la
+## ultima y la isla ya es tuya.
+@warning_ignore("unused_signal")
+signal conquest_mission_won(island_id: String, mission: int, conquered: bool)
+## Tu bandera ondea en `island_id`: empieza a pagar tributo y da su recompensa.
+@warning_ignore("unused_signal")
+signal island_conquered(island_id: String)
+## Todas las islas del archipielago son tuyas.
+@warning_ignore("unused_signal")
+signal archipelago_conquered()
+## Las islas conquistadas pagaron (recurso -> cantidad, ya en la bolsa).
+@warning_ignore("unused_signal")
+signal empire_tribute_paid(amounts: Dictionary)

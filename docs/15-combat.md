@@ -2153,3 +2153,46 @@ siempre. Perder o abandonar deja la amenaza en la orilla con lo que le quedaba.
   en era 1, avanzadilla con 3-4 en era 2, bote con 2 lanchas.
 - `tools/line_probe.gd`: la línea no cambia (la sonda no ataca amenazas); vigilar que
   el botín de los pecios no adelante la era 1 (≈ 40-90 recursos cada 3-4 min).
+## 16. Volverse el Imperio: las misiones de conquista (1.2, rama `feat/volverse-imperio`, sin medir)
+
+Tras **ganar** el Ataque Final (§6) la partida sigue: seis islas vecinas que conquistar
+y que luego pagan tributo. El diseño entero, las islas, los premios y el guardado están
+en [06-progression-victory.md](06-progression-victory.md) §Volverse el Imperio; aquí, lo
+que toca al combate.
+
+- **La oferta.** `{kind: "conquest", island, mission, domain, seed, era, id: -1}`
+  (`scripts/empire/ConquestGenerator.gd`, puro y estático). `ExpeditionGenerator`
+  conoce el tipo (`KIND_CONQUEST`): `sortie_map()` y `offer_name_key()` lo derivan a
+  `ConquestGenerator` (cargado con `load()` al usarse, para no tener un ciclo de
+  preload). `Expedition` lo sabe (`is_conquest()`, `conquest_island()`,
+  `conquest_mission()`, `conquest_domain()`, cura `empire_heal_between`) y rehace el
+  mapa igual al cargar.
+- **El mapa.** La cadena corta de las campañas (`_chain_map`), dominio puro: en mar,
+  `domain_roster("sea")` sobre mar abierto (`terrain_kind` sea); en aire, cazas y
+  dirigibles sobre la costa; en tierra, el roster de siempre. Profundidad
+  `empire_tier_enemy[nivel].depth + mision + capa`, era ≥ `empire_min_era` (3), escala
+  × `empire_tier_enemy[nivel].mult`. El jefe de la Ciudadela de Ceniza (última misión,
+  último nodo, `conquest_boss`) usa `campaign_boss_roster` y `empire_boss_extra_scale`.
+- **Botín.** Solo el último combate de cada misión (`conquest_final`): oro y madera de
+  la curva × `empire_reward_mult` y `empire_mission_parts` repuestos (el doble en la
+  misión que toma la isla). Lo grande es la isla: tributo periódico y premio único.
+- **Lanzar.** `EmpireManager.launch_conquest(isla, tropa)` mira el candado de la isla
+  (fase, ya conquistada, islas que pide antes, edificio del medio, descanso) y llama a
+  `CombatManager.launch_conquest_mission(oferta, tropa)`, que aplica las reglas de
+  siempre con `can_launch_to()` (dominio puro, como las campañas).
+- **Volver.** `CombatManager._resolve_expedition()` no toca el tablón de salidas con una
+  conquista y deja `conquest_island` / `conquest_mission` en `_last_result`;
+  `EmpireManager` los lee al oír `expedition_ended` y avanza la isla (o cuenta el
+  revés). Retirada enemiga sí; "resolver solo" no.
+- **La interfaz.** MISIONES tiene la pestaña **IMPERIO** (solo con la fase activa):
+  botones de las islas por tomar, la cadena de la elegida, su candado y VER EL
+  ARCHIPIÉLAGO; la selección de tropa se filtra por el medio de la misión
+  (`SkirmishPanel._picker_domain()`). En `BattleScreen`, el título del mapa dice
+  "Isla · Misión" y pinta agua o cielo; el parte dice "Misión N de M ganada" y "¡X es
+  tuya!".
+
+**Qué medir en la ronda final.** Con `tools/balance_probe.gd`, como las campañas: cada
+misión de cada isla con la columna de su medio en era 3 (6 cazas, 2 lanchas + 2
+cañoneras + 2 acorazados, 2 inf + 2 art + 2 tanques) y el jefe de la Ciudadela; el
+objetivo, ★ 90-100 %, ★★ 70-90 %, ★★★ 55-75 % y el jefe ~50 %. Retocar
+`empire_tier_enemy` y `empire_boss_extra_scale`.

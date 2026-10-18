@@ -98,6 +98,11 @@ func _ready() -> void:
 		_refresh_block())
 	EventBus.game_load_completed.connect(_request_grid_refresh)
 	EventBus.game_new_started.connect(_request_grid_refresh)
+	# Volverse el Imperio: una isla conquistada puede abrir una decoracion antes
+	# de su rango (EmpireManager.unlocks_building).
+	EventBus.island_conquered.connect(func(_i):
+		_request_grid_refresh()
+		_refresh_block())
 	# Con la lista abierta, el coste en rojo o no y el aviso siguen a lo que hay.
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	# CONSTRUIR es la accion principal: siempre a la vista, no escondida tras el

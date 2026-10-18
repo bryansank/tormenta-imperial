@@ -132,6 +132,8 @@ func heal_between_pct() -> float:
 		return maxf(0.0, GameConfig.combat_expedition_heal_between * heal_mult)
 	if kind == Generator.KIND_CAMPAIGN:
 		return maxf(0.0, GameConfig.campaign_heal_between * heal_mult)
+	if kind == Generator.KIND_CONQUEST:
+		return maxf(0.0, GameConfig.empire_heal_between * heal_mult)
 	return 0.0
 
 ## Enfermeria (feat/edificios-militares): multiplica la cura de arriba. La pone
@@ -155,6 +157,23 @@ func evacuate(uids: Array) -> Dictionary:
 			keep.append(unit)
 	party = keep
 	return out
+
+
+## Volverse el Imperio (feat/volverse-imperio): mision de conquista de una isla.
+func is_conquest() -> bool:
+	return kind == Generator.KIND_CONQUEST
+
+## La isla que se conquista ("" si no es de conquista).
+func conquest_island() -> String:
+	return String(offer.get("island", "")) if is_conquest() else ""
+
+## El numero de la mision de conquista (desde 0), o -1.
+func conquest_mission() -> int:
+	return int(offer.get("mission", -1)) if is_conquest() else -1
+
+## El medio de la mision de conquista ("land" / "sea" / "air"), o "".
+func conquest_domain() -> String:
+	return String(offer.get("domain", "")) if is_conquest() else ""
 
 ## Es una mision de una de las tres campanas (feat/tres-campanas).
 func is_campaign() -> bool:

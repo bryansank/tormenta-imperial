@@ -239,6 +239,8 @@ const TIPS := {
 	# sin las campanas: ProgressionManager._announce_audit_waiting).
 	"campaigns":      {"title": "HELP_T_CAMPAIGNS",       "body": "HELP_B_CAMPAIGNS"},
 	"final_gate":     {"title": "HELP_T_FINAL_GATE",      "body": "HELP_B_FINAL_GATE"},
+	# Volverse el Imperio (feat/volverse-imperio): al empezar la fase.
+	"empire":         {"title": "HELP_T_EMPIRE",          "body": "HELP_B_EMPIRE"},
 	# ── Ayudas de las novedades (2026-10-14): disparadores en _connect_news() ──
 	"saves":          {"title": "HELP_T_SAVES",     "body": "HELP_B_SAVES"},
 	"rank":           {"title": "HELP_T_RANK",      "body": "HELP_B_RANK"},

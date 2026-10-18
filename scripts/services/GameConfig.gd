@@ -4467,3 +4467,141 @@ var threat_wreck_workers := 2
 var threat_wreck_explore_seconds := 60.0
 ## Rango por explorar un pecio (atacar ya da la XP de un combate ganado).
 var threat_wreck_rank_xp := 20
+# ── Volverse el Imperio (feat/volverse-imperio, docs/06 §Volverse el Imperio) ──
+# ══════════════════════════════════════════════════════════════════════
+# Tras GANAR el Ataque Final la partida sigue en la misma isla: la Tormenta para
+# y ahora eres tu quien cobra a las islas vecinas. Un mapa del archipielago con
+# seis islas, cada una con su escudo, su dificultad, su cadena corta de
+# misiones (mar, aire y tierra, dominio puro como las tres campanas) y su
+# tributo periodico al conquistarla, mas una recompensa unica.
+#
+# Modelo puro: scripts/empire/Archipelago.gd (estado) y ConquestGenerator.gd
+# (mapas). Servicio: EmpireManager (autoload, el ultimo). Guardado: "empire".
+#
+# SIN MEDIR: las cifras de enemigos y tributos son una primera propuesta. Medir
+# con tools/balance_probe.gd (como las campanas, docs/15 §13 "Medido") en la
+# ronda final y retocar empire_tier_enemy.
+
+## Las islas, en el orden del mapa. Cada una:
+##   id        clave interna (guardado)
+##   name/desc claves de Tr (EMP_ISLE_<ID>_NAME / _DESC)
+##   tier      dificultad 1-3 (estrellas)
+##   needs     islas conquistadas antes de poder atacarla
+##   pos       sitio en el mapa (0..1 del recuadro; tu isla esta en el centro)
+##   crest     su escudo: una receta de ColonyFlag (piezas propias, sin simbolos reales)
+##   missions  la cadena: medio, combates y nombre (EMP_M_*). La ultima toma la isla.
+##   tribute   lo que paga cada empire_tribute_interval una vez conquistada
+##   reward    lo unico que da al conquistarla: edificios (decoraciones que abre
+##             antes de su rango), piezas de bandera (patterns/emblems/colors) o
+##             un titulo (EMP_TITLE_*).
+var empire_islands := [
+	{"id": "gulls", "tier": 1, "needs": 0, "pos": Vector2(0.18, 0.26),
+		"crest": {"pattern": "bands_h", "emblem": "anchor", "colors": ["sky", "ivory", "steel"]},
+		"missions": [
+			{"domain": "sea", "fights": 1, "name": "EMP_M_SEA_BLOCKADE"},
+			{"domain": "land", "fights": 1, "name": "EMP_M_LAND_LANDING"},
+		],
+		"tribute": {"wood": 80, "food": 40},
+		"reward": {"buildings": ["palm_trees"]}},
+	{"id": "ember", "tier": 1, "needs": 0, "pos": Vector2(0.80, 0.22),
+		"crest": {"pattern": "diagonal", "emblem": "sun", "colors": ["red", "soot", "gold"]},
+		"missions": [
+			{"domain": "air", "fights": 1, "name": "EMP_M_AIR_SKIES"},
+			{"domain": "land", "fights": 1, "name": "EMP_M_LAND_LANDING"},
+		],
+		"tribute": {"gold": 70, "wood": 30},
+		"reward": {"colors": ["gold", "terracotta"]}},
+	{"id": "fog", "tier": 2, "needs": 1, "pos": Vector2(0.12, 0.66),
+		"crest": {"pattern": "waves", "emblem": "ship", "colors": ["slate", "ivory", "gold"]},
+		"missions": [
+			{"domain": "sea", "fights": 1, "name": "EMP_M_SEA_BLOCKADE"},
+			{"domain": "sea", "fights": 2, "name": "EMP_M_SEA_HARBOR"},
+			{"domain": "land", "fights": 2, "name": "EMP_M_LAND_LANDING"},
+		],
+		"tribute": {"steel": 45, "gold": 40, "planks": 4},
+		"reward": {"emblems": ["ship"], "patterns": ["waves"]}},
+	{"id": "wind", "tier": 2, "needs": 1, "pos": Vector2(0.88, 0.62),
+		"crest": {"pattern": "hoist_triangle", "emblem": "airship", "colors": ["sky", "brass", "soot"]},
+		"missions": [
+			{"domain": "air", "fights": 1, "name": "EMP_M_AIR_SKIES"},
+			{"domain": "air", "fights": 2, "name": "EMP_M_AIR_HANGARS"},
+			{"domain": "land", "fights": 2, "name": "EMP_M_LAND_FORT"},
+		],
+		"tribute": {"oil": 35, "gold": 40, "fuel": 3},
+		"reward": {"emblems": ["airship"]}},
+	{"id": "iron", "tier": 3, "needs": 3, "pos": Vector2(0.32, 0.88),
+		"crest": {"pattern": "quartered", "emblem": "cogs", "colors": ["steel", "soot", "copper"]},
+		"missions": [
+			{"domain": "sea", "fights": 2, "name": "EMP_M_SEA_HARBOR"},
+			{"domain": "air", "fights": 2, "name": "EMP_M_AIR_HANGARS"},
+			{"domain": "land", "fights": 2, "name": "EMP_M_LAND_FORT"},
+		],
+		"tribute": {"steel": 70, "beams": 3, "ingots": 2},
+		"reward": {"buildings": ["statue"], "patterns": ["checks"]}},
+	{"id": "ash", "tier": 3, "needs": 5, "pos": Vector2(0.70, 0.88),
+		"crest": {"pattern": "saltire", "emblem": "tower", "colors": ["soot", "crimson", "gold"]},
+		"missions": [
+			{"domain": "air", "fights": 2, "name": "EMP_M_AIR_HANGARS"},
+			{"domain": "sea", "fights": 2, "name": "EMP_M_SEA_HARBOR"},
+			{"domain": "land", "fights": 3, "name": "EMP_M_LAND_CITADEL", "boss": true},
+		],
+		"tribute": {"gold": 120, "oil": 40, "fuel": 3},
+		"reward": {"title": "EMP_TITLE_LORD"}},
+]
+
+## La dureza de cada nivel: profundidad de partida en la curva enemiga de
+## siempre (ExpeditionGenerator.enemy_pressure / enemy_scale, era 3, mision N
+## suma N) y una cifra encima, como campaign_enemy_mult. El jefe de la Ciudadela
+## usa el roster de jefe de campana (campaign_boss_roster) y empire_boss_extra_scale.
+var empire_tier_enemy := {
+	1: {"depth": 4, "mult": 1.0},
+	2: {"depth": 6, "mult": 1.0},
+	3: {"depth": 8, "mult": 1.0},
+}
+var empire_boss_extra_scale := 0.93
+## Las misiones se juegan en la era de la colonia, nunca por debajo de esta.
+var empire_min_era := 3
+## Oro y madera de la curva en el ultimo combate de cada mision, por esto (como
+## campaign_reward_mult), y repuestos al ganarla.
+var empire_reward_mult := 0.75
+var empire_mission_parts := 2
+## Segundos de juego entre ganar una mision y la siguiente de la MISMA isla.
+## Pasa por get_duration().
+var empire_mission_cooldown := 120.0
+## Cada cuanto pagan las islas conquistadas (segundos jugados, get_duration()).
+var empire_tribute_interval := 180.0
+## Vida que recupera la columna entre dos combates de una mision.
+var empire_heal_between := 0.30
+## Titulos por islas conquistadas (el mayor alcanzado; la Ciudadela da ademas el
+## suyo propio en su reward). Claves de Tr.
+var empire_titles := [
+	{"count": 1, "key": "EMP_TITLE_PROTECTOR"},
+	{"count": 3, "key": "EMP_TITLE_VICEROY"},
+	{"count": 6, "key": "EMP_TITLE_LORD"},
+]
+
+## Lo que se registra en tablas de mas arriba sin tocarlas: la regla de modo
+## "empire_phase" (Campana y Supervivencia si; Constructor y Sandbox no: no
+## tienen asedio que ganar) y la XP de rango de las conquistas.
+var _empire_registered := _register_empire()
+
+func _register_empire() -> bool:
+	game_mode_rules["campaign"]["empire_phase"] = true
+	game_mode_rules["builder"]["empire_phase"] = false
+	game_mode_rules["sandbox"]["empire_phase"] = false
+	rank_xp_sources["conquest_mission"] = 80
+	rank_xp_sources["island_conquered"] = 300
+	return true
+
+## La definicion de una isla, o {} si no existe.
+func empire_island(island_id: String) -> Dictionary:
+	for island in empire_islands:
+		if String(island.get("id", "")) == island_id:
+			return island
+	return {}
+
+func empire_island_ids() -> Array:
+	var ids: Array = []
+	for island in empire_islands:
+		ids.append(String(island.get("id", "")))
+	return ids
