@@ -746,17 +746,21 @@ aspecto. Recetas propias, sin piezas CC0:
   hangar de media cana con el portalon abierto atras a la izquierda, el mastil de
   celosia con el dirigible amarrado atras a la derecha (`FxAnchor` en el faro de
   su punta) y la manga de viento.
-- Su `.tres` debe llevar `model_scene` = `res://assets/models/toy/shipyard.tscn`
-  / `aerodrome.tscn`. Si un `.tres` no lo lleva, `DieselpunkBuildingFactory`
-  carga igual la maqueta horneada (`BAKED_ONLY`).
-- Mientras no exista su `.tres`, el horneador toma la huella de
-  `build_toy_models.EXTRA` (2x2, patio 0,3); con el `.tres`, manda el `.tres` y su
-  parcela.
+- Sus `.tres` llevan `model_scene` = `res://assets/models/toy/shipyard.tscn`
+  / `aerodrome.tscn` y `mesh_height` 2,0 / 2,7 (pegado al juntar las ramas de
+  reglas y vista, `integracion/v1.1-aire-mar`). Si un `.tres` no lo llevara,
+  `DieselpunkBuildingFactory` carga igual la maqueta horneada (`BAKED_ONLY`).
+- El horneador toma la huella y la parcela del `.tres`;
+  `build_toy_models.EXTRA` solo serviria si faltara el `.tres`.
 - 2D: `BuildingArt2D._shipyard` / `_aerodrome` (mapa, fantasma e icono del menu,
   que es el mismo dibujo). En CONSTRUIR van en la categoria militar.
-- **Pendiente de pegar en `GameConfig`** al juntar con la rama de reglas (no se
-  toca aqui para no chocar): su fila de `construction_style`, de
-  `building_lot_style` y de `building_active_fx` (ver el informe de la rama).
+- `construction_style`, `building_lot_style` y `building_active_fx`: una sola
+  fila por edificio en `GameConfig`, la de la rama de reglas (grua en la obra del
+  Astillero, cinco piezas de atrezo); `building_active_fx` = humo / brillo.
+- **Pendiente:** el modelo no se gira solo hacia el agua. La regla de costa
+  (`PlacementRules.SHORE_ONLY`) obliga a tocar la costa, y el jugador puede girar
+  el edificio al colocarlo, pero nada orienta la darsena (+Z del modelo) al mar:
+  sin girarlo, en una costa que no queda delante, el agua dibujada da a tierra.
 
 ### Obra por edificio y por instancia
 

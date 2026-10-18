@@ -53,8 +53,8 @@ const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", 
 	# DecorMesh (<id>_mesh.res) y, sin hornear, usa su version procedural.
 	"lamp_post", "park_bench", "hedge", "avenue_tree", "flower_planter",
 	"colony_sign", "hay_cart", "bonfire", "flagpole", "palm_trees",
-	# Astillero y Aerodromo (1.1, feat/aire-mar-vista). Sus .tres los pone la
-	# rama de reglas; hasta entonces su huella sale de EXTRA.
+	# Astillero y Aerodromo (1.1, feat/aire-mar-vista); sus .tres (rama de
+	# reglas) mandan en la huella, EXTRA solo cubre si faltaran.
 	"shipyard", "aerodrome",
 	# Muelle de pesca (feat/muelle-pesca).
 	"fishing_dock"]
