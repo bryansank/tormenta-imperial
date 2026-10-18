@@ -83,12 +83,16 @@ func run() -> void:
 			print("override %s = %s" % [prop, str(GameConfig.get(prop))])
 	_clock_probe = load("res://tools/balance_probe.gd").new()
 	_connect_probes()
+	_connect_extra_probes()
+	if _extras_on():
+		print("jugador completo: extras de la 1.1 activados (--extras=1)")
 	var results: Array = []
 	for s in options.get("seeds", [1]):
 		var result: Dictionary = await _play_seed(int(s))
 		results.append(result)
 		_print_run(result)
 	_print_table(results)
+	_print_extras_table(results)
 	finished.emit(0)
 
 # ══════════════════════════════════════════════════════════════════════
@@ -152,7 +156,13 @@ func _play_seed(map_seed: int) -> Dictionary:
 		"board_minutes": 0.0, "events": 0, "step_time": {},
 		"collects": 0, "collected": {}, "crop_changes": 0, "full_stop": 0.0,
 		"activity_times": [0.0], "after": {}, "overflow_by": {}, "step_log": [],
+		# Extras de la 1.1 (se apuntan tambien sin --extras=1, para comparar).
+		"extra_first": {}, "extra_builds": {}, "extra_no_spot": {}, "extra_units": {},
+		"dock_food": 0, "dock_spoiled": 0, "coast_launched": 0, "coast_won": 0,
+		"coast_lost": 0, "coast_abandoned": 0, "coast_skipped": 0, "coast_pending": false,
 	}
+	_extras_accum = 0.0
+	_last_coast = -INF
 	_clock = 0.0
 	_decide_accum = 0.0
 	_sample_accum = 0.0
@@ -403,6 +413,8 @@ func _decide() -> void:
 				_act("sell %d %s (bolsa llena)" % [int(step["amount"]), String(step["id"])], false)
 		_:
 			pass
+	if _extras_on():
+		_extras(step)
 	_army_upkeep_guard()
 	if bool(options.get("active", false)):
 		_run_processes()
@@ -451,6 +463,10 @@ func _raid() -> bool:
 func _tidy_expedition() -> void:
 	if not CombatManager.has_active_expedition() or CombatManager.is_board_open():
 		return
+	# El jugador completo elige la primera carta del draft y sigue la ruta (una
+	# mision de costa puede ser de varios combates); el normal abandona como antes.
+	if _extras_on() and CombatManager.has_pending_draft():
+		CombatManager.apply_draft(0)
 	for i in range(4):
 		if CombatManager.select_node(i):
 			return
@@ -888,6 +904,441 @@ func _run_recipes() -> void:
 				break
 
 # ══════════════════════════════════════════════════════════════════════
+# Extras de la 1.1 (`--extras=1` o `--player=completo`)
+# ══════════════════════════════════════════════════════════════════════
+#
+# El jugador "completo": ademas de seguir ¿QUE HACER?, levanta lo nuevo de la
+# 1.1 cuando aporta (Muelle de pesca, edificios utiles, Astillero, Aerodromo),
+# entrena algo de mar y aire y lo saca a las misiones de costa. Una accion de
+# extras como mucho por vistazo, con las mismas reglas que un clic
+# (rango, tope, requisitos, obreros, coste, evaluate_placement, carretera
+# automatica pagada a 1 oro el tramo). Sin la opcion nada de esto corre y la
+# sonda juega exactamente como antes.
+
+## Los edificios nuevos de la 1.1 cuyo primer minuto se apunta.
+const EXTRA_BUILDINGS := ["fishing_dock", "windmill", "silo", "tavern", "carpentry", "well",
+	"lighthouse", "fuel_depot", "shipyard", "aerodrome"]
+## Las unidades de mar y aire.
+const EXTRA_UNITS := ["torpedo_boat", "gunboat", "dreadnought", "fighter", "bomber", "airship"]
+const LAND_UNITS := ["vehicle", "artillery", "infantry"]
+## Flota que quiere tener el jugador completo (por era): pocas y caras.
+const FLEET_TARGET := {
+	2: {"gunboat": 1, "torpedo_boat": 1},
+	3: {"gunboat": 2, "torpedo_boat": 1, "fighter": 2, "bomber": 1},
+}
+## Segundos entre dos misiones de costa.
+const COAST_EVERY := 6.0 * 60.0
+## Unidades de tierra que se quedan siempre en casa (guarnicion del Diezmo) al
+## sacar una columna de costa; como minimo tambien la mitad de las que hay.
+const HOME_LAND_MIN := 2
+## Cada cuanto (s) mira el jugador si le falta un edificio util.
+const UTILITY_EVERY := 20.0
+
+var _extras_accum := 0.0
+var _last_coast := -INF
+
+func _extras_on() -> bool:
+	return String(options.get("extras", "0")) == "1" or String(options.get("player", "")) == "completo"
+
+## Una decision de extras por vistazo (las prioridades, de arriba abajo).
+func _extras(step: Dictionary) -> void:
+	if CombatManager.is_board_open():
+		return
+	if _coast_mission():
+		return
+	if _extra_dock(step):
+		return
+	if _extra_fleet_building(step):
+		return
+	if _extra_utility(step):
+		return
+	_extra_train()
+
+## ¿Se puede pagar `cost` sin robarle al paso principal? Si el paso se puede
+## pagar tambien despues del extra, si; si no, solo cuando el extra no pasa del
+## 25 % de lo que hay de cada recurso que pide (lo barato no retrasa la linea).
+## `urgent` (hambre) se salta la regla del 25 %. Siempre con el colchon de la tropa.
+func _extra_affordable(cost: Dictionary, step: Dictionary, urgent: bool = false) -> bool:
+	if not ResourceManager.can_afford(cost) or not _keeps_reserve(cost):
+		return false
+	if urgent:
+		return true
+	var step_cost: Dictionary = Objectives.step_cost(step) if not step.is_empty() else {}
+	var both_ok := true
+	for type in step_cost:
+		if ResourceManager.get_amount(type) < int(step_cost[type]) + int(cost.get(type, 0)):
+			both_ok = false
+			break
+	if both_ok:
+		return true
+	for type in cost:
+		if ResourceManager.is_material(int(type)):
+			continue
+		if int(cost[type]) > int(ResourceManager.get_amount(type) * 0.25):
+			return false
+	return true
+
+## Lo que falta de materiales en `cost` se manda a fabricar (taller libre o
+## Nucleo). Devuelve true si faltaba algo.
+func _make_missing_materials(cost: Dictionary) -> bool:
+	var short_any := false
+	for type in cost:
+		if not ResourceManager.is_material(int(type)):
+			continue
+		var short: int = int(cost[type]) - ResourceManager.get_amount(type)
+		if short <= 0:
+			continue
+		short_any = true
+		var mat: String = ResourceManager.get_type_name(type)
+		var src: String = GameConfig.get_material_source(mat)
+		if src != "" and Rules.count_building(src) > 0:
+			_try_make({"kind": "make", "id": mat, "building": src, "amount": short})
+	return short_any
+
+## Levanta un extra: comprueba lo mismo que el panel CONSTRUIR, busca hueco con
+## las reglas del juego, paga la carretera y coloca con _try_place (girado al
+## agua si es el Astillero, como el fantasma del juego).
+func _build_extra(building_id: String, step: Dictionary, urgent: bool = false) -> bool:
+	var data: BuildingData = Rules.load_building_data(building_id)
+	if data == null:
+		return false
+	if not Rules.check_rank(building_id) or not Rules.check_building_limit(building_id) \
+			or not Rules.check_prerequisites(building_id):
+		return false
+	if data.workers_required > 0 and PopulationManager.get_free_workers() < data.workers_required:
+		return false
+	var cost: Dictionary = data.get_cost()
+	if _make_missing_materials(cost):
+		return false
+	if not _extra_affordable(cost, step, urgent):
+		return false
+	var spot: Dictionary = _extra_spot(building_id, data)
+	if spot.is_empty():
+		_r["extra_no_spot"][building_id] = int(_r["extra_no_spot"].get(building_id, 0)) + 1
+		return false
+	var origin: Vector2i = spot["origin"]
+	var size: Vector2i = spot.get("size", data.grid_size)
+	# La carretera sale de la caja como en el juego (1 oro por tramo).
+	var route: Variant = Rules.road_route(origin, size)
+	if route != null and (route as Array).size() > 0:
+		var with_route: Dictionary = cost.duplicate()
+		with_route[ResourceManager.Type.GOLD] = int(with_route.get(ResourceManager.Type.GOLD, 0)) + (route as Array).size()
+		if not ResourceManager.can_afford(with_route):
+			return false
+	_pave_to(origin, size)
+	var before: int = Rules.count_building(building_id)
+	_placer._current_data = data
+	_placer._rotation_steps = int(spot.get("rotation", 0))
+	_placer._try_place(origin)
+	_placer._current_data = null
+	_placer._rotation_steps = 0
+	if Rules.count_building(building_id) > before:
+		_r["extra_builds"][building_id] = int(_r["extra_builds"].get(building_id, 0)) + 1
+		_act("extra %s" % building_id, true)
+		return true
+	return false
+
+## Hueco para un extra: el Muelle por la regla de su banco de peces; el Astillero
+## en la costa, mirando al agua; el Molino junto a las Granjas; la Taberna junto
+## a las casas; el Pozo junto a la produccion; el Faro en la costa si cabe; el
+## resto donde el jugador construye siempre (cerca del Nucleo, sin orlas).
+func _extra_spot(building_id: String, data: BuildingData) -> Dictionary:
+	var on_coast := func(o: Vector2i) -> bool: return Rules.touches_shore(o, data.grid_size)
+	match building_id:
+		"fishing_dock":
+			return _spot_for(building_id, data)
+		"shipyard":
+			return _spot_scan(data, on_coast, [], 0, true)
+		"windmill":
+			return _spot_scan(data, Callable(), ["farm"], GameConfig.windmill_radius, false, 2)
+		"tavern":
+			return _spot_scan(data, Callable(), ["house"], GameConfig.tavern_radius, false, 2)
+		"well":
+			return _spot_scan(data, Callable(), ["farm", "sawmill", "gold_mine", "foundry", "refinery", "house"],
+				GameConfig.well_radius, false, 3)
+		"lighthouse":
+			var s: Dictionary = _spot_scan(data, on_coast, [], 0, false)
+			return s if not s.is_empty() else _spot_for(building_id, data)
+		_:
+			return _spot_for(building_id, data)
+
+## Recorre la rejilla buscando el mejor origen: `filter` (opcional) lo acepta;
+## `near_ids` + `radius` piden al menos `min_near` edificios de esos tipos a esa
+## distancia (Chebyshev de borde a borde, como UtilityEffects, con una casilla
+## de margen). Gana el que mas cubre y, a igualdad, el mas cercano al Nucleo.
+## `face_water`: el giro que pone la darsena al agua (Rules.steps_facing_water,
+## el mismo que el fantasma). Siempre termina en evaluate_placement.
+func _spot_scan(data: BuildingData, filter: Callable, near_ids: Array, radius: int,
+		face_water: bool, min_near: int = 1) -> Dictionary:
+	var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
+	var reserved: Dictionary = {}
+	for dep in _map.get_all_deposits():
+		for x in range(int(dep["cell_x"]) - 1, int(dep["cell_x"]) + int(dep["size_x"]) + 1):
+			for y in range(int(dep["cell_y"]) - 1, int(dep["cell_y"]) + int(dep["size_y"]) + 1):
+				reserved[Vector2i(x, y)] = true
+	var targets: Array = []
+	if not near_ids.is_empty():
+		for info in GridManager.get_all_buildings():
+			if (info["data"] as BuildingData).id in near_ids:
+				targets.append([info["origin_cell"] as Vector2i, (info["data"] as BuildingData).grid_size])
+		if targets.size() < min_near:
+			return {}
+	var cands: Array = []
+	for x in range(GridManager.grid_width - data.grid_size.x + 1):
+		for y in range(GridManager.grid_height - data.grid_size.y + 1):
+			var origin := Vector2i(x, y)
+			if not GridManager.can_place(origin, data.grid_size):
+				continue
+			var clash := false
+			for c in GridManager.cells_for(origin, data.grid_size):
+				if reserved.has(c):
+					clash = true
+					break
+			if clash:
+				continue
+			if filter.is_valid() and not bool(filter.call(origin)):
+				continue
+			var covered := 0
+			for t in targets:
+				if _gap(origin, data.grid_size, t[0], t[1]) <= maxi(1, radius - 1):
+					covered += 1
+			if not near_ids.is_empty() and covered < min_near:
+				continue
+			cands.append([-covered, _dist(origin, center), origin])
+	cands.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
+	var tries := 0
+	for c in cands:
+		tries += 1
+		if tries > 60:
+			break
+		var origin: Vector2i = c[2]
+		if not bool(Rules.evaluate_placement(data.id, origin, data.grid_size, _map)["ok"]):
+			continue
+		var rot := 0
+		if face_water:
+			rot = maxi(0, Rules.steps_facing_water(data.id, origin, data.grid_size, false))
+		return {"origin": origin, "rotation": rot, "size": data.grid_size}
+	return {}
+
+## Distancia de borde a borde entre dos huellas (Chebyshev; 1 = pegadas).
+func _gap(o1: Vector2i, s1: Vector2i, o2: Vector2i, s2: Vector2i) -> int:
+	var dx: int = maxi(0, maxi(o2.x - (o1.x + s1.x - 1), o1.x - (o2.x + s2.x - 1)))
+	var dy: int = maxi(0, maxi(o2.y - (o1.y + s1.y - 1), o1.y - (o2.y + s2.y - 1)))
+	return maxi(dx, dy)
+
+## Comida por delante en minutos (en caja y esperando en los edificios).
+func _food_minutes() -> float:
+	var due_per_min: float = float(PopulationManager.food_due()) * 60.0 \
+		/ maxf(1.0, GameConfig.get_duration(GameConfig.consumption_interval))
+	var ahead: float = float(ResourceManager.get_amount(ResourceManager.Type.FOOD)) \
+		+ float(ProductionManager.get_all_stock().get("food", 0))
+	return ahead / maxf(0.1, due_per_min)
+
+## Muelle de pesca: en cuanto la comida va justa (menos de MEDIUM_CROP_MINUTES
+## por delante), aunque cueste; si no, hasta dos mientras sea barato (cabe).
+func _extra_dock(step: Dictionary) -> bool:
+	var docks: int = Rules.count_building("fishing_dock")
+	var hungry: bool = _food_minutes() < MEDIUM_CROP_MINUTES
+	if not hungry and docks >= 2:
+		return false
+	return _build_extra("fishing_dock", step, hungry)
+
+## Astillero (era 2) y Aerodromo (era 3): lo que propone la segunda linea de
+## ¿QUE HACER? (Objectives.fleet_step), en calma.
+func _extra_fleet_building(step: Dictionary) -> bool:
+	if StormManager.get_phase() != StormCycle.Phase.CALM:
+		return false
+	var fleet: Dictionary = Objectives.fleet_step()
+	if fleet.is_empty():
+		return false
+	return _build_extra(String(fleet["id"]), step)
+
+## Edificios utiles cuando aportan, uno a la vez y cada UTILITY_EVERY segundos.
+func _extra_utility(step: Dictionary) -> bool:
+	_extras_accum += DECIDE_EVERY
+	if _extras_accum < UTILITY_EVERY:
+		return false
+	_extras_accum = 0.0
+	var farms: int = Rules.count_building("farm")
+	var houses: int = Rules.count_building("house")
+	var cap: int = ResourceManager.get_storage_cap()
+	var tight: bool = ResourceManager.get_total_stored() > int(cap * 0.8)
+	var wants: Array = []
+	# Molino: un molino por cada dos Granjas (+20 % a las que cubre), hasta dos.
+	if farms >= 2 and Rules.count_building("windmill") < mini(2, farms / 2):
+		wants.append("windmill")
+	# Silo: la bolsa aprieta y hay comida que sacar de ella.
+	if tight and farms >= 1 and ResourceManager.get_amount(ResourceManager.Type.FOOD) > 150 \
+			and Rules.count_building("silo") < 2:
+		wants.append("silo")
+	# Deposito de combustible: la bolsa aprieta y el petroleo pesa en ella.
+	if tight and ResourceManager.get_amount(ResourceManager.Type.OIL) > 200 \
+			and Rules.count_building("fuel_depot") < 2:
+		wants.append("fuel_depot")
+	# Taberna: casas que crecer y comida de sobra para pagarla (diez minutos).
+	if houses >= 2 and farms >= 1 and _food_minutes() > 10.0 and Rules.count_building("tavern") < 1:
+		wants.append("tavern")
+	# Pozo y Faro: cuando la Tormenta de verdad ya esta armada.
+	if StormManager.is_armed():
+		if Rules.count_building("well") < 2:
+			wants.append("well")
+		if Rules.count_building("lighthouse") < 1:
+			wants.append("lighthouse")
+	# Carpinteria: tablones sin parar el Aserradero, desde la era 2.
+	if ProgressionManager.current_era >= 2 and Rules.count_building("carpentry") < 1:
+		wants.append("carpentry")
+	for id in wants:
+		if _build_extra(String(id), step):
+			return true
+	return false
+
+## Flota de mar y aire: la de FLEET_TARGET de la era, en calma, sin pasar del
+## tope de tropa (can_train) ni del colchon. El material que pida se fabrica antes.
+func _extra_train() -> void:
+	if StormManager.get_phase() != StormCycle.Phase.CALM:
+		return
+	if ProgressionManager.is_final_audit_active():
+		return
+	var target: Dictionary = FLEET_TARGET.get(mini(3, ProgressionManager.current_era), {})
+	for unit_id in target:
+		if ArmyManager.get_count(unit_id) + _in_training(unit_id) >= int(target[unit_id]):
+			continue
+		if not ArmyManager.is_unlocked(unit_id):
+			continue
+		var cost: Dictionary = ArmyManager._convert_cost(GameConfig.get_unit_def(unit_id).get("cost", {}))
+		if not bool(ArmyManager.can_train(unit_id)["ok"]) and ResourceManager.can_afford(cost):
+			continue
+		if _make_missing_materials(cost):
+			return
+		if not bool(ArmyManager.can_train(unit_id)["ok"]):
+			continue
+		if not _extra_affordable(cost, _r.get("last_step", {})):
+			continue
+		if ArmyManager.train(unit_id):
+			_r["units_trained"] += 1
+			_act("extra train %s" % unit_id, true)
+			return
+
+func _in_training(unit_id: String) -> int:
+	var n := 0
+	for t in ArmyManager.get_training():
+		if String((t as Dictionary).get("id", "")) == unit_id:
+			n += 1
+	return n
+
+## Mision de costa: una oferta del tablon con agua, cada COAST_EVERY, en calma y
+## lejos del siguiente Aviso, con barcos y aviones al frente y la tierra que
+## sobre de la guarnicion (en casa quedan al menos HOME_LAND_MIN de tierra y la
+## mitad). Solo si la columna no es mas floja que el enemigo; "resolver solo" si
+## el juego lo deja (incursion con el doble de fuerza).
+func _coast_mission() -> bool:
+	if _clock - _last_coast < COAST_EVERY:
+		return false
+	if CombatManager.has_active_expedition() or StormManager.get_phase() != StormCycle.Phase.CALM:
+		return false
+	if ProgressionManager.is_final_audit_pending() or ProgressionManager.is_final_audit_active():
+		return false
+	var cycle: StormCycle = StormManager.get_cycle()
+	if StormManager.is_armed() and cycle != null and float(cycle.seconds_left) < 300.0:
+		return false
+	var home: Dictionary = CombatManager.get_deployable_units()
+	var party: Dictionary = {}
+	var room: int = GameConfig.combat_deploy_cap
+	for unit_id in EXTRA_UNITS:
+		var n: int = mini(int(home.get(unit_id, 0)), room)
+		if n > 0:
+			party[unit_id] = n
+			room -= n
+	if party.is_empty():
+		return false
+	var land_total := 0
+	for unit_id in LAND_UNITS:
+		land_total += int(home.get(unit_id, 0))
+	var land_free: int = maxi(0, land_total - maxi(HOME_LAND_MIN, int(ceil(land_total / 2.0))))
+	for unit_id in LAND_UNITS:
+		var n2: int = mini(mini(int(home.get(unit_id, 0)), room), land_free)
+		if n2 > 0:
+			party[unit_id] = n2
+			room -= n2
+			land_free -= n2
+	for offer in CombatManager.get_sortie_offers():
+		if not CombatManager.offer_has_water(offer):
+			continue
+		if not bool(CombatManager.can_launch_to(party, offer).get("ok", false)):
+			continue
+		var preview: Dictionary = CombatManager.sortie_preview(offer, party)
+		if float(preview.get("player_power", 0.0)) < float(preview.get("enemy_power", 0.0)):
+			_r["coast_skipped"] += 1
+			continue
+		if CombatManager.launch_sortie(int(offer.get("id", -1)), party, bool(preview.get("can_auto", false))):
+			_last_coast = _clock
+			_r["coast_launched"] += 1
+			_r["coast_pending"] = true
+			_act("extra coast %s %s" % [String(offer.get("kind", "")), str(party)], true)
+			return true
+	return false
+
+## Lo que se apunta de los extras (siempre conectado; sin extras casi todo
+## queda a cero, y asi las dos tablas se comparan columna a columna).
+func _connect_extra_probes() -> void:
+	EventBus.construction_completed.connect(func(node: Node) -> void:
+		var info: Dictionary = GridManager.get_building_info(node)
+		if info.is_empty():
+			return
+		var id: String = (info["data"] as BuildingData).id
+		if id in EXTRA_BUILDINGS and not (_r["extra_first"] as Dictionary).has(id):
+			_r["extra_first"][id] = _clock)
+	EventBus.production_collected.connect(func(node: Node, got: Dictionary) -> void:
+		var info: Dictionary = GridManager.get_building_info(node)
+		if not info.is_empty() and (info["data"] as BuildingData).id == "fishing_dock":
+			_r["dock_food"] += int(got.get("food", 0)))
+	EventBus.stock_spoiled.connect(func(node: Node, lost: Dictionary) -> void:
+		var info: Dictionary = GridManager.get_building_info(node)
+		if not info.is_empty() and (info["data"] as BuildingData).id == "fishing_dock":
+			_r["dock_spoiled"] += int(lost.get("food", 0)))
+	EventBus.unit_trained.connect(func(id: String) -> void:
+		if id in EXTRA_UNITS:
+			_r["extra_units"][id] = int(_r["extra_units"].get(id, 0)) + 1)
+	EventBus.expedition_ended.connect(func(result: int, _rw: Dictionary, _c: Dictionary) -> void:
+		if not bool(_r.get("coast_pending", false)):
+			return
+		_r["coast_pending"] = false
+		if result == Expedition.RESULT_WON:
+			_r["coast_won"] += 1
+		elif result == Expedition.RESULT_LOST:
+			_r["coast_lost"] += 1
+		else:
+			_r["coast_abandoned"] += 1)
+
+func _print_extras(r: Dictionary) -> void:
+	var firsts := ""
+	for id in EXTRA_BUILDINGS:
+		firsts += "%s=%s " % [id, _min1((r["extra_first"] as Dictionary).get(id, -1.0))]
+	print("  1.1 primer edificio (min): " + firsts)
+	print("  1.1 muelle: comida recogida %d (estropeada %d) | flota entrenada %s | costa lanzadas %d ganadas %d perdidas %d abandonadas %d (descartadas por floja %d) | sin hueco %s" % [
+		int(r["dock_food"]), int(r["dock_spoiled"]), str(r["extra_units"]), int(r["coast_launched"]),
+		int(r["coast_won"]), int(r["coast_lost"]), int(r["coast_abandoned"]), int(r["coast_skipped"]),
+		str(r["extra_no_spot"])])
+
+func _print_extras_table(results: Array) -> void:
+	print("")
+	print("| semilla | muelle | molino | silo | taberna | carpinteria | pozo | faro | deposito | astillero | aerodromo | comida muelle | flota | costa G/P/A | era 1 | era 2 | era 3 | victoria | huecos>3min |")
+	print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	for r in results:
+		var f: Dictionary = r["extra_first"]
+		var cells := ""
+		for id in EXTRA_BUILDINGS:
+			cells += "%s | " % _min1(f.get(id, -1.0))
+		var fleet := 0
+		for id in r["extra_units"]:
+			fleet += int(r["extra_units"][id])
+		var g: Dictionary = _gaps(r)
+		print("| %d | %s%d | %d | %d/%d/%d | %.1f | %.0f | %.0f | %s | %d |" % [
+			r["seed"], cells, int(r["dock_food"]), fleet, int(r["coast_won"]), int(r["coast_lost"]),
+			int(r["coast_abandoned"]), _era_len(r, 1), _era_len(r, 2), _era_len(r, 3),
+			_mins(r["victory_at"]), int(g["idle_count"])])
+
+# ══════════════════════════════════════════════════════════════════════
 # Huecos
 # ══════════════════════════════════════════════════════════════════════
 
@@ -1193,6 +1644,7 @@ func _print_run(r: Dictionary) -> void:
 	print("  recoger: %d veces %s | cambios de cultivo %d | edificio-minutos parado por lleno %.0f | granjas %d" % [
 		int(r["collects"]), str(r["collected"]), int(r["crop_changes"]), float(r["full_stop"]) / 60.0,
 		int(r.get("farms", 0))])
+	_print_extras(r)
 	if r["stuck"] != "":
 		print("  ATASCO: " + String(r["stuck"]))
 	print("  final: " + str(r["end"]))
