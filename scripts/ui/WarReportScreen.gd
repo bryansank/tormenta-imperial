@@ -20,9 +20,20 @@ extends CanvasLayer
 ## No sale el parte del Diezmo cuando el Diezmo es parte de otra cosa: durante
 ## el asedio (los Tasadores no cobran, ya lo dice un aviso) y cuando es el Diezmo
 ## maximo de un asedio perdido, que ya cuenta AuditDefeatScreen.
+##
+## El Sargento Mayor Bombarda (feat/instructores) comenta cada parte con una
+## frase, debajo de las cifras: tres variantes por caso (QUOTE_CASES), que se
+## turnan. Su fila se oculta con Ajustes > Interfaz > Instructores.
 
 const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const TextKit := preload("res://scripts/ui/TextKit.gd")
+const InstructorBust := preload("res://scripts/ui/InstructorBust.gd")
+
+## Los casos que el Sargento comenta, y cuantas frases tiene cada uno
+## (INSTR_QUOTE_<CASO>_<n> en Tr.gd).
+const QUOTE_CASES := ["DEFENSE_WON", "DEFENSE_LOST", "TITHE_REPELLED", "TITHE_TAKEN", "TRIAL_REPELLED", "TRIAL_TAKEN"]
+const QUOTE_VARIANTS := 3
+const BUST_SIZE := Vector2(84, 105)
 
 const LAYER := 19
 const CARD_WIDTH := 500.0
@@ -35,6 +46,14 @@ var _kicker: Label
 var _title: Label
 var _stamp_slot: VBoxContainer
 var _body: Label
+var _voice_row: HBoxContainer
+var _voice_bust: Control
+var _quote: Label
+var _signed: Label
+var _quote_case := ""
+## Turno de frases: empieza en un sitio al azar para que dos partidas no
+## arranquen igual, y luego se turnan.
+var _quote_seq := randi() % QUOTE_VARIANTS
 
 ## Cola de partes: {"kind": Kind, ...datos}.
 var _queue: Array = []
@@ -73,6 +92,32 @@ func _setup_ui() -> void:
 	column.add_child(UITheme.make_separator())
 	_body = ModalKit.make_text("", "body", UITheme.TEXT)
 	column.add_child(_body)
+	# El Sargento y su frase.
+	_voice_row = HBoxContainer.new()
+	_voice_row.name = "InstructorRow"
+	_voice_row.add_theme_constant_override("separation", 10)
+	_voice_row.visible = false
+	column.add_child(_voice_row)
+	_voice_bust = InstructorBust.new()
+	_voice_bust.name = "Instructor"
+	_voice_bust.custom_minimum_size = BUST_SIZE
+	_voice_bust.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_voice_bust.show_as(InstructorBust.COMBAT, "point", 1)
+	_voice_row.add_child(_voice_bust)
+	var said := VBoxContainer.new()
+	said.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	said.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_voice_row.add_child(said)
+	_quote = UITheme.make_label("", "body", UITheme.TEXT_BRIGHT)
+	_quote.name = "Quote"
+	_quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	said.add_child(_quote)
+	_signed = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_signed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_signed.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	said.add_child(_signed)
+	EventBus.instructors_visibility_changed.connect(func(on: bool):
+		_voice_row.visible = on and _quote_case != "")
 	column.add_child(ModalKit.make_menu_button(Tr.t("BTN_UNDERSTOOD"), UITheme.BTN, close_current))
 	_relayout()
 
@@ -125,9 +170,12 @@ func try_show_next() -> bool:
 			_paint_tithe(_current)
 	_relayout()
 	visible = true
+	if _voice_row.visible:
+		_voice_bust.speak(_quote)
 	return true
 
 func close_current() -> void:
+	_voice_bust.finish_speaking()
 	visible = false
 	_current = {}
 
@@ -145,6 +193,49 @@ func title_text() -> String:
 
 func body_text() -> String:
 	return _body.text
+
+## La frase del Sargento en pantalla, su caso y si se ve (pruebas).
+func quote_text() -> String:
+	return _quote.text
+
+func quote_case() -> String:
+	return _quote_case
+
+func is_instructor_shown() -> bool:
+	return _voice_row.visible
+
+func instructor() -> Control:
+	return _voice_bust
+
+## La clave de la frase `n` (se turnan) de `quote_case_id`. Pura, para las pruebas.
+static func quote_key(quote_case_id: String, n: int) -> String:
+	return "INSTR_QUOTE_%s_%d" % [quote_case_id, posmod(n, QUOTE_VARIANTS) + 1]
+
+## El caso que comenta el Sargento para un parte: tipo y si salio bien.
+static func quote_case_for(kind: int, good: bool) -> String:
+	match kind:
+		Kind.DEFENSE:
+			return "DEFENSE_WON" if good else "DEFENSE_LOST"
+		Kind.TRIAL:
+			return "TRIAL_REPELLED" if good else "TRIAL_TAKEN"
+	return "TITHE_REPELLED" if good else "TITHE_TAKEN"
+
+## La cara del Sargento: saluda tras una defensa ganada, contento si echa a
+## los Cobradores; enfadado si se llevan algo, preocupado en el de prueba.
+static func quote_face(kind: int, good: bool) -> String:
+	if good:
+		return "salute" if kind == Kind.DEFENSE else "happy"
+	return "worried" if kind == Kind.TRIAL else "angry"
+
+## Pone la frase del Sargento con su cara.
+func _say(kind: int, good: bool) -> void:
+	_quote_case = quote_case_for(kind, good)
+	_quote_seq += 1
+	_quote.text = Tr.t(quote_key(_quote_case, _quote_seq))
+	_signed.text = Tr.t("INSTR_SIGNED") % ("%s %s" % [Tr.t(InstructorBust.rank_key(InstructorBust.COMBAT)),
+		Tr.t(InstructorBust.name_key(InstructorBust.COMBAT))])
+	_voice_bust.show_as(InstructorBust.COMBAT, quote_face(kind, good), 1)
+	_voice_row.visible = GameConfig.ui_instructors_visible
 
 func stamp_text() -> String:
 	for child in _stamp_slot.get_children():
@@ -167,6 +258,7 @@ func _paint_defense(report: Dictionary) -> void:
 	UITheme.set_label_color(_title, UITheme.POSITIVE if victory else UITheme.DANGER)
 	_set_stamp("", Color.WHITE)
 	_body.text = "\n".join(defense_lines(victory, int(report.get("rounds", 0)), report.get("summary", {})))
+	_say(Kind.DEFENSE, victory)
 
 func _paint_tithe(report: Dictionary) -> void:
 	var repelled: bool = bool(report.get("repelled", false))
@@ -178,6 +270,7 @@ func _paint_tithe(report: Dictionary) -> void:
 		UITheme.POSITIVE.lightened(0.2) if repelled else UITheme.DANGER.lightened(0.25)
 	)
 	_body.text = "\n".join(tithe_lines(repelled, report.get("taken", {})))
+	_say(Kind.TITHE, repelled)
 
 ## El parte del Impuesto de prueba: echados o lo poco que se llevaron, y la
 ## leccion (soldados en casa = nadie se lleva nada).
@@ -191,6 +284,7 @@ func _paint_trial(report: Dictionary) -> void:
 		UITheme.POSITIVE.lightened(0.2) if repelled else UITheme.WARNING.lightened(0.2)
 	)
 	_body.text = "\n".join(trial_lines(repelled, report.get("taken", {})))
+	_say(Kind.TRIAL, repelled)
 
 ## Las lineas del parte del Impuesto de prueba. Sin estado, para las pruebas.
 static func trial_lines(repelled: bool, taken: Dictionary) -> Array:

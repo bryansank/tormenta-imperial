@@ -12,7 +12,7 @@ const PATH := "user://settings.cfg"
 ## Campos de GameConfig que las suites de interfaz tocan.
 const FIELDS := ["ui_device_profile", "ui_scale_pct", "ui_text_size", "ui_palette",
 	"ui_high_contrast", "ui_panel_opacity", "ui_hud_hidden", "ui_layout",
-	"ui_helper_visible", "ui_touch_controls", "ui_grid_visible", "ui_touch_controls_opacity",
+	"ui_helper_visible", "ui_instructors_visible", "ui_touch_controls", "ui_grid_visible", "ui_touch_controls_opacity",
 	"ui_touch_controls_size",
 	"ui_fps_cap", "fps_background", "fps_paused",
 	"profile_runs_finished", "profile_campaigns_won", "ui_graphics_quality", "saves_active_slot",

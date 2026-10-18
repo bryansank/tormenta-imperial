@@ -951,7 +951,7 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   restores it after placement, never in Minimal quality), `helper_visible` (help callouts, on by default),
   `touch_controls` (`auto` / `always` / `never`; "auto" follows the device profile:
   tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
-  `touch_controls_opacity`, `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
+  `touch_controls_opacity`, `instructors_visible` (the instructor busts, docs/23 §9), `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
 - `[interfaz]`: device profile, UI scale, text size, palette, high contrast, panel
   opacity, hidden HUD elements, moved layout, `touch_controls_size` (size of the
   on-screen controls: `auto` = the profile's, PC 100 % / tablet 115 % / phone
@@ -1164,6 +1164,7 @@ tormenta-imperial/
 |   |   +-- ModalKit.gd              # Builds the war-report / dialog cards from UITheme pieces
 |   |   +-- PauseMenu.gd, TitleMenu.gd, NewGameDialog.gd, PauseWatcher.gd
 |   |   +-- BattleScreen.gd, SkirmishPanel.gd, WarReportScreen.gd, AuditWaveBanner.gd, AuditDefeatScreen.gd
+|   |   +-- InstructorBust.gd           # The two instructors (Capt. Remache: colony, Sgt. Bombarda: combat), code-drawn busts beside tutorial/tip/war-report cards (docs/23 §9)
 |   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd, TouchTooltip.gd
 |   |   +-- HelperPanel.gd, HelpCallout.gd, HelpCatalog.gd, HelpTargets.gd, HelpIndexPanel.gd
 |   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the flag drawn from pieces

@@ -383,6 +383,12 @@ signal touch_controls_size_changed(scale: float)
 @warning_ignore("unused_signal")
 signal helper_visibility_changed(visible: bool)
 
+## Los instructores (bustos junto a tutorial, consejos y partes) se encendieron
+## o apagaron en Ajustes > Interfaz. GameConfig.ui_instructors_visible ya tiene
+## el valor nuevo.
+@warning_ignore("unused_signal")
+signal instructors_visibility_changed(visible: bool)
+
 ## Emitted when music is switched on/off (Settings or the ☰ quick button).
 @warning_ignore("unused_signal")
 signal music_toggled(enabled: bool)

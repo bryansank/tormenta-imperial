@@ -157,6 +157,7 @@ func _setup_ui() -> void:
 	_fit_scroll()
 	UILayoutManager.layout_changed.connect(_fit_scroll)
 	EventBus.helper_visibility_changed.connect(func(_v): _sync_hud_checks())
+	EventBus.instructors_visibility_changed.connect(func(_v): _sync_hud_checks())
 
 ## Tablet y movil: todo lo que se pulsa en Ajustes (botones, desplegables,
 ## interruptores, la X de cerrar) llega al alto de dedo de Ajustes

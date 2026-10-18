@@ -129,7 +129,9 @@ de perfil reconstruyen la interfaz como el resto de tokens (APLICAR).
 `scripts/ui/HudRegistry.gd` es el registro central. Elementos que se pueden
 ocultar: recursos y almacén (con obreros y moral, que van en esa fila), botón del registro,
 indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
-mismo interruptor que AYUDA del menú ☰), texto de turno en batalla y las
+mismo interruptor que AYUDA del menú ☰), los instructores (el busto de la
+Capitana Remache y del Sargento Bombarda junto al tutorial, los consejos y los
+partes; modo `instructors`, `[ui] instructors_visible`, docs/23 §9), texto de turno en batalla y las
 herramientas Sandbox (solo existen en ese modo, docs/20) y el botón de velocidad
 x1 / x2 (§13). El botón ☰ MENÚ (el
 menú único, que sustituye al ☰ y a la pausa II) no está en el registro: no se
