@@ -154,6 +154,7 @@ func _setup_ui() -> void:
 
 	_sync_music(GameConfig.audio_music_enabled)
 	_size_for_touch(_panel)
+	_let_text_wrap(_panel)
 	_fit_scroll()
 	UILayoutManager.layout_changed.connect(_fit_scroll)
 	EventBus.helper_visibility_changed.connect(func(_v): _sync_hud_checks())
@@ -175,6 +176,24 @@ func _size_for_touch(node: Node) -> void:
 			if sq:
 				c.custom_minimum_size.x = c.custom_minimum_size.y
 		_size_for_touch(child)
+
+## Un movil en vertical (400 px): los interruptores de texto largo ("Cuadricula
+## siempre visible (si no, solo al construir)"), los botones de una fila y los
+## desplegables con la opcion mas larga ensanchaban el panel mas que la
+## pantalla y Interfaz salia cortada por los dos lados (ronda visual de la 1.1).
+## El texto de los botones que llenan su fila parte en lineas; el desplegable
+## mide la opcion elegida, no la mas larga. Con sitio (PC) no cambia nada.
+func _let_text_wrap(node: Node) -> void:
+	for child in node.get_children():
+		if child is OptionButton:
+			(child as OptionButton).fit_to_longest_item = false
+		elif child is Button:
+			var b := child as Button
+			var fills: bool = child.get_parent() is VBoxContainer \
+				or (b.size_flags_horizontal & Control.SIZE_EXPAND) != 0
+			if fills and b.text != "":
+				b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_let_text_wrap(child)
 
 ## Alto fuera de los scrolls: con filas mas altas (tablet y movil) la cabecera,
 ## las pestanas, APLICAR y cerrar crecen lo mismo cada una.
@@ -639,8 +658,9 @@ func _refresh_preview() -> void:
 		l.add_theme_color_override("font_outline_color", tokens["OUTLINE_COLOR"])
 		l.add_theme_constant_override("outline_size", UITheme.outline_for(fs))
 		row1.add_child(l)
-	var row2 := HBoxContainer.new()
-	row2.add_theme_constant_override("separation", 6)
+	var row2 := HFlowContainer.new()
+	row2.add_theme_constant_override("h_separation", 6)
+	row2.add_theme_constant_override("v_separation", 6)
 	col.add_child(row2)
 	for key in ["POSITIVE", "WARNING", "DANGER", "RES_GOLD", "RES_WOOD", "RES_STEEL", "RES_OIL", "BOARD_MOVE", "BOARD_TARGET"]:
 		var sw := ColorRect.new()

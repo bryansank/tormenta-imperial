@@ -22,6 +22,8 @@ extends Node
 ##                     repetidos, logro, era, rango) y luego con CONSTRUIR abierto
 ##   --placing         tras el HUD, una captura colocando una Casa (✓, R, CANCELAR)
 ##   --settings-tabs=1,2,3   pestanas de Ajustes que capturar (por defecto 1,3)
+##   --touch=always    controles en pantalla (auto, always, never)
+##   --touch-size=...  alias de --controls-size
 ##
 ## Las capturas van a docs/media/dev/interfaz/ (ignorada por git). Correla
 ## SIEMPRE con una carpeta de datos aparte (override.cfg temporal con
@@ -73,7 +75,8 @@ func _run() -> void:
 	GameConfig.ui_hud_hidden = []
 	GameConfig.ui_layout = {}
 	GameConfig.ui_helper_visible = _arg("no-help") != "true"
-	GameConfig.ui_touch_controls_size = _arg("controls-size", "auto")
+	GameConfig.ui_touch_controls = _arg("touch", "auto")
+	GameConfig.ui_touch_controls_size = _arg("controls-size", _arg("touch-size", "auto"))
 	if _arg("edited") == "true":
 		GameConfig.ui_layout[DeviceProfile.layout_key()] = {
 			"StormHUD": [0, 520],
@@ -89,6 +92,8 @@ func _run() -> void:
 		" profile=", DeviceProfile.current(), " key=", DeviceProfile.layout_key())
 
 	(load("res://tools/view2d_probe_runner.gd").new() as Node)._write_seeded_save()
+	# Sin el menu principal delante (tapaba todas las tomas).
+	GameManager.title_dismissed = true
 	var scene := "res://scenes/main/Main2D.tscn" if _arg("view") == "2d" else "res://scenes/main/Main.tscn"
 	get_tree().change_scene_to_file(scene)
 	await _frames(60)
@@ -144,6 +149,7 @@ func _run() -> void:
 		for tab in tabs:
 			settings.call("select_tab", tab)
 			await _frames(8)
+			_report_wide(settings, tab)
 			await _shot("settings_tab%d" % tab)
 			# Y el final de la pestana (lo que no cabe a la primera).
 			var scrolls: Array = settings.get("_scrolls")
@@ -220,6 +226,28 @@ func _seed_state() -> void:
 		panel.visible = true
 		storm.call("_style_for", StormCycle.Phase.WARNING)
 	EventBus.notification_posted.emit("Aviso de prueba: la sonda de interfaz", "info", UITheme.INFO)
+
+## Si el panel de Ajustes no cabe a lo ancho, dice que controles lo ensanchan.
+func _report_wide(settings: Node, tab: int) -> void:
+	var panel: Control = settings.get("_panel")
+	var vp := get_tree().root.get_visible_rect().size
+	if panel == null:
+		return
+	var r := panel.get_global_rect()
+	print("interfaz_probe: ajustes tab%d panel=%s vp=%s" % [tab, r, vp])
+	if r.size.x <= vp.x + 0.5:
+		return
+	var limit := vp.x * 0.7
+	var stack: Array = [panel]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		for ch in n.get_children():
+			if ch is Control and (ch as Control).is_visible_in_tree():
+				var w := (ch as Control).get_combined_minimum_size().x
+				if w > limit:
+					print("interfaz_probe:   ancho ", int(w), " ", ch.get_path(), " ", ch.get_class(),
+						" '", str(ch.get("text")) if ch.get("text") != null else "", "'")
+				stack.push_back(ch)
 
 func _close_intro(main: Node) -> void:
 	var tut: Node = main.get_node_or_null("TutorialPanel")

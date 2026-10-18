@@ -151,6 +151,33 @@ func _ready() -> void:
 	_refresh_tips()
 	_refresh_callouts()
 	_setup_news()
+	_watch_modal_screens.call_deferred()
+
+## Los partes de guerra y las pantallas de fin tapan la colonia: con uno a la
+## vista no sale ninguna ayuda, y la que estaba se aparta y vuelve al cerrarlo
+## (el busto de la Capitana asomaba por detras del parte, ronda visual de la 1.1).
+const MODAL_SCREENS := ["WarReportScreen", "AuditDefeatScreen", "VictoryScreen"]
+
+func _watch_modal_screens() -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+	for n in MODAL_SCREENS:
+		var s := parent.get_node_or_null(n)
+		if s is CanvasLayer:
+			(s as CanvasLayer).visibility_changed.connect(func(): _pump.call_deferred())
+
+func _modal_screen_up() -> bool:
+	var parent := get_parent()
+	if parent == null:
+		return false
+	for n in MODAL_SCREENS:
+		# is_showing(): la de victoria es una capa siempre visible que crea su
+		# tarjeta al ganar.
+		var s := parent.get_node_or_null(n)
+		if s != null and s.has_method("is_showing") and bool(s.call("is_showing")):
+			return true
+	return false
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -376,6 +403,8 @@ func _can_show(item: Dictionary) -> bool:
 	var forced := bool(item["forced"])
 	if get_tree().paused or _guide_open:
 		return false
+	if _modal_screen_up():
+		return false
 	# Con un tablero de combate abierto (pelea o su parte) solo pasan las ayudas
 	# del propio combate; el resto espera a EventBus.encounter_closed.
 	if CombatManager.is_board_open() and not id in COMBAT_HELP_IDS:
@@ -514,6 +543,9 @@ func _place_tip_bust() -> void:
 		var target := HelpCatalog.target(String(_current["id"]))
 		if target != "":
 			avoid.append(HelpTargets.rect(get_tree(), target))
+	var storm := _storm_rect()
+	if storm.size.x > 1.0:
+		avoid.append(storm)
 	_tip_bust.dock_to(get_viewport().get_visible_rect().size, _tip_card.get_global_rect(), avoid)
 
 ## El busto de la tarjeta de consejo (pruebas).
@@ -566,11 +598,26 @@ func _update_pointer() -> void:
 func _fit_tip_card() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var tw: float = minf(TIP_WIDTH, vp.x - EDGE * 2.0)
+	var shift := tip_card_shift(vp, tw, _storm_rect())
 	_tip_card.custom_minimum_size = Vector2(tw, 0)
-	_tip_card.offset_left = -tw * 0.5
-	_tip_card.offset_right = tw * 0.5
+	_tip_card.offset_left = -tw * 0.5 + shift
+	_tip_card.offset_right = tw * 0.5 + shift
 	_tip_card.offset_bottom = -TIP_BOTTOM_GAP
 	_tip_card.offset_top = -TIP_BOTTOM_GAP
+
+## La Tormenta (con la orden de la Regencia abierta) en pantalla, o un Rect2
+## vacio. En un telefono baja a la columna izquierda y llega a media pantalla.
+func _storm_rect() -> Rect2:
+	var c: Control = HudRegistry.control_of("StormHUD")
+	if c == null or not is_instance_valid(c) or not c.is_visible_in_tree():
+		return Rect2()
+	return c.get_global_rect()
+
+## Cuanto se corre a la derecha la tarjeta de consejo (centrada abajo) para no
+## pisar la Tormenta en la columna izquierda de un telefono (tapaba su boton
+## ENTREGAR, ronda visual de la 1.1). Ver InstructorBust.centered_card_shift.
+static func tip_card_shift(vp: Vector2, tw: float, block: Rect2) -> float:
+	return InstructorBust.centered_card_shift(vp, tw, block, vp.y * 0.5)
 
 # ── Para pruebas y sondas ────────────────────────────────────────────
 

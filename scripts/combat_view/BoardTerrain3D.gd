@@ -69,6 +69,9 @@ static func build(board: Vector2i, seed_value: int, simple := false, scene := SC
 	var ext := Layout.board_extent(board)
 	var w := ext.x + MARGIN * 2.0
 	var d := ext.y + MARGIN * 2.0
+	if front and is_open_sea(terrain):
+		_open_sea_front(mk, board, ext, rng, simple, terrain)
+		return mk.commit()
 	if front:
 		_field(mk, board, ext, rng, simple, scene, terrain)
 		_edges(mk, board, ext, rng, simple, scene)
@@ -190,6 +193,52 @@ static func _front_water(mk, board: Vector2i, terrain: Dictionary, y0: float) ->
 			else:
 				mk.flat(c + Vector3(0, y0 + 0.02, 0), Vector2(Layout.CELL + 0.3, Layout.CELL + 0.3), C(S.SKY, WATER_COLOR_D + 0.02))
 				_foam_edges(mk, board, cell, c, y0 + 0.024, terrain, true)
+
+## Mar abierto (Campana de Mar): tres cuartos o mas del tablero son agua.
+static func is_open_sea(terrain: Dictionary) -> bool:
+	if terrain.is_empty():
+		return false
+	var water := 0
+	for cell in terrain:
+		if String(terrain[cell]) == Layout.TERRAIN_WATER:
+			water += 1
+	return float(water) >= float(terrain.size()) * 0.75
+
+## La vista frontal del mar abierto: mar hasta el horizonte en vez de un prado
+## con un charco (se leia como un rio entre orillas con arboles; ronda visual de
+## la 1.1). Sin sacos ni arboles al borde (flotarian); los islotes, roca sobre
+## su arena con espuma alrededor; al fondo, un par de islas lejanas. Una sola
+## malla, como el resto: no cuesta mas.
+static func _open_sea_front(mk, board: Vector2i, ext: Vector2, rng: RandomNumberGenerator, simple: bool, terrain: Dictionary) -> void:
+	var y0 := -0.11
+	var hx := ext.x * 0.5
+	var hz := ext.y * 0.5
+	mk.flat(Vector3(0, y0 - 0.02, -ext.y * 2.0), Vector2(ext.x * 12.0, ext.y * 13.0), C(S.SKY, WATER_COLOR_D - 0.02))
+	_front_water(mk, board, terrain, y0)
+	if not simple:
+		# Rizos de ola sueltos, fuera y dentro del tablero (planos: no tapan nada).
+		for i in 34:
+			var p := Vector3(rng.randf_range(-hx - 7.0, hx + 7.0), y0 + 0.03, rng.randf_range(-hz - 9.0, hz + 4.0))
+			mk.flat(p, Vector2(rng.randf_range(0.5, 1.1), 0.07), C(S.SKY, 0.08))
+	# Los islotes: arena, roca y una mata.
+	for cell in terrain:
+		if String(terrain[cell]) != Layout.TERRAIN_LAND:
+			continue
+		var c := Layout.cell_to_world(cell, board)
+		mk.flat(c + Vector3(0, y0 + 0.03, 0), Vector2(Layout.CELL * 0.92, Layout.CELL * 0.92), C(S.CREAM, -0.14))
+		mk.box(c + Vector3(-0.15, y0 + 0.2, 0.05), Vector3(0.95, 0.36, 0.75), C(S.STONE, -0.08))
+		mk.box(c + Vector3(0.3, y0 + 0.14, -0.3), Vector3(0.5, 0.24, 0.45), C(S.STONE, 0.0))
+		if not simple:
+			mk.box(c + Vector3(0.45, y0 + 0.1, 0.4), Vector3(0.16, 0.14, 0.16), C(S.GREEN, -0.05))
+	# Islas lejanas al fondo y a los lados: horizonte, no un borde de mesa.
+	for i in (2 if simple else 4):
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var p := Vector3(side * rng.randf_range(hx + 3.0, hx + 8.0), y0 - 0.01, -hz - rng.randf_range(3.0, 9.0))
+		var r := rng.randf_range(1.2, 2.2)
+		mk.cyl(p, r, 0.08, C(S.CREAM, -0.14), 9)
+		_tree(mk, p + Vector3(0, 0.06, 0), rng.randf_range(1.0, 1.5))
+		if not simple:
+			_tree(mk, p + Vector3(r * 0.45, 0.06, r * 0.2), rng.randf_range(0.8, 1.2))
 
 ## El campo de la vista frontal: hierba seguida hasta el horizonte, la tierra
 ## de nadie batida en medio (una franja parda de bordes irregulares) y craters

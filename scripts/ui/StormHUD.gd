@@ -77,6 +77,9 @@ var _baro_label: Label
 var _baro_left := 0.0
 ## La tarjeta de la Orden.
 var _card: VBoxContainer
+## La tarjeta va dentro de un scroll que no pasa del borde de abajo (ronda visual
+## de la 1.1: en un telefono apaisado baja por la columna izquierda y se salia).
+var _card_scroll: ScrollContainer
 var _card_open := false
 var _take_label: Label
 var _escort_label: Label
@@ -95,7 +98,10 @@ const LAYER_OVER_MODALS := 16
 const LAYER_UNDER_MODALS := 11
 
 func _sync_layer() -> void:
-	var under: bool = UILayoutManager.is_column_narrow() and UIManager.is_any_window_open()
+	# Con la orden de la Regencia abierta tampoco: la tarjeta es grande y tapaba
+	# la cabecera y las filas de Ajustes en PC (ronda visual de la 1.1).
+	var big: bool = UILayoutManager.is_column_narrow() or (_card != null and _card.visible)
+	var under: bool = big and UIManager.is_any_window_open()
 	layer = LAYER_UNDER_MODALS if under else LAYER_OVER_MODALS
 
 func _ready() -> void:
@@ -216,7 +222,13 @@ func _setup_card(parent: Control) -> void:
 	_card.custom_minimum_size = Vector2(300, 0)
 	_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_card.visible = false
-	parent.add_child(_card)
+	_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_card_scroll = ScrollContainer.new()
+	_card_scroll.name = "OrderScroll"
+	_card_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_card_scroll.visible = false
+	parent.add_child(_card_scroll)
+	_card_scroll.add_child(_card)
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 6)
@@ -354,7 +366,7 @@ func _on_panel_input(event: InputEvent) -> void:
 	# Dentro de la tarjeta no se cierra: ahi se lee (y se mantiene pulsado para
 	# ver la ayuda de cada linea). Se cierra con su X o tocando el barometro.
 	var at: Vector2 = _panel.get_global_transform() * (event as InputEventMouseButton).position
-	if _card.visible and _card.get_global_rect().has_point(at):
+	if _card.visible and _card_scroll.get_global_rect().has_point(at):
 		return
 	_card_open = not _card_open
 	_refresh()
@@ -365,6 +377,23 @@ func _on_order_changed(fresh: bool) -> void:
 	if fresh and StormManager.order_visible():
 		_card_open = true
 	_refresh()
+
+## El alto del scroll de la Orden: la tarjeta entera si cabe; si no, hasta el
+## borde de abajo de la pantalla (con su margen) y el resto se arrastra.
+func _fit_card_height() -> void:
+	if _card_scroll == null or not _card_scroll.is_visible_in_tree():
+		return
+	var need: float = _card.get_combined_minimum_size().y
+	var vp_h: float = get_viewport().get_visible_rect().size.y
+	var room: float = vp_h - _card_scroll.get_global_rect().position.y - 12.0
+	var h: float = order_card_height(need, room)
+	if not is_equal_approx(_card_scroll.custom_minimum_size.y, h):
+		_card_scroll.custom_minimum_size.y = h
+
+## Puro para las pruebas: lo que pide la tarjeta, sin pasar de `room` (y nunca
+## menos de 90 px, para que se lea al menos la cabecera).
+static func order_card_height(need: float, room: float) -> float:
+	return minf(need, maxf(90.0, room))
 
 func open_card() -> void:
 	_card_open = true
@@ -388,8 +417,11 @@ func _refresh_card() -> void:
 	var visible_now: bool = _card_open and StormManager.order_visible() \
 		and StormManager.get_phase() != StormCycle.Phase.TITHE
 	_card.visible = visible_now
+	_card_scroll.visible = visible_now
+	_sync_layer()
 	if not visible_now:
 		return
+	_fit_card_height.call_deferred()
 	var preview: Dictionary = StormManager.tithe_preview()
 	var ratio: int = roundi(float(preview.get("ratio", 0.0)) * 100.0)
 	var after: int = roundi(float(preview.get("ratio_after", 0.0)) * 100.0)

@@ -174,12 +174,19 @@ func _run() -> void:
 	StormSky.refresh_day()
 	EventBus.storm_incoming.emit(60.0)
 	EventBus.storm_phase_changed.emit(StormCycleScript.Phase.WARNING, 60.0)
+	# En 2D el tinte lee la fase real de StormManager (en calma aqui): se fuerza
+	# como en view2d_probe / dianoche_probe.
+	var tint: Node = get_tree().current_scene.get_node_or_null("StormTint")
+	if tint:
+		tint.set("forced_weight", 0.35)
 	await _seconds(4.0)
 	await _shot("grande_aviso")
 	EventBus.storm_ash_started.emit()
 	EventBus.storm_phase_changed.emit(StormCycleScript.Phase.ASH, 30.0)
 	EventBus.storm_started.emit(3)
 	EventBus.storm_phase_changed.emit(StormCycleScript.Phase.STORM, 30.0)
+	if tint:
+		tint.set("forced_weight", 1.0)
 	await _seconds(4.0)
 	await _shot("grande_tormenta")
 	DayClock.set_hour(hours["noche"])
@@ -239,21 +246,30 @@ func _military_shots(main: Node, skirmish: Node) -> void:
 	UIManager.close_all_windows()
 	await _frames(5)
 	var battle: Node = main.get_node_or_null("BattleScreen")
+	# Cada mision en las tres vistas: la frontal, la maqueta de casillas y el 2D.
+	var runs: Array = []
 	for pair in [["sea", {"torpedo_boat": 2, "gunboat": 3, "dreadnought": 1}], ["air", {"fighter": 4, "airship": 1}]]:
-		var domain: String = pair[0]
+		for style in ["front", "board", "2d"]:
+			runs.append([pair[0], pair[1], style])
+	for run in runs:
+		var domain: String = run[0]
+		var style: String = run[2]
+		if battle:
+			battle.force_board_style("2d" if style == "2d" else "3d")
+			battle.force_combat_view("" if style == "2d" else style)
 		# Como CombatManager.launch_campaign_mission, sin su candado (aqui no hay
 		# Astillero ni Aerodromo en el mapa).
 		var offer: Dictionary = ExpeditionGenerator.campaign_offer(domain, 1, 777, 3)
-		CombatManager._expedition = Expedition.create_sortie(900, offer, pair[1], 75.0)
+		CombatManager._expedition = Expedition.create_sortie(900, offer, run[1], 75.0)
 		CombatManager._morale_snapshot = 75.0
 		EventBus.expedition_started.emit(900, CombatManager._expedition.map.size())
-		if battle and battle.has_method("open_map"):
+		if style == "front" and battle and battle.has_method("open_map"):
 			battle.open_map(CombatManager._expedition)
 			await _frames(15)
 			await _shot("campana_%s_mapa" % domain)
 		CombatManager.enter_current_node()
 		await _seconds(3.0)
-		await _shot("campana_%s_tablero" % domain)
+		await _shot("campana_%s_tablero_%s" % [domain, style])
 		CombatManager.abandon_expedition()
 		await _seconds(1.0)
 		if battle:
@@ -261,6 +277,9 @@ func _military_shots(main: Node, skirmish: Node) -> void:
 		var reports: Node = main.get_node_or_null("WarReportScreen")
 		if reports:
 			reports.visible = false
+	if battle:
+		battle.force_board_style("")
+		battle.force_combat_view("")
 
 func _click_nucleo(shot_name: String) -> void:
 	for info in GridManager.get_all_buildings():

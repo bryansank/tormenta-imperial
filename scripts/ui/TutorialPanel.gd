@@ -561,7 +561,13 @@ func _layout_step() -> void:
 	# tapan: la tarjeta se aparta de los dos juntos.
 	focus = with_confirm(focus, _confirm_rect())
 	_card.position = card_position(vp, Vector2(w, ch), focus, _step in TutorialManager.INFO_PANEL_STEPS and has_rect)
-	_bust.dock_to(vp, Rect2(_card.position, Vector2(w, ch)), [focus], TOP_HUD)
+	if focus.size == Vector2.ZERO:
+		# Sin foco va centrada abajo: que no tape la orden de la Regencia cuando
+		# la Tormenta baja a la columna izquierda (tablet 4:3, movil; ronda
+		# visual de la 1.1). Se corre a la derecha lo que haga falta y quepa.
+		var storm := _storm_rect()
+		_card.position.x += InstructorBust.centered_card_shift(vp, w, storm, _card.position.y)
+	_bust.dock_to(vp, Rect2(_card.position, Vector2(w, ch)), [focus, _storm_rect()], TOP_HUD)
 
 	# Flecha y aro.
 	_ring.visible = false
@@ -639,6 +645,13 @@ func _card_already_picked(building_id: String) -> bool:
 	return menu != null and menu.has_method("selected_building_id") \
 		and menu.selected_building_id() == building_id
 
+## La Tormenta (y su orden) a la vista, o Rect2() si no.
+func _storm_rect() -> Rect2:
+	var c: Control = HudRegistry.control_of("StormHUD")
+	if c == null or not is_instance_valid(c) or not c.is_visible_in_tree():
+		return Rect2()
+	return c.get_global_rect()
+
 ## El ✓ de colocar con el dedo, si esta a la vista (Rect2() si no).
 func _confirm_rect() -> Rect2:
 	var c := get_tree().get_first_node_in_group("placement_confirm") as Control
@@ -659,7 +672,9 @@ static func with_confirm(focus: Rect2, confirm: Rect2) -> Rect2:
 ## foco, abajo al centro (por encima de CONSTRUIR). Publica para las pruebas.
 static func card_position(vp: Vector2, size: Vector2, focus: Rect2, prefer_side: bool = false) -> Vector2:
 	if focus.size == Vector2.ZERO:
-		return Vector2((vp.x - size.x) * 0.5, vp.y - size.y - 110.0)
+		# Nunca por encima del borde: en un telefono la tarjeta alta de reparar
+		# subia hasta cortar su rotulo (ronda visual de la 1.1).
+		return Vector2((vp.x - size.x) * 0.5, maxf(EDGE, vp.y - size.y - 110.0))
 	var x := clampf(focus.get_center().x - size.x * 0.5, EDGE, vp.x - size.x - EDGE)
 	var side_y := clampf(focus.get_center().y - size.y * 0.5, TOP_HUD, maxf(TOP_HUD, vp.y - size.y - EDGE))
 	var left := Vector2(focus.position.x - ARROW_GAP - size.x, side_y)
