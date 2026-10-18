@@ -46,6 +46,16 @@ static func morale_attack_mod(morale: float) -> float:
 	var t: float = clampf(morale / 100.0, 0.0, 1.0)
 	return lerpf(range_cfg.x, range_cfg.y, t)
 
+## La moral de la guarnicion del Ataque Final (y sus dotaciones de torre): su
+## propio rango, GameConfig.final_audit_morale_attack_range (docs/17).
+static func siege_morale_attack_mod(morale: float) -> float:
+	var range_cfg: Vector2 = GameConfig.final_audit_morale_attack_range
+	return lerpf(range_cfg.x, range_cfg.y, clampf(morale / 100.0, 0.0, 1.0))
+
+static func siege_morale_initiative_bonus(morale: float) -> int:
+	var r: Vector2 = GameConfig.final_audit_morale_initiative_range
+	return roundi(lerpf(r.x, r.y, clampf(morale / 100.0, 0.0, 1.0)))
+
 ## Symmetric around 50 morale: demoralised troops react late, inspired ones early.
 static func morale_initiative_bonus(morale: float) -> int:
 	var span: int = GameConfig.combat_morale_initiative_bonus

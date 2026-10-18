@@ -120,8 +120,8 @@ func _build_waves() -> void:
 ## Turns whatever is at home into the garrison, stamping each unit with the
 ## spirit in `morale_snapshot`. Returns what it built.
 func _muster(garrison_counts: Dictionary) -> Array:
-	var attack_mod: float = Rules.morale_attack_mod(morale_snapshot)
-	var initiative_bonus: int = Rules.morale_initiative_bonus(morale_snapshot)
+	var attack_mod: float = Rules.siege_morale_attack_mod(morale_snapshot)
+	var initiative_bonus: int = Rules.siege_morale_initiative_bonus(morale_snapshot)
 	for unit_id in garrison_counts.keys():
 		for i in range(int(garrison_counts[unit_id])):
 			var unit: CombatUnit = CombatUnitScript.create(next_uid(), String(unit_id), PLAYER, 1.0)
@@ -132,8 +132,8 @@ func _muster(garrison_counts: Dictionary) -> Array:
 
 ## Vuelve a sellar a cada unidad con la moral de `morale_snapshot`.
 func _apply_morale(units: Array) -> void:
-	var attack_mod: float = Rules.morale_attack_mod(morale_snapshot)
-	var initiative_bonus: int = Rules.morale_initiative_bonus(morale_snapshot)
+	var attack_mod: float = Rules.siege_morale_attack_mod(morale_snapshot)
+	var initiative_bonus: int = Rules.siege_morale_initiative_bonus(morale_snapshot)
 	for unit in units:
 		unit.morale_attack_mod = attack_mod
 		unit.morale_initiative_bonus = initiative_bonus
@@ -562,8 +562,8 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> FinalAudit:
 
 	# The morale modifiers are recomputed rather than stored: they are a pure
 	# function of the snapshot, and one less field is one less thing to drift.
-	var attack_mod: float = Rules.morale_attack_mod(audit.morale_snapshot)
-	var initiative_bonus: int = Rules.morale_initiative_bonus(audit.morale_snapshot)
+	var attack_mod: float = Rules.siege_morale_attack_mod(audit.morale_snapshot)
+	var initiative_bonus: int = Rules.siege_morale_initiative_bonus(audit.morale_snapshot)
 	var highest_uid: int = 0
 	for unit_data in data.get("garrison", []):
 		var unit: CombatUnit = CombatUnitScript.from_dict(unit_data)

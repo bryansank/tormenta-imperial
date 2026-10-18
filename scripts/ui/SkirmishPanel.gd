@@ -1053,6 +1053,13 @@ func _add_campaign_header(domain: String) -> void:
 	var blurb := UITheme.make_label(Tr.t("CAMP_BLURB_" + domain.to_upper()), "small", UITheme.TEXT_DIM)
 	blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_sortie_box.add_child(blurb)
+	# El Leviatan pide acorazados: se dice antes de llegar a el (docs/15 §13).
+	var need: String = Objectives.campaign_boss_need_text(domain)
+	if need != "":
+		var need_label := UITheme.make_label(need, "small", UITheme.WARNING)
+		need_label.name = "CampaignBossNeed"
+		need_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_sortie_box.add_child(need_label)
 	var lock: String = CombatManager.campaign_lock_reason(domain)
 	if lock != "":
 		var why := UITheme.make_label(_campaign_lock_text(domain), "small",

@@ -2613,6 +2613,12 @@ var campaign_boss_extra_scale := {"land": 0.93, "sea": 0.90, "air": 0.78}
 ## Cuantas unidades de su clase pesada lleva el jefe de campana ademas de su
 ## escolta, por medio (antes 2: el jefe era casi solo pesados y no se ganaba).
 var campaign_boss_heavies := {"land": 1, "sea": 1, "air": 1}
+## El jefe de campana que pide una unidad concreta, y cuantas en casa. El
+## Leviatan es el reto de la era 3 (decision de Bryan): con la flota de la era 2
+## gana el 0 %, con acorazados el 53-100 % (docs/15 §13 "Medido"). El panel de
+## la campana y ¿QUE HACER? lo dicen antes de llegar a el.
+var campaign_boss_counter := {"sea": "dreadnought"}
+var campaign_boss_counter_count := 2
 ## Segundos de juego entre ganar una mision y que la siguiente de la MISMA
 ## campana se pueda lanzar (la tropa descansa). Pasa por get_duration().
 var campaign_mission_cooldown := 150.0
@@ -3351,6 +3357,21 @@ var final_audit_air_escort_fighters := 0
 ## Perder no acaba la partida, pero tampoco se rifa la victoria: hay que
 ## reconstruir el ejercito antes de que la Regencia vuelva a bajar.
 var final_audit_resummon_min_units := 3
+
+## La moral en el Ataque Final (decision de Bryan, ronda final de la 1.1): la
+## guarnicion de casa y las dotaciones de las torres pelean con ESTE rango y no
+## con combat_morale_attack_range. Con el general (0,60-1,40) la referencia
+## (6 blindados, 4 torres) ganaba el 82,5 % con moral 100 y el 0 % con moral 75:
+## el asedio dependia solo de la moral. Se defiende la propia casa, asi que la
+## moral baja pesa menos; la de 100 vale lo mismo que fuera. Calibrado con
+## tools/siege_probe.gd (docs/17 "Ronda final: la moral").
+## Ataque 1,20-1,40 e iniciativa 0..+2 (a moral 75: x1,35 y +2; a 100, lo de
+## siempre). Medido: moral 75 0 % -> 48,5 %; moral 100 sigue en 82,5 %.
+## Con el ataque solo no basta: a moral 75 se quedaba en 27 % por la iniciativa
+## (+1 con el rango general).
+var final_audit_morale_attack_range := Vector2(1.20, 1.40)
+## Iniciativa de la guarnicion: de x (moral 0) a y (moral 100), redondeado.
+var final_audit_morale_initiative_range := Vector2(0.0, 2.0)
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Modos de juego ──

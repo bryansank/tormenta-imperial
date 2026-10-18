@@ -486,6 +486,9 @@ static func campaign_need_step(domain: String, why: String) -> Dictionary:
 		if ArmyManager.is_unlocked(unit_id):
 			var away: int = int(CombatManager.get_units_away().get(unit_id, 0))
 			return _army_step(unit_id, _army_count(unit_id) - away + (wanted - home), "OBJ_WHY_CAMPAIGN_UNITS", "train")
+	var boss: Dictionary = campaign_boss_step(domain)
+	if not boss.is_empty():
+		return boss
 	return {"kind": "campaign", "id": domain, "why": why}
 
 ## La segunda linea de ¿QUE HACER? (como sortie_step): la siguiente mision de
@@ -500,8 +503,49 @@ static func campaign_step() -> Dictionary:
 			continue
 		if CombatManager.campaign_units_home(domain).is_empty():
 			continue
+		# El Leviatan sin acorazados: antes que la mision, entrenarlos.
+		var boss: Dictionary = campaign_boss_step(domain)
+		if not boss.is_empty():
+			return boss
 		return {"kind": "campaign", "id": domain, "why": "OBJ_WHY_CAMPAIGN_NEXT"}
 	return {}
+
+## El jefe de campana que pide una unidad que no hay en casa (el Leviatan pide
+## acorazados, GameConfig.campaign_boss_counter): la unidad, o "". Mientras la
+## campana siga abierta y su jefe por delante.
+static func campaign_boss_need(domain: String) -> String:
+	var unit_id: String = String(GameConfig.campaign_boss_counter.get(domain, ""))
+	if unit_id == "" or CombatManager.is_campaign_complete(domain):
+		return ""
+	if int(CombatManager.campaign_units_home(domain).get(unit_id, 0)) > 0:
+		return ""
+	return unit_id
+
+## Lo que dice el panel de la campana: "Para el jefe, el Leviatan, necesitas
+## acorazados: llegan en la era 3" (o "entrenalos en el Astillero" si ya se
+## puede). "" si no hace falta nada.
+static func campaign_boss_need_text(domain: String) -> String:
+	var unit_id: String = campaign_boss_need(domain)
+	if unit_id == "":
+		return ""
+	var era: int = int(GameConfig.get_unit_def(unit_id).get("era", 1))
+	if ProgressionManager.current_era < era:
+		return Tr.t("CAMP_BOSS_NEEDS_%s_ERA" % domain.to_upper()) % era
+	return Tr.t("CAMP_BOSS_NEEDS_%s_TRAIN" % domain.to_upper())
+
+## ¿QUE HACER?: con el jefe como siguiente mision y sin su unidad en casa, el
+## paso es entrenarla (si la era ya la deja). {} si no toca.
+static func campaign_boss_step(domain: String) -> Dictionary:
+	var unit_id: String = campaign_boss_need(domain)
+	if unit_id == "":
+		return {}
+	if not ExpeditionGenerator.campaign_is_boss_mission(domain, CombatManager.campaign_won(domain)):
+		return {}
+	if not ArmyManager.is_unlocked(unit_id):
+		return {}
+	var away: int = int(CombatManager.get_units_away().get(unit_id, 0))
+	var wanted: int = maxi(1, GameConfig.campaign_boss_counter_count)
+	return _army_step(unit_id, _army_count(unit_id) - away + wanted, "OBJ_WHY_CAMPAIGN_BOSS_HEAVY", "train")
 
 ## "Para llamar al Ataque Final: ...", o "" si no falta nada (o no hay asedio).
 static func final_gate_text() -> String:

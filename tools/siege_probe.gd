@@ -29,6 +29,8 @@ extends SceneTree
 ##   --airship_hp=N   pisa la vida del dirigible; --land_air=N el alcance de
 ##                    tierra y mar contra el aire (combat_domain_targets)
 ##   --threat_w=F    pisa `combat_ai_threat_weight` (IA: peso de la amenaza)
+##   --siege_atk=lo,hi  pisa `final_audit_morale_attack_range`
+##   --siege_init=lo,hi  pisa `final_audit_morale_initiative_range`
 ##   --only=a,b       varias configuraciones separadas por comas
 ##   --adv=off        sin ventaja por tipo (combat_type_advantage), para medir
 ##                    el "antes"; --adv=1.5,0.75 pisa los dos multiplicadores
@@ -168,8 +170,8 @@ func _play(seed_value: int, roster: Dictionary) -> Dictionary:
 	audit.begin()
 	var crew_losses := 0
 	var crews: Array = []
-	var attack_mod: float = Rules.morale_attack_mod(_morale)
-	var initiative_bonus: int = Rules.morale_initiative_bonus(_morale)
+	var attack_mod: float = Rules.siege_morale_attack_mod(_morale)
+	var initiative_bonus: int = Rules.siege_morale_initiative_bonus(_morale)
 	var rounds := 0
 	var minutes := 0.0
 	var guard := 0
@@ -258,6 +260,12 @@ func _apply_overrides() -> void:
 			"escort": _cfg.final_audit_air_escort_fighters = int(value)
 			"airship_hp": _cfg.combat_unit_stats["airship"]["hp"] = int(value)
 			"threat_w": _cfg.combat_ai_threat_weight = float(value)
+			"siege_atk":
+				var lohi: PackedStringArray = value.split(",")
+				_cfg.final_audit_morale_attack_range = Vector2(float(lohi[0]), float(lohi[1]))
+			"siege_init":
+				var ir: PackedStringArray = value.split(",")
+				_cfg.final_audit_morale_initiative_range = Vector2(float(ir[0]), float(ir[1]))
 			"land_air": 
 				_cfg.combat_domain_targets["land"]["air"] = int(value)
 				_cfg.combat_domain_targets["sea"]["air"] = int(value)

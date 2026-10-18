@@ -479,7 +479,8 @@ func _campaign_mission() -> bool:
 	if String(options.get("campaigns", "1")) == "0":
 		return false
 	var camp: Dictionary = Objectives.campaign_step()
-	if camp.is_empty():
+	# El Leviatan sin acorazados devuelve un paso de entrenar, no la mision.
+	if camp.is_empty() or String(camp.get("kind", "")) != "campaign":
 		return false
 	if StormManager.get_phase() != StormCycle.Phase.CALM:
 		return false

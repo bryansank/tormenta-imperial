@@ -82,3 +82,32 @@ func test_the_help_index_has_the_three_campaigns_page() -> void:
 	assert_bool(catalog.ENTRIES.has("final_gate")).is_true()
 	assert_bool(TutorialManager.TIPS.has("campaigns")).is_true()
 	assert_bool(TutorialManager.TIPS.has("final_gate")).is_true()
+
+## El Leviatan es el reto de la era 3 (decision de Bryan, ronda final): sin
+## acorazados en casa, la pestana de Mar lo dice antes de llegar a el y ¿QUE
+## HACER? pide entrenarlos cuando el jefe es lo siguiente.
+func test_the_sea_tab_warns_that_the_leviathan_needs_dreadnoughts() -> void:
+	var saved_units: Dictionary = ArmyManager._units.duplicate()
+	var saved_era: int = ProgressionManager.current_era
+	ArmyManager._units = {"torpedo_boat": 3, "gunboat": 3}
+	ProgressionManager.current_era = 2
+	assert_str(Objectives.campaign_boss_need("sea")).is_equal("dreadnought")
+	assert_str(Objectives.campaign_boss_need("land")).is_empty()
+	var text: String = Objectives.campaign_boss_need_text("sea")
+	assert_str(text).is_equal(Tr.t("CAMP_BOSS_NEEDS_SEA_ERA") % 3)
+	ProgressionManager.current_era = 3
+	assert_str(Objectives.campaign_boss_need_text("sea")).is_equal(Tr.t("CAMP_BOSS_NEEDS_SEA_TRAIN"))
+	# Con el jefe como siguiente mision, el paso es entrenar acorazados.
+	var book: Dictionary = CombatManager.get_campaigns_save_data()
+	book["progress"] = {"land": 0, "sea": GameConfig.campaign_mission_count("sea") - 1, "air": 0}
+	CombatManager.load_campaigns_save_data(book)
+	var step: Dictionary = Objectives.campaign_boss_step("sea")
+	if ArmyManager.is_unlocked("dreadnought"):
+		assert_str(String(step.get("id", ""))).is_equal("dreadnought")
+		assert_str(String(step.get("why", ""))).is_equal("OBJ_WHY_CAMPAIGN_BOSS_HEAVY")
+	# Con acorazados en casa, nada que decir.
+	ArmyManager._units = {"gunboat": 3, "dreadnought": 2}
+	assert_str(Objectives.campaign_boss_need_text("sea")).is_empty()
+	assert_bool(Objectives.campaign_boss_step("sea").is_empty()).is_true()
+	ArmyManager._units = saved_units
+	ProgressionManager.current_era = saved_era

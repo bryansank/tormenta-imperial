@@ -405,13 +405,8 @@ despliegue y no paran a los cañones), pero ya no por la escolta.
 | 6 veh + 2 cazas | 65,0 % | 24,0 % | 0 % | — | 20,0 % | 58,5 % | 92,0 % |
 
 - **Dos torres:** 25,5 %, claramente por debajo (antes ~45 %).
-- **Moral 75: 0 %**, también con ×1,10 (0 %). Con moral 90, 30,5 %. La moral
-  (ataque ×0,6-1,4 y ±2 de iniciativa) es hoy la palanca más fuerte del asedio:
-  con la IA nueva los blindados rinden a moral 100 y caen a moral 75. **Abierto**
-  (para Bryan): o se asume que el asedio pide la moral alta (decoraciones,
-  Taberna, sueldos pagados) y se dice en su ayuda, o se suaviza
-  `combat_morale_attack_range` (0,60-1,40) solo para la guarnición de casa. La
-  sonda de la línea (otro agente) dirá con qué moral llega el jugador.
+- **Moral 75: 0 %** (también con ×1,10), moral 90: 30,5 %, con el rango de moral
+  general. Resuelto abajo, "La moral en el asedio".
 - **Gobernador:** con `audit_enemy_mult` 1,05 la máxima ganaba el 23 % (×1,02
   45 %, ×1,01 57,5 %). **Decisión:** **1,005** → 67,5 % (≥ 60 %). El Gobernador
   sigue siendo más duro en expediciones (×1,05), campañas y Diezmo (×1,34); en
@@ -434,3 +429,40 @@ Repetir:
     godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4
     godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --tier=governor
     godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --morale=75
+
+### La moral en el asedio (decisión de Bryan, 2026-10-18)
+
+Con el rango general (`combat_morale_attack_range` 0,60-1,40 y ±2 de iniciativa)
+el asedio dependía solo de la moral: 82,5 % a moral 100, 30,5 % a 90, 0 % a 75.
+Bryan: suavizarlo para que la referencia gane ~50 % con moral 75 y ~80 % con 100.
+
+La guarnición de casa del Ataque Final **y** las dotaciones de las torres pelean
+ahora con su propio rango (`CombatRules.siege_morale_attack_mod` /
+`siege_morale_initiative_bonus`; `FinalAudit` y `CombatManager` al montar cada
+oleada): `final_audit_morale_attack_range` = **(1,20, 1,40)** y
+`final_audit_morale_initiative_range` = **(0, +2)**. A moral 100 todo vale lo
+mismo que antes; a moral 75, ×1,35 de ataque y +2 de iniciativa (antes ×1,20 y
++1). Las expediciones, campañas y el Diezmo siguen con el rango general.
+
+Lo que se probó a moral 75 (6 vehículos, 4 torres, 200 semillas):
+
+| Ataque (moral 0-100) | Iniciativa | Moral 75 |
+|---|---|---|
+| 0,60-1,40 (el general) | -2..+2 | 0 % |
+| 1,00 / 1,10 / 1,20 / 1,30 - 1,40 | -2..+2 | 12 / 27 / 27 / 27 % |
+| 0,60-1,40 | 0..+2 | 0 % |
+| 1,00-1,40 | 0..+2 | 30,5 % |
+| **1,20-1,40** | **0..+2** | **48,5 %** |
+
+Solo con el ataque no basta: a moral 75 la iniciativa +1 la deja en 27 %.
+
+Con los valores nuevos (×1,14, dirigible, sin escolta, 200 semillas):
+
+| Guarnición | moral 100 | moral 90 | moral 75 | Gobernador, 100 | Gobernador, 75 | 2 torres, 100 |
+|---|---|---|---|---|---|---|
+| 5 vehículos | 40,0 % | 40,0 % | 28,5 % | 40,0 % | 34,0 % | 0 % |
+| **6 vehículos** | **82,5 %** | **75,0 %** | **48,5 %** | **67,5 %** | 22,5 % | 25,5 % |
+| 6 veh + 2 cazas | 65,0 % | 56,0 % | 25,5 % | 58,5 % | 38,5 % | 24,0 % |
+
+Repetir: `godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --morale=75`
+(`--siege_atk=lo,hi` y `--siege_init=lo,hi` pisan los dos rangos).

@@ -1886,7 +1886,11 @@ para ver la pendiente):
 Lectura:
 
 - **Los dudosos.** El Leviatán con barcos de la era 2 no se gana (0 %): pide
-  acorazados, que es lo que dice su ficha (era 3). El Zepelín **solo con cazas** es
+  acorazados. Decisión de Bryan: se queda como reto de la era 3, y el juego lo
+  dice. Mientras no haya acorazados en casa, la pestaña de Mar enseña "Para el
+  jefe, el Leviatán, necesitas acorazados: llegan en la era 3" (o "entrénalos en
+  el Astillero"), y con el jefe como siguiente misión ¿QUÉ HACER? pide entrenar 2
+  (`Objectives.campaign_boss_need/_text/_step`, `GameConfig.campaign_boss_counter`). El Zepelín **solo con cazas** es
   justo lo que lo gana (57 %); con dirigibles propios, no.
 - La primera misión de cada campaña se deja como **entrada** (100 % con una columna
   digna; la segunda de tierra ya pide 4 infantes). Disputarla pediría enemigos a ×2.

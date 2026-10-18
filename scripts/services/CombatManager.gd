@@ -332,6 +332,11 @@ func _on_final_audit_wave_ready(_wave: int, roster: Dictionary, scale: float) ->
 	var audit_crews: Array = []
 	if wanted > 0:
 		audit_crews = _build_side({GameConfig.storm_tower_garrison_unit: wanted}, Encounter.PLAYER, 1.0)
+		# En el asedio, la moral de casa (final_audit_morale_attack_range), como
+		# la guarnicion que sella FinalAudit.
+		for crew in audit_crews:
+			crew.morale_attack_mod = Rules.siege_morale_attack_mod(_morale_snapshot)
+			crew.morale_initiative_bonus = Rules.siege_morale_initiative_bonus(_morale_snapshot)
 	# Quien las fabrica es quien dice quienes son. La lista viaja hasta el tablero
 	# en la misma llamada: ninguna decision sobre "esto es dotacion" pasa por lo
 	# que dejo apuntado un tablero que ya no existe.
