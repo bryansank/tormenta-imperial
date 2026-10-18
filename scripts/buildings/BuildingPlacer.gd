@@ -19,6 +19,7 @@ const PointerMath := preload("res://scripts/services/InputService.gd")
 ## viven en PlacementRules y aqui solo se llaman.
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
+const RoadTraffic := preload("res://scripts/map/RoadTraffic.gd")
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
 ## Obra por fases, ruina y humo de "trabajando" (docs/03, "Aspecto en el mapa").
 const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
@@ -101,6 +102,10 @@ func _ready() -> void:
 	var walkers: Node = WorkerWalkers.new()
 	walkers.setup(walkers_layer, false)
 	add_child(walkers)
+	# Los camiones de los extractores al almacen (solo vista, feat/decoraciones-y-trafico).
+	var traffic: Node = RoadTraffic.new()
+	traffic.setup(walkers_layer, false)
+	add_child(traffic)
 
 	# Cached ghost materials for preview
 	_ghost_valid = StandardMaterial3D.new()
