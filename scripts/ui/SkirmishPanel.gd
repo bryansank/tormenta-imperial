@@ -133,7 +133,7 @@ func _setup_ui() -> void:
 	vbox.add_child(UITheme.make_separator())
 
 	_units_scroll = ScrollContainer.new()
-	_units_scroll.custom_minimum_size = Vector2(0, 300)
+	_units_scroll.custom_minimum_size = Vector2(0, UNITS_SCROLL_H)
 	_units_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_units_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.add_child(_units_scroll)
@@ -236,12 +236,32 @@ func _setup_ui() -> void:
 	vbox.add_child(_dev_btn)
 
 	_refresh()
+	if is_inside_tree():
+		get_viewport().size_changed.connect(_fit_height)
+
+## El scroll de MISIONES mide 300 de serie; en un telefono apaisado (lienzo de
+## ~400 de alto) el panel entero no cabia y se cortaban la cabecera con su X y
+## el pie (ronda visual de la 1.1). Se encoge lo que haga falta, hasta 90.
+const UNITS_SCROLL_H := 300.0
+const UNITS_SCROLL_MIN_H := 90.0
+
+static func units_scroll_height(vp_h: float, chrome_h: float) -> float:
+	return clampf(vp_h - 32.0 - chrome_h, UNITS_SCROLL_MIN_H, UNITS_SCROLL_H)
+
+func _fit_height() -> void:
+	if _panel == null or _units_scroll == null or not is_inside_tree():
+		return
+	var chrome: float = _panel.get_combined_minimum_size().y - _units_scroll.custom_minimum_size.y
+	var h := units_scroll_height(get_viewport().get_visible_rect().size.y, chrome)
+	if not is_equal_approx(_units_scroll.custom_minimum_size.y, h):
+		_units_scroll.custom_minimum_size.y = h
 
 # ── Refresh ──────────────────────────────────────────────────────────
 
 func _refresh() -> void:
 	if not _commit_label:
 		return
+	_fit_height.call_deferred()
 	_prune_selection()
 	var cap: int = GameConfig.combat_deploy_cap
 	var on_campaign: bool = has_expedition()

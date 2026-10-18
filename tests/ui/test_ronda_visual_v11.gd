@@ -48,6 +48,12 @@ func test_the_title_card_never_lifts_past_the_top() -> void:
 	assert_float((554.0 - 500.0) * 0.5 - lift).is_greater_equal(ModalKit.EDGE - 0.01)
 	assert_float(TitleMenuScript.title_card_lift(400.0, 600.0)).is_equal(0.0)
 
+func test_the_missions_scroll_shrinks_on_a_short_screen() -> void:
+	var Skirmish := load("res://scripts/ui/SkirmishPanel.gd")
+	assert_float(Skirmish.units_scroll_height(720.0, 300.0)).is_equal(300.0)
+	assert_float(Skirmish.units_scroll_height(400.0, 230.0)).is_equal(138.0)
+	assert_float(Skirmish.units_scroll_height(300.0, 260.0)).is_equal(90.0)
+
 func test_the_order_card_stops_at_the_bottom_edge() -> void:
 	assert_float(StormHUDScript.order_card_height(200.0, 500.0)).is_equal(200.0)
 	assert_float(StormHUDScript.order_card_height(300.0, 180.0)).is_equal(180.0)
