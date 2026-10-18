@@ -781,6 +781,17 @@ static func campaign_offer(domain: String, mission: int, base_seed: int, era: in
 		"blueprint": "",
 	}
 
+## La escala de los enemigos de una mision sobre la curva (campaign_enemy_mult:
+## un numero para todo el medio o una fila por mision).
+static func campaign_mission_mult(domain: String, mission: int) -> float:
+	var value = GameConfig.campaign_enemy_mult.get(domain, 1.0)
+	if value is Array:
+		var row: Array = value
+		if row.is_empty():
+			return 1.0
+		return float(row[clampi(mission, 0, row.size() - 1)])
+	return float(value)
+
 static func campaign_seed(base_seed: int, domain: String, mission: int) -> int:
 	var value: int = base_seed + int(CAMPAIGN_DOMAIN_SALT.get(domain, 0)) + CAMPAIGN_SEED_STRIDE * (mission + 1)
 	return value if value != 0 else 1
@@ -820,6 +831,8 @@ static func campaign_mission_map(offer: Dictionary) -> Array:
 	var fights: int = campaign_mission_fights(domain, mission)
 	var boss_mission: bool = campaign_is_boss_mission(domain, mission)
 	var level: int = mission * maxi(0, GameConfig.campaign_level_step)
+	var mult: float = campaign_mission_mult(domain, mission)
+	var boss_mult: float = float(GameConfig.campaign_boss_extra_scale.get(domain, 1.0))
 	var nodes: Array = _chain_map(rng, fights)
 	var last: int = nodes.size() - 1
 	for node in nodes:
@@ -829,11 +842,11 @@ static func campaign_mission_map(offer: Dictionary) -> Array:
 		var risk: int = int(node["risk"])
 		if final and boss_mission:
 			node["enemy_roster"] = campaign_boss_roster(rng, depth, era, domain)
-			node["enemy_scale"] = enemy_scale(depth, era, 2, true) * GameConfig.campaign_boss_extra_scale
+			node["enemy_scale"] = enemy_scale(depth, era, 2, true) * boss_mult
 			node["campaign_boss"] = true
 		else:
 			node["enemy_roster"] = domain_roster(rng, depth, era, risk, domain)
-			node["enemy_scale"] = enemy_scale(depth, era, risk, bool(node["is_boss"]))
+			node["enemy_scale"] = enemy_scale(depth, era, risk, bool(node["is_boss"])) * mult
 		node["campaign_domain"] = domain
 		if domain == "sea":
 			node["terrain_kind"] = TERRAIN_KIND_SEA
@@ -908,7 +921,7 @@ static func campaign_boss_roster(rng: RandomNumberGenerator, depth: int, era: in
 	var roster: Dictionary = domain_roster(rng, depth, era, 1, domain)
 	var top: String = _domain_heavy(era, domain)
 	if top != "":
-		roster[top] = int(roster.get(top, 0)) + maxi(1, GameConfig.campaign_boss_heavies)
+		roster[top] = int(roster.get(top, 0)) + maxi(1, int(GameConfig.campaign_boss_heavies.get(domain, 1)))
 	return _trim_to_cap(roster)
 
 ## Lo mas pesado de un medio que la era deja sacar al enemigo. Para el aire es

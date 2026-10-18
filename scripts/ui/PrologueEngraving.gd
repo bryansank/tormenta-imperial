@@ -236,7 +236,10 @@ static func _emperor(ci: CanvasItem, box: Rect2, k: float) -> void:
 	# La cinta de luto, cruzando la esquina del marco.
 	var a := c + Vector2(rx * 0.55, -ry * 1.05)
 	var b := c + Vector2(rx * 1.15, -ry * 0.45)
-	var band := PackedVector2Array([a, a + Vector2(rx * 0.2, -ry * 0.03), b + Vector2(rx * 0.04, ry * 0.2), b])
+	# Un paralelogramo (a, a+n, b+n, b): la version anterior se cruzaba consigo
+	# misma y la triangulacion fallaba ("Invalid polygon data").
+	var n := Vector2(rx * 0.13, -ry * 0.13)
+	var band := PackedVector2Array([a, a + n, b + n, b])
 	ci.draw_colored_polygon(band, INK)
 	# El decreto: hoja inclinada con renglones y la firma.
 	var sheet := _pts(box, [0.08, 0.78, 0.66, 0.72, 0.7, 0.98, 0.12, 1.0])

@@ -2540,10 +2540,32 @@ const CAMPAIGN_DOMAINS := ["land", "sea", "air"]
 ## Cuanto pesa cada mision en la curva enemiga (enemy_pressure): mision N es
 ## como un nodo de profundidad N * esto, mas su propia profundidad dentro del mapa.
 var campaign_level_step := 2
-## El jefe de campana: la escala de jefe de siempre por esto encima.
-var campaign_boss_extra_scale := 1.10
-## Cuantas unidades de su clase pesada lleva el jefe de campana ademas de su escolta.
-var campaign_boss_heavies := 2
+## Escala de los enemigos de cada mision de campana sobre la curva de siempre,
+## una cifra por mision (la del jefe de campana, para sus combates de paso; el
+## jefe lleva la suya abajo). Calibrada en la ronda final de la 1.1 con
+## `tools/balance_probe.gd -- --only=campaigns --camp-calib=1` (docs/15 §13
+## "Medido"): las misiones traen 2-3 cuerpos por combate (la curva de las
+## expediciones) contra columnas de 6 y sin esto salian al 100 %; los jefes, con
+## dos pesados y x1,10, al 0 %.
+##   * La primera de cada campana es la de entrada: gana cualquier columna digna
+##     (tierra, 3 infantes; la segunda ya pide 4). Subirla hasta disputarla
+##     pide enemigos a x2, monstruos por unidad: no se hace.
+##   * Las de en medio: la columna bien formada de su era gana el 60-100 %, la
+##     floja (4 infantes, 4 lanchas, 3 cazas) no.
+## El combate no tira dados: cada fila es un escalon, y entre dos cifras de la
+## calibracion la tasa salta. Retocar de 0,02 en 0,02.
+var campaign_enemy_mult := {
+	"land": [1.5, 1.7, 1.30, 1.33, 1.15, 0.93],
+	"sea": [1.6, 1.30, 1.25, 1.17, 0.90],
+	"air": [1.4, 1.03, 1.02, 0.97, 0.78],
+}
+## El jefe de campana: la escala de jefe de siempre (combat_boss_multiplier) por
+## esto, por medio. Antes 1,10 para todos (0 % de victorias); ahora la columna
+## bien formada gana el 45-75 % (tierra 2+2+2, mar con acorazados, aire 6 cazas).
+var campaign_boss_extra_scale := {"land": 0.93, "sea": 0.90, "air": 0.78}
+## Cuantas unidades de su clase pesada lleva el jefe de campana ademas de su
+## escolta, por medio (antes 2: el jefe era casi solo pesados y no se ganaba).
+var campaign_boss_heavies := {"land": 1, "sea": 1, "air": 1}
 ## Segundos de juego entre ganar una mision y que la siguiente de la MISMA
 ## campana se pueda lanzar (la tropa descansa). Pasa por get_duration().
 var campaign_mission_cooldown := 150.0

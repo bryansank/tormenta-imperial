@@ -124,6 +124,25 @@ func _run() -> void:
 			only_campaigns = true
 		elif a.begins_with("--camp-seeds="):
 			_camp_seeds = maxi(1, int(a.trim_prefix("--camp-seeds=")))
+		elif a.begins_with("--camp-only="):
+			_camp_only = a.trim_prefix("--camp-only=").split(",")
+		elif a.begins_with("--camp-step="):
+			GameConfig.campaign_level_step = int(a.trim_prefix("--camp-step="))
+		elif a.begins_with("--boss-extra="):
+			_set_by_domain(GameConfig.campaign_boss_extra_scale, a.trim_prefix("--boss-extra="), false)
+		elif a.begins_with("--boss-heavies="):
+			_set_by_domain(GameConfig.campaign_boss_heavies, a.trim_prefix("--boss-heavies="), true)
+		elif a == "--camp-calib=1":
+			_camp_calib = true
+		elif a.begins_with("--calib="):
+			var r: PackedStringArray = a.trim_prefix("--calib=").split(",")
+			_calib_mults = []
+			var m: float = float(r[0])
+			while m <= float(r[1]) + 0.0001:
+				_calib_mults.append(m)
+				m += float(r[2])
+		elif a.begins_with("--camp-mult="):
+			_set_by_domain(GameConfig.campaign_enemy_mult, a.trim_prefix("--camp-mult="), false)
 		elif a == "--adv=off":
 			GameConfig.combat_type_advantage["beats"] = {}
 		elif a.begins_with("--adv="):
@@ -146,6 +165,10 @@ func _run() -> void:
 	_print_config()
 	if only_coast:
 		_sweep_coast()
+		print("")
+		return
+	if only_campaigns and _camp_calib:
+		_calibrate_campaigns()
 		print("")
 		return
 	if only_campaigns:
@@ -754,14 +777,37 @@ const CAMPAIGN_PARTIES := {
 	"air": {
 		3: [
 			{"label": "3 cazas", "counts": {"fighter": 3}},
-			{"label": "6 cazas (solo cazas)", "counts": {"fighter": 6}},
-			{"label": "4 cazas + 2 dirig (bien)", "counts": {"fighter": 4, "airship": 2}},
+			{"label": "6 cazas (bien)", "counts": {"fighter": 6}},
+			{"label": "5 cazas + 1 dirig", "counts": {"fighter": 5, "airship": 1}},
+			{"label": "4 cazas + 2 dirig", "counts": {"fighter": 4, "airship": 2}},
 			{"label": "3 cazas + 3 dirig", "counts": {"fighter": 3, "airship": 3}},
 		],
 	},
 }
 const CAMP_SEEDS := 150
 var _camp_seeds: int = CAMP_SEEDS
+## `-- --camp-only=land:5,sea:4` (medio:mision desde 0, o solo el medio) limita
+## el barrido; `--camp-step=N`, `--boss-extra=F`, `--boss-heavies=N` pisan los
+## campaign_* correspondientes.
+var _camp_only: PackedStringArray = []
+## `-- --camp-calib=1`: por mision, barre la escala del enemigo (la de sus
+## combates y la del jefe a la vez) y da la victoria de cada plantilla por fila.
+var _camp_calib := false
+var _calib_mults: Array = [0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35]
+
+## "1.2" pisa los tres medios; "land:1.2,air:0.9" solo los nombrados.
+func _set_by_domain(table: Dictionary, value: String, as_int: bool) -> void:
+	for part in value.split(","):
+		var kv: PackedStringArray = part.split(":")
+		var keys: Array = GameConfig.CAMPAIGN_DOMAINS if kv.size() == 1 else [kv[0]]
+		var raw: String = kv[kv.size() - 1]
+		for k in keys:
+			table[k] = int(raw) if as_int else float(raw)
+
+func _camp_selected(domain: String, mission: int) -> bool:
+	if _camp_only.is_empty():
+		return true
+	return _camp_only.has(domain) or _camp_only.has("%s:%d" % [domain, mission])
 
 func _sweep_campaigns() -> void:
 	print("")
@@ -770,6 +816,8 @@ func _sweep_campaigns() -> void:
 	for domain in GameConfig.CAMPAIGN_DOMAINS:
 		var count: int = GameConfig.campaign_mission_count(domain)
 		for mission in range(count):
+			if not _camp_selected(domain, mission):
+				continue
 			var era: int = Generator.campaign_mission_era(domain, mission)
 			var offers: Array = []
 			for s in range(_camp_seeds):
@@ -781,3 +829,44 @@ func _sweep_campaigns() -> void:
 				print("%-5s %-13s %-3d %-5d %-32s %-4d %-6s %-6.2f %-7.1f %.1f" % [
 					domain, name, era, Generator.campaign_mission_fights(domain, mission), party["label"], row["n"],
 					"%.0f%%" % (100.0 * row["win_rate"]), row["casualties_mean"], row["rounds_mean"], row["minutes_mean"]])
+
+func _calibrate_campaigns() -> void:
+	print("")
+	print("-- CALIBRACION DE CAMPANAS (victoria por plantilla; mult = escala de mision y de jefe) --")
+	for domain in GameConfig.CAMPAIGN_DOMAINS:
+		var count: int = GameConfig.campaign_mission_count(domain)
+		var saved_mult = GameConfig.campaign_enemy_mult[domain]
+		var saved_boss = GameConfig.campaign_boss_extra_scale[domain]
+		for mission in range(count):
+			if not _camp_selected(domain, mission):
+				continue
+			var era: int = Generator.campaign_mission_era(domain, mission)
+			var parties: Array = CAMPAIGN_PARTIES[domain].get(era, [])
+			var labels: Array = []
+			for party in parties:
+				labels.append(String(party["label"]))
+			print("%s m%d (era %d, %d comb): %s" % [domain, mission + 1, era,
+				Generator.campaign_mission_fights(domain, mission), " | ".join(labels)])
+			for m in _calib_mults:
+				GameConfig.campaign_enemy_mult[domain] = _mult_row(saved_mult, mission, m)
+				GameConfig.campaign_boss_extra_scale[domain] = m
+				var offers: Array = []
+				for s in range(_camp_seeds):
+					offers.append(Generator.campaign_offer(domain, mission, SEED_BASE + 7919 * s, era))
+				var cells: Array = []
+				for party in parties:
+					var row := _measure_coast(offers, party["counts"])
+					cells.append("%3.0f%%" % (100.0 * row["win_rate"]))
+				print("  x%.2f  %s" % [m, "  ".join(cells)])
+		GameConfig.campaign_enemy_mult[domain] = saved_mult
+		GameConfig.campaign_boss_extra_scale[domain] = saved_boss
+
+## La fila de multiplicadores con `m` en la mision `mission` (acepta float o Array).
+func _mult_row(current, mission: int, m: float):
+	if current is Array:
+		var row: Array = (current as Array).duplicate()
+		while row.size() <= mission:
+			row.append(1.0)
+		row[mission] = m
+		return row
+	return m
