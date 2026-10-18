@@ -22,6 +22,8 @@ extends RefCounted
 
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const CoreLevel := preload("res://scripts/services/CoreLevel.gd")
+## Edificios militares de la 1.2 (feat/edificios-militares).
+const Military := preload("res://scripts/buildings/MilitaryBuildings.gd")
 
 ## El camino recomendado, en orden. Cada entrada se da por hecha cuando hay al
 ## menos `count` en pie (o en obras). Es el mismo orden que la guia
@@ -566,6 +568,35 @@ static func fleet_step() -> Dictionary:
 			continue
 		return {"kind": "build", "id": building_id, "count": 1,
 			"why": "OBJ_WHY_SHIPYARD" if building_id == "shipyard" else "OBJ_WHY_AERODROME"}
+	return {}
+
+## Paso aparte, como fleet_step() (feat/edificios-militares): solo de APOYO,
+## nunca entra en next_step() (la linea y su sonda no cambian). ¿QUE HACER? lo
+## ensena en la misma linea que fleet_step cuando esa no tiene nada. Por orden:
+## elegir doctrina con la Herreria lista y sin ninguna; un Campo de tiro; una
+## Enfermeria (cuando ya se ha peleado fuera); una Herreria. {} si no toca:
+## modo sin combate, asedio en marcha, sin Cuartel, falta su plano o no cabe.
+static func military_support_step() -> Dictionary:
+	if not GameMode.tithe_enabled() and not GameMode.audit_enabled():
+		return {}
+	if ProgressionManager.is_final_audit_active():
+		return {}
+	if Rules.count_building("barracks") < 1:
+		return {}
+	if Military.smithy_working() and ArmyManager.get_doctrine() == "" and ArmyManager.get_doctrine_pending() == "":
+		return {"kind": "doctrine", "id": Military.SMITHY, "why": "OBJ_WHY_DOCTRINE"}
+	for pair in [[Military.FIRING_RANGE, "OBJ_WHY_FIRING_RANGE"], [Military.INFIRMARY, "OBJ_WHY_INFIRMARY"],
+			[Military.SMITHY, "OBJ_WHY_SMITHY"]]:
+		var building_id: String = String(pair[0])
+		if Rules.count_building(building_id) >= 1:
+			continue
+		if CombatManager.blueprint_locked(building_id):
+			continue
+		if building_id == Military.INFIRMARY and not TutorialManager.is_first_sortie_done():
+			continue
+		var step: Dictionary = _build_step(building_id, String(pair[1]))
+		if not step.is_empty():
+			return step
 	return {}
 
 ## La columna que se propone para la primera escaramuza: una unidad de casa, la
@@ -1535,6 +1566,8 @@ static func describe(step: Dictionary) -> Dictionary:
 			title = Tr.t("OBJ_DO_RESUMMON")
 		"core":
 			title = Tr.t("OBJ_DO_CORE") % int(step.get("level", CoreLevel.next_level()))
+		"doctrine":
+			title = Tr.t("OBJ_DO_DOCTRINE")
 		_:
 			match String(step.get("why", "")):
 				"OBJ_WHY_SANDBOX_BUILT":

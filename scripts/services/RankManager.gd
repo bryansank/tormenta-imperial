@@ -36,7 +36,8 @@ func _ready() -> void:
 	EventBus.market_trade_completed.connect(func(_r, _a, _b, _p): add_xp_from("trade"))
 	EventBus.unit_trained.connect(func(_u): add_xp_from("train"))
 	EventBus.encounter_ended.connect(_on_encounter_ended)
-	EventBus.defense_auto_resolved.connect(func(victory, _r, _s): _on_encounter_ended(victory, 0))
+	# Una defensa resuelta a ciegas cuenta aunque haya un simulacro abierto.
+	EventBus.defense_auto_resolved.connect(func(victory, _r, _s): if victory: add_xp_from("fight_won"))
 	EventBus.expedition_ended.connect(_on_expedition_ended)
 	EventBus.storm_ended.connect(_on_storm_ended)
 	EventBus.milestone_completed.connect(func(_m): add_xp_from("milestone"))
@@ -79,6 +80,9 @@ func _on_construction_completed(node: Node) -> void:
 	add_xp_from("build_decoration" if data.is_decoration else "build")
 
 func _on_encounter_ended(victory: bool, _turns: int) -> void:
+	# El simulacro paga su XP aparte, y solo la primera vez (ArmyManager).
+	if CombatManager.is_practice():
+		return
 	if victory:
 		add_xp_from("fight_won")
 

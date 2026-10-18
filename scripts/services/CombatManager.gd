@@ -95,6 +95,12 @@ var _audit_charged: Dictionary = {}
 ## perdida: espera a que ese tablero se cierre y entonces baja.
 var _audit_wave_queued: bool = false
 
+## Edificios militares (feat/edificios-militares): Enfermeria y Campo de tiro.
+const Military := preload("res://scripts/buildings/MilitaryBuildings.gd")
+## La leccion del simulacro que va a abrir el proximo _open_board ("" = no es
+## un simulacro). Se consume al abrir.
+var _pending_practice: String = ""
+
 func _ready() -> void:
 	EventBus.final_audit_wave_ready.connect(_on_final_audit_wave_ready)
 	# El Diezmo gasta el apunte de la rebaja y se lleva la avanzadilla no echada.
@@ -446,6 +452,42 @@ func roster_size(roster: Dictionary) -> int:
 func is_defending() -> bool:
 	return _encounter != null and _encounter.is_defense
 
+## True while the open board is a SIMULACRO of the Firing range (no real losses).
+func is_practice() -> bool:
+	return _encounter != null and _encounter.is_practice
+
+## La leccion del simulacro abierto ("" si no lo es).
+func practice_lesson() -> String:
+	return _encounter.practice_lesson if is_practice() else ""
+
+## Por que no se puede abrir un simulacro ahora (clave de Tr), o "" si se puede.
+func practice_block_reason() -> String:
+	if not Military.firing_range_working() and not GameMode.all_unlocked():
+		return "PRACTICE_WHY_NO_RANGE"
+	if is_board_open():
+		return "PRACTICE_WHY_BOARD"
+	if has_active_expedition():
+		return "PRACTICE_WHY_EXPEDITION"
+	if ProgressionManager.is_final_audit_active():
+		return "PRACTICE_WHY_AUDIT"
+	return ""
+
+## SIMULACRO (doc 21 §4.4): abre el tablero de la leccion `lesson_id` con su
+## tropa de practica (no sale del ejercito; lleva la doctrina activa) contra
+## munecos. Nada de lo que pase toca la base salvo el premio de la primera
+## victoria (ArmyManager.complete_practice).
+func start_practice(lesson_id: String) -> bool:
+	var lesson: Dictionary = GameConfig.get_practice_lesson(lesson_id)
+	if lesson.is_empty() or practice_block_reason() != "":
+		return false
+	# Moral neutra: la practica no depende de como este el pueblo.
+	_morale_snapshot = 50.0
+	var player_units: Array = _build_side(lesson.get("player", {}), Encounter.PLAYER, 1.0)
+	_pending_practice = lesson_id
+	_open(player_units, lesson.get("enemy", {}), false, 0, false, [],
+		float(lesson.get("enemy_scale", 0.5)))
+	return true
+
 ## `reinforcements` son unidades del jugador que no salen de su ejército (hoy,
 ## las dotaciones de torre). Entran al tablero como cualquier otra, pero se
 ## anotan aparte para que las bajas no toquen el roster de ArmyManager.
@@ -504,6 +546,11 @@ func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: 
 	# un nodo de expedicion o incursion la pide; el Diezmo y el asedio, no.
 	var board_terrain: Dictionary = home_terrain(units) if terrain == null else (terrain as Dictionary)
 	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids, can_rout, board_terrain)
+	# Simulacro del Campo de tiro: se marca antes de avisar a nadie, para que
+	# el titulo del tablero ya lo sepa (BattleScreen) y la liquidacion lo salte.
+	_encounter.is_practice = _pending_practice != ""
+	_encounter.practice_lesson = _pending_practice
+	_pending_practice = ""
 	_board_generation += 1
 	_enemy_turn_running = false
 	_result_applied = false
@@ -767,6 +814,10 @@ func _apply_result(victory: bool, rounds: int) -> void:
 	if _encounter == null or _result_applied:
 		return
 	_result_applied = true
+	# Simulacro: ni bajas, ni moral, ni botin; solo el premio de la primera vez.
+	if _encounter.is_practice:
+		_apply_practice_result(victory, rounds)
+		return
 	if _audit_wave_active:
 		_audit_wave_won = victory
 		# Quien cayo sin que llegara su unit_died (no deberia pasar en partida,
@@ -783,6 +834,26 @@ func _apply_result(victory: bool, rounds: int) -> void:
 		return
 
 	_apply_result_for(_encounter, victory, rounds, _tower_crew_uids, _audit_charged)
+
+## El parte de un simulacro: nadie cae de verdad, la moral no se mueve y solo
+## la primera victoria de cada leccion paga (ArmyManager.complete_practice).
+func _apply_practice_result(victory: bool, rounds: int) -> void:
+	var lesson: String = _encounter.practice_lesson
+	var reward: Dictionary = ArmyManager.complete_practice(lesson, victory)
+	_last_result = {
+		"victory": victory,
+		"rounds": rounds,
+		"defense": false,
+		"practice": true,
+		"lesson": lesson,
+		"rewards": reward,
+		"casualties": {},
+		"survivors": _count_by_unit(_encounter.survivors()),
+		"morale_delta": 0,
+		"tower_crews": 0,
+		"tower_crews_lost": 0,
+		"towers_damaged": 0,
+	}
 
 ## Una unidad del jugador cae en una oleada del asedio, y su baja se cobra YA, no
 ## al cerrar la oleada. La guarnicion del asedio son las mismas CombatUnit que
@@ -830,6 +901,17 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 			to_charge.append(unit)
 	var survivors: Dictionary = _count_by_unit(_roster_only(encounter.survivors(), crew_uids))
 
+	# Enfermeria (feat/edificios-militares): tras una victoria vuelve uno de
+	# cada tres caidos del ejercito. No en el asedio (sus bajas se cobran en
+	# plena pelea, `precharged`) ni para las dotaciones de torre.
+	var recovered: Dictionary = {}
+	if victory and precharged.is_empty() and not _audit_wave_active and Military.infirmary_working():
+		var back: Array = Rules.pick_recovered(to_charge,
+			Rules.infirmary_returns(to_charge.size(), GameConfig.infirmary_return_every))
+		for unit in back:
+			to_charge.erase(unit)
+		recovered = _count_by_unit(back)
+
 	# ArmyManager is the source of truth for the roster: the party was never
 	# deducted when it marched out, so only the dead are subtracted now and
 	# Military Power lands exactly on the survivors.
@@ -849,7 +931,7 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 	var dead: int = 0
 	for count in lost.values():
 		dead += int(count)
-	var morale_delta: int = Rules.morale_delta(victory, dead)
+	var morale_delta: int = Rules.morale_delta(victory, dead, Military.morale_per_casualty())
 	if morale_delta != 0:
 		PopulationManager.adjust_morale(morale_delta)
 
@@ -872,6 +954,8 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 		# Lo que cayo del otro lado: el parte de una defensa resuelta a ciegas
 		# tiene que contar las dos columnas, no solo la nuestra.
 		"enemy_casualties": _count_by_unit(encounter.casualties(Encounter.ENEMY)),
+		# Enfermeria: caidos que volvieron a casa en vez de morir.
+		"recovered": recovered,
 	}
 	return _last_result
 
@@ -1144,11 +1228,27 @@ func abandon_expedition() -> bool:
 ## modelo apunta el botin del nodo y decide si toca draft o si la campana ha
 ## terminado; eso se publica despues de encounter_ended (ver _emit_events).
 func _apply_expedition_encounter(victory: bool, rounds: int) -> void:
-	var fallen: Dictionary = _count_by_unit(_encounter.casualties(Encounter.PLAYER))
+	var fallen_units: Array = _encounter.casualties(Encounter.PLAYER)
 	var survivors: Dictionary = _count_by_unit(_encounter.survivors())
 	# Los supervivientes bajan del tablero ya, con su daño puesto: son las mismas
 	# instancias que viven en Expedition.party y asi entran al siguiente nodo.
 	_encounter.release_survivors()
+
+	# Enfermeria (feat/edificios-militares): ganado el combate, uno de cada tres
+	# caidos de ESTE combate vuelve a casa (sale de la columna, no cuenta como
+	# baja). Y la cura entre combates sube un 30 %.
+	var recovered: Dictionary = {}
+	var infirmary: bool = Military.infirmary_working()
+	if victory and infirmary:
+		var back: Array = Rules.pick_recovered(fallen_units,
+			Rules.infirmary_returns(fallen_units.size(), GameConfig.infirmary_return_every))
+		var uids: Array = []
+		for unit in back:
+			uids.append(unit.uid)
+			fallen_units.erase(unit)
+		recovered = _expedition.evacuate(uids)
+	var fallen: Dictionary = _count_by_unit(fallen_units)
+	_expedition.heal_mult = GameConfig.infirmary_heal_mult if infirmary else 1.0
 
 	var before: Dictionary = _expedition.rewards.duplicate()
 	_expedition_followups = _expedition.mark_cleared() if victory else _expedition.mark_defeated()
@@ -1172,6 +1272,7 @@ func _apply_expedition_encounter(victory: bool, rounds: int) -> void:
 		"tower_crews": 0,
 		"tower_crews_lost": 0,
 		"towers_damaged": 0,
+		"recovered": recovered,
 	}
 	# Lo que da este nodo de lo que solo se consigue fuera, y si la columna se
 	# curo al seguir (expedicion corta). Para el parte del encuentro.
@@ -1259,7 +1360,7 @@ func _resolve_expedition(result: int) -> void:
 		dead += int(count)
 	# Misma formula que la escaramuza suelta: ganar levanta, cada caido hunde.
 	# Abandonar no es ganar, pero tampoco cuesta mas que sus muertos.
-	var morale_delta: int = Rules.morale_delta(result == Expedition.RESULT_WON, dead)
+	var morale_delta: int = Rules.morale_delta(result == Expedition.RESULT_WON, dead, Military.morale_per_casualty())
 	if morale_delta != 0:
 		PopulationManager.adjust_morale(morale_delta)
 
@@ -1276,6 +1377,8 @@ func _resolve_expedition(result: int) -> void:
 		"routed": bool(_last_result.get("routed", false)),
 		"auto_resolved": bool(_last_result.get("auto_resolved", false)),
 		"casualties": lost.duplicate(),
+		# Enfermeria: los que volvieron a casa en vez de caer, en toda la salida.
+		"recovered": (summary.get("evacuated", {}) as Dictionary).duplicate(),
 		"survivors": summary.get("survivors", {}),
 		"morale_delta": morale_delta,
 		"nodes_cleared": int(summary.get("nodes_cleared", 0)),
@@ -1915,3 +2018,4 @@ func _clear_runtime_state() -> void:
 	_last_board_crew_uids.clear()
 	_audit_charged.clear()
 	_audit_wave_queued = false
+	_pending_practice = ""

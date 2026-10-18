@@ -259,7 +259,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (37 total, `data/buildings/*.tres`)
+### Buildings (40 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -290,6 +290,9 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Shipyard (1.1) | 2x2 | 220/80/0/120 + 10 planks, 4 beams | 3 | Trains ships; must touch the coast; needs a Foundry; no cap (2026-10-18) | 2 |
 | Aerodrome (1.1) | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | Trains planes and airships; needs a Refinery; no cap (2026-10-18) | 3 |
 | Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food/30s, no crop; on the shore touching a school of fish; caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
+| Infirmary (1.2) | 2x2 | 180/60/0/100 + 6 planks | 2 | After a won fight 1 in 3 fallen come home; −1 morale per loss (not −3); +30 % heal between mission fights; max 1; needs Barracks + Foundry | 2 |
+| Military smithy (1.2) | 2x2 | 200/80/0/80 + 4 beams | 2 | Doctrines: one active for the whole army, 150 gold + 90 s to change; max 1; needs Barracks + Foundry | 2 |
+| Firing range (1.2) | 2x2 | 160/40/0/100 + 8 planks | 1 | Training −20 % time; SIMULACRO: 3 practice lessons on the board, no real losses, small prize the first time; max 1; needs Barracks + Foundry | 2 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
 
 The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
@@ -902,7 +905,38 @@ PNG is missing.
   `TutorialPanel` draws them where `BattleScreen.coach_anchor()` says. Saved as
   `combat_lessons_done` inside the `tutorial` key. No Skip on steps 1-3, Skip on 4-7,
   "Repetir combate guiado" in the AYUDA index. Six combat guides at the end of
-  `HelpCatalog.ENTRIES`. The practice range (design doc 21 §4.4) is not done.
+  `HelpCatalog.ENTRIES`. The practice range (design doc 21 §4.4) landed in 1.2 as the
+  Firing range's SIMULACRO (below).
+
+**Military support buildings (1.2, `feat/edificios-militares`, docs/15 §14, docs/03).**
+Infirmary (`infirmary`), Military smithy (`smithy`) and Firing range (`firing_range`):
+2x2, era 2, unique, need Barracks + Foundry. Their `GameConfig` block sits at the end
+with `_register_military_buildings()` (like the Fishing dock), and all their state
+lives in `ArmyManager` (save key `army`: `doctrine`, `practice_done`; cleared by its
+`reset()`, already called from the three places in `GameManager`). "Working" =
+finished, not ruined, connected, staffed (`scripts/buildings/MilitaryBuildings.gd`,
+asked at the moment of use, never per frame).
+- *Infirmary*: on a won fight (not the Final Audit, not tower crews) one in
+  `infirmary_return_every` (3) fallen comes home (`CombatRules.infirmary_returns`,
+  `pick_recovered`, most Power first; `Expedition.evacuate()` on missions);
+  `CombatRules.morale_delta(victory, dead, per_casualty)` with 1 instead of 3;
+  `Expedition.heal_mult` 1.3. The report shows `recovered`.
+- *Doctrines*: `GameConfig.combat_doctrines` (6: assault, trench, heavy_artillery,
+  tuned_engines, seamanship, air_aces; `units` or `domain`, small `mods` that always
+  trade something), pure `scripts/combat/Doctrines.gd`. ONE active for the whole army.
+  `CombatUnit.create()` applies `GameConfig.combat_active_doctrine` (runtime, set by
+  `ArmyManager._sync_doctrine()`: the chosen one while a Smithy is finished) to the
+  player side only; `to_dict()` carries `doctrine`. AI and AutoResolver untouched.
+- *SIMULACRO*: `CombatManager.start_practice(lesson_id)` opens the normal board with
+  the lesson's practice troops vs dummies (`firing_range_lessons`); `Encounter.is_practice`
+  makes `_apply_result` skip casualties, morale and loot; the first win of each lesson
+  pays via `ArmyManager.complete_practice()`. `CombatManager.is_practice()` keeps it out
+  of regiment wins and the `fight_won` XP. Training time × `firing_range_train_mult` (0.8).
+- UI: `scripts/ui/MilitarySection.gd` inside `BuildingInfoPanel` (doctrine buttons,
+  lesson buttons); `Objectives.military_support_step()` is a support line only (shown
+  where `fleet_step` is, never in `next_step()`). Signals: `doctrine_switch_started`,
+  `doctrine_changed`, `practice_lesson_completed`. Core level / blueprints are set by
+  `feat/nucleo-y-planos` (proposed: Core 3; blueprint for Infirmary and Smithy).
 
 ### Tech Tree (15 techs, 3 branches)
 

@@ -236,6 +236,60 @@ operational Tower cuts storm damage by 15% (cap 60%) and puts one artillery crew
 the defensive boards — the Tithe and each Final Audit wave — outside the deploy cap
 (max 2). See [15-combat.md](15-combat.md).
 
+### Edificios militares de la 1.2 (rama `feat/edificios-militares`, doc 21 §6.3 n.º 8-10)
+
+Tres edificios de apoyo al ejército. No entrenan ni producen: cambian el combate.
+Los tres son **2x2, de era 2 (piden acero), únicos** (tope 1 en todas las eras) y
+piden **Cuartel + Fundición**. Todo su estado vive en `ArmyManager` (clave `army` del
+guardado) y su bloque de `GameConfig` va al final, con `_register_military_buildings()`
+(como el Muelle de pesca): topes, requisitos, obra, parcela, actividad y la XP del
+simulacro se añaden a las tablas comunes al crear GameConfig.
+
+| ID | Nombre | Coste G/S/O/W + materiales | Gente | Obra | Vida | Qué hace |
+|----|------|------|------|------|------|------|
+| `infirmary` | Enfermería | 180/60/0/100 + 6 tablones | 2 | 14 s | 180 | Tras un combate **ganado**, de cada 3 caídos del ejército vuelve 1 a casa (por abajo; primero los de más Poder). −1 de moral por baja en vez de −3. +30 % de cura entre combates de una misión (0,30 → 0,39) |
+| `smithy` | Herrería militar | 200/80/0/80 + 4 vigas | 2 | 16 s | 220 | **Doctrinas**: una activa a la vez para todo el ejército. Adoptar o cambiar cuesta 150 oro y 90 s (sigue la anterior mientras tanto) |
+| `firing_range` | Campo de tiro | 160/40/0/100 + 8 tablones | 1 | 12 s | 160 | Entrenar cualquier unidad tarda un **20 % menos**. **SIMULACRO**: 3 lecciones en el tablero contra muñecos, sin bajas reales; la primera victoria de cada una paga 40/50/60 oro y 15 XP de rango |
+
+**En marcha** (`scripts/buildings/MilitaryBuildings.gd`) = terminado, no en ruinas,
+unido al Núcleo y con su gente (las metas `connected`, `staffed`, `workers_off` de
+`PopulationManager`). La Enfermería y el Campo de tiro solo cuentan en marcha, y se
+consultan en el momento (al cerrar un combate, al empezar a entrenar, al abrir un
+simulacro), nunca por fotograma. La **doctrina** se aprende: vale mientras haya una
+Herrería **terminada** en el mapa, aunque esté en ruinas o sin gente; para
+**cambiarla** sí tiene que estar en marcha. Sin Herrería, la elegida se recuerda pero
+no vale (`ArmyManager.effective_doctrine()` → `GameConfig.combat_active_doctrine`,
+que se recalcula al terminar o derribar un edificio y al cargar).
+
+**Dónde no actúan.** La Enfermería no devuelve caídos del **Ataque Final** (sus bajas
+se cobran en plena pelea) ni a las dotaciones de torre (no son ejército). El
+simulacro no se abre con otro tablero abierto, con la columna fuera ni durante el
+asedio (`CombatManager.practice_block_reason()`).
+
+**Nivel del Núcleo y planos** (los pone `feat/nucleo-y-planos`, no esta rama):
+propuesta Núcleo 3 para los tres; **plano** para la Enfermería y la Herrería, el
+Campo de tiro sin plano. Ojo: `GameConfig.combat_blueprint_buildings` aún dice
+`military_forge` (nombre provisional de la Herrería); el id real es `smithy`.
+
+**Ficha.** `scripts/ui/MilitarySection.gd` (dentro de `BuildingInfoPanel`, como
+`HarvestSection`): la Enfermería cuenta sus tres efectos con cifras; la Herrería
+lista las 6 doctrinas (lo que cambia, a quién, cuál está EN USO, la barra mientras
+se aprende); el Campo de tiro, sus tres lecciones con el premio o "✓ hecha". No se
+mejoran (`TOPE_NO_UPGRADE_WHY_<ID>`). Ayuda: una tarjeta por edificio al terminar el
+primero (`HelpCatalog`, `TutorialManager.TIPS`). ¿QUÉ HACER? solo como apoyo
+(`Objectives.military_support_step()`, en la línea de `fleet_step`): elegir doctrina
+con la Herrería lista, un Campo de tiro, una Enfermería (tras la primera salida) y
+una Herrería; nunca entra en `next_step()`.
+
+**Aspecto.** Maqueta horneada (`tools/toy_recipes/<id>.gd`): Enfermería = tienda de
+lona clara con la cruz roja enorme en el tejado y la bandera, camillas y botiquines
+(~1.200 triángulos); Herrería = nave de piedra con chimenea (humo, `FxAnchor`) y la
+fragua encendida (brillo sin luz real), yunque, muela, armero (~1.030); Campo de
+tiro = calle de tierra, talud con tres dianas, línea de sacos y caseta (~1.230).
+Piezas CC0 de KayKit (`kk:barrel`, `kk:weaponrack`, `kk:target`), el resto propio.
+2D en `BuildingArt2D` (`_infirmary`, `_smithy`, `_firing_range`, el mismo
+vocabulario), y su fila en `construction_style` y `building_lot_style`.
+
 ### Decorations (morale only)
 
 | ID | Name | Size | Cost G/S/O/W | Build Time | Morale |

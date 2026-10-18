@@ -51,6 +51,12 @@ var terrain: Dictionary = {}
 ## en un tablero sin agua). No pelean, no mueren, no cuentan: se quedan "en el
 ## puerto". Normalmente vacio: quien compone los bandos ya evita mandarlas.
 var reserve: Array = []
+## SIMULACRO del Campo de tiro (feat/edificios-militares, doc 21 §4.4): un
+## tablero de practica. Las reglas del tablero son las mismas; lo que cambia es
+## la liquidacion (CombatManager): sin bajas reales, sin moral, sin botin.
+var is_practice: bool = false
+## La leccion (GameConfig.firing_range_lessons[].id) que se practica.
+var practice_lesson: String = ""
 
 # ── Construction ─────────────────────────────────────────────────────
 

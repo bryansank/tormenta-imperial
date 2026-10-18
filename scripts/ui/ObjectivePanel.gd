@@ -227,6 +227,10 @@ func refresh() -> void:
 		var ctext: Dictionary = Objectives.describe(contract)
 		_now_contract.text = "%s\n%s" % [String(ctext["title"]), String(ctext["why"])]
 	var fleet: Dictionary = Objectives.fleet_step()
+	# Sin Astillero ni Aerodromo que pedir: los edificios militares de apoyo
+	# (feat/edificios-militares), en la misma linea.
+	if fleet.is_empty():
+		fleet = Objectives.military_support_step()
 	# No repite el paso principal (si la linea ya pide eso mismo, sobra).
 	if not fleet.is_empty() and String(fleet.get("id", "")) == String(step.get("id", "")):
 		fleet = {}

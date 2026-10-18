@@ -516,3 +516,15 @@ signal contract_discarded(source: String, contract: Dictionary)
 ## El panel se repinta con esta.
 @warning_ignore("unused_signal")
 signal contract_board_changed()
+
+# ── Edificios militares (feat/edificios-militares) ──
+## Herreria: se pago y empieza a adoptarse `doctrine_id`; tarda `seconds`.
+@warning_ignore("unused_signal")
+signal doctrine_switch_started(doctrine_id: String, seconds: float)
+## La doctrina elegida cambio (ya esta adoptada). "" = ninguna.
+@warning_ignore("unused_signal")
+signal doctrine_changed(doctrine_id: String)
+## Campo de tiro: se gano una leccion del simulacro. `first_time` = es la
+## primera vez y `reward` (por nombre de recurso) ya se pago.
+@warning_ignore("unused_signal")
+signal practice_lesson_completed(lesson_id: String, first_time: bool, reward: Dictionary)

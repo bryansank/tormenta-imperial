@@ -61,6 +61,9 @@ var _confirm_label: Label
 var _process_panel: ProcessActionsPanel
 ## PARA RECOGER y, en la Granja, CULTIVO (2026-10-04).
 var _harvest: VBoxContainer = null
+## Enfermeria, Herreria (doctrinas) y Campo de tiro (simulacro): su parte de
+## la ficha (feat/edificios-militares).
+var _military: VBoxContainer = null
 var _selected_node: Node = null
 var _selected_data: BuildingData = null
 var _selected_deposit_id: String = ""
@@ -107,6 +110,8 @@ func _process(delta: float) -> void:
 			_refresh_upgrade()
 	if _harvest != null and not _is_deposit:
 		_harvest.refresh()
+	if _military != null and not _is_deposit:
+		_military.refresh()
 
 # ── UI Construction ──
 
@@ -169,7 +174,10 @@ func _build_ui() -> void:
 
 	_harvest = preload("res://scripts/ui/HarvestSection.gd").new()
 	_harvest.visible = false
+	_military.visible = false
 	_vbox.add_child(_harvest)
+	_military = preload("res://scripts/ui/MilitarySection.gd").new()
+	_vbox.add_child(_military)
 
 	# Deposit uses ("12 usos restantes" y, debajo, a mano o con su edificio)
 	_deposit_uses_label = UITheme.make_label("", "body", UITheme.WARNING)
@@ -430,6 +438,7 @@ func _show_building_panel() -> void:
 
 	_deposit_uses_label.visible = false
 	_harvest.show_for(_selected_node, _selected_data)
+	_military.show_for(_selected_node, _selected_data)
 	_refresh_workers_toggle()
 	_refresh_open_button()
 

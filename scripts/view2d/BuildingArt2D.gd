@@ -159,6 +159,10 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"shipyard": _shipyard(ci, r)
 		"aerodrome": _aerodrome(ci, r)
 		"fishing_dock": _fishing_dock(ci, r)
+		# Edificios militares de la 1.2 (feat/edificios-militares, al final).
+		"infirmary": _infirmary(ci, r)
+		"smithy": _smithy(ci, r)
+		"firing_range": _firing_range(ci, r)
 		_:
 			_block(ci, r, minf(r.size.x, r.size.y) * 0.16, STONE, CONCRETE_DARK)
 	if level > 1:
@@ -2016,6 +2020,8 @@ static func fx_anchors(id: String) -> Array:
 		"fuel_depot": return [Vector2(0.84, 0.82)]
 		# Muelle de pesca: la chimenea del ahumadero.
 		"fishing_dock": return [Vector2(0.2, 0.08)]
+		# Herreria militar: la chimenea de la fragua.
+		"smithy": return [Vector2(0.2, 0.1)]
 	return [Vector2(0.5, 0.45)]
 
 # ── Parcela y atrezo (docs/03, "Parcela y atrezo") ────────────────────
@@ -3434,3 +3440,118 @@ static func _fish_shadow(ci: CanvasItem, c: Vector2, s: float, dir: Vector2) -> 
 	ci.draw_colored_polygon(body, col)
 	var tail := c - d * s * 1.3
 	ci.draw_colored_polygon(PackedVector2Array([tail, tail - d * s * 0.7 + side * s * 0.55, tail - d * s * 0.7 - side * s * 0.55]), col)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Edificios militares de la 1.2 (feat/edificios-militares) ──
+# ══════════════════════════════════════════════════════════════════════
+# El mismo vocabulario que sus recetas 3D (tools/toy_recipes/<id>.gd): la
+# Enfermeria es una tienda de lona clara con la cruz roja enorme; la Herreria,
+# una nave de piedra con la fragua encendida y el yunque; el Campo de tiro, la
+# calle de tierra con la linea de sacos y las dianas al fondo.
+
+## Una cruz roja de enfermeria (lo exagerado), con su borde.
+static func _red_cross(ci: CanvasItem, c: Vector2, s: float) -> void:
+	var a := Rect2(c - Vector2(s * 0.5, s * 0.17), Vector2(s, s * 0.34))
+	var b := Rect2(c - Vector2(s * 0.17, s * 0.5), Vector2(s * 0.34, s))
+	ci.draw_rect(a.grow(1.0), OUTLINE)
+	ci.draw_rect(b.grow(1.0), OUTLINE)
+	ci.draw_rect(a, IMPERIAL_RED)
+	ci.draw_rect(b, IMPERIAL_RED)
+
+static func _infirmary(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	# La tienda grande de lona (dos aguas) atras, con la cruz en el tejado.
+	var tent := Rect2(r.position + r.size * Vector2(0.04, 0.06), r.size * Vector2(0.92, 0.56))
+	var top := _gable(ci, tent, m * 0.16, CREAM.darkened(0.04), CREAM.darkened(0.16), true)
+	_wall_marks(ci, _wall, 3, SKY.darkened(0.3), 0.3)
+	_red_cross(ci, top.get_center() + Vector2(-top.size.x * 0.2, 0), m * 0.2)
+	# Delante: dos camillas (catres) y cajas de botiquin con su cruz.
+	for k in 2:
+		var cot := Rect2(r.position + r.size * Vector2(0.08 + 0.3 * k, 0.72), r.size * Vector2(0.24, 0.12))
+		ci.draw_rect(cot.grow(1.0), OUTLINE)
+		ci.draw_rect(cot, DARK_WOOD)
+		ci.draw_rect(cot.grow(-1.5), CREAM)
+		_dot(ci, cot.position + Vector2(cot.size.x * 0.18, cot.size.y * 0.5), m * 0.03, CREAM.darkened(0.12))
+	for p in [Vector2(0.78, 0.74), Vector2(0.9, 0.86)]:
+		var bc := r.position + r.size * (p as Vector2)
+		var box := Rect2(bc - Vector2(m, m) * 0.06, Vector2(m, m) * 0.12)
+		ci.draw_rect(box.grow(1.0), OUTLINE)
+		ci.draw_rect(box, CREAM)
+		_red_cross(ci, bc, m * 0.07)
+	# El mastil con la bandera de la cruz, junto a la entrada.
+	var tip := _mast(ci, r.position + r.size * Vector2(0.66, 0.66), m * 0.36, IRON, 2.0)
+	var flag := PackedVector2Array([tip, tip + Vector2(m * 0.2, 0), tip + Vector2(m * 0.2, m * 0.12), tip + Vector2(0, m * 0.12)])
+	_poly(ci, flag, CREAM, OUTLINE, 1.0)
+	_red_cross(ci, tip + Vector2(m * 0.1, m * 0.06), m * 0.07)
+
+static func _smithy(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	# La nave de piedra con tejado de pizarra; dentro, la fragua encendida.
+	var hall := Rect2(r.position + r.size * Vector2(0.04, 0.06), r.size * Vector2(0.62, 0.56))
+	var top := _gable(ci, hall, m * 0.2, SLATE, STONE.darkened(0.06), true)
+	_wall_marks(ci, _wall, 2, FIRE, 0.3)
+	_hazard_strip(ci, Rect2(Vector2(top.position.x + 2, top.end.y - 3), Vector2(top.size.x - 4, 3)))
+	# La chimenea de la fragua (de ahi el humo de "trabajando").
+	var chim: Vector2 = r.position + r.size * (fx_anchors("smithy")[0] as Vector2)
+	_cyl(ci, chim, m * 0.06, m * 0.14, OIL_BLACK, STONE.darkened(0.2))
+	# El cobertizo abierto a la derecha con la boca de la fragua (lo exagerado).
+	var forge := r.position + r.size * Vector2(0.82, 0.3)
+	_cyl(ci, forge, m * 0.11, m * 0.08, STONE.darkened(0.15), CONCRETE_DARK)
+	_dot(ci, forge, m * 0.07, FIRE)
+	_dot(ci, forge, m * 0.035, FIRE_CORE)
+	# El yunque grande delante, con su tajo de madera.
+	var anvil := r.position + r.size * Vector2(0.4, 0.8)
+	_cyl(ci, anvil + Vector2(0, m * 0.02), m * 0.07, m * 0.05, DARK_WOOD.lightened(0.1), DARK_WOOD)
+	var body := PackedVector2Array([anvil + Vector2(-m * 0.13, -m * 0.05), anvil + Vector2(m * 0.1, -m * 0.05),
+		anvil + Vector2(m * 0.16, -m * 0.02), anvil + Vector2(m * 0.07, 0), anvil + Vector2(-m * 0.07, 0)])
+	_poly(ci, body, IRON.lightened(0.15), OUTLINE, 1.2)
+	ci.draw_line(anvil + Vector2(-m * 0.11, -m * 0.045), anvil + Vector2(m * 0.08, -m * 0.045), STEEL, 1.5)
+	# La muela de afilar y un armero con espadas.
+	var wheel := r.position + r.size * Vector2(0.78, 0.72)
+	_disc(ci, wheel, m * 0.08, STONE, OUTLINE, 1.2)
+	_dot(ci, wheel, m * 0.02, IRON)
+	var rack := Rect2(r.position + r.size * Vector2(0.06, 0.74), r.size * Vector2(0.2, 0.05))
+	ci.draw_rect(rack.grow(1.0), OUTLINE)
+	ci.draw_rect(rack, DARK_WOOD)
+	for k in 3:
+		var x := rack.position.x + rack.size.x * (0.2 + 0.3 * k)
+		ci.draw_line(Vector2(x, rack.position.y - m * 0.08), Vector2(x, rack.end.y), STEEL.lightened(0.15), 2.0)
+		ci.draw_line(Vector2(x - m * 0.025, rack.position.y - m * 0.02), Vector2(x + m * 0.025, rack.position.y - m * 0.02), BRASS, 1.5)
+
+static func _firing_range(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	# La calle de tierra apisonada con sus rayas de distancia.
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, SITE_DIRT.lightened(0.08))
+	for k in range(1, 4):
+		var y := r.position.y + r.size.y * (0.2 * k + 0.05)
+		ci.draw_line(Vector2(r.position.x + 3, y), Vector2(r.end.x - 3, y), CREAM.darkened(0.1), 1.0)
+	# Al fondo, el talud de tierra y tres dianas (lo exagerado).
+	var berm := Rect2(r.position + Vector2(0, 0), Vector2(r.size.x, r.size.y * 0.16))
+	_block(ci, berm, m * 0.06, OLIVE, OLIVE_DARK)
+	for k in 3:
+		var c := r.position + r.size * Vector2(0.2 + 0.3 * k, 0.24)
+		_mast(ci, c + Vector2(0, m * 0.06), m * 0.04, DARK_WOOD, 2.0)
+		_disc(ci, c, m * 0.1, CREAM, OUTLINE, 1.2)
+		_dot(ci, c, m * 0.07, IMPERIAL_RED)
+		_dot(ci, c, m * 0.045, CREAM)
+		_dot(ci, c, m * 0.022, IMPERIAL_RED)
+	# Delante, la linea de tiro de sacos terreros y el armero.
+	var y0 := r.position.y + r.size.y * 0.78
+	for k in 6:
+		var sc := Vector2(r.position.x + r.size.x * (0.1 + 0.135 * k), y0)
+		var sack := Rect2(sc - Vector2(m * 0.065, m * 0.035), Vector2(m * 0.13, m * 0.07))
+		ci.draw_rect(sack.grow(1.0), OUTLINE)
+		ci.draw_rect(sack, SITE_SANDBAG)
+	var rack := Rect2(r.position + r.size * Vector2(0.62, 0.88), r.size * Vector2(0.3, 0.06))
+	ci.draw_rect(rack.grow(1.0), OUTLINE)
+	ci.draw_rect(rack, DARK_WOOD)
+	for k in 4:
+		var x := rack.position.x + rack.size.x * (0.15 + 0.23 * k)
+		ci.draw_line(Vector2(x, rack.position.y - m * 0.06), Vector2(x, rack.end.y), GUNMETAL, 2.0)
+	# Una caja de municion con su franja.
+	var ammo := Rect2(r.position + r.size * Vector2(0.08, 0.86), r.size * Vector2(0.16, 0.09))
+	ci.draw_rect(ammo.grow(1.0), OUTLINE)
+	ci.draw_rect(ammo, OLIVE_DARK)
+	ci.draw_rect(Rect2(ammo.position + Vector2(0, ammo.size.y * 0.4), Vector2(ammo.size.x, ammo.size.y * 0.2)), BRASS)
