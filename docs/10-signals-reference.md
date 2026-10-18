@@ -434,6 +434,24 @@ Los avisos al jugador van por `notification_posted` (nuevo encargo, cumplido, se
 acabo el plazo); la XP de rango (`contract_rank_xp`) la suma ContractManager con
 `RankManager.add_xp()`.
 
+## Edificios militares
+
+Rama `feat/edificios-militares` (1.2): la Herreria (doctrinas) y el Campo de tiro
+(simulacro). Tres señales nuevas (143 con las 140 de arriba). Las emite solo
+`ArmyManager`. La Enfermeria no tiene señal propia: su efecto va en el parte del
+combate (`CombatManager.get_last_result()["recovered"]`).
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `doctrine_switch_started` | `doctrine_id: String, seconds: float` | ArmyManager (`choose_doctrine()`) | MilitarySection (ficha de la Herreria) |
+| `doctrine_changed` | `doctrine_id: String` (`""` = ninguna) | ArmyManager (al acabar de aprenderla) | MilitarySection |
+| `practice_lesson_completed` | `lesson_id: String, first_time: bool, reward: Dictionary` (ya pagado) | ArmyManager (`complete_practice()`, lo llama CombatManager al cerrar un simulacro ganado) | MilitarySection |
+
+El simulacro usa las señales de siempre del tablero (`encounter_started`,
+`encounter_ended`...): quien no debe contarlo como combate de verdad pregunta
+`CombatManager.is_practice()` (ArmyManager para las estrellas del regimiento,
+RankManager para la XP de "fight_won").
+
 ## Orphan signals
 
 Declared in `EventBus.gd` but not wired on one or both sides. Most are suppressed

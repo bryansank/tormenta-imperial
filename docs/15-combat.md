@@ -1925,3 +1925,88 @@ pasa, recortar misiones (`campaign_defs`) o combates por misión.
   de su medio en su era mínima (sobre todo el Leviatán en era 2 y el Zepelín con solo
   cazas).
 - `tools/siege_probe.gd`: el asedio no cambia.
+
+## 14. Edificios militares: Enfermería, doctrinas y simulacro (1.2, rama `feat/edificios-militares`)
+
+Tres edificios de apoyo (costes y aspecto en [03-buildings.md](03-buildings.md),
+"Edificios militares de la 1.2"). Aquí, lo que cambian en el combate. Ninguno toca
+la IA ni `AutoResolver`, ni el bando enemigo.
+
+### Enfermería
+
+- **Vuelve 1 de cada 3 caídos** tras un combate **ganado**
+  (`CombatRules.infirmary_returns(n, infirmary_return_every)`, por abajo:
+  1-2 → 0, 3-5 → 1, 6 → 2). Vuelven primero los de más Poder
+  (`CombatRules.pick_recovered()`, puro). En un combate suelto o en el Diezmo
+  (`_apply_result_for`) no se restan del ejército; en una misión
+  (`_apply_expedition_encounter`) salen de la columna con
+  `Expedition.evacuate(uids)` y quedan en casa al momento (no cuentan como bajas
+  ni como supervivientes; `Expedition.evacuated` va al guardado solo para el parte).
+  El parte lo dice: `recovered` en `get_last_result()` y "Vuelven de la Enfermería:"
+  en `BattleScreen`. **No** en las oleadas del Ataque Final (bajas cobradas en
+  plena pelea) ni para las dotaciones de torre.
+- **Moral:** `CombatRules.morale_delta(victory, bajas, per_casualty)`; con la
+  Enfermería en marcha `per_casualty = infirmary_morale_per_casualty` (1) en vez de
+  `combat_morale_per_casualty` (3). Vale en todas las liquidaciones.
+- **Cura entre combates de una misión ×1,3:** `Expedition.heal_mult`, que pone
+  CombatManager antes de cada `mark_cleared()` (no se guarda). La incursión sigue
+  sin curar.
+
+### Doctrinas (Herrería, doc 21 §5.2, D8 = A)
+
+**Decisión simple:** una sola doctrina activa para todo el ejército (no una por
+medio ni por tipo). Datos en `GameConfig.combat_doctrines`; modelo puro
+`scripts/combat/Doctrines.gd`. `CombatUnit.create()` aplica
+`GameConfig.combat_active_doctrine` al bando del jugador (side 0), así que vale en
+misiones, campañas, Diezmo, asedio (también la guarnición y las dotaciones) y
+simulacro. La unidad guarda `doctrine` en `to_dict()` y la recupera en
+`from_dict()` sin tocar la vida: una columna pelea con la doctrina con la que salió,
+como con su moral.
+
+| Doctrina | A quién | Da | Quita |
+|---|---|---|---|
+| Asalto (`assault`) | Infantería | +1 movimiento | −1 defensa |
+| Trinchera (`trench`) | Infantería | DEFENDER ×3 (en vez de ×2) | −1 movimiento |
+| Artillería pesada (`heavy_artillery`) | Artillería | +2 ataque | −1 iniciativa |
+| Motores afinados (`tuned_engines`) | Blindado | +1 movimiento, +1 iniciativa | −10 % vida |
+| Marinería (`seamanship`) | Barcos (medio `sea`) | +1 defensa, +1 iniciativa | −10 % ataque |
+| Ases del aire (`air_aces`) | Aire (medio `air`) | +2 ataque | −15 % vida |
+
+`mods` admite `atk`, `def`, `move`, `range`, `initiative` (sumas), `atk_pct`,
+`hp_pct` (fracción) y `defend_mult`. Adoptar o cambiar: `ArmyManager.choose_doctrine()`
+cobra `smithy_doctrine_cost` (150 oro) y tarda `smithy_doctrine_seconds` (90 s, por
+`get_duration`); mientras tanto sigue la anterior. Estado en `army.doctrine`
+(`active`, `pending`, `left`, `total`); `reset()` lo tira sin devolver nada.
+
+**Balance pendiente:** medir cada doctrina con `tools/balance_probe.gd` (misiones de
+su medio) y `tools/siege_probe.gd` (ninguna puede mover el asedio más de ±5 puntos
+sobre el 82 %). La sonda tiene que fijar `GameConfig.combat_active_doctrine`.
+
+### Simulacro (Campo de tiro, doc 21 §4.4)
+
+`CombatManager.start_practice(lesson_id)` abre el tablero de siempre con la tropa
+de práctica de la lección (`firing_range_lessons[].player`, no sale del ejército,
+moral neutra 50, lleva la doctrina activa) contra muñecos (`enemy` con
+`enemy_scale` 0,5-0,6). `Encounter.is_practice` y `practice_lesson` se marcan antes
+de `encounter_started`, así el título dice "Simulacro: …". Al acabar,
+`_apply_result` lo desvía a `_apply_practice_result`: **sin bajas, sin moral, sin
+botín**; la primera victoria de cada lección paga su premio y 15 XP
+(`rank_xp_sources.practice_lesson`) por `ArmyManager.complete_practice()`, que lo
+apunta en `army.practice_done`. Las estrellas del regimiento y la XP de
+"fight_won" no cuentan el simulacro (`CombatManager.is_practice()`).
+
+| Lección | Tu tropa | Muñecos | Premio |
+|---|---|---|---|
+| Mover y atacar (`move_attack`) | 2 Infantería | 2 Infantería ×0,5 | 40 oro |
+| Cañón y distancia (`artillery`) | 1 Artillería + 1 Infantería | 2 Infantería ×0,5 | 50 oro |
+| Quién gana a quién (`advantages`) | Infantería + Artillería + Blindado | lo mismo ×0,6 | 60 oro |
+
+No se abre con otro tablero abierto, con la columna fuera o con el asedio en marcha
+(`practice_block_reason()`). Si el Diezmo llega en mitad de un simulacro, se
+resuelve a ciegas como con cualquier tablero abierto.
+
+### Pruebas (escritas sin correr)
+
+`tests/combat/test_doctrines.gd`, `tests/combat/test_infirmary.gd`,
+`tests/buildings/test_military_buildings.gd` y los recuentos 37 → 40 de
+`test_building_catalog`, `test_building_lot` y `test_building_i18n`.
