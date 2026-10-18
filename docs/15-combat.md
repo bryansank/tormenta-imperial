@@ -585,6 +585,40 @@ enemigo aunque el botón esté apagado (`BattleScreen.threat_visible()`).
 **Simulacro (§4.4 del diseño): no hecho.** Pide un edificio nuevo y un `is_practice` en
 `CombatManager`, que es de la rama de escaramuzas: queda para cuando esa rama entre.
 
+### Cobertura del Bastión (1.2, rama `feat/edificios-defensa-vida`)
+
+El Bastión (docs/03, "Defensa y vida") pone **casillas de parapeto** en los
+tableros de defensa: el Impuesto (tablero y "resolver solo" / defensa a ciegas) y
+cada oleada del Ataque Final. Nunca en expediciones, incursiones ni campañas.
+
+- **Modelo puro.** `Encounter.cover` (casilla → defensa de más) con
+  `set_cover(cells, bonus)`, `cover_at(cell)`, `cover_for(unit)` (0 si vuela o no
+  está en el tablero: un avión no se esconde tras unos sacos) y
+  `damage_between(attacker, target)`, que es lo que usa `attack()`.
+  `CombatRules.damage(attacker, target, cover := 0)` resta la cobertura a la
+  defensa del objetivo antes de la ventaja por tipo; con 0 es la fórmula de
+  siempre, así que **un tablero sin bastión no cambia ni un punto**.
+  `CombatRules.cover_cells(board, terrain, count, row)` elige las casillas: solo
+  tierra, en la fila `row`, del centro hacia fuera; determinista.
+- **Quién la pone.** `CombatManager.apply_home_cover(encounter)` tras crear un
+  tablero de defensa (`_open_board` con `is_defense` y `auto_resolve_defense`):
+  `GameConfig.defense_cover_cells` casillas (1 por cada 3 bastiones en pie, tope
+  2; lo calcula `DefenseLifeEffects` al construir/derribar) en la fila de atrás
+  del jugador (`board_size.y - 1`), con `bastion_cover_defense` (+2). Las
+  dotaciones de torre forman en esa fila, así que suelen empezar a cubierto.
+- **La IA** cuenta la cobertura al decidir si un golpe remata
+  (`CombatAI._context` → `damage_between`); el resto de su valoración no cambia.
+- **Vista.** 2D: la casilla vacía con fondo de sacos y borde de latón, tooltip
+  `LBL_COVER_CELL_TIP`; una pieza de superficie encima, borde de latón. 3D (las dos
+  vistas): un murete de sacos de dos hileras con dos estacas en el borde de
+  delante de la casilla, dentro de la misma malla del tablero
+  (`BoardTerrain3D._cover_parapets`, `BoardLayout3D.cover_of`): ni una llamada de
+  dibujo más. El daño previsto (`target_previews`) ya la descuenta.
+- **No se guarda**: los tableros no se guardan; al reabrir, se vuelve a pedir.
+- **Medir en el pase final**: `siege_probe` y `balance_probe` con 0, 1 y 2
+  casillas (el asedio con 6 blindados + 4 torres ganaba el ~82 %; +2 de defensa
+  en dos casillas de atrás debería mover poco: anotarlo en docs/17).
+
 ### Turn flow
 
 1. `start()` → `_begin_round()`: every living unit gets `begin_turn()` (clears

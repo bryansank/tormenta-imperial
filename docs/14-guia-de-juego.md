@@ -203,6 +203,8 @@ Da algo menos que una Granja con trigo, pero no hay que esperar a que crezca nad
 | <img src="media/guia/warehouse.png" width="110"> | **Almacén** | 2×2 | 60 oro · 40 madera | 1 | +500 a la bolsa compartida (+250 por nivel mejorado). Máximo 5 |
 | | **Mercado** | 2×2 | 100 oro · 60 madera | 1 | Abre la Bolsa Imperial: tócalo y pulsa **ABRIR MERCADO**. Pide una Mina de oro. Solo uno |
 | | **Laboratorio** | 2×2 | 150 oro · 100 madera | 2 | Abre el árbol tecnológico: tócalo y pulsa **INVESTIGAR**. Pide una Casa. Solo uno |
+| | **Chatarrería** (1.2) | 2×2 | 160 oro · 40 acero · 90 madera · 6 tablones | 2 | Reparar lo que tiene a 4 casillas cuesta un 40 % menos. Al acabar la Tormenta, sus brigadas recogen las ruinas de su zona: 12 de acero por ruina, 1 repuesto por cada 2 (hasta 3) y levantan una ruina al 35 % para que vuelva a funcionar. Pide la Fundición (y su plano) |
+| | **Telégrafo** (1.2) | 2×2 | 200 oro · 60 acero · 80 madera · 4 vigas | 1 | Un hueco más en el tablón de ENCARGOS («El telégrafo», encargos de cualquiera) y los encargos nuevos duran un 50 % más. Pide Fundición y Almacén. Solo uno |
 
 ### Militares
 
@@ -211,8 +213,16 @@ Da algo menos que una Granja con trigo, pero no hay que esperar a que crezca nad
 | <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 120 oro · 80 madera · 10 tablones | 1 | Entrena unidades, **desde la era 1** (sin acero; desde el 17-10-2026). En la era 1 solo Infantería; la Artillería llega con el acero y el Tanque con el petróleo. Cada cuartel es una plaza de entrenamiento en paralelo (hasta 5). **Sin tope**: levanta los que quieras; cada uno lleva la bandera de tu país |
 | <img src="media/guia/tower.png" width="110"> | **Torre** | 2×2 | 150 oro · 60 acero · 20 petróleo · 30 madera · 4 vigas | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
 | <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera · 20 vigas · 10 lingotes · 10 combustible | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca el Ataque Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
+| | **Bastión** (1.2) | **2×1** | 60 oro · 25 acero · 30 madera | 0 | Tramo de muro (gíralo con el botón de girar). Lo que queda **detrás** (hacia el centro de la isla) a 3 casillas o menos recibe un 30 % menos de daño de la Tormenta (se suma al Pozo multiplicando). En el Impuesto y el Ataque Final pone **una casilla de parapeto** en tu fila de atrás (dos con 4 o más bastiones): quien esté encima defiende +2. Pide Fundición y Cuartel. Máximo 6 / 10 / 14 |
 
 ### Decoraciones (suben la moral)
+
+**Barrios bonitos (1.2).** Cada decoración da además **belleza** a las casas que
+tiene a 3 casillas o menos (estatua 10, fuente 6, jardín 4, mástil 3, árbol, macetero
+y palmeras 2, el resto 1; mejoradas valen más). Una casa con **10** de belleza es
+**bonita**: +1 sitio y +2 de moral para la colonia, con jardineras y setos. Con **25**
+es **elegante**: +2 sitios y +4 de moral, con hiedra, farolas y banderines. La ficha
+de la casa dice cuánta belleza tiene y cuánta le falta.
 
 | | Edificio | Coste | Moral |
 |---|---|---|---|

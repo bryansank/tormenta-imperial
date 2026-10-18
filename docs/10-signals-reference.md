@@ -434,6 +434,16 @@ Los avisos al jugador van por `notification_posted` (nuevo encargo, cumplido, se
 acabo el plazo); la XP de rango (`contract_rank_xp`) la suma ContractManager con
 `RankManager.add_xp()`.
 
+Con un Telégrafo en pie (1.2) hay un cuarto hueco, `source = "telegraph"`
+(`ContractBoard.WIRE`): su encargo lleva además `from` (la fuente real).
+
+## Defensa y vida (1.2, `feat/edificios-defensa-vida`)
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `beauty_changed` | — | ProductionManager (`_refresh_areas`, cuando `DefenseLifeEffects.refresh()` cambia la belleza de alguna casa) | BuildingPlacer (`_sync_beauty`, adornos `BeautyTrim`), TutorialManager (ayuda `beauty`) |
+| `scrap_salvaged` | `steel: int, parts: int, lifted: int` | StormManager (`_scrap_salvage`, al acabar la Tormenta) | *(no listener: el aviso va por `notification_posted`)* |
+
 ## Orphan signals
 
 Declared in `EventBus.gd` but not wired on one or both sides. Most are suppressed
