@@ -106,6 +106,15 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		_road(ci, Rect2(-size * 0.5, size), int(opts.get("road_mask", 0)))
 		return
 	var level: int = int(opts.get("level", 1))
+	# El Nucleo (niveles 1-5, feat/nucleo-y-planos) no crece ni lleva zocalo:
+	# gana sus propias piezas (_nucleo_level), como CoreTrim en 3D.
+	if id == "nucleo":
+		if bool(opts.get("shadow", true)):
+			_ground_shadow(ci, r, minf(r.size.x, r.size.y) * 0.22)
+		_nucleo(ci, r)
+		if level > 1:
+			_nucleo_level(ci, r, level)
+		return
 	# Mejorado: el MISMO dibujo, un 8 % mayor por nivel (como la 3D,
 	# ProductionManager.apply_level_visual), alrededor del centro.
 	r = grown_rect(r, level)
@@ -316,6 +325,11 @@ const LEVEL_GROWTH := 0.08
 static func level_scale(level: int) -> float:
 	return 1.0 + LEVEL_GROWTH * float(maxi(0, level - 1))
 
+## El nivel con el que crece el dibujo de `id`: el Nucleo no crece (sube hasta
+## el 5 y gana piezas propias, _nucleo_level); el resto, su nivel.
+static func growth_level(id: String, level: int) -> int:
+	return 1 if id == "nucleo" else level
+
 ## `r` crecido alrededor de su centro segun el nivel.
 static func grown_rect(r: Rect2, level: int) -> Rect2:
 	var f := level_scale(level)
@@ -393,7 +407,9 @@ static func _level_trim(ci: CanvasItem, r: Rect2, level: int, decor := false) ->
 static func draw_level_plate(ci: CanvasItem, fp: Vector2, level: int) -> void:
 	if level <= 1:
 		return
-	var bars := clampi(level, 2, 3)
+	# Dos galones en el II, tres en el III; el Nucleo llega al V (uno por nivel
+	# por encima del 1).
+	var bars := clampi(level, 2, 3) if level <= 3 else level - 1
 	var w := 7.0
 	var x := -fp.x * 0.5 + 4.0 + w * 0.5
 	for i in bars:
@@ -521,6 +537,51 @@ static func _nucleo(ci: CanvasItem, r: Rect2) -> void:
 	_disc(ci, lt, rad * 0.26, IRON, OUTLINE, 1.0)
 	_cyl(ci, lt - _down * m * 0.05, rad * 0.17, m * 0.05, BRASS_DARK, GLOW)
 	_shaded_disc(ci, g["lantern_top"], rad * 0.13, BRASS)
+
+## Las piezas que gana el Nucleo con su nivel (1.2, feat/nucleo-y-planos), las
+## mismas que CoreTrim en 3D, sobre su dibujo y dentro de su huella: N2 farolas
+## y losa delante; N3 alas bajas de ladrillo a los lados con ventanas
+## encendidas; N4 torreones con cupulin de laton en las esquinas de delante y
+## farolas detras (lo alto es el mastil de la bandera); N5 obeliscos con punta dorada en las esquinas. Se hornea con el
+## resto del dibujo (una textura por nivel en ArtCache2D): nada por frame.
+static func _nucleo_level(ci: CanvasItem, r: Rect2, level: int) -> void:
+	var g := _nucleo_geom(r)
+	var m: float = g["m"]
+	var c := r.get_center()
+	var left := _left()
+	var ext_d := absf(_down.x) * r.size.x * 0.5 + absf(_down.y) * r.size.y * 0.5
+	var ext_l := absf(left.x) * r.size.x * 0.5 + absf(left.y) * r.size.y * 0.5
+	# N2: farolas delante y la losa de la escalinata.
+	var front := c + _down * ext_d * 0.9
+	_block(ci, Rect2(front - Vector2(m * 0.16, m * 0.03), Vector2(m * 0.32, m * 0.06)), m * 0.015, MARBLE, CONCRETE_DARK)
+	for sx: float in [-1.0, 1.0]:
+		var lamp_top := _mast(ci, front + left * sx * ext_l * 0.62, m * 0.09, IRON, 1.3)
+		_dot(ci, lamp_top, 3.0, Color(GLOW, 0.35))
+		_dot(ci, lamp_top, 1.8, GLOW)
+	if level >= 3:
+		# Alas bajas de ladrillo a los lados.
+		for sx: float in [-1.0, 1.0]:
+			var wc := c + left * sx * ext_l * 0.8 + _down * ext_d * 0.3
+			var wing := Rect2(wc - Vector2(m * 0.07, m * 0.09), Vector2(m * 0.14, m * 0.18))
+			_block(ci, wing, m * 0.06, TILE_RED, TILE_RED_DARK)
+			ci.draw_rect(Rect2(wing.get_center() - Vector2(m * 0.025, m * 0.03), Vector2(m * 0.05, m * 0.04)), GLOW)
+	if level >= 4:
+		# Torreones en las esquinas de delante y dos farolas detras.
+		for sx: float in [-1.0, 1.0]:
+			var tc := c + _down * ext_d * 0.82 + left * sx * ext_l * 0.85
+			_cyl(ci, tc, m * 0.05, m * 0.12, STONE.lightened(0.1), STONE)
+			_shaded_disc(ci, tc - _down * m * 0.12, m * 0.05, BRASS)
+		var back := c - _down * ext_d * 0.9
+		for sx: float in [-1.0, 1.0]:
+			var lt := _mast(ci, back + left * sx * ext_l * 0.45, m * 0.07, IRON, 1.2)
+			_dot(ci, lt, 1.6, GLOW)
+	if level >= 5:
+		# Obeliscos en las cuatro esquinas, con la punta dorada.
+		for sd: float in [-1.0, 1.0]:
+			for sl: float in [-1.0, 1.0]:
+				var foot := c + _down * sd * ext_d * 0.94 + left * sl * ext_l * 0.94
+				var top := _mast(ci, foot, m * 0.13, STONE.lightened(0.1), 3.0)
+				_dot(ci, top, 2.2, BRASS_LIGHT)
 
 ## Las medidas del Nucleo, compartidas por su dibujo y por `flag_mount`.
 ## El tambor se adelanta un poco hacia abajo en pantalla para que lo alto

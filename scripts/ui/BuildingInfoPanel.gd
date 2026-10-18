@@ -2,6 +2,7 @@ extends CanvasLayer
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const TextKit := preload("res://scripts/ui/TextKit.gd")
 const HelpText := preload("res://scripts/ui/BuildingHelpText.gd")
+const CoreLevel := preload("res://scripts/services/CoreLevel.gd")
 ## Panel that appears when selecting a building or deposit.
 ## Scrollable, styled, with upgrade, demolish confirm, level display.
 ##
@@ -65,6 +66,9 @@ var _selected_data: BuildingData = null
 var _selected_deposit_id: String = ""
 var _is_deposit: bool = false
 var _demolish_pending: bool = false
+## Con el Nucleo elegido y en obras, la linea "Subiendo a nivel N" se repinta
+## cada medio segundo (no cada fotograma).
+var _core_tick := 0.0
 
 func _ready() -> void:
 	layer = 10
@@ -80,13 +84,15 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(_on_construction_completed)
 	EventBus.workers_changed.connect(func(_u, _t): if _workers_btn != null and _panel.visible: _refresh_workers_toggle())
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
+	# El Nucleo empieza a subir (1.2): la ficha cambia el boton por la obra.
+	EventBus.core_upgrade_started.connect(func(_to): if _panel.visible and _selected_data != null and _selected_data.is_core: _refresh_upgrade())
 	# El boton MEJORAR y su "por que" siguen a lo que hay (antes solo al abrir).
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	EventBus.building_selected_for_placement.connect(func(_d): _hide_panel())
 	EventBus.building_demolished.connect(func(_n, _c): _hide_panel())
 	EventBus.deposit_depleted.connect(func(n, _id): if n == _selected_node: _hide_panel())
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not _selected_node or not _panel.visible:
 		return
 	if not is_instance_valid(_selected_node):
@@ -94,6 +100,11 @@ func _process(_delta: float) -> void:
 		return
 	_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
 	_update_construction()
+	if _selected_data != null and _selected_data.is_core and ProgressionManager.is_core_upgrading():
+		_core_tick -= delta
+		if _core_tick <= 0.0:
+			_core_tick = 0.5
+			_refresh_upgrade()
 	if _harvest != null and not _is_deposit:
 		_harvest.refresh()
 
@@ -453,6 +464,9 @@ func _refresh_upgrade() -> void:
 	if _selected_node == null or not is_instance_valid(_selected_node) or _selected_data == null or _is_deposit:
 		_upgrade_container.visible = false
 		return
+	if _selected_data.is_core:
+		_refresh_core_upgrade()
+		return
 	var level: int = _selected_node.get_meta("level", 1)
 	var next_level := level + 1
 	var top := GameConfig.max_building_level
@@ -488,6 +502,38 @@ func _refresh_upgrade() -> void:
 	_upgrade_parts_label.visible = parts != ""
 	var blocks: Array = HelpText.upgrade_block_lines(_selected_data, _selected_node)
 	_upgrade_btn.disabled = not blocks.is_empty() or not ResourceManager.can_afford(cost)
+	_upgrade_why_label.text = "\n".join(blocks)
+	_upgrade_why_label.visible = not blocks.is_empty()
+
+## La seccion del Nucleo (1.2, feat/nucleo-y-planos): "Nivel 2 de 5", lo que da
+## el siguiente (topes que suben y edificios que abre), lo que cuesta, lo que
+## pide antes y el boton SUBIR NÚCLEO. En obras, cuanto falta. Reusa los mismos
+## controles que la mejora de los demas edificios.
+func _refresh_core_upgrade() -> void:
+	_no_upgrade_label.visible = false
+	_upgrade_container.visible = true
+	_upgrade_level_label.text = CoreLevel.level_text()
+	if CoreLevel.is_max() or ProgressionManager.is_core_upgrading():
+		_upgrade_cost_label.text = Tr.t("CORE_MAX") if CoreLevel.is_max() else CoreLevel.upgrading_text()
+		_upgrade_cost_label.visible = true
+		_upgrade_cost_row.visible = false
+		_upgrade_btn.visible = false
+		return
+	var to := CoreLevel.next_level()
+	var lines: Array = [Tr.t("CORE_GAIN_HEAD") % to]
+	lines.append_array(CoreLevel.gains_lines(to))
+	_upgrade_cost_label.text = "\n".join(lines)
+	_upgrade_cost_label.visible = true
+	var cost := CoreLevel.cost(to)
+	TextKit.fill_cost_row(_upgrade_cost_row, by_name(cost), missing_by_name(cost))
+	_upgrade_cost_row.visible = true
+	var parts := int(cost.get(ResourceManager.Type.PARTS, 0))
+	_upgrade_parts_label.text = Tr.t("TOPE_PARTS_NOTE") % [to, parts] if parts > 0 else ""
+	_upgrade_parts_label.visible = parts > 0
+	_upgrade_btn.text = Tr.t("CORE_BTN_UP") % to
+	_upgrade_btn.visible = true
+	var blocks: Array = CoreLevel.block_lines()
+	_upgrade_btn.disabled = not blocks.is_empty()
 	_upgrade_why_label.text = "\n".join(blocks)
 	_upgrade_why_label.visible = not blocks.is_empty()
 
@@ -664,6 +710,10 @@ func _on_repair() -> void:
 
 func _on_upgrade() -> void:
 	if not _selected_node or not _selected_data:
+		return
+	if _selected_data.is_core:
+		ProgressionManager.start_core_upgrade()
+		_show_building_panel()
 		return
 	var level: int = _selected_node.get_meta("level", 1)
 	var next_level := level + 1

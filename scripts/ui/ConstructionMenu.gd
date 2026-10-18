@@ -84,9 +84,16 @@ func _ready() -> void:
 	EventBus.governor_rank_up.connect(func(_r, _w):
 		_request_grid_refresh()
 		_refresh_block())
-	# Los topes suben con la era (GameConfig.building_limits_by_era): al cambiar
-	# de era, las tarjetas y el detalle dicen el tope nuevo.
+	# Los topes suben con el Nucleo (GameConfig.core_level_limits, 1.2) y
+	# algunos edificios los abre el Nucleo o un plano: al cambiar, las tarjetas
+	# y el detalle dicen lo nuevo. La era sigue abriendo recursos.
 	EventBus.era_advanced.connect(func(_e):
+		_request_grid_refresh()
+		_refresh_block())
+	EventBus.core_level_changed.connect(func(_l):
+		_request_grid_refresh()
+		_refresh_block())
+	EventBus.blueprint_unlocked.connect(func(_id):
 		_request_grid_refresh()
 		_refresh_block())
 	EventBus.game_load_completed.connect(_request_grid_refresh)
@@ -518,8 +525,9 @@ func _flush_grid_refresh() -> void:
 func _grid_signature(filtered: Array) -> Array:
 	var sig: Array = []
 	for data in filtered:
-		var rank_locked := not Rules.check_rank(data.id)
-		sig.append([data.id, rank_locked or _has_locked_resource_cost(data), rank_locked,
+		var lock := Rules.lock_kind(data.id)
+		var rank_locked := lock != ""
+		sig.append([data.id, rank_locked or _has_locked_resource_cost(data), lock,
 			_thumb_cache.has(data.id)])
 	return sig
 
@@ -545,8 +553,10 @@ func _refresh_grid() -> void:
 	_mark_selected_card()
 
 func _create_grid_card(data: BuildingData) -> PanelContainer:
-	# Bloqueado por rango del gobernador: candado y "Rango N" en vez del coste.
-	var rank_locked := not Rules.check_rank(data.id)
+	# Bloqueado por rango del gobernador, por el nivel del Nucleo o sin plano
+	# (1.2): candado y "Rango N" / "Núcleo N" / "Plano" en vez del coste.
+	var lock := Rules.lock_kind(data.id)
+	var rank_locked := lock != ""
 	var locked := rank_locked or _has_locked_resource_cost(data)
 	var cat_color: Color = _cat_colors.get(_get_category(data), UITheme.ACCENT)
 
@@ -598,8 +608,17 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	name_label.custom_minimum_size.x = 110
 	vbox.add_child(name_label)
 
-	if rank_locked:
-		vbox.add_child(make_rank_lock_row(RankManager.building_rank(data.id)))
+	match lock:
+		"rank":
+			vbox.add_child(make_rank_lock_row(RankManager.building_rank(data.id)))
+		"core":
+			var core_row := make_lock_row(Tr.t("LBL_CORE_LOCK") % GameConfig.core_level_unlock(data.id), "CoreLock")
+			core_row.tooltip_text = Rules.core_lock_text(data.id)
+			vbox.add_child(core_row)
+		"blueprint":
+			var bp_row := make_lock_row(Tr.t("LBL_BLUEPRINT_LOCK"), "BlueprintLock")
+			bp_row.tooltip_text = Rules.blueprint_lock_text(data.id)
+			vbox.add_child(bp_row)
 
 	# El coste en la propia tarjeta: se ve sin elegir. Icono y cifra por recurso,
 	# y en rojo solo lo que falta (antes la linea entera en rojo, con nombres).
@@ -628,9 +647,12 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	fill_limit_row(limit_row, data.id, "small")
 	vbox.add_child(limit_row)
 	# Lleno: una palabra en la tarjeta ("Al máximo"); la frase entera, en el detalle.
-	var full_tag := UITheme.make_label(Tr.t("TOPE_CARD_FULL"), "small", UITheme.WARNING)
+	# Si el Nucleo lo sube, la tarjeta lo dice: "Al máximo · Sube el Núcleo a 3".
+	var full_tag := UITheme.make_label(card_full_text(data.id), "small", UITheme.WARNING)
 	full_tag.name = "CardFull"
 	full_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	full_tag.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	full_tag.custom_minimum_size.x = 110
 	full_tag.visible = bool(limit_info(data.id).get("full", false))
 	vbox.add_child(full_tag)
 
@@ -661,6 +683,25 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 
 	return card
 
+## Lo que dice la tarjeta llena: "Al máximo" y, si subir el Nucleo lo sube,
+## debajo "Sube el Núcleo a 3" (1.2).
+static func card_full_text(building_id: String) -> String:
+	var info := limit_info(building_id)
+	if info.has("next_core"):
+		return Tr.t("TOPE_CARD_FULL") + "\n" + Tr.t("TOPE_CARD_FULL_CORE") % int(info["next_core"])
+	return Tr.t("TOPE_CARD_FULL")
+
+## Candado dibujado + `text` ("Núcleo 2", "Plano"), con el nombre de nodo
+## `row_name` (las pruebas lo buscan). Como make_rank_lock_row.
+static func make_lock_row(text: String, row_name: String) -> HBoxContainer:
+	var row := make_rank_lock_row(0)
+	row.name = row_name
+	var label := row.find_child("RankLockLabel", false, false) as Label
+	if label != null:
+		label.text = text
+		label.name = row_name + "Label"
+	return row
+
 ## Candado dibujado + "Rango N". El candado se pinta (no es un emoji): la
 ## tipografia del juego no lo tiene y el respaldo del sistema no esta en todos.
 static func make_rank_lock_row(rank: int) -> HBoxContainer:
@@ -680,8 +721,9 @@ static func make_rank_lock_row(rank: int) -> HBoxContainer:
 	return row
 
 ## Lo que dice CONSTRUIR del tope de `building_id`: {} si no tiene (decoraciones,
-## Sandbox). Si no, count / limit (de la era en curso, rango incluido), full, y
-## next_era / next_limit si una era posterior lo sube. Estatica para las pruebas.
+## Sandbox). Si no, count / limit (con el Nucleo de ahora, rango incluido), full,
+## y next_core / next_limit si un nivel mas alto del Nucleo lo sube (1.2).
+## Estatica para las pruebas.
 static func limit_info(building_id: String) -> Dictionary:
 	var limit := GameConfig.get_building_limit(building_id)
 	if building_id == "" or limit < 0:
@@ -690,7 +732,7 @@ static func limit_info(building_id: String) -> Dictionary:
 	var info := {"count": count, "limit": limit, "full": count >= limit}
 	var next := GameConfig.next_building_limit(building_id)
 	if not next.is_empty():
-		info["next_era"] = int(next["era"])
+		info["next_core"] = int(next["core_level"])
 		info["next_limit"] = int(next["limit"])
 	return info
 
@@ -708,7 +750,7 @@ static func _count_of(building_id: String) -> int:
 		_counts[building_id] = Rules.count_building(building_id)
 	return int(_counts[building_id])
 
-## "3/6 · era 2: 9", o "3/6" si ya no sube. "" sin tope.
+## "3/6 · Núcleo 3: 9", o "3/6" si ya no sube. "" sin tope.
 static func limit_text(building_id: String) -> String:
 	return _limit_text_of(limit_info(building_id))
 
@@ -716,11 +758,12 @@ static func _limit_text_of(info: Dictionary) -> String:
 	if info.is_empty():
 		return ""
 	var text: String = Tr.t("FMT_LIMIT_COUNT") % [int(info["count"]), int(info["limit"])]
-	if info.has("next_era"):
-		text += " · " + Tr.t("FMT_LIMIT_NEXT_ERA") % [int(info["next_era"]), int(info["next_limit"])]
+	if info.has("next_core"):
+		text += " · " + Tr.t("FMT_LIMIT_NEXT_CORE") % [int(info["next_core"]), int(info["next_limit"])]
 	return text
 
-## El tooltip: lo mismo en frase ("Tienes 3. Tope en esta era: 6. En la era 2...").
+## El tooltip: lo mismo en frase ("Tienes 3. Máximo ahora: 6. Con el Núcleo a
+## nivel 3...").
 static func limit_tooltip(building_id: String) -> String:
 	return _limit_tooltip_of(limit_info(building_id))
 
@@ -728,8 +771,8 @@ static func _limit_tooltip_of(info: Dictionary) -> String:
 	if info.is_empty():
 		return ""
 	var lines: Array = [Tr.t("FMT_LIMIT_TIP") % [int(info["count"]), int(info["limit"])]]
-	if info.has("next_era"):
-		lines.append(Tr.t("FMT_LIMIT_TIP_NEXT") % [int(info["next_era"]), int(info["next_limit"])])
+	if info.has("next_core"):
+		lines.append(Tr.t("FMT_LIMIT_TIP_NEXT_CORE") % [int(info["next_core"]), int(info["next_limit"])])
 	elif int(info["limit"]) == 1:
 		lines.append(Tr.t("LBL_LIMIT_UNIQUE"))
 	else:
@@ -1036,6 +1079,8 @@ func _update_card_costs() -> void:
 		var full_tag := card.find_child("CardFull", true, false) as Label
 		if full_tag != null:
 			full_tag.visible = bool(limit_info(id).get("full", false))
+			if full_tag.visible:
+				full_tag.text = card_full_text(id)
 		if row == null or not _card_styles.has(id) or bool(_card_styles[id].get("locked", false)):
 			continue
 		var data: BuildingData = _data_by_id(id)

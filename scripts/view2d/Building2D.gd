@@ -436,7 +436,7 @@ func _make_active_fx() -> Node2D:
 func _place_fx(holder: Node2D) -> void:
 	# Las bocas estan en el dibujo del edificio, que deja libre el patio (y
 	# crece con el nivel, como el dibujo).
-	var size := (base_size_px() - Vector2.ONE * yard_px() * 2.0) * Art.level_scale(int(get_meta("level", 1)))
+	var size := (base_size_px() - Vector2.ONE * yard_px() * 2.0) * Art.level_scale(Art.growth_level(data.id, int(get_meta("level", 1))))
 	var angle := float(view_steps()) * PI * 0.5
 	for sprite in holder.get_children():
 		var anchor: Vector2 = sprite.get_meta("anchor", Vector2(0.5, 0.5))
@@ -488,7 +488,7 @@ func _instance_texture(size: Vector2, inset: float, level: int, steps: int) -> b
 		_inst_tex = null
 		var plan := _lot_plan
 		var id := data.id
-		var inner := (size - Vector2.ONE * inset * 2.0) * Art.level_scale(level)
+		var inner := (size - Vector2.ONE * inset * 2.0) * Art.level_scale(Art.growth_level(data.id, level))
 		var opts := {"level": level, "decor": data.is_decoration, "shadow": true, "inset": inset, "rot": steps, "growth": -1.0}
 		var painter := func(ci: CanvasItem) -> void:
 			Art.draw_lot_ground(ci, plan, size)
@@ -583,7 +583,7 @@ func _draw() -> void:
 			ProductionManager.get_construction_progress(self), n, data.id, _site_seed)
 	else:
 		if has_lot:
-			var grown := inner * Art.level_scale(level)
+			var grown := inner * Art.level_scale(Art.growth_level(data.id, level))
 			Art.draw_lot_shadow(self, Rect2(-grown * 0.5, grown).grow(-Art.INSET))
 		if dmg != LookRule.DAMAGE_NONE:
 			# El ladeo va en pantalla (siempre hacia el mismo lado gire como gire).
@@ -596,7 +596,7 @@ func _draw() -> void:
 	if ghost:
 		return
 	var fp2 := footprint_px()
-	var fp_inner := (fp2 - Vector2.ONE * inset * 2.0) * Art.level_scale(level)
+	var fp_inner := (fp2 - Vector2.ONE * inset * 2.0) * Art.level_scale(Art.growth_level(data.id, level))
 	if look == LookRule.Look.UPGRADE:
 		# Mejora: el edificio sigue a la vista, con andamio y rayas encima.
 		Art.draw_construction(self, fp_inner, ProductionManager.get_construction_progress(self))

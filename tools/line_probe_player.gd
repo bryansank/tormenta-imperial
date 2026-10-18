@@ -396,6 +396,14 @@ func _decide() -> void:
 			_try_build(String(step["id"]), step)
 		"upgrade":
 			_try_upgrade(step)
+		"core":
+			# Subir el Nucleo (1.2, feat/nucleo-y-planos): lo pide ¿QUE HACER?
+			# cuando un tope frena. Lo que falta se cubre en el Mercado.
+			if not ProgressionManager.is_core_upgrading():
+				if ProgressionManager.start_core_upgrade():
+					_act("core L%d" % int(step.get("level", 0)), true)
+				else:
+					_cover_with_market(Objectives.step_cost(step))
 		"train", "rebuild":
 			_try_train(String(step["id"]))
 		"trade":
@@ -1068,7 +1076,7 @@ func _build_extra(building_id: String, step: Dictionary, urgent: bool = false) -
 	var data: BuildingData = Rules.load_building_data(building_id)
 	if data == null:
 		return false
-	if not Rules.check_rank(building_id) or not Rules.check_building_limit(building_id) \
+	if Rules.lock_kind(building_id) != "" or not Rules.check_building_limit(building_id) \
 			or not Rules.check_prerequisites(building_id):
 		return false
 	if data.workers_required > 0 and PopulationManager.get_free_workers() < data.workers_required:

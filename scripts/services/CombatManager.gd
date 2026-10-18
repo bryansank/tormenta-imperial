@@ -1426,19 +1426,47 @@ func auto_resolve_current() -> bool:
 	_auto_resolving = false
 	return true
 
-## Planos: un edificio de combat_blueprint_buildings no se construye sin el suyo.
-## Gancho para PlacementRules (check_blueprint, como check_rank) y para el
-## candado de ConstructionMenu: las ramas que traigan esos edificios lo llaman.
+## Planos (1.2, feat/nucleo-y-planos): un edificio de
+## GameConfig.blueprint_required no se construye sin el suyo. Lo comprueba
+## PlacementRules.check_blueprint() (colocar, CONSTRUIR, ¿QUE HACER?). Los
+## planos ganados viven en el tablon (SortieBoard.blueprints, clave "sorties"
+## del guardado): un mecanismo generico, sirve para cualquier id.
 func blueprint_locked(building_id: String) -> bool:
-	if GameMode.all_unlocked():
-		return false
-	return building_id in GameConfig.combat_blueprint_buildings and not _sorties.has_blueprint(building_id)
+	return GameConfig.needs_blueprint(building_id) and not _sorties.has_blueprint(building_id)
 
 func has_blueprint(building_id: String) -> bool:
 	return _sorties.has_blueprint(building_id)
 
 func get_blueprints() -> Array:
 	return _sorties.blueprints.duplicate()
+
+## Da los planos `ids` (los que ya se tienen no cuentan dos veces). Con
+## `announce`, cada plano nuevo sale como blueprint_unlocked y con su aviso.
+## La puerta generica para cualquier fuente de planos (campanas hoy; el
+## contrabandista del Puerto u otras, manana).
+func grant_blueprints(ids: Array, announce: bool = true) -> void:
+	if ids.is_empty():
+		return
+	if announce:
+		_publish_sortie_events(_sorties.bank_loot({"blueprints": ids.duplicate()}))
+		return
+	for id in ids:
+		var building_id := String(id)
+		if building_id != "" and not _sorties.blueprints.has(building_id):
+			_sorties.blueprints.append(building_id)
+
+## Los planos de las misiones de campana ya ganadas (GameConfig.blueprint_sources).
+## Idempotente: se llama al cargar (sin avisos: una partida vieja, o una mision
+## ganada antes de que su edificio existiera, recibe el suyo) y al ganar una
+## mision.
+func _sync_campaign_blueprints(announce: bool) -> void:
+	var ids: Array = []
+	for domain in CampaignBookScript.DOMAINS:
+		for mission in _campaigns.won(String(domain)):
+			for id in GameConfig.blueprints_for_mission(String(domain), mission):
+				if not _sorties.has_blueprint(String(id)) and not ids.has(id):
+					ids.append(id)
+	grant_blueprints(ids, announce)
 
 ## Rebaja del proximo Diezmo ganada en una salida, en % (0 = ninguna). Solo el
 ## apunte: la aplica StormManager.add_tithe_discount() al volver la columna
@@ -1524,14 +1552,18 @@ func _sortie_context() -> Dictionary:
 		"expedition_out": _expedition != null and _expedition.kind == ExpeditionGeneratorScript.KIND_EXPEDITION,
 	}
 
-## El plano que llevaria una expedicion nueva: el primero de la lista cuyo
-## edificio exista ya en data/buildings, no se tenga y no este ya prometido.
+## El plano que llevaria una expedicion nueva del tablon: el primero de
+## blueprint_required que no salga de ninguna campana (esos los da su mision,
+## blueprint_sources), cuyo edificio exista ya en data/buildings, no se tenga y
+## no este ya prometido.
 func _next_blueprint() -> String:
 	var promised: Array = _sorties.offered_blueprints()
 	if _expedition != null:
 		promised.append(String(_expedition.offer.get("blueprint", "")))
-	for id in GameConfig.combat_blueprint_buildings:
+	for id in GameConfig.blueprint_required:
 		var building_id: String = String(id)
+		if not GameConfig.blueprint_source(building_id).is_empty():
+			continue
 		if _sorties.has_blueprint(building_id) or promised.has(building_id):
 			continue
 		if ResourceLoader.exists("res://data/buildings/%s.tres" % building_id):
@@ -1580,6 +1612,10 @@ func _publish_sortie_events(events: Array) -> void:
 		match String(event.get("e", "")):
 			"blueprint_gained":
 				EventBus.blueprint_unlocked.emit(String(event["id"]))
+				var bp_path := "res://data/buildings/%s.tres" % String(event["id"])
+				var bp_data: BuildingData = load(bp_path) as BuildingData if ResourceLoader.exists(bp_path) else null
+				var bp_name: String = bp_data.get_display_name() if bp_data != null else String(event["id"])
+				EventBus.notification_posted.emit(Tr.t("NOTIF_BLUEPRINT_GAINED") % bp_name, "info", Color(0.3, 0.8, 1.0))
 			"offers_changed", "tithe_cut_gained":
 				changed = true
 	if changed:
@@ -1618,14 +1654,26 @@ func campaigns_completed_count() -> int:
 	return _campaigns.completed_count()
 
 ## La oferta de la mision que toca en `domain`, con la era de ahora (vacia si la
-## campana esta completa). La del jefe lleva el plano que daria, si queda alguno.
+## campana esta completa). Lleva el plano que da esa mision
+## (GameConfig.blueprint_sources), si aun no se tiene y su edificio existe: asi
+## se ve antes de salir y viaja en el botin del ultimo combate.
 func campaign_offer(domain: String) -> Dictionary:
 	var offer: Dictionary = _campaigns.offer_for(domain, ProgressionManager.current_era)
 	if offer.is_empty():
 		return offer
-	if ExpeditionGeneratorScript.campaign_is_boss_mission(domain, int(offer["mission"])):
-		offer["blueprint"] = _next_blueprint()
+	offer["blueprint"] = campaign_mission_blueprint(domain, int(offer["mission"]))
 	return offer
+
+## El plano que da la mision `mission` (desde 0) de `domain` y aun no se tiene,
+## o "" (ninguno, ya lo tienes o su edificio aun no existe en esta version).
+func campaign_mission_blueprint(domain: String, mission: int) -> String:
+	for id in GameConfig.blueprints_for_mission(domain, mission):
+		var building_id: String = String(id)
+		if _sorties.has_blueprint(building_id):
+			continue
+		if ResourceLoader.exists("res://data/buildings/%s.tres" % building_id):
+			return building_id
+	return ""
 
 ## Por que no se puede salir ahora a la siguiente mision de `domain`, como clave
 ## de Tr (sin cifras), o "" si se puede (falta elegir la tropa, eso aparte).
@@ -1728,6 +1776,9 @@ func _publish_campaign_events(events: Array) -> void:
 		match String(event.get("e", "")):
 			"campaign_mission_won":
 				EventBus.campaign_mission_won.emit(String(event["domain"]), int(event["mission"]), bool(event["boss"]))
+				# El plano de la mision, aunque no viajara en el botin (su
+				# edificio no existia al salir): ganar la mision lo da.
+				grant_blueprints(GameConfig.blueprints_for_mission(String(event["domain"]), int(event["mission"])))
 			"campaign_completed":
 				EventBus.campaign_completed.emit(String(event["domain"]))
 			"campaign_changed":
@@ -1830,6 +1881,9 @@ func get_campaigns_save_data() -> Dictionary:
 func load_campaigns_save_data(data: Dictionary) -> void:
 	_campaigns = CampaignBookScript.from_dict(data)
 	_campaigns.ensure_seed(_new_seed())
+	# Los planos de las misiones ya ganadas (1.2): una partida de la 1.1 los
+	# recibe sin aviso. Va despues del tablon (GameManager carga "sorties" antes).
+	_sync_campaign_blueprints(false)
 	EventBus.campaign_changed.emit()
 
 ## Todo lo que este servicio se inventa mientras se juega: el tablero, la

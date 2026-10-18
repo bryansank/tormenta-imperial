@@ -112,6 +112,7 @@ func _autosave_triggers() -> Array:
 		[EventBus.construction_completed, 1],
 		[EventBus.building_upgrade_started, 2],
 		[EventBus.building_upgrade_completed, 2],
+		[EventBus.core_upgrade_started, 1],
 		[EventBus.storm_phase_changed, 2],
 		[EventBus.production_collected, 2],
 		[EventBus.crop_planted, 2],
@@ -781,6 +782,8 @@ func _load_game() -> void:
 		var elapsed := now - saved_at
 		if elapsed > 2.0:
 			ProductionManager.apply_offline_progression(elapsed)
+			# La obra del Nucleo tambien avanza fuera (1.2, feat/nucleo-y-planos).
+			ProgressionManager.apply_offline_core(elapsed)
 	_skip_offline_once = false
 
 	# Partidas de antes de la Auditoria Final con el Cuartel General ya al maximo:

@@ -126,6 +126,16 @@ signal market_trade_completed(resource: String, amount: int, is_buy: bool, total
 signal resource_unlocked(resource_name: String)
 @warning_ignore("unused_signal")
 signal era_advanced(new_era: int)
+## Nucleo con niveles (1.2, feat/nucleo-y-planos). Emitidas solo por
+## ProgressionManager. Empieza la obra para subir el Nucleo a `to_level` (ya
+## pagada); y el Nucleo ya esta a `level` (al terminar la obra y al cargar una
+## partida). Al terminar tambien sale building_upgrade_completed con el nodo del
+## Nucleo, para que la ficha, el sonido, el rango y el guardado lo vean como una
+## mejora mas.
+@warning_ignore("unused_signal")
+signal core_upgrade_started(to_level: int)
+@warning_ignore("unused_signal")
+signal core_level_changed(level: int)
 @warning_ignore("unused_signal")
 signal milestone_completed(milestone_id: String)
 @warning_ignore("unused_signal")

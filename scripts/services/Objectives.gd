@@ -13,12 +13,15 @@ extends RefCounted
 ## Un paso es un Dictionary:
 ##   kind  "build" | "upgrade" | "train" | "repair" | "sell" | "buy" | "research" | "siege" | "resummon"
 ##         | "rebuild" | "sandbox" | "sortie" | "contract" | "campaign"
+##         | "core" (subir el Nucleo a `level`; id "nucleo". 1.2, feat/nucleo-y-planos:
+##           sale cuando un tope frena un paso y el Nucleo mas alto lo levanta)
 ##         ("sortie_offer" solo sale de sortie_step(), la segunda linea del panel)
 ##   id    edificio o unidad
 ##   level nivel al que sube una mejora
 ##   why   clave de Tr con el porque (una frase)
 
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+const CoreLevel := preload("res://scripts/services/CoreLevel.gd")
 
 ## El camino recomendado, en orden. Cada entrada se da por hecha cuando hay al
 ## menos `count` en pie (o en obras). Es el mismo orden que la guia
@@ -585,6 +588,11 @@ static func _first_open_line_step() -> Dictionary:
 		match String(entry["kind"]):
 			"build":
 				if Rules.count_building(String(entry["id"])) < entry_count(entry):
+					# El tope lo frena y el Nucleo mas alto lo levanta: subir el
+					# Nucleo es el paso (1.2).
+					var core: Dictionary = core_step_for_limit(String(entry["id"]))
+					if not core.is_empty():
+						return core
 					var open_step: Dictionary = entry.duplicate()
 					open_step["count"] = entry_count(entry)
 					return open_step
@@ -815,6 +823,9 @@ static func house_room_step(target: Dictionary = {}, outer: Dictionary = {}) -> 
 	if ResourceManager.get_amount(ResourceManager.Type.FOOD) < PopulationManager.food_due() * 4:
 		return {}
 	var step: Dictionary = _build_step("house", "OBJ_WHY_HOUSE_ROOM")
+	if step.is_empty():
+		# Casas al tope: el Nucleo mas alto deja levantar mas (1.2).
+		step = core_step_for_limit("house")
 	if step.is_empty() or not _paid_with_surplus(step, target, outer):
 		return {}
 	return step
@@ -989,9 +1000,22 @@ static func _army_upkeep() -> int:
 		upkeep += ArmyManager.get_count(unit_id) * int(GameConfig.get_unit_def(unit_id).get("upkeep_gold", 0))
 	return upkeep
 
+## Subir el Nucleo cuando su tope frena a `building_id` (1.2): {"kind": "core"}
+## si ya esta lleno, un nivel mas alto lo sube y el Nucleo puede apuntar a ese
+## nivel (no esta en obras ni al maximo, y se cumple lo que pide); {} si no.
+static func core_step_for_limit(building_id: String, why: String = "OBJ_WHY_CORE_LIMIT") -> Dictionary:
+	if Rules.check_building_limit(building_id) or not CoreLevel.raises_limit(building_id):
+		return {}
+	if not CoreLevel.can_aim():
+		return {}
+	return {"kind": "core", "id": GameConfig.CORE_ID, "level": CoreLevel.next_level(), "why": why,
+		"for": building_id}
+
 ## Lo que cuesta el paso, indexado por ResourceManager.Type. Vacio si no cuesta.
 static func step_cost(step: Dictionary) -> Dictionary:
 	match String(step.get("kind", "")):
+		"core":
+			return CoreLevel.cost(int(step.get("level", CoreLevel.next_level())))
 		"build":
 			var data: BuildingData = Rules.load_building_data(String(step["id"]))
 			return data.get_cost() if data != null else {}
@@ -1208,6 +1232,9 @@ static func _room_on_the_way() -> int:
 static func _build_step(building_id: String, why: String) -> Dictionary:
 	if not Rules.check_building_limit(building_id) or not Rules.check_prerequisites(building_id):
 		return {}
+	# Cerrado por el Nucleo o sin plano (1.2): no se propone.
+	if not Rules.check_core_level(building_id) or not Rules.check_blueprint(building_id):
+		return {}
 	if not ResourceManager.is_unlocked_by_name(_needs_unlocked(building_id)):
 		return {}
 	if not has_site(building_id):
@@ -1253,6 +1280,10 @@ static func _producer_step(res: String, why: String) -> Dictionary:
 	var more: Dictionary = _build_step(building_id, why)
 	if not more.is_empty():
 		return more
+	# Sin hueco por el tope y el Nucleo mas alto lo sube: subir el Nucleo (1.2).
+	var core: Dictionary = core_step_for_limit(building_id)
+	if not core.is_empty():
+		return core
 	# Comida sin hueco para otra Granja (tope de la era): un Muelle de pesca en
 	# la orilla, si queda un banco de peces con sitio (feat/muelle-pesca). Solo
 	# como apoyo: la linea nunca lo pide.
@@ -1502,6 +1533,8 @@ static func describe(step: Dictionary) -> Dictionary:
 			title = Tr.t("OBJ_DO_CONTRACT") % Tr.t("CONTRACT_SRC_" + String(step.get("id", "")).to_upper())
 		"resummon":
 			title = Tr.t("OBJ_DO_RESUMMON")
+		"core":
+			title = Tr.t("OBJ_DO_CORE") % int(step.get("level", CoreLevel.next_level()))
 		_:
 			match String(step.get("why", "")):
 				"OBJ_WHY_SANDBOX_BUILT":
@@ -1602,6 +1635,10 @@ static func blocker(step: Dictionary) -> String:
 			if CombatManager.campaign_units_home(domain).is_empty():
 				return Tr.t("CAMP_NO_UNITS_" + domain.to_upper())
 			return ""
+		"core":
+			if ProgressionManager.is_core_upgrading():
+				return Tr.t("OBJ_IN_PROGRESS")
+			return "\n".join(CoreLevel.block_lines())
 		"siege":
 			if ProgressionManager.is_final_audit_active():
 				return Tr.t("OBJ_SIEGE_UNDER_WAY")

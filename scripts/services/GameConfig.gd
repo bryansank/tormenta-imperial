@@ -103,17 +103,19 @@ var hq_upgrade_costs := {
 }
 
 # ── Building Limits (max per type, -1 = unlimited) ──
-# Topes de la ERA 1 y de lo que no sube con la era. Los que suben estan en
-# `building_limits_by_era` (seccion "Building Limit Helpers"); las decoraciones
+# Topes con el Nucleo a NIVEL 1 y de lo que no sube con el Nucleo (1.2,
+# feat/nucleo-y-planos: el Nucleo sustituye a los topes por era). Los que suben
+# estan en `core_level_limits` (bloque "Nucleo y planos", al final), y su primera
+# cifra tiene que ser la de aqui (lo exige la prueba). Las decoraciones
 # (BuildingData.is_decoration) no tienen tope aunque salgan aqui. Se lee siempre
 # con get_building_limit(id), nunca a mano.
 
 var building_limits := {
-	"sawmill": 5,
-	"gold_mine": 4,
-	"foundry": 3,
-	"refinery": 2,
-	"warehouse": 5,
+	"sawmill": 4,
+	"gold_mine": 3,
+	"foundry": 1,
+	"refinery": 1,
+	"warehouse": 3,
 	# El Mercado y el Laboratorio abren el comercio y el arbol tecnologico
 	# (2026-09-28): uno de cada basta.
 	"market": 1,
@@ -121,23 +123,25 @@ var building_limits := {
 	# El Cuartel no tiene tope (Bryan, 18-10-2026): el freno es el del ejercito,
 	# no el del mapa (army_capacity_max, army_training_slots_max y el sueldo).
 	"barracks": -1,
-	"tower": 6,
+	"tower": 2,
 	"headquarters": 1,
-	"house": 10,
+	"house": 8,
 	"garden": -1,
 	"statue": 5,
 	"fountain": 5,
 	"road": -1,
-	"farm": 6,
-	# Edificios utiles de la 1.1: el tope de era 1 (lo que sube con la era esta
-	# en building_limits_by_era, y la prueba exige que la era 1 coincida).
-	"windmill": 2,
+	"farm": 4,
+	# Edificios utiles de la 1.1: el tope con el Nucleo a nivel 1 (lo que sube
+	# esta en core_level_limits, y la prueba exige que el nivel 1 coincida).
+	"windmill": 1,
 	"silo": 2,
 	"tavern": 1,
 	"carpentry": 1,
-	"well": 3,
+	"well": 2,
 	"lighthouse": 1,
 	"fuel_depot": 2,
+	# Muelle de pesca (feat/muelle-pesca): antes lo ponia _register_fishing_dock.
+	"fishing_dock": 3,
 	# Aire y mar (feat/aire-mar-reglas): el Astillero y el Aerodromo. SIN TOPE
 	# desde 2026-10-18 (decision de Bryan, ronda final de la 1.1). Cada uno da un
 	# hueco de entrenamiento y +4 de capacidad (army_capacity_per_building); los
@@ -1883,86 +1887,73 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 
 # ── Building Limit Helpers ──
 
-## Topes que suben con la era (decision D1 de Bryan, 14-10-2026; docs/03 §Topes).
-## [era 1, era 2, era 3]. La era 1 es el tope de siempre (`building_limits`): una
-## partida guardada nunca queda por encima de su tope. Regla general ≈ ×1,5 en la
-## era 2 y ×2 en la era 3, con tres excepciones que no suben:
-##   warehouse 5  la bolsa de la era 3 sin tecnologias es 1000 + 5×500 = 3500, el
-##                precio justo del CG nivel 3 (hq_upgrade_costs[3] sin materiales).
-##                Con 7 almacenes serian 4500 (5500 con las tecnologias) y el CG 3
-##                dejaria de pedir la bolsa llena. La bolsa ya crece por era sola
-##                (base_storage_cap_by_era 600/800/1000) y por nivel de almacen.
-##   tower 6      4 torres ya dan el 60 % de mitigacion (storm_tower_mitigation_max)
-##                y solo 2 salen al tablero (storm_tower_garrison_max): mas torres
-##                no darian nada. El rango sigue dando +1 (rango 16).
-##   unicos 1     Mercado, Laboratorio y Cuartel General (no estan en esta tabla).
-## El Cuartel no esta: no tiene tope en ninguna era (Bryan, 18-10-2026). Lo que
-## frena al ejercito no es cuantos cuarteles caben sino la capacidad, que crece
-## cada vez menos y tiene techo (`get_army_capacity`), los huecos de
-## entrenamiento (`army_training_slots_max`) y el sueldo en oro.
-## Un id que no esta aqui usa `building_limits` en todas las eras.
-var building_limits_by_era := {
-	"sawmill": [5, 8, 10],
-	"gold_mine": [4, 6, 8],
-	"foundry": [3, 5, 6],
-	"refinery": [2, 3, 4],
-	"house": [10, 15, 20],
-	"farm": [6, 9, 12],
-	"warehouse": [5, 5, 5],
-	"tower": [6, 6, 6],
-	# Edificios utiles de la 1.1 (feat/edificios-utiles-1, doc 21 §6.3). El Faro
-	# es unico; el Deposito de combustible no se levanta antes de la Refineria
-	# (prerrequisito), asi que sus topes de era 1-2 no se ven.
-	"windmill": [2, 3, 4],
-	"silo": [2, 4, 5],
-	"tavern": [1, 2, 3],
-	"carpentry": [1, 2, 2],
-	"well": [3, 5, 6],
-	"lighthouse": [1, 1, 1],
-	"fuel_depot": [2, 2, 3],
-	# Aire y mar: sin tope desde 2026-10-18 (ver building_limits).
-}
+## Topes por era: SUSTITUIDOS en la 1.2 por los niveles del Nucleo (decision de
+## Bryan, 18-10-2026; feat/nucleo-y-planos). La tabla buena es
+## `core_level_limits` (bloque "Nucleo y planos", al final). Esta queda vacia
+## como PUENTE: si una rama que aun no conoce el Nucleo mete aqui una fila
+## [era 1, era 2, era 3], se lee como [N1, N2, N3, N4, N5] = [e1, e1, e2, e3, e3]
+## hasta que el integrador la pase a core_level_limits.
+var building_limits_by_era := {}
 
-## El tope de `building_id` AHORA: la era en curso (ProgressionManager), mas los
-## huecos del rango. -1 = sin tope. Es el unico sitio que deben leer las reglas
-## de colocar, CONSTRUIR, ¿QUE HACER? y el tutorial. Nada de esto se guarda: sale
-## de la era y del rango, que ya van en el save.
+## El tope de `building_id` AHORA: el nivel del Nucleo (ProgressionManager), mas
+## los huecos del rango. -1 = sin tope. Es el unico sitio que deben leer las
+## reglas de colocar, CONSTRUIR, ¿QUE HACER? y el tutorial. Nada de esto se
+## guarda aparte: sale del nivel del Nucleo y del rango, que ya van en el save.
+## Que un edificio aun no este ABIERTO por el Nucleo (core_level_unlocks) no lo
+## dice el tope sino PlacementRules.check_core_level(): asi CONSTRUIR ensena el
+## candado "Nucleo N" y no un "0/0".
 func get_building_limit(building_id: String) -> int:
-	return get_building_limit_for_era(building_id, current_era())
+	return get_building_limit_at(building_id, current_core_level())
 
-## El tope de `building_id` en la era `era` (1..3, se acota), con el rango encima.
-## Sandbox: -1 siempre (docs/20). Decoraciones: -1 siempre (las limita el terreno).
-func get_building_limit_for_era(building_id: String, era: int) -> int:
+## El tope de `building_id` con el Nucleo a `core_level` (1..5, se acota), con el
+## rango encima. Sandbox: -1 siempre (docs/20). Decoraciones: -1 siempre (las
+## limita el terreno).
+func get_building_limit_at(building_id: String, core_level: int) -> int:
 	if GameMode.all_unlocked():
 		return -1  # Sandbox: sin tope por tipo (ver docs/20-modos-de-juego.md).
 	if is_uncapped_building(building_id):
 		return -1
-	var limit := base_building_limit(building_id, era)
+	var limit := base_building_limit(building_id, core_level)
 	if limit < 0:
 		return limit
 	# Huecos extra que da el rango del gobernador (RankManager los asigna).
 	return limit + int(rank_limit_bonus.get(building_id, 0))
 
-## El tope de la tabla en `era`, sin rango ni modo. -1 = sin tope.
-func base_building_limit(building_id: String, era: int) -> int:
-	if building_limits_by_era.has(building_id):
-		var row: Array = building_limits_by_era[building_id]
+## El tope de la tabla con el Nucleo a `core_level`, sin rango ni modo. -1 = sin
+## tope. Orden: core_level_limits, el puente por era y building_limits (fijos).
+func base_building_limit(building_id: String, core_level: int) -> int:
+	var lv := clampi(core_level, 1, core_level_max)
+	if core_level_limits.has(building_id):
+		var row: Array = core_level_limits[building_id]
 		if not row.is_empty():
-			return int(row[clampi(era, 1, row.size()) - 1])
+			return int(row[clampi(lv, 1, row.size()) - 1])
+	if building_limits_by_era.has(building_id):
+		var era_row: Array = building_limits_by_era[building_id]
+		if not era_row.is_empty():
+			var era: int = int(CORE_LEVEL_ERA_BRIDGE[lv - 1])
+			return int(era_row[clampi(era, 1, era_row.size()) - 1])
 	return int(building_limits.get(building_id, -1))
 
-## La proxima era en la que sube el tope de `building_id` y a cuanto (con el
-## rango), o {} si ya no sube. Para "3/6 · era 2: 9" en CONSTRUIR.
+## El proximo nivel del Nucleo que sube el tope de `building_id` y a cuanto (con
+## el rango), o {} si ya no sube: {"core_level": 3, "limit": 8}. Para
+## "3/5 · Núcleo 3: 8" en CONSTRUIR y "Sube el Núcleo a 3" en la tarjeta llena.
 func next_building_limit(building_id: String) -> Dictionary:
-	var era := current_era()
-	var now := get_building_limit_for_era(building_id, era)
+	var lv := current_core_level()
+	var now := get_building_limit_at(building_id, lv)
 	if now < 0:
 		return {}
-	for e in range(era + 1, max_era() + 1):
-		var later := get_building_limit_for_era(building_id, e)
+	for l in range(lv + 1, core_level_max + 1):
+		var later := get_building_limit_at(building_id, l)
 		if later > now:
-			return {"era": e, "limit": later}
+			return {"core_level": l, "limit": later}
 	return {}
+
+## El nivel del Nucleo, o 1 sin ProgressionManager (pruebas sin arbol, arranque).
+func current_core_level() -> int:
+	var pm := get_node_or_null("/root/ProgressionManager")
+	if pm == null:
+		return 1
+	return clampi(int(pm.get("core_level")), 1, core_level_max)
 
 ## La era en curso, o 1 sin ProgressionManager (pruebas sin arbol, arranque).
 func current_era() -> int:
@@ -2527,13 +2518,9 @@ var combat_loot_expedition_node_parts := 2
 var combat_loot_expedition_boss_parts := 4
 var combat_loot_expedition_boss_colonists := 3
 
-## Planos: edificios que solo se construyen con su plano (doc 21 §6.3). La lista
-## puede empezar corta: un id solo se ofrece como botin cuando su
-## data/buildings/<id>.tres existe, asi que las ramas que traigan esos edificios
-## los activan sin tocar nada aqui. El candado lo pone quien construye
-## (CombatManager.blueprint_locked(); PlacementRules tiene que llamarlo, como
-## check_rank()).
-var combat_blueprint_buildings := ["infirmary", "military_forge", "scrapyard", "diesel_plant"]
+## Planos: la lista de edificios que los piden es `blueprint_required` y de que
+## mision sale cada uno `blueprint_sources` (bloque "Nucleo y planos", al final;
+## 1.2, feat/nucleo-y-planos). Antes estaba aqui `combat_blueprint_buildings`.
 
 # ── Tres campañas: Tierra, Mar y Aire (feat/tres-campanas, docs/15 §13) ──
 # Decision de Bryan (2026-10-18): tres cadenas de misiones APARTE, cada una de
@@ -3612,8 +3599,8 @@ func spoil_after_for(building_id: String) -> float:
 
 const FISHING_DOCK_ID := "fishing_dock"
 
-## Topes por era (como la Granja, menos: lo limita tambien cuantos bancos hay).
-var fishing_dock_limits_by_era := [3, 4, 6]
+## Sus topes van con el Nucleo (core_level_limits, bloque "Nucleo y planos"):
+## como la Granja, menos, porque lo limita tambien cuantos bancos hay.
 ## Lo que cabe en el muelle antes de pararse (unos 6 minutos de pesca).
 var fishing_dock_stock_cap := 150
 ## Pescado fresco (solo Gobernador, con estropeado): aguanta esta fraccion de lo
@@ -3642,8 +3629,6 @@ var _fishing_dock_registered := _register_fishing_dock()
 
 func _register_fishing_dock() -> bool:
 	var id := FISHING_DOCK_ID
-	building_limits[id] = int(fishing_dock_limits_by_era[0])
-	building_limits_by_era[id] = fishing_dock_limits_by_era.duplicate()
 	building_deposit_rules[id] = {"deposit": "fish_shoal", "reach": 1, "consumes": false,
 		"message": "LBL_NEEDS_FISH_NEAR"}
 	# Ahumar pescado: la madera que sobra (atasca la bolsa, docs/22) pasa a
@@ -3673,3 +3658,183 @@ func _register_fishing_dock() -> bool:
 		"props": ["barrel", "crate", "sacks", "barrel"], "count": [3, 5]}
 	building_active_fx[id] = "smoke"
 	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Nucleo y planos (feat/nucleo-y-planos, 1.2) ──
+# ══════════════════════════════════════════════════════════════════════
+# Decision de Bryan (18-10-2026): el Nucleo tiene NIVELES 1-5 y SUSTITUYE a los
+# topes por era. Subirlo (recursos + materiales + tiempo de obra) sube el maximo
+# de cada edificio y abre edificios nuevos. Los edificios avanzados piden ademas
+# un PLANO que se gana en las campanas (Tierra, Mar, Aire). Doc 21 §6.1 y §3.1;
+# docs/03 §"Nucleo y planos". SIN MEDIR con la sonda (ronda de pruebas de la 1.2).
+#
+# CONTRATO para las ramas de la 1.2 que traen edificios (lo lee el integrador):
+#   core_level_unlocks[id] = N   el edificio no se construye hasta el Nucleo N.
+#   blueprint_required += [id]   el edificio no se construye sin su plano; y
+#   blueprint_sources[id] = {"domain", "mission"}  la mision que lo da.
+#   core_level_limits[id] = [N1..N5]  sus topes; sin fila, building_limits fijo.
+
+const CORE_ID := "nucleo"
+
+## Niveles del Nucleo. El 1 es el de salida.
+var core_level_max := 5
+
+## A que era se parece cada nivel del Nucleo: lo usa el puente de las filas
+## por era (building_limits_by_era) y nada mas. N2 = era 1 tardia, N3 = era 2,
+## N4 y N5 = era 3.
+const CORE_LEVEL_ERA_BRIDGE := [1, 1, 2, 3, 3]
+
+## Topes por nivel del Nucleo: [N1, N2, N3, N4, N5]. La primera cifra es la de
+## building_limits (lo exige la prueba). Regla: N2 ≈ los topes de la era 1 de la
+## 1.1, N3 ≈ los de la era 2, N4 ≈ los de la era 3 y N5 uno mas en lo que
+## produce. El N1 es mas corto: el Nucleo es la meta larga de cada era.
+## Excepciones que no siguen la regla (las de siempre):
+##   warehouse 5  la bolsa de la era 3 sin tecnologias es 1000 + 5×500 = 3500, el
+##                precio justo del CG nivel 3. Se llega al 5 con el Nucleo 2 (la
+##                era 1 ya dejaba 5): el CG nunca espera al Nucleo.
+##   tower 6      4 torres ya dan el 60 % de mitigacion y solo 2 salen al tablero.
+##   unicos 1     Mercado, Laboratorio y Cuartel General (no estan aqui).
+## Sin tope ni aqui ni en building_limits: Cuartel, Astillero y Aerodromo (su
+## freno es la tropa), decoraciones y carreteras.
+var core_level_limits := {
+	"sawmill": [4, 5, 8, 10, 11],
+	"gold_mine": [3, 4, 6, 8, 9],
+	"foundry": [1, 3, 5, 6, 7],
+	"refinery": [1, 2, 3, 4, 5],
+	"house": [8, 10, 15, 20, 22],
+	"farm": [4, 6, 9, 12, 13],
+	"warehouse": [3, 5, 5, 5, 5],
+	"tower": [2, 4, 6, 6, 6],
+	# Edificios utiles de la 1.1 (doc 21 §6.3).
+	"windmill": [1, 2, 3, 4, 4],
+	"silo": [2, 2, 4, 5, 5],
+	"tavern": [1, 1, 2, 3, 3],
+	"carpentry": [1, 1, 2, 2, 2],
+	"well": [2, 3, 5, 6, 6],
+	"lighthouse": [1, 1, 1, 1, 1],
+	"fuel_depot": [2, 2, 2, 3, 3],
+	"fishing_dock": [3, 3, 4, 6, 6],
+}
+
+## CONTRATO: id -> nivel minimo del Nucleo para poder construirlo (1 = desde el
+## principio; un id que no esta aqui es 1). Lo comprueba
+## PlacementRules.check_core_level() y lo ensena CONSTRUIR con su candado
+## "Núcleo N". Las ramas de la 1.2 proponen sus filas y el integrador las mete
+## aqui (docs/03 §"Nucleo y planos").
+var core_level_unlocks := {
+	# Doc 21 §6.3: los utiles de la 1.1 que abren el Nucleo 2 y el 4.
+	"silo": 2,
+	"tavern": 2,
+	"carpentry": 2,
+	"lighthouse": 2,
+	"fishing_dock": 2,
+	"fuel_depot": 4,
+}
+
+## Lo que pide cada nivel ANTES de poder pagarlo (coherente con las eras):
+##   era        era minima de la colonia
+##   buildings  edificios terminados que tiene que haber (al menos uno de cada)
+## N2: la era 1 completa (lo mismo que pide la Fundicion). N3: la era 2 y un
+## Cuartel. N4: la era 3. N5: la era 3 y el Cuartel General.
+var core_level_requirements := {
+	2: {"era": 1, "buildings": ["sawmill", "gold_mine", "house", "warehouse"]},
+	3: {"era": 2, "buildings": ["barracks"]},
+	4: {"era": 3, "buildings": []},
+	5: {"era": 3, "buildings": ["headquarters"]},
+}
+
+## Lo que cuesta subir el Nucleo A cada nivel (nombres de recurso). La parte de
+## la bolsa cabe siempre en la bolsa de su era con los almacenes del nivel
+## anterior: N2 400 de 2100 (era 1, 3 almacenes), N3 1050, N4 1650 y N5 3000
+## de 3500 (era 3, 5 almacenes). Los repuestos (N4 y N5) solo se traen de fuera:
+## el Nucleo alto es un motivo para salir (doc 21 §3.1).
+var core_level_costs := {
+	2: {"gold": 250, "wood": 150, "planks": 10},
+	3: {"gold": 600, "steel": 250, "wood": 200, "beams": 12},
+	4: {"gold": 1000, "steel": 400, "oil": 250, "fuel": 12, "parts": 6},
+	5: {"gold": 1500, "steel": 700, "oil": 500, "wood": 300, "beams": 20, "fuel": 20, "parts": 12},
+}
+
+## Segundos de obra para llegar a cada nivel (pasan por get_duration: el modo
+## desarrollador los acorta). El Nucleo sigue funcionando mientras sube.
+var core_level_durations := {2: 60.0, 3: 120.0, 4: 180.0, 5: 240.0}
+
+## El nivel del Nucleo que abre `building_id` (1 si ninguno). Sandbox: 1.
+func core_level_unlock(building_id: String) -> int:
+	if GameMode.all_unlocked():
+		return 1
+	return clampi(int(core_level_unlocks.get(building_id, 1)), 1, core_level_max)
+
+## Lo que cuesta subir el Nucleo a `to_level`, por ResourceManager.Type. {} si
+## no es un nivel valido.
+func get_core_upgrade_cost(to_level: int) -> Dictionary:
+	var raw: Dictionary = core_level_costs.get(to_level, {})
+	var cost := {}
+	for res_name in raw:
+		var type: int = ResourceManager.name_to_type(String(res_name))
+		if type != -1:
+			cost[type] = int(raw[res_name])
+	return cost
+
+## Segundos de obra (ya escalados) para subir el Nucleo a `to_level`.
+func get_core_upgrade_duration(to_level: int) -> float:
+	return get_duration(float(core_level_durations.get(to_level, 60.0)))
+
+## Los ids que abre exactamente el nivel `level` del Nucleo, ordenados.
+func core_unlocks_at(level: int) -> Array:
+	var out: Array = []
+	for id in core_level_unlocks:
+		if int(core_level_unlocks[id]) == level:
+			out.append(String(id))
+	out.sort()
+	return out
+
+## CONTRATO: los edificios que solo se construyen con su plano. Los crean otras
+## ramas de la 1.2 (Enfermeria, Herreria, Central diesel, Chatarreria, Casa de
+## cambio): la lista compila y funciona aunque sus .tres aun no existan (sin
+## .tres no hay tarjeta en CONSTRUIR ni plano en la oferta de la mision, pero
+## ganar la mision lo apunta igual).
+var blueprint_required := ["infirmary", "smithy", "diesel_plant", "scrapyard", "exchange"]
+
+## De que mision sale cada plano: {"domain": "land"|"sea"|"air", "mission": N}
+## con N desde 1 (la mision 3 de Tierra = la tercera; la del jefe es la ultima).
+## Una mision por plano, repartidos entre las tres campanas y cada uno en una
+## mision de su era (doc 21 §6.3; campaign_defs):
+##   infirmary     Tierra 3 "La mina tomada"        era 2  (combate, moral)
+##   smithy        Tierra 5 "La fabrica cercada"    era 2  (doctrinas)
+##   scrapyard     Mar 2    "El faro apagado"       era 2  (ruinas -> acero)
+##   exchange      Mar 3    "La flota del estrecho" era 2  (mercado)
+##   diesel_plant  Aire 2   "El dirigible espia"    era 3  (produccion)
+var blueprint_sources := {
+	"infirmary": {"domain": "land", "mission": 3},
+	"smithy": {"domain": "land", "mission": 5},
+	"scrapyard": {"domain": "sea", "mission": 2},
+	"exchange": {"domain": "sea", "mission": 3},
+	"diesel_plant": {"domain": "air", "mission": 2},
+}
+
+## ¿Pide plano `building_id`? Sandbox: nunca.
+func needs_blueprint(building_id: String) -> bool:
+	if GameMode.all_unlocked():
+		return false
+	return building_id in blueprint_required
+
+## La mision que da el plano de `building_id`: {"domain", "mission"} (mission
+## desde 1) o {} si no sale de ninguna campana.
+func blueprint_source(building_id: String) -> Dictionary:
+	var src: Variant = blueprint_sources.get(building_id, {})
+	if not (src is Dictionary) or (src as Dictionary).is_empty():
+		return {}
+	var row: Dictionary = src
+	return {"domain": String(row.get("domain", "land")), "mission": maxi(1, int(row.get("mission", 1)))}
+
+## Los planos que da la mision `mission_index` (desde 0, como CampaignBook) de
+## `domain`. Varios si la tabla repite mision.
+func blueprints_for_mission(domain: String, mission_index: int) -> Array:
+	var out: Array = []
+	for id in blueprint_sources:
+		var src := blueprint_source(String(id))
+		if String(src.get("domain", "")) == domain and int(src.get("mission", 0)) == mission_index + 1:
+			out.append(String(id))
+	out.sort()
+	return out
