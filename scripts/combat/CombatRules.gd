@@ -258,10 +258,32 @@ static func encounter_rewards(era: int) -> Dictionary:
 ## The swing back home: a win lifts the town, and every unit that does not come
 ## back sinks it. A costly victory can still leave the base worse than it started,
 ## which is the whole point of tying the two halves together.
-static func morale_delta(victory: bool, casualties: int) -> int:
+## `per_casualty` < 0 = el de siempre (combat_morale_per_casualty); la
+## Enfermeria pasa el suyo (infirmary_morale_per_casualty).
+static func morale_delta(victory: bool, casualties: int, per_casualty: float = -1.0) -> int:
 	var delta: float = GameConfig.combat_morale_on_victory if victory else 0.0
-	delta -= GameConfig.combat_morale_per_casualty * float(maxi(0, casualties))
+	var each: float = GameConfig.combat_morale_per_casualty if per_casualty < 0.0 else per_casualty
+	delta -= each * float(maxi(0, casualties))
 	return roundi(delta)
+
+## Enfermeria (feat/edificios-militares): cuantos de `fallen` caidos vuelven a
+## casa tras un combate ganado: uno de cada `every`, por abajo.
+static func infirmary_returns(fallen: int, every: int) -> int:
+	if every <= 0 or fallen <= 0:
+		return 0
+	return fallen / every
+
+## Los `count` caidos que vuelven: los de mas Poder primero (a igual Poder, el
+## uid menor), para que lo que se salva sea lo que mas cuesta reponer.
+static func pick_recovered(fallen: Array, count: int) -> Array:
+	if count <= 0 or fallen.is_empty():
+		return []
+	var sorted: Array = fallen.duplicate()
+	sorted.sort_custom(func(a, b):
+		if a.power() != b.power():
+			return a.power() > b.power()
+		return a.uid < b.uid)
+	return sorted.slice(0, mini(count, sorted.size()))
 
 static func living_units(units: Array, side: int) -> Array:
 	var result: Array = []

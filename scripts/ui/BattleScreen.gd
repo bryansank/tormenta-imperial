@@ -764,6 +764,10 @@ func _show_expedition_report(result: int, rewards: Dictionary, casualties: Dicti
 	# Diezmo), ya aplicado a la colonia: lo deja CombatManager en el parte.
 	var last: Dictionary = CombatManager.get_last_result()
 	if bool(last.get("expedition", false)):
+		# Enfermeria: los caidos que volvieron a casa en toda la salida.
+		var recovered: Dictionary = last.get("recovered", {})
+		if not recovered.is_empty():
+			lines.append(Tr.t("LBL_INFIRMARY_RECOVERED") % _unit_list(recovered))
 		for text in SkirmishPanelScript.loot_lines(last.get("loot", {})):
 			lines.append(String(text))
 		# Tres campanas: como queda la campana (el progreso se apunta justo
@@ -1263,6 +1267,10 @@ func _encounter_title(index: int, is_boss: bool) -> String:
 		return "%s  %s" % [Tr.t("LBL_ENCOUNTER_N") % (index + 1), Tr.t("LBL_BOSS")]
 	if has_expedition():
 		return Tr.t("LBL_ENCOUNTER_N") % (index + 1)
+	# Simulacro del Campo de tiro (feat/edificios-militares): de practica.
+	if CombatManager.is_practice():
+		var lesson: Dictionary = GameConfig.get_practice_lesson(CombatManager.practice_lesson())
+		return Tr.t("PRACTICE_FIGHT_TITLE") % Tr.t(String(lesson.get("name", "")))
 	# Un tablero de defensa (el Diezmo, el Impuesto de prueba) no es una mision.
 	if CombatManager.is_defending():
 		return Tr.t("LBL_DEFENSE_FIGHT")
@@ -1324,10 +1332,20 @@ func _result_text(turns_used: int) -> String:
 		lines.append("%s: %s" % [Tr.t("LBL_REWARDS"), _resource_list(rewards)])
 
 	var casualties: Dictionary = result.get("casualties", {})
+	if bool(result.get("practice", false)):
+		# Simulacro: nadie cae de verdad; el premio solo la primera vez.
+		lines.append(Tr.t("PRACTICE_RESULT_SAFE"))
+		if rewards.is_empty() and bool(result.get("victory", false)):
+			lines.append(Tr.t("PRACTICE_RESULT_DONE"))
+		return "\n".join(lines)
 	if casualties.is_empty():
 		lines.append(Tr.t("LBL_NO_CASUALTIES"))
 	else:
 		lines.append("%s: %s" % [Tr.t("LBL_CASUALTIES"), _unit_list(casualties)])
+	# Enfermeria: los que volvieron a casa en vez de caer.
+	var recovered: Dictionary = result.get("recovered", {})
+	if not recovered.is_empty():
+		lines.append(Tr.t("LBL_INFIRMARY_RECOVERED") % _unit_list(recovered))
 
 	# Una dotacion caida deja su torre dañada (CombatManager.damage_towers_for_lost_crews).
 	var towers: int = int(result.get("towers_damaged", 0))

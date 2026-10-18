@@ -248,6 +248,10 @@ const TIPS := {
 	"farm":           {"title": "HELP_T_FARM",      "body": "HELP_B_FARM"},
 	"collect_full":   {"title": "HELP_T_COLLECT",   "body": "HELP_B_COLLECT"},
 	"fishing_dock":   {"title": "HELP_T_FISHING_DOCK", "body": "HELP_B_FISHING_DOCK"},
+	# Edificios militares (feat/edificios-militares).
+	"infirmary":      {"title": "HELP_T_INFIRMARY", "body": "HELP_B_INFIRMARY"},
+	"smithy":         {"title": "HELP_T_SMITHY", "body": "HELP_B_SMITHY"},
+	"firing_range":   {"title": "HELP_T_FIRING_RANGE", "body": "HELP_B_FIRING_RANGE"},
 	"island":         {"title": "HELP_T_ISLAND",    "body": "HELP_B_ISLAND"},
 }
 
@@ -1413,6 +1417,11 @@ func _on_news_construction(node: Node) -> void:
 		"fishing_dock":
 			if not has_seen_tip("fishing_dock"):
 				offer_tip("fishing_dock")
+		# Edificios militares (feat/edificios-militares): el primero de cada uno.
+		"infirmary", "smithy", "firing_range":
+			var tip_id := String(info["data"].id)
+			if not has_seen_tip(tip_id):
+				offer_tip(tip_id)
 
 ## Un edificio se lleno sin recoger: para hasta que se recoge.
 func _on_news_stock(node: Node, _stock: Dictionary) -> void:

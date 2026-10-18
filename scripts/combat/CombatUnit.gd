@@ -7,6 +7,8 @@ class_name CombatUnit
 ## morale modify the derived getters, never the stored stats.
 
 const DOMAIN_LAND := "land"
+## Doctrinas de la Herreria (feat/edificios-militares): datos puros.
+const Doctrines := preload("res://scripts/combat/Doctrines.gd")
 
 var uid: int = 0
 var unit_id: String = ""
@@ -23,6 +25,11 @@ var scale: float = 1.0
 ## Morale multiplier captured when the expedition launched (player only).
 var morale_attack_mod: float = 1.0
 var morale_initiative_bonus: int = 0
+## Doctrina de la Herreria con la que nacio (player only; "" = ninguna) y sus
+## mods (Doctrines.gd). Se fija al crear la unidad y viaja en el guardado:
+## la columna pelea con la doctrina con la que salio, como con su moral.
+var doctrine: String = ""
+var doctrine_mods: Dictionary = {}
 
 static func create(p_uid: int, p_unit_id: String, p_side: int, p_scale: float = 1.0) -> CombatUnit:
 	var unit := CombatUnit.new()
@@ -33,6 +40,10 @@ static func create(p_uid: int, p_unit_id: String, p_side: int, p_scale: float = 
 	var stats: Dictionary = GameConfig.get_combat_stats(p_unit_id)
 	unit.max_hp = maxi(1, roundi(float(stats.get("hp", 10)) * p_scale))
 	unit.hp = unit.max_hp
+	# La doctrina activa (GameConfig.combat_active_doctrine, la pone
+	# ArmyManager) solo al bando del jugador.
+	if p_side == 0 and GameConfig.combat_active_doctrine != "":
+		Doctrines.apply(unit, GameConfig.combat_active_doctrine)
 	return unit
 
 func _base(stat: String, fallback: int) -> int:
@@ -43,24 +54,25 @@ func is_alive() -> bool:
 	return hp > 0
 
 func attack_power() -> int:
-	var value := float(_base("atk", 1) + int(draft_bonuses.get("atk", 0))) * scale
+	var value := float(_base("atk", 1) + int(draft_bonuses.get("atk", 0)) + int(doctrine_mods.get("atk", 0))) * scale
+	value *= 1.0 + float(doctrine_mods.get("atk_pct", 0.0))
 	return maxi(1, roundi(value * morale_attack_mod))
 
 func defense() -> int:
-	var value := _base("def", 0) + int(draft_bonuses.get("def", 0))
-	return value * 2 if defending else value
+	var value := maxi(0, _base("def", 0) + int(draft_bonuses.get("def", 0)) + int(doctrine_mods.get("def", 0)))
+	return value * int(doctrine_mods.get("defend_mult", 2)) if defending else value
 
 func move_range() -> int:
-	return maxi(0, _base("move", 1) + int(draft_bonuses.get("move", 0)))
+	return maxi(0, _base("move", 1) + int(draft_bonuses.get("move", 0)) + int(doctrine_mods.get("move", 0)))
 
 func attack_range() -> int:
-	return maxi(1, _base("range", 1))
+	return maxi(1, _base("range", 1) + int(doctrine_mods.get("range", 0)))
 
 func min_range() -> int:
 	return maxi(1, _base("min_range", 1))
 
 func initiative() -> int:
-	return _base("initiative", 1) + int(draft_bonuses.get("initiative", 0)) + morale_initiative_bonus
+	return _base("initiative", 1) + int(draft_bonuses.get("initiative", 0)) + morale_initiative_bonus 		+ int(doctrine_mods.get("initiative", 0))
 
 ## El medio por el que se mueve: "land", "sea" o "air" (GameConfig.combat_unit_stats,
 ## campo `domain`). Lo leen las reglas (docs/15 §11, aire y mar): por donde
@@ -123,6 +135,9 @@ func to_dict() -> Dictionary:
 		# Aire y mar: se escribe para quien lea el guardado; al cargar manda la
 		# fila del tipo (un guardado viejo sin la clave es de tierra).
 		"domain": domain(),
+		# Herreria: la doctrina con la que nacio ("" = ninguna; los mods salen
+		# de la tabla al cargar, la vida ya va en max_hp).
+		"doctrine": doctrine,
 	}
 
 static func from_dict(data: Dictionary) -> CombatUnit:
@@ -135,4 +150,5 @@ static func from_dict(data: Dictionary) -> CombatUnit:
 	unit.draft_bonuses = data.get("draft_bonuses", {}).duplicate()
 	unit.scale = float(data.get("scale", 1.0))
 	unit.domain_hint = String(data.get("domain", ""))
+	Doctrines.restore(unit, String(data.get("doctrine", "")))
 	return unit

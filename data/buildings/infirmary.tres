@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/models/toy/infirmary.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+model_scene = ExtResource("2")
+id = "infirmary"
+display_name = "Enfermería"
+description = "Tras una victoria, uno de cada tres caídos vuelve a casa."
+grid_size = Vector2i(2, 2)
+cost_gold = 180
+cost_steel = 60
+cost_oil = 0
+cost_wood = 100
+cost_materials = {"planks": 6}
+build_time = 14.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+mesh_height = 1.8
+mesh_color = Color(0.92, 0.9, 0.84, 1)
+workers_required = 2
+max_health = 180

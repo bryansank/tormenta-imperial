@@ -119,6 +119,9 @@ func _get_category(data: BuildingData) -> String:
 		return "support"
 	if data.id in ["barracks", "tower", "shipyard", "aerodrome"]:
 		return "military"
+	# Enfermeria, Herreria militar y Campo de tiro (feat/edificios-militares).
+	if data.id in GameConfig.MILITARY_SUPPORT_BUILDINGS:
+		return "military"
 	return "production"
 
 func _get_filtered_buildings() -> Array:

@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/models/toy/firing_range.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+model_scene = ExtResource("2")
+id = "firing_range"
+display_name = "Campo de tiro"
+description = "Entrena más rápido y practica en el simulacro."
+grid_size = Vector2i(2, 2)
+cost_gold = 160
+cost_steel = 40
+cost_oil = 0
+cost_wood = 100
+cost_materials = {"planks": 8}
+build_time = 12.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+mesh_height = 1.2
+mesh_color = Color(0.55, 0.45, 0.3, 1)
+workers_required = 1
+max_health = 160

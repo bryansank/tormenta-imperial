@@ -129,10 +129,32 @@ static func create_sortie(p_id: int, p_offer: Dictionary, party_counts: Dictiona
 ## Solo la expedicion corta: la de siempre sigue sin curar (FR-011).
 func heal_between_pct() -> float:
 	if kind == Generator.KIND_EXPEDITION:
-		return maxf(0.0, GameConfig.combat_expedition_heal_between)
+		return maxf(0.0, GameConfig.combat_expedition_heal_between * heal_mult)
 	if kind == Generator.KIND_CAMPAIGN:
-		return maxf(0.0, GameConfig.campaign_heal_between)
+		return maxf(0.0, GameConfig.campaign_heal_between * heal_mult)
 	return 0.0
+
+## Enfermeria (feat/edificios-militares): multiplica la cura de arriba. La pone
+## CombatManager antes de cada mark_cleared() segun haya o no Enfermeria en
+## marcha; no se guarda (se vuelve a decidir en cada combate).
+var heal_mult: float = 1.0
+## Caidos que la Enfermeria devolvio a casa, por tipo: ya no estan en `party`
+## (no cuentan como bajas ni como supervivientes) y vuelven al cuartel.
+var evacuated: Dictionary = {}
+
+## Saca de la columna a los caidos `uids` y los apunta como evacuados (vuelven
+## a casa). Solo caidos de esta columna; devuelve {unit_id: n} de los sacados.
+func evacuate(uids: Array) -> Dictionary:
+	var out: Dictionary = {}
+	var keep: Array = []
+	for unit in party:
+		if not unit.is_alive() and uids.has(unit.uid):
+			out[unit.unit_id] = int(out.get(unit.unit_id, 0)) + 1
+			evacuated[unit.unit_id] = int(evacuated.get(unit.unit_id, 0)) + 1
+		else:
+			keep.append(unit)
+	party = keep
+	return out
 
 ## Es una mision de una de las tres campanas (feat/tres-campanas).
 func is_campaign() -> bool:
@@ -363,6 +385,7 @@ func result_summary() -> Dictionary:
 		"survivors": _tally(living_party()),
 		"nodes_cleared": nodes_cleared(),
 		"boss_defeated": boss_defeated(),
+		"evacuated": evacuated.duplicate(),
 	}
 
 func _tally(units: Array) -> Dictionary:
@@ -399,6 +422,8 @@ func to_dict() -> Dictionary:
 		"kind": kind,
 		"offer": offer.duplicate(true),
 		"loot": loot.duplicate(true),
+		# Enfermeria: los caidos que ya volvieron a casa (solo para el parte).
+		"evacuated": evacuated.duplicate(),
 	}
 
 ## Rebuilds a run from a save. `default_era` covers saves written before `era`
@@ -433,6 +458,11 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> Expedition:
 	var saved_loot: Variant = data.get("loot", {})
 	if saved_loot is Dictionary:
 		Generator.add_loot(run.loot, saved_loot)
+	# Sin la clave (guardado anterior a la Enfermeria): nadie evacuado.
+	var saved_evac: Variant = data.get("evacuated", {})
+	if saved_evac is Dictionary:
+		for unit_id in saved_evac:
+			run.evacuated[String(unit_id)] = int(saved_evac[unit_id])
 
 	run.map = run._build_map()
 	for index in data.get("cleared", []):

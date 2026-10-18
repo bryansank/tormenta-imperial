@@ -3673,3 +3673,132 @@ func _register_fishing_dock() -> bool:
 		"props": ["barrel", "crate", "sacks", "barrel"], "count": [3, 5]}
 	building_active_fx[id] = "smoke"
 	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Edificios militares (feat/edificios-militares, doc 21 §6.3 n.º 8-10) ──
+# ══════════════════════════════════════════════════════════════════════
+# Enfermeria (infirmary), Herreria militar (smithy) y Campo de tiro
+# (firing_range). Los tres de era 2, 2x2, unicos. No producen: cambian el
+# combate. Detalle y cifras: docs/03-buildings.md ("Edificios militares de la
+# 1.2") y docs/15-combat.md §14.
+#
+# Como el Muelle de pesca, sus filas en las tablas comunes (topes,
+# requisitos, obra, parcela, actividad, XP del rango) no estan escritas dentro
+# de cada tabla: las anade _register_military_buildings() al crear GameConfig,
+# para no chocar con otras ramas que tocan las mismas tablas. El nivel del
+# Nucleo y los planos (core_level_unlocks, blueprint_required) los pone la
+# rama feat/nucleo-y-planos, no esta.
+
+const INFIRMARY_ID := "infirmary"
+const SMITHY_ID := "smithy"
+const FIRING_RANGE_ID := "firing_range"
+const MILITARY_SUPPORT_BUILDINGS := ["infirmary", "smithy", "firing_range"]
+
+## Enfermeria: tras un combate GANADO (no el asedio final), de cada
+## `infirmary_return_every` caidos del ejercito vuelve uno a casa (por abajo:
+## 1-2 caidos, ninguno; 3-5, uno; 6, dos). Vuelven primero los que mas Poder
+## tienen. No hace falta mas de una: es unica.
+var infirmary_return_every := 3
+## Moral del pueblo por cada baja con la Enfermeria en marcha (sin ella,
+## combat_morale_per_casualty = 3).
+var infirmary_morale_per_casualty := 1.0
+## La cura entre combates de una mision se multiplica por esto (0,30 -> 0,39).
+var infirmary_heal_mult := 1.3
+
+## Campo de tiro: el tiempo de entrenar cualquier unidad se multiplica por esto.
+var firing_range_train_mult := 0.8
+## SIMULACRO: tres lecciones en el tablero contra munecos (el enemigo con
+## `enemy_scale`), sin bajas reales, sin moral, sin botin. La primera victoria
+## de cada leccion paga `reward` y `rank_xp_sources["practice_lesson"]` de XP.
+## La tropa es de practica (no sale del ejercito) y lleva la doctrina activa.
+var firing_range_lessons := [
+	{"id": "move_attack", "name": "PRACTICE_MOVE_ATTACK", "desc": "PRACTICE_MOVE_ATTACK_DESC",
+		"player": {"infantry": 2}, "enemy": {"infantry": 2}, "enemy_scale": 0.5,
+		"reward": {"gold": 40}},
+	{"id": "artillery", "name": "PRACTICE_ARTILLERY", "desc": "PRACTICE_ARTILLERY_DESC",
+		"player": {"artillery": 1, "infantry": 1}, "enemy": {"infantry": 2}, "enemy_scale": 0.5,
+		"reward": {"gold": 50}},
+	{"id": "advantages", "name": "PRACTICE_ADVANTAGES", "desc": "PRACTICE_ADVANTAGES_DESC",
+		"player": {"infantry": 1, "artillery": 1, "vehicle": 1},
+		"enemy": {"infantry": 1, "artillery": 1, "vehicle": 1}, "enemy_scale": 0.6,
+		"reward": {"gold": 60}},
+]
+
+## Herreria militar: DOCTRINAS. Una sola activa a la vez, para todo el
+## ejercito (decision simple: no una por medio). Cada una toca un tipo de
+## unidad (`units`) o un medio entero (`domain`) y siempre cambia algo por algo:
+## mismo presupuesto, distinto estilo. Solo el bando del jugador; la IA y
+## AutoResolver no cambian. Las aplica CombatUnit.create() (Doctrines.gd), asi
+## que valen en misiones, Diezmo, asedio y simulacro.
+##
+## `mods`: "atk", "def", "move", "range", "initiative" (sumas), "atk_pct" y
+## "hp_pct" (fraccion: -0.1 = -10 %), "defend_mult" (defender multiplica la
+## defensa por esto en vez de por 2).
+var combat_doctrines := {
+	"assault": {"name": "DOC_ASSAULT", "desc": "DOC_ASSAULT_DESC",
+		"units": ["infantry"], "mods": {"move": 1, "def": -1}},
+	"trench": {"name": "DOC_TRENCH", "desc": "DOC_TRENCH_DESC",
+		"units": ["infantry"], "mods": {"move": -1, "defend_mult": 3}},
+	"heavy_artillery": {"name": "DOC_HEAVY_ARTILLERY", "desc": "DOC_HEAVY_ARTILLERY_DESC",
+		"units": ["artillery"], "mods": {"atk": 2, "initiative": -1}},
+	"tuned_engines": {"name": "DOC_TUNED_ENGINES", "desc": "DOC_TUNED_ENGINES_DESC",
+		"units": ["vehicle"], "mods": {"move": 1, "initiative": 1, "hp_pct": -0.1}},
+	"seamanship": {"name": "DOC_SEAMANSHIP", "desc": "DOC_SEAMANSHIP_DESC",
+		"domain": "sea", "mods": {"def": 1, "initiative": 1, "atk_pct": -0.1}},
+	"air_aces": {"name": "DOC_AIR_ACES", "desc": "DOC_AIR_ACES_DESC",
+		"domain": "air", "mods": {"atk": 2, "hp_pct": -0.15}},
+}
+## Orden en la ficha de la Herreria.
+var combat_doctrine_order := ["assault", "trench", "heavy_artillery", "tuned_engines", "seamanship", "air_aces"]
+## Adoptar o cambiar de doctrina: se paga al empezar y tarda esto (segundos de
+## juego, pasan por get_duration). Mientras tanto sigue la anterior.
+var smithy_doctrine_cost := {"gold": 150}
+var smithy_doctrine_seconds := 90.0
+## La doctrina que llevan AHORA las unidades del jugador al nacer (runtime: la
+## pone ArmyManager._sync_doctrine; "" = ninguna). No se guarda aqui: el save
+## guarda la elegida, en "army".
+var combat_active_doctrine := ""
+
+## Se evalua al crear GameConfig, despues de todas las tablas de arriba.
+var _military_buildings_registered := _register_military_buildings()
+
+func _register_military_buildings() -> bool:
+	for id in MILITARY_SUPPORT_BUILDINGS:
+		building_limits[id] = 1
+		building_limits_by_era[id] = [1, 1, 1]
+	# Los tres viven del Cuartel; la Enfermeria y la Herreria piden ademas
+	# acero (la Fundicion). El Campo de tiro tambien lo paga en acero.
+	building_prerequisites[INFIRMARY_ID] = ["barracks", "foundry"]
+	building_prerequisites[SMITHY_ID] = ["barracks", "foundry"]
+	building_prerequisites[FIRING_RANGE_ID] = ["barracks", "foundry"]
+	# Obra: lona y camillas; yunque y chispas; sacos terreros y dianas.
+	construction_style[INFIRMARY_ID] = {"piles": ["planks", "sacks", "crates"], "fence": "canvas",
+		"tarp": Color(0.88, 0.86, 0.80), "frame": "gable", "frame_mat": "wood", "site_fx": "dust",
+		"flag": Color(0.86, 0.18, 0.14)}
+	construction_style[SMITHY_ID] = {"piles": ["bricks", "beams", "rivets"], "fence": "dark_planks",
+		"tarp": Color(0.30, 0.26, 0.24), "frame": "hall", "frame_mat": "steel", "site_fx": "sparks",
+		"flag": Color(0.95, 0.74, 0.12)}
+	construction_style[FIRING_RANGE_ID] = {"piles": ["sandbags", "planks", "sacks"], "fence": "planks",
+		"tarp": Color(0.42, 0.46, 0.28), "frame": "low", "frame_mat": "wood", "site_fx": "dust",
+		"flag": Color(0.95, 0.74, 0.12)}
+	building_lot_style[INFIRMARY_ID] = {"ground": "slabs", "trim": "curb", "yard": 0.3, "accent": "military",
+		"props": ["crate", "lamp", "barrel", "sacks"], "count": [3, 5]}
+	building_lot_style[SMITHY_ID] = {"ground": "plate", "trim": "sandbags", "yard": 0.3, "accent": "military",
+		"props": ["crate", "ammo", "barrel", "lamp"], "count": [3, 5]}
+	building_lot_style[FIRING_RANGE_ID] = {"ground": "dirt", "trim": "sandbags", "yard": 0.25, "accent": "military",
+		"props": ["ammo", "sacks", "crate"], "count": [2, 4]}
+	# Actividad: la fragua humea; los otros dos, quietos (sin coste de efecto).
+	building_active_fx[SMITHY_ID] = "smoke"
+	# XP del rango por la primera victoria de cada leccion del simulacro.
+	if not rank_xp_sources.has("practice_lesson"):
+		rank_xp_sources["practice_lesson"] = 15
+	return true
+
+func get_doctrine_def(doctrine_id: String) -> Dictionary:
+	return combat_doctrines.get(doctrine_id, {})
+
+func get_practice_lesson(lesson_id: String) -> Dictionary:
+	for lesson in firing_range_lessons:
+		if String(lesson.get("id", "")) == lesson_id:
+			return lesson
+	return {}

@@ -33,6 +33,21 @@ var _regiment: Dictionary = RegimentLook.defaults()
 var _look_cache: Dictionary = {}
 var _look_key := ""
 
+# ── Edificios militares (feat/edificios-militares) ──
+const Military := preload("res://scripts/buildings/MilitaryBuildings.gd")
+const Doctrines := preload("res://scripts/combat/Doctrines.gd")
+## Herreria: la doctrina elegida ("" = ninguna), la que se esta adoptando y lo
+## que le falta. Mientras se adopta sigue la anterior. Viaja en "army" como
+## "doctrine". Lo que lleva la tropa al nacer es effective_doctrine(), que
+## ademas pide una Herreria terminada (GameConfig.combat_active_doctrine).
+var _doctrine := ""
+var _doctrine_pending := ""
+var _doctrine_left := 0.0
+var _doctrine_total := 0.0
+## Campo de tiro: las lecciones del SIMULACRO ya ganadas una vez (pagan solo
+## la primera). Viaja en "army" como "practice_done".
+var _practice_done: Array = []
+
 var _type_map := {
 	"gold": ResourceManager.Type.GOLD,
 	"steel": ResourceManager.Type.STEEL,
@@ -55,7 +70,13 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(_resync_storm_phase)
 	# Las estrellas: combates ganados, como cuenta la XP del rango.
 	EventBus.encounter_ended.connect(_on_encounter_ended)
-	EventBus.defense_auto_resolved.connect(func(victory, _r, _s): _on_encounter_ended(victory, 0))
+	# Una defensa resuelta a ciegas cuenta aunque haya un simulacro abierto.
+	EventBus.defense_auto_resolved.connect(func(victory, _r, _s): if victory: _record_regiment_win())
+	# La doctrina vale con una Herreria terminada: se recalcula al terminar o
+	# derribar un edificio y al cargar (no por fotograma).
+	EventBus.construction_completed.connect(func(_n): _sync_doctrine())
+	EventBus.building_demolished.connect(func(_n, _c): _sync_doctrine.call_deferred())
+	EventBus.game_load_completed.connect(_sync_doctrine)
 
 func _resync_storm_phase() -> void:
 	_ash_overhead = StormManager.is_ashfall() and not StormManager.is_trial_running()
@@ -65,6 +86,8 @@ func _process(delta: float) -> void:
 	delta = GameConfig.sim_delta(delta)
 	_advance_training(delta)
 	_advance_upkeep(delta)
+	if _doctrine_pending != "":
+		_advance_doctrine(delta)
 
 # ── Regimiento (cosmetico) ──
 
@@ -109,6 +132,9 @@ func set_regiment(reg_name: String, color_id: String, emblem: String, paint: Str
 	return true
 
 func _on_encounter_ended(victory: bool, _turns: int) -> void:
+	# El simulacro del Campo de tiro no es una victoria del regimiento.
+	if CombatManager.is_practice():
+		return
 	if victory:
 		_record_regiment_win()
 
@@ -248,6 +274,8 @@ func train(unit_id: String) -> bool:
 	var def := GameConfig.get_unit_def(unit_id)
 	ResourceManager.spend_cost(_convert_cost(def.get("cost", {})))
 	var dur := GameConfig.get_duration(float(def.get("train_time", 20.0)))
+	# Campo de tiro en marcha: -20 % (GameConfig.firing_range_train_mult).
+	dur *= Military.train_time_mult()
 	_training.append({"id": unit_id, "remaining": dur, "duration": dur})
 	EventBus.unit_training_started.emit(unit_id, dur)
 	EventBus.army_changed.emit()
@@ -513,6 +541,10 @@ func get_save_data() -> Dictionary:
 		"upkeep_accum": _upkeep_accum,
 		"unpaid_ticks": _unpaid_ticks,
 		"regiment": _regiment.duplicate(),
+		# Edificios militares (feat/edificios-militares).
+		"doctrine": {"active": _doctrine, "pending": _doctrine_pending,
+			"left": _doctrine_left, "total": _doctrine_total},
+		"practice_done": _practice_done.duplicate(),
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -535,6 +567,27 @@ func load_save_data(data: Dictionary) -> void:
 	# (el rango carga despues): lo hace get_regiment_look() al pintar.
 	_regiment = RegimentLook.normalized(data.get("regiment", {}))
 	_invalidate_look()
+	# Herreria y Campo de tiro: sin las claves (guardado anterior), nada. Se
+	# sustituye, no se suma: cargar dos veces da lo mismo. Una doctrina que ya
+	# no existe se olvida.
+	var doc: Variant = data.get("doctrine", {})
+	var doc_d: Dictionary = doc if doc is Dictionary else {}
+	_doctrine = String(doc_d.get("active", ""))
+	if not Doctrines.exists(_doctrine):
+		_doctrine = ""
+	_doctrine_pending = String(doc_d.get("pending", ""))
+	if not Doctrines.exists(_doctrine_pending):
+		_doctrine_pending = ""
+	_doctrine_left = 0.0
+	_doctrine_total = 0.0
+	if _doctrine_pending != "":
+		_doctrine_left = maxf(0.0, float(doc_d.get("left", 0.0)))
+		_doctrine_total = maxf(_doctrine_left, float(doc_d.get("total", _doctrine_left)))
+	_practice_done.clear()
+	for lesson_id in data.get("practice_done", []):
+		if not _practice_done.has(String(lesson_id)):
+			_practice_done.append(String(lesson_id))
+	_sync_doctrine()
 	EventBus.army_changed.emit()
 	EventBus.regiment_changed.emit()
 
@@ -545,6 +598,125 @@ func reset() -> void:
 	_unpaid_ticks = 0
 	_regiment = RegimentLook.defaults()
 	_invalidate_look()
+	# Edificios militares: se tira, no se devuelve nada (una doctrina a medias
+	# no reembolsa su oro en la partida nueva).
+	_doctrine = ""
+	_doctrine_pending = ""
+	_doctrine_left = 0.0
+	_doctrine_total = 0.0
+	_practice_done.clear()
+	GameConfig.combat_active_doctrine = ""
 	# Partida nueva: el cielo tambien empieza limpio.
 	_ash_overhead = false
 	EventBus.army_changed.emit()
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Herreria militar: doctrinas (feat/edificios-militares) ──
+# ══════════════════════════════════════════════════════════════════════
+
+## La doctrina elegida ("" = ninguna), aunque ahora no valga (sin Herreria).
+func get_doctrine() -> String:
+	return _doctrine
+
+## La que se esta adoptando ("" = ninguna) y lo que le falta, en segundos.
+func get_doctrine_pending() -> String:
+	return _doctrine_pending
+
+func get_doctrine_left() -> float:
+	return _doctrine_left
+
+## 0..1 de la adopcion en curso (0 si no hay ninguna).
+func get_doctrine_progress() -> float:
+	if _doctrine_pending == "" or _doctrine_total <= 0.0:
+		return 0.0
+	return clampf(1.0 - _doctrine_left / _doctrine_total, 0.0, 1.0)
+
+## La que lleva la tropa al nacer: la elegida, si hay una Herreria terminada
+## (en Sandbox, siempre).
+func effective_doctrine() -> String:
+	if _doctrine == "":
+		return ""
+	if GameMode.all_unlocked() or Military.smithy_built():
+		return _doctrine
+	return ""
+
+## El coste de adoptar o cambiar de doctrina, en Type -> cantidad.
+func doctrine_cost() -> Dictionary:
+	return _convert_cost(GameConfig.smithy_doctrine_cost)
+
+## {ok, reason} para adoptar `doctrine_id`. reason es una clave de Tr.
+func can_choose_doctrine(doctrine_id: String) -> Dictionary:
+	if not Doctrines.exists(doctrine_id):
+		return {"ok": false, "reason": "DOC_WHY_UNKNOWN"}
+	if not Military.smithy_working() and not GameMode.all_unlocked():
+		return {"ok": false, "reason": "DOC_WHY_NO_SMITHY"}
+	if doctrine_id == _doctrine and _doctrine_pending == "":
+		return {"ok": false, "reason": "DOC_WHY_ACTIVE"}
+	if _doctrine_pending != "":
+		return {"ok": false, "reason": "DOC_WHY_SWITCHING"}
+	if not ResourceManager.can_afford(doctrine_cost()):
+		return {"ok": false, "reason": "LBL_NOT_ENOUGH_RESOURCES"}
+	return {"ok": true, "reason": ""}
+
+## Paga y empieza a adoptar `doctrine_id`. Mientras dura, sigue la anterior.
+func choose_doctrine(doctrine_id: String) -> bool:
+	if not bool(can_choose_doctrine(doctrine_id)["ok"]):
+		return false
+	ResourceManager.spend_cost(doctrine_cost())
+	_doctrine_pending = doctrine_id
+	_doctrine_total = GameConfig.get_duration(GameConfig.smithy_doctrine_seconds)
+	_doctrine_left = _doctrine_total
+	EventBus.doctrine_switch_started.emit(doctrine_id, _doctrine_total)
+	GameManager.request_save()
+	return true
+
+func _advance_doctrine(delta: float) -> void:
+	_doctrine_left -= delta
+	if _doctrine_left > 0.0:
+		return
+	_doctrine = _doctrine_pending
+	_doctrine_pending = ""
+	_doctrine_left = 0.0
+	_doctrine_total = 0.0
+	_sync_doctrine()
+	EventBus.doctrine_changed.emit(_doctrine)
+	GameManager.request_save()
+
+## Publica la doctrina que vale ahora en GameConfig.combat_active_doctrine,
+## que es lo que lee CombatUnit.create(). Barato: una pasada por los edificios.
+func _sync_doctrine() -> void:
+	GameConfig.combat_active_doctrine = effective_doctrine()
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Campo de tiro: el simulacro (feat/edificios-militares) ──
+# ══════════════════════════════════════════════════════════════════════
+
+func is_practice_done(lesson_id: String) -> bool:
+	return _practice_done.has(lesson_id)
+
+func practice_done_count() -> int:
+	return _practice_done.size()
+
+## Lo que paga ganar `lesson_id` ahora: su premio la primera vez, {} despues.
+func practice_reward(lesson_id: String) -> Dictionary:
+	if is_practice_done(lesson_id):
+		return {}
+	return (GameConfig.get_practice_lesson(lesson_id).get("reward", {}) as Dictionary).duplicate()
+
+## Lo llama CombatManager al cerrar un simulacro. Ganado por primera vez: paga
+## el premio (por nombre de recurso) y la XP del rango, y lo apunta. Devuelve
+## lo pagado ({} si nada).
+func complete_practice(lesson_id: String, victory: bool) -> Dictionary:
+	if not victory or lesson_id == "" or GameConfig.get_practice_lesson(lesson_id).is_empty():
+		return {}
+	var first := not is_practice_done(lesson_id)
+	var reward: Dictionary = practice_reward(lesson_id)
+	if first:
+		_practice_done.append(lesson_id)
+		var cost := _convert_cost(reward)
+		for type in cost:
+			ResourceManager.add(type, int(cost[type]))
+		RankManager.add_xp_from("practice_lesson")
+		GameManager.request_save()
+	EventBus.practice_lesson_completed.emit(lesson_id, first, reward)
+	return reward
