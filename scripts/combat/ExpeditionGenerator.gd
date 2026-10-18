@@ -719,6 +719,23 @@ static func add_loot(into: Dictionary, gained: Dictionary) -> void:
 
 ## La fuerza del nodo mas duro del mapa (el jefe, o el unico nodo de una
 ## incursion): contra eso se mide la columna en la seleccion de tropa.
+## La fuerza de una columna para la prevision (ronda final de la 1.1): la suma
+## de `power` por la escala AL CUADRADO (sube la vida y el ataque a la vez) y por
+## el numero de cuerpos (ley cuadrada de Lanchester: dos contra tres pierden por
+## numero aunque cada uno valga mas). Con la suma a secas, "56 contra 34" (2
+## canones contra 3 infantes) salia favorable y se perdia siempre.
+static func column_strength(roster: Dictionary, scale: float = 1.0) -> float:
+	return roster_power(roster) * scale * scale * float(roster_size(roster))
+
+static func node_strength(node: Dictionary, era: int) -> float:
+	return column_strength(node.get("enemy_roster", {}), node_scale(node, era))
+
+static func hardest_node_strength(map: Array, era: int) -> float:
+	var best: float = 0.0
+	for node in map:
+		best = maxf(best, node_strength(node, era))
+	return best
+
 static func hardest_node_power(map: Array, era: int) -> float:
 	var best: float = 0.0
 	for node in map:

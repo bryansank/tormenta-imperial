@@ -76,11 +76,25 @@ func test_while_one_campaign_rests_the_panel_prepares_the_next() -> void:
 	assert_str(String(gate.get("id", ""))).is_equal("aerodrome")
 
 ## Con la del Mar lista para salir, el panel la pide a ella (no cambia nada).
+## Columna de 6 en casa: desde la ronda final el panel pide 6 de su medio (o la
+## que ya salga "Favorable") antes de la mision (campaign_suggested_party).
 func test_a_campaign_ready_to_launch_still_comes_first() -> void:
 	_placer.counts = {"barracks": 1, "shipyard": 1}
-	ArmyManager.load_save_data({"units": {"gunboat": 3, "torpedo_boat": 1}})
+	ArmyManager.load_save_data({"units": {"gunboat": 4, "torpedo_boat": 2}})
 	CombatManager.load_campaigns_save_data({"seed": 7,
 		"progress": {"land": GameConfig.campaign_mission_count("land"), "sea": 1, "air": 0}})
 	var gate: Dictionary = Objectives.campaign_gate_step()
 	assert_str(String(gate.get("kind", ""))).is_equal("campaign")
 	assert_str(String(gate.get("id", ""))).is_equal("sea")
+
+## Con 4 barcos que no salen "Favorable", el panel pide reponer hasta 6 antes de
+## la mision (antes pedia 3 y el jugador perdia la primera vez).
+func test_a_small_fleet_is_asked_to_grow_before_the_mission() -> void:
+	_placer.counts = {"barracks": 1, "shipyard": 1, "aerodrome": 1}
+	ArmyManager.load_save_data({"units": {"gunboat": 3, "torpedo_boat": 1}})
+	CombatManager.load_campaigns_save_data({"seed": 7,
+		"progress": {"land": GameConfig.campaign_mission_count("land"), "sea": 1, "air": 0}})
+	if Objectives.campaign_home_favorable("sea"):
+		return
+	var gate: Dictionary = Objectives.campaign_gate_step()
+	assert_str(String(gate.get("kind", ""))).is_equal("train")
