@@ -72,7 +72,7 @@ var _boot := BOOT_FRAMES
 ## horneo; si cambia (calzadas, nivel, giro, ruina...) se pide otra.
 var _inst_tex: Texture2D = null
 var _inst_key := ""
-## La bandera del pais (Nucleo y Cuartel General), o null.
+## La bandera del pais (Nucleo y Cuarteles), o null.
 var _flag: Node2D = null
 
 func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
@@ -111,7 +111,7 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	# La calzada no cambia sola (ni obra, ni vida, ni nivel): sin _process (lo
 	# apaga _ready), se repinta cuando la rejilla cambia a su alrededor o al
 	# seleccionarla.
-	# La bandera del pais sobre el Nucleo, el Cuartel General y los dibujos con
+	# La bandera del pais sobre el Nucleo, los Cuarteles y los dibujos con
 	# mastil (el mastil y el letrero de la colonia: BuildingArt2D.has_flag_mount).
 	if ColonyFlag2D.flies_over(data) or Art.has_flag_mount(data.id):
 		_flag = ColonyFlag2D.new()
@@ -233,8 +233,8 @@ func _process(delta: float) -> void:
 		_sync_flag()
 		queue_redraw()
 
-## La bandera cuelga del mastil del propio dibujo (linterna del Nucleo, esquina
-## del tejado del Cuartel General, lo alto del mastil o del letrero): se
+## La bandera cuelga del mastil del propio dibujo (linterna del Nucleo,
+## mastil corto del tejado del Cuartel, lo alto del mastil o del letrero): se
 ## recoloca solo cuando cambia la firma (giro, nivel), nunca por frame.
 func _sync_flag() -> void:
 	if _flag == null:

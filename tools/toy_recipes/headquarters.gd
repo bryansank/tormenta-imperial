@@ -57,10 +57,6 @@ func build(mk, kit, ctx: Dictionary) -> Dictionary:
 		mk.box(Vector3(bx, 1.3, fz + 0.06), Vector3(0.26, 0.14, 0.02), P.iron())
 		mk.box(Vector3(bx, 0.62, fz + 0.06), Vector3(0.26, 0.08, 0.02), P.iron())
 		mk._tri(Vector3(bx - 0.13, 0.545, fz + 0.04), Vector3(bx + 0.13, 0.545, fz + 0.04), Vector3(bx, 0.42, fz + 0.04), Vector3.BACK, yellow, false)
-	# Mastil alto en la esquina delantera derecha del tejado; la bandera del pais
-	# la cuelga otro (FlagAnchor), aqui solo el palo.
-	var mb := Vector3(1.18, 1.82, fz - 0.25)
-	P.block(mk, mb, Vector3(0.26, 0.14, 0.26), stone.darkened(0.12))
-	mk.cyl(mb + Vector3(0, 0.14, 0), 0.055, 2.1, P.iron(0.15), 6, Vector3.UP, 0.04)
-	mk.ball(mb + Vector3(0, 2.28, 0), 0.08, P.C(S.BRASS, 0.08))
-	return {"fx": mouth, "flag": mb + Vector3(0, 2.18, 0)}
+	# Sin mastil ni bandera del pais (Bryan, 2026-10-18): la bandera va en el
+	# Nucleo y en los Cuarteles. El remate del CG es su torre y el emblema.
+	return {"fx": mouth}

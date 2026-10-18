@@ -442,6 +442,8 @@ Formula (piecewise linear, `PopulationManager.morale_to_multiplier`): `0.5 + m/5
   cambia, el tope de almacenes se queda en 5 para que siga valiendo 3.500 = 3.500, y lo
   que no cabe espera en los edificios (§Production that waits to be collected).
 - Las decoraciones no tienen tope: son el sitio donde gastar lo que sobra (moral).
+- El Cuartel tampoco, desde el 18-10-2026: su freno es la tropa (capacidad decreciente
+  con techo de 43 y 5 entrenando a la vez) y el sueldo en oro (docs/03 "Cuartel sin tope").
 - Para medir con `tools/line_probe.gd`: lo tirado por bolsa llena, el minuto del CG 3 y
   cuántos extractores levanta de verdad el jugador de la sonda en cada era.
 

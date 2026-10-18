@@ -10,7 +10,7 @@ extends RefCounted
 ## juego ni simbolos reales.
 ##
 ## Una sola fuente para todo lo que la ensena: la insignia del HUD, el editor
-## (ColonyIdentityPanel), los partes, el mastil del Nucleo y del Cuartel General
+## (ColonyIdentityPanel), los partes, el mastil del Nucleo y de los Cuarteles
 ## (3D y 2D) y la lista de partidas guardadas, que la pinta desde el indice con
 ## `draw_spec()` sin cargar la partida.
 ##
@@ -61,8 +61,11 @@ const PATTERNS := {
 static var _cache := {}
 static var _polys := {}
 
-## Los edificios con mastil y bandera del pais (3D y 2D).
-const FLAG_BUILDINGS := ["headquarters"]
+## Los edificios con mastil y bandera del pais (3D y 2D), ademas del Nucleo.
+## Desde 2026-10-18 (Bryan) solo los Cuarteles: el Cuartel General ya no la
+## lleva. Con Cuarteles sin tope puede haber muchas: todas comparten malla,
+## material y shader (ColonyFlag3D) y ninguna tiene _process.
+const FLAG_BUILDINGS := ["barracks"]
 
 static func flies_over(data: BuildingData) -> bool:
 	return data != null and (data.is_core or data.id in FLAG_BUILDINGS)

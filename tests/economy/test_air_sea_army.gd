@@ -151,3 +151,20 @@ func test_the_reasons_fit_in_a_line() -> void:
 		for locale in ["es", "en"]:
 			var words: int = String(Tr._STRINGS[locale][key]).split(" ", false).size()
 			assert_int(words).override_failure_message("%s/%s" % [locale, key]).is_less_equal(10)
+
+## Astillero y Aerodromo sin tope (2026-10-18): el mismo freno que el Cuartel.
+## Plazas enteras los primeros, menos despues, techo por tipo y techo global; y
+## huecos de entrenamiento con su tope.
+func test_fleet_buildings_without_a_cap_still_hit_the_army_brake() -> void:
+	var full: int = int(GameConfig.army_full_capacity_buildings["shipyard"])
+	var per: int = int(GameConfig.army_capacity_per_building["shipyard"])
+	var extra: int = int(GameConfig.army_capacity_per_extra_building["shipyard"])
+	assert_int(GameConfig.army_building_capacity("shipyard", full)).is_equal(per * full)
+	assert_int(GameConfig.army_building_capacity("shipyard", full + 1)).is_equal(per * full + extra)
+	assert_int(GameConfig.army_building_capacity("shipyard", 50)).is_equal(int(GameConfig.army_capacity_max_by_building["shipyard"]))
+	var huge := {"barracks": 50, "shipyard": 50, "aerodrome": 50}
+	assert_int(GameConfig.get_army_capacity_for(huge)).is_equal(GameConfig.army_capacity_max_total)
+	assert_int(GameConfig.get_training_slots_for("shipyard", 50)).is_equal(int(GameConfig.army_training_slots_max_by_building["shipyard"]))
+	assert_int(GameConfig.get_training_slots_for("barracks", 50)).is_equal(GameConfig.army_training_slots_max)
+	assert_int(GameConfig.get_building_limit("shipyard")).is_equal(-1)
+	assert_int(GameConfig.get_building_limit("aerodrome")).is_equal(-1)

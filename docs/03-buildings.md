@@ -215,8 +215,9 @@ missions (loot, spare parts, blueprints) only exist with soldiers. In era 1 it t
 (`ArmyManager.is_unlocked`, by `unit_types[*].era`), and the ARMY panel says so on the
 greyed rows ("Necesita acero de la Fundición (era 2)", `LBL_ARMY_LOCKED_ERA_*`).
 One worker (not three) so that sawmill (2) + Barracks (1) + Farm (2) fit in the 5 people
-of the Núcleo without waiting for a House. Limit per era unchanged (3/4/5). The Tower
-now asks for the Foundry explicitly: before, the Barracks implied it.
+of the Núcleo without waiting for a House. **No building cap since 2026-10-18** (see
+"Cuartel sin tope" below; before, 3/4/5 per era). The Tower now asks for the Foundry
+explicitly: before, the Barracks implied it.
 
 **Air and sea (2026-10-17, `feat/aire-mar-reglas`).** The Shipyard trains the
 ships (torpedo boat, gunboat, dreadnought) and the Aerodrome the planes (fighter,
@@ -406,14 +407,40 @@ under construction the label above the building gives the percentage and the tim
 | foundry | 3 | 5 | 6 | ×1,5 / ×2; lo limitan las vetas de hierro |
 | refinery | 2 | 3 | 4 | ×1,5 / ×2; además consume su pozo (3-6 por mapa) |
 | fishing_dock | 3 | 4 | 6 | Muelle de pesca (1.1): lo limitan también los bancos de peces (3-5) |
-| barracks | 3 | 4 | 5 | Sube menos: cada uno es un hueco de entrenamiento y +8 de capacidad (con 5, 43 unidades); el freno es el mantenimiento en oro |
 | warehouse | 5 | 5 | 5 | **No sube.** Bolsa de la era 3 sin técnicas: 1000 + 5×500 = 3500 = CG nivel 3 (1500 + 800 + 500 + 700; los materiales van aparte). Con 7 almacenes serían 4500 (5500 con las técnicas) y el CG 3 dejaría de pedir la bolsa llena. La bolsa ya crece sola por era (600/800/1000) y por nivel de almacén (+250 por nivel) |
 | tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y hasta 4 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
 | market, laboratory, headquarters | 1 | 1 | 1 | Únicos |
+| barracks | — | — | — | **Sin tope** desde 2026-10-18 (antes 3/4/5): el freno está en el ejército, ver abajo |
 | garden, fountain, statue, road y las diez decoraciones baratas (`lamp_post` … `palm_trees`) | — | — | — | Sin tope |
 
 Los huecos del rango van encima: casas +2 en los rangos 10 y 17 (era 3: 24), torre +1 en
 el 16.
+
+**Cuartel sin tope (2026-10-18, decisión de Bryan, rama `fix/bandera-y-topes-militares`).**
+`building_limits["barracks"] = -1` y el Cuartel sale de `building_limits_by_era`: se
+pueden levantar tantos como quepan y se paguen, en todas las eras. Todo lo que lee el
+tope ya entiende -1 (`PlacementRules.check_building_limit`, la tarjeta de CONSTRUIR sin
+contador ni "Al máximo", `BuildingHelpText` —la guía dice "Sin máximo" y la página
+*Topes de edificios* lo nombra junto a las decoraciones—, `Objectives`, el tutorial —un
+repaso con varios Cuarteles ya no lo salta por "limit"— y `rank_limit_bonus`, que no
+tenía huecos de Cuartel). Como cada Cuartel era capacidad (+8) y un hueco de
+entrenamiento, sin freno el ejército crecería sin techo salvo por el sueldo. **El freno
+elegido** (`GameConfig`, valores conservadores: los máximos de antes son el techo):
+
+| Valor | Qué | Por qué |
+|-------|-----|---------|
+| `army_full_capacity_barracks` = 3 | Los 3 primeros Cuarteles dan +8 plazas (`army_capacity_per_barracks`) | Igual que antes en la era 1 (3 + 8×3 = 27) |
+| `army_capacity_per_extra_barracks` = 4 | Del 4.º en adelante, +4 cada uno | Rendimiento decreciente: un Cuartel de más sigue ayudando, la mitad |
+| `army_capacity_max` = 43 | Techo de tropa (se llega con 7 Cuarteles) | 43 era lo máximo con el tope viejo (5 Cuarteles en la era 3) |
+| `army_training_slots_max` = 5 | Entrenando a la vez, como mucho 5 | 5 era lo máximo con el tope viejo |
+
+`GameConfig.get_army_capacity(n)`, `army_capacity_gain(n)` (lo que suma el próximo; la
+guía dice "+8 soldados", "+4" o nada en el techo) y `get_army_training_slots(n)`;
+`ArmyManager.max_slots()` lee este último. Las ayudas del panel EJÉRCITO dicen las
+cifras (`LBL_ARMY_CAPACITY_HINT`, `LBL_ARMY_SLOTS_HINT`). Más Cuarteles siguen sirviendo:
+repartir la defensa, tener repuesto si uno cae en ruinas. El sueldo en oro sigue siendo
+el freno de fondo. Cada Cuartel lleva la bandera del país (ver "FlagAnchor"), así que
+con muchos todas comparten malla, material y shader (`ColonyFlag3D`), sin `_process`.
 
 **CONSTRUIR** lo enseña en cada tarjeta y en el detalle: una casita dibujada y
 "3/6 · era 2: 9" (cuántos hay / tope de esta era · la era que lo sube y a cuánto), en
@@ -622,9 +649,9 @@ verde en lo residencial).
 | Almacen | losas | bordillo | cajas, palets, sacos, barril | **grua** amarilla cuya pluma pasa por encima del tejado con una caja colgando sobre la entrada (NE) |
 | Mercado | losas | bordillo | puestos de fruta, sacos, barril, maceta | toldos grandes con mercancia (en el modelo) |
 | Laboratorio | losas | barandilla | botellas de gas, cajas, farola, maceta | **antena** de celosia con luz azulada (NO) y cupula de cristal en el modelo |
-| Cuartel | tierra batida | sacos terreros | munecos de practica, diana, cajas de municion | **mastil** con la bandera amarilla y negra (NE) |
+| Cuartel | tierra batida | sacos terreros | munecos de practica, diana, cajas de municion | — (desde 2026-10-18: su remate es la bandera del pais en el mastil corto del tejado, del modelo) |
 | Torre | chapa remachada | sacos terreros | municion, sacos, farola, barril | **canon** en su nido de sacos (SE) |
-| Cuartel General | losas | barandilla | banderas, farola, maceta, municion | **emblema de la Regencia** (rueda dentada de laton con el rayo de la Tormenta) sobre el tejado |
+| Cuartel General | losas | barandilla | farola, macetas, municion (sin banderas desde 2026-10-18) | **emblema de la Regencia** (rueda dentada de laton con el rayo de la Tormenta) sobre el tejado |
 | Vivienda | hierba | valla baja | tendedero, macetas, banco, barril | — |
 | Nucleo | losas | bordillo | farolas, macetas, bancos | — (ya es monumental) |
 | Jardin / Fuente / Estatua | hierba / losas / losas | bordillo | banco, farola, maceta | — |
@@ -730,11 +757,21 @@ triangulos por edificio (el horneador los imprime).
   Cuartel General con el emblema de la Regencia en la fachada, la cupula y el manometro del Nucleo, el surtidor de la
   Fuente, la rueda dentada de la Estatua, el molino de la Granja) y un acento
   por familia.
-- **FlagAnchor**: un `Marker3D` donde se cuelga la bandera del pais. En el
-  Cuartel General, en lo alto de su mastil (esquina delantera derecha del
-  tejado); en el Nucleo, en lo alto del mastil de la colonia (`ColonyFlag3D`,
-  que no es del modelo: el horneado lo coloca con la misma cima que mide
-  `BuildingPlacer`, `max(mesh_height, malla) + 2,4`). El modelo no dibuja bandera.
+- **FlagAnchor**: un `Marker3D` donde se cuelga la bandera del pais. **La
+  bandera del pais va solo en el Nucleo y en los Cuarteles** (Bryan,
+  2026-10-18; `ColonyFlag.FLAG_BUILDINGS = ["barracks"]`, ademas del Nucleo y de
+  las decoraciones con mastil). En el Cuartel, en lo alto de un mastil corto
+  sobre la cumbrera (lado contrario a la chimenea, receta
+  `tools/toy_recipes/barracks.gd`); la bandera es mediana
+  (`ColonyFlag3D.BARRACKS_SCALE`, 0,62 de la normal) y cuelga hacia +X, sobre su
+  propio tejado, sin salirse de la huella. El Cuartel General ya no lleva mastil
+  (se veia enorme: escala 1,6 y palo de 2,1 sobre el tejado). En el Nucleo, en
+  lo alto del mastil de la colonia (`ColonyFlag3D`, que no es del modelo: el
+  horneado lo coloca con la misma cima que mide `BuildingPlacer`,
+  `max(mesh_height, malla) + 2,4`). El modelo no dibuja bandera. En obra o en
+  ruinas la bandera no se ve y vuelve al terminar o al reparar. En 2D,
+  `BuildingArt2D.flag_mount("barracks")` (peana en el tejado; palo y bandera
+  los pinta `ColonyFlag2D`).
 - **Madera** (2026-10-12): la casilla WOOD de `ToyPalette` es un marron natural
   (140, 100, 70), no naranja; la siguen las piezas CC0, el atrezo y la obra
   (`ToyTones`).

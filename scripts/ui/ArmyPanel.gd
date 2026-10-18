@@ -120,12 +120,14 @@ func _setup_ui() -> void:
 	# "Tropa 5/11" y "En cola 1/1"; de donde sale cada tope, en el tooltip.
 	_capacity_label = UITheme.make_label("", "body", UITheme.TEXT)
 	_capacity_label.mouse_filter = Control.MOUSE_FILTER_PASS
-	_capacity_label.tooltip_text = Tr.t("LBL_ARMY_CAPACITY_HINT") % [GameConfig.army_base_capacity, GameConfig.army_capacity_per_barracks] \
-		+ "\n" + Tr.t("LBL_ARMY_CAPACITY_FLEET_HINT") % [int(GameConfig.army_capacity_per_building.get("shipyard", 0)),
+	_capacity_label.tooltip_text = Tr.t("LBL_ARMY_CAPACITY_HINT") % [GameConfig.army_base_capacity,
+		GameConfig.army_capacity_per_barracks, GameConfig.army_full_capacity_barracks,
+		GameConfig.army_capacity_per_extra_barracks, GameConfig.army_capacity_max] 		+ "
+" + Tr.t("LBL_ARMY_CAPACITY_FLEET_HINT") % [int(GameConfig.army_capacity_per_building.get("shipyard", 0)),
 			int(GameConfig.army_capacity_per_building.get("aerodrome", 0))]
 	_slots_label = UITheme.make_label("", "body", UITheme.TEXT_DIM)
 	_slots_label.mouse_filter = Control.MOUSE_FILTER_PASS
-	_slots_label.tooltip_text = Tr.t("LBL_ARMY_SLOTS_HINT")
+	_slots_label.tooltip_text = Tr.t("LBL_ARMY_SLOTS_HINT") % GameConfig.army_training_slots_max
 	stats_row.add_child(_capacity_label)
 	stats_row.add_child(_slots_label)
 	vbox.add_child(stats_row)

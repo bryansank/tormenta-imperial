@@ -323,7 +323,9 @@ exists, procedural until then), returned by `DieselpunkBuildingFactory.create()`
 
 **Building caps rise with the era (2026-10-14, Bryan's D1).** `GameConfig.building_limits_by_era`
 holds `[era 1, era 2, era 3]` (≈ ×1.5 / ×2: house 10/15/20, farm 6/9/12, sawmill 5/8/10,
-gold mine 4/6/8, foundry 3/5/6, refinery 2/3/4, barracks 3/4/5); era 1 is the old cap.
+gold mine 4/6/8, foundry 3/5/6, refinery 2/3/4); era 1 is the old cap. **The Barracks
+has no cap since 2026-10-18** (`building_limits["barracks"] = -1`, not in the era
+table); the brake is on the army instead (see Army & Units).
 Warehouse stays 5 (keeps 1000 + 5×500 = 3500 = HQ L3) and tower stays 6 (4 already
 reach the 60 % mitigation cap); Market, Laboratory and HQ stay 1. **Decorations have no
 cap** (any `BuildingData.is_decoration`, no table entry needed). The only reader is
@@ -583,8 +585,12 @@ showier ones come by rank (`rank_rewards`). Picked in the editor
 `cancelled`), opened from ☰ MENÚ → COLONIA (RankPanel) and as the New Game step (NewGameDialog →
 `GameManager.start_new_game(mode, tier, identity)`; `_new_game()` applies it with
 `RankManager.set_colony()` right after `RankManager.reset()`). Flies on the Nucleo and
-the HQ (`ColonyFlag3D`: small plane + vertex-shader wave, off in low quality; hangs
-from the model's `FlagAnchor` marker when it has one; `ColonyFlag2D`), signs the war
+on every Barracks, and on no other building (2026-10-18: not on the HQ any more;
+`ColonyFlag.FLAG_BUILDINGS = ["barracks"]`) (`ColonyFlag3D`: small plane + vertex-shader
+wave, off in low quality; hangs from the model's `FlagAnchor` marker when it has one —
+the Barracks has a short mast on its roof ridge, flag at `BARRACKS_SCALE`; shared
+plane/material/shader/pole meshes, no `_process`; hidden under construction or in
+ruins; `ColonyFlag2D` from `BuildingArt2D.flag_mount()`), signs the war
 reports, the audit defeat, the victory and the board header (`ColonyByline`), and its
 first colour fills our board tokens' round mark. Signal `colony_identity_changed`. The basic
 buildings keep their era unlocks. Locks go through `PlacementRules.check_rank()`; the
@@ -645,14 +651,19 @@ fixed for the run; saves without `tier` load as Colono.
 
 - **ArmyManager** trains each unit at **its** building (`unit_types[...]["building"]`:
   Barracks for land, Shipyard for sea, Aerodrome for air; no key = Barracks).
-  Parallel training slots = one per building, only for that building's units
-  (`max_slots(building)`, `training_in(building)`; one unit per slot, no queue). Cost
-  paid up-front. `has_military_building()` (any of the three) opens the army panel
-  and the skirmishes.
-- Capacity: `3 base + 8 per Barracks + 4 per Shipyard + 4 per Aerodrome` (Shipyard and
-  Aerodrome have no cap since 2026-10-18: price, workers and upkeep are the brake)
-  (`army_capacity_per_building`, `GameConfig.get_army_capacity_for()`). Owned units
-  AND units in training count.
+  Parallel training slots = one per building, only for that building's units, up to
+  a ceiling per kind (`army_training_slots_max` 5 for Barracks,
+  `army_training_slots_max_by_building` 2 for Shipyard / Aerodrome;
+  `GameConfig.get_training_slots_for()`, `max_slots(building)`, `training_in(building)`;
+  one unit per slot, no queue). Cost paid up-front. `has_military_building()` (any of
+  the three) opens the army panel and the skirmishes.
+- Capacity (`GameConfig.get_army_capacity_for(counts)`, the one function): Barracks
+  `3 base + 8` for each of the first `army_full_capacity_barracks` (3), `+4` after,
+  capped at `army_capacity_max` (43) — `get_army_capacity(n)`; Shipyard and Aerodrome
+  the same rule (`army_building_capacity()`: +4 for the first 2, +2 after, capped at
+  +12 each); the whole army at `army_capacity_max_total` (67). Barracks, Shipyard and
+  Aerodrome have no building cap (2026-10-18), so this is the brake, with price,
+  workers and gold upkeep behind it. Owned units AND units in training count.
 - Units gated by era (`ProgressionManager.current_era >= unit.era`).
 
 | Unit | Domain | Building | Era | Cost | Train | Upkeep | Power |
@@ -1091,7 +1102,7 @@ tormenta-imperial/
 |   |   +-- PlacementRules.gd        # Shared placement rules for 3D and 2D: deposit adjacency, footprint, road network and auto-road, upgrade effects
 |   |   +-- PlacementAssist.gd       # Touch placement (tap aims, tap ghost/✓ builds), valid-spot highlight — docs/21 §9
 |   |   +-- BuildingStatusBadge.gd   # Worker pictogram / "Zzz" + why a building is stopped (3D)
-|   |   +-- ColonyFlag3D.gd          # The country flag on the Nucleo and HQ masts (shader wave, FlagAnchor)
+|   |   +-- ColonyFlag3D.gd          # The country flag on the Nucleo and Barracks masts (shader wave, FlagAnchor)
 |   |   +-- BuildingLook.gd          # Rule (both views): construction phase / upgrade / ruin / active / idle; site style per type + seeded layout per instance
 |   |   +-- BuildingLookVisual.gd    # Applies it in 3D (child "LookVisual"); BuildingPlacer syncs it with one map-wide clock
 |   |   +-- BuildingFx.gd            # Generated smoke/dust/glow/sparks sprite sheets (8 frames, 4x2) + TIME shaders, 3D and 2D

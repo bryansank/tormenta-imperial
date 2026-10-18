@@ -1,15 +1,15 @@
 extends Node2D
-## La bandera del pais en la vista 2D, sobre el Nucleo, el Cuartel General y
-## los dibujos con mastil (el mastil y el letrero de la colonia).
+## La bandera del pais en la vista 2D, sobre el Nucleo, los Cuarteles y los
+## dibujos con mastil (el mastil y el letrero de la colonia). Desde 2026-10-18
+## no va en el Cuartel General (Bryan: solo Nucleo y Cuarteles).
 ## Se dibuja con la textura cacheada de ColonyFlag y solo se repinta al oir
 ## colony_identity_changed o cuando su edificio cambia de giro o de nivel
-## (`set_mount`): nada por frame. En el Cuartel General no se ve mientras esta
-## en obra.
+## (`set_mount`): nada por frame. En obra o en ruinas no se ve; vuelve al
+## terminar o al reparar.
 ##
 ## Como en 3D (FlagAnchor de la receta), la bandera cuelga del mastil del
-## PROPIO edificio: en el Nucleo sale de lo alto de la linterna; en el Cuartel
-## General, de la esquina delantera derecha del tejado
-## (BuildingArt2D.flag_mount). El palo lo pinta este nodo (no se hornea con el
+## PROPIO edificio: en el Nucleo sale de lo alto de la linterna; en el Cuartel,
+## de un mastil corto sobre el tejado (BuildingArt2D.flag_mount). El palo lo pinta este nodo (no se hornea con el
 ## edificio: es lo mas alto y se saldria del margen de la cache). Sin montura
 ## (pruebas, `setup` a secas) pone su mastil de reserva en el borde derecho.
 

@@ -4,7 +4,9 @@ extends Node
 ## and contribute to Military Power. Combat (planned) will consume this army.
 ##
 ## Training model: one unit trains per Barracks at a time (parallel slots =
-## barracks count). Army size is capped by GameConfig.get_army_capacity().
+## barracks count, up to GameConfig.army_training_slots_max). Army size is
+## capped by GameConfig.get_army_capacity() (diminishing per barracks, with a
+## ceiling: the Barracks has no building cap since 2026-10-18).
 
 var _units: Dictionary = {}   # unit_id (String) -> count (int)
 var _training: Array = []     # [{id: String, remaining: float, duration: float}]
@@ -181,14 +183,15 @@ func get_capacity() -> int:
 func get_used_capacity() -> int:
 	return get_total_units() + _training.size()
 
-## Parallel training slots = one per military building. Con `building_id`, solo
-## los de ese edificio (cada Astillero entrena barcos, no soldados).
+## Parallel training slots = one per military building, up to the ceiling of
+## its kind (GameConfig.get_training_slots_for). Con `building_id`, solo los de
+## ese edificio (cada Astillero entrena barcos, no soldados).
 func max_slots(building_id: String = "") -> int:
 	if building_id != "":
-		return building_count(building_id)
+		return GameConfig.get_training_slots_for(building_id, building_count(building_id))
 	var total := 0
 	for id in GameConfig.MILITARY_BUILDINGS:
-		total += building_count(String(id))
+		total += GameConfig.get_training_slots_for(String(id), building_count(String(id)))
 	return total
 
 ## Cuantas unidades se entrenan ahora mismo en los edificios `building_id`.

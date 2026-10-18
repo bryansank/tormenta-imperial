@@ -118,7 +118,9 @@ var building_limits := {
 	# (2026-09-28): uno de cada basta.
 	"market": 1,
 	"laboratory": 1,
-	"barracks": 3,
+	# El Cuartel no tiene tope (Bryan, 18-10-2026): el freno es el del ejercito,
+	# no el del mapa (army_capacity_max, army_training_slots_max y el sueldo).
+	"barracks": -1,
 	"tower": 6,
 	"headquarters": 1,
 	"house": 10,
@@ -1617,8 +1619,11 @@ var storm_visual_gust_amount := {"pc": 160, "tablet": 110, "phone": 70}
 ##   chimenea de la Fundicion, la grua del Almacen, la antena del Laboratorio,
 ##   el emblema del Cuartel General... Esa esquina no lleva atrezo. "ROOF":
 ##   encima del tejado, apoyado en la altura medida del modelo.
-## - "keep_clear": esquinas sin atrezo por otra cosa (la del Nucleo y la del
-##   Cuartel General son las del mastil con la bandera del pais, ColonyFlag3D/2D).
+## - "keep_clear": esquinas sin atrezo por otra cosa (la del Nucleo es la del
+##   mastil con la bandera del pais, ColonyFlag3D/2D). El Cuartel lleva la suya
+##   en un mastil corto sobre el tejado (receta, FlagAnchor): ya no tiene el
+##   mastil alto de la parcela con la bandera amarilla (2026-10-18), y el
+##   Cuartel General no lleva bandera ninguna, ni en la parcela.
 ## Sin entrada (la calzada), sin parcela.
 var building_lot_style := {
 	"sawmill": {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "industrial",
@@ -1641,14 +1646,13 @@ var building_lot_style := {
 		"props": ["gas", "crate", "gas", "lamp", "planter"], "count": [4, 6],
 		"signature": "antenna", "corner": "NW"},
 	"barracks": {"ground": "dirt", "trim": "sandbags", "yard": 0.3, "accent": "military",
-		"props": ["dummy", "target", "ammo", "dummy", "sacks"], "count": [4, 6],
-		"signature": "flag", "corner": "NE"},
+		"props": ["dummy", "target", "ammo", "dummy", "sacks"], "count": [4, 6]},
 	"tower": {"ground": "plate", "trim": "sandbags", "yard": 0.3, "accent": "military",
 		"props": ["ammo", "sacks", "ammo", "lamp", "barrel"], "count": [4, 6],
 		"signature": "cannon", "corner": "SE"},
 	"headquarters": {"ground": "slabs", "trim": "rail", "yard": 0.28, "accent": "military",
-		"props": ["flag", "lamp", "planter", "ammo"], "count": [3, 5],
-		"signature": "emblem", "corner": "ROOF", "keep_clear": ["NE"]},
+		"props": ["lamp", "planter", "ammo", "planter"], "count": [3, 5],
+		"signature": "emblem", "corner": "ROOF"},
 	# La Granja (rama comida): tierra batida, valla baja y sacos de la cosecha. El
 	# patio es mas estrecho que el de los demas: el campo es el edificio.
 	"farm": {"ground": "dirt", "trim": "fence", "yard": 0.25, "accent": "residential",
@@ -1845,8 +1849,10 @@ func get_deposit_max_uses(deposit_id: String) -> int:
 ##                y solo 2 salen al tablero (storm_tower_garrison_max): mas torres
 ##                no darian nada. El rango sigue dando +1 (rango 16).
 ##   unicos 1     Mercado, Laboratorio y Cuartel General (no estan en esta tabla).
-## El Cuartel sube menos (3/4/5): cada uno es un hueco de entrenamiento y +8 de
-## capacidad; con 5 ya caben 43 unidades y el mantenimiento en oro es el freno.
+## El Cuartel no esta: no tiene tope en ninguna era (Bryan, 18-10-2026). Lo que
+## frena al ejercito no es cuantos cuarteles caben sino la capacidad, que crece
+## cada vez menos y tiene techo (`get_army_capacity`), los huecos de
+## entrenamiento (`army_training_slots_max`) y el sueldo en oro.
 ## Un id que no esta aqui usa `building_limits` en todas las eras.
 var building_limits_by_era := {
 	"sawmill": [5, 8, 10],
@@ -1855,7 +1861,6 @@ var building_limits_by_era := {
 	"refinery": [2, 3, 4],
 	"house": [10, 15, 20],
 	"farm": [6, 9, 12],
-	"barracks": [3, 4, 5],
 	"warehouse": [5, 5, 5],
 	"tower": [6, 6, 6],
 	# Edificios utiles de la 1.1 (feat/edificios-utiles-1, doc 21 §6.3). El Faro
@@ -2064,11 +2069,42 @@ const MILITARY_BUILDING_DOMAIN := {"barracks": "land", "shipyard": "sea", "aerod
 
 ## Army capacity: you may hold a few units even with no barracks; each barracks
 ## raises the ceiling. Bigger base = larger, stronger army.
+##
+## El Cuartel no tiene tope de edificios (Bryan, 18-10-2026), asi que el freno
+## esta aqui, con los valores de antes como techo (con el tope 3/4/5 lo maximo
+## eran 5 cuarteles: 3 + 8x5 = 43 plazas y 5 a la vez):
+##   - los `army_full_capacity_barracks` primeros cuarteles dan +8 plazas cada
+##     uno; los siguientes, +4 (`army_capacity_per_extra_barracks`);
+##   - la tropa no pasa de `army_capacity_max` (43: se llega con 7 cuarteles);
+##   - no se entrenan mas de `army_training_slots_max` (5) unidades a la vez.
+## Un cuartel de mas sigue sirviendo (otro sitio que la Tormenta puede golpear,
+## mas defensas repartidas, un repuesto si uno cae en ruinas), pero no infla el
+## ejercito sin freno. Y el sueldo en oro de cada unidad sigue siendo el freno
+## de fondo.
 var army_base_capacity := 3
 var army_capacity_per_barracks := 8
-## Lo que suma a la capacidad cada Astillero y cada Aerodromo (aire y mar,
-## 2026-10-17). Menos que un Cuartel: son flotas pequenas y caras de mantener.
+var army_full_capacity_barracks := 3
+var army_capacity_per_extra_barracks := 4
+var army_capacity_max := 43
+var army_training_slots_max := 5
+## Aire y mar (2026-10-17; sin tope de edificios desde 2026-10-18, integracion
+## con fix/bandera-y-topes-militares). El MISMO criterio que el Cuartel: los
+## `army_full_capacity_buildings` primeros dan sus plazas enteras
+## (`army_capacity_per_building`), los siguientes `army_capacity_per_extra_building`,
+## y lo de cada edificio no pasa de `army_capacity_max_by_building`. El Cuartel
+## lee sus cifras de las variables de arriba (army_*_barracks, army_capacity_max
+## menos la base), para que quien lo afine no toque dos sitios. Con los topes de
+## antes (1/1/2) lo maximo eran 2 de cada: +8 por medio; ahora el techo es +12
+## (4 de cada), y el ejercito entero no pasa de `army_capacity_max_total`
+## (43 + 12 + 12 = 67).
 var army_capacity_per_building := {"barracks": 8, "shipyard": 4, "aerodrome": 4}
+var army_full_capacity_buildings := {"shipyard": 2, "aerodrome": 2}
+var army_capacity_per_extra_building := {"shipyard": 2, "aerodrome": 2}
+var army_capacity_max_by_building := {"shipyard": 12, "aerodrome": 12}
+var army_capacity_max_total := 67
+## Huecos de entrenamiento a la vez por tipo de edificio (uno por edificio hasta
+## esto). El Cuartel, `army_training_slots_max`.
+var army_training_slots_max_by_building := {"shipyard": 2, "aerodrome": 2}
 ## Seconds between upkeep deductions (scaled by dev_mode like other durations).
 var army_upkeep_interval := 30.0
 
@@ -2079,18 +2115,49 @@ func get_unit_ids() -> Array:
 	return unit_types.keys()
 
 func get_army_capacity(barracks_count: int) -> int:
-	return army_base_capacity + army_capacity_per_barracks * maxi(0, barracks_count)
+	var n := maxi(0, barracks_count)
+	var full := mini(n, army_full_capacity_barracks)
+	var extra := n - full
+	var cap := army_base_capacity + army_capacity_per_barracks * full 		+ army_capacity_per_extra_barracks * extra
+	return mini(cap, army_capacity_max)
+
+## Cuantas plazas suma el proximo cuartel a partir de `barracks_count` (0 si ya
+## se esta en el techo). Para "+8 soldados" de la guia y el panel.
+func army_capacity_gain(barracks_count: int) -> int:
+	return get_army_capacity(barracks_count + 1) - get_army_capacity(barracks_count)
+
+## Huecos de entrenamiento a la vez: uno por cuartel, hasta el techo.
+func get_army_training_slots(barracks_count: int) -> int:
+	return clampi(barracks_count, 0, army_training_slots_max)
 
 ## La capacidad con todos los edificios militares: `counts` = id -> cuantos hay
-## (barracks / shipyard / aerodrome). El Cuartel sigue leyendo
-## army_capacity_per_barracks, para que quien lo afine no tenga que tocar dos sitios.
+## (barracks / shipyard / aerodrome). LA funcion de la capacidad: el Cuartel por
+## get_army_capacity() (base incluida) y cada flota por army_building_capacity(),
+## con el techo global encima.
 func get_army_capacity_for(counts: Dictionary) -> int:
 	var total: int = get_army_capacity(int(counts.get("barracks", 0)))
 	for building_id in counts:
 		if String(building_id) == "barracks":
 			continue
-		total += int(army_capacity_per_building.get(building_id, 0)) * maxi(0, int(counts[building_id]))
-	return total
+		total += army_building_capacity(String(building_id), int(counts[building_id]))
+	return mini(total, army_capacity_max_total)
+
+## Plazas que dan `count` edificios `building_id` que no son el Cuartel (sin la
+## base): enteras los primeros, menos los siguientes, con su techo.
+func army_building_capacity(building_id: String, count: int) -> int:
+	var n := maxi(0, count)
+	var full := mini(n, int(army_full_capacity_buildings.get(building_id, n)))
+	var cap := int(army_capacity_per_building.get(building_id, 0)) * full 		+ int(army_capacity_per_extra_building.get(building_id, 0)) * (n - full)
+	var top := int(army_capacity_max_by_building.get(building_id, -1))
+	return cap if top < 0 else mini(cap, top)
+
+## Huecos de entrenamiento de `count` edificios `building_id`: uno por edificio
+## hasta el techo de su tipo.
+func get_training_slots_for(building_id: String, count: int) -> int:
+	if building_id == "barracks":
+		return get_army_training_slots(count)
+	var top := int(army_training_slots_max_by_building.get(building_id, -1))
+	return maxi(0, count) if top < 0 else clampi(count, 0, top)
 
 ## Donde se entrena `unit_id`: "barracks" si su fila no dice otra cosa.
 func get_unit_building(unit_id: String) -> String:

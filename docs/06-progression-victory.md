@@ -275,10 +275,16 @@ pure helpers in `scripts/services/ColonyIdentity.gd`, drawing in `scripts/ui/Col
   only path: `clear_save()` also resets before the reload, so the choice cannot wait
   inside RankManager) — and later ☰ MENÚ → COLONIA → BANDERA Y NOMBRE (`open("edit")`, RankPanel applies it with
   `set_colony()`).
-- **Where it shows:** the Nucleo and HQ masts (`ColonyFlag3D`: a 6-segment plane with
-  the cached texture and a vertex-shader wave, no wave in low graphics quality, big on
-  the HQ, hangs from the model's `FlagAnchor` Marker3D when the baked model has one,
-  hidden while the HQ is a construction site; `ColonyFlag2D` draws the cached texture),
+- **Where it shows:** the masts of the Nucleo and of **every Barracks** — and only
+  there among the buildings (Bryan, 2026-10-18; `ColonyFlag.FLAG_BUILDINGS =
+  ["barracks"]`; the HQ no longer has a mast or flag, and the flagpole/colony-sign
+  decorations keep theirs) (`ColonyFlag3D`: a 6-segment plane with the cached texture
+  and a vertex-shader wave, no wave in low graphics quality; medium size on the
+  Barracks (`BARRACKS_SCALE` 0.62), hanging from the short roof mast's `FlagAnchor`
+  in the baked model; hidden while under construction or ruined and back when finished
+  or repaired; Barracks have no building cap, so every flag shares the plane, material,
+  shader and pole/knob meshes and none has a `_process`; `ColonyFlag2D` draws the
+  cached texture from `BuildingArt2D.flag_mount()`),
   the HUD badge (flag + name; the rank title moved to the tooltip and the card), and
   `ColonyByline` (small flag + name above the title, so sentences do not grow) on
   `WarReportScreen`, `AuditDefeatScreen`, `VictoryScreen` and the `BattleScreen` header.
