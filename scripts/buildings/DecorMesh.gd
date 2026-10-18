@@ -30,8 +30,12 @@ const TRI_BUDGET := 600
 ## id -> Mesh (horneada o procedural), una por tipo para todo el mapa.
 static var _cache := {}
 
+## Las dieciocho restantes del catalogo (feat/decoraciones-y-trafico): misma
+## malla compartida, mismo lote; su version procedural vive en DecorMesh2.
+const More := preload("res://scripts/buildings/DecorMesh2.gd")
+
 static func handles(id: String) -> bool:
-	return id in IDS
+	return id in IDS or More.handles(id)
 
 ## La malla del tipo `id` (cacheada), o null si no es una de estas.
 static func mesh_for(id: String) -> Mesh:
@@ -134,6 +138,7 @@ static func build(mk, id: String) -> void:
 		"bonfire": _bonfire(mk)
 		"flagpole": _flagpole(mk)
 		"palm_trees": _palm_trees(mk)
+		_: More.build(mk, id)
 
 # ── Colores ───────────────────────────────────────────────────────────
 

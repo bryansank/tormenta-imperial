@@ -599,7 +599,7 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	vbox.add_child(name_label)
 
 	if rank_locked:
-		vbox.add_child(make_rank_lock_row(RankManager.building_rank(data.id)))
+		vbox.add_child(make_rank_lock_row(RankManager.building_rank(data.id), Rules.deed_lock_text(data.id)))
 
 	# El coste en la propia tarjeta: se ve sin elegir. Icono y cifra por recurso,
 	# y en rojo solo lo que falta (antes la linea entera en rojo, con nombres).
@@ -663,7 +663,8 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 
 ## Candado dibujado + "Rango N". El candado se pinta (no es un emoji): la
 ## tipografia del juego no lo tiene y el respaldo del sistema no esta en todos.
-static func make_rank_lock_row(rank: int) -> HBoxContainer:
+## `text`: lo que se lee en vez de "Rango N" (una hazana: "Rechaza 1 Impuesto").
+static func make_rank_lock_row(rank: int, text: String = "") -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "RankLock"
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -674,7 +675,7 @@ static func make_rank_lock_row(rank: int) -> HBoxContainer:
 	lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lock.draw.connect(func(): draw_lock(lock, Rect2(Vector2.ZERO, lock.custom_minimum_size), UITheme.WARNING))
 	row.add_child(lock)
-	var label := UITheme.make_label(Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
+	var label := UITheme.make_label(text if text != "" else Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
 	label.name = "RankLockLabel"
 	row.add_child(label)
 	return row

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "pond_bridge"
+display_name = "Estanque con puente"
+description = "Un estanque con nenúfares y un puentecito de madera en arco."
+grid_size = Vector2i(2, 2)
+cost_gold = 110
+cost_steel = 20
+cost_oil = 0
+cost_wood = 50
+build_time = 5.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+workers_required = 0
+morale_bonus = 7
+mesh_height = 1
+mesh_color = Color(0.4, 0.6, 0.75, 1)
+max_health = 70
+is_decoration = true

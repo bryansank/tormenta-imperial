@@ -222,9 +222,10 @@ The source folders carry a `.gdignore` and are not exported; only the baked mesh
 | `kaykit_city_builder_bits/` | [KayKit — City Builder Bits](https://kaylousberg.itch.io/city-builder-bits) (Kay Lousberg) | CC0 1.0 (`licenses/CC0-KAYKIT-CITY-BUILDER-BITS.txt`) |
 | `kaykit_medieval_hexagon/` | [KayKit — Medieval Hexagon Pack](https://kaylousberg.itch.io/kaykit-medieval-hexagon) (Kay Lousberg) | CC0 1.0 (`licenses/CC0-KAYKIT-MEDIEVAL-HEXAGON.txt`) |
 | `kenney_city_kit_industrial/` | [Kenney — City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial) | CC0 1.0 (`licenses/CC0-KENNEY-CITY-KIT-INDUSTRIAL.txt`) |
-| `kenney_fantasy_town_kit/` (`lantern`, `hedge`, `hedge-large`, `tree-high-round`, `windmill`) | [Kenney — Fantasy Town Kit](https://kenney.nl/assets/fantasy-town-kit) | CC0 1.0 (`licenses/CC0-KENNEY-FANTASY-TOWN-KIT.txt`) |
-| `kenney_survival_kit/` (`signpost`, `campfire-stand`, `resource-wood`, `bucket`) | [Kenney — Survival Kit](https://kenney.nl/assets/survival-kit) | CC0 1.0 (`licenses/CC0-KENNEY-SURVIVAL-KIT.txt`) |
-| `kenney_pirate_kit/` (`flag-high`, `palm-straight`, `patch-sand`, `tower-complete-small`, `barrel`, `boat-row-small`) | [Kenney — Pirate Kit](https://kenney.nl/assets/pirate-kit) | CC0 1.0 (`licenses/CC0-KENNEY-PIRATE-KIT.txt`) |
+| `kenney_fantasy_town_kit/` (`lantern`, `hedge`, `hedge-large`, `tree-high-round`, `windmill`, `fountain-square`, `pillar-stone`, `banner-red`, `banner-green`, `roof-point`, `roof-high-point`) | [Kenney — Fantasy Town Kit](https://kenney.nl/assets/fantasy-town-kit) | CC0 1.0 (`licenses/CC0-KENNEY-FANTASY-TOWN-KIT.txt`) |
+| `kenney_survival_kit/` (`signpost`, `campfire-stand`, `resource-wood`, `bucket`, `tent-canvas`, `rock-sand-a`) | [Kenney — Survival Kit](https://kenney.nl/assets/survival-kit) | CC0 1.0 (`licenses/CC0-KENNEY-SURVIVAL-KIT.txt`) |
+| `kenney_pirate_kit/` (`flag-high`, `palm-straight`, `patch-sand`, `tower-complete-small`, `barrel`, `boat-row-small`, `boat-row-large`, `cannon`) | [Kenney — Pirate Kit](https://kenney.nl/assets/pirate-kit) | CC0 1.0 (`licenses/CC0-KENNEY-PIRATE-KIT.txt`) |
+| `kenney_factory_kit/` (`cog-a`, `cog-c`) | [Kenney — Factory Kit](https://kenney.nl/assets/factory-kit) | CC0 1.0 (`licenses/CC0-KENNEY-FACTORY-KIT.txt`) |
 
 ## 6. Original content (not third-party)
 

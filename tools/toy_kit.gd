@@ -21,6 +21,9 @@ const PACKS := {
 	"ft": "res://assets/models/cc0/kenney_fantasy_town_kit/",
 	"sur": "res://assets/models/cc0/kenney_survival_kit/",
 	"pir": "res://assets/models/cc0/kenney_pirate_kit/",
+	# Kenney Factory Kit (feat/decoraciones-y-trafico): engranajes, tuberia y
+	# caja larga de las decoraciones de era 2-3.
+	"fac": "res://assets/models/cc0/kenney_factory_kit/",
 }
 
 ## nombre ("kk:barrel") -> {"v", "n", "slot", "d", "aabb"} (triangulos sueltos).
