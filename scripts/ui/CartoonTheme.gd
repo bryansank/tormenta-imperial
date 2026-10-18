@@ -813,3 +813,398 @@ static func legacy_tokens(base: Dictionary) -> Dictionary:
 	d["BTN_PRESSED"] = c(r, "CARD_ALT").darkened(0.08)
 	d["BTN_DISABLED"] = Color(c(r, "WELL"), 0.7)
 	return d
+
+# ══════════════════════════════════════
+# --- EJÉRCITO (feat/ui2-ejercito)
+# ══════════════════════════════════════
+# Piezas de las pantallas de Ejercito, Misiones, combate y partes de guerra
+# (fase 2, docs/28 §14). Solo se AÑADE aqui: lo de arriba es de la fase 1.
+
+const _ArmyTextKit := preload("res://scripts/ui/TextKit.gd")
+
+## Lienzo de telefono (alto < 450), aunque nadie haya fijado `phone` todavia.
+static func phone_canvas(vp: Vector2) -> bool:
+	return phone or vp.y < 450.0
+
+## Ventana grande con su velo detras, dentro de `parent` (un Control a pantalla
+## completa). Devuelve lo de window() mas "holder" (velo + ventana, lo que se
+## enciende y se apaga), "veil" y "ribbon".
+static func modal_window(parent: Control, title: String, fill: Color, with_close: bool = true) -> Dictionary:
+	var holder := Control.new()
+	holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(holder)
+	var v := veil()
+	holder.add_child(v)
+	var w := window(title, fill, with_close)
+	holder.add_child(w["root"])
+	w["holder"] = holder
+	w["veil"] = v
+	w["ribbon"] = (w["root"] as Control).get_child(1)
+	return w
+
+## Coloca una ventana de modal_window(): en telefono a pantalla completa (6 px
+## de margen); en PC centrada, con `max_size` de tope.
+static func fit_window(w: Dictionary, vp: Vector2, max_size: Vector2) -> void:
+	var root: Control = w["root"]
+	var ph := phone_canvas(vp)
+	var margin := Vector2(6, 2) if ph else Vector2(24, 16)
+	var sz := vp - margin * 2.0
+	if not ph:
+		sz = Vector2(minf(max_size.x, sz.x), minf(max_size.y, sz.y))
+	root.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	root.position = ((vp - sz) * 0.5).floor()
+	root.size = sz
+	var st := window_style()
+	if ph:
+		st.set_content_margin_all(10)
+	(w["panel"] as PanelContainer).add_theme_stylebox_override("panel", st)
+	(w["body"] as VBoxContainer).add_theme_constant_override("separation", 6 if ph else GAP)
+
+## Como fit_window, pero el alto lo pone el contenido (partes, carteles): ancho
+## `width` como mucho, centrada. Se llama otra vez cuando cambia el contenido.
+static func fit_card(w: Dictionary, vp: Vector2, width: float) -> void:
+	var root: Control = w["root"]
+	var panel: PanelContainer = w["panel"]
+	var ph := phone_canvas(vp)
+	var wd := minf(width, vp.x - (12.0 if ph else 32.0))
+	var st := window_style()
+	if ph:
+		st.set_content_margin_all(10)
+	panel.add_theme_stylebox_override("panel", st)
+	root.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	root.size = Vector2(wd, maxf(root.size.y, 10.0))
+	var hh := panel.get_combined_minimum_size().y + panel.offset_top
+	var h := minf(hh, vp.y - (4.0 if ph else 24.0))
+	root.size = Vector2(wd, h)
+	root.position = ((vp - root.size) * 0.5).floor()
+
+## Cambia el titulo y el color de la cinta de una ventana.
+static func set_ribbon(w: Dictionary, title: String, fill: Color) -> void:
+	var ribbon: PanelContainer = w["ribbon"] if w.has("ribbon") else (w["root"] as Control).get_child(1)
+	ribbon.add_theme_stylebox_override("panel", ribbon_style(fill))
+	var l := ribbon.get_child(0) as Label
+	if l == null:
+		return
+	var tc := on_fill(fill)
+	l.text = title
+	style_label(l, "display", tc["color"], tc["outline"])
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+## Color de texto con significado sobre la superficie de `role` ("" = tenue):
+## sobre crema se oscurece para leerse, sobre pizarra se aclara.
+static func tone_color(tone: String, role: String = "window") -> Color:
+	if tone == "":
+		return text(role, true)
+	var key: String = {"positive": "POSITIVE", "warning": "WARNING", "danger": "DANGER", "info": "INFO", "accent": "ACCENT"}.get(tone, "INFO")
+	var col := sem(key)
+	return col.darkened(0.38) if kind(role) == "light" else col.lightened(0.28)
+
+## Una linea con icono: [icono] frase corta. La frase envuelve.
+static func icon_line(glyph: String, text_s: String, tone: String = "", role: String = "window",
+		level: String = "small") -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	if glyph != "":
+		var ic := make_glyph(glyph, 22 if phone else 24)
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(ic)
+	var l := label(text_s, level, tone_color(tone, role))
+	l.name = "Text"
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(l)
+	return row
+
+## Un Button de siempre (su `text` sigue siendo su texto: las pantallas lo
+## cambian y las pruebas lo leen) con la piel de pastilla de pill_button y, si
+## se pide, un icono a la izquierda. Se puede volver a llamar para cambiarla.
+static func style_pill(btn: Button, kind_s: String = "secondary", height: int = BTN, role: String = "window",
+		glyph: String = "", level: String = "button") -> Button:
+	var fill := kind_fill(kind_s, role)
+	var pad := 16 if btn.text != "" else 6
+	_btn_states(btn, fill, int(height * 0.5), pad, role)
+	var tc := on_fill(fill)
+	if kind_s == "secondary":
+		tc = {"color": text(role), "outline": false}
+	var size := fs(level)
+	btn.add_theme_font_override("font", title_font())
+	btn.add_theme_font_size_override("font_size", size)
+	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		btn.add_theme_color_override(st, tc["color"])
+	btn.add_theme_color_override("font_disabled_color", Color(tc["color"], 0.65))
+	btn.add_theme_constant_override("outline_size", maxi(3, roundi(size * 0.25)) if tc["outline"] else 0)
+	btn.add_theme_color_override("font_outline_color", INK)
+	btn.custom_minimum_size.y = height
+	var old := btn.get_node_or_null("PillGlyph")
+	if old != null:
+		btn.remove_child(old)
+		old.queue_free()
+	if glyph != "":
+		var px := roundi(height * 0.52)
+		var ic := make_glyph(glyph, px)
+		ic.name = "PillGlyph"
+		btn.add_child(ic)
+		if btn.text == "":
+			ic.set_anchors_preset(Control.PRESET_CENTER)
+			ic.offset_left = -px * 0.5
+			ic.offset_right = px * 0.5
+			btn.custom_minimum_size.x = maxf(btn.custom_minimum_size.x, height)
+		else:
+			ic.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+			ic.offset_left = pad
+			ic.offset_right = pad + px
+			for st in ["normal", "hover", "pressed", "disabled"]:
+				var sb := btn.get_theme_stylebox(st)
+				if sb != null:
+					sb.content_margin_left = pad + px + 6
+		ic.offset_top = -px * 0.5 - LIP * 0.5
+		ic.offset_bottom = px * 0.5 - LIP * 0.5
+	return btn
+
+## Cambia el texto de un boton de pill_button() (vive en una etiqueta hija).
+static func set_pill_text(btn: Button, text_s: String) -> void:
+	var l := _army_first_label(btn)
+	if l != null:
+		l.text = text_s
+
+static func _army_first_label(n: Node) -> Label:
+	for child in n.get_children():
+		if child is Label:
+			return child
+		var found := _army_first_label(child)
+		if found != null:
+			return found
+	return null
+
+## Disco de unidad: la silueta en blanco sobre el color de su bando, con "×N"
+## en una pastilla abajo a la derecha si `count` >= 0.
+static func unit_disc(unit_id: String, fill: Color, d: int, count: int = -1) -> Control:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", box(fill, INK, 3, int(d * 0.5), 3))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.custom_minimum_size = Vector2(d, d)
+	var cc := CenterContainer.new()
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cc.add_child(make_glyph("unit:" + unit_id, int(d * 0.66)))
+	p.add_child(cc)
+	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if count < 0:
+		return p
+	var holder := Control.new()
+	holder.custom_minimum_size = Vector2(d + 12, d + 4)
+	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	holder.mouse_filter = Control.MOUSE_FILTER_PASS
+	holder.add_child(p)
+	p.size = Vector2(d, d)
+	var n := PanelContainer.new()
+	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ns := box(WHITE, INK, 2, 10, 0)
+	ns.content_margin_left = 4
+	ns.content_margin_right = 4
+	n.add_theme_stylebox_override("panel", ns)
+	var nl := label("×%d" % count, "small", INK)
+	nl.name = "Count"
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	n.add_child(nl)
+	holder.add_child(n)
+	n.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	n.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	n.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	return holder
+
+## Una fila de discos por unidad de `roster` ({unit_id: n}), en el orden de
+## GameConfig. `fill`: el color del bando.
+static func roster_discs(roster: Dictionary, fill: Color, d: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	for unit_id in GameConfig.get_unit_ids():
+		var n: int = int(roster.get(unit_id, 0))
+		if n <= 0:
+			continue
+		var disc := unit_disc(String(unit_id), fill, d, n)
+		disc.tooltip_text = "%d %s" % [n, Tr.t(String(GameConfig.get_unit_def(String(unit_id)).get("name", unit_id)))]
+		row.add_child(disc)
+	return row
+
+## Fila de costes: [icono] cifra en huecos redondos, en rojo lo que falta. Cada
+## cifra es una etiqueta "Amount_<recurso>" (como TextKit.cost_row) y la fila
+## guarda "amounts" en meta. Los materiales sin icono llevan su nombre detras.
+static func cost_row(amounts: Dictionary, short: Dictionary = {}, prefix: String = "", role: String = "window") -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "CostRow"
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.set_meta("amounts", amounts.duplicate())
+	for res_id in amounts:
+		var id := String(res_id)
+		var missing: int = int(short.get(id, 0))
+		var chip := PanelContainer.new()
+		chip.name = "Cost_" + id
+		var s := well_style(role, 12, 2)
+		s.content_margin_left = 4
+		s.content_margin_right = 8
+		if missing > 0:
+			s.bg_color = Color(sem("DANGER"), 0.22)
+			s.border_color = sem("DANGER")
+			s.set_border_width_all(2)
+		chip.add_theme_stylebox_override("panel", s)
+		chip.mouse_filter = Control.MOUSE_FILTER_PASS
+		chip.tooltip_text = Tr.res_cap(id) if missing <= 0 else "%s · %s" % [Tr.res_cap(id), Tr.t("OBJ_MISSING") % ("%d" % missing)]
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 3)
+		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var tex := _ArmyTextKit.res_icon(id)
+		var txt := "%s%d" % [prefix, int(amounts[id])]
+		if tex != null:
+			var r := TextureRect.new()
+			r.texture = tex
+			r.custom_minimum_size = Vector2(22, 22)
+			r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			h.add_child(r)
+		else:
+			txt += " " + Tr.res_name(id)
+		var col := text(role)
+		if missing > 0:
+			col = tone_color("danger", role)
+		var l := label(txt, "small" if phone else "number", col)
+		l.name = "Amount_" + id
+		h.add_child(l)
+		chip.add_child(h)
+		row.add_child(chip)
+	return row
+
+## Las cifras de una fila de cost_row(), {recurso: texto}: lo que ve el jugador.
+static func row_amounts(row: Node) -> Dictionary:
+	var out := {}
+	if row == null:
+		return out
+	for child in row.get_children():
+		if child is Label and String(child.name).begins_with("Amount_"):
+			out[String(child.name).substr(7)] = (child as Label).text
+		else:
+			out.merge(row_amounts(child))
+	return out
+
+## El recorrido de una campana: hechas (✓ verde), la que toca (★ laton), las que
+## faltan (su numero) y el jefe al final (bomba roja). `compact`: telefono.
+static func campaign_track(won: int, total: int, compact: bool, boss_tip: String = "") -> HBoxContainer:
+	var track := HBoxContainer.new()
+	track.name = "CampaignTrack"
+	track.add_theme_constant_override("separation", 0)
+	track.alignment = BoxContainer.ALIGNMENT_CENTER
+	track.mouse_filter = Control.MOUSE_FILTER_PASS
+	for i in total:
+		var state := "next"
+		if i < won:
+			state = "done"
+		elif i == total - 1:
+			state = "boss"
+		elif i == won:
+			state = "now"
+		var big := state in ["now", "boss"]
+		var dd := (34 if big else 26) if compact else (46 if big else 36)
+		var fill: Color = c("window", "WELL")
+		match state:
+			"done":
+				fill = sem("POSITIVE")
+			"now":
+				fill = sem("ACCENT")
+			"boss":
+				fill = sem("DANGER")
+		var node := PanelContainer.new()
+		node.name = "Mission_%d" % i
+		var st := box(fill, INK, 3, int(dd * 0.5), 0)
+		if state == "boss" and i == won:
+			st.border_color = sem("ACCENT")
+			st.set_border_width_all(4)
+		node.add_theme_stylebox_override("panel", st)
+		node.custom_minimum_size = Vector2(dd, dd)
+		node.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		node.mouse_filter = Control.MOUSE_FILTER_PASS
+		node.set_meta("state", state)
+		var cc := CenterContainer.new()
+		cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var g: String = {"done": "check", "now": "star", "boss": "demolish"}.get(state, "")
+		if g != "":
+			cc.add_child(make_glyph(g, int(dd * 0.6), WHITE if state == "done" else Color(0, 0, 0, 0)))
+		else:
+			cc.add_child(label(str(i + 1), "small", text("window", true)))
+		node.add_child(cc)
+		if state == "boss" and boss_tip != "":
+			node.tooltip_text = boss_tip
+		track.add_child(node)
+		if i < total - 1:
+			var line := Panel.new()
+			line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			line.custom_minimum_size = Vector2(12 if compact else 30, 7)
+			line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			line.add_theme_stylebox_override("panel", box(sem("POSITIVE") if i < won else c("window", "WELL"), INK, 2, 3, 0))
+			track.add_child(line)
+	return track
+
+## Etiqueta de pronostico: Favorable (verde), Igualada (ambar), Dificil (rojo);
+## "" = sin tropa elegida todavia (gris).
+static func odds_badge(odds: String, text_s: String) -> PanelContainer:
+	var fill: Color = kind_fill("disabled")
+	match odds:
+		"favorable":
+			fill = sem("POSITIVE")
+		"even":
+			fill = sem("WARNING")
+		"hard":
+			fill = sem("DANGER")
+	var b := badge(text_s, fill)
+	b.name = "OddsLabel"
+	b.mouse_filter = Control.MOUSE_FILTER_PASS
+	return b
+
+## El sello de los partes (COBRADO / REPELIDO): pastilla de color algo girada,
+## sin animacion. Guarda su texto en meta "stamp_text".
+static func stamp(text_s: String, fill: Color) -> Control:
+	var holder := Control.new()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.custom_minimum_size = Vector2(0, 50 if phone else 60)
+	var p := PanelContainer.new()
+	var s := box(fill, INK, BORDER + 1, 14, 0, 0, 3)
+	s.content_margin_left = 22
+	s.content_margin_right = 22
+	s.content_margin_top = 2
+	s.content_margin_bottom = 4
+	p.add_theme_stylebox_override("panel", s)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tc := on_fill(fill)
+	var l := label(text_s, "title", tc["color"], tc["outline"])
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	p.add_child(l)
+	holder.add_child(p)
+	p.set_anchors_preset(Control.PRESET_CENTER)
+	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	p.grow_vertical = Control.GROW_DIRECTION_BOTH
+	p.rotation = deg_to_rad(-6.0)
+	p.resized.connect(func(): p.pivot_offset = p.size * 0.5)
+	holder.set_meta("stamp_text", text_s)
+	return holder
+
+## Tarjeta-boton (las mejoras del draft): un Button de texto con piel de
+## tarjeta; encima, borde de laton.
+static func style_card_button(btn: Button, role: String = "window") -> Button:
+	var n := card_style(role)
+	var h := card_style(role, true)
+	var p := card_style(role, true, c(role, "CARD_ALT"))
+	for sb in [n, h, p]:
+		sb.set_content_margin_all(12)
+	btn.add_theme_stylebox_override("normal", n)
+	btn.add_theme_stylebox_override("hover", h)
+	btn.add_theme_stylebox_override("pressed", p)
+	btn.add_theme_stylebox_override("focus", box(Color(0, 0, 0, 0), sem("ACCENT"), 3, RADIUS_CARD + 2, 0))
+	btn.add_theme_font_override("font", title_font())
+	btn.add_theme_font_size_override("font_size", fs("button"))
+	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		btn.add_theme_color_override(st, text(role))
+	btn.add_theme_constant_override("outline_size", 0)
+	return btn

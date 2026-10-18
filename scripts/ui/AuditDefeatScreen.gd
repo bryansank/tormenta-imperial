@@ -10,13 +10,21 @@ extends CanvasLayer
 ## misma cadena de llamadas. Quien conecte primero es cuestion de orden de
 ## `_ready`, asi que aqui no se supone nada: se apunta todo lo que llega en el
 ## mismo frame y el parte se monta diferido, cuando ya ha llegado todo.
+##
+## Rediseno fase 2 (feat/ui2-ejercito, docs/28): ventana crema con cinta roja
+## ASEDIO; titulo, la oleada en que cayo, lo perdido en iconos y lineas cortas,
+## y lo que importa en verde: no es el final. REconstruir es el boton verde.
 
 const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 const LAYER := 20
 const CARD_WIDTH := 540.0
 
 var _root: Control
+var _win: Dictionary = {}
 var _card: PanelContainer
+var _icons: HFlowContainer
+var _relayout_queued := false
 var _wave_label: Label
 var _lost_label: Label
 var _resummon_label: Label
@@ -55,52 +63,82 @@ func _setup_ui() -> void:
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
-	_root.add_child(ModalKit.make_backdrop(0.7))
+	# Sin ✕: se sale con RECONSTRUIR (o, acabada la partida, con sus botones).
+	_win = CT.modal_window(_root, Tr.t("ARMY2_SIEGE"), CT.sem("DANGER"), false)
+	var veil: ColorRect = _win["veil"]
+	veil.color = Color(veil.color, 0.7)
+	_card = _win["panel"]
+	_card.minimum_size_changed.connect(_queue_relayout)
+	var column: VBoxContainer = _win["body"]
+	column.add_theme_constant_override("separation", 6)
 
-	_card = ModalKit.make_card(10)
-	_root.add_child(_card)
-	var column: VBoxContainer = _card.get_child(0)
-
-	column.add_child(ColonyByline.new())
-	column.add_child(ModalKit.make_text(Tr.t("AUDIT_TITLE"), "section", UITheme.TEXT_DIM))
-	var title := ModalKit.make_text(Tr.t("LBL_AUDIT_DEFEAT_TITLE"), "title", UITheme.DANGER)
-	title.add_theme_font_size_override("font_size", 32)
+	column.add_child(ColonyByline.new("small", CT.text("window", true)))
+	var title := _centered(CT.label(Tr.t("LBL_AUDIT_DEFEAT_TITLE"), "title", CT.tone_color("danger")))
+	title.tooltip_text = Tr.t("AUDIT_TITLE")
 	column.add_child(title)
 	_title = title
-	_mode_label = ModalKit.make_text("", "small", UITheme.TEXT_DIM)
+	_mode_label = _centered(CT.label("", "small", CT.text("window", true)))
 	column.add_child(_mode_label)
-	_wave_label = ModalKit.make_text("", "section", UITheme.ACCENT)
+	_wave_label = _centered(CT.label("", "button", CT.text("window")))
+	_wave_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	_wave_label.tooltip_text = Tr.t("AUDIT_LOST")
 	column.add_child(_wave_label)
-	column.add_child(ModalKit.make_text(Tr.t("AUDIT_LOST"), "body", UITheme.TEXT))
-	column.add_child(UITheme.make_separator())
 
-	column.add_child(UITheme.section_header(Tr.t("LBL_AUDIT_WHAT_WAS_LOST"), UITheme.DANGER))
-	_lost_label = ModalKit.make_text("", "body", UITheme.TEXT)
+	# Lo perdido: discos de la guarnicion caida y las lineas cortas.
+	_icons = HFlowContainer.new()
+	_icons.name = "LostIcons"
+	_icons.alignment = FlowContainer.ALIGNMENT_CENTER
+	_icons.add_theme_constant_override("h_separation", 8)
+	_icons.mouse_filter = Control.MOUSE_FILTER_PASS
+	_icons.tooltip_text = Tr.t("LBL_AUDIT_WHAT_WAS_LOST")
+	column.add_child(_icons)
+	_lost_label = _centered(CT.label("", "body", CT.text("window")))
 	column.add_child(_lost_label)
-	column.add_child(UITheme.make_separator())
 
-	# Lo que mas importa, lo ultimo y en otro color: no se ha perdido la partida.
-	_not_the_end = ModalKit.make_text(Tr.t("AUDIT_LOST_DESC"), "section", UITheme.POSITIVE)
+	# Lo que mas importa, lo ultimo y en verde: no se ha perdido la partida.
+	_not_the_end = _centered(CT.label(Tr.t("AUDIT_LOST_DESC"), "button", CT.tone_color("positive")))
 	column.add_child(_not_the_end)
-	_resummon_label = ModalKit.make_text("", "small", UITheme.WARNING)
+	_resummon_label = _centered(CT.label("", "small", CT.tone_color("warning")))
 	column.add_child(_resummon_label)
 
-	_rebuild_btn = ModalKit.make_menu_button(Tr.t("BTN_AUDIT_REBUILD"), UITheme.POSITIVE, close)
+	_rebuild_btn = CT.pill_button(Tr.t("BTN_AUDIT_REBUILD"), "wrench", "primary", CT.h("big"))
+	_rebuild_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_rebuild_btn.pressed.connect(close)
 	column.add_child(_rebuild_btn)
 
 	# Supervivencia: en vez de "reconstruye", "se acabo".
-	_run_over_label = ModalKit.make_text(Tr.t("LBL_RUN_OVER_DESC"), "body", UITheme.WARNING)
+	_run_over_label = _centered(CT.label(Tr.t("LBL_RUN_OVER_DESC"), "body", CT.tone_color("warning")))
 	column.add_child(_run_over_label)
 	_end_row = HBoxContainer.new()
+	_end_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_end_row.add_theme_constant_override("separation", 12)
 	column.add_child(_end_row)
-	_end_row.add_child(ModalKit.make_menu_button(Tr.t("BTN_NEW_GAME"), UITheme.POSITIVE, _on_new_game))
-	_end_row.add_child(ModalKit.make_menu_button(Tr.t("BTN_QUIT"), UITheme.DANGER, _on_quit))
+	var new_game := CT.pill_button(Tr.t("BTN_NEW_GAME"), "game", "primary", CT.h("big"))
+	new_game.pressed.connect(_on_new_game)
+	_end_row.add_child(new_game)
+	var quit := CT.pill_button(Tr.t("BTN_QUIT"), "close", "danger", CT.h("big"))
+	quit.pressed.connect(_on_quit)
+	_end_row.add_child(quit)
 	_apply_variant()
 	_relayout()
 
+static func _centered(l: Label) -> Label:
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+## La tarjeta mide lo que su contenido; se recoloca cuando este cambia.
 func _relayout() -> void:
-	ModalKit.fit_center(_card, CARD_WIDTH, get_viewport().get_visible_rect().size)
+	_relayout_queued = false
+	if not is_inside_tree():
+		return
+	CT.fit_card(_win, get_viewport().get_visible_rect().size, CARD_WIDTH)
+
+func _queue_relayout() -> void:
+	if _relayout_queued:
+		return
+	_relayout_queued = true
+	_relayout.call_deferred()
 
 # ── Apuntes ──────────────────────────────────────────────────────────
 
@@ -149,10 +187,26 @@ func _show(wave: int, frame: int) -> void:
 		total_waves = audit.wave_count()
 	_wave_label.text = Tr.t("LBL_AUDIT_FELL_AT") % (Tr.t("AUDIT_WAVE") % [wave + 1, maxi(total_waves, wave + 1)])
 	_lost_label.text = "\n".join(loss_lines(taken, damaged, ruined, casualties))
+	for child in _icons.get_children():
+		_icons.remove_child(child)
+		child.queue_free()
+	var discs := CT.roster_discs(casualties, CT.kind_fill("disabled"), 40)
+	if discs.get_child_count() > 0:
+		_icons.add_child(discs)
+	else:
+		discs.queue_free()
+	var resources: Dictionary = {}
+	for key in taken:
+		if key in ["gold", "wood", "steel", "oil"] and int(taken[key]) > 0:
+			resources[key] = int(taken[key])
+	if not resources.is_empty():
+		_icons.add_child(CT.cost_row(resources, resources, "-"))
+	_icons.visible = _icons.get_child_count() > 0
 	_resummon_label.text = resummon_text()
 	_apply_variant()
 	_relayout()
 	visible = true
+	_queue_relayout()
 
 func close() -> void:
 	# Una partida terminada no se cierra: no hay nada detras a lo que volver.
@@ -203,6 +257,7 @@ static func resummon_text() -> String:
 func _apply_variant() -> void:
 	var over: bool = GameMode.is_run_over()
 	_title.text = Tr.t("LBL_RUN_OVER_TITLE") if over else Tr.t("LBL_AUDIT_DEFEAT_TITLE")
+	_mode_label.visible = over
 	_mode_label.text = Tr.t("LBL_MODE_CURRENT") % GameMode.display_name()
 	_not_the_end.visible = not over
 	_resummon_label.visible = not over
