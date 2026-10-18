@@ -655,6 +655,14 @@ var touch_tooltip_hold_sec := 0.5
 const TOUCH_OPACITY_MIN := 0.15
 const TOUCH_OPACITY_MAX := 1.0
 var ui_touch_controls_opacity := 0.45
+## Tamano de los controles en pantalla (cruceta, zoom, girar, R, CANCELAR y el
+## ✓ de colocar): "auto" es el del perfil de dispositivo
+## (DeviceProfile.DEFAULTS[...]["controls_size"]: PC 100 %, tablet 115 %,
+## movil 130 %); los demas lo fuerzan. Del dispositivo, en settings.cfg
+## [interfaz] touch_controls_size (docs/21 §9, "Tamano de los controles").
+const TOUCH_CONTROLS_SIZE_MODES := ["auto", "small", "normal", "large", "xlarge"]
+const TOUCH_CONTROLS_SIZE_SCALES := {"small": 0.85, "normal": 1.0, "large": 1.25, "xlarge": 1.5}
+var ui_touch_controls_size := "auto"
 
 # ── User Settings persistence ──
 # Device-local preferences (volumes, UI toggles) — separate from save_game.json
@@ -915,6 +923,8 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 				ui_layout.erase(key)
 	var fps := str(cf.get_value("interfaz", "fps_cap", ui_fps_cap))
 	ui_fps_cap = fps if fps in FPS_CAP_MODES else "auto"
+	var csize := str(cf.get_value("interfaz", "touch_controls_size", ui_touch_controls_size))
+	ui_touch_controls_size = csize if csize in TOUCH_CONTROLS_SIZE_MODES else "auto"
 	profile_runs_finished = maxi(0, int(cf.get_value("perfil", "runs_finished", profile_runs_finished)))
 	profile_campaigns_won = maxi(0, int(cf.get_value("perfil", "campaigns_won", profile_campaigns_won)))
 	saves_active_slot = maxi(0, int(cf.get_value("partidas", "activa", saves_active_slot)))
@@ -953,6 +963,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)
 	cf.set_value("interfaz", "fps_cap", ui_fps_cap)
+	cf.set_value("interfaz", "touch_controls_size", ui_touch_controls_size)
 	cf.set_value("perfil", "runs_finished", profile_runs_finished)
 	cf.set_value("perfil", "campaigns_won", profile_campaigns_won)
 	cf.set_value("partidas", "activa", saves_active_slot)
@@ -1087,6 +1098,34 @@ func set_touch_controls_opacity(value: float, persist: bool = true) -> void:
 	if persist:
 		save_user_settings()
 	EventBus.touch_controls_opacity_changed.emit(ui_touch_controls_opacity)
+
+## Escala de los controles en pantalla que vale ahora (1.0 = 100 %), resolviendo
+## el "auto" contra el perfil de dispositivo. Es la unica pregunta que hacen
+## OnScreenControls, PlacementAssist y UILayoutManager.
+func touch_controls_scale() -> float:
+	return touch_controls_scale_for(ui_touch_controls_size, _profile_controls_size())
+
+## Puro: la escala de un modo, con `profile_scale` para "auto".
+static func touch_controls_scale_for(mode: String, profile_scale: float) -> float:
+	if TOUCH_CONTROLS_SIZE_SCALES.has(mode):
+		return float(TOUCH_CONTROLS_SIZE_SCALES[mode])
+	return profile_scale
+
+## El tamano de serie del perfil activo (sin DeviceProfile, 100 %).
+func _profile_controls_size() -> float:
+	var dp := get_node_or_null("/root/DeviceProfile")
+	if dp != null and dp.has_method("defaults"):
+		return float(dp.defaults().get("controls_size", 1.0))
+	return 1.0
+
+## Cambia el tamano, lo guarda y anuncia la escala resuelta (se ve al momento).
+func set_touch_controls_size(mode: String, persist: bool = true) -> void:
+	if not mode in TOUCH_CONTROLS_SIZE_MODES:
+		mode = "auto"
+	ui_touch_controls_size = mode
+	if persist:
+		save_user_settings()
+	EventBus.touch_controls_size_changed.emit(touch_controls_scale())
 
 # ── Pantalla completa ──
 

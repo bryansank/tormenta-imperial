@@ -945,6 +945,14 @@ const _STRINGS := {
 		"BTN_MOVE_HERE": "MOVER AQUÍ",
 		"LBL_OUTSIDE_MAP": "Fuera del mapa: toca la isla.",
 		"LBL_TOUCH_OPACITY": "Opacidad de los controles",
+		# Controles móviles (feat/controles-moviles)
+		"LBL_CONTROLS_SIZE": "Tamaño de los controles",
+		"LBL_CONTROLS_SIZE_TIP": "Flechas, zoom, girar, CANCELAR y el botón de construir aquí. Se ve al momento.",
+		"OPT_CONTROLS_SIZE_AUTO": "Del perfil (%d %%)",
+		"OPT_CONTROLS_SIZE_SMALL": "Pequeño (%d %%)",
+		"OPT_CONTROLS_SIZE_NORMAL": "Normal (%d %%)",
+		"OPT_CONTROLS_SIZE_LARGE": "Grande (%d %%)",
+		"OPT_CONTROLS_SIZE_XLARGE": "Muy grande (%d %%)",
 		# ── prologo-ayudas ──
 		# Prologo: el expediente de la Regencia sobre la isla, con notas al margen.
 		"PRO_FOLIO": "Folio %d de %d",
@@ -2770,6 +2778,14 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"BTN_MOVE_HERE": "MOVE HERE",
 		"LBL_OUTSIDE_MAP": "Off the map: tap the island.",
 		"LBL_TOUCH_OPACITY": "Control opacity",
+		# Controles móviles (feat/controles-moviles)
+		"LBL_CONTROLS_SIZE": "Control size",
+		"LBL_CONTROLS_SIZE_TIP": "Arrows, zoom, turn, CANCEL and the build-here button. Applies at once.",
+		"OPT_CONTROLS_SIZE_AUTO": "Profile (%d %%)",
+		"OPT_CONTROLS_SIZE_SMALL": "Small (%d %%)",
+		"OPT_CONTROLS_SIZE_NORMAL": "Normal (%d %%)",
+		"OPT_CONTROLS_SIZE_LARGE": "Large (%d %%)",
+		"OPT_CONTROLS_SIZE_XLARGE": "Extra large (%d %%)",
 		# ── prologo-ayudas ──
 		"PRO_FOLIO": "Folio %d of %d",
 		"PRO_HINT": "← → or Enter to turn the folio  ·  Esc to skip",

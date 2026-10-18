@@ -153,9 +153,32 @@ func _setup_ui() -> void:
 	vbox.add_child(close_btn)
 
 	_sync_music(GameConfig.audio_music_enabled)
+	_size_for_touch(_panel)
 	_fit_scroll()
 	UILayoutManager.layout_changed.connect(_fit_scroll)
 	EventBus.helper_visibility_changed.connect(func(_v): _sync_hud_checks())
+
+## Tablet y movil: todo lo que se pulsa en Ajustes (botones, desplegables,
+## interruptores, la X de cerrar) llega al alto de dedo de Ajustes
+## (UITheme.SETTINGS_ROW_H); un boton cuadrado crece por los dos lados. En PC
+## SETTINGS_ROW_H es el minimo de siempre y no cambia nada.
+func _size_for_touch(node: Node) -> void:
+	if not UITheme.settings_touch():
+		return
+	var h := float(UITheme.SETTINGS_ROW_H)
+	for child in node.get_children():
+		if child is BaseButton:
+			var c := child as Control
+			var sq: bool = c.custom_minimum_size.x > 0.0 and is_equal_approx(c.custom_minimum_size.x, c.custom_minimum_size.y)
+			c.custom_minimum_size.y = maxf(c.custom_minimum_size.y, h)
+			if sq:
+				c.custom_minimum_size.x = c.custom_minimum_size.y
+		_size_for_touch(child)
+
+## Alto fuera de los scrolls: con filas mas altas (tablet y movil) la cabecera,
+## las pestanas, APLICAR y cerrar crecen lo mismo cada una.
+func _chrome_h() -> float:
+	return CHROME_H + 4.0 * float(UITheme.SETTINGS_ROW_H - UITheme.MIN_BTN_H)
 
 ## Una pestana: un scroll con su columna. Devuelve la columna.
 func _add_tab(title_key: String) -> VBoxContainer:
@@ -173,7 +196,9 @@ func _add_tab(title_key: String) -> VBoxContainer:
 	pad.add_theme_constant_override("margin_top", 6)
 	scroll.add_child(pad)
 	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 12)
+	# Mas aire entre filas en tablet y movil: un dedo que apunta a un ajuste no
+	# debe rozar el de al lado.
+	body.add_theme_constant_override("separation", 18 if UITheme.settings_touch() else 12)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pad.add_child(body)
 	_scrolls.append(scroll)
@@ -486,12 +511,37 @@ func _build_controls_tab(body: VBoxContainer) -> void:
 		GameConfig.ui_touch_controls_opacity, GameConfig.TOUCH_OPACITY_MIN, GameConfig.TOUCH_OPACITY_MAX,
 		func(v: float): GameConfig.set_touch_controls_opacity(v, false),
 		func(): GameConfig.save_user_settings()))
+	body.add_child(_make_controls_size_row())
 	body.add_child(_make_hint(Tr.ti("LBL_CONTROLS_SUMMARY")))
 	_add_reset(body, reset_controls)
+
+## Tamano de los controles en pantalla: el del perfil o uno fijo. Se ve al
+## momento (OnScreenControls y el ✓ de colocar escuchan
+## touch_controls_size_changed) y se guarda en settings.cfg [interfaz].
+func _make_controls_size_row() -> HBoxContainer:
+	var modes: Array = GameConfig.TOUCH_CONTROLS_SIZE_MODES
+	var labels: Array = []
+	for mode in modes:
+		if mode == "auto":
+			labels.append(Tr.t("OPT_CONTROLS_SIZE_AUTO") % roundi(
+				float(DeviceProfile.defaults().get("controls_size", 1.0)) * 100.0))
+		else:
+			labels.append(Tr.t("OPT_CONTROLS_SIZE_" + String(mode).to_upper()) % roundi(
+				float(GameConfig.TOUCH_CONTROLS_SIZE_SCALES[mode]) * 100.0))
+	var row := UITheme.make_option_row(Tr.t("LBL_CONTROLS_SIZE"), labels,
+		maxi(0, modes.find(GameConfig.ui_touch_controls_size)), func(idx: int):
+			GameConfig.set_touch_controls_size(modes[idx]))
+	row.name = "ControlsSizeRow"
+	row.tooltip_text = Tr.t("LBL_CONTROLS_SIZE_TIP")
+	return row
 
 func reset_controls() -> void:
 	GameConfig.set_touch_controls("auto")
 	GameConfig.set_touch_controls_opacity(0.45)
+	GameConfig.set_touch_controls_size("auto")
+	var size_row := find_child("ControlsSizeRow", true, false)
+	if size_row != null:
+		(size_row.get_child(1) as OptionButton).selected = 0
 	var op: HSlider = _audio_sliders.get("touch_opacity")
 	if op != null:
 		op.set_value_no_signal(GameConfig.ui_touch_controls_opacity)
@@ -656,7 +706,7 @@ func _fit_scroll() -> void:
 	var wanted := 120.0
 	for body in _bodies:
 		wanted = maxf(wanted, body.get_combined_minimum_size().y)
-	var h := clampf(wanted, 120.0, maxf(120.0, vp.y - CHROME_H))
+	var h := clampf(wanted, 120.0, maxf(120.0, vp.y - _chrome_h()))
 	for scroll in _scrolls:
 		scroll.custom_minimum_size.y = h
 
@@ -682,7 +732,7 @@ func _make_language_row() -> HBoxContainer:
 		var btn := Button.new()
 		btn.name = "Locale_" + locale
 		btn.text = Tr.t("LBL_LOCALE_" + locale.to_upper())
-		btn.custom_minimum_size = Vector2(96, 36)
+		btn.custom_minimum_size = Vector2(96, UITheme.SETTINGS_ROW_H)
 		var active: bool = locale == Tr.get_locale()
 		UITheme.style_button(btn, UITheme.ACCENT if active else UITheme.BTN, UITheme.FONT_BODY)
 		btn.pressed.connect(GameConfig.set_locale.bind(locale))
@@ -748,8 +798,10 @@ func _make_percent_row(key: String, label_text: String, initial: float, min_v: f
 	slider.max_value = max_v
 	slider.step = 0.05
 	slider.value = initial
-	# Alto de dedo en tablet: el regulador es un control que se arrastra.
+	# Alto de dedo en tablet: el regulador es un control que se arrastra. En
+	# tablet y movil, ademas, bolita y carril grandes (UITheme.style_settings_slider).
 	slider.custom_minimum_size = Vector2(0, UITheme.touch_px(28.0))
+	UITheme.style_settings_slider(slider)
 	# La rueda desplaza la pestana, nunca mueve el regulador: pasar la rueda por
 	# encima de un volumen lo cambiaba sin querer, y en una pestana que no
 	# desplaza parecia que la rueda "seleccionaba" ajustes.

@@ -66,13 +66,20 @@ const MIN_LOGICAL_WIDTH_PORTRAIT := 400.0
 ## tope de fotogramas en "auto": un juego de gestion no gana nada por encima de 60,
 ## y en tablet y movil 30 estables gastan la mitad de bateria y no se calientan
 ## (las baratas bajan el reloj con el calor y entonces tironean). Docs/26 §7.4.
+## `controls_size` es el "auto" de Ajustes → Controles → Tamano de los controles
+## (cruceta, zoom, girar, R, CANCELAR, ✓); `settings_row` el alto de cada fila
+## de Ajustes (deslizadores, interruptores, desplegables, pestanas, botones):
+## en tablet y movil, un poco mas que el lado tactil minimo (docs/21 §2 y §9).
 const DEFAULTS := {
 	PC: {"ui_scale": 1.0, "text_size": "normal", "touch_target": 44,
-		"touch_controls": false, "layout": "standard", "input": "mouse", "fps": 60},
+		"touch_controls": false, "layout": "standard", "input": "mouse", "fps": 60,
+		"controls_size": 1.0, "settings_row": 44},
 	TABLET: {"ui_scale": 1.15, "text_size": "normal", "touch_target": 48,
-		"touch_controls": true, "layout": "standard", "input": "touch", "fps": 30},
+		"touch_controls": true, "layout": "standard", "input": "touch", "fps": 30,
+		"controls_size": 1.15, "settings_row": 56},
 	PHONE: {"ui_scale": 1.3, "text_size": "large", "touch_target": 52,
-		"touch_controls": true, "layout": "compact", "input": "touch", "fps": 30},
+		"touch_controls": true, "layout": "compact", "input": "touch", "fps": 30,
+		"controls_size": 1.3, "settings_row": 60},
 }
 
 var _detected := PC
@@ -199,6 +206,8 @@ func set_profile_override(mode: String) -> void:
 	apply_fps()
 	profile_changed.emit(current())
 	EventBus.touch_controls_changed.emit(GameConfig.touch_controls_enabled())
+	# El tamano "auto" de los controles sigue al perfil: se ve al momento.
+	EventBus.touch_controls_size_changed.emit(GameConfig.touch_controls_scale())
 
 # ── Escala y texto ────────────────────────────────────────────────────
 
@@ -273,7 +282,8 @@ func apply_all() -> void:
 ## cambian: para eso rebuild_ui().
 func apply_theme() -> void:
 	UITheme.configure(GameConfig.ui_palette, GameConfig.ui_high_contrast,
-		GameConfig.ui_panel_opacity, effective_text_size(), int(defaults()["touch_target"]))
+		GameConfig.ui_panel_opacity, effective_text_size(), int(defaults()["touch_target"]),
+		int(defaults().get("settings_row", 0)))
 	get_tree().root.theme = UITheme.build_global_theme()
 	# El texto flotante del mundo usa GameConfig.resource_colors: misma paleta.
 	# Se pisan los cuatro de la paleta y se conservan los demas (materiales,

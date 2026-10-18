@@ -175,7 +175,8 @@ static var text_scale := 1.0
 ## Reescribe los tokens. Sin argumentos deja la interfaz de serie (los tests
 ## lo llaman asi en after_test para no contagiar a la siguiente suite).
 static func configure(p_palette: String = "default", p_high_contrast: bool = false,
-		p_opacity: float = 1.0, p_text_size: String = "normal", p_touch_target: int = _BASE_MIN_BTN_H) -> void:
+		p_opacity: float = 1.0, p_text_size: String = "normal", p_touch_target: int = _BASE_MIN_BTN_H,
+		p_settings_row: int = 0) -> void:
 	palette = p_palette if p_palette in PALETTES else "default"
 	high_contrast = p_high_contrast
 	panel_opacity = clampf(p_opacity, OPACITY_MIN, OPACITY_MAX)
@@ -188,6 +189,7 @@ static func configure(p_palette: String = "default", p_high_contrast: bool = fal
 	FONT_SMALL = scaled_font(_FONT_BASE["small"], text_scale)
 	FONT_BUTTON = scaled_font(_FONT_BASE["button"], text_scale)
 	MIN_BTN_H = maxi(_BASE_MIN_BTN_H, p_touch_target)
+	SETTINGS_ROW_H = maxi(MIN_BTN_H, p_settings_row)
 
 ## Copia un diccionario de resolve_tokens() en los tokens estaticos.
 static func _apply_tokens(d: Dictionary) -> void:
@@ -361,6 +363,11 @@ const MARGIN := 12
 const BORDER := 6
 ## Lado tactil minimo (guia de accesibilidad movil): 44 px.
 static var MIN_BTN_H := 44
+## Alto de cada fila de Ajustes (deslizador, interruptor, desplegable, pestana,
+## boton). En PC es MIN_BTN_H; en tablet y movil el perfil lo sube un poco por
+## encima del lado tactil (DeviceProfile.DEFAULTS[...]["settings_row"]): los
+## ajustes se tocan de uno en uno y con prisa, y un dedo no apunta como un raton.
+static var SETTINGS_ROW_H := 44
 const SEPARATION := 8
 
 # ══════════════════════════════════════
@@ -738,7 +745,7 @@ static func make_check_button(text: String, pressed: bool, on_toggled: Callable)
 	var cb := CheckButton.new()
 	cb.text = text
 	cb.button_pressed = pressed
-	cb.custom_minimum_size.y = MIN_BTN_H
+	cb.custom_minimum_size.y = SETTINGS_ROW_H
 	var hf := heavy_font()
 	if hf:
 		cb.add_theme_font_override("font", hf)
@@ -748,10 +755,11 @@ static func make_check_button(text: String, pressed: bool, on_toggled: Callable)
 	cb.add_theme_color_override("font_pressed_color", readable(TEXT_BRIGHT))
 	cb.add_theme_constant_override("outline_size", outline_for(FONT_BODY))
 	cb.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
-	cb.add_theme_icon_override("unchecked", switch_icon(false))
-	cb.add_theme_icon_override("checked", switch_icon(true))
-	cb.add_theme_icon_override("unchecked_disabled", switch_icon(false, true))
-	cb.add_theme_icon_override("checked_disabled", switch_icon(true, true))
+	var k := settings_touch_factor()
+	cb.add_theme_icon_override("unchecked", switch_icon(false, false, k))
+	cb.add_theme_icon_override("checked", switch_icon(true, false, k))
+	cb.add_theme_icon_override("unchecked_disabled", switch_icon(false, true, k))
+	cb.add_theme_icon_override("checked_disabled", switch_icon(true, true, k))
 	if on_toggled.is_valid():
 		cb.toggled.connect(on_toggled)
 	return cb
@@ -760,12 +768,13 @@ static func make_check_button(text: String, pressed: bool, on_toggled: Callable)
 ## y a la derecha encendido, gris y a la izquierda apagado. Se hace una vez por
 ## estado y paleta (cache).
 static var _switch_cache := {}
-static func switch_icon(on: bool, disabled: bool = false) -> Texture2D:
-	var key := "%s|%s|%s|%s" % [on, disabled, POSITIVE.to_html(), TEXT_DIM.to_html()]
+## `scale` lo agranda (Ajustes en tablet y movil, settings_touch_factor()).
+static func switch_icon(on: bool, disabled: bool = false, scale: float = 1.0) -> Texture2D:
+	var w := roundi(48.0 * maxf(scale, 1.0))
+	var h := roundi(26.0 * maxf(scale, 1.0))
+	var key := "%s|%s|%s|%s|%d" % [on, disabled, POSITIVE.to_html(), TEXT_DIM.to_html(), w]
 	if _switch_cache.has(key):
 		return _switch_cache[key]
-	var w := 48
-	var h := 26
 	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	var track: Color = POSITIVE if on else BG_DARK.lightened(0.12)
@@ -787,7 +796,7 @@ static func switch_icon(on: bool, disabled: bool = false) -> Texture2D:
 	var kx := float(w) - r if on else r
 	for y in h:
 		for x in w:
-			if Vector2(float(x) + 0.5 - kx, float(y) + 0.5 - r).length() <= r - 4.0:
+			if Vector2(float(x) + 0.5 - kx, float(y) + 0.5 - r).length() <= r - 4.0 * float(h) / 26.0:
 				img.set_pixel(x, y, knob)
 	var tex := ImageTexture.create_from_image(img)
 	_switch_cache[key] = tex
@@ -817,6 +826,63 @@ static func touch_px(desktop_px: float) -> float:
 ## paneles: resuelve el "auto" de Ajustes contra el hardware real.
 static func is_touch_ui() -> bool:
 	return GameConfig.touch_controls_enabled()
+
+## Cuanto crecen los controles de Ajustes sobre los de PC (1.0 en PC; 56/44 en
+## tablet, 60/44 en movil). Agranda el interruptor, la bolita del deslizador y su
+## carril; los altos van por SETTINGS_ROW_H.
+static func settings_touch_factor() -> float:
+	return float(SETTINGS_ROW_H) / float(_BASE_MIN_BTN_H)
+
+## Si Ajustes lleva el tamano de dedo (tablet y movil). En PC no cambia nada.
+static func settings_touch() -> bool:
+	return SETTINGS_ROW_H > _BASE_MIN_BTN_H
+
+## Un deslizador de Ajustes a tamano de dedo: bolita redonda grande y carril mas
+## grueso. En PC lo deja como esta (el tema global).
+static func style_settings_slider(slider: HSlider) -> void:
+	slider.custom_minimum_size.y = maxf(slider.custom_minimum_size.y, float(SETTINGS_ROW_H) if settings_touch() else 0.0)
+	if not settings_touch():
+		return
+	var k := settings_touch_factor()
+	var knob := slider_knob_icon(roundi(22.0 * k), false)
+	slider.add_theme_icon_override("grabber", knob)
+	slider.add_theme_icon_override("grabber_highlight", slider_knob_icon(roundi(22.0 * k), true))
+	var track := roundi(4.0 * k)
+	var clear := Color(0, 0, 0, 0)
+	var rail := _flat(BG_DARK, ACCENT_DIM, 1, CORNER, 0)
+	rail.content_margin_top = track
+	rail.content_margin_bottom = track
+	slider.add_theme_stylebox_override("slider", rail)
+	var area := _flat(ACCENT_DIM, clear, 0, CORNER, 0)
+	area.content_margin_top = track
+	area.content_margin_bottom = track
+	slider.add_theme_stylebox_override("grabber_area", area)
+	var area_h := _flat(ACCENT, clear, 0, CORNER, 0)
+	area_h.content_margin_top = track
+	area_h.content_margin_bottom = track
+	slider.add_theme_stylebox_override("grabber_area_highlight", area_h)
+
+## Bolita del deslizador: circulo con borde claro. Cache por lado y paleta.
+static var _knob_cache := {}
+static func slider_knob_icon(side: int, hot: bool) -> Texture2D:
+	var key := "%d|%s|%s|%s" % [side, hot, ACCENT.to_html(), TEXT_BRIGHT.to_html()]
+	if _knob_cache.has(key):
+		return _knob_cache[key]
+	var img := Image.create(side, side, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var r := float(side) * 0.5
+	var fill: Color = ACCENT.lightened(0.2) if hot else ACCENT
+	var rim: Color = TEXT_BRIGHT
+	for y in side:
+		for x in side:
+			var d := Vector2(float(x) + 0.5 - r, float(y) + 0.5 - r).length()
+			if d <= r - 2.5:
+				img.set_pixel(x, y, fill)
+			elif d <= r - 0.5:
+				img.set_pixel(x, y, rim)
+	var tex := ImageTexture.create_from_image(img)
+	_knob_cache[key] = tex
+	return tex
 
 # ══════════════════════════════════════
 # HUD (tarjetas permanentes de la pantalla de juego)
@@ -1036,14 +1102,22 @@ static func make_option_row(label_text: String, options: Array, selected: int, o
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(label)
 	var picker := OptionButton.new()
-	picker.custom_minimum_size = Vector2(180, MIN_BTN_H)
+	picker.custom_minimum_size = Vector2(180, SETTINGS_ROW_H)
 	for opt in options:
 		picker.add_item(String(opt))
+	# La lista que se despliega, con filas de dedo en tablet y movil.
+	if settings_touch():
+		picker.get_popup().add_theme_constant_override("v_separation", settings_popup_separation())
 	picker.selected = clampi(selected, 0, maxi(options.size() - 1, 0))
 	if on_selected.is_valid():
 		picker.item_selected.connect(on_selected)
 	row.add_child(picker)
 	return row
+
+## Hueco entre filas de un desplegable para que cada fila mida SETTINGS_ROW_H
+## (la fila es la letra mas este hueco).
+static func settings_popup_separation() -> int:
+	return maxi(4, SETTINGS_ROW_H - int(FONT_BODY * 1.4))
 
 ## Tactical command panel con bordes gruesos militares y glow
 static func make_command_panel_style() -> StyleBox:
@@ -1129,7 +1203,7 @@ static func _theme_button(t: Theme, type: String) -> void:
 ## Estilos de pestana: alto de dedo, el margen vertical lleva la pestana a
 ## MIN_BTN_H con la letra del cuerpo.
 static func _tab_styles() -> Dictionary:
-	var tab_pad := maxi(8, int((MIN_BTN_H - FONT_BODY) / 2.0))
+	var tab_pad := maxi(8, int((SETTINGS_ROW_H - FONT_BODY) / 2.0))
 	var sel := _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.28), ACCENT, 2, CORNER, 0)
 	var off := _flat(Color(BG_DARK, 0.9), ACCENT_DIM, 1, CORNER, 0)
 	var hov := _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.16), ACCENT, 1, CORNER, 0)
@@ -1236,6 +1310,8 @@ static func build_global_theme() -> Theme:
 	t.set_color("font_hover_color", "PopupMenu", readable(TEXT_BRIGHT))
 	t.set_color("font_separator_color", "PopupMenu", readable(ACCENT))
 	t.set_font_size("font_size", "PopupMenu", FONT_BODY)
+	if settings_touch():
+		t.set_constant("v_separation", "PopupMenu", settings_popup_separation())
 
 	# ── Tooltip ──
 	t.set_stylebox("panel", "TooltipPanel", _flat(Color(BG_DARK, 0.97), ACCENT, 1, CORNER, 8))

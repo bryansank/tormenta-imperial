@@ -30,6 +30,8 @@ Tablet / Móvil (`GameConfig.ui_device_profile`: `auto`, `pc`, `tablet`, `phone`
 | Escala de interfaz | 100 % | 115 % | 130 % |
 | Tamaño de texto | normal | normal | grande |
 | Lado táctil mínimo (`UITheme.MIN_BTN_H`) | 44 | 48 | 52 |
+| Alto de cada fila de Ajustes (`UITheme.SETTINGS_ROW_H`, `settings_row`) | 44 | 56 | 60 |
+| Tamaño de los controles en pantalla en "Del perfil" (`controls_size`) | 100 % | 115 % | 130 % |
 | Controles en pantalla en "Automático" | **no** (norma de Bryan) | sí | sí |
 | Variante de disposición | standard | standard | compact (sin globos de ayuda) |
 | Textos de ayuda | ratón | dedo | dedo |
@@ -84,18 +86,43 @@ en tablet y con letra grande) y su **Restablecer esta pestaña** (menos Juego):
 |---|---|
 | **Audio** | Volumen general, música sí/no (también en ☰ MENÚ → PARTIDA), música, efectos. De serie bajos: general 80 %, música 35 %, efectos 50 % (`GameConfig.AUDIO_DEFAULTS`), con curva perceptual |
 | **Interfaz** | Perfil de dispositivo, escala, tamaño de texto · Vista 3D/2D, rejilla, pantalla completa · Nombres junto a los iconos (Automático / Siempre / Nunca, §8) · Elementos en pantalla (un interruptor por elemento) · Editar / Restablecer disposición |
-| **Controles** | Controles en pantalla (Automático / Siempre / Nunca), su opacidad (20–100 %, de serie 55 %, `GameConfig.ui_touch_controls_opacity`) y el resumen de controles en ratón o en dedo |
+| **Controles** | Controles en pantalla (Automático / Siempre / Nunca), su opacidad (20–100 %, de serie 55 %, `GameConfig.ui_touch_controls_opacity`), su **tamaño** (Del perfil / Pequeño 85 % / Normal 100 % / Grande 125 % / Muy grande 150 %, §9) y el resumen de controles en ratón o en dedo |
 | **Accesibilidad** | Paleta de colores, alto contraste, opacidad de paneles, vista previa |
 | **Juego** | Idioma, Nueva partida |
 
-Qué se aplica al momento: audio, vista, rejilla, pantalla completa, controles,
-escala, mostrar/ocultar HUD y la disposición. Lo que cambia tokens de `UITheme`
+Qué se aplica al momento: audio, vista, rejilla, pantalla completa, controles
+(también su tamaño), escala, mostrar/ocultar HUD y la disposición. Lo que cambia tokens de `UITheme`
 (texto, paleta, contraste, opacidad, perfil) se ve en la **vista previa** y se
 aplica con **APLICAR CAMBIOS** o al cerrar Ajustes: los paneles se construyen una
 vez, así que `DeviceProfile.rebuild_ui()` recarga la escena conservando la partida
 (la misma recarga que el cambio de idioma) y vuelve a abrir Ajustes en la
 pestaña donde estaba. Con un tablero de combate abierto no se recarga: se guarda
 y se verá al terminar.
+
+### Ajustes a tamaño de dedo (tablet y móvil)
+
+Petición de Bryan (2026-10-18): en el móvil, los propios controles de Ajustes,
+un poco más grandes. `DeviceProfile.DEFAULTS[...]["settings_row"]` llega a
+`UITheme.configure()` y fija el token `UITheme.SETTINGS_ROW_H` (PC 44 = el
+`MIN_BTN_H` de siempre, tablet 56, móvil 60; `UITheme.settings_touch()` dice si
+es mayor que el de PC). Con él:
+
+- `make_option_row`: el desplegable mide `SETTINGS_ROW_H` y su lista abre con
+  filas de ese alto (`v_separation` del `PopupMenu`, también en el tema global).
+- `make_check_button`: fila de `SETTINGS_ROW_H` y el interruptor dibujado crece
+  en proporción (`switch_icon(on, disabled, escala)`).
+- Pestañas: el relleno vertical lleva cada pestaña a `SETTINGS_ROW_H`.
+- Deslizadores (`UITheme.style_settings_slider`): alto `SETTINGS_ROW_H`, bolita
+  redonda de 22 px × factor y carril más grueso.
+- `SettingsPanel._size_for_touch`: todo `BaseButton` del panel (Restablecer,
+  APLICAR, ENTENDIDO, idioma, 3D/2D, la X) llega a ese alto; los cuadrados
+  crecen por los dos lados. Más hueco entre filas (18 en vez de 12) y la
+  cabecera fija crece lo mismo (`_chrome_h()`), así que el panel sigue cabiendo:
+  lo que no cabe se desplaza.
+
+Es del **perfil**, no de "controles en pantalla": un PC sigue igual aunque elija
+"Siempre"; un portátil táctil que lo quiera elige el perfil Tablet. Los cambios
+de perfil reconstruyen la interfaz como el resto de tokens (APLICAR).
 
 ## 3. Mostrar / ocultar HUD (`HudRegistry`)
 
@@ -450,6 +477,51 @@ menú único se lee si no hay otra y se borra al guardar: hay un solo ajuste). S
 (fondo, borde y símbolo); el que se pulsa se ve al 100 % y vuelve en 0,2 s al
 soltar. Ajustes → Controles → "Opacidad de los controles", al momento. En PC los
 controles siguen sin salir por defecto.
+
+### Tamaño de los controles (2026-10-18, rama `feat/controles-moviles`)
+
+Petición de Bryan: en el móvil, los controles en pantalla un poco más grandes, y
+que se puedan agrandar en Ajustes.
+
+- **Ajuste**: Ajustes → Controles → *Tamaño de los controles*, con
+  `GameConfig.TOUCH_CONTROLS_SIZE_MODES` = Del perfil (`auto`) / Pequeño 85 % /
+  Normal 100 % / Grande 125 % / Muy grande 150 %
+  (`TOUCH_CONTROLS_SIZE_SCALES`). Se guarda en `settings.cfg [interfaz]
+  touch_controls_size` (un valor desconocido vuelve a `auto`). Como el resto de
+  `[interfaz]`, es un valor por dispositivo y "Del perfil" sigue al perfil
+  activo: PC 100 %, tablet 115 %, móvil 130 % (`DeviceProfile.DEFAULTS[...]
+  ["controls_size"]`).
+- **Al momento**: `GameConfig.set_touch_controls_size()` emite
+  `EventBus.touch_controls_size_changed(escala)` (también al forzar otro perfil).
+  Lo escuchan `OnScreenControls` (cruceta, girar, zoom, R ↻ y ✕ CANCELAR: lado,
+  letra y huecos × escala, desde su tamaño de serie guardado en `base_min` /
+  `base_font`), `PlacementAssist` (el botón ✓ CONSTRUIR AQUÍ) y `UILayoutManager`.
+  La opacidad no cambia al cambiar el tamaño.
+- **Nunca se salen**: la escala que se aplica es
+  `UILayoutManager.touch_controls_scale()` =
+  `UILayoutConfig.touch_controls_fit(pedida, lienzo)`: se recorta si la cruceta
+  (152 px de serie) y la columna derecha (~130 × 232 colocando) no caben lado a
+  lado con sus márgenes, o si la columna no cabe bajo el ☰ MENÚ y la insignia
+  (`TOUCH_TOP_RESERVE`). Nunca baja de 85 %. Medido: móvil apaisado 985x554
+  (1280x720 a 130 %) y 1231x554 (2400x1080) admiten 150 %; vertical 480 de ancho
+  también; a 400 de ancho se queda en 122 %. Se recalcula con
+  `layout_changed` (girar, escala de interfaz).
+- **No chocan**: lo que va encima de los controles sube lo que ellos crecen
+  (`UILayoutConfig.touch_controls_lift` = (escala − 1) × 152, solo con los
+  controles en pantalla activos). Se aplica en `UILayoutManager.get_slot` a los
+  slots anclados abajo en una esquina (avisos `toast_area`, globos
+  `tip_above_dpad`, `tip_bottom_right`, `tip_bottom_left`) y, en pantalla
+  estrecha, a todos los de abajo (CONSTRUIR, ESCARAMUZAS, avisos), que allí van
+  encima de la cruceta (`sits_above_touch_controls`). CONSTRUIR en apaisado va en
+  el centro, entre la cruceta y el zoom, y no se mueve.
+- **Hueco conocido**: con la columna central bajada (lienzo de 720 a 1080 de
+  ancho) ESCARAMUZAS, a la derecha de CONSTRUIR, puede rozar la columna derecha
+  de los controles; ya pasaba al 100 % en anchos cercanos a 800.
+- Tests: `tests/ui/test_controles_moviles.gd` (escala por perfil y por modo,
+  guardado en `[interfaz]`, señal, botones que crecen y vuelven, opacidad
+  intacta, que quepan en móvil apaisado y vertical, la subida de los slots, filas
+  de Ajustes de dedo en móvil y sin cambios en PC, que Ajustes quepa, fila y
+  Restablecer de la pestaña Controles, textos ES/EN).
 
 ### Girar con dos dedos (3D)
 
