@@ -881,3 +881,20 @@ el Zepelín con solo cazas); que la espera tras el CG nv3 no sea "jugar las tres
 campañas de golpe". Palancas, por orden: `campaign_defs` (misiones y combates),
 `campaign_level_step`, `campaign_boss_extra_scale` / `campaign_boss_heavies`,
 `campaign_mission_cooldown`.
+
+## 15. Volverse el Imperio: después de ganar (1.2, rama `feat/volverse-imperio`, sin medir)
+
+La línea ya no acaba en la victoria. Ganado el Ataque Final, ¿QUÉ HACER? pasa a la
+siguiente conquista del archipiélago (`Objectives.empire_step()`: el edificio del medio
+si falta, tropa de ese medio si no hay, o la misión) en vez de "mundo libre"; con las
+seis islas tuyas dice "Todo el archipiélago es tuyo". Detalle en
+[06-progression-victory.md](06-progression-victory.md) §Volverse el Imperio.
+
+`line_probe` termina en la victoria, así que no cambia. Para medir la fase hace falta
+que la sonda siga jugando tras ganar (conquistar en el orden que propone
+`next_target()`): anotado como trabajo de la ronda final, con estas preguntas:
+
+- ¿Cuánto dura conquistar las seis islas (16 misiones, ~27 combates más descansos)?
+- ¿El tributo (hasta ~400 recursos y unos materiales cada 3 min con todas) llena la
+  bolsa y se tira? Si es así, bajar `tribute` o subir `empire_tribute_interval`.
+- ¿Hay huecos largos sin nada que hacer entre misiones (descanso de 120 s por isla)?
