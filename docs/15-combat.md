@@ -470,6 +470,78 @@ camara mas baja ensena mas suelo, que es un plano sin luz extra; la sombra
 sigue el mismo reglaje por calidad. **Sin medir todavia** con
 `battle_probe --fps` (pendiente del pase final, ver docs/26).
 
+### Mar y aire en la maqueta (1.1, rama `feat/aire-mar-vista`)
+
+La VISTA de las seis unidades de mar y aire y del agua del tablero. Las reglas
+(quien pisa que, quien pega a quien, el terreno de cada encuentro) son de la
+rama `feat/aire-mar-reglas`; esta vista solo pinta lo que el modelo diga y
+funciona igual sin ella (todo lo que lee es `CombatUnit.domain()` y, de forma
+defensiva, `encounter.get("terrain")`).
+
+**Las piezas** (`tools/build_toy_models.gd -- --units`, recetas en
+`tools/toy_recipes/units/<id>.gd`, piezas comunes nuevas en `_unit_parts.gd`:
+`hull`, `sea_stand`, `funnel`, `turret`, `prop`, `ellipsoid`, `roundel`):
+
+| Pieza | Dominio | Lo exagerado | Jugador | Regencia |
+|---|---|---|---|---|
+| Lancha torpedera (`torpedo_boat`) | mar | los dos tubos lanzatorpedos | 345 | 275 |
+| Canonera (`gunboat`) | mar | la torreta de proa con un canon gordo | 324 | 302 |
+| Acorazado (`dreadnought`) | mar | dos torretas de canones dobles, dos chimeneas | 478 | 438 |
+| Caza (`fighter`) | aire | biplano con la helice enorme | 356 | 366 |
+| Bombardero (`bomber`) | aire | bimotor con las dos bombas bajo la panza | 486 | 474 |
+| Dirigible (`airship`) | aire | la envuelta con franjas del bando | 456 | 480 |
+
+Todas por debajo de 800 (prueba `tests/ui/test_sea_air_view.gd`), con la
+superficie `team` del color de la colonia en las nuestras (el regimiento la
+pinta igual que en las de tierra, y su insignia sale en la placa) y el morado
+horneado en las de la Regencia. Marcadores `Muzzle` y `Top` como siempre.
+
+- **El bando por la forma, tambien aqui.** Un barco no lleva peana: lleva una
+  mancha de **espuma** (que ademas es su estela, abierta en V por la popa) con el
+  canto del bando, redonda los nuestros y en rombo la Regencia. Un avion tampoco:
+  su **sombra en el suelo** es redonda o en rombo (`UnitToy3D.shadow_mesh`, dos
+  mallas para todo el tablero). La sombra solo la llevan los de aire: sobre el
+  agua no hay sombra.
+- **Altura**: `BoardLayout3D.DOMAIN_HEIGHT` (mar -0,12, con la flotacion de la
+  pieza en `_unit_parts.WATERLINE`; aire 1,7 y la pieza montada desde
+  `AIR_Y` = 0,3 para que el oscurecimiento de contacto no le ensucie las alas).
+- **Vaiven**: el de siempre (un tween en bucle en `_lift`, ningun `_process`),
+  ahora por dominio (`UnitToy3D.BOB`: el barco 5 cm cada 1,6 s, el avion 12 cm
+  cada 1,1 s) y desfasado por uid. En calidad baja y minima no hay vaiven
+  (`calm`, la misma regla que el giro leve de la camara).
+- **Moverse** (`UnitToy3D.move_along`): tierra a saltitos (`hop_along`); mar
+  deslizandose casilla a casilla con una escora leve (`sail_along`), y su ruta
+  dibujada no corta por tierra (`BoardLayout3D.route_blocked`); aire despega,
+  vuela en linea recta al final de la ruta y aterriza (`fly_along`).
+- **Atacar** (`Board3D.attack_kind`): el acorazado, el bombardero y el
+  dirigible tiran en parabola (el obus de la artilleria); la lancha, la canonera
+  y el caza disparan directo. Sin efectos nuevos.
+- **Caer**: el barco levanta la proa y se hunde (y deja espuma, no crater); el
+  avion cae en barrena hasta su sombra y deja crater.
+
+**El agua del tablero** (`BoardTerrain3D.build(..., terrain)`). Las casillas
+`"water"` son la misma lamina de mar de la playa, 7 cm por debajo de las
+losetas (`BoardLayout3D.WATER_TOP`), sin junta entre una y otra, con una onda
+clara y espuma en los lados que dan a tierra; las `"shore"`, losetas de arena.
+Las marcas de casilla y las ✕ bajan a la lamina en el agua. Todo en la misma
+malla del terreno: ni una llamada de dibujo mas. Con agua, la maqueta abre en
+el escenario playa (`BattleScreen.board_scene_for`). Que casillas se iluminan
+para mover lo sigue diciendo `valid_moves` del modelo: la vista no filtra nada.
+
+**El frente.** Las casillas de agua son manchas de mar sobre el campo (y arena
+las de orilla), algo mayores que la casilla para que no se vea rejilla; los
+barcos flotan en ellas y los aviones van arriba, a su altura, con la sombra
+debajo. Donde hay agua no se pintan craters, matas ni la linea entre bandos.
+Donde cae el agua lo decide el terreno de las reglas (la propuesta de
+`docs/15 §11`: una franja de agua en un lado o al frente).
+
+**El tablero 2D** (`BattleScreen._style_cell`): las casillas vacias de agua se
+pintan con `UITheme.BOARD_WATER` (INFO oscurecido) y las de orilla con
+`BOARD_SHORE`; "puedes ir aqui" (`BOARD_MOVE`) manda sobre ellas. Las seis
+siluetas nuevas salen de `tools/gen_unit_icons.gd` (barcos de perfil con la
+proa a la derecha, aviones vistos desde arriba, el dirigible de perfil) a 64 y a
+24 / 42 / 60 / 96 px.
+
 ### Enseñar el combate (2026-10-14, rama `feat/ensenar-combate`)
 
 Diseño: `tormenta-imperial-contexto/21_REDISENO_CICLO_Y_CONTENIDO.md` §4.1-4.3. Tres
@@ -1471,10 +1543,18 @@ mar".
 ### Pendiente
 
 - Medir con `balance_probe` / `siege_probe` (no saben aun componer flotas).
-- La vista: agua en el tablero 8x8 y en el frente, piezas e iconos de las seis
-  unidades, modelos del Astillero y del Aerodromo (`feat/aire-mar-vista`).
 - `BattleScreen` (2D): tocar una casilla con avion encima de un soldado
   selecciona al soldado (`get_unit_at`); para elegir capa hara falta un gesto.
+
+### La vista
+
+**1.1: la vista ya esta** (rama `feat/aire-mar-vista`, ver §3 "Mar y aire en la
+maqueta"): las seis piezas (`torpedo_boat`, `gunboat`, `dreadnought`,
+`fighter`, `bomber`, `airship`), sus siluetas 2D, el agua del tablero 3D, del
+frente y del 2D, el despegue y el deslizarse en lugar del saltito, y las
+maquetas del Astillero y el Aerodromo. Las reglas (terreno del encuentro,
+movimiento y objetivos por dominio, entrenamiento) van en `feat/aire-mar-reglas`.
+
 ## 12. El regimiento (solo cosmético)
 
 Fila 3.1 del rediseño (doc 21 §5.1, rama `feat/regimiento`, 2026-10-14). El

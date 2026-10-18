@@ -11,7 +11,9 @@ extends GdUnitTestSuite
 ## Se tocan miembros privados a proposito, igual que en test_expedition_ui.gd: lo
 ## que se quiere vigilar es justo el dibujo.
 
-const UNIT_IDS := ["infantry", "artillery", "vehicle"]
+## Las tres de tierra y las seis de mar y aire (1.1): todas tienen silueta.
+const UNIT_IDS := ["infantry", "artillery", "vehicle",
+	"torpedo_boat", "gunboat", "dreadnought", "fighter", "bomber", "airship"]
 
 ## El movil mas estrecho que el tablero tiene que aguantar (quickstart E9).
 const PHONE := Vector2i(400, 720)
@@ -72,11 +74,12 @@ func test_every_unit_type_has_its_icon_on_disk() -> void:
 		assert_bool(FileAccess.file_exists(path)).override_failure_message(
 			"falta el icono de %s en %s" % [unit_id, path]).is_true()
 
-func test_the_three_unit_types_of_the_game_are_the_three_that_have_an_icon() -> void:
-	# Aire y mar (feat/aire-mar-reglas): las de tierra siguen siendo estas tres;
-	# los iconos de barcos y aviones los trae la rama de vista
-	# (feat/aire-mar-vista), y el caso de arriba los pide en disco.
-	assert_array(GameConfig.get_unit_ids_in_domain("land")).contains_exactly_in_any_order(UNIT_IDS)
+func test_every_unit_type_of_the_game_is_one_that_has_an_icon() -> void:
+	# Las nueve del juego (tres de tierra, seis de mar y aire) son justo las que
+	# tienen silueta, y las de tierra siguen siendo las tres de siempre.
+	assert_array(GameConfig.get_unit_ids()).contains_exactly_in_any_order(UNIT_IDS)
+	assert_array(GameConfig.get_unit_ids_in_domain("land")).contains_exactly_in_any_order(
+		["infantry", "artillery", "vehicle"])
 	for unit_id in UNIT_IDS:
 		assert_object(UITheme.unit_icon(unit_id)).override_failure_message(
 			"el icono de %s no esta importado" % unit_id).is_not_null()

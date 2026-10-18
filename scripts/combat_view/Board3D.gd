@@ -95,6 +95,9 @@ var _regiment: Dictionary = {}
 var _boss_uid := -1
 ## El escenario de la maqueta (BoardTerrain3D.SCENES): solo decorado.
 var _scene := "land"
+## El terreno del encuentro (BoardLayout3D.terrain_of): casilla -> "land" /
+## "water" / "shore". Vacio = todo tierra. Solo se pinta: las reglas son suyas.
+var _terrain_map: Dictionary = {}
 ## "front" o "board" (STYLES). Lo pone BattleScreen con la preferencia.
 var _style := STYLE_BOARD
 var _seed := 1
@@ -161,6 +164,7 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 
 	_scene = String(opts.get("scene", Terrain.SCENE_LAND))
 	_seed = int(opts.get("seed", 1))
+	_terrain_map = Layout.terrain_of(encounter)
 	var st := String(opts.get("style", _style))
 	_style = st if st in STYLES else STYLE_BOARD
 	_build_terrain()
@@ -177,6 +181,7 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 			"boss": unit.uid == _boss_uid, "crew": crews.has(unit.uid),
 			"team_color": _team_color,
 			"regiment": _regiment if unit.side == PLAYER else {},
+			"calm": _simple,
 		})
 		toy.position = _world_of(unit.position)
 		# Cada bando mira al otro: los nuestros al fondo, la Regencia hacia aca.
@@ -217,6 +222,9 @@ func set_style(style: String) -> void:
 func style() -> String:
 	return _style
 
+func terrain_map() -> Dictionary:
+	return _terrain_map
+
 func is_front() -> bool:
 	return _style == STYLE_FRONT
 
@@ -237,7 +245,7 @@ func _place_toys() -> void:
 			toy.position = _world_of(_cell_of[uid])
 
 func _build_terrain() -> void:
-	_terrain.mesh = Terrain.build(board, _seed, _simple, _scene, is_front())
+	_terrain.mesh = Terrain.build(board, _seed, _simple, _scene, is_front(), _terrain_map)
 
 ## Lo que cambia entre las dos vistas ademas del suelo: las marcas de casilla
 ## (en el frente no hay) y el fondo (en el frente, un cielo de bruma en vez de
@@ -363,13 +371,17 @@ func _play_move(uid: int, from: Vector2i, to: Vector2i) -> void:
 		_cell_of[uid] = to
 		return
 	var start: Vector2i = _cell_of.get(uid, from)
-	var route: Array = Layout.path(start, to, _occupied_except(uid), board)
+	# Un barco no dibuja su ruta por tierra; el aire vuela derecho (fly_along
+	# solo mira el final). Las reglas ya decidieron a donde llega.
+	var blocked := _occupied_except(uid)
+	blocked.merge(Layout.route_blocked(_terrain_map, toy.domain, board))
+	var route: Array = Layout.path(start, to, blocked, board)
 	var points: Array = []
 	for i in range(1, route.size()):
 		points.append(_world_of(route[i]))
 	_cell_of[uid] = to
 	_follow(_world_of(to), 0.35)
-	var tw: Tween = toy.hop_along(points, MOVE_STEP * _tempo())
+	var tw: Tween = toy.move_along(points, MOVE_STEP * _tempo())
 	await tw.finished
 
 func _play_attack(attacker: int, target: int, damage: int) -> void:
@@ -404,8 +416,12 @@ func _play_attack(attacker: int, target: int, damage: int) -> void:
 
 ## Que animacion de ataque toca: la artilleria tira por elevacion; quien pega a
 ## una casilla de distancia sin canon, a la bayoneta; el resto, disparo directo.
+## Mar y aire (1.1): el acorazado tira por elevacion como la artilleria; el
+## bombardero y el dirigible sueltan su carga en parabola (el mismo obus); la
+## lancha, la canonera y el caza disparan directo. Sin efectos nuevos.
+const SHELL_UNITS := ["artillery", "dreadnought", "bomber", "airship"]
 static func attack_kind(unit_id: String, dist: int) -> String:
-	if unit_id == "artillery":
+	if unit_id in SHELL_UNITS:
 		return "shell"
 	if unit_id == "infantry" and dist <= 1:
 		return "melee"
@@ -426,7 +442,17 @@ func _play_die(uid: int) -> void:
 	var at: Vector3 = toy.global_position
 	var tw: Tween = toy.die(DEATH_TIME * _tempo())
 	await tw.finished
-	_fx.crater(at)
+	_wreck(toy, at)
+
+## Lo que deja una pieza al caer: crater en tierra (tambien el avion, que cae
+## al suelo); en el agua, solo una salpicadura de espuma.
+func _wreck(toy, at: Vector3) -> void:
+	if toy.domain == "sea" or Layout.is_water(_terrain_map, Layout.world_to_cell(at, board)):
+		_fx.puff(at + Vector3(0, 0.1, 0), WATER_SPLASH)
+	else:
+		_fx.crater(at)
+
+const WATER_SPLASH := Color(0.86, 0.92, 0.94)
 
 func _play_defend(uid: int) -> void:
 	var toy = _toys.get(uid)
@@ -476,7 +502,7 @@ func _reconcile() -> void:
 		if not unit.is_alive():
 			if toy.alive:
 				toy.remove_now()
-				_fx.crater(toy.global_position)
+				_wreck(toy, toy.global_position)
 			_cell_of.erase(unit.uid)
 			continue
 		if _cell_of.get(unit.uid, Vector2i(-99, -99)) != unit.position:
@@ -733,7 +759,7 @@ func _place_crosses() -> void:
 		var l: Label3D = _cross_labels[i]
 		l.visible = i < cells.size()
 		if l.visible:
-			l.position = _world_of(cells[i]) + Vector3(0, 0.35, 0)
+			l.position = _world_of(cells[i]) + Vector3(0, 0.35 + Layout.ground_y(_terrain_map, cells[i]), 0)
 
 func no_fire_cross_count() -> int:
 	var n := 0
@@ -845,7 +871,9 @@ func _layout_marks() -> void:
 	for y in board.y:
 		for x in board.x:
 			var i := y * board.x + x
-			mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, _world_of(Vector2i(x, y)) + Vector3(0, 0.035, 0)))
+			# Sobre la lamina de agua en el mar (mas baja que las losetas).
+			var gy := Layout.ground_y(_terrain_map, Vector2i(x, y))
+			mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, _world_of(Vector2i(x, y)) + Vector3(0, 0.035 + gy, 0)))
 			mm.set_instance_custom_data(i, Color(0, 0, 0, 0))
 	_paint_marks()
 

@@ -215,7 +215,19 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 	var decor := preload("res://scripts/buildings/DecorMesh.gd")
 	if decor.handles(building_id):
 		return decor.instantiate(building_id)
+	# Astillero y Aerodromo (1.1, feat/aire-mar-vista): su maqueta horneada.
+	# Lo normal es que su .tres la lleve en `model_scene`; esto cubre un .tres
+	# que aun no la tenga, para que nunca salga un edificio sin cuerpo.
+	if building_id in BAKED_ONLY:
+		var baked := "res://assets/models/toy/%s.tscn" % building_id
+		if ResourceLoader.exists(baked):
+			var scene := load(baked) as PackedScene
+			if scene != null:
+				return scene.instantiate() as Node3D
 	return null
+
+## Edificios que solo existen como maqueta horneada (sin version procedural).
+const BAKED_ONLY := ["shipyard", "aerodrome"]
 
 ## Create a road mesh with neighbor connectivity.
 ## neighbors is a bitmask: NORTH=1, EAST=2, SOUTH=4, WEST=8

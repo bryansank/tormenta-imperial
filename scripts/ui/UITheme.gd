@@ -74,6 +74,11 @@ static var BRANCH_LOGISTICS: Color
 static var BOARD_EMPTY: Color
 static var BOARD_MOVE: Color
 static var BOARD_TARGET: Color
+# Casillas de mar y de orilla del tablero 2D (mar y aire, 1.1): el agua es el
+# azul acero de INFO oscurecido (mas oscuro que "puedes ir aqui"), la orilla la
+# superficie tirando a laton. Derivados de la paleta como los de arriba.
+static var BOARD_WATER: Color
+static var BOARD_SHORE: Color
 
 static func _static_init() -> void:
 	_apply_tokens(resolve_tokens("default", false, 1.0))
@@ -221,6 +226,8 @@ static func _apply_tokens(d: Dictionary) -> void:
 	BOARD_EMPTY = d["BOARD_EMPTY"]
 	BOARD_MOVE = d["BOARD_MOVE"]
 	BOARD_TARGET = d["BOARD_TARGET"]
+	BOARD_WATER = d["BOARD_WATER"]
+	BOARD_SHORE = d["BOARD_SHORE"]
 
 ## Los tokens que saldrian con esas opciones, sin aplicarlos. Puro: los tests y
 ## la vista previa de Ajustes lo usan para comparar paletas.
@@ -266,6 +273,8 @@ static func _derive(d: Dictionary, hc: bool) -> void:
 	d["BOARD_EMPTY"] = surface.lightened(0.02)
 	d["BOARD_MOVE"] = (d["INFO"] as Color).darkened(0.2)
 	d["BOARD_TARGET"] = (d["DANGER"] as Color).darkened(0.15)
+	d["BOARD_WATER"] = (d["INFO"] as Color).darkened(0.5)
+	d["BOARD_SHORE"] = surface.lerp(accent, 0.22)
 
 ## Tamano de letra escalado, nunca por debajo de 11 px (legible en movil).
 static func scaled_font(base_px: int, scale: float) -> int:
