@@ -114,7 +114,7 @@ static func _trade_port(mk) -> Dictionary:
 		mk.box(foot + Vector3(0, 1.6 * t + 0.16, 0), Vector3(0.28, 0.06, 0.28), C(S.IRON))
 	mk.box(foot + Vector3(-0.05, 1.82, 0.05), Vector3(0.36, 0.3, 0.36), C(S.RED, -0.05))
 	var jib0 := foot + Vector3(0, 1.85, 0)
-	var jib1 := Vector3(0.55, 2.05, 1.55)
+	var jib1 := Vector3(0.55, 2.05, 1.28)
 	mk.beam(jib0, jib1, 0.14, C(S.BRASS, 0.05))
 	mk.beam(foot + Vector3(0, 2.15, 0), jib1, 0.05, C(S.IRON))
 	mk.beam(jib1, jib1 + Vector3(0, -0.85, 0), 0.03, C(S.IRON))
