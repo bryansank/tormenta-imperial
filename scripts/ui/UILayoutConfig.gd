@@ -111,12 +111,22 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_BOTH,
 	},
+	## La columna de avisos (NotificationPanel, Bryan 2026-10-18): el UNICO
+	## sitio de los avisos, logros y ascensos. Bajo los recursos (y bajo la
+	## Tormenta cuando esta baja a la izquierda): se apila tras el registro,
+	## que casi siempre esta oculto y le cede su sitio (y abierto, los avisos
+	## esperan). Lejos de CONSTRUIR y su
+	## consejo (abajo al centro), de ¿QUE HACER? y la insignia (arriba a la
+	## derecha) y de la cruceta (abajo a la izquierda: NotificationPanel.capacity
+	## deja uno si no caben dos).
 	"toast_area": {
-		"anchor": Rect2(0, 1, 0, 1),
-		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 200},
-		"max_size": Vector2(344, 210),
+		"anchor": Rect2(0, 0, 0, 0),
+		"margin": {"left": 10, "top": 186, "right": 0, "bottom": 0},
+		"max_size": Vector2(330, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
-		"grow_v": Control.GROW_DIRECTION_BEGIN,
+		"grow_v": Control.GROW_DIRECTION_END,
+		"stack_after": "NotificationPanel.log",
+		"gap": 8,
 	},
 	"bottom_center": {
 		"anchor": Rect2(0.5, 1, 0.5, 1),
@@ -157,7 +167,8 @@ const SLOTS := {
 		"max_size": Vector2(260, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
-		"stack_after": "NotificationPanel.log",
+		# Bajo la columna de avisos (vacia mide 0 y el globo queda donde estaba).
+		"stack_after": "NotificationPanel.toasts",
 		"gap": 8,
 		"follow_moved": true,
 	},
@@ -239,11 +250,6 @@ const COLUMN_NARROW_SLOTS := {
 	## La Tormenta baja a la izquierda: la velocidad se queda arriba en el centro,
 	## sin apilarse tras ella (cae en mitad de la columna izquierda).
 	"speed_button": {"stack_after": ""},
-	"toast_area": {
-		"anchor": Rect2(0.5, 1, 0.5, 1),
-		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 84},
-		"grow_h": Control.GROW_DIRECTION_BOTH,
-	},
 }
 const NARROW_SLOTS := {
 	"storm_banner": {
@@ -260,10 +266,8 @@ const NARROW_SLOTS := {
 	"bottom_center": {
 		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 196},
 	},
-	## Y los avisos, por encima de CONSTRUIR.
-	"toast_area": {
-		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 256},
-	},
+	## Los avisos, mas estrechos (uno a la vez, bajo la Tormenta como el registro).
+	"toast_area": {"max_size": Vector2(300, 0)},
 	## ESCARAMUZAS no cabe a la derecha de CONSTRUIR en 400 px: va centrado justo
 	## encima (196 + 64 de CONSTRUIR + 8 de hueco), por debajo de los avisos.
 	"skirmish_button": {
@@ -292,7 +296,7 @@ const NARROW_SLOTS := {
 		# 250 y no 280: a la derecha, en tactil, estan girar/zoom (x >= 272).
 		"max_size": Vector2(250, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
-		"stack_after": "StormHUD",
+		"stack_after": "NotificationPanel.toasts",
 		"gap": 8,
 	},
 }

@@ -260,6 +260,8 @@ func _setup_ui() -> void:
 
 	_tip_card = _make_callout()
 	_tip_card.name = "TipCard"
+	# Los avisos (NotificationPanel) esperan si el consejo cae sobre su columna.
+	_tip_card.add_to_group("alert_blocker")
 	_tip_card.anchor_left = 0.5
 	_tip_card.anchor_right = 0.5
 	_tip_card.anchor_top = 1.0

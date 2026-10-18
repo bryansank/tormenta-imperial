@@ -18,6 +18,8 @@ extends Node
 ##   --only-hud        solo la captura del HUD
 ##   --controls-size=small|normal|large|xlarge   tamano de los controles en pantalla
 ##   --no-help         sin globos de ayuda ni tarjetas del tutorial
+##   --alerts          tras el HUD, varios avisos a la vez (peligro, advertencia,
+##                     repetidos, logro, era, rango) y luego con CONSTRUIR abierto
 ##   --placing         tras el HUD, una captura colocando una Casa (✓, R, CANCELAR)
 ##   --settings-tabs=1,2,3   pestanas de Ajustes que capturar (por defecto 1,3)
 ##
@@ -110,6 +112,8 @@ func _run() -> void:
 			tut.visible = false
 	await _frames(10)
 	await _shot("hud")
+	if _arg("alerts") == "true":
+		await _alerts(main)
 	if _arg("placing") == "true":
 		EventBus.building_selected_for_placement.emit(load("res://data/buildings/house.tres"))
 		await _frames(20)
@@ -159,8 +163,41 @@ func _run() -> void:
 
 	CombatManager.start_skirmish({"infantry": 3, "artillery": 1})
 	await _frames(30)
+	if _arg("alerts") == "true":
+		EventBus.notification_posted.emit("¡La ceniza cae sobre la colonia!", "danger", UITheme.DANGER)
+		EventBus.notification_posted.emit("Sin madera: la gente pasa frío.", "warning", UITheme.WARNING)
+		await _frames(10)
 	await _shot("board")
 	_finish()
+
+## Una rafaga de avisos como la de una partida real (un frame con Tormenta,
+## almacen lleno repetido, un material nuevo, un logro, una era y un ascenso),
+## y otra con CONSTRUIR abierto. Capturas "alerts" y "alerts_window".
+func _alerts(main: Node) -> void:
+	EventBus.notification_posted.emit("Almacén lleno: se perdieron 40 (tope 1600)", "warning", UITheme.WARNING)
+	EventBus.notification_posted.emit("Nuevo material: Vigas de acero. Fabrícalo en su edificio (tócalo y elige el proceso).", "notice", UITheme.ACCENT)
+	EventBus.notification_posted.emit("¡La ceniza llega en 30 s! Guarda la madera.", "danger", UITheme.DANGER)
+	EventBus.notification_posted.emit("Almacén lleno: se perdieron 40 (tope 1600)", "warning", UITheme.WARNING)
+	EventBus.notification_posted.emit("Sin madera: la gente pasa frío y baja la moral.", "warning", UITheme.WARNING)
+	EventBus.notification_posted.emit("Almacén lleno: se perdieron 40 (tope 1600)", "warning", UITheme.WARNING)
+	EventBus.milestone_completed.emit("era_2")
+	EventBus.era_advanced.emit(2)
+	EventBus.governor_rank_up.emit(3, {"limits": {}})
+	# Pronto: 1,3 s despues (el logro lleva su espera de entrada) y antes de que
+	# el primero se vaya.
+	await _frames(80)
+	await _shot("alerts")
+	var menu: Node = main.get_node_or_null("ConstructionMenu")
+	if menu != null:
+		menu.call("_open")
+		await _frames(10)
+		EventBus.notification_posted.emit("Sin oro: no se pueden pagar los sueldos.", "warning", UITheme.WARNING)
+		EventBus.notification_posted.emit("¡La Tormenta golpea la Fundición!", "danger", UITheme.DANGER)
+		await _frames(20)
+		await _shot("alerts_window")
+		menu.call("_toggle_panel")
+		await _frames(20)
+		await _shot("alerts_after_window")
 
 ## Fase avanzada, poblacion y la Tormenta en aviso: todo el HUD a la vista.
 func _seed_state() -> void:

@@ -49,20 +49,24 @@ func test_the_badge_has_its_own_slot_and_is_registered() -> void:
 	assert_bool(HudRegistry.ELEMENTS.has("RankPanel")).is_true()
 	assert_bool("RankPanel" in HudRegistry.ORDER).is_true()
 
+## El ascenso va a la columna de avisos (NotificationPanel, "achievement") en
+## una frase con lo desbloqueado.
 func test_ranking_up_shows_a_short_toast_with_what_it_opened() -> void:
 	var panel := _panel()
+	var notes: CanvasLayer = auto_free(load("res://scenes/ui/NotificationPanel.tscn").instantiate())
+	add_child(notes)
 	await await_idle_frame()
 	RankManager.add_xp(RankManager.xp_for_rank(2))
-	var toast: PanelContainer = panel.toast()
-	assert_object(toast).is_not_null()
-	var title: Label = toast.find_child("RankToastTitle", true, false)
-	assert_str(title.text).contains("2")
-	# Lo desbloqueado (el jardin), en una linea corta.
 	var garden: BuildingData = load("res://data/buildings/garden.tres")
-	var texts: Array = []
-	for label in toast.find_children("*", "Label", true, false):
-		texts.append((label as Label).text)
-	assert_bool(texts.any(func(s): return String(s).contains(garden.get_display_name()))).is_true()
+	var entries: Array = (notes.alerts().shown + notes.alerts().waiting).filter(
+		func(e): return String(e["category"]) == "achievement")
+	assert_int(entries.size()).is_equal(1)
+	var text := String(entries[0]["text"])
+	assert_str(text).contains("2")
+	# Lo desbloqueado (el jardin), en la misma frase.
+	assert_str(text).contains(garden.get_display_name())
+	# Ya no hay placa propia del panel.
+	assert_object(panel.find_child("RankToast", true, false)).is_null()
 
 func test_the_colony_card_opens_the_editor_and_locks_what_is_not_earned() -> void:
 	var panel := _panel()

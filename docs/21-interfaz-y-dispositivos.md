@@ -495,9 +495,9 @@ que se puedan agrandar en Ajustes.
 - **No chocan**: lo que va encima de los controles sube lo que ellos crecen
   (`UILayoutConfig.touch_controls_lift` = (escala − 1) × 152, solo con los
   controles en pantalla activos). Se aplica en `UILayoutManager.get_slot` a los
-  slots anclados abajo en una esquina (avisos `toast_area`, globos
-  `tip_above_dpad`, `tip_bottom_right`, `tip_bottom_left`) y, en pantalla
-  estrecha, a todos los de abajo (CONSTRUIR, ESCARAMUZAS, avisos), que allí van
+  slots anclados abajo en una esquina (globos `tip_above_dpad`,
+  `tip_bottom_right`, `tip_bottom_left`; los avisos ya no viven abajo, §14) y, en
+  pantalla estrecha, a todos los de abajo (CONSTRUIR, ESCARAMUZAS), que allí van
   encima de la cruceta (`sits_above_touch_controls`). CONSTRUIR en apaisado va en
   el centro, entre la cruceta y el zoom, y no se mueve.
 - **Hueco conocido**: con la columna central bajada (lienzo de 720 a 1080 de
@@ -938,3 +938,51 @@ está el registro y cómo se limpian las rutas: docs/19 §7.
 PARTIDA lleva dos filas de dos botones (Guardar | PARTIDAS, Historia | Informar
 fallo, con letra de cuerpo): con diez botones en columna, en una tablet de 720 px
 de alto "Guardar y salir" quedaba tras el scroll; con ocho filas cabe entero.
+
+## 14. Avisos: un solo sitio (2026-10-18, rama `integracion/1.0-bandera-controles`)
+
+Bryan: "las alertas se sobreponen a todo, se ve feo". Antes había cuatro sitios
+que pintaban encima de lo que fuera: los toasts de `NotificationPanel` (abajo a la
+izquierda, hasta 3, y en tablet 4:3 al centro encima de CONSTRUIR), la placa de
+hito y era de `ProgressPanel` (a un tercio de pantalla, centrada), el ascenso de
+`RankPanel` (bajo la insignia) y las tarjetas de `HelperPanel`. Con una ráfaga
+(Tormenta + almacén lleno + logro + era + rango) se apilaban, y el peligro podía
+perderse porque el tope tiraba el más viejo.
+
+- **Un sitio**: la columna izquierda bajo los recursos (`toast_area`, apilada tras
+  el registro, que casi siempre está oculto y le cede su sitio; en tablet 4:3 y
+  móvil queda bajo la Tormenta, que baja a esa columna). No toca CONSTRUIR ni su
+  consejo (abajo al centro), ¿QUÉ HACER? ni la insignia (arriba a la derecha) ni
+  los controles en pantalla. El globo de los recursos (`tip_left`) va debajo.
+- **Hitos, eras y ascensos son avisos** (categoría `achievement`): `ProgressPanel`
+  y `RankPanel` ya no pintan placas; emiten `notification_posted` y el ascenso va en
+  una frase (`RankPanel.rank_up_text`: "▲ 3 · Maestro de obras: + Jardín").
+- **Como mucho 2 a la vez; 1 en teléfono** (perfil `phone` o lienzo estrecho) o si
+  entre la columna y la cruceta no caben dos (`NotificationPanel.capacity`). El
+  resto espera en `AlertQueue` (pura, `scripts/ui/AlertQueue.gd`): por orden de
+  llegada, los de peligro delante (y desplazan a uno corriente), y la cola no pasa
+  de 4: lo de más se resume en "N avisos más en el REGISTRO", que sale el último.
+- **Repetidos agrupados**: el mismo texto y categoría no sale dos veces; suma
+  "×3" y su reloj vuelve a empezar.
+- **Compactos**: icono (cuadrito del color con "!", "i", "▲" o "»", para no
+  depender del color), una frase (`headline`: hasta el primer ". ", "! " o "? ";
+  el texto entero va en el registro y en la ayuda emergente), "×N" y ✕. Dos líneas
+  como mucho; se van solos (5 s, peligro 7 s). Sin animaciones.
+- **Con algo abierto esperan**: una ventana de `UIManager` (CONSTRUIR, ficha,
+  Ejército, Misiones, Mercado, Ajustes...), el tablero, el registro, un parte de
+  guerra o la derrota/victoria (grupo `modal_screen`), la intro del tutorial, o la
+  tarjeta del tutorial o un consejo encima de la columna (grupo `alert_blocker`).
+  Mientras, solo se ve **un aviso de peligro, pequeño** (una línea), apartado en
+  la esquina de abajo a la izquierda (libre con CONSTRUIR, la ficha, Ajustes y el
+  tablero; arriba tapaba la cabecera del tablero); al cerrar,
+  salen los que esperaban, con su cuenta. La salida y vuelta de una expedición
+  (`combat`) ya no se pinta encima de la pelea: espera como los demás.
+- **Coste**: como mucho dos `PanelContainer` en pantalla; `_process` solo corre
+  mientras hay avisos en pantalla o en cola (mira la tarjeta del tutorial cada
+  0,25 s).
+
+Tests: `tests/ui/test_alert_queue.gd` (la regla pura y el panel),
+`tests/ui/test_held_notices.gd` (tablero), `test_hud_layout`, `test_hud_words`,
+`test_rank_panel`. Sonda: `tools/interfaz_probe.gd -- --alerts --no-help
+--only-hud` (ráfaga de avisos, luego con CONSTRUIR abierto y al cerrarlo; capturas
+`*_alerts*.png` en `docs/media/dev/interfaz/`).

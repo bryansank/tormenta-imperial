@@ -122,7 +122,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- MarketPanel (CanvasLayer 11) -- buy/sell UI, opened from a Market building (not from the menu)
   +-- ProgressPanel (CanvasLayer 11) -- milestones + era display
   +-- VictoryScreen (CanvasLayer 20) -- victory overlay
-  +-- NotificationPanel (CanvasLayer 11) -- toasts (only warning, danger and notice) + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips; the objective strip at the top centre is gone too, 2026-10-05: the next step lives in ¿QUÉ HACER?)
+  +-- NotificationPanel (CanvasLayer 11) -- THE single place for alerts (warning, danger, notice, combat and achievement = milestone/era/rank-up; docs/21 §14): one column top-left under the resources, max 2 (1 on phone), the rest queued and repeats grouped "×3" (`AlertQueue`), icon + one sentence + ✕, no animations; with a window, the board or the tutorial card over it they wait (one small danger only) + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips; the objective strip at the top centre is gone too, 2026-10-05: the next step lives in ¿QUÉ HACER?)
   +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI, opened from a Laboratory building (not from the menu)
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step()
   +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign; FICHA opens each unit's card (UnitCard)
@@ -682,10 +682,10 @@ service drains it onto the `EventBus`; the UI only reads and calls.
   empty). Minimal quality forces "board" (cheapest measured). Models, AI and
   AutoResolver never know which view is on.
 - **Colony notices wait for the fight:** while `CombatManager.is_board_open()`,
-  NotificationPanel holds its toasts (log at once; category `combat` still shows),
-  ProgressPanel/RankPanel hold their toasts and HelperPanel goes quiet (except the
-  `encounter` tip); all resume on `EventBus.encounter_closed` (end of
-  `CombatManager.end_encounter()`).
+  NotificationPanel holds its alerts (log at once; only one `danger` shows, small;
+  milestones, eras and rank-ups are alerts too since 2026-10-18) and HelperPanel
+  goes quiet (except the `encounter` tip); all resume on
+  `EventBus.encounter_closed` (end of `CombatManager.end_encounter()`).
 
 Three roads reach the same board: an expedition node (player picks the party in
 `SkirmishPanel`, which calls `CombatManager.launch_expedition()`; a win pays loot),
