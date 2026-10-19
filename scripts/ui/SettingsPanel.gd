@@ -547,7 +547,9 @@ func reset_interface() -> void:
 	GameConfig.ui_combat_view = "front"
 	GameConfig.ui_fps_cap = "auto"
 	GameConfig.set_hud_words("auto")
-	for row_name in ["ProfileRow", "ScaleRow", "TextSizeRow", "QualityRow", "CombatViewRow", "FpsRow", "HudWordsRow"]:
+	# El tema vuelve a Claro (el de serie); se ve al APLICAR, con lo demas.
+	GameConfig.ui_theme = "light"
+	for row_name in ["ProfileRow", "ScaleRow", "TextSizeRow", "QualityRow", "CombatViewRow", "FpsRow", "HudWordsRow", "ThemeRow"]:
 		var picker = _picker_of(row_name)
 		if picker != null:
 			picker.select(0)

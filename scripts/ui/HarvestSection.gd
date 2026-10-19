@@ -108,7 +108,7 @@ func refresh() -> void:
 		_stock_row.tooltip_text = Tr.t("LBL_STOCK_FULL")
 	else:
 		_stock_row.tooltip_text = Tr.t("LBL_STOCK_TIP")
-	_stock_label.add_theme_color_override("font_color", CT.sem("WARNING").darkened(0.35) if full else CT.text("window", true))
+	_stock_label.add_theme_color_override("font_color", CT.tone_color("warning") if full else CT.text("window", true))
 	_collect_btn.disabled = total <= 0
 	if _crop_box.visible:
 		var current: String = ProductionManager.get_crop(_node)

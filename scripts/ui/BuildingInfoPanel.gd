@@ -224,6 +224,7 @@ func _build_ui() -> void:
 	_name_edit.add_theme_font_override("font", CT.body_font())
 	_name_edit.add_theme_font_size_override("font_size", CT.fs("body"))
 	_name_edit.add_theme_color_override("font_color", CT.text("window"))
+	_name_edit.add_theme_color_override("font_placeholder_color", CT.text("window", true))
 	_name_edit.add_theme_stylebox_override("normal", CT.well_style("window", 12, 8))
 	_name_edit.add_theme_stylebox_override("focus", CT.box(CT.c("window", "WELL"), CT.sem("ACCENT"), 2, 12, 8))
 	_name_edit.text_submitted.connect(func(_t): _on_rename())
@@ -284,7 +285,7 @@ func _build_ui() -> void:
 	# El nivel 3 de los que producen pide repuestos: se avisa antes de pulsar.
 	_upgrade_parts_label = CT.para("", "window", false, "small")
 	_upgrade_parts_label.name = "UpgradeParts"
-	_upgrade_parts_label.add_theme_color_override("font_color", CT.sem("WARNING").darkened(0.35))
+	_upgrade_parts_label.add_theme_color_override("font_color", CT.tone_color("warning"))
 	_upgrade_parts_label.visible = false
 	_upgrade_container.add_child(_upgrade_parts_label)
 	# Con el boton apagado, por que (en gris el boton, en rojo el porque).
