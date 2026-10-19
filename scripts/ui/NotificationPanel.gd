@@ -47,6 +47,11 @@ var _toast_layer: CanvasLayer
 var _is_open := false
 var _log_entries: Array = []
 var _log_vbox: VBoxContainer
+## El registro cambio mientras estaba cerrado: se rehace al abrirlo.
+var _log_dirty := true
+## El estilo nuevo del REGISTRO (feat/ui2-menus). Los avisos (la columna) son
+## de otro frente de trabajo.
+const LogCT := preload("res://scripts/ui/CartoonTheme.gd")
 var _toast_container: VBoxContainer
 ## Con algo abierto, el unico aviso de peligro se aparta a la esquina de abajo a
 ## la izquierda (libre con CONSTRUIR, la ficha, Ajustes y el tablero), en vez
@@ -119,27 +124,47 @@ func _setup_ui() -> void:
 	_edge_container.alignment = BoxContainer.ALIGNMENT_END
 	toast_root.add_child(_edge_container)
 
-	# Log panel
+	# REGISTRO (feat/ui2-menus, docs/28): una ventana crema en su hueco de
+	# siempre, con el titulo y la X redonda arriba y una fila por aviso:
+	# [icono del tipo] la frase, con una franja del color del tipo.
 	_panel = PanelContainer.new()
+	_panel.name = "LogPanel"
 	UILayoutManager.apply_layout("NotificationPanel.log", _panel)
 	_panel.visible = false
-	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
+	var ws := LogCT.window_style()
+	ws.set_content_margin_all(12)
+	_panel.add_theme_stylebox_override("panel", ws)
 	root.add_child(_panel)
 	HudRegistry.register("NotificationPanel.log", _panel)
 
 	var panel_vbox := VBoxContainer.new()
-	panel_vbox.add_theme_constant_override("separation", 4)
+	panel_vbox.add_theme_constant_override("separation", 8)
 	_panel.add_child(panel_vbox)
 
-	panel_vbox.add_child(UITheme.make_panel_header(Tr.t("LBL_LOG_TITLE"), _toggle_panel))
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	panel_vbox.add_child(head)
+	var head_icon := LogCT.make_glyph("clock", 28, LogCT.sem("INFO"))
+	head_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(head_icon)
+	var title := LogCT.label(Tr.t("UI2M_LOG_TITLE"), "title", LogCT.text("window"))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close := LogCT.close_button(44)
+	close.name = "CloseLog"
+	close.tooltip_text = Tr.t("BTN_CLOSE")
+	close.pressed.connect(_toggle_panel)
+	head.add_child(close)
 
 	var scroll := ScrollContainer.new()
+	scroll.name = "LogScroll"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panel_vbox.add_child(scroll)
 
 	_log_vbox = VBoxContainer.new()
-	_log_vbox.add_theme_constant_override("separation", 2)
+	_log_vbox.name = "LogList"
+	_log_vbox.add_theme_constant_override("separation", 4)
 	_log_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_log_vbox)
 
@@ -462,13 +487,58 @@ static func headline(text: String) -> String:
 		return text.substr(0, cut + 1)
 	return text
 
+## La lista del registro. Solo se rehace con el registro abierto: cerrado, se
+## marca y se rehace al abrirlo (antes eran 50 etiquetas nuevas por aviso).
 func _refresh_log() -> void:
+	if not _is_open:
+		_log_dirty = true
+		return
+	_log_dirty = false
 	for child in _log_vbox.get_children():
 		child.queue_free()
+	if _log_entries.is_empty():
+		_log_vbox.add_child(LogCT.para(Tr.t("UI2M_LOG_EMPTY"), "window", true))
+		return
 	for entry in _log_entries:
-		var label := UITheme.make_label(entry["message"], "small", entry["color"])
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD
-		_log_vbox.add_child(label)
+		_log_vbox.add_child(_make_log_row(entry))
+
+## Una fila: [icono] frase, en una tarjeta con la franja del color del tipo.
+func _make_log_row(entry: Dictionary) -> PanelContainer:
+	var row := PanelContainer.new()
+	var st := LogCT.card_style("window")
+	st.set_content_margin_all(4)
+	st.content_margin_left = 10
+	st.border_color = Color(entry["color"])
+	st.border_width_left = 6
+	row.add_theme_stylebox_override("panel", st)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 8)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(line)
+	var ic := LogCT.make_glyph(log_glyph(String(entry["category"])), 22)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	line.add_child(ic)
+	var label := LogCT.para(String(entry["message"]), "window", false, "small")
+	label.name = "Message"
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(label)
+	return row
+
+## El icono de cada tipo en el registro (CartoonIcon): no depende solo del color.
+static func log_glyph(category: String) -> String:
+	match category:
+		"danger":
+			return "storm"
+		"warning":
+			return "wrench"
+		"achievement":
+			return "star"
+		"combat":
+			return "army"
+		"notice":
+			return "check"
+	return "help"
 
 ## Que categorias salen en pantalla ademas de ir al registro. "combat" es la
 ## salida y la vuelta de la columna (_on_expedition_started/_ended): pasa fuera
@@ -488,6 +558,8 @@ func is_open() -> bool:
 func _toggle_panel() -> void:
 	_is_open = not _is_open
 	_panel.visible = _is_open
+	if _is_open and _log_dirty:
+		_refresh_log()
 	_pump()
 
 # ── Fases ──

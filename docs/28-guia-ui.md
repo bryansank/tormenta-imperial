@@ -351,10 +351,11 @@ Decisiones tomadas aquí (revisables):
   "al tocar recursos").
 - La línea del siguiente paso se oculta mientras habla la Capitana en el
   tutorial guiado (no se repite la misma cara dos veces).
-## 15. Fase 2 · CONSTRUIR, ficha, Mercado e Investigar (rama `feat/ui2-construir`)
+
+## 16. Fase 2 · CONSTRUIR, ficha, Mercado e Investigar (rama `feat/ui2-construir`)
 
 Hechas con las piezas de esta guía y las de la sección `# --- CONSTRUIR` de
-`CartoonTheme`; detalle por pantalla en `docs/21-interfaz-y-dispositivos.md` §15.
+`CartoonTheme`; detalle por pantalla en `docs/21-interfaz-y-dispositivos.md` §16.
 
 - **CONSTRUIR**: carril de pestañas a la izquierda (icono; con palabra en PC),
   filas de una línea `[miniatura] Nombre … [coste] [martillo]` con lo que falta
@@ -376,7 +377,8 @@ Pendiente de la ronda de pruebas (capturas en 640×360, 800×360, tablet y
 1280×720) y de que el frente del HUD ponga `CartoonTheme.phone` y el lienzo del
 teléfono en dp (§4.2): hasta entonces, en un teléfono real el lienzo mide ~554 de
 alto y estas pantallas salen con la disposición de tablet.
-## 15. Fase 2 · Ejército, Misiones, combate y partes (`feat/ui2-ejercito`)
+
+## 17. Fase 2 · Ejército, Misiones, combate y partes (`feat/ui2-ejercito`)
 
 Pantallas rehechas con esta guía: `ArmyPanel`, `RegimentCard`, `UnitCard`,
 `SkirmishPanel` (MISIONES), `SkirmishButton`, la piel de `BattleScreen`,
@@ -411,3 +413,51 @@ abrir / elegir (+ de tropa, ataque rápido elegido), rojo = quitar (✕, abandon
 
 Pendiente para la ronda de capturas: MISIONES a 640×360 con las cuatro pestañas y
 la lista del Ataque Final a la vez (puede pedir scroll en la tarjeta de misión).
+
+## 18. Menús y pantallas de lectura (fase 2, rama `feat/ui2-menus`)
+
+Ajustes, Ayuda, tutorial, consejos, menú principal, Nueva partida, país y
+bandera, Partidas, victoria, prólogo (marco y letra), guía rápida y REGISTRO.
+Piezas nuevas, solo añadidas al final de `CartoonTheme` (sección "MENÚS"):
+
+| Pieza | Para |
+|---|---|
+| `menus_phone(vp)` | Maquetar como teléfono: lienzo de menos de 450 de alto, o perfil teléfono (mientras su lienzo siga siendo mayor, §4.2). |
+| `menu_window(title, fill, small)` + `place_window(root, vp, max, small)` | La ventana con cinta y ✕; centrada con tope en PC/tablet, a pantalla completa en teléfono. Con anclas: sigue al lienzo. |
+| `setting_row(name, glyph, text, control)` | Fila grande de Ajustes: [icono] Nombre ··· control [valor]. |
+| `picker(options, selected, cb)` (`CartoonPicker.gd`) | El selector que sustituye a los desplegables: pastillas (≤ 4 opciones cortas) o paso a paso `[◀] opción [▶]`. API de `OptionButton`. |
+| `live_switch(on, cb, name)` | El interruptor de §7, pulsable: `CheckButton` con el carril dibujado. |
+| `menu_slider(name, value, min, max)` | El deslizador de §7 con nombre y rango. |
+| `text_button(text, glyph, kind, h)` / `button_text(b)` | Pastilla que guarda su texto en la meta `"text"` (`Button.text` va vacío porque lo pinta una etiqueta); las pruebas buscan por ella. |
+| `menu_h(size)` | Alto de botón de menú: `h(size)` sin bajar de `UITheme.MIN_BTN_H`. |
+| `list_button(glyph, text, small, mark)` | Fila-tarjeta de una lista (índice de ayuda): [icono] texto ··· [✓]. |
+| `bubble_style()` + `Tail` + `place_tail()` | El bocadillo del instructor (tutorial, consejos) y su piquito hacia el busto. |
+| `group_title(text)` | Título pequeño de grupo ("AVANZADO"). |
+
+Textos: bloque propio `# UI v2 MENÚS` en `Tr.gd`, claves `UI2M_*` (ES/EN).
+Detalle por pantalla: Ajustes en `docs/21` §2; prólogo, guía rápida, tutorial,
+consejos e índice de ayuda en `docs/23` §10. Lo demás:
+
+- **Menú principal** (`TitleMenu`): tarjeta crema sin título a la izquierda de la
+  ilustración; CONTINUAR verde con el modo en pequeño debajo, Nueva partida,
+  Partidas n/5 y Ajustes crema, Salir rojo. 280 de ancho en teléfono.
+- **Nueva partida** (`NewGameDialog`): ventana crema; tarjetas de modo y de nivel
+  elegibles (borde de latón la elegida, apagada con candado la cerrada y el
+  porqué debajo); Cancelar crema, EMPEZAR verde.
+- **País y bandera** (`ColonyIdentityPanel`): cinta de latón; nombre grande con
+  "Al azar"; a la izquierda la bandera, su "Al azar" y los botones (Saltar o
+  Cancelar, LISTO verde); a la derecha las pestañas Fondo / Emblema / Colores
+  (solo icono en teléfono) y las piezas. Cabe en 640×360.
+- **Partidas** (`SavesPanel`): cinta azul, "3/5" arriba, una tarjeta por partida
+  (borde de latón la que se juega) con bandera, nombre, cifras pequeñas, CARGAR
+  verde y borrar rojo **solo icono** (confirmación en la misma fila).
+- **Victoria** (`VictoryScreen`): cinta verde, bandera y nombre, una frase y las
+  cifras como icono + número (el nombre debajo); SEGUIR verde, Nueva partida
+  crema. Sin fundido.
+- **REGISTRO** (`NotificationPanel`, solo el panel del registro; la columna de
+  avisos es de otro frente): ventana crema en su hueco, una fila por aviso con el
+  icono del tipo y una franja de su color. La lista solo se rehace con el
+  registro abierto.
+
+Pendiente de decidir (no se tocó): los globos de ayuda siguen **encendidos** de
+serie (`GameConfig.ui_helper_visible`); §12 propone apagarlos.

@@ -94,7 +94,7 @@ func test_settings_offers_the_selector() -> void:
 	await await_idle_frame()
 	var row := panel.find_child("CombatViewRow", true, false)
 	assert_object(row).is_not_null()
-	var picker := row.get_child(1) as OptionButton
+	var picker = row.find_child("Picker", true, false)
 	assert_int(picker.item_count).is_equal(2)
 	picker.item_selected.emit(1)
 	assert_str(GameConfig.ui_combat_view).is_equal("board")

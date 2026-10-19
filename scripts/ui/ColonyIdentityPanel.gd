@@ -27,11 +27,13 @@ const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const ColonyIdentity := preload("res://scripts/services/ColonyIdentity.gd")
 const ConstructionMenuScript := preload("res://scripts/ui/ConstructionMenu.gd")
 const DragScroll := preload("res://scripts/ui/DragScroll.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 ## Por encima del dialogo de Nueva partida (40) y del menu (30).
 const LAYER := 41
 const CARD_W := 800.0
 const PREVIEW := Vector2(168, 112)
+const PREVIEW_SMALL := Vector2(120, 80)
 const THUMB := Vector2(66, 44)
 const SWATCH := 46.0
 const TABS := ["patterns", "emblems", "colors"]
@@ -51,6 +53,11 @@ var _open := false
 var _root: Control
 var _backdrop: ColorRect
 var _card: PanelContainer
+## La raiz de la ventana (CartoonTheme.window): cinta, panel y X.
+var _window: Control
+var _tabs_row: HBoxContainer
+## Telefono: ventana a pantalla completa, pestanas solo con icono.
+var _small := false
 var _preview: TextureRect
 var _name_edit: LineEdit
 var _name_error: Label
@@ -95,7 +102,7 @@ func open(mode: String = "edit", colony_name: String = "", spec: Dictionary = {}
 	_initial_spec = _spec.duplicate(true)
 	_name_edit.text = _name
 	_name_error.visible = false
-	_secondary_btn.text = Tr.t("BTN_IDENTITY_SKIP") if _mode == "new" else Tr.t("BTN_CANCEL")
+	_set_button_text(_secondary_btn, Tr.t("BTN_IDENTITY_SKIP") if _mode == "new" else Tr.t("BTN_CANCEL"))
 	_tab = "patterns"
 	_open = true
 	visible = true
@@ -197,118 +204,158 @@ func _input(event: InputEvent) -> void:
 # ── Montaje ──
 
 func _build() -> void:
+	_small = CT.menus_phone(get_viewport().get_visible_rect().size) if is_inside_tree() else false
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
-	_backdrop = ModalKit.make_backdrop()
+	_backdrop = CT.veil()
 	_root.add_child(_backdrop)
-	_card = ModalKit.make_card(UITheme.SEPARATION)
+	# Ventana crema con la cinta "TU PAIS" (docs/28 §6). En telefono, sin cinta:
+	# los 360 de alto son para la bandera y las piezas.
+	var w := CT.menu_window(Tr.t("LBL_IDENTITY_TITLE"), CT.sem("ACCENT"), _small, true)
+	_window = w["root"]
+	_window.name = "IdentityWindow"
+	_root.add_child(_window)
+	_card = w["panel"]
 	_card.name = "IdentityCard"
-	_root.add_child(_card)
-	var col: VBoxContainer = _card.get_child(0)
-	col.add_child(UITheme.make_panel_header(Tr.t("LBL_IDENTITY_TITLE"), func(): secondary() if _mode == "new" else cancel()))
+	var close: Button = w["close"]
+	close.name = "CloseButton"
+	close.tooltip_text = Tr.t("BTN_CLOSE")
+	close.pressed.connect(func(): secondary() if _mode == "new" else cancel())
+	var col: VBoxContainer = w["body"]
 
-	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", 14)
-	col.add_child(top)
-	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 6)
-	top.add_child(left)
-	_preview = TextureRect.new()
-	_preview.name = "FlagPreview"
-	_preview.custom_minimum_size = PREVIEW
-	_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_preview.stretch_mode = TextureRect.STRETCH_SCALE
-	_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left.add_child(_preview)
-	var flag_dice := _make_button(Tr.t("BTN_IDENTITY_RANDOM_FLAG"), UITheme.BTN, randomize_flag)
-	flag_dice.name = "RandomFlag"
-	left.add_child(flag_dice)
-
-	var right := VBoxContainer.new()
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.add_theme_constant_override("separation", 6)
-	top.add_child(right)
-	right.add_child(UITheme.make_label(Tr.t("LBL_IDENTITY_NAME_HINT"), "small", UITheme.TEXT_DIM))
+	# Fila del nombre: [  Monte Biela  ] [dado]  (el aviso, corto, debajo).
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 8)
+	col.add_child(name_row)
 	_name_edit = LineEdit.new()
 	_name_edit.name = "NameEdit"
 	_name_edit.max_length = GameConfig.COLONY_NAME_MAX
-	_name_edit.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H + 4)
-	_name_edit.add_theme_font_size_override("font_size", UITheme.FONT_BODY + 3)
-	var hf := UITheme.heavy_font()
-	if hf:
-		_name_edit.add_theme_font_override("font", hf)
+	_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_name_edit.custom_minimum_size = Vector2(0, CT.menu_h("btn"))
+	_name_edit.add_theme_font_override("font", CT.title_font())
+	_name_edit.add_theme_font_size_override("font_size", CT.fs("title"))
+	_name_edit.add_theme_color_override("font_color", CT.text("window"))
+	_name_edit.add_theme_color_override("font_placeholder_color", CT.text("window", true))
+	_name_edit.add_theme_color_override("caret_color", CT.text("window"))
+	var es := CT.well_style("window", 14, 8)
+	es.content_margin_left = 14
+	es.border_color = CT.c("window", "CARD_BORDER")
+	es.set_border_width_all(CT.BORDER)
+	_name_edit.add_theme_stylebox_override("normal", es)
+	var ef := es.duplicate() as StyleBoxFlat
+	ef.border_color = CT.sem("ACCENT")
+	_name_edit.add_theme_stylebox_override("focus", ef)
 	_name_edit.placeholder_text = Tr.t("LBL_IDENTITY_NAME_HINT")
+	_name_edit.tooltip_text = Tr.t("LBL_IDENTITY_NAME_HINT")
 	_name_edit.text_changed.connect(func(t: String):
 		_name = t
 		_name_error.visible = false)
 	_name_edit.text_submitted.connect(func(_t): confirm())
-	right.add_child(_name_edit)
-	var name_row := HBoxContainer.new()
-	name_row.add_theme_constant_override("separation", 10)
-	right.add_child(name_row)
-	var name_dice := _make_button(Tr.t("BTN_IDENTITY_RANDOM_NAME"), UITheme.BTN, randomize_name)
+	name_row.add_child(_name_edit)
+	var name_dice := CT.text_button("" if _small else Tr.t("UI2M_ID_RANDOM"), "raid", "secondary", CT.menu_h("btn"))
 	name_dice.name = "RandomName"
+	name_dice.tooltip_text = Tr.t("BTN_IDENTITY_RANDOM_NAME")
+	name_dice.focus_mode = Control.FOCUS_NONE
+	name_dice.pressed.connect(randomize_name)
 	name_row.add_child(name_dice)
-	_name_error = UITheme.make_label(Tr.t("LBL_IDENTITY_NAME_BAD"), "body", UITheme.WARNING)
+	_name_error = CT.label(Tr.t("LBL_IDENTITY_NAME_BAD"), "small", CT.sem("DANGER").darkened(0.2))
 	_name_error.name = "NameError"
 	_name_error.visible = false
-	_name_error.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	name_row.add_child(_name_error)
+	col.add_child(_name_error)
 
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 6)
-	col.add_child(tabs)
-	for kind in TABS:
-		var key: String = {"patterns": "LBL_IDENTITY_TAB_PATTERN", "emblems": "LBL_IDENTITY_TAB_EMBLEM",
-			"colors": "LBL_IDENTITY_TAB_COLORS"}[kind]
-		var b := _make_button(Tr.t(key), UITheme.BTN, func(): select_tab(kind))
-		b.name = "Tab_" + kind
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tabs.add_child(b)
-		_tab_buttons[kind] = b
+	# Bandera a la izquierda (con su dado y los botones de abajo); piezas a la
+	# derecha: asi cabe en un telefono apaisado de 360 de alto.
+	var main := HBoxContainer.new()
+	main.add_theme_constant_override("separation", 10 if _small else 16)
+	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(main)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 6 if _small else 10)
+	main.add_child(left)
+	var frame := PanelContainer.new()
+	frame.add_theme_stylebox_override("panel", CT.well_style("window", 12, 6))
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.add_child(frame)
+	_preview = TextureRect.new()
+	_preview.name = "FlagPreview"
+	_preview.custom_minimum_size = PREVIEW_SMALL if _small else PREVIEW
+	_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_preview.stretch_mode = TextureRect.STRETCH_SCALE
+	_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(_preview)
+	var flag_dice := CT.text_button(Tr.t("UI2M_ID_RANDOM"), "raid", "secondary", CT.menu_h("small"))
+	flag_dice.name = "RandomFlag"
+	flag_dice.tooltip_text = Tr.t("BTN_IDENTITY_RANDOM_FLAG")
+	flag_dice.focus_mode = Control.FOCUS_NONE
+	flag_dice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flag_dice.pressed.connect(randomize_flag)
+	left.add_child(flag_dice)
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left.add_child(spacer)
+	_secondary_btn = CT.text_button(Tr.t("BTN_CANCEL"), "back", "secondary", CT.menu_h("small"))
+	_secondary_btn.name = "Secondary"
+	_secondary_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_secondary_btn.pressed.connect(secondary)
+	left.add_child(_secondary_btn)
+	_ok_btn = CT.text_button(Tr.t("BTN_IDENTITY_OK"), "check", "primary", CT.menu_h("btn"))
+	_ok_btn.name = "Confirm"
+	_ok_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ok_btn.pressed.connect(func(): confirm())
+	left.add_child(_ok_btn)
+
+	var right := VBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", 6)
+	main.add_child(right)
+	_tabs_row = HBoxContainer.new()
+	_tabs_row.name = "Tabs"
+	_tabs_row.add_theme_constant_override("separation", 6)
+	right.add_child(_tabs_row)
 
 	_scroll = ScrollContainer.new()
 	_scroll.name = "PieceScroll"
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_scroll.custom_minimum_size = Vector2(0, 260)
-	col.add_child(_scroll)
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll.custom_minimum_size = Vector2(0, 80)
+	right.add_child(_scroll)
 	DragScroll.attach.call_deferred(_scroll)
 	_content = VBoxContainer.new()
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_content.add_theme_constant_override("separation", 8)
 	_scroll.add_child(_content)
 
-	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 12)
-	col.add_child(buttons)
-	_secondary_btn = ModalKit.make_menu_button(Tr.t("BTN_CANCEL"), UITheme.BTN, secondary)
-	_secondary_btn.name = "Secondary"
-	buttons.add_child(_secondary_btn)
-	_ok_btn = ModalKit.make_menu_button(Tr.t("BTN_IDENTITY_OK"), UITheme.POSITIVE, func(): confirm())
-	_ok_btn.name = "Confirm"
-	buttons.add_child(_ok_btn)
-
-func _make_button(text: String, color: Color, callback: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
-	UITheme.style_button(b, color, UITheme.FONT_BUTTON)
-	b.pressed.connect(callback)
-	return b
+## Las tres pestanas (fondo, emblema, colores): la elegida en laton con labio.
+## Se rehacen al cambiar (CartoonTheme.tab da otra pieza segun este elegida).
+func _rebuild_tabs() -> void:
+	for c in _tabs_row.get_children():
+		_tabs_row.remove_child(c)
+		c.queue_free()
+	_tab_buttons.clear()
+	for kind in TABS:
+		var key: String = {"patterns": "LBL_IDENTITY_TAB_PATTERN", "emblems": "LBL_IDENTITY_TAB_EMBLEM",
+			"colors": "LBL_IDENTITY_TAB_COLORS"}[kind]
+		var title := Tr.t(key).capitalize()
+		var glyph: String = {"patterns": "screen", "emblems": "star", "colors": "access"}[kind]
+		var b := CT.tab("" if _small else title, glyph, kind == _tab, "window", CT.sem("ACCENT"), CT.menu_h("small"))
+		b.name = "Tab_" + kind
+		b.tooltip_text = title
+		b.focus_mode = Control.FOCUS_NONE
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.set_meta("selected", kind == _tab)
+		var k: String = kind
+		# Diferido: la pestana pulsada se rehace y no se puede quitar en su propia senal.
+		b.pressed.connect(func(): select_tab.call_deferred(k))
+		_tabs_row.add_child(b)
+		_tab_buttons[kind] = b
 
 func _relayout() -> void:
-	if _card == null or not is_inside_tree():
+	if _window == null or not is_inside_tree():
 		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	ModalKit.fit_center(_card, CARD_W, vp)
-	# La lista de piezas se queda con lo que sobre de alto (y se arrastra).
-	_scroll.custom_minimum_size.y = clampf(vp.y - 470.0, 120.0, 300.0)
-	_card.reset_size()
-	_card.offset_top = -_card.size.y * 0.5
-	_card.offset_bottom = _card.size.y * 0.5
+	CT.place_window(_window, vp, Vector2(CARD_W, 560), _small)
 
 # ── Refresco ──
 
@@ -316,10 +363,7 @@ func _refresh() -> void:
 	if _preview == null:
 		return
 	_preview.texture = ColonyFlag.texture(_spec)
-	for kind in _tab_buttons:
-		var b: Button = _tab_buttons[kind]
-		UITheme.style_button(b, UITheme.ACCENT_DIM if kind == _tab else UITheme.BTN, UITheme.FONT_BUTTON)
-		b.set_meta("selected", kind == _tab)
+	_rebuild_tabs()
 	for child in _content.get_children():
 		_content.remove_child(child)
 		child.queue_free()
@@ -390,7 +434,7 @@ func _build_color_rows() -> void:
 		slots.append(2)
 	for slot in slots:
 		var key: String = ["LBL_IDENTITY_COLOR_1", "LBL_IDENTITY_COLOR_2", "LBL_IDENTITY_COLOR_EMBLEM"][slot]
-		_content.add_child(UITheme.section_header(Tr.t(key)))
+		_content.add_child(CT.group_title(Tr.t(key)))
 		var row := HFlowContainer.new()
 		row.name = "Colors_%d" % slot
 		row.add_theme_constant_override("h_separation", 6)
@@ -432,9 +476,9 @@ func _swatch(slot: int, color_id: String) -> Button:
 		var lock := Control.new()
 		lock.custom_minimum_size = Vector2(10, 12)
 		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		lock.draw.connect(func(): ConstructionMenuScript.draw_lock(lock, Rect2(Vector2.ZERO, lock.custom_minimum_size), UITheme.WARNING))
+		lock.draw.connect(func(): ConstructionMenuScript.draw_lock(lock, Rect2(Vector2.ZERO, lock.custom_minimum_size), CT.sem("WARNING").darkened(0.3)))
 		row.add_child(lock)
-		var label := UITheme.make_label(str(ColonyIdentity.piece_rank("colors", color_id)), "small", UITheme.WARNING)
+		var label := CT.label(str(ColonyIdentity.piece_rank("colors", color_id)), "small", CT.sem("WARNING").darkened(0.3))
 		label.name = "RankLockLabel"
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(label)
@@ -447,7 +491,7 @@ func _swatch(slot: int, color_id: String) -> Button:
 		cross.set_anchors_preset(Control.PRESET_FULL_RECT)
 		cross.draw.connect(func():
 			var s := cross.size
-			cross.draw_line(Vector2(8, 8), s - Vector2(8, 8), UITheme.TEXT_DIM, 2.0))
+			cross.draw_line(Vector2(8, 8), s - Vector2(8, 8), CT.INK, 3.0))
 		btn.add_child(cross)
 	btn.pressed.connect(func(): pick("colors", color_id, slot))
 	return btn
@@ -478,12 +522,19 @@ func _make_pick_button(selected: bool, enabled: bool) -> Button:
 	var btn := Button.new()
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.disabled = not enabled
-	var st := StyleBoxFlat.new()
-	st.bg_color = UITheme.CARD_BG if enabled else UITheme.BTN_DISABLED
-	st.set_corner_radius_all(4)
-	st.border_color = UITheme.ACCENT if selected else UITheme.ACCENT_DIM
-	st.set_border_width_all(3 if selected else 1)
+	# Tarjeta crema; la elegida con borde de laton grueso; la cerrada, apagada.
+	var fill := CT.c("window", "CARD") if enabled else CT.c("window", "CARD_ALT")
+	var st := CT.card_style("window", selected, fill)
+	st.set_content_margin_all(4)
+	st.set_corner_radius_all(12)
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		btn.add_theme_stylebox_override(state, st)
 	btn.set_meta("selected", selected)
 	return btn
+
+## Cambia el texto de una pastilla (su etiqueta y la meta "text").
+func _set_button_text(b: Button, text_s: String) -> void:
+	b.set_meta("text", text_s)
+	for l in b.find_children("*", "Label", true, false):
+		(l as Label).text = text_s
+		return

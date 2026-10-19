@@ -1,37 +1,46 @@
 extends CanvasLayer
 ## La guia rapida: como funciona el juego en una sola pantalla, en cuatro
-## bloques cortos (2026-09-28). Sale UNA vez por partida, al cerrar el prologo y
-## antes del tutorial guiado; despues vive en AYUDA (HelpCatalog: guide_*), con
-## los mismos textos.
+## tarjetas (2026-09-28; estilo nuevo 2026-10, docs/28). Ya no sale sola: la
+## abre AYUDA > Como funciona, y sus textos largos tambien viven en AYUDA
+## (HelpCatalog: guide_qg_*).
 ##
-##   RECURSOS    que hay, cuando llega cada uno, el almacen y el taller
-##   EXTRAER     a mano se agota; con su edificio especializado, no
-##   EDIFICIOS   trabajadores, viviendas y carretera hasta el Nucleo
-##   PROGRESO    eras, arbol tecnologico y la Tormenta
+##   [recursos]  Recursos     una frase
+##   [construir] Extraer      una frase
+##   [mercado]   Edificios    una frase
+##   [estrella]  Progreso     una frase
 ##
-## No es el lore (eso es el prologo) ni el tutorial (eso son las marcas sobre la
-## interfaz): es la chuleta que el jugador lee de un vistazo. No pausa (el
-## prologo pauso y ya lo solto): tapa la pantalla y se lleva los toques, y el
-## tutorial no se ensena mientras esta abierta (TutorialPanel). Avisa con `closed`.
+## Cada tarjeta dice UNA frase (UI2M_QG_*_S); tocarla despliega el texto entero
+## (QG_*_B) en la misma tarjeta, y tocarla otra vez lo pliega. No pausa: tapa la
+## pantalla y se lleva los toques, y el tutorial no se ensena mientras esta
+## abierta (TutorialPanel). Avisa con `closed`.
 
 signal closed()
 
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
+
 const LAYER := 33
-const MAX_WIDTH := 980.0
-## Las cuatro secciones: titulo y cuerpo (claves de Tr; el cuerpo con Tr.ti).
+const MAX_SIZE := Vector2(980, 600)
+## Las cuatro secciones: titulo, frase corta y cuerpo entero (claves de Tr; el
+## cuerpo con Tr.ti).
 const SECTIONS := [
-	["QG_RESOURCES_T", "QG_RESOURCES_B"],
-	["QG_EXTRACT_T", "QG_EXTRACT_B"],
-	["QG_BUILDINGS_T", "QG_BUILDINGS_B"],
-	["QG_PROGRESS_T", "QG_PROGRESS_B"],
+	["QG_RESOURCES_T", "UI2M_QG_RESOURCES_S", "QG_RESOURCES_B"],
+	["QG_EXTRACT_T", "UI2M_QG_EXTRACT_S", "QG_EXTRACT_B"],
+	["QG_BUILDINGS_T", "UI2M_QG_BUILDINGS_S", "QG_BUILDINGS_B"],
+	["QG_PROGRESS_T", "UI2M_QG_PROGRESS_S", "QG_PROGRESS_B"],
 ]
+## El icono de cada seccion (CartoonIcon, o "res:" para un recurso).
+const SECTION_ICONS := ["res:wood", "wrench", "build", "star"]
 ## El pie: "Manten pulsado para leer" (con Tr.ti: con raton dice "pasa el raton").
 const READ_HINT := "QG_READ_HINT"
 
 var _root: Control
+var _window: Control
 var _card: PanelContainer
 var _grid: GridContainer
 var _open := false
+var _small := false
+## Tarjeta -> su texto entero (escondido hasta tocarla).
+var _details: Array[Label] = []
 
 func _ready() -> void:
 	layer = LAYER
@@ -42,16 +51,22 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_relayout)
 
 func _build() -> void:
+	_small = CT.menus_phone(get_viewport().get_visible_rect().size)
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_root)
-	_root.add_child(ModalKit.make_backdrop(0.75))
-	_card = ModalKit.make_card(10)
-	_root.add_child(_card)
-	var column: VBoxContainer = _card.get_child(0)
-	column.add_child(ModalKit.make_text(Tr.t("QG_TITLE"), "title", UITheme.ACCENT))
-	column.add_child(UITheme.make_separator())
+	_root.add_child(CT.veil())
+	var w := CT.menu_window(Tr.t("UI2M_QG_TITLE"), CT.sem("INFO"), _small)
+	_window = w["root"]
+	_window.name = "QuickGuideWindow"
+	_root.add_child(_window)
+	_card = w["panel"]
+	(w["close"] as Button).name = "QuickGuideClose"
+	(w["close"] as Button).tooltip_text = Tr.t("BTN_CLOSE")
+	(w["close"] as Button).pressed.connect(close)
+	var column: VBoxContainer = w["body"]
+
 	var scroll := ScrollContainer.new()
 	scroll.name = "QuickGuideScroll"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -60,38 +75,88 @@ func _build() -> void:
 	_grid = GridContainer.new()
 	_grid.columns = 2
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_grid.add_theme_constant_override("h_separation", 16)
-	_grid.add_theme_constant_override("v_separation", 12)
+	_grid.add_theme_constant_override("h_separation", 10)
+	_grid.add_theme_constant_override("v_separation", 10)
 	scroll.add_child(_grid)
-	for sec in SECTIONS:
-		var box := VBoxContainer.new()
-		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		box.add_theme_constant_override("separation", 4)
-		box.add_child(ModalKit.make_text(Tr.t(String(sec[0])), "section", UITheme.ACCENT))
-		var body := ModalKit.make_text(Tr.ti(String(sec[1])), "body", UITheme.TEXT)
-		body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		body.custom_minimum_size.x = 200
-		box.add_child(body)
-		_grid.add_child(box)
-	# Como leer lo que no esta escrito: con el raton, el tooltip; con el dedo,
-	# mantener pulsado (TouchTooltip). Una linea, bajo los cuatro bloques.
-	var read := ModalKit.make_text(Tr.ti(READ_HINT), "body", UITheme.ACCENT)
+	for i in SECTIONS.size():
+		_grid.add_child(_section_card(SECTIONS[i], SECTION_ICONS[i]))
+
+	# Como leer lo que no esta escrito: con el raton, el globo; con el dedo,
+	# mantener pulsado (TouchTooltip). Una linea, bajo las cuatro tarjetas.
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", 10)
+	column.add_child(foot)
+	var read := CT.para(Tr.ti(READ_HINT), "window", true, "small")
 	read.name = "QuickGuideReadHint"
-	read.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	column.add_child(read)
-	var ok := ModalKit.make_menu_button(Tr.t("QG_OK"), UITheme.POSITIVE, close)
+	read.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	foot.add_child(read)
+	var ok := CT.text_button(Tr.t("QG_OK"), "build", "primary", CT.menu_h("btn"))
 	ok.name = "QuickGuideOk"
-	column.add_child(ok)
+	ok.pressed.connect(close)
+	foot.add_child(ok)
+
+## Una tarjeta: [icono] Titulo / una frase; tocarla despliega el texto entero.
+func _section_card(sec: Array, glyph: String) -> Button:
+	var btn := Button.new()
+	btn.name = "Block_" + String(sec[0]).trim_prefix("QG_").trim_suffix("_T").to_lower()
+	btn.focus_mode = Control.FOCUS_ALL
+	btn.toggle_mode = true
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var n := CT.card_style("window")
+	var sel := CT.card_style("window", true)
+	for sb in [n, sel]:
+		sb.set_content_margin_all(10)
+	btn.add_theme_stylebox_override("normal", n)
+	btn.add_theme_stylebox_override("hover", n)
+	btn.add_theme_stylebox_override("pressed", sel)
+	btn.add_theme_stylebox_override("hover_pressed", sel)
+	btn.add_theme_stylebox_override("focus", CT.box(Color(0, 0, 0, 0), CT.sem("ACCENT"), 3, CT.RADIUS_CARD + 2, 0))
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", 4)
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 12
+	box.offset_right = -12
+	box.offset_top = 8
+	box.offset_bottom = -8
+	btn.add_child(box)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(head)
+	var ic := CT.make_glyph(glyph, 30 if _small else 36)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(ic)
+	var titles := VBoxContainer.new()
+	titles.add_theme_constant_override("separation", 0)
+	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	titles.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(titles)
+	titles.add_child(CT.label(Tr.t(String(sec[0])), "button", CT.text("window")))
+	var short := CT.para(Tr.ti(String(sec[1])), "window", true, "small")
+	titles.add_child(short)
+	var more := CT.make_glyph("plus", 22)
+	more.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(more)
+	var detail := CT.para(Tr.ti(String(sec[2])), "window", false, "body")
+	detail.name = "Detail"
+	detail.visible = false
+	box.add_child(detail)
+	_details.append(detail)
+	btn.toggled.connect(func(on: bool): detail.visible = on)
+	# El boton no crece con sus hijos: se le pasa el alto que pide el texto.
+	box.minimum_size_changed.connect(func():
+		btn.custom_minimum_size.y = box.get_combined_minimum_size().y + 16.0)
+	btn.custom_minimum_size.y = 72.0
+	return btn
 
 func _relayout() -> void:
-	if _card == null:
+	if _window == null or not is_inside_tree():
 		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	ModalKit.fit_center(_card, MAX_WIDTH, vp)
-	# Dos columnas si caben (tablet y PC en horizontal), una en un movil.
-	_grid.columns = 2 if _card.custom_minimum_size.x >= 640.0 else 1
-	var scroll := _grid.get_parent() as ScrollContainer
-	scroll.custom_minimum_size.y = clampf(vp.y - 220.0, 160.0, 520.0)
+	CT.place_window(_window, vp, MAX_SIZE, _small)
+	# Dos columnas si caben (tablet y PC en horizontal, y el telefono apaisado).
+	_grid.columns = 2 if minf(MAX_SIZE.x, vp.x) >= 600.0 else 1
 
 func open() -> void:
 	_open = true

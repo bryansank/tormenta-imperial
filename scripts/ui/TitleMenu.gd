@@ -16,8 +16,10 @@ extends CanvasLayer
 ## No carga ni guarda nada por su cuenta: GameManager ya arranco la partida
 ## antes de que este nodo existiera. El menu solo decide cuando se suelta.
 
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
+
 const LAYER := 30
-const CARD_WIDTH := 360.0
+const CARD_WIDTH := 340.0
 ## Por debajo de esta proporcion (ancho/alto) la pantalla es de movil en
 ## vertical: la ilustracion recorta el titulo, asi que se escribe encima.
 const PORTRAIT_RATIO := 1.0
@@ -107,7 +109,7 @@ func _setup_ui() -> void:
 
 	var base := ColorRect.new()
 	base.set_anchors_preset(Control.PRESET_FULL_RECT)
-	base.color = UITheme.BG_DARK
+	base.color = CT.c("hud", "BG")
 	base.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(base)
 
@@ -123,18 +125,18 @@ func _setup_ui() -> void:
 	# Un velo para que la tarjeta se lea sobre la ilustracion sin apagarla.
 	_shade = ColorRect.new()
 	_shade.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_shade.color = Color(0.0, 0.0, 0.0, 0.25)
+	_shade.color = Color(0.0, 0.0, 0.0, 0.2)
 	_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_shade)
 
 	# Emblema y nombre: solo en vertical, donde la ilustracion recorta su titulo.
 	_brand = VBoxContainer.new()
 	_brand.alignment = BoxContainer.ALIGNMENT_CENTER
-	_brand.add_theme_constant_override("separation", 6)
+	_brand.add_theme_constant_override("separation", 4)
 	_brand.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_brand)
 	var logo := TextureRect.new()
-	logo.custom_minimum_size = Vector2(96, 96)
+	logo.custom_minimum_size = Vector2(88, 88)
 	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -142,70 +144,107 @@ func _setup_ui() -> void:
 	if ResourceLoader.exists(LOGO_PATH):
 		logo.texture = load(LOGO_PATH)
 	_brand.add_child(logo)
-	var name_label := ModalKit.make_text(Tr.t("LBL_TITLE_GAME"), "title", UITheme.ACCENT)
-	name_label.add_theme_font_size_override("font_size", 30)
+	var name_label := CT.label(Tr.t("LBL_TITLE_GAME"), "display", CT.WHITE, true)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_brand.add_child(name_label)
-	_brand.add_child(ModalKit.make_text(Tr.t("LBL_TITLE_MOTTO"), "small", UITheme.TEXT))
 
-	_card = ModalKit.make_card(10)
+	# La tarjeta: crema con borde grueso (docs/28 §6), sin titulo ni cinta: los
+	# botones dicen lo que son. Verde = la accion principal (Continuar o, sin
+	# partida, Nueva partida), rojo = Salir, el resto crema (docs/28 §5).
+	var small := CT.menus_phone(_vp())
+	_card = PanelContainer.new()
+	_card.name = "Card"
+	var st := CT.window_style()
+	st.set_content_margin_all(10 if small else 18)
+	_card.add_theme_stylebox_override("panel", st)
+	_card.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(_card)
-	var column: VBoxContainer = _card.get_child(0)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 6 if small else 10)
+	_card.add_child(column)
 
-	var header := ModalKit.make_text(Tr.t("LBL_TITLE_MENU"), "section", UITheme.ACCENT)
-	column.add_child(header)
-	column.add_child(UITheme.make_separator())
-
-	_continue_btn = ModalKit.make_menu_button(Tr.t("BTN_TITLE_CONTINUE"), UITheme.POSITIVE, _on_continue)
+	var hh: int = CT.menu_h("small" if small else "btn")
+	_continue_btn = _menu_button(Tr.t("UI2M_TITLE_CONTINUE"), "next", "primary", CT.menu_h("btn" if small else "big"), _on_continue)
+	_continue_btn.name = "ContinueButton"
 	column.add_child(_continue_btn)
-	_mode_label = ModalKit.make_text("", "small", UITheme.TEXT_DIM)
+	_mode_label = CT.label("", "small", CT.text("window", true))
+	_mode_label.name = "RunMode"
+	_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_mode_label)
-	_new_btn = ModalKit.make_menu_button(Tr.t("BTN_NEW_GAME"), UITheme.BTN, _on_new_game)
+	_new_btn = _menu_button(Tr.t("BTN_NEW_GAME"), "plus", "secondary", hh, _on_new_game)
+	_new_btn.name = "NewGameButton"
 	column.add_child(_new_btn)
-	_saves_btn = ModalKit.make_menu_button(Tr.t("BTN_SAVES"), UITheme.BTN, _on_saves)
+	_saves_btn = _menu_button(Tr.t("BTN_SAVES"), "game", "secondary", hh, _on_saves)
 	_saves_btn.name = "SavesButton"
 	column.add_child(_saves_btn)
-	_settings_btn = ModalKit.make_menu_button(Tr.t("BTN_SETTINGS"), UITheme.BTN, _on_settings)
+	_settings_btn = _menu_button(Tr.t("BTN_SETTINGS"), "settings", "secondary", hh, _on_settings)
+	_settings_btn.name = "SettingsButton"
 	column.add_child(_settings_btn)
-	_quit_btn = ModalKit.make_menu_button(Tr.t("BTN_QUIT"), UITheme.DANGER, _on_quit)
+	_quit_btn = _menu_button(Tr.t("BTN_QUIT"), "close", "danger", hh, _on_quit)
+	_quit_btn.name = "QuitButton"
 	column.add_child(_quit_btn)
 
 	_relayout()
+
+## Un boton del menu: pastilla a lo ancho con [icono] Palabra. El texto vive en
+## una etiqueta (meta "label"); `Button.text` se queda vacio.
+func _menu_button(text_s: String, glyph: String, kind_s: String, hh: int, cb: Callable) -> Button:
+	var b := CT.pill_button(text_s, glyph, kind_s, hh)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.set_meta("text", text_s)
+	b.pressed.connect(cb)
+	return b
+
+## El texto de un boton del menu (pruebas y sondas).
+func button_text(b: Button) -> String:
+	var l := b.find_children("*", "Label", true, false)
+	return (l[0] as Label).text if not l.is_empty() else b.text
+
+func _vp() -> Vector2:
+	return get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
 
 ## Horizontal: la ilustracion ya trae el titulo abajo, la tarjeta va a la
 ## izquierda sobre el cielo. Vertical: emblema y nombre arriba, tarjeta debajo.
 func _relayout() -> void:
 	if _card == null:
 		return
-	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var vp: Vector2 = _vp()
+	var small := CT.menus_phone(vp)
 	var portrait: bool = vp.x / maxf(vp.y, 1.0) < PORTRAIT_RATIO
 	_brand.visible = portrait and _card.visible
-	ModalKit.fit_center(_card, CARD_WIDTH, vp)
+	var width: float = minf(CARD_WIDTH if not small else 280.0, vp.x - ModalKit.EDGE * 2.0)
+	_card.custom_minimum_size = Vector2(width, 0)
+	_card.reset_size()
+	var card_h: float = _card.get_combined_minimum_size().y
 	# En vertical la ilustracion se estira por debajo de la pantalla: su franja
 	# de titulo queda fuera, en vez de salir recortada ("ENTA IMP").
 	_art.offset_bottom = vp.y * 0.4 if portrait else 0.0
-	_shade.color.a = 0.45 if portrait else 0.25
+	_shade.color.a = 0.45 if portrait else 0.2
 	if portrait:
 		_brand.set_anchors_preset(Control.PRESET_CENTER_TOP)
 		_brand.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		_brand.offset_left = -vp.x * 0.5 + ModalKit.EDGE
 		_brand.offset_right = vp.x * 0.5 - ModalKit.EDGE
 		_brand.offset_top = 24.0
-		_brand.offset_bottom = 250.0
-		_card.offset_top = 110.0
-		_card.offset_bottom = 110.0
+		_brand.offset_bottom = 220.0
+		_card.set_anchors_preset(Control.PRESET_CENTER)
+		_card.offset_left = -width * 0.5
+		_card.offset_right = width * 0.5
+		_card.offset_top = 110.0 - card_h * 0.5
+		_card.offset_bottom = 110.0 + card_h * 0.5
 	else:
 		# Pegada a la izquierda y algo por encima del centro: abajo esta el titulo.
-		var width: float = _card.custom_minimum_size.x
+		# Sin salirse por arriba (telefono apaisado: ronda visual de la 1.1).
+		var lift := title_card_lift(vp.y, card_h)
 		_card.anchor_left = 0.0
 		_card.anchor_right = 0.0
-		_card.offset_left = 56.0
-		_card.offset_right = 56.0 + width
-		# Sin salirse por arriba: en un telefono apaisado (lienzo de ~550 px de alto,
-		# botones tactiles) la tarjeta subida 60 px cortaba "MENU PRINCIPAL" (ronda
-		# visual de la 1.1).
-		var lift := title_card_lift(vp.y, _card.get_combined_minimum_size().y)
-		_card.offset_top = -lift
-		_card.offset_bottom = -lift
+		_card.anchor_top = 0.5
+		_card.anchor_bottom = 0.5
+		var left := 24.0 if small else 56.0
+		_card.offset_left = left
+		_card.offset_right = left + width
+		_card.offset_top = -card_h * 0.5 - lift
+		_card.offset_bottom = card_h * 0.5 - lift
 
 ## Cuanto sube la tarjeta sobre el centro (horizontal): 60 px, o lo que quepa
 ## sin que su borde de arriba baje de ModalKit.EDGE.
@@ -245,7 +284,9 @@ func _refresh_buttons() -> void:
 	_mode_label.visible = _continue_btn.visible
 	_mode_label.text = Tr.t("LBL_TITLE_RUN_MODE") % GameMode.display_name()
 	var saves: int = GameManager.list_saves().size()
-	_saves_btn.text = "%s  %d/%d" % [Tr.t("BTN_SAVES"), saves, GameManager.MAX_SAVES]
+	var saves_label := _saves_btn.find_children("*", "Label", true, false)
+	if not saves_label.is_empty():
+		(saves_label[0] as Label).text = "%s  %d/%d" % [Tr.t("BTN_SAVES"), saves, GameManager.MAX_SAVES]
 	_saves_btn.visible = saves > 0
 
 func _on_game_ready() -> void:

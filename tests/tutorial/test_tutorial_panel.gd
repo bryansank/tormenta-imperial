@@ -84,7 +84,7 @@ func test_the_reading_cards_move_on_with_their_button_and_show_numbers() -> void
 	await await_idle_frame()
 	var ok: Button = panel.find_child("GuideOk", true, false)
 	assert_bool(ok.visible).is_true()
-	assert_str(ok.text).is_equal(Tr.t("BTN_GUIDE_GOAL_OK"))
+	assert_str(CartoonTheme.button_text(ok)).is_equal(Tr.t("BTN_GUIDE_GOAL_OK"))
 	ok.pressed.emit()
 	await await_idle_frame()
 	assert_str(panel.current_step()).is_equal("core")
@@ -116,8 +116,8 @@ func test_there_is_no_skip_tutorial_button() -> void:
 	assert_object(panel.find_child("SkipTutorial", true, false)).is_null()
 	for b in panel.find_child("CoachCard", true, false).find_children("*", "Button", true, false):
 		if (b as Button).is_visible_in_tree():
-			assert_str((b as Button).text).is_not_equal("Saltar tutorial")
-			assert_str((b as Button).text).is_not_equal("Skip tutorial")
+			assert_str(CartoonTheme.button_text(b as Button)).is_not_equal("Saltar tutorial")
+			assert_str(CartoonTheme.button_text(b as Button)).is_not_equal("Skip tutorial")
 	assert_bool(panel.end_replay_button().visible).is_false()
 	assert_bool(Tr._STRINGS["es"].has("BTN_GUIDE_SKIP")).is_false()
 

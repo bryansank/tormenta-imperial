@@ -9,9 +9,10 @@ extends CanvasLayer
 ##             Campaña · Colono · Era 2 · 1:05 · 12/10 18:30
 ##                                              [CARGAR] [BORRAR]
 ##
-## BORRAR pide confirmacion en la misma fila. Una partida terminada (Supervivencia
-## perdida, sellada) no se carga: solo se borra. Todo sale de UITheme y la lista
-## se arrastra con el dedo (DragScroll).
+## BORRAR (rojo, solo el icono) pide confirmacion en la misma fila. Una partida
+## terminada (Supervivencia perdida, sellada) no se carga: solo se borra. Estilo
+## nuevo (CartoonTheme, docs/28): ventana crema con cinta azul, una tarjeta por
+## partida, y la lista se arrastra con el dedo (DragScroll).
 ##
 ## Lo crea GameManager (open_saves_list) y cuelga de el: funciona en la vista 3D
 ## y en la 2D, con el arbol en pausa, y se libera solo al cargar o cerrar.
@@ -20,16 +21,19 @@ signal closed
 
 const LAYER := 40
 const MAX_WIDTH := 760.0
-## Por debajo de este ancho de tarjeta los botones van debajo de los datos.
-const NARROW := 560.0
 const FLAG_SIZE := Vector2(42, 28)
 ## El dibujante de banderas.
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const DragScroll := preload("res://scripts/ui/DragScroll.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 var _make_room := false
 var _root: Control
 var _card: PanelContainer
+## La raiz de la ventana (CartoonTheme.window): cinta, panel y X.
+var _window: Control
+## Telefono: ventana a pantalla completa.
+var _small := false
 var _count_label: Label
 var _full_label: Label
 var _scroll: ScrollContainer
@@ -54,58 +58,61 @@ func _ready() -> void:
 # ── Construccion ─────────────────────────────────────────────────────
 
 func _setup_ui() -> void:
+	_small = CT.menus_phone(get_viewport().get_visible_rect().size)
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_root)
-	var backdrop := ModalKit.make_backdrop(0.85)
+	var backdrop := CT.veil()
 	backdrop.gui_input.connect(func(e: InputEvent):
 		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
 			close())
 	_root.add_child(backdrop)
 
-	_card = ModalKit.make_card(10)
+	# Ventana crema con la cinta azul PARTIDAS y la X roja (docs/28 §6).
+	var w := CT.menu_window(Tr.t("BTN_SAVES"), CT.sem("INFO"), _small)
+	_window = w["root"]
+	_window.name = "SavesWindow"
+	_root.add_child(_window)
+	_card = w["panel"]
 	_card.name = "SavesCard"
-	_root.add_child(_card)
-	var column: VBoxContainer = _card.get_child(0)
+	var close_btn: Button = w["close"]
+	close_btn.name = "Close"
+	close_btn.tooltip_text = Tr.t("BTN_CLOSE")
+	close_btn.pressed.connect(close)
+	var column: VBoxContainer = w["body"]
 
+	# Cuantas hay (3/5) y, si se abrio para hacer sitio, que hacer.
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 10)
 	column.add_child(head)
-	var title := UITheme.make_label(Tr.t("BTN_SAVES"), "title", UITheme.ACCENT)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(title)
-	_count_label = UITheme.make_label("", "section", UITheme.TEXT_DIM)
-	_count_label.name = "Count"
-	_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	head.add_child(_count_label)
-	var close_btn := Button.new()
-	close_btn.name = "Close"
-	close_btn.text = "✕"
-	close_btn.tooltip_text = Tr.t("BTN_CLOSE")
-	close_btn.focus_mode = Control.FOCUS_ALL
-	UITheme.style_button(close_btn, UITheme.BTN, UITheme.FONT_SECTION)
-	close_btn.custom_minimum_size = Vector2(UITheme.MIN_BTN_H, UITheme.MIN_BTN_H)
-	close_btn.pressed.connect(close)
-	head.add_child(close_btn)
-
-	_full_label = ModalKit.make_text("", "body", UITheme.WARNING)
+	_full_label = CT.para("", "window", false, "body")
 	_full_label.name = "FullLabel"
-	column.add_child(_full_label)
-	column.add_child(UITheme.make_separator())
+	_full_label.add_theme_color_override("font_color", CT.sem("WARNING").darkened(0.4))
+	_full_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(_full_label)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(spacer)
+	_count_label = CT.label("", "number", CT.text("window", true))
+	_count_label.name = "Count"
+	_count_label.tooltip_text = Tr.t("BTN_SAVES")
+	head.add_child(_count_label)
 
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(_scroll)
 	var pad := MarginContainer.new()
 	pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pad.add_theme_constant_override("margin_right", 10)
+	pad.add_theme_constant_override("margin_right", 8)
+	pad.add_theme_constant_override("margin_bottom", 6)
 	_scroll.add_child(pad)
 	_list = VBoxContainer.new()
 	_list.name = "List"
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list.add_theme_constant_override("separation", 8)
+	_list.add_theme_constant_override("separation", 6 if _small else 8)
 	pad.add_child(_list)
 	DragScroll.attach.call_deferred(_scroll)
 
@@ -125,11 +132,13 @@ func refresh() -> void:
 	_full_label.text = Tr.t("LBL_SAVES_FULL_ROOM")
 	_full_label.visible = _make_room
 	if saves.is_empty():
-		_list.add_child(ModalKit.make_text(Tr.t("LBL_SAVES_EMPTY"), "body", UITheme.TEXT_DIM))
+		_list.add_child(CT.para(Tr.t("LBL_SAVES_EMPTY"), "window", true))
 	for entry in saves:
 		_list.add_child(_make_row(entry))
 	_relayout()
 
+## Una fila: [bandera] Nombre / cifras ······ [CARGAR] [borrar]. La que se
+## esta jugando, con borde de laton (elegida).
 func _make_row(entry: Dictionary) -> PanelContainer:
 	var id := int(entry.get("id", 0))
 	var active: bool = id == GameManager.active_slot() and not GameManager.is_active_slot_deleted()
@@ -137,82 +146,89 @@ func _make_row(entry: Dictionary) -> PanelContainer:
 	var row := PanelContainer.new()
 	row.name = "Save_%d" % id
 	row.set_meta("save_id", id)
-	row.add_theme_stylebox_override("panel", UITheme.make_panel_style(active))
+	var st := CT.card_style("window", active)
+	st.set_content_margin_all(6 if _small else 10)
+	st.content_margin_left = 10 if _small else 14
+	row.add_theme_stylebox_override("panel", st)
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	row.add_child(box)
 
-	# Bandera, nombre y estado.
+	var line := HFlowContainer.new()
+	line.add_theme_constant_override("h_separation", 10)
+	line.add_theme_constant_override("v_separation", 6)
+	row.add_child(line)
+
+	var who := HBoxContainer.new()
+	who.add_theme_constant_override("separation", 10)
+	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	who.custom_minimum_size.x = 220.0 if _small else 300.0
+	line.add_child(who)
+	who.add_child(_make_flag(entry))
+	var texts := VBoxContainer.new()
+	texts.add_theme_constant_override("separation", -2)
+	texts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	who.add_child(texts)
 	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", 10)
-	box.add_child(top)
-	top.add_child(_make_flag(entry))
-	var name_label := UITheme.make_label(display_name(entry), "section", UITheme.TEXT_BRIGHT)
+	top.add_theme_constant_override("separation", 8)
+	texts.add_child(top)
+	var name_label := CT.label(display_name(entry), "button", CT.text("window"))
 	name_label.name = "Name"
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	top.add_child(name_label)
 	if sealed:
-		top.add_child(_badge(Tr.t("LBL_SAVE_SEALED"), UITheme.DANGER, "Sealed"))
+		top.add_child(_badge(Tr.t("LBL_SAVE_SEALED"), CT.sem("DANGER"), "Sealed"))
 	elif bool(entry.get("broken", false)):
-		top.add_child(_badge(Tr.t("LBL_SAVE_BROKEN"), UITheme.WARNING, "Broken"))
+		top.add_child(_badge(Tr.t("LBL_SAVE_BROKEN"), CT.sem("WARNING"), "Broken"))
 	if active:
-		top.add_child(_badge(Tr.t("LBL_SAVE_ACTIVE"), UITheme.POSITIVE, "Active"))
-
-	# Datos en cifras y botones; en estrecho, los botones bajan de linea.
-	var bottom := HFlowContainer.new()
-	bottom.add_theme_constant_override("h_separation", 10)
-	bottom.add_theme_constant_override("v_separation", 6)
-	box.add_child(bottom)
-	var info := UITheme.make_label(info_line(entry), "small", UITheme.TEXT)
+		top.add_child(_badge(Tr.t("LBL_SAVE_ACTIVE"), CT.sem("POSITIVE"), "Active"))
+	var info := CT.label(info_line(entry), "small", CT.text("window", true))
 	info.name = "Info"
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	info.custom_minimum_size.x = 240.0
-	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.clip_text = true
+	info.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	info.tooltip_text = "%s · %s" % [Tr.t("LBL_SAVE_TIME_TIP"), Tr.t("LBL_SAVE_DATE_TIP")]
 	info.mouse_filter = Control.MOUSE_FILTER_PASS
-	bottom.add_child(info)
+	texts.add_child(info)
+
 	var buttons := HBoxContainer.new()
 	buttons.name = "Buttons"
 	buttons.add_theme_constant_override("separation", 8)
 	buttons.size_flags_horizontal = Control.SIZE_SHRINK_END
-	bottom.add_child(buttons)
+	line.add_child(buttons)
+	var bh := CT.menu_h("small")
 	if _confirm_id == id:
-		var ask := UITheme.make_label(Tr.t("LBL_SAVE_DELETE_ASK"), "body", UITheme.DANGER)
-		ask.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		var ask := CT.label(Tr.t("LBL_SAVE_DELETE_ASK"), "button", CT.sem("DANGER").darkened(0.2))
 		buttons.add_child(ask)
-		buttons.add_child(_button("No", Tr.t("BTN_SAVE_DELETE_NO"), UITheme.BTN, _ask_delete.bind(0)))
-		buttons.add_child(_button("Yes", Tr.t("BTN_SAVE_DELETE_YES"), UITheme.DANGER, delete_save.bind(id)))
+		buttons.add_child(_button("No", Tr.t("BTN_SAVE_DELETE_NO"), "", "secondary", bh, _ask_delete.bind(0)))
+		buttons.add_child(_button("Yes", Tr.t("BTN_SAVE_DELETE_YES"), "demolish", "danger", bh, delete_save.bind(id)))
 	else:
 		# La que ya estas jugando dice SEGUIR, no CARGAR (ronda 1.0): abrirla
 		# guarda antes y vuelve al mismo punto (GameManager.load_slot).
 		var load_text := Tr.t("BTN_SAVE_CONTINUE") if active else Tr.t("BTN_SAVE_LOAD")
-		var load_btn := _button("Load", load_text, UITheme.POSITIVE, load_save.bind(id))
+		var load_btn := _button("Load", load_text, "next", "primary", bh, load_save.bind(id))
 		# Terminada: se ve, no se sigue. Con la lista para hacer sitio, solo borrar.
 		load_btn.disabled = sealed or _make_room
 		load_btn.visible = not _make_room
 		buttons.add_child(load_btn)
-		buttons.add_child(_button("Delete", Tr.t("BTN_SAVE_DELETE"), UITheme.DANGER, _ask_delete.bind(id)))
+		# Borrar: rojo y solo el icono (el nombre al mantener, docs/28 §5).
+		var del_btn := _button("Delete", "", "demolish", "danger", bh, _ask_delete.bind(id))
+		del_btn.tooltip_text = Tr.t("BTN_SAVE_DELETE")
+		del_btn.set_meta("text", Tr.t("BTN_SAVE_DELETE"))
+		buttons.add_child(del_btn)
 	return row
 
-func _button(node_name: String, text: String, color: Color, cb: Callable) -> Button:
-	var btn := Button.new()
+func _button(node_name: String, text_s: String, glyph: String, kind_s: String, hh: int, cb: Callable) -> Button:
+	var btn := CT.text_button(text_s, glyph, kind_s, hh)
 	btn.name = node_name
-	btn.text = text
 	btn.focus_mode = Control.FOCUS_ALL
-	btn.custom_minimum_size = Vector2(96, UITheme.MIN_BTN_H)
-	UITheme.style_button(btn, color, UITheme.FONT_BUTTON)
 	btn.pressed.connect(cb)
 	return btn
 
-func _badge(text: String, color: Color, node_name: String) -> Label:
-	var label := UITheme.make_label(text, "small", color)
-	label.name = node_name
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	return label
+func _badge(text_s: String, color: Color, node_name: String) -> Control:
+	var b := CT.badge(text_s, color)
+	b.name = node_name
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return b
 
 ## La bandera de la partida (ColonyFlag.draw_spec), o un recuadro del color de
 ## la colonia si el guardado no trae receta (partidas de antes).
@@ -232,7 +248,7 @@ func _make_flag(entry: Dictionary) -> Control:
 			ColonyFlag.draw_spec(flag, rect, spec)
 		else:
 			flag.draw_rect(rect, fill)
-		flag.draw_rect(rect, UITheme.TEXT_DIM, false, 1.0))
+		flag.draw_rect(rect, CT.INK, false, 2.0))
 	return flag
 
 # ── Textos ───────────────────────────────────────────────────────────
@@ -274,16 +290,15 @@ static func short_date(unix: float) -> String:
 
 # ── Colocacion ───────────────────────────────────────────────────────
 
+## Ventana centrada con su tope; mas baja si hay pocas partidas. En telefono,
+## a pantalla completa. Lo que no cabe se desplaza (y se arrastra).
 func _relayout() -> void:
-	if _card == null:
+	if _window == null or not is_inside_tree():
 		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	ModalKit.fit_center(_card, MAX_WIDTH, vp)
-	# Lo que no quepa en alto se desplaza: titulo y margenes piden unos 150 px.
 	var rows: int = maxi(1, row_count())
-	var row_h: float = 118.0 if _card.custom_minimum_size.x < NARROW else 92.0
-	var wanted: float = float(rows) * row_h
-	_scroll.custom_minimum_size = Vector2(0, clampf(wanted, 80.0, maxf(80.0, vp.y - 190.0)))
+	var wanted_h: float = 170.0 + float(rows) * 86.0
+	CT.place_window(_window, vp, Vector2(MAX_WIDTH, clampf(wanted_h, 260.0, 600.0)), _small)
 
 # ── Acciones ─────────────────────────────────────────────────────────
 

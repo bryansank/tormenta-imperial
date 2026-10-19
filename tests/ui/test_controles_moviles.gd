@@ -182,9 +182,6 @@ func test_phone_settings_controls_are_finger_sized() -> void:
 	assert_array(small).is_empty()
 	for node in panel.find_children("Slider_*", "HSlider", true, false):
 		assert_float((node as Control).custom_minimum_size.y).is_greater_equal(float(UITheme.SETTINGS_ROW_H))
-	var tabs: TabContainer = panel.find_child("SettingsTabs", true, false)
-	var sb := tabs.get_theme_stylebox("tab_selected")
-	assert_float(sb.content_margin_top * 2.0 + UITheme.FONT_BODY).is_greater_equal(float(UITheme.SETTINGS_ROW_H) - 2.0)
 
 func test_settings_still_fit_on_a_phone() -> void:
 	_force_profile("phone")
@@ -192,7 +189,8 @@ func test_settings_still_fit_on_a_phone() -> void:
 	add_child(_panel)
 	_panel.toggle()
 	var vp: Vector2 = _panel.get_viewport().get_visible_rect().size
-	for i in 5:
+	_panel.set_advanced_open(true)
+	for i in 4:
 		_panel.select_tab(i)
 		await await_idle_frame()
 		var r: Rect2 = (_panel._panel as Control).get_global_rect()
@@ -204,7 +202,7 @@ func test_controls_tab_has_the_size_row_and_its_reset() -> void:
 	_panel.toggle()
 	var row = _panel.find_child("ControlsSizeRow", true, false)
 	assert_object(row).is_not_null()
-	var picker := row.get_child(1) as OptionButton
+	var picker = row.find_child("Picker", true, false)
 	assert_int(picker.item_count).is_equal(GameConfig.TOUCH_CONTROLS_SIZE_MODES.size())
 	picker.select(4)
 	picker.item_selected.emit(4)

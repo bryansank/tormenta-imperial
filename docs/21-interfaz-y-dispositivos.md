@@ -106,25 +106,45 @@ La pantalla de arranque de Godot se sustituye por el logo de la marca
 
 ## 2. Ajustes en pestañas
 
-`SettingsPanel` tiene cinco pestañas, cada una con su scroll (cabe a 1024x768,
-en tablet y con letra grande) y su **Restablecer esta pestaña** (menos Juego):
+Rediseño fase 2 (2026-10-18, rama `feat/ui2-menus`, guía en `docs/28-guia-ui.md`):
+`SettingsPanel` es una ventana crema con la cinta azul **AJUSTES** y la ✕ roja
+(`CartoonTheme.menu_window`), centrada con tope de 1000×600 en PC y tablet y a
+pantalla completa en teléfono (`CartoonTheme.menus_phone`). A la izquierda, un
+**carril de pestañas** con icono (en teléfono solo el icono; el nombre al mantener
+pulsado). Cuatro pestañas, cada una con su scroll y, menos Juego, su
+**Restablecer**:
 
 | Pestaña | Qué hay |
 |---|---|
-| **Audio** | Volumen general, música sí/no (también en ☰ MENÚ → PARTIDA), música, efectos. De serie bajos: general 80 %, música 35 %, efectos 50 % (`GameConfig.AUDIO_DEFAULTS`), con curva perceptual |
-| **Interfaz** | Perfil de dispositivo, escala, tamaño de texto · Vista 3D/2D, rejilla, pantalla completa · Nombres junto a los iconos (Automático / Siempre / Nunca, §8) · Elementos en pantalla (un interruptor por elemento) · Editar / Restablecer disposición |
-| **Controles** | Controles en pantalla (Automático / Siempre / Nunca), su opacidad (20–100 %, de serie 55 %, `GameConfig.ui_touch_controls_opacity`), su **tamaño** (Del perfil / Pequeño 85 % / Normal 100 % / Grande 125 % / Muy grande 150 %, §9) y el resumen de controles en ratón o en dedo |
-| **Accesibilidad** | Paleta de colores, alto contraste, opacidad de paneles, vista previa |
-| **Juego** | Idioma, Nueva partida |
+| **Sonido** | General, música sí/no (interruptor), volumen de música, efectos. De serie bajos: general 80 %, música 35 %, efectos 50 % (`GameConfig.AUDIO_DEFAULTS`), con curva perceptual |
+| **Pantalla** | Orientación (Horizontal / Vertical), mapa 3D/2D, tamaño del texto, gráficos, pantalla completa, cuadrícula, vista del combate · y plegado bajo **Más opciones**: dispositivo, escala, fotogramas, Detectar, nombres junto a los iconos, qué se ve en pantalla (un interruptor por elemento), colores (paleta, alto contraste, opacidad y la muestra) y disposición (Mover paneles / De serie) |
+| **Controles** | Botones en pantalla (Auto / Siempre / Nunca) con la frase de "Auto", su opacidad, su **tamaño** (§9) y el resumen de controles en ratón o en dedo |
+| **Juego** | Idioma (un botón por idioma con su nombre en ese idioma), Nueva partida |
+
+Las piezas (todas en `CartoonTheme`, sección "MENÚS"):
+
+- **Fila** (`setting_row`): tarjeta con [icono] Nombre ······ control [valor]. El
+  nombre largo de antes va en el globo al mantener pulsado. La tarjeta lleva el
+  nombre de la fila de siempre (`ProfileRow`, `ScaleRow`, `FpsRow`...).
+- **Selector** (`picker`, `scripts/ui/CartoonPicker.gd`): sustituye a los
+  desplegables. Hasta 4 opciones cortas, pastillas en fila (la elegida azul); con
+  más o con textos largos, paso a paso `[◀] opción [▶]`. Habla como un
+  `OptionButton` (`item_selected`, `selected`, `item_count`, `select`,
+  `set_item_text`); se busca dentro de la fila por el nombre `Picker`.
+- **Interruptor** (`live_switch`): un `CheckButton` con el carril dibujado
+  (verde encendido, bolita blanca). Conserva los nombres de antes (`GridCheck`,
+  `HighContrastCheck`, `Hud_<id>`...).
+- **Deslizador** (`menu_slider`): carril grueso, relleno de latón, bolita
+  blanca, valor a la derecha. Nombres `Slider_<clave>`; la rueda no lo mueve.
 
 Qué se aplica al momento: audio, vista, rejilla, pantalla completa, controles
 (también su tamaño), escala, mostrar/ocultar HUD y la disposición. Lo que cambia tokens de `UITheme`
-(texto, paleta, contraste, opacidad, perfil) se ve en la **vista previa** y se
-aplica con **APLICAR CAMBIOS** o al cerrar Ajustes: los paneles se construyen una
-vez, así que `DeviceProfile.rebuild_ui()` recarga la escena conservando la partida
-(la misma recarga que el cambio de idioma) y vuelve a abrir Ajustes en la
-pestaña donde estaba. Con un tablero de combate abierto no se recarga: se guarda
-y se verá al terminar.
+(texto, paleta, contraste, opacidad, perfil) se ve en la **muestra** y se aplica
+con **APLICAR** (pastilla ámbar, solo cuando hay algo pendiente) o al cerrar
+Ajustes: los paneles se construyen una vez, así que `DeviceProfile.rebuild_ui()`
+recarga la escena conservando la partida (la misma recarga que el cambio de
+idioma) y vuelve a abrir Ajustes en la pestaña donde estaba. Con un tablero de
+combate abierto no se recarga: se guarda y se verá al terminar.
 
 ### Ajustes a tamaño de dedo (tablet y móvil)
 
@@ -132,20 +152,11 @@ Petición de Bryan (2026-10-18): en el móvil, los propios controles de Ajustes,
 un poco más grandes. `DeviceProfile.DEFAULTS[...]["settings_row"]` llega a
 `UITheme.configure()` y fija el token `UITheme.SETTINGS_ROW_H` (PC 44 = el
 `MIN_BTN_H` de siempre, tablet 56, móvil 60; `UITheme.settings_touch()` dice si
-es mayor que el de PC). Con él:
-
-- `make_option_row`: el desplegable mide `SETTINGS_ROW_H` y su lista abre con
-  filas de ese alto (`v_separation` del `PopupMenu`, también en el tema global).
-- `make_check_button`: fila de `SETTINGS_ROW_H` y el interruptor dibujado crece
-  en proporción (`switch_icon(on, disabled, escala)`).
-- Pestañas: el relleno vertical lleva cada pestaña a `SETTINGS_ROW_H`.
-- Deslizadores (`UITheme.style_settings_slider`): alto `SETTINGS_ROW_H`, bolita
-  redonda de 22 px × factor y carril más grueso.
-- `SettingsPanel._size_for_touch`: todo `BaseButton` del panel (Restablecer,
-  APLICAR, ENTENDIDO, idioma, 3D/2D, la X) llega a ese alto; los cuadrados
-  crecen por los dos lados. Más hueco entre filas (18 en vez de 12) y la
-  cabecera fija crece lo mismo (`_chrome_h()`), así que el panel sigue cabiendo:
-  lo que no cabe se desplaza.
+es mayor que el de PC). En el rediseño, `SettingsPanel._h()` da el alto de cada
+pieza: el de `CartoonTheme.menu_h()` (nunca menos que `UITheme.MIN_BTN_H`), sin
+bajar de `SETTINGS_ROW_H` en tablet y móvil ni de 48 en teléfono. Pestañas,
+pastillas, selectores, interruptores, deslizadores y la ✕ llegan a ese alto; lo
+que no cabe se desplaza.
 
 Es del **perfil**, no de "controles en pantalla": un PC sigue igual aunque elija
 "Siempre"; un portátil táctil que lo quiera elige el perfil Tablet. Los cambios
@@ -315,7 +326,7 @@ estado de población, que lleva su propia rama):
 - Máximo 3 avisos a la vez (el resto ya está en el registro).
 - Los globos de ayuda se callan también bajo la pausa y el menú principal
   (`HelperPanel` mira `get_tree().paused` con un vigía que corre en pausa).
-- **Ventanas del rediseño** (fase 2, docs/28 §15: Ejército, MISIONES, ENCARGOS,
+- **Ventanas del rediseño** (fase 2, docs/28 §17: Ejército, MISIONES, ENCARGOS,
   partes): ya no usan su ranura de `UILayoutConfig` (`ArmyPanel.modal`,
   `SkirmishPanel.modal`, `ContractPanel.modal` siguen registradas en `UIManager`
   para el apilado y ESC). Se colocan solas con `CartoonTheme.fit_window()` al
@@ -1097,9 +1108,9 @@ en pantalla al soltarlos.
 Tests: `tests/ui/test_bottom_bar.gd`, `tests/ui/test_ui2_hud.gd`, y al día
 `test_game_menu`, `test_device_profile`, `test_touch_controls`,
 `test_cartoon_theme`, `test_hud_layout`, `test_ui_stacking`, `test_view_mode`.
-## 15. CONSTRUIR, ficha, Mercado e Investigar con el estilo nuevo (2026-10-18, rama `feat/ui2-construir`)
+## 16. CONSTRUIR, ficha, Mercado e Investigar con el estilo nuevo (2026-10-18, rama `feat/ui2-construir`)
 
-Fase 2 del rediseño (`docs/28-guia-ui.md` §15): las cuatro pantallas de la
+Fase 2 del rediseño (`docs/28-guia-ui.md` §16): las cuatro pantallas de la
 economía se rehacen con `CartoonTheme`, **teléfono primero** (640×360 y
 800×360) y luego tablet y PC. Sin animaciones; icono + número; una frase como
 mucho; el detalle al mantener pulsado (`TouchTooltip`) o al pasar el ratón.

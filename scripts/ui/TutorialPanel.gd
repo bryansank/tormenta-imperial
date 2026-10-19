@@ -18,14 +18,19 @@ extends CanvasLayer
 ## cuando TutorialManager ve que se hizo (derive_step), asi que da igual el
 ## orden en que haga las cosas.
 ##
-## Estilo laton sobre metal (el del HUD): es la voz de "que tocar". El lore es
-## papel (PrologueScreen) y la ayuda azul acero (HelperPanel).
+## Estilo nuevo (fase 2, docs/28 y la maqueta): la tarjeta es un BOCADILLO crema
+## con tinta gruesa y su piquito hacia el busto de la Capitana (colonia) o del
+## Sargento (combate). Arriba la pastilla "Paso N de M"; luego UNA frase grande
+## (lo que hay que hacer) y, si algo lo impide, lo que falta en pequeno debajo.
+## Botones por intencion (docs/28 §5): verde la accion principal, crema "Terminar
+## repaso". Sin animaciones: el marco y el aro no laten y el texto sale entero.
 
 const PrologueScene := preload("res://scenes/ui/PrologueScreen.tscn")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const CoachArrow := preload("res://scripts/ui/CoachArrow.gd")
 const TypeCircleScript := preload("res://scripts/ui/TypeCircle.gd")
 const InstructorBust := preload("res://scripts/ui/InstructorBust.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 ## Encima de las ventanas de UIManager (12+) y del texto de colocar (15), para
 ## poder senalar una tarjeta dentro de la lista de CONSTRUIR. El tablero (18) lo
@@ -56,6 +61,11 @@ var _ring: Control
 var _card: PanelContainer
 var _badge: Label
 var _text: Label
+## Lo que falta y como conseguirlo (las lineas 2+ de compose_card_text), en
+## pequeno bajo la frase del paso.
+var _detail: Label
+## El piquito del bocadillo hacia el busto.
+var _tail: Control
 ## Las cifras del edificio del paso, con iconos (building_facts).
 var _facts: HBoxContainer
 var _facts_for := "-"
@@ -66,7 +76,6 @@ var _quick_guide: CanvasLayer = null
 const QuickGuideScript := preload("res://scripts/ui/QuickGuide.gd")
 const QUICK_GUIDE_ID := "quick_guide"
 var _done_left := 0.0
-var _pulse := 0.0
 ## Lo caro del paso (que control senala, su texto con lo que falta, que bosque)
 ## se busca cada RESOLVE_SECONDS, no en cada fotograma (docs/26 §6.9). Cada
 ## fotograma solo lee el rectangulo del control ya encontrado y proyecta la
@@ -192,11 +201,11 @@ func _build_coach() -> void:
 	_frame.name = "Highlight"
 	var fs := StyleBoxFlat.new()
 	fs.bg_color = Color(0, 0, 0, 0)
-	fs.border_color = UITheme.ACCENT
-	fs.set_border_width_all(3)
-	fs.set_corner_radius_all(6)
-	fs.shadow_color = Color(UITheme.ACCENT, 0.45)
-	fs.shadow_size = 8
+	fs.border_color = CT.sem("ACCENT")
+	fs.set_border_width_all(4)
+	fs.set_corner_radius_all(12)
+	fs.shadow_color = Color(CT.INK, 0.5)
+	fs.shadow_size = 2
 	_frame.add_theme_stylebox_override("panel", fs)
 	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_coach.add_child(_frame)
@@ -205,9 +214,9 @@ func _build_coach() -> void:
 	_ring = Panel.new()
 	_ring.name = "Ring"
 	var rs := StyleBoxFlat.new()
-	rs.bg_color = Color(UITheme.ACCENT, 0.12)
-	rs.border_color = UITheme.ACCENT
-	rs.set_border_width_all(3)
+	rs.bg_color = Color(CT.sem("ACCENT"), 0.15)
+	rs.border_color = CT.sem("ACCENT")
+	rs.set_border_width_all(4)
 	rs.set_corner_radius_all(40)
 	_ring.add_theme_stylebox_override("panel", rs)
 	_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -217,7 +226,7 @@ func _build_coach() -> void:
 
 	_arrow = CoachArrow.new()
 	_arrow.name = "Arrow"
-	_arrow.set("color", UITheme.ACCENT)
+	_arrow.set("color", CT.sem("ACCENT"))
 	_coach.add_child(_arrow)
 
 	_card = PanelContainer.new()
@@ -225,19 +234,34 @@ func _build_coach() -> void:
 	# Los avisos (NotificationPanel) esperan si la tarjeta cae sobre su columna.
 	_card.add_to_group("alert_blocker")
 	_card.mouse_filter = Control.MOUSE_FILTER_STOP
-	_card.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2, true))
+	_card.add_theme_stylebox_override("panel", CT.bubble_style())
 	_coach.add_child(_card)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
 	_card.add_child(col)
 
-	_badge = UITheme.make_label("", "small", UITheme.ACCENT)
+	# "Paso 3 de 9": una pastilla de laton pequena.
+	var pill := PanelContainer.new()
+	pill.name = "BadgePill"
+	var ps := CT.box(CT.sem("ACCENT"), CT.INK, 2, 12, 0)
+	ps.content_margin_left = 10
+	ps.content_margin_right = 10
+	ps.content_margin_top = 0
+	ps.content_margin_bottom = 2
+	pill.add_theme_stylebox_override("panel", ps)
+	pill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(pill)
+	_badge = CT.label("", "small", CT.INK)
 	_badge.name = "Badge"
-	col.add_child(_badge)
-	_text = UITheme.make_label("", "section", UITheme.TEXT_BRIGHT)
+	pill.add_child(_badge)
+	_text = CT.para("", "window", false, "title")
 	_text.name = "Instruction"
-	_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_text)
+	_detail = CT.para("", "window", true, "small")
+	_detail.name = "Detail"
+	_detail.visible = false
+	col.add_child(_detail)
 	# Las cifras del edificio: [madera] +6 cada 12 s  [trabajadores] 2 trabajan.
 	_facts = HBoxContainer.new()
 	_facts.name = "Facts"
@@ -258,31 +282,23 @@ func _build_coach() -> void:
 	# Sin "Saltar tutorial" (decision de Bryan, 2026-10-04): el tutorial de una
 	# partida nueva se hace entero. Solo el repaso que se pide desde AYUDA se
 	# puede dejar a medias.
-	_end_replay_btn = Button.new()
+	_end_replay_btn = CT.text_button(Tr.t("BTN_GUIDE_END_REPLAY"), "", "secondary", CT.menu_h("small"), "body")
 	_end_replay_btn.name = "EndReplay"
-	_end_replay_btn.text = Tr.t("BTN_GUIDE_END_REPLAY")
-	_end_replay_btn.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
 	_end_replay_btn.focus_mode = Control.FOCUS_NONE
-	UITheme.style_button(_end_replay_btn, UITheme.BTN, UITheme.FONT_SMALL)
 	_end_replay_btn.pressed.connect(func(): TutorialManager.stop_replay())
 	_end_replay_btn.visible = false
 	row.add_child(_end_replay_btn)
-	_ok_btn = Button.new()
+	# La accion de la tarjeta: verde (docs/28 §5).
+	_ok_btn = CT.text_button(Tr.t("BTN_GUIDE_OK"), "check", "primary", CT.menu_h("btn"))
 	_ok_btn.name = "GuideOk"
-	_ok_btn.text = Tr.t("BTN_GUIDE_OK")
-	_ok_btn.custom_minimum_size = Vector2(140, UITheme.MIN_BTN_H)
 	_ok_btn.focus_mode = Control.FOCUS_NONE
-	UITheme.style_button(_ok_btn, UITheme.ACCENT.darkened(0.2), UITheme.FONT_BUTTON)
 	_ok_btn.pressed.connect(_on_ok_pressed)
 	_ok_btn.visible = false
 	row.add_child(_ok_btn)
 	# Combate guiado: solo "Entendido" (el circulo). Sin "Saltar" (2026-10-16).
-	_combat_ok_btn = Button.new()
+	_combat_ok_btn = CT.text_button(Tr.t("BTN_CGUIDE_OK"), "check", "primary", CT.menu_h("btn"))
 	_combat_ok_btn.name = "CombatOk"
-	_combat_ok_btn.text = Tr.t("BTN_CGUIDE_OK")
-	_combat_ok_btn.custom_minimum_size = Vector2(140, UITheme.MIN_BTN_H)
 	_combat_ok_btn.focus_mode = Control.FOCUS_NONE
-	UITheme.style_button(_combat_ok_btn, UITheme.ACCENT.darkened(0.2), UITheme.FONT_BUTTON)
 	_combat_ok_btn.pressed.connect(func(): TutorialManager.close_combat_step(_cstep))
 	_combat_ok_btn.visible = false
 	row.add_child(_combat_ok_btn)
@@ -291,6 +307,17 @@ func _build_coach() -> void:
 	_bust.name = "Instructor"
 	_bust.visible = GameConfig.ui_instructors_visible
 	_coach.add_child(_bust)
+	_tail = CT.Tail.new()
+	_tail.name = "Tail"
+	_tail.visible = false
+	_coach.add_child(_tail)
+
+## Cambia el texto de una pastilla (su etiqueta y la meta "text").
+static func set_button_text(b: Button, text_s: String) -> void:
+	b.set_meta("text", text_s)
+	for l in b.find_children("*", "Label", true, false):
+		(l as Label).text = text_s
+		return
 
 ## El boton de la tarjeta: en el "listo" final cierra el tutorial; en una
 ## tarjeta de leer (la meta, el Nucleo) la da por leida y sigue.
@@ -313,7 +340,7 @@ func _on_step_changed(step_id: String) -> void:
 	_done_left = DONE_SECONDS if step_id == "done" else 0.0
 	var reading: bool = TutorialManager.step_has_ok(step_id)
 	_ok_btn.visible = step_id == "done" or reading
-	_ok_btn.text = TutorialManager.step_ok_text(step_id) if reading else Tr.t("BTN_GUIDE_OK")
+	set_button_text(_ok_btn, TutorialManager.step_ok_text(step_id) if reading else Tr.t("BTN_GUIDE_OK"))
 	_end_replay_btn.visible = step_id != "done" and TutorialManager.is_replay()
 	# El paso de reparar ensena lo que cuesta reparar (no un edificio de datos).
 	# En "consigue lo que falta" no van las cifras del edificio: la tarjeta habla
@@ -325,10 +352,9 @@ func _on_step_changed(step_id: String) -> void:
 		facts_for = ""
 	_render_facts(facts_for)
 	_render_text()
-	# La Capitana lo dice: su cara del paso y la boca mientras se escribe.
+	# La Capitana lo dice: su cara del paso. El texto sale entero (docs/28 §0.6).
 	if step_id != "" and _cstep == "":
 		_bust.show_as(InstructorBust.COLONY, InstructorBust.expression_for_step(step_id), _bust.facing)
-		_bust.speak(_text)
 
 func _render_text() -> void:
 	# Con una marca de combate en pantalla, la tarjeta es suya.
@@ -343,7 +369,19 @@ func _render_text() -> void:
 		_badge.text = Tr.t("LBL_GUIDE_REPAIR_BADGE")
 	else:
 		_badge.text = Tr.t("LBL_GUIDE_STEP") % [n, TutorialManager.GUIDE_TOTAL]
-	_text.text = TutorialManager.step_text(_step)
+	_set_card_text(TutorialManager.step_text(_step))
+
+## La frase del paso (la primera linea) en grande y el resto (lo que falta y como
+## conseguirlo) en pequeno debajo.
+func _set_card_text(full: String) -> void:
+	var lines := full.split("\n", false)
+	var main := String(lines[0]) if not lines.is_empty() else ""
+	var rest := "\n".join(lines.slice(1)) if lines.size() > 1 else ""
+	if _text.text != main:
+		_text.text = main
+	if _detail.text != rest:
+		_detail.text = rest
+	_detail.visible = rest != ""
 
 ## Pinta la fila de cifras con iconos de `building_id` ("" la esconde). Solo
 ## rehace los nodos si cambia el edificio.
@@ -362,7 +400,7 @@ func _render_facts(building_id: String) -> void:
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if String(f["icon"]) != "":
 			chip.add_child(UITheme.make_icon(String(f["icon"]), 24))
-		var l := UITheme.make_label(String(f["text"]), "small", UITheme.TEXT_BRIGHT)
+		var l := CT.label(String(f["text"]), "small", CT.text("window"))
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		chip.add_child(l)
 		_facts.add_child(chip)
@@ -383,7 +421,10 @@ func current_step() -> String:
 func is_coach_visible() -> bool:
 	return _coach.visible
 
+## El texto entero de la tarjeta: la frase y lo que falta debajo.
 func coach_text() -> String:
+	if _detail != null and _detail.text != "":
+		return _text.text + "\n" + _detail.text
 	return _text.text
 
 ## El "Terminar repaso" (solo visible en un repaso pedido desde AYUDA).
@@ -430,7 +471,6 @@ func _process(delta: float) -> void:
 		_resolve_left = 0.0
 		return
 	_coach.visible = true
-	_pulse += delta
 	if _step == "done":
 		_done_left -= delta
 		if _done_left <= 0.0:
@@ -531,8 +571,7 @@ func _layout_step() -> void:
 		hint = ""
 		how = ""
 	text = compose_card_text(text, hint, how, camera)
-	if _text.text != text:
-		_text.text = text
+	_set_card_text(text)
 
 	var has_rect := rect.size.x > 1.0 and rect.size.y > 1.0
 	if has_rect:
@@ -542,7 +581,6 @@ func _layout_step() -> void:
 	if has_rect:
 		_frame.position = rect.position
 		_frame.size = rect.size
-		_frame.modulate.a = 0.65 + 0.35 * sin(_pulse * 4.0)
 
 	# La tarjeta, junto a lo senalado (debajo si cabe, si no encima), sin taparlo.
 	var w: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
@@ -568,6 +606,7 @@ func _layout_step() -> void:
 		var storm := _storm_rect()
 		_card.position.x += InstructorBust.centered_card_shift(vp, w, storm, _card.position.y)
 	_bust.dock_to(vp, Rect2(_card.position, Vector2(w, ch)), [focus, _storm_rect()], TOP_HUD)
+	CT.place_tail(_tail, Rect2(_card.position, Vector2(w, ch)), _bust)
 
 	# Flecha y aro.
 	_ring.visible = false
@@ -590,8 +629,6 @@ func _layout_step() -> void:
 		var p: Vector2 = point["point"]
 		if bool(point.get("ok", true)):
 			_ring.visible = true
-			var s := 1.0 + 0.12 * sin(_pulse * 4.0)
-			_ring.scale = Vector2(s, s)
 			_ring.position = p - _ring.size * 0.5
 			_arrow.visible = true
 			_arrow.point_at(p - Vector2(0, 44), Vector2.DOWN)
@@ -841,10 +878,9 @@ func _on_combat_step_changed(step_id: String) -> void:
 		_facts.visible = false
 		_facts_for = "-"
 		_badge.text = Tr.t("LBL_CGUIDE_STEP") % [TutorialManager.combat_step_number(step_id), TutorialManager.COMBAT_TOTAL]
-		_text.text = TutorialManager.combat_step_text(step_id)
+		_set_card_text(TutorialManager.combat_step_text(step_id))
 		# El Sargento Bombarda lleva el combate guiado.
 		_bust.show_as(InstructorBust.COMBAT, InstructorBust.expression_for_combat_step(step_id), _bust.facing)
-		_bust.speak(_text)
 		set_process(true)
 	else:
 		_coach.visible = false
@@ -881,7 +917,6 @@ func _layout_combat(delta: float) -> void:
 		_coach.visible = false
 		return
 	_coach.visible = true
-	_pulse += delta
 	# El circulo ya no se cierra solo (2026-10-16): se cierra con "Entendido".
 	for r in _dim:
 		r.visible = false
@@ -895,7 +930,6 @@ func _layout_combat(delta: float) -> void:
 	if has_rect:
 		_frame.position = rect.position
 		_frame.size = rect.size
-		_frame.modulate.a = 0.65 + 0.35 * sin(_pulse * 4.0)
 
 	var w: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
 	var key := "%s|%s|%d|%s|%s" % [_badge.text, _text.text, int(w), _combat_ok_btn.visible, _circle.visible]
@@ -910,6 +944,7 @@ func _layout_combat(delta: float) -> void:
 		Vector2(w, _card_h), avoid, vp, focus)
 	avoid.append(focus)
 	_bust.dock_to(vp, Rect2(_card.position, Vector2(w, _card_h)), avoid)
+	CT.place_tail(_tail, Rect2(_card.position, Vector2(w, _card_h)), _bust)
 
 	_ring.visible = false
 	_arrow.visible = false
@@ -930,8 +965,6 @@ func _layout_combat(delta: float) -> void:
 	elif has_point:
 		var pt: Vector2 = anchor["point"]
 		_ring.visible = true
-		var sc := 1.0 + 0.12 * sin(_pulse * 4.0)
-		_ring.scale = Vector2(sc, sc)
 		_ring.position = pt - _ring.size * 0.5
 		_arrow.visible = true
 		_arrow.point_at(pt - Vector2(0, 44), Vector2.DOWN)

@@ -127,12 +127,12 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step(); on the map, a foldable line with the Captain's face, bottom-left (own layer 10, slot `next_step`); tapping the text opens the panel
   +-- TechTreePanel (CanvasLayer 11) -- INVESTIGAR window (CartoonTheme): 3 branches x 5 tiers of two-line cards + the detail with INVESTIGAR (branch rail on phone); opened from a Laboratory building or `open()`
   +-- ArmyPanel (CanvasLayer 11) -- EJÉRCITO: Tierra/Mar/Aire tabs, train with + (cost in icons), Military Power, troops/queue, upkeep, who is away on campaign; (?) opens each unit's card (UnitCard). Cartoon window since UI phase 2 (docs/28 §15)
-  +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
-  +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close; building guide; instances HelpIndexPanel
+  +-- SettingsPanel (CanvasLayer 15) -- cream window, icon tab rail: Sonido · Pantalla (colours/contrast/layout folded under "Más opciones") · Controles · Juego (persisted in settings.cfg; docs/21 §2)
+  +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close, one sentence + "Más" (cream bubble pointing at the instructor); building guide; instances HelpIndexPanel
   +-- SkirmishPanel (CanvasLayer 11) -- MISIONES: Tierra/Mar/Aire/Ataques rápidos tabs, Final Assault checklist, mission card (track, enemies, loot, odds) beside the troop picker (− n +), ¡AL ATAQUE! fixed at the bottom; campaign status while a column is out; "QUE BAJEN" (Final Audit)
   +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn, in its "front" or "board" view; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
   +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator: since the redesign ONE round icon under ☰ (sun / storm cloud, ring in the phase colour, no pulse; phase and margin on hold, slot `storm_icon`); in calm the barometer ("3–5 min", a shifted margin, never the exact minute) and, on tap, the Regency Order card (docs/06 §Orden de la Regencia)
-  +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI, also over the combat board (combat lessons); instances PrologueScreen
+  +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI, also over the combat board (combat lessons); the card is a speech bubble next to the instructor bust (one sentence, no animation); instances PrologueScreen
   +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit (a red ribbon, no fade: it just disappears)
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
@@ -1176,6 +1176,7 @@ tormenta-imperial/
 |   |   +-- InstructorBust.gd           # The two instructors (Capt. Remache: colony, Sgt. Bombarda: combat), code-drawn busts beside tutorial/tip/war-report cards (docs/23 §9)
 |   |   +-- TutorialPanel.gd, CoachArrow.gd, PrologueScreen.gd, RegenciaSeal.gd, QuickGuide.gd, DragScroll.gd, TouchTooltip.gd
 |   |   +-- HelperPanel.gd, HelpCallout.gd, HelpCatalog.gd, HelpTargets.gd, HelpIndexPanel.gd
+|   |   +-- CartoonPicker.gd         # The redesign's selector (pills or ◀ option ▶), replaces dropdowns in Settings (docs/28 §15)
 |   |   +-- RankPanel.gd, ColonyFlag.gd  # Governor rank badge/toast/COLONIA card; the flag drawn from pieces
 |   |   +-- RegimentCard.gd, RegimentLook.gd  # The REGIMIENTO card in the Cuartel; regiment look, badge and paint helpers (cosmetic)
 |   |   +-- ColonyIdentityPanel.gd, ColonyByline.gd  # Country name + flag editor; flag + name line on reports

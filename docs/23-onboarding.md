@@ -13,6 +13,10 @@ Tres piezas, tres estilos, y ninguna se parece a otra:
 | **Tutorial** | Qué tocar, sobre la interfaz de verdad | Latón sobre metal, flecha y velo | `TutorialPanel` (capa 19) |
 | **Ayudas** | Globos y consejos, de uno en uno | Azul acero, con ✕ y barra de tiempo | `HelperPanel` (14 y 19) + `HelpIndexPanel` |
 
+> **Rediseño 2026-10-18 (fase 2, `docs/28`)**: las tres piezas pasan al estilo nuevo
+> (ventanas crema, letra redonda, una frase y el detalle al pedirlo, sin animaciones).
+> Lo que cambia se resume en §10; la tabla de arriba es la de antes.
+
 Junto al tutorial, la tarjeta de consejo y los partes de guerra habla un **instructor**
 (§9): la Capitana Ada Remache en la colonia y el Sargento Mayor Casimiro Bombarda en el
 combate, un busto dibujado por código que se pega a la tarjeta.
@@ -871,3 +875,22 @@ señalado, teléfono, oculto si no cabe), caras de todos los pasos y consejos, t
 caras de los dos se dibujan, hablar escribe y mueve la boca, apagado no escribe, textos
 en los dos idiomas, las frases se turnan, el parte lleva su frase y el ajuste está en la
 lista de Interfaz.
+
+## 10. Estilo nuevo (rediseño fase 2, 2026-10-18, rama `feat/ui2-menus`)
+
+La guía es `docs/28-guia-ui.md`; las piezas, `CartoonTheme` (sección "MENÚS").
+Lo de arriba sigue valiendo en el **qué** y el **cuándo**; cambia el **cómo se ve**
+y **cuánto texto** sale de una vez. Sin animaciones en ninguna de las tres piezas.
+
+| | Antes | Ahora |
+|---|---|---|
+| **Prólogo** | Papel, máquina de escribir, el texto se escribía solo y el tampón caía | Folio crema con borde grueso (`CartoonTheme.window_style`) sobre la pizarra del HUD; título en Baloo 2 y texto en Nunito Sans; la nota a mano conserva su letra. El folio sale **entero, de golpe**: Siguiente pasa de folio al primer toque (`is_typing()` siempre falso). Atrás es un redondo con la flecha; Siguiente / Empezar, la pastilla verde. Las láminas (`PrologueEngraving`), el sello y el tampón no cambian. |
+| **Guía rápida** | Cuatro bloques de texto largo | Cuatro tarjetas con icono, título y **una frase** (`UI2M_QG_*_S`); tocar una despliega el texto entero (`QG_*_B`) en la misma tarjeta. Ventana con cinta azul CÓMO SE JUEGA. |
+| **Tutorial** | Tarjeta de latón sobre metal, marco que latía, texto escrito poco a poco | **Bocadillo** crema con tinta gruesa (`CartoonTheme.bubble_style`) y su **piquito** (`CartoonTheme.Tail`, colocado con `place_tail`) hacia el busto de la Capitana o del Sargento, como en la maqueta. Arriba la pastilla de latón "Paso N de M" (`Badge`); luego **una frase grande** (la primera línea de `compose_card_text`) y, en pequeño debajo (`Detail`), lo que falta y cómo conseguirlo. `coach_text()` devuelve las dos. Botón por intención: verde la acción (`GuideOk`, `CombatOk`), crema "Terminar repaso". Marco y aro de latón quietos. |
+| **Consejos y globos** | Tarjeta azul acero con todo el texto | Bocadillo crema: [?] título, **la primera frase** (`HelpCallout.first_sentence`) y **Más** para desplegar el resto; desplegada, el reloj se para. ✕ roja redonda, barra de tiempo en azul. La tarjeta de consejo lleva el piquito hacia el busto. Sin fundido al salir. |
+| **Índice de AYUDA** | Lista de botones de texto | Ventana con cinta azul AYUDA. Arriba, pastillas con icono (Cómo se juega, Edificios, Tutorial, Historia, Combate; el nombre largo al mantener pulsado) y la fila "Consejos solos" con su interruptor. Debajo, una cabecera con icono por categoría y una tarjeta por ayuda (✓ si ya se vio). Las **páginas** enseñan el primer párrafo entero y cada párrafo siguiente como una **sección** plegada (su primera frase; tocar despliega). `page_text()` sigue devolviendo el texto entero. |
+| **Guía de edificios** | Lista de líneas de texto | Una tarjeta por edificio: nombre y tamaño, costes como icono + cifra (`cost_chip`), trabajadores, y la línea pequeña de topes y requisitos (`GuideRules`). La descripción, al mantener pulsado. |
+
+Los instructores ya **no hablan escribiendo** desde estas tarjetas (ni `speak()` ni la
+boca que se mueve): ponen la cara del paso y el texto sale entero. `InstructorBust.speak`
+sigue existiendo para quien lo use (los partes de guerra, de otro frente).
