@@ -18,6 +18,7 @@ extends GdUnitTestSuite
 const SettingsParking := preload("res://tests/save/settings_parking.gd")
 const TP := preload("res://scripts/ui/TutorialPanel.gd")
 const UnitCardScript := preload("res://scripts/ui/UnitCard.gd")
+const Objectives := preload("res://scripts/services/Objectives.gd")
 const LAB := preload("res://data/buildings/laboratory.tres")
 const HOUSE := preload("res://data/buildings/house.tres")
 
@@ -184,13 +185,20 @@ func test_only_short_of_room_the_step_asks_for_another_house_naturally() -> void
 	PopulationManager._max_population = 11
 	PopulationManager._used_workers = 10
 	assert_bool(TutorialManager.needs_house_only("laboratory")).is_true()
+	# El objetivo en verbo (2026-10-19) y, como paso de ahora, la otra Casa.
 	var text := TutorialManager.step_text("need_laboratory")
-	assert_str(text).is_equal(Tr.ti("GUIDE_NEED_HOUSE") % [LAB.get_display_name(), HOUSE.population_capacity])
+	assert_str(text).is_equal(Objectives.goal_title({"kind": "build", "id": "laboratory"}))
 	assert_str(text).not_contains("%")
-	# Con sitio en las casas la gente llega sola: el paso de siempre.
+	assert_str(text).not_contains(LAB.get_display_name() + ":")
+	# El paso de ahora es una Casa: "otra" si ya hay, o la que pide el
+	# Laboratorio antes (esta prueba no planta ninguna en la rejilla).
+	var hint := TutorialManager.step_hint("need_laboratory")
+	assert_bool(hint.contains("● " + Tr.t("OBJ_STEP_HOUSE") % HOUSE.population_capacity)
+		or hint.contains("● " + Tr.t("OBJ_DO_BUILD") % Objectives.building_a("house"))).override_failure_message(hint).is_true()
+	# Con sitio en las casas la gente llega sola: esperar es el paso.
 	PopulationManager._max_population = 17
 	assert_bool(TutorialManager.needs_house_only("laboratory")).is_false()
-	assert_str(TutorialManager.step_text("need_laboratory")).is_equal(Tr.ti("GUIDE_NEED") % LAB.get_display_name())
+	assert_str(TutorialManager.step_hint("need_laboratory")).contains(Tr.t("OBJ_STEP_WORKERS_WAIT") % 1)
 	# Si ademas faltan recursos, no es "solo una Casa".
 	PopulationManager._max_population = 11
 	ResourceManager.set_amounts({"gold": 0, "wood": 0})

@@ -403,6 +403,13 @@ func open() -> void:
 	if not _is_open:
 		_open()
 
+## Abre la lista con `building_id` ya elegido (los pasos de ¿QUE HACER?, 2026-10-19).
+func open_on(building_id: String) -> void:
+	open()
+	var data := _data_by_id(building_id)
+	if data != null:
+		_select_building(data)
+
 func _open() -> void:
 	_is_open = true
 	_fit_layout()
@@ -550,6 +557,12 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		cost.name = "CardCost"
 		cost.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(cost)
+		# La primera a mitad de precio (GameConfig.first_building_discount, 2026-10-19).
+		var deal := CT.badge(Tr.t("LBL_FIRST_HALF_PRICE"), CT.sem("POSITIVE"))
+		deal.name = "CardDeal"
+		deal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		deal.visible = data.first_discount_factor() < 1.0
+		row.add_child(deal)
 		# Lleno: una palabra en vez del coste, y el atajo para mejorar uno.
 		var full := CT.badge(Tr.t("TOPE_CARD_FULL"), CT.sem("WARNING"))
 		full.name = "CardFull"
@@ -574,7 +587,7 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 			_select_building(data)
 			_on_build_pressed())
 		row.add_child(hammer)
-		_row_parts[data.id] = {"cost": cost, "full": full, "up": up, "hammer": hammer}
+		_row_parts[data.id] = {"cost": cost, "full": full, "up": up, "hammer": hammer, "deal": deal}
 
 	card.tooltip_text = row_tooltip(data)
 
@@ -1043,6 +1056,8 @@ func _update_card_costs() -> void:
 		CT.fill_cost_strip(parts["cost"], cost, short)
 		(parts["cost"] as Control).visible = not full
 		(parts["full"] as Control).visible = full
+		if parts.has("deal"):
+			(parts["deal"] as Control).visible = not full and data.first_discount_factor() < 1.0
 		(parts["up"] as Control).visible = full and Rules.upgrade_does_something(data) \
 			and HelpText.lowest_upgradable(data.id) != null
 		var hammer: Button = parts["hammer"]

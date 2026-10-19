@@ -16,8 +16,15 @@ var _events: Array = []
 ## bolsa: cada prueba empieza sin ejercito y deja la bolsa como estaba.
 var _saved_army: Dictionary = {}
 var _saved_bag: Dictionary = {}
+## El tutorial frena la prueba (2026-10-19): cada prueba empieza con el tutorial
+## ya hecho (sin marca de cuando), salvo las que lo ponen en marcha.
+var _saved_tutorial: Dictionary = {}
 
 func before_test() -> void:
+	_saved_tutorial = TutorialManager.get_save_data()
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	TutorialManager.guide_baseline = {}
+	TutorialManager.guide_finished_at = -1.0
 	_saved_storm = StormManager.get_save_data()
 	_saved_progression = ProgressionManager.get_save_data()
 	_saved_population = PopulationManager.get_save_data()
@@ -61,6 +68,7 @@ func after_test() -> void:
 	ProgressionManager.load_save_data(_saved_progression)
 	PopulationManager.load_save_data(_saved_population)
 	GameConfig.event_production_multiplier = _saved_mult
+	TutorialManager.load_save_data(_saved_tutorial)
 
 func _on_incoming(_s: float) -> void: _events.append("incoming")
 func _on_ash() -> void: _events.append("ash")
@@ -108,6 +116,66 @@ func test_it_waits_for_its_minute_of_play() -> void:
 	assert_bool(StormManager.is_trial_running()).is_true()
 	assert_int(StormManager.get_phase()).is_equal(StormCycle.Phase.WARNING)
 	assert_array(_events).contains(["incoming"])
+
+# ── Nunca en medio del tutorial (queja de Bryan, 2026-10-19) ─────────
+
+func test_it_never_comes_while_the_tutorial_is_running() -> void:
+	TutorialManager.guide_state = TutorialManager.GUIDE_ACTIVE
+	ProgressionManager._played_seconds = GameConfig.get_storm_trial_at() * 4.0
+	assert_bool(TutorialManager.blocks_interruptions()).is_true()
+	assert_bool(StormManager.check_trial()).is_false()
+	assert_bool(StormManager.is_trial_running()).is_false()
+	assert_bool(StormManager.is_trial_done()).is_false()
+
+func test_it_comes_a_while_after_the_tutorial_ends() -> void:
+	TutorialManager.guide_state = TutorialManager.GUIDE_ACTIVE
+	var finished_at: float = GameConfig.get_storm_trial_at() + 100.0
+	ProgressionManager._played_seconds = finished_at
+	TutorialManager.finish_guide()
+	assert_float(TutorialManager.guide_finished_at).is_equal(finished_at)
+	var after: float = GameConfig.get_duration(GameConfig.storm_trial_after_guide)
+	assert_float(StormManager.trial_due_at()).is_equal(finished_at + after)
+	ProgressionManager._played_seconds = finished_at + after - 1.0
+	assert_bool(StormManager.check_trial()).is_false()
+	ProgressionManager._played_seconds = finished_at + after
+	assert_bool(StormManager.check_trial()).is_true()
+	# Llega con su Aviso delante, como siempre.
+	assert_int(StormManager.get_phase()).is_equal(StormCycle.Phase.WARNING)
+
+func test_a_quick_tutorial_keeps_the_usual_minute() -> void:
+	TutorialManager.guide_finished_at = 10.0
+	assert_float(StormManager.trial_due_at()).is_equal(GameConfig.get_storm_trial_at())
+
+func test_a_replay_does_not_hold_it_nor_move_it() -> void:
+	TutorialManager.guide_state = TutorialManager.GUIDE_ACTIVE
+	TutorialManager.guide_baseline = {"sawmills": 1}
+	assert_bool(TutorialManager.blocks_interruptions()).is_false()
+	ProgressionManager._played_seconds = GameConfig.get_storm_trial_at() + 500.0
+	TutorialManager.finish_guide()
+	assert_float(TutorialManager.guide_finished_at).is_equal(-1.0)
+
+func test_when_the_tutorial_ended_travels_in_the_save() -> void:
+	TutorialManager.guide_finished_at = 321.0
+	var data: Dictionary = TutorialManager.get_save_data()
+	TutorialManager.reset()
+	assert_float(TutorialManager.guide_finished_at).is_equal(-1.0)
+	TutorialManager.load_save_data(data)
+	assert_float(TutorialManager.guide_finished_at).is_equal(321.0)
+	data.erase("guide_finished_at")
+	TutorialManager.load_save_data(data)
+	assert_float(TutorialManager.guide_finished_at).is_equal(-1.0)
+
+func test_the_real_storm_clock_waits_in_the_calm_during_the_tutorial() -> void:
+	StormManager._armed = true
+	TutorialManager.guide_state = TutorialManager.GUIDE_ACTIVE
+	var before: float = StormManager.get_cycle().seconds_until_ash()
+	StormManager._process(5.0)
+	assert_float(StormManager.get_cycle().seconds_until_ash()).is_equal(before)
+	assert_int(StormManager.get_cycle().phase).is_equal(StormCycle.Phase.CALM)
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	StormManager._process(5.0)
+	assert_float(StormManager.get_cycle().seconds_until_ash()).is_less(before)
+	StormManager._armed = false
 
 func test_the_minute_is_game_time_scaled_by_dev_mode() -> void:
 	assert_float(GameConfig.get_storm_trial_at()).is_equal(GameConfig.get_duration(GameConfig.storm_trial_at))

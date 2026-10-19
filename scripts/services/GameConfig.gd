@@ -1883,7 +1883,7 @@ func get_upgrade_cost(data: BuildingData, to_level: int) -> Dictionary:
 		return cost
 	var mult: float = upgrade_cost_multiplier[to_level - 1]
 	var cost := {}
-	var base: Dictionary = data.get_cost()
+	var base: Dictionary = data.get_base_cost()
 	for type in base:
 		cost[type] = int(base[type] * mult)
 	# Repuestos: solo salen de las escaramuzas (doc 21 §3.1). Los pide el nivel 3
@@ -2803,6 +2803,15 @@ var storm_first_severity := 1
 ## reloj de pared; pasan por get_duration(), asi que dev_mode los comprime. Si la
 ## Fundicion llega antes, la prueba ya no hace falta y no sale.
 var storm_trial_at := 300.0
+## Y nunca en medio del tutorial guiado: espera a que acabe y llega, como pronto,
+## estos segundos de partida despues (2026-10-19, StormManager.trial_due_at).
+var storm_trial_after_guide := 90.0
+
+## La primera de estas obras sale con rebaja (id -> factor del precio), para que
+## el tutorial no la pida cuando el oro esta en el suelo: la Mina de oro llega
+## detras del Cuartel temprano y a 120 oro + 80 madera tardaba (queja de Bryan,
+## 2026-10-19). Las siguientes, al precio de la ficha. BuildingData.get_cost.
+var first_building_discount := {"gold_mine": 0.5}
 var storm_trial_severity := 1
 ## Lo que deja producir durante su Ceniza y su Tormenta: bastante mas que una de
 ## verdad (0,5 y 0,15). Se nota, no hunde.

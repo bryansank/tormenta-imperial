@@ -265,6 +265,11 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 
 ## El primer paso de una colonia nueva es el que dice la intro: el aserradero.
 func test_a_new_colony_is_told_to_build_a_sawmill() -> void:
+	# La bolsa de una partida nueva (no la que dejo otra suite).
+	var bag := {"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0, "planks": 0}
+	bag.merge(GameConfig.starting_resources, true)
+	ResourceManager.set_amounts(bag)
+	PopulationManager.load_save_data({"population": 5, "morale": 75})
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("build")
 	assert_str(String(step["id"])).is_equal("sawmill")
@@ -300,7 +305,7 @@ func test_with_the_real_bag_the_barracks_comes_right_after_the_planks() -> void:
 	var saved_mode: int = GameMode.current
 	GameMode.current = GameMode.Mode.CAMPAIGN
 	TutorialManager.first_sortie_done = false
-	var bag := {"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0}
+	var bag := {"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0, "planks": 0}
 	bag.merge(GameConfig.starting_resources, true)
 	ResourceManager.set_amounts(bag)
 	PopulationManager.load_save_data({"population": 5, "morale": 75})
@@ -463,8 +468,10 @@ func test_the_panel_shows_the_live_step_and_not_the_old_fixed_list() -> void:
 	add_child(panel)
 	panel.refresh()
 	var shown: Dictionary = panel.get_now_text()
-	var expected: Dictionary = Objectives.describe(Objectives.next_step())
-	assert_str(String(shown["title"])).is_equal(String(expected["title"]))
+	# El titulo es el objetivo (2026-10-19); debajo, sus pasos.
+	var plan: Dictionary = Objectives.plan()
+	var expected: Dictionary = Objectives.describe(plan["goal"])
+	assert_str(String(shown["title"])).is_equal(String(plan["title"]))
 	assert_str(String(shown["why"])).is_equal(String(expected["why"]))
 	# Las frases falsas de antes no estan en ninguna parte del panel.
 	for key in ["LBL_OBJ_STEP_1", "LBL_OBJ_STEP_4", "LBL_OBJ_STEP_5", "LBL_OBJ_MISSION_DESC"]:
@@ -680,7 +687,8 @@ func test_a_missing_workshop_material_says_where_to_make_it() -> void:
 	ResourceManager.unlock(ResourceManager.name_to_type("planks"))
 	ResourceManager.set_amounts({"planks": 0})
 	var how: String = Objectives.how_to_get("planks")
-	assert_str(how).contains(Tr.res_cap("planks"))
+	# Sin "Tablones:" delante (2026-10-19): donde y que boton.
+	assert_str(how).contains(Objectives.your_building("sawmill"))
 	assert_str(how).contains(Tr.t("PROC_MAKE_PLANKS"))
 	assert_str(how).contains(Rules.load_building_data("sawmill").get_display_name())
 
@@ -688,7 +696,8 @@ func test_a_material_without_its_workshop_says_to_build_it_first() -> void:
 	assert_int(Rules.count_building("foundry")).is_equal(0)
 	var how: String = Objectives.how_to_get("beams")
 	var foundry: String = Rules.load_building_data("foundry").get_display_name()
-	assert_str(how).is_equal(Tr.t("GUIDE_HOW_MAKE_FIRST") % [Tr.res_cap("beams"), foundry])
+	assert_str(how).is_equal(Tr.t("GUIDE_HOW_MAKE_FIRST") % Objectives.building_a("foundry"))
+	assert_str(how).contains(foundry)
 
 func test_every_resource_and_material_has_a_way_to_get_it() -> void:
 	for res in ["wood", "gold", "food", "planks", "ingots", "beams", "fuel"]:
@@ -741,3 +750,177 @@ func test_with_the_three_campaigns_done_only_the_hq_is_missing() -> void:
 	assert_array(missing).contains_exactly([Tr.t("AUDIT_NEEDS_HQ3")])
 	assert_dict(Objectives.campaign_gate_step()).is_empty()
 	CombatManager.load_campaigns_save_data(saved_campaigns)
+
+# ── El objetivo, paso a paso (2026-10-19, feat/objetivo-paso-a-paso) ──
+#
+# Queja de Bryan: "siempre me dices EDIFICIO: OBJETIVO; coloca el OBJETIVO y ya,
+# y explica PASO A PASO que se necesita". Y su bug: "cuando me pide oro, si no
+# esta contado al oro, todo queda bugueado" (lo que espera en la Mina no contaba).
+
+func _lines(p: Dictionary) -> Array:
+	return Objectives.plan_lines(p["items"])
+
+func _current_count(items: Array) -> int:
+	var n := 0
+	for item in items:
+		if String(item["state"]) == "current":
+			n += 1
+	return n
+
+func test_goal_titles_never_put_the_building_name_in_front() -> void:
+	var saved := Tr.get_locale()
+	for lang in ["es", "en"]:
+		Tr.set_locale(lang)
+		var verb: String = Tr.t("OBJ_DO_BUILD").split("%s")[0]
+		for entry in Objectives.LINE:
+			if String(entry["kind"]) != "build":
+				continue
+			var id: String = String(entry["id"])
+			var bname: String = Rules.load_building_data(id).get_display_name()
+			var title: String = Objectives.goal_title({"kind": "build", "id": id})
+			assert_str(title).override_failure_message("%s: '%s'" % [lang, title]).starts_with(verb)
+			assert_str(title).not_contains(bname + ":")
+			assert_str(title).not_contains(": " + bname)
+			assert_str(title).contains(bname)
+	Tr.set_locale(saved)
+
+func test_articles_follow_the_building() -> void:
+	var saved := Tr.get_locale()
+	Tr.set_locale("es")
+	assert_str(Objectives.building_a("barracks")).is_equal("un " + Rules.load_building_data("barracks").get_display_name())
+	assert_str(Objectives.building_a("house")).is_equal("una " + Rules.load_building_data("house").get_display_name())
+	assert_str(Objectives.building_the("farm")).is_equal("la " + Rules.load_building_data("farm").get_display_name())
+	Tr.set_locale("en")
+	assert_str(Objectives.building_a("sawmill")).is_equal("a Sawmill")
+	assert_str(Objectives.building_the("market")).is_equal("the Market")
+	Tr.set_locale(saved)
+
+func test_the_barracks_goal_lists_the_sawmill_the_planks_and_placing_it() -> void:
+	_build("sawmill")
+	ResourceManager.unlock(ResourceManager.name_to_type("planks"))
+	var data: BuildingData = Rules.load_building_data("barracks")
+	var need: int = int(data.get_cost().get(ResourceManager.name_to_type("planks"), 0))
+	assert_int(need).override_failure_message("el Cuartel ya no pide tablones").is_greater(0)
+	ResourceManager.set_amounts({"gold": 2000, "wood": 2000, "food": 400, "planks": need - 4})
+	var p: Dictionary = Objectives.plan_for({"kind": "build", "id": "barracks", "count": 1})
+	assert_str(String(p["title"])).is_equal(Tr.t("OBJ_DO_BUILD") % Objectives.building_a("barracks"))
+	var lines: Array = _lines(p)
+	var have: int = lines.find("✓ " + Rules.load_building_data("sawmill").get_display_name())
+	var make: int = lines.find("● " + Tr.t("OBJ_STEP_MAKE") % [need, Tr.res_name("planks"), need - 4, need])
+	var place: int = lines.find("○ " + Tr.t("OBJ_STEP_PLACE") % Objectives.building_the("barracks"))
+	assert_int(have).override_failure_message(str(lines)).is_greater_equal(0)
+	assert_int(make).override_failure_message(str(lines)).is_greater(have)
+	assert_int(place).override_failure_message(str(lines)).is_greater(make)
+	assert_int(lines.size()).is_between(2, Objectives.PLAN_MAX_ITEMS)
+	# El paso de ahora dice como darlo, en una frase.
+	assert_str(String(p["current"]["how"])).contains(Tr.t("PROC_MAKE_PLANKS"))
+	# La linea plegada: el objetivo y el paso de ahora, cortos.
+	assert_str(Objectives.plan_line(p)).is_equal("%s · %s" % [p["title"],
+		Tr.t("OBJ_STEP_MAKE_SHORT") % [Tr.res_name("planks"), need - 4, need]])
+
+func test_with_everything_paid_the_step_is_to_place_it() -> void:
+	ResourceManager.set_amounts({"gold": 2000, "wood": 2000, "food": 400})
+	var p: Dictionary = Objectives.plan_for({"kind": "build", "id": "sawmill", "count": 1})
+	var cur: Dictionary = p["current"]
+	assert_str(String(cur["kind"])).is_equal("place")
+	assert_str(String(cur["text"])).is_equal(Tr.t("OBJ_STEP_PLACE") % Objectives.building_the("sawmill"))
+	assert_dict(cur["go"]).is_equal({"build": "sawmill"})
+	# Sin nada mas que decir, la linea es solo el objetivo.
+	assert_str(Objectives.plan_line(p)).is_equal(String(p["title"]))
+
+func test_gold_waiting_in_the_mine_is_the_step_and_counts() -> void:
+	var mine: Node = _build("gold_mine")
+	ResourceManager.set_amounts({"gold": 20, "wood": 100, "food": 100, "steel": 0, "oil": 0})
+	ProductionManager._stock[mine] = {"res": {"gold": 45}, "age": 0.0}
+	var cost: int = int(Rules.load_building_data("sawmill").get_cost()[ResourceManager.Type.GOLD])
+	var p: Dictionary = Objectives.plan_for({"kind": "build", "id": "sawmill", "count": 1})
+	var cur: Dictionary = p["current"]
+	ProductionManager._stock.erase(mine)
+	assert_str(String(cur["kind"])).is_equal("collect")
+	assert_str(String(cur["text"])).is_equal(Tr.t("OBJ_STEP_COLLECT") % [Tr.res_name("gold"), Objectives.building_the("gold_mine"), 45])
+	assert_str(String(cur["how"])).is_equal(Tr.t("OBJ_STEP_BAG_COUNT") % [20, 45, cost])
+	assert_object(cur["go"]["node"]).is_same(mine)
+	assert_str(Objectives.plan_line(p)).contains(Tr.t("OBJ_STEP_COLLECT_SHORT") % [Tr.res_name("gold"), 45])
+	# Recogido, el paso avanza solo: ya no hay nada que recoger, queda juntar.
+	ResourceManager.set_amounts({"gold": 65})
+	var after: Dictionary = Objectives.plan_for({"kind": "build", "id": "sawmill", "count": 1})
+	for item in after["items"]:
+		assert_str(String(item["kind"])).is_not_equal("collect")
+	assert_str(String(after["current"]["kind"])).is_equal("gather")
+	assert_str(String(after["current"]["text"])).contains("65")
+
+func test_the_tutorial_points_at_the_building_with_something_to_collect() -> void:
+	var mine: Node = _build("gold_mine")
+	ResourceManager.set_amounts({"gold": 0, "wood": 100, "food": 100, "steel": 0, "oil": 0})
+	ProductionManager._stock[mine] = {"res": {"gold": 45}, "age": 0.0}
+	var target: String = TutorialManager.need_target("sawmill")
+	var hint: String = TutorialManager.step_hint("need_sawmill")
+	ProductionManager._stock.erase(mine)
+	assert_str(target).contains("gold_mine")
+	assert_str(hint).contains("● " + Tr.t("OBJ_STEP_COLLECT") % [Tr.res_name("gold"), Objectives.building_the("gold_mine"), 45])
+
+func test_a_full_bag_asks_to_make_room_instead_of_waiting_blind() -> void:
+	var mine: Node = _build("gold_mine")
+	var cap: int = ResourceManager.get_storage_cap()
+	ResourceManager.set_amounts({"gold": 0, "wood": cap, "food": 0})
+	ProductionManager._stock[mine] = {"res": {"gold": 45}, "age": 0.0}
+	var p: Dictionary = Objectives.plan_for({"kind": "build", "id": "sawmill", "count": 1})
+	ProductionManager._stock.erase(mine)
+	var kinds: Array = []
+	for item in p["items"]:
+		kinds.append(String(item["kind"]))
+	assert_array(kinds).contains(["room"])
+	# Recoger no cabe: no se pide.
+	assert_array(kinds).not_contains(["collect"])
+
+func test_short_of_hands_with_full_houses_asks_for_another_house() -> void:
+	ResourceManager.set_amounts({"gold": 2000, "wood": 2000, "food": 400})
+	PopulationManager._population = PopulationManager._max_population
+	PopulationManager._used_workers = PopulationManager._population
+	var p: Dictionary = Objectives.plan_for({"kind": "build", "id": "sawmill", "count": 1})
+	var house := Rules.load_building_data("house")
+	assert_array(_lines(p)).contains(["● " + Tr.t("OBJ_STEP_HOUSE") % house.population_capacity])
+
+func test_a_support_step_goes_first_as_the_current_one() -> void:
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "food": 400})
+	var action := {"kind": "build", "id": "farm", "count": 1, "why": "OBJ_WHY_FEED_FOOD"}
+	var p: Dictionary = Objectives.plan_for({"kind": "build", "id": "barracks", "count": 1}, action)
+	var first: Dictionary = p["items"][0]
+	assert_str(String(first["state"])).is_equal("current")
+	assert_str(String(first["text"])).is_equal(String(Objectives.describe(action)["title"]))
+	assert_int(_current_count(p["items"])).is_equal(1)
+
+func test_every_step_of_the_line_has_a_short_list_with_one_current() -> void:
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "food": 400})
+	for entry in Objectives.LINE:
+		var goal: Dictionary = entry.duplicate()
+		var p: Dictionary = Objectives.plan_for(goal, goal)
+		var items: Array = p["items"]
+		var label := "%s:%s" % [entry["kind"], entry["id"]]
+		assert_int(items.size()).override_failure_message(label).is_between(1, Objectives.PLAN_MAX_ITEMS)
+		assert_int(_current_count(items)).override_failure_message(label).is_equal(1)
+		assert_str(String(p["title"])).override_failure_message(label).is_not_empty()
+
+func test_next_step_is_not_touched_by_the_plan() -> void:
+	# La sonda de linea lee next_step(): el plan solo lo lee.
+	_build("sawmill")
+	var before: Dictionary = Objectives.next_step()
+	Objectives.plan()
+	assert_dict(Objectives.next_step()).is_equal(before)
+	assert_dict(Objectives.goal_step()).is_not_empty()
+
+func test_the_panel_lists_the_steps_and_the_hud_line_shows_goal_and_step() -> void:
+	_build("sawmill")
+	ResourceManager.unlock(ResourceManager.name_to_type("planks"))
+	ResourceManager.set_amounts({"gold": 2000, "wood": 2000, "food": 400, "planks": 0})
+	var panel: CanvasLayer = auto_free(load("res://scenes/ui/ObjectivePanel.tscn").instantiate())
+	add_child(panel)
+	panel.refresh()
+	var p: Dictionary = Objectives.plan()
+	var shown: Dictionary = panel.get_now_text()
+	assert_str(String(shown["title"])).is_equal(String(p["title"]))
+	assert_array(shown["steps"]).is_equal(Objectives.plan_lines(p["items"]))
+	assert_array(shown["steps"]).is_not_empty()
+	if panel.line() != null:
+		panel.refresh_line()
+		assert_str(panel.line_text()).is_equal(Objectives.plan_line(p))

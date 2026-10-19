@@ -16,6 +16,7 @@ const RegimentCard := preload("res://scripts/ui/RegimentCard.gd")
 const UnitCardScript := preload("res://scripts/ui/UnitCard.gd")
 const PlacementRulesScript := preload("res://scripts/buildings/PlacementRules.gd")
 const CT := preload("res://scripts/ui/CartoonTheme.gd")
+const Objectives := preload("res://scripts/services/Objectives.gd")
 
 ## Tope de la ventana en PC (en telefono va a pantalla completa).
 const MAX_SIZE := Vector2(980, 640)
@@ -267,7 +268,7 @@ func _rebuild_tabs() -> void:
 			t.tooltip_text = "%s · %s" % [word, Tr.t("LBL_DOMAIN_SLOTS") % [bname, count,
 				ArmyManager.training_in(String(building_id)), ArmyManager.max_slots(String(building_id))]]
 		else:
-			t.tooltip_text = "%s · %s" % [word, Tr.t("LBL_DOMAIN_NEEDS") % bname]
+			t.tooltip_text = "%s · %s" % [word, Tr.t("LBL_DOMAIN_NEEDS") % Objectives.building_a(String(building_id))]
 		t.pressed.connect(select_tab.bind(domain))
 		_tabs_row.add_child(t)
 
@@ -284,7 +285,7 @@ func _rebuild_units() -> void:
 	if building_id == "":
 		return
 	if ArmyManager.building_count(building_id) <= 0:
-		var lock := CT.icon_line("lock", Tr.t("LBL_DOMAIN_NEEDS") % _building_name(building_id), "warning", "window", "body")
+		var lock := CT.icon_line("lock", Tr.t("LBL_DOMAIN_NEEDS") % Objectives.building_a(building_id), "warning", "window", "body")
 		lock.name = "Domain_" + domain
 		_units_vbox.add_child(lock)
 	for unit_id in GameConfig.get_unit_ids():

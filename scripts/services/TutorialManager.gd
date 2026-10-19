@@ -200,6 +200,11 @@ var guide_flags: Dictionary = {}
 ## Lecciones de combate ya dadas en esta partida ("basics", "artillery"; docs/23
 ## §2.4). Van en la partida, como el resto del tutorial.
 var combat_lessons_done: Array[String] = []
+## Segundos de partida jugados (ProgressionManager) cuando acabo el tutorial
+## guiado de verdad (no un repaso), o -1 si no ha acabado o la partida es de antes
+## de 2026-10-19. La tormenta de prueba llega GameConfig.storm_trial_after_guide
+## despues (StormManager.trial_due_at). Va en la partida.
+var guide_finished_at: float = -1.0
 
 ## El prologo esta pedido y espera a que no haya nada encima (menu principal,
 ## pausa, selector de modo).
@@ -485,6 +490,7 @@ func skip_guide() -> void:
 	if not GameConfig.dev_mode:
 		push_warning("TutorialManager.skip_guide(): solo en modo dev")
 		return
+	_note_guide_finished()
 	guide_state = GUIDE_SKIPPED
 	_step = ""
 	EventBus.tutorial_step_changed.emit("")
@@ -494,13 +500,32 @@ func skip_guide() -> void:
 func finish_guide() -> void:
 	if guide_state != GUIDE_ACTIVE:
 		return
+	_note_guide_finished()
 	guide_state = GUIDE_DONE
 	_step = ""
 	EventBus.tutorial_step_changed.emit("")
 	EventBus.tutorial_guide_finished.emit(false)
 
+## Apunta cuando acabo el tutorial de verdad (un repaso no cuenta). Antes de
+## cambiar guide_state: is_replay() lo mira.
+func _note_guide_finished() -> void:
+	if not is_replay():
+		guide_finished_at = ProgressionManager.get_played_seconds()
+
 func is_guide_active() -> bool:
 	return guide_state == GUIDE_ACTIVE
+
+## Nada que interrumpa llega mientras se aprende (queja de Bryan, 2026-10-19:
+## "la primera tormenta esta llegando aunque este haciendo el tutorial"): con el
+## tutorial guiado en marcha, o pendiente de empezar en una partida ya arrancada
+## (el prologo delante), la tormenta de prueba, la Tormenta de verdad y los
+## eventos aleatorios esperan. Un repaso pedido desde AYUDA no frena nada.
+func blocks_interruptions() -> bool:
+	if guide_state == GUIDE_ACTIVE:
+		return not is_replay()
+	if guide_state == GUIDE_PENDING:
+		return GameManager.is_started()
+	return false
 
 func current_step() -> String:
 	if guide_state == GUIDE_ACTIVE:
@@ -621,6 +646,11 @@ static func need_target(building_id: String) -> String:
 	var data := Rules.load_building_data(building_id)
 	if data == null:
 		return ""
+	# Lo que senala es el paso de ahora de la lista (need_plan): recoger en el
+	# edificio que guarda lo que falta, su productor, la veta, CONSTRUIR...
+	var from_plan: String = Objectives.item_target(need_plan(building_id).get("current", {}))
+	if from_plan != "":
+		return from_plan
 	for res in Rules.missing_cost(data):
 		var t := _target_for_resource(String(res))
 		if t != "":
@@ -746,6 +776,9 @@ func _notice_skipped(goal: String, building_id: String, why: String) -> void:
 		return
 	var data := Rules.load_building_data(building_id)
 	var bname: String = data.get_display_name() if data != null else building_id
+	# Sin "Aserradero:" delante (2026-10-19): el nombre va dentro de la frase.
+	if why != "limit":
+		bname = Objectives.building_the(building_id)
 	EventBus.notification_posted.emit(Tr.t(key) % bname, "notice", UITheme.ACCENT)
 
 ## Por que se salta una meta -> la frase que lo dice (con el nombre del edificio).
@@ -823,6 +856,10 @@ static func step_hint(step_id: String) -> String:
 	var b := building_for_step(step_id)
 	if b == "":
 		return ""
+	# "Consigue lo que falta" (2026-10-19): la lista de pasos con su estado, la
+	# misma de ¿QUE HACER? (Objectives.plan_for), no "Edificio: falta esto".
+	if is_need_step(step_id):
+		return "\n".join(Objectives.plan_lines(need_plan(b)["items"]))
 	var data := Rules.load_building_data(b)
 	if data == null:
 		return ""
@@ -855,6 +892,8 @@ static func step_how(step_id: String) -> String:
 	var b := building_for_step(step_id)
 	if b == "":
 		return ""
+	if is_need_step(step_id):
+		return String(need_plan(b).get("current", {}).get("how", ""))
 	var data := Rules.load_building_data(b)
 	if data == null:
 		return ""
@@ -908,18 +947,21 @@ static func step_text(step_id: String) -> String:
 		return ""
 	var text := Tr.ti(String(e.get("text", "")))
 	if bool(e.get("need", false)):
-		var data := Rules.load_building_data(String(e["building"]))
-		var shown_name: String = data.get_display_name() if data != null else String(e["building"])
-		# Solo faltan manos y las casas estan llenas (el Laboratorio, casi
-		# siempre: el Cuartel temprano se llevo el trabajador que sobraba). En vez
-		# de "aun no puedes construirlo" + lista, una frase que lo cuenta como el
-		# paso natural que es: primero otra Casa (feat/hud-y-tutorial).
-		if needs_house_only(String(e["building"])):
-			var house := Rules.load_building_data("house")
-			var room: int = house.population_capacity if house != null else 0
-			return Tr.ti("GUIDE_NEED_HOUSE") % [shown_name, room]
-		text = text % shown_name
+		# El objetivo en verbo, sin "Edificio:" delante (queja de Bryan,
+		# 2026-10-19): "Construye un Cuartel". Debajo van los pasos (step_hint)
+		# y como dar el de ahora (step_how). Solo faltar otra Casa es un paso mas
+		# de la lista ("Construye otra Casa (+6 trabajadores)").
+		return Objectives.goal_title({"kind": "build", "id": String(e["building"]), "count": 1})
 	return text
+
+## Los pasos de levantar `building_id` para la tarjeta del tutorial: la lista de
+## Objectives.plan_for, como mucho NEED_PLAN_ITEMS (la tarjeta no pasa de cinco
+## lineas: el objetivo, los pasos y como dar el de ahora).
+const NEED_PLAN_ITEMS := 3
+static func need_plan(building_id: String) -> Dictionary:
+	var p: Dictionary = Objectives.plan_for({"kind": "build", "id": building_id, "count": 1})
+	p["items"] = Objectives._trim_items(p["items"], NEED_PLAN_ITEMS)
+	return p
 
 ## A `building_id` solo le faltan trabajadores (los recursos ya estan) y en las
 ## casas no cabe nadie mas: lo unico que lo arregla es otra Casa.
@@ -1272,6 +1314,7 @@ func get_save_data() -> Dictionary:
 		"guide_flags": guide_flags.duplicate(),
 		"combat_lessons_done": combat_lessons_done.duplicate(),
 		"repair_lesson_done": repair_lesson_done,
+		"guide_finished_at": guide_finished_at,
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -1341,6 +1384,9 @@ func load_save_data(data: Dictionary) -> void:
 	# La leccion de reparar. Sin la clave (guardado de antes): no se ha dado.
 	var rl: Variant = data.get("repair_lesson_done", false)
 	repair_lesson_done = rl is bool and rl
+	# Sin la clave (guardado de antes): -1, la tormenta de prueba a su hora de siempre.
+	var gfa: Variant = data.get("guide_finished_at", -1.0)
+	guide_finished_at = float(gfa) if (gfa is float or gfa is int) else -1.0
 	_extra_step = ""
 	_repair_node = null
 	_repair_pending = false
@@ -1363,6 +1409,7 @@ func reset() -> void:
 	combat_lessons_done.clear()
 	_clear_combat_lesson(false)
 	repair_lesson_done = false
+	guide_finished_at = -1.0
 	_extra_step = ""
 	_repair_node = null
 	_repair_pending = false

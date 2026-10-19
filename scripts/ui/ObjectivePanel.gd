@@ -60,8 +60,12 @@ func _ready() -> void:
 
 const LINE_LAYER := 10
 ## Ancho maximo del texto de la linea (se recorta con "…"; entero al mantener).
+## En el telefono, algo mas ancha desde 2026-10-19: la linea lleva el objetivo y
+## el paso de ahora ("Construye un Cuartel · Fabrica tablones 6/10") y alli va
+## por encima de la barra de abajo. En PC comparte fila con la barra: se queda en
+## 300 y lo que no cabe sale entero al mantener.
 const LINE_TEXT_MAX := 300.0
-const LINE_TEXT_MAX_PHONE := 220.0
+const LINE_TEXT_MAX_PHONE := 330.0
 ## Repaso lento por si algo cambia sin senal (un proceso que acaba).
 const LINE_SLOW_REFRESH := 4.0
 
@@ -160,9 +164,11 @@ func refresh_line() -> void:
 		return
 	var hide: bool = TutorialManager.is_coach_active() or TutorialManager.is_title_menu_open() \
 		or not GameManager.is_started()
-	var step: Dictionary = Objectives.next_step()
-	var text: Dictionary = Objectives.describe(step)
-	var title := String(text.get("title", ""))
+	# El objetivo y el paso de ahora (2026-10-19): "Construye un Cuartel ·
+	# Fabrica tablones 6/10". El objetivo va primero, sin "Edificio:" delante.
+	var p: Dictionary = Objectives.plan()
+	var text: Dictionary = Objectives.describe(p["goal"])
+	var title := Objectives.plan_line(p)
 	_line.visible = not hide and title != "" and not HudRegistry.is_hidden("ObjectivePanel.line")
 	_line_text.text = title
 	var max_w := LINE_TEXT_MAX_PHONE if CartoonTheme.phone else LINE_TEXT_MAX
@@ -171,12 +177,11 @@ func refresh_line() -> void:
 	var w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x if font != null else max_w
 	_line_text.custom_minimum_size.x = minf(w + 2.0, max_w)
 	var why := HelpText.live_text(String(text.get("why", "")))
-	var blocker := String(text.get("blocker", ""))
-	var tip := title
+	var tip := String(p["title"])
 	if why != "":
 		tip += "\n" + why
-	if blocker != "":
-		tip += "\n" + blocker
+	for l in Objectives.plan_lines(p["items"]):
+		tip += "\n" + String(l)
 	_line.tooltip_text = tip + "\n" + Tr.t("HUD_NEXT_TIP")
 	_line_text.visible = not _line_folded
 	_line_arrow.visible = not _line_folded
@@ -288,6 +293,14 @@ func _setup_ui() -> void:
 	_now_title = UITheme.make_label("", "section", UITheme.TEXT_BRIGHT)
 	_now_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_now_title)
+	# Los pasos (2026-10-19): ✓ hecho, ● el de ahora, ○ por hacer. Cada uno se
+	# toca y lleva a donde se da (CONSTRUIR, el edificio, EJERCITO...); debajo
+	# del de ahora, como darlo en una frase. Van justo bajo el objetivo, antes
+	# del porque: en el telefono se ven sin desplazar.
+	_steps_box = VBoxContainer.new()
+	_steps_box.name = "PlanSteps"
+	_steps_box.add_theme_constant_override("separation", 2)
+	content.add_child(_steps_box)
 	_now_why = UITheme.make_label("", "body", UITheme.TEXT)
 	_now_why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_now_why)
@@ -370,12 +383,17 @@ func _process(delta: float) -> void:
 ## Vuelve a preguntar el paso y repinta. Publico para los tests.
 func refresh() -> void:
 	_refresh_left = REFRESH_EVERY
-	var step: Dictionary = Objectives.next_step()
-	var text: Dictionary = Objectives.describe(step)
-	_now_title.text = String(text["title"])
+	var p: Dictionary = Objectives.plan()
+	var step: Dictionary = p["action"]
+	var text: Dictionary = Objectives.describe(p["goal"])
+	_now_title.text = String(p["title"])
 	_now_why.text = HelpText.live_text(String(text["why"]))
-	_now_blocker.text = String(text["blocker"])
-	_now_blocker.visible = String(text["blocker"]) != ""
+	_paint_steps(p["items"])
+	# Con la lista de pasos, lo que falta ya esta en ella: el aviso suelto solo
+	# queda para un objetivo sin pasos.
+	var block_text: String = String(text["blocker"]) if (p["items"] as Array).is_empty() else ""
+	_now_blocker.text = block_text
+	_now_blocker.visible = block_text != ""
 	var goal: Dictionary = Objectives.calm_goal()
 	_calm_goal.text = String(goal.get("text", ""))
 	_calm_goal.visible = not goal.is_empty()
@@ -435,7 +453,167 @@ func _paint_route() -> void:
 		labels[i].queue_free()
 
 func get_now_text() -> Dictionary:
-	return {"title": _now_title.text, "why": _now_why.text, "blocker": _now_blocker.text}
+	return {"title": _now_title.text, "why": _now_why.text, "blocker": _now_blocker.text,
+		"steps": steps_text()}
+
+# ── Los pasos (2026-10-19, feat/objetivo-paso-a-paso) ─────────────────
+
+var _steps_box: VBoxContainer
+## Los pasos pintados ahora (para tocar uno y para las pruebas).
+var _items: Array = []
+
+## Una fila por paso: un boton plano con su marca, y el "como" bajo el de ahora.
+## Se reescriben las filas que ya hay (se repinta cada segundo).
+func _paint_steps(items: Array) -> void:
+	_items = items
+	var want: Array = []
+	for i in items.size():
+		var item: Dictionary = items[i]
+		want.append({"i": i, "state": String(item["state"]),
+			"text": "%s %s" % [Objectives.PLAN_MARKS.get(String(item["state"]), "○"), String(item["text"])]})
+		if String(item["state"]) == "current" and String(item.get("how", "")) != "":
+			want.append({"how": String(item["how"])})
+	var rows := _steps_box.get_children()
+	for k in want.size():
+		var w: Dictionary = want[k]
+		var is_how: bool = w.has("how")
+		var row: Control = rows[k] if k < rows.size() else null
+		if row != null and (row is Button) == is_how:
+			_steps_box.remove_child(row)
+			row.queue_free()
+			row = null
+		if row == null:
+			row = _make_step_row(is_how)
+			_steps_box.add_child(row)
+			_steps_box.move_child(row, k)
+			rows = _steps_box.get_children()
+		if is_how:
+			(row as Label).text = String(w["how"])
+			continue
+		var b := row as Button
+		var item: Dictionary = items[int(w["i"])]
+		b.text = String(w["text"])
+		b.set_meta("item", int(w["i"]))
+		var state: String = String(w["state"])
+		var color: Color = UITheme.TEXT_DIM if state == "done" else (UITheme.ACCENT if state == "current" else UITheme.TEXT)
+		for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_disabled_color"]:
+			b.add_theme_color_override(c, color)
+		b.tooltip_text = String(item.get("how", ""))
+		b.disabled = state == "done" or (item.get("go", {}) as Dictionary).is_empty()
+	rows = _steps_box.get_children()
+	for k in range(want.size(), rows.size()):
+		_steps_box.remove_child(rows[k])
+		rows[k].queue_free()
+	_steps_box.visible = not items.is_empty()
+
+func _make_step_row(is_how: bool) -> Control:
+	if is_how:
+		var l := UITheme.make_label("", "small", UITheme.TEXT)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.add_theme_constant_override("margin_left", 24)
+		return l
+	var b := Button.new()
+	b.flat = true
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", UITheme.FONT_BODY)
+	b.pressed.connect(func(): go_to_step(int(b.get_meta("item", -1))))
+	return b
+
+## Los pasos en pantalla, una linea cada uno con su marca (pruebas).
+func steps_text() -> Array:
+	return Objectives.plan_lines(_items)
+
+## Toca el paso `index`: cierra el panel y lleva a donde se da (CONSTRUIR con
+## el edificio elegido, la camara y la ficha del edificio, el bosque o la veta,
+## EJERCITO o MISIONES).
+func go_to_step(index: int) -> void:
+	if index < 0 or index >= _items.size():
+		return
+	var go: Dictionary = _items[index].get("go", {})
+	if go.is_empty():
+		return
+	if _is_open:
+		toggle()
+	var tree := get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
+	if go.has("build"):
+		var menu: Node = scene.get_node_or_null("ConstructionMenu") if scene != null else null
+		if menu != null and menu.has_method("open_on"):
+			menu.call("open_on", String(go["build"]))
+		return
+	if go.has("panel"):
+		var panel: Node = scene.get_node_or_null(String(go["panel"])) if scene != null else null
+		if panel != null and panel.has_method("open"):
+			panel.call("open")
+		return
+	var node: Node = go.get("node")
+	if (node == null or not is_instance_valid(node)) and go.has("building"):
+		node = _first_node(String(go["building"]))
+	if node != null and is_instance_valid(node):
+		var info: Dictionary = GridManager.get_building_info(node)
+		if not info.is_empty():
+			var data: BuildingData = info["data"]
+			_focus_world(GridManager.building_center(info["origin_cell"], data.grid_size))
+			EventBus.building_clicked.emit(node, data)
+		return
+	if go.has("deposit"):
+		var cell: Vector2i = _nearest_deposit(String(go["deposit"]))
+		if cell.x >= 0:
+			_focus_world(GridManager.cell_to_world(cell))
+
+func _first_node(building_id: String) -> Node:
+	for info in GridManager.buildings_view():
+		if (info["data"] as BuildingData).id == building_id:
+			return info["node"]
+	return null
+
+## La casilla del yacimiento `deposit_id` mas cerca del centro de la camara.
+func _nearest_deposit(deposit_id: String) -> Vector2i:
+	var map_gen: Node = GameManager.map_generator()
+	if map_gen == null or not map_gen.has_method("get_all_deposits"):
+		return Vector2i(-1, -1)
+	var best := Vector2i(-1, -1)
+	var best_d := INF
+	var here: Vector2 = _camera_target()
+	for dep in map_gen.get_all_deposits():
+		if String(dep.get("id", "")) != deposit_id:
+			continue
+		var cell := Vector2i(int(dep["cell_x"]), int(dep["cell_y"]))
+		var w: Vector3 = GridManager.cell_to_world(cell)
+		var d: float = Vector2(w.x, w.z).distance_to(here)
+		if d < best_d:
+			best_d = d
+			best = cell
+	return best
+
+func _camera_target() -> Vector2:
+	var cam: Node = _camera()
+	if cam != null and cam.has_method("get_state"):
+		var st: Dictionary = cam.call("get_state")
+		return Vector2(float(st.get("target_x", 0.0)), float(st.get("target_y", 0.0)))
+	return Vector2.ZERO
+
+func _camera() -> Node:
+	var vp := get_viewport()
+	if vp == null:
+		return null
+	var cam: Node = vp.get_camera_3d()
+	if cam == null:
+		cam = vp.get_camera_2d()
+	return cam
+
+## Lleva la camara a un punto del mundo (3D o 2D: las dos guardan su centro en
+## unidades de mundo, target_x / target_y).
+func _focus_world(at: Vector3) -> void:
+	var cam: Node = _camera()
+	if cam == null or not cam.has_method("get_state"):
+		return
+	var st: Dictionary = cam.call("get_state")
+	st["target_x"] = at.x
+	st["target_y"] = at.z
+	cam.call("set_state", st)
 
 # ── modos-de-juego ──
 

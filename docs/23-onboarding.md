@@ -510,6 +510,95 @@ Pruebas: `tests/tutorial/test_guide_steps.gd` (`after_collecting_comes_the_barra
 juguete), `tests/ui/test_war_reports.gd` (su parte) y `tests/economy/test_cuartel_temprano.gd`.
 Sin correr aún (se corren en la ronda final).
 
+### 2.9 El objetivo, paso a paso (2026-10-19, rama `feat/objetivo-paso-a-paso`)
+
+Queja de Bryan: "siempre me dices EDIFICIO: OBJETIVO («Casa: …», «Cuartel: …», «Mina
+de Oro: aún no puedes construirlo…»); coloca el OBJETIVO y ya, y explica PASO A PASO qué
+se necesita". Y un bug suyo: "cuando me pide oro, si no está contado al oro, todo queda
+bugueado": lo que espera en la Mina sin recoger no contaba, el paso pedía "te faltan 120
+de oro" y se quedaba esperando.
+
+**El objetivo en verbo, sin nombre delante.** `Objectives.goal_title()`: "Construye un
+Cuartel", "Entrena tu primer soldado", "Sube el Cuartel General a nivel 2", "Gana la
+misión «X» (Campaña de Tierra)". Los artículos salen de `Objectives.building_a()` /
+`building_the()` / `your_building()` (`FEMININE_ES`: Casa, Granja, Mina, Fundición...).
+Revisadas todas las claves con la forma "%s: …" que hablaban de un edificio o recurso
+(`OBJ_DO_BUILD`, `OBJ_DO_REPAIR`, `OBJ_DO_RESEARCH`, `OBJ_DO_CONTRACT`, `OBJ_DO_CAMPAIGN`,
+`OBJ_DO_MAKE`, `OBJ_DO_SANDBOX_MODE`, `GUIDE_NEED`, `GUIDE_NEED_HOUSE`, `GUIDE_SKIP_*`,
+`GUIDE_HOW_*`, `TOPE_HOW_MATERIAL`, `LBL_DOMAIN_NEEDS`, `CAMP_LOCK_BUILDING`), en ES y EN;
+`test_menos_texto_objetivos.gd` vigila que ninguna empiece por "%s:".
+
+**Los pasos.** `Objectives.plan()` (= `plan_for(goal_step(), next_step())`) devuelve el
+objetivo y 2-4 pasos con estado (`PLAN_MARKS`: ✓ hecho, ● el de ahora, ○ por hacer),
+sacados de lo que falta de verdad:
+
+| Paso (`kind`) | Cuándo | Ejemplo |
+|---|---|---|
+| `have` / `build` | requisito o taller del material | ✓ Aserradero / ○ Construye una Fundición |
+| `make` | material del coste | ● Fabrica 10 tablones (6/10) |
+| `collect` | lo que falta espera en un edificio | ● Recoge oro de la Mina de Oro (+45) — "En la bolsa 20 + por recoger 45 / necesitas 80" |
+| `gather` | falta de la bolsa y no hay nada por recoger | ● Junta 80 de oro (20/80) |
+| `room` | el coste no cabe, o la bolsa está llena y falta algo | ● Haz sitio en el almacén |
+| `workers` | faltan manos | Espera a 1 trabajador más / Construye otra Casa (+6 trabajadores) |
+| `place` | el último | ○ Coloca el Cuartel / Entrena Infantería en EJÉRCITO (0/1) |
+| `action` | `next_step()` es un apoyo que no está en la lista (Granja por comida, vender...) | va el primero, como el de ahora |
+
+El de ahora: lo que se recoge (gratis, y desatasca), si no el que coincide con
+`next_step()`, si no el primero que falte. `goal_step()` es `next_step()` sin los apoyos
+(`_next(support)`): **`next_step()` no cambia** y la sonda de línea lo sigue leyendo igual.
+Cada paso trae `how` (una frase) y `go`: {"build": id} abre CONSTRUIR con ese edificio
+(`ConstructionMenu.open_on`), {"node"}/{"building"} lleva la cámara y abre la ficha,
+{"deposit"} lleva la cámara al bosque o la veta más cercana, {"panel"} abre EJÉRCITO o
+MISIONES. Un paso que espera por algo que no se ve no existe: si el productor está parado
+lo dice (`OBJ_STEP_STOPPED`), con la bolsa llena pide sitio en vez de recoger.
+
+**Dónde sale.**
+- **Línea plegable del HUD** (`ObjectivePanel.refresh_line`): el objetivo y el paso de
+  ahora, cortos (`Objectives.plan_line`): "Construye un Cuartel · Fabrica tablones 6/10",
+  "Construye un Cuartel · Recoge oro +45". Al mantener, el objetivo y todos los pasos.
+- **Panel ¿QUÉ HACER?**: el título es el objetivo; debajo, los pasos como botones planos
+  (tocar uno lleva a él) y el "cómo" del de ahora. El aviso suelto de "te falta" solo
+  queda para un objetivo sin pasos.
+- **Tarjeta del tutorial** `need_<edificio>`: la frase es el objetivo ("Construye un
+  Cuartel"), `step_hint` son los pasos con su marca (como mucho `NEED_PLAN_ITEMS` = 3) y
+  `step_how` el cómo del de ahora; `need_target` señala lo del paso de ahora (el edificio
+  con algo por recoger, el productor, la veta, CONSTRUIR). "Solo falta otra Casa" ya no es
+  una frase aparte: es el paso ● Construye otra Casa (+6 trabajadores).
+
+Pruebas: `tests/ui/test_objectives.gd` (títulos sin nombre delante en ES/EN, artículos, la
+lista del Cuartel, colocar, **oro sin recoger** y que al recogerlo avanza, la bolsa llena,
+la otra Casa, el apoyo delante, toda la línea con una lista corta y un solo paso de ahora,
+`next_step()` intacto, el panel y la línea), `test_menos_texto_objetivos.gd`,
+`tests/tutorial/test_guide_never_stuck.gd` y `tests/ui/test_hud_y_tutorial.gd`. Sonda:
+`godot --path . -s tools/recorrido_probe.gd -- --objetivo --profile=phone --shot-size=800x360`
+(y `--profile=pc --shot-size=1920x1080`): tarjeta del tutorial, línea y panel con oro sin
+recoger y con tablones 6/10.
+
+### 2.10 Nada interrumpe el tutorial (2026-10-19, rama `feat/objetivo-paso-a-paso`)
+
+Queja de Bryan: "la primera tormenta está llegando aunque esté haciendo el tutorial".
+`TutorialManager.blocks_interruptions()`: con el tutorial guiado en marcha (no un repaso
+pedido desde AYUDA), o pendiente de empezar en una partida ya arrancada (el prólogo
+delante), esperan:
+
+- la **tormenta de prueba** (`StormManager.check_trial`): llega en `trial_due_at()`, a su
+  hora (`storm_trial_at`, 300 s jugados) y nunca antes de `storm_trial_after_guide` (90 s)
+  después de acabar el tutorial, con su Aviso delante como siempre;
+- la **Tormenta de verdad**: con el reloj en calma no avanza (una ya empezada, de un
+  guardado viejo, sigue su curso; la invocada a mano en Sandbox, también);
+- los **eventos aleatorios** (`RandomEventManager`): el reloj no corre; el que ya estaba en
+  curso acaba.
+
+Guardado: `TutorialManager.guide_finished_at` (segundos jugados al acabar el tutorial de
+verdad; `finish_guide` y `skip_guide`, no un repaso) viaja en la clave `tutorial`; sin ella
+(partida de antes) vale -1 y la prueba sale a su hora de siempre. `trial_done` no cambia.
+Partidas sin tutorial (repaso, guardados con el tutorial hecho, Sandbox/Constructor, que ya
+no tienen prueba) siguen como antes. La sonda de línea juega como quien ya acabó el
+tutorial (`tools/line_probe_player.gd` pone `guide_state = done`), así que sus cifras no
+cambian. Pruebas: `tests/storm/test_storm_trial.gd` (no llega en medio, llega 90 s después,
+tutorial corto = hora de siempre, el repaso no frena, guardado, el reloj de verdad en calma)
+y `tests/tutorial/test_tutorial_holds_interruptions.gd`.
+
 ## 3. Ayudas (`HelperPanel`, `HelpCallout`, `HelpCatalog`)
 
 `HelpCatalog` es la lista de todas: los globos del HUD (`callout_*`), los consejos de

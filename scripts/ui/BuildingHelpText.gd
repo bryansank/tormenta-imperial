@@ -11,6 +11,7 @@ extends RefCounted
 ## Lenguaje para 10-15 anos: frases cortas, sin jerga.
 
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+const Objectives := preload("res://scripts/services/Objectives.gd")
 
 ## El recurso que llega con una era y el edificio que lo trae. La Fundicion abre
 ## la era 2 (acero) y la Refineria la 3 (petroleo): CLAUDE.md, "3-Era Progression".
@@ -203,7 +204,7 @@ static func upgrade_block_lines(data: BuildingData, node: Node) -> Array:
 		elif not ResourceManager.is_unlocked_by_name(rid) and ERA_RESOURCES.has(rid):
 			how.append(Tr.t("TOPE_LOCK_ERA") % [int(ERA_RESOURCES[rid][0]), _building_name(String(ERA_RESOURCES[rid][1]))])
 		elif GameConfig.get_material_source(rid) != "":
-			how.append(Tr.t("TOPE_HOW_MATERIAL") % [Tr.res_cap(rid), _building_name(GameConfig.get_material_source(rid))])
+			how.append(Tr.t("TOPE_HOW_MATERIAL") % [Objectives.building_the(GameConfig.get_material_source(rid)), Tr.res_name(rid)])
 	if not missing.is_empty():
 		var parts: Array = []
 		for rid in missing:

@@ -128,6 +128,13 @@ func _open_colony(map_seed: int) -> void:
 	# Reloj de la Tormenta con la misma semilla que el mapa: la partida entera se
 	# repite igual con la misma semilla.
 	StormManager.get_cycle().seed_rng(map_seed)
+	# La sonda juega como quien ya acabo el tutorial antes de empezar: con el
+	# tutorial en marcha la tormenta de prueba y los eventos esperan (2026-10-19,
+	# TutorialManager.blocks_interruptions) y la sonda no hace sus pasos. Asi la
+	# prueba sigue llegando a su hora (storm_trial_at), como antes.
+	TutorialManager.intro_seen = true
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	TutorialManager.guide_finished_at = -1.0
 	for node in get_tree().root.get_children():
 		if node != self and node != _scene:
 			node.set_process(false)

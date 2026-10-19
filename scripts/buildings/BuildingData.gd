@@ -82,7 +82,28 @@ func _translated(key: String, fallback: String) -> String:
 	return fallback if text == key else text
 
 ## Helper: get cost as dictionary compatible with ResourceManager.
+## Lo que cuesta levantar el siguiente: el precio de la ficha, salvo el primero
+## de un edificio con rebaja de estreno (GameConfig.first_building_discount: la
+## primera Mina de oro a mitad de precio, 2026-10-19). Es el unico coste de obra:
+## CONSTRUIR, el fantasma, el cobro, ¿QUE HACER? y el tutorial leen este.
 func get_cost() -> Dictionary:
+	var cost := get_base_cost()
+	var factor: float = first_discount_factor()
+	if factor < 1.0:
+		for type in cost:
+			cost[type] = maxi(1, int(ceil(float(cost[type]) * factor)))
+	return cost
+
+## La rebaja del primero (0,5 = mitad) si aun no hay ninguno en pie; 1,0 si no.
+func first_discount_factor() -> float:
+	var factor: float = float(GameConfig.first_building_discount.get(id, 1.0))
+	if factor >= 1.0:
+		return 1.0
+	return factor if GridManager.count_by_id(id) == 0 else 1.0
+
+## El precio de la ficha, sin rebajas: la base de mejoras, reparaciones y
+## devoluciones.
+func get_base_cost() -> Dictionary:
 	var cost := {}
 	if cost_gold > 0:
 		cost[ResourceManager.Type.GOLD] = cost_gold

@@ -319,6 +319,19 @@ Dos decisiones de Bryan para la era 1: que dure **8-12 minutos** y que tenga una
   su propio `StormCycle`: el reloj de verdad sigue armándose con la Fundición. Si la
   Fundición llega antes del minuto 5, no sale. No en Constructor ni Sandbox (regla de
   modo `storm_trial`). La sonda no la cuenta como tormenta y la anota aparte.
+  **Nunca en medio del tutorial** (2026-10-19, docs/23 §2.10): con el tutorial guiado en
+  marcha espera, y llega como pronto `storm_trial_after_guide` (90 s jugados) después de
+  acabarlo (`StormManager.trial_due_at`); tampoco corren entretanto el reloj de la
+  Tormenta de verdad ni los eventos. La sonda juega con el tutorial ya hecho, así que la
+  prueba le sigue llegando a su hora y estas cifras no cambian.
+- **La primera Mina de oro a mitad de precio** (2026-10-19, docs/03): 60 oro + 40 madera
+  en vez de 120 + 80. Sonda corta (`--seeds=1,2,3 --hours=0.4`): la Mina sale en el
+  minuto 4,8 con y sin rebaja (en la línea va detrás del primer soldado y la misión, no
+  la frena el oro), su espera en ¿QUÉ HACER? es de 2 min en los dos casos, y lo que se
+  ahorra adelanta la era 2: minuto 15,7-17,8 con rebaja frente a 17,8-19,8 sin ella.
+  En el tutorial, que la pide detrás de la Casa y los manejos, hay que juntar la mitad
+  de oro; ese orden no lo mide ninguna sonda (el recorrido rellena la bolsa), queda
+  para la ronda de pruebas con Bryan.
 - **Minado a mano**: oro 20 cada 12 s → **12 cada 30 s**; madera 20 cada 8 s → **10 cada
   20 s** (hierro y petróleo igual). Por obrero y minuto rinden ahora lo mismo que su
   extractor (oro 12 frente a 13,3 de la Mina; madera 15 frente a 15 del Aserradero):
