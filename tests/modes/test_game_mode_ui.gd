@@ -27,7 +27,7 @@ func _dialog(current: int = GameMode.Mode.CAMPAIGN) -> CanvasLayer:
 	return dialog
 
 func _find_button(node: Node, text: String) -> Button:
-	if node is Button and (node as Button).text == text:
+	if node is Button and CartoonTheme.button_text(node as Button) == text:
 		return node
 	for child in node.get_children():
 		var hit := _find_button(child, text)

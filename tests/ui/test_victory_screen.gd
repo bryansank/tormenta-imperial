@@ -25,7 +25,7 @@ func _dialogs() -> Array:
 	return found
 
 func _find_button(node: Node, text: String) -> Button:
-	if node is Button and (node as Button).text == text:
+	if node is Button and CartoonTheme.button_text(node as Button) == text:
 		return node
 	for child in node.get_children():
 		var hit := _find_button(child, text)
@@ -71,7 +71,7 @@ func test_victory_stats_count_played_time_and_the_storms() -> void:
 func test_the_victory_screen_shows_the_storm_count() -> void:
 	var screen := _screen()
 	screen._on_victory_achieved(STATS.merged({"storms_survived": 11, "tithes_repelled": 9, "audit_summons": 2}))
-	assert_bool(_has_label(screen, Tr.t("LBL_STAT_STORMS"))).is_true()
+	assert_bool(_has_label(screen, Tr.t("LBL_STAT_STORMS").trim_suffix(":"))).is_true()
 	assert_bool(_has_label(screen, Tr.t("LBL_VICTORY_SUBTITLE_AUDIT"))).is_true()
 
 ## Constructor gana sin Tormenta, sin Diezmo y sin asedio: esas filas no salen.
@@ -84,7 +84,7 @@ func test_the_builder_victory_does_not_count_storms() -> void:
 	GameMode.current = saved_mode
 	GameMode.run_result = saved_result
 	assert_bool(_has_label(screen, Tr.t("LBL_VICTORY_SUBTITLE_BUILDER"))).is_true()
-	assert_bool(_has_label(screen, Tr.t("LBL_STAT_STORMS"))).is_false()
+	assert_bool(_has_label(screen, Tr.t("LBL_STAT_STORMS").trim_suffix(":"))).is_false()
 	assert_bool(_has_label(screen, Tr.t("LBL_VICTORY_CODA"))).is_false()
 
 func _has_label(node: Node, text: String) -> bool:

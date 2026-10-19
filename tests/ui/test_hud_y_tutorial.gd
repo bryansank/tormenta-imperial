@@ -144,7 +144,7 @@ func test_settings_has_the_names_row_and_reset_puts_it_on_auto() -> void:
 	add_child(p)
 	var row: Node = p.find_child("HudWordsRow", true, false)
 	assert_object(row).is_not_null()
-	(row.get_child(1) as OptionButton).item_selected.emit(2)
+	row.find_child("Picker", true, false).item_selected.emit(2)
 	assert_str(GameConfig.ui_hud_words).is_equal("never")
 	p.reset_interface()
 	assert_str(GameConfig.ui_hud_words).is_equal("auto")

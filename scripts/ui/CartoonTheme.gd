@@ -813,3 +813,298 @@ static func legacy_tokens(base: Dictionary) -> Dictionary:
 	d["BTN_PRESSED"] = c(r, "CARD_ALT").darkened(0.08)
 	d["BTN_DISABLED"] = Color(c(r, "WELL"), 0.7)
 	return d
+
+# --- MENÚS (feat/ui2-menus) ---------------------------------------------
+# Piezas de las pantallas de menu de la fase 2 (Ajustes, Ayuda, tutorial,
+# menu principal, partidas, victoria, prologo, registro). Solo se anaden:
+# las de arriba son de la fase 1 y de los otros frentes.
+
+## Pantalla de telefono para maquetar una ventana: lienzo bajo (< 450) o el
+## perfil telefono (aunque hoy su lienzo aun sea mas alto, docs/28 §4.2).
+static func menus_phone(vp: Vector2) -> bool:
+	if phone or vp.y < 450.0:
+		return true
+	return DeviceProfile.current() == "phone" and vp.y < 620.0
+
+## Coloca la raiz de una ventana (`window()["root"]`): en telefono a pantalla
+## completa con un margen corto; si no, centrada con un tope `max_size`. Con
+## anclas, para que siga al lienzo si cambia de tamano.
+static func place_window(root: Control, vp: Vector2, max_size: Vector2, small: bool = false) -> void:
+	var margin := Vector2(6, 4) if small else Vector2(24, 16)
+	var sz := Vector2(minf(max_size.x, vp.x - margin.x * 2.0), minf(max_size.y, vp.y - margin.y * 2.0))
+	if small:
+		sz = vp - margin * 2.0
+	root.set_anchors_preset(Control.PRESET_CENTER)
+	root.offset_left = -roundf(sz.x * 0.5)
+	root.offset_right = roundf(sz.x * 0.5)
+	root.offset_top = -roundf(sz.y * 0.5)
+	root.offset_bottom = roundf(sz.y * 0.5)
+
+## La ventana de menu entera: `window()` + el margen corto del telefono.
+## Devuelve lo mismo que window() ({"root", "body", "close", "panel"}).
+static func menu_window(title: String, fill: Color, small: bool, with_close: bool = true) -> Dictionary:
+	var w := window(title, fill, with_close)
+	var body: VBoxContainer = w["body"]
+	body.add_theme_constant_override("separation", 6 if small else GAP)
+	if small:
+		var s := window_style()
+		s.set_content_margin_all(10)
+		(w["panel"] as PanelContainer).add_theme_stylebox_override("panel", s)
+	return w
+
+## Fila grande de Ajustes: [icono] Nombre ······ control [valor]. La tarjeta
+## lleva el nombre de la fila (las pruebas la buscan por el).
+static func setting_row(row_name: String, glyph: String, text_s: String, control: Control,
+		small: bool = false, value: Label = null, tip: String = "") -> PanelContainer:
+	var card := PanelContainer.new()
+	card.name = row_name
+	var st := card_style("window")
+	st.set_content_margin_all(4 if small else 10)
+	st.content_margin_left = 8 if small else 14
+	card.add_theme_stylebox_override("panel", st)
+	card.tooltip_text = tip
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8 if small else 12)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if glyph != "":
+		var ic := make_glyph(glyph, 26 if small else 34, sem("INFO"))
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(ic)
+	var l := label(text_s, "button", text("window"))
+	l.custom_minimum_size.x = 96 if small else 190
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if not (control is HSlider):
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(l)
+	control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if control is HSlider:
+		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(control)
+	if value != null:
+		value.custom_minimum_size.x = 44 if small else 58
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		value.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(value)
+	card.add_child(row)
+	return card
+
+## Interruptor que se pulsa de verdad (CheckButton con el carril dibujado:
+## verde encendido, bolita blanca). Sin texto: el nombre va en la fila.
+static func live_switch(on: bool, on_toggled: Callable = Callable(), node_name: String = "") -> CheckButton:
+	var b := CheckButton.new()
+	if node_name != "":
+		b.name = node_name
+	b.text = ""
+	b.button_pressed = on
+	b.focus_mode = Control.FOCUS_ALL
+	b.add_theme_icon_override("checked", switch_texture(true, false))
+	b.add_theme_icon_override("unchecked", switch_texture(false, false))
+	b.add_theme_icon_override("checked_disabled", switch_texture(true, true))
+	b.add_theme_icon_override("unchecked_disabled", switch_texture(false, true))
+	var empty := StyleBoxEmpty.new()
+	for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		b.add_theme_stylebox_override(st, empty)
+	b.add_theme_stylebox_override("focus", box(Color(0, 0, 0, 0), sem("ACCENT"), 3, 24, 0))
+	b.custom_minimum_size = Vector2(84, TOUCH_MIN)
+	if on_toggled.is_valid():
+		b.toggled.connect(on_toggled)
+	return b
+
+static var _switch_tex := {}
+## El carril del interruptor (76x40) con su bolita, en textura: CheckButton
+## pinta iconos. Se dibuja una vez por estado.
+static func switch_texture(on: bool, disabled: bool) -> Texture2D:
+	var key := "%s|%s|%s|%s|%s" % [on, disabled, UITheme.palette, UITheme.high_contrast, surface]
+	if _switch_tex.has(key):
+		return _switch_tex[key]
+	var w := 76
+	var hh := 40
+	var img := Image.create(w, hh, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var fill: Color = sem("POSITIVE") if on else c("window", "WELL")
+	if disabled:
+		fill = fill.lerp(Color(0.6, 0.6, 0.6), 0.6)
+	var ink := INK if not disabled else Color(INK, 0.5)
+	var r := hh * 0.5
+	var bw := 3.0
+	var knob_c := Vector2(w - r, r) if on else Vector2(r, r)
+	var knob_r := r - 6.0
+	for y in hh:
+		for x in w:
+			var p := Vector2(x + 0.5, y + 0.5)
+			# Distancia a la capsula (segmento entre los dos centros).
+			var cx := clampf(p.x, r, w - r)
+			var d := p.distance_to(Vector2(cx, r))
+			var col := Color(0, 0, 0, 0)
+			if d <= r - bw:
+				col = fill
+			elif d <= r - 0.5:
+				col = ink
+			elif d <= r:
+				col = Color(ink, r - d)
+			var dk := p.distance_to(knob_c)
+			if dk <= knob_r - 2.0:
+				col = WHITE
+			elif dk <= knob_r:
+				col = ink
+			img.set_pixel(x, y, col)
+	var t := ImageTexture.create_from_image(img)
+	_switch_tex[key] = t
+	return t
+
+## Deslizador de Ajustes con su nombre de nodo, paso y rango.
+static func menu_slider(node_name: String, value: float, min_v: float = 0.0, max_v: float = 1.0,
+		step: float = 0.05) -> HSlider:
+	var sl := slider(value)
+	sl.name = node_name
+	sl.min_value = min_v
+	sl.max_value = max_v
+	sl.step = step
+	sl.value = value
+	sl.custom_minimum_size = Vector2(120, TOUCH_MIN)
+	# La rueda desplaza la pestana, nunca mueve el regulador.
+	sl.scrollable = false
+	return sl
+
+## Un selector (CartoonPicker): pastillas o paso a paso segun quepan.
+static func picker(options: Array, selected: int, on_selected: Callable = Callable(),
+		height: int = 48, tips: Array = []) -> HBoxContainer:
+	var p: HBoxContainer = load("res://scripts/ui/CartoonPicker.gd").new()
+	p.name = "Picker"
+	p.call("setup", options, selected, height, "window", false, tips)
+	if on_selected.is_valid():
+		p.connect("item_selected", on_selected)
+	return p
+
+## Titulo pequeno de un grupo dentro de una ventana ("Avanzado").
+static func group_title(text_s: String) -> Label:
+	var l := label(text_s, "small", text("window", true))
+	l.uppercase = true
+	return l
+
+## Tarjeta-boton de una lista (indice de ayuda, partidas, menu principal):
+## [icono] Texto  ······  [marca]. `mark`: id de icono a la derecha ("" nada).
+static func list_button(glyph: String, text_s: String, small: bool = false, mark: String = "",
+		dim: bool = false) -> Button:
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_ALL
+	var hgt := 48 if small else 56
+	var n := card_style("window")
+	var hv := card_style("window")
+	hv.bg_color = c("window", "CARD").darkened(0.04)
+	hv.border_color = sem("INFO")
+	var pr := card_style("window")
+	pr.bg_color = c("window", "CARD_ALT")
+	for sb in [n, hv, pr]:
+		sb.set_content_margin_all(4)
+		sb.content_margin_left = 10
+		sb.content_margin_right = 10
+	b.add_theme_stylebox_override("normal", n)
+	b.add_theme_stylebox_override("hover", hv)
+	b.add_theme_stylebox_override("pressed", pr)
+	b.add_theme_stylebox_override("focus", box(Color(0, 0, 0, 0), sem("ACCENT"), 3, RADIUS_CARD + 2, 0))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if glyph != "":
+		var ic := make_glyph(glyph, 26 if small else 32, sem("INFO"))
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(ic)
+	var l := label(text_s, "button", text("window", dim))
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.clip_text = true
+	row.add_child(l)
+	if mark != "":
+		var m := make_glyph(mark, 22 if small else 26)
+		m.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(m)
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = 12
+	row.offset_right = -12
+	b.add_child(row)
+	b.custom_minimum_size = Vector2(0, hgt)
+	b.set_meta("label", l)
+	return b
+
+## El bocadillo del instructor (tutorial, consejos): crema con tinta gruesa.
+static func bubble_style(small: bool = false) -> StyleBoxFlat:
+	var s := box(c("window", "BG"), INK, BORDER, RADIUS_CARD, 10 if small else 14, 0, 2)
+	s.shadow_color = Color(INK, 0.35)
+	s.shadow_size = 1
+	s.shadow_offset = Vector2(0, 4)
+	return s
+
+## Pastilla del "Paso 3 de 9" del tutorial.
+static func step_pill(text_s: String) -> PanelContainer:
+	return badge(text_s, sem("ACCENT"))
+
+## El piquito del bocadillo hacia el instructor. `side`: -1 sale por la
+## izquierda de la tarjeta, 1 por la derecha, 0 oculto. Se coloca a mano.
+class Tail extends Control:
+	var side := -1:
+		set(v):
+			side = v
+			queue_redraw()
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		custom_minimum_size = Vector2(18, 26)
+		size = custom_minimum_size
+
+	func _draw() -> void:
+		if side == 0:
+			return
+		var w := size.x
+		var hh := size.y
+		var pts: PackedVector2Array
+		if side < 0:
+			pts = PackedVector2Array([Vector2(w + 3, 0), Vector2(0, hh * 0.5), Vector2(w + 3, hh)])
+		else:
+			pts = PackedVector2Array([Vector2(-3, 0), Vector2(w, hh * 0.5), Vector2(-3, hh)])
+		draw_colored_polygon(pts, CartoonTheme.c("window", "BG"))
+		draw_polyline(pts, CartoonTheme.INK, 3.0, true)
+
+## Pastilla con su texto guardado en la meta "text" (Button.text va vacio: lo
+## pinta una etiqueta). Las pruebas y las sondas buscan los botones por ella.
+static func text_button(text_s: String, glyph: String = "", kind_s: String = "secondary",
+		height: int = BTN, level: String = "button") -> Button:
+	var b := pill_button(text_s, glyph, kind_s, height, "window", level)
+	b.set_meta("text", text_s)
+	b.tooltip_text = text_s if glyph != "" and text_s == "" else b.tooltip_text
+	return b
+
+## Alto de boton de las pantallas de menu: el de h(), sin bajar del alto de
+## dedo que pidan Ajustes (UITheme.MIN_BTN_H, que sube en tablet y movil).
+static func menu_h(size_s: String) -> int:
+	return maxi(h(size_s), UITheme.MIN_BTN_H)
+
+## El texto de un boton: su meta "text" (pastillas) o Button.text.
+static func button_text(b: Button) -> String:
+	return String(b.get_meta("text", b.text)) if b != null else ""
+
+## Coloca el piquito (`Tail`) del bocadillo `card` hacia el instructor `bust`
+## (los dos en el mismo lienzo). Sin busto a la vista, o con el busto encima o
+## debajo de la tarjeta, el piquito se esconde.
+static func place_tail(tail: Control, card: Rect2, bust: Control) -> void:
+	if tail == null:
+		return
+	if bust == null or not bust.visible or card.size.x < 1.0:
+		tail.visible = false
+		return
+	var b := Rect2(bust.position, bust.size)
+	var side := 0
+	if b.end.x <= card.position.x + 4.0:
+		side = -1
+	elif b.position.x >= card.end.x - 4.0:
+		side = 1
+	if side == 0:
+		tail.visible = false
+		return
+	tail.visible = true
+	tail.set("side", side)
+	var ty := clampf(b.get_center().y - tail.size.y * 0.5, card.position.y + 10.0, card.end.y - tail.size.y - 10.0)
+	var tx := card.position.x - tail.size.x + 1.0 if side < 0 else card.end.x - 1.0
+	tail.position = Vector2(tx, ty)

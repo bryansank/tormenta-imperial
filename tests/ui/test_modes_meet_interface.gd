@@ -109,13 +109,12 @@ func test_the_mode_picker_uses_the_live_palette_contrast_and_touch_size() -> voi
 	assert_bool(UITheme.DANGER != default_danger).is_true()
 	var dialog: CanvasLayer = GameManager.request_new_game()
 	await _settle()
-	assert_that(DialogScript.mode_color(GameMode.Mode.SURVIVAL)).is_equal(UITheme.DANGER)
+	assert_that(DialogScript.mode_color(GameMode.Mode.SURVIVAL)).is_equal(CartoonTheme.sem("DANGER"))
 	for mode in GameMode.ORDER:
 		assert_float(dialog.mode_card(mode).size.y).is_greater_equal(float(UITheme.MIN_BTN_H))
-	var probe := UITheme.make_label("x", "title")
+	# El titulo sigue el tamano de letra del estilo nuevo (CartoonTheme, docs/28).
 	var title := _first_label(dialog)
-	assert_int(title.get_theme_font_size("font_size")).is_equal(probe.get_theme_font_size("font_size"))
-	probe.free()
+	assert_int(title.get_theme_font_size("font_size")).is_equal(CartoonTheme.fs("title"))
 	var start := _find_button(dialog, Tr.t("BTN_MODE_START"))
 	assert_float(start.get_combined_minimum_size().y).is_greater_equal(float(UITheme.MIN_BTN_H))
 	dialog.cancel()
@@ -145,7 +144,7 @@ func _first_label(node: Node) -> Label:
 	return null
 
 func _find_button(node: Node, text: String) -> Button:
-	if node is Button and (node as Button).text == text:
+	if node is Button and CartoonTheme.button_text(node as Button) == text:
 		return node
 	for child in node.get_children():
 		var hit := _find_button(child, text)

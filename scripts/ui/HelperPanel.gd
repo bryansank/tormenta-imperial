@@ -25,6 +25,11 @@ extends CanvasLayer
 ## Los globos los coloca UILayoutManager (slots tip_*), bajo el panel del que
 ## hablan. Las tarjetas de consejo van abajo al centro en su propia capa (19),
 ## por encima de las ventanas, porque a veces explican una ventana (mercado).
+##
+## Estilo nuevo (fase 2, docs/28): la tarjeta de consejo es un bocadillo crema
+## con su piquito hacia el busto del instructor, una frase y "Mas" (HelpCallout).
+## Sin animaciones: ni fundido al salir, ni marco que late, ni texto que se
+## escribe solo.
 
 const HelpCallout := preload("res://scripts/ui/HelpCallout.gd")
 const HelpCatalog := preload("res://scripts/ui/HelpCatalog.gd")
@@ -32,6 +37,7 @@ const BuildingHelpText := preload("res://scripts/ui/BuildingHelpText.gd")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const HelpIndexScene := preload("res://scenes/ui/HelpIndexPanel.tscn")
 const InstructorBust := preload("res://scripts/ui/InstructorBust.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 ## Node name of the Skirmish callout, so tests and tools can find it.
 const SKIRMISH_CALLOUT_NAME := "SkirmishCallout"
@@ -69,7 +75,7 @@ const DESKTOP_TIPS := ["HelperPanel.tip_camera"]
 
 var _callouts: Control
 var _help_btn: Button
-var _guide_panel: PanelContainer
+var _guide_panel: Control
 var _backdrop: ColorRect
 var _guide_open := false
 var _skirmish_callout: PanelContainer
@@ -88,13 +94,14 @@ var _index: CanvasLayer
 ## pequenos y van pegados a su control): la Capitana para lo basico y la
 ## economia, el Sargento para la Tormenta y el ejercito (feat/instructores).
 var _tip_bust: Control
+## El piquito del bocadillo de consejo, hacia el busto.
+var _tip_tail: Control
 
 ## Cola: {id, prio, seq, forced}. `_current` es la que esta en pantalla.
 var _queue: Array[Dictionary] = []
 var _current: Dictionary = {}
 var _seq := 0
 var _gap := 0.0
-var _pulse := 0.0
 
 func _ready() -> void:
 	# Above the HUD (10-11). UIManager stacks open windows from layer 12 up, so
@@ -226,8 +233,8 @@ func _setup_ui() -> void:
 	_skirmish_callout.setup("callout_skirmish", HelpCatalog.title("callout_skirmish"), HelpCatalog.body("callout_skirmish"))
 	_callouts.add_child(_skirmish_callout)
 
-	# ── Building guide modal ──
-	_backdrop = UITheme.make_backdrop()
+	# ── Guia de edificios: ventana crema con cinta (docs/28 §6) ──
+	_backdrop = CT.veil()
 	_backdrop.visible = false
 	_backdrop.gui_input.connect(func(event: InputEvent):
 		if event is InputEventMouseButton and event.pressed:
@@ -235,23 +242,15 @@ func _setup_ui() -> void:
 	)
 	root.add_child(_backdrop)
 
-	_guide_panel = PanelContainer.new()
+	var small := CT.menus_phone(get_viewport().get_visible_rect().size)
+	var gw := CT.menu_window(Tr.t("LBL_GUIDE_TITLE"), CT.sem("INFO"), small)
+	_guide_panel = gw["root"]
+	_guide_panel.name = "BuildingGuide"
 	_guide_panel.visible = false
-	UILayoutManager.apply_layout("HelperPanel.modal", _guide_panel)
-	_guide_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	root.add_child(_guide_panel)
-
-	var margin := MarginContainer.new()
-	for side in ["top", "left", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 20)
-	_guide_panel.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(vbox)
-
-	vbox.add_child(UITheme.make_panel_header(Tr.t("LBL_GUIDE_TITLE"), _toggle_guide))
-	vbox.add_child(UITheme.make_separator())
+	(gw["close"] as Button).tooltip_text = Tr.t("BTN_CLOSE")
+	(gw["close"] as Button).pressed.connect(_toggle_guide)
+	var vbox: VBoxContainer = gw["body"]
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -260,7 +259,7 @@ func _setup_ui() -> void:
 
 	var list := VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 14)
+	list.add_theme_constant_override("separation", 8)
 	scroll.add_child(list)
 
 	for data in _load_buildings():
@@ -280,11 +279,11 @@ func _setup_ui() -> void:
 	_pointer.name = "HelpPointer"
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0, 0, 0, 0)
-	ps.border_color = UITheme.INFO.lightened(0.35)
-	ps.set_border_width_all(3)
-	ps.set_corner_radius_all(6)
-	ps.shadow_color = Color(UITheme.INFO, 0.5)
-	ps.shadow_size = 6
+	ps.border_color = CT.sem("ACCENT")
+	ps.set_border_width_all(4)
+	ps.set_corner_radius_all(12)
+	ps.shadow_color = Color(CT.INK, 0.45)
+	ps.shadow_size = 2
 	_pointer.add_theme_stylebox_override("panel", ps)
 	_pointer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pointer.visible = false
@@ -305,6 +304,10 @@ func _setup_ui() -> void:
 	_tip_bust.name = "TipInstructor"
 	_tip_bust.visible = false
 	tip_root.add_child(_tip_bust)
+	_tip_tail = CT.Tail.new()
+	_tip_tail.name = "TipTail"
+	_tip_tail.visible = false
+	tip_root.add_child(_tip_tail)
 	_tip_card.item_rect_changed.connect(_place_tip_bust)
 	_tip_card.visibility_changed.connect(_place_tip_bust)
 	EventBus.instructors_visibility_changed.connect(func(_on): _place_tip_bust())
@@ -514,20 +517,17 @@ func _show(item: Dictionary) -> void:
 	box.start()
 	if box == _tip_card:
 		_speak_tip(id)
-	# Entra con un fundido corto: llama la vista sin interrumpir.
-	box.modulate.a = 0.0
-	create_tween().tween_property(box, "modulate:a", 1.0, 0.25)
+	# Sin fundido (docs/28 §0.6): aparece al instante.
 	_current = item.duplicate()
 	_current["box"] = box
 	_refresh_callouts()
 
-## El instructor de la tarjeta de consejo: quien segun la categoria, su cara,
-## y el texto escrito poco a poco mientras mueve la boca.
+## El instructor de la tarjeta de consejo: quien segun la categoria y su cara.
+## El texto sale entero (sin maquina de escribir: docs/28 §0.6).
 func _speak_tip(id: String) -> void:
 	var cat := HelpCatalog.category(id)
 	_tip_bust.show_as(InstructorBust.who_for_category(cat), InstructorBust.expression_for_category(cat), _tip_bust.facing)
 	_tip_bust.visible = GameConfig.ui_instructors_visible
-	_tip_bust.speak(_tip_card.call("body_label"))
 	_place_tip_bust.call_deferred()
 
 ## Pega el busto a la tarjeta de consejo (a su izquierda si cabe), sin tapar el
@@ -537,6 +537,8 @@ func _place_tip_bust() -> void:
 		return
 	if not _tip_card.visible or not GameConfig.ui_instructors_visible:
 		_tip_bust.visible = false
+		if _tip_tail != null:
+			_tip_tail.visible = false
 		return
 	var avoid: Array = []
 	if not _current.is_empty():
@@ -547,6 +549,7 @@ func _place_tip_bust() -> void:
 	if storm.size.x > 1.0:
 		avoid.append(storm)
 	_tip_bust.dock_to(get_viewport().get_visible_rect().size, _tip_card.get_global_rect(), avoid)
+	CT.place_tail(_tip_tail, _tip_card.get_global_rect(), _tip_bust)
 
 ## El busto de la tarjeta de consejo (pruebas).
 func tip_instructor() -> Control:
@@ -576,7 +579,6 @@ func _process(delta: float) -> void:
 		if _gap <= 0.0:
 			_gap = 0.0
 			_pump()
-	_pulse += delta
 	_update_pointer()
 
 ## El marco azul alrededor del control del que habla la ayuda en pantalla.
@@ -593,7 +595,6 @@ func _update_pointer() -> void:
 	_pointer.visible = true
 	_pointer.position = rect.position
 	_pointer.size = rect.size
-	_pointer.modulate.a = 0.6 + 0.4 * sin(_pulse * 4.0)
 
 func _fit_tip_card() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
@@ -676,30 +677,55 @@ func _load_buildings() -> Array:
 	result.sort_custom(func(a, b): return a.get_display_name() < b.get_display_name())
 	return result
 
-func _make_building_entry(data: BuildingData) -> VBoxContainer:
+## Una tarjeta por edificio: el nombre y su tamano, los costes como icono +
+## cifra, los trabajadores, y una linea pequena con lo que pide (tope, era,
+## antes). La descripcion, al mantener pulsado.
+func _make_building_entry(data: BuildingData) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.name = "Guide_" + String(data.id)
+	var st := CT.card_style("window")
+	st.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", st)
+	# Al mantener pulsado: la descripcion y las cifras en palabras.
+	card.tooltip_text = data.get_description() + "\n" + _meta_line(data)
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	var entry := VBoxContainer.new()
-	entry.add_theme_constant_override("separation", 2)
+	entry.add_theme_constant_override("separation", 4)
+	entry.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(entry)
 
-	var title := UITheme.make_label("%s  (%dx%d)" % [data.get_display_name(), data.grid_size.x, data.grid_size.y], "body", UITheme.ACCENT)
-	entry.add_child(title)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entry.add_child(head)
+	var title := CT.label(data.get_display_name(), "button", CT.text("window"))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	head.add_child(CT.label("%dx%d" % [data.grid_size.x, data.grid_size.y], "small", CT.text("window", true)))
 
-	var meta := UITheme.make_label(_meta_line(data), "small", UITheme.TEXT_DIM)
-	meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	entry.add_child(meta)
+	var chips := HFlowContainer.new()
+	chips.add_theme_constant_override("h_separation", 6)
+	chips.add_theme_constant_override("v_separation", 6)
+	chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entry.add_child(chips)
+	for pair in [[data.cost_gold, "gold"], [data.cost_steel, "steel"], [data.cost_oil, "oil"], [data.cost_wood, "wood"]]:
+		if int(pair[0]) > 0:
+			chips.add_child(CT.cost_chip(String(pair[1]), int(pair[0])))
+	for mat in data.cost_materials:
+		if int(data.cost_materials[mat]) > 0:
+			chips.add_child(CT.cost_chip(String(mat), int(data.cost_materials[mat])))
+	if data.workers_required > 0:
+		var w := CT.badge("%d" % data.workers_required, CT.sem("INFO"), "army")
+		w.tooltip_text = Tr.t("LBL_GUIDE_WORKERS")
+		chips.add_child(w)
 
 	# Topes y mejoras (feat/topes-mejoras-ayuda): tope por era, era, lo que pide
-	# antes y si se mejora. "Tope: 5 · 8 · 10 (eras 1-3) · Era 1 · Antes: Casa ·
-	# Se mejora hasta el nivel 3".
-	var rules := UITheme.make_label(BuildingHelpText.guide_rules_line(data), "small", UITheme.INFO)
+	# antes y si se mejora, en una linea pequena.
+	var rules := CT.label(BuildingHelpText.guide_rules_line(data), "small", CT.text("window", true))
 	rules.name = "GuideRules"
 	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	entry.add_child(rules)
-
-	if not data.get_description().is_empty():
-		var desc := UITheme.make_label(data.get_description(), "small", UITheme.TEXT)
-		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		entry.add_child(desc)
-	return entry
+	return card
 
 ## "Costo: 120 oro, 80 madera · Trabajadores: 3 · Produce: 8 oro"
 func _meta_line(data: BuildingData) -> String:
@@ -824,6 +850,8 @@ func _toggle_guide() -> void:
 	_guide_panel.visible = _guide_open
 	_backdrop.visible = _guide_open
 	if _guide_open:
+		CT.place_window(_guide_panel, get_viewport().get_visible_rect().size, Vector2(760, 600),
+			CT.menus_phone(get_viewport().get_visible_rect().size))
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)

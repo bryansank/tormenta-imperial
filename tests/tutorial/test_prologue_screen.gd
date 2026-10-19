@@ -48,12 +48,12 @@ func test_next_twice_then_back_lands_on_folio_two() -> void:
 	assert_int(s.current_page()).is_equal(1)
 	assert_bool(s.back_button().disabled).is_false()
 
-func test_next_first_finishes_the_typing_then_turns_the_folio() -> void:
+## Sin animacion (docs/28 §0.6): el folio sale entero y Siguiente pasa de
+## folio al primer toque.
+func test_the_folio_comes_out_whole_and_next_turns_it() -> void:
 	var s := _screen()
-	assert_bool(s.is_typing()).is_true()
-	s.next_button().pressed.emit()
 	assert_bool(s.is_typing()).is_false()
-	assert_int(s.current_page()).is_equal(0)
+	assert_float((s.find_child("Body", true, false) as Label).visible_ratio).is_equal(1.0)
 	s.next_button().pressed.emit()
 	assert_int(s.current_page()).is_equal(1)
 
@@ -142,8 +142,9 @@ func test_it_does_not_look_like_the_tutorial() -> void:
 	var s := _screen()
 	assert_object(s.find_child("Seal", true, false)).is_not_null()
 	var body: Label = s.find_child("Body", true, false)
-	assert_object(body.get_theme_font("font")).is_equal(UITheme.typewriter_font())
-	assert_that(body.get_theme_color("font_color")).is_equal(UITheme.INK)
+	# Letra del estilo nuevo (docs/28 §3) sobre el folio crema.
+	assert_object(body.get_theme_font("font")).is_equal(CartoonTheme.body_font())
+	assert_that(body.get_theme_color("font_color")).is_equal(CartoonTheme.text("window"))
 
 # ── La hoja final (2026-10-04) ───────────────────────────────────────
 
@@ -153,7 +154,7 @@ func test_the_last_folio_before_playing_is_the_plan() -> void:
 	var s := _screen()
 	s.go_to_page(s.page_count() - 1)
 	assert_str(s.title_text()).is_equal(Tr.t("PRO_4_TITLE"))
-	assert_str(s.next_button().text).contains(Tr.t("BTN_PROLOGUE_START"))
+	assert_str(CartoonTheme.button_text(s.next_button())).contains(Tr.t("BTN_PROLOGUE_START"))
 	assert_bool(s.skip_button().visible).is_true()
 
 func test_the_last_folio_says_the_plan_in_plain_words_in_both_languages() -> void:

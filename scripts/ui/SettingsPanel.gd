@@ -1,47 +1,56 @@
 extends CanvasLayer
-## Ajustes, en pestanas: Audio · Interfaz · Controles · Accesibilidad · Juego.
+## Ajustes (rediseno fase 2, docs/28): una ventana crema con cinta azul y
+## cuatro pestanas en un carril de iconos a la izquierda: Sonido · Pantalla ·
+## Controles · Juego. Filas grandes con icono, deslizadores, interruptores
+## dibujados y selectores de pastillas (o paso a paso, si no caben). Lo raro
+## (perfil, escala, FPS, que se ve en pantalla, colores, contraste, opacidad,
+## disposicion) va al final de Pantalla, plegado bajo "Mas opciones".
 ## Todo se guarda en user://settings.cfg (del dispositivo, no de la partida).
 ##
-## Cada pestana es su propio scroll: a 1024x768, en tablet o con letra grande
-## el panel entero no cabe, y lo que no cabe se desplaza sin perder la cabecera
-## ni el boton de cerrar. Cada pestana tiene su "Restablecer".
-##
 ## Lo que se aplica al momento: volumenes, musica, vista, rejilla, pantalla
-## completa, controles, escala de interfaz, mostrar/ocultar HUD, disposicion.
-## Lo que cambia tokens de UITheme (tamano de texto, paleta, alto contraste,
-## opacidad, perfil) se previsualiza en la tarjeta de muestra y se aplica al
-## pulsar APLICAR o al cerrar: los paneles se construyen una vez, asi que
+## completa, controles, escala, mostrar/ocultar HUD, disposicion. Lo que cambia
+## tokens de UITheme (tamano de texto, paleta, alto contraste, opacidad,
+## perfil) se previsualiza en la muestra y se aplica con APLICAR o al cerrar:
 ## DeviceProfile.rebuild_ui() recarga la escena conservando la partida y vuelve
 ## a abrir Ajustes en la misma pestana. Ver docs/21-interfaz-y-dispositivos.md.
+##
+## Sin animaciones (docs/28 §0.6): todo cambia al instante.
 
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
 const WorldLook := preload("res://scripts/map/WorldLook.gd")
 const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
-enum Tab { AUDIO, INTERFACE, CONTROLS, ACCESSIBILITY, GAME }
+enum Tab { AUDIO, INTERFACE, CONTROLS, GAME }
 
+## Pestanas: clave del titulo, icono del carril.
+const TABS := [["TAB_AUDIO", "sound"], ["TAB_INTERFACE", "screen"], ["TAB_CONTROLS", "controls"], ["TAB_GAME", "game"]]
 ## Escalas ofrecidas (0 = la del perfil de dispositivo).
 const SCALE_STEPS := [0, 75, 90, 100, 115, 130, 150]
-## Alto que se reserva fuera de los scrolls: cabecera, pestanas, APLICAR y
-## cerrar, y los margenes del panel.
-const CHROME_H := 300.0
+## Tope de la ventana en PC/tablet (docs/28 §6).
+const WINDOW_MAX := Vector2(1000, 600)
 
-var _panel: PanelContainer
+var _panel: Control
 var _backdrop: ColorRect
 var _settings_btn: Button
 var _fullscreen_check: CheckButton
 var _music_btn: Button
 var _music_check: CheckButton
 var _tabs: TabContainer
+var _rail: VBoxContainer
 var _scrolls: Array[ScrollContainer] = []
 var _bodies: Array[VBoxContainer] = []
 var _apply_btn: Button
 var _preview: PanelContainer
+var _advanced: VBoxContainer
+var _advanced_btn: Button
 var _hud_checks: Dictionary = {}
 var _audio_sliders: Dictionary = {}
 var _is_open := false
 ## Hay cambios que solo se ven al reconstruir la interfaz.
 var _needs_rebuild := false
+## Telefono: carril solo con iconos, filas cortas, ventana a pantalla completa.
+var _small := false
 
 func _ready() -> void:
 	layer = 15
@@ -59,43 +68,32 @@ func _reopen(tab: int) -> void:
 		toggle()
 	select_tab(tab)
 
+func _vp() -> Vector2:
+	return get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
+
 func _setup_ui() -> void:
-	# Root control holds the always-present sidebar button; the modal itself
-	# (backdrop + panel) is toggled independently so the button stays visible.
+	_small = CT.menus_phone(_vp())
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	# Sidebar button — lives in the hamburger menu
+	# Botones de la columna vieja del ☰ (ya no se ensenan: el menu ☰ abre Ajustes
+	# y tiene su propio boton de musica). Se quedan escondidos por compatibilidad.
 	_settings_btn = Button.new()
+	_settings_btn.name = "SettingsButton"
 	_settings_btn.text = Tr.t("BTN_SETTINGS")
-	_settings_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
-	_settings_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_settings_btn.offset_left = -176
-	_settings_btn.offset_top = UILayoutManager.get_sidebar_button_offset("SettingsPanel.button")
-	UITheme.style_card_button(_settings_btn, UITheme.BTN.lightened(0.05), UITheme.ACCENT)
+	_settings_btn.visible = false
 	_settings_btn.pressed.connect(toggle)
-	_settings_btn.visible = false  # Start collapsed with sidebar
 	root.add_child(_settings_btn)
-	EventBus.sidebar_toggled.connect(func(vis: bool): _settings_btn.visible = vis)
-
-	# Musica si/no de un clic desde el menu ☰, sin abrir Ajustes.
 	_music_btn = Button.new()
 	_music_btn.name = "MusicQuickButton"
-	_music_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
-	_music_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_music_btn.offset_left = -176
-	_music_btn.offset_top = UILayoutManager.get_sidebar_button_offset("SettingsPanel.music_button")
-	UITheme.style_card_button(_music_btn, UITheme.BTN.lightened(0.05), UITheme.ACCENT)
-	_music_btn.pressed.connect(AudioManager.toggle_music)
 	_music_btn.visible = false
+	_music_btn.pressed.connect(AudioManager.toggle_music)
 	root.add_child(_music_btn)
-	EventBus.sidebar_toggled.connect(func(vis: bool): _music_btn.visible = vis)
 	EventBus.music_toggled.connect(_sync_music)
 
-	# Backdrop
-	_backdrop = UITheme.make_backdrop()
+	_backdrop = CT.veil()
 	_backdrop.visible = false
 	_backdrop.gui_input.connect(func(event: InputEvent):
 		if event is InputEventMouseButton and event.pressed:
@@ -103,122 +101,113 @@ func _setup_ui() -> void:
 	)
 	root.add_child(_backdrop)
 
-	_panel = PanelContainer.new()
+	var w := CT.menu_window(Tr.t("LBL_SETTINGS_TITLE"), CT.sem("INFO"), _small)
+	_panel = w["root"]
+	_panel.name = "SettingsWindow"
 	_panel.visible = false
-	UILayoutManager.apply_layout("SettingsPanel.modal", _panel)
-	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
-	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))
 	root.add_child(_panel)
+	var close: Button = w["close"]
+	close.name = "CloseButton"
+	if close.custom_minimum_size.y < _h("small"):
+		var side := float(_h("small"))
+		close.custom_minimum_size = Vector2(side, side)
+		close.offset_left = -side + 10
+		close.offset_right = 10
+		close.offset_bottom = close.offset_top + side
+	(w["close"] as Button).tooltip_text = Tr.t("BTN_CLOSE")
+	(w["close"] as Button).pressed.connect(toggle)
+	(w["panel"] as Control).gui_input.connect(func(event):
+		if event is InputEventMouseButton and event.pressed:
+			UIManager.focus_window(self))
+	var body: VBoxContainer = w["body"]
 
-	var margin := MarginContainer.new()
-	for side in ["top", "left", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 16)
-	_panel.add_child(margin)
+	var main := HBoxContainer.new()
+	main.add_theme_constant_override("separation", 8 if _small else 16)
+	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(main)
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
-	margin.add_child(vbox)
-
-	vbox.add_child(UITheme.make_panel_header(Tr.t("LBL_SETTINGS_TITLE"), toggle))
+	_rail = VBoxContainer.new()
+	_rail.name = "TabRail"
+	_rail.add_theme_constant_override("separation", 6 if _small else 8)
+	_rail.custom_minimum_size.x = 56 if _small else 220
+	main.add_child(_rail)
 
 	_tabs = TabContainer.new()
 	_tabs.name = "SettingsTabs"
+	_tabs.tabs_visible = false
+	_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	# Recortadas: en un movil en vertical las cinco pestanas no caben y la
-	# barra se desplaza con sus flechas en vez de ensanchar el panel.
-	_tabs.clip_tabs = true
-	UITheme.style_tabs(_tabs)
-	vbox.add_child(_tabs)
+	var empty := StyleBoxEmpty.new()
+	_tabs.add_theme_stylebox_override("panel", empty)
+	main.add_child(_tabs)
 
 	_build_audio_tab(_add_tab("TAB_AUDIO"))
 	_build_interface_tab(_add_tab("TAB_INTERFACE"))
 	_build_controls_tab(_add_tab("TAB_CONTROLS"))
-	_build_accessibility_tab(_add_tab("TAB_ACCESSIBILITY"))
 	_build_game_tab(_add_tab("TAB_GAME"))
+	# Diferido: la pestana que se pulsa no se puede quitar dentro de su propia senal.
+	_tabs.tab_changed.connect(func(_i): _rebuild_rail.call_deferred())
+	_rebuild_rail()
 
-	# APLICAR: solo cuando hay algo que necesita reconstruir la interfaz.
-	_apply_btn = Button.new()
+	# APLICAR: solo cuando hay algo que necesita reconstruir la interfaz. Ambar:
+	# avisa de que hay algo pendiente (docs/28 §5).
+	_apply_btn = CT.pill_button(Tr.t("UI2M_BTN_APPLY"), "check", "warning", _h("btn"))
 	_apply_btn.name = "ApplyButton"
-	_apply_btn.text = Tr.t("BTN_UI_APPLY")
 	_apply_btn.tooltip_text = Tr.t("LBL_UI_APPLY_HINT")
-	UITheme.style_button(_apply_btn, UITheme.WARNING.darkened(0.35), UITheme.FONT_BODY)
 	_apply_btn.pressed.connect(apply_pending)
 	_apply_btn.visible = false
-	vbox.add_child(_apply_btn)
-
-	var close_btn := Button.new()
-	close_btn.text = Tr.t("BTN_UNDERSTOOD")
-	UITheme.style_button(close_btn, UITheme.POSITIVE, UITheme.FONT_SECTION)
-	close_btn.pressed.connect(toggle)
-	vbox.add_child(close_btn)
+	_apply_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	body.add_child(_apply_btn)
 
 	_sync_music(GameConfig.audio_music_enabled)
-	_size_for_touch(_panel)
-	_let_text_wrap(_panel)
-	_fit_scroll()
-	UILayoutManager.layout_changed.connect(_fit_scroll)
+	_fit()
+	get_viewport().size_changed.connect(_fit)
 	EventBus.helper_visibility_changed.connect(func(_v): _sync_hud_checks())
 	EventBus.instructors_visibility_changed.connect(func(_v): _sync_hud_checks())
 
-## Tablet y movil: todo lo que se pulsa en Ajustes (botones, desplegables,
-## interruptores, la X de cerrar) llega al alto de dedo de Ajustes
-## (UITheme.SETTINGS_ROW_H); un boton cuadrado crece por los dos lados. En PC
-## SETTINGS_ROW_H es el minimo de siempre y no cambia nada.
-func _size_for_touch(node: Node) -> void:
-	if not UITheme.settings_touch():
+## La ventana, centrada con su tope (PC) o a pantalla completa (telefono).
+func _fit() -> void:
+	if _panel == null or not is_inside_tree():
 		return
-	var h := float(UITheme.SETTINGS_ROW_H)
-	for child in node.get_children():
-		if child is BaseButton:
-			var c := child as Control
-			var sq: bool = c.custom_minimum_size.x > 0.0 and is_equal_approx(c.custom_minimum_size.x, c.custom_minimum_size.y)
-			c.custom_minimum_size.y = maxf(c.custom_minimum_size.y, h)
-			if sq:
-				c.custom_minimum_size.x = c.custom_minimum_size.y
-		_size_for_touch(child)
+	CT.place_window(_panel, _vp(), WINDOW_MAX, _small)
 
-## Un movil en vertical (400 px): los interruptores de texto largo ("Cuadricula
-## siempre visible (si no, solo al construir)"), los botones de una fila y los
-## desplegables con la opcion mas larga ensanchaban el panel mas que la
-## pantalla y Interfaz salia cortada por los dos lados (ronda visual de la 1.1).
-## El texto de los botones que llenan su fila parte en lineas; el desplegable
-## mide la opcion elegida, no la mas larga. Con sitio (PC) no cambia nada.
-func _let_text_wrap(node: Node) -> void:
-	for child in node.get_children():
-		if child is OptionButton:
-			(child as OptionButton).fit_to_longest_item = false
-		elif child is Button:
-			var b := child as Button
-			var fills: bool = child.get_parent() is VBoxContainer \
-				or (b.size_flags_horizontal & Control.SIZE_EXPAND) != 0
-			if fills and b.text != "":
-				b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_let_text_wrap(child)
+## El carril de pestanas: la elegida en azul con labio, las demas planas. En
+## telefono solo el icono (el nombre al mantener pulsado).
+func _rebuild_rail() -> void:
+	if _rail == null:
+		return
+	for c in _rail.get_children():
+		_rail.remove_child(c)
+		c.queue_free()
+	for i in TABS.size():
+		var title := Tr.t(UI2M_TAB_KEYS[i])
+		var t := CT.tab("" if _small else title, TABS[i][1], i == current_tab(), "window", CT.sem("INFO"), _h("btn"))
+		t.name = "Tab_%d" % i
+		t.tooltip_text = title
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var idx := i
+		t.pressed.connect(func(): select_tab(idx))
+		_rail.add_child(t)
 
-## Alto fuera de los scrolls: con filas mas altas (tablet y movil) la cabecera,
-## las pestanas, APLICAR y cerrar crecen lo mismo cada una.
-func _chrome_h() -> float:
-	return CHROME_H + 4.0 * float(UITheme.SETTINGS_ROW_H - UITheme.MIN_BTN_H)
+## Titulos cortos del carril (los TAB_* de siempre siguen siendo los de la
+## pestana del TabContainer).
+const UI2M_TAB_KEYS := ["UI2M_TAB_SOUND", "UI2M_TAB_SCREEN", "UI2M_TAB_CONTROLS", "UI2M_TAB_GAME"]
 
 ## Una pestana: un scroll con su columna. Devuelve la columna.
 func _add_tab(title_key: String) -> VBoxContainer:
 	var scroll := ScrollContainer.new()
 	scroll.name = title_key
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tabs.add_child(scroll)
 	_tabs.set_tab_title(_tabs.get_tab_count() - 1, Tr.t(title_key))
-	# Aire a los lados: a la izquierda para que el recorte del scroll no se coma
-	# la primera letra, a la derecha para la barra de desplazamiento.
 	var pad := MarginContainer.new()
 	pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pad.add_theme_constant_override("margin_left", 6)
-	pad.add_theme_constant_override("margin_right", 14)
-	pad.add_theme_constant_override("margin_top", 6)
+	pad.add_theme_constant_override("margin_right", 6 if _small else 12)
+	pad.add_theme_constant_override("margin_bottom", 8)
 	scroll.add_child(pad)
 	var body := VBoxContainer.new()
-	# Mas aire entre filas en tablet y movil: un dedo que apunta a un ajuste no
-	# debe rozar el de al lado.
-	body.add_theme_constant_override("separation", 18 if UITheme.settings_touch() else 12)
+	body.add_theme_constant_override("separation", 6 if _small else 10)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pad.add_child(body)
 	_scrolls.append(scroll)
@@ -227,13 +216,12 @@ func _add_tab(title_key: String) -> VBoxContainer:
 		scroll.name = "SettingsScroll"
 	return body
 
-## Restablecer al pie de cada pestana, a la izquierda y discreto.
+## Restablecer al pie de cada pestana: pastilla secundaria, discreta.
 func _add_reset(body: VBoxContainer, callback: Callable) -> Button:
-	body.add_child(UITheme.make_separator())
-	var btn := Button.new()
+	var btn := CT.pill_button(Tr.t("UI2M_BTN_RESET"), "back", "secondary", _h("small"))
 	btn.name = "ResetTab"
-	btn.text = Tr.t("BTN_RESET_TAB")
-	UITheme.style_button(btn, UITheme.BTN, UITheme.FONT_BODY)
+	btn.tooltip_text = Tr.t("BTN_RESET_TAB")
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	btn.pressed.connect(callback)
 	body.add_child(btn)
 	return btn
@@ -241,22 +229,43 @@ func _add_reset(body: VBoxContainer, callback: Callable) -> Button:
 func select_tab(tab: int) -> void:
 	if _tabs != null:
 		_tabs.current_tab = clampi(tab, 0, _tabs.get_tab_count() - 1)
-		_fit_scroll()
+		_rebuild_rail.call_deferred()
 
 func current_tab() -> int:
 	return _tabs.current_tab if _tabs != null else 0
 
-# ── Audio ─────────────────────────────────────────────────────────────
+## Alto de dedo de Ajustes: el de la pieza (CartoonTheme.h), sin bajar del de
+## Ajustes en tablet y movil (UITheme.SETTINGS_ROW_H) ni de 48 en telefono.
+func _h(size_s: String) -> int:
+	var hh := CT.menu_h(size_s)
+	if UITheme.settings_touch():
+		hh = maxi(hh, UITheme.SETTINGS_ROW_H)
+	if _small:
+		hh = maxi(hh, CT.TOUCH_MIN)
+	return hh
+
+## Una fila con su texto y su control. `short_key`: el texto en telefono.
+func _row(row_name: String, glyph: String, key: String, control: Control, value: Label = null,
+		tip: String = "", short_key: String = "") -> PanelContainer:
+	var text_s := Tr.t(short_key if _small and short_key != "" else key)
+	if control is CheckButton or control is HSlider:
+		control.custom_minimum_size.y = maxf(control.custom_minimum_size.y, float(_h("small")))
+	return CT.setting_row(row_name, glyph, text_s, control, _small, value, tip)
+
+func _picker(options: Array, selected: int, on_selected: Callable, tips: Array = []) -> HBoxContainer:
+	return CT.picker(options, selected, on_selected, _h("small"), tips)
+
+# ── Sonido ────────────────────────────────────────────────────────────
 
 func _build_audio_tab(body: VBoxContainer) -> void:
-	body.add_child(_make_volume_row("master", Tr.t("LBL_VOL_MASTER"), GameConfig.audio_master_volume,
+	body.add_child(_volume_row("master", "sound", "UI2M_SET_MASTER", GameConfig.audio_master_volume,
 		func(v: float): AudioManager.set_master_volume(v)))
-	_music_check = UITheme.make_check_button(Tr.t("LBL_MUSIC_ENABLED"), GameConfig.audio_music_enabled,
-		func(pressed: bool): AudioManager.set_music_enabled(pressed))
-	body.add_child(_music_check)
-	body.add_child(_make_volume_row("music", Tr.t("LBL_VOL_MUSIC"), GameConfig.audio_music_volume,
-		func(v: float): AudioManager.set_music_volume(v)))
-	body.add_child(_make_volume_row("sfx", Tr.t("LBL_VOL_SFX"), GameConfig.audio_sfx_volume,
+	_music_check = CT.live_switch(GameConfig.audio_music_enabled,
+		func(pressed: bool): AudioManager.set_music_enabled(pressed), "MusicSwitch")
+	body.add_child(_row("MusicRow", "music", "UI2M_SET_MUSIC", _music_check, null, Tr.t("LBL_MUSIC_ENABLED")))
+	body.add_child(_volume_row("music", "music", "UI2M_SET_MUSIC_VOL", GameConfig.audio_music_volume,
+		func(v: float): AudioManager.set_music_volume(v), false, "UI2M_SET_MUSIC_VOL_SHORT"))
+	body.add_child(_volume_row("sfx", "sound", "UI2M_SET_SFX", GameConfig.audio_sfx_volume,
 		func(v: float): AudioManager.set_sfx_volume(v), true))
 	_add_reset(body, reset_audio)
 
@@ -270,163 +279,197 @@ func reset_audio() -> void:
 	AudioManager.set_music_enabled(true)
 	GameConfig.save_user_settings()
 
-# ── Interfaz ──────────────────────────────────────────────────────────
+# ── Pantalla ──────────────────────────────────────────────────────────
 
 func _build_interface_tab(body: VBoxContainer) -> void:
-	body.add_child(UITheme.section_header(Tr.t("LBL_SECTION_DEVICE")))
-	var modes: Array = GameConfig.DEVICE_PROFILE_MODES
-	var labels: Array = [Tr.t("OPT_PROFILE_AUTO") % _profile_name(DeviceProfile.detected())]
-	for mode in modes.slice(1):
-		labels.append(_profile_name(mode))
-	var profile_row := UITheme.make_option_row(Tr.t("LBL_DEVICE_PROFILE"), labels,
-		modes.find(GameConfig.ui_device_profile), func(idx: int):
-			DeviceProfile.set_profile_override(modes[idx])
-			_mark_rebuild())
-	profile_row.name = "ProfileRow"
-	body.add_child(profile_row)
+	# Horizontal siempre por defecto; vertical, solo si se elige (docs/28 §4.3).
+	var orients: Array = GameConfig.ORIENTATIONS
+	body.add_child(_row("OrientationRow", "screen", "UI2M_SET_ORIENT",
+		_picker([Tr.t("UI2M_OPT_LANDSCAPE"), Tr.t("UI2M_OPT_PORTRAIT")], maxi(0, orients.find(GameConfig.ui_orientation)),
+			func(idx: int): GameConfig.set_orientation(orients[idx])), null, Tr.t("LBL_ORIENTATION")))
 
-	var scale_labels: Array = []
-	for pct in SCALE_STEPS:
-		scale_labels.append(Tr.t("OPT_SCALE_PROFILE") % roundi(float(DeviceProfile.DEFAULTS[DeviceProfile.current()]["ui_scale"]) * 100.0) if pct == 0 else "%d %%" % pct)
-	var scale_idx := maxi(0, SCALE_STEPS.find(GameConfig.ui_scale_pct))
-	var scale_row := UITheme.make_option_row(Tr.t("LBL_UI_SCALE"), scale_labels, scale_idx, func(idx: int):
-		GameConfig.ui_scale_pct = SCALE_STEPS[idx]
-		GameConfig.save_user_settings()
-		DeviceProfile.apply_scale())
-	scale_row.name = "ScaleRow"
-	body.add_child(scale_row)
+	body.add_child(_make_view_mode_row())
 
 	var text_opts: Array = ["auto"] + UITheme.TEXT_SIZES
 	var text_labels: Array = []
 	for opt in text_opts:
 		text_labels.append(Tr.t("OPT_TEXT_" + String(opt).to_upper()))
-	var text_row := UITheme.make_option_row(Tr.t("LBL_TEXT_SIZE"), text_labels,
-		maxi(0, text_opts.find(GameConfig.ui_text_size)), func(idx: int):
+	body.add_child(_row("TextSizeRow", "access", "UI2M_SET_TEXT",
+		_picker(text_labels, maxi(0, text_opts.find(GameConfig.ui_text_size)), func(idx: int):
 			GameConfig.ui_text_size = text_opts[idx]
 			GameConfig.save_user_settings()
-			_mark_rebuild())
-	text_row.name = "TextSizeRow"
-	body.add_child(text_row)
+			_mark_rebuild()), null, Tr.t("LBL_TEXT_SIZE")))
 
-	# Horizontal siempre por defecto; vertical, solo si se elige (docs/28 §4).
-	var orients: Array = GameConfig.ORIENTATIONS
-	var orient_row := UITheme.make_option_row(Tr.t("LBL_ORIENTATION"),
-		[Tr.t("OPT_ORIENT_LANDSCAPE"), Tr.t("OPT_ORIENT_PORTRAIT")],
-		maxi(0, orients.find(GameConfig.ui_orientation)), func(idx: int):
-			GameConfig.set_orientation(orients[idx]))
-	orient_row.name = "OrientationRow"
-	body.add_child(orient_row)
-
-	body.add_child(UITheme.make_separator())
-	body.add_child(UITheme.section_header(Tr.t("LBL_SECTION_VIEW")))
-	body.add_child(_make_view_mode_row())
-	var grid_check := UITheme.make_check_button(
-		Tr.t("LBL_SHOW_GRID"), GameConfig.ui_grid_visible,
-		func(pressed: bool):
-			GameConfig.ui_grid_visible = pressed
-			# En calidad Minima la preferencia se guarda pero no se pinta.
-			EventBus.grid_overlay_toggled.emit(GraphicsQuality.grid_always_visible())
-			GameConfig.save_user_settings()
-	)
-	grid_check.name = "GridCheck"
-	body.add_child(grid_check)
-	# Calidad grafica del mapa 3D (WorldLook): "auto" dice cual le toca a este
-	# dispositivo. Se ve al momento, sin recargar.
+	# Calidad grafica del mapa 3D (WorldLook): "auto" dice cual le toca. Se ve
+	# al momento, sin recargar.
 	var q_modes: Array = GameConfig.GRAPHICS_QUALITY_MODES
 	var auto_q := WorldLook.effective_quality("auto", RenderingServer.get_current_rendering_method())
 	var q_labels: Array = [Tr.t("OPT_QUALITY_AUTO") % Tr.t("OPT_QUALITY_" + auto_q.to_upper()),
 		Tr.t("OPT_QUALITY_HIGH"), Tr.t("OPT_QUALITY_LOW"), Tr.t("OPT_QUALITY_MINIMAL")]
-	var quality_row := UITheme.make_option_row(Tr.t("LBL_GRAPHICS_QUALITY"), q_labels,
-		maxi(0, q_modes.find(GameConfig.ui_graphics_quality)), func(idx: int):
-			set_graphics_quality(q_modes[idx]))
-	quality_row.name = "QualityRow"
-	body.add_child(quality_row)
-	body.add_child(_make_hint(Tr.t("LBL_QUALITY_MINIMAL_HINT")))
-	# Detectar de nuevo (docs/26 §7.2): vuelve a "auto" y decide como en el
-	# primer arranque (si las senales no deciden, mide unos segundos el mapa).
-	var detect_btn := Button.new()
-	detect_btn.name = "DetectQualityButton"
-	detect_btn.text = Tr.t("BTN_DETECT_QUALITY")
-	UITheme.style_button(detect_btn, UITheme.BTN, UITheme.FONT_BODY)
-	detect_btn.pressed.connect(func():
-		DeviceProfile.start_quality_detection(true)
-		var picker := quality_row.get_child(1) as OptionButton
-		if picker != null:
-			picker.selected = maxi(0, q_modes.find(GameConfig.ui_graphics_quality))
-		_refresh_fps_auto_label()
-		if DeviceProfile.is_detecting_quality():
-			EventBus.notification_posted.emit(Tr.t("MSG_QUALITY_MEASURING"), "info", UITheme.INFO))
-	body.add_child(detect_btn)
-	# Vista del combate (docs/15 §3, "Las dos vistas"): frente (por defecto) o
-	# el tablero 8x8. Preferencia del dispositivo; tambien se cambia en la pelea.
+	body.add_child(_row("QualityRow", "settings", "UI2M_SET_QUALITY",
+		_picker(q_labels, maxi(0, q_modes.find(GameConfig.ui_graphics_quality)), func(idx: int):
+			set_graphics_quality(q_modes[idx])), null, Tr.t("LBL_QUALITY_MINIMAL_HINT")))
+
+	# Pantalla completa — tambien con F11; el interruptor se sincroniza si se
+	# cambia por teclado mientras el panel esta abierto.
+	_fullscreen_check = CT.live_switch(GameConfig.ui_fullscreen,
+		func(pressed: bool): GameConfig.set_fullscreen(pressed), "FullscreenCheck")
+	body.add_child(_row("FullscreenRow", "screen", "UI2M_SET_FULLSCREEN", _fullscreen_check, null,
+		Tr.t("LBL_FULLSCREEN"), "UI2M_SET_FULLSCREEN_SHORT"))
+	EventBus.fullscreen_changed.connect(func(enabled: bool):
+		_fullscreen_check.set_pressed_no_signal(enabled)
+	)
+
+	var grid_check := CT.live_switch(GameConfig.ui_grid_visible, func(pressed: bool):
+		GameConfig.ui_grid_visible = pressed
+		# En calidad Minima la preferencia se guarda pero no se pinta.
+		EventBus.grid_overlay_toggled.emit(GraphicsQuality.grid_always_visible())
+		GameConfig.save_user_settings(), "GridCheck")
+	body.add_child(_row("GridRow", "build", "UI2M_SET_GRID", grid_check, null, Tr.t("LBL_SHOW_GRID")))
+
+	# Vista del combate (docs/15 §3): frente (por defecto) o el tablero 8x8.
 	var cv_modes: Array = GameConfig.COMBAT_VIEWS
 	var cv_labels: Array = []
 	for mode in cv_modes:
 		cv_labels.append(Tr.t("OPT_COMBAT_VIEW_" + String(mode).to_upper()))
-	var combat_row := UITheme.make_option_row(Tr.t("LBL_COMBAT_VIEW"), cv_labels,
-		maxi(0, cv_modes.find(GameConfig.ui_combat_view)), func(idx: int):
-			GameConfig.set_combat_view(cv_modes[idx]))
-	combat_row.name = "CombatViewRow"
-	combat_row.tooltip_text = Tr.t("LBL_COMBAT_VIEW_TIP")
-	body.add_child(combat_row)
-	# Pantalla completa — tambien con F11; el interruptor se sincroniza si se
-	# cambia por teclado mientras el panel esta abierto.
-	_fullscreen_check = UITheme.make_check_button(
-		Tr.t("LBL_FULLSCREEN"), GameConfig.ui_fullscreen,
-		func(pressed: bool): GameConfig.set_fullscreen(pressed)
-	)
-	body.add_child(_fullscreen_check)
-	EventBus.fullscreen_changed.connect(func(enabled: bool):
-		_fullscreen_check.set_pressed_no_signal(enabled)
-	)
-	body.add_child(_make_fps_row())
-	body.add_child(_make_hint(Tr.t("LBL_FPS_HINT")))
+	body.add_child(_row("CombatViewRow", "army", "UI2M_SET_COMBAT_VIEW",
+		_picker(cv_labels, maxi(0, cv_modes.find(GameConfig.ui_combat_view)), func(idx: int):
+			GameConfig.set_combat_view(cv_modes[idx])), null, Tr.t("LBL_COMBAT_VIEW_TIP")))
 
-	body.add_child(UITheme.make_separator())
-	body.add_child(UITheme.section_header(Tr.t("LBL_SECTION_HUD")))
-	# Nombres bajo los iconos de recursos (feat/hud-y-tutorial): se ve al momento.
+	_build_advanced(body)
+	_add_reset(body, reset_interface)
+
+## "Mas opciones": lo que casi nadie toca, plegado al final de Pantalla.
+func _build_advanced(body: VBoxContainer) -> void:
+	_advanced_btn = CT.pill_button(Tr.t("UI2M_ADVANCED_SHOW"), "plus", "secondary", _h("small"))
+	_advanced_btn.name = "AdvancedToggle"
+	_advanced_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_advanced_btn.pressed.connect(func(): set_advanced_open(not _advanced.visible))
+	body.add_child(_advanced_btn)
+	_advanced = VBoxContainer.new()
+	_advanced.name = "Advanced"
+	_advanced.add_theme_constant_override("separation", 6 if _small else 10)
+	_advanced.visible = false
+	body.add_child(_advanced)
+	var adv := _advanced
+
+	# Dispositivo, escala y fotogramas.
+	adv.add_child(CT.group_title(Tr.t("UI2M_ADVANCED")))
+	var modes: Array = GameConfig.DEVICE_PROFILE_MODES
+	var labels: Array = [Tr.t("OPT_PROFILE_AUTO") % _profile_name(DeviceProfile.detected())]
+	for mode in modes.slice(1):
+		labels.append(_profile_name(mode))
+	adv.add_child(_row("ProfileRow", "screen", "UI2M_SET_PROFILE",
+		_picker(labels, modes.find(GameConfig.ui_device_profile), func(idx: int):
+			DeviceProfile.set_profile_override(modes[idx])
+			_mark_rebuild()), null, Tr.t("LBL_DEVICE_PROFILE")))
+
+	var scale_labels: Array = []
+	for pct in SCALE_STEPS:
+		scale_labels.append(Tr.t("OPT_SCALE_PROFILE") % roundi(float(DeviceProfile.DEFAULTS[DeviceProfile.current()]["ui_scale"]) * 100.0) if pct == 0 else "%d %%" % pct)
+	adv.add_child(_row("ScaleRow", "plus", "UI2M_SET_SCALE",
+		_picker(scale_labels, maxi(0, SCALE_STEPS.find(GameConfig.ui_scale_pct)), func(idx: int):
+			GameConfig.ui_scale_pct = SCALE_STEPS[idx]
+			GameConfig.save_user_settings()
+			DeviceProfile.apply_scale()), null, Tr.t("LBL_UI_SCALE")))
+
+	adv.add_child(_make_fps_row())
+	# Detectar de nuevo (docs/26 §7.2): vuelve a "auto" y decide como en el
+	# primer arranque.
+	var detect_btn := CT.pill_button(Tr.t("UI2M_BTN_DETECT"), "settings", "info", _h("small"))
+	detect_btn.name = "DetectQualityButton"
+	detect_btn.tooltip_text = Tr.t("BTN_DETECT_QUALITY")
+	detect_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	detect_btn.pressed.connect(func():
+		DeviceProfile.start_quality_detection(true)
+		var picker = _picker_of("QualityRow")
+		if picker != null:
+			picker.select(maxi(0, GameConfig.GRAPHICS_QUALITY_MODES.find(GameConfig.ui_graphics_quality)))
+		_refresh_fps_auto_label()
+		if DeviceProfile.is_detecting_quality():
+			EventBus.notification_posted.emit(Tr.t("MSG_QUALITY_MEASURING"), "info", UITheme.INFO))
+	adv.add_child(detect_btn)
+
+	# Que se ve en pantalla.
+	adv.add_child(CT.group_title(Tr.t("UI2M_SET_HUD")))
 	var words_modes: Array = GameConfig.HUD_WORDS_MODES
-	var words_row := UITheme.make_option_row(Tr.t("LBL_HUD_WORDS"),
-		[Tr.t("OPT_HUD_WORDS_AUTO"), Tr.t("OPT_HUD_WORDS_ALWAYS"), Tr.t("OPT_HUD_WORDS_NEVER")],
-		maxi(0, words_modes.find(GameConfig.ui_hud_words)), func(idx: int):
-			GameConfig.set_hud_words(words_modes[idx]))
-	words_row.name = "HudWordsRow"
-	words_row.tooltip_text = Tr.t("LBL_HUD_WORDS_HINT")
-	body.add_child(words_row)
-	body.add_child(_make_hint(Tr.t("LBL_HUD_WORDS_HINT")))
-	body.add_child(_make_hint(Tr.t("LBL_HUD_HINT")))
+	adv.add_child(_row("HudWordsRow", "game", "UI2M_SET_WORDS",
+		_picker([Tr.t("OPT_HUD_WORDS_AUTO"), Tr.t("OPT_HUD_WORDS_ALWAYS"), Tr.t("OPT_HUD_WORDS_NEVER")],
+			maxi(0, words_modes.find(GameConfig.ui_hud_words)), func(idx: int):
+				GameConfig.set_hud_words(words_modes[idx])), null, Tr.t("LBL_HUD_WORDS_HINT")))
 	for id in HudRegistry.hideable_ids():
-		var check := UITheme.make_check_button(Tr.t(HudRegistry.label_key(id)), not HudRegistry.is_hidden(id),
-			func(pressed: bool): HudRegistry.set_hidden(id, not pressed))
-		check.name = "Hud_" + String(id).replace(".", "_")
+		var check := CT.live_switch(not HudRegistry.is_hidden(id),
+			func(pressed: bool): HudRegistry.set_hidden(id, not pressed), "Hud_" + String(id).replace(".", "_"))
 		_hud_checks[id] = check
-		body.add_child(check)
+		check.custom_minimum_size.y = maxf(check.custom_minimum_size.y, float(_h("small")))
+		var card := CT.setting_row("HudRow_" + String(id).replace(".", "_"), "", Tr.t(HudRegistry.label_key(id)),
+			check, _small)
+		adv.add_child(card)
 
-	body.add_child(UITheme.make_separator())
-	body.add_child(UITheme.section_header(Tr.t("LBL_SECTION_LAYOUT")))
-	body.add_child(_make_hint(Tr.ti("LBL_LAYOUT_HINT")))
-	# HFlow: en un movil en vertical los dos botones no caben en una fila y
-	# ensanchaban todo el panel fuera de la pantalla; asi el segundo baja.
+	# Colores y contraste (accesibilidad).
+	adv.add_child(CT.group_title(Tr.t("TAB_ACCESSIBILITY")))
+	var pal_labels: Array = []
+	var pal_tips: Array = []
+	for p in UITheme.PALETTES:
+		pal_labels.append(Tr.t("UI2M_OPT_PALETTE_" + String(p).to_upper()))
+		pal_tips.append(Tr.t("OPT_PALETTE_" + String(p).to_upper()))
+	adv.add_child(_row("PaletteRow", "access", "UI2M_SET_PALETTE",
+		_picker(pal_labels, maxi(0, UITheme.PALETTES.find(GameConfig.ui_palette)), func(idx: int):
+			GameConfig.ui_palette = UITheme.PALETTES[idx]
+			GameConfig.save_user_settings()
+			_mark_rebuild(), pal_tips), null, Tr.t("LBL_PALETTE")))
+	var hc := CT.live_switch(GameConfig.ui_high_contrast, func(pressed: bool):
+		GameConfig.ui_high_contrast = pressed
+		GameConfig.save_user_settings()
+		_mark_rebuild(), "HighContrastCheck")
+	adv.add_child(_row("HighContrastRow", "access", "UI2M_SET_CONTRAST", hc, null, Tr.t("LBL_HIGH_CONTRAST")))
+	adv.add_child(_percent_row("opacity", "screen", "UI2M_SET_OPACITY", GameConfig.ui_panel_opacity,
+		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX, func(v: float):
+			GameConfig.ui_panel_opacity = v
+			_mark_rebuild(false), func(): GameConfig.save_user_settings(), Tr.t("LBL_PANEL_OPACITY")))
+	_preview = PanelContainer.new()
+	_preview.name = "PalettePreview"
+	adv.add_child(_preview)
+	_refresh_preview()
+
+	# Disposicion: mover los paneles del HUD.
+	adv.add_child(CT.group_title(Tr.t("UI2M_SET_LAYOUT")))
 	var layout_row := HFlowContainer.new()
 	layout_row.add_theme_constant_override("h_separation", 8)
 	layout_row.add_theme_constant_override("v_separation", 8)
-	var edit_btn := Button.new()
+	var edit_btn := CT.pill_button(Tr.t("UI2M_BTN_EDIT"), "move", "info", _h("small"))
 	edit_btn.name = "EditLayoutButton"
-	edit_btn.text = Tr.t("BTN_EDIT_LAYOUT")
-	edit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UITheme.style_button(edit_btn, UITheme.INFO, UITheme.FONT_BODY)
+	edit_btn.tooltip_text = Tr.ti("LBL_LAYOUT_HINT")
 	edit_btn.pressed.connect(start_layout_edit)
 	layout_row.add_child(edit_btn)
-	var reset_layout_btn := Button.new()
+	var reset_layout_btn := CT.pill_button(Tr.t("UI2M_BTN_DEFAULT"), "back", "secondary", _h("small"))
 	reset_layout_btn.name = "ResetLayoutButton"
-	reset_layout_btn.text = Tr.t("BTN_RESET_LAYOUT")
-	reset_layout_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UITheme.style_button(reset_layout_btn, UITheme.BTN, UITheme.FONT_BODY)
+	reset_layout_btn.tooltip_text = Tr.t("BTN_RESET_LAYOUT")
 	reset_layout_btn.pressed.connect(UILayoutManager.reset_user_layout)
 	layout_row.add_child(reset_layout_btn)
-	body.add_child(layout_row)
+	adv.add_child(layout_row)
 
-	_add_reset(body, reset_interface)
+## Abre o pliega "Mas opciones".
+func set_advanced_open(open: bool) -> void:
+	if _advanced == null:
+		return
+	_advanced.visible = open
+	var lbl: Label = _find_label(_advanced_btn)
+	if lbl != null:
+		lbl.text = Tr.t("UI2M_ADVANCED_HIDE" if open else "UI2M_ADVANCED_SHOW")
+
+func is_advanced_open() -> bool:
+	return _advanced != null and _advanced.visible
+
+func _find_label(n: Node) -> Label:
+	for c in n.find_children("*", "Label", true, false):
+		return c as Label
+	return null
+
+## El selector (CartoonPicker) de una fila, o null.
+func _picker_of(row_name: String):
+	var row := find_child(row_name, true, false)
+	return row.find_child("Picker", true, false) if row != null else null
 
 ## Cambia la calidad grafica del mapa, la guarda y la aplica ya. En PC, entrar
 ## en Minima o salir de ella cambia ademas el renderizador, y eso se aplica al
@@ -444,16 +487,13 @@ func set_graphics_quality(quality: String) -> void:
 
 ## El "Del perfil (N)" de la fila de FPS sigue a la calidad (30 en PC con Minima).
 func _refresh_fps_auto_label() -> void:
-	var row := find_child("FpsRow", true, false)
-	if row == null:
-		return
-	var picker := row.get_child(1) as OptionButton
-	if picker != null and picker.item_count > 0:
+	var picker = _picker_of("FpsRow")
+	if picker != null and int(picker.get("item_count")) > 0:
 		picker.set_item_text(0, Tr.t("OPT_FPS_AUTO") % DeviceProfile.auto_fps())
 
 ## Fotogramas por segundo: el del perfil, un numero o sin tope. Se aplica al
 ## momento, sin reconstruir la interfaz.
-func _make_fps_row() -> HBoxContainer:
+func _make_fps_row() -> PanelContainer:
 	var modes: Array = GameConfig.FPS_CAP_MODES
 	var labels: Array = []
 	for mode in modes:
@@ -463,16 +503,14 @@ func _make_fps_row() -> HBoxContainer:
 			labels.append(Tr.t("OPT_FPS_UNLIMITED"))
 		else:
 			labels.append(String(mode))
-	var row := UITheme.make_option_row(Tr.t("LBL_FPS_CAP"), labels,
-		maxi(0, modes.find(GameConfig.ui_fps_cap)), func(idx: int):
-			DeviceProfile.set_fps_cap(modes[idx]))
-	row.name = "FpsRow"
-	return row
+	return _row("FpsRow", "clock", "UI2M_SET_FPS",
+		_picker(labels, maxi(0, modes.find(GameConfig.ui_fps_cap)), func(idx: int):
+			DeviceProfile.set_fps_cap(modes[idx])), null, Tr.t("LBL_FPS_HINT"))
 
 func _profile_name(profile: String) -> String:
 	return Tr.t("OPT_PROFILE_" + profile.to_upper())
 
-## Interfaz de serie: perfil automatico, escala y texto del perfil, todo el HUD
+## Pantalla de serie: perfil automatico, escala y texto del perfil, todo el HUD
 ## a la vista y la disposicion de serie. La vista 2D/3D y el idioma no se tocan:
 ## cambiarlos recarga la partida y nadie lo espera de "restablecer".
 func reset_interface() -> void:
@@ -486,18 +524,13 @@ func reset_interface() -> void:
 		grid_check.set_pressed_no_signal(false)
 	if GraphicsQuality.set_quality("auto"):
 		EventBus.notification_posted.emit(Tr.t("MSG_QUALITY_RESTART"), "notice", UITheme.INFO)
-	var quality_row := find_child("QualityRow", true, false)
-	if quality_row != null:
-		(quality_row.get_child(1) as OptionButton).selected = 0
 	GameConfig.ui_combat_view = "front"
-	var combat_row := find_child("CombatViewRow", true, false)
-	if combat_row != null:
-		(combat_row.get_child(1) as OptionButton).selected = 0
 	GameConfig.ui_fps_cap = "auto"
 	GameConfig.set_hud_words("auto")
-	var words_row := find_child("HudWordsRow", true, false)
-	if words_row != null:
-		(words_row.get_child(1) as OptionButton).selected = 0
+	for row_name in ["ProfileRow", "ScaleRow", "TextSizeRow", "QualityRow", "CombatViewRow", "FpsRow", "HudWordsRow"]:
+		var picker = _picker_of(row_name)
+		if picker != null:
+			picker.select(0)
 	HudRegistry.show_all()
 	UILayoutManager.reset_user_layout()
 	GameConfig.save_user_settings()
@@ -525,32 +558,29 @@ func _build_controls_tab(body: VBoxContainer) -> void:
 	# Controles en pantalla: tres estados porque "automatico" (tablet y movil;
 	# en PC nunca) es el valor bueno para casi todos.
 	var touch_idx := GameConfig.TOUCH_CONTROLS_MODES.find(GameConfig.ui_touch_controls)
-	var row := UITheme.make_option_row(
-		Tr.t("LBL_TOUCH_CONTROLS"),
-		[Tr.t("OPT_TOUCH_AUTO"), Tr.t("OPT_TOUCH_ALWAYS"), Tr.t("OPT_TOUCH_NEVER")],
-		touch_idx,
-		func(idx: int): GameConfig.set_touch_controls(GameConfig.TOUCH_CONTROLS_MODES[idx])
-	)
-	row.name = "TouchControlsRow"
-	body.add_child(row)
+	body.add_child(_row("TouchControlsRow", "controls", "UI2M_SET_TOUCH",
+		_picker([Tr.t("UI2M_OPT_AUTO"), Tr.t("OPT_TOUCH_ALWAYS"), Tr.t("OPT_TOUCH_NEVER")], touch_idx,
+			func(idx: int): GameConfig.set_touch_controls(GameConfig.TOUCH_CONTROLS_MODES[idx]),
+			[Tr.t("OPT_TOUCH_AUTO"), "", ""]), null, Tr.t("LBL_TOUCH_CONTROLS")))
 	# "Automatico" es solo tablet y movil: un portatil tactil no los saca por
-	# tocarlo (decision de Bryan, 2026-10-04). Se dice aqui, que es donde se elige.
-	var auto_hint := _make_hint(Tr.t("LBL_TOUCH_AUTO_HINT"))
+	# tocarlo (decision de Bryan, 2026-10-04). Una frase, bajo la fila.
+	var auto_hint := CT.para(Tr.t("LBL_TOUCH_AUTO_HINT"), "window", true, "small")
 	auto_hint.name = "TouchAutoHint"
 	body.add_child(auto_hint)
-	# Opacidad de los controles en pantalla (tactil): se ve al momento y se guarda.
-	body.add_child(_make_percent_row("touch_opacity", Tr.t("LBL_TOUCH_OPACITY"),
+	body.add_child(_percent_row("touch_opacity", "screen", "UI2M_SET_OPACITY",
 		GameConfig.ui_touch_controls_opacity, GameConfig.TOUCH_OPACITY_MIN, GameConfig.TOUCH_OPACITY_MAX,
 		func(v: float): GameConfig.set_touch_controls_opacity(v, false),
-		func(): GameConfig.save_user_settings()))
+		func(): GameConfig.save_user_settings(), Tr.t("LBL_TOUCH_OPACITY")))
 	body.add_child(_make_controls_size_row())
-	body.add_child(_make_hint(Tr.ti("LBL_CONTROLS_SUMMARY")))
+	var summary := CT.para(Tr.ti("LBL_CONTROLS_SUMMARY"), "window", true, "small")
+	summary.name = "ControlsSummary"
+	body.add_child(summary)
 	_add_reset(body, reset_controls)
 
 ## Tamano de los controles en pantalla: el del perfil o uno fijo. Se ve al
 ## momento (OnScreenControls y el ✓ de colocar escuchan
 ## touch_controls_size_changed) y se guarda en settings.cfg [interfaz].
-func _make_controls_size_row() -> HBoxContainer:
+func _make_controls_size_row() -> PanelContainer:
 	var modes: Array = GameConfig.TOUCH_CONTROLS_SIZE_MODES
 	var labels: Array = []
 	for mode in modes:
@@ -560,70 +590,32 @@ func _make_controls_size_row() -> HBoxContainer:
 		else:
 			labels.append(Tr.t("OPT_CONTROLS_SIZE_" + String(mode).to_upper()) % roundi(
 				float(GameConfig.TOUCH_CONTROLS_SIZE_SCALES[mode]) * 100.0))
-	var row := UITheme.make_option_row(Tr.t("LBL_CONTROLS_SIZE"), labels,
-		maxi(0, modes.find(GameConfig.ui_touch_controls_size)), func(idx: int):
-			GameConfig.set_touch_controls_size(modes[idx]))
-	row.name = "ControlsSizeRow"
-	row.tooltip_text = Tr.t("LBL_CONTROLS_SIZE_TIP")
-	return row
+	return _row("ControlsSizeRow", "plus", "UI2M_SET_SIZE",
+		_picker(labels, maxi(0, modes.find(GameConfig.ui_touch_controls_size)), func(idx: int):
+			GameConfig.set_touch_controls_size(modes[idx])), null, Tr.t("LBL_CONTROLS_SIZE_TIP"))
 
 func reset_controls() -> void:
 	GameConfig.set_touch_controls("auto")
 	GameConfig.set_touch_controls_opacity(0.45)
 	GameConfig.set_touch_controls_size("auto")
-	var size_row := find_child("ControlsSizeRow", true, false)
-	if size_row != null:
-		(size_row.get_child(1) as OptionButton).selected = 0
+	for row_name in ["ControlsSizeRow", "TouchControlsRow"]:
+		var picker = _picker_of(row_name)
+		if picker != null:
+			picker.select(0)
 	var op: HSlider = _audio_sliders.get("touch_opacity")
 	if op != null:
 		op.set_value_no_signal(GameConfig.ui_touch_controls_opacity)
-	var row := find_child("TouchControlsRow", true, false)
-	if row != null:
-		(row.get_child(1) as OptionButton).selected = 0
 
-# ── Accesibilidad ─────────────────────────────────────────────────────
-
-func _build_accessibility_tab(body: VBoxContainer) -> void:
-	var pal_labels: Array = []
-	for p in UITheme.PALETTES:
-		pal_labels.append(Tr.t("OPT_PALETTE_" + String(p).to_upper()))
-	var pal_row := UITheme.make_option_row(Tr.t("LBL_PALETTE"), pal_labels,
-		maxi(0, UITheme.PALETTES.find(GameConfig.ui_palette)), func(idx: int):
-			GameConfig.ui_palette = UITheme.PALETTES[idx]
-			GameConfig.save_user_settings()
-			_mark_rebuild())
-	pal_row.name = "PaletteRow"
-	body.add_child(pal_row)
-
-	var hc := UITheme.make_check_button(Tr.t("LBL_HIGH_CONTRAST"), GameConfig.ui_high_contrast,
-		func(pressed: bool):
-			GameConfig.ui_high_contrast = pressed
-			GameConfig.save_user_settings()
-			_mark_rebuild())
-	hc.name = "HighContrastCheck"
-	body.add_child(hc)
-
-	body.add_child(_make_percent_row("opacity", Tr.t("LBL_PANEL_OPACITY"), GameConfig.ui_panel_opacity,
-		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX, func(v: float):
-			GameConfig.ui_panel_opacity = v
-			_mark_rebuild(false), func(): GameConfig.save_user_settings()))
-
-	body.add_child(UITheme.make_separator())
-	body.add_child(UITheme.section_header(Tr.t("LBL_PREVIEW")))
-	_preview = PanelContainer.new()
-	_preview.name = "PalettePreview"
-	body.add_child(_preview)
-	_refresh_preview()
-	_add_reset(body, reset_accessibility)
+# ── Colores (al final de Pantalla) ────────────────────────────────────
 
 func reset_accessibility() -> void:
 	GameConfig.ui_palette = "default"
 	GameConfig.ui_high_contrast = false
 	GameConfig.ui_panel_opacity = 1.0
 	GameConfig.save_user_settings()
-	var pal_row := find_child("PaletteRow", true, false)
-	if pal_row != null:
-		(pal_row.get_child(1) as OptionButton).selected = 0
+	var picker = _picker_of("PaletteRow")
+	if picker != null:
+		picker.select(0)
 	var hc := find_child("HighContrastCheck", true, false) as CheckButton
 	if hc != null:
 		hc.set_pressed_no_signal(false)
@@ -633,57 +625,36 @@ func reset_accessibility() -> void:
 	_mark_rebuild()
 
 ## Muestra con los tokens que quedarian (sin aplicarlos): aliado / enemigo,
-## bueno / aviso / malo, recursos y una barra de vida en sus tres tramos, sobre
-## el fondo de tarjeta con la opacidad elegida, y el texto al tamano elegido.
+## bueno / aviso / malo y los recursos, sobre la tarjeta. Pastillas de color y
+## una palabra: lo justo para ver si se distinguen.
 func _refresh_preview() -> void:
 	if _preview == null:
 		return
 	for child in _preview.get_children():
 		child.queue_free()
 	var tokens := UITheme.resolve_tokens(GameConfig.ui_palette, GameConfig.ui_high_contrast, GameConfig.ui_panel_opacity)
-	var style := StyleBoxFlat.new()
-	style.bg_color = tokens["HUD_BG"]
-	style.border_color = tokens["ACCENT"]
-	style.set_border_width_all(3 if GameConfig.ui_high_contrast else 2)
+	var style := CT.card_style("window")
 	style.set_content_margin_all(10)
-	style.set_corner_radius_all(4)
 	_preview.add_theme_stylebox_override("panel", style)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
 	_preview.add_child(col)
-	var fs := UITheme.scaled_font(UITheme._FONT_BASE["body"],
-		float(UITheme.TEXT_SCALES.get(_pending_text_size(), 1.0)))
-	var min_ratio := 7.0 if GameConfig.ui_high_contrast else 4.5
-	# HFlow: en un movil en vertical las cuatro muestras bajan de fila en vez
-	# de ensanchar el panel fuera de la pantalla.
-	var row1 := HFlowContainer.new()
-	row1.add_theme_constant_override("h_separation", 14)
-	col.add_child(row1)
-	for pair in [["POSITIVE", "LBL_PREVIEW_ALLY"], ["DANGER", "LBL_PREVIEW_ENEMY"], ["WARNING", "LBL_PREVIEW_WARNING"], ["INFO", "LBL_PREVIEW_INFO"]]:
-		var l := Label.new()
-		l.text = Tr.t(pair[1])
-		l.add_theme_font_size_override("font_size", fs)
-		l.add_theme_color_override("font_color", UITheme.readable(tokens[pair[0]], UITheme.UI_BG_REFERENCE, min_ratio))
-		l.add_theme_color_override("font_outline_color", tokens["OUTLINE_COLOR"])
-		l.add_theme_constant_override("outline_size", UITheme.outline_for(fs))
-		row1.add_child(l)
-	var row2 := HFlowContainer.new()
-	row2.add_theme_constant_override("h_separation", 6)
-	row2.add_theme_constant_override("v_separation", 6)
-	col.add_child(row2)
+	var swatches := HFlowContainer.new()
+	swatches.add_theme_constant_override("h_separation", 6)
+	swatches.add_theme_constant_override("v_separation", 6)
+	col.add_child(swatches)
 	for key in ["POSITIVE", "WARNING", "DANGER", "RES_GOLD", "RES_WOOD", "RES_STEEL", "RES_OIL", "BOARD_MOVE", "BOARD_TARGET"]:
 		var sw := ColorRect.new()
 		sw.color = tokens[key]
-		sw.custom_minimum_size = Vector2(28, 18)
+		sw.custom_minimum_size = Vector2(30, 22)
 		sw.tooltip_text = key
-		row2.add_child(sw)
-	var dim := Label.new()
-	dim.text = Tr.t("LBL_PREVIEW_SECONDARY")
-	dim.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dim.add_theme_font_size_override("font_size", UITheme.scaled_font(UITheme._FONT_BASE["small"],
-		float(UITheme.TEXT_SCALES.get(_pending_text_size(), 1.0))))
-	dim.add_theme_color_override("font_color", UITheme.readable(tokens["TEXT_DIM"], UITheme.UI_BG_REFERENCE, min_ratio))
-	col.add_child(dim)
+		swatches.add_child(sw)
+	var words := HFlowContainer.new()
+	words.add_theme_constant_override("h_separation", 6)
+	words.add_theme_constant_override("v_separation", 6)
+	col.add_child(words)
+	for pair in [["POSITIVE", "LBL_PREVIEW_ALLY"], ["DANGER", "LBL_PREVIEW_ENEMY"], ["WARNING", "LBL_PREVIEW_WARNING"], ["INFO", "LBL_PREVIEW_INFO"]]:
+		words.add_child(CT.badge(Tr.t(pair[1]), tokens[pair[0]]))
 
 func _pending_text_size() -> String:
 	return DeviceProfile.effective_text_size()
@@ -692,11 +663,10 @@ func _pending_text_size() -> String:
 
 func _build_game_tab(body: VBoxContainer) -> void:
 	body.add_child(_make_language_row())
-	body.add_child(UITheme.make_separator())
-	var new_game_btn := Button.new()
-	new_game_btn.text = Tr.t("BTN_NEW_GAME")
+	var new_game_btn := CT.text_button(Tr.t("BTN_NEW_GAME"), "game", "secondary", _h("btn"))
+	new_game_btn.name = "NewGameButton"
 	# Ya no borra nada (crea otra partida): sin color de peligro.
-	UITheme.style_button(new_game_btn, UITheme.BTN, UITheme.FONT_BODY)
+	new_game_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	new_game_btn.pressed.connect(GameManager.request_new_game)
 	body.add_child(new_game_btn)
 
@@ -727,138 +697,83 @@ func apply_pending(reopen: bool = true) -> void:
 
 # ── Piezas ────────────────────────────────────────────────────────────
 
-func _make_hint(text: String) -> Label:
-	var l := UITheme.make_label(text, "small", UITheme.TEXT_DIM)
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	return l
-
-## Alto de los scrolls: lo que pide la pestana mas alta, sin pasar de la
-## pantalla menos la cabecera, las pestanas y los botones de abajo.
-func _fit_scroll() -> void:
-	if _scrolls.is_empty() or not is_inside_tree():
-		return
-	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var wanted := 120.0
-	for body in _bodies:
-		wanted = maxf(wanted, body.get_combined_minimum_size().y)
-	var h := clampf(wanted, 120.0, maxf(120.0, vp.y - _chrome_h()))
-	for scroll in _scrolls:
-		scroll.custom_minimum_size.y = h
-
 ## El boton del menu y el interruptor dicen lo mismo, cambie quien cambie.
 func _sync_music(enabled: bool) -> void:
 	_music_btn.text = Tr.t("BTN_MUSIC_ON") if enabled else Tr.t("BTN_MUSIC_OFF")
-	_music_btn.modulate = Color(1, 1, 1, 1.0 if enabled else 0.7)
 	if _music_check != null:
 		_music_check.set_pressed_no_signal(enabled)
 
-## Selector de idioma: IDIOMA  [Español] [English]. Un boton por idioma con su
-## nombre en ese idioma, para que quien no entienda el actual encuentre el suyo.
-## El activo va en dorado (pulsarlo otra vez no hace nada). Elegir otro lo aplica, lo guarda y
-## recarga la partida (GameManager escucha EventBus.locale_changed).
-func _make_language_row() -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.name = "LanguageRow"
-	row.add_theme_constant_override("separation", 8)
-	var label := UITheme.make_label(Tr.t("LBL_LANGUAGE"), "body")
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(label)
+## Selector de idioma: un boton por idioma con su nombre en ese idioma, para
+## que quien no entienda el actual encuentre el suyo. El activo va en azul
+## (pulsarlo otra vez no hace nada). Elegir otro lo aplica, lo guarda y recarga
+## la partida (GameManager escucha EventBus.locale_changed).
+func _make_language_row() -> PanelContainer:
+	var buttons := HBoxContainer.new()
+	buttons.name = "LocaleButtons"
+	buttons.add_theme_constant_override("separation", 6)
 	for locale in Tr.LOCALES:
-		var btn := Button.new()
-		btn.name = "Locale_" + locale
-		btn.text = Tr.t("LBL_LOCALE_" + locale.to_upper())
-		btn.custom_minimum_size = Vector2(96, UITheme.SETTINGS_ROW_H)
+		var name_s := Tr.t("LBL_LOCALE_" + locale.to_upper())
 		var active: bool = locale == Tr.get_locale()
-		UITheme.style_button(btn, UITheme.ACCENT if active else UITheme.BTN, UITheme.FONT_BODY)
+		var btn := CT.pill_button(locale.to_upper() if _small else name_s, "", "info" if active else "secondary",
+			_h("small"), "window", "body")
+		btn.name = "Locale_" + locale
+		btn.set_meta("text", name_s)
+		btn.tooltip_text = name_s
 		btn.pressed.connect(GameConfig.set_locale.bind(locale))
-		row.add_child(btn)
-	return row
+		buttons.add_child(btn)
+	return _row("LanguageRow", "game", "UI2M_SET_LANG", buttons, null, Tr.t("LBL_LANGUAGE"))
 
 ## Vista del mapa: [3D] [2D]. Elegir la otra guarda la preferencia y la partida
 ## y abre la otra escena (ViewMode.switch_to, docs/18-vista-2d.md).
-func _make_view_mode_row() -> VBoxContainer:
-	var box := VBoxContainer.new()
-	box.name = "ViewModeRow"
-	box.add_theme_constant_override("separation", 4)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	box.add_child(row)
-	var label := UITheme.make_label(Tr.t("LBL_VIEW_MODE"), "body")
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(label)
+func _make_view_mode_row() -> PanelContainer:
 	var current := ViewMode.current(get_tree()) if is_inside_tree() else ""
 	if current == "":
 		current = ViewMode.requested()
-	var group := ButtonGroup.new()
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 6)
 	for mode in [ViewMode.MODE_3D, ViewMode.MODE_2D]:
-		var btn := Button.new()
+		var btn := CT.pill_button("3D" if mode == ViewMode.MODE_3D else "2D", "", "info" if mode == current else "secondary",
+			_h("small"), "window", "body")
 		btn.name = "View" + mode.to_upper()
-		btn.text = Tr.t("BTN_VIEW_3D" if mode == ViewMode.MODE_3D else "BTN_VIEW_2D")
-		btn.toggle_mode = true
-		btn.button_group = group
-		btn.button_pressed = mode == current
-		UITheme.style_button(btn, UITheme.INFO if mode == current else UITheme.BTN, UITheme.FONT_BODY)
+		btn.tooltip_text = Tr.t("BTN_VIEW_3D" if mode == ViewMode.MODE_3D else "BTN_VIEW_2D")
 		btn.pressed.connect(func():
 			if mode != ViewMode.current(get_tree()):
 				ViewMode.switch_to(mode, get_tree())
 		)
-		btn.tooltip_text = Tr.t("LBL_VIEW_MODE_HINT")
-		row.add_child(btn)
-	return box
+		buttons.add_child(btn)
+	return _row("ViewModeRow", "build", "UI2M_SET_VIEW", buttons, null, Tr.t("LBL_VIEW_MODE_HINT"))
 
-## One labelled volume slider row: NAME  [--------o---]  85%
-func _make_volume_row(key: String, label_text: String, initial: float, apply: Callable, sfx_preview := false) -> VBoxContainer:
-	return _make_percent_row(key, label_text, initial, 0.0, 1.0, apply, func():
+## Volumen: [icono] Nombre [--------o---] 80
+func _volume_row(key: String, glyph: String, label_key: String, initial: float, apply: Callable,
+		sfx_preview := false, short_key: String = "") -> PanelContainer:
+	return _percent_row(key, glyph, label_key, initial, 0.0, 1.0, apply, func():
 		GameConfig.save_user_settings()
 		if sfx_preview:
-			AudioManager.play_sfx("ui_click"))
+			AudioManager.play_sfx("ui_click"), "", short_key)
 
 ## Fila con regulador en porcentaje. `on_change` en cada paso; `on_commit` al
 ## soltar (guardar, previsualizar un sonido).
-func _make_percent_row(key: String, label_text: String, initial: float, min_v: float, max_v: float,
-		on_change: Callable, on_commit: Callable) -> VBoxContainer:
-	var row := VBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	var top := HBoxContainer.new()
-	row.add_child(top)
-	var name_label := UITheme.make_label(label_text, "body")
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(name_label)
-	var value_label := UITheme.make_label("%d%%" % roundi(initial * 100.0), "body", UITheme.ACCENT)
-	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	top.add_child(value_label)
-	var slider := HSlider.new()
-	slider.name = "Slider_" + key
-	slider.min_value = min_v
-	slider.max_value = max_v
-	slider.step = 0.05
-	slider.value = initial
-	# Alto de dedo en tablet: el regulador es un control que se arrastra. En
-	# tablet y movil, ademas, bolita y carril grandes (UITheme.style_settings_slider).
-	slider.custom_minimum_size = Vector2(0, UITheme.touch_px(28.0))
-	UITheme.style_settings_slider(slider)
-	# La rueda desplaza la pestana, nunca mueve el regulador: pasar la rueda por
-	# encima de un volumen lo cambiaba sin querer, y en una pestana que no
-	# desplaza parecia que la rueda "seleccionaba" ajustes.
-	slider.scrollable = false
-	row.add_child(slider)
+func _percent_row(key: String, glyph: String, label_key: String, initial: float, min_v: float, max_v: float,
+		on_change: Callable, on_commit: Callable, tip: String = "", short_key: String = "") -> PanelContainer:
+	var slider := CT.menu_slider("Slider_" + key, initial, min_v, max_v)
+	var value_label := CT.label(str(roundi(initial * 100.0)), "number", CT.text("window"))
 	_audio_sliders[key] = slider
 	slider.value_changed.connect(func(v: float):
 		on_change.call(v)
-		value_label.text = "%d%%" % roundi(v * 100.0)
+		value_label.text = str(roundi(v * 100.0))
 	)
 	slider.drag_ended.connect(func(changed: bool):
 		if changed:
 			on_commit.call()
 	)
-	return row
+	return _row("Row_" + key, glyph, label_key, slider, value_label, tip, short_key)
 
 func toggle() -> void:
 	_is_open = not _is_open
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
 	if _is_open:
-		_fit_scroll()
+		_fit()
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)

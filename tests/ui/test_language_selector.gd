@@ -87,11 +87,11 @@ func test_the_settings_panel_offers_both_languages_and_switches() -> void:
 	add_child(_panel)
 	var row: Node = _panel.find_child("LanguageRow", true, false)
 	assert_object(row).is_not_null()
-	var en_btn := row.get_node("Locale_en") as Button
-	var es_btn := row.get_node("Locale_es") as Button
+	var en_btn := row.find_child("Locale_en", true, false) as Button
+	var es_btn := row.find_child("Locale_es", true, false) as Button
 	assert_object(en_btn).is_not_null()
 	assert_object(es_btn).is_not_null()
-	assert_str(en_btn.text).is_equal("English")
+	assert_str(String(en_btn.get_meta("text", ""))).is_equal("English")
 	en_btn.pressed.emit()
 	assert_str(Tr.get_locale()).is_equal("en")
 	assert_array(_announced).is_equal(["en"])
