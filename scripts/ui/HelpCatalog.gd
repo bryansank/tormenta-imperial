@@ -133,6 +133,9 @@ const ENTRIES := {
 		"title": "HELP_T_FLAG", "body": "HELP_B_FLAG", "target": "menu_button"},
 	"island": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
 		"title": "HELP_T_ISLAND", "body": "HELP_B_ISLAND", "target": ""},
+	# Carretera larga (feat/carretera-arrastrar): sale al coger la carretera.
+	"road_drag": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_ROAD_DRAG", "body": "HELP_B_ROAD_DRAG", "target": ""},
 	"night": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
 		"title": "HELP_T_NIGHT", "body": "HELP_B_NIGHT", "target": ""},
 	"bug_report": {"kind": "tip", "cat": CAT_BASICS, "basic": true,

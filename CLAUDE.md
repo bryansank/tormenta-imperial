@@ -469,6 +469,13 @@ hand mining there holds `mining_workers`, needs no road and spends no deposit us
   route together (`Rules.cost_with_route`, 1 gold per tile) and lay it with
   `Rules.pave_route()` (emits `building_placed` per tile). Roads are instant
   (`build_time = 0`). No route → reason `"road"` (`LBL_NEEDS_ROAD`).
+- **Long road (drag):** with the road in hand, mouse press-drag-release (touch: tap
+  start, tap end, tap end again or ✓) lays a whole line: straight or L (longer axis
+  first, R / ↻ flips the corner), else the shortest free path. Existing road is
+  crossed free; it must touch the network; tiles are laid from the network out and,
+  short of gold, only the affordable ones (`PlacementRules.plan_road_line` /
+  `lay_road_line`, state in `PlacementAssist`, preview via `assist_show_line`). A
+  click without drag still lays one tile. docs/21 §9 "Carretera larga".
 - **No road, no work:** `PopulationManager._recalculate_all()` sets the meta
   `connected` on every building; an unconnected one gets no workers, a house gives no
   room, ProductionManager skips it and its badge says "sin carretera" (`no_road`).

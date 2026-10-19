@@ -735,7 +735,7 @@ static func style_card_button(btn: Button, bg: Color = CARD_BG, left_color: Colo
 ## Unico punto donde se decide como se ve una etiqueta.
 static func apply_text_style(label: Label, size: String, color: Color) -> void:
 	var fs: int
-	var font: FontFile
+	var font: Font
 	match size:
 		"title":
 			fs = FONT_TITLE

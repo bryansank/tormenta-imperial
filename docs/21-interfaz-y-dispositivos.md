@@ -456,6 +456,36 @@ Para construir en serie (calzadas) basta tocar la casilla siguiente y el
 fantasma. El clic emulado que Godot fabrica al levantar el dedo se ignora
 mientras se coloca, y el dedo que pulsa ✓ no mueve después el fantasma.
 
+### Carretera larga (2026-10-19, rama `feat/carretera-arrastrar`)
+
+Con la carretera en la mano se tiende un tramo entero de una vez, en 3D y en 2D:
+
+| Entrada | Gesto |
+|---|---|
+| Ratón | Mantener el clic y arrastrar: el tramo va de donde se pulsó a donde está el cursor; al soltar se tiende. Un clic sin arrastrar pone un solo tramo (ahora al soltar, no al pulsar) |
+| Dedo | Tocar el inicio (lleva el fantasma), tocar el final (vista previa) y tocar el final otra vez o **✓** para tenderlo. El final pasa a ser el inicio del siguiente, así se encadenan calles; tocar la casilla siguiente y luego otra vez sigue poniendo de uno en uno. Tocar el inicio quita el tramo; arrastrar el fantasma mueve el inicio; arrastrar en otro sitio sigue moviendo el mapa |
+| R / ↻ | Cambia el codo de la L (la carretera es 1x1: girarla no hacía nada) |
+
+Se eligió "toca inicio → toca fin" en táctil y no arrastrar con el dedo porque el
+arrastre de un dedo es del mapa (bug 8) y así no se rompe.
+
+**Reglas** (`PlacementRules.plan_road_line` / `lay_road_line`, puras y comunes):
+recto o en L, primero por el eje más largo; si esa L choca, la otra; si las dos
+chocan, el camino más corto por celdas libres (BFS). Las celdas que ya son
+carretera se cruzan sin cobrar. El tramo tiene que tocar la red unida al Núcleo
+(o el Núcleo) en algún punto. Se tiende desde la red hacia fuera con
+`pave_route` (una tanda: `building_placed` por tramo, un guardado y un recuento
+al final). **Sin oro para todo** se ponen los tramos que se pueden pagar, los
+pegados a la red (nunca queda un trozo suelto), y se avisa "Puestos N de M
+tramos". La ruta se recalcula solo al cambiar de casilla.
+
+**Vista previa:** casillas verdes (se pagan) y rojas (no valen o no llega el
+oro), sin el fantasma, y el rótulo "N tramos · N oro" (`RoadLineCost`, en la
+capa del ✓) bajo la punta final. En la guía, el paso de practicar carretera
+cuenta el primer tramo tendido. La ayuda `road_drag` sale la primera vez que se
+coge la carretera fuera de la guía y está en el índice de AYUDA.
+Tests: `tests/map/test_road_line.gd`, `tests/buildings/test_road_line_placement.gd`.
+
 El fantasma lo apunta el dedo (`touch_aim`) desde que empieza la colocación si
 el perfil es táctil o ya llegó un toque; un movimiento de ratón de verdad
 devuelve el mando al cursor.

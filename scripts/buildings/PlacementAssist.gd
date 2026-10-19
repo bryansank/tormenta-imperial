@@ -19,6 +19,19 @@ extends Node
 ##    donde cabe junto a su yacimiento; el fantasma tactil sale ya en la mas
 ##    cercana al centro, y si no queda comoda a la vista la camara va a ella.
 ## 3. Cierra la columna ☰ al empezar a colocar: tapaba la derecha del mapa.
+## 4. **Carretera larga** (2026-10-19). Con la carretera en la mano:
+##    - raton: mantener el clic y arrastrar dibuja el tramo de donde se pulso a
+##      donde esta el cursor; al soltar se tiende. Un clic sin arrastrar pone un
+##      solo tramo, como siempre;
+##    - dedo: el primer toque fija el inicio (el fantasma); tocar otra casilla
+##      dibuja el tramo hasta ella; tocar el final otra vez o ✓ lo tiende. El
+##      final pasa a ser el inicio del siguiente (se encadenan calles). Tocar el
+##      inicio vuelve a un solo tramo; arrastrar el fantasma mueve el inicio.
+##      Arrastrar en otro sitio sigue moviendo el mapa;
+##    - R o ↻ cambia el codo de la L.
+##    La vista previa son casillas verdes (se pagan) o rojas (no valen o no
+##    llega el oro) y un rotulo "N tramos · N oro". Las reglas y el coste son
+##    PlacementRules.plan_road_line / lay_road_line, iguales en 3D y 2D.
 ##
 ## El colocador (BuildingPlacer o BuildingPlacer2D) crea este nodo como hijo y
 ## responde a los metodos `assist_*` (ver cada llamada). Las reglas no viven
@@ -52,12 +65,24 @@ var _placer: Node = null
 var _layer: CanvasLayer = null
 var _confirm: Button = null
 
+# ── Carretera larga ──
+## Inicio del tramo (raton: donde se pulso; dedo: el fantasma). (-1, -1) sin fijar.
+var line_start := Vector2i(-1, -1)
+## El plan en vista previa (PlacementRules.plan_road_line), {} si no hay tramo.
+var line_plan: Dictionary = {}
+## El codo de la L va por el otro eje (R o ↻).
+var line_flip := false
+## Un arrastre de raton esta dibujando un tramo.
+var mouse_drawing := false
+var _line_label: Label = null
+
 func setup(placer: Node) -> void:
 	_placer = placer
 	EventBus.sidebar_toggled.connect(func(v: bool): _sidebar_open = v)
 
 func _ready() -> void:
 	_build_confirm()
+	_build_line_label()
 	# El ✓ crece con Ajustes → Controles → Tamano de los controles, como la cruceta.
 	EventBus.touch_controls_size_changed.connect(func(_s): _size_confirm())
 
@@ -67,6 +92,11 @@ func _ready() -> void:
 func begin() -> void:
 	_finger = -1
 	_grab = false
+	line_start = Vector2i(-1, -1)
+	line_plan = {}
+	line_flip = false
+	mouse_drawing = false
+	_show_line()
 	touch_aim = _touch_mode()
 	# El modo tactil puede haber cambiado desde que se construyo (touch_px).
 	_size_confirm()
@@ -78,6 +108,10 @@ func begin() -> void:
 	if menu != null and menu.has_method("is_open") and menu.is_open():
 		menu.resume()
 	refresh_spots()
+	# La carretera larga se cuenta la primera vez que se coge la carretera, salvo
+	# en plena guia (su paso de practicar ya dice que hacer).
+	if is_road() and TutorialManager.guide_state != TutorialManager.GUIDE_ACTIVE:
+		TutorialManager.offer_tip("road_drag")
 	var centre := _screen_centre_cell()
 	var target := nearest_spot(centre) if not spots.is_empty() else centre_origin(centre)
 	# Si el hueco elegido no queda comodo a la vista (fuera, o pegado a un borde
@@ -93,8 +127,12 @@ func end() -> void:
 	_grab = false
 	spots = []
 	cell = Vector2i(-1, -1)
+	line_start = Vector2i(-1, -1)
+	line_plan = {}
+	mouse_drawing = false
 	if _placer:
 		_placer.assist_show_cells([])
+		_show_line()
 	_update_confirm()
 
 ## Recalcula las casillas validas (tras colocar, girar o demoler) y las pinta.
@@ -143,6 +181,13 @@ func handle_touch(event: InputEvent) -> bool:
 			return true
 		_moved = true
 		move_to(_placer.assist_screen_to_cell(sd.position) - _grab_offset, false)
+		# Con la carretera, arrastrar el fantasma mueve el inicio del tramo.
+		if is_road():
+			line_start = cell
+			if line_active():
+				var e: Vector2i = line_plan["end"]
+				line_plan = {}
+				line_to(e)
 		return true
 	return false
 
@@ -176,7 +221,10 @@ func _on_release(st: InputEventScreenTouch) -> bool:
 		return false
 	if _grab:
 		_grab = false
-		if not _moved:
+		if not _moved and is_road() and line_active():
+			# Tocar el inicio con un tramo dibujado: vuelve a un solo tramo.
+			line_clear()
+		elif not _moved:
 			# Un toque sobre el fantasma: confirmar.
 			confirm()
 		elif not is_valid(cell):
@@ -195,8 +243,29 @@ func _on_release(st: InputEventScreenTouch) -> bool:
 		EventBus.notification_posted.emit(Tr.t("LBL_OUTSIDE_MAP"), "info", UITheme.INFO)
 		_placer.assist_feedback(Tr.t("LBL_OUTSIDE_MAP"))
 		return false
+	if is_road() and _tap_road(tapped):
+		return false
 	move_to(snap(tapped), true)
 	return false
+
+## Un toque en el mapa con la carretera en la mano. Devuelve false si el toque
+## sigue el camino de siempre (lleva el fantasma): el primero, que fija el
+## inicio, o el que vuelve al inicio.
+func _tap_road(tapped: Vector2i) -> bool:
+	if not GridManager.is_valid_cell(line_start):
+		line_start = tapped
+		return false
+	if tapped == line_start:
+		line_plan = {}
+		_show_line()
+		return false
+	if line_active() and tapped == line_plan["end"]:
+		line_commit()
+		return true
+	line_to(tapped)
+	if not bool(line_plan.get("ok", false)):
+		_placer.assist_feedback(Rules.road_line_label(line_plan))
+	return true
 
 # ── Fantasma ──────────────────────────────────────────────────────────
 
@@ -217,9 +286,15 @@ func move_to(origin: Vector2i, explain: bool) -> void:
 	_update_confirm()
 
 func confirm() -> void:
+	if is_road() and line_active():
+		line_commit()
+		return
 	if not GridManager.is_valid_cell(cell):
 		return
 	_placer.assist_confirm(cell)
+	# El siguiente tramo sale de este (calles en serie con el dedo).
+	if is_road():
+		line_start = cell
 	if _placer.assist_is_placing():
 		refresh_spots()
 	_update_confirm()
@@ -411,6 +486,8 @@ func _update_confirm() -> void:
 	if _confirm == null or _placer == null:
 		return
 	var show: bool = touch_aim and _placer.assist_is_placing() and is_valid(cell)
+	if line_active():
+		show = touch_aim and _placer.assist_is_placing() and bool(line_plan["ok"]) and int(line_plan["affordable"]) > 0
 	_confirm.text = "✓ " + Tr.t("BTN_MOVE_HERE" if _placer.assist_moving_node() != null else "BTN_PLACE_HERE")
 	_confirm.visible = show
 	if show:
@@ -419,6 +496,8 @@ func _update_confirm() -> void:
 func _process(_delta: float) -> void:
 	if _confirm != null and _confirm.visible:
 		_position_confirm()
+	if _line_label != null and _line_label.visible:
+		_position_line_label()
 
 ## Encima del fantasma, dentro de la pantalla. Si el fantasma se sale, abajo al
 ## centro (sigue estando a mano).
@@ -427,6 +506,12 @@ func _position_confirm() -> void:
 	_confirm.reset_size()
 	var sz := _confirm.get_combined_minimum_size()
 	var anchor: Variant = _placer.assist_ghost_top_screen(cell)
+	# Con un tramo dibujado, el ✓ va sobre su punta final.
+	if line_active():
+		var p: Variant = _placer.assist_cell_to_screen(line_plan["end"], Vector2i.ONE)
+		anchor = null
+		if p != null and get_viewport().get_visible_rect().has_point(p):
+			anchor = (p as Vector2) - Vector2(0.0, 24.0)
 	var pos: Vector2
 	if anchor == null:
 		pos = Vector2(vp.x * 0.5 - sz.x * 0.5, vp.y - sz.y - 120.0)
@@ -435,3 +520,138 @@ func _position_confirm() -> void:
 	pos.x = clampf(pos.x, 8.0, vp.x - sz.x - 8.0)
 	pos.y = clampf(pos.y, 60.0, vp.y - sz.y - 8.0)
 	_confirm.position = pos
+
+# ── Carretera larga ───────────────────────────────────────────────────
+
+## Se esta colocando (no moviendo) una carretera.
+func is_road() -> bool:
+	return _placer != null and _placer.assist_moving_node() == null \
+		and _placer.assist_building_id() == Rules.ROAD_ID
+
+func line_active() -> bool:
+	return not line_plan.is_empty()
+
+## El raton se pulso en `c` con la carretera: empieza un posible arrastre.
+func mouse_line_begin(c: Vector2i) -> void:
+	mouse_drawing = true
+	line_start = c
+	line_plan = {}
+	_show_line()
+
+## El cursor esta en `c` con el boton pulsado. Solo se recalcula al cambiar de celda.
+func mouse_line_move(c: Vector2i) -> void:
+	if mouse_drawing:
+		line_to(c)
+
+## Se solto el boton. Devuelve true si habia un tramo (y se tendio); false si
+## fue un clic sin arrastre (el colocador pone un solo tramo, como siempre).
+func mouse_line_end() -> bool:
+	if not mouse_drawing:
+		return false
+	mouse_drawing = false
+	if not line_active():
+		line_start = Vector2i(-1, -1)
+		return false
+	line_commit()
+	line_start = Vector2i(-1, -1)
+	return true
+
+## Vista previa del tramo de line_start a `end`. No hace nada si `end` no cambio.
+func line_to(end: Vector2i) -> void:
+	if not GridManager.is_valid_cell(line_start):
+		return
+	if line_active() and line_plan["end"] == end:
+		return
+	if end == line_start:
+		line_clear()
+		return
+	line_plan = Rules.plan_road_line(line_start, end, line_flip)
+	_show_line()
+	_update_confirm()
+
+func line_clear() -> void:
+	line_plan = {}
+	_show_line()
+	if touch_aim and GridManager.is_valid_cell(line_start):
+		move_to(line_start, false)
+	_update_confirm()
+
+## R o ↻ con la carretera: el codo de la L va por el otro eje.
+func line_flip_elbow() -> void:
+	line_flip = not line_flip
+	if line_active():
+		var e: Vector2i = line_plan["end"]
+		line_plan = {}
+		line_to(e)
+
+## Tiende el tramo en vista previa (con el mapa y el oro de ahora) y lo dice.
+func line_commit() -> void:
+	if not line_active():
+		return
+	var end: Vector2i = line_plan["end"]
+	var result := Rules.lay_road_line(_placer, line_start, end, line_flip)
+	var text := Rules.road_line_result_text(result)
+	if text != "":
+		_placer.assist_feedback(text)
+	line_plan = {}
+	if int(result["laid"]) > 0:
+		# El final es el inicio del siguiente tramo (con el dedo).
+		line_start = end
+		_placer.assist_line_laid()
+	_show_line()
+	if touch_aim:
+		move_to(line_start, false)
+	_update_confirm()
+
+func _show_line() -> void:
+	if _placer == null:
+		return
+	if line_plan.is_empty():
+		_placer.assist_show_line([], [])
+		_placer.assist_set_ghost_visible(true)
+		if _line_label != null:
+			_line_label.visible = false
+		return
+	var good: Array = []
+	var bad: Array = []
+	if bool(line_plan["ok"]):
+		var new: Array = line_plan["new"]
+		var k := int(line_plan["affordable"])
+		good = new.slice(0, k)
+		bad = new.slice(k)
+	else:
+		bad = (line_plan["cells"] as Array).filter(func(c): return not Rules.is_road_at(c))
+	_placer.assist_show_line(good, bad)
+	_placer.assist_set_ghost_visible(false)
+	if _line_label != null:
+		_line_label.text = Rules.road_line_label(line_plan)
+		var ok: bool = bool(line_plan["ok"]) and bad.is_empty()
+		_line_label.add_theme_color_override("font_color", UITheme.POSITIVE if ok else UITheme.DANGER)
+		_line_label.visible = true
+		if is_inside_tree():
+			_position_line_label()
+
+func _build_line_label() -> void:
+	_line_label = UITheme.make_label("", "body", UITheme.POSITIVE)
+	_line_label.name = "RoadLineCost"
+	_line_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_line_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_line_label.add_theme_constant_override("outline_size", 6)
+	_line_label.visible = false
+	_layer.add_child(_line_label)
+
+func line_label() -> Label:
+	return _line_label
+
+## Debajo de la punta final del tramo (el ✓ va encima).
+func _position_line_label() -> void:
+	var vp := get_viewport().get_visible_rect().size
+	_line_label.reset_size()
+	var sz := _line_label.get_combined_minimum_size()
+	var p: Variant = _placer.assist_cell_to_screen(line_plan["end"], Vector2i.ONE) if line_active() else null
+	var pos: Vector2 = Vector2(vp.x * 0.5 - sz.x * 0.5, vp.y - sz.y - 80.0)
+	if p != null:
+		pos = (p as Vector2) + Vector2(-sz.x * 0.5, 22.0)
+	pos.x = clampf(pos.x, 8.0, vp.x - sz.x - 8.0)
+	pos.y = clampf(pos.y, 60.0, vp.y - sz.y - 8.0)
+	_line_label.position = pos

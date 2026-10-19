@@ -176,7 +176,18 @@ func _handle_left_button(event: InputEventMouseButton) -> void:
 			return
 		if _state != State.IDLE:
 			_left_pressed = false
+			# Carretera larga: pulsar empieza el tramo; se tiende al soltar
+			# (un clic sin arrastrar pone un solo tramo, al soltar).
+			if _state == State.PLACING and _assist.is_road():
+				_assist.mouse_line_begin(screen_to_cell(event.position))
+				get_viewport().set_input_as_handled()
+				return
 			handle_click(event.position)
+		return
+	if _assist.mouse_drawing and not _left_from_touch:
+		if not _assist.mouse_line_end():
+			handle_click(event.position)
+		get_viewport().set_input_as_handled()
 		return
 	var was_click := _left_pressed and not _left_dragged
 	if _left_from_touch and InputService.touch_pan_consumed_click():
@@ -224,6 +235,17 @@ func handle_click(screen_pos: Vector2) -> void:
 func _process(delta: float) -> void:
 	_tick_block_flash(delta)
 	if _state == State.IDLE or _ghost == null:
+		return
+	# Carretera larga: el tramo sigue al cursor mientras el boton siga pulsado.
+	# Si se solto donde no llega el evento (encima de un panel), se tiende igual.
+	if _assist.mouse_drawing and not _assist.touch_aim:
+		var mouse_pos := get_viewport().get_mouse_position()
+		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			if not _assist.mouse_line_end():
+				handle_click(mouse_pos)
+		else:
+			_assist.mouse_line_move(screen_to_cell(mouse_pos))
+	if _ghost == null:
 		return
 	# Con el dedo el fantasma esta donde lo dejo el ultimo toque.
 	var cell: Vector2i = _assist.cell if _assist.touch_aim else screen_to_cell(get_viewport().get_mouse_position())
@@ -280,6 +302,11 @@ func _rotate_building() -> void:
 		_assist.move_to(_assist.cell, false)
 
 func _on_rotate_requested() -> void:
+	# Una carretera es 1x1: girar no cambia nada, asi que R / ↻ cambia el codo
+	# de la carretera larga.
+	if _state == State.PLACING and _assist.is_road():
+		_assist.line_flip_elbow()
+		return
 	if _state != State.IDLE:
 		_auto_face = false
 		_rotate_building()
@@ -786,3 +813,48 @@ func _draw_block_flash() -> void:
 			first = false
 		_block_flash.draw_rect(r, Color(UITheme.DANGER, a * 0.35), true)
 		_block_flash.draw_rect(r.grow(1.0), Color(UITheme.DANGER, a), false, 3.0)
+
+# ── Carretera larga: vista previa del tramo (PlacementAssist) ──────────
+
+var _line_preview: Node2D = null
+var _line_good: Array = []
+var _line_bad: Array = []
+
+## Pinta el tramo: `good` en verde (se tiende), `bad` en rojo (no vale o no
+## llega el oro).
+func assist_show_line(good: Array, bad: Array) -> void:
+	_line_good = good
+	_line_bad = bad
+	if _line_preview == null:
+		if good.is_empty() and bad.is_empty():
+			return
+		_line_preview = Node2D.new()
+		_line_preview.name = "RoadLinePreview"
+		# Encima de edificios y figuras: el rojo sobre lo ocupado se tiene que ver.
+		_line_preview.z_index = 4
+		_line_preview.draw.connect(_draw_line_preview)
+		add_child(_line_preview)
+	_line_preview.visible = not (good.is_empty() and bad.is_empty())
+	_line_preview.queue_redraw()
+
+func _draw_line_preview() -> void:
+	for pair in [[_line_good, UITheme.POSITIVE], [_line_bad, UITheme.DANGER]]:
+		var col: Color = pair[1]
+		for c in pair[0]:
+			var r := View2D.footprint_rect_px(c, Vector2i.ONE).grow(-1.5)
+			_line_preview.draw_rect(r, Color(col, 0.5), true)
+			_line_preview.draw_rect(r, Color(col, 0.95), false, 1.5)
+
+func assist_set_ghost_visible(v: bool) -> void:
+	if _ghost:
+		_ghost.visible = v
+
+## Se acaba de tender un tramo: el fantasma se recoloca en el siguiente frame.
+func assist_line_laid() -> void:
+	_hover_cell = Vector2i(-99999, -99999)
+
+func get_line_preview() -> Node2D:
+	return _line_preview
+
+func get_line_cells() -> Array:
+	return [_line_good, _line_bad]
