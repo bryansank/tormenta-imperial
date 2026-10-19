@@ -100,3 +100,31 @@ func test_a_queued_process_still_saves_as_one_entry_with_its_count() -> void:
 	var info: Dictionary = ProcessManager.get_active(node)
 	assert_int(int(info["count"])).is_equal(5)
 	assert_int(int(info["total"])).is_equal(5)
+
+# ── Ronda ui3 (feat/ui3-ficha) ───────────────────────────────────────
+
+func test_the_cancel_preview_promises_the_waiting_batches_whole() -> void:
+	var node := _node()
+	ResourceManager.set_amounts({"wood": 400, "gold": 0, "steel": 0, "oil": 0})
+	var proc := _proc("nucleo", "wood_planks")
+	var per: int = int(proc["cost"]["wood"])
+	ProcessManager.enqueue_process(node, proc, 3)
+	var promised := ProcessManager.get_refund_preview(node)
+	assert_int(int(promised["wood"])).is_equal(int(floor(per * GameConfig.get_cancel_refund_ratio())) + 2 * per)
+
+func test_the_first_batch_button_carries_the_verb() -> void:
+	var ProcessCard: GDScript = preload("res://scripts/ui/ProcessCard.gd")
+	assert_str(ProcessCard.verb_text({"id": "make_planks"})).is_equal(Tr.t("UI3F_VERB_MAKE_PLANKS"))
+	assert_str(ProcessCard.verb_text({"id": GameConfig.CORE_MINING_PREFIX + "mine_wood"})).is_equal(Tr.t("UI3F_VERB_MINE_WOOD"))
+	assert_str(ProcessCard.verb_text({"id": "no_such"})).is_equal(Tr.t("UI3F_VERB_DO"))
+	var saved := Tr.get_locale()
+	for loc in ["es", "en"]:
+		Tr.set_locale(loc)
+		for building_id in GameConfig.building_processes:
+			for p in GameConfig.building_processes[building_id]:
+				var key := "UI3F_VERB_" + String(p["id"]).to_upper()
+				assert_str(Tr.t(key)).override_failure_message(key + "/" + loc).is_not_equal(key)
+		for deposit_id in GameConfig.mining_data:
+			var key := "UI3F_VERB_" + String(GameConfig.mining_data[deposit_id]["id"]).to_upper()
+			assert_str(Tr.t(key)).override_failure_message(key + "/" + loc).is_not_equal(key)
+	Tr.set_locale(saved)

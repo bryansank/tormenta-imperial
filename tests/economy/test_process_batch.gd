@@ -3,7 +3,7 @@ extends GdUnitTestSuite
 ##
 ##   - un lote se paga entero al arrancar y entrega una vuelta tras otra;
 ##   - si no alcanza para todas, no arranca ninguna;
-##   - cancelar devuelve la tasa de siempre sobre todo lo pagado y no entregado;
+##   - cancelar devuelve la tasa sobre la tanda en marcha y entero lo que espera;
 ##   - la Tormenta pone en riesgo el lote entero;
 ##   - el guardado lleva `count`/`total`; uno de antes sin `count` es una vuelta;
 ##   - MAX lo limitan los recursos, el hueco de la bolsa y los usos de la veta;
@@ -89,14 +89,16 @@ func test_each_cycle_delivers_and_the_next_one_starts() -> void:
 	assert_int(_wood()).is_equal(after_paying + 3 * 35)
 	assert_bool(ProcessManager.is_busy(node)).is_false()
 
-func test_cancelling_a_batch_refunds_the_rate_on_what_was_not_delivered() -> void:
+## Ronda ui3 (2026-10-19): la tasa solo cae sobre la tanda en marcha; las que
+## esperan en la cola vuelven enteras (como con −1 / Vaciar).
+func test_cancelling_a_batch_refunds_the_rate_on_the_running_one_and_the_rest_whole() -> void:
 	var node := _node()
 	ResourceManager.set_amounts({"wood": 200})
 	var proc := _process_def("nucleo", "wood_planks")
 	ProcessManager.start_process(node, proc, 4)
-	_finish_cycle(node)   # una entregada, quedan 3 pagadas
+	_finish_cycle(node)   # una entregada, quedan 3 pagadas (1 en marcha + 2 en cola)
 	var promised := ProcessManager.get_refund_preview(node)
-	assert_int(int(promised["wood"])).is_equal(int(floor(3 * 20 * GameConfig.cancel_refund_ratio)))
+	assert_int(int(promised["wood"])).is_equal(int(floor(20 * GameConfig.cancel_refund_ratio)) + 2 * 20)
 	var paid := ProcessManager.cancel(node)
 	assert_int(int(paid["wood"])).is_equal(int(promised["wood"]))
 

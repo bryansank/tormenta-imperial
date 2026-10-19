@@ -65,10 +65,28 @@ func is_busy(node: Node) -> bool:
 func get_refund_preview(node: Node) -> Dictionary:
 	if not _active.has(node):
 		return {}
-	# Recortado al hueco que queda: con la bolsa compartida, prometer un 70% que
-	# no cabe es mentirle al jugador en el propio boton.
-	return ResourceManager.fit_into_storage(
-		GameConfig.get_cancel_refund(_paid_cost(_active[node])))
+	# Ronda ui3 (2026-10-19): la tasa solo muerde a la tanda en marcha; las que
+	# esperan en la cola no se empezaron y vuelven enteras, como con −1 / Vaciar
+	# (si no, cancelar todo devolveria menos que vaciar y cancelar despues).
+	var info: Dictionary = _active[node]
+	var refund := GameConfig.get_cancel_refund(info.get("cost", {}))
+	var waiting := _cost_times(info.get("cost", {}), int(info.get("count", 1)) - 1) if int(info.get("count", 1)) > 1 else {}
+	for res_name in waiting:
+		refund[res_name] = int(refund.get(res_name, 0)) + int(waiting[res_name])
+	return _promise(node, refund)
+
+## Lo que de verdad vuelve de `amounts`: en un edificio, todo (lo que no cabe
+## en la bolsa se queda dentro para RECOGER); fuera de uno (una veta), lo que
+## quepa. Prometer un 70% que no cabe seria mentir en el propio boton.
+func _promise(node: Node, amounts: Dictionary) -> Dictionary:
+	if amounts.is_empty():
+		return {}
+	if _keeps_leftover(node):
+		return amounts.duplicate()
+	return ResourceManager.fit_into_storage(amounts)
+
+func _keeps_leftover(node: Node) -> bool:
+	return node != null and is_instance_valid(node) and not GridManager.get_building_info(node).is_empty()
 
 ## Lo que sobreviviria a la Tormenta si rompiera ahora mismo. Hoy es siempre
 ## vacio —se pierde con su coste— pero existe como funcion y no como cero escrito
@@ -98,10 +116,27 @@ func cancel(node: Node) -> Dictionary:
 ## mitad el dia que esto cambie.
 func _drop(node: Node, refund: Dictionary) -> Dictionary:
 	_active.erase(node)
-	for res_name in refund:
-		if _type_map.has(res_name):
-			ResourceManager.add(_type_map[res_name], refund[res_name])
+	_give_back(node, refund)
 	return refund
+
+## Devuelve `amounts`: a la bolsa lo que quepa y, en un edificio, el resto se
+## queda dentro (ProductionManager.keep_in_building), como la produccion que no
+## cabe. Nada pagado se pierde por devolverlo con la bolsa llena.
+func _give_back(node: Node, amounts: Dictionary) -> void:
+	var leftover := {}
+	var keep := _keeps_leftover(node)
+	for res_name in amounts:
+		if not _type_map.has(res_name):
+			continue
+		var amount := int(amounts[res_name])
+		if keep:
+			var rest: int = ResourceManager.add_fitting(_type_map[res_name], amount)
+			if rest > 0:
+				leftover[res_name] = rest
+		else:
+			ResourceManager.add(_type_map[res_name], amount)
+	if not leftover.is_empty():
+		ProductionManager.keep_in_building(node, leftover)
 
 func get_active(node: Node) -> Dictionary:
 	return _active.get(node, {})
@@ -333,10 +368,8 @@ func dequeue(node: Node, n: int = 1) -> Dictionary:
 	var info: Dictionary = _active[node]
 	info["count"] = int(info.get("count", 1)) - take
 	info["total"] = maxi(int(info["count"]), int(info.get("total", 1)) - take)
-	var refund := ResourceManager.fit_into_storage(_cost_times(info.get("cost", {}), take)) 		if not (info.get("cost", {}) as Dictionary).is_empty() else {}
-	for res_name in refund:
-		if _type_map.has(res_name):
-			ResourceManager.add(_type_map[res_name], refund[res_name])
+	var refund := _promise(node, _cost_times(info.get("cost", {}), take)) if not (info.get("cost", {}) as Dictionary).is_empty() else {}
+	_give_back(node, refund)
 	EventBus.process_started.emit(node, str(info.get("id", "")))
 	return refund
 
