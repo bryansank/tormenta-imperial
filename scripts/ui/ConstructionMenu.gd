@@ -12,7 +12,14 @@ extends CanvasLayer
 ##
 ## En PC y tablet, a la derecha, la ficha del elegido: miniatura, una frase, lo
 ## que da, por que no se puede, el coste y CONSTRUIR. En telefono (lienzo de
-## menos de 450 de alto) la ventana va a pantalla completa y la ficha no sale.
+## menos de 450 de alto) la ficha no cabe: el elegido sale en una franja debajo
+## de la lista (nombre, porque, coste y CONSTRUIR / MEJORAR). La ventana va a
+## pantalla completa en todos los perfiles, dentro de la zona segura, con la X
+## a la izquierda del boton ☰ (que se dibuja encima de todo).
+##
+## Los nombres, siempre enteros (dos lineas antes que "…"), en Baloo 2 de 16 dp
+## como poco en telefono (CartoonTheme.name_label); el globo de cada fila
+## empieza por el nombre.
 ##
 ## Sin animaciones (decision de Bryan): ni la maqueta 3D que giraba ni nada que
 ## se mueva; la miniatura es la foto que se hace al arrancar.
@@ -100,6 +107,16 @@ const CATEGORY_GLYPHS := {
 ## Ancho de la ficha del elegido (PC) y ancho minimo de lienzo para que quepa.
 const DETAIL_W := 300.0
 const DETAIL_MIN_VP_W := 760.0
+## Lo que se le deja a la lista y al carril antes de dar sitio a la ficha, y el
+## ancho de la ficha por debajo del cual ya no se encoge mas.
+const LIST_MIN_W := 520.0
+const RAIL_W := 180.0
+const DETAIL_MIN_W := 250.0
+## Por debajo de este ancho de lienzo (tablet), el atajo MEJORAR de la fila va
+## solo con su icono: la palabra empujaba la ficha fuera de la pantalla.
+const WIDE_ROWS_VP_W := 1200.0
+## Filas compactas (tablet): MEJORAR de la fila solo con icono.
+var _compact := false
 
 ## Capa en reposo (lista cerrada): bajo cualquier ventana de UIManager, que
 ## apila desde la 12. Con la lista abierta la capa la pone UIManager.
@@ -231,7 +248,15 @@ func _setup_ui() -> void:
 	_grid_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_grid_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_grid_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main.add_child(_grid_scroll)
+	# La lista y, debajo (solo telefono), la franja del elegido.
+	var list_col := VBoxContainer.new()
+	list_col.name = "ListColumn"
+	list_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_col.add_theme_constant_override("separation", 6)
+	main.add_child(list_col)
+	list_col.add_child(_grid_scroll)
+	_build_strip(list_col)
 	_grid_container = VBoxContainer.new()
 	_grid_container.add_theme_constant_override("separation", 6)
 	_grid_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -375,7 +400,88 @@ func _build_detail(main: HBoxContainer) -> void:
 	_detail_build_btn.pressed.connect(_on_build_pressed)
 	_detail_column.add_child(_detail_build_btn)
 
-## Coloca la ventana: a pantalla completa en telefono; en PC donde diga su slot.
+## Telefono: la franja del elegido, debajo de la lista (la ficha de la derecha
+## no cabe): Nombre entero / porque · coste · CONSTRUIR o MEJORAR.
+var _strip: PanelContainer
+var _strip_name: Label
+var _strip_why: Label
+var _strip_cost: HBoxContainer
+var _strip_build: Button
+var _strip_upgrade: Button
+
+func _build_strip(parent: Control) -> void:
+	_strip = PanelContainer.new()
+	_strip.name = "PhoneStrip"
+	var st := CT.card_style("window", true)
+	st.set_content_margin_all(4)
+	st.content_margin_left = 8
+	_strip.add_theme_stylebox_override("panel", st)
+	_strip.visible = false
+	parent.add_child(_strip)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	_strip.add_child(row)
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	col.add_theme_constant_override("separation", 0)
+	row.add_child(col)
+	_strip_name = CT.name_label("", "button")
+	_strip_name.name = "StripName"
+	col.add_child(_strip_name)
+	_strip_why = CT.label("", "small", CT.danger_text())
+	_strip_why.name = "StripWhy"
+	_strip_why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(_strip_why)
+	_strip_cost = CT.cost_strip({})
+	_strip_cost.name = "StripCost"
+	_strip_cost.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_strip_cost)
+	_strip_upgrade = CT.pill_button("", "upgrade", "open", 48)
+	_strip_upgrade.name = "StripUpgradeOne"
+	_strip_upgrade.tooltip_text = Tr.t("TOPE_BTN_UPGRADE_ONE_TIP")
+	_strip_upgrade.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_strip_upgrade.pressed.connect(_on_upgrade_one)
+	row.add_child(_strip_upgrade)
+	_strip_build = CT.pill_button(Tr.t("BTN_BUILD"), "build", "primary", 48)
+	_strip_build.name = "StripBuildButton"
+	_strip_build.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_strip_build.pressed.connect(_on_build_pressed)
+	row.add_child(_strip_build)
+
+## Pone la franja del telefono al dia con el elegido (oculta en PC y tablet, o
+## sin elegido).
+func _refresh_strip() -> void:
+	if _strip == null:
+		return
+	_strip.visible = _phone and _selected_data != null and _is_open
+	if not _strip.visible:
+		return
+	var data := _selected_data
+	_strip_name.text = data.get_display_name()
+	var block := Rules.purchase_block_detail(data)
+	var full := HelpText.is_full(data.id)
+	var why := lock_reason(data)
+	if why == "" and full:
+		why = Tr.t("TOPE_CARD_FULL")
+	elif why == "" and block != "":
+		var short: Array = Rules.block_reasons_short(data)
+		why = String(short[0]) if not short.is_empty() else ""
+	_strip_why.text = why
+	_strip_why.visible = why != ""
+	# Lleno no es un error: ambar, como la etiqueta "Al máximo" de la fila.
+	_strip_why.add_theme_color_override("font_color", CT.sem("WARNING").darkened(0.35) \
+		if (full and lock_reason(data) == "") else CT.danger_text())
+	_strip_why.tooltip_text = block
+	_strip.tooltip_text = _row_tooltip_of(data, block)
+	CT.fill_cost_strip(_strip_cost, Rules.cost_by_name(data), Rules.missing_cost(data))
+	_strip_cost.visible = not full and lock_reason(data) == ""
+	_strip_upgrade.visible = full and Rules.upgrade_does_something(data) \
+		and HelpText.lowest_upgradable(data.id) != null
+	_strip_build.visible = not full
+	_strip_build.disabled = block != ""
+
+## Coloca la ventana a pantalla completa (todos los perfiles, zona segura).
 ## Si cambia de telefono a PC (o al reves) se rehacen el carril y las filas.
 func _fit_layout() -> void:
 	if _modal == null or not is_inside_tree():
@@ -385,19 +491,34 @@ func _fit_layout() -> void:
 	# A pantalla completa en todos los perfiles (Bryan, 2026-10-19: "es mas
 	# facil"), con margen al borde: en PC y tablet la ficha va a la derecha.
 	CT.fit_fullscreen(_win, 8.0 if ph else 16.0)
+	var root := _win["root"] as Control
 	if not ph:
-		(_win["root"] as Control).offset_top = 10.0
+		root.offset_top = 10.0
 		var close: Control = _win.get("close")
 		if close != null:
 			close.offset_left = -close.custom_minimum_size.x - 6
 			close.offset_right = -6
+	# Zona segura del telefono (muesca, barra de gestos): fuera de ella.
+	var safe := CT.safe_insets(get_viewport())
+	root.offset_left += float(safe["left"])
+	root.offset_top += float(safe["top"])
+	root.offset_right -= float(safe["right"])
+	root.offset_bottom -= float(safe["bottom"])
 	_detail_column.visible = not ph and vp.x >= DETAIL_MIN_VP_W
-	_detail_column.custom_minimum_size.x = clampf(vp.x * 0.30, DETAIL_W, 460.0)
-	if ph != _phone:
+	# La ficha nunca empuja la lista fuera de la ventana (tablet 1280x800: los
+	# botones de la ficha salian cortados por la derecha).
+	var room := vp.x - 32.0 - float(safe["left"]) - float(safe["right"]) - 60.0 - RAIL_W - LIST_MIN_W
+	_detail_column.custom_minimum_size.x = clampf(minf(vp.x * 0.30, room), DETAIL_MIN_W, 460.0)
+	var compact := not ph and vp.x < WIDE_ROWS_VP_W
+	if ph != _phone or compact != _compact:
 		_phone = ph
+		_compact = compact
 		_build_rail()
 		_grid_sig = []
 		_refresh_grid()
+	_refresh_strip()
+	# El ☰ (capa 30) tapaba la X en todos los perfiles: la X va a su izquierda.
+	CT.dodge_menu_button.call_deferred(_win.get("close"))
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Open / Close ──
@@ -427,6 +548,8 @@ func _open() -> void:
 func _close() -> void:
 	_is_open = false
 	_modal.visible = false
+	if _strip != null:
+		_strip.visible = false
 	_backdrop.visible = false
 	UIManager.close_panel(self)
 	layer = REST_LAYER
@@ -485,7 +608,7 @@ func _flush_grid_refresh() -> void:
 		_refresh_grid()
 
 func _grid_signature(filtered: Array) -> Array:
-	var sig: Array = [_phone]
+	var sig: Array = [_phone, _compact]
 	for data in filtered:
 		sig.append([data.id, lock_reason(data), _thumb_cache.has(data.id)])
 	return sig
@@ -537,11 +660,13 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	row.add_child(_make_thumb(data, Vector2(52, 40) if _phone else Vector2(64, 48), locked))
 
 	# El nombre siempre entero: si no cabe, la fila crece a dos lineas.
-	var name_label := CT.label(data.get_display_name(), "button", CT.text("window", locked))
+	# El nombre siempre entero (crece a dos lineas antes que cortar), en Baloo 2
+	# de 16 dp como poco en telefono y en el color normal tambien bloqueado: lo
+	# apagado ya lo dicen la miniatura y el fondo (contraste).
+	var name_label := CT.name_label(data.get_display_name(), "button")
 	name_label.name = "RowName"
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_label.custom_minimum_size.x = 96.0 if _phone else 150.0
 	row.add_child(name_label)
 
@@ -551,10 +676,13 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		lock.add_theme_constant_override("separation", 4)
 		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		var g := CT.make_glyph("lock", 20)
+		var g := CT.make_glyph("lock", 20 if _phone else 24)
 		g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		lock.add_child(g)
-		var why := CT.label(reason, "small", CT.text("window", true))
+		# "Falta Almacén" lleva un nombre: el mismo minimo que los nombres.
+		var why := CT.name_label(reason, "small")
+		why.autowrap_mode = TextServer.AUTOWRAP_OFF
+		why.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		why.name = "RankLockLabel" if lock.name == "RankLock" else "LockLabel"
 		lock.add_child(why)
 		row.add_child(lock)
@@ -576,7 +704,7 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		full.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		full.visible = false
 		row.add_child(full)
-		var up := CT.pill_button("" if _phone else Tr.t("UI2C_BTN_UPGRADE_ONE_SHORT"), "upgrade", "open", 48 if _phone else CT.BTN_SMALL)
+		var up := CT.pill_button("" if (_phone or _compact) else Tr.t("UI2C_BTN_UPGRADE_ONE_SHORT"), "upgrade", "open", 48 if _phone else CT.BTN_SMALL)
 		up.name = "RowUpgradeOne"
 		up.tooltip_text = Tr.t("TOPE_BTN_UPGRADE_ONE_TIP")
 		up.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -672,7 +800,8 @@ static func row_tooltip(data: BuildingData) -> String:
 	return _row_tooltip_of(data, Rules.purchase_block_detail(data))
 
 static func _row_tooltip_of(data: BuildingData, block: String) -> String:
-	var lines: Array = [data.get_description()]
+	# El nombre entero primero: el globo se lee sin mirar la fila.
+	var lines: Array = [data.get_display_name(), data.get_description()]
 	var rule := PlacementAssistScript.rule_text(data.id)
 	if rule != "":
 		lines.append(rule)
@@ -850,6 +979,7 @@ func _show_no_selection() -> void:
 	_detail_upgrade_one.visible = false
 	_detail_build_btn.visible = false
 	_clear_preview_model()
+	_refresh_strip()
 
 func _select_building(data: BuildingData) -> void:
 	if _selected_data == data:
@@ -924,6 +1054,7 @@ func _refresh_block() -> void:
 		and HelpText.lowest_upgradable(_selected_data.id) != null
 	fill_limit_row(_detail_limit, _selected_data.id, "body")
 	_refresh_cost()
+	_refresh_strip()
 
 ## Lo que se explica en frase sobre el boton: el tope lleno y que hacer, y lo
 ## que llega con una era o se fabrica en otro sitio. Estatica para las pruebas.
@@ -1150,7 +1281,8 @@ func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingDa
 
 	viewport.add_child(model)
 	var max_dim := maxf(data.grid_size.x, data.grid_size.y) * GridManager.cell_size
-	camera.size = max_dim * 2.5
+	# Mas cerca que antes (2,5): en la fila el modelo salia diminuto.
+	camera.size = max_dim * 1.9
 
 	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	await RenderingServer.frame_post_draw
@@ -1172,6 +1304,9 @@ func selected_building_id() -> String:
 
 ## El CONSTRUIR de la ficha (el que empieza a colocar). Para el tutorial.
 func detail_build_button() -> Button:
+	# En telefono la ficha no sale: el CONSTRUIR es el de la franja de abajo.
+	if _phone and _strip_build != null:
+		return _strip_build
 	return _detail_build_btn
 
 ## El boton CONSTRUIR del HUD, para pruebas.
