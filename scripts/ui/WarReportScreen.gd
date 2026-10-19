@@ -24,10 +24,15 @@ extends CanvasLayer
 ## El Sargento Mayor Bombarda (feat/instructores) comenta cada parte con una
 ## frase, debajo de las cifras: tres variantes por caso (QUOTE_CASES), que se
 ## turnan. Su fila se oculta con Ajustes > Interfaz > Instructores.
+##
+## Rediseno fase 2 (feat/ui2-ejercito, docs/28): ventana crema con cinta PARTE
+## (verde si salio bien, roja si no), el sello, lo perdido en iconos (discos de
+## unidad, recursos en rojo) y las lineas cortas debajo; ¡ENTENDIDO! verde.
 
 const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const TextKit := preload("res://scripts/ui/TextKit.gd")
 const InstructorBust := preload("res://scripts/ui/InstructorBust.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 ## Los casos que el Sargento comenta, y cuantas frases tiene cada uno
 ## (INSTR_QUOTE_<CASO>_<n> en Tr.gd).
@@ -41,7 +46,11 @@ const CARD_WIDTH := 500.0
 enum Kind { DEFENSE, TITHE, TRIAL }
 
 var _root: Control
+var _win: Dictionary = {}
 var _card: PanelContainer
+## Lo perdido o lo ganado en iconos, encima de las lineas.
+var _icons: HFlowContainer
+var _relayout_queued := false
 var _kicker: Label
 var _title: Label
 var _stamp_slot: VBoxContainer
@@ -77,22 +86,31 @@ func _setup_ui() -> void:
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
-	_root.add_child(ModalKit.make_backdrop(0.55))
-
-	_card = ModalKit.make_card(8)
-	_root.add_child(_card)
-	var column: VBoxContainer = _card.get_child(0)
+	_win = CT.modal_window(_root, Tr.t("ARMY2_REPORT"), CT.sem("ACCENT"))
+	var veil: ColorRect = _win["veil"]
+	veil.color = Color(veil.color, 0.55)
+	(_win["close"] as Button).pressed.connect(close_current)
+	(_win["close"] as Button).tooltip_text = Tr.t("BTN_CLOSE")
+	_card = _win["panel"]
+	_card.minimum_size_changed.connect(_queue_relayout)
+	var column: VBoxContainer = _win["body"]
+	column.add_theme_constant_override("separation", 6)
 
 	# El pais que firma el parte: bandera y nombre, encima (no alarga el titulo).
-	column.add_child(ColonyByline.new())
-	_kicker = ModalKit.make_text("", "small", UITheme.TEXT_DIM)
+	column.add_child(ColonyByline.new("small", CT.text("window", true)))
+	_kicker = _centered(CT.label("", "small", CT.text("window", true)))
 	column.add_child(_kicker)
-	_title = ModalKit.make_text("", "title", UITheme.ACCENT)
+	_title = _centered(CT.label("", "title", CT.text("window")))
 	column.add_child(_title)
 	_stamp_slot = VBoxContainer.new()
 	column.add_child(_stamp_slot)
-	column.add_child(UITheme.make_separator())
-	_body = ModalKit.make_text("", "body", UITheme.TEXT)
+	_icons = HFlowContainer.new()
+	_icons.name = "ReportIcons"
+	_icons.alignment = FlowContainer.ALIGNMENT_CENTER
+	_icons.add_theme_constant_override("h_separation", 10)
+	_icons.add_theme_constant_override("v_separation", 4)
+	column.add_child(_icons)
+	_body = _centered(CT.label("", "body", CT.text("window")))
 	column.add_child(_body)
 	# El Sargento y su frase.
 	_voice_row = HBoxContainer.new()
@@ -110,21 +128,40 @@ func _setup_ui() -> void:
 	said.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	said.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_voice_row.add_child(said)
-	_quote = UITheme.make_label("", "body", UITheme.TEXT_BRIGHT)
+	_quote = CT.label("", "body", CT.text("window"))
 	_quote.name = "Quote"
 	_quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	said.add_child(_quote)
-	_signed = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_signed = CT.label("", "small", CT.text("window", true))
 	_signed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_signed.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	said.add_child(_signed)
 	EventBus.instructors_visibility_changed.connect(func(on: bool):
 		_voice_row.visible = on and _quote_case != "")
-	column.add_child(ModalKit.make_menu_button(Tr.t("BTN_UNDERSTOOD"), UITheme.BTN, close_current))
+	var ok := CT.pill_button(Tr.t("BTN_UNDERSTOOD"), "check", "primary", CT.h("big"))
+	ok.name = "Understood"
+	ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ok.pressed.connect(close_current)
+	column.add_child(ok)
 	_relayout()
 
+static func _centered(l: Label) -> Label:
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+## La tarjeta mide lo que su contenido; se recoloca cuando este cambia.
 func _relayout() -> void:
-	ModalKit.fit_center(_card, CARD_WIDTH, get_viewport().get_visible_rect().size)
+	_relayout_queued = false
+	if not is_inside_tree():
+		return
+	CT.fit_card(_win, get_viewport().get_visible_rect().size, CARD_WIDTH)
+
+func _queue_relayout() -> void:
+	if _relayout_queued:
+		return
+	_relayout_queued = true
+	_relayout.call_deferred()
 
 # ── Entradas ─────────────────────────────────────────────────────────
 
@@ -172,6 +209,7 @@ func try_show_next() -> bool:
 			_paint_tithe(_current)
 	_relayout()
 	visible = true
+	_queue_relayout()
 	if _voice_row.visible:
 		_voice_bust.speak(_quote)
 	return true
@@ -251,14 +289,18 @@ func _set_stamp(text: String, color: Color) -> void:
 		_stamp_slot.remove_child(child)
 		child.queue_free()
 	if text != "":
-		_stamp_slot.add_child(ModalKit.make_stamp(text, color))
+		_stamp_slot.add_child(CT.stamp(text, color))
 
 func _paint_defense(report: Dictionary) -> void:
 	var victory: bool = bool(report.get("victory", false))
 	_kicker.text = Tr.t("LBL_REPORT_DEFENSE_KICKER")
 	_title.text = Tr.t("LBL_REPORT_DEFENSE_WON") if victory else Tr.t("LBL_REPORT_DEFENSE_LOST")
-	UITheme.set_label_color(_title, UITheme.POSITIVE if victory else UITheme.DANGER)
+	_tone(victory, "danger")
 	_set_stamp("", Color.WHITE)
+	# Bajas en discos: las nuestras en verde, las suyas en rojo.
+	var summary: Dictionary = report.get("summary", {})
+	_set_icons([CT.roster_discs(summary.get("casualties", {}), CT.sem("POSITIVE"), 40),
+		CT.roster_discs(summary.get("enemy_casualties", {}), CT.sem("DANGER"), 40)])
 	_body.text = "\n".join(defense_lines(victory, int(report.get("rounds", 0)), report.get("summary", {})))
 	_say(Kind.DEFENSE, victory)
 
@@ -266,11 +308,12 @@ func _paint_tithe(report: Dictionary) -> void:
 	var repelled: bool = bool(report.get("repelled", false))
 	_kicker.text = Tr.t("STORM_TITHE_DEFENDING")
 	_title.text = Tr.t("LBL_REPORT_TITHE_REPELLED") if repelled else Tr.t("LBL_REPORT_TITHE_TAKEN")
-	UITheme.set_label_color(_title, UITheme.POSITIVE if repelled else UITheme.DANGER)
+	_tone(repelled, "danger")
 	_set_stamp(
 		Tr.t("LBL_STAMP_REPELLED") if repelled else Tr.t("LBL_STAMP_COLLECTED"),
-		UITheme.POSITIVE.lightened(0.2) if repelled else UITheme.DANGER.lightened(0.25)
+		CT.sem("POSITIVE") if repelled else CT.sem("DANGER")
 	)
+	_set_icons([_taken_chips(report.get("taken", {}))])
 	_body.text = "\n".join(tithe_lines(repelled, report.get("taken", {})))
 	_say(Kind.TITHE, repelled)
 
@@ -280,13 +323,49 @@ func _paint_trial(report: Dictionary) -> void:
 	var repelled: bool = bool(report.get("repelled", false))
 	_kicker.text = Tr.t("LBL_REPORT_TRIAL_KICKER")
 	_title.text = Tr.t("LBL_REPORT_TITHE_REPELLED") if repelled else Tr.t("LBL_REPORT_TITHE_TAKEN")
-	UITheme.set_label_color(_title, UITheme.POSITIVE if repelled else UITheme.WARNING)
+	_tone(repelled, "warning")
 	_set_stamp(
 		Tr.t("LBL_STAMP_REPELLED") if repelled else Tr.t("LBL_STAMP_COLLECTED"),
-		UITheme.POSITIVE.lightened(0.2) if repelled else UITheme.WARNING.lightened(0.2)
+		CT.sem("POSITIVE") if repelled else CT.sem("WARNING")
 	)
+	_set_icons([_taken_chips(report.get("taken", {}))])
 	_body.text = "\n".join(trial_lines(repelled, report.get("taken", {})))
 	_say(Kind.TRIAL, repelled)
+
+## La cinta (PARTE) y el titulo en verde si salio bien; si no, en `bad_tone`.
+func _tone(good: bool, bad_tone: String) -> void:
+	CT.set_ribbon(_win, Tr.t("ARMY2_REPORT"), CT.sem("POSITIVE") if good else CT.sem(bad_tone.to_upper()))
+	CT.style_label(_title, "title", CT.tone_color("positive" if good else bad_tone))
+
+## Cambia la fila de iconos (vacia = se esconde).
+func _set_icons(parts: Array) -> void:
+	for child in _icons.get_children():
+		_icons.remove_child(child)
+		child.queue_free()
+	for part in parts:
+		if part != null and (part as Control).get_child_count() > 0:
+			_icons.add_child(part)
+		elif part != null:
+			(part as Control).queue_free()
+	_icons.visible = _icons.get_child_count() > 0
+
+## Lo que se llevaron en iconos: recursos con "-", edificios y trabajadores.
+func _taken_chips(taken: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	var resources: Dictionary = {}
+	for key in taken:
+		if key in ["gold", "wood", "steel", "oil", "food"] and int(taken[key]) > 0:
+			resources[key] = int(taken[key])
+	if not resources.is_empty():
+		row.add_child(CT.cost_row(resources, resources, "-"))
+	if int(taken.get("workers", 0)) > 0:
+		var people := HBoxContainer.new()
+		people.add_theme_constant_override("separation", 3)
+		people.add_child(UITheme.make_icon("workers", 24))
+		people.add_child(CT.label("-%d" % int(taken["workers"]), "number", CT.tone_color("danger")))
+		row.add_child(people)
+	return row
 
 ## Las lineas del parte del Impuesto de prueba. Sin estado, para las pruebas.
 static func trial_lines(repelled: bool, taken: Dictionary) -> Array:

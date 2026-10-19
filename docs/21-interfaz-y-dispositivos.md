@@ -315,6 +315,16 @@ estado de población, que lleva su propia rama):
 - Máximo 3 avisos a la vez (el resto ya está en el registro).
 - Los globos de ayuda se callan también bajo la pausa y el menú principal
   (`HelperPanel` mira `get_tree().paused` con un vigía que corre en pausa).
+- **Ventanas del rediseño** (fase 2, docs/28 §15: Ejército, MISIONES, ENCARGOS,
+  partes): ya no usan su ranura de `UILayoutConfig` (`ArmyPanel.modal`,
+  `SkirmishPanel.modal`, `ContractPanel.modal` siguen registradas en `UIManager`
+  para el apilado y ESC). Se colocan solas con `CartoonTheme.fit_window()` al
+  abrirse y con `size_changed`: en un lienzo de menos de 450 de alto
+  (`CartoonTheme.phone_canvas()`), a pantalla completa con 6 px de margen; si no,
+  centradas con su tope (Ejército 980×640, MISIONES 1080×560, ENCARGOS 1080×520).
+  Los partes miden lo que su contenido (`fit_card()`). En teléfono las pestañas
+  no elegidas y las acciones del tablero van solo con icono (la palabra al
+  mantener pulsado).
 
 ## 8. Menú único, Ajustes que responden y volumen
 

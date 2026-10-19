@@ -107,18 +107,20 @@ func test_no_movement_controls_on_a_pc_by_default() -> void:
 
 func test_the_reason_a_unit_cannot_train_is_visible_text() -> void:
 	var panel := _instance("res://scenes/ui/ArmyPanel.tscn")
-	panel._refresh()
-	await await_idle_frame()  # las filas viejas se liberan en diferido
+	# Rediseno fase 2: una pestana por medio (Tierra / Mar / Aire); se cuentan
+	# los motivos de las tres.
 	var blocked := 0
 	for unit_id in GameConfig.get_unit_ids():
 		if not ArmyManager.can_train(unit_id)["ok"]:
 			blocked += 1
-	var labels := panel.find_children("BlockedReason", "Label", true, false)
 	var shown := 0
-	for l in labels:
-		if not l.is_queued_for_deletion():
-			shown += 1
-			assert_str((l as Label).text).is_not_empty()
+	for domain in ["land", "sea", "air"]:
+		panel.select_tab(domain)
+		await await_idle_frame()  # las filas viejas se liberan en diferido
+		for l in panel.find_children("BlockedReason", "Label", true, false):
+			if not l.is_queued_for_deletion() and l.is_inside_tree():
+				shown += 1
+				assert_str((l as Label).text).is_not_empty()
 	assert_int(shown).is_equal(blocked)
 
 # ── Tamano dedo ──────────────────────────────────────────────────────

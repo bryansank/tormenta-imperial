@@ -20,6 +20,7 @@ extends PanelContainer
 
 signal closed()
 
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 const ICON_PX := 42
 const GLYPH_PX := 22
 
@@ -35,7 +36,13 @@ func setup(unit_id: String, unit = null, closable := false) -> void:
 	_closable = closable
 	name = "UnitCard"
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.CAT_MILITARY, 2, true))
+	# Rediseno fase 2 (feat/ui2-ejercito): tarjeta crema de borde grueso, la
+	# misma en el tablero y en el Cuartel.
+	var st := CT.box(CT.c("window", "BG"), CT.c("window", "BORDER"), CT.BORDER, CT.RADIUS_CARD, 8 if CT.phone else 12)
+	st.shadow_color = Color(CT.c("window", "BORDER").darkened(0.45), 0.6)
+	st.shadow_size = 1
+	st.shadow_offset = Vector2(0, 4)
+	add_theme_stylebox_override("panel", st)
 	# Fuera del arbol ya: con queue_free solo, la ficha vieja y la nueva sumaban
 	# su alto un fotograma y el panel crecia sin encoger (ronda de pruebas 1.0).
 	for child in get_children():
@@ -140,35 +147,26 @@ func _build() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	col.add_child(head)
-	var icon := TextureRect.new()
-	icon.texture = UITheme.unit_icon(_unit_id, ICON_PX)
-	icon.custom_minimum_size = Vector2(ICON_PX, ICON_PX)
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var enemy: bool = _unit != null and int(_unit.side) == 1
-	icon.modulate = UITheme.unit_icon_tint(not enemy)
-	head.add_child(icon)
+	head.add_child(CT.unit_disc(_unit_id, CT.sem("DANGER") if enemy else CT.sem("POSITIVE"), 40 if CT.phone else ICON_PX + 4))
 	var names := VBoxContainer.new()
 	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	names.add_theme_constant_override("separation", 0)
 	head.add_child(names)
-	var title := UITheme.make_label(unit_name(_unit_id).to_upper(), "section", UITheme.TEXT_BRIGHT)
+	var title := CT.label(unit_name(_unit_id), "title", CT.text("window"))
 	title.name = "CardTitle"
 	names.add_child(title)
 	if _unit != null:
 		var who := Tr.t("LBL_CARD_ENEMY") if enemy else Tr.t("LBL_CARD_OURS")
-		var sub := UITheme.make_label("%s · %d/%d" % [who, v["hp"], v["max_hp"]], "small",
-			UITheme.DANGER.lightened(0.3) if enemy else UITheme.POSITIVE.lightened(0.3))
+		var sub := CT.label("%s · %d/%d" % [who, v["hp"], v["max_hp"]], "small",
+			CT.tone_color("danger" if enemy else "positive"))
 		sub.name = "CardHp"
 		names.add_child(sub)
 	if _closable:
-		var x := Button.new()
+		var x := CT.close_button(44 if not CT.phone else 48)
 		x.name = "CardClose"
-		x.text = "✕"
 		x.focus_mode = Control.FOCUS_NONE
-		x.custom_minimum_size = Vector2(UITheme.MIN_BTN_H, UITheme.MIN_BTN_H)
-		UITheme.style_button(x, UITheme.BTN, UITheme.FONT_BUTTON)
+		x.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		x.pressed.connect(func(): closed.emit())
 		head.add_child(x)
 
@@ -189,35 +187,37 @@ func _build() -> void:
 	var move_box := HBoxContainer.new()
 	move_box.add_theme_constant_override("separation", 4)
 	move_box.add_child(UITheme.make_icon("move", GLYPH_PX))
-	move_box.add_child(UITheme.make_label(Tr.t("LBL_CARD_MOVE") % v["move"], "body", UITheme.TEXT))
+	move_box.add_child(CT.label(Tr.t("LBL_CARD_MOVE") % v["move"], "body", CT.text("window")))
 	reach.add_child(move_box)
 	reach.add_child(_stat("range", range_text(v["min_range"], v["range"]), ""))
 	if int(v["min_range"]) > 1:
-		col.add_child(_stat("nofire", Tr.t("LBL_CARD_TOO_CLOSE"), "", UITheme.WARNING))
+		col.add_child(_stat("nofire", Tr.t("LBL_CARD_TOO_CLOSE"), "", CT.tone_color("warning")))
 
 	# Ventaja por tipo.
 	var adv := float(GameConfig.combat_type_advantage.get("advantage", 1.0))
 	var dis := float(GameConfig.combat_type_advantage.get("disadvantage", 1.0))
 	var strong := strong_against(_unit_id)
 	if not strong.is_empty():
-		col.add_child(_matchup_row("good", Tr.t("LBL_CARD_STRONG"), strong, mult_words(true, adv), UITheme.POSITIVE))
+		col.add_child(_matchup_row("good", Tr.t("LBL_CARD_STRONG"), strong, mult_words(true, adv), CT.tone_color("positive")))
 	var weak := weak_against(_unit_id)
 	if not weak.is_empty():
-		col.add_child(_matchup_row("bad", Tr.t("LBL_CARD_WEAK"), weak, mult_words(false, dis), UITheme.WARNING))
+		col.add_child(_matchup_row("bad", Tr.t("LBL_CARD_WEAK"), weak, mult_words(false, dis), CT.tone_color("warning")))
 
-	# Una frase, la ultima.
+	# Una frase, la ultima (en telefono, al mantener pulsado: no cabe).
 	var tip_key := "UNIT_%s_CARD_TIP" % _unit_id.to_upper()
 	var tip := Tr.t(tip_key)
-	if tip != tip_key:
-		var phrase := UITheme.make_label(tip, "small", UITheme.TEXT_DIM)
+	if tip != tip_key and not CT.phone:
+		var phrase := CT.label(tip, "small", CT.text("window", true))
 		phrase.name = "CardPhrase"
 		phrase.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		phrase.custom_minimum_size.x = 220
 		col.add_child(phrase)
 
 	tooltip_text = "\n".join(summary_lines(_unit_id, _unit))
+	if tip != tip_key and CT.phone:
+		tooltip_text += "\n" + tip
 
-func _stat(kind: String, text: String, tip: String, color: Color = UITheme.TEXT) -> HBoxContainer:
+func _stat(kind: String, text: String, tip: String, color: Color = Color(0, 0, 0, 0)) -> HBoxContainer:
 	var box := HBoxContainer.new()
 	box.name = "Stat_" + kind
 	box.add_theme_constant_override("separation", 4)
@@ -225,7 +225,8 @@ func _stat(kind: String, text: String, tip: String, color: Color = UITheme.TEXT)
 	g.kind = kind
 	g.custom_minimum_size = Vector2(GLYPH_PX, GLYPH_PX)
 	box.add_child(g)
-	var label := UITheme.make_label(text, "body", color)
+	var label := CT.label(text, "number" if kind in ["hp", "atk", "def"] else "body",
+		color if color.a > 0.0 else CT.text("window"))
 	box.add_child(label)
 	if tip != "":
 		box.tooltip_text = tip
@@ -252,17 +253,12 @@ func _matchup_row(kind: String, lead: String, ids: Array, mult: String, color: C
 	g.kind = kind
 	g.custom_minimum_size = Vector2(GLYPH_PX, GLYPH_PX)
 	row.add_child(g)
-	row.add_child(UITheme.make_label(lead, "body", color))
+	row.add_child(CT.label(lead, "body", color))
 	for id in ids:
-		var ic := TextureRect.new()
-		ic.texture = UITheme.unit_icon(String(id), GLYPH_PX)
-		ic.custom_minimum_size = Vector2(GLYPH_PX, GLYPH_PX)
-		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(ic)
-		row.add_child(UITheme.make_label(unit_name(String(id)), "body", UITheme.TEXT_BRIGHT))
-	var words := UITheme.make_label(mult, "small", color)
+		# La silueta es blanca: va en un disco de tinta para leerse sobre la crema.
+		row.add_child(CT.unit_disc(String(id), CT.c("window", "TEXT_DIM"), GLYPH_PX + 6))
+		row.add_child(CT.label(unit_name(String(id)), "body", CT.text("window")))
+	var words := CT.label(mult, "small", color)
 	words.name = "MatchupWords"
 	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	words.custom_minimum_size.x = 180
@@ -282,36 +278,36 @@ class StatGlyph extends Control:
 		var s := minf(size.x, size.y)
 		var c := size * 0.5
 		var r := s * 0.42
-		var line := UITheme.OUTLINE_COLOR
+		var line := CT.INK
 		match kind:
 			"hp":
-				var col := UITheme.DANGER.lightened(0.15)
+				var col := CT.sem("DANGER")
 				draw_circle(c + Vector2(-r * 0.45, -r * 0.2), r * 0.52, col)
 				draw_circle(c + Vector2(r * 0.45, -r * 0.2), r * 0.52, col)
 				draw_colored_polygon(PackedVector2Array([
 					c + Vector2(-r * 0.95, -r * 0.05), c + Vector2(r * 0.95, -r * 0.05), c + Vector2(0, r * 0.95)]), col)
 			"atk":
-				var blade := UITheme.TEXT_BRIGHT
-				draw_line(c + Vector2(-r * 0.8, r * 0.8), c + Vector2(r * 0.85, -r * 0.85), line, 5.0)
-				draw_line(c + Vector2(-r * 0.8, r * 0.8), c + Vector2(r * 0.85, -r * 0.85), blade, 3.0)
-				draw_line(c + Vector2(-r * 0.75, r * 0.15), c + Vector2(-r * 0.15, r * 0.75), UITheme.ACCENT, 3.0)
+				var blade := Color(0.85, 0.88, 0.92)
+				draw_line(c + Vector2(-r * 0.8, r * 0.8), c + Vector2(r * 0.85, -r * 0.85), line, 6.0)
+				draw_line(c + Vector2(-r * 0.8, r * 0.8), c + Vector2(r * 0.85, -r * 0.85), blade, 3.5)
+				draw_line(c + Vector2(-r * 0.75, r * 0.15), c + Vector2(-r * 0.15, r * 0.75), CT.sem("ACCENT"), 3.5)
 			"def":
 				var pts := PackedVector2Array([
 					c + Vector2(-r * 0.8, -r * 0.85), c + Vector2(r * 0.8, -r * 0.85),
 					c + Vector2(r * 0.8, r * 0.1), c + Vector2(0, r * 0.95), c + Vector2(-r * 0.8, r * 0.1)])
-				draw_colored_polygon(pts, UITheme.INFO.lightened(0.2))
+				draw_colored_polygon(pts, CT.sem("INFO"))
 				pts.append(pts[0])
-				draw_polyline(pts, line, 1.5)
+				draw_polyline(pts, line, 2.0)
 			"range":
-				draw_arc(c, r, 0, TAU, 20, UITheme.DANGER.lightened(0.25), 2.0)
-				draw_arc(c, r * 0.55, 0, TAU, 16, UITheme.DANGER.lightened(0.25), 2.0)
-				draw_circle(c, r * 0.18, UITheme.DANGER.lightened(0.25))
+				draw_arc(c, r, 0, TAU, 20, CT.sem("DANGER"), 2.5)
+				draw_arc(c, r * 0.55, 0, TAU, 16, CT.sem("DANGER"), 2.5)
+				draw_circle(c, r * 0.18, CT.sem("DANGER"))
 			"nofire":
-				draw_line(c + Vector2(-r, -r), c + Vector2(r, r), UITheme.WARNING, 3.5)
-				draw_line(c + Vector2(r, -r), c + Vector2(-r, r), UITheme.WARNING, 3.5)
+				draw_line(c + Vector2(-r, -r), c + Vector2(r, r), CT.sem("WARNING"), 4.0)
+				draw_line(c + Vector2(r, -r), c + Vector2(-r, r), CT.sem("WARNING"), 4.0)
 			"good":
 				draw_colored_polygon(PackedVector2Array([
-					c + Vector2(0, -r), c + Vector2(r, r * 0.6), c + Vector2(-r, r * 0.6)]), UITheme.POSITIVE)
+					c + Vector2(0, -r), c + Vector2(r, r * 0.6), c + Vector2(-r, r * 0.6)]), CT.sem("POSITIVE"))
 			"bad":
 				draw_colored_polygon(PackedVector2Array([
-					c + Vector2(0, r), c + Vector2(r, -r * 0.6), c + Vector2(-r, -r * 0.6)]), UITheme.WARNING)
+					c + Vector2(0, r), c + Vector2(r, -r * 0.6), c + Vector2(-r, -r * 0.6)]), CT.sem("WARNING"))

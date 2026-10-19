@@ -11,8 +11,13 @@ extends CanvasLayer
 ## Editar disposicion (slot "skirmish_button"). No hace nada por fotograma: se
 ## repinta con senales.
 
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
+
 const LAYER := 10
-const BTN_W := 176.0
+## Rediseno fase 2 (feat/ui2-ejercito): boton redondo azul (abrir) con el
+## banderin de MISIONES; el nombre y el motivo, al mantener pulsado.
+const BTN_W := 64.0
+const BTN_W_PHONE := 48.0
 const DOT := 16.0
 
 var _dock: Control
@@ -52,16 +57,15 @@ func _setup_ui() -> void:
 	_dock = Control.new()
 	_dock.name = "SkirmishDock"
 	_dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_dock.custom_minimum_size = Vector2(UITheme.touch_px(BTN_W), UITheme.MIN_BTN_H + 12)
+	var d: float = BTN_W_PHONE if CT.phone else BTN_W
+	_dock.custom_minimum_size = Vector2(d, d)
 	UILayoutManager.apply_layout("SkirmishButton", _dock)
 	root.add_child(_dock)
 
-	_button = Button.new()
+	_button = CT.round_button("missions", "open", int(d), "", "hud") as Button
 	_button.name = "SkirmishHudButton"
 	_button.focus_mode = Control.FOCUS_NONE
-	_button.text = Tr.t("BTN_SKIRMISH")
 	_button.set_anchors_preset(Control.PRESET_FULL_RECT)
-	UITheme.style_button(_button, UITheme.CAT_MILITARY.darkened(0.15), UITheme.FONT_BUTTON)
 	_button.pressed.connect(_on_pressed)
 	_dock.add_child(_button)
 
@@ -69,12 +73,7 @@ func _setup_ui() -> void:
 	_dot = Panel.new()
 	_dot.name = "ReasonDot"
 	_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = UITheme.DANGER
-	style.set_corner_radius_all(int(DOT))
-	style.border_color = UITheme.TEXT_BRIGHT
-	style.set_border_width_all(2)
-	_dot.add_theme_stylebox_override("panel", style)
+	_dot.add_theme_stylebox_override("panel", CT.box(CT.sem("DANGER"), CT.INK, 2, int(DOT), 0))
 	_dot.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_dot.offset_left = -DOT * 0.75
 	_dot.offset_right = DOT * 0.25
@@ -96,7 +95,7 @@ func refresh() -> void:
 		return
 	var reason: String = CombatManager.sortie_reason()
 	_dot.visible = reason != ""
-	_button.tooltip_text = Tr.t(reason) if reason != "" else Tr.t("HINT_SKIRMISH_BUTTON")
+	_button.tooltip_text = "%s · %s" % [Tr.t("LBL_SKIRMISH_TITLE"), Tr.t(reason) if reason != "" else Tr.t("HINT_SKIRMISH_BUTTON")]
 
 func _on_pressed() -> void:
 	var panel: Node = _skirmish_panel()

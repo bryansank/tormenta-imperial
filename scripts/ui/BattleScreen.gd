@@ -32,6 +32,12 @@ extends CanvasLayer
 ## con las mismas llamadas a CombatManager. La preferencia es del dispositivo
 ## (GameConfig.ui_combat_view, settings.cfg) y se cambia en Ajustes o con el
 ## boton de la cabecera, tambien a mitad de pelea.
+##
+## **Piel nueva** (rediseno fase 2, feat/ui2-ejercito, docs/28): la cabecera es
+## una ficha oscura del HUD; la barra de acciones, botones pastilla con icono (en
+## telefono solo el icono, la palabra al mantener); el parte, el draft y el
+## informe final, ventanas crema. Las reglas, el tablero y la maqueta 3D no
+## cambian: esto es solo la piel.
 
 const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const Rules := preload("res://scripts/combat/CombatRules.gd")
@@ -44,6 +50,7 @@ const Orders := preload("res://scripts/combat_view/FrontOrders.gd")
 ## Para las lineas del botin exclusivo (las mismas palabras que la seleccion).
 const SkirmishPanelScript := preload("res://scripts/ui/SkirmishPanel.gd")
 const UnitCardScript := preload("res://scripts/ui/UnitCard.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 const PLAYER := 0
 const ENEMY := 1
@@ -189,6 +196,8 @@ var _pending_draft: Array = []
 var _report_panel: PanelContainer
 var _report_title: Label
 var _report_detail: Label
+## El botin y las bajas del informe final en iconos, encima de las lineas.
+var _report_icons: HFlowContainer
 
 var _confirm_dialog: ConfirmationDialog
 
@@ -244,7 +253,7 @@ func _setup_ui() -> void:
 	# sentirse como tal.
 	_backdrop = ColorRect.new()
 	_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_backdrop.color = Color(UITheme.BG_DARK.darkened(0.3), 0.93)
+	_backdrop.color = Color(CT.c("hud", "BG").darkened(0.25), 0.94)
 	_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(_backdrop)
 
@@ -281,19 +290,23 @@ func _build_board_view() -> void:
 	header.add_theme_constant_override("h_separation", 24)
 	header.add_theme_constant_override("v_separation", 4)
 	# Nuestro lado: la bandera y el nombre del pais.
-	header.add_child(ColonyByline.new("small"))
-	_title_label = UITheme.make_label("", "title", UITheme.ACCENT)
+	header.add_theme_constant_override("h_separation", 14)
+	header.add_child(ColonyByline.new("small", CT.text("hud", true)))
+	_title_label = CT.label("", "button", CT.sem("ACCENT"))
 	header.add_child(_title_label)
-	_round_label = UITheme.make_label("", "section", UITheme.TEXT_DIM)
+	# "Ronda 3 / 20" en corto: [reloj] 3/20, y que significa al mantener.
+	_round_label = CT.label("", "number", CT.text("hud", true))
+	_round_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	_round_label.tooltip_text = Tr.t("ARMY2_ROUND_TIP")
 	header.add_child(_round_label)
-	_turn_label = UITheme.make_label("", "section", UITheme.TEXT)
+	_turn_label = CT.label("", "button", CT.text("hud"))
 	_turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(_turn_label)
 	# x1 / x2 propio: el boton del HUD (capa 10) queda tapado por el tablero (18).
 	_speed_btn = Button.new()
 	_speed_btn.name = "BoardSpeed"
 	_speed_btn.focus_mode = Control.FOCUS_NONE
-	_speed_btn.custom_minimum_size = Vector2(UITheme.touch_px(56.0), UITheme.MIN_BTN_H)
+	_speed_btn.custom_minimum_size = Vector2(56, 0)
 	_speed_btn.pressed.connect(GameConfig.toggle_game_speed)
 	header.add_child(_speed_btn)
 	EventBus.game_speed_changed.connect(func(_s): _refresh_speed_button())
@@ -303,7 +316,7 @@ func _build_board_view() -> void:
 	_view_btn = Button.new()
 	_view_btn.name = "BoardViewToggle"
 	_view_btn.focus_mode = Control.FOCUS_NONE
-	_view_btn.custom_minimum_size = Vector2(UITheme.touch_px(96.0), UITheme.MIN_BTN_H)
+	_view_btn.custom_minimum_size = Vector2(0, 0)
 	_view_btn.tooltip_text = Tr.t("LBL_COMBAT_VIEW_TIP")
 	_view_btn.pressed.connect(toggle_combat_view)
 	_view_btn.visible = false
@@ -314,7 +327,14 @@ func _build_board_view() -> void:
 	_header_margin = MarginContainer.new()
 	_header_margin.name = "BoardHeaderMargin"
 	_header_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_header_margin.add_child(header)
+	# La cabecera es una ficha oscura y fina del HUD (docs/28 §2.2), centrada.
+	var header_card := PanelContainer.new()
+	header_card.name = "BoardHeaderCard"
+	header_card.add_theme_stylebox_override("panel", CT.hud_style())
+	header_card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	header_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_card.add_child(header)
+	_header_margin.add_child(header_card)
 	column.add_child(_header_margin)
 	_fit_header()
 	HudRegistry.register("BattleScreen.turn", _turn_label)
@@ -322,7 +342,7 @@ func _build_board_view() -> void:
 	# Franja de iniciativa: la ronda entera, en el orden en que va a pasar (FR-006).
 	_order_box = HBoxContainer.new()
 	_order_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	_order_box.add_theme_constant_override("separation", 4)
+	_order_box.add_theme_constant_override("separation", 5)
 	column.add_child(_order_box)
 
 	var grid_center := HBoxContainer.new()
@@ -346,47 +366,77 @@ func _build_board_view() -> void:
 
 	# Los botones tambien parten en dos filas si no caben (tres de 132 px y el
 	# de abandonar no entran en un movil de 400).
+	# La barra de acciones: pastillas con icono; TERMINAR TURNO es la principal
+	# (verde). En telefono solo el icono (la palabra al mantener pulsado), para
+	# que quepan en una fila y el tablero conserve su alto.
 	var actions := HFlowContainer.new()
+	actions.name = "BoardActions"
 	actions.alignment = FlowContainer.ALIGNMENT_CENTER
 	actions.add_theme_constant_override("h_separation", 8)
 	actions.add_theme_constant_override("v_separation", 6)
-	_defend_btn = _make_action(Tr.t("BTN_DEFEND"), func(): _act_defend())
-	_wait_btn = _make_action(Tr.t("BTN_WAIT"), func(): _act_wait())
-	_end_btn = _make_action(Tr.t("BTN_END_TURN"), func(): _act_end_turn())
+	_defend_btn = _make_action(Tr.t("BTN_DEFEND"), func(): _act_defend(), "army", "secondary")
+	_defend_btn.name = "DefendButton"
+	_wait_btn = _make_action(Tr.t("BTN_WAIT"), func(): _act_wait(), "clock", "secondary")
+	_wait_btn.name = "WaitButton"
+	_end_btn = _make_action(Tr.t("BTN_END_TURN"), func(): _act_end_turn(), "next", "primary")
+	_end_btn.name = "EndTurnButton"
 	# AVANZAR: solo en el frente, donde no hay casillas que tocar para moverse.
-	_advance_btn = _make_action(Tr.t("BTN_ADVANCE"), func(): _act_advance())
+	_advance_btn = _make_action(Tr.t("BTN_ADVANCE"), func(): _act_advance(), "upgrade", "open")
 	_advance_btn.name = "AdvanceButton"
 	_advance_btn.visible = false
 	actions.add_child(_advance_btn)
 	# VER ALCANCE ENEMIGO (docs/15 §3, "Ensenar el combate"): conmuta, no actua.
-	_threat_btn = _make_action(Tr.t("BTN_SHOW_THREAT"), func(): toggle_threat())
+	_threat_btn = _make_action(Tr.t("BTN_SHOW_THREAT"), func(): toggle_threat(), "access", "secondary")
 	_threat_btn.name = "ThreatButton"
-	_threat_btn.tooltip_text = Tr.ti("LBL_THREAT_TIP")
+	_threat_btn.set_meta("tip", Tr.ti("LBL_THREAT_TIP"))
 	actions.add_child(_threat_btn)
 	actions.add_child(_defend_btn)
 	actions.add_child(_wait_btn)
 	actions.add_child(_end_btn)
 	# Abandonar tambien desde el tablero: una expedicion se puede cortar sin
 	# tener que ganar antes el encuentro que la esta matando.
-	_abandon_board_btn = _make_action(Tr.t("BTN_ABANDON"), func(): _ask_abandon())
-	UITheme.style_button(_abandon_board_btn, UITheme.DANGER.darkened(0.25), UITheme.FONT_BUTTON)
+	_abandon_board_btn = _make_action(Tr.t("BTN_ABANDON"), func(): _ask_abandon(), "back", "danger")
+	_abandon_board_btn.name = "AbandonButton"
 	_abandon_board_btn.visible = false
 	actions.add_child(_abandon_board_btn)
-	_auto_btn = _make_action(Tr.t("BTN_AUTO_RESOLVE"), func(): _act_auto_resolve())
+	_auto_btn = _make_action(Tr.t("BTN_AUTO_RESOLVE"), func(): _act_auto_resolve(), "raid", "warn")
 	_auto_btn.name = "AutoResolveButton"
-	_auto_btn.tooltip_text = Tr.t("HINT_AUTO_RESOLVE")
+	_auto_btn.set_meta("tip", Tr.t("HINT_AUTO_RESOLVE"))
 	_auto_btn.visible = false
 	actions.add_child(_auto_btn)
 	column.add_child(actions)
 	_actions_row = actions
+	_skin_actions()
 
-func _make_action(text: String, callback: Callable) -> Button:
+## Un boton de la barra de acciones. Su piel la pone _skin_action (texto o solo
+## icono segun la pantalla).
+func _make_action(text: String, callback: Callable, glyph: String = "", kind: String = "secondary") -> Button:
 	var btn := Button.new()
-	btn.text = text
-	btn.custom_minimum_size = Vector2(132, UITheme.MIN_BTN_H + 4)
-	UITheme.style_button(btn, UITheme.BTN, UITheme.FONT_BUTTON)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.set_meta("label", text)
+	btn.set_meta("glyph", glyph)
+	btn.set_meta("kind", kind)
 	btn.pressed.connect(callback)
+	_skin_action(btn)
 	return btn
+
+## Telefono (lienzo bajo): solo el icono y la palabra al mantener; si no,
+## [icono] Palabra. Lo que diga el boton, siempre tambien en su tooltip.
+func _skin_action(btn: Button, kind_override: String = "") -> void:
+	var phone := CT.phone_canvas(get_viewport().get_visible_rect().size) if is_inside_tree() else CT.phone
+	var label := String(btn.get_meta("label", btn.text))
+	var glyph := String(btn.get_meta("glyph", ""))
+	btn.text = "" if (phone and glyph != "") else label
+	var tip := String(btn.get_meta("tip", ""))
+	btn.tooltip_text = label if tip == "" else "%s\n%s" % [label, tip]
+	var kind := kind_override if kind_override != "" else String(btn.get_meta("kind", "secondary"))
+	CT.style_pill(btn, kind, 48 if phone else CT.BTN_SMALL, "hud", glyph)
+
+func _skin_actions() -> void:
+	for btn in [_advance_btn, _threat_btn, _defend_btn, _wait_btn, _end_btn, _abandon_board_btn, _auto_btn, _abandon_map_btn]:
+		if btn != null:
+			_skin_action(btn)
+	_style_threat_button()
 
 func _build_result_panel() -> void:
 	_result_panel = PanelContainer.new()
@@ -396,27 +446,26 @@ func _build_result_panel() -> void:
 	_result_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_result_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_result_panel.custom_minimum_size = Vector2(340, 0)
-	_result_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
+	_result_panel.add_theme_stylebox_override("panel", CT.window_style())
 	_result_panel.visible = false
 	_root.add_child(_result_panel)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", UITheme.SEPARATION)
+	vbox.add_theme_constant_override("separation", 8)
 	_result_panel.add_child(vbox)
 
-	_result_title = UITheme.make_label("", "title", UITheme.ACCENT)
+	_result_title = CT.label("", "display", CT.text("window"))
 	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_result_title)
 
-	_result_detail = UITheme.make_label("", "body", UITheme.TEXT_DIM)
+	_result_detail = CT.label("", "body", CT.text("window", true))
 	_result_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_result_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_result_detail.custom_minimum_size.x = 300
 	vbox.add_child(_result_detail)
 
-	var close := Button.new()
-	close.text = Tr.t("BTN_CLOSE")
-	close.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
-	UITheme.style_button(close, UITheme.BTN, UITheme.FONT_BUTTON)
+	var close := CT.pill_button(Tr.t("BTN_CLOSE"), "check", "primary", CT.h("big"))
+	close.name = "ResultClose"
 	close.pressed.connect(_close_board)
 	vbox.add_child(close)
 
@@ -444,26 +493,37 @@ func _build_map_view() -> void:
 	column.add_theme_constant_override("separation", UITheme.SEPARATION)
 	_map_view.add_child(column)
 
+	# Cabecera en una ficha oscura del HUD: que campana y mision es, y por donde
+	# va la columna ([banderin] 2/5).
+	var header_card := PanelContainer.new()
+	header_card.name = "MapHeader"
+	header_card.add_theme_stylebox_override("panel", CT.hud_style())
+	column.add_child(header_card)
+	var header_col := VBoxContainer.new()
+	header_col.add_theme_constant_override("separation", 2)
+	header_card.add_child(header_col)
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 16)
-	_map_title = UITheme.make_label(Tr.t("LBL_EXPEDITION_MAP"), "title", UITheme.ACCENT)
+	header.add_theme_constant_override("separation", 10)
+	header.add_child(CT.make_glyph("missions", 28))
+	_map_title = CT.label(Tr.t("LBL_EXPEDITION_MAP"), "title", CT.text("hud"))
 	_map_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_map_title.clip_text = true
 	header.add_child(_map_title)
-	_map_progress = UITheme.make_label("", "section", UITheme.TEXT_DIM)
+	_map_progress = CT.label("", "number", CT.text("hud", true))
 	header.add_child(_map_progress)
-	column.add_child(header)
+	header_col.add_child(header)
 
 	# Los bonos del draft van en la cabecera del mapa porque son la razon por la
 	# que el jugador mira el mapa: deciden si la ruta arriesgada ya es asumible.
-	_map_bonuses = UITheme.make_label("", "small", UITheme.POSITIVE)
+	_map_bonuses = CT.label("", "small", CT.tone_color("positive", "hud"))
 	_map_bonuses.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	column.add_child(_map_bonuses)
+	header_col.add_child(_map_bonuses)
 
 	# Lo que diria el tooltip, escrito: con el dedo es la unica forma de saber
 	# que hay detras de un nodo antes de entrar en el.
-	_map_hint = UITheme.make_label("", "small", UITheme.TEXT)
+	_map_hint = CT.label("", "small", CT.text("hud", true))
 	_map_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	column.add_child(_map_hint)
+	header_col.add_child(_map_hint)
 
 	_map_scroll = ScrollContainer.new()
 	_map_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -478,8 +538,8 @@ func _build_map_view() -> void:
 	var footer := HBoxContainer.new()
 	footer.alignment = BoxContainer.ALIGNMENT_CENTER
 	footer.add_theme_constant_override("separation", 8)
-	_abandon_map_btn = _make_action(Tr.t("BTN_ABANDON"), func(): _ask_abandon())
-	UITheme.style_button(_abandon_map_btn, UITheme.DANGER.darkened(0.25), UITheme.FONT_BUTTON)
+	_abandon_map_btn = _make_action(Tr.t("BTN_ABANDON"), func(): _ask_abandon(), "back", "danger")
+	_abandon_map_btn.name = "AbandonMapButton"
 	footer.add_child(_abandon_map_btn)
 	column.add_child(footer)
 
@@ -488,7 +548,7 @@ func _build_draft_panel() -> void:
 	# y una de ellas tiene que elegirse antes de volver al mapa (SC-009).
 	_draft_backdrop = ColorRect.new()
 	_draft_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_draft_backdrop.color = Color(UITheme.BG_DARK.darkened(0.5), 0.75)
+	_draft_backdrop.color = Color(0.05, 0.04, 0.03, 0.6 if UITheme.high_contrast else 0.42)
 	_draft_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_draft_backdrop.visible = false
 	_root.add_child(_draft_backdrop)
@@ -500,20 +560,25 @@ func _build_draft_panel() -> void:
 	_draft_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_draft_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_draft_panel.custom_minimum_size = Vector2(360, 0)
-	_draft_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
+	_draft_panel.add_theme_stylebox_override("panel", CT.window_style())
 	_draft_panel.visible = false
 	_root.add_child(_draft_panel)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", UITheme.SEPARATION)
+	vbox.add_theme_constant_override("separation", 8)
 	_draft_panel.add_child(vbox)
 
-	var title := UITheme.make_label(Tr.t("LBL_DRAFT_TITLE"), "title", UITheme.ACCENT)
+	var head := HBoxContainer.new()
+	head.alignment = BoxContainer.ALIGNMENT_CENTER
+	head.add_theme_constant_override("separation", 8)
+	head.add_child(CT.make_glyph("star", 30))
+	var title := CT.label(Tr.t("LBL_DRAFT_TITLE"), "title", CT.text("window"))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
+	head.add_child(title)
+	vbox.add_child(head)
 
 	_draft_cards = VBoxContainer.new()
-	_draft_cards.add_theme_constant_override("separation", 6)
+	_draft_cards.add_theme_constant_override("separation", 8)
 	vbox.add_child(_draft_cards)
 
 func _build_report_panel() -> void:
@@ -524,27 +589,34 @@ func _build_report_panel() -> void:
 	_report_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_report_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_report_panel.custom_minimum_size = Vector2(360, 0)
-	_report_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
+	_report_panel.add_theme_stylebox_override("panel", CT.window_style())
 	_report_panel.visible = false
 	_root.add_child(_report_panel)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", UITheme.SEPARATION)
+	vbox.add_theme_constant_override("separation", 8)
 	_report_panel.add_child(vbox)
 
-	_report_title = UITheme.make_label("", "title", UITheme.ACCENT)
+	_report_title = CT.label("", "display", CT.text("window"))
 	_report_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_report_title)
 
-	_report_detail = UITheme.make_label("", "body", UITheme.TEXT_DIM)
+	# Botin (+) y bajas en iconos; debajo, las lineas cortas.
+	_report_icons = HFlowContainer.new()
+	_report_icons.name = "ReportIcons"
+	_report_icons.alignment = FlowContainer.ALIGNMENT_CENTER
+	_report_icons.add_theme_constant_override("h_separation", 10)
+	_report_icons.add_theme_constant_override("v_separation", 4)
+	vbox.add_child(_report_icons)
+
+	_report_detail = CT.label("", "body", CT.text("window", true))
 	_report_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_report_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_report_detail.custom_minimum_size.x = 320
 	vbox.add_child(_report_detail)
 
-	var back := Button.new()
-	back.text = Tr.t("BTN_BACK_TO_BASE")
-	back.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
-	UITheme.style_button(back, UITheme.BTN, UITheme.FONT_BUTTON)
+	var back := CT.pill_button(Tr.t("BTN_BACK_TO_BASE"), "back", "primary", CT.h("big"))
+	back.name = "BackToBase"
 	back.pressed.connect(_close_all)
 	vbox.add_child(back)
 
@@ -675,6 +747,7 @@ func _fit_header() -> void:
 
 func _on_viewport_resized() -> void:
 	_fit_header()
+	_skin_actions()
 	if _view == View.BOARD and _uses_3d():
 		_queue_margin_update()
 		_refresh()
@@ -743,13 +816,21 @@ func _show_expedition_report(result: int, rewards: Dictionary, casualties: Dicti
 	match result:
 		0:
 			_report_title.text = Tr.t("LBL_VICTORY")
-			_report_title.add_theme_color_override("font_color", UITheme.POSITIVE)
+			_report_title.add_theme_color_override("font_color", CT.tone_color("positive"))
 		2:
 			_report_title.text = Tr.t("LBL_ABANDONED")
-			_report_title.add_theme_color_override("font_color", UITheme.WARNING)
+			_report_title.add_theme_color_override("font_color", CT.tone_color("warning"))
 		_:
 			_report_title.text = Tr.t("LBL_DEFEAT")
-			_report_title.add_theme_color_override("font_color", UITheme.DANGER)
+			_report_title.add_theme_color_override("font_color", CT.tone_color("danger"))
+	for child in _report_icons.get_children():
+		_report_icons.remove_child(child)
+		child.queue_free()
+	if not rewards.is_empty():
+		_report_icons.add_child(CT.cost_row(rewards, {}, "+"))
+	if not casualties.is_empty():
+		_report_icons.add_child(CT.roster_discs(casualties, CT.kind_fill("disabled"), 40))
+	_report_icons.visible = _report_icons.get_child_count() > 0
 
 	var lines: Array = []
 	if rewards.is_empty():
@@ -813,9 +894,9 @@ func _open_draft() -> void:
 func _make_draft_card(index: int, option: Dictionary) -> Button:
 	var card := Button.new()
 	card.text = draft_text(option)
-	card.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H + 8)
+	card.custom_minimum_size = Vector2(0, 64)
 	card.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	UITheme.style_card_button(card, UITheme.CARD_BG, UITheme.ACCENT)
+	CT.army_card_button(card)
 	card.pressed.connect(func(): _choose_draft(index))
 	return card
 
@@ -964,7 +1045,7 @@ func _build_map() -> void:
 
 		# El riesgo, escrito bajo el nodo. El color del fondo lo repite, pero
 		# el color solo no basta, y el tooltip no existe en un movil.
-		var risk_label := UITheme.make_label("", "small", UITheme.TEXT_DIM)
+		var risk_label := CT.label("", "small", CT.text("hud", true))
 		risk_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		risk_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		risk_label.clip_text = true
@@ -999,8 +1080,8 @@ func _refresh_map() -> void:
 		# En mar y aire, el barco o el avion que mas trae (ronda de pruebas 1.1).
 		btn.icon = null if is_boss else UITheme.unit_icon(node_lead_unit(node), 24)
 		btn.add_theme_constant_override("icon_max_width", 22)
-		btn.add_theme_color_override("icon_normal_color", UITheme.unit_icon_tint(false))
-		btn.add_theme_color_override("icon_disabled_color", UITheme.TEXT_DIM)
+		btn.add_theme_color_override("icon_normal_color", CT.WHITE)
+		btn.add_theme_color_override("icon_disabled_color", CT.c("hud", "TEXT_DIM"))
 		btn.disabled = not (reachable or fightable)
 		btn.tooltip_text = _node_tooltip(node, i == current, cleared, reachable)
 		if fightable:
@@ -1010,7 +1091,7 @@ func _refresh_map() -> void:
 			var risk_label: Label = _map_risk_labels[i]
 			risk_label.text = node_risk_text(i)
 			var risk_col: Color = _risk_color(int(node.get("risk", 0))).lightened(0.35)
-			UITheme.set_label_color(risk_label, risk_col if (reachable or fightable or i == _armed_node) else UITheme.TEXT_DIM)
+			risk_label.add_theme_color_override("font_color", risk_col if (reachable or fightable or i == _armed_node) else CT.text("hud", true))
 
 	_map_progress.text = Tr.t("LBL_EXPEDITION_PROGRESS") % [_run.nodes_cleared(), map.size()]
 	_map_bonuses.text = _draft_summary()
@@ -1021,52 +1102,50 @@ func _refresh_map() -> void:
 ## El riesgo se pinta en el fondo y se dice con palabras en el tooltip: el color
 ## solo nunca es suficiente.
 func _style_node(btn: Button, is_current: bool, cleared: bool, reachable: bool, is_boss: bool, risk: int, armed: bool = false) -> void:
-	var background: Color = _risk_color(risk).darkened(0.55)
-	var border: Color = UITheme.ACCENT_DIM
-	var width: int = 1
+	# Piel de juguete (docs/28): fichas redondas con tinta, color vivo por
+	# riesgo donde se puede ir, apagado donde no.
+	var background: Color = _risk_color(risk)
+	var border: Color = CT.INK
+	var width: int = 3
 
 	if is_boss:
-		background = UITheme.DANGER.darkened(0.3)
-		border = UITheme.DANGER
-		width = 2
+		background = CT.sem("DANGER")
 	if cleared:
-		background = UITheme.POSITIVE.darkened(0.6)
-		border = UITheme.POSITIVE
-		width = 2
-	if reachable:
-		border = UITheme.WARNING
-		width = 3
+		background = CT.sem("POSITIVE")
+	if not (reachable or is_current or cleared):
+		background = background.lerp(CT.c("hud", "CARD_ALT"), 0.7)
 	if is_current:
-		border = UITheme.ACCENT
-		width = 4
+		border = CT.sem("ACCENT")
+		width = 5
 	if armed:
 		# Armado por un primer toque: brilla y se aclara, para que el segundo
 		# toque se sienta como confirmar, no como adivinar.
 		background = background.lightened(0.25)
-		border = UITheme.TEXT_BRIGHT
-		width = 5
+		border = CT.WHITE
+		width = 6
 
-	var style := StyleBoxFlat.new()
-	style.bg_color = background
-	style.set_corner_radius_all(UITheme.CORNER)
-	style.border_color = border
-	style.set_border_width_all(width)
-	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+	var style := CT.box(background, border, width, int(_node_size * 0.5), 2, 0, 2 if (reachable or is_current) else 0, "hud")
+	var hover := CT.box(background.lightened(0.12), border, width, int(_node_size * 0.5), 2, 0, 2 if (reachable or is_current) else 0, "hud")
+	for state in ["normal", "pressed", "disabled", "focus"]:
 		btn.add_theme_stylebox_override(state, style)
-	var text_color: Color = UITheme.TEXT_BRIGHT if (reachable or is_current) else UITheme.TEXT_DIM
+	btn.add_theme_stylebox_override("hover", hover)
+	var text_color: Color = CT.WHITE if (reachable or is_current or cleared) else CT.c("hud", "TEXT_DIM")
 	btn.add_theme_color_override("font_color", text_color)
 	btn.add_theme_color_override("font_disabled_color", text_color)
-	btn.add_theme_color_override("font_hover_color", UITheme.TEXT_BRIGHT)
-	btn.add_theme_font_size_override("font_size", UITheme.FONT_SMALL)
+	btn.add_theme_color_override("font_hover_color", CT.WHITE)
+	btn.add_theme_color_override("font_outline_color", CT.INK)
+	btn.add_theme_constant_override("outline_size", 4)
+	btn.add_theme_font_override("font", CT.title_font())
+	btn.add_theme_font_size_override("font_size", CT.fs("small"))
 
 func _risk_color(risk: int) -> Color:
 	match clampi(risk, 0, 2):
 		0:
-			return UITheme.POSITIVE
+			return CT.sem("POSITIVE")
 		1:
-			return UITheme.WARNING
+			return CT.sem("WARNING")
 		_:
-			return UITheme.DANGER
+			return CT.sem("DANGER")
 
 func _risk_text(risk: int) -> String:
 	match clampi(risk, 0, 2):
@@ -1149,8 +1228,10 @@ func _draw_map_links() -> void:
 				continue
 			var to_point: Vector2 = _node_positions[to_index] + Vector2(0.0, half)
 			var live: bool = from_index == current
-			var color: Color = UITheme.ACCENT if live else UITheme.ACCENT_DIM
-			_map_canvas.draw_line(from_point, to_point, color, 3.0 if live else 2.0)
+			var color: Color = CT.sem("ACCENT") if live else CT.c("hud", "CARD_BORDER")
+			# Con tinta debajo: el camino de juguete se lee sobre la pizarra.
+			_map_canvas.draw_line(from_point, to_point, CT.INK, 8.0 if live else 6.0, true)
+			_map_canvas.draw_line(from_point, to_point, color, 5.0 if live else 3.0, true)
 
 ## Lo que la columna lleva encima ahora mismo, en el orden en que lo eligio.
 func _draft_summary() -> String:
@@ -1319,7 +1400,7 @@ func _show_encounter_result(victory: bool, turns_used: int) -> void:
 	close_unit_card()
 	_refresh()
 	_result_title.text = Tr.t("LBL_VICTORY") if victory else Tr.t("LBL_DEFEAT")
-	_result_title.add_theme_color_override("font_color", UITheme.POSITIVE if victory else UITheme.DANGER)
+	_result_title.add_theme_color_override("font_color", CT.tone_color("positive" if victory else "danger"))
 	_result_detail.text = _result_text(turns_used)
 	_result_panel.visible = true
 	_set_actions_enabled(false)
@@ -1400,14 +1481,15 @@ func _refresh_header() -> void:
 	# Al agotar el tope el contador ya ha pasado a la ronda siguiente: la
 	# cabecera decia "Ronda 21 / 20" detras del parte de derrota.
 	var limit := CombatManager.get_turn_limit()
-	_round_label.text = Tr.t("LBL_ROUND") % [mini(CombatManager.get_round(), limit), limit]
+	_round_label.text = Tr.t("ARMY2_ROUND") % [mini(CombatManager.get_round(), limit), limit]
+	_round_label.tooltip_text = "%s\n%s" % [Tr.t("LBL_ROUND") % [mini(CombatManager.get_round(), limit), limit], Tr.t("ARMY2_ROUND_TIP")]
 	var active := CombatManager.get_active_unit()
 	if active == null:
 		_turn_label.text = ""
 		return
 	var is_player: bool = active.side == PLAYER
 	_turn_label.text = Tr.t("LBL_TURN_PLAYER") if is_player else Tr.t("LBL_TURN_ENEMY")
-	_turn_label.add_theme_color_override("font_color", UITheme.POSITIVE if is_player else UITheme.DANGER)
+	_turn_label.add_theme_color_override("font_color", CT.tone_color("positive" if is_player else "danger", "hud"))
 
 func _refresh_cells() -> void:
 	var active := CombatManager.get_active_unit()
@@ -1666,24 +1748,25 @@ func _refresh_order() -> void:
 		if unit == null or not unit.is_alive():
 			continue
 		var chip := Label.new()
-		chip.custom_minimum_size = Vector2(26, 26)
+		chip.custom_minimum_size = Vector2(30, 30)
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		chip.add_theme_font_size_override("font_size", UITheme.FONT_SMALL)
 		var is_active: bool = active != null and uid == active.uid
-		var tint: Color = UITheme.POSITIVE if unit.side == PLAYER else UITheme.DANGER
+		var tint: Color = CT.sem("POSITIVE") if unit.side == PLAYER else CT.sem("DANGER")
 		_paint_order_face(chip, unit, is_active)
 		var style := StyleBoxFlat.new()
-		style.bg_color = tint.darkened(0.2 if is_active else 0.6)
+		style.bg_color = tint if is_active else tint.darkened(0.35)
+		style.anti_aliasing = true
 		# La forma dice el bando: ficha redonda la nuestra, cuadrada la suya. Es
 		# la misma pareja circulo/esquina que la marca de las casillas.
-		style.set_corner_radius_all(13 if unit.side == PLAYER else 0)
+		style.set_corner_radius_all(15 if unit.side == PLAYER else 3)
 		chip.set_meta("side", "ally" if unit.side == PLAYER else "enemy")
 		# Quien es, en el tooltip: la ficha solo lleva la silueta.
 		chip.mouse_filter = Control.MOUSE_FILTER_PASS
 		chip.tooltip_text = chip_tooltip(unit)
-		style.border_color = UITheme.ACCENT if is_active else UITheme.ACCENT_DIM
-		style.set_border_width_all(2 if is_active else 1)
+		style.border_color = CT.sem("ACCENT") if is_active else CT.INK
+		style.set_border_width_all(3 if is_active else 2)
 		if boss >= 0 and uid == boss:
 			UITheme.mark_boss(style)
 		chip.add_theme_stylebox_override("normal", style)
@@ -1977,7 +2060,7 @@ func _refresh_view_button() -> void:
 	# El boton dice a donde lleva, no donde se esta.
 	var other := "OPT_COMBAT_VIEW_BOARD" if combat_view() == "front" else "OPT_COMBAT_VIEW_FRONT"
 	_view_btn.text = Tr.t(other)
-	UITheme.style_button(_view_btn, UITheme.BTN, UITheme.FONT_SECTION)
+	CT.style_pill(_view_btn, "secondary", 44 if not CT.phone else 48, "hud", "", "small")
 
 func view_button() -> Button:
 	return _view_btn
@@ -2112,7 +2195,7 @@ func _refresh_speed_button() -> void:
 	var fast := GameConfig.game_speed > 1.0
 	_speed_btn.text = "x%d" % int(GameConfig.game_speed)
 	_speed_btn.tooltip_text = Tr.ti("LBL_GAME_SPEED_TIP")
-	UITheme.style_button(_speed_btn, UITheme.ACCENT.darkened(0.35) if fast else UITheme.BTN, UITheme.FONT_SECTION)
+	CT.style_pill(_speed_btn, "accent" if fast else "secondary", 44 if not CT.phone else 48, "hud", "", "small")
 
 func speed_button() -> Button:
 	return _speed_btn
@@ -2230,8 +2313,8 @@ func threat_button() -> Button:
 func _style_threat_button() -> void:
 	if _threat_btn == null:
 		return
-	_threat_btn.text = Tr.t("BTN_HIDE_THREAT") if _show_threat else Tr.t("BTN_SHOW_THREAT")
-	UITheme.style_button(_threat_btn, UITheme.WARNING.darkened(0.35) if _show_threat else UITheme.BTN, UITheme.FONT_BUTTON)
+	_threat_btn.set_meta("label", Tr.t("BTN_HIDE_THREAT") if _show_threat else Tr.t("BTN_SHOW_THREAT"))
+	_skin_action(_threat_btn, "warn" if _show_threat else "secondary")
 
 ## Lo que se escribe encima de cada pieza: el dano previsto sobre los objetivos
 ## ("-18 de 75", o "-75 ¡Cae!") y "✕ Muy cerca" sobre el enemigo pegado a una

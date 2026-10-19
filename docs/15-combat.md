@@ -122,6 +122,14 @@ blind defence, the Tithe, each siege wave, a lost siege).
 | `scripts/ui/AuditWaveBanner.gd` | "Oleada X de N" on `final_audit_wave_ready`, with the cleared wave from `final_audit_wave_cleared` |
 | `scripts/ui/AuditDefeatScreen.gd` | A lost siege (`final_audit_lost`): what was taken, in which wave, and what it takes to resummon — or, in Supervivencia, the end of the run |
 
+**Piel nueva (rediseño fase 2, `feat/ui2-ejercito`, docs/28 §15).** Ejército,
+MISIONES, ENCARGOS, los partes, el cartel de oleada y la derrota del asedio son
+ventanas crema con cinta (`CartoonTheme.modal_window` / `fit_window` / `fit_card`); en
+`BattleScreen` solo cambia la piel: cabecera en una ficha oscura del HUD, barra de
+acciones con pastillas de icono (en teléfono solo el icono, la palabra al mantener),
+fichas de iniciativa redondas/cuadradas con tinta, nodos del mapa redondos por riesgo,
+y parte, draft e informe final crema. Reglas, tablero 2D y maqueta 3D, sin tocar.
+
 The old `has_method()` / `has_signal()` scaffolding around the expedition calls is
 gone; the only guards left in these panels are unrelated (`SkirmishPanel` asks
 `PopulationManager.has_method("get_morale")` and `BattleScreen.has_method("open_map")`).
@@ -898,10 +906,11 @@ abandone.
 
 ### Antes de salir (`SkirmishPanel`)
 
-Arriba del selector de tropa: las ofertas (botón por oferta) y la ficha de la elegida
-con el mapa por capas (iconos de unidad y número por combate), el botín (lo exclusivo y
-oro/madera con su icono) y "Tu fuerza X · enemigo Y" con **Favorable / Igualada /
-Difícil** (`CombatRules.odds_label`: ≥ 1.25 favorable, < 0.85 difícil). La fuerza es
+En la pestaña Ataques rápidos: una pastilla por oferta (la elegida, azul) y la tarjeta
+de la elegida con los enemigos del primer combate en discos (el mapa por capas, al
+mantener pulsado), el botín (oro/madera con su icono; lo exclusivo, una estrella "+N"
+con su lista) y la etiqueta **Favorable / Igualada / Difícil** (`CombatRules.odds_label`:
+≥ 1.25 favorable, < 0.85 difícil; "Tu fuerza X · enemigo Y" al mantener). La fuerza es
 `CombatRules.side_strength()` (poder × vida / vida base: cuenta heridas y escala); antes
 de lanzar, `roster_power()` de la columna contra el nodo más duro del mapa.
 
@@ -1818,14 +1827,20 @@ incluido.
 
 ### La interfaz
 
-- **MISIONES** (`SkirmishPanel`): arriba, lo que falta para el Ataque Final; debajo,
-  las pestañas **TIERRA / MAR / AIRE / ATAQUES RÁPIDOS** (cada campaña con su N/M,
-  "cerrada" sin su edificio o "completa"). La pestaña de una campaña enseña su nombre,
-  la fila de misiones (✔ hechas, ▶ la que toca, ☠ el jefe), una frase de qué es, el
-  candado con su motivo y su cifra ("Cerrada. Construye: Astillero", "Esta misión
-  llega en la era 3", "La tropa descansa. Lista en 1:20") y la ficha de la misión
-  (mapa, enemigos, botín, fuerzas). La selección de tropa solo enseña las filas de su
-  medio, con lo que no vale apagado y su motivo.
+- **MISIONES** (`SkirmishPanel`; rediseño fase 2, `feat/ui2-ejercito`, docs/28 §15):
+  ventana crema con cinta roja. Arriba, las pestañas **Tierra / Mar / Aire / Ataques
+  rápidos** (icono del medio; candado sin su edificio, ✓ completa; en teléfono las no
+  elegidas solo icono y "3 de 6" a la derecha) y, mientras falte algo, la lista de lo
+  que falta para el Ataque Final (`AuditGateLine`: ✓ / candado por CG nivel 3 y por
+  campaña, la frase entera al mantener). Debajo, lado a lado: la **misión**
+  (`SortieDetail`: recorrido ✓ ✓ ★ 4 5 [jefe] con `CartoonTheme.campaign_track`,
+  "Misión 3 · nombre" + Favorable / Igualada / Difícil, discos de los enemigos del
+  primer combate con "N combates" y la bomba del jefe, botín en iconos; el mapa entero
+  y de qué va la campaña, al mantener) y **tu tropa** (`TroopCard`: disco, "en casa: N",
+  − n +; solo las filas de su medio, lo que no vale en gris con su motivo). Fijo abajo:
+  [moral] 72, [casco] 3/6 y **¡AL ATAQUE!** (verde, `ARMY2_BTN_ATTACK`); el candado
+  ("Cerrada. Construye: Astillero", "La tropa descansa. Lista en 1:20") va debajo en una
+  línea.
 - **El mapa de la misión** (`BattleScreen`): el título dice campaña y misión, y el
   fondo es agua (mar) o cielo (aire): un `ColorRect` con tokens de `UITheme`, nada por
   fotograma. El parte final dice "Misión 3 de 5 ganada" o "La misión sigue ahí".

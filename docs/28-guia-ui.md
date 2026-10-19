@@ -376,3 +376,38 @@ Pendiente de la ronda de pruebas (capturas en 640×360, 800×360, tablet y
 1280×720) y de que el frente del HUD ponga `CartoonTheme.phone` y el lienzo del
 teléfono en dp (§4.2): hasta entonces, en un teléfono real el lienzo mide ~554 de
 alto y estas pantallas salen con la disposición de tablet.
+## 15. Fase 2 · Ejército, Misiones, combate y partes (`feat/ui2-ejercito`)
+
+Pantallas rehechas con esta guía: `ArmyPanel`, `RegimentCard`, `UnitCard`,
+`SkirmishPanel` (MISIONES), `SkirmishButton`, la piel de `BattleScreen`,
+`WarReportScreen`, `AuditWaveBanner`, `AuditDefeatScreen` y `ContractPanel`
+(ENCARGOS). La tarjeta de la Orden de la Regencia vive en `StormHUD` (HUD, otro
+frente). Textos nuevos: bloque `# UI v2 EJÉRCITO` de `Tr.gd` (claves `ARMY2_*`).
+
+**Piezas** (sección `# --- EJÉRCITO (feat/ui2-ejercito)` al final de
+`CartoonTheme.gd`): `modal_window()` (velo + ventana con cinta, en un `holder`
+que se enciende y apaga) con `fit_window()` (teléfono a pantalla completa, PC
+centrada con tope) o `fit_card()` (alto por contenido: partes); `set_ribbon()`;
+`style_pill()` (piel de pastilla sobre un `Button` normal: su `text` sigue siendo
+el texto); `set_pill_text()`; `unit_disc()` y `roster_discs()` (silueta blanca en
+un disco del bando, con "×N"); `cost_row()` / `row_amounts()` (huecos con
+[icono] cifra, en rojo lo que falta, cifras `Amount_<recurso>`);
+`campaign_track()` (✓ ✓ ★ 4 5 [jefe]); `odds_badge()`; `stamp()`;
+`icon_line()`; `tone_color()`; `style_card_button()`; `phone_canvas()` (lienzo
+de menos de 450 de alto aunque nadie haya fijado `phone`).
+
+| Pantalla | Qué queda a la vista | Qué va al mantener pulsado |
+|---|---|---|
+| EJÉRCITO | Pestañas Tierra / Mar / Aire (candado sin su edificio); [casco] poder, [trabajadores] 5/11, [reloj] 1/2; por unidad: disco, nombre ×3, coste en iconos, "Poder 10", [reloj][oro] 1 de sueldo, ficha (?) y **+** verde; cola con barra y ✕ roja; REGIMIENTO al final | Topes y de dónde salen, el sueldo, cifras de combate, lo que devuelve cancelar |
+| MISIONES | Pestañas + lista de lo que falta para el Ataque Final; misión (recorrido, nombre, Favorable/Difícil, enemigos, botín) y tropa (− n +) lado a lado; **¡AL ATAQUE!** fijo abajo con moral y 3/6 | El mapa entero, de qué va la campaña, las fuerzas, el botín exclusivo |
+| Combate (piel) | Cabecera oscura (país, combate, [3/20], de quién es el turno, x2, vista); acciones con icono (teléfono: solo icono) | Qué es cada acción, la ronda |
+| Partes | Cinta PARTE verde/roja, sello, lo perdido en iconos, líneas cortas, Sargento, ¡ENTENDIDO! | — |
+| Oleada | Cinta roja "Oleada 2 de 4" arriba al centro; la nota en una pastilla oscura; se quita de golpe a los 3,6 s (sin fundido) | — |
+| ENCARGOS | Tres tarjetas lado a lado (columna en teléfono): quién en pastilla de su color, reloj, piden / dan en iconos, ENTREGAR verde y descartar (✕) | Quién es cada uno, qué significa cada premio |
+
+Botones: verde = la acción (¡AL ATAQUE!, +, ENTREGAR, TERMINAR TURNO), azul =
+abrir / elegir (+ de tropa, ataque rápido elegido), rojo = quitar (✕, abandonar),
+ámbar = avisar (RESOLVER SOLO, alcance enemigo encendido).
+
+Pendiente para la ronda de capturas: MISIONES a 640×360 con las cuatro pestañas y
+la lista del Ataque Final a la vez (puede pedir scroll en la tarjeta de misión).

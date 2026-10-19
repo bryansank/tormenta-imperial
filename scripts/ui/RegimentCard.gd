@@ -14,9 +14,11 @@ extends PanelContainer
 const RegimentLook := preload("res://scripts/ui/RegimentLook.gd")
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const ConstructionMenuScript := preload("res://scripts/ui/ConstructionMenu.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 const BADGE_PX := 52
-const CHIP := 44
+## Lado de las fichas de la galeria: tamano dedo (docs/28 §4, 48 dp).
+const CHIP := 48
 
 var _badge: TextureRect
 var _name_label: Label
@@ -32,12 +34,10 @@ var _rebuilding := false
 
 func _ready() -> void:
 	name = "RegimentCard"
-	var style := StyleBoxFlat.new()
-	style.bg_color = UITheme.CARD_BG
-	style.set_corner_radius_all(UITheme.CORNER)
+	# Rediseno fase 2 (feat/ui2-ejercito): tarjeta crema con borde de laton.
+	var style := CT.card_style("window", false, CT.c("window", "CARD"))
+	style.border_color = CT.sem("ACCENT")
 	style.set_content_margin_all(8)
-	style.border_width_left = 5
-	style.border_color = UITheme.ACCENT
 	add_theme_stylebox_override("panel", style)
 	_build()
 	EventBus.regiment_changed.connect(refresh)
@@ -68,12 +68,12 @@ func _build() -> void:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 1)
 	row.add_child(info)
-	info.add_child(UITheme.make_label(Tr.t("LBL_REGIMENT_TITLE"), "small", UITheme.ACCENT))
-	_name_label = UITheme.make_label("", "section", UITheme.TEXT)
+	info.add_child(CT.label(Tr.t("LBL_REGIMENT_TITLE"), "small", CT.text("window", true)))
+	_name_label = CT.label("", "button", CT.text("window"))
 	_name_label.name = "RegimentName"
 	_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.add_child(_name_label)
-	_wins_label = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_wins_label = CT.label("", "small", CT.text("window", true))
 	_wins_label.name = "RegimentWins"
 	_wins_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	_wins_label.tooltip_text = Tr.t("LBL_REGIMENT_STARS_HINT") % GameConfig.regiment_star_wins
@@ -81,9 +81,9 @@ func _build() -> void:
 
 	_edit_btn = Button.new()
 	_edit_btn.name = "RegimentEdit"
-	_edit_btn.custom_minimum_size = Vector2(96, 40)
+	_edit_btn.text = Tr.t("BTN_REGIMENT_EDIT")
 	_edit_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	UITheme.style_button(_edit_btn, UITheme.BTN, UITheme.FONT_SMALL)
+	CT.style_pill(_edit_btn, "secondary", 48 if CT.phone else CT.BTN_SMALL, "window", "settings", "small")
 	_edit_btn.pressed.connect(toggle_editor)
 	row.add_child(_edit_btn)
 
@@ -112,9 +112,13 @@ func refresh() -> void:
 	_name_label.text = String(look["name"])
 	var wins := int(look["wins"])
 	var next := RegimentLook.wins_to_next_star(wins)
-	_wins_label.text = Tr.t("FMT_REGIMENT_WINS") % wins
+	# Una cifra corta a la vista; la estrella que falta, al mantener pulsado.
+	_wins_label.text = Tr.t("ARMY2_STARS_N") % wins
+	_wins_label.tooltip_text = Tr.t("FMT_REGIMENT_WINS") % wins
 	if next > 0:
-		_wins_label.text += " · " + Tr.t("FMT_REGIMENT_NEXT_STAR") % next
+		_wins_label.tooltip_text += " · " + Tr.t("FMT_REGIMENT_NEXT_STAR") % next
+	_wins_label.tooltip_text += "
+" + Tr.t("LBL_REGIMENT_STARS_HINT") % GameConfig.regiment_star_wins
 	_edit_btn.text = Tr.t("BTN_REGIMENT_DONE") if _open else Tr.t("BTN_REGIMENT_EDIT")
 	if _open:
 		_rebuild_editor(look)
@@ -135,7 +139,7 @@ func _fill_editor(look: Dictionary) -> void:
 	var saved := ArmyManager.get_regiment()
 
 	# Nombre: texto libre con el filtro del pais, y "al azar".
-	_editor.add_child(UITheme.make_label(Tr.t("LBL_REGIMENT_NAME"), "small", UITheme.ACCENT))
+	_editor.add_child(CT.label(Tr.t("LBL_REGIMENT_NAME"), "small", CT.text("window", true)))
 	var name_row := HBoxContainer.new()
 	name_row.add_theme_constant_override("separation", 6)
 	_editor.add_child(name_row)
@@ -145,16 +149,23 @@ func _fill_editor(look: Dictionary) -> void:
 	_name_edit.placeholder_text = Tr.t("REGIMENT_DEFAULT_NAME")
 	_name_edit.text = typed if had_focus else String(saved["name"])
 	_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_name_edit.custom_minimum_size.y = 48
+	var edit_style := CT.well_style("window", 12, 8)
+	_name_edit.add_theme_stylebox_override("normal", edit_style)
+	_name_edit.add_theme_stylebox_override("focus", CT.box(CT.c("window", "WELL"), CT.sem("ACCENT"), 3, 12, 8))
+	_name_edit.add_theme_font_override("font", CT.body_font())
+	_name_edit.add_theme_font_size_override("font_size", CT.fs("body"))
+	_name_edit.add_theme_color_override("font_color", CT.text("window"))
 	_name_edit.text_submitted.connect(func(t: String): set_name_text(t))
 	_name_edit.focus_exited.connect(_on_name_focus_exited)
 	name_row.add_child(_name_edit)
 	var random_btn := Button.new()
 	random_btn.name = "RegimentRandomName"
 	random_btn.text = Tr.t("BTN_REGIMENT_RANDOM")
-	UITheme.style_button(random_btn, UITheme.BTN, UITheme.FONT_SMALL)
+	CT.style_pill(random_btn, "secondary", 48, "window", "", "small")
 	random_btn.pressed.connect(randomize_name)
 	name_row.add_child(random_btn)
-	_name_warning = UITheme.make_label(Tr.t("LBL_REGIMENT_NAME_BAD"), "small", UITheme.WARNING)
+	_name_warning = CT.label(Tr.t("LBL_REGIMENT_NAME_BAD"), "small", CT.tone_color("warning"))
 	_name_warning.name = "RegimentNameWarning"
 	_name_warning.visible = false
 	_editor.add_child(_name_warning)
@@ -165,7 +176,7 @@ func _fill_editor(look: Dictionary) -> void:
 	var all := GameMode.all_unlocked()
 
 	# Color: el de la bandera o uno de los colores de la colonia.
-	_editor.add_child(UITheme.make_label(Tr.t("LBL_REGIMENT_COLOR"), "small", UITheme.ACCENT))
+	_editor.add_child(CT.label(Tr.t("LBL_REGIMENT_COLOR"), "small", CT.text("window", true)))
 	var colors := _flow("RegimentColors")
 	colors.add_child(_flag_chip("color", String(saved["color"]) == ""))
 	for color_id in GameConfig.COLONY_COLOR_ORDER:
@@ -183,7 +194,7 @@ func _fill_editor(look: Dictionary) -> void:
 		colors.add_child(chip)
 
 	# Emblema: el de la bandera o uno de sus emblemas, en el color de ahora.
-	_editor.add_child(UITheme.make_label(Tr.t("LBL_REGIMENT_EMBLEM"), "small", UITheme.ACCENT))
+	_editor.add_child(CT.label(Tr.t("LBL_REGIMENT_EMBLEM"), "small", CT.text("window", true)))
 	var emblems := _flow("RegimentEmblems")
 	emblems.add_child(_flag_chip("emblem", String(saved["emblem"]) == ""))
 	for emblem in GameConfig.COLONY_EMBLEMS:
@@ -198,7 +209,7 @@ func _fill_editor(look: Dictionary) -> void:
 		emblems.add_child(chip)
 
 	# Pintura: abre con el rango.
-	_editor.add_child(UITheme.make_label(Tr.t("LBL_REGIMENT_PAINT"), "small", UITheme.ACCENT))
+	_editor.add_child(CT.label(Tr.t("LBL_REGIMENT_PAINT"), "small", CT.text("window", true)))
 	var paints := _flow("RegimentPaints")
 	for paint in GameConfig.REGIMENT_PAINTS:
 		var open := RegimentLook.is_paint_open(paint, rank, all)
@@ -210,7 +221,7 @@ func _fill_editor(look: Dictionary) -> void:
 		chip.pressed.connect(func(): pick("paint", id))
 		paints.add_child(chip)
 
-	_editor.add_child(UITheme.make_label(Tr.t("LBL_REGIMENT_COSMETIC"), "small", UITheme.TEXT_DIM))
+	_editor.add_child(CT.label(Tr.t("LBL_REGIMENT_COSMETIC"), "small", CT.text("window", true)))
 
 ## Cambia una pieza ("color", "emblem", "paint"; "" = la de la bandera) y deja
 ## las demas como estan. Devuelve lo que diga ArmyManager.
@@ -265,11 +276,8 @@ func _chip(node_name: String, selected: bool, open: bool, tip: String, rank: int
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.disabled = not open
 	btn.tooltip_text = tip if open else "%s · %s" % [tip, Tr.t("LBL_RANK_LOCK") % rank]
-	var st := StyleBoxFlat.new()
-	st.bg_color = UITheme.CARD_BG.lightened(0.04) if open else UITheme.BTN_DISABLED
-	st.set_corner_radius_all(4)
-	st.border_color = UITheme.ACCENT if selected else UITheme.ACCENT_DIM
-	st.set_border_width_all(3 if selected else 1)
+	var st := CT.box(CT.c("window", "CARD") if open else CT.c("window", "CARD_ALT"),
+		CT.sem("ACCENT") if selected else CT.c("window", "CARD_BORDER"), 4 if selected else 2, 12, 2)
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		btn.add_theme_stylebox_override(state, st)
 	btn.set_meta("selected", selected)
