@@ -985,3 +985,67 @@ Repetir (con `override.cfg` propio):
 
     godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5 --log=1
     godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5 --extras=1 --log=1
+
+## 15. Ronda final de balance de la 1.1 (2026-10-18/19, `integracion/v1.1-aire-mar`)
+
+Decisiones de Bryan tras §13-14 (0/5 ganaban en 8 h con la línea, 3/5 con extras):
+duración objetivo **6-8 h** sin recortar campañas; menos bajas en defensa; sueldo más
+bajo; la columna sugerida, la que gana; una previsión de fuerza que no engañe.
+
+### Lo que cambió
+
+| Cambio | Dónde | Qué |
+|---|---|---|
+| Heridos en la defensa | `CombatManager.defense_wounded()`, `combat_defense_return_share` | Defendiendo la base (Diezmo; **no** el Ataque Final), 2 de cada 3 caídos del ejército vuelven heridos (redondeando a su favor; siempre cae uno; mueren antes los de menos `power`). El parte dice "Vuelven heridos". Hook de la Enfermería (1.2) en esa función |
+| Sueldo | `army_upkeep_interval` 30 → **90 s** | Un tercio del sueldo (con 60 s quedaban 3-18 deserciones) |
+| Columna sugerida | `campaign_suggested_party` 3 → **6** | ¿QUÉ HACER? pide 6 de su medio (lo que quepa en el tope de tropa), salvo que la tropa en casa ya salga "Favorable" (`Objectives.campaign_home_favorable`) |
+| Previsión de fuerza | `ExpeditionGenerator.column_strength()` | `power × escala² × cuerpos` (Lanchester) en vez de la suma de `power`: "56 contra 34" con 2 cañones ya sale "Difícil" |
+| Reintentos de campaña | `campaign_retry_ease` 0,95, `campaign_retry_floor` 0,80, `CampaignBook.fails` | Cada derrota en la misión que toca le quita un 5 % al enemigo de esa misión (mismo mapa). Sin dados, una misión perdida con una columna se perdía siempre (semilla 4: el Zepelín, 6 derrotas) |
+| Preparar otra campaña | `Objectives.campaign_gate_step` | Mientras una campaña espera, primero el edificio que falte a otra; luego reponer |
+| Errores en la sonda | `StockIcon3D._set_anim` | Sin Tween vacío ni `play` sobre un bucle ya matado (miles de "Tween invalid" por partida) |
+
+### Medido (`--no-dev --seeds=1,2,3,4,5`, tope 8 h, nómina 90 s)
+
+**Jugador de la línea:**
+
+| Semilla | era 1 | CG nv3 | Tierra | Mar | Aire | asedio | victoria | deserciones | bajas | huecos >3 min sin decidir (mayor) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 17,8 | 252 | 213 | 307 | 366 | 372 GANADO | **394** (6 h 34) | 9 | 47 | 4 (7,4) |
+| 2 | 18,8 | 353 | 245 | 422 | 479 | 479 GANADO | **506** (8 h 26) | 1 | 63 | 9 (9,1) |
+| 3 | 19,8 | 298 | 306 | 366 | 459 | 468 GANADO | **494** (8 h 14) | 2 | 54 | 7 (10,3) |
+| 4 | 17,8 | — | 270 | 0/5 | 0/5 | — | no | 0 | 36 | 19 (12,0) |
+| 5 | 17,8 | 237 | 228 | 314 | 363 | 363 GANADO | **389** (6 h 29) | 0 | 54 | 4 (4,2) |
+
+**Jugador completo** (`--extras=1`):
+
+| Semilla | era 1 | CG nv3 | Tierra | Mar | Aire | asedio | victoria | deserciones | bajas | huecos >3 min (mayor) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 20,8 | 236 | 235 | 284 | 319 | 327 GANADO | **353** (5 h 53) | 0 | 49 | 2 (6,0) |
+| 2 | 20,8 | 389 | 396 | 459 | 3/5 | — | no | 4 | 45 | 17 (10,4) |
+| 3 | 23,8 | 282 | 305 | 343 | 377 | 392 GANADO | **414** (6 h 54) | 7 | 63 | 7 (5,7) |
+| 4 | 22,8 | 399 | 273 | 463 | 3/5 | — | no | 1 | 39 | 12 (9,5) |
+| 5 | 20,8 | 236 | 243 | 316 | 395 | 395 GANADO | **422** (7 h 02) | 1 | 57 | 5 (7,0) |
+
+La tanda anterior (nómina 60 s, sin reintentos) dio 3/5 con la línea (6 h 54 - 7 h 15)
+y **5/5** con extras (6 h 34 - 8 h 06), con 3-9 y 8-18 deserciones.
+
+Lectura:
+
+- **Victoria: 7 de 10 partidas en esta tanda** (15 de 20 contando las dos), casi
+  todas en 6-8 h; dos pasan algo de 8 h. Antes de esta ronda, 3 de 10.
+- **Deserciones: 0-9** por partida (antes 10-45). El oro ya no se queda en 0 en cada
+  Tormenta de la era 3.
+- **Lo que no gana es la economía de la era 3, no las campañas:** las que pierden
+  llegan al CG nv3 en el minuto 353-399 (o nunca: línea, semilla 4) por esperas de
+  vigas, combustible y lingotes para el CG nv3 (110 min en la semilla 2 de la tanda
+  anterior). Los huecos >3 min de esas partidas (12-19) caen todos ahí. Ninguna
+  campaña se atasca: 0-2 misiones fallidas por partida.
+- **Ruido:** la misma semilla no repite partida entre corridas (§14 "Ruido"): la
+  semilla 4 de la línea ganó en el 411 con nómina 60 s y no llega al CG nv3 con 90 s.
+  Con 5 semillas, las tasas son orientativas.
+- Era 1: 17,8-19,8 min (línea), 20,8-23,8 (completo). Sin cambios.
+
+Abierto: el camino de materiales del CG nv3 en la era 3 (Refinería → combustible,
+Fundición → vigas, Mina → lingotes) es lo que alarga o rompe las partidas lentas.
+Palanca para la próxima ronda: `hq_upgrade_costs` (materiales del nivel 3) o el
+rendimiento de los procesos de taller.

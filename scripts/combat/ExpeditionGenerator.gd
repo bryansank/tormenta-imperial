@@ -848,8 +848,12 @@ static func campaign_mission_map(offer: Dictionary) -> Array:
 	var fights: int = campaign_mission_fights(domain, mission)
 	var boss_mission: bool = campaign_is_boss_mission(domain, mission)
 	var level: int = mission * maxi(0, GameConfig.campaign_level_step)
-	var mult: float = campaign_mission_mult(domain, mission)
-	var boss_mult: float = float(GameConfig.campaign_boss_extra_scale.get(domain, 1.0))
+	# Cada derrota en esta mision debilita a la Regencia (mismo mapa, misma
+	# semilla): sin dados, perder una vez con una columna era perder siempre.
+	var ease: float = maxf(GameConfig.campaign_retry_floor,
+		pow(GameConfig.campaign_retry_ease, float(maxi(0, int(offer.get("retries", 0))))))
+	var mult: float = campaign_mission_mult(domain, mission) * ease
+	var boss_mult: float = float(GameConfig.campaign_boss_extra_scale.get(domain, 1.0)) * ease
 	var nodes: Array = _chain_map(rng, fights)
 	var last: int = nodes.size() - 1
 	for node in nodes:

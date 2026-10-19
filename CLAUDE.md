@@ -693,7 +693,7 @@ fixed for the run; saves without `tier` load as Colono.
   The Shipyard ghost turns itself to face the nearest water (`PlacementRules.FACES_WATER`)
   and the 2D view draws `rotation_steps` with the 3D convention (`Building2D.view_steps()`).
 
-- **Upkeep:** every 60s (`army_upkeep_interval`; 30 s until the 1.1 final round), gold-only. If short, drains remaining gold to 0 and emits
+- **Upkeep:** every 90s (`army_upkeep_interval`; 30 s until the 1.1 final round), gold-only. If short, drains remaining gold to 0 and emits
   `army_upkeep_unpaid`. Sustained non-payment **deserts** units, the most expensive
   first (`ArmyManager._desert()` → `army_deserted`).
 - **Defending the base** (Tithe, not the Final Audit): of the army units that fall,
@@ -701,6 +701,10 @@ fixed for the run; saves without `tier` load as Colono.
   come back wounded instead of dying, cheapest die first
   (`CombatManager.defense_wounded()`, the hook for the 1.2 Infirmary; war report
   line "Vuelven heridos").
+- **Campaign retries:** each defeat in the campaign mission that is due eases its
+  enemy x0.95 (floor x0.80, `campaign_retry_ease` / `campaign_retry_floor`,
+  `CampaignBook.fails`, saved); winning resets it. Same map. Without it a
+  deterministic loss was a loss forever.
 - **Military Power** = sum of unit power. Combat consumes this army for real:
   `ArmyManager` stays the source of truth and `CombatManager` only debits the dead
   (`remove_units()`), so Power never lies while a column is out.

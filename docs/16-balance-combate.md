@@ -793,3 +793,17 @@ de un tipo todo pasa del 90 %, y el bombardero sigue al 100 % con menos de una b
 **No se toca**: estas misiones están apagadas, y cambiar estadísticas de barcos o
 aviones movería las tres campañas, ya calibradas. Cuando las mixtas vuelvan: el
 bombardero (vida 95 → 85, o que la cañonera le pegue a 2) y el Puerto con "4 X".
+
+### Ronda final: heridos en la defensa y previsión de fuerza (2026-10-19)
+
+- **Defender la base** (Diezmo, no el Ataque Final): 2 de cada 3 caídos del ejército
+  vuelven heridos (`combat_defense_return_share`, `CombatManager.defense_wounded()`;
+  siempre cae uno, mueren antes los de menos `power`). Test: `tests/combat/test_defense_wounded.gd`.
+- **Previsión** (`sortie_preview`: "Favorable / Igualada / Difícil" y "resolver
+  solo"): fuerza de columna `power × escala² × cuerpos`
+  (`ExpeditionGenerator.column_strength`). La escala del enemigo sube vida y ataque
+  (cuenta dos veces) y el número pesa (ley cuadrada): 2 cañones (56 × 2 = 112) contra
+  3 infantes a ×1,5 (30 × 2,25 × 3 = 202) ya sale "Difícil"; antes, "56 contra 34",
+  favorable, y se perdía siempre.
+- **Reintentos de campaña:** cada derrota en la misión que toca, ×0,95 al enemigo de
+  esa misión (suelo ×0,80), mismo mapa (docs/15 §13, docs/22 §15).

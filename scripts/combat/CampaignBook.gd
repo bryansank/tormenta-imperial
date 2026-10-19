@@ -28,6 +28,10 @@ var next_at: Dictionary = {"land": 0.0, "sea": 0.0, "air": 0.0}
 var seen: Dictionary = {"land": -1, "sea": -1, "air": -1}
 ## Intentos perdidos o abandonados, por campana (solo para el parte y la sonda).
 var setbacks: Dictionary = {"land": 0, "sea": 0, "air": 0}
+## Derrotas en la mision que toca ahora (se pone a 0 al ganarla). Cada una
+## debilita al enemigo de esa mision (campaign_retry_ease): el combate no tira
+## dados y, sin esto, una mision perdida con una columna se perdia siempre.
+var fails: Dictionary = {"land": 0, "sea": 0, "air": 0}
 
 # ── Consultas ────────────────────────────────────────────────────────
 
@@ -70,7 +74,9 @@ func offer_for(domain: String, era: int) -> Dictionary:
 	var mission: int = next_mission(domain)
 	if mission < 0:
 		return {}
-	return Generator.campaign_offer(domain, mission, seed_value, era)
+	var offer: Dictionary = Generator.campaign_offer(domain, mission, seed_value, era)
+	offer["retries"] = int(fails.get(domain, 0))
+	return offer
 
 ## Hay una mision nueva que el jugador aun no ha mirado.
 func is_unseen(domain: String) -> bool:
@@ -93,10 +99,13 @@ func finish(domain: String, mission: int, won_it: bool, now: float, cooldown: fl
 		return []
 	if not won_it:
 		setbacks[domain] = int(setbacks.get(domain, 0)) + 1
+		if mission == next_mission(domain):
+			fails[domain] = int(fails.get(domain, 0)) + 1
 		return [{"e": "campaign_changed"}]
 	if mission != next_mission(domain):
 		return [{"e": "campaign_changed"}]
 	progress[domain] = won(domain) + 1
+	fails[domain] = 0
 	next_at[domain] = now + maxf(0.0, cooldown)
 	var boss: bool = Generator.campaign_is_boss_mission(domain, mission)
 	var events: Array = [{"e": "campaign_mission_won", "domain": domain, "mission": mission, "boss": boss}]
@@ -126,6 +135,7 @@ func to_dict() -> Dictionary:
 		"next_at": next_at.duplicate(),
 		"seen": seen.duplicate(),
 		"setbacks": setbacks.duplicate(),
+		"fails": fails.duplicate(),
 	}
 
 ## Idempotente: lo cargado sustituye a todo, nunca se suma. Sin datos (guardado
@@ -145,4 +155,6 @@ static func from_dict(data: Dictionary) -> CampaignBook:
 		book.next_at[domain] = maxf(0.0, float(n.get(domain, 0.0)))
 		book.seen[domain] = int(s.get(domain, -1))
 		book.setbacks[domain] = maxi(0, int(b.get(domain, 0)))
+		var f: Dictionary = data.get("fails", {}) if data.get("fails", {}) is Dictionary else {}
+		book.fails[domain] = maxi(0, int(f.get(domain, 0)))
 	return book
