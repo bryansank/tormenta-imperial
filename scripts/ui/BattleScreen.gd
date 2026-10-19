@@ -724,8 +724,11 @@ func _build_grid() -> void:
 ## bajen de un tamano tocable (quickstart E9).
 func _recalculate_cell_size() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var by_width: float = (vp.x * 0.92) / float(_board.x)
-	var by_height: float = (vp.y * 0.58) / float(_board.y)
+	# Se descuentan los huecos entre casillas (2 px) y el borde del marco: con
+	# 400 px la ultima columna se salia un pixel (402 de 401).
+	var gaps := 2.0 * float(_board.x - 1) + 12.0
+	var by_width: float = (vp.x * 0.92 - gaps) / float(_board.x)
+	var by_height: float = (vp.y * 0.58 - 2.0 * float(_board.y - 1)) / float(_board.y)
 	_cell_size = int(clampf(minf(by_width, by_height), 34.0, 62.0))
 
 ## Lo mismo para el mapa: el nodo es un boton y un boton tiene que poder pulsarse
