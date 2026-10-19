@@ -111,7 +111,7 @@ const GUIDE_STEPS := {
 	"pick_sawmill":     {"n": 3,  "text": "GUIDE_PICK_SAWMILL",    "target": "card:sawmill", "building": "sawmill"},
 	"place_sawmill":    {"n": 3,  "text": "GUIDE_PLACE_SAWMILL",   "target": "forest", "building": "sawmill"},
 	"wait_sawmill":     {"n": 3,  "text": "GUIDE_WAIT_SAWMILL",    "target": "building:sawmill"},
-	"collect":          {"n": 4,  "text": "GUIDE_COLLECT",         "target": "building:sawmill"},
+	"collect":          {"n": 4,  "text": "GUIDE_COLLECT",         "target": "built:sawmill|building:sawmill"},
 	# El Cuartel (2026-10-17): abrir, elegir, colocar y esperar la obra.
 	"open_barracks":    {"n": 5,  "text": "GUIDE_OPEN_BARRACKS",   "target": "build_button", "building": "barracks"},
 	"pick_barracks":    {"n": 5,  "text": "GUIDE_PICK_BARRACKS",   "target": "card:barracks", "building": "barracks"},

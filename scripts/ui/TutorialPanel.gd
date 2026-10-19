@@ -60,6 +60,12 @@ const AVOID_GAP := 12.0
 ## grande sola. Al cumplirse, el paso cambia y la tarjeta sale con su flecha.
 const FOLD_SECONDS := 4.0
 const IDLE_REMIND_SECONDS := 90.0
+## La primera vez, un texto largo se ve algo mas (fold_seconds), hasta 8 s; y
+## abierta a mano desde el recordatorio, REOPEN_SECONDS antes de replegarse.
+const FOLD_SECONDS_MAX := 8.0
+const FOLD_CHARS_PER_SECOND := 18.0
+const REOPEN_SECONDS := 8.0
+const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
 var _prologue: CanvasLayer
 var _coach: Control
@@ -126,6 +132,17 @@ var _fold_left := 0.0
 var _chip_idle := 0.0
 var _chip_last := ""
 var _chip_hot := false
+## Pasos de espera cuya tarjeta ya salio una vez: si se vuelve a ellos (los
+## recursos bajan y suben alrededor del coste), salen ya plegados.
+var _seen_wait: Dictionary = {}
+## La tarjeta de ahora es el "¡Ya puedes!" que sigue a una espera; y los pasos
+## que ya lo tuvieron (sale UNA vez por paso).
+var _ready_card := false
+var _ready_done: Dictionary = {}
+## El paso de ahora esperaba en el fotograma anterior (recoger cambia sin
+## cambiar de paso: en cuanto hay madera).
+var _was_waiting := false
+var _step_before := ""
 
 func _ready() -> void:
 	layer = COACH_LAYER
@@ -359,7 +376,8 @@ func _build_chip() -> void:
 	_chip_text = CT.label("", "body", CT.text("hud"))
 	_chip_text.name = "ReminderText"
 	_chip_text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_chip_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_chip_text.clip_text = true
+	_chip_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	row.add_child(_chip_text)
 	CT.fit_button_content(_chip, row, 6.0)
 	_style_chip(false)
@@ -376,18 +394,47 @@ func _style_chip(hot: bool) -> void:
 static func is_waiting_step(step_id: String) -> bool:
 	return TutorialManager.is_need_step(step_id) or step_id.begins_with("wait_")
 
+## Si el paso de ahora solo espera, mirando tambien lo que hay: recoger es un
+## paso de espera mientras el Aserradero aun no ha cortado nada (no hay icono
+## que tocar); en cuanto tiene madera, es un paso de accion (feat/ui3-tutorial).
+func is_waiting_now() -> bool:
+	if is_waiting_step(_step):
+		return true
+	return _step == "collect" and not _sawmill_has_wood()
+
+func _sawmill_has_wood() -> bool:
+	for info in GridManager.buildings_view():
+		var d: Resource = info.get("data")
+		var node: Node = info.get("node")
+		if d == null or node == null or String(d.get("id")) != "sawmill":
+			continue
+		if int(ProductionManager.get_stock(node).get("wood", 0)) > 0:
+			return true
+	return false
+
+## Se puede plegar ahora: un paso de espera, o el "¡Ya puedes!" que lo sigue.
+func can_fold() -> bool:
+	return is_waiting_now() or _ready_card
+
 ## Pliega (true) o abre (false) la tarjeta de un paso de espera.
 func set_folded(folded: bool) -> void:
-	if folded and not is_waiting_step(_step):
+	if folded and not can_fold():
 		return
+	if not folded and _folded:
+		# Abierta a mano desde el recordatorio: un rato mas para leerla.
+		_fold_left = REOPEN_SECONDS
 	_folded = folded
-	if not folded:
-		_fold_left = FOLD_SECONDS
+	if folded:
+		_seen_wait[_step] = true
 	_chip_idle = 0.0
 	_style_chip(false)
 
 func is_folded() -> bool:
 	return _folded
+
+## La tarjeta es el "¡Ya puedes!" que sigue a una espera (sale una vez).
+func is_ready_card() -> bool:
+	return _ready_card
 
 func reminder() -> Button:
 	return _chip
@@ -395,16 +442,45 @@ func reminder() -> Button:
 func reminder_text() -> String:
 	return _chip_text.text if _chip_text != null else ""
 
-## Lo que dice el recordatorio: lo primero que falta ("Junta 120 oro · 45/120")
-## o, si no hay, la frase del paso.
+## Lo que dice el recordatorio, en UNA linea corta: el paso de ahora de la
+## lista ("Junta oro 45/80"), la obra ("Obra: Aserradero 40 %"), "Aserradero
+## cortando madera..." o, tras la espera, "¡Ya puedes! Pulsa CONSTRUIR".
 func _reminder_line() -> String:
-	var hint := _res_hint.split("
-", false)
-	if not hint.is_empty():
-		return String(hint[0])
+	if _ready_card:
+		var what := "TUT3_READY_DO"
+		if _step == "collect":
+			what = "TUT3_READY_COLLECT"
+		elif TutorialManager.step_target(_step) == "build_button":
+			what = "TUT3_READY_BUILD"
+		return Tr.t("TUT3_CHIP_READY") % Tr.t(what)
+	if TutorialManager.is_need_step(_step):
+		var cur: Dictionary = TutorialManager.need_plan(TutorialManager.step_building(_step)).get("current", {})
+		var short := String(cur.get("short", cur.get("text", "")))
+		if short != "":
+			return short
+		return TutorialManager.step_text(_step)
+	if _step.begins_with("wait_"):
+		var b := _step.substr(5)
+		var data := Rules.load_building_data(b)
+		var bname: String = data.get_display_name() if data != null else b
+		for info in GridManager.buildings_view():
+			var d: Resource = info.get("data")
+			var node: Node = info.get("node")
+			if d != null and node != null and String(d.get("id")) == b and ProductionManager.is_constructing(node):
+				return Tr.t("TUT3_CHIP_WORK") % [bname, roundi(ProductionManager.get_construction_progress(node) * 100.0)]
+		return Tr.t("TUT3_CHIP_WORK_WAIT") % bname
+	if _step == "collect":
+		var saw := Rules.load_building_data("sawmill")
+		return Tr.t("TUT3_CHIP_COLLECT_WAIT") % (saw.get_display_name() if saw != null else "sawmill")
 	var main := _res_text.split("
 ", false)
 	return String(main[0]) if not main.is_empty() else ""
+
+## Cuanto se ve la tarjeta de un paso de espera la primera vez antes de
+## plegarse: FOLD_SECONDS, algo mas si su texto es largo (la carretera de la
+## obra del Aserradero), nunca mas de FOLD_SECONDS_MAX. Pura.
+static func fold_seconds(text_s: String) -> float:
+	return clampf(float(text_s.length()) / FOLD_CHARS_PER_SECOND, FOLD_SECONDS, FOLD_SECONDS_MAX)
 
 ## Coloca el recordatorio donde vive la linea del siguiente paso (que se oculta
 ## con el tutorial en marcha) y esconde todo lo demas.
@@ -417,20 +493,23 @@ func _layout_folded(delta: float) -> void:
 	_card.visible = false
 	_tail.visible = false
 	_bust.visible = false
-	_chip.visible = true
+	# Con CONSTRUIR (o cualquier ventana) abierto, el recordatorio no se pone
+	# encima de su lista: espera a que se cierre.
+	_chip.visible = UIManager.open_windows().is_empty()
 	var line := _reminder_line()
 	if line != _chip_last:
 		_chip_last = line
 		_chip_idle = 0.0
 		if _chip_hot:
 			_style_chip(false)
-	_chip_text.text = line
-	_chip_text.custom_minimum_size.x = 0.0
+	if _chip_text.text != line:
+		_chip_text.text = line
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var w := minf(_chip_text.get_theme_font("font").get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1,
 		_chip_text.get_theme_font_size("font_size")).x + 2.0, vp.x * 0.5)
-	_chip_text.custom_minimum_size.x = w
-	_chip.reset_size()
+	if absf(_chip_text.custom_minimum_size.x - w) > 0.5:
+		_chip_text.custom_minimum_size.x = w
+		_chip.reset_size()
 	var m: Dictionary = UILayoutManager.get_slot("next_step").get("margin", {})
 	var left := float(m.get("left", 12.0))
 	var bottom := float(m.get("bottom", 90.0))
@@ -438,6 +517,19 @@ func _layout_folded(delta: float) -> void:
 	_chip_idle += delta
 	if _chip_idle >= IDLE_REMIND_SECONDS and not _chip_hot:
 		_style_chip(true)
+
+## La tarjeta del paso de accion que sigue a una espera: se abre UNA vez con
+## su flecha y el rotulo "¡Ya puedes!".
+func _enter_ready() -> void:
+	_ready_card = true
+	_folded = false
+	_ready_done[_step] = true
+	_update_later_btn()
+	_render_text()
+
+func _update_later_btn() -> void:
+	if _later_btn != null:
+		_later_btn.visible = _step != "" and can_fold()
 
 ## Cambia el texto de una pastilla (su etiqueta y la meta "text").
 static func set_button_text(b: Button, text_s: String) -> void:
@@ -465,15 +557,27 @@ func _on_step_changed(step_id: String) -> void:
 	if step_id == "":
 		_coach.visible = false
 	_done_left = DONE_SECONDS if step_id == "done" else 0.0
-	# Paso de espera: se ve FOLD_SECONDS y se pliega. Paso de accion: abierto.
+	# Paso de espera: se ve un rato y se pliega; si ya salio una vez, sale
+	# plegado. Paso de accion: abierto; el primero tras una espera es el
+	# "¡Ya puedes!" (una vez por paso), que tambien se puede plegar.
+	var came_from_wait := _was_waiting and _step_before != "" and _step_before != step_id
+	_step_before = step_id
+	_ready_card = false
 	_folded = false
-	_fold_left = FOLD_SECONDS
+	_was_waiting = is_waiting_now() if step_id != "" else false
+	if step_id == "" or step_id == "done":
+		_seen_wait.clear()
+		_ready_done.clear()
+	elif _was_waiting:
+		_folded = bool(_seen_wait.get(step_id, false))
+	elif came_from_wait and not bool(_ready_done.get(step_id, false)):
+		_enter_ready()
+	_fold_left = fold_seconds(TutorialManager.step_text(step_id))
 	_chip_idle = 0.0
 	if _chip != null:
 		_style_chip(false)
 		_chip.visible = false
-	if _later_btn != null:
-		_later_btn.visible = is_waiting_step(step_id)
+	_update_later_btn()
 	var reading: bool = TutorialManager.step_has_ok(step_id)
 	_ok_btn.visible = step_id == "done" or reading
 	set_button_text(_ok_btn, TutorialManager.step_ok_text(step_id) if reading else Tr.t("BTN_GUIDE_OK"))
@@ -505,6 +609,8 @@ func _render_text() -> void:
 		_badge.text = Tr.t("LBL_GUIDE_REPAIR_BADGE")
 	else:
 		_badge.text = Tr.t("LBL_GUIDE_STEP") % [n, TutorialManager.GUIDE_TOTAL]
+		if _ready_card:
+			_badge.text = Tr.t("TUT3_READY_BADGE") + _badge.text
 	_set_card_text(TutorialManager.step_text(_step))
 
 ## La frase del paso (la primera linea) en grande y el resto (lo que falta y como
@@ -613,7 +719,16 @@ func _process(delta: float) -> void:
 			TutorialManager.finish_guide()
 			return
 	_resolve_left -= delta
-	if is_waiting_step(_step) and not _folded:
+	var waiting := is_waiting_now()
+	if waiting != _was_waiting:
+		_was_waiting = waiting
+		# Recoger: el Aserradero ya tiene madera. Mismo paso, ya es de accion.
+		if not waiting and not bool(_ready_done.get(_step, false)):
+			_enter_ready()
+		elif not waiting:
+			_folded = false
+		_update_later_btn()
+	if waiting and not _folded:
 		_fold_left -= delta
 		if _fold_left <= 0.0:
 			set_folded(true)
@@ -714,6 +829,9 @@ func _layout_step() -> void:
 		point = HelpTargets.cell_screen_point(get_viewport(), _res_cell, _res_cell_size)
 	elif _res_control != null and is_instance_valid(_res_control) and _res_control.is_visible_in_tree():
 		rect = _res_control.get_global_rect()
+	if not point.is_empty() and bool(point.get("ok", true)) and _under_hud(point["point"]):
+		point = point.duplicate()
+		point["ok"] = false
 	var camera := not point.is_empty() and not bool(point.get("ok", true))
 	var hint := _res_hint
 	var how := _res_how
@@ -832,6 +950,15 @@ func _card_already_picked(building_id: String) -> bool:
 	var menu: Node = scene.get_node_or_null("ConstructionMenu") if scene != null else null
 	return menu != null and menu.has_method("selected_building_id") \
 		and menu.selected_building_id() == building_id
+
+## `p` cae debajo de la tarjeta de recursos o del rango (arriba): lo que se
+## senala ahi no se ve (feat/ui3-tutorial).
+func _under_hud(p: Vector2) -> bool:
+	for id in ["ResourceHUD", "RankPanel"]:
+		var c: Control = HudRegistry.control_of(id)
+		if c != null and is_instance_valid(c) and c.is_visible_in_tree() and c.get_global_rect().grow(24.0).has_point(p):
+			return true
+	return false
 
 ## La Tormenta (y su orden) a la vista, o Rect2() si no.
 func _storm_rect() -> Rect2:
@@ -954,7 +1081,10 @@ func _deposit_cell(vp: Vector2, deposit_id: String) -> Dictionary:
 		var sz := Vector2i(int(dep.get("size_x", 2)), int(dep.get("size_y", 2)))
 		var sp := HelpTargets.cell_screen_point(get_viewport(), cell, sz)
 		var p: Vector2 = sp["point"]
-		var d: float = p.distance_to(center) + (0.0 if bool(sp["ok"]) else 100000.0)
+		# Uno escondido bajo el HUD de arriba (recursos, rango) cuenta casi como
+		# fuera de pantalla: el aro y la flecha caian encima de los numeros.
+		var hidden := bool(sp["ok"]) and _under_hud(p)
+		var d: float = p.distance_to(center) + (0.0 if bool(sp["ok"]) else 100000.0) + (50000.0 if hidden else 0.0)
 		if d < best_d:
 			best_d = d
 			best = {"cell": cell, "size": sz}

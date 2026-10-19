@@ -513,6 +513,8 @@ serie (`GameConfig.ui_helper_visible`); §12 propone apagarlos.
 - **Tutorial menos pesado:** los pasos de espera (`need_*`, `wait_*`) se ven
   4 s y se pliegan a un recordatorio con la cara de la Capitana (o con «Más
   tarde»); tocarlo los abre; a los 90 s sin avance solo se resalta. Los pasos
-  de acción siguen como antes.
+  de acción siguen como antes. Revisión en `feat/ui3-tutorial` (docs/23 §2.11):
+  el recordatorio en una línea con el paso de ahora, ya plegado al volver a un
+  paso visto, «¡Ya puedes!» una vez al tenerlo todo, y recoger también espera.
 - **La línea del siguiente paso** va encima de la barra de abajo en PC (en la
   misma fila se montaba sobre Ejército / Misiones).
