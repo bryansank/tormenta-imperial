@@ -185,7 +185,8 @@ func _fill_editor(look: Dictionary) -> void:
 			Tr.t("COLONY_COLOR_" + String(color_id).to_upper()), RegimentLook.piece_rank_of("colors", color_id))
 		var swatch := ColorRect.new()
 		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		swatch.color = ColonyFlag.color_of(color_id) if open else ColonyFlag.color_of(color_id).darkened(0.55)
+		swatch.color = ColonyFlag.color_of(color_id) if open else Color(ColonyFlag.color_of(color_id), 0.45)
+		swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		swatch.custom_minimum_size = Vector2(CHIP - 14, CHIP - 14)
 		_chip_box(chip).add_child(swatch)
 		_add_lock(chip)
@@ -276,19 +277,17 @@ func _chip(node_name: String, selected: bool, open: bool, tip: String, rank: int
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.disabled = not open
 	btn.tooltip_text = tip if open else "%s · %s" % [tip, Tr.t("LBL_RANK_LOCK") % rank]
-	var st := CT.box(CT.c("window", "CARD") if open else CT.c("window", "CARD_ALT"),
-		CT.sem("ACCENT") if selected else CT.c("window", "CARD_BORDER"), 4 if selected else 2, 12, 2)
+	# Elegida: borde de laton grueso; cerrada: apagada, con la placa del rango
+	# debajo de la pieza (nunca encima). El boton mide lo que su contenido.
+	var st := CT.pick_style(selected, open)
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		btn.add_theme_stylebox_override(state, st)
 	btn.set_meta("selected", selected)
-	btn.custom_minimum_size = Vector2(CHIP, CHIP + (20 if not open else 0))
 	var box := VBoxContainer.new()
 	box.name = "Box"
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 2)
-	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	btn.add_child(box)
+	box.add_theme_constant_override("separation", 3)
+	CT.fit_button_content(btn, box, 4.0)
 	if not open and rank > 0:
 		btn.set_meta("lock_rank", rank)
 	return btn
@@ -296,7 +295,7 @@ func _chip(node_name: String, selected: bool, open: bool, tip: String, rank: int
 ## Candado y "Rango N" bajo la miniatura de una pieza cerrada.
 func _add_lock(chip: Button) -> void:
 	if chip.has_meta("lock_rank"):
-		_chip_box(chip).add_child(ConstructionMenuScript.make_rank_lock_row(int(chip.get_meta("lock_rank"))))
+		_chip_box(chip).add_child(CT.rank_plate(int(chip.get_meta("lock_rank"))))
 
 func _chip_box(chip: Button) -> VBoxContainer:
 	return chip.get_node("Box")
@@ -310,5 +309,5 @@ func _pic(tex: Texture2D, open: bool) -> TextureRect:
 	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	if not open:
-		pic.modulate = Color(0.45, 0.45, 0.45)
+		pic.modulate = Color(1, 1, 1, 0.45)
 	return pic

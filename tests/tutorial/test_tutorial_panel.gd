@@ -104,6 +104,9 @@ func test_the_veil_never_eats_a_touch() -> void:
 	for c in panel.find_child("Coach", true, false).find_children("*", "Control", true, false):
 		var ctl := c as Control
 		var in_card: bool = ctl.name == "CoachCard" or panel.find_child("CoachCard", true, false).is_ancestor_of(ctl)
+		# El recordatorio de un paso de espera se toca para abrirlo (2026-10-19).
+		var chip: Node = panel.find_child("GuideReminder", true, false)
+		in_card = in_card or ctl == chip or (chip != null and chip.is_ancestor_of(ctl))
 		if not in_card:
 			assert_int(ctl.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
 

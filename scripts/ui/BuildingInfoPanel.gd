@@ -22,6 +22,7 @@ const CT := preload("res://scripts/ui/CartoonTheme.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const TextKit := preload("res://scripts/ui/TextKit.gd")
 const HelpText := preload("res://scripts/ui/BuildingHelpText.gd")
+const TrainingSectionScript := preload("res://scripts/ui/TrainingSection.gd")
 
 ## La ventana entera (cinta + panel + X): la coloca UILayoutManager en el slot
 ## "right_panel" (PC) o _fit_layout() (telefono).
@@ -63,7 +64,9 @@ var _repair_cost_row: HBoxContainer
 var _actions_header: Control
 var _actions_sep: Control
 ## Fila de acciones de abajo (mover, girar, derribar...).
-var _actions_box: HBoxContainer
+var _actions_box: HFlowContainer
+## ENTRENAR en los edificios militares (2026-10-19): las unidades de ESE edificio.
+var _training: VBoxContainer
 var _move_container: Control
 var _move_btn: Button
 var _rotate_btn: Button
@@ -118,6 +121,8 @@ func _process(_delta: float) -> void:
 		return
 	_process_panel.update_progress(_selected_node, _is_deposit, _selected_data)
 	_update_construction()
+	if _training != null and _training.visible:
+		_training.update_progress()
 	if _harvest != null and not _is_deposit:
 		_harvest.refresh()
 
@@ -197,6 +202,11 @@ func _build_ui() -> void:
 	_harvest = preload("res://scripts/ui/HarvestSection.gd").new()
 	_harvest.visible = false
 	_vbox.add_child(_harvest)
+
+	_training = TrainingSectionScript.new()
+	_training.visible = false
+	_training.open_army_requested.connect(_on_open_army)
+	_vbox.add_child(_training)
 
 	# ── Yacimiento: usos y, al mantener, a mano o con su edificio ──
 	_deposit_uses_label = CT.para("", "window")
@@ -282,7 +292,15 @@ func _build_ui() -> void:
 	_upgrade_why_label.name = "UpgradeWhy"
 	_upgrade_why_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_upgrade_container.add_child(_upgrade_why_label)
-	_vbox.add_child(_upgrade_container)
+	# Mejora, su efecto, el boton y el coste en una sola tarjeta: se leen juntos.
+	var up_card := PanelContainer.new()
+	up_card.name = "UpgradeCard"
+	var up_style := CT.card_style("window")
+	up_style.set_content_margin_all(6 if _phone else 10)
+	up_card.add_theme_stylebox_override("panel", up_style)
+	up_card.add_child(_upgrade_container)
+	_upgrade_container.visibility_changed.connect(func(): up_card.visible = _upgrade_container.visible)
+	_vbox.add_child(up_card)
 	# Los que no se mejoran lo dicen, con su porque, en gris.
 	_no_upgrade_label = CT.para("", "window", true, "small")
 	_no_upgrade_label.name = "NoUpgrade"
@@ -315,14 +333,17 @@ func _build_ui() -> void:
 	_open_btn.visible = false
 	body.add_child(_open_btn)
 
-	_actions_box = HBoxContainer.new()
+	# Se parte en dos filas si no cabe: cada boton lleva su nombre corto (en
+	# telefono solo el icono, con el nombre al mantener pulsado).
+	_actions_box = HFlowContainer.new()
 	_actions_box.name = "InfoActions"
-	_actions_box.add_theme_constant_override("separation", 6)
+	_actions_box.add_theme_constant_override("h_separation", 6)
+	_actions_box.add_theme_constant_override("v_separation", 6)
 	body.add_child(_actions_box)
 
 	# Trabajadores: el jugador decide si este edificio trabaja. Solo icono: el
 	# estado esta arriba y la explicacion, en el tooltip.
-	_workers_btn = CT.pill_button("", "workers_off", "secondary", CT.h("small"))
+	_workers_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_WORKERS"), "workers_off", "secondary", CT.h("small"))
 	_workers_btn.name = "WorkersToggle"
 	_workers_btn.pressed.connect(_on_toggle_workers)
 	_actions_box.add_child(_workers_btn)
@@ -338,20 +359,17 @@ func _build_ui() -> void:
 	_move_container = _move_btn
 	_actions_box.add_child(_move_btn)
 
-	_rotate_btn = CT.pill_button("", "", "secondary", CT.h("small"))
+	_rotate_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_ROTATE"), "", "secondary", CT.h("small"))
 	_rotate_btn.name = "RotateButton"
-	_rotate_btn.get_child(0).add_child(CT.rotate_glyph(roundi(CT.h("small") * 0.56)))
+	var rot_glyph := CT.rotate_glyph(roundi(CT.h("small") * 0.56))
+	_rotate_btn.get_child(0).add_child(rot_glyph)
+	_rotate_btn.get_child(0).move_child(rot_glyph, 0)
 	_rotate_btn.tooltip_text = Tr.t("UI2C_TIP_ROTATE")
 	_rotate_btn.pressed.connect(_on_rotate)
 	_actions_box.add_child(_rotate_btn)
 
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_actions_box.add_child(spacer)
-
 	# Derribar: rojo y solo icono; el nombre al mantener. Pide confirmacion.
-	_demolish_btn = CT.pill_button("", "demolish", "danger", CT.h("small"))
+	_demolish_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_DEMOLISH"), "demolish", "danger", CT.h("small"))
 	_demolish_btn.name = "DemolishButton"
 	_demolish_btn.add_to_group("hud_info_demolish")
 	_demolish_btn.tooltip_text = Tr.t("UI2C_TIP_DEMOLISH")
@@ -399,8 +417,10 @@ func _fit_layout() -> void:
 	_panel.anchor_right = 1.0
 	_panel.anchor_top = 0.0
 	_panel.anchor_bottom = 1.0
-	_panel.offset_left = -6.0 - width
-	_panel.offset_right = -6.0
+	# Margen con el borde (y la zona segura del telefono): nunca pegado.
+	var edge := 14.0 + _safe_right()
+	_panel.offset_left = -edge - width
+	_panel.offset_right = -edge
 	_panel.offset_top = 2.0
 	_panel.offset_bottom = -4.0
 	_panel.custom_minimum_size = Vector2.ZERO
@@ -409,6 +429,23 @@ func _fit_layout() -> void:
 	(_win["panel"] as PanelContainer).add_theme_stylebox_override("panel", s)
 	_close_btn.offset_left = -_close_btn.custom_minimum_size.x - 2
 	_close_btn.offset_right = -2
+
+## Lo que tapa la muesca o los bordes curvos a la derecha, en pixeles logicos.
+func _safe_right() -> float:
+	if not is_inside_tree() or DisplayServer.get_name() == "headless":
+		return 0.0
+	var safe := DisplayServer.get_display_safe_area()
+	var win := DisplayServer.window_get_size()
+	if safe.size.x <= 0 or win.x <= 0:
+		return 0.0
+	var px := float(win.x - (safe.position.x + safe.size.x))
+	return clampf(px / maxf(get_tree().root.content_scale_factor, 0.01), 0.0, 48.0)
+
+## "Ver ejercito" de ENTRENAR: el resumen (tropa, sueldo, regimiento).
+func _on_open_army() -> void:
+	var army := get_parent().get_node_or_null("ArmyPanel") if get_parent() != null else null
+	if army != null and army.has_method("open"):
+		army.open()
 
 # ── Event Handlers ──
 
@@ -491,6 +528,10 @@ func _show_building_panel() -> void:
 
 	_deposit_uses_label.visible = false
 	_harvest.show_for(_selected_node, _selected_data)
+	var military: bool = String(_selected_data.id) in GameConfig.MILITARY_BUILDINGS and not is_building
+	_training.visible = military
+	if military:
+		_training.setup(String(_selected_data.id))
 	_refresh_workers_toggle()
 	_refresh_open_button()
 
@@ -515,6 +556,7 @@ func _show_building_panel() -> void:
 	_set_actions_header(_process_panel.action_count() > 0)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
+	(func(): CT.sync_ribbon_pad(_win)).call_deferred()
 	set_process(true)
 	UIManager.open_panel(self)
 
@@ -617,6 +659,7 @@ func _show_deposit_panel() -> void:
 	_level_label.visible = false
 	_production_container.visible = false
 	_harvest.visible = false
+	_training.visible = false
 	_construction_container.visible = false
 	_name_container.visible = false
 	_upgrade_container.visible = false
@@ -630,6 +673,7 @@ func _show_deposit_panel() -> void:
 	_set_actions_header(_process_panel.action_count() > 0)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
+	(func(): CT.sync_ribbon_pad(_win)).call_deferred()
 	set_process(true)
 	UIManager.open_panel(self)
 

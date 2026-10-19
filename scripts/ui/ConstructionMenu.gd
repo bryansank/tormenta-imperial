@@ -209,7 +209,7 @@ func _setup_ui() -> void:
 			UIManager.focus_window(self)
 	)
 	_root.add_child(_modal)
-	UILayoutManager.apply_layout("ConstructionMenu.modal", _modal)
+	# A pantalla completa en todos los perfiles: _fit_layout la coloca (sin slot).
 
 	var body: VBoxContainer = _win["body"]
 	var main := HBoxContainer.new()
@@ -382,12 +382,17 @@ func _fit_layout() -> void:
 		return
 	var vp := _vp()
 	var ph := CT.is_phone()
-	if ph:
-		CT.fit_fullscreen(_win)
-	else:
-		UILayoutManager.apply_layout("ConstructionMenu.modal", _modal)
-		CT.fit_desktop(_win)
+	# A pantalla completa en todos los perfiles (Bryan, 2026-10-19: "es mas
+	# facil"), con margen al borde: en PC y tablet la ficha va a la derecha.
+	CT.fit_fullscreen(_win, 8.0 if ph else 16.0)
+	if not ph:
+		(_win["root"] as Control).offset_top = 10.0
+		var close: Control = _win.get("close")
+		if close != null:
+			close.offset_left = -close.custom_minimum_size.x - 6
+			close.offset_right = -6
 	_detail_column.visible = not ph and vp.x >= DETAIL_MIN_VP_W
+	_detail_column.custom_minimum_size.x = clampf(vp.x * 0.30, DETAIL_W, 460.0)
 	if ph != _phone:
 		_phone = ph
 		_build_rail()
@@ -531,11 +536,13 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 
 	row.add_child(_make_thumb(data, Vector2(52, 40) if _phone else Vector2(64, 48), locked))
 
+	# El nombre siempre entero: si no cabe, la fila crece a dos lineas.
 	var name_label := CT.label(data.get_display_name(), "button", CT.text("window", locked))
 	name_label.name = "RowName"
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_label.clip_text = true
-	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_label.custom_minimum_size.x = 96.0 if _phone else 150.0
 	row.add_child(name_label)
 
 	if locked:
@@ -615,7 +622,7 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 func _style_row(card: PanelContainer, selected: bool, locked: bool, hover: bool) -> void:
 	var fill := CT.c("window", "CARD_ALT") if locked else Color(0, 0, 0, 0)
 	if hover and not locked:
-		fill = CT.c("window", "CARD").lightened(0.5)
+		fill = CT.c("window", "CARD_ALT") if CT.dark_windows() else CT.c("window", "CARD").lightened(0.5)
 	var s := CT.card_style("window", selected, fill)
 	s.set_content_margin_all(3 if _phone else 6)
 	s.content_margin_right = 6 if _phone else 8

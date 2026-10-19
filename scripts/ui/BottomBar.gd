@@ -197,6 +197,7 @@ func refresh() -> void:
 	var mbtn: Button = _buttons["missions"]
 	if military:
 		mbtn.tooltip_text = Tr.t(reason) if reason != "" else Tr.t("HUD_BAR_MISSIONS")
+		(_buttons["army"] as Button).tooltip_text = "%s · %s" % [Tr.t("HUD_BAR_ARMY"), Tr.t("HUD_BAR_ARMY_GO")]
 
 func _set_reason(id: String, why: String) -> void:
 	_reasons[id] = why
@@ -252,6 +253,12 @@ func has_missions_dot() -> bool:
 func _on_pressed(id: String) -> void:
 	if String(_reasons.get(id, "")) != "":
 		return
+	# Ejercito (2026-10-19): se entrena en los Cuarteles. El boton lleva al
+	# edificio militar (centra la camara y abre su ficha con ENTRENAR); con
+	# varios, cada toque va al siguiente.
+	if id == "army":
+		go_to_military()
+		return
 	if id == "help":
 		var help := _help_panel()
 		if help != null:
@@ -276,6 +283,49 @@ func _on_pressed(id: String) -> void:
 		panel.toggle()
 	elif panel.has_method("_toggle_panel"):
 		panel._toggle_panel()
+
+var _military_turn := 0
+
+## Centra la camara en el siguiente edificio militar terminado y abre su ficha.
+## Devuelve el nodo (o null si no hay ninguno). Publico para pruebas y sondas.
+func go_to_military() -> Node:
+	var found: Array = []
+	for info in GridManager.get_all_buildings():
+		var data: BuildingData = info.get("data")
+		if data == null or not (String(data.id) in GameConfig.MILITARY_BUILDINGS):
+			continue
+		var node: Node = info.get("node")
+		if node == null or not is_instance_valid(node):
+			continue
+		found.append(info)
+	if found.is_empty():
+		return null
+	var info: Dictionary = found[_military_turn % found.size()]
+	_military_turn += 1
+	var node: Node = info["node"]
+	UIManager.close_all_windows()
+	_center_camera_on(info)
+	EventBus.building_clicked.emit(node, info["data"])
+	return node
+
+func _center_camera_on(info: Dictionary) -> void:
+	var scene := get_tree().current_scene if is_inside_tree() else null
+	if scene == null:
+		return
+	var cam: Node = scene.get_node_or_null("MonumentalCamera")
+	if cam == null:
+		cam = scene.get_node_or_null("Camera2D")
+	if cam == null or not cam.has_method("get_state") or not cam.has_method("set_state"):
+		return
+	var cells: Array = info.get("cells", [info.get("origin_cell", Vector2i.ZERO)])
+	var sum := Vector3.ZERO
+	for cell in cells:
+		sum += GridManager.cell_to_world(cell)
+	sum /= float(maxi(cells.size(), 1))
+	var st: Dictionary = cam.get_state()
+	st["target_x"] = sum.x
+	st["target_y"] = sum.z
+	cam.set_state(st)
 
 static func _panel_is_open(panel: Node) -> bool:
 	if panel.has_method("is_open"):

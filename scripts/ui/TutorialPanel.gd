@@ -51,6 +51,15 @@ const TOP_HUD := 72.0
 const CARD_MAX_LINES := 5
 ## Hueco entre la tarjeta del combate guiado y los avisos que aparta.
 const AVOID_GAP := 12.0
+## Pasos de espera (2026-10-19, queja de Bryan: "no es mi culpa no tener los
+## recursos"): los que solo esperan recursos, produccion, obra o trabajadores
+## (need_<id> y wait_<id>). Se ven FOLD_SECONDS y se pliegan a un recordatorio
+## pequeno (la cara + "lo que falta"), sin flecha, aro ni velo, sin bloquear
+## nada. Tocarlo los vuelve a abrir. Tras IDLE_REMIND_SECONDS sin cambios, el
+## recordatorio se resalta (sin animacion ni sonido); nunca vuelve la tarjeta
+## grande sola. Al cumplirse, el paso cambia y la tarjeta sale con su flecha.
+const FOLD_SECONDS := 4.0
+const IDLE_REMIND_SECONDS := 90.0
 
 var _prologue: CanvasLayer
 var _coach: Control
@@ -108,6 +117,15 @@ var _combat_ok_btn: Button
 ## la tarjeta (InstructorBust.dock_to); se encoge o se oculta si no cabe sin
 ## tapar lo senalado.
 var _bust: Control
+## El recordatorio plegado de un paso de espera.
+var _chip: Button
+var _chip_text: Label
+var _later_btn: Button
+var _folded := false
+var _fold_left := 0.0
+var _chip_idle := 0.0
+var _chip_last := ""
+var _chip_hot := false
 
 func _ready() -> void:
 	layer = COACH_LAYER
@@ -303,6 +321,17 @@ func _build_coach() -> void:
 	_combat_ok_btn.visible = false
 	row.add_child(_combat_ok_btn)
 
+	# "Mas tarde": pliega ya un paso de espera.
+	_later_btn = CT.text_button(Tr.t("BTN_GUIDE_LATER"), "", "secondary", CT.menu_h("small"), "body")
+	_later_btn.name = "GuideLater"
+	_later_btn.focus_mode = Control.FOCUS_NONE
+	_later_btn.pressed.connect(func(): set_folded(true))
+	_later_btn.visible = false
+	row.add_child(_later_btn)
+	row.move_child(_later_btn, 0)
+
+	_build_chip()
+
 	_bust = InstructorBust.new()
 	_bust.name = "Instructor"
 	_bust.visible = GameConfig.ui_instructors_visible
@@ -311,6 +340,104 @@ func _build_coach() -> void:
 	_tail.name = "Tail"
 	_tail.visible = false
 	_coach.add_child(_tail)
+
+## El recordatorio: [cara] "Junta 120 oro · 45/120". Un boton: tocarlo abre.
+func _build_chip() -> void:
+	_chip = Button.new()
+	_chip.name = "GuideReminder"
+	_chip.focus_mode = Control.FOCUS_NONE
+	_chip.visible = false
+	_chip.tooltip_text = Tr.t("LBL_GUIDE_REMINDER_TIP")
+	_chip.pressed.connect(func(): set_folded(false))
+	_coach.add_child(_chip)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var face := CT.captain_face(34 if CT.is_phone() else 42)
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	face.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(face)
+	_chip_text = CT.label("", "body", CT.text("hud"))
+	_chip_text.name = "ReminderText"
+	_chip_text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_chip_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(_chip_text)
+	CT.fit_button_content(_chip, row, 6.0)
+	_style_chip(false)
+
+func _style_chip(hot: bool) -> void:
+	_chip_hot = hot
+	var st := CT.hud_style(CT.sem("ACCENT") if hot else Color(0, 0, 0, 0))
+	if hot:
+		st.set_border_width_all(4)
+	for s in ["normal", "hover", "pressed", "focus"]:
+		_chip.add_theme_stylebox_override(s, st)
+
+## Si el paso solo espera (recursos, produccion, obra, trabajadores).
+static func is_waiting_step(step_id: String) -> bool:
+	return TutorialManager.is_need_step(step_id) or step_id.begins_with("wait_")
+
+## Pliega (true) o abre (false) la tarjeta de un paso de espera.
+func set_folded(folded: bool) -> void:
+	if folded and not is_waiting_step(_step):
+		return
+	_folded = folded
+	if not folded:
+		_fold_left = FOLD_SECONDS
+	_chip_idle = 0.0
+	_style_chip(false)
+
+func is_folded() -> bool:
+	return _folded
+
+func reminder() -> Button:
+	return _chip
+
+func reminder_text() -> String:
+	return _chip_text.text if _chip_text != null else ""
+
+## Lo que dice el recordatorio: lo primero que falta ("Junta 120 oro · 45/120")
+## o, si no hay, la frase del paso.
+func _reminder_line() -> String:
+	var hint := _res_hint.split("
+", false)
+	if not hint.is_empty():
+		return String(hint[0])
+	var main := _res_text.split("
+", false)
+	return String(main[0]) if not main.is_empty() else ""
+
+## Coloca el recordatorio donde vive la linea del siguiente paso (que se oculta
+## con el tutorial en marcha) y esconde todo lo demas.
+func _layout_folded(delta: float) -> void:
+	for r in _dim:
+		r.visible = false
+	_frame.visible = false
+	_arrow.visible = false
+	_ring.visible = false
+	_card.visible = false
+	_tail.visible = false
+	_bust.visible = false
+	_chip.visible = true
+	var line := _reminder_line()
+	if line != _chip_last:
+		_chip_last = line
+		_chip_idle = 0.0
+		if _chip_hot:
+			_style_chip(false)
+	_chip_text.text = line
+	_chip_text.custom_minimum_size.x = 0.0
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var w := minf(_chip_text.get_theme_font("font").get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		_chip_text.get_theme_font_size("font_size")).x + 2.0, vp.x * 0.5)
+	_chip_text.custom_minimum_size.x = w
+	_chip.reset_size()
+	var m: Dictionary = UILayoutManager.get_slot("next_step").get("margin", {})
+	var left := float(m.get("left", 12.0))
+	var bottom := float(m.get("bottom", 90.0))
+	_chip.position = Vector2(left, vp.y - bottom - _chip.size.y)
+	_chip_idle += delta
+	if _chip_idle >= IDLE_REMIND_SECONDS and not _chip_hot:
+		_style_chip(true)
 
 ## Cambia el texto de una pastilla (su etiqueta y la meta "text").
 static func set_button_text(b: Button, text_s: String) -> void:
@@ -338,6 +465,15 @@ func _on_step_changed(step_id: String) -> void:
 	if step_id == "":
 		_coach.visible = false
 	_done_left = DONE_SECONDS if step_id == "done" else 0.0
+	# Paso de espera: se ve FOLD_SECONDS y se pliega. Paso de accion: abierto.
+	_folded = false
+	_fold_left = FOLD_SECONDS
+	_chip_idle = 0.0
+	if _chip != null:
+		_style_chip(false)
+		_chip.visible = false
+	if _later_btn != null:
+		_later_btn.visible = is_waiting_step(step_id)
 	var reading: bool = TutorialManager.step_has_ok(step_id)
 	_ok_btn.visible = step_id == "done" or reading
 	set_button_text(_ok_btn, TutorialManager.step_ok_text(step_id) if reading else Tr.t("BTN_GUIDE_OK"))
@@ -477,6 +613,20 @@ func _process(delta: float) -> void:
 			TutorialManager.finish_guide()
 			return
 	_resolve_left -= delta
+	if is_waiting_step(_step) and not _folded:
+		_fold_left -= delta
+		if _fold_left <= 0.0:
+			set_folded(true)
+	if _folded:
+		if _resolve_left <= 0.0:
+			_resolve_step()
+		_layout_folded(delta)
+		return
+	_chip.visible = false
+	_card.visible = true
+	_bust.visible = GameConfig.ui_instructors_visible
+	for r in _dim:
+		r.visible = true
 	# El control encontrado se fue (la lista se cerro, la tarjeta se recreo): se
 	# busca otra vez ya, sin esperar al reloj.
 	# Igual si el jugador acaba de elegir (o soltar) la tarjeta que pide el paso:

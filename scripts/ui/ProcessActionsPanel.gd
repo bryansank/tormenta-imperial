@@ -32,6 +32,9 @@ var _processes_box: VBoxContainer
 var _count := 0
 var _cards: Array = []
 var _busy := false
+## El proceso que hace ahora el edificio ("" = nada): su tarjeta sigue abierta
+## para sumar tandas (ProcessManager.enqueue_process); las demas, apagadas.
+var _busy_id := ""
 var _last_refresh_ms := 0
 var _progress_container: VBoxContainer
 var _progress_bar: ProgressBar
@@ -151,6 +154,7 @@ func update_progress(node: Node, is_deposit: bool, data: BuildingData) -> void:
 	var active := ProcessManager.get_active(node)
 	if active.is_empty():
 		_active_node = null
+		_busy_id = ""
 		_progress_container.visible = false
 		var constructing: bool = not is_deposit and data != null and ProductionManager.is_constructing(node)
 		if not constructing and (is_deposit or data != null):
@@ -160,6 +164,7 @@ func update_progress(node: Node, is_deposit: bool, data: BuildingData) -> void:
 				_refresh_cards(false)
 		return
 	_active_node = node
+	_busy_id = String(active.get("id", "*"))
 	_progress_container.visible = true
 	_progress_bar.value = ProcessManager.get_progress(node)
 	var total: int = ProcessManager.get_batch_total(node)
@@ -174,6 +179,8 @@ func update_progress(node: Node, is_deposit: bool, data: BuildingData) -> void:
 	_update_cancel_text(node)
 	if not _busy:
 		set_buttons_disabled(true)
+	else:
+		_refresh_cards(false)
 
 ## El boton dice exactamente cuanto devuelve. La tasa normal va en su tooltip;
 ## con la Tormenta en marcha se dice a la vista y en rojo: cancelar entonces
@@ -200,14 +207,16 @@ func _refresh_cards(force: bool) -> void:
 	if not force and now - _last_refresh_ms < REFRESH_MS:
 		return
 	_last_refresh_ms = now
+	var busy: Variant = (_busy_id if _busy_id != "" else true) if _busy else ""
 	for card in _cards:
 		if is_instance_valid(card):
-			card.refresh(_busy)
+			card.refresh(busy)
 
 func _add_process_card(proc: Dictionary, node: Node, accent: Color, from_tip: String = "") -> void:
 	var card: PanelContainer = ProcessCard.new()
 	card.setup(proc, ProcessCard.Kind.PROCESS, node, accent, from_tip)
 	card.batch_requested.connect(func(n: int): _start_process(node, proc, n))
+	card.dequeue_requested.connect(func(n: int): _dequeue(node, n))
 	_processes_box.add_child(card)
 	_cards.append(card)
 	_count += 1
@@ -221,6 +230,7 @@ func _add_mining_card(mining: Dictionary, node: Node, deposit_id: String) -> voi
 	var card: PanelContainer = ProcessCard.new()
 	card.setup(mining, ProcessCard.Kind.DEPOSIT, node, Color(0, 0, 0, 0))
 	card.batch_requested.connect(func(n: int): _start_mining(node, deposit_id, n))
+	card.dequeue_requested.connect(func(n: int): _dequeue(node, n))
 	_processes_box.add_child(card)
 	_cards.append(card)
 	_count += 1
@@ -251,12 +261,21 @@ static func _process_has_locked_resource(proc: Dictionary) -> bool:
 				return true
 	return false
 
+## Cada lote SUMA a la cola de ese proceso (o la empieza).
 func _start_process(node: Node, proc: Dictionary, count: int = 1) -> void:
-	if node and not ProcessManager.is_busy(node):
-		if ProcessManager.start_process(node, proc, count):
-			set_buttons_disabled(true)
+	if node and ProcessManager.enqueue_process(node, proc, count):
+		update_progress(node, false, null)
+		_refresh_cards(true)
 
 func _start_mining(node: Node, deposit_id: String, count: int = 1) -> void:
-	if node and not ProcessManager.is_busy(node):
-		if ProcessManager.start_mining(node, deposit_id, count):
-			set_buttons_disabled(true)
+	if node and ProcessManager.enqueue_mining(node, deposit_id, count):
+		update_progress(node, true, null)
+		_refresh_cards(true)
+
+## Quita tandas sin empezar (n = -1: todas) y devuelve lo pagado por ellas.
+func _dequeue(node: Node, n: int) -> void:
+	if node == null:
+		return
+	ProcessManager.dequeue(node, ProcessManager.queued_not_started(node) if n < 0 else n)
+	update_progress(node, false, null)
+	_refresh_cards(true)

@@ -732,6 +732,8 @@ var ui_scale_pct := 0
 var ui_text_size := "auto"
 ## Paleta de colores (UITheme.PALETTES), alto contraste y opacidad de paneles.
 var ui_palette := "default"
+## Tema de las ventanas: "light" (crema, de serie) o "dark" (CartoonTheme.window_theme).
+var ui_theme := "light"
 var ui_high_contrast := false
 var ui_panel_opacity := 1.0
 ## Calidad grafica del mapa 3D (WorldLook, docs/21 §12): "high" pone SSAO (solo
@@ -911,6 +913,8 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	var pal := str(cf.get_value("interfaz", "palette", ui_palette))
 	ui_palette = pal if pal in UITheme.PALETTES else "default"
 	ui_high_contrast = bool(cf.get_value("interfaz", "high_contrast", ui_high_contrast))
+	var theme_s := str(cf.get_value("interfaz", "ui_theme", ui_theme))
+	ui_theme = theme_s if theme_s in ["light", "dark"] else "light"
 	ui_panel_opacity = clampf(float(cf.get_value("interfaz", "panel_opacity", ui_panel_opacity)),
 		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
 	var quality := str(cf.get_value("interfaz", "graphics_quality", ui_graphics_quality))
@@ -972,6 +976,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "text_size", ui_text_size)
 	cf.set_value("interfaz", "palette", ui_palette)
 	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
+	cf.set_value("interfaz", "ui_theme", ui_theme)
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
 	cf.set_value("interfaz", "graphics_quality", ui_graphics_quality)
 	cf.set_value("interfaz", "combat_view", ui_combat_view)

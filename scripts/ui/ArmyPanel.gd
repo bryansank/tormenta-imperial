@@ -16,6 +16,7 @@ const RegimentCard := preload("res://scripts/ui/RegimentCard.gd")
 const UnitCardScript := preload("res://scripts/ui/UnitCard.gd")
 const PlacementRulesScript := preload("res://scripts/buildings/PlacementRules.gd")
 const CT := preload("res://scripts/ui/CartoonTheme.gd")
+const TrainingSectionScript := preload("res://scripts/ui/TrainingSection.gd")
 const Objectives := preload("res://scripts/services/Objectives.gd")
 
 ## Tope de la ventana en PC (en telefono va a pantalla completa).
@@ -292,119 +293,15 @@ func _rebuild_units() -> void:
 		if GameConfig.get_unit_building(String(unit_id)) == building_id:
 			_units_vbox.add_child(_make_unit_row(String(unit_id)))
 
+## La fila de una unidad: la misma pieza que la ficha del Cuartel
+## (TrainingSection.make_unit_row), con solo "+" en el boton de entrenar.
 func _make_unit_row(unit_id: String) -> PanelContainer:
-	var def := GameConfig.get_unit_def(unit_id)
-	var unlocked := ArmyManager.is_unlocked(unit_id) \
-		and ArmyManager.building_count(GameConfig.get_unit_building(unit_id)) > 0
-	var ph := CT.is_phone()
+	return TrainingSectionScript.make_unit_row(unit_id, _cards_open.has(unit_id), false,
+		toggle_unit_card.bind(unit_id), _refresh)
 
-	var card := PanelContainer.new()
-	card.name = "Unit_" + unit_id
-	var style := CT.card_style("window", false, CT.c("window", "CARD_ALT") if not unlocked else Color(0, 0, 0, 0))
-	style.set_content_margin_all(6 if ph else 10)
-	card.add_theme_stylebox_override("panel", style)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	card.add_child(row)
-
-	var disc := CT.unit_disc(unit_id, CT.sem("POSITIVE") if unlocked else CT.kind_fill("disabled"), 38 if ph else 48)
-	disc.mouse_filter = Control.MOUSE_FILTER_PASS
-	disc.tooltip_text = "\n".join(UnitCardScript.summary_lines(unit_id))
-	row.add_child(disc)
-
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.add_theme_constant_override("separation", 2)
-	row.add_child(info)
-
-	# Nombre y "×3" (cuantas tienes); "fuera: 2" si hay columna fuera.
-	var title_row := HBoxContainer.new()
-	title_row.add_theme_constant_override("separation", 8)
-	var name_label := CT.label(Tr.t(def.get("name", unit_id)), "button", CT.text("window", not unlocked))
-	title_row.add_child(name_label)
-	var owned_label := CT.label(Tr.t("LBL_ARMY_OWNED") % ArmyManager.get_count(unit_id), "number", CT.tone_color("positive"))
-	owned_label.name = "Owned"
-	title_row.add_child(owned_label)
-	var on_campaign: int = int(_units_on_expedition().get(unit_id, 0))
-	if on_campaign > 0:
-		var away := CT.badge(Tr.t("ARMY2_AWAY_N") % on_campaign, CT.sem("WARNING"))
-		away.tooltip_text = Tr.t("LBL_ON_CAMPAIGN") % on_campaign
-		away.mouse_filter = Control.MOUSE_FILTER_PASS
-		away.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		title_row.add_child(away)
-	info.add_child(title_row)
-
-	# Coste en iconos (en rojo lo que falta), poder y sueldo: el sueldo lleva un
-	# reloj delante y lo explica al mantener pulsado.
-	var stats := HFlowContainer.new()
-	stats.name = "Stats"
-	stats.add_theme_constant_override("h_separation", 8)
-	stats.add_theme_constant_override("v_separation", 2)
-	var cost: Dictionary = def.get("cost", {})
-	stats.add_child(CT.cost_row(cost, _missing(cost)))
-	var power := CT.label(Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0)), "small", CT.text("window", true))
-	power.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	stats.add_child(power)
-	var upkeep := HBoxContainer.new()
-	upkeep.name = "Upkeep"
-	upkeep.add_theme_constant_override("separation", 2)
-	upkeep.mouse_filter = Control.MOUSE_FILTER_PASS
-	upkeep.tooltip_text = "%s · %s" % [Tr.t("LBL_ARMY_UPKEEP_SHORT"), Tr.t("LBL_ARMY_UPKEEP_HINT") % int(GameConfig.army_upkeep_interval)]
-	var clock := CT.make_glyph("clock", 20)
-	clock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	upkeep.add_child(clock)
-	upkeep.add_child(CT.cost_row({"gold": int(def.get("upkeep_gold", 0))}))
-	stats.add_child(upkeep)
-	info.add_child(stats)
-
-	# Por que no se puede entrenar, a la vista (en movil no hay raton que se pose).
-	var check := ArmyManager.can_train(unit_id)
-	if not check["ok"] and check["reason"] != "":
-		var why := CT.icon_line("lock", blocked_text(unit_id, String(check["reason"])), "warning")
-		why.get_node("Text").name = "BlockedReason"
-		info.add_child(why)
-
-	# La ficha de la unidad (docs/15 §3, "Ensenar el combate"): la misma que en el
-	# tablero, sin vida actual. Se abre y se cierra en la propia fila.
-	if _cards_open.has(unit_id):
-		var unit_card = UnitCardScript.new()
-		unit_card.setup(unit_id, null, false)
-		info.add_child(unit_card)
-
-	# A la derecha: ficha (azul) y entrenar (+ verde). Solo iconos; el nombre al
-	# mantener pulsado.
-	var btn_h := 48 if ph else CT.BTN_SMALL
-	var card_btn := CT.pill_button("", "help", "secondary" if not _cards_open.has(unit_id) else "open", btn_h)
-	card_btn.name = "CardButton"
-	card_btn.tooltip_text = Tr.t("ARMY2_CARD_TIP")
-	card_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	card_btn.pressed.connect(toggle_unit_card.bind(unit_id))
-	row.add_child(card_btn)
-	var train_btn := CT.pill_button("", "plus", "primary", 52 if not ph else 48)
-	train_btn.name = "TrainButton"
-	train_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	train_btn.disabled = not check["ok"]
-	train_btn.tooltip_text = "%s · %s" % [Tr.t("ARMY2_TRAIN_TIP"), TextKit.cost_text(cost)]
-	if not check["ok"] and check["reason"] != "":
-		train_btn.tooltip_text = blocked_text(unit_id, String(check["reason"]))
-	train_btn.pressed.connect(func():
-		if ArmyManager.train(unit_id):
-			_refresh()
-	)
-	row.add_child(train_btn)
-	return card
-
-## Por que no se puede entrenar `unit_id`, en palabras. Una unidad de otra era
-## dice cual y que la abre (cuartel temprano, 2026-10-17). Sin estado, para las
-## pruebas.
+## Por que no se puede entrenar `unit_id` (vive en TrainingSection).
 static func blocked_text(unit_id: String, reason: String) -> String:
-	if reason == "LBL_ARMY_LOCKED":
-		var era: int = int(GameConfig.get_unit_def(unit_id).get("era", 1))
-		var key := "LBL_ARMY_LOCKED_ERA_%d" % era
-		if Tr.t(key) != key:
-			return Tr.t(key)
-	return Tr.t(reason)
+	return TrainingSectionScript.blocked_text(unit_id, reason)
 
 ## Abre o cierra la ficha de `unit_id` en su fila. Si la unidad es de otra
 ## pestana, se pasa a la suya.
@@ -425,79 +322,25 @@ func is_unit_card_open(unit_id: String) -> bool:
 # ── Cola de entrenamiento ──
 
 func _rebuild_training() -> void:
-	for child in _training_vbox.get_children():
-		_training_vbox.remove_child(child)
-		child.queue_free()
-	_training_bars.clear()
 	var training := ArmyManager.get_training()
 	if training.is_empty():
+		for child in _training_vbox.get_children():
+			_training_vbox.remove_child(child)
+			child.queue_free()
+		_training_bars.clear()
 		_training_vbox.visible = ArmyManager.get_total_units() == 0
 		if _training_vbox.visible:
 			_training_vbox.add_child(CT.icon_line("army", Tr.t("LBL_ARMY_EMPTY"), ""))
 		return
+	# La cola entera (todos los edificios), con las piezas de TrainingSection.
+	_training_bars = TrainingSectionScript.fill_queue(_training_vbox, "", _refresh)
 	_training_vbox.visible = true
-	var ph := CT.is_phone()
-	for i in range(training.size()):
-		var item: Dictionary = training[i]
-		var def := GameConfig.get_unit_def(item["id"])
-		var line := HBoxContainer.new()
-		line.add_theme_constant_override("separation", 8)
-		var disc := CT.unit_disc(String(item["id"]), CT.sem("INFO"), 30 if ph else 36)
-		disc.mouse_filter = Control.MOUSE_FILTER_PASS
-		disc.tooltip_text = "%s · %s" % [Tr.t("LBL_ARMY_IN_TRAINING"), Tr.t(def.get("name", item["id"]))]
-		line.add_child(disc)
-		var bar := CT.progress(_training_progress(item), CT.sem("POSITIVE"), "window", 14)
-		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		line.add_child(bar)
-		line.add_child(_make_cancel_button(i))
-		_training_vbox.add_child(line)
-		_training_bars.append(bar)
-
-## Cancelar un entrenamiento: ✕ roja, y lo que vuelve en iconos al lado.
-## Entrenar era irreversible: pulsar por error costaba la unidad entera.
-func _make_cancel_button(index: int) -> Control:
-	var refund := ArmyManager.get_training_refund(index)
-	var box := HBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	if not refund.is_empty():
-		var back := CT.make_glyph("back", 20)
-		back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		box.add_child(back)
-		box.add_child(CT.cost_row(refund))
-	# En rojo siempre (cancelar es quitar); con la Tormenta, el tooltip lo dice.
-	var btn := CT.pill_button("", "close", "danger", 48 if CT.is_phone() else CT.BTN_SMALL)
-	btn.name = "CancelTraining"
-	btn.tooltip_text = Tr.t("LBL_CANCEL_NO_REFUND") if refund.is_empty() else Tr.t("FMT_CANCEL_REFUND") % TextKit.cost_text(refund)
-	btn.pressed.connect(func():
-		ArmyManager.cancel_training(index)
-		_refresh()
-	)
-	box.add_child(btn)
-	return box
 
 func _update_training_progress() -> void:
-	var training := ArmyManager.get_training()
-	for i in range(mini(_training_bars.size(), training.size())):
-		_training_bars[i].value = _training_progress(training[i])
+	TrainingSectionScript.update_bars(_training_bars)
 
-func _training_progress(item: Dictionary) -> float:
-	var dur: float = item.get("duration", 1.0)
-	if dur <= 0.0:
-		return 1.0
-	return clampf(1.0 - (item.get("remaining", 0.0) / dur), 0.0, 1.0)
-
-## Lo que falta para pagar `cost` (por nombre de recurso).
 func _missing(cost: Dictionary) -> Dictionary:
-	var out := {}
-	for res_name in cost:
-		var type: int = ResourceManager.name_to_type(String(res_name))
-		if type < 0:
-			continue
-		var short: int = int(cost[res_name]) - ResourceManager.get_amount(type)
-		if short > 0:
-			out[res_name] = short
-	return out
+	return TrainingSectionScript.missing(cost)
 
 # ── Visibility / open-close ──
 

@@ -392,10 +392,8 @@ func _piece_grid(kind: String) -> HFlowContainer:
 		var label_key := ("FLAG_PATTERN_" if kind == "patterns" else "FLAG_EMBLEM_") + String(id).to_upper()
 		btn.tooltip_text = Tr.t(label_key)
 		var box := VBoxContainer.new()
-		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.alignment = BoxContainer.ALIGNMENT_CENTER
-		box.set_anchors_preset(Control.PRESET_FULL_RECT)
-		btn.add_child(box)
+		box.add_theme_constant_override("separation", 3)
 		var pic := TextureRect.new()
 		pic.custom_minimum_size = THUMB
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -404,11 +402,12 @@ func _piece_grid(kind: String) -> HFlowContainer:
 		pic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		pic.texture = ColonyFlag.small_texture(_thumb_spec(kind, id))
 		if not unlocked:
-			pic.modulate = Color(0.45, 0.45, 0.45)
+			pic.modulate = Color(1, 1, 1, 0.45)
 		box.add_child(pic)
 		if not unlocked:
-			box.add_child(ConstructionMenuScript.make_rank_lock_row(ColonyIdentity.piece_rank(kind, id)))
-		btn.custom_minimum_size = Vector2(THUMB.x + 18, THUMB.y + (34 if not unlocked else 16))
+			box.add_child(CT.rank_plate(ColonyIdentity.piece_rank(kind, id)))
+			btn.tooltip_text += " · " + Tr.t("LBL_RANK_LOCK") % ColonyIdentity.piece_rank(kind, id)
+		CT.fit_button_content(btn, box, 5.0)
 		var piece_id := String(id)
 		btn.pressed.connect(func(): pick(kind, piece_id))
 		grid.add_child(btn)
@@ -451,48 +450,25 @@ func _swatch(slot: int, color_id: String) -> Button:
 	btn.tooltip_text = Tr.t("COLONY_COLOR_" + color_id.to_upper())
 	if unlocked and not allowed:
 		btn.tooltip_text += " · " + Tr.t("LBL_IDENTITY_UNREADABLE")
-	btn.custom_minimum_size = Vector2(SWATCH, SWATCH + (0 if unlocked else 16))
+	# La muestra entera arriba; cerrada, debajo la placa del rango. Sin nada
+	# pintado encima del color.
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 3)
 	var swatch := ColorRect.new()
+	swatch.name = "Swatch"
 	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	swatch.custom_minimum_size = Vector2(SWATCH - 12.0, SWATCH - 12.0)
+	swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	swatch.color = ColonyFlag.color_of(color_id)
 	if not allowed:
-		swatch.color = swatch.color.darkened(0.55)
-	swatch.set_anchors_preset(Control.PRESET_FULL_RECT)
-	swatch.offset_left = 6
-	swatch.offset_top = 6
-	swatch.offset_right = -6
-	swatch.offset_bottom = -6 - (16 if not unlocked else 0)
-	btn.add_child(swatch)
+		# Apagado: el color se ve, pero a media luz.
+		swatch.color = Color(swatch.color.lerp(CT.c("window", "WELL"), 0.45), 0.55)
+	box.add_child(swatch)
 	if not unlocked:
-		# Candado dibujado y el numero de rango, bajo la muestra.
-		var row := HBoxContainer.new()
-		row.name = "RankLock"
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 2)
-		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		row.offset_top = -18
-		row.offset_bottom = -2
-		var lock := Control.new()
-		lock.custom_minimum_size = Vector2(10, 12)
-		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		lock.draw.connect(func(): ConstructionMenuScript.draw_lock(lock, Rect2(Vector2.ZERO, lock.custom_minimum_size), CT.sem("WARNING").darkened(0.3)))
-		row.add_child(lock)
-		var label := CT.label(str(ColonyIdentity.piece_rank("colors", color_id)), "small", CT.sem("WARNING").darkened(0.3))
-		label.name = "RankLockLabel"
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(label)
-		btn.add_child(row)
+		box.add_child(CT.rank_plate(ColonyIdentity.piece_rank("colors", color_id)))
 		btn.tooltip_text = Tr.t("LBL_RANK_LOCK") % ColonyIdentity.piece_rank("colors", color_id)
-	elif not allowed:
-		# Tachado: no se distinguiria o no se leeria.
-		var cross := Control.new()
-		cross.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		cross.set_anchors_preset(Control.PRESET_FULL_RECT)
-		cross.draw.connect(func():
-			var s := cross.size
-			cross.draw_line(Vector2(8, 8), s - Vector2(8, 8), CT.INK, 3.0))
-		btn.add_child(cross)
+	CT.fit_button_content(btn, box, 5.0)
 	btn.pressed.connect(func(): pick("colors", color_id, slot))
 	return btn
 
@@ -523,10 +499,7 @@ func _make_pick_button(selected: bool, enabled: bool) -> Button:
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.disabled = not enabled
 	# Tarjeta crema; la elegida con borde de laton grueso; la cerrada, apagada.
-	var fill := CT.c("window", "CARD") if enabled else CT.c("window", "CARD_ALT")
-	var st := CT.card_style("window", selected, fill)
-	st.set_content_margin_all(4)
-	st.set_corner_radius_all(12)
+	var st := CT.pick_style(selected, enabled)
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		btn.add_theme_stylebox_override(state, st)
 	btn.set_meta("selected", selected)

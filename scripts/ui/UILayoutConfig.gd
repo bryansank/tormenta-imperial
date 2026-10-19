@@ -88,7 +88,7 @@ const SLOTS := {
 	},
 	"right_panel": {
 		"anchor": Rect2(1, 0, 1, 1),
-		"margin": {"left": 0, "top": 210, "right": 8, "bottom": 20},
+		"margin": {"left": 0, "top": 210, "right": 18, "bottom": 20},
 		"max_size": Vector2(360, 0),
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,
@@ -128,9 +128,11 @@ const SLOTS := {
 	## ¿QUE HACER? como una linea plegable con la cara de la Capitana (docs/28
 	## §12), abajo a la izquierda. `above_dpad`: con la cruceta en pantalla
 	## (tablet) sube por encima de ella (UILayoutManager.get_slot).
+	## Encima de la barra de abajo (2026-10-19): en la misma fila se montaba sobre
+	## Ejercito / Misiones con textos largos (20 + 64 del redondo + nombre + 12).
 	"next_step": {
 		"anchor": Rect2(0, 1, 0, 1),
-		"margin": {"left": 14, "top": 0, "right": 0, "bottom": 20},
+		"margin": {"left": 14, "top": 0, "right": 0, "bottom": 118},
 		"max_size": Vector2(0, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_BEGIN,

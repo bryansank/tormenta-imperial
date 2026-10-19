@@ -254,6 +254,92 @@ func start_process(node: Node, process: Dictionary, count: int = 1) -> bool:
 	_warn_if_ash()
 	return true
 
+## Tandas que acumulan (decision de Bryan, 2026-10-19): cada x1 / x5 / MAX de la
+## ficha SUMA una tanda a la cola de ese proceso (x1 + x1 + x5 = 7). Se cobra al
+## encolar, como al arrancar un lote: lo que esta en la cola ya esta pagado, asi
+## que cancelar o la Tormenta siguen leyendo `count` x coste. Un edificio hace un
+## proceso a la vez: con otro en marcha no se encola (la ficha lo dice). Nunca
+## mas de GameConfig.process_batch_max en la cola. El guardado no cambia: la cola
+## son `count` / `total` de la entrada (los guardados viejos valen).
+func enqueue_process(node: Node, process: Dictionary, count: int = 1) -> bool:
+	if not _active.has(node):
+		return start_process(node, process, count)
+	var info: Dictionary = _active[node]
+	if str(info.get("id", "")) != str(process.get("id", "")):
+		return false
+	var room: int = GameConfig.process_batch_max - int(info.get("count", 1))
+	count = mini(count, room)
+	if count <= 0:
+		return false
+	if process.has("cost") and not process["cost"].is_empty():
+		var cost := _convert_cost(_cost_times(process["cost"], count))
+		if not ResourceManager.can_afford(cost):
+			return false
+		ResourceManager.spend_cost(cost)
+	info["count"] = int(info.get("count", 1)) + count
+	info["total"] = int(info.get("total", 1)) + count
+	EventBus.process_started.emit(node, str(info["id"]))
+	_warn_if_ash()
+	return true
+
+## Lo mismo para el minado a mano de una veta (no cuesta recursos; nunca mas que
+## los usos que le queden).
+func enqueue_mining(node: Node, deposit_id: String, count: int = 1) -> bool:
+	if not _active.has(node):
+		return start_mining(node, deposit_id, count)
+	var info: Dictionary = _active[node]
+	var data := get_mining_info(deposit_id)
+	if data.is_empty() or str(info.get("id", "")) != str(data.get("id", "")):
+		return false
+	var room: int = GameConfig.process_batch_max - int(info.get("count", 1))
+	var uses := deposit_uses_left(node)
+	if uses >= 0:
+		room = mini(room, uses - int(info.get("count", 1)))
+	count = mini(count, room)
+	if count <= 0:
+		return false
+	info["count"] = int(info.get("count", 1)) + count
+	info["total"] = int(info.get("total", 1)) + count
+	EventBus.mining_started.emit(node, deposit_id)
+	return true
+
+## Cuantas tandas hay en la cola sin empezar (las que se pueden quitar).
+func queued_not_started(node: Node) -> int:
+	if not _active.has(node):
+		return 0
+	return maxi(0, int(_active[node].get("count", 1)) - 1)
+
+## Cuantas tandas mas caben en la cola de `node` para `process` (0 si el
+## edificio hace otra cosa). Sin nada en marcha, lo que dice max_batch.
+func room_for(node: Node, process: Dictionary, uses_left: int = -1) -> int:
+	var mx := max_batch(process, uses_left)
+	if not _active.has(node):
+		return mx
+	var info: Dictionary = _active[node]
+	if str(info.get("id", "")) != str(process.get("id", "")):
+		return 0
+	var room: int = GameConfig.process_batch_max - int(info.get("count", 1))
+	if uses_left >= 0:
+		room = mini(room, uses_left - int(info.get("count", 1)))
+	return clampi(mini(mx, room), 0, GameConfig.process_batch_max)
+
+## Quita `n` tandas sin empezar (la de ahora sigue) y devuelve ENTERO lo que se
+## pago por ellas: no se empezaron, asi que no hay tasa de cancelacion. Lo que
+## no quepa en la bolsa se recorta como cualquier reembolso.
+func dequeue(node: Node, n: int = 1) -> Dictionary:
+	var take := mini(n, queued_not_started(node))
+	if take <= 0:
+		return {}
+	var info: Dictionary = _active[node]
+	info["count"] = int(info.get("count", 1)) - take
+	info["total"] = maxi(int(info["count"]), int(info.get("total", 1)) - take)
+	var refund := ResourceManager.fit_into_storage(_cost_times(info.get("cost", {}), take)) 		if not (info.get("cost", {}) as Dictionary).is_empty() else {}
+	for res_name in refund:
+		if _type_map.has(res_name):
+			ResourceManager.add(_type_map[res_name], refund[res_name])
+	EventBus.process_started.emit(node, str(info.get("id", "")))
+	return refund
+
 ## Por que no se puede sacar a mano esta veta ahora: "" si se puede, o una clave
 ## de Tr. Dos reglas (2026-09-28): la veta tiene que tocar una carretera unida al
 ## Nucleo, y hacen falta trabajadores libres (GameConfig.mining_workers).

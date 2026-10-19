@@ -190,11 +190,27 @@ const _SURF_HC := {
 		"TEXT": Color("ffffff"), "TEXT_DIM": Color("f2f2f2")},
 }
 
+## Tema de las ventanas, a eleccion del jugador (Ajustes > Pantalla > Tema;
+## settings.cfg [interfaz] ui_theme): "light" = ventanas crema (de serie),
+## "dark" = ventanas gris azulado con borde de color. El HUD es oscuro en los
+## dos. Lo pone DeviceProfile.apply_theme() antes de UITheme.configure().
+const WINDOW_THEMES := ["light", "dark"]
+static var window_theme := "light"
+
+## Las ventanas del tema oscuro (Bryan, 2026-10-19): fondo #243241, tarjetas
+## #2e3f51, borde #4fa3e0, texto #f3f7fb y tenue #a9bccd.
+const _SURF_NIGHT := {
+	"BG": Color("243241"), "CARD": Color("2e3f51"), "CARD_ALT": Color("37495d"),
+	"WELL": Color("1b2733"), "BORDER": Color("4fa3e0"), "CARD_BORDER": Color("4b6b89"),
+	"TEXT": Color("f3f7fb"), "TEXT_DIM": Color("a9bccd"), "NEUTRAL": Color("3d546c"),
+	"SHADOW": Color(0, 0, 0, 0.45),
+}
+
 ## "hud" (fichas sobre el mapa, barra de abajo) o "window" (ventanas grandes).
 static func kind(role: String) -> String:
 	if role == "hud":
 		return "light" if surface == "light" else "dark"
-	return "dark" if surface == "dark" else "light"
+	return "dark" if (surface == "dark" or window_theme == "dark") else "light"
 
 ## Un color de la superficie de `role` (BG, CARD, TEXT...) o un semantico.
 static func c(role: String, key: String) -> Color:
@@ -203,7 +219,13 @@ static func c(role: String, key: String) -> Color:
 	var k := kind(role)
 	if UITheme.high_contrast and _SURF_HC[k].has(key):
 		return _SURF_HC[k][key]
+	if k == "dark" and role != "hud" and window_theme == "dark" and _SURF_NIGHT.has(key):
+		return _SURF_NIGHT[key]
 	return _SURF[k][key]
+
+## Si las ventanas son oscuras (tema oscuro o superficie oscura).
+static func dark_windows() -> bool:
+	return kind("window") == "dark"
 
 static func sem(key: String) -> Color:
 	var pal: Dictionary = _SEMANTIC_PALETTES.get(UITheme.palette, {})
@@ -715,7 +737,21 @@ static func window(title: String, ribbon_fill: Color = Color(0, 0, 0, 0), with_c
 		close.offset_top = rs.y * 0.5 - close.custom_minimum_size.y * 0.5 + 2
 		close.offset_bottom = close.offset_top + close.custom_minimum_size.y
 		root.add_child(close)
-	return {"root": root, "body": body, "close": close, "panel": panel}
+	return {"root": root, "body": body, "close": close, "panel": panel, "ribbon": ribbon, "top_pad": top_pad}
+
+## La cinta mide lo que mida su titulo (una palabra larga, letra grande): el
+## hueco de arriba del cuerpo la sigue, para que nada quede tapado bajo ella.
+## Llamalo despues de cambiar el titulo (diferido: la etiqueta se mide en el arbol).
+static func sync_ribbon_pad(w: Dictionary) -> void:
+	var ribbon: Control = w.get("ribbon")
+	var pad: Control = w.get("top_pad")
+	var panel: Control = w.get("panel")
+	if ribbon == null or pad == null or panel == null:
+		return
+	var rh := maxf(ribbon.get_combined_minimum_size().y, ribbon.offset_bottom - ribbon.offset_top)
+	ribbon.offset_bottom = ribbon.offset_top + rh
+	var need := rh - panel.offset_top - float(panel.get_theme_stylebox("panel").content_margin_top) + 6.0
+	pad.custom_minimum_size.y = maxf(roundf(need), 0.0)
 
 ## Aviso (docs/28 §10): icono + una frase + X, en la columna de avisos. El
 ## repetido se agrupa con "x3". `tone`: positive, warning, danger, info.
@@ -1893,3 +1929,58 @@ static func place_tail(tail: Control, card: Rect2, bust: Control) -> void:
 	var ty := clampf(b.get_center().y - tail.size.y * 0.5, card.position.y + 10.0, card.end.y - tail.size.y - 10.0)
 	var tx := card.position.x - tail.size.x + 1.0 if side < 0 else card.end.x - 1.0
 	tail.position = Vector2(tx, ty)
+
+# --- REJILLAS DE PIEZAS (integracion/ui-v2, 2026-10-19) -------------------
+# Las muestras de color, fondos, emblemas y pinturas: la pieza arriba, entera y
+# sin nada pintado encima; si esta cerrada, debajo una placa clara con el
+# candado y el rango. El boton mide lo que su contenido (nunca se corta).
+
+## Placa pequena "candado + N" (rango que abre la pieza), clara y legible.
+static func rank_plate(rank: int) -> PanelContainer:
+	var plate := PanelContainer.new()
+	plate.name = "RankLock"
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := box(c("window", "CARD"), c("window", "CARD_BORDER"), 2, 8, 2)
+	st.content_margin_left = 6
+	st.content_margin_right = 6
+	plate.add_theme_stylebox_override("panel", st)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 3)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.add_child(row)
+	var lock := make_glyph("lock", 14 if phone else 16, text("window"))
+	lock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(lock)
+	var l := label(str(rank), "small", text("window"))
+	l.name = "RankLockLabel"
+	row.add_child(l)
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	return plate
+
+## Mete `content` en el boton con `pad` de margen y hace que el boton mida lo
+## que el contenido pida (y lo siga si cambia).
+static func fit_button_content(btn: Button, content: Control, pad: float = 5.0) -> void:
+	content.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content.offset_left = pad
+	content.offset_top = pad
+	content.offset_right = -pad
+	content.offset_bottom = -pad
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(content)
+	var fit := func():
+		if is_instance_valid(btn) and is_instance_valid(content):
+			btn.custom_minimum_size = content.get_combined_minimum_size() + Vector2(pad, pad) * 2.0
+	content.minimum_size_changed.connect(fit)
+	fit.call()
+
+## Estilo de una tarjeta de pieza: elegida con borde grueso de laton; cerrada,
+## apagada (relleno hundido).
+static func pick_style(selected: bool, enabled: bool) -> StyleBoxFlat:
+	var fill := c("window", "CARD") if enabled else c("window", "WELL")
+	var st := box(fill, sem("ACCENT") if selected else c("window", "CARD_BORDER"),
+		5 if selected else 2, 12, 4, 0, 0, "window")
+	if selected:
+		st.shadow_color = Color(sem("ACCENT"), 0.5)
+		st.shadow_size = 4
+	return st
