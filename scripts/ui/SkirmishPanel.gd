@@ -176,7 +176,13 @@ func _setup_ui() -> void:
 	_troop_card = PanelContainer.new()
 	_troop_card.name = "TroopCard"
 	_troop_card.add_theme_stylebox_override("panel", CT.card_style("window"))
-	_main_row.add_child(_troop_card)
+	# Telefono en vertical: la tropa va debajo de la mision (al lado se salia
+	# por la derecha en 400 px).
+	if CT.portrait():
+		_troop_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_sortie_box.add_child(_troop_card)
+	else:
+		_main_row.add_child(_troop_card)
 	var troop_col := VBoxContainer.new()
 	troop_col.add_theme_constant_override("separation", 4)
 	_troop_card.add_child(troop_col)
@@ -221,6 +227,13 @@ func _setup_ui() -> void:
 	_footer = HBoxContainer.new()
 	_footer.add_theme_constant_override("separation", 10)
 	foot_col.add_child(_footer)
+	# Telefono en vertical: los botones van en su propia fila, bajo las cifras.
+	var actions: HBoxContainer = _footer
+	if CT.portrait():
+		actions = HBoxContainer.new()
+		actions.name = "FooterActions"
+		actions.add_theme_constant_override("separation", 8)
+		foot_col.add_child(actions)
 	var morale := _foot_chip("res:morale")
 	_morale_label = morale.get_child(1)
 	var commit := _foot_chip("army")
@@ -232,7 +245,7 @@ func _setup_ui() -> void:
 	_audit_btn.name = "AuditButton"
 	_audit_btn.pressed.connect(_on_audit_pressed)
 	_audit_btn.visible = false
-	_footer.add_child(_audit_btn)
+	actions.add_child(_audit_btn)
 
 	# RESOLVER SOLO (D6 = A): solo en incursiones y solo si la columna dobla al
 	# enemigo. Apagado con el motivo en el tooltip cuando no llega.
@@ -240,17 +253,17 @@ func _setup_ui() -> void:
 	_auto_btn.name = "AutoResolveButton"
 	_auto_btn.pressed.connect(_on_auto_pressed)
 	_auto_btn.visible = false
-	_footer.add_child(_auto_btn)
+	actions.add_child(_auto_btn)
 
 	_launch_btn = CT.pill_button(Tr.t("ARMY2_BTN_ATTACK"), "missions", "primary", CT.h("big"))
 	_launch_btn.name = "LaunchButton"
 	_launch_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_launch_btn.pressed.connect(_on_launch_pressed)
-	_footer.add_child(_launch_btn)
+	actions.add_child(_launch_btn)
 
 	_dev_btn = CT.pill_button(Tr.t("BTN_DEV_SKIRMISH"), "", "secondary", 48, "window", "small")
 	_dev_btn.pressed.connect(func(): if CombatManager.dev_start_encounter(): _close())
-	_footer.add_child(_dev_btn)
+	actions.add_child(_dev_btn)
 
 	# Un boton apagado sin motivo es un bug a ojos del jugador. El motivo va
 	# debajo, escrito, siempre que `can_launch` diga que no.
@@ -550,8 +563,10 @@ func _make_unit_row(unit_id: String, owned: int, blocked: bool = false, block_te
 	info.add_theme_constant_override("separation", -2)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.alignment = BoxContainer.ALIGNMENT_CENTER
-	var name_label := CT.label(Tr.t(def.get("name", unit_id)), "button", CT.text("window", blocked))
-	name_label.clip_text = true
+	# El nombre entero (antes se cortaba: "Infanteri"); en telefono, un punto
+	# mas pequeno para que quepa junto a − n +.
+	var name_label := CT.label(Tr.t(def.get("name", unit_id)), "body" if ph else "button", CT.text("window", blocked))
+	name_label.name = "UnitName"
 	info.add_child(name_label)
 	var sub_text: String = block_text if (blocked and block_text != "") else Tr.t("ARMY2_HOME_N") % owned
 	var sub := CT.label(sub_text, "small", CT.tone_color("warning") if blocked else CT.text("window", true))
@@ -1123,7 +1138,8 @@ func _add_tabs() -> void:
 		current == TAB_RAIDS, ph, "%s: %d" % [Tr.t("ARMY2_TAB_RAIDS"), raids]))
 	# En telefono, "3 de 6" a la derecha de las pestanas (en PC va en la tarjeta).
 	var camp := current_campaign()
-	if ph and camp != "":
+	# En vertical no cabe junto a las pestanas: va en la tarjeta (como en PC).
+	if ph and camp != "" and not CT.portrait():
 		var spacer := Control.new()
 		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1150,7 +1166,7 @@ func _add_campaign_header(domain: String) -> void:
 	var ph := _phone()
 	var won: int = CombatManager.campaign_won(domain)
 	var total: int = CombatManager.campaign_total(domain)
-	if not ph:
+	if not ph or CT.portrait():
 		var head := HBoxContainer.new()
 		head.add_theme_constant_override("separation", 8)
 		var title := CT.label(Tr.t("CAMP_NAME_" + domain.to_upper()), "small", CT.text("window", true))

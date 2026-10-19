@@ -271,6 +271,18 @@ func _fit_scroll() -> void:
 		CT.place_center(_win, vp, WINDOW_SIZE)
 	if _detail != null:
 		_detail.custom_minimum_size.x = DETAIL_WIDTH_PHONE if _narrow else DETAIL_WIDTH
+		# Telefono en vertical: la ficha baja bajo las ramas (a su lado se salia
+		# por la derecha en 400 px).
+		var below := CT.portrait()
+		var want_parent: Node = _body.get_parent() if below else _body
+		if _detail.get_parent() != want_parent:
+			_detail.get_parent().remove_child(_detail)
+			want_parent.add_child(_detail)
+			if below:
+				want_parent.move_child(_detail, _body.get_index() + 1)
+		if below:
+			_detail.custom_minimum_size.x = 0.0
+			_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for btn in _tech_buttons.values():
 		(btn as Button).custom_minimum_size.x = CARD_WIDTH_NARROW if _narrow else CARD_WIDTH
 	_apply_branch_visibility()

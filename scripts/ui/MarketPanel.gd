@@ -172,7 +172,20 @@ func _add_resource_row(parent: VBoxContainer, res_name: String) -> void:
 	card.add_theme_stylebox_override("panel", cs)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6 if _phone else 10)
-	card.add_child(row)
+	# Telefono en vertical: precios arriba, [−] n [+] COMPRAR VENDER debajo
+	# (en una fila no cabia y VENDER se salia por la derecha).
+	var trade_row: HBoxContainer = row
+	if CT.portrait():
+		var stack := VBoxContainer.new()
+		stack.add_theme_constant_override("separation", 4)
+		card.add_child(stack)
+		stack.add_child(row)
+		trade_row = HBoxContainer.new()
+		trade_row.alignment = BoxContainer.ALIGNMENT_END
+		trade_row.add_theme_constant_override("separation", 6)
+		stack.add_child(trade_row)
+	else:
+		card.add_child(row)
 
 	# El recurso por su icono; su nombre, en el tooltip.
 	var icon := UITheme.make_icon(res_name, 30 if _phone else 36)
@@ -216,22 +229,22 @@ func _add_resource_row(parent: VBoxContainer, res_name: String) -> void:
 	var amount := 10
 	var minus_btn := CT.pill_button("", "minus", "secondary", 48)
 	minus_btn.tooltip_text = "−5"
-	row.add_child(minus_btn)
+	trade_row.add_child(minus_btn)
 	var amount_label := CT.label(str(amount), "number", CT.text("window"))
 	amount_label.name = "Amount"
 	amount_label.custom_minimum_size.x = 32
 	amount_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	row.add_child(amount_label)
+	trade_row.add_child(amount_label)
 	var plus_btn := CT.pill_button("", "plus", "secondary", 48)
 	plus_btn.tooltip_text = "+5"
-	row.add_child(plus_btn)
+	trade_row.add_child(plus_btn)
 
 	var buy_btn := CT.text_pill(Tr.t("UI2C_BTN_BUY"), "primary", 48)
 	buy_btn.name = "Buy"
-	row.add_child(buy_btn)
+	trade_row.add_child(buy_btn)
 	var sell_btn := CT.text_pill(Tr.t("UI2C_BTN_SELL"), "accent", 48)
 	sell_btn.name = "Sell"
-	row.add_child(sell_btn)
+	trade_row.add_child(sell_btn)
 
 	_rows[res_name] = {"buy_price": buy["label"], "sell_price": sell["label"], "amount_label": amount_label, "amount": amount,
 		"spread": spread_label, "trend": trend, "buy_btn": buy_btn, "sell_btn": sell_btn}

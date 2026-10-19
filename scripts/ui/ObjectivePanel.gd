@@ -252,15 +252,16 @@ func _setup_ui() -> void:
 	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))
 	root.add_child(_panel)
 
+	# En telefono (360 de alto) los huecos se comian el panel y la lista de
+	# pasos se veia de una linea: margenes y separaciones mas cortos.
+	var tight: bool = CartoonTheme.is_phone()
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_top", 20)
-	margin.add_theme_constant_override("margin_left", 20)
-	margin.add_theme_constant_override("margin_right", 20)
-	margin.add_theme_constant_override("margin_bottom", 20)
+	for side in ["margin_top", "margin_left", "margin_right", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 10 if tight else 20)
 	_panel.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 15)
+	vbox.add_theme_constant_override("separation", 6 if tight else 15)
 	margin.add_child(vbox)
 
 	# Header. La mision del modo va en el tooltip del titulo (2026-10-04): la
@@ -281,7 +282,7 @@ func _setup_ui() -> void:
 
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 20)
+	content.add_theme_constant_override("separation", 8 if tight else 20)
 	scroll.add_child(content)
 
 	# ── AHORA: el siguiente paso, calculado desde la partida (Objectives) ──

@@ -132,7 +132,11 @@ func _setup_ui() -> void:
 	top.add_child(spacer)
 	var stats := HBoxContainer.new()
 	stats.add_theme_constant_override("separation", 12)
-	top.add_child(stats)
+	# Telefono en vertical: las cifras bajo las pestanas (juntas no cabian).
+	if CT.portrait():
+		body.add_child(stats)
+	else:
+		top.add_child(stats)
 	_power_label = _summary_chip(stats, "army", Tr.t("ARMY2_POWER"))
 	# De donde sale cada tope, al mantener pulsado.
 	_capacity_label = _summary_chip(stats, "res:workers", Tr.t("ARMY2_TROOPS"))
@@ -296,7 +300,7 @@ func _rebuild_units() -> void:
 ## La fila de una unidad: la misma pieza que la ficha del Cuartel
 ## (TrainingSection.make_unit_row), con solo "+" en el boton de entrenar.
 func _make_unit_row(unit_id: String) -> PanelContainer:
-	return TrainingSectionScript.make_unit_row(unit_id, _cards_open.has(unit_id), false,
+	return TrainingSectionScript.make_unit_row(unit_id, _cards_open.has(unit_id), CT.portrait(),
 		toggle_unit_card.bind(unit_id), _refresh)
 
 ## Por que no se puede entrenar `unit_id` (vive en TrainingSection).

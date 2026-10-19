@@ -433,7 +433,8 @@ func _fit_layout() -> void:
 	_panel.offset_left = -edge - width
 	_panel.offset_right = -edge
 	_panel.offset_top = 2.0
-	_panel.offset_bottom = -4.0
+	# Por encima de la barra de abajo: tapaba CONSTRUIR a medias.
+	_panel.offset_bottom = -float(CT.bar_build_h() + 14)
 	_panel.custom_minimum_size = Vector2.ZERO
 	var s := CT.window_style()
 	s.set_content_margin_all(10)

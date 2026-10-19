@@ -88,7 +88,7 @@ const SLOTS := {
 	},
 	"right_panel": {
 		"anchor": Rect2(1, 0, 1, 1),
-		"margin": {"left": 0, "top": 210, "right": 18, "bottom": 20},
+		"margin": {"left": 0, "top": 210, "right": 18, "bottom": 112},
 		"max_size": Vector2(360, 0),
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,

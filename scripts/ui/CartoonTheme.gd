@@ -1137,6 +1137,7 @@ static func section(text_s: String, glyph: String = "", role: String = "window")
 ## Una ventana de CartoonTheme.window() colocada a pantalla completa con
 ## `margin` de borde (telefono). La X se mete dentro para que no se corte.
 static func fit_fullscreen(w: Dictionary, margin: float = 6.0) -> void:
+	dodge_closes_in.call_deferred(w.get("root"))
 	var root: Control = w["root"]
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.offset_left = margin
@@ -1155,6 +1156,7 @@ static func fit_fullscreen(w: Dictionary, margin: float = 6.0) -> void:
 
 ## Devuelve la ventana a su sitio de PC (lo pone UILayoutManager con el slot).
 static func fit_desktop(w: Dictionary) -> void:
+	dodge_closes_in.call_deferred(w.get("root"))
 	var panel: PanelContainer = w["panel"]
 	panel.add_theme_stylebox_override("panel", window_style())
 	var close: Control = w.get("close")
@@ -1302,6 +1304,7 @@ static func modal_window(parent: Control, title: String, fill: Color, with_close
 ## Coloca una ventana de modal_window(): en telefono a pantalla completa (6 px
 ## de margen); en PC centrada, con `max_size` de tope.
 static func fit_window(w: Dictionary, vp: Vector2, max_size: Vector2) -> void:
+	dodge_closes_in.call_deferred(w.get("root"))
 	var root: Control = w["root"]
 	var ph := is_phone()
 	var margin := Vector2(6, 2) if ph else Vector2(24, 16)
@@ -1320,6 +1323,7 @@ static func fit_window(w: Dictionary, vp: Vector2, max_size: Vector2) -> void:
 ## Como fit_window, pero el alto lo pone el contenido (partes, carteles): ancho
 ## `width` como mucho, centrada. Se llama otra vez cuando cambia el contenido.
 static func fit_card(w: Dictionary, vp: Vector2, width: float) -> void:
+	dodge_closes_in.call_deferred(w.get("root"))
 	var root: Control = w["root"]
 	var panel: PanelContainer = w["panel"]
 	var ph := is_phone()
@@ -1669,6 +1673,7 @@ static func army_card_button(btn: Button, role: String = "window") -> Button:
 ## completa con un margen corto; si no, centrada con un tope `max_size`. Con
 ## anclas, para que siga al lienzo si cambia de tamano.
 static func place_window(root: Control, vp: Vector2, max_size: Vector2, small: bool = false) -> void:
+	dodge_closes_in.call_deferred(root)
 	var margin := Vector2(6, 4) if small else Vector2(24, 16)
 	var sz := Vector2(minf(max_size.x, vp.x - margin.x * 2.0), minf(max_size.y, vp.y - margin.y * 2.0))
 	if small:
@@ -1706,6 +1711,15 @@ static func setting_row(row_name: String, glyph: String, text_s: String, control
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8 if small else 12)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Telefono en vertical: el selector baja bajo su nombre (en 400 px de ancho
+	# no cabian los dos en una fila y se salian por la derecha).
+	var stacked := portrait() and not (control is CheckButton)
+	var outer: VBoxContainer = null
+	if stacked:
+		outer = VBoxContainer.new()
+		outer.add_theme_constant_override("separation", 4)
+		outer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		outer.add_child(row)
 	if glyph != "":
 		var ic := make_glyph(glyph, 26 if small else 34, sem("INFO"))
 		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1720,14 +1734,26 @@ static func setting_row(row_name: String, glyph: String, text_s: String, control
 	control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	if control is HSlider:
 		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(control)
+	var holder: BoxContainer = row
+	if stacked:
+		holder = HBoxContainer.new()
+		holder.alignment = BoxContainer.ALIGNMENT_END
+		holder.add_theme_constant_override("separation", 8)
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		outer.add_child(holder)
+	holder.add_child(control)
 	if value != null:
 		value.custom_minimum_size.x = 44 if small else 58
 		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		value.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(value)
-	card.add_child(row)
+		holder.add_child(value)
+	card.add_child(outer if stacked else row)
 	return card
+
+## Telefono en vertical (lienzo estrecho y alto): las piezas que van en fila en
+## apaisado se apilan.
+static func portrait() -> bool:
+	return phone and UILayoutManager != null and UILayoutManager.is_narrow()
 
 ## Interruptor que se pulsa de verdad (CheckButton con el carril dibujado:
 ## verde encendido, bolita blanca). Sin texto: el nombre va en la fila.
@@ -2231,14 +2257,38 @@ static func dodge_menu_button(close: Control, gap: float = 8.0) -> void:
 		if n is Control and is_instance_valid(n) and (n as Control).is_visible_in_tree():
 			btn = n
 			break
-	if btn == null:
-		return
-	var b := btn.get_global_rect().grow(gap)
 	var r := close.get_global_rect()
-	if not r.intersects(b):
+	var shift := 0.0
+	# Nunca fuera de la pantalla por la derecha (la X sobresale de su ventana).
+	var vp_w: float = close.get_viewport().get_visible_rect().size.x
+	if r.end.x > vp_w - 4.0:
+		shift = r.end.x - (vp_w - 4.0)
+	# Y nunca debajo del ☰ (si la ventana esta por debajo de su capa).
+	if btn != null:
+		var b := btn.get_global_rect().grow(gap)
+		var layer_ok := true
+		var btn_layer := btn.get_parent()
+		while btn_layer != null and not (btn_layer is CanvasLayer):
+			btn_layer = btn_layer.get_parent()
+		var close_layer: Node = close.get_parent()
+		while close_layer != null and not (close_layer is CanvasLayer):
+			close_layer = close_layer.get_parent()
+		if btn_layer is CanvasLayer and close_layer is CanvasLayer:
+			layer_ok = (close_layer as CanvasLayer).layer <= (btn_layer as CanvasLayer).layer
+		if layer_ok and r.intersects(b):
+			shift = maxf(shift, r.end.x - b.position.x)
+	if shift <= 0.0:
 		return
-	var shift := r.end.x - b.position.x
 	close.offset_left -= shift
 	close.offset_right -= shift
 	close.set_meta("dodge_shift", shift)
 	close.set_meta("dodge_at", close.offset_left)
+
+## Aparta del ☰ (y del borde) las X de ventana que cuelgan de `root`. Lo llaman
+## en diferido las funciones que colocan ventanas (fit_*, place_window).
+static func dodge_closes_in(root: Variant) -> void:
+	if not (root is Control) or not is_instance_valid(root) or not (root as Control).is_inside_tree():
+		return
+	for n in (root as Control).get_tree().get_nodes_in_group("window_close"):
+		if n is Control and (root as Control).is_ancestor_of(n) and (n as Control).is_visible_in_tree():
+			dodge_menu_button(n as Control)
