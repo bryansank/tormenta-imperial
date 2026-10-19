@@ -118,13 +118,13 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" follows the device profile (tablet/phone yes, PC no)
   +-- ResourceHUD (CanvasLayer 10) -- top-left card: one row of [icon] number chips (resources, free workers, morale once the Storm is armed; names and meaning in tooltips, a tap unfolds them) + shared storage bar with used/cap + materials row (once one is unlocked)
   +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), on land only, none on the Núcleo sidewalk or the shore band (land next to the water), each with room and a road path for its extractor; then 3-5 schools of fish in the water next to the coast (`SHORE_DEPOSIT_IDS`, for the Fishing dock); `shore_cells()` is the hook for more sea/shore resources
-  +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + building list
-  +-- BuildingInfoPanel (CanvasLayer 10) -- right panel: selected building / deposit info; RETIRAR / PONER TRABAJADORES; ABRIR MERCADO / INVESTIGAR on the Market / Laboratory (`SCREENS`)
-  +-- MarketPanel (CanvasLayer 11) -- buy/sell UI, opened from a Market building (not from the menu)
+  +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + the CONSTRUIR window (CartoonTheme, docs/21 §15): category rail on the left, one-line rows (thumbnail, name, cost chips with what is missing in red, hammer that builds), lock + short why, "Al máximo" + MEJORAR; detail column on PC, full screen on phone
+  +-- BuildingInfoPanel (CanvasLayer 10) -- right side panel (CartoonTheme, no veil): level N of 3 with bar, what it does in number chips, REPARAR / MEJORAR with cost and why, processes; bottom row by intent: ABRIR MERCADO / INVESTIGAR on the Market / Laboratory (`SCREENS`), workers on/off, MOVER, GIRAR, demolish (red icon)
+  +-- MarketPanel (CanvasLayer 11) -- MERCADO window (CartoonTheme): one row per resource, buy/sell prices, [−] n [+], COMPRAR / VENDER; opened from a Market building or `open()`
   +-- ProgressPanel (CanvasLayer 11) -- milestones + era display
   +-- VictoryScreen (CanvasLayer 20) -- victory overlay
   +-- NotificationPanel (CanvasLayer 11) -- THE single place for alerts (warning, danger, notice, combat and achievement = milestone/era/rank-up; docs/21 §14): one column top-left under the resources, max 2 (1 on phone), the rest queued and repeats grouped "×3" (`AlertQueue`), icon + one sentence + ✕, no animations; with a window, the board or the tutorial card over it they wait (one small danger only) + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips; the objective strip at the top centre is gone too, 2026-10-05: the next step lives in ¿QUÉ HACER?)
-  +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI, opened from a Laboratory building (not from the menu)
+  +-- TechTreePanel (CanvasLayer 11) -- INVESTIGAR window (CartoonTheme): 3 branches x 5 tiers of two-line cards + the detail with INVESTIGAR (branch rail on phone); opened from a Laboratory building or `open()`
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step()
   +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign; FICHA opens each unit's card (UnitCard)
   +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
@@ -1393,7 +1393,7 @@ All balance values live in `GameConfig.gd`:
 ### Shared Utilities
 
 - **FloatingText** (`scripts/services/FloatingText.gd`): Static class for spawning animated 3D text labels. Use `FloatingText.spawn()` for custom text or `FloatingText.spawn_resource()` for resource gain/loss display (`spawn_on()` / `spawn_resource_on()` work on any node, 2D included; the 2D view draws them with `FloatingText2D`). Colors come from `GameConfig.resource_colors`.
-- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and ConstructionMenu previews **as the fallback when a building has no `model_scene`** — today only the 10 cheap decorations, which it hands to `DecorMesh` — and by `RoadBatch3D` for the road meshes (`road_mesh()`).
+- **DieselpunkBuildingFactory** (`scripts/buildings/DieselpunkBuildingFactory.gd`): Static factory generating dieselpunk building meshes from primitives (rivets, pipes, brass/rust palette, shared PBR metal maps). `create(building_id, cell_size, grid_size)` and connectivity-aware `create_road(cell_size, neighbors)`. Called by BuildingPlacer and the ConstructionMenu thumbnails **as the fallback when a building has no `model_scene`** — today only the 10 cheap decorations, which it hands to `DecorMesh` — and by `RoadBatch3D` for the road meshes (`road_mesh()`).
 - **UITheme** (`scripts/ui/UITheme.gd`): Static theme — call its factories for any new UI instead of hand-styling controls.
 
 ### Dev Mode

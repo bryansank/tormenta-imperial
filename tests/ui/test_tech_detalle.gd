@@ -115,7 +115,8 @@ func test_missing_resources_show_in_red_in_the_detail() -> void:
 	var row: Control = panel.find_child("DetailCost", true, false)
 	var gold_label: Label = row.find_child("Amount_gold", true, false)
 	assert_object(gold_label).is_not_null()
-	assert_that(gold_label.get_theme_color("font_color")).is_equal(UITheme.readable(UITheme.DANGER))
+	# Fila del estilo nuevo (CartoonTheme.cost_strip): el rojo de "lo que falta".
+	assert_that(gold_label.get_theme_color("font_color")).is_equal(CartoonTheme.danger_text())
 
 func test_the_detail_opens_with_something_to_read() -> void:
 	var panel := _panel()

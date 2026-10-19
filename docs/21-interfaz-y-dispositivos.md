@@ -409,8 +409,9 @@ devuelve el mando al cursor.
 
 **La regla del yacimiento se ve antes de colocar:**
 
-- La ficha de `ConstructionMenu` dice "▲ El aserradero debe tocar un bosque (al
-  lado o en diagonal)" (o la veta, el hierro, el pozo):
+- La ficha de `ConstructionMenu` (PC) dice "El aserradero debe tocar un bosque
+  (al lado o en diagonal)" (o la veta, el hierro, el pozo), y en teléfono va en
+  el globo de mantener pulsada la fila (§15):
   `PlacementAssist.rule_text(id)`. Es la misma clave `message` de
   `GameConfig.building_deposit_rules` que usa el aviso al fallar
   (`LBL_NEEDS_*_NEAR`, `LBL_REQUIRES_DEPOSIT`), con ratón o en táctil: una sola
@@ -1002,3 +1003,76 @@ Tests: `tests/ui/test_alert_queue.gd` (la regla pura y el panel),
 `test_rank_panel`. Sonda: `tools/interfaz_probe.gd -- --alerts --no-help
 --only-hud` (ráfaga de avisos, luego con CONSTRUIR abierto y al cerrarlo; capturas
 `*_alerts*.png` en `docs/media/dev/interfaz/`).
+
+## 15. CONSTRUIR, ficha, Mercado e Investigar con el estilo nuevo (2026-10-18, rama `feat/ui2-construir`)
+
+Fase 2 del rediseño (`docs/28-guia-ui.md` §15): las cuatro pantallas de la
+economía se rehacen con `CartoonTheme`, **teléfono primero** (640×360 y
+800×360) y luego tablet y PC. Sin animaciones; icono + número; una frase como
+mucho; el detalle al mantener pulsado (`TouchTooltip`) o al pasar el ratón.
+
+| Pantalla | Teléfono (lienzo < 450 de alto) | Tablet / PC |
+|---|---|---|
+| CONSTRUIR (`ConstructionMenu`) | Ventana a pantalla completa (`CartoonTheme.fit_fullscreen`). Carril de pestañas de categoría a la izquierda, **solo icono**; una columna de filas de una línea. Sin ficha: el detalle de cada fila, al mantenerla. | La ventana en su slot (`center_modal`, 1000×640). Carril con icono y palabra, la lista y, a la derecha (lienzo ≥ 760 de ancho), la ficha del elegido. |
+| Ficha (`BuildingInfoPanel`) | Panel a la derecha, de arriba abajo, con medio lienzo de ancho como mucho (≤ 330): el edificio se ve a la izquierda. Sin velo. | Slot `right_panel` (360 de ancho). |
+| MERCADO (`MarketPanel`) | Pantalla completa, una fila por recurso en un scroll. | Centrada (760 de ancho, el alto de sus filas). |
+| INVESTIGAR (`TechTreePanel`) | Pantalla completa: carril de ramas (solo icono), la rama elegida y la ficha a la derecha. | Centrada (1120×640): las tres ramas lado a lado y la ficha. Por debajo de 880 de ancho, como en teléfono. |
+
+`CartoonTheme.is_phone(vp)` decide (la bandera `CartoonTheme.phone` o un lienzo
+de menos de 450 de alto); cada panel se recoloca con `UILayoutManager.layout_changed`
+y `size_changed`, y CONSTRUIR rehace su carril y sus filas al cruzar el umbral.
+
+**CONSTRUIR, la fila**: `[miniatura] Nombre ....... [coste] [martillo]`.
+
+- El coste en fichas hundidas (`CartoonTheme.cost_strip`, compatible con
+  `TextKit.row_amounts`: cada cifra se llama `Amount_<id>`), **en rojo lo que
+  falta**; si faltan trabajadores libres, una ficha de obrero en rojo.
+- El **martillo** verde (`RowBuild`) elige y empieza a colocar; gris si no se
+  puede pagar (el porqué, en el globo de la fila).
+- Bloqueada: candado + su porqué en 1-3 palabras en el sitio del coste
+  (`ConstructionMenu.lock_reason`: "Rango 4", "Era 2", "Falta Almacén", "Aún
+  no"), miniatura a media luz y sin martillo. Se puede tocar: la ficha dice todo
+  lo que le falta.
+- Tope lleno: la etiqueta **"Al máximo"** en vez del coste y el atajo **MEJORAR**
+  (`RowUpgradeOne`, azul: abre la ficha del de nivel más bajo).
+- Tocar la fila la **elige** (al soltar dentro, para que arrastrar la lista no
+  elija); el ratón encima solo resalta (A14).
+- Se quitó el buscador y la maqueta 3D que giraba: la ficha usa la miniatura
+  quieta (la foto que se hace al arrancar), que además cuesta menos.
+
+**Ficha del edificio**: la cinta de latón con el nombre (la descripción, al
+mantenerla); "Nivel 2 de 3" con su barra; el estado en una palabra
+("Trabajando", "Sin carretera", "Parado por ti"…); lo que hace en fichas de
+cifra ("+6 [madera] cada 12 s", "[obrero] 2 trabajan"); la obra; lo acumulado
+con **RECOGER** en la misma fila (y el cultivo de la Granja como selector);
+**REPARAR** ámbar con su coste al lado; **MEJORAR** verde con su coste al lado y,
+apagado, el porqué en rojo debajo; los procesos del taller (`ProcessCard`: coste
+→ producto en fichas y los lotes x1 verde / x5 / MAX). Abajo, fuera del scroll,
+los botones por intención: **ABRIR MERCADO / INVESTIGAR** (azul, en el Mercado y
+el Laboratorio), retirar o poner trabajadores (solo icono; crema / verde),
+**MOVER**, **GIRAR** (solo icono: lo levanta como MOVER y gira el fantasma un
+cuarto, `EventBus.building_rotate_requested`) y **derribar** (rojo, solo icono,
+pide confirmación). Los grupos del tutorial (`hud_info_repair`, `hud_info_move`,
+`hud_info_demolish`, `hud_info_demolish_confirm`) siguen en sus botones.
+
+**Mercado**: arriba tu oro; cada fila `[icono] [oro] compra · [oro] venta · [−]
+10 [+] · COMPRAR · VENDER` (la palabra bajo cada precio solo en PC). COMPRAR y
+VENDER se apagan si no alcanza y el globo dice por qué ("Falta oro"). En
+Gobernador, el spread y la flecha de tendencia en la fila y la estación arriba.
+
+**Investigar**: cada tarjeta, dos líneas ("1 · Nombre" y su ventaja); el color
+dice el estado (investigada, disponible con el borde de su rama, bloqueada). El
+porqué, el coste y el lore, al mantenerla. La ficha: nombre, nivel y rama (la
+frase de la rama al mantenerla), la ventaja en verde, una frase de lore, el
+requisito, el coste en fichas con el tiempo y **INVESTIGAR**.
+
+Textos nuevos: bloque `# UI v2 CONSTRUIR` de `Tr.gd` (claves `UI2C_*`, ES y EN).
+Piezas nuevas en `CartoonTheme` (sección `# --- CONSTRUIR (feat/ui2-construir)`):
+`is_phone`, `cost_strip` / `fill_cost_strip`, `thumb_frame`, `set_pill_text`,
+`set_pill_kind`, `why_label`, `section`, `fit_fullscreen` / `fit_desktop` /
+`place_center`, `level_bar`, `text_pill` / `style_text_pill`,
+`style_card_button`, `rotate_glyph`, `danger_text` / `positive_text`.
+
+Tests: `tests/ui/test_ui2_construir.gd`, y se ajustaron `test_tech_detalle`,
+`test_tech_tree_explained` y `test_blocked_reasons` (el porqué y el coste de una
+tecnología pasan de la tarjeta a su globo).
