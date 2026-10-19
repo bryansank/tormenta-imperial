@@ -105,7 +105,7 @@ func _ids_for(cat: String) -> Array:
 # ── Construccion ─────────────────────────────────────────────────────
 
 func _build() -> void:
-	_small = CT.menus_phone(get_viewport().get_visible_rect().size)
+	_small = CT.is_phone()
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE

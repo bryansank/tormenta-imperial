@@ -93,7 +93,7 @@ func _setup_ui() -> void:
 
 ## Telefono: tarjetas en columna. PC: lado a lado.
 func _build_list() -> void:
-	var phone := CT.phone_canvas(_vp())
+	var phone := CT.is_phone()
 	if _list != null and ((_list is VBoxContainer) == phone):
 		return
 	if _list != null:
@@ -185,7 +185,7 @@ func refresh() -> void:
 	for source in BoardScript.SOURCES:
 		_list.add_child(_make_card(source))
 	_footer.text = Tr.t("LBL_CONTRACT_HARD") if GameMode.is_governor() else Tr.t("LBL_CONTRACT_EASY")
-	_footer.visible = not CT.phone_canvas(_vp())
+	_footer.visible = not CT.is_phone()
 	_update_clocks()
 
 func _update_clocks() -> void:
@@ -212,7 +212,7 @@ func _source_color(source: String) -> Color:
 func _make_card(source: String) -> PanelContainer:
 	var color := _source_color(source)
 	var contract: Dictionary = ContractManager.get_contract(source)
-	var phone := CT.phone_canvas(_vp())
+	var phone := CT.is_phone()
 	var card := PanelContainer.new()
 	card.name = "Card_" + source
 	var style := CT.card_style("window", false, CT.c("window", "CARD_ALT") if contract.is_empty() else Color(0, 0, 0, 0))

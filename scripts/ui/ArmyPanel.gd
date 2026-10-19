@@ -249,7 +249,7 @@ func _rebuild_tabs() -> void:
 	for child in _tabs_row.get_children():
 		_tabs_row.remove_child(child)
 		child.queue_free()
-	var ph := CT.phone_canvas(_vp())
+	var ph := CT.is_phone()
 	var current := current_tab()
 	for building_id in GameConfig.MILITARY_BUILDINGS:
 		var domain := _domain_of(String(building_id))
@@ -295,7 +295,7 @@ func _make_unit_row(unit_id: String) -> PanelContainer:
 	var def := GameConfig.get_unit_def(unit_id)
 	var unlocked := ArmyManager.is_unlocked(unit_id) \
 		and ArmyManager.building_count(GameConfig.get_unit_building(unit_id)) > 0
-	var ph := CT.phone_canvas(_vp())
+	var ph := CT.is_phone()
 
 	var card := PanelContainer.new()
 	card.name = "Unit_" + unit_id
@@ -435,7 +435,7 @@ func _rebuild_training() -> void:
 			_training_vbox.add_child(CT.icon_line("army", Tr.t("LBL_ARMY_EMPTY"), ""))
 		return
 	_training_vbox.visible = true
-	var ph := CT.phone_canvas(_vp())
+	var ph := CT.is_phone()
 	for i in range(training.size()):
 		var item: Dictionary = training[i]
 		var def := GameConfig.get_unit_def(item["id"])
@@ -465,7 +465,7 @@ func _make_cancel_button(index: int) -> Control:
 		box.add_child(back)
 		box.add_child(CT.cost_row(refund))
 	# En rojo siempre (cancelar es quitar); con la Tormenta, el tooltip lo dice.
-	var btn := CT.pill_button("", "close", "danger", 48 if CT.phone_canvas(_vp()) else CT.BTN_SMALL)
+	var btn := CT.pill_button("", "close", "danger", 48 if CT.is_phone() else CT.BTN_SMALL)
 	btn.name = "CancelTraining"
 	btn.tooltip_text = Tr.t("LBL_CANCEL_NO_REFUND") if refund.is_empty() else Tr.t("FMT_CANCEL_REFUND") % TextKit.cost_text(refund)
 	btn.pressed.connect(func():

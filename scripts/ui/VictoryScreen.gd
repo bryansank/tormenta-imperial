@@ -34,7 +34,7 @@ func is_showing() -> bool:
 
 func _show_victory(stats: Dictionary) -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var small := CT.menus_phone(vp)
+	var small := CT.is_phone()
 	_backdrop = CT.veil()
 	add_child(_backdrop)
 

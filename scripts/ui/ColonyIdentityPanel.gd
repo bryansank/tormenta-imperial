@@ -204,7 +204,7 @@ func _input(event: InputEvent) -> void:
 # ── Montaje ──
 
 func _build() -> void:
-	_small = CT.menus_phone(get_viewport().get_visible_rect().size) if is_inside_tree() else false
+	_small = CT.is_phone() if is_inside_tree() else false
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE

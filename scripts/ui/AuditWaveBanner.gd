@@ -98,7 +98,7 @@ func _setup_ui() -> void:
 ## Arriba al centro, donde el tablero pone su titulo: se lee sin tapar casillas.
 func _relayout() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var phone := CT.phone_canvas(vp)
+	var phone := CT.is_phone()
 	var width: float = minf(WIDTH, vp.x - 16.0)
 	_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH

@@ -263,7 +263,7 @@ func _fit_scroll() -> void:
 	if _branches_scroll == null or _panel == null or not is_inside_tree():
 		return
 	var vp := _vp()
-	var ph := CT.is_phone(vp)
+	var ph := CT.is_phone()
 	_narrow = ph or detail_below(vp.x)
 	if ph:
 		CT.fit_fullscreen(_win)

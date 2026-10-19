@@ -464,7 +464,7 @@ devuelve el mando al cursor.
 
 - La ficha de `ConstructionMenu` (PC) dice "El aserradero debe tocar un bosque
   (al lado o en diagonal)" (o la veta, el hierro, el pozo), y en teléfono va en
-  el globo de mantener pulsada la fila (§15):
+  el globo de mantener pulsada la fila (§16):
   `PlacementAssist.rule_text(id)`. Es la misma clave `message` de
   `GameConfig.building_deposit_rules` que usa el aviso al fallar
   (`LBL_NEEDS_*_NEAR`, `LBL_REQUIRES_DEPOSIT`), con ratón o en táctil: una sola

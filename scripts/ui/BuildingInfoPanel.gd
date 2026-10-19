@@ -127,7 +127,7 @@ func _vp() -> Vector2:
 	return get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
 
 func _build_ui() -> void:
-	_phone = CT.is_phone(_vp())
+	_phone = CT.is_phone()
 	_win = CT.window("", CT.sem("ACCENT"))
 	_panel = _win["root"]
 	_panel.name = "InfoWindow"
@@ -388,7 +388,7 @@ func _fit_layout() -> void:
 	if _panel == null or not is_inside_tree():
 		return
 	var vp := _vp()
-	var ph := CT.is_phone(vp)
+	var ph := CT.is_phone()
 	_phone = ph
 	if not ph:
 		UILayoutManager.apply_layout("BuildingInfoPanel", _panel)

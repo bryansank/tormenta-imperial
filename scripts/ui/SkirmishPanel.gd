@@ -295,7 +295,7 @@ func _vp() -> Vector2:
 	return get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
 
 func _phone() -> bool:
-	return CT.phone_canvas(_vp())
+	return CT.is_phone()
 
 func _fit() -> void:
 	CT.fit_window(_win, _vp(), MAX_SIZE)

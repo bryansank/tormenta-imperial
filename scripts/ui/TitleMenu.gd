@@ -151,7 +151,7 @@ func _setup_ui() -> void:
 	# La tarjeta: crema con borde grueso (docs/28 §6), sin titulo ni cinta: los
 	# botones dicen lo que son. Verde = la accion principal (Continuar o, sin
 	# partida, Nueva partida), rojo = Salir, el resto crema (docs/28 §5).
-	var small := CT.menus_phone(_vp())
+	var small := CT.is_phone()
 	_card = PanelContainer.new()
 	_card.name = "Card"
 	var st := CT.window_style()
@@ -173,6 +173,7 @@ func _setup_ui() -> void:
 	column.add_child(_mode_label)
 	_new_btn = _menu_button(Tr.t("BTN_NEW_GAME"), "plus", "secondary", hh, _on_new_game)
 	_new_btn.name = "NewGameButton"
+	_new_btn.set_meta("pill_h", hh)
 	column.add_child(_new_btn)
 	_saves_btn = _menu_button(Tr.t("BTN_SAVES"), "game", "secondary", hh, _on_saves)
 	_saves_btn.name = "SavesButton"
@@ -209,7 +210,7 @@ func _relayout() -> void:
 	if _card == null:
 		return
 	var vp: Vector2 = _vp()
-	var small := CT.menus_phone(vp)
+	var small := CT.is_phone()
 	var portrait: bool = vp.x / maxf(vp.y, 1.0) < PORTRAIT_RATIO
 	_brand.visible = portrait and _card.visible
 	var width: float = minf(CARD_WIDTH if not small else 280.0, vp.x - ModalKit.EDGE * 2.0)
@@ -281,6 +282,8 @@ func close_menu() -> void:
 
 func _refresh_buttons() -> void:
 	_continue_btn.visible = has_game_to_continue()
+	# Sin partida que continuar, NUEVA PARTIDA es la accion principal: verde.
+	CT.set_pill_kind(_new_btn, "secondary" if _continue_btn.visible else "primary", int(_new_btn.get_meta("pill_h", CT.BTN)))
 	_mode_label.visible = _continue_btn.visible
 	_mode_label.text = Tr.t("LBL_TITLE_RUN_MODE") % GameMode.display_name()
 	var saves: int = GameManager.list_saves().size()

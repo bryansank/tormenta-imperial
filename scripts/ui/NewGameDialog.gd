@@ -103,7 +103,7 @@ func _setup_ui() -> void:
 
 	# Ventana crema (docs/28 §6). El titulo va dentro: la tarjeta la coloca
 	# ModalKit.fit_center y crece con su contenido.
-	var small := CT.menus_phone(get_viewport().get_visible_rect().size)
+	var small := CT.is_phone()
 	_card = PanelContainer.new()
 	_card.name = "Card"
 	var st := CT.window_style()

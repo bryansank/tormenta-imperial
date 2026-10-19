@@ -423,7 +423,7 @@ func _make_action(text: String, callback: Callable, glyph: String = "", kind: St
 ## Telefono (lienzo bajo): solo el icono y la palabra al mantener; si no,
 ## [icono] Palabra. Lo que diga el boton, siempre tambien en su tooltip.
 func _skin_action(btn: Button, kind_override: String = "") -> void:
-	var phone := CT.phone_canvas(get_viewport().get_visible_rect().size) if is_inside_tree() else CT.phone
+	var phone := CT.is_phone() if is_inside_tree() else CT.phone
 	var label := String(btn.get_meta("label", btn.text))
 	var glyph := String(btn.get_meta("glyph", ""))
 	btn.text = "" if (phone and glyph != "") else label

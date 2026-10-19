@@ -132,7 +132,7 @@ const SIZE_FLOOR_PHONE := {"display": 20, "title": 17, "button": 16, "number": 1
 ## Lado tactil minimo en telefono (dp).
 const TOUCH_MIN := 48
 
-## true en lienzos de telefono (alto < 450): letra y piezas de telefono.
+## true con el perfil Movil o un lienzo de telefono; lo fija DeviceProfile. Leelo con is_phone().
 static var phone := false
 
 static func fs(level: String) -> int:
@@ -937,10 +937,13 @@ static func captain_face(px: int) -> Control:
 # docs/28). Solo se anaden aqui: lo de arriba es de la fase 1 y de los otros
 # frentes.
 
-## Lienzo de telefono: la bandera `phone` (la pone el HUD) o un lienzo de menos
-## de 450 de alto. Las ventanas van entonces a pantalla completa, una columna.
-static func is_phone(vp: Vector2) -> bool:
-	return phone or (vp.y > 1.0 and vp.y < 450.0)
+## LA pregunta "¿maqueto para telefono?" de todas las pantallas: lee `phone`,
+## que fija DeviceProfile (perfil Movil, o lienzo de menos de
+## DeviceProfile.PHONE_CANVAS_MAX_SIDE de lado corto). Las ventanas van entonces
+## a pantalla completa, una columna. `_vp` se ignora (se acepta por las llamadas
+## viejas); no se mira el tamano del lienzo aqui para que nadie discrepe.
+static func is_phone(_vp: Vector2 = Vector2.ZERO) -> bool:
+	return phone
 
 ## Rojo legible de "lo que falta" sobre la superficie de `role`.
 static func danger_text(role: String = "window") -> Color:
@@ -1216,10 +1219,6 @@ static func place_center(w: Dictionary, vp: Vector2, want: Vector2) -> void:
 
 const _ArmyTextKit := preload("res://scripts/ui/TextKit.gd")
 
-## Lienzo de telefono (alto < 450), aunque nadie haya fijado `phone` todavia.
-static func phone_canvas(vp: Vector2) -> bool:
-	return phone or vp.y < 450.0
-
 ## Ventana grande con su velo detras, dentro de `parent` (un Control a pantalla
 ## completa). Devuelve lo de window() mas "holder" (velo + ventana, lo que se
 ## enciende y se apaga), "veil" y "ribbon".
@@ -1241,7 +1240,7 @@ static func modal_window(parent: Control, title: String, fill: Color, with_close
 ## de margen); en PC centrada, con `max_size` de tope.
 static func fit_window(w: Dictionary, vp: Vector2, max_size: Vector2) -> void:
 	var root: Control = w["root"]
-	var ph := phone_canvas(vp)
+	var ph := is_phone()
 	var margin := Vector2(6, 2) if ph else Vector2(24, 16)
 	var sz := vp - margin * 2.0
 	if not ph:
@@ -1260,7 +1259,7 @@ static func fit_window(w: Dictionary, vp: Vector2, max_size: Vector2) -> void:
 static func fit_card(w: Dictionary, vp: Vector2, width: float) -> void:
 	var root: Control = w["root"]
 	var panel: PanelContainer = w["panel"]
-	var ph := phone_canvas(vp)
+	var ph := is_phone()
 	var wd := minf(width, vp.x - (12.0 if ph else 32.0))
 	var st := window_style()
 	if ph:
@@ -1602,13 +1601,6 @@ static func army_card_button(btn: Button, role: String = "window") -> Button:
 # Piezas de las pantallas de menu de la fase 2 (Ajustes, Ayuda, tutorial,
 # menu principal, partidas, victoria, prologo, registro). Solo se anaden:
 # las de arriba son de la fase 1 y de los otros frentes.
-
-## Pantalla de telefono para maquetar una ventana: lienzo bajo (< 450) o el
-## perfil telefono (aunque hoy su lienzo aun sea mas alto, docs/28 §4.2).
-static func menus_phone(vp: Vector2) -> bool:
-	if phone or vp.y < 450.0:
-		return true
-	return DeviceProfile.current() == "phone" and vp.y < 620.0
 
 ## Coloca la raiz de una ventana (`window()["root"]`): en telefono a pantalla
 ## completa con un margen corto; si no, centrada con un tope `max_size`. Con

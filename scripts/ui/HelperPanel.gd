@@ -242,7 +242,7 @@ func _setup_ui() -> void:
 	)
 	root.add_child(_backdrop)
 
-	var small := CT.menus_phone(get_viewport().get_visible_rect().size)
+	var small := CT.is_phone()
 	var gw := CT.menu_window(Tr.t("LBL_GUIDE_TITLE"), CT.sem("INFO"), small)
 	_guide_panel = gw["root"]
 	_guide_panel.name = "BuildingGuide"
@@ -851,7 +851,7 @@ func _toggle_guide() -> void:
 	_backdrop.visible = _guide_open
 	if _guide_open:
 		CT.place_window(_guide_panel, get_viewport().get_visible_rect().size, Vector2(760, 600),
-			CT.menus_phone(get_viewport().get_visible_rect().size))
+			CT.is_phone())
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)

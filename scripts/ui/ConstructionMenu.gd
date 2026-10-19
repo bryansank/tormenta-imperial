@@ -165,7 +165,7 @@ func _vp() -> Vector2:
 	return get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
 
 func _setup_ui() -> void:
-	_phone = CT.is_phone(_vp())
+	_phone = CT.is_phone()
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -381,7 +381,7 @@ func _fit_layout() -> void:
 	if _modal == null or not is_inside_tree():
 		return
 	var vp := _vp()
-	var ph := CT.is_phone(vp)
+	var ph := CT.is_phone()
 	if ph:
 		CT.fit_fullscreen(_win)
 	else:

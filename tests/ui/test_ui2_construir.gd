@@ -47,12 +47,14 @@ func test_a_cost_strip_is_not_rebuilt_when_nothing_changed() -> void:
 	assert_object(row.get_child(0)).is_same(chip)
 	row.free()
 
-func test_phone_canvas_is_the_short_one() -> void:
+func test_is_phone_reads_the_flag_device_profile_sets() -> void:
+	# Una sola pregunta para todas las pantallas: la bandera que fija DeviceProfile.
 	var saved := CT.phone
+	CT.phone = true
+	assert_bool(CT.is_phone()).is_true()
 	CT.phone = false
-	assert_bool(CT.is_phone(Vector2(640, 360))).is_true()
-	assert_bool(CT.is_phone(Vector2(800, 360))).is_true()
-	assert_bool(CT.is_phone(Vector2(1280, 720))).is_false()
+	assert_bool(CT.is_phone()).is_false()
+	assert_bool(DeviceProfile.is_phone_canvas(Vector2(800, 360))).is_true()
 	CT.phone = saved
 
 func test_text_pills_keep_their_text_and_finger_size() -> void:
