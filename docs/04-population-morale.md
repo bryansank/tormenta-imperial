@@ -8,7 +8,18 @@ Population is the human engine of the economy. Without workers, buildings don't 
 
 - Tracked by `PopulationManager` (autoload singleton)
 - Starts at 5 (from Nucleo's `population_capacity`)
-- Grows by +1 every 20 seconds (40 s in the first two phases, `early_growth_interval`) IF:
+- **A finished house fills at once** (Bryan, 2026-10-19: "tardan en aparecer cuando
+  genero una casa"). When a house's construction ends — or its upgrade, which counts
+  its whole new room, since an upgrading house gives no room and its people wait
+  outside — every worker that fits comes in on the spot (`PopulationManager._move_in()`,
+  up to the island's max), with a `+6 trabajadores` floating text over the house and
+  `EventBus.residents_arrived(home, count)`, which makes the new figures of
+  `WorkerWalkers` walk out of that house. Not with `morale < 30` (unless below
+  `population_regrow_floor`): then they keep coming one at a time as below once
+  morale recovers. A house without road gives no room and brings nobody. The Núcleo
+  is never "finished" (its 5 are the start). Nothing new is saved.
+- The slow drip is for **getting people back** (hunger, accidents, desertion, the
+  Tithe, a house that finished with low morale). It grows by +1 every 20 seconds (40 s in the first two phases, `early_growth_interval`) IF:
   - `morale >= 30` (`morale_growth_threshold`) — or population is below
     `population_regrow_floor` (5), so a sunk colony always climbs back
   - `population < max_population`

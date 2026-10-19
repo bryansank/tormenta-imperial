@@ -1062,3 +1062,25 @@ Abierto: el camino de materiales del CG nv3 en la era 3 (Refinería → combusti
 Fundición → vigas, Mina → lingotes) es lo que alarga o rompe las partidas lentas.
 Palanca para la próxima ronda: `hq_upgrade_costs` (materiales del nivel 3) o el
 rendimiento de los procesos de taller.
+
+## 16. La Casa trae a su gente de golpe (2026-10-19, rama `feat/casa-trae-trabajadores`)
+
+Decisión de Bryan: "siento que tardan en aparecer cuando genero una casa". Antes la
+gente llegaba de uno en uno (+1 por tic de crecimiento, 40 s en las fases 1-2) y una
+Casa tardaba unos dos minutos en llenarse. Ahora, al **terminar la obra** de una Casa
+(o su mejora), entran todos los que caben (`PopulationManager._move_in()`, docs/04),
+salvo con la moral bajo 30. El goteo queda para recuperar a los que se pierden.
+RETIRAR / PONER TRABAJADORES no cambia.
+
+Medido con `--no-dev --seeds=1,2 --hours=1` (solo la primera hora: es la era 1 lo que
+cambia), el mismo commit con y sin el cambio:
+
+| Semilla | era 2 antes | era 2 después | 1.ª Mina de oro antes → después | muertos de hambre antes → después |
+|---|---|---|---|---|
+| 1 | 17,7 | **16,7** | min 5 → 3 | 0 → 3 |
+| 2 | 15,7 | **15,7** | min 5 → 3 | 0 → 0 |
+
+Lectura: la Mina de oro ya no espera a que la Casa se llene (dos minutos antes) y la
+era 2 llega igual o un minuto antes; la era 1 no se rompe. Más gente antes come antes:
+la semilla 1 tuvo 3 muertos de hambre (antes 0), que el goteo repone. El
+resto de la primera hora (era 3 en el 38-42) queda dentro del ruido de §14.

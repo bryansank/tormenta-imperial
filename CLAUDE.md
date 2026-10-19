@@ -69,7 +69,7 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 138 signals in 30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 141 signals in 30 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
@@ -505,7 +505,7 @@ hand mining there holds `mining_workers`, needs no road and spends no deposit us
   `GameConfig.mining_workers` (2) while it lasts and needs the deposit to touch a road
   joined to the Núcleo (`ProcessManager.mining_blocker()`: `MINE_NEEDS_ROAD` /
   `MINE_NEEDS_WORKERS`)
-- Population grows +1 per tick (20s) if morale > 30 and housing available
+- **A finished House fills at once** (2026-10-19): when its construction or upgrade ends, every worker that fits comes in (`PopulationManager._move_in()`, "+6 trabajadores" over the house, `residents_arrived` so the new walkers leave that house), unless morale < 30. The +1 per tick (20s; 40s early) drip, with morale >= 30 and room, is only for getting lost people back (docs/04)
 - **Consumption:** Each pop eats `food_per_pop` (1) **food** per 30s tick (60 s early;
   `PopulationManager.food_due()`). Wood and gold are no longer eaten (2026-10-04)
 - If can't pay: morale drops -8/tick, and after two unpaid ticks people starve. If paid: morale recovers +3/tick
