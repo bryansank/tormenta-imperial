@@ -34,7 +34,8 @@ func test_the_storage_bar_explains_itself_without_a_fixed_title() -> void:
 	var hud: CanvasLayer = auto_free(load("res://scenes/ui/ResourceHUD.tscn").instantiate())
 	add_child(hud)
 	var row: Control = hud.find_child("StorageRow", true, false)
-	assert_str(row.tooltip_text).is_equal(Tr.t("HINT_HUD_STORAGE"))
+	# Con el estilo maqueta la cifra va delante, en la misma ayuda emergente.
+	assert_str(row.tooltip_text).ends_with(Tr.t("HINT_HUD_STORAGE"))
 	var labels: Array = row.find_children("*", "Label", true, false)
 	assert_int(labels.size()).is_equal(1)
 	assert_str((labels[0] as Label).text).contains("/")

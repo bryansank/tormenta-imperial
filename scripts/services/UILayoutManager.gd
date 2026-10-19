@@ -67,7 +67,11 @@ func _on_viewport_resized() -> void:
 ## Pantalla estrecha (movil en vertical): la columna central (Tormenta y
 ## objetivo) no cabe entre la izquierda y el menu ☰, asi que baja a la columna
 ## izquierda. Ver UILayoutConfig.NARROW_SLOTS.
+## Un telefono apaisado de 16:9 (640x360 logico) no es "estrecho": su lienzo es
+## bajo, y NARROW_SLOTS subiria CONSTRUIR y la barra 196 px (fuera de pantalla).
 func is_narrow() -> bool:
+	if is_phone_canvas() and _viewport_size.x > _viewport_size.y:
+		return false
 	return _viewport_size.x < UILayoutConfig.NARROW_WIDTH
 
 ## La columna central no cabe entre la izquierda y el menu ☰ (tablet 4:3, o

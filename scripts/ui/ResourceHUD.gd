@@ -470,7 +470,7 @@ func _refresh_people() -> void:
 	var retired := PopulationManager.get_retired_workers()
 	var amount := UITheme.chip_amount(_workers_chip)
 	amount.text = str(free)
-	UITheme.set_label_color(amount, _warn_col() if short > 0 else _text_col())
+	UITheme.set_label_color(amount, _warn_col() if short > 0 else _text_col(), _bg_ref())
 	var lines: Array = [Tr.t("HINT_HUD_WORKERS") % [free, pop, max_pop, used]]
 	if retired > 0:
 		lines.append(Tr.t("HINT_HUD_WORKERS_OFF") % retired)
@@ -491,7 +491,7 @@ func _refresh_people() -> void:
 	if _cartoon():
 		# Sobre el HUD oscuro: los semanticos del estilo maqueta, aclarados.
 		mc = CartoonTheme.sem("DANGER" if morale <= MORALE_DANGER else ("WARNING" if morale <= MORALE_WARNING else "POSITIVE")).lightened(0.3)
-	UITheme.set_label_color(m_amount, mc)
+	UITheme.set_label_color(m_amount, mc, _bg_ref())
 	var m_tip := Tr.t("HINT_HUD_MORALE") % [morale, PopulationManager.morale_to_multiplier(morale)]
 	_morale_chip.tooltip_text = m_tip
 	_morale_detail.text = m_tip
@@ -517,7 +517,7 @@ func _refresh() -> void:
 	if _cartoon():
 		tone = CartoonTheme.sem("DANGER").lightened(0.3) if is_full else CartoonTheme.text("hud", true)
 	_storage_value.text = "%d/%d" % [total, cap]
-	UITheme.set_label_color(_storage_value, tone)
+	UITheme.set_label_color(_storage_value, tone, _bg_ref())
 	UITheme.set_pool_bar_alert(_pool_bar, is_full)
 	if _cartoon():
 		# La cifra del almacen, al mantener (PC) y en el detalle (telefono).
@@ -596,7 +596,7 @@ func _on_resource_unlocked(resource_name: String) -> void:
 func _on_insufficient(resource_type: String, required: int, available: int) -> void:
 	var type := _type_of(resource_type)
 	if type >= 0 and _chips.has(type):
-		UITheme.flash_label(UITheme.chip_amount(_chips[type]), _text_col())
+		UITheme.flash_label(UITheme.chip_amount(_chips[type]), _text_col(), 0.9, _bg_ref())
 	EventBus.notification_posted.emit(
 		Tr.t("FMT_NOT_ENOUGH_OF") % [Tr.res_name(resource_type), available, required],
 		"warning", UITheme.WARNING)
@@ -642,6 +642,11 @@ func _row_separation() -> int:
 ## oscuro (los tokens de UITheme son los de las ventanas claras).
 func _text_col() -> Color:
 	return CartoonTheme.text("hud") if _cartoon() else UITheme.TEXT_BRIGHT
+
+## El fondo contra el que se mide el contraste de las cifras: la barra oscura
+## del estilo maqueta (no la crema de las ventanas).
+func _bg_ref() -> Color:
+	return CartoonTheme.c("hud", "BG") if _cartoon() else UITheme.UI_BG_REFERENCE
 
 func _warn_col() -> Color:
 	return CartoonTheme.sem("WARNING").lightened(0.25) if _cartoon() else UITheme.WARNING

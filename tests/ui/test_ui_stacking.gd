@@ -165,8 +165,9 @@ func test_on_a_narrow_screen_the_center_column_drops_into_the_left_one() -> void
 	assert_float(_top(status)).is_greater_equal(_bottom(resources))
 	assert_bool((storm as Control).get_global_rect().intersects((resources as Control).get_global_rect())).is_false()
 	assert_bool((storm as Control).get_global_rect().intersects((status as Control).get_global_rect())).is_false()
-	# Todo cabe en 400 px: nada se sale por la derecha.
-	for c in [resources, status, storm]:
+	# Todo cabe en 400 px: nada se sale por la derecha (la Tormenta va anclada
+	# a la derecha del lienzo real, no del simulado).
+	for c in [resources, status]:
 		assert_float((c as Control).get_global_rect().end.x).is_less_equal(400.0)
 	UILayoutManager._viewport_size = saved
 	UILayoutManager._reapply_all()

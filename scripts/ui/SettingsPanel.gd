@@ -453,6 +453,9 @@ func _build_advanced(body: VBoxContainer) -> void:
 func set_advanced_open(open: bool) -> void:
 	if _advanced == null:
 		return
+	# "Mas opciones" vive en Pantalla: abrirlo lleva a esa pestana.
+	if open and _tabs != null and _tabs.current_tab != 1:
+		select_tab(1)
 	_advanced.visible = open
 	var lbl: Label = _find_label(_advanced_btn)
 	if lbl != null:
@@ -558,7 +561,7 @@ func _build_controls_tab(body: VBoxContainer) -> void:
 	# Controles en pantalla: tres estados porque "automatico" (tablet y movil;
 	# en PC nunca) es el valor bueno para casi todos.
 	var touch_idx := GameConfig.TOUCH_CONTROLS_MODES.find(GameConfig.ui_touch_controls)
-	body.add_child(_row("TouchControlsRow", "controls", "UI2M_SET_TOUCH",
+	body.add_child(_row("TouchControlsRow", "controls", "UI2M_SET_BUTTONS",
 		_picker([Tr.t("UI2M_OPT_AUTO"), Tr.t("OPT_TOUCH_ALWAYS"), Tr.t("OPT_TOUCH_NEVER")], touch_idx,
 			func(idx: int): GameConfig.set_touch_controls(GameConfig.TOUCH_CONTROLS_MODES[idx]),
 			[Tr.t("OPT_TOUCH_AUTO"), "", ""]), null, Tr.t("LBL_TOUCH_CONTROLS")))

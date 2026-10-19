@@ -475,8 +475,10 @@ static func readable(color: Color, bg: Color = UI_BG_REFERENCE, min_ratio: float
 
 ## Pinta una etiqueta ya creada respetando el contraste minimo y el contorno.
 ## Usar esto en vez de add_theme_color_override("font_color", ...) a mano.
-static func set_label_color(control: Control, color: Color) -> void:
-	var c := readable(color)
+## `bg`: el fondo real si no es el de las ventanas (el HUD oscuro del estilo
+## maqueta pasa CartoonTheme.c("hud", "BG"), o su cifra clara se oscureceria).
+static func set_label_color(control: Control, color: Color, bg: Color = UI_BG_REFERENCE) -> void:
+	var c := readable(color, bg)
 	# El mismo color otra vez no se reaplica: un override nuevo avisa de cambio
 	# de tema y repinta (los HUD lo piden en cada senal).
 	if control.has_theme_color_override("font_color") and control.get_theme_color("font_color") == c:
@@ -735,7 +737,7 @@ static func style_card_button(btn: Button, bg: Color = CARD_BG, left_color: Colo
 ## Unico punto donde se decide como se ve una etiqueta.
 static func apply_text_style(label: Label, size: String, color: Color) -> void:
 	var fs: int
-	var font: FontFile
+	var font: Font
 	match size:
 		"title":
 			fs = FONT_TITLE
@@ -1097,8 +1099,8 @@ static func chip_amount(chip: HBoxContainer) -> Label:
 
 ## Parpadeo rojo de una etiqueta (recurso que falta, almacen que desborda) y
 ## vuelta a su color. Se usa en vez de un texto flotante que tapa otros paneles.
-static func flash_label(label: Label, restore: Color, duration: float = 0.9) -> void:
-	set_label_color(label, DANGER)
+static func flash_label(label: Label, restore: Color, duration: float = 0.9, bg: Color = UI_BG_REFERENCE) -> void:
+	set_label_color(label, DANGER, bg)
 	# Un parpadeo a la vez: el anterior, si sigue, se corta (antes se apilaban y
 	# el primero devolvia el color a mitad del ultimo).
 	if label.has_meta("flash_tween"):
@@ -1108,7 +1110,7 @@ static func flash_label(label: Label, restore: Color, duration: float = 0.9) -> 
 	var tween := label.create_tween()
 	label.set_meta("flash_tween", tween)
 	tween.tween_interval(duration)
-	tween.tween_callback(func(): if is_instance_valid(label): set_label_color(label, restore))
+	tween.tween_callback(func(): if is_instance_valid(label): set_label_color(label, restore, bg))
 
 # ── Barra de bolsa (almacen compartido) ──
 # Una sola barra para los cuatro recursos porque el tope es uno solo. Cada

@@ -423,7 +423,16 @@ func _make_cartoon_toast(e: Dictionary, text: String, category: String, compact:
 		label.custom_minimum_size.x = (TOAST_W_COMPACT if compact else TOAST_W) - 96.0
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if parts["count"] != null:
-		(parts["count"] as Control).name = "Count"
+		var badge := parts["count"] as Control
+		badge.name = "CountBadge"
+		for n in badge.find_children("*", "Label", true, false):
+			n.name = "Count"
+			break
+	# El icono con forma (primer hijo de la fila), con el nombre de siempre.
+	if toast.get_child_count() > 0 and toast.get_child(0).get_child_count() > 0:
+		var first := toast.get_child(0).get_child(0)
+		if not (first is Label) and not (first is Button):
+			first.name = "Icon"
 	var close := parts["close"] as Button
 	if close != null:
 		close.name = "Close"

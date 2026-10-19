@@ -10,6 +10,7 @@ extends GdUnitTestSuite
 const OSC := preload("res://scripts/ui/OnScreenControls.gd")
 
 var _osc: CanvasLayer = null
+var _saved_touch := "auto"
 var _zooms: Array = []
 var _rots: Array = []
 var _brots := 0
@@ -28,12 +29,16 @@ func before_test() -> void:
 	EventBus.camera_zoom_requested.connect(_on_zoom)
 	EventBus.camera_rotate_step_requested.connect(_on_rot)
 	EventBus.building_rotate_requested.connect(_on_brot)
+	_saved_touch = GameConfig.ui_touch_controls
+	GameConfig.ui_touch_controls = "always"
 	_osc = auto_free(OSC.new())
 	add_child(_osc)
 	# En headless el perfil es PC y los controles no se ven: aqui se fuerzan.
 	_osc.visible = true
+	_osc._apply_visibility()
 
 func after_test() -> void:
+	GameConfig.ui_touch_controls = _saved_touch
 	EventBus.camera_zoom_requested.disconnect(_on_zoom)
 	EventBus.camera_rotate_step_requested.disconnect(_on_rot)
 	EventBus.building_rotate_requested.disconnect(_on_brot)

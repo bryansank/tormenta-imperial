@@ -270,7 +270,7 @@ static func well_style(role: String, radius: int = 12, pad: int = 6) -> StyleBox
 static func hud_style(accent: Color = Color(0, 0, 0, 0)) -> StyleBoxFlat:
 	if kind("hud") == "light":
 		return box(c("hud", "CARD"), c("hud", "BORDER"), BORDER, 18, 8, 6, 2, "hud")
-	var s := box(Color(c("hud", "BG"), 0.9 if not UITheme.high_contrast else 1.0),
+	var s := box(Color(c("hud", "BG"), (0.92 if not UITheme.high_contrast else 1.0) * UITheme.panel_opacity),
 		accent if accent.a > 0.0 else c("hud", "CARD_BORDER"), 2, 16, 8, 6, 0, "hud")
 	return s
 
@@ -740,7 +740,7 @@ static func notice(text_s: String, glyph: String, tone: String = "info", count: 
 	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(l)
 	if count > 1:
-		row.add_child(badge("x%d" % count, col))
+		row.add_child(badge("×%d" % count, col))
 		(row.get_child(row.get_child_count() - 1) as Control).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	# La X: dibujo pequeno, zona de toque de dedo (el boton entero mide 40-48).
 	var x := Button.new()
@@ -798,7 +798,7 @@ static func legacy_tokens(base: Dictionary) -> Dictionary:
 	d["PANEL_BG"] = c(r, "BG")
 	d["PANEL_BG_LIGHT"] = c(r, "CARD")
 	d["CARD_BG"] = c(r, "CARD")
-	d["HUD_BG"] = Color(c("hud", "BG"), 0.92)
+	d["HUD_BG"] = Color(c("hud", "BG"), 0.92 * UITheme.panel_opacity)
 	d["ACCENT"] = sem("ACCENT").darkened(0.25) if light else sem("ACCENT")
 	d["ACCENT_DIM"] = Color(c(r, "CARD_BORDER"), 0.7)
 	d["TEXT"] = c(r, "TEXT")
@@ -1859,7 +1859,16 @@ static func menu_h(size_s: String) -> int:
 
 ## El texto de un boton: su meta "text" (pastillas) o Button.text.
 static func button_text(b: Button) -> String:
-	return String(b.get_meta("text", b.text)) if b != null else ""
+	if b == null:
+		return ""
+	if b.has_meta("text"):
+		return String(b.get_meta("text"))
+	if b.text != "":
+		return b.text
+	# pill_button: el texto vive en una etiqueta hija.
+	for n in b.find_children("*", "Label", true, false):
+		return (n as Label).text
+	return ""
 
 ## Coloca el piquito (`Tail`) del bocadillo `card` hacia el instructor `bust`
 ## (los dos en el mismo lienzo). Sin busto a la vista, o con el busto encima o

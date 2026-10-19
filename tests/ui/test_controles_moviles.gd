@@ -41,7 +41,10 @@ func test_auto_follows_the_profile_and_phone_is_biggest() -> void:
 	var d: Dictionary = DeviceProfile.DEFAULTS
 	assert_float(float(d["pc"]["controls_size"])).is_equal(1.0)
 	assert_float(float(d["tablet"]["controls_size"])).is_greater(1.0)
-	assert_float(float(d["phone"]["controls_size"])).is_greater(float(d["tablet"]["controls_size"]))
+	# Rediseno 2026-10 (docs/28 §12): en telefono la cruceta va apagada de serie
+	# y el lienzo ya sigue a los dp, asi que su "auto" no agranda mas.
+	assert_float(float(d["phone"]["controls_size"])).is_greater_equal(float(d["pc"]["controls_size"]))
+	assert_bool(bool(d["phone"]["onscreen_controls"])).is_false()
 	assert_float(GameConfig.touch_controls_scale_for("auto", 1.3)).is_equal(1.3)
 	assert_float(GameConfig.touch_controls_scale_for("large", 1.3)).is_equal(1.25)
 	assert_float(GameConfig.touch_controls_scale_for("bogus", 1.15)).is_equal(1.15)
@@ -49,7 +52,9 @@ func test_auto_follows_the_profile_and_phone_is_biggest() -> void:
 func test_forcing_the_profile_changes_the_auto_size() -> void:
 	GameConfig.ui_touch_controls_size = "auto"
 	_force_profile("phone")
-	assert_float(GameConfig.touch_controls_scale()).is_equal(1.3)
+	assert_float(GameConfig.touch_controls_scale()).is_equal(float(DeviceProfile.DEFAULTS["phone"]["controls_size"]))
+	_force_profile("tablet")
+	assert_float(GameConfig.touch_controls_scale()).is_equal(float(DeviceProfile.DEFAULTS["tablet"]["controls_size"]))
 	_force_profile("pc")
 	assert_float(GameConfig.touch_controls_scale()).is_equal(1.0)
 

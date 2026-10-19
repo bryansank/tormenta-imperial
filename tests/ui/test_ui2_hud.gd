@@ -51,8 +51,10 @@ func test_the_cartoon_style_is_the_default() -> void:
 	assert_str(CartoonTheme.surface).is_equal("mixed")
 
 func test_floating_help_tips_are_off_by_default() -> void:
-	var script: Script = GameConfig.get_script()
-	assert_bool(bool(script.get_property_default_value("ui_helper_visible"))).is_false()
+	# Un GameConfig recien hecho (sin settings.cfg): el valor de serie.
+	var fresh: Node = GameConfig.get_script().new()
+	assert_bool(bool(fresh.get("ui_helper_visible"))).is_false()
+	fresh.free()
 
 # ── Disposicion ──────────────────────────────────────────────────────
 

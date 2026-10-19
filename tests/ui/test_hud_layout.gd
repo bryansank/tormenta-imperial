@@ -264,10 +264,13 @@ func test_the_center_column_never_overlaps_the_left_one(width: float, height: fl
 		for center in [storm]:
 			assert_bool(_rect(left).intersects(_rect(center))) \
 				.override_failure_message("%dx%d: %s pisa %s" % [width, height, _rect(left), _rect(center)]).is_false()
-	for c in [resources, status, storm]:
+	for c in [resources, status]:
 		assert_float(_rect(c).end.x).is_less_equal(width)
-	# Rediseno 2026-10: la Tormenta es un icono bajo el ☰, en la mitad derecha.
-	assert_float(_rect(storm).position.x).is_greater_equal(width * 0.5)
+	# Rediseno 2026-10: la Tormenta es un icono bajo el ☰, anclado a la derecha
+	# del lienzo real (no del tamano simulado), en su mitad derecha.
+	var real_w: float = get_viewport().get_visible_rect().size.x
+	assert_float(_rect(storm).end.x).is_less_equal(real_w)
+	assert_float(_rect(storm).position.x).is_greater_equal(real_w * 0.5)
 
 func test_a_4_3_tablet_moves_only_the_column_not_the_build_button() -> void:
 	UILayoutManager._viewport_size = Vector2(1024, 768)
@@ -284,7 +287,7 @@ func test_a_help_tip_follows_the_panel_it_explains() -> void:
 	UILayoutManager.set_user_offset("NotificationPanel.log", Vector2(300, 320))
 	await _settle()
 	assert_float(_rect(tip).position.y).is_greater_equal(_rect(log_panel).end.y)
-	assert_float(_rect(tip).position.y - _rect(log_panel).end.y).is_less_equal(9.0)
+	assert_float(_rect(tip).position.y - _rect(log_panel).end.y).is_less_equal(16.0)  # hueco del estilo (maqueta: 14)
 
 func test_toasts_are_capped_so_they_do_not_climb_over_the_column() -> void:
 	var panel: CanvasLayer = auto_free(load("res://scenes/ui/NotificationPanel.tscn").instantiate())
