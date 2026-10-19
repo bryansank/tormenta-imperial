@@ -678,9 +678,11 @@ const USER_SETTINGS_PATH := "user://settings.cfg"
 ## was written as true by every install, so it is ignored and dropped on save.
 var ui_grid_visible := false
 
-## Whether the on-screen helper callouts are shown ("?" button). On by default
-## so new players get guidance; the choice persists once toggled.
-var ui_helper_visible := true
+## Whether the on-screen helper callouts are shown ("?" button). OFF by default
+## since the UI redesign (docs/28 §12, 2026-10-18): floating tips covered the
+## map; they open from AYUDA (bottom bar) and the guided tutorial still forces
+## the ones it needs. The choice persists once toggled.
+var ui_helper_visible := false
 
 ## Los instructores (feat/instructores, docs/23 §9): el busto de la
 ## Capitana Remache y del Sargento Bombarda junto a las tarjetas del tutorial,
@@ -1031,6 +1033,22 @@ func touch_controls_enabled() -> bool:
 		"never":
 			return false
 		_:
+			return _touch_profile()
+
+## Si la cruceta, el zoom y el girar en pantalla se ven (OnScreenControls).
+## Distinto de touch_controls_enabled() (que dice "se juega con el dedo"):
+## en "auto" solo la tablet los lleva; el telefono juega con gestos (rediseno
+## 2026-10, docs/28 §12) y solo ve CANCELAR / girar edificio mientras coloca.
+func onscreen_controls_visible() -> bool:
+	match ui_touch_controls:
+		"always":
+			return true
+		"never":
+			return false
+		_:
+			var dp := get_node_or_null("/root/DeviceProfile")
+			if dp != null and dp.has_method("onscreen_controls_default"):
+				return dp.onscreen_controls_default()
 			return _touch_profile()
 
 ## "auto" sigue al perfil de dispositivo (tablet y movil llevan controles en

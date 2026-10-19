@@ -226,7 +226,7 @@ func capacity() -> int:
 		return MAX_TOASTS_NARROW
 	var vp := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
 	var floor_y := vp.y
-	if GameConfig.touch_controls_enabled():
+	if GameConfig.onscreen_controls_visible():
 		floor_y -= UILayoutConfig.TOUCH_CONTROLS_MARGIN + UILayoutConfig.TOUCH_DPAD_SIDE * UILayoutManager.touch_controls_scale()
 	var room := floor_y - _toast_container.global_position.y
 	return MAX_TOASTS if room >= TOAST_H * 2.0 + 8.0 else MAX_TOASTS_NARROW
@@ -328,6 +328,8 @@ func _make_toast(e: Dictionary, compact: bool) -> PanelContainer:
 		text = Tr.t("MSG_MORE_NOTICES") % int(e["count"])
 	else:
 		text = headline(String(e["text"]))
+	if UITheme.is_cartoon():
+		return _make_cartoon_toast(e, text, category, compact)
 	var toast := PanelContainer.new()
 	toast.name = "Alert"
 	toast.set_meta("alert_key", String(e["key"]))
@@ -370,6 +372,51 @@ func _make_toast(e: Dictionary, compact: bool) -> PanelContainer:
 		_alerts.dismiss(key)
 		_pump())
 	row.add_child(close)
+	return toast
+
+## Estilo maqueta (docs/28 §10, feat/ui2-hud): la pieza CartoonTheme.notice()
+## (icono con forma propia por tipo + una frase + "×N" + X, franja del color
+## del tipo). Solo cambia el ESTILO: cola, colocacion y tiempos son los de
+## siempre (AlertQueue). En telefono tocar el aviso entero lo cierra (la X
+## dibujada es pequena). Los nodos conservan sus nombres (Alert, Text, Count,
+## Close) para quien los busque.
+func _make_cartoon_toast(e: Dictionary, text: String, category: String, compact: bool) -> PanelContainer:
+	var tone := CartoonTheme.notice_tone(category)
+	var toast := CartoonTheme.notice(text, CartoonTheme.notice_glyph(category), tone,
+		1 if bool(e["summary"]) else int(e["count"]))
+	toast.name = "Alert"
+	toast.set_meta("alert_key", String(e["key"]))
+	toast.tooltip_text = String(e["text"])
+	var key := String(e["key"])
+	var parts := CartoonTheme.notice_parts(toast)
+	var label := parts["label"] as Label
+	if label != null:
+		label.name = "Text"
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.max_lines_visible = 1 if _busy_drawn else 2
+		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		label.custom_minimum_size.x = (TOAST_W_COMPACT if compact else TOAST_W) - 96.0
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if parts["count"] != null:
+		(parts["count"] as Control).name = "Count"
+	var close := parts["close"] as Button
+	if close != null:
+		close.name = "Close"
+		close.focus_mode = Control.FOCUS_NONE
+		close.tooltip_text = Tr.t("BTN_CLOSE")
+		close.pressed.connect(func():
+			_alerts.dismiss(key)
+			_pump())
+	# Telefono: el aviso entero se cierra de un toque.
+	if CartoonTheme.phone:
+		toast.mouse_filter = Control.MOUSE_FILTER_STOP
+		toast.gui_input.connect(func(ev: InputEvent):
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				toast.accept_event()
+				_alerts.dismiss(key)
+				_pump())
+	else:
+		toast.mouse_filter = Control.MOUSE_FILTER_PASS
 	return toast
 
 ## El icono: un cuadrito del color del aviso con un signo, para no depender solo

@@ -160,10 +160,11 @@ func test_on_a_narrow_screen_the_center_column_drops_into_the_left_one() -> void
 	var status := _place("NotificationPanel.log", 3)
 	var storm := _place("StormHUD", 1)
 	await _settle()
-	# Recursos -> Tormenta -> registro (sin tarjeta de estado ni franja de
-	# objetivo).
-	assert_float(_top(storm)).is_greater_equal(_bottom(resources))
-	assert_float(_top(status)).is_greater_equal(_bottom(storm))
+	# Rediseno 2026-10: la Tormenta es un icono bajo el ☰ (a la derecha); la
+	# columna izquierda es recursos -> registro, y nada se pisa.
+	assert_float(_top(status)).is_greater_equal(_bottom(resources))
+	assert_bool((storm as Control).get_global_rect().intersects((resources as Control).get_global_rect())).is_false()
+	assert_bool((storm as Control).get_global_rect().intersects((status as Control).get_global_rect())).is_false()
 	# Todo cabe en 400 px: nada se sale por la derecha.
 	for c in [resources, status, storm]:
 		assert_float((c as Control).get_global_rect().end.x).is_less_equal(400.0)

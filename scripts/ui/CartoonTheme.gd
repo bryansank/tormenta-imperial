@@ -813,3 +813,122 @@ static func legacy_tokens(base: Dictionary) -> Dictionary:
 	d["BTN_PRESSED"] = c(r, "CARD_ALT").darkened(0.08)
 	d["BTN_DISABLED"] = Color(c(r, "WELL"), 0.7)
 	return d
+
+# --- HUD (feat/ui2-hud) ---
+# Piezas del HUD de la fase 2 (docs/28 §12): barra de recursos, rango compacto,
+# icono de la Tormenta, la linea del siguiente paso con la cara de la Capitana,
+# la barra de abajo y el estilo de los avisos. Solo se anaden; lo de arriba no
+# se toca.
+
+## Margen del HUD con el borde de la pantalla (telefono / PC y tablet).
+static func hud_edge() -> float:
+	return 8.0 if phone else 14.0
+
+## Diametro de los redondos de la barra de abajo y del ☰ (docs/28 §5).
+static func bar_round() -> int:
+	return 48 if phone else 64
+
+static func menu_round() -> int:
+	return 48 if phone else 54
+
+## Diametro del icono de la Tormenta (un redondo solo, docs/28 §12).
+static func storm_round() -> int:
+	return 44 if phone else 50
+
+## Alto de CONSTRUIR en la barra (pastilla grande: 52 telefono, 70 PC).
+static func bar_build_h() -> int:
+	return 52 if phone else 70
+
+## Ficha redonda del HUD oscuro con un aro de color (la Tormenta).
+static func hud_round_style(d: int, ring: Color = Color(0, 0, 0, 0)) -> StyleBoxFlat:
+	var s := box(Color(c("hud", "BG"), 0.9 if not UITheme.high_contrast else 1.0),
+		ring if ring.a > 0.0 else c("hud", "CARD_BORDER"), 3 if ring.a > 0.0 else 2, int(d * 0.5), 0, 0, 0, "hud")
+	return s
+
+## El punto rojo de "hay algo nuevo" (Misiones). Se pega a la esquina de arriba
+## a la derecha de `host` (un boton redondo).
+static func red_dot(host: Control, side: int = 0) -> Panel:
+	var px := side if side > 0 else (16 if phone else 20)
+	var dot := Panel.new()
+	dot.name = "RedDot"
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dot.add_theme_stylebox_override("panel", box(sem("DANGER"), INK, 2, int(px * 0.5), 0))
+	host.add_child(dot)
+	dot.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	dot.offset_left = -px + 4
+	dot.offset_right = 4
+	dot.offset_top = -4
+	dot.offset_bottom = px - 4
+	return dot
+
+## Glifo y tono de un aviso segun su categoria (NotificationPanel). Forma propia
+## por tipo, no solo color: peligro rayo, advertencia reloj, logro estrella,
+## la columna que sale o vuelve banderin, el resto la "?" azul.
+static func notice_glyph(category: String) -> String:
+	match category:
+		"danger":
+			return "raid"
+		"warning":
+			return "clock"
+		"achievement", "success":
+			return "star"
+		"combat":
+			return "missions"
+	return "help"
+
+static func notice_tone(category: String) -> String:
+	match category:
+		"danger":
+			return "danger"
+		"warning":
+			return "warning"
+		"achievement", "success":
+			return "positive"
+	return "info"
+
+## Busca en un aviso de notice() su etiqueta, su X y su "×N" (para nombrarlos y
+## cablearlos sin rehacer la pieza).
+static func notice_parts(p: PanelContainer) -> Dictionary:
+	var out := {"label": null, "close": null, "count": null}
+	if p == null or p.get_child_count() == 0:
+		return out
+	var row := p.get_child(0)
+	for ch in row.get_children():
+		if ch is Label and out["label"] == null:
+			out["label"] = ch
+		elif ch is Button:
+			out["close"] = ch
+		elif ch is PanelContainer:
+			out["count"] = ch
+	return out
+
+## La cara de la Capitana Remache en un circulo (la linea del siguiente paso,
+## docs/28 §12): el mismo dibujo de InstructorBust, recortado, sin animacion.
+class CaptainFace extends Control:
+	var mood := "happy":
+		set(v):
+			mood = v
+			queue_redraw()
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		clip_contents = true
+		resized.connect(queue_redraw)
+
+	func _draw() -> void:
+		var sz := minf(size.x, size.y)
+		if sz <= 1.0:
+			return
+		var center := size * 0.5
+		draw_circle(center, sz * 0.5, Color("f7e7c4"))
+		var h := sz * 2.15
+		var w := h * 0.8
+		var bust = load("res://scripts/ui/InstructorBust.gd")
+		bust._draw_ada(self, Rect2(Vector2(size.x * 0.5 - w * 0.5, -0.1 * h), Vector2(w, h)), mood)
+		draw_arc(center, sz * 0.5 - 1.5, 0.0, TAU, 40, CartoonTheme.sem("ACCENT"), 3.0, true)
+
+static func captain_face(px: int) -> Control:
+	var f := CaptainFace.new()
+	f.custom_minimum_size = Vector2(px, px)
+	f.size = Vector2(px, px)
+	return f

@@ -37,6 +37,10 @@ const ELEMENTS := {
 	## Los instructores: el busto junto a la tarjeta del tutorial, los consejos y
 	## los partes (feat/instructores). Es una bandera de GameConfig, como la ayuda.
 	"Instructors": {"label": "HUD_INSTRUCTORS", "hideable": true, "movable": false, "mode": "instructors"},
+	## Rediseno 2026-10 (feat/ui2-hud, docs/28 §12): la barra de abajo (no se
+	## oculta: es el menu) y la linea del siguiente paso con la Capitana.
+	"BottomBar": {"label": "HUD_BOTTOM_BAR", "hideable": false, "movable": true, "mode": "none"},
+	"ObjectivePanel.line": {"label": "HUD_NEXT_STEP", "hideable": true, "movable": true, "mode": "holder"},
 }
 
 ## Orden en Ajustes y en el editor.
@@ -44,8 +48,8 @@ const ORDER := [
 	"ResourceHUD",
 	"StormHUD", "NotificationPanel.toasts",
 	"HelperPanel.callouts", "Instructors", "BattleScreen.turn", "SandboxPanel", "RankPanel",
-	"GameSpeedButton", "SkirmishButton",
-	"NotificationPanel.log", "ConstructionMenu.button", "BuildingInfoPanel",
+	"GameSpeedButton", "SkirmishButton", "ObjectivePanel.line",
+	"NotificationPanel.log", "ConstructionMenu.button", "BottomBar", "BuildingInfoPanel",
 ]
 
 ## Ids que existieron y ya no: un settings.cfg viejo que los nombre (ocultos o

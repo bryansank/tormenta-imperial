@@ -18,6 +18,9 @@ extends Node
 ##     minimo en apaisado; la escala lo encoge (UI mas grande) o lo agranda.
 ##     En vertical el lienzo se lleva a PORTRAIT_WIDTH de ancho para que el
 ##     movil use la disposicion estrecha (UILayoutConfig.NARROW_SLOTS).
+##     El TELEFONO no: su lienzo sigue a los dp reales (alto logico = alto en dp,
+##     360-540 en apaisado; phone_content_scale_for), y por debajo de 450 de lado
+##     corto CartoonTheme.phone pone las piezas de telefono (docs/28 §4).
 ##   - Engine.max_fps: el tope de fotogramas (fps_for, puro). El del perfil o el
 ##     elegido en Ajustes; menos con el juego en pausa y aun menos sin foco.
 ##     En PC con calidad Minima, el "auto" es GameConfig.fps_minimal_pc.
@@ -70,17 +73,32 @@ const MIN_LOGICAL_WIDTH_PORTRAIT := 400.0
 ## (cruceta, zoom, girar, R, CANCELAR, ✓); `settings_row` el alto de cada fila
 ## de Ajustes (deslizadores, interruptores, desplegables, pestanas, botones):
 ## en tablet y movil, un poco mas que el lado tactil minimo (docs/21 §2 y §9).
+## `touch_controls`: perfil de dedo (textos de dedo, colocacion tactil, lado
+## tactil); `onscreen_controls`: el "auto" de Controles en pantalla (cruceta,
+## zoom, girar). En telefono, apagados de serie (rediseno 2026-10, docs/28 §12):
+## los gestos bastan y la cruceta se comia la pantalla.
+## Telefono (docs/28 §4.2): `ui_scale` 1,0 ya no agranda un lienzo de 720, es
+## "a su tamano en dp": el lienzo sigue a los dp reales (phone_content_scale_for).
 const DEFAULTS := {
 	PC: {"ui_scale": 1.0, "text_size": "normal", "touch_target": 44,
-		"touch_controls": false, "layout": "standard", "input": "mouse", "fps": 60,
-		"controls_size": 1.0, "settings_row": 44},
+		"touch_controls": false, "onscreen_controls": false, "layout": "standard",
+		"input": "mouse", "fps": 60, "controls_size": 1.0, "settings_row": 44},
 	TABLET: {"ui_scale": 1.15, "text_size": "normal", "touch_target": 48,
-		"touch_controls": true, "layout": "standard", "input": "touch", "fps": 30,
-		"controls_size": 1.15, "settings_row": 56},
-	PHONE: {"ui_scale": 1.3, "text_size": "large", "touch_target": 52,
-		"touch_controls": true, "layout": "compact", "input": "touch", "fps": 30,
-		"controls_size": 1.3, "settings_row": 60},
+		"touch_controls": true, "onscreen_controls": true, "layout": "standard",
+		"input": "touch", "fps": 30, "controls_size": 1.15, "settings_row": 56},
+	PHONE: {"ui_scale": 1.0, "text_size": "normal", "touch_target": 48,
+		"touch_controls": true, "onscreen_controls": false, "layout": "compact",
+		"input": "touch", "fps": 30, "controls_size": 1.0, "settings_row": 52},
 }
+
+## Lienzo del telefono en apaisado (docs/28 §4.2): alto logico = alto en dp de
+## la pantalla, entre estos dos. 360 es el telefono pequeno para el que se
+## disenan las pantallas; por encima de 540 ya se ve como una tablet pequena.
+const PHONE_MIN_LOGICAL_HEIGHT := 360.0
+const PHONE_MAX_LOGICAL_HEIGHT := 540.0
+## Por debajo de este lado corto logico la interfaz usa las piezas de telefono
+## (CartoonTheme.phone: letras, botones y disposiciones de telefono).
+const PHONE_CANVAS_MAX_SIDE := 450.0
 
 var _detected := PC
 var _factor := 1.0
@@ -181,9 +199,15 @@ func current() -> String:
 func defaults() -> Dictionary:
 	return DEFAULTS.get(current(), DEFAULTS[PC])
 
-## Tablet y movil: controles en pantalla en "auto" y lado tactil mayor.
+## Tablet y movil: perfil de dedo (textos de dedo, colocacion tactil, lado
+## tactil mayor).
 func is_touch_profile() -> bool:
 	return bool(defaults()["touch_controls"])
+
+## El "auto" de Controles en pantalla: solo tablet. En telefono, no (docs/28
+## §12: los gestos bastan; queda CANCELAR mientras se coloca).
+func onscreen_controls_default() -> bool:
+	return bool(defaults().get("onscreen_controls", defaults()["touch_controls"]))
 
 ## "touch" o "mouse": que textos de ayuda tocan. Un PC que ya recibio un toque
 ## real (o con los controles tactiles forzados) habla de dedos.
@@ -241,6 +265,31 @@ static func content_scale_for(window: Vector2, ui_scale: float) -> float:
 	var factor := desired / s0 * ui_scale
 	return clampf(factor, 0.25, maxf(max_factor, 0.25))
 
+## content_scale_factor del TELEFONO (docs/28 §4.2). Puro. Antes el telefono
+## usaba content_scale_for con escala 1,3 y el suelo de 540 de alto: en un
+## telefono de 360 dp el lienzo salia de ~554 de alto y todo se veia a ~0,65 de
+## su tamano fisico (17 px de cuerpo = 11 dp). Ahora el lienzo sigue a los dp:
+##   apaisado: alto logico = alto en dp / escala, entre PHONE_MIN_LOGICAL_HEIGHT
+##             y PHONE_MAX_LOGICAL_HEIGHT (360 dp -> 360; 412 dp -> 412).
+##   vertical: ancho logico = ancho en dp / escala, entre
+##             MIN_LOGICAL_WIDTH_PORTRAIT y PORTRAIT_WIDTH (columna unica).
+## Sin dpi conocido se asume 160 (1 dp por px).
+static func phone_content_scale_for(window: Vector2, dpi: int, ui_scale: float) -> float:
+	if window.x <= 0.0 or window.y <= 0.0:
+		return ui_scale
+	var s0 := minf(window.x / BASE_SIZE.x, window.y / BASE_SIZE.y)
+	var density := (float(dpi) if dpi > 0 else 160.0) / 160.0
+	var k := maxf(ui_scale, 0.1)
+	if window.y > window.x:
+		var target_w := clampf(window.x / density / k, MIN_LOGICAL_WIDTH_PORTRAIT, PORTRAIT_WIDTH)
+		return window.x / (s0 * target_w)
+	var target_h := clampf(window.y / density / k, PHONE_MIN_LOGICAL_HEIGHT, PHONE_MAX_LOGICAL_HEIGHT)
+	return window.y / (s0 * target_h)
+
+## Si un lienzo logico es de telefono (lado corto < PHONE_CANVAS_MAX_SIDE). Puro.
+static func is_phone_canvas(logical: Vector2) -> bool:
+	return minf(logical.x, logical.y) < PHONE_CANVAS_MAX_SIDE
+
 ## Tamano del lienzo logico que resulta (para tests y capturas). Puro.
 static func logical_size_for(window: Vector2, factor: float) -> Vector2:
 	var s0 := minf(window.x / BASE_SIZE.x, window.y / BASE_SIZE.y)
@@ -297,7 +346,9 @@ func apply_theme() -> void:
 func apply_scale() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	var factor := content_scale_for(_window_size(), effective_ui_scale())
+	var window := _window_size()
+	var factor := scale_factor_for(current(), window, _screen_dpi(), effective_ui_scale())
+	_sync_phone_canvas(logical_size_for(window, factor))
 	var root := get_tree().root
 	if is_equal_approx(root.content_scale_factor, factor) and is_equal_approx(_factor, factor):
 		return
@@ -306,6 +357,28 @@ func apply_scale() -> void:
 	# Cambiar la escala no siempre avisa size_changed: se recoloca a mano.
 	UILayoutManager.refresh_viewport()
 	scale_applied.emit(factor)
+
+## El factor de un perfil: el telefono sigue a los dp (phone_content_scale_for);
+## tablet y PC, como siempre (content_scale_for). Puro.
+static func scale_factor_for(profile: String, window: Vector2, dpi: int, ui_scale: float) -> float:
+	if profile == PHONE:
+		return phone_content_scale_for(window, dpi, ui_scale)
+	return content_scale_for(window, ui_scale)
+
+## CartoonTheme.phone sigue al lienzo: letras, botones y disposiciones de
+## telefono por debajo de PHONE_CANVAS_MAX_SIDE. Los paneles se construyen una
+## vez: si cambia con una partida en marcha (girar, redimensionar la ventana del
+## PC por debajo de 450 de alto), se reconstruye la interfaz.
+func _sync_phone_canvas(logical: Vector2) -> void:
+	# El perfil Movil (detectado o forzado) siempre lleva las piezas de telefono;
+	# los demas, solo si su lienzo real es de telefono (ventana muy baja).
+	var phone := current() == PHONE or is_phone_canvas(logical)
+	if phone == CartoonTheme.phone:
+		return
+	CartoonTheme.phone = phone
+	CartoonTheme.show_caption_never = phone
+	if GameManager.is_started():
+		rebuild_ui.call_deferred()
 
 func current_factor() -> float:
 	return get_tree().root.content_scale_factor

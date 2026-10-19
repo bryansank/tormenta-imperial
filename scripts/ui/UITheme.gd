@@ -107,9 +107,11 @@ static func _static_init() -> void:
 # no se rehicieron la sigan a grandes rasgos. De serie, "classic": nada cambia.
 
 const STYLES := ["classic", "cartoon"]
-## El estilo con el que arranca el juego. Fase 1 del rediseno: "classic"
-## hasta que Bryan apruebe las maquetas.
-const STYLE_DEFAULT := "classic"
+## El estilo con el que arranca el juego. Fase 2 del rediseno (feat/ui2-hud,
+## 2026-10-18): "cartoon" de serie, con la superficie mixta y Baloo 2 + Nunito
+## Sans (CartoonTheme). "classic" queda como respaldo interno:
+## `-- --ui-style=classic` o use_style("classic").
+const STYLE_DEFAULT := "cartoon"
 static var STYLE := "classic"
 
 ## Cambia de estilo (y, en "cartoon", la superficie y la pareja de fuentes;

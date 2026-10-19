@@ -79,6 +79,50 @@ func test_auto_follows_a_touch_profile() -> void:
 	assert_bool(phone).is_true()
 	assert_bool(pc).is_false()
 
+## Rediseno 2026-10 (docs/28 §12): "se juega con el dedo" no es lo mismo que
+## "hay cruceta". En "auto" la cruceta y el zoom solo salen en tablet; el
+## telefono juega con gestos (y conserva CANCELAR mientras coloca).
+func test_auto_onscreen_controls_only_on_a_tablet() -> void:
+	var saved := GameConfig.ui_device_profile
+	GameConfig.ui_touch_controls = "auto"
+	var got := []
+	for prof in ["pc", "tablet", "phone"]:
+		GameConfig.ui_device_profile = prof
+		got.append([GameConfig.touch_controls_enabled(), GameConfig.onscreen_controls_visible()])
+	GameConfig.ui_device_profile = saved
+	assert_array(got).is_equal([[false, false], [true, true], [true, false]])
+
+func test_always_and_never_rule_the_onscreen_controls_too() -> void:
+	var saved := GameConfig.ui_device_profile
+	GameConfig.ui_device_profile = "phone"
+	GameConfig.ui_touch_controls = "always"
+	var always := GameConfig.onscreen_controls_visible()
+	GameConfig.ui_touch_controls = "never"
+	var never := GameConfig.onscreen_controls_visible()
+	GameConfig.ui_device_profile = saved
+	assert_bool(always).is_true()
+	assert_bool(never).is_false()
+
+func test_a_phone_without_dpad_still_gets_cancel_while_placing() -> void:
+	var saved := GameConfig.ui_device_profile
+	GameConfig.ui_device_profile = "phone"
+	GameConfig.ui_touch_controls = "auto"
+	var osc = auto_free(load("res://scenes/ui/OnScreenControls.tscn").instantiate())
+	add_child(osc)
+	var idle: bool = osc.visible
+	osc._set_placing(true)
+	var placing: bool = osc.visible
+	var full: bool = osc.full_controls_shown()
+	var cancel: bool = osc.is_placing_shown()
+	osc._set_placing(false)
+	var after: bool = osc.visible
+	GameConfig.ui_device_profile = saved
+	assert_bool(idle).is_false()
+	assert_bool(placing).is_true()
+	assert_bool(full).is_false()
+	assert_bool(cancel).is_true()
+	assert_bool(after).is_false()
+
 func test_an_explicit_never_wins_over_a_real_touch() -> void:
 	GameConfig.ui_touch_controls = "never"
 	GameConfig._real_touch_seen = false

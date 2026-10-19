@@ -117,7 +117,10 @@ func test_the_2d_scene_has_the_same_ui_as_the_3d_scene() -> void:
 			# escaramuzas: el boton del HUD abre SkirmishPanel por nombre.
 			"SkirmishButton",
 			# encargos: PauseMenu abre el tablon por nombre.
-			"ContractPanel"]:
+			"ContractPanel",
+			# ui2-hud: la barra de abajo abre Ejercito, Misiones, Mercado e
+			# Investigar por nombre y oculta SkirmishButton.
+			"BottomBar"]:
 		assert_bool(n in names_3d).override_failure_message("%s falta en Main" % n).is_true()
 		assert_bool(n in names_2d).override_failure_message("%s falta en Main2D" % n).is_true()
 
