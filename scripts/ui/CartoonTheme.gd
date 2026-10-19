@@ -813,3 +813,278 @@ static func legacy_tokens(base: Dictionary) -> Dictionary:
 	d["BTN_PRESSED"] = c(r, "CARD_ALT").darkened(0.08)
 	d["BTN_DISABLED"] = Color(c(r, "WELL"), 0.7)
 	return d
+
+# --- CONSTRUIR (feat/ui2-construir) ---
+# Piezas de CONSTRUIR, la ficha del edificio, el Mercado e Investigar (fase 2,
+# docs/28). Solo se anaden aqui: lo de arriba es de la fase 1 y de los otros
+# frentes.
+
+## Lienzo de telefono: la bandera `phone` (la pone el HUD) o un lienzo de menos
+## de 450 de alto. Las ventanas van entonces a pantalla completa, una columna.
+static func is_phone(vp: Vector2) -> bool:
+	return phone or (vp.y > 1.0 and vp.y < 450.0)
+
+## Rojo legible de "lo que falta" sobre la superficie de `role`.
+static func danger_text(role: String = "window") -> Color:
+	return sem("DANGER").darkened(0.25) if kind(role) == "light" else sem("DANGER").lightened(0.35)
+
+## Verde legible de "lo que se gana" sobre la superficie de `role`.
+static func positive_text(role: String = "window") -> Color:
+	return sem("POSITIVE").darkened(0.3) if kind(role) == "light" else sem("POSITIVE").lightened(0.3)
+
+## Recursos que tienen icono propio (PNG). Los materiales del taller no: se
+## escriben con su nombre.
+const ICON_RES := ["gold", "wood", "steel", "oil", "food", "workers", "morale"]
+
+## Fila de costes del estilo nuevo: una ficha hundida por recurso ([icono] cifra)
+## y en rojo lo que falta (`short`, por nombre de recurso). Compatible con
+## TextKit.row_amounts: cada cifra se llama "Amount_<id>" y la fila guarda el
+## diccionario en la meta "amounts". `prefix` va delante ("+" en lo que se gana);
+## `tone` cambia el color de las cifras que no faltan.
+static func cost_strip(amounts: Dictionary, short: Dictionary = {}, role: String = "window",
+		prefix: String = "", level: String = "number", tone: Color = Color(0, 0, 0, 0)) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "CostRow"
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	fill_cost_strip(row, amounts, short, role, prefix, level, tone)
+	return row
+
+## Rehace una fila de cost_strip con otras cifras. No toca nada si no cambio
+## (llega una senal por recurso; docs/26 §6.9).
+static func fill_cost_strip(row: Container, amounts: Dictionary, short: Dictionary = {}, role: String = "window",
+		prefix: String = "", level: String = "number", tone: Color = Color(0, 0, 0, 0)) -> void:
+	var sig := [amounts, short, role, prefix, level, tone, phone, UITheme.palette, UITheme.high_contrast]
+	if row.has_meta("strip_sig") and row.get_meta("strip_sig") == sig and row.get_child_count() == amounts.size():
+		return
+	row.set_meta("strip_sig", sig)
+	row.set_meta("amounts", amounts.duplicate())
+	for child in row.get_children():
+		row.remove_child(child)
+		child.free()
+	for res_id in amounts:
+		var id := String(res_id)
+		row.add_child(_strip_chip(id, int(amounts[res_id]), int(short.get(id, 0)), role, prefix, level, tone))
+
+static func _strip_chip(id: String, amount: int, missing: int, role: String, prefix: String,
+		level: String, tone: Color) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.name = "Chip_" + id
+	var s := well_style(role, 12, 2)
+	s.content_margin_left = 4
+	s.content_margin_right = 8
+	if missing > 0:
+		s.bg_color = Color(sem("DANGER"), 0.22)
+		s.border_color = sem("DANGER")
+		s.set_border_width_all(2)
+	p.add_theme_stylebox_override("panel", s)
+	p.mouse_filter = Control.MOUSE_FILTER_PASS
+	var cap := Tr.res_cap(id) if id != "workers" else Tr.t("UI2C_WORKERS")
+	p.tooltip_text = cap if missing <= 0 else "%s · %s" % [cap, Tr.t("OBJ_MISSING") % ("%d" % missing)]
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 3)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var txt := "%s%d" % [prefix, amount]
+	if id in ICON_RES:
+		var ic := UITheme.make_icon(id, 20 if phone else 24)
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(ic)
+	else:
+		txt += " " + Tr.res_name(id)
+	var col := tone if tone.a > 0.0 else text(role)
+	if missing > 0:
+		col = danger_text(role)
+	var l := label(txt, level if id in ICON_RES else "small", col)
+	l.name = "Amount_" + id
+	h.add_child(l)
+	p.add_child(h)
+	return p
+
+## Hueco hundido con una imagen dentro (miniatura del edificio).
+static func thumb_frame(content: Control, px: Vector2, role: String = "window") -> PanelContainer:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", well_style(role, 12, 3))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.custom_minimum_size = px
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(content)
+	return p
+
+## Cambia el texto de un boton hecho con pill_button / tab (su primera etiqueta).
+static func set_pill_text(btn: Control, text_s: String) -> void:
+	for n in btn.find_children("*", "Label", true, false):
+		(n as Label).text = text_s
+		return
+
+## Cambia la clase (verde, azul, ambar, rojo, crema) de un pill_button hecho.
+static func set_pill_kind(btn: Button, kind_s: String, height: int, role: String = "window") -> void:
+	var fill := kind_fill(kind_s, role)
+	_btn_states(btn, fill, int(height * 0.5), 22, role)
+	var tc := on_fill(fill)
+	if kind_s == "secondary":
+		tc = {"color": text(role), "outline": false}
+	for n in btn.find_children("*", "Label", true, false):
+		var l := n as Label
+		l.add_theme_color_override("font_color", tc["color"])
+		l.add_theme_constant_override("outline_size", maxi(4, roundi(fs("button") * 0.3)) if tc["outline"] else 0)
+
+## El porque de un boton gris, en 2-3 palabras debajo (docs/28 §5). Oculto si
+## no hay porque.
+static func why_label(role: String = "window") -> Label:
+	var l := label("", "small", danger_text(role))
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_PASS
+	l.visible = false
+	return l
+
+## Titulito de seccion: [icono] palabra en tenue (sin mayusculas).
+static func section(text_s: String, glyph: String = "", role: String = "window") -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	if glyph != "":
+		var g := make_glyph(glyph, 20)
+		g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(g)
+	row.add_child(label(text_s, "small", text(role, true)))
+	return row
+
+## Una ventana de CartoonTheme.window() colocada a pantalla completa con
+## `margin` de borde (telefono). La X se mete dentro para que no se corte.
+static func fit_fullscreen(w: Dictionary, margin: float = 6.0) -> void:
+	var root: Control = w["root"]
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.offset_left = margin
+	root.offset_top = 2.0
+	root.offset_right = -margin
+	root.offset_bottom = -margin
+	root.custom_minimum_size = Vector2.ZERO
+	var panel: PanelContainer = w["panel"]
+	var s := window_style()
+	s.set_content_margin_all(10)
+	panel.add_theme_stylebox_override("panel", s)
+	var close: Control = w.get("close")
+	if close != null:
+		close.offset_left = -close.custom_minimum_size.x - 2
+		close.offset_right = -2
+
+## Devuelve la ventana a su sitio de PC (lo pone UILayoutManager con el slot).
+static func fit_desktop(w: Dictionary) -> void:
+	var panel: PanelContainer = w["panel"]
+	panel.add_theme_stylebox_override("panel", window_style())
+	var close: Control = w.get("close")
+	if close != null:
+		close.offset_left = -close.custom_minimum_size.x + 10
+		close.offset_right = 10
+
+## Barra de nivel: "Nivel 2 de 3" y una barra de laton con lo hecho.
+static func level_bar(level: int, top: int, role: String = "window") -> ProgressBar:
+	var bar := progress(float(level) / float(maxi(top, 1)), sem("ACCENT"), role, 10 if phone else 12)
+	bar.custom_minimum_size.x = 80
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return bar
+
+## Pastilla con su texto en Button.text (no en una etiqueta hija): para los
+## botones cuyo texto cambia a menudo o se lee desde fuera (x1 / x5 / MAX,
+## COMPRAR / VENDER, las tarjetas de tecnologia). Mismo labio y colores que
+## pill_button; `icon_id` pone un icono de recurso (PNG) delante.
+static func text_pill(text_s: String, kind_s: String = "primary", height: int = BTN,
+		role: String = "window", level: String = "button", icon_id: String = "") -> Button:
+	var b := Button.new()
+	b.text = text_s
+	b.focus_mode = Control.FOCUS_ALL
+	b.custom_minimum_size = Vector2(height, height)
+	if icon_id != "":
+		b.icon = UITheme.icon_texture(icon_id, 24)
+		b.expand_icon = false
+	style_text_pill(b, kind_s, height, role, level)
+	return b
+
+static func style_text_pill(b: Button, kind_s: String, height: int, role: String = "window", level: String = "button") -> void:
+	var fill := kind_fill(kind_s, role)
+	_btn_states(b, fill, int(height * 0.5), 14, role)
+	var tc := on_fill(fill)
+	if kind_s == "secondary":
+		tc = {"color": text(role), "outline": false}
+	var f: Font = title_font() if level in ["display", "title", "button", "number"] else bold_font()
+	if f != null:
+		b.add_theme_font_override("font", f)
+	b.add_theme_font_size_override("font_size", fs(level))
+	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(st, tc["color"])
+	b.add_theme_color_override("font_disabled_color", Color(tc["color"], 0.65))
+	b.add_theme_constant_override("outline_size", maxi(4, roundi(fs(level) * 0.3)) if tc["outline"] else 0)
+	b.add_theme_color_override("font_outline_color", INK)
+	b.add_theme_constant_override("h_separation", 8)
+	b.set_meta("pill_kind", kind_s)
+
+## Tarjeta-boton (tecnologias): una tarjeta que se toca. `state`: "open",
+## "done" (verde claro), "locked" (CARD_ALT). `selected`: borde de laton.
+static func style_card_button(b: Button, state: String, selected: bool, edge: Color = Color(0, 0, 0, 0)) -> void:
+	var fill := c("window", "CARD")
+	if state == "done":
+		fill = c("window", "CARD").lerp(sem("POSITIVE"), 0.22)
+	elif state == "locked":
+		fill = c("window", "CARD_ALT")
+	var n := card_style("window", selected, fill)
+	if edge.a > 0.0 and not selected:
+		n.border_color = edge
+	n.content_margin_left = 10
+	n.content_margin_right = 10
+	n.content_margin_top = 6
+	n.content_margin_bottom = 8
+	var h := n.duplicate() as StyleBoxFlat
+	h.bg_color = fill.lightened(0.15)
+	b.add_theme_stylebox_override("normal", n)
+	b.add_theme_stylebox_override("hover", h)
+	b.add_theme_stylebox_override("pressed", h)
+	b.add_theme_stylebox_override("disabled", n)
+	b.add_theme_stylebox_override("focus", box(Color(0, 0, 0, 0), sem("ACCENT"), 3, RADIUS_CARD + 2, 0))
+	var col := text("window", state == "locked")
+	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color", "font_disabled_color"]:
+		b.add_theme_color_override(st, col)
+	b.add_theme_constant_override("outline_size", 0)
+	var f := bold_font()
+	if f != null:
+		b.add_theme_font_override("font", f)
+	b.add_theme_font_size_override("font_size", fs("small"))
+
+## Icono de girar (flecha en arco con punta), dibujado: CartoonIcon no lo trae.
+static func rotate_glyph(px: int, tint: Color = Color(0, 0, 0, 0)) -> Control:
+	var ctl := Control.new()
+	ctl.custom_minimum_size = Vector2(px, px)
+	ctl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ctl.draw.connect(func():
+		var s := minf(ctl.size.x, ctl.size.y)
+		var cen := ctl.size * 0.5
+		var r := s * 0.32
+		var col := tint if tint.a > 0.0 else sem("INFO")
+		var w := maxf(3.0, s * 0.14)
+		ctl.draw_arc(cen, r, deg_to_rad(-60), deg_to_rad(220), 24, INK, w + 3.0, true)
+		ctl.draw_arc(cen, r, deg_to_rad(-60), deg_to_rad(220), 24, col, w, true)
+		var tip := cen + Vector2(cos(deg_to_rad(-60)), sin(deg_to_rad(-60))) * r
+		var head := PackedVector2Array([tip + Vector2(-s * 0.2, -s * 0.05), tip + Vector2(s * 0.12, -s * 0.16),
+			tip + Vector2(s * 0.06, s * 0.2)])
+		ctl.draw_colored_polygon(head, col)
+		ctl.draw_polyline(PackedVector2Array([head[0], head[1], head[2], head[0]]), INK, 2.0, true))
+	return ctl
+
+## Coloca una ventana de window() centrada en el lienzo (PC y tablet): ancho y
+## alto como mucho `want` (alto 0 = lo que pida su contenido), con margen, y
+## bajada lo justo para no quedar bajo el boton ☰ (UILayoutManager).
+static func place_center(w: Dictionary, vp: Vector2, want: Vector2) -> void:
+	fit_desktop(w)
+	var root: Control = w["root"]
+	var panel: PanelContainer = w["panel"]
+	var h := want.y
+	if h <= 0.0:
+		h = panel.get_combined_minimum_size().y + panel.offset_top
+	var sz := Vector2(minf(want.x, vp.x - 48.0), minf(h, vp.y - 32.0))
+	if UILayoutManager != null and UILayoutManager.has_method("clear_menu_button"):
+		sz = UILayoutManager.clear_menu_button(sz)
+	root.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	root.custom_minimum_size = Vector2.ZERO
+	root.position = ((vp - sz) * 0.5).round()
+	root.size = sz

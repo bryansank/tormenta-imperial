@@ -1,7 +1,28 @@
 extends CanvasLayer
-## Construction menu: full-screen modal with category tabs, search bar,
-## building grid with thumbnails, and a 3D preview panel for the selected building.
+## CONSTRUIR (rediseno fase 2, docs/28-guia-ui.md; maqueta en
+## tools/ui_mockup/mock_screens.gd, build_construction).
+##
+## Ventana crema con la cinta verde. A la izquierda, un carril de pestanas de
+## categoria (icono; con su palabra en PC). En medio, una lista de filas de UNA
+## linea: miniatura, nombre, coste en iconos (en rojo lo que falta) y el martillo
+## verde, que construye directamente. Lo que no se puede, con su porque corto en
+## vez del coste: candado + "Rango 4", "Era 2", "Falta Almacén"; lleno, "Al
+## máximo" y el atajo MEJORAR UNO. El detalle de cada fila, al mantener pulsado
+## (TouchTooltip) o al pasar el raton.
+##
+## En PC y tablet, a la derecha, la ficha del elegido: miniatura, una frase, lo
+## que da, por que no se puede, el coste y CONSTRUIR. En telefono (lienzo de
+## menos de 450 de alto) la ventana va a pantalla completa y la ficha no sale.
+##
+## Sin animaciones (decision de Bryan): ni la maqueta 3D que giraba ni nada que
+## se mueva; la miniatura es la foto que se hace al arrancar.
+##
+## Tocar una fila la ELIGE (al soltar dentro: arrastrar la lista empieza encima
+## de una fila y no debe elegirla); el martillo elige y construye. El tutorial
+## busca las filas por id (card_for) y el CONSTRUIR de la ficha
+## (detail_build_button).
 
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 const PlacementAssistScript := preload("res://scripts/buildings/PlacementAssist.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const TextKit := preload("res://scripts/ui/TextKit.gd")
@@ -9,68 +30,79 @@ const HelpText := preload("res://scripts/ui/BuildingHelpText.gd")
 
 var _root: Control
 var _backdrop: ColorRect
-var _modal: PanelContainer
+## La ventana entera (cinta + panel + X). La coloca UILayoutManager en PC y
+## CartoonTheme.fit_fullscreen en telefono.
+var _modal: Control
+var _win: Dictionary = {}
 var _build_btn: Button
 ## Tamano del boton CONSTRUIR del HUD (el primario del juego).
 const BUILD_BTN_W := 240.0
 const BUILD_BTN_H := 64.0
 var _is_open := false
+## Telefono: la disposicion con la que se monto la lista (cambia al girar o al
+## cambiar de perfil, y entonces se rehace).
+var _phone := false
 
 # Category state
 var _all_buildings: Array = []
 var _current_category := "all"
+## Ya no hay buscador (menos interfaz, docs/28 §0); se conserva por si algo lo
+## pone a mano.
 var _search_text := ""
 var _cat_buttons: Dictionary = {}
+var _rail: VBoxContainer
 
-# Building grid
-var _grid_container: GridContainer
+# La lista (una fila por edificio)
+var _grid_container: VBoxContainer
 var _grid_scroll: ScrollContainer
 
-# Detail panel (right side)
+# Ficha del elegido (PC)
+var _detail_column: VBoxContainer
 var _detail_panel: VBoxContainer
 var _detail_name: Label
-## El coste en fila de iconos con su cifra; en rojo lo que falta (2026-10-04).
-var _detail_cost: HFlowContainer
+var _detail_desc: Label
+## El coste en fila de iconos con su cifra; en rojo lo que falta.
+var _detail_cost: HBoxContainer
 ## Lo que produce: "+6 [madera] cada 12 s".
 var _detail_production: HBoxContainer
-var _detail_extras: Label
-## "[edificio] 3/6 · era 2: 9": cuantos hay, el tope de la era y el siguiente.
+## Trabajadores que pide, alojamiento y moral que da, en fichas de cifra.
+var _detail_extras: HBoxContainer
+## "[edificio] 3/6": cuantos hay y el tope de la era.
 var _detail_limit: HBoxContainer
-## "Necesita bosque adyacente": la regla del yacimiento, antes de colocar (bug 10).
+## "Necesita bosque al lado": la regla del yacimiento, antes de colocar.
 var _detail_rule: Label
 ## Por que no se puede construir ahora ("Te falta: 20 Madera"), junto al boton.
 var _detail_block: Label
-## Topes y mejoras (feat/topes-mejoras-ayuda): la frase del tope lleno ("Máximo
-## 5 en esta era. En la era 2 podrás tener 8."), lo que trae una era aun no
-## alcanzada ("Llega en la era 2, con la Fundición") y el atajo "Mejorar uno".
+## La frase del tope lleno y lo que trae una era aun no alcanzada.
 var _detail_explain: Label
 var _detail_upgrade_one: Button
 var _detail_build_btn: Button
+var _detail_thumb: TextureRect
 var _selected_data: BuildingData = null
-
-# 3D Preview
-var _preview_viewport: SubViewport
-var _preview_container: SubViewportContainer
-var _preview_camera: Camera3D
-var _preview_model: Node3D = null
-var _preview_spin := 0.0
 
 # Thumbnail cache
 var _thumb_cache: Dictionary = {}  # building_id -> ImageTexture
 
-# Vista 2D (docs/18-vista-2d.md): miniaturas y vista previa con el dibujo plano
-# del mapa en vez de modelos 3D. Se decide al arrancar: sin Camera3D es la 2D.
+# Vista 2D (docs/18-vista-2d.md): miniaturas con el dibujo plano del mapa en vez
+# de fotos de los modelos 3D. Se decide al arrancar: sin Camera3D es la 2D.
 const BuildingIcon2D := preload("res://scripts/view2d/BuildingIcon2D.gd")
 var _is_2d := false
 var _preview_icon: Control = null
 var _thumb_rects: Dictionary = {}  # building_id -> TextureRect
 
 const CATEGORIES := ["all", "production", "support", "military", "decoration"]
+## El icono de cada pestana del carril.
+const CATEGORY_GLYPHS := {
+	"all": "build", "production": "res:wood", "support": "res:workers",
+	"military": "army", "decoration": "star",
+}
+
+## Ancho de la ficha del elegido (PC) y ancho minimo de lienzo para que quepa.
+const DETAIL_W := 300.0
+const DETAIL_MIN_VP_W := 760.0
 
 ## Capa en reposo (lista cerrada): bajo cualquier ventana de UIManager, que
-## apila desde la 12. Antes era 12 fija y empataba con la primera ventana
-## abierta (AYUDA, Ejercito...): el boton CONSTRUIR se pintaba encima de ella.
-## Con la lista abierta la capa la pone UIManager, como a las demas.
+## apila desde la 12. Con la lista abierta la capa la pone UIManager.
 const REST_LAYER := 11
 
 func _ready() -> void:
@@ -84,26 +116,20 @@ func _ready() -> void:
 	EventBus.governor_rank_up.connect(func(_r, _w):
 		_request_grid_refresh()
 		_refresh_block())
-	# Los topes suben con la era (GameConfig.building_limits_by_era): al cambiar
-	# de era, las tarjetas y el detalle dicen el tope nuevo.
+	# Los topes suben con la era (GameConfig.building_limits_by_era).
 	EventBus.era_advanced.connect(func(_e):
 		_request_grid_refresh()
 		_refresh_block())
 	EventBus.game_load_completed.connect(_request_grid_refresh)
 	EventBus.game_new_started.connect(_request_grid_refresh)
-	# Con la lista abierta, el coste en rojo o no y el aviso siguen a lo que hay.
+	# Con la lista abierta, el coste en rojo o no y el porque siguen a lo que hay.
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
-	# CONSTRUIR es la accion principal: siempre a la vista, no escondida tras el
-	# menu (bug 9/11: solo salia al desplegar el antiguo ☰).
+	EventBus.workers_changed.connect(func(_u, _t): _on_resources_changed())
+	# CONSTRUIR es la accion principal: siempre a la vista.
 	_build_btn.visible = true
 	UIManager.register_panel(self, "ConstructionMenu.modal")
-	# El giro de la maqueta solo hace falta con la lista abierta.
-	set_process(false)
-
-func _process(delta: float) -> void:
-	if _preview_model and _is_open and _selected_data:
-		_preview_spin += delta * 0.5
-		_preview_model.rotation.y = _preview_spin
+	UILayoutManager.layout_changed.connect(_fit_layout)
+	get_viewport().size_changed.connect(_fit_layout)
 
 func _load_buildings() -> void:
 	_all_buildings.clear()
@@ -135,34 +161,35 @@ func _get_filtered_buildings() -> Array:
 # ── UI Setup ──
 # ══════════════════════════════════════════════════════════════════════
 
+func _vp() -> Vector2:
+	return get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
+
 func _setup_ui() -> void:
+	_phone = CT.is_phone(_vp())
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
-	# Build button (bottom center)
+	# El boton CONSTRUIR del HUD (abajo en el centro). La barra de abajo es de
+	# otro frente: aqui solo se crea y se registra, como siempre.
 	_build_btn = Button.new()
 	_build_btn.name = "BuildButton"
-	# Gancho del tutorial guiado (frente de ayudas): resalta este boton.
 	_build_btn.add_to_group("hud_build_button")
 	_build_btn.text = Tr.t("BTN_BUILD_BIG")
 	_build_btn.tooltip_text = Tr.t("BTN_BUILD_HINT")
 	_build_btn.focus_mode = Control.FOCUS_NONE
-	# Grande y abajo en el centro: el pulgar llega en una tablet apaisada.
 	_build_btn.custom_minimum_size = Vector2(BUILD_BTN_W, BUILD_BTN_H)
 	UILayoutManager.apply_layout("ConstructionMenu.button", _build_btn)
 	UITheme.style_button(_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
-	# El primario del juego se distingue en reposo: metal mas claro y borde de
-	# laton, no el mismo verde apagado que cualquier boton.
 	_build_btn.add_theme_stylebox_override("normal", UITheme._button_style(
 		UITheme._metal_tint(UITheme.POSITIVE, 1.35), UITheme.POSITIVE, UITheme.ACCENT, 4))
 	_build_btn.pressed.connect(_open)
 	_root.add_child(_build_btn)
 	HudRegistry.register("ConstructionMenu.button", _build_btn)
 
-	# Backdrop
-	_backdrop = UITheme.make_backdrop()
+	# Velo sobre el mapa: tocarlo cierra.
+	_backdrop = CT.veil()
 	_backdrop.visible = false
 	_backdrop.gui_input.connect(func(e):
 		if e is InputEventMouseButton and e.pressed:
@@ -170,61 +197,59 @@ func _setup_ui() -> void:
 	)
 	_root.add_child(_backdrop)
 
-	# Main modal panel
-	_modal = PanelContainer.new()
-	UILayoutManager.apply_layout("ConstructionMenu.modal", _modal)
+	# La ventana: cinta verde CONSTRUIR y la X roja.
+	_win = CT.window(Tr.t("UI2C_BUILD_TITLE"), CT.sem("POSITIVE"))
+	_modal = _win["root"]
+	_modal.name = "BuildWindow"
 	_modal.visible = false
-	_modal.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
-	_modal.gui_input.connect(func(event):
+	(_win["close"] as Button).pressed.connect(_close)
+	(_win["close"] as Button).tooltip_text = Tr.t("UI2C_CLOSE")
+	(_win["panel"] as Control).gui_input.connect(func(event):
 		if event is InputEventMouseButton and event.pressed:
 			UIManager.focus_window(self)
 	)
 	_root.add_child(_modal)
+	UILayoutManager.apply_layout("ConstructionMenu.modal", _modal)
 
-	var main_vbox := VBoxContainer.new()
-	main_vbox.add_theme_constant_override("separation", 8)
-	_modal.add_child(main_vbox)
+	var body: VBoxContainer = _win["body"]
+	var main := HBoxContainer.new()
+	main.name = "BuildMain"
+	main.add_theme_constant_override("separation", 8 if _phone else CT.GAP + 4)
+	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(main)
 
-	# ── Header: title + search + close ──
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 10)
-	main_vbox.add_child(header)
+	# Carril de pestanas de categoria, a la izquierda.
+	_rail = VBoxContainer.new()
+	_rail.name = "CategoryRail"
+	_rail.add_theme_constant_override("separation", 6)
+	main.add_child(_rail)
+	_build_rail()
 
-	var title := UITheme.make_label(Tr.t("LBL_BUILDINGS_TITLE"), "title", UITheme.ACCENT)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title)
+	# La lista: una fila por edificio, en una columna que se arrastra con el dedo.
+	_grid_scroll = ScrollContainer.new()
+	_grid_scroll.name = "BuildList"
+	_grid_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_grid_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_grid_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main.add_child(_grid_scroll)
+	_grid_container = VBoxContainer.new()
+	_grid_container.add_theme_constant_override("separation", 6)
+	_grid_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_grid_scroll.add_child(_grid_container)
 
-	var search := LineEdit.new()
-	search.placeholder_text = Tr.t("LBL_SEARCH")
-	search.custom_minimum_size = Vector2(180, 32)
-	search.add_theme_font_size_override("font_size", UITheme.FONT_BODY)
-	UITheme.set_label_color(search, UITheme.TEXT)
-	search.add_theme_color_override("font_placeholder_color", UITheme.readable(UITheme.TEXT_DIM, UITheme.UI_BG_REFERENCE, 3.0))
-	var search_style := StyleBoxFlat.new()
-	search_style.bg_color = UITheme.BG_DARK
-	search_style.set_corner_radius_all(UITheme.CORNER)
-	search_style.set_content_margin_all(6)
-	search_style.border_color = UITheme.ACCENT_DIM
-	search_style.set_border_width_all(1)
-	search.add_theme_stylebox_override("normal", search_style)
-	var search_focus := search_style.duplicate()
-	search_focus.border_color = UITheme.ACCENT
-	search_focus.set_border_width_all(2)
-	search.add_theme_stylebox_override("focus", search_focus)
-	search.text_changed.connect(func(text):
-		_search_text = text
-		_refresh_grid()
-	)
-	header.add_child(search)
+	_build_detail(main)
+	_show_no_selection()
+	_refresh_grid()
+	_fit_layout()
 
-	header.add_child(UITheme.make_close_button(_close))
-
-	# ── Category tabs ──
-	var cat_bar := HBoxContainer.new()
-	cat_bar.add_theme_constant_override("separation", 4)
-	main_vbox.add_child(cat_bar)
-
-	var cat_labels := {
+## El carril: en telefono solo iconos (el nombre al mantener); en PC icono y
+## palabra. La elegida, verde y con labio.
+func _build_rail() -> void:
+	for child in _rail.get_children():
+		_rail.remove_child(child)
+		child.queue_free()
+	_cat_buttons.clear()
+	var names := {
 		"all": Tr.t("LBL_CAT_ALL"),
 		"production": Tr.t("LBL_CAT_PRODUCTION"),
 		"support": Tr.t("LBL_CAT_SUPPORT"),
@@ -232,207 +257,163 @@ func _setup_ui() -> void:
 		"decoration": Tr.t("LBL_CAT_DECORATION"),
 	}
 	for cat_id in CATEGORIES:
-		var btn := Button.new()
-		btn.text = cat_labels.get(cat_id, cat_id)
-		btn.custom_minimum_size = Vector2(0, 32)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var is_active: bool = cat_id == _current_category
-		UITheme.style_button(btn, filter_color(is_active), UITheme.FONT_SMALL)
-		var cid: String = cat_id  # capture
-		btn.pressed.connect(func(): _select_category(cid))
-		cat_bar.add_child(btn)
-		_cat_buttons[cat_id] = btn
+		var sel: bool = cat_id == _current_category
+		var t := CT.tab("" if _phone else String(names[cat_id]), String(CATEGORY_GLYPHS[cat_id]), sel, "window",
+			CT.sem("POSITIVE") if sel else Color(0, 0, 0, 0), 48 if _phone else CT.BTN)
+		t.name = "Cat_" + cat_id
+		t.tooltip_text = String(names[cat_id])
+		t.focus_mode = Control.FOCUS_NONE
+		if _phone:
+			t.custom_minimum_size = Vector2(52, 48)
+		else:
+			t.set_meta("min_w", 180.0)
+			t.custom_minimum_size.x = maxf(t.custom_minimum_size.x, 180.0)
+			t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var cid: String = cat_id
+		t.pressed.connect(func(): _select_category(cid))
+		_rail.add_child(t)
+		_cat_buttons[cat_id] = t
 
-	main_vbox.add_child(UITheme.make_separator())
+## La ficha de la derecha (PC). CONSTRUIR, MEJORAR UNO, el coste y el porque
+## van fuera del scroll: en tablet la ficha es mas alta que la ventana y el
+## boton quedaba fuera (QA flujo 04).
+func _build_detail(main: HBoxContainer) -> void:
+	_detail_column = VBoxContainer.new()
+	_detail_column.name = "DetailColumn"
+	_detail_column.custom_minimum_size = Vector2(DETAIL_W, 0)
+	_detail_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_detail_column.add_theme_constant_override("separation", 8)
+	main.add_child(_detail_column)
 
-	# ── Content: grid (left) + detail (right) ──
-	var content := HSplitContainer.new()
-	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.split_offset = 420
-	main_vbox.add_child(content)
-
-	# Left side: scrollable grid of building cards
-	_grid_scroll = ScrollContainer.new()
-	_grid_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_grid_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_grid_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	content.add_child(_grid_scroll)
-
-	_grid_container = GridContainer.new()
-	_grid_container.columns = 3
-	# Tantas columnas como quepan: con tres fijas quedaba media lista vacia y
-	# habia que desplazar para ver edificios que cabian de sobra.
-	_grid_scroll.resized.connect(_fit_columns)
-	_grid_container.add_theme_constant_override("h_separation", 6)
-	_grid_container.add_theme_constant_override("v_separation", 6)
-	_grid_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_grid_scroll.add_child(_grid_container)
-
-	# Right side: detail panel with 3D preview. The CONSTRUIR button sits below
-	# the scroll, always in sight: on a tablet the detail is taller than the
-	# window and the button used to end up scrolled off the bottom (QA flow 04).
-	var detail_column := VBoxContainer.new()
-	detail_column.name = "DetailColumn"
-	detail_column.custom_minimum_size = Vector2(320, 0)
-	detail_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail_column.add_theme_constant_override("separation", 8)
-	content.add_child(detail_column)
 	var detail_scroll := ScrollContainer.new()
-	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	detail_column.add_child(detail_scroll)
+	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_detail_column.add_child(detail_scroll)
 
 	_detail_panel = VBoxContainer.new()
 	_detail_panel.add_theme_constant_override("separation", 8)
 	_detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	detail_scroll.add_child(_detail_panel)
 
-	# 3D preview SubViewport
-	_preview_viewport = SubViewport.new()
-	_preview_viewport.size = Vector2i(300, 220)
-	_preview_viewport.transparent_bg = true
-	_preview_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_preview_viewport.world_3d = World3D.new()
-
-	_preview_camera = Camera3D.new()
-	_preview_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	_preview_camera.size = 6.0
-	# look_at_from_position works before the node is in the tree (plain look_at errors).
-	_preview_camera.look_at_from_position(Vector3(4.0, 4.5, 4.0), Vector3(0, 0.5, 0))
-	_preview_viewport.add_child(_preview_camera)
-
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-50, 30, 0)
-	light.light_energy = 1.3
-	_preview_viewport.add_child(light)
-
-	var fill_light := DirectionalLight3D.new()
-	fill_light.rotation_degrees = Vector3(-30, -150, 0)
-	fill_light.light_energy = 0.5
-	_preview_viewport.add_child(fill_light)
-
-	_preview_container = SubViewportContainer.new()
-	_preview_container.custom_minimum_size = Vector2(300, 220)
-	_preview_container.stretch = true
-	_preview_container.add_child(_preview_viewport)
-	# Border around preview
-	var preview_style := StyleBoxFlat.new()
-	preview_style.bg_color = UITheme.BG_DARK.darkened(0.4)
-	preview_style.set_corner_radius_all(UITheme.CORNER)
-	preview_style.border_color = UITheme.ACCENT_DIM
-	preview_style.set_border_width_all(1)
-	var preview_wrapper := PanelContainer.new()
-	preview_wrapper.add_theme_stylebox_override("panel", preview_style)
-	preview_wrapper.add_child(_preview_container)
+	# Miniatura: la foto del modelo (3D) o el dibujo del mapa (2D). Quieta.
+	var thumb_box := Control.new()
+	thumb_box.custom_minimum_size = Vector2(0, 120)
 	if _is_2d:
-		_preview_container.visible = false
 		_preview_icon = BuildingIcon2D.new()
-		_preview_icon.custom_minimum_size = Vector2(300, 220)
-		preview_wrapper.add_child(_preview_icon)
-	_detail_panel.add_child(preview_wrapper)
+		_preview_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		thumb_box.add_child(_preview_icon)
+	else:
+		_detail_thumb = TextureRect.new()
+		_detail_thumb.name = "DetailThumb"
+		_detail_thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_detail_thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_detail_thumb.set_anchors_preset(Control.PRESET_FULL_RECT)
+		thumb_box.add_child(_detail_thumb)
+	_detail_panel.add_child(CT.thumb_frame(thumb_box, Vector2(0, 120)))
 
-	# Detail labels
-	# El nombre; el tamano (todos 2x2 salvo la carretera) va en su tooltip.
-	_detail_name = UITheme.make_label("", "title", UITheme.TEXT_BRIGHT)
-	_detail_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# El nombre; la descripcion entera y el tamano, en su tooltip.
+	_detail_name = CT.label("", "title", CT.text("window"))
+	_detail_name.name = "DetailName"
 	_detail_name.mouse_filter = Control.MOUSE_FILTER_PASS
+	_detail_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_detail_panel.add_child(_detail_name)
-
-	# El coste, lo primero tras el nombre: es lo que decide si se puede. Iconos
-	# con su cifra y en rojo lo que falta, sin repetir "Costo:" ni los nombres.
-	_detail_cost = TextKit.cost_row({}, {}, "section", UITheme.WARNING)
-	_detail_cost.name = "DetailCost"
-	_detail_cost.alignment = FlowContainer.ALIGNMENT_CENTER
-	_detail_panel.add_child(_detail_cost)
-
-	_detail_panel.add_child(UITheme.make_separator())
-	# Nombre y coste arriba del todo; la vista previa, detras. En tableta la
-	# vista previa empujaba el coste fuera de la pantalla.
-	_detail_panel.move_child(preview_wrapper, _detail_panel.get_child_count() - 1)
+	# Una frase como mucho (docs/28 §9).
+	_detail_desc = CT.para("", "window", true)
+	_detail_desc.name = "DetailDesc"
+	_detail_panel.add_child(_detail_desc)
 
 	_detail_production = HBoxContainer.new()
 	_detail_production.name = "DetailProduction"
 	_detail_production.add_theme_constant_override("separation", 6)
+	_detail_production.mouse_filter = Control.MOUSE_FILTER_PASS
 	_detail_panel.add_child(_detail_production)
 
-	_detail_rule = UITheme.make_label("", "small", UITheme.INFO)
+	_detail_extras = HBoxContainer.new()
+	_detail_extras.name = "DetailExtras"
+	_detail_extras.add_theme_constant_override("separation", 14)
+	_detail_panel.add_child(_detail_extras)
+
+	_detail_rule = CT.para("", "window", true, "small")
 	_detail_rule.name = "DepositRule"
-	_detail_rule.autowrap_mode = TextServer.AUTOWRAP_WORD
-	# La regla de la carretera, entera, en el tooltip (y en la guia rapida).
 	_detail_rule.mouse_filter = Control.MOUSE_FILTER_PASS
 	_detail_panel.add_child(_detail_rule)
-
-	_detail_extras = UITheme.make_label("", "small", UITheme.TEXT_DIM)
-	_detail_extras.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_detail_panel.add_child(_detail_extras)
 
 	_detail_limit = HBoxContainer.new()
 	_detail_limit.name = "DetailLimit"
 	_detail_limit.visible = false
 	_detail_panel.add_child(_detail_limit)
 
-	# Por que no se puede (tope o era), en frase y no solo con la tarjeta apagada.
-	# Fuera del scroll, junto al boton (ronda 1.0: dentro quedaba bajo el borde a
-	# 1280x720 y solo se veia MEJORAR UNO, sin saber por que).
-	_detail_explain = UITheme.make_label("", "body", UITheme.WARNING)
+	# Lo que decide, fuera del scroll y junto al boton.
+	_detail_explain = CT.para("", "window", false, "small")
 	_detail_explain.name = "DetailExplain"
-	_detail_explain.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detail_explain.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_detail_explain.add_theme_color_override("font_color", CT.sem("WARNING").darkened(0.35))
 	_detail_explain.mouse_filter = Control.MOUSE_FILTER_PASS
 	_detail_explain.visible = false
-	detail_column.add_child(_detail_explain)
+	_detail_column.add_child(_detail_explain)
 
-	# Lo que impide construir, a la vista junto al boton (fuera del scroll).
-	_detail_block = UITheme.make_label("", "body", UITheme.DANGER)
+	_detail_block = CT.why_label()
 	_detail_block.name = "DetailBlock"
-	_detail_block.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_detail_block.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_detail_block.mouse_filter = Control.MOUSE_FILTER_PASS
-	_detail_block.visible = false
-	detail_column.add_child(_detail_block)
+	_detail_block.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_detail_column.add_child(_detail_block)
+
+	_detail_cost = CT.cost_strip({})
+	_detail_cost.name = "DetailCost"
+	_detail_column.add_child(_detail_cost)
 
 	# Con el tope lleno: lleva al de nivel mas bajo y abre su ficha para mejorarlo.
-	_detail_upgrade_one = Button.new()
+	_detail_upgrade_one = CT.pill_button(Tr.t("TOPE_BTN_UPGRADE_ONE"), "upgrade", "open", CT.h("btn"))
 	_detail_upgrade_one.name = "DetailUpgradeOne"
-	_detail_upgrade_one.text = Tr.t("TOPE_BTN_UPGRADE_ONE")
 	_detail_upgrade_one.tooltip_text = Tr.t("TOPE_BTN_UPGRADE_ONE_TIP")
-	_detail_upgrade_one.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H)
 	_detail_upgrade_one.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UITheme.style_button(_detail_upgrade_one, UITheme.INFO, UITheme.FONT_BODY)
 	_detail_upgrade_one.pressed.connect(_on_upgrade_one)
 	_detail_upgrade_one.visible = false
-	detail_column.add_child(_detail_upgrade_one)
+	_detail_column.add_child(_detail_upgrade_one)
 
-	# Build button (outside the scroll, see DetailColumn above)
-	_detail_build_btn = Button.new()
-	_detail_build_btn.text = Tr.t("BTN_BUILD")
-	_detail_build_btn.custom_minimum_size = Vector2(0, 48)
-	_detail_build_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UITheme.style_button(_detail_build_btn, UITheme.POSITIVE.darkened(0.1), UITheme.FONT_TITLE)
+	_detail_build_btn = CT.pill_button(Tr.t("BTN_BUILD"), "build", "primary", CT.h("big"))
 	_detail_build_btn.name = "DetailBuildButton"
+	_detail_build_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_detail_build_btn.pressed.connect(_on_build_pressed)
-	detail_column.add_child(_detail_build_btn)
+	_detail_column.add_child(_detail_build_btn)
 
-	# Initial state: show placeholder
-	_show_no_selection()
-	_refresh_grid()
+## Coloca la ventana: a pantalla completa en telefono; en PC donde diga su slot.
+## Si cambia de telefono a PC (o al reves) se rehacen el carril y las filas.
+func _fit_layout() -> void:
+	if _modal == null or not is_inside_tree():
+		return
+	var vp := _vp()
+	var ph := CT.is_phone(vp)
+	if ph:
+		CT.fit_fullscreen(_win)
+	else:
+		UILayoutManager.apply_layout("ConstructionMenu.modal", _modal)
+		CT.fit_desktop(_win)
+	_detail_column.visible = not ph and vp.x >= DETAIL_MIN_VP_W
+	if ph != _phone:
+		_phone = ph
+		_build_rail()
+		_grid_sig = []
+		_refresh_grid()
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Open / Close ──
 # ══════════════════════════════════════════════════════════════════════
 
+## Abre la lista (para la barra de abajo y el tutorial).
+func open() -> void:
+	if not _is_open:
+		_open()
+
 func _open() -> void:
 	_is_open = true
+	_fit_layout()
 	_modal.visible = true
 	_backdrop.visible = true
 	_refresh_grid()
 	_refresh_block()
-	set_process(true)
 	UIManager.open_panel(self)
 
 func _close() -> void:
 	_is_open = false
-	set_process(false)
 	_modal.visible = false
 	_backdrop.visible = false
 	UIManager.close_panel(self)
@@ -448,61 +429,37 @@ func _toggle_panel() -> void:
 # ── Category Selection ──
 # ══════════════════════════════════════════════════════════════════════
 
-## Color de categoria: solo la franja inferior de cada tarjeta (docs/24-paleta.md).
-var _cat_colors := {
-	"all": UITheme.ACCENT,
-	"production": UITheme.CAT_PRODUCTION,
-	"support": UITheme.CAT_SUPPORT,
-	"military": UITheme.CAT_MILITARY,
-	"decoration": UITheme.CAT_DECORATION,
-}
-
-## Fondo de un boton del filtro: todos iguales, el activo en laton. Antes cada
-## categoria tenia su color de boton y la barra parecia un arcoiris.
+## Fondo de un boton del filtro del estilo viejo (se conserva para quien lo use).
 static func filter_color(active: bool) -> Color:
 	return UITheme.ACCENT.darkened(0.55) if active else UITheme.BTN
 
 func _select_category(cat_id: String) -> void:
+	if cat_id == _current_category:
+		return
 	_current_category = cat_id
-	# Update button styles
-	for cid in _cat_buttons:
-		var btn: Button = _cat_buttons[cid]
-		var is_active: bool = cid == _current_category
-		UITheme.style_button(btn, filter_color(is_active), UITheme.FONT_SMALL)
+	_build_rail()
 	_refresh_grid()
+	_grid_scroll.scroll_vertical = 0
 
 # ══════════════════════════════════════════════════════════════════════
-# ── Grid (building cards) ──
+# ── La lista (una fila por edificio) ──
 # ══════════════════════════════════════════════════════════════════════
 
-## Estilos de las tarjetas desbloqueadas: id -> {"style": StyleBoxFlat, "cat": Color}.
-## Hace falta para marcar la seleccionada sin recrear la rejilla.
-var _card_styles: Dictionary = {}
-
-const CARD_W := 125.0
-const CARD_GAP := 6.0
-
-## Columnas de la rejilla para el ancho de la lista.
-static func columns_for(width: float) -> int:
-	return maxi(1, floori((width - 14.0 + CARD_GAP) / (CARD_W + CARD_GAP)))
-
-func _fit_columns() -> void:
-	if _grid_scroll != null and _grid_container != null:
-		_grid_container.columns = columns_for(_grid_scroll.size.x)
-
-## Tarjetas de la rejilla por id de edificio (HelpTargets las busca asi).
+## Filas por id de edificio (HelpTargets las busca asi) y lo que se repinta de
+## cada una sin rehacerla: {"cost", "full", "up", "hammer", "locked"}.
 var _cards: Dictionary = {}
-## Lo que decide como es cada tarjeta: [id, bloqueada, bloqueada por rango, con
-## miniatura]. Si no cambia, la rejilla no se recrea: solo se repintan costes.
+var _row_parts: Dictionary = {}
+## Lo que decide como es cada fila: [id, porque del candado, con miniatura].
+## Si no cambia, la lista no se rehace: solo se repintan costes y topes.
 var _grid_sig: Array = []
 
-## La tarjeta de `building_id` en la rejilla, o null. Para el tutorial.
+## La fila de `building_id`, o null. Para el tutorial.
 func card_for(building_id: String) -> Control:
 	var card: Control = _cards.get(building_id)
 	return card if card != null and is_instance_valid(card) else null
 
-## Una senal pide rehacer la rejilla: con la lista cerrada no se hace nada
-## (_open la pone al dia), abierta se hace una vez al final del fotograma.
+## Una senal pide rehacer la lista: cerrada no se hace nada (_open la pone al
+## dia), abierta se hace una vez al final del fotograma.
 var _grid_refresh_queued := false
 func _request_grid_refresh() -> void:
 	if not _is_open or _grid_refresh_queued:
@@ -516,14 +473,12 @@ func _flush_grid_refresh() -> void:
 		_refresh_grid()
 
 func _grid_signature(filtered: Array) -> Array:
-	var sig: Array = []
+	var sig: Array = [_phone]
 	for data in filtered:
-		var rank_locked := not Rules.check_rank(data.id)
-		sig.append([data.id, rank_locked or _has_locked_resource_cost(data), rank_locked,
-			_thumb_cache.has(data.id)])
+		sig.append([data.id, lock_reason(data), _thumb_cache.has(data.id)])
 	return sig
 
-## Rehace las tarjetas solo si cambia cuales hay o si alguna se bloquea o se
+## Rehace las filas solo si cambia cuales hay o si alguna se bloquea o se
 ## desbloquea; si no, deja las que hay y pone al dia su coste (docs/26 §6.9).
 func _refresh_grid() -> void:
 	var filtered := _get_filtered_buildings()
@@ -534,135 +489,182 @@ func _refresh_grid() -> void:
 		return
 	_grid_sig = sig
 	for child in _grid_container.get_children():
+		_grid_container.remove_child(child)
 		child.queue_free()
-	_card_styles.clear()
 	_cards.clear()
-
+	_row_parts.clear()
+	_thumb_rects.clear()
 	for data in filtered:
 		var card := _create_grid_card(data)
 		_grid_container.add_child(card)
 		_cards[data.id] = card
+	_update_card_costs()
 	_mark_selected_card()
 
+## Una fila: [miniatura] Nombre ........ [coste] [martillo]. Bloqueada, el
+## candado y su porque en el sitio del coste, y sin martillo.
 func _create_grid_card(data: BuildingData) -> PanelContainer:
-	# Bloqueado por rango del gobernador: candado y "Rango N" en vez del coste.
-	var rank_locked := not Rules.check_rank(data.id)
-	var locked := rank_locked or _has_locked_resource_cost(data)
-	var cat_color: Color = _cat_colors.get(_get_category(data), UITheme.ACCENT)
-
+	var reason := lock_reason(data)
+	var locked := reason != ""
 	var card := PanelContainer.new()
-	# El tutorial guiado busca la tarjeta por id, no por el nombre traducido.
+	# El tutorial busca la fila por id, no por el nombre traducido.
 	card.set_meta("building_id", data.id)
-	card.custom_minimum_size = Vector2(125, 110)
-	var style := StyleBoxFlat.new()
-	style.bg_color = UITheme.CARD_BG if not locked else UITheme.BTN_DISABLED
-	style.set_corner_radius_all(4)
-	style.set_content_margin_all(6)
-	style.border_width_bottom = 3
-	style.border_color = cat_color if not locked else UITheme.TEXT_DIM
-	card.add_theme_stylebox_override("panel", style)
+	card.set_meta("locked", locked)
+	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Alto de dedo; el ancho minimo solo hace que la fila se pueda tocar antes
+	# de que la lista tenga tamano (al abrir, y en las pruebas).
+	card.custom_minimum_size = Vector2(160, 48 if _phone else 60)
+	_style_row(card, false, locked, false)
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 3)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	card.add_child(vbox)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(row)
 
-	# Thumbnail
-	if _is_2d:
-		var icon: Control = BuildingIcon2D.new()
-		icon.custom_minimum_size = Vector2(64, 64)
-		icon.data = data
-		if locked:
-			icon.modulate = Color(0.4, 0.4, 0.4, 0.7)
-		vbox.add_child(icon)
-	elif _thumb_cache.has(data.id):
-		var tex_rect := TextureRect.new()
-		tex_rect.custom_minimum_size = Vector2(64, 64)
-		tex_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		tex_rect.texture = _thumb_cache[data.id]
-		if locked:
-			tex_rect.modulate = Color(0.4, 0.4, 0.4, 0.7)
-		_thumb_rects[data.id] = tex_rect
-		vbox.add_child(tex_rect)
+	row.add_child(_make_thumb(data, Vector2(52, 40) if _phone else Vector2(64, 48), locked))
+
+	var name_label := CT.label(data.get_display_name(), "button", CT.text("window", locked))
+	name_label.name = "RowName"
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(name_label)
+
+	if locked:
+		var lock := HBoxContainer.new()
+		lock.name = "RankLock" if not Rules.check_rank(data.id) else "LockReason"
+		lock.add_theme_constant_override("separation", 4)
+		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var g := CT.make_glyph("lock", 20)
+		g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		lock.add_child(g)
+		var why := CT.label(reason, "small", CT.text("window", true))
+		why.name = "RankLockLabel" if lock.name == "RankLock" else "LockLabel"
+		lock.add_child(why)
+		row.add_child(lock)
 	else:
-		var placeholder := ColorRect.new()
-		placeholder.custom_minimum_size = Vector2(64, 64)
-		placeholder.color = data.mesh_color if not locked else data.mesh_color.darkened(0.5)
-		vbox.add_child(placeholder)
+		# El coste, con lo que falta en rojo (y los trabajadores, si faltan).
+		var cost := CT.cost_strip({}, {}, "window", "", "number")
+		cost.name = "CardCost"
+		cost.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(cost)
+		# Lleno: una palabra en vez del coste, y el atajo para mejorar uno.
+		var full := CT.badge(Tr.t("TOPE_CARD_FULL"), CT.sem("WARNING"))
+		full.name = "CardFull"
+		full.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		full.visible = false
+		row.add_child(full)
+		var up := CT.pill_button("" if _phone else Tr.t("UI2C_BTN_UPGRADE_ONE_SHORT"), "upgrade", "open", 48 if _phone else CT.BTN_SMALL)
+		up.name = "RowUpgradeOne"
+		up.tooltip_text = Tr.t("TOPE_BTN_UPGRADE_ONE_TIP")
+		up.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		up.visible = false
+		up.pressed.connect(func():
+			_select_building(data)
+			_on_upgrade_one())
+		row.add_child(up)
+		# El martillo: elige y empieza a colocar.
+		var hammer := CT.pill_button("", "build", "primary", 48 if _phone else CT.BTN_SMALL)
+		hammer.name = "RowBuild"
+		hammer.tooltip_text = Tr.t("UI2C_BTN_BUILD_TIP")
+		hammer.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hammer.pressed.connect(func():
+			_select_building(data)
+			_on_build_pressed())
+		row.add_child(hammer)
+		_row_parts[data.id] = {"cost": cost, "full": full, "up": up, "hammer": hammer}
 
-	# Name
-	var name_label := UITheme.make_label(data.get_display_name(), "small", UITheme.TEXT if not locked else UITheme.TEXT_DIM)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	name_label.custom_minimum_size.x = 110
-	vbox.add_child(name_label)
+	card.tooltip_text = row_tooltip(data)
 
-	if rank_locked:
-		vbox.add_child(make_rank_lock_row(RankManager.building_rank(data.id)))
-
-	# El coste en la propia tarjeta: se ve sin elegir. Icono y cifra por recurso,
-	# y en rojo solo lo que falta (antes la linea entera en rojo, con nombres).
-	# Bloqueado por rango, la tarjeta ensena el candado en su lugar.
-	var cost := {} if rank_locked else Rules.cost_by_name(data)
-	if not cost.is_empty():
-		var cost_row := TextKit.cost_row(cost, {} if locked else Rules.missing_cost(data), "small",
-			UITheme.TEXT_DIM if locked else UITheme.WARNING)
-		cost_row.name = "CardCost"
-		cost_row.alignment = FlowContainer.ALIGNMENT_CENTER
-		cost_row.add_theme_constant_override("h_separation", 6)
-		cost_row.custom_minimum_size.x = 110
-		vbox.add_child(cost_row)
-
-	# Lo que da una vivienda, en la propia tarjeta: "+6 trabajadores".
-	if data.population_capacity > 0 and not data.is_core:
-		var gain := UITheme.make_label(Tr.t("LBL_CARD_WORKERS") % data.population_capacity, "small", UITheme.POSITIVE)
-		gain.name = "CardGain"
-		gain.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(gain)
-
-	# Cuantos hay y el tope de la era: "3/6 · era 2: 9". Sin tope, nada.
-	var limit_row := HBoxContainer.new()
-	limit_row.name = "CardLimit"
-	limit_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	fill_limit_row(limit_row, data.id, "small")
-	vbox.add_child(limit_row)
-	# Lleno: una palabra en la tarjeta ("Al máximo"); la frase entera, en el detalle.
-	var full_tag := UITheme.make_label(Tr.t("TOPE_CARD_FULL"), "small", UITheme.WARNING)
-	full_tag.name = "CardFull"
-	full_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	full_tag.visible = bool(limit_info(data.id).get("full", false))
-	vbox.add_child(full_tag)
-
-	# Interaction (A14): el hover solo RESALTA; la seleccion cambia solo con
-	# clic y queda bloqueada hasta el siguiente. Antes pasar el raton por otra
-	# tarjeta cambiaba la seleccion y el detalle saltaba de edificio en edificio.
-	#
-	# Se elige al SOLTAR dentro de la tarjeta: arrastrar la lista (DragScroll)
-	# empieza encima de una tarjeta y no puede elegirla. Las bloqueadas tambien
-	# se pueden tocar: el detalle dice que les falta (antes no pasaba nada, y el
-	# Cuartel General parecia roto).
-	_card_styles[data.id] = {"style": style, "cat": cat_color if not locked else UITheme.TEXT_DIM, "locked": locked}
+	# Se elige al SOLTAR dentro de la fila: arrastrar la lista (DragScroll)
+	# empieza encima de una fila y no puede elegirla. Las bloqueadas tambien se
+	# eligen: la ficha dice que les falta. El raton encima solo resalta (A14).
 	card.gui_input.connect(func(event):
 		if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT \
 				and Rect2(Vector2.ZERO, card.size.max(card.custom_minimum_size)).has_point(event.position):
 			_select_building(data)
 	)
-	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var base_bg: Color = UITheme.CARD_BG if not locked else UITheme.BTN_DISABLED
-	card.mouse_entered.connect(func():
-		if not _is_selected(data):
-			style.bg_color = base_bg.lightened(0.12)
-	)
-	card.mouse_exited.connect(func():
-		if not _is_selected(data):
-			style.bg_color = base_bg
-	)
-
+	if not locked:
+		card.mouse_entered.connect(func():
+			if not _is_selected(data):
+				_style_row(card, false, false, true)
+		)
+		card.mouse_exited.connect(func():
+			if not _is_selected(data):
+				_style_row(card, false, false, false)
+		)
 	return card
 
-## Candado dibujado + "Rango N". El candado se pinta (no es un emoji): la
-## tipografia del juego no lo tiene y el respaldo del sistema no esta en todos.
+## Estilo de una fila: normal, elegida (borde de laton), bloqueada (CARD_ALT) o
+## con el raton encima (un poco mas clara).
+func _style_row(card: PanelContainer, selected: bool, locked: bool, hover: bool) -> void:
+	var fill := CT.c("window", "CARD_ALT") if locked else Color(0, 0, 0, 0)
+	if hover and not locked:
+		fill = CT.c("window", "CARD").lightened(0.5)
+	var s := CT.card_style("window", selected, fill)
+	s.set_content_margin_all(3 if _phone else 6)
+	s.content_margin_right = 6 if _phone else 8
+	card.add_theme_stylebox_override("panel", s)
+
+## La miniatura de una fila: la foto del modelo (3D) o el dibujo del mapa (2D).
+func _make_thumb(data: BuildingData, px: Vector2, locked: bool) -> PanelContainer:
+	var content: Control
+	if _is_2d:
+		var icon: Control = BuildingIcon2D.new()
+		icon.data = data
+		content = icon
+	else:
+		var tex_rect := TextureRect.new()
+		tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex_rect.texture = _thumb_cache.get(data.id, null)
+		_thumb_rects[data.id] = tex_rect
+		content = tex_rect
+	var frame := CT.thumb_frame(content, px)
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if locked:
+		frame.modulate = Color(1, 1, 1, 0.45)
+	return frame
+
+## El porque corto de una fila que no se puede construir, o "" si se puede (con
+## o sin recursos): "Rango 4", "Era 2", "Falta Almacén", "Aún no". El tope lleno
+## no cuenta aqui: lo dice la etiqueta "Al máximo". Estatica para las pruebas.
+static func lock_reason(data: BuildingData) -> String:
+	if data == null:
+		return ""
+	if not Rules.check_rank(data.id):
+		return Tr.t("LBL_RANK_LOCK") % RankManager.building_rank(data.id)
+	if has_locked_resource_cost(data):
+		var era := HelpText.build_era(data)
+		if era > ProgressionManager.current_era:
+			return Tr.t("UI2C_BLD_ERA") % era
+		return Tr.t("UI2C_BLD_LOCKED")
+	if not Rules.check_prerequisites(data.id):
+		var names := Rules.missing_prerequisite_names(data.id).split(" + ")
+		return Tr.t("UI2C_BLD_NEEDS") % names[0]
+	return ""
+
+## Lo que se lee al mantener pulsada una fila: que es, su regla, su tope y, si
+## no se puede, por que (entero). Estatica para las pruebas.
+static func row_tooltip(data: BuildingData) -> String:
+	return _row_tooltip_of(data, Rules.purchase_block_detail(data))
+
+static func _row_tooltip_of(data: BuildingData, block: String) -> String:
+	var lines: Array = [data.get_description()]
+	var rule := PlacementAssistScript.rule_text(data.id)
+	if rule != "":
+		lines.append(rule)
+	var lim := limit_tooltip(data.id)
+	if lim != "":
+		lines.append(lim)
+	if block != "":
+		lines.append(block)
+	return "\n".join(lines)
+
+## Candado dibujado + "Rango N" (estilo viejo). Lo usan la Colonia y los
+## Regimientos; las filas de CONSTRUIR llevan el candado de CartoonIcon.
 static func make_rank_lock_row(rank: int) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "RankLock"
@@ -695,8 +697,7 @@ static func limit_info(building_id: String) -> Dictionary:
 	return info
 
 ## Cuantos hay de `building_id`, recordado mientras no cambie el mapa
-## (GridManager.map_version()): el refresco de costes llega con cada recurso que
-## cambia y contar recorre todos los edificios, carreteras incluidas.
+## (GridManager.map_version()).
 static var _count_version := -1
 static var _counts: Dictionary = {}
 static func _count_of(building_id: String) -> int:
@@ -737,7 +738,7 @@ static func _limit_tooltip_of(info: Dictionary) -> String:
 	return " ".join(lines)
 
 ## Rellena `row` con el icono de edificio y limit_text(); la esconde sin tope.
-## No rehace nada si el texto no cambio (se llama en cada refresco de costes).
+## No rehace nada si el texto no cambio.
 static func fill_limit_row(row: HBoxContainer, building_id: String, font_size: String) -> void:
 	var info := limit_info(building_id)
 	var text := _limit_text_of(info)
@@ -753,23 +754,20 @@ static func fill_limit_row(row: HBoxContainer, building_id: String, font_size: S
 		child.free()
 	if text == "":
 		return
-	row.add_theme_constant_override("separation", 4)
+	row.add_theme_constant_override("separation", 6)
 	row.tooltip_text = _limit_tooltip_of(info)
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
-	var color: Color = UITheme.WARNING if full else UITheme.TEXT_DIM
-	var icon := Control.new()
+	var color: Color = CT.sem("WARNING").darkened(0.35) if full else CT.text("window", true)
+	var icon := CT.make_glyph("build", 20)
 	icon.name = "LimitIcon"
-	icon.custom_minimum_size = Vector2(14, 14)
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon.draw.connect(func(): draw_building_glyph(icon, Rect2(Vector2.ZERO, icon.custom_minimum_size), color))
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(icon)
-	var label := UITheme.make_label(text, font_size, color)
+	var level := "small" if font_size == "small" else "body"
+	var label := CT.label(text, level, color)
 	label.name = "LimitLabel"
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(label)
 
-## Una casita: tejado a dos aguas y cuerpo con puerta. Se pinta (como el
-## candado): la tipografia no trae un icono de edificio.
+## Una casita: tejado a dos aguas y cuerpo con puerta (estilo viejo).
 static func draw_building_glyph(ci: CanvasItem, r: Rect2, color: Color) -> void:
 	var roof_h := r.size.y * 0.42
 	ci.draw_colored_polygon(PackedVector2Array([
@@ -783,7 +781,7 @@ static func draw_building_glyph(ci: CanvasItem, r: Rect2, color: Color) -> void:
 		r.size.x * 0.2, body.size.y * 0.6)
 	ci.draw_rect(door, UITheme.BG_DARK)
 
-## Un candado: arco del grillete y cuerpo con ojo de cerradura.
+## Un candado: arco del grillete y cuerpo con ojo de cerradura (estilo viejo).
 static func draw_lock(ci: CanvasItem, r: Rect2, color: Color) -> void:
 	var body := Rect2(r.position.x, r.position.y + r.size.y * 0.45, r.size.x, r.size.y * 0.55)
 	var shackle_c := Vector2(r.get_center().x, r.position.y + r.size.y * 0.45)
@@ -802,32 +800,31 @@ static func card_cost_text(data: BuildingData) -> String:
 func _is_selected(data: BuildingData) -> bool:
 	return _selected_data != null and _selected_data.id == data.id
 
-## Pinta la tarjeta elegida con marco de laton y fondo claro, y devuelve las
-## demas a su estado normal. Se llama al seleccionar y al reconstruir la rejilla.
+## La fila elegida con borde de laton; las demas, normales.
 func _mark_selected_card() -> void:
-	for id in _card_styles:
-		var entry: Dictionary = _card_styles[id]
-		var style: StyleBoxFlat = entry["style"]
+	for id in _cards:
+		var card: PanelContainer = _cards[id]
+		if not is_instance_valid(card):
+			continue
 		var selected: bool = _selected_data != null and _selected_data.id == id
-		var base_bg: Color = UITheme.BTN_DISABLED if bool(entry.get("locked", false)) else UITheme.CARD_BG
-		style.bg_color = base_bg.lightened(0.25) if selected else base_bg
-		style.set_border_width_all(2 if selected else 0)
-		style.border_width_bottom = 3
-		style.border_color = UITheme.ACCENT if selected else entry["cat"]
+		_style_row(card, selected, bool(card.get_meta("locked", false)), false)
 
 # ══════════════════════════════════════════════════════════════════════
-# ── Detail Panel (right side) ──
+# ── Ficha del elegido ──
 # ══════════════════════════════════════════════════════════════════════
 
 func _show_no_selection() -> void:
 	_selected_data = null
 	_detail_name.text = Tr.t("LBL_SELECT_BUILDING")
 	_detail_name.tooltip_text = ""
-	TextKit.fill_cost_row(_detail_cost, {})
+	_detail_desc.text = ""
+	_detail_desc.visible = false
+	CT.fill_cost_strip(_detail_cost, {})
 	_fill_production({}, 0)
-	_detail_extras.text = ""
+	_fill_extras(null)
 	fill_limit_row(_detail_limit, "", "small")
 	_detail_rule.text = ""
+	_detail_rule.visible = false
 	_detail_block.visible = false
 	_detail_explain.visible = false
 	_detail_upgrade_one.visible = false
@@ -838,15 +835,14 @@ func _select_building(data: BuildingData) -> void:
 	if _selected_data == data:
 		return
 	_selected_data = data
-	_preview_spin = 0.0
 	_mark_selected_card()
 
-	# Nombre; el tamano y la descripcion, en su tooltip.
+	# Nombre; el tamano y la descripcion entera, en su tooltip.
 	_detail_name.text = data.get_display_name()
 	_detail_name.tooltip_text = "%dx%d · %s" % [data.grid_size.x, data.grid_size.y, data.get_description()]
-
-	# Coste: fila de iconos (el rojo de lo que falta lo pone _refresh_block).
-	_refresh_cost()
+	_detail_desc.text = first_sentence(data.get_description())
+	_detail_desc.tooltip_text = data.get_description()
+	_detail_desc.visible = _detail_desc.text != ""
 
 	# Produccion: "+6 [madera] cada 12 s".
 	var prod := {}
@@ -854,52 +850,39 @@ func _select_building(data: BuildingData) -> void:
 		if int(pair[1]) > 0:
 			prod[pair[0]] = int(pair[1])
 	_fill_production(prod, data.production_interval)
+	_fill_extras(data)
 
-	# Regla del yacimiento (PlacementAssist.rule_text): se dice aqui, no al
-	# fallar. La de la carretera, en corto; entera en el tooltip.
+	# Regla del yacimiento y de la carretera, en corto; entera en el tooltip.
 	var rule := PlacementAssistScript.rule_text(data.id)
-	var rules: Array = []
-	if rule != "":
-		rules.append("▲ " + rule)
-	if not data.is_core and data.id != "road":
-		rules.append("▲ " + Tr.t("LBL_RULE_ROAD_SHORT"))
-	_detail_rule.text = "\n".join(rules)
+	_detail_rule.text = rule
 	_detail_rule.tooltip_text = Tr.t("LBL_RULE_ROAD") if not data.is_core and data.id != "road" else ""
-	_detail_rule.visible = not rules.is_empty()
+	_detail_rule.visible = rule != ""
 
-	# Extras, en una linea: trabajadores, alojamiento, moral y requisitos.
-	_detail_extras.text = " · ".join(extras_parts(data))
-
-	# Build button, y lo que lo impide si algo lo impide
 	_detail_build_btn.visible = true
 	_refresh_block()
-
-	# 3D preview
 	_load_preview_model(data)
 
+## La primera frase de un texto (docs/28 §9: una frase como mucho).
+static func first_sentence(text: String) -> String:
+	var t := text.strip_edges()
+	for i in t.length():
+		if t[i] in [".", "!", "?"] and (i == t.length() - 1 or t[i + 1] == " "):
+			return t.substr(0, i + 1)
+	return t
+
 func _load_preview_model(data: BuildingData) -> void:
-	_clear_preview_model()
 	if _is_2d:
-		_preview_icon.data = data
+		if _preview_icon != null:
+			_preview_icon.data = data
 		return
-	if data.model_scene:
-		_preview_model = data.instantiate_model()
-	else:
-		_preview_model = DieselpunkBuildingFactory.create(data.id, GridManager.cell_size, data.grid_size)
-	if not _preview_model:
-		return
-	_preview_viewport.add_child(_preview_model)
-	# Adjust camera to fit building
-	var max_dim := maxf(data.grid_size.x, data.grid_size.y) * GridManager.cell_size
-	_preview_camera.size = max_dim * 2.8
-	_preview_spin = 0.0
+	if _detail_thumb != null:
+		_detail_thumb.texture = _thumb_cache.get(data.id, null)
 
 func _clear_preview_model() -> void:
 	if _preview_icon:
 		_preview_icon.data = null
-	if _preview_model and is_instance_valid(_preview_model):
-		_preview_model.queue_free()
-		_preview_model = null
+	if _detail_thumb != null:
+		_detail_thumb.texture = null
 
 ## Lo que impide construir el elegido: se dice y el boton no deja empezar a
 ## colocar algo que luego no se puede pagar.
@@ -907,7 +890,6 @@ func _refresh_block() -> void:
 	if _selected_data == null:
 		_detail_block.visible = false
 		return
-	# En corto junto al boton; entero (como se desbloquea cada cosa) en el tooltip.
 	var block := Rules.purchase_block_detail(_selected_data)
 	var explain := explain_lines(_selected_data)
 	_detail_explain.text = "\n".join(explain)
@@ -938,8 +920,7 @@ static func explain_lines(data: BuildingData) -> Array:
 	out.append_array(HelpText.locked_lines(data))
 	return out
 
-## Las razones cortas de siempre, sin las que ya dice explain_lines() en frase
-## (el "Límite alcanzado (5/5)" y el "Bloqueado: acero").
+## Las razones cortas de siempre, sin las que ya dice explain_lines() en frase.
 static func block_lines_without_explained(data: BuildingData, explained: bool) -> Array:
 	var lines: Array = Rules.block_reasons_short(data)
 	if not explained:
@@ -970,15 +951,17 @@ func _on_upgrade_one() -> void:
 	_close()
 	HelpText.focus_and_select(get_viewport(), node)
 
-## La fila del coste del elegido, con lo que falta en rojo. Gratis lo dice.
+## El coste del elegido, con lo que falta en rojo. Gratis lo dice.
 func _refresh_cost() -> void:
 	if _selected_data == null:
-		TextKit.fill_cost_row(_detail_cost, {})
+		CT.fill_cost_strip(_detail_cost, {})
 		return
 	var cost := Rules.cost_by_name(_selected_data)
-	TextKit.fill_cost_row(_detail_cost, cost, Rules.missing_cost(_selected_data), "section", UITheme.WARNING)
-	if cost.is_empty():
-		_detail_cost.add_child(UITheme.make_label(Tr.t("LBL_FREE"), "section", UITheme.POSITIVE))
+	CT.fill_cost_strip(_detail_cost, cost, Rules.missing_cost(_selected_data))
+	if cost.is_empty() and _detail_cost.get_child_count() == 0:
+		var free := CT.label(Tr.t("LBL_FREE"), "button", CT.positive_text())
+		_detail_cost.add_child(free)
+		_detail_cost.remove_meta("strip_sig")
 
 ## "+6 [madera] cada 12 s", o nada si no produce.
 func _fill_production(prod: Dictionary, interval: float) -> void:
@@ -988,9 +971,27 @@ func _fill_production(prod: Dictionary, interval: float) -> void:
 	_detail_production.visible = not prod.is_empty()
 	if prod.is_empty():
 		return
-	_detail_production.add_child(TextKit.cost_inline(prod, {}, "body", UITheme.POSITIVE, "+"))
+	_detail_production.add_child(CT.cost_strip(prod, {}, "window", "+", "number", CT.positive_text()))
 	if interval > 0:
-		_detail_production.add_child(UITheme.make_label(Tr.t("FMT_EVERY") % TextKit.short_time(interval), "body", UITheme.POSITIVE))
+		var every := CT.label(Tr.t("FMT_EVERY") % TextKit.short_time(interval), "body", CT.text("window", true))
+		_detail_production.add_child(every)
+
+## Trabajadores que pide, alojamiento y moral que da: fichas de cifra con su
+## nombre debajo (el requisito va en el porque, no aqui).
+func _fill_extras(data: BuildingData) -> void:
+	for child in _detail_extras.get_children():
+		_detail_extras.remove_child(child)
+		child.free()
+	if data == null:
+		_detail_extras.visible = false
+		return
+	if data.workers_required > 0:
+		_detail_extras.add_child(CT.stat_chip("res:workers", str(data.workers_required), Tr.t("UI2C_CHIP_WORK"), "window"))
+	if data.population_capacity > 0:
+		_detail_extras.add_child(CT.stat_chip("res:workers", "+%d" % data.population_capacity, Tr.t("UI2C_CHIP_ROOM"), "window"))
+	if data.morale_bonus > 0:
+		_detail_extras.add_child(CT.stat_chip("res:morale", "+%d" % data.morale_bonus, Tr.t("UI2C_CHIP_MORALE"), "window"))
+	_detail_extras.visible = _detail_extras.get_child_count() > 0
 
 ## Lo que pide y lo que da, en piezas cortas: "2 trabajadores", "+6 trabajadores",
 ## "+5 moral", "Requiere: Fundicion". Estatica y publica para las pruebas.
@@ -1021,26 +1022,34 @@ func _flush_costs() -> void:
 		_refresh_block()
 		_update_card_costs()
 
-## El coste de cada tarjeta desbloqueada, con lo que falta en rojo. TextKit no
-## rehace la fila si no cambio nada.
+## El coste de cada fila (con lo que falta en rojo), el tope lleno, el atajo de
+## mejorar y el martillo. Cada pieza no se rehace si no cambio.
 func _update_card_costs() -> void:
-	for card in _grid_container.get_children():
-		if card.is_queued_for_deletion():
+	var free_workers: int = PopulationManager.get_free_workers()
+	for id in _row_parts:
+		var parts: Dictionary = _row_parts[id]
+		var card: Control = _cards.get(id)
+		if card == null or not is_instance_valid(card) or card.is_queued_for_deletion():
 			continue
-		var row := card.find_child("CardCost", true, false) as HFlowContainer
-		var id := String(card.get_meta("building_id", ""))
-		# El tope cambia con lo construido y con la era, este o no bloqueada.
-		var limit_row := card.find_child("CardLimit", true, false) as HBoxContainer
-		if limit_row != null:
-			fill_limit_row(limit_row, id, "small")
-		var full_tag := card.find_child("CardFull", true, false) as Label
-		if full_tag != null:
-			full_tag.visible = bool(limit_info(id).get("full", false))
-		if row == null or not _card_styles.has(id) or bool(_card_styles[id].get("locked", false)):
+		var data: BuildingData = _data_by_id(String(id))
+		if data == null:
 			continue
-		var data: BuildingData = _data_by_id(id)
-		if data != null:
-			TextKit.fill_cost_row(row, Rules.cost_by_name(data), Rules.missing_cost(data), "small", UITheme.WARNING)
+		var full := HelpText.is_full(data.id)
+		var cost := Rules.cost_by_name(data)
+		var short := Rules.missing_cost(data)
+		if data.workers_required > 0 and free_workers < data.workers_required:
+			cost["workers"] = data.workers_required
+			short["workers"] = data.workers_required - free_workers
+		CT.fill_cost_strip(parts["cost"], cost, short)
+		(parts["cost"] as Control).visible = not full
+		(parts["full"] as Control).visible = full
+		(parts["up"] as Control).visible = full and Rules.upgrade_does_something(data) \
+			and HelpText.lowest_upgradable(data.id) != null
+		var hammer: Button = parts["hammer"]
+		hammer.visible = not full
+		var block := Rules.purchase_block_detail(data)
+		hammer.disabled = block != ""
+		card.tooltip_text = _row_tooltip_of(data, block)
 
 func _data_by_id(id: String) -> BuildingData:
 	for data in _all_buildings:
@@ -1049,7 +1058,7 @@ func _data_by_id(id: String) -> BuildingData:
 	return null
 
 func _on_build_pressed() -> void:
-	if _selected_data and not _detail_build_btn.disabled:
+	if _selected_data and Rules.purchase_block_detail(_selected_data) == "":
 		EventBus.building_selected_for_placement.emit(_selected_data)
 		_close()
 
@@ -1057,16 +1066,19 @@ func _on_build_pressed() -> void:
 # ── Helpers ──
 # ══════════════════════════════════════════════════════════════════════
 
-func _has_locked_resource_cost(data: BuildingData) -> bool:
-	# Cualquier recurso o material del coste que aun no este en el juego.
+## Cualquier recurso o material del coste que aun no este en el juego.
+static func has_locked_resource_cost(data: BuildingData) -> bool:
 	var cost := data.get_cost()
 	for type in cost:
 		if not ResourceManager.is_unlocked(type) and ResourceManager.get_amount(type) < int(cost[type]):
 			return true
 	return false
 
+func _has_locked_resource_cost(data: BuildingData) -> bool:
+	return has_locked_resource_cost(data)
+
 # ══════════════════════════════════════════════════════════════════════
-# ── Thumbnail Generation (background, for grid cards) ──
+# ── Thumbnail Generation (background, for the rows) ──
 # ══════════════════════════════════════════════════════════════════════
 
 func _generate_thumbnails() -> void:
@@ -1101,9 +1113,8 @@ func _generate_thumbnails() -> void:
 		await _render_thumbnail(viewport, camera, data)
 
 	viewport.queue_free()
-	# Las miniaturas que no llegaron a tiempo a su tarjeta: la firma de la
-	# rejilla cambia y la proxima vez que se abra (o ya, si esta abierta) se
-	# rehace con ellas.
+	# Las miniaturas que no llegaron a tiempo a su fila: la firma de la lista
+	# cambia y la proxima vez que se abra (o ya, si esta abierta) se rehace.
 	_request_grid_refresh()
 
 func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingData) -> void:
@@ -1128,17 +1139,19 @@ func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingDa
 
 	if _thumb_rects.has(data.id) and is_instance_valid(_thumb_rects[data.id]):
 		_thumb_rects[data.id].texture = tex
+	if _selected_data != null and _selected_data.id == data.id and _detail_thumb != null:
+		_detail_thumb.texture = tex
 
 	model.queue_free()
 
-## El boton CONSTRUIR del HUD, para pruebas.
 ## Id del edificio elegido en la lista ("" si ninguno). Para el tutorial.
 func selected_building_id() -> String:
 	return String(_selected_data.id) if _selected_data != null and _is_open else ""
 
-## El CONSTRUIR del detalle (el que empieza a colocar). Para el tutorial.
+## El CONSTRUIR de la ficha (el que empieza a colocar). Para el tutorial.
 func detail_build_button() -> Button:
 	return _detail_build_btn
 
+## El boton CONSTRUIR del HUD, para pruebas.
 func build_button() -> Button:
 	return _build_btn

@@ -109,8 +109,8 @@ static func row_amounts(row: Control) -> Dictionary:
 	var out := {}
 	if row == null:
 		return out
-	for chip in row.get_children():
-		for child in chip.get_children():
-			if child is Label and String(child.name).begins_with("Amount_"):
-				out[String(child.name).substr(7)] = (child as Label).text
+	# Recorre a cualquier profundidad: las filas del estilo nuevo
+	# (CartoonTheme.cost_strip) meten la cifra dentro de una ficha con fondo.
+	for child in row.find_children("Amount_*", "Label", true, false):
+		out[String(child.name).substr(7)] = (child as Label).text
 	return out

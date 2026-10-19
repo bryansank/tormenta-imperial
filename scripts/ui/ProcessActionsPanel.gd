@@ -12,6 +12,7 @@ class_name ProcessActionsPanel
 ## se saca a mano (mas lentos: GameConfig.core_process_time_mult).
 
 const TextKit := preload("res://scripts/ui/TextKit.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 const ProcessCard := preload("res://scripts/ui/ProcessCard.gd")
 const MapGeneratorScript := preload("res://scripts/map/MapGenerator.gd")
 
@@ -51,14 +52,13 @@ func _init(processes_box: VBoxContainer, progress_container: VBoxContainer,
 ## Hasta ahora no habia boton: la unica forma de parar algo era demoler el
 ## edificio entero, y se perdia el 100% sin decirlo.
 func _build_cancel_controls() -> void:
-	_rate_label = UITheme.make_label("", "small", UITheme.TEXT_DIM)
-	_rate_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_rate_label = CT.why_label()
+	_rate_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_progress_container.add_child(_rate_label)
 
-	_cancel_btn = Button.new()
-	_cancel_btn.text = Tr.t("BTN_CANCEL")
-	_cancel_btn.custom_minimum_size = Vector2(0, UITheme.touch_px(30.0))
-	UITheme.style_button(_cancel_btn, UITheme.DANGER.darkened(0.2))
+	# Cancelar: rojo (quita), con lo que devuelve escrito en el propio boton.
+	_cancel_btn = CT.text_pill(Tr.t("BTN_CANCEL"), "danger", CT.h("small"), "window", "body")
+	_cancel_btn.name = "CancelProcess"
 	_cancel_btn.pressed.connect(_on_cancel_pressed)
 	_progress_container.add_child(_cancel_btn)
 
@@ -95,7 +95,7 @@ func populate_building(node: Node, data: BuildingData, is_constructing: bool) ->
 		_add_core_groups(node, processes)
 	else:
 		for proc in processes:
-			_add_process_card(proc, node, UITheme.ACCENT)
+			_add_process_card(proc, node, Color(0, 0, 0, 0))
 	if is_constructing:
 		set_buttons_disabled(true)
 	update_progress(node, false, data)
@@ -108,11 +108,11 @@ func _add_core_groups(node: Node, processes: Array) -> void:
 		var in_group: Array = processes.filter(func(p): return String(p.get("core_group", "own")) == gid)
 		if in_group.is_empty():
 			continue
-		var header := UITheme.make_label(Tr.t(String(group[1])), "small", UITheme.TEXT_DIM)
+		var header := CT.section(Tr.t(String(group[1])), {"own": "build", "workshop": "wrench", "hand": "res:workers"}.get(gid, ""))
 		header.name = "CoreGroup_" + gid
 		_processes_box.add_child(header)
 		var accent: Color = UITheme.ACCENT if gid == "own" else (
-			UITheme.POSITIVE if gid == "hand" else UITheme.INFO)
+			CT.sem("POSITIVE") if gid == "hand" else CT.sem("INFO"))
 		for proc in in_group:
 			_add_process_card(proc, node, accent, _from_tip(proc))
 
@@ -131,9 +131,9 @@ func _from_tip(proc: Dictionary) -> String:
 func populate_deposit(node: Node, deposit_id: String) -> void:
 	clear()
 	if not GameConfig.is_deposit_unlocked(deposit_id):
-		var locked_label := UITheme.make_label(Tr.t("LBL_DEPOSIT_LOCKED"), "small", UITheme.DANGER)
-		locked_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		locked_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		var locked_label := CT.why_label()
+		locked_label.text = Tr.t("LBL_DEPOSIT_LOCKED")
+		locked_label.visible = true
 		_processes_box.add_child(locked_label)
 		_count += 1
 		_progress_container.visible = false
@@ -189,7 +189,6 @@ func _update_cancel_text(node: Node) -> void:
 	_rate_label.text = Tr.t("LBL_CANCEL_RATE_STORM") % pct if stormy else ""
 	_rate_label.visible = stormy
 	_cancel_btn.tooltip_text = Tr.t("LBL_CANCEL_RATE_STORM") % pct if stormy else Tr.t("LBL_CANCEL_RATE") % pct
-	UITheme.set_label_color(_rate_label, UITheme.DANGER)
 
 func set_buttons_disabled(disabled: bool) -> void:
 	_busy = disabled
@@ -220,7 +219,7 @@ static func process_card_text(proc: Dictionary) -> String:
 
 func _add_mining_card(mining: Dictionary, node: Node, deposit_id: String) -> void:
 	var card: PanelContainer = ProcessCard.new()
-	card.setup(mining, ProcessCard.Kind.DEPOSIT, node, UITheme.POSITIVE)
+	card.setup(mining, ProcessCard.Kind.DEPOSIT, node, Color(0, 0, 0, 0))
 	card.batch_requested.connect(func(n: int): _start_mining(node, deposit_id, n))
 	_processes_box.add_child(card)
 	_cards.append(card)

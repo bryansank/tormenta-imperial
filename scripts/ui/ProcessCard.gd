@@ -18,6 +18,7 @@ extends PanelContainer
 ## al dia, y el panel la llama con cuentagotas (no cada fotograma).
 
 const TextKit := preload("res://scripts/ui/TextKit.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 signal batch_requested(count: int)
 
@@ -36,7 +37,12 @@ var _last_busy := false
 
 ## `proc` es la definicion ya escalada (ProcessManager.get_processes_for o
 ## get_mining_info). `node` es el edificio o la veta. `from_tip` es un texto extra
-## para el tooltip (de donde viene un proceso del Nucleo).
+## para el tooltip (de donde viene un proceso del Nucleo). `accent` tine el borde
+## de la tarjeta (los grupos del Nucleo).
+##
+## Estilo nuevo (docs/28, fase 2): tarjeta crema con borde grueso, el coste y el
+## producto en fichas hundidas ([madera] 20 → [+5 tablones]) y los lotes como
+## pastillas: x1 verde (la accion), x5 y MAX en crema.
 func setup(proc: Dictionary, kind: int, node: Node, accent: Color, from_tip: String = "") -> void:
 	_proc = proc
 	_kind = kind
@@ -51,7 +57,7 @@ func setup(proc: Dictionary, kind: int, node: Node, accent: Color, from_tip: Str
 	tooltip_text = tip
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
+	box.add_theme_constant_override("separation", 6)
 	box.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(box)
 
@@ -60,67 +66,70 @@ func setup(proc: Dictionary, kind: int, node: Node, accent: Color, from_tip: Str
 	top.add_theme_constant_override("separation", 8)
 	top.mouse_filter = Control.MOUSE_FILTER_PASS
 	box.add_child(top)
-	var title := UITheme.make_label(Tr.t(String(proc.get("name", ""))), "body", UITheme.TEXT_BRIGHT)
+	var title := CT.label(Tr.t(String(proc.get("name", ""))), "button", CT.text("window"))
 	title.name = "Title"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(title)
-	var time := UITheme.make_label(TextKit.short_time(float(proc.get("duration", 0.0))), "small", UITheme.TEXT_DIM)
+	var clock := CT.make_glyph("clock", 18)
+	clock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top.add_child(clock)
+	var time := CT.label(TextKit.short_time(float(proc.get("duration", 0.0))), "small", CT.text("window", true))
 	time.name = "Time"
-	time.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(time)
 	if _workers() > 0:
 		var workers := HBoxContainer.new()
 		workers.name = "Workers"
 		workers.add_theme_constant_override("separation", 2)
 		workers.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		workers.add_child(UITheme.make_icon("workers", TextKit.ICON_PX))
-		var wl := UITheme.make_label(str(_workers()), "small", UITheme.TEXT_DIM)
-		wl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		workers.add_child(wl)
+		var wi := UITheme.make_icon("workers", 20)
+		wi.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		workers.add_child(wi)
+		workers.add_child(CT.label(str(_workers()), "small", CT.text("window", true)))
 		top.add_child(workers)
 
-	# Fila 2: lo que cuesta → lo que sale, en iconos. Una fila que se parte por
-	# piezas enteras si el panel es estrecho.
+	# Fila 2: lo que cuesta → lo que sale, en fichas. Se parte por piezas
+	# enteras si el panel es estrecho.
 	var flow := HFlowContainer.new()
 	flow.name = "Yield"
-	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("h_separation", 6)
+	flow.add_theme_constant_override("v_separation", 4)
 	flow.mouse_filter = Control.MOUSE_FILTER_PASS
 	box.add_child(flow)
 	var cost: Dictionary = proc.get("cost", {})
 	if not cost.is_empty():
-		var cost_row := TextKit.cost_inline(cost, {}, "body", UITheme.TEXT)
+		var cost_row := CT.cost_strip(cost)
 		cost_row.name = "Cost"
 		flow.add_child(cost_row)
-		var arrow := UITheme.make_label("→", "body", UITheme.TEXT_DIM)
-		arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var arrow := CT.make_glyph("next", 18, CT.text("window", true))
+		arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		flow.add_child(arrow)
-	var out_row := TextKit.cost_inline(proc.get("produces", {}), {}, "body", UITheme.POSITIVE, "+")
+	var out_row := CT.cost_strip(proc.get("produces", {}), {}, "window", "+", "number", CT.positive_text())
 	out_row.name = "Produces"
 	flow.add_child(out_row)
 
 	# Fila 3: por que no se puede (oculta si se puede).
-	_block_label = UITheme.make_label("", "small", UITheme.DANGER)
+	_block_label = CT.why_label()
 	_block_label.name = "Block"
-	_block_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_block_label.visible = false
+	_block_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	box.add_child(_block_label)
 
-	# Fila 4: los lotes. Del tamano de un dedo en tablet.
+	# Fila 4: los lotes. Del tamano de un dedo.
 	var buttons := HBoxContainer.new()
 	buttons.name = "Batch"
 	buttons.add_theme_constant_override("separation", 6)
 	box.add_child(buttons)
+	var first := true
 	for n in GameConfig.process_batch_sizes:
 		var size_n: int = int(n)
-		var btn := _make_batch_button(Tr.t("BTN_BATCH_N") % size_n, UITheme.BTN)
+		var btn := _make_batch_button(Tr.t("BTN_BATCH_N") % size_n, "primary" if first else "secondary")
+		first = false
 		btn.name = "Batch_%d" % size_n
 		btn.tooltip_text = Tr.t("LBL_BATCH_TIP") % size_n
 		btn.pressed.connect(func(): batch_requested.emit(size_n))
 		buttons.add_child(btn)
 		_size_buttons[size_n] = btn
-	_max_btn = _make_batch_button(Tr.t("BTN_BATCH_MAX") % 0, UITheme.ACCENT_DIM)
+	_max_btn = _make_batch_button(Tr.t("BTN_BATCH_MAX") % 0, "secondary")
 	_max_btn.name = "BatchMax"
 	_max_btn.size_flags_stretch_ratio = 1.6
 	_max_btn.tooltip_text = Tr.t("LBL_BATCH_MAX_TIP") % GameConfig.process_batch_max
@@ -128,24 +137,17 @@ func setup(proc: Dictionary, kind: int, node: Node, accent: Color, from_tip: Str
 	buttons.add_child(_max_btn)
 	refresh(false)
 
-func _make_batch_button(text: String, bg: Color) -> Button:
-	var btn := Button.new()
-	btn.text = text
+func _make_batch_button(text: String, kind_s: String) -> Button:
+	var btn := CT.text_pill(text, kind_s, CT.h("small"))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.custom_minimum_size = Vector2(0, UITheme.touch_px(34.0))
-	UITheme.style_button(btn, bg)
 	return btn
 
 func _card_style(accent: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = UITheme.CARD_BG
-	s.set_corner_radius_all(4)
-	s.border_color = accent
-	s.border_width_left = 4
+	var s := CT.card_style("window")
+	if accent.a > 0.0 and accent != UITheme.ACCENT:
+		s.border_color = accent
+	s.set_content_margin_all(8)
 	s.content_margin_left = 10
-	s.content_margin_right = 8
-	s.content_margin_top = 6
-	s.content_margin_bottom = 6
 	return s
 
 func _workers() -> int:
@@ -174,7 +176,7 @@ func refresh(busy: bool) -> void:
 	_last_max = mx
 	_last_block = block
 	_last_busy = busy
-	_block_label.text = ("✖ " + Tr.t(block)) if block != "" else ""
+	_block_label.text = Tr.t(block) if block != "" else ""
 	_block_label.visible = block != "" and not busy
 	var off := busy or block != ""
 	for n in _size_buttons:
