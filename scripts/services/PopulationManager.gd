@@ -285,6 +285,7 @@ func _tick_growth() -> void:
 
 func _on_building_completed(node: Node) -> void:
 	_recalculate_all()
+	_move_in(node)
 
 ## Tramo a tramo del auto-road, el recuento entero (nucleo, red, vetas, todos
 ## los edificios) se repetia por cada tramo. Dentro de una tanda solo se apunta.
@@ -303,8 +304,46 @@ func _on_placement_batch_finished(_count: int) -> void:
 func _on_building_demolished(_node: Node, _cell: Vector2i) -> void:
 	_recalculate_all()
 
-func _on_upgrade_completed(_node: Node, _new_level: int) -> void:
+func _on_upgrade_completed(node: Node, _new_level: int) -> void:
 	_recalculate_all()
+	_move_in(node)
+
+## Una vivienda recien terminada (obra o mejora) se llena de golpe (decision de
+## Bryan, 2026-10-19: "tardan en aparecer cuando genero una casa"). Antes la
+## gente llegaba de uno en uno, +1 por tic de crecimiento, y una Casa tardaba
+## unos dos minutos en llenarse. Ahora llega toda la que cabe en ella, hasta el
+## tope de la isla; el goteo de _tick_growth queda para recuperar a los que se
+## pierden (hambre, accidentes, desercion, Diezmo). Con la moral bajo el umbral
+## de crecimiento no llega nadie de golpe: siguen viniendo de uno en uno cuando
+## se recupere. Una mejora cuenta su sitio entero, no solo el extra: durante la
+## obra la casa no da sitio y los suyos se quedan fuera; al terminar vuelven
+## ellos y los nuevos. Sin carretera la vivienda no da sitio y nadie entra.
+## Nada que guardar: la gente que entra es poblacion como cualquier otra.
+func _move_in(node: Node) -> void:
+	if node == null or not is_instance_valid(node) or node.has_meta("under_construction"):
+		return
+	var info := GridManager.get_building_info(node)
+	if info.is_empty():
+		return
+	var data: BuildingData = info.get("data")
+	if data == null or data.is_core or data.population_capacity <= 0:
+		return
+	if not bool(node.get_meta("connected", true)):
+		return
+	var regrowing: bool = _population < GameConfig.population_regrow_floor
+	if _morale < GameConfig.morale_growth_threshold and not regrowing:
+		return
+	var lvl: int = int(node.get_meta("level", 1))
+	var room: int = int(data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, lvl))
+	var gain: int = mini(room, _max_population - _population)
+	if gain <= 0:
+		return
+	_population += gain
+	_restaff()
+	EventBus.population_changed.emit(_population, _max_population)
+	EventBus.residents_arrived.emit(node, gain)
+	# A un lado del "¡Construccion completa!" para no pisarlo.
+	FloatingText.spawn_on(node, Tr.t("FMT_WORKERS_ARRIVED") % gain, UITheme.POSITIVE, 1.6)
 
 ## Reparte de nuevo los puestos cuando cambia la gente. Sin edificios en la
 ## rejilla no hay puestos que repartir (y recalcular dejaria el aforo en cero).

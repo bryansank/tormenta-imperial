@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**140 signals** in 30 categories (counted on 2026-10-18, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**141 signals** in 30 categories (2026-10-19: + `residents_arrived`; counted on 2026-10-18, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -170,9 +170,14 @@ through a won Final Audit — HQ level 3 summons the siege, it does not win.
 | `morale_changed` | `new_morale: int` | PopulationManager | NotificationPanel, SkirmishPanel |
 | `consumption_failed` | `resource: String` | PopulationManager | TutorialManager |
 | `population_starved` | `deaths: int, population: int` | PopulationManager | *(no listener)* |
+| `residents_arrived` | `home: Node, count: int` | PopulationManager | WorkerWalkers |
 
 `population_starved` reports a famine that actually killed: `deaths` is how many
 died, `population` what is left afterwards (never below the floor).
+
+`residents_arrived` fires when a finished house (construction or upgrade) fills at
+once: `count` is how many came in. The new street figures walk out of `home`
+(docs/04).
 
 ## Army
 

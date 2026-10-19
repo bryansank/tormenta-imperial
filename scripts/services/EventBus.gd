@@ -146,6 +146,11 @@ signal consumption_failed(resource: String)
 ## de verdad, `population` lo que queda despues (nunca por debajo del suelo).
 @warning_ignore("unused_signal")
 signal population_starved(deaths: int, population: int)
+## Una vivienda recien terminada (obra o mejora) recibe a su gente de golpe.
+## `count` es cuanta entro de verdad (lo que cabia). La escuchan los caminantes,
+## que hacen salir de esa casa a los recien llegados.
+@warning_ignore("unused_signal")
+signal residents_arrived(home: Node, count: int)
 
 # ── Army ──
 @warning_ignore("unused_signal")
