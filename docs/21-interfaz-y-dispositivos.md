@@ -538,8 +538,12 @@ que la interfaz:
 - **Sin pulsar.** Al salir la burbuja, el botón recibe un "soltar" lejos de todo
   control (el mismo truco que `DragScroll`): no se dispara y no se queda hundido. El
   soltar del ratón emulado al levantar el dedo se come.
-- **Con DragScroll.** Arrastrar una lista manda ese soltar-lejos: el gesto lo ve y se
-  cancela, aunque `DragScroll` se quede los movimientos.
+- **Con DragScroll.** Dentro de una lista, `DragScroll` retiene la pulsación del ratón
+  hasta saber si es un toque o un desplazamiento (2026-10-19). Si la lista empieza a
+  moverse, llama a `cancel_hold()` y el globo no sale. Si sale el globo, el gesto de la
+  lista se olvida (`DragScroll.cancel_gesture()`) y al botón se le quita también el
+  toque (`DragScroll.touch_cancel_events`: en Godot 4.7 los botones atienden
+  `InputEventScreenTouch` y se dispararían al levantar el dedo).
 - **La burbuja.** Estilo `UITheme.make_hud_card_style`, texto "body" (sigue el tamaño
   de texto de Ajustes), 360 px de ancho máximo con ajuste de línea, centrada sobre el
   dedo y 56 px por encima (debajo si no cabe), nunca fuera de la pantalla
