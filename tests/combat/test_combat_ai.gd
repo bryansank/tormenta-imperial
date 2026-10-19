@@ -100,8 +100,10 @@ func test_it_finishes_off_a_rival_it_can_kill_this_turn() -> void:
 	assert_int(plan[0]["target"]).is_equal(dying.uid)
 
 func test_the_target_guard_counts_before_calling_it_a_kill() -> void:
-	# El mismo tablero, pero la moribunda esta en guardia: la defensa se dobla,
-	# el dano ya no la mata y la IA vuelve a morder al vehiculo, que es lo caro.
+	# La moribunda esta en guardia: la defensa se dobla y el dano ya no la mata.
+	# El unico remate de verdad es el vehiculo, al que le quedan 3 de vida, y a
+	# ese va. (Hasta la 1.0 este test pedia "morder al vehiculo, que es lo caro";
+	# con la IA de la 1.1 lo caro no cuenta, cuenta el golpe: CombatAI.shot_worth.)
 	var enemy := _unit("infantry", ENEMY)
 	var armour := _unit("vehicle", PLAYER)
 	var dying := _unit("infantry", PLAYER)
@@ -110,13 +112,27 @@ func test_the_target_guard_counts_before_calling_it_a_kill() -> void:
 	armour.position = Vector2i(4, 5)
 	dying.position = Vector2i(3, 4)
 	dying.hp = 5
+	armour.hp = 3                                  # dano 8-5 = 3: cae
 	dying.defending = true                         # dano 8-4 = 4 < 5: sobrevive
+	# Sin ventaja por tipo: aqui se mira solo la guardia (con ella, la infanteria
+	# evitaria al vehiculo, que es su mal objetivo: ver test_type_advantage.gd).
+	var saved: Dictionary = GameConfig.combat_type_advantage["beats"]
+	GameConfig.combat_type_advantage["beats"] = {}
+	var enemies: Array = [armour, dying]
+	var guarded: Dictionary = AIScript._context(e, enemy, enemies)["lethal"]
 	var plan := AIScript.plan_turn(e, enemy.uid)
+	dying.defending = false
+	var open: Dictionary = AIScript._context(e, enemy, enemies)["lethal"]
+	GameConfig.combat_type_advantage["beats"] = saved
+	assert_bool(guarded[dying.uid]).is_false()
+	assert_bool(open[dying.uid]).is_true()
 	assert_int(plan[plan.size() - 1]["target"]).is_equal(armour.uid)
 
-func test_without_a_finishing_blow_it_bites_the_most_valuable_rival() -> void:
-	# Nadie cae este turno: entonces pesa el poder. El vehiculo tiene mas HP que
-	# la infanteria, asi que "el mas debil" habria elegido lo contrario.
+func test_without_a_finishing_blow_it_bites_where_the_hit_counts_most() -> void:
+	# Nadie cae este turno: entonces pesa el valor del golpe (CombatAI.shot_worth,
+	# 1.1): la parte de la vida que se lleva por la amenaza del rival. El vehiculo
+	# vale mas `power` (65 contra 10), que es lo que antes decidia, pero 3 de 200
+	# no le hacen nada; 6 de 100 a la infanteria si.
 	var enemy := _unit("infantry", ENEMY)
 	var armour := _unit("vehicle", PLAYER)
 	var escort := _unit("infantry", PLAYER)
@@ -124,9 +140,54 @@ func test_without_a_finishing_blow_it_bites_the_most_valuable_rival() -> void:
 	enemy.position = Vector2i(4, 4)
 	armour.position = Vector2i(4, 5)
 	escort.position = Vector2i(3, 4)
+	var saved: Dictionary = GameConfig.combat_type_advantage["beats"]
+	GameConfig.combat_type_advantage["beats"] = {}
+	var allies: Array = [enemy]
+	assert_bool(AIScript.shot_worth(enemy, escort, allies) > AIScript.shot_worth(enemy, armour, allies)).is_true()
 	var plan := AIScript.plan_turn(e, enemy.uid)
+	GameConfig.combat_type_advantage["beats"] = saved
 	assert_array(_actions(plan)).is_equal(["attack"])
-	assert_int(plan[0]["target"]).is_equal(armour.uid)
+	assert_int(plan[0]["target"]).is_equal(escort.uid)
+
+func test_a_rival_that_cannot_hurt_us_is_worth_nothing() -> void:
+	# La amenaza: un bombardero no puede pegar a un caza, asi que para el caza no
+	# urge nada (valor 0) aunque el golpe le quite vida.
+	var fighter := _unit("fighter", PLAYER)
+	var bomber := _unit("bomber", ENEMY)
+	assert_float(AIScript.threat_of(bomber, [fighter])).is_equal(0.0)
+	assert_float(AIScript.shot_worth(fighter, bomber, [fighter])).is_equal(0.0)
+	assert_float(AIScript.threat_of(fighter, [bomber])).is_greater(0.0)
+
+func test_a_tank_breaks_the_gun_and_does_not_chase_the_airship() -> void:
+	# El caso del asedio (docs/17): un blindado con un dirigible encima y un canon
+	# al lado. Con el `power` mordia al dirigible (55 contra 28) y le arañaba 8 de
+	# 260 mientras el canon le hacia 14; ahora va a por el canon.
+	var tank := _unit("vehicle", PLAYER)
+	var airship := _unit("airship", ENEMY)
+	var gun := _unit("artillery", ENEMY)
+	var e := _encounter([tank, airship, gun])
+	tank.position = Vector2i(4, 4)
+	airship.position = Vector2i(4, 4)        # encima: distancia 1 entre capas
+	gun.position = Vector2i(3, 4)
+	var plan := AIScript.plan_turn(e, tank.uid)
+	assert_int(plan[plan.size() - 1]["target"]).is_equal(gun.uid)
+
+func test_with_nothing_in_reach_it_heads_for_the_rival_that_matters() -> void:
+	# Sin tiro este turno, el blindado no camina hacia lo mas cercano sino hacia
+	# el rival que mas vale descontado por los turnos que tarda en llegar: un
+	# canon a tres turnos antes que un dirigible a dos al que apenas araña.
+	var tank := _unit("vehicle", PLAYER)     # move 4, range 1
+	var airship := _unit("airship", ENEMY)
+	var gun := _unit("artillery", ENEMY)
+	var e := _encounter([tank, airship, gun])
+	tank.position = Vector2i(0, 0)
+	airship.position = Vector2i(0, 6)        # a 6: dos turnos
+	gun.position = Vector2i(7, 3)            # a 10: tres turnos
+	var plan := AIScript.plan_turn(e, tank.uid)
+	assert_str(String(plan[0]["action"])).is_equal("move")
+	var to: Vector2i = plan[0]["to"]
+	# Gasta su movimiento entero en acercarse al canon (de 10 a 6).
+	assert_int(Rules.manhattan(to, gun.position)).is_equal(6)
 
 func test_at_equal_value_it_picks_the_one_with_less_hp() -> void:
 	var enemy := _unit("infantry", ENEMY)

@@ -545,3 +545,265 @@ ejecución de los tests.
 Para medir un cambio, lo único que hace falta es tocar el valor en
 `GameConfig.gd` y volver a correrla. Un barrido completo de 200 semillas tarda
 unos minutos.
+
+---
+
+## Ventaja por tipo (2026-10-13, rama `feat/combate-3d`)
+
+Artilleria > vehiculo > infanteria > artilleria, x1,5 / x0,75 sobre el dano neto
+(`GameConfig.combat_type_advantage`, docs/15 §3). Danos netos con la regla (sin
+borradores ni moral):
+
+| Ataca \ recibe | infanteria | artilleria | vehiculo |
+|---|---|---|---|
+| infanteria | 6 | **11** (x1,5) | 2 (x0,75) |
+| artilleria | 9 (x0,75) | 13 | **14** (x1,5) |
+| vehiculo | **15** (x1,5) | 8 (x0,75) | 7 |
+
+Medido con `tools/balance_probe.gd` (`-- --adv=off` para el antes), 200
+semillas por celda: el barrido de encuentros y expediciones se mueve poco. En
+era 1 no cambia nada (solo infanteria contra infanteria). En las celdas de era
+3 con plantilla mixta el ganar% se mueve unos puntos arriba o abajo (p. ej. era
+3, profundidad 5, riesgo medio, plantilla 4: 79 % -> 78 %; riesgo alto,
+plantilla 3: 42 % -> 32 %; plantilla 4: 73 % -> 75 %). Ninguna celda pasa a
+trivial ni a imposible. Las tablas completas salen con
+`-- --only=expeditions` y `-- --adv=off`; cuadrarlas con la rama de balance al
+integrar.
+
+---
+
+## Aire y mar (2026-10-17, rama `feat/aire-mar-reglas`) — medido en la ronda de la 1.1
+
+Seis unidades nuevas (estadisticas en docs/15 §8, reglas en §11). Se eligieron a
+ojo sobre la escala de las tres de tierra: la vida de los barcos y del dirigible
+alarga los encuentros de costa unas rondas, y los cruces tienen el mismo ×1,5 /
+×0,75. Danos netos de los emparejamientos que mas pesan (sin moral ni cartas):
+
+| Ataca -> recibe | Dano | Por que |
+|---|---|---|
+| caza -> bombardero | 17 (11 ×1,5) | el caza es el antiaereo |
+| caza -> dirigible | 12 (8 ×1,5) | 260 de vida: hacen falta varios cazas o tiempo |
+| bombardero -> tanque | 20 (13 ×1,5) | lo pesado cae ante las bombas |
+| bombardero -> acorazado | 18 (12 ×1,5) | |
+| lancha -> acorazado | 14 (9 ×1,5) | el acorazado tiene 280 de vida |
+| acorazado -> canonera | 20 (13 ×1,5) | |
+| canonera -> infanteria | 15 (10 ×1,5) | a 3 casillas desde el agua |
+| dirigible -> infanteria | 12 (8 ×1,5) | |
+| infanteria -> dirigible | 4 | solo a 1 casilla |
+| tanque -> dirigible | 8 | solo a 1 casilla |
+
+Lo que no se toco: las tres unidades de tierra, el circulo de tierra, la escala
+del enemigo y los tableros sin agua (identicos a antes: lo fija
+`tests/combat/test_air_sea_rules.gd`).
+
+**Pendiente (ronda final) — hecho, ver "Medido" abajo:** la sonda (`tools/balance_probe.gd`) no compone aun
+columnas con barcos o aviones ni tableros de costa. Medir antes de dar por buenos
+los numeros: (1) expedicion al Puerto en era 2 con 4 de tierra y con 2 de tierra
++ 2 lanchas/canoneras; (2) era 3 con 2 cazas + 2 bombarderos + 2 tanques contra
+el jefe con acorazado; (3) que ningun encuentro de costa pase de las 20 rondas
+(el dirigible y el acorazado son esponjas). Las palancas: la vida de
+`dreadnought` y `airship`, y `combat_coastal_raid_chance`.
+
+### Medido: misiones de costa (ronda de la 1.1, `integracion/v1.1-aire-mar`)
+
+`tools/balance_probe.gd -- --only=coast` juega ofertas de costa enteras (la
+expedición al Puerto, 3 combates, y las incursiones piratas, 1) con el jugador
+"jugado" (cartas y salidas como `_measure_expeditions`), cada combate sobre el
+terreno de su nodo, y una fila de referencia con la misma salida tierra adentro.
+120 ofertas por fila, plantillas de 4 (6 la última):
+
+**Antes** (lo de la rama: los barcos se sumaban si no sobraba un infante; el jefe
+de era 3 traía cañonera **y** acorazado):
+
+| Era | Salida | Plantilla | Gana | Nodos |
+|---|---|---|---|---|
+| 2 | tierra adentro (ref.) | 2 inf + 2 art | 100 % | 3,00 |
+| 2 | Puerto | 2 inf + 2 art | **1 %** | 2,01 |
+| 2 | Puerto | 2 tierra + 2 cañoneras | 67 % | 2,67 |
+| 3 | tierra adentro (ref.) | inf + art + 2 tanques | 90 % | 2,90 |
+| 3 | Puerto | inf + art + 2 tanques | **0 %** | 1,99 |
+| 3 | Puerto | 2 tanques + 2 cañoneras / + 2 lanchas / + 2 cazas | **0 % / 0 % / 0 %** | 2,00 |
+| 3 | Puerto | 2 tanques + 2 bombarderos | 100 % | 3,00 |
+
+Siempre caían en el jefe (nodos = 2): el jefe ya lleva la escolta recortada
+(`combat_expedition_boss_escort_cut`) y los barcos se la devolvían con creces; el
+acorazado enemigo (280 de vida × el jefe, alcance 4, gana al tanque y a la
+cañonera) solo caía ante bombarderos. Probado: el acorazado entrando por el
+tanque del jefe seguía en 0 % sin bombarderos.
+
+**Después** (`ExpeditionGenerator.add_ships`: UN barco por combate, en el sitio de
+un cuerpo —un infante si sobra, si no un cañón—; era 3, cañonera también el jefe;
+sin acorazado enemigo en las salidas):
+
+| Era | Salida | Plantilla | Gana | Bajas | Rondas (máx) | >20 r | Min |
+|---|---|---|---|---|---|---|---|
+| 2 | Puerto | 2 inf + 2 art | 83 % | 2,71 | 6,3 (15) | 0 % | 5,9 |
+| 2 | Puerto | 2 tierra + 2 lanchas | 5 % | 3,95 | 6,4 (15) | 0 % | 5,5 |
+| 2 | Puerto | 2 tierra + 2 cañoneras | 99 % | 1,00 | 5,0 (11) | 0 % | 5,4 |
+| 2 | piratas | las tres | 100 % | 0 | 4-5 | 0 % | 1,5-1,7 |
+| 3 | Puerto | inf + art + 2 tanques | 47 % | 3,25 | 9,5 (19) | 0 % | 7,9 |
+| 3 | Puerto | 2 tanques + 2 cañoneras | 70 % | 1,96 | 7,3 (18) | 0 % | 7,3 |
+| 3 | Puerto | 2 tanques + 2 lanchas | 0 % | 3,90 | 8,7 (20) | 0 % | 5,9 |
+| 3 | Puerto | 2 tanques + 2 bombarderos | 100 % | 0,40 | 5,0 (8) | 0 % | 5,3 |
+| 3 | Puerto | 2 tanques + 2 cazas | 82 % | 1,73 | 8,1 (20) | 0 % | 7,9 |
+| 3 | Puerto | 2 tanq + 2 cazas + 2 bomb | 100 % | 0,28 | 3,9 (6) | 0 % | 6,3 |
+| 3 | piratas | todas | 100 % | 0-1 | 3-8 | 0 % | 1,7-2,6 |
+
+Lectura: el Puerto pide flota (con cañoneras o aviones gana más que con solo
+tierra) sin cerrarse a quien no la tiene; ningún combate de costa pasa de 20
+rondas (el miedo era el acorazado y el dirigible como esponjas). Las **lanchas**
+salen mal en las dos eras: 90 de vida y defensa 1, su único papel es el
+acorazado, que ya no sale en las salidas; queda **pendiente** darles algo (o
+dejar que el Puerto de era 3 traiga un acorazado cuando la IA no se ceba con los
+objetivos duros, ver docs/17 "Aire y mar"). Los **bombarderos** pasan por encima
+de todo en la costa (100 % con 0,3-0,4 bajas): a vigilar cuando se mida la
+campaña entera.
+
+Tests: `tests/combat/test_air_sea_missions.gd` (un barco por combate, en el
+sitio de un cuerpo; jefe con cañonera; sin acorazado enemigo).
+
+Repetir (autoload temporal `BalanceProbe`, ver la cabecera de la sonda):
+
+    godot --headless --path . -- --only=coast --no-dev
+
+
+### La IA nueva y el reequilibrio de lanchas y bombarderos (1.1; medido en la ronda final, abajo)
+
+**Qué cambió** (decisión de Bryan, `integracion/v1.1-aire-mar`):
+
+- **IA** (docs/15 §8 "La IA"): el objetivo ya no se elige por el `power` sino por
+  el valor del golpe, `CombatAI.shot_worth` = (daño / vida que le queda) ×
+  amenaza del objetivo para los nuestros ^ `combat_ai_threat_weight` (1,0). Sin
+  tiro, la unidad va al rival de más valor descontado por turnos de camino. Vale
+  para los dos bandos, también en tierra pura.
+- **Lancha torpedera**: vida 90 → **120**, defensa 1 → **2**, alcance 1 → **2**
+  (alcanza la orilla y la primera fila de tierra desde el agua). Coste igual.
+- **Bombardero**: ataque 18 → **14**, vida 110 → **95**, oro 260 → **300**.
+
+Daños netos que cambian (sin moral ni cartas):
+
+| Ataca -> recibe | Antes | Ahora |
+|---|---|---|
+| bombardero -> tanque | 20 | 14 (9 ×1,5) |
+| bombardero -> artillería | 26 | 20 (13 ×1,5) |
+| bombardero -> cañonera | 23 | 17 (11 ×1,5) |
+| bombardero -> acorazado | 18 | 12 (8 ×1,5) |
+| bombardero -> infantería | 16 | 12 |
+| infantería -> lancha | 7 | 6 |
+| artillería -> lancha | 13 | 12 |
+| cañonera -> lancha | 17 (11 ×1,5) | 15 (10 ×1,5) |
+
+**Antes** (lo que hay que batir; tabla "Medido" de arriba, IA vieja): lanchas 5 %
+(era 2, 2 tierra + 2 lanchas) y 0 % (era 3, 2 tanques + 2 lanchas);
+bombarderos 100 % con 0,3-0,4 bajas.
+
+**Ronda final — qué medir y con qué objetivo** (`tools/balance_probe.gd`, autoload
+temporal, `override.cfg` propio; `--only=coast`, que ya trae las filas de 4 de un
+tipo + 2 de tierra y las de acorazados y dirigibles del jugador):
+
+    godot --headless --path . -- --only=coast --no-dev
+    godot --headless --path . -- --only=coast --no-dev --threat_w=0   # sensibilidad de la IA
+
+1. **Costa por unidad**: en su terreno típico (Puerto de su era, "2 tierra + 4 X" /
+   "2 tanques + 4 X"), **ninguna < 30 % ni > 90 %**; mirar también las filas 2+2.
+   Si la lancha sigue baja: vida 120 → 140 o ataque 15 → 17. Si el bombardero
+   sigue > 90 %: vida 95 → 85 o que la cañonera le pegue a 2 (`targets`).
+   Ningún combate de costa > 20 rondas.
+2. **Tierra pura** (IA nueva frente a la vieja): las filas "tierra(ref)" de la
+   costa (salida tierra adentro, era 2 y 3) y `--only=expeditions` (eras 1-3,
+   plantillas 3/4/6). Que no se desplomen ni se disparen respecto a §6.2 y a la
+   tabla "Medido" (era 2 ref. 100 %, era 3 ref. 90 %). Si cambian mucho, tocar
+   `combat_ai_threat_weight` (0 / 0,5 / 1), no las estadísticas de tierra.
+3. La rebaja de misiones de costa de la ronda anterior (un barco por combate, sin
+   acorazado enemigo) se mantiene salvo que la IA nueva lo cambie.
+
+Para medir la IA vieja como "antes" en tierra pura: `git show e00f696:scripts/combat/CombatAI.gd`
+sobre una copia temporal (sin commitear) y la misma sonda.
+
+### Ronda final de la 1.1 (2026-10-18): IA nueva frente a la vieja, en tierra
+
+`tools/balance_probe.gd -- --exp-seeds=100` (autoload temporal, `override.cfg`
+propio). La IA vieja es `e00f696:scripts/combat/CombatAI.gd` puesta encima en una
+copia sin commitear (la elección por `power`); la nueva, la de la rama
+(`shot_worth`, peso 1,0). Mismos valores de combate en las dos.
+
+**Encuentros sueltos** (los ATAQUES RÁPIDOS son esto: un combate), media sobre
+profundidad 0-6 y riesgo, 200 semillas por celda:
+
+| Era / plantilla | Vieja: gana | Nueva: gana | Vieja: bajas | Nueva: bajas |
+|---|---|---|---|---|
+| era 1, 3 | 100 % | 100 % | 0,00 | 0,76 |
+| era 1, 4 | 100 % | 100 % | 0,00 | 0,76 |
+| era 1, 6 | 100 % | 100 % | 0,10 | 0,76 |
+| era 2, 3 | 64 % | 64 % | 1,28 | 1,74 |
+| era 2, 4 | 93 % | 96 % | 0,91 | 1,12 |
+| era 2, 6 | 100 % | 100 % | 0,31 | 0,47 |
+| era 3, 3 | 46 % | 37 % | 2,16 | 2,43 |
+| era 3, 4 | 85 % | 88 % | 1,23 | 1,79 |
+| era 3, 6 | 100 % | 100 % | 0,20 | 0,97 |
+
+Duración igual (2,7-4,1 min por combate). Lo que cambia es el precio: el enemigo
+ya no reparte golpes entre lo "caro" y remata al que tiene tocado, así que
+**cuesta más bajas** (en era 1, de 0 a 0,76 por combate, siempre ganando).
+
+**Expedición larga** (6-8 nodos sin curar; hoy solo la usan tests y sondas, el
+tablón la sustituyó por la Campaña de Tierra), jugador "jugado", 100 semillas:
+
+| Era / plantilla | Vieja | Nueva |
+|---|---|---|
+| era 1, 4 | 56 % | 12 % |
+| era 1, 6 | 100 % | 96 % |
+| era 2, 6 | 51 % | 47 % |
+| era 3, 6 | 2 % | 0 % |
+
+La atrición se nota donde se arrastra de nodo en nodo sin cura (era 1 con 4).
+
+**Asedio**, mismos valores de hoy (×1,14, dirigible, sin escolta, 4 torres, moral
+100): IA vieja 6 vehículos **13,5 %**, 6 veh + 2 cazas 13 %, 5 vehículos 0 %;
+IA nueva 82,5 % / 65 % / 40 % (docs/17 "Ronda final"). Ahí la vieja perseguía al
+dirigible con los blindados.
+
+**Decisión:** `combat_ai_threat_weight` se queda en **1,0** (0 y 2 dan peor
+asedio: 60 % y 68 %, docs/17). Los ataques rápidos ganan lo mismo con más bajas;
+la expedición larga ya no está en el tablón y las tres campañas están calibradas
+con la IA nueva (docs/15 §13 "Medido"). No se tocan estadísticas de tierra.
+
+### Ronda final: costa por unidad (misiones mixtas, hoy apagadas)
+
+`-- --only=coast --coast-seeds=60` (la sonda enciende `combat_mixed_missions_enabled`
+solo para medir: en el juego las misiones mixtas son futuro, docs/15 §13). IA nueva,
+lancha y bombardero reequilibrados:
+
+| Era | Destino | Plantilla | Gana | Bajas |
+|---|---|---|---|---|
+| 2 | Puerto | 4 tierra | 0 % | 3,98 |
+| 2 | Puerto | 2 tierra + 2 lanchas | 90 % (antes 5 %) | 2,08 |
+| 2 | Puerto | 2 tierra + 2 cañoneras | 100 % | 1,38 |
+| 2 | Puerto | 2 tierra + 4 lanchas / 4 cañoneras | 100 % / 100 % | 0,65 / 0,27 |
+| 3 | Puerto | 4 tierra | 17 % | 3,62 |
+| 3 | Puerto | 2 tanques + 2 lanchas | 12 % (antes 0 %) | 3,72 |
+| 3 | Puerto | 2 tanques + 2 cañoneras | 88 % | 1,67 |
+| 3 | Puerto | 2 tanques + 2 cazas | 62 % | 2,82 |
+| 3 | Puerto | 2 tanques + 2 bombarderos | 100 % | 0,80 |
+| 3 | Puerto | 2 tanques + 4 de cualquiera | 100 % | 0,12-2,78 |
+| 2-3 | Piratas (1 combate) | todas | 100 % | 0-1,8 |
+
+La lancha deja de ser inútil en la era 2; en la era 3 con solo dos, no. Con cuatro
+de un tipo todo pasa del 90 %, y el bombardero sigue al 100 % con menos de una baja.
+**No se toca**: estas misiones están apagadas, y cambiar estadísticas de barcos o
+aviones movería las tres campañas, ya calibradas. Cuando las mixtas vuelvan: el
+bombardero (vida 95 → 85, o que la cañonera le pegue a 2) y el Puerto con "4 X".
+
+### Ronda final: heridos en la defensa y previsión de fuerza (2026-10-19)
+
+- **Defender la base** (Diezmo, no el Ataque Final): 2 de cada 3 caídos del ejército
+  vuelven heridos (`combat_defense_return_share`, `CombatManager.defense_wounded()`;
+  siempre cae uno, mueren antes los de menos `power`). Test: `tests/combat/test_defense_wounded.gd`.
+- **Previsión** (`sortie_preview`: "Favorable / Igualada / Difícil" y "resolver
+  solo"): fuerza de columna `power × escala² × cuerpos`
+  (`ExpeditionGenerator.column_strength`). La escala del enemigo sube vida y ataque
+  (cuenta dos veces) y el número pesa (ley cuadrada): 2 cañones (56 × 2 = 112) contra
+  3 infantes a ×1,5 (30 × 2,25 × 3 = 202) ya sale "Difícil"; antes, "56 contra 34",
+  favorable, y se perdía siempre.
+- **Reintentos de campaña:** cada derrota en la misión que toca, ×0,95 al enemigo de
+  esa misión (suelo ×0,80), mismo mapa (docs/15 §13, docs/22 §15).

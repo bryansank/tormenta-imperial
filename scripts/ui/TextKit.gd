@@ -28,7 +28,7 @@ static func short_time(seconds: float) -> String:
 
 ## El icono del recurso, o null si no lo tiene (los materiales del taller).
 static func res_icon(res_id: String) -> Texture2D:
-	if not (res_id in ["gold", "wood", "steel", "oil"]):
+	if not (res_id in ["gold", "wood", "steel", "oil", "food"]):
 		return null
 	return UITheme.icon_texture(res_id, ICON_PX)
 
@@ -59,6 +59,12 @@ static func cost_inline(amounts: Dictionary, short: Dictionary = {}, size_name: 
 ## Rehace el contenido de una fila de cost_row o cost_inline con otras cifras.
 static func fill_cost_row(row: Container, amounts: Dictionary, short: Dictionary = {},
 		size_name: String = "small", color: Color = UITheme.TEXT, prefix: String = "") -> void:
+	# Las mismas cifras, lo mismo en rojo y el mismo estilo: la fila ya dice eso
+	# y no se rehace (llega una senal por recurso y por tick; docs/26 §6.9).
+	var sig := [amounts, short, size_name, color, prefix, UITheme.DANGER]
+	if row.has_meta("fill_sig") and row.get_meta("fill_sig") == sig and row.get_child_count() == amounts.size():
+		return
+	row.set_meta("fill_sig", sig)
 	for child in row.get_children():
 		row.remove_child(child)
 		child.free()
@@ -103,8 +109,8 @@ static func row_amounts(row: Control) -> Dictionary:
 	var out := {}
 	if row == null:
 		return out
-	for chip in row.get_children():
-		for child in chip.get_children():
-			if child is Label and String(child.name).begins_with("Amount_"):
-				out[String(child.name).substr(7)] = (child as Label).text
+	# Recorre a cualquier profundidad: las filas del estilo nuevo
+	# (CartoonTheme.cost_strip) meten la cifra dentro de una ficha con fondo.
+	for child in row.find_children("Amount_*", "Label", true, false):
+		out[String(child.name).substr(7)] = (child as Label).text
 	return out

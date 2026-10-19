@@ -6,6 +6,11 @@ uniform float cell_size : hint_range(0.5, 10.0) = 2.0;
 uniform float line_width : hint_range(0.01, 0.15) = 0.04;
 uniform float fade_distance : hint_range(10.0, 100.0) = 60.0;
 uniform vec2 grid_origin = vec2(-25.0, -25.0);
+// Isla irregular: solo se dibuja sobre tierra. Una celda por texel (1 = tierra);
+// sin mascara (isla cuadrada) toda la rejilla es tierra.
+uniform sampler2D land_mask : filter_nearest, repeat_disable;
+uniform vec2 grid_cells = vec2(40.0, 40.0);
+uniform bool use_land_mask = false;
 
 varying vec3 world_vertex;
 
@@ -24,6 +29,17 @@ void fragment() {
 	float dist = length(world_vertex.xz - CAMERA_POSITION_WORLD.xz);
 	float fade = 1.0 - smoothstep(fade_distance * 0.6, fade_distance, dist);
 
+	// La linea entre una celda de tierra y una de agua se dibuja entera: se
+	// mira la celda de cada lado de la linea, no solo la de este fragmento.
+	float land = 1.0;
+	if (use_land_mask) {
+		float e = 0.15;
+		land = texture(land_mask, (floor(coord + vec2(-e, -e)) + 0.5) / grid_cells).r;
+		land = max(land, texture(land_mask, (floor(coord + vec2(e, -e)) + 0.5) / grid_cells).r);
+		land = max(land, texture(land_mask, (floor(coord + vec2(-e, e)) + 0.5) / grid_cells).r);
+		land = max(land, texture(land_mask, (floor(coord + vec2(e, e)) + 0.5) / grid_cells).r);
+	}
+
 	ALBEDO = grid_color.rgb;
-	ALPHA = line * grid_color.a * fade;
+	ALPHA = line * grid_color.a * fade * step(0.5, land);
 }

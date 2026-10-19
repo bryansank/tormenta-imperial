@@ -20,6 +20,13 @@ extends SceneTree
 ##   --hours=N       tope de horas de juego por partida (8)
 ##   --active=1      el jugador tambien exprime los procesos manuales
 ##   --log=1         imprime cada accion del jugador
+##   --tutorial=0    no levanta el Laboratorio de la era 1 que pide el tutorial
+##                   guiado (por defecto si, como el jugador que lo sigue)
+##   --extras=1      (o --player=completo) el jugador ademas levanta lo nuevo de
+##                   la 1.1 cuando aporta (Muelle de pesca, Molino, Silo, Taberna,
+##                   Carpinteria, Pozo, Faro, Deposito de combustible, Astillero,
+##                   Aerodromo), entrena barcos y aviones y sale a misiones de
+##                   costa. Mismas reglas que un clic. Detalle en docs/22 §13.
 ##
 ## El jugador vive en tools/line_probe_player.gd: este script de arranque no puede
 ## nombrar autoloads (se compila antes de que existan), aquel si.

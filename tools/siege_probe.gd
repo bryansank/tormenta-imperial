@@ -17,12 +17,23 @@ extends SceneTree
 ##   --era=N          era de la guarnicion (3)
 ##   --morale=F       moral congelada (100)
 ##   --towers=N       torres en pie (2)
+##   --crews=N        pisa `storm_tower_garrison_max` (dotaciones de torre a la vez)
 ##   --spw --spe --last --base --per --gun --armour --chance --waves=min,max
 ##                    pisan los `final_audit_*` correspondientes
 ##   --only=etiqueta  una sola configuracion de guarnicion
 ##   --tier=governor  juega el asedio en nivel Gobernador (GameMode.Tier)
 ##   --audit_mult=F   pisa `game_tier_rules.governor.audit_enemy_mult`
 ##   --detail=1       desglose por longitud de asedio (3, 4 y 5 oleadas)
+##   --airships=N     pisa `final_audit_airships_last_wave` (0 = el asedio de antes)
+##   --escort=N       pisa `final_audit_air_escort_fighters`
+##   --airship_hp=N   pisa la vida del dirigible; --land_air=N el alcance de
+##                    tierra y mar contra el aire (combat_domain_targets)
+##   --threat_w=F    pisa `combat_ai_threat_weight` (IA: peso de la amenaza)
+##   --siege_atk=lo,hi  pisa `final_audit_morale_attack_range`
+##   --siege_init=lo,hi  pisa `final_audit_morale_initiative_range`
+##   --only=a,b       varias configuraciones separadas por comas
+##   --adv=off        sin ventaja por tipo (combat_type_advantage), para medir
+##                    el "antes"; --adv=1.5,0.75 pisa los dos multiplicadores
 ##
 ## Nota: siendo el script de arranque (`-s`) no puede nombrar los autoloads en
 ## tiempo de compilacion —todavia no existen—, asi que GameConfig se resuelve a
@@ -56,6 +67,11 @@ const CONFIGS := [
 	{"label": "mixta 3+2+1", "roster": {"infantry": 3, "artillery": 2, "vehicle": 1}},
 	{"label": "mixta 2+2+2", "roster": {"infantry": 2, "artillery": 2, "vehicle": 2}},
 	{"label": "MAX 6 vehiculos", "roster": {"vehicle": 6}},
+	# Aire y mar (docs/17, "Aire y mar"): con aviones la Regencia trae escolta de
+	# cazas; con barcos el tablero de casa tiene agua (CombatManager.home_terrain).
+	{"label": "6 veh + 2 cazas", "roster": {"vehicle": 6, "fighter": 2}},
+	{"label": "4 veh + 2 cazas", "roster": {"vehicle": 4, "fighter": 2}},
+	{"label": "4 veh + 2 canoneras", "roster": {"vehicle": 4, "gunboat": 2}},
 ]
 
 var _cfg: Node = null
@@ -96,7 +112,7 @@ func _initialize() -> void:
 	print("%-18s %7s  %11s %7s %11s %8s %8s" % [
 		"guarnicion", "gana%", "oleadas", "vivos", "vivos|gana", "rondas", "minutos"])
 	for config in CONFIGS:
-		if _only != "" and String(config["label"]) != _only:
+		if _only != "" and not _only.split(",").has(String(config["label"])):
 			continue
 		_run_config(config)
 	_clock.free()
@@ -154,8 +170,8 @@ func _play(seed_value: int, roster: Dictionary) -> Dictionary:
 	audit.begin()
 	var crew_losses := 0
 	var crews: Array = []
-	var attack_mod: float = Rules.morale_attack_mod(_morale)
-	var initiative_bonus: int = Rules.morale_initiative_bonus(_morale)
+	var attack_mod: float = Rules.siege_morale_attack_mod(_morale)
+	var initiative_bonus: int = Rules.siege_morale_initiative_bonus(_morale)
 	var rounds := 0
 	var minutes := 0.0
 	var guard := 0
@@ -185,7 +201,13 @@ func _play(seed_value: int, roster: Dictionary) -> Dictionary:
 		var units: Array = defenders.duplicate()
 		units.append_array(crews)
 		units.append_array(audit.build_enemy_units())
-		var encounter = EncounterScript.create(units, 0, false, true, crew_uids)
+		# El agua de casa, como CombatManager.home_terrain(): solo con barcos propios.
+		var terrain: Dictionary = {}
+		for unit in defenders:
+			if unit.domain() == "sea":
+				terrain = Rules.coastal_terrain(_cfg.combat_board_size, _cfg.combat_home_coast_seed)
+				break
+		var encounter = EncounterScript.create(units, 0, false, true, crew_uids, false, terrain)
 		var outcome: Dictionary = AutoResolverScript.resolve(encounter)
 		rounds += int(outcome["rounds"])
 		minutes += float(_clock._minutes(_clock._timing_of(outcome["events"], units), 5.0))
@@ -233,6 +255,28 @@ func _apply_overrides() -> void:
 			"armour": _cfg.final_audit_armour_wave = int(value)
 			"chance": _cfg.final_audit_extra_gun_chance = float(value)
 			"audit_mult": _cfg.game_tier_rules["governor"]["audit_enemy_mult"] = float(value)
+			"crews": _cfg.storm_tower_garrison_max = int(value)
+			"airships": _cfg.final_audit_airships_last_wave = int(value)
+			"escort": _cfg.final_audit_air_escort_fighters = int(value)
+			"airship_hp": _cfg.combat_unit_stats["airship"]["hp"] = int(value)
+			"threat_w": _cfg.combat_ai_threat_weight = float(value)
+			"siege_atk":
+				var lohi: PackedStringArray = value.split(",")
+				_cfg.final_audit_morale_attack_range = Vector2(float(lohi[0]), float(lohi[1]))
+			"siege_init":
+				var ir: PackedStringArray = value.split(",")
+				_cfg.final_audit_morale_initiative_range = Vector2(float(ir[0]), float(ir[1]))
+			"land_air": 
+				_cfg.combat_domain_targets["land"]["air"] = int(value)
+				_cfg.combat_domain_targets["sea"]["air"] = int(value)
+			"adv":
+				if value == "off":
+					_cfg.combat_type_advantage["beats"] = {}
+				else:
+					var m: PackedStringArray = value.split(",")
+					if m.size() == 2:
+						_cfg.combat_type_advantage["advantage"] = float(m[0])
+						_cfg.combat_type_advantage["disadvantage"] = float(m[1])
 			"waves":
 				var pair: PackedStringArray = value.split(",")
 				if pair.size() == 2:

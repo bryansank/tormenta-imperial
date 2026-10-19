@@ -69,9 +69,20 @@ func _people(population: int, max_pop: int, used: int, short: int = 0) -> void:
 	PopulationManager._understaffed = short
 	EventBus.workers_changed.emit(used, population)
 
+## El color de la moral en el HUD: el token, o en el estilo maqueta su tono
+## semantico aclarado (va sobre la barra oscura).
+func _morale_col(token: Color) -> Color:
+	if not UITheme.is_cartoon():
+		return token
+	var pairs := {"POSITIVE": UITheme.POSITIVE, "WARNING": UITheme.WARNING, "DANGER": UITheme.DANGER}
+	for k in pairs:
+		if token == pairs[k]:
+			return CartoonTheme.sem(k).lightened(0.3)
+	return token
+
 func _color_for(token: Color) -> Color:
 	var probe: Label = auto_free(Label.new())
-	UITheme.set_label_color(probe, token)
+	UITheme.set_label_color(probe, token, CartoonTheme.c("hud", "BG") if UITheme.is_cartoon() else UITheme.UI_BG_REFERENCE)
 	return probe.get_theme_color("font_color")
 
 # ── Obreros ──────────────────────────────────────────────────────────
@@ -81,8 +92,11 @@ func test_the_workers_icon_shows_the_free_workers_and_follows_the_signal() -> vo
 	var chip: HBoxContainer = hud.workers_chip()
 	assert_object(chip).is_not_null()
 	assert_str(String(chip.name)).is_equal("Chip_workers")
-	# En la misma fila que los recursos.
-	assert_object(chip.get_parent()).is_same(hud.find_child("Chip_gold", true, false).get_parent())
+	# En la misma fila que los recursos (cada ficha en su celda con su palabra,
+	# feat/hud-y-tutorial).
+	var row: Node = hud.find_child("ChipsRow", true, false)
+	assert_bool(row.is_ancestor_of(chip)).is_true()
+	assert_object(chip.get_parent().get_parent()).is_same(hud.find_child("Chip_gold", true, false).get_parent().get_parent())
 	_people(12, 18, 9)
 	assert_str(UITheme.chip_amount(chip).text).is_equal("3")
 	_people(12, 18, 4)
@@ -94,9 +108,9 @@ func test_the_workers_number_turns_to_warning_when_a_building_lacks_workers() ->
 	var hud := _hud()
 	var amount: Label = UITheme.chip_amount(hud.workers_chip())
 	_people(5, 6, 5, 0)
-	assert_object(amount.get_theme_color("font_color")).is_equal(_color_for(UITheme.TEXT_BRIGHT))
+	assert_object(amount.get_theme_color("font_color")).is_equal(_color_for(hud._text_col()))
 	_people(5, 6, 5, 1)
-	assert_object(amount.get_theme_color("font_color")).is_equal(_color_for(UITheme.WARNING))
+	assert_object(amount.get_theme_color("font_color")).is_equal(_color_for(hud._warn_col()))
 	assert_str(hud.workers_chip().tooltip_text).contains(Tr.t("HINT_HUD_WORKERS_SHORT") % 1)
 
 func test_population_counts_buildings_left_without_workers() -> void:
@@ -143,7 +157,7 @@ func test_morale_shows_its_number_with_the_threshold_colour() -> void:
 		PopulationManager._morale = int(case[0])
 		EventBus.morale_changed.emit(int(case[0]))
 		assert_str(amount.text).is_equal(str(case[0]))
-		assert_object(amount.get_theme_color("font_color")).is_equal(_color_for(case[1]))
+		assert_object(amount.get_theme_color("font_color")).is_equal(_color_for(_morale_col(case[1])))
 	assert_str(hud.morale_chip().tooltip_text).contains("x")
 
 func test_morale_is_rederived_after_loading_a_game() -> void:

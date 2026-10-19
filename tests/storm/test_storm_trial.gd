@@ -12,13 +12,30 @@ var _saved_population: Dictionary = {}
 var _saved_mult: float = 1.0
 var _saved_mode: int = GameMode.DEFAULT
 var _events: Array = []
+## El Impuesto de juguete (2026-10-17) mira las tropas de casa y cobra de la
+## bolsa: cada prueba empieza sin ejercito y deja la bolsa como estaba.
+var _saved_army: Dictionary = {}
+var _saved_bag: Dictionary = {}
+## El tutorial frena la prueba (2026-10-19): cada prueba empieza con el tutorial
+## ya hecho (sin marca de cuando), salvo las que lo ponen en marcha.
+var _saved_tutorial: Dictionary = {}
 
 func before_test() -> void:
+	_saved_tutorial = TutorialManager.get_save_data()
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	TutorialManager.guide_baseline = {}
+	TutorialManager.guide_finished_at = -1.0
 	_saved_storm = StormManager.get_save_data()
 	_saved_progression = ProgressionManager.get_save_data()
 	_saved_population = PopulationManager.get_save_data()
 	_saved_mult = GameConfig.event_production_multiplier
 	_saved_mode = GameMode.current
+	_saved_army = ArmyManager.get_save_data()
+	ArmyManager.load_save_data({"units": {}, "training": [], "upkeep_accum": 0.0})
+	_saved_bag = {}
+	var all: Dictionary = ResourceManager.get_all()
+	for type in all:
+		_saved_bag[ResourceManager.get_type_name(type)] = all[type]
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
 	StormManager.reset()
 	ProgressionManager.current_era = 1
@@ -41,12 +58,17 @@ func after_test() -> void:
 	EventBus.tithe_resolved.disconnect(_on_tithe_resolved)
 	EventBus.building_damaged.disconnect(_on_damaged)
 	GameMode.begin_run(_saved_mode)
+	if CombatManager.is_board_open():
+		CombatManager.end_encounter()
+	ArmyManager.load_save_data(_saved_army)
+	ResourceManager.set_amounts(_saved_bag)
 	StormManager.reset()
 	StormManager.load_save_data(_saved_storm)
 	StormManager._tithe_to_resume = false
 	ProgressionManager.load_save_data(_saved_progression)
 	PopulationManager.load_save_data(_saved_population)
 	GameConfig.event_production_multiplier = _saved_mult
+	TutorialManager.load_save_data(_saved_tutorial)
 
 func _on_incoming(_s: float) -> void: _events.append("incoming")
 func _on_ash() -> void: _events.append("ash")
@@ -94,6 +116,66 @@ func test_it_waits_for_its_minute_of_play() -> void:
 	assert_bool(StormManager.is_trial_running()).is_true()
 	assert_int(StormManager.get_phase()).is_equal(StormCycle.Phase.WARNING)
 	assert_array(_events).contains(["incoming"])
+
+# ── Nunca en medio del tutorial (queja de Bryan, 2026-10-19) ─────────
+
+func test_it_never_comes_while_the_tutorial_is_running() -> void:
+	TutorialManager.guide_state = TutorialManager.GUIDE_ACTIVE
+	ProgressionManager._played_seconds = GameConfig.get_storm_trial_at() * 4.0
+	assert_bool(TutorialManager.blocks_interruptions()).is_true()
+	assert_bool(StormManager.check_trial()).is_false()
+	assert_bool(StormManager.is_trial_running()).is_false()
+	assert_bool(StormManager.is_trial_done()).is_false()
+
+func test_it_comes_a_while_after_the_tutorial_ends() -> void:
+	TutorialManager.guide_state = TutorialManager.GUIDE_ACTIVE
+	var finished_at: float = GameConfig.get_storm_trial_at() + 100.0
+	ProgressionManager._played_seconds = finished_at
+	TutorialManager.finish_guide()
+	assert_float(TutorialManager.guide_finished_at).is_equal(finished_at)
+	var after: float = GameConfig.get_duration(GameConfig.storm_trial_after_guide)
+	assert_float(StormManager.trial_due_at()).is_equal(finished_at + after)
+	ProgressionManager._played_seconds = finished_at + after - 1.0
+	assert_bool(StormManager.check_trial()).is_false()
+	ProgressionManager._played_seconds = finished_at + after
+	assert_bool(StormManager.check_trial()).is_true()
+	# Llega con su Aviso delante, como siempre.
+	assert_int(StormManager.get_phase()).is_equal(StormCycle.Phase.WARNING)
+
+func test_a_quick_tutorial_keeps_the_usual_minute() -> void:
+	TutorialManager.guide_finished_at = 10.0
+	assert_float(StormManager.trial_due_at()).is_equal(GameConfig.get_storm_trial_at())
+
+func test_a_replay_does_not_hold_it_nor_move_it() -> void:
+	TutorialManager.guide_state = TutorialManager.GUIDE_ACTIVE
+	TutorialManager.guide_baseline = {"sawmills": 1}
+	assert_bool(TutorialManager.blocks_interruptions()).is_false()
+	ProgressionManager._played_seconds = GameConfig.get_storm_trial_at() + 500.0
+	TutorialManager.finish_guide()
+	assert_float(TutorialManager.guide_finished_at).is_equal(-1.0)
+
+func test_when_the_tutorial_ended_travels_in_the_save() -> void:
+	TutorialManager.guide_finished_at = 321.0
+	var data: Dictionary = TutorialManager.get_save_data()
+	TutorialManager.reset()
+	assert_float(TutorialManager.guide_finished_at).is_equal(-1.0)
+	TutorialManager.load_save_data(data)
+	assert_float(TutorialManager.guide_finished_at).is_equal(321.0)
+	data.erase("guide_finished_at")
+	TutorialManager.load_save_data(data)
+	assert_float(TutorialManager.guide_finished_at).is_equal(-1.0)
+
+func test_the_real_storm_clock_waits_in_the_calm_during_the_tutorial() -> void:
+	StormManager._armed = true
+	TutorialManager.guide_state = TutorialManager.GUIDE_ACTIVE
+	var before: float = StormManager.get_cycle().seconds_until_ash()
+	StormManager._process(5.0)
+	assert_float(StormManager.get_cycle().seconds_until_ash()).is_equal(before)
+	assert_int(StormManager.get_cycle().phase).is_equal(StormCycle.Phase.CALM)
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	StormManager._process(5.0)
+	assert_float(StormManager.get_cycle().seconds_until_ash()).is_less(before)
+	StormManager._armed = false
 
 func test_the_minute_is_game_time_scaled_by_dev_mode() -> void:
 	assert_float(GameConfig.get_storm_trial_at()).is_equal(GameConfig.get_duration(GameConfig.storm_trial_at))
@@ -207,3 +289,140 @@ func test_an_old_save_without_the_keys_still_gets_it() -> void:
 	assert_bool(StormManager.is_trial_done()).is_false()
 	ProgressionManager._played_seconds = GameConfig.get_storm_trial_at()
 	assert_bool(StormManager.check_trial()).is_true()
+
+# ── El Impuesto de juguete (cuartel temprano, 2026-10-17) ────────────
+#
+# Al escampar la prueba bajan unos Cobradores de juguete: con tropas en casa se
+# pelea en el tablero contra una escolta minima y debil; sin tropas se llevan un
+# poco de la bolsa. Nunca edificios, trabajadores ni dano, y no es el Diezmo de
+# verdad (ni tithe_demanded ni tithe_resolved).
+
+var _trial_results: Array = []
+
+func _on_trial_tithe(repelled: bool, taken: Dictionary) -> void:
+	_trial_results.append({"repelled": repelled, "taken": taken})
+
+func _with_army(units: Dictionary) -> Dictionary:
+	var saved: Dictionary = ArmyManager.get_save_data()
+	ArmyManager.load_save_data({"units": units, "training": [], "upkeep_accum": 0.0})
+	return saved
+
+func test_the_trial_model_ends_with_the_toy_tax() -> void:
+	var cycle := StormCycle.create_trial(5)
+	var seen: Array = []
+	for event in cycle.summon_now():
+		seen.append(String(event["e"]))
+	for i in 2000:
+		if cycle.finished:
+			break
+		for event in cycle.advance(0.5):
+			seen.append(String(event["e"]))
+	assert_int(seen.count("trial_tithe")).is_equal(1)
+	assert_int(seen.find("trial_tithe")).is_greater(seen.find("storm_ended"))
+	assert_array(seen).not_contains(["tithe"])
+
+func test_the_toy_tax_is_small_and_capped() -> void:
+	assert_int(GameConfig.get_trial_tithe_debt(0)).is_equal(0)
+	assert_int(GameConfig.get_trial_tithe_debt(100)).is_equal(int(100 * GameConfig.storm_trial_tithe_pct))
+	assert_int(GameConfig.get_trial_tithe_debt(100000)).is_equal(GameConfig.storm_trial_tithe_cap)
+	# La escolta: uno por soldado en casa, de 1 al tope.
+	var unit: String = GameConfig.storm_trial_tithe_unit
+	assert_int(int(StormManager.trial_tithe_roster(0)[unit])).is_equal(1)
+	assert_int(int(StormManager.trial_tithe_roster(1)[unit])).is_equal(1)
+	assert_int(int(StormManager.trial_tithe_roster(9)[unit])).is_equal(GameConfig.storm_trial_tithe_force_max)
+
+func test_without_troops_the_toy_tax_takes_a_little_and_nothing_else() -> void:
+	var army := _with_army({})
+	var saved_res := {"gold": ResourceManager.get_amount(ResourceManager.Type.GOLD),
+		"wood": ResourceManager.get_amount(ResourceManager.Type.WOOD)}
+	ResourceManager.set_amounts({"gold": 200, "wood": 100})
+	var stored: int = ResourceManager.get_total_stored()
+	var pop: int = PopulationManager.get_population()
+	_trial_results = []
+	EventBus.trial_tithe_resolved.connect(_on_trial_tithe)
+	ProgressionManager._played_seconds = GameConfig.get_storm_trial_at()
+	StormManager.check_trial()
+	_run_trial_out()
+	EventBus.trial_tithe_resolved.disconnect(_on_trial_tithe)
+	var debt: int = GameConfig.get_trial_tithe_debt(stored)
+	ArmyManager.load_save_data(army)
+	ResourceManager.set_amounts(saved_res)
+	assert_bool(CombatManager.is_board_open()).is_false()
+	assert_int(_trial_results.size()).is_equal(1)
+	assert_bool(bool(_trial_results[0]["repelled"])).is_false()
+	var taken: Dictionary = _trial_results[0]["taken"]
+	var total := 0
+	for key in taken:
+		total += int(taken[key])
+	assert_int(total).is_equal(debt)
+	assert_bool(taken.has("buildings") or taken.has("workers")).is_false()
+	assert_int(PopulationManager.get_population()).is_equal(pop)
+	# No es el Diezmo de verdad, y no rompe nada.
+	assert_array(_events).not_contains(["tithe", "tithe_resolved", "damaged"])
+	assert_bool(StormManager.is_trial_tithe_pending()).is_false()
+
+func test_with_troops_at_home_the_toy_tax_is_fought_on_the_board() -> void:
+	var army := _with_army({"infantry": 1})
+	_trial_results = []
+	EventBus.trial_tithe_resolved.connect(_on_trial_tithe)
+	StormManager.begin_trial_tithe()
+	var opened: bool = CombatManager.is_board_open() and CombatManager.is_defending()
+	var enemies: Array = []
+	for u in CombatManager.get_units():
+		if u.side != 0:
+			enemies.append(u)
+	assert_bool(opened).is_true()
+	assert_bool(StormManager.is_trial_tithe_pending()).is_true()
+	assert_int(enemies.size()).is_equal(1)
+	if not enemies.is_empty():
+		assert_float(float(enemies[0].scale)).is_equal(GameConfig.storm_trial_tithe_enemy_scale)
+	# Ganada: se van sin nada.
+	StormManager._on_encounter_ended(true, 2)
+	CombatManager.end_encounter()
+	EventBus.trial_tithe_resolved.disconnect(_on_trial_tithe)
+	ArmyManager.load_save_data(army)
+	assert_int(_trial_results.size()).is_equal(1)
+	assert_bool(bool(_trial_results[0]["repelled"])).is_true()
+	assert_bool(StormManager.is_trial_tithe_pending()).is_false()
+
+func test_a_lost_toy_defense_pays_the_little_tax() -> void:
+	var army := _with_army({"infantry": 1})
+	_trial_results = []
+	EventBus.trial_tithe_resolved.connect(_on_trial_tithe)
+	StormManager.begin_trial_tithe()
+	StormManager._on_encounter_ended(false, 2)
+	CombatManager.end_encounter()
+	EventBus.trial_tithe_resolved.disconnect(_on_trial_tithe)
+	ArmyManager.load_save_data(army)
+	assert_int(_trial_results.size()).is_equal(1)
+	assert_bool(bool(_trial_results[0]["repelled"])).is_false()
+
+func test_the_toy_tax_pending_travels_in_the_save_and_reset_clears_it() -> void:
+	StormManager._trial_tithe_pending = true
+	var data: Dictionary = StormManager.get_save_data()
+	assert_bool(bool(data.get("trial_tithe_pending", false))).is_true()
+	StormManager.reset()
+	assert_bool(StormManager.is_trial_tithe_pending()).is_false()
+	StormManager.load_save_data(data)
+	StormManager.load_save_data(data)  # idempotente
+	assert_bool(StormManager.is_trial_tithe_pending()).is_true()
+	# Un guardado de antes no trae la clave: nada pendiente.
+	data.erase("trial_tithe_pending")
+	StormManager.load_save_data(data)
+	assert_bool(StormManager.is_trial_tithe_pending()).is_false()
+	StormManager.reset()
+
+func test_no_toy_tax_where_there_is_no_tax() -> void:
+	GameMode.begin_run(GameMode.Mode.BUILDER)
+	StormManager.begin_trial_tithe()
+	assert_bool(StormManager.is_trial_tithe_pending()).is_false()
+	assert_bool(CombatManager.is_board_open()).is_false()
+	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
+
+func test_the_toy_tax_is_explained_before_it_comes() -> void:
+	# El aviso de la prueba ya dice que si hay soldados en casa, pelean.
+	assert_str(Tr._STRINGS["es"]["STORM_TRIAL_INCOMING"]).contains("soldados")
+	assert_str(Tr._STRINGS["en"]["STORM_TRIAL_INCOMING"]).contains("soldiers")
+	for key in ["STORM_TRIAL_TITHE_DEFEND", "STORM_TRIAL_TITHE_REPELLED", "STORM_TRIAL_TITHE_PAID"]:
+		for loc in ["es", "en"]:
+			assert_bool(Tr._STRINGS[loc].has(key)).override_failure_message("%s/%s" % [loc, key]).is_true()

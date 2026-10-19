@@ -204,7 +204,11 @@ func test_the_menu_button_sits_top_right_and_is_finger_sized() -> void:
 	assert_float(btn.anchor_left).is_equal(1.0)
 	assert_float(btn.anchor_top).is_equal(0.0)
 	assert_float(btn.custom_minimum_size.y).is_greater_equal(float(UITheme.MIN_BTN_H))
-	assert_str(btn.text).is_equal(Tr.t("BTN_GAME_MENU"))
+	# Clasico: "☰ MENÚ" con palabra; maqueta: el redondo ☰, con su ayuda.
+	if UITheme.is_cartoon():
+		assert_str(btn.tooltip_text).is_not_empty()
+	else:
+		assert_str(btn.text).is_equal(Tr.t("BTN_GAME_MENU"))
 
 ## QA en tableta (flujos 01 y 03): el atras de Android llegaba dos veces por
 ## toque y abria y cerraba el MENÚ en el acto. Dos peticiones seguidas son un

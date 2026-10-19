@@ -43,7 +43,7 @@ func before_test() -> void:
 	TutorialManager.reset()
 	ProgressionManager.final_audit = null
 	PopulationManager.load_save_data({"morale": 75})
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0})
 	ResourceManager.set_era(1)
 	ResourceManager.set_warehouse_count(5)
 

@@ -8,9 +8,15 @@ const DEPOSIT_TYPES := {
 	"iron_deposit": { "display_name": "DEP_IRON", "color": Color(0.6, 0.6, 0.65, 1), "height": 0.5 },
 	"oil_well": { "display_name": "DEP_OIL", "color": Color(0.15, 0.15, 0.18, 1), "height": 0.15 },
 	"forest": { "display_name": "DEP_FOREST", "color": Color(0.2, 0.5, 0.15, 1), "height": 0.8 },
+	# Banco de peces (feat/muelle-pesca): en el agua, pegado a la costa. Lo
+	# explota el Muelle de pesca (GameConfig.building_deposit_rules); no se agota.
+	"fish_shoal": { "display_name": "DEP_FISH_SHOAL", "color": Color(0.25, 0.5, 0.7, 1), "height": 0.1 },
 }
 
 const DEPOSIT_IDS := ["gold_vein", "iron_deposit", "oil_well", "forest"]
+
+## La maqueta de cada yacimiento en 3D (una malla, color por vertice).
+const DepositMesh := preload("res://scripts/map/DepositMesh.gd")
 
 var _deposits_container: Node
 var _deposit_cells: Array = []  # [{ "id": String, "cell_x": int, "cell_y": int, "size_x": int, "size_y": int, "node": Node }]
@@ -105,14 +111,20 @@ func core_ring_rect() -> Rect2i:
 		size = data.grid_size
 	return Rect2i(core_origin(), size).grow(1)
 
-## ¿Es `cell` de la franja de costa? La franja son las `map_shore_band` celdas
-## exteriores de la rejilla: tierra construible, pero sin yacimientos de tierra.
+## ¿Es `cell` de la franja de costa? La franja son las celdas de tierra a
+## `map_shore_band` celdas (o menos, contando diagonales) del agua: de la que
+## entra en la rejilla (isla irregular) o de la de fuera (la isla cuadrada de
+## antes, donde la franja es el anillo exterior). Tierra construible, pero sin
+## yacimientos de tierra: es el gancho de los futuros recursos del mar.
 static func is_shore_cell(cell: Vector2i) -> bool:
-	if not GridManager.is_valid_cell(cell):
+	if not GridManager.is_land_cell(cell):
 		return false
 	var band: int = GameConfig.map_shore_band
-	return cell.x < band or cell.y < band \
-		or cell.x >= GridManager.grid_width - band or cell.y >= GridManager.grid_height - band
+	for dy in range(-band, band + 1):
+		for dx in range(-band, band + 1):
+			if not GridManager.is_land_cell(cell + Vector2i(dx, dy)):
+				return true
+	return false
 
 ## Todas las celdas de la franja de costa.
 static func shore_cells() -> Array:
@@ -124,23 +136,193 @@ static func shore_cells() -> Array:
 				out.append(c)
 	return out
 
-## ¿Es mar? Todo lo que queda fuera de la rejilla: margen de hierba, arena y agua
-## (IslandGenerator). Ahi no se construye; un recurso marino se trabajaria desde
-## una celda de costa pegada a el.
+## ¿Es mar? El agua de dentro de la rejilla (isla irregular) y todo lo de fuera.
+## Ahi no se construye; un recurso marino se trabajaria desde una celda de costa
+## pegada a el.
 static func is_sea_cell(cell: Vector2i) -> bool:
-	return not GridManager.is_valid_cell(cell)
+	return not GridManager.is_land_cell(cell)
 
-## Yacimientos de costa y mar. Hoy no hay ninguno. Cuando los haya (pesca,
-## petroleo en alta mar, sal...): se anade su tipo a DEPOSIT_TYPES y a esta
-## lista, se le pone una regla en GameConfig.building_deposit_rules para su
-## extractor (un muelle, que tocaria una celda de costa y el mar de al lado), y
-## aqui se sortean sobre shore_cells(), que ningun yacimiento de tierra pisa.
-## El guardado ya los llevaria: get_all_deposits() no mira el tipo.
-const SHORE_DEPOSIT_IDS: Array = []
+## Yacimientos de mar (feat/muelle-pesca): el banco de peces. Viven en celdas de
+## AGUA de la rejilla (GridManager.place_sea_obstacle), MAR ADENTRO desde
+## fix/peces-en-el-mar (2026-10-19): entre `min_gap` y `max_gap` casillas de agua
+## los separan de la tierra (GameConfig.sea_deposit_rolls), nunca pegados a la
+## arena. Su extractor, el Muelle de pesca, se planta en la costa (regla "shore")
+## y llega al banco a distancia (GameConfig.fishing_dock_reach); un banco sirve a
+## `fishing_dock_per_shoal` muelles (PlacementRules.deposit_with_room). Ninguno
+## se agota (GameConfig.endless_deposits). El guardado los lleva como a los
+## demas: get_all_deposits() no mira el tipo.
+## Otro recurso del mar (sal, petroleo en alta mar...): su tipo en DEPOSIT_TYPES,
+## su id aqui, la regla de su extractor y sus cifras en GameConfig.sea_deposit_rolls.
+const SHORE_DEPOSIT_IDS: Array = ["fish_shoal"]
+
+## Las ocho celdas vecinas (diagonales incluidas), como la regla de costa.
+const _AROUND := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]
+
+## ¿Vive en el agua este yacimiento?
+static func is_sea_deposit(deposit_id: String) -> bool:
+	return deposit_id in SHORE_DEPOSIT_IDS
 
 func _generate_shore_deposits() -> void:
-	for _deposit_id in SHORE_DEPOSIT_IDS:
-		pass
+	for deposit_id in SHORE_DEPOSIT_IDS:
+		_fill_sea_type(String(deposit_id))
+
+## Una partida de antes del muelle (la 1.0) no trae bancos de peces: al cargarla
+## se sortean (con la semilla de su isla: siempre los mismos). Solo si no hay
+## ninguno de ese tipo: un banco nunca se agota ni se consume, asi que "cero"
+## solo puede ser una partida vieja, o una isla sin agua dentro de la rejilla (la
+## cuadrada de antes de 2026-10-12), donde no cabe ninguno y esto no hace nada.
+##
+## Una partida de antes de fix/peces-en-el-mar trae los bancos pegados a la
+## orilla: los que ningun muelle usa se recolocan mar adentro (se quitan y se
+## vuelve a sortear hasta el numero de la isla); los que si tienen muelle se
+## respetan tal cual, para no dejarlo sin peces. Se llama despues de poner los
+## edificios guardados (GameManager), asi que los muelles ya estan en la rejilla.
+func ensure_shore_deposits() -> void:
+	for deposit_id in SHORE_DEPOSIT_IDS:
+		var id := String(deposit_id)
+		var moved := _drop_unused_coast_hugging(id)
+		if moved or _count_type(id) == 0:
+			_fill_sea_type(id)
+
+## ¿Esta este yacimiento de mar a la distancia de la orilla que pide su tirada?
+func _at_sea_distance(deposit_id: String, origin: Vector2i, size: Vector2i) -> bool:
+	var roll: Dictionary = GameConfig.sea_deposit_rolls.get(deposit_id, {})
+	return not _has_land_within(origin, size, int(roll.get("min_gap", 0)) - 1) \
+		and _has_land_within(origin, size, int(roll.get("max_gap", 0)))
+
+## ¿Hay alguna celda de tierra con `gap` casillas o menos de agua entre ella y
+## el rectangulo? gap 0 = pegada a el (diagonal incluida); gap < 0 = nunca.
+static func _has_land_within(origin: Vector2i, size: Vector2i, gap: int) -> bool:
+	if gap < 0:
+		return false
+	var r := gap + 1
+	for y in range(origin.y - r, origin.y + size.y + r):
+		for x in range(origin.x - r, origin.x + size.x + r):
+			if GridManager.is_land_cell(Vector2i(x, y)):
+				return true
+	return false
+
+## Quita los bancos de `deposit_id` que estan mas cerca de la tierra de lo que
+## pide su tirada (los de antes de fix/peces-en-el-mar) y que ningun extractor
+## alcanza. true si quito alguno.
+func _drop_unused_coast_hugging(deposit_id: String) -> bool:
+	var roll: Dictionary = GameConfig.sea_deposit_rolls.get(deposit_id, {})
+	var min_gap := int(roll.get("min_gap", 0))
+	if min_gap <= 0:
+		return false
+	var drop: Array = []
+	for entry in _deposit_cells:
+		if String(entry["id"]) != deposit_id or not is_instance_valid(entry["node"]):
+			continue
+		var o := Vector2i(entry["cell_x"], entry["cell_y"])
+		var sz := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
+		if not _has_land_within(o, sz, min_gap - 1):
+			continue
+		if not _used_by_an_extractor(deposit_id, o, sz):
+			drop.append(entry["node"])
+	for node in drop:
+		remove_deposit(node)
+	return not drop.is_empty()
+
+## ¿Lo alcanza algun edificio cuya regla pide este tipo de yacimiento?
+func _used_by_an_extractor(deposit_id: String, origin: Vector2i, size: Vector2i) -> bool:
+	for info in GridManager.buildings_view():
+		var data: Resource = info.get("data")
+		if data == null:
+			continue
+		var rule: Dictionary = GameConfig.get_deposit_rule(String(data.id))
+		if rule.is_empty() or String(rule["deposit"]) != deposit_id:
+			continue
+		if deposit_within_reach(origin, size, info["cells"], int(rule["reach"])):
+			return true
+	return false
+
+## Sortea los yacimientos de mar de `deposit_id`. Con su propio azar (semilla de
+## la isla y del tipo), no con el global: el resto del mapa sale igual que antes
+## de haberlos, y cargar una partida vieja da siempre los mismos bancos. Se mira
+## una vez por partida nueva (o por carga vieja), nunca por fotograma.
+func _fill_sea_type(deposit_id: String) -> void:
+	var roll: Dictionary = GameConfig.sea_deposit_rolls.get(deposit_id, {})
+	if roll.is_empty():
+		return
+	var candidates: Array = _sea_spots(deposit_id)
+	if candidates.is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([deposit_id, GridManager.island_seed, GridManager.grid_width, GridManager.grid_height])
+	var lo: int = mini(int(roll["min"]), int(roll["max"]))
+	var hi: int = maxi(int(roll["min"]), int(roll["max"]))
+	var wanted: int = rng.randi_range(lo, hi)
+	var spacing: int = int(roll.get("spacing", 6))
+	# Barajado con el azar propio (shuffle() usaria el global).
+	for i in range(candidates.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t = candidates[i]
+		candidates[i] = candidates[j]
+		candidates[j] = t
+	var reach := _road_reach()
+	var taken: Array = []
+	for entry in _deposit_cells:
+		if String(entry["id"]) == deposit_id:
+			taken.append(Rect2i(Vector2i(entry["cell_x"], entry["cell_y"]), Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))))
+	for cand in candidates:
+		if _count_type(deposit_id) >= wanted:
+			break
+		var origin: Vector2i = cand
+		# Algunos salen de 3 de largo, si el agua da para ello.
+		var size := Vector2i(2, 2)
+		var long_size := Vector2i(3, 2) if rng.randf() < 0.5 else Vector2i(2, 3)
+		if rng.randf() < float(roll.get("long_chance", 0.0)) and _is_sea_spot(deposit_id, origin, long_size):
+			size = long_size
+		var rect := Rect2i(origin, size)
+		var crowded := false
+		for other in taken:
+			if (other as Rect2i).grow(spacing).intersects(rect):
+				crowded = true
+				break
+		if crowded:
+			continue
+		var node := spawn_deposit(deposit_id, origin, -1, size)
+		if node == null:
+			continue
+		# Un banco sin hueco en la costa para su muelle, o sin camino a la red, no vale.
+		if not _deposit_is_workable(_entry_of(node), reach):
+			remove_deposit(node)
+			continue
+		taken.append(rect)
+
+## Origenes 2x2 de agua libre a la distancia de la orilla que pide la tirada de
+## `deposit_id` (mar adentro), lejos del Nucleo. En el orden de la rejilla.
+func _sea_spots(deposit_id: String) -> Array:
+	var out: Array = []
+	var keep_out: Rect2i = core_ring_rect().grow(GameConfig.deposit_core_gap)
+	for y in range(GridManager.grid_height - 1):
+		for x in range(GridManager.grid_width - 1):
+			var o := Vector2i(x, y)
+			if keep_out.intersects(Rect2i(o, Vector2i(2, 2))):
+				continue
+			if _is_sea_spot(deposit_id, o, Vector2i(2, 2)):
+				out.append(o)
+	return out
+
+## ¿Cabe un yacimiento de mar de `size` en `origin`? Todo agua de la rejilla,
+## sin nada encima, y mar adentro: al menos `min_gap` casillas de agua hasta la
+## tierra (no toca la arena) y como mucho `max_gap` (si no, ningun muelle llega).
+func _is_sea_spot(deposit_id: String, origin: Vector2i, size: Vector2i) -> bool:
+	for c in GridManager.cells_for(origin, size):
+		if not GridManager.is_water_cell(c) or GridManager.get_building_at(c) != null:
+			return false
+	return _at_sea_distance(deposit_id, origin, size)
+
+## ¿Toca el agua alguna de estas celdas (diagonal incluida)? La costa de
+## PlacementRules.is_coast_cell, sin cargar PlacementRules.
+static func touches_water(cells: Array) -> bool:
+	for c in cells:
+		for d in _AROUND:
+			if not GridManager.is_land_cell(c + d):
+				return true
+	return false
 
 # ── Yacimiento trabajable ─────────────────────────────────────────────
 
@@ -164,10 +346,10 @@ func _extractor_spots(entry: Dictionary, limit: int = 0) -> Array:
 			continue
 		var data: Resource = _building_data(building_id)
 		var footprint: Vector2i = data.grid_size if data != null else Vector2i(2, 2)
-		return _spots_for(entry, footprint, int(rule["reach"]), limit)
+		return _spots_for(entry, footprint, int(rule["reach"]), limit, bool(rule.get("shore", false)))
 	return [{"origin": Vector2i(entry["cell_x"], entry["cell_y"]), "size": Vector2i.ONE}]
 
-func _spots_for(entry: Dictionary, footprint: Vector2i, reach: int, limit: int) -> Array:
+func _spots_for(entry: Dictionary, footprint: Vector2i, reach: int, limit: int, shore: bool = false) -> Array:
 	var spots: Array = []
 	var dep_origin := Vector2i(entry["cell_x"], entry["cell_y"])
 	var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
@@ -182,7 +364,10 @@ func _spots_for(entry: Dictionary, footprint: Vector2i, reach: int, limit: int) 
 				var origin := Vector2i(ox, oy)
 				if not GridManager.can_place(origin, s, null, ignore):
 					continue
-				if deposit_within_reach(dep_origin, dep_size, GridManager.cells_for(origin, s), reach):
+				var cells: Array = GridManager.cells_for(origin, s)
+				if shore and not touches_water(cells):
+					continue
+				if deposit_within_reach(dep_origin, dep_size, cells, reach):
 					spots.append({"origin": origin, "size": s})
 					if limit > 0 and spots.size() >= limit:
 						return spots
@@ -260,13 +445,58 @@ func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, 
 	# Add to tree FIRST, then position (a global transform needs a parent)
 	_deposits_container.add_child(root)
 	_place_deposit_node(root, cell, dep_size)
-	GridManager.place_obstacle(cell, root, dep_size)
+	_refresh_deposit_look(root)
+	if is_sea_deposit(deposit_id):
+		GridManager.place_sea_obstacle(cell, root, dep_size)
+	else:
+		GridManager.place_obstacle(cell, root, dep_size)
 
 	_deposit_cells.append({ "id": deposit_id, "cell_x": cell.x, "cell_y": cell.y, "size_x": dep_size.x, "size_y": dep_size.y, "node": root })
+	if is_sea_deposit(deposit_id):
+		_queue_sand_holes()
 	return root
 
+# ── La arena no tapa los bancos (1.1) ─────────────────────────────────
+# Hasta fix/peces-en-el-mar los bancos iban en la primera franja de agua, justo
+# donde la playa 3D de IslandGenerator baja desde el cesped hasta el mar: la
+# arena los tapaba casi enteros, y la isla abria un hueco sobre cada uno
+# (island_sand.gdshader, `holes`; la cala de Island2D en 2D). Ahora van mar
+# adentro, pero con una casilla de agua por medio la cola de la playa 3D aun
+# roza su borde, y la playa 2D (Island2D.SHORE_WIDTH, mas de dos casillas) los
+# cubre: el hueco sigue en las dos vistas, acotado a la huella del banco y, en
+# 2D, abierto hacia el mar (agua azul alrededor del banco, nunca hacia la
+# tierra). Se avisa una vez por fotograma como mucho, solo cuando cambian.
+
+var _sand_holes_queued := false
+
+func _queue_sand_holes() -> void:
+	if _sand_holes_queued or not is_inside_tree():
+		return
+	_sand_holes_queued = true
+	_push_sand_holes.call_deferred()
+
+## Los rectangulos (mundo XZ: centro y semiejes) de los yacimientos de mar.
+func sea_deposit_rects() -> Array:
+	var rects: Array = []
+	for entry in _deposit_cells:
+		if not is_sea_deposit(String(entry["id"])):
+			continue
+		var size := Vector2i(int(entry.get("size_x", 2)), int(entry.get("size_y", 2)))
+		var c := GridManager.building_center(Vector2i(int(entry["cell_x"]), int(entry["cell_y"])), size)
+		var half := Vector2(size) * GridManager.cell_size * 0.5
+		rects.append(Vector4(c.x, c.z, half.x, half.y))
+	return rects
+
+func _push_sand_holes() -> void:
+	_sand_holes_queued = false
+	if not is_inside_tree() or get_tree().current_scene == null:
+		return
+	var island := get_tree().current_scene.get_node_or_null("IslandGenerator")
+	if island != null and island.has_method("set_sand_holes"):
+		island.set_sand_holes(sea_deposit_rects())
+
 # ── Ganchos de vista ──────────────────────────────────────────────────
-# Todo lo que es dibujo pasa por estos cuatro metodos. La vista 2D
+# Todo lo que es dibujo pasa por estos cinco metodos. La vista 2D
 # (scripts/view2d/MapGenerator2D.gd) hereda de aqui y solo cambia estos; el
 # sorteo, el registro, el agotamiento, el guardado y la regla de alcance son
 # los mismos en las dos vistas.
@@ -275,24 +505,22 @@ func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, 
 func _make_container() -> Node:
 	return Node3D.new()
 
-## El nodo visible de un yacimiento (sin posicionar). Lleva un Label3D oculto:
-## BuildingInfoPanel lee de ahi el nombre al hacer clic.
+## El nodo visible de un yacimiento (sin posicionar). La malla ("Look", una
+## sola MeshInstance3D con la maqueta de DepositMesh) la pone
+## _refresh_deposit_look() cuando el nodo ya sabe su celda y sus usos. Lleva un
+## Label3D oculto: BuildingInfoPanel lee de ahi el nombre al hacer clic.
 func _build_deposit_node(deposit_id: String, info: Dictionary, dep_size: Vector2i) -> Node:
 	var root := Node3D.new()
-
-	# Scale mesh to fill the multi-cell area
-	var scale_x: float = float(dep_size.x)
-	var scale_z: float = float(dep_size.y)
-	var deposit_mesh := _create_deposit_mesh(deposit_id, info)
-	deposit_mesh.scale = Vector3(scale_x, maxf(scale_x, scale_z) * 0.8, scale_z)
-	root.add_child(deposit_mesh)
+	var look := MeshInstance3D.new()
+	look.name = "Look"
+	root.add_child(look)
 
 	# Hidden label — used by BuildingInfoPanel to get display name on click
 	var label := Label3D.new()
 	label.text = Tr.t(info["display_name"])
 	label.font_size = 48
 	label.pixel_size = 0.01
-	label.position.y = info["height"] * maxf(scale_x, scale_z) + 1.2
+	label.position.y = info["height"] * float(maxi(dep_size.x, dep_size.y)) + 1.2
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	label.outline_size = 10
@@ -302,6 +530,21 @@ func _build_deposit_node(deposit_id: String, info: Dictionary, dep_size: Vector2
 
 	root.add_child(label)
 	return root
+
+## Monta (o rehace) la maqueta del yacimiento con su semilla (la celda) y su
+## etapa de agotamiento (DepositMesh.stage_of). Solo rehace la malla si la
+## etapa cambio: minar no cuesta nada mientras no se cruza un cuarto.
+func _refresh_deposit_look(root: Node) -> void:
+	var stage := DepositMesh.stage_of(int(root.get_meta("uses_remaining", 1)), int(root.get_meta("max_uses", 1)))
+	if int(root.get_meta("look_stage", -1)) == stage:
+		return
+	root.set_meta("look_stage", stage)
+	var look := root.get_node_or_null("Look") as MeshInstance3D
+	if look == null:
+		return
+	var cell: Vector2i = root.get_meta("cell", Vector2i.ZERO)
+	look.mesh = DepositMesh.mesh_for(String(root.get_meta("deposit_id", "")), root.get_meta("deposit_size", Vector2i(2, 2)),
+		DepositMesh.seed_for(cell), stage, GridManager.cell_size)
 
 ## Coloca el nodo ya metido en el arbol sobre su huella.
 func _place_deposit_node(root: Node, cell: Vector2i, dep_size: Vector2i) -> void:
@@ -333,6 +576,8 @@ func _on_mining_completed(deposit_node: Node, _deposit_id: String) -> void:
 	deposit_node.set_meta("uses_remaining", uses)
 	if uses <= 0:
 		_deplete_deposit(deposit_node)
+	else:
+		_refresh_deposit_look(deposit_node)
 
 func _deplete_deposit(node: Node) -> void:
 	var deposit_id: String = node.get_meta("deposit_id", "")
@@ -383,238 +628,7 @@ func clear_all_deposits() -> void:
 		if is_instance_valid(entry["node"]):
 			entry["node"].queue_free()
 	_deposit_cells.clear()
-
-# ── Deposit mesh generation ──
-
-func _dep_metal(color: Color, metallic: float = 0.7, roughness: float = 0.45) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.metallic = metallic
-	mat.roughness = roughness
-	return mat
-
-func _dep_emissive(color: Color, energy: float = 1.5) -> StandardMaterial3D:
-	var mat := _dep_metal(color, 0.0, 0.9)
-	mat.emission_enabled = true
-	mat.emission = color
-	mat.emission_energy_multiplier = energy
-	return mat
-
-func _dep_add_box(parent: Node3D, pos: Vector3, size: Vector3, mat: StandardMaterial3D) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	mi.mesh = mesh
-	mi.set_surface_override_material(0, mat)
-	mi.position = pos
-	parent.add_child(mi)
-	return mi
-
-func _dep_add_cyl(parent: Node3D, pos: Vector3, radius: float, height: float, mat: StandardMaterial3D, seg: int = 24) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = radius
-	mesh.bottom_radius = radius
-	mesh.height = height
-	mesh.radial_segments = seg
-	mi.mesh = mesh
-	mi.set_surface_override_material(0, mat)
-	mi.position = pos
-	parent.add_child(mi)
-	return mi
-
-func _dep_add_sphere(parent: Node3D, pos: Vector3, radius: float, mat: StandardMaterial3D, seg: int = 16) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	var mesh := SphereMesh.new()
-	mesh.radius = radius
-	mesh.height = radius * 2.0
-	mesh.radial_segments = seg
-	mesh.rings = maxi(seg / 2, 8)
-	mi.mesh = mesh
-	mi.set_surface_override_material(0, mat)
-	mi.position = pos
-	parent.add_child(mi)
-	return mi
-
-func _dep_add_cone(parent: Node3D, pos: Vector3, bot_r: float, top_r: float, height: float, mat: StandardMaterial3D, seg: int = 24) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = top_r
-	mesh.bottom_radius = bot_r
-	mesh.height = height
-	mesh.radial_segments = seg
-	mi.mesh = mesh
-	mi.set_surface_override_material(0, mat)
-	mi.position = pos
-	parent.add_child(mi)
-	return mi
-
-func _create_deposit_mesh(deposit_id: String, info: Dictionary) -> Node3D:
-	match deposit_id:
-		"gold_vein": return _deposit_gold_vein()
-		"iron_deposit": return _deposit_iron()
-		"oil_well": return _deposit_oil_well()
-		"forest": return _deposit_forest()
-	# Fallback
-	var node := Node3D.new()
-	var mi := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = GridManager.cell_size * 0.35
-	cyl.bottom_radius = GridManager.cell_size * 0.4
-	cyl.height = info["height"]
-	mi.mesh = cyl
-	mi.set_surface_override_material(0, _dep_metal(info["color"]))
-	mi.position.y = info["height"] * 0.5
-	node.add_child(mi)
-	return node
-
-func _deposit_gold_vein() -> Node3D:
-	var root := Node3D.new()
-	var mat_rock := _dep_metal(Color(0.40, 0.35, 0.30), 0.3, 0.8)
-	var mat_gold := _dep_metal(Color(0.85, 0.70, 0.15), 0.95, 0.2)
-	var mat_gold_glow := _dep_emissive(Color(0.9, 0.75, 0.1), 0.6)
-	# Large rock cluster
-	_dep_add_sphere(root, Vector3(0, 0.4, 0), 0.7, mat_rock)
-	_dep_add_sphere(root, Vector3(0.5, 0.5, 0.3), 0.5, mat_rock)
-	_dep_add_sphere(root, Vector3(-0.4, 0.45, -0.35), 0.55, mat_rock)
-	_dep_add_sphere(root, Vector3(-0.6, 0.3, 0.4), 0.4, mat_rock)
-	_dep_add_sphere(root, Vector3(0.3, 0.3, -0.5), 0.45, mat_rock)
-	# Gold veins (bright streaks on surface)
-	_dep_add_box(root, Vector3(0.2, 0.7, 0.5), Vector3(0.35, 0.08, 0.08), mat_gold)
-	_dep_add_box(root, Vector3(-0.3, 0.75, -0.2), Vector3(0.25, 0.07, 0.12), mat_gold)
-	_dep_add_box(root, Vector3(0.5, 0.5, 0.0), Vector3(0.08, 0.18, 0.25), mat_gold)
-	_dep_add_box(root, Vector3(-0.1, 0.6, 0.4), Vector3(0.3, 0.06, 0.06), mat_gold)
-	# Gold nuggets scattered around base
-	_dep_add_sphere(root, Vector3(0.7, 0.1, 0.5), 0.12, mat_gold_glow)
-	_dep_add_sphere(root, Vector3(-0.6, 0.08, 0.5), 0.09, mat_gold_glow)
-	_dep_add_sphere(root, Vector3(0.0, 0.85, 0.2), 0.1, mat_gold_glow)
-	_dep_add_sphere(root, Vector3(-0.5, 0.1, -0.4), 0.08, mat_gold_glow)
-	_dep_add_sphere(root, Vector3(0.4, 0.08, -0.6), 0.1, mat_gold_glow)
-	return root
-
-func _deposit_iron() -> Node3D:
-	var root := Node3D.new()
-	var mat_iron := _dep_metal(Color(0.45, 0.42, 0.48), 0.85, 0.35)
-	var mat_dark := _dep_metal(Color(0.25, 0.23, 0.27), 0.8, 0.4)
-	var mat_rust := _dep_metal(Color(0.55, 0.30, 0.15), 0.5, 0.6)
-	var mat_sheen := _dep_emissive(Color(0.55, 0.55, 0.65), 0.3)
-	# Large angular iron ore chunks (scattered boulders)
-	var b1 := _dep_add_box(root, Vector3(0, 0.5, 0), Vector3(0.8, 1.0, 0.7), mat_iron)
-	b1.rotation.y = 0.3
-	var b2 := _dep_add_box(root, Vector3(0.4, 0.65, 0.4), Vector3(0.55, 0.9, 0.5), mat_dark)
-	b2.rotation.y = -0.5
-	b2.rotation.x = 0.15
-	var b3 := _dep_add_box(root, Vector3(-0.3, 0.4, -0.25), Vector3(0.65, 0.7, 0.55), mat_iron)
-	b3.rotation.y = 0.8
-	var b4 := _dep_add_box(root, Vector3(-0.5, 0.3, 0.4), Vector3(0.45, 0.5, 0.45), mat_dark)
-	b4.rotation.y = -0.2
-	b4.rotation.z = 0.1
-	# Tall ore pillar
-	var b5 := _dep_add_box(root, Vector3(0.15, 0.7, -0.35), Vector3(0.35, 1.2, 0.3), mat_iron)
-	b5.rotation.y = 0.5
-	# Metallic veins (shiny streaks)
-	_dep_add_box(root, Vector3(0.2, 0.85, 0.4), Vector3(0.4, 0.05, 0.08), mat_sheen)
-	_dep_add_box(root, Vector3(-0.15, 0.7, -0.3), Vector3(0.3, 0.05, 0.1), mat_sheen)
-	_dep_add_box(root, Vector3(0.5, 0.5, -0.1), Vector3(0.08, 0.05, 0.3), mat_sheen)
-	# Rust weathering
-	_dep_add_box(root, Vector3(-0.4, 0.6, 0.25), Vector3(0.5, 0.03, 0.06), mat_rust)
-	_dep_add_box(root, Vector3(0.3, 0.35, 0.15), Vector3(0.35, 0.03, 0.08), mat_rust)
-	# Scattered ore fragments
-	_dep_add_sphere(root, Vector3(0.6, 0.1, -0.4), 0.1, mat_dark)
-	_dep_add_sphere(root, Vector3(-0.55, 0.08, 0.55), 0.08, mat_dark)
-	_dep_add_sphere(root, Vector3(0.7, 0.07, 0.3), 0.07, mat_iron)
-	_dep_add_sphere(root, Vector3(-0.65, 0.06, -0.35), 0.06, mat_dark)
-	_dep_add_sphere(root, Vector3(0.1, 0.05, 0.65), 0.07, mat_iron)
-	return root
-
-func _deposit_oil_well() -> Node3D:
-	var root := Node3D.new()
-	var mat_oil_dark := _dep_metal(Color(0.06, 0.05, 0.08), 0.4, 0.15)
-	var mat_oil_sheen := _dep_emissive(Color(0.12, 0.08, 0.20), 0.4)
-	var mat_oil_edge := _dep_metal(Color(0.10, 0.08, 0.12), 0.3, 0.25)
-	var mat_iron := _dep_metal(Color(0.25, 0.23, 0.27), 0.8, 0.4)
-	var mat_rust := _dep_metal(Color(0.50, 0.28, 0.15), 0.6, 0.55)
-	var mat_warning := _dep_emissive(Color(1.0, 0.3, 0.05), 1.5)
-	# Oil puddle base
-	_dep_add_cyl(root, Vector3(0, 0.02, 0), 0.85, 0.04, mat_oil_sheen, 12)
-	_dep_add_cyl(root, Vector3(0.35, 0.02, 0.25), 0.55, 0.04, mat_oil_dark)
-	_dep_add_cyl(root, Vector3(-0.3, 0.02, -0.2), 0.6, 0.04, mat_oil_dark)
-	_dep_add_cyl(root, Vector3(-0.45, 0.02, 0.35), 0.4, 0.03, mat_oil_sheen)
-	_dep_add_cyl(root, Vector3(0.5, 0.02, -0.35), 0.45, 0.03, mat_oil_edge)
-	# Natural oil seep (geyser pipe)
-	_dep_add_cyl(root, Vector3(0, 0.3, 0), 0.08, 0.6, mat_iron)
-	_dep_add_cyl(root, Vector3(0, 0.65, 0), 0.12, 0.1, mat_rust)
-	# Oil bubbling up from pipe
-	_dep_add_sphere(root, Vector3(0, 0.72, 0), 0.08, mat_oil_sheen)
-	_dep_add_sphere(root, Vector3(0.04, 0.78, 0.02), 0.04, mat_oil_dark)
-	# Warning stakes around the seep
-	for i in range(4):
-		var angle: float = i * TAU / 4.0 + PI / 4.0
-		var sx: float = cos(angle) * 0.6
-		var sz: float = sin(angle) * 0.6
-		_dep_add_cyl(root, Vector3(sx, 0.2, sz), 0.02, 0.4, mat_rust)
-		_dep_add_sphere(root, Vector3(sx, 0.42, sz), 0.035, mat_warning)
-	# Small satellite puddles
-	_dep_add_cyl(root, Vector3(0.7, 0.015, 0.5), 0.25, 0.03, mat_oil_dark)
-	_dep_add_cyl(root, Vector3(-0.65, 0.015, -0.5), 0.3, 0.03, mat_oil_sheen)
-	# Bubbles
-	_dep_add_sphere(root, Vector3(0.15, 0.05, 0.15), 0.06, mat_oil_sheen)
-	_dep_add_sphere(root, Vector3(-0.25, 0.05, -0.1), 0.05, mat_oil_sheen)
-	return root
-
-func _deposit_forest() -> Node3D:
-	var root := Node3D.new()
-	var mat_trunk := _dep_metal(Color(0.35, 0.22, 0.10), 0.1, 0.85)
-	var mat_trunk_birch := _dep_metal(Color(0.65, 0.58, 0.48), 0.1, 0.8)
-	var mat_leaves_dark := _dep_metal(Color(0.15, 0.35, 0.10), 0.1, 0.8)
-	var mat_leaves_light := _dep_metal(Color(0.28, 0.50, 0.18), 0.1, 0.75)
-	var mat_leaves_autumn := _dep_metal(Color(0.45, 0.35, 0.10), 0.1, 0.8)
-	var mat_moss := _dep_metal(Color(0.18, 0.30, 0.12), 0.05, 0.9)
-	var mat_mushroom := _dep_emissive(Color(0.8, 0.6, 0.2), 0.3)
-	# Main tall pine (layered canopy)
-	_dep_add_cyl(root, Vector3(0, 0.8, 0), 0.12, 1.6, mat_trunk)
-	_dep_add_cone(root, Vector3(0, 2.0, 0), 0.65, 0.0, 0.9, mat_leaves_dark)
-	_dep_add_cone(root, Vector3(0, 1.7, 0), 0.72, 0.2, 0.6, mat_leaves_light)
-	_dep_add_cone(root, Vector3(0, 1.4, 0), 0.55, 0.3, 0.4, mat_leaves_dark)
-	# Second tall tree (birch)
-	_dep_add_cyl(root, Vector3(0.55, 0.65, 0.5), 0.07, 1.3, mat_trunk_birch)
-	_dep_add_sphere(root, Vector3(0.55, 1.55, 0.5), 0.4, mat_leaves_light)
-	_dep_add_sphere(root, Vector3(0.55, 1.35, 0.55), 0.35, mat_leaves_dark)
-	# Third pine
-	_dep_add_cyl(root, Vector3(-0.55, 0.5, -0.45), 0.08, 1.0, mat_trunk)
-	_dep_add_cone(root, Vector3(-0.55, 1.25, -0.45), 0.45, 0.0, 0.7, mat_leaves_dark)
-	_dep_add_cone(root, Vector3(-0.55, 1.05, -0.45), 0.50, 0.12, 0.4, mat_leaves_light)
-	# Fourth small autumn tree
-	_dep_add_cyl(root, Vector3(-0.35, 0.5, 0.55), 0.06, 1.0, mat_trunk)
-	_dep_add_sphere(root, Vector3(-0.35, 1.2, 0.55), 0.35, mat_leaves_autumn)
-	# Fifth young sapling
-	_dep_add_cyl(root, Vector3(0.4, 0.3, -0.5), 0.04, 0.6, mat_trunk)
-	_dep_add_cone(root, Vector3(0.4, 0.75, -0.5), 0.2, 0.0, 0.35, mat_leaves_light)
-	# Dense undergrowth
-	_dep_add_sphere(root, Vector3(-0.4, 0.2, 0.15), 0.25, mat_leaves_light)
-	_dep_add_sphere(root, Vector3(0.3, 0.2, -0.3), 0.22, mat_leaves_dark)
-	_dep_add_sphere(root, Vector3(0.65, 0.15, 0.1), 0.2, mat_leaves_light)
-	_dep_add_sphere(root, Vector3(-0.6, 0.18, -0.2), 0.22, mat_leaves_dark)
-	_dep_add_sphere(root, Vector3(0.1, 0.15, 0.65), 0.18, mat_leaves_light)
-	_dep_add_sphere(root, Vector3(-0.2, 0.14, -0.6), 0.16, mat_leaves_dark)
-	# Fallen logs
-	var log1 := _dep_add_cyl(root, Vector3(-0.6, 0.1, 0.4), 0.07, 0.5, mat_trunk)
-	log1.rotation.z = PI / 2.0
-	var log2 := _dep_add_cyl(root, Vector3(0.5, 0.1, 0.7), 0.06, 0.45, mat_trunk)
-	log2.rotation.z = PI / 2.0
-	log2.rotation.y = 0.8
-	# Tree stump
-	_dep_add_cyl(root, Vector3(0.6, 0.1, -0.55), 0.1, 0.2, mat_trunk)
-	# Moss patches
-	_dep_add_cyl(root, Vector3(0.1, 0.01, -0.1), 0.6, 0.02, mat_moss)
-	_dep_add_cyl(root, Vector3(-0.3, 0.01, 0.3), 0.45, 0.02, mat_moss)
-	_dep_add_cyl(root, Vector3(0.4, 0.01, 0.35), 0.3, 0.02, mat_moss)
-	# Mushrooms
-	_dep_add_cyl(root, Vector3(-0.5, 0.06, 0.0), 0.015, 0.06, mat_trunk)
-	_dep_add_sphere(root, Vector3(-0.5, 0.1, 0.0), 0.04, mat_mushroom)
-	_dep_add_cyl(root, Vector3(-0.45, 0.05, 0.05), 0.01, 0.04, mat_trunk)
-	_dep_add_sphere(root, Vector3(-0.45, 0.08, 0.05), 0.03, mat_mushroom)
-	return root
+	_queue_sand_holes()
 
 # ── Deposit reach (placement rules) ──
 
@@ -645,6 +659,74 @@ func find_deposit_near_cells(deposit_id: String, cells: Array, reach: int) -> No
 		if deposit_within_reach(dep_origin, dep_size, cells, reach):
 			return entry["node"]
 	return null
+
+## Every deposit of the type within `reach` of the cells, nearest first (by
+## Chebyshev gap; ties keep the map order). The fishing dock picks among them.
+func find_deposits_near_cells(deposit_id: String, cells: Array, reach: int) -> Array:
+	var found: Array = []
+	for entry in _deposit_cells:
+		if entry["id"] != deposit_id or not is_instance_valid(entry["node"]):
+			continue
+		var dep_origin := Vector2i(entry["cell_x"], entry["cell_y"])
+		var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
+		var d := deposit_distance(dep_origin, dep_size, cells)
+		if d <= reach:
+			found.append([d, found.size(), entry["node"]])
+	found.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
+	return found.map(func(f): return f[2])
+
+## El embarcadero de un muelle (fix/peces-en-el-mar): las celdas de agua entre
+## su huella (`dock_cells`) y el banco mas cercano a su alcance, en linea (pasos
+## de rey, el mas recto entre los mas cortos): {"cells", "from" (la celda del
+## muelle de la que sale), "to" (la del banco a la que llega)}. "cells" vacio sin
+## banco, o si ya lo toca (un muelle de una partida vieja). Solo dibujo: no ocupa
+## la rejilla. Se pide al colocar, mover o cargar, nunca por fotograma.
+func pier_path(dock_cells: Array, building_id: String = "fishing_dock") -> Dictionary:
+	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
+	if rule.is_empty() or dock_cells.is_empty():
+		return {"cells": []}
+	var near := find_deposits_near_cells(String(rule["deposit"]), dock_cells, int(rule["reach"]))
+	if near.is_empty():
+		return {"cells": []}
+	var dep: Node = near[0]
+	var o: Vector2i = dep.get_meta("cell", Vector2i.ZERO)
+	var sz: Vector2i = dep.get_meta("deposit_size", Vector2i(2, 2))
+	var shoal := Rect2i(o, sz)
+	var from: Vector2i = dock_cells[0]
+	var to: Vector2i = from
+	var best_d := 1 << 30
+	var best_m := 1 << 30
+	for cell in dock_cells:
+		var a: Vector2i = cell
+		var b := Vector2i(clampi(a.x, o.x, shoal.end.x - 1), clampi(a.y, o.y, shoal.end.y - 1))
+		var d: int = maxi(absi(b.x - a.x), absi(b.y - a.y))
+		var m: int = absi(b.x - a.x) + absi(b.y - a.y)
+		if d < best_d or (d == best_d and m < best_m):
+			best_d = d
+			best_m = m
+			from = a
+			to = b
+	var out: Array = []
+	var cur := from
+	for _i in range(best_d):
+		cur += Vector2i(signi(to.x - cur.x), signi(to.y - cur.y))
+		if shoal.has_point(cur):
+			break
+		if GridManager.is_water_cell(cur):
+			out.append(cur)
+	return {"cells": out, "from": from, "to": to}
+
+## Chebyshev distance from the nearest of `cells` to the rectangle (0 = inside).
+static func deposit_distance(dep_origin: Vector2i, dep_size: Vector2i, cells: Array) -> int:
+	var max_x: int = dep_origin.x + dep_size.x - 1
+	var max_y: int = dep_origin.y + dep_size.y - 1
+	var best := 1 << 30
+	for cell in cells:
+		var c: Vector2i = cell
+		var dx: int = maxi(0, maxi(dep_origin.x - c.x, c.x - max_x))
+		var dy: int = maxi(0, maxi(dep_origin.y - c.y, c.y - max_y))
+		best = mini(best, maxi(dx, dy))
+	return best
 
 ## Find a deposit of the given type that overlaps any of the provided cells.
 ## Returns the deposit node or null. Kept as the reach-0 case of the rule above.
@@ -678,6 +760,9 @@ func buildable_spots_near(deposit_id: String, footprint: Vector2i, reach: int, l
 					var origin := Vector2i(ox, oy)
 					if not GridManager.can_place(origin, s):
 						continue
+					# Lo que trabaja un banco de mar se planta en la costa.
+					if is_sea_deposit(deposit_id) and not touches_water(GridManager.cells_for(origin, s)):
+						continue
 					if deposit_within_reach(dep_origin, dep_size, GridManager.cells_for(origin, s), reach):
 						spots.append({"origin": origin, "size": s})
 						if limit > 0 and spots.size() >= limit:
@@ -697,21 +782,25 @@ func remove_deposit(node: Node) -> void:
 			break
 	if cell != Vector2i(-1, -1):
 		GridManager.remove_obstacle(cell, dep_size)
+	if is_sea_deposit(deposit_id):
+		_queue_sand_holes()
 	node.queue_free()
 
 ## Una celda al azar donde cabe un yacimiento de `dep_size`: dentro de la
 ## rejilla pero fuera de la franja de costa, lejos del centro y sin tocar la
 ## acera del Nucleo (queda `deposit_core_gap` de hueco para que la red crezca).
 func _random_cell_for_deposit(center: Vector2i, dep_size: Vector2i) -> Vector2i:
-	var band: int = GameConfig.map_shore_band
 	var keep_out: Rect2i = core_ring_rect().grow(GameConfig.deposit_core_gap)
-	var max_x: int = GridManager.grid_width - band - dep_size.x
-	var max_y: int = GridManager.grid_height - band - dep_size.y
-	if max_x < band or max_y < band:
+	# Se sortea dentro del rectangulo de la tierra (en una isla irregular el mar
+	# se come buena parte de la rejilla) y nunca en la franja de costa.
+	var land: Rect2i = GridManager.land_bounds()
+	var max_x: int = land.end.x - dep_size.x
+	var max_y: int = land.end.y - dep_size.y
+	if max_x < land.position.x or max_y < land.position.y:
 		return Vector2i(-1, -1)
-	for attempt in range(80):
-		var cx: int = randi_range(band, max_x)
-		var cy: int = randi_range(band, max_y)
+	for attempt in range(120):
+		var cx: int = randi_range(land.position.x, max_x)
+		var cy: int = randi_range(land.position.y, max_y)
 		var cell := Vector2i(cx, cy)
 		# Check center exclusion from deposit center
 		var mid_x: float = cx + dep_size.x * 0.5
@@ -721,8 +810,16 @@ func _random_cell_for_deposit(center: Vector2i, dep_size: Vector2i) -> Vector2i:
 			continue
 		if keep_out.intersects(Rect2i(cell, dep_size)):
 			continue
-		# Check all cells are free
+		# Check all cells are free (y en tierra: can_place no acepta agua)
 		if not GridManager.can_place(cell, dep_size):
+			continue
+		if _touches_shore(cell, dep_size):
 			continue
 		return cell
 	return Vector2i(-1, -1)
+
+func _touches_shore(cell: Vector2i, dep_size: Vector2i) -> bool:
+	for c in GridManager.cells_for(cell, dep_size):
+		if is_shore_cell(c):
+			return true
+	return false

@@ -1,12 +1,32 @@
 extends CanvasLayer
-## Army / Barracks panel: train units, see Military Power, capacity and upkeep.
-## The management → combat bridge — a bigger base fields a stronger army.
+## EJERCITO (Cuartel, Astillero, Aerodromo): entrenar unidades, ver el Poder
+## Militar, la tropa y la cola. El puente de la base al combate: una base mas
+## grande saca un ejercito mas fuerte.
 ##
-## Menos texto (2026-10-04): "Tropa 5/11 · En cola 1/1", cada unidad con "×3" y
-## su coste en iconos; de donde salen los topes y el sueldo, en tooltips.
+## Rediseno fase 2 (feat/ui2-ejercito, docs/28): ventana crema de borde grueso
+## con su cinta, pestanas Tierra / Mar / Aire, y cada unidad en una fila
+##   [disco] Soldado ×3            [ficha] [+]
+##           [oro] 40 [madera] 20  Poder 10  [reloj][oro] 1
+## Icono + numero; lo que no se puede, gris con candado y el porque en 2-3
+## palabras; el detalle (topes, sueldo, quien abre que) al mantener pulsado.
+## Telefono primero: a pantalla completa, pestanas solo icono menos la elegida.
 
 const TextKit := preload("res://scripts/ui/TextKit.gd")
+const RegimentCard := preload("res://scripts/ui/RegimentCard.gd")
+const UnitCardScript := preload("res://scripts/ui/UnitCard.gd")
+const PlacementRulesScript := preload("res://scripts/buildings/PlacementRules.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
+const TrainingSectionScript := preload("res://scripts/ui/TrainingSection.gd")
+const Objectives := preload("res://scripts/services/Objectives.gd")
 
+## Tope de la ventana en PC (en telefono va a pantalla completa).
+const MAX_SIZE := Vector2(980, 640)
+const DOMAIN_GLYPH := {"land": "tank", "sea": "anchor", "air": "plane"}
+const DOMAIN_TAB_KEY := {"land": "ARMY2_TAB_LAND", "sea": "ARMY2_TAB_SEA", "air": "ARMY2_TAB_AIR"}
+
+## La ventana (velo + cinta + cuerpo). `_panel` es su caja, `_backdrop` el velo.
+var _win: Dictionary = {}
+var _holder: Control
 var _panel: PanelContainer
 var _backdrop: ColorRect
 var _army_btn: Button
@@ -16,18 +36,23 @@ var _sidebar_visible := false
 var _power_label: Label
 var _capacity_label: Label
 var _slots_label: Label
+var _tabs_row: HBoxContainer
 var _units_vbox: VBoxContainer
 var _training_vbox: VBoxContainer
 var _training_bars: Array = []  # ProgressBar refs, index-aligned with ArmyManager.get_training()
+## Las fichas abiertas (boton de ficha): unit_id -> true. Se mantienen al rehacer.
+var _cards_open: Dictionary = {}
+## La pestana elegida ("land" / "sea" / "air"); "" = la primera con edificio.
+var _tab := ""
 
 
 func _ready() -> void:
 	layer = 11
 	_setup_ui()
 	UIManager.register_panel(self, "ArmyPanel.modal")
-	EventBus.army_changed.connect(_refresh)
+	EventBus.army_changed.connect(_request_refresh)
 	EventBus.era_advanced.connect(_on_era_advanced)
-	EventBus.resource_unlocked.connect(func(_r): _refresh())
+	EventBus.resource_unlocked.connect(_request_refresh)
 	EventBus.building_placed.connect(func(_d, _c): _on_base_changed())
 	EventBus.building_demolished.connect(func(_n, _c): _on_base_changed())
 	EventBus.game_load_completed.connect(_on_base_changed)
@@ -35,12 +60,29 @@ func _ready() -> void:
 	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
 	# Lo que esta fuera sigue contando en el ejercito pero no se puede entrenar
 	# ni mandar a ningun otro sitio: el panel tiene que decirlo.
-	EventBus.expedition_started.connect(func(_id, _nodes): _refresh())
-	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _refresh())
+	EventBus.expedition_started.connect(func(_id, _nodes): _request_refresh())
+	EventBus.expedition_ended.connect(func(_r, _rewards, _casualties): _request_refresh())
 	EventBus.expedition_resumed.connect(_on_expedition_resumed)
+	get_viewport().size_changed.connect(_on_viewport_resized)
 	_update_button_visibility()
 	# Por si la partida se cargo antes de que este panel escuchara.
 	_on_base_changed.call_deferred()
+	# Las barras de entrenamiento solo se mueven con el panel abierto.
+	set_process(false)
+
+## Las senales del ejercito rehacen las filas solo con el panel abierto (al
+## abrirlo se rehacen de todos modos), y una vez por fotograma como mucho.
+var _refresh_queued := false
+func _request_refresh(_arg = null) -> void:
+	if not _is_open or _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
+	if _is_open:
+		_refresh()
 
 func _process(_delta: float) -> void:
 	if not _is_open:
@@ -53,91 +95,122 @@ func _setup_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	# Sidebar button (hamburger menu)
+	# Boton de la barra lateral vieja (☰). La barra de abajo abre el panel con open().
 	_army_btn = Button.new()
 	_army_btn.text = Tr.t("BTN_ARMY")
 	_army_btn.custom_minimum_size = Vector2(164, UILayoutConfig.SIDEBAR_BTN_HEIGHT)
 	_army_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_army_btn.offset_left = -176
 	_army_btn.offset_top = UILayoutManager.get_sidebar_button_offset("ArmyPanel.button")
-	UITheme.style_card_button(_army_btn, UITheme.BTN.lightened(0.05), UITheme.CAT_MILITARY)
+	CT.style_pill(_army_btn, "open", CT.BTN_SMALL, "hud", "army")
 	_army_btn.pressed.connect(_toggle_panel)
 	_army_btn.visible = false
 	root.add_child(_army_btn)
 
-	# Backdrop
-	_backdrop = UITheme.make_backdrop()
-	_backdrop.visible = false
+	_win = CT.modal_window(root, Tr.t("LBL_ARMY_TITLE"), CT.sem("POSITIVE"))
+	_holder = _win["holder"]
+	_holder.visible = false
+	_backdrop = _win["veil"]
 	_backdrop.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _toggle_panel())
-	root.add_child(_backdrop)
-
-	# Modal
-	_panel = PanelContainer.new()
-	UILayoutManager.apply_layout("ArmyPanel.modal", _panel)
-	_panel.visible = false
-	_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
+	_panel = _win["panel"]
 	_panel.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed: UIManager.focus_window(self))
-	root.add_child(_panel)
+	(_win["close"] as Button).pressed.connect(_toggle_panel)
+	(_win["close"] as Button).tooltip_text = Tr.t("BTN_CLOSE")
+	var body: VBoxContainer = _win["body"]
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", UITheme.SEPARATION)
-	_panel.add_child(vbox)
+	# Fila de arriba: las pestanas a la izquierda y tres cifras a la derecha.
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 8)
+	body.add_child(top)
+	_tabs_row = HBoxContainer.new()
+	_tabs_row.name = "ArmyTabs"
+	_tabs_row.add_theme_constant_override("separation", 6)
+	top.add_child(_tabs_row)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(spacer)
+	var stats := HBoxContainer.new()
+	stats.add_theme_constant_override("separation", 12)
+	# Telefono en vertical: las cifras bajo las pestanas (juntas no cabian).
+	if CT.portrait():
+		body.add_child(stats)
+	else:
+		top.add_child(stats)
+	_power_label = _summary_chip(stats, "army", Tr.t("ARMY2_POWER"))
+	# De donde sale cada tope, al mantener pulsado.
+	_capacity_label = _summary_chip(stats, "res:workers", Tr.t("ARMY2_TROOPS"))
+	_capacity_label.tooltip_text = Tr.t("LBL_ARMY_CAPACITY_HINT") % [GameConfig.army_base_capacity,
+		GameConfig.army_capacity_per_barracks, GameConfig.army_full_capacity_barracks,
+		GameConfig.army_capacity_per_extra_barracks, GameConfig.army_capacity_max] \
+		+ "\n" + Tr.t("LBL_ARMY_CAPACITY_FLEET_HINT") % [int(GameConfig.army_capacity_per_building.get("shipyard", 0)),
+			int(GameConfig.army_capacity_per_building.get("aerodrome", 0))]
+	_capacity_label.get_parent().tooltip_text = _capacity_label.tooltip_text
+	_slots_label = _summary_chip(stats, "clock", Tr.t("ARMY2_QUEUE"))
+	_slots_label.tooltip_text = Tr.t("LBL_ARMY_SLOTS_HINT") % GameConfig.army_training_slots_max
+	_slots_label.get_parent().tooltip_text = _slots_label.tooltip_text
 
-	vbox.add_child(UITheme.make_panel_header(Tr.t("LBL_ARMY_TITLE"), _toggle_panel))
-
-	# Summary
-	_power_label = UITheme.make_label("", "title", UITheme.CAT_MILITARY)
-	_power_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(_power_label)
-
-	# Flow y no HBox: en un movil en vertical las dos cifras van una debajo de
-	# otra en vez de empujar el panel fuera de la pantalla.
-	var stats_row := HFlowContainer.new()
-	stats_row.alignment = FlowContainer.ALIGNMENT_CENTER
-	stats_row.add_theme_constant_override("h_separation", 20)
-	# "Tropa 5/11" y "En cola 1/1"; de donde sale cada tope, en el tooltip.
-	_capacity_label = UITheme.make_label("", "body", UITheme.TEXT)
-	_capacity_label.mouse_filter = Control.MOUSE_FILTER_PASS
-	_capacity_label.tooltip_text = Tr.t("LBL_ARMY_CAPACITY_HINT") % [GameConfig.army_base_capacity, GameConfig.army_capacity_per_barracks]
-	_slots_label = UITheme.make_label("", "body", UITheme.TEXT_DIM)
-	_slots_label.mouse_filter = Control.MOUSE_FILTER_PASS
-	_slots_label.tooltip_text = Tr.t("LBL_ARMY_SLOTS_HINT")
-	stats_row.add_child(_capacity_label)
-	stats_row.add_child(_slots_label)
-	vbox.add_child(stats_row)
-
-	vbox.add_child(UITheme.make_separator())
-
-	# Unit list (scrollable)
+	# La lista de la pestana y, al final, la tarjeta REGIMIENTO (solo cosmetica).
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 260)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(scroll)
-
+	body.add_child(scroll)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(col)
 	_units_vbox = VBoxContainer.new()
 	_units_vbox.add_theme_constant_override("separation", 6)
 	_units_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_units_vbox)
+	col.add_child(_units_vbox)
+	col.add_child(RegimentCard.new())
 
-	vbox.add_child(UITheme.make_separator())
-
-	# In-training section
-	vbox.add_child(UITheme.make_label(Tr.t("LBL_ARMY_IN_TRAINING"), "section", UITheme.ACCENT))
+	# La cola de entrenamiento, abajo y solo si hay algo.
 	_training_vbox = VBoxContainer.new()
+	_training_vbox.name = "Training"
 	_training_vbox.add_theme_constant_override("separation", 4)
-	vbox.add_child(_training_vbox)
+	body.add_child(_training_vbox)
 
+	_fit()
 	_refresh()
+
+## [icono] cifra, con el nombre al mantener pulsado. Devuelve la etiqueta.
+func _summary_chip(parent: Container, glyph: String, caption: String) -> Label:
+	var chip := HBoxContainer.new()
+	chip.add_theme_constant_override("separation", 4)
+	chip.mouse_filter = Control.MOUSE_FILTER_PASS
+	chip.tooltip_text = caption
+	var ic := CT.make_glyph(glyph, 24 if CT.phone else 28)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chip.add_child(ic)
+	var l := CT.label("", "number", CT.text("window"))
+	l.mouse_filter = Control.MOUSE_FILTER_PASS
+	chip.add_child(l)
+	parent.add_child(chip)
+	return l
+
+func _vp() -> Vector2:
+	return get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
+
+func _fit() -> void:
+	CT.fit_window(_win, _vp(), MAX_SIZE)
+
+func _on_viewport_resized() -> void:
+	_fit()
+	if _is_open:
+		_refresh()
 
 # ── Refresh ──
 
 func _refresh(_arg = null) -> void:
 	if not _power_label:
 		return
-	_power_label.text = Tr.t("LBL_MILITARY_POWER") % ArmyManager.get_power()
-	_capacity_label.text = Tr.t("LBL_ARMY_CAPACITY") % [ArmyManager.get_used_capacity(), ArmyManager.get_capacity()]
-	_slots_label.text = Tr.t("LBL_ARMY_SLOTS") % [ArmyManager.get_training().size(), ArmyManager.max_slots()]
+	var power: int = ArmyManager.get_power()
+	_power_label.text = str(power)
+	_power_label.get_parent().tooltip_text = Tr.t("LBL_MILITARY_POWER") % power
+	_capacity_label.text = "%d/%d" % [ArmyManager.get_used_capacity(), ArmyManager.get_capacity()]
+	_slots_label.text = "%d/%d" % [ArmyManager.get_training().size(), ArmyManager.max_slots()]
+	_rebuild_tabs()
 	_rebuild_units()
 	_rebuild_training()
 
@@ -146,162 +219,137 @@ func _units_on_expedition() -> Dictionary:
 	return CombatManager.get_units_on_expedition()
 
 func _on_expedition_resumed(_expedition_id: int) -> void:
-	_refresh()
+	_request_refresh()
 
+# ── Pestanas Tierra / Mar / Aire ──
+
+func _domain_of(building_id: String) -> String:
+	return String(GameConfig.MILITARY_BUILDING_DOMAIN.get(building_id, "land"))
+
+func _building_of(domain: String) -> String:
+	for building_id in GameConfig.MILITARY_BUILDINGS:
+		if _domain_of(String(building_id)) == domain:
+			return String(building_id)
+	return ""
+
+func _building_name(building_id: String) -> String:
+	var data: BuildingData = PlacementRulesScript.load_building_data(building_id)
+	return data.get_display_name() if data != null else building_id
+
+## La pestana elegida; sin elegir, la primera cuyo edificio este en pie.
+func current_tab() -> String:
+	if _tab != "":
+		return _tab
+	for building_id in GameConfig.MILITARY_BUILDINGS:
+		if ArmyManager.building_count(String(building_id)) > 0:
+			return _domain_of(String(building_id))
+	return "land"
+
+## Cambia de pestana. Publico para la barra de abajo y las pruebas.
+func select_tab(domain: String) -> void:
+	_tab = domain
+	if _is_open or _power_label != null:
+		_refresh()
+
+func _rebuild_tabs() -> void:
+	for child in _tabs_row.get_children():
+		_tabs_row.remove_child(child)
+		child.queue_free()
+	var ph := CT.is_phone()
+	var current := current_tab()
+	for building_id in GameConfig.MILITARY_BUILDINGS:
+		var domain := _domain_of(String(building_id))
+		var sel := domain == current
+		var count: int = ArmyManager.building_count(String(building_id))
+		var glyph: String = DOMAIN_GLYPH.get(domain, "army") if count > 0 else "lock"
+		var word := Tr.t(String(DOMAIN_TAB_KEY.get(domain, "ARMY2_TAB_LAND")))
+		var t := CT.tab(word if (sel or not ph) else "", glyph, sel, "window",
+			CT.sem("POSITIVE") if sel else Color(0, 0, 0, 0), 48 if ph else CT.BTN)
+		t.name = "ArmyTab_" + domain
+		if ph and not sel:
+			t.custom_minimum_size.x = 56
+		var bname := _building_name(String(building_id))
+		if count > 0:
+			t.tooltip_text = "%s · %s" % [word, Tr.t("LBL_DOMAIN_SLOTS") % [bname, count,
+				ArmyManager.training_in(String(building_id)), ArmyManager.max_slots(String(building_id))]]
+		else:
+			t.tooltip_text = "%s · %s" % [word, Tr.t("LBL_DOMAIN_NEEDS") % Objectives.building_a(String(building_id))]
+		t.pressed.connect(select_tab.bind(domain))
+		_tabs_row.add_child(t)
+
+# ── Filas de unidades ──
+
+## Las filas de la pestana elegida. Sin el edificio, el candado dice que
+## construir; las filas siguen ahi en gris (se ve lo que vendra).
 func _rebuild_units() -> void:
 	for child in _units_vbox.get_children():
+		_units_vbox.remove_child(child)
 		child.queue_free()
+	var domain := current_tab()
+	var building_id := _building_of(domain)
+	if building_id == "":
+		return
+	if ArmyManager.building_count(building_id) <= 0:
+		var lock := CT.icon_line("lock", Tr.t("LBL_DOMAIN_NEEDS") % Objectives.building_a(building_id), "warning", "window", "body")
+		lock.name = "Domain_" + domain
+		_units_vbox.add_child(lock)
 	for unit_id in GameConfig.get_unit_ids():
-		_units_vbox.add_child(_make_unit_row(unit_id))
+		if GameConfig.get_unit_building(String(unit_id)) == building_id:
+			_units_vbox.add_child(_make_unit_row(String(unit_id)))
 
+## La fila de una unidad: la misma pieza que la ficha del Cuartel
+## (TrainingSection.make_unit_row), con solo "+" en el boton de entrenar.
 func _make_unit_row(unit_id: String) -> PanelContainer:
-	var def := GameConfig.get_unit_def(unit_id)
-	var unlocked := ArmyManager.is_unlocked(unit_id)
+	return TrainingSectionScript.make_unit_row(unit_id, _cards_open.has(unit_id), CT.portrait(),
+		toggle_unit_card.bind(unit_id), _refresh)
 
-	var card := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = UITheme.CARD_BG if unlocked else UITheme.BTN_DISABLED
-	style.set_corner_radius_all(UITheme.CORNER)
-	style.set_content_margin_all(8)
-	style.border_width_left = 5
-	style.border_color = UITheme.CAT_MILITARY if unlocked else UITheme.TEXT_DIM
-	card.add_theme_stylebox_override("panel", style)
+## Por que no se puede entrenar `unit_id` (vive en TrainingSection).
+static func blocked_text(unit_id: String, reason: String) -> String:
+	return TrainingSectionScript.blocked_text(unit_id, reason)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	card.add_child(row)
+## Abre o cierra la ficha de `unit_id` en su fila. Si la unidad es de otra
+## pestana, se pasa a la suya.
+func toggle_unit_card(unit_id: String) -> void:
+	if _cards_open.has(unit_id):
+		_cards_open.erase(unit_id)
+	else:
+		_cards_open[unit_id] = true
+		var domain := _domain_of(GameConfig.get_unit_building(unit_id))
+		if domain != current_tab():
+			_tab = domain
+			_rebuild_tabs()
+	_rebuild_units()
 
-	# Left: name + stats
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.add_theme_constant_override("separation", 1)
-	row.add_child(info)
+func is_unit_card_open(unit_id: String) -> bool:
+	return _cards_open.has(unit_id)
 
-	# Nombre y "×3" (cuantas tienes). El nivel de era sobraba: si la era no
-	# llega, el motivo lo dice debajo.
-	var title_row := HFlowContainer.new()
-	title_row.add_theme_constant_override("h_separation", 8)
-	var name_label := UITheme.make_label(Tr.t(def.get("name", unit_id)), "section", UITheme.TEXT if unlocked else UITheme.TEXT_DIM)
-	title_row.add_child(name_label)
-	var owned_label := UITheme.make_label(Tr.t("LBL_ARMY_OWNED") % ArmyManager.get_count(unit_id), "section", UITheme.POSITIVE)
-	owned_label.name = "Owned"
-	title_row.add_child(owned_label)
-	var on_campaign: int = int(_units_on_expedition().get(unit_id, 0))
-	if on_campaign > 0:
-		title_row.add_child(UITheme.make_label(Tr.t("LBL_ON_CAMPAIGN") % on_campaign, "small", UITheme.WARNING))
-	info.add_child(title_row)
-
-	# Coste en iconos (en rojo lo que falta), poder y sueldo: [oro] 40 [madera] 20 · Poder 10 · Sueldo [oro] 1
-	var stats := HFlowContainer.new()
-	stats.name = "Stats"
-	stats.add_theme_constant_override("h_separation", 8)
-	var cost: Dictionary = def.get("cost", {})
-	stats.add_child(TextKit.cost_inline(cost, _missing(cost), "small", UITheme.TEXT_DIM))
-	stats.add_child(UITheme.make_label(Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0)), "small", UITheme.TEXT_DIM))
-	var upkeep := UITheme.make_label(Tr.t("LBL_ARMY_UPKEEP_SHORT"), "small", UITheme.TEXT_DIM)
-	upkeep.mouse_filter = Control.MOUSE_FILTER_PASS
-	upkeep.tooltip_text = Tr.t("LBL_ARMY_UPKEEP_HINT") % int(GameConfig.army_upkeep_interval)
-	stats.add_child(upkeep)
-	var upkeep_row := TextKit.cost_inline({"gold": int(def.get("upkeep_gold", 0))}, {}, "small", UITheme.TEXT_DIM)
-	upkeep_row.name = "Upkeep"
-	stats.add_child(upkeep_row)
-	info.add_child(stats)
-
-	# Right: train button
-	var check := ArmyManager.can_train(unit_id)
-	# Por que no se puede entrenar, a la vista: antes solo iba en el tooltip, y
-	# en movil no hay raton que se pose encima para leerlo.
-	if not check["ok"] and check["reason"] != "":
-		var why := UITheme.make_label(Tr.t(check["reason"]), "small", UITheme.WARNING)
-		why.name = "BlockedReason"
-		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		info.add_child(why)
-	var train_btn := Button.new()
-	train_btn.text = Tr.t("BTN_TRAIN")
-	train_btn.custom_minimum_size = Vector2(96, 40)
-	UITheme.style_button(train_btn, UITheme.CAT_MILITARY.darkened(0.15) if check["ok"] else UITheme.BTN, UITheme.FONT_BODY)
-	train_btn.disabled = not check["ok"]
-	if not check["ok"] and check["reason"] != "":
-		train_btn.tooltip_text = Tr.t(check["reason"])
-	train_btn.pressed.connect(func():
-		if ArmyManager.train(unit_id):
-			_refresh()
-	)
-	row.add_child(train_btn)
-
-	return card
+# ── Cola de entrenamiento ──
 
 func _rebuild_training() -> void:
-	for child in _training_vbox.get_children():
-		child.queue_free()
-	_training_bars.clear()
 	var training := ArmyManager.get_training()
 	if training.is_empty():
-		var empty := UITheme.make_label(Tr.t("LBL_ARMY_EMPTY") if ArmyManager.get_total_units() == 0 else "—", "small", UITheme.TEXT_DIM)
-		_training_vbox.add_child(empty)
+		for child in _training_vbox.get_children():
+			_training_vbox.remove_child(child)
+			child.queue_free()
+		_training_bars.clear()
+		_training_vbox.visible = ArmyManager.get_total_units() == 0
+		if _training_vbox.visible:
+			_training_vbox.add_child(CT.icon_line("army", Tr.t("LBL_ARMY_EMPTY"), ""))
 		return
-	for i in range(training.size()):
-		var item: Dictionary = training[i]
-		var def := GameConfig.get_unit_def(item["id"])
-		var line := HBoxContainer.new()
-		line.add_theme_constant_override("separation", 8)
-		var name_label := UITheme.make_label(Tr.t(def.get("name", item["id"])), "small", UITheme.TEXT)
-		name_label.custom_minimum_size.x = 130
-		line.add_child(name_label)
-		var bar := UITheme.make_progress_bar(UITheme.CAT_MILITARY, 12)
-		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		bar.max_value = 1.0
-		bar.value = _training_progress(item)
-		line.add_child(bar)
-		line.add_child(_make_cancel_button(i))
-		_training_vbox.add_child(line)
-		_training_bars.append(bar)
-
-## Cancelar un entrenamiento, diciendo en el propio boton cuanto vuelve.
-## Entrenar era irreversible: pulsar ENTRENAR por error costaba la unidad entera.
-func _make_cancel_button(index: int) -> Button:
-	var refund := ArmyManager.get_training_refund(index)
-	var btn := Button.new()
-	if refund.is_empty():
-		btn.text = Tr.t("LBL_CANCEL_NO_REFUND")
-	else:
-		btn.text = Tr.t("FMT_CANCEL_REFUND") % TextKit.cost_text(refund)
-	# En rojo cuando la Tormenta se esta cobrando su parte de la cancelacion.
-	var stormy := GameConfig.get_cancel_refund_ratio() < GameConfig.cancel_refund_ratio
-	UITheme.style_button(btn, UITheme.DANGER.darkened(0.2) if stormy else UITheme.BTN, UITheme.FONT_SMALL)
-	btn.pressed.connect(func():
-		ArmyManager.cancel_training(index)
-		_refresh()
-	)
-	return btn
+	# La cola entera (todos los edificios), con las piezas de TrainingSection.
+	_training_bars = TrainingSectionScript.fill_queue(_training_vbox, "", _refresh)
+	_training_vbox.visible = true
 
 func _update_training_progress() -> void:
-	var training := ArmyManager.get_training()
-	for i in range(mini(_training_bars.size(), training.size())):
-		_training_bars[i].value = _training_progress(training[i])
+	TrainingSectionScript.update_bars(_training_bars)
 
-func _training_progress(item: Dictionary) -> float:
-	var dur: float = item.get("duration", 1.0)
-	if dur <= 0.0:
-		return 1.0
-	return clampf(1.0 - (item.get("remaining", 0.0) / dur), 0.0, 1.0)
-
-## Lo que falta para pagar `cost` (por nombre de recurso).
 func _missing(cost: Dictionary) -> Dictionary:
-	var out := {}
-	for res_name in cost:
-		var type: int = ResourceManager.name_to_type(String(res_name))
-		if type < 0:
-			continue
-		var short: int = int(cost[res_name]) - ResourceManager.get_amount(type)
-		if short > 0:
-			out[res_name] = short
-	return out
+	return TrainingSectionScript.missing(cost)
 
 # ── Visibility / open-close ──
 
 func _on_era_advanced(_new_era: int) -> void:
-	_refresh()
+	_request_refresh()
 	_update_button_visibility()
 
 func _on_base_changed(_arg = null) -> void:
@@ -311,7 +359,7 @@ func _on_base_changed(_arg = null) -> void:
 
 func _update_button_visibility() -> void:
 	# Army button appears in the sidebar once a Barracks exists.
-	_army_btn.visible = _sidebar_visible and ArmyManager.barracks_count() > 0
+	_army_btn.visible = _sidebar_visible and ArmyManager.has_military_building()
 
 func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_visible = is_visible
@@ -322,10 +370,22 @@ func _on_upkeep_unpaid(gold_short: int) -> void:
 
 func _toggle_panel() -> void:
 	_is_open = not _is_open
-	_panel.visible = _is_open
-	_backdrop.visible = _is_open
+	_holder.visible = _is_open
+	set_process(_is_open)
 	if _is_open:
+		_fit()
 		_refresh()
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)
+
+## Lo abre la barra de abajo (y ☰). Si ya esta abierto, no lo cierra.
+func open() -> void:
+	if not _is_open:
+		_toggle_panel()
+
+func toggle() -> void:
+	_toggle_panel()
+
+func is_open() -> bool:
+	return _is_open

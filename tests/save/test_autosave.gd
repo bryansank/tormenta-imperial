@@ -7,7 +7,10 @@ extends GdUnitTestSuite
 ## devolver listas) y el guardado real apartado: una suite no se cobra la
 ## partida de nadie.
 
-const SAVE_PATH := "user://save_game.json"
+## La partida activa (user://partidas/partida_<id>.json, docs/09).
+var SAVE_PATH: String:
+	get:
+		return GameManager.save_path()
 const BACKUP_PATH := "user://save_game.autosave_test.bak"
 const STUB_SRC := "extends Node\nfunc get_all_placed_buildings() -> Array:\n\treturn []\nfunc get_all_deposits() -> Array:\n\treturn []\n"
 const PARTY := {"infantry": 2}

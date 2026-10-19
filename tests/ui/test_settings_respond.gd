@@ -219,3 +219,55 @@ func test_touch_controls_opacity_slider_applies_at_once() -> void:
 	assert_float(stored).is_equal_approx(0.4, 0.01)
 	# Nunca invisibles del todo: el minimo es TOUCH_OPACITY_MIN.
 	assert_float(slider.min_value).is_equal_approx(GameConfig.TOUCH_OPACITY_MIN, 0.001)
+
+## Un arrastre de raton de `from` a `to` en `steps` pasos, empujado al viewport.
+func _drag(from: Vector2, to: Vector2, steps := 6) -> void:
+	var m0 := InputEventMouseMotion.new()
+	m0.position = from
+	m0.global_position = from
+	get_viewport().push_input(m0, true)
+	var p := InputEventMouseButton.new()
+	p.button_index = MOUSE_BUTTON_LEFT
+	p.pressed = true
+	p.button_mask = MOUSE_BUTTON_MASK_LEFT
+	p.position = from
+	p.global_position = from
+	get_viewport().push_input(p, true)
+	for i in steps:
+		var m := InputEventMouseMotion.new()
+		m.position = from.lerp(to, float(i + 1) / steps)
+		m.global_position = m.position
+		m.button_mask = MOUSE_BUTTON_MASK_LEFT
+		get_viewport().push_input(m, true)
+	var r := InputEventMouseButton.new()
+	r.button_index = MOUSE_BUTTON_LEFT
+	r.pressed = false
+	r.position = to
+	r.global_position = to
+	get_viewport().push_input(r, true)
+
+## Bug de Bryan (2026-10-19): desplazar la pestana Audio empezando encima de un
+## deslizador le cambiaba el volumen. En vertical no lo toca (quepa la pestana
+## entera o no); de lado, si.
+func test_scrolling_over_a_volume_slider_does_not_change_it() -> void:
+	GameConfig.audio_master_volume = 0.5
+	var root := _game()
+	root.get_node("IntroTrap").visible = false
+	await _frames(2)
+	_settings(root).toggle()
+	await _frames(4)
+	var s := _settings(root)
+	var tabs: TabContainer = s.find_child("SettingsTabs", true, false)
+	tabs.current_tab = 0
+	await _frames(3)
+	var slider: HSlider = s.find_child("Slider_master", true, false)
+	# Lejos del centro: una pulsacion que llegara al deslizador lo moveria a 0,2.
+	var c := Vector2(slider.get_global_rect().position.x + slider.size.x * 0.2, _center(slider).y)
+	_drag(c, c - Vector2(0, 80))
+	var after_vertical: float = GameConfig.audio_master_volume
+	await _frames(1)
+	_drag(c, c + Vector2(slider.size.x * 0.5, 0))
+	var after_sideways: float = GameConfig.audio_master_volume
+	assert_float(after_vertical).override_failure_message(
+		"arrastrar en vertical cambio el volumen (%.2f)" % after_vertical).is_equal_approx(0.5, 0.001)
+	assert_float(after_sideways).is_greater(0.6)

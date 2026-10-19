@@ -21,10 +21,16 @@ const View2D := preload("res://scripts/view2d/View2D.gd")
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
 ## Dedo, casillas validas y boton ✓: lo mismo que en 3D (docs/21 §Tactil).
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
+## Salto y polvo de obra terminada (V1).
+const Fx := preload("res://scripts/buildings/BuildingFx.gd")
 
 var _state: State = State.IDLE
 var _current_data: BuildingData = null
 var _rotation_steps := 0
+## El Astillero se gira solo hacia el agua hasta que el jugador lo gira a mano
+## (PlacementRules.FACES_WATER).
+var _auto_face := true
 var _moving_building: Node2D = null
 var _ghost: Node2D = null
 var _hover_cell := Vector2i(-99999, -99999)
@@ -61,11 +67,49 @@ func _ready() -> void:
 	EventBus.deposit_clicked.connect(_on_deposit_clicked)
 	EventBus.building_deselected.connect(_on_building_deselected)
 	EventBus.building_rotate_requested.connect(_on_rotate_requested)
+	# Obra terminada: salto y polvo (V1); lo recogido vuela a la bolsa (V2).
+	EventBus.construction_completed.connect(_on_construction_done)
+	# Reparado: vuelve a sano con el mismo salto (docs/03, "Etapas de dano").
+	EventBus.building_repaired.connect(_on_construction_done)
+	EventBus.production_collected.connect(_on_production_collected)
 	GameManager.register_placer(self)
 	_assist = Assist.new()
 	_assist.name = "PlacementAssist"
 	_assist.setup(self)
 	add_child(_assist)
+
+## Obra terminada (V1) o reparacion: el edificio entero da el salto (crece desde el centro de
+## su huella, que es su origen) con un Tween que muere con el, y suelta 8 motas
+## de polvo desde el borde. En calidad Minima, solo el salto.
+func _on_construction_done(node: Node) -> void:
+	if node == null or not is_instance_valid(node) or not (node is Node2D) or not node.is_inside_tree():
+		return
+	var data: BuildingData = node.get("data") as BuildingData
+	if data == null or data.id == "road":
+		return
+	var b := node as Node2D
+	var old: Tween = b.get_meta("_bounce_tween") if b.has_meta("_bounce_tween") else null
+	if old != null and old.is_valid():
+		old.kill()
+	b.scale = Vector2.ONE
+	var set_k := func(k: float) -> void:
+		if is_instance_valid(b):
+			b.scale = Vector2(k, k)
+	b.set_meta("_bounce_tween", Fx.bounce(b, set_k))
+	if GraphicsQuality.fx_enabled():
+		var fp: Vector2 = b.footprint_px() if b.has_method("footprint_px") else Vector2(32, 32)
+		var burst := Fx.dust_burst_2d(minf(fp.x, fp.y) * 0.5)
+		burst.z_index = 5
+		b.add_child(burst)
+		burst.emitting = true
+
+## Lo recogido vuela del edificio a su ficha de la bolsa (V2, FloatingText).
+func _on_production_collected(node: Node, collected: Dictionary) -> void:
+	if node == null or not is_instance_valid(node) or not (node is Node2D) or not node.is_inside_tree():
+		return
+	var icon := node.get_node_or_null("StockIcon") as Node2D
+	var from: CanvasItem = icon if icon != null and icon.visible else node as Node2D
+	FloatingText.fly_to_hud(get_tree(), from.get_global_transform_with_canvas().origin, collected)
 
 func _input(event: InputEvent) -> void:
 	if _state != State.IDLE:
@@ -111,7 +155,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			EventBus.building_placement_cancelled.emit()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R and _state != State.IDLE:
-			_rotate_building()
+			# Por la senal, como el boton ↻ de la pantalla: asi el tutorial ve
+			# el giro con teclado y con el dedo (_on_rotate_requested gira).
+			EventBus.building_rotate_requested.emit()
 			get_viewport().set_input_as_handled()
 
 ## Igual que en 3D: con el raton se coloca al pulsar; con el dedo, al levantarlo
@@ -130,7 +176,18 @@ func _handle_left_button(event: InputEventMouseButton) -> void:
 			return
 		if _state != State.IDLE:
 			_left_pressed = false
+			# Carretera larga: pulsar empieza el tramo; se tiende al soltar
+			# (un clic sin arrastrar pone un solo tramo, al soltar).
+			if _state == State.PLACING and _assist.is_road():
+				_assist.mouse_line_begin(screen_to_cell(event.position))
+				get_viewport().set_input_as_handled()
+				return
 			handle_click(event.position)
+		return
+	if _assist.mouse_drawing and not _left_from_touch:
+		if not _assist.mouse_line_end():
+			handle_click(event.position)
+		get_viewport().set_input_as_handled()
 		return
 	var was_click := _left_pressed and not _left_dragged
 	if _left_from_touch and InputService.touch_pan_consumed_click():
@@ -166,7 +223,8 @@ func handle_click(screen_pos: Vector2) -> void:
 	var cell := screen_to_cell(screen_pos)
 	match _state:
 		State.IDLE:
-			_try_select(cell)
+			if not _try_collect_icon(screen_pos):
+				_try_select(cell)
 		State.PLACING:
 			if GridManager.is_valid_cell(cell):
 				try_place(cell)
@@ -177,6 +235,17 @@ func handle_click(screen_pos: Vector2) -> void:
 func _process(delta: float) -> void:
 	_tick_block_flash(delta)
 	if _state == State.IDLE or _ghost == null:
+		return
+	# Carretera larga: el tramo sigue al cursor mientras el boton siga pulsado.
+	# Si se solto donde no llega el evento (encima de un panel), se tiende igual.
+	if _assist.mouse_drawing and not _assist.touch_aim:
+		var mouse_pos := get_viewport().get_mouse_position()
+		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			if not _assist.mouse_line_end():
+				handle_click(mouse_pos)
+		else:
+			_assist.mouse_line_move(screen_to_cell(mouse_pos))
+	if _ghost == null:
 		return
 	# Con el dedo el fantasma esta donde lo dejo el ultimo toque.
 	var cell: Vector2i = _assist.cell if _assist.touch_aim else screen_to_cell(get_viewport().get_mouse_position())
@@ -190,10 +259,15 @@ func _process(delta: float) -> void:
 func update_ghost(cell: Vector2i) -> void:
 	if _ghost == null or _current_data == null:
 		return
+	_auto_face_water(cell)
 	var size := Rules.rotated_size(_current_data, _rotation_steps)
 	_ghost.position = View2D.footprint_center_px(cell, size)
 	var ignore: Node = _moving_building if _state == State.MOVING else null
 	var ok: bool = GridManager.is_valid_cell(cell) and bool(Rules.evaluate_placement(_current_data.id, cell, size, _map_generator(), ignore)["ok"])
+	# Sin poder pagarlo (recursos, material del taller, trabajadores) tambien
+	# rojo: el clic lo rechazaria y diria que falta (2026-10-17).
+	if ok and _state == State.PLACING and Rules.purchase_block_detail(_current_data) != "":
+		ok = false
 	_ghost.set("ghost_valid", ok)
 	_ghost.set_meta("rotation_steps", _rotation_steps)
 	_ghost.queue_redraw()
@@ -228,14 +302,36 @@ func _rotate_building() -> void:
 		_assist.move_to(_assist.cell, false)
 
 func _on_rotate_requested() -> void:
+	# Una carretera es 1x1: girar no cambia nada, asi que R / ↻ cambia el codo
+	# de la carretera larga.
+	if _state == State.PLACING and _assist.is_road():
+		_assist.line_flip_elbow()
+		return
 	if _state != State.IDLE:
+		_auto_face = false
 		_rotate_building()
+
+## Gira el fantasma para que la darsena mire al agua mas cercana a `cell`. Solo al
+## colocar (al mover se respeta el giro que ya tenia) y mientras el jugador no lo
+## haya girado a mano. Se llama cuando el fantasma cambia de celda, no por fotograma.
+## Los pasos van con el convenio de la vista 3D (el guardado es uno solo): el
+## dibujo 2D los invierte al pintar (Building2D.view_steps()).
+func _auto_face_water(cell: Vector2i) -> void:
+	if _state != State.PLACING or not _auto_face or _current_data == null:
+		return
+	var steps := Rules.steps_facing_water(_current_data.id, cell, Rules.rotated_size(_current_data, _rotation_steps), false)
+	if steps < 0 or steps == _rotation_steps:
+		return
+	_rotation_steps = steps
+	if _ghost:
+		_ghost.set_meta("rotation_steps", _rotation_steps)
+		_ghost.queue_redraw()
 
 func _show_grid_overlay(forced: bool) -> void:
 	var scene := get_tree().current_scene if is_inside_tree() else null
 	var grid := scene.get_node_or_null("GridOverlay") if scene else null
 	if grid:
-		grid.visible = forced or GameConfig.ui_grid_visible
+		grid.visible = forced or GraphicsQuality.grid_always_visible()
 
 # ── Colocar ───────────────────────────────────────────────────────────
 
@@ -243,6 +339,7 @@ func _on_building_selected(data: Resource) -> void:
 	_cancel()
 	_current_data = data as BuildingData
 	_rotation_steps = 0
+	_auto_face = true
 	_state = State.PLACING
 	_create_ghost()
 
@@ -250,16 +347,22 @@ func _on_building_selected(data: Resource) -> void:
 func try_place(cell: Vector2i) -> Node:
 	if _current_data == null:
 		return null
+	_auto_face_water(cell)
 	var size := Rules.rotated_size(_current_data, _rotation_steps)
 	var map_gen := _map_generator()
 	var verdict := Rules.evaluate_placement(_current_data.id, cell, size, map_gen)
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "water":
+			_show_feedback(Tr.t("LBL_ON_WATER"))
+			TutorialManager.offer_tip("island")
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return null
 	var blocked := Rules.purchase_block_detail(_current_data)
 	if blocked != "":
@@ -340,10 +443,15 @@ func try_move(cell: Vector2i) -> bool:
 	if not verdict["ok"]:
 		if verdict["reason"] == "deposit":
 			_reject_for_deposit(_current_data.id)
+		elif verdict["reason"] == "water":
+			_show_feedback(Tr.t("LBL_ON_WATER"))
+			TutorialManager.offer_tip("island")
 		elif verdict["reason"] == "occupied":
 			_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 		elif verdict["reason"] == "road":
 			_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+		elif verdict["reason"] == Rules.SHORE_REASON:
+			_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 		return false
 	# Llevado a donde no llega la red: su carretera se tiende (y se paga) igual
 	# que al colocarlo.
@@ -421,12 +529,38 @@ func _try_select(cell: Vector2i) -> void:
 		EventBus.building_deselected.emit()
 		return
 	var info := GridManager.get_building_info(node)
+	# Con algo que recoger, el toque recoge; si no cupo nada, selecciona.
+	if not info.is_empty() and ProductionManager.has_stock(node) and not ProductionManager.collect(node).is_empty():
+		return
 	if not info.is_empty():
 		EventBus.building_clicked.emit(node, info["data"])
 	elif node.has_meta("deposit_id"):
 		EventBus.deposit_clicked.emit(node, node.get_meta("deposit_id"), cell)
 	else:
 		EventBus.building_deselected.emit()
+
+## Recoge el edificio cuyo icono flotante ("StockIcon") esta bajo `screen_pos`.
+## Con la bolsa llena no entra nada: abre su panel. Devuelve si toco un icono.
+func _try_collect_icon(screen_pos: Vector2) -> bool:
+	var xform := get_viewport().get_canvas_transform()
+	var best: Node = null
+	var best_d := 40.0
+	for info in GridManager.get_all_buildings():
+		var node: Node = info["node"]
+		if node == null or not is_instance_valid(node):
+			continue
+		var icon := node.get_node_or_null("StockIcon") as Node2D
+		if icon == null or not icon.visible:
+			continue
+		var d := (xform * icon.global_position).distance_to(screen_pos)
+		if d < best_d:
+			best = node
+			best_d = d
+	if best == null:
+		return false
+	if ProductionManager.collect(best).is_empty():
+		EventBus.building_clicked.emit(best, GridManager.get_building_info(best)["data"])
+	return true
 
 func _set_selected(node: Node) -> void:
 	if is_instance_valid(_selected) and _selected.has_method("set_selected"):
@@ -562,10 +696,15 @@ func assist_explain(origin: Vector2i) -> void:
 	var verdict := Rules.evaluate_placement(_current_data.id, origin, Rules.rotated_size(_current_data, _rotation_steps), _map_generator(), ignore)
 	if verdict["reason"] == "deposit":
 		_reject_for_deposit(_current_data.id)
+	elif verdict["reason"] == "water":
+		_show_feedback(Tr.t("LBL_ON_WATER"))
+		TutorialManager.offer_tip("island")
 	elif verdict["reason"] == "occupied":
 		_show_feedback(Tr.t("LBL_CELL_OCCUPIED"))
 	elif verdict["reason"] == "road":
 		_show_feedback(Tr.t("LBL_NEEDS_ROAD"))
+	elif verdict["reason"] == Rules.SHORE_REASON:
+		_show_feedback(Tr.t("LBL_NEEDS_SHORE"))
 
 func assist_feedback(text: String) -> void:
 	_show_feedback(text)
@@ -674,3 +813,48 @@ func _draw_block_flash() -> void:
 			first = false
 		_block_flash.draw_rect(r, Color(UITheme.DANGER, a * 0.35), true)
 		_block_flash.draw_rect(r.grow(1.0), Color(UITheme.DANGER, a), false, 3.0)
+
+# ── Carretera larga: vista previa del tramo (PlacementAssist) ──────────
+
+var _line_preview: Node2D = null
+var _line_good: Array = []
+var _line_bad: Array = []
+
+## Pinta el tramo: `good` en verde (se tiende), `bad` en rojo (no vale o no
+## llega el oro).
+func assist_show_line(good: Array, bad: Array) -> void:
+	_line_good = good
+	_line_bad = bad
+	if _line_preview == null:
+		if good.is_empty() and bad.is_empty():
+			return
+		_line_preview = Node2D.new()
+		_line_preview.name = "RoadLinePreview"
+		# Encima de edificios y figuras: el rojo sobre lo ocupado se tiene que ver.
+		_line_preview.z_index = 4
+		_line_preview.draw.connect(_draw_line_preview)
+		add_child(_line_preview)
+	_line_preview.visible = not (good.is_empty() and bad.is_empty())
+	_line_preview.queue_redraw()
+
+func _draw_line_preview() -> void:
+	for pair in [[_line_good, UITheme.POSITIVE], [_line_bad, UITheme.DANGER]]:
+		var col: Color = pair[1]
+		for c in pair[0]:
+			var r := View2D.footprint_rect_px(c, Vector2i.ONE).grow(-1.5)
+			_line_preview.draw_rect(r, Color(col, 0.5), true)
+			_line_preview.draw_rect(r, Color(col, 0.95), false, 1.5)
+
+func assist_set_ghost_visible(v: bool) -> void:
+	if _ghost:
+		_ghost.visible = v
+
+## Se acaba de tender un tramo: el fantasma se recoloca en el siguiente frame.
+func assist_line_laid() -> void:
+	_hover_cell = Vector2i(-99999, -99999)
+
+func get_line_preview() -> Node2D:
+	return _line_preview
+
+func get_line_cells() -> Array:
+	return [_line_good, _line_bad]

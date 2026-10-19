@@ -40,6 +40,22 @@ func _initialize() -> void:
 		_save("artillery%s.png" % suffix)
 		_draw_vehicle()
 		_save("vehicle%s.png" % suffix)
+		# Mar y aire (1.1, feat/aire-mar-vista). Los barcos de perfil con la proa
+		# a la derecha (como el canon y el blindado); los aviones vistos desde
+		# arriba (la cruz de las alas es lo que se lee a 24 px); el dirigible de
+		# perfil (su globo es la forma).
+		_draw_torpedo_boat()
+		_save("torpedo_boat%s.png" % suffix)
+		_draw_gunboat()
+		_save("gunboat%s.png" % suffix)
+		_draw_dreadnought()
+		_save("dreadnought%s.png" % suffix)
+		_draw_fighter()
+		_save("fighter%s.png" % suffix)
+		_draw_bomber()
+		_save("bomber%s.png" % suffix)
+		_draw_airship()
+		_save("airship%s.png" % suffix)
 
 	print("GEN_DONE")
 
@@ -105,6 +121,88 @@ func _draw_vehicle() -> void:
 	_capsule(Vector2(17.0, 26.0), Vector2(17.0, 12.0), 2.6)
 	_disc(17.0, 10.5, 4.0)
 
+# ── Mar ──────────────────────────────────────────────────────────────
+# Tres cascos de perfil que se separan por el largo y por lo que llevan
+# encima: la lancha es baja y lleva un tubo largo en cubierta; la canonera, un
+# castillo con una chimenea y una torreta delante; el acorazado, el mas largo,
+# con dos chimeneas, palo y torretas a proa y a popa.
+
+## Lancha torpedera: casco bajo y fino, garita a popa con su chimenea y el tubo
+## lanzatorpedos en cubierta.
+func _draw_torpedo_boat() -> void:
+	_clear()
+	_poly([Vector2(3.0, 37.0), Vector2(50.0, 37.0), Vector2(62.0, 31.0), Vector2(55.0, 47.0), Vector2(9.0, 47.0)])
+	_box(10.0, 27.0, 24.0, 37.0)
+	_capsule(Vector2(15.0, 27.0), Vector2(13.0, 17.0), 2.6)
+	_capsule(Vector2(28.0, 33.0), Vector2(52.0, 33.0), 2.4)
+	_disc(52.0, 33.0, 3.0)
+
+## Canonera: casco medio, castillo con puente, chimenea alta y la torreta de
+## proa con un canon gordo.
+func _draw_gunboat() -> void:
+	_clear()
+	_poly([Vector2(2.0, 39.0), Vector2(50.0, 39.0), Vector2(63.0, 33.0), Vector2(55.0, 52.0), Vector2(7.0, 52.0)])
+	_box(12.0, 28.0, 32.0, 39.0)
+	_box(16.0, 21.0, 28.0, 28.0)
+	_capsule(Vector2(22.0, 21.0), Vector2(20.0, 8.0), 3.4)
+	_disc(43.0, 35.0, 5.5)
+	_capsule(Vector2(44.0, 33.0), Vector2(61.0, 26.0), 2.6)
+
+## Acorazado: el casco mas largo, superestructura escalonada, dos chimeneas,
+## palo con cofa y torretas de dos canones a proa y a popa.
+func _draw_dreadnought() -> void:
+	_clear()
+	_poly([Vector2(1.0, 41.0), Vector2(52.0, 41.0), Vector2(63.0, 36.0), Vector2(57.0, 54.0), Vector2(5.0, 54.0)])
+	_box(19.0, 31.0, 43.0, 41.0)
+	_box(23.0, 23.0, 38.0, 31.0)
+	_capsule(Vector2(27.0, 23.0), Vector2(26.0, 11.0), 3.0)
+	_capsule(Vector2(35.0, 23.0), Vector2(34.0, 13.0), 3.0)
+	_capsule(Vector2(31.0, 23.0), Vector2(31.0, 3.0), 1.3)
+	_box(28.0, 6.0, 34.0, 9.0)
+	_disc(50.0, 38.0, 4.8)
+	_capsule(Vector2(50.0, 36.0), Vector2(63.0, 32.0), 1.6)
+	_capsule(Vector2(50.0, 39.0), Vector2(63.0, 35.0), 1.6)
+	_disc(11.0, 38.0, 4.5)
+	_capsule(Vector2(11.0, 36.0), Vector2(1.0, 32.0), 1.5)
+
+# ── Aire ─────────────────────────────────────────────────────────────
+
+## Caza: biplano visto desde arriba. Fuselaje corto, ala recta, helice ancha
+## (la barra de arriba) y el plano de cola.
+func _draw_fighter() -> void:
+	_clear()
+	_capsule(Vector2(32.0, 12.0), Vector2(32.0, 56.0), 5.5)
+	_box(5.0, 20.0, 59.0, 31.0)
+	_box(19.0, 50.0, 45.0, 56.0)
+	_capsule(Vector2(19.0, 6.0), Vector2(45.0, 6.0), 2.4)
+	_disc(32.0, 9.0, 4.0)
+
+## Bombardero: visto desde arriba, ala mas larga y ancha, dos motores con su
+## helice delante del ala y doble timon en la cola.
+func _draw_bomber() -> void:
+	_clear()
+	_capsule(Vector2(32.0, 8.0), Vector2(32.0, 60.0), 6.5)
+	_box(1.0, 25.0, 63.0, 36.0)
+	for x in [16.0, 48.0]:
+		_capsule(Vector2(x, 15.0), Vector2(x, 34.0), 4.6)
+		_capsule(Vector2(x - 8.0, 13.0), Vector2(x + 8.0, 13.0), 1.8)
+	_box(17.0, 53.0, 47.0, 58.0)
+	_box(15.0, 49.0, 20.0, 61.0)
+	_box(44.0, 49.0, 49.0, 61.0)
+
+## Dirigible: de perfil, el globo grande con las aletas de cola, la barquilla
+## colgada y su helice.
+func _draw_airship() -> void:
+	_clear()
+	_ellipse(33.0, 25.0, 28.0, 15.0)
+	_poly([Vector2(9.0, 25.0), Vector2(1.0, 9.0), Vector2(11.0, 15.0)])
+	_poly([Vector2(9.0, 25.0), Vector2(1.0, 41.0), Vector2(11.0, 35.0)])
+	_capsule(Vector2(26.0, 38.0), Vector2(24.0, 44.0), 1.2)
+	_capsule(Vector2(40.0, 38.0), Vector2(42.0, 44.0), 1.2)
+	_box(21.0, 43.0, 45.0, 51.0)
+	_capsule(Vector2(17.0, 47.0), Vector2(21.0, 47.0), 1.6)
+	_capsule(Vector2(16.0, 41.0), Vector2(16.0, 53.0), 1.8)
+
 # ── Primitivas de trazado ────────────────────────────────────────────
 
 func _clear() -> void:
@@ -135,6 +233,18 @@ func _disc(cx: float, cy: float, r: float) -> void:
 	for y in range(ys.x, ys.y):
 		for x in range(xs.x, xs.y):
 			if _at(x, y).distance_squared_to(Vector2(cx, cy)) <= r * r:
+				_plot(x, y)
+
+## Elipse rellena de semiejes `rx` y `ry` (el globo del dirigible).
+func _ellipse(cx: float, cy: float, rx: float, ry: float) -> void:
+	var xs := _span(cx - rx, cx + rx)
+	var ys := _span(cy - ry, cy + ry)
+	for y in range(ys.x, ys.y):
+		for x in range(xs.x, xs.y):
+			var p := _at(x, y)
+			var dx := (p.x - cx) / rx
+			var dy := (p.y - cy) / ry
+			if dx * dx + dy * dy <= 1.0:
 				_plot(x, y)
 
 func _ring(cx: float, cy: float, r_out: float, r_in: float) -> void:

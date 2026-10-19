@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/models/toy/fishing_dock.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+model_scene = ExtResource("2")
+id = "fishing_dock"
+display_name = "Muelle de pesca"
+description = "Pesca comida y algo de oro desde la costa, con un banco de peces mar adentro."
+grid_size = Vector2i(2, 2)
+cost_gold = 60
+cost_steel = 0
+cost_oil = 0
+cost_wood = 40
+build_time = 6.0
+produces_gold = 3
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+produces_food = 12
+production_interval = 30.0
+mesh_height = 1.4
+mesh_color = Color(0.3, 0.45, 0.6, 1)
+workers_required = 2
+max_health = 120

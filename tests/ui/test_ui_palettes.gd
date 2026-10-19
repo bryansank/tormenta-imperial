@@ -66,7 +66,9 @@ func test_configure_rewrites_the_semantic_tokens() -> void:
 	UITheme.configure("red_green")
 	assert_str(UITheme.palette).is_equal("red_green")
 	assert_bool(UITheme.POSITIVE.is_equal_approx(default_positive)).is_false()
-	assert_bool(UITheme.POSITIVE.is_equal_approx(UITheme._PALETTE_TOKENS["red_green"]["POSITIVE"])).is_true()
+	# Con el estilo maqueta los semanticos salen de la paleta de CartoonTheme.
+	var want: Color = CartoonTheme.sem("POSITIVE") if UITheme.is_cartoon() else UITheme._PALETTE_TOKENS["red_green"]["POSITIVE"]
+	assert_bool(UITheme.POSITIVE.is_equal_approx(want)).is_true()
 	# Lo que usa el tablero y el HUD sale de ahi.
 	assert_bool(UITheme.unit_icon_tint(true).is_equal_approx(UITheme.POSITIVE.lightened(0.62))).is_true()
 	UITheme.configure()
@@ -118,11 +120,13 @@ func test_text_tokens_meet_the_minimum_contrast_on_the_surface() -> void:
 func test_high_contrast_has_no_low_contrast_secondary_text() -> void:
 	UITheme.configure("default", true)
 	assert_float(UITheme.MIN_CONTRAST).is_equal(7.0)
-	assert_float(UITheme.contrast_ratio(UITheme.TEXT_DIM, UITheme.UI_BG_REFERENCE)).is_greater_equal(7.0)
+	# El fondo de referencia: el de las ventanas (crema en el estilo maqueta).
+	var ref: Color = CartoonTheme.c("window", "BG") if UITheme.is_cartoon() else UITheme.UI_BG_REFERENCE
+	assert_float(UITheme.contrast_ratio(UITheme.TEXT_DIM, ref)).is_greater_equal(7.0)
 	# Y cualquier color que un panel pida sale legible a 7:1.
 	var label := UITheme.make_label("x", "small", Color(0.3, 0.2, 0.1))
 	var shown: Color = label.get_theme_color("font_color")
-	assert_float(UITheme.contrast_ratio(shown, UITheme.UI_BG_REFERENCE)).is_greater_equal(7.0)
+	assert_float(UITheme.contrast_ratio(shown, ref)).is_greater_equal(7.0)
 	label.free()
 
 func test_high_contrast_panels_are_opaque_flat_boxes_with_a_clear_border() -> void:
@@ -149,8 +153,11 @@ func test_panel_opacity_fades_hud_cards_and_panels() -> void:
 	UITheme.configure("default", false, 0.5)
 	assert_float(UITheme.HUD_BG.a).is_equal_approx(0.46, 0.001)
 	assert_float(UITheme.make_hud_card_style().bg_color.a).is_equal_approx(0.46, 0.001)
-	var panel := UITheme.make_panel_style() as StyleBoxFlat
-	assert_float(panel.bg_color.a).is_less(0.95)
+	# Las ventanas crema del estilo maqueta no se transparentan (docs/28): solo
+	# las superficies oscuras siguen la opacidad.
+	if not UITheme.is_cartoon():
+		var panel := UITheme.make_panel_style() as StyleBoxFlat
+		assert_float(panel.bg_color.a).is_less(0.95)
 	UITheme.configure()
 
 func test_opacity_is_clamped() -> void:

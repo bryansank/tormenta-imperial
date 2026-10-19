@@ -155,7 +155,7 @@ func _on_cloud_load_response(result: int, response_code: int, _headers: PackedSt
 		return
 
 	# Write to local save path and reload
-	var file := FileAccess.open(GameManager.SAVE_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(GameManager.save_path(), FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(save_data, "\t"))
 	EventBus.notification_posted.emit(Tr.t("NOTIF_CLOUD_LOADED"), "positive", Color(0.3, 0.8, 0.5))

@@ -6,8 +6,10 @@ extends Node
 ##   title            el menu principal
 ##   title_settings   Ajustes abierto desde el menu principal (por encima de todo)
 ##   hud_era1         el HUD de una partida recien empezada
+##   hud_x2           el mismo HUD con la velocidad en x2
 ##   menu             el menu de la partida (☰ MENU) con un panel de edificio
 ##                    abierto antes (el boton lo cierra y abre igual)
+##   menu_report      tras pulsar "Informar de un fallo" (el aviso de copiado)
 ##   settings_tab0..4 cada pestana de Ajustes, abierto desde el menu
 ##   hud_era3         el HUD con los cuatro recursos, poblacion y la Tormenta
 ##
@@ -86,6 +88,11 @@ func _run() -> void:
 	_close_intro(main)
 	await _frames(20)
 	await _shot("hud_era1")
+	# El boton de velocidad en x2 (docs/21 §13).
+	GameConfig.set_game_speed(2.0)
+	await _frames(5)
+	await _shot("hud_x2")
+	GameConfig.set_game_speed(1.0)
 
 	# Un panel de edificio abierto, como tras cualquier toque en el mapa: el
 	# boton del menu lo cierra y abre igual (bug 3).
@@ -99,6 +106,10 @@ func _run() -> void:
 	menu.menu_button().pressed.emit()
 	await _frames(10)
 	await _shot("menu")
+	# Informar de un fallo: copia y lo dice bajo los grupos.
+	menu.entry("Game_Report").pressed.emit()
+	await _frames(5)
+	await _shot("menu_report")
 	menu.entry("Game_Settings").pressed.emit()
 	await _frames(5)
 	for tab in 5:
@@ -141,13 +152,13 @@ func _seed_era3() -> void:
 	EventBus.era_advanced.emit(3)
 
 func _close_intro(main: Node) -> void:
-	var offline: Variant = GameManager.get("_offline_canvas")
-	if offline != null and is_instance_valid(offline):
-		(offline as Node).queue_free()
-		GameManager.set("_offline_canvas", null)
 	var tut: Node = main.get_node_or_null("TutorialPanel")
 	if tut and tut.has_method("is_intro_open") and tut.call("is_intro_open"):
 		tut.call("_close")
+	# La guia rapida sale una vez por partida tras el prologo y tapa el HUD.
+	for guide in get_tree().get_nodes_in_group("quick_guide"):
+		if guide.has_method("is_open") and guide.is_open():
+			guide.close()
 
 func _frames(n: int) -> void:
 	for i in range(n):

@@ -54,6 +54,10 @@ var started: bool = false
 ## the model, and therefore in the save, because a crew that died before a
 ## reload is just as dead after it.
 var crew_losses: int = 0
+## Aire y mar: la ultima oleada trae cazas de escolta porque la guarnicion tenia
+## aviones cuando se convoco (o cuando se abrio la puerta, si aun no habia
+## empezado). Va en el guardado: las oleadas se rehacen con ella.
+var air_escort: bool = false
 
 ## uid counter, unique inside this siege and shared with the waves it fields, so
 ## no two units on a board can ever collide (data-model, CombatUnit.uid).
@@ -79,6 +83,7 @@ static func create(p_seed: int, garrison_counts: Dictionary, p_era: int = 1, p_m
 	audit.summons = 1
 	audit.started = false
 	audit.crew_losses = 0
+	audit.air_escort = counts_have_air(garrison_counts)
 	audit._build_waves()
 	audit._muster(garrison_counts)
 	return audit
@@ -115,8 +120,8 @@ func _build_waves() -> void:
 ## Turns whatever is at home into the garrison, stamping each unit with the
 ## spirit in `morale_snapshot`. Returns what it built.
 func _muster(garrison_counts: Dictionary) -> Array:
-	var attack_mod: float = Rules.morale_attack_mod(morale_snapshot)
-	var initiative_bonus: int = Rules.morale_initiative_bonus(morale_snapshot)
+	var attack_mod: float = Rules.siege_morale_attack_mod(morale_snapshot)
+	var initiative_bonus: int = Rules.siege_morale_initiative_bonus(morale_snapshot)
 	for unit_id in garrison_counts.keys():
 		for i in range(int(garrison_counts[unit_id])):
 			var unit: CombatUnit = CombatUnitScript.create(next_uid(), String(unit_id), PLAYER, 1.0)
@@ -127,8 +132,8 @@ func _muster(garrison_counts: Dictionary) -> Array:
 
 ## Vuelve a sellar a cada unidad con la moral de `morale_snapshot`.
 func _apply_morale(units: Array) -> void:
-	var attack_mod: float = Rules.morale_attack_mod(morale_snapshot)
-	var initiative_bonus: int = Rules.morale_initiative_bonus(morale_snapshot)
+	var attack_mod: float = Rules.siege_morale_attack_mod(morale_snapshot)
+	var initiative_bonus: int = Rules.siege_morale_initiative_bonus(morale_snapshot)
 	for unit in units:
 		unit.morale_attack_mod = attack_mod
 		unit.morale_initiative_bonus = initiative_bonus
@@ -186,15 +191,65 @@ func _compose(rng: RandomNumberGenerator, index: int, total: int) -> Dictionary:
 	guns = mini(guns, maxi(0, slots - armour - 1))
 	var line: int = maxi(1, slots - guns - armour)
 
+	# Aire y mar (2026-10-17): la ultima oleada baja con dirigibles (y cazas de
+	# escolta si el jugador tiene aviones). No anaden cuerpos: cada dirigible
+	# ocupa el hueco de un canon (si no hay, el de un infante) y cada caza el de un
+	# infante, sin dejar nunca la linea vacia. Sin azar: no mueve la moneda de
+	# arriba, asi que las oleadas anteriores son las de siempre.
+	var airships: int = 0
+	var fighters: int = 0
+	if index >= total - 1 and era >= GameConfig.final_audit_air_min_era:
+		for i in range(maxi(0, GameConfig.final_audit_airships_last_wave)):
+			if not _is_available("airship"):
+				break
+			if guns > 0:
+				guns -= 1
+			elif line > 1:
+				line -= 1
+			else:
+				break
+			airships += 1
+		if air_escort:
+			for i in range(maxi(0, GameConfig.final_audit_air_escort_fighters)):
+				if not _is_available("fighter"):
+					break
+				if line > 1:
+					line -= 1
+				elif guns > 0:
+					guns -= 1
+				else:
+					break
+				fighters += 1
+
 	var roster: Dictionary = {"infantry": line}
 	if guns > 0:
 		roster["artillery"] = guns
 	if armour > 0:
 		roster["vehicle"] = armour
+	if airships > 0:
+		roster["airship"] = airships
+	if fighters > 0:
+		roster["fighter"] = fighters
 	return roster
 
 func _is_available(unit_id: String) -> bool:
 	return era >= int(GameConfig.get_unit_def(unit_id).get("era", 1))
+
+## ¿Hay aviones en esta guarnicion (unit_id -> cuantos)? Decide la escolta de cazas.
+static func counts_have_air(garrison_counts: Dictionary) -> bool:
+	for unit_id in garrison_counts:
+		if int(garrison_counts[unit_id]) > 0 and GameConfig.get_unit_domain(String(unit_id)) == "air":
+			return true
+	return false
+
+## Pone la escolta de cazas segun la guarnicion y, si cambia, vuelve a tirar las
+## oleadas (con la misma semilla: solo cambia la ultima). Solo antes de empezar.
+func _set_air_escort(garrison_counts: Dictionary) -> void:
+	var wanted: bool = counts_have_air(garrison_counts)
+	if wanted == air_escort:
+		return
+	air_escort = wanted
+	_build_waves()
 
 # ── Queries ──────────────────────────────────────────────────────────
 
@@ -321,6 +376,9 @@ func begin(garrison_counts: Variant = null, p_morale: float = -1.0) -> Array:
 	if garrison_counts != null:
 		if not started:
 			garrison = []
+			# Quien abre la puerta es quien decide la escolta: si entre convocar y
+			# abrir se entrenaron (o perdieron) aviones, la ultima oleada cambia.
+			_set_air_escort(garrison_counts as Dictionary)
 			_muster(garrison_counts as Dictionary)
 		else:
 			events.append_array(reconcile(garrison_counts as Dictionary))
@@ -418,6 +476,7 @@ func resummon(p_seed: int, garrison_counts: Dictionary, p_era: int = -1, p_moral
 	started = false
 	crew_losses = 0
 	summons += 1
+	air_escort = counts_have_air(garrison_counts)
 	_build_waves()
 	_muster(garrison_counts)
 	return [{"e": "final_audit_summoned", "waves": wave_count(), "summons": summons}]
@@ -467,6 +526,7 @@ func to_dict() -> Dictionary:
 		"crew_losses": crew_losses,
 		"morale_snapshot": morale_snapshot,
 		"garrison": units,
+		"air_escort": air_escort,
 	}
 
 ## Rebuilds a siege from a save. A save written before the audit existed has no
@@ -493,6 +553,8 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> FinalAudit:
 	audit.summons = maxi(1, int(data.get("summons", 1)))
 	audit.crew_losses = maxi(0, int(data.get("crew_losses", 0)))
 	audit.morale_snapshot = float(data.get("morale_snapshot", 50.0))
+	# Sin la clave (guardado anterior a aire y mar): sin escolta de cazas.
+	audit.air_escort = bool(data.get("air_escort", false))
 	# The era has to be in place before the waves are rolled: it is half of what
 	# decides their shape.
 	audit._build_waves()
@@ -500,8 +562,8 @@ static func from_dict(data: Dictionary, default_era: int = 1) -> FinalAudit:
 
 	# The morale modifiers are recomputed rather than stored: they are a pure
 	# function of the snapshot, and one less field is one less thing to drift.
-	var attack_mod: float = Rules.morale_attack_mod(audit.morale_snapshot)
-	var initiative_bonus: int = Rules.morale_initiative_bonus(audit.morale_snapshot)
+	var attack_mod: float = Rules.siege_morale_attack_mod(audit.morale_snapshot)
+	var initiative_bonus: int = Rules.siege_morale_initiative_bonus(audit.morale_snapshot)
 	var highest_uid: int = 0
 	for unit_data in data.get("garrison", []):
 		var unit: CombatUnit = CombatUnitScript.from_dict(unit_data)

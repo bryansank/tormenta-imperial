@@ -57,6 +57,26 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 			return _resource_hud_chip(tree, "morale_chip")
 		"storm":
 			return HudRegistry.control_of("StormHUD")
+		# Novedades (2026-10-14): el boton x1/x2 y la insignia de rango.
+		"speed_button":
+			return HudRegistry.control_of("GameSpeedButton")
+		"rank_badge":
+			return HudRegistry.control_of("RankPanel")
+		# Tutorial claro (2026-10-16): girar, mover, derribar y reparar. Los
+		# botones de la ficha del edificio y el ↻ de la pantalla (solo se ve en
+		# tablet y movil, y solo colocando: en PC no hay nada que senalar, es R).
+		"info_move":
+			return _first_in_group(tree, "hud_info_move")
+		"info_train":
+			return _first_in_group(tree, "hud_train_button")
+		"info_demolish":
+			return _first_in_group(tree, "hud_info_demolish")
+		"info_demolish_confirm":
+			return _first_in_group(tree, "hud_info_demolish_confirm")
+		"info_repair":
+			return _first_in_group(tree, "hud_info_repair")
+		"rotate_button":
+			return _first_in_group(tree, "hud_rotate_building")
 	if target_name.begins_with("card:"):
 		return card_or_build(tree, target_name.substr(5))
 	return null
@@ -93,12 +113,16 @@ static func card_or_build(tree: SceneTree, building_id: String) -> Control:
 		scroll_into_view(card)
 	return card
 
-## Desplaza el ScrollContainer que contiene a `c` hasta que se vea entero.
+## Desplaza el ScrollContainer que contiene a `c` hasta que se vea entero. Si ya
+## se ve no toca el scroll: el tutorial lo pregunta varias veces por segundo y no
+## debe pelear con el dedo que arrastra la lista.
 static func scroll_into_view(c: Control) -> void:
 	var p := c.get_parent()
 	while p != null:
 		if p is ScrollContainer:
-			(p as ScrollContainer).ensure_control_visible(c)
+			var sc := p as ScrollContainer
+			if not sc.get_global_rect().encloses(c.get_global_rect()):
+				sc.ensure_control_visible(c)
 			return
 		p = p.get_parent()
 
@@ -124,6 +148,12 @@ static func building_card(tree: SceneTree, building_id: String) -> Control:
 	var menu := _scene_node(tree, "ConstructionMenu")
 	if menu == null:
 		return null
+	# Lo directo: ConstructionMenu guarda sus tarjetas por id. Recorrer todo el
+	# arbol del menu buscando etiquetas queda para quien no lo tenga.
+	if menu.has_method("card_for"):
+		var card: Control = menu.card_for(building_id)
+		if card != null and is_instance_valid(card) and card.is_visible_in_tree():
+			return card
 	var display := ""
 	var path := "res://data/buildings/%s.tres" % building_id
 	if ResourceLoader.exists(path):

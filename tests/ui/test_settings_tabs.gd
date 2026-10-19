@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
-## Ajustes en pestanas (docs/21): Audio · Interfaz · Controles · Accesibilidad
-## · Juego. Que esten todas, que cada una tenga su Restablecer, que quepa en
+## Ajustes en pestanas (docs/21, docs/28): Sonido · Pantalla · Controles ·
+## Juego; colores y contraste al final de Pantalla, en "Mas opciones". Que esten todas, que cada una tenga su Restablecer, que quepa en
 ## pantalla, que los interruptores del HUD manden, que lo que necesita
 ## reconstruir la interfaz lo diga, y los globos callados en pausa.
 ##
@@ -30,20 +30,22 @@ func _open():
 	_panel.toggle()
 	return _panel
 
-func test_the_five_tabs_are_there_in_order() -> void:
+func test_the_four_tabs_are_there_in_order() -> void:
 	var p = _open()
 	var tabs: TabContainer = p.find_child("SettingsTabs", true, false)
-	assert_int(tabs.get_tab_count()).is_equal(5)
+	assert_int(tabs.get_tab_count()).is_equal(4)
 	var titles: Array = []
 	for i in tabs.get_tab_count():
 		titles.append(tabs.get_tab_title(i))
 	assert_array(titles).is_equal([Tr.t("TAB_AUDIO"), Tr.t("TAB_INTERFACE"), Tr.t("TAB_CONTROLS"),
-		Tr.t("TAB_ACCESSIBILITY"), Tr.t("TAB_GAME")])
+		Tr.t("TAB_GAME")])
+	# El carril de iconos tiene una pestana por cada una.
+	assert_int(p.find_child("TabRail", true, false).get_child_count()).is_equal(4)
 
 func test_every_tab_but_game_has_its_reset() -> void:
 	var p = _open()
 	var tabs: TabContainer = p.find_child("SettingsTabs", true, false)
-	for i in 4:
+	for i in 3:
 		assert_object(tabs.get_child(i).find_child("ResetTab", true, false)).override_failure_message("pestana %d" % i).is_not_null()
 
 func test_the_old_rows_still_exist() -> void:
@@ -54,8 +56,9 @@ func test_the_old_rows_still_exist() -> void:
 
 func test_the_panel_fits_on_screen_on_every_tab() -> void:
 	var p = _open()
+	p.set_advanced_open(true)
 	var vp: Vector2 = p.get_viewport().get_visible_rect().size
-	for i in 5:
+	for i in 4:
 		p.select_tab(i)
 		await await_idle_frame()
 		await await_idle_frame()
@@ -66,9 +69,15 @@ func test_the_panel_fits_on_screen_on_every_tab() -> void:
 
 func test_the_tabs_are_finger_sized() -> void:
 	var p = _open()
-	var tabs: TabContainer = p.find_child("SettingsTabs", true, false)
 	await await_idle_frame()
-	assert_float(tabs.get_tab_bar().size.y).is_greater_equal(float(UITheme.MIN_BTN_H) - 1.0)
+	for t in p.find_child("TabRail", true, false).get_children():
+		assert_float((t as Control).size.y).is_greater_equal(float(CartoonTheme.TOUCH_MIN) - 1.0)
+
+func test_advanced_options_start_folded() -> void:
+	var p = _open()
+	assert_bool(p.is_advanced_open()).is_false()
+	p.set_advanced_open(true)
+	assert_bool((p.find_child("PaletteRow", true, false) as Control).is_visible_in_tree()).is_true()
 
 func test_a_hud_switch_hides_that_element() -> void:
 	var p = _open()
@@ -91,7 +100,7 @@ func test_palette_text_and_contrast_ask_for_a_rebuild() -> void:
 	var apply: Button = p.find_child("ApplyButton", true, false)
 	assert_bool(apply.visible).is_false()
 	var row: Node = p.find_child("PaletteRow", true, false)
-	(row.get_child(1) as OptionButton).item_selected.emit(1)
+	row.find_child("Picker", true, false).item_selected.emit(1)
 	assert_str(GameConfig.ui_palette).is_equal(UITheme.PALETTES[1])
 	assert_bool(p.needs_rebuild()).is_true()
 	assert_bool(apply.visible).is_true()
@@ -102,7 +111,7 @@ func test_palette_text_and_contrast_ask_for_a_rebuild() -> void:
 func test_the_preview_uses_the_pending_palette() -> void:
 	var p = _open()
 	var row: Node = p.find_child("PaletteRow", true, false)
-	(row.get_child(1) as OptionButton).item_selected.emit(UITheme.PALETTES.find("red_green"))
+	row.find_child("Picker", true, false).item_selected.emit(UITheme.PALETTES.find("red_green"))
 	await await_idle_frame()
 	var preview: PanelContainer = p.find_child("PalettePreview", true, false)
 	var swatch := preview.find_children("*", "ColorRect", true, false)[0] as ColorRect
@@ -113,7 +122,7 @@ func test_the_preview_uses_the_pending_palette() -> void:
 func test_the_ui_scale_applies_and_persists() -> void:
 	var p = _open()
 	var row: Node = p.find_child("ScaleRow", true, false)
-	(row.get_child(1) as OptionButton).item_selected.emit(p.SCALE_STEPS.find(130))
+	row.find_child("Picker", true, false).item_selected.emit(p.SCALE_STEPS.find(130))
 	assert_int(GameConfig.ui_scale_pct).is_equal(130)
 	GameConfig.ui_scale_pct = 0
 	GameConfig.load_user_settings()
@@ -124,7 +133,7 @@ func test_the_fps_row_sets_the_cap() -> void:
 	var tabs: TabContainer = p.find_child("SettingsTabs", true, false)
 	var row: Node = tabs.get_child(1).find_child("FpsRow", true, false)
 	assert_object(row).is_not_null()
-	var picker := row.get_child(1) as OptionButton
+	var picker = row.find_child("Picker", true, false)
 	assert_int(picker.item_count).is_equal(GameConfig.FPS_CAP_MODES.size())
 	picker.item_selected.emit(GameConfig.FPS_CAP_MODES.find("45"))
 	assert_str(GameConfig.ui_fps_cap).is_equal("45")

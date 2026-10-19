@@ -34,8 +34,9 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 
 ### ProcessActionsPanel (`scripts/ui/ProcessActionsPanel.gd`)
 - **Type:** Helper class (not a scene, instantiated by BuildingInfoPanel)
-- **Shows:** Available manual processes for selected building, or mining button for deposits. Each card is the name plus one line: "15 madera → +25 madera · +5 oro · 30 s" (mining: "+20 madera · 8 s · 2 trabajadores" and "✖ reason" when it cannot start)
-- **Behavior:** Hides processes that use locked resources. Shows progress bar during active process ("Talar · 0:16") and "Cancelar (vuelven 7 madera)"; the normal cancel rate is the button's tooltip, the Storm rate (it costs double) stays visible in red. Disables buttons while process running or building constructing.
+- **Shows:** Available manual processes for selected building, or the mining card for deposits. Since 2026-10-14 each one is a `ProcessCard` (`scripts/ui/ProcessCard.gd`), icons and numbers before words: name with time and, for hand mining, [worker icon] 2 on the right; then `[wood] 20 → +5 tablones` as icon rows (`TextKit.cost_inline`, product in green); "✖ reason" only when it cannot start; and a row of finger-sized batch buttons **×1 · ×5 · MÁX ×N** (`UITheme.touch_px`). The plain-text line ("20 madera → +5 tablones · 30 s · 2 trabajadores") is the card's tooltip (hold to read on tablet).
+- **The Núcleo** shows three groups, each with a short dim header: **Del Núcleo** (its own processes), **Como en los talleres · tarda más** (every workshop recipe already unlocked) and **Sacar a mano · tarda más** (hand mining of each unlocked resource). The tooltip of a copied card says where it comes from ("Lo mismo que en: Aserradero. Aquí tarda más."). Rule in docs/02 §"El Núcleo, taller de todo".
+- **Behavior:** Hides processes that use locked resources. Shows progress bar during active process ("Talar · 0:16"; a batch: "Talar · 2 de 5 · 1:40", time to finish the whole batch) and "Cancelar (vuelven 7 madera)" (the refund of everything paid and not delivered); the normal cancel rate is the button's tooltip, the Storm rate (it costs double) stays visible in red. Disables the batch buttons while something runs here or the building is under construction; ×5 is off when fewer than 5 can be paid or stored, MÁX when fewer than 2. What a card can afford is recalculated at most every 300 ms (`REFRESH_MS`), never rebuilt per frame. BuildingInfoPanel was not touched: it still calls `populate_building` / `populate_deposit` / `update_progress`.
 
 ### MarketPanel (`scripts/ui/MarketPanel.gd`)
 - **Position:** Center overlay, opened from a Market building (ABRIR MERCADO in its BuildingInfoPanel); no menu entry since 2026-09-28
@@ -46,17 +47,17 @@ All UI is built programmatically in GDScript (no Godot editor UI design). Each p
 ### ProgressPanel (`scripts/ui/ProgressPanel.gd`)
 - **Position:** Center overlay, opened from ☰ MENÚ → COLONIA → Progreso
 - **Shows:** Current era, progress bar, 9 milestones with [X]/[ ] checkmarks
-- **Behavior:** Updates checkmarks on milestone completion. Milestone and era toasts go through a queue: one plate at a time at 30 % of the screen height, away from the centre column (they used to stack on top of each other and of the objective).
+- **Behavior:** Updates checkmarks on milestone completion. Milestone and era notices are alerts of category `achievement` in NotificationPanel's single column since 2026-10-18 (they used to be a plate of their own at 30 % of the screen height; docs/21 §14).
 - **Layer:** 11
 
 ### VictoryScreen (`scripts/ui/VictoryScreen.gd`)
 - **Position:** Center overlay (full screen)
 - **Shows:** "VICTORIA IMPERIAL" title, flavor text, stats, continue/new game buttons
-- **Trigger:** `EventBus.victory_achieved`. Waits for `GameManager.offline_report_closed` if the offline report (also layer 20) is still open. "Nueva partida" goes through `GameManager.request_new_game()`
+- **Trigger:** `EventBus.victory_achieved` (opens at once; the offline report it used to wait for is gone). "Nueva partida" goes through `GameManager.request_new_game()`
 - **Layer:** 20
 
 ### TitleMenu (`scripts/ui/TitleMenu.gd`)
-- **Shows:** keyart background (logo + name on portrait), Continuar (only if a save was loaded or the player already played this session), Nueva partida (via `GameManager.request_new_game()` when there is something to lose), Ajustes, Salir
+- **Shows:** keyart background (logo + name on portrait), Continuar (the last game played, only if a save was loaded or the player already played this session, and not a sealed run), Nueva partida (via `GameManager.request_new_game()`; never deletes, it creates another game), PARTIDAS n/5 (the saved-games list, `SavesPanel`), Ajustes, Salir
 - **Behavior:** opens on launch over the already-loaded game and pauses the tree (`get_tree().paused`). Skipped headless and with `-- --no-title` (probes). Shown once per session (static flag survives the new-game reload)
 - **Layer:** 30, `PROCESS_MODE_ALWAYS`
 
@@ -66,7 +67,8 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - **Button:** "☰ MENÚ", top-right, finger-sized, always visible in play (hidden while the menu itself is open). No other menu button exists; the old sidebar buttons of each panel stay hidden (nobody emits `sidebar_toggled(true)` any more)
 - **Card:** title, "Modo: X" (only when the run is not Campaña, 2026-10-04), and two groups side by side (one column with scroll below 700 px). Each group's sentence ("Los paneles de tu isla...", "La isla espera...") is the tooltip of its header:
   - **COLONIA** — ¿Qué hacer?, Progreso, Colonia (rank, flag and colour: `RankPanel`), Ejército and Escaramuzas (with a Barracks), Sandbox (in Sandbox mode), Registro (the activity log). Mercado and Tecnología left the menu on 2026-09-28: they open from their buildings. Only what is available is shown, so no gaps. Picking one closes the menu, unpauses and opens that panel (`open_colony_panel`)
-  - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Historia (closes the menu, then `TutorialManager.show_prologue()` replays the prologue, docs/23), Menú principal, Guardar y salir
+  - **PARTIDA** — Reanudar, Guardar, Ajustes, Música sí/no, Ayuda (only if a node in group `help_index` exists; calls its `open()`), Informar de un fallo (copies `BugReport.build()` to the clipboard and says "Copiado. Pégalo en un mensaje." under the groups; nothing leaves the device, docs/19 §7), Historia (closes the menu, then `TutorialManager.show_prologue()` replays the prologue, docs/23), Menú principal, Guardar y salir
+- **Speed button:** `PauseMenu._ready()` adds `GameSpeedButton` (x1 / x2, key F) as its sibling, so both views get it without touching the scenes (docs/21 §13)
 - **Behavior:**
   - Real pause while open (`get_tree().paused`); tapping the backdrop resumes.
   - The button NEVER fails silently: it cancels a placement (`building_placement_cancelled`) and closes every UIManager window (`UIManager.close_all_windows()`) and then opens. `can_pause()` is only for ESC.
@@ -75,12 +77,12 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
   - Borrowed screens (Ajustes, Ayuda, the intro) get `PROCESS_MODE_ALWAYS` and a layer ABOVE the menu (`LAYER + 1`, re-pinned every frame and on every UIManager reorder) while in use, and their mode and layer back on close. TitleMenu does the same with Ajustes. Bug 1 was the intro (layer 17) sitting over Ajustes (UIManager put it at 13) and eating every touch.
   - Menú principal saves, cancels placement, closes windows and opens TitleMenu, in 3D and 2D and in every mode.
 - **Layer:** 30
-- **Tests:** `tests/ui/test_game_menu.gd`, `test_main_menu_exit.gd`, `test_settings_respond.gd` (real mouse events pushed at the slider and a toggle, from the title menu, the game menu and in play, with a full-screen trap layer at 17), `test_pause_menu.gd`
+- **Tests:** `tests/ui/test_game_menu.gd`, `tests/support/test_bug_report.gd`, `tests/support/test_game_speed.gd`, `test_main_menu_exit.gd`, `test_settings_respond.gd` (real mouse events pushed at the slider and a toggle, from the title menu, the game menu and in play, with a full-screen trap layer at 17), `test_pause_menu.gd`
 - **Probe:** `tools/menu_probe.gd` (`-- --shot-size=1280x800 --profile=tablet [--view=2d]`), screenshots in `docs/media/dev/menu/`
 
 ### RankPanel (`scripts/ui/RankPanel.gd`) — governor rank
 - **Badge:** top-right, left of "☰ MENÚ" (own slot `rank_badge` in `UILayoutConfig`; under the menu button on a narrow screen, without the title). The colony flag, the rank number, the title and a thin XP bar. Registered in `HudRegistry` as `RankPanel` (hideable and movable). Tapping it opens the card
-- **Rank-up toast:** "▲ 5 · Alcalde" and one short line per reward ("Fuente", "+1 % producción", "bandera nueva"), under the badge, ~4 s. Sound `rank_up` (AudioManager, alias of `era_up`)
+- **Rank-up notice:** one sentence, "▲ 5 · Alcalde: + Fuente, + 1 % producción" (`rank_up_text`), sent as an `achievement` alert to NotificationPanel's column (2026-10-18; it used to be a card under the badge). Sound `rank_up` (AudioManager, its own clip `rank_up.ogg` since 2026-10-12; no longer an alias of `era_up`)
 - **COLONIA card** (☰ MENÚ → COLONIA → Colonia, `RankPanel.modal` in `center_modal`): rank and XP, what the next rank brings, and the flag and colour galleries; what is not earned yet is disabled with a padlock and the rank
 - **Layer:** 11. Reads everything from `RankManager`; holds no state. Docs: [06-progression-victory.md](06-progression-victory.md) §Governor rank
 
@@ -91,9 +93,9 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 - All built with `ModalKit` (`scripts/ui/ModalKit.gd`), which only places UITheme pieces
 
 ### NotificationPanel (`scripts/ui/NotificationPanel.gd`)
-- **Position:** bottom-left toasts, left side log panel (under the resources)
+- **Position:** the alert column top-left under the resources (slot `toast_area`, stacked after the hidden log), left side log panel (under the resources)
 - **Shows:** toast notifications and the scrollable activity log. The old status card under the resources ("Trabajadores: 26 de 32", "En su puesto…", "Moral 72 %…") was removed in 2026-10: workers and morale are chips of the ResourceHUD row. What was urgent in it already arrives as a toast from `PopulationManager` (no wood, no gold, low morale, starvation). The objective strip at the top centre ("Avanza hacia la Victoria Imperial. Construye el Cuartel General y mejóralo.") was removed on 2026-10-05: it was a per-phase sentence that repeated, less precisely, what ¿QUÉ HACER? says (`Objectives.next_step()`), which is now the only place for the next step. Its slot (`top_center`), its HUD entry and the help tip under it (`tip_center`) went with it; an old `settings.cfg` that hides or moves it loads without it (`HudRegistry.RETIRED`), and the helps that pointed at it (`callout_objective`, the guide's last step, the PROGRESO block) point at ¿QUÉ HACER?: its ☰ MENÚ entry when the menu is open, the ☰ MENÚ button otherwise (`HelpTargets.objective_entry`).
-- **Behavior:** Listens to `EventBus.notification_posted`. Only `warning`, `danger` and `notice` become toasts (`shows_toast()`); routine news ("Camino construido", the population grew) goes to the log only. Toasts auto-fade after 4 seconds, at most 3 at a time (1 on a narrow screen), and drop under the CONSTRUIR window while it is open. The log stores the last 50 entries and opens from ☰ MENÚ → COLONIA → Registro (`open_log()`); the old REGISTRO DE AVISOS button on the HUD is gone. Colours come from `UITheme.notice_color(category)`.
+- **Behavior:** Listens to `EventBus.notification_posted`. Only `warning`, `danger`, `notice`, `combat` and `achievement` become alerts (`shows_toast()`); routine news ("Camino construido", the population grew) goes to the log only. Alerts (docs/21 §14): at most 2 at a time (1 on a phone), the rest queued in `AlertQueue` with repeats grouped ("×3"), icon + one sentence + ✕, gone after 5 s (danger 7 s) with no animation; while a window, the board or the tutorial card is over them they wait and only one danger shows, small. The log stores the last 50 entries and opens from ☰ MENÚ → COLONIA → Registro (`open_log()`); the old REGISTRO DE AVISOS button on the HUD is gone. Colours come from `UITheme.notice_color(category)`.
 - **Layer:** 11
 
 ### Status badge (`scripts/buildings/BuildingStatusBadge.gd`, `scripts/view2d/StatusBadge2D.gd`)
@@ -111,7 +113,7 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 | Panel | Layer | What it is |
 |---|---|---|
 | `TechTreePanel` | 11 | 3 branches x 5 tiers, research progress; each card "1 · Name / cost / advantage" (+ reason if blocked). Tapping a card (any, locked ones too) **chooses** it; a detail card beside the branches (below them on a canvas under 880 px) shows name, tier and branch, the tech's lore, the branch's sentence, the cost as icons (`TextKit.cost_row`, missing in red), the time (`TextKit.short_time`), the advantage, the requirement and the reason it cannot start, with the INVESTIGAR button (2026-10-05). The long intro is a tooltip; lore and branch sentence are also tooltips of the card and header. Opened from a Laboratory (INVESTIGAR) ([11-tech-tree.md](11-tech-tree.md)) |
-| `QuickGuide` | 33 | Child of `TutorialPanel`: "how the game works" in four blocks (resources, extraction, buildings and roads, progress), once per game after the prologue; the same texts are `guide_qg_*` in AYUDA |
+| `QuickGuide` | 33 | Child of `TutorialPanel`: "how the game works" in four blocks (resources, extraction, buildings and roads, progress). It no longer opens by itself after the prologue (2026-10-14); the same texts are `guide_qg_*` in AYUDA |
 | `ArmyPanel` | 11 | "Tropa 5/11 · En cola 1/1" (where each cap comes from in the tooltip), Military Power; per unit "×3", cost as icons, power and wage; who is away on campaign |
 | `SkirmishPanel` | 11 | Commit troops ("Salen 3/6") and launch an expedition; campaign status while a column is out ("Nodos 2/5"); "QUE BAJEN" for the Final Audit ([15-combat.md](15-combat.md)) |
 | `BattleScreen` | 18 | The 8x8 board plus the expedition map, draft modal and final report; outside UIManager's stack so ESC cannot dismiss a fight. Header in one row: encounter, round and whose turn; each initiative chip names its unit and HP in the tooltip |
@@ -120,6 +122,7 @@ lived in opposite corners and overlapped). The node is still called `PauseMenu`.
 | `StormHUD` | 16 (11 under modals) | Storm phase: colour and icon, no countdown |
 | `SandboxPanel` | 11 | Sandbox only: the SANDBOX tab with INVOCAR TORMENTA / INVOCAR AUDITORÍA ([20-modos-de-juego.md](20-modos-de-juego.md)) |
 | `NewGameDialog` | 40 | The mode picker, created by `GameManager.request_new_game()` from every "Nueva partida" |
+| `SavesPanel` | 40 | PARTIDAS: the saved games (name, flag, mode/tier, era, time, date; Load / Delete), from the title menu and ☰ MENÚ → PARTIDA, and from Nueva partida with five games (`make_room`) |
 | `LayoutEditor` | 35 | EDITAR DISPOSICIÓN: drag panels, saved per device profile |
 
 Every panel exists in both `Main.tscn` and `Main2D.tscn` with the same name; the
@@ -155,7 +158,7 @@ Tres piezas que no se mezclan, cada una con su estilo:
 | Pieza | Script | Capa | Estilo | Que hace |
 |---|---|---|---|---|
 | Prologo | `PrologueScreen` (hija de `TutorialPanel`) | 32 | papel, maquina de escribir, lacre | El lore en tres folios y en lenguaje claro (la firma del Emperador, la Tormenta, quienes somos), sin membrete. Atras / Siguiente / Saltar historia, puntos de pagina, deslizar el dedo. Pausa el juego |
-| Guia rapida | `QuickGuide` (hija de `TutorialPanel`) | 33 | tarjeta de `ModalKit` | Como funciona el juego en cuatro bloques. Una vez por partida, al cerrar el prologo y antes del tutorial; despues, en AYUDA |
+| Guia rapida | `QuickGuide` (hija de `TutorialPanel`) | 33 | tarjeta de `ModalKit` | Como funciona el juego en cuatro bloques. Desde el 14-10 ya **no se abre sola** al cerrar el prologo (Bryan: sobraba al empezar); sus textos siguen en AYUDA (`guide_qg_*`) |
 | Tutorial guiado | `TutorialPanel` | 19 | laton sobre metal | Coach marks sobre la interfaz real: velo con hueco, marco, flecha, una linea. Avanza cuando el jugador hace la cosa (`TutorialManager.derive_step`). "Saltar tutorial" |
 | Ayudas | `HelperPanel` (+ `HelpCallout`, `HelpCatalog`) | 14 (globos) / 19 (tarjeta) | azul acero | Una a la vez, en cola por prioridad, con ✕ y cierre solo (6-12 s, barra, pausa con el dedo encima). Cerrada = vista |
 | Indice de AYUDA | `HelpIndexPanel` (grupo `help_index`, `open()`) | pila de UIManager | metal | Lo visto y lo basico, por categoria; tocar reabre esa ayuda senalando su control. Interruptor global, guia de edificios, Repetir tutorial, Historia |
@@ -199,7 +202,15 @@ Everything goes through `UITheme` (tokens, factories, `UITheme.style_tabs`).
 - **Drag to scroll:** every `ScrollContainer` drags with a finger or the mouse wherever
   the gesture starts (`scripts/ui/DragScroll.gd`, hooked by UIManager); a drag never
   presses what is under it, and the wheel scrolls the list instead of changing a
-  slider.
+  slider. Since 2026-10-19 the press is **held back** until the gesture is known:
+  release without moving more than `InputService.touch_slop_px()` (14 dp) and the
+  press + release are replayed in place (a tap presses as always); move further and it
+  is a scroll, the control below never hears of it, and its touch press (Godot 4.7
+  buttons also answer `InputEventScreenTouch`) is cancelled by dragging the finger far
+  away. A slider only takes the gesture when it starts on its knob/rail
+  (`DragScroll.on_slider_track`) and the first move runs along it; vertical over an
+  `HSlider` scrolls. Nested lists: the innermost one that can move in the gesture's
+  direction scrolls. "Hold to read" is cancelled as soon as the list starts to move.
 - **Hold to read (touch):** with the touch input style, keeping a finger still
   `GameConfig.touch_tooltip_hold_sec` (0.5 s) on any `Control` with a tooltip shows it
   in a bubble above the finger; the button is not pressed. A short tap still presses.

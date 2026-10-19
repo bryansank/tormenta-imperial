@@ -6,6 +6,8 @@ class_name CombatUnit
 ## Base stats come from GameConfig.combat_unit_stats. Draft bonuses and the base's
 ## morale modify the derived getters, never the stored stats.
 
+const DOMAIN_LAND := "land"
+
 var uid: int = 0
 var unit_id: String = ""
 var side: int = 0            ## 0 = player, 1 = enemy
@@ -60,6 +62,29 @@ func min_range() -> int:
 func initiative() -> int:
 	return _base("initiative", 1) + int(draft_bonuses.get("initiative", 0)) + morale_initiative_bonus
 
+## El medio por el que se mueve: "land", "sea" o "air" (GameConfig.combat_unit_stats,
+## campo `domain`). Lo leen las reglas (docs/15 §11, aire y mar): por donde
+## anda (combat_domain_moves), a quien pega (combat_domain_targets) y en que
+## capa ocupa la casilla (CombatRules.layer_of). Sale de la fila del tipo, como
+## el resto de estadisticas; `domain_hint` (lo guardado) solo cuenta si el tipo
+## ya no tiene fila.
+func domain() -> String:
+	var stats: Dictionary = GameConfig.get_combat_stats(unit_id)
+	if stats.has("domain"):
+		return String(stats["domain"])
+	return domain_hint if domain_hint != "" else DOMAIN_LAND
+
+## Lo que dijo el guardado del dominio (to_dict/from_dict). Vacio = sin dato.
+var domain_hint: String = ""
+
+## La capa de la casilla que ocupa: "air" para el aire, "surface" para tierra y
+## mar (un barco en la orilla bloquea a un soldado; un avion no).
+func layer() -> String:
+	return "air" if domain() == DOMAIN_AIR else "surface"
+
+const DOMAIN_SEA := "sea"
+const DOMAIN_AIR := "air"
+
 ## Power contribution, reused for AI target priority.
 func power() -> int:
 	var def: Dictionary = GameConfig.get_unit_def(unit_id)
@@ -95,6 +120,9 @@ func to_dict() -> Dictionary:
 		"max_hp": max_hp,
 		"draft_bonuses": draft_bonuses.duplicate(),
 		"scale": scale,
+		# Aire y mar: se escribe para quien lea el guardado; al cargar manda la
+		# fila del tipo (un guardado viejo sin la clave es de tierra).
+		"domain": domain(),
 	}
 
 static func from_dict(data: Dictionary) -> CombatUnit:
@@ -106,4 +134,5 @@ static func from_dict(data: Dictionary) -> CombatUnit:
 	unit.hp = int(data.get("hp", unit.max_hp))
 	unit.draft_bonuses = data.get("draft_bonuses", {}).duplicate()
 	unit.scale = float(data.get("scale", 1.0))
+	unit.domain_hint = String(data.get("domain", ""))
 	return unit

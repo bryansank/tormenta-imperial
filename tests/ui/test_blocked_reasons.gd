@@ -45,7 +45,7 @@ func _rich() -> void:
 	ResourceManager.set_amounts({"gold": 5000, "wood": 5000, "steel": 5000, "oil": 5000})
 
 func _broke() -> void:
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0})
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 0})
 
 # ── Arbol tecnologico: el manager ────────────────────────────────────
 
@@ -86,6 +86,8 @@ func test_the_blocker_agrees_with_can_research() -> void:
 
 # ── Arbol tecnologico: el panel ──────────────────────────────────────
 
+## Rediseno fase 2 (docs/28): el porque ya no va en la tarjeta (menos texto),
+## va lo primero de su tooltip (mantener pulsado) y en la ficha.
 func test_the_panel_writes_the_reason_under_a_blocked_tech() -> void:
 	_rich()
 	var panel: CanvasLayer = auto_free(load("res://scenes/ui/TechTreePanel.tscn").instantiate())
@@ -94,8 +96,8 @@ func test_the_panel_writes_the_reason_under_a_blocked_tech() -> void:
 	var tier2: Dictionary = _branch()[1]
 	panel._refresh_tech_states()
 	var btn: Button = panel._tech_buttons[tier2["id"]]
-	assert_str(btn.text).contains(Tr.t("TECH_BLOCK_PREREQ") % Tr.t(tier1["name"]))
-	assert_str(panel._tech_buttons[tier1["id"]].text).not_contains(Tr.t("TECH_BLOCK_PREREQ").split("%")[0])
+	assert_str(btn.tooltip_text).contains(Tr.t("TECH_BLOCK_PREREQ") % Tr.t(tier1["name"]))
+	assert_str(panel._tech_buttons[tier1["id"]].tooltip_text).not_contains(Tr.t("TECH_BLOCK_PREREQ").split("%")[0])
 
 func test_the_reason_is_rewritten_not_piled_up() -> void:
 	_broke()
@@ -106,10 +108,10 @@ func test_the_reason_is_rewritten_not_piled_up() -> void:
 		panel._refresh_tech_states()
 	var btn: Button = panel._tech_buttons[tier1["id"]]
 	var prefix: String = Tr.t("TECH_BLOCK_COST").split("%")[0]
-	assert_int(btn.text.count(prefix)).is_equal(1)
+	assert_int(btn.tooltip_text.count(prefix)).is_equal(1)
 	_rich()
 	panel._refresh_tech_states()
-	assert_int(btn.text.count(prefix)).is_equal(0)
+	assert_int(btn.tooltip_text.count(prefix)).is_equal(0)
 
 # ── Volver a convocar a la Regencia ──────────────────────────────────
 

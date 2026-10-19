@@ -8,6 +8,7 @@ extends GdUnitTestSuite
 
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
+const ColonyIdentity := preload("res://scripts/services/ColonyIdentity.gd")
 
 var _rank_saved: Dictionary = {}
 var _progress_saved: Dictionary = {}
@@ -27,11 +28,11 @@ func before_test() -> void:
 	_rank_ups.clear()
 	_cosmetics.clear()
 	EventBus.governor_rank_up.connect(_on_rank_up)
-	EventBus.colony_cosmetics_changed.connect(_on_cosmetics)
+	EventBus.colony_identity_changed.connect(_on_cosmetics)
 
 func after_test() -> void:
 	EventBus.governor_rank_up.disconnect(_on_rank_up)
-	EventBus.colony_cosmetics_changed.disconnect(_on_cosmetics)
+	EventBus.colony_identity_changed.disconnect(_on_cosmetics)
 	for node in _placed:
 		if is_instance_valid(node):
 			GridManager.remove_building(node)
@@ -45,8 +46,8 @@ func after_test() -> void:
 func _on_rank_up(rank: int, rewards: Dictionary) -> void:
 	_rank_ups.append([rank, rewards])
 
-func _on_cosmetics(flag_id: String, color_id: String) -> void:
-	_cosmetics.append([flag_id, color_id])
+func _on_cosmetics(colony_name: String, spec: Dictionary) -> void:
+	_cosmetics.append([colony_name, spec])
 
 func _xp_of(source: String) -> int:
 	return int(GameConfig.rank_xp_sources[source])
@@ -152,7 +153,8 @@ func test_a_big_jump_ranks_up_once_with_everything_it_crossed() -> void:
 	var rewards: Dictionary = _rank_ups[0][1]
 	assert_int(int(_rank_ups[0][0])).is_equal(4)
 	assert_array(rewards.get("buildings", [])).contains(["garden"])
-	assert_array(rewards.get("flags", [])).contains(["cross"])
+	assert_array(rewards.get("patterns", [])).contains(["border"])
+	assert_array(rewards.get("emblems", [])).contains(["tower", "star"])
 	assert_float(float(rewards.get("production", 0.0))).is_equal_approx(0.01, 0.0001)
 	assert_float(float(rewards.get("storage", 0.0))).is_equal_approx(0.02, 0.0001)
 
@@ -188,8 +190,9 @@ func test_basic_buildings_are_never_locked_by_rank() -> void:
 func test_sandbox_has_every_rank_unlock_open() -> void:
 	GameMode.begin_run(GameMode.Mode.SANDBOX)
 	assert_bool(Rules.check_rank("statue")).is_true()
-	assert_bool(RankManager.is_flag_unlocked("chevron")).is_true()
-	assert_bool(RankManager.is_color_unlocked("copper")).is_true()
+	assert_bool(RankManager.is_piece_unlocked("patterns", "checks")).is_true()
+	assert_bool(RankManager.is_piece_unlocked("emblems", "airship")).is_true()
+	assert_bool(RankManager.is_color_unlocked("gold")).is_true()
 
 # ── Bonos ────────────────────────────────────────────────────────────
 
@@ -220,7 +223,8 @@ func test_bonuses_follow_the_rank() -> void:
 	assert_float(float(all["storage"])).is_less_equal(0.1)
 
 func test_loading_twice_gives_the_same_bonuses_as_loading_once() -> void:
-	var data := {"xp": RankManager.xp_for_rank(16) + 5, "flag": "cross", "color": "steel"}
+	var data := {"xp": RankManager.xp_for_rank(16) + 5, "colony": {"name": "Liga de Vaporia",
+		"flag": {"pattern": "cross", "emblem": "anchor", "colors": ["steel", "ivory", "soot"]}}}
 	RankManager.load_save_data(data.duplicate())
 	var once := _bonus_snapshot()
 	var rank_once := RankManager.get_rank()
@@ -238,50 +242,62 @@ func test_loading_a_lower_rank_drops_the_bonuses() -> void:
 
 # ── Cosmeticos ───────────────────────────────────────────────────────
 
-func test_a_locked_flag_or_colour_cannot_be_picked() -> void:
+func test_a_locked_piece_cannot_be_picked() -> void:
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
-	assert_bool(RankManager.set_flag("chevron")).is_false()
-	assert_bool(RankManager.set_color("copper")).is_false()
-	assert_str(RankManager.get_flag()).is_equal(GameConfig.COLONY_DEFAULT_FLAG)
+	var before := RankManager.get_flag_spec()
+	assert_bool(RankManager.set_colony("Liga de Vaporia", {"pattern": "checks", "emblem": "gear",
+		"colors": ["brass", "ivory", "crimson"]})).is_false()
+	assert_bool(RankManager.set_colony("Liga de Vaporia", {"pattern": "plain", "emblem": "gear",
+		"colors": ["gold", "ivory", "crimson"]})).is_false()
+	assert_dict(RankManager.get_flag_spec()).is_equal(before)
 	assert_array(_cosmetics).is_empty()
 
-func test_an_unlocked_flag_and_colour_are_picked_saved_and_announced() -> void:
+func test_an_unlocked_flag_is_picked_saved_and_announced() -> void:
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
-	RankManager.add_xp(RankManager.xp_for_rank(RankManager.flag_rank("cross")))
-	RankManager.add_xp(RankManager.xp_for_rank(RankManager.color_rank("steel")))
-	assert_bool(RankManager.set_flag("cross")).is_true()
-	assert_bool(RankManager.set_color("steel")).is_true()
-	assert_array(_cosmetics.back()).is_equal(["cross", "steel"])
+	RankManager.add_xp(RankManager.xp_for_rank(RankManager.piece_rank("patterns", "saltire")))
+	var spec := {"pattern": "saltire", "emblem": "anchor", "colors": ["steel", "ivory", "ivory"]}
+	assert_bool(RankManager.set_colony("Unión de Latonia", spec)).is_true()
+	assert_str(String(_cosmetics.back()[0])).is_equal("Unión de Latonia")
 	var saved := RankManager.get_save_data()
-	assert_str(String(saved["flag"])).is_equal("cross")
-	assert_str(String(saved["color"])).is_equal("steel")
+	assert_str(String(saved["colony"]["name"])).is_equal("Unión de Latonia")
+	assert_str(String(saved["colony"]["flag"]["pattern"])).is_equal("saltire")
 	RankManager.reset()
 	RankManager.load_save_data(saved)
-	assert_str(RankManager.get_flag()).is_equal("cross")
+	assert_str(RankManager.get_colony_name()).is_equal("Unión de Latonia")
+	assert_str(String(RankManager.get_flag_spec()["pattern"])).is_equal("saltire")
 	assert_str(RankManager.get_color_id()).is_equal("steel")
 	assert_bool(RankManager.get_color() == GameConfig.colony_colors["steel"]).is_true()
 
-func test_a_save_with_a_cosmetic_above_its_rank_falls_back() -> void:
+func test_a_save_with_a_piece_above_its_rank_falls_back() -> void:
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
-	RankManager.load_save_data({"xp": 0, "flag": "chevron", "color": "nonsense"})
-	assert_str(RankManager.get_flag()).is_equal(GameConfig.COLONY_DEFAULT_FLAG)
-	assert_str(RankManager.get_color_id()).is_equal(GameConfig.COLONY_DEFAULT_COLOR)
+	RankManager.load_save_data({"xp": 0, "colony": {"name": "Cobrevalle",
+		"flag": {"pattern": "checks", "emblem": "airship", "colors": ["gold", "nonsense", "ivory"]}}})
+	var spec := RankManager.get_flag_spec()
+	assert_str(String(spec["pattern"])).is_equal(GameConfig.COLONY_DEFAULT_SPEC["pattern"])
+	assert_str(String(spec["emblem"])).is_equal(GameConfig.COLONY_DEFAULT_SPEC["emblem"])
+	assert_bool(RankManager.is_spec_unlocked(spec)).is_true()
+	assert_str(RankManager.get_colony_name()).is_equal("Cobrevalle")
 
-func test_every_flag_design_is_drawn_and_they_differ() -> void:
+func test_every_pattern_and_emblem_is_drawn_and_they_differ() -> void:
 	var seen := {}
-	for flag_id in GameConfig.COLONY_FLAGS:
-		var img: Image = ColonyFlag.make_image(flag_id, GameConfig.colony_colors["crimson"])
-		assert_int(img.get_width()).is_equal(ColonyFlag.W)
-		assert_int(img.get_height()).is_equal(ColonyFlag.H)
+	for pattern in GameConfig.COLONY_PATTERNS:
+		var img: Image = ColonyFlag.make_image({"pattern": pattern, "emblem": "none",
+			"colors": ["crimson", "ivory", "soot"]}, ColonyFlag.SMALL_W, ColonyFlag.SMALL_H, 1)
 		var key := Marshalls.raw_to_base64(img.get_data())
-		assert_bool(seen.has(key)).override_failure_message("%s repite el dibujo de %s" % [flag_id, seen.get(key, "")]).is_false()
-		seen[key] = flag_id
-	# Cada bandera y cada color se desbloquea en algun rango.
-	for flag_id in GameConfig.COLONY_FLAGS:
-		assert_int(RankManager.flag_rank(flag_id)).is_greater(0)
-	for color_id in GameConfig.COLONY_COLOR_ORDER:
-		assert_int(RankManager.color_rank(color_id)).is_greater(0)
-	assert_int(GameConfig.COLONY_FLAGS.size()).is_between(3, 6)
+		assert_bool(seen.has(key)).override_failure_message("%s repite el dibujo de %s" % [pattern, seen.get(key, "")]).is_false()
+		seen[key] = pattern
+	for emblem in GameConfig.COLONY_EMBLEMS:
+		if emblem == "none":
+			continue
+		var img: Image = ColonyFlag.make_image({"pattern": "plain", "emblem": emblem,
+			"colors": ["crimson", "ivory", "ivory"]}, ColonyFlag.SMALL_W, ColonyFlag.SMALL_H, 1)
+		var key := Marshalls.raw_to_base64(img.get_data())
+		assert_bool(seen.has(key)).override_failure_message("%s repite el dibujo de %s" % [emblem, seen.get(key, "")]).is_false()
+		seen[key] = emblem
+	# Cada pieza se abre en algun rango.
+	for kind in ["patterns", "emblems", "colors"]:
+		for id in ColonyIdentity.catalog(kind):
+			assert_int(RankManager.piece_rank(kind, id)).override_failure_message("%s/%s sin rango" % [kind, id]).is_greater(0)
 
 # ── Reset y guardados viejos ─────────────────────────────────────────
 
@@ -290,8 +306,8 @@ func test_reset_forgets_xp_rank_bonuses_and_cosmetics() -> void:
 	RankManager.reset()
 	assert_int(RankManager.get_xp()).is_equal(0)
 	assert_int(RankManager.get_rank()).is_equal(1)
-	assert_str(RankManager.get_flag()).is_equal(GameConfig.COLONY_DEFAULT_FLAG)
-	assert_str(RankManager.get_color_id()).is_equal(GameConfig.COLONY_DEFAULT_COLOR)
+	assert_bool(RankManager.is_spec_unlocked(RankManager.get_flag_spec())).is_true()
+	assert_str(RankManager.get_colony_name()).is_not_empty()
 	assert_float(GameConfig.rank_production_bonus).is_equal(0.0)
 	assert_float(GameConfig.rank_storage_bonus).is_equal(0.0)
 	assert_dict(GameConfig.rank_limit_bonus).is_empty()
@@ -303,7 +319,7 @@ func test_an_old_save_without_rank_is_rank_one() -> void:
 	RankManager.load_save_data({})
 	assert_int(RankManager.get_xp()).is_equal(0)
 	assert_int(RankManager.get_rank()).is_equal(1)
-	assert_str(RankManager.get_flag()).is_equal(GameConfig.COLONY_DEFAULT_FLAG)
+	assert_str(RankManager.get_colony_name()).is_not_empty()
 
 func test_every_fresh_game_path_resets_the_rank_and_the_save_carries_it() -> void:
 	var src: String = FileAccess.get_file_as_string("res://scripts/services/GameManager.gd")

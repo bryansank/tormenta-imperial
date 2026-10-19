@@ -48,12 +48,12 @@ func test_next_twice_then_back_lands_on_folio_two() -> void:
 	assert_int(s.current_page()).is_equal(1)
 	assert_bool(s.back_button().disabled).is_false()
 
-func test_next_first_finishes_the_typing_then_turns_the_folio() -> void:
+## Sin animacion (docs/28 §0.6): el folio sale entero y Siguiente pasa de
+## folio al primer toque.
+func test_the_folio_comes_out_whole_and_next_turns_it() -> void:
 	var s := _screen()
-	assert_bool(s.is_typing()).is_true()
-	s.next_button().pressed.emit()
 	assert_bool(s.is_typing()).is_false()
-	assert_int(s.current_page()).is_equal(0)
+	assert_float((s.find_child("Body", true, false) as Label).visible_ratio).is_equal(1.0)
 	s.next_button().pressed.emit()
 	assert_int(s.current_page()).is_equal(1)
 
@@ -142,8 +142,9 @@ func test_it_does_not_look_like_the_tutorial() -> void:
 	var s := _screen()
 	assert_object(s.find_child("Seal", true, false)).is_not_null()
 	var body: Label = s.find_child("Body", true, false)
-	assert_object(body.get_theme_font("font")).is_equal(UITheme.typewriter_font())
-	assert_that(body.get_theme_color("font_color")).is_equal(UITheme.INK)
+	# Letra del estilo nuevo (docs/28 §3) sobre el folio crema.
+	assert_object(body.get_theme_font("font")).is_equal(CartoonTheme.body_font())
+	assert_that(body.get_theme_color("font_color")).is_equal(CartoonTheme.text("window"))
 
 # ── La hoja final (2026-10-04) ───────────────────────────────────────
 
@@ -153,7 +154,7 @@ func test_the_last_folio_before_playing_is_the_plan() -> void:
 	var s := _screen()
 	s.go_to_page(s.page_count() - 1)
 	assert_str(s.title_text()).is_equal(Tr.t("PRO_4_TITLE"))
-	assert_str(s.next_button().text).contains(Tr.t("BTN_PROLOGUE_START"))
+	assert_str(CartoonTheme.button_text(s.next_button())).contains(Tr.t("BTN_PROLOGUE_START"))
 	assert_bool(s.skip_button().visible).is_true()
 
 func test_the_last_folio_says_the_plan_in_plain_words_in_both_languages() -> void:
@@ -188,3 +189,81 @@ func test_the_last_folio_turns_with_keys_and_swipes_like_the_others() -> void:
 	assert_int(s.current_page()).is_equal(last - 1)
 	assert_bool(s.handle_swipe(Vector2(-220, 0))).is_true()
 	assert_int(s.current_page()).is_equal(last)
+
+# ── La lamina de cada folio (2026-10-18, feat/vista2d-y-prologo) ─────
+# El folio dejaba dos tercios del papel vacios (ronda 1.0, mejora 8): cada uno
+# lleva ahora un grabado a tinta dibujado en codigo (PrologueEngraving).
+
+const Engraving := preload("res://scripts/ui/PrologueEngraving.gd")
+const ScreenScript := preload("res://scripts/ui/PrologueScreen.gd")
+
+func test_every_folio_of_every_variant_has_its_engraving() -> void:
+	for v in ScreenScript.VARIANTS:
+		for id in ScreenScript.VARIANTS[v]:
+			assert_bool(Engraving.has_scene(String(id))).override_failure_message("folio %s sin lamina" % id).is_true()
+
+func test_the_engraving_follows_the_folio() -> void:
+	var s := _screen()
+	assert_str(String(s.art().get("folio"))).is_equal("1")
+	s.go_to_page(2)
+	assert_str(String(s.art().get("folio"))).is_equal("3")
+	s.prev_page()
+	assert_str(String(s.art().get("folio"))).is_equal("2")
+
+func test_the_engraving_shows_once_the_typing_is_done() -> void:
+	var s := _screen()
+	s.next_page()
+	assert_float(s.art().modulate.a).is_equal(1.0)
+
+func test_wide_sheets_put_the_engraving_beside_the_text_and_narrow_ones_on_top() -> void:
+	var pc: Dictionary = ScreenScript.layout_for(Vector2(860, 640))
+	assert_str(String(pc["mode"])).is_equal("side")
+	assert_float(float(pc["art"])).is_between(170.0, 320.0)
+	# Telefono en horizontal: folio ancho pero bajo, sigue al lado.
+	assert_str(String(ScreenScript.layout_for(Vector2(700, 260))["mode"])).is_equal("side")
+	# Estrecho y alto: encima del texto, una franja.
+	var tall: Dictionary = ScreenScript.layout_for(Vector2(420, 600))
+	assert_str(String(tall["mode"])).is_equal("top")
+	assert_float(float(tall["art"])).is_between(90.0, 150.0)
+	# Estrecho y bajo: solo texto.
+	assert_str(String(ScreenScript.layout_for(Vector2(420, 280))["mode"])).is_equal("none")
+
+func test_the_stamp_lands_on_the_engraving_when_it_fits() -> void:
+	var sheet := Vector2(860, 640)
+	var stamp := Vector2(180, 50)
+	var art := Rect2(520, 80, 300, 420)
+	var on_art: Vector2 = ScreenScript.stamp_position(sheet, stamp, art)
+	assert_bool(art.encloses(Rect2(on_art, stamp))).is_true()
+	# Sin lamina (o demasiado pequena), el sitio de siempre.
+	var old: Vector2 = ScreenScript.stamp_position(sheet, stamp, Rect2())
+	assert_that(old).is_equal(Vector2(sheet.x - stamp.x - 150.0, sheet.y - stamp.y - 52.0))
+
+func test_every_engraving_draws_at_pc_tablet_and_phone_sizes() -> void:
+	var drawn := [0]
+	var plates: Array = []
+	var canvas := Control.new()
+	canvas.size = Vector2(400, 400)
+	canvas.draw.connect(func():
+		for id in Engraving.SCENES:
+			for area in [Rect2(0, 0, 320, 480), Rect2(0, 0, 230, 260), Rect2(0, 0, 150, 120)]:
+				plates.append(Engraving.draw_plate(canvas, area, String(id)))
+		drawn[0] += 1)
+	add_child(canvas)
+	canvas.queue_redraw()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_int(drawn[0]).is_greater(0)
+	for p in plates:
+		assert_bool((p as Rect2).has_area()).is_true()
+	canvas.queue_free()
+
+func test_a_too_small_area_draws_no_plate() -> void:
+	var drawn := [Rect2(1, 1, 1, 1)]
+	var canvas := Control.new()
+	canvas.draw.connect(func(): drawn[0] = Engraving.draw_plate(canvas, Rect2(0, 0, 30, 30), "1"))
+	add_child(canvas)
+	canvas.queue_redraw()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_bool(drawn[0].has_area()).is_false()
+	canvas.queue_free()

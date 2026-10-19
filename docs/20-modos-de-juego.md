@@ -30,6 +30,7 @@ hereda de Campaña.
 | Reloj de la Tormenta (`storm`) | sí | **no** | sí | **no** (solo invocada) |
 | Diezmo (`tithe`) | sí | **no** | sí | sí, si se invoca la tormenta |
 | HQ nv.3 convoca la Auditoría (`audit_on_capstone`) | sí | **no** | sí | **no** (solo invocada) |
+| La Auditoría pide además las tres campañas (`audit_needs_campaigns`, feat/tres-campanas) | **sí** | — (sin asedio) | **sí** | **no** (se invoca a mano) |
 | HQ nv.3 gana sin asedio (`capstone_wins`) | no | **sí** | no | no |
 | Hay victoria (`victory`) | sí | sí | sí | **no** |
 | Reconvocar la Auditoría perdida (`resummon`) | sí | — | **no: la partida termina** | sí (invocar otra) |
@@ -301,3 +302,21 @@ cámara ni del placer.
 - `tools/modes_probe.gd` — capturas con ventana (selector y cada modo un
   minuto dentro, en 3D y 2D). Instrucciones en su cabecera; siempre con una
   carpeta de usuario propia en `override.cfg`.
+
+## 5. Las tres campañas y los modos (2026-10-18, rama `feat/tres-campanas`)
+
+El Ataque Final tiene dos llaves: el Cuartel General a nivel 3 y las campañas de
+Tierra, Mar y Aire completas ([15-combat.md](15-combat.md) §13). Por modo:
+
+- **Campaña** (Colono y Gobernador): las dos llaves. Gobernador hereda su enemigo más
+  duro también en las campañas (`expedition_enemy_mult`, jefes incluidos).
+- **Supervivencia**: las dos llaves. Es la Campaña más dura y su asedio sigue siendo
+  uno solo; pedirle menos que a la Campaña la volvería más corta, no más difícil.
+- **Constructor**: no hay asedio; el Cuartel General a nivel 3 gana como siempre. Las
+  campañas se pueden jugar (botín y rango), pero no son meta.
+- **Sandbox**: el asedio solo se invoca desde la pestaña SANDBOX, como antes; las
+  campañas se pueden jugar para probarlas.
+
+La regla es `audit_needs_campaigns` en `game_mode_rules` y se pregunta con
+`GameMode.audit_needs_campaigns()`, que además respeta el interruptor global
+`GameConfig.final_audit_needs_campaigns` (los tests del camino de la 1.0 lo apagan).

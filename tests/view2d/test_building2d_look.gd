@@ -13,6 +13,7 @@ var _canvas: Node2D = null
 var _calls: Array = []
 
 func after_test() -> void:
+	ProductionManager.set_process(true)
 	if is_instance_valid(_canvas):
 		_canvas.queue_free()
 	_canvas = null
@@ -46,6 +47,9 @@ func test_ruin_and_damage_draw() -> void:
 		func(ci): Art.draw_ruin(ci, Vector2(96, 96), 9, 3),
 		func(ci): Art.draw_damage(ci, Vector2(64, 64), 0.0, true, 5, 2),
 		func(ci): Art.draw_damage(ci, Vector2(64, 64), 0.5, false, 5, 2),
+		func(ci): Art.draw_damage(ci, Vector2(64, 64), 0.2, false, 5, 2),
+		func(ci): Art.draw_damage(ci, Vector2(64, 64), 0.9, false, 5, 2),
+		func(ci): Art.draw_damage_marks(ci, Vector2(96, 96), LookRule.DAMAGE_HEAVY, 4, 3),
 	])
 	assert_int(_drawn).is_greater(0)
 
@@ -62,9 +66,11 @@ func _spawn(id: String) -> Node2D:
 	add_child(b)
 	return b
 
+## Building2D mira su estado cada CHECK_FRAMES fotogramas (repartidos entre
+## edificios): se espera algo mas que eso.
 func _settle() -> void:
-	await get_tree().process_frame
-	await get_tree().process_frame
+	for i in Building2D.CHECK_FRAMES + 2:
+		await get_tree().process_frame
 
 func test_construction_shows_the_phase_of_its_progress() -> void:
 	var data: BuildingData = load("res://data/buildings/foundry.tres")
@@ -155,6 +161,10 @@ func _spawn_building(id: String, done: float) -> Node2D:
 	add_child(b)
 	var total := GameConfig.get_build_time(maxf(1.0, data.build_time))
 	ProductionManager.register_building(b, data, total * (1.0 - done))
+	# En modo dev la obra dura 2 s: con el 10 % que queda, los fotogramas de
+	# _settle() la podian terminar (segun lo rapido que fuera la maquina). El
+	# reloj de la obra se para; after_test() lo vuelve a poner.
+	ProductionManager.set_process(false)
 	return b
 
 func test_a_site_in_frame_phase_animates_crane_and_flag() -> void:

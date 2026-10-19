@@ -68,6 +68,16 @@ for font in "$ROOT"/assets/fonts/*.ttf "$ROOT"/assets/fonts/*.otf; do
 	[ -n "$match" ] || die "la fuente $name no tiene su licencia al lado (assets/fonts/*$family*.txt)"
 done
 for lic in "$ROOT"/assets/fonts/*.txt; do FONT_LICENSES+=("$lic"); done
+# Las fuentes del rediseno van en una carpeta por familia (assets/fonts/<familia>/
+# con su OFL.txt): cada una tiene que traer su licencia, que viaja como
+# licenses/fonts/OFL-<familia>.txt.
+FONT_DIR_LICENSES=()
+for dir in "$ROOT"/assets/fonts/*/; do
+	[ -d "$dir" ] || continue
+	ls "$dir"*.ttf "$dir"*.otf >/dev/null 2>&1 || continue
+	[ -f "$dir/OFL.txt" ] || die "la carpeta de fuentes $(basename "$dir") no tiene su OFL.txt"
+	FONT_DIR_LICENSES+=("$dir/OFL.txt")
+done
 [ ${#FONT_LICENSES[@]} -gt 0 ] || die "no hay licencias de fuentes en assets/fonts/"
 
 # Elige con qué comprimir: zip, python o el tar de Windows (bsdtar, que sí hace zip).
@@ -115,6 +125,9 @@ stage_common() { # stage_common <carpeta> <leeme>
 	to_crlf "$ROOT/licenses/GODOT-COPYRIGHT.txt" "$d/GODOT-COPYRIGHT.txt"
 	cp "$ROOT/THIRD-PARTY-NOTICES.md" "$d/THIRD-PARTY-NOTICES.md"
 	for lic in "${FONT_LICENSES[@]}"; do cp "$lic" "$d/licenses/fonts/"; done
+	for lic in "${FONT_DIR_LICENSES[@]}"; do
+		cp "$lic" "$d/licenses/fonts/OFL-$(basename "$(dirname "$lic")").txt"
+	done
 }
 
 magic() { head -c 2 "$1"; }

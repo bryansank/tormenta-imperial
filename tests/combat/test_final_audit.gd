@@ -437,8 +437,8 @@ func test_the_morale_that_counts_is_the_one_at_the_gate() -> void:
 	audit.begin(GARRISON, 15.0)
 	assert_float(audit.morale_snapshot).is_equal(15.0)
 	for unit in audit.living_garrison():
-		assert_float(unit.morale_attack_mod).is_equal(CombatRules.morale_attack_mod(15.0))
-		assert_int(unit.morale_initiative_bonus).is_equal(CombatRules.morale_initiative_bonus(15.0))
+		assert_float(unit.morale_attack_mod).is_equal(CombatRules.siege_morale_attack_mod(15.0))
+		assert_int(unit.morale_initiative_bonus).is_equal(CombatRules.siege_morale_initiative_bonus(15.0))
 
 func test_without_a_morale_the_gate_keeps_the_summon_one() -> void:
 	var audit := _audit(4242, 3, 70.0)
@@ -453,7 +453,7 @@ func test_a_siege_already_fought_keeps_its_morale_after_a_reload() -> void:
 	restored.begin(GARRISON, 10.0)
 	assert_float(restored.morale_snapshot).is_equal(80.0)
 	for unit in restored.living_garrison():
-		assert_float(unit.morale_attack_mod).is_equal(CombatRules.morale_attack_mod(80.0))
+		assert_float(unit.morale_attack_mod).is_equal(CombatRules.siege_morale_attack_mod(80.0))
 
 func test_a_save_summoned_but_never_opened_reads_the_morale_at_the_gate() -> void:
 	# Un guardado de antes de la regla, con el asedio convocado y sin abrir:
@@ -464,3 +464,15 @@ func test_a_save_summoned_but_never_opened_reads_the_morale_at_the_gate() -> voi
 	assert_bool(restored.started).is_false()
 	restored.begin(GARRISON, 30.0)
 	assert_float(restored.morale_snapshot).is_equal(30.0)
+
+## La moral del asedio (decision de Bryan, ronda final de la 1.1, docs/17): a
+## moral 100 vale lo mismo que fuera; por debajo pesa menos que en el campo.
+func test_the_siege_morale_is_softer_but_equal_at_full_spirit() -> void:
+	assert_float(CombatRules.siege_morale_attack_mod(100.0)).is_equal_approx(CombatRules.morale_attack_mod(100.0), 0.0001)
+	assert_int(CombatRules.siege_morale_initiative_bonus(100.0)).is_equal(CombatRules.morale_initiative_bonus(100.0))
+	assert_float(CombatRules.siege_morale_attack_mod(75.0)).is_greater(CombatRules.morale_attack_mod(75.0))
+	assert_int(CombatRules.siege_morale_initiative_bonus(75.0)).is_greater_equal(CombatRules.morale_initiative_bonus(75.0))
+	var audit := _audit(4242, 3, 75.0)
+	audit.begin(GARRISON, 75.0)
+	for unit in audit.living_garrison():
+		assert_float(unit.morale_attack_mod).is_equal(CombatRules.siege_morale_attack_mod(75.0))

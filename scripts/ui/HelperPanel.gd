@@ -25,11 +25,19 @@ extends CanvasLayer
 ## Los globos los coloca UILayoutManager (slots tip_*), bajo el panel del que
 ## hablan. Las tarjetas de consejo van abajo al centro en su propia capa (19),
 ## por encima de las ventanas, porque a veces explican una ventana (mercado).
+##
+## Estilo nuevo (fase 2, docs/28): la tarjeta de consejo es un bocadillo crema
+## con su piquito hacia el busto del instructor, una frase y "Mas" (HelpCallout).
+## Sin animaciones: ni fundido al salir, ni marco que late, ni texto que se
+## escribe solo.
 
 const HelpCallout := preload("res://scripts/ui/HelpCallout.gd")
 const HelpCatalog := preload("res://scripts/ui/HelpCatalog.gd")
+const BuildingHelpText := preload("res://scripts/ui/BuildingHelpText.gd")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const HelpIndexScene := preload("res://scenes/ui/HelpIndexPanel.tscn")
+const InstructorBust := preload("res://scripts/ui/InstructorBust.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 ## Node name of the Skirmish callout, so tests and tools can find it.
 const SKIRMISH_CALLOUT_NAME := "SkirmishCallout"
@@ -67,9 +75,11 @@ const DESKTOP_TIPS := ["HelperPanel.tip_camera"]
 
 var _callouts: Control
 var _help_btn: Button
-var _guide_panel: PanelContainer
+var _guide_panel: Control
 var _backdrop: ColorRect
 var _guide_open := false
+## La X de la guia de edificios (se corre a la izquierda del ☰ si la tapa).
+var _guide_close: Control
 var _skirmish_callout: PanelContainer
 var _sidebar_visible := false
 var _storm_silenced := false
@@ -82,13 +92,18 @@ var _tip_layer: CanvasLayer
 var _tip_card: PanelContainer
 var _pointer: Panel
 var _index: CanvasLayer
+## El instructor junto a la tarjeta de consejo (no junto a los globos, que son
+## pequenos y van pegados a su control): la Capitana para lo basico y la
+## economia, el Sargento para la Tormenta y el ejercito (feat/instructores).
+var _tip_bust: Control
+## El piquito del bocadillo de consejo, hacia el busto.
+var _tip_tail: Control
 
 ## Cola: {id, prio, seq, forced}. `_current` es la que esta en pantalla.
 var _queue: Array[Dictionary] = []
 var _current: Dictionary = {}
 var _seq := 0
 var _gap := 0.0
-var _pulse := 0.0
 
 func _ready() -> void:
 	# Above the HUD (10-11). UIManager stacks open windows from layer 12 up, so
@@ -131,9 +146,47 @@ func _ready() -> void:
 	EventBus.tutorial_tip_requested.connect(_on_tip_requested)
 	EventBus.help_reopen_requested.connect(show_help)
 	EventBus.tutorial_guide_finished.connect(_on_guide_finished)
+	# Una leccion suelta del tutorial (reparar) que sale con un globo ya en
+	# pantalla lo aparta: antes se pisaban las dos tarjetas (ronda de pruebas 1.0).
+	EventBus.tutorial_step_changed.connect(func(_s): _pump.call_deferred())
+	# CONSTRUIR abierto aparta los consejos; al cerrarlo vuelven.
+	UIManager.window_opened.connect(func(_w): _pump.call_deferred())
+	UIManager.window_closed.connect(func(_w): _pump.call_deferred())
+	# Durante una pelea las ayudas de la colonia esperan (docs/15 §3): al abrir
+	# el tablero la que este en pantalla se aparta y vuelve al cerrar el parte.
+	EventBus.encounter_started.connect(func(_i, _b): _refresh_callouts())
+	EventBus.encounter_closed.connect(_refresh_callouts)
 	_update_skirmish_callout()
 	_refresh_tips()
 	_refresh_callouts()
+	_setup_news()
+	_watch_modal_screens.call_deferred()
+
+## Los partes de guerra y las pantallas de fin tapan la colonia: con uno a la
+## vista no sale ninguna ayuda, y la que estaba se aparta y vuelve al cerrarlo
+## (el busto de la Capitana asomaba por detras del parte, ronda visual de la 1.1).
+const MODAL_SCREENS := ["WarReportScreen", "AuditDefeatScreen", "VictoryScreen"]
+
+func _watch_modal_screens() -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+	for n in MODAL_SCREENS:
+		var s := parent.get_node_or_null(n)
+		if s is CanvasLayer:
+			(s as CanvasLayer).visibility_changed.connect(func(): _pump.call_deferred())
+
+func _modal_screen_up() -> bool:
+	var parent := get_parent()
+	if parent == null:
+		return false
+	for n in MODAL_SCREENS:
+		# is_showing(): la de victoria es una capa siempre visible que crea su
+		# tarjeta al ganar.
+		var s := parent.get_node_or_null(n)
+		if s != null and s.has_method("is_showing") and bool(s.call("is_showing")):
+			return true
+	return false
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -182,8 +235,8 @@ func _setup_ui() -> void:
 	_skirmish_callout.setup("callout_skirmish", HelpCatalog.title("callout_skirmish"), HelpCatalog.body("callout_skirmish"))
 	_callouts.add_child(_skirmish_callout)
 
-	# ── Building guide modal ──
-	_backdrop = UITheme.make_backdrop()
+	# ── Guia de edificios: ventana crema con cinta (docs/28 §6) ──
+	_backdrop = CT.veil()
 	_backdrop.visible = false
 	_backdrop.gui_input.connect(func(event: InputEvent):
 		if event is InputEventMouseButton and event.pressed:
@@ -191,23 +244,16 @@ func _setup_ui() -> void:
 	)
 	root.add_child(_backdrop)
 
-	_guide_panel = PanelContainer.new()
+	var small := CT.is_phone()
+	var gw := CT.menu_window(Tr.t("LBL_GUIDE_TITLE"), CT.sem("INFO"), small)
+	_guide_panel = gw["root"]
+	_guide_panel.name = "BuildingGuide"
 	_guide_panel.visible = false
-	UILayoutManager.apply_layout("HelperPanel.modal", _guide_panel)
-	_guide_panel.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	root.add_child(_guide_panel)
-
-	var margin := MarginContainer.new()
-	for side in ["top", "left", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 20)
-	_guide_panel.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(vbox)
-
-	vbox.add_child(UITheme.make_panel_header(Tr.t("LBL_GUIDE_TITLE"), _toggle_guide))
-	vbox.add_child(UITheme.make_separator())
+	(gw["close"] as Button).tooltip_text = Tr.t("BTN_CLOSE")
+	(gw["close"] as Button).pressed.connect(_toggle_guide)
+	_guide_close = gw["close"]
+	var vbox: VBoxContainer = gw["body"]
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -216,7 +262,7 @@ func _setup_ui() -> void:
 
 	var list := VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 14)
+	list.add_theme_constant_override("separation", 8)
 	scroll.add_child(list)
 
 	for data in _load_buildings():
@@ -236,11 +282,11 @@ func _setup_ui() -> void:
 	_pointer.name = "HelpPointer"
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0, 0, 0, 0)
-	ps.border_color = UITheme.INFO.lightened(0.35)
-	ps.set_border_width_all(3)
-	ps.set_corner_radius_all(6)
-	ps.shadow_color = Color(UITheme.INFO, 0.5)
-	ps.shadow_size = 6
+	ps.border_color = CT.sem("ACCENT")
+	ps.set_border_width_all(4)
+	ps.set_corner_radius_all(12)
+	ps.shadow_color = Color(CT.INK, 0.45)
+	ps.shadow_size = 2
 	_pointer.add_theme_stylebox_override("panel", ps)
 	_pointer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pointer.visible = false
@@ -248,6 +294,8 @@ func _setup_ui() -> void:
 
 	_tip_card = _make_callout()
 	_tip_card.name = "TipCard"
+	# Los avisos (NotificationPanel) esperan si el consejo cae sobre su columna.
+	_tip_card.add_to_group("alert_blocker")
 	_tip_card.anchor_left = 0.5
 	_tip_card.anchor_right = 0.5
 	_tip_card.anchor_top = 1.0
@@ -255,6 +303,17 @@ func _setup_ui() -> void:
 	_tip_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_tip_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	tip_root.add_child(_tip_card)
+	_tip_bust = InstructorBust.new()
+	_tip_bust.name = "TipInstructor"
+	_tip_bust.visible = false
+	tip_root.add_child(_tip_bust)
+	_tip_tail = CT.Tail.new()
+	_tip_tail.name = "TipTail"
+	_tip_tail.visible = false
+	tip_root.add_child(_tip_tail)
+	_tip_card.item_rect_changed.connect(_place_tip_bust)
+	_tip_card.visibility_changed.connect(_place_tip_bust)
+	EventBus.instructors_visibility_changed.connect(func(_on): _place_tip_bust())
 
 	# El indice de AYUDA, en su propia capa (la pone UIManager al abrirse).
 	_index = HelpIndexScene.instantiate()
@@ -342,10 +401,19 @@ func _on_game_started() -> void:
 			enqueue(id)
 
 ## ¿Puede salir esta ayuda ahora mismo?
+## Ayudas que son del combate y SI salen con el tablero abierto.
+const COMBAT_HELP_IDS := ["encounter"]
+
 func _can_show(item: Dictionary) -> bool:
 	var id := String(item["id"])
 	var forced := bool(item["forced"])
 	if get_tree().paused or _guide_open:
+		return false
+	if _modal_screen_up():
+		return false
+	# Con un tablero de combate abierto (pelea o su parte) solo pasan las ayudas
+	# del propio combate; el resto espera a EventBus.encounter_closed.
+	if CombatManager.is_board_open() and not id in COMBAT_HELP_IDS:
 		return false
 	# Con el indice de AYUDA abierto se esta eligiendo que leer: nada encima.
 	if _index != null and _index.has_method("is_open") and _index.call("is_open"):
@@ -353,7 +421,8 @@ func _can_show(item: Dictionary) -> bool:
 	if not forced:
 		if not GameConfig.ui_helper_visible:
 			return false
-		if TutorialManager.is_guide_active():
+		# Tampoco con una leccion suelta del tutorial en pantalla (reparar).
+		if TutorialManager.is_coach_active():
 			return false
 	var k := HelpCatalog.kind(id)
 	if k == "callout":
@@ -370,7 +439,18 @@ func _can_show(item: Dictionary) -> bool:
 	# el dedo (taparian la columna de CANCELAR).
 	if _placing and GameConfig.touch_controls_enabled() and not forced:
 		return false
+	# Ni con CONSTRUIR abierto: la tarjeta tapaba la ficha del edificio (la frase
+	# del tope y MEJORAR UNO) a 1280x720. Vuelve al cerrarlo (ronda 1.0).
+	if not forced and _build_menu_open():
+		return false
 	return true
+
+## La lista de CONSTRUIR esta abierta (en la pila de UIManager).
+func _build_menu_open() -> bool:
+	for w in UIManager.open_windows():
+		if is_instance_valid(w) and String(w.name) == "ConstructionMenu":
+			return true
+	return false
 
 ## El globo tiene sentido ahora: el de ESCARAMUZAS solo con su boton a la vista,
 ## el de zoom solo con los botones tactiles, y ninguno de camara colocando con
@@ -438,12 +518,45 @@ func _show(item: Dictionary) -> void:
 		return
 	box.setup(id, HelpCatalog.title(id), HelpCatalog.body(id))
 	box.start()
-	# Entra con un fundido corto: llama la vista sin interrumpir.
-	box.modulate.a = 0.0
-	create_tween().tween_property(box, "modulate:a", 1.0, 0.25)
+	if box == _tip_card:
+		_speak_tip(id)
+	# Sin fundido (docs/28 §0.6): aparece al instante.
 	_current = item.duplicate()
 	_current["box"] = box
 	_refresh_callouts()
+
+## El instructor de la tarjeta de consejo: quien segun la categoria y su cara.
+## El texto sale entero (sin maquina de escribir: docs/28 §0.6).
+func _speak_tip(id: String) -> void:
+	var cat := HelpCatalog.category(id)
+	_tip_bust.show_as(InstructorBust.who_for_category(cat), InstructorBust.expression_for_category(cat), _tip_bust.facing)
+	_tip_bust.visible = GameConfig.ui_instructors_visible
+	_place_tip_bust.call_deferred()
+
+## Pega el busto a la tarjeta de consejo (a su izquierda si cabe), sin tapar el
+## control que senala el marco azul; si no cabe, se oculta.
+func _place_tip_bust() -> void:
+	if _tip_bust == null:
+		return
+	if not _tip_card.visible or not GameConfig.ui_instructors_visible:
+		_tip_bust.visible = false
+		if _tip_tail != null:
+			_tip_tail.visible = false
+		return
+	var avoid: Array = []
+	if not _current.is_empty():
+		var target := HelpCatalog.target(String(_current["id"]))
+		if target != "":
+			avoid.append(HelpTargets.rect(get_tree(), target))
+	var storm := _storm_rect()
+	if storm.size.x > 1.0:
+		avoid.append(storm)
+	_tip_bust.dock_to(get_viewport().get_visible_rect().size, _tip_card.get_global_rect(), avoid)
+	CT.place_tail(_tip_tail, _tip_card.get_global_rect(), _tip_bust)
+
+## El busto de la tarjeta de consejo (pruebas).
+func tip_instructor() -> Control:
+	return _tip_bust
 
 func _suspend_current() -> void:
 	if _current.is_empty():
@@ -469,7 +582,6 @@ func _process(delta: float) -> void:
 		if _gap <= 0.0:
 			_gap = 0.0
 			_pump()
-	_pulse += delta
 	_update_pointer()
 
 ## El marco azul alrededor del control del que habla la ayuda en pantalla.
@@ -486,16 +598,30 @@ func _update_pointer() -> void:
 	_pointer.visible = true
 	_pointer.position = rect.position
 	_pointer.size = rect.size
-	_pointer.modulate.a = 0.6 + 0.4 * sin(_pulse * 4.0)
 
 func _fit_tip_card() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var tw: float = minf(TIP_WIDTH, vp.x - EDGE * 2.0)
+	var shift := tip_card_shift(vp, tw, _storm_rect())
 	_tip_card.custom_minimum_size = Vector2(tw, 0)
-	_tip_card.offset_left = -tw * 0.5
-	_tip_card.offset_right = tw * 0.5
+	_tip_card.offset_left = -tw * 0.5 + shift
+	_tip_card.offset_right = tw * 0.5 + shift
 	_tip_card.offset_bottom = -TIP_BOTTOM_GAP
 	_tip_card.offset_top = -TIP_BOTTOM_GAP
+
+## La Tormenta (con la orden de la Regencia abierta) en pantalla, o un Rect2
+## vacio. En un telefono baja a la columna izquierda y llega a media pantalla.
+func _storm_rect() -> Rect2:
+	var c: Control = HudRegistry.control_of("StormHUD")
+	if c == null or not is_instance_valid(c) or not c.is_visible_in_tree():
+		return Rect2()
+	return c.get_global_rect()
+
+## Cuanto se corre a la derecha la tarjeta de consejo (centrada abajo) para no
+## pisar la Tormenta en la columna izquierda de un telefono (tapaba su boton
+## ENTREGAR, ronda visual de la 1.1). Ver InstructorBust.centered_card_shift.
+static func tip_card_shift(vp: Vector2, tw: float, block: Rect2) -> float:
+	return InstructorBust.centered_card_shift(vp, tw, block, vp.y * 0.5)
 
 # ── Para pruebas y sondas ────────────────────────────────────────────
 
@@ -554,22 +680,61 @@ func _load_buildings() -> Array:
 	result.sort_custom(func(a, b): return a.get_display_name() < b.get_display_name())
 	return result
 
-func _make_building_entry(data: BuildingData) -> VBoxContainer:
+## Una tarjeta por edificio: el nombre y su tamano, los costes como icono +
+## cifra, los trabajadores, y una linea pequena con lo que pide (tope, era,
+## antes). La descripcion, al mantener pulsado.
+func _make_building_entry(data: BuildingData) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.name = "Guide_" + String(data.id)
+	var st := CT.card_style("window")
+	st.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", st)
+	# Al mantener pulsado: el nombre entero, la descripcion y las cifras en palabras.
+	card.tooltip_text = "%s\n%s\n%s" % [data.get_display_name(), data.get_description(), _meta_line(data)]
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	var entry := VBoxContainer.new()
-	entry.add_theme_constant_override("separation", 2)
+	entry.add_theme_constant_override("separation", 4)
+	entry.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(entry)
 
-	var title := UITheme.make_label("%s  (%dx%d)" % [data.get_display_name(), data.grid_size.x, data.grid_size.y], "body", UITheme.ACCENT)
-	entry.add_child(title)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entry.add_child(head)
+	# El nombre entero (dos lineas antes que cortar), 16 dp como poco en telefono.
+	var title := CT.name_label(data.get_display_name(), "button")
+	title.name = "GuideName"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	head.add_child(CT.label("%dx%d" % [data.grid_size.x, data.grid_size.y], "small", CT.text("window", true)))
 
-	var meta := UITheme.make_label(_meta_line(data), "small", UITheme.TEXT_DIM)
-	meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	entry.add_child(meta)
+	# El coste como en CONSTRUIR: icono + cifra; los materiales (sin icono), con
+	# su nombre ("8 vigas"): antes salian como una cifra suelta sin icono. Los
+	# trabajadores, con su icono.
+	var amounts := {}
+	for pair in [[data.cost_gold, "gold"], [data.cost_steel, "steel"], [data.cost_oil, "oil"], [data.cost_wood, "wood"]]:
+		if int(pair[0]) > 0:
+			amounts[String(pair[1])] = int(pair[0])
+	for mat in data.cost_materials:
+		if int(data.cost_materials[mat]) > 0:
+			amounts[String(mat)] = int(data.cost_materials[mat])
+	if data.workers_required > 0:
+		amounts["workers"] = data.workers_required
+	var chips := HFlowContainer.new()
+	chips.name = "GuideCost"
+	chips.add_theme_constant_override("h_separation", 6)
+	chips.add_theme_constant_override("v_separation", 6)
+	chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CT.fill_cost_strip(chips, amounts)
+	entry.add_child(chips)
 
-	if not data.get_description().is_empty():
-		var desc := UITheme.make_label(data.get_description(), "small", UITheme.TEXT)
-		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		entry.add_child(desc)
-	return entry
+	# Topes y mejoras (feat/topes-mejoras-ayuda): tope por era, era, lo que pide
+	# antes y si se mejora, en una linea pequena.
+	var rules := CT.label(BuildingHelpText.guide_rules_line(data), "small", CT.text("window", true))
+	rules.name = "GuideRules"
+	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	entry.add_child(rules)
+	return card
 
 ## "Costo: 120 oro, 80 madera · Trabajadores: 3 · Produce: 8 oro"
 func _meta_line(data: BuildingData) -> String:
@@ -579,13 +744,17 @@ func _meta_line(data: BuildingData) -> String:
 	for pair in [[data.cost_gold, "gold"], [data.cost_steel, "steel"], [data.cost_oil, "oil"], [data.cost_wood, "wood"]]:
 		if pair[0] > 0:
 			costs.append("%d %s" % [pair[0], Tr.res_name(pair[1])])
+	# Los materiales del taller tambien son coste (antes no salian en la guia).
+	for mat in data.cost_materials:
+		if int(data.cost_materials[mat]) > 0:
+			costs.append("%d %s" % [int(data.cost_materials[mat]), Tr.res_name(String(mat))])
 	parts.append("%s: %s" % [Tr.t("LBL_GUIDE_COST"), ", ".join(costs) if not costs.is_empty() else Tr.t("LBL_FREE")])
 
 	if data.workers_required > 0:
 		parts.append("%s: %d" % [Tr.t("LBL_GUIDE_WORKERS"), data.workers_required])
 
 	var produces: Array[String] = []
-	for pair in [[data.produces_gold, "gold"], [data.produces_steel, "steel"], [data.produces_oil, "oil"], [data.produces_wood, "wood"]]:
+	for pair in [[data.produces_gold, "gold"], [data.produces_steel, "steel"], [data.produces_oil, "oil"], [data.produces_wood, "wood"], [data.produces_food, "food"]]:
 		if pair[0] > 0:
 			produces.append("%d %s" % [pair[0], Tr.res_name(pair[1])])
 	if not produces.is_empty():
@@ -620,7 +789,7 @@ func _refresh_callouts() -> void:
 ## Something more important is on screen: an open window, the pause or title
 ## menu (the tree is paused), or the Storm.
 func is_quiet() -> bool:
-	return _storm_silenced or UIManager.is_any_window_open() or get_tree().paused
+	return _storm_silenced or UIManager.is_any_window_open() or get_tree().paused 		or CombatManager.is_board_open()
 
 func _on_storm_phase_changed(phase: int, _left: float) -> void:
 	if phase == StormCycle.Phase.CALM:
@@ -662,7 +831,7 @@ func _refresh_tips() -> void:
 	_pump()
 
 func _skirmish_gate() -> bool:
-	return _sidebar_visible and ArmyManager.barracks_count() > 0 and not UILayoutManager.is_narrow()
+	return _sidebar_visible and ArmyManager.has_military_building() and not UILayoutManager.is_narrow()
 
 ## El globo de ESCARAMUZAS sale (una vez) cuando aparece su boton: hay Cuartel y
 ## la columna ☰ esta abierta.
@@ -690,6 +859,9 @@ func _toggle_guide() -> void:
 	_guide_panel.visible = _guide_open
 	_backdrop.visible = _guide_open
 	if _guide_open:
+		CT.place_window(_guide_panel, get_viewport().get_visible_rect().size, Vector2(760, 600),
+			CT.is_phone())
+		CT.dodge_menu_button.call_deferred(_guide_close)
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)
@@ -698,3 +870,24 @@ func _toggle_guide() -> void:
 
 ## Vigia de la pausa: el arbol en pausa no llama al _process de HelperPanel.
 const _PauseWatcher := preload("res://scripts/ui/PauseWatcher.gd")
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Novedades (2026-10-14, docs/23 §3) ──
+# ══════════════════════════════════════════════════════════════════════
+
+## Globos de las novedades que salen detras de los basicos (prioridad 0: los
+## ultimos de la cola), al terminar el tutorial o al cargar con el ya hecho.
+const NEWS_AFTER_GUIDE := ["callout_speed"]
+
+func _setup_news() -> void:
+	EventBus.tutorial_guide_finished.connect(func(_skipped): _enqueue_news())
+	EventBus.game_new_started.connect(_on_news_game_started)
+	EventBus.game_load_completed.connect(_on_news_game_started)
+
+func _enqueue_news() -> void:
+	for id in NEWS_AFTER_GUIDE:
+		enqueue(id)
+
+func _on_news_game_started() -> void:
+	if TutorialManager.guide_state in [TutorialManager.GUIDE_DONE, TutorialManager.GUIDE_SKIPPED]:
+		_enqueue_news()

@@ -170,6 +170,13 @@ static func tithe_enabled() -> bool:
 static func audit_enabled() -> bool:
 	return _flag("audit_on_capstone")
 
+## Tres campanas (feat/tres-campanas): el Ataque Final pide ademas las campanas
+## de Tierra, Mar y Aire completas. Campana y Supervivencia si; Constructor no
+## tiene asedio y Sandbox lo convoca a mano. El interruptor global
+## GameConfig.final_audit_needs_campaigns lo apaga en todos (tests de la 1.0).
+static func audit_needs_campaigns() -> bool:
+	return audit_enabled() and _flag("audit_needs_campaigns") and GameConfig.final_audit_needs_campaigns
+
 ## El Cuartel General a nivel 3 gana la partida sin asedio (Constructor).
 static func capstone_wins() -> bool:
 	return _flag("capstone_wins")
@@ -188,6 +195,10 @@ static func offline_enabled() -> bool:
 
 static func random_events_enabled() -> bool:
 	return _flag("random_events")
+
+## El tablon de encargos (ContractManager). Sandbox no lo tiene.
+static func contracts_enabled() -> bool:
+	return _flag("contracts")
 
 ## Los eventos de categoria "danger" (tormenta menor, plaga, bandidos...).
 static func danger_events_enabled() -> bool:
@@ -250,7 +261,8 @@ static func _tier_num(name: String) -> float:
 	return float(v) if v != null else 1.0
 
 ## Lo acumulado en un edificio sin recoger se estropea con el tiempo. La
-## mecanica la pone feat/comida-granja-recoger; aqui solo la regla.
+## mecanica es la de ProductionManager (GameConfig.spoil_after_seconds, solo
+## Gobernador: GameConfig.game_tier_rules).
 static func spoilage_enabled() -> bool:
 	return bool(tier_rule("spoilage"))
 

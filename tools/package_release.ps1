@@ -56,6 +56,17 @@ foreach ($font in Get-ChildItem -LiteralPath $fontDir -File | Where-Object { $_.
 	}
 }
 
+# Las fuentes del rediseno: una carpeta por familia con su OFL.txt, que viaja
+# como licenses/fonts/OFL-<familia>.txt.
+$fontDirLicenses = @()
+foreach ($dir in Get-ChildItem -LiteralPath $fontDir -Directory) {
+	$hasFont = @(Get-ChildItem -LiteralPath $dir.FullName -File | Where-Object { $_.Extension -in ".ttf", ".otf" }).Count -gt 0
+	if (-not $hasFont) { continue }
+	$ofl = Join-Path $dir.FullName "OFL.txt"
+	if (-not (Test-Path -LiteralPath $ofl -PathType Leaf)) { Fail "la carpeta de fuentes $($dir.Name) no tiene su OFL.txt" }
+	$fontDirLicenses += [pscustomobject]@{ Family = $dir.Name; Path = $ofl }
+}
+
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 # Texto para Windows en CRLF, sin BOM.
 function Get-CrlfBytes([string]$path, [string]$version) {
@@ -87,6 +98,9 @@ function New-Package([string]$name, [string]$binary, [string]$binaryName, [strin
 		Add-File $zip "$name/$binaryName" $binary
 		foreach ($lic in $fontLicenses | Sort-Object Name) {
 			Add-File $zip "$name/licenses/fonts/$($lic.Name)" $lic.FullName
+		}
+		foreach ($lic in $fontDirLicenses | Sort-Object Family) {
+			Add-File $zip "$name/licenses/fonts/OFL-$($lic.Family).txt" $lic.Path
 		}
 	} finally {
 		$zip.Dispose()

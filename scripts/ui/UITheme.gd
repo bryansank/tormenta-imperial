@@ -74,9 +74,64 @@ static var BRANCH_LOGISTICS: Color
 static var BOARD_EMPTY: Color
 static var BOARD_MOVE: Color
 static var BOARD_TARGET: Color
+# Casillas de mar y de orilla del tablero 2D (mar y aire, 1.1): el agua es el
+# azul acero de INFO oscurecido (mas oscuro que "puedes ir aqui"), la orilla la
+# superficie tirando a laton. Derivados de la paleta como los de arriba.
+static var BOARD_WATER: Color
+static var BOARD_SHORE: Color
 
 static func _static_init() -> void:
 	_apply_tokens(resolve_tokens("default", false, 1.0))
+	# Ajuste de desarrollo: `godot --path . -- --ui-style=cartoon
+	# --ui-font=baloo_nunitosans --ui-surface=light` (docs/28-guia-ui.md §11).
+	var style_arg := ""
+	var font_arg := ""
+	var surface_arg := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--ui-style="):
+			style_arg = a.substr(11)
+		elif a.begins_with("--ui-font="):
+			font_arg = a.substr(10)
+		elif a.begins_with("--ui-surface="):
+			surface_arg = a.substr(13)
+	if style_arg != "" or STYLE_DEFAULT != "classic":
+		use_style(style_arg if style_arg != "" else STYLE_DEFAULT, surface_arg, font_arg)
+
+
+# ══════════════════════════════════════
+# ESTILO: clasico (laton sobre metal) o maqueta (docs/28-guia-ui.md)
+# ══════════════════════════════════════
+# "cartoon" es la variante del rediseno 2026-10: paneles redondeados de
+# juguete, colores vivos, letra redonda (CartoonTheme). Se activa con
+# use_style(); los tokens de abajo se reescriben para que los paneles que aun
+# no se rehicieron la sigan a grandes rasgos. De serie, "classic": nada cambia.
+
+const STYLES := ["classic", "cartoon"]
+## El estilo con el que arranca el juego. Fase 2 del rediseno (feat/ui2-hud,
+## 2026-10-18): "cartoon" de serie, con la superficie mixta y Baloo 2 + Nunito
+## Sans (CartoonTheme). "classic" queda como respaldo interno:
+## `-- --ui-style=classic` o use_style("classic").
+const STYLE_DEFAULT := "cartoon"
+static var STYLE := "classic"
+
+## Cambia de estilo (y, en "cartoon", la superficie y la pareja de fuentes;
+## "" deja la que habia). Reaplica los tokens con las preferencias actuales.
+static func use_style(style: String, surface: String = "", combo: String = "") -> void:
+	STYLE = style if style in STYLES else "classic"
+	if surface in CartoonTheme.SURFACES:
+		CartoonTheme.surface = surface
+	if CartoonTheme.COMBOS.has(combo):
+		CartoonTheme.combo = combo
+	_switch_cache.clear()
+	_knob_cache.clear()
+	var ts := "normal"
+	for k in TEXT_SCALES:
+		if is_equal_approx(float(TEXT_SCALES[k]), text_scale):
+			ts = k
+	configure(palette, high_contrast, panel_opacity, ts, MIN_BTN_H, SETTINGS_ROW_H)
+
+static func is_cartoon() -> bool:
+	return STYLE == "cartoon"
 
 
 # ══════════════════════════════════════
@@ -170,12 +225,16 @@ static var text_scale := 1.0
 ## Reescribe los tokens. Sin argumentos deja la interfaz de serie (los tests
 ## lo llaman asi en after_test para no contagiar a la siguiente suite).
 static func configure(p_palette: String = "default", p_high_contrast: bool = false,
-		p_opacity: float = 1.0, p_text_size: String = "normal", p_touch_target: int = _BASE_MIN_BTN_H) -> void:
+		p_opacity: float = 1.0, p_text_size: String = "normal", p_touch_target: int = _BASE_MIN_BTN_H,
+		p_settings_row: int = 0) -> void:
 	palette = p_palette if p_palette in PALETTES else "default"
 	high_contrast = p_high_contrast
 	panel_opacity = clampf(p_opacity, OPACITY_MIN, OPACITY_MAX)
 	text_scale = float(TEXT_SCALES.get(p_text_size, 1.0))
-	_apply_tokens(resolve_tokens(palette, high_contrast, panel_opacity))
+	var tokens := resolve_tokens(palette, high_contrast, panel_opacity)
+	if is_cartoon():
+		tokens = CartoonTheme.legacy_tokens(tokens)
+	_apply_tokens(tokens)
 	MIN_CONTRAST = 7.0 if high_contrast else 4.5
 	FONT_TITLE = scaled_font(_FONT_BASE["title"], text_scale)
 	FONT_SECTION = scaled_font(_FONT_BASE["section"], text_scale)
@@ -183,6 +242,7 @@ static func configure(p_palette: String = "default", p_high_contrast: bool = fal
 	FONT_SMALL = scaled_font(_FONT_BASE["small"], text_scale)
 	FONT_BUTTON = scaled_font(_FONT_BASE["button"], text_scale)
 	MIN_BTN_H = maxi(_BASE_MIN_BTN_H, p_touch_target)
+	SETTINGS_ROW_H = maxi(MIN_BTN_H, p_settings_row)
 
 ## Copia un diccionario de resolve_tokens() en los tokens estaticos.
 static func _apply_tokens(d: Dictionary) -> void:
@@ -221,6 +281,8 @@ static func _apply_tokens(d: Dictionary) -> void:
 	BOARD_EMPTY = d["BOARD_EMPTY"]
 	BOARD_MOVE = d["BOARD_MOVE"]
 	BOARD_TARGET = d["BOARD_TARGET"]
+	BOARD_WATER = d["BOARD_WATER"]
+	BOARD_SHORE = d["BOARD_SHORE"]
 
 ## Los tokens que saldrian con esas opciones, sin aplicarlos. Puro: los tests y
 ## la vista previa de Ajustes lo usan para comparar paletas.
@@ -266,6 +328,8 @@ static func _derive(d: Dictionary, hc: bool) -> void:
 	d["BOARD_EMPTY"] = surface.lightened(0.02)
 	d["BOARD_MOVE"] = (d["INFO"] as Color).darkened(0.2)
 	d["BOARD_TARGET"] = (d["DANGER"] as Color).darkened(0.15)
+	d["BOARD_WATER"] = (d["INFO"] as Color).darkened(0.5)
+	d["BOARD_SHORE"] = surface.lerp(accent, 0.22)
 
 ## Tamano de letra escalado, nunca por debajo de 11 px (legible en movil).
 static func scaled_font(base_px: int, scale: float) -> int:
@@ -323,19 +387,27 @@ static func _load_font(path: String) -> FontFile:
 	_font_cache[path] = f
 	return f
 
-static func body_font() -> FontFile:
+static func body_font() -> Font:
+	if is_cartoon():
+		return CartoonTheme.body_font()
 	return _load_font(FONT_BODY_PATH)
 
-static func heavy_font() -> FontFile:
+static func heavy_font() -> Font:
+	if is_cartoon():
+		return CartoonTheme.body_font()
 	return _load_font(FONT_HEAVY_PATH)
 
 ## Rajdhani Bold: cabeceras de seccion y botones.
-static func bold_font() -> FontFile:
+static func bold_font() -> Font:
+	if is_cartoon():
+		return CartoonTheme.title_font()
 	return _load_font(FONT_BOLD_PATH)
 
 ## Display font for titles, with Rajdhani as fallback so accented/ñ glyphs
 ## missing from the stencil face still render.
-static func title_font() -> FontFile:
+static func title_font() -> Font:
+	if is_cartoon():
+		return CartoonTheme.title_font()
 	var f := _load_font(FONT_TITLE_PATH)
 	if f and f.fallbacks.is_empty():
 		var b := body_font()
@@ -352,6 +424,11 @@ const MARGIN := 12
 const BORDER := 6
 ## Lado tactil minimo (guia de accesibilidad movil): 44 px.
 static var MIN_BTN_H := 44
+## Alto de cada fila de Ajustes (deslizador, interruptor, desplegable, pestana,
+## boton). En PC es MIN_BTN_H; en tablet y movil el perfil lo sube un poco por
+## encima del lado tactil (DeviceProfile.DEFAULTS[...]["settings_row"]): los
+## ajustes se tocan de uno en uno y con prisa, y un dedo no apunta como un raton.
+static var SETTINGS_ROW_H := 44
 const SEPARATION := 8
 
 # ══════════════════════════════════════
@@ -380,21 +457,33 @@ static func contrast_ratio(a: Color, b: Color) -> float:
 ## Devuelve `color` aclarado lo justo para cumplir `min_ratio` sobre `bg`.
 ## Conserva el tono: solo interpola hacia blanco.
 static func readable(color: Color, bg: Color = UI_BG_REFERENCE, min_ratio: float = MIN_CONTRAST) -> Color:
+	# En el estilo maqueta el fondo de referencia es el de las ventanas, y si es
+	# claro el texto se corrige oscureciendo, no aclarando.
+	if is_cartoon() and bg == UI_BG_REFERENCE:
+		bg = CartoonTheme.c("window", "BG")
 	if contrast_ratio(color, bg) >= min_ratio:
 		return color
+	var to_dark := _relative_luminance(bg) > 0.4
 	var t := 0.05
 	while t <= 0.95:
-		var candidate := color.lightened(t)
+		var candidate := color.darkened(t) if to_dark else color.lightened(t)
 		if contrast_ratio(candidate, bg) >= min_ratio:
 			candidate.a = color.a
 			return candidate
 		t += 0.05
-	return Color(1.0, 1.0, 1.0, color.a)
+	return Color(0.0, 0.0, 0.0, color.a) if to_dark else Color(1.0, 1.0, 1.0, color.a)
 
 ## Pinta una etiqueta ya creada respetando el contraste minimo y el contorno.
 ## Usar esto en vez de add_theme_color_override("font_color", ...) a mano.
-static func set_label_color(control: Control, color: Color) -> void:
-	control.add_theme_color_override("font_color", readable(color))
+## `bg`: el fondo real si no es el de las ventanas (el HUD oscuro del estilo
+## maqueta pasa CartoonTheme.c("hud", "BG"), o su cifra clara se oscureceria).
+static func set_label_color(control: Control, color: Color, bg: Color = UI_BG_REFERENCE) -> void:
+	var c := readable(color, bg)
+	# El mismo color otra vez no se reaplica: un override nuevo avisa de cambio
+	# de tema y repinta (los HUD lo piden en cada senal).
+	if control.has_theme_color_override("font_color") and control.get_theme_color("font_color") == c:
+		return
+	control.add_theme_color_override("font_color", c)
 
 # ══════════════════════════════════════
 # TEXTURED SURFACES (9-patch metal — Kenney UI, CC0)
@@ -514,6 +603,8 @@ static func mark_boss(style: StyleBoxFlat) -> void:
 # ══════════════════════════════════════
 
 static func make_panel_style(border: bool = true) -> StyleBox:
+	if is_cartoon():
+		return CartoonTheme.window_style() if border else CartoonTheme.card_style()
 	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(1, 1, 1))
 	if tex != null:
 		return tex
@@ -541,6 +632,8 @@ static func make_hud_style() -> StyleBoxFlat:
 
 ## Military tactical panel con decoraciones de esquinas
 static func make_war_table_style() -> StyleBox:
+	if is_cartoon():
+		return CartoonTheme.window_style()
 	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(1.06, 1.02, 0.92))
 	if tex != null:
 		return tex
@@ -573,6 +666,16 @@ static func _apply_button_text(btn: Button, font_size: int) -> void:
 
 static func style_button(btn: Button, bg: Color = BTN, font_size: int = FONT_BUTTON) -> void:
 	btn.custom_minimum_size.y = maxi(int(btn.custom_minimum_size.y), MIN_BTN_H)
+	if is_cartoon():
+		CartoonTheme._btn_states(btn, bg, int(btn.custom_minimum_size.y * 0.5), 14, "window")
+		_apply_button_text(btn, font_size)
+		var tc := CartoonTheme.on_fill(bg)
+		btn.add_theme_color_override("font_color", tc["color"])
+		btn.add_theme_color_override("font_hover_color", tc["color"])
+		btn.add_theme_color_override("font_pressed_color", tc["color"])
+		btn.add_theme_constant_override("outline_size", outline_for(font_size) if tc["outline"] else 0)
+		btn.add_theme_color_override("font_outline_color", CartoonTheme.INK)
+		return
 
 	# Baked metal button, tinted toward `bg`'s hue; falls back to flat if art missing.
 	btn.add_theme_stylebox_override("normal", _button_style(_metal_tint(bg, 1.0), bg, ACCENT_DIM, 3))
@@ -634,7 +737,7 @@ static func style_card_button(btn: Button, bg: Color = CARD_BG, left_color: Colo
 ## Unico punto donde se decide como se ve una etiqueta.
 static func apply_text_style(label: Label, size: String, color: Color) -> void:
 	var fs: int
-	var font: FontFile
+	var font: Font
 	match size:
 		"title":
 			fs = FONT_TITLE
@@ -724,7 +827,9 @@ static func make_check_button(text: String, pressed: bool, on_toggled: Callable)
 	var cb := CheckButton.new()
 	cb.text = text
 	cb.button_pressed = pressed
-	cb.custom_minimum_size.y = MIN_BTN_H
+	cb.custom_minimum_size.y = SETTINGS_ROW_H
+	# Un texto largo envuelve en vez de ensanchar el panel (movil en vertical).
+	cb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var hf := heavy_font()
 	if hf:
 		cb.add_theme_font_override("font", hf)
@@ -734,9 +839,52 @@ static func make_check_button(text: String, pressed: bool, on_toggled: Callable)
 	cb.add_theme_color_override("font_pressed_color", readable(TEXT_BRIGHT))
 	cb.add_theme_constant_override("outline_size", outline_for(FONT_BODY))
 	cb.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
+	var k := settings_touch_factor()
+	cb.add_theme_icon_override("unchecked", switch_icon(false, false, k))
+	cb.add_theme_icon_override("checked", switch_icon(true, false, k))
+	cb.add_theme_icon_override("unchecked_disabled", switch_icon(false, true, k))
+	cb.add_theme_icon_override("checked_disabled", switch_icon(true, true, k))
 	if on_toggled.is_valid():
 		cb.toggled.connect(on_toggled)
 	return cb
+
+## Un interruptor dibujado: carril redondeado con borde claro y bolita; verde
+## y a la derecha encendido, gris y a la izquierda apagado. Se hace una vez por
+## estado y paleta (cache).
+static var _switch_cache := {}
+## `scale` lo agranda (Ajustes en tablet y movil, settings_touch_factor()).
+static func switch_icon(on: bool, disabled: bool = false, scale: float = 1.0) -> Texture2D:
+	var w := roundi(48.0 * maxf(scale, 1.0))
+	var h := roundi(26.0 * maxf(scale, 1.0))
+	var key := "%s|%s|%s|%s|%d" % [on, disabled, POSITIVE.to_html(), TEXT_DIM.to_html(), w]
+	if _switch_cache.has(key):
+		return _switch_cache[key]
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var track: Color = POSITIVE if on else BG_DARK.lightened(0.12)
+	var rim: Color = POSITIVE.lightened(0.25) if on else TEXT_DIM
+	var knob: Color = Color(0.97, 0.95, 0.88) if on else TEXT_DIM.lightened(0.2)
+	if disabled:
+		track.a = 0.45
+		rim.a = 0.45
+		knob.a = 0.45
+	var r := h * 0.5
+	for y in h:
+		for x in w:
+			var cx := clampf(float(x) + 0.5, r, float(w) - r)
+			var d := Vector2(float(x) + 0.5 - cx, float(y) + 0.5 - r).length()
+			if d <= r - 2.0:
+				img.set_pixel(x, y, track)
+			elif d <= r:
+				img.set_pixel(x, y, rim)
+	var kx := float(w) - r if on else r
+	for y in h:
+		for x in w:
+			if Vector2(float(x) + 0.5 - kx, float(y) + 0.5 - r).length() <= r - 4.0 * float(h) / 26.0:
+				img.set_pixel(x, y, knob)
+	var tex := ImageTexture.create_from_image(img)
+	_switch_cache[key] = tex
+	return tex
 
 static func make_backdrop() -> ColorRect:
 	var rect := ColorRect.new()
@@ -763,6 +911,63 @@ static func touch_px(desktop_px: float) -> float:
 static func is_touch_ui() -> bool:
 	return GameConfig.touch_controls_enabled()
 
+## Cuanto crecen los controles de Ajustes sobre los de PC (1.0 en PC; 56/44 en
+## tablet, 60/44 en movil). Agranda el interruptor, la bolita del deslizador y su
+## carril; los altos van por SETTINGS_ROW_H.
+static func settings_touch_factor() -> float:
+	return float(SETTINGS_ROW_H) / float(_BASE_MIN_BTN_H)
+
+## Si Ajustes lleva el tamano de dedo (tablet y movil). En PC no cambia nada.
+static func settings_touch() -> bool:
+	return SETTINGS_ROW_H > _BASE_MIN_BTN_H
+
+## Un deslizador de Ajustes a tamano de dedo: bolita redonda grande y carril mas
+## grueso. En PC lo deja como esta (el tema global).
+static func style_settings_slider(slider: HSlider) -> void:
+	slider.custom_minimum_size.y = maxf(slider.custom_minimum_size.y, float(SETTINGS_ROW_H) if settings_touch() else 0.0)
+	if not settings_touch():
+		return
+	var k := settings_touch_factor()
+	var knob := slider_knob_icon(roundi(22.0 * k), false)
+	slider.add_theme_icon_override("grabber", knob)
+	slider.add_theme_icon_override("grabber_highlight", slider_knob_icon(roundi(22.0 * k), true))
+	var track := roundi(4.0 * k)
+	var clear := Color(0, 0, 0, 0)
+	var rail := _flat(BG_DARK, ACCENT_DIM, 1, CORNER, 0)
+	rail.content_margin_top = track
+	rail.content_margin_bottom = track
+	slider.add_theme_stylebox_override("slider", rail)
+	var area := _flat(ACCENT_DIM, clear, 0, CORNER, 0)
+	area.content_margin_top = track
+	area.content_margin_bottom = track
+	slider.add_theme_stylebox_override("grabber_area", area)
+	var area_h := _flat(ACCENT, clear, 0, CORNER, 0)
+	area_h.content_margin_top = track
+	area_h.content_margin_bottom = track
+	slider.add_theme_stylebox_override("grabber_area_highlight", area_h)
+
+## Bolita del deslizador: circulo con borde claro. Cache por lado y paleta.
+static var _knob_cache := {}
+static func slider_knob_icon(side: int, hot: bool) -> Texture2D:
+	var key := "%d|%s|%s|%s" % [side, hot, ACCENT.to_html(), TEXT_BRIGHT.to_html()]
+	if _knob_cache.has(key):
+		return _knob_cache[key]
+	var img := Image.create(side, side, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var r := float(side) * 0.5
+	var fill: Color = ACCENT.lightened(0.2) if hot else ACCENT
+	var rim: Color = TEXT_BRIGHT
+	for y in side:
+		for x in side:
+			var d := Vector2(float(x) + 0.5 - r, float(y) + 0.5 - r).length()
+			if d <= r - 2.5:
+				img.set_pixel(x, y, fill)
+			elif d <= r - 0.5:
+				img.set_pixel(x, y, rim)
+	var tex := ImageTexture.create_from_image(img)
+	_knob_cache[key] = tex
+	return tex
+
 # ══════════════════════════════════════
 # HUD (tarjetas permanentes de la pantalla de juego)
 # ══════════════════════════════════════
@@ -775,6 +980,8 @@ static func is_touch_ui() -> bool:
 ## Tarjeta del HUD. `left_bar` pinta el borde izquierdo mas grueso: marca los
 ## paneles de estado (poblacion) frente a los de aviso (objetivo, tutorial).
 static func make_hud_card_style(border: Color = ACCENT, border_width: int = 2, left_bar: bool = false) -> StyleBoxFlat:
+	if is_cartoon():
+		return CartoonTheme.hud_style(border)
 	var s := StyleBoxFlat.new()
 	s.bg_color = HUD_BG
 	s.set_corner_radius_all(4)
@@ -892,11 +1099,18 @@ static func chip_amount(chip: HBoxContainer) -> Label:
 
 ## Parpadeo rojo de una etiqueta (recurso que falta, almacen que desborda) y
 ## vuelta a su color. Se usa en vez de un texto flotante que tapa otros paneles.
-static func flash_label(label: Label, restore: Color, duration: float = 0.9) -> void:
-	set_label_color(label, DANGER)
+static func flash_label(label: Label, restore: Color, duration: float = 0.9, bg: Color = UI_BG_REFERENCE) -> void:
+	set_label_color(label, DANGER, bg)
+	# Un parpadeo a la vez: el anterior, si sigue, se corta (antes se apilaban y
+	# el primero devolvia el color a mitad del ultimo).
+	if label.has_meta("flash_tween"):
+		var old: Tween = label.get_meta("flash_tween")
+		if old != null and old.is_valid():
+			old.kill()
 	var tween := label.create_tween()
+	label.set_meta("flash_tween", tween)
 	tween.tween_interval(duration)
-	tween.tween_callback(func(): if is_instance_valid(label): set_label_color(label, restore))
+	tween.tween_callback(func(): if is_instance_valid(label): set_label_color(label, restore, bg))
 
 # ── Barra de bolsa (almacen compartido) ──
 # Una sola barra para los cuatro recursos porque el tope es uno solo. Cada
@@ -943,6 +1157,12 @@ static func pool_bar_free(bar: PanelContainer) -> ColorRect:
 
 ## Rojo cuando desborda; latón cuando cabe.
 static func set_pool_bar_alert(bar: PanelContainer, alert: bool) -> void:
+	# Se llama en cada cambio de recursos: solo se crea un estilo nuevo si cambia
+	# el estado o la paleta.
+	var key := [alert, DANGER, ACCENT_DIM, BG_DARK]
+	if bar.has_meta("pool_alert_key") and bar.get_meta("pool_alert_key") == key:
+		return
+	bar.set_meta("pool_alert_key", key)
 	bar.add_theme_stylebox_override("panel", _pool_frame_style(alert))
 
 static func _pool_frame_style(alert: bool) -> StyleBoxFlat:
@@ -968,17 +1188,52 @@ static func make_option_row(label_text: String, options: Array, selected: int, o
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(label)
 	var picker := OptionButton.new()
-	picker.custom_minimum_size = Vector2(180, MIN_BTN_H)
+	picker.custom_minimum_size = Vector2(180, SETTINGS_ROW_H)
 	for opt in options:
 		picker.add_item(String(opt))
+	# La lista que se despliega, con filas de dedo en tablet y movil.
+	if settings_touch():
+		picker.get_popup().add_theme_constant_override("v_separation", settings_popup_separation())
 	picker.selected = clampi(selected, 0, maxi(options.size() - 1, 0))
 	if on_selected.is_valid():
 		picker.item_selected.connect(on_selected)
+	# En un lienzo estrecho (movil en vertical) el texto largo del desplegable
+	# ("Automatico (solo tablet y movil)") se comia la fila y la etiqueta, que
+	# envuelve, quedaba de una letra por linea. El desplegable no pasa del 55 %
+	# de su fila; lo que no quepa se corta con "…" (en horizontal cabe entero).
+	picker.clip_text = true
+	picker.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.resized.connect(func(): _fit_option_picker(row, picker))
 	row.add_child(picker)
 	return row
 
+## Ancho del desplegable de make_option_row: el de su opcion mas larga (letra,
+## flecha y margenes), sin pasar del 55 % de la fila ni bajar de 120.
+static func _fit_option_picker(row: Control, picker: OptionButton) -> void:
+	if not is_instance_valid(picker) or row.size.x <= 0.0:
+		return
+	var font := picker.get_theme_font("font")
+	var fs := picker.get_theme_font_size("font_size")
+	var widest := 0.0
+	for i in picker.item_count:
+		widest = maxf(widest, font.get_string_size(picker.get_item_text(i), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+	var arrow := picker.get_theme_icon("arrow")
+	var sb := picker.get_theme_stylebox("normal")
+	var natural := widest + (float(arrow.get_width()) if arrow != null else 16.0) 		+ (sb.get_minimum_size().x if sb != null else 16.0) + 12.0
+	var w := clampf(natural, 120.0, maxf(120.0, row.size.x * 0.55))
+	w = maxf(w, 180.0) if row.size.x * 0.55 >= 180.0 else w
+	if not is_equal_approx(picker.custom_minimum_size.x, w):
+		picker.custom_minimum_size.x = w
+
+## Hueco entre filas de un desplegable para que cada fila mida SETTINGS_ROW_H
+## (la fila es la letra mas este hueco).
+static func settings_popup_separation() -> int:
+	return maxi(4, SETTINGS_ROW_H - int(FONT_BODY * 1.4))
+
 ## Tactical command panel con bordes gruesos militares y glow
 static func make_command_panel_style() -> StyleBox:
+	if is_cartoon():
+		return CartoonTheme.window_style()
 	var tex := _tex_box(TEX_PANEL, 20, MARGIN, Color(0.82, 0.82, 0.82))
 	if tex != null:
 		return tex
@@ -1031,6 +1286,9 @@ static func _metal_tint(base: Color, boost: float) -> Color:
 
 ## Textured brass button for one state, with a flat fallback if art is missing.
 static func _button_style(modulate: Color, fb_bg: Color, fb_border: Color, fb_bw: int) -> StyleBox:
+	if is_cartoon():
+		return CartoonTheme.box(fb_bg, CartoonTheme.INK if CartoonTheme.kind("window") == "light" else fb_border,
+			CartoonTheme.BORDER, 18, 10, 0, CartoonTheme.LIP)
 	var tex := _tex_box(TEX_BUTTON, 12, 10, modulate)
 	if tex != null:
 		return tex
@@ -1061,7 +1319,7 @@ static func _theme_button(t: Theme, type: String) -> void:
 ## Estilos de pestana: alto de dedo, el margen vertical lleva la pestana a
 ## MIN_BTN_H con la letra del cuerpo.
 static func _tab_styles() -> Dictionary:
-	var tab_pad := maxi(8, int((MIN_BTN_H - FONT_BODY) / 2.0))
+	var tab_pad := maxi(8, int((SETTINGS_ROW_H - FONT_BODY) / 2.0))
 	var sel := _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.28), ACCENT, 2, CORNER, 0)
 	var off := _flat(Color(BG_DARK, 0.9), ACCENT_DIM, 1, CORNER, 0)
 	var hov := _flat(Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.16), ACCENT, 1, CORNER, 0)
@@ -1120,6 +1378,12 @@ static func build_global_theme() -> Theme:
 		t.set_color("font_outline_color", cb, OUTLINE_COLOR)
 		t.set_constant("outline_size", cb, outline_for(FONT_BODY))
 		t.set_font_size("font_size", cb, FONT_BODY)
+	# El interruptor apagado de serie es un punto gris sobre fondo oscuro: no se
+	# veia que alli hubiera algo que pulsar (ronda de pruebas 1.0).
+	t.set_icon("unchecked", "CheckButton", switch_icon(false))
+	t.set_icon("checked", "CheckButton", switch_icon(true))
+	t.set_icon("unchecked_disabled", "CheckButton", switch_icon(false, true))
+	t.set_icon("checked_disabled", "CheckButton", switch_icon(true, true))
 
 	# ── LineEdit ──
 	t.set_stylebox("normal", "LineEdit", _flat(BG_DARK, ACCENT_DIM, 1, CORNER, 6))
@@ -1162,10 +1426,16 @@ static func build_global_theme() -> Theme:
 	t.set_color("font_hover_color", "PopupMenu", readable(TEXT_BRIGHT))
 	t.set_color("font_separator_color", "PopupMenu", readable(ACCENT))
 	t.set_font_size("font_size", "PopupMenu", FONT_BODY)
+	if settings_touch():
+		t.set_constant("v_separation", "PopupMenu", settings_popup_separation())
 
 	# ── Tooltip ──
-	t.set_stylebox("panel", "TooltipPanel", _flat(Color(BG_DARK, 0.97), ACCENT, 1, CORNER, 8))
-	t.set_color("font_color", "TooltipLabel", readable(TEXT_BRIGHT))
+	if is_cartoon():
+		t.set_stylebox("panel", "TooltipPanel", CartoonTheme.tooltip_style())
+		t.set_color("font_color", "TooltipLabel", Color("fff5e1"))
+	else:
+		t.set_stylebox("panel", "TooltipPanel", _flat(Color(BG_DARK, 0.97), ACCENT, 1, CORNER, 8))
+		t.set_color("font_color", "TooltipLabel", readable(TEXT_BRIGHT))
 	t.set_font_size("font_size", "TooltipLabel", FONT_BODY)
 
 	# ── Pestanas (Ajustes) ──

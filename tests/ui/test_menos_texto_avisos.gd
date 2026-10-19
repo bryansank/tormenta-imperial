@@ -13,6 +13,9 @@ func before_test() -> void:
 
 func after_test() -> void:
 	GameMode.current = _mode_saved
+	if not UITheme.is_cartoon():
+		UITheme.use_style(UITheme.STYLE_DEFAULT, "mixed", CartoonTheme.DEFAULT_COMBO)
+		UITheme.configure()
 
 func _words(text: String) -> int:
 	return text.split(" ", false).size()
@@ -20,6 +23,10 @@ func _words(text: String) -> int:
 # ── ☰ MENU ──
 
 func test_the_menu_groups_keep_their_sentence_in_the_tooltip() -> void:
+	# Los grupos COLONIA / PARTIDA son del menu clasico (respaldo interno): el
+	# ☰ del rediseno no los tiene (Encargos, Progreso... van en la tarjeta de la
+	# colonia). Se comprueba el clasico.
+	UITheme.use_style("classic")
 	var menu: CanvasLayer = auto_free(load("res://scenes/ui/PauseMenu.tscn").instantiate())
 	add_child(menu)
 	GameMode.current = GameMode.Mode.CAMPAIGN
@@ -34,6 +41,8 @@ func test_the_menu_groups_keep_their_sentence_in_the_tooltip() -> void:
 	# "Modo: Campana" no se ensena: es el unico modo que se juega.
 	assert_bool((menu.find_child("ModeLabel", true, false) as Label).visible).is_false()
 	menu.resume()
+	UITheme.use_style(UITheme.STYLE_DEFAULT, "mixed", CartoonTheme.DEFAULT_COMBO)
+	UITheme.configure()
 
 func test_another_mode_is_still_named() -> void:
 	var menu: CanvasLayer = auto_free(load("res://scenes/ui/PauseMenu.tscn").instantiate())

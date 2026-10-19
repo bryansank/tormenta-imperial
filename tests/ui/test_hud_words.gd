@@ -34,7 +34,8 @@ func test_the_storage_bar_explains_itself_without_a_fixed_title() -> void:
 	var hud: CanvasLayer = auto_free(load("res://scenes/ui/ResourceHUD.tscn").instantiate())
 	add_child(hud)
 	var row: Control = hud.find_child("StorageRow", true, false)
-	assert_str(row.tooltip_text).is_equal(Tr.t("HINT_HUD_STORAGE"))
+	# Con el estilo maqueta la cifra va delante, en la misma ayuda emergente.
+	assert_str(row.tooltip_text).ends_with(Tr.t("HINT_HUD_STORAGE"))
 	var labels: Array = row.find_children("*", "Label", true, false)
 	assert_int(labels.size()).is_equal(1)
 	assert_str((labels[0] as Label).text).contains("/")
@@ -42,11 +43,16 @@ func test_the_storage_bar_explains_itself_without_a_fixed_title() -> void:
 	var legend: Label = hud.find_child("StorageLegend", true, false)
 	assert_bool(legend.is_visible_in_tree()).is_true()
 
-## Iconos y numeros: ningun nombre escrito al lado en la fila de fichas.
+## Con "Nombres junto a los iconos" en Nunca: solo iconos y numeros en la fila.
+## (Con Siempre, o en "auto" para un jugador nuevo, van las palabras debajo:
+## tests/ui/test_hud_y_tutorial.gd.)
 func test_the_chip_row_has_no_words() -> void:
+	var saved := GameConfig.ui_hud_words
+	GameConfig.ui_hud_words = "never"
 	var hud: CanvasLayer = auto_free(load("res://scenes/ui/ResourceHUD.tscn").instantiate())
 	add_child(hud)
 	var row: Control = hud.find_child("ChipsRow", true, false)
+	GameConfig.ui_hud_words = saved
 	for node in row.find_children("*", "Label", true, false):
 		var text := (node as Label).text
 		if (node as Label).is_visible_in_tree() and text != "":
@@ -71,12 +77,17 @@ func test_build_is_always_on_screen() -> void:
 	assert_float(btn.custom_minimum_size.y).is_greater_equal(56.0)
 	assert_float(btn.custom_minimum_size.x).is_greater_equal(200.0)
 
+## Hitos y eras ya no pintan placa propia: van a la columna de avisos como
+## "achievement" (NotificationPanel, 2026-10-18) y alli hacen cola.
 func test_milestone_and_era_toasts_queue_up() -> void:
 	var progress: CanvasLayer = auto_free(load("res://scenes/ui/ProgressPanel.tscn").instantiate())
 	add_child(progress)
+	var notes: CanvasLayer = auto_free(load("res://scenes/ui/NotificationPanel.tscn").instantiate())
+	add_child(notes)
+	await await_idle_frame()
 	progress._show_toast("uno", UITheme.ACCENT)
 	progress._show_toast("dos", UITheme.INFO)
 	progress._show_toast("tres", UITheme.INFO)
-	var on_screen := progress.find_children("MilestoneToast*", "PanelContainer", false, false).size()
-	assert_int(on_screen).is_equal(1)
-	assert_int(progress.pending_toasts()).is_equal(3)
+	assert_int(progress.find_children("MilestoneToast*", "PanelContainer", true, false).size()).is_equal(0)
+	assert_int(notes.shown_toasts().size()).is_less_equal(notes.MAX_TOASTS)
+	assert_int(notes.shown_toasts().size() + notes.held_count()).is_equal(3)

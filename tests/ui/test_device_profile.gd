@@ -91,7 +91,70 @@ func test_each_profile_brings_its_defaults() -> void:
 	var phone := [DeviceProfile.effective_ui_scale(), DeviceProfile.effective_text_size(), DeviceProfile.is_touch_profile(), DeviceProfile.layout_variant()]
 	assert_array(pc).is_equal([1.0, "normal", false])
 	assert_array(tablet).is_equal([1.15, "normal", true])
-	assert_array(phone).is_equal([1.3, "large", true, "compact"])
+	# Rediseno 2026-10 (docs/28 §4.2): el telefono ya no agranda un lienzo de
+	# 720; su lienzo sigue a los dp y la escala 1,0 es "a su tamano".
+	assert_array(phone).is_equal([1.0, "normal", true, "compact"])
+
+## Cruceta y zoom en pantalla: en "auto", solo la tablet (docs/28 §12).
+func test_onscreen_controls_default_per_profile() -> void:
+	var got := []
+	for prof in ["pc", "tablet", "phone"]:
+		GameConfig.ui_device_profile = prof
+		got.append(DeviceProfile.onscreen_controls_default())
+	assert_array(got).is_equal([false, true, false])
+
+# ── Lienzo del telefono (docs/28 §4.2) ───────────────────────────────
+
+func _phone_logical(window: Vector2, dpi: int, ui_scale: float = 1.0) -> Vector2:
+	return DeviceProfile.logical_size_for(window,
+		DeviceProfile.phone_content_scale_for(window, dpi, ui_scale))
+
+func test_a_360_dp_phone_gets_a_360_canvas() -> void:
+	# 1440x720 px a 320 dpi (densidad 2): 720x360 dp -> lienzo 720x360.
+	var size := _phone_logical(Vector2(1440, 720), 320)
+	assert_float(size.y).is_equal_approx(360.0, 0.5)
+	assert_float(size.x).is_equal_approx(720.0, 0.5)
+
+func test_a_412_dp_phone_follows_its_dp() -> void:
+	# 2400x1080 a 420 dpi (densidad 2,625): 411 dp de alto.
+	var size := _phone_logical(Vector2(2400, 1080), 420)
+	assert_float(size.y).is_equal_approx(1080.0 / 2.625, 0.5)
+	assert_float(size.x / size.y).is_equal_approx(2400.0 / 1080.0, 0.01)
+
+func test_the_phone_canvas_stays_between_360_and_540() -> void:
+	# Un telefono raro de 300 dp no baja de 360; una escala pequena no pasa de 540.
+	assert_float(_phone_logical(Vector2(1200, 600), 320).y).is_equal_approx(
+		DeviceProfile.PHONE_MIN_LOGICAL_HEIGHT, 0.5)
+	assert_float(_phone_logical(Vector2(2400, 1080), 160, 0.5).y).is_equal_approx(
+		DeviceProfile.PHONE_MAX_LOGICAL_HEIGHT, 0.5)
+
+func test_before_and_after_on_a_360_dp_phone() -> void:
+	# Antes: 1,3 de escala con el suelo de 540 -> ~554 de alto (todo a ~0,65).
+	var window := Vector2(1440, 720)
+	var before := DeviceProfile.logical_size_for(window, DeviceProfile.content_scale_for(window, 1.3))
+	var after := _phone_logical(window, 320)
+	assert_float(before.y).is_greater(540.0)
+	assert_float(after.y).is_equal_approx(360.0, 0.5)
+
+func test_a_portrait_phone_keeps_the_narrow_column() -> void:
+	var size := _phone_logical(Vector2(1080, 2400), 420)
+	assert_float(size.x).is_greater_equal(DeviceProfile.MIN_LOGICAL_WIDTH_PORTRAIT - 0.5)
+	assert_float(size.x).is_less(UILayoutConfig.NARROW_WIDTH)
+
+func test_only_the_phone_profile_uses_the_dp_canvas() -> void:
+	var window := Vector2(1440, 720)
+	assert_float(DeviceProfile.scale_factor_for("phone", window, 320, 1.0)).is_equal_approx(
+		DeviceProfile.phone_content_scale_for(window, 320, 1.0), 0.0001)
+	assert_float(DeviceProfile.scale_factor_for("tablet", window, 320, 1.15)).is_equal_approx(
+		DeviceProfile.content_scale_for(window, 1.15), 0.0001)
+	assert_float(DeviceProfile.scale_factor_for("pc", window, 96, 1.0)).is_equal_approx(
+		DeviceProfile.content_scale_for(window, 1.0), 0.0001)
+
+func test_the_phone_pieces_switch_on_below_450() -> void:
+	assert_bool(DeviceProfile.is_phone_canvas(Vector2(640, 360))).is_true()
+	assert_bool(DeviceProfile.is_phone_canvas(Vector2(800, 412))).is_true()
+	assert_bool(DeviceProfile.is_phone_canvas(Vector2(1280, 720))).is_false()
+	assert_bool(DeviceProfile.is_phone_canvas(Vector2(1113, 696))).is_false()
 
 func test_an_explicit_scale_and_text_size_win_over_the_profile() -> void:
 	GameConfig.ui_device_profile = "tablet"
@@ -201,7 +264,7 @@ func test_a_portrait_phone_gets_the_narrow_canvas() -> void:
 	var size := _logical(Vector2(400, 720), 1.0)
 	assert_float(size.x).is_equal_approx(DeviceProfile.PORTRAIT_WIDTH, 0.5)
 	assert_float(size.x).is_less(UILayoutConfig.NARROW_WIDTH)
-	# Con la escala del perfil movil, no por debajo del minimo en vertical.
+	# Con una escala grande, no por debajo del minimo en vertical.
 	var phone := _logical(Vector2(1080, 2400), 1.3)
 	assert_float(phone.x).is_greater_equal(DeviceProfile.MIN_LOGICAL_WIDTH_PORTRAIT - 0.5)
 	assert_float(phone.x).is_less(UILayoutConfig.NARROW_WIDTH)

@@ -23,6 +23,19 @@ const Rules := preload("res://scripts/combat/CombatRules.gd")
 const AI := preload("res://scripts/combat/CombatAI.gd")
 const AutoResolverScript := preload("res://scripts/combat/AutoResolver.gd")
 const ExpeditionGeneratorScript := preload("res://scripts/combat/ExpeditionGenerator.gd")
+const SortieBoardScript := preload("res://scripts/combat/SortieBoard.gd")
+const CampaignBookScript := preload("res://scripts/combat/CampaignBook.gd")
+
+## El tablon de salidas (doc 21 §3, 2026-10-14): la incursion y la expedicion a
+## la vista, cuando llega la siguiente, los planos conseguidos y la rebaja del
+## Diezmo pendiente. Modelo puro; este servicio le da el reloj y las semillas.
+var _sorties: SortieBoard = SortieBoardScript.new()
+var _sortie_timer: Timer = null
+## Las tres campanas (feat/tres-campanas): Tierra, Mar y Aire. Cuantas misiones
+## lleva cada una y cuando toca la siguiente. Modelo puro; clave "campaigns".
+var _campaigns: CampaignBook = CampaignBookScript.new()
+## True mientras "resolver solo" juega el tablero de un tiron: el parte lo dice.
+var _auto_resolving: bool = false
 
 var _encounter: Encounter = null
 ## La expedicion en curso. Null en la base; se descarta al resolverla.
@@ -84,6 +97,17 @@ var _audit_wave_queued: bool = false
 
 func _ready() -> void:
 	EventBus.final_audit_wave_ready.connect(_on_final_audit_wave_ready)
+	# El Diezmo gasta el apunte de la rebaja y se lleva la avanzadilla no echada.
+	EventBus.tithe_resolved.connect(func(_paid, _taken): _publish_sortie_events(_sorties.on_tithe_resolved()))
+	# Un reloj lento y barato: mira dos fechas y, si toca, sortea una oferta.
+	# Pausable: con el juego parado no aparece nada.
+	_sortie_timer = Timer.new()
+	_sortie_timer.name = "SortieTimer"
+	_sortie_timer.wait_time = maxf(0.25, GameConfig.combat_sortie_refresh_interval)
+	_sortie_timer.process_mode = Node.PROCESS_MODE_PAUSABLE
+	_sortie_timer.timeout.connect(refresh_sorties)
+	add_child(_sortie_timer)
+	_sortie_timer.start()
 
 # ── Queries ──────────────────────────────────────────────────────────
 
@@ -269,7 +293,7 @@ func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -
 	units.append_array(_build_side(enemy_roster, Encounter.ENEMY, scale))
 	_morale_snapshot = board_snapshot
 
-	var encounter: Encounter = EncounterScript.create(units, 0, false, true, crew_uids.keys())
+	var encounter: Encounter = EncounterScript.create(units, 0, false, true, crew_uids.keys(), false, home_terrain(units))
 	var outcome: Dictionary = AutoResolverScript.resolve(encounter)
 	var victory: bool = bool(outcome["victory"])
 	var rounds: int = int(outcome["rounds"])
@@ -308,6 +332,11 @@ func _on_final_audit_wave_ready(_wave: int, roster: Dictionary, scale: float) ->
 	var audit_crews: Array = []
 	if wanted > 0:
 		audit_crews = _build_side({GameConfig.storm_tower_garrison_unit: wanted}, Encounter.PLAYER, 1.0)
+		# En el asedio, la moral de casa (final_audit_morale_attack_range), como
+		# la guarnicion que sella FinalAudit.
+		for crew in audit_crews:
+			crew.morale_attack_mod = Rules.siege_morale_attack_mod(_morale_snapshot)
+			crew.morale_initiative_bonus = Rules.siege_morale_initiative_bonus(_morale_snapshot)
 	# Quien las fabrica es quien dice quienes son. La lista viaja hasta el tablero
 	# en la misma llamada: ninguna decision sobre "esto es dotacion" pasa por lo
 	# que dejo apuntado un tablero que ya no existe.
@@ -373,7 +402,7 @@ func get_tower_crews(garrison: Dictionary) -> Dictionary:
 ## la siguiente tormenta es la decisión que todo esto existe para provocar.
 func count_standing_towers() -> int:
 	var standing := 0
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		if data == null or data.id != GameConfig.storm_tower_building_id:
 			continue
@@ -391,7 +420,7 @@ func damage_towers_for_lost_crews(crews_lost: int) -> int:
 	if crews_lost <= 0:
 		return 0
 	var towers: Array = []
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		if data == null or data.id != GameConfig.storm_tower_building_id:
 			continue
@@ -461,8 +490,13 @@ func _open(player_units: Array, enemy_roster: Dictionary, is_boss: bool, encount
 
 ## Único sitio donde se abre un tablero: recibe ambos bandos ya montados, fija
 ## quién no cuenta como ejército y arranca.
-func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array) -> void:
+##
+## `terrain` (aire y mar, docs/15 §11): el de la expedicion lo da su nodo; para
+## el resto (Diezmo, asedio, escaramuza) null = el de casa (home_terrain): agua
+## solo si en el bando del jugador hay barcos.
+func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: bool, crew_uids: Array, can_rout: bool = false, terrain: Variant = null) -> void:
 	_reserve_uids(units)
+	_auto_resolving = false
 	_tower_crew_uids.clear()
 	_audit_charged.clear()
 	for uid in crew_uids:
@@ -471,12 +505,27 @@ func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: 
 	# Las dotaciones de torre forman en la retaguardia: son artilleria con alcance
 	# minimo 2, y en cabeza se quedan mudas justo cuando el enemigo llega a
 	# contacto. Es la misma lista que ya se usa para no contarlas como bajas.
-	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids)
+	# La retirada enemiga solo en los tableros de la columna (D7 = B): quien abre
+	# un nodo de expedicion o incursion la pide; el Diezmo y el asedio, no.
+	var board_terrain: Dictionary = home_terrain(units) if terrain == null else (terrain as Dictionary)
+	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids, can_rout, board_terrain)
 	_board_generation += 1
 	_enemy_turn_running = false
 	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())
+
+## El tablero de casa (Diezmo, Ataque Final, escaramuza de pruebas). Decision de
+## aire y mar (2026-10-17): tiene agua SOLO si en el bando del jugador hay algun
+## barco — tu flota guarda la costa y el combate se da en la playa. Sin barcos
+## es todo tierra, como siempre, y el equilibrio del Diezmo y del asedio de las
+## partidas sin flota no cambia ni una casilla. La costa de casa es siempre la
+## misma (combat_home_coast_seed). Los aviones no necesitan agua.
+func home_terrain(units: Array) -> Dictionary:
+	for unit in units:
+		if unit.side == Encounter.PLAYER and unit.domain() == CombatUnit.DOMAIN_SEA:
+			return Rules.coastal_terrain(GameConfig.combat_board_size, GameConfig.combat_home_coast_seed)
+	return {}
 
 ## Empuja el contador por encima de cualquier uid que ya exista en `units`, para
 ## que todo lo que se fabrique despues (dotaciones, enemigo) no repita ninguno.
@@ -543,6 +592,9 @@ func end_encounter() -> void:
 		# (_resolve_expedition publica su parte, BattleScreen recoloca vistas), y
 		# abrir la oleada en mitad de eso la esconderia nada mas abrirla.
 		call_deferred("_release_queued_audit_wave")
+	# Al final: si report_audit_wave abrio la oleada siguiente, quien escucha
+	# ve el tablero nuevo abierto y sigue esperando.
+	EventBus.encounter_closed.emit()
 
 ## Deja bajar la oleada que esperaba en la puerta, si sigue habiendo asedio y el
 ## tablero sigue libre. Si otro tablero se abrio entretanto, vuelve a esperar.
@@ -631,10 +683,15 @@ func _emit_events(events: Array) -> void:
 				if _audit_wave_active:
 					_settle_audit_death(int(event["uid"]))
 				EventBus.unit_died.emit(event["uid"], event["side"])
+			"enemy_routed":
+				EventBus.enemy_routed.emit()
 			"encounter_ended":
 				# The base learns the outcome before anyone is told the fight is
 				# over, so the UI reading get_last_result() always sees it applied.
 				_apply_result(event["victory"], event["rounds"])
+				# Como acabo: el parte dice si se retiraron o si se resolvio solo.
+				_last_result["routed"] = bool(event.get("routed", false))
+				_last_result["auto_resolved"] = _auto_resolving
 				EventBus.encounter_ended.emit(event["victory"], event["rounds"])
 				# Y solo entonces la expedicion sigue: draft o final de la campana.
 				_publish_expedition_followups()
@@ -776,7 +833,16 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 			already.append(unit)
 		else:
 			to_charge.append(unit)
+	# Defender la base (Diezmo / Impuesto, no el Ataque Final): parte de los que
+	# caen vuelven heridos y no salen del ejercito (decision de Bryan, ronda
+	# final de la 1.1).
+	var wounded: Array = []
+	if encounter.is_defense and precharged.is_empty() and not _audit_wave_active:
+		wounded = defense_wounded(to_charge)
+		to_charge = to_charge.filter(func(u): return not wounded.has(u))
 	var survivors: Dictionary = _count_by_unit(_roster_only(encounter.survivors(), crew_uids))
+	for unit in wounded:
+		survivors[unit.unit_id] = int(survivors.get(unit.unit_id, 0)) + 1
 
 	# ArmyManager is the source of truth for the roster: the party was never
 	# deducted when it marched out, so only the dead are subtracted now and
@@ -820,10 +886,35 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 		# Lo que cayo del otro lado: el parte de una defensa resuelta a ciegas
 		# tiene que contar las dos columnas, no solo la nuestra.
 		"enemy_casualties": _count_by_unit(encounter.casualties(Encounter.ENEMY)),
+		# Caidos defendiendo la base que vuelven heridos (no cuentan como bajas).
+		"wounded": _count_by_unit(wounded),
 	}
 	return _last_result
 
 ## Quita del recuento a las unidades que no pertenecen al ejército del jugador.
+## De los caidos del ejercito en una defensa de la base, los que vuelven heridos:
+## `combat_defense_return_share` (2 de cada 3, redondeando a favor de los que
+## vuelven) y siempre cae al menos uno. Mueren primero los de menos `power` (el
+## enemigo remata lo que tiene a mano; lo pesado se arrastra a casa). Pura sobre
+## la lista: sin tocar ArmyManager.
+##
+## HOOK de la Enfermeria (1.2): cuando exista, que lea aqui cuantos vuelven (p.
+## ej. mas con la Enfermeria en pie) o que los tenga de baja un rato en vez de
+## devolverlos al momento. Hoy vuelven al cuartel en el acto.
+static func defense_wounded(fallen: Array) -> Array:
+	var n: int = fallen.size()
+	if n == 0:
+		return []
+	var back: int = clampi(int(floor(float(n) * GameConfig.combat_defense_return_share)), 0, n - 1)
+	if back <= 0:
+		return []
+	var order: Array = fallen.duplicate()
+	order.sort_custom(func(a, b) -> bool:
+		var pa: int = int(GameConfig.get_unit_def(a.unit_id).get("power", 0))
+		var pb: int = int(GameConfig.get_unit_def(b.unit_id).get("power", 0))
+		return pa < pb if pa != pb else a.uid < b.uid)
+	return order.slice(n - back)
+
 func _roster_only(units: Array, crew_uids: Dictionary) -> Array:
 	var result: Array = []
 	for unit in units:
@@ -849,6 +940,8 @@ func _resource_type(res_name: String) -> int:
 			return ResourceManager.Type.OIL
 		"wood":
 			return ResourceManager.Type.WOOD
+		"parts":
+			return ResourceManager.Type.PARTS
 		_:
 			return ResourceManager.Type.GOLD
 
@@ -941,6 +1034,41 @@ func can_launch(party: Dictionary) -> Dictionary:
 			return {"ok": false, "reason": "MSG_UNITS_UNAVAILABLE"}
 	return {"ok": true, "reason": ""}
 
+## Lo mismo que can_launch(), sabiendo ademas a donde va la columna (aire y mar):
+## los barcos solo salen a una mision con agua (de costa). `offer` vacio o
+## {"kind": "first"} = la primera escaramuza, que es en tierra.
+func can_launch_to(party: Dictionary, offer: Dictionary) -> Dictionary:
+	var check: Dictionary = can_launch(party)
+	if not bool(check.get("ok", false)):
+		return check
+	# Tres campanas: dominio puro. Solo tropa del medio de la campana, y de esa
+	# solo la que puede pegar a ese medio (el bombardero no va a la de aire).
+	if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN:
+		var domain: String = String(offer.get("domain", "land"))
+		for unit_id in party:
+			if int(party[unit_id]) <= 0:
+				continue
+			var why: String = campaign_unit_block(String(unit_id), domain)
+			if why != "":
+				return {"ok": false, "reason": why}
+		return check
+	if party_has_ships(party) and not offer_has_water(offer):
+		return {"ok": false, "reason": "MSG_SHIPS_NEED_WATER"}
+	return check
+
+## ¿Lleva barcos esta columna (unit_id -> cuantos)?
+static func party_has_ships(party: Dictionary) -> bool:
+	for unit_id in party:
+		if int(party[unit_id]) > 0 and GameConfig.get_unit_domain(String(unit_id)) == CombatUnit.DOMAIN_SEA:
+			return true
+	return false
+
+## ¿Tiene agua alguno de los combates de esta oferta del tablon?
+func offer_has_water(offer: Dictionary) -> bool:
+	if offer.is_empty() or String(offer.get("kind", "")) == "first":
+		return false
+	return ExpeditionGeneratorScript.map_has_water(offer_map(offer))
+
 ## Saca la columna. Crea la expedicion con una semilla nueva (o la dada, para
 ## reproducir una partida) y la moral que la base tiene ahora mismo, avisa y
 ## abre el tablero del nodo 0. Las unidades NO se descuentan de ArmyManager:
@@ -952,6 +1080,9 @@ func can_launch(party: Dictionary) -> Dictionary:
 ## esperan los tests y las sondas que lanzan con semilla.
 func launch_expedition(party: Dictionary, seed_value: int = 0, first_sortie: bool = false) -> bool:
 	if not bool(can_launch(party).get("ok", false)):
+		return false
+	# La expedicion de siempre y la primera escaramuza son en tierra: sin barcos.
+	if party_has_ships(party):
 		return false
 	var committed: Dictionary = {}
 	for unit_id in party:
@@ -1007,9 +1138,11 @@ func enter_current_node() -> bool:
 		# Un tablero ya resuelto que la UI aun no cerro.
 		end_encounter()
 	_morale_snapshot = _expedition.morale_snapshot
+	# El terreno del nodo: agua si es de costa (aire y mar), todo tierra si no.
 	_open_board(
 		_expedition.build_encounter_units(), bool(node.get("is_boss", false)),
-		int(node.get("index", _expedition.current_node)), false, []
+		int(node.get("index", _expedition.current_node)), false, [], true,
+		_expedition.current_terrain(GameConfig.combat_board_size)
 	)
 	return true
 
@@ -1079,6 +1212,12 @@ func _apply_expedition_encounter(victory: bool, rounds: int) -> void:
 		"tower_crews_lost": 0,
 		"towers_damaged": 0,
 	}
+	# Lo que da este nodo de lo que solo se consigue fuera, y si la columna se
+	# curo al seguir (expedicion corta). Para el parte del encuentro.
+	_last_result["loot"] = (_expedition.current_node_data().get("loot", {}) as Dictionary).duplicate(true) if victory else {}
+	for event in _expedition_followups:
+		if String(event.get("e", "")) == "party_healed":
+			_last_result["healed_pct"] = float(event.get("pct", 0.0))
 
 func _publish_expedition_followups() -> void:
 	var events: Array = _expedition_followups
@@ -1141,6 +1280,17 @@ func _resolve_expedition(result: int) -> void:
 	var rewards: Dictionary = summary.get("rewards", {})
 	for res_name in rewards:
 		ResourceManager.add(_resource_type(String(res_name)), int(rewards[res_name]))
+	# Lo que solo se consigue fuera: repuestos, colonos, planos y la rebaja del
+	# Diezmo. Como el oro, lo de los nodos ganados llega aunque se abandone.
+	var loot: Dictionary = _apply_loot(summary.get("loot", {}))
+	# La oferta del tablon vuelve si la columna no gano ningun combate (se puede
+	# intentar otra vez) o deja paso a la siguiente tras el enfriamiento. Con un
+	# combate ganado ya se cobro botin: si volviera entera, abandonar tras el
+	# primero y relanzar seria repetir botin gratis.
+	if not _expedition.offer.is_empty() and not _expedition.is_campaign():
+		var spent: bool = result == Expedition.RESULT_WON or int(summary.get("nodes_cleared", 0)) > 0
+		_publish_sortie_events(_sorties.finish(_expedition.offer, spent,
+			_now(), _sortie_cooldown(_expedition.kind)))
 
 	var lost: Dictionary = ArmyManager.remove_units(summary.get("casualties", {}))
 	var dead: int = 0
@@ -1159,6 +1309,11 @@ func _resolve_expedition(result: int) -> void:
 		"expedition": true,
 		"result": result,
 		"rewards": rewards.duplicate(),
+		"loot": loot,
+		"kind": _expedition.kind,
+		# Como acabo el ultimo combate: lo pone _emit_events justo antes.
+		"routed": bool(_last_result.get("routed", false)),
+		"auto_resolved": bool(_last_result.get("auto_resolved", false)),
 		"casualties": lost.duplicate(),
 		"survivors": summary.get("survivors", {}),
 		"morale_delta": morale_delta,
@@ -1169,15 +1324,457 @@ func _resolve_expedition(result: int) -> void:
 		"towers_damaged": 0,
 	}
 
+	var campaign_domain: String = _expedition.campaign_domain()
+	var campaign_mission: int = _expedition.campaign_mission()
+	if campaign_domain != "":
+		_last_result["campaign_domain"] = campaign_domain
+		_last_result["campaign_mission"] = campaign_mission
+		_last_result["campaign_boss"] = ExpeditionGeneratorScript.campaign_is_boss_mission(campaign_domain, campaign_mission)
+
 	_expedition = null
 	_clear_draft()
 	_expedition_followups = []
+	if not loot.is_empty():
+		EventBus.sortie_loot_gained.emit(loot.duplicate(true))
 	EventBus.expedition_ended.emit(result, rewards.duplicate(), lost.duplicate())
+	# Tres campanas: la mision avanza solo si su ultimo combate cayo. Despues de
+	# expedition_ended, para que quien lea el parte lo vea antes que el progreso
+	# (y el Ataque Final, si con esto ya se puede llamar).
+	if campaign_domain != "":
+		_publish_campaign_events(_campaigns.finish(campaign_domain, campaign_mission,
+			result == Expedition.RESULT_WON, _now(), GameConfig.get_duration(GameConfig.campaign_mission_cooldown)))
 
 func _new_seed() -> int:
 	var value: int = randi()
 	# Cero es "sin semilla" para launch_expedition(); que nunca salga por azar.
 	return value if value != 0 else 1
+
+# ── Salidas: el tablon, el botin y "resolver solo" (doc 21 §3) ───────
+
+## Las ofertas a la vista (copias: la UI no las muta).
+func get_sortie_offers() -> Array:
+	return _sorties.offers.duplicate(true)
+
+func get_sortie_offer(offer_id: int) -> Dictionary:
+	return _sorties.get_offer(offer_id).duplicate(true)
+
+## El mapa entero de una oferta, el mismo que se jugara (se ve antes de salir).
+func offer_map(offer: Dictionary) -> Array:
+	return ExpeditionGeneratorScript.sortie_map(offer)
+
+## Todo lo que la seleccion de tropa ensena antes de lanzar: nombre, combates,
+## enemigos por nodo, botin, oro y madera, y las fuerzas de los dos lados con su
+## etiqueta (Favorable / Igualada / Dificil). `party` es unit_id -> count.
+## Sirve tambien para la primera escaramuza (offer = {"kind": "first"}).
+func sortie_preview(offer: Dictionary, party: Dictionary) -> Dictionary:
+	var map: Array = []
+	var era: int = maxi(1, int(offer.get("era", ProgressionManager.current_era)))
+	var first: bool = String(offer.get("kind", "")) == "first"
+	if first:
+		map = ExpeditionGeneratorScript.first_sortie_map()
+	else:
+		map = offer_map(offer)
+	# Fuerza de columna (power x escala^2 x cuerpos), no la suma de power: la de
+	# antes enganaba con columnas pequenas (docs/16 "Ronda final").
+	var enemy: float = ExpeditionGeneratorScript.hardest_node_strength(map, era)
+	var mine: float = ExpeditionGeneratorScript.column_strength(party)
+	return {
+		"name_key": "SORTIE_NAME_FIRST" if first else ExpeditionGeneratorScript.offer_name_key(offer),
+		"kind": String(offer.get("kind", "")),
+		"fights": ExpeditionGeneratorScript.fights_on_path(map),
+		"map": map,
+		"layers": ExpeditionGeneratorScript.layers_of(map),
+		"loot": ExpeditionGeneratorScript.path_loot(map),
+		"rewards": ExpeditionGeneratorScript.path_rewards(map, era),
+		"enemy_power": enemy,
+		"player_power": mine,
+		"odds": Rules.odds_label(mine, enemy),
+		# Aire y mar: hay agua en el tablero (se pueden llevar barcos; vienen barcos).
+		"coastal": ExpeditionGeneratorScript.map_has_water(map),
+		# Pre-lanzamiento: la incursion se puede resolver sola si la columna dobla
+		# al enemigo. La expedicion y la primera escaramuza, no.
+		"can_auto": String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_RAID \
+			and Rules.can_auto_resolve(mine, enemy),
+		# Tres campanas: de que campana es y si es la del jefe.
+		"campaign_domain": String(offer.get("domain", "")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN else "",
+		"campaign_boss": String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN \
+			and ExpeditionGeneratorScript.campaign_is_boss_mission(String(offer.get("domain", "")), int(offer.get("mission", 0))),
+	}
+
+## Saca la columna a una oferta del tablon. Mismas comprobaciones que
+## launch_expedition(); la oferta sale del tablon y vuelve si la columna pierde.
+## `auto_resolve`: la incursion se juega de un tiron con la IA (solo si la
+## fuerza lo permite; si no, se juega normal).
+func launch_sortie(offer_id: int, party: Dictionary, auto_resolve: bool = false) -> bool:
+	if not bool(can_launch(party).get("ok", false)):
+		return false
+	if _sorties.get_offer(offer_id).is_empty():
+		return false
+	# Aire y mar: barcos solo a una mision con agua.
+	if not bool(can_launch_to(party, _sorties.get_offer(offer_id)).get("ok", false)):
+		return false
+	var committed: Dictionary = {}
+	for unit_id in party:
+		if int(party[unit_id]) > 0:
+			committed[String(unit_id)] = int(party[unit_id])
+	var offer: Dictionary = _sorties.take(offer_id)
+	_expedition = ExpeditionScript.create_sortie(_next_expedition_id, offer, committed, _read_morale())
+	_next_expedition_id += 1
+	_morale_snapshot = _expedition.morale_snapshot
+	_clear_draft()
+	_expedition_followups = []
+	EventBus.sortie_offers_changed.emit()
+	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
+	enter_current_node()
+	if auto_resolve and can_auto_resolve():
+		auto_resolve_current()
+	return true
+
+## "Resolver solo" (D6 = A) vale ahora: el tablero abierto es una incursion o un
+## Diezmo (nunca el asedio, ni una expedicion de tres), sigue en juego, y tu
+## fuerza es al menos combat_auto_resolve_ratio veces la del enemigo.
+func can_auto_resolve() -> bool:
+	if _encounter == null or not _encounter.is_active() or _audit_wave_active:
+		return false
+	var allowed: bool = false
+	if _encounter.is_defense:
+		allowed = true
+	elif _is_expedition_board() and _expedition.is_raid():
+		allowed = true
+	if not allowed:
+		return false
+	return Rules.can_auto_resolve(
+		Rules.side_strength(_encounter.units, Encounter.PLAYER),
+		Rules.side_strength(_encounter.units, Encounter.ENEMY))
+
+## Juega el tablero abierto de un tiron con la IA en los dos bandos: el mismo
+## Encounter y el mismo AutoResolver que el Diezmo a ciegas. Solo se publican
+## las muertes y el final (no cien movimientos en un fotograma); el parte dice
+## "resuelto solo". Devuelve false si no se puede.
+func auto_resolve_current() -> bool:
+	if not can_auto_resolve():
+		return false
+	# Un turno enemigo a medias (corrutina esperando) deja de ser de nadie.
+	_board_generation += 1
+	_enemy_turn_running = false
+	_auto_resolving = true
+	var outcome: Dictionary = AutoResolverScript.resolve(_encounter)
+	var events: Array = []
+	for event in outcome.get("events", []):
+		if String(event.get("e", "")) in ["unit_died", "enemy_routed", "encounter_ended"]:
+			events.append(event)
+	_emit_events(events)
+	_auto_resolving = false
+	return true
+
+## Planos: un edificio de combat_blueprint_buildings no se construye sin el suyo.
+## Gancho para PlacementRules (check_blueprint, como check_rank) y para el
+## candado de ConstructionMenu: las ramas que traigan esos edificios lo llaman.
+func blueprint_locked(building_id: String) -> bool:
+	if GameMode.all_unlocked():
+		return false
+	return building_id in GameConfig.combat_blueprint_buildings and not _sorties.has_blueprint(building_id)
+
+func has_blueprint(building_id: String) -> bool:
+	return _sorties.has_blueprint(building_id)
+
+func get_blueprints() -> Array:
+	return _sorties.blueprints.duplicate()
+
+## Rebaja del proximo Diezmo ganada en una salida, en % (0 = ninguna). Solo el
+## apunte: la aplica StormManager.add_tithe_discount() al volver la columna
+## (_apply_loot). Se borra con tithe_resolved.
+func get_tithe_cut_pct() -> int:
+	return _sorties.tithe_cut_pct
+
+## El jugador ha abierto el tablon: se apaga el aviso de "nuevo".
+func mark_sorties_seen() -> void:
+	_publish_sortie_events(_sorties.mark_all_seen())
+	_publish_campaign_events(_campaigns.mark_all_seen())
+
+## Por que conviene salir ahora, como clave de Tr, o "" si no hay motivo. Es la
+## unica respuesta: el punto rojo del boton ESCARAMUZAS y la linea de ¿QUE
+## HACER? la leen de aqui. Sin columna en casa no hay motivo que valga.
+func sortie_reason() -> String:
+	if has_active_expedition() or is_board_open():
+		return ""
+	if ProgressionManager.is_final_audit_pending() or ProgressionManager.is_final_audit_active():
+		return ""
+	if not ArmyManager.has_military_building() or get_deployable_units().is_empty():
+		return ""
+	if is_first_sortie_due():
+		return "SORTIE_WHY_FIRST"
+	if _sorties.has_outpost() and _sorties.tithe_cut_pct <= 0 and StormManager.is_armed():
+		return "SORTIE_WHY_OUTPOST"
+	if not _sorties.offers.is_empty() and _parts_wanted() > ResourceManager.get_amount(ResourceManager.Type.PARTS):
+		return "SORTIE_WHY_PARTS"
+	if _sorties.has_unseen():
+		return "SORTIE_WHY_NEW"
+	# Tres campanas: una mision nueva que se puede lanzar ya, con tropa de su medio.
+	if campaign_waiting_unseen() != "":
+		return "SORTIE_WHY_CAMPAIGN"
+	return ""
+
+## Repuestos que pide la mejora mas barata que ya se podria hacer (un productor
+## en el nivel justo de debajo). 0 si ninguna los pide.
+func _parts_wanted() -> int:
+	var wanted: int = 0
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info["data"]
+		if data == null or not data.id in GameConfig.upgrade_parts_buildings:
+			continue
+		var level: int = int((info["node"] as Node).get_meta("level", 1))
+		var need: int = GameConfig.upgrade_parts_needed(data.id, level + 1)
+		if need > 0 and (wanted == 0 or need < wanted):
+			wanted = need
+	return wanted
+
+## Revisa el tablon: oferta nueva si toca. La llama el reloj cada pocos segundos
+## (y los tests a mano).
+func refresh_sorties() -> void:
+	_publish_sortie_events(_sorties.refresh(_now(), _sortie_context(), _new_seed()))
+	_check_campaign_rest()
+
+## Una campana que acaba de terminar su descanso avisa (punto rojo, panel). Dos
+## restas por tic: nada que medir.
+var _campaign_resting: Dictionary = {}
+func _check_campaign_rest() -> void:
+	var now: float = _now()
+	var changed := false
+	for domain in CampaignBook.DOMAINS:
+		var resting: bool = _campaigns.cooldown_left(domain, now) > 0.0
+		if bool(_campaign_resting.get(domain, false)) and not resting:
+			changed = true
+		_campaign_resting[domain] = resting
+	if changed:
+		EventBus.campaign_changed.emit()
+
+func _sortie_context() -> Dictionary:
+	var open: bool = ArmyManager.has_military_building() and TutorialManager.is_first_sortie_done() \
+		and not GameMode.is_run_over() and not StormManager.is_halted()
+	var era: int = ProgressionManager.current_era
+	return {
+		"raids": open,
+		# La expedicion corta del tablon es ahora la Campana de Tierra
+		# (feat/tres-campanas): apagada salvo con su interruptor.
+		"expeditions": open and era >= GameConfig.combat_expedition_min_era and GameConfig.combat_board_expeditions_enabled,
+		"outpost": open and GameMode.tithe_enabled() and StormManager.is_armed(),
+		"era": era,
+		"blueprint": _next_blueprint(),
+		"raid_out": _expedition != null and _expedition.kind == ExpeditionGeneratorScript.KIND_RAID,
+		"expedition_out": _expedition != null and _expedition.kind == ExpeditionGeneratorScript.KIND_EXPEDITION,
+	}
+
+## El plano que llevaria una expedicion nueva: el primero de la lista cuyo
+## edificio exista ya en data/buildings, no se tenga y no este ya prometido.
+func _next_blueprint() -> String:
+	var promised: Array = _sorties.offered_blueprints()
+	if _expedition != null:
+		promised.append(String(_expedition.offer.get("blueprint", "")))
+	for id in GameConfig.combat_blueprint_buildings:
+		var building_id: String = String(id)
+		if _sorties.has_blueprint(building_id) or promised.has(building_id):
+			continue
+		if ResourceLoader.exists("res://data/buildings/%s.tres" % building_id):
+			return building_id
+	return ""
+
+## Aplica a la colonia lo que la columna trajo de fuera y devuelve lo que de
+## verdad entro (los colonos se quedan en lo que quepa en las casas).
+func _apply_loot(raw: Dictionary) -> Dictionary:
+	var applied: Dictionary = {}
+	var parts: int = int(raw.get("parts", 0))
+	if parts > 0:
+		ResourceManager.unlock(ResourceManager.Type.PARTS)
+		ResourceManager.add(ResourceManager.Type.PARTS, parts)
+		applied["parts"] = parts
+	var colonists: int = int(raw.get("colonists", 0))
+	if colonists > 0:
+		var room: int = maxi(0, PopulationManager.get_max_population() - PopulationManager.get_population())
+		var arrived: int = mini(colonists, room)
+		if arrived > 0:
+			# remove_population con signo negativo es "llegan": la API publica que
+			# escribe la poblacion (y respeta su suelo y su señal).
+			PopulationManager.remove_population(-arrived)
+			applied["colonists"] = arrived
+		if arrived < colonists:
+			applied["colonists_no_room"] = colonists - arrived
+	var banked: Dictionary = {}
+	if raw.has("blueprints"):
+		banked["blueprints"] = raw["blueprints"]
+		applied["blueprints"] = (raw["blueprints"] as Array).duplicate()
+	if int(raw.get("tithe_pct", 0)) > 0:
+		var pct: int = int(raw["tithe_pct"])
+		banked["tithe_pct"] = pct
+		applied["tithe_pct"] = pct
+		# Un solo mecanismo de rebaja, el de la Orden de la Regencia (rama
+		# feat/orden-regencia). Sin esa funcion la rebaja se anota y no hace nada.
+		if StormManager.has_method("add_tithe_discount"):
+			StormManager.call("add_tithe_discount", "expedicion", float(pct) / 100.0)
+	if not banked.is_empty():
+		_publish_sortie_events(_sorties.bank_loot(banked))
+	return applied
+
+func _publish_sortie_events(events: Array) -> void:
+	var changed := false
+	for event in events:
+		match String(event.get("e", "")):
+			"blueprint_gained":
+				EventBus.blueprint_unlocked.emit(String(event["id"]))
+			"offers_changed", "tithe_cut_gained":
+				changed = true
+	if changed:
+		EventBus.sortie_offers_changed.emit()
+
+func _sortie_cooldown(kind: String) -> float:
+	var base: float = GameConfig.combat_raid_cooldown if kind == ExpeditionGeneratorScript.KIND_RAID \
+		else GameConfig.combat_expedition_cooldown
+	return GameConfig.get_duration(base)
+
+func _now() -> float:
+	return ProgressionManager.get_played_seconds()
+
+# ── Las tres campanas: Tierra, Mar y Aire (feat/tres-campanas) ───────
+
+## El libro de campanas, para leer (la UI y las pruebas). Nadie fuera de este
+## servicio lo muta.
+func get_campaign_book() -> CampaignBook:
+	return _campaigns
+
+func campaign_won(domain: String) -> int:
+	return _campaigns.won(domain)
+
+func campaign_total(domain: String) -> int:
+	return CampaignBook.total(domain)
+
+func is_campaign_complete(domain: String) -> bool:
+	return _campaigns.is_complete(domain)
+
+## Las tres completas: lo que, con el Cuartel General a nivel 3, abre el Ataque
+## Final (ProgressionManager.final_audit_ready()).
+func campaigns_all_complete() -> bool:
+	return _campaigns.all_complete()
+
+func campaigns_completed_count() -> int:
+	return _campaigns.completed_count()
+
+## La oferta de la mision que toca en `domain`, con la era de ahora (vacia si la
+## campana esta completa). La del jefe lleva el plano que daria, si queda alguno.
+func campaign_offer(domain: String) -> Dictionary:
+	var offer: Dictionary = _campaigns.offer_for(domain, ProgressionManager.current_era)
+	if offer.is_empty():
+		return offer
+	if ExpeditionGeneratorScript.campaign_is_boss_mission(domain, int(offer["mission"])):
+		offer["blueprint"] = _next_blueprint()
+	return offer
+
+## Por que no se puede salir ahora a la siguiente mision de `domain`, como clave
+## de Tr (sin cifras), o "" si se puede (falta elegir la tropa, eso aparte).
+## El orden es el de lo que el jugador tiene que arreglar primero.
+##   CAMP_DONE              la campana esta completa
+##   CAMP_LOCK_BUILDING     falta su edificio (Cuartel, Astillero, Aerodromo)
+##   CAMP_LOCK_FIRST_SORTIE falta ganar la primera escaramuza
+##   CAMP_LOCK_ERA          la mision pide una era que aun no llega
+##   CAMP_LOCK_REST         la tropa descansa tras la ultima mision
+##   y los de can_launch (columna fuera, asedio convocado...)
+func campaign_lock_reason(domain: String) -> String:
+	if _campaigns.is_complete(domain):
+		return "CAMP_DONE"
+	if GameMode.is_run_over():
+		return "OBJ_WHY_RUN_OVER"
+	var building: String = String(GameConfig.campaign_defs.get(domain, {}).get("building", "barracks"))
+	if ArmyManager.building_count(building) <= 0:
+		return "CAMP_LOCK_BUILDING"
+	if is_first_sortie_due():
+		return "CAMP_LOCK_FIRST_SORTIE"
+	var mission: int = _campaigns.next_mission(domain)
+	if ProgressionManager.current_era < ExpeditionGeneratorScript.campaign_mission_era(domain, mission):
+		return "CAMP_LOCK_ERA"
+	if _campaigns.cooldown_left(domain, _now()) > 0.0:
+		return "CAMP_LOCK_REST"
+	if has_active_expedition():
+		return "MSG_EXPEDITION_ACTIVE"
+	if is_in_encounter():
+		return "MSG_ENCOUNTER_ACTIVE"
+	if ProgressionManager.is_final_audit_pending() or ProgressionManager.is_final_audit_active():
+		return "MSG_AUDIT_BLOCKS_EXPEDITION"
+	return ""
+
+## Segundos de descanso que le quedan a `domain` (0 = lista).
+func campaign_rest_left(domain: String) -> float:
+	return _campaigns.cooldown_left(domain, _now())
+
+## El edificio que abre `domain` (para el candado: "Construye: Astillero").
+static func campaign_building(domain: String) -> String:
+	return String(GameConfig.campaign_defs.get(domain, {}).get("building", "barracks"))
+
+## Por que `unit_id` no puede ir a la campana `domain`, o "" si puede.
+func campaign_unit_block(unit_id: String, domain: String) -> String:
+	if GameConfig.get_unit_domain(unit_id) != domain:
+		return "CAMP_UNIT_WRONG_DOMAIN"
+	if not GameConfig.campaign_unit_allowed(domain, unit_id):
+		return "CAMP_UNIT_CANT_HIT"
+	return ""
+
+## Lo que hay en casa que puede ir a la campana `domain` (unit_id -> cuantos).
+func campaign_units_home(domain: String) -> Dictionary:
+	var home: Dictionary = get_deployable_units()
+	var out: Dictionary = {}
+	for unit_id in home:
+		if campaign_unit_block(String(unit_id), domain) == "":
+			out[String(unit_id)] = int(home[unit_id])
+	return out
+
+## Saca la columna a la mision que toca de `domain`. Mismas comprobaciones que
+## launch_sortie(), y ademas el candado de la campana y su dominio puro. Si la
+## columna pierde o abandona, la mision sigue ahi (con el mismo mapa).
+func launch_campaign_mission(domain: String, party: Dictionary) -> bool:
+	if campaign_lock_reason(domain) != "":
+		return false
+	var offer: Dictionary = campaign_offer(domain)
+	if offer.is_empty():
+		return false
+	if not bool(can_launch_to(party, offer).get("ok", false)):
+		return false
+	var committed: Dictionary = {}
+	for unit_id in party:
+		if int(party[unit_id]) > 0:
+			committed[String(unit_id)] = int(party[unit_id])
+	_expedition = ExpeditionScript.create_sortie(_next_expedition_id, offer, committed, _read_morale())
+	_next_expedition_id += 1
+	_morale_snapshot = _expedition.morale_snapshot
+	_clear_draft()
+	_expedition_followups = []
+	_publish_campaign_events(_campaigns.mark_all_seen())
+	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
+	enter_current_node()
+	return true
+
+## La primera campana con una mision nueva sin mirar que ya se podria lanzar y
+## con tropa de su medio en casa, o "". Para el punto rojo y ¿QUE HACER?.
+func campaign_waiting_unseen() -> String:
+	for domain in CampaignBook.DOMAINS:
+		if not _campaigns.is_unseen(domain):
+			continue
+		if campaign_lock_reason(domain) != "":
+			continue
+		if campaign_units_home(domain).is_empty():
+			continue
+		return String(domain)
+	return ""
+
+func _publish_campaign_events(events: Array) -> void:
+	var changed := false
+	for event in events:
+		match String(event.get("e", "")):
+			"campaign_mission_won":
+				EventBus.campaign_mission_won.emit(String(event["domain"]), int(event["mission"]), bool(event["boss"]))
+			"campaign_completed":
+				EventBus.campaign_completed.emit(String(event["domain"]))
+			"campaign_changed":
+				changed = true
+	if changed:
+		EventBus.campaign_changed.emit()
 
 # ── Dev helper (T014) ────────────────────────────────────────────────
 
@@ -1243,6 +1840,38 @@ func load_save_data(data: Dictionary) -> void:
 func reset() -> void:
 	_clear_runtime_state()
 	_next_expedition_id = 1
+	# El tablon es estado de la partida (clave "sorties"): partida nueva, tablon
+	# vacio. Se tira, no se liquida: ni planos ni rebaja pasan a la nueva.
+	_sorties = SortieBoardScript.new()
+	# Las tres campanas (clave "campaigns"): partida nueva, ninguna empezada, y
+	# una semilla nueva para todos sus mapas. Se tiran, no se liquidan.
+	_campaigns = CampaignBookScript.new()
+	_campaigns.ensure_seed(_new_seed())
+
+## Lo que va en data["sorties"]: ofertas, relojes, planos y rebaja del Diezmo.
+## Aparte de data["expedition"] porque vive aunque no haya columna fuera.
+func get_sorties_save_data() -> Dictionary:
+	return _sorties.to_dict()
+
+## Idempotente: sustituye el tablon entero por el guardado. Sin la clave
+## (guardado anterior a las salidas nuevas) llega {} y el tablon empieza vacio;
+## la primera oferta sale en el siguiente tic del reloj.
+func load_sorties_save_data(data: Dictionary) -> void:
+	_sorties = SortieBoardScript.from_dict(data)
+	EventBus.sortie_offers_changed.emit()
+
+## Lo que va en data["campaigns"] (feat/tres-campanas): semilla, misiones ganadas
+## por campana, descansos y lo visto.
+func get_campaigns_save_data() -> Dictionary:
+	return _campaigns.to_dict()
+
+## Idempotente: sustituye el libro entero. Sin la clave (guardado anterior a las
+## tres campanas) llega {}: ninguna empezada, con semilla nueva. Un Ataque Final
+## ya convocado o ganado en ese guardado no se toca: vive en ProgressionManager.
+func load_campaigns_save_data(data: Dictionary) -> void:
+	_campaigns = CampaignBookScript.from_dict(data)
+	_campaigns.ensure_seed(_new_seed())
+	EventBus.campaign_changed.emit()
 
 ## Todo lo que este servicio se inventa mientras se juega: el tablero, la
 ## campana, el parte, las marcas del asedio y los contadores. Lo unico que NO

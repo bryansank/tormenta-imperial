@@ -16,6 +16,8 @@ extends RefCounted
 ## Para anadir una: una entrada aqui, sus claves Tr (ES y EN) y, si es un
 ## consejo, su disparador en TutorialManager.
 
+const BuildingHelpText := preload("res://scripts/ui/BuildingHelpText.gd")
+
 const CAT_BASICS := "basics"
 const CAT_ECONOMY := "economy"
 const CAT_STORM := "storm"
@@ -50,6 +52,22 @@ const ENTRIES := {
 		"title": "HELP_T_MENUS", "body": "HELP_B_MENUS", "target": "menu_button"},
 	"callout_skirmish": {"kind": "callout", "cat": CAT_ARMY, "basic": false,
 		"title": "HELP_T_SKIRMISH", "body": "LBL_HELP_SKIRMISH", "target": ""},
+	# ── La meta y los edificios del principio (2026-10-16, rama feat/tutorial-claro):
+	# lo mismo que dicen la primera y la ultima tarjeta del tutorial y sus pasos ──
+	"guide_goal": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_GOAL", "body": "HELP_B_GOAL", "target": "objective"},
+	"guide_start_buildings": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_START_BUILDINGS", "body": "HELP_B_START_BUILDINGS", "target": "build_button"},
+	# Girar, mover y derribar (lo que ensena el tutorial en sus pasos 6-8) y los
+	# danos (la leccion de reparar). La de reparar solo donde hay Tormenta.
+	"guide_rotate": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_ROTATE", "body": "HELP_B_ROTATE", "target": "build_button"},
+	"guide_move": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_MOVE", "body": "HELP_B_MOVE", "target": ""},
+	"guide_demolish": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_DEMOLISH", "body": "HELP_B_DEMOLISH", "target": ""},
+	"guide_repair": {"kind": "guide", "cat": CAT_STORM, "basic": true,
+		"title": "HELP_T_REPAIR", "body": "HELP_B_REPAIR", "target": "", "needs": "storm_started"},
 	# ── Guia rapida (2026-09-28): los cuatro bloques de la pantalla del inicio ──
 	"guide_qg_resources": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "QG_RESOURCES_T", "body": "QG_RESOURCES_B", "target": "resources"},
@@ -104,6 +122,80 @@ const ENTRIES := {
 		"title": "TUT_TIP_FIRST_SORTIE_TITLE", "body": "TUT_TIP_FIRST_SORTIE_BODY", "target": "menu_button"},
 	"final_audit": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
 		"title": "TUT_TIP_AUDIT_TITLE", "body": "HELP_TIP_AUDIT_BODY", "target": ""},
+	# ── Novedades (2026-10-14): basicas, asi estan en el indice desde el principio ──
+	"saves": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_SAVES", "body": "HELP_B_SAVES", "target": "menu_button"},
+	"callout_speed": {"kind": "callout", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_SPEED", "body": "HELP_B_SPEED", "target": "speed_button"},
+	"rank": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_RANK", "body": "HELP_B_RANK", "target": "rank_badge"},
+	"flag": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_FLAG", "body": "HELP_B_FLAG", "target": "menu_button"},
+	"island": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_ISLAND", "body": "HELP_B_ISLAND", "target": ""},
+	# Carretera larga (feat/carretera-arrastrar): sale al coger la carretera.
+	"road_drag": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_ROAD_DRAG", "body": "HELP_B_ROAD_DRAG", "target": ""},
+	"night": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_NIGHT", "body": "HELP_B_NIGHT", "target": ""},
+	"bug_report": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_BUG", "body": "HELP_B_BUG", "target": "menu_button"},
+	"farm": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_FARM", "body": "HELP_B_FARM", "target": ""},
+	"collect_full": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_COLLECT", "body": "HELP_B_COLLECT", "target": ""},
+	# Muelle de pesca (feat/muelle-pesca): sale al terminar el primero.
+	"fishing_dock": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_FISHING_DOCK", "body": "HELP_B_FISHING_DOCK", "target": ""},
+	# ── Ensenar el combate (2026-10-14, rama feat/ensenar-combate, docs/23 §2.4) ──
+	# Guias basicas: siempre en el indice. Lo mismo que cuentan las marcas del
+	# combate guiado y la ficha de unidad, para leerlo con calma.
+	"guide_combat_units": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_COMBAT_UNITS", "body": "HELP_B_COMBAT_UNITS", "target": ""},
+	"guide_combat_move": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_COMBAT_MOVE", "body": "HELP_B_COMBAT_MOVE", "target": ""},
+	"guide_type_advantage": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_TYPE_ADVANTAGE", "body": "HELP_B_TYPE_ADVANTAGE", "target": ""},
+	"guide_artillery_range": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_ARTILLERY_RANGE", "body": "HELP_B_ARTILLERY_RANGE", "target": ""},
+	"guide_combat_previews": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_COMBAT_PREVIEWS", "body": "HELP_B_COMBAT_PREVIEWS", "target": ""},
+	"guide_combat_defend": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_COMBAT_DEFEND", "body": "HELP_B_COMBAT_DEFEND", "target": ""},
+	# ── Aire y mar (feat/aire-mar-reglas, docs/15 §11) ──
+	# El consejo sale al levantar el primer Astillero o Aerodromo; la guia de
+	# ventajas esta en el indice desde el principio, junto a "Quien gana a quien".
+	"air_sea": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
+		"title": "HELP_T_AIR_SEA", "body": "HELP_B_AIR_SEA", "target": ""},
+	"guide_air_sea_advantage": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_AIR_SEA_ADVANTAGE", "body": "HELP_B_AIR_SEA_ADVANTAGE", "target": ""},
+	# ── Tres campanas (feat/tres-campanas, docs/15 §13) ──
+	# La pagina "Las tres campanas" esta en el indice desde el principio; el
+	# consejo sale al ganar la primera escaramuza (se abre la de Tierra). "Que
+	# pide el Ataque Final" sale en la era 3 o al llegar el CG a nivel 3 sin las
+	# campanas; tambien esta en el indice (solo donde hay asedio).
+	"guide_campaigns": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_CAMPAIGNS", "body": "HELP_B_CAMPAIGNS", "target": ""},
+	"campaigns": {"kind": "tip", "cat": CAT_ARMY, "basic": false,
+		"title": "HELP_T_CAMPAIGNS", "body": "HELP_B_CAMPAIGNS", "target": ""},
+	"final_gate": {"kind": "tip", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_FINAL_GATE", "body": "HELP_B_FINAL_GATE", "target": "", "needs": "final_audit"},
+	# ── Topes y mejoras (2026-10-17, rama feat/topes-mejoras-ayuda) ──
+	# Paginas con numeros: `dyn` = el cuerpo lo escribe BuildingHelpText leyendo
+	# GameConfig (topes por era, multiplicadores de mejora, repuestos, torres,
+	# recetas), no una clave fija; `body` es su resumen de una linea (el tooltip
+	# del indice, summary()). El indice las abre como pagina (sin reloj),
+	# porque son largas para la tarjeta de abajo.
+	"guide_limits": {"kind": "guide", "cat": CAT_BASICS, "basic": true, "dyn": true,
+		"title": "HELP_T_LIMITS", "body": "HELP_B_LIMITS", "target": "build_button"},
+	"guide_upgrades": {"kind": "guide", "cat": CAT_BASICS, "basic": true, "dyn": true,
+		"title": "HELP_T_UPGRADES", "body": "HELP_B_UPGRADES", "target": ""},
+	"guide_eras": {"kind": "guide", "cat": CAT_ECONOMY, "basic": true, "dyn": true,
+		"title": "HELP_T_ERAS", "body": "HELP_B_ERAS", "target": "objective"},
+	"guide_workshop": {"kind": "guide", "cat": CAT_ECONOMY, "basic": true, "dyn": true,
+		"title": "HELP_T_WORKSHOP", "body": "HELP_B_WORKSHOP", "target": ""},
+	"guide_towers": {"kind": "guide", "cat": CAT_STORM, "basic": true, "dyn": true,
+		"title": "HELP_T_TOWERS", "body": "HELP_B_TOWERS", "target": "", "needs": "storm_started"},
 }
 
 ## Prioridad de los globos que salen solos: mayor sale antes. Los consejos van
@@ -152,6 +244,20 @@ static func title(id: String) -> String:
 static func body(id: String) -> String:
 	if id == "callout_camera" and GameConfig.touch_controls_enabled():
 		return Tr.ti("LBL_HELP_CAMERA")
+	if is_page(id):
+		return BuildingHelpText.help_body(id)
+	var key := String(entry(id).get("body", ""))
+	return Tr.ti(key) if key != "" else ""
+
+## Una pagina con numeros vivos (`dyn`): el indice la lee en grande, sin reloj.
+static func is_page(id: String) -> bool:
+	return bool(entry(id).get("dyn", false))
+
+## El texto corto de una ayuda (su clave `body`): para el tooltip del indice. En
+## una pagina es su resumen; en las demas, lo mismo que body().
+static func summary(id: String) -> String:
+	if not is_page(id):
+		return body(id)
 	var key := String(entry(id).get("body", ""))
 	return Tr.ti(key) if key != "" else ""
 

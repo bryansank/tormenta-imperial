@@ -28,10 +28,21 @@ var _notif_cooldown := 0.0  # Prevent notification spam
 ## Viaja en el guardado: el hambre no se olvida al cerrar el juego.
 var _unpaid_ticks := 0
 
+## Tabernas que pudieron servir en el ultimo tic de consumo (comida y oro
+## pagados, obreros y casas en su barrio). Dan moral en ese tic y gente de mas
+## en el de crecimiento. Derivado: no se guarda (tras cargar, 0 hasta el tic).
+var _served_taverns := 0
+
+## Tanda de colocacion en curso (auto-road): un solo recuento al cerrarla.
+var _batch_depth := 0
+var _batch_dirty := false
+
 func _ready() -> void:
 	EventBus.construction_completed.connect(_on_building_completed)
 	# Una carretera es instantanea: al ponerla puede conectar algo que estaba suelto.
-	EventBus.building_placed.connect(func(_d, _c): _recalculate_all())
+	EventBus.building_placed.connect(_on_building_placed)
+	EventBus.placement_batch_started.connect(func(): _batch_depth += 1)
+	EventBus.placement_batch_finished.connect(_on_placement_batch_finished)
 	# Una veta agotada para al extractor de al lado (el nodo muere al final del frame).
 	EventBus.deposit_depleted.connect(func(_n, _id): _recalculate_all.call_deferred())
 	# Minar a mano ocupa trabajadores mientras dura (ProcessManager.busy_mining_workers).
@@ -47,6 +58,8 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _notif_cooldown > 0.0:
 		_notif_cooldown -= delta
+	# x2: consumo y crecimiento al doble; el enfriamiento del aviso, en real.
+	delta = GameConfig.sim_delta(delta)
 
 	# Phase 0 (Foundation): no consumption, no growth — just build freely
 	if ProgressionManager.current_phase < GameConfig.Phase.SETTLEMENT:
@@ -128,6 +141,9 @@ func _set_population(value: int) -> void:
 	if clamped == _population:
 		return
 	_population = clamped
+	# Menos gente, menos puestos cubiertos: se reparten de nuevo (antes un muerto
+	# de hambre seguia "trabajando" hasta la siguiente obra).
+	_restaff()
 	EventBus.population_changed.emit(_population, _max_population)
 
 # ── Consumption ──
@@ -135,38 +151,26 @@ func _set_population(value: int) -> void:
 func _tick_consumption() -> void:
 	if _population <= 0:
 		return
-	# Each pop unit consumes 1 wood and 1 gold per tick, reduced by tech bonus
-	var reduction := GameConfig.tech_consumption_reduction
-	var wood_needed: int = maxi(1, int(_population * maxf(0.1, 1.0 - reduction)))
-	var gold_needed: int = maxi(1, int(_population * maxf(0.1, 1.0 - reduction)))
+	# La gente come COMIDA (2026-10-04): antes eran 1 de madera y 1 de oro por
+	# habitante y tic. La tecnologia de consumo la rebaja como entonces.
+	var food_needed: int = food_due()
+	var food_ok := ResourceManager.has_enough(ResourceManager.Type.FOOD, food_needed)
 
-	var wood_ok := ResourceManager.has_enough(ResourceManager.Type.WOOD, wood_needed)
-	var gold_ok := ResourceManager.has_enough(ResourceManager.Type.GOLD, gold_needed)
-
-	if wood_ok:
-		ResourceManager.spend(ResourceManager.Type.WOOD, wood_needed)
+	if food_ok:
+		ResourceManager.spend(ResourceManager.Type.FOOD, food_needed)
 	else:
-		var available := ResourceManager.get_amount(ResourceManager.Type.WOOD)
+		var available := ResourceManager.get_amount(ResourceManager.Type.FOOD)
 		if available > 0:
-			ResourceManager.spend(ResourceManager.Type.WOOD, available)
-		EventBus.consumption_failed.emit("wood")
+			ResourceManager.spend(ResourceManager.Type.FOOD, available)
+		EventBus.consumption_failed.emit("food")
 		if _notif_cooldown <= 0.0:
-			EventBus.notification_posted.emit(Tr.t("NOTIF_NO_WOOD"), "warning", Color(0.9, 0.6, 0.2))
+			EventBus.notification_posted.emit(Tr.t("NOTIF_NO_FOOD"), "warning", Color(0.9, 0.6, 0.2))
 			_notif_cooldown = 30.0
 
-	if gold_ok:
-		ResourceManager.spend(ResourceManager.Type.GOLD, gold_needed)
-	else:
-		var available := ResourceManager.get_amount(ResourceManager.Type.GOLD)
-		if available > 0:
-			ResourceManager.spend(ResourceManager.Type.GOLD, available)
-		EventBus.consumption_failed.emit("gold")
-		if _notif_cooldown <= 0.0:
-			EventBus.notification_posted.emit(Tr.t("NOTIF_NO_GOLD"), "warning", Color(0.9, 0.6, 0.2))
-			_notif_cooldown = 30.0
+	_tick_taverns()
 
 	# Morale adjustments
-	if wood_ok and gold_ok:
+	if food_ok:
 		_adjust_morale(GameConfig.morale_satisfied_recovery)
 		# Un tic pagado entero borra la cuenta: el hambre no se arrastra.
 		_unpaid_ticks = 0
@@ -177,6 +181,43 @@ func _tick_consumption() -> void:
 	# Dos tics de gracia. Al tercero la gente deja de aguantar.
 	if GameConfig.unpaid_hurts(_unpaid_ticks):
 		_starve()
+
+## Las Tabernas (1.1): cada una con obreros, carretera y casas en su barrio
+## (meta `tavern_houses`, UtilityEffects) gasta su comida y su oro; si los hay,
+## sube la moral. Sin pagar, no sirve: ni moral ni gente de mas.
+func _tick_taverns() -> void:
+	_served_taverns = 0
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info.get("data")
+		var node: Node = info.get("node")
+		if data == null or data.id != "tavern" or node == null or not is_instance_valid(node):
+			continue
+		if int(node.get_meta("tavern_houses", 0)) <= 0:
+			continue
+		if not BuildingHealth.is_operational(node) or not is_building_staffed(node):
+			continue
+		if not bool(node.get_meta("connected", true)):
+			continue
+		var cost := {
+			ResourceManager.Type.FOOD: GameConfig.tavern_food_cost,
+			ResourceManager.Type.GOLD: GameConfig.tavern_gold_cost,
+		}
+		# Sin bastante, no sirve (y no se avisa: la Taberna se queda vacia).
+		if not ResourceManager.can_afford(cost):
+			continue
+		ResourceManager.spend_cost(cost)
+		_served_taverns += 1
+	if _served_taverns > 0:
+		_adjust_morale(GameConfig.tavern_morale * _served_taverns)
+
+## Tabernas que sirvieron en el ultimo tic.
+func get_served_taverns() -> int:
+	return _served_taverns
+
+## Comida que pide un tic de consumo con la poblacion de ahora (minimo 1).
+func food_due() -> int:
+	var reduction := GameConfig.tech_consumption_reduction
+	return maxi(1, int(float(_population * GameConfig.food_per_pop) * maxf(0.1, 1.0 - reduction)))
 
 ## El impago sostenido mata. Hasta ahora solo restaba moral y avisaba, asi que
 ## se podia ignorar indefinidamente; una advertencia que nunca se cumple deja de
@@ -229,8 +270,12 @@ func _tick_growth() -> void:
 	var regrowing: bool = _population < GameConfig.population_regrow_floor
 	if _morale < GameConfig.morale_growth_threshold and not regrowing:
 		return  # Too unhappy to grow
-	# Grow 1 pop if morale is decent
-	_population = mini(_population + 1, _max_population)
+	# Grow 1 pop if morale is decent (y uno mas por Taberna que sirvio).
+	_population = mini(_population + 1 + _served_taverns * GameConfig.tavern_growth_bonus, _max_population)
+	# El que nace va a trabajar YA. Sin esto los puestos solo se repartian al
+	# terminar una obra: la primera Mina de oro se quedaba sin obreros diez
+	# minutos con la gente ya nacida (medido con tools/line_probe.gd, 2026-10-12).
+	_restaff()
 	EventBus.population_changed.emit(_population, _max_population)
 	if _notif_cooldown <= 0.0:
 		EventBus.notification_posted.emit(Tr.t("NOTIF_POP_GREW") % [_population, _max_population], "info", Color(0.4, 0.8, 0.4))
@@ -240,11 +285,71 @@ func _tick_growth() -> void:
 
 func _on_building_completed(node: Node) -> void:
 	_recalculate_all()
+	_move_in(node)
+
+## Tramo a tramo del auto-road, el recuento entero (nucleo, red, vetas, todos
+## los edificios) se repetia por cada tramo. Dentro de una tanda solo se apunta.
+func _on_building_placed(_data: Resource, _cell: Vector2i) -> void:
+	if _batch_depth > 0:
+		_batch_dirty = true
+		return
+	_recalculate_all()
+
+func _on_placement_batch_finished(_count: int) -> void:
+	_batch_depth = maxi(0, _batch_depth - 1)
+	if _batch_depth == 0 and _batch_dirty:
+		_batch_dirty = false
+		_recalculate_all()
 
 func _on_building_demolished(_node: Node, _cell: Vector2i) -> void:
 	_recalculate_all()
 
-func _on_upgrade_completed(_node: Node, _new_level: int) -> void:
+func _on_upgrade_completed(node: Node, _new_level: int) -> void:
+	_recalculate_all()
+	_move_in(node)
+
+## Una vivienda recien terminada (obra o mejora) se llena de golpe (decision de
+## Bryan, 2026-10-19: "tardan en aparecer cuando genero una casa"). Antes la
+## gente llegaba de uno en uno, +1 por tic de crecimiento, y una Casa tardaba
+## unos dos minutos en llenarse. Ahora llega toda la que cabe en ella, hasta el
+## tope de la isla; el goteo de _tick_growth queda para recuperar a los que se
+## pierden (hambre, accidentes, desercion, Diezmo). Con la moral bajo el umbral
+## de crecimiento no llega nadie de golpe: siguen viniendo de uno en uno cuando
+## se recupere. Una mejora cuenta su sitio entero, no solo el extra: durante la
+## obra la casa no da sitio y los suyos se quedan fuera; al terminar vuelven
+## ellos y los nuevos. Sin carretera la vivienda no da sitio y nadie entra.
+## Nada que guardar: la gente que entra es poblacion como cualquier otra.
+func _move_in(node: Node) -> void:
+	if node == null or not is_instance_valid(node) or node.has_meta("under_construction"):
+		return
+	var info := GridManager.get_building_info(node)
+	if info.is_empty():
+		return
+	var data: BuildingData = info.get("data")
+	if data == null or data.is_core or data.population_capacity <= 0:
+		return
+	if not bool(node.get_meta("connected", true)):
+		return
+	var regrowing: bool = _population < GameConfig.population_regrow_floor
+	if _morale < GameConfig.morale_growth_threshold and not regrowing:
+		return
+	var lvl: int = int(node.get_meta("level", 1))
+	var room: int = int(data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, lvl))
+	var gain: int = mini(room, _max_population - _population)
+	if gain <= 0:
+		return
+	_population += gain
+	_restaff()
+	EventBus.population_changed.emit(_population, _max_population)
+	EventBus.residents_arrived.emit(node, gain)
+	# A un lado del "¡Construccion completa!" para no pisarlo.
+	FloatingText.spawn_on(node, Tr.t("FMT_WORKERS_ARRIVED") % gain, UITheme.POSITIVE, 1.6)
+
+## Reparte de nuevo los puestos cuando cambia la gente. Sin edificios en la
+## rejilla no hay puestos que repartir (y recalcular dejaria el aforo en cero).
+func _restaff() -> void:
+	if GridManager.get_all_buildings().is_empty():
+		return
 	_recalculate_all()
 
 func _recalculate_all() -> void:
@@ -262,12 +367,12 @@ func _recalculate_all() -> void:
 	# recibe trabajadores, ni una vivienda da sitio, ni produce (ProductionManager
 	# mira la misma meta `connected`). Se calcula la red una vez por recuento.
 	var has_core: bool = not Rules.core_cells().is_empty()
-	var network: Dictionary = Rules.connected_roads() if has_core else {}
+	var network: Dictionary = Rules.network_view() if has_core else {}
 	var connection_changed := false
 
 	# First pass: count capacity and morale
 	var buildings_needing_workers: Array = []
-	for info in GridManager.get_all_buildings():
+	for info in GridManager.buildings_view():
 		var data: BuildingData = info["data"]
 		var node: Node = info.get("node", null)
 		var connected := true
@@ -398,3 +503,4 @@ func reset() -> void:
 	_consumption_timer = 0.0
 	_growth_timer = 0.0
 	_unpaid_ticks = 0
+	_served_taverns = 0

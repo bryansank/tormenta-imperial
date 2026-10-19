@@ -24,6 +24,29 @@ extends CanvasLayer
 ##
 ## Los iconos (moneda, tronco, lingote, gota, obrero, corazon) los genera
 ## tools/gen_resource_icons.gd; los estilos salen todos de UITheme.
+##
+## Nombres bajo los iconos (feat/hud-y-tutorial, ronda 1.0 mejora 4): cada ficha
+## va en una celda con su palabra debajo ("Oro", "Trabajadores", "Moral"). Se
+## ven segun GameConfig.hud_words_enabled() (Ajustes > Interfaz > Nombres junto
+## a los iconos: en "auto", tableta y movil siempre; PC, la primera hora de las
+## primeras partidas). Con palabras la fila no pasa de WORDS_ROW_MAX y se parte
+## en dos filas (cabe en 1280x720 y en un movil). Sin palabras, la celda es solo
+## la ficha: nada cambia respecto a antes.
+
+## Rediseno 2026-10 (docs/28 §12, feat/ui2-hud), con el estilo maqueta:
+##   - Barra oscura fina (CartoonTheme.hud_style): [icono] cifra en Baloo 2, el
+##     nombre pequeno debajo solo en PC (segun hud_words).
+##   - Telefono (CartoonTheme.phone): 3 recursos clave + libres (4 recursos a
+##     partir de 780 de ancho); el resto, la moral y los materiales, al tocar.
+##   - Almacen: barra fina de 8 px en PC con la cifra al mantener; en telefono
+##     fuera (la cifra va en el detalle al tocar).
+## Con el estilo clasico todo sigue como antes.
+
+## Telefono: cuantos recursos se ven (sin contar los libres) y desde que ancho
+## cabe uno mas (docs/28 §4.1).
+const PHONE_RESOURCES := 3
+const PHONE_RESOURCES_WIDE := 4
+const PHONE_WIDE_FROM := 780.0
 
 ## Umbrales de color de la moral (los mismos que tenia la tarjeta vieja).
 const MORALE_DANGER := 30
@@ -35,6 +58,12 @@ const MENU_GAP := 6.0
 const CARD_MARGINS := 20.0
 ## Alto del LIMPIAR de desarrollo en escritorio (con el dedo, MIN_BTN_H).
 const DEV_BTN_PX := 28.0
+## Ancho maximo de la fila con palabras: cinco recursos en la primera fila y
+## trabajadores y moral en la segunda; la columna central no se desplaza.
+const WORDS_ROW_MAX := 380.0
+## Cada cuanto se mira si el "auto" ya paso la primera hora (segundos reales).
+## Una comprobacion por minuto: nada de _process.
+const WORDS_CHECK_SECONDS := 60.0
 
 var _panel: PanelContainer
 var _chips: Dictionary = {}       # Type -> HBoxContainer (UITheme.make_resource_chip)
@@ -56,11 +85,16 @@ var _morale_detail: Label
 var _mat_row: HBoxContainer
 var _mat_labels: Dictionary = {}  # Type -> Label
 var _is_expanded := false
+## Nombres bajo los iconos: ficha -> su celda (VBox) y su palabra (Label).
+var _cells: Dictionary = {}
+var _words: Dictionary = {}
+var _words_on := false
+var _words_timer: Timer = null
 
 ## En orden de era: lo primero que ve un jugador nuevo es oro y madera.
-var _resource_ids := ["gold", "wood", "steel", "oil"]
+var _resource_ids := ["gold", "wood", "food", "steel", "oil"]
 var _resource_types := [
-	ResourceManager.Type.GOLD, ResourceManager.Type.WOOD,
+	ResourceManager.Type.GOLD, ResourceManager.Type.WOOD, ResourceManager.Type.FOOD,
 	ResourceManager.Type.STEEL, ResourceManager.Type.OIL,
 ]
 
@@ -88,6 +122,12 @@ func _ready() -> void:
 	EventBus.storm_halted_forever.connect(func(): _refresh_people.call_deferred())
 	EventBus.game_load_completed.connect(func(): _refresh_people.call_deferred())
 	EventBus.game_new_started.connect(func(): _refresh_people.call_deferred())
+	# Nombres bajo los iconos: al cambiar el ajuste, el perfil (tableta/PC) o la
+	# partida (la "primera hora" es de cada partida).
+	EventBus.hud_words_changed.connect(func(_on): apply_words())
+	EventBus.touch_controls_changed.connect(func(_on): apply_words())
+	EventBus.game_load_completed.connect(func(): apply_words.call_deferred())
+	EventBus.game_new_started.connect(func(): apply_words.call_deferred())
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -97,12 +137,21 @@ func _setup_ui() -> void:
 
 	_panel = PanelContainer.new()
 	UILayoutManager.apply_layout("ResourceHUD", _panel)
-	_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT))
+	if _cartoon():
+		var hs := CartoonTheme.hud_style()
+		hs.set_content_margin_all(6 if CartoonTheme.phone else 8)
+		_panel.add_theme_stylebox_override("panel", hs)
+		# Tocar la barra (en cualquier sitio) despliega el detalle.
+		_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		_panel.gui_input.connect(_on_tap_expand)
+		_panel.tooltip_text = Tr.t("HUD_RES_MORE_TIP")
+	else:
+		_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT))
 	root.add_child(_panel)
 	HudRegistry.register("ResourceHUD", _panel)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_theme_constant_override("separation", 3 if _cartoon() else 6)
 	_panel.add_child(vbox)
 
 	# ── Fila de fichas: [icono] cantidad por recurso, obreros y moral ──
@@ -110,25 +159,25 @@ func _setup_ui() -> void:
 	# seis fichas no caben en 400 px. Ver _fit_row().
 	var chips_row := HFlowContainer.new()
 	chips_row.name = "ChipsRow"
-	chips_row.add_theme_constant_override("h_separation", ROW_SEPARATION)
+	chips_row.add_theme_constant_override("h_separation", _row_separation())
 	chips_row.add_theme_constant_override("v_separation", 4)
 	vbox.add_child(chips_row)
 	_chips_row = chips_row
 
 	for i in range(_resource_ids.size()):
 		var type: ResourceManager.Type = _resource_types[i]
-		var chip := UITheme.make_resource_chip(_resource_ids[i])
-		chip.visible = ResourceManager.is_unlocked(type)
+		var chip := _make_chip(_resource_ids[i])
 		# Cada numero dice que es (bug 11): nombre al pasar el raton y, con el
 		# dedo, un toque despliega la fila con nombres.
 		chip.name = "Chip_" + _resource_ids[i]
 		chip.mouse_filter = Control.MOUSE_FILTER_STOP
 		chip.gui_input.connect(_on_tap_expand)
-		chips_row.add_child(chip)
+		_add_cell(chip, _resource_ids[i], Tr.res_cap(_resource_ids[i]), chips_row)
+		_set_chip_shown(chip, ResourceManager.is_unlocked(type))
 		_chips[type] = chip
 
-	_workers_chip = _make_people_chip("workers", chips_row)
-	_morale_chip = _make_people_chip("morale", chips_row)
+	_workers_chip = _make_people_chip("workers", Tr.t("HUD_WORD_WORKERS"), chips_row)
+	_morale_chip = _make_people_chip("morale", Tr.t("HUD_WORD_MORALE"), chips_row)
 
 	# Dev-only shortcut to wipe the save. Players use Settings > New game instead.
 	if GameConfig.dev_mode:
@@ -158,9 +207,11 @@ func _setup_ui() -> void:
 		row.add_child(swatch)
 		row.add_child(UITheme.make_icon(res_id, 20))
 		var name_lbl := UITheme.make_label(Tr.res_upper(res_id), "small", UITheme.resource_color(res_id))
+		if _cartoon():
+			name_lbl = CartoonTheme.label(Tr.res_cap(res_id), "small", CartoonTheme.text("hud", true))
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(name_lbl)
-		var amt := UITheme.make_label("0", "small", UITheme.TEXT_BRIGHT)
+		var amt := _hud_label("0", "small", false)
 		amt.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(amt)
 		row.visible = ResourceManager.is_unlocked(type)
@@ -174,6 +225,7 @@ func _setup_ui() -> void:
 	# Que es la barra: un tope para los cuatro, y lo que no cabe se pierde.
 	var legend := _make_detail_label("StorageLegend")
 	legend.text = Tr.t("HINT_HUD_STORAGE")
+	_storage_legend = legend
 
 	# ── Almacen: la barra y "730/1000" en una linea. Sin titulo: lo que es va
 	# en el tooltip y en el detalle (el tope es uno para los cuatro). ──
@@ -193,11 +245,18 @@ func _setup_ui() -> void:
 	_pool_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	storage_row.add_child(_pool_bar)
 
-	_storage_value = UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	_storage_value = _hud_label("", "small", true)
 	_storage_value.name = "StorageValue"
 	_storage_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_storage_value.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	storage_row.add_child(_storage_value)
+	if _cartoon():
+		# Barra fina de 8 px; la cifra, al mantener (tooltip) y en el detalle.
+		# En telefono la barra sale de la pantalla (docs/28 §12).
+		_storage_value.visible = false
+		_pool_bar.custom_minimum_size.y = 8
+		storage_row.visible = not CartoonTheme.phone
+	_storage_row = storage_row
 	var segs := UITheme.pool_bar_segments(_pool_bar)
 	for i in range(_resource_types.size()):
 		_segments[_resource_types[i]] = segs[i]
@@ -211,9 +270,16 @@ func _setup_ui() -> void:
 	_mat_row.mouse_filter = Control.MOUSE_FILTER_STOP
 	vbox.add_child(_mat_row)
 	# Sin el rotulo "TALLER": los nombres ya dicen lo que son; el tooltip, donde estan.
+	if _cartoon() and CartoonTheme.phone:
+		# Telefono: los materiales, al tocar (van en el detalle desplegado).
+		vbox.remove_child(_mat_row)
+		_content_box.add_child(_mat_row)
 	for type in ResourceManager.MATERIALS:
 		var res_id: String = ResourceManager.get_type_name(type)
 		var lbl := UITheme.make_label("", "small", UITheme.resource_color(res_id))
+		if _cartoon():
+			lbl = CartoonTheme.label("", "small", CartoonTheme.text("hud", true))
+			lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		lbl.name = "Mat_" + res_id
 		lbl.tooltip_text = Tr.t("HINT_MATERIALS")
 		_mat_row.add_child(lbl)
@@ -222,8 +288,76 @@ func _setup_ui() -> void:
 	_refresh()
 	_refresh_people()
 	_size_for_touch()
+	apply_words()
 	get_viewport().size_changed.connect(_fit_row.call_deferred)
 	_fit_row.call_deferred()
+
+## Mete `chip` en una celda con su palabra debajo (oculta hasta apply_words).
+func _add_cell(chip: HBoxContainer, word_id: String, word: String, row: Container) -> void:
+	var cell := VBoxContainer.new()
+	cell.name = "Cell_" + word_id
+	cell.add_theme_constant_override("separation", 0)
+	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(chip)
+	var lbl := _hud_label(word, "small", true)
+	lbl.name = "Word_" + word_id
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Tocar la palabra hace lo mismo que tocar la ficha: desplegar el detalle.
+	lbl.mouse_filter = Control.MOUSE_FILTER_STOP
+	lbl.tooltip_text = word
+	lbl.gui_input.connect(_on_tap_expand)
+	lbl.visible = false
+	cell.add_child(lbl)
+	row.add_child(cell)
+	_cells[chip] = cell
+	_words[chip] = lbl
+
+## Ensena u oculta una ficha con su celda (la palabra va con ella).
+func _set_chip_shown(chip: HBoxContainer, on: bool) -> void:
+	chip.visible = on
+	var cell: Control = _cells.get(chip)
+	if cell != null:
+		cell.visible = on
+
+## Pone o quita las palabras bajo los iconos segun el ajuste (y el "auto").
+## Publica: la llaman las senales y las pruebas.
+func apply_words() -> void:
+	if _chips_row == null:
+		return
+	# Estilo maqueta: el nombre pequeno bajo la cifra solo en PC y tablet; en
+	# telefono, al mantener pulsado (docs/28 §4.1).
+	var on := GameConfig.hud_words_enabled() and not (_cartoon() and CartoonTheme.phone)
+	_words_on = on
+	for chip in _words:
+		(_words[chip] as Label).visible = on
+	# El "auto" de PC se apaga solo pasada la primera hora: un vistazo por minuto
+	# mientras siga encendido por eso. Con "siempre", "nunca" o en tableta, nada.
+	_watch_words(on and GameConfig.hud_words_timed())
+	_fit_row()
+
+func _watch_words(on: bool) -> void:
+	if not on:
+		if _words_timer != null:
+			_words_timer.stop()
+		return
+	if _words_timer == null:
+		_words_timer = Timer.new()
+		_words_timer.name = "WordsTimer"
+		_words_timer.wait_time = WORDS_CHECK_SECONDS
+		_words_timer.timeout.connect(func():
+			if GameConfig.hud_words_enabled() != _words_on:
+				apply_words())
+		add_child(_words_timer)
+	if _words_timer.is_stopped() and _words_timer.is_inside_tree():
+		_words_timer.start()
+
+## Si las palabras estan a la vista ahora (pruebas).
+func words_shown() -> bool:
+	return _words_on
+
+## La palabra bajo una ficha (pruebas), o null.
+func word_of(chip: HBoxContainer) -> Label:
+	return _words.get(chip) as Label
 
 ## Las fichas se tocan: con el dedo no bajan de MIN_BTN_H de alto (el ancho
 ## lo da el numero; forzarlo ensanchaba la fila y empujaba la columna central).
@@ -247,8 +381,13 @@ func _fit_row() -> void:
 			natural += (c as Control).get_combined_minimum_size().x
 			shown += 1
 	# +1: sin holgura, un redondeo parte la fila aunque quepa.
-	natural += float(maxi(0, shown - 1) * ROW_SEPARATION) + 1.0
-	_chips_row.custom_minimum_size.x = minf(natural, _room_before_menu())
+	natural += float(maxi(0, shown - 1) * _row_separation()) + 1.0
+	var room := _room_before_menu()
+	# Con palabras la fila es mas ancha: no pasa de WORDS_ROW_MAX y se parte en
+	# dos filas, para no empujar la columna central (1280x720) ni el ☰ (movil).
+	if _words_on:
+		room = minf(room, WORDS_ROW_MAX)
+	_chips_row.custom_minimum_size.x = minf(natural, room)
 
 ## Ancho util de la fila hasta el boton ☰ (o sin limite si no hay boton o no
 ## esta en la misma franja de arriba).
@@ -269,16 +408,16 @@ func tap_targets() -> Array:
 	return _chips.values() + [_workers_chip, _morale_chip]
 
 ## Ficha de obreros o de moral: la misma forma que la de un recurso.
-func _make_people_chip(icon_id: String, row: Container) -> HBoxContainer:
-	var chip := UITheme.make_resource_chip(icon_id)
+func _make_people_chip(icon_id: String, word: String, row: Container) -> HBoxContainer:
+	var chip := _make_chip(icon_id)
 	chip.name = "Chip_" + icon_id
 	chip.mouse_filter = Control.MOUSE_FILTER_STOP
 	chip.gui_input.connect(_on_tap_expand)
-	row.add_child(chip)
+	_add_cell(chip, icon_id, word, row)
 	return chip
 
 func _make_detail_label(node_name: String) -> Label:
-	var lbl := UITheme.make_label("", "small", UITheme.TEXT_DIM)
+	var lbl := _hud_label("", "small", true)
 	lbl.name = node_name
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.custom_minimum_size.x = 220
@@ -331,7 +470,7 @@ func _refresh_people() -> void:
 	var retired := PopulationManager.get_retired_workers()
 	var amount := UITheme.chip_amount(_workers_chip)
 	amount.text = str(free)
-	UITheme.set_label_color(amount, UITheme.WARNING if short > 0 else UITheme.TEXT_BRIGHT)
+	UITheme.set_label_color(amount, _warn_col() if short > 0 else _text_col(), _bg_ref())
 	var lines: Array = [Tr.t("HINT_HUD_WORKERS") % [free, pop, max_pop, used]]
 	if retired > 0:
 		lines.append(Tr.t("HINT_HUD_WORKERS_OFF") % retired)
@@ -342,12 +481,17 @@ func _refresh_people() -> void:
 	_workers_detail.text = tip
 
 	var shown := morale_visible()
-	_morale_chip.visible = shown
+	# Telefono: la moral va al detalle (al tocar la barra), no a la fila.
+	_set_chip_shown(_morale_chip, shown and not (_cartoon() and CartoonTheme.phone))
 	_morale_detail.visible = shown
 	var morale := PopulationManager.get_morale()
 	var m_amount := UITheme.chip_amount(_morale_chip)
 	m_amount.text = str(morale)
-	UITheme.set_label_color(m_amount, morale_color(morale))
+	var mc := morale_color(morale)
+	if _cartoon():
+		# Sobre el HUD oscuro: los semanticos del estilo maqueta, aclarados.
+		mc = CartoonTheme.sem("DANGER" if morale <= MORALE_DANGER else ("WARNING" if morale <= MORALE_WARNING else "POSITIVE")).lightened(0.3)
+	UITheme.set_label_color(m_amount, mc, _bg_ref())
 	var m_tip := Tr.t("HINT_HUD_MORALE") % [morale, PopulationManager.morale_to_multiplier(morale)]
 	_morale_chip.tooltip_text = m_tip
 	_morale_detail.text = m_tip
@@ -370,9 +514,19 @@ func _refresh() -> void:
 
 	# Rojo mientras la bolsa esta llena: desde aqui, lo producido se pierde.
 	var tone: Color = UITheme.DANGER if is_full else UITheme.TEXT_DIM
+	if _cartoon():
+		tone = CartoonTheme.sem("DANGER").lightened(0.3) if is_full else CartoonTheme.text("hud", true)
 	_storage_value.text = "%d/%d" % [total, cap]
-	UITheme.set_label_color(_storage_value, tone)
+	UITheme.set_label_color(_storage_value, tone, _bg_ref())
 	UITheme.set_pool_bar_alert(_pool_bar, is_full)
+	if _cartoon():
+		# La cifra del almacen, al mantener (PC) y en el detalle (telefono).
+		var storage_tip := Tr.t("HUD_STORAGE_TIP") % [CartoonTheme.thousands(total), CartoonTheme.thousands(cap)]
+		if _storage_row != null:
+			_storage_row.tooltip_text = storage_tip + "\n" + Tr.t("HINT_HUD_STORAGE")
+		if _storage_legend != null:
+			_storage_legend.text = storage_tip + "\n" + Tr.t("HINT_HUD_STORAGE")
+		_apply_chip_visibility()
 
 	for type in _segments:
 		var seg_amt := ResourceManager.get_amount(type)
@@ -392,7 +546,17 @@ func _refresh() -> void:
 	_mat_row.visible = any_material
 	_fit_row()
 
+## Llega una senal por recurso (cuatro en un tick de consumo, una por coste al
+## construir): se repinta una vez, al final del fotograma (docs/26 §6.9).
+var _refresh_queued := false
 func _on_resource_changed(_resource_type: String, _new_amount: int, _delta: int) -> void:
+	if _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
 	_refresh()
 
 func _on_resource_unlocked(resource_name: String) -> void:
@@ -406,13 +570,22 @@ func _on_resource_unlocked(resource_name: String) -> void:
 	if type < 0 or not _chips.has(type):
 		return
 	var chip: HBoxContainer = _chips[type]
-	chip.visible = true
+	_set_chip_shown(chip, true)
 	if _exp_rows.has(type):
 		_exp_rows[type].visible = true
+	if _cartoon():
+		# Sin animaciones (docs/28 §0): aparece y ya; el aviso de la era lo dice.
+		_refresh()
+		return
 	# Destello al desbloquear: el jugador acaba de abrir una era y la fila
 	# cambia de forma; sin aviso, el recurso nuevo aparece sin mas.
 	chip.modulate = Color(2.5, 2.0, 0.5, 0.0)
+	if chip.has_meta("unlock_tween"):
+		var old: Tween = chip.get_meta("unlock_tween")
+		if old != null and old.is_valid():
+			old.kill()
 	var tween := create_tween()
+	chip.set_meta("unlock_tween", tween)
 	tween.tween_property(chip, "modulate", Color(1.5, 1.3, 0.8, 1.0), 0.4)
 	tween.tween_property(chip, "modulate", Color.WHITE, 1.0)
 	_refresh()
@@ -423,19 +596,114 @@ func _on_resource_unlocked(resource_name: String) -> void:
 func _on_insufficient(resource_type: String, required: int, available: int) -> void:
 	var type := _type_of(resource_type)
 	if type >= 0 and _chips.has(type):
-		UITheme.flash_label(UITheme.chip_amount(_chips[type]), UITheme.TEXT_BRIGHT)
+		UITheme.flash_label(UITheme.chip_amount(_chips[type]), _text_col(), 0.9, _bg_ref())
 	EventBus.notification_posted.emit(
 		Tr.t("FMT_NOT_ENOUGH_OF") % [Tr.res_name(resource_type), available, required],
 		"warning", UITheme.WARNING)
 
 ## Desborde: la barra ya esta roja por _refresh; un parpadeo marca el momento
 ## exacto en que algo se ha perdido, que es lo que el jugador no veia.
+## Con la bolsa llena llega en cada produccion: un parpadeo a la vez (antes se
+## apilaban tweens que se pisaban la misma propiedad).
+var _overflow_tween: Tween = null
 func _on_overflow(_resource_type: String, _lost: int, _cap: int) -> void:
 	_refresh()
-	var tween := create_tween()
-	tween.tween_property(_pool_bar, "modulate", Color(1.6, 1.2, 1.2, 1.0), 0.15)
-	tween.tween_property(_pool_bar, "modulate", Color.WHITE, 0.5)
+	if _cartoon():
+		# Sin animaciones: la barra ya esta roja (set_pool_bar_alert).
+		return
+	if _overflow_tween != null and _overflow_tween.is_valid():
+		_overflow_tween.kill()
+	_overflow_tween = create_tween()
+	_overflow_tween.tween_property(_pool_bar, "modulate", Color(1.6, 1.2, 1.2, 1.0), 0.15)
+	_overflow_tween.tween_property(_pool_bar, "modulate", Color.WHITE, 0.5)
 
 func _type_of(resource_name: String) -> int:
 	var idx := _resource_ids.find(resource_name)
 	return int(_resource_types[idx]) if idx >= 0 else -1
+
+# ── Estilo maqueta (rediseno 2026-10, feat/ui2-hud) ─────────────────────
+
+var _storage_row: Control = null
+var _storage_legend: Label = null
+
+## Prioridad de los recursos en la fila del telefono (docs/28 §4.1): oro,
+## madera y acero; con sitio, la comida; el petroleo, al tocar.
+const PHONE_PRIORITY := ["gold", "wood", "steel", "food", "oil"]
+
+static func _cartoon() -> bool:
+	return UITheme.is_cartoon()
+
+func _row_separation() -> int:
+	if _cartoon():
+		return 10 if CartoonTheme.phone else 16
+	return ROW_SEPARATION
+
+## Texto normal / de aviso sobre la barra: en el estilo maqueta, los del HUD
+## oscuro (los tokens de UITheme son los de las ventanas claras).
+func _text_col() -> Color:
+	return CartoonTheme.text("hud") if _cartoon() else UITheme.TEXT_BRIGHT
+
+## El fondo contra el que se mide el contraste de las cifras: la barra oscura
+## del estilo maqueta (no la crema de las ventanas).
+func _bg_ref() -> Color:
+	return CartoonTheme.c("hud", "BG") if _cartoon() else UITheme.UI_BG_REFERENCE
+
+func _warn_col() -> Color:
+	return CartoonTheme.sem("WARNING").lightened(0.25) if _cartoon() else UITheme.WARNING
+
+func _hud_label(text: String, level: String, dim: bool) -> Label:
+	if _cartoon():
+		var l := CartoonTheme.label(text, level, CartoonTheme.text("hud", dim))
+		return l
+	return UITheme.make_label(text, level, UITheme.TEXT_DIM if dim else UITheme.TEXT_BRIGHT)
+
+## Una ficha [icono] cifra. Misma forma de siempre (UITheme.chip_amount la
+## encuentra); en el estilo maqueta, icono mas grande y cifra en Baloo 2.
+func _make_chip(res_id: String) -> HBoxContainer:
+	var chip := UITheme.make_resource_chip(res_id)
+	if not _cartoon():
+		return chip
+	chip.add_theme_constant_override("separation", 5)
+	var px := 26 if CartoonTheme.phone else 32
+	var icon := chip.get_child(0) as TextureRect
+	if icon != null:
+		icon.texture = UITheme.icon_texture(res_id, px)
+		icon.custom_minimum_size = Vector2(px, px)
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var amount := UITheme.chip_amount(chip)
+	CartoonTheme.style_label(amount, "number", CartoonTheme.text("hud"))
+	amount.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return chip
+
+## Que recursos van en la fila: todos los desbloqueados; en telefono, los
+## PHONE_RESOURCES primeros por PHONE_PRIORITY (uno mas desde PHONE_WIDE_FROM
+## de ancho). Los demas siguen en el detalle desplegado.
+func _apply_chip_visibility() -> void:
+	var cap := 99
+	if _cartoon() and CartoonTheme.phone:
+		var vp_w: float = get_viewport().get_visible_rect().size.x if is_inside_tree() else 640.0
+		cap = PHONE_RESOURCES_WIDE if vp_w >= PHONE_WIDE_FROM else PHONE_RESOURCES
+	var shown := 0
+	for res_id in PHONE_PRIORITY:
+		var idx := _resource_ids.find(res_id)
+		if idx < 0:
+			continue
+		var type: ResourceManager.Type = _resource_types[idx]
+		if not _chips.has(type):
+			continue
+		var unlocked: bool = ResourceManager.is_unlocked(type)
+		var on := unlocked and shown < cap
+		if on:
+			shown += 1
+		var chip: HBoxContainer = _chips[type]
+		if chip.visible != on:
+			_set_chip_shown(chip, on)
+
+## Recursos que se ven en la fila ahora (pruebas).
+func shown_resource_ids() -> Array:
+	var out: Array = []
+	for i in _resource_ids.size():
+		var chip: HBoxContainer = _chips.get(_resource_types[i])
+		if chip != null and chip.visible:
+			out.append(_resource_ids[i])
+	return out

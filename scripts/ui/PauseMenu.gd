@@ -4,10 +4,11 @@ extends CanvasLayer
 ## Ajustes en los dos y "Menu principal" solo en uno. Ahora hay un boton
 ## "☰ MENU" en la esquina superior derecha que abre una tarjeta con dos grupos:
 ##
-##   COLONIA  Que hacer · Progreso · Colonia (rango) · Ejercito ·
+##   COLONIA  Que hacer · Progreso · Colonia (rango) · Encargos · Ejercito ·
 ##            Escaramuzas · Sandbox        (solo lo que ya esta disponible)
-##   PARTIDA  Reanudar · Guardar · Ajustes · Musica · Ayuda · Historia ·
-##            Menu principal · Guardar y salir
+##   PARTIDA  Reanudar · Guardar | Partidas · Ajustes · Musica · Ayuda ·
+##            Historia | Informar fallo · Menu principal · Guardar y salir
+##            (los "|" comparten fila: asi cabe entero en 720 px de alto)
 ##
 ## - Con el menu abierto la partida esta en pausa de verdad (`get_tree().paused`).
 ##   Todo lo que no marque PROCESS_MODE_ALWAYS se para; este menu y la musica no.
@@ -35,6 +36,7 @@ const CHROME_H := 150.0
 ## El boton del menu: esquina superior derecha, con palabra y no solo icono.
 const MENU_BTN_MARGIN := 10.0
 const MENU_BTN_MIN_W := 118.0
+const GameSpeedButtonScript := preload("res://scripts/ui/GameSpeedButton.gd")
 
 ## Entradas de COLONIA: [id, clave Tr, nodo hermano].
 const COLONY_ENTRIES := [
@@ -42,6 +44,8 @@ const COLONY_ENTRIES := [
 	["progress", "BTN_PROGRESS", "ProgressPanel"],
 	# Rango del gobernador: rango, XP, bandera y color de la colonia.
 	["colony", "BTN_COLONY_RANK", "RankPanel"],
+	# El tablon de encargos (feat/encargos). No en Sandbox.
+	["contracts", "BTN_CONTRACTS", "ContractPanel"],
 	# Mercado y Tecnologia salen del menu (2026-09-28): se abren tocando su
 	# edificio (el Mercado y el Laboratorio, BuildingInfoPanel.SCREENS).
 	["army", "BTN_ARMY", "ArmyPanel"],
@@ -85,10 +89,14 @@ func _ready() -> void:
 	EventBus.tutorial_intro_closed.connect(_on_intro_closed)
 	EventBus.music_toggled.connect(func(_on): _sync_music())
 	get_viewport().size_changed.connect(_relayout)
+	_add_speed_button()
 
 # ── Construccion ─────────────────────────────────────────────────────
 
 func _setup_ui() -> void:
+	if UITheme.is_cartoon():
+		_setup_cartoon()
+		return
 	var overlay := Control.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -168,7 +176,8 @@ func _setup_ui() -> void:
 	for entry in COLONY_ENTRIES:
 		var id: String = entry[0]
 		var sibling: String = entry[2]
-		var btn := ModalKit.make_menu_button(Tr.t(entry[1]), UITheme.BTN, func(): open_colony_panel(sibling))
+		# Todo el menu en mayusculas, como sus entradas grandes (ronda 1.0).
+		var btn := ModalKit.make_menu_button(Tr.t(entry[1]).to_upper(), UITheme.BTN, func(): open_colony_panel(sibling))
 		btn.name = "Colony_" + id
 		colony.add_child(btn)
 		_colony_buttons[id] = btn
@@ -176,11 +185,19 @@ func _setup_ui() -> void:
 	# ── PARTIDA ──
 	var game := _make_group("GameGroup", Tr.t("LBL_MENU_GROUP_GAME"), Tr.t("LBL_PAUSE_SUBTITLE"))
 	_resume_btn = _add_game_button(game, "Resume", Tr.t("BTN_RESUME"), UITheme.POSITIVE, resume)
-	_add_game_button(game, "Save", Tr.t("BTN_SAVE_GAME"), UITheme.BTN, save)
+	# Guardar y PARTIDAS, Historia e Informar fallo van de dos en dos: en una
+	# tablet de 720 px de alto el grupo entero cabe sin scroll y "Guardar y
+	# salir" queda a la vista (antes caia tras el desplazamiento).
+	var save_row := _make_pair_row(game)
+	_add_game_button(save_row, "Save", Tr.t("BTN_SAVE_GAME"), UITheme.BTN, save, true)
+	_add_game_button(save_row, "Saves", Tr.t("BTN_SAVES"), UITheme.BTN, _on_saves, true)
 	_add_game_button(game, "Settings", Tr.t("BTN_SETTINGS"), UITheme.BTN, _on_settings)
 	_music_btn = _add_game_button(game, "Music", "", UITheme.BTN, AudioManager.toggle_music)
 	_help_btn = _add_game_button(game, "Help", Tr.t("BTN_HELP"), UITheme.INFO, _on_help)
-	_add_game_button(game, "Story", Tr.t("BTN_STORY"), UITheme.BTN, _on_story)
+	var story_row := _make_pair_row(game)
+	_add_game_button(story_row, "Story", Tr.t("BTN_STORY"), UITheme.BTN, _on_story, true)
+	var report := _add_game_button(story_row, "Report", Tr.t("BTN_REPORT_BUG"), UITheme.BTN, report_bug, true)
+	report.tooltip_text = Tr.t("BTN_REPORT_BUG_HINT")
 	_add_game_button(game, "MainMenu", Tr.t("BTN_MAIN_MENU"), UITheme.BTN, _on_main_menu)
 	_add_game_button(game, "Quit", Tr.t("BTN_SAVE_QUIT"), UITheme.DANGER, _on_quit)
 
@@ -190,6 +207,188 @@ func _setup_ui() -> void:
 
 	_sync_music()
 	_relayout()
+
+## El boton x1 / x2 del HUD (docs/21 §13). Lo pone este menu y no las escenas:
+## las dos vistas lo tienen. Va de HERMANO (no de hijo): es HUD de la partida,
+## se para con la pausa y no es parte de este menu.
+## Estilo maqueta (docs/28 §12): la velocidad vive DENTRO de este menu; el boton
+## suelto se crea igual (lleva el atajo F) pero no se ve.
+func _add_speed_button() -> void:
+	var parent := get_parent()
+	if parent == null or parent.get_node_or_null("GameSpeedButton") != null:
+		return
+	var speed := GameSpeedButtonScript.new()
+	speed.name = "GameSpeedButton"
+	if UITheme.is_cartoon():
+		speed.visible = false
+	parent.add_child.call_deferred(speed)
+
+# ══════════════════════════════════════════════════════════════════════
+# ESTILO MAQUETA (rediseno 2026-10, docs/28 §12, feat/ui2-hud)
+# ══════════════════════════════════════════════════════════════════════
+# ☰ redondo arriba a la derecha y, al tocarlo, una ventana pequena con SOLO:
+#   AJUSTES · PARTIDAS · SALIR, y la velocidad x1 / x2 dentro.
+# Debajo, en pequeno, Historia e Informar fallo (no caben en otro sitio).
+# Lo demas que vivia aqui se fue: Ejercito, Misiones y Ayuda a la barra de
+# abajo (BottomBar); ¿QUE HACER? a la linea del siguiente paso
+# (ObjectivePanel); Progreso, Encargos, Registro y Sandbox a la tarjeta de la
+# colonia (tocar el rango); la musica a Ajustes; Guardar lo hace PARTIDAS (y el
+# autoguardado). SALIR guarda y vuelve al menu principal, que tiene "Salir".
+# Los nombres de nodo se conservan (Game_Settings, Game_Saves, Game_MainMenu,
+# Game_Story, Game_Report; la X es Game_Resume).
+
+var _menu_root: Control = null
+var _speed_row: HBoxContainer = null
+var _speed_buttons: Dictionary = {}   # float -> Button
+
+func _setup_cartoon() -> void:
+	var overlay := Control.new()
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(overlay)
+
+	var d := CartoonTheme.menu_round()
+	_menu_btn = CartoonTheme.round_button("menu", "secondary", d, "", "hud") as Button
+	_menu_btn.name = "MenuButton"
+	_menu_btn.tooltip_text = Tr.ti("BTN_GAME_MENU_HINT")
+	_menu_btn.focus_mode = Control.FOCUS_NONE
+	_menu_btn.pressed.connect(request_open)
+	_menu_btn.add_to_group("hud_menu_button")
+	overlay.add_child(_menu_btn)
+	# El ☰ se dibuja encima de las ventanas: al abrir o cerrar una (o cambiar el
+	# lienzo), la X de cada ventana abierta se corre a su izquierda si queda
+	# debajo (CartoonTheme.dodge_menu_button, grupo "window_close").
+	UIManager.window_opened.connect(func(_w): _dodge_soon())
+	UIManager.window_closed.connect(func(_w): _dodge_soon())
+	get_viewport().size_changed.connect(_dodge_soon)
+
+	_root = Control.new()
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.visible = false
+	add_child(_root)
+
+	_backdrop = CartoonTheme.veil()
+	_backdrop.gui_input.connect(func(e: InputEvent):
+		if (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT):
+			resume())
+	_root.add_child(_backdrop)
+
+	var w := CartoonTheme.window(Tr.t("HUD_MENU_TITLE"), CartoonTheme.sem("INFO"), true)
+	_menu_root = w["root"]
+	_menu_root.name = "MenuWindow"
+	_root.add_child(_menu_root)
+	_card = w["panel"]
+	_card.name = "MenuCard"
+	if CartoonTheme.phone:
+		var ps := CartoonTheme.window_style()
+		ps.set_content_margin_all(10)
+		_card.add_theme_stylebox_override("panel", ps)
+	var close: Button = w["close"]
+	close.name = "Game_Resume"
+	close.tooltip_text = Tr.t("BTN_RESUME")
+	close.pressed.connect(resume)
+	_resume_btn = close
+	var body: VBoxContainer = w["body"]
+	body.add_theme_constant_override("separation", 8 if CartoonTheme.phone else CartoonTheme.GAP)
+
+	_mode_label = CartoonTheme.label("", "small", CartoonTheme.text("window", true))
+	_mode_label.name = "ModeLabel"
+	_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(_mode_label)
+
+	var h := CartoonTheme.h("big")
+	for spec in [["Settings", "BTN_SETTINGS", "settings", "open", _on_settings],
+			["Saves", "BTN_SAVES", "game", "open", _on_saves],
+			["MainMenu", "HUD_MENU_QUIT", "back", "danger", _on_main_menu]]:
+		var b := CartoonTheme.pill_button(Tr.t(String(spec[1])).to_upper(), String(spec[2]), String(spec[3]), h, "window")
+		b.name = "Game_" + String(spec[0])
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.focus_mode = Control.FOCUS_ALL
+		b.pressed.connect(spec[4])
+		body.add_child(b)
+
+	# Velocidad x1 / x2 (docs/28 §12): un selector de dos pastillas.
+	_speed_row = HBoxContainer.new()
+	_speed_row.name = "SpeedRow"
+	_speed_row.add_theme_constant_override("separation", 8)
+	_speed_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.add_child(_speed_row)
+	var sp_lbl := CartoonTheme.label(Tr.t("HUD_MENU_SPEED"), "button", CartoonTheme.text("window"))
+	sp_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_speed_row.add_child(sp_lbl)
+	_sync_speed()
+	EventBus.game_speed_changed.connect(func(_s): _sync_speed())
+
+	# Lo pequeno: Historia e Informar fallo.
+	var foot := HBoxContainer.new()
+	foot.name = "Footer"
+	foot.add_theme_constant_override("separation", 8)
+	foot.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.add_child(foot)
+	var story := CartoonTheme.pill_button(Tr.t("BTN_STORY"), "", "secondary", CartoonTheme.h("small"), "window", "body")
+	story.name = "Game_Story"
+	story.pressed.connect(_on_story)
+	foot.add_child(story)
+	var report := CartoonTheme.pill_button(Tr.t("BTN_REPORT_BUG"), "", "secondary", CartoonTheme.h("small"), "window", "body")
+	report.name = "Game_Report"
+	report.tooltip_text = Tr.t("BTN_REPORT_BUG_HINT")
+	report.pressed.connect(report_bug)
+	foot.add_child(report)
+
+	_status = CartoonTheme.label("", "small", CartoonTheme.positive_text())
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.visible = false
+	body.add_child(_status)
+	_relayout()
+
+## Las dos pastillas de velocidad: la elegida azul, la otra crema. Se rehacen
+## al cambiar (son dos botones; sin animacion).
+func _sync_speed() -> void:
+	if _speed_row == null:
+		return
+	for b in _speed_buttons.values():
+		if is_instance_valid(b):
+			_speed_row.remove_child(b)
+			b.queue_free()
+	_speed_buttons.clear()
+	for s in GameConfig.GAME_SPEEDS:
+		var on := is_equal_approx(float(s), GameConfig.game_speed)
+		var b := CartoonTheme.pill_button("x%d" % int(s), "", "info" if on else "secondary",
+			CartoonTheme.h("small"), "window")
+		b.name = "Speed_x%d" % int(s)
+		b.tooltip_text = Tr.ti("LBL_GAME_SPEED_TIP")
+		b.pressed.connect(GameConfig.set_game_speed.bind(float(s)))
+		_speed_row.add_child(b)
+		_speed_buttons[float(s)] = b
+
+## La pastilla de una velocidad (pruebas).
+func speed_button(speed: float) -> Button:
+	return _speed_buttons.get(speed) as Button
+
+## Coloca la ventana del estilo maqueta: centrada, con su alto natural; en
+## telefono casi a lo ancho (docs/28 §6).
+func _relayout_cartoon(vp: Vector2) -> void:
+	if _menu_root == null:
+		return
+	var w := minf(CARTOON_MENU_W_PHONE if CartoonTheme.phone else CARTOON_MENU_W, vp.x - 16.0)
+	var panel_h := _card.get_combined_minimum_size().y + _card.offset_top
+	var h := minf(panel_h, vp.y - 8.0)
+	_menu_root.position = Vector2((vp.x - w) * 0.5, (vp.y - h) * 0.5)
+	_menu_root.size = Vector2(w, h)
+
+const CARTOON_MENU_W := 420.0
+const CARTOON_MENU_W_PHONE := 340.0
+
+func _place_menu_button_cartoon() -> void:
+	var d := float(CartoonTheme.menu_round())
+	var edge := CartoonTheme.hud_edge()
+	_menu_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_menu_btn.offset_right = -edge
+	_menu_btn.offset_left = -edge - d
+	_menu_btn.offset_top = edge
+	_menu_btn.offset_bottom = edge + d
 
 func _make_group(node_name: String, title: String, hint: String) -> VBoxContainer:
 	var box := VBoxContainer.new()
@@ -209,14 +408,37 @@ func _make_group(node_name: String, title: String, hint: String) -> VBoxContaine
 	_groups.add_child(box)
 	return box
 
-func _add_game_button(group: VBoxContainer, id: String, text: String, color: Color, cb: Callable) -> Button:
-	var btn := ModalKit.make_menu_button(text, color, cb)
+## `half`: el boton comparte fila con otro (_make_pair_row) y va con letra de
+## cuerpo para que su palabra quepa en media columna.
+func _add_game_button(group: Container, id: String, text: String, color: Color, cb: Callable,
+		half := false) -> Button:
+	var btn := ModalKit.make_menu_button(text.to_upper(), color, cb)
 	btn.name = "Game_" + id
+	if half:
+		UITheme.style_button(btn, color, UITheme.FONT_BODY)
+		btn.clip_text = true
+		btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		btn.custom_minimum_size.x = 0.0
+		if btn.tooltip_text == "":
+			btn.tooltip_text = text
 	group.add_child(btn)
 	return btn
 
+## Una fila de dos botones a partes iguales dentro de un grupo del menu.
+func _make_pair_row(group: VBoxContainer) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", int(group.get_theme_constant("separation")))
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group.add_child(row)
+	return row
+
 func _relayout() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
+	if _menu_root != null:
+		_relayout_cartoon(vp)
+		if _menu_btn != null:
+			_place_menu_button_cartoon()
+		return
 	var wide: bool = vp.x >= TWO_COLUMNS_MIN_WIDTH
 	if _groups != null:
 		_groups.columns = 2 if wide else 1
@@ -282,7 +504,17 @@ func menu_button() -> Button:
 	return _menu_btn
 
 ## Una entrada del menu por su nombre de nodo (Colony_market, Game_MainMenu...).
-func entry(node_name: String) -> Button:
+## Estilo maqueta: ¿QUE HACER? ya no es una entrada, es la linea del siguiente
+## paso (ObjectivePanel.line()); "Colony_objectives" devuelve esa linea para
+## que quien la senala (el tutorial, HelpTargets) siga encontrandola.
+func entry(node_name: String) -> Control:
+	if _menu_root != null:
+		if node_name == "Colony_objectives":
+			var obj := _find_sibling("ObjectivePanel")
+			if obj != null and obj.has_method("line"):
+				return obj.line()
+			return null
+		return _menu_root.find_child(node_name, true, false) as Control
 	return _card.find_child(node_name, true, false) as Button
 
 # ── Cuando se puede abrir ────────────────────────────────────────────
@@ -388,6 +620,26 @@ func open_pause() -> void:
 		_paused_by_me = true
 	_resume_btn.grab_focus.call_deferred()
 
+## Ahora y dos fotogramas despues (las ventanas se colocan en diferido).
+func _dodge_soon() -> void:
+	_dodge_closes.call_deferred()
+	if is_inside_tree():
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_dodge_closes()
+
+## Aparta de debajo del ☰ las X de las ventanas que esten a la vista.
+func _dodge_closes() -> void:
+	if not is_inside_tree() or not UITheme.is_cartoon():
+		return
+	for n in get_tree().get_nodes_in_group("window_close"):
+		if n is Control and is_instance_valid(n) and (n as Control).is_visible_in_tree():
+			CartoonTheme.dodge_menu_button(n as Control)
+
+## Compatibilidad (llamado al cerrar el menu): las X se recolocan.
+func _sync_menu_btn() -> void:
+	_dodge_closes()
+
 func open_menu() -> void:
 	request_open()
 
@@ -396,6 +648,7 @@ func resume() -> void:
 	_open = false
 	_root.visible = false
 	_menu_btn.visible = true
+	_sync_menu_btn()
 	if _paused_by_me:
 		_paused_by_me = false
 		get_tree().paused = false
@@ -410,9 +663,14 @@ func _exit_tree() -> void:
 func _refresh_entries() -> void:
 	for entry_def in COLONY_ENTRIES:
 		var id: String = entry_def[0]
-		var btn: Button = _colony_buttons[id]
+		var btn: Button = _colony_buttons.get(id)
+		if btn == null:
+			continue
 		btn.visible = _find_sibling(entry_def[2]) != null and is_colony_entry_available(id)
-	_help_btn.visible = _help_panel() != null
+	if _help_btn != null:
+		_help_btn.visible = _help_panel() != null
+	if _speed_row != null:
+		_sync_speed()
 	_sync_music()
 	_relayout.call_deferred()
 
@@ -421,9 +679,11 @@ static func is_colony_entry_available(id: String) -> bool:
 		"market":
 			return ProgressionManager.current_phase >= GameConfig.Phase.ECONOMY
 		"army", "skirmish":
-			return ArmyManager.barracks_count() > 0
+			return ArmyManager.has_military_building()
 		"sandbox":
 			return GameMode.sandbox_tools()
+		"contracts":
+			return GameMode.contracts_enabled()
 	return true
 
 func _sync_music() -> void:
@@ -470,10 +730,26 @@ func save() -> void:
 	_status.visible = true
 	EventBus.notification_posted.emit(Tr.t(key), "warning" if deferred else "success", color)
 
+## INFORMAR DE UN FALLO: copia el informe (BugReport) al portapapeles y lo dice
+## aqui mismo, como Guardar. No envia nada: el jugador lo pega donde quiera.
+func report_bug() -> void:
+	BugReport.copy_to_clipboard()
+	# La primera vez, al volver al juego, la ayuda dice donde pegarlo.
+	TutorialManager.offer_tip("bug_report")
+	_status.text = Tr.t("MSG_REPORT_COPIED")
+	_status.add_theme_color_override("font_color", UITheme.POSITIVE)
+	_status.visible = true
+
 ## Guarda si hay partida en marcha. Sin escena de juego (pruebas) no hay nada.
 func _save_now() -> void:
 	if GameManager.is_started():
 		GameManager.save_game()
+
+## PARTIDAS: la misma lista que el menu principal (SavesPanel, encima de este
+## menu). Antes se guarda, para que la partida en curso salga al dia.
+func _on_saves() -> void:
+	_save_now()
+	GameManager.open_saves_list()
 
 func _on_settings() -> void:
 	var settings: Node = _find_sibling("SettingsPanel")
@@ -501,20 +777,11 @@ func _help_panel() -> Node:
 		return p
 	return null
 
-## Vuelve a contar el lore. La intro es modal y vive en TutorialPanel; se abre
-## con el juego todavia en pausa y, al cerrarla, se vuelve a este menu.
-##
-## Con el prologo propio del frente de ayudas (TutorialManager.show_prologue),
-## el menu se cierra antes: el prologo espera a que no haya pausa ni menu.
+## Vuelve a contar el lore (TutorialManager.show_prologue). El menu se cierra
+## antes: el prologo espera a que no haya pausa ni menu.
 func _on_story() -> void:
-	if TutorialManager.has_method("show_prologue"):
-		resume()
-		TutorialManager.call("show_prologue")
-		return
-	var tutorial: Node = _find_sibling("TutorialPanel")
-	if tutorial != null:
-		_open_sub(tutorial)
-	TutorialManager.show_intro()
+	resume()
+	TutorialManager.show_prologue()
 
 ## Guarda y cede el sitio al menu principal. La pausa cambia de manos en la misma
 ## llamada: se suelta aqui y el menu principal la vuelve a tomar como suya, para

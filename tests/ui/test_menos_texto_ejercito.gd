@@ -4,41 +4,55 @@ extends GdUnitTestSuite
 ## topes dicen de donde salen en el tooltip, y los motivos caben en una linea.
 
 const TextKit := preload("res://scripts/ui/TextKit.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
+## Rediseno fase 2 (feat/ui2-ejercito): las unidades van por pestanas (Tierra /
+## Mar / Aire) y cada fila se llama Unit_<id>; el coste son fichas de
+## CartoonTheme.cost_row (cifras "Amount_<recurso>", como TextKit).
 func test_each_unit_row_keeps_cost_count_power_and_wage() -> void:
 	var panel: CanvasLayer = auto_free(load("res://scenes/ui/ArmyPanel.tscn").instantiate())
 	add_child(panel)
 	await await_idle_frame()
-	panel._refresh()
-	await await_idle_frame()
-	var rows: Array = panel.find_children("Stats", "HFlowContainer", true, false).filter(
-		func(n): return not n.is_queued_for_deletion())
-	assert_int(rows.size()).is_equal(GameConfig.get_unit_ids().size())
-	var i := 0
-	for unit_id in GameConfig.get_unit_ids():
-		var def := GameConfig.get_unit_def(unit_id)
-		var row: Control = rows[i]
-		var cost_row: Control = row.get_child(0)
-		var shown := TextKit.row_amounts(cost_row)
-		for res in def.get("cost", {}):
-			assert_str(String(shown[res])).is_equal(str(int(def["cost"][res])))
-		var power_text := Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0))
-		var has_power := false
-		for child in row.get_children():
-			if child is Label and (child as Label).text == power_text:
-				has_power = true
-		assert_bool(has_power).is_true()
-		var upkeep: Control = row.find_child("Upkeep", true, false)
-		assert_str(String(TextKit.row_amounts(upkeep)["gold"])).is_equal(str(int(def.get("upkeep_gold", 0))))
-		i += 1
+	var seen := 0
+	for domain in ["land", "sea", "air"]:
+		panel.select_tab(domain)
+		await await_idle_frame()
+		for unit_id in GameConfig.get_unit_ids():
+			var card: Node = panel.find_child("Unit_" + String(unit_id), true, false)
+			if card == null or card.is_queued_for_deletion():
+				continue
+			seen += 1
+			_check_row(card.find_child("Stats", true, false), String(unit_id))
+	assert_int(seen).is_equal(GameConfig.get_unit_ids().size())
+
+func _check_row(row: Control, unit_id: String) -> void:
+	var def := GameConfig.get_unit_def(unit_id)
+	var cost_row: Control = row.get_child(0)
+	var shown := CT.row_amounts(cost_row)
+	for res in def.get("cost", {}):
+		# Los materiales del taller no tienen icono: llevan su nombre detras
+		# (TextKit.cost_row; el blindado pide vigas desde balance/huecos).
+		var want := str(int(def["cost"][res]))
+		if TextKit.res_icon(String(res)) == null:
+			want += " " + Tr.res_name(String(res))
+		assert_str(String(shown[res])).is_equal(want)
+	var power_text := Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0))
+	var has_power := false
+	for child in row.get_children():
+		if child is Label and (child as Label).text == power_text:
+			has_power = true
+	assert_bool(has_power).is_true()
+	var upkeep: Control = row.find_child("Upkeep", true, false)
+	assert_str(String(CT.row_amounts(upkeep)["gold"])).is_equal(str(int(def.get("upkeep_gold", 0))))
 
 func test_the_caps_say_where_they_come_from_in_the_tooltip() -> void:
 	var panel: CanvasLayer = auto_free(load("res://scenes/ui/ArmyPanel.tscn").instantiate())
 	add_child(panel)
 	await await_idle_frame()
 	panel._refresh()
+	# Icono + numero: "5/11"; que es y de donde sale el tope, al mantener pulsado.
 	assert_str(panel._capacity_label.text).is_equal(
-		Tr.t("LBL_ARMY_CAPACITY") % [ArmyManager.get_used_capacity(), ArmyManager.get_capacity()])
+		"%d/%d" % [ArmyManager.get_used_capacity(), ArmyManager.get_capacity()])
 	assert_str(panel._capacity_label.tooltip_text).contains(str(GameConfig.army_capacity_per_barracks))
 	assert_str(panel._slots_label.tooltip_text).is_not_empty()
 

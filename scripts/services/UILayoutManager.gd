@@ -44,6 +44,10 @@ func _ready() -> void:
 	# Apply the global UI theme so built-in controls stop looking "default".
 	get_tree().root.theme = UITheme.build_global_theme()
 	EventBus.sidebar_toggled.connect(_on_sidebar_toggled)
+	# Los controles en pantalla crecen o aparecen: lo que va encima de ellos
+	# (avisos, globos; en vertical, CONSTRUIR) sube lo que ellos suben.
+	EventBus.touch_controls_size_changed.connect(func(_s): refresh_viewport.call_deferred())
+	EventBus.touch_controls_changed.connect(func(_on): refresh_viewport.call_deferred())
 
 ## Recoloca todo contra el lienzo actual. DeviceProfile lo llama al cambiar la
 ## escala de interfaz (content_scale_factor no siempre avisa size_changed).
@@ -63,7 +67,11 @@ func _on_viewport_resized() -> void:
 ## Pantalla estrecha (movil en vertical): la columna central (Tormenta y
 ## objetivo) no cabe entre la izquierda y el menu ☰, asi que baja a la columna
 ## izquierda. Ver UILayoutConfig.NARROW_SLOTS.
+## Un telefono apaisado de 16:9 (640x360 logico) no es "estrecho": su lienzo es
+## bajo, y NARROW_SLOTS subiria CONSTRUIR y la barra 196 px (fuera de pantalla).
 func is_narrow() -> bool:
+	if is_phone_canvas() and _viewport_size.x > _viewport_size.y:
+		return false
 	return _viewport_size.x < UILayoutConfig.NARROW_WIDTH
 
 ## La columna central no cabe entre la izquierda y el menu ☰ (tablet 4:3, o
@@ -123,6 +131,11 @@ func _check_column_state() -> void:
 ## pantalla estrecha encima. Todo el manager lee los slots por aqui.
 func get_slot(slot_name: String) -> Dictionary:
 	var base: Dictionary = UILayoutConfig.SLOTS.get(slot_name, {})
+	# Telefono (docs/28 §4): margenes de 8 y la barra de abajo mas baja. Va
+	# debajo de lo estrecho: en vertical manda NARROW_SLOTS.
+	if is_phone_canvas() and UILayoutConfig.PHONE_SLOTS.has(slot_name):
+		base = base.duplicate()
+		base.merge(UILayoutConfig.PHONE_SLOTS[slot_name], true)
 	var override: Dictionary = {}
 	if is_narrow():
 		override = UILayoutConfig.NARROW_SLOTS.get(slot_name, {})
@@ -130,11 +143,40 @@ func get_slot(slot_name: String) -> Dictionary:
 		if slot_name in UILayoutConfig.COLUMN_SLOTS:
 			override = UILayoutConfig.NARROW_SLOTS.get(slot_name, {})
 		override = UILayoutConfig.COLUMN_NARROW_SLOTS.get(slot_name, override)
-	if override.is_empty():
-		return base
-	var merged := base.duplicate()
-	merged.merge(override, true)
+	var merged := base
+	if not override.is_empty():
+		merged = base.duplicate()
+		merged.merge(override, true)
+	var lift := touch_controls_lift()
+	if lift > 0.0 and UILayoutConfig.sits_above_touch_controls(slot_name, merged, is_narrow()):
+		merged = merged.duplicate(true)
+		merged["margin"]["bottom"] = float(merged["margin"]["bottom"]) + lift
+	# La linea del siguiente paso vive en la esquina de la cruceta: con la
+	# cruceta en pantalla (tablet) sube por encima de ella.
+	if bool(merged.get("above_dpad", false)) and GameConfig.onscreen_controls_visible():
+		merged = merged.duplicate(true)
+		merged["margin"]["bottom"] = float(merged["margin"]["bottom"]) \
+			+ UILayoutConfig.TOUCH_DPAD_SIDE + UILayoutConfig.ABOVE_DPAD_GAP
 	return merged
+
+## Lienzo de telefono (CartoonTheme.phone, lo pone DeviceProfile): PHONE_SLOTS.
+## Solo en el estilo maqueta: el clasico no tiene disposicion de telefono.
+func is_phone_canvas() -> bool:
+	return CartoonTheme.phone and UITheme.is_cartoon()
+
+## Escala de los controles en pantalla que cabe en este lienzo (la de Ajustes,
+## recortada por UILayoutConfig.touch_controls_fit). OnScreenControls y este
+## manager leen la misma: los botones y lo que va encima de ellos crecen a la par.
+func touch_controls_scale() -> float:
+	return UILayoutConfig.touch_controls_fit(GameConfig.touch_controls_scale(), _viewport_size)
+
+## Lo que suben los slots de encima de los controles; 0 sin controles en pantalla.
+func touch_controls_lift() -> float:
+	# La cruceta y el zoom, no "se juega con el dedo": en telefono van apagados
+	# de serie y lo de abajo no tiene que subir (docs/28 §12).
+	if not GameConfig.onscreen_controls_visible():
+		return 0.0
+	return UILayoutConfig.touch_controls_lift(touch_controls_scale())
 
 func _on_sidebar_toggled(is_visible: bool) -> void:
 	_sidebar_expanded = is_visible

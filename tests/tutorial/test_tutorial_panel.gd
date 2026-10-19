@@ -8,10 +8,13 @@ extends GdUnitTestSuite
 
 var _closed := 0
 var _saved: Dictionary = {}
+const Plenty := preload("res://tests/tutorial/plenty.gd")
+var _plenty := Plenty.new()
 
 func before_test() -> void:
 	_closed = 0
 	_saved = TutorialManager.get_save_data()
+	_plenty.park()
 	TutorialManager.reset()
 	EventBus.tutorial_intro_closed.connect(_count_closed)
 
@@ -19,6 +22,7 @@ func after_test() -> void:
 	EventBus.tutorial_intro_closed.disconnect(_count_closed)
 	get_tree().paused = false
 	TutorialManager.load_save_data(_saved)
+	_plenty.restore()
 
 func _count_closed() -> void:
 	_closed += 1
@@ -65,12 +69,31 @@ func test_a_step_shows_its_line_and_number() -> void:
 	await await_idle_frame()
 	_start_guide()
 	await await_idle_frame()
-	assert_str(panel.current_step()).is_equal("open_build")
+	# Primero la meta (2026-10-16): paso 1, con su boton.
+	assert_str(panel.current_step()).is_equal("goal")
 	assert_bool(panel.is_coach_visible()).is_true()
 	assert_str(panel.coach_text()).is_not_empty()
 	var badge: Label = panel.find_child("Badge", true, false)
 	assert_str(badge.text).contains("1")
 	assert_str(badge.text).contains(str(TutorialManager.GUIDE_TOTAL))
+
+func test_the_reading_cards_move_on_with_their_button_and_show_numbers() -> void:
+	var panel := _panel()
+	await await_idle_frame()
+	_start_guide()
+	await await_idle_frame()
+	var ok: Button = panel.find_child("GuideOk", true, false)
+	assert_bool(ok.visible).is_true()
+	assert_str(CartoonTheme.button_text(ok)).is_equal(Tr.t("BTN_GUIDE_GOAL_OK"))
+	ok.pressed.emit()
+	await await_idle_frame()
+	assert_str(panel.current_step()).is_equal("core")
+	ok.pressed.emit()
+	await await_idle_frame()
+	assert_str(panel.current_step()).is_equal("open_build")
+	assert_bool(ok.visible).is_false()
+	# Las cifras del aserradero, con iconos: lo que corta y cada cuanto.
+	assert_str(panel.facts_text()).contains(str(load("res://data/buildings/sawmill.tres").produces_wood))
 
 func test_the_veil_never_eats_a_touch() -> void:
 	# Fuera de orden tiene que poder tocarse todo: solo la tarjeta para el dedo.
@@ -81,6 +104,9 @@ func test_the_veil_never_eats_a_touch() -> void:
 	for c in panel.find_child("Coach", true, false).find_children("*", "Control", true, false):
 		var ctl := c as Control
 		var in_card: bool = ctl.name == "CoachCard" or panel.find_child("CoachCard", true, false).is_ancestor_of(ctl)
+		# El recordatorio de un paso de espera se toca para abrirlo (2026-10-19).
+		var chip: Node = panel.find_child("GuideReminder", true, false)
+		in_card = in_card or ctl == chip or (chip != null and chip.is_ancestor_of(ctl))
 		if not in_card:
 			assert_int(ctl.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
 
@@ -93,8 +119,8 @@ func test_there_is_no_skip_tutorial_button() -> void:
 	assert_object(panel.find_child("SkipTutorial", true, false)).is_null()
 	for b in panel.find_child("CoachCard", true, false).find_children("*", "Button", true, false):
 		if (b as Button).is_visible_in_tree():
-			assert_str((b as Button).text).is_not_equal("Saltar tutorial")
-			assert_str((b as Button).text).is_not_equal("Skip tutorial")
+			assert_str(CartoonTheme.button_text(b as Button)).is_not_equal("Saltar tutorial")
+			assert_str(CartoonTheme.button_text(b as Button)).is_not_equal("Skip tutorial")
 	assert_bool(panel.end_replay_button().visible).is_false()
 	assert_bool(Tr._STRINGS["es"].has("BTN_GUIDE_SKIP")).is_false()
 

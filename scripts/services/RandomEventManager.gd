@@ -12,11 +12,24 @@ func _ready() -> void:
 	_schedule_next_event()
 
 func _process(delta: float) -> void:
+	# x2: la simulacion avanza al doble (GameConfig.sim_delta).
+	delta = GameConfig.sim_delta(delta)
 	# Random events don't start until Phase 3 (Survival)
 	if ProgressionManager.current_phase < GameConfig.Phase.SURVIVAL:
 		return
 	# Sandbox no tiene eventos: con recursos infinitos solo serian ruido.
 	if not GameMode.random_events_enabled():
+		return
+
+	# Process active event duration
+	if not _active_event.is_empty():
+		_active_timer -= delta
+		if _active_timer <= 0.0:
+			_end_active_event()
+
+	# Con el tutorial en marcha no llega ninguno nuevo (2026-10-19): el reloj
+	# espera, y el que ya estaba en curso acaba.
+	if TutorialManager.blocks_interruptions():
 		return
 
 	# Check for next event
@@ -25,12 +38,6 @@ func _process(delta: float) -> void:
 		_timer = 0.0
 		_trigger_random_event()
 		_schedule_next_event()
-
-	# Process active event duration
-	if not _active_event.is_empty():
-		_active_timer -= delta
-		if _active_timer <= 0.0:
-			_end_active_event()
 
 func _schedule_next_event() -> void:
 	var base_min: float

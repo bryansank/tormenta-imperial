@@ -273,7 +273,9 @@ func test_the_side_panel_blocks_the_launch_and_says_why() -> void:
 	var panel := _panel()
 	await await_idle_frame()
 	panel._selection = {}
-	panel._refresh()
+	# Tres campanas: sin Cuartel la pestana de Tierra dice "Cerrada. Construye:
+	# Cuartel", que es su candado. El "sin unidades" es de los ataques rapidos.
+	panel.select_tab(panel.TAB_RAIDS)
 	assert_bool(panel._launch_btn.disabled).is_true()
 	assert_bool(panel._reason_label.visible).is_true()
 	assert_str(panel._reason_label.text).is_equal(Tr.t("MSG_NO_UNITS"))

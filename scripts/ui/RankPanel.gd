@@ -2,28 +2,27 @@ extends CanvasLayer
 ## El rango del gobernador en pantalla. Tres piezas, ninguna con estado propio
 ## (todo se lee de RankManager):
 ##
-##   Insignia   arriba a la derecha, junto al ☰ MENU: la bandera de la colonia,
-##              el numero de rango, el titulo y una barra fina de XP. Tocarla
-##              abre la tarjeta. Slot propio "rank_badge" en UILayoutConfig y
+##   Insignia   arriba a la derecha, junto al ☰ MENU: la bandera del pais, el
+##              numero de rango, el nombre del pais y una barra fina de XP (el
+##              titulo del rango, en el tooltip y en la tarjeta). Tocarla abre
+##              la tarjeta. Slot propio "rank_badge" en UILayoutConfig y
 ##              registrada en HudRegistry (se oculta y se mueve).
 ##   Aviso      al subir de rango: "▲ 5 · Alcalde" y lo desbloqueado, corto, bajo
 ##              la insignia. Suena "rank_up" (AudioManager, no aqui).
-##   Tarjeta    ☰ MENU > COLONIA: rango y XP, y la galeria de banderas y colores
-##              (lo bloqueado, con candado y "Rango N").
+##   Tarjeta    ☰ MENU > COLONIA: el pais (bandera y nombre), rango y XP, y el
+##              boton BANDERA Y NOMBRE, que abre el editor (ColonyIdentityPanel)
+##              con las piezas del rango (lo bloqueado, con candado y "Rango N").
 
 const LAYER := 11
 const BADGE_W := 196.0
 const BADGE_W_NARROW := 118.0
 const FLAG_SMALL := Vector2(36, 24)
 const FLAG_BIG := Vector2(84, 56)
-const FLAG_PICK := Vector2(54, 36)
-const SWATCH := Vector2(44, 44)
-const TOAST_HOLD := 3.5
 const CARD_W := 520.0
 
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
-const ConstructionMenuScript := preload("res://scripts/ui/ConstructionMenu.gd")
+const IdentityPanel := preload("res://scripts/ui/ColonyIdentityPanel.gd")
 
 var _root: Control
 var _dock: Control
@@ -32,8 +31,6 @@ var _badge_flag: TextureRect
 var _badge_rank: Label
 var _badge_title: Label
 var _badge_bar: ProgressBar
-var _toast: PanelContainer = null
-var _toast_tween: Tween = null
 
 var _backdrop: ColorRect
 var _card: PanelContainer
@@ -42,17 +39,35 @@ var _card_rank: Label
 var _card_bar: ProgressBar
 var _card_xp: Label
 var _card_next: Label
-var _flag_row: HFlowContainer
-var _color_row: HFlowContainer
+var _card_name: Label
+var _editor: CanvasLayer = null
 var _is_open := false
+
+## La fila de la colonia en la tarjeta (rediseno 2026-10, docs/28 §12): lo que
+## salio del menu ☰ y no esta en la barra de abajo. [id, clave Tr, panel
+## hermano, glifo].
+const HUB_ENTRIES := [
+	["progress", "BTN_PROGRESS", "ProgressPanel", "star"],
+	["contracts", "BTN_CONTRACTS", "ContractPanel", "check"],
+	["log", "BTN_LOG_MENU", "NotificationPanel", "clock"],
+	["sandbox", "BTN_SANDBOX", "SandboxPanel", "wrench"],
+]
+var _hub: HFlowContainer
+var _hub_buttons: Dictionary = {}
+## Insignia en telefono: bandera, estrella, cifra y barra (sin el nombre).
+const BADGE_W_PHONE := 128.0
+const FLAG_PHONE := Vector2(33, 22)
+
+static func _cartoon() -> bool:
+	return UITheme.is_cartoon()
 
 func _ready() -> void:
 	layer = LAYER
 	_setup_ui()
 	UIManager.register_panel(self, "RankPanel.modal")
-	EventBus.governor_xp_changed.connect(func(_x, _r, _g): refresh())
+	EventBus.governor_xp_changed.connect(_on_xp_changed)
 	EventBus.governor_rank_up.connect(_on_rank_up)
-	EventBus.colony_cosmetics_changed.connect(func(_f, _c): refresh())
+	EventBus.colony_identity_changed.connect(func(_n, _s): refresh())
 	EventBus.game_load_completed.connect(refresh)
 	EventBus.game_new_started.connect(refresh)
 	get_viewport().size_changed.connect(_relayout)
@@ -80,6 +95,9 @@ func _setup_ui() -> void:
 	_badge.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for state in ["normal", "hover", "pressed", "focus"]:
 		var st := UITheme.make_hud_card_style(UITheme.ACCENT, 2)
+		if _cartoon():
+			# Ficha del HUD oscuro fino (docs/28 §12), mismo alto que el ☰.
+			st = CartoonTheme.hud_style()
 		st.content_margin_top = 4
 		st.content_margin_bottom = 4
 		st.content_margin_left = 6
@@ -103,7 +121,14 @@ func _setup_ui() -> void:
 	_badge_flag = _make_flag_rect(FLAG_SMALL)
 	_badge_flag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_badge_flag)
+	if _cartoon():
+		# La estrella del rango delante de la cifra (docs/28 §12).
+		var star := CartoonTheme.make_glyph("star", 20 if CartoonTheme.phone else 24)
+		star.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(star)
 	_badge_rank = UITheme.make_label("1", "section", UITheme.ACCENT)
+	if _cartoon():
+		_badge_rank = CartoonTheme.label("1", "button", CartoonTheme.text("hud"))
 	_badge_rank.name = "RankNumber"
 	_badge_rank.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_badge_rank.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -115,11 +140,16 @@ func _setup_ui() -> void:
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(column)
 	_badge_title = UITheme.make_label("", "small", UITheme.TEXT)
-	_badge_title.name = "RankTitle"
+	if _cartoon():
+		_badge_title = CartoonTheme.label("", "small", CartoonTheme.text("hud", true))
+	_badge_title.name = "ColonyName"
 	_badge_title.clip_text = true
+	_badge_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_badge_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(_badge_title)
 	_badge_bar = _make_thin_bar(5)
+	if _cartoon():
+		_badge_bar = CartoonTheme.progress(0.0, CartoonTheme.sem("INFO"), "hud", 8)
 	_badge_bar.name = "RankXpBar"
 	column.add_child(_badge_bar)
 
@@ -147,7 +177,12 @@ func _setup_ui() -> void:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.alignment = BoxContainer.ALIGNMENT_CENTER
 	head.add_child(info)
-	_card_rank = UITheme.make_label("", "section", UITheme.ACCENT)
+	_card_name = UITheme.make_label("", "section", UITheme.TEXT_BRIGHT)
+	_card_name.name = "ColonyName"
+	_card_name.clip_text = true
+	_card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	info.add_child(_card_name)
+	_card_rank = UITheme.make_label("", "body", UITheme.ACCENT)
 	info.add_child(_card_rank)
 	_card_bar = _make_thin_bar(8)
 	info.add_child(_card_bar)
@@ -158,17 +193,30 @@ func _setup_ui() -> void:
 	_card_next.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_card_next)
 
-	col.add_child(UITheme.section_header(Tr.t("LBL_COLONY_FLAG")))
-	_flag_row = HFlowContainer.new()
-	_flag_row.add_theme_constant_override("h_separation", 8)
-	_flag_row.add_theme_constant_override("v_separation", 8)
-	col.add_child(_flag_row)
+	var edit := ModalKit.make_menu_button(Tr.t("BTN_COLONY_EDIT"), UITheme.ACCENT_DIM, open_editor)
+	edit.name = "EditColony"
+	col.add_child(edit)
 
-	col.add_child(UITheme.section_header(Tr.t("LBL_COLONY_COLOR")))
-	_color_row = HFlowContainer.new()
-	_color_row.add_theme_constant_override("h_separation", 8)
-	_color_row.add_theme_constant_override("v_separation", 8)
-	col.add_child(_color_row)
+	# ── La colonia, en una fila (rediseno 2026-10): lo que salio del menu ☰ y no
+	# va en la barra de abajo. Progreso, Encargos, Registro y, en su modo,
+	# Sandbox. Cada uno cierra esta tarjeta y abre su panel.
+	_hub = HFlowContainer.new()
+	_hub.name = "ColonyHub"
+	_hub.add_theme_constant_override("h_separation", 8)
+	_hub.add_theme_constant_override("v_separation", 8)
+	col.add_child(_hub)
+	for entry in HUB_ENTRIES:
+		var id: String = entry[0]
+		var b: Button
+		if _cartoon():
+			b = CartoonTheme.pill_button(Tr.t(String(entry[1])), String(entry[3]), "open",
+				CartoonTheme.h("small"), "window", "body")
+			b.pressed.connect(open_hub_entry.bind(id))
+		else:
+			b = ModalKit.make_menu_button(Tr.t(String(entry[1])), UITheme.BTN, open_hub_entry.bind(id))
+		b.name = "Hub_" + id
+		_hub.add_child(b)
+		_hub_buttons[id] = b
 	_relayout()
 
 func _make_flag_rect(px: Vector2) -> TextureRect:
@@ -197,6 +245,13 @@ func _relayout() -> void:
 	var narrow: bool = vp.x < UILayoutConfig.NARROW_WIDTH
 	_dock.custom_minimum_size.x = BADGE_W_NARROW if narrow else BADGE_W
 	_badge_title.visible = not narrow
+	if _cartoon():
+		# Mismo alto que el ☰ redondo; en telefono, bandera + cifra + barra.
+		_dock.custom_minimum_size.y = CartoonTheme.menu_round()
+		if CartoonTheme.phone:
+			_dock.custom_minimum_size.x = BADGE_W_PHONE
+			_badge_title.visible = false
+			_badge_flag.custom_minimum_size = FLAG_PHONE
 	ModalKit.fit_center(_card, CARD_W, vp)
 	_card.reset_size()
 	_card.offset_top = -_card.size.y * 0.5
@@ -204,13 +259,32 @@ func _relayout() -> void:
 
 # ── Refresco ──
 
+## Cada ciclo de produccion da 1 XP: con muchos edificios llegan varias en el
+## mismo fotograma. Si el rango no cambia, se repinta una vez al final del
+## fotograma; si cambia, ya.
+var _refresh_queued := false
+func _on_xp_changed(_xp: int, rank: int, _gained: int) -> void:
+	if _badge_rank != null and _badge_rank.text != str(rank):
+		refresh()
+		return
+	if _refresh_queued:
+		return
+	_refresh_queued = true
+	_flush_refresh.call_deferred()
+
+func _flush_refresh() -> void:
+	_refresh_queued = false
+	refresh()
+
 func refresh() -> void:
 	var rank: int = RankManager.get_rank()
 	var flag_tex := ColonyFlag.current_texture()
 	var title := Tr.t(RankManager.get_title_key())
 	_badge_flag.texture = flag_tex
 	_badge_rank.text = str(rank)
-	_badge_title.text = title
+	_badge_title.text = RankManager.get_colony_name()
+	_badge.tooltip_text = "%s · %s
+%s" % [RankManager.get_colony_name(), title, Tr.t("LBL_RANK_BADGE_TIP")]
 	_badge_bar.value = RankManager.get_rank_progress()
 	if _is_open:
 		_refresh_card()
@@ -218,6 +292,7 @@ func refresh() -> void:
 func _refresh_card() -> void:
 	var rank: int = RankManager.get_rank()
 	_card_flag.texture = ColonyFlag.current_texture()
+	_card_name.text = RankManager.get_colony_name()
 	_card_rank.text = Tr.t("FMT_RANK_TITLE") % [rank, Tr.t(RankManager.get_title_key())]
 	_card_bar.value = RankManager.get_rank_progress()
 	if RankManager.is_max_rank():
@@ -228,77 +303,22 @@ func _refresh_card() -> void:
 		var lines := reward_lines(RankManager.rewards_between(rank, rank + 1))
 		_card_next.text = Tr.t("FMT_RANK_NEXT") % [rank + 1, ", ".join(lines)] if not lines.is_empty() else ""
 	_card_next.visible = _card_next.text != ""
-	_build_flag_buttons()
-	_build_color_buttons()
 	_relayout.call_deferred()
 
-func _build_flag_buttons() -> void:
-	for child in _flag_row.get_children():
-		child.queue_free()
-	for flag_id in GameConfig.COLONY_FLAGS:
-		var unlocked: bool = RankManager.is_flag_unlocked(flag_id)
-		var btn := _make_pick_button(flag_id == RankManager.get_flag(), unlocked)
-		btn.name = "Flag_" + flag_id
-		var box := VBoxContainer.new()
-		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.alignment = BoxContainer.ALIGNMENT_CENTER
-		box.set_anchors_preset(Control.PRESET_FULL_RECT)
-		btn.add_child(box)
-		var pic := _make_flag_rect(FLAG_PICK)
-		pic.texture = ColonyFlag.texture(flag_id, RankManager.get_color())
-		pic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		if not unlocked:
-			pic.modulate = Color(0.45, 0.45, 0.45)
-		box.add_child(pic)
-		if not unlocked:
-			box.add_child(ConstructionMenuScript.make_rank_lock_row(RankManager.flag_rank(flag_id)))
-		btn.custom_minimum_size = Vector2(FLAG_PICK.x + 30, FLAG_PICK.y + (34 if not unlocked else 16))
-		btn.pressed.connect(func(): RankManager.set_flag(flag_id))
-		_flag_row.add_child(btn)
+# ── El editor del pais (ColonyIdentityPanel, modo "edit") ──
 
-func _build_color_buttons() -> void:
-	for child in _color_row.get_children():
-		child.queue_free()
-	for color_id in GameConfig.COLONY_COLOR_ORDER:
-		var unlocked: bool = RankManager.is_color_unlocked(color_id)
-		var btn := _make_pick_button(color_id == RankManager.get_color_id(), unlocked)
-		btn.name = "Color_" + color_id
-		btn.tooltip_text = Tr.t("COLONY_COLOR_" + color_id.to_upper())
-		var swatch := ColorRect.new()
-		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		swatch.color = GameConfig.colony_colors[color_id]
-		if not unlocked:
-			swatch.color = swatch.color.darkened(0.5)
-		swatch.set_anchors_preset(Control.PRESET_FULL_RECT)
-		swatch.offset_left = 6
-		swatch.offset_top = 6
-		swatch.offset_right = -6
-		swatch.offset_bottom = -6
-		btn.add_child(swatch)
-		btn.custom_minimum_size = SWATCH
-		if not unlocked:
-			var lock := UITheme.make_label(str(RankManager.color_rank(color_id)), "small", UITheme.WARNING)
-			lock.name = "RankLockLabel"
-			lock.set_anchors_preset(Control.PRESET_CENTER)
-			lock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			btn.add_child(lock)
-		btn.pressed.connect(func(): RankManager.set_color(color_id))
-		_color_row.add_child(btn)
+## Abre el editor sobre la tarjeta. LISTO aplica en RankManager.set_colony().
+func open_editor() -> void:
+	if _editor != null and is_instance_valid(_editor):
+		return
+	_editor = IdentityPanel.new()
+	add_child(_editor)
+	_editor.confirmed.connect(func(colony_name: String, spec: Dictionary):
+		RankManager.set_colony(colony_name, spec))
+	_editor.open("edit")
 
-func _make_pick_button(selected: bool, unlocked: bool) -> Button:
-	var btn := Button.new()
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.disabled = not unlocked
-	var st := StyleBoxFlat.new()
-	st.bg_color = UITheme.CARD_BG if unlocked else UITheme.BTN_DISABLED
-	st.set_corner_radius_all(4)
-	st.border_color = UITheme.ACCENT if selected else UITheme.ACCENT_DIM
-	st.set_border_width_all(3 if selected else 1)
-	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-		btn.add_theme_stylebox_override(state, st)
-	btn.set_meta("selected", selected)
-	return btn
+func editor() -> CanvasLayer:
+	return _editor if _editor != null and is_instance_valid(_editor) else null
 
 # ── Lo ganado, en pocas palabras ──
 
@@ -310,70 +330,44 @@ static func reward_lines(rewards: Dictionary) -> Array:
 		out.append(data.get_display_name() if data != null else String(id))
 	var limits: Dictionary = rewards.get("limit", {})
 	for id in limits:
+		# Huecos de algo sin tope (las decoraciones desde los topes por era) no
+		# dan nada: no se anuncian.
+		if GameConfig.is_uncapped_building(String(id)):
+			continue
 		var data := Rules.load_building_data(String(id))
 		out.append(Tr.t("FMT_RANK_REWARD_SLOTS") % [int(limits[id]), data.get_display_name() if data != null else String(id)])
 	if float(rewards.get("production", 0.0)) > 0.0:
 		out.append(Tr.t("FMT_RANK_REWARD_PRODUCTION") % roundi(float(rewards["production"]) * 100.0))
 	if float(rewards.get("storage", 0.0)) > 0.0:
 		out.append(Tr.t("FMT_RANK_REWARD_STORAGE") % roundi(float(rewards["storage"]) * 100.0))
-	if not rewards.get("flags", []).is_empty():
-		out.append(Tr.t("LBL_RANK_REWARD_FLAG"))
+	if not rewards.get("patterns", []).is_empty():
+		out.append(Tr.t("LBL_RANK_REWARD_PATTERN"))
+	if not rewards.get("emblems", []).is_empty():
+		out.append(Tr.t("LBL_RANK_REWARD_EMBLEM"))
 	if not rewards.get("colors", []).is_empty():
 		out.append(Tr.t("LBL_RANK_REWARD_COLOR"))
+	if not rewards.get("paints", []).is_empty():
+		out.append(Tr.t("LBL_RANK_REWARD_PAINT"))
 	return out
 
 # ── Aviso de ascenso ──
 
+## El ascenso va a la columna de avisos (NotificationPanel, "achievement",
+## 2026-10-18) en una frase: "▲ 3 · Maestro de obras: + Jardin, + Bandera
+## nueva". Alli espera si hay una ventana o el tablero abiertos.
 func _on_rank_up(rank: int, rewards: Dictionary) -> void:
 	refresh()
 	show_rank_toast(rank, rewards)
 
 func show_rank_toast(rank: int, rewards: Dictionary) -> void:
-	if _toast != null and is_instance_valid(_toast):
-		_toast.queue_free()
-	if _toast_tween != null and _toast_tween.is_valid():
-		_toast_tween.kill()
-	_toast = PanelContainer.new()
-	_toast.name = "RankToast"
-	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_toast.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2, true))
-	var col := VBoxContainer.new()
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 2)
-	_toast.add_child(col)
-	var head := UITheme.make_label(Tr.t("FMT_RANK_UP") % [rank, Tr.t(GameConfig.rank_title_key(rank))], "section", UITheme.ACCENT)
-	head.name = "RankToastTitle"
-	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(head)
-	for line in reward_lines(rewards):
-		var l := UITheme.make_label("+ " + String(line), "small", UITheme.POSITIVE)
-		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.add_child(l)
-	_root.add_child(_toast)
-	_place_toast.call_deferred()
-	_toast.modulate.a = 0.0
-	_toast_tween = create_tween()
-	_toast_tween.tween_property(_toast, "modulate:a", 1.0, 0.25)
-	_toast_tween.tween_interval(TOAST_HOLD)
-	_toast_tween.tween_property(_toast, "modulate:a", 0.0, 0.5)
-	var toast := _toast
-	_toast_tween.tween_callback(func():
-		if is_instance_valid(toast):
-			toast.queue_free())
+	EventBus.notification_posted.emit(rank_up_text(rank, rewards), "achievement", UITheme.ACCENT)
 
-## Bajo la insignia, alineado a su borde derecho y dentro de la pantalla.
-func _place_toast() -> void:
-	if _toast == null or not is_instance_valid(_toast) or _dock == null:
-		return
-	_toast.reset_size()
-	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var badge := _dock.get_global_rect()
-	var x := clampf(badge.end.x - _toast.size.x, 8.0, maxf(8.0, vp.x - _toast.size.x - 8.0))
-	var y := clampf(badge.end.y + 6.0, 8.0, maxf(8.0, vp.y - _toast.size.y - 8.0))
-	_toast.position = Vector2(x, y)
-
-func toast() -> PanelContainer:
-	return _toast if _toast != null and is_instance_valid(_toast) else null
+static func rank_up_text(rank: int, rewards: Dictionary) -> String:
+	var text := Tr.t("FMT_RANK_UP") % [rank, Tr.t(GameConfig.rank_title_key(rank))]
+	var lines := reward_lines(rewards)
+	if not lines.is_empty():
+		text += ": " + ", ".join(lines.map(func(l): return "+ " + String(l)))
+	return text
 
 # ── Abrir y cerrar (☰ MENU > COLONIA, o tocar la insignia) ──
 
@@ -387,7 +381,56 @@ func open() -> void:
 	_card.visible = true
 	_backdrop.visible = true
 	_refresh_card()
+	_refresh_hub()
 	UIManager.open_panel(self)
+
+## Que entradas de la colonia se ven: solo lo que existe en la escena y ya
+## esta disponible (Encargos no en Sandbox; Sandbox solo en su modo).
+func _refresh_hub() -> void:
+	for entry in HUB_ENTRIES:
+		var id: String = entry[0]
+		var b: Button = _hub_buttons.get(id)
+		if b == null:
+			continue
+		b.visible = _sibling(String(entry[2])) != null and hub_entry_available(id)
+
+static func hub_entry_available(id: String) -> bool:
+	match id:
+		"sandbox":
+			return GameMode.sandbox_tools()
+		"contracts":
+			return GameMode.contracts_enabled()
+	return true
+
+## Cierra la tarjeta y abre el panel de esa entrada (si ya estaba abierto, lo
+## deja asi).
+func open_hub_entry(id: String) -> void:
+	var sibling := ""
+	for entry in HUB_ENTRIES:
+		if String(entry[0]) == id:
+			sibling = String(entry[2])
+	var panel := _sibling(sibling)
+	_close()
+	if panel == null:
+		return
+	if panel.has_method("is_open") and panel.is_open():
+		return
+	if panel.has_method("open_log"):
+		panel.open_log()
+	elif panel.has_method("open"):
+		panel.open()
+	elif panel.has_method("toggle"):
+		panel.toggle()
+	elif panel.has_method("_toggle_panel"):
+		panel._toggle_panel()
+
+func hub_button(id: String) -> Button:
+	return _hub_buttons.get(id) as Button
+
+func _sibling(node_name: String) -> Node:
+	if node_name == "" or get_parent() == null:
+		return null
+	return get_parent().get_node_or_null(node_name)
 
 func _close() -> void:
 	if not _is_open:

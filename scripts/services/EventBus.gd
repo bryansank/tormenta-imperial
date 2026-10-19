@@ -36,6 +36,13 @@ signal building_selected_for_placement(building_data: Resource)
 signal building_placement_cancelled()  # ESC, right-click or the on-screen CANCEL; BuildingPlacer._cancel listens
 @warning_ignore("unused_signal")
 signal building_placed(building_data: Resource, cell: Vector2i)
+## Una tanda de building_placed del mismo gesto (los tramos del auto-road,
+## PlacementRules.pave_route). Quien hace trabajo caro por building_placed
+## (guardar, recontar) lo aplaza hasta `placement_batch_finished` y lo hace una vez.
+@warning_ignore("unused_signal")
+signal placement_batch_started()
+@warning_ignore("unused_signal")
+signal placement_batch_finished(count: int)
 @warning_ignore("unused_signal")
 signal building_moved(from_cell: Vector2i, to_cell: Vector2i)
 @warning_ignore("unused_signal")
@@ -139,6 +146,11 @@ signal consumption_failed(resource: String)
 ## de verdad, `population` lo que queda despues (nunca por debajo del suelo).
 @warning_ignore("unused_signal")
 signal population_starved(deaths: int, population: int)
+## Una vivienda recien terminada (obra o mejora) recibe a su gente de golpe.
+## `count` es cuanta entro de verdad (lo que cabia). La escuchan los caminantes,
+## que hacen salir de esa casa a los recien llegados.
+@warning_ignore("unused_signal")
+signal residents_arrived(home: Node, count: int)
 
 # ── Army ──
 @warning_ignore("unused_signal")
@@ -155,6 +167,10 @@ signal unit_training_cancelled(unit_id: String, refunded: Dictionary)
 ## Desercion: al ejercito sin paga se le va la tropa, la mas cara primero.
 @warning_ignore("unused_signal")
 signal army_deserted(unit_id: String, count: int)
+## El regimiento cambio de nombre, color, emblema o pintura, o gano una
+## estrella. Solo cosmetico (ArmyManager.get_regiment_look()).
+@warning_ignore("unused_signal")
+signal regiment_changed()
 
 # ── Combat ──
 ## Emitted only by CombatManager. `side`: 0 = player, 1 = enemy.
@@ -177,6 +193,13 @@ signal unit_defended(unit_uid: int)
 signal unit_died(unit_uid: int, side: int)
 @warning_ignore("unused_signal")
 signal encounter_ended(victory: bool, turns_used: int)
+## El tablero se cerro (CombatManager.end_encounter): el parte ya se leyo. Lo
+## que esperaba a que terminara la pelea (los avisos de la colonia retenidos)
+## sale ahora, salvo que otro tablero se haya abierto en la misma llamada (la
+## oleada siguiente del asedio): por eso quien escucha vuelve a mirar
+## CombatManager.is_board_open().
+@warning_ignore("unused_signal")
+signal encounter_closed()
 @warning_ignore("unused_signal")
 signal draft_offered(options: Array)
 @warning_ignore("unused_signal")
@@ -187,6 +210,34 @@ signal expedition_ended(result: int, rewards: Dictionary, casualties: Dictionary
 ## actual. El tablero no se guarda (D6), asi que aqui nunca hay encuentro abierto.
 @warning_ignore("unused_signal")
 signal expedition_resumed(expedition_id: int)
+## Salidas (doc 21 §3, 2026-10-14). El tablon cambio: oferta nueva, lanzada,
+## vuelta, vista, o la rebaja del Diezmo se gano o se gasto. El boton
+## ESCARAMUZAS repinta su punto rojo con esto.
+@warning_ignore("unused_signal")
+signal sortie_offers_changed()
+## Lo que la columna trajo de fuera al volver: "parts", "colonists",
+## "tithe_pct", "blueprints" (Array). Ya aplicado a la colonia.
+@warning_ignore("unused_signal")
+signal sortie_loot_gained(loot: Dictionary)
+## Un plano nuevo: el edificio `building_id` ya se puede construir.
+@warning_ignore("unused_signal")
+signal blueprint_unlocked(building_id: String)
+## Tres campanas (feat/tres-campanas). Emitidas solo por CombatManager. El libro
+## de campanas cambio (mision ganada, perdida, vista, partida cargada): el panel
+## de MISIONES y el punto rojo repintan con esto.
+@warning_ignore("unused_signal")
+signal campaign_changed()
+## Una mision de campana ganada (`domain`: land / sea / air; `mission` desde 0;
+## `is_boss`: era la del jefe de campana). Ya cobrada.
+@warning_ignore("unused_signal")
+signal campaign_mission_won(domain: String, mission: int, is_boss: bool)
+## Una campana entera completa (su jefe derrotado). ProgressionManager mira si
+## con esto ya se puede llamar al Ataque Final.
+@warning_ignore("unused_signal")
+signal campaign_completed(domain: String)
+## El enemigo se retiro con poca vida y el combate se gano (D7 = B).
+@warning_ignore("unused_signal")
+signal enemy_routed()
 
 # ── Building Health ──
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
@@ -197,6 +248,14 @@ signal building_damaged(building_node: Node, health: int, max_health: int)
 signal building_ruined(building_node: Node)
 @warning_ignore("unused_signal")
 signal building_repaired(building_node: Node)
+
+# ── Day and night ──
+## Emitted only by DayClock when the day clock enters a phase. `phase` follows
+## DayCycle.Phase (DAWN, DAY, DUSK, NIGHT); `hour` is the time of day, 0-1.
+## Not emitted on load or new game: a consumer re-derives from
+## `DayClock.get_phase()` on `game_load_completed` / `game_new_started`.
+@warning_ignore("unused_signal")
+signal day_phase_changed(phase: int, hour: float)
 
 # ── Imperial Storm ──
 ## Emitted only by StormManager. The storm is dispatched on a schedule, not rolled
@@ -229,6 +288,12 @@ signal storm_ended(severity: int)
 signal tithe_demanded(severity: int)
 @warning_ignore("unused_signal")
 signal tithe_resolved(paid: bool, taken: Dictionary)
+## La Orden de la Regencia cambio: encargo nuevo, entregado, o una rebaja del
+## Diezmo apuntada (StormManager.add_tithe_discount). `fresh` es true solo cuando
+## sale una Orden nueva (al armarse el reloj y tras cada Diezmo): el HUD abre la
+## tarjeta. Emitida solo por StormManager.
+@warning_ignore("unused_signal")
+signal storm_order_changed(fresh: bool)
 ## La guarnicion peleo sola: el Diezmo cayo con el tablero ocupado por una
 ## expedicion y la defensa se resolvio a ciegas (AutoResolver). `summary` es
 ## CombatManager.get_last_result(). Emitida solo por CombatManager, y es la UNICA
@@ -236,6 +301,13 @@ signal tithe_resolved(paid: bool, taken: Dictionary)
 ## el tablero abierto las tomaria como suyas.
 @warning_ignore("unused_signal")
 signal defense_auto_resolved(victory: bool, rounds: int, summary: Dictionary)
+## El Impuesto de juguete de la tormenta de prueba (era 1) quedo resuelto:
+## `repelled` si las tropas de casa echaron a los Cobradores; si no, `taken` es lo
+## que se llevaron de la bolsa (recursos por nombre). Solo StormManager. No es
+## `tithe_resolved`: el Mercado, las salidas y el sonido del Impuesto de verdad no
+## tienen que reaccionar a un ensayo. Lo pinta WarReportScreen.
+@warning_ignore("unused_signal")
+signal trial_tithe_resolved(repelled: bool, taken: Dictionary)
 
 # ── The Final Audit ──
 ## Emitidas solo por ProgressionManager. El Cuartel General a nivel 3 ya no gana
@@ -281,6 +353,15 @@ signal objective_panel_toggled()
 signal sidebar_toggled(visible: bool)
 @warning_ignore("unused_signal")
 signal grid_overlay_toggled(visible: bool)
+## La calidad grafica del mapa cambio en Ajustes ("auto", "high", "low");
+## WorldLook la aplica al entorno y al sol de la escena 3D.
+@warning_ignore("unused_signal")
+signal graphics_quality_changed(quality: String)
+## La velocidad del juego cambio (1.0 o 2.0; GameConfig.set_game_speed). La
+## simulacion la lee en GameConfig.sim_delta(); la vista de combate, para
+## acortar sus animaciones con GameConfig.combat_pace().
+@warning_ignore("unused_signal")
+signal game_speed_changed(speed: float)
 
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
@@ -292,11 +373,26 @@ signal touch_controls_changed(enabled: bool)
 ## La opacidad de los controles en pantalla cambio (Ajustes → Controles).
 @warning_ignore("unused_signal")
 signal touch_controls_opacity_changed(opacity: float)
+## Los nombres junto a los iconos del HUD se encendieron o apagaron (Ajustes >
+## Interfaz, o el "auto" que se apaga pasada la primera hora). Lleva el estado
+## ya resuelto (GameConfig.hud_words_enabled()).
+@warning_ignore("unused_signal")
+signal hud_words_changed(shown: bool)
+## El tamano de los controles en pantalla cambio (Ajustes → Controles, o el
+## perfil de dispositivo en "auto"). Lleva la escala RESUELTA (1.0 = 100 %).
+@warning_ignore("unused_signal")
+signal touch_controls_size_changed(scale: float)
 
 ## Los globos de ayuda se encendieron o apagaron (AYUDA del menu ☰ o Ajustes >
 ## Interfaz). GameConfig.ui_helper_visible ya tiene el valor nuevo.
 @warning_ignore("unused_signal")
 signal helper_visibility_changed(visible: bool)
+
+## Los instructores (bustos junto a tutorial, consejos y partes) se encendieron
+## o apagaron en Ajustes > Interfaz. GameConfig.ui_instructors_visible ya tiene
+## el valor nuevo.
+@warning_ignore("unused_signal")
+signal instructors_visibility_changed(visible: bool)
 
 ## Emitted when music is switched on/off (Settings or the ☰ quick button).
 @warning_ignore("unused_signal")
@@ -352,10 +448,12 @@ signal governor_xp_changed(xp: int, rank: int, gained: int)
 ## rango alcanzado en este salto (un hito gordo puede saltar dos).
 @warning_ignore("unused_signal")
 signal governor_rank_up(rank: int, rewards: Dictionary)
-## El jugador eligio otra bandera o color (☰ MENU > COLONIA). El Nucleo y las
-## fichas propias del tablero se repintan al oirla.
+## El pais cambio de nombre o de bandera (☰ MENU > COLONIA, el paso de Nueva
+## partida o una carga). `flag_spec` es la receta de ColonyFlag:
+## {"pattern", "emblem", "colors": [fondo 1, fondo 2, emblema]}. Los mastiles
+## del Nucleo y del Cuartel General, la insignia y los partes se repintan al oirla.
 @warning_ignore("unused_signal")
-signal colony_cosmetics_changed(flag_id: String, color_id: String)
+signal colony_identity_changed(colony_name: String, flag_spec: Dictionary)
 
 # ── prologo-ayudas ──
 ## El tutorial guiado cambio de paso (TutorialManager.GUIDE_STEPS). "" = ninguno
@@ -370,3 +468,46 @@ signal tutorial_guide_finished(skipped: bool)
 ## de HelpCatalog. HelperPanel la ensena ya, senalando su control.
 @warning_ignore("unused_signal")
 signal help_reopen_requested(help_id: String)
+## El combate guiado cambio de paso (TutorialManager.COMBAT_STEPS: "c_select",
+## "c_move"...). "" = ninguna marca en el tablero. Lo pinta TutorialPanel.
+@warning_ignore("unused_signal")
+signal combat_lesson_step_changed(step_id: String)
+
+# ── comida-granja-recoger (2026-10-04) ──
+## Cambio lo acumulado en un edificio (produjo, se recogio, se echo a perder).
+## `stock` es recurso -> cantidad. Lo escuchan el icono flotante y el badge.
+@warning_ignore("unused_signal")
+signal building_stock_changed(node: Node, stock: Dictionary)
+## El jugador recogio lo de un edificio. `collected` es lo que entro en la bolsa;
+## lo que no cupo se queda en el edificio.
+@warning_ignore("unused_signal")
+signal production_collected(node: Node, collected: Dictionary)
+## Lo acumulado paso demasiado tiempo sin recoger y se perdio una parte
+## (solo con GameMode.spoilage_enabled()).
+@warning_ignore("unused_signal")
+signal stock_spoiled(node: Node, lost: Dictionary)
+## Se planto (o cambio) el cultivo de una Granja.
+@warning_ignore("unused_signal")
+signal crop_planted(node: Node, crop_id: String)
+
+# ── Encargos (feat/encargos) ──
+## ContractManager publica lo que devuelve el modelo puro ContractBoard. `source`
+## es "regency", "neighbors" o "smuggler"; `contract` es el encargo entero
+## ({id, source, template, ask, reward, seconds_total, seconds_left}).
+## Llego un encargo nuevo al tablon.
+@warning_ignore("unused_signal")
+signal contract_offered(source: String, contract: Dictionary)
+## Se entrego: lo pedido ya salio de la bolsa y `reward` ya se pago.
+@warning_ignore("unused_signal")
+signal contract_delivered(source: String, contract: Dictionary, reward: Dictionary)
+## Se acabo el plazo sin entregarlo. En Colono no castiga; en Gobernador baja
+## la reputacion con quien lo pidio (`reputation`, 0 a contract_reputation_min).
+@warning_ignore("unused_signal")
+signal contract_expired(source: String, contract: Dictionary, reputation: int)
+## El jugador lo rechazo ("No, gracias").
+@warning_ignore("unused_signal")
+signal contract_discarded(source: String, contract: Dictionary)
+## Algo cambio en el tablon (cualquiera de las de arriba, o una carga/reset).
+## El panel se repinta con esta.
+@warning_ignore("unused_signal")
+signal contract_board_changed()

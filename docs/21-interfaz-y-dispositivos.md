@@ -27,16 +27,29 @@ Tablet / Móvil (`GameConfig.ui_device_profile`: `auto`, `pc`, `tablet`, `phone`
 
 | | PC | Tablet | Móvil |
 |---|---|---|---|
-| Escala de interfaz | 100 % | 115 % | 130 % |
-| Tamaño de texto | normal | normal | grande |
-| Lado táctil mínimo (`UITheme.MIN_BTN_H`) | 44 | 48 | 52 |
-| Controles en pantalla en "Automático" | **no** (norma de Bryan) | sí | sí |
+| Escala de interfaz | 100 % | 115 % | 100 % **= a su tamaño en dp** (rediseño 2026-10, ver abajo) |
+| Tamaño de texto | normal | normal | normal |
+| Lado táctil mínimo (`UITheme.MIN_BTN_H`) | 44 | 48 | 48 |
+| Alto de cada fila de Ajustes (`UITheme.SETTINGS_ROW_H`, `settings_row`) | 44 | 56 | 52 |
+| Tamaño de los controles en pantalla en "Del perfil" (`controls_size`) | 100 % | 115 % | 100 % |
+| Perfil de dedo (`touch_controls`: textos, colocación táctil) | no | sí | sí |
+| Cruceta y zoom en "Automático" (`onscreen_controls`) | **no** (norma de Bryan) | sí | **no** (rediseño 2026-10: gestos; CANCELAR sigue al colocar) |
 | Variante de disposición | standard | standard | compact (sin globos de ayuda) |
 | Textos de ayuda | ratón | dedo | dedo |
 | Disposición movida | la suya | la suya | la suya |
 
+**Rediseño 2026-10 (rama `feat/ui2-hud`, docs/28 §12):** "se juega con el dedo"
+(`GameConfig.touch_controls_enabled()`, `DeviceProfile.is_touch_profile()`) y
+"hay cruceta en pantalla" (`GameConfig.onscreen_controls_visible()`,
+`DeviceProfile.onscreen_controls_default()`) son dos preguntas distintas. En
+"Automático" el teléfono juega con gestos y no lleva cruceta, zoom ni girar; al
+colocar o mover un edificio `OnScreenControls` enseña solo la pareja girar
+edificio + CANCELAR. "Siempre" y "Nunca" mandan sobre las dos.
+`UILayoutManager.touch_controls_lift()` y `NotificationPanel.capacity()` miran la
+cruceta, no el perfil de dedo.
+
 "Automático" en *Controles en pantalla* es **solo móvil y tablet** (decisión de
-Bryan, 2026-10-04): sigue al perfil, y en un PC no se enciende ni porque la pantalla
+Bryan, 2026-10-04; desde 2026-10-18 la cruceta solo tablet): sigue al perfil, y en un PC no se enciende ni porque la pantalla
 se declare táctil ni porque llegue un toque real; un portátil táctil tocado una vez
 no se llena de flechas. El portátil táctil elige **Siempre** a mano (o el perfil
 Tablet), y Ajustes lo dice debajo del selector (`LBL_TOUCH_AUTO_HINT`). Un toque real
@@ -60,8 +73,24 @@ pura): el texto se sigue rasterizando a la resolución real, nítido.
 | 2048x1536 / 1024x768 (4:3) | Tablet 115 % | 1113x835 |
 | 2560x1080 (21:9) | PC 100 % | 1707x720 |
 | 400x720 (vertical) | Móvil | 400x720 (columna única) |
+| 1440x720 px a 320 dpi (720x360 dp) | Móvil 100 % | **720x360** (antes ~997x554) |
+| 2400x1080 px a 420 dpi (914x411 dp) | Móvil 100 % | **914x411** (antes ~1330x598) |
 
-- En apaisado el lienzo nunca baja de **540** de alto (`MIN_LOGICAL_HEIGHT`): es
+- **Lienzo del teléfono (rediseño 2026-10, docs/28 §4.2):** el perfil Móvil ya no
+  usa `content_scale_for` con 130 % y el suelo de 540: su lienzo sigue a los dp
+  reales (`DeviceProfile.phone_content_scale_for(window, dpi, escala)`, pura):
+  en apaisado, alto lógico = alto en dp / escala, entre **360** y **540**
+  (`PHONE_MIN_LOGICAL_HEIGHT` / `PHONE_MAX_LOGICAL_HEIGHT`); en vertical, ancho
+  lógico = ancho en dp, entre 400 y 480. Antes un teléfono de 360 dp dibujaba un
+  lienzo de ~554 de alto y todo salía a ~0,65 de su tamaño físico (el cuerpo de
+  17 px se veía como 11 dp). `DeviceProfile.scale_factor_for(perfil, ...)` elige
+  la fórmula; tablet y PC no cambian.
+- Por debajo de **450** de lado corto lógico (`is_phone_canvas`) se encienden las
+  piezas de teléfono del estilo maqueta (`CartoonTheme.phone`: letras, botones,
+  `UILayoutConfig.PHONE_SLOTS`). Lo pone `DeviceProfile._sync_phone_canvas()` al
+  aplicar la escala; si cambia con una partida en marcha se reconstruye la
+  interfaz (`rebuild_ui`).
+- En apaisado (PC y tablet) el lienzo nunca baja de **540** de alto (`MIN_LOGICAL_HEIGHT`): es
   lo que ocupa el menú ☰ desplegado. Por eso 150 % en 1280x720 se queda en 133 %.
 - En vertical el ancho lógico se lleva a 480 (y nunca menos de 400) para que el
   móvil use la disposición estrecha.
@@ -77,33 +106,72 @@ La pantalla de arranque de Godot se sustituye por el logo de la marca
 
 ## 2. Ajustes en pestañas
 
-`SettingsPanel` tiene cinco pestañas, cada una con su scroll (cabe a 1024x768,
-en tablet y con letra grande) y su **Restablecer esta pestaña** (menos Juego):
+Rediseño fase 2 (2026-10-18, rama `feat/ui2-menus`, guía en `docs/28-guia-ui.md`):
+`SettingsPanel` es una ventana crema con la cinta azul **AJUSTES** y la ✕ roja
+(`CartoonTheme.menu_window`), centrada con tope de 1000×600 en PC y tablet y a
+pantalla completa en teléfono (`CartoonTheme.menus_phone`). A la izquierda, un
+**carril de pestañas** con icono (en teléfono solo el icono; el nombre al mantener
+pulsado). Cuatro pestañas, cada una con su scroll y, menos Juego, su
+**Restablecer**:
 
 | Pestaña | Qué hay |
 |---|---|
-| **Audio** | Volumen general, música sí/no (también en ☰ MENÚ → PARTIDA), música, efectos. De serie bajos: general 80 %, música 35 %, efectos 50 % (`GameConfig.AUDIO_DEFAULTS`), con curva perceptual |
-| **Interfaz** | Perfil de dispositivo, escala, tamaño de texto · Vista 3D/2D, rejilla, pantalla completa · Elementos en pantalla (un interruptor por elemento) · Editar / Restablecer disposición |
-| **Controles** | Controles en pantalla (Automático / Siempre / Nunca), su opacidad (20–100 %, de serie 55 %, `GameConfig.ui_touch_controls_opacity`) y el resumen de controles en ratón o en dedo |
-| **Accesibilidad** | Paleta de colores, alto contraste, opacidad de paneles, vista previa |
-| **Juego** | Idioma, Nueva partida |
+| **Sonido** | General, música sí/no (interruptor), volumen de música, efectos. De serie bajos: general 80 %, música 35 %, efectos 50 % (`GameConfig.AUDIO_DEFAULTS`), con curva perceptual |
+| **Pantalla** | Orientación (Horizontal / Vertical), mapa 3D/2D, tamaño del texto, gráficos, pantalla completa, cuadrícula, vista del combate · y plegado bajo **Más opciones**: dispositivo, escala, fotogramas, Detectar, nombres junto a los iconos, qué se ve en pantalla (un interruptor por elemento), colores (paleta, alto contraste, opacidad y la muestra) y disposición (Mover paneles / De serie) |
+| **Controles** | Botones en pantalla (Auto / Siempre / Nunca) con la frase de "Auto", su opacidad, su **tamaño** (§9) y el resumen de controles en ratón o en dedo |
+| **Juego** | Idioma (un botón por idioma con su nombre en ese idioma), Nueva partida |
 
-Qué se aplica al momento: audio, vista, rejilla, pantalla completa, controles,
-escala, mostrar/ocultar HUD y la disposición. Lo que cambia tokens de `UITheme`
-(texto, paleta, contraste, opacidad, perfil) se ve en la **vista previa** y se
-aplica con **APLICAR CAMBIOS** o al cerrar Ajustes: los paneles se construyen una
-vez, así que `DeviceProfile.rebuild_ui()` recarga la escena conservando la partida
-(la misma recarga que el cambio de idioma) y vuelve a abrir Ajustes en la
-pestaña donde estaba. Con un tablero de combate abierto no se recarga: se guarda
-y se verá al terminar.
+Las piezas (todas en `CartoonTheme`, sección "MENÚS"):
+
+- **Fila** (`setting_row`): tarjeta con [icono] Nombre ······ control [valor]. El
+  nombre largo de antes va en el globo al mantener pulsado. La tarjeta lleva el
+  nombre de la fila de siempre (`ProfileRow`, `ScaleRow`, `FpsRow`...).
+- **Selector** (`picker`, `scripts/ui/CartoonPicker.gd`): sustituye a los
+  desplegables. Hasta 4 opciones cortas, pastillas en fila (la elegida azul); con
+  más o con textos largos, paso a paso `[◀] opción [▶]`. Habla como un
+  `OptionButton` (`item_selected`, `selected`, `item_count`, `select`,
+  `set_item_text`); se busca dentro de la fila por el nombre `Picker`.
+- **Interruptor** (`live_switch`): un `CheckButton` con el carril dibujado
+  (verde encendido, bolita blanca). Conserva los nombres de antes (`GridCheck`,
+  `HighContrastCheck`, `Hud_<id>`...).
+- **Deslizador** (`menu_slider`): carril grueso, relleno de latón, bolita
+  blanca, valor a la derecha. Nombres `Slider_<clave>`; la rueda no lo mueve.
+
+Qué se aplica al momento: audio, vista, rejilla, pantalla completa, controles
+(también su tamaño), escala, mostrar/ocultar HUD y la disposición. Lo que cambia tokens de `UITheme`
+(texto, paleta, contraste, opacidad, perfil) se ve en la **muestra** y se aplica
+con **APLICAR** (pastilla ámbar, solo cuando hay algo pendiente) o al cerrar
+Ajustes: los paneles se construyen una vez, así que `DeviceProfile.rebuild_ui()`
+recarga la escena conservando la partida (la misma recarga que el cambio de
+idioma) y vuelve a abrir Ajustes en la pestaña donde estaba. Con un tablero de
+combate abierto no se recarga: se guarda y se verá al terminar.
+
+### Ajustes a tamaño de dedo (tablet y móvil)
+
+Petición de Bryan (2026-10-18): en el móvil, los propios controles de Ajustes,
+un poco más grandes. `DeviceProfile.DEFAULTS[...]["settings_row"]` llega a
+`UITheme.configure()` y fija el token `UITheme.SETTINGS_ROW_H` (PC 44 = el
+`MIN_BTN_H` de siempre, tablet 56, móvil 60; `UITheme.settings_touch()` dice si
+es mayor que el de PC). En el rediseño, `SettingsPanel._h()` da el alto de cada
+pieza: el de `CartoonTheme.menu_h()` (nunca menos que `UITheme.MIN_BTN_H`), sin
+bajar de `SETTINGS_ROW_H` en tablet y móvil ni de 48 en teléfono. Pestañas,
+pastillas, selectores, interruptores, deslizadores y la ✕ llegan a ese alto; lo
+que no cabe se desplaza.
+
+Es del **perfil**, no de "controles en pantalla": un PC sigue igual aunque elija
+"Siempre"; un portátil táctil que lo quiera elige el perfil Tablet. Los cambios
+de perfil reconstruyen la interfaz como el resto de tokens (APLICAR).
 
 ## 3. Mostrar / ocultar HUD (`HudRegistry`)
 
 `scripts/ui/HudRegistry.gd` es el registro central. Elementos que se pueden
 ocultar: recursos y almacén (con obreros y moral, que van en esa fila), botón del registro,
 indicador de la Tormenta, avisos emergentes, globos de ayuda (es el
-mismo interruptor que AYUDA del menú ☰), texto de turno en batalla y las
-herramientas Sandbox (solo existen en ese modo, docs/20). El botón ☰ MENÚ (el
+mismo interruptor que AYUDA del menú ☰), los instructores (el busto de la
+Capitana Remache y del Sargento Bombarda junto al tutorial, los consejos y los
+partes; modo `instructors`, `[ui] instructors_visible`, docs/23 §9), texto de turno en batalla y las
+herramientas Sandbox (solo existen en ese modo, docs/20) y el botón de velocidad
+x1 / x2 (§13). El botón ☰ MENÚ (el
 menú único, que sustituye al ☰ y a la pausa II) no está en el registro: no se
 puede ocultar.
 
@@ -242,6 +310,11 @@ estado de población, que lleva su propia rama):
 
 ## 7. Disposición por tamaño de lienzo
 
+> Rediseño 2026-10 (§15): la Tormenta ya no está en una columna central sino
+> bajo el ☰ (`storm_icon`), así que no baja a la izquierda; el registro sigue
+> bajo los recursos. El teléfono apaisado tiene su propia disposición
+> (`PHONE_SLOTS`, §15).
+
 - **< 1080 px de ancho** (tablet 4:3 con escala, 150 %…): la columna central
   (la Tormenta) baja a la columna izquierda
   (`UILayoutConfig.COLUMN_NARROW_WIDTH`, `COLUMN_SLOTS`), los avisos pasan al
@@ -253,6 +326,16 @@ estado de población, que lleva su propia rama):
 - Máximo 3 avisos a la vez (el resto ya está en el registro).
 - Los globos de ayuda se callan también bajo la pausa y el menú principal
   (`HelperPanel` mira `get_tree().paused` con un vigía que corre en pausa).
+- **Ventanas del rediseño** (fase 2, docs/28 §17: Ejército, MISIONES, ENCARGOS,
+  partes): ya no usan su ranura de `UILayoutConfig` (`ArmyPanel.modal`,
+  `SkirmishPanel.modal`, `ContractPanel.modal` siguen registradas en `UIManager`
+  para el apilado y ESC). Se colocan solas con `CartoonTheme.fit_window()` al
+  abrirse y con `size_changed`: en un lienzo de menos de 450 de alto
+  (`CartoonTheme.phone_canvas()`), a pantalla completa con 6 px de margen; si no,
+  centradas con su tope (Ejército 980×640, MISIONES 1080×560, ENCARGOS 1080×520).
+  Los partes miden lo que su contenido (`fit_card()`). En teléfono las pestañas
+  no elegidas y las acciones del tablero van solo con icono (la palabra al
+  mantener pulsado).
 
 ## 8. Menú único, Ajustes que responden y volumen
 
@@ -276,6 +359,20 @@ estado de población, que lleva su propia rama):
   leyenda de colores de la barra, obreros, moral). La tarjeta de estado
   (Trabajadores / En su puesto / Moral) ya no existe. El Zzz sigue con su
   motivo. Detalle en docs/08 (ResourceHUD).
+- **Nombres bajo los iconos** (2026-10-18, rama `feat/hud-y-tutorial`, ronda 1.0
+  mejora 4): cada ficha va en una celda con su palabra debajo ("Oro", "Madera",
+  "Comida", "Acero", "Petróleo", "Trabajadores", "Moral"). Ajustes > Interfaz >
+  **Nombres junto a los iconos**: Automático / Siempre / Nunca
+  (`GameConfig.ui_hud_words`, settings.cfg `[interfaz] hud_words`, nunca en la
+  partida). Automático (`GameConfig.hud_words_enabled()`): tableta y móvil siempre;
+  en PC, mientras `profile_runs_finished < hud_words_new_runs` (2) y en la primera
+  hora jugada de la partida (`hud_words_first_seconds`, 3600). El HUD mira una vez
+  por minuto si ya pasó la hora (un `Timer`, solo en ese caso; nada de `_process`).
+  Con palabras la fila no pasa de `ResourceHUD.WORDS_ROW_MAX` (380 px) y se parte
+  en dos filas: cabe en 1280x720 sin empujar la columna central, y en un móvil se
+  parte antes del ☰. Señal: `EventBus.hud_words_changed`.
+- **Ajustes > Audio** ya no dice "Música" dos veces: "Música encendida" (el
+  interruptor) y "Volumen de la música" (ronda 1.0, mejora 13).
 - **Sonda**: `tools/menu_probe.gd` captura título, Ajustes sobre el título, el
   HUD en era 1 y 3, el menú y cada pestaña de Ajustes, y el tablero, en
   `docs/media/dev/menu/`.
@@ -359,14 +456,45 @@ Para construir en serie (calzadas) basta tocar la casilla siguiente y el
 fantasma. El clic emulado que Godot fabrica al levantar el dedo se ignora
 mientras se coloca, y el dedo que pulsa ✓ no mueve después el fantasma.
 
+### Carretera larga (2026-10-19, rama `feat/carretera-arrastrar`)
+
+Con la carretera en la mano se tiende un tramo entero de una vez, en 3D y en 2D:
+
+| Entrada | Gesto |
+|---|---|
+| Ratón | Mantener el clic y arrastrar: el tramo va de donde se pulsó a donde está el cursor; al soltar se tiende. Un clic sin arrastrar pone un solo tramo (ahora al soltar, no al pulsar) |
+| Dedo | Tocar el inicio (lleva el fantasma), tocar el final (vista previa) y tocar el final otra vez o **✓** para tenderlo. El final pasa a ser el inicio del siguiente, así se encadenan calles; tocar la casilla siguiente y luego otra vez sigue poniendo de uno en uno. Tocar el inicio quita el tramo; arrastrar el fantasma mueve el inicio; arrastrar en otro sitio sigue moviendo el mapa |
+| R / ↻ | Cambia el codo de la L (la carretera es 1x1: girarla no hacía nada) |
+
+Se eligió "toca inicio → toca fin" en táctil y no arrastrar con el dedo porque el
+arrastre de un dedo es del mapa (bug 8) y así no se rompe.
+
+**Reglas** (`PlacementRules.plan_road_line` / `lay_road_line`, puras y comunes):
+recto o en L, primero por el eje más largo; si esa L choca, la otra; si las dos
+chocan, el camino más corto por celdas libres (BFS). Las celdas que ya son
+carretera se cruzan sin cobrar. El tramo tiene que tocar la red unida al Núcleo
+(o el Núcleo) en algún punto. Se tiende desde la red hacia fuera con
+`pave_route` (una tanda: `building_placed` por tramo, un guardado y un recuento
+al final). **Sin oro para todo** se ponen los tramos que se pueden pagar, los
+pegados a la red (nunca queda un trozo suelto), y se avisa "Puestos N de M
+tramos". La ruta se recalcula solo al cambiar de casilla.
+
+**Vista previa:** casillas verdes (se pagan) y rojas (no valen o no llega el
+oro), sin el fantasma, y el rótulo "N tramos · N oro" (`RoadLineCost`, en la
+capa del ✓) bajo la punta final. En la guía, el paso de practicar carretera
+cuenta el primer tramo tendido. La ayuda `road_drag` sale la primera vez que se
+coge la carretera fuera de la guía y está en el índice de AYUDA.
+Tests: `tests/map/test_road_line.gd`, `tests/buildings/test_road_line_placement.gd`.
+
 El fantasma lo apunta el dedo (`touch_aim`) desde que empieza la colocación si
 el perfil es táctil o ya llegó un toque; un movimiento de ratón de verdad
 devuelve el mando al cursor.
 
 **La regla del yacimiento se ve antes de colocar:**
 
-- La ficha de `ConstructionMenu` dice "▲ El aserradero debe tocar un bosque (al
-  lado o en diagonal)" (o la veta, el hierro, el pozo):
+- La ficha de `ConstructionMenu` (PC) dice "El aserradero debe tocar un bosque
+  (al lado o en diagonal)" (o la veta, el hierro, el pozo), y en teléfono va en
+  el globo de mantener pulsada la fila (§16):
   `PlacementAssist.rule_text(id)`. Es la misma clave `message` de
   `GameConfig.building_deposit_rules` que usa el aviso al fallar
   (`LBL_NEEDS_*_NEAR`, `LBL_REQUIRES_DEPOSIT`), con ratón o en táctil: una sola
@@ -410,8 +538,12 @@ que la interfaz:
 - **Sin pulsar.** Al salir la burbuja, el botón recibe un "soltar" lejos de todo
   control (el mismo truco que `DragScroll`): no se dispara y no se queda hundido. El
   soltar del ratón emulado al levantar el dedo se come.
-- **Con DragScroll.** Arrastrar una lista manda ese soltar-lejos: el gesto lo ve y se
-  cancela, aunque `DragScroll` se quede los movimientos.
+- **Con DragScroll.** Dentro de una lista, `DragScroll` retiene la pulsación del ratón
+  hasta saber si es un toque o un desplazamiento (2026-10-19). Si la lista empieza a
+  moverse, llama a `cancel_hold()` y el globo no sale. Si sale el globo, el gesto de la
+  lista se olvida (`DragScroll.cancel_gesture()`) y al botón se le quita también el
+  toque (`DragScroll.touch_cancel_events`: en Godot 4.7 los botones atienden
+  `InputEventScreenTouch` y se dispararían al levantar el dedo).
 - **La burbuja.** Estilo `UITheme.make_hud_card_style`, texto "body" (sigue el tamaño
   de texto de Ajustes), 360 px de ancho máximo con ajuste de línea, centrada sobre el
   dedo y 56 px por encima (debajo si no cabe), nunca fuera de la pantalla
@@ -435,6 +567,51 @@ menú único se lee si no hay otra y se borra al guardar: hay un solo ajuste). S
 (fondo, borde y símbolo); el que se pulsa se ve al 100 % y vuelve en 0,2 s al
 soltar. Ajustes → Controles → "Opacidad de los controles", al momento. En PC los
 controles siguen sin salir por defecto.
+
+### Tamaño de los controles (2026-10-18, rama `feat/controles-moviles`)
+
+Petición de Bryan: en el móvil, los controles en pantalla un poco más grandes, y
+que se puedan agrandar en Ajustes.
+
+- **Ajuste**: Ajustes → Controles → *Tamaño de los controles*, con
+  `GameConfig.TOUCH_CONTROLS_SIZE_MODES` = Del perfil (`auto`) / Pequeño 85 % /
+  Normal 100 % / Grande 125 % / Muy grande 150 %
+  (`TOUCH_CONTROLS_SIZE_SCALES`). Se guarda en `settings.cfg [interfaz]
+  touch_controls_size` (un valor desconocido vuelve a `auto`). Como el resto de
+  `[interfaz]`, es un valor por dispositivo y "Del perfil" sigue al perfil
+  activo: PC 100 %, tablet 115 %, móvil 130 % (`DeviceProfile.DEFAULTS[...]
+  ["controls_size"]`).
+- **Al momento**: `GameConfig.set_touch_controls_size()` emite
+  `EventBus.touch_controls_size_changed(escala)` (también al forzar otro perfil).
+  Lo escuchan `OnScreenControls` (cruceta, girar, zoom, R ↻ y ✕ CANCELAR: lado,
+  letra y huecos × escala, desde su tamaño de serie guardado en `base_min` /
+  `base_font`), `PlacementAssist` (el botón ✓ CONSTRUIR AQUÍ) y `UILayoutManager`.
+  La opacidad no cambia al cambiar el tamaño.
+- **Nunca se salen**: la escala que se aplica es
+  `UILayoutManager.touch_controls_scale()` =
+  `UILayoutConfig.touch_controls_fit(pedida, lienzo)`: se recorta si la cruceta
+  (152 px de serie) y la columna derecha (~130 × 232 colocando) no caben lado a
+  lado con sus márgenes, o si la columna no cabe bajo el ☰ MENÚ y la insignia
+  (`TOUCH_TOP_RESERVE`). Nunca baja de 85 %. Medido: móvil apaisado 985x554
+  (1280x720 a 130 %) y 1231x554 (2400x1080) admiten 150 %; vertical 480 de ancho
+  también; a 400 de ancho se queda en 122 %. Se recalcula con
+  `layout_changed` (girar, escala de interfaz).
+- **No chocan**: lo que va encima de los controles sube lo que ellos crecen
+  (`UILayoutConfig.touch_controls_lift` = (escala − 1) × 152, solo con los
+  controles en pantalla activos). Se aplica en `UILayoutManager.get_slot` a los
+  slots anclados abajo en una esquina (globos `tip_above_dpad`,
+  `tip_bottom_right`, `tip_bottom_left`; los avisos ya no viven abajo, §14) y, en
+  pantalla estrecha, a todos los de abajo (CONSTRUIR, ESCARAMUZAS), que allí van
+  encima de la cruceta (`sits_above_touch_controls`). CONSTRUIR en apaisado va en
+  el centro, entre la cruceta y el zoom, y no se mueve.
+- **Hueco conocido**: con la columna central bajada (lienzo de 720 a 1080 de
+  ancho) ESCARAMUZAS, a la derecha de CONSTRUIR, puede rozar la columna derecha
+  de los controles; ya pasaba al 100 % en anchos cercanos a 800.
+- Tests: `tests/ui/test_controles_moviles.gd` (escala por perfil y por modo,
+  guardado en `[interfaz]`, señal, botones que crecen y vuelven, opacidad
+  intacta, que quepan en móvil apaisado y vertical, la subida de los slots, filas
+  de Ajustes de dedo en móvil y sin cambios en PC, que Ajustes quepa, fila y
+  Restablecer de la pestaña Controles, textos ES/EN).
 
 ### Girar con dos dedos (3D)
 
@@ -474,7 +651,7 @@ vsync sigue como está.
 
 | Perfil | "Del perfil" | Por qué |
 |---|---|---|
-| PC | 60 | Por encima no aporta nada en un juego de gestión |
+| PC | 60 (30 con la calidad Mínima, `GameConfig.fps_minimal_pc`) | Por encima no aporta nada en un juego de gestión; en Mínima, estable antes que alto |
 | Tablet | 30 | Batería y calor: las tablets baratas bajan el reloj al calentarse y entonces tironean |
 | Móvil | 30 | Igual, y en pantalla pequeña 30 estables se ven bien |
 
@@ -490,9 +667,13 @@ Además del elegido, el juego baja solo:
 
 La cuenta es pura: `DeviceProfile.fps_for(mode, profile_fps, focused, paused)`
 (0 = sin tope); `effective_fps_cap()` la hace con el estado de ahora y
-`apply_fps()` la aplica (al arrancar, al cambiar de perfil, al restablecer
-Interfaz, al pausar y al perder o recuperar el foco). Valores por perfil en
-`DeviceProfile.DEFAULTS["fps"]`. Diseño y medidas: `docs/26-rendimiento.md` §7.4.
+`apply_fps()` la aplica (al arrancar, al cambiar de perfil o de calidad, al
+restablecer Interfaz, al pausar y al perder o recuperar el foco). Valores por
+perfil en `DeviceProfile.DEFAULTS["fps"]`; el "Del perfil" lo da
+`DeviceProfile.auto_fps()` (`auto_fps_for(perfil, minima)`, pura), que en PC con
+Mínima baja a 30. Mientras se mide la calidad en el primer arranque (§12,
+"Detección") no hay tope: la pausa del menú de título lo bajaría a 30 y la medida
+vería un equipo flojo en cualquiera. Diseño y medidas: `docs/26-rendimiento.md` §7.4.
 
 - **Headless no se toca**: `apply_fps()` no hace nada con
   `DisplayServer.get_name() == "headless"`, así que los tests y las sondas sin
@@ -540,3 +721,496 @@ y Restablecer).
 - `UILayoutConfig.CENTER_COLUMN_HALF_WIDTH` sigue en 220 (se midió con la franja de
   objetivo, de 440 px): la Tormenta (380) cabe con margen y así no se mueven los
   umbrales de las tablets.
+
+## 12. Luz y ambiente del mapa 3D (aire de maqueta)
+
+> Número fijo: el código lo cita como "docs/21 §12" desde la rama de arte. El §11
+> queda libre.
+
+Dirección de arte (2026-10-05): diorama de juguete. Colores cálidos y saturados,
+luz suave y sombras marcadas que anclan cada pieza al suelo. Esta sección cubre
+lo que no es edificio: cielo, sol, isla, agua, el día y la noche, y lo que les
+hace la Tormenta.
+Los edificios, las parcelas y su paleta están en docs/03 ("Modelos: maqueta de
+juguete", `scripts/buildings/ToyPalette.gd`).
+
+### Quién hace qué
+
+| Pieza | Archivo | Qué decide |
+|---|---|---|
+| Cielo, sol, tonemapping | `scenes/main/Main.tscn` (`WorldEnvironment`, `DirectionalLight`) | Los colores **limpios**: cielo procedural cálido, luz ambiental del cielo (70 %), sol cálido a 1,35, ACES, contraste 1,06 y saturación 1,2 |
+| Lo que cuesta GPU | `scripts/map/WorldLook.gd` (script del `WorldEnvironment`) | SSAO, glow, cortes de sombra, radiancia, isla sencilla, escala 3D. Nunca toca colores ni energías |
+| La hora del día | `scripts/storm/DayCycle.gd` (modelo puro) + `scripts/services/DayClock.gd` (autoload) | El reloj: amanecer, día, atardecer, noche; la hora viaja en el save |
+| La Tormenta y el día | `scripts/map/StormSky.gd` (autoload) | Guarda los valores limpios (los del mediodía), pinta los del momento del día y oscurece por fase encima: cielo, niebla, sol, luz ambiental, **la isla** y las ventanas |
+| La isla | `scripts/map/IslandGenerator.gd` + cinco shaders | Cesped (`grass_ground`), canto (`island_cliff`), playa (`island_sand`), espuma (`island_foam`), agua (`water_border`). Sin texturas: todo en coordenadas de mundo |
+| Lo común de los shaders | `scripts/map/storm_grade.gdshaderinc` | Los uniforms `storm_weight` (0-1), `night_weight` (0-1) y `simple` (bool), y la función `storm_grade()` |
+
+La isla 2D (`scripts/view2d/Island2D.gd`) usa la misma geometría y la misma
+paleta cálida, pero no pasa por nada de esto: se tiñe con `StormTint2D` (día,
+noche y Tormenta en un solo `CanvasModulate`).
+
+### La isla de maqueta
+
+- **Cesped** en y = 0 (la rejilla, el ratón y los edificios cuentan con ello):
+  tres verdes, zonas secas, calvas de tierra, grano de matas y flores sueltas.
+  Las octavas del ruido van giradas y el dominio se dobla con dos ruidos lentos:
+  sin eso las manchas salían cuadradas, alineadas con las calles.
+- **Canto**: una pared de y = 0 a y = −0,6 por todo el borde, con un labio verde
+  arriba y tierra con vetas (la `WOOD` de ToyPalette oscurecida).
+- **Playa**: un anillo que baja de −0,28 a −0,9; arena entre `CREAM` y `BRASS`,
+  mojada donde la corta el agua, y una franja oscura al pie del canto que hace de
+  **sombra de contacto** (ancla la placa de cesped sin SSAO, que Mobile no tiene).
+- **Agua** a y = −0,5: el `SKY` de ToyPalette, hondo lejos y turquesa junto a la
+  costa (distancia a un rectángulo redondeado ajustado a la isla). Ondas de
+  senos, sin ruido: el ruido de valor derivado dejaba un mosaico de rombos.
+- **Espuma**: cinta `unshaded` que sigue la costa exacta, con una franja fija
+  pegada a la arena (legible desde lejos) y líneas que salen hacia el mar.
+- Todo se rehace en `grid_resized` (la rejilla cambia por partida).
+
+### Calidades (`WorldLook.settings_for`)
+
+El jugador elige en Ajustes → Interfaz: `auto`, `high`, `low`, `minimal`
+(`GameConfig.ui_graphics_quality`, en `settings.cfg`), con una línea de ayuda debajo
+y el botón **DETECTAR DE NUEVO**. `auto` es alta solo con Forward+; con Mobile o
+Compatibility es baja. La única puerta para cambiarla es
+`GraphicsQuality.set_quality()` (`scripts/services/GraphicsQuality.gd`, estático, con
+`preload`): guarda, emite `graphics_quality_changed` y pone o quita el override del
+renderizador. WorldLook pinta el mundo; lo demás lo aplica
+`GraphicsQuality.apply_runtime()`, que llama `DeviceProfile` al arrancar y con cada
+cambio.
+
+| | Alta | Baja | Mínima |
+|---|---|---|---|
+| SSAO | solo Forward+ | no | no |
+| Glow | Forward+ y Mobile | no | no |
+| Sombras del sol | 4 cortes (Forward+), 2 (Mobile) | 1 corte (ortogonal) | **apagadas** |
+| Radiancia del cielo | 64 | 32 | 32 |
+| Isla | completa | sencilla | sencilla |
+| `scaling_3d_scale` | la de project.godot (1,0 PC, 0,75 móvil) | igual | **0,7** PC, **0,6** móvil (la UI no se escala) |
+| MSAA 3D | el de project.godot (2x PC, 0 móvil) | igual | **no** |
+| Humo, serrín, farol, chispas (`BuildingFx`) | sí | sí | **ocultos** (grupo `building_fx_anim`) |
+| Banderines de obra / bandera de la colonia | ondean / ondea | ondean / quieta | **quietos** |
+| Rejilla "siempre visible" | la de Ajustes | igual | **no** (solo al construir) |
+| Caminantes | tope del perfil | igual | **`life_figure_cap_minimal`** (12) |
+| FPS "Del perfil" en PC | 60 | 60 | **30** |
+| Renderizador en PC | Forward+ | Forward+ | **Mobile**, desde el siguiente arranque |
+| Tablero de combate 3D | completo | completo | simplificado (lo lee `BattleScreen` de `settings_for`) |
+
+- **Mínima en PC cambia el renderizador al reiniciar** (decisión del dueño): al
+  elegirla, `GraphicsQuality.sync_renderer_override()` escribe
+  `user://renderer_override.cfg` con `[rendering] renderer/rendering_method="mobile"`
+  y avisa "se aplica al reiniciar". El motor lo lee al arrancar porque
+  `project.godot` lo nombra en `application/config/project_settings_override`: vive
+  en el user dir (se puede escribir aunque el `.exe` esté en `Program Files`) y no
+  toca la instalación. El editor no lee ese archivo (solo el juego), así que no se
+  cuela en `project.godot`. Volver a otra calidad lo borra (y avisa igual). No se
+  pide Mobile si hoy se va en Compatibility (sin Vulkan ni D3D12), ni en Android
+  (ya es Mobile), ni en headless. Al arrancar, `DeviceProfile` lo resincroniza con
+  la calidad guardada. `--rendering-method` en la línea de órdenes sigue mandando
+  (las sondas).
+- **Detección del primer arranque** (`DeviceProfile.start_quality_detection`, reglas
+  puras en `GraphicsQuality.static_verdict` / `measure_verdict`; docs/26 §7.2). Solo
+  con la calidad en `auto` y sin `[interfaz] quality_detected`. Nunca en headless ni
+  con `-- --no-title` / `-- --no-detect`. Paso 1: renderizador Compatibility, nombre
+  de GPU en `GameConfig.quality_weak_gpu_patterns`, RAM ≤ `quality_weak_ram_mb`
+  (4600 MB), ≤ `quality_weak_threads` (4) hilos o móvil con ≤ 6600 MB → Mínima. Paso
+  2 (si el 1 no decide, y solo en la vista 3D): 2 s de espera detrás del menú de
+  título y 3 s de medida sin tope de FPS; mediana > 25 ms o p95 > 33 ms → Mínima;
+  mediana > 16,7 ms midiendo en Alta → Baja (nunca por debajo de 1,1 fotogramas del
+  refresco de la pantalla: con vsync un monitor de 50 Hz da 20 ms y no es flojo). Perder el foco descarta la medida (se
+  repite en el siguiente arranque); si el jugador elige calidad mientras se mide,
+  manda la suya. Paso 3: si se bajó, un aviso de una línea al cerrar el menú de
+  título (`MSG_QUALITY_AUTO_MINIMAL` / `_LOW`, más `MSG_QUALITY_RESTART` si cambia
+  el renderizador). Se guardan `quality_detected = true` y
+  `quality_detected_reason` (para depurar; también sale en el log).
+
+- **Isla sencilla** (uniform `simple`): agua lisa (solo el degradado, sin ondas
+  ni crestas), espuma con la franja fija y sin líneas, cesped sin sombra, zonas
+  secas, matas ni doblado de dominio, arena sin grano ni guijarros. El valor es
+  el mismo para todo el material, así que la rama no cuesta. WorldLook lo pinta
+  en los materiales al cambiar de calidad, e IslandGenerator lo lee
+  (`WorldLook.island_simple()`) al crearlos.
+- **Distancia de sombra**: sigue al zoom de la cámara
+  (`shadow_distance_for`: distancia × 1,6 + 18, entre 30 y 200), para que de
+  cerca la sombra use toda su resolución. Sin sombras no se calcula.
+- El SSAO está apagado en `Main.tscn` y lo enciende WorldLook: así Mobile no
+  avisa al cargar la escena.
+- Shaders "para una papa": sin bucles (las tres octavas del cesped van escritas a
+  mano), sin texturas ni muestreos, nada recalculado por frame en GDScript.
+
+### Por renderizador
+
+- **Forward+** (PC): todo lo de la tabla.
+- **Mobile** (APK Android): sin SSAO (no existe); glow y dos cortes de sombra
+  solo si el jugador fuerza alta. Con `auto` va en baja.
+- **Compatibility** (APK de QA del emulador): sin SSAO ni glow; con `auto`, baja.
+
+### Lo que oscurece la Tormenta (`StormSky`)
+
+**La Tormenta, corta a la vista (2026-10-16).** Antes el cielo se quedaba
+oscuro todo el Aviso, la Ceniza y la Tormenta (2-3 minutos) y no aportaba nada.
+Ahora es un **golpe** corto y marcado al llegar, y el resto del tiempo un tono
+apenas teñido. Solo cambia el aspecto: la mecánica y las duraciones de las
+fases (`storm_*` de `GameConfig`, `StormCycle`) son las mismas, y el HUD de la
+Tormenta (`StormHUD`) sigue diciendo la fase. Los valores están en
+`GameConfig.storm_visual_*`:
+
+| Momento | Peso de ceniza |
+|---|---|
+| Aviso | `storm_visual_warning` (0,12), funde en 3 s |
+| Ceniza | `storm_visual_ash` (0,2), funde en 3 s |
+| **Golpe** (`storm_started`) | la severidad, entre 0,6 y 1 (`StormSky.punch_weight`): se cierra en `storm_visual_punch_in` (0,7 s), aguanta hasta `storm_visual_punch` (6 s) y se abre en `storm_visual_punch_out` (3 s) |
+| Resto de la Tormenta (y Diezmo en 2D) | `storm_visual_linger` (0,22) |
+| Calma | 0, funde en 5 s |
+
+- **Ráfaga**: durante el golpe la ceniza cruza la pantalla empujada por el
+  viento. En 3D, un `CPUParticles3D` colgado de la cámara (`StormGust`, la mota
+  y el material del polvo de obra de `BuildingFx`: ningún shader nuevo) que se
+  borra solo; en 2D, el `CPUParticles2D` de `StormTint2D`, que solo emite en el
+  golpe. Motas por perfil en `storm_visual_gust_amount`. En calidad Mínima no
+  hay ráfaga; el golpe de oscuridad sí.
+- **Cargar a media Tormenta** no repite el golpe: se pinta el tono de fondo.
+- Fuera del golpe la severidad no se ve (el Aviso no adelanta la factura).
+  Ganada la Auditoría Final aclara de golpe y para siempre.
+
+- **Cielo**: color de fondo, los cuatro colores del `ProceduralSkyMaterial`
+  hacia ceniza, luz ambiental hacia ceniza clara y al 30 % de energía, sol al
+  15 %, niebla de ceniza hasta 0,014.
+- **Isla, agua y espuma**: el mismo peso, con el mismo fundido (un
+  `tween_method` sobre el uniform `storm_weight` de los cinco materiales).
+  `storm_grade()` desatura y enfría hacia la pizarra (`SLATE`) y baja el valor;
+  el agua además pierde brillo (más rugosa). La espuma no tiene luz, así que
+  aquí se apaga a mano y pierde opacidad: sin esto era lo único blanco bajo la
+  ceniza.
+- **Cargar o empezar partida** (`game_load_completed`, `game_new_started`):
+  `sync_to_storm()` pinta al instante la fase en que está la Tormenta, sin
+  fundido; en calma vuelve todo limpio. Los valores limpios se guardan una vez
+  por `Environment` (el de `Main.tscn` es un sub-recurso que puede sobrevivir a la
+  recarga con la ceniza puesta).
+- **Isla rehecha** (`grid_resized`, recarga): el peso vive en el autoload
+  (`StormSky.get_island_weight()`); IslandGenerator lo pone en los materiales al
+  crearlos, así que no nace limpia a media tormenta. Sin cielo (vista 2D) el
+  peso se guarda igual.
+- **Coste**: solo se tocan uniforms y propiedades del entorno durante los
+  fundidos (3-5 s por fase, el golpe unos 10 s); nada de materiales ni mallas nuevas (la ráfaga reusa la mota del polvo de obra).
+
+### Día y noche (2026-10-12)
+
+Solo visual, preparado para reglas. El público tiene 10-15 años: la noche es
+azulada y más baja de luz, **nunca oscura de verdad**.
+
+- **Modelo puro** `scripts/storm/DayCycle.gd` (como `StormCycle`): sin nodos, sin
+  señales, sin azar. `tick(delta)` devuelve eventos `day_phase_changed`. La hora va
+  de 0 a 1 y empieza al rayar el alba; fases `DAWN`, `DAY`, `DUSK`, `NIGHT`.
+  Consultas: `is_night()`, `light_weight()` (1 de día, 0 de noche, curva suave en
+  alba y ocaso), `warm_weight()` (el naranja del sol bajo, un arco dentro del alba y
+  del ocaso), `sun_arc()` (−1 este, 0 mediodía, 1 oeste; de noche la luna lo
+  recorre al revés, así la dirección de la luz nunca salta).
+- **Duración** (`GameConfig.day_cycle_*`): amanecer 90 s, día 600 s, atardecer
+  90 s, noche 180 s = **16 min** por vuelta. En dev_mode se comprime como todo.
+  `day_cycle_enabled = false` = siempre de día pleno (la luz de `Main.tscn`).
+- **Servicio**: `DayClock`, autoload propio (antes de StormSky). No vive en
+  StormSky porque la hora es estado de partida (save + `reset()` desde los tres
+  sitios de GameManager) y el `reset()` de StormSky no se puede llamar al empezar
+  partida (olvidaría los valores limpios del Environment). Se para con la pausa
+  real. Emite `day_phase_changed(phase, hour)` al entrar en cada fase. Una regla
+  futura pregunta `DayClock.is_night()` o `light_weight()`.
+- **3D (StormSky)**: los valores limpios de `Main.tscn` son los del **mediodía**.
+  Cada `day_cycle_refresh` segundos (2) y al cambiar de fase se calculan los del
+  momento (`_day`): sol, color del sol, luz ambiental, fondo y los cuatro colores
+  del cielo procedural. Alba y ocaso: sol y cielo hacia naranja (`SUN_WARM`,
+  `SKY_WARM`), el sol más bajo y girado (`SUN_DIP`, `SUN_SWEEP`, nunca bajo
+  `MIN_ELEVATION`: la maqueta se sigue leyendo). Noche: luna azulada al 50 % de
+  energía, luz ambiental azul a energía plena, cielo azul pizarra (`SKY_NIGHT`). Los
+  colores de la noche entran con n² (en mitad del ocaso manda el naranja).
+- **La Tormenta manda sobre la noche**: se mezcla *encima* del momento del día
+  hacia los mismos objetivos de ceniza que de día (calculados sobre los valores
+  limpios). Con la Tormenta en pleno da igual la hora, y la noche con Tormenta
+  nunca queda más oscura que la Tormenta de día. Los fundidos de 3-5 s son un solo
+  `tween_method` que relee `_day` en cada paso: el refresco del día no se pelea
+  con ellos.
+- **Isla**: uniform `night_weight` en `storm_grade.gdshaderinc` (= noche × (1 −
+  Tormenta)): quita un 30 % de saturación y enfría hacia el azul sin oscurecer (la
+  luna ya baja la luz). La espuma, sin luz, se apaga un 40 %; el agua pierde
+  además saturación y algo de brillo (agua azul bajo luna azul salía chillona).
+  IslandGenerator lo lee (`StormSky.get_island_night_weight()`) al crear la isla.
+- **Ventanas y faroles**: un parámetro del material compartido
+  `ToyPalette.glow_material()` (el `albedo_color` si es `StandardMaterial3D`, el
+  uniform `glow_gain` si un día es `ShaderMaterial`): ×0,8 de día, ×1,7 de noche,
+  ×1,4 con la Tormenta encima. Más de 1 es HDR: con glow (calidad alta) brillan.
+  Sin luces nuevas. Hoy solo lo usan las parcelas (`LotMesh`); los edificios
+  horneados de la rama de arte lo heredan sin tocar nada.
+- **2D (`StormTint2D`)**: el `CanvasModulate` parte del tinte del momento
+  (`day_tint()`: blanco de día, `WARM_TINT` al alba y al ocaso, `NIGHT_TINT` azul
+  de noche) y la ceniza se mezcla encima. Dos `lerp` por frame sobre un color.
+- **Guardado**: clave `day` (`{"hour"}`), docs/09. Partida vieja = de día.
+  **Offline el reloj no avanza**: al volver es la misma hora (como la Tormenta,
+  solo la producción corre con el juego cerrado).
+- **Coste**: nada nuevo por frame salvo durante los fundidos de la Tormenta (como
+  antes). El refresco cada 2 s toca propiedades del Environment y de la luz, cinco
+  uniforms y un color de material; el cielo (radiancia incremental) se recalcula
+  entonces. En calidad mínima sigue sin sombras: la luz que gira no cuesta nada.
+  Medida (2026-10-12, misma máquina cargada, 1600x900): alta día 50 fps / noche 49;
+  mínima día 77 / noche 75 — de noche cuesta lo mismo que de día.
+- Sonda: `tools/dianoche_probe.gd` (amanecer, día, atardecer, noche, costa y
+  cerca de noche, mínima de noche, noche con Tormenta y después, y lo mismo en 2D;
+  FPS de día y de noche). Capturas `docs/media/dev/dianoche_<tag>_*.png`.
+
+### Sonda
+
+`tools/arte_probe.gd` (con ventana y con `override.cfg` propio) fotografía la
+colonia en calma, de cerca, la costa (`3d_costa`), las calidades baja y mínima
+con su FPS, las tres fases de la Tormenta y la costa en Tormenta
+(`3d_costa_tormenta`), y la vista 2D. Con `--rendering-method mobile` repite todo
+en Mobile. Capturas en `docs/media/dev/arte_<tag>_*.png` (git-ignored).
+
+Medida de referencia (2026-10-12, PC de desarrollo, 1600x900, colonia sembrada):
+Forward+ alta ≈ 85 fps, baja ≈ 88, mínima ≈ 139; Mobile ≈ 135 / 138 / 151.
+
+### Pendiente
+
+- Día y noche: sin reglas todavía (producción nocturna, consumo de madera en luz,
+  Tormenta de noche). Los caminantes tienen el gancho
+  (`WorkerWalkers.set_presence()`, `GameConfig.life_night_presence`) sin cablear:
+  colgaría de `day_phase_changed`. AudioManager no cambia de noche (un ambiente
+  nocturno colgaría de la misma señal). Las parcelas no reciben `night_weight`
+  (como con `storm_weight`). Sin entrada en Ajustes para apagar el ciclo.
+
+- Las parcelas de los edificios (césped de los solares) no reciben
+  `storm_weight`: bajo la Tormenta quedan algo más verdes que la isla. Son de
+  los edificios, no de esta sección.
+- Mínima: `BuildingPlacer.gd` (3D) restaura la rejilla con
+  `GameConfig.ui_grid_visible` al terminar de colocar; debería usar
+  `GraphicsQuality.grid_always_visible()` (como ya hace `BuildingPlacer2D`), o en
+  Mínima con la rejilla "siempre" marcada vuelve a verse tras construir.
+- Mínima: el tope de caminantes nuevo se aplica en la siguiente reconciliación de
+  `WorkerWalkers` (al cambiar población, obreros o edificios), no al instante.
+
+## 13. Velocidad del juego (x1 / x2) e Informar de un fallo
+
+> Número fijo: el código lo cita como "docs/21 §13" (rama `feat/soporte-y-velocidad`).
+
+### Velocidad x1 / x2
+
+- **Botón:** `scripts/ui/GameSpeedButton.gd`, una capa (10) que crea `PauseMenu`
+  al arrancar como hermana suya (las dos vistas tienen `PauseMenu`; no está en
+  las escenas). Dice `x1` o `x2` y nada más; en x2 se tiñe de acento. Slot
+  `speed_button`: arriba en el centro, bajo el indicador de la Tormenta (en calma,
+  en su sitio); con la columna central bajada (tablet 4:3) se queda arriba en el
+  centro sin apilarse; en móvil vertical va bajo la insignia del rango. Registrado
+  en `HudRegistry` (`GameSpeedButton`): se oculta en Ajustes → Interfaz y se mueve
+  en Editar disposición.
+- **Atajo:** tecla **F** (sin Ctrl/Alt), en `_unhandled_key_input`: un campo de
+  texto con foco se la queda. Con el juego en pausa no responde
+  (`PROCESS_MODE_PAUSABLE`).
+- **Qué acelera:** la simulación. `GameConfig.game_speed` (1.0 o 2.0,
+  `GAME_SPEEDS`) y `GameConfig.sim_delta(delta)`, que leen en su `_process`
+  ProductionManager (construcción, producción, caducidad), ProcessManager,
+  PopulationManager (consumo y crecimiento), ArmyManager (entrenamiento y
+  sueldo), TechTreeManager, StormManager (ciclo y tormenta de prueba), DayClock,
+  RandomEventManager y MarketManager. En el tablero, `get_combat_ai_step_delay()`
+  pasa por `GameConfig.combat_pace()`: el turno enemigo va al doble.
+- **Qué no:** la interfaz (tweens, avisos, cámara, arrastre), el autoguardado
+  (segundos reales), los enfriamientos de avisos, el reloj del tutorial, el tiempo
+  jugado (`ProgressionManager.get_played_seconds()`, que es de verdad) y la
+  progresión offline.
+- **Por qué no `Engine.time_scale`:** escala el `delta` de *todo* nodo y de todo
+  tween y `Timer`: la cámara, los avisos, `DragScroll`, los globos, el
+  autoguardado y las animaciones de menús irían al doble, y cada uno pediría su
+  excepción (`ignore_time_scale`, o dividir el delta) en archivos de otras ramas.
+  Con el multiplicador, la regla es una línea al principio de cada `_process` de
+  servicio y lo demás no se entera. Coste: una multiplicación por servicio y
+  fotograma. Con `dev_time_scale` se compone sin pisarse (uno acorta duraciones,
+  el otro acelera el reloj).
+- **La vista de combate** (otra rama) lee `GameConfig.game_speed`, acorta sus
+  animaciones con `GameConfig.combat_pace(segundos)` y escucha
+  `EventBus.game_speed_changed(speed)` para cambiar a mitad de tablero.
+- **No se guarda:** ni en `save_game.json` ni en `settings.cfg`. Al abrir el
+  juego siempre es x1 (escribirla en `settings.cfg` sería un valor que nadie lee).
+  Lo que sí guarda `settings.cfg` es el botón: oculto o movido (HudRegistry). La
+  pausa real sigue igual: con el árbol en pausa ningún `_process` corre.
+- **Tests:** `tests/support/test_game_speed.gd`.
+
+### Informar de un fallo
+
+**☰ MENÚ → PARTIDA → Informar fallo** (en la fila de Historia, tras AYUDA; el
+nombre largo va en su tooltip) copia al portapapeles
+el informe de `scripts/services/BugReport.gd` y lo dice bajo los grupos, como
+Guardar: "Copiado. Pégalo en un mensaje." Nada sale del equipo. Qué lleva, dónde
+está el registro y cómo se limpian las rutas: docs/19 §7.
+
+PARTIDA lleva dos filas de dos botones (Guardar | PARTIDAS, Historia | Informar
+fallo, con letra de cuerpo): con diez botones en columna, en una tablet de 720 px
+de alto "Guardar y salir" quedaba tras el scroll; con ocho filas cabe entero.
+
+## 14. Avisos: un solo sitio (2026-10-18, rama `integracion/1.0-bandera-controles`)
+
+Bryan: "las alertas se sobreponen a todo, se ve feo". Antes había cuatro sitios
+que pintaban encima de lo que fuera: los toasts de `NotificationPanel` (abajo a la
+izquierda, hasta 3, y en tablet 4:3 al centro encima de CONSTRUIR), la placa de
+hito y era de `ProgressPanel` (a un tercio de pantalla, centrada), el ascenso de
+`RankPanel` (bajo la insignia) y las tarjetas de `HelperPanel`. Con una ráfaga
+(Tormenta + almacén lleno + logro + era + rango) se apilaban, y el peligro podía
+perderse porque el tope tiraba el más viejo.
+
+- **Un sitio**: la columna izquierda bajo los recursos (`toast_area`, apilada tras
+  el registro, que casi siempre está oculto y le cede su sitio; en tablet 4:3 y
+  móvil queda bajo la Tormenta, que baja a esa columna). No toca CONSTRUIR ni su
+  consejo (abajo al centro), ¿QUÉ HACER? ni la insignia (arriba a la derecha) ni
+  los controles en pantalla. El globo de los recursos (`tip_left`) va debajo.
+- **Hitos, eras y ascensos son avisos** (categoría `achievement`): `ProgressPanel`
+  y `RankPanel` ya no pintan placas; emiten `notification_posted` y el ascenso va en
+  una frase (`RankPanel.rank_up_text`: "▲ 3 · Maestro de obras: + Jardín").
+- **Como mucho 2 a la vez; 1 en teléfono** (perfil `phone` o lienzo estrecho) o si
+  entre la columna y la cruceta no caben dos (`NotificationPanel.capacity`). El
+  resto espera en `AlertQueue` (pura, `scripts/ui/AlertQueue.gd`): por orden de
+  llegada, los de peligro delante (y desplazan a uno corriente), y la cola no pasa
+  de 4: lo de más se resume en "N avisos más en el REGISTRO", que sale el último.
+- **Repetidos agrupados**: el mismo texto y categoría no sale dos veces; suma
+  "×3" y su reloj vuelve a empezar.
+- **Compactos**: icono (cuadrito del color con "!", "i", "▲" o "»", para no
+  depender del color), una frase (`headline`: hasta el primer ". ", "! " o "? ";
+  el texto entero va en el registro y en la ayuda emergente), "×N" y ✕. Dos líneas
+  como mucho; se van solos (5 s, peligro 7 s). Sin animaciones.
+- **Con algo abierto esperan**: una ventana de `UIManager` (CONSTRUIR, ficha,
+  Ejército, Misiones, Mercado, Ajustes...), el tablero, el registro, un parte de
+  guerra o la derrota/victoria (grupo `modal_screen`), la intro del tutorial, o la
+  tarjeta del tutorial o un consejo encima de la columna (grupo `alert_blocker`).
+  Mientras, solo se ve **un aviso de peligro, pequeño** (una línea), apartado en
+  la esquina de abajo a la izquierda (libre con CONSTRUIR, la ficha, Ajustes y el
+  tablero; arriba tapaba la cabecera del tablero); al cerrar,
+  salen los que esperaban, con su cuenta. La salida y vuelta de una expedición
+  (`combat`) ya no se pinta encima de la pelea: espera como los demás.
+- **Coste**: como mucho dos `PanelContainer` en pantalla; `_process` solo corre
+  mientras hay avisos en pantalla o en cola (mira la tarjeta del tutorial cada
+  0,25 s).
+
+Tests: `tests/ui/test_alert_queue.gd` (la regla pura y el panel),
+`tests/ui/test_held_notices.gd` (tablero), `test_hud_layout`, `test_hud_words`,
+`test_rank_panel`. Sonda: `tools/interfaz_probe.gd -- --alerts --no-help
+--only-hud` (ráfaga de avisos, luego con CONSTRUIR abierto y al cerrarlo; capturas
+`*_alerts*.png` en `docs/media/dev/interfaz/`).
+
+## 15. HUD del rediseño (2026-10-18, rama `feat/ui2-hud`)
+
+Fase 2 del rediseño de la interfaz (guía: `docs/28-guia-ui.md`, §12 "HUD
+mínimo"). El estilo maqueta (`CartoonTheme`, Baloo 2 + Nunito Sans, superficie
+mixta) es **el de serie** (`UITheme.STYLE_DEFAULT = "cartoon"`); el clásico queda
+como respaldo interno (`-- --ui-style=classic`). Todo lo de abajo mira
+`UITheme.is_cartoon()`; con el clásico, el HUD de siempre.
+
+**Qué queda fijo en pantalla**
+
+| Sitio | Qué | Script / slot |
+|---|---|---|
+| Arriba a la izquierda | Barra oscura fina: `[icono] cifra` (Baloo 2), nombre pequeño debajo solo en PC (según *Nombres junto a los iconos*); barra de almacén de 8 px en PC con la cifra al mantener. **Teléfono:** 3 recursos clave (oro, madera, acero; 4 desde 780 de ancho) + libres; la moral, el resto, los materiales y la cifra del almacén al tocar la barra | `ResourceHUD`, `top_left` |
+| Debajo | La columna de avisos (máx. 2; 1 en teléfono) con `CartoonTheme.notice()`: icono con forma por tipo, una frase, "×N", X; en teléfono tocar el aviso lo cierra. La cola no cambia (`AlertQueue`) | `NotificationPanel`, `toast_area` |
+| Arriba a la derecha | ☰ redondo (54 / 48) y, a su izquierda, el rango compacto (bandera, ★ cifra, nombre del país y barra de XP; teléfono: bandera, ★ cifra y barra) | `PauseMenu`, `RankPanel` (`rank_badge`) |
+| Bajo el ☰ | La Tormenta: un icono redondo (sol en calma, nube con rayo en las fases, aro del color de la fase), sin latido; la fase y el margen "3–5 min" al mantener; tocarlo abre la Orden de la Regencia (tarjeta clara) | `StormHUD`, `storm_icon` |
+| Abajo en el centro | **La barra**: Ejército y Misiones (punto rojo con `CombatManager.sortie_reason()`) a la izquierda de CONSTRUIR; Mercado, Investigar y Ayuda a la derecha. Redondos azules con nombre debajo (PC/tablet) o solo icono (teléfono). Gris con candado y el porqué al mantener cuando no se puede ("Falta un Cuartel", "Falta un Mercado", "Aún en obras", "Sin carretera") | `BottomBar` (nuevo, en Main.tscn y Main2D.tscn), `bottom_bar` |
+| Abajo a la izquierda | **¿QUÉ HACER?**: una línea con la cara de la Capitana y "Haz una Casa →". Tocar la cara la pliega; tocar el texto abre el panel con el porqué y el camino. El porqué corto, al mantener. Oculta mientras enseña el tutorial guiado. Con la cruceta en pantalla (tablet) sube por encima (`above_dpad`) | `ObjectivePanel` (capa propia 10), `next_step` |
+
+**El ☰ reducido**: AJUSTES, PARTIDAS y SALIR (guarda y vuelve al menú principal,
+que tiene "Salir"), con la **velocidad x1 / x2 dentro** (dos pastillas; el botón
+suelto `GameSpeedButton` se sigue creando por el atajo F, pero oculto). Historia
+e Informar fallo, en pequeño debajo. Lo que salió del ☰ sigue a mano:
+
+| Antes en ☰ | Ahora |
+|---|---|
+| Ejército, Escaramuzas (Misiones), Ayuda | Barra de abajo |
+| Mercado, Tecnología (ya iban por su edificio) | Barra de abajo (con su edificio terminado y con carretera) |
+| ¿Qué hacer? | La línea del siguiente paso (`PauseMenu.entry("Colony_objectives")` la devuelve, para el tutorial) |
+| Colonia (rango) | Tocar el rango |
+| Progreso, Encargos, Registro, Sandbox | La tarjeta de la colonia (tocar el rango), fila `ColonyHub` |
+| Música | Ajustes → Audio |
+| Guardar | PARTIDAS guarda antes de abrir; autoguardado |
+
+El viejo botón ESCARAMUZAS (`SkirmishButton`) sigue en la escena pero la barra lo
+oculta. **Globos de ayuda apagados de serie** (`GameConfig.ui_helper_visible =
+false`): se encienden desde Ayuda; el tutorial guiado fuerza los que necesita.
+
+**Teléfono** (`CartoonTheme.phone`, lienzo de < 450 de lado corto, §1):
+`UILayoutConfig.PHONE_SLOTS` (márgenes de 8, CONSTRUIR y la barra a 8 del borde,
+la línea del siguiente paso encima de la barra), mezclado en
+`UILayoutManager.get_slot()` antes que `NARROW_SLOTS`. Cruceta y zoom apagados de
+serie (§1).
+
+**Sin animaciones**: fuera el latido de la Tormenta, el destello del recurso
+desbloqueado, el parpadeo de la barra al desbordar y el fundido de los controles
+en pantalla al soltarlos.
+
+Tests: `tests/ui/test_bottom_bar.gd`, `tests/ui/test_ui2_hud.gd`, y al día
+`test_game_menu`, `test_device_profile`, `test_touch_controls`,
+`test_cartoon_theme`, `test_hud_layout`, `test_ui_stacking`, `test_view_mode`.
+## 16. CONSTRUIR, ficha, Mercado e Investigar con el estilo nuevo (2026-10-18, rama `feat/ui2-construir`)
+
+Fase 2 del rediseño (`docs/28-guia-ui.md` §16): las cuatro pantallas de la
+economía se rehacen con `CartoonTheme`, **teléfono primero** (640×360 y
+800×360) y luego tablet y PC. Sin animaciones; icono + número; una frase como
+mucho; el detalle al mantener pulsado (`TouchTooltip`) o al pasar el ratón.
+
+| Pantalla | Teléfono (lienzo < 450 de alto) | Tablet / PC |
+|---|---|---|
+| CONSTRUIR (`ConstructionMenu`) | Ventana a pantalla completa (`CartoonTheme.fit_fullscreen`). Carril de pestañas de categoría a la izquierda, **solo icono**; una columna de filas de una línea. Sin ficha: el detalle de cada fila, al mantenerla. | La ventana en su slot (`center_modal`, 1000×640). Carril con icono y palabra, la lista y, a la derecha (lienzo ≥ 760 de ancho), la ficha del elegido. |
+| Ficha (`BuildingInfoPanel`) | Panel a la derecha, de arriba abajo, con medio lienzo de ancho como mucho (≤ 330): el edificio se ve a la izquierda. Sin velo. | Slot `right_panel` (360 de ancho). |
+| MERCADO (`MarketPanel`) | Pantalla completa, una fila por recurso en un scroll. | Centrada (760 de ancho, el alto de sus filas). |
+| INVESTIGAR (`TechTreePanel`) | Pantalla completa: carril de ramas (solo icono), la rama elegida y la ficha a la derecha. | Centrada (1120×640): las tres ramas lado a lado y la ficha. Por debajo de 880 de ancho, como en teléfono. |
+
+`CartoonTheme.is_phone(vp)` decide (la bandera `CartoonTheme.phone` o un lienzo
+de menos de 450 de alto); cada panel se recoloca con `UILayoutManager.layout_changed`
+y `size_changed`, y CONSTRUIR rehace su carril y sus filas al cruzar el umbral.
+
+**CONSTRUIR, la fila**: `[miniatura] Nombre ....... [coste] [martillo]`.
+
+- El coste en fichas hundidas (`CartoonTheme.cost_strip`, compatible con
+  `TextKit.row_amounts`: cada cifra se llama `Amount_<id>`), **en rojo lo que
+  falta**; si faltan trabajadores libres, una ficha de obrero en rojo.
+- El **martillo** verde (`RowBuild`) elige y empieza a colocar; gris si no se
+  puede pagar (el porqué, en el globo de la fila).
+- Bloqueada: candado + su porqué en 1-3 palabras en el sitio del coste
+  (`ConstructionMenu.lock_reason`: "Rango 4", "Era 2", "Falta Almacén", "Aún
+  no"), miniatura a media luz y sin martillo. Se puede tocar: la ficha dice todo
+  lo que le falta.
+- Tope lleno: la etiqueta **"Al máximo"** en vez del coste y el atajo **MEJORAR**
+  (`RowUpgradeOne`, azul: abre la ficha del de nivel más bajo).
+- Tocar la fila la **elige** (al soltar dentro, para que arrastrar la lista no
+  elija); el ratón encima solo resalta (A14).
+- Se quitó el buscador y la maqueta 3D que giraba: la ficha usa la miniatura
+  quieta (la foto que se hace al arrancar), que además cuesta menos.
+
+**Ficha del edificio**: la cinta de latón con el nombre (la descripción, al
+mantenerla); "Nivel 2 de 3" con su barra; el estado en una palabra
+("Trabajando", "Sin carretera", "Parado por ti"…); lo que hace en fichas de
+cifra ("+6 [madera] cada 12 s", "[obrero] 2 trabajan"); la obra; lo acumulado
+con **RECOGER** en la misma fila (y el cultivo de la Granja como selector);
+**REPARAR** ámbar con su coste al lado; **MEJORAR** verde con su coste al lado y,
+apagado, el porqué en rojo debajo; los procesos del taller (`ProcessCard`: coste
+→ producto en fichas y los lotes x1 verde / x5 / MAX). Abajo, fuera del scroll,
+los botones por intención: **ABRIR MERCADO / INVESTIGAR** (azul, en el Mercado y
+el Laboratorio), retirar o poner trabajadores (solo icono; crema / verde),
+**MOVER**, **GIRAR** (solo icono: lo levanta como MOVER y gira el fantasma un
+cuarto, `EventBus.building_rotate_requested`) y **derribar** (rojo, solo icono,
+pide confirmación). Los grupos del tutorial (`hud_info_repair`, `hud_info_move`,
+`hud_info_demolish`, `hud_info_demolish_confirm`) siguen en sus botones.
+
+**Mercado**: arriba tu oro; cada fila `[icono] [oro] compra · [oro] venta · [−]
+10 [+] · COMPRAR · VENDER` (la palabra bajo cada precio solo en PC). COMPRAR y
+VENDER se apagan si no alcanza y el globo dice por qué ("Falta oro"). En
+Gobernador, el spread y la flecha de tendencia en la fila y la estación arriba.
+
+**Investigar**: cada tarjeta, dos líneas ("1 · Nombre" y su ventaja); el color
+dice el estado (investigada, disponible con el borde de su rama, bloqueada). El
+porqué, el coste y el lore, al mantenerla. La ficha: nombre, nivel y rama (la
+frase de la rama al mantenerla), la ventaja en verde, una frase de lore, el
+requisito, el coste en fichas con el tiempo y **INVESTIGAR**.
+
+Textos nuevos: bloque `# UI v2 CONSTRUIR` de `Tr.gd` (claves `UI2C_*`, ES y EN).
+Piezas nuevas en `CartoonTheme` (sección `# --- CONSTRUIR (feat/ui2-construir)`):
+`is_phone`, `cost_strip` / `fill_cost_strip`, `thumb_frame`, `set_pill_text`,
+`set_pill_kind`, `why_label`, `section`, `fit_fullscreen` / `fit_desktop` /
+`place_center`, `level_bar`, `text_pill` / `style_text_pill`,
+`style_card_button`, `rotate_glyph`, `danger_text` / `positive_text`.
+
+Tests: `tests/ui/test_ui2_construir.gd`, y se ajustaron `test_tech_detalle`,
+`test_tech_tree_explained` y `test_blocked_reasons` (el porqué y el coste de una
+tecnología pasan de la tarjeta a su globo).

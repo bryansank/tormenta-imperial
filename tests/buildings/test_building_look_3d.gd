@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## El aspecto de los edificios en 3D: las fases de obra por huella que genera
-## DieselpunkBuildingFactory, el andamio de mejora, los escombros de la ruina,
+## DieselpunkBuildingFactory (que delega en SiteMesh), el andamio de mejora, los escombros de la ruina,
 ## la hoja de humo de BuildingFx y BuildingLookVisual aplicandolos sobre un
 ## edificio (modelo oculto en obra, hundido en ruina, humo al trabajar).
 
@@ -9,6 +9,9 @@ const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
 const Fx := preload("res://scripts/buildings/BuildingFx.gd")
 const Badge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
 const Placer := preload("res://scripts/buildings/BuildingPlacer.gd")
+const Site := preload("res://scripts/buildings/SiteMesh.gd")
+
+const Palette := preload("res://scripts/buildings/ToyPalette.gd")
 
 const CELL := 2.0
 
@@ -17,6 +20,21 @@ func _mesh_count(node: Node) -> int:
 	for c in node.get_children():
 		n += _mesh_count(c)
 	return n
+
+## Triangulos de todas las mallas de `node` (lo quieto de una obra va en una
+## sola malla: se cuentan piezas por triangulos, no por nodos).
+func _tris(node: Node) -> int:
+	var n := 0
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		var mesh: Mesh = (node as MeshInstance3D).mesh
+		for s in mesh.get_surface_count():
+			n += (mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() / 3
+	for c in node.get_children():
+		n += _tris(c)
+	return n
+
+func _groups(site: Node3D) -> Array:
+	return site.get_meta("site_groups", [])
 
 func _top(node: Node3D) -> float:
 	return Badge.measure_top(node)
@@ -29,7 +47,24 @@ func test_factory_builds_every_phase_for_every_footprint() -> void:
 			var site: Node3D = auto_free(DieselpunkBuildingFactory.create_construction_phase(fp, phase, CELL))
 			assert_object(site).is_not_null()
 			assert_str(String(site.name)).is_equal("ConstructionPhase%d" % phase)
-			assert_int(_mesh_count(site)).is_greater(3)
+			# Todo lo quieto en UNA malla, la primera; lo animado aparte.
+			assert_str(String(site.get_child(0).name)).is_equal("Site")
+			assert_int(_tris(site.get_child(0))).is_greater(100)
+			assert_object(site.find_child("SiteFlag", true, false)).is_not_null()
+
+func test_the_site_is_one_static_mesh() -> void:
+	# Para un equipo modesto: lo quieto de una obra es una sola malla; el resto
+	# son las piezas que mueve un shader (banderin, grua, chispas/polvo).
+	for phase in 3:
+		var site: Node3D = auto_free(DieselpunkBuildingFactory.create_construction_phase(Vector2i(3, 3), phase, CELL, "foundry", 5))
+		var statics := 0
+		for c in site.get_children():
+			if not (c is MeshInstance3D):
+				continue
+			var animated: bool = (c as MeshInstance3D).material_override is ShaderMaterial or String(c.name).begins_with("SiteFx_")
+			if not animated:
+				statics += 1
+		assert_int(statics).is_equal(1)
 
 func test_phases_rise_one_after_another() -> void:
 	# Valla baja, cimientos bajos, estructura alta: la fase 2 es la que se ve de lejos.
@@ -41,7 +76,7 @@ func test_phases_rise_one_after_another() -> void:
 func test_bigger_footprints_carry_more_pieces() -> void:
 	var small: Node3D = auto_free(DieselpunkBuildingFactory.create_construction_phase(Vector2i(1, 1), 2, CELL))
 	var big: Node3D = auto_free(DieselpunkBuildingFactory.create_construction_phase(Vector2i(3, 3), 2, CELL))
-	assert_int(_mesh_count(big)).is_greater(_mesh_count(small))
+	assert_int(_tris(big)).is_greater(_tris(small))
 	# La grua solo sale en las parcelas de 2x2 o mas.
 	assert_object(small.find_child("CraneJib", true, false)).is_null()
 	assert_object(big.find_child("CraneJib", true, false)).is_not_null()
@@ -53,9 +88,13 @@ func test_unknown_phase_is_null() -> void:
 func test_site_materials_are_shared() -> void:
 	var a: Node3D = auto_free(DieselpunkBuildingFactory.create_construction_phase(Vector2i(2, 2), 1, CELL))
 	var b: Node3D = auto_free(DieselpunkBuildingFactory.create_construction_phase(Vector2i(3, 3), 1, CELL))
-	var ma: Material = (a.get_child(0) as MeshInstance3D).get_surface_override_material(0)
-	var mb: Material = (b.get_child(0) as MeshInstance3D).get_surface_override_material(0)
+	# Los de la paleta de la maqueta: los mismos que los edificios y las parcelas.
+	var ma: Material = (a.get_child(0) as MeshInstance3D).mesh.surface_get_material(0)
+	var mb: Material = (b.get_child(0) as MeshInstance3D).mesh.surface_get_material(0)
 	assert_object(ma).is_same(mb)
+	assert_object(ma).is_same(Palette.solid_material())
+	var ruin: Node3D = auto_free(DieselpunkBuildingFactory.create_ruin_overlay(Vector2i(2, 2), CELL, 3))
+	assert_object((ruin.get_child(0) as MeshInstance3D).mesh.surface_get_material(0)).is_same(Palette.solid_material())
 
 func test_scaffold_and_ruin_overlay() -> void:
 	var scaffold: Node3D = auto_free(DieselpunkBuildingFactory.create_scaffold(Vector2i(2, 2), CELL, 3.0))
@@ -63,14 +102,15 @@ func test_scaffold_and_ruin_overlay() -> void:
 	assert_float(_top(scaffold)).is_greater(2.5)
 	var ruin: Node3D = auto_free(DieselpunkBuildingFactory.create_ruin_overlay(Vector2i(2, 2), CELL, 7))
 	assert_str(String(ruin.name)).is_equal("RuinOverlay")
-	assert_int(_mesh_count(ruin)).is_greater(8)
+	assert_int(_tris(ruin)).is_greater(100)
 
 func test_ruin_overlay_is_deterministic() -> void:
 	var a: Node3D = auto_free(DieselpunkBuildingFactory.create_ruin_overlay(Vector2i(2, 2), CELL, 42))
 	var b: Node3D = auto_free(DieselpunkBuildingFactory.create_ruin_overlay(Vector2i(2, 2), CELL, 42))
 	assert_int(a.get_child_count()).is_equal(b.get_child_count())
-	for i in a.get_child_count():
-		assert_vector((a.get_child(i) as Node3D).position).is_equal((b.get_child(i) as Node3D).position)
+	var va: PackedVector3Array = (a.get_child(0) as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var vb: PackedVector3Array = (b.get_child(0) as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	assert_bool(va == vb).is_true()
 
 # ── Hoja de sprites ──────────────────────────────────────────────────
 
@@ -147,6 +187,28 @@ func test_ruin_sinks_the_model_and_repair_restores_it() -> void:
 	assert_vector(model.rotation).is_equal(Vector3.ZERO)
 	assert_object(look.get_ruin()).is_null()
 
+func test_damage_stages_lean_the_model_and_repair_straightens_it() -> void:
+	var parts := _building("barracks")
+	var model: Node3D = parts[1]
+	var look = parts[2]
+	look.apply({"look": LookRule.Look.IDLE, "phase": 0, "damage": LookRule.DAMAGE_LIGHT})
+	assert_str(String(look.get_damage_node().name)).is_equal("DamageOverlay1")
+	assert_float(absf(model.rotation.z)).is_greater(0.01)
+	# Grave: otra malla, con humo y chispas; trabajar no la quita.
+	look.apply({"look": LookRule.Look.ACTIVE, "phase": 0, "damage": LookRule.DAMAGE_HEAVY})
+	assert_str(String(look.get_damage_node().name)).is_equal("DamageOverlay2")
+	assert_object(look.get_damage_node().find_child("DamageSmoke", true, false)).is_not_null()
+	look.apply({"look": LookRule.Look.IDLE, "phase": 0, "damage": LookRule.DAMAGE_NONE})
+	assert_object(look.get_damage_node()).is_null()
+	assert_vector(model.position).is_equal(Vector3.ZERO)
+	assert_vector(model.rotation).is_equal(Vector3.ZERO)
+
+func test_the_damage_mesh_is_cached_per_stage_and_box() -> void:
+	var box := AABB(Vector3(-1.5, 0, -1.5), Vector3(3, 3, 3))
+	var a = Site.damage_mesh(LookRule.DAMAGE_LIGHT, box, 0)
+	assert_object(Site.damage_mesh(LookRule.DAMAGE_LIGHT, box, 0)).is_same(a)
+	assert_object(Site.damage_mesh(LookRule.DAMAGE_HEAVY, box, 0)).is_not_same(a)
+
 func test_working_shows_the_effect_and_stopping_hides_it() -> void:
 	var parts := _building("foundry")
 	var look = parts[2]
@@ -207,7 +269,11 @@ func _fingerprint(node: Node, xform: Transform3D = Transform3D.IDENTITY) -> Arra
 		var local: Transform3D = xform * (c as Node3D).transform
 		if c is MeshInstance3D and (c as MeshInstance3D).mesh:
 			var label := "mesh" if String(c.name).begins_with("@") else String(c.name)
-			out.append("%s|%s" % [label, str(local.origin.snapped(Vector3.ONE * 0.001))])
+			var mesh: Mesh = (c as MeshInstance3D).mesh
+			# La malla unica de la obra cambia por dentro: su caja y su tamano cuentan.
+			var box: AABB = mesh.get_aabb()
+			out.append("%s|%s|%s|%s|%d" % [label, str(local.origin.snapped(Vector3.ONE * 0.001)),
+				str(box.position.snapped(Vector3.ONE * 0.001)), str(box.size.snapped(Vector3.ONE * 0.001)), _tris(c)])
 		out.append_array(_fingerprint(c, local))
 	return out
 
@@ -236,14 +302,10 @@ func test_different_buildings_raise_different_sites() -> void:
 	# Y la fase 0 apila otra cosa: troncos en el aserradero, tuberias en la refineria.
 	var saw := _site("sawmill", 0, seed_val)
 	var ref := _site("refinery", 0, seed_val)
-	var saw_kinds := []
-	for p in saw.get_node("Piles").get_children():
-		saw_kinds.append(String(p.name))
+	var saw_kinds: Array = saw.get_meta("site_piles")
 	assert_bool(saw_kinds.any(func(k): return k in ["Pile_logs", "Pile_sawdust", "Pile_planks"])).is_true()
 	assert_bool(saw_kinds.has("Pile_pipes")).is_false()
-	var ref_kinds := []
-	for p in ref.get_node("Piles").get_children():
-		ref_kinds.append(String(p.name))
+	var ref_kinds: Array = ref.get_meta("site_piles")
 	assert_bool(ref_kinds.any(func(k): return k in ["Pile_pipes", "Pile_drums", "Pile_beams"])).is_true()
 	assert_bool(ref_kinds.has("Pile_logs")).is_false()
 
@@ -254,15 +316,15 @@ func test_every_building_keeps_its_three_phases_recognisable() -> void:
 			var found := _site(id, 1, seed_val)
 			var frame := _site(id, 2, seed_val)
 			# 0: siempre valla (postes y tablas o paneles) y pilas.
-			assert_int(_mesh_count(fence.get_node("Fence"))).override_failure_message(id).is_greater(8)
-			assert_int(fence.get_node("Piles").get_child_count()).is_greater(0)
+			assert_array(_groups(fence)).contains(["Fence", "Piles"])
+			assert_int(_tris(fence.get_child(0))).override_failure_message(id).is_greater(150)
+			assert_int((fence.get_meta("site_piles") as Array).size()).is_greater(0)
 			# 1: siempre losa con zapatas; ni valla ni estructura.
-			assert_object(found.get_node_or_null("Foundation")).is_not_null()
-			assert_object(found.get_node_or_null("Fence")).is_null()
-			assert_object(found.get_node_or_null("Frame")).is_null()
+			assert_array(_groups(found)).contains(["Foundation"])
+			assert_array(_groups(found)).not_contains(["Fence", "Frame"])
 			# 2: siempre estructura, alta, con andamio; y la grua desde 2x2.
-			assert_int(_mesh_count(frame.get_node("Frame"))).override_failure_message(id).is_greater(3)
-			assert_object(frame.get_node_or_null("Scaffold")).is_not_null()
+			assert_array(_groups(frame)).contains(["Frame", "Scaffold"])
+			assert_int(_tris(frame.get_child(0))).override_failure_message(id).is_greater(_tris(found.get_child(0)))
 			assert_float(_top(frame)).override_failure_message(id).is_greater(_top(fence) + 0.8)
 			var data: BuildingData = load("res://data/buildings/%s.tres" % id)
 			var has_crane := frame.find_child("CraneJib", true, false) != null

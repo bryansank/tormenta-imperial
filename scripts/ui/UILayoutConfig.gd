@@ -27,7 +27,7 @@ const SLOTS := {
 	## La tarjeta de estado de debajo ("status_bar") se quito en 2026-10.
 	"top_left": {
 		"anchor": Rect2(0, 0, 0, 0),
-		"margin": {"left": 10, "top": 8, "right": 0, "bottom": 0},
+		"margin": {"left": 14, "top": 14, "right": 0, "bottom": 0},
 		"max_size": Vector2(300, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
@@ -67,6 +67,17 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_END,
 	},
+	## El boton de velocidad x1 / x2 (GameSpeedButton): bajo la Tormenta, y en
+	## calma (la Tormenta oculta) en su sitio, arriba en el centro.
+	"speed_button": {
+		"anchor": Rect2(0.5, 0, 0.5, 0),
+		"margin": {"left": 0, "top": 8, "right": 0, "bottom": 0},
+		"max_size": Vector2(64, 0),
+		"grow_h": Control.GROW_DIRECTION_BOTH,
+		"grow_v": Control.GROW_DIRECTION_END,
+		"stack_after": "StormHUD",
+		"gap": 6,
+	},
 	## Columna derecha: botones del menu lateral -> panel de edificio.
 	"sidebar_buttons": {
 		"anchor": Rect2(1, 0, 1, 0),
@@ -77,21 +88,55 @@ const SLOTS := {
 	},
 	"right_panel": {
 		"anchor": Rect2(1, 0, 1, 1),
-		"margin": {"left": 0, "top": 210, "right": 8, "bottom": 20},
+		"margin": {"left": 0, "top": 210, "right": 18, "bottom": 112},
 		"max_size": Vector2(360, 0),
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,
 		"stack_after": "sidebar_buttons",
 		"gap": 8,
 	},
-	## Insignia del rango del gobernador: a la izquierda del boton "☰ MENU"
-	## (PauseMenu: 118 px + 10 de margen + 10 de hueco), en la misma franja.
+	## Insignia del rango del gobernador: a la izquierda del ☰ redondo (PauseMenu:
+	## 54 px + 14 de margen + 8 de hueco), en la misma franja (rediseno 2026-10).
 	"rank_badge": {
 		"anchor": Rect2(1, 0, 1, 0),
-		"margin": {"left": 0, "top": 10, "right": 138, "bottom": 0},
+		"margin": {"left": 0, "top": 14, "right": 76, "bottom": 0},
 		"max_size": Vector2(200, 0),
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,
+	},
+	## La Tormenta, un icono redondo solo, debajo del ☰ (docs/28 §12): 14 + 54 +
+	## 8 de alto; centrada bajo el ☰ (54 - 50) / 2 = 2. La Orden de la Regencia se
+	## despliega debajo, hacia la izquierda.
+	"storm_icon": {
+		"anchor": Rect2(1, 0, 1, 0),
+		"margin": {"left": 0, "top": 76, "right": 16, "bottom": 0},
+		"max_size": Vector2(0, 0),
+		"grow_h": Control.GROW_DIRECTION_BEGIN,
+		"grow_v": Control.GROW_DIRECTION_END,
+	},
+	## La barra de abajo (BottomBar): Ejercito y Misiones a la izquierda de
+	## CONSTRUIR, Mercado, Investigar y Ayuda a la derecha. Centrada y con el
+	## mismo margen de abajo que CONSTRUIR (bottom_center): el hueco del centro
+	## mide lo que CONSTRUIR.
+	"bottom_bar": {
+		"anchor": Rect2(0.5, 1, 0.5, 1),
+		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 20},
+		"max_size": Vector2.ZERO,
+		"grow_h": Control.GROW_DIRECTION_BOTH,
+		"grow_v": Control.GROW_DIRECTION_BEGIN,
+	},
+	## ¿QUE HACER? como una linea plegable con la cara de la Capitana (docs/28
+	## §12), abajo a la izquierda. `above_dpad`: con la cruceta en pantalla
+	## (tablet) sube por encima de ella (UILayoutManager.get_slot).
+	## Encima de la barra de abajo (2026-10-19): en la misma fila se montaba sobre
+	## Ejercito / Misiones con textos largos (20 + 64 del redondo + nombre + 12).
+	"next_step": {
+		"anchor": Rect2(0, 1, 0, 1),
+		"margin": {"left": 14, "top": 0, "right": 0, "bottom": 118},
+		"max_size": Vector2(0, 0),
+		"grow_h": Control.GROW_DIRECTION_END,
+		"grow_v": Control.GROW_DIRECTION_BEGIN,
+		"above_dpad": true,
 	},
 	"center_modal": {
 		"anchor": Rect2(0.5, 0.5, 0.5, 0.5),
@@ -100,18 +145,37 @@ const SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_BOTH,
 		"grow_v": Control.GROW_DIRECTION_BOTH,
 	},
+	## La columna de avisos (NotificationPanel, Bryan 2026-10-18): el UNICO
+	## sitio de los avisos, logros y ascensos. Bajo los recursos (y bajo la
+	## Tormenta cuando esta baja a la izquierda): se apila tras el registro,
+	## que casi siempre esta oculto y le cede su sitio (y abierto, los avisos
+	## esperan). Lejos de CONSTRUIR y su
+	## consejo (abajo al centro), de ¿QUE HACER? y la insignia (arriba a la
+	## derecha) y de la cruceta (abajo a la izquierda: NotificationPanel.capacity
+	## deja uno si no caben dos).
 	"toast_area": {
-		"anchor": Rect2(0, 1, 0, 1),
-		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 200},
-		"max_size": Vector2(344, 210),
+		"anchor": Rect2(0, 0, 0, 0),
+		"margin": {"left": 10, "top": 186, "right": 0, "bottom": 0},
+		"max_size": Vector2(330, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
-		"grow_v": Control.GROW_DIRECTION_BEGIN,
+		"grow_v": Control.GROW_DIRECTION_END,
+		"stack_after": "NotificationPanel.log",
+		"gap": 8,
 	},
 	"bottom_center": {
 		"anchor": Rect2(0.5, 1, 0.5, 1),
 		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 20},
 		"max_size": Vector2(250, 0),
 		"grow_h": Control.GROW_DIRECTION_BOTH,
+		"grow_v": Control.GROW_DIRECTION_BEGIN,
+	},
+	## El boton ESCARAMUZAS (SkirmishButton), a la derecha de CONSTRUIR en la
+	## misma franja de abajo: media anchura de CONSTRUIR (240 / 2) + 12 de hueco.
+	"skirmish_button": {
+		"anchor": Rect2(0.5, 1, 0.5, 1),
+		"margin": {"left": 132, "top": 0, "right": 0, "bottom": 20},
+		"max_size": Vector2(176, 0),
+		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_BEGIN,
 	},
 	"bottom_controls": {
@@ -137,7 +201,8 @@ const SLOTS := {
 		"max_size": Vector2(260, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
 		"grow_v": Control.GROW_DIRECTION_END,
-		"stack_after": "NotificationPanel.log",
+		# Bajo la columna de avisos (vacia mide 0 y el globo queda donde estaba).
+		"stack_after": "NotificationPanel.toasts",
 		"gap": 8,
 		"follow_moved": true,
 	},
@@ -147,7 +212,7 @@ const SLOTS := {
 	## 10 de hueco).
 	"tip_top_right": {
 		"anchor": Rect2(1, 0, 1, 0),
-		"margin": {"left": 0, "top": 10, "right": 138, "bottom": 0},
+		"margin": {"left": 0, "top": 76, "right": 76, "bottom": 0},
 		"max_size": Vector2(280, 0),
 		"grow_h": Control.GROW_DIRECTION_BEGIN,
 		"grow_v": Control.GROW_DIRECTION_END,
@@ -216,11 +281,9 @@ const PAUSE_RESERVE := 0.0
 ## izquierda llena hasta media pantalla, los avisos suben desde abajo a la
 ## izquierda y la tapaban. Pasan al centro, encima de CONSTRUIR.
 const COLUMN_NARROW_SLOTS := {
-	"toast_area": {
-		"anchor": Rect2(0.5, 1, 0.5, 1),
-		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 84},
-		"grow_h": Control.GROW_DIRECTION_BOTH,
-	},
+	## La Tormenta baja a la izquierda: la velocidad se queda arriba en el centro,
+	## sin apilarse tras ella (cae en mitad de la columna izquierda).
+	"speed_button": {"stack_after": ""},
 }
 const NARROW_SLOTS := {
 	"storm_banner": {
@@ -229,23 +292,50 @@ const NARROW_SLOTS := {
 		"grow_h": Control.GROW_DIRECTION_END,
 		"stack_after": "ResourceHUD",
 	},
+	## Rediseno 2026-10: la Tormenta ya no baja a esta columna (es un icono bajo
+	## el ☰), asi que el registro sigue bajo los recursos.
 	"left_panel": {
-		"stack_after": "StormHUD",
+		"stack_after": "ResourceHUD",
 	},
 	## CONSTRUIR sube por encima de las flechas y del zoom: en 400 px de ancho
 	## los tres no caben en la misma franja de abajo.
 	"bottom_center": {
 		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 196},
 	},
-	## Y los avisos, por encima de CONSTRUIR.
-	"toast_area": {
-		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 256},
+	## Los avisos, mas estrechos (uno a la vez, bajo la Tormenta como el registro).
+	"toast_area": {"max_size": Vector2(300, 0)},
+	## ESCARAMUZAS no cabe a la derecha de CONSTRUIR en 400 px: va centrado justo
+	## encima (196 + 64 de CONSTRUIR + 8 de hueco), por debajo de los avisos.
+	"skirmish_button": {
+		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 268},
+		"grow_h": Control.GROW_DIRECTION_BOTH,
 	},
 	## La insignia del rango, bajo el boton ☰ MENU (10 + 48 + 6): a su izquierda
 	## chocaria con la columna de recursos.
 	"rank_badge": {
 		"margin": {"left": 0, "top": 64, "right": 10, "bottom": 0},
 		"max_size": Vector2(120, 0),
+	},
+	## Rediseno 2026-10: la Tormenta bajo la insignia (que va bajo el ☰); la barra
+	## de abajo entera encima de CONSTRUIR (196 + 64 + 8; BottomBar esconde el
+	## hueco central) y la linea del siguiente paso encima de la barra.
+	"storm_icon": {
+		"margin": {"left": 0, "top": 118, "right": 10, "bottom": 0},
+	},
+	"bottom_bar": {
+		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 268},
+	},
+	"next_step": {
+		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 356},
+		"above_dpad": false,
+	},
+	## La velocidad, bajo la insignia del rango (el centro de arriba choca con
+	## los recursos en 400 px).
+	"speed_button": {
+		"anchor": Rect2(1, 0, 1, 0),
+		"margin": {"left": 0, "top": 118, "right": 10, "bottom": 0},
+		"grow_h": Control.GROW_DIRECTION_BEGIN,
+		"stack_after": "RankPanel",
 	},
 	## El globo del menu ☰ (con la guia de edificios) es el unico que cabe en
 	## una pantalla estrecha: HelperPanel oculta los demas (NARROW_TIPS).
@@ -255,10 +345,55 @@ const NARROW_SLOTS := {
 		# 250 y no 280: a la derecha, en tactil, estan girar/zoom (x >= 272).
 		"max_size": Vector2(250, 0),
 		"grow_h": Control.GROW_DIRECTION_END,
-		"stack_after": "StormHUD",
+		"stack_after": "NotificationPanel.toasts",
 		"gap": 8,
 	},
 }
+
+## ── Controles en pantalla (OnScreenControls) a su tamano (docs/21 §9) ──
+## Huella de serie (100 %): la cruceta son 3 botones de 48 con 4 de hueco
+## (152 x 152); la columna derecha, colocando, mide ~130 de ancho (CANCELAR) y
+## 48 + 50 + 50 + 48 de botones con 3 huecos de 12 (232 de alto). 20 de margen.
+const TOUCH_DPAD_SIDE := 152.0
+const TOUCH_RIGHT_COLUMN_W := 130.0
+const TOUCH_RIGHT_COLUMN_H := 232.0
+const TOUCH_CONTROLS_MARGIN := 20.0
+## Lo que se deja libre arriba para el boton ☰ MENU y la insignia del rango.
+const TOUCH_TOP_RESERVE := 130.0
+## Nunca por debajo de "Pequeno": mas chicos ya no se aciertan con el dedo.
+const TOUCH_SCALE_FLOOR := 0.85
+
+## Escala que de verdad cabe en un lienzo `vp` (puro): la pedida, salvo que la
+## cruceta y la columna derecha no quepan lado a lado (movil en vertical, 400 de
+## ancho) o la columna no quepa de alto bajo el menu. Asi nada se sale.
+static func touch_controls_fit(requested: float, vp: Vector2) -> float:
+	var s := requested
+	if vp.x > 0.0:
+		var w_room := vp.x - TOUCH_CONTROLS_MARGIN * 2.0 - 16.0
+		s = minf(s, w_room / (TOUCH_DPAD_SIDE + TOUCH_RIGHT_COLUMN_W))
+	if vp.y > 0.0:
+		var h_room := vp.y - TOUCH_CONTROLS_MARGIN * 2.0 - TOUCH_TOP_RESERVE
+		s = minf(s, h_room / TOUCH_RIGHT_COLUMN_H)
+	return maxf(s, TOUCH_SCALE_FLOOR)
+
+## Cuanto suben los slots que van encima de los controles (avisos, globos de la
+## camara y del zoom; en pantalla estrecha tambien CONSTRUIR y ESCARAMUZAS)
+## cuando los controles crecen por encima del 100 %. Puro.
+static func touch_controls_lift(scale: float) -> float:
+	return maxf(0.0, (scale - 1.0) * TOUCH_DPAD_SIDE)
+
+## Si un slot va encima de los controles en pantalla: anclado abajo y, fuera de
+## la pantalla estrecha, en una esquina (lo del centro abajo, CONSTRUIR y lo que
+## se le apila, queda entre la cruceta y el zoom y no se toca).
+static func sits_above_touch_controls(slot_name: String, slot: Dictionary, narrow: bool) -> bool:
+	if slot_name == "bottom_controls" or not slot.has("anchor"):
+		return false
+	var a: Rect2 = slot["anchor"]
+	if not is_equal_approx(a.position.y, 1.0):
+		return false
+	if narrow:
+		return true
+	return is_equal_approx(a.position.x, 0.0) or is_equal_approx(a.position.x, 1.0)
 
 ## Globos que siguen en pantalla estrecha. Seis globos en 400 px se tapan entre
 ## si y tapan el mapa; el de ☰ lleva a AYUDA y a la guia, y la intro del
@@ -274,7 +409,10 @@ const SIDEBAR_STACK_REF := "sidebar_buttons"
 ## Panel-to-slot assignment
 const PANEL_SLOTS := {
 	"ResourceHUD":                "top_left",
-	"StormHUD":                   "storm_banner",
+	## Rediseno 2026-10 (docs/28 §12): la Tormenta es un icono bajo el ☰.
+	"StormHUD":                   "storm_icon",
+	"BottomBar":                  "bottom_bar",
+	"ObjectivePanel.line":        "next_step",
 	"NotificationPanel.toasts":   "toast_area",
 	"NotificationPanel.log":      "left_panel",
 	"MarketPanel.sidebar_toggle": "sidebar_buttons",
@@ -311,7 +449,10 @@ const PANEL_SLOTS := {
 	"OnScreenControls":           "bottom_controls",
 	"SandboxPanel":               "sandbox_tab",
 	"RankPanel":                  "rank_badge",
+	"GameSpeedButton":            "speed_button",
 	"RankPanel.modal":            "center_modal",
+	"SkirmishButton":             "skirmish_button",
+	"ContractPanel.modal":        "center_modal",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)
@@ -321,6 +462,7 @@ const PANEL_SIZES := {
 	"MarketPanel.modal":       Vector2(540, 0),
 	"ProgressPanel.modal":     Vector2(470, 0),
 	"ArmyPanel.modal":         Vector2(620, 0),
+	"ContractPanel.modal":     Vector2(620, 0),
 	"SkirmishPanel.modal":     Vector2(640, 0),
 	## 1000: tres ramas y, a su derecha, la ficha de la tecnologia elegida.
 	"TechTreePanel.modal":     Vector2(1000, 0),
@@ -363,3 +505,31 @@ const SIDEBAR_TOGGLE_SIZE := 48
 const SIDEBAR_FIRST_Y := 10
 ## Ancho del boton de menu lateral (los paneles lo usan para colocarse a -176).
 const SIDEBAR_BTN_WIDTH := 164
+
+## ── Telefono (rediseno 2026-10, docs/28 §4) ──
+## Con CartoonTheme.phone (lienzo de menos de 450 de lado corto: 640x360,
+## 800x360) UILayoutManager.get_slot() mezcla esto sobre SLOTS, antes que
+## NARROW_SLOTS (vertical gana). Margenes de 8 al borde; el ☰ y los redondos
+## miden 48, CONSTRUIR 52, la Tormenta 44:
+##   arriba: recursos a la izquierda; rango a la izquierda del ☰ (8 + 48 + 6);
+##           la Tormenta bajo el ☰ (8 + 48 + 6, centrada: 8 + 2).
+##   abajo:  CONSTRUIR y la barra a 8 del borde; la linea del siguiente paso
+##           encima de la barra (8 + 52 + 8).
+const PHONE_SLOTS := {
+	"top_left": {"margin": {"left": 8, "top": 8, "right": 0, "bottom": 0}},
+	"rank_badge": {"margin": {"left": 0, "top": 8, "right": 62, "bottom": 0},
+		"max_size": Vector2(128, 0)},
+	"storm_icon": {"margin": {"left": 0, "top": 62, "right": 10, "bottom": 0}},
+	"tip_top_right": {"margin": {"left": 0, "top": 62, "right": 62, "bottom": 0}},
+	"bottom_center": {"margin": {"left": 0, "top": 0, "right": 0, "bottom": 8}},
+	"bottom_bar": {"margin": {"left": 0, "top": 0, "right": 0, "bottom": 8}},
+	"next_step": {"margin": {"left": 8, "top": 0, "right": 0, "bottom": 68}},
+	"toast_area": {"margin": {"left": 8, "top": 186, "right": 0, "bottom": 0},
+		"max_size": Vector2(300, 0), "gap": 6},
+	"tip_bottom_center": {"margin": {"left": 0, "top": 0, "right": 0, "bottom": 68}},
+}
+
+## Lo que sube un slot `above_dpad` con la cruceta en pantalla: la cruceta de
+## serie (TOUCH_DPAD_SIDE) y un hueco. Lo que crezca por encima del 100 % lo
+## suma touch_controls_lift().
+const ABOVE_DPAD_GAP := 10.0
