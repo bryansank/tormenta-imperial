@@ -311,6 +311,9 @@ func test_the_guide_walks_the_whole_opening() -> void:
 	assert_str(TutorialManager.current_step()).is_equal("wait_barracks")
 	barracks.remove_meta("under_construction")
 	EventBus.construction_completed.emit(barracks)
+	# Entrenar en el Cuartel (2026-10-19): su ficha y ENTRENAR.
+	assert_str(TutorialManager.current_step()).is_equal("train")
+	EventBus.unit_training_started.emit("infantry", 20.0)
 	# La Granja: la gente come.
 	assert_str(TutorialManager.current_step()).is_equal("open_farm")
 	_place(FARM, Vector2i(10, 2))

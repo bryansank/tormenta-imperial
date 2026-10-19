@@ -85,7 +85,8 @@ func _start() -> void:
 ## Las dos tarjetas de leer del principio (la meta y el Nucleo) y los tres
 ## manejos (girar, mover, derribar), 2026-10-16: aqui se prueba lo demas.
 func _read() -> void:
-	for fact in ["goal_seen", "core_seen", "rotated", "moved", "road_placed", "demolished"]:
+	# "trained" (ENTRENAR en el Cuartel, 2026-10-19) se prueba en test_guide_steps.
+	for fact in ["goal_seen", "core_seen", "rotated", "moved", "road_placed", "demolished", "trained"]:
 		TutorialManager.note_guide_fact(fact)
 
 func _words(text: String) -> int:
@@ -316,7 +317,7 @@ func test_the_collect_and_farm_goals_sit_between_sawmill_and_house() -> void:
 	# de despues de la casa (2026-10-16) se da por hecho aqui.
 	var f := {"goal_seen": true, "core_seen": true, "rotated": true, "moved": true, "road_placed": true,
 		"demolished": true, "sawmills": 1, "sawmills_built": 1, "houses": 1,
-		"barrackss": 1, "barrackss_built": 1,
+		"barrackss": 1, "barrackss_built": 1, "trained": true,
 		"gold_mines": 1, "markets": 1, "warehouses": 1, "laboratorys": 1}
 	assert_str(TutorialManager.derive_step(f)).is_equal("collect")
 	f["collected"] = true
@@ -496,7 +497,7 @@ func test_derive_step_asks_to_get_what_is_missing_before_building() -> void:
 
 func test_the_rotate_and_road_goals_also_wait_for_what_they_pick() -> void:
 	var f := {"goal_seen": true, "core_seen": true, "sawmills": 1, "sawmills_built": 1,
-		"collected": true, "barrackss": 1, "barrackss_built": 1, "farms": 1, "short": ["house"]}
+		"collected": true, "barrackss": 1, "barrackss_built": 1, "trained": true, "farms": 1, "short": ["house"]}
 	assert_str(TutorialManager.derive_step(f)).is_equal("need_house")
 	f.merge({"rotated": true, "houses": 1, "moved": true, "short": ["road"]}, true)
 	assert_str(TutorialManager.derive_step(f)).is_equal("need_road")
