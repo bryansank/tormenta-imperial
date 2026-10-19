@@ -2114,3 +2114,72 @@ static func piece_swatch(col: Color, min_size: Vector2, dim: bool) -> ColorRect:
 	sw.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sw.color = col.lerp(Color(0.6, 0.58, 0.55), 0.45) if dim else col
 	return sw
+# --- CONSTRUIR3 (feat/ui3-construir) ---
+# Nombres de edificio siempre enteros y legibles, la zona segura del telefono
+# y la X de las ventanas grandes fuera de debajo del boton ☰ (capa 30).
+
+## Tamano minimo de un nombre de edificio: 16 dp en telefono (docs/28 §3.1,
+## Bryan 2026-10-19: "no se ven bien los nombres"), 18 en tablet y PC.
+const NAME_MIN_PHONE := 16
+const NAME_MIN := 18
+
+## Tamano de letra de un nombre en `level` (nunca por debajo del minimo).
+static func name_size(level: String = "button") -> int:
+	return maxi(fs(level), NAME_MIN_PHONE if phone else NAME_MIN)
+
+## Un nombre de edificio (o un porque que lleva uno: "Falta Almacén"): Baloo 2,
+## en el color normal del texto (nunca el tenue: contraste), y que pasa a la
+## linea siguiente antes que cortarse con "…".
+static func name_label(text_s: String, level: String = "button", role: String = "window",
+		color: Color = Color(0, 0, 0, 0)) -> Label:
+	var l := label(text_s, level, color if color.a > 0.0 else text(role))
+	l.add_theme_font_override("font", title_font())
+	l.add_theme_font_size_override("font_size", name_size(level))
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.clip_text = false
+	l.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	return l
+
+## La zona segura (muesca, esquinas, barra de gestos) en pixeles del lienzo:
+## {"left", "top", "right", "bottom"}. Cero fuera del movil.
+static func safe_insets(vp: Viewport) -> Dictionary:
+	var out := {"left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0}
+	if vp == null or not OS.has_feature("mobile"):
+		return out
+	var win := Vector2(DisplayServer.window_get_size())
+	var safe := Rect2(DisplayServer.get_display_safe_area())
+	if win.x <= 0.0 or win.y <= 0.0 or safe.size.x <= 0.0:
+		return out
+	var k := vp.get_visible_rect().size / win
+	out["left"] = maxf(0.0, safe.position.x * k.x)
+	out["top"] = maxf(0.0, safe.position.y * k.y)
+	out["right"] = maxf(0.0, (win.x - safe.end.x) * k.x)
+	out["bottom"] = maxf(0.0, (win.y - safe.end.y) * k.y)
+	return out
+
+## El boton ☰ (capa 30, arriba a la derecha) se dibuja encima de cualquier
+## ventana: si tapa la X de `close`, la X se corre a su izquierda. Se puede
+## llamar cada vez que se recoloca la ventana: deshace el corrimiento anterior.
+## Diferido por quien lo llame si la ventana se acaba de colocar.
+static func dodge_menu_button(close: Control, gap: float = 8.0) -> void:
+	if close == null or not is_instance_valid(close) or not close.is_inside_tree():
+		return
+	var prev: float = float(close.get_meta("dodge_shift", 0.0))
+	close.offset_left += prev
+	close.offset_right += prev
+	close.set_meta("dodge_shift", 0.0)
+	var btn: Control = null
+	for n in close.get_tree().get_nodes_in_group("hud_menu_button"):
+		if n is Control and is_instance_valid(n) and (n as Control).is_visible_in_tree():
+			btn = n
+			break
+	if btn == null:
+		return
+	var b := btn.get_global_rect().grow(gap)
+	var r := close.get_global_rect()
+	if not r.intersects(b):
+		return
+	var shift := r.end.x - b.position.x
+	close.offset_left -= shift
+	close.offset_right -= shift
+	close.set_meta("dodge_shift", shift)

@@ -78,6 +78,8 @@ var _help_btn: Button
 var _guide_panel: Control
 var _backdrop: ColorRect
 var _guide_open := false
+## La X de la guia de edificios (se corre a la izquierda del ☰ si la tapa).
+var _guide_close: Control
 var _skirmish_callout: PanelContainer
 var _sidebar_visible := false
 var _storm_silenced := false
@@ -250,6 +252,7 @@ func _setup_ui() -> void:
 	root.add_child(_guide_panel)
 	(gw["close"] as Button).tooltip_text = Tr.t("BTN_CLOSE")
 	(gw["close"] as Button).pressed.connect(_toggle_guide)
+	_guide_close = gw["close"]
 	var vbox: VBoxContainer = gw["body"]
 
 	var scroll := ScrollContainer.new()
@@ -686,8 +689,8 @@ func _make_building_entry(data: BuildingData) -> PanelContainer:
 	var st := CT.card_style("window")
 	st.set_content_margin_all(10)
 	card.add_theme_stylebox_override("panel", st)
-	# Al mantener pulsado: la descripcion y las cifras en palabras.
-	card.tooltip_text = data.get_description() + "\n" + _meta_line(data)
+	# Al mantener pulsado: el nombre entero, la descripcion y las cifras en palabras.
+	card.tooltip_text = "%s\n%s\n%s" % [data.get_display_name(), data.get_description(), _meta_line(data)]
 	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	var entry := VBoxContainer.new()
 	entry.add_theme_constant_override("separation", 4)
@@ -698,26 +701,32 @@ func _make_building_entry(data: BuildingData) -> PanelContainer:
 	head.add_theme_constant_override("separation", 8)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	entry.add_child(head)
-	var title := CT.label(data.get_display_name(), "button", CT.text("window"))
+	# El nombre entero (dos lineas antes que cortar), 16 dp como poco en telefono.
+	var title := CT.name_label(data.get_display_name(), "button")
+	title.name = "GuideName"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
 	head.add_child(CT.label("%dx%d" % [data.grid_size.x, data.grid_size.y], "small", CT.text("window", true)))
 
+	# El coste como en CONSTRUIR: icono + cifra; los materiales (sin icono), con
+	# su nombre ("8 vigas"): antes salian como una cifra suelta sin icono. Los
+	# trabajadores, con su icono.
+	var amounts := {}
+	for pair in [[data.cost_gold, "gold"], [data.cost_steel, "steel"], [data.cost_oil, "oil"], [data.cost_wood, "wood"]]:
+		if int(pair[0]) > 0:
+			amounts[String(pair[1])] = int(pair[0])
+	for mat in data.cost_materials:
+		if int(data.cost_materials[mat]) > 0:
+			amounts[String(mat)] = int(data.cost_materials[mat])
+	if data.workers_required > 0:
+		amounts["workers"] = data.workers_required
 	var chips := HFlowContainer.new()
+	chips.name = "GuideCost"
 	chips.add_theme_constant_override("h_separation", 6)
 	chips.add_theme_constant_override("v_separation", 6)
 	chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	CT.fill_cost_strip(chips, amounts)
 	entry.add_child(chips)
-	for pair in [[data.cost_gold, "gold"], [data.cost_steel, "steel"], [data.cost_oil, "oil"], [data.cost_wood, "wood"]]:
-		if int(pair[0]) > 0:
-			chips.add_child(CT.cost_chip(String(pair[1]), int(pair[0])))
-	for mat in data.cost_materials:
-		if int(data.cost_materials[mat]) > 0:
-			chips.add_child(CT.cost_chip(String(mat), int(data.cost_materials[mat])))
-	if data.workers_required > 0:
-		var w := CT.badge("%d" % data.workers_required, CT.sem("INFO"), "army")
-		w.tooltip_text = Tr.t("LBL_GUIDE_WORKERS")
-		chips.add_child(w)
 
 	# Topes y mejoras (feat/topes-mejoras-ayuda): tope por era, era, lo que pide
 	# antes y si se mejora, en una linea pequena.
@@ -852,6 +861,7 @@ func _toggle_guide() -> void:
 	if _guide_open:
 		CT.place_window(_guide_panel, get_viewport().get_visible_rect().size, Vector2(760, 600),
 			CT.is_phone())
+		CT.dodge_menu_button.call_deferred(_guide_close)
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)

@@ -46,6 +46,8 @@ var _page_sections: VBoxContainer
 var _page_scroll: ScrollContainer
 var _page_id := ""
 var _page_full := ""
+## La X (se corre a la izquierda del ☰ si la tapa).
+var _close_btn: Control
 
 func _ready() -> void:
 	add_to_group("help_index")
@@ -126,6 +128,7 @@ func _build() -> void:
 	(w["close"] as Button).name = "CloseButton"
 	(w["close"] as Button).tooltip_text = Tr.t("BTN_CLOSE")
 	(w["close"] as Button).pressed.connect(close)
+	_close_btn = w["close"]
 	var col: VBoxContainer = w["body"]
 
 	_list_mode = VBoxContainer.new()
@@ -363,3 +366,4 @@ func _fit() -> void:
 	if _window == null or not is_inside_tree():
 		return
 	CT.place_window(_window, get_viewport().get_visible_rect().size, CARD_MAX, _small)
+	CT.dodge_menu_button.call_deferred(_close_btn)

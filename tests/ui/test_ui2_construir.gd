@@ -79,7 +79,7 @@ func test_a_free_building_has_no_lock_reason() -> void:
 		return
 	assert_str(MenuScript.lock_reason(_data("house"))).is_empty()
 
-func test_rows_are_one_line_with_a_hammer_or_a_lock() -> void:
+func test_rows_have_a_hammer_or_a_lock() -> void:
 	var menu: CanvasLayer = auto_free(load("res://scenes/ui/ConstructionMenu.tscn").instantiate())
 	add_child(menu)
 	await await_idle_frame()
@@ -154,3 +154,113 @@ func test_buttons_say_one_or_two_words() -> void:
 		for key in ["UI2C_BTN_UPGRADE", "UI2C_BTN_REPAIR", "UI2C_BTN_MOVE", "UI2C_BTN_DEMOLISH",
 				"UI2C_BTN_COLLECT", "UI2C_BTN_BUY", "UI2C_BTN_SELL", "UI2C_BUILD_TITLE", "UI2C_TECH_TITLE"]:
 			assert_int(String(Tr._STRINGS[locale][key]).split(" ", false).size()).is_less_equal(2)
+
+# ── CONSTRUIR3 (feat/ui3-construir): nombres enteros, franja del telefono, la X ──
+
+func _menu() -> CanvasLayer:
+	var menu: CanvasLayer = auto_free(load("res://scenes/ui/ConstructionMenu.tscn").instantiate())
+	add_child(menu)
+	return menu
+
+func test_names_are_whole_and_big_enough_on_a_phone() -> void:
+	var saved := CT.phone
+	CT.phone = true
+	var l := CT.name_label("Depósito de combustible", "small")
+	assert_int(l.get_theme_font_size("font_size")).is_greater_equal(CT.NAME_MIN_PHONE)
+	assert_bool(l.clip_text).is_false()
+	assert_int(l.text_overrun_behavior).is_equal(TextServer.OVERRUN_NO_TRIMMING)
+	assert_int(l.autowrap_mode).is_not_equal(TextServer.AUTOWRAP_OFF)
+	assert_object(l.get_theme_font("font")).is_same(CT.title_font())
+	l.free()
+	CT.phone = saved
+
+func test_every_row_name_is_whole_and_not_dimmed() -> void:
+	var menu := _menu()
+	await await_idle_frame()
+	menu.call("_open")
+	for card in menu._grid_container.get_children():
+		var name_l: Label = card.find_child("RowName", true, false)
+		assert_object(name_l).is_not_null()
+		assert_int(name_l.text_overrun_behavior).is_equal(TextServer.OVERRUN_NO_TRIMMING)
+		assert_bool(name_l.clip_text).is_false()
+		assert_int(name_l.autowrap_mode).is_not_equal(TextServer.AUTOWRAP_OFF)
+		# Bloqueado o no, el nombre con el color normal (contraste).
+		assert_that(name_l.get_theme_color("font_color")).is_equal(CT.text("window"))
+		assert_int(name_l.get_theme_font_size("font_size")).is_greater_equal(CT.name_size("button"))
+	menu.call("_close")
+
+func test_the_hold_bubble_starts_with_the_whole_name() -> void:
+	var data := _data("fuel_depot")
+	assert_str(MenuScript.row_tooltip(data).get_slice("\n", 0)).is_equal(data.get_display_name())
+
+func test_on_a_phone_the_chosen_one_shows_in_a_strip_with_its_build_button() -> void:
+	var saved := CT.phone
+	CT.phone = true
+	ResourceManager.set_amounts({"gold": 9999, "wood": 9999})
+	var menu := _menu()
+	await await_idle_frame()
+	menu.call("_fit_layout")
+	menu.call("_open")
+	var strip: Control = menu.find_child("PhoneStrip", true, false)
+	assert_bool(strip.visible).is_false()
+	menu.call("_select_building", _data("road"))
+	assert_bool(strip.visible).is_true()
+	assert_str((strip.find_child("StripName", true, false) as Label).text).is_equal(_data("road").get_display_name())
+	# El tutorial senala el CONSTRUIR de la franja: la ficha no sale en telefono.
+	assert_object(menu.detail_build_button()).is_same(strip.find_child("StripBuildButton", true, false))
+	menu.call("_close")
+	assert_bool(strip.visible).is_false()
+	CT.phone = saved
+	menu.call("_fit_layout")
+
+func test_the_strip_never_shows_on_pc() -> void:
+	var saved := CT.phone
+	CT.phone = false
+	var menu := _menu()
+	await await_idle_frame()
+	menu.call("_fit_layout")
+	menu.call("_open")
+	menu.call("_select_building", _data("house"))
+	assert_bool((menu.find_child("PhoneStrip", true, false) as Control).visible).is_false()
+	assert_object(menu.detail_build_button()).is_same(menu.find_child("DetailBuildButton", true, false))
+	menu.call("_close")
+	CT.phone = saved
+
+func test_the_close_x_steps_left_of_the_menu_button() -> void:
+	var host := Control.new()
+	host.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(host)
+	var btn := Control.new()
+	btn.add_to_group("hud_menu_button")
+	btn.position = Vector2(500, 0)
+	btn.size = Vector2(60, 60)
+	host.add_child(btn)
+	var x := Control.new()
+	x.position = Vector2(520, 10)
+	x.size = Vector2(48, 48)
+	host.add_child(x)
+	await await_idle_frame()
+	CT.dodge_menu_button(x)
+	assert_bool(x.get_global_rect().intersects(btn.get_global_rect().grow(8.0))).is_false()
+	# Llamarlo otra vez no lo corre mas: deshace el corrimiento anterior.
+	var once := x.position.x
+	CT.dodge_menu_button(x)
+	assert_float(x.position.x).is_equal_approx(once, 0.5)
+	host.free()
+
+func test_the_building_guide_names_the_materials_and_the_whole_name() -> void:
+	var helper: CanvasLayer = auto_free(load("res://scenes/ui/HelperPanel.tscn").instantiate())
+	add_child(helper)
+	await await_idle_frame()
+	var hq := _data("headquarters")
+	var card: Control = helper.call("_make_building_entry", hq)
+	var cost: Control = card.find_child("GuideCost", true, false)
+	var shown := TextKit.row_amounts(cost)
+	for mat in hq.cost_materials:
+		if int(hq.cost_materials[mat]) > 0:
+			assert_str(String(shown[String(mat)])).contains(Tr.res_name(String(mat)))
+	var name_l: Label = card.find_child("GuideName", true, false)
+	assert_str(name_l.text).is_equal(hq.get_display_name())
+	assert_int(name_l.text_overrun_behavior).is_equal(TextServer.OVERRUN_NO_TRIMMING)
+	assert_str(card.tooltip_text.get_slice("\n", 0)).is_equal(hq.get_display_name())
+	card.free()
