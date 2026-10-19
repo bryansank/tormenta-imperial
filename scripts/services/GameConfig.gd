@@ -2199,7 +2199,11 @@ var army_capacity_max_total := 67
 ## esto). El Cuartel, `army_training_slots_max`.
 var army_training_slots_max_by_building := {"shipyard": 2, "aerodrome": 2}
 ## Seconds between upkeep deductions (scaled by dev_mode like other durations).
-var army_upkeep_interval := 30.0
+## 90 s desde la ronda final de la 1.1 (antes 30): el sueldo a un tercio. La
+## sonda de la linea veia el oro a 0 en casi cada Tormenta de la era 3 y 10-45
+## deserciones por partida; con 60 s quedaban 3-18, con 90 s 0-9 (docs/22 §15).
+## El `upkeep_gold` de cada unidad no cambia: es lo que cobra cada nomina.
+var army_upkeep_interval := 90.0
 
 func get_unit_def(unit_id: String) -> Dictionary:
 	return unit_types.get(unit_id, {})
@@ -2511,6 +2515,13 @@ var combat_first_sortie_rewards := {"gold": 150, "wood": 100}
 var combat_morale_initiative_bonus := 2
 var combat_morale_attack_range := Vector2(0.60, 1.40)
 var combat_morale_on_victory := 8.0
+## Defender la base (Diezmo / Impuesto; NO el Ataque Final): de las unidades del
+## ejercito que caen, esta parte vuelve herida en vez de morir (redondeando a
+## favor de las que vuelven; siempre cae al menos una). Decision de Bryan en la
+## ronda final de la 1.1: la sonda de la linea veia la guarnicion entera caer en
+## cada Diezmo de la era 3 y la columna de las campanas reponiendose sin fin
+## (docs/22 §14). Hook de la Enfermeria (1.2): CombatManager.defense_wounded().
+var combat_defense_return_share := 2.0 / 3.0
 var combat_morale_per_casualty := 3.0
 
 # ── Salidas: incursiones, expediciones cortas y botin exclusivo (doc 21 §3) ──
@@ -2664,6 +2675,13 @@ var campaign_boss_heavies := {"land": 1, "sea": 1, "air": 1}
 ## gana el 0 %, con acorazados el 53-100 % (docs/15 §13 "Medido"). El panel de
 ## la campana y ¿QUE HACER? lo dicen antes de llegar a el.
 var campaign_boss_counter := {"sea": "dreadnought"}
+## Cada derrota en la mision que toca le quita al enemigo de esa mision un 5 %
+## (escala x0,95 por derrota, nunca por debajo de x0,80); al ganarla se vuelve a
+## x1. El mapa no cambia. Sin esto, como el combate no tira dados, una mision
+## perdida con una columna se perdia siempre (sonda de la linea, ronda final de
+## la 1.1: el Zepelin, 6 derrotas seguidas en la semilla 4).
+var campaign_retry_ease := 0.95
+var campaign_retry_floor := 0.80
 var campaign_boss_counter_count := 2
 ## Segundos de juego entre ganar una mision y que la siguiente de la MISMA
 ## campana se pueda lanzar (la tropa descansa). Pasa por get_duration().
@@ -2701,7 +2719,10 @@ func campaign_mission_count(domain: String) -> int:
 ## La unidad que ¿QUE HACER? propone entrenar para una campana sin tropa en casa.
 var campaign_suggested_unit := {"land": "artillery", "sea": "gunboat", "air": "fighter"}
 ## Cuantas de su medio pide ¿QUE HACER? antes de proponer la mision.
-var campaign_suggested_party := 3
+## 6 desde la ronda final de la 1.1 (antes 3): la columna que gana es la de 6
+## (docs/15 §13 "Medido": 3 cazas pierden el 100 % de la mision 1 del Aire, 3
+## infantes la 2 de Tierra). Si el tope de tropa no deja, pide lo que quepa.
+var campaign_suggested_party := 6
 
 ## Repuestos que pide una mejora: nivel -> cantidad, solo para los edificios de
 ## la lista (los productores). El Cuartel General tiene su propia tabla.

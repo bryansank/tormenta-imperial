@@ -392,6 +392,9 @@ static func defense_lines(_victory: bool, rounds: int, summary: Dictionary) -> A
 	lines.append(Tr.t("LBL_REPORT_ROUNDS") % rounds)
 	lines.append("%s: %s" % [Tr.t("LBL_REPORT_OUR_LOSSES"), _unit_list(summary.get("casualties", {}))])
 	lines.append("%s: %s" % [Tr.t("LBL_REPORT_THEIR_LOSSES"), _unit_list(summary.get("enemy_casualties", {}))])
+	var wounded: Dictionary = summary.get("wounded", {})
+	if not wounded.is_empty():
+		lines.append("%s: %s" % [Tr.t("LBL_REPORT_WOUNDED"), _unit_list(wounded)])
 	var crews: int = int(summary.get("tower_crews", 0))
 	if crews > 0:
 		lines.append(Tr.t("LBL_REPORT_TOWER_CREWS") % [crews, int(summary.get("tower_crews_lost", 0))])

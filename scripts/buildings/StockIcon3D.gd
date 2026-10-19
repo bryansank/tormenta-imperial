@@ -122,9 +122,12 @@ func _set_anim(kind: int) -> void:
 	scale = Vector3.ONE
 	if kind == 0:
 		return
-	var tw := create_tween()
+	# El Tween de aparecer solo existe si aparece: uno vacio da "started with no
+	# Tweeners" (sonda de la linea, ronda final de la 1.1).
+	var tw: Tween = null
 	if appearing:
 		# Aparece: de pequeno a su tamano, con un pasito de mas.
+		tw = create_tween()
 		scale = Vector3.ONE * 0.3
 		tw.tween_property(self, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	var loop := create_tween().set_loops()
@@ -138,9 +141,13 @@ func _set_anim(kind: int) -> void:
 		# Lleno: late en rojo, mas rapido (el edificio esta parado).
 		loop.tween_property(self, "scale", Vector3.ONE * 1.14, 0.22).set_trans(Tween.TRANS_SINE)
 		loop.tween_property(self, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_SINE)
-	if appearing:
+	if tw != null:
 		loop.pause()
-		tw.tween_callback(loop.play)
+		# Si el bucle ya se mato (cambio de estado antes de acabar de aparecer),
+		# no se le da al play: "Tween invalid".
+		tw.tween_callback(func() -> void:
+			if loop.is_valid():
+				loop.play())
 	_anim_tween = loop
 
 func is_full() -> bool:

@@ -303,3 +303,26 @@ func test_each_mission_has_its_calibrated_scale() -> void:
 	var depth: int = 1 * GameConfig.campaign_level_step + int(node["depth"])
 	var base: float = ExpeditionGenerator.enemy_scale(depth, 2, int(node["risk"]), bool(node["is_boss"]))
 	assert_float(float(node["enemy_scale"])).is_equal_approx(base * float(GameConfig.campaign_enemy_mult["sea"][1]), 0.0001)
+
+## Ronda final de la 1.1: cada derrota en la mision que toca debilita a su
+## enemigo (mismo mapa); al ganarla se vuelve a empezar.
+func test_each_failure_eases_the_same_mission() -> void:
+	var book = BookScript.new()
+	book.ensure_seed(4242)
+	var first: Dictionary = book.offer_for("air", 3)
+	assert_int(int(first.get("retries", -1))).is_equal(0)
+	book.finish("air", 0, false, 0.0, 0.0)
+	book.finish("air", 0, false, 0.0, 0.0)
+	var again: Dictionary = book.offer_for("air", 3)
+	assert_int(int(again["retries"])).is_equal(2)
+	assert_int(int(again["seed"])).is_equal(int(first["seed"]))
+	var easy: Array = Generator.campaign_mission_map(again)
+	var hard: Array = Generator.campaign_mission_map(first)
+	assert_float(float(easy[0]["enemy_scale"])).is_less(float(hard[0]["enemy_scale"]))
+	assert_dict(easy[0]["enemy_roster"]).is_equal(hard[0]["enemy_roster"])
+	# Ganarla pone el contador a cero; se guarda y se carga.
+	book.finish("air", 0, true, 0.0, 0.0)
+	assert_int(int(book.fails["air"])).is_equal(0)
+	book.finish("air", 1, false, 0.0, 0.0)
+	var loaded = BookScript.from_dict(book.to_dict())
+	assert_int(int(loaded.fails["air"])).is_equal(1)

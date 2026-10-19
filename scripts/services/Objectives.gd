@@ -461,6 +461,7 @@ static func campaign_gate_step() -> Dictionary:
 	if CombatManager.campaigns_all_complete():
 		return {}
 	var domain: String = ""
+	var playable := false
 	for d in GameConfig.CAMPAIGN_DOMAINS:
 		if CombatManager.is_campaign_complete(String(d)):
 			continue
@@ -468,10 +469,32 @@ static func campaign_gate_step() -> Dictionary:
 			domain = String(d)
 		if CombatManager.campaign_lock_reason(String(d)) == "" and not CombatManager.campaign_units_home(String(d)).is_empty():
 			domain = String(d)
+			playable = true
 			break
 	if domain == "":
 		return {}
-	return campaign_need_step(domain, "OBJ_WHY_CAMPAIGN_FOR_AUDIT")
+	var step: Dictionary = campaign_need_step(domain, "OBJ_WHY_CAMPAIGN_FOR_AUDIT")
+	# Ronda de la 1.1 (2026-10-18): mientras la campana que toca solo espera (la
+	# tropa descansa, la columna esta fuera), lo siguiente es preparar otra que
+	# falte: su edificio o su tropa. Antes el panel se quedaba en "la mision del
+	# Mar" durante el descanso y el Aerodromo no se pedia hasta acabar el Mar
+	# (sonda de linea: Aerodromo en el minuto 441, con el Mar hecho en el 440).
+	# Con la columna sugerida de 6 (ronda final), la que descansa puede pedir
+	# reponer tropa: aun asi va antes el edificio que falte a otra (tarda mas).
+	if not playable and String(step.get("kind", "")) in ["campaign", "train"]:
+		var preps: Array = []
+		for d in GameConfig.CAMPAIGN_DOMAINS:
+			if String(d) == domain or CombatManager.is_campaign_complete(String(d)):
+				continue
+			preps.append(campaign_need_step(String(d), "OBJ_WHY_CAMPAIGN_FOR_AUDIT"))
+		for prep in preps:
+			if String(prep.get("kind", "")) == "build":
+				return prep
+		if String(step.get("kind", "")) == "campaign":
+			for prep in preps:
+				if String(prep.get("kind", "")) != "campaign":
+					return prep
+	return step
 
 ## Lo que pide una campana para poder jugar su mision: su edificio, tropa de su
 ## medio, o la mision misma ({"kind": "campaign", "id": medio}).
@@ -480,8 +503,10 @@ static func campaign_need_step(domain: String, why: String) -> Dictionary:
 	if CombatManager.campaign_lock_reason(domain) == "CAMP_LOCK_BUILDING":
 		return {"kind": "build", "id": building, "count": 1, "why": "OBJ_WHY_CAMPAIGN_BUILDING"}
 	var home: int = CombatManager.roster_size(CombatManager.campaign_units_home(domain))
-	var wanted: int = maxi(1, GameConfig.campaign_suggested_party)
-	if home < wanted:
+	# La columna llena (6) si cabe; con el tope de tropa lleno, lo que quepa.
+	var room: int = maxi(0, ArmyManager.get_capacity() - ArmyManager.get_total_units() - _training_total())
+	var wanted: int = clampi(GameConfig.campaign_suggested_party, 1, maxi(1, home + room))
+	if home < wanted and not campaign_home_favorable(domain):
 		var unit_id: String = String(GameConfig.campaign_suggested_unit.get(domain, "infantry"))
 		if ArmyManager.is_unlocked(unit_id):
 			var away: int = int(CombatManager.get_units_away().get(unit_id, 0))
@@ -1348,6 +1373,28 @@ static func _needs_unlocked(building_id: String) -> String:
 
 static func _army_step(unit_id: String, count: int, why: String, kind: String) -> Dictionary:
 	return {"kind": kind, "id": unit_id, "count": count, "why": why}
+
+## La tropa de su medio que hay en casa ya sale "Favorable" en la prevision de
+## la siguiente mision (fuerza de columna, CombatManager.sortie_preview).
+static func campaign_home_favorable(domain: String) -> bool:
+	var home: Dictionary = CombatManager.campaign_units_home(domain)
+	if home.is_empty():
+		return false
+	var offer: Dictionary = CombatManager.campaign_offer(domain)
+	if offer.is_empty():
+		return false
+	var party: Dictionary = {}
+	var room: int = GameConfig.combat_deploy_cap
+	for unit_id in home:
+		var n: int = mini(int(home[unit_id]), room)
+		if n > 0:
+			party[unit_id] = n
+			room -= n
+	return String(CombatManager.sortie_preview(offer, party).get("odds", "")) == "favorable"
+
+## Unidades que se estan entrenando ahora, de cualquier tipo.
+static func _training_total() -> int:
+	return ArmyManager.get_training().size()
 
 ## Unidades de ese tipo en el ejercito, mas las que se estan entrenando.
 static func _army_count(unit_id: String) -> int:

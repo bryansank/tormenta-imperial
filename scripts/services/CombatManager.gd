@@ -833,7 +833,16 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 			already.append(unit)
 		else:
 			to_charge.append(unit)
+	# Defender la base (Diezmo / Impuesto, no el Ataque Final): parte de los que
+	# caen vuelven heridos y no salen del ejercito (decision de Bryan, ronda
+	# final de la 1.1).
+	var wounded: Array = []
+	if encounter.is_defense and precharged.is_empty() and not _audit_wave_active:
+		wounded = defense_wounded(to_charge)
+		to_charge = to_charge.filter(func(u): return not wounded.has(u))
 	var survivors: Dictionary = _count_by_unit(_roster_only(encounter.survivors(), crew_uids))
+	for unit in wounded:
+		survivors[unit.unit_id] = int(survivors.get(unit.unit_id, 0)) + 1
 
 	# ArmyManager is the source of truth for the roster: the party was never
 	# deducted when it marched out, so only the dead are subtracted now and
@@ -877,10 +886,35 @@ func _apply_result_for(encounter: Encounter, victory: bool, rounds: int, crew_ui
 		# Lo que cayo del otro lado: el parte de una defensa resuelta a ciegas
 		# tiene que contar las dos columnas, no solo la nuestra.
 		"enemy_casualties": _count_by_unit(encounter.casualties(Encounter.ENEMY)),
+		# Caidos defendiendo la base que vuelven heridos (no cuentan como bajas).
+		"wounded": _count_by_unit(wounded),
 	}
 	return _last_result
 
 ## Quita del recuento a las unidades que no pertenecen al ejército del jugador.
+## De los caidos del ejercito en una defensa de la base, los que vuelven heridos:
+## `combat_defense_return_share` (2 de cada 3, redondeando a favor de los que
+## vuelven) y siempre cae al menos uno. Mueren primero los de menos `power` (el
+## enemigo remata lo que tiene a mano; lo pesado se arrastra a casa). Pura sobre
+## la lista: sin tocar ArmyManager.
+##
+## HOOK de la Enfermeria (1.2): cuando exista, que lea aqui cuantos vuelven (p.
+## ej. mas con la Enfermeria en pie) o que los tenga de baja un rato en vez de
+## devolverlos al momento. Hoy vuelven al cuartel en el acto.
+static func defense_wounded(fallen: Array) -> Array:
+	var n: int = fallen.size()
+	if n == 0:
+		return []
+	var back: int = clampi(int(floor(float(n) * GameConfig.combat_defense_return_share)), 0, n - 1)
+	if back <= 0:
+		return []
+	var order: Array = fallen.duplicate()
+	order.sort_custom(func(a, b) -> bool:
+		var pa: int = int(GameConfig.get_unit_def(a.unit_id).get("power", 0))
+		var pb: int = int(GameConfig.get_unit_def(b.unit_id).get("power", 0))
+		return pa < pb if pa != pb else a.uid < b.uid)
+	return order.slice(n - back)
+
 func _roster_only(units: Array, crew_uids: Dictionary) -> Array:
 	var result: Array = []
 	for unit in units:
@@ -1340,8 +1374,10 @@ func sortie_preview(offer: Dictionary, party: Dictionary) -> Dictionary:
 		map = ExpeditionGeneratorScript.first_sortie_map()
 	else:
 		map = offer_map(offer)
-	var enemy: float = ExpeditionGeneratorScript.hardest_node_power(map, era)
-	var mine: float = ExpeditionGeneratorScript.roster_power(party)
+	# Fuerza de columna (power x escala^2 x cuerpos), no la suma de power: la de
+	# antes enganaba con columnas pequenas (docs/16 "Ronda final").
+	var enemy: float = ExpeditionGeneratorScript.hardest_node_strength(map, era)
+	var mine: float = ExpeditionGeneratorScript.column_strength(party)
 	return {
 		"name_key": "SORTIE_NAME_FIRST" if first else ExpeditionGeneratorScript.offer_name_key(offer),
 		"kind": String(offer.get("kind", "")),
