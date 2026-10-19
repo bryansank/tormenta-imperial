@@ -85,6 +85,10 @@ func _process(delta: float) -> void:
 	_tick_trial(delta)
 	if _halted or _cycle == null or not is_armed():
 		return
+	# Con el tutorial en marcha la Tormenta de verdad no empieza (2026-10-19): el
+	# reloj de la calma se para. Una ya empezada (guardado viejo) sigue su curso.
+	if _cycle.phase == StormCycle.Phase.CALM and not _on_demand and TutorialManager.blocks_interruptions():
+		return
 	_publish(_cycle.advance(delta))
 
 # ── Queries ──────────────────────────────────────────────────────────
@@ -220,9 +224,23 @@ func check_trial() -> bool:
 	if _armed or ProgressionManager.current_era > 1:
 		_trial_done = true
 		return false
-	if ProgressionManager.get_played_seconds() >= GameConfig.get_storm_trial_at():
+	# Nunca en medio del tutorial (queja de Bryan, 2026-10-19): espera a que acabe
+	# y llega storm_trial_after_guide despues, con su Aviso delante.
+	if TutorialManager.blocks_interruptions():
+		return false
+	if ProgressionManager.get_played_seconds() >= trial_due_at():
 		return start_trial()
 	return false
+
+## Cuando toca la tormenta de prueba, en segundos de partida jugados: a su hora
+## (storm_trial_at) y nunca antes de storm_trial_after_guide despues de acabar el
+## tutorial. Una partida sin esa marca (guardado de antes) la tiene a su hora.
+func trial_due_at() -> float:
+	var at: float = GameConfig.get_storm_trial_at()
+	var finished: float = TutorialManager.guide_finished_at
+	if finished >= 0.0:
+		at = maxf(at, finished + GameConfig.get_duration(GameConfig.storm_trial_after_guide))
+	return at
 
 ## Lanza la tormenta de prueba ya. Una sola vez por partida. Publica para las
 ## pruebas y la sonda; el juego la lanza solo desde _tick_trial().

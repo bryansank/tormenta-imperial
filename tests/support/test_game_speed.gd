@@ -14,8 +14,15 @@ var _mode_saved: int
 var _nodes: Array = []
 var _speeds: Array = []
 
+var _tutorial_saved: Dictionary = {}
+
 func before_test() -> void:
 	GameConfig.set_game_speed(1.0)
+	# Con el tutorial en marcha el reloj de la Tormenta espera (2026-10-19,
+	# TutorialManager.blocks_interruptions): aqui se prueba el reloj solo.
+	_tutorial_saved = TutorialManager.get_save_data()
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	TutorialManager.guide_baseline = {}
 	_storm_saved = StormManager.get_save_data()
 	_day_saved = DayClock.get_save_data()
 	_day_enabled = GameConfig.day_cycle_enabled
@@ -34,6 +41,7 @@ func after_test() -> void:
 	StormManager.load_save_data(_storm_saved)
 	GameConfig.day_cycle_enabled = _day_enabled
 	DayClock.load_save_data(_day_saved)
+	TutorialManager.load_save_data(_tutorial_saved)
 	get_tree().paused = false
 
 func _node() -> Node3D:

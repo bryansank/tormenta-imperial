@@ -105,7 +105,10 @@ func test_what_to_do_points_at_a_deliverable_contract() -> void:
 	assert_str(String(step.get("kind", ""))).is_equal("contract")
 	assert_str(String(step.get("id", ""))).is_equal("smuggler")
 	var text: Dictionary = Objectives.describe(step)
-	assert_str(String(text["title"])).contains(Tr.t("CONTRACT_SRC_SMUGGLER"))
+	# "Entrega el encargo del contrabandista" (2026-10-19): el nombre va dentro.
+	var src: String = Tr.t("CONTRACT_SRC_SMUGGLER")
+	assert_str(String(text["title"]).to_lower()).contains(src.substr(src.find(" ") + 1).to_lower())
+	assert_str(String(text["title"])).not_contains(" de el ")
 
 func test_the_context_follows_the_game() -> void:
 	var ctx: Dictionary = ContractManager.context()

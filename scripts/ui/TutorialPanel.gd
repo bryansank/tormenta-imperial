@@ -528,8 +528,9 @@ func _resolve_step() -> void:
 	# que hacer.
 	_res_hint = TutorialManager.step_hint(_step)
 	_res_how = TutorialManager.step_how(_step)
-	_res_house_only = TutorialManager.is_need_step(_step) \
-		and TutorialManager.needs_house_only(TutorialManager.building_for_step(_step))
+	# Desde 2026-10-19 la otra Casa es un paso de la lista (step_hint): nada
+	# que callar.
+	_res_house_only = false
 
 ## Una celda del mapa que senalar para `t`, o {} si `t` no es de celda (o no hay).
 func _target_site(vp: Vector2, t: String) -> Dictionary:

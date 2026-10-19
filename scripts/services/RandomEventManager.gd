@@ -21,18 +21,23 @@ func _process(delta: float) -> void:
 	if not GameMode.random_events_enabled():
 		return
 
+	# Process active event duration
+	if not _active_event.is_empty():
+		_active_timer -= delta
+		if _active_timer <= 0.0:
+			_end_active_event()
+
+	# Con el tutorial en marcha no llega ninguno nuevo (2026-10-19): el reloj
+	# espera, y el que ya estaba en curso acaba.
+	if TutorialManager.blocks_interruptions():
+		return
+
 	# Check for next event
 	_timer += delta
 	if _timer >= _next_event_time and _active_event.is_empty():
 		_timer = 0.0
 		_trigger_random_event()
 		_schedule_next_event()
-
-	# Process active event duration
-	if not _active_event.is_empty():
-		_active_timer -= delta
-		if _active_timer <= 0.0:
-			_end_active_event()
 
 func _schedule_next_event() -> void:
 	var base_min: float

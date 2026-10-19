@@ -291,7 +291,7 @@ cuando hay alguno; la línea del siguiente paso.
 | Barra de almacén con "usado/tope" | Barra fina de 8 px (PC); el número al mantener. Teléfono: fuera. |
 | Trabajadores y moral como fichas | "Libres" queda; moral solo en PC (teléfono: al tocar recursos). |
 | StormHUD (color + icono + texto de fase) | Solo el icono redondo (sol / nube); la fase al mantener. |
-| ¿QUÉ HACER? (tarjeta) | **Una línea plegable** con la cara de la Capitana: "Haz una Casa →". |
+| ¿QUÉ HACER? (tarjeta) | **Una línea plegable** con la cara de la Capitana: "Haz una Casa →". Desde 2026-10-19 (docs/23 §2.9): el objetivo y el paso de ahora, "Construye un Cuartel · Fabrica tablones 6/10"; al abrirla, el objetivo y 2-4 pasos ✓/●/○ que se tocan. |
 | Toasts sueltos | Columna de avisos (§10). |
 | Insignia de rango con título, barra y bandera | PC igual pero compacta; teléfono: bandera + número + barra. |
 | Botón MISIONES suelto y entradas de ☰ (Ejército, Misiones, Mercado, Investigar) | **Barra de abajo**. Mercado e Investigar abren su edificio; sin él, gris con el porqué. |

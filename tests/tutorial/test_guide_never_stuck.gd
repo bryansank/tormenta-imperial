@@ -11,6 +11,7 @@ const FARM := preload("res://data/buildings/farm.tres")
 const BARRACKS := preload("res://data/buildings/barracks.tres")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+const Objectives := preload("res://scripts/services/Objectives.gd")
 
 ## Un generador de mapa de mentira: dice que yacimientos hay y si alguno esta al
 ## alcance (find_deposit_near_cells es lo que mira PlacementRules).
@@ -261,7 +262,12 @@ func test_the_panel_shows_the_missing_line_under_the_step() -> void:
 	_start()
 	await await_idle_frame()
 	panel._process(0.016)
-	assert_str(panel.coach_text()).contains(TutorialManager.step_hint("open_build"))
+	# Sin oro ni madera el paso es "consigue lo que falta": la tarjeta lleva el
+	# objetivo y debajo sus pasos con su marca (2026-10-19).
+	var step: String = panel.current_step()
+	assert_bool(TutorialManager.is_need_step(step)).is_true()
+	for line in TutorialManager.step_hint(step).split("\n", false):
+		assert_str(panel.coach_text()).contains(line)
 
 func test_touch_steps_all_resolve_and_the_hint_is_the_same() -> void:
 	GameConfig.ui_touch_controls = "always"
@@ -501,7 +507,8 @@ func test_short_of_resources_the_guide_waits_and_comes_back_by_itself() -> void:
 	assert_str(TutorialManager.current_step()).is_equal("need_sawmill")
 	var text := TutorialManager.step_text("need_sawmill")
 	assert_str(text).contains(SAWMILL.get_display_name())
-	assert_str(TutorialManager.step_hint("need_sawmill")).contains("70")
+	# Los pasos con su cuenta (2026-10-19): "● Junta 80 de oro (10/80)".
+	assert_str(TutorialManager.step_hint("need_sawmill")).contains("(10/80)")
 	assert_str(TutorialManager.step_how("need_sawmill")).is_not_empty()
 	# Llega lo que faltaba: vuelve al paso de construir sin tocar nada mas.
 	ResourceManager.set_amounts({"gold": 300, "wood": 200})
@@ -512,15 +519,24 @@ func test_short_of_workers_and_resources_says_both() -> void:
 	PopulationManager._population = 1
 	ResourceManager.set_amounts({"gold": 0, "wood": 0})
 	var hint := TutorialManager.step_hint("need_sawmill")
-	assert_str(hint).contains(Tr.t("GUIDE_NEED_WORKERS") % 1)
-	assert_str(hint).contains(Tr.t("OBJ_MISSING") % Tr.amount_list(Rules.missing_cost(SAWMILL)))
+	# Una lista corta de pasos (2026-10-19): lo que falta de la bolsa, con su
+	# cuenta, y como mucho NEED_PLAN_ITEMS lineas de pocas palabras.
+	assert_str(hint).contains(Tr.t("OBJ_STEP_GATHER") % [80, Tr.res_name("gold"), 0, 80])
+	assert_int(hint.split("\n", false).size()).is_less_equal(TutorialManager.NEED_PLAN_ITEMS)
 	for line in hint.split("\n"):
 		assert_int(_words(line)).is_less_equal(8)
+	# Solo trabajadores: el paso de ahora es esperarlos (hay sitio en las casas).
+	ResourceManager.set_amounts({"gold": 300, "wood": 200})
+	PopulationManager._max_population = 5
+	assert_str(TutorialManager.step_hint("need_sawmill")).contains("● " + Tr.t("OBJ_STEP_WORKERS_WAIT") % 1)
 
 func test_no_room_in_the_houses_says_to_build_another() -> void:
+	ResourceManager.set_amounts({"gold": 300, "wood": 200})
 	PopulationManager._population = 1
 	PopulationManager._max_population = 1
-	assert_str(TutorialManager.step_how("need_sawmill")).contains(Tr.ti("GUIDE_HOW_WORKERS_HOUSE"))
+	var house: BuildingData = Rules.load_building_data("house")
+	assert_str(TutorialManager.step_hint("need_sawmill")).contains("● " + Tr.t("OBJ_STEP_HOUSE") % house.population_capacity)
+	assert_str(TutorialManager.step_how("need_sawmill")).is_equal(Tr.ti("OBJ_STEP_PLACE_HOW") % Objectives.building_the("house"))
 	assert_str(TutorialManager.need_target("sawmill")).is_equal("build_button")
 
 func test_the_need_step_points_where_to_get_it() -> void:
@@ -566,7 +582,7 @@ func test_the_panel_shows_the_need_step_with_what_is_missing() -> void:
 ## (alli se sierran), y vuelve solo al tenerlos.
 func test_short_of_planks_the_barracks_step_points_at_the_sawmill() -> void:
 	ResourceManager.unlock(ResourceManager.Type.PLANKS)
-	ResourceManager.set_amounts({"planks": 0})
+	ResourceManager.set_amounts({"planks": 0, "gold": 1000, "wood": 300})
 	_place(SAWMILL, Vector2i(2, 2))
 	_start()
 	TutorialManager.note_guide_fact("collected")
@@ -589,8 +605,9 @@ func test_a_skipped_goal_says_why_once() -> void:
 	TutorialManager._process(TutorialManager.GUIDE_CHECK_SECONDS + 0.1)
 	TutorialManager._process(TutorialManager.GUIDE_CHECK_SECONDS + 0.1)
 	EventBus.notification_posted.disconnect(grab)
-	var saw_note: String = Tr.t("GUIDE_SKIP_DEPOSIT") % SAWMILL.get_display_name()
-	var barracks_note: String = Tr.t("GUIDE_SKIP_PREREQ") % BARRACKS.get_display_name()
+	# El nombre va dentro de la frase, con su articulo (2026-10-19).
+	var saw_note: String = Tr.t("GUIDE_SKIP_DEPOSIT") % Objectives.building_the("sawmill")
+	var barracks_note: String = Tr.t("GUIDE_SKIP_PREREQ") % Objectives.building_the("barracks")
 	assert_int(notes.count(saw_note)).is_equal(1)
 	assert_int(notes.count(barracks_note)).is_equal(1)
 	for key in ["GUIDE_SKIP_DEPOSIT", "GUIDE_SKIP_LIMIT", "GUIDE_SKIP_PREREQ", "GUIDE_SKIP_RANK"]:

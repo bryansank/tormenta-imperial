@@ -38,10 +38,21 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 | `nucleo` | Núcleo | 3x3 | Free | 0 | instant | — (manual processes, +5 worker room) | — |
 | `sawmill` | Aserradero | 2x2 | 80/0/0/50 | 2 | 5s | 6 wood (+ planks by hand) | 12s |
 | `farm` | Granja | 2x2 | 40/0/0/30 | 2 | 5s | food, by crop (below) | the crop's |
-| `gold_mine` | Mina de Oro | 2x2 | 120/0/0/80 | 3 | 8s | 8 gold (+ ingots by hand) | 12s |
+| `gold_mine` | Mina de Oro | 2x2 | 120/0/0/80 (**the first: 60/0/0/40**) | 3 | 8s | 8 gold (+ ingots by hand) | 12s |
 | `foundry` | Fundición | 2x2 | 200/0/0/120 | 3 | 12s | 5 steel (+ beams by hand) | 15s |
 | `refinery` | Refinería | 2x2 | 300/150/0/100 + 6 beams | 4 | 18s | 4 oil (+ fuel by hand) | 18s |
 | `headquarters` | Cuartel General | 2x2 | 500/300/200/200 + 20 beams, 10 ingots, 10 fuel | 5 | 30s | 10 gold | 20s |
+
+**The first Gold Mine at half price (2026-10-19, `feat/objetivo-paso-a-paso`).**
+Bryan: "bájale el precio a la Mina de oro en el tutorial, la pones demasiado cara".
+In the tutorial it comes after the early Barracks, with gold at its lowest.
+`GameConfig.first_building_discount` (`{"gold_mine": 0.5}`) halves the cost of the
+first one while none stands (`BuildingData.first_discount_factor()`); the next ones
+pay the card price. `BuildingData.get_cost()` is the one build cost, so CONSTRUIR (and
+its "1.ª a mitad de precio" badge, `LBL_FIRST_HALF_PRICE`), the ghost, the charge,
+WHAT NOW? and the tutorial's `need_*` all show the same price. Upgrades and repairs
+are priced on the card price (`get_base_cost()`). Tests:
+`tests/economy/test_first_mine_discount.gd`.
 
 Materials (planks, ingots, beams, fuel) are made with the first manual process of
 each extractor and live outside the shared pool: see

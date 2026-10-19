@@ -109,7 +109,7 @@ func repair_cost(node: Node) -> Dictionary:
 		return {}
 	var factor: float = missing * GameConfig.storm_repair_cost_ratio
 	var cost: Dictionary = {}
-	var full: Dictionary = data.get_cost()
+	var full: Dictionary = data.get_base_cost()
 	for type in full:
 		var amount: int = roundi(float(full[type]) * factor)
 		if amount > 0:

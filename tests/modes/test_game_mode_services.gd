@@ -84,7 +84,11 @@ func test_campaign_runs_the_storm_once_armed() -> void:
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
 	StormManager.reset()
 	StormManager._armed = true
+	# Sin tutorial en marcha (frena el reloj, 2026-10-19).
+	var tut: Dictionary = TutorialManager.get_save_data()
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
 	_run_storm(GameConfig.get_storm_first_interval() + 1.0, 1.0)
+	TutorialManager.load_save_data(tut)
 	assert_int(StormManager.get_phase()).is_equal(StormCycle.Phase.WARNING)
 
 func test_a_mode_without_tithe_lets_the_storm_pass_without_collecting() -> void:

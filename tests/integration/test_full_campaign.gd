@@ -172,7 +172,14 @@ var _incoming: int = 0
 
 var _saved_needs_campaigns := true
 
+var _tutorial_saved: Dictionary = {}
+
 func before_test() -> void:
+	# Con el tutorial en marcha el reloj de la Tormenta espera (2026-10-19,
+	# TutorialManager.blocks_interruptions): aqui se prueba el reloj solo.
+	_tutorial_saved = TutorialManager.get_save_data()
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
+	TutorialManager.guide_baseline = {}
 	_saved_resources = _resource_amounts()
 	_saved_era = ResourceManager.get_era()
 	_saved_warehouses = ResourceManager.get_warehouse_count()
@@ -215,6 +222,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	GameConfig.final_audit_needs_campaigns = _saved_needs_campaigns
+	TutorialManager.load_save_data(_tutorial_saved)
 	_close_colony()
 	_disconnect_probes()
 
@@ -882,6 +890,9 @@ func test_a_whole_storm_cycle_bites_the_base_and_settles_its_tithe() -> void:
 ## ciclo que se salte una fase no acabe corriendo ciclos enteros de mas. Con
 ## guarda: si no llega, el caso falla diciendo donde se quedo.
 func _advance_storm_until(phase: int, what_failed: String) -> void:
+	# La colonia de la prueba arranca con el tutorial pendiente, que frena el
+	# reloj (2026-10-19): aqui se juega como quien ya lo acabo.
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
 	var guard := 0
 	while StormManager.get_phase() != phase:
 		guard += 1

@@ -119,6 +119,12 @@ func _run() -> void:
 		qg.call("close")
 		await _frames(20)
 
+	# ── Solo ¿QUE HACER? paso a paso (--objetivo, 2026-10-19) ──
+	if _arg("objetivo") == "true":
+		await _objective_tour(main)
+		_finish()
+		return
+
 	# ── Tutorial guiado, jugado ──
 	await _play_guide(main)
 
@@ -256,6 +262,70 @@ func _extras(main: Node) -> void:
 	if wr2 != null and wr2.has_method("close_current"):
 		wr2.call("close_current")
 		await _frames(10)
+
+## ¿QUE HACER? paso a paso (feat/objetivo-paso-a-paso): la linea del HUD y el
+## panel con el objetivo y sus pasos, sin recoger nada a mano. Dos momentos: el
+## oro que espera en la Mina (el paso es recogerlo) y los tablones del Cuartel
+## (6 de 10). Tambien la tarjeta del tutorial "consigue lo que falta".
+func _objective_tour(main: Node) -> void:
+	var cm: Node = main.get_node("ConstructionMenu")
+	var placer: Node = main.get_node("BuildingPlacer")
+	var obj: Node = main.get_node("ObjectivePanel")
+	# Sin globos de ayuda encima: las capturas son del objetivo.
+	GameConfig.ui_helper_visible = false
+	EventBus.helper_visibility_changed.emit(false)
+	# La tarjeta del tutorial con oro sin recoger: el paso es recogerlo.
+	await _frames(20)
+	_top_up()
+	for id in ["sawmill", "gold_mine"]:
+		cm.call("_open")
+		cm.call("_select_building", Rules.load_building_data(id))
+		cm.call("_on_build_pressed")
+		var spot := _free_spot(id, null)
+		placer.call("assist_center_on", spot)
+		placer.call("assist_move_ghost", spot)
+		await _frames(10)
+		placer.call("assist_confirm", spot)
+		await _frames(10)
+		_complete_all()
+		_top_up()
+	EventBus.building_placement_cancelled.emit()
+	var mine := _first("gold_mine")
+	ResourceManager.set_amounts({"gold": 10, "wood": 220, "food": 40, "planks": 0})
+	ProductionManager._add_to_stock(mine, {"gold": 45})
+	# El tutorial ya enseno a recoger: lo siguiente es el Cuartel, sin oro.
+	for fact in ["goal_seen", "core_seen", "collected"]:
+		TutorialManager.note_guide_fact(fact)
+	await _seconds(1.5)
+	print("recorrido_probe: tutorial paso=", TutorialManager.current_step(), " texto=", TutorialManager.step_text(TutorialManager.current_step()))
+	await _shot("objetivo_tutorial_recoger")
+	# Sin tutorial: la linea del HUD y el panel.
+	TutorialManager.skip_guide()
+	await _frames(10)
+	obj.call("refresh_line")
+	await _frames(5)
+	print("recorrido_probe: linea=", obj.call("line_text"))
+	await _shot("objetivo_linea_recoger")
+	obj.call("toggle")
+	await _frames(15)
+	print("recorrido_probe: panel=", obj.call("get_now_text"))
+	await _shot("objetivo_panel_recoger")
+	obj.call("toggle")
+	await _frames(5)
+	# Tablones: 6 de 10, con el oro ya recogido.
+	ProductionManager.collect(mine)
+	ResourceManager.set_amounts({"gold": 400, "wood": 220, "food": 40, "planks": 6})
+	await _frames(10)
+	obj.call("refresh_line")
+	await _frames(5)
+	print("recorrido_probe: linea=", obj.call("line_text"))
+	await _shot("objetivo_linea_tablones")
+	obj.call("toggle")
+	await _frames(15)
+	print("recorrido_probe: panel=", obj.call("get_now_text"))
+	await _shot("objetivo_panel_tablones")
+	obj.call("toggle")
+	await _frames(5)
 
 ## Juega el tutorial hasta "done" (o 70 vueltas), una captura antes de cada accion.
 func _play_guide(main: Node) -> void:
