@@ -152,7 +152,8 @@ func test_the_next_step_is_a_foldable_line_with_the_captain() -> void:
 	var line: Control = obj.line()
 	assert_object(line).is_not_null()
 	assert_object(line.find_child("Face", true, false)).is_not_null()
-	assert_str(obj.line_text()).is_equal(String(Objectives.describe(Objectives.next_step())["title"]))
+	# Objetivo y paso de ahora (feat/objetivo-paso-a-paso): Objectives.plan_line.
+	assert_str(obj.line_text()).is_equal(Objectives.plan_line(Objectives.plan()))
 	obj.set_line_folded(true)
 	var text_hidden: bool = not (line.find_child("StepText", true, false) as Control).visible
 	obj.set_line_folded(false)
