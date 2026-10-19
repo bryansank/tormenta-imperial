@@ -225,9 +225,20 @@ func _handle_left_button(event: InputEventMouseButton) -> void:
 			return
 		if _state != State.IDLE:
 			_left_pressed = false
+			# Carretera larga: pulsar empieza el tramo; se tiende al soltar
+			# (un clic sin arrastrar pone un solo tramo, al soltar).
+			if _state == State.PLACING and _assist.is_road():
+				_assist.mouse_line_begin(assist_screen_to_cell(event.position))
+				get_viewport().set_input_as_handled()
+				return
 			_handle_left_click(event.position)
 		return
 
+	if _assist.mouse_drawing and not _left_from_touch:
+		if not _assist.mouse_line_end():
+			_handle_left_click(event.position)
+		get_viewport().set_input_as_handled()
+		return
 	# Release: a click without drag places or selects; a drag was a camera pan.
 	var was_click := _left_pressed and not _left_dragged
 	if _left_from_touch and InputService.touch_pan_consumed_click():
@@ -403,6 +414,11 @@ func _rebuild_preview() -> void:
 	_hover_cell = Vector2i(-1, -1)  # Force position refresh
 
 func _on_rotate_requested() -> void:
+	# Una carretera es 1x1: girar no cambia nada, asi que R / ↻ cambia el codo
+	# de la carretera larga.
+	if _state == State.PLACING and _assist.is_road():
+		_assist.line_flip_elbow()
+		return
 	if _state != State.IDLE:
 		_auto_face = false
 		_rotate_building()
@@ -445,6 +461,14 @@ func _update_preview() -> void:
 			_set_preview_cell(_assist.cell)
 		return
 	var mouse_pos := get_viewport().get_mouse_position()
+	# Carretera larga: el tramo sigue al cursor mientras el boton siga pulsado.
+	# Si se solto donde no llega el evento (encima de un panel), se tiende igual.
+	if _assist.mouse_drawing:
+		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			if not _assist.mouse_line_end():
+				_handle_left_click(mouse_pos)
+		else:
+			_assist.mouse_line_move(assist_screen_to_cell(mouse_pos))
 	var hit = _raycast_to_ground(mouse_pos)
 	if hit == null:
 		return
@@ -1286,3 +1310,57 @@ func _tick_block_flash(delta: float) -> void:
 	var mat := (mm.mesh as PlaneMesh).material as StandardMaterial3D
 	mat.albedo_color.a = 0.3 + 0.25 * sin(Time.get_ticks_msec() * 0.008)
 	_block_flash.visible = not cells.is_empty()
+
+# ── Carretera larga: vista previa del tramo (PlacementAssist) ──────────
+
+var _line_preview: MultiMeshInstance3D = null
+
+## Pinta el tramo: `good` en verde (se tiende), `bad` en rojo (no vale o no
+## llega el oro). Un MultiMesh, como las casillas validas.
+func assist_show_line(good: Array, bad: Array) -> void:
+	var total := good.size() + bad.size()
+	if total == 0:
+		if _line_preview:
+			_line_preview.visible = false
+		return
+	if _line_preview == null:
+		_line_preview = MultiMeshInstance3D.new()
+		_line_preview.name = "RoadLinePreview"
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		var plane := PlaneMesh.new()
+		plane.size = Vector2.ONE * GridManager.cell_size * 0.92
+		var mat := StandardMaterial3D.new()
+		mat.vertex_color_use_as_albedo = true
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.no_depth_test = true
+		plane.material = mat
+		mm.mesh = plane
+		_line_preview.multimesh = mm
+		add_child(_line_preview)
+	var multimesh := _line_preview.multimesh
+	multimesh.instance_count = total
+	var ok_col := Color(_ghost_valid.albedo_color, 0.7) if _ghost_valid else Color(0.3, 0.9, 0.3, 0.7)
+	var bad_col := Color(_ghost_invalid.albedo_color, 0.7) if _ghost_invalid else Color(0.9, 0.25, 0.2, 0.7)
+	var i := 0
+	for list in [good, bad]:
+		for c in list:
+			var w := GridManager.cell_to_world(c)
+			multimesh.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(w.x, 0.08, w.z)))
+			multimesh.set_instance_color(i, ok_col if list == good else bad_col)
+			i += 1
+	_line_preview.visible = true
+
+func assist_set_ghost_visible(v: bool) -> void:
+	if _preview_node:
+		_preview_node.visible = v
+
+## Se acaba de tender un tramo: el fantasma se recoloca en el siguiente frame.
+func assist_line_laid() -> void:
+	_hover_cell = Vector2i(-1, -1)
+
+func get_line_preview() -> MultiMeshInstance3D:
+	return _line_preview

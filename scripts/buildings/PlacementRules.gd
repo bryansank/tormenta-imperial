@@ -755,6 +755,229 @@ static func pave_route(placer: Node, route: Array) -> int:
 	EventBus.placement_batch_finished.emit(n)
 	return n
 
+# ── Carretera larga (2026-10-19, feat/carretera-arrastrar) ─────────────
+#
+# Con la carretera en la mano, arrastrar (raton) o tocar inicio y fin (dedo)
+# tiende un tramo entero de una vez. Aqui viven las reglas, sin vista:
+#
+# - El camino es recto o en L, primero por el eje mas largo (`flip` cambia el
+#   codo: R o ↻). Si esa L choca, se prueba la otra; si las dos chocan, el
+#   camino mas corto por celdas libres (BFS). Si no hay ninguno, el tramo sale
+#   rojo con la razon de la primera celda que estorba.
+# - Las celdas que ya son carretera se atraviesan y no se cobran.
+# - El tramo tiene que tocar la red unida al Nucleo (o el Nucleo) en algun
+#   punto, como una carretera suelta. Sin Nucleo (escenas de prueba) no hay regla.
+# - Se tiende en orden desde la red hacia fuera. Si el oro no llega para todo,
+#   se ponen los tramos que se pueden pagar, los mas cercanos a la red (nunca
+#   queda un trozo suelto), y se dice cuantos faltaron. Decision: mejor avanzar
+#   hasta donde llegue que no poner nada.
+
+## Las celdas de un tramo recto o en L de `a` a `b`, puntas incluidas: primero el
+## eje mas largo (empate: horizontal); con `flip`, el otro.
+static func road_line_cells(a: Vector2i, b: Vector2i, flip: bool = false) -> Array:
+	var d := b - a
+	var x_first := absi(d.x) >= absi(d.y)
+	if flip:
+		x_first = not x_first
+	var out: Array = [a]
+	var cur := a
+	for axis in ([0, 1] if x_first else [1, 0]):
+		if axis == 0:
+			while cur.x != b.x:
+				cur.x += signi(d.x)
+				out.append(cur)
+		else:
+			while cur.y != b.y:
+				cur.y += signi(d.y)
+				out.append(cur)
+	return out
+
+## Se puede pasar por `c`: tierra y libre, o ya carretera.
+static func _road_passable(c: Vector2i) -> bool:
+	return GridManager.is_land_cell(c) and (GridManager.is_cell_free(c) or _is_road_cell(c, null))
+
+## "" si todo el camino es transitable; si no, la razon de la primera celda que
+## estorba ("water" o "occupied").
+static func _road_line_blocker(cells: Array) -> String:
+	for c in cells:
+		if not GridManager.is_land_cell(c):
+			return "water"
+		if not _road_passable(c):
+			return "occupied"
+	return ""
+
+## El camino mas corto de `a` a `b` por celdas transitables, o null.
+static func _road_bfs(a: Vector2i, b: Vector2i) -> Variant:
+	if not _road_passable(a) or not _road_passable(b):
+		return null
+	var came := {a: null}
+	var queue: Array = [a]
+	var head := 0
+	while head < queue.size():
+		var cur: Vector2i = queue[head]
+		head += 1
+		if cur == b:
+			var path: Array = []
+			var step: Variant = cur
+			while step != null:
+				path.push_front(step)
+				step = came[step]
+			return path
+		for d in NEIGHBORS4:
+			var n: Vector2i = cur + d
+			if not came.has(n) and _road_passable(n):
+				came[n] = cur
+				queue.append(n)
+	return null
+
+## Las celdas nuevas de `cells` (las que no son ya carretera), ordenadas por su
+## distancia, a lo largo del camino, a un punto que toca la red: asi cualquier
+## prefijo queda unido. null si el camino no toca la red ni el Nucleo.
+static func _road_line_order(cells: Array) -> Variant:
+	var n := cells.size()
+	var anchor: Array = []
+	anchor.resize(n)
+	var any := false
+	var free_rule := core_cells().is_empty()
+	var network := network_view()
+	var core := _core_set()
+	for i in n:
+		var c: Vector2i = cells[i]
+		var a := (i == 0) if free_rule else (network.has(c) or _touches([c], network) or _touches([c], core))
+		anchor[i] = a
+		any = any or a
+	if not any:
+		return null
+	# Distancia por el camino al ancla mas cercana: una pasada hacia delante y
+	# otra hacia atras.
+	var dist: Array = []
+	dist.resize(n)
+	var last := -1
+	for i in n:
+		if anchor[i]:
+			last = i
+		dist[i] = (i - last) if last >= 0 else n * 2
+	last = -1
+	for i in range(n - 1, -1, -1):
+		if anchor[i]:
+			last = i
+		if last >= 0:
+			dist[i] = mini(dist[i], last - i)
+	var idx: Array = []
+	for i in n:
+		if not _is_road_cell(cells[i], null):
+			idx.append(i)
+	idx.sort_custom(func(p, q): return dist[p] < dist[q] or (dist[p] == dist[q] and p < q))
+	var out: Array = []
+	for i in idx:
+		out.append(cells[i])
+	return out
+
+## El plan de una carretera larga de `a` a `b`:
+## {"start", "end", "cells" (el camino, en orden), "new" (las celdas a tender,
+## desde la red hacia fuera), "ok", "reason" ("" | "water" | "occupied" |
+## "road" | "built"), "affordable" (cuantos tramos de "new" se pueden pagar)}.
+## "built": todo el camino ya es carretera. Puro: no tiende ni cobra nada.
+static func plan_road_line(a: Vector2i, b: Vector2i, flip: bool = false) -> Dictionary:
+	var out := {"start": a, "end": b, "cells": [], "new": [], "ok": false, "reason": "", "affordable": 0}
+	if not GridManager.is_valid_cell(a) or not GridManager.is_valid_cell(b):
+		out["reason"] = "water"
+		return out
+	var first := road_line_cells(a, b, flip)
+	var reason := _road_line_blocker(first)
+	var cells: Variant = first
+	if reason != "":
+		var second := road_line_cells(a, b, not flip)
+		cells = second if _road_line_blocker(second) == "" else _road_bfs(a, b)
+	if cells == null:
+		out["cells"] = first
+		out["reason"] = reason
+		return out
+	out["cells"] = cells
+	var ordered: Variant = _road_line_order(cells)
+	if ordered == null:
+		out["reason"] = "road"
+		out["new"] = (cells as Array).filter(func(c): return not _is_road_cell(c, null))
+		return out
+	if (ordered as Array).is_empty():
+		out["reason"] = "built"
+		return out
+	out["new"] = ordered
+	out["ok"] = true
+	out["affordable"] = affordable_road_tiles((ordered as Array).size())
+	return out
+
+## Cuantos tramos de carretera (hasta `wanted`) se pueden pagar ahora.
+static func affordable_road_tiles(wanted: int) -> int:
+	var road := load_building_data(ROAD_ID)
+	if road == null or road.get_cost().is_empty():
+		return wanted
+	var one := road.get_cost()
+	var lo := 0
+	var hi := wanted
+	while lo < hi:
+		var mid := (lo + hi + 1) / 2
+		var cost := {}
+		for type in one:
+			cost[type] = int(one[type]) * mid
+		if ResourceManager.can_afford(cost):
+			lo = mid
+		else:
+			hi = mid - 1
+	return lo
+
+## Tiende (y cobra) una carretera larga con `placer`, rehaciendo el plan con el
+## mapa y el oro de ahora. Devuelve {"laid", "wanted", "reason"}: puestos,
+## los que pedia el tramo y por que no (la razon del plan, o "gold").
+static func lay_road_line(placer: Node, a: Vector2i, b: Vector2i, flip: bool = false) -> Dictionary:
+	var plan := plan_road_line(a, b, flip)
+	var wanted: int = (plan["new"] as Array).size()
+	if not bool(plan["ok"]):
+		return {"laid": 0, "wanted": wanted, "reason": String(plan["reason"])}
+	var k := int(plan["affordable"])
+	if k <= 0:
+		return {"laid": 0, "wanted": wanted, "reason": "gold"}
+	var laid := pave_route(placer, (plan["new"] as Array).slice(0, k))
+	return {"laid": laid, "wanted": wanted, "reason": "" if laid >= wanted else "gold"}
+
+## El rotulo de la vista previa: "12 tramos · 12 oro", "Solo hay oro para 5 de
+## 12 tramos" o por que no se puede.
+static func road_line_label(plan: Dictionary) -> String:
+	if plan.is_empty():
+		return ""
+	if not bool(plan["ok"]):
+		return road_line_reason_text(String(plan["reason"]))
+	var n: int = (plan["new"] as Array).size()
+	var k := int(plan["affordable"])
+	var gold := int(route_cost((plan["new"] as Array)).get(ResourceManager.Type.GOLD, 0))
+	if k < n:
+		return Tr.t("LBL_ROAD_LINE_SHORT") % [k, n]
+	return Tr.t("LBL_ROAD_LINE_COST") % [n, gold]
+
+## Lo que se dice al soltar: cuantos se pusieron o por que no.
+static func road_line_result_text(result: Dictionary) -> String:
+	var laid := int(result["laid"])
+	var wanted := int(result["wanted"])
+	if laid > 0 and laid < wanted:
+		return Tr.t("LBL_ROAD_LINE_PARTIAL") % [laid, wanted]
+	if laid > 0:
+		return Tr.t("LBL_ROAD_LINE_LAID") % laid
+	return road_line_reason_text(String(result["reason"]))
+
+static func road_line_reason_text(reason: String) -> String:
+	match reason:
+		"water":
+			return Tr.t("LBL_ON_WATER")
+		"occupied":
+			return Tr.t("LBL_ROAD_LINE_BLOCKED")
+		"road":
+			return Tr.t("LBL_NEEDS_ROAD")
+		"built":
+			return Tr.t("LBL_ROAD_LINE_BUILT")
+		"gold":
+			return Tr.t("LBL_ROAD_LINE_NO_GOLD")
+	return ""
+
 # ── Camino de acceso alrededor de un yacimiento (2026-10-04) ───────────
 #
 # El primer extractor que se planta junto a un yacimiento tiende gratis un

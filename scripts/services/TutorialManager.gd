@@ -254,6 +254,8 @@ const TIPS := {
 	"collect_full":   {"title": "HELP_T_COLLECT",   "body": "HELP_B_COLLECT"},
 	"fishing_dock":   {"title": "HELP_T_FISHING_DOCK", "body": "HELP_B_FISHING_DOCK"},
 	"island":         {"title": "HELP_T_ISLAND",    "body": "HELP_B_ISLAND"},
+	# Carretera larga: la primera vez que se coge la carretera fuera de la guia.
+	"road_drag":      {"title": "HELP_T_ROAD_DRAG", "body": "HELP_B_ROAD_DRAG"},
 }
 
 ## Paneles cuya primera apertura merece un consejo: nombre del nodo en Main.tscn
