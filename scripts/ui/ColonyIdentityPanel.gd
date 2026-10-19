@@ -15,9 +15,10 @@ extends CanvasLayer
 ## "edit"  ☰ MENU > COLONIA: parte del pais de esta partida, con las piezas del
 ##         rango de ahora. Lo engancha RankPanel, que llama a set_colony().
 ##
-## Siempre queda bonita: los colores que no se distinguirian o no se leerian se
-## ven tachados y no se pueden tocar, y al cambiar una pieza la receta se arregla
-## sola (ColonyFlag.fix_spec). Lo cerrado por rango, con candado y "Rango N".
+## Siempre queda bonita: los colores que no se distinguirian o no se leerian
+## salen apagados con el simbolo de prohibido debajo y no se pueden tocar, y al
+## cambiar una pieza la receta se arregla sola (ColonyFlag.fix_spec). Lo cerrado
+## por rango, apagado y con la placa [candado] N debajo (CartoonTheme.piece_tile).
 ## Al cerrarse (confirmar o cancelar) se libera solo salvo `auto_free = false`.
 
 signal confirmed(colony_name: String, spec: Dictionary)
@@ -25,7 +26,6 @@ signal cancelled
 
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const ColonyIdentity := preload("res://scripts/services/ColonyIdentity.gd")
-const ConstructionMenuScript := preload("res://scripts/ui/ConstructionMenu.gd")
 const DragScroll := preload("res://scripts/ui/DragScroll.gd")
 const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
@@ -387,27 +387,27 @@ func _piece_grid(kind: String) -> HFlowContainer:
 	var current: String = _spec["pattern"] if kind == "patterns" else _spec["emblem"]
 	for id in ColonyIdentity.catalog(kind):
 		var unlocked := ColonyIdentity.is_piece_open(kind, id, _rank, _all)
-		var btn := _make_pick_button(id == current, unlocked)
+		var lock := 0 if unlocked else ColonyIdentity.piece_rank(kind, id)
+		# La pieza entera arriba; debajo, la placa del rango si esta cerrada
+		# (CartoonTheme.piece_tile: todas las fichas miden igual).
+		var pic: Control
+		if kind == "emblems" and String(id) == "none":
+			pic = CT.none_piece(THUMB)
+		else:
+			var tex := TextureRect.new()
+			tex.custom_minimum_size = THUMB
+			tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			tex.texture = ColonyFlag.small_texture(_thumb_spec(kind, id))
+			if not unlocked:
+				tex.modulate = Color(1, 1, 1, 0.5)
+			pic = tex
+		var btn := CT.piece_tile(pic, id == current, unlocked, lock)
 		btn.name = "Piece_" + String(id)
 		var label_key := ("FLAG_PATTERN_" if kind == "patterns" else "FLAG_EMBLEM_") + String(id).to_upper()
 		btn.tooltip_text = Tr.t(label_key)
-		var box := VBoxContainer.new()
-		box.alignment = BoxContainer.ALIGNMENT_CENTER
-		box.add_theme_constant_override("separation", 3)
-		var pic := TextureRect.new()
-		pic.custom_minimum_size = THUMB
-		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		pic.stretch_mode = TextureRect.STRETCH_SCALE
-		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		pic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		pic.texture = ColonyFlag.small_texture(_thumb_spec(kind, id))
 		if not unlocked:
-			pic.modulate = Color(1, 1, 1, 0.45)
-		box.add_child(pic)
-		if not unlocked:
-			box.add_child(CT.rank_plate(ColonyIdentity.piece_rank(kind, id)))
-			btn.tooltip_text += " · " + Tr.t("LBL_RANK_LOCK") % ColonyIdentity.piece_rank(kind, id)
-		CT.fit_button_content(btn, box, 5.0)
+			btn.tooltip_text += " · " + Tr.t("LBL_RANK_LOCK") % lock
 		var piece_id := String(id)
 		btn.pressed.connect(func(): pick(kind, piece_id))
 		grid.add_child(btn)
@@ -445,30 +445,17 @@ func _build_color_rows() -> void:
 func _swatch(slot: int, color_id: String) -> Button:
 	var unlocked := ColonyIdentity.is_piece_open("colors", color_id, _rank, _all)
 	var allowed := unlocked and _color_allowed(slot, color_id)
-	var btn := _make_pick_button(String(_spec["colors"][slot]) == color_id, allowed)
+	var lock := 0 if unlocked else ColonyIdentity.piece_rank("colors", color_id)
+	# La muestra entera arriba, sin nada pintado encima; debajo, la placa del
+	# rango (cerrada) o la de "no se leeria" (abierta pero no vale aqui).
+	var swatch := CT.piece_swatch(ColonyFlag.color_of(color_id), Vector2(SWATCH - 12.0, SWATCH - 16.0), not allowed)
+	var btn := CT.piece_tile(swatch, String(_spec["colors"][slot]) == color_id, allowed, lock, unlocked and not allowed)
 	btn.name = "Color_%d_%s" % [slot, color_id]
 	btn.tooltip_text = Tr.t("COLONY_COLOR_" + color_id.to_upper())
 	if unlocked and not allowed:
 		btn.tooltip_text += " · " + Tr.t("LBL_IDENTITY_UNREADABLE")
-	# La muestra entera arriba; cerrada, debajo la placa del rango. Sin nada
-	# pintado encima del color.
-	var box := VBoxContainer.new()
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 3)
-	var swatch := ColorRect.new()
-	swatch.name = "Swatch"
-	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	swatch.custom_minimum_size = Vector2(SWATCH - 12.0, SWATCH - 12.0)
-	swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	swatch.color = ColonyFlag.color_of(color_id)
-	if not allowed:
-		# Apagado: el color se ve, pero a media luz.
-		swatch.color = Color(swatch.color.lerp(CT.c("window", "WELL"), 0.45), 0.55)
-	box.add_child(swatch)
-	if not unlocked:
-		box.add_child(CT.rank_plate(ColonyIdentity.piece_rank("colors", color_id)))
-		btn.tooltip_text = Tr.t("LBL_RANK_LOCK") % ColonyIdentity.piece_rank("colors", color_id)
-	CT.fit_button_content(btn, box, 5.0)
+	elif not unlocked:
+		btn.tooltip_text += " · " + Tr.t("LBL_RANK_LOCK") % lock
 	btn.pressed.connect(func(): pick("colors", color_id, slot))
 	return btn
 
@@ -493,17 +480,6 @@ func _color_allowed(slot: int, color_id: String) -> bool:
 			var fixed := ColonyFlag.fix_spec({"pattern": _spec["pattern"], "emblem": _spec["emblem"], "colors": colors}, _open_colors())
 			return String(fixed["colors"][2]) == color_id
 	return false
-
-func _make_pick_button(selected: bool, enabled: bool) -> Button:
-	var btn := Button.new()
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.disabled = not enabled
-	# Tarjeta crema; la elegida con borde de laton grueso; la cerrada, apagada.
-	var st := CT.pick_style(selected, enabled)
-	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-		btn.add_theme_stylebox_override(state, st)
-	btn.set_meta("selected", selected)
-	return btn
 
 ## Cambia el texto de una pastilla (su etiqueta y la meta "text").
 func _set_button_text(b: Button, text_s: String) -> void:

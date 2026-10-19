@@ -477,7 +477,14 @@ serie (`GameConfig.ui_helper_visible`); §12 propone apagarlos.
   cerrada, a media luz y con una **placa clara** «candado + rango» debajo
   (`CartoonTheme.rank_plate`), nunca pintada encima. La tarjeta mide lo que su
   contenido (`fit_button_content`); la elegida, borde de latón de 5
-  (`pick_style`).
+  (`pick_style`). Revisión (feat/ui3-bandera): todas las fichas salen de
+  `CartoonTheme.piece_tile` y en una rejilla miden **igual de ancho** (el de la
+  placa), así que caben más por fila (los 13 colores en una fila a 800×360);
+  la abierta llena la ficha con su pieza. Color cerrado: su tono, más gris pero
+  opaco (antes casi crema: no se distinguían). Abierto pero «no se leería»: la
+  placa lleva el símbolo de prohibido rojo (antes nada, o una raya encima).
+  «Sin emblema»: hueco hundido con el símbolo de prohibido (`none_piece`), no
+  una muestra vacía ni un disco liso. Sonda: `tools/bandera_ui_probe.gd`.
 - **CONSTRUIR a pantalla completa** en todos los perfiles; la ficha a la derecha
   en tablet y PC. El nombre del edificio va siempre entero: la fila crece a dos
   líneas antes que cortar.

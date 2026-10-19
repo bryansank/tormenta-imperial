@@ -1984,3 +1984,133 @@ static func pick_style(selected: bool, enabled: bool) -> StyleBoxFlat:
 		st.shadow_color = Color(sem("ACCENT"), 0.5)
 		st.shadow_size = 4
 	return st
+
+# --- BANDERA (feat/ui3-bandera) -------------------------------------------
+# Las fichas de las rejillas de PAIS Y BANDERA y de REGIMIENTO, todas del mismo
+# tamano en una rejilla: la pieza arriba (entera, sin nada pintado encima) y
+# debajo la placa del rango (cerrada) o la de "no se leeria"
+# (abierta pero no vale aqui); la abierta llena la ficha. Del mismo ancho, para que
+# abiertas y cerradas midan igual y ninguna fila salga desigual o cortada.
+
+const PIECE_PAD := 4.0
+
+## Ficha de pieza. `content` es la muestra / miniatura (crece hasta llenar).
+## `lock_rank` > 0: cerrada hasta ese rango. `unreadable`: abierta pero no se
+## leeria en esa casilla. El boton lleva "selected" y "lock_rank" en meta, y
+## su caja (VBox "Box") la pieza y, si hace falta, la placa ("RankLock" o
+## "Unreadable").
+static func piece_tile(content: Control, selected: bool, enabled: bool, lock_rank: int = 0,
+		unreadable: bool = false) -> Button:
+	var btn := Button.new()
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.disabled = not enabled
+	var st := pick_style(selected, enabled)
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		btn.add_theme_stylebox_override(state, st)
+	btn.set_meta("selected", selected)
+	var box := VBoxContainer.new()
+	box.name = "Box"
+	box.add_theme_constant_override("separation", 3)
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(content)
+	var strip: PanelContainer
+	if lock_rank > 0:
+		strip = piece_plate("lock", str(lock_rank))
+		strip.name = "RankLock"
+		btn.set_meta("lock_rank", lock_rank)
+	elif unreadable:
+		strip = piece_plate("ban", "")
+		strip.name = "Unreadable"
+	if strip != null:
+		box.add_child(strip)
+	else:
+		# Abierta: la pieza llena la ficha (la fila de HFlow le da el alto de
+		# las cerradas); de ancho, al menos el de una placa, para que casen.
+		# Se mide una placa invisible ya en el arbol (fuera de el no mide bien).
+		var probe := piece_plate("lock", "")
+		probe.name = "PlateWidth"
+		probe.modulate.a = 0.0
+		btn.add_child(probe)
+		var sync := func():
+			if is_instance_valid(probe) and is_instance_valid(box):
+				box.custom_minimum_size.x = probe.get_combined_minimum_size().x
+		probe.minimum_size_changed.connect(sync)
+		sync.call()
+	fit_button_content(btn, box, PIECE_PAD)
+	return btn
+
+## La placa pequena de debajo: [candado] N, o el simbolo de prohibido. Todas
+## del mismo ancho (el de "88") y alto, para que las fichas casen.
+static func piece_plate(icon: String, text_s: String) -> PanelContainer:
+	var plate := PanelContainer.new()
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var st := box(c("window", "CARD"), c("window", "CARD_BORDER"), 1, 7, 1)
+	st.content_margin_left = 4
+	st.content_margin_right = 4
+	plate.add_theme_stylebox_override("panel", st)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 2)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.add_child(row)
+	var px := 12 if phone else 14
+	var ic: Control = make_glyph("lock", px, text("window")) if icon == "lock" else none_icon(px, sem("DANGER"))
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(ic)
+	var l := label(text_s, "small", text("window"))
+	l.name = "RankLockLabel"
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var f := l.get_theme_font("font")
+	if f != null:
+		# Ancho de "88" y alto de una linea aunque no lleve texto.
+		l.custom_minimum_size = Vector2(ceilf(f.get_string_size("88", HORIZONTAL_ALIGNMENT_LEFT, -1, fs("small")).x),
+			ceilf(f.get_height(fs("small"))))
+	row.add_child(l)
+	if icon != "lock":
+		# Solo el simbolo, centrado en el mismo hueco que "[candado] N".
+		l.visible = false
+		ic.custom_minimum_size = Vector2(px + 2 + l.custom_minimum_size.x, l.custom_minimum_size.y)
+	return plate
+
+## "Ninguno" / "no vale": un aro con su barra (el simbolo de prohibido), dibujado.
+static func none_icon(px: int, tint: Color = Color(0, 0, 0, 0)) -> Control:
+	var ic := Control.new()
+	ic.name = "NoneIcon"
+	ic.custom_minimum_size = Vector2(px, px)
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var col := tint if tint.a > 0.0 else text("window", true)
+	ic.draw.connect(func():
+		var s := minf(ic.size.x, ic.size.y)
+		var ctr := ic.size * 0.5
+		var r := s * 0.4
+		var w := maxf(2.0, s * 0.13)
+		ic.draw_arc(ctr, r, 0.0, TAU, 28, col, w, true)
+		var d := Vector2(r, -r).normalized() * r
+		ic.draw_line(ctr - d, ctr + d, col, w, true))
+	return ic
+
+## La pieza "ninguno" (sin emblema): un hueco hundido con el simbolo, en vez
+## de una muestra vacia o una raya.
+static func none_piece(min_size: Vector2) -> Control:
+	var well := PanelContainer.new()
+	well.name = "NonePiece"
+	well.custom_minimum_size = min_size
+	well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	well.add_theme_stylebox_override("panel", well_style("window", 8, 2))
+	var center := CenterContainer.new()
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	well.add_child(center)
+	center.add_child(none_icon(int(minf(min_size.x, min_size.y) * 0.7)))
+	return well
+
+## Una muestra de color para una ficha; apagada se ve su color, mas gris, opaca.
+static func piece_swatch(col: Color, min_size: Vector2, dim: bool) -> ColorRect:
+	var sw := ColorRect.new()
+	sw.name = "Swatch"
+	sw.custom_minimum_size = min_size
+	sw.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sw.color = col.lerp(Color(0.6, 0.58, 0.55), 0.45) if dim else col
+	return sw

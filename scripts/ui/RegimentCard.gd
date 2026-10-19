@@ -13,7 +13,6 @@ extends PanelContainer
 
 const RegimentLook := preload("res://scripts/ui/RegimentLook.gd")
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
-const ConstructionMenuScript := preload("res://scripts/ui/ConstructionMenu.gd")
 const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 const BADGE_PX := 52
@@ -156,6 +155,8 @@ func _fill_editor(look: Dictionary) -> void:
 	_name_edit.add_theme_font_override("font", CT.body_font())
 	_name_edit.add_theme_font_size_override("font_size", CT.fs("body"))
 	_name_edit.add_theme_color_override("font_color", CT.text("window"))
+	# El nombre de serie se lee (antes casi crema sobre crema).
+	_name_edit.add_theme_color_override("font_placeholder_color", CT.text("window", true))
 	_name_edit.text_submitted.connect(func(t: String): set_name_text(t))
 	_name_edit.focus_exited.connect(_on_name_focus_exited)
 	name_row.add_child(_name_edit)
@@ -181,15 +182,9 @@ func _fill_editor(look: Dictionary) -> void:
 	colors.add_child(_flag_chip("color", String(saved["color"]) == ""))
 	for color_id in GameConfig.COLONY_COLOR_ORDER:
 		var open := RegimentLook.is_open("colors", color_id, rank, all)
-		var chip := _chip("Color_" + color_id, String(saved["color"]) == color_id, open,
+		var swatch := CT.piece_swatch(ColonyFlag.color_of(color_id), Vector2(CHIP - 14, CHIP - 14), not open)
+		var chip := _chip("Color_" + color_id, swatch, String(saved["color"]) == color_id, open,
 			Tr.t("COLONY_COLOR_" + String(color_id).to_upper()), RegimentLook.piece_rank_of("colors", color_id))
-		var swatch := ColorRect.new()
-		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		swatch.color = ColonyFlag.color_of(color_id) if open else Color(ColonyFlag.color_of(color_id), 0.45)
-		swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		swatch.custom_minimum_size = Vector2(CHIP - 14, CHIP - 14)
-		_chip_box(chip).add_child(swatch)
-		_add_lock(chip)
 		var id := String(color_id)
 		chip.pressed.connect(func(): pick("color", id))
 		colors.add_child(chip)
@@ -200,11 +195,10 @@ func _fill_editor(look: Dictionary) -> void:
 	emblems.add_child(_flag_chip("emblem", String(saved["emblem"]) == ""))
 	for emblem in GameConfig.COLONY_EMBLEMS:
 		var open := RegimentLook.is_open("emblems", emblem, rank, all)
-		var chip := _chip("Emblem_" + emblem, String(saved["emblem"]) == emblem, open,
+		# "Ninguno": el simbolo de prohibido, no un disco liso que parece otra pieza.
+		var pic: Control = CT.none_piece(Vector2(CHIP - 10, CHIP - 10)) if String(emblem) == "none" 			else _pic(RegimentLook.badge_texture({"color_id": look["color_id"], "emblem": emblem, "stars": 0}, false), open)
+		var chip := _chip("Emblem_" + emblem, pic, String(saved["emblem"]) == emblem, open,
 			Tr.t("FLAG_EMBLEM_" + String(emblem).to_upper()), RegimentLook.piece_rank_of("emblems", emblem))
-		var pic := _pic(RegimentLook.badge_texture({"color_id": look["color_id"], "emblem": emblem, "stars": 0}, false), open)
-		_chip_box(chip).add_child(pic)
-		_add_lock(chip)
 		var id := String(emblem)
 		chip.pressed.connect(func(): pick("emblem", id))
 		emblems.add_child(chip)
@@ -214,10 +208,9 @@ func _fill_editor(look: Dictionary) -> void:
 	var paints := _flow("RegimentPaints")
 	for paint in GameConfig.REGIMENT_PAINTS:
 		var open := RegimentLook.is_paint_open(paint, rank, all)
-		var chip := _chip("Paint_" + paint, String(saved["paint"]) == paint, open,
-			Tr.t("REGIMENT_PAINT_" + String(paint).to_upper()), RegimentLook.paint_rank(paint))
-		_chip_box(chip).add_child(_pic(RegimentLook.paint_texture(paint, look["color_id"]), open))
-		_add_lock(chip)
+		var chip := _chip("Paint_" + paint, _pic(RegimentLook.paint_texture(paint, look["color_id"]), open),
+			String(saved["paint"]) == paint, open, Tr.t("REGIMENT_PAINT_" + String(paint).to_upper()),
+			RegimentLook.paint_rank(paint))
 		var id := String(paint)
 		chip.pressed.connect(func(): pick("paint", id))
 		paints.add_child(chip)
@@ -264,41 +257,19 @@ func _flow(node_name: String) -> HFlowContainer:
 
 ## "Como la bandera": la miniatura de la bandera del pais.
 func _flag_chip(kind: String, selected: bool) -> Button:
-	var chip := _chip("Flag_" + kind, selected, true, Tr.t("LBL_REGIMENT_LIKE_FLAG"), 0)
 	var pic := _pic(ColonyFlag.current_small_texture(), true)
 	pic.custom_minimum_size = Vector2(CHIP - 8, (CHIP - 8) * 0.66)
-	_chip_box(chip).add_child(pic)
+	var chip := _chip("Flag_" + kind, pic, selected, true, Tr.t("LBL_REGIMENT_LIKE_FLAG"), 0)
 	chip.pressed.connect(func(): pick(kind, ""))
 	return chip
 
-func _chip(node_name: String, selected: bool, open: bool, tip: String, rank: int) -> Button:
-	var btn := Button.new()
+## Ficha de la galeria (CartoonTheme.piece_tile): la pieza arriba; cerrada,
+## apagada y con la placa [candado] N debajo, nunca encima. Todas miden igual.
+func _chip(node_name: String, content: Control, selected: bool, open: bool, tip: String, rank: int) -> Button:
+	var btn := CT.piece_tile(content, selected, open, rank if not open and rank > 0 else 0)
 	btn.name = node_name
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.disabled = not open
 	btn.tooltip_text = tip if open else "%s · %s" % [tip, Tr.t("LBL_RANK_LOCK") % rank]
-	# Elegida: borde de laton grueso; cerrada: apagada, con la placa del rango
-	# debajo de la pieza (nunca encima). El boton mide lo que su contenido.
-	var st := CT.pick_style(selected, open)
-	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-		btn.add_theme_stylebox_override(state, st)
-	btn.set_meta("selected", selected)
-	var box := VBoxContainer.new()
-	box.name = "Box"
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 3)
-	CT.fit_button_content(btn, box, 4.0)
-	if not open and rank > 0:
-		btn.set_meta("lock_rank", rank)
 	return btn
-
-## Candado y "Rango N" bajo la miniatura de una pieza cerrada.
-func _add_lock(chip: Button) -> void:
-	if chip.has_meta("lock_rank"):
-		_chip_box(chip).add_child(CT.rank_plate(int(chip.get_meta("lock_rank"))))
-
-func _chip_box(chip: Button) -> VBoxContainer:
-	return chip.get_node("Box")
 
 func _pic(tex: Texture2D, open: bool) -> TextureRect:
 	var pic := TextureRect.new()
