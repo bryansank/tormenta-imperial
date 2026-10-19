@@ -528,7 +528,7 @@ static func cost_chip(res_id: String, amount: int, enough: bool = true, role: St
 	row.add_child(UITheme.make_icon(res_id, 24))
 	var col := text(role)
 	if not enough:
-		col = sem("DANGER").darkened(0.25) if kind(role) == "light" else sem("DANGER").lightened(0.35)
+		col = danger_text(role)
 	row.add_child(label(_thousands(amount), "number", col))
 	p.add_child(row)
 	return p
@@ -983,11 +983,29 @@ static func is_phone(_vp: Vector2 = Vector2.ZERO) -> bool:
 
 ## Rojo legible de "lo que falta" sobre la superficie de `role`.
 static func danger_text(role: String = "window") -> Color:
-	return sem("DANGER").darkened(0.25) if kind(role) == "light" else sem("DANGER").lightened(0.35)
+	return readable(sem("DANGER").darkened(0.25) if kind(role) == "light" else sem("DANGER").lightened(0.35), role)
 
 ## Verde legible de "lo que se gana" sobre la superficie de `role`.
 static func positive_text(role: String = "window") -> Color:
-	return sem("POSITIVE").darkened(0.3) if kind(role) == "light" else sem("POSITIVE").lightened(0.3)
+	return readable(sem("POSITIVE").darkened(0.3) if kind(role) == "light" else sem("POSITIVE").lightened(0.3), role)
+
+## `col` como texto sobre la superficie de `role` (su BG, CARD y CARD_ALT):
+## si no llega al contraste minimo (UITheme.MIN_CONTRAST: 4,5, o 7 con alto
+## contraste) se oscurece sobre lo claro o se aclara sobre lo oscuro, a pasos,
+## hasta llegar. Conserva el tono: rojo sigue rojo, ambar sigue ambar. Asi un
+## color con significado se lee igual en Claro, en Oscuro y con daltonismo.
+static func readable(col: Color, role: String = "window") -> Color:
+	var target := UITheme.MIN_CONTRAST
+	var light := kind(role) == "light"
+	var out := col
+	for i in 24:
+		var worst := 99.0
+		for key in ["BG", "CARD", "CARD_ALT"]:
+			worst = minf(worst, UITheme.contrast_ratio(out, c(role, key)))
+		if worst >= target:
+			return out
+		out = out.darkened(0.06) if light else out.lightened(0.06)
+	return out
 
 ## Recursos que tienen icono propio (PNG). Los materiales del taller no: se
 ## escriben con su nombre.
@@ -1057,10 +1075,15 @@ static func _strip_chip(id: String, amount: int, missing: int, role: String, pre
 	p.add_child(h)
 	return p
 
-## Hueco hundido con una imagen dentro (miniatura del edificio).
+## Hueco hundido con una imagen dentro (miniatura del edificio). Sobre una
+## ventana oscura el hueco es claro (la letra tenue): las miniaturas son de
+## tejados y piedra oscuros y en un hueco casi negro no se veian.
 static func thumb_frame(content: Control, px: Vector2, role: String = "window") -> PanelContainer:
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", well_style(role, 12, 3))
+	var st := well_style(role, 12, 3)
+	if kind(role) == "dark":
+		st.bg_color = c(role, "TEXT_DIM")
+	p.add_theme_stylebox_override("panel", st)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.custom_minimum_size = px
 	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1327,7 +1350,7 @@ static func tone_color(tone: String, role: String = "window") -> Color:
 		return text(role, true)
 	var key: String = {"positive": "POSITIVE", "warning": "WARNING", "danger": "DANGER", "info": "INFO", "accent": "ACCENT"}.get(tone, "INFO")
 	var col := sem(key)
-	return col.darkened(0.38) if kind(role) == "light" else col.lightened(0.28)
+	return readable(col.darkened(0.38) if kind(role) == "light" else col.lightened(0.28), role)
 
 ## Una linea con icono: [icono] frase corta. La frase envuelve.
 static func icon_line(glyph: String, text_s: String, tone: String = "", role: String = "window",
@@ -1728,7 +1751,7 @@ static var _switch_tex := {}
 ## El carril del interruptor (76x40) con su bolita, en textura: CheckButton
 ## pinta iconos. Se dibuja una vez por estado.
 static func switch_texture(on: bool, disabled: bool) -> Texture2D:
-	var key := "%s|%s|%s|%s|%s" % [on, disabled, UITheme.palette, UITheme.high_contrast, surface]
+	var key := "%s|%s|%s|%s|%s|%s" % [on, disabled, UITheme.palette, UITheme.high_contrast, surface, window_theme]
 	if _switch_tex.has(key):
 		return _switch_tex[key]
 	var w := 76
@@ -1841,9 +1864,15 @@ static func list_button(glyph: String, text_s: String, small: bool = false, mark
 	b.set_meta("label", l)
 	return b
 
-## El bocadillo del instructor (tutorial, consejos): crema con tinta gruesa.
+## El contorno grueso de lo que se dibuja sobre la superficie de `role`
+## (bocadillo, piquito): tinta sobre lo claro, el borde de color sobre lo oscuro.
+static func edge(role: String = "window") -> Color:
+	return INK if kind(role) == "light" else c(role, "BORDER")
+
+## El bocadillo del instructor (tutorial, consejos): el fondo de las ventanas
+## con su contorno (tinta en Claro, el borde azul en Oscuro).
 static func bubble_style(small: bool = false) -> StyleBoxFlat:
-	var s := box(c("window", "BG"), INK, BORDER, RADIUS_CARD, 10 if small else 14, 0, 2)
+	var s := box(c("window", "BG"), edge("window"), BORDER, RADIUS_CARD, 10 if small else 14, 0, 2)
 	s.shadow_color = Color(INK, 0.35)
 	s.shadow_size = 1
 	s.shadow_offset = Vector2(0, 4)
@@ -1877,7 +1906,7 @@ class Tail extends Control:
 		else:
 			pts = PackedVector2Array([Vector2(-3, 0), Vector2(w, hh * 0.5), Vector2(-3, hh)])
 		draw_colored_polygon(pts, CartoonTheme.c("window", "BG"))
-		draw_polyline(pts, CartoonTheme.INK, 3.0, true)
+		draw_polyline(pts, CartoonTheme.edge("window"), 3.0, true)
 
 ## Pastilla con su texto guardado en la meta "text" (Button.text va vacio: lo
 ## pinta una etiqueta). Las pruebas y las sondas buscan los botones por ella.
@@ -1974,10 +2003,18 @@ static func fit_button_content(btn: Button, content: Control, pad: float = 5.0) 
 	content.minimum_size_changed.connect(fit)
 	fit.call()
 
+## Relleno de una tarjeta de pieza. La cerrada va hundida: en Claro el hueco
+## (WELL); en Oscuro CARD_ALT, porque el hueco casi negro se comia las muestras
+## a media luz.
+static func pick_fill(enabled: bool) -> Color:
+	if enabled:
+		return c("window", "CARD")
+	return c("window", "WELL") if kind("window") == "light" else c("window", "CARD_ALT")
+
 ## Estilo de una tarjeta de pieza: elegida con borde grueso de laton; cerrada,
 ## apagada (relleno hundido).
 static func pick_style(selected: bool, enabled: bool) -> StyleBoxFlat:
-	var fill := c("window", "CARD") if enabled else c("window", "WELL")
+	var fill := pick_fill(enabled)
 	var st := box(fill, sem("ACCENT") if selected else c("window", "CARD_BORDER"),
 		5 if selected else 2, 12, 4, 0, 0, "window")
 	if selected:

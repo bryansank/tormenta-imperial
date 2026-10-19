@@ -473,6 +473,14 @@ serie (`GameConfig.ui_helper_visible`); §12 propone apagarlos.
   se aplica al momento (rehace la interfaz). Todo sale de `CartoonTheme.c()`
   (`window_theme`, `_SURF_NIGHT`); el HUD es oscuro en los dos. Alto contraste
   y daltonismo siguen mandando.
+  Los colores con significado sobre una ventana (rojo de lo que falta, verde de
+  lo que se gana, ambar de aviso) se piden a `danger_text()`, `positive_text()`
+  o `tone_color()`, nunca `sem(...).darkened(...)` a mano: pasan por
+  `CartoonTheme.readable()`, que los oscurece (Claro) o aclara (Oscuro) hasta el
+  contraste minimo sobre BG, CARD y CARD_ALT con cualquier paleta. El contorno
+  de lo dibujado sobre la ventana (bocadillo, piquito) es `edge()`; las piezas
+  cerradas, `pick_fill(false)`; las miniaturas van en un hueco claro en Oscuro
+  (`thumb_frame`). Pruebas: `tests/ui/test_ui3_tema.gd`.
 - **Rejillas de piezas** (País y bandera, regimiento): la pieza arriba, entera;
   cerrada, a media luz y con una **placa clara** «candado + rango» debajo
   (`CartoonTheme.rank_plate`), nunca pintada encima. La tarjeta mide lo que su

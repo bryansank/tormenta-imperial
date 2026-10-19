@@ -346,7 +346,7 @@ func _build_detail(main: HBoxContainer) -> void:
 	# Lo que decide, fuera del scroll y junto al boton.
 	_detail_explain = CT.para("", "window", false, "small")
 	_detail_explain.name = "DetailExplain"
-	_detail_explain.add_theme_color_override("font_color", CT.sem("WARNING").darkened(0.35))
+	_detail_explain.add_theme_color_override("font_color", CT.tone_color("warning"))
 	_detail_explain.mouse_filter = Control.MOUSE_FILTER_PASS
 	_detail_explain.visible = false
 	_detail_column.add_child(_detail_explain)
@@ -777,7 +777,7 @@ static func fill_limit_row(row: HBoxContainer, building_id: String, font_size: S
 	row.add_theme_constant_override("separation", 6)
 	row.tooltip_text = _limit_tooltip_of(info)
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
-	var color: Color = CT.sem("WARNING").darkened(0.35) if full else CT.text("window", true)
+	var color: Color = CT.tone_color("warning") if full else CT.text("window", true)
 	var icon := CT.make_glyph("build", 20)
 	icon.name = "LimitIcon"
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER

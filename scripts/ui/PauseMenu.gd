@@ -330,7 +330,7 @@ func _setup_cartoon() -> void:
 	report.pressed.connect(report_bug)
 	foot.add_child(report)
 
-	_status = CartoonTheme.label("", "small", CartoonTheme.sem("POSITIVE").darkened(0.25))
+	_status = CartoonTheme.label("", "small", CartoonTheme.positive_text())
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.visible = false

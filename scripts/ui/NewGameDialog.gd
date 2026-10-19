@@ -152,7 +152,7 @@ func _setup_ui() -> void:
 		_tier_cards[t] = tbtn
 		tier_row.add_child(tbtn)
 	# El porque de lo cerrado, corto, bajo las tarjetas (docs/28 §9.5).
-	_tier_lock_label = CT.label(Tr.t("TIER_GOVERNOR_LOCKED"), "small", CT.sem("WARNING").darkened(0.35))
+	_tier_lock_label = CT.label(Tr.t("TIER_GOVERNOR_LOCKED"), "small", CT.tone_color("warning"))
 	_tier_lock_label.name = "TierLockLabel"
 	_tier_lock_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tier_box.add_child(_tier_lock_label)

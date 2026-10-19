@@ -88,7 +88,7 @@ func _setup_ui() -> void:
 	column.add_child(head)
 	_full_label = CT.para("", "window", false, "body")
 	_full_label.name = "FullLabel"
-	_full_label.add_theme_color_override("font_color", CT.sem("WARNING").darkened(0.4))
+	_full_label.add_theme_color_override("font_color", CT.tone_color("warning"))
 	_full_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(_full_label)
 	var spacer := Control.new()
@@ -197,7 +197,7 @@ func _make_row(entry: Dictionary) -> PanelContainer:
 	line.add_child(buttons)
 	var bh := CT.menu_h("small")
 	if _confirm_id == id:
-		var ask := CT.label(Tr.t("LBL_SAVE_DELETE_ASK"), "button", CT.sem("DANGER").darkened(0.2))
+		var ask := CT.label(Tr.t("LBL_SAVE_DELETE_ASK"), "button", CT.danger_text())
 		buttons.add_child(ask)
 		buttons.add_child(_button("No", Tr.t("BTN_SAVE_DELETE_NO"), "", "secondary", bh, _ask_delete.bind(0)))
 		buttons.add_child(_button("Yes", Tr.t("BTN_SAVE_DELETE_YES"), "demolish", "danger", bh, delete_save.bind(id)))

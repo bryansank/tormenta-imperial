@@ -260,7 +260,7 @@ func _build() -> void:
 	name_dice.focus_mode = Control.FOCUS_NONE
 	name_dice.pressed.connect(randomize_name)
 	name_row.add_child(name_dice)
-	_name_error = CT.label(Tr.t("LBL_IDENTITY_NAME_BAD"), "small", CT.sem("DANGER").darkened(0.2))
+	_name_error = CT.label(Tr.t("LBL_IDENTITY_NAME_BAD"), "small", CT.danger_text())
 	_name_error.name = "NameError"
 	_name_error.visible = false
 	col.add_child(_name_error)
@@ -463,7 +463,7 @@ func _swatch(slot: int, color_id: String) -> Button:
 	swatch.color = ColonyFlag.color_of(color_id)
 	if not allowed:
 		# Apagado: el color se ve, pero a media luz.
-		swatch.color = Color(swatch.color.lerp(CT.c("window", "WELL"), 0.45), 0.55)
+		swatch.color = Color(swatch.color.lerp(CT.pick_fill(false), 0.45), 0.55)
 	box.add_child(swatch)
 	if not unlocked:
 		box.add_child(CT.rank_plate(ColonyIdentity.piece_rank("colors", color_id)))

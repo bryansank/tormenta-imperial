@@ -196,8 +196,12 @@ static func draw_glyph(ci: CanvasItem, r: Rect2, id: String, tint: Color = Color
 			var col := t if has_t else W
 			if id == "sound":
 				_shape(ci, _pts(r, [0.1, 0.38, 0.28, 0.38, 0.52, 0.16, 0.52, 0.84, 0.28, 0.62, 0.1, 0.62]), col, r, ink)
-				ci.draw_arc(_p(r, 0.52, 0.5), r.size.x * 0.2, -0.8, 0.8, 12, INK if ink else col, _w(r), true)
-				ci.draw_arc(_p(r, 0.52, 0.5), r.size.x * 0.36, -0.8, 0.8, 16, INK if ink else col, _w(r), true)
+				# Las ondas: trazo de color con contorno de tinta (como el ancla),
+				# para que se vean tambien sobre las ventanas oscuras.
+				for rad_k in [0.2, 0.36]:
+					if ink:
+						ci.draw_arc(_p(r, 0.52, 0.5), r.size.x * rad_k, -0.8, 0.8, 16, INK, _w(r) * 2.0, true)
+					ci.draw_arc(_p(r, 0.52, 0.5), r.size.x * rad_k, -0.8, 0.8, 16, col, _w(r) * 0.8, true)
 			else:
 				_rect(ci, r, 0.36, 0.14, 0.44, 0.72, col, ink)
 				_rect(ci, r, 0.74, 0.08, 0.82, 0.62, col, ink)
