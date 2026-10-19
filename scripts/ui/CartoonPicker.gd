@@ -19,6 +19,9 @@ const MAX_SEGMENTS := 4
 ## Letras en total a partir de las cuales las pastillas ya no caben en un
 ## telefono y se pasa al paso a paso.
 const MAX_SEGMENT_CHARS := 26
+## Ancho del texto del paso a paso: el de la opcion mas larga, entre estos dos.
+const VALUE_MIN_W := 96.0
+const VALUE_MAX_W := 170.0
 
 var selected := -1
 var _items: Array = []
@@ -112,9 +115,12 @@ func _build_stepper() -> void:
 	_value = CT.label(get_item_text(selected), "body", CT.text(_role))
 	_value.name = "Value"
 	_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_value.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_value.clip_text = true
-	_value.custom_minimum_size = Vector2(96, 0)
+	_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Nunca con puntos ("Del perfil (1…"): el hueco pide el ancho de la opcion
+	# mas larga (hasta VALUE_MAX_W) y, si aun asi no cabe, parte en dos lineas.
+	_value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_value.max_lines_visible = 2
+	_value.custom_minimum_size = Vector2(value_width(), 0)
 	well.add_child(_value)
 	if selected >= 0 and selected < _tips.size():
 		well.tooltip_text = String(_tips[selected])
@@ -124,3 +130,15 @@ func _build_stepper() -> void:
 	_next.disabled = selected >= _items.size() - 1
 	_next.pressed.connect(func(): pick(mini(_items.size() - 1, selected + 1)))
 	add_child(_next)
+
+## El ancho que pide el texto del paso a paso: la opcion mas larga con la letra
+## de la etiqueta, entre VALUE_MIN_W y VALUE_MAX_W (mas larga: dos lineas).
+func value_width() -> float:
+	if _value == null:
+		return VALUE_MIN_W
+	var font: Font = _value.get_theme_font("font")
+	var fsize: int = _value.get_theme_font_size("font_size")
+	var widest := 0.0
+	for o in _items:
+		widest = maxf(widest, font.get_string_size(String(o), HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x)
+	return clampf(ceilf(widest) + 4.0, VALUE_MIN_W, VALUE_MAX_W)

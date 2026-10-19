@@ -108,12 +108,31 @@ func _show_victory(stats: Dictionary) -> void:
 
 	var max_size := Vector2(WINDOW_MAX.x, minf(WINDOW_MAX.y, vp.y - 32.0))
 	CT.place_window(_window, vp, max_size, small)
+	_set_menu_button_hidden(true)
 
 func _close() -> void:
+	_set_menu_button_hidden(false)
 	if _backdrop != null and is_instance_valid(_backdrop):
 		_backdrop.queue_free()
 	if _window != null and is_instance_valid(_window):
 		_window.queue_free()
+
+## El ☰ (capa 30) caia sobre la esquina de la ventana, que no tiene X que
+## apartar: mientras se ve la Victoria, el ☰ se esconde. Lo que se escondio aqui
+## es lo unico que se vuelve a mostrar.
+func _set_menu_button_hidden(hide_it: bool) -> void:
+	if not is_inside_tree():
+		return
+	for n in get_tree().get_nodes_in_group("hud_menu_button"):
+		var c := n as Control
+		if c == null or not is_instance_valid(c):
+			continue
+		if hide_it and c.visible:
+			c.visible = false
+			c.set_meta("hidden_by_victory", true)
+		elif not hide_it and c.has_meta("hidden_by_victory"):
+			c.remove_meta("hidden_by_victory")
+			c.visible = true
 
 ## Una cifra: [icono] valor, y debajo el nombre (sin los dos puntos del texto
 ## de siempre). El nombre entero, al mantener pulsado.

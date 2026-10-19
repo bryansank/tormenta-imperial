@@ -88,6 +88,9 @@ var _detail_thumb: TextureRect
 var _selected_data: BuildingData = null
 
 # Thumbnail cache
+## Lado de la foto de cada modelo antes del recorte, y formato del hueco.
+const THUMB_RENDER_PX := 256
+const THUMB_ASPECT := 4.0 / 3.0
 var _thumb_cache: Dictionary = {}  # building_id -> ImageTexture
 
 # Vista 2D (docs/18-vista-2d.md): miniaturas con el dibujo plano del mapa en vez
@@ -660,7 +663,7 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(row)
 
-	row.add_child(_make_thumb(data, Vector2(52, 40) if _phone else Vector2(64, 48), locked))
+	row.add_child(_make_thumb(data, Vector2(56, 42) if _phone else Vector2(72, 54), locked))
 
 	# El nombre siempre entero: si no cabe, la fila crece a dos lineas.
 	# El nombre siempre entero (crece a dos lineas antes que cortar), en Baloo 2
@@ -1242,7 +1245,9 @@ func _generate_thumbnails() -> void:
 	if _is_2d:
 		return
 	var viewport := SubViewport.new()
-	viewport.size = Vector2i(128, 128)
+	# Se pinta holgado y luego se recorta a lo que ocupa el modelo (_crop_to_model):
+	# asi cualquier edificio llena su hueco, alto o chato, de 1x1 o de 3x3.
+	viewport.size = Vector2i(THUMB_RENDER_PX, THUMB_RENDER_PX)
 	viewport.transparent_bg = true
 	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	viewport.world_3d = World3D.new()
@@ -1284,13 +1289,14 @@ func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingDa
 
 	viewport.add_child(model)
 	var max_dim := maxf(data.grid_size.x, data.grid_size.y) * GridManager.cell_size
-	# Mas cerca que antes (2,5): en la fila el modelo salia diminuto.
-	camera.size = max_dim * 1.9
+	# Holgado para no cortar nada (torres altas, modelos escalados): el recorte
+	# de despues lo encuadra.
+	camera.size = max_dim * 3.0
 
 	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	await RenderingServer.frame_post_draw
 
-	var image := viewport.get_texture().get_image()
+	var image := _crop_to_model(viewport.get_texture().get_image())
 	var tex := ImageTexture.create_from_image(image)
 	_thumb_cache[data.id] = tex
 
@@ -1300,6 +1306,28 @@ func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingDa
 		_detail_thumb.texture = tex
 
 	model.queue_free()
+
+## Lo que ocupa el modelo (los pixeles no transparentes) con un respiro
+## alrededor, en el formato del hueco (4:3): el edificio llena su miniatura sea
+## cual sea su tamano. Una foto vacia se devuelve tal cual. Estatica para las pruebas.
+static func _crop_to_model(image: Image, aspect: float = THUMB_ASPECT) -> Image:
+	var used := image.get_used_rect()
+	if used.size.x <= 0 or used.size.y <= 0:
+		return image
+	var pad := ceili(maxf(used.size.x, used.size.y) * 0.06)
+	var r := used.grow(pad)
+	# Al formato del hueco, centrado en el modelo, sin salirse de la foto.
+	if float(r.size.x) / float(r.size.y) < aspect:
+		var w := ceili(r.size.y * aspect)
+		r = Rect2i(r.position.x - (w - r.size.x) / 2, r.position.y, w, r.size.y)
+	else:
+		var h := ceili(r.size.x / aspect)
+		r = Rect2i(r.position.x, r.position.y - (h - r.size.y) / 2, r.size.x, h)
+	var full := Rect2i(Vector2i.ZERO, image.get_size())
+	r = r.intersection(full)
+	if r.size.x <= 0 or r.size.y <= 0:
+		return image
+	return image.get_region(r)
 
 ## Id del edificio elegido en la lista ("" si ninguno). Para el tutorial.
 func _bar() -> Node:

@@ -320,6 +320,15 @@ func _run() -> void:
 		settings.select_tab(1)
 		settings.set_advanced_open(true)
 		await _frames(10)
+		# Lo de Mas opciones queda por debajo: se desplaza hasta la Escala.
+		var scale_row: Control = settings.find_child("ScaleRow", true, false)
+		if scale_row != null:
+			var sc: Node = scale_row.get_parent()
+			while sc != null and not (sc is ScrollContainer):
+				sc = sc.get_parent()
+			if sc != null:
+				(sc as ScrollContainer).ensure_control_visible(scale_row)
+				await _frames(5)
 		await _shot("g_ajustes_mas_opciones")
 		if settings.is_open():
 			settings.toggle()

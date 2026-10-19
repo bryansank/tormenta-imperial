@@ -518,3 +518,12 @@ serie (`GameConfig.ui_helper_visible`); §12 propone apagarlos.
   paso visto, «¡Ya puedes!» una vez al tenerlo todo, y recoger también espera.
 - **La línea del siguiente paso** va encima de la barra de abajo en PC (en la
   misma fila se montaba sobre Ejército / Misiones).
+- **Cinco detalles de la revisión** (`tests/ui/test_ui2_detalles_feos.gd`):
+  las miniaturas 3D de CONSTRUIR se pintan a 256 holgadas y se recortan a lo
+  que ocupa el modelo en 4:3 (`ConstructionMenu._crop_to_model`), y el hueco
+  crece (56×42 teléfono, 72×54 PC); el Mercado rehace sus filas al cargar y al
+  abrir si cambiaron los recursos abiertos (`set_unlock_state` no avisa: salían
+  solo comida y madera aunque hubiera acero y petróleo); la Victoria esconde
+  el ☰ mientras se ve (no tiene X que apartar); el paso a paso de `CartoonPicker`
+  pide el ancho de su opción más larga (96-170) y parte en dos líneas antes que
+  poner puntos; la cabecera de ENTRENAR deja 22 de margen a la derecha.

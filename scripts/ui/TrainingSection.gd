@@ -50,7 +50,7 @@ func setup(building_id: String) -> void:
 	head.add_theme_constant_override("v_separation", 2)
 	# Un respiro a la derecha: la barra del scroll no tapa la ultima cifra.
 	var head_pad := MarginContainer.new()
-	head_pad.add_theme_constant_override("margin_right", 12)
+	head_pad.add_theme_constant_override("margin_right", 22)
 	head_pad.add_child(head)
 	add_child(head_pad)
 	var title := CT.section(Tr.t("UI2F_TRAIN_TITLE"), "army")

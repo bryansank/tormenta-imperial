@@ -40,6 +40,11 @@ func _ready() -> void:
 	UIManager.register_panel(self, "MarketPanel.modal")
 	EventBus.market_prices_updated.connect(_on_prices_updated)
 	EventBus.resource_unlocked.connect(func(_r): _rebuild())
+	# Cargar una partida pone los recursos abiertos sin avisar (set_unlock_state
+	# no emite resource_unlocked): sin esto el Mercado se quedaba con las filas de
+	# una partida nueva (comida y madera) aunque el acero y el petroleo ya se
+	# tuvieran.
+	EventBus.game_load_completed.connect(_rebuild_if_rows_changed)
 	EventBus.market_trade_completed.connect(func(_r, _a, _b, _p): _update_prices())
 	EventBus.phase_advanced.connect(_on_phase_advanced)
 	# La estacion del mercado (Gobernador) cambia con la Tormenta, no con el tick.
@@ -342,7 +347,22 @@ func open() -> void:
 	if not _is_open:
 		_toggle_panel()
 
+## Los recursos que tienen fila hoy: los de TRADEABLE ya abiertos.
+static func tradeable_now() -> Array:
+	var out: Array = []
+	for res_name in TRADEABLE:
+		if ResourceManager.is_unlocked_by_name(res_name):
+			out.append(res_name)
+	return out
+
+## Rehace las filas si no son las de los recursos abiertos ahora.
+func _rebuild_if_rows_changed() -> void:
+	if _rows.keys() != tradeable_now():
+		_rebuild()
+
 func _toggle_panel() -> void:
+	if not _is_open:
+		_rebuild_if_rows_changed()
 	_is_open = not _is_open
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
