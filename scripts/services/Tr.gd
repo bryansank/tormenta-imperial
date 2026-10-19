@@ -1773,7 +1773,7 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"PROC_SMOKE_FISH": "Ahumar pescado",
 		"HELP_T_FISHING_DOCK": "El Muelle de pesca",
 		"HELP_B_FISHING_DOCK": "El Muelle pesca comida y un poco de oro él solo, sin elegir cultivo. Recógelo cuando se llene.\nVa en la costa, con un banco de peces a 4 casillas o menos: son las manchas azules con peces, mar adentro. Cada banco da para 2 muelles.\n¿Te sobra madera? Usa «Ahumar pescado»: quema madera y te da más comida.",
-		"OBJ_WHY_FISHING_DOCK": "Falta comida y no caben más Granjas. Un Muelle en la costa, cerca de los peces, pesca comida y algo de oro sin parar.",
+		"OBJ_WHY_FISHING_DOCK": "Falta comida y no caben más Granjas. Un Muelle junto a los peces pesca comida y algo de oro.",
 		# ── Topes y mejoras (feat/topes-mejoras-ayuda) ──
 		# CONSTRUIR con el tope lleno, la ficha del edificio (nivel, por que no se
 		# mejora, por que MEJORAR esta apagado, repuestos), las paginas de AYUDA con
@@ -3779,7 +3779,7 @@ When full, the building stops. What does not fit in your storage stays in the bu
 		"PROC_SMOKE_FISH": "Smoke fish",
 		"HELP_T_FISHING_DOCK": "The Fishing dock",
 		"HELP_B_FISHING_DOCK": "The dock catches food and a little gold on its own, no crop to pick. Collect it when it fills up.\nIt goes on the coast, with a school of fish 4 tiles away or less: the blue patches with fish, out at sea. Each school feeds 2 docks.\nToo much wood? Use «Smoke fish»: it burns wood and gives you more food.",
-		"OBJ_WHY_FISHING_DOCK": "Food is short and no more Farms fit. A dock on the coast near the fish catches food and some gold nonstop.",
+		"OBJ_WHY_FISHING_DOCK": "Food is short and no more Farms fit. A dock by the fish catches food and some gold.",
 		# ── Topes y mejoras (feat/topes-mejoras-ayuda) ──
 		"TOPE_FULL_UNIQUE": "There can only be one, and you have it.",
 		"TOPE_FULL_NEXT_ERA": "Up to %d in this era. In era %d you can have %d.",
