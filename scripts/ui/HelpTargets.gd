@@ -67,6 +67,8 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 		# tablet y movil, y solo colocando: en PC no hay nada que senalar, es R).
 		"info_move":
 			return _first_in_group(tree, "hud_info_move")
+		"info_train":
+			return _first_in_group(tree, "hud_train_button")
 		"info_demolish":
 			return _first_in_group(tree, "hud_info_demolish")
 		"info_demolish_confirm":

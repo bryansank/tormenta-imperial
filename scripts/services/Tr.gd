@@ -2090,6 +2090,7 @@ Si se llena, el edificio para. Lo que no cabe en tu almacén se queda en el edif
 		"HUD_BAR_RESEARCH": "Investigar",
 		"HUD_BAR_HELP": "Ayuda",
 		"HUD_BAR_LOCK_ARMY": "Falta un Cuartel",
+		"GUIDE_TRAIN": "Toca tu Cuartel y pulsa ENTRENAR: tu primer soldado.",
 		"BTN_GUIDE_LATER": "Más tarde",
 		"LBL_GUIDE_REMINDER_TIP": "Toca para ver el paso del tutorial",
 		# --- TUTORIAL3 (feat/ui3-tutorial): el recordatorio en una linea ---
@@ -4202,6 +4203,7 @@ When full, the building stops. What does not fit in your storage stays in the bu
 		"HUD_BAR_RESEARCH": "Research",
 		"HUD_BAR_HELP": "Help",
 		"HUD_BAR_LOCK_ARMY": "Needs a Barracks",
+		"GUIDE_TRAIN": "Tap your Barracks and press TRAIN: your first soldier.",
 		"BTN_GUIDE_LATER": "Later",
 		"LBL_GUIDE_REMINDER_TIP": "Tap to see the tutorial step",
 		# --- TUTORIAL3 (feat/ui3-tutorial): the one-line reminder ---

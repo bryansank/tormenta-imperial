@@ -906,6 +906,13 @@ func _layout_step() -> void:
 			var c := vp * 0.5
 			var dir := (p - c).normalized()
 			var edge := _edge_point(c, dir, vp, 60.0)
+			# Nunca encima de la barra de abajo (en telefono caia junto a Ejercito)
+			# ni del HUD de arriba.
+			var bar := get_tree().get_first_node_in_group("bottom_bar")
+			var bar_top := vp.y - (float(CT.bar_round()) + 40.0)
+			if bar != null and bar.get("_dock") is Control and (bar.get("_dock") as Control).is_visible_in_tree():
+				bar_top = minf(bar_top, (bar.get("_dock") as Control).get_global_rect().position.y - 16.0)
+			edge.y = clampf(edge.y, TOP_HUD + 16.0, maxf(TOP_HUD + 16.0, bar_top))
 			_arrow.visible = true
 			_arrow.point_at(edge, dir)
 

@@ -75,6 +75,8 @@ const GUIDE_GOALS := [
 	# Aserradero (bosque imposible) su requisito falla y se pasa de largo (prereq).
 	{"goal": "barracks", "kind": "build", "building": "barracks",
 		"steps": {"open": "open_barracks", "pick": "pick_barracks", "place": "place_barracks", "wait": "wait_barracks"}},
+	# Se entrena en el Cuartel (2026-10-19): tocarlo y pulsar ENTRENAR en su ficha.
+	{"goal": "train", "kind": "fact", "fact": "trained", "step": "train", "needs": "barracks"},
 	{"goal": "farm", "kind": "build", "building": "farm",
 		"steps": {"open": "open_farm", "pick": "pick_farm", "place": "place_farm"}},
 	{"goal": "rotate", "kind": "fact", "fact": "rotated", "step": "rotate", "menu_step": "rotate_pick",
@@ -117,6 +119,7 @@ const GUIDE_STEPS := {
 	"pick_barracks":    {"n": 5,  "text": "GUIDE_PICK_BARRACKS",   "target": "card:barracks", "building": "barracks"},
 	"place_barracks":   {"n": 5,  "text": "GUIDE_PLACE_BARRACKS",  "target": "", "building": "barracks"},
 	"wait_barracks":    {"n": 5,  "text": "GUIDE_WAIT_BARRACKS",   "target": "building:barracks", "building": "barracks"},
+	"train":            {"n": 5,  "text": "GUIDE_TRAIN",           "target": "info_train|building:barracks", "building": "barracks"},
 	"open_farm":        {"n": 6,  "text": "GUIDE_OPEN_FARM",       "target": "build_button", "building": "farm"},
 	"pick_farm":        {"n": 6,  "text": "GUIDE_PICK_FARM",       "target": "card:farm", "building": "farm"},
 	"place_farm":       {"n": 6,  "text": "GUIDE_PLACE_FARM",      "target": "", "building": "farm"},
@@ -170,7 +173,7 @@ const GUIDE_TOTAL := 13
 
 ## Los pasos en los que el tutorial deja ver la ficha de un edificio
 ## (BuildingInfoPanel) sin esconderse: lo que ensenan ocurre dentro de ella.
-const INFO_PANEL_STEPS := ["move", "demolish", "repair"]
+const INFO_PANEL_STEPS := ["move", "demolish", "repair", "train"]
 
 ## La leccion de reparar (2026-10-16): una tarjeta de leer que sale la primera
 ## vez que la Tormenta o un asedio dana un edificio, aparte del tutorial guiado
@@ -291,6 +294,8 @@ func _ready() -> void:
 	EventBus.expedition_started.connect(_on_expedition_started)
 	EventBus.expedition_ended.connect(_on_expedition_ended)
 	EventBus.unit_trained.connect(_on_unit_trained)
+	# El paso ENTRENAR se cumple al pulsar ENTRENAR (no al acabar el recluta).
+	EventBus.unit_training_started.connect(func(_id, _d): note_guide_fact("trained"))
 	EventBus.army_upkeep_unpaid.connect(_on_upkeep_unpaid)
 	EventBus.consumption_failed.connect(_on_consumption_failed)
 	EventBus.final_audit_summoned.connect(_on_final_audit_summoned)

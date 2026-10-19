@@ -69,7 +69,8 @@ func _place(data: BuildingData, cell: Vector2i, built: bool = true) -> Node:
 ## El Cuartel (2026-10-17) tambien va hecho salvo en las pruebas que lo miran.
 func _f(extra: Dictionary = {}) -> Dictionary:
 	var f := {"goal_seen": true, "core_seen": true, "rotated": true, "moved": true,
-		"road_placed": true, "demolished": true, "barrackss": 1, "barrackss_built": 1}
+		"road_placed": true, "demolished": true, "barrackss": 1, "barrackss_built": 1,
+		"trained": true}
 	f.merge(extra, true)
 	return f
 
@@ -457,3 +458,11 @@ func test_garbage_in_the_guide_keys_is_harmless() -> void:
 	TutorialManager.load_save_data({"intro_seen": true, "guide_state": 7, "guide_baseline": "x", "helps_seen": "y"})
 	assert_str(TutorialManager.guide_state).is_equal(TutorialManager.GUIDE_DONE)
 	assert_array(TutorialManager.helps_seen).is_empty()
+
+## Se entrena en el Cuartel (2026-10-19): con el Cuartel en pie y sin haber
+## entrenado, el paso senala ENTRENAR en su ficha (o el Cuartel en el mapa).
+func test_a_built_barracks_asks_to_train_in_it() -> void:
+	var f := _f({"sawmills": 1, "sawmills_built": 1, "collected": true, "trained": false})
+	assert_str(TutorialManager.derive_step(f)).is_equal("train")
+	assert_str(TutorialManager.step_target("train")).contains("info_train")
+	assert_bool("train" in TutorialManager.INFO_PANEL_STEPS).is_true()

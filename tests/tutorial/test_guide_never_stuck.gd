@@ -135,7 +135,7 @@ func test_no_reachable_forest_skips_the_sawmill() -> void:
 	# Sin aserradero tampoco hay que recoger, ni Cuartel (lo pide: 2026-10-17):
 	# el siguiente es la Granja.
 	assert_str(TutorialManager.current_step()).is_equal("open_farm")
-	assert_array(TutorialManager.blocked_goals()).contains_exactly(["sawmill", "collect", "barracks"])
+	assert_array(TutorialManager.blocked_goals()).contains_exactly(["sawmill", "collect", "barracks", "train"])
 
 func test_no_forest_at_all_skips_the_sawmill() -> void:
 	_map.deposits = [{"id": "gold_vein", "cell_x": 5, "cell_y": 5, "size_x": 2, "size_y": 2}]

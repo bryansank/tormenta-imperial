@@ -494,6 +494,19 @@ func _play_guide(main: Node) -> void:
 				EventBus.building_rotate_requested.emit()
 				await _frames(15)
 				await _shot("tut_rotate_girado")
+			"train":
+				# Se entrena en el Cuartel: su ficha y ENTRENAR.
+				var bk := _first("barracks")
+				EventBus.building_clicked.emit(bk, _data_of(bk))
+				await _frames(20)
+				await _shot("tut_train_ficha")
+				var tb := get_tree().get_first_node_in_group("hud_train_button") as Button
+				if tb != null and not tb.disabled:
+					tb.pressed.emit()
+				else:
+					ArmyManager.train("infantry")
+				await _frames(10)
+				EventBus.building_deselected.emit()
 			"move":
 				var house := _first("house")
 				EventBus.building_clicked.emit(house, _data_of(house))
