@@ -351,3 +351,28 @@ Decisiones tomadas aquí (revisables):
   "al tocar recursos").
 - La línea del siguiente paso se oculta mientras habla la Capitana en el
   tutorial guiado (no se repite la misma cara dos veces).
+## 15. Fase 2 · CONSTRUIR, ficha, Mercado e Investigar (rama `feat/ui2-construir`)
+
+Hechas con las piezas de esta guía y las de la sección `# --- CONSTRUIR` de
+`CartoonTheme`; detalle por pantalla en `docs/21-interfaz-y-dispositivos.md` §15.
+
+- **CONSTRUIR**: carril de pestañas a la izquierda (icono; con palabra en PC),
+  filas de una línea `[miniatura] Nombre … [coste] [martillo]` con lo que falta
+  en rojo, candado + porqué corto en lo bloqueado ("Era 2", "Falta Almacén",
+  "Rango 4"), "Al máximo" + MEJORAR en lo lleno. En PC, la ficha a la derecha;
+  en teléfono, pantalla completa y el detalle al mantener la fila.
+- **Ficha**: panel lateral sin velo; "Nivel N de 3" con barra; lo que hace en
+  fichas de cifra; MEJORAR verde y REPARAR ámbar con su coste al lado y el
+  porqué en rojo si están apagados; abajo ABRIR (azul), trabajadores, MOVER,
+  GIRAR (crema) y derribar (rojo, solo icono).
+- **Mercado**: una fila por recurso, los precios con icono de oro, [−] n [+],
+  COMPRAR (verde) y VENDER (latón), grises con su porqué si no alcanza.
+- **Investigar**: tarjetas de dos líneas (nivel · nombre y ventaja), el porqué,
+  el coste y el lore al mantener; ficha con INVESTIGAR. En teléfono, carril de
+  ramas y una rama a la vez.
+
+Colores de cinta: CONSTRUIR verde, ficha latón, MERCADO latón, INVESTIGAR azul.
+Pendiente de la ronda de pruebas (capturas en 640×360, 800×360, tablet y
+1280×720) y de que el frente del HUD ponga `CartoonTheme.phone` y el lienzo del
+teléfono en dp (§4.2): hasta entonces, en un teléfono real el lienzo mide ~554 de
+alto y estas pantallas salen con la disposición de tablet.
