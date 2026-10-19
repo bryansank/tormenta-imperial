@@ -599,6 +599,51 @@ cambian. Pruebas: `tests/storm/test_storm_trial.gd` (no llega en medio, llega 90
 tutorial corto = hora de siempre, el repaso no frena, guardado, el reloj de verdad en calma)
 y `tests/tutorial/test_tutorial_holds_interruptions.gd`.
 
+### 2.11 Los pasos de espera se pliegan (2026-10-19, ramas `integracion/ui-v2` y `feat/ui3-tutorial`)
+
+Queja de Bryan: "cuando no tienes los recursos, el tutorial se vuelve molesto porque te
+sigue marcando cosas todo el tiempo en pantalla; no es mi culpa no tenerlos". Primera
+versión en `integracion/ui-v2` (e98310c); revisada y completada en `feat/ui3-tutorial`.
+
+- **Pasos de espera** (`TutorialPanel.is_waiting_step` / `is_waiting_now`): `need_*`,
+  `wait_*` y `collect` **mientras el Aserradero no ha cortado nada** (no hay icono que
+  tocar). La tarjeta sale una vez (`fold_seconds`: 4 s, hasta 8 s si el texto es largo,
+  como la carretera de la obra del Aserradero) o hasta «Más tarde», y se **pliega** a un
+  recordatorio de una línea con la cara de la Capitana (`GuideReminder`), sin flecha, aro
+  ni velo, que no bloquea nada. Va donde vive la línea de ¿QUÉ HACER? (slot `next_step`,
+  que el tutorial esconde): encima de la barra de abajo, sin taparla. Con CONSTRUIR u
+  otra ventana abierta no se pinta encima de su lista.
+- **Qué dice** (`_reminder_line`): el paso de ahora de la lista (`need_plan` →
+  `current.short`: "Junta oro 45/80", "Fabrica tablones 6/10", "Faltan 2 trabajadores");
+  la obra ("Obra: Aserradero 44 %"); "Aserradero cortando madera…". Nunca la lista
+  entera ni un "✓" de lo ya hecho (la primera versión copiaba la primera línea de
+  `step_hint`, que podía ser "✓ Aserradero").
+- **Tocarlo** abre la tarjeta; abierta a mano dura `REOPEN_SECONDS` (8 s) antes de
+  replegarse. Un paso de espera ya visto que vuelve (los recursos bajan y suben alrededor
+  del coste) sale **ya plegado** (`_seen_wait`).
+- **¡Ya puedes!** Al pasar de una espera a un paso de acción (`need_x` → `open_x`, o
+  `collect` cuando aparece la madera), la tarjeta se abre **una vez por paso**
+  (`_ready_done`) con su flecha y el rótulo "¡YA PUEDES! · TUTORIAL · PASO N DE M"; se
+  puede plegar con «Más tarde» y el recordatorio dice "¡Ya puedes! Pulsa CONSTRUIR" /
+  "¡Ya puedes! Recoge la madera". La segunda vez que se llega a ese paso es un paso de
+  acción como siempre.
+- **90 s sin avance** (`IDLE_REMIND_SECONDS`; avance = cambia el texto del recordatorio):
+  solo se resalta el borde, sin animación ni sonido. La tarjeta grande nunca vuelve sola.
+- Los pasos de acción (toca aquí, coloca, gira, recoge con madera) siguen como antes.
+- `collect` señala ahora el Aserradero terminado (`built:sawmill|building:sawmill`): antes
+  apuntaba solo a su obra y, acabada, la tarjeta salía sin flecha.
+- Lo señalado debajo de la tarjeta de recursos o del rango (una veta tras el HUD) cuenta
+  como fuera de pantalla (`_under_hud`): el aro y la flecha ya no caen sobre los números.
+- **No se guarda.** Plegado, visto y "¡Ya puedes!" son estado de la vista (como el paso en
+  pantalla); al cargar o cambiar de vista 3D/2D la tarjeta del paso de espera vuelve a
+  salir una vez y se pliega. El paso sí sale del guardado (`derive_step`).
+
+Pruebas: `tests/tutorial/test_tutorial_reminder.gd`. Sonda:
+`godot --path . -s tools/recorrido_probe.gd -- --recordatorio --profile=phone --shot-size=800x360`
+(y `--profile=pc --shot-size=1920x1080`): tarjeta, recordatorio, resaltado, reabierta,
+"¡Ya puedes!" abierto y plegado, la vuelta plegada, la obra, recoger y el Cuartel sin
+tablones (con CONSTRUIR abierto encima).
+
 ## 3. Ayudas (`HelperPanel`, `HelpCallout`, `HelpCatalog`)
 
 `HelpCatalog` es la lista de todas: los globos del HUD (`callout_*`), los consejos de

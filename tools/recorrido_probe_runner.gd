@@ -119,6 +119,12 @@ func _run() -> void:
 		qg.call("close")
 		await _frames(20)
 
+	# ── Solo el recordatorio plegado del tutorial (--recordatorio, feat/ui3-tutorial) ──
+	if _arg("recordatorio") == "true":
+		await _reminder_tour(main)
+		_finish()
+		return
+
 	# ── Solo ¿QUE HACER? paso a paso (--objetivo, 2026-10-19) ──
 	if _arg("objetivo") == "true":
 		await _objective_tour(main)
@@ -326,6 +332,126 @@ func _objective_tour(main: Node) -> void:
 	await _shot("objetivo_panel_tablones")
 	obj.call("toggle")
 	await _frames(5)
+
+## El recordatorio plegado (feat/ui3-tutorial): un paso de espera sale como
+## tarjeta, se pliega a los 4 s, se resalta a los 90 s sin avance, se reabre al
+## tocarlo y, al tenerlo todo, la tarjeta del paso de accion sale UNA vez con su
+## flecha ("¡Ya puedes!"). Sin recoger a mano: la espera es de verdad.
+func _reminder_tour(main: Node) -> void:
+	var cm: Node = main.get_node("ConstructionMenu")
+	var placer: Node = main.get_node("BuildingPlacer")
+	var tut: Node = main.get_node("TutorialPanel")
+	GameConfig.ui_helper_visible = false
+	EventBus.helper_visibility_changed.emit(false)
+	await _frames(20)
+	for fact in ["goal_seen", "core_seen"]:
+		TutorialManager.note_guide_fact(fact)
+	# 1. Sin oro ni madera: need_sawmill.
+	ResourceManager.set_amounts({"gold": 0, "wood": 0})
+	await _seconds(1.5)
+	_log_reminder(tut, "need 1s")
+	await _shot("rec_need_tarjeta")
+	await _seconds(4.0)
+	_log_reminder(tut, "need 5s")
+	await _shot("rec_need_chip")
+	tut.set("_chip_idle", 999.0)
+	await _frames(5)
+	_log_reminder(tut, "need 90s")
+	await _shot("rec_need_chip_resaltado")
+	(tut.call("reminder") as Button).pressed.emit()
+	await _frames(10)
+	_log_reminder(tut, "need reabierta")
+	await _shot("rec_need_reabierta")
+	await _seconds(FOLD_WAIT)
+	_log_reminder(tut, "need replegada")
+	# 2. Ya lo tiene: la tarjeta de CONSTRUIR, una vez, con su flecha.
+	ResourceManager.set_amounts({"gold": 320, "wood": 220})
+	await _seconds(1.5)
+	_log_reminder(tut, "ya puedes")
+	await _shot("rec_ya_puedes_tarjeta")
+	var later: Button = tut.find_child("GuideLater", true, false)
+	if later != null and later.visible:
+		later.pressed.emit()
+		await _frames(10)
+		_log_reminder(tut, "ya puedes plegada")
+		await _shot("rec_ya_puedes_chip")
+	# 3. Se vuelve a quedar sin nada: el paso de espera ya visto sale plegado.
+	ResourceManager.set_amounts({"gold": 0, "wood": 0})
+	await _seconds(1.5)
+	_log_reminder(tut, "otra vez sin nada")
+	await _shot("rec_need_otra_vez")
+	ResourceManager.set_amounts({"gold": 320, "wood": 220})
+	await _seconds(1.5)
+	_log_reminder(tut, "otra vez ya puedes")
+	await _shot("rec_ya_puedes_otra_vez")
+	# 4. El Aserradero: su obra es un paso de espera; recoger espera la madera.
+	cm.call("_open")
+	await _frames(10)
+	cm.call("_select_building", Rules.load_building_data("sawmill"))
+	await _frames(5)
+	cm.call("_on_build_pressed")
+	var spot := _free_spot("sawmill", null)
+	placer.call("assist_center_on", spot)
+	placer.call("assist_move_ghost", spot)
+	await _frames(10)
+	placer.call("assist_confirm", spot)
+	await _frames(5)
+	# Una obra larga (en dev dura un suspiro): que se vea el recordatorio de obra.
+	var site := _first("sawmill")
+	if site != null and ProductionManager._constructing.has(site):
+		ProductionManager._constructing[site]["duration"] = 60.0
+		ProductionManager._constructing[site]["remaining"] = 40.0
+	await _seconds(1.0)
+	_log_reminder(tut, "obra 1s")
+	await _shot("rec_obra_tarjeta")
+	await _seconds(FOLD_WAIT)
+	_log_reminder(tut, "obra plegada")
+	await _shot("rec_obra_chip")
+	_complete_all()
+	var saw := _first("sawmill")
+	# Recien acabada, sin madera aun: recoger espera. En dev corta en 2 s: se
+	# para un momento (trabajadores fuera) para ver la espera.
+	PopulationManager.set_workers_off(saw, true)
+	await _seconds(1.0)
+	_log_reminder(tut, "recoger 1s")
+	await _shot("rec_recoger_tarjeta")
+	await _seconds(FOLD_WAIT)
+	_log_reminder(tut, "recoger plegada")
+	await _shot("rec_recoger_chip")
+	PopulationManager.set_workers_off(saw, false)
+	# Espera de verdad a que el Aserradero corte madera (dev x5), sin tocar nada.
+	for i in 60:
+		if int(ProductionManager.get_stock(saw).get("wood", 0)) > 0:
+			break
+		await _seconds(0.5)
+	await _seconds(1.0)
+	_log_reminder(tut, "recoger ya puedes")
+	await _shot("rec_recoger_ya_puedes")
+	ProductionManager.collect(saw)
+	await _seconds(1.5)
+	# 5. El Cuartel sin tablones.
+	ResourceManager.set_amounts({"planks": 0, "gold": 320, "wood": 220})
+	await _seconds(1.5)
+	_log_reminder(tut, "cuartel 1s")
+	await _shot("rec_cuartel_tarjeta")
+	await _seconds(FOLD_WAIT)
+	_log_reminder(tut, "cuartel plegada")
+	await _shot("rec_cuartel_chip")
+	# Con CONSTRUIR abierto encima, el chip no estorba (ni se ve sobre la lista).
+	cm.call("_open")
+	await _frames(15)
+	await _shot("rec_cuartel_chip_construir")
+	cm.call("_close")
+	await _frames(10)
+
+const FOLD_WAIT := 5.0
+
+func _log_reminder(tut: Node, what: String) -> void:
+	var chip: Control = tut.call("reminder")
+	print("recorrido_probe: [rec] ", what, " paso=", TutorialManager.current_step(), " plegada=", tut.call("is_folded"),
+		" chip=", chip.visible, " '", tut.call("reminder_text"), "' rect=", chip.get_global_rect(),
+		" tarjeta=", (tut.find_child("CoachCard", true, false) as Control).visible,
+		" flecha=", (tut.find_child("Arrow", true, false) as Control).visible)
 
 ## Juega el tutorial hasta "done" (o 70 vueltas), una captura antes de cada accion.
 func _play_guide(main: Node) -> void:
