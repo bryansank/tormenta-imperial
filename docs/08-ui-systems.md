@@ -202,7 +202,15 @@ Everything goes through `UITheme` (tokens, factories, `UITheme.style_tabs`).
 - **Drag to scroll:** every `ScrollContainer` drags with a finger or the mouse wherever
   the gesture starts (`scripts/ui/DragScroll.gd`, hooked by UIManager); a drag never
   presses what is under it, and the wheel scrolls the list instead of changing a
-  slider.
+  slider. Since 2026-10-19 the press is **held back** until the gesture is known:
+  release without moving more than `InputService.touch_slop_px()` (14 dp) and the
+  press + release are replayed in place (a tap presses as always); move further and it
+  is a scroll, the control below never hears of it, and its touch press (Godot 4.7
+  buttons also answer `InputEventScreenTouch`) is cancelled by dragging the finger far
+  away. A slider only takes the gesture when it starts on its knob/rail
+  (`DragScroll.on_slider_track`) and the first move runs along it; vertical over an
+  `HSlider` scrolls. Nested lists: the innermost one that can move in the gesture's
+  direction scrolls. "Hold to read" is cancelled as soon as the list starts to move.
 - **Hold to read (touch):** with the touch input style, keeping a finger still
   `GameConfig.touch_tooltip_hold_sec` (0.5 s) on any `Control` with a tooltip shows it
   in a bubble above the finger; the button is not pressed. A short tap still presses.

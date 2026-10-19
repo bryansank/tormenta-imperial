@@ -13,7 +13,8 @@ extends CanvasLayer
 ##     no se dispara y no se queda hundido. El soltar de verdad ya no le llega;
 ##   - un toque corto no ve nada de esto: pulsa;
 ##   - moverse mas que el umbral de toque (InputService.touch_slop_px), un
-##     segundo dedo o un soltar-lejos de DragScroll cancelan el gesto;
+##     segundo dedo, un soltar-lejos o que una lista (DragScroll) empiece a
+##     desplazarse (cancel_hold) cancelan el gesto;
 ##   - levantar el dedo cierra la burbuja; otro dedo, tambien.
 ##
 ## Los botones que actuan al tocar (ACTION_MODE_BUTTON_PRESS: la cruceta, el
@@ -84,6 +85,11 @@ func bubble() -> PanelContainer:
 
 func bubble_text() -> String:
 	return _label.text if _shown else ""
+
+## Desarma el gesto sin ensenar nada: una lista (DragScroll) ha empezado a
+## desplazarse con este dedo, asi que ya no es un dedo quieto.
+func cancel_hold() -> void:
+	_pending = false
 
 # ── Entrada ───────────────────────────────────────────────────────────
 
@@ -184,6 +190,9 @@ func _fire() -> void:
 	var text := _tooltip_of(_target, _start)
 	if text == "":
 		return
+	# Si el dedo esta en una lista, el gesto pendiente de la lista (que aun no
+	# le ha dado la pulsacion a nadie) se olvida: al levantarlo no hay toque.
+	(load("res://scripts/ui/DragScroll.gd") as GDScript).call("cancel_gesture")
 	_cancel_press()
 	show_bubble(text, _start)
 
@@ -202,6 +211,13 @@ func _cancel_press() -> void:
 	_cancelling = true
 	get_viewport().push_input(m, true)
 	get_viewport().push_input(r, true)
+	# El boton tambien atiende el toque (Godot 4.7): sin esto se dispararia al
+	# levantar el dedo. Dentro de una lista es la unica pulsacion que tiene
+	# (DragScroll retiene la del raton hasta saber si es un toque).
+	if _touches.size() == 1:
+		var idx: int = _touches.keys()[0]
+		for ev in (load("res://scripts/ui/DragScroll.gd") as GDScript).call("touch_cancel_events", idx):
+			get_viewport().push_input(ev, true)
 	_cancelling = false
 	_eat_release = true
 
