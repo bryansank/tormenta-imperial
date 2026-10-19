@@ -143,18 +143,29 @@ func setup(proc: Dictionary, kind: int, node: Node, accent: Color, from_tip: Str
 	_clear_btn.pressed.connect(func(): dequeue_requested.emit(-1))
 	_queue_row.add_child(_clear_btn)
 
-	# Fila 5: el verbo ("Fabricar:") y los lotes, todos verdes: cada uno SUMA
-	# esas tandas a la cola. Del tamano de un dedo.
-	var verb := CT.label(Tr.t("UI2F_VERB_MINE" if kind == Kind.DEPOSIT else "UI2F_VERB_MAKE"), "small", CT.text("window", true))
+	# Fila 5: los lotes, todos verdes: cada uno SUMA esas tandas a la cola. El
+	# primero lleva el verbo del proceso ("SERRAR ×1", ronda ui3): se lee lo que
+	# hace sin mirar el titulo. Encima, una linea corta que dice que se suman.
+	var verb := CT.label(Tr.t("UI3F_TAP_ADDS"), "small", CT.text("window", true))
 	verb.name = "Verb"
 	box.add_child(verb)
-	var buttons := HBoxContainer.new()
+	# Partible: si "DESTILAR ×1 · ×5 · MÁX ×20" no cabe, MÁX baja de linea en
+	# vez de ensanchar la ficha y salirse por la derecha (ronda ui3).
+	var buttons := HFlowContainer.new()
 	buttons.name = "Batch"
-	buttons.add_theme_constant_override("separation", 6)
+	buttons.add_theme_constant_override("h_separation", 6)
+	buttons.add_theme_constant_override("v_separation", 6)
 	box.add_child(buttons)
+	var first := true
 	for n in GameConfig.process_batch_sizes:
 		var size_n: int = int(n)
-		var btn := _make_batch_button(Tr.t("BTN_BATCH_N") % size_n, "primary")
+		var text := Tr.t("BTN_BATCH_N") % size_n
+		if first:
+			text = "%s %s" % [verb_text(proc, kind), text]
+		var btn := _make_batch_button(text, "primary")
+		if first:
+			btn.size_flags_stretch_ratio = 1.7
+		first = false
 		btn.name = "Batch_%d" % size_n
 		btn.tooltip_text = Tr.t("LBL_BATCH_TIP") % size_n
 		btn.pressed.connect(func(): batch_requested.emit(size_n))
@@ -162,14 +173,15 @@ func setup(proc: Dictionary, kind: int, node: Node, accent: Color, from_tip: Str
 		_size_buttons[size_n] = btn
 	_max_btn = _make_batch_button(Tr.t("BTN_BATCH_MAX") % 0, "primary")
 	_max_btn.name = "BatchMax"
-	_max_btn.size_flags_stretch_ratio = 1.6
+	_max_btn.size_flags_stretch_ratio = 1.4
 	_max_btn.tooltip_text = Tr.t("LBL_BATCH_MAX_TIP") % GameConfig.process_batch_max
 	_max_btn.pressed.connect(func(): batch_requested.emit(max_now()))
 	buttons.add_child(_max_btn)
 	refresh("")
 
 func _make_batch_button(text: String, kind_s: String) -> Button:
-	var btn := CT.text_pill(text, kind_s, CT.h("small"))
+	# Letra de cuerpo: "DESTILAR ×1 · ×5 · MÁX ×20" cabe en la ficha de 360.
+	var btn := CT.text_pill(text, kind_s, CT.h("small"), "window", "body")
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return btn
 
@@ -239,9 +251,22 @@ func refresh(busy_id: Variant = "") -> void:
 			btn.tooltip_text = Tr.t("LBL_BATCH_CANT")
 		else:
 			btn.tooltip_text = Tr.t("LBL_BATCH_TIP") % int(n)
-	_max_btn.text = Tr.t("BTN_BATCH_MAX") % maxi(mx, 0)
+	# "MÁX ×12" solo cuando da para algo: apagado, "MÁX" a secas (un "×0" no
+	# dice nada).
+	_max_btn.text = Tr.t("BTN_BATCH_MAX") % mx if (mx >= 2 and not off) else Tr.t("UI3F_BATCH_MAX")
 	# MAX solo tiene sentido si da para mas de una; si no, basta el x1.
 	_max_btn.disabled = off or mx < 2
+
+## El verbo del boton x1, en mayusculas: "SERRAR", "TALAR", "DESTILAR"... Sale
+## de UI3F_VERB_<ID> (el minado desde el Nucleo usa el de su veta); sin verbo
+## propio, HACER (procesos) o SACAR (a mano).
+static func verb_text(proc: Dictionary, kind: int = Kind.PROCESS) -> String:
+	var pid := String(proc.get("id", "")).trim_prefix(GameConfig.CORE_MINING_PREFIX)
+	var key := "UI3F_VERB_" + pid.to_upper()
+	if Tr.t(key) != key:
+		return Tr.t(key)
+	var hand := kind == Kind.DEPOSIT or pid.begins_with("mine_")
+	return Tr.t("UI3F_VERB_HAND" if hand else "UI3F_VERB_DO")
 
 ## Los botones de la tarjeta (para el panel y las pruebas).
 func batch_buttons() -> Array:

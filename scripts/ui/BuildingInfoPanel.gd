@@ -271,8 +271,10 @@ func _build_ui() -> void:
 	_upgrade_cost_label = CT.para("", "window", true, "small")
 	_upgrade_cost_label.name = "UpgradeEffect"
 	_upgrade_container.add_child(_upgrade_cost_label)
-	var up_row := HBoxContainer.new()
-	up_row.add_theme_constant_override("separation", 6)
+	# Se parte (coste debajo del boton) si no cabe: nada pasa del ancho de la ficha.
+	var up_row := HFlowContainer.new()
+	up_row.add_theme_constant_override("h_separation", 6)
+	up_row.add_theme_constant_override("v_separation", 4)
 	_upgrade_btn = CT.pill_button(Tr.t("UI2C_BTN_UPGRADE"), "upgrade", "primary", CT.h("btn"))
 	_upgrade_btn.name = "UpgradeButton"
 	_upgrade_btn.pressed.connect(_on_upgrade)
@@ -344,7 +346,7 @@ func _build_ui() -> void:
 
 	# Trabajadores: el jugador decide si este edificio trabaja. Solo icono: el
 	# estado esta arriba y la explicacion, en el tooltip.
-	_workers_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_WORKERS"), "workers_off", "secondary", CT.h("small"))
+	_workers_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_WORKERS"), "workers_off", "secondary", CT.h("small"), "window", "body")
 	_workers_btn.name = "WorkersToggle"
 	_workers_btn.pressed.connect(_on_toggle_workers)
 	_actions_box.add_child(_workers_btn)
@@ -352,7 +354,7 @@ func _build_ui() -> void:
 	_workers_hint.name = "WorkersHint"
 	_workers_hint.visible = false
 
-	_move_btn = CT.pill_button("" if _phone else Tr.t("UI2C_BTN_MOVE"), "move", "secondary", CT.h("small"))
+	_move_btn = CT.pill_button("" if _phone else Tr.t("UI2C_BTN_MOVE"), "move", "secondary", CT.h("small"), "window", "body")
 	_move_btn.name = "MoveButton"
 	_move_btn.add_to_group("hud_info_move")
 	_move_btn.tooltip_text = Tr.t("LBL_MOVE_HINT")
@@ -360,7 +362,7 @@ func _build_ui() -> void:
 	_move_container = _move_btn
 	_actions_box.add_child(_move_btn)
 
-	_rotate_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_ROTATE"), "", "secondary", CT.h("small"))
+	_rotate_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_ROTATE"), "", "secondary", CT.h("small"), "window", "body")
 	_rotate_btn.name = "RotateButton"
 	var rot_glyph := CT.rotate_glyph(roundi(CT.h("small") * 0.56))
 	_rotate_btn.get_child(0).add_child(rot_glyph)
@@ -370,7 +372,7 @@ func _build_ui() -> void:
 	_actions_box.add_child(_rotate_btn)
 
 	# Derribar: rojo y solo icono; el nombre al mantener. Pide confirmacion.
-	_demolish_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_DEMOLISH"), "demolish", "danger", CT.h("small"))
+	_demolish_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_DEMOLISH"), "demolish", "danger", CT.h("small"), "window", "body")
 	_demolish_btn.name = "DemolishButton"
 	_demolish_btn.add_to_group("hud_info_demolish")
 	_demolish_btn.tooltip_text = Tr.t("UI2C_TIP_DEMOLISH")
@@ -412,6 +414,11 @@ func _fit_layout() -> void:
 	if not ph:
 		UILayoutManager.apply_layout("BuildingInfoPanel", _panel)
 		CT.fit_desktop(_win)
+		# Tablet: la zona segura (muesca, bordes curvos) tampoco se pisa.
+		var safe := _safe_right()
+		if safe > 0.0:
+			_panel.offset_left -= safe
+			_panel.offset_right -= safe
 		return
 	var width := minf(330.0, vp.x * 0.52)
 	_panel.anchor_left = 1.0
@@ -420,6 +427,9 @@ func _fit_layout() -> void:
 	_panel.anchor_bottom = 1.0
 	# Margen con el borde (y la zona segura del telefono): nunca pegado.
 	var edge := 14.0 + _safe_right()
+	# El ☰ redondo vive arriba a la derecha: la ficha (y su X) van a su
+	# izquierda para no quedar debajo (ronda ui3, 2026-10-19).
+	edge = maxf(edge, _menu_clearance(vp))
 	_panel.offset_left = -edge - width
 	_panel.offset_right = -edge
 	_panel.offset_top = 2.0
@@ -431,9 +441,22 @@ func _fit_layout() -> void:
 	_close_btn.offset_left = -_close_btn.custom_minimum_size.x - 2
 	_close_btn.offset_right = -2
 
+## Cuanto hay que apartarse del borde derecho para no caer debajo del ☰ (el
+## boton del menu, arriba a la derecha). 0 si no esta o no se ve.
+func _menu_clearance(vp: Vector2) -> float:
+	var menu := get_tree().get_first_node_in_group("hud_menu_button") as Control
+	if menu == null or not is_instance_valid(menu) or not menu.is_visible_in_tree():
+		return 0.0
+	var r := menu.get_global_rect()
+	if r.size.x <= 0.0 or r.position.y > 80.0 or r.position.x < vp.x * 0.5:
+		return 0.0
+	return vp.x - r.position.x + 6.0
+
 ## Lo que tapa la muesca o los bordes curvos a la derecha, en pixeles logicos.
+## Solo en movil: en escritorio la "zona segura" es la del monitor (sin la
+## barra de tareas) y no dice nada de la ventana.
 func _safe_right() -> float:
-	if not is_inside_tree() or DisplayServer.get_name() == "headless":
+	if not is_inside_tree() or DisplayServer.get_name() == "headless" or not OS.has_feature("mobile"):
 		return 0.0
 	var safe := DisplayServer.get_display_safe_area()
 	var win := DisplayServer.window_get_size()

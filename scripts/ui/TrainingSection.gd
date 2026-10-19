@@ -44,9 +44,15 @@ func setup(building_id: String) -> void:
 	for c in get_children():
 		remove_child(c)
 		c.queue_free()
+	# Se parte en dos lineas si no cabe (ficha estrecha del telefono, ronda ui3).
 	var head := HFlowContainer.new()
 	head.add_theme_constant_override("h_separation", 10)
-	add_child(head)
+	head.add_theme_constant_override("v_separation", 2)
+	# Un respiro a la derecha: la barra del scroll no tapa la ultima cifra.
+	var head_pad := MarginContainer.new()
+	head_pad.add_theme_constant_override("margin_right", 12)
+	head_pad.add_child(head)
+	add_child(head_pad)
 	var title := CT.section(Tr.t("UI2F_TRAIN_TITLE"), "army")
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
@@ -106,7 +112,7 @@ func rebuild() -> void:
 		if GameConfig.get_unit_building(String(unit_id)) == _building_id:
 			_rows.add_child(make_unit_row(String(unit_id), _cards_open.has(unit_id), true,
 				_toggle_card.bind(String(unit_id)), rebuild))
-	_bars = fill_queue(_queue, _building_id, rebuild)
+	_bars = fill_queue(_queue, _building_id, rebuild, true)
 
 ## Las barras de la cola, sin rehacer nada (cada fotograma con la ficha abierta).
 func update_progress() -> void:
@@ -137,29 +143,29 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 	style.set_content_margin_all(6 if ph else 10)
 	card.add_theme_stylebox_override("panel", style)
 
-	# En la ficha (estrecha, 360 como mucho) los botones bajan a su propia fila, a la
-	# derecha: en una sola fila la tarjeta se salia por el borde.
-	var outer := VBoxContainer.new()
-	outer.add_theme_constant_override("separation", 4)
-	card.add_child(outer)
+	# En la ficha (`with_word`, panel estrecho) la fila va en pisos: arriba disco,
+	# nombre y (?); debajo el coste a todo lo ancho y ENTRENAR entero. Asi nada
+	# se sale por la derecha en 640x360 (ronda ui3). En EJERCITO (ancho), en linea.
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
-	outer.add_child(row)
-	var btn_row: HBoxContainer = row
+	var stack: VBoxContainer = null
 	if with_word:
-		btn_row = HBoxContainer.new()
-		btn_row.name = "Buttons"
-		btn_row.alignment = BoxContainer.ALIGNMENT_END
-		btn_row.add_theme_constant_override("separation", 8)
-		outer.add_child(btn_row)
+		stack = VBoxContainer.new()
+		stack.add_theme_constant_override("separation", 4)
+		card.add_child(stack)
+		stack.add_child(row)
+	else:
+		card.add_child(row)
 
-	var disc := CT.unit_disc(unit_id, CT.sem("POSITIVE") if unlocked else CT.kind_fill("disabled"), 38 if ph else 48)
+	var disc := CT.unit_disc(unit_id, CT.sem("POSITIVE") if unlocked else CT.kind_fill("disabled"),
+		(32 if ph else 40) if with_word else (38 if ph else 48))
 	disc.mouse_filter = Control.MOUSE_FILTER_PASS
 	disc.tooltip_text = "\n".join(UnitCardScript.summary_lines(unit_id))
 	row.add_child(disc)
 
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	info.add_theme_constant_override("separation", 2)
 	row.add_child(info)
 
@@ -186,12 +192,18 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 	stats.add_theme_constant_override("h_separation", 8)
 	stats.add_theme_constant_override("v_separation", 2)
 	var cost: Dictionary = def.get("cost", {})
-	# Una ficha por recurso: si no caben en una linea, bajan (la ficha es estrecha).
-	var short := missing(cost)
-	for res_name in cost:
-		var one := {res_name: cost[res_name]}
-		var miss := {res_name: short[res_name]} if short.has(res_name) else {}
-		stats.add_child(CT.cost_row(one, miss))
+	var cost_row := CT.cost_row(cost, missing(cost))
+	if with_word:
+		# En la ficha estrecha las fichas del coste se parten por piezas enteras
+		# (el Aerodromo pide cuatro recursos y un material).
+		# Las fichas van sueltas en la fila partible (un flujo dentro de otro se
+		# encogeria a una ficha por linea).
+		for chip in cost_row.get_children():
+			cost_row.remove_child(chip)
+			stats.add_child(chip)
+		cost_row.free()
+	else:
+		stats.add_child(cost_row)
 	var power := CT.label(Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0)), "small", CT.text("window", true))
 	power.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	stats.add_child(power)
@@ -205,18 +217,19 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 	upkeep.add_child(clock)
 	upkeep.add_child(CT.cost_row({"gold": int(def.get("upkeep_gold", 0))}))
 	stats.add_child(upkeep)
-	info.add_child(stats)
+	var lower: VBoxContainer = stack if with_word else info
+	lower.add_child(stats)
 
 	var check := ArmyManager.can_train(unit_id)
 	if not check["ok"] and check["reason"] != "":
 		var why := CT.icon_line("lock", blocked_text(unit_id, String(check["reason"])), "warning")
 		why.get_node("Text").name = "BlockedReason"
-		info.add_child(why)
+		lower.add_child(why)
 
 	if card_open:
 		var unit_card = UnitCardScript.new()
 		unit_card.setup(unit_id, null, false)
-		info.add_child(unit_card)
+		lower.add_child(unit_card)
 
 	var btn_h := 48 if ph else CT.BTN_SMALL
 	var card_btn := CT.pill_button("", "help", "secondary" if not card_open else "open", btn_h)
@@ -224,12 +237,15 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 	card_btn.tooltip_text = Tr.t("ARMY2_CARD_TIP")
 	card_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	card_btn.pressed.connect(on_card)
-	btn_row.add_child(card_btn)
+	row.add_child(card_btn)
 	var word := Tr.t("UI2F_TRAIN_BTN") if with_word else ""
-	var train_btn := CT.pill_button(word, "plus", "primary", 52 if not ph else 48)
+	var train_btn := CT.pill_button(word, "plus", "primary",
+		(48 if ph else CT.BTN_SMALL) if with_word else (52 if not ph else 48))
 	train_btn.name = "TrainButton"
 	train_btn.add_to_group("hud_train_button")
 	train_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if with_word:
+		train_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	train_btn.disabled = not check["ok"]
 	train_btn.tooltip_text = "%s · %s" % [Tr.t("ARMY2_TRAIN_TIP"), TextKit.cost_text(cost)]
 	if not check["ok"] and check["reason"] != "":
@@ -238,7 +254,10 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 		if ArmyManager.train(unit_id):
 			on_changed.call()
 	)
-	btn_row.add_child(train_btn)
+	if with_word:
+		stack.add_child(train_btn)
+	else:
+		row.add_child(train_btn)
 	return card
 
 ## Por que no se puede entrenar `unit_id`, en palabras. Una unidad de otra era
@@ -254,7 +273,8 @@ static func blocked_text(unit_id: String, reason: String) -> String:
 ## La cola en `box`: una linea por recluta (disco, barra, lo que devuelve y ✕).
 ## Con `building_id`, solo la de ese edificio. Devuelve las barras, en orden,
 ## con su indice en ArmyManager.get_training() como meta "index".
-static func fill_queue(box: VBoxContainer, building_id: String, on_changed: Callable) -> Array:
+## `compact` (la ficha): lo que devuelve la ✕ va en su tooltip, no al lado.
+static func fill_queue(box: VBoxContainer, building_id: String, on_changed: Callable, compact: bool = false) -> Array:
 	for child in box.get_children():
 		box.remove_child(child)
 		child.queue_free()
@@ -277,7 +297,7 @@ static func fill_queue(box: VBoxContainer, building_id: String, on_changed: Call
 		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		bar.set_meta("index", i)
 		line.add_child(bar)
-		line.add_child(make_cancel_button(i, on_changed))
+		line.add_child(make_cancel_button(i, on_changed, compact))
 		box.add_child(line)
 		bars.append(bar)
 	box.visible = not bars.is_empty()
@@ -293,11 +313,11 @@ static func update_bars(bars: Array, _building_id: String = "") -> void:
 			bar.value = training_progress(training[i])
 
 ## Cancelar un entrenamiento: ✕ roja, y lo que vuelve en iconos al lado.
-static func make_cancel_button(index: int, on_changed: Callable) -> Control:
+static func make_cancel_button(index: int, on_changed: Callable, compact: bool = false) -> Control:
 	var refund := ArmyManager.get_training_refund(index)
 	var box := HBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
-	if not refund.is_empty():
+	if not refund.is_empty() and not compact:
 		var back := CT.make_glyph("back", 20)
 		back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		box.add_child(back)
