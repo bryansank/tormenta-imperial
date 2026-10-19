@@ -76,14 +76,15 @@ static func prerequisite_names(building_id: String) -> String:
 static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector2i, map_gen: Node, ignore_building: Node = null) -> Dictionary:
 	if not on_land(cell, size):
 		return {"ok": false, "reason": "water", "deposit": null}
-	if needs_shore(building_id) and not touches_shore(cell, size):
-		return {"ok": false, "reason": SHORE_REASON, "deposit": null}
 	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
+	if (needs_shore(building_id) or bool(rule.get("shore", false))) and not touches_shore(cell, size):
+		# El Muelle de pesca (regla "shore") dice su propia frase: "deposit".
+		return {"ok": false, "reason": SHORE_REASON if rule.is_empty() else "deposit", "deposit": null}
 	var deposit: Node = null
 	if not rule.is_empty():
 		var cells: Array = GridManager.cells_for(cell, size)
 		if map_gen != null and map_gen.has_method("find_deposit_near_cells"):
-			deposit = map_gen.find_deposit_near_cells(String(rule["deposit"]), cells, int(rule["reach"]))
+			deposit = deposit_with_room(building_id, rule, cells, map_gen, ignore_building)
 		if deposit == null:
 			return {"ok": false, "reason": "deposit", "deposit": null}
 	# Un yacimiento que se consume queda debajo del edificio: sus celdas valen.
@@ -100,6 +101,68 @@ static func evaluate_placement(building_id: String, cell: Vector2i, size: Vector
 				return {"ok": true, "reason": "", "deposit": deposit, "route": route}
 		return {"ok": false, "reason": "road", "deposit": deposit}
 	return {"ok": true, "reason": "", "deposit": deposit, "route": []}
+
+## El yacimiento que trabajaria `building_id` desde `cells`: el mas cercano a
+## su alcance. Con tope por yacimiento (regla "per_deposit": un banco de peces
+## sirve a 2 muelles, fix/peces-en-el-mar), el mas cercano que aun tiene sitio.
+## "Tener sitio" no guarda a que banco va cada muelle: se reparte (un
+## emparejamiento con capacidades, pocos muelles y pocos bancos) y el nuevo cabe
+## si con el no queda ningun muelle de antes sin banco. Un muelle de una partida
+## vieja que ya pasaba del tope no bloquea a los demas: solo cuenta lo que se
+## pierde con el nuevo. Solo al evaluar un sitio, nunca por fotograma.
+static func deposit_with_room(building_id: String, rule: Dictionary, cells: Array, map_gen: Node, ignore_building: Node = null) -> Node:
+	var deposit_id := String(rule["deposit"])
+	var reach := int(rule["reach"])
+	var cap := int(rule.get("per_deposit", 0))
+	if cap <= 0 or not map_gen.has_method("find_deposits_near_cells"):
+		return map_gen.find_deposit_near_cells(deposit_id, cells, reach)
+	var near: Array = map_gen.find_deposits_near_cells(deposit_id, cells, reach)
+	if near.is_empty():
+		return null
+	var others: Array = []
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info["data"]
+		if data == null or data.id != building_id or info["node"] == ignore_building:
+			continue
+		var options: Array = map_gen.find_deposits_near_cells(deposit_id, info["cells"], reach)
+		if not options.is_empty():
+			others.append(options)
+	if others.is_empty():
+		return near[0]
+	var before := _max_matching(others, cap, {})
+	for dep in near:
+		if _max_matching(others, cap, {dep: cap - 1}) == before:
+			return dep
+	return null
+
+## Cuantos de `options` (por muelle, los yacimientos que alcanza) se pueden
+## repartir sin pasar de `cap` por yacimiento (`caps` cambia el tope de alguno).
+## Caminos de aumento (Kuhn): con 6 muelles y 5 bancos, unas decenas de pasos.
+static func _max_matching(options: Array, cap: int, caps: Dictionary) -> int:
+	var held := {}
+	var n := 0
+	for i in options.size():
+		if _augment(i, options, cap, caps, held, {}):
+			n += 1
+	return n
+
+static func _augment(i: int, options: Array, cap: int, caps: Dictionary, held: Dictionary, seen: Dictionary) -> bool:
+	for dep in options[i]:
+		if seen.has(dep):
+			continue
+		seen[dep] = true
+		var list: Array = held.get(dep, [])
+		if list.size() < int(caps.get(dep, cap)):
+			list.append(i)
+			held[dep] = list
+			return true
+		for j in list.duplicate():
+			if _augment(j, options, cap, caps, held, seen):
+				list.erase(j)
+				list.append(i)
+				held[dep] = list
+				return true
+	return false
 
 ## ¿Cae toda la huella en tierra?
 static func on_land(cell: Vector2i, size: Vector2i) -> bool:
@@ -753,6 +816,11 @@ static func access_ring_cells(deposit: Node, extractor_size: Vector2i) -> Array:
 static func wants_access_ring(data: BuildingData, verdict: Dictionary, building: Node) -> bool:
 	var rule: Dictionary = GameConfig.get_deposit_rule(data.id)
 	if rule.is_empty() or bool(rule.get("consumes", false)):
+		return false
+	# Un banco de peces esta mar adentro (fix/peces-en-el-mar): su anillo caeria
+	# casi todo en el agua y lo poco de tierra pavimentaria la costa donde van los
+	# otros muelles. El muelle llega con su propia ruta.
+	if bool(rule.get("shore", false)):
 		return false
 	var deposit: Node = verdict.get("deposit", null)
 	if deposit == null or not is_instance_valid(deposit) or bool(deposit.get_meta(ACCESS_RING_META, false)):

@@ -385,6 +385,12 @@ no se pinta (lo dice el rotulo de la obra), igual que en 3D.
   linea de espuma donde corta la arena. Se calcula al cambiar los bancos o la
   forma; `_draw` solo pinta lo guardado. Si un recorte no diera un solo
   poligono limpio, ese anillo se pinta entero (mejor charco que agujero).
+  Desde fix/peces-en-el-mar (2026-10-19) los bancos van mar adentro, con al
+  menos una casilla de agua hasta la tierra; la playa 2D aun los cubriria, asi
+  que la cala sigue, pero ya no hay tierra pegada: `_sea_dir` cae en "lejos del
+  centro de la isla" y la cala se abre hacia el mar (agua azul alrededor del
+  banco), sin entrar en la costa. El Muelle de pesca saca hasta el banco su
+  embarcadero (`DockPier2D`, las celdas de `MapGenerator.pier_path`).
 - **El banco** (`_dep_fish_shoal`) ya no es un ovalo con borde: agua honda
   difusa sin contorno, ondas en corro, sombras de peces bajo el agua
   (`_fish_shadow`), tres lomos que asoman con su estela, el pez que salta y la

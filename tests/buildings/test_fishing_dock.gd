@@ -58,7 +58,8 @@ func test_the_building_is_a_cheap_era_one_food_producer() -> void:
 	assert_int(d.cost_steel + d.cost_oil).is_equal(0)
 	assert_bool(d.cost_materials.is_empty()).is_true()
 	assert_int(d.workers_required).is_equal(2)
-	assert_that(d.get_production()).is_equal({"food": 12})
+	# El banco da comida y oro en la misma fuente (fix/peces-en-el-mar).
+	assert_that(d.get_production()).is_equal({"food": 12, "gold": 3})
 	assert_float(d.production_interval).is_equal(30.0)
 	assert_object(d.model_scene).is_not_null()
 
@@ -66,6 +67,10 @@ func test_it_yields_less_per_minute_than_a_long_farm_crop() -> void:
 	# Pesca sin esperar cultivo: por debajo del Trigo, por encima de la Lechuga.
 	var d := _data()
 	var per_min := float(d.produces_food) * 60.0 / d.production_interval
+	# Su oro es una propina: menos de una quinta parte de lo que da una Mina.
+	var mine: BuildingData = load("res://data/buildings/gold_mine.tres")
+	assert_float(float(d.produces_gold) / d.production_interval).is_less(
+		0.2 * float(mine.produces_gold) / mine.production_interval)
 	var short: Dictionary = GameConfig.get_crop("crop_short")
 	var long: Dictionary = GameConfig.get_crop("crop_long")
 	assert_float(per_min).is_greater(float(short["food"]) * 60.0 / float(short["duration"]))
@@ -86,13 +91,16 @@ func test_it_has_lot_site_fx_and_stock_cap() -> void:
 	# Sin requisitos: un banco de peces y una carretera bastan.
 	assert_bool(GameConfig.get_prerequisites(ID).is_empty()).is_true()
 
-func test_it_must_touch_a_school_of_fish() -> void:
+func test_it_reaches_a_school_out_at_sea_from_the_coast() -> void:
 	var rule: Dictionary = GameConfig.get_deposit_rule(ID)
 	assert_str(String(rule["deposit"])).is_equal("fish_shoal")
-	assert_int(int(rule["reach"])).is_equal(1)
+	assert_int(int(rule["reach"])).is_equal(4)
+	assert_int(int(rule["reach"])).is_equal(GameConfig.fishing_dock_reach)
 	assert_bool(bool(rule["consumes"])).is_false()
+	assert_bool(bool(rule["shore"])).is_true()
+	assert_int(int(rule["per_deposit"])).is_equal(2)
 	assert_str(String(rule["message"])).is_equal("LBL_NEEDS_FISH_NEAR")
-	# La regla del banco ya pone el muelle en la costa: no hace falta la de las palmeras.
+	# Va en la costa por su propia regla ("shore"), con su frase, no la de las palmeras.
 	assert_bool(Rules.needs_shore(ID)).is_false()
 	assert_str(Assist.rule_text(ID)).is_equal(Tr.t("LBL_NEEDS_FISH_NEAR"))
 
@@ -121,7 +129,7 @@ func test_fresh_fish_spoils_in_half_the_time_and_the_silo_helps() -> void:
 
 func test_it_goes_on_the_shore_next_to_a_school_and_nowhere_else() -> void:
 	_new_map(42)
-	var spots: Array = _map.buildable_spots_near("fish_shoal", Vector2i(2, 2), 1)
+	var spots: Array = _map.buildable_spots_near("fish_shoal", Vector2i(2, 2), GameConfig.fishing_dock_reach)
 	assert_bool(spots.is_empty()).is_false()
 	var spot: Dictionary = spots[0]
 	var ok: Dictionary = Rules.evaluate_placement(ID, spot["origin"], spot["size"], _map)
@@ -144,8 +152,84 @@ func test_touch_placement_offers_spots_around_the_schools() -> void:
 
 func test_the_dock_has_its_vein_while_the_school_is_there() -> void:
 	_new_map(42)
-	var spot: Dictionary = _map.buildable_spots_near("fish_shoal", Vector2i(2, 2), 1)[0]
+	var spot: Dictionary = _map.buildable_spots_near("fish_shoal", Vector2i(2, 2), GameConfig.fishing_dock_reach)[0]
 	assert_bool(Rules.has_its_deposit(_data(), GridManager.cells_for(spot["origin"], spot["size"]), _map)).is_true()
+
+## Pone un muelle de verdad en la rejilla (sin vista) en `origin`.
+func _put_dock(origin: Vector2i) -> Node3D:
+	var node: Node3D = auto_free(Node3D.new())
+	assert_bool(GridManager.place_building(origin, _data(), node)).is_true()
+	return node
+
+## Los sitios validos que alcanzan a `shoal` (y a ningun otro banco).
+func _spots_only_for(shoal: Node) -> Array:
+	var out: Array = []
+	for o in Assist.valid_spots(ID, Vector2i(2, 2), _map):
+		var near: Array = _map.find_deposits_near_cells("fish_shoal", GridManager.cells_for(o, Vector2i(2, 2)), GameConfig.fishing_dock_reach)
+		if near.size() == 1 and near[0] == shoal:
+			out.append(o)
+	return out
+
+func test_inland_within_reach_is_not_the_coast() -> void:
+	# Al alcance del banco pero sin tocar el agua: no vale (va en la costa).
+	for s in [42, 7, 99, 314]:
+		_new_map(s)
+		for spot in _map.buildable_spots_near("fish_shoal", Vector2i(2, 2), GameConfig.fishing_dock_reach):
+			assert_bool(Rules.touches_shore(spot["origin"], spot["size"])).is_true()
+		for y in range(GridManager.grid_height - 1):
+			for x in range(GridManager.grid_width - 1):
+				var o := Vector2i(x, y)
+				if Rules.touches_shore(o, Vector2i(2, 2)) or not Rules.on_land(o, Vector2i(2, 2)):
+					continue
+				var v: Dictionary = Rules.evaluate_placement(ID, o, Vector2i(2, 2), _map)
+				assert_bool(bool(v["ok"])).override_failure_message("semilla %d: muelle tierra adentro en %s" % [s, o]).is_false()
+
+func test_a_school_feeds_two_docks_not_three() -> void:
+	# Busca un banco con tres sitios suyos que no se pisen.
+	for s in [42, 7, 99, 314, 2718, 4242]:
+		_new_map(s)
+		for d in _map.get_all_deposits():
+			if String(d["id"]) != "fish_shoal":
+				continue
+			var shoal: Node = GridManager.get_building_at(Vector2i(d["cell_x"], d["cell_y"]))
+			var picked: Array = []
+			for o in _spots_only_for(shoal):
+				var free := true
+				for p in picked:
+					if Rect2i(p, Vector2i(2, 2)).grow(1).intersects(Rect2i(o, Vector2i(2, 2))):
+						free = false
+				if free:
+					picked.append(o)
+				if picked.size() == 3:
+					break
+			if picked.size() < 3:
+				continue
+			_put_dock(picked[0])
+			_put_dock(picked[1])
+			var third: Dictionary = Rules.evaluate_placement(ID, picked[2], Vector2i(2, 2), _map)
+			assert_bool(bool(third["ok"])).is_false()
+			assert_str(String(third["reason"])).is_equal("deposit")
+			# Moviendo uno de los dos, el sitio del tercero vale para el.
+			var moving: Node = GridManager.get_building_at(picked[1])
+			var moved: Dictionary = Rules.evaluate_placement(ID, picked[2], Vector2i(2, 2), _map, moving)
+			assert_bool(moved["deposit"] == shoal).is_true()
+			return
+	fail("ningun banco con tres sitios suyos en las semillas probadas")
+
+func test_the_pier_crosses_the_water_to_the_school() -> void:
+	_new_map(42)
+	var spot: Dictionary = _map.buildable_spots_near("fish_shoal", Vector2i(2, 2), GameConfig.fishing_dock_reach)[0]
+	var cells: Array = GridManager.cells_for(spot["origin"], spot["size"])
+	var path: Dictionary = _map.pier_path(cells)
+	var pier: Array = path["cells"]
+	assert_int(pier.size()).is_between(1, GameConfig.fishing_dock_reach - 1)
+	for c in pier:
+		assert_bool(GridManager.is_water_cell(c)).is_true()
+		# No ocupa la rejilla: el agua sigue sin nada encima.
+		assert_object(GridManager.get_building_at(c)).is_null()
+	assert_bool(cells.has(path["from"])).is_true()
+	var shoal: Node = GridManager.get_building_at(path["to"])
+	assert_str(String(shoal.get_meta("deposit_id", ""))).is_equal("fish_shoal")
 
 # ── Aspecto, textos y ayuda ───────────────────────────────────────────
 

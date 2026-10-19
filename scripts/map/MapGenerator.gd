@@ -142,13 +142,15 @@ static func shore_cells() -> Array:
 static func is_sea_cell(cell: Vector2i) -> bool:
 	return not GridManager.is_land_cell(cell)
 
-## Yacimientos de costa y mar (feat/muelle-pesca): el banco de peces. Viven en
-## celdas de AGUA de la rejilla pegadas a la tierra (GridManager.place_sea_obstacle)
-## y su extractor, el Muelle de pesca, se planta en la costa tocandolos
-## (GameConfig.building_deposit_rules, alcance 1: toda celda de tierra que toca
-## el agua es costa, asi que tocar el banco ya es tocar la orilla). Ninguno se
-## agota (GameConfig.endless_deposits). El guardado los lleva como a los demas:
-## get_all_deposits() no mira el tipo.
+## Yacimientos de mar (feat/muelle-pesca): el banco de peces. Viven en celdas de
+## AGUA de la rejilla (GridManager.place_sea_obstacle), MAR ADENTRO desde
+## fix/peces-en-el-mar (2026-10-19): entre `min_gap` y `max_gap` casillas de agua
+## los separan de la tierra (GameConfig.sea_deposit_rolls), nunca pegados a la
+## arena. Su extractor, el Muelle de pesca, se planta en la costa (regla "shore")
+## y llega al banco a distancia (GameConfig.fishing_dock_reach); un banco sirve a
+## `fishing_dock_per_shoal` muelles (PlacementRules.deposit_with_room). Ninguno
+## se agota (GameConfig.endless_deposits). El guardado los lleva como a los
+## demas: get_all_deposits() no mira el tipo.
 ## Otro recurso del mar (sal, petroleo en alta mar...): su tipo en DEPOSIT_TYPES,
 ## su id aqui, la regla de su extractor y sus cifras en GameConfig.sea_deposit_rolls.
 const SHORE_DEPOSIT_IDS: Array = ["fish_shoal"]
@@ -170,10 +172,71 @@ func _generate_shore_deposits() -> void:
 ## ninguno de ese tipo: un banco nunca se agota ni se consume, asi que "cero"
 ## solo puede ser una partida vieja, o una isla sin agua dentro de la rejilla (la
 ## cuadrada de antes de 2026-10-12), donde no cabe ninguno y esto no hace nada.
+##
+## Una partida de antes de fix/peces-en-el-mar trae los bancos pegados a la
+## orilla: los que ningun muelle usa se recolocan mar adentro (se quitan y se
+## vuelve a sortear hasta el numero de la isla); los que si tienen muelle se
+## respetan tal cual, para no dejarlo sin peces. Se llama despues de poner los
+## edificios guardados (GameManager), asi que los muelles ya estan en la rejilla.
 func ensure_shore_deposits() -> void:
 	for deposit_id in SHORE_DEPOSIT_IDS:
-		if _count_type(String(deposit_id)) == 0:
-			_fill_sea_type(String(deposit_id))
+		var id := String(deposit_id)
+		var moved := _drop_unused_coast_hugging(id)
+		if moved or _count_type(id) == 0:
+			_fill_sea_type(id)
+
+## ¿Esta este yacimiento de mar a la distancia de la orilla que pide su tirada?
+func _at_sea_distance(deposit_id: String, origin: Vector2i, size: Vector2i) -> bool:
+	var roll: Dictionary = GameConfig.sea_deposit_rolls.get(deposit_id, {})
+	return not _has_land_within(origin, size, int(roll.get("min_gap", 0)) - 1) \
+		and _has_land_within(origin, size, int(roll.get("max_gap", 0)))
+
+## ¿Hay alguna celda de tierra con `gap` casillas o menos de agua entre ella y
+## el rectangulo? gap 0 = pegada a el (diagonal incluida); gap < 0 = nunca.
+static func _has_land_within(origin: Vector2i, size: Vector2i, gap: int) -> bool:
+	if gap < 0:
+		return false
+	var r := gap + 1
+	for y in range(origin.y - r, origin.y + size.y + r):
+		for x in range(origin.x - r, origin.x + size.x + r):
+			if GridManager.is_land_cell(Vector2i(x, y)):
+				return true
+	return false
+
+## Quita los bancos de `deposit_id` que estan mas cerca de la tierra de lo que
+## pide su tirada (los de antes de fix/peces-en-el-mar) y que ningun extractor
+## alcanza. true si quito alguno.
+func _drop_unused_coast_hugging(deposit_id: String) -> bool:
+	var roll: Dictionary = GameConfig.sea_deposit_rolls.get(deposit_id, {})
+	var min_gap := int(roll.get("min_gap", 0))
+	if min_gap <= 0:
+		return false
+	var drop: Array = []
+	for entry in _deposit_cells:
+		if String(entry["id"]) != deposit_id or not is_instance_valid(entry["node"]):
+			continue
+		var o := Vector2i(entry["cell_x"], entry["cell_y"])
+		var sz := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
+		if not _has_land_within(o, sz, min_gap - 1):
+			continue
+		if not _used_by_an_extractor(deposit_id, o, sz):
+			drop.append(entry["node"])
+	for node in drop:
+		remove_deposit(node)
+	return not drop.is_empty()
+
+## ¿Lo alcanza algun edificio cuya regla pide este tipo de yacimiento?
+func _used_by_an_extractor(deposit_id: String, origin: Vector2i, size: Vector2i) -> bool:
+	for info in GridManager.buildings_view():
+		var data: Resource = info.get("data")
+		if data == null:
+			continue
+		var rule: Dictionary = GameConfig.get_deposit_rule(String(data.id))
+		if rule.is_empty() or String(rule["deposit"]) != deposit_id:
+			continue
+		if deposit_within_reach(origin, size, info["cells"], int(rule["reach"])):
+			return true
+	return false
 
 ## Sortea los yacimientos de mar de `deposit_id`. Con su propio azar (semilla de
 ## la isla y del tipo), no con el global: el resto del mapa sale igual que antes
@@ -183,7 +246,7 @@ func _fill_sea_type(deposit_id: String) -> void:
 	var roll: Dictionary = GameConfig.sea_deposit_rolls.get(deposit_id, {})
 	if roll.is_empty():
 		return
-	var candidates: Array = _sea_spots()
+	var candidates: Array = _sea_spots(deposit_id)
 	if candidates.is_empty():
 		return
 	var rng := RandomNumberGenerator.new()
@@ -210,7 +273,7 @@ func _fill_sea_type(deposit_id: String) -> void:
 		# Algunos salen de 3 de largo, si el agua da para ello.
 		var size := Vector2i(2, 2)
 		var long_size := Vector2i(3, 2) if rng.randf() < 0.5 else Vector2i(2, 3)
-		if rng.randf() < float(roll.get("long_chance", 0.0)) and _is_sea_spot(origin, long_size):
+		if rng.randf() < float(roll.get("long_chance", 0.0)) and _is_sea_spot(deposit_id, origin, long_size):
 			size = long_size
 		var rect := Rect2i(origin, size)
 		var crowded := false
@@ -223,15 +286,15 @@ func _fill_sea_type(deposit_id: String) -> void:
 		var node := spawn_deposit(deposit_id, origin, -1, size)
 		if node == null:
 			continue
-		# Un banco sin hueco en la orilla para su muelle, o sin camino a la red, no vale.
+		# Un banco sin hueco en la costa para su muelle, o sin camino a la red, no vale.
 		if not _deposit_is_workable(_entry_of(node), reach):
 			remove_deposit(node)
 			continue
 		taken.append(rect)
 
-## Origenes 2x2 de agua libre pegados a la tierra (alguna celda toca la costa,
-## diagonal incluida), lejos del Nucleo. En el orden de la rejilla.
-func _sea_spots() -> Array:
+## Origenes 2x2 de agua libre a la distancia de la orilla que pide la tirada de
+## `deposit_id` (mar adentro), lejos del Nucleo. En el orden de la rejilla.
+func _sea_spots(deposit_id: String) -> Array:
 	var out: Array = []
 	var keep_out: Rect2i = core_ring_rect().grow(GameConfig.deposit_core_gap)
 	for y in range(GridManager.grid_height - 1):
@@ -239,23 +302,27 @@ func _sea_spots() -> Array:
 			var o := Vector2i(x, y)
 			if keep_out.intersects(Rect2i(o, Vector2i(2, 2))):
 				continue
-			if _is_sea_spot(o, Vector2i(2, 2)):
+			if _is_sea_spot(deposit_id, o, Vector2i(2, 2)):
 				out.append(o)
 	return out
 
 ## ¿Cabe un yacimiento de mar de `size` en `origin`? Todo agua de la rejilla,
-## sin nada encima, y tocando tierra (si no, ningun muelle llega a el).
-func _is_sea_spot(origin: Vector2i, size: Vector2i) -> bool:
-	var touches_land := false
+## sin nada encima, y mar adentro: al menos `min_gap` casillas de agua hasta la
+## tierra (no toca la arena) y como mucho `max_gap` (si no, ningun muelle llega).
+func _is_sea_spot(deposit_id: String, origin: Vector2i, size: Vector2i) -> bool:
 	for c in GridManager.cells_for(origin, size):
 		if not GridManager.is_water_cell(c) or GridManager.get_building_at(c) != null:
 			return false
-		if not touches_land:
-			for d in _AROUND:
-				if GridManager.is_land_cell(c + d):
-					touches_land = true
-					break
-	return touches_land
+	return _at_sea_distance(deposit_id, origin, size)
+
+## ¿Toca el agua alguna de estas celdas (diagonal incluida)? La costa de
+## PlacementRules.is_coast_cell, sin cargar PlacementRules.
+static func touches_water(cells: Array) -> bool:
+	for c in cells:
+		for d in _AROUND:
+			if not GridManager.is_land_cell(c + d):
+				return true
+	return false
 
 # ── Yacimiento trabajable ─────────────────────────────────────────────
 
@@ -279,10 +346,10 @@ func _extractor_spots(entry: Dictionary, limit: int = 0) -> Array:
 			continue
 		var data: Resource = _building_data(building_id)
 		var footprint: Vector2i = data.grid_size if data != null else Vector2i(2, 2)
-		return _spots_for(entry, footprint, int(rule["reach"]), limit)
+		return _spots_for(entry, footprint, int(rule["reach"]), limit, bool(rule.get("shore", false)))
 	return [{"origin": Vector2i(entry["cell_x"], entry["cell_y"]), "size": Vector2i.ONE}]
 
-func _spots_for(entry: Dictionary, footprint: Vector2i, reach: int, limit: int) -> Array:
+func _spots_for(entry: Dictionary, footprint: Vector2i, reach: int, limit: int, shore: bool = false) -> Array:
 	var spots: Array = []
 	var dep_origin := Vector2i(entry["cell_x"], entry["cell_y"])
 	var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
@@ -297,7 +364,10 @@ func _spots_for(entry: Dictionary, footprint: Vector2i, reach: int, limit: int) 
 				var origin := Vector2i(ox, oy)
 				if not GridManager.can_place(origin, s, null, ignore):
 					continue
-				if deposit_within_reach(dep_origin, dep_size, GridManager.cells_for(origin, s), reach):
+				var cells: Array = GridManager.cells_for(origin, s)
+				if shore and not touches_water(cells):
+					continue
+				if deposit_within_reach(dep_origin, dep_size, cells, reach):
 					spots.append({"origin": origin, "size": s})
 					if limit > 0 and spots.size() >= limit:
 						return spots
@@ -387,11 +457,15 @@ func spawn_deposit(deposit_id: String, cell: Vector2i, uses_override: int = -1, 
 	return root
 
 # ── La arena no tapa los bancos (1.1) ─────────────────────────────────
-# Los bancos de peces van en la primera franja de agua (el muelle tiene que
-# tocarlos desde la orilla), justo donde la playa 3D de IslandGenerator baja
-# desde el cesped hasta el mar: la arena los tapaba casi enteros. La isla abre
-# un hueco en la arena sobre cada banco (island_sand.gdshader, `holes`). Se
-# avisa una vez por fotograma como mucho, solo cuando cambian los bancos.
+# Hasta fix/peces-en-el-mar los bancos iban en la primera franja de agua, justo
+# donde la playa 3D de IslandGenerator baja desde el cesped hasta el mar: la
+# arena los tapaba casi enteros, y la isla abria un hueco sobre cada uno
+# (island_sand.gdshader, `holes`; la cala de Island2D en 2D). Ahora van mar
+# adentro, pero con una casilla de agua por medio la cola de la playa 3D aun
+# roza su borde, y la playa 2D (Island2D.SHORE_WIDTH, mas de dos casillas) los
+# cubre: el hueco sigue en las dos vistas, acotado a la huella del banco y, en
+# 2D, abierto hacia el mar (agua azul alrededor del banco, nunca hacia la
+# tierra). Se avisa una vez por fotograma como mucho, solo cuando cambian.
 
 var _sand_holes_queued := false
 
@@ -586,6 +660,74 @@ func find_deposit_near_cells(deposit_id: String, cells: Array, reach: int) -> No
 			return entry["node"]
 	return null
 
+## Every deposit of the type within `reach` of the cells, nearest first (by
+## Chebyshev gap; ties keep the map order). The fishing dock picks among them.
+func find_deposits_near_cells(deposit_id: String, cells: Array, reach: int) -> Array:
+	var found: Array = []
+	for entry in _deposit_cells:
+		if entry["id"] != deposit_id or not is_instance_valid(entry["node"]):
+			continue
+		var dep_origin := Vector2i(entry["cell_x"], entry["cell_y"])
+		var dep_size := Vector2i(entry.get("size_x", 2), entry.get("size_y", 2))
+		var d := deposit_distance(dep_origin, dep_size, cells)
+		if d <= reach:
+			found.append([d, found.size(), entry["node"]])
+	found.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
+	return found.map(func(f): return f[2])
+
+## El embarcadero de un muelle (fix/peces-en-el-mar): las celdas de agua entre
+## su huella (`dock_cells`) y el banco mas cercano a su alcance, en linea (pasos
+## de rey, el mas recto entre los mas cortos): {"cells", "from" (la celda del
+## muelle de la que sale), "to" (la del banco a la que llega)}. "cells" vacio sin
+## banco, o si ya lo toca (un muelle de una partida vieja). Solo dibujo: no ocupa
+## la rejilla. Se pide al colocar, mover o cargar, nunca por fotograma.
+func pier_path(dock_cells: Array, building_id: String = "fishing_dock") -> Dictionary:
+	var rule: Dictionary = GameConfig.get_deposit_rule(building_id)
+	if rule.is_empty() or dock_cells.is_empty():
+		return {"cells": []}
+	var near := find_deposits_near_cells(String(rule["deposit"]), dock_cells, int(rule["reach"]))
+	if near.is_empty():
+		return {"cells": []}
+	var dep: Node = near[0]
+	var o: Vector2i = dep.get_meta("cell", Vector2i.ZERO)
+	var sz: Vector2i = dep.get_meta("deposit_size", Vector2i(2, 2))
+	var shoal := Rect2i(o, sz)
+	var from: Vector2i = dock_cells[0]
+	var to: Vector2i = from
+	var best_d := 1 << 30
+	var best_m := 1 << 30
+	for cell in dock_cells:
+		var a: Vector2i = cell
+		var b := Vector2i(clampi(a.x, o.x, shoal.end.x - 1), clampi(a.y, o.y, shoal.end.y - 1))
+		var d: int = maxi(absi(b.x - a.x), absi(b.y - a.y))
+		var m: int = absi(b.x - a.x) + absi(b.y - a.y)
+		if d < best_d or (d == best_d and m < best_m):
+			best_d = d
+			best_m = m
+			from = a
+			to = b
+	var out: Array = []
+	var cur := from
+	for _i in range(best_d):
+		cur += Vector2i(signi(to.x - cur.x), signi(to.y - cur.y))
+		if shoal.has_point(cur):
+			break
+		if GridManager.is_water_cell(cur):
+			out.append(cur)
+	return {"cells": out, "from": from, "to": to}
+
+## Chebyshev distance from the nearest of `cells` to the rectangle (0 = inside).
+static func deposit_distance(dep_origin: Vector2i, dep_size: Vector2i, cells: Array) -> int:
+	var max_x: int = dep_origin.x + dep_size.x - 1
+	var max_y: int = dep_origin.y + dep_size.y - 1
+	var best := 1 << 30
+	for cell in cells:
+		var c: Vector2i = cell
+		var dx: int = maxi(0, maxi(dep_origin.x - c.x, c.x - max_x))
+		var dy: int = maxi(0, maxi(dep_origin.y - c.y, c.y - max_y))
+		best = mini(best, maxi(dx, dy))
+	return best
+
 ## Find a deposit of the given type that overlaps any of the provided cells.
 ## Returns the deposit node or null. Kept as the reach-0 case of the rule above.
 func find_deposit_at_cells(deposit_id: String, cells: Array) -> Node:
@@ -617,6 +759,9 @@ func buildable_spots_near(deposit_id: String, footprint: Vector2i, reach: int, l
 				for oy in range(dep_origin.y - s.y - reach + 1, dep_origin.y + dep_size.y + reach):
 					var origin := Vector2i(ox, oy)
 					if not GridManager.can_place(origin, s):
+						continue
+					# Lo que trabaja un banco de mar se planta en la costa.
+					if is_sea_deposit(deposit_id) and not touches_water(GridManager.cells_for(origin, s)):
 						continue
 					if deposit_within_reach(dep_origin, dep_size, GridManager.cells_for(origin, s), reach):
 						spots.append({"origin": origin, "size": s})

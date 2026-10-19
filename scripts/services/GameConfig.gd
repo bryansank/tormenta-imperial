@@ -3670,6 +3670,9 @@ func spoil_after_for(building_id: String) -> float:
 # un banco de peces (yacimiento de mar, MapGenerator.SHORE_DEPOSIT_IDS). Pesca
 # solo, sin elegir cultivo: menos por minuto que la Granja con su cultivo largo,
 # pero sin esperar ni replantar. Detalle y cifras: docs/03-buildings.md.
+# El banco da comida Y oro en la misma fuente (fix/peces-en-el-mar): el .tres
+# rinde 12 comida + 3 oro cada 30 s (0,4 comida/s y 0,1 oro/s; una Mina de oro
+# da 8 oro/12 s = 0,67/s, asi que el oro del muelle es una propina, no otra mina).
 #
 # Sus filas en las tablas comunes (topes, regla de yacimiento, taller, obra,
 # parcela...) no estan escritas dentro de cada tabla: las anade
@@ -3688,11 +3691,20 @@ var fishing_dock_stock_cap := 150
 var fishing_dock_spoil_mult := 0.5
 
 ## Bancos de peces por isla nueva: cuantos [min, max], separacion minima entre
-## dos (casillas de agua o tierra entre sus huellas) y probabilidad de que uno
-## salga de 3 casillas de largo. Por tipo de yacimiento de mar.
+## dos (casillas de agua o tierra entre sus huellas), probabilidad de que uno
+## salga de 3 casillas de largo y cuanta agua queda entre la orilla y el banco
+## (fix/peces-en-el-mar, 2026-10-19: "los peces no van en la costa, van en el
+## mar"): entre `min_gap` y `max_gap` casillas de agua, nunca pegado a la arena.
+## Por tipo de yacimiento de mar.
 var sea_deposit_rolls := {
-	"fish_shoal": {"min": 3, "max": 5, "spacing": 6, "long_chance": 0.35},
+	"fish_shoal": {"min": 3, "max": 5, "spacing": 6, "long_chance": 0.35,
+		"min_gap": 1, "max_gap": 3},
 }
+## Hasta donde llega un muelle a su banco (Chebyshev desde su huella: 4 = hasta
+## tres casillas de agua por medio, las que deja `max_gap`), y a cuantos
+## muelles da de comer un banco. El muelle va en la costa (toca el agua).
+var fishing_dock_reach := 4
+var fishing_dock_per_shoal := 2
 ## Yacimientos que no se agotan nunca: el panel no ensena usos (solo su frase
 ## DEP_SHORT_<ID>) y nada los gasta (no tienen minado a mano en mining_data).
 var endless_deposits := ["fish_shoal"]
@@ -3711,7 +3723,10 @@ func _register_fishing_dock() -> bool:
 	var id := FISHING_DOCK_ID
 	building_limits[id] = int(fishing_dock_limits_by_era[0])
 	building_limits_by_era[id] = fishing_dock_limits_by_era.duplicate()
-	building_deposit_rules[id] = {"deposit": "fish_shoal", "reach": 1, "consumes": false,
+	# En la costa ("shore") y con su banco a `fishing_dock_reach` casillas, mar
+	# adentro; un banco sirve a `fishing_dock_per_shoal` muelles ("per_deposit").
+	building_deposit_rules[id] = {"deposit": "fish_shoal", "reach": fishing_dock_reach,
+		"consumes": false, "shore": true, "per_deposit": fishing_dock_per_shoal,
 		"message": "LBL_NEEDS_FISH_NEAR"}
 	# Ahumar pescado: la madera que sobra (atasca la bolsa, docs/22) pasa a
 	# comida que va derecha al almacen, donde nunca se estropea. 15 de madera
