@@ -60,6 +60,8 @@ func test_the_basics_come_one_at_a_time_after_the_tutorial() -> void:
 
 func test_the_saves_tip_goes_ahead_of_the_callouts() -> void:
 	TutorialManager.load_save_data({"intro_seen": true, "guide_state": "done"})
+	# Otra suite pudo dejar la colonia con hambre: ese consejo no entra en esta prueba.
+	TutorialManager.mark_help_seen("consumption")
 	var helper := _helper()
 	await await_idle_frame()
 	if not _clear_stack():
