@@ -126,14 +126,14 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- NotificationPanel (CanvasLayer 11) -- THE single place for alerts (warning, danger, notice, combat and achievement = milestone/era/rank-up; docs/21 §14): one column top-left under the resources, max 2 (1 on phone), the rest queued and repeats grouped "×3" (`AlertQueue`), icon + one sentence + ✕, no animations; with a window, the board or the tutorial card over it they wait (one small danger only) + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips; the objective strip at the top centre is gone too, 2026-10-05: the next step lives in ¿QUÉ HACER?)
   +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI, opened from a Laboratory building (not from the menu)
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step()
-  +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign; FICHA opens each unit's card (UnitCard)
+  +-- ArmyPanel (CanvasLayer 11) -- EJÉRCITO: Tierra/Mar/Aire tabs, train with + (cost in icons), Military Power, troops/queue, upkeep, who is away on campaign; (?) opens each unit's card (UnitCard). Cartoon window since UI phase 2 (docs/28 §15)
   +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
   +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close; building guide; instances HelpIndexPanel
-  +-- SkirmishPanel (CanvasLayer 11) -- commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" (Final Audit)
+  +-- SkirmishPanel (CanvasLayer 11) -- MISIONES: Tierra/Mar/Aire/Ataques rápidos tabs, Final Assault checklist, mission card (track, enemies, loot, odds) beside the troop picker (− n +), ¡AL ATAQUE! fixed at the bottom; campaign status while a column is out; "QUE BAJEN" (Final Audit)
   +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn, in its "front" or "board" view; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
   +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator (colour + icon, no countdown); in calm the barometer ("3–5 min", a shifted margin, never the exact minute) and, on tap, the Regency Order card (docs/06 §Orden de la Regencia)
   +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI, also over the combat board (combat lessons); instances PrologueScreen
-  +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit
+  +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit (a red ribbon, no fade: it just disappears)
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
@@ -164,7 +164,7 @@ UI panels are positioned by `UILayoutManager` using the slot definitions in
 anchors (`tip_*`) —, `NARROW_SLOTS` / `COLUMN_SLOTS` for narrow canvases, panel->slot map, slot
 conflicts).
 `UIManager.open_panel()` handles stacking and closes conflicting panels.
-All styling comes from the static `UITheme` class. A second style, the
+All styling comes from the static `UITheme` class (the redesigned screens — UI phase 2, docs/28 — build from `CartoonTheme`; the army/missions/combat/report pieces live in its `# --- EJÉRCITO` section: `modal_window`/`fit_window`/`fit_card`, `style_pill`, `unit_disc`, `cost_row`, `campaign_track`). A second style, the
 "maqueta" redesign (`CartoonTheme`, `scripts/ui/CartoonIcon.gd`, guide in
 `docs/28-guia-ui.md`), is switched on with `UITheme.use_style("cartoon")` (or
 `-- --ui-style=cartoon`); the default is still `"classic"` until the phase-2
