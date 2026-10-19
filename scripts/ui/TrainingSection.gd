@@ -44,8 +44,8 @@ func setup(building_id: String) -> void:
 	for c in get_children():
 		remove_child(c)
 		c.queue_free()
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 10)
+	var head := HFlowContainer.new()
+	head.add_theme_constant_override("h_separation", 10)
 	add_child(head)
 	var title := CT.section(Tr.t("UI2F_TRAIN_TITLE"), "army")
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -137,9 +137,21 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 	style.set_content_margin_all(6 if ph else 10)
 	card.add_theme_stylebox_override("panel", style)
 
+	# En la ficha (estrecha, 360 como mucho) los botones bajan a su propia fila, a la
+	# derecha: en una sola fila la tarjeta se salia por el borde.
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 4)
+	card.add_child(outer)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
-	card.add_child(row)
+	outer.add_child(row)
+	var btn_row: HBoxContainer = row
+	if with_word:
+		btn_row = HBoxContainer.new()
+		btn_row.name = "Buttons"
+		btn_row.alignment = BoxContainer.ALIGNMENT_END
+		btn_row.add_theme_constant_override("separation", 8)
+		outer.add_child(btn_row)
 
 	var disc := CT.unit_disc(unit_id, CT.sem("POSITIVE") if unlocked else CT.kind_fill("disabled"), 38 if ph else 48)
 	disc.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -174,7 +186,12 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 	stats.add_theme_constant_override("h_separation", 8)
 	stats.add_theme_constant_override("v_separation", 2)
 	var cost: Dictionary = def.get("cost", {})
-	stats.add_child(CT.cost_row(cost, missing(cost)))
+	# Una ficha por recurso: si no caben en una linea, bajan (la ficha es estrecha).
+	var short := missing(cost)
+	for res_name in cost:
+		var one := {res_name: cost[res_name]}
+		var miss := {res_name: short[res_name]} if short.has(res_name) else {}
+		stats.add_child(CT.cost_row(one, miss))
 	var power := CT.label(Tr.t("LBL_ARMY_POWER_EACH") % int(def.get("power", 0)), "small", CT.text("window", true))
 	power.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	stats.add_child(power)
@@ -207,8 +224,8 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 	card_btn.tooltip_text = Tr.t("ARMY2_CARD_TIP")
 	card_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	card_btn.pressed.connect(on_card)
-	row.add_child(card_btn)
-	var word := Tr.t("UI2F_TRAIN_BTN") if (with_word and not ph) else ""
+	btn_row.add_child(card_btn)
+	var word := Tr.t("UI2F_TRAIN_BTN") if with_word else ""
 	var train_btn := CT.pill_button(word, "plus", "primary", 52 if not ph else 48)
 	train_btn.name = "TrainButton"
 	train_btn.add_to_group("hud_train_button")
@@ -221,7 +238,7 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 		if ArmyManager.train(unit_id):
 			on_changed.call()
 	)
-	row.add_child(train_btn)
+	btn_row.add_child(train_btn)
 	return card
 
 ## Por que no se puede entrenar `unit_id`, en palabras. Una unidad de otra era

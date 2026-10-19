@@ -79,6 +79,12 @@ func _run() -> void:
 		tut.visible = true
 		TutorialManager.intro_seen = true
 		TutorialManager.start_guide(false)
+		await _frames(5)
+		# La meta y el Nucleo se leen; sin oro ni madera el siguiente es need_*.
+		for s in ["goal", "core"]:
+			if TutorialManager.current_step() == s:
+				TutorialManager.confirm_step(s)
+				await _frames(5)
 		await _seconds(1.5)
 		print("ui2_probe: paso del tutorial=", TutorialManager.current_step())
 		await _shot("t_tutorial_paso")
@@ -284,15 +290,18 @@ func _run() -> void:
 	# Partes de guerra.
 	var reports: Node = main.get_node_or_null("WarReportScreen")
 	if reports:
-		reports.visible = true
+		reports.visible = false
 		EventBus.defense_auto_resolved.emit(false, 6, {"casualties": {"infantry": 2},
 			"enemy_casualties": {"infantry": 3, "artillery": 1}, "tower_crews": 1,
 			"tower_crews_lost": 0, "morale_delta": -4})
+		reports.try_show_next()
 		await _frames(15)
 		await _shot("g_parte_defensa")
 		reports.close_current()
 		await _frames(5)
 		EventBus.tithe_resolved.emit(true, {"gold": 300, "wood": 120})
+		await _frames(3)
+		reports.try_show_next()
 		await _frames(15)
 		await _shot("g_parte_impuesto")
 		while reports.is_showing():

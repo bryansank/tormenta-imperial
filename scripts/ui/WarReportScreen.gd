@@ -55,6 +55,8 @@ var _kicker: Label
 var _title: Label
 var _stamp_slot: VBoxContainer
 var _body: Label
+var _scroll: ScrollContainer
+var _scroll_body: VBoxContainer
 var _voice_row: HBoxContainer
 var _voice_bust: Control
 var _quote: Label
@@ -93,8 +95,22 @@ func _setup_ui() -> void:
 	(_win["close"] as Button).tooltip_text = Tr.t("BTN_CLOSE")
 	_card = _win["panel"]
 	_card.minimum_size_changed.connect(_queue_relayout)
-	var column: VBoxContainer = _win["body"]
+	var outer: VBoxContainer = _win["body"]
+	outer.add_theme_constant_override("separation", 6)
+	# Lo del medio (pais, titulo, bajas, el Sargento) se arrastra si no cabe: en
+	# un telefono de 360 de alto el parte entero no cabe y se quedaba en blanco.
+	_scroll = ScrollContainer.new()
+	_scroll.name = "ReportScroll"
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outer.add_child(_scroll)
+	var column := VBoxContainer.new()
+	column.name = "ReportBody"
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.add_theme_constant_override("separation", 6)
+	_scroll.add_child(column)
+	_scroll_body = column
+	column.minimum_size_changed.connect(_queue_relayout)
 
 	# El pais que firma el parte: bandera y nombre, encima (no alarga el titulo).
 	column.add_child(ColonyByline.new("small", CT.text("window", true)))
@@ -142,7 +158,7 @@ func _setup_ui() -> void:
 	ok.name = "Understood"
 	ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ok.pressed.connect(close_current)
-	column.add_child(ok)
+	outer.add_child(ok)
 	_relayout()
 
 static func _centered(l: Label) -> Label:
@@ -155,7 +171,16 @@ func _relayout() -> void:
 	_relayout_queued = false
 	if not is_inside_tree():
 		return
-	CT.fit_card(_win, get_viewport().get_visible_rect().size, CARD_WIDTH)
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	if _scroll != null:
+		# El medio mide lo que pida, sin pasarse de lo que deja la pantalla.
+		var panel: Control = _win["panel"]
+		var base: float = panel.get_combined_minimum_size().y + panel.offset_top - _scroll.custom_minimum_size.y
+		var room: float = vp.y - (4.0 if CT.is_phone() else 24.0) - base
+		var want := clampf(_scroll_body.get_combined_minimum_size().y, 40.0, maxf(40.0, room))
+		if absf(want - _scroll.custom_minimum_size.y) > 0.5:
+			_scroll.custom_minimum_size.y = want
+	CT.fit_card(_win, vp, CARD_WIDTH)
 
 func _queue_relayout() -> void:
 	if _relayout_queued:

@@ -255,6 +255,10 @@ func _setup_cartoon() -> void:
 	_menu_btn.pressed.connect(request_open)
 	_menu_btn.add_to_group("hud_menu_button")
 	overlay.add_child(_menu_btn)
+	# Con una ventana abierta el ☰ se aparta: tapaba su X y su cinta (telefono,
+	# CONSTRUIR a pantalla completa). La ventana tiene su X; ESC / atras siguen.
+	UIManager.window_opened.connect(func(_w): _sync_menu_btn.call_deferred())
+	UIManager.window_closed.connect(func(_w): _sync_menu_btn.call_deferred())
 
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -614,6 +618,21 @@ func open_pause() -> void:
 		_paused_by_me = true
 	_resume_btn.grab_focus.call_deferred()
 
+## El ☰ se ve si el menu no esta abierto y ninguna ventana lo tapa (la ficha
+## del edificio en PC y tablet va mas abajo y no lo tapa).
+func _sync_menu_btn() -> void:
+	if _menu_btn == null or not UITheme.is_cartoon():
+		return
+	var covered := false
+	for w in UIManager.open_windows():
+		if not is_instance_valid(w) or w == self:
+			continue
+		if String(w.name) == "BuildingInfoPanel" and not CartoonTheme.is_phone():
+			continue
+		covered = true
+		break
+	_menu_btn.visible = not _open and not covered
+
 func open_menu() -> void:
 	request_open()
 
@@ -622,6 +641,7 @@ func resume() -> void:
 	_open = false
 	_root.visible = false
 	_menu_btn.visible = true
+	_sync_menu_btn()
 	if _paused_by_me:
 		_paused_by_me = false
 		get_tree().paused = false
