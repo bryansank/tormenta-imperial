@@ -81,6 +81,10 @@ var _routes := {}      # Vector4i(desde, hasta) -> Array de Vector2
 var _homes: Array = []
 var _decos: Array = []
 var _markets: Array = []
+## La casa que se acaba de llenar (residents_arrived) y cuantas figuras nuevas
+## salen aun de ella: los recien llegados no aparecen en una casa cualquiera.
+var _fresh_home: Node = null
+var _fresh_left := 0
 ## Medida del coste (microsegundos del ultimo fotograma, media y el ultimo repaso).
 var last_frame_usec := 0
 var avg_frame_usec := 0.0
@@ -100,6 +104,7 @@ func _ready() -> void:
 	EventBus.workers_changed.connect(_mark_dirty)
 	EventBus.population_changed.connect(_mark_dirty)
 	EventBus.construction_completed.connect(_mark_dirty)
+	EventBus.residents_arrived.connect(_on_residents_arrived)
 	EventBus.building_placed.connect(_mark_dirty)
 	EventBus.building_demolished.connect(_mark_dirty)
 	EventBus.storm_phase_changed.connect(_on_storm_phase)
@@ -113,6 +118,13 @@ func _ready() -> void:
 		_figures.setup(figure_cap())
 
 func _mark_dirty(_a: Variant = null, _b: Variant = null) -> void:
+	_dirty = true
+
+## Una vivienda se lleno de golpe (PopulationManager._move_in): las figuras que
+## nazcan en el proximo repaso, hasta las que valen esos `count`, salen de ella.
+func _on_residents_arrived(home: Node, count: int) -> void:
+	_fresh_home = home
+	_fresh_left = ceili(float(count) / maxi(1, GameConfig.life_people_per_figure))
 	_dirty = true
 
 ## Lo pasajero se re-deriva al cargar: si se guardo en plena Ceniza, la calle
@@ -439,6 +451,8 @@ func reconcile() -> void:
 			extra -= 1
 	for i in maxi(0, -extra):
 		_spawn(ROLE_CITIZEN, null)
+	# Los que no llegaron a nacer en este repaso ya no son "recien llegados".
+	_fresh_left = 0
 	_sweep()
 	last_reconcile_usec = Time.get_ticks_usec() - t0
 
@@ -454,6 +468,13 @@ func _spawn(role: String, target: Node) -> void:
 		a.kind = Kind.MAN if r < 0.4 else (Kind.WOMAN if r < 0.8 else Kind.CHILD)
 	a.target = target
 	a.home = _homes[_rng.randi() % _homes.size()]
+	# Los recien llegados a una Casa nueva salen de ella.
+	if _fresh_left > 0:
+		if is_instance_valid(_fresh_home) and _homes.has(_fresh_home):
+			a.home = _fresh_home
+			_fresh_left -= 1
+		else:
+			_fresh_left = 0
 	a.at = a.home
 	a.state = State.INSIDE
 	# Escalonados: no salen todos a la vez de golpe.
