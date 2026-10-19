@@ -2287,7 +2287,7 @@ static func dodge_menu_button(close: Control, gap: float = 8.0) -> void:
 ## Aparta del ☰ (y del borde) las X de ventana que cuelgan de `root`. Lo llaman
 ## en diferido las funciones que colocan ventanas (fit_*, place_window).
 static func dodge_closes_in(root: Variant) -> void:
-	if not (root is Control) or not is_instance_valid(root) or not (root as Control).is_inside_tree():
+	if not is_instance_valid(root) or not (root is Control) or not (root as Control).is_inside_tree():
 		return
 	for n in (root as Control).get_tree().get_nodes_in_group("window_close"):
 		if n is Control and (root as Control).is_ancestor_of(n) and (n as Control).is_visible_in_tree():
