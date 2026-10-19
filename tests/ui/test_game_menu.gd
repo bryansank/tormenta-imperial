@@ -1,10 +1,10 @@
 extends GdUnitTestSuite
 ## El menu unico de la partida (bugs 3 y 9 del diagnostico de jugabilidad):
-## un solo boton "☰ MENU" que SIEMPRE abre (cierra ventanas y suelta el
-## edificio antes), pausa, y ofrece COLONIA (paneles del juego, solo los
-## disponibles) y PARTIDA (reanudar, guardar, ajustes, ayuda, historia, menu
-## principal, salir). Elegir algo de COLONIA cierra el menu, quita la pausa y
-## abre ese panel.
+## un solo boton ☰ que SIEMPRE abre (cierra ventanas y suelta el edificio
+## antes) y pausa. Desde el rediseno 2026-10 (docs/28 §12) ofrece solo AJUSTES,
+## PARTIDAS y SALIR, con la velocidad x1 / x2 dentro; Ejercito, Misiones y
+## Ayuda estan en la barra de abajo (test_bottom_bar.gd) y la colonia
+## (Progreso, Encargos, Registro) en la tarjeta del rango.
 ##
 ## Cada test que pausa el arbol lo suelta antes de esperar un frame.
 
@@ -71,7 +71,8 @@ func test_there_is_one_menu_button_and_no_pause_ii() -> void:
 		func(b): return (b as Button).is_visible_in_tree())
 	assert_int(buttons.size()).is_equal(1)
 	var btn: Button = buttons[0]
-	assert_str(btn.text).is_equal(Tr.t("BTN_GAME_MENU"))
+	# Rediseno 2026-10: el ☰ es un redondo con el icono de menu (sin palabra).
+	assert_bool(btn.is_in_group("hud_menu_button")).is_true()
 	assert_str(btn.text).is_not_equal("II")
 
 func test_the_market_panel_no_longer_has_its_own_burger() -> void:
@@ -79,19 +80,44 @@ func test_the_market_panel_no_longer_has_its_own_burger() -> void:
 	for b in market.find_children("*", "Button", true, false):
 		assert_str((b as Button).text).is_not_equal("☰")
 
-func test_the_menu_shows_both_groups_and_the_mode() -> void:
+## Rediseno 2026-10 (docs/28 §12): ☰ solo Ajustes, Partidas y Salir, con la
+## velocidad dentro; Historia e Informar fallo en pequeno. Lo demas se fue a la
+## barra de abajo, a la linea del siguiente paso y a la tarjeta de la colonia.
+func test_the_menu_only_has_settings_saves_quit_and_speed() -> void:
 	var menu := _menu()
 	GameMode.current = GameMode.Mode.BUILDER
 	menu.open_pause()
 	var mode_text: String = (menu.find_child("ModeLabel", true, false) as Label).text
-	var colony: bool = menu.find_child("ColonyGroup", true, false) != null
-	var game: bool = menu.find_child("GameGroup", true, false) != null
 	menu.resume()
-	assert_bool(colony).is_true()
-	assert_bool(game).is_true()
 	assert_str(mode_text).contains(GameMode.display_name())
-	for id in ["Game_Resume", "Game_Save", "Game_Settings", "Game_Story", "Game_MainMenu", "Game_Quit"]:
+	for id in ["Game_Resume", "Game_Settings", "Game_Saves", "Game_MainMenu", "Game_Story", "Game_Report"]:
 		assert_object(menu.entry(id)).override_failure_message(id).is_not_null()
+	for id in ["Game_Save", "Game_Quit", "Game_Help", "Game_Music", "Colony_army", "Colony_skirmish",
+			"Colony_progress", "Colony_log", "ColonyGroup"]:
+		assert_object(menu.entry(id)).override_failure_message(id).is_null()
+	assert_object(menu.speed_button(1.0)).is_not_null()
+	assert_object(menu.speed_button(2.0)).is_not_null()
+
+func test_the_speed_lives_inside_the_menu() -> void:
+	var saved := GameConfig.game_speed
+	var menu := _menu()
+	menu.open_pause()
+	menu.speed_button(2.0).pressed.emit()
+	var fast := GameConfig.game_speed
+	menu.speed_button(1.0).pressed.emit()
+	var slow := GameConfig.game_speed
+	menu.resume()
+	GameConfig.set_game_speed(saved)
+	assert_float(fast).is_equal(2.0)
+	assert_float(slow).is_equal(1.0)
+
+func test_the_loose_speed_button_still_exists_but_is_hidden() -> void:
+	var menu := _menu()
+	await get_tree().process_frame
+	var speed: CanvasLayer = _root.get_node_or_null("GameSpeedButton")
+	assert_object(speed).is_not_null()
+	assert_bool(speed.visible).is_false()
+	assert_object(menu).is_not_null()
 
 # ── El boton nunca falla en silencio (bug 3) ──────────────────────────
 
@@ -137,75 +163,25 @@ func test_the_button_again_closes_and_resumes() -> void:
 
 # ── COLONIA ──────────────────────────────────────────────────────────
 
-func test_a_colony_entry_closes_the_menu_unpauses_and_opens_the_panel() -> void:
+## ¿QUE HACER? ya no es una entrada del menu: "Colony_objectives" devuelve la
+## linea del siguiente paso (asi la sigue encontrando el tutorial).
+func test_the_objectives_entry_is_the_next_step_line() -> void:
 	var menu := _menu()
 	var objectives := _add("res://scenes/ui/ObjectivePanel.tscn", "ObjectivePanel")
-	menu.open_pause()
-	menu.entry("Colony_objectives").pressed.emit()
-	var opened: bool = objectives.get("_is_open")
-	assert_bool(menu.is_open()).is_false()
-	assert_bool(get_tree().paused).is_false()
-	assert_bool(opened).is_true()
-	objectives.toggle()
-
-func test_colony_entries_only_show_what_is_available() -> void:
-	var menu := _menu()
-	for n in ["ObjectivePanel", "MarketPanel", "ArmyPanel", "SandboxPanel"]:
-		var stub := CanvasLayer.new()
-		stub.name = n
-		_root.add_child(stub)
-	ProgressionManager.current_phase = GameConfig.Phase.FOUNDATION
-	GameMode.current = GameMode.Mode.CAMPAIGN
-	menu.open_pause()
-	# Mercado y Tecnologia ya no estan en el menu: se abren desde su edificio.
-	var market_in_menu: bool = menu.entry("Colony_market") != null
-	var tech_in_menu: bool = menu.entry("Colony_tech") != null
-	var sandbox_campaign: bool = menu.entry("Colony_sandbox").visible
-	var objectives: bool = menu.entry("Colony_objectives").visible
-	menu.resume()
-	ProgressionManager.current_phase = GameConfig.Phase.ECONOMY
-	GameMode.current = GameMode.Mode.SANDBOX
-	menu.open_pause()
-	var sandbox_mode: bool = menu.entry("Colony_sandbox").visible
-	menu.resume()
-	assert_bool(objectives).is_true()
-	assert_bool(market_in_menu).is_false()
-	assert_bool(tech_in_menu).is_false()
-	assert_bool(sandbox_campaign).is_false()
-	assert_bool(sandbox_mode).is_true()
+	assert_object(menu.entry("Colony_objectives")).is_same(objectives.line())
 
 func test_army_needs_a_barracks() -> void:
 	assert_bool(MenuScript.is_colony_entry_available("army")).is_equal(ArmyManager.barracks_count() > 0)
 	assert_bool(MenuScript.is_colony_entry_available("skirmish")).is_equal(ArmyManager.barracks_count() > 0)
 
-# ── AYUDA (contrato con el frente de ayudas) ──────────────────────────
+# ── AYUDA: ahora en la barra de abajo (tests/ui/test_bottom_bar.gd) ────
 
-func test_help_is_hidden_without_the_help_index() -> void:
+func test_help_is_no_longer_in_the_menu() -> void:
 	var menu := _menu()
 	menu.open_pause()
-	var shown: bool = menu.entry("Game_Help").visible
+	var entry: Control = menu.entry("Game_Help")
 	menu.resume()
-	assert_bool(shown).is_false()
-
-func test_help_opens_the_help_index() -> void:
-	var script := GDScript.new()
-	script.source_code = "extends CanvasLayer\nvar opened := 0\nfunc open():\n\topened += 1\nfunc is_open() -> bool:\n\treturn opened > 0\n"
-	script.reload()
-	var help := CanvasLayer.new()
-	help.set_script(script)
-	help.name = "HelpIndexPanel"
-	help.add_to_group("help_index")
-	_root.add_child(help)
-	var menu := _menu()
-	menu.open_pause()
-	var shown: bool = menu.entry("Game_Help").visible
-	menu.entry("Game_Help").pressed.emit()
-	var opened: int = help.get("opened")
-	var layer: int = help.layer
-	menu.resume()
-	assert_bool(shown).is_true()
-	assert_int(opened).is_equal(1)
-	assert_int(layer).is_greater(menu.layer)
+	assert_object(entry).is_null()
 
 # ── ESC y atras de Android ────────────────────────────────────────────
 

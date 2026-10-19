@@ -27,18 +27,29 @@ Tablet / Móvil (`GameConfig.ui_device_profile`: `auto`, `pc`, `tablet`, `phone`
 
 | | PC | Tablet | Móvil |
 |---|---|---|---|
-| Escala de interfaz | 100 % | 115 % | 130 % |
-| Tamaño de texto | normal | normal | grande |
-| Lado táctil mínimo (`UITheme.MIN_BTN_H`) | 44 | 48 | 52 |
-| Alto de cada fila de Ajustes (`UITheme.SETTINGS_ROW_H`, `settings_row`) | 44 | 56 | 60 |
-| Tamaño de los controles en pantalla en "Del perfil" (`controls_size`) | 100 % | 115 % | 130 % |
-| Controles en pantalla en "Automático" | **no** (norma de Bryan) | sí | sí |
+| Escala de interfaz | 100 % | 115 % | 100 % **= a su tamaño en dp** (rediseño 2026-10, ver abajo) |
+| Tamaño de texto | normal | normal | normal |
+| Lado táctil mínimo (`UITheme.MIN_BTN_H`) | 44 | 48 | 48 |
+| Alto de cada fila de Ajustes (`UITheme.SETTINGS_ROW_H`, `settings_row`) | 44 | 56 | 52 |
+| Tamaño de los controles en pantalla en "Del perfil" (`controls_size`) | 100 % | 115 % | 100 % |
+| Perfil de dedo (`touch_controls`: textos, colocación táctil) | no | sí | sí |
+| Cruceta y zoom en "Automático" (`onscreen_controls`) | **no** (norma de Bryan) | sí | **no** (rediseño 2026-10: gestos; CANCELAR sigue al colocar) |
 | Variante de disposición | standard | standard | compact (sin globos de ayuda) |
 | Textos de ayuda | ratón | dedo | dedo |
 | Disposición movida | la suya | la suya | la suya |
 
+**Rediseño 2026-10 (rama `feat/ui2-hud`, docs/28 §12):** "se juega con el dedo"
+(`GameConfig.touch_controls_enabled()`, `DeviceProfile.is_touch_profile()`) y
+"hay cruceta en pantalla" (`GameConfig.onscreen_controls_visible()`,
+`DeviceProfile.onscreen_controls_default()`) son dos preguntas distintas. En
+"Automático" el teléfono juega con gestos y no lleva cruceta, zoom ni girar; al
+colocar o mover un edificio `OnScreenControls` enseña solo la pareja girar
+edificio + CANCELAR. "Siempre" y "Nunca" mandan sobre las dos.
+`UILayoutManager.touch_controls_lift()` y `NotificationPanel.capacity()` miran la
+cruceta, no el perfil de dedo.
+
 "Automático" en *Controles en pantalla* es **solo móvil y tablet** (decisión de
-Bryan, 2026-10-04): sigue al perfil, y en un PC no se enciende ni porque la pantalla
+Bryan, 2026-10-04; desde 2026-10-18 la cruceta solo tablet): sigue al perfil, y en un PC no se enciende ni porque la pantalla
 se declare táctil ni porque llegue un toque real; un portátil táctil tocado una vez
 no se llena de flechas. El portátil táctil elige **Siempre** a mano (o el perfil
 Tablet), y Ajustes lo dice debajo del selector (`LBL_TOUCH_AUTO_HINT`). Un toque real
@@ -62,8 +73,24 @@ pura): el texto se sigue rasterizando a la resolución real, nítido.
 | 2048x1536 / 1024x768 (4:3) | Tablet 115 % | 1113x835 |
 | 2560x1080 (21:9) | PC 100 % | 1707x720 |
 | 400x720 (vertical) | Móvil | 400x720 (columna única) |
+| 1440x720 px a 320 dpi (720x360 dp) | Móvil 100 % | **720x360** (antes ~997x554) |
+| 2400x1080 px a 420 dpi (914x411 dp) | Móvil 100 % | **914x411** (antes ~1330x598) |
 
-- En apaisado el lienzo nunca baja de **540** de alto (`MIN_LOGICAL_HEIGHT`): es
+- **Lienzo del teléfono (rediseño 2026-10, docs/28 §4.2):** el perfil Móvil ya no
+  usa `content_scale_for` con 130 % y el suelo de 540: su lienzo sigue a los dp
+  reales (`DeviceProfile.phone_content_scale_for(window, dpi, escala)`, pura):
+  en apaisado, alto lógico = alto en dp / escala, entre **360** y **540**
+  (`PHONE_MIN_LOGICAL_HEIGHT` / `PHONE_MAX_LOGICAL_HEIGHT`); en vertical, ancho
+  lógico = ancho en dp, entre 400 y 480. Antes un teléfono de 360 dp dibujaba un
+  lienzo de ~554 de alto y todo salía a ~0,65 de su tamaño físico (el cuerpo de
+  17 px se veía como 11 dp). `DeviceProfile.scale_factor_for(perfil, ...)` elige
+  la fórmula; tablet y PC no cambian.
+- Por debajo de **450** de lado corto lógico (`is_phone_canvas`) se encienden las
+  piezas de teléfono del estilo maqueta (`CartoonTheme.phone`: letras, botones,
+  `UILayoutConfig.PHONE_SLOTS`). Lo pone `DeviceProfile._sync_phone_canvas()` al
+  aplicar la escala; si cambia con una partida en marcha se reconstruye la
+  interfaz (`rebuild_ui`).
+- En apaisado (PC y tablet) el lienzo nunca baja de **540** de alto (`MIN_LOGICAL_HEIGHT`): es
   lo que ocupa el menú ☰ desplegado. Por eso 150 % en 1280x720 se queda en 133 %.
 - En vertical el ancho lógico se lleva a 480 (y nunca menos de 400) para que el
   móvil use la disposición estrecha.
@@ -271,6 +298,11 @@ estado de población, que lleva su propia rama):
   con los mismos huecos de formato.
 
 ## 7. Disposición por tamaño de lienzo
+
+> Rediseño 2026-10 (§15): la Tormenta ya no está en una columna central sino
+> bajo el ☰ (`storm_icon`), así que no baja a la izquierda; el registro sigue
+> bajo los recursos. El teléfono apaisado tiene su propia disposición
+> (`PHONE_SLOTS`, §15).
 
 - **< 1080 px de ancho** (tablet 4:3 con escala, 150 %…): la columna central
   (la Tormenta) baja a la columna izquierda
@@ -1002,3 +1034,55 @@ Tests: `tests/ui/test_alert_queue.gd` (la regla pura y el panel),
 `test_rank_panel`. Sonda: `tools/interfaz_probe.gd -- --alerts --no-help
 --only-hud` (ráfaga de avisos, luego con CONSTRUIR abierto y al cerrarlo; capturas
 `*_alerts*.png` en `docs/media/dev/interfaz/`).
+
+## 15. HUD del rediseño (2026-10-18, rama `feat/ui2-hud`)
+
+Fase 2 del rediseño de la interfaz (guía: `docs/28-guia-ui.md`, §12 "HUD
+mínimo"). El estilo maqueta (`CartoonTheme`, Baloo 2 + Nunito Sans, superficie
+mixta) es **el de serie** (`UITheme.STYLE_DEFAULT = "cartoon"`); el clásico queda
+como respaldo interno (`-- --ui-style=classic`). Todo lo de abajo mira
+`UITheme.is_cartoon()`; con el clásico, el HUD de siempre.
+
+**Qué queda fijo en pantalla**
+
+| Sitio | Qué | Script / slot |
+|---|---|---|
+| Arriba a la izquierda | Barra oscura fina: `[icono] cifra` (Baloo 2), nombre pequeño debajo solo en PC (según *Nombres junto a los iconos*); barra de almacén de 8 px en PC con la cifra al mantener. **Teléfono:** 3 recursos clave (oro, madera, acero; 4 desde 780 de ancho) + libres; la moral, el resto, los materiales y la cifra del almacén al tocar la barra | `ResourceHUD`, `top_left` |
+| Debajo | La columna de avisos (máx. 2; 1 en teléfono) con `CartoonTheme.notice()`: icono con forma por tipo, una frase, "×N", X; en teléfono tocar el aviso lo cierra. La cola no cambia (`AlertQueue`) | `NotificationPanel`, `toast_area` |
+| Arriba a la derecha | ☰ redondo (54 / 48) y, a su izquierda, el rango compacto (bandera, ★ cifra, nombre del país y barra de XP; teléfono: bandera, ★ cifra y barra) | `PauseMenu`, `RankPanel` (`rank_badge`) |
+| Bajo el ☰ | La Tormenta: un icono redondo (sol en calma, nube con rayo en las fases, aro del color de la fase), sin latido; la fase y el margen "3–5 min" al mantener; tocarlo abre la Orden de la Regencia (tarjeta clara) | `StormHUD`, `storm_icon` |
+| Abajo en el centro | **La barra**: Ejército y Misiones (punto rojo con `CombatManager.sortie_reason()`) a la izquierda de CONSTRUIR; Mercado, Investigar y Ayuda a la derecha. Redondos azules con nombre debajo (PC/tablet) o solo icono (teléfono). Gris con candado y el porqué al mantener cuando no se puede ("Falta un Cuartel", "Falta un Mercado", "Aún en obras", "Sin carretera") | `BottomBar` (nuevo, en Main.tscn y Main2D.tscn), `bottom_bar` |
+| Abajo a la izquierda | **¿QUÉ HACER?**: una línea con la cara de la Capitana y "Haz una Casa →". Tocar la cara la pliega; tocar el texto abre el panel con el porqué y el camino. El porqué corto, al mantener. Oculta mientras enseña el tutorial guiado. Con la cruceta en pantalla (tablet) sube por encima (`above_dpad`) | `ObjectivePanel` (capa propia 10), `next_step` |
+
+**El ☰ reducido**: AJUSTES, PARTIDAS y SALIR (guarda y vuelve al menú principal,
+que tiene "Salir"), con la **velocidad x1 / x2 dentro** (dos pastillas; el botón
+suelto `GameSpeedButton` se sigue creando por el atajo F, pero oculto). Historia
+e Informar fallo, en pequeño debajo. Lo que salió del ☰ sigue a mano:
+
+| Antes en ☰ | Ahora |
+|---|---|
+| Ejército, Escaramuzas (Misiones), Ayuda | Barra de abajo |
+| Mercado, Tecnología (ya iban por su edificio) | Barra de abajo (con su edificio terminado y con carretera) |
+| ¿Qué hacer? | La línea del siguiente paso (`PauseMenu.entry("Colony_objectives")` la devuelve, para el tutorial) |
+| Colonia (rango) | Tocar el rango |
+| Progreso, Encargos, Registro, Sandbox | La tarjeta de la colonia (tocar el rango), fila `ColonyHub` |
+| Música | Ajustes → Audio |
+| Guardar | PARTIDAS guarda antes de abrir; autoguardado |
+
+El viejo botón ESCARAMUZAS (`SkirmishButton`) sigue en la escena pero la barra lo
+oculta. **Globos de ayuda apagados de serie** (`GameConfig.ui_helper_visible =
+false`): se encienden desde Ayuda; el tutorial guiado fuerza los que necesita.
+
+**Teléfono** (`CartoonTheme.phone`, lienzo de < 450 de lado corto, §1):
+`UILayoutConfig.PHONE_SLOTS` (márgenes de 8, CONSTRUIR y la barra a 8 del borde,
+la línea del siguiente paso encima de la barra), mezclado en
+`UILayoutManager.get_slot()` antes que `NARROW_SLOTS`. Cruceta y zoom apagados de
+serie (§1).
+
+**Sin animaciones**: fuera el latido de la Tormenta, el destello del recurso
+desbloqueado, el parpadeo de la barra al desbordar y el fundido de los controles
+en pantalla al soltarlos.
+
+Tests: `tests/ui/test_bottom_bar.gd`, `tests/ui/test_ui2_hud.gd`, y al día
+`test_game_menu`, `test_device_profile`, `test_touch_controls`,
+`test_cartoon_theme`, `test_hud_layout`, `test_ui_stacking`, `test_view_mode`.

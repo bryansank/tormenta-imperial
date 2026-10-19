@@ -133,13 +133,18 @@ func _ready() -> void:
 
 ## El latido sustituye al numero: cuanto mas rapido late, peor esta la cosa. Es
 ## la unica pista de intensidad que da el panel, y es deliberadamente vaga.
+## Estilo maqueta: sin latido (sin animaciones, docs/28 §0); la fase la dicen el
+## icono y el color del aro.
 func _process(delta: float) -> void:
 	if not _panel.visible:
 		return
-	if _baro_row.visible:
+	if _baro_row.visible or (_cartoon() and StormManager.get_phase() == StormCycle.Phase.CALM):
 		_baro_left -= delta
 		if _baro_left <= 0.0:
 			_refresh_barometer()
+	if _cartoon():
+		_panel.modulate.a = 1.0
+		return
 	var beat: float = _beat_rate(StormManager.get_phase())
 	if beat <= 0.0:
 		_panel.modulate.a = 1.0
@@ -168,6 +173,8 @@ func _setup_ui() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 6)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if _cartoon():
+		column.alignment = BoxContainer.ALIGNMENT_CENTER
 	_panel.add_child(column)
 
 	var hbox := HBoxContainer.new()
@@ -186,6 +193,18 @@ func _setup_ui() -> void:
 	_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(_label)
+
+	if _cartoon():
+		# Rediseno 2026-10 (docs/28 §12): un icono redondo solo, sol en calma y
+		# nube con rayo en las fases; la fase y el margen, al mantener pulsado.
+		var d := CartoonTheme.storm_round()
+		_glyph = CartoonTheme.make_glyph("sun", roundi(d * 0.62))
+		_glyph.name = "StormGlyph"
+		hbox.add_child(_glyph)
+		hbox.move_child(_glyph, 0)
+		_icon.visible = false
+		_label.visible = false
+		_panel.custom_minimum_size = Vector2(d, d)
 
 	_setup_barometer(column)
 	_setup_card(column)
@@ -309,12 +328,14 @@ func _refresh() -> void:
 		_panel.modulate.a = 1.0
 		return
 	var calm: bool = phase == StormCycle.Phase.CALM
-	_phase_row.visible = not calm
-	_baro_row.visible = calm
+	_phase_row.visible = not calm or _cartoon()
+	_baro_row.visible = calm and not _cartoon()
 	_style_for(phase)
 	if calm:
 		_refresh_barometer()
 	_refresh_card()
+	if _cartoon():
+		_style_for(phase)
 
 ## En calma, antes de la Fundicion, no hay nada que indicar. Desde que el reloj
 ## esta armado la calma ensena el barometro (doc 21, D5 = A): un margen, no una
@@ -342,6 +363,10 @@ func _refresh_barometer() -> void:
 	_baro_icon.set_phase(StormCycle.Phase.WARNING, UITheme.readable(
 		UITheme.TEXT_DIM.lerp(UITheme.WARNING, float(baro["fill"]))))
 	_panel.tooltip_text = Tr.t("STORM_BAROMETER_TIP")
+	if _cartoon():
+		# El margen ("3-5 min") pasa al globo de mantener pulsado.
+		_panel.tooltip_text = Tr.t("HUD_STORM_CALM_TIP") % barometer_text(baro) \
+			+ "\n" + Tr.t("STORM_BAROMETER_TIP")
 
 ## El texto del margen. Publico para las pruebas.
 static func barometer_text(baro: Dictionary) -> String:
@@ -468,6 +493,9 @@ func _refresh_card() -> void:
 
 func _style_for(phase: int) -> void:
 	var tint: Color = _tint_for(phase)
+	if _cartoon():
+		_style_cartoon(phase, tint)
+		return
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = UITheme.HUD_BG
@@ -484,6 +512,18 @@ func _style_for(phase: int) -> void:
 ## El color sube de temperatura con la fase, y el Diezmo se sale de la escala del
 ## clima a proposito: ya no es cielo, es alguien en la puerta.
 func _tint_for(phase: int) -> Color:
+	if _cartoon():
+		match phase:
+			StormCycle.Phase.WARNING:
+				return CartoonTheme.sem("WARNING")
+			StormCycle.Phase.ASH:
+				return CartoonTheme.sem("WARNING").lerp(CartoonTheme.sem("DANGER"), 0.5)
+			StormCycle.Phase.STORM:
+				return CartoonTheme.sem("DANGER")
+			StormCycle.Phase.TITHE:
+				return CartoonTheme.sem("ACCENT")
+			_:
+				return CartoonTheme.c("hud", "CARD_BORDER")
 	match phase:
 		StormCycle.Phase.WARNING:
 			return UITheme.WARNING
@@ -508,6 +548,41 @@ func _key_for(phase: int) -> String:
 			return "STORM_PHASE_TITHE"
 		_:
 			return "STORM_PHASE_WARNING"
+
+## Estilo maqueta: redondo con un aro del color de la fase mientras la Orden
+## esta cerrada; con la Orden abierta, tarjeta clara (sus textos usan los
+## tokens de las ventanas) con el icono arriba.
+func _style_cartoon(phase: int, tint: Color) -> void:
+	var d := CartoonTheme.storm_round()
+	var calm: bool = phase == StormCycle.Phase.CALM
+	if _glyph != null:
+		_glyph.set("glyph", "sun" if calm else "storm")
+	var card_open: bool = _card != null and _card.visible
+	var style: StyleBoxFlat
+	if card_open:
+		style = CartoonTheme.card_style("window")
+		style.border_color = tint
+		style.set_content_margin_all(10)
+	else:
+		style = CartoonTheme.hud_round_style(d, tint if not calm else Color(0, 0, 0, 0))
+		style.set_content_margin_all(0)
+	_panel.add_theme_stylebox_override("panel", style)
+	_label.text = Tr.t(_key_for(phase))
+	if not calm:
+		var tip := Tr.t(_key_for(phase))
+		if StormManager.order_visible():
+			tip += "\n" + Tr.t("HUD_STORM_ORDER_TIP")
+		_panel.tooltip_text = tip
+
+## El icono redondo de la Tormenta (estilo maqueta); null en el clasico.
+var _glyph: Control = null
+
+static func _cartoon() -> bool:
+	return UITheme.is_cartoon()
+
+## El glifo que se ve ahora ("sun" o "storm"), para pruebas.
+func shown_glyph() -> String:
+	return String(_glyph.get("glyph")) if _glyph != null else ""
 
 ## Pulsaciones por segundo, en radianes. Cero significa panel quieto.
 func _beat_rate(phase: int) -> float:

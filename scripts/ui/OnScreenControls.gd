@@ -56,6 +56,9 @@ var _gaps: Dictionary = {}
 
 func _ready() -> void:
 	layer = 10
+	# Sin animaciones en el estilo maqueta (docs/28 §0): al soltar, de golpe.
+	if UITheme.is_cartoon():
+		release_fade_sec = 0.0
 	_setup_ui()
 	EventBus.building_selected_for_placement.connect(func(_d): _set_placing(true))
 	EventBus.request_move_building.connect(func(_b): _set_placing(true))
@@ -64,8 +67,8 @@ func _ready() -> void:
 	# en serie (PlacementRules.keeps_placing): ahi se esconde la pareja.
 	EventBus.building_moved.connect(func(_from, _to): _set_placing(false))
 	EventBus.building_deselected.connect(func(): _set_placing(false))
-	_apply_visibility(GameConfig.touch_controls_enabled())
-	EventBus.touch_controls_changed.connect(_apply_visibility)
+	_apply_visibility()
+	EventBus.touch_controls_changed.connect(func(_on): _apply_visibility())
 	set_opacity(GameConfig.ui_touch_controls_opacity)
 	EventBus.touch_controls_opacity_changed.connect(set_opacity)
 	# Tamano: al cambiarlo en Ajustes, al cambiar el perfil y al cambiar el lienzo
@@ -74,13 +77,36 @@ func _ready() -> void:
 	EventBus.touch_controls_size_changed.connect(func(_s): apply_size())
 	UILayoutManager.layout_changed.connect(apply_size)
 
-## Hides the whole layer. A held D-pad button is released too, so the camera
-## does not keep drifting after the controls vanish under the finger.
-func _apply_visibility(enabled: bool) -> void:
-	visible = enabled
-	if not enabled:
+## Que se ve (rediseno 2026-10, docs/28 §12):
+##   - Cruceta, zoom y girar la camara: GameConfig.onscreen_controls_visible()
+##     ("auto": solo tablet; el telefono juega con gestos).
+##   - La pareja de colocar (girar edificio + CANCELAR): mientras se coloca,
+##     siempre que se juegue con el dedo, aunque la cruceta este apagada. Sin
+##     ella el dedo no tenia salida (cancelar era clic derecho o ESC).
+## Con nada que ensenar se oculta la capa entera. Un boton mantenido se suelta,
+## para que la camara no siga moviendose cuando el control desaparece.
+func _apply_visibility(_unused: Variant = null) -> void:
+	var full := GameConfig.onscreen_controls_visible()
+	var pair := _placing and (full or GameConfig.touch_controls_enabled() or GameConfig.real_touch_seen())
+	visible = full or pair
+	if _dpad != null:
+		_dpad.visible = full
+	if _zoom_box != null:
+		_zoom_box.visible = full
+	if _camera_rotate_box != null:
+		var narrow: bool = UILayoutManager.is_narrow()
+		_camera_rotate_box.visible = full and _camera_rotate_allowed and not (_placing and narrow)
+	if not full:
 		_pan_direction = Vector2.ZERO
 		_holds.clear()
+
+## Si la cruceta y el zoom estan a la vista (no solo la pareja de colocar).
+func full_controls_shown() -> bool:
+	return visible and _dpad != null and _dpad.visible
+
+var _placing := false
+var _dpad: Control = null
+var _zoom_box: Control = null
 
 ## The placement pair (rotate building + cancel) comes and goes together.
 ## En pantalla estrecha (movil en vertical) la columna derecha, al colocar,
@@ -88,11 +114,10 @@ func _apply_visibility(enabled: bool) -> void:
 ## CONSTRUIR: mientras se coloca esa fila se esconde (la camara se sigue girando
 ## con dos dedos) y vuelve al terminar.
 func _set_placing(placing: bool) -> void:
+	_placing = placing
 	_rotate_building_btn.visible = placing
 	_cancel_placement_btn.visible = placing
-	if _camera_rotate_box != null:
-		var narrow: bool = UILayoutManager.is_narrow()
-		_camera_rotate_box.visible = _camera_rotate_allowed and not (placing and narrow)
+	_apply_visibility()
 
 func is_placing_shown() -> bool:
 	return _cancel_placement_btn.visible
@@ -256,6 +281,7 @@ func _setup_ui() -> void:
 	# derecha (que crece al colocar) y las flechas se separan hacia arriba.
 	dpad.size_flags_vertical = Control.SIZE_SHRINK_END
 	hbox.add_child(dpad)
+	_dpad = dpad
 
 	# Spacer
 	var spacer := Control.new()
@@ -298,6 +324,15 @@ func _setup_ui() -> void:
 	_cancel_placement_btn.custom_minimum_size = Vector2(108, 50)
 	_cancel_placement_btn.tooltip_text = Tr.ti("LBL_CANCEL_PLACEMENT_TIP")
 	UITheme.style_button(_cancel_placement_btn, UITheme.DANGER, UITheme.FONT_BODY)
+	if UITheme.is_cartoon():
+		# Rojo de "cerrar / quitar" del estilo maqueta, letra de botones.
+		CartoonTheme._btn_states(_cancel_placement_btn, CartoonTheme.sem("DANGER"), 25, 14, "hud")
+		_cancel_placement_btn.add_theme_font_override("font", CartoonTheme.title_font())
+		_cancel_placement_btn.add_theme_color_override("font_color", CartoonTheme.WHITE)
+		_cancel_placement_btn.add_theme_color_override("font_hover_color", CartoonTheme.WHITE)
+		_cancel_placement_btn.add_theme_color_override("font_pressed_color", CartoonTheme.WHITE)
+		_cancel_placement_btn.add_theme_color_override("font_outline_color", CartoonTheme.INK)
+		_cancel_placement_btn.add_theme_constant_override("outline_size", 5)
 	# style_button sube el alto al lado tactil del perfil: ese es el de serie.
 	_remember_base(_cancel_placement_btn, UITheme.FONT_BODY)
 	_cancel_placement_btn.pressed.connect(_on_cancel_placement)
@@ -307,6 +342,7 @@ func _setup_ui() -> void:
 
 	var zoom_box := _create_zoom_buttons()
 	right_vbox.add_child(zoom_box)
+	_zoom_box = zoom_box
 
 func _create_dpad() -> GridContainer:
 	var grid := GridContainer.new()
@@ -429,5 +465,11 @@ func _styled_button(label: String) -> Button:
 	UITheme.set_label_color(btn, UITheme.TEXT_DIM)
 	btn.add_theme_color_override("font_hover_color", UITheme.TEXT)
 	btn.add_theme_color_override("font_pressed_color", UITheme.TEXT_BRIGHT)
+	if UITheme.is_cartoon():
+		# Estilo maqueta: ficha del HUD oscuro, redonda, texto claro (docs/28).
+		CartoonTheme._btn_states(btn, CartoonTheme.c("hud", "NEUTRAL"), 24, 4, "hud")
+		btn.add_theme_font_override("font", CartoonTheme.title_font())
+		for k in ["font_color", "font_hover_color", "font_pressed_color"]:
+			btn.add_theme_color_override(k, CartoonTheme.text("hud"))
 	_register(btn)
 	return btn

@@ -16,17 +16,24 @@ func before_test() -> void:
 func after_test() -> void:
 	CartoonTheme.phone = false
 	CartoonTheme.show_caption_never = false
-	UITheme.use_style("classic", "mixed", CartoonTheme.DEFAULT_COMBO)
+	# Se vuelve al estilo de serie (desde la fase 2, "cartoon"): dejar "classic"
+	# contagiaba a las suites que vinieran detras.
+	UITheme.use_style(UITheme.STYLE_DEFAULT, "mixed", CartoonTheme.DEFAULT_COMBO)
 	UITheme.configure()
 	SettingsParking.restore(_parked)
 
-func test_classic_is_the_default_and_nothing_changes() -> void:
-	assert_str(UITheme.STYLE_DEFAULT).is_equal("classic")
+## Fase 2 (feat/ui2-hud, 2026-10-18): el estilo maqueta es el de serie; el
+## clasico queda como respaldo interno y sigue aplicando sus tokens.
+func test_cartoon_is_the_default_and_classic_stays_available() -> void:
+	assert_str(UITheme.STYLE_DEFAULT).is_equal("cartoon")
+	assert_bool(UITheme.is_cartoon()).is_true()
+	UITheme.use_style("classic")
 	assert_bool(UITheme.is_cartoon()).is_false()
 	var tokens := UITheme.resolve_tokens("default", false, 1.0)
 	assert_object(UITheme.SURFACE).is_equal(tokens["SURFACE"])
 
 func test_switching_to_cartoon_and_back_restores_the_classic_tokens() -> void:
+	UITheme.use_style("classic")
 	var before := UITheme.SURFACE
 	UITheme.use_style("cartoon", "mixed", "baloo_nunitosans")
 	assert_bool(UITheme.is_cartoon()).is_true()

@@ -304,10 +304,11 @@ cuando hay alguno; la línea del siguiente paso.
 ## 13. Cómo se activa (desarrollo)
 
 - Código: `UITheme.use_style("cartoon", "mixed", "baloo_nunitosans")`; vuelta:
-  `UITheme.use_style("classic")`. De serie, `UITheme.STYLE_DEFAULT = "classic"`:
-  la fase 1 no cambia nada en el juego.
-- Línea de comandos: `godot --path . -- --ui-style=cartoon --ui-font=lilita_nunito
-  --ui-surface=light`.
+  `UITheme.use_style("classic")`. **Desde la fase 2 (rama `feat/ui2-hud`) de
+  serie es `UITheme.STYLE_DEFAULT = "cartoon"`**; el clásico queda como respaldo
+  interno.
+- Línea de comandos: `godot --path . -- --ui-style=classic` (vuelta al viejo),
+  `--ui-font=lilita_nunito --ui-surface=light` (las otras opciones).
 - Activado, los tokens de `UITheme` se reescriben (`CartoonTheme.legacy_tokens()`)
   y las factorías de panel, botón, tarjeta del HUD, tooltip y letras pasan al
   estilo nuevo, así que los paneles que aún no se rehicieron lo siguen a grandes
@@ -327,3 +328,26 @@ cuando hay alguno; la línea del siguiente paso.
 3. Barra de abajo y ☰ reducido (§12); decidir dónde van velocidad y Encargos.
 4. Pasar `STYLE_DEFAULT` a `"cartoon"` y borrar las fuentes y el estilo viejo
    que ya no se usen (Black Ops One, Rajdhani, las parejas A y C).
+
+## 15. Fase 2: lo implementado del HUD (rama `feat/ui2-hud`, 2026-10-18)
+
+Detalle técnico en `docs/21-interfaz-y-dispositivos.md` §1 (lienzo del teléfono)
+y §15 (HUD). Resumen frente a §14:
+
+| Punto | Estado |
+|---|---|
+| 1. Lienzo del teléfono | **Hecho.** `DeviceProfile.phone_content_scale_for()`: alto lógico = alto en dp (360-540) en apaisado. Un teléfono de 360 dp pasa de un lienzo de ~554 de alto a **360** (todo a su tamaño físico, ×1,54). `CartoonTheme.phone` se enciende solo con lienzos de < 450 de lado corto. Escala del perfil Móvil 100 % y texto normal |
+| 2. HUD y avisos con `CartoonTheme` | **Hecho** (recursos, rango, Tormenta, ¿QUÉ HACER?, avisos, controles en pantalla, ☰). El resto de pantallas, en sus ramas (CONSTRUIR/ficha/Mercado/Investigar; Ejército/Misiones/combate; Ajustes/Ayuda/tutorial/menús) |
+| 3. Barra de abajo y ☰ | **Hecho.** `BottomBar` (Ejército, Misiones, [CONSTRUIR], Mercado, Investigar, Ayuda); ☰ = Ajustes, Partidas, Salir + **velocidad x1 / x2 dentro**. **Encargos**, Progreso, Registro y Sandbox, en la tarjeta de la colonia (tocar el rango). Historia e Informar fallo, en pequeño al pie del ☰ (pendiente de Bryan: ¿mejor dentro de Ayuda?) |
+| 4. `STYLE_DEFAULT = "cartoon"` | **Hecho.** Borrar el estilo y las fuentes viejas queda para cuando todas las pantallas estén rehechas |
+
+Decisiones tomadas aquí (revisables):
+
+- **SALIR** guarda y vuelve al menú principal (que tiene "Salir del juego"); en
+  Android no hay "cerrar la app" dentro de un juego.
+- La cifra del almacén va al mantener pulsado (PC) y al detalle (teléfono); la
+  barra fina se queda en PC.
+- En teléfono, la moral pasa al detalle de la barra de recursos (§12 lo pedía
+  "al tocar recursos").
+- La línea del siguiente paso se oculta mientras habla la Capitana en el
+  tutorial guiado (no se repite la misma cara dos veces).

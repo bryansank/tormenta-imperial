@@ -94,6 +94,9 @@ func _ready() -> void:
 # ── Construccion ─────────────────────────────────────────────────────
 
 func _setup_ui() -> void:
+	if UITheme.is_cartoon():
+		_setup_cartoon()
+		return
 	var overlay := Control.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -208,13 +211,178 @@ func _setup_ui() -> void:
 ## El boton x1 / x2 del HUD (docs/21 §13). Lo pone este menu y no las escenas:
 ## las dos vistas lo tienen. Va de HERMANO (no de hijo): es HUD de la partida,
 ## se para con la pausa y no es parte de este menu.
+## Estilo maqueta (docs/28 §12): la velocidad vive DENTRO de este menu; el boton
+## suelto se crea igual (lleva el atajo F) pero no se ve.
 func _add_speed_button() -> void:
 	var parent := get_parent()
 	if parent == null or parent.get_node_or_null("GameSpeedButton") != null:
 		return
 	var speed := GameSpeedButtonScript.new()
 	speed.name = "GameSpeedButton"
+	if UITheme.is_cartoon():
+		speed.visible = false
 	parent.add_child.call_deferred(speed)
+
+# ══════════════════════════════════════════════════════════════════════
+# ESTILO MAQUETA (rediseno 2026-10, docs/28 §12, feat/ui2-hud)
+# ══════════════════════════════════════════════════════════════════════
+# ☰ redondo arriba a la derecha y, al tocarlo, una ventana pequena con SOLO:
+#   AJUSTES · PARTIDAS · SALIR, y la velocidad x1 / x2 dentro.
+# Debajo, en pequeno, Historia e Informar fallo (no caben en otro sitio).
+# Lo demas que vivia aqui se fue: Ejercito, Misiones y Ayuda a la barra de
+# abajo (BottomBar); ¿QUE HACER? a la linea del siguiente paso
+# (ObjectivePanel); Progreso, Encargos, Registro y Sandbox a la tarjeta de la
+# colonia (tocar el rango); la musica a Ajustes; Guardar lo hace PARTIDAS (y el
+# autoguardado). SALIR guarda y vuelve al menu principal, que tiene "Salir".
+# Los nombres de nodo se conservan (Game_Settings, Game_Saves, Game_MainMenu,
+# Game_Story, Game_Report; la X es Game_Resume).
+
+var _menu_root: Control = null
+var _speed_row: HBoxContainer = null
+var _speed_buttons: Dictionary = {}   # float -> Button
+
+func _setup_cartoon() -> void:
+	var overlay := Control.new()
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(overlay)
+
+	var d := CartoonTheme.menu_round()
+	_menu_btn = CartoonTheme.round_button("menu", "secondary", d, "", "hud") as Button
+	_menu_btn.name = "MenuButton"
+	_menu_btn.tooltip_text = Tr.ti("BTN_GAME_MENU_HINT")
+	_menu_btn.focus_mode = Control.FOCUS_NONE
+	_menu_btn.pressed.connect(request_open)
+	_menu_btn.add_to_group("hud_menu_button")
+	overlay.add_child(_menu_btn)
+
+	_root = Control.new()
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.visible = false
+	add_child(_root)
+
+	_backdrop = CartoonTheme.veil()
+	_backdrop.gui_input.connect(func(e: InputEvent):
+		if (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT):
+			resume())
+	_root.add_child(_backdrop)
+
+	var w := CartoonTheme.window(Tr.t("HUD_MENU_TITLE"), CartoonTheme.sem("INFO"), true)
+	_menu_root = w["root"]
+	_menu_root.name = "MenuWindow"
+	_root.add_child(_menu_root)
+	_card = w["panel"]
+	_card.name = "MenuCard"
+	if CartoonTheme.phone:
+		var ps := CartoonTheme.window_style()
+		ps.set_content_margin_all(10)
+		_card.add_theme_stylebox_override("panel", ps)
+	var close: Button = w["close"]
+	close.name = "Game_Resume"
+	close.tooltip_text = Tr.t("BTN_RESUME")
+	close.pressed.connect(resume)
+	_resume_btn = close
+	var body: VBoxContainer = w["body"]
+	body.add_theme_constant_override("separation", 8 if CartoonTheme.phone else CartoonTheme.GAP)
+
+	_mode_label = CartoonTheme.label("", "small", CartoonTheme.text("window", true))
+	_mode_label.name = "ModeLabel"
+	_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(_mode_label)
+
+	var h := CartoonTheme.h("big")
+	for spec in [["Settings", "BTN_SETTINGS", "settings", "open", _on_settings],
+			["Saves", "BTN_SAVES", "game", "open", _on_saves],
+			["MainMenu", "HUD_MENU_QUIT", "back", "danger", _on_main_menu]]:
+		var b := CartoonTheme.pill_button(Tr.t(String(spec[1])).to_upper(), String(spec[2]), String(spec[3]), h, "window")
+		b.name = "Game_" + String(spec[0])
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.focus_mode = Control.FOCUS_ALL
+		b.pressed.connect(spec[4])
+		body.add_child(b)
+
+	# Velocidad x1 / x2 (docs/28 §12): un selector de dos pastillas.
+	_speed_row = HBoxContainer.new()
+	_speed_row.name = "SpeedRow"
+	_speed_row.add_theme_constant_override("separation", 8)
+	_speed_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.add_child(_speed_row)
+	var sp_lbl := CartoonTheme.label(Tr.t("HUD_MENU_SPEED"), "button", CartoonTheme.text("window"))
+	sp_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_speed_row.add_child(sp_lbl)
+	_sync_speed()
+	EventBus.game_speed_changed.connect(func(_s): _sync_speed())
+
+	# Lo pequeno: Historia e Informar fallo.
+	var foot := HBoxContainer.new()
+	foot.name = "Footer"
+	foot.add_theme_constant_override("separation", 8)
+	foot.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.add_child(foot)
+	var story := CartoonTheme.pill_button(Tr.t("BTN_STORY"), "", "secondary", CartoonTheme.h("small"), "window", "body")
+	story.name = "Game_Story"
+	story.pressed.connect(_on_story)
+	foot.add_child(story)
+	var report := CartoonTheme.pill_button(Tr.t("BTN_REPORT_BUG"), "", "secondary", CartoonTheme.h("small"), "window", "body")
+	report.name = "Game_Report"
+	report.tooltip_text = Tr.t("BTN_REPORT_BUG_HINT")
+	report.pressed.connect(report_bug)
+	foot.add_child(report)
+
+	_status = CartoonTheme.label("", "small", CartoonTheme.sem("POSITIVE").darkened(0.25))
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.visible = false
+	body.add_child(_status)
+	_relayout()
+
+## Las dos pastillas de velocidad: la elegida azul, la otra crema. Se rehacen
+## al cambiar (son dos botones; sin animacion).
+func _sync_speed() -> void:
+	if _speed_row == null:
+		return
+	for b in _speed_buttons.values():
+		if is_instance_valid(b):
+			_speed_row.remove_child(b)
+			b.queue_free()
+	_speed_buttons.clear()
+	for s in GameConfig.GAME_SPEEDS:
+		var on := is_equal_approx(float(s), GameConfig.game_speed)
+		var b := CartoonTheme.pill_button("x%d" % int(s), "", "info" if on else "secondary",
+			CartoonTheme.h("small"), "window")
+		b.name = "Speed_x%d" % int(s)
+		b.tooltip_text = Tr.ti("LBL_GAME_SPEED_TIP")
+		b.pressed.connect(GameConfig.set_game_speed.bind(float(s)))
+		_speed_row.add_child(b)
+		_speed_buttons[float(s)] = b
+
+## La pastilla de una velocidad (pruebas).
+func speed_button(speed: float) -> Button:
+	return _speed_buttons.get(speed) as Button
+
+## Coloca la ventana del estilo maqueta: centrada, con su alto natural; en
+## telefono casi a lo ancho (docs/28 §6).
+func _relayout_cartoon(vp: Vector2) -> void:
+	if _menu_root == null:
+		return
+	var w := minf(CARTOON_MENU_W_PHONE if CartoonTheme.phone else CARTOON_MENU_W, vp.x - 16.0)
+	var panel_h := _card.get_combined_minimum_size().y + _card.offset_top
+	var h := minf(panel_h, vp.y - 8.0)
+	_menu_root.position = Vector2((vp.x - w) * 0.5, (vp.y - h) * 0.5)
+	_menu_root.size = Vector2(w, h)
+
+const CARTOON_MENU_W := 420.0
+const CARTOON_MENU_W_PHONE := 340.0
+
+func _place_menu_button_cartoon() -> void:
+	var d := float(CartoonTheme.menu_round())
+	var edge := CartoonTheme.hud_edge()
+	_menu_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_menu_btn.offset_right = -edge
+	_menu_btn.offset_left = -edge - d
+	_menu_btn.offset_top = edge
+	_menu_btn.offset_bottom = edge + d
 
 func _make_group(node_name: String, title: String, hint: String) -> VBoxContainer:
 	var box := VBoxContainer.new()
@@ -260,6 +428,11 @@ func _make_pair_row(group: VBoxContainer) -> HBoxContainer:
 
 func _relayout() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
+	if _menu_root != null:
+		_relayout_cartoon(vp)
+		if _menu_btn != null:
+			_place_menu_button_cartoon()
+		return
 	var wide: bool = vp.x >= TWO_COLUMNS_MIN_WIDTH
 	if _groups != null:
 		_groups.columns = 2 if wide else 1
@@ -325,7 +498,17 @@ func menu_button() -> Button:
 	return _menu_btn
 
 ## Una entrada del menu por su nombre de nodo (Colony_market, Game_MainMenu...).
-func entry(node_name: String) -> Button:
+## Estilo maqueta: ¿QUE HACER? ya no es una entrada, es la linea del siguiente
+## paso (ObjectivePanel.line()); "Colony_objectives" devuelve esa linea para
+## que quien la senala (el tutorial, HelpTargets) siga encontrandola.
+func entry(node_name: String) -> Control:
+	if _menu_root != null:
+		if node_name == "Colony_objectives":
+			var obj := _find_sibling("ObjectivePanel")
+			if obj != null and obj.has_method("line"):
+				return obj.line()
+			return null
+		return _menu_root.find_child(node_name, true, false) as Control
 	return _card.find_child(node_name, true, false) as Button
 
 # ── Cuando se puede abrir ────────────────────────────────────────────
@@ -453,9 +636,14 @@ func _exit_tree() -> void:
 func _refresh_entries() -> void:
 	for entry_def in COLONY_ENTRIES:
 		var id: String = entry_def[0]
-		var btn: Button = _colony_buttons[id]
+		var btn: Button = _colony_buttons.get(id)
+		if btn == null:
+			continue
 		btn.visible = _find_sibling(entry_def[2]) != null and is_colony_entry_available(id)
-	_help_btn.visible = _help_panel() != null
+	if _help_btn != null:
+		_help_btn.visible = _help_panel() != null
+	if _speed_row != null:
+		_sync_speed()
 	_sync_music()
 	_relayout.call_deferred()
 

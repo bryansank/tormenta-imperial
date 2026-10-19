@@ -266,9 +266,8 @@ func test_the_center_column_never_overlaps_the_left_one(width: float, height: fl
 				.override_failure_message("%dx%d: %s pisa %s" % [width, height, _rect(left), _rect(center)]).is_false()
 	for c in [resources, status, storm]:
 		assert_float(_rect(c).end.x).is_less_equal(width)
-	# Y lo centrado no se mete bajo el menu ☰ (176 px a la derecha).
-	for center in [storm]:
-		assert_float(_rect(center).end.x).is_less_equal(width - UILayoutConfig.SIDEBAR_BTN_WIDTH - 10.0)
+	# Rediseno 2026-10: la Tormenta es un icono bajo el ☰, en la mitad derecha.
+	assert_float(_rect(storm).position.x).is_greater_equal(width * 0.5)
 
 func test_a_4_3_tablet_moves_only_the_column_not_the_build_button() -> void:
 	UILayoutManager._viewport_size = Vector2(1024, 768)
@@ -342,6 +341,8 @@ func test_on_a_4_3_tablet_toasts_stay_in_the_left_column_under_the_storm() -> vo
 	assert_float((slot["anchor"] as Rect2).position.x).is_equal(0.0)
 	assert_float((slot["anchor"] as Rect2).position.y).is_equal(0.0)
 	assert_str(String(slot["stack_after"])).is_equal("NotificationPanel.log")
-	assert_str(String(UILayoutManager.get_slot("left_panel")["stack_after"])).is_equal("StormHUD")
+	# La Tormenta ya no baja a la columna (icono bajo el ☰): el registro va bajo
+	# los recursos.
+	assert_str(String(UILayoutManager.get_slot("left_panel")["stack_after"])).is_equal("ResourceHUD")
 	UILayoutManager._viewport_size = Vector2(1280, 720)
 	assert_float((UILayoutManager.get_slot("toast_area")["anchor"] as Rect2).position.x).is_equal(0.0)

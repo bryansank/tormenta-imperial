@@ -43,6 +43,24 @@ var _card_name: Label
 var _editor: CanvasLayer = null
 var _is_open := false
 
+## La fila de la colonia en la tarjeta (rediseno 2026-10, docs/28 §12): lo que
+## salio del menu ☰ y no esta en la barra de abajo. [id, clave Tr, panel
+## hermano, glifo].
+const HUB_ENTRIES := [
+	["progress", "BTN_PROGRESS", "ProgressPanel", "star"],
+	["contracts", "BTN_CONTRACTS", "ContractPanel", "check"],
+	["log", "BTN_LOG_MENU", "NotificationPanel", "clock"],
+	["sandbox", "BTN_SANDBOX", "SandboxPanel", "wrench"],
+]
+var _hub: HFlowContainer
+var _hub_buttons: Dictionary = {}
+## Insignia en telefono: bandera, estrella, cifra y barra (sin el nombre).
+const BADGE_W_PHONE := 128.0
+const FLAG_PHONE := Vector2(33, 22)
+
+static func _cartoon() -> bool:
+	return UITheme.is_cartoon()
+
 func _ready() -> void:
 	layer = LAYER
 	_setup_ui()
@@ -77,6 +95,9 @@ func _setup_ui() -> void:
 	_badge.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for state in ["normal", "hover", "pressed", "focus"]:
 		var st := UITheme.make_hud_card_style(UITheme.ACCENT, 2)
+		if _cartoon():
+			# Ficha del HUD oscuro fino (docs/28 §12), mismo alto que el ☰.
+			st = CartoonTheme.hud_style()
 		st.content_margin_top = 4
 		st.content_margin_bottom = 4
 		st.content_margin_left = 6
@@ -100,7 +121,14 @@ func _setup_ui() -> void:
 	_badge_flag = _make_flag_rect(FLAG_SMALL)
 	_badge_flag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_badge_flag)
+	if _cartoon():
+		# La estrella del rango delante de la cifra (docs/28 §12).
+		var star := CartoonTheme.make_glyph("star", 20 if CartoonTheme.phone else 24)
+		star.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(star)
 	_badge_rank = UITheme.make_label("1", "section", UITheme.ACCENT)
+	if _cartoon():
+		_badge_rank = CartoonTheme.label("1", "button", CartoonTheme.text("hud"))
 	_badge_rank.name = "RankNumber"
 	_badge_rank.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_badge_rank.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -112,12 +140,16 @@ func _setup_ui() -> void:
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(column)
 	_badge_title = UITheme.make_label("", "small", UITheme.TEXT)
+	if _cartoon():
+		_badge_title = CartoonTheme.label("", "small", CartoonTheme.text("hud", true))
 	_badge_title.name = "ColonyName"
 	_badge_title.clip_text = true
 	_badge_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_badge_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(_badge_title)
 	_badge_bar = _make_thin_bar(5)
+	if _cartoon():
+		_badge_bar = CartoonTheme.progress(0.0, CartoonTheme.sem("INFO"), "hud", 8)
 	_badge_bar.name = "RankXpBar"
 	column.add_child(_badge_bar)
 
@@ -164,6 +196,27 @@ func _setup_ui() -> void:
 	var edit := ModalKit.make_menu_button(Tr.t("BTN_COLONY_EDIT"), UITheme.ACCENT_DIM, open_editor)
 	edit.name = "EditColony"
 	col.add_child(edit)
+
+	# ── La colonia, en una fila (rediseno 2026-10): lo que salio del menu ☰ y no
+	# va en la barra de abajo. Progreso, Encargos, Registro y, en su modo,
+	# Sandbox. Cada uno cierra esta tarjeta y abre su panel.
+	_hub = HFlowContainer.new()
+	_hub.name = "ColonyHub"
+	_hub.add_theme_constant_override("h_separation", 8)
+	_hub.add_theme_constant_override("v_separation", 8)
+	col.add_child(_hub)
+	for entry in HUB_ENTRIES:
+		var id: String = entry[0]
+		var b: Button
+		if _cartoon():
+			b = CartoonTheme.pill_button(Tr.t(String(entry[1])), String(entry[3]), "open",
+				CartoonTheme.h("small"), "window", "body")
+			b.pressed.connect(open_hub_entry.bind(id))
+		else:
+			b = ModalKit.make_menu_button(Tr.t(String(entry[1])), UITheme.BTN, open_hub_entry.bind(id))
+		b.name = "Hub_" + id
+		_hub.add_child(b)
+		_hub_buttons[id] = b
 	_relayout()
 
 func _make_flag_rect(px: Vector2) -> TextureRect:
@@ -192,6 +245,13 @@ func _relayout() -> void:
 	var narrow: bool = vp.x < UILayoutConfig.NARROW_WIDTH
 	_dock.custom_minimum_size.x = BADGE_W_NARROW if narrow else BADGE_W
 	_badge_title.visible = not narrow
+	if _cartoon():
+		# Mismo alto que el ☰ redondo; en telefono, bandera + cifra + barra.
+		_dock.custom_minimum_size.y = CartoonTheme.menu_round()
+		if CartoonTheme.phone:
+			_dock.custom_minimum_size.x = BADGE_W_PHONE
+			_badge_title.visible = false
+			_badge_flag.custom_minimum_size = FLAG_PHONE
 	ModalKit.fit_center(_card, CARD_W, vp)
 	_card.reset_size()
 	_card.offset_top = -_card.size.y * 0.5
@@ -321,7 +381,56 @@ func open() -> void:
 	_card.visible = true
 	_backdrop.visible = true
 	_refresh_card()
+	_refresh_hub()
 	UIManager.open_panel(self)
+
+## Que entradas de la colonia se ven: solo lo que existe en la escena y ya
+## esta disponible (Encargos no en Sandbox; Sandbox solo en su modo).
+func _refresh_hub() -> void:
+	for entry in HUB_ENTRIES:
+		var id: String = entry[0]
+		var b: Button = _hub_buttons.get(id)
+		if b == null:
+			continue
+		b.visible = _sibling(String(entry[2])) != null and hub_entry_available(id)
+
+static func hub_entry_available(id: String) -> bool:
+	match id:
+		"sandbox":
+			return GameMode.sandbox_tools()
+		"contracts":
+			return GameMode.contracts_enabled()
+	return true
+
+## Cierra la tarjeta y abre el panel de esa entrada (si ya estaba abierto, lo
+## deja asi).
+func open_hub_entry(id: String) -> void:
+	var sibling := ""
+	for entry in HUB_ENTRIES:
+		if String(entry[0]) == id:
+			sibling = String(entry[2])
+	var panel := _sibling(sibling)
+	_close()
+	if panel == null:
+		return
+	if panel.has_method("is_open") and panel.is_open():
+		return
+	if panel.has_method("open_log"):
+		panel.open_log()
+	elif panel.has_method("open"):
+		panel.open()
+	elif panel.has_method("toggle"):
+		panel.toggle()
+	elif panel.has_method("_toggle_panel"):
+		panel._toggle_panel()
+
+func hub_button(id: String) -> Button:
+	return _hub_buttons.get(id) as Button
+
+func _sibling(node_name: String) -> Node:
+	if node_name == "" or get_parent() == null:
+		return null
+	return get_parent().get_node_or_null(node_name)
 
 func _close() -> void:
 	if not _is_open:

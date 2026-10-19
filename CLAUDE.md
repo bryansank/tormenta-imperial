@@ -29,7 +29,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 2. Press **F5** to run. The title menu (`TitleMenu`) opens first over the loaded game
 3. WASD / arrows to pan, Q/E or right-drag to rotate, scroll to zoom, middle-drag or left-drag on the ground to grab-pan, F11 fullscreen
 4. Touch: one finger grabs the terrain, two-finger pinch to zoom and twist to rotate (3D only); tap to aim a building, tap the ghost / ✓ to build (docs/21 §9)
-5. A fresh game: ☰ MENÚ → Menú principal → Nueva partida (mode picker; today it only offers Campaña). It never deletes the current game: it goes to a new slot (up to 5, see "Save/Load System"). Deleting `user://partidas/` starts from scratch
+5. A fresh game: ☰ → SALIR (main menu) → Nueva partida (mode picker; today it only offers Campaña). It never deletes the current game: it goes to a new slot (up to 5, see "Save/Load System"). Deleting `user://partidas/` starts from scratch
 6. **2D view:** Settings → Map view, or `godot --path . -- --view=2d`. Same services, UI and save; only the world view differs (`scenes/main/Main2D.tscn`, `scripts/view2d/`). See `docs/18-vista-2d.md`
 7. **User args** (after `--`): `--view=2d|3d`, `--no-title` (skip the title menu, used by probes), `--multi` (allow a second copy, see 9), `--dev` / `--no-dev` (force `dev_mode`, see "Dev Mode")
 8. **Your save lives in the editor's user dir** (`%APPDATA%\Godot\app_userdata\Tormenta Imperial`). Anything that plays or writes saves outside a normal play session (probes, experiments, a second agent) needs a git-ignored `override.cfg` at the project root with its own dir, deleted afterwards:
@@ -92,7 +92,7 @@ holds a service's state of its own.
 | 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built; it opens and closes with the game's goal, explains every starting building with its numbers and teaches rotate/move/demolish; it cannot be skipped or closed, docs/23 §2.5), a one-off repair lesson the first time a building is damaged (docs/23 §2.6), the guided first fights on the board (combat lessons, docs/23 §2.4, no Skip either) and which tips/helps were seen; state saved with the game (docs/23) |
 | 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambience (day, night and Storm loops), runtime buses |
-| 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
+| 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`; the phone canvas follows the real dp, 360-540 tall in landscape, `phone_content_scale_for`, and turns `CartoonTheme.phone` on), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
 | 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`). See `docs/06-progression-victory.md` §Governor rank |
 | 28 | `ContractManager` | `scripts/services/ContractManager.gd` | The contract board (ENCARGOS): ticks the pure `scripts/economy/ContractBoard.gd` (3 slots: Regency, neighbours, smuggler), charges what is asked and pays the reward (resources, morale, colonists if `PopulationManager.add_colonists` exists, Tithe discount through `StormManager.add_tithe_discount` if it exists, else gold), emits `contract_*`; saved as `contracts`; off in Sandbox (`GameMode.contracts_enabled()`). See `docs/27-encargos.md` |
 
@@ -115,8 +115,8 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- IslandGenerator (Node3D) -- procedural island mesh: the irregular coast of the land mask (`IslandShape.coast_polygon`: grass, cliff, sand and foam along it; the sea shades from a distance texture); an old square-island save keeps the rounded square that covers the grid. Rebuilds on `grid_resized`
   +-- GridOverlay (MeshInstance3D) -- faint cell grid (Settings toggle, off by default: it shows while placing), fitted to GridManager at runtime, drawn on land only (a land-mask texture in the shader)
   +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist; every road drawn by one RoadBatch3D child (a MultiMesh per neighbour mask, at most 16 draw calls)
-  +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" follows the device profile (tablet/phone yes, PC no)
-  +-- ResourceHUD (CanvasLayer 10) -- top-left card: one row of [icon] number chips (resources, free workers, morale once the Storm is armed; names and meaning in tooltips, a tap unfolds them) + shared storage bar with used/cap + materials row (once one is unlocked)
+  +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" = tablet only (`GameConfig.onscreen_controls_visible()`); a phone gets only rotate-building + CANCEL while placing
+  +-- ResourceHUD (CanvasLayer 10) -- top-left dark thin bar: [icon] number chips (resources, free workers, morale once the Storm is armed; small name under it on PC, meaning in tooltips, a tap unfolds the detail) + 8 px storage bar (PC; the number on hold) + materials row; phone: 3 resources + free workers, the rest on tap
   +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), on land only, none on the Núcleo sidewalk or the shore band (land next to the water), each with room and a road path for its extractor; then 3-5 schools of fish in the water next to the coast (`SHORE_DEPOSIT_IDS`, for the Fishing dock); `shore_cells()` is the hook for more sea/shore resources
   +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + building list
   +-- BuildingInfoPanel (CanvasLayer 10) -- right panel: selected building / deposit info; RETIRAR / PONER TRABAJADORES; ABRIR MERCADO / INVESTIGAR on the Market / Laboratory (`SCREENS`)
@@ -125,34 +125,35 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- VictoryScreen (CanvasLayer 20) -- victory overlay
   +-- NotificationPanel (CanvasLayer 11) -- THE single place for alerts (warning, danger, notice, combat and achievement = milestone/era/rank-up; docs/21 §14): one column top-left under the resources, max 2 (1 on phone), the rest queued and repeats grouped "×3" (`AlertQueue`), icon + one sentence + ✕, no animations; with a window, the board or the tutorial card over it they wait (one small danger only) + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips; the objective strip at the top centre is gone too, 2026-10-05: the next step lives in ¿QUÉ HACER?)
   +-- TechTreePanel (CanvasLayer 11) -- 3 branches x 5 tiers research UI, opened from a Laboratory building (not from the menu)
-  +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step()
+  +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step(); on the map, a foldable line with the Captain's face, bottom-left (own layer 10, slot `next_step`); tapping the text opens the panel
   +-- ArmyPanel (CanvasLayer 11) -- train units, Military Power, upkeep, who is away on campaign; FICHA opens each unit's card (UnitCard)
   +-- SettingsPanel (CanvasLayer 15) -- tabs Audio · Interfaz · Controles · Accesibilidad · Juego (persisted in settings.cfg)
   +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close; building guide; instances HelpIndexPanel
   +-- SkirmishPanel (CanvasLayer 11) -- commit troops and launch an expedition; campaign status while a column is out; "QUE BAJEN" (Final Audit)
   +-- BattleScreen (CanvasLayer 18) -- the 8x8 board (a 3D diorama in a SubViewport, scenes/combat/Board3D.tscn, in its "front" or "board" view; the classic 2D grid in the 2D view and headless) plus the expedition map, draft modal and final report (outside UIManager's stack)
-  +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator (colour + icon, no countdown); in calm the barometer ("3–5 min", a shifted margin, never the exact minute) and, on tap, the Regency Order card (docs/06 §Orden de la Regencia)
+  +-- StormHUD (CanvasLayer 16, 11 under modals) -- storm phase indicator: since the redesign ONE round icon under ☰ (sun / storm cloud, ring in the phase colour, no pulse; phase and margin on hold, slot `storm_icon`); in calm the barometer ("3–5 min", a shifted margin, never the exact minute) and, on tap, the Regency Order card (docs/06 §Orden de la Regencia)
   +-- TutorialPanel (CanvasLayer 19) -- guided coach marks on the real UI, also over the combat board (combat lessons); instances PrologueScreen
   +-- AuditWaveBanner (CanvasLayer 19) -- "Oleada X de N" during the Final Audit
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
-  +-- RankPanel (CanvasLayer 11) -- governor rank badge (flag, number, country name, XP bar) left of ☰ MENÚ, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel)
-  +-- SkirmishButton (CanvasLayer 10) -- MISIONES (the old ESCARAMUZAS) next to CONSTRUIR once a Barracks stands, red dot when there is a reason to go out (2026-10-14)
-  +-- ContractPanel (CanvasLayer 11) -- ENCARGOS: one card per source (clock, what they want with the missing part in red, the reward in icons, ENTREGAR / No, gracias), opened from ☰ MENÚ → COLONIA (docs/27)
-  +-- PauseMenu (CanvasLayer 30) -- THE game menu ("☰ MENÚ" top-right): COLONIA + PARTIDA groups, real pause; ESC / Android back; adds the GameSpeedButton sibling (x1 / x2, layer 10)
-  +-- TitleMenu (CanvasLayer 30) -- main menu on launch and from ☰ MENÚ -> Menú principal
+  +-- RankPanel (CanvasLayer 11) -- compact governor rank badge (flag, ★ number, country name, XP bar; phone without the name) left of ☰, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel, and the `ColonyHub` row: Progreso, Encargos, Registro, Sandbox)
+  +-- SkirmishButton (CanvasLayer 10) -- the old MISIONES button next to CONSTRUIR; still in the scene but hidden by BottomBar (its Misiones button replaces it)
+  +-- ContractPanel (CanvasLayer 11) -- ENCARGOS: one card per source (clock, what they want with the missing part in red, the reward in icons, ENTREGAR / No, gracias), opened from the COLONIA card (tap the rank) (docs/27)
+  +-- BottomBar (CanvasLayer 10) -- the bottom bar (docs/28 §12): Ejército, Misiones (red dot) | CONSTRUIR's gap | Mercado, Investigar, Ayuda; round blue buttons, name under them on PC/tablet, icon only on a phone; grey + lock + reason on hold when not available (slot `bottom_bar`)
+  +-- PauseMenu (CanvasLayer 30) -- THE game menu (round ☰ top-right): AJUSTES · PARTIDAS · SALIR + speed x1/x2 inside (Historia / Informar fallo small at the foot), real pause; ESC / Android back; still adds the GameSpeedButton sibling (hidden, it carries the F shortcut)
+  +-- TitleMenu (CanvasLayer 30) -- main menu on launch and from ☰ → SALIR
 
 Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
   +-- Camera2D (Camera2DController) / StormTint (CanvasModulate, StormTint2D) / Island (Island2D)
   +-- GridOverlay (GridOverlay2D) / BuildingPlacer (BuildingPlacer2D) / MapGenerator (MapGenerator2D)
-  +-- OnScreenControls ... TitleMenu -- the same 25 UI nodes as above
+  +-- OnScreenControls ... TitleMenu -- the same 26 UI nodes as above (BottomBar included)
 
 Created at runtime, not in either .tscn:
   PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, three folios in plain language
   QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks; no longer opens by itself (2026-10-14), texts in AYUDA
   WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: workers and citizens walking the roads (view only, docs/04)
-  HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from ☰ MENÚ
+  HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from the bottom bar (Ayuda)
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker (step 1) and the country name + flag (step 2), created by GameManager.request_new_game()
   ColonyIdentityPanel (layer 41, scripts/ui/ColonyIdentityPanel.gd) -- the country name + flag editor: open("new") from NewGameDialog, open("edit") from RankPanel's COLONIA card
   SavesPanel (layer 40, scripts/ui/SavesPanel.gd) -- PARTIDAS, the saved-games list, created by GameManager.open_saves_list()
@@ -164,11 +165,15 @@ UI panels are positioned by `UILayoutManager` using the slot definitions in
 anchors (`tip_*`) —, `NARROW_SLOTS` / `COLUMN_SLOTS` for narrow canvases, panel->slot map, slot
 conflicts).
 `UIManager.open_panel()` handles stacking and closes conflicting panels.
-All styling comes from the static `UITheme` class. A second style, the
-"maqueta" redesign (`CartoonTheme`, `scripts/ui/CartoonIcon.gd`, guide in
-`docs/28-guia-ui.md`), is switched on with `UITheme.use_style("cartoon")` (or
-`-- --ui-style=cartoon`); the default is still `"classic"` until the phase-2
-redesign lands, and its mockups come from `tools/ui_mockup_probe.gd`. Panels and buttons are plain
+All styling comes from the static `UITheme` class. Since the phase-2 redesign
+(`feat/ui2-hud`, 2026-10-18) the **default style is the "maqueta" one**
+(`UITheme.STYLE_DEFAULT = "cartoon"`: `CartoonTheme`, `scripts/ui/CartoonIcon.gd`,
+Baloo 2 + Nunito Sans, dark thin HUD + light cream windows; guide in
+`docs/28-guia-ui.md`); `"classic"` stays as an internal fallback
+(`-- --ui-style=classic`), and the mockups come from `tools/ui_mockup_probe.gd`.
+On a phone canvas (< 450 short side, `CartoonTheme.phone`, set by DeviceProfile)
+`UILayoutConfig.PHONE_SLOTS` is merged in `UILayoutManager.get_slot()` before
+`NARROW_SLOTS`. Under the old style, panels and buttons are plain
 boxes since 2026-09-28 (`UITheme.METAL_TEXTURES = false`; the metal 9-patch
 textures generated by `tools/gen_ui_textures.gd` stay in `assets/` in case they
 come back), and every `ScrollContainer` drags with finger or mouse
@@ -586,7 +591,7 @@ names like "Liga de Vaporia" in ES/EN, a short ES/EN word filter in
 `draw_spec()` for lists). Rank 1 opens 5 patterns, 4 emblems and 6 colours; the
 showier ones come by rank (`rank_rewards`). Picked in the editor
 `scripts/ui/ColonyIdentityPanel.gd` (`open("new"|"edit")`, signals `confirmed` /
-`cancelled`), opened from ☰ MENÚ → COLONIA (RankPanel) and as the New Game step (NewGameDialog →
+`cancelled`), opened from the COLONIA card (tap the rank badge, RankPanel) and as the New Game step (NewGameDialog →
 `GameManager.start_new_game(mode, tier, identity)`; `_new_game()` applies it with
 `RankManager.set_colony()` right after `RankManager.reset()`). Flies on the Nucleo and
 on every Barracks, and on no other building (2026-10-18: not on the HQ any more;
@@ -613,8 +618,8 @@ materials; pays gold or scarce resources). Rewards are fixed when the contract
 appears. Colono: missing one costs nothing; Gobernador: missing or refusing lowers
 that source's reputation and cuts its next rewards. Pure model
 `scripts/economy/ContractBoard.gd` (returns events, own RNG, no `class_name`),
-service `ContractManager` (last autoload), panel `ContractPanel` from ☰ MENÚ →
-COLONIA. ¿QUÉ HACER? shows a deliverable contract as an extra line
+service `ContractManager` (last autoload), panel `ContractPanel` from the COLONIA card
+(tap the rank badge; it left ☰ in the 2026-10 redesign). ¿QUÉ HACER? shows a deliverable contract as an extra line
 (`Objectives.contract_step()`, outside `next_step()` so the line probe is unchanged).
 Tunables `contract_*` at the end of `GameConfig`; mode rule `"contracts"` (off in
 Sandbox). Saved as `"contracts"`; a save without it gets a fresh board. Values not
@@ -705,7 +710,7 @@ fixed for the run; saves without `tier` load as Colono.
   (`remove_units()`), so Power never lies while a column is out.
 - EventBus signals: `unit_training_started`, `unit_trained`, `army_changed`,
   `army_upkeep_unpaid`, `unit_training_cancelled`, `army_deserted`.
-- The Ejército and Misiones (old Escaramuzas) entries of ☰ MENÚ → COLONIA only appear once a military building (Barracks, Shipyard or Aerodrome) exists.
+- The Ejército and Misiones buttons of the bottom bar (BottomBar) stay locked (grey, padlock, reason on hold) until a military building (Barracks, Shipyard or Aerodrome) exists.
 - Combat stats for these unit types are separate, in
   `GameConfig.combat_unit_stats` — see `docs/15-combat.md` §8.
 - **The regiment (cosmetic only, 2026-10-14, `docs/15-combat.md` §12):** name, colour
@@ -952,7 +957,7 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
 - `[audio]`: `master` / `music` / `sfx` / `ambient` volumes (sliders in SettingsPanel)
   and `music_enabled`;
 - `[ui]`: `grid_visible` (map grid toggle, off by default; GridOverlayControl applies it, BuildingPlacer
-  restores it after placement, never in Minimal quality), `helper_visible` (help callouts, on by default),
+  restores it after placement, never in Minimal quality), `helper_visible` (help callouts, OFF by default since the 2026-10 redesign; Ayuda turns them on, the guided tutorial forces its own),
   `touch_controls` (`auto` / `always` / `never`; "auto" follows the device profile:
   tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
   `touch_controls_opacity`, `instructors_visible` (the instructor busts, docs/23 §9), `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
@@ -999,7 +1004,7 @@ and Settings closes; accepted). With a board open it does not reload
   `GameConfig._ready()` via `OS.add_logger()`. Writes `user://logs/registro.txt` in
   blocks every 3 s (and on close / background), 200 KB cap, 2 rotations, repeated
   lines counted. Never leaves the device.
-- **Report:** ☰ MENÚ → PARTIDA → Informar de un fallo copies `BugReport.build()`
+- **Report:** ☰ → Informar de un fallo (small, at the foot of the menu) copies `BugReport.build()`
   (version, OS, GPU/renderer, profile, quality, view, locale, mode/tier, era, speed,
   last 40 log lines) to the clipboard. `BugReport.sanitize()` turns home-dir paths
   into `~` and the colony name into `<colonia>`.
@@ -1048,7 +1053,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
 - **Nueva partida never deletes**: `start_new_game()` saves the current game and starts the new one in a new slot. With
   five, `request_new_game()` opens the list (`SavesPanel`, `make_room`) to delete one first. A fresh island that was born
   by itself and never built on (`is_current_disposable()`) is reused instead of taking a place. The list
-  (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ MENÚ → PARTIDA) has Load and Delete
+  (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ → PARTIDAS) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
 - Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views

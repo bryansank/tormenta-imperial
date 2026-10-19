@@ -34,6 +34,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/RankPanel.tscn" id="rango_gobernador"]
 [ext_resource type="PackedScene" path="res://scenes/ui/SkirmishButton.tscn" id="boton_escaramuzas"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ContractPanel.tscn" id="encargos"]
+[ext_resource type="PackedScene" path="res://scenes/ui/BottomBar.tscn" id="barra_abajo"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.32, 0.56, 0.86, 1)
@@ -175,6 +176,8 @@ script = ExtResource("7")
 
 [node name="SkirmishButton" parent="." instance=ExtResource("boton_escaramuzas")]
 [node name="ContractPanel" parent="." instance=ExtResource("encargos")]
+
+[node name="BottomBar" parent="." instance=ExtResource("barra_abajo")]
 
 [node name="PauseMenu" parent="." instance=ExtResource("27")]
 

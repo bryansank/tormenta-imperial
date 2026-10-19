@@ -127,6 +127,11 @@ func _check_column_state() -> void:
 ## pantalla estrecha encima. Todo el manager lee los slots por aqui.
 func get_slot(slot_name: String) -> Dictionary:
 	var base: Dictionary = UILayoutConfig.SLOTS.get(slot_name, {})
+	# Telefono (docs/28 §4): margenes de 8 y la barra de abajo mas baja. Va
+	# debajo de lo estrecho: en vertical manda NARROW_SLOTS.
+	if is_phone_canvas() and UILayoutConfig.PHONE_SLOTS.has(slot_name):
+		base = base.duplicate()
+		base.merge(UILayoutConfig.PHONE_SLOTS[slot_name], true)
 	var override: Dictionary = {}
 	if is_narrow():
 		override = UILayoutConfig.NARROW_SLOTS.get(slot_name, {})
@@ -142,7 +147,18 @@ func get_slot(slot_name: String) -> Dictionary:
 	if lift > 0.0 and UILayoutConfig.sits_above_touch_controls(slot_name, merged, is_narrow()):
 		merged = merged.duplicate(true)
 		merged["margin"]["bottom"] = float(merged["margin"]["bottom"]) + lift
+	# La linea del siguiente paso vive en la esquina de la cruceta: con la
+	# cruceta en pantalla (tablet) sube por encima de ella.
+	if bool(merged.get("above_dpad", false)) and GameConfig.onscreen_controls_visible():
+		merged = merged.duplicate(true)
+		merged["margin"]["bottom"] = float(merged["margin"]["bottom"]) \
+			+ UILayoutConfig.TOUCH_DPAD_SIDE + UILayoutConfig.ABOVE_DPAD_GAP
 	return merged
+
+## Lienzo de telefono (CartoonTheme.phone, lo pone DeviceProfile): PHONE_SLOTS.
+## Solo en el estilo maqueta: el clasico no tiene disposicion de telefono.
+func is_phone_canvas() -> bool:
+	return CartoonTheme.phone and UITheme.is_cartoon()
 
 ## Escala de los controles en pantalla que cabe en este lienzo (la de Ajustes,
 ## recortada por UILayoutConfig.touch_controls_fit). OnScreenControls y este
@@ -152,7 +168,9 @@ func touch_controls_scale() -> float:
 
 ## Lo que suben los slots de encima de los controles; 0 sin controles en pantalla.
 func touch_controls_lift() -> float:
-	if not GameConfig.touch_controls_enabled():
+	# La cruceta y el zoom, no "se juega con el dedo": en telefono van apagados
+	# de serie y lo de abajo no tiene que subir (docs/28 §12).
+	if not GameConfig.onscreen_controls_visible():
 		return 0.0
 	return UILayoutConfig.touch_controls_lift(touch_controls_scale())
 
