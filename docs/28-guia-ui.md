@@ -461,3 +461,43 @@ consejos e índice de ayuda en `docs/23` §10. Lo demás:
 
 Pendiente de decidir (no se tocó): los globos de ayuda siguen **encendidos** de
 serie (`GameConfig.ui_helper_visible`); §12 propone apagarlos.
+
+## 19. Ronda de Bryan sobre la versión previa (2026-10-19, `integracion/ui-v2`)
+
+- **Una sola pregunta de teléfono:** `CartoonTheme.is_phone()` lee la bandera
+  `phone` que fija `DeviceProfile` (perfil Móvil o lienzo de menos de 450 de lado
+  corto). Se quitaron `phone_canvas()` y `menus_phone()`.
+- **Tema de las ventanas:** Ajustes › Pantalla › Tema: *Claro* (crema, de serie)
+  u *Oscuro* (fondo `#243241`, tarjetas `#2e3f51`, borde `#4fa3e0`, texto
+  `#f3f7fb` / tenue `#a9bccd`). Guardado en `settings.cfg [interfaz] ui_theme`;
+  se aplica al momento (rehace la interfaz). Todo sale de `CartoonTheme.c()`
+  (`window_theme`, `_SURF_NIGHT`); el HUD es oscuro en los dos. Alto contraste
+  y daltonismo siguen mandando.
+- **Rejillas de piezas** (País y bandera, regimiento): la pieza arriba, entera;
+  cerrada, a media luz y con una **placa clara** «candado + rango» debajo
+  (`CartoonTheme.rank_plate`), nunca pintada encima. La tarjeta mide lo que su
+  contenido (`fit_button_content`); la elegida, borde de latón de 5
+  (`pick_style`).
+- **CONSTRUIR a pantalla completa** en todos los perfiles; la ficha a la derecha
+  en tablet y PC. El nombre del edificio va siempre entero: la fila crece a dos
+  líneas antes que cortar.
+- **Ficha del edificio:** 14 px de margen con el borde (más la zona segura), la
+  cinta ya no tapa lo primero (`CartoonTheme.sync_ribbon_pad`), la mejora en
+  una tarjeta (efecto + MEJORAR + coste), y los botones de abajo con nombre en
+  PC y tablet (en teléfono, el nombre al mantener).
+- **Procesos del taller: tandas que acumulan.** Cada ×1 / ×5 / MÁX (verdes, con
+  el verbo encima: «Fabricar (cada toque suma):») suma tandas a la cola de ese
+  proceso; «En cola: N», **−1** y **Vaciar** (devuelven entero lo no empezado).
+  Se cobra al encolar (`ProcessManager.enqueue_process`), tope
+  `process_batch_max`; con otro proceso en marcha la tarjeta se apaga y dice
+  «Ocupado: …».
+- **Se entrena en los Cuarteles:** la ficha del Cuartel, Astillero y Aeródromo
+  trae ENTRENAR (`TrainingSection`); el botón Ejército de la barra lleva al
+  edificio militar (centra la cámara y abre su ficha; con varios, rota).
+  `ArmyPanel` queda como resumen («Ver ejército»).
+- **Tutorial menos pesado:** los pasos de espera (`need_*`, `wait_*`) se ven
+  4 s y se pliegan a un recordatorio con la cara de la Capitana (o con «Más
+  tarde»); tocarlo los abre; a los 90 s sin avance solo se resalta. Los pasos
+  de acción siguen como antes.
+- **La línea del siguiente paso** va encima de la barra de abajo en PC (en la
+  misma fila se montaba sobre Ejército / Misiones).

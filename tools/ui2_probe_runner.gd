@@ -26,10 +26,13 @@ func _run() -> void:
 	GameConfig.ui_layout = {}
 	GameConfig.ui_helper_visible = false
 	GameConfig.ui_touch_controls = "auto"
+	# --theme=dark: el tema oscuro de las ventanas (Ajustes > Pantalla > Tema).
+	GameConfig.ui_theme = "dark" if _arg("theme") == "dark" else "light"
 	DeviceProfile.apply_all()
 	await _frames(5)
 	var win := DisplayServer.window_get_size()
-	_tag = "%s_%s_%dx%d%s" % [_arg("view", "3d"), DeviceProfile.current(), win.x, win.y,
+	_tag = "%s_%s_%dx%d%s%s" % [_arg("view", "3d"), DeviceProfile.current(), win.x, win.y,
+		"_oscuro" if _arg("theme") == "dark" else "",
 		("_" + _arg("tag")) if _arg("tag") != "" else ""]
 	var scene := "res://scenes/main/Main2D.tscn" if _arg("view") == "2d" else "res://scenes/main/Main.tscn"
 
@@ -63,6 +66,24 @@ func _run() -> void:
 	await _shot("t_quehacer")
 	UIManager.close_all_windows()
 	await _frames(5)
+	# Tutorial: un paso de espera (sin oro ni madera) abierto y luego plegado.
+	var tut: CanvasLayer = main.get_node_or_null("TutorialPanel")
+	if tut:
+		var saved_res := {"gold": ResourceManager.get_amount(ResourceManager.Type.GOLD),
+			"wood": ResourceManager.get_amount(ResourceManager.Type.WOOD)}
+		ResourceManager.set_amounts({"gold": 10, "wood": 5})
+		tut.visible = true
+		TutorialManager.intro_seen = true
+		TutorialManager.start_guide(false)
+		await _seconds(1.5)
+		print("ui2_probe: paso del tutorial=", TutorialManager.current_step())
+		await _shot("t_tutorial_paso")
+		await _seconds(4.5)
+		await _shot("t_tutorial_recordatorio")
+		TutorialManager.finish_guide()
+		await _frames(5)
+		tut.visible = false
+		ResourceManager.set_amounts(saved_res)
 	# Menu principal con partida que continuar.
 	var title: Node = main.get_node_or_null("TitleMenu")
 	if title:
@@ -151,6 +172,44 @@ func _run() -> void:
 		EventBus.building_deselected.emit()
 		await _frames(5)
 	await _click_nucleo("g_ficha_nucleo")
+	# El Nucleo con una cola de tandas: x1 + x1 + x5 = 7.
+	var core: Node = null
+	for info in GridManager.get_all_buildings():
+		if (info["data"] as BuildingData).is_core:
+			core = info["node"]
+	if core:
+		var procs: Array = ProcessManager.get_processes_for("nucleo")
+		if not procs.is_empty():
+			ProcessManager.enqueue_process(core, procs[0], 1)
+			ProcessManager.enqueue_process(core, procs[0], 1)
+			ProcessManager.enqueue_process(core, procs[0], 5)
+		await _click_nucleo("g_ficha_nucleo_cola")
+		ProcessManager.cancel(core)
+	# El Cuartel: su ficha trae ENTRENAR.
+	for info in GridManager.get_all_buildings():
+		if (info["data"] as BuildingData).id == "barracks":
+			ArmyManager.train("infantry")
+			EventBus.building_clicked.emit(info["node"], info["data"])
+			await _frames(15)
+			await _shot("g_ficha_cuartel")
+			EventBus.building_deselected.emit()
+			await _frames(5)
+			break
+	# PAIS Y BANDERA: fondos y colores.
+	if rank and rank.has_method("open_editor"):
+		rank.open_editor()
+		await _frames(15)
+		await _shot("g_pais_bandera")
+		var ed: Node = rank.editor()
+		if ed:
+			ed.select_tab("colors")
+			await _frames(10)
+			await _shot("g_pais_bandera_colores")
+			ed.select_tab("emblems")
+			await _frames(10)
+			await _shot("g_pais_bandera_emblemas")
+			ed.cancel()
+		await _frames(5)
 
 	# Mercado, Investigar, Encargos.
 	for pair in [["MarketPanel", "g_mercado"], ["TechTreePanel", "g_investigar"]]:

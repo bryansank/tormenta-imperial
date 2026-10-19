@@ -126,7 +126,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- NotificationPanel (CanvasLayer 11) -- THE single place for alerts (warning, danger, notice, combat and achievement = milestone/era/rank-up; docs/21 §14): one column top-left under the resources, max 2 (1 on phone), the rest queued and repeats grouped "×3" (`AlertQueue`), icon + one sentence + ✕, no animations; with a window, the board or the tutorial card over it they wait (one small danger only) + the activity log, opened from ☰ MENÚ → REGISTRO (the old workers/morale status card is gone: those are ResourceHUD chips; the objective strip at the top centre is gone too, 2026-10-05: the next step lives in ¿QUÉ HACER?)
   +-- ObjectivePanel (CanvasLayer 15) -- ¿QUÉ HACER?: the next step, from Objectives.next_step(); on the map, a foldable line with the Captain's face, bottom-left (own layer 10, slot `next_step`); tapping the text opens the panel
   +-- TechTreePanel (CanvasLayer 11) -- INVESTIGAR window (CartoonTheme): 3 branches x 5 tiers of two-line cards + the detail with INVESTIGAR (branch rail on phone); opened from a Laboratory building or `open()`
-  +-- ArmyPanel (CanvasLayer 11) -- EJÉRCITO: Tierra/Mar/Aire tabs, train with + (cost in icons), Military Power, troops/queue, upkeep, who is away on campaign; (?) opens each unit's card (UnitCard). Cartoon window since UI phase 2 (docs/28 §15)
+  +-- ArmyPanel (CanvasLayer 11) -- EJÉRCITO: Tierra/Mar/Aire tabs, train with + (cost in icons), Military Power, troops/queue, upkeep, who is away on campaign; (?) opens each unit's card (UnitCard). Cartoon window since UI phase 2 (docs/28 §15) Since 2026-10-19 training happens in the military building's card (BuildingInfoPanel + `scripts/ui/TrainingSection.gd`, the same rows ArmyPanel uses); the bar's Ejército button goes to the Barracks, and ArmyPanel is the summary ("Ver ejército")
   +-- SettingsPanel (CanvasLayer 15) -- cream window, icon tab rail: Sonido · Pantalla (colours/contrast/layout folded under "Más opciones") · Controles · Juego (persisted in settings.cfg; docs/21 §2)
   +-- HelperPanel (CanvasLayer 14) -- help callouts and tip cards (19), one at a time with ✕ + auto-close, one sentence + "Más" (cream bubble pointing at the instructor); building guide; instances HelpIndexPanel
   +-- SkirmishPanel (CanvasLayer 11) -- MISIONES: Tierra/Mar/Aire/Ataques rápidos tabs, Final Assault checklist, mission card (track, enemies, loot, odds) beside the troop picker (− n +), ¡AL ATAQUE! fixed at the bottom; campaign status while a column is out; "QUE BAJEN" (Final Audit)
@@ -495,6 +495,7 @@ hand mining there holds `mining_workers`, needs no road and spends no deposit us
   puesto: 8 · libres: 4")
 - Nucleo provides 5 starting room. Houses provide 6 each
 - Each production building requires workers (see table above), first built = first served
+- **Workshop queue (2026-10-19):** each ×1 / ×5 / MÁX in a building card ADDS batches to that process (`ProcessManager.enqueue_process` / `enqueue_mining`, paid when queued, capped by `process_batch_max`; `dequeue()` removes batches not started and refunds them in full). One process per building at a time; the save is the same `count` / `total`
 - **Retirar / poner trabajadores:** `PopulationManager.set_workers_off(node, off)` (button
   in BuildingInfoPanel) frees a building's workers for others and stops it; saved per
   building as `workers_off`. Badge: "sin trabajadores (retirados)"
@@ -982,7 +983,7 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   `touch_controls` (`auto` / `always` / `never`; "auto" follows the device profile:
   tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
   `touch_controls_opacity`, `instructors_visible` (the instructor busts, docs/23 §9), `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
-- `[interfaz]`: device profile, UI scale, text size, palette, high contrast, panel
+- `[interfaz]`: `ui_theme` (`light` cream windows / `dark` blue-grey windows, `CartoonTheme.window_theme`), device profile, UI scale, text size, palette, high contrast, panel
   opacity, hidden HUD elements, moved layout, `touch_controls_size` (size of the
   on-screen controls: `auto` = the profile's, PC 100 % / tablet 115 % / phone
   130 %, or `small` … `xlarge`; docs/21 §9), `fps_cap` (`auto` / `30`…`120` /
