@@ -152,16 +152,37 @@ bloque viva solo y no choque con otras ramas que tocan esas tablas.
 
 | ID | Nombre | Coste G/S/O/W | Obreros | Obra | Topes (era 1/2/3) | Produce | Regla |
 |----|--------|------|---|---|---|---|---|
-| `fishing_dock` | Muelle de pesca | 60/0/0/40 | 2 | 6 s | 3/4/6 (`fishing_dock_limits_by_era`) | 12 comida cada 30 s (24/min a moral 50, nivel 1) | En la orilla, tocando un **banco de peces** (alcance 1) |
+| `fishing_dock` | Muelle de pesca | 60/0/0/40 | 2 | 6 s | 3/4/6 (`fishing_dock_limits_by_era`) | 12 comida + 3 oro cada 30 s (24 comida y 6 oro por minuto a moral 50, nivel 1) | En la costa, con un **banco de peces** mar adentro a alcance 4; 2 muelles por banco |
 
-- **Dónde va.** Su regla de yacimiento (`building_deposit_rules["fishing_dock"]`:
-  `fish_shoal`, alcance 1, no lo consume, aviso `LBL_NEEDS_FISH_NEAR`) basta para
-  "debe tocar la costa": el banco vive en celdas de agua, y toda celda de tierra que lo
-  toca (diagonal incluida) es costa (`PlacementRules.is_coast_cell`). No está en
-  `PlacementRules.SHORE_ONLY` (las palmeras): así la colocación táctil busca sitios
-  alrededor de los bancos (`PlacementAssist.valid_spots`) y no por toda la costa. Lleva
-  carretera como todo, y el primero junto a un banco tiende el anillo de acceso gratis
-  como los demás extractores (solo los tramos de tierra unidos a la red).
+- **Dónde va (fix/peces-en-el-mar, 2026-10-19).** El banco vive mar adentro (docs/02),
+  así que tocarlo ya no pone el muelle en la orilla. Su regla
+  (`building_deposit_rules["fishing_dock"]`): `fish_shoal`, alcance
+  `fishing_dock_reach` (4, Chebyshev desde la huella: hasta tres casillas de agua por
+  medio), `"shore": true` (alguna celda de la huella toca el agua,
+  `PlacementRules.touches_shore`; si no, motivo `"deposit"` con su propia frase
+  `LBL_NEEDS_FISH_NEAR`), `"per_deposit"` = `fishing_dock_per_shoal` (2), no lo
+  consume. **Dos muelles por banco:** `PlacementRules.deposit_with_room()` no guarda a
+  qué banco va cada muelle: reparte los que hay entre los bancos que alcanzan
+  (emparejamiento con capacidades, Kuhn; 6 muelles y 5 bancos como mucho) y el nuevo
+  cabe si con él no se queda ningún muelle de antes sin banco; elige el banco más
+  cercano que aún tiene sitio. Un muelle de una partida vieja que ya pasaba del tope no
+  bloquea a los demás. No está en `PlacementRules.SHORE_ONLY` (las palmeras): la
+  colocación táctil busca sitios alrededor de los bancos (`PlacementAssist.valid_spots`,
+  con el alcance 4) y no por toda la costa; `MapGenerator.buildable_spots_near` y
+  `_spots_for` también piden la costa para un banco de mar. Lleva carretera como todo,
+  pero **sin anillo de acceso** (`wants_access_ring`: el anillo alrededor de un banco
+  mar adentro caería casi todo en el agua y pavimentaría la costa de los otros muelles).
+- **Embarcadero.** Una pasarela de tablas sobre pilotes desde la costa hasta su banco:
+  `MapGenerator.pier_path(cells)` da las celdas de agua entre la huella y el banco más
+  cercano (en línea, pasos de rey) y la pintan `scripts/buildings/DockPier3D.gd` (una
+  tabla y dos pilotes por celda, mallas y material compartidos, sin sombra) y
+  `scripts/view2d/DockPier2D.gd` (un `_draw`). Solo dibujo: no ocupa la rejilla. Se
+  rehace al colocar, mover o cargar (diferido), nunca por fotograma.
+- **Comida y oro en la misma fuente.** El `.tres` rinde `produces_food` 12 +
+  `produces_gold` 3 cada 30 s: 0,1 oro/s frente a los 0,67 de una Mina de oro (8/12 s),
+  una propina que no rompe la economía del oro. Los dos van al almacén del edificio
+  (`fishing_dock_stock_cap` 150 entre los dos, 10 ciclos) y la ficha y CONSTRUIR los
+  enseñan con sus iconos (recorren todos los `produces_*`).
 - **Comparado con la Granja** (20 / 25 / 30 de comida por minuto según el cultivo):
   rinde algo menos que la Granja con cultivo largo, pero pesca sin parar, sin elegir ni
   esperar cultivo, y el Molino no le afecta. Lo limitan su tope y los bancos (3-5 por
@@ -461,7 +482,7 @@ Defined in `GameConfig.building_deposit_rules` and checked by
 | gold_mine | gold_vein | 1 | no |
 | foundry | iron_deposit | 1 | no |
 | refinery | oil_well | 0 (on top) | yes |
-| fishing_dock | fish_shoal (en el agua) | 1 | no (nunca se agota) |
+| fishing_dock | fish_shoal (mar adentro; el muelle en la costa, 2 por banco) | 4 | no (nunca se agota) |
 
 The three reach-1 extractors also need their deposit **alive**: if it is mined out by
 hand, they stop ("sin veta", `PlacementRules.has_its_deposit()`).

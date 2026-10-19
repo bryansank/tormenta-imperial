@@ -17,7 +17,7 @@ The economy is era-gated: resources unlock progressively as the player advances.
 **Food (2026-10-04).** `ResourceManager.Type.FOOD`, appended after the materials so no
 number moves. It is a **pool** resource (it counts against the shared cap, the Tithe
 takes it last) and it is grown at the **Farm** (docs/03) or, since 1.1, caught at the
-**Fishing dock** on the shore (docs/03, "Muelle de pesca"). Buy and sell it at the
+**Fishing dock** on the coast, which also brings in a little gold (docs/03, "Muelle de pesca"). Buy and sell it at the
 Market (base price 2, the cheapest: buying food is the immediate fix for hunger). A
 save from before food loads with `GameConfig.legacy_save_food` (120) so nobody starves
 on load.
@@ -200,8 +200,9 @@ One **shared pool** for the five resources (not a cap per resource):
 ## Where extractors can go
 
 Sawmill, Gold Mine and Foundry must touch a forest, a gold vein and an iron deposit
-(reach 1); the Fishing dock (1.1) stands on the shore touching a school of fish
-(`fish_shoal`, reach 1, in the water: see "Yacimientos de mar" below); the Refinery
+(reach 1); the Fishing dock (1.1) stands on the coast with a school of fish out at
+sea within reach 4 (`fish_shoal`, rule `shore`, two docks per school: see
+"Yacimientos de mar" below); the Refinery
 sits on an oil well and consumes it
 (`GameConfig.building_deposit_rules`, applied by `PlacementRules`). Like every
 building, they also need a road joined to the Núcleo (docs/03 "Road network").
@@ -232,11 +233,16 @@ building, they also need a road joined to the Núcleo (docs/03 "Road network").
 El primer recurso del mar, el gancho que dejó `MapGenerator.shore_cells()`. Lo
 explota el **Muelle de pesca** (docs/03).
 
-- **Dónde:** en celdas de **agua** de la rejilla (las de la isla irregular), 2x2 o 3x2,
-  todas agua, sin nada encima y tocando tierra (diagonal incluida). Nunca en la acera
-  del Núcleo ni a menos de `deposit_core_gap` de ella. Entre dos bancos quedan al menos
-  `spacing` (6) casillas. Cada uno deja hueco en la orilla para un muelle 2x2 con
-  camino a la red (`_deposit_is_workable`, la misma regla que los de tierra).
+- **Dónde (fix/peces-en-el-mar, 2026-10-19: "los peces no van en la costa, van en el
+  mar"):** en celdas de **agua** de la rejilla (las de la isla irregular), 2x2 o 3x2,
+  todas agua, sin nada encima y **mar adentro**: entre `min_gap` (1) y `max_gap` (3)
+  casillas de agua las separan de la tierra más cercana (Chebyshev; nunca pegados a la
+  arena). Nunca en la acera del Núcleo ni a menos de `deposit_core_gap` de ella. Entre
+  dos bancos quedan al menos `spacing` (6) casillas. Cada uno deja hueco en la costa
+  para un muelle 2x2 que lo alcance (`fishing_dock_reach` 4: hasta tres casillas de agua
+  por medio) con camino a la red (`_deposit_is_workable`, la misma regla que los de
+  tierra). `edge_water` deja 3 casillas de agua en el borde de la rejilla, así que
+  `min_gap` 2 casi solo cabría en las calas: por eso 1.
 - **Cuántos:** `GameConfig.sea_deposit_rolls["fish_shoal"]`: 3-5 por isla, un 35 % de
   3 casillas de largo. `MapGenerator.SHORE_DEPOSIT_IDS` = `["fish_shoal"]`;
   `_fill_sea_type()` los sortea al final de `generate_new_map()` con **su propio azar**
@@ -253,6 +259,11 @@ explota el **Muelle de pesca** (docs/03).
   `GameManager` llama a `MapGenerator.ensure_shore_deposits()`, que los sortea (con la
   semilla de su isla) si no hay ninguno. En la isla cuadrada de antes de 2026-10-12 no
   hay agua dentro de la rejilla: no sale ninguno y el muelle no se puede construir.
+  Una partida de antes de fix/peces-en-el-mar trae sus bancos pegados a la orilla: al
+  cargar, los que **ningún muelle alcanza** se quitan y se vuelve a sortear mar adentro
+  hasta el número de la isla (`_drop_unused_coast_hugging`); los que **tienen muelle se
+  respetan** donde están, para no dejarlo sin peces (alcance 4 incluye el 1 de antes).
+  Se llama después de poner los edificios guardados.
 - **Aspecto:** 3D en `DepositMesh._fish_shoal()` a la altura del mar
   (`DepositMesh.SEA_Y` = `IslandGenerator.WATER_Y`, -0,5): mancha de agua honda con su
   orla clara, lomos y aletas de peces asomando, espuma, una boya roja y blanca y, lo
@@ -260,10 +271,15 @@ explota el **Muelle de pesca** (docs/03).
   de contacto, una malla en caché por tamaño y variante. 2D en
   `BuildingArt2D._dep_fish_shoal()`, horneado en `ArtCache2D` como los demás. Sin
   etapas: nunca se agota.
-- **La arena no los tapa (ronda visual de la 1.1):** los bancos viven en la primera
-  franja de agua (el muelle tiene que tocarlos desde la orilla), justo donde la playa 3D
-  de `IslandGenerator` baja del césped al mar, y la arena los tapaba casi enteros. La
-  isla abre un hueco en la arena sobre cada banco: `MapGenerator.sea_deposit_rects()`
+- **La arena no los tapa (ronda visual de la 1.1):** hasta fix/peces-en-el-mar los
+  bancos vivían en la primera franja de agua, justo donde la playa 3D de
+  `IslandGenerator` baja del césped al mar, y la arena los tapaba casi enteros. Mar
+  adentro, con una casilla de agua por medio, la cola de la playa 3D (llega ~1,3
+  casillas más allá de la última tierra) aún roza su borde y la playa 2D
+  (`Island2D.SHORE_WIDTH`, más de dos casillas) los cubre, así que el hueco sigue en
+  las dos vistas, acotado a la huella del banco (en 2D abierto hacia el mar: agua azul
+  alrededor del banco, nunca hacia la tierra). La isla abre un hueco en la arena sobre
+  cada banco: `MapGenerator.sea_deposit_rects()`
   (centro XZ y semiejes) → `IslandGenerator.set_sand_holes()` → uniformes `holes` /
   `hole_count` de `island_sand.gdshader` (hasta 8, rectángulo redondeado, `discard`). Se
   avisa diferido y solo cuando cambian los bancos (sortear, quitar, limpiar), nunca por

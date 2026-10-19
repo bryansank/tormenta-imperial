@@ -21,6 +21,7 @@ const StatusBadge2D := preload("res://scripts/view2d/StatusBadge2D.gd")
 ## Icono flotante de "listo para recoger" (2026-10-04).
 const StockIcon2D := preload("res://scripts/view2d/StockIcon2D.gd")
 const ColonyFlag2D := preload("res://scripts/view2d/ColonyFlag2D.gd")
+const DockPier2D := preload("res://scripts/view2d/DockPier2D.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 ## Obra por fases, ruina y actividad: la misma regla que en 3D (docs/03).
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
@@ -111,6 +112,11 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 	# La calzada no cambia sola (ni obra, ni vida, ni nivel): sin _process (lo
 	# apaga _ready), se repinta cuando la rejilla cambia a su alrededor o al
 	# seleccionarla.
+	# El embarcadero del Muelle de pesca hasta su banco (fix/peces-en-el-mar).
+	if data.id == "fishing_dock":
+		var pier: Node2D = DockPier2D.new()
+		add_child(pier)
+		pier.setup(self)
 	# La bandera del pais sobre el Nucleo, los Cuarteles y los dibujos con
 	# mastil (el mastil y el letrero de la colonia: BuildingArt2D.has_flag_mount).
 	if ColonyFlag2D.flies_over(data) or Art.has_flag_mount(data.id):

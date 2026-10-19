@@ -1,10 +1,12 @@
 extends GdUnitTestSuite
 ## Bancos de peces (feat/muelle-pesca): el primer yacimiento de mar. Viven en
-## celdas de agua de la rejilla pegadas a la tierra, entre
+## celdas de agua de la rejilla MAR ADENTRO (fix/peces-en-el-mar: entre min_gap
+## y max_gap casillas de agua hasta la tierra), entre
 ## GameConfig.sea_deposit_rolls["fish_shoal"].min y max por isla, con su propio
 ## azar (semilla de la isla), cada uno con hueco en la orilla para un Muelle de
 ## pesca y camino a la red. No se agotan. Una partida vieja los recibe al cargar
-## (MapGenerator.ensure_shore_deposits).
+## (MapGenerator.ensure_shore_deposits), y los suyos pegados a la orilla se
+## recolocan mar adentro si ningun muelle los usa.
 ##
 ## Escrita sin correr (regla de Bryan: un solo pase de pruebas al final).
 ## Toca el GridManager real: cada caso lo deja limpio.
@@ -54,19 +56,28 @@ func test_every_island_brings_its_schools_of_fish() -> void:
 		assert_int(_shoals().size()).override_failure_message("semilla %d: %d bancos" % [s, _shoals().size()]) \
 			.is_between(int(roll["min"]), int(roll["max"]))
 
-func test_a_school_is_all_water_and_touches_the_land() -> void:
+## Casillas de agua entre el banco y la tierra mas cercana (Chebyshev - 1).
+func _gap_to_land(d: Dictionary) -> int:
+	var best := 999
+	for y in range(GridManager.grid_height):
+		for x in range(GridManager.grid_width):
+			if GridManager.is_land_cell(Vector2i(x, y)):
+				best = mini(best, MapGen.deposit_distance(Vector2i(d["cell_x"], d["cell_y"]),
+					Vector2i(d["size_x"], d["size_y"]), [Vector2i(x, y)]) - 1)
+	return best
+
+func test_a_school_is_all_water_and_out_at_sea() -> void:
+	var roll: Dictionary = GameConfig.sea_deposit_rolls[SHOAL]
 	for s in SEEDS:
 		_new_map(s)
 		for d in _shoals():
-			var touches := false
 			for c in _cells_of(d):
 				assert_bool(GridManager.is_water_cell(c)).override_failure_message(
 					"semilla %d: banco en tierra (%s)" % [s, c]).is_true()
-				for dx in [-1, 0, 1]:
-					for dy in [-1, 0, 1]:
-						if GridManager.is_land_cell(c + Vector2i(dx, dy)):
-							touches = true
-			assert_bool(touches).override_failure_message("semilla %d: banco lejos de la costa" % s).is_true()
+			# Ni pegado a la arena ni tan lejos que ningun muelle llegue.
+			assert_int(_gap_to_land(d)).override_failure_message("semilla %d: banco a %d casillas" % [s, _gap_to_land(d)]) \
+				.is_between(int(roll["min_gap"]), int(roll["max_gap"]))
+			assert_int(int(roll["max_gap"]) + 1).is_less_equal(GameConfig.fishing_dock_reach)
 
 func test_schools_keep_their_distance() -> void:
 	var gap: int = int(GameConfig.sea_deposit_rolls[SHOAL]["spacing"])
@@ -83,7 +94,7 @@ func test_every_school_leaves_room_for_a_dock_and_a_road() -> void:
 	for s in SEEDS:
 		_new_map(s)
 		assert_bool(_map.all_deposits_workable()).override_failure_message("semilla %d" % s).is_true()
-		assert_bool(_map.has_buildable_spot_near(SHOAL, Vector2i(2, 2), 1)).override_failure_message("semilla %d" % s).is_true()
+		assert_bool(_map.has_buildable_spot_near(SHOAL, Vector2i(2, 2), GameConfig.fishing_dock_reach)).override_failure_message("semilla %d" % s).is_true()
 
 func test_the_same_seed_gives_the_same_schools() -> void:
 	_new_map(4242)
@@ -143,6 +154,51 @@ func test_an_old_game_gets_the_same_schools_on_load() -> void:
 	# Con bancos ya puestos, no anade ninguno.
 	_map.ensure_shore_deposits()
 	assert_int(_shoals().size()).is_equal(first.size())
+
+## Una partida de antes de fix/peces-en-el-mar: un banco pegado a la orilla.
+func _hugging_spot() -> Vector2i:
+	for y in range(GridManager.grid_height - 1):
+		for x in range(GridManager.grid_width - 1):
+			var o := Vector2i(x, y)
+			var ok := true
+			for c in GridManager.cells_for(o, Vector2i(2, 2)):
+				if not GridManager.is_water_cell(c) or GridManager.get_building_at(c) != null:
+					ok = false
+			if ok and MapGen._has_land_within(o, Vector2i(2, 2), 0) \
+					and not Rect2i(o, Vector2i(2, 2)).grow(8).has_point(_map.core_origin()):
+				return o
+	return Vector2i(-1, -1)
+
+func test_an_old_coast_hugging_school_moves_out_to_sea_on_load() -> void:
+	_new_map(42)
+	var count := _shoals().size()
+	# Lo que traia una partida vieja: un banco mas, pegado a la arena, sin muelle.
+	var o := _hugging_spot()
+	assert_bool(o.x >= 0).is_true()
+	_map.spawn_deposit(SHOAL, o, -1, Vector2i(2, 2))
+	_map.ensure_shore_deposits()
+	for d in _shoals():
+		assert_int(_gap_to_land(d)).is_greater_equal(int(GameConfig.sea_deposit_rolls[SHOAL]["min_gap"]))
+	assert_int(_shoals().size()).is_greater_equal(count)
+
+func test_an_old_coast_hugging_school_with_its_dock_stays() -> void:
+	_new_map(42)
+	var o := _hugging_spot()
+	assert_bool(o.x >= 0).is_true()
+	var node: Node = _map.spawn_deposit(SHOAL, o, -1, Vector2i(2, 2))
+	# Su muelle de la 1.1, pegado a el (alcance 1 de entonces).
+	var dock_data: BuildingData = load("res://data/buildings/fishing_dock.tres")
+	var dock: Node3D = auto_free(Node3D.new())
+	var placed := false
+	for ox in range(o.x - 2, o.x + 3):
+		for oy in range(o.y - 2, o.y + 3):
+			if not placed and GridManager.can_place(Vector2i(ox, oy), Vector2i(2, 2)) \
+					and MapGen.deposit_within_reach(o, Vector2i(2, 2), GridManager.cells_for(Vector2i(ox, oy), Vector2i(2, 2)), 1):
+				placed = GridManager.place_building(Vector2i(ox, oy), dock_data, dock)
+	assert_bool(placed).is_true()
+	_map.ensure_shore_deposits()
+	assert_bool(is_instance_valid(node) and not node.is_queued_for_deletion()).is_true()
+	assert_object(GridManager.get_building_at(o)).is_same(node)
 
 func test_a_square_island_has_no_sea_inside_and_no_schools() -> void:
 	# La rejilla de antes (sin semilla de isla): toda tierra, el mar fuera.

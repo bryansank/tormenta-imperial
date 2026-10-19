@@ -11,6 +11,7 @@ enum State { IDLE, PLACING, MOVING }
 ## (a fresh clone runs the game headless before any editor scan).
 const StatusBadge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
 const ColonyFlag3D := preload("res://scripts/buildings/ColonyFlag3D.gd")
+const DockPier3D := preload("res://scripts/buildings/DockPier3D.gd")
 ## Las cuentas de pantalla -> suelo son estaticas y viven en InputService, que es
 ## quien las usa para el dedo. Se cargan por script (no por el autoload) para
 ## llamarlas como lo que son: funciones sueltas, sin instancia de por medio.
@@ -965,6 +966,12 @@ func _create_building_mesh(data: BuildingData) -> Node3D:
 		var lot: Node3D = Lot.new()
 		root.add_child(lot)
 		lot.setup(root, data)
+	# El Muelle de pesca saca su embarcadero hasta el banco, mar adentro
+	# (fix/peces-en-el-mar). Solo dibujo; las celdas, de MapGenerator.pier_path.
+	if data.id == "fishing_dock":
+		var pier: Node3D = DockPier3D.new()
+		root.add_child(pier)
+		pier.setup(root)
 	# La bandera del pais ondea sobre el Nucleo, los Cuarteles y todo modelo
 	# que traiga mastil (FlagAnchor: el mastil y el letrero de la colonia). El
 	# Cuartel General ya no (2026-10-18). Va la ultima: el cartel de estado se

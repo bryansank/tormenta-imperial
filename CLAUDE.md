@@ -117,7 +117,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- BuildingPlacer (Node3D, scenes/buildings/BuildingPlacer.tscn) -- placement/move/demolish, touch placement via PlacementAssist; every road drawn by one RoadBatch3D child (a MultiMesh per neighbour mask, at most 16 draw calls)
   +-- OnScreenControls (CanvasLayer 10) -- D-pad, zoom, rotate; "auto" = tablet only (`GameConfig.onscreen_controls_visible()`); a phone gets only rotate-building + CANCEL while placing
   +-- ResourceHUD (CanvasLayer 10) -- top-left dark thin bar: [icon] number chips (resources, free workers, morale once the Storm is armed; small name under it on PC, meaning in tooltips, a tap unfolds the detail) + 8 px storage bar (PC; the number on hold) + materials row; phone: 3 resources + free workers, the rest on tap
-  +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), on land only, none on the Núcleo sidewalk or the shore band (land next to the water), each with room and a road path for its extractor; then 3-5 schools of fish in the water next to the coast (`SHORE_DEPOSIT_IDS`, for the Fishing dock); `shore_cells()` is the hook for more sea/shore resources
+  +-- MapGenerator (Node) -- spawns 3-6 deposits of EACH type (`deposit_per_type_*`), on land only, none on the Núcleo sidewalk or the shore band (land next to the water), each with room and a road path for its extractor; then 3-5 schools of fish out at sea, 1-3 water cells off the coast (`SHORE_DEPOSIT_IDS`, for the Fishing dock); `shore_cells()` is the hook for more sea/shore resources
   +-- ConstructionMenu (CanvasLayer 12) -- big CONSTRUIR button (always visible, bottom centre) + the CONSTRUIR window (CartoonTheme, docs/21 §15): category rail on the left, one-line rows (thumbnail, name, cost chips with what is missing in red, hammer that builds), lock + short why, "Al máximo" + MEJORAR; detail column on PC, full screen on phone
   +-- BuildingInfoPanel (CanvasLayer 10) -- right side panel (CartoonTheme, no veil): level N of 3 with bar, what it does in number chips, REPARAR / MEJORAR with cost and why, processes; bottom row by intent: ABRIR MERCADO / INVESTIGAR on the Market / Laboratory (`SCREENS`), workers on/off, MOVER, GIRAR, demolish (red icon)
   +-- MarketPanel (CanvasLayer 11) -- MERCADO window (CartoonTheme): one row per resource, buy/sell prices, [−] n [+], COMPRAR / VENDER; opened from a Market building or `open()`
@@ -298,7 +298,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Fuel depot (1.1) | 2x2 | 200/80/0/80 + 4 beams | 1 | +500 oil outside the shared bag; needs a Refinery | 3 |
 | Shipyard (1.1) | 2x2 | 220/80/0/120 + 10 planks, 4 beams | 3 | Trains ships; must touch the coast; needs a Foundry; no cap (2026-10-18) | 2 |
 | Aerodrome (1.1) | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | Trains planes and airships; needs a Refinery; no cap (2026-10-18) | 3 |
-| Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food/30s, no crop; on the shore touching a school of fish; caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
+| Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food + 3 gold/30s, no crop; on the coast with a school of fish within reach 4 (2 docks per school); caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
 
 The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
@@ -307,12 +307,17 @@ The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
 exists) and `BuildingArt2D._utility`. Full table: `docs/03-buildings.md`.
 
 **Fishing dock (feat/muelle-pesca, doc 21 §6.3 n.º 7):** `fishing_dock`, era 1, the
-second food producer. Its deposit rule (`fish_shoal`, reach 1) puts it on the shore:
-the **school of fish** is the first sea deposit (`MapGenerator.SHORE_DEPOSIT_IDS`), 3-5
-per island in water cells touching land (`GameConfig.sea_deposit_rolls`, own RNG seeded
-by the island; `GridManager.place_sea_obstacle`), never runs out
-(`GameConfig.endless_deposits`, no hand mining). Old saves get their shoals on load
-(`MapGenerator.ensure_shore_deposits()`). In Gobernador its fresh fish spoils in half
+second food producer, and a little gold from the same school (12 food + 3 gold / 30 s).
+Its deposit rule (`fish_shoal`, reach `fishing_dock_reach` 4, `"shore": true`,
+`"per_deposit"` 2 via `PlacementRules.deposit_with_room()`) puts it on the coast: the
+**school of fish** is the first sea deposit (`MapGenerator.SHORE_DEPOSIT_IDS`), 3-5 per
+island **out at sea** (fix/peces-en-el-mar: `min_gap` 1 to `max_gap` 3 water cells off
+the land, `GameConfig.sea_deposit_rolls`, own RNG seeded by the island;
+`GridManager.place_sea_obstacle`), never runs out (`GameConfig.endless_deposits`, no
+hand mining). A plank pier joins the dock to its school (`MapGenerator.pier_path`,
+`DockPier3D` / `DockPier2D`, view only); no access ring. Old saves get their shoals on
+load (`MapGenerator.ensure_shore_deposits()`); old coast-hugging shoals that no dock
+reaches are moved out to sea there, the ones with a dock stay. In Gobernador its fresh fish spoils in half
 the time (`fishing_dock_spoil_mult`). All its numbers live in the GameConfig block
 "Muelle de pesca" at the end of the file: `_register_fishing_dock()` adds its rows
 to the shared tables (limits, deposit rule, processes, stock cap, styles) when
