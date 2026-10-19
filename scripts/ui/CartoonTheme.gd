@@ -463,8 +463,12 @@ static func round_button(glyph: String, kind_s: String = "secondary", d: int = R
 	return col
 
 ## Cerrar: redondo rojo con la X, siempre arriba a la derecha de la ventana.
+## Las X de ventana van en el grupo "window_close": PauseMenu las aparta de
+## debajo del ☰ (dodge_menu_button) cada vez que se abre o cierra una ventana.
 static func close_button(d: int = 0) -> Button:
-	return round_button("close", "danger", d if d > 0 else (48 if phone else 50)) as Button
+	var b := round_button("close", "danger", d if d > 0 else (48 if phone else 50)) as Button
+	b.add_to_group("window_close")
+	return b
 
 ## Un icono: id de CartoonIcon, "res:<id>" (recurso, PNG) o "unit:<id>"
 ## (silueta de unidad, PNG en blanco).
@@ -2215,9 +2219,12 @@ static func safe_insets(vp: Viewport) -> Dictionary:
 static func dodge_menu_button(close: Control, gap: float = 8.0) -> void:
 	if close == null or not is_instance_valid(close) or not close.is_inside_tree():
 		return
+	# Se deshace el corrimiento anterior solo si nadie ha recolocado la X desde
+	# entonces (fit_desktop / fit_fullscreen ponen sus offsets de nuevo).
 	var prev: float = float(close.get_meta("dodge_shift", 0.0))
-	close.offset_left += prev
-	close.offset_right += prev
+	if prev != 0.0 and is_equal_approx(close.offset_left, float(close.get_meta("dodge_at", INF))):
+		close.offset_left += prev
+		close.offset_right += prev
 	close.set_meta("dodge_shift", 0.0)
 	var btn: Control = null
 	for n in close.get_tree().get_nodes_in_group("hud_menu_button"):
@@ -2234,3 +2241,4 @@ static func dodge_menu_button(close: Control, gap: float = 8.0) -> void:
 	close.offset_left -= shift
 	close.offset_right -= shift
 	close.set_meta("dodge_shift", shift)
+	close.set_meta("dodge_at", close.offset_left)

@@ -255,10 +255,12 @@ func _setup_cartoon() -> void:
 	_menu_btn.pressed.connect(request_open)
 	_menu_btn.add_to_group("hud_menu_button")
 	overlay.add_child(_menu_btn)
-	# Con una ventana abierta el ☰ se aparta: tapaba su X y su cinta (telefono,
-	# CONSTRUIR a pantalla completa). La ventana tiene su X; ESC / atras siguen.
-	UIManager.window_opened.connect(func(_w): _sync_menu_btn.call_deferred())
-	UIManager.window_closed.connect(func(_w): _sync_menu_btn.call_deferred())
+	# El ☰ se dibuja encima de las ventanas: al abrir o cerrar una (o cambiar el
+	# lienzo), la X de cada ventana abierta se corre a su izquierda si queda
+	# debajo (CartoonTheme.dodge_menu_button, grupo "window_close").
+	UIManager.window_opened.connect(func(_w): _dodge_soon())
+	UIManager.window_closed.connect(func(_w): _dodge_soon())
+	get_viewport().size_changed.connect(_dodge_soon)
 
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -618,20 +620,25 @@ func open_pause() -> void:
 		_paused_by_me = true
 	_resume_btn.grab_focus.call_deferred()
 
-## El ☰ se ve si el menu no esta abierto y ninguna ventana lo tapa (la ficha
-## del edificio en PC y tablet va mas abajo y no lo tapa).
-func _sync_menu_btn() -> void:
-	if _menu_btn == null or not UITheme.is_cartoon():
+## Ahora y dos fotogramas despues (las ventanas se colocan en diferido).
+func _dodge_soon() -> void:
+	_dodge_closes.call_deferred()
+	if is_inside_tree():
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_dodge_closes()
+
+## Aparta de debajo del ☰ las X de las ventanas que esten a la vista.
+func _dodge_closes() -> void:
+	if not is_inside_tree() or not UITheme.is_cartoon():
 		return
-	var covered := false
-	for w in UIManager.open_windows():
-		if not is_instance_valid(w) or w == self:
-			continue
-		if String(w.name) == "BuildingInfoPanel" and not CartoonTheme.is_phone():
-			continue
-		covered = true
-		break
-	_menu_btn.visible = not _open and not covered
+	for n in get_tree().get_nodes_in_group("window_close"):
+		if n is Control and is_instance_valid(n) and (n as Control).is_visible_in_tree():
+			CartoonTheme.dodge_menu_button(n as Control)
+
+## Compatibilidad (llamado al cerrar el menu): las X se recolocan.
+func _sync_menu_btn() -> void:
+	_dodge_closes()
 
 func open_menu() -> void:
 	request_open()

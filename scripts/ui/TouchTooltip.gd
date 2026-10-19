@@ -209,8 +209,16 @@ func _cancel_press() -> void:
 
 ## Ensena `text` encima de `finger` (pixeles del lienzo), dentro de la pantalla.
 func show_bubble(text: String, finger: Vector2) -> void:
-	_bubble.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2))
-	UITheme.apply_text_style(_label, "body", UITheme.TEXT_BRIGHT)
+	if UITheme.is_cartoon():
+		# Estilo maqueta: el bocadillo de las ventanas (sigue al tema claro u
+		# oscuro) con su texto; antes salia tinta sobre la ficha oscura del HUD.
+		var st := CartoonTheme.bubble_style()
+		st.set_content_margin_all(10)
+		_bubble.add_theme_stylebox_override("panel", st)
+		CartoonTheme.style_label(_label, "body", CartoonTheme.text("window"))
+	else:
+		_bubble.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT, 2))
+		UITheme.apply_text_style(_label, "body", UITheme.TEXT_BRIGHT)
 	_label.text = text
 	var vp := get_viewport().get_visible_rect().size
 	var max_w := minf(MAX_WIDTH, vp.x - EDGE * 2.0)
