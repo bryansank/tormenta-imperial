@@ -49,9 +49,14 @@ func test_the_bar_has_five_round_buttons_around_build() -> void:
 	for id in ["army", "missions", "market", "research", "help"]:
 		assert_object(bar.button(id)).override_failure_message(id).is_not_null()
 		assert_bool(bar.button(id).is_in_group("hud_bar_" + id)).is_true()
-	# Dos a la izquierda, tres a la derecha, el hueco de CONSTRUIR en medio.
+	# Dos a la izquierda, tres a la derecha y CONSTRUIR en medio, en la misma
+	# fila (2026-10-19: el boton suelto se montaba sobre los redondos).
 	var dock: Control = bar.find_child("BarDock", true, false)
-	assert_object(dock.find_child("BuildGap", false, false)).is_not_null()
+	var cell: Control = dock.find_child("BuildCell", false, false)
+	assert_object(cell).is_not_null()
+	assert_int(cell.get_index()).is_equal(1)
+	assert_object(bar.build_button()).is_not_null()
+	assert_bool(bar.build_button().is_in_group("hud_build_button")).is_true()
 	assert_int((dock.find_child("Left", false, false) as Control).get_child_count()).is_equal(2)
 	assert_int((dock.find_child("Right", false, false) as Control).get_child_count()).is_equal(3)
 

@@ -125,8 +125,11 @@ func _ready() -> void:
 	# Con la lista abierta, el coste en rojo o no y el porque siguen a lo que hay.
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	EventBus.workers_changed.connect(func(_u, _t): _on_resources_changed())
-	# CONSTRUIR es la accion principal: siempre a la vista.
+	# CONSTRUIR es la accion principal: siempre a la vista. Con la barra de
+	# abajo (estilo maqueta) el boton es suyo, en su fila: este se esconde y le
+	# deja el grupo que busca el tutorial.
 	_build_btn.visible = true
+	_hand_build_button_to_bar.call_deferred()
 	UIManager.register_panel(self, "ConstructionMenu.modal")
 	UILayoutManager.layout_changed.connect(_fit_layout)
 	get_viewport().size_changed.connect(_fit_layout)
@@ -1167,6 +1170,17 @@ func _render_thumbnail(viewport: SubViewport, camera: Camera3D, data: BuildingDa
 	model.queue_free()
 
 ## Id del edificio elegido en la lista ("" si ninguno). Para el tutorial.
+func _bar() -> Node:
+	return get_tree().get_first_node_in_group("bottom_bar") if is_inside_tree() else null
+
+func _hand_build_button_to_bar() -> void:
+	var bar := _bar()
+	if bar == null or not bar.has_method("build_button") or bar.build_button() == null:
+		return
+	_build_btn.visible = false
+	if _build_btn.is_in_group("hud_build_button"):
+		_build_btn.remove_from_group("hud_build_button")
+
 func selected_building_id() -> String:
 	return String(_selected_data.id) if _selected_data != null and _is_open else ""
 
@@ -1176,4 +1190,7 @@ func detail_build_button() -> Button:
 
 ## El boton CONSTRUIR del HUD, para pruebas.
 func build_button() -> Button:
+	var bar := _bar()
+	if bar != null and bar.has_method("build_button") and bar.build_button() != null:
+		return bar.build_button()
 	return _build_btn

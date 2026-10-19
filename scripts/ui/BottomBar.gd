@@ -43,6 +43,12 @@ var _dock: HBoxContainer
 var _left: HBoxContainer
 var _right: HBoxContainer
 var _build_gap: Control
+## CONSTRUIR, parte de la barra (2026-10-19: el boton suelto de ConstructionMenu
+## se montaba sobre los redondos). Abre ConstructionMenu; lleva el grupo
+## "hud_build_button" que busca el tutorial.
+var _build_btn: Button
+var _build_cell: VBoxContainer
+var _build_spacer: Control
 var _buttons: Dictionary = {}   # id -> Button
 var _cells: Dictionary = {}     # id -> Control (el boton o su columna con nombre)
 var _locks: Dictionary = {}     # id -> Control (el candado pequeno)
@@ -93,12 +99,32 @@ func _setup_ui() -> void:
 	var sep := int(GAP if CartoonTheme.phone else GAP_PC)
 	_left = _group("Left", sep)
 	_dock.add_child(_left)
-	# El hueco de CONSTRUIR: no recoge toques (el boton es de ConstructionMenu).
+	# CONSTRUIR en el centro, en la misma fila y con la misma linea de abajo que
+	# los redondos (debajo, el hueco del nombre que llevan ellos en PC).
+	_build_cell = VBoxContainer.new()
+	_build_cell.name = "BuildCell"
+	_build_cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_build_cell.size_flags_vertical = Control.SIZE_SHRINK_END
+	_build_cell.add_theme_constant_override("separation", 0)
+	_dock.add_child(_build_cell)
+	_build_btn = CartoonTheme.pill_button(Tr.t("BTN_BUILD_BIG"), "build", "primary", CartoonTheme.bar_build_h(),
+		"hud", "title")
+	_build_btn.name = "BarBuild"
+	_build_btn.add_to_group("hud_build_button")
+	_build_btn.tooltip_text = Tr.t("BTN_BUILD_HINT")
+	_build_btn.focus_mode = Control.FOCUS_NONE
+	_build_btn.pressed.connect(_on_build_pressed)
+	_build_cell.add_child(_build_btn)
+	_build_spacer = Control.new()
+	_build_spacer.name = "BuildCaptionGap"
+	_build_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_build_cell.add_child(_build_spacer)
+	# Compatibilidad: el viejo hueco (ya sin ancho) por si alguien lo busca.
 	_build_gap = Control.new()
 	_build_gap.name = "BuildGap"
 	_build_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_build_gap.custom_minimum_size = Vector2(BUILD_W_FALLBACK, 1)
-	_dock.add_child(_build_gap)
+	_build_gap.visible = false
+	_build_cell.add_child(_build_gap)
 	_right = _group("Right", sep)
 	_dock.add_child(_right)
 
@@ -155,21 +181,53 @@ func _add_item(group: HBoxContainer, it: Array) -> void:
 	btn.add_child(lock)
 	_locks[id] = lock
 
-## Mide CONSTRUIR (ancho real) y deja ese hueco en el centro.
+## CONSTRUIR se ajusta al lienzo: con palabra en PC, tablet y telefono
+## apaisado; en vertical (estrecho) solo el martillo, para que la fila quepa en
+## 400 px. Debajo, el alto del nombre de los redondos (alinea las bases).
 func _fit_gap() -> void:
-	if _build_gap == null or not is_inside_tree():
+	if _build_btn == null or not is_inside_tree():
 		return
-	var w := BUILD_W_FALLBACK
-	var b := get_tree().get_first_node_in_group("hud_build_button") as Control
-	if b != null and is_instance_valid(b) and b.is_visible_in_tree():
-		w = maxf(b.size.x, b.get_combined_minimum_size().x)
-		if not b.resized.is_connected(_fit_gap):
-			b.resized.connect(_fit_gap)
-	elif b == null:
-		w = BUILD_W_FALLBACK
-	_build_gap.custom_minimum_size.x = w
-	# En pantalla estrecha (vertical) la barra va entera encima de CONSTRUIR.
-	_build_gap.visible = not UILayoutManager.is_narrow()
+	var narrow: bool = UILayoutManager.is_narrow()
+	var want := "" if narrow else Tr.t("BTN_BUILD_BIG")
+	if bool(_build_btn.get_meta("narrow", false)) != narrow:
+		var parent := _build_btn.get_parent()
+		var idx := _build_btn.get_index()
+		parent.remove_child(_build_btn)
+		_build_btn.queue_free()
+		_build_btn = CartoonTheme.pill_button(want, "build", "primary", CartoonTheme.bar_build_h(), "hud", "title")
+		_build_btn.name = "BarBuild"
+		_build_btn.add_to_group("hud_build_button")
+		_build_btn.tooltip_text = Tr.t("BTN_BUILD_HINT")
+		_build_btn.focus_mode = Control.FOCUS_NONE
+		_build_btn.pressed.connect(_on_build_pressed)
+		_build_btn.set_meta("narrow", narrow)
+		parent.add_child(_build_btn)
+		parent.move_child(_build_btn, idx)
+	_build_btn.custom_minimum_size.x = maxf(_build_btn.custom_minimum_size.x,
+		float(CartoonTheme.bar_build_h()) * (1.3 if narrow else 2.6))
+	_build_spacer.custom_minimum_size.y = _caption_h() if shows_captions() else 0.0
+
+## Lo que mide el nombre bajo un redondo (para alinear CONSTRUIR con ellos).
+func _caption_h() -> float:
+	for id in _cells:
+		var cell: Control = _cells[id]
+		var btn: Control = _buttons[id]
+		if is_instance_valid(cell) and cell != btn:
+			return maxf(0.0, cell.get_combined_minimum_size().y - btn.get_combined_minimum_size().y)
+	return 0.0
+
+func _on_build_pressed() -> void:
+	var cm := _sibling("ConstructionMenu")
+	if cm == null:
+		return
+	if cm.has_method("_toggle_panel"):
+		cm._toggle_panel()
+	elif cm.has_method("open"):
+		cm.open()
+
+## El CONSTRUIR de la barra (pruebas, ConstructionMenu.build_button()).
+func build_button() -> Button:
+	return _build_btn
 
 # ── Estado ─────────────────────────────────────────────────────────────
 

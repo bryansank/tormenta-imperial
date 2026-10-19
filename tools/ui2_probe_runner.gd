@@ -52,7 +52,11 @@ func _run() -> void:
 			print("ui2_probe: army bloqueado=", not bar.is_open_for("army"), " porque=", bar.reason_for("army"))
 	var skb: CanvasLayer = main.get_node_or_null("SkirmishButton")
 	print("ui2_probe: SkirmishButton visible=", skb.visible if skb else null)
+	var only_bar := _arg("only") == "bar"
 	var build: Node = main.get_node_or_null("ConstructionMenu")
+	if only_bar:
+		await _bar_shots(main, scene)
+		return
 	build._open()
 	await _frames(12)
 	await _shot("t_construir")
@@ -338,6 +342,22 @@ func _run() -> void:
 		"tithes_repelled": 3, "audit_summons": 1, "mode": "campaign"})
 	await _frames(20)
 	await _shot("g_victoria")
+	_finish()
+
+## Solo la barra de abajo: temprana (bloqueada) y con la colonia grande.
+func _bar_shots(main: Node, scene: String) -> void:
+	var seeder: Node = ArteRunner.new()
+	seeder._write_seeded_save()
+	_add_military_lots(String(seeder.SAVE_PATH))
+	seeder.free()
+	GameManager.clear_save_and_reload_from(SaveSlotsRef.read(GameManager.active_slot()), scene)
+	await _frames(60)
+	_quiet()
+	await _seconds(4.0)
+	_quiet()
+	_camera(Vector2(-6.0, -2.0), -1.0)
+	await _seconds(1.0)
+	await _shot("g_hud_barra")
 	_finish()
 
 func _shot(shot_name: String) -> void:
