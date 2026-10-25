@@ -228,12 +228,15 @@ func _setup_ui() -> void:
 	_footer.add_theme_constant_override("separation", 10)
 	foot_col.add_child(_footer)
 	# Telefono en vertical: los botones van en su propia fila, bajo las cifras.
-	var actions: HBoxContainer = _footer
+	var actions: Container = _footer
 	if CT.portrait():
-		actions = HBoxContainer.new()
-		actions.name = "FooterActions"
-		actions.add_theme_constant_override("separation", 8)
-		foot_col.add_child(actions)
+		# Y bajan de linea si no caben (QUE BAJEN + ¡AL ATAQUE! en 400 px).
+		var flow := HFlowContainer.new()
+		flow.name = "FooterActions"
+		flow.add_theme_constant_override("h_separation", 8)
+		flow.add_theme_constant_override("v_separation", 6)
+		foot_col.add_child(flow)
+		actions = flow
 	var morale := _foot_chip("res:morale")
 	_morale_label = morale.get_child(1)
 	var commit := _foot_chip("army")
@@ -249,7 +252,10 @@ func _setup_ui() -> void:
 
 	# RESOLVER SOLO (D6 = A): solo en incursiones y solo si la columna dobla al
 	# enemigo. Apagado con el motivo en el tooltip cuando no llega.
-	_auto_btn = CT.pill_button(Tr.t("BTN_AUTO_RESOLVE"), "raid", "secondary", CT.h("big"), "window", "small")
+	# En telefono, solo el icono (el nombre y el porque, al mantener pulsado): con
+	# QUE BAJEN, RESOLVER SOLO y ¡AL ATAQUE! en una fila la ventana salia 80 px
+	# por la derecha en 640x360.
+	_auto_btn = CT.pill_button("" if CT.phone else Tr.t("BTN_AUTO_RESOLVE"), "raid", "secondary", CT.h("big"), "window", "small")
 	_auto_btn.name = "AutoResolveButton"
 	_auto_btn.pressed.connect(_on_auto_pressed)
 	_auto_btn.visible = false
@@ -567,6 +573,10 @@ func _make_unit_row(unit_id: String, owned: int, blocked: bool = false, block_te
 	# mas pequeno para que quepa junto a − n +.
 	var name_label := CT.label(Tr.t(def.get("name", unit_id)), "body" if ph else "button", CT.text("window", blocked))
 	name_label.name = "UnitName"
+	# Entero, pero a dos lineas si no cabe: "Lancha torpedera" en una sacaba la
+	# tropa (y la ventana) por la derecha en un telefono.
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_label.custom_minimum_size.x = 72 if ph else 110
 	info.add_child(name_label)
 	var sub_text: String = block_text if (blocked and block_text != "") else Tr.t("ARMY2_HOME_N") % owned
 	var sub := CT.label(sub_text, "small", CT.tone_color("warning") if blocked else CT.text("window", true))
@@ -1112,9 +1122,12 @@ func _gate_item(done: bool, text: String) -> HBoxContainer:
 ## los ataques rapidos del tablon. En telefono, las no elegidas solo con icono.
 func _add_tabs() -> void:
 	var ph := _phone()
-	var row := HBoxContainer.new()
+	# Bajan de linea si no caben (telefono en vertical: salian 70 px por la
+	# derecha con "Ataques rapidos" elegido).
+	var row := HFlowContainer.new()
 	row.name = "CampaignTabs"
-	row.add_theme_constant_override("separation", 6)
+	row.add_theme_constant_override("h_separation", 6)
+	row.add_theme_constant_override("v_separation", 6)
 	_head_box.add_child(row)
 	var current: String = current_tab()
 	for domain in GameConfig.CAMPAIGN_DOMAINS:

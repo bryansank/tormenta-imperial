@@ -48,7 +48,7 @@ var _upgrade_container: VBoxContainer
 var _upgrade_btn: Button
 ## Lo que da la mejora ("Madera: 6 → 9 cada 12 s").
 var _upgrade_cost_label: Label
-var _upgrade_cost_row: HBoxContainer
+var _upgrade_cost_row: HFlowContainer
 ## "Nivel 1 de 3" (arriba, con la barra), el aviso de repuestos, POR QUE el
 ## boton esta apagado y, en los que no se mejoran, una linea que lo dice.
 var _upgrade_level_label: Label
@@ -59,7 +59,7 @@ var _upgrade_refresh_queued := false
 var _repair_container: PanelContainer
 var _repair_btn: Button
 var _repair_label: Label
-var _repair_cost_row: HBoxContainer
+var _repair_cost_row: HFlowContainer
 ## La cabecera de los procesos: solo con procesos que ofrecer.
 var _actions_header: Control
 var _actions_sep: Control
@@ -247,8 +247,10 @@ func _build_ui() -> void:
 	_repair_label = CT.label("", "body", CT.text("window"))
 	_repair_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rep_col.add_child(_repair_label)
-	var rep_row := HBoxContainer.new()
-	rep_row.add_theme_constant_override("separation", 6)
+	# Se parte como la de mejorar: el coste baja bajo el boton si no cabe.
+	var rep_row := HFlowContainer.new()
+	rep_row.add_theme_constant_override("h_separation", 6)
+	rep_row.add_theme_constant_override("v_separation", 4)
 	_repair_btn = CT.pill_button(Tr.t("UI2C_BTN_REPAIR"), "wrench", "warn", CT.h("btn"))
 	# Grupos para que el tutorial los senale (HelpTargets: info_repair, info_move,
 	# info_demolish, info_demolish_confirm).
@@ -256,9 +258,10 @@ func _build_ui() -> void:
 	_repair_btn.tooltip_text = Tr.t("UI2C_TIP_REPAIR")
 	_repair_btn.pressed.connect(_on_repair)
 	rep_row.add_child(_repair_btn)
-	_repair_cost_row = CT.cost_strip({})
+	_repair_cost_row = CT.cost_flow()
 	_repair_cost_row.name = "RepairCost"
 	_repair_cost_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_repair_cost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rep_row.add_child(_repair_cost_row)
 	rep_col.add_child(rep_row)
 	_repair_container.visible = false
@@ -279,9 +282,12 @@ func _build_ui() -> void:
 	_upgrade_btn.name = "UpgradeButton"
 	_upgrade_btn.pressed.connect(_on_upgrade)
 	up_row.add_child(_upgrade_btn)
-	_upgrade_cost_row = CT.cost_strip({})
+	# Las fichas del coste tambien bajan de linea: el Cuartel General pide siete
+	# cosas y la ficha salia 340 px por la derecha.
+	_upgrade_cost_row = CT.cost_flow()
 	_upgrade_cost_row.name = "UpgradeCost"
 	_upgrade_cost_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_upgrade_cost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	up_row.add_child(_upgrade_cost_row)
 	_upgrade_container.add_child(up_row)
 	# El nivel 3 de los que producen pide repuestos: se avisa antes de pulsar.

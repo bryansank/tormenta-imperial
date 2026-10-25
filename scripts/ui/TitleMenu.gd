@@ -118,6 +118,9 @@ func _setup_ui() -> void:
 	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Se sale por abajo a proposito en vertical (ver _relayout): la sonda y el
+	# test de desbordes (tests/ui/overflow_scan.gd) no la cuentan.
+	_art.set_meta("overflow_ok", true)
 	if ResourceLoader.exists(KEYART_PATH):
 		_art.texture = load(KEYART_PATH)
 	_root.add_child(_art)

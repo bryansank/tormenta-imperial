@@ -14,7 +14,7 @@ const CT := preload("res://scripts/ui/CartoonTheme.gd")
 
 var _node: Node = null
 var _data: BuildingData = null
-var _stock_row: HBoxContainer
+var _stock_row: HFlowContainer
 var _stock_items: HBoxContainer
 var _stock_label: Label
 var _collect_btn: Button
@@ -30,9 +30,12 @@ func _init() -> void:
 	var header := CT.section(Tr.t("LBL_STOCK_HEADER"), "check")
 	header.tooltip_text = Tr.t("LBL_STOCK_TIP")
 	add_child(header)
-	_stock_row = HBoxContainer.new()
+	# Se parte si no cabe (RECOGER baja de linea): en la ficha estrecha de PC la
+	# fila de la Fundicion salia 50 px por la derecha.
+	_stock_row = HFlowContainer.new()
 	_stock_row.name = "StockRow"
-	_stock_row.add_theme_constant_override("separation", 8)
+	_stock_row.add_theme_constant_override("h_separation", 8)
+	_stock_row.add_theme_constant_override("v_separation", 4)
 	_stock_row.mouse_filter = Control.MOUSE_FILTER_PASS
 	_stock_row.tooltip_text = Tr.t("LBL_STOCK_TIP")
 	_stock_items = CT.cost_strip({}, {}, "window", "", "number", CT.positive_text())

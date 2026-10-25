@@ -91,9 +91,12 @@ func _show_victory(stats: Dictionary) -> void:
 		vbox.add_child(coda)
 
 	# Botones: seguir es lo principal (verde); una partida nueva, crema.
-	var btn_row := HBoxContainer.new()
-	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 12)
+	# Uno debajo del otro si no caben (telefono en vertical: salian 33 px por la
+	# derecha).
+	var btn_row := HFlowContainer.new()
+	btn_row.alignment = FlowContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("h_separation", 12)
+	btn_row.add_theme_constant_override("v_separation", 8)
 	var bh := CT.menu_h("btn")
 	var continue_btn := CT.text_button(Tr.t("BTN_CONTINUE"), "next", "primary", bh)
 	continue_btn.name = "ContinueButton"

@@ -219,6 +219,12 @@ func _build() -> void:
 	_root.add_child(_window)
 	_card = w["panel"]
 	_card.name = "IdentityCard"
+	if _small:
+		# Sin cinta de verdad: con ella la tarjeta bajaba 30 px y LISTO quedaba
+		# por debajo del borde de un telefono de 360 de alto.
+		(w["ribbon"] as Control).visible = false
+		_card.offset_top = 0.0
+		(w["top_pad"] as Control).custom_minimum_size.y = 0.0
 	var close: Button = w["close"]
 	close.name = "CloseButton"
 	close.tooltip_text = Tr.t("BTN_CLOSE")
@@ -270,6 +276,9 @@ func _build() -> void:
 	var main := HBoxContainer.new()
 	main.add_theme_constant_override("separation", 10 if _small else 16)
 	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Telefono en vertical: bandera arriba y piezas debajo (lado a lado salia
+	# 28 px por la derecha en 400 de ancho).
+	main.vertical = CT.portrait()
 	col.add_child(main)
 	var left := VBoxContainer.new()
 	left.add_theme_constant_override("separation", 6 if _small else 10)

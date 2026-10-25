@@ -1029,6 +1029,23 @@ static func cost_strip(amounts: Dictionary, short: Dictionary = {}, role: String
 	fill_cost_strip(row, amounts, short, role, prefix, level, tone)
 	return row
 
+## Como cost_strip, pero las fichas bajan a otra linea si no caben (ficha del
+## edificio, detalle de CONSTRUIR, filas de la lista): un coste largo (el Cuartel
+## General pide siete cosas) ya no empuja la ventana fuera por la derecha.
+## `align_end` las arrima a la derecha (filas de lista, con el martillo detras).
+static func cost_flow(amounts: Dictionary = {}, short: Dictionary = {}, role: String = "window",
+		prefix: String = "", level: String = "number", tone: Color = Color(0, 0, 0, 0),
+		align_end: bool = false) -> HFlowContainer:
+	var row := HFlowContainer.new()
+	row.name = "CostRow"
+	row.add_theme_constant_override("h_separation", 4)
+	row.add_theme_constant_override("v_separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	if align_end:
+		row.alignment = FlowContainer.ALIGNMENT_END
+	fill_cost_strip(row, amounts, short, role, prefix, level, tone)
+	return row
+
 ## Rehace una fila de cost_strip con otras cifras. No toca nada si no cambio
 ## (llega una senal por recurso; docs/26 §6.9).
 static func fill_cost_strip(row: Container, amounts: Dictionary, short: Dictionary = {}, role: String = "window",
@@ -1334,10 +1351,33 @@ static func fit_card(w: Dictionary, vp: Vector2, width: float) -> void:
 	panel.add_theme_stylebox_override("panel", st)
 	root.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	root.size = Vector2(wd, maxf(root.size.y, 10.0))
+	_fold_ribbon_if_tall(w, ph, vp.y - 4.0)
 	var hh := panel.get_combined_minimum_size().y + panel.offset_top
 	var h := minf(hh, vp.y - (4.0 if ph else 24.0))
 	root.size = Vector2(wd, h)
 	root.position = ((vp - root.size) * 0.5).floor()
+
+## Telefono: si la tarjeta no cabe de alto con su cinta, la cinta se esconde y
+## la tarjeta sube a su sitio (el parte del asedio perdido se salia 7 px por
+## abajo en 360 de alto). Si vuelve a caber, la cinta vuelve.
+static func _fold_ribbon_if_tall(w: Dictionary, ph: bool, room: float) -> void:
+	var ribbon: Control = w.get("ribbon")
+	var pad: Control = w.get("top_pad")
+	var panel: Control = w.get("panel")
+	if ribbon == null or pad == null or panel == null:
+		return
+	if not panel.has_meta("ribbon_top"):
+		panel.set_meta("ribbon_top", panel.offset_top)
+	if not ribbon.visible and pad.has_meta("ribbon_pad"):
+		pad.custom_minimum_size.y = float(pad.get_meta("ribbon_pad"))
+	ribbon.visible = true
+	panel.offset_top = float(panel.get_meta("ribbon_top"))
+	if not ph or panel.get_combined_minimum_size().y + panel.offset_top <= room:
+		return
+	pad.set_meta("ribbon_pad", pad.custom_minimum_size.y)
+	ribbon.visible = false
+	panel.offset_top = 0.0
+	pad.custom_minimum_size.y = 0.0
 
 ## Cambia el titulo y el color de la cinta de una ventana.
 static func set_ribbon(w: Dictionary, title: String, fill: Color) -> void:

@@ -379,6 +379,9 @@ func _build() -> void:
 	mid.add_child(_dots)
 	_hint = CT.label("", "small", CT.c("hud", "TEXT_DIM"))
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# La pista baja a dos lineas antes que empujar SIGUIENTE fuera de la pantalla
+	# (telefono en vertical: el pie salia 210 px por la derecha).
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mid.add_child(_hint)
 
 	# Atras: redondo, solo la flecha (el nombre al mantener pulsado).
