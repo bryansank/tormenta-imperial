@@ -260,6 +260,10 @@ const TIPS := {
 	"bastion":        {"title": "HELP_T_BASTION",   "body": "HELP_B_BASTION"},
 	"scrapyard":      {"title": "HELP_T_SCRAPYARD", "body": "HELP_B_SCRAPYARD"},
 	"telegraph":      {"title": "HELP_T_TELEGRAPH", "body": "HELP_B_TELEGRAPH"},
+	# Economia (feat/edificios-economia): al terminar el primero de cada uno.
+	"trade_port":     {"title": "HELP_T_TRADE_PORT",   "body": "HELP_B_TRADE_PORT"},
+	"exchange":       {"title": "HELP_T_EXCHANGE",     "body": "HELP_B_EXCHANGE"},
+	"diesel_plant":   {"title": "HELP_T_DIESEL_PLANT", "body": "HELP_B_DIESEL_PLANT"},
 	"island":         {"title": "HELP_T_ISLAND",    "body": "HELP_B_ISLAND"},
 	# Carretera larga: la primera vez que se coge la carretera fuera de la guia.
 	"road_drag":      {"title": "HELP_T_ROAD_DRAG", "body": "HELP_B_ROAD_DRAG"},
@@ -1471,7 +1475,7 @@ func _on_news_construction(node: Node) -> void:
 		"fishing_dock":
 			if not has_seen_tip("fishing_dock"):
 				offer_tip("fishing_dock")
-		"bastion", "scrapyard", "telegraph":
+		"bastion", "scrapyard", "telegraph", "trade_port", "exchange", "diesel_plant":
 			var tip_id := String(info["data"].id)
 			if not has_seen_tip(tip_id):
 				offer_tip(tip_id)

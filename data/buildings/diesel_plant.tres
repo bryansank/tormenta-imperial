@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "diesel_plant"
+display_name = "Central diésel"
+description = "Quema combustible y da +15 % de producción a los aserraderos, minas, fundiciones y refinerías cercanos."
+grid_size = Vector2i(2, 2)
+cost_gold = 320
+cost_steel = 160
+cost_oil = 80
+cost_wood = 60
+cost_materials = {"beams": 6, "fuel": 4}
+build_time = 14.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+mesh_height = 2.4
+mesh_color = Color(0.3, 0.3, 0.32, 1)
+workers_required = 2
+max_health = 260

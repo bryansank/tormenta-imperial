@@ -548,6 +548,7 @@ func _new_game() -> void:
 	ProductionManager.reset()
 	RankManager.reset()
 	ContractManager.reset()
+	EconomyManager.reset()
 	_apply_pending_identity()
 	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
 	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
@@ -763,6 +764,12 @@ func _load_game() -> void:
 	var contracts_data: Variant = data.get("contracts", {})
 	ContractManager.load_save_data(contracts_data if contracts_data is Dictionary else {})
 
+	# Economia (feat/edificios-economia): el barco del contrabandista, los planos
+	# menores comprados y los relojes de las Centrales y del interes. Sin la
+	# clave (partida anterior) es un barco nuevo y sin planos.
+	var economy_data: Variant = data.get("economy", {})
+	EconomyManager.load_save_data(economy_data if economy_data is Dictionary else {})
+
 	# La bolsa es una sola y su tope depende de la era, de los almacenes y del arbol
 	# tecnologico: hasta que los tres no estan restaurados no se sabe cuanto cabe. Por
 	# eso el recorte va aqui y no junto a los recursos. Una partida guardada cuando el
@@ -906,6 +913,7 @@ func _write_save() -> void:
 	data["game_mode"] = GameMode.get_save_data()
 	data["rank"] = RankManager.get_save_data()
 	data["contracts"] = ContractManager.get_save_data()
+	data["economy"] = EconomyManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -1019,6 +1027,7 @@ func clear_save() -> void:
 	ProductionManager.reset()
 	RankManager.reset()
 	ContractManager.reset()
+	EconomyManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null
@@ -1065,6 +1074,7 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	ProductionManager.reset()
 	RankManager.reset()
 	ContractManager.reset()
+	EconomyManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null

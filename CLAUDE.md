@@ -63,7 +63,7 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-29 autoloads in `project.godot`: the 28 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager` and `ContractManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
+30 autoloads in `project.godot`: the 29 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager`, `ContractManager` and `EconomyManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
@@ -95,6 +95,7 @@ holds a service's state of its own.
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`; the phone canvas follows the real dp, 360-540 tall in landscape, `phone_content_scale_for`, and turns `CartoonTheme.phone` on), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
 | 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`). See `docs/06-progression-victory.md` §Governor rank |
 | 28 | `ContractManager` | `scripts/services/ContractManager.gd` | The contract board (ENCARGOS): ticks the pure `scripts/economy/ContractBoard.gd` (3 slots: Regency, neighbours, smuggler), charges what is asked and pays the reward (resources, morale, colonists if `PopulationManager.add_colonists` exists, Tithe discount through `StormManager.add_tithe_discount` if it exists, else gold), emits `contract_*`; saved as `contracts`; off in Sandbox (`GameMode.contracts_enabled()`). See `docs/27-encargos.md` |
+| 29 | `EconomyManager` | `scripts/services/EconomyManager.gd` | The 1.2 economy buildings (`feat/edificios-economia`): the smuggler's ship of the Trade port (pure `scripts/economy/SmugglerShip.gd`: clock, 3 offers, deals through `take_offer()`), minor blueprints bought from it (`has_plan()`, read by `RankManager.is_building_unlocked`), the Diesel plants' fuel (`burn_fuel()`) and the Exchange's Governor interest; emits `smuggler_*`, `diesel_plant_fuel_changed`, `exchange_interest_paid`, `economy_changed`; saved as `economy`. See `docs/03-buildings.md` "Economía de la 1.2" |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -299,6 +300,10 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Shipyard (1.1) | 2x2 | 220/80/0/120 + 10 planks, 4 beams | 3 | Trains ships; must touch the coast; needs a Foundry; no cap (2026-10-18) | 2 |
 | Aerodrome (1.1) | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | Trains planes and airships; needs a Refinery; no cap (2026-10-18) | 3 |
 | Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food + 3 gold/30s, no crop; on the coast with a school of fish within reach 4 (2 docks per school); caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
+| Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food/30s, no crop; on the shore touching a school of fish; caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
+| Trade port (1.2) | 2x2 | 300/100/0/160 + 12 planks, 6 beams | 2 | The smuggler's ship docks every 6-10 min for 90 s with 3 offers; on the coast, faces the water; needs Market + Foundry; max 1 | 2 |
+| Exchange house (1.2) | 2x2 | 350/120/0/100 + 8 ingots, 4 beams | 2 | Market spread −10 points (30 % → 20 %, floor 8 %); Governor: 1 % interest on stored gold per minute (cap 20); needs Market + Foundry; max 1 | 2 |
+| Diesel plant (1.2) | 2x2 | 320/160/80/60 + 6 beams, 4 fuel | 2 | Burns 1 fuel / 45 s; sawmills, gold mines, foundries, refineries within 5 cells +15 %; needs a Refinery; max 2; mission blueprint | 3 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
 | Bastion (1.2) | **2x1** | 60/25/0/30 | 0 | Wall: −30 % storm damage to what stands behind it (towards the island centre) within 3 cells; a +2 defence cover cell on defensive boards (1 per 3 bastions, max 2); needs Foundry + Barracks; caps 6/10/14 | 2 |
 | Scrapyard (1.2) | 2x2 | 160/40/0/90 + 6 planks | 2 | Repairs −40 % within 4 cells; after each Storm: 12 steel per ruin in its area, 1 part per 2 ruins (max 3), lifts 1 ruin to 35 %; blueprint building; caps 1/2/2 | 2 |
@@ -346,6 +351,33 @@ pretty (+1 room, +2 morale points), ≥ 25 = elegant (+2, +4), added by
 unchanged (docs/15 §3). **Telegraph** slot: `ContractBoard.WIRE` (saved in
 `contracts`, with `from`). Looks: `DefenseToys.gd` + bakes in `assets/models/toy/`;
 2D `BuildingArt2D._bastion/_scrapyard/_telegraph`. Detail: docs/03 "Defensa y vida".
+**Economy buildings (1.2, feat/edificios-economia, doc 21 §6.3 n.º 13, 14, 16; doc 14
+§P4):** `trade_port`, `exchange`, `diesel_plant`. Numbers in the GameConfig block
+"Economia" at the end of the file (`_register_economy_buildings()` adds their rows to
+limits, prerequisites, construction/lot styles and active fx). The Trade port is in
+`PlacementRules.SHORE_ONLY` and `FACES_WATER` (like the Shipyard). `EconomyManager`
+(autoload, last) runs the smuggler's ship (pure `scripts/economy/SmugglerShip.gd`):
+no clock without a working port (standing, road, workers), first ship 75 s after,
+then every 6-10 min; never in Ash/Storm (it sails early if the Ash comes); waits while
+a board is open. Three offers: exclusive (2-4 spare parts at 60 gold, or a **minor
+blueprint** = a rank-locked building above your rank, 40 gold per rank, never a
+mission blueprint), a workshop material, and a resource deal (sells at 75 % of the
+Market buy price or buys at 1.6× its sell price). A bought blueprint opens the
+building early (`RankManager.is_building_unlocked` asks `EconomyManager.has_plan`).
+The Exchange's spread cut is `GameConfig.market_spread_cut` (runtime, set by
+`UtilityEffects.refresh`), read through `GameConfig.effective_market_spread()` by
+`MarketManager`. The Diesel plant's area is the meta `diesel_bonus` on industrials
+(UtilityEffects, on build/demolish/workers change, or when a plant runs out of fuel);
+`ProductionManager.get_cycle_yield` applies it only live (not offline). Looks: own toy
+models (`scripts/buildings/EconomyToys.gd`, baked to `assets/models/toy/<id>.tscn`,
+picked by `EconomyToys.create()` without `model_scene`), 2D in `BuildingArt2D`; the
+ship is `scripts/map/SmugglerShip3D.gd` (one shared ~320-tri mesh, Tweens, no
+`_process`) and `scripts/view2d/SmugglerShip2D.gd`, children of the placers; tapping it
+(`EconomyManager.ship_hit`) or VER EL BARCO on the port opens `scripts/ui/SmugglerPanel.gd`
+(created on demand, not in the scenes). **Proposed (wired by the Núcleo/blueprints
+branch, not here):** port Núcleo 3; exchange Núcleo 3 + blueprint; diesel plant Núcleo 4
++ blueprint (already in `combat_blueprint_buildings`). Detail: docs/03 "Economía de la
+1.2", docs/02, docs/05 "Casa de cambio".
 
 **Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
 `avenue_tree`, `flower_planter`, `colony_sign`, `hay_cart`, `bonfire`, `flagpole`,
@@ -1099,7 +1131,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ → PARTIDAS) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `economy` (EconomyManager: the smuggler's ship with its offers and dice, bought blueprints, fuel and interest clocks), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -1127,7 +1159,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
 
 ```
 tormenta-imperial/
-+-- project.godot                    # Engine config (version 1.0.0), 28 autoloads (27 game + BeckettRuntime), renderer override hook
++-- project.godot                    # Engine config (version 1.0.0), 30 autoloads (29 game + BeckettRuntime), renderer override hook
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
 +-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
@@ -1139,7 +1171,7 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 158 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 161 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ support/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
@@ -1199,8 +1231,9 @@ tormenta-imperial/
 |   |   +-- StormSky.gd              # Autoload: sky/light of the time of day and the storm
 |   +-- storm/StormCycle.gd          # PURE model: the storm's phase clock
 |   +-- economy/ContractBoard.gd     # PURE model: the contract board (3 slots, clocks, rewards, reputation)
+|   +-- economy/SmugglerShip.gd      # PURE model: the smuggler's ship of the Trade port (clock, 3 offers, own RNG; 1.2)
 |   +-- storm/DayCycle.gd            # PURE model: the day/night clock (DayClock ticks it)
-|   +-- services/                    # The 28 game autoloads (table above) + BeckettGate.gd
+|   +-- services/                    # The 29 game autoloads (table above) + BeckettGate.gd
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
@@ -1290,6 +1323,7 @@ unset:
 |---|---|
 | Baked toy model (`model_scene` = `assets/models/toy/<id>.tscn`) | `nucleo`, `house`, `sawmill`, `farm`, `gold_mine`, `warehouse`, `market`, `laboratory`, `foundry`, `barracks`, `refinery`, `tower`, `headquarters`, `garden`, `fountain`, `statue`, `fishing_dock`, `shipyard`, `aerodrome` (19). The Farm adds its beds as a separate mesh (`Crops`, `FarmCrops3D`) animated by the shared `toy_crops.gdshader` |
 | `DecorMesh` (through `DieselpunkBuildingFactory.create()`) | the 10 cheap decorations: one shared mesh per type, baked `assets/models/toy/<id>_mesh.res` when it exists, procedural (LotMesh boxes, cylinders, balls) until then — none is baked yet |
+| `EconomyToys` (through `DieselpunkBuildingFactory.create()`) | `trade_port`, `exchange`, `diesel_plant` (1.2): their bake `assets/models/toy/<id>.tscn` (baked 2026-10-18; no `model_scene` in the `.tres`), the shared procedural mesh if it is missing. Also the smuggler's ship (`ship_mesh()`) |
 | `RoadBatch3D` | `road`: the node carries no mesh; the batch draws every tile with `DieselpunkBuildingFactory.road_mesh()` per neighbour mask |
 
 The toy models are baked offline by `tools/build_toy_models.gd` from the recipes in
@@ -1335,7 +1369,7 @@ guarnición), cañoneros (not dotación). Code identifiers (`tithe`, `audit`, `g
 
 ### Key Rule: GDScript first (decided 2026-09-12)
 
-- **GDScript for everything**, combat included. The whole project (27 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
+- **GDScript for everything**, combat included. The whole project (29 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
 - The old plan put unit AI, combat math and pathfinding in C# **for performance**. That argument does not apply at the agreed combat scale: an 8x8 board with 4–6 units per side. GDScript is orders of magnitude more than enough.
 - **Migrate later, only on evidence**: if a profiled module proves too slow, port that module to C#. Do not create the .NET project speculatively.
 

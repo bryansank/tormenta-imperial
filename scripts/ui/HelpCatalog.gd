@@ -154,6 +154,13 @@ const ENTRIES := {
 		"title": "HELP_T_SCRAPYARD", "body": "HELP_B_SCRAPYARD", "target": ""},
 	"telegraph": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
 		"title": "HELP_T_TELEGRAPH", "body": "HELP_B_TELEGRAPH", "target": ""},
+	# Economia (feat/edificios-economia): salen al terminar el primero de cada uno.
+	"trade_port": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_TRADE_PORT", "body": "HELP_B_TRADE_PORT", "target": ""},
+	"exchange": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_EXCHANGE", "body": "HELP_B_EXCHANGE", "target": ""},
+	"diesel_plant": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_DIESEL_PLANT", "body": "HELP_B_DIESEL_PLANT", "target": ""},
 	# ── Ensenar el combate (2026-10-14, rama feat/ensenar-combate, docs/23 §2.4) ──
 	# Guias basicas: siempre en el indice. Lo mismo que cuentan las marcas del
 	# combate guiado y la ficha de unidad, para leerlo con calma.

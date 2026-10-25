@@ -173,10 +173,11 @@ static func on_land(cell: Vector2i, size: Vector2i) -> bool:
 
 # ── Costa (feat/decoraciones-remates) ─────────────────────────────────
 
-## Lo que solo se planta en la costa: las palmeras y el Astillero (aire y mar:
-## los barcos salen al agua). Motivo del veredicto y su aviso (LBL_NEEDS_SHORE),
+## Lo que solo se planta en la costa: las palmeras, el Astillero (aire y mar:
+## los barcos salen al agua) y el Puerto comercial (el barco del contrabandista
+## atraca delante). Motivo del veredicto y su aviso (LBL_NEEDS_SHORE),
 ## el mismo en 3D y en 2D.
-const SHORE_ONLY := ["palm_trees", "shipyard"]
+const SHORE_ONLY := ["palm_trees", "shipyard", "trade_port"]
 const SHORE_REASON := "shore"
 const NEIGHBORS8 := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]
@@ -202,11 +203,12 @@ static func touches_shore(cell: Vector2i, size: Vector2i) -> bool:
 			return true
 	return false
 
-## Lo que se orienta solo al agua al colocarlo: el Astillero tiene la darsena en
+## Lo que se orienta solo al agua al colocarlo: el Astillero (y el Puerto
+## comercial, con su muelle) tiene la darsena en
 ## su lado de delante (+Z del modelo 3D, +y local del dibujo 2D). El fantasma se
 ## gira para que mire al agua mas cercana; el jugador aun puede girarlo a mano
 ## (entonces deja de girarse solo hasta el proximo edificio).
-const FACES_WATER := ["shipyard"]
+const FACES_WATER := ["shipyard", "trade_port"]
 ## Hasta cuantas celdas fuera de la huella se busca el agua.
 const FACE_WATER_REACH := 4
 ## Lados del mundo en orden de giro: N (-y), E (+x), S (+y), O (-x).

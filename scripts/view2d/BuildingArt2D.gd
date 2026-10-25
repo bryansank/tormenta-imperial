@@ -154,6 +154,10 @@ static func draw_building(ci: CanvasItem, id: String, size: Vector2, opts: Dicti
 		"bastion": _bastion(ci, r)
 		"scrapyard": _scrapyard(ci, r)
 		"telegraph": _telegraph(ci, r)
+		# Economia de la 1.2 (feat/edificios-economia; dibujos al final del archivo).
+		"trade_port": _trade_port(ci, r)
+		"exchange": _exchange(ci, r)
+		"diesel_plant": _diesel_plant(ci, r)
 		_:
 			_block(ci, r, minf(r.size.x, r.size.y) * 0.16, STONE, CONCRETE_DARK)
 	if level > 1:
@@ -1962,6 +1966,11 @@ static func fx_anchors(id: String) -> Array:
 		# Defensa y vida: el monton de chatarra y la lampara del mastil.
 		"scrapyard": return [Vector2(0.42, 0.72)]
 		"telegraph": return [Vector2(0.8, 0.12)]
+		# Economia (feat/edificios-economia): el rotulo del tinglado, la moneda
+		# y la boca de la chimenea de la Central.
+		"trade_port": return [Vector2(0.35, 0.3)]
+		"exchange": return [Vector2(0.5, 0.3)]
+		"diesel_plant": return [Vector2(0.8, 0.0)]
 	return [Vector2(0.5, 0.45)]
 
 # ── Parcela y atrezo (docs/03, "Parcela y atrezo") ────────────────────
@@ -3501,3 +3510,170 @@ static func _telegraph(ci: CanvasItem, r: Rect2) -> void:
 	_dot(ci, tip, m * 0.11, Color(RED, 0.25))
 	_disc(ci, tip, m * 0.05, RED.lightened(0.15), OUTLINE, 1.0)
 	_dot(ci, tip - _down * m * 0.06, m * 0.03, BRASS_LIGHT)
+# ── Economia de la 1.2 (feat/edificios-economia, doc 21 §6.3) ──
+# ══════════════════════════════════════════════════════════════════════
+# El mismo vocabulario que la 3D (scripts/buildings/EconomyToys.gd): la grua de
+# laton del Puerto, la gran moneda de la Casa de cambio, la chimenea con franjas
+# y el volante de la Central. El Puerto mira al agua con su lado de delante
+# (+y local), como el Astillero.
+
+## Puerto comercial: tinglado de pizarra atras, muelle de tablones delante con
+## su canto y norays, cajas y sacos, y la GRUA de laton cuya pluma sale por
+## encima del agua con una caja colgando.
+static func _trade_port(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, CONCRETE_DARK)
+	# El muelle: tablones en la franja de delante
+	var quay := Rect2(Vector2(r.position.x, r.position.y + r.size.y * 0.62), Vector2(r.size.x, r.size.y * 0.38))
+	ci.draw_rect(quay, LIGHT_WOOD.darkened(0.08))
+	for k in range(1, 8):
+		var x := quay.position.x + quay.size.x * float(k) / 8.0
+		ci.draw_line(Vector2(x, quay.position.y), Vector2(x, quay.end.y), DARK_WOOD, 1.0)
+	ci.draw_rect(Rect2(Vector2(quay.position.x, quay.end.y - m * 0.05), Vector2(quay.size.x, m * 0.05)), DARK_WOOD)
+	for t in [0.18, 0.5, 0.82]:
+		_disc(ci, Vector2(quay.position.x + quay.size.x * t, quay.end.y - m * 0.1), m * 0.03, IRON)
+	# El tinglado
+	var shed := Rect2(r.position + r.size * Vector2(0.04, 0.05), r.size * Vector2(0.62, 0.5))
+	_gable(ci, shed, m * 0.12, SLATE, CREAM.darkened(0.06), true)
+	_wall_marks(ci, _wall, 3, GLOW, 0.3, DARK_WOOD)
+	var plate := Rect2(shed.get_center() + Vector2(-m * 0.13, -m * 0.03), Vector2(m * 0.26, m * 0.06))
+	ci.draw_rect(plate.grow(1.0), OUTLINE)
+	ci.draw_rect(plate, BRASS)
+	# Mercancias en el muelle
+	for p in [Vector2(0.12, 0.72), Vector2(0.24, 0.76), Vector2(0.17, 0.66)]:
+		var crate := Rect2(r.position + r.size * p, Vector2(m * 0.1, m * 0.1))
+		ci.draw_rect(crate.grow(1.0), OUTLINE)
+		ci.draw_rect(crate, LIGHT_WOOD)
+		ci.draw_line(crate.position, crate.end, DARK_WOOD, 1.0)
+	for k in 2:
+		_shaded_disc(ci, r.position + r.size * Vector2(0.4 + k * 0.08, 0.76), m * 0.045, CREAM.darkened(0.12))
+	# La grua (lo exagerado): torre a la derecha y pluma hacia el agua
+	var foot := r.position + r.size * Vector2(0.8, 0.5)
+	var tip := r.position + r.size * Vector2(0.62, 1.08)
+	_cyl(ci, foot - _down * m * 0.28, m * 0.07, m * 0.28, BRASS, BRASS_DARK)
+	var top := foot - _down * m * 0.3
+	ci.draw_line(top + _shade * m * 0.2, tip + _shade * m * 0.2, Color(SHADOW, 0.3), 4.0)
+	ci.draw_line(top, tip, OUTLINE, 5.0)
+	ci.draw_line(top, tip, BRASS, 3.0)
+	_disc(ci, top, m * 0.05, IMPERIAL_RED, OUTLINE, 1.0)
+	ci.draw_line(tip, tip + Vector2(0, m * 0.06), IRON, 1.0)
+	var hang := Rect2(tip + Vector2(-m * 0.05, m * 0.05), Vector2(m * 0.1, m * 0.09))
+	ci.draw_rect(hang.grow(1.0), OUTLINE)
+	ci.draw_rect(hang, LIGHT_WOOD)
+
+## Casa de cambio: escalinata, cuerpo de piedra clara con portico de columnas
+## y la GRAN moneda de oro encima del fronton.
+static func _exchange(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	ci.draw_rect(r, MARBLE.darkened(0.12))
+	# Escalinata delante
+	for k in 3:
+		var w := r.size.x * (0.56 - k * 0.05)
+		var step := Rect2(Vector2(r.get_center().x - w * 0.5, r.end.y - m * (0.08 + k * 0.05)), Vector2(w, m * 0.05))
+		ci.draw_rect(step, CONCRETE.lightened(0.05 * k))
+		ci.draw_line(step.position, Vector2(step.end.x, step.position.y), CONCRETE_DARK, 1.0)
+	var body := Rect2(r.position + r.size * Vector2(0.08, 0.08), r.size * Vector2(0.84, 0.62))
+	_gable(ci, body, m * 0.16, SLATE, MARBLE.darkened(0.04), true)
+	_wall_marks(ci, _wall, 4, GLOW, 0.35, OUTLINE)
+	# Columnas del portico
+	for k in 4:
+		var x := body.position.x + body.size.x * (0.2 + 0.2 * k)
+		_cyl(ci, Vector2(x, body.end.y + m * 0.02), m * 0.035, m * 0.1, MARBLE, MARBLE.darkened(0.15))
+	# Estandartes rojos
+	for sx in [0.06, 0.94]:
+		var p := r.position + r.size * Vector2(sx, 0.78)
+		var tipm := _mast(ci, p, m * 0.2, IRON, 1.5)
+		var flag := Rect2(tipm + Vector2(-m * 0.03, 0), Vector2(m * 0.06, m * 0.1))
+		ci.draw_rect(flag, IMPERIAL_RED)
+		ci.draw_rect(flag, OUTLINE, false, 1.0)
+	# La moneda (lo exagerado)
+	var coin := body.get_center() - _down * m * 0.12
+	_dot(ci, coin + _shade * m * 0.1, m * 0.2, Color(SHADOW, 0.3))
+	_disc(ci, coin, m * 0.2, BRASS, OUTLINE, 1.5)
+	ci.draw_arc(coin, m * 0.14, 0.0, TAU, 20, BRASS_DARK, 1.5)
+	_dot(ci, coin - Vector2(m, m) * 0.05, m * 0.06, BRASS_LIGHT)
+	ci.draw_line(coin - Vector2(0, m * 0.08), coin + Vector2(0, m * 0.08), BRASS_DARK, 2.0)
+	ci.draw_line(coin + Vector2(-m * 0.05, -m * 0.04), coin + Vector2(m * 0.05, -m * 0.04), BRASS_DARK, 1.5)
+	ci.draw_line(coin + Vector2(-m * 0.05, m * 0.04), coin + Vector2(m * 0.05, m * 0.04), BRASS_DARK, 1.5)
+
+## Central diesel: nave de chapa con lucernario encendido, la CHIMENEA alta con
+## franjas rojas, el gran volante de laton y el tanque de combustible.
+static func _diesel_plant(ci: CanvasItem, r: Rect2) -> void:
+	var m := minf(r.size.x, r.size.y)
+	ci.draw_rect(r.grow(1.0), OUTLINE)
+	_plate(ci, r, SLATE.darkened(0.08), OUTLINE, 1.0)
+	_rivets(ci, r, BRASS, 3.0)
+	var hall := Rect2(r.position + r.size * Vector2(0.06, 0.1), r.size * Vector2(0.6, 0.56))
+	var roof := _gable(ci, hall, m * 0.14, GUNMETAL, STEEL, true)
+	ci.draw_rect(Rect2(Vector2(roof.position.x + roof.size.x * 0.15, roof.get_center().y - m * 0.025), Vector2(roof.size.x * 0.7, m * 0.05)), GLOW)
+	_wall_marks(ci, _wall, 3, GLOW, 0.35, OUTLINE)
+	# Tanque de combustible abajo a la izquierda y su tuberia
+	var tank := r.position + r.size * Vector2(0.18, 0.78)
+	var wheel := r.position + r.size * Vector2(0.62, 0.8)
+	ci.draw_line(tank, wheel, OUTLINE, 5.0)
+	ci.draw_line(tank, wheel, STEEL, 3.0)
+	_cyl(ci, tank - _down * m * 0.1, m * 0.12, m * 0.1, CREAM, CREAM.darkened(0.12))
+	_cyl_band(ci, tank - _down * m * 0.1, m * 0.12, m * 0.1, 0.5, 2.0, RED)
+	# El volante de laton
+	_disc(ci, wheel, m * 0.15, BRASS, OUTLINE, 1.5)
+	ci.draw_arc(wheel, m * 0.1, 0.0, TAU, 16, BRASS_DARK, 2.0)
+	for k in 4:
+		var a := PI * 0.25 + k * PI * 0.5
+		ci.draw_line(wheel, wheel + Vector2(cos(a), sin(a)) * m * 0.12, BRASS_DARK, 1.5)
+	_dot(ci, wheel, m * 0.03, RED)
+	# La chimenea (lo exagerado), atras a la derecha
+	var stack := r.position + r.size * Vector2(0.8, 0.22)
+	var h := m * 0.5
+	_cyl(ci, stack - _down * h, m * 0.085, h, IRON, TILE_RED_DARK)
+	_cyl_band(ci, stack - _down * h, m * 0.085, h, 0.15, 2.5, IMPERIAL_RED)
+	_cyl_band(ci, stack - _down * h, m * 0.085, h, 0.42, 2.5, IMPERIAL_RED)
+	_dot(ci, stack - _down * h, m * 0.05, OIL_BLACK)
+
+## El barco del contrabandista visto desde arriba, centrado en el origen, la
+## proa hacia +x, `length` px de eslora. Lo dibujan el mapa 2D
+## (SmugglerShip2D) y la cabecera del panel EL BARCO.
+static func draw_smuggler_ship(ci: CanvasItem, length: float) -> void:
+	var l := length * 0.5
+	var b := length * 0.15
+	# Sombra en el agua y estela
+	var hull := PackedVector2Array([Vector2(-l, -b), Vector2(l * 0.5, -b), Vector2(l, 0), Vector2(l * 0.5, b), Vector2(-l, b)])
+	var off := Vector2(length * 0.03, length * 0.05)
+	var sh := PackedVector2Array()
+	for p in hull:
+		sh.append(p + off)
+	ci.draw_colored_polygon(sh, Color(SKY.darkened(0.6), 0.45))
+	ci.draw_line(Vector2(-l * 1.05, -b * 0.6), Vector2(-l * 1.4, -b * 1.2), Color(CREAM, 0.6), 2.0)
+	ci.draw_line(Vector2(-l * 1.05, b * 0.6), Vector2(-l * 1.4, b * 1.2), Color(CREAM, 0.6), 2.0)
+	# Casco (con la franja roja de la borda) y cubierta
+	_poly(ci, hull, IRON.lightened(0.15), OUTLINE, 1.5)
+	var rail := PackedVector2Array([Vector2(-l * 0.9, -b * 0.72), Vector2(l * 0.46, -b * 0.72), Vector2(l * 0.84, 0),
+		Vector2(l * 0.46, b * 0.72), Vector2(-l * 0.9, b * 0.72), Vector2(-l * 0.9, -b * 0.72)])
+	ci.draw_polyline(rail, IMPERIAL_RED, 2.0)
+	var deck := PackedVector2Array([Vector2(-l * 0.84, -b * 0.6), Vector2(l * 0.42, -b * 0.6), Vector2(l * 0.74, 0),
+		Vector2(l * 0.42, b * 0.6), Vector2(-l * 0.84, b * 0.6)])
+	ci.draw_colored_polygon(deck, LIGHT_WOOD)
+	for k in range(1, 3):
+		var y := -b * 0.6 + b * 1.2 * float(k) / 3.0
+		ci.draw_line(Vector2(-l * 0.84, y), Vector2(l * 0.5, y), DARK_WOOD, 1.0)
+	# Caseta a popa con ventanas encendidas
+	var cab := Rect2(Vector2(-l * 0.8, -b * 0.5), Vector2(l * 0.45, b))
+	ci.draw_rect(cab.grow(1.0), OUTLINE)
+	ci.draw_rect(cab, CREAM.darkened(0.08))
+	ci.draw_rect(Rect2(cab.position + Vector2(cab.size.x * 0.25, 1.0), Vector2(cab.size.x * 0.4, 2.0)), GLOW)
+	ci.draw_rect(Rect2(Vector2(cab.position.x + cab.size.x * 0.25, cab.end.y - 3.0), Vector2(cab.size.x * 0.4, 2.0)), GLOW)
+	# Chimenea con aro de laton
+	_disc(ci, Vector2(-l * 0.28, 0), b * 0.32, IRON, OUTLINE, 1.0)
+	ci.draw_arc(Vector2(-l * 0.28, 0), b * 0.32, 0.0, TAU, 12, BRASS, 1.5)
+	# Palo y vela parda tendida a lo largo
+	var mast := Vector2(l * 0.15, 0)
+	_poly(ci, PackedVector2Array([mast + Vector2(0, -b * 0.05), mast + Vector2(l * 0.55, -b * 0.05), mast + Vector2(0, -b * 0.95)]),
+		TERRACOTTA.darkened(0.25), OUTLINE, 1.0)
+	_dot(ci, mast, maxf(1.5, b * 0.12), DARK_WOOD)
+	# Carga y farol de proa
+	for p in [Vector2(l * 0.38, -b * 0.22), Vector2(l * 0.38, b * 0.24)]:
+		var crate := Rect2(p - Vector2(b * 0.22, b * 0.22), Vector2(b * 0.44, b * 0.44))
+		ci.draw_rect(crate.grow(1.0), OUTLINE)
+		ci.draw_rect(crate, LIGHT_WOOD)
+	_dot(ci, Vector2(l * 0.72, 0), maxf(1.5, b * 0.12), GLOW)

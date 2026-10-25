@@ -268,6 +268,83 @@ bloque viva solo y no choque con otras ramas que tocan esas tablas.
 **El banco de peces** (`fish_shoal`, `DEP_FISH_SHOAL`) es el primer yacimiento de mar:
 ver [02-economy.md](02-economy.md) "Yacimientos de mar".
 
+### Economía de la 1.2: Puerto comercial, Casa de cambio y Central diésel (`feat/edificios-economia`)
+
+Doc 21 §6.3 n.º 13, 14 y 16 del contexto privado; el barco es el §P4 del doc 14.
+Todos 2x2, con carretera como todo, 2 obreros cada uno, sin mejora (no producen:
+`PlacementRules.upgrade_does_something()` los deja fuera). Sus cifras viven en
+`GameConfig`, bloque "Economia (feat/edificios-economia)" al final del archivo:
+`_register_economy_buildings()` añade sus filas a las tablas comunes al crear
+`GameConfig` (topes, requisitos, obra, parcela, efecto), como el Muelle de pesca.
+
+| ID | Nombre | Coste O/A/P/M + mat. | Obreros | Obra | Tope | Requisitos | Qué hace |
+|----|------|------|---|---|---|---|---|
+| `trade_port` | Puerto comercial | 300/100/0/160 + 12 tablones, 6 vigas | 2 | 14 s | 1 | Mercado + Fundición (era 2) | En la costa (`PlacementRules.SHORE_ONLY`) y orientado al agua (`FACES_WATER`, como el Astillero). Cada 6-10 min atraca 90 s el barco del contrabandista con 3 ofertas |
+| `exchange` | Casa de cambio | 350/120/0/100 + 8 lingotes, 4 vigas | 2 | 12 s | 1 | Mercado + Fundición (era 2) | −10 puntos de spread en el Mercado (30 % → 20 %, suelo 8 %); en Gobernador, 1 % de interés por minuto sobre el oro guardado (tope 20) |
+| `diesel_plant` | Central diésel | 320/160/80/60 + 6 vigas, 4 combustible | 2 | 14 s | 2 | Refinería (era 3) | Quema 1 combustible cada 45 s; los aserraderos, minas de oro, fundiciones y refinerías a ≤ 5 casillas rinden +15 % (no se suma entre Centrales) |
+
+**Nivel de Núcleo y plano (propuesta, lo cablea la rama del Núcleo y los planos):**
+Puerto, Núcleo 3; Casa de cambio, Núcleo 3 + plano; Central diésel, Núcleo 4 + plano
+(la Central ya está en `combat_blueprint_buildings`). Esta rama no toca
+`core_level_unlocks` ni `blueprint_required`.
+
+**Quién lleva qué.**
+- `EconomyManager` (autoload, el último): el reloj del barco (modelo puro
+  `scripts/economy/SmugglerShip.gd`, con su RNG en el guardado), los tratos
+  (`take_offer`), los planos menores comprados, el combustible de las Centrales y el
+  interés. Guardado en la clave `"economy"`; `reset()` en los tres sitios de
+  `GameManager`.
+- `UtilityEffects.refresh()` (al construir, terminar, demoler, arruinar, reparar,
+  cargar y cuando cambian los obreros; nunca por frame): entrega a `EconomyManager`
+  los Puertos, Casas y Centrales en pie, pone `GameConfig.market_spread_cut` si una
+  Casa trabaja y la meta `diesel_bonus` en los industriales cercanos a una Central en
+  marcha. "Trabaja" = en pie, con carretera y con sus obreros.
+- `ProductionManager.get_cycle_yield()` multiplica por `1 + diesel_bonus` solo en vivo
+  (`include_events`): offline no se quema combustible, así que tampoco se cobra.
+- Una Central que no puede pagar su combustible pone `diesel_running = false`, avisa
+  una vez (`NOTIF_DIESEL_NO_FUEL`) y se recalculan las áreas; al volver a pagar, arranca.
+
+**El barco del contrabandista.** Sin Puerto que trabaje no cuenta el reloj. El primero
+llega 75 s después de que el Puerto trabaje; luego, cada 6-10 min (sorteo). Con Ceniza o
+Tormenta espera en alta mar; si llega la Ceniza estando atracado, zarpa antes. Con un
+combate abierto, el reloj espera. Tres huecos de oferta:
+1. **Exclusivo:** repuestos (2-4, 60 de oro cada uno; lo normal es traerlos de las
+   misiones) o, si queda alguno, un **plano menor**: un edificio que abre el rango por
+   encima del de ahora (`rank_rewards`), a 40 de oro por rango (mínimo 120). Nunca un
+   plano obligatorio de misión. Comprado, `RankManager.is_building_unlocked()` lo da
+   por abierto.
+2. **Material:** tablones, lingotes, vigas o combustible ya hechos, un poco por encima
+   de lo que cuesta fabricarlos (`smuggler_material_offers`).
+3. **Recursos:** te vende madera/comida/acero/petróleo al 75 % del precio de compra del
+   Mercado, o te compra lo que te sobra a 1,6 × su precio de venta (cifras de 10 en 10).
+
+Cada trato se hace una vez, da `smuggler_rank_xp` (5) de rango y guarda. Al atracar:
+aviso (`NOTIF_SMUGGLER_ARRIVED`) y el efecto `event_positive`.
+
+**Vista.** 3D: `scripts/map/SmugglerShip3D.gd`, hijo de `BuildingPlacer`: una malla
+compartida (`EconomyToys.ship_mesh()`, ~320 triángulos, los dos materiales de la
+maqueta), escondida casi siempre; entra y sale con un Tween de 4,5 s a lo largo de la
+orilla y se mece con otro Tween en bucle (sin `_process`). Atraca a casilla y media del
+frente del Puerto (`EconomyManager.berth_for`). 2D: `scripts/view2d/SmugglerShip2D.gd`,
+la silueta de `BuildingArt2D.draw_smuggler_ship` dibujada una vez. Tocarlo en las dos
+vistas (`EconomyManager.ship_hit`) abre **EL BARCO** (`scripts/ui/SmugglerPanel.gd`,
+creado al pedirlo, no está en las escenas); también **VER EL BARCO** en la ficha del
+Puerto. La ficha de los tres dice su estado (`BuildingInfoPanel.economy_status`).
+
+**Aspecto.** Maquetas propias (sin piezas CC0) en `scripts/buildings/EconomyToys.gd`,
+horneadas por `tools/build_toy_models.gd -- --only=trade_port,exchange,diesel_plant`
+(recetas `tools/toy_recipes/<id>.gd`): Puerto 888 tri (tinglado, muelle y la grúa de
+latón con su caja colgando sobre el agua), Casa de cambio 617 (pórtico con columnas y
+la gran moneda en el frontón), Central 1.092 (chimenea con franjas rojas y volante de
+latón; `FxAnchor` en la boca). `EconomyToys.create()` usa el horneado si existe, sin
+`model_scene` en el `.tres`. 2D: `BuildingArt2D._trade_port`, `_exchange`,
+`_diesel_plant`. Obra y parcela propias en el bloque de `GameConfig`.
+
+**Pruebas (sin correr):** `tests/economy/test_smuggler_ship.gd`,
+`tests/economy/test_economy_buildings.gd`, `tests/ui/test_smuggler_panel.gd`; los
+recuentos de edificios suben a 40 en `test_building_catalog`, `test_building_lot` y
+`test_building_i18n`.
+
 ### Military Buildings
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Prereqs |
@@ -1013,4 +1090,5 @@ solido de la paleta (`vertex_color_is_srgb`).
 - `scripts/buildings/LotPlan.gd` — rule: lot ground, trim, props and exaggerated element (both views); `scripts/buildings/BuildingLot.gd` — the 3D lot; `scripts/buildings/LotMesh.gd` — one vertex-coloured mesh per lot
 - `scripts/buildings/SiteMesh.gd` — 3D construction phases, upgrade scaffold and ruin in the toy palette (one static mesh each); `scripts/buildings/ToyTones.gd` — palette-derived tones for everything around the buildings
 - `scripts/buildings/SiteFx.gd` — construction-site animation shaders (crane, hook, pennant) for both views; site style/layout in `BuildingLook.gd`
+- `scripts/buildings/EconomyToys.gd` — Puerto comercial, Casa de cambio, Central diésel y el barco del contrabandista en maqueta; `scripts/services/EconomyManager.gd` + `scripts/economy/SmugglerShip.gd` — el barco, los tratos, el combustible y el interés (1.2)
 - `scenes/buildings/BuildingPlacer.tscn` — placement/move/demolish logic
