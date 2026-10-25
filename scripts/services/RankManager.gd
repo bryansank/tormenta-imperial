@@ -42,6 +42,10 @@ func _ready() -> void:
 	EventBus.milestone_completed.connect(func(_m): add_xp_from("milestone"))
 	# Tres campanas (feat/tres-campanas): cada mision ganada, y mas el jefe.
 	EventBus.campaign_mission_won.connect(func(_d, _m, boss): add_xp_from("campaign_boss" if boss else "campaign_mission"))
+	# Volverse el Imperio (feat/volverse-imperio): cada mision de conquista, y
+	# mas al tomar la isla. El rango sigue subiendo hasta el 18 despues de ganar.
+	EventBus.conquest_mission_won.connect(func(_i, _m, _c): add_xp_from("conquest_mission"))
+	EventBus.island_conquered.connect(func(_i): add_xp_from("island_conquered"))
 	_apply_bonuses()
 	# Hasta la primera partida (o en escenas de prueba), un nombre ya puesto.
 	if _colony_name.is_empty():
@@ -176,7 +180,11 @@ func is_building_unlocked(building_id: String) -> bool:
 	# Un plano menor comprado al contrabandista lo abre antes de tiempo
 	# (feat/edificios-economia, EconomyManager.grant_plan).
 	var economy := get_node_or_null("/root/EconomyManager")
-	return economy != null and economy.has_plan(building_id)
+	if economy != null and economy.has_plan(building_id):
+		return true
+	# Volverse el Imperio: una isla conquistada abre su decoracion antes de rango.
+	var empire: Node = get_node_or_null("/root/EmpireManager")
+	return empire != null and bool(empire.unlocks_building(building_id))
 
 ## El rango que abre una pieza de la bandera ("patterns", "emblems", "colors").
 static func piece_rank(kind: String, id: String) -> int:

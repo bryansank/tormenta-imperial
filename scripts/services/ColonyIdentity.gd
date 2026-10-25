@@ -63,7 +63,17 @@ static func is_piece_open(kind: String, id: String, rank: int, all: bool = false
 	var r := piece_rank(kind, id)
 	if r <= 0:
 		return false
-	return all or r <= rank
+	return all or r <= rank or empire_grants(kind, id)
+
+## Volverse el Imperio (feat/volverse-imperio): una isla conquistada puede abrir
+## una pieza antes de su rango (su premio unico). Se pregunta al autoload por
+## ruta, sin depender de el: en una escena de prueba sin EmpireManager, nada.
+static func empire_grants(kind: String, id: String) -> bool:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return false
+	var empire: Node = tree.root.get_node_or_null("EmpireManager")
+	return empire != null and empire.has_method("unlocks_piece") and bool(empire.unlocks_piece(kind, id))
 
 ## Las piezas abiertas de un tipo, en el orden de la galeria.
 static func open_pieces(kind: String, rank: int, all: bool = false) -> Array:

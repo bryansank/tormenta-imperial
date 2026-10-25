@@ -320,3 +320,19 @@ Tierra, Mar y Aire completas ([15-combat.md](15-combat.md) §13). Por modo:
 La regla es `audit_needs_campaigns` en `game_mode_rules` y se pregunta con
 `GameMode.audit_needs_campaigns()`, que además respeta el interruptor global
 `GameConfig.final_audit_needs_campaigns` (los tests del camino de la 1.0 lo apagan).
+
+## 6. Volverse el Imperio y los modos (1.2, rama `feat/volverse-imperio`)
+
+Tras ganar el Ataque Final, la fase del archipiélago
+([06-progression-victory.md](06-progression-victory.md) §Volverse el Imperio). Regla
+`empire_phase` en `game_mode_rules` (la registra `GameConfig._register_empire()` en
+su bloque final, sin tocar la tabla), consulta `GameMode.empire_enabled()`, que pide
+además `victory` y `audit_on_capstone`:
+
+- **Campaña** (Colono y Gobernador): sí. Gobernador pelea las conquistas con su
+  enemigo más duro (`expedition_enemy_mult`, como las campañas).
+- **Supervivencia**: sí, si se gana su único asedio. Perderlo sella la partida, así
+  que nunca llega.
+- **Constructor**: no. Gana con el CG nv3 sin asedio; su victoria sigue igual.
+- **Sandbox**: no. No hay victoria.
+

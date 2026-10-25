@@ -99,3 +99,34 @@ func test_it_opens_at_once() -> void:
 	var screen := _screen()
 	screen._on_victory_achieved(STATS)
 	assert_bool(screen.is_showing()).is_true()
+
+# ── Volverse el Imperio (feat/volverse-imperio) ──────────────────────
+
+## En Campana la victoria dice "Ahora el Imperio eres tu" y lleva el boton del
+## archipielago; en Constructor, no.
+func test_the_campaign_victory_is_now_the_empire() -> void:
+	var saved_mode: int = GameMode.current
+	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
+	var screen := _screen()
+	screen._on_victory_achieved(STATS)
+	GameMode.current = saved_mode
+	assert_bool(_has_label(screen, Tr.t("LBL_VICTORY_TITLE_EMPIRE"))).is_true()
+	assert_bool(_has_label(screen, Tr.t("LBL_VICTORY_CODA_EMPIRE"))).is_true()
+	assert_object(screen.find_child("ArchipelagoButton", true, false)).is_not_null()
+
+func test_the_builder_victory_has_no_archipelago() -> void:
+	var saved_mode: int = GameMode.current
+	GameMode.begin_run(GameMode.Mode.BUILDER)
+	var screen := _screen()
+	screen._on_victory_achieved(STATS.merged({"mode": "builder"}))
+	GameMode.current = saved_mode
+	assert_object(screen.find_child("ArchipelagoButton", true, false)).is_null()
+
+## La pantalla monta el ArchipelagoPanel como hermano (asi ☰ MENU lo encuentra).
+func test_the_victory_screen_mounts_the_archipelago_panel() -> void:
+	var holder: Node = auto_free(Node.new())
+	add_child(holder)
+	var screen: CanvasLayer = load("res://scenes/ui/VictoryScreen.tscn").instantiate()
+	holder.add_child(screen)
+	await await_idle_frame()
+	assert_object(holder.get_node_or_null("ArchipelagoPanel")).is_not_null()

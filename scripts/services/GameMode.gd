@@ -177,6 +177,12 @@ static func audit_enabled() -> bool:
 static func audit_needs_campaigns() -> bool:
 	return audit_enabled() and _flag("audit_needs_campaigns") and GameConfig.final_audit_needs_campaigns
 
+## Volverse el Imperio (feat/volverse-imperio): tras ganar el Ataque Final la
+## partida sigue con el archipielago (conquistas y tributo). Campana y
+## Supervivencia si; Constructor (gana sin asedio) y Sandbox (sin victoria) no.
+static func empire_enabled() -> bool:
+	return victory_enabled() and audit_enabled() and _flag("empire_phase")
+
 ## El Cuartel General a nivel 3 gana la partida sin asedio (Constructor).
 static func capstone_wins() -> bool:
 	return _flag("capstone_wins")

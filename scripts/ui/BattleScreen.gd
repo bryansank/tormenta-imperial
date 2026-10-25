@@ -865,6 +865,18 @@ func _show_expedition_report(result: int, rewards: Dictionary, casualties: Dicti
 					lines.append(Tr.t("CAMP_REPORT_BOSS") % camp_name)
 			else:
 				lines.append(Tr.t("CAMP_REPORT_RETRY"))
+		# Volverse el Imperio: como queda la isla (el progreso se apunta justo
+		# despues de este parte: se cuenta desde la mision jugada).
+		var island: String = String(last.get("conquest_island", ""))
+		if island != "":
+			var island_name: String = Tr.t(ConquestGenerator.island_name_key(island))
+			var played: int = int(last.get("conquest_mission", 0))
+			if result == 0:
+				lines.append(Tr.t("EMP_REPORT_WON") % [island_name, played + 1, ConquestGenerator.mission_count(island)])
+				if ConquestGenerator.is_final(island, played):
+					lines.append(Tr.t("EMP_REPORT_CONQUERED") % island_name)
+			else:
+				lines.append(Tr.t("CAMP_REPORT_RETRY"))
 	_report_detail.text = "\n".join(lines)
 
 	_report_panel.visible = true
@@ -976,10 +988,18 @@ func _paint_map_domain() -> void:
 		mission = _run.campaign_mission()
 	_map_title.text = Tr.t("LBL_EXPEDITION_MAP")
 	_map_sky.visible = false
+	# Volverse el Imperio: una mision de conquista dice la isla y la mision, y
+	# pinta el fondo de su medio como las campanas.
+	if domain == "" and _run != null and _run.has_method("is_conquest") and _run.is_conquest():
+		domain = _run.conquest_domain()
+		var island: String = _run.conquest_island()
+		_map_title.text = "%s · %s" % [Tr.t(ConquestGenerator.island_name_key(island)),
+			Tr.t(ConquestGenerator.mission_name_key(island, _run.conquest_mission()))]
+	elif domain != "":
+		_map_title.text = "%s · %s" % [Tr.t("CAMP_NAME_" + domain.to_upper()),
+			Tr.t(ExpeditionGenerator.campaign_mission_name_key(domain, mission))]
 	if domain == "":
 		return
-	_map_title.text = "%s · %s" % [Tr.t("CAMP_NAME_" + domain.to_upper()),
-		Tr.t(ExpeditionGenerator.campaign_mission_name_key(domain, mission))]
 	match domain:
 		"sea":
 			_map_sky.color = Color(UITheme.BOARD_WATER, 0.55)

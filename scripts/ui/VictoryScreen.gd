@@ -12,6 +12,7 @@ extends CanvasLayer
 
 const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const CT := preload("res://scripts/ui/CartoonTheme.gd")
+const ArchipelagoPanelScript := preload("res://scripts/ui/ArchipelagoPanel.gd")
 
 ## Tope de la ventana en PC/tablet.
 const WINDOW_MAX := Vector2(720, 560)
@@ -24,6 +25,29 @@ func _ready() -> void:
 	# Mientras se ve, los avisos esperan (NotificationPanel.is_busy).
 	add_to_group("modal_screen")
 	EventBus.victory_achieved.connect(_on_victory_achieved)
+	_mount_archipelago.call_deferred()
+
+## Pone el ArchipelagoPanel de hermano (una vez). Oculto y sin _process hasta
+## que se abre: no cuesta nada mientras no se usa.
+func _mount_archipelago() -> void:
+	var parent: Node = get_parent()
+	if parent == null or parent.get_node_or_null(ArchipelagoPanelScript.NODE_NAME) != null:
+		return
+	var archipelago: CanvasLayer = ArchipelagoPanelScript.new()
+	archipelago.name = ArchipelagoPanelScript.NODE_NAME
+	parent.add_child(archipelago)
+
+## Cierra la pantalla (CONTINUAR o VER EL ARCHIPIELAGO).
+func dismiss() -> void:
+	_close()
+
+## VER EL ARCHIPIELAGO: cierra la victoria y abre el mapa de las islas.
+func open_archipelago() -> void:
+	dismiss()
+	_mount_archipelago()
+	var archipelago: Node = get_parent().get_node_or_null(ArchipelagoPanelScript.NODE_NAME) if get_parent() != null else null
+	if archipelago != null and archipelago.has_method("open"):
+		archipelago.open()
 
 func _on_victory_achieved(stats: Dictionary) -> void:
 	_show_victory(stats)

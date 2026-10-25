@@ -50,6 +50,9 @@ const COLONY_ENTRIES := [
 	# edificio (el Mercado y el Laboratorio, BuildingInfoPanel.SCREENS).
 	["army", "BTN_ARMY", "ArmyPanel"],
 	["skirmish", "BTN_SKIRMISH", "SkirmishPanel"],
+	# Volverse el Imperio (feat/volverse-imperio): el mapa de las islas vecinas,
+	# solo despues de ganar el Ataque Final. Lo monta VictoryScreen como hermano.
+	["archipelago", "BTN_ARCHIPELAGO", "ArchipelagoPanel"],
 	["sandbox", "BTN_SANDBOX", "SandboxPanel"],
 	# El registro de avisos: para repasar lo ultimo que paso (2026-09-28). Antes
 	# era un boton a la vista en el HUD.
@@ -684,6 +687,8 @@ static func is_colony_entry_available(id: String) -> bool:
 			return GameMode.sandbox_tools()
 		"contracts":
 			return GameMode.contracts_enabled()
+		"archipelago":
+			return EmpireManager.is_active()
 	return true
 
 func _sync_music() -> void:

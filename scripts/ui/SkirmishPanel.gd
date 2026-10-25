@@ -78,6 +78,10 @@ var _selected_offer: int = -1
 ## "air" = esa campana; TAB_RAIDS = los ataques rapidos del tablon; "" = la que
 ## toque (la primera campana con algo que hacer).
 const TAB_RAIDS := "raids"
+## Volverse el Imperio (feat/volverse-imperio): la pestana IMPERIO, con la
+## mision que toca de la isla elegida (en el mapa del archipielago o aqui).
+const TAB_EMPIRE := "empire"
+var _empire_island: String = ""
 var _tab: String = ""
 const ODDS_KEYS := {"favorable": "ODDS_FAVORABLE", "even": "ODDS_EVEN", "hard": "ODDS_HARD"}
 const ICON_PX := 24
@@ -110,6 +114,8 @@ func _ready() -> void:
 	EventBus.sortie_offers_changed.connect(func(): if _is_open: _refresh())
 	# Las tres campanas: mision ganada, perdida, lista tras descansar.
 	EventBus.campaign_changed.connect(func(): if _is_open: _refresh())
+	# Volverse el Imperio: mision de conquista ganada, isla tomada, descanso.
+	EventBus.empire_changed.connect(func(): if _is_open: _refresh())
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	# Por si la partida se cargo antes de que este panel escuchara.
 	_on_expedition_changed.call_deferred()
@@ -383,6 +389,13 @@ func _refresh() -> void:
 		if lock != "" and (ok or lock in ["CAMP_DONE", "CAMP_LOCK_BUILDING", "CAMP_LOCK_ERA", "CAMP_LOCK_REST", "CAMP_LOCK_FIRST_SORTIE"]):
 			ok = false
 			reason = _campaign_lock_text(tab_domain)
+	elif current_tab() == TAB_EMPIRE:
+		# Volverse el Imperio: en la pestana IMPERIO manda el candado de la isla.
+		var island: String = current_empire_island()
+		var empire_lock: String = EmpireManager.lock_reason(island) if island != "" else "EMP_LOCK_PHASE"
+		if empire_lock != "":
+			ok = false
+			reason = EmpireManager.lock_text(island) if island != "" else Tr.t(empire_lock)
 	if ok and offer.is_empty():
 		ok = false
 		reason = "LBL_SORTIE_NONE"
@@ -695,6 +708,18 @@ func _on_launch_pressed() -> void:
 		_close()
 		return
 	var offer: Dictionary = current_offer()
+	# Volverse el Imperio: la mision que toca de la isla elegida.
+	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_CONQUEST:
+		var island: String = String(offer.get("island", ""))
+		if EmpireManager.launch_conquest(island, party):
+			_close()
+		else:
+			var why_emp: String = EmpireManager.lock_text(island)
+			if why_emp == "":
+				why_emp = _reason_text(String(evaluate_launch(party).get("reason", "MSG_SORTIE_GONE")))
+			EventBus.notification_posted.emit(why_emp, "warning", UITheme.WARNING)
+			_refresh()
+		return
 	# Tres campanas: la mision que toca de la pestana elegida.
 	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_CAMPAIGN:
 		if CombatManager.launch_campaign_mission(String(offer.get("domain", "")), party):
@@ -845,6 +870,10 @@ func current_offer() -> Dictionary:
 	var domain: String = current_campaign()
 	if domain != "":
 		return CombatManager.campaign_offer(domain)
+	# Volverse el Imperio: la mision que toca de la isla elegida.
+	if current_tab() == TAB_EMPIRE:
+		var island: String = current_empire_island()
+		return EmpireManager.conquest_offer(island) if island != "" else {}
 	var offers: Array = raid_offers()
 	if offers.is_empty():
 		return {}
@@ -871,6 +900,10 @@ func pure_domain() -> String:
 		return camp
 	if CombatManager.is_first_sortie_due():
 		return ""
+	# Volverse el Imperio: el medio de la mision de conquista que toca.
+	if current_tab() == TAB_EMPIRE:
+		var island: String = current_empire_island()
+		return EmpireManager.next_domain(island) if island != "" else ""
 	var offer: Dictionary = current_offer()
 	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_THREAT:
 		return String(offer.get("domain", "land"))
@@ -899,6 +932,9 @@ func _rebuild_sorties(offer: Dictionary, preview: Dictionary) -> void:
 	var domain: String = current_campaign()
 	if domain != "":
 		_add_campaign_header(domain)
+	elif not first and current_tab() == TAB_EMPIRE:
+		# Volverse el Imperio: las islas por tomar, la cadena de la elegida.
+		_add_empire_header()
 	elif not first:
 		var offers: Array = raid_offers()
 		# Los pecios de la costa (v1.2) no se pelean: una fila con EXPLORAR,
@@ -965,7 +1001,7 @@ func _add_wreck_rows() -> void:
 func _kind_text(offer: Dictionary, fights: int) -> String:
 	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_THREAT:
 		return Tr.t("THREAT_KIND_SEA") if String(offer.get("domain", "land")) == "sea" else Tr.t("THREAT_KIND_LAND")
-	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_CAMPAIGN:
+	if String(offer.get("kind", "")) in [ExpeditionGenerator.KIND_CAMPAIGN, ExpeditionGenerator.KIND_CONQUEST]:
 		return Tr.t("CAMP_KIND_FIGHTS") % fights
 	if String(offer.get("kind", "")) == ExpeditionGenerator.KIND_EXPEDITION:
 		return Tr.t("SORTIE_KIND_EXPEDITION") % fights
@@ -1024,6 +1060,18 @@ func _fill_detail(offer: Dictionary, preview: Dictionary) -> void:
 	odds_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(odds_badge)
 	_mission_box.add_child(head)
+	# Volverse el Imperio: el jefe de la Ciudadela y la mision que toma la isla.
+	var conquest_island: String = String(preview.get("conquest_island", ""))
+	if conquest_island != "":
+		var mission: int = int(offer.get("mission", 0))
+		if ConquestGenerator.is_boss_mission(conquest_island, mission):
+			var emp_boss := CT.icon_line("demolish", Tr.t("EMP_BOSS_WARNING"), "danger")
+			emp_boss.name = "ConquestBoss"
+			_mission_box.add_child(emp_boss)
+		if ConquestGenerator.is_final(conquest_island, mission):
+			var final_note := CT.icon_line("star", Tr.t("EMP_FINAL_MISSION"), "positive")
+			final_note.name = "ConquestFinal"
+			_mission_box.add_child(final_note)
 	if threat_domain != "":
 		var left: int = ceili(ThreatManager.seconds_left(int(offer.get("threat_id", 0))))
 		var time_line := CT.icon_line("clock", Tr.t("THREAT_TIME_LEFT").replace("{t}", "%d:%02d" % [left / 60, left % 60]), "warning")
@@ -1153,6 +1201,10 @@ func current_campaign() -> String:
 ## si no la primera que tenga su edificio y algo por hacer, si no los ataques
 ## rapidos (si hay alguno), si no la de Tierra.
 func _default_tab() -> String:
+	# Volverse el Imperio: con la fase en marcha y alguna isla por tomar, se
+	# abre en IMPERIO (las campanas ya estan hechas: eran la llave del asedio).
+	if EmpireManager.is_active() and EmpireManager.next_target() != "":
+		return TAB_EMPIRE
 	var waiting: String = CombatManager.campaign_waiting_unseen()
 	if waiting != "":
 		return waiting
@@ -1240,6 +1292,10 @@ func _add_tabs() -> void:
 	var raids: int = CombatManager.get_sortie_offers().size() + ThreatManager.get_threats().size()
 	row.add_child(_make_tab_button("CampaignTab_raids", Tr.t("ARMY2_TAB_RAIDS"), "raid", TAB_RAIDS,
 		current == TAB_RAIDS, ph, "%s: %d" % [Tr.t("ARMY2_TAB_RAIDS"), raids]))
+	# Volverse el Imperio: la pestana de las conquistas, solo con la fase activa.
+	if EmpireManager.is_active():
+		row.add_child(_make_tab_button("CampaignTab_empire", Tr.t("EMP_TAB"), "star", TAB_EMPIRE,
+			current == TAB_EMPIRE, ph, Tr.t("EMP_TAB_SUB") % [EmpireManager.conquered_count(), EmpireManager.island_count()]))
 	# En telefono, "3 de 6" a la derecha de las pestanas (en PC va en la tarjeta).
 	var camp := current_campaign()
 	# En vertical no cabe junto a las pestanas: va en la tarjeta (como en PC).
@@ -1302,3 +1358,78 @@ func _campaign_lock_text(domain: String) -> String:
 	var text: String = Objectives.campaign_lock_text(domain)
 	# Los motivos de can_launch (columna fuera, asedio...) ya vienen traducidos.
 	return text
+
+# ── Volverse el Imperio: la pestana IMPERIO (v1.2, feat/volverse-imperio) ──
+
+## La isla de la pestana IMPERIO: la elegida si sigue por tomar, si no la que
+## propone EmpireManager. "" si no queda ninguna.
+func current_empire_island() -> String:
+	if _empire_island != "" and not EmpireManager.is_conquered(_empire_island) 			and EmpireManager.island_ids().has(_empire_island):
+		return _empire_island
+	_empire_island = EmpireManager.next_target()
+	return _empire_island
+
+func select_empire_island(island_id: String) -> void:
+	_empire_island = island_id
+	_selection.clear()
+	_refresh()
+
+## Lo abre el archipielago (PREPARAR EL ASALTO): pestana IMPERIO con esa isla.
+func open_conquest(island_id: String) -> void:
+	_tab = TAB_EMPIRE
+	_empire_island = island_id
+	_selection.clear()
+	if _is_open:
+		_refresh()
+	else:
+		_open()
+
+## La cabecera de IMPERIO dentro de la tarjeta: una pastilla por isla por tomar
+## (la elegida azul, "n/m" al mantener), el recorrido de la elegida, su candado y
+## el acceso al mapa del archipielago.
+func _add_empire_header() -> void:
+	var ph := _phone()
+	var current: String = current_empire_island()
+	var row := HFlowContainer.new()
+	row.name = "EmpireIslands"
+	row.add_theme_constant_override("h_separation", 6)
+	row.add_theme_constant_override("v_separation", 6)
+	_mission_box.add_child(row)
+	for island_id in EmpireManager.island_ids():
+		var id: String = String(island_id)
+		if EmpireManager.is_conquered(id):
+			continue
+		var btn := CT.pill_button(Tr.t(ConquestGenerator.island_name_key(id)), "",
+			"open" if id == current else "secondary", 48 if ph else CT.BTN_SMALL, "window", "small")
+		btn.name = "EmpireIsland_" + id
+		btn.tooltip_text = Tr.t("CAMP_PROGRESS") % [EmpireManager.won(id), EmpireManager.total(id)]
+		btn.pressed.connect(select_empire_island.bind(id))
+		row.add_child(btn)
+	if current == "":
+		_mission_box.add_child(CT.icon_line("check", Tr.t("MSG_EMPIRE_ALL_CONQUERED"), "positive", "window", "body"))
+	else:
+		var won: int = EmpireManager.won(current)
+		var total: int = EmpireManager.total(current)
+		var track := CT.campaign_track(won, total, ph, Tr.t("EMP_BOSS_WARNING"))
+		track.name = "EmpireTrack"
+		track.tooltip_text = "%s · %s" % [Tr.t(ConquestGenerator.island_name_key(current)), Tr.t("CAMP_PROGRESS") % [won, total]]
+		_mission_box.add_child(track)
+		if EmpireManager.lock_reason(current) != "":
+			var why := CT.icon_line("lock", EmpireManager.lock_text(current), "warning")
+			why.name = "EmpireLock"
+			_mission_box.add_child(why)
+	var map_btn := CT.pill_button(Tr.t("BTN_VIEW_ARCHIPELAGO"), "anchor", "open", 48 if ph else CT.BTN_SMALL, "window", "small")
+	map_btn.name = "EmpireMapButton"
+	map_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	map_btn.pressed.connect(_open_archipelago)
+	_mission_box.add_child(map_btn)
+
+func _open_archipelago() -> void:
+	var parent: Node = get_parent()
+	var archipelago: Node = parent.get_node_or_null("ArchipelagoPanel") if parent != null else null
+	if archipelago == null or not archipelago.has_method("open"):
+		return
+	_close()
+	if archipelago.has_method("select_island") and current_empire_island() != "":
+		archipelago.select_island(current_empire_island())
+	archipelago.open()

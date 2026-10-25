@@ -483,6 +483,21 @@ interés de la Casa de cambio. Ver docs/03 "Economía de la 1.2".
 Los avisos van por `notification_posted` (barco atracado, barco que zarpa por la
 Ceniza, Central sin combustible). EconomyManager escucha `workers_changed` para pedir el
 recuento de áreas (`ProductionManager.request_area_refresh()`).
+## Volverse el Imperio
+
+Los emite solo `EmpireManager`, que publica lo que devuelve el modelo puro
+`Archipelago` ([06-progression-victory.md](06-progression-victory.md) §Volverse el
+Imperio). `island_id` es una clave de `GameConfig.empire_islands` ("gulls", "ember",
+"fog", "wind", "iron", "ash").
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `empire_phase_started` | — | EmpireManager (`_maybe_start()`: al ganar o al cargar una partida ya ganada) | GameManager (autosave) |
+| `empire_changed` | — | EmpireManager (misión, isla, tributo, descanso terminado, carga) | ArchipelagoPanel, SkirmishPanel |
+| `conquest_mission_won` | `island_id: String, mission: int, conquered: bool` | EmpireManager | RankManager (XP `conquest_mission`), GameManager (autosave) |
+| `island_conquered` | `island_id: String` | EmpireManager | RankManager (XP `island_conquered`), RankPanel, ConstructionMenu, AudioManager (`rank_up`) |
+| `archipelago_conquered` | — | EmpireManager | *(no listener: el aviso va por `notification_posted`)* |
+| `empire_tribute_paid` | `amounts: Dictionary` (ya en la bolsa) | EmpireManager | GameManager (autosave) |
 
 ## Orphan signals
 
