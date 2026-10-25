@@ -268,7 +268,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (37 total, `data/buildings/*.tres`)
+### Buildings (40 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -300,6 +300,9 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Aerodrome (1.1) | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | Trains planes and airships; needs a Refinery; no cap (2026-10-18) | 3 |
 | Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food + 3 gold/30s, no crop; on the coast with a school of fish within reach 4 (2 docks per school); caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
+| Bastion (1.2) | **2x1** | 60/25/0/30 | 0 | Wall: −30 % storm damage to what stands behind it (towards the island centre) within 3 cells; a +2 defence cover cell on defensive boards (1 per 3 bastions, max 2); needs Foundry + Barracks; caps 6/10/14 | 2 |
+| Scrapyard (1.2) | 2x2 | 160/40/0/90 + 6 planks | 2 | Repairs −40 % within 4 cells; after each Storm: 12 steel per ruin in its area, 1 part per 2 ruins (max 3), lifts 1 ruin to 35 %; blueprint building; caps 1/2/2 | 2 |
+| Telegraph (1.2) | 2x2 | 200/60/0/80 + 4 beams | 1 | +1 contract slot ("El telégrafo", orders from any source) and new contracts last +50 %; needs Foundry + Warehouse; max 1 | 2 |
 
 The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
 `scripts/buildings/UtilityEffects.gd` (on build/demolish, never per frame), look in
@@ -325,6 +328,24 @@ GameConfig is created. Baked toy model `assets/models/toy/fishing_dock.tscn`; 2D
 `BuildingArt2D._fishing_dock` / `_dep_fish_shoal`; 3D shoal `DepositMesh._fish_shoal`.
 ¿QUÉ HACER? only offers it as food support when no Farm fits. Detail: docs/02
 "Yacimientos de mar", docs/03 "Muelle de pesca".
+
+**Defensa y vida (1.2, `feat/edificios-defensa-vida`, doc 21 §6.3 n.º 11, 12, 18 and §6.4):**
+the three "(1.2)" rows and the **neighbourhood beauty**. Areas in
+`scripts/buildings/DefenseLifeEffects.gd` (called right after `UtilityEffects` from
+`ProductionManager._refresh_areas()`, on build/demolish/finish/ruin/repair/upgrade/
+staffing, never per frame; metas `bastion_cover`, `scrap_cover`, `beauty*`; runtime
+`GameConfig.defense_cover_cells`, `contract_extra_slots`, `contract_duration_mult`,
+cleared in `ProductionManager.reset()`). All numbers in the GameConfig block
+"Defensa y vida" at the end of the file; `_register_defense_life_buildings()` adds
+their table rows. **Beauty:** every standing decoration gives its beauty
+(`beauty_values`, unlisted ones `max(1, morale/2)`) to houses within 3 cells; ≥ 10 =
+pretty (+1 room, +2 morale points), ≥ 25 = elegant (+2, +4), added by
+`PopulationManager`; looks: `BeautyTrim.gd` (3D, cached like `LevelTrim`) and
+`BuildingArt2D.draw_beauty` (2D). **Bastion cover** is pure combat model:
+`Encounter.cover` + `CombatRules.damage(..., cover)`; a board without bastions is
+unchanged (docs/15 §3). **Telegraph** slot: `ContractBoard.WIRE` (saved in
+`contracts`, with `from`). Looks: `DefenseToys.gd` + bakes in `assets/models/toy/`;
+2D `BuildingArt2D._bastion/_scrapyard/_telegraph`. Detail: docs/03 "Defensa y vida".
 
 **Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
 `avenue_tree`, `flower_planter`, `colony_sign`, `hay_cart`, `bonfire`, `flagpole`,
@@ -432,7 +453,7 @@ hand mining there holds `mining_workers`, needs no road and spends no deposit us
 
 ### Road network (2026-09-28)
 
-- **Every building is at least 2x2**, except the road (1x1). The baked models already
+- **Every building is at least 2x2**, except the road (1x1) and the Bastion wall (2x1, 1.2). The baked models already
   fit their plot (`model_scale` / `model_stretch` stay at 1; they were for the old
   GLBs); `BuildingData.instantiate_model()` is the only way to spawn one.
 - **Everything touches a road joined to the Núcleo.** `PlacementRules.is_connected_spot()`

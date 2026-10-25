@@ -2595,7 +2595,13 @@ var combat_loot_expedition_boss_colonists := 3
 ## los activan sin tocar nada aqui. El candado lo pone quien construye
 ## (CombatManager.blueprint_locked(); PlacementRules tiene que llamarlo, como
 ## check_rank()).
-var combat_blueprint_buildings := ["infirmary", "military_forge", "scrapyard", "diesel_plant"]
+## v1.2 (decision de Bryan, 2026-10-25): sin planos. La Chatarreria y la Central
+## diesel salieron de la lista y se abren por era, rango y requisitos
+## (building_prerequisites / rank_rewards); la Enfermeria y la Herreria son de la
+## rama militar, que no entro, y sin su .tres nunca se ofrecen. Nadie pone el
+## candado (PlacementRules no llama a blueprint_locked): la rama del Nucleo y los
+## planos lo traera.
+var combat_blueprint_buildings := ["infirmary", "military_forge"]
 
 # ── Tres campañas: Tierra, Mar y Aire (feat/tres-campanas, docs/15 §13) ──
 # Decision de Bryan (2026-10-18): tres cadenas de misiones APARTE, cada una de
@@ -3789,4 +3795,120 @@ func _register_fishing_dock() -> bool:
 	building_lot_style[id] = {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "residential",
 		"props": ["barrel", "crate", "sacks", "barrel"], "count": [3, 5]}
 	building_active_fx[id] = "smoke"
+	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Defensa y vida (feat/edificios-defensa-vida, doc 21 §6.3 n.º 11, 12, 18 y §6.4) ──
+# ══════════════════════════════════════════════════════════════════════
+# Bastion (tramo de muro 2x1), Chatarreria y Telegrafo. La belleza del barrio
+# de la rama original no entro en la 1.2 (decision de Bryan): quitada.
+# Como el bloque de los utiles: las areas se calculan al construir, terminar,
+# demoler, arruinar, reparar o mejorar (DefenseLifeEffects.refresh, agrupado y
+# diferido por ProductionManager), nunca por frame, y quedan como metas en los
+# edificios. Nada de esto viaja en el save: sale de los edificios, que ya van en
+# el. El hueco extra de encargos SI va en el save, dentro de "contracts".
+#
+# Sus filas en las tablas comunes (topes, prerrequisitos, obra, parcela,
+# actividad) las anade _register_defense_life_buildings() al crear GameConfig,
+# para que este bloque viva solo y no choque con otras ramas. Quien busque
+# "bastion", "scrapyard" o "telegraph" en una tabla y no lo vea, lo tiene aqui.
+# El nivel de Nucleo y el plano que abren cada uno (core_level_unlocks /
+# blueprint_required) son de la rama del Nucleo; aqui no se tocan.
+
+const BASTION_ID := "bastion"
+const SCRAPYARD_ID := "scrapyard"
+const TELEGRAPH_ID := "telegraph"
+
+## Bastion: los edificios a `bastion_radius` casillas (borde a borde) que quedan
+## DETRAS del muro (del lado del centro de la isla, lejos del mar) reciben este
+## tanto menos de dano de la Tormenta. No se suma entre bastiones; con un Pozo
+## cerca, los dos se multiplican (0,7 x 0,8 = 0,56 del golpe).
+var bastion_radius := 3
+var bastion_storm_reduction := 0.3
+## Casillas de cobertura en el tablero de defensa (Impuesto y asedio): una por
+## cada `bastion_per_cover_cell` bastiones en pie, hasta `bastion_board_cover_max`.
+## Quien este encima (de superficie, no un avion) suma `bastion_cover_defense`.
+var bastion_per_cover_cell := 3
+var bastion_board_cover_max := 2
+var bastion_cover_defense := 2
+## Topes por era (sin bastiones antes del acero: la era 1 no se ve).
+var bastion_limits_by_era := [6, 10, 14]
+
+## Chatarreria (con obreros y en pie): sus brigadas reparan mas barato lo que
+## esta a `scrapyard_radius` (descuento sobre el precio de la reparacion; no se
+## suma entre chatarrerias) y, al acabar cada Tormenta, despejan las ruinas de
+## su zona: por ruina, `scrapyard_steel_per_ruin` de acero; un repuesto por cada
+## `scrapyard_ruins_per_part` ruinas (hasta `scrapyard_parts_max` por chatarreria
+## y Tormenta), y levantan `scrapyard_brigade_lifts` ruinas al
+## `scrapyard_brigade_lift_ratio` de su salud (gratis: vuelven a funcionar).
+var scrapyard_radius := 4
+var scrapyard_repair_discount := 0.4
+var scrapyard_steel_per_ruin := 12
+var scrapyard_ruins_per_part := 2
+var scrapyard_parts_max := 3
+var scrapyard_brigade_lifts := 1
+var scrapyard_brigade_lift_ratio := 0.35
+var scrapyard_limits_by_era := [1, 2, 2]
+
+## Telegrafo (unico, en pie): un hueco mas en el tablon de encargos (el hilo del
+## telegrafo: le llegan encargos de cualquier fuente abierta) y los plazos de los
+## encargos nuevos duran este tanto mas.
+var telegraph_extra_contracts := 1
+var telegraph_duration_bonus := 0.5
+## Espera hasta el primer encargo por el hilo, desde que el Telegrafo esta en pie.
+var telegraph_first_delay := 60.0
+
+## Runtime (lo pone DefenseLifeEffects; nunca se guarda ni se toca a mano).
+## Casillas de cobertura que el Bastion pone en el proximo tablero de defensa.
+var defense_cover_cells := 0
+## Huecos de encargos de mas (Telegrafo) y multiplicador de los plazos nuevos.
+var contract_extra_slots := 0
+var contract_duration_mult := 1.0
+
+## Casillas de cobertura que dan `bastions` bastiones en pie.
+func bastion_cover_cells_for(bastions: int) -> int:
+	if bastions <= 0:
+		return 0
+	return mini(bastion_board_cover_max, ceili(float(bastions) / float(maxi(1, bastion_per_cover_cell))))
+
+## Se evalua al crear GameConfig, despues de todas las tablas de arriba.
+var _defense_life_registered := _register_defense_life_buildings()
+
+func _register_defense_life_buildings() -> bool:
+	# Topes (la era 1 coincide con building_limits, como pide la prueba de topes).
+	building_limits[BASTION_ID] = int(bastion_limits_by_era[0])
+	building_limits_by_era[BASTION_ID] = bastion_limits_by_era.duplicate()
+	building_limits[SCRAPYARD_ID] = int(scrapyard_limits_by_era[0])
+	building_limits_by_era[SCRAPYARD_ID] = scrapyard_limits_by_era.duplicate()
+	building_limits[TELEGRAPH_ID] = 1
+	building_limits_by_era[TELEGRAPH_ID] = [1, 1, 1]
+	# Prerrequisitos: los tres son de la era 2 (piden acero). El Bastion, ademas,
+	# el Cuartel (quien lo defiende); el Telegrafo, el Almacen (de donde salen
+	# los encargos); la Chatarreria, solo la Fundicion (alli funde lo que recoge).
+	building_prerequisites[BASTION_ID] = ["foundry", "barracks"]
+	building_prerequisites[SCRAPYARD_ID] = ["foundry"]
+	building_prerequisites[TELEGRAPH_ID] = ["foundry", "warehouse"]
+	# Obra: piedra y sacos para el muro; chatarra y chapa para la Chatarreria;
+	# ladrillo y un mastil para el Telegrafo.
+	construction_style[BASTION_ID] = {"piles": ["stone", "sandbags", "gravel"], "fence": "canvas",
+		"tarp": Color(0.33, 0.37, 0.20), "frame": "low", "frame_mat": "stone", "site_fx": "dust",
+		"flag": Color(0.95, 0.74, 0.12)}
+	construction_style[SCRAPYARD_ID] = {"piles": ["drums", "rivets", "pipes"], "fence": "sheet",
+		"tarp": Color(0.40, 0.30, 0.22), "frame": "hall", "frame_mat": "steel", "site_fx": "sparks",
+		"flag": Color(0.80, 0.16, 0.10), "crane": Color(0.80, 0.16, 0.10)}
+	construction_style[TELEGRAPH_ID] = {"piles": ["bricks", "beams", "crates"], "fence": "planks",
+		"tarp": Color(0.22, 0.36, 0.42), "frame": "mast", "frame_mat": "steel", "site_fx": "sparks",
+		"flag": Color(0.82, 0.63, 0.20)}
+	# Parcela: el muro casi sin patio y sin atrezo (el muro ya es todo);
+	# Chatarreria industrial con su chatarra; Telegrafo civico.
+	building_lot_style[BASTION_ID] = {"ground": "dirt", "trim": "sandbags", "yard": 0.08,
+		"accent": "military", "props": [], "count": [0, 0]}
+	building_lot_style[SCRAPYARD_ID] = {"ground": "dirt", "trim": "fence", "yard": 0.3,
+		"accent": "industrial", "props": ["drums", "crate", "barrel", "drums", "lamp"], "count": [4, 6]}
+	building_lot_style[TELEGRAPH_ID] = {"ground": "slabs", "trim": "curb", "yard": 0.3,
+		"accent": "civic", "props": ["bench", "lamp", "planter", "crate"], "count": [3, 5]}
+	# Trabajando: la Chatarreria levanta polvo de chatarra y el Telegrafo
+	# parpadea (su lampara de senales).
+	building_active_fx[SCRAPYARD_ID] = "dust"
+	building_active_fx[TELEGRAPH_ID] = "glow"
 	return true

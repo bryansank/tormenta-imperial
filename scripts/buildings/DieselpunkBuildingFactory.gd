@@ -210,6 +210,11 @@ static func create(building_id: String, cell_size: float, grid_size: Vector2i) -
 	# modelo horneado en cuanto exista). Ver UtilityToys.
 	if _Utility.handles(building_id):
 		return _Utility.create(building_id)
+	# Bastion, Chatarreria y Telegrafo (feat/edificios-defensa-vida): igual, en
+	# DefenseToys (horneado si existe, procedural si no).
+	var defense := preload("res://scripts/buildings/DefenseToys.gd")
+	if defense.handles(building_id):
+		return defense.create(building_id)
 	# Las diez decoraciones baratas (feat/decoraciones-1): una malla de la
 	# paleta compartida por tipo, horneada si existe (DecorMesh).
 	var decor := preload("res://scripts/buildings/DecorMesh.gd")

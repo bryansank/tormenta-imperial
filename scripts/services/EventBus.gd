@@ -511,3 +511,9 @@ signal contract_discarded(source: String, contract: Dictionary)
 ## El panel se repinta con esta.
 @warning_ignore("unused_signal")
 signal contract_board_changed()
+
+# ── Defensa y vida (feat/edificios-defensa-vida) ──
+## Tras la Tormenta, las brigadas de la Chatarreria despejaron ruinas: `steel`
+## de acero, `parts` repuestos y `lifted` edificios levantados.
+@warning_ignore("unused_signal")
+signal scrap_salvaged(steel: int, parts: int, lifted: int)

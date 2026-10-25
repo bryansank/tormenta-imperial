@@ -11,8 +11,11 @@ class_name CombatRules
 ## Encima va la ventaja por tipo (GameConfig.combat_type_advantage): el dano neto
 ## se multiplica por la ventaja o la desventaja del emparejamiento y se redondea,
 ## sin bajar nunca de 1.
-static func damage(attacker: CombatUnit, target: CombatUnit) -> int:
-	var net: int = maxi(1, attacker.attack_power() - target.defense())
+## `cover` (Bastion, feat/edificios-defensa-vida): defensa de mas que da la
+## casilla en la que esta `target` (Encounter.cover_at). 0 = sin cobertura, la
+## formula de siempre.
+static func damage(attacker: CombatUnit, target: CombatUnit, cover: int = 0) -> int:
+	var net: int = maxi(1, attacker.attack_power() - target.defense() - maxi(0, cover))
 	var mult: float = type_multiplier(attacker.unit_id, target.unit_id)
 	if is_equal_approx(mult, 1.0):
 		return net
@@ -344,8 +347,8 @@ static func hp_fraction(units: Array, side: int, start_hp: int) -> float:
 ## Lo que haria `attacker` a `target` si le atacara ahora, sin hacerlo:
 ## {damage, hp, max_hp, hp_after, kills, matchup (+1/0/-1), mult}. Usa damage(),
 ## asi que la ventaja por tipo, la defensa doblada y la moral ya van dentro.
-static func preview_damage(attacker: CombatUnit, target: CombatUnit) -> Dictionary:
-	var dealt: int = damage(attacker, target)
+static func preview_damage(attacker: CombatUnit, target: CombatUnit, cover: int = 0) -> Dictionary:
+	var dealt: int = damage(attacker, target, cover)
 	var hp_after: int = maxi(0, target.hp - dealt)
 	return {
 		"damage": dealt,
@@ -409,3 +412,29 @@ static func threat_cells(units: Array, side: int, board: Vector2i, terrain: Dict
 			for cell in fire_cells_from(unit, stand, board):
 				seen[cell] = true
 	return seen.keys()
+
+# ── Cobertura del Bastion (feat/edificios-defensa-vida, doc 21 §6.3 n.º 18) ──
+
+## Las casillas de cobertura de un tablero de defensa: `count` casillas de
+## tierra en la fila `row` (la de atras del jugador), del centro hacia fuera
+## (centro, izquierda del centro, derecha...). Solo tierra: en el agua no se
+## levanta un parapeto. Puro y determinista; [] si count <= 0.
+static func cover_cells(board: Vector2i, terrain: Dictionary, count: int, row: int) -> Array:
+	var out: Array = []
+	if count <= 0 or row < 0 or row >= board.y:
+		return out
+	var mid: int = floori(board.x * 0.5)
+	var order: Array = [mid]
+	for k in range(1, board.x):
+		order.append(mid - k)
+		order.append(mid + k)
+	for x in order:
+		if out.size() >= count:
+			break
+		var cell := Vector2i(int(x), row)
+		if not in_board(cell, board):
+			continue
+		if terrain_at(terrain, cell) != TERRAIN_LAND:
+			continue
+		out.append(cell)
+	return out

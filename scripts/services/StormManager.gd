@@ -424,6 +424,7 @@ func _publish(events: Array) -> void:
 				EventBus.storm_tick.emit(int(event["phase"]), float(event["left"]))
 			"storm_ended":
 				_well_repairs()
+				_scrap_salvage()
 				EventBus.storm_ended.emit(int(event["severity"]))
 				EventBus.notification_posted.emit(
 					Tr.t("STORM_ENDED"), "info", UITheme.TEXT_DIM)
@@ -489,8 +490,11 @@ func _damage_buildings(severity: int) -> void:
 				severity, BuildingHealth.get_max_health(node), towers)
 			# Un Pozo cerca (meta de UtilityEffects) quita parte del golpe.
 			var cover: float = float(node.get_meta("well_cover", 0.0))
-			if cover > 0.0:
-				amount = maxi(1, int(round(float(amount) * (1.0 - cover))))
+			# Detras de un Bastion (DefenseLifeEffects): el muro para otra parte.
+			# Pozo y Bastion se multiplican, no se suman.
+			var wall: float = float(node.get_meta("bastion_cover", 0.0))
+			if cover > 0.0 or wall > 0.0:
+				amount = maxi(1, int(round(float(amount) * (1.0 - cover) * (1.0 - wall))))
 			BuildingHealth.damage_building(node, amount)
 			hits -= 1
 
@@ -511,6 +515,31 @@ func _well_repairs() -> int:
 		if BuildingHealth.heal(node, amount) > 0:
 			healed += 1
 	return healed
+
+## Pasada la Tormenta, las brigadas de la Chatarreria (feat/edificios-defensa-vida)
+## despejan las ruinas de su zona: acero y repuestos a la bolsa, y levantan
+## alguna ruina para que vuelva a funcionar. El reparto lo decide
+## DefenseLifeEffects.salvage_plan() (puro); aqui se paga y se avisa.
+func _scrap_salvage() -> Dictionary:
+	var plan: Dictionary = preload("res://scripts/buildings/DefenseLifeEffects.gd").salvage_plan()
+	if int(plan.get("ruins", 0)) <= 0:
+		return plan
+	var steel: int = int(plan.get("steel", 0))
+	var parts: int = int(plan.get("parts", 0))
+	if steel > 0:
+		ResourceManager.unlock(ResourceManager.Type.STEEL)
+		ResourceManager.add(ResourceManager.Type.STEEL, steel)
+	if parts > 0:
+		ResourceManager.unlock(ResourceManager.Type.PARTS)
+		ResourceManager.add(ResourceManager.Type.PARTS, parts)
+	var lifted := 0
+	for node in plan.get("lifted", []):
+		if BuildingHealth.lift_ruin(node, GameConfig.scrapyard_brigade_lift_ratio):
+			lifted += 1
+	EventBus.scrap_salvaged.emit(steel, parts, lifted)
+	EventBus.notification_posted.emit(
+		Tr.t("NOTIF_SCRAP_SALVAGED") % [steel, parts, lifted], "notice", UITheme.INFO)
+	return plan
 
 ## Los escalones de objetivos, del más prioritario al menos, ya filtrados de todo
 ## lo intocable. Público porque es la regla que hay que poder auditar sin

@@ -605,6 +605,13 @@ func _refresh_status_line() -> void:
 			text = Tr.t("LBL_WORKERS_OFF_SHORT")
 		else:
 			text = Tr.t("LBL_WORKERS_ON_SHORT") % _selected_data.workers_required
+	# Defensa (v1.2): lo que cubre un Bastion, la brigada de la Chatarreria, el
+	# Telegrafo (metas de DefenseLifeEffects, sin recalcular).
+	if not ProductionManager.is_constructing(_selected_node):
+		var effect: String = preload("res://scripts/buildings/DefenseLifeEffects.gd").info_line(_selected_node, _selected_data)
+		if not effect.is_empty():
+			text = effect if text.is_empty() else text + "
+" + effect
 	_level_label.text = text
 	_level_label.visible = text != ""
 
