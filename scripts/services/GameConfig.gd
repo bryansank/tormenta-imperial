@@ -3911,6 +3911,9 @@ func _register_defense_life_buildings() -> bool:
 	# parpadea (su lampara de senales).
 	building_active_fx[SCRAPYARD_ID] = "dust"
 	building_active_fx[TELEGRAPH_ID] = "glow"
+	return true
+
+# ══════════════════════════════════════════════════════════════════════
 # ── Economia (feat/edificios-economia, doc 21 §6.3 n.º 13, 14 y 16) ──
 # ══════════════════════════════════════════════════════════════════════
 # Puerto comercial (el barco del contrabandista, doc 14 §P4), Casa de cambio
@@ -4045,7 +4048,9 @@ func _register_economy_buildings() -> bool:
 	building_active_fx[EXCHANGE_ID] = "glow"
 	building_active_fx[DIESEL_PLANT_ID] = "smoke"
 	return true
-# Decoraciones y trafico (feat/decoraciones-y-trafico, doc 21 §6.4-6.5 y §7 V5)
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Decoraciones y trafico (feat/decoraciones-y-trafico, doc 21 §6.4-6.5 y §7 V5)
 # ══════════════════════════════════════════════════════════════════════
 # Las dieciocho decoraciones que faltaban del catalogo y los camiones de la red
 # de carreteras. Como el Muelle de pesca, sus filas en las tablas comunes
@@ -4182,6 +4187,8 @@ func _register_decorations_traffic() -> bool:
 		building_lot_style[id] = {"ground": l[0], "trim": l[1], "yard": 0.25, "accent": l[2],
 			"props": l[3], "count": [1, 2]}
 	return true
+
+# ══════════════════════════════════════════════════════════════════════
 # ── Amenazas de costa (feat/amenazas-costa) ──────────────────────────
 #
 # Marcas en la orilla que dan SOLO BOTIN OPCIONAL (decision de Bryan,
@@ -4253,6 +4260,8 @@ var threat_wreck_workers := 2
 var threat_wreck_explore_seconds := 60.0
 ## Rango por explorar un pecio (atacar ya da la XP de un combate ganado).
 var threat_wreck_rank_xp := 20
+
+# ══════════════════════════════════════════════════════════════════════
 # ── Volverse el Imperio (feat/volverse-imperio, docs/06 §Volverse el Imperio) ──
 # ══════════════════════════════════════════════════════════════════════
 # Tras GANAR el Ataque Final la partida sigue en la misma isla: la Tormenta para
