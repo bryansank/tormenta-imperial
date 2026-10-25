@@ -63,10 +63,18 @@ const IDS := ["nucleo", "house", "sawmill", "gold_mine", "warehouse", "market", 
 	"bastion", "scrapyard", "telegraph",
 	# Economia de la 1.2 (feat/edificios-economia). Hasta hornearlos, el juego
 	# usa su version procedural (scripts/buildings/EconomyToys.gd).
-	"trade_port", "exchange", "diesel_plant"]
+	"trade_port", "exchange", "diesel_plant",
+	# Las dieciocho decoraciones restantes (feat/decoraciones-y-trafico); en el
+	# juego las carga DecorMesh y, sin hornear, usa DecorMesh2 (procedural).
+	"flower_stall", "community_garden", "small_fountain", "entrance_arch", "bandstand",
+	"beached_boat", "gear_garden", "fair_stage", "fair_tent", "pond_bridge", "water_mill",
+	"museum_cannon", "container_mural", "clock_tower", "wreck_monument", "storm_column",
+	"moored_airship", "governor_plaza"]
 
 ## Presupuesto de triangulos de una decoracion 2x2 (doc 21 §6.6).
 const DECOR_TRI_BUDGET := 600
+## Y de una decoracion mayor (3x3): como un edificio util.
+const DECOR_BIG_TRI_BUDGET := 1500
 
 ## Huella y patio de lo que aun no tiene .tres (la Granja usa el rectangulo de
 ## su parcela, GameConfig.building_lot_style["farm"]). Con su .tres, manda el
@@ -232,8 +240,11 @@ func _bake(id: String) -> bool:
 		push_error("build_toy_models: no guarda la escena de %s (%d)" % [id, err])
 		return false
 	var a := mesh.get_aabb()
-	if preload("res://scripts/buildings/DecorMesh.gd").handles(id) and Kit.tri_count(mesh) > DECOR_TRI_BUDGET:
-		print("build_toy_models:   ** %s PASA DEL PRESUPUESTO DE DECORACION (%d) **" % [id, DECOR_TRI_BUDGET])
+	# Decoraciones de mas de 2x2 (la Plaza del Gobernador, 3x3): el presupuesto
+	# de un edificio util (doc 21 §6.6).
+	var decor_budget := DECOR_TRI_BUDGET if int(ctx["grid"].x) <= 2 else DECOR_BIG_TRI_BUDGET
+	if preload("res://scripts/buildings/DecorMesh.gd").handles(id) and Kit.tri_count(mesh) > decor_budget:
+		print("build_toy_models:   ** %s PASA DEL PRESUPUESTO DE DECORACION (%d) **" % [id, decor_budget])
 	print("build_toy_models: %-13s %5d tri  %.2f x %.2f x %.2f (objetivo %.2f x %.2f)%s" % [
 		id, Kit.tri_count(mesh), a.size.x, a.size.y, a.size.z, ctx["w"], ctx["d"],
 		("  FxAnchor" if out.has("fx") else "") + ("  FlagAnchor" if flag_at != null else "")

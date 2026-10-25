@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "container_mural"
+display_name = "Mural de contenedores"
+description = "Dos contenedores apilados y un mural pintado por los vecinos."
+grid_size = Vector2i(2, 2)
+cost_gold = 60
+cost_steel = 60
+cost_oil = 0
+cost_wood = 20
+build_time = 4.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+workers_required = 0
+morale_bonus = 6
+mesh_height = 1.8
+mesh_color = Color(0.75, 0.3, 0.25, 1)
+max_health = 120
+is_decoration = true

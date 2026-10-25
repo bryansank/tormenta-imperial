@@ -23,6 +23,7 @@ const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
 ## El barco del contrabandista y su panel (feat/edificios-economia).
 const SmugglerShip3D := preload("res://scripts/map/SmugglerShip3D.gd")
 const SmugglerPanelScript := preload("res://scripts/ui/SmugglerPanel.gd")
+const RoadTraffic := preload("res://scripts/map/RoadTraffic.gd")
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
 ## Obra por fases, ruina y humo de "trabajando" (docs/03, "Aspecto en el mapa").
 const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
@@ -108,6 +109,10 @@ func _ready() -> void:
 	# El barco del contrabandista (feat/edificios-economia): escondido hasta
 	# que atraca junto al Puerto comercial.
 	add_child(SmugglerShip3D.new())
+	# Los camiones de los extractores al almacen (solo vista, feat/decoraciones-y-trafico).
+	var traffic: Node = RoadTraffic.new()
+	traffic.setup(walkers_layer, false)
+	add_child(traffic)
 
 	# Cached ghost materials for preview
 	_ghost_valid = StandardMaterial3D.new()

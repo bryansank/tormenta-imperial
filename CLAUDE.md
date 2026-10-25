@@ -269,7 +269,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (40 total, `data/buildings/*.tres`)
+### Buildings (55 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -308,6 +308,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Bastion (1.2) | **2x1** | 60/25/0/30 | 0 | Wall: −30 % storm damage to what stands behind it (towards the island centre) within 3 cells; a +2 defence cover cell on defensive boards (1 per 3 bastions, max 2); needs Foundry + Barracks; caps 6/10/14 | 2 |
 | Scrapyard (1.2) | 2x2 | 160/40/0/90 + 6 planks | 2 | Repairs −40 % within 4 cells; after each Storm: 12 steel per ruin in its area, 1 part per 2 ruins (max 3), lifts 1 ruin to 35 %; blueprint building; caps 1/2/2 | 2 |
 | Telegraph (1.2) | 2x2 | 200/60/0/80 + 4 beams | 1 | +1 contract slot ("El telégrafo", orders from any source) and new contracts last +50 %; needs Foundry + Warehouse; max 1 | 2 |
+| 18 more decorations (1.2) | 2x2 (Governor's plaza 3x3) | 40-500 gold, steel from era 2, oil from era 3 | 0 | +4 to +18 morale; no cap; ranks 4-18, Museum cannon / Storm column by refused Taxes; boat and wreck coast only | deco |
 
 The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
 `scripts/buildings/UtilityEffects.gd` (on build/demolish, never per frame), look in
@@ -385,6 +386,19 @@ branch, not here):** port Núcleo 3; exchange Núcleo 3 + blueprint; diesel plan
 `scripts/buildings/DecorMesh.gd` (baked `assets/models/toy/<id>_mesh.res` when it
 exists, procedural until then), returned by `DieselpunkBuildingFactory.create()`;
 2D in `BuildingArt2D`. Table, pieces and what is pending: `docs/03-buildings.md`.
+
+**The other 18 decorations (feat/decoraciones-y-trafico, 1.2):** `flower_stall`,
+`community_garden`, `small_fountain`, `entrance_arch`, `bandstand`, `beached_boat`,
+`gear_garden`, `fair_stage`, `fair_tent`, `pond_bridge`, `water_mill`, `museum_cannon`,
+`container_mural`, `clock_tower`, `wreck_monument`, `storm_column`, `moored_airship`,
+`governor_plaza` (3x3) — the rest of doc 21 §6.4, +4 to +18 morale, ranks 4-18 (§6.5),
+the Museum cannon and the Storm column by refused Taxes (`decor_deed_unlocks`,
+`PlacementRules.check_deed()`), the boat and the wreck coast only
+(`decor_shore_only`). Procedural in `scripts/buildings/DecorMesh2.gd` (served by
+`DecorMesh`, drawn by `DecorBatch3D`), all 18 baked (236-596 triangles, the plaza 916),
+2D in `BuildingArt2D._d2_<id>()`. Their rows in `rank_rewards`, `construction_style`
+and `building_lot_style` are added by `GameConfig._register_decorations_traffic()` at
+the end of GameConfig (not written inside the tables). Detail: docs/03.
 
 **Key constraint:** Foundry costs 0 steel (it unlocks steel). Refinery costs 0 oil (it unlocks oil).
 
@@ -522,6 +536,15 @@ hand mining there holds `mining_workers`, needs no road and spends no deposit us
   drawn by one node: `WalkerFigures3D` (a MultiMesh per silhouette) or
   `WalkerFigures2D` (one `_draw`). View only, never saved; staffing stays in
   PopulationManager. Detail in docs/04.
+- **Traffic (1.2):** `scripts/map/RoadTraffic.gd` (next to WorkerWalkers in both
+  placers): a few toy diesel trucks drive from staffed extractors to the nearest
+  Warehouse (or the Núcleo) along the road network and back, the load in the
+  resource's colour. One truck per `traffic_sources_per_truck` sources, capped per
+  profile (`traffic_truck_cap` 12/8/5) and **none in Mínima**
+  (`traffic_truck_cap_minimal`); indoors through Ash, Storm and Tithe. Data in
+  `TruckActor.gd`, drawn by `TrafficFigures3D` (one MultiMesh, one draw call) or
+  `TrafficFigures2D` (one `_draw`); one `_process` for all, off when there are none.
+  View only, never saved. Detail in docs/04 §Traffic and docs/26 §7.8.
 - **Auto-road:** `evaluate_placement()` accepts an unconnected spot when a free route
   to the network exists and returns it as `"route"`; the placers charge building +
   route together (`Rules.cost_with_route`, 1 gold per tile) and lay it with
@@ -1200,6 +1223,7 @@ tormenta-imperial/
 |   |   +-- LevelTrim.gd             # Level pieces of an upgraded building: plinth, chimneys / lamps (II / III)
 |   |   +-- FarmCrops3D.gd, StockIcon3D.gd, SiteMesh.gd  # The Farm's beds (toy_crops shader), collect icon, construction-site mesh
 |   |   +-- DecorMesh.gd             # The 10 cheap decorations: one shared mesh per type (baked if present, procedural otherwise)
+|   |   +-- DecorMesh2.gd            # The other 18 decorations (procedural; DecorMesh serves them)
 |   +-- camera/MonumentalCamera.gd   # Orthographic 45deg RTS camera
 |   +-- combat/                      # PURE models: no nodes, no signals, no global RNG
 |   |   +-- CombatUnit.gd            # One unit: hp, position, draft bonuses, morale mods
@@ -1227,6 +1251,7 @@ tormenta-imperial/
 |   |   +-- DepositMesh.gd           # Deposits as one baked toy mesh per type, size, variant and depletion stage
 |   |   +-- MapGenerator.gd          # Random deposits: 3-6 per type, room and a road path for each extractor
 |   |   +-- WorkerWalkers.gd         # Workers and citizens walking the road network (view only, 3D and 2D)
+|   |   +-- RoadTraffic.gd, TruckActor.gd, TrafficFigures3D.gd  # Trucks from extractors to the warehouse (view only; 2D: view2d/TrafficFigures2D.gd)
 |   |   +-- WalkerActor.gd, WalkerFigures3D.gd  # One figure's data; the 3D MultiMesh drawer (2D: view2d/WalkerFigures2D.gd)
 |   |   +-- StormSky.gd              # Autoload: sky/light of the time of day and the storm
 |   +-- storm/StormCycle.gd          # PURE model: the storm's phase clock
@@ -1266,7 +1291,7 @@ tormenta-imperial/
 |       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
 |       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
-+-- data/buildings/                  # 36 .tres building definitions
++-- data/buildings/                  # 55 .tres building definitions
 +-- assets/
 |   +-- audio/{music,sfx,ambient}/   # 5 tracks, 47 SFX, 4 ambient loops (see MANIFEST.md)
 |   +-- models/toy/                  # Baked toy buildings (<id>.tscn + <id>_mesh.res, toy_solid / toy_glow materials)
@@ -1322,8 +1347,8 @@ unset:
 | Source | Buildings |
 |---|---|
 | Baked toy model (`model_scene` = `assets/models/toy/<id>.tscn`) | `nucleo`, `house`, `sawmill`, `farm`, `gold_mine`, `warehouse`, `market`, `laboratory`, `foundry`, `barracks`, `refinery`, `tower`, `headquarters`, `garden`, `fountain`, `statue`, `fishing_dock`, `shipyard`, `aerodrome` (19). The Farm adds its beds as a separate mesh (`Crops`, `FarmCrops3D`) animated by the shared `toy_crops.gdshader` |
-| `DecorMesh` (through `DieselpunkBuildingFactory.create()`) | the 10 cheap decorations: one shared mesh per type, baked `assets/models/toy/<id>_mesh.res` when it exists, procedural (LotMesh boxes, cylinders, balls) until then — none is baked yet |
 | `EconomyToys` (through `DieselpunkBuildingFactory.create()`) | `trade_port`, `exchange`, `diesel_plant` (1.2): their bake `assets/models/toy/<id>.tscn` (baked 2026-10-18; no `model_scene` in the `.tres`), the shared procedural mesh if it is missing. Also the smuggler's ship (`ship_mesh()`) |
+| `DecorMesh` (through `DieselpunkBuildingFactory.create()`) | the 28 decorations (the 10 cheap ones and the 18 of `DecorMesh2`): one shared mesh per type, baked `assets/models/toy/<id>_mesh.res` (all baked), procedural (LotMesh boxes, cylinders, balls) as the fallback |
 | `RoadBatch3D` | `road`: the node carries no mesh; the batch draws every tile with `DieselpunkBuildingFactory.road_mesh()` per neighbour mask |
 
 The toy models are baked offline by `tools/build_toy_models.gd` from the recipes in
@@ -1452,6 +1477,7 @@ All balance values live in `GameConfig.gd`:
 - `unit_types` / `army_base_capacity` / `army_capacity_per_barracks` / `army_upkeep_interval` - army
 - `tech_definitions` + `tech_*` bonuses - tech tree
 - `rank_xp_sources` / `rank_xp_thresholds` / `rank_rewards` / `colony_colors` / `COLONY_PATTERNS` / `COLONY_EMBLEMS` - governor rank (XP, curve, unlocks, bonuses, flag pieces)
+- `decor_rank_unlocks` / `decor_deed_unlocks` / `decor_shore_only` - the other 18 decorations (rank, deed, coast); `traffic_*` - the trucks (end of the file, `_register_decorations_traffic()`)
 - `REGIMENT_PAINTS` / `regiment_star_wins` - the regiment's paints and stars (cosmetic only)
 - `audio_*_volume` / `audio_music_fade` / `audio_sfx_voices` - audio
 - `phase_triggers` / `early_*` - onboarding phase pacing

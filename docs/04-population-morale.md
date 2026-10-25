@@ -263,3 +263,55 @@ Tunables in `GameConfig` ("Vida de la ciudad"): `life_people_per_figure`,
 `life_figure_cap`, `life_walk_speed`, `life_hurry_multiplier`, `life_stay_*`,
 `life_pause_*`, `life_night_presence`, `life_night_citizen_share`, `life_night_step`,
 `life_night_step_seconds`.
+
+### Traffic: trucks on the roads (view only, `feat/decoraciones-y-trafico`, 2026-10-18)
+
+`scripts/map/RoadTraffic.gd` (doc 21 §7, V5) puts a few toy diesel trucks on the
+road network, next to the people and built the same way: it only **reads** the
+buildings and PopulationManager's metas, decides nothing, emits nothing and saves
+nothing (`tests/map/test_road_traffic.gd`). Both placers create it next to
+`WorkerWalkers`, on the same `Walkers` layer.
+
+- **Where from, where to.** Sources are finished extractors that are staffed and
+  connected (`staffed` / `connected`) and produce something that travels:
+  wood, gold, steel, oil or food (`RoadTraffic.cargo_color()`: sawmill, gold
+  mine, foundry, refinery, farm, fishing dock, HQ...). Destinations are the
+  finished Warehouses (`traffic_depot_ids`) and, with none, the Núcleo; each
+  truck goes to the one nearest its extractor. It leaves loaded (the load is the
+  resource's colour: logs, brass, steel, black drums, green), drives the shortest
+  route to the depot door, goes in to unload (`traffic_stay_unload`), comes back
+  empty and goes in to load (`traffic_stay_load`). It keeps to the right-hand lane
+  (`traffic_lane_offset`, 0.2 cell) so trucks crossing do not overlap. Purely
+  visual: no resource moves.
+- **How many.** One truck per `traffic_sources_per_truck` (2) sources, capped per
+  device profile, `traffic_truck_cap` = PC 12 / tablet 8 / phone 5, and in the
+  **Minimal** quality `traffic_truck_cap_minimal` (0: no trucks at all;
+  `RoadTraffic.truck_cap()` reads `GraphicsQuality.is_minimal()` and re-reads it on
+  `graphics_quality_changed`). Withdrawn workers, "sin carretera" and vein-less
+  buildings get no truck.
+- **The Storm.** Warning: `traffic_hurry_multiplier` (1.5x). Ash, Storm and Tithe:
+  every truck on the road shrinks indoors in 0.6 s and none leaves until the calm
+  (then they trickle out over 1-8 s); re-read on `game_load_completed`. Night does
+  not change them.
+- **How it is drawn.** Trucks are data (`scripts/map/TruckActor.gd`). 3D:
+  `TrafficFigures3D`, ONE MultiMesh with one merged truck mesh (~400 triangles:
+  long diesel bonnet, cab, open bed, four fat wheels, exhaust) whose `UV.x` says
+  paint / chassis / load / lamp; the cab paint goes in the instance colour, the
+  load colour in the custom data, and an empty truck flattens its load into the
+  bed in the vertex shader. One draw call for every truck (plus shadows on PC
+  only). 2D: `TrafficFigures2D`, six rotated rectangles per truck in one `_draw`,
+  no textures, not redrawn while no truck is out.
+- **Cost.** One `_process` for all of them, switched off when there are no trucks
+  (and on again by a signal). Per frame: a few additions and one matrix per truck
+  on the road, and one buffer write. Routes are a BFS over the network when a
+  truck sets out, cached per pair of doors; the town is re-read on signals
+  (workers, construction, placing or removing) and every 30 s. With the PC cap of
+  12 it is about a sixth of the walkers' budget (72 figures). Not measured with
+  the probe yet (Bryan's rule: one test pass at the end); `avg_frame_usec` and
+  `last_reconcile_usec` are there for `life_probe`.
+
+Tunables in `GameConfig` ("Decoraciones y trafico", at the end of the file):
+`traffic_sources_per_truck`, `traffic_truck_cap`, `traffic_truck_cap_minimal`,
+`traffic_depot_ids`, `traffic_speed`, `traffic_hurry_multiplier`,
+`traffic_lane_offset`, `traffic_stay_load`, `traffic_stay_unload`,
+`traffic_truck_paints`.

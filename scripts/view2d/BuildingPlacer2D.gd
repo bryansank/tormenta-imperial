@@ -19,6 +19,7 @@ const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
 ## El barco del contrabandista y su panel (feat/edificios-economia).
 const SmugglerShip2D := preload("res://scripts/view2d/SmugglerShip2D.gd")
 const SmugglerPanelScript := preload("res://scripts/ui/SmugglerPanel.gd")
+const RoadTraffic := preload("res://scripts/map/RoadTraffic.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
@@ -63,6 +64,10 @@ func _ready() -> void:
 	walkers.setup(walkers_layer, true)
 	add_child(walkers)
 	add_child(SmugglerShip2D.new())
+	# Los camiones de los extractores al almacen (solo vista, feat/decoraciones-y-trafico).
+	var traffic: Node = RoadTraffic.new()
+	traffic.setup(walkers_layer, true)
+	add_child(traffic)
 	EventBus.building_selected_for_placement.connect(_on_building_selected)
 	EventBus.building_placement_cancelled.connect(_cancel)
 	EventBus.request_move_building.connect(_on_move_requested)

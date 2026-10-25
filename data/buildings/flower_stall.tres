@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "flower_stall"
+display_name = "Puesto de flores"
+description = "Un puesto con toldo a rayas y cubos de flores. Da color a la calle."
+grid_size = Vector2i(2, 2)
+cost_gold = 60
+cost_steel = 0
+cost_oil = 0
+cost_wood = 30
+build_time = 3.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+workers_required = 0
+morale_bonus = 4
+mesh_height = 2.1
+mesh_color = Color(0.35, 0.6, 0.3, 1)
+max_health = 50
+is_decoration = true

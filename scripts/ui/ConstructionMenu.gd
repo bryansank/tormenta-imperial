@@ -790,6 +790,11 @@ static func lock_reason(data: BuildingData) -> String:
 	if data == null:
 		return ""
 	if not Rules.check_rank(data.id):
+		# Las decoraciones de hazana (Canon de museo, Columna de la Tormenta)
+		# dicen lo que falta de la hazana, no un rango.
+		var deed := Rules.deed_lock_text(data.id)
+		if deed != "":
+			return deed
 		return Tr.t("LBL_RANK_LOCK") % RankManager.building_rank(data.id)
 	if has_locked_resource_cost(data):
 		var era := HelpText.build_era(data)
@@ -821,7 +826,8 @@ static func _row_tooltip_of(data: BuildingData, block: String) -> String:
 
 ## Candado dibujado + "Rango N" (estilo viejo). Lo usan la Colonia y los
 ## Regimientos; las filas de CONSTRUIR llevan el candado de CartoonIcon.
-static func make_rank_lock_row(rank: int) -> HBoxContainer:
+## `text`: lo que se lee en vez de "Rango N" (una hazana: "Impuestos rechazados: 0/1").
+static func make_rank_lock_row(rank: int, text: String = "") -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "RankLock"
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -832,7 +838,7 @@ static func make_rank_lock_row(rank: int) -> HBoxContainer:
 	lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lock.draw.connect(func(): draw_lock(lock, Rect2(Vector2.ZERO, lock.custom_minimum_size), UITheme.WARNING))
 	row.add_child(lock)
-	var label := UITheme.make_label(Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
+	var label := UITheme.make_label(text if text != "" else Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
 	label.name = "RankLockLabel"
 	row.add_child(label)
 	return row
