@@ -549,6 +549,7 @@ func _new_game() -> void:
 	RankManager.reset()
 	ContractManager.reset()
 	EconomyManager.reset()
+	ThreatManager.reset()
 	_apply_pending_identity()
 	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
 	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
@@ -769,6 +770,10 @@ func _load_game() -> void:
 	# clave (partida anterior) es un barco nuevo y sin planos.
 	var economy_data: Variant = data.get("economy", {})
 	EconomyManager.load_save_data(economy_data if economy_data is Dictionary else {})
+	# Amenazas de costa (feat/amenazas-costa). Sin la clave (partida anterior a
+	# ellas) la orilla esta vacia y la primera sale sola tras su plazo.
+	var threats_data: Variant = data.get("threats", {})
+	ThreatManager.load_save_data(threats_data if threats_data is Dictionary else {})
 
 	# La bolsa es una sola y su tope depende de la era, de los almacenes y del arbol
 	# tecnologico: hasta que los tres no estan restaurados no se sabe cuanto cabe. Por
@@ -914,6 +919,7 @@ func _write_save() -> void:
 	data["rank"] = RankManager.get_save_data()
 	data["contracts"] = ContractManager.get_save_data()
 	data["economy"] = EconomyManager.get_save_data()
+	data["threats"] = ThreatManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -1028,6 +1034,7 @@ func clear_save() -> void:
 	RankManager.reset()
 	ContractManager.reset()
 	EconomyManager.reset()
+	ThreatManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null
@@ -1075,6 +1082,7 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	RankManager.reset()
 	ContractManager.reset()
 	EconomyManager.reset()
+	ThreatManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null

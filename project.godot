@@ -61,6 +61,7 @@ DeviceProfile="*res://scripts/services/DeviceProfile.gd"
 RankManager="*res://scripts/services/RankManager.gd"
 ContractManager="*res://scripts/services/ContractManager.gd"
 EconomyManager="*res://scripts/services/EconomyManager.gd"
+ThreatManager="*res://scripts/services/ThreatManager.gd"
 
 [beckett]
 

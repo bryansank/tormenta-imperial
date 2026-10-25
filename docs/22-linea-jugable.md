@@ -1084,3 +1084,26 @@ Lectura: la Mina de oro ya no espera a que la Casa se llene (dos minutos antes) 
 era 2 llega igual o un minuto antes; la era 1 no se rompe. Más gente antes come antes:
 la semilla 1 tuvo 3 muertos de hambre (antes 0), que el goteo repone. El
 resto de la primera hora (era 3 en el 38-42) queda dentro del ruido de §14.
+## 15. Amenazas de costa (1.2, rama `feat/amenazas-costa`, sin medir)
+
+Solo botín opcional (docs/15 §14): saqueadores, avanzadilla de la Regencia y pecios en
+la orilla, que se van solos sin daño. **No tocan la línea**: `Objectives.next_step()`
+no cambia y la sonda de línea no las ataca ni explora (las ignora y se van). Lo único
+que pueden mover es el ritmo de quien sí las juega:
+
+| Fuente | Cada cuánto | Botín medio (era 1) | Coste |
+|---|---|---|---|
+| Saqueadores | ~1 de cada 2 marcas, una marca cada 150-270 s | ~55 oro, ~30 madera, 1,5 repuestos | 1 combate fácil (prof. 0, ×0,9) |
+| Pecio | ~1 de cada 3 | ~45 madera, ~25 oro, 1 repuesto | 2 trabajadores 60 s |
+| Avanzadilla (era 2+) | ~1 de cada 3 | ~100 oro, ~38 acero (×1,25), 2,5 repuestos | 1 combate como la incursión |
+
+Cuenta rápida: con todo atacado, ~25-40 recursos por minuto en la era 1, frente a los
+~60-90 por minuto de una era 1 con aserradero y mina. Riesgo a medir: que adelante
+la Fundición (hoy en el minuto 10-13) por debajo de 9 min con quien ataque todo. Las
+palancas, por orden: `threat_rewards`, `threat_spawn_interval`, `threat_first_delay`,
+`threat_weights` (menos pecios en la era 1), `threat_rare_chance`.
+
+**Qué medir en la ronda final:** enseñar a `tools/line_probe.gd` un jugador
+"oportunista" (`--threats=1`: ataca cuando la etiqueta es Favorable y explora todo
+pecio con 2 libres) y comparar con 3 semillas: minuto de la Fundición, del CG 3 y
+victoria; que los 2 trabajadores del pecio no paren la producción de la era 1.

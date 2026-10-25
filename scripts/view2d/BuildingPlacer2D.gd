@@ -549,6 +549,10 @@ func _try_select(cell: Vector2i) -> void:
 	var node := GridManager.get_building_at(cell) if GridManager.is_valid_cell(cell) else null
 	if node == null:
 		EventBus.building_deselected.emit()
+		# Una marca de amenaza en la costa (feat/amenazas-costa): su tarjeta.
+		var threat_id: int = ThreatManager.threat_at_cell(cell)
+		if threat_id > 0:
+			EventBus.threat_clicked.emit(threat_id)
 		return
 	var info := GridManager.get_building_info(node)
 	# Con algo que recoger, el toque recoge; si no cupo nada, selecciona.

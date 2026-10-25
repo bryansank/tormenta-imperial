@@ -14,6 +14,10 @@ func _make_container() -> Node:
 	n.z_index = 0
 	return n
 
+## Las marcas de las amenazas de costa (feat/amenazas-costa), dibujadas en 2D.
+func _make_threat_marks() -> Node:
+	return preload("res://scripts/view2d/ThreatMarks2D.gd").new()
+
 func _build_deposit_node(deposit_id: String, info: Dictionary, dep_size: Vector2i) -> Node:
 	var node: Node2D = Deposit2D.new()
 	node.setup(deposit_id, Tr.t(info["display_name"]), dep_size)
