@@ -130,8 +130,10 @@ func test_the_port_goes_on_the_coast_facing_the_water() -> void:
 	assert_bool(Rules.needs_shore("exchange")).is_false()
 	assert_bool(Rules.needs_shore("diesel_plant")).is_false()
 
-func test_the_diesel_plant_is_a_mission_blueprint() -> void:
-	assert_bool("diesel_plant" in GameConfig.combat_blueprint_buildings).is_true()
+## 1.2 sin planos (integracion/v1.2b): la Central se abre por rango, no por plano.
+func test_the_diesel_plant_opens_by_rank_not_by_blueprint() -> void:
+	assert_bool("diesel_plant" in GameConfig.combat_blueprint_buildings).is_false()
+	assert_int(RankManager.building_rank("diesel_plant")).is_equal(9)
 
 # ── Mallas ────────────────────────────────────────────────────────────
 

@@ -4400,3 +4400,37 @@ func empire_island_ids() -> Array:
 	for island in empire_islands:
 		ids.append(String(island.get("id", "")))
 	return ids
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Integracion de la 1.2 (integracion/v1.2b, decision de Bryan 2026-10-25) ──
+# ══════════════════════════════════════════════════════════════════════
+# Sin Nucleo 1-5 y sin planos (esa rama no entra en la 1.2). Los edificios que
+# la rama de economia y la de defensa proponian abrir con "Nucleo N + plano" se
+# abren por ERA (sus requisitos de siempre, building_prerequisites) y por RANGO
+# (rank_rewards, el mismo candado "Rango N" de CONSTRUIR). Los topes siguen
+# siendo los de la era (building_limits_by_era); estas son sus filas.
+#
+# | Edificio      | Antes (propuesta)      | 1.2                                    |
+# |---------------|------------------------|----------------------------------------|
+# | Puerto        | Nucleo 3               | Mercado + Fundicion (era 2)            |
+# | Chatarreria   | plano de mision        | Fundicion (era 2) + rango 4            |
+# | Casa de cambio| Nucleo 3 + plano       | Mercado + Fundicion (era 2) + rango 6  |
+# | Central diesel| Nucleo 4 + plano       | Refineria (era 3) + rango 9            |
+#
+# El barco del contrabandista no vende "planos menores" (smuggler_plan_chance a
+# 0): sin planos en la 1.2, su hueco exclusivo son siempre repuestos.
+const V12_RANK_BUILDINGS := {4: ["scrapyard"], 6: ["exchange"], 9: ["diesel_plant"]}
+
+var _v12_registered := _register_v12_unlocks()
+
+func _register_v12_unlocks() -> bool:
+	for rank in V12_RANK_BUILDINGS:
+		var row: Dictionary = rank_rewards.get(rank, {})
+		var list: Array = (row.get("buildings", []) as Array).duplicate()
+		for id in V12_RANK_BUILDINGS[rank]:
+			if not list.has(id):
+				list.append(id)
+		row["buildings"] = list
+		rank_rewards[rank] = row
+	smuggler_plan_chance = 0.0
+	return true
