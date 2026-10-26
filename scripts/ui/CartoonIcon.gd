@@ -14,8 +14,9 @@ const GLYPHS := ["build", "army", "missions", "market", "research", "help", "men
 	"sound", "music", "screen", "controls", "access", "game", "anchor", "plane",
 	"tank", "raid", "check", "storm", "plus", "minus", "back", "next", "workers_off", "sun", "wrench"]
 
-## Tinta del contorno: la misma de los instructores (InstructorBust.INK).
-const INK := Color(0.12, 0.09, 0.06)
+## Tinta del contorno: la de la piel dieselpunk (CartoonTheme.INK, Pizarra muy
+## oscura; antes el marron de los instructores).
+const INK := Color("13171b")
 
 var glyph := "build":
 	set(v):
