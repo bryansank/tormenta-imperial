@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 ## pintan sin error en pie, en obra y en ruina, y el edificio deja libre su patio.
 
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
+const Building2DClock := preload("res://scripts/view2d/Building2DClock.gd")
 const Art := preload("res://scripts/view2d/BuildingArt2D.gd")
 const Plan := preload("res://scripts/buildings/LotPlan.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
@@ -30,10 +31,11 @@ func _draw_on_canvas(calls: Array) -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-## Building2D mira su estado cada CHECK_FRAMES fotogramas (repartidos entre
-## edificios): se espera algo mas que eso.
+## Building2D mira su estado en una ronda de Building2DClock (ROUND_SECONDS
+## de tiempo real, repartida entre edificios): se espera algo mas que eso.
 func _settle() -> void:
-	for i in Building2D.CHECK_FRAMES + 2:
+	await get_tree().create_timer(Building2DClock.ROUND_SECONDS + 0.1).timeout
+	for i in 3:
 		await get_tree().process_frame
 
 func test_every_lot_draws_in_every_state() -> void:

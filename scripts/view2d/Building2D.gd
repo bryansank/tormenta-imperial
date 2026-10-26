@@ -35,8 +35,11 @@ const ArtCache := preload("res://scripts/view2d/ArtCache2D.gd")
 ## cada uno en su hueco). Los primeros `BOOT_FRAMES` mira siempre.
 const CHECK_FRAMES := 10
 const BOOT_FRAMES := 4
-## El badge se relee una de cada BADGE_EVERY revisiones (~0,5 s a 60 fps).
-const BADGE_EVERY := 3
+## El badge se relee una de cada BADGE_EVERY revisiones (dos rondas de
+## Building2DClock, 0,8 s). Lo que cambia los obreros ya lo refresca al
+## momento (PopulationManager llama a refresh()); esto cubre lo demas
+## (proceso del taller, reserva llena).
+const BADGE_EVERY := 2
 const Clock := preload("res://scripts/view2d/Building2DClock.gd")
 
 var data: BuildingData = null
@@ -278,8 +281,9 @@ func check_state() -> void:
 		_apply_fx()
 		_sync_flag()
 		queue_redraw()
-	# Giro o movimiento cambian la huella: el badge se recoloca (solo si cambio).
-	place_badge()
+		# Giro o nivel cambian la huella: el badge se recoloca (el zoom lo
+		# vigila el reloj; mover no cambia nada, el badge es hijo).
+		place_badge()
 
 ## Recoloca el badge si cambio el zoom, la huella o la seleccion. Lo llaman la
 ## revision periodica y el reloj al cambiar el zoom.

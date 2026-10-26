@@ -19,11 +19,20 @@ extends Node
 ## la partida: los edificios se dan de baja al salir del arbol).
 
 const CHECK_FRAMES := 10
+## Cada edificio se revisa una vez cada ROUND_SECONDS de tiempo real, no cada
+## CHECK_FRAMES fotogramas: a 130 fps una ronda por fotogramas eran 13
+## revisiones por segundo y edificio (~840 us/fotograma en la colonia grande).
+## Una cubeta cada ROUND_SECONDS / CHECK_FRAMES; con pocos fps, como mucho
+## una ronda entera por fotograma. Es lo que hace BuildingPlacer en 3D con
+## building_look_sync_interval; las senales de obra, dano o reparacion no
+## esperan (repintan por su cuenta o en la siguiente cubeta).
+const ROUND_SECONDS := 0.4
 
 static var _instance: Node = null
 
 var _buckets: Array = []
 var _frame := 0
+var _acc := 0.0
 var _zoom := -1.0
 
 static func register(building: Node) -> void:
@@ -59,7 +68,15 @@ func count() -> int:
 		n += (b as Array).size()
 	return n
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var step := ROUND_SECONDS / float(CHECK_FRAMES)
+	_acc = minf(_acc + delta, ROUND_SECONDS)
+	while _acc >= step:
+		_acc -= step
+		_check_next_bucket()
+	_follow_zoom()
+
+func _check_next_bucket() -> void:
 	_frame = (_frame + 1) % CHECK_FRAMES
 	var bucket: Array = _buckets[_frame]
 	for i in range(bucket.size() - 1, -1, -1):
@@ -68,6 +85,9 @@ func _process(_delta: float) -> void:
 			bucket.remove_at(i)
 			continue
 		building.check_state()
+
+## Con zoom nuevo, los badges a la vista se recolocan (una vez por cambio).
+func _follow_zoom() -> void:
 	var cam := get_viewport().get_camera_2d() if get_viewport() != null else null
 	if cam == null:
 		return
