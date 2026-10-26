@@ -71,7 +71,7 @@ func _setup_ui() -> void:
 	var ic := CT.make_glyph("storm", 30 if CT.phone else 38)
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(ic)
-	var tc := CT.on_fill(CT.sem("DANGER"))
+	var tc := CT.ribbon_text(CT.sem("DANGER"))
 	_wave_label = CT.label("", "display", tc["color"], tc["outline"])
 	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	row.add_child(_wave_label)

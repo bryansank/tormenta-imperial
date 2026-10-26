@@ -144,7 +144,7 @@ func _build_ui() -> void:
 	# La etiqueta de la cinta es el titulo (la unica etiqueta al crearla).
 	_title_label = _panel.find_children("*", "Label", true, false)[0] as Label
 	# En un panel lateral estrecho la cinta lleva letra de titulo, no de cartel.
-	var tc := CT.on_fill(CT.sem("ACCENT"))
+	var tc := CT.ribbon_text(CT.sem("ACCENT"))
 	CT.style_label(_title_label, "title", tc["color"], tc["outline"])
 	_title_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	_close_btn = _win["close"]
