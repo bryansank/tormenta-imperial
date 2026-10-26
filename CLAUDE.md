@@ -69,7 +69,7 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 165 signals in 36 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 166 signals in 36 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
@@ -101,7 +101,14 @@ holds a service's state of its own.
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
-`Main.tscn` is the main scene. Its root carries `scripts/view2d/ViewRouter.gd`: when
+The project's main scene is `scenes/main/Boot.tscn` (one node, `scripts/boot/Boot.gd`): it puts the
+startup loading screen (`scripts/boot/LoadingScreen.gd`, CanvasLayer 90, outside the scene so it survives the
+change) on the root, which loads the scene of the preferred view by threads with a real progress bar, then
+mounts it and stays up until GameManager has placed the game and the first 3D frame is drawn (docs/19 §14).
+Opening `Main.tscn` / `Main2D.tscn` directly (F6, tests, `-s` probes) skips it; `-- --boot-trace` logs where
+the startup time goes (`scripts/boot/BootTrace.gd`, also in an export).
+
+`Main.tscn` is the game scene. Its root carries `scripts/view2d/ViewRouter.gd`: when
 the preferred view (Settings, or `-- --view=2d`) is the other one, it holds the game
 start and switches to `Main2D.tscn` before anything loads. Both scenes carry **the
 same UI nodes, with the same names** (today also in the same order); only the world

@@ -447,6 +447,11 @@ signal locale_changed(locale: String)
 signal game_new_started()
 @warning_ignore("unused_signal")
 signal game_load_completed()
+## Mientras GameManager coloca la partida al arrancar: `done` de `total` piezas
+## (los edificios del guardado; en una partida nueva, sus pasos). La escucha la
+## pantalla de carga (LoadingScreen) para mover su barra.
+@warning_ignore("unused_signal")
+signal game_load_progress(done: int, total: int)
 
 # ── Tutorial ──
 ## Emitidas solo por TutorialManager. El manager decide QUE se ensena y CUANDO

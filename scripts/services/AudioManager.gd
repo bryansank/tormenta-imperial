@@ -221,7 +221,12 @@ const IMPACT_SFX_BY_DOMAIN := {
 ## louder and would eat every voice in the pool (GameConfig.audio_sfx_voices).
 const SFX_BURST_GAP_MSEC := 60
 
-var _streams: Dictionary = {}          # key → AudioStream (only for files that exist)
+var _streams: Dictionary = {}          # key → AudioStream ya cargado (se llena al usarlo)
+## key → ruta del clip que existe. Los clips se cargan al primer uso (_stream) o,
+## al arrancar, los carga por hilos la pantalla de carga (stream_paths /
+## adopt_streams): cargar los ~55 al crear el autoload costaba 120-210 ms con el
+## juego aun sin pintar nada (docs/19 §14).
+var _paths: Dictionary = {}
 var _sfx_players: Array[AudioStreamPlayer] = []
 var _sfx_next: int = 0
 var _sfx_last_msec: Dictionary = {}    # key → Time.get_ticks_msec() of its last play
@@ -245,10 +250,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_ensure_buses()
 	_build_players()
-	_load_manifest(MUSIC_MANIFEST, MUSIC_DIR)
-	_load_manifest(AMBIENT_MANIFEST, AMBIENT_DIR)
-	_make_ambient_loop()
-	_load_manifest(SFX_MANIFEST, SFX_DIR)
+	_index_manifest(MUSIC_MANIFEST, MUSIC_DIR)
+	_index_manifest(AMBIENT_MANIFEST, AMBIENT_DIR)
+	_index_manifest(SFX_MANIFEST, SFX_DIR)
 	_apply_volumes()
 	_connect_events()
 	_hook_ui_sounds()
@@ -286,30 +290,62 @@ func _build_players() -> void:
 		add_child(a)
 		_ambient_players[key] = a
 
-func _load_manifest(manifest: Dictionary, dir: String) -> void:
+func _index_manifest(manifest: Dictionary, dir: String) -> void:
 	for key in manifest:
 		var base_path: String = dir + String(manifest[key])
 		for ext: String in [".ogg", ".wav", ".mp3"]:
 			var path: String = base_path + ext
 			if ResourceLoader.exists(path):
-				var stream: Resource = load(path)
-				if stream is AudioStream:
-					_streams[key] = stream
+				_paths[key] = path
 				break
+
+## Si hay clip instalado para `key` (cargado o no).
+func has_stream(key: String) -> bool:
+	return _paths.has(key)
+
+## El clip de `key`, cargandolo la primera vez; null si no esta instalado.
+func _stream(key: String) -> AudioStream:
+	var cached: AudioStream = _streams.get(key)
+	if cached != null:
+		return cached
+	var path: String = _paths.get(key, "")
+	if path == "":
+		return null
+	var stream := load(path) as AudioStream
+	if stream == null:
+		_paths.erase(key)
+		return null
+	if AMBIENT_MANIFEST.has(key):
+		_make_loop(stream)
+	_streams[key] = stream
+	return stream
+
+## Las rutas de todos los clips instalados, sin repetir (dos claves pueden
+## compartir fichero). La pantalla de carga las carga por hilos.
+func stream_paths() -> PackedStringArray:
+	var out := PackedStringArray()
+	for key in _paths:
+		var p: String = _paths[key]
+		if not out.has(p):
+			out.append(p)
+	return out
+
+## Recoge los clips que la pantalla de carga ya dejo en memoria (cache de
+## ResourceLoader): no vuelve a leer nada del disco.
+func adopt_streams() -> void:
+	for key in _paths:
+		if not _streams.has(key) and ResourceLoader.has_cached(_paths[key]):
+			_stream(key)
 
 ## Los bucles de ambiente se marcan en bucle aqui, sin depender de como los
 ## importe el editor (el reinicio en `finished` queda de red por si acaso).
-func _make_ambient_loop() -> void:
-	for key in AMBIENT_MANIFEST:
-		var stream: AudioStream = _streams.get(key)
-		if stream == null:
-			continue
-		if stream is AudioStreamWAV:
-			var wav := stream as AudioStreamWAV
-			wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
-			wav.loop_end = wav.data.size() / (4 if wav.stereo else 2)
-		elif "loop" in stream:
-			stream.set("loop", true)
+func _make_loop(stream: AudioStream) -> void:
+	if stream is AudioStreamWAV:
+		var wav := stream as AudioStreamWAV
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_end = wav.data.size() / (4 if wav.stereo else 2)
+	elif "loop" in stream:
+		stream.set("loop", true)
 
 # ── Volume control (public — wire to a settings UI later) ─────────────
 
@@ -406,7 +442,7 @@ func set_master_volume(linear: float) -> void:
 
 ## Plays a one-shot SFX by manifest key. No-op if the clip is not installed.
 func play_sfx(key: String) -> void:
-	var stream: AudioStream = _streams.get(key)
+	var stream: AudioStream = _stream(key)
 	if stream == null:
 		return
 	if not _burst_guard_allows(key, Time.get_ticks_msec()):
@@ -432,7 +468,7 @@ func _burst_guard_allows(key: String, now_msec: int) -> bool:
 func play_music(key: String) -> void:
 	if key == _current_music_key:
 		return
-	var stream: AudioStream = _streams.get(key)
+	var stream: AudioStream = _stream(key)
 	if stream == null:
 		return
 	if not GameConfig.audio_music_enabled:
@@ -485,7 +521,7 @@ func set_ambient(key: String) -> void:
 	for k in _ambient_players:
 		var p: AudioStreamPlayer = _ambient_players[k]
 		if k == key:
-			var stream: AudioStream = _streams.get(k)
+			var stream: AudioStream = _stream(k)
 			if stream == null:
 				continue
 			if same and p.playing:

@@ -17,6 +17,10 @@ func _ready() -> void:
 	if not GameConfig.dev_mode:
 		push_warning("[storm] dev_mode desactivado; no se hace nada")
 		return
+	# Desde Boot.tscn la escena llega cargada por hilos, despues de este _ready:
+	# se espera a que la partida arranque antes de contar SETTLE.
+	while not GameManager.is_started():
+		await get_tree().process_frame
 	await get_tree().create_timer(SETTLE).timeout
 	await _run()
 
