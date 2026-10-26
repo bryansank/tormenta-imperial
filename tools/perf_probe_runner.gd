@@ -40,6 +40,9 @@ var _targets: Array = []     # {node, label, kind}
 var _cost: Dictionary = {}   # label -> {"us": int, "calls": int, "kind": String}
 var _rescan_at := 0
 
+## Lo que monto _apply_v12 (sale en la tabla).
+var _v12_note := ""
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	process_priority = -1000
@@ -77,6 +80,7 @@ func _run() -> void:
 		await _frames(30)
 	if quality == "minima":
 		_apply_minima(view)
+	await _apply_v12(String(options.get("v12", "on")))
 	_set_camera(scenario, view)
 	var rid := get_viewport().get_viewport_rid()
 	RenderingServer.viewport_set_measure_render_time(rid, true)
@@ -534,6 +538,59 @@ func _set_camera(scenario: String, view: String) -> void:
 		if cam and cam.has_method("set_state"):
 			cam.set_state({"target_x": 0.0, "target_y": 0.0, "yaw": 0.0, "distance": d})
 
+# ── La 1.2: camiones, amenazas de costa y el barco (docs/26) ─────────
+
+## "on": dos amenazas en la orilla (una en tierra y otra en el agua) y el barco
+## atracado junto a un Puerto (si hay); los camiones salen solos de los
+## extractores. "off": fuera camiones, marcas y barco, para medir la diferencia.
+func _apply_v12(mode: String) -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var placer := scene.get_node_or_null("BuildingPlacer")
+	if mode == "off":
+		if placer != null:
+			for n in placer.get_children():
+				if String(n.name) in ["RoadTraffic", "SmugglerShip3D", "SmugglerShip2D"]:
+					n.queue_free()
+			for trucks in scene.find_children("Trucks", "", true, false):
+				trucks.queue_free()
+		for marks in scene.find_children("ThreatMarks", "", true, false):
+			marks.queue_free()
+		GameConfig.threats_enabled = false
+		ThreatManager.reset()
+		EconomyManager.load_save_data({})
+		await _frames(5)
+		_v12_note = "off"
+		return
+	var spots: Dictionary = ThreatManager.free_spots()
+	var threats: Array = []
+	var land: Array = spots.get("land", [])
+	var sea: Array = spots.get("sea", [])
+	if not land.is_empty():
+		var c: Vector2i = land[land.size() / 3]
+		threats.append({"id": 1, "type": "vanguard", "x": c.x, "y": c.y, "water": false, "seed": 5, "era": 3,
+			"born": 0.0, "ends": 99999.0, "state": "idle", "explore_ends": 0.0, "seen": true})
+	if not sea.is_empty():
+		var c2: Vector2i = sea[(sea.size() * 2) / 3]
+		threats.append({"id": 2, "type": "raiders", "x": c2.x, "y": c2.y, "water": true, "seed": 6, "era": 3,
+			"born": 0.0, "ends": 99999.0, "state": "idle", "explore_ends": 0.0, "seen": true})
+	ThreatManager.load_save_data({"threats": threats, "next_spawn_at": 99999.0, "next_id": 3})
+	var offers := [
+		{"kind": "parts", "give": {"parts": 2}, "price": 120, "sold": false},
+		{"kind": "material", "give": {"planks": 8}, "price": 104, "sold": false},
+		{"kind": "buy", "ask": {"wood": 40}, "pay": 130, "sold": false},
+	]
+	EconomyManager.load_save_data({"ship": {"wait_left": 300.0, "docked_left": 99999.0, "offers": offers, "visits": 1}})
+	var port: Node = EconomyManager.get_any_port()
+	if port != null:
+		EventBus.smuggler_ship_arrived.emit(offers, port)
+	await _frames(10)
+	var traffic := placer.get_node_or_null("RoadTraffic") if placer != null else null
+	_v12_note = "on: amenazas=%d barco=%s camiones=%s" % [threats.size(), str(port != null),
+		str(traffic.truck_count()) if traffic != null and traffic.has_method("truck_count") else "?"]
+	print("perf_probe: v12 " + _v12_note)
+
 func _walkers() -> Node:
 	var scene := get_tree().current_scene
 	return scene.get_node_or_null("BuildingPlacer/WorkerWalkers") if scene else null
@@ -660,6 +717,7 @@ func _print_table(r: Dictionary) -> void:
 	print("perf_probe: GPU '%s' (%s), %s / %s, calidad %s -> %s, ventana %s, scaling_3d %.2f" % [
 		r["gpu"], r["gpu_vendor"], r["renderer"], r["driver"], r["quality"], r["quality_effective"], r["window"], r["scaling_3d"]])
 	print("perf_probe: sembrado %s" % JSON.stringify(r["seeded"]))
+	print("perf_probe: v12 %s" % _v12_note)
 	print("| escenario | fps | 1 % bajo | p99 ms | pico proceso ms | pico fisica ms | render CPU ms | resto CPU ms | GPU ms | draw calls | objetos | primitivas | nodos | memoria est. MB | video MB | proceso MB |")
 	print("| %s | %.0f | %.0f | %.1f | %.2f | %.2f | %.2f | %.2f | %.2f | %.0f | %.0f | %.0f | %d | %.0f | %.0f | %.0f |" % [
 		r["scenario"], m["fps_mean"], m["fps_1pct_low"], m["frame_ms_p99"], m["process_peak_ms"], m["physics_peak_ms"],

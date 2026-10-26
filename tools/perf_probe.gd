@@ -32,6 +32,9 @@ extends SceneTree
 ##   --profile=N   segundos de perfil por script tras la medida (4; 0 lo apaga)
 ##   --tag=texto   prefijo de los ficheros de salida (por defecto renderer_calidad)
 ##   --shot=0      no guarda la captura de control
+##   --v12=on|off  lo que cuesta la 1.2 (on): dos amenazas de costa en la orilla
+##                 y el barco del contrabandista atracado; los camiones van solos.
+##                 off quita camiones, marcas y barco para comparar (docs/26).
 
 const SCENARIOS := ["inicio", "media", "grande", "tormenta", "combate", "grande_2d"]
 
@@ -110,7 +113,7 @@ static func parse_args(user_args: PackedStringArray) -> Dictionary:
 	var out := {
 		"scenario": "grande", "seconds": 15.0, "warmup": 6.0, "quality": "auto",
 		"view": "3d", "size": Vector2i(1280, 720), "seed": 1, "vsync": false,
-		"profile": 4.0, "tag": "", "shot": true,
+		"profile": 4.0, "tag": "", "shot": true, "v12": "on",
 	}
 	for arg in user_args:
 		if not arg.begins_with("--") or not arg.contains("="):
@@ -138,6 +141,8 @@ static func parse_args(user_args: PackedStringArray) -> Dictionary:
 				out["tag"] = value
 			"shot":
 				out["shot"] = value != "0"
+			"v12":
+				out["v12"] = "off" if value in ["off", "0"] else "on"
 	if out["scenario"] == "grande_2d":
 		out["view"] = "2d"
 	return out
