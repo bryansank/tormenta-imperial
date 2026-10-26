@@ -3,10 +3,22 @@ extends SceneTree
 ## (nada descargado) y los guarda en assets/textures/ui/icons/*.png.
 ## Run: godot --headless --path . --script res://tools/gen_resource_icons.gd
 ##
+## Lenguaje de la piel dieselpunk "D · Mezcla sobria" (docs/21 §17): iconos de
+## LINEA, trazo grueso de puntas redondas en el claro de la paleta (hueso), con
+## el color del recurso solo como acento pequeno (el centro de la moneda, el
+## corte del tronco, el brillo del lingote, la gota por dentro...). Las formas
+## son las de la maqueta (conceptos-dieselpunk.html, caja de 24 x 24), las
+## mismas que CartoonIcon.gd dibuja en vivo.
+##
 ## Cada recurso tiene una FORMA distinta, no solo un color: moneda (oro),
-## tronco (madera), lingote (acero), gota (petroleo). Quien no distinga el
-## amarillo del marron tiene que poder leer el recurso igual. Se dibuja a 4x
-## y se reduce con Lanczos para que los bordes salgan suaves a 32 px.
+## tronco (madera), lingote (acero), gota (petroleo), espiga (comida). Quien no
+## distinga el amarillo del marron tiene que poder leer el recurso igual.
+##
+## Estos PNG salen tambien sobre el mapa (la ficha de "listo para recoger" y
+## los numeros flotantes), sobre la hierba y un disco claro: por eso cada icono
+## lleva un halo de tinta (la Pizarra oscura) debajo del trazo y el cuerpo de
+## las formas cerradas relleno de tinta. Sobre la Pizarra del HUD el halo no se
+## ve. Se dibuja a 4x y se reduce con Lanczos para que los bordes salgan suaves.
 ##
 ## Hermano de tools/gen_ui_textures.gd (placas metalicas 9-patch).
 
@@ -19,8 +31,27 @@ const SS := 4  # supersampling
 ## queda como estaba para quien lo pida sin medida.
 const SCALES := [24, 42, 60, 96]
 
+## Paleta D (docs/24): hueso del texto, tinta de la Pizarra, laton.
+const BONE := Color("eeeae1")
+const INK := Color(0.075, 0.09, 0.106, 0.92)
+const BRASS := Color("c99a45")
+## Los acentos de recurso de la maqueta (--c-oro, --c-mad...).
+const C_GOLD := Color("f0c350")
+const C_WOOD := Color("d49a5c")
+const C_FOOD := Color("d9d16c")
+const C_STEEL := Color("afc5d4")
+const C_OIL := Color("b9a6f3")
+const C_MORALE := Color("f0937a")
+
+## Trazo y halo, en unidades de la caja de 24. A 24 px el trazo pide algo mas
+## para no quedarse en un pelo.
+const STROKE := 2.3
+const HALO := 1.3
+
 var _img: Image
 var _w: int
+## Pasada en curso: "halo" (tinta debajo de todo) o "main" (trazo y acentos).
+var _pass := "main"
 
 func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
@@ -41,213 +72,225 @@ func _draw_icon(fname: String, painter: Callable) -> void:
 	for px in SCALES:
 		_draw_icon_at("%s_%d.png" % [fname, px], px, painter)
 
-## Las primitivas trabajan en 0..1 del lienzo: el mismo pintor sirve a todas
-## las medidas, cada una trazada a 4x de su tamano final.
+## El mismo pintor sirve a todas las medidas: halo primero, luego el dibujo.
 func _draw_icon_at(out_name: String, px: int, painter: Callable) -> void:
 	_w = px * SS
 	_img = Image.create(_w, _w, false, Image.FORMAT_RGBA8)
 	_img.fill(Color(0, 0, 0, 0))
+	_pass = "halo"
+	painter.call()
+	_pass = "main"
 	painter.call()
 	_img.resize(px, px, Image.INTERPOLATE_LANCZOS)
 	var err := _img.save_png(ProjectSettings.globalize_path(OUT_DIR + out_name))
 	print("GEN_ICON %s err=%d" % [out_name, err])
 
-# ── Primitivas (en coordenadas 0..1 del lienzo) ─────────────────────
+# ── Primitivas (unidades de la caja de 24) ───────────────────────────
 
-func _px(u: float) -> float:
-	return u * float(_w)
+func _u() -> float:
+	return float(_w) / 24.0
 
-## Rellena cada pixel cuyo centro cumpla `inside(p)`; `p` en 0..1.
-func _fill(inside: Callable, col: Color) -> void:
-	for y in _w:
-		for x in _w:
-			var p := Vector2((float(x) + 0.5) / float(_w), (float(y) + 0.5) / float(_w))
+## Grosor del trazo en unidades: a 24 px algo mas grueso.
+func _stroke() -> float:
+	return STROKE * (1.15 if _w <= 24 * SS else 1.0)
+
+func _plot(x: int, y: int, col: Color) -> void:
+	if x < 0 or y < 0 or x >= _w or y >= _w:
+		return
+	_img.set_pixel(x, y, _img.get_pixel(x, y).blend(col))
+
+## Pinta cada pixel de la caja [x0,x1]x[y0,y1] (unidades) cuyo centro cumple
+## `inside(p)` (p en unidades).
+func _region(x0: float, y0: float, x1: float, y1: float, inside: Callable, col: Color) -> void:
+	var u := _u()
+	var px0 := maxi(0, int(floor(x0 * u)))
+	var py0 := maxi(0, int(floor(y0 * u)))
+	var px1 := mini(_w - 1, int(ceil(x1 * u)))
+	var py1 := mini(_w - 1, int(ceil(y1 * u)))
+	for y in range(py0, py1 + 1):
+		for x in range(px0, px1 + 1):
+			var p := Vector2((float(x) + 0.5) / u, (float(y) + 0.5) / u)
 			if inside.call(p):
-				_img.set_pixel(x, y, col)
+				_plot(x, y, col)
 
-func _circle(c: Vector2, r: float, col: Color) -> void:
-	_fill(func(p: Vector2) -> bool: return p.distance_to(c) <= r, col)
+static func _seg_dist(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var t := 0.0 if ab.length_squared() < 0.0001 else clampf((p - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+	return p.distance_to(a + ab * t)
 
-func _ring(c: Vector2, r_out: float, r_in: float, col: Color) -> void:
-	_fill(func(p: Vector2) -> bool:
-		var d := p.distance_to(c)
-		return d <= r_out and d >= r_in, col)
+static func _to_pts(uv: Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for i in range(0, uv.size(), 2):
+		out.append(Vector2(float(uv[i]), float(uv[i + 1])))
+	return out
 
-func _ellipse(c: Vector2, rx: float, ry: float, col: Color) -> void:
-	_fill(func(p: Vector2) -> bool:
-		var dx := (p.x - c.x) / rx
-		var dy := (p.y - c.y) / ry
-		return dx * dx + dy * dy <= 1.0, col)
+## Trazo de polilinea (puntas y codos redondos: distancia al segmento). En la
+## pasada de halo, mas ancho y en tinta; `col` solo cuenta en la de dibujo.
+func _line(uv: Array, col: Color = BONE, closed := false, mult := 1.0) -> void:
+	var pts := _to_pts(uv)
+	if closed:
+		pts.append(pts[0])
+	var half := _stroke() * mult * 0.5
+	var c := col
+	if _pass == "halo":
+		half += HALO
+		c = INK
+	for i in pts.size() - 1:
+		var a := pts[i]
+		var b := pts[i + 1]
+		_region(minf(a.x, b.x) - half, minf(a.y, b.y) - half, maxf(a.x, b.x) + half, maxf(a.y, b.y) + half,
+			func(p: Vector2) -> bool: return _seg_dist(p, a, b) <= half, c)
 
-func _rect(x0: float, y0: float, x1: float, y1: float, col: Color) -> void:
-	_fill(func(p: Vector2) -> bool: return p.x >= x0 and p.x <= x1 and p.y >= y0 and p.y <= y1, col)
+## Forma cerrada: en el halo se rellena de tinta (el cuerpo se lee sobre el
+## mapa); en el dibujo solo se traza.
+func _shape(uv: Array, col: Color = BONE) -> void:
+	if _pass == "halo":
+		_fill(uv, INK)
+	_line(uv, col, true)
 
-## Poligono convexo o concavo por regla par-impar.
-func _poly(points: PackedVector2Array, col: Color) -> void:
-	_fill(func(p: Vector2) -> bool: return Geometry2D.is_point_in_polygon(p, points), col)
+## Relleno de poligono. Los acentos solo se pintan en la pasada de dibujo.
+func _fill(uv: Array, col: Color) -> void:
+	if _pass == "halo" and col != INK:
+		return
+	var pts := _to_pts(uv)
+	var lo := pts[0]
+	var hi := pts[0]
+	for p in pts:
+		lo = Vector2(minf(lo.x, p.x), minf(lo.y, p.y))
+		hi = Vector2(maxf(hi.x, p.x), maxf(hi.y, p.y))
+	_region(lo.x, lo.y, hi.x, hi.y, func(p: Vector2) -> bool: return Geometry2D.is_point_in_polygon(p, pts), col)
 
-func _rounded_rect(x0: float, y0: float, x1: float, y1: float, r: float, col: Color) -> void:
-	_fill(func(p: Vector2) -> bool:
-		if p.x < x0 or p.x > x1 or p.y < y0 or p.y > y1:
-			return false
-		var cx := clampf(p.x, x0 + r, x1 - r)
-		var cy := clampf(p.y, y0 + r, y1 - r)
-		return p.distance_to(Vector2(cx, cy)) <= r, col)
+func _ring(cx: float, cy: float, r: float, col: Color = BONE, body := false) -> void:
+	if body and _pass == "halo":
+		_disc(cx, cy, r, INK)
+	var half := _stroke() * 0.5
+	var c := col
+	if _pass == "halo":
+		half += HALO
+		c = INK
+	var ctr := Vector2(cx, cy)
+	_region(cx - r - half, cy - r - half, cx + r + half, cy + r + half,
+		func(p: Vector2) -> bool: return absf(p.distance_to(ctr) - r) <= half, c)
+
+func _disc(cx: float, cy: float, r: float, col: Color) -> void:
+	if _pass == "halo" and col != INK:
+		return
+	var ctr := Vector2(cx, cy)
+	_region(cx - r, cy - r, cx + r, cy + r, func(p: Vector2) -> bool: return p.distance_to(ctr) <= r, col)
+
+## Puntos de un arco de elipse (unidades), para _line / _fill.
+static func _ell(cx: float, cy: float, rx: float, ry: float, a0: float, a1: float, n := 20) -> Array:
+	var out := []
+	for i in n + 1:
+		var a := a0 + (a1 - a0) * float(i) / float(n)
+		out.append(cx + cos(a) * rx)
+		out.append(cy + sin(a) * ry)
+	return out
 
 # ── Iconos ───────────────────────────────────────────────────────────
 
-## Moneda: disco dorado con canto oscuro, anillo interior y brillo.
+## Moneda: canto en hueso y la cara de oro dentro (el acento).
 func _paint_coin() -> void:
-	var c := Vector2(0.5, 0.5)
-	_circle(c, 0.44, Color(0.55, 0.40, 0.08))              # canto
-	_circle(c, 0.38, Color(1.0, 0.85, 0.2))                 # cara
-	_ring(c, 0.30, 0.26, Color(0.75, 0.58, 0.12))           # anillo grabado
-	_rect(0.46, 0.30, 0.54, 0.70, Color(0.75, 0.58, 0.12))  # barra central
-	_rect(0.36, 0.30, 0.64, 0.37, Color(0.75, 0.58, 0.12))  # cabeza de la "T"
-	_ellipse(Vector2(0.36, 0.34), 0.10, 0.06, Color(1.0, 0.97, 0.7, 0.9))  # brillo
+	_ring(12, 12, 8.5, BONE, true)
+	_disc(12, 12, 4.6, C_GOLD)
+	_ring(12, 12, 4.6, BONE)
 
-## Tronco: cilindro tumbado, corteza con vetas y el corte con anillos.
+## Tronco tumbado: el cuerpo en hueso y el corte de madera, con su anillo.
 func _paint_log() -> void:
-	var bark := Color(0.45, 0.28, 0.13)
-	var bark_dark := Color(0.33, 0.20, 0.09)
-	var cut := Color(0.85, 0.66, 0.38)
-	var ring := Color(0.62, 0.44, 0.22)
-	_rounded_rect(0.08, 0.30, 0.78, 0.70, 0.06, bark)
-	# vetas
-	_rect(0.14, 0.38, 0.62, 0.41, bark_dark)
-	_rect(0.20, 0.52, 0.66, 0.55, bark_dark)
-	_rect(0.12, 0.62, 0.56, 0.65, bark_dark)
-	# corte del extremo derecho
-	_ellipse(Vector2(0.78, 0.50), 0.14, 0.20, bark_dark)
-	_ellipse(Vector2(0.78, 0.50), 0.11, 0.17, cut)
-	_ellipse(Vector2(0.78, 0.50), 0.07, 0.11, ring)
-	_ellipse(Vector2(0.78, 0.50), 0.04, 0.06, cut)
+	var body := [17, 6, 7, 6] + _ell(7, 12, 3.5, 6, PI * 1.5, PI * 0.5) + [17, 18] + _ell(17, 12, 3.5, 6, PI * 0.5, -PI * 0.5)
+	if _pass == "halo":
+		_fill(body, INK)
+	_line([17, 6, 7, 6] + _ell(7, 12, 3.5, 6, PI * 1.5, PI * 0.5) + [17, 18])
+	var cut := _ell(17, 12, 3.5, 6, 0.0, TAU, 28)
+	_fill(cut, C_WOOD)
+	_line(cut)
+	_line(_ell(17, 12, 1.2, 2.2, 0.0, TAU, 16), BONE, false, 0.8)
 
-## Lingote: bloque trapezoidal con cara superior clara y frente sombreado.
+## Lingote: el trapecio en hueso, un velo de acero dentro y su brillo.
 func _paint_ingot() -> void:
-	var top := Color(0.85, 0.88, 0.92)
-	var front := Color(0.58, 0.63, 0.70)
-	var side := Color(0.42, 0.47, 0.54)
-	var edge := Color(0.25, 0.28, 0.33)
-	# frente (trapecio, mas ancho abajo)
-	_poly(PackedVector2Array([Vector2(0.18, 0.46), Vector2(0.72, 0.46), Vector2(0.82, 0.78), Vector2(0.08, 0.78)]), edge)
-	_poly(PackedVector2Array([Vector2(0.20, 0.49), Vector2(0.70, 0.49), Vector2(0.79, 0.75), Vector2(0.11, 0.75)]), front)
-	# cara superior (paralelogramo hacia atras-derecha)
-	_poly(PackedVector2Array([Vector2(0.18, 0.46), Vector2(0.72, 0.46), Vector2(0.86, 0.26), Vector2(0.34, 0.26)]), edge)
-	_poly(PackedVector2Array([Vector2(0.22, 0.44), Vector2(0.69, 0.44), Vector2(0.82, 0.29), Vector2(0.37, 0.29)]), top)
-	# lateral derecho
-	_poly(PackedVector2Array([Vector2(0.72, 0.46), Vector2(0.86, 0.26), Vector2(0.92, 0.56), Vector2(0.82, 0.78)]), side)
-	# brillo en la cara superior
-	_rect(0.40, 0.33, 0.62, 0.36, Color(1, 1, 1, 0.7))
+	var bar := [2.5, 18.5, 6, 9, 18, 9, 21.5, 18.5]
+	if _pass == "halo":
+		_fill(bar, INK)
+	_fill(bar, Color(C_STEEL, 0.32))
+	_line(bar, BONE, true)
+	_line([8, 12.5, 12.5, 12.5], C_STEEL)
 
-## Gota: circulo mas punta, con reflejo. Petroleo: violeta grisaceo.
+## Gota de petroleo: contorno en hueso, el petroleo por dentro y su reflejo.
 func _paint_drop() -> void:
-	var body := Color(0.50, 0.45, 0.58)
-	var rim := Color(0.28, 0.24, 0.34)
-	var c := Vector2(0.5, 0.62)
-	_circle(c, 0.30, rim)
-	_poly(PackedVector2Array([Vector2(0.21, 0.58), Vector2(0.5, 0.06), Vector2(0.79, 0.58)]), rim)
-	_circle(c, 0.26, body)
-	_poly(PackedVector2Array([Vector2(0.25, 0.58), Vector2(0.5, 0.12), Vector2(0.75, 0.58)]), body)
-	_ellipse(Vector2(0.40, 0.62), 0.07, 0.11, Color(0.85, 0.82, 0.92, 0.85))
+	var drop := [12, 3, 14.6, 6.1, 16.8, 9.1, 18.2, 11.8, 18.5, 14.3] + _ell(12, 14.3, 6.5, 6.5, 0.0, PI) \
+		+ [5.5, 14.3, 5.8, 11.8, 7.2, 9.1, 9.4, 6.1]
+	if _pass == "halo":
+		_fill(drop, INK)
+	var inner := [12, 7.2, 13.6, 9.2, 15.2, 11.6, 15.6, 14.3] + _ell(12, 14.3, 3.6, 3.6, 0.0, PI, 12) \
+		+ [8.4, 14.3, 8.8, 11.6, 10.4, 9.2]
+	_fill(inner, Color(C_OIL, 0.55))
+	_line(drop, BONE, true)
+	_line(_ell(12, 15, 3, 3, PI, PI * 0.5, 8), C_OIL, false, 0.85)
 
-## Comida (2026-10-04): una espiga de trigo. Forma alargada y vertical, con los
-## granos en dos filas y una hoja verde: no se confunde con la moneda redonda,
-## el tronco tumbado, el lingote ni la gota.
+## Espiga: el tallo y las hojas en hueso, los granos de trigo por dentro.
 func _paint_wheat() -> void:
-	var grain := Color(0.93, 0.76, 0.30)
-	var grain_dark := Color(0.62, 0.44, 0.12)
-	var stalk := Color(0.55, 0.62, 0.22)
-	var leaf := Color(0.38, 0.62, 0.20)
-	var leaf_dark := Color(0.22, 0.40, 0.12)
-	# tallo
-	_poly(PackedVector2Array([Vector2(0.47, 0.42), Vector2(0.53, 0.42), Vector2(0.55, 0.94), Vector2(0.49, 0.94)]), stalk)
-	# hoja
-	_poly(PackedVector2Array([Vector2(0.52, 0.80), Vector2(0.84, 0.58), Vector2(0.80, 0.66), Vector2(0.54, 0.86)]), leaf_dark)
-	_poly(PackedVector2Array([Vector2(0.53, 0.79), Vector2(0.80, 0.60), Vector2(0.54, 0.83)]), leaf)
-	# granos: dos filas en zigzag, de abajo arriba, mas pequenos hacia la punta
-	for i in 5:
-		var y := 0.50 - float(i) * 0.085
-		var r := 0.085 - float(i) * 0.008
-		_ellipse(Vector2(0.40, y), r * 1.05, r * 1.45, grain_dark)
-		_ellipse(Vector2(0.40, y), r * 0.8, r * 1.2, grain)
-		_ellipse(Vector2(0.60, y - 0.04), r * 1.05, r * 1.45, grain_dark)
-		_ellipse(Vector2(0.60, y - 0.04), r * 0.8, r * 1.2, grain)
-	# grano de la punta y bigotes
-	_ellipse(Vector2(0.50, 0.10), 0.06, 0.08, grain_dark)
-	_ellipse(Vector2(0.50, 0.10), 0.045, 0.065, grain)
-	_poly(PackedVector2Array([Vector2(0.30, 0.10), Vector2(0.32, 0.09), Vector2(0.40, 0.30), Vector2(0.38, 0.31)]), grain_dark)
-	_poly(PackedVector2Array([Vector2(0.70, 0.06), Vector2(0.72, 0.07), Vector2(0.62, 0.26), Vector2(0.60, 0.25)]), grain_dark)
-## Obrero: busto con casco de laton y mono azul acero. Es el icono de los
-## obreros libres en la fila de recursos (ResourceHUD); forma de persona, no de
-## recurso, para que no se confunda con ninguno de los cuatro.
-func _paint_worker() -> void:
-	var rim := Color(0.12, 0.10, 0.08)
-	var overalls := Color(0.36, 0.46, 0.60)
-	var overalls_dark := Color(0.26, 0.33, 0.44)
-	var skin := Color(0.88, 0.70, 0.52)
-	var brass := Color(0.92, 0.70, 0.22)
-	var brass_dark := Color(0.62, 0.45, 0.12)
-	# Hombros y torso (trapecio), con borde oscuro para leerse sobre la isla.
-	_poly(PackedVector2Array([Vector2(0.27, 0.56), Vector2(0.73, 0.56), Vector2(0.92, 0.97), Vector2(0.08, 0.97)]), rim)
-	_poly(PackedVector2Array([Vector2(0.30, 0.60), Vector2(0.70, 0.60), Vector2(0.87, 0.94), Vector2(0.13, 0.94)]), overalls)
-	# Peto del mono y tirantes.
-	_rect(0.38, 0.70, 0.62, 0.94, overalls_dark)
-	_rect(0.36, 0.60, 0.41, 0.72, overalls_dark)
-	_rect(0.59, 0.60, 0.64, 0.72, overalls_dark)
-	# Cabeza.
-	_circle(Vector2(0.5, 0.42), 0.19, rim)
-	_circle(Vector2(0.5, 0.43), 0.155, skin)
-	# Casco: media cupula y ala.
-	_fill(func(p: Vector2) -> bool: return p.y <= 0.37 and p.distance_to(Vector2(0.5, 0.37)) <= 0.215, rim)
-	_fill(func(p: Vector2) -> bool: return p.y <= 0.35 and p.distance_to(Vector2(0.5, 0.36)) <= 0.18, brass)
-	_rounded_rect(0.20, 0.33, 0.80, 0.40, 0.02, rim)
-	_rect(0.23, 0.345, 0.77, 0.385, brass_dark)
-	_rect(0.47, 0.18, 0.53, 0.34, brass_dark)  # cresta del casco
-	_ellipse(Vector2(0.41, 0.26), 0.05, 0.03, Color(1.0, 0.95, 0.7, 0.85))  # brillo
+	_line([12, 21.5, 12, 6])
+	_line([12, 3, 12, 4.2])
+	for oy in [0.0, 5.0, 10.0]:
+		var y: float = 9.0 + oy
+		for side in [-1.0, 1.0]:
+			var leaf := [12, y, 12 + side * 2.5, y - 0.7, 12 + side * 4.1, y - 2.4, 12 + side * 4.5, y - 4.5,
+				12 + side * 2.0, y - 3.8, 12 + side * 0.4, y - 2.1]
+			if _pass == "halo":
+				_fill(leaf, INK)
+			_fill(leaf, Color(C_FOOD, 0.75))
+			_line(leaf, BONE, true, 0.85)
 
-## Corazon con remaches: la moral. Rojo oxido con brillo; el numero de al lado
-## lleva el color del umbral (UITheme), el icono no cambia.
+## Trabajador: cabeza y hombros en hueso, el casco de laton.
+func _paint_worker() -> void:
+	var shoulders := _ell(12, 21.8, 7.6, 7.2, PI, TAU)
+	if _pass == "halo":
+		_fill(shoulders, INK)
+	_line(shoulders)
+	_ring(12, 10, 3.6, BONE, true)
+	var helmet := _ell(12, 8.6, 4.4, 4.2, PI, TAU, 14)
+	if _pass == "halo":
+		_fill(helmet, INK)
+	_fill(helmet, Color(BRASS, 0.85))
+	_line(helmet, BRASS, true, 0.9)
+	_line([6.6, 8.6, 17.4, 8.6], BRASS)
+
+## Corazon de la moral: contorno en hueso y un corazon pequeno de color dentro.
 func _paint_heart() -> void:
-	var rim := Color(0.22, 0.06, 0.05)
-	var body := Color(0.80, 0.22, 0.18)
-	var light := Color(0.95, 0.45, 0.38)
-	var heart := func(p: Vector2, grow: float) -> bool:
-		var l := p.distance_to(Vector2(0.335, 0.38)) <= 0.19 + grow
-		var r := p.distance_to(Vector2(0.665, 0.38)) <= 0.19 + grow
-		var tri := Geometry2D.is_point_in_polygon(p, PackedVector2Array([
-			Vector2(0.15 - grow, 0.44), Vector2(0.85 + grow, 0.44), Vector2(0.5, 0.88 + grow * 1.4)]))
-		return l or r or tri
-	_fill(func(p: Vector2) -> bool: return heart.call(p, 0.045), rim)
-	_fill(func(p: Vector2) -> bool: return heart.call(p, 0.0), body)
-	_ellipse(Vector2(0.32, 0.34), 0.08, 0.06, light)
-	# Dos remaches de laton: el corazon de la colonia es de chapa.
-	_circle(Vector2(0.5, 0.70), 0.035, Color(0.92, 0.70, 0.22))
-	_circle(Vector2(0.5, 0.52), 0.035, Color(0.92, 0.70, 0.22))
+	var outer := _heart(12, 12.4, 0.52)
+	if _pass == "halo":
+		_fill(outer, INK)
+	_fill(_heart(12, 11.8, 0.27), C_MORALE)
+	_line(outer, BONE, true)
+
+## Puntos de un corazon (curva clasica) centrado en (cx, cy), escala `k`.
+static func _heart(cx: float, cy: float, k: float) -> Array:
+	var out := []
+	for i in 40:
+		var t := TAU * float(i) / 40.0
+		var x := 16.0 * pow(sin(t), 3)
+		var y := 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t)
+		out.append(cx + x * k)
+		out.append(cy - y * k)
+	return out
 
 ## Cuatro flechas en cruz: el icono del boton MOVER del panel de edificio.
 func _paint_move_arrows() -> void:
-	var col := Color(0.95, 0.90, 0.80)
-	var c := Vector2(0.5, 0.5)
-	var shaft := 0.055
-	var head := 0.17
-	var tip := 0.06
-	# ejes
-	_rect(c.x - shaft, tip + head * 0.6, c.x + shaft, 1.0 - tip - head * 0.6, col)
-	_rect(tip + head * 0.6, c.y - shaft, 1.0 - tip - head * 0.6, c.y + shaft, col)
-	# puntas
-	_poly(PackedVector2Array([Vector2(0.5, tip), Vector2(0.5 - head * 0.8, tip + head), Vector2(0.5 + head * 0.8, tip + head)]), col)
-	_poly(PackedVector2Array([Vector2(0.5, 1.0 - tip), Vector2(0.5 - head * 0.8, 1.0 - tip - head), Vector2(0.5 + head * 0.8, 1.0 - tip - head)]), col)
-	_poly(PackedVector2Array([Vector2(tip, 0.5), Vector2(tip + head, 0.5 - head * 0.8), Vector2(tip + head, 0.5 + head * 0.8)]), col)
-	_poly(PackedVector2Array([Vector2(1.0 - tip, 0.5), Vector2(1.0 - tip - head, 0.5 - head * 0.8), Vector2(1.0 - tip - head, 0.5 + head * 0.8)]), col)
-	_circle(c, 0.09, col)
+	_line([12, 2.8, 12, 21.2])
+	_line([2.8, 12, 21.2, 12])
+	_line([9, 5.8, 12, 2.8, 15, 5.8])
+	_line([9, 18.2, 12, 21.2, 15, 18.2])
+	_line([5.8, 9, 2.8, 12, 5.8, 15])
+	_line([18.2, 9, 21.2, 12, 18.2, 15])
+	_disc(12, 12, 1.7, BRASS)
 
-## Asa de arrastre: seis puntos en dos columnas, como en cualquier barra movible.
+## Asa de arrastre: seis remaches de laton en dos columnas.
 func _paint_drag_grip() -> void:
-	var col := Color(0.77, 0.59, 0.16)
-	for row in [0.25, 0.5, 0.75]:
-		_circle(Vector2(0.36, row), 0.09, col)
-		_circle(Vector2(0.64, row), 0.09, col)
+	for row in [6.0, 12.0, 18.0]:
+		for x in [8.6, 15.4]:
+			if _pass == "halo":
+				_disc(x, row, 2.2 + HALO, INK)
+			_disc(x, row, 2.2, BRASS)
 
 func _process(_delta: float) -> bool:
 	return true
