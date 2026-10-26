@@ -1,5 +1,12 @@
 # 28 · Guía de estilo de la interfaz (rediseño 2026-10)
 
+> **2026-10-25: la piel cambió.** La estructura de esta guía (pantallas, tamaños,
+> barra de abajo, avisos, teléfono) sigue en pie, pero los colores, las fuentes
+> y la forma de los botones de aquí (crema, Baloo 2 / Nunito Sans, pastillas con
+> labio) los sustituye la piel dieselpunk "D · Mezcla sobria":
+> [21-interfaz-y-dispositivos.md §17](21-interfaz-y-dispositivos.md) y
+> [24-paleta.md](24-paleta.md).
+
 Bryan: *"las interfaces se ven demasiado feas, la fuente, los textos muy feos y
 sobrecargados, los botones no se entienden bien"*, *"en teléfonos pequeños se ve
 feo y sobrecargado"* y *"las alertas se sobreponen a todo"*. Esta guía es la
