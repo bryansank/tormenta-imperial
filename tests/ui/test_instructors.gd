@@ -121,6 +121,29 @@ func test_every_face_of_both_draws_without_errors() -> void:
 				await get_tree().process_frame
 	assert_bool(is_instance_valid(b)).is_true()
 
+## Las caras en circulo (CartoonTheme.CaptainFace y la InstructorFace de la 1.2)
+## llaman a _draw_ada / _draw_bombarda: el mismo retrato que el busto, con su
+## boca y sin brazos. Siguen existiendo y pintan todas las caras.
+func test_the_round_faces_use_the_same_portrait() -> void:
+	var face: Control = auto_free(CartoonTheme.captain_face(64))
+	add_child(face)
+	var sarge: Control = auto_free(_SargeFace.new())
+	sarge.size = Vector2(64, 64)
+	add_child(sarge)
+	for e in Bust.EXPRESSIONS:
+		face.set("mood", e)
+		sarge.mood = e
+		sarge.queue_redraw()
+		await get_tree().process_frame
+	assert_bool(is_instance_valid(face) and is_instance_valid(sarge)).is_true()
+
+class _SargeFace extends Control:
+	var mood := "happy"
+
+	func _draw() -> void:
+		var h := size.y * 2.15
+		Bust._draw_bombarda(self, Rect2(Vector2(size.x * 0.5 - h * 0.4, -0.1 * h), Vector2(h * 0.8, h)), mood)
+
 # ── Hablar ───────────────────────────────────────────────────────────
 
 func test_speaking_types_the_text_and_moves_the_mouth() -> void:
