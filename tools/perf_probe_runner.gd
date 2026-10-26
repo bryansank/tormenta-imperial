@@ -108,11 +108,22 @@ func _measure(seconds: float, rid: RID) -> Dictionary:
 	var maxs := {"proc": 0.0, "phys": 0.0, "draw": 0.0, "obj": 0.0, "prim": 0.0, "gpu": 0.0, "cpu_r": 0.0}
 	var walkers := _walkers()
 	var walk_sum := 0.0
+	# DeviceProfile vuelve a poner su tope (60 en PC, 30 en pausa, 10 sin foco)
+	# cuando cambia la pausa o el foco: aqui se quita en cada fotograma y se
+	# cuentan los fotogramas en que estaba puesto o la ventana no tenia el foco.
+	var capped := 0
+	var unfocused := 0
+	Engine.max_fps = 0
 	var start := Time.get_ticks_usec()
 	var prev := start
 	var end_at := start + int(seconds * 1000000.0)
 	while true:
 		await get_tree().process_frame
+		if Engine.max_fps != 0:
+			capped += 1
+			Engine.max_fps = 0
+		if not DisplayServer.window_is_focused():
+			unfocused += 1
 		var now := Time.get_ticks_usec()
 		frame_ms.append(float(now - prev) / 1000.0)
 		prev = now
@@ -146,6 +157,8 @@ func _measure(seconds: float, rid: RID) -> Dictionary:
 	return {
 		"frames": n,
 		"seconds": elapsed_s,
+		"frames_capped": capped,
+		"frames_unfocused": unfocused,
 		"fps_mean": float(n) / maxf(0.001, elapsed_s),
 		"frame_ms_mean": elapsed_s * 1000.0 / maxf(1.0, float(n)),
 		"frame_ms_p50": float(sorted[n / 2]),
@@ -431,6 +444,11 @@ func _city(width: int, blocks: int, plan: Array, slots: Array, era: int) -> Dict
 	_shuffle(order)
 	slots = slots.duplicate()
 	_shuffle(slots)
+	# Las casas primero: desde que los topes (astilleros, aerodromos...) dan mas
+	# edificios que esquinas libres, el corte de abajo dejaba 4 casas de 10 y la
+	# colonia grande sin obreros ("sin trabajadores" en casi todo, sin caminantes).
+	var homes := slots.filter(func(s): return s == "house")
+	slots = homes + slots.filter(func(s): return s != "house")
 	var core_o := Vector2i(base + center * BLOCK + 1, base + center * BLOCK + 1)
 	buildings.append({"id": "nucleo", "cell_x": core_o.x, "cell_y": core_o.y})
 	var bi := 0
