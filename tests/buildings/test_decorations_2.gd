@@ -128,8 +128,12 @@ func test_every_decoration_has_a_shared_palette_mesh_within_budget() -> void:
 		var budget := 1500 if id == "governor_plaza" else Decor.TRI_BUDGET
 		assert_int(Kit.tri_count(mesh)).override_failure_message(id).is_less_equal(budget)
 		assert_object(mesh.surface_get_material(0)).is_same(Decor.MeshKit.solid_material())
+		# Al ras del suelo, salvo lo que se hunde a proposito (el bote y el pecio
+		# medio enterrados en la arena, el puente y la rueda del molino en el
+		# agua del estanque): eso puede bajar hasta 0,4 (el terreno lo tapa).
 		var a := mesh.get_aabb()
-		assert_float(a.position.y).is_greater_equal(-0.01)
+		var floor_y := -0.4 if id in ["beached_boat", "wreck_monument", "pond_bridge", "water_mill"] else -0.01
+		assert_float(a.position.y).override_failure_message(id).is_greater_equal(floor_y)
 		var one: MeshInstance3D = auto_free(Decor.instantiate(id))
 		var two: MeshInstance3D = auto_free(Decor.instantiate(id))
 		assert_object(one.mesh).is_same(two.mesh)

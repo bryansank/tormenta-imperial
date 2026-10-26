@@ -6,11 +6,11 @@ extends GdUnitTestSuite
 
 func test_every_building_definition_loads() -> void:
 	var all := BuildingData.load_all()
-	assert_int(all.size()).is_equal(40)
+	assert_int(all.size()).is_equal(61)
 	var ids := {}
 	for data in all:
 		ids[data.id] = true
-	assert_int(ids.size()).is_equal(40)
+	assert_int(ids.size()).is_equal(61)
 	assert_bool(ids.has("sawmill")).is_true()
 	assert_bool(ids.has("nucleo")).is_true()
 	# 1.1: aire y mar (Astillero, Aerodromo) y el Muelle de pesca.
@@ -19,6 +19,9 @@ func test_every_building_definition_loads() -> void:
 		assert_bool(ids.has(id)).is_true()
 	# Defensa y vida (feat/edificios-defensa-vida).
 	for id in ["bastion", "scrapyard", "telegraph"]:
+		assert_bool(ids.has(id)).is_true()
+	# Las dieciocho decoraciones de la 1.2 (feat/decoraciones-y-trafico).
+	for id in ["flower_stall", "governor_plaza", "storm_column", "wreck_monument"]:
 		assert_bool(ids.has(id)).is_true()
 
 
