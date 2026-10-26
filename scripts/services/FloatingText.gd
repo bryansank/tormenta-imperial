@@ -8,6 +8,14 @@ class_name FloatingText
 
 const FloatingText2D := preload("res://scripts/view2d/FloatingText2D.gd")
 
+## Cuanto se agranda el texto 3D segun el perfil: en telefono la camara cubre
+## el mapa en una pantalla de ~6 pulgadas y 0,0125 daba unos 8 px (QA 30). Solo
+## cambia pixel_size: ni mas mallas ni mas llamadas de dibujo.
+const PROFILE_SIZE := {"phone": 2.0, "tablet": 1.4}
+
+static func size_factor(profile: String) -> float:
+	return float(PROFILE_SIZE.get(profile, 1.0))
+
 static func spawn(scene_tree: SceneTree, world_pos: Vector3, text: String, color: Color) -> void:
 	if not scene_tree or not scene_tree.current_scene:
 		return
@@ -16,7 +24,7 @@ static func spawn(scene_tree: SceneTree, world_pos: Vector3, text: String, color
 	# Del tamano del rotulo de obras (BuildingStatusBadge): a 20 px y 0.005 no se
 	# leia desde la camara de siempre (ronda de pruebas 1.0).
 	label.font_size = 36
-	label.pixel_size = 0.0125
+	label.pixel_size = 0.0125 * size_factor(DeviceProfile.current())
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	label.outline_size = 8
