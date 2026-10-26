@@ -117,6 +117,7 @@ func _set_placing(placing: bool) -> void:
 	_placing = placing
 	_rotate_building_btn.visible = placing
 	_cancel_placement_btn.visible = placing
+	set_opacity(_opacity)
 	_apply_visibility()
 
 func is_placing_shown() -> bool:
@@ -174,7 +175,12 @@ func set_opacity(value: float) -> void:
 	_opacity = clampf(value, GameConfig.TOUCH_OPACITY_MIN, GameConfig.TOUCH_OPACITY_MAX)
 	for btn in _buttons:
 		if is_instance_valid(btn):
-			btn.modulate.a = 1.0 if (btn.button_pressed or _holds.has(btn)) else _opacity
+			btn.modulate.a = 1.0 if (btn.button_pressed or _holds.has(btn) or _is_placement_btn(btn)) else _opacity
+
+## Girar y CANCELAR al colocar van opacos: semitransparentes parecian
+## desactivados justo cuando el tutorial dice "toca R".
+func _is_placement_btn(btn: Button) -> bool:
+	return _placing and (btn == _rotate_building_btn or btn == _cancel_placement_btn)
 
 func get_opacity() -> float:
 	return _opacity
@@ -240,7 +246,7 @@ func _register(btn: Button) -> void:
 	# Al tocar, entero en el acto (es la confirmacion de que el dedo acerto); al
 	# soltar vuelve a la opacidad elegida en release_fade_sec.
 	btn.button_down.connect(func(): _flash(btn, 1.0, 0.0))
-	btn.button_up.connect(func(): _flash(btn, _opacity, release_fade_sec))
+	btn.button_up.connect(func(): _flash(btn, 1.0 if _is_placement_btn(btn) else _opacity, release_fade_sec))
 
 ## Seconds a released button takes to fade back (0 = at once; tests use it).
 var release_fade_sec := 0.2

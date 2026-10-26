@@ -118,7 +118,9 @@ func _setup_line() -> void:
 	row.add_child(_line_face)
 	_line_text = CartoonTheme.label("", "button", CartoonTheme.text("hud"))
 	_line_text.name = "StepText"
-	_line_text.clip_text = true
+	# Dos lineas como mucho (en 640x360 una sola se cortaba casi siempre).
+	_line_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_line_text.max_lines_visible = 2
 	_line_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_line_text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_line_text)
@@ -189,7 +191,12 @@ func refresh_line() -> void:
 	var font := _line_text.get_theme_font("font")
 	var fsize := _line_text.get_theme_font_size("font_size")
 	var w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x if font != null else max_w
-	_line_text.custom_minimum_size.x = minf(w + 2.0, max_w)
+	# Si no cabe en una linea, se parte en dos: el ancho se reparte (con un
+	# minimo) en vez de cortar con "...".
+	if w + 2.0 <= max_w:
+		_line_text.custom_minimum_size.x = w + 2.0
+	else:
+		_line_text.custom_minimum_size.x = clampf(w * 0.62, max_w * 0.7, max_w)
 	var why := HelpText.live_text(String(text.get("why", "")))
 	var tip := String(p["title"])
 	if why != "":
