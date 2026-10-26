@@ -67,8 +67,25 @@ const LINE := [
 	{"kind": "build", "id": "refinery", "count": 1, "why": "OBJ_WHY_REFINERY"},
 	{"kind": "build", "id": "tower", "count": 2, "needs": "storm", "why": "OBJ_WHY_TOWERS"},
 	{"kind": "build", "id": "headquarters", "count": 1, "why": "OBJ_WHY_HQ"},
-	{"kind": "upgrade", "id": "headquarters", "level": 2, "why": "OBJ_WHY_HQ_2"},
+	# Los edificios de las campanas de Mar y Aire, en cuanto el CG esta en pie
+	# (feat/ritmo-colono): asi sus barcos y aviones se entrenan mientras se juega
+	# Tierra, y no despues (medido: el Astillero llegaba al acabar Tierra).
+	{"kind": "build", "id": "shipyard", "count": 1, "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_BUILDING"},
+	{"kind": "build", "id": "aerodrome", "count": 1, "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_BUILDING"},
+	# Los seis tanques del final, antes de las campanas (feat/ritmo-colono): son la
+	# columna que gana Tierra de corrido (2 canones + 4 tanques, 100 %, docs/15
+	# §13) y despues aguantan el asedio.
 	{"kind": "train", "id": "vehicle", "count": 6, "needs": "audit", "why": "OBJ_WHY_ARMOUR"},
+	# Una sola llave y los capitulos (feat/ritmo-colono): las piezas del CG nivel 3
+	# van en la linea, con el CG ya en pie y los tanques en casa: se juegan
+	# mientras el CG junta lo de sus niveles 2 y 3, no despues. Tierra cierra el
+	# capitulo II. Hecha = la pieza en casa. Medido (docs/22 §17): con la de Tierra
+	# antes del CG, o antes de los tanques, el jefe de Tierra se perdia una y otra
+	# vez y la partida se iba de 6 h.
+	{"kind": "campaign", "id": "land", "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_FOR_AUDIT"},
+	{"kind": "campaign", "id": "sea", "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_FOR_AUDIT"},
+	{"kind": "campaign", "id": "air", "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_FOR_AUDIT"},
+	{"kind": "upgrade", "id": "headquarters", "level": 2, "why": "OBJ_WHY_HQ_2"},
 	# Las torres que el asedio aprovecha: cada una manda una dotacion de
 	# artilleria, y con la guarnicion mermada caben mas en el tablero
 	# (GameConfig.storm_tower_garrison_max). Es la preparacion del final
@@ -194,11 +211,10 @@ static func _next(support: bool) -> Dictionary:
 	if not sortie.is_empty():
 		return sortie
 
-	# ── Las tres campanas (feat/tres-campanas) ──
-	# El Cuartel General ya esta a nivel 3 y el Ataque Final espera a las
-	# campanas que faltan: lo siguiente es una de ellas (su edificio, su tropa o
-	# su mision). Antes del nivel 3 las campanas van en la segunda linea
-	# (campaign_step) y la linea principal no cambia.
+	# ── Las piezas del Cuartel General (una sola llave, feat/ritmo-colono) ──
+	# Lo siguiente de la linea es el CG nivel 3 y le faltan piezas: lo siguiente
+	# es la campana que la tiene (su edificio, su tropa o su mision). Antes, las
+	# campanas van en la segunda linea (campaign_step) y la linea no cambia.
 	var gate: Dictionary = campaign_gate_step()
 	if not gate.is_empty():
 		return _wrap(gate, support) if String(gate["kind"]) != "campaign" else gate
@@ -215,6 +231,11 @@ static func _wrap(target: Dictionary, support: bool) -> Dictionary:
 	return _support_or(target) if support else target
 
 static func _support_or(target: Dictionary) -> Dictionary:
+	# Tropa con el ejercito al tope (feat/ritmo-colono): entrenarla es imposible
+	# hasta tener sitio. Otro Cuartel da 8 de tope (los primeros tres; luego 4).
+	var room: Dictionary = army_room_step(target)
+	if not room.is_empty():
+		target = room
 	# Lo que el edificio pide en pie antes (GameConfig.building_prerequisites)
 	# va primero: si no, el panel pedia algo que el juego rechaza al hacer clic
 	# y la partida se quedaba ahi para siempre.
@@ -471,23 +492,55 @@ static func sortie_step() -> Dictionary:
 		return {}
 	return {"kind": "sortie_offer", "why": reason}
 
-## ── Las tres campanas (feat/tres-campanas) ──
+## ── Las tres campanas (feat/tres-campanas) y sus piezas (feat/ritmo-colono) ──
 
-## El paso de las campanas cuando el Ataque Final solo espera por ellas (el
-## Cuartel General ya esta a nivel 3). {} si no toca. Elige la campana que se
-## puede jugar ya (si no, la primera que falte) y pide, por orden, su edificio,
-## tropa de su medio o la mision.
-static func campaign_gate_step() -> Dictionary:
+## ¿Lo siguiente de la linea es subir el Cuartel General al nivel 3 y le faltan
+## piezas? Es cuando las campanas pasan a ser el paso principal.
+static func hq3_waits_for_pieces() -> bool:
 	if not GameMode.audit_needs_campaigns() or ProgressionManager.final_audit != null:
-		return {}
-	if not ProgressionManager.is_milestone_completed("hq_max"):
-		return {}
-	if CombatManager.campaigns_all_complete():
+		return false
+	if ProgressionManager.is_milestone_completed("hq_max"):
+		return false
+	if CombatManager.hq_missing_pieces(GameConfig.max_building_level).is_empty():
+		return false
+	var target: Dictionary = _first_open_line_step()
+	return String(target.get("kind", "")) == "upgrade" and String(target.get("id", "")) == "headquarters" \
+		and int(target.get("level", 0)) >= GameConfig.max_building_level
+
+## Las campanas cuya pieza es ahora el paso principal (feat/ritmo-colono: las
+## piezas van en la linea, LINE, con el CG en pie y antes de su nivel 2). Todas
+## las que falten (la de Tierra primero si se puede jugar; mientras descansa, se
+## prepara o se juega otra), o [] si no toca. Tambien si lo siguiente de la linea
+## es el CG nivel 3 y le faltan piezas (un guardado que ya paso esas entradas).
+static func gate_domains() -> Array:
+	if not GameMode.audit_needs_campaigns() or ProgressionManager.final_audit != null:
+		return []
+	if ProgressionManager.is_milestone_completed("hq_max"):
+		return []
+	var missing: Array = CombatManager.hq_missing_pieces(GameConfig.max_building_level)
+	if missing.is_empty():
+		return []
+	if String(_first_open_line_step().get("kind", "")) == "campaign" or hq3_waits_for_pieces():
+		return missing
+	return []
+
+## El paso de las campanas cuando su pieza es el paso principal (gate_domains:
+## la meta del capitulo, o el CG nivel 3 esperando). {} si no toca. Elige la
+## campana sin pieza que se puede jugar ya (si no, la primera que falte) y pide,
+## por orden, su edificio, tropa de su medio o la mision.
+static func campaign_gate_step() -> Dictionary:
+	return campaign_gate_step_for(gate_domains())
+
+## El paso de las campanas entre las de `gated` (las que son paso principal).
+## Publico para las pruebas: la linea no hace falta montarla para probar la
+## eleccion de campana y su preparacion.
+static func campaign_gate_step_for(gated: Array) -> Dictionary:
+	if gated.is_empty():
 		return {}
 	var domain: String = ""
 	var playable := false
 	for d in GameConfig.CAMPAIGN_DOMAINS:
-		if CombatManager.is_campaign_complete(String(d)):
+		if CombatManager.is_campaign_complete(String(d)) or not gated.has(String(d)):
 			continue
 		if domain == "":
 			domain = String(d)
@@ -508,7 +561,7 @@ static func campaign_gate_step() -> Dictionary:
 	if not playable and String(step.get("kind", "")) in ["campaign", "train"]:
 		var preps: Array = []
 		for d in GameConfig.CAMPAIGN_DOMAINS:
-			if String(d) == domain or CombatManager.is_campaign_complete(String(d)):
+			if String(d) == domain or CombatManager.is_campaign_complete(String(d)) or not gated.has(String(d)):
 				continue
 			preps.append(campaign_need_step(String(d), "OBJ_WHY_CAMPAIGN_FOR_AUDIT"))
 		for prep in preps:
@@ -610,7 +663,7 @@ static func campaign_boss_step(domain: String) -> Dictionary:
 	var unit_id: String = campaign_boss_need(domain)
 	if unit_id == "":
 		return {}
-	if not ExpeditionGenerator.campaign_is_boss_mission(domain, CombatManager.campaign_won(domain)):
+	if not ExpeditionGenerator.campaign_is_boss_mission(domain, CombatManager.get_campaign_book().next_mission(domain)):
 		return {}
 	if not ArmyManager.is_unlocked(unit_id):
 		return {}
@@ -619,7 +672,13 @@ static func campaign_boss_step(domain: String) -> Dictionary:
 	return _army_step(unit_id, _army_count(unit_id) - away + wanted, "OBJ_WHY_CAMPAIGN_BOSS_HEAVY", "train")
 
 ## "Para llamar al Ataque Final: ...", o "" si no falta nada (o no hay asedio).
+## Con piezas por conseguir, primero eso: "Para el CG 3 te faltan: pieza de Mar,
+## pieza de Aire".
 static func final_gate_text() -> String:
+	var pieces: String = CombatManager.hq_pieces_text()
+	if pieces != "" and not ProgressionManager.is_milestone_completed("hq_max") \
+			and ProgressionManager.final_audit == null and GameMode.audit_enabled():
+		return pieces
 	return ProgressionManager.final_audit_gate_text()
 
 ## El candado de una campana en palabras, con su cifra (lo mismo que dice el
@@ -636,7 +695,8 @@ static func campaign_lock_text(domain: String) -> String:
 			var data: BuildingData = Rules.load_building_data(CombatManager.campaign_building(domain))
 			return Tr.t("CAMP_LOCK_BUILDING") % (building_a(CombatManager.campaign_building(domain)) if data != null else CombatManager.campaign_building(domain))
 		"CAMP_LOCK_ERA":
-			return Tr.t("CAMP_LOCK_ERA") % ExpeditionGenerator.campaign_mission_era(domain, CombatManager.campaign_won(domain))
+			return Tr.t("CAMP_LOCK_ERA") % ExpeditionGenerator.campaign_mission_era(domain,
+				maxi(0, CombatManager.get_campaign_book().next_mission(domain)))
 		"CAMP_LOCK_REST":
 			var left: int = ceili(CombatManager.campaign_rest_left(domain))
 			return Tr.t("CAMP_LOCK_REST") % [left / 60, left % 60]
@@ -716,6 +776,9 @@ static func _first_open_line_step() -> Dictionary:
 					var step := _army_step(_garrison_unit(entry), int(entry["count"]), String(entry["why"]), "train")
 					step["any"] = bool(entry.get("any", false))
 					return step
+			"campaign":
+				if not _line_entry_done(entry):
+					return entry.duplicate()
 	return {}
 
 ## Cuantos pide una entrada de la linea. Las torres del asedio salen de
@@ -750,6 +813,8 @@ static func _entry_applies(entry: Dictionary) -> bool:
 			return not GameMode.tithe_enabled()
 		"audit":
 			return GameMode.audit_enabled()
+		"pieces":
+			return GameMode.audit_needs_campaigns()
 	return true
 
 ## Cuantas unidades cuentan para un paso de tropa: las de su tipo, o todas si el
@@ -1420,6 +1485,21 @@ static func _needs_unlocked(building_id: String) -> String:
 static func _army_step(unit_id: String, count: int, why: String, kind: String) -> Dictionary:
 	return {"kind": kind, "id": unit_id, "count": count, "why": why}
 
+## Un paso de tropa con el ejercito al tope: "Construye otro Cuartel" (mas tope
+## de tropa). {} si no es de tropa, si cabe o si no se puede levantar otro.
+static func army_room_step(step: Dictionary) -> Dictionary:
+	if not String(step.get("kind", "")) in ["train", "rebuild"]:
+		return {}
+	if String(ArmyManager.can_train(String(step.get("id", ""))).get("reason", "")) != "LBL_ARMY_AT_CAP":
+		return {}
+	if ArmyManager.get_capacity() >= GameConfig.army_capacity_max_total:
+		return {}
+	var limit: int = GameConfig.get_building_limit("barracks")
+	var have: int = Rules.count_building("barracks")
+	if limit >= 0 and have >= limit:
+		return {}
+	return {"kind": "build", "id": "barracks", "count": have + 1, "why": "OBJ_WHY_ARMY_ROOM"}
+
 ## La tropa de su medio que hay en casa ya sale "Favorable" en la prevision de
 ## la siguiente mision (fuerza de columna, CombatManager.sortie_preview).
 static func campaign_home_favorable(domain: String) -> bool:
@@ -1506,6 +1586,11 @@ static func route() -> Array:
 		var sortie_after: bool = not sortie_placed and String(entry.get("sortie_row", "")) == "after"
 		var done: bool = _line_entry_done(entry)
 		var row := {"text": describe(entry)["title"], "done": done, "current": false}
+		# Una pieza del CG nivel 3: "Planos del Bastion (jefe de la Campana de Tierra)".
+		if String(entry["kind"]) == "campaign":
+			var d: String = String(entry["id"])
+			row["text"] = Tr.t("OBJ_ROUTE_PIECE") % (Tr.t("PIECE_FROM_BOSS") % [CombatManager.piece_name(d),
+				Tr.t("CAMP_NAME_" + d.to_upper())])
 		# En EL CAMINO cada fila es un paso: "Construye:" delante de cada
 		# edificio sobraba (2026-10-04). Basta el nombre.
 		if String(entry["kind"]) == "build":
@@ -1528,15 +1613,6 @@ static func route() -> Array:
 				first_row["current"] = true
 				current_found = true
 			rows.append(first_row)
-	# Tres campanas: la otra llave del Ataque Final, en una fila.
-	if GameMode.audit_needs_campaigns():
-		var camps_done: bool = CombatManager.campaigns_all_complete() or ProgressionManager.final_audit != null
-		var camp_row := {"text": Tr.t("OBJ_ROUTE_CAMPAIGNS") % CombatManager.campaigns_completed_count(),
-			"done": camps_done, "current": false}
-		if not camps_done and not current_found and ProgressionManager.is_milestone_completed("hq_max"):
-			camp_row["current"] = true
-			current_found = true
-		rows.append(camp_row)
 	if GameMode.audit_enabled():
 		var won: bool = StormManager.is_halted()
 		rows.append({"text": Tr.t("OBJ_ROUTE_FINAL"), "done": won, "current": not current_found and not won})
@@ -1553,6 +1629,9 @@ static func _line_entry_done(entry: Dictionary) -> bool:
 			return node != null and int(node.get_meta("level", 1)) >= int(entry["level"])
 		"train":
 			return _train_progress(entry) >= int(entry["count"])
+		"campaign":
+			return CombatManager.has_campaign_piece(String(entry["id"])) \
+				or ProgressionManager.is_milestone_completed("hq_max") or ProgressionManager.final_audit != null
 	return false
 
 ## Como conseguir `res` (un recurso o un material del taller), en una linea
@@ -1629,7 +1708,7 @@ static func describe(step: Dictionary) -> Dictionary:
 		"campaign":
 			var domain: String = String(step.get("id", "land"))
 			title = Tr.t("OBJ_DO_CAMPAIGN") % [Tr.t(ExpeditionGenerator.campaign_mission_name_key(domain,
-				maxi(0, CombatManager.campaign_won(domain)))), Tr.t("CAMP_NAME_" + domain.to_upper())]
+				maxi(0, CombatManager.get_campaign_book().next_mission(domain)))), Tr.t("CAMP_NAME_" + domain.to_upper())]
 		"contract":
 			# "Entrega el encargo de los vecinos": el nombre del tablon va en minuscula.
 			var src_name: String = Tr.t("CONTRACT_SRC_" + String(step.get("id", "")).to_upper())
@@ -1672,7 +1751,14 @@ static func describe(step: Dictionary) -> Dictionary:
 			var how: Array = how_lines(Rules.missing_cost(data))
 			if not how.is_empty():
 				block_text += "\n" + "\n".join(how)
-	return {"title": title, "why": Tr.t(why), "blocker": block_text}
+	var why_text: String = Tr.t(why)
+	# Una sola llave: delante del porque, las piezas que le faltan al CG nivel 3
+	# ("Para el CG 3 te faltan: pieza de Mar, pieza de Aire").
+	if why == "OBJ_WHY_CAMPAIGN_FOR_AUDIT" or why == "OBJ_WHY_HQ_3":
+		var pieces: String = CombatManager.hq_pieces_text()
+		if pieces != "":
+			why_text = pieces + "\n" + why_text
+	return {"title": title, "why": why_text, "blocker": block_text}
 
 ## Por que no se puede dar el paso ahora, o "" si se puede.
 static func blocker(step: Dictionary) -> String:
@@ -1690,6 +1776,9 @@ static func blocker(step: Dictionary) -> String:
 			var node: Node = upgrade_node(step)
 			if node != null and ProductionManager.is_constructing(node):
 				return Tr.t("OBJ_IN_PROGRESS")
+			if String(step.get("id", "")) == "headquarters" \
+					and not CombatManager.hq_missing_pieces(int(step.get("level", 0))).is_empty():
+				return CombatManager.hq_pieces_text()
 			var total: int = _cost_total(step_cost(step))
 			if total > ResourceManager.get_storage_cap():
 				return Tr.t("OBJ_BAG_TOO_SMALL") % [total, ResourceManager.get_storage_cap()]

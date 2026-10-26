@@ -8,6 +8,7 @@ extends Node
 ## FinalAudit itself never emits (constitution, principles I and IV).
 
 const FinalAuditScript := preload("res://scripts/combat/FinalAudit.gd")
+const Chapters := preload("res://scripts/services/Chapters.gd")
 
 var current_era := 1
 var current_phase: int = GameConfig.Phase.FOUNDATION
@@ -23,6 +24,11 @@ var _start_time := 0.0
 ## pared menos la de creacion, asi que una partida de tres horas repartida en una
 ## semana ponia "7 dias jugados". Viaja en el guardado.
 var _played_seconds := 0.0
+## Capitulos ya cerrados (feat/ritmo-colono): 1..3. Viaja en el guardado
+## (`progression.chapters`) para no repetir la pantalla de cierre. Un guardado de
+## antes no lo trae: al cargar se dan por cerrados, en silencio, los que ya esten
+## cumplidos.
+var chapters_closed: Array = []
 
 func _process(delta: float) -> void:
 	if GameManager.is_started():
@@ -38,9 +44,11 @@ func _ready() -> void:
 	EventBus.market_trade_completed.connect(_on_trade_completed)
 	EventBus.building_placed.connect(_on_building_placed)
 	EventBus.resource_changed.connect(_on_resource_changed)
-	# Tres campanas (feat/tres-campanas): completar una puede ser lo ultimo que
-	# faltaba para el Ataque Final (en el orden que sea).
-	EventBus.campaign_completed.connect(func(_domain): try_summon_final_audit())
+	# Una sola llave (feat/ritmo-colono): el Ataque Final llega con el CG nivel 3,
+	# que ya pide las piezas. Completar una campana cierra quiza un capitulo.
+	EventBus.campaign_completed.connect(func(_domain): check_chapters())
+	EventBus.victory_achieved.connect(func(_stats): check_chapters())
+	EventBus.game_load_completed.connect(_sync_chapters_silently)
 
 # ── Era System ──
 
@@ -50,11 +58,13 @@ func _check_era_advance(building_id: String) -> void:
 		ResourceManager.unlock(ResourceManager.Type.STEEL)
 		_complete_milestone("era_2")
 		EventBus.era_advanced.emit(2)
+		check_chapters()
 	elif current_era == 2 and building_id == "refinery":
 		current_era = 3
 		ResourceManager.unlock(ResourceManager.Type.OIL)
 		_complete_milestone("era_3")
 		EventBus.era_advanced.emit(3)
+		check_chapters()
 
 # ── Milestones ──
 
@@ -75,6 +85,7 @@ func _complete_milestone(milestone_id: String) -> void:
 				_announce_audit_waiting()
 		elif GameMode.capstone_wins():
 			_trigger_victory()
+		check_chapters()
 
 func _check_phase_advance(milestone_id: String) -> void:
 	for phase in GameConfig.phase_triggers:
@@ -113,22 +124,21 @@ func _check_military_milestone() -> void:
 ## Everything here is thin on purpose: the rules live in FinalAudit, this service
 ## only drives it and republishes what it returns.
 
-## ── La condicion del Ataque Final (feat/tres-campanas) ──
-## Las dos llaves: el Cuartel General a nivel 3 (hito hq_max) y, donde el modo lo
-## pida (GameMode.audit_needs_campaigns), las tres campanas completas. Da igual
-## el orden: se mira al cumplirse cada una.
+## ── La condicion del Ataque Final: una sola llave (feat/ritmo-colono) ──
+## Antes (feat/tres-campanas) habia dos llaves: el CG nivel 3 y las tres campanas
+## completas. Desde 2026-10-25 (decision de Bryan) hay una: el Cuartel General a
+## nivel 3. Las campanas entran por el CG: cada jefe entrega una pieza y el nivel
+## 3 las pide (GameConfig.hq_needs_pieces, donde GameMode.audit_needs_campaigns).
+## Un guardado viejo con el CG ya a nivel 3 y campanas a medias puede llamar al
+## Ataque Final: ya pago su llave.
 
-## ¿Estan las dos llaves? (Sin contar si ya hay asedio.)
+## ¿Esta la llave? (Sin contar si ya hay asedio.)
 func final_audit_ready() -> bool:
-	if not milestones_completed.has("hq_max"):
-		return false
-	if GameMode.audit_needs_campaigns() and not CombatManager.campaigns_all_complete():
-		return false
-	return true
+	return milestones_completed.has("hq_max")
 
 ## Convoca el Ataque Final si toca por primera vez: el modo lo tiene, no hay ya
 ## uno (convocado, en marcha, perdido o ganado: eso lo lleva su propio camino),
-## la Tormenta no esta parada y las dos llaves estan. true si lo convoco.
+## la Tormenta no esta parada y la llave esta. true si lo convoco.
 func try_summon_final_audit() -> bool:
 	if not GameMode.audit_enabled() or final_audit != null or StormManager.is_halted():
 		return false
@@ -137,19 +147,18 @@ func try_summon_final_audit() -> bool:
 	return summon_final_audit()
 
 ## Lo que falta para el Ataque Final, una cosa por elemento y ya traducida
-## ("Cuartel General a nivel 3", "Campana de Mar 2/5", "Campana de Aire: sin
-## empezar"). Vacio si no falta nada o si el modo no tiene asedio.
+## ("Cuartel General a nivel 3", y antes las piezas que pide: "Casco del Leviatan
+## (jefe del Mar)"). Vacio si no falta nada o si el modo no tiene asedio.
 func final_audit_missing() -> Array:
 	var out: Array = []
 	if not GameMode.audit_enabled() or final_audit != null:
 		return out
-	if not milestones_completed.has("hq_max"):
-		out.append(Tr.t("AUDIT_NEEDS_HQ3"))
-	if GameMode.audit_needs_campaigns():
-		for domain in GameConfig.CAMPAIGN_DOMAINS:
-			if CombatManager.is_campaign_complete(String(domain)):
-				continue
-			out.append(campaign_status_text(String(domain)))
+	if milestones_completed.has("hq_max"):
+		return out
+	for domain in CombatManager.hq_missing_pieces(GameConfig.max_building_level):
+		out.append(Tr.t("PIECE_FROM_BOSS") % [CombatManager.piece_name(String(domain)),
+			Tr.t("CAMP_NAME_" + String(domain).to_upper())])
+	out.append(Tr.t("AUDIT_NEEDS_HQ3"))
 	return out
 
 ## "Para llamar al Ataque Final: ..." con lo que falta, o "" si no falta nada.
@@ -171,7 +180,8 @@ static func campaign_status_text(domain: String) -> String:
 		return Tr.t("CAMP_STATUS_NOT_STARTED") % title
 	return Tr.t("CAMP_STATUS_PROGRESS") % [title, won, total]
 
-## El Cuartel General llego a nivel 3 pero faltan campanas: se dice cuales.
+## El Cuartel General llego a nivel 3 pero el Ataque Final no se convoco (la
+## Tormenta parada, un asedio de antes): se dice que falta, si falta algo.
 func _announce_audit_waiting() -> void:
 	var text: String = final_audit_gate_text()
 	if text == "":
@@ -329,6 +339,37 @@ func _audit_seed() -> int:
 func _read_morale() -> float:
 	return float(PopulationManager.get_morale())
 
+# ── Capitulos (feat/ritmo-colono, scripts/services/Chapters.gd) ──
+
+## Cierra los capitulos cumplidos, en orden y de uno en uno: el II no se cierra
+## antes que el I. Emite `chapter_completed` por cada uno que cierra. Se llama
+## al cambiar de era, al completar una campana, con el CG nivel 3 y al ganar.
+func check_chapters() -> void:
+	if not Chapters.enabled():
+		return
+	for n in range(1, Chapters.COUNT + 1):
+		if chapters_closed.has(n):
+			continue
+		if not Chapters.is_done(n):
+			return
+		chapters_closed.append(n)
+		EventBus.chapter_completed.emit(n)
+
+## Al cargar: los capitulos ya cumplidos se dan por cerrados SIN pantalla (un
+## guardado de antes de los capitulos, o uno que se guardo justo al cumplirse).
+func _sync_chapters_silently() -> void:
+	if not Chapters.enabled():
+		return
+	for n in range(1, Chapters.COUNT + 1):
+		if chapters_closed.has(n):
+			continue
+		if not Chapters.is_done(n):
+			return
+		chapters_closed.append(n)
+
+func is_chapter_closed(n: int) -> bool:
+	return chapters_closed.has(n)
+
 # ── Victory ──
 
 ## Reached only through the final audit now. Nothing else emits it.
@@ -402,6 +443,7 @@ func get_save_data() -> Dictionary:
 		"start_time": _start_time,
 		"played_seconds": _played_seconds,
 		"final_audit": final_audit.to_dict() if final_audit != null else {},
+		"chapters": chapters_closed.duplicate(),
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -413,6 +455,14 @@ func load_save_data(data: Dictionary) -> void:
 	_start_time = data.get("start_time", Time.get_unix_time_from_system())
 	# Un guardado anterior no sabe cuanto se jugo: empieza a contar desde aqui.
 	_played_seconds = maxf(0.0, float(data.get("played_seconds", 0.0)))
+	# Capitulos cerrados (sin la clave, ninguno: se derivan al terminar la carga).
+	chapters_closed = []
+	var ch: Variant = data.get("chapters", [])
+	if ch is Array:
+		for v in ch:
+			var n: int = int(v)
+			if n >= 1 and n <= Chapters.COUNT and not chapters_closed.has(n):
+				chapters_closed.append(n)
 	# A save older than the audit has no key, which simply means "never summoned"
 	# and is not something to migrate (constitution, principle V).
 	final_audit = FinalAuditScript.from_dict(data.get("final_audit", {}), current_era)
@@ -442,6 +492,7 @@ func reset() -> void:
 	_stats = {"buildings_built": 0, "resources_gathered": 0, "trades_completed": 0}
 	_start_time = Time.get_unix_time_from_system()
 	_played_seconds = 0.0
+	chapters_closed = []
 
 # ── Helpers ──
 

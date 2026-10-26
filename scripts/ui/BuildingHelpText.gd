@@ -181,6 +181,11 @@ static func upgrade_block_lines(data: BuildingData, node: Node) -> Array:
 	if ProductionManager.is_constructing(node):
 		out.append(Tr.t("TOPE_UPGRADING"))
 		return out
+	# Una sola llave (feat/ritmo-colono): el CG nivel 3 pide las piezas de los
+	# jefes de campana. "Para el CG 3 te faltan: pieza de Mar, pieza de Aire".
+	if data.id == "headquarters" and not CombatManager.hq_missing_pieces(level + 1).is_empty():
+		out.append(CombatManager.hq_pieces_text())
+		out.append(Tr.t("HQ3_PIECES_HOW"))
 	var cost := GameConfig.get_upgrade_cost(data, level + 1)
 	# Cabe en el almacen? Lo que cuenta es la bolsa compartida (los materiales y
 	# los repuestos van aparte). El nivel 3 del Cuartel General pide la bolsa entera.
@@ -219,11 +224,14 @@ static func upgrade_block_lines(data: BuildingData, node: Node) -> Array:
 
 ## Lo que cuesta subir el Cuartel General a `level` en la bolsa compartida (oro,
 ## acero, petroleo y madera; los materiales van aparte).
+## Lo de la bolsa del nivel `level` del CG, con la rebaja del nivel de la
+## Campana (hq_resource_mult, feat/ritmo-colono): el mismo coste que se cobra.
 static func hq_bag_cost(level: int) -> int:
-	var raw: Dictionary = GameConfig.hq_upgrade_costs.get(level, {})
+	var hq: BuildingData = load("res://data/buildings/headquarters.tres")
+	var cost: Dictionary = GameConfig.get_upgrade_cost(hq, level) if hq != null else {}
 	var total := 0
 	for res_id in ["gold", "steel", "oil", "wood"]:
-		total += int(raw.get(res_id, 0))
+		total += int(cost.get(ResourceManager.name_to_type(res_id), 0))
 	return total
 
 ## Cambia las marcas {HQ2_COST} y {HQ3_COST} de un texto por el coste real del

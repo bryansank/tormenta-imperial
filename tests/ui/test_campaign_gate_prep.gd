@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
-## Ronda de la 1.1 (sonda de linea, 2026-10-18): con el Cuartel General a nivel 3,
-## mientras la campana que toca solo espera (su tropa descansa), ¿QUE HACER? pide
+## Ronda de la 1.1 (sonda de linea, 2026-10-18): con las campanas como paso
+## principal (desde feat/ritmo-colono, las piezas del CG en la linea; aqui se
+## prueba la eleccion con campaign_gate_step_for), mientras la campana que toca solo espera (su tropa descansa), ¿QUE HACER? pide
 ## preparar otra que falte (su edificio o su tropa) en vez de quedarse en "la
 ## mision" hasta que acabe el descanso. ArmyManager cuenta edificios en el
 ## "BuildingPlacer" de la escena actual: se aparca uno de mentira.
@@ -19,6 +20,7 @@ var _saved_army: Dictionary = {}
 var _saved_campaigns: Dictionary = {}
 var _saved_era := 1
 var _saved_mode := 0
+var _saved_hq_built := false
 var _saved_hq_max := false
 var _saved_first_sortie := false
 
@@ -27,11 +29,13 @@ func before_test() -> void:
 	_saved_campaigns = CombatManager.get_campaigns_save_data()
 	_saved_era = ProgressionManager.current_era
 	_saved_mode = GameMode.current
-	_saved_hq_max = bool(ProgressionManager.milestones_completed.get("hq_max", false))
+	_saved_hq_built = bool(ProgressionManager.milestones_completed.get("hq_built", false))
 	_saved_first_sortie = TutorialManager.first_sortie_done
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
 	ProgressionManager.current_era = 3
-	ProgressionManager.milestones_completed["hq_max"] = true
+	ProgressionManager.milestones_completed["hq_built"] = true
+	_saved_hq_max = bool(ProgressionManager.milestones_completed.get("hq_max", false))
+	ProgressionManager.milestones_completed.erase("hq_max")
 	TutorialManager.first_sortie_done = true
 	_scene = get_tree().current_scene
 	if _scene == null:
@@ -54,10 +58,12 @@ func after_test() -> void:
 	ArmyManager.load_save_data(_saved_army)
 	CombatManager.load_campaigns_save_data(_saved_campaigns)
 	ProgressionManager.current_era = _saved_era
+	if _saved_hq_built:
+		ProgressionManager.milestones_completed["hq_built"] = true
+	else:
+		ProgressionManager.milestones_completed.erase("hq_built")
 	if _saved_hq_max:
 		ProgressionManager.milestones_completed["hq_max"] = true
-	else:
-		ProgressionManager.milestones_completed.erase("hq_max")
 	TutorialManager.first_sortie_done = _saved_first_sortie
 	GameMode.current = _saved_mode
 
@@ -68,10 +74,10 @@ func test_while_one_campaign_rests_the_panel_prepares_the_next() -> void:
 	ArmyManager.load_save_data({"units": {"gunboat": 3, "torpedo_boat": 1}})
 	var now: float = ProgressionManager.get_played_seconds()
 	CombatManager.load_campaigns_save_data({"seed": 7,
-		"progress": {"land": GameConfig.campaign_mission_count("land"), "sea": 1, "air": 0},
+		"progress": {"land": GameConfig.campaign_base_count("land"), "sea": 1, "air": 0},
 		"next_at": {"land": 0.0, "sea": now + 600.0, "air": 0.0}})
 	assert_str(CombatManager.campaign_lock_reason("sea")).is_equal("CAMP_LOCK_REST")
-	var gate: Dictionary = Objectives.campaign_gate_step()
+	var gate: Dictionary = Objectives.campaign_gate_step_for(CombatManager.missing_campaign_pieces())
 	assert_str(String(gate.get("kind", ""))).is_equal("build")
 	assert_str(String(gate.get("id", ""))).is_equal("aerodrome")
 
@@ -82,8 +88,8 @@ func test_a_campaign_ready_to_launch_still_comes_first() -> void:
 	_placer.counts = {"barracks": 1, "shipyard": 1}
 	ArmyManager.load_save_data({"units": {"gunboat": 4, "torpedo_boat": 2}})
 	CombatManager.load_campaigns_save_data({"seed": 7,
-		"progress": {"land": GameConfig.campaign_mission_count("land"), "sea": 1, "air": 0}})
-	var gate: Dictionary = Objectives.campaign_gate_step()
+		"progress": {"land": GameConfig.campaign_base_count("land"), "sea": 0, "air": 0}})
+	var gate: Dictionary = Objectives.campaign_gate_step_for(CombatManager.missing_campaign_pieces())
 	assert_str(String(gate.get("kind", ""))).is_equal("campaign")
 	assert_str(String(gate.get("id", ""))).is_equal("sea")
 
@@ -93,8 +99,8 @@ func test_a_small_fleet_is_asked_to_grow_before_the_mission() -> void:
 	_placer.counts = {"barracks": 1, "shipyard": 1, "aerodrome": 1}
 	ArmyManager.load_save_data({"units": {"gunboat": 3, "torpedo_boat": 1}})
 	CombatManager.load_campaigns_save_data({"seed": 7,
-		"progress": {"land": GameConfig.campaign_mission_count("land"), "sea": 1, "air": 0}})
+		"progress": {"land": GameConfig.campaign_base_count("land"), "sea": 1, "air": 0}})
 	if Objectives.campaign_home_favorable("sea"):
 		return
-	var gate: Dictionary = Objectives.campaign_gate_step()
+	var gate: Dictionary = Objectives.campaign_gate_step_for(CombatManager.missing_campaign_pieces())
 	assert_str(String(gate.get("kind", ""))).is_equal("train")

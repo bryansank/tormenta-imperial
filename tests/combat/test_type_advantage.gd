@@ -158,6 +158,10 @@ func test_auto_resolver_hits_with_the_same_multipliers() -> void:
 		if ev.get("e", "") == "unit_attacked" and int(ev["attacker"]) == gun_uid:
 			hits.append(int(ev["damage"]))
 	assert_array(hits).is_not_empty()
-	# Con ventaja: 14 al blindado a pecho descubierto, 6 si esta en guardia.
+	# Con ventaja: 14 al blindado a pecho descubierto, 6 si esta en guardia; con
+	# el azar del dano (feat/ritmo-colono), dentro de su rango.
+	var s: float = GameConfig.combat_damage_spread
 	for d in hits:
-		assert_bool(d == 14 or d == 6).override_failure_message("dano %d" % d).is_true()
+		var open_hit: bool = d >= roundi(14.0 * (1.0 - s)) and d <= roundi(14.0 * (1.0 + s))
+		var guard_hit: bool = d >= roundi(6.0 * (1.0 - s)) and d <= roundi(6.0 * (1.0 + s))
+		assert_bool(open_hit or guard_hit).override_failure_message("dano %d" % d).is_true()

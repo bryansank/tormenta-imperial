@@ -1908,11 +1908,22 @@ func get_upgrade_cost(data: BuildingData, to_level: int) -> Dictionary:
 	# HQ has special override costs
 	if data.id == "headquarters" and hq_upgrade_costs.has(to_level):
 		var hq_cost_raw: Dictionary = hq_upgrade_costs[to_level]
+		# Colono pide menos material del taller (regla `hq_material_mult` de
+		# game_tier_rules, feat/ritmo-colono): la era 3 se alargaba esperando
+		# vigas, lingotes y combustible; y `hq_resource_mult` la bolsa (oro, acero,
+		# petroleo, madera): Colono 0,75, asi que su nivel 3 ya no pide la bolsa
+		# entera (Gobernador si: 3.500 = la bolsa maxima sin tecnologias).
+		var mat_mult: float = GameMode.hq_material_mult()
+		var res_mult: float = GameMode.hq_resource_mult()
 		var cost := {}
 		for res_name in hq_cost_raw:
 			var type := ResourceManager.name_to_type(res_name)
 			if type != -1:
-				cost[type] = hq_cost_raw[res_name]
+				var amount: int = int(hq_cost_raw[res_name])
+				var mult: float = mat_mult if ResourceManager.is_material(type) else res_mult
+				if not is_equal_approx(mult, 1.0):
+					amount = maxi(1, roundi(float(amount) * mult))
+				cost[type] = amount
 		return cost
 	var mult: float = upgrade_cost_multiplier[to_level - 1]
 	var cost := {}
@@ -2428,6 +2439,14 @@ var combat_home_coast_seed := 7
 ## filas de en medio (CombatRules.open_sea_terrain). Los barcos los rodean.
 var combat_sea_islets := 3
 
+## Algo de azar en el dano (feat/ritmo-colono, decision de Bryan 2026-10-25,
+## docs/15 §3 "El dano y su azar"): cada golpe sale entre (1 - esto) y (1 + esto)
+## de su dano esperado, con el generador SEMBRADO de su Encounter (misma semilla y
+## mismas jugadas = mismo combate). Antes el combate no tiraba dados y cada mision
+## era un escalon: un 1,5 % de enemigo pasaba del 95 % al 29 % de victorias.
+## 0 = el dano fijo de antes. La vista previa ensena el rango ("-8-11 de 75").
+var combat_damage_spread := 0.12
+
 ## Ventajas por tipo (piedra-papel-tijera, 2026-10-12, docs/15 §3 "Ventaja por
 ## tipo"). El circulo de tierra:
 ##   artilleria > vehiculo : el obus de alto explosivo raja la chapa remachada
@@ -2695,17 +2714,23 @@ var campaign_level_step := 2
 ##     pide enemigos a x2, monstruos por unidad: no se hace.
 ##   * Las de en medio: la columna bien formada de su era gana el 60-100 %, la
 ##     floja (4 infantes, 4 lanchas, 3 cazas) no.
-## El combate no tira dados: cada fila es un escalon, y entre dos cifras de la
-## calibracion la tasa salta. Retocar de 0,02 en 0,02.
+## Desde feat/ritmo-colono (2026-10-25) el dano tira un poco de azar
+## (combat_damage_spread): las filas siguen siendo empinadas pero ya no son un
+## escalon (tierra m3: x1,34 93 %, x1,38 56 %). Recalibradas con el azar
+## (docs/16 "Azar del dano"): tierra m3 1,30 -> 1,36 (99 % -> ~75 %), tierra m5
+## 1,15 -> 1,13 (57 % -> 75 %). Retocar de 0,02 en 0,02.
 var campaign_enemy_mult := {
-	"land": [1.5, 1.7, 1.30, 1.31, 1.15, 0.93],
-	"sea": [1.6, 1.30, 1.25, 1.17, 0.90],
-	"air": [1.4, 1.03, 1.02, 0.97, 0.78],
+	"land": [1.5, 1.7, 1.36, 1.31, 1.13, 0.93],
+	"sea": [1.6, 1.30, 1.25, 1.17, 0.88],
+	"air": [1.4, 1.03, 1.02, 0.97, 0.76],
 }
 ## El jefe de campana: la escala de jefe de siempre (combat_boss_multiplier) por
 ## esto, por medio. Antes 1,10 para todos (0 % de victorias); ahora la columna
 ## bien formada gana el 45-75 % (tierra 2+2+2, mar con acorazados, aire 6 cazas).
-var campaign_boss_extra_scale := {"land": 0.93, "sea": 0.90, "air": 0.78}
+## Con el azar del dano (feat/ritmo-colono) el Leviatan bajo al 48 % y el
+## Zepelin al 46 %: mar 0,90 -> 0,88 (x0,86 82 %, x0,90 51 %) y aire 0,78 -> 0,76
+## (x0,74 97 %, x0,78 42 %), docs/16 "Azar del dano".
+var campaign_boss_extra_scale := {"land": 0.93, "sea": 0.88, "air": 0.76}
 ## Cuantas unidades de su clase pesada lleva el jefe de campana ademas de su
 ## escolta, por medio (antes 2: el jefe era casi solo pesados y no se ganaba).
 var campaign_boss_heavies := {"land": 1, "sea": 1, "air": 1}
@@ -2751,9 +2776,52 @@ func campaign_unit_allowed(domain: String, unit_id: String) -> bool:
 	var targets: Dictionary = stats.get("targets", {})
 	return int(targets.get(domain, -1)) != 0
 
-## Numero de misiones de una campana (jefe incluido).
+## Numero de misiones de una campana EN ESTE NIVEL (jefe incluido): las de
+## campaign_mission_list(). Colono juega menos que Gobernador (feat/ritmo-colono).
 func campaign_mission_count(domain: String) -> int:
+	return campaign_mission_list(domain).size()
+
+## Todas las misiones de la tabla (campaign_defs), jefe incluido: lo que juega
+## Gobernador. Los indices de mision de todo el combate (ofertas, mapas, nombres,
+## eras, escalas) son indices de esta tabla.
+func campaign_base_count(domain: String) -> int:
 	return (campaign_defs.get(domain, {}).get("eras", []) as Array).size()
+
+## Las misiones que se juegan en este nivel, como indices de la tabla, en orden
+## (regla `campaign_missions` de game_tier_rules; sin regla, todas). El jefe (la
+## ultima de la tabla) va siempre: es quien entrega la pieza del Cuartel General.
+## Colono (feat/ritmo-colono, decision de Bryan 2026-10-25): Tierra 4, Mar 2,
+## Aire 2, sin tocar las cifras de cada mision (su escala y su era son las de la
+## tabla, calibradas en docs/15 §13).
+func campaign_mission_list(domain: String) -> Array:
+	var base: int = campaign_base_count(domain)
+	var out: Array = []
+	var rule: Variant = GameMode.tier_rule("campaign_missions")
+	var picked: Variant = (rule as Dictionary).get(domain, null) if rule is Dictionary else null
+	if picked is Array and not (picked as Array).is_empty():
+		for v in picked:
+			var i: int = int(v)
+			if i >= 0 and i < base and not out.has(i):
+				out.append(i)
+		out.sort()
+	else:
+		for i in range(base):
+			out.append(i)
+	if base > 0 and not out.has(base - 1):
+		out.append(base - 1)
+	return out
+
+## Las piezas del Cuartel General nivel 3 (feat/ritmo-colono, decision de Bryan
+## 2026-10-25: "una sola llave"). El jefe de cada campana entrega la suya; el CG
+## nivel 3 las pide las tres ademas de su coste (donde el modo lo pida,
+## GameMode.audit_needs_campaigns) y el Ataque Final llega con el CG nivel 3.
+## Nombres: PIECE_<MEDIO> en Tr ("Planos del Bastion", "Casco del Leviatan",
+## "Motor del Zepelin").
+const CAMPAIGN_PIECES := {"land": "bastion_plans", "sea": "leviathan_hull", "air": "zeppelin_engine"}
+
+## ¿Pide el Cuartel General nivel `to_level` las piezas de las campanas?
+func hq_needs_pieces(to_level: int) -> bool:
+	return to_level >= max_building_level and GameMode.audit_needs_campaigns()
 
 ## La unidad que ¿QUE HACER? propone entrenar para una campana sin tropa en casa.
 var campaign_suggested_unit := {"land": "artillery", "sea": "gunboat", "air": "fighter"}
@@ -2997,6 +3065,15 @@ func get_storm_mitigation(towers: int) -> float:
 var storm_tithe_ratio := 0.25
 ## How many enemies the Assessors field, before severity scaling.
 var storm_tithe_base_force := 3
+## La Visita (feat/ritmo-colono, decision de Bryan 2026-10-25): solo uno de cada
+## tantos Impuestos se pelea en el tablero (el primero de verdad siempre, para
+## ensenar; luego el 4.º, el 7.º...). Los demas los resuelve la guarnicion sola con
+## AutoResolver (las mismas reglas) y el parte de guerra lo cuenta. 1 = todos en el
+## tablero, como antes. La prueba de la era 1 no cuenta: va siempre al tablero.
+var storm_tithe_board_every := 3
+## Segundos (de juego) que se ofrece ¡PELEAR! en un Impuesto con parte automatico
+## antes de resolverlo solo.
+var storm_tithe_choice_seconds := 12.0
 
 ## ── La Cuota Mínima ──
 ## El porcentaje solo no bastaba: con el almacén en cero se llevaban cero, así
@@ -3398,6 +3475,13 @@ func get_storm_loss_refund(cost: Dictionary) -> Dictionary:
 ## 4-5 desde 2026-10-12 (antes 3-5): un final mas exigente (docs/17, "2026-10-12").
 var final_audit_waves := Vector2i(4, 5)
 
+## Las oleadas del asedio en este nivel: las de `final_audit_waves` mas la regla
+## `final_audit_waves_delta` de game_tier_rules (feat/ritmo-colono: Colono -1,
+## es decir 3-4; Gobernador 0). Nunca menos de 1.
+func get_final_audit_waves() -> Vector2i:
+	var delta: int = int(GameMode.tier_rule("final_audit_waves_delta")) if GameMode.tier_rule("final_audit_waves_delta") != null else 0
+	return Vector2i(maxi(1, final_audit_waves.x + delta), maxi(1, final_audit_waves.y + delta))
+
 ## Cuerpos de la primera oleada, y cuantos suma cada oleada siguiente. El techo
 ## real lo pone `combat_deploy_cap`: el tablero sigue siendo el mismo de siempre.
 var final_audit_base_slots := 3
@@ -3436,7 +3520,11 @@ var final_audit_scale_per_era := 0.05
 ## 1.14 desde la ronda final de la 1.1 (2026-10-18, IA nueva + dirigible): con
 ## 1.10 la referencia (6 blindados, 4 torres) ganaba el 90 %; 1.12-1.13 lo mismo
 ## (88-90 %), 1.14 el 82,5 % y 1.15 se desploma al 57,5 % (docs/17 "Ronda final").
-var final_audit_last_wave_multiplier := 1.14
+## 1.06 desde feat/ritmo-colono (2026-10-25): con el azar del dano (±12 %) el
+## asedio de 4-5 oleadas acumula la mala suerte y la referencia caia al 58,5 %
+## con 1.14. Ya no es un escalon: 1.02 86,5 %, 1.06 79,5 %, 1.10 69,5 %, 1.14
+## 58,5 % (docs/17 "Azar del dano").
+var final_audit_last_wave_multiplier := 1.06
 
 ## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
 ## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
@@ -3584,6 +3672,15 @@ var game_mode_rules := {
 ##   audit_enemy_mult        escala de cada oleada de la Auditoria Final
 ## Las cifras de combate salen de tools/siege_probe.gd y tools/balance_probe.gd
 ## (docs/16 y docs/17): con la guarnicion maxima el asedio sigue >= 60 %.
+##   campaign_missions       (feat/ritmo-colono) que misiones de cada campana se
+##                           juegan, como indices de campaign_defs; sin el medio,
+##                           todas. El jefe va siempre.
+##   hq_material_mult        (feat/ritmo-colono) los materiales del taller que
+##                           piden los niveles 2 y 3 del Cuartel General
+##   hq_resource_mult        (feat/ritmo-colono) lo de la bolsa que piden esos
+##                           niveles (oro, acero, petroleo, madera)
+##   final_audit_waves_delta (feat/ritmo-colono) oleadas de mas o de menos en el
+##                           asedio (get_final_audit_waves)
 var game_tier_rules := {
 	"colonist": {
 		"spoilage": false,
@@ -3592,6 +3689,14 @@ var game_tier_rules := {
 		"expedition_enemy_mult": 1.0,
 		"tithe_force_mult": 1.0,
 		"audit_enemy_mult": 1.0,
+		# Colono en 3-4 h, tres capitulos (decision de Bryan 2026-10-25, docs/22
+		# §17): Tierra 4 (m1, m3, m5 y el jefe), Mar 2 y Aire 2 (la de entrada y el
+		# jefe). Medido: con Mar 3 y Aire 3 la linea ganaba en 5 h. Gobernador
+		# juega las 16.
+		"campaign_missions": {"land": [0, 2, 4, 5], "sea": [0, 4], "air": [0, 4]},
+		"hq_material_mult": 0.3,
+		"hq_resource_mult": 0.6,
+		"final_audit_waves_delta": -1,
 	},
 	"governor": {
 		"spoilage": true,
@@ -3606,6 +3711,11 @@ var game_tier_rules := {
 		# 67,5 % (docs/17 "Ronda final"). El Gobernador se nota en las expediciones,
 		# las campanas y el Diezmo; en el asedio, casi nada.
 		"audit_enemy_mult": 1.005,
+		# Gobernador lo juega todo: las 16 misiones y el taller entero del CG.
+		"campaign_missions": {},
+		"hq_material_mult": 1.0,
+		"hq_resource_mult": 1.0,
+		"final_audit_waves_delta": 0,
 	},
 }
 

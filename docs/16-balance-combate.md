@@ -807,3 +807,84 @@ bombardero (vida 95 → 85, o que la cañonera le pegue a 2) y el Puerto con "4 
   favorable, y se perdía siempre.
 - **Reintentos de campaña:** cada derrota en la misión que toca, ×0,95 al enemigo de
   esa misión (suelo ×0,80), mismo mapa (docs/15 §13, docs/22 §15).
+
+## Azar del daño y reintentos (2026-10-25, rama `feat/ritmo-colono`)
+
+Decisión de Bryan tras la crítica (contexto 27, P1-3): el combate iba a escalones.
+Ahora cada golpe sale entre ±`combat_damage_spread` (**0,12**) de su daño esperado,
+con el generador sembrado de su `Encounter` (docs/15 §3 "El daño y su azar"); la
+vista previa enseña el rango. Y el "−5 % al enemigo por derrota"
+(`campaign_retry_ease`) había que **decidirlo con medidas**: quitarlo si el azar ya
+suavizaba.
+
+Cómo se midió: `tools/balance_probe.gd` (sin autoload: `tools/balance_probe_run.gd`,
+un lanzador `-s` que crea la sonda y llama a `_run()`), `--only=campaigns`, Colono, moral 75, AutoResolver con
+la IA a los dos lados, cada combate de campaña sembrado con la semilla de su oferta
+(`--spread=0` = el dano fijo de antes). Opciones nuevas: `--spread=F` y
+`--retry-sim=N [--ease=0]` (la misma oferta, el mismo mapa, hasta N intentos, como
+un jugador que la repite tras perder).
+
+### La columna bien formada, primer intento (100 ofertas por fila)
+
+| Misión | Sin azar | Con azar ±12 % |
+|---|---|---|
+| Tierra m3 (×1,30) | 97 % | 97 % |
+| Tierra m4 (×1,31) | 95 % | 83 % |
+| Tierra m5 (×1,15) | 77 % | 57 % |
+| **Tierra jefe** | 59 % | **63 %** |
+| Mar m2 / m3 | 74 / 74 % | 74 / 73 % |
+| Mar m4 | 86 % | 90 % |
+| **Mar jefe** (Leviatán) | 53 % | **48 %** |
+| Aire m2 / m3 / m4 | 69 / 81 / 83 % | 73 / 79 / 89 % |
+| **Aire jefe** (Zepelín) | 57 % | **46 %** |
+
+Con cien mapas distintos la media apenas se mueve: el azar no cambia cuánto se
+gana, cambia **cómo** se gana un mapa concreto.
+
+### El mismo mapa, otra vez (40 mapas por fila, hasta 4 intentos)
+
+Victoria acumulada al 1.º, ≤2.º, ≤3.º y ≤4.º intento, y los mapas que **nunca**
+caen en 4 (columna bien formada):
+
+| Misión | A: sin azar, con rebaja | B: con azar, sin rebaja | C: con azar y rebaja |
+|---|---|---|---|
+| Tierra m5 | 75 / 98 / 100 / 100 — nunca 0 % | 63 / 80 / 83 / 88 — **nunca 13 %** | 63 / 100 / 100 / 100 — nunca 0 % |
+| Tierra jefe | 55 / 93 / 100 / 100 — 0 % | 58 / 68 / 75 / 80 — **20 %** | 58 / 95 / 100 / 100 — 0 % |
+| Mar m2 | 70 / 98 / 100 / 100 — 0 % | 75 / 75 / 75 / 75 — **25 %** | 75 / 95 / 100 / 100 — 0 % |
+| Mar m3 | 68 / 98 / 100 / 100 — 0 % | 70 / 73 / 73 / 75 — **25 %** | 70 / 95 / 100 / 100 — 0 % |
+| Mar jefe | 58 / 88 / 100 / 100 — 0 % | 55 / 65 / 68 / 68 — **33 %** | 55 / 88 / 100 / 100 — 0 % |
+| Aire m2 | 63 / 100 / 100 / 100 — 0 % | 63 / 80 / 93 / 95 — 5 % | 63 / 100 / 100 / 100 — 0 % |
+| Aire jefe | 58 / 95 / 100 / 100 — 0 % | 55 / 65 / 70 / 73 — **28 %** | 55 / 100 / 100 / 100 — 0 % |
+
+(Tierra m1-m4, Mar m1 y m4, Aire m1, m3 y m4: 90-100 % al primero en las tres.)
+
+**Decisión: la rebaja se queda.** Con solo el azar (B), entre el 13 % y el 33 % de
+los mapas difíciles **no caen nunca** en cuatro intentos: el resultado de un mapa lo
+decide sobre todo el mapa (el roster y el terreno), y ±12 % pocas veces da la vuelta
+a una derrota clara. Con azar y rebaja (C) todo cae en el segundo o el tercer
+intento, igual que antes, pero el primero ya no es un escalón. Lo que sí cambia: la
+rebaja **deja de ser invisible**. MISIONES enseña "Tras tus derrotas aquí, la Regencia
+ha perdido fuerza en esta misión: −10 %" (`CombatManager.campaign_retry_ease_pct()`,
+`CAMP_RETRY_EASED`).
+
+### Recalibración con el azar (columna bien formada, 100 ofertas)
+
+Objetivo: misiones 60-90 %, jefes 45-75 %. Fuera quedaban Tierra m3 (97 %, muy fácil:
+es una de las de Colono) y, en el borde, Tierra m5 (57 %), el Leviatán (48 %) y el
+Zepelín (46 %). Con el azar las filas siguen empinadas pero ya no son escalones:
+
+| Misión | Escalas medidas | Antes → ahora |
+|---|---|---|
+| Tierra m3 | ×1,30 99 %, ×1,34 93 %, ×1,38 56 %, ×1,42 23 % | ×1,30 → **×1,36** |
+| Tierra m5 | ×1,09 98 %, ×1,11 94 %, ×1,13 75 %, ×1,15 57 % | ×1,15 → **×1,13** (75 %) |
+| Mar jefe (Leviatán) | ×0,82 99 %, ×0,86 82 %, ×0,90 51 % | ×0,90 → **×0,88** |
+| Aire jefe (Zepelín, 6 cazas) | ×0,74 97 %, ×0,78 42 %, ×0,82 5 % | ×0,78 → **×0,76** |
+
+(`campaign_enemy_mult` y `campaign_boss_extra_scale`; en los jefes la sonda mueve las
+dos a la vez, como en la calibración de la 1.1.)
+
+Repetir (con `override.cfg` propio):
+
+    godot --headless --path . -s tools/balance_probe_run.gd -- --only=campaigns --camp-seeds=100 [--spread=0]
+    godot --headless --path . -s tools/balance_probe_run.gd -- --only=campaigns --camp-seeds=40 --retry-sim=4 [--ease=0] [--spread=0]
+    godot --headless --path . -s tools/balance_probe_run.gd -- --only=campaigns --camp-calib=1 --camp-seeds=100 --camp-only=land:2 --calib=1.30,1.46,0.04

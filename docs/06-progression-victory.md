@@ -44,29 +44,33 @@ What `hq_max` does depends on the game mode ([20-modos-de-juego.md](20-modos-de-
 
 | Mode | HQ level 3 | Victory |
 |------|-----------|---------|
-| Campaña | One of the two keys: with the three campaigns complete too, `summon_final_audit()`: 3-5 defensive waves ([15-combat.md](15-combat.md) §6), entered with "QUE BAJEN" | Surviving the last wave. Losing is not a game over: the siege can be resummoned once 3 units stand |
-| Supervivencia | Same two keys, same siege, but only one (`resummon: false`) | Surviving it. Losing it ends the run (`run_ended`) and seals the save |
+| Campaña | The single key (2026-10-25): `summon_final_audit()`: 3-5 defensive waves ([15-combat.md](15-combat.md) §6), entered with "QUE BAJEN". HQ level 3 itself asks for the three campaign pieces | Surviving the last wave. Losing is not a game over: the siege can be resummoned once 3 units stand |
+| Supervivencia | Same key, same siege, but only one (`resummon: false`) | Surviving it. Losing it ends the run (`run_ended`) and seals the save |
 | Constructor | No siege (`audit_on_capstone: false`) | `_trigger_victory()` right away (`capstone_wins: true`) |
 | Sandbox | Nothing (the siege is summoned only from the SANDBOX tab) | None (`victory: false`) |
 
 `_complete_milestone("hq_max")` asks `GameMode.audit_enabled()` first and
 `GameMode.capstone_wins()` second.
 
-**The two keys of the Final Audit (2026-10-18, `feat/tres-campanas`,
-[15-combat.md](15-combat.md) §13).** In Campaña and Supervivencia the siege needs HQ
-level 3 **and** the three mission campaigns complete (Land: Barracks, 5 missions +
-boss; Sea: Shipyard, 4 + boss; Air: Aerodrome, 4 + boss), in any order.
-`ProgressionManager.try_summon_final_audit()` runs on `hq_max` and on every
-`campaign_completed`; `final_audit_ready()` / `final_audit_missing()` /
-`final_audit_gate_text()` say what is missing ("Para llamar al Ataque Final falta:
-Campaña de Mar 2/5, Campaña de Aire sin empezar"). If HQ 3 lands first, a warning
-toast says it and the `final_gate` tip explains it; ¿QUÉ HACER? turns to the
-campaigns (`Objectives.campaign_gate_step()`). Rule `audit_needs_campaigns`
+**One key for the Final Audit (2026-10-25, `feat/ritmo-colono`,
+[15-combat.md](15-combat.md) §13 "La condición del Ataque Final").** Before it there
+were two keys (HQ level 3 and the three campaigns, `feat/tres-campanas`). Now each
+**campaign boss hands over a piece** of HQ level 3 — **Planos del Bastión** (Land),
+**Casco del Leviatán** (Sea), **Motor del Zepelín** (Air) — and HQ level 3 asks for
+the three pieces on top of its cost (`GameConfig.hq_needs_pieces()`,
+`CombatManager.hq_missing_pieces()`, refused in `ProductionManager.start_upgrade()`).
+HQ level 3 summons the siege, as in the 1.0: `final_audit_ready()` is `hq_max`.
+`final_audit_missing()` / `final_audit_gate_text()` list the missing pieces and HQ 3;
+¿QUÉ HACER? says "Para el CG 3 te faltan: pieza de Mar, pieza de Aire"
+(`CombatManager.hq_pieces_text()`) and the pieces are steps of its line (with the HQ
+standing: Shipyard, Aerodrome, the six tanks, then the three campaigns, Land first,
+before HQ level 2). Rule `audit_needs_campaigns`
 (`GameMode.audit_needs_campaigns()`), global switch
-`GameConfig.final_audit_needs_campaigns`. An old save with the Audit already
-summoned, lost or won keeps it; one without the `campaigns` key starts with none.
-Each mission won gives rank XP (`campaign_mission` 60, `campaign_boss` 250). In the siege modes, surviving the last wave emits
-`storm_halted_forever` and only then `_trigger_victory()`:
+`GameConfig.final_audit_needs_campaigns`. Old saves: a piece is a boss already beaten;
+an old save with HQ 3 done and campaigns unfinished can call the siege (it paid its
+key). Each mission won gives rank XP (`campaign_mission` 60, `campaign_boss` 250). In
+the siege modes, surviving the last wave emits `storm_halted_forever` and only then
+`_trigger_victory()`:
 
 1. Stats: `time_played` (**played seconds**, `ProgressionManager._played_seconds`,
    saved — not wall-clock time since creation), buildings built, trades, milestones,
@@ -266,6 +270,49 @@ Regla `empire_phase` (`GameMode.empire_enabled()` = victoria + asedio + regla):
   Regencia) es solo una frase del Sargento: no hay rebeliones.
 - Las islas no se ven desde la vista de la isla (3D/2D): solo en el mapa.
 - Multijugador asíncrono ("imperios de ultramar", doc de contexto 10 §3.3): fuera.
+
+## Capítulos (2026-10-25, rama `feat/ritmo-colono`)
+
+Decisión de Bryan tras la crítica (contexto 27, B1): **Colono dura 3-4 h en tres
+capítulos**, que son los tres actos del lore (contexto 03 §7); Gobernador se queda en
+6-8 h. Cada capítulo tiene un objetivo visible en ¿QUÉ HACER? y se cierra con una
+pantalla corta.
+
+| Capítulo | Acto del lore | Qué abre | Se cierra con |
+|---|---|---|---|
+| **I · Nadie nos mira** | Acto I (Era Frontera) | oro, madera, comida, casas; Cuartel, primer soldado y primera misión; la Tormenta de prueba; la Campaña de Tierra | la **Fundición** (era 2) |
+| **II · La cuenta** | Acto II (Era Industrial) | acero; la Tormenta de verdad y el Impuesto (la Visita); la guarnición, el Astillero y la Campaña de Mar; la Refinería, las torres y el Cuartel General | la **Refinería** (era 3) **y** los **Planos del Bastión** (jefe de Tierra) |
+| **III · El libro** | Acto III (Era Petrolera) | petróleo, torres, Cuartel General, Aeródromo; Mar y Aire | **Casco del Leviatán** y **Motor del Zepelín**, el **CG nivel 3** y **aguantar el Ataque Final** (la victoria) |
+
+- **Lógica.** `scripts/services/Chapters.gd` (estático, como `Objectives`, sin estado):
+  `current()` (1-3; 4 con la partida ganada), `is_done(n)`, `goals(n)` (metas con su
+  clave de Tr y si están hechas), `heading(n)` ("Capítulo II · La cuenta"),
+  `goal_text(n)`, `goal_lines(n)` ("✓ …", "· …"), `close_text(n)`. Solo hay
+  capítulos donde hay Ataque Final (`Chapters.enabled()`: Campaña, en los dos niveles,
+  y Supervivencia).
+- **Estado.** `ProgressionManager.chapters_closed` (los cerrados, para no repetir la
+  pantalla), en el guardado como `progression.chapters`; se limpia en `reset()`.
+  `check_chapters()` los cierra **en orden** y de uno en uno al cambiar de era, al
+  completar una campaña, con el CG nivel 3 y al ganar, y emite
+  `EventBus.chapter_completed(n)`. Al cargar (`game_load_completed`) los ya cumplidos
+  se dan por cerrados **sin pantalla**: un guardado de antes de los capítulos no ve
+  tres tarjetas seguidas.
+- **¿QUÉ HACER?** (`ObjectivePanel`): arriba, "CAPÍTULO II · LA CUENTA", el objetivo
+  del capítulo en una frase y sus metas con ✓ (`_paint_chapter()`, con el refresco de
+  siempre: nada por fotograma). La línea (`Objectives.LINE`) lleva las piezas donde
+  las pide su capítulo (docs/15 §13).
+- **El cierre** (`scripts/ui/ChapterScreen.gd`, capa 19, grupo `modal_screen`): una
+  tarjeta con la cinta "CAPÍTULO I COMPLETO", el nombre, una frase del lore
+  (`CHAPTER_n_CLOSE`), "Ahora: Capítulo II · La cuenta" con su objetivo y
+  **¡ADELANTE!**. La crea `ObjectivePanel` en las dos escenas (no es un nodo de
+  `Main.tscn`). Espera a que no haya tablero abierto ni otro parte a la vista. El
+  capítulo III no saca tarjeta: lo cierra la pantalla de victoria.
+- **El ritmo de Colono** (regla de nivel, `GameConfig.game_tier_rules`):
+  `campaign_missions` (Tierra 4, Mar 2, Aire 2; Gobernador las 16), `hq_resource_mult` 0,6 (lo de la bolsa del CG; Gobernador 1) y
+  `hq_material_mult` 0,3 (vigas, lingotes y combustible de los niveles 2 y 3 del CG;
+  Gobernador 1). En Gobernador el nivel 3 sigue pidiendo la bolsa entera (3.500);
+  en Colono, 2.100 (`hq_resource_mult` 0,6, material ×0,3), y su asedio trae una
+  oleada menos (3-4, `final_audit_waves_delta` −1). Medido en [22-linea-jugable.md](22-linea-jugable.md) §17.
 
 ## Orden de la Regencia (2026-10-14, 1.1)
 

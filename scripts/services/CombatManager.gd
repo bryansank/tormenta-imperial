@@ -271,7 +271,10 @@ func start_defense(enemy_roster: Dictionary, defenders: Array = [], enemy_scale:
 ## Devuelve {"fought": false, "victory": false, "reason": ...} cuando no hay
 ## nadie que defienda (igual que start_defense() devuelve false) o nadie de quien
 ## defenderse; si se pelea, {"fought": true, "victory", "rounds", "summary"}.
-func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -> Dictionary:
+##
+## `reason` viaja en el parte (summary["reason"]): "auto_tithe" es un Impuesto de
+## los que se resuelven solos (la Visita, feat/ritmo-colono), no una columna fuera.
+func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0, reason: String = "") -> Dictionary:
 	if enemy_roster.is_empty():
 		return {"fought": false, "victory": false, "reason": "no_attackers"}
 	var garrison: Dictionary = get_garrison()
@@ -295,10 +298,13 @@ func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -
 
 	var encounter: Encounter = EncounterScript.create(units, 0, false, true, crew_uids.keys(), false, home_terrain(units))
 	apply_home_cover(encounter)
+	encounter.seed_rng(fight_seed(encounter))
 	var outcome: Dictionary = AutoResolverScript.resolve(encounter)
 	var victory: bool = bool(outcome["victory"])
 	var rounds: int = int(outcome["rounds"])
 	var summary: Dictionary = _apply_result_for(encounter, victory, rounds, crew_uids)
+	if reason != "":
+		summary["reason"] = reason
 	EventBus.defense_auto_resolved.emit(victory, rounds, summary)
 	return {"fought": true, "victory": victory, "rounds": rounds, "summary": summary}
 
@@ -512,6 +518,7 @@ func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: 
 	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids, can_rout, board_terrain)
 	if is_defense:
 		apply_home_cover(_encounter)
+	_encounter.seed_rng(fight_seed(_encounter))
 	_board_generation += 1
 	_enemy_turn_running = false
 	_result_applied = false
@@ -532,6 +539,20 @@ func apply_home_cover(encounter: Encounter) -> void:
 	var row: int = encounter.board_size.y - 1
 	encounter.set_cover(Rules.cover_cells(encounter.board_size, encounter.terrain, count, row),
 		GameConfig.bastion_cover_defense)
+## La semilla del azar del dano de un tablero que se abre (feat/ritmo-colono,
+## docs/15 §3 "El dano y su azar"): la del propio tablero (Encounter.board_seed:
+## bandos, vida, casillas) mezclada con el momento de la partida (segundos jugados)
+## y el contador de tableros. Asi un reintento de la misma mision, con la misma
+## columna, es otra noche; y la misma semilla repite el combate golpe a golpe.
+func fight_seed(encounter: Encounter) -> int:
+	if forced_fight_seed != 0:
+		return forced_fight_seed
+	var value: int = hash([encounter.board_seed(), int(ProgressionManager.get_played_seconds() * 10.0), _board_generation])
+	return value if value != 0 else 1
+
+## Pruebas y sondas: con un valor distinto de 0, todo tablero que se abra usa esta
+## semilla (el mismo tablero, el mismo combate). 0 = la de fight_seed().
+var forced_fight_seed: int = 0
 
 ## El tablero de casa (Diezmo, Ataque Final, escaramuza de pruebas). Decision de
 ## aire y mar (2026-10-17): tiene agua SOLO si en el bando del jugador hay algun
@@ -1735,6 +1756,59 @@ func campaigns_all_complete() -> bool:
 func campaigns_completed_count() -> int:
 	return _campaigns.completed_count()
 
+## Cuanto ha perdido el enemigo de la mision que toca en `domain` por las
+## derrotas en ella (campaign_retry_ease, con suelo), en puntos de %: 0 sin
+## derrotas. El panel de MISIONES lo ensena (feat/ritmo-colono: ya no es oculto).
+func campaign_retry_ease_pct(domain: String) -> int:
+	var fails: int = int(_campaigns.fails.get(domain, 0))
+	if fails <= 0 or _campaigns.is_complete(domain):
+		return 0
+	var ease: float = maxf(GameConfig.campaign_retry_floor, pow(GameConfig.campaign_retry_ease, float(fails)))
+	return roundi((1.0 - ease) * 100.0)
+
+## El numero que se ensena de la mision `mission` (indice de la tabla) en este
+## nivel: "Mision 2 de 4" en Colono puede ser la 3 de la tabla.
+func campaign_mission_number(domain: String, mission: int) -> int:
+	return CampaignBookScript.number_of(domain, mission)
+
+# ── Las piezas del Cuartel General (una sola llave, feat/ritmo-colono) ──
+
+## ¿Tiene ya la pieza que entrega el jefe de `domain`?
+func has_campaign_piece(domain: String) -> bool:
+	return _campaigns.has_piece(domain)
+
+## Las campanas cuya pieza falta, en orden (Tierra, Mar, Aire).
+func missing_campaign_pieces() -> Array:
+	return _campaigns.missing_pieces()
+
+func campaign_pieces_count() -> int:
+	return _campaigns.pieces_count()
+
+## Las piezas que le faltan al Cuartel General para subir a `to_level` (solo el
+## nivel 3, y solo donde el modo lo pida). [] = nada que esperar.
+func hq_missing_pieces(to_level: int) -> Array:
+	if not GameConfig.hq_needs_pieces(to_level):
+		return []
+	return _campaigns.missing_pieces()
+
+## "Planos del Bastion", "Casco del Leviatan", "Motor del Zepelin".
+static func piece_name(domain: String) -> String:
+	return Tr.t("PIECE_" + domain.to_upper())
+
+## "pieza de Mar": la forma corta, para "Para el CG 3 te faltan: ...".
+static func piece_short(domain: String) -> String:
+	return Tr.t("PIECE_SHORT_" + domain.to_upper())
+
+## "Para el CG 3 te faltan: pieza de Mar, pieza de Aire", o "" si no falta ninguna.
+func hq_pieces_text() -> String:
+	var missing: Array = hq_missing_pieces(GameConfig.max_building_level)
+	if missing.is_empty():
+		return ""
+	var names: Array = []
+	for d in missing:
+		names.append(piece_short(String(d)))
+	return Tr.t("HQ3_PIECES_MISSING") % ", ".join(names)
+
 ## La oferta de la mision que toca en `domain`, con la era de ahora (vacia si la
 ## campana esta completa). La del jefe lleva el plano que daria, si queda alguno.
 func campaign_offer(domain: String) -> Dictionary:
@@ -1873,6 +1947,10 @@ func _publish_campaign_events(events: Array) -> void:
 				EventBus.campaign_mission_won.emit(String(event["domain"]), int(event["mission"]), bool(event["boss"]))
 			"campaign_completed":
 				EventBus.campaign_completed.emit(String(event["domain"]))
+			"campaign_piece_won":
+				EventBus.campaign_piece_won.emit(String(event["domain"]))
+				EventBus.notification_posted.emit(Tr.t("MSG_PIECE_WON") % piece_name(String(event["domain"])),
+					"success", UITheme.POSITIVE)
 			"campaign_changed":
 				changed = true
 	if changed:

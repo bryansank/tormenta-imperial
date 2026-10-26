@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET, version **1.0.0** in progress (`project.godot` `config/version`; the 1.0 is assembled on the `integracion/arte-v1` branch). The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a grid rolled per game, 60-74 cells a side, with the sea inside the grid and 3-6 deposits of each type on land), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop: five resources in one shared pool (food included, grown on Farms and eaten by the people), four workshop materials, production that waits in each building until it is collected with a tap, manual processes in batches (the Núcleo can run every workshop recipe, slower), population and morale, market and laboratory as buildings, tech tree, army training. Turn-based PVE combat: an 8x8 board shown by default as a "front" view (both sides face to face, no grid in sight; the 3D 8x8 board and a flat 2D grid are the alternatives), rock-paper-scissors type advantage, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid, three separate mission campaigns (Land, Sea, Air: each a chain of missions in a single domain with a boss at the end), and the Final Audit — in Campaña it needs HQ level 3 **and** the three campaigns complete, then summons a 3-5 wave siege you have to survive; winning it no longer ends the game: "Volverse el Imperio" (1.2) turns you into the one who collects, with an archipelago of six neighbouring islands to conquer (short land/sea/air mission chains) that then pay you tribute. Around that core: a "toy diorama" look (buildings and units baked from CC0 pieces into one vertex-coloured mesh each; a building "pops" when it finishes and collected goods fly to the HUD), 27 building types (10 of them new cheap decorations, with no cap), building limits that rise with the era, a day/night cycle, ambient sound for day, night and Storm, up to five saved games, x1/x2 game speed, graphics quality down to "Mínima" with an FPS cap, four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done, what is left and the redesign in progress.
+**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET, version **1.0.0** in progress (`project.godot` `config/version`; the 1.0 is assembled on the `integracion/arte-v1` branch). The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a grid rolled per game, 60-74 cells a side, with the sea inside the grid and 3-6 deposits of each type on land), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop: five resources in one shared pool (food included, grown on Farms and eaten by the people), four workshop materials, production that waits in each building until it is collected with a tap, manual processes in batches (the Núcleo can run every workshop recipe, slower), population and morale, market and laboratory as buildings, tech tree, army training. Turn-based PVE combat: an 8x8 board shown by default as a "front" view (both sides face to face, no grid in sight; the 3D 8x8 board and a flat 2D grid are the alternatives), rock-paper-scissors type advantage, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid (only one Tax in three on the board, "la Visita"; the rest by automatic report), three separate mission campaigns (Land, Sea, Air: each a chain of missions in a single domain with a boss at the end; each boss hands over a piece of HQ level 3), and the Final Audit — in Campaña HQ level 3 (which asks for the three pieces) summons a 3-5 wave siege you have to survive; winning it no longer ends the game: "Volverse el Imperio" (1.2) turns you into the one who collects, with an archipelago of six neighbouring islands to conquer (short land/sea/air mission chains) that then pay you tribute. Colono plays in three chapters (the three acts of the lore) and lasts 3-4 h; Gobernador, 6-8 h. Around that core: a "toy diorama" look (buildings and units baked from CC0 pieces into one vertex-coloured mesh each; a building "pops" when it finishes and collected goods fly to the HUD), 27 building types (10 of them new cheap decorations, with no cap), building limits that rise with the era, a day/night cycle, ambient sound for day, night and Storm, up to five saved games, x1/x2 game speed, graphics quality down to "Mínima" with an FPS cap, four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done, what is left and the redesign in progress.
 
 Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
@@ -225,7 +225,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
   by era (600 / 800 / 1000) + 500 per warehouse (max 5 in every era: the warehouse cap does not rise, see below).
   Era 1 is 600 so the opening fits: 580 starting resources, plus sawmill + gold mine (330).
   Era 3 ceiling without techs = 1000 + 5x500 = **3500**, exactly the price of the HQ
-  level 3 upgrade. On top of that, `GameConfig.tech_storage_bonus` adds the storage
+  level 3 upgrade in Gobernador (Colono pays 60 % of it, `hq_resource_mult`). On top of that, `GameConfig.tech_storage_bonus` adds the storage
   techs: `ind_2` +200, `log_2` +300, `log_5` +500 — **+1000**, so the absolute ceiling
   is **4500** (`GameConfig.get_storage_cap()`). Sandbox ignores all of it
   (`sandbox_storage_cap`).
@@ -647,19 +647,26 @@ the SURVIVAL phase (first Warehouse), never in Sandbox, and Constructor gets onl
 | Merchant | Complete 10 market trades |
 | Commander | Build Barracks + 2 Towers |
 | General | Build Headquarters |
-| `hq_max` | **HQ Level 3 — one of the two keys of the Final Audit** (the other: the three campaigns) |
+| `hq_max` | **HQ Level 3 — the single key of the Final Audit** (it asks for the three campaign pieces) |
 
-HQ upgrade costs: L2 = 800g/500s/300o/400w, L3 = 1500g/800s/500o/700w
+HQ upgrade costs: `hq_upgrade_costs` (L2 1300g/900s/500o/300w + 350 beams, 140 ingots, 200 fuel; L3 1500g/800s/500o/700w + 700 beams, 280 ingots, 400 fuel); Colono pays 30 % of the workshop materials and 60 % of the bag (`hq_material_mult` 0.3, `hq_resource_mult` 0.6 in `game_tier_rules`), Gobernador all of it. L3 also asks for the three pieces.
 
-**In Campaña, HQ level 3 does not win the game.** The Final Audit has **two keys**
-(feat/tres-campanas, 2026-10-18): HQ level 3 (`hq_max`) and the three campaigns
-(Land, Sea, Air) complete, in any order. `ProgressionManager.try_summon_final_audit()`
-runs on `hq_max` and on `EventBus.campaign_completed`; if a key is missing it posts
-"Para llamar al Ataque Final falta: ..." (`final_audit_gate_text()`), shown also in
-SkirmishPanel and ¿QUÉ HACER?. `GameMode.audit_needs_campaigns()` (rule
-`audit_needs_campaigns`: Campaña and Supervivencia yes; Constructor/Sandbox no) and
-the global switch `GameConfig.final_audit_needs_campaigns` (tests of the 1.0 path turn
-it off). A save that already had the Audit summoned or won keeps it. Then
+**In Campaña, HQ level 3 does not win the game.** Since 2026-10-25 (`feat/ritmo-colono`,
+docs/15 §13) the Final Audit has **one key**: HQ level 3. Each campaign boss hands over
+a **piece** (Land: Planos del Bastión, Sea: Casco del Leviatán, Air: Motor del
+Zepelín; `GameConfig.CAMPAIGN_PIECES`, `CampaignBook.has_piece()` = boss beaten) and
+the HQ level 3 upgrade asks for the three on top of its cost
+(`GameConfig.hq_needs_pieces()`, `CombatManager.hq_missing_pieces()` /
+`hq_pieces_text()` "Para el CG 3 te faltan: pieza de Mar, pieza de Aire";
+`ProductionManager.start_upgrade()` refuses without them).
+`ProgressionManager.final_audit_ready()` is `hq_max`; `final_audit_missing()` lists the
+missing pieces and HQ 3. The pieces are steps of ¿QUÉ HACER?'s line
+(`Objectives.LINE` entries `kind: "campaign"`, with the HQ standing — after the
+Shipyard, the Aerodrome and the six siege tanks — and before HQ level 2). `GameMode.audit_needs_campaigns()` (rule `audit_needs_campaigns`: Campaña
+and Supervivencia yes; Constructor/Sandbox no) and the global switch
+`GameConfig.final_audit_needs_campaigns` (tests of the 1.0 path turn it off) decide
+whether HQ 3 asks for pieces. Old saves: a piece is a boss already beaten; one with
+HQ 3 done and campaigns unfinished can call the siege. Then
 the Regency comes down for a 3-5 wave siege (`final_audit_waves`) fought by whatever
 garrison is at home plus the tower crews, with attrition across waves and no
 retraining in between. The garrison and its morale are read when the gate opens
@@ -797,6 +804,17 @@ with visible spread (docs/05), spoilage (`spoilage_enabled()`: what waits uncoll
 Audit in Campaña, a sealed Survival) — and is always open in `dev_mode`. The tier is
 fixed for the run; saves without `tier` load as Colono.
 
+**Colono in 3-4 h, three chapters (2026-10-25, `feat/ritmo-colono`, docs/06
+§Capítulos, docs/22 §17):** I *Nadie nos mira* (to the Foundry), II *La cuenta* (the
+Refinery and the Land piece), III *El libro* (the Sea and Air pieces, HQ 3, the
+siege). `scripts/services/Chapters.gd` (static) derives them; `ProgressionManager`
+keeps `chapters_closed` (save `progression.chapters`) and emits
+`EventBus.chapter_completed(n)`; ¿QUÉ HACER? shows the chapter and its goals and
+`scripts/ui/ChapterScreen.gd` (created by ObjectivePanel) shows the short closing card
+(chapter III closes with the victory screen). Colono's pace comes from
+`game_tier_rules`: `campaign_missions` (Land 4, Sea 2, Air 2 of the table's 6/5/5;
+Gobernador plays all 16), `hq_material_mult` (0.3), `hq_resource_mult` (0.6) and `final_audit_waves_delta` (−1: a 3-4 wave siege); Gobernador 1, 1 and 0. Measured: Colono 3 h 24-4 h 28, Gobernador 6 h 13-7 h 54 (docs/22 §17).
+
 ### Army & Units (management -> combat bridge)
 
 - **ArmyManager** trains each unit at **its** building (`unit_types[...]["building"]`:
@@ -853,8 +871,10 @@ fixed for the run; saves without `tier` load as Colono.
   line "Vuelven heridos").
 - **Campaign retries:** each defeat in the campaign mission that is due eases its
   enemy x0.95 (floor x0.80, `campaign_retry_ease` / `campaign_retry_floor`,
-  `CampaignBook.fails`, saved); winning resets it. Same map. Without it a
-  deterministic loss was a loss forever.
+  `CampaignBook.fails`, saved); winning resets it. Same map. Kept after the damage
+  roll (2026-10-25, measured in docs/16 "Azar del daño": with the roll alone, 5-33 %
+  of the hard maps never fell in 4 tries) and now **visible** in MISIONES
+  (`CombatManager.campaign_retry_ease_pct()`, "la Regencia ha perdido fuerza: −10 %").
 - **Military Power** = sum of unit power. Combat consumes this army for real:
   `ArmyManager` stays the source of truth and `CombatManager` only debits the dead
   (`remove_units()`), so Power never lies while a column is out.
@@ -889,6 +909,13 @@ service drains it onto the `EventBus`; the UI only reads and calls.
   `SortieBoard` (the sortie board, 2026-10-14), `CampaignBook`, `ThreatBoard` (coastal
   threats, 1.2).
   No nodes, no timers, no global `randf()` — every one is headless-testable.
+- **Damage roll (2026-10-25, `feat/ritmo-colono`, docs/15 §3 "El daño y su azar"):**
+  each hit rolls inside ±`combat_damage_spread` (0.12) of the expected damage
+  (`CombatRules.damage()` is the centre the AI plans with; `damage_range()`,
+  `rolled_damage(a, t, roll)`). The roll comes from the `Encounter`'s own seeded
+  `rng` (`board_seed()` by default, `seed_rng()`; `CombatManager.fight_seed()` mixes
+  in played time so a retry is another night): **same seed + same moves = same
+  fight**. The preview shows the range ("8-11 de 75", "¡Cae!" / "¿Cae?").
 - **Services:** `CombatManager` owns the `Encounter` and the `Expedition`;
   `ProgressionManager` owns the `FinalAudit`.
 - **UI:** `BattleScreen` (one overlay, four views that never share the screen: the
@@ -954,6 +981,16 @@ wave to wave with its damage). When the Tithe lands while a board is already ope
 `AutoResolver` plays the *same* `Encounter` with the AI on both sides — there is no
 second combat formula anywhere — and `WarReportScreen` shows the result.
 
+**La Visita (2026-10-25, `feat/ritmo-colono`, docs/15 §5):** only one Tax in
+`storm_tithe_board_every` (3) goes to the board — the first real one and then every
+third (`StormManager.is_visit_due()`, from `storms_survived`). The others are resolved
+by the home troops with the same `auto_resolve_defense()` (`reason: "auto_tithe"`);
+for `storm_tithe_choice_seconds` (12) StormManager offers **¡PELEAR!** (StormHUD
+`FightTitheButton`, `fight_this_tithe()`, signal `tithe_choice_changed`), then
+`resolve_tithe_auto()`. `WarReportScreen` paints one card: the fight, the Tax glued to
+it and "la próxima Visita, dentro de N Impuestos" (`tithes_before_visit()`). The
+era-1 trial Tax always goes to the board.
+
 **The expedition runs end to end from the UI:** launch in `SkirmishPanel`, the node
 map / draft / final report in `BattleScreen` (`select_node()`, `apply_draft()`,
 `abandon_expedition()`), attrition and permadeath across nodes, units away are
@@ -961,9 +998,12 @@ locked out of the garrison, and a run in flight is saved and reopens its map on 
 (`expedition_resumed`). `start_skirmish()` is no longer called from `scripts/` (only
 tests use it); the dev-only test fight goes through `dev_start_encounter()`.
 
-**Three campaigns (2026-10-18, branch `feat/tres-campanas`, docs/15 §13, untested):**
+**Three campaigns (2026-10-18, branch `feat/tres-campanas`, docs/15 §13):**
 Land (Barracks, era 1: 5 missions + boss), Sea (Shipyard, era 2: 4 + boss) and Air
-(Aerodrome, era 3: 4 + boss), each a chain of short maps (1-3 fights) in a **pure
+(Aerodrome, era 3: 4 + boss) — Colono plays Land 4, Sea 2, Air 2 of them
+(`GameConfig.campaign_mission_list()`; missions are always named by their **table
+index**, `campaign_base_count()`; `CampaignBook.progress` is that index, so old saves
+load as they were) — each a chain of short maps (1-3 fights) in a **pure
 domain**: only that domain's units (the bomber cannot hit planes, so it stays home
 from Air; `GameConfig.campaign_unit_allowed()`), enemies of the same domain, sea fights
 on an all-water board with rocky islets (`CombatRules.open_sea_terrain`), air fights
@@ -1231,9 +1271,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ → PARTIDAS) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `economy` (EconomyManager: the smuggler's ship with its offers and dice, bought blueprints, fuel and interest clocks), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `threats` (ThreatManager: coastal threats, `ThreatBoard`; a save without it = empty shore), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, and the `final_audit`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `empire` (EmpireManager: the archipelago after victory, `Archipelago`; a save without it = nothing started, and a save with the Audit already won starts the phase on load), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, the `final_audit` and the closed `chapters`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `economy` (EconomyManager: the smuggler's ship with its offers and dice, bought blueprints, fuel and interest clocks), `threats` (ThreatManager: coastal threats, `ThreatBoard`; a save without it = empty shore), `empire` (EmpireManager: the archipelago after victory, `Archipelago`; a save without it = nothing started, and a save with the Audit already won starts the phase on load), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -1342,6 +1380,7 @@ tormenta-imperial/
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
+|   |   +-- Chapters.gd              # Static: the three chapters of the Campaign (docs/06 §Capítulos)
 |   |   +-- GraphicsQuality.gd       # Static (preload): set_quality(), what Minimal turns off outside WorldLook, renderer override, detection rules
 |   |   +-- SaveSlots.gd             # Static (preload): user://partidas/, the index, up to 5 games
 |   |   +-- ColonyIdentity.gd        # Static: country flag pieces by rank, random names/flags, word filter
@@ -1362,6 +1401,7 @@ tormenta-imperial/
 |   |   +-- RegimentCard.gd, RegimentLook.gd  # The REGIMIENTO card in the Cuartel; regiment look, badge and paint helpers (cosmetic)
 |   |   +-- ColonyIdentityPanel.gd, ColonyByline.gd  # Country name + flag editor; flag + name line on reports
 |   |   +-- SandboxPanel.gd, SettingsPanel.gd, StormHUD.gd, ObjectivePanel.gd, ArmyPanel.gd, TechTreePanel.gd
+|   |   +-- ChapterScreen.gd         # The short chapter-closing card (created by ObjectivePanel)
 |   |   +-- BuildingInfoPanel.gd, ConstructionMenu.gd, MarketPanel.gd, NotificationPanel.gd,
 |   |   +-- OnScreenControls.gd, ProcessActionsPanel.gd (+ ProcessCard.gd), ProgressPanel.gd, ResourceHUD.gd, VictoryScreen.gd
 |   |   +-- HarvestSection.gd, SavesPanel.gd, GameSpeedButton.gd, TextKit.gd  # RECOGER, PARTIDAS list, x1/x2, icon+number rows
@@ -1577,6 +1617,11 @@ All balance values live in `GameConfig.gd`:
 - `contract_*` - the contract board: source eras, first delays, cooldown, era scaling, reputation, Tithe fallback gold, rank XP, templates (docs/27)
 - `game_mode_rules` / `sandbox_*` - per-mode rules and multipliers on top of the base
   values (modes apply factors; the balance line changes the base values — docs/20, docs/22)
+- `game_tier_rules` - Colono / Gobernador: market, spoilage, harder enemy and, since
+  `feat/ritmo-colono`, `campaign_missions` (which campaign missions each tier plays)
+  and `hq_material_mult` (HQ workshop materials) — the 3-4 h / 6-8 h pace (docs/22 §17)
+- `combat_damage_spread` - the damage roll (±12 %; 0 = fixed damage); `campaign_retry_*` - the visible ease per defeat
+- `storm_tithe_board_every` / `storm_tithe_choice_seconds` - la Visita: one Tax in N on the board, the ¡PELEAR! window
 - `population_floor` / `population_regrow_floor` - the ruin floor
 - `autosave_interval` / `autosave_debounce` / `max_offline_seconds` - saving and offline
 

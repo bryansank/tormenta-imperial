@@ -846,8 +846,10 @@ static func campaign_mission_fights(domain: String, mission: int) -> int:
 		return 1
 	return maxi(1, int(fights[clampi(mission, 0, fights.size() - 1)]))
 
+## `mission` es un indice de la tabla (campaign_defs): el jefe es su ultima
+## mision, en Colono y en Gobernador (Colono se salta misiones de en medio).
 static func campaign_is_boss_mission(domain: String, mission: int) -> bool:
-	return mission == GameConfig.campaign_mission_count(domain) - 1
+	return mission == GameConfig.campaign_base_count(domain) - 1
 
 ## Clave de Tr del nombre: CAMP_LAND_M1 ... y CAMP_LAND_BOSS para el jefe.
 static func campaign_mission_name_key(domain: String, mission: int) -> String:

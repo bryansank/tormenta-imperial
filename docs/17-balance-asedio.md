@@ -466,3 +466,43 @@ Con los valores nuevos (×1,14, dirigible, sin escolta, 200 semillas):
 
 Repetir: `godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 --morale=75`
 (`--siege_atk=lo,hi` y `--siege_init=lo,hi` pisan los dos rangos).
+
+## Azar del daño (2026-10-25, rama `feat/ritmo-colono`)
+
+Con el daño ±12 % (`combat_damage_spread`, docs/15 §3 "El daño y su azar") el asedio
+de 4-5 oleadas **acumula la mala suerte** de oleada en oleada: con la última oleada a
+×1,14 la referencia (6 blindados, 4 torres, moral 100, Colono) bajó del 82,5 % al
+**58,5 %**. Cada oleada siembra su `Encounter` con la semilla del asedio y su número
+(`siege_probe`, igual que `CombatManager.fight_seed()` en partida).
+
+`tools/siege_probe.gd`, 200 semillas, 4 torres:
+
+| `final_audit_last_wave_multiplier` | 6 vehículos (referencia) |
+|---|---|
+| ×1,14 sin azar (lo de antes) | 82,5 % |
+| ×1,14 con azar | 58,5 % |
+| ×1,10 | 69,5 % |
+| **×1,06** | **79,5 %** |
+| ×1,02 | 86,5 % |
+
+Ya no es un escalón (antes ×1,14 → ×1,15 caía del 82,5 % al 57,5 %): ahora cada 0,04
+mueve unos diez puntos. **Decisión: ×1,14 → ×1,06** (referencia ~80 %).
+
+Con ×1,06 y azar (200 semillas):
+
+| Guarnición | 4 torres, moral 100 | moral 75 | 2 torres | Gobernador |
+|---|---|---|---|---|
+| 5 vehículos | 50,0 % (antes 40,0 %) | — | — | — |
+| **6 vehículos** | **79,5 %** | 61,0 % (antes 48,5 %) | 40,0 % (antes 25,5 %) | **71,5 %** (antes 67,5 %) |
+| 6 veh + 2 cazas | 84,0 % (antes 65,0 %) | — | — | — |
+
+Las guarniciones flojas y las de dos torres suben algo (la suerte también ayuda al
+que va justo), y la de referencia queda en la franja.
+
+Repetir: `godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 [--spread=0] [--last=F] [--tier=governor] [--morale=75]`.
+
+**Colono: una oleada menos** (`game_tier_rules.colonist.final_audit_waves_delta` = −1,
+`GameConfig.get_final_audit_waves()`): su asedio es de 3-4 oleadas. Con 4 torres, 5
+blindados ganan el 99 % (200 semillas): en Colono el final se gana casi siempre a la
+primera, como pide "se puede caer, no se puede perder" y el ritmo de 3-4 h (docs/22
+§17). La referencia del ~80 % es la de 4-5 oleadas (Gobernador, y la tabla de arriba).

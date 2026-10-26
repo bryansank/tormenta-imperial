@@ -99,7 +99,7 @@ func test_the_sea_tab_warns_that_the_leviathan_needs_dreadnoughts() -> void:
 	assert_str(Objectives.campaign_boss_need_text("sea")).is_equal(Tr.t("CAMP_BOSS_NEEDS_SEA_TRAIN"))
 	# Con el jefe como siguiente mision, el paso es entrenar acorazados.
 	var book: Dictionary = CombatManager.get_campaigns_save_data()
-	book["progress"] = {"land": 0, "sea": GameConfig.campaign_mission_count("sea") - 1, "air": 0}
+	book["progress"] = {"land": 0, "sea": GameConfig.campaign_base_count("sea") - 1, "air": 0}
 	CombatManager.load_campaigns_save_data(book)
 	var step: Dictionary = Objectives.campaign_boss_step("sea")
 	if ArmyManager.is_unlocked("dreadnought"):

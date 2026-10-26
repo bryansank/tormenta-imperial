@@ -320,8 +320,12 @@ func _play_fight(view: String) -> Dictionary:
 	return out
 
 func test_both_views_resolve_the_same_encounter_the_same_way() -> void:
+	# El azar del dano (feat/ritmo-colono) va sembrado: con la misma semilla, el
+	# mismo tablero sale igual en las dos vistas.
+	CombatManager.forced_fight_seed = 4242
 	var on_board: Dictionary = await _play_fight("board")
 	var on_front: Dictionary = await _play_fight("front")
+	CombatManager.forced_fight_seed = 0
 	assert_bool(on_front["won"]).is_equal(on_board["won"])
 	assert_int(on_front["round"]).is_equal(on_board["round"])
 	assert_dict(on_front["hp"]).is_equal(on_board["hp"])

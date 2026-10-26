@@ -23,6 +23,8 @@ extends SceneTree
 ##   --tutorial=1    levanta el Laboratorio en la era 1, como pedia el tutorial
 ##                   guiado hasta 2026-10-24 (el tutorial corto ya no lo pide:
 ##                   por defecto, no)
+##   --tier=governor el nivel Gobernador (por defecto Colono). Colono juega menos
+##                   misiones y pide menos material para el CG (feat/ritmo-colono)
 ##   --extras=1      (o --player=completo) el jugador ademas levanta lo nuevo de
 ##                   la 1.1 cuando aporta (Muelle de pesca, Molino, Silo, Taberna,
 ##                   Carpinteria, Pozo, Faro, Deposito de combustible, Astillero,

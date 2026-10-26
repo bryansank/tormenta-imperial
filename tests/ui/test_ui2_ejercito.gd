@@ -106,11 +106,12 @@ func test_the_gate_checklist_names_what_is_missing() -> void:
 	await await_idle_frame()
 	panel.open()
 	var gate: Node = panel._sortie_box.find_child("AuditGateLine", true, false)
-	if ProgressionManager.final_audit_gate_text() == "":
+	var gate_text: String = preload("res://scripts/services/Objectives.gd").final_gate_text()
+	if gate_text == "":
 		assert_object(gate).is_null()
 	else:
 		assert_object(gate).is_not_null()
-		assert_str((gate as Control).tooltip_text).is_equal(ProgressionManager.final_audit_gate_text())
+		assert_str((gate as Control).tooltip_text).is_equal(gate_text)
 	panel._close()
 	TutorialManager.first_sortie_done = saved_first
 

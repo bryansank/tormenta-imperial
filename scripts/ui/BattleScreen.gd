@@ -859,10 +859,14 @@ func _show_expedition_report(result: int, rewards: Dictionary, casualties: Dicti
 		if domain != "":
 			var camp_name: String = Tr.t("CAMP_NAME_" + domain.to_upper())
 			if result == 0:
-				lines.append(Tr.t("CAMP_REPORT_WON") % [camp_name, int(last.get("campaign_mission", 0)) + 1,
+				lines.append(Tr.t("CAMP_REPORT_WON") % [camp_name,
+					maxi(1, CombatManager.campaign_mission_number(domain, int(last.get("campaign_mission", 0)))),
 					CombatManager.campaign_total(domain)])
 				if bool(last.get("campaign_boss", false)):
 					lines.append(Tr.t("CAMP_REPORT_BOSS") % camp_name)
+					# Una sola llave: el jefe entrega su pieza del CG nivel 3.
+					if GameConfig.hq_needs_pieces(GameConfig.max_building_level):
+						lines.append(Tr.t("CAMP_REPORT_PIECE") % CombatManager.piece_name(domain))
 			else:
 				lines.append(Tr.t("CAMP_REPORT_RETRY"))
 		# Volverse el Imperio: como queda la isla (el progreso se apunta justo
@@ -2357,7 +2361,7 @@ func _style_threat_button() -> void:
 	_skin_action(_threat_btn, "warn" if _show_threat else "secondary")
 
 ## Lo que se escribe encima de cada pieza: el dano previsto sobre los objetivos
-## ("-18 de 75", o "-75 ¡Cae!") y "✕ Muy cerca" sobre el enemigo pegado a una
+## ("16-20 de 75", "70-80 ¡Cae!"; sin rango, "-18 de 75") y "✕ Muy cerca" sobre el enemigo pegado a una
 ## artilleria. uid -> texto. Publica para las pruebas.
 func target_previews(attacker: CombatUnit, targets: Array) -> Dictionary:
 	var out := {}
@@ -2377,10 +2381,21 @@ func target_previews(attacker: CombatUnit, targets: Array) -> Dictionary:
 				out[u.uid] = Tr.t("LBL_PREVIEW_TOO_CLOSE")
 	return out
 
+## Con azar en el dano (feat/ritmo-colono) el golpe es un rango: "8-11 de 75",
+## "8-11 ¡Cae!" (cae hasta con el minimo) o "8-11 ¿Cae?" (cae con un buen golpe).
+## Sin rango (dano pequeno o combat_damage_spread = 0), lo de siempre.
 static func preview_text(p: Dictionary) -> String:
+	var lo: int = int(p.get("damage_min", p.get("damage", 0)))
+	var hi: int = int(p.get("damage_max", p.get("damage", 0)))
+	if lo == hi:
+		if bool(p.get("kills", false)):
+			return Tr.t("LBL_PREVIEW_KILL") % int(p.get("damage", 0))
+		return Tr.t("LBL_PREVIEW_DAMAGE") % [int(p.get("damage", 0)), int(p.get("hp", 0))]
 	if bool(p.get("kills", false)):
-		return Tr.t("LBL_PREVIEW_KILL") % int(p.get("damage", 0))
-	return Tr.t("LBL_PREVIEW_DAMAGE") % [int(p.get("damage", 0)), int(p.get("hp", 0))]
+		return Tr.t("LBL_PREVIEW_KILL_RANGE") % [lo, hi]
+	if bool(p.get("may_kill", false)):
+		return Tr.t("LBL_PREVIEW_MAY_KILL") % [lo, hi]
+	return Tr.t("LBL_PREVIEW_DAMAGE_RANGE") % [lo, hi, int(p.get("hp", 0))]
 
 ## La vista previa en una casilla del tablero 2D.
 func _paint_cell_preview(label: Label, unit: CombatUnit, targets: Array) -> void:

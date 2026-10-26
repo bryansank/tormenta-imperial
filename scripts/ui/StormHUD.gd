@@ -141,6 +141,7 @@ func _ready() -> void:
 	EventBus.storm_order_changed.connect(_on_order_changed)
 	EventBus.resource_changed.connect(func(_r, _a, _d): if _card_open: _refresh_card())
 	EventBus.game_load_completed.connect(_refresh)
+	EventBus.tithe_choice_changed.connect(func(_open): _refresh_fight())
 	_refresh()
 
 ## El latido sustituye al numero: cuanto mas rapido late, peor esta la cosa. Es
@@ -227,6 +228,52 @@ func _setup_ui() -> void:
 
 	_setup_barometer(column)
 	_setup_card(column)
+	_setup_fight_button()
+
+# ── ¡PELEAR! (la Visita, feat/ritmo-colono) ──────────────────────────
+# Dos de cada tres Impuestos se resuelven con parte automatico. Mientras
+# StormManager ofrece pelearlo (unos segundos), sale este boton debajo del
+# indicador: tocarlo abre el tablero de ese Impuesto. Nada por fotograma: se
+# muestra y se oculta con `tithe_choice_changed`.
+
+var _fight_btn: Button = null
+
+func _setup_fight_button() -> void:
+	_fight_btn = CartoonTheme.pill_button(Tr.t("BTN_FIGHT_TITHE"), "army", "danger", CartoonTheme.h("big"), "hud")
+	_fight_btn.name = "FightTitheButton"
+	_fight_btn.tooltip_text = Tr.t("BTN_FIGHT_TITHE_TIP")
+	_fight_btn.visible = false
+	_fight_btn.pressed.connect(_on_fight_pressed)
+	_root.add_child(_fight_btn)
+
+func _on_fight_pressed() -> void:
+	StormManager.fight_this_tithe()
+	_refresh_fight()
+
+## Muestra el boton debajo del indicador mientras la oferta este abierta.
+func _refresh_fight() -> void:
+	if _fight_btn == null:
+		return
+	var open: bool = StormManager.is_tithe_choice_open()
+	_fight_btn.visible = open
+	if open:
+		_place_fight.call_deferred()
+
+func _place_fight() -> void:
+	if _fight_btn == null or not _fight_btn.visible:
+		return
+	var vp: Vector2 = get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
+	var size: Vector2 = _fight_btn.get_combined_minimum_size()
+	var at := Vector2((vp.x - size.x) * 0.5, 80.0)
+	if _panel != null and _panel.visible:
+		at = Vector2(_panel.position.x + (_panel.size.x - size.x) * 0.5, _panel.position.y + _panel.size.y + 8.0)
+	at.x = clampf(at.x, 8.0, maxf(8.0, vp.x - size.x - 8.0))
+	at.y = clampf(at.y, 8.0, maxf(8.0, vp.y - size.y - 8.0))
+	_fight_btn.position = at
+
+## El boton de ¡PELEAR! (pruebas).
+func fight_button() -> Button:
+	return _fight_btn
 
 ## El barometro: el ojo del Aviso en apagado, una barra corta y el margen.
 func _setup_barometer(parent: Control) -> void:
